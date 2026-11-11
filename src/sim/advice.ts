@@ -1,11 +1,14 @@
 // Reference practice: what a careful Aroostook grower would do next, from what the grower can see.
-// The in-game coach shows it, and the reference bot follows it.
+// The in-game coach shows it, and the reference bot follows it. It tends the fields the farm holds; it has nothing
+// to say about land, hiring or contracts.
 import { dayIndex } from './calendar.ts'
+import { canDo } from './crew.ts'
 import * as P from './params.ts'
 import type { Campaign, JobKind, World } from './types.ts'
 import { fieldInfo, forecast, today } from './view.ts'
 import { openLots } from './campaign.ts'
 import { newPotatoWindow } from './market.ts'
+import { seasonDone } from './season.ts'
 
 export interface Advice {
   id: string
@@ -110,11 +113,26 @@ export function advise(world: World, c: Campaign): Advice[] {
       add(lot.field, 'sell', `Sell the ${fieldInfo(c, lot.field).name} crop off the field.`, 'Blighted tubers went over the picking table. More are in the pile, and they rot in storage.', false, lot.id)
     }
   }
-  if (s.frozen || s.fields.every(f => f.status === 'rest' || f.status === 'dug' || f.status === 'lost')) {
+  if (seasonDone(c)) {
     add(-1, 'close', 'Close out the season.', 'Everything is in. The cellar is next.', true)
   }
   out.sort((a, b) => Number(b.urgent) - Number(a.urgent))
-  return out
+  // No more of any job than the crews could get round to: as many fields at once as the home farm has, for each
+  // crew able to do it, counting what is already on the list. The most urgent come first, then the fields in order.
+  const room = new Map<JobKind, number>()
+  return out.filter(a => {
+    if (a.act === 'wait' || a.act === 'sell' || a.act === 'close') return true
+    const kind = a.act
+    let left = room.get(kind)
+    if (left === undefined) {
+      let crews = 0
+      for (const u of c.crew) if (canDo(u.kind, kind)) crews++
+      left = P.ADVICE_FIELDS_PER_CREW * crews
+      for (const j of s.jobs) if (j.kind === kind) left--
+    }
+    room.set(kind, left - 1)
+    return left > 0
+  })
 }
 
 // For each field: what reference practice wants done there now (need), or why it is leaving the field alone (hold).

@@ -22,7 +22,7 @@ export interface Variety {
   dormancy: number      // days in the cellar before sprouting
   price: number         // dollars per cwt of US No. 1 in an average year
   chefBonus: boolean    // large tubers sell at a premium
-  contract: boolean     // grown to a processor's contract: the price barely moves with the market
+  contract: boolean     // the chipping variety: off contract it sells at a processing price that barely moves with the market
   skin: number          // colours, for drawing
   flesh: number
   shape: number         // 1 round, 1.7 long
@@ -62,7 +62,7 @@ export const VARIETIES: Variety[] = [
   },
   {
     id: 'atlantic', name: 'Atlantic', released: 1976, maturity: 'mid', market: 'Chip contract',
-    blurb: 'The chipping standard. Sold on contract, so the price holds when the market falls and misses out when it soars. Big tubers go hollow.',
+    blurb: 'The chipping standard. Grown against a chip plant\'s contract, which pays a fixed price; off contract it fetches only a processing price. Big tubers go hollow.',
     tiPd: 145, matPd: 650, set: 8, bulk: 1.12, blightLeaf: 1.0, blightTuber: 1.1, scab: 1.0, hollow: 0.154, green: 1.0, rough: 0.9,
     drought: 0.3, virus: 0.75, dormancy: 100, price: 12.5, chefBonus: false, contract: true, skin: 0xd9c491, flesh: 0xf8f2de, shape: 1.05,
   },

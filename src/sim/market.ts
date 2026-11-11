@@ -31,10 +31,11 @@ function drift(c: Campaign): number {
   return 1 + clamp(w, -0.15, 0.15)
 }
 
-// Dollars per hundredweight of US No. 1 for a variety, now.
+// Dollars per hundredweight of US No. 1 for a variety on the open market, now. The chipping variety finds only a
+// processing price off contract, which moves a quarter as far as the market does.
 export function basePrice(world: World, c: Campaign, id: VarietyId): number {
   const v = variety(id)
-  if (v.contract) return v.price * (1 + (levelNow(world, c) - 1) * 0.25)
+  if (v.contract) return v.price * P.PROCESSING_PRICE * (1 + (levelNow(world, c) - 1) * 0.25)
   const seasonal = c.phase === 'season' && c.season
     ? seasonFactor(c.season.day)
     : P.MONTH_CURVE[Math.min(c.month, P.MONTH_CURVE.length - 1)] * drift(c)

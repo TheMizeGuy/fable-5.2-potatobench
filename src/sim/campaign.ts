@@ -1,18 +1,19 @@
 // The campaign: planning, the season, the cellar and the year-end ledger, all driven through apply().
+import { contractOffers } from './buyers.ts'
+import { hireBlock, newFarmer, newUnit } from './crew.ts'
+import { DUFOUR_YARD, HOME_FIELDS, HOME_YARD, PARCELS, YARDS } from './farm.ts'
 import { lotCwt } from './harvest.ts'
 import { sellLot } from './market.ts'
 import * as P from './params.ts'
 import { hash32 } from './rng.ts'
-import { addJob, FIELD_NAMES, seasonDone, startSeason, stepDay } from './season.ts'
-import type { Campaign, Cmd, FieldPlan, GameEvent, Lot, Result, UpgradeId, World, YearSummary } from './types.ts'
+import { addJob, FIELD_NAMES, holdsDufour, releaseJob, seasonDone, startSeason, stepDay, unitBlock } from './season.ts'
+import type { Campaign, Cmd, Contract, Due, FieldPlan, GameEvent, Lot, Result, UpgradeId, World, YearSummary } from './types.ts'
 import { variety } from './varieties.ts'
 import { dayIndex, withCommas } from './calendar.ts'
 import { finishLot } from './harvest.ts'
 import { hasYear } from './weather.ts'
 
-const START_STREAK = [0, 2, 1, 3, 0, 1]
-const START_VERT = [0.03, 0.1, 0.05, 0.22, 0.03, 0.08]
-const ELEV: (0 | 1 | 2)[] = [2, 2, 1, 1, 0, 0]
+const REST_PLAN: FieldPlan = { crop: 'rest', variety: 'katahdin', seed: 'certified' }
 
 export function lastStartYear(world: World): number {
   const ys = world.weather.playable
@@ -27,8 +28,18 @@ export function startYears(world: World): number[] {
   })
 }
 
+export function held(c: Campaign, field: number): boolean {
+  const f = c.fields[field]
+  return !!f && f.tenure !== 'none'
+}
+
+function defaultPlan(c: Campaign, i: number): FieldPlan {
+  if (!held(c, i)) return { ...REST_PLAN }
+  return { crop: c.fields[i].streak >= 2 ? 'rest' : 'potato', variety: 'katahdin', seed: 'certified' }
+}
+
 export function defaultPlans(c: Campaign): FieldPlan[] {
-  return c.fields.map(f => ({ crop: f.streak >= 2 ? 'rest' : 'potato', variety: 'katahdin', seed: 'certified' } as FieldPlan))
+  return c.fields.map((_, i) => defaultPlan(c, i))
 }
 
 export function createCampaign(world: World, opts: { seed: number; startYear: number }): Campaign {
@@ -40,28 +51,48 @@ export function createCampaign(world: World, opts: { seed: number; startYear: nu
     startYear: opts.startYear, year: opts.startYear, yearIdx: 0, goalYears: P.GOAL_YEARS,
     phase: 'plan', outcome: '',
     cash: P.START_CASH,
-    fields: ELEV.map((elev, i) => ({ elev, soil: Math.max(0, 1 - 0.5 * START_STREAK[i]), vert: START_VERT[i], streak: START_STREAK[i] })),
+    fields: PARCELS.map((p, i) => ({
+      elev: p.elev, soil: Math.max(0, 1 - 0.5 * p.streak), vert: p.vert, streak: p.streak,
+      tenure: i < HOME_FIELDS ? 'owned' : 'none',
+    })),
     plans: [],
-    upgrades: { boom: false, harvester: false, vent: false, reel: false },
-    seedStock: [], season: null, lots: [], nextLot: 1, month: 0,
-    yearRevenue: 0, yearCosts: 0, yearRest: 0, yearStorage: 0, history: [], steps: 0,
+    upgrades: { boom: false, harvester: false, vent: false, reel: false, tractor2: false, house2: false },
+    seedStock: [], season: null, lots: [], nextLot: 1,
+    crew: [newFarmer()], nextUnit: 1,
+    offers: [], contracts: [],
+    month: 0,
+    yearRevenue: 0, yearCosts: 0, yearRest: 0, yearStorage: 0,
+    yearWages: 0, yearRent: 0, yearLand: 0, yearContracts: 0, yearPenalties: 0,
+    history: [], steps: 0,
   }
   c.plans = defaultPlans(c)
+  c.offers = contractOffers(c.seed, c.year)
   return c
 }
 
-export function planCost(c: Campaign): number {
-  let cost = 0
-  for (const p of c.plans) {
-    if (p.crop === 'rest') cost += P.REST_COST
-    else cost += P.FIELD_COST + (p.seed === 'certified' ? P.SEED_CWT_PER_FIELD * P.CERT_SEED_PER_CWT : 0)
+export interface PlanCosts { fields: number; rent: number; wages: number; total: number }
+
+// What beginning the season costs: growing each held field, the year's rent, and the first month of every hired wage.
+export function planCosts(c: Campaign): PlanCosts {
+  let fields = 0, rent = 0, wages = 0
+  for (let i = 0; i < c.plans.length; i++) {
+    if (!held(c, i)) continue
+    const p = c.plans[i]
+    if (p.crop === 'rest') fields += P.REST_COST
+    else fields += P.FIELD_COST + (p.seed === 'certified' ? P.SEED_CWT_PER_FIELD * P.CERT_SEED_PER_CWT : 0)
+    if (c.fields[i].tenure === 'rented') rent += PARCELS[i].rent
   }
-  return cost
+  for (const u of c.crew) wages += u.wage
+  return { fields, rent, wages, total: fields + rent + wages }
+}
+
+export function planCost(c: Campaign): number {
+  return planCosts(c).total
 }
 
 function savedSeedShort(c: Campaign): string {
   const need: Record<string, number> = {}
-  for (const p of c.plans) if (p.crop === 'potato' && p.seed === 'saved') need[p.variety] = (need[p.variety] ?? 0) + 1
+  c.plans.forEach((p, i) => { if (held(c, i) && p.crop === 'potato' && p.seed === 'saved') need[p.variety] = (need[p.variety] ?? 0) + 1 })
   for (const id of Object.keys(need)) {
     const have = c.seedStock.filter(s => s.variety === id).reduce((a, s) => a + s.fields, 0)
     if (have < need[id]) return `Not enough saved ${variety(id as FieldPlan['variety']).name} seed: ${have} field${have === 1 ? '' : 's'} worth in the cellar.`
@@ -69,8 +100,22 @@ function savedSeedShort(c: Campaign): string {
   return ''
 }
 
+export interface PotatoHouse { name: string; at: number; cwt: number }
+
+// The potato houses the farm has now: the home house, a second one at home once built, the Dufour house while
+// Dufour land is held. Ventilation is in the home houses.
+export function potatoHouses(c: Campaign): PotatoHouse[] {
+  const home = c.upgrades.vent ? P.CELLAR_CWT_VENT : P.CELLAR_CWT
+  const out: PotatoHouse[] = [{ name: 'Home potato house', at: HOME_YARD, cwt: home }]
+  if (c.upgrades.house2) out.push({ name: 'Second potato house', at: HOME_YARD, cwt: home })
+  if (holdsDufour(c)) out.push({ name: 'Dufour potato house', at: DUFOUR_YARD, cwt: YARDS[1].cellar })
+  return out
+}
+
 export function cellarCapacity(c: Campaign): number {
-  return c.upgrades.vent ? P.CELLAR_CWT_VENT : P.CELLAR_CWT
+  let cap = 0
+  for (const h of potatoHouses(c)) cap += h.cwt
+  return cap
 }
 
 export function openLots(c: Campaign): Lot[] {
@@ -86,11 +131,36 @@ function note(c: Campaign, type: string, level: GameEvent['level'], text: string
   return e
 }
 
+function cost(c: Campaign, amount: number): void {
+  c.cash -= amount
+  c.yearCosts += amount
+}
+
+// Contracts that fall due now: what was not delivered costs CONTRACT_PENALTY of its contract value.
+function settleContracts(c: Campaign, due: Due | 'all', out: GameEvent[]): void {
+  for (const k of c.contracts) {
+    if (k.settled || (due !== 'all' && k.due !== due)) continue
+    k.settled = true
+    const short = k.cwt - k.delivered
+    const name = variety(k.variety).name
+    if (short > 1e-6) {
+      const pen = short * k.price * P.CONTRACT_PENALTY
+      k.penalty = pen
+      cost(c, pen)
+      c.yearPenalties += pen
+      out.push(note(c, 'contractShort', 'bad', `${withCommas(short)} cwt of ${name} short on ${k.buyer.toLowerCase()}'s contract. The penalty is $${withCommas(pen)}.`))
+    } else {
+      out.push(note(c, 'contractFilled', 'good', `${k.buyer}'s contract for ${withCommas(k.cwt)} cwt of ${name} is filled.`))
+    }
+  }
+}
+
 function endSeason(world: World, c: Campaign): GameEvent[] {
   const s = c.season!
   const out: GameEvent[] = []
   for (let i = 0; i < P.FIELD_COUNT; i++) {
     const f = s.fields[i]
+    if (f.status === 'off') continue
     if (f.status === 'rest') {
       c.cash += P.REST_INCOME
       c.yearRevenue += P.REST_INCOME
@@ -107,7 +177,10 @@ function endSeason(world: World, c: Campaign): GameEvent[] {
     }
   }
   s.jobs = []
-  // The cellar only holds so much: the overflow is sold off the field.
+  // The crews go home for the winter.
+  for (const u of c.crew) { u.job = -1; u.at = HOME_YARD; u.to = HOME_YARD; u.road = 0 }
+  settleContracts(c, 'harvest', out)
+  // The potato houses only hold so much: the overflow is sold off the field.
   const cap = cellarCapacity(c)
   let total = openLots(c).reduce((a, l) => a + lotCwt(l), 0)
   if (total > cap) {
@@ -194,16 +267,19 @@ function storeMonth(c: Campaign, out: GameEvent[]): void {
 export function netWorth(c: Campaign): number {
   let w = c.cash
   for (const id of Object.keys(c.upgrades) as UpgradeId[]) if (c.upgrades[id]) w += P.UPGRADES[id].cost * 0.5
+  for (let i = HOME_FIELDS; i < c.fields.length; i++) if (c.fields[i].tenure === 'owned') w += PARCELS[i].price * P.LAND_WORTH
   return Math.round(w)
 }
 
 function closeYear(world: World, c: Campaign, out: GameEvent[]): void {
   const s = c.season!
+  settleContracts(c, 'all', out)
   let interest = 0
   const lots = c.lots.filter(l => l.year === c.year)
   let potatoFields = 0, market = 0, culled = 0, peak = 0
   for (let i = 0; i < P.FIELD_COUNT; i++) {
     const f = s.fields[i]
+    if (f.status === 'off') continue
     if (c.plans[i].crop === 'potato' && f.plantDay >= 0) potatoFields++
     if (f.sevPeak > peak) peak = f.sevPeak
   }
@@ -222,6 +298,7 @@ function closeYear(world: World, c: Campaign, out: GameEvent[]): void {
     cashEnd: c.cash,
     revenue: c.yearRevenue, costs: c.yearCosts, note: P.NOTE_PAYMENT, living: P.LIVING, interest,
     restIncome: c.yearRest, storage: c.yearStorage,
+    wages: c.yearWages, rent: c.yearRent, land: c.yearLand, penalties: c.yearPenalties, contracts: c.yearContracts,
     cwtSold: market, cwtCulled: culled,
     yieldCwtAcre: potatoFields ? market / (potatoFields * P.FIELD_ACRES) : 0,
     potatoFields, blightPeak: peak, lots,
@@ -235,8 +312,9 @@ function closeYear(world: World, c: Campaign, out: GameEvent[]): void {
       c.seedStock.push({ variety: lot.variety, fields: lot.seedHeld, virus: lot.virus, blight: lot.blightSeed })
     }
   }
-  // Soil remembers what grew.
+  // Soil remembers what grew, on the land the farm held this year.
   for (let i = 0; i < P.FIELD_COUNT; i++) {
+    if (s.fields[i].status === 'off') continue
     const fp = c.fields[i]
     const odds = fp.vert / (1 - fp.vert)
     // A potato field that was never planted lay fallow: it counts as a year out of potatoes.
@@ -271,12 +349,21 @@ function nextYear(world: World, c: Campaign): Result {
   c.yearCosts = 0
   c.yearRest = 0
   c.yearStorage = 0
+  c.yearWages = 0
+  c.yearRent = 0
+  c.yearLand = 0
+  c.yearContracts = 0
+  c.yearPenalties = 0
   c.month = 0
   c.season = null
   c.lots = []
+  c.contracts = []
+  c.offers = contractOffers(c.seed, c.year)
   c.phase = 'plan'
   // Carry the plan forward with the rotation flipped where the soil asks for it, and drop seed that is not there.
+  // Rented land and the hired crew carry forward too, until they are released or dismissed.
   c.plans = c.plans.map((p, i) => {
+    if (!held(c, i)) return { ...REST_PLAN }
     const fp = c.fields[i]
     const crop = p.crop === 'potato' && fp.streak >= 2 ? 'rest' : p.crop === 'rest' ? 'potato' : p.crop
     return { crop, variety: p.variety, seed: 'certified' } as FieldPlan
@@ -284,11 +371,16 @@ function nextYear(world: World, c: Campaign): Result {
   return ok()
 }
 
+function fieldIndex(field: number): boolean {
+  return Number.isInteger(field) && field >= 0 && field < P.FIELD_COUNT
+}
+
 export function apply(world: World, c: Campaign, cmd: Cmd): Result {
   switch (cmd.t) {
     case 'plan': {
       if (c.phase !== 'plan') return fail('Plans are made in spring.')
-      if (cmd.field < 0 || cmd.field >= P.FIELD_COUNT) return fail('No such field.')
+      if (!fieldIndex(cmd.field)) return fail('No such field.')
+      if (!held(c, cmd.field)) return fail(`${FIELD_NAMES[cmd.field]} is not the farm's. Rent or buy it first.`)
       const v = variety(cmd.plan.variety)
       if (cmd.plan.crop === 'potato' && v.released > c.year) return fail(`${v.name} was not released until ${v.released}.`)
       const before = c.plans[cmd.field]
@@ -308,21 +400,103 @@ export function apply(world: World, c: Campaign, cmd: Cmd): Result {
       c.upgrades[cmd.upgrade] = true
       return ok()
     }
+    case 'rent': {
+      if (c.phase !== 'plan') return fail('Land is rented in spring.')
+      if (!fieldIndex(cmd.field)) return fail('No such field.')
+      const fp = c.fields[cmd.field]
+      const name = FIELD_NAMES[cmd.field]
+      if (fp.tenure === 'owned') return fail(`The farm owns ${name}.`)
+      if (fp.tenure === 'rented') return fail(`${name} is already rented for this year.`)
+      fp.tenure = 'rented'
+      c.plans[cmd.field] = defaultPlan(c, cmd.field)
+      return ok([note(c, 'rented', 'info', `${name} is rented for the year: $${withCommas(PARCELS[cmd.field].rent)}, paid when the season begins.`, cmd.field)])
+    }
+    case 'release': {
+      if (c.phase !== 'plan') return fail('Rented land is given up in spring.')
+      if (!fieldIndex(cmd.field)) return fail('No such field.')
+      const fp = c.fields[cmd.field]
+      const name = FIELD_NAMES[cmd.field]
+      if (fp.tenure === 'owned') return fail(`The farm owns ${name}. Land is not sold back.`)
+      if (fp.tenure === 'none') return fail(`${name} is not the farm's.`)
+      fp.tenure = 'none'
+      c.plans[cmd.field] = { ...REST_PLAN }
+      return ok([note(c, 'released', 'info', `${name} goes back to its owner.`, cmd.field)])
+    }
+    case 'buyLand': {
+      if (c.phase !== 'plan') return fail('Land is bought in spring.')
+      if (!fieldIndex(cmd.field)) return fail('No such field.')
+      const fp = c.fields[cmd.field]
+      const name = FIELD_NAMES[cmd.field]
+      if (fp.tenure === 'owned') return fail(`The farm already owns ${name}.`)
+      const price = PARCELS[cmd.field].price
+      if (c.cash - price < 0) return fail('Not enough cash. The bank will not lend for land.')
+      const was = fp.tenure
+      cost(c, price)
+      c.yearLand += price
+      fp.tenure = 'owned'
+      if (was === 'none') c.plans[cmd.field] = defaultPlan(c, cmd.field)
+      return ok([note(c, 'landBought', 'good', `${name} is the farm's: bought for $${withCommas(price)}.`, cmd.field)])
+    }
+    case 'accept': {
+      if (c.phase !== 'plan') return fail('Contracts are signed in spring.')
+      const k = c.offers.findIndex(o => o.id === cmd.offer)
+      if (k < 0) return fail('No such offer.')
+      const [o] = c.offers.splice(k, 1)
+      const signed: Contract = { ...o, delivered: 0, paid: 0, penalty: 0, settled: false }
+      c.contracts.push(signed)
+      return ok([note(c, 'accepted', 'info', `Contract signed with ${o.buyer.toLowerCase()}: ${withCommas(o.cwt)} cwt of ${variety(o.variety).name} at $${o.price.toFixed(2)}.`)])
+    }
     case 'begin': {
       if (c.phase !== 'plan') return fail('The season has already begun.')
       const short = savedSeedShort(c)
       if (short) return fail(short)
-      const cost = planCost(c)
-      if (c.cash - cost < P.OPERATING_LIMIT) return fail('The bank will not lend that much for the spring. Rest a field, or plant saved seed: it is free, but it carries virus.')
-      c.cash -= cost
-      c.yearCosts += cost
+      const pc = planCosts(c)
+      if (c.cash - pc.total < P.OPERATING_LIMIT) return fail('The bank will not lend that much for the spring. Rest a field, or plant saved seed: it is free, but it carries virus.')
+      cost(c, pc.total)
+      c.yearRent += pc.rent
+      c.yearWages += pc.wages
+      c.offers = []
       startSeason(world, c)
       c.phase = 'season'
       return ok()
     }
+    case 'hire': {
+      const why = hireBlock(c, cmd.kind)
+      if (why) return fail(why)
+      const u = newUnit(c, cmd.kind as 'hand' | 'operator')
+      if (c.phase === 'season' && c.season) {
+        cost(c, u.wage)
+        c.yearWages += u.wage
+        u.paidTo = c.season.day + P.WAGE_DAYS
+      }
+      c.crew.push(u)
+      const as = u.kind === 'hand' ? 'a field hand' : 'the tractor operator'
+      return ok([note(c, 'hired', 'info', `${u.name} is hired as ${as} at $${withCommas(u.wage)} a month.`)])
+    }
+    case 'dismiss': {
+      if (c.phase !== 'plan' && c.phase !== 'season') return fail('Hands are let go in spring or during the season.')
+      const k = c.crew.findIndex(u => u.id === cmd.unit)
+      if (k < 0) return fail('No such hand.')
+      const u = c.crew[k]
+      if (u.kind === 'farmer') return fail('The farmer stays.')
+      c.crew.splice(k, 1)
+      for (const j of c.season?.jobs ?? []) if (j.unit === u.id) j.unit = -1
+      return ok([note(c, 'dismissed', 'info', `${u.name} is let go.`)])
+    }
     case 'job': {
-      const why = addJob(c, cmd.kind, cmd.field)
+      const why = addJob(c, cmd.kind, cmd.field, cmd.unit ?? -1)
       return why ? fail(why) : ok()
+    }
+    case 'assign': {
+      if (c.phase !== 'season' || !c.season) return fail('No work list.')
+      const job = c.season.jobs.find(j => j.id === cmd.id)
+      if (!job) return fail('No such job.')
+      if (!Number.isInteger(cmd.unit) || cmd.unit < -1) return fail('No such crew.')
+      const why = unitBlock(c, job.kind, cmd.unit)
+      if (why) return fail(why)
+      job.unit = cmd.unit
+      for (const u of c.crew) if (u.job === job.id && cmd.unit >= 0 && u.id !== cmd.unit) u.job = -1
+      return ok()
     }
     case 'cancel': {
       if (c.phase !== 'season' || !c.season) return fail('No work list.')
@@ -330,6 +504,7 @@ export function apply(world: World, c: Campaign, cmd: Cmd): Result {
       if (k < 0) return fail('No such job.')
       if (c.season.jobs[k].kind === 'dig' && c.season.jobs[k].done > 0) return fail('The digger is already in the field.')
       c.season.jobs.splice(k, 1)
+      releaseJob(c, cmd.id)
       return ok()
     }
     case 'bump': {
@@ -362,6 +537,36 @@ export function apply(world: World, c: Campaign, cmd: Cmd): Result {
       const money = sellLot(world, c, lot, cmd.frac)
       return ok([note(c, 'sold', 'good', `Sold ${variety(lot.variety).name} from ${FIELD_NAMES[lot.field]} for $${withCommas(money)}.`, lot.field)])
     }
+    case 'deliver': {
+      if (c.phase !== 'season' && c.phase !== 'cellar') return fail('Nothing to deliver now.')
+      const lot = c.lots.find(l => l.id === cmd.lot)
+      if (!lot || !lot.open) return fail('That lot is gone.')
+      const k = c.contracts.find(x => x.id === cmd.contract)
+      if (!k) return fail('No such contract.')
+      if (k.settled) return fail('That contract has closed.')
+      const name = variety(lot.variety).name
+      if (k.variety !== lot.variety) return fail(`${k.buyer} wants ${variety(k.variety).name}, not ${name}.`)
+      const need = k.cwt - k.delivered
+      if (need <= 1e-6) return fail('That contract is filled.')
+      if (c.phase === 'season' && c.season && c.season.fields[lot.field].status === 'digging') return fail('Still being dug.')
+      if (lot.grades.no1 + lot.grades.chef <= 1e-6) return fail('There is no US No. 1 or large stock left in that lot.')
+      if (c.phase === 'season' && c.season) ageLot(c, lot, c.season.day)
+      const have = lot.grades.no1 + lot.grades.chef
+      const take = Math.min(have, need)
+      const keep = 1 - take / have
+      lot.grades.no1 *= keep
+      lot.grades.chef *= keep
+      const money = take * k.price
+      k.delivered += take
+      k.paid += money
+      lot.sold += take
+      lot.revenue += money
+      c.cash += money
+      c.yearRevenue += money
+      c.yearContracts += money
+      if (lotCwt(lot) < 0.5) lot.open = false
+      return ok([note(c, 'delivered', 'good', `Delivered ${withCommas(take)} cwt of ${name} from ${FIELD_NAMES[lot.field]} to ${k.buyer.toLowerCase()} for $${withCommas(money)}.`, lot.field)])
+    }
     case 'seed': {
       if (c.phase !== 'cellar') return fail('Seed is held back from the cellar.')
       const lot = c.lots.find(l => l.id === cmd.lot)
@@ -389,6 +594,7 @@ export function apply(world: World, c: Campaign, cmd: Cmd): Result {
       }
       storeMonth(c, out)
       c.month++
+      if (c.month === P.CONTRACT_WINTER_MONTH) settleContracts(c, 'winter', out)
       return ok(out)
     }
     case 'next': {
@@ -396,9 +602,9 @@ export function apply(world: World, c: Campaign, cmd: Cmd): Result {
       return nextYear(world, c)
     }
   }
+  return fail('No such command.')
 }
 
 export function canEndSeason(c: Campaign): boolean {
   return c.phase === 'season' && seasonDone(c)
 }
-

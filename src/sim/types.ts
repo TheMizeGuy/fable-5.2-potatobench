@@ -55,15 +55,18 @@ export interface Day {
 export type VarietyId = 'norland' | 'superior' | 'katahdin' | 'kennebec' | 'burbank' | 'atlantic' | 'gold' | 'caribou'
 
 export type JobKind = 'plant' | 'hill' | 'scout' | 'spray' | 'water' | 'rogue' | 'sample' | 'kill' | 'dig'
-export type UpgradeId = 'boom' | 'harvester' | 'vent' | 'reel'
+export type UpgradeId = 'boom' | 'harvester' | 'vent' | 'reel' | 'tractor2' | 'house2'
 export type Grade = 'no1' | 'chef' | 'b' | 'no2' | 'cull'
 export type Cause = 'green' | 'scab' | 'hollow' | 'knob' | 'skin' | 'bruise' | 'blight' | 'frost' | 'rot' | 'small'
+export type Tenure = 'owned' | 'rented' | 'none'
+export type UnitKind = 'farmer' | 'operator' | 'hand'
 
 export interface FieldPersist {
   elev: 0 | 1 | 2           // 0 bottom land, 1 mid slope, 2 ridge
   soil: number              // short-term soil condition from the rotation, 0..1
   vert: number              // share of plants that will go down early with Verticillium wilt
   streak: number            // consecutive potato years up to last season
+  tenure: Tenure            // 'rented' carries into the next spring until released
 }
 
 export interface FieldPlan {
@@ -72,7 +75,8 @@ export interface FieldPlan {
   seed: 'certified' | 'saved'
 }
 
-export type FieldStatus = 'rest' | 'idle' | 'planted' | 'growing' | 'dead' | 'digging' | 'dug' | 'lost'
+// 'off': not the farm's this season.
+export type FieldStatus = 'off' | 'rest' | 'idle' | 'planted' | 'growing' | 'dead' | 'digging' | 'dug' | 'lost'
 
 // Hill state bits.
 export const H_EMERGED = 1
@@ -138,6 +142,38 @@ export interface Job {
   field: number
   done: number
   need: number
+  unit: number              // -1: any crew; otherwise the id of the unit it is pinned to
+}
+
+// A crew: the farmer, a hired field hand, or a hired operator on the second tractor.
+export interface Unit {
+  id: number                // the farmer is 0
+  kind: UnitKind
+  name: string
+  at: number                // where it is: a field index, or -1 the home yard, -2 the Dufour yard
+  wage: number              // dollars a month
+  job: number               // id of the order it is working or going to, or -1
+  to: number                // where it is going; equals `at` when it is not on the road
+  road: number              // days of travel left to reach `to`
+  paidTo: number            // day of the season until which its wage is paid
+}
+
+export type Due = 'harvest' | 'winter'
+
+export interface Offer {
+  id: number
+  buyer: string
+  variety: VarietyId
+  cwt: number               // US No. 1 and large tubers
+  price: number             // dollars per cwt, fixed
+  due: Due                  // 'harvest': by the close of the season; 'winter': from storage before March
+}
+
+export interface Contract extends Offer {
+  delivered: number         // cwt
+  paid: number              // dollars received for what was delivered
+  penalty: number           // dollars charged at the due date for the shortfall
+  settled: boolean          // the due date has passed
 }
 
 export interface Lot {
@@ -187,8 +223,7 @@ export interface Season {
   fields: FieldSeason[]
   jobs: Job[]
   nextJob: number
-  workLeft: number          // share of today not yet used
-  worked: { kind: JobKind; field: number }[]   // what the farmer did on the last day worked, in order
+  worked: { kind: JobKind; field: number; unit: number }[]   // what each crew did on the last day worked, in order
   spent: number
   log: GameEvent[]
 }
@@ -198,6 +233,8 @@ export interface YearSummary {
   cashStart: number; cashEnd: number
   revenue: number; costs: number; note: number; living: number; interest: number
   restIncome: number; storage: number      // parts of revenue and of costs
+  wages: number; rent: number; land: number; penalties: number   // parts of costs
+  contracts: number                        // part of revenue: deliveries against contracts
   cwtSold: number; cwtCulled: number
   yieldCwtAcre: number      // marketable, over potato acres
   potatoFields: number
@@ -218,18 +255,27 @@ export interface Campaign {
   phase: Phase
   outcome: '' | 'kept' | 'lost'
   cash: number
-  fields: FieldPersist[]
-  plans: FieldPlan[]
+  fields: FieldPersist[]    // one per parcel (src/sim/farm.ts)
+  plans: FieldPlan[]        // one per parcel; a field the farm does not hold keeps a rest-year placeholder
   upgrades: Record<UpgradeId, boolean>
   seedStock: SeedStock[]
   season: Season | null
   lots: Lot[]
   nextLot: number
+  crew: Unit[]              // the farmer first, then hired units in the order hired
+  nextUnit: number
+  offers: Offer[]           // this spring's contract offers, until the season begins
+  contracts: Contract[]     // this year's accepted contracts
   month: number             // cellar month index, 0 = November
   yearRevenue: number
   yearCosts: number
   yearRest: number
   yearStorage: number
+  yearWages: number
+  yearRent: number
+  yearLand: number
+  yearContracts: number
+  yearPenalties: number
   history: YearSummary[]
   steps: number
 }
@@ -237,13 +283,21 @@ export interface Campaign {
 export type Cmd =
   | { t: 'plan'; field: number; plan: FieldPlan }
   | { t: 'buy'; upgrade: UpgradeId }
+  | { t: 'rent'; field: number }
+  | { t: 'release'; field: number }
+  | { t: 'buyLand'; field: number }
+  | { t: 'accept'; offer: number }
   | { t: 'begin' }
-  | { t: 'job'; kind: JobKind; field: number }
+  | { t: 'hire'; kind: UnitKind }
+  | { t: 'dismiss'; unit: number }
+  | { t: 'job'; kind: JobKind; field: number; unit?: number }
+  | { t: 'assign'; id: number; unit: number }
   | { t: 'cancel'; id: number }
   | { t: 'bump'; id: number }
   | { t: 'day' }
   | { t: 'endSeason' }
   | { t: 'sell'; lot: number; frac: number }
+  | { t: 'deliver'; lot: number; contract: number }
   | { t: 'seed'; lot: number; fields: number }
   | { t: 'month' }
   | { t: 'next' }
