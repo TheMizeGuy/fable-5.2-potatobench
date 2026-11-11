@@ -25,9 +25,9 @@ async function answerTicket(page: Page, store: boolean): Promise<void> {
 // Plays the days as they come: reads a tip and puts it away, gives each field what its badge asks for (every third
 // one through the command card), keeps the clock running, and answers weigh tickets. Stops at the first ticket or
 // when the season is done.
-async function farm(page: Page, until: 'ticket' | 'done', store: boolean): Promise<void> {
+async function farm(page: Page, until: 'ticket' | 'done', store: boolean, ms = 300_000): Promise<void> {
   let given = 0
-  const deadline = Date.now() + 300_000
+  const deadline = Date.now() + ms
   while (Date.now() < deadline) {
     const s = await look(page)
     if (s.ticket) {
@@ -143,7 +143,7 @@ async function winterAndYearEnd(page: Page): Promise<void> {
 }
 
 test('a second year on a bigger farm: rented land, a hired hand, and a contract delivered against', async ({ page }) => {
-  test.setTimeout(600_000)
+  test.setTimeout(900_000)
   const errors = watchErrors(page)
   await page.goto('./')
   await page.evaluate(() => localStorage.clear())
@@ -196,7 +196,8 @@ test('a second year on a bigger farm: rented land, a hired hand, and a contract 
   await expect(page.getByTestId('unit-1')).toHaveAttribute('aria-pressed', 'true')
   await page.getByTestId('unit-1').click()
   await expect(page.getByTestId('unit-1')).toHaveAttribute('aria-pressed', 'false')
-  await farm(page, 'done', true)
+  // A whole season in one go, with more land to work than the first year had.
+  await farm(page, 'done', true, 600_000)
   const delivered = await page.evaluate(() => (globalThis as unknown as { __county: { app: { campaign: { contracts: { delivered: number }[] } } } }).__county.app.campaign.contracts[0].delivered)
   expect(delivered).toBeGreaterThan(0)
 

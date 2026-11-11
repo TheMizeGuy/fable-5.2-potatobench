@@ -1,9 +1,12 @@
 // Opens the game, optionally runs a little code in it, and prints every console error and page error with its stack.
-// Usage: node tools/quality/errors.ts <base url> [code run in the page through the capture helper]
+// Usage: node tools/quality/errors.ts <base url> [code run in the page through the capture helper, or @file holding it]
+// WAIT=ms sets how long the page runs after the code before the errors are printed.
+import { readFileSync } from 'node:fs'
 import { chromium } from '@playwright/test'
 import { GPU, HELPER, q } from './shared.ts'
 
-const [base, code = ''] = process.argv.slice(2)
+const [base, arg = ''] = process.argv.slice(2)
+const code = arg.startsWith('@') ? readFileSync(arg.slice(1), 'utf8') : arg
 if (!base) throw new Error('usage: errors.ts <base url> [code]')
 const browser = await chromium.launch({ args: GPU })
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
@@ -19,7 +22,7 @@ page.on('pageerror', e => seen.push(`page: ${e.stack ?? String(e)}`))
 await page.goto(base)
 const up = await page.waitForFunction(() => '__county' in globalThis, null, { timeout: 15000 }).then(() => true, () => false)
 if (up && code) await q(page, code).catch(e => seen.push(`code: ${String(e)}`))
-await page.waitForTimeout(1500)
+await page.waitForTimeout(Number(process.env.WAIT ?? 1500))
 console.log(up ? 'the game is up' : 'the game did not come up')
 for (const s of seen) console.log(s)
 await browser.close()
