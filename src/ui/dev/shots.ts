@@ -1,5 +1,6 @@
-// Walks every screen at desktop and phone size, saves named screenshots, runs axe, and fails on any console error.
-// Usage: node src/ui/dev/shots.ts [output folder]    (ENGINE=firefox or ENGINE=webkit to use another browser)
+// Walks every screen at nine window sizes, saves named screenshots, runs axe, checks the layout holds, and fails on
+// any console error.
+// Usage: node src/ui/dev/shots.ts [output folder] [size tag ...]   (ENGINE=firefox or ENGINE=webkit for another browser)
 import { mkdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { chromium, firefox, webkit, type Page } from '@playwright/test'
@@ -25,7 +26,15 @@ const shots: string[] = []
 
 const problems: string[] = []
 
-// At phone width: nothing may scroll sideways, and every control must be at least 40 px square to the finger.
+// Every size the season screen has to hold together at. The touch ones are walked as a finger would.
+const SIZES: [string, number, number][] = [
+  ['p320', 320, 640], ['phone', 390, 844], ['land', 844, 390], ['tablet', 820, 1180],
+  ['w1024', 1024, 700], ['w1280', 1280, 720], ['w1366', 1366, 768], ['wide', 1440, 900], ['w1920', 1920, 1080],
+]
+const TOUCH = new Set(['p320', 'phone', 'land', 'tablet'])
+const only = process.argv.slice(3)
+
+// Nothing may scroll sideways, and under a finger every control must be at least 40 px square.
 async function layoutCheck(page: Page, tag: string, name: string): Promise<void> {
   const r = await page.evaluate((phone) => {
     const out: string[] = []
@@ -45,8 +54,83 @@ async function layoutCheck(page: Page, tag: string, name: string): Promise<void>
       }
     }
     return out
-  }, tag === 'phone')
+  }, TOUCH.has(tag))
   for (const p of r) problems.push(`${tag} ${name}: ${p}`)
+}
+
+// The season screen at this size: the land has room, the date is on one line clear of the clock, and no field chip
+// is narrower than its name.
+async function seasonCheck(page: Page, tag: string, name: string): Promise<void> {
+  const r = await page.evaluate(() => {
+    const out: string[] = []
+    const box = (q: string) => document.querySelector(q)?.getBoundingClientRect()
+    const ins = window.__county.app.insets
+    const freeW = innerWidth - ins.left - ins.right, freeH = innerHeight - ins.top - ins.bottom
+    if (freeW < 240 || freeH < 150) out.push(`the land has only ${Math.round(freeW)}x${Math.round(freeH)} px`)
+    const date = document.querySelector<HTMLElement>('.date')
+    if (date) {
+      if (date.getClientRects().length > 1 || date.getBoundingClientRect().height > 30) out.push('the date wraps')
+      const d = date.getBoundingClientRect(), c = box('.clock')
+      if (c && d.right > c.left + 0.5 && d.left < c.right - 0.5 && d.bottom > c.top + 0.5 && d.top < c.bottom - 0.5) out.push('the date runs under the clock')
+      if (date.scrollWidth > date.clientWidth + 1) out.push('the date is cut off')
+    }
+    const bar = box('.topbar')
+    if (bar && bar.right > innerWidth + 0.5) out.push('the top bar runs off the side')
+    for (const el of document.querySelectorAll<HTMLElement>('.topbar > *')) {
+      const b = el.getBoundingClientRect()
+      if (b.width > 0 && bar && (b.right > bar.right + 0.5 || b.left < bar.left - 0.5)) out.push(`top bar item ${el.className} sticks out`)
+    }
+    for (const chip of document.querySelectorAll<HTMLElement>('.chip')) {
+      const n = chip.querySelector<HTMLElement>('.chip-name')!
+      const c = chip.getBoundingClientRect()
+      const range = document.createRange()
+      range.selectNodeContents(n)
+      const text = range.getBoundingClientRect()
+      if (text.right > c.right - 2 || text.height > 22) out.push(`chip ${n.textContent} is narrower than its name (${Math.round(c.width)} px)`)
+    }
+    return out
+  })
+  for (const p of r) problems.push(`${tag} ${name}: ${p}`)
+}
+
+// Where the panel is the tabbed sheet: the tab bar and the chips stay where they are while tabs and toasts change.
+async function steadyCheck(page: Page, tag: string): Promise<void> {
+  const at = async () => page.evaluate(() => {
+    const t = document.querySelector('.sheet-tabs')!.getBoundingClientRect(), c = document.querySelector('.bottom-sheet .chips')!.getBoundingClientRect()
+    const b = document.querySelector('.topbar')!.getBoundingClientRect()
+    return [Math.round(t.top), Math.round(t.height), Math.round(c.top), Math.round(b.height)].join(',')
+  })
+  const first = await at()
+  for (const tab of ['work', 'weather', 'diary', 'coach', 'field']) {
+    await page.getByTestId(`tab-${tab}`).click()
+    await page.waitForTimeout(120)
+    const now = await at()
+    if (now !== first) problems.push(`${tag}: the tab bar or header moved on the ${tab} tab (${first} to ${now})`)
+  }
+  await page.keyboard.press('Shift+P')
+  await page.keyboard.press('Shift+H')
+  await page.waitForTimeout(300)
+  const toasted = await at()
+  if (toasted !== first) problems.push(`${tag}: the tab bar or header moved under a toast (${first} to ${toasted})`)
+  if (await page.locator('.toasts.compact').count()) expect(await page.locator('.toast').count() <= 1, `${tag}: more than one toast at a time over a small view of the land`)
+  await page.evaluate(() => { const { app } = window.__county; for (const j of [...app.campaign!.season!.jobs]) app.do({ t: 'cancel', id: j.id }) })
+  await page.waitForTimeout(150)
+}
+
+// A queued job leaves every job button where it was, and the nine are all on screen.
+async function padCheck(page: Page, tag: string): Promise<void> {
+  const where = async () => page.evaluate(() => [...document.querySelectorAll<HTMLElement>('.job-btn')].map(b => { const r = b.getBoundingClientRect(); return `${b.dataset.testid}:${Math.round(r.left)},${Math.round(r.top)},${Math.round(r.width)},${Math.round(r.height)}` }).join(' '))
+  const before = await where()
+  expect(before.split(' ').length === 9, `${tag}: the field panel does not show nine jobs`)
+  const open = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>('.job-btn.ok')].map(b => b.dataset.testid!))
+  if (open.length) {
+    await page.getByTestId(open[0]).click()
+    await page.waitForTimeout(200)
+    const after = await where()
+    if (after !== before) problems.push(`${tag}: job buttons moved after ${open[0]} was queued`)
+    const shownIn = await page.evaluate(() => { const p = document.querySelector('.pad')!.getBoundingClientRect(); return p.top >= 0 && p.bottom <= innerHeight + 0.5 })
+    expect(shownIn, `${tag}: the job pad is not all on screen with a field chosen`)
+  }
 }
 
 async function shot(page: Page, tag: string, name: string): Promise<void> {
@@ -64,11 +148,18 @@ function expect(ok: boolean, what: string): void {
 // Keyboard: Space, 1 2 3, [ ] and arrows, a job letter, Escape; dialogs keep and give back focus.
 async function keyboard(page: Page, tag: string): Promise<void> {
   const state = () => page.evaluate(() => ({ speed: window.__county.app.speed, sel: window.__county.app.selected, jobs: window.__county.app.campaign!.season!.jobs.map(j => `${j.kind}:${j.field}`) }))
-  await page.mouse.click(5, 450)
+  const compact = await page.evaluate(() => document.querySelector<HTMLElement>('.hud')!.dataset.layout !== 'wide')
+  await page.mouse.click(5, Math.round(page.viewportSize()!.height * 0.4))
   await page.keyboard.press('2')
   expect((await state()).speed === 2, `${tag}: key 2 did not set speed 2`)
   await page.keyboard.press(' ')
   expect((await state()).speed === 0, `${tag}: Space did not pause`)
+  await page.keyboard.press('1')
+  await page.getByTestId('field-3').focus()
+  await page.keyboard.press('0')
+  expect((await state()).speed === 0, `${tag}: 0 did not pause with a field chip focused`)
+  await page.keyboard.press('Escape')
+  await page.keyboard.press('Escape')
   await page.keyboard.press(']')
   await page.keyboard.press(']')
   await page.keyboard.press('[')
@@ -81,18 +172,18 @@ async function keyboard(page: Page, tag: string): Promise<void> {
   await page.keyboard.press('Escape')
   expect((await state()).sel === -1, `${tag}: Escape did not let go of the field`)
   const id = await page.evaluate(() => window.__county.app.campaign!.season!.jobs[0]?.id ?? -1)
-  if (tag === 'phone') await page.getByTestId('tab-work').click()
+  if (compact) await page.getByTestId('tab-work').click()
   if (id >= 0) await page.getByTestId(`job-cancel-${id}`).click()
   expect((await state()).jobs.length === 0, `${tag}: cancel did not empty the work list`)
   await page.getByTestId('field-0').click()
-  if (tag === 'phone') await page.getByTestId('tab-field').click()
+  if (compact) await page.getByTestId('tab-field').click()
   await page.getByTestId('act-plant').focus()
   await page.keyboard.press('Enter')
   await page.waitForTimeout(100)
   expect((await state()).jobs.includes('plant:0'), `${tag}: Enter on Plant did not queue it`)
   expect(await page.evaluate(() => !!document.activeElement?.closest('.fieldpanel')), `${tag}: focus was lost after queuing a job from the keyboard`)
   const id2 = await page.evaluate(() => window.__county.app.campaign!.season!.jobs[0]?.id ?? -1)
-  if (tag === 'phone') await page.getByTestId('tab-work').click()
+  if (compact) await page.getByTestId('tab-work').click()
   if (id2 >= 0) await page.getByTestId(`job-cancel-${id2}`).click()
   await page.keyboard.press('Escape')
   await page.getByTestId('how-open').focus()
@@ -106,7 +197,8 @@ async function keyboard(page: Page, tag: string): Promise<void> {
   expect(await page.evaluate(() => (document.activeElement as HTMLElement | null)?.dataset.testid === 'how-open'), `${tag}: focus did not return to the button that opened the dialog`)
   const ins = await page.evaluate(() => window.__county.app.insets)
   insetReport.push(`${tag} season insets: top ${ins.top}, right ${ins.right}, bottom ${ins.bottom}, left ${ins.left}`)
-  expect(ins.top > 0 && ins.bottom > 0 && (tag === 'phone' || (ins.left > 0 && ins.right > 0)), `${tag}: insets not set`)
+  const layout = await page.evaluate(() => document.querySelector<HTMLElement>('.hud')!.dataset.layout)
+  expect(ins.top > 0 && (layout === 'phone' ? ins.bottom > 0 : layout === 'side' ? ins.right > 0 : ins.left > 0 && ins.right > 0 && ins.bottom > 0), `${tag}: insets not set`)
 }
 const insetReport: string[] = []
 
@@ -145,9 +237,10 @@ async function play(page: Page, stop: 'day' | 'dug' | 'done', until = 0): Promis
 
 async function walk(tag: string, width: number, height: number): Promise<void> {
   const engine = process.env.ENGINE ?? 'chromium'
-  const browser = engine === 'firefox' ? await firefox.launch() : engine === 'webkit' ? await webkit.launch()
-    : await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] })
-  const context = await browser.newContext({ viewport: { width, height } })
+  const gl = process.platform === 'darwin' ? ['--use-angle=metal', '--ignore-gpu-blocklist', '--enable-gpu'] : ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist']
+  const browser = engine === 'firefox' ? await firefox.launch() : engine === 'webkit' ? await webkit.launch() : await chromium.launch({ args: gl })
+  const touch = TOUCH.has(tag)
+  const context = await browser.newContext({ viewport: { width, height }, hasTouch: touch, isMobile: touch && engine === 'chromium' })
   const page = await context.newPage()
   try {
     await steps(page, tag, width)
@@ -173,21 +266,39 @@ async function steps(page: Page, tag: string, width: number): Promise<void> {
   await page.getByTestId('new-farm').click()
   await page.getByTestId('start-year-1977').click()
   await shot(page, tag, '02-new-farm')
+  await axe(page, tag, 'new farm')
+  const picker = (await page.locator('.year-detail').textContent()) ?? ''
+  expect(!/blight|frost|summer|wettest|driest|1977 dollars/i.test(picker), `${tag}: the year picker says something about the season to come: ${picker.slice(0, 200)}`)
+  expect(/1976/.test(picker), `${tag}: the year picker does not show the year before`)
   await page.getByTestId('start-confirm').click()
   await page.getByTestId('begin-season').waitFor()
   await page.evaluate(() => window.__county.app.newGame(1977, 5))
   await page.getByTestId('begin-season').waitFor()
+  const compact = await page.evaluate(() => document.querySelector<HTMLElement>('.hud')!.dataset.layout !== 'wide')
+  const touch = TOUCH.has(tag)
+  if (touch) expect(await page.evaluate(() => matchMedia('(pointer: coarse)').matches), `${tag}: the touch walk is not seen as a touch device`)
   await shot(page, tag, '03-plan')
   await axe(page, tag, 'plan')
   if (width < 600) {
     await page.locator('.sheet').evaluate(el => { el.scrollTop = el.scrollHeight })
     await shot(page, tag, '03b-plan-foot')
   }
+  await page.getByTestId('compare-open').click()
+  await shot(page, tag, '03c-compare')
+  await page.getByTestId('compare-close').click()
 
   await page.getByTestId('begin-season').click()
   await page.getByTestId('speed-0').waitFor()
   await shot(page, tag, '04-season-start')
+  await seasonCheck(page, tag, 'season start')
+  expect(/Nothing can be queued yet/.test((await page.getByTestId('clock-note').textContent()) ?? ''), `${tag}: day one does not say that nothing can be queued yet`)
+  if (touch) expect((await page.locator('.hud kbd').evaluateAll(els => els.filter(e => (e as HTMLElement).offsetParent !== null).length)) === 0, `${tag}: key chips are shown to a touch player`)
   await keyboard(page, tag)
+  if (compact) await steadyCheck(page, tag)
+  await page.getByTestId('field-0').click()
+  await page.waitForTimeout(250)
+  await shot(page, tag, '04b-season-field-idle')
+  await page.keyboard.press('Escape')
 
   await play(page, 'day', await page.evaluate(() => window.__county.sim.dayIndex(1977, 6, 22)))
   await closeDialogs(page)
@@ -196,13 +307,17 @@ async function steps(page: Page, tag: string, width: number): Promise<void> {
     const b = page.getByTestId(`act-${kind}`)
     if (await b.isEnabled()) await b.click()
   }
-  if (width < 600) {
+  if (compact) {
     await page.getByTestId('tab-field').click()
     await page.locator('.sheet-body').evaluate(el => { el.scrollTop = 0 })
-  } else await page.locator('.fieldpanel').evaluate(el => { el.scrollTop = 0 })
+  } else await page.locator('.panel-info').evaluate(el => { el.scrollTop = 0 })
+  await page.mouse.move(2, 2)
   await shot(page, tag, '05-season-field')
+  await seasonCheck(page, tag, 'midsummer')
   await axe(page, tag, 'season')
-  if (width < 600) {
+  await padCheck(page, tag)
+  await shot(page, tag, '05a-season-field-job')
+  if (compact) {
     await page.getByTestId('tab-work').click()
     await shot(page, tag, '05b-season-work')
     await page.getByTestId('tab-weather').click()
@@ -217,6 +332,13 @@ async function steps(page: Page, tag: string, width: number): Promise<void> {
     await page.getByTestId('sample-dialog').waitFor()
     await page.waitForTimeout(800)
     await shot(page, tag, '06-test-dig')
+    // A stray tap outside must not close the result.
+    await page.mouse.click(Math.round(width / 2), 4)
+    expect(await page.getByTestId('sample-dialog').count() === 1, `${tag}: a tap outside closed the test dig`)
+    await page.getByTestId('sample-close').click()
+    if (compact) await page.getByTestId('tab-field').click()
+    await page.getByTestId('sample-again').click()
+    await page.getByTestId('sample-dialog').waitFor()
     await page.getByTestId('sample-close').click()
   } else errors.push(`${tag}: could not queue a test dig`)
 
@@ -225,8 +347,22 @@ async function steps(page: Page, tag: string, width: number): Promise<void> {
   await page.getByTestId('weighin').waitFor()
   await page.waitForTimeout(900)
   await shot(page, tag, '07-weigh-in')
+  await page.mouse.click(Math.round(width / 2), 4)
+  expect(await page.getByTestId('weighin').count() === 1, `${tag}: a tap outside closed the weigh-in`)
+  await page.locator('.dialog-body').last().evaluate(el => { el.scrollTop = el.scrollHeight })
+  await shot(page, tag, '07b-weigh-in-choice')
+  await axe(page, tag, 'weigh-in')
+  expect(await page.locator('.dialog-foot .btn.primary').count() === 0, `${tag}: one of the sell or keep buttons is the primary one`)
   await page.getByTestId(`lot-keep-${lot}`).click()
+  await page.waitForTimeout(200)
+  expect(/went into the cellar/.test((await page.locator('.toasts').textContent()) ?? ''), `${tag}: no toast when a crop goes to the cellar`)
   await closeDialogs(page)
+  await page.getByTestId('cellar-line').waitFor()
+  await shot(page, tag, '07c-cellar-line')
+  await page.getByTestId('cellar-line').click()
+  await page.getByTestId('cellar-lots').waitFor()
+  await shot(page, tag, '07d-cellar-lots')
+  await page.getByTestId('cellar-close').click()
 
   await play(page, 'done')
   await closeDialogs(page)
@@ -235,10 +371,13 @@ async function steps(page: Page, tag: string, width: number): Promise<void> {
   await page.getByTestId('end-season').click()
   await page.getByTestId('month-next').waitFor()
   await closeDialogs(page)
+  // The walk wants a second spring whatever the first year made: the money is topped up by hand.
+  await page.evaluate(() => { window.__county.app.campaign!.cash += 40000 })
   await shot(page, tag, '09-cellar')
   await axe(page, tag, 'cellar')
 
   const open = await page.evaluate(() => window.__county.sim.openLots(window.__county.app.campaign!).map(l => l.id))
+  if (open.length && await page.getByTestId(`lot-seed-${open[0]}`).count()) await page.getByTestId(`lot-seed-${open[0]}`).click()
   if (open.length) await page.getByTestId(`lot-sell-half-${open[0]}`).click()
   for (let k = 0; k < 9 && (await page.evaluate(() => window.__county.app.campaign!.phase)) === 'cellar'; k++) {
     const before = await page.evaluate(() => window.__county.app.campaign!.month)
@@ -266,6 +405,9 @@ async function steps(page: Page, tag: string, width: number): Promise<void> {
 
   await page.getByTestId('year-next').click()
   await page.getByTestId('begin-season').waitFor()
+  // Saved seed is put in the cellar by hand, so the walk shows it whatever the winter did to the pile.
+  await page.evaluate(() => { const { app } = window.__county; app.campaign!.seedStock = [{ variety: 'katahdin', fields: 2, virus: 0.12, blight: 0.03 }]; app.do({ t: 'plan', field: 0, plan: { crop: 'potato', variety: 'katahdin', seed: 'saved' } }) })
+  await page.getByTestId('seed-note-0').waitFor()
   await shot(page, tag, '14-plan-year-two')
 
   await page.evaluate(() => {
@@ -284,12 +426,28 @@ async function steps(page: Page, tag: string, width: number): Promise<void> {
   await page.getByTestId('over-title').click()
   await page.getByTestId('continue').waitFor()
   await shot(page, tag, '17-title-continue')
+
+  // Five seasons kept: the fifth ledger. The money is put there by hand; this walk is about the screen.
+  await page.evaluate(() => {
+    const { app } = window.__county
+    app.newGame(1985, 9)
+    const c = app.campaign!
+    for (let y = 0; y < 5; y++) {
+      c.cash = 120000
+      app.do({ t: 'begin' })
+      app.do({ t: 'endSeason' })
+      for (let k = 0; k < 10 && c.phase === 'cellar'; k++) app.do({ t: 'month' })
+      if (y < 4) app.do({ t: 'next' })
+    }
+  })
+  await closeDialogs(page)
+  await page.getByTestId('kept-moment').waitFor()
+  await shot(page, tag, '18-ledger-kept')
 }
 
 let failed = false
 try {
-  await walk('wide', 1440, 900)
-  await walk('phone', 390, 844)
+  for (const [tag, w, h] of SIZES) if (only.length === 0 || only.includes(tag)) await walk(tag, w, h)
 } catch (e) {
   failed = true
   console.error(e)

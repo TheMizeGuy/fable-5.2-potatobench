@@ -11,8 +11,12 @@ export const PHASE_LABEL: Record<S.Phase, string> = {
 
 const SPEED_LABEL = ['Pause', 'Run slowly, about a day a second', 'Run faster, two or three days a second', 'Run fast, eight days a second']
 
-export function dateText(c: S.Campaign, short = false): string {
-  if (c.phase === 'season' && c.season) return short ? `${F.weekday(c.year, c.season.day, true)}, ${F.date(c.year, c.season.day)}, ${c.year}` : `${F.dateLong(c.year, c.season.day)}, ${c.year}`
+// form: 'long' with the weekday spelled out, 'mid' with it shortened, 'short' with the month shortened too.
+export function dateText(c: S.Campaign, form: 'long' | 'mid' | 'short' = 'long'): string {
+  if (c.phase === 'season' && c.season) {
+    const d = c.season.day
+    return form === 'long' ? `${F.dateLong(c.year, d)}, ${c.year}` : `${F.weekday(c.year, d, true)}, ${F.date(c.year, d, form === 'short')}, ${c.year}`
+  }
   if (c.phase === 'cellar') return `${S.CELLAR_MONTHS[c.month]} ${c.month < 2 ? c.year : c.year + 1}`
   if (c.phase === 'plan') return `Spring ${c.year}`
   if (c.phase === 'ledger') return `Year end ${c.year}`
@@ -59,31 +63,43 @@ export function topBar(ctx: Ctx): { el: HTMLElement; update(): void } {
     if (!c) return
     const season = c.phase === 'season' && !!c.season
     const done = season && S.seasonDone(c)
+    const bar = document.querySelector<HTMLElement>('.hud')?.dataset.bar ?? 'full'
+    const form = bar === 'full' ? 'long' : bar === 'row' ? 'mid' : 'short'
+    const stopped = season && app.speed === 0 && !done ? app.pauseReason : ''
     const model = {
-      p: c.phase, y: c.year, i: c.yearIdx, g: c.goalYears, d: dateText(c), cash: Math.round(c.cash), sp: app.speed, done,
-      day: c.season?.day, w: c.season?.watchDay, f: c.season?.log.filter(e => e.type === 'frost').length, u: app.settings.units, ph: ctx.phone(),
+      p: c.phase, y: c.year, i: c.yearIdx, g: c.goalYears, d: dateText(c, form), cash: Math.round(c.cash), sp: app.speed, done, bar, stopped,
+      day: c.season?.day, w: c.season?.watchDay, f: c.season?.log.filter(e => e.type === 'frost').length, u: app.settings.units, t: ctx.touch(),
     }
-    patch(el, JSON.stringify(model), () => [
-      h('div', { class: 'tb-id' },
-        h('span', { class: 'wordmark' }, 'The County'),
-        h('span', { class: 'tb-phase' }, h('span', { testid: 'phase' }, PHASE_LABEL[c.phase]), ' · ',
-          c.yearIdx < c.goalYears ? `${ctx.phone() ? '' : 'season '}${c.yearIdx + 1} of ${c.goalYears}` : `year ${c.yearIdx + 1}`)),
-      h('div', { class: 'tb-date' },
-        h('span', { class: 'date', testid: 'date' }, dateText(c, ctx.phone())),
-        season ? seasonStrip(c) : null),
-      season ? h('div', { class: 'clock', role: 'group', 'aria-label': 'Clock' },
-        [0, 1, 2, 3].map(k => h('button', {
-          class: 'clock-btn', type: 'button', testid: `speed-${k}`, 'aria-pressed': String(app.speed === k && !(done && k > 0)), 'aria-label': SPEED_LABEL[k],
-          disabled: done && k > 0, title: done && k > 0 ? 'The season is over' : `${SPEED_LABEL[k]} (${k === 0 ? 'Space' : k})`, onclick: () => app.setSpeed(k as 0 | 1 | 2 | 3),
-        }, k === 0 ? icon('pause') : speedGlyph(k)))) : null,
-      h('div', { class: 'tb-cash' },
-        h('span', { class: 'label' }, c.cash < 0 && (c.phase === 'season' || c.phase === 'cellar') ? 'Cash · spring loan' : 'Cash'),
-        h('span', { class: `cash${c.cash < 0 ? ' neg' : ''}`, testid: 'cash' }, F.money(c.cash))),
-      done ? h('button', { class: 'btn primary end', type: 'button', testid: 'end-season', onclick: () => ctx.run({ t: 'endSeason' }) }, 'Close out the season') : null,
-      h('div', { class: 'tb-menu' },
-        h('button', { class: 'icon-btn', type: 'button', testid: 'how-open', 'aria-label': 'How it works', title: 'How it works', onclick: () => openHelp(ctx) }, icon('help')),
-        h('button', { class: 'icon-btn', type: 'button', testid: 'settings-open', 'aria-label': 'Menu and settings', title: 'Menu and settings', onclick: () => openSettings(ctx) }, icon('menu'))),
-    ])
+    el.classList.toggle('has-clock', season)
+    patch(el, JSON.stringify(model), () => {
+      const count = c.yearIdx < c.goalYears ? `${bar === 'full' ? 'season ' : ''}${c.yearIdx + 1} of ${c.goalYears}` : `year ${c.yearIdx + 1}`
+      const loan = c.cash < 0 && (c.phase === 'season' || c.phase === 'cellar')
+      return [
+        h('div', { class: 'tb-id' },
+          h('span', { class: 'wordmark' }, 'The County'),
+          h('span', { class: 'tb-phase' }, h('span', { testid: 'phase' }, bar === 'stack' && season ? 'Season' : PHASE_LABEL[c.phase]), bar === 'stack' && season ? ' ' : ' · ', count)),
+        h('div', { class: 'tb-date' },
+          h('span', { class: 'date', testid: 'date' }, dateText(c, form)),
+          season ? seasonStrip(c) : null),
+        season ? h('div', { class: 'clock', role: 'group', 'aria-label': 'Clock' },
+          [0, 1, 2, 3].map(k => {
+            const off = done && k > 0
+            const keys = ctx.touch() ? '' : ` (${k === 0 ? '0 or Space' : k})`
+            const why = k === 0 && stopped ? `. It stopped itself: ${F.localize(stopped)}` : ''
+            return h('button', {
+              class: 'clock-btn', type: 'button', testid: `speed-${k}`, 'aria-pressed': String(app.speed === k && !off), 'aria-label': `${SPEED_LABEL[k]}${why}`,
+              disabled: off, title: off ? 'The season is over' : `${SPEED_LABEL[k]}${keys}${why}`, onclick: () => app.setSpeed(k as 0 | 1 | 2 | 3),
+            }, k === 0 ? icon('pause') : speedGlyph(k))
+          })) : null,
+        h('div', { class: 'tb-cash' },
+          h('span', { class: 'label' }, loan ? (bar === 'full' ? 'Cash · spring loan' : 'Spring loan') : 'Cash'),
+          h('span', { class: `cash${c.cash < 0 ? ' neg' : ''}`, testid: 'cash' }, F.money(c.cash))),
+        done ? h('button', { class: 'btn primary end', type: 'button', testid: 'end-season', onclick: () => ctx.run({ t: 'endSeason' }) }, 'Close out the season') : null,
+        h('div', { class: 'tb-menu' },
+          h('button', { class: 'icon-btn', type: 'button', testid: 'how-open', 'aria-label': 'How it works', title: 'How it works', onclick: () => openHelp(ctx) }, icon('help')),
+          h('button', { class: 'icon-btn', type: 'button', testid: 'settings-open', 'aria-label': 'Menu and settings', title: 'Menu and settings', onclick: () => openSettings(ctx) }, icon('menu'))),
+      ]
+    })
   }
   return { el, update }
 }

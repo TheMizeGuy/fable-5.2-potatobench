@@ -143,6 +143,9 @@ kbd {
   color: var(--ink-2);
 }
 
+/* A finger has no keys: key chips and keyboard notes are not shown. */
+.hud.touch kbd, .hud.touch .keys-only { display: none; }
+
 /* ------------------------------------------------------------- focus */
 
 .hud :focus { outline: none; }
@@ -173,12 +176,18 @@ kbd {
   text-align: center;
   transition: background-color 120ms ease, border-color 120ms ease;
 }
-.btn:hover:not(:disabled) { background: #fffdf6; border-color: var(--ink); }
 .btn:active:not(:disabled) { background: var(--paper-2); }
 .btn.primary { background: var(--ink); color: var(--paper-hi); border-color: var(--ink); }
-.btn.primary:hover:not(:disabled) { background: #343b2f; }
+.btn.primary:active:not(:disabled) { background: #343b2f; }
 .btn.danger { color: var(--bad); border-color: var(--bad); }
-.btn.danger:hover:not(:disabled) { background: #fbefe9; }
+/* Hover only where there is a pointer that can hover: on a touch screen it would stick after the tap. */
+@media (hover: hover) {
+  .btn:hover:not(:disabled) { background: #fffdf6; border-color: var(--ink); }
+  .btn.primary:hover:not(:disabled) { background: #343b2f; }
+  .btn.danger:hover:not(:disabled) { background: #fbefe9; }
+  .icon-btn:hover:not(:disabled) { background: var(--paper-2); border-color: var(--rule-strong); }
+  .link:hover { color: var(--ink); }
+}
 .btn.small { min-height: var(--hit-small); padding: 0 var(--space-2); font-size: 13px; }
 .btn.big { min-height: 46px; padding: 0 20px; font-size: 15px; }
 .btn:disabled { cursor: not-allowed; color: var(--ink-3); background: transparent; border-style: dashed; border-color: var(--rule-strong); }
@@ -186,6 +195,7 @@ kbd {
 
 .icon-btn {
   display: inline-grid;
+  flex: none;
   place-items: center;
   width: var(--hit);
   height: var(--hit);
@@ -197,7 +207,6 @@ kbd {
   font-size: 18px;
   line-height: 1;
 }
-.icon-btn:hover:not(:disabled) { background: var(--paper-2); border-color: var(--rule-strong); }
 .icon-btn:disabled { color: var(--rule-strong); cursor: not-allowed; }
 .icon-btn.small { width: var(--hit-small); height: var(--hit-small); }
 .icon-btn .ic { width: 20px; height: 20px; }
@@ -213,7 +222,6 @@ kbd {
   cursor: pointer;
   font-size: 13px;
 }
-.link:hover { color: var(--ink); }
 
 .row-wrap { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
 .row-end { display: flex; flex-wrap: wrap; gap: var(--space-2); justify-content: flex-end; align-items: center; margin-top: var(--space-4); }
@@ -309,6 +317,8 @@ fieldset.group .seg-opt { flex: 1 1 200px; }
   border-right: 2px solid var(--ink);
   transition: left 700ms cubic-bezier(0.2, 0.7, 0.2, 1), width 700ms cubic-bezier(0.2, 0.7, 0.2, 1);
 }
+.band-tick { position: absolute; top: -5px; bottom: -5px; width: 3px; margin-left: -1.5px; background: var(--ink); border-radius: 1px; box-shadow: 0 0 0 1.5px var(--paper); }
+.band-tick.truth { background: var(--bad); }
 .range-axis { position: absolute; left: 0; right: 0; top: 17px; display: flex; justify-content: space-between; font-size: 11px; color: var(--ink-3); }
 
 .stat { display: grid; gap: 2px; }
@@ -397,6 +407,8 @@ td.neg, .neg { color: var(--bad); }
 .toast > .ic { margin-top: 6px; width: 16px; height: 16px; }
 .toast .icon-btn { width: var(--hit-small); height: var(--hit-small); }
 .toast .icon-btn .ic { width: 16px; height: 16px; }
+.toasts.compact .toast { font-size: 13px; }
+.toasts.compact .toast > span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; padding-top: 4px; }
 .toast.bad { border-color: var(--bad); }
 .toast.warn { border-color: var(--warn); }
 @keyframes toast-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
