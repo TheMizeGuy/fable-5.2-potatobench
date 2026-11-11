@@ -40,7 +40,9 @@ export class Director {
       const w = events.find(e => e.type === 'sample')?.data?.weights
       this.barrelUntil = cue.barrel(rig, slot(), has.has('dug') ? 'dig' : 'sample', Array.isArray(w) ? w.length : 5)
     }
-    if ((has.has('sold') || has.has('overflow')) && this.ready('sold', 0.4, now)) cue.sold(rig, slot())
+    if ((has.has('sold') || has.has('overflow') || has.has('delivered') || has.has('contractFilled')) && this.ready('sold', 0.4, now)) cue.sold(rig, slot())
+    // A deal struck or someone taken on: the same dry knock that answers an order.
+    if ((has.has('hired') || has.has('accepted') || has.has('rented') || has.has('landBought')) && this.ready('order', 0.09, now)) cue.heard(rig, slot())
 
     // The bank calling the note has its own close, and no chime.
     if (events.some(e => e.type === 'lost' && e.field < 0)) {
