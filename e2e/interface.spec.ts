@@ -144,7 +144,8 @@ test('a weigh ticket wants an answer: it cannot be tapped away, and closing it s
   await startSeason(page)
   await reach(page, `q.run(999, ['sell'], 'lot')`)
   const ticket = page.getByTestId('weighin')
-  await expect(ticket).toBeVisible()
+  // The ticket waits for the land to finish showing the dig, which a slow engine takes a while over.
+  await expect(ticket).toBeVisible({ timeout: 30_000 })
   await expect(ticket).toContainText('Weigh ticket')
   await expect(ticket.getByTestId('carried')).toContainText('The field gave')
   await expect(ticket.locator('.losses')).toBeVisible()
@@ -329,7 +330,7 @@ test('a crop a contract wants: the weigh ticket delivers it and the tracker coun
     for (let i = 0; i < 6; i++) if (c.plans[i].crop === 'potato') app.do({ t: 'plan', field: i, plan: { crop: 'potato', variety: 'kennebec', seed: 'certified' } })
     app.do({ t: 'begin' }); app.setSpeed(0); q.run(999, ['sell'], 'lot')`)
   const ticket = page.getByTestId('weighin')
-  await expect(ticket).toBeVisible()
+  await expect(ticket).toBeVisible({ timeout: 30_000 })
   const deliver = ticket.locator('[data-testid^="lot-deliver-"]')
   await expect(deliver).toContainText('Deliver to the fry plant')
   await expect(ticket.locator('.choice')).toContainText(/market/)

@@ -306,7 +306,7 @@
 .q.waiting .ic { opacity: 0.5; }
 .q.more { color: var(--cream-2); font-size: var(--t-small); font-weight: 600; }
 /* Above an order, under the pointer: do it first, and choose who does it. */
-.q-tools { position: absolute; inset: auto 0 100% 0; display: flex; gap: var(--sp-h); opacity: 0; pointer-events: none; }
+.q-tools { position: absolute; z-index: 2; inset: auto 0 100% 0; display: flex; gap: var(--sp-h); opacity: 0; pointer-events: none; }
 .q-first {
   flex: 1 1 0;
   height: 24px;
