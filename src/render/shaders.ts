@@ -1,5 +1,5 @@
 // Shared uniforms and a small helper for adding to three's built-in materials.
-import { Color, Vector2, type IUniform, type Material } from 'three'
+import { Color, Vector2, Vector3, type IUniform, type Material } from 'three'
 import { GLSL_NOISE } from './noise.ts'
 
 export const U = {
@@ -7,7 +7,8 @@ export const U = {
   uSway: { value: 0.3 },
   uWindDir: { value: new Vector2(1, 0) },
   uSnow: { value: 0 },
-  uRime: { value: 0 },
+  // Rime on the ridge, mid-slope and bottom terraces: cold air settles, so the low ground frosts first.
+  uRime: { value: new Vector3() },
   uWet: { value: 0 },
   uGrass: { value: new Color('#6f8a45') },
   uGold: { value: 0 },
@@ -33,7 +34,7 @@ uniform float uTime;
 uniform float uSway;
 uniform vec2 uWindDir;
 uniform float uSnow;
-uniform float uRime;
+uniform vec3 uRime;
 uniform float uWet;
 uniform vec3 uGrass;
 uniform float uGold;
@@ -42,6 +43,9 @@ uniform vec3 uSky;
 varying vec3 vWorld;
 varying vec3 vWNormal;
 ${GLSL_NOISE}
+float rimeAt(float z) {
+  return mix(mix(uRime.x, uRime.y, smoothstep(-6.4, -3.6, z)), uRime.z, smoothstep(4.6, 7.4, z));
+}
 `
 
 let serial = 0
@@ -82,20 +86,26 @@ export function patch<M extends Material>(mat: M, p: Patch): M {
 }
 
 // Snow settles on what faces up, rime frosts it; both in patches.
-export const SNOW_RIME = snowRime('uSnow')
-export const SNOW_RIME_TREE = snowRime('uSnow * 0.45')
+export const SNOW_RIME = snowRime('uSnow', '1.0')
+export const SNOW_RIME_TREE = snowRime('uSnow * 0.45', '0.3')
 
-function snowRime(amount: string): string {
+function snowRime(amount: string, rimeShare: string): string {
   return /* glsl */ `
   {
     float snowAmt = ${amount};
     float up = clamp(vWNormal.y, 0.0, 1.0);
-    float n = fbm(vWorld.xz * 0.3) * 0.8 + vnoise(vWorld.xz * 3.0) * 0.2;
-    float lie = n * 0.7 + up * 0.3;
-    float cover = smoothstep(1.0 - snowAmt, 1.03 - snowAmt, lie) * step(0.001, snowAmt) * smoothstep(0.25, 0.6, up);
-    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.9, 0.92, 0.95), cover);
-    float rime = uRime * smoothstep(0.2, 0.9, up) * (0.55 + 0.45 * vnoise(vWorld.xz * 9.0));
-    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.84, 0.89, 0.93), rime * 0.75);
+    // Most days have neither; skip the noise then.
+    if (snowAmt > 0.001) {
+      float n = fbm(vWorld.xz * 0.3) * 0.8 + vnoise(vWorld.xz * 3.0) * 0.2;
+      float lie = n * 0.7 + up * 0.3;
+      float cover = smoothstep(1.0 - snowAmt, 1.03 - snowAmt, lie) * smoothstep(0.25, 0.6, up);
+      diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.9, 0.92, 0.95), cover);
+    }
+    float rimeHere = ${rimeShare} * rimeAt(vWorld.z) * smoothstep(0.0, 0.6, up);
+    if (rimeHere > 0.001) {
+      float crystals = smoothstep(0.4, 0.72, vnoise(vWorld.xz * 37.0) * 0.6 + vnoise(vWorld.xz * 8.0) * 0.4);
+      diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.84, 0.9, 0.96), rimeHere * (0.62 + 0.38 * crystals) * 0.9);
+    }
   }
 `
 }

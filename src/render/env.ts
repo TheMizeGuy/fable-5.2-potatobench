@@ -18,7 +18,9 @@ export interface Env {
   wind: number
   windDir: number          // radians, the direction the wind blows toward, in the xz plane
   mist: number
-  rime: number
+  rime0: number            // rime on the ridge, mid-slope and bottom terraces
+  rime1: number
+  rime2: number
   snow: number             // snow lying on the ground
   wet: number              // general wetness of grass and road
   grass: Color
@@ -36,7 +38,7 @@ export function makeEnv(): Env {
     sunElev: 0.8, sunAz: -2.2, sunI: 2.6, hemiI: 1.1,
     sun: new Color('#fff2dc'), hemiSky: new Color('#bcd3e0'), hemiGround: new Color('#5a4a38'),
     skyTop: new Color('#a9c6d9'), skyHorizon: new Color('#e9eee6'), fog: 0.05,
-    rain: 0, snowfall: 0, wind: 0.3, windDir: 0.4, mist: 0, rime: 0, snow: 0, wet: 0,
+    rain: 0, snowfall: 0, wind: 0.3, windDir: 0.4, mist: 0, rime0: 0, rime1: 0, rime2: 0, snow: 0, wet: 0,
     grass: new Color('#6f8a45'), birch: 1, gold: 0, oats: 1, oatsRipe: 0, ice: 0, smoke: 0, cloud: 0,
   }
 }
@@ -98,7 +100,17 @@ export function envTarget(snap: Snapshot, out: Env): Env {
   out.windDir = w.wdir < 0 ? 0.6 : ((w.wdir + 180) * Math.PI) / 180
   const growing = d > 130 && d < 290 && w.tmin > 2
   out.mist = w.sky === 'fog' ? 1 : growing && w.wetH >= 10 ? Math.min(0.8, (w.wetH - 9) / 9) : 0
-  out.rime = w.tmin < 0 && w.snwd < 20 ? Math.min(1, 0.35 + -w.tmin / 4) : 0
+  // In the season each terrace frosts as its own fields did last night; otherwise the picture of the time of year.
+  const rime = w.tmin < 0 && w.snwd < 20 ? Math.min(1, 0.35 + -w.tmin / 4) : 0
+  out.rime0 = snap.rime ? snap.rime[0] : rime
+  out.rime1 = snap.rime ? snap.rime[1] : rime
+  out.rime2 = snap.rime ? snap.rime[2] : rime
+  // A frosty morning's light is cold, so the rime reads white rather than straw under the autumn sun.
+  const frosty = Math.max(out.rime0, out.rime1, out.rime2)
+  if (frosty > 0) {
+    out.sun.lerp(tmp.set('#eef2f6'), 0.7 * frosty)
+    out.skyHorizon.lerp(tmp.set('#e4ebf0'), 0.5 * frosty)
+  }
   out.snow = Math.min(1, w.snwd / 200)
   if (snap.mode === 'plan') out.snow = 0.24
   if (snap.mode === 'ledger') out.snow = 0.22
@@ -122,7 +134,7 @@ function bump(x: number, a: number, peak: number, b: number): number {
   return x < peak ? (x - a) / (peak - a) : (b - x) / (b - peak)
 }
 
-const NUM_KEYS = ['sunElev', 'sunAz', 'sunI', 'hemiI', 'fog', 'rain', 'snowfall', 'wind', 'mist', 'rime', 'snow', 'wet', 'birch', 'gold', 'oats', 'oatsRipe', 'ice', 'smoke', 'cloud'] as const
+const NUM_KEYS = ['sunElev', 'sunAz', 'sunI', 'hemiI', 'fog', 'rain', 'snowfall', 'wind', 'mist', 'rime0', 'rime1', 'rime2', 'snow', 'wet', 'birch', 'gold', 'oats', 'oatsRipe', 'ice', 'smoke', 'cloud'] as const
 const COLOR_KEYS = ['sun', 'hemiSky', 'hemiGround', 'skyTop', 'skyHorizon', 'grass'] as const
 
 // Ease `cur` toward `target`; k is the share of the gap closed this frame.

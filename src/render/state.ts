@@ -9,10 +9,12 @@ export interface FieldVis {
   crop: 'potato' | 'rest'
   status: string
   hills: sim.HillLook[]
-  ridge: number            // 0 flat, 0.3 planted, 0.65 hilled once, 1 hilled twice
+  ridge: number            // 0 flat, 0.1 planted, 0.55 hilled once, 1 hilled twice
   moisture: sim.Moisture
   bloom: number
   wilt: number
+  frosted: number          // share of the leaf blackened by frost this past week
+  rime: number             // rime on this field this morning, 0..1
   variety: sim.VarietyId
   lot: number
   grams: number            // what the lot says came out of each dug hill, 0 before digging
@@ -44,11 +46,12 @@ export interface Snapshot {
   worked: Work[]
   next: Work | null
   frozen: boolean
+  rime: number[] | null    // in the season, rime on the ridge, mid-slope and bottom terraces
 }
 
 const BARE: sim.HillLook = { kind: 'bare', canopy: 0, vigor: 1, blight: 0, stunted: false, yellow: 0 }
 
-const RIDGE_BY_PASSES = [0.42, 0.7, 1]
+const RIDGE_BY_PASSES = [0.1, 0.55, 1]
 
 export function snapshot(app: App): Snapshot {
   const c = app.campaign
@@ -56,9 +59,20 @@ export function snapshot(app: App): Snapshot {
   const mode: Mode = c.phase
   const s = c.season
   const fields: FieldVis[] = []
+  // Last night, from the station record; a field froze when its own minimum, colder in the low ground, reached zero.
+  const night = s && mode === 'season' && s.day > 0 ? sim.getDay(app.world, s.year, s.day - 1) : null
+  const rime: number[] | null = night ? [0, 0, 0] : null
   for (let i = 0; i < sim.FIELD_COUNT; i++) {
     const plan = c.plans[i]
     const info = sim.fieldInfo(c, i)
+    let frost = 0
+    if (night && night.snwd < 20) {
+      const t = sim.fieldTmin(night, info.elev)
+      // A light silvering at zero, white hoarfrost three degrees below.
+      if (info.rime || t <= 0) frost = Math.min(1, 0.25 + Math.max(0, -t) / 3.2)
+      const terrace = Math.floor(i / 2)
+      rime![terrace] = Math.max(rime![terrace], frost)
+    }
     const hills: sim.HillLook[] = []
     let planted = false, dug = 0
     for (let h = 0; h < sim.HILLS; h++) {
@@ -86,6 +100,8 @@ export function snapshot(app: App): Snapshot {
       moisture: info.moistureLabel,
       bloom: info.bloom,
       wilt: info.wilt,
+      frosted: info.frosted,
+      rime: frost,
       variety: plan.variety,
       lot: info.lot,
       grams, dark, green,
@@ -110,6 +126,7 @@ export function snapshot(app: App): Snapshot {
     mode, year: c.year, day, seasonDay: s ? s.day : -1, month: c.month, fields, weather, worked,
     next: nextJob ? { kind: nextJob.kind, field: nextJob.field } : null,
     frozen: s ? s.frozen : false,
+    rime,
   }
 }
 
@@ -142,11 +159,14 @@ function showcase(): Snapshot {
       const j = hash2(i * 131 + h, 7)
       hills.push(potato ? { kind: 'plant', canopy: Math.min(1, canopy * (0.88 + 0.2 * j)), vigor: 0.9 + 0.2 * hash2(h, i), blight: 0, stunted: false, yellow: 0 } : BARE)
     }
-    fields.push({ crop: potato ? 'potato' : 'rest', status: potato ? 'growing' : 'rest', hills, ridge: potato ? 1 : 0, moisture: 'good', bloom, wilt: 0, variety: v, lot: -1, grams: 0, dark: 0, green: 0 })
+    fields.push({
+      crop: potato ? 'potato' : 'rest', status: potato ? 'growing' : 'rest', hills, ridge: potato ? 1 : 0, moisture: 'good', bloom, wilt: 0,
+      frosted: 0, rime: 0, variety: v, lot: -1, grams: 0, dark: 0, green: 0,
+    })
   }
   return {
     mode: 'title', year: 1987, day: 196, seasonDay: -1, month: 0, fields,
     weather: { sky: 'clear', tmin: 13, tmax: 25, wind: 3.5, wdir: 250, prcp: 0, wetH: 6, snwd: 0 },
-    worked: [{ kind: 'spray', field: 2 }], next: null, frozen: false,
+    worked: [{ kind: 'spray', field: 2 }], next: null, frozen: false, rime: null,
   }
 }

@@ -4,7 +4,7 @@ import {
 } from 'three'
 import { FIELD_COUNT, HILLS, variety, type VarietyId } from '../sim/index.ts'
 import { tuberGeometry } from './geometry.ts'
-import { RIDGE_AMP } from './fields.ts'
+import { RIDGE_AMP, upload } from './fields.ts'
 import { fieldBaseY, hillPos } from './layout.ts'
 import { hash2, rng } from './noise.ts'
 
@@ -45,6 +45,7 @@ export class Harvest {
   private barrelScale = new Float32Array(FIELD_COUNT * HILLS)
   private barrelWant = new Uint8Array(FIELD_COUNT * HILLS)
   private busyHills = new Uint16Array(FIELD_COUNT * HILLS)
+  private barrelsJumped = false
   private r = rng(31)
   private m = new Matrix4()
   private v = new Vector3()
@@ -172,6 +173,7 @@ export class Harvest {
 
   snap(): void {
     for (let k = 0; k < this.barrelWant.length; k++) this.barrelScale[k] = this.busyHills[k] ? 0 : this.barrelWant[k]
+    this.barrelsJumped = true
   }
 
   update(dt: number, paused: boolean): void {
@@ -203,15 +205,18 @@ export class Harvest {
     }
     this.tubers = keep
     this.tuberMesh.count = n
-    this.tuberMesh.instanceMatrix.needsUpdate = true
-    if (this.tuberMesh.instanceColor) this.tuberMesh.instanceColor.needsUpdate = true
+    // Only what moved goes to the GPU: the tubers in flight or lying, and the barrels while they grow or go.
+    upload(n, this.tuberMesh.instanceMatrix, this.tuberMesh.instanceColor)
 
-    let b = 0
+    let b = 0, moved = false
     const k1 = 1 - Math.exp(-dt * 4)
     const up = new Vector3(0, 1, 0)
     for (let k = 0; k < this.barrelWant.length; k++) {
       const want = this.barrelWant[k] && !this.busyHills[k] ? 1 : 0
-      this.barrelScale[k] += (want - this.barrelScale[k]) * k1
+      const was = this.barrelScale[k]
+      const d = want - was
+      this.barrelScale[k] = Math.abs(d) < 0.002 ? want : was + d * k1
+      if (this.barrelScale[k] !== was) moved = true
       if (this.barrelScale[k] < 0.02 || b >= MAX_BARRELS) continue
       const f = Math.floor(k / HILLS), h = k % HILLS
       const p = hillPos(f, h)
@@ -221,8 +226,9 @@ export class Harvest {
       this.s.set(sc, sc, sc)
       this.barrelMesh.setMatrixAt(b++, this.m.compose(this.v, this.q, this.s))
     }
+    if (moved || this.barrelsJumped || b !== this.barrelMesh.count) upload(b, this.barrelMesh.instanceMatrix)
+    this.barrelsJumped = false
     this.barrelMesh.count = b
-    this.barrelMesh.instanceMatrix.needsUpdate = true
   }
 
   busy(): boolean {
