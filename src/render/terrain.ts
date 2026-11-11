@@ -1,18 +1,14 @@
-// The block of land: turf and road on top, soil on the cut faces, the brook in front, stone walls.
+// The land: one surface from the farm out to the far ridges, the neighbours' quilt of strips and woodlots drawn on it,
+// the brook, the roads and the stone walls.
 import {
-  BufferAttribute, BufferGeometry, CanvasTexture, Color, DoubleSide, DynamicDrawUsage, Group, IcosahedronGeometry, InstancedMesh,
-  Matrix4, Mesh, MeshBasicMaterial, MeshLambertMaterial, MeshStandardMaterial, PlaneGeometry, Quaternion, Vector3,
+  BufferAttribute, BufferGeometry, Color, DoubleSide, DynamicDrawUsage, Group, IcosahedronGeometry, InstancedMesh, Matrix4, Mesh,
+  MeshStandardMaterial, Quaternion, Vector3, type Texture,
 } from 'three'
-import { BLOCK, BROOK_Z, FIELDS, WATER_Y, fieldMask, groundY, roadDist } from './layout.ts'
-import { hash2, rng, smooth } from './noise.ts'
-import { SNOW_RIME, patch } from './shaders.ts'
-import { STRATA_PX, strataTexture } from './textures.ts'
-
-export const CLOUD_SHADE = /* glsl */ `
-  if (uCloud > 0.001) diffuseColor.rgb *= 1.0 - uCloud * 0.38 * smoothstep(0.48, 0.66, fbm(vWorld.xz * 0.045 + vec2(uTime * 0.035, uTime * 0.012)));
-`
-
-const STEP = 0.25
+import {
+  FARM, FIELDS, HOME_WOODS, REGION, ROAD, SPURS, WATER_Y, brookHalf, brookZ, fieldMask, groundY, hillRoadZ, roadDist, townRoadZ,
+} from './layout.ts'
+import { hash2, rng } from './noise.ts'
+import { SNOW_RIME, linear, patch } from './shaders.ts'
 
 export interface Terrain {
   group: Group
@@ -20,224 +16,351 @@ export interface Terrain {
   dispose(): void
 }
 
-export function buildTerrain(): Terrain {
+// A run of grid lines: even across the farm, widening outward to the horizon.
+function axis(lo: number, hi: number, step: number, growth: number, limit: number): number[] {
+  const out: number[] = []
+  for (let v = lo; v <= hi + 1e-6; v += step) out.push(v)
+  let s = step, a = lo, b = hi
+  while (b < limit) {
+    s *= growth
+    a -= s
+    b += s
+    out.unshift(a)
+    out.push(b)
+  }
+  return out
+}
+
+// The quilt, as in regionAt() in layout.ts, and what grows on each strip by the day of the year.
+const QUILT_GLSL = /* glsl */ `
+struct Land { float woods; float hard; float edge; vec2 q; float width; ivec2 cell; };
+Land landAt(vec2 p) {
+  ivec2 c = ivec2(floor(p / ${REGION.toFixed(1)}));
+  float d1 = 1e9, d2 = 1e9;
+  ivec2 best = c;
+  vec2 site = vec2(0.0);
+  for (int j = -1; j <= 1; j++) {
+    for (int i = -1; i <= 1; i++) {
+      ivec2 cc = c + ivec2(i, j);
+      vec2 s = (vec2(cc) + 0.5 + (vec2(ihash(cc + ivec2(131, 17)), ihash(cc + ivec2(-57, 211))) - 0.5) * 0.72) * ${REGION.toFixed(1)};
+      float d = distance(p, s);
+      if (d < d1) { d2 = d1; d1 = d; best = cc; site = s; } else if (d < d2) d2 = d;
+    }
+  }
+  Land l;
+  l.cell = best;
+  l.edge = (d2 - d1) * 0.5;
+  l.woods = step(ihash(best + ivec2(19, -83)), 0.26 + 0.42 * smoothstep(700.0, 2400.0, distance(site, vec2(4.6, 0.0))));
+  l.hard = ihash(best + ivec2(43, 7));
+  float ang = (ihash(best + ivec2(77, 301)) < 0.5 ? 0.0 : 1.5707963) + (ihash(best + ivec2(5, 9)) - 0.5) * 0.7;
+  l.width = 12.0 + 14.0 * ihash(best + ivec2(-3, 41));
+  vec2 r = p - site;
+  l.q = vec2(cos(ang) * r.x + sin(ang) * r.y, -sin(ang) * r.x + cos(ang) * r.y);
+  return l;
+}
+float ramp(float a, float b, float x) { return clamp((x - a) / (b - a), 0.0, 1.0); }
+// A strip's colour: potatoes, oats, hay, clover or pasture, each by the calendar. rows: 1 where a crop is drilled in rows.
+vec3 cropColor(float kind, float tone, float day, vec3 soil, vec3 grass, out float rows) {
+  rows = 0.0;
+  float d = day + (tone - 0.5) * 10.0;
+  vec3 col;
+  if (kind < 0.36) {
+    float up = ramp(150.0, 186.0, d), down = ramp(238.0, 258.0, d), dug = ramp(262.0, 276.0, d);
+    vec3 leaf = mix(${linear('#6fa355')}, ${linear('#3a6b3c')}, ramp(160.0, 200.0, d));
+    leaf = mix(leaf, ${linear('#d9dcc9')}, 0.2 * ramp(190.0, 198.0, d) * (1.0 - ramp(212.0, 222.0, d)));
+    leaf = mix(leaf, ${linear('#7a6f48')}, down);
+    col = mix(soil, leaf, up * (1.0 - dug));
+    rows = (0.25 + 0.75 * (1.0 - up)) * step(128.0, d) * (1.0 - dug);
+  } else if (kind < 0.58) {
+    float up = ramp(128.0, 160.0, d), ripe = ramp(205.0, 232.0, d), cut = ramp(242.0, 250.0, d);
+    vec3 oat = mix(${linear('#7fa46a')}, ${linear('#cfb56b')}, ripe);
+    col = mix(mix(soil, oat, up), ${linear('#b8a778')}, cut);
+    col = mix(col, grass, 0.35 * cut * ramp(262.0, 290.0, d));
+    rows = 0.12 * (1.0 - up);
+  } else if (kind < 0.8) {
+    float mown = max(ramp(176.0, 179.0, d) * (1.0 - ramp(190.0, 204.0, d)), ramp(234.0, 237.0, d) * (1.0 - ramp(246.0, 262.0, d)));
+    col = mix(grass * vec3(0.92, 1.06, 0.82), ${linear('#a9ad62')}, mown);
+    rows = 0.3 * mown;
+  } else if (kind < 0.92) {
+    col = mix(grass * vec3(0.72, 0.98, 0.7), ${linear('#8f6f86')}, 0.2 * ramp(168.0, 180.0, d) * (1.0 - ramp(206.0, 220.0, d)));
+  } else {
+    col = grass * vec3(1.05, 1.0, 0.86);
+  }
+  return col;
+}
+`
+
+export function buildTerrain(roadTex: Texture): Terrain {
   const group = new Group()
   const disposables: { dispose(): void }[] = []
 
-  // ---- Top surface
-  const nx = Math.round((BLOCK.x1 - BLOCK.x0) / STEP) + 1
-  const nz = Math.round((BLOCK.z1 - BLOCK.z0) / STEP) + 1
+  const xs = axis(-50.2, 60.2, 0.6, 1.065, 3600), zs = axis(-64.2, 64.2, 0.6, 1.065, 3600)
+  const nx = xs.length, nz = zs.length
   const pos = new Float32Array(nx * nz * 3)
   const surf = new Float32Array(nx * nz * 4)
   for (let j = 0; j < nz; j++) {
     for (let i = 0; i < nx; i++) {
-      const x = Math.min(BLOCK.x1, BLOCK.x0 + i * STEP), z = Math.min(BLOCK.z1, BLOCK.z0 + j * STEP)
-      const k = j * nx + i
-      const field = fieldMask(x, z, 0.3)
+      const x = xs[i], z = zs[j], k = j * nx + i
+      const home = x > -50.5 && x < 60.5 && z > -64.5 && z < 64.5
       pos[k * 3] = x
-      pos[k * 3 + 1] = groundY(x, z) - field * 0.04
+      pos[k * 3 + 1] = groundY(x, z) - (home ? fieldMask(x, z, 0.35) * 0.09 : 0)
       pos[k * 3 + 2] = z
-      const rd = roadDist(x, z)
-      const ruts = 1 - 0.55 * (1 - smooth(0.06, 0.2, rd))
-      surf[k * 4] = (1 - smooth(0.5, 0.78, rd)) * ruts
-      surf[k * 4 + 1] = smooth(-15.3, -16.6, z) * (1 - smooth(0.5, 1.5, rd))
-      surf[k * 4 + 2] = Math.max(1 - smooth(0.55, 1.05, Math.abs(z - BROOK_Z)), field * 0.9)
+      const h = HOME_WOODS
+      const ragged = home ? 5 * (hash2(Math.round(x * 0.4), Math.round(z * 0.4)) - 0.5) : 0
+      surf[k * 4] = home && x > h.x0 + ragged && x < h.x1 + ragged && z > h.z0 + ragged && z < h.z1 + 1 ? 1 : 0
+      surf[k * 4 + 1] = Math.min(1, Math.abs(z - brookZ(x)) / 8)
+      const yard = home ? Math.max(0, 1 - roadDist(x, z) / 2.2) : 0
+      surf[k * 4 + 2] = yard
       surf[k * 4 + 3] = hash2(i, j)
     }
   }
-  const idx: number[] = []
+  const idx = new Uint32Array((nx - 1) * (nz - 1) * 6)
+  let n = 0
   for (let j = 0; j < nz - 1; j++) {
     for (let i = 0; i < nx - 1; i++) {
       const a = j * nx + i, b = a + 1, c = a + nx, d = c + 1
-      idx.push(a, c, b, b, c, d)
+      idx[n++] = a; idx[n++] = c; idx[n++] = b; idx[n++] = b; idx[n++] = c; idx[n++] = d
     }
   }
-  const top = new BufferGeometry()
-  top.setAttribute('position', new BufferAttribute(pos, 3))
-  top.setAttribute('aSurf', new BufferAttribute(surf, 4))
-  top.setIndex(idx)
-  top.computeVertexNormals()
-  const topMat = patch(new MeshLambertMaterial({ color: 0xffffff }), {
+  const land = new BufferGeometry()
+  land.setAttribute('position', new BufferAttribute(pos, 3))
+  land.setAttribute('aSurf', new BufferAttribute(surf, 4))
+  land.setIndex(new BufferAttribute(idx, 1))
+  land.computeVertexNormals()
+  const fieldRects = FIELDS.map(f => `vec4(${f.x0.toFixed(2)}, ${f.z0.toFixed(2)}, ${f.x1.toFixed(2)}, ${f.z1.toFixed(2)})`).join(', ')
+  const landMat = patch(new MeshStandardMaterial({ color: 0xffffff, roughness: 0.96, metalness: 0 }), {
     vertexHead: 'attribute vec4 aSurf; varying vec4 vSurf;',
     vertexBegin: 'vSurf = aSurf;',
-    fragmentHead: 'varying vec4 vSurf;',
+    fragmentHead: /* glsl */ `
+      varying vec4 vSurf;
+      ${QUILT_GLSL}
+      const vec4 FIELD_RECT[6] = vec4[6](${fieldRects});
+      float landRough;
+      vec2 landBump;
+    `,
     fragmentColor: /* glsl */ `
       {
-        float n = fbm(vWorld.xz * 0.55);
-        float fine = vnoise(vWorld.xz * 5.0);
-        vec3 grass = uGrass * (0.8 + 0.38 * n) * (0.9 + 0.2 * fine) * (0.95 + 0.1 * vSurf.w);
-        grass *= 1.0 - 0.12 * uWet;
-        float steep = 1.0 - smoothstep(0.75, 0.95, vWNormal.y);
-        grass = mix(grass, grass * vec3(1.05, 0.95, 0.8), steep * 0.6);
-        vec3 woods = vec3(0.075, 0.07, 0.045) * (0.8 + 0.5 * n);
-        vec3 road = mix(vec3(0.26, 0.21, 0.155), vec3(0.15, 0.12, 0.09), uWet) * (0.8 + 0.35 * fine);
-        vec3 mud = mix(vec3(0.17, 0.13, 0.09), vec3(0.1, 0.075, 0.05), uWet) * (0.85 + 0.3 * fine);
-        vec3 col = mix(grass, woods, vSurf.y);
-        col = mix(col, mud, vSurf.z * 0.85);
-        col = mix(col, road, vSurf.x);
+        vec2 p = vWorld.xz;
+        float far = length(vWorld - cameraPosition);
+        vec4 n1 = texture2D(uNoise, p * 0.0037);
+        vec4 n2 = texture2D(uNoise, p * 0.043);
+        vec4 n3 = texture2D(uNoise, p * 0.31);
+        float fine = n3.a, mid = n2.b, broad = n1.b;
+        vec3 grass = uGrass * (0.74 + 0.5 * mid) * (0.88 + 0.24 * fine) * (0.9 + 0.2 * broad);
+        vec3 soil = ${linear('#6e4b38')} * (0.8 + 0.4 * mid) * mix(1.0, 0.62, uWet);
+        landRough = 0.96;
+        landBump = (n3.rg - 0.5) * 1.6 + (n2.rg - 0.5) * 0.8;
+
+        // Home: meadow inside the walls, needles under the spruce, trodden earth in the dooryard, gravel by the brook.
+        vec2 hd = max(vec2(${FARM.x0.toFixed(1)}, ${FARM.z0.toFixed(1)}) - p, p - vec2(${FARM.x1.toFixed(1)}, ${(FARM.z1 + 3).toFixed(1)}));
+        float home = 1.0 - smoothstep(-1.5, 2.5, max(hd.x, hd.y));
+        vec3 col = grass;
+        {
+          Land l = landAt(p);
+          float strip = floor(l.q.x / l.width), fx = fract(l.q.x / l.width);
+          float along = floor(l.q.y / (l.width * 3.4) + ihash(ivec2(int(strip) + l.cell.x * 31, l.cell.y * 17 + 5)));
+          ivec2 id = ivec2(int(strip) * 7 + l.cell.x * 13 + int(along) * 3, l.cell.y * 29 + int(along));
+          float kind = ihash(id), tone = ihash(id + ivec2(3, 11));
+          float rows;
+          vec3 crop = cropColor(kind, tone, uDay, soil, grass, rows) * (0.86 + 0.28 * tone);
+          float period = ${(0.34).toFixed(2)};
+          float line = 0.5 + 0.5 * cos(l.q.x * 6.2831853 / period);
+          float show = rows * (1.0 - smoothstep(0.2, 0.7, fwidth(l.q.x) / period));
+          crop *= 1.0 - show * 0.45 * (1.0 - line);
+          // mowing and tillage lines that carry at any distance
+          float sweep = 0.5 + 0.5 * cos(l.q.x * 6.2831853 / (l.width * 0.2));
+          crop *= 0.95 + 0.07 * sweep * (1.0 - smoothstep(0.5, 2.0, fwidth(l.q.x) / (l.width * 0.2)));
+          float verge = min(fx, 1.0 - fx) * l.width;
+          float aa = fwidth(l.q.x) + 0.25;
+          crop = mix(grass * 0.82, crop, smoothstep(0.35, 0.35 + aa, verge));
+          // woodlots, and hedgerows between the blocks
+          float bough = texture2D(uNoise, p * 0.19).a;
+          vec3 spruce = ${linear('#1c3026')} * (0.65 + 0.7 * bough);
+          vec3 broad = mix(${linear('#3c6a30')}, mix(${linear('#b5532a')}, ${linear('#d6b23e')}, fine), uGold * step(0.35, mid)) * (0.6 + 0.8 * bough);
+          broad = mix(${linear('#5a5046')} * (0.7 + 0.5 * bough), broad, uLeaf);
+          vec3 woods = mix(spruce, broad, step(1.0 - l.hard * 0.75, texture2D(uNoise, p * 0.021).a));
+          float ragged = (mid - 0.5) * 6.0;
+          float inWoods = l.woods * smoothstep(1.5, 4.0, l.edge + ragged);
+          float hedge = (1.0 - l.woods) * (1.0 - smoothstep(1.0, 2.6, l.edge + ragged * 0.3));
+          vec3 outland = mix(crop, woods, max(inWoods, hedge * 0.8));
+          landRough = mix(0.96, 1.0, inWoods);
+          col = mix(outland, col, home);
+        }
+        // the home woodlot's floor, the dooryard and the brook's banks
+        col = mix(col, ${linear('#3b3125')} * (0.7 + 0.6 * fine), vSurf.x * 0.92);
+        col = mix(col, mix(${linear('#8a6e52')}, ${linear('#5b4534')}, uWet) * (0.82 + 0.36 * fine), smoothstep(0.25, 0.75, vSurf.z + (fine - 0.5) * 0.5) * 0.85);
+        float bank = 1.0 - smoothstep(0.1, 0.24, vSurf.y + (mid - 0.5) * 0.1);
+        col = mix(col, mix(${linear('#8c8676')}, ${linear('#4c4033')}, 0.45 + 0.4 * fine) * mix(1.0, 0.7, uWet), bank);
+        // under the six fields the ground is the soil's own colour, so no green shows at a field's edge
+        for (int k = 0; k < 6; k++) {
+          vec2 fd = max(FIELD_RECT[k].xy - p, p - FIELD_RECT[k].zw);
+          col = mix(col, soil * 0.9, 1.0 - smoothstep(0.0, 0.45, max(fd.x, fd.y)));
+        }
+        col *= mix(1.0, 0.84, uWet * (1.0 - bank));
+        landRough = mix(landRough, 0.62, uWet * 0.6);
         diffuseColor.rgb = col;
       }
-      ${CLOUD_SHADE}
       ${SNOW_RIME}
     `,
+    fragmentRoughness: 'roughnessFactor = landRough;',
+    fragmentNormal: 'normal = normalize(normal + (viewMatrix * vec4(landBump.x, 0.0, landBump.y, 0.0)).xyz * 0.22);',
   })
-  const topMesh = new Mesh(top, topMat)
-  topMesh.receiveShadow = true
-  group.add(topMesh)
-  disposables.push(top, topMat)
+  const landMesh = new Mesh(land, landMat)
+  landMesh.receiveShadow = true
+  landMesh.frustumCulled = false
+  group.add(landMesh)
+  disposables.push(land, landMat)
 
-  // ---- Cut faces
-  const strata = strataTexture()
-  disposables.push(strata)
-  const skirt = skirtGeometry(nx, nz, pos)
-  const skirtMat = new MeshLambertMaterial({ map: strata, color: 0xffffff, emissive: 0x2a2018 })
-  const skirtMesh = new Mesh(skirt, skirtMat)
-  group.add(skirtMesh)
-  disposables.push(skirt, skirtMat)
-
-  // The underside, so the block never looks hollow.
-  const under = new PlaneGeometry(BLOCK.x1 - BLOCK.x0, BLOCK.z1 - BLOCK.z0)
-  under.rotateX(Math.PI / 2)
-  under.translate((BLOCK.x0 + BLOCK.x1) / 2, BLOCK.base, (BLOCK.z0 + BLOCK.z1) / 2)
-  const underMat = new MeshBasicMaterial({ color: 0x2a221b })
-  group.add(new Mesh(under, underMat))
-  disposables.push(under, underMat)
-
-  // A soft shadow under the block.
-  const shadowTex = blobTexture()
-  const shadowGeo = new PlaneGeometry(BLOCK.x1 - BLOCK.x0 + 14, BLOCK.z1 - BLOCK.z0 + 14)
-  shadowGeo.rotateX(-Math.PI / 2)
-  shadowGeo.translate((BLOCK.x0 + BLOCK.x1) / 2 + 3, BLOCK.base - 0.6, (BLOCK.z0 + BLOCK.z1) / 2 + 1)
-  const shadowMat = new MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false, color: 0x1a1612, fog: false })
-  const shadowMesh = new Mesh(shadowGeo, shadowMat)
-  shadowMesh.renderOrder = -1
-  group.add(shadowMesh)
-  disposables.push(shadowTex, shadowGeo, shadowMat)
-
-  // ---- The brook
-  const ice = { value: 0 }
-  const waterGeo = new PlaneGeometry(BLOCK.x1 - BLOCK.x0, 2.2, 120, 8)
-  waterGeo.rotateX(-Math.PI / 2)
-  waterGeo.translate((BLOCK.x0 + BLOCK.x1) / 2, WATER_Y, BROOK_Z)
-  const waterMat = patch(new MeshStandardMaterial({ color: 0x2f403d, roughness: 0.85, metalness: 0.0, side: DoubleSide }), {
-    uniforms: { uIce: ice },
-    fragmentHead: 'uniform float uIce; float waterGlint;',
-    fragmentColor: /* glsl */ `
-      {
-        float flow = fbm(vec2(vWorld.x * 0.7 - uTime * 0.5, vWorld.z * 2.2));
-        vec3 deep = vec3(0.006, 0.014, 0.018);
-        vec3 shallow = vec3(0.016, 0.03, 0.032);
-        vec3 col = mix(deep, shallow, smoothstep(0.3, 0.75, flow));
-        col = mix(col, vec3(0.62, 0.66, 0.7) * (0.9 + 0.1 * flow), uIce);
-        col = mix(col, vec3(0.9, 0.92, 0.94), uIce * uSnow * smoothstep(0.35, 0.6, fbm(vWorld.xz * 0.6)));
-        diffuseColor.rgb = col;
-        float edge = smoothstep(0.55, 0.85, abs(vWorld.z - ${BROOK_Z.toFixed(2)}));
-        waterGlint = (1.0 - uIce) * (0.006 + 0.012 * flow + 0.16 * smoothstep(0.74, 0.82, flow)) * (1.0 - 0.6 * edge);
+  // ---- Roads: ribbons laid on the ground.
+  const roadMat = (tint: string, wetTint: string) => patch(new MeshStandardMaterial({ map: roadTex, transparent: true, depthWrite: false, roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }), {
+    fragmentColor: `diffuseColor.rgb *= mix(${linear(tint)}, ${linear(wetTint)}, uWet) * (0.85 + 0.3 * texture2D(uNoise, vWorld.xz * 0.2).a); ${SNOW_RIME} diffuseColor.a *= 1.0 - 0.85 * smoothstep(0.5, 0.9, uSnow);`,
+    fragmentRoughness: 'roughnessFactor = mix(0.95, 0.5, uWet * 0.7);',
+  })
+  const farmRoad = roadMat('#b29474', '#6b5440'), townRoad = roadMat('#c2b396', '#857763')
+  const ribbon = (pts: [number, number][], width: number, mat: MeshStandardMaterial, lift: number): void => {
+    const p: number[] = [], uv: number[] = [], ix: number[] = []
+    let len = 0
+    // resample so the ribbon follows the ground
+    const fine: [number, number][] = []
+    for (let k = 0; k < pts.length - 1; k++) {
+      const [ax, az] = pts[k], [bx, bz] = pts[k + 1]
+      const steps = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / 0.9))
+      for (let s = 0; s < steps; s++) fine.push([ax + ((bx - ax) * s) / steps, az + ((bz - az) * s) / steps])
+    }
+    fine.push(pts[pts.length - 1])
+    for (let k = 0; k < fine.length; k++) {
+      const a = fine[Math.max(0, k - 1)], b = fine[Math.min(fine.length - 1, k + 1)]
+      const dx = b[0] - a[0], dz = b[1] - a[1], l = Math.hypot(dx, dz) || 1
+      const nxv = -dz / l, nzv = dx / l
+      if (k > 0) len += Math.hypot(fine[k][0] - fine[k - 1][0], fine[k][1] - fine[k - 1][1])
+      for (const s of [-1, 0, 1]) {
+        const x = fine[k][0] + nxv * s * width / 2, z = fine[k][1] + nzv * s * width / 2
+        p.push(x, groundY(x, z) + lift, z)
+        uv.push((s + 1) / 2, len / (width * 2))
       }
-    `,
-    fragmentEmissive: 'totalEmissiveRadiance += uSky * waterGlint;',
-    fragmentRoughness: 'roughnessFactor = mix(0.85, 0.7, uIce);',
-  })
-  const water = new Mesh(waterGeo, waterMat)
-  water.receiveShadow = true
-  group.add(water)
-  disposables.push(waterGeo, waterMat)
-  const faces = waterFaces()
-  const facesMat = new MeshLambertMaterial({ color: 0x24322f, transparent: true, opacity: 0.85, side: DoubleSide })
-  group.add(new Mesh(faces, facesMat))
-  disposables.push(faces, facesMat)
+      if (k > 0) {
+        const o = (k - 1) * 3
+        ix.push(o, o + 1, o + 3, o + 1, o + 4, o + 3, o + 1, o + 2, o + 4, o + 2, o + 5, o + 4)
+      }
+    }
+    const g = new BufferGeometry()
+    g.setAttribute('position', new BufferAttribute(new Float32Array(p), 3))
+    g.setAttribute('uv', new BufferAttribute(new Float32Array(uv), 2))
+    g.setIndex(ix)
+    g.computeVertexNormals()
+    const mesh = new Mesh(g, mat)
+    mesh.receiveShadow = true
+    mesh.renderOrder = 1
+    group.add(mesh)
+    disposables.push(g)
+  }
+  ribbon(ROAD, 1.5, farmRoad, 0.035)
+  for (const s of SPURS) ribbon(s, 1.25, farmRoad, 0.03)
+  const longRoad = (zOf: (x: number) => number): [number, number][] => {
+    const pts: [number, number][] = []
+    for (let x = -1500; x <= 1500; x += 6) pts.push([x, zOf(x)])
+    return pts
+  }
+  ribbon(longRoad(townRoadZ), 2.4, townRoad, 0.06)
+  ribbon(longRoad(hillRoadZ), 2.4, townRoad, 0.08)
+  disposables.push(farmRoad, townRoad)
 
-  // ---- Stone walls and rock piles along the field edges
+  // ---- The brook: a ribbon of water down the valley.
+  const ice = { value: 0 }
+  {
+    const p: number[] = [], uv: number[] = [], ix: number[] = []
+    let k = 0
+    for (let x = -460; x <= 470; x += Math.abs(x) < 70 ? 0.6 : 3) {
+      const z = brookZ(x), hw = brookHalf(x) + 0.5
+      for (const s of [-1, -0.5, 0, 0.5, 1]) {
+        p.push(x, WATER_Y, z + s * hw)
+        uv.push(x, s)
+      }
+      if (k > 0) for (let q = 0; q < 4; q++) { const o = (k - 1) * 5 + q; ix.push(o, o + 1, o + 5, o + 1, o + 6, o + 5) }
+      k++
+    }
+    const g = new BufferGeometry()
+    g.setAttribute('position', new BufferAttribute(new Float32Array(p), 3))
+    g.setAttribute('uv', new BufferAttribute(new Float32Array(uv), 2))
+    g.setIndex(ix)
+    g.computeVertexNormals()
+    const mat = patch(new MeshStandardMaterial({ color: 0xffffff, roughness: 0.06, metalness: 0, transparent: true, side: DoubleSide }), {
+      uniforms: { uIce: ice },
+      vertexHead: 'varying vec2 vBrook;',
+      vertexBegin: 'vBrook = uv;',
+      fragmentHead: 'uniform float uIce; varying vec2 vBrook; vec2 ripple; float frozen;',
+      fragmentColor: /* glsl */ `
+        {
+          vec2 f1 = texture2D(uNoise, vWorld.xz * vec2(0.09, 0.2) + vec2(-uTime * 0.035, 0.0)).rg - 0.5;
+          vec2 f2 = texture2D(uNoise, vWorld.xz * vec2(0.21, 0.37) + vec2(-uTime * 0.06, uTime * 0.01)).rg - 0.5;
+          ripple = (f1 + f2 * 0.6) * (1.0 - uIce);
+          float shore = abs(vBrook.y);
+          frozen = uIce;
+          vec3 deep = ${linear('#2a2f25')}, shallow = ${linear('#6b6450')};
+          vec3 col = mix(deep, shallow, smoothstep(0.35, 0.95, shore));
+          col = mix(col, vec3(0.62, 0.68, 0.74) * (0.9 + 0.2 * texture2D(uNoise, vWorld.xz * 0.11).a), uIce);
+          col = mix(col, vec3(0.84, 0.88, 0.93), uIce * smoothstep(0.3, 0.7, uSnow) * smoothstep(0.35, 0.6, texture2D(uNoise, vWorld.xz * 0.05).b + uSnow * 0.3));
+          diffuseColor.rgb = col;
+          diffuseColor.a = mix(smoothstep(1.0, 0.72, shore) * 0.94, smoothstep(1.0, 0.9, shore), uIce);
+        }
+      `,
+      fragmentRoughness: 'roughnessFactor = mix(0.07, 0.55, frozen);',
+      fragmentNormal: 'normal = normalize(normal + (viewMatrix * vec4(ripple.x, 0.0, ripple.y, 0.0)).xyz * 0.5);',
+    })
+    const water = new Mesh(g, mat)
+    water.receiveShadow = true
+    water.renderOrder = 2
+    group.add(water)
+    disposables.push(g, mat)
+  }
+
   const rocks = stoneWalls()
   group.add(rocks)
-  disposables.push(rocks.geometry, rocks.material as MeshLambertMaterial)
+  disposables.push(rocks.geometry, rocks.material as MeshStandardMaterial)
 
-  return {
-    group,
-    water: { ice },
-    dispose() { for (const d of disposables) d.dispose() },
-  }
+  return { group, water: { ice }, dispose() { for (const d of disposables) d.dispose() } }
 }
 
-function skirtGeometry(nx: number, nz: number, top: Float32Array): BufferGeometry {
-  // Walk the rim: front (z1), right (x1), back (z0), left (x0), so the faces point outward.
-  const rim: number[] = []
-  for (let i = 0; i < nx; i++) rim.push((nz - 1) * nx + i)
-  for (let j = nz - 2; j >= 0; j--) rim.push(j * nx + nx - 1)
-  for (let i = nx - 2; i >= 0; i--) rim.push(i)
-  for (let j = 1; j < nz; j++) rim.push(j * nx)
-  const pos: number[] = [], uv: number[] = [], nrm: number[] = []
-  let s = 0
-  const W = 512 / STRATA_PX, H = 640 / STRATA_PX
-  for (let k = 0; k < rim.length - 1; k++) {
-    const a = rim[k], b = rim[k + 1]
-    const ax = top[a * 3], ay = top[a * 3 + 1], az = top[a * 3 + 2]
-    const bx = top[b * 3], by = top[b * 3 + 1], bz = top[b * 3 + 2]
-    const len = Math.hypot(bx - ax, bz - az)
-    if (len < 1e-6) continue
-    const nxv = -(bz - az) / len, nzv = (bx - ax) / len
-    const s1 = s + len
-    // two triangles: a-top, a-bottom, b-top, b-bottom
-    const quad = [[ax, ay, az, s, 0], [ax, BLOCK.base, az, s, ay - BLOCK.base], [bx, by, bz, s1, 0], [bx, BLOCK.base, bz, s1, by - BLOCK.base]]
-    for (const q of [quad[0], quad[1], quad[2], quad[2], quad[1], quad[3]]) {
-      pos.push(q[0], q[1], q[2])
-      uv.push(q[3] / W, 1 - q[4] / H)
-      nrm.push(nxv, 0, nzv)
-    }
-    s = s1
-  }
-  const g = new BufferGeometry()
-  g.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3))
-  g.setAttribute('normal', new BufferAttribute(new Float32Array(nrm), 3))
-  g.setAttribute('uv', new BufferAttribute(new Float32Array(uv), 2))
-  return g
-}
-
-function waterFaces(): BufferGeometry {
-  const pos: number[] = []
-  for (const x of [BLOCK.x0, BLOCK.x1]) {
-    const out = x === BLOCK.x0 ? -1 : 1
-    for (let z = BROOK_Z - 1.4; z < BROOK_Z + 1.4; z += 0.1) {
-      const y0 = groundY(x, z), y1 = groundY(x, z + 0.1)
-      if (y0 >= WATER_Y && y1 >= WATER_Y) continue
-      const xo = x + out * 0.005
-      const quad = [[xo, Math.min(y0, WATER_Y), z], [xo, WATER_Y, z], [xo, Math.min(y1, WATER_Y), z + 0.1], [xo, WATER_Y, z + 0.1]]
-      const order = out > 0 ? [0, 2, 1, 1, 2, 3] : [0, 1, 2, 2, 1, 3]
-      for (const o of order) pos.push(...quad[o])
-    }
-  }
-  const g = new BufferGeometry()
-  g.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3))
-  g.computeVertexNormals()
-  return g
-}
-
+// Field stone, cleared by hand and piled along the edges: the west wall, the wall under the woodlot, the wall by the road.
 function stoneWalls(): InstancedMesh {
-  const spots: [number, number, number][] = []
+  const spots: [number, number, number, number][] = []
   const r = rng(77)
   const line = (x0: number, z0: number, x1: number, z1: number, every: number) => {
-    const n = Math.max(2, Math.round(Math.hypot(x1 - x0, z1 - z0) / every))
-    for (let k = 0; k <= n; k++) {
-      const t = k / n
-      const x = x0 + (x1 - x0) * t + (r() - 0.5) * 0.25, z = z0 + (z1 - z0) * t + (r() - 0.5) * 0.25
-      if (roadDist(x, z) < 1.2) continue
-      spots.push([x, z, 0.13 + r() * 0.13])
-      if (r() < 0.55) spots.push([x + (r() - 0.5) * 0.2, z + (r() - 0.5) * 0.2, 0.1 + r() * 0.08])
+    const count = Math.max(2, Math.round(Math.hypot(x1 - x0, z1 - z0) / every))
+    for (let k = 0; k <= count; k++) {
+      const t = k / count
+      const x = x0 + (x1 - x0) * t + (r() - 0.5) * 0.22, z = z0 + (z1 - z0) * t + (r() - 0.5) * 0.22
+      if (roadDist(x, z) < 1.3) continue
+      const s = 0.1 + r() * 0.09
+      spots.push([x, z, s, 0])
+      if (r() < 0.8) spots.push([x + (r() - 0.5) * 0.16, z + (r() - 0.5) * 0.16, 0.08 + r() * 0.06, s * 0.8])
+      if (r() < 0.3) spots.push([x + (r() - 0.5) * 0.5, z + (r() - 0.5) * 0.5, 0.06 + r() * 0.05, 0])
     }
   }
-  line(-12.5, -15.2, -12.4, 16.1, 0.24)
-  line(-12.4, -15.4, 12.2, -15.4, 0.26)
-  for (const f of FIELDS) if (f.i % 2 === 0) line(f.x1 + 0.6, f.z0 + 0.2, f.x1 + 0.6, f.z1 - 0.2, 0.75)
-  const geo = new IcosahedronGeometry(1, 0)
-  const mat = patch(new MeshLambertMaterial({ color: 0xffffff, flatShading: true }), { fragmentColor: SNOW_RIME })
+  line(-17.5, -21.6, -17.4, 20.4, 0.17)
+  line(-17.5, -21.7, 16.4, -21.7, 0.17)
+  line(16.5, -21.7, 16.5, -8.2, 0.18)
+  line(16.4, 5.6, 16.4, 19.6, 0.18)
+  line(-18, 20.6, 16, 20.5, 1.9)
+  for (const f of FIELDS) if (f.i % 2 === 0) line(f.x1 + 0.9, f.z0 + 0.6, f.x1 + 0.9, f.z1 - 0.6, 0.9)
+  const geo = new IcosahedronGeometry(1, 1)
+  const gp = geo.getAttribute('position') as BufferAttribute
+  for (let i = 0; i < gp.count; i++) {
+    const k = 1 + (hash2(Math.round(gp.getX(i) * 50), Math.round(gp.getY(i) * 50 + gp.getZ(i) * 31)) - 0.5) * 0.3
+    gp.setXYZ(i, gp.getX(i) * k, gp.getY(i) * k, gp.getZ(i) * k)
+  }
+  geo.computeVertexNormals()
+  const mat = patch(new MeshStandardMaterial({ color: 0xffffff, roughness: 0.92, flatShading: true }), {
+    fragmentColor: `diffuseColor.rgb *= 0.85 + 0.3 * texture2D(uNoise, vWorld.xz * 0.9).a; ${SNOW_RIME}`,
+  })
   const mesh = new InstancedMesh(geo, mat, spots.length)
   const m = new Matrix4(), q = new Quaternion(), p = new Vector3(), sc = new Vector3(), e = new Vector3()
   const col = new Color()
-  const greys = ['#8e8a82', '#a29d93', '#76726b', '#9a9488', '#827b70']
-  spots.forEach(([x, z, s], k) => {
-    p.set(x, groundY(x, z) + s * 0.35, z)
+  const greys = ['#9a968c', '#aaa59a', '#827e76', '#a39c8e', '#8d867a', '#b3aea0']
+  spots.forEach(([x, z, s, up], k) => {
+    p.set(x, groundY(x, z) + s * 0.4 + up, z)
     q.setFromAxisAngle(e.set(r(), r(), r()).normalize(), r() * Math.PI)
-    sc.set(s * (1 + r() * 0.5), s * (0.6 + r() * 0.3), s * (1 + r() * 0.4))
+    sc.set(s * (1 + r() * 0.5), s * (0.62 + r() * 0.3), s * (1 + r() * 0.4))
     mesh.setMatrixAt(k, m.compose(p, q, sc))
     mesh.setColorAt(k, col.set(greys[k % greys.length]))
   })
@@ -246,17 +369,3 @@ function stoneWalls(): InstancedMesh {
   mesh.receiveShadow = true
   return mesh
 }
-
-function blobTexture(): CanvasTexture {
-  const c = document.createElement('canvas')
-  c.width = c.height = 128
-  const g = c.getContext('2d')!
-  const grad = g.createRadialGradient(64, 64, 20, 64, 64, 64)
-  grad.addColorStop(0, 'rgba(255,255,255,0.55)')
-  grad.addColorStop(0.55, 'rgba(255,255,255,0.3)')
-  grad.addColorStop(1, 'rgba(255,255,255,0)')
-  g.fillStyle = grad
-  g.fillRect(0, 0, 128, 128)
-  return new CanvasTexture(c)
-}
-

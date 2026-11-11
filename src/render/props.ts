@@ -1,290 +1,309 @@
-// Woods, the farmhouse, the potato house, the bridge, chimney smoke.
+// The farmstead: the connected farm (big house, little house, back house, barn) stepping up the slope, the potato house
+// banked into the hill, the bridge, and the neighbours' houses and barns far off.
 import {
-  BoxGeometry, Color, CylinderGeometry, DynamicDrawUsage, ExtrudeGeometry, Group, InstancedMesh, Matrix4, Mesh,
-  MeshLambertMaterial, Quaternion, Shape, Sprite, SpriteMaterial, Vector3, type Material, type Texture,
+  BoxGeometry, BufferAttribute, BufferGeometry, CylinderGeometry, ExtrudeGeometry, Group, InstancedMesh, Matrix4, Mesh,
+  MeshStandardMaterial, Quaternion, Shape, Vector3,
 } from 'three'
-import { birchCrownGeometry, birchTrunkGeometry, spruceGeometry } from './geometry.ts'
-import { BLOCK, BROOK_Z, HOUSE, POTATO_HOUSE, groundY, roadDist } from './layout.ts'
-import { rng } from './noise.ts'
-import { SNOW_RIME, SNOW_RIME_TREE, patch, sway } from './shaders.ts'
-import { boardsTexture, puffTexture, shingleTexture } from './textures.ts'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import { FARMSTEADS } from './flora.ts'
+import { BARN, HOUSE, POTATO_HOUSE, WATER_Y, brookZ, groundY, padLevel } from './layout.ts'
+import { SNOW_RIME, linear, patch } from './shaders.ts'
 
-interface Tree { x: number; z: number; s: number; r: number; shrub?: boolean }
+type Finish = 'plain' | 'clapboard' | 'boards' | 'shingle' | 'metal' | 'brick' | 'stone' | 'glass'
+
+// Paint and wear, drawn in the shader from where the surface is in the world: no texture coordinates needed.
+const FINISH: Record<Finish, string> = {
+  plain: 'float tone = 0.94 + 0.12 * texture2D(uNoise, vWorld.xy * 0.6 + vWorld.zz * 0.4).a;',
+  clapboard: /* glsl */ `
+    float lap = fract(vWorld.y / 0.13);
+    float seen = 1.0 - smoothstep(0.3, 0.9, fwidth(vWorld.y) / 0.13);
+    float tone = (1.0 - 0.34 * seen * smoothstep(0.78, 0.98, lap)) * (0.9 + 0.2 * texture2D(uNoise, vec2(dot(vWorld.xz, vec2(0.7, 0.7)) * 0.3, vWorld.y * 2.0)).a);`,
+  boards: /* glsl */ `
+    float run = abs(vWNormal.x) > abs(vWNormal.z) ? vWorld.z : vWorld.x;
+    float seen = 1.0 - smoothstep(0.3, 0.9, fwidth(run) / 0.2);
+    float board = floor(run / 0.2);
+    float tone = (1.0 - 0.4 * seen * smoothstep(0.86, 0.98, fract(run / 0.2))) * (0.84 + 0.3 * fract(sin(board * 12.9898) * 43758.5453) * seen) * (0.9 + 0.2 * texture2D(uNoise, vec2(run * 1.5, vWorld.y * 0.25)).a);`,
+  shingle: /* glsl */ `
+    float run = abs(vWNormal.x) > abs(vWNormal.z) ? vWorld.z : vWorld.x;
+    float course = vWorld.y / 0.085, seen = 1.0 - smoothstep(0.3, 0.9, fwidth(course));
+    float tab = floor(run / 0.17 + 0.5 * floor(course));
+    float tone = (1.0 - 0.3 * seen * smoothstep(0.7, 0.98, fract(course))) * (0.8 + 0.36 * fract(sin(tab * 78.233 + floor(course) * 12.9898) * 43758.5453) * seen) * (0.9 + 0.2 * texture2D(uNoise, vWorld.xz * 0.4).a);`,
+  metal: /* glsl */ `
+    float run = abs(vWNormal.x) > abs(vWNormal.z) ? vWorld.z : vWorld.x;
+    float seen = 1.0 - smoothstep(0.3, 0.9, fwidth(run) / 0.3);
+    float tone = (1.0 - 0.3 * seen * smoothstep(0.9, 0.99, fract(run / 0.3))) * (0.82 + 0.3 * texture2D(uNoise, vWorld.xz * 0.21).b);`,
+  brick: /* glsl */ `
+    float course = vWorld.y / 0.06, run = (abs(vWNormal.x) > abs(vWNormal.z) ? vWorld.z : vWorld.x) / 0.13 + 0.5 * floor(course);
+    float seen = 1.0 - smoothstep(0.3, 0.9, fwidth(course));
+    float tone = mix(1.0, 0.72 + 0.4 * fract(sin(floor(run) * 12.9898 + floor(course) * 78.233) * 43758.5453), seen) * (1.0 - 0.35 * seen * max(smoothstep(0.82, 0.96, fract(course)), smoothstep(0.9, 0.98, fract(run))));`,
+  stone: 'float tone = 0.72 + 0.5 * texture2D(uNoise, vWorld.xz * 0.5 + vWorld.yy * 0.7).a;',
+  glass: 'float tone = 1.0;',
+}
+
+export const LAMP = { value: 0 }
 
 export class Props {
   readonly group = new Group()
-  private crowns: InstancedMesh
-  private crownSpots: Tree[] = []
-  private crownKey = -1
-  private smoke: Sprite[] = []
-  private smokeMat: SpriteMaterial[] = []
-  private chimney = new Vector3()
+  // Where smoke leaves the kitchen chimney.
+  readonly chimney = new Vector3()
+  private parts = new Map<string, { mat: MeshStandardMaterial; geos: BufferGeometry[] }>()
   private disposables: { dispose(): void }[] = []
+  private m = new Matrix4()
+  private q = new Quaternion()
+  private up = new Vector3(0, 1, 0)
 
   constructor() {
-    const r = rng(2024)
-    const spruce: Tree[] = [], birch: Tree[] = []
-    const clear = (x: number, z: number) => roadDist(x, z) > 1.3 && Math.hypot(x - POTATO_HOUSE.x, z - POTATO_HOUSE.z) > 4.2
-    for (let z = BLOCK.z0 + 0.5; z < -15.4; z += 1.05) {
-      for (let x = BLOCK.x0 + 0.4; x < BLOCK.x1 - 0.3; x += 1.1) {
-        const jx = x + (r() - 0.5) * 0.9, jz = z + (r() - 0.5) * 0.8
-        if (!clear(jx, jz) || r() < 0.12) continue
-        const front = jz > -17 ? 0.75 : 1
-        if (jz > -16.2 && r() < 0.45) birch.push({ x: jx, z: jz, s: 2.4 + r() * 1.0, r: r() })
-        else spruce.push({ x: jx, z: jz, s: (2.6 + r() * 1.9) * front, r: r() })
-      }
+    this.farmhouse()
+    this.potatoHouse()
+    this.bridge()
+    for (const { mat, geos } of this.parts.values()) {
+      const merged = mergeGeometries(geos)!
+      for (const g of geos) g.dispose()
+      const mesh = new Mesh(merged, mat)
+      mesh.castShadow = true
+      mesh.receiveShadow = true
+      mesh.layers.enable(1)
+      mesh.layers.enable(2)
+      this.group.add(mesh)
+      this.disposables.push(merged, mat)
     }
-    for (let z = -14.5; z < 15.5; z += 1.6 + r() * 1.4) {
-      const x = -13.6 - r() * 1.1
-      if (r() < 0.6) birch.push({ x, z, s: 2.0 + r() * 1.1, r: r() })
-      else spruce.push({ x, z, s: 1.8 + r() * 1.4, r: r() })
-    }
-    for (let x = BLOCK.x0 + 0.6; x < BLOCK.x1 - 0.5; x += 1.3 + r() * 1.6) {
-      if (roadDist(x, 16.1) < 1.5) continue
-      birch.push({ x: x + (r() - 0.5), z: 16.2 + r() * 0.2, s: 0.9 + r() * 0.5, r: r(), shrub: true })
-      if (r() < 0.5) birch.push({ x: x + r(), z: 18.7 + r() * 0.5, s: 1.0 + r() * 1.4, r: r(), shrub: r() < 0.6 })
-    }
-    for (let k = 0; k < 6; k++) spruce.push({ x: 20 + r() * 3, z: 6 + k * 1.6 + r(), s: 2 + r() * 1.3, r: r() })
-    for (let k = 0; k < 4; k++) birch.push({ x: 21.5 + r() * 1.5, z: 9 + k * 2 + r(), s: 2.2 + r(), r: r() })
-
-    // Spruce
-    const spruceGeo = spruceGeometry()
-    const spruceMat = patch(new MeshLambertMaterial({ vertexColors: true }), { vertexProject: sway('0.025'), fragmentColor: SNOW_RIME_TREE })
-    const sp = new InstancedMesh(spruceGeo, spruceMat, spruce.length)
-    const m = new Matrix4(), q = new Quaternion(), p = new Vector3(), sc = new Vector3(), up = new Vector3(0, 1, 0)
-    const col = new Color()
-    spruce.forEach((t, k) => {
-      q.setFromAxisAngle(up, t.r * 6.28)
-      sp.setMatrixAt(k, m.compose(p.set(t.x, groundY(t.x, t.z) - 0.05, t.z), q, sc.set(t.s * (0.85 + t.r * 0.3), t.s, t.s * (0.85 + t.r * 0.3))))
-      sp.setColorAt(k, col.set('#22382f').multiplyScalar(0.8 + t.r * 0.45))
-    })
-    this.addShadowed(sp)
-    this.disposables.push(spruceGeo, spruceMat)
-
-    // Birch trunks and crowns (shrubs along the brook are crowns only)
-    const trunks = birch.filter(t => !t.shrub)
-    const trunkGeo = birchTrunkGeometry()
-    const trunkMat = patch(new MeshLambertMaterial({ vertexColors: true }), { fragmentColor: SNOW_RIME })
-    const tr = new InstancedMesh(trunkGeo, trunkMat, trunks.length)
-    trunks.forEach((t, k) => {
-      q.setFromAxisAngle(up, t.r * 6.28)
-      tr.setMatrixAt(k, m.compose(p.set(t.x, groundY(t.x, t.z) - 0.05, t.z), q, sc.set(t.s * 1.4, t.s, t.s * 1.4)))
-    })
-    this.addShadowed(tr)
-    this.disposables.push(trunkGeo, trunkMat)
-    const crownGeo = birchCrownGeometry()
-    const crownMat = patch(new MeshLambertMaterial({ vertexColors: true }), { vertexProject: sway('0.06'), fragmentColor: SNOW_RIME_TREE })
-    this.crowns = new InstancedMesh(crownGeo, crownMat, birch.length)
-    this.crowns.instanceMatrix.setUsage(DynamicDrawUsage)
-    this.crownSpots = birch
-    this.addShadowed(this.crowns)
-    this.disposables.push(crownGeo, crownMat)
-
-    this.buildFarmhouse()
-    this.buildPotatoHouse()
-    this.buildBridge()
-    this.buildSmoke()
+    this.neighbours()
   }
 
-  private addShadowed(mesh: Mesh): void {
-    mesh.castShadow = true
-    mesh.receiveShadow = true
-    this.group.add(mesh)
-  }
-
-  private mat(color: string, map?: Texture, repeat?: [number, number]): Material {
-    let tex = map
-    if (map && repeat) {
-      tex = map.clone()
-      tex.repeat.set(repeat[0], repeat[1])
-      tex.needsUpdate = true
-      this.disposables.push(tex)
+  private mat(color: string, finish: Finish, roughness = 0.9): { mat: MeshStandardMaterial; geos: BufferGeometry[] } {
+    const key = `${color}|${finish}`
+    let part = this.parts.get(key)
+    if (!part) {
+      const glass = finish === 'glass'
+      const mat = patch(new MeshStandardMaterial({ color, roughness: glass ? 0.1 : roughness, metalness: finish === 'metal' ? 0.25 : 0 }), {
+        key: `county-built-${finish}`,
+        uniforms: glass ? { uLamp: LAMP } : {},
+        fragmentHead: glass ? 'uniform float uLamp;' : '',
+        fragmentColor: `{ ${FINISH[finish]} diffuseColor.rgb *= tone; } ${glass ? '' : SNOW_RIME}`,
+        // Windows catch the low sun, and show lamplight on a winter evening.
+        fragmentEmissive: glass ? /* glsl */ `
+          {
+            vec3 seen = reflect(normalize(vWorld - cameraPosition), normalize(vWNormal));
+            float low = 1.0 - smoothstep(0.16, 0.5, uSunDir.y);
+            totalEmissiveRadiance += uSunCol * (pow(max(dot(seen, uSunDir), 0.0), 14.0) * 1.3 + 0.16 * low * max(dot(normalize(vWNormal), uSunDir), 0.0)) * cloudShade(vWorld);
+            float lit = step(0.55, fract(sin(floor(vWorld.y * 1.3) * 12.9898 + floor((vWorld.x + vWorld.z) * 1.1) * 78.233) * 43758.5453));
+            totalEmissiveRadiance += ${linear('#ffc47a')} * uLamp * lit * 0.9;
+          }` : '',
+      })
+      part = { mat, geos: [] }
+      this.parts.set(key, part)
     }
-    const m = patch(new MeshLambertMaterial({ color, map: tex ?? null }), { fragmentColor: SNOW_RIME })
-    this.disposables.push(m)
-    return m
+    return part
   }
 
-  private box(w: number, h: number, d: number, material: Material, x: number, y: number, z: number, ry = 0): Mesh {
-    const g = new BoxGeometry(w, h, d)
-    this.disposables.push(g)
-    const mesh = new Mesh(g, material)
-    mesh.position.set(x, y, z)
-    mesh.rotation.y = ry
-    this.addShadowed(mesh)
-    return mesh
+  private add(g: BufferGeometry, part: { geos: BufferGeometry[] }, x: number, y: number, z: number, ry = 0): void {
+    g.applyMatrix4(this.m.compose(new Vector3(x, y, z), this.q.setFromAxisAngle(this.up, ry), new Vector3(1, 1, 1)))
+    const flat = g.index ? g.toNonIndexed() : g
+    if (flat !== g) g.dispose()
+    for (const name of Object.keys(flat.attributes)) if (name !== 'position' && name !== 'normal') flat.deleteAttribute(name)
+    part.geos.push(flat)
   }
 
-  // A gabled building: body along z, ridge along z. Origin at the middle of the floor.
-  private gabled(w: number, l: number, wall: number, rise: number, wallMat: Material, roofMat: Material, x: number, y: number, z: number, ry = 0): Group {
-    const g = new Group()
+  private box(w: number, h: number, d: number, color: string, finish: Finish, x: number, y: number, z: number, ry = 0): void {
+    this.add(new BoxGeometry(w, h, d), this.mat(color, finish), x, y, z, ry)
+  }
+
+  // A gabled building: ridge along z, floor centre at (x, y, z). Returns the height of the ridge.
+  private gabled(w: number, l: number, wall: number, rise: number, color: string, finish: Finish, roofColor: string, roofFinish: Finish, x: number, y: number, z: number): number {
     const shape = new Shape()
-    shape.moveTo(-w / 2, 0)
-    shape.lineTo(w / 2, 0)
+    shape.moveTo(-w / 2, -0.6)
+    shape.lineTo(w / 2, -0.6)
     shape.lineTo(w / 2, wall)
     shape.lineTo(0, wall + rise)
     shape.lineTo(-w / 2, wall)
     shape.closePath()
     const body = new ExtrudeGeometry(shape, { depth: l, bevelEnabled: false })
     body.translate(0, 0, -l / 2)
-    this.disposables.push(body)
-    const bm = new Mesh(body, wallMat)
-    bm.castShadow = bm.receiveShadow = true
-    g.add(bm)
-    const oh = 0.14
-    const slope = Math.hypot(w / 2 + oh, rise * (1 + oh / (w / 2)))
+    this.add(body, this.mat(color, finish), x, y, z)
+    const oh = 0.16
     const ang = Math.atan2(rise, w / 2)
+    const slope = Math.hypot(w / 2, rise) + oh
     for (const side of [-1, 1]) {
-      const geo = new BoxGeometry(slope, 0.07, l + oh * 2)
-      this.disposables.push(geo)
-      const rm = new Mesh(geo, roofMat)
-      rm.rotation.z = -side * ang
-      rm.position.set(side * (w / 4 + oh / 2) * 1.0, wall + rise / 2 - oh * Math.tan(ang) / 2 + 0.03, 0)
-      rm.castShadow = rm.receiveShadow = true
-      g.add(rm)
+      const roof = new BoxGeometry(slope, 0.07, l + oh * 2)
+      roof.translate(-slope / 2 + (oh > 0 ? 0 : 0), 0.035, 0)
+      roof.rotateZ(side > 0 ? ang : Math.PI - ang)
+      roof.translate(0, wall + rise + 0.01, 0)
+      this.add(roof, this.mat(roofColor, roofFinish, 0.8), x, y, z)
     }
-    g.position.set(x, y, z)
-    g.rotation.y = ry
-    this.group.add(g)
-    return g
+    // rake and eave boards
+    for (const end of [-1, 1]) for (const side of [-1, 1]) {
+      const rake = new BoxGeometry(slope, 0.09, 0.05)
+      rake.translate(-slope / 2, -0.03, 0)
+      rake.rotateZ(side > 0 ? ang : Math.PI - ang)
+      rake.translate(0, wall + rise, end * (l / 2 + oh - 0.02))
+      this.add(rake, this.mat('#efe9da', 'plain'), x, y, z)
+    }
+    return y + wall + rise
   }
 
-  private buildFarmhouse(): void {
-    const clap = boardsTexture(true, 4)
-    const shingle = shingleTexture()
-    this.disposables.push(clap, shingle)
-    const white = this.mat('#ebe5d6', clap, [0.6, 0.6])
-    const red = this.mat('#8c4433', clap, [0.5, 0.5])
-    const roof = this.mat('#55575a', shingle, [1, 1])
-    const barnRoof = this.mat('#5e5a55', shingle, [1, 1])
-    const dark = this.mat('#2b3133')
-    const trim = this.mat('#f4f0e6')
-    const green = this.mat('#2f4a3a')
-    const brick = this.mat('#7a4434')
+  // A window: casing, sash and glass on a wall facing -x (`face` 0) or +z (`face` 1).
+  private window(x: number, y: number, z: number, face: number, w = 0.34, h = 0.52): void {
+    const t = 0.05
+    if (face === 0) {
+      this.box(t, h + 0.1, w + 0.1, '#efe9da', 'plain', x, y, z)
+      this.box(t + 0.01, h, w, '#1c2428', 'glass', x - 0.008, y, z)
+      this.box(t + 0.02, 0.025, w, '#efe9da', 'plain', x - 0.01, y, z)
+      this.box(t + 0.02, h, 0.022, '#efe9da', 'plain', x - 0.01, y, z)
+    } else {
+      this.box(w + 0.1, h + 0.1, t, '#efe9da', 'plain', x, y, z)
+      this.box(w, h, t + 0.01, '#1c2428', 'glass', x, y, z + 0.008)
+      this.box(w, 0.025, t + 0.02, '#efe9da', 'plain', x, y, z + 0.01)
+      this.box(0.022, h, t + 0.02, '#efe9da', 'plain', x, y, z + 0.01)
+    }
+  }
+
+  private farmhouse(): void {
+    const white = '#e9e3d3', red = '#8a3b2d', roof = '#4b4d50', barnRoof = '#8a8c88', brick = '#7c4737', green = '#2f4a3a'
     const hx = HOUSE.x, hz = HOUSE.z
-    const y = groundY(hx, hz)
-    // House, ell and barn in a line: big house, little house, back house, barn.
-    this.gabled(2.3, 2.8, 1.75, 0.95, white, roof, hx, y, hz + 1.2)
-    this.gabled(1.6, 1.9, 1.3, 0.6, white, roof, hx + 0.1, y, hz - 1.15)
-    this.gabled(2.7, 3.0, 1.6, 1.2, red, barnRoof, hx + 0.25, y, hz - 3.6)
-    // Windows on the road side (-x) and the front (+z).
-    for (const wz of [hz + 0.45, hz + 1.2, hz + 1.95]) {
-      for (const wy of [0.55, 1.3]) {
-        this.box(0.06, 0.44, 0.3, trim, hx - 1.16, y + wy, wz)
-        this.box(0.07, 0.34, 0.2, dark, hx - 1.165, y + wy, wz)
-      }
-    }
-    for (const wx of [hx - 0.55, hx + 0.55]) {
-      for (const wy of [0.55, 1.3]) {
-        this.box(0.3, 0.44, 0.06, trim, wx, y + wy, hz + 2.61)
-        this.box(0.2, 0.34, 0.07, dark, wx, y + wy, hz + 2.615)
-      }
-    }
-    this.box(0.24, 0.3, 0.06, dark, hx, y + 2.1, hz + 2.61)
-    this.box(0.07, 0.62, 0.32, green, hx - 0.86, y + 0.33, hz - 1.0)
-    this.box(0.07, 1.0, 1.0, this.mat('#4a3328'), hx - 1.13 + 0.01, y + 0.5, hz - 3.6)
-    const ch = this.box(0.26, 0.85, 0.26, brick, hx + 0.35, y + 2.45, hz + 1.5)
-    this.chimney.set(ch.position.x, ch.position.y + 0.45, ch.position.z)
-    this.box(0.26, 0.6, 0.26, brick, hx + 0.1, y + 1.9, hz - 1.25)
+    const y0 = padLevel(0), y1 = padLevel(1), y2 = padLevel(2)
+    // The big house: gable to the road below, two storeys.
+    const ridge = this.gabled(3.0, 3.6, 2.05, 1.15, white, 'clapboard', roof, 'shingle', hx, y0, hz)
+    this.box(3.06, 0.14, 3.66, '#8a857c', 'stone', hx, y0 + 0.02, hz)
+    for (const wz of [hz - 1.05, hz, hz + 1.05]) for (const wy of [0.72, 1.62]) this.window(hx - 1.5, y0 + wy, wz, 0)
+    for (const wx of [hx - 0.72, hx + 0.72]) for (const wy of [0.72, 1.62]) this.window(wx, y0 + wy, hz + 1.8, 1)
+    this.window(hx, y0 + 2.5, hz + 1.8, 1, 0.26, 0.36)
+    // front door on the gable end, with a hood
+    this.box(0.42, 0.86, 0.06, green, 'plain', hx, y0 + 0.5, hz + 1.81)
+    this.box(0.7, 0.05, 0.3, '#efe9da', 'plain', hx, y0 + 1.02, hz + 1.94)
+    this.box(0.8, 0.1, 0.4, '#8a857c', 'stone', hx, y0 + 0.04, hz + 2.0)
+    for (const s of [-1, 1]) this.box(0.08, 2.05, 0.08, '#efe9da', 'plain', hx + s * 1.5, y0 + 1.02, hz + 1.8)
+    this.box(0.36, 0.9, 0.36, brick, 'brick', hx + 0.4, ridge + 0.1, hz - 0.5)
+    // The little house (the kitchen ell), a step up the slope, with a porch on the dooryard side.
+    const ell = this.gabled(2.3, 3.0, 1.45, 0.82, white, 'clapboard', roof, 'shingle', hx + 0.1, y1, hz - 3.2)
+    for (const wz of [hz - 2.5, hz - 3.9]) this.window(hx - 1.05, y1 + 0.78, wz, 0, 0.32, 0.48)
+    this.box(0.06, 0.82, 0.4, green, 'plain', hx - 1.06, y1 + 0.46, hz - 3.2)
+    this.box(0.9, 0.06, 2.4, roof, 'shingle', hx - 1.5, y1 + 1.36, hz - 3.2)
+    for (const pz of [hz - 4.3, hz - 2.1]) this.box(0.07, 1.3, 0.07, '#efe9da', 'plain', hx - 1.88, y1 + 0.68, pz)
+    this.box(0.9, 0.08, 2.4, '#8d7f6c', 'boards', hx - 1.5, y1 + 0.06, hz - 3.2)
+    this.box(0.3, 0.8, 0.3, brick, 'brick', hx + 0.3, ell + 0.15, hz - 3.4)
+    this.chimney.set(hx + 0.3, ell + 0.6, hz - 3.4)
+    // The back house (woodshed and workshop), then the barn, each a step higher.
+    this.gabled(2.5, 2.8, 1.5, 0.9, white, 'clapboard', roof, 'shingle', hx + 0.2, y1 + 0.1, hz - 6.0)
+    this.box(0.06, 1.1, 1.3, '#6f6253', 'boards', hx - 1.06, y1 + 0.66, hz - 6.0)
+    const bx = BARN.x, bz = BARN.z
+    const barnTop = this.gabled(4.3, 6.0, 2.5, 1.9, red, 'boards', barnRoof, 'metal', bx, y2, bz - 0.8)
+    this.box(4.36, 0.2, 6.06, '#8a857c', 'stone', bx, y2 + 0.04, bz - 0.8)
+    // the great door on its track, the hay door above it, a row of small sashes, white trim
+    this.box(0.07, 1.9, 1.9, '#7c3528', 'boards', bx - 2.17, y2 + 1.0, bz - 0.4)
+    this.box(0.08, 0.08, 2.9, '#efe9da', 'plain', bx - 2.18, y2 + 2.0, bz - 0.9)
+    for (const s of [-1, 1]) this.box(0.09, 1.9, 0.07, '#efe9da', 'plain', bx - 2.19, y2 + 1.0, bz - 0.4 + s * 0.95)
+    for (const wz of [bz - 2.9, bz + 1.6]) this.window(bx - 2.15, y2 + 1.25, wz, 0, 0.3, 0.3)
+    for (const s of [-1, 1]) this.box(0.1, 2.5, 0.1, '#efe9da', 'plain', bx - 2.15, y2 + 1.25, bz - 0.8 + s * 3.0)
+    this.box(0.7, 0.8, 0.07, '#7c3528', 'boards', bx, y2 + 3.0, bz + 2.21)
+    this.window(bx, y2 + 3.9, bz + 2.2, 1, 0.26, 0.26)
+    for (const s of [-1, 1]) this.box(0.1, 2.5, 0.1, '#efe9da', 'plain', bx + s * 2.15, y2 + 1.25, bz + 2.2)
+    // cupola
+    this.box(0.62, 0.5, 0.62, '#efe9da', 'clapboard', bx, barnTop + 0.2, bz - 0.8)
+    this.gabled(0.8, 0.8, 0.0, 0.34, '#efe9da', 'plain', barnRoof, 'metal', bx, barnTop + 0.45, bz - 0.8)
+    // woodpile against the back house
+    for (let k = 0; k < 3; k++) this.box(0.34, 0.3 - k * 0.02, 1.5 - k * 0.2, '#8a7458', 'boards', hx - 1.36, y1 + 0.2 + k * 0.28, hz - 7.0)
   }
 
-  private buildPotatoHouse(): void {
-    const boards = boardsTexture(false, 8)
-    const shingle = shingleTexture()
-    this.disposables.push(boards, shingle)
-    const wood = this.mat('#7b6a58', boards, [0.7, 0.7])
-    const door = this.mat('#54463a', boards, [0.5, 0.5])
-    const roof = this.mat('#5f5953', shingle, [1.2, 1.2])
+  private potatoHouse(): void {
     const px = POTATO_HOUSE.x, pz = POTATO_HOUSE.z
-    const y = groundY(px, pz + 1)
-    const w = 3.4, l = 5.0, wall = 0.9, rise = 1.0
-    this.gabled(w, l, wall, rise, wood, roof, px, y - 0.05, pz)
-    // Banked earth up to the eaves on the sides and back.
-    const berm = patch(new MeshLambertMaterial({ color: 0xffffff }), {
-      fragmentColor: `diffuseColor.rgb = uGrass * (0.8 + 0.35 * fbm(vWorld.xz * 0.9)); ${SNOW_RIME}`,
+    const y = padLevel(3)
+    const w = 4.2, l = 6.2, wall = 1.15, rise = 1.25
+    const front = pz + l / 2
+    // The frame house above, shingled and weathered grey; concrete below, where the door is.
+    const top = this.gabled(w, l, wall, rise, '#8f8a80', 'shingle', '#5d5a56', 'shingle', px, y, pz)
+    this.box(w + 0.1, 0.62, 0.16, '#a8a295', 'stone', px, y + 0.3, front + 0.02)
+    for (const s of [-1, 1]) {
+      this.box(0.82, 1.08, 0.08, '#5e5248', 'boards', px + s * 0.43, y + 0.56, front + 0.08)
+      // wing walls hold back the bank each side of the door
+      this.box(0.18, 0.8, 1.8, '#a8a295', 'stone', px + s * (w / 2 + 0.05), y + 0.34, front + 0.8)
+    }
+    this.box(1.9, 0.1, 0.12, '#3b352e', 'plain', px, y + 1.16, front + 0.09)
+    this.window(px, y + 1.7, front, 1, 0.3, 0.3)
+    // ventilators on the ridge
+    for (const vz of [pz - 1.6, pz + 1.3]) {
+      this.box(0.36, 0.36, 0.36, '#9aa0a0', 'metal', px, top + 0.14, vz)
+      this.gabled(0.5, 0.5, 0, 0.16, '#9aa0a0', 'metal', '#9aa0a0', 'metal', px, top + 0.32, vz)
+    }
+    // Earth banked to the eaves along both sides and round the back.
+    const berm = patch(new MeshStandardMaterial({ color: 0xffffff, roughness: 0.96 }), {
+      fragmentColor: `diffuseColor.rgb = uGrass * (0.74 + 0.5 * texture2D(uNoise, vWorld.xz * 0.043).b) * (0.88 + 0.24 * texture2D(uNoise, vWorld.xz * 0.31).a); ${SNOW_RIME}`,
     })
-    this.disposables.push(berm)
-    for (const side of [-1, 1]) {
+    const bank = (sx: number, sz: number, bw: number, bl: number, x: number, z: number) => {
       const sh = new Shape()
-      sh.moveTo(0, 0)
-      sh.lineTo(1.7, 0)
+      sh.moveTo(0, -0.7)
+      sh.lineTo(bw, -0.7)
+      sh.lineTo(bw, 0)
       sh.lineTo(0, wall + 0.05)
       sh.closePath()
-      const g = new ExtrudeGeometry(sh, { depth: l + 0.2, bevelEnabled: false })
-      g.translate(0, 0, -(l + 0.2) / 2)
-      if (side < 0) g.scale(-1, 1, 1)
-      this.disposables.push(g)
+      const g = new ExtrudeGeometry(sh, { depth: bl, bevelEnabled: false })
+      g.translate(0, 0, -bl / 2)
+      if (sx < 0) g.scale(-1, 1, 1)
+      if (sz) g.rotateY(-Math.PI / 2 * sz)
       const mesh = new Mesh(g, berm)
-      mesh.position.set(px + side * (w / 2 - 0.02), y - 0.1, pz)
-      this.addShadowed(mesh)
-    }
-    this.box(0.7, 1.05, 0.06, door, px - 0.36, y + 0.5, pz + l / 2 + 0.02)
-    this.box(0.7, 1.05, 0.06, door, px + 0.36, y + 0.5, pz + l / 2 + 0.02)
-    this.box(0.3, 0.22, 0.06, this.mat('#2b2a28'), px, y + 1.35, pz + l / 2 + 0.02)
-    for (const vz of [pz - 1.2, pz + 1.2]) {
-      this.box(0.3, 0.3, 0.3, wood, px, y + wall + rise + 0.05, vz)
-      this.box(0.42, 0.06, 0.42, roof, px, y + wall + rise + 0.24, vz)
-    }
-  }
-
-  private buildBridge(): void {
-    const x = 13.6
-    const plank = this.mat('#6d5b48')
-    const log = this.mat('#4f4237')
-    this.box(1.9, 0.1, 2.6, plank, x, 0.12, BROOK_Z)
-    for (const dx of [-0.9, 0.9]) {
-      const g = new CylinderGeometry(0.08, 0.08, 2.6, 6)
-      g.rotateX(Math.PI / 2)
+      mesh.position.set(x, y, z)
+      mesh.castShadow = mesh.receiveShadow = true
+      mesh.layers.enable(1)
+      this.group.add(mesh)
       this.disposables.push(g)
-      const mesh = new Mesh(g, log)
-      mesh.position.set(x + dx, 0.24, BROOK_Z)
-      this.addShadowed(mesh)
+    }
+    bank(1, 0, 2.2, l - 0.2, px + w / 2 - 0.02, pz - 0.1)
+    bank(-1, 0, 2.2, l - 0.2, px - w / 2 + 0.02, pz - 0.1)
+    bank(1, 1, 2.0, w + 3.4, px, pz - l / 2 + 0.02)
+    this.disposables.push(berm)
+  }
+
+  private bridge(): void {
+    const x = 17.8, z = brookZ(17.8)
+    const deck = Math.max(groundY(x, z - 2), WATER_Y + 0.42)
+    for (let k = 0; k < 9; k++) this.box(1.9, 0.07, 0.3, k % 2 ? '#7a6753' : '#6d5b48', 'boards', x, deck + 0.02, z - 1.36 + k * 0.34)
+    for (const dx of [-0.82, 0.82]) {
+      const g = new CylinderGeometry(0.09, 0.09, 3.3, 7)
+      g.rotateX(Math.PI / 2)
+      this.add(g, this.mat('#4f4237', 'plain'), x + dx, deck - 0.08, z)
+      // a rail on posts
+      for (const pz of [-1.2, 0, 1.2]) this.box(0.07, 0.5, 0.07, '#6d5b48', 'plain', x + dx * 1.1, deck + 0.28, z + pz)
+      this.box(0.06, 0.06, 2.7, '#6d5b48', 'plain', x + dx * 1.1, deck + 0.5, z)
     }
   }
 
-  private buildSmoke(): void {
-    const tex = puffTexture()
-    this.disposables.push(tex)
-    for (let k = 0; k < 14; k++) {
-      const mat = new SpriteMaterial({ map: tex, color: 0xd8d6d2, transparent: true, opacity: 0, depthWrite: false, fog: true })
-      const s = new Sprite(mat)
-      s.userData.phase = k / 14
-      this.smoke.push(s)
-      this.smokeMat.push(mat)
-      this.group.add(s)
-      this.disposables.push(mat)
+  // The neighbours: a house and a barn each, small and plain, seen from a long way off.
+  private neighbours(): void {
+    const one = (w: number, l: number, wall: number, rise: number, x: number, z: number, wallC: number[], roofC: number[]): BufferGeometry => {
+      const hw = w / 2, hl = l / 2, top = wall + rise
+      const v: number[] = [], c: number[] = []
+      const tri = (a: number[], b: number[], d: number[], col: number[]) => { v.push(...a, ...b, ...d); c.push(...col, ...col, ...col) }
+      const quad = (a: number[], b: number[], d: number[], e: number[], col: number[]) => { tri(a, b, d, col); tri(a, d, e, col) }
+      const P = (px: number, py: number, pz: number) => [x + px, py, z + pz]
+      quad(P(-hw, -1, hl), P(hw, -1, hl), P(hw, wall, hl), P(-hw, wall, hl), wallC)
+      quad(P(hw, -1, -hl), P(-hw, -1, -hl), P(-hw, wall, -hl), P(hw, wall, -hl), wallC)
+      quad(P(hw, -1, hl), P(hw, -1, -hl), P(hw, wall, -hl), P(hw, wall, hl), wallC)
+      quad(P(-hw, -1, -hl), P(-hw, -1, hl), P(-hw, wall, hl), P(-hw, wall, -hl), wallC)
+      tri(P(-hw, wall, hl), P(hw, wall, hl), P(0, top, hl), wallC)
+      tri(P(hw, wall, -hl), P(-hw, wall, -hl), P(0, top, -hl), wallC)
+      quad(P(hw + 0.15, wall - 0.1, hl + 0.15), P(hw + 0.15, wall - 0.1, -hl - 0.15), P(0, top, -hl - 0.15), P(0, top, hl + 0.15), roofC)
+      quad(P(-hw - 0.15, wall - 0.1, -hl - 0.15), P(-hw - 0.15, wall - 0.1, hl + 0.15), P(0, top, hl + 0.15), P(0, top, -hl - 0.15), roofC)
+      const g = new BufferGeometry()
+      g.setAttribute('position', new BufferAttribute(new Float32Array(v), 3))
+      g.setAttribute('color', new BufferAttribute(new Float32Array(c), 3))
+      g.computeVertexNormals()
+      return g
     }
-  }
-
-  update(time: number, env: { birch: number; gold: number; smoke: number; windDir: number; wind: number }): void {
-    const key = Math.round(env.birch * 40) * 100 + Math.round(env.gold * 40)
-    if (key !== this.crownKey) {
-      this.crownKey = key
-      const m = new Matrix4(), q = new Quaternion(), p = new Vector3(), sc = new Vector3(), up = new Vector3(0, 1, 0), col = new Color()
-      const green = new Color('#7d9a4c'), gold = new Color('#d6b23e'), alder = new Color('#5f7d3e'), rust = new Color('#a77a3a')
-      this.crownSpots.forEach((t, k) => {
-        const leaf = t.shrub ? Math.max(0.15, env.birch) : env.birch
-        const s = t.s * (t.shrub ? 1.6 : 1) * (0.3 + 0.7 * leaf) * (leaf < 0.05 && !t.shrub ? 0 : 1)
-        q.setFromAxisAngle(up, t.r * 6.28)
-        p.set(t.x, groundY(t.x, t.z) + (t.shrub ? -0.6 * t.s : 0), t.z)
-        this.crowns.setMatrixAt(k, m.compose(p, q, sc.set(s, t.s * (t.shrub ? 1.4 : 1), s)))
-        const base = t.shrub ? alder : green
-        col.copy(base).lerp(t.shrub ? rust : gold, env.gold * (0.6 + 0.4 * t.r))
-        if (leaf < 0.3) col.lerp(new Color('#6b5a45'), 1 - leaf / 0.3)
-        this.crowns.setColorAt(k, col.multiplyScalar(0.85 + 0.3 * t.r))
-      })
-      this.crowns.instanceMatrix.needsUpdate = true
-      if (this.crowns.instanceColor) this.crowns.instanceColor.needsUpdate = true
-    }
-    const dx = Math.cos(env.windDir) * (0.4 + env.wind), dz = Math.sin(env.windDir) * (0.4 + env.wind)
-    this.smoke.forEach((s, k) => {
-      const a = (time * 0.12 + s.userData.phase) % 1
-      s.position.set(this.chimney.x + dx * a * 2.2, this.chimney.y + a * 2.6, this.chimney.z + dz * a * 2.2)
-      const size = 0.35 + a * 1.6
-      s.scale.set(size, size, size)
-      this.smokeMat[k].opacity = env.smoke * (1 - a) * Math.min(1, a * 6) * 0.55
-      s.visible = this.smokeMat[k].opacity > 0.005
+    const white = [0.82, 0.79, 0.7], red = [0.26, 0.05, 0.035], grey = [0.09, 0.09, 0.1], tin = [0.3, 0.31, 0.3]
+    const parts = [one(3, 4.2, 2.1, 1.2, 0, 0, white, grey), one(2.4, 3, 1.5, 0.9, 0.2, -3.6, white, grey), one(4.6, 6.4, 2.6, 2, 0.6, -9, red, tin)]
+    const geo = mergeGeometries(parts)!
+    for (const p of parts) p.dispose()
+    const mat = patch(new MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.9 }), { fragmentColor: SNOW_RIME })
+    const mesh = new InstancedMesh(geo, mat, FARMSTEADS.length)
+    const p = new Vector3(), s = new Vector3(1, 1, 1)
+    FARMSTEADS.forEach(([x, z, ry], k) => {
+      const y = Math.min(groundY(x, z), groundY(x + 2, z - 9), groundY(x - 2, z + 2)) + 0.2
+      mesh.setMatrixAt(k, this.m.compose(p.set(x, y, z), this.q.setFromAxisAngle(this.up, ry), s))
     })
+    mesh.castShadow = true
+    mesh.layers.enable(2)
+    mesh.frustumCulled = false
+    this.group.add(mesh)
+    this.disposables.push(geo, mat)
   }
 
   dispose(): void {
@@ -292,4 +311,3 @@ export class Props {
     this.group.traverse(o => { if (o instanceof InstancedMesh) o.dispose() })
   }
 }
-

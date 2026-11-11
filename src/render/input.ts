@@ -1,0 +1,202 @@
+// The pointer on the land and the camera keys, as src/game/contracts.ts lays them down:
+// drag pans, the wheel or a pinch zooms toward the pointer, right-drag or a twist or Q and E turn, arrows pan, Home frames
+// the farm; a click selects, Shift-click adds, a double-click selects alike, a right-click or long press gives the
+// field its order. A drag never selects.
+import type { App } from '../game/app.ts'
+import type { CameraRig, Viewport } from './camera.ts'
+
+const LONG_PRESS_MS = 520
+const DOUBLE_MS = 330
+
+export interface Input {
+  // Called every frame: held keys move the camera.
+  frame(dt: number): void
+  dispose(): void
+}
+
+export function attachInput(
+  canvas: HTMLCanvasElement, app: App, rig: CameraRig, viewport: () => Viewport,
+  pick: (x: number, y: number) => number, home: () => void,
+): Input {
+  const pointers = new Map<number, { x: number; y: number }>()
+  let downAt: { x: number; y: number; button: number; touch: boolean } | null = null
+  let dragged = false
+  let consumed = false
+  let slop = 5
+  let pressTimer = 0
+  let lastClick = { t: 0, x: 0, y: 0, field: -2 }
+  let pinch = { dist: 0, angle: 0, x: 0, y: 0 }
+  const held = new Set<string>()
+
+  const local = (e: { clientX: number; clientY: number }) => {
+    const b = canvas.getBoundingClientRect()
+    return { x: e.clientX - b.left, y: e.clientY - b.top }
+  }
+  const two = () => {
+    const [a, b] = [...pointers.values()]
+    return { dist: Math.hypot(a.x - b.x, a.y - b.y), angle: Math.atan2(b.y - a.y, b.x - a.x), x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
+  }
+  const hover = (i: number) => {
+    app.setHover(i)
+    if (!downAt) canvas.style.cursor = i >= 0 ? 'pointer' : 'grab'
+  }
+
+  const onDown = (e: PointerEvent) => {
+    const p = local(e)
+    pointers.set(e.pointerId, p)
+    try { canvas.setPointerCapture?.(e.pointerId) } catch { /* the pointer is already gone */ }
+    clearTimeout(pressTimer)
+    if (pointers.size === 1) {
+      const touch = e.pointerType !== 'mouse'
+      downAt = { x: p.x, y: p.y, button: e.button, touch }
+      dragged = false
+      consumed = false
+      slop = touch ? 11 : 5
+      if (touch) {
+        pressTimer = window.setTimeout(() => {
+          if (!downAt || dragged || pointers.size !== 1) return
+          consumed = true
+          const i = pick(downAt.x, downAt.y)
+          if (i >= 0) app.smartOrder(i)
+        }, LONG_PRESS_MS)
+      }
+    } else if (pointers.size === 2) {
+      pinch = two()
+      dragged = true
+    }
+  }
+
+  const onMove = (e: PointerEvent) => {
+    const p = local(e)
+    const was = pointers.get(e.pointerId)
+    if (!was) {
+      if (e.pointerType === 'mouse') hover(pick(p.x, p.y))
+      return
+    }
+    const vp = viewport()
+    if (pointers.size >= 2) {
+      pointers.set(e.pointerId, p)
+      const now = two()
+      if (pinch.dist > 0 && now.dist > 0) rig.zoomAt(pinch.dist / now.dist, now.x, now.y, vp)
+      let turn = now.angle - pinch.angle
+      if (turn > Math.PI) turn -= Math.PI * 2
+      if (turn < -Math.PI) turn += Math.PI * 2
+      if (Math.abs(turn) < 0.5) rig.turnBy(turn, vp)
+      rig.pan(pinch.x, pinch.y, now.x, now.y, vp)
+      pinch = now
+      return
+    }
+    if (downAt && !dragged && Math.hypot(p.x - downAt.x, p.y - downAt.y) > slop) {
+      dragged = true
+      clearTimeout(pressTimer)
+      canvas.style.cursor = 'grabbing'
+      if (app.hover !== -1) app.setHover(-1)
+    }
+    if (dragged && downAt && !consumed) {
+      if (downAt.button === 2) rig.turnBy((p.x - was.x) * 0.0062, vp)
+      else rig.pan(was.x, was.y, p.x, p.y, vp)
+    }
+    pointers.set(e.pointerId, p)
+  }
+
+  const release = (e: PointerEvent, tap: boolean) => {
+    const had = pointers.delete(e.pointerId)
+    clearTimeout(pressTimer)
+    if (pointers.size === 1) {
+      // One finger of a pinch lifted: the other carries on as a drag, and never as a tap.
+      dragged = true
+    }
+    if (tap && had && pointers.size === 0 && downAt && !dragged && !consumed) {
+      const p = local(e)
+      const i = pick(p.x, p.y)
+      if (downAt.button === 2) {
+        if (i >= 0) app.smartOrder(i)
+      } else if (downAt.button === 0) {
+        const now = performance.now()
+        const again = now - lastClick.t < DOUBLE_MS && Math.hypot(p.x - lastClick.x, p.y - lastClick.y) < 12 && lastClick.field === i
+        if (again) {
+          if (i >= 0) app.selectLike(i)
+          else home()
+          lastClick.t = 0
+        } else {
+          app.select(i, i >= 0 && e.shiftKey)
+          lastClick = { t: now, x: p.x, y: p.y, field: i }
+        }
+      }
+    }
+    if (pointers.size === 0) {
+      downAt = null
+      canvas.style.cursor = app.hover >= 0 ? 'pointer' : 'grab'
+    }
+  }
+  const onUp = (e: PointerEvent) => release(e, true)
+  const onCancel = (e: PointerEvent) => release(e, false)
+  const onLeave = () => { if (!downAt) hover(-1) }
+  const onMenu = (e: Event) => e.preventDefault()
+  const onWheel = (e: WheelEvent) => {
+    e.preventDefault()
+    const p = local(e)
+    const step = e.deltaY * (e.deltaMode === 1 ? 0.05 : e.ctrlKey ? 0.008 : 0.0016)
+    rig.zoomAt(Math.exp(Math.max(-0.8, Math.min(0.8, step))), p.x, p.y, viewport())
+  }
+
+  // Keys: only the camera's own, and never while the player is typing or a paper is open over the land.
+  const mine = (e: KeyboardEvent): string => {
+    if (e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented) return ''
+    const t = e.target as HTMLElement | null
+    if (t && t.closest && t.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"], dialog, [role="dialog"], [role="menu"], [role="listbox"], [role="slider"], [role="radiogroup"], [role="tablist"]')) return ''
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Home') return e.key
+    if (e.key === 'q' || e.key === 'Q') return 'q'
+    if (e.key === 'e' || e.key === 'E') return 'e'
+    return ''
+  }
+  const onKeyDown = (e: KeyboardEvent) => {
+    const k = mine(e)
+    if (!k) return
+    e.preventDefault()
+    if (k === 'Home') { if (!e.repeat) home() } else held.add(k)
+  }
+  const onKeyUp = (e: KeyboardEvent) => {
+    for (const k of ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown']) if (e.key === k) held.delete(k)
+    if (e.key === 'q' || e.key === 'Q') held.delete('q')
+    if (e.key === 'e' || e.key === 'E') held.delete('e')
+  }
+  const onBlur = () => held.clear()
+
+  canvas.addEventListener('pointerdown', onDown)
+  canvas.addEventListener('pointermove', onMove)
+  canvas.addEventListener('pointerup', onUp)
+  canvas.addEventListener('pointercancel', onCancel)
+  canvas.addEventListener('pointerleave', onLeave)
+  canvas.addEventListener('contextmenu', onMenu)
+  canvas.addEventListener('wheel', onWheel, { passive: false })
+  addEventListener('keydown', onKeyDown)
+  addEventListener('keyup', onKeyUp)
+  addEventListener('blur', onBlur)
+  canvas.style.cursor = 'grab'
+
+  return {
+    frame(dt) {
+      if (!held.size) return
+      const vp = viewport()
+      const x = (held.has('ArrowRight') ? 1 : 0) - (held.has('ArrowLeft') ? 1 : 0)
+      const y = (held.has('ArrowUp') ? 1 : 0) - (held.has('ArrowDown') ? 1 : 0)
+      if (x || y) rig.slide(x * dt, y * dt, vp)
+      const turn = (held.has('e') ? 1 : 0) - (held.has('q') ? 1 : 0)
+      if (turn) rig.turnBy(turn * 1.5 * dt, vp)
+    },
+    dispose() {
+      clearTimeout(pressTimer)
+      canvas.removeEventListener('pointerdown', onDown)
+      canvas.removeEventListener('pointermove', onMove)
+      canvas.removeEventListener('pointerup', onUp)
+      canvas.removeEventListener('pointercancel', onCancel)
+      canvas.removeEventListener('pointerleave', onLeave)
+      canvas.removeEventListener('contextmenu', onMenu)
+      canvas.removeEventListener('wheel', onWheel)
+      removeEventListener('keydown', onKeyDown)
+      removeEventListener('keyup', onKeyUp)
+      removeEventListener('blur', onBlur)
+    },
+  }
+}
