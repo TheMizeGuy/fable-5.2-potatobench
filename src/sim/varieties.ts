@@ -58,19 +58,19 @@ export const VARIETIES: Variety[] = [
     id: 'burbank', name: 'Russet Burbank', released: 1902, maturity: 'very late', market: 'Russet bakers and fry stock',
     blurb: 'The baking potato. Never finishes in a Maine season, so every September day counts, and uneven water turns it knobby and hollow. Keeps until June.',
     tiPd: 175, matPd: 850, set: 10, bulk: 1.0, blightLeaf: 0.7, blightTuber: 1.1, scab: 0.47, hollow: 0.138, green: 0.7, rough: 1.7,
-    drought: 0.3, virus: 0.85, dormancy: 160, price: 13.5, chefBonus: true, contract: false, skin: 0xa6794e, flesh: 0xf5eeda, shape: 1.7,
+    drought: 0.3, virus: 0.85, dormancy: 160, price: 14, chefBonus: true, contract: false, skin: 0xa6794e, flesh: 0xf5eeda, shape: 1.7,
   },
   {
     id: 'atlantic', name: 'Atlantic', released: 1976, maturity: 'mid', market: 'Chip contract',
     blurb: 'The chipping standard. Sold on contract, so the price holds when the market falls and misses out when it soars. Big tubers go hollow.',
     tiPd: 145, matPd: 650, set: 8, bulk: 1.12, blightLeaf: 1.0, blightTuber: 1.1, scab: 1.0, hollow: 0.154, green: 1.0, rough: 0.9,
-    drought: 0.3, virus: 0.75, dormancy: 100, price: 12.5, chefBonus: false, contract: true, skin: 0xd9c491, flesh: 0xf8f2de, shape: 1.05,
+    drought: 0.3, virus: 0.75, dormancy: 100, price: 13.75, chefBonus: false, contract: true, skin: 0xd9c491, flesh: 0xf8f2de, shape: 1.05,
   },
   {
     id: 'gold', name: 'Yukon Gold', released: 1980, maturity: 'mid', market: 'Yellow specialty',
     blurb: 'Yellow flesh, sold by name at the best price on the list. Sets few tubers, so they run large and some go hollow.',
     tiPd: 140, matPd: 580, set: 6, bulk: 1.0, blightLeaf: 0.87, blightTuber: 0.8, scab: 1.32, hollow: 0.12, green: 1.0, rough: 0.9,
-    drought: 0.4, virus: 1.0, dormancy: 110, price: 16.5, chefBonus: false, contract: false, skin: 0xd8b565, flesh: 0xf2d98a, shape: 1.1,
+    drought: 0.4, virus: 1.0, dormancy: 110, price: 16.2, chefBonus: false, contract: false, skin: 0xd8b565, flesh: 0xf2d98a, shape: 1.1,
   },
   {
     id: 'caribou', name: 'Caribou Russet', released: 2015, maturity: 'late', market: 'Russet bakers and fry stock',

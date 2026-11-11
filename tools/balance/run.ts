@@ -135,11 +135,13 @@ async function main(): Promise<void> {
   const summaries = entries.map(e => summarize(e, rowsOf(e.name)))
   const sum = (bot: string) => summaries.find(s => s.bot === bot)!
 
-  // Gate 1: expert > reference > naive on survival and net worth.
+  // Gate 1: expert > reference > naive on survival and net worth, with the expert keeping at least 90% of farms,
+  // the reference 65% to 80% and the naive bot at most 10%.
   const er = paired(byKey, 'expert', 'reference', years, seeds)
   const rn = paired(byKey, 'reference', 'naive', years, seeds)
+  const keptOk = sum('expert').kept >= 0.9 && sum('reference').kept >= 0.65 && sum('reference').kept <= 0.8 && sum('naive').kept <= 0.1
   const g1 = sum('expert').kept > sum('reference').kept && sum('reference').kept > sum('naive').kept &&
-    er.lo > 0 && rn.lo > 0
+    er.lo > 0 && rn.lo > 0 && keptOk
   // Gate 2: every ablation is worse than the expert.
   const abl = ABLATIONS.map(a => ({ ...a, p: paired(byKey, 'expert', a.name, years, seeds) }))
   const g2 = abl.every(a => a.p.lo > 0)
@@ -174,16 +176,20 @@ async function main(): Promise<void> {
   const dominant = (w: WinTable) => Object.keys(w.wins).filter(b => (w.eligible[b] ?? 0) >= 5 && w.wins[b] / w.eligible[b] > 0.5)
   const calShare = (w: WinTable) => (w.wins.calendar ?? 0) / w.years
   const domCamp = dominant(campWins), domSeason = dominant(seasonWins)
-  const g3 = domCamp.length === 0 && domSeason.length === 0 && calShare(calCampWins) <= 0.5 && calShare(calSeasonWins) <= 0.5
+  // At least four varieties must each be the best plan in some years, over campaigns and over single seasons.
+  const MIN_WINNERS = 4
+  const winnersOf = (w: WinTable) => Object.keys(w.wins).length
+  const g3 = domCamp.length === 0 && domSeason.length === 0 && winnersOf(campWins) >= MIN_WINNERS && winnersOf(seasonWins) >= MIN_WINNERS &&
+    calShare(calCampWins) < 0.5 && calShare(calSeasonWins) < 0.5
   // Gate 4: the naive bot usually loses the farm and the expert usually keeps it.
   const naiveLost = 1 - sum('naive').kept
   const g4 = naiveLost > 0.5 && sum('expert').kept > 0.5
 
   const secs = (performance.now() - t0) / 1000
   const gates = [
-    { gate: 1, name: 'Skill gradient', pass: g1, detail: `kept: expert ${pct(sum('expert').kept)} > reference ${pct(sum('reference').kept)} > naive ${pct(sum('naive').kept)}; net worth expert - reference ${k(er.mean)} (95% CI ${k(er.lo)} to ${k(er.hi)}), reference - naive ${k(rn.mean)} (${k(rn.lo)} to ${k(rn.hi)})` },
+    { gate: 1, name: 'Skill gradient', pass: g1, detail: `kept: expert ${pct(sum('expert').kept)} > reference ${pct(sum('reference').kept)} > naive ${pct(sum('naive').kept)} (targets: at least 90%, 65% to 80%, at most 10%); net worth expert - reference ${k(er.mean)} (95% CI ${k(er.lo)} to ${k(er.hi)}), reference - naive ${k(rn.mean)} (${k(rn.lo)} to ${k(rn.hi)})` },
     { gate: 2, name: 'Every verb earns its place', pass: g2, detail: abl.map(a => `${a.verb} ${a.p.lo > 0 ? 'earns' : 'does not'} (${k(a.p.mean)}, CI ${k(a.p.lo)} to ${k(a.p.hi)})`).join('; ') },
-    { gate: 3, name: 'No dominant plan', pass: g3, detail: `campaigns: ${winText(campWins)}${domCamp.length ? ` (dominant: ${domCamp.join(', ')})` : ''}; single seasons: ${winText(seasonWins)}${domSeason.length ? ` (dominant: ${domSeason.join(', ')})` : ''}; fixed calendar beats the expert in ${calCampWins.wins.calendar ?? 0}/${calCampWins.years} start years and ${calSeasonWins.wins.calendar ?? 0}/${calSeasonWins.years} seasons` },
+    { gate: 3, name: 'No dominant plan', pass: g3, detail: `campaigns: ${winText(campWins)}${domCamp.length ? ` (dominant: ${domCamp.join(', ')})` : ''}, ${winnersOf(campWins)} varieties win some years; single seasons: ${winText(seasonWins)}${domSeason.length ? ` (dominant: ${domSeason.join(', ')})` : ''}, ${winnersOf(seasonWins)} varieties win some years (at least ${MIN_WINNERS} needed); fixed calendar beats the expert in ${calCampWins.wins.calendar ?? 0}/${calCampWins.years} start years and ${calSeasonWins.wins.calendar ?? 0}/${calSeasonWins.years} seasons` },
     { gate: 4, name: 'Losable and winnable', pass: g4, detail: `naive loses ${pct(naiveLost)} of campaigns; expert keeps ${pct(sum('expert').kept)}` },
   ]
 
@@ -255,7 +261,7 @@ function report(r: ReportIn): string {
   L.push('| Ablation | Verb removed | Expert minus ablation, mean | 95% interval | Expert better | Same result | Kept, expert / ablation | Earns its place |', '|---|---|---|---|---|---|---|---|')
   for (const a of r.abl) L.push(`| ${a.name} | ${a.verb} | ${k(a.p.mean)} | ${k(a.p.lo)} to ${k(a.p.hi)} | ${pct(a.p.aBetter)} | ${pct(a.p.ties)} | ${pct(a.p.keptA)} / ${pct(a.p.keptB)} | ${a.p.lo > 0 ? 'yes' : 'no'} |`)
   L.push('', '## Gate 3: dominant plans', '')
-  L.push('Each single-variety bot is the expert with every potato field in one variety. A variety competes only in years it had been released by. A plan dominates when it wins more than half of the years it could play (at least five of them). The calendar bot is the expert held to the same dates every year.', '')
+  L.push('Each single-variety bot is the expert with every potato field in one variety. A variety competes only in years it had been released by. A plan dominates when it wins more than half of the years it could play (at least five of them). The gate also asks that at least four varieties win some years, over campaigns and over single seasons. The calendar bot is the expert held to the same dates every year; it must lose to the expert in most years.', '')
   L.push('| Plan | Wins over five-season campaigns (by start year) | Wins over single seasons |', '|---|---|---|')
   const names = new Set([...Object.keys(r.campWins.eligible), ...Object.keys(r.seasonWins.eligible)])
   for (const n of names) L.push(`| ${n.replace('only-', '')} | ${r.campWins.wins[n] ?? 0} of ${r.campWins.eligible[n] ?? 0} | ${r.seasonWins.wins[n] ?? 0} of ${r.seasonWins.eligible[n] ?? 0} |`)
