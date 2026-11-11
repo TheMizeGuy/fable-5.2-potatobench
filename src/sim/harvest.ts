@@ -8,7 +8,7 @@ import { clamp } from './weather.ts'
 export interface Tuber { w: number; mark: number }   // mark: 0 sound, otherwise 1 + index into CAUSES
 
 function blankLoss(): Record<Cause, number> {
-  return { green: 0, scab: 0, hollow: 0, knob: 0, skin: 0, bruise: 0, blight: 0, frost: 0, rot: 0, small: 0 }
+  return { green: 0, scab: 0, hollow: 0, knob: 0, skin: 0, bruise: 0, blight: 0, frost: 0, rot: 0, small: 0, stone: 0 }
 }
 
 export function newLot(c: Campaign, field: number, f: FieldSeason, day: number, register: boolean): Lot {
@@ -18,7 +18,7 @@ export function newLot(c: Campaign, field: number, f: FieldSeason, day: number, 
     grades: { no1: 0, chef: 0, b: 0, no2: 0, cull: 0 },
     skinned: 0, loss: blankLoss(), rot: 0, skin: 0,
     virus: 0, blightSeed: 0, months: 0, sprouted: false, broke: false,
-    sold: 0, revenue: 0, seedHeld: 0, open: false,
+    sold: 0, revenue: 0, packed: 0, seedHeld: 0, open: false,
   }
   if (register) c.lots.push(lot)
   return lot
@@ -38,10 +38,11 @@ export function tuberWeights(seed: number, year: number, field: number, hill: nu
   return raw
 }
 
-const MARK: Record<Cause, number> = { green: 1, scab: 2, hollow: 3, knob: 4, skin: 5, bruise: 6, blight: 7, frost: 8, rot: 9, small: 10 }
+const MARK: Record<Cause, number> = { green: 1, scab: 2, hollow: 3, knob: 4, skin: 5, bruise: 6, blight: 7, frost: 8, rot: 9, small: 10, stone: 11 }
 
-// Grades the tubers under one hill into the lot and returns them for showing.
-export function gradeHill(c: Campaign, s: Season, f: FieldSeason, field: number, i: number, lot: Lot, _d: Day): Tuber[] {
+// Grades the tubers under one hill into the lot and returns them for showing. stones is the share of tubers the
+// digger bruises on stones (none for a hill lifted by hand).
+export function gradeHill(c: Campaign, s: Season, f: FieldSeason, field: number, i: number, lot: Lot, _d: Day, stones = 0): Tuber[] {
   const mass = f.hMass[i]
   const n = f.hN[i]
   const out: Tuber[] = []
@@ -79,6 +80,7 @@ export function gradeHill(c: Campaign, s: Season, f: FieldSeason, field: number,
       else if (w > 220 && u(7) < Math.min(0.6, v.hollow * (0.6 + f.hollow * 0.5))) mark = MARK.hollow
       else if (u(8) < pKnob) mark = MARK.knob
       else if (u(9) < pBruise) mark = MARK.bruise
+      else if (stones > 0 && u(10) < stones) mark = MARK.stone
       if (mark) {
         lot.grades.no2 += cwt
         lot.loss[P.CAUSES[mark - 1]] += cwt

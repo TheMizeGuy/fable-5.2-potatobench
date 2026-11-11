@@ -9,7 +9,7 @@ import * as R from './rules.ts'
 
 const CAUSE_LABEL: Record<S.Cause, string> = {
   green: 'Greened', scab: 'Scab', hollow: 'Hollow heart', knob: 'Knobs and cracks', skin: 'Thin skins',
-  bruise: 'Bruised', blight: 'Tuber blight', frost: 'Frozen', rot: 'Soft rot', small: 'Too small',
+  bruise: 'Bruised', blight: 'Tuber blight', frost: 'Frozen', rot: 'Soft rot', small: 'Too small', stone: 'Stone bruise',
 }
 const CULLED: S.Cause[] = ['green', 'blight', 'frost', 'rot', 'small']
 
@@ -47,7 +47,7 @@ interface Placed { w: number; mark: number; k: number; x: number; ground: number
 
 const LABEL_H = 34
 // What a mark is called under its tuber, in a word or two.
-const TRAY_MARK: Record<S.Cause, string> = { green: 'green', scab: 'scab', hollow: 'hollow', knob: 'knobby', skin: 'thin skin', bruise: 'bruised', blight: 'blight', frost: 'frozen', rot: 'rot', small: 'small' }
+const TRAY_MARK: Record<S.Cause, string> = { green: 'green', scab: 'scab', hollow: 'hollow', knob: 'knobby', skin: 'thin skin', bruise: 'bruised', blight: 'blight', frost: 'frozen', rot: 'rot', small: 'small', stone: 'stone bruise' }
 
 // Tubers in weight order on one ground line, or two when one would make them too small to read.
 // close: a phone's tray, where the labels stand nearer each other so one row of tubers can do.
@@ -283,6 +283,7 @@ function phrase(ctx: Ctx, c: S.Campaign, lot: S.Lot, cause: S.Cause): string {
       if (x.killed && (!x.died || x.killed.day <= x.died.day)) return `the vines were killed on ${F.date(c.year, x.killed.day, true)}, before these sized`
       if (x.died) return x.died.text.startsWith('Frost') ? 'frost finished the vines before these sized' : x.died.text.startsWith('Blight') ? 'blight took the vines before these sized' : 'the vines went down before these sized'
       return 'dug green, before they sized'
+    case 'stone': return 'knocked on stones coming out of the ground'
   }
 }
 
@@ -355,6 +356,7 @@ function why(ctx: Ctx, c: S.Campaign, lot: S.Lot, cause: S.Cause): string {
       }
       return `Under ${F.metric() ? '4 cm' : '1½ inches'} across: too small to grade, so they go to the starch factory with the culls. Tubers keep sizing until the vines die.${end}${v.maturity === 'late' || v.maturity === 'very late' ? ` ${v.name} needs a long season.` : ''}`
     }
+    case 'stone': return `Knocked on stones coming out of the ground. ${name} is stony, and stones bruise more under an unpractised hand on the digger. Picking the rocks off the field, with no crop in it, is the cure.`
   }
 }
 

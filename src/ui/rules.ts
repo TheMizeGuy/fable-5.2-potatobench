@@ -3,14 +3,16 @@ import type { Alert } from '../game/app.ts'
 import * as S from '../sim/index.ts'
 import * as F from './fmt.ts'
 
-export const JOB_KEY: Record<S.JobKind, string> = { plant: 'P', hill: 'H', scout: 'C', spray: 'S', water: 'W', rogue: 'R', sample: 'T', kill: 'K', dig: 'D' }
-export const KEY_JOB: Record<string, S.JobKind> = { p: 'plant', h: 'hill', c: 'scout', s: 'spray', w: 'water', r: 'rogue', t: 'sample', k: 'kill', d: 'dig' }
+export const JOB_KEY: Record<S.JobKind, string> = { plant: 'P', hill: 'H', scout: 'C', spray: 'S', water: 'W', rogue: 'R', sample: 'T', kill: 'K', dig: 'D', fell: 'F', rocks: 'O', brush: 'B', build: '', haul: '' }
+export const KEY_JOB: Record<string, S.JobKind> = { p: 'plant', h: 'hill', c: 'scout', s: 'spray', w: 'water', r: 'rogue', t: 'sample', k: 'kill', d: 'dig', f: 'fell', o: 'rocks', b: 'brush' }
 export const JOB_VERB: Record<S.JobKind, string> = {
   plant: 'Plant', hill: 'Hill', scout: 'Scout', spray: 'Spray', water: 'Water', rogue: 'Rogue', sample: 'Test dig', kill: 'Kill vines', dig: 'Dig',
+  fell: 'Fell', rocks: 'Pick rocks', brush: 'Cut brush', build: 'Build', haul: 'Haul in',
 }
 // What the crew is doing, before the field's name.
 export const JOB_DOING: Record<S.JobKind, string> = {
   plant: 'Planting', hill: 'Hilling', scout: 'Scouting', spray: 'Spraying', water: 'Watering', rogue: 'Roguing', sample: 'Test dig in', kill: 'Killing vines in', dig: 'Digging',
+  fell: 'Felling', rocks: 'Picking rocks in', brush: 'Cutting brush round', build: 'Building at', haul: 'Hauling in',
 }
 
 // One line each: what the job does.
@@ -24,7 +26,12 @@ export function jobWhat(kind: S.JobKind): string {
     case 'rogue': return 'Pulls up and bags the blighted plants you have found, so they stop throwing spores at the rest.'
     case 'sample': return 'Lifts one hill so you can see the tubers: how many, how big, and what is wrong with them.'
     case 'kill': return 'Kills the vines. The tubers stop growing and their skins start to set.'
-    case 'dig': return 'Lifts the crop and grades it, tuber by tuber.'
+    case 'dig': return 'Lifts the crop into barrels in the field.'
+    case 'fell': return 'Cuts the standing wood. The logs come to the yard.'
+    case 'rocks': return 'Picks the stones off the ground. They come to the yard as fieldstone.'
+    case 'brush': return 'Cuts back the hedgerow round the field.'
+    case 'build': return 'Puts up the building, a day of work at a time.'
+    case 'haul': return 'Brings the barrels in from the field to the potato house, where the crop is weighed.'
   }
 }
 
@@ -39,7 +46,12 @@ export function orderHelp(kind: S.JobKind): string {
     case 'rogue': return 'Pulls and bags the blighted plants you have found. While they are few.'
     case 'sample': return 'Lifts one hill to show its tubers. Your only look at the crop before dig day.'
     case 'kill': return `Kills the vines: growth stops and skins set in ${S.SKIN_DAYS} days. Early September, or sooner if blight is winning.`
-    case 'dig': return 'Lifts the crop and grades every tuber. Once the skins are set, and before the ground freezes.'
+    case 'dig': return 'Lifts the crop into barrels. Once the skins are set, and before the ground freezes.'
+    case 'fell': return 'Cuts a tract of woods or brush, the first step to a new field. Slow in the season, cheap in winter.'
+    case 'rocks': return 'Picks stones. Stony ground slows planting and digging and bruises the crop. Only with no crop in.'
+    case 'brush': return 'Cuts the hedgerow back: less blight weather and frost, a little more drying wind. It grows back.'
+    case 'build': return 'Raises a building with the farm\'s own people. Ordered from the yard.'
+    case 'haul': return 'Brings the dug crop in. Barrels left in the field can freeze or green.'
   }
 }
 
@@ -54,7 +66,12 @@ export function hint(kind: S.JobKind): string {
     case 'rogue': return 'To rogue is to pull and bag the blighted plants you have found, so they stop throwing spores at the rest.'
     case 'sample': return 'A test dig lifts one hill so you can see the tubers. It is your only look before dig day.'
     case 'kill': return `Kill the vines once the crop is made. The tubers stop growing, and skins take ${S.SKIN_DAYS} days to set.`
-    case 'dig': return 'Digging lifts the crop and grades every tuber. Wait for set skins if frost allows, because thin skins do not keep.'
+    case 'dig': return 'Digging lifts the crop into barrels. Wait for set skins if frost allows, because thin skins do not keep.'
+    case 'fell': return 'Felling a tract is the first step to a new field: fell, stump, pick the rocks, plant.'
+    case 'rocks': return 'Stones slow the planter and the digger and bruise the crop. Picking them takes hands and time.'
+    case 'brush': return 'A grown-up hedgerow holds damp and frost on the field. Cutting it lets the wind through.'
+    case 'build': return 'The farm\'s own people put buildings up, when they are not needed in the fields.'
+    case 'haul': return 'The dug crop sits in barrels until it is hauled in. A hard frost on barrels in the field takes a share.'
   }
 }
 
@@ -279,6 +296,7 @@ export function kindDoes(kind: S.UnitKind): string {
 
 const JOB_NOUN: Record<S.JobKind, string> = {
   plant: 'planting', hill: 'hilling', scout: 'scouting', spray: 'spraying', water: 'watering', rogue: 'pulling blighted plants', sample: 'test digs', kill: 'vine kill', dig: 'digging',
+  fell: 'felling', rocks: 'picking rocks', brush: 'cutting brush', build: 'building', haul: 'hauling',
 }
 
 export function initial(name: string): string {

@@ -40,6 +40,10 @@ function score(kind: S.JobKind, f: S.FieldInfo, s: S.Season, suggested: boolean)
     case 'sample': return 50
     case 'kill': return s.fields[f.index].matureDay >= 0 || f.blightKnown >= 0.05 || s.day >= S.dayIndex(s.year, 7, 20) ? 45 : 25
     case 'dig': return f.status === 'dead' ? 85 : 10
+    case 'fell': return 75
+    case 'rocks': return 40
+    case 'brush': return 30
+    case 'build': case 'haul': return 0
   }
 }
 

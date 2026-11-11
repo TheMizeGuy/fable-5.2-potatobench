@@ -221,3 +221,115 @@ default.
 The first spring is unchanged: one farmer, six fields, click what glows. Nobody
 has to hire, clear, build or borrow. Each of these opens as the player reaches
 for it.
+
+## 8. As built: where the simulation departs from the text above
+
+The rules as built are listed in `docs/MODEL.md` section 10 onward. Where the
+text above was silent, or two of its rules collided, the build chose as follows.
+
+**People.**
+
+- *Part days of tiredness.* A part day moves tiredness by 0.07 x the share of the
+  day worked minus 0.3 x the share not worked, so the two ends the text gives are
+  one rule, and a short job does not stop someone resting.
+- *Hiring by kind stays.* `{ t: 'hire', kind: 'hand' | 'operator' }` takes
+  someone from the hiring hall: average at that work (level 5), at the old wage,
+  set never to do the other kind's work until the player changes their
+  priorities. Applicants are the way to find someone better or cheaper.
+- *An operator no longer needs a second tractor.* With one tractor, an operator
+  and the farmer share it: the limit on machine work is the tractors, not the
+  people.
+- *Housing replaces the old crew limits* (four hands, one operator): two hired
+  people live out, and more need bunkhouse beds.
+- *Applicants lapse when the season begins*, like contract offers; someone who
+  asks for work later comes as an incident (section 6).
+- *Scouting* is capped at 0.9 from skill; a sharp eye adds after that, and no
+  one does better than 0.95 or worse than 0.05.
+- *Cheerful* lifts every colleague's mood target by 0.03 for each cheerful person
+  on the farm.
+- *Winter is six months*, November to April, one for each cellar month. When the
+  cellar closes early, the rest of the winter's work and pay come at the year end.
+- *Pickers* are paid only for days worked (not Sundays off) and go back to school
+  by themselves on October 11.
+- *A foreman* orders only on working days.
+- *Winter work teaches*, a point a day as in the season, and everyone is rested
+  when the season closes.
+- The command for the rule is `{ t: 'sundays', off: boolean }`.
+
+**Land and materials.**
+
+- *Positions.* The tracts sit a field's depth (13.2 ground units) behind or beside
+  their blocks: Home Woodlot behind North Ridge, Alder Swale beside Bottom Field
+  toward the yard, Burnt Hill behind High Lot, the Dufour Back Lot behind Dufour
+  Upper. Shelter reaches 20 units in a straight line, so each tract shelters the
+  one field beside it (and the woodlot and Burnt Hill shelter each other once
+  either is cleared).
+- *Prices.* Burnt Hill $5,000 and the back lot $4,000 (woodland, cheaper than
+  cleared land). Tracts are never let. The back lot can be bought while the farm
+  holds a Dufour field, and does not by itself bring the Dufour house.
+- *"Ruinous in the growing season".* Felling is allowed in the season, at half
+  speed; in winter it goes at full speed. The text's wish that it be winter work
+  is kept by the price, not a ban.
+- *Stumping fee* $3,000; *tile* $4,000. Both are paid when ordered (spring or
+  season) and count season days; tile goes only under the farm's own bottom land
+  with no crop in the ground.
+- *Stones slow work relative to the home farm's 0.25*, so the old job times hold
+  on the home six: ridge fields at 0.3 to 0.35 plant and dig 4 to 9% slower, the
+  bottom fields at 0.2 4% faster. At 1 the pace is 36% of the old.
+- *Stone bruising* only starts above 0.2 stones, so the home farm loses well
+  under 1% of its tubers to it and new ground about 6%.
+- *A tract cleared in mid season* is a field from the next spring; until then its
+  rocks can be picked. Its default plan is a rest year, which also clears the
+  raw-ground penalty.
+- *The mortgage* is booked as part of the year's costs (the ledger's `mortgage`
+  line), principal and interest together, like every other dollar.
+- *Logs* sell in spring, in the season or in winter, never between the year's
+  close and the next spring, when the books are shut.
+
+**Buildings and hauling.**
+
+- *Which buildings can stand in the Dufour yard.* Only a potato house and a
+  bunkhouse; the shed, packing shed, pond, stand, station and road serve the
+  whole farm and go in the home yard. One there counts, and is worked on, only
+  while Dufour land is held.
+- *A build order cannot be cancelled*: the building is paid for, and the order
+  stays until it stands. Priorities decide who works on it and when.
+- *Buildings are paid from cash*, like equipment and land's down payment; the bank
+  does not lend for them.
+- *The old second potato house.* `{ t: 'buy', upgrade: 'house2' }` still works: a
+  contractor puts up the home house at once for $18,000, against about $9,000 and
+  materials and 30 crew-days of the farm's own work. Either way `upgrades.house2`
+  is true once a second house stands at home.
+- *The stand's catch.* The text gives none; as built, someone minds it for a fifth
+  of a working day each day it opens, so it costs the scarcest thing on the farm.
+- *The weather station's "errors 40% smaller"* scales every error the forecast
+  makes (temperature, the wet-or-dry call, the amount, the wet hours) by 0.6.
+- *The pond* is full each spring and empties whenever the last 30 days brought
+  under 40 mm; otherwise it gains half a watering a day plus one for each 20 mm of
+  rain.
+- *Hauling.* The haul order goes to the top of the list. A hauler who empties the
+  barrels lets the order go until more is dug, so hauling can change hands in a
+  day. The weigh ticket waits for the last barrel, and the season is not done
+  while any field is unweighed. Barrels left at the freeze-up are lost.
+- *Dig time* stays at two days (1.25 with the harvester) everywhere; the distance
+  to the potato house now slows the hauling instead. A farmer alone now spends
+  about three and a half days a field at harvest instead of two, which is the
+  point: the harvest is when a second pair of hands, pickers or a truck pay.
+
+**Incidents.**
+
+- *Rates.* Someone asking for work 1.2% a day, a neighbour's offer 0.6%, a buyer
+  1% (from August, with a weighed lot of 100 cwt or more), a breakdown 0.4% a
+  tractor-day times (1 + 2 x the driver's tiredness), an injury 5% a day of
+  woods or machine work while worn out (above 0.85). In play that is a handful
+  a season, more on a farm worked hard with Sundays on.
+- *Who answers what.* The last choice of each is its default (not hired, not
+  matched, waiting for the part, turned down); answers wait four days, a buyer
+  seven. They happen only in the season; the season's end closes them and mends
+  the tractors.
+- *A rush part* is paid like any job, on the season's operating loan, and is
+  offered only while it would bring the tractor back sooner.
+- *With a mechanic on the farm* (machine skill 7) a breakdown costs a day and asks
+  nothing, so a rush part would buy nothing.
+- *An injury* is not a question: it is an event, and the person shows as hurt,
+  with the day they are back, in `peopleInfo`.

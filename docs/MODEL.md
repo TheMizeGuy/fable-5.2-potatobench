@@ -149,7 +149,7 @@ All game rules, chosen for the decisions they make, not sourced. Constants are i
 | Land the farm does not hold this year has no crop, takes no orders, earns no rest income, and keeps its soil record unchanged | Invented | Its owner's use of it is outside the game |
 | New land starts rested (soil 1, no potato years) with 2 to 8% of plants carrying Verticillium, a little more on the old Dufour potato ground | Invented | Ground long in hay |
 | Blight jumps between the home six as before (full rate within two places on the list, half otherwise); between any other pair at the full rate within 30 ground units by road, half beyond | Invented | Keeps the home farm's spread as it was |
-| Crews: the farmer does every job; a field hand only the walking jobs (scouting, pulling blighted plants, test digs); the tractor operator only the machine jobs (planting, hilling, spraying, watering, vine kill, digging), and only once the farm has a second tractor. At most four hands and one operator | Invented | |
+| Crews: the farmer does every job; a field hand from the hiring hall only the walking jobs (scouting, pulling blighted plants, test digs) and a tractor operator only the machine jobs (planting, hilling, spraying, watering, vine kill, digging), until their priorities are changed. Since the farmstead, who does what, how many can be hired and how many tractors there are follow section 10 | Invented | |
 | Wages are paid for 30 days at a time from the day a unit is hired; a unit hired in spring is paid its first month with the plan. A hired unit stays on into the next year until let go; no wages run outside the season | Invented | |
 | Each crew has one day of work a day. Travel costs it 0.0016 of a day per ground unit by the farm roads (east-west plus north-south distance): about 0.03 of a day between neighbouring home fields, 0.11 from the home yard to the Dufour yard. A drive that does not fit in the day carries into the next. Crews start the season and spend the winter in the home yard, and otherwise end each day where they worked | Invented | |
 | The day's order: first every crew carries on (finishes a drive, then works the order it holds if it is still wanted, still allowed to it and the weather allows; otherwise lets it go, keeping the work done). Then the crew with the most of its day left takes the next order, hands before the operator before the farmer on a tie: of the first three orders on the list it can do, may take (pins), that no other crew holds and the weather allows, the one with the least travel plus 0.07 of a day for each place down the list. Two crews never work the same order | Invented | No two home fields are 0.07 of a day apart, so on the home farm one farmer works the list in order, as before; across blocks a crew prefers the work where it is |
@@ -159,7 +159,91 @@ All game rules, chosen for the decisions they make, not sourced. Constants are i
 | A delivery takes US No. 1 and large tubers of the contract's variety from a lot already dug, up to what the contract still needs, at the contract price; storage since the dig is settled first, as for a sale. What is undelivered at the due date (the close of the season, or when the cellar reaches March) costs 30% of its contract value | Invented | |
 | Reference practice (the coach and the reference bot) tends every field the farm holds but says nothing about land, hiring or contracts, and at any time asks for no more of one job than six fields per crew able to do it, counting what is already on the list | Invented | Six is the home farm, so one farmer on the home six is advised exactly as before |
 
-## 10. Things the model leaves out
+## 10. The farmstead: people
+
+All game rules from `docs/FARMSTEAD.md` section 1, chosen for the decisions they make. Constants are in
+`src/sim/params.ts` (from `SKILLS` on); the rules are in `src/sim/people.ts` and the people's day in
+`src/sim/season.ts`.
+
+| Rule | Tag | Source |
+| --- | --- | --- |
+| Everyone who works is a person with five skills, 0 to 10: machine (plant, hill, spray, water, kill vines, dig), field (scout, rogue, test dig), woods, build, pack. The farmer starts at 6, 6, 4, 4, 3 | Invented | |
+| Work in a skill goes at 0.6 + 0.08 x level of the old speed, so level 5 is the old speed; and at 0.85 + 0.25 x mood, so a middling mood of 0.6 is the old speed | Invented | |
+| A scout finds each hill with visible lesions with chance 0.35 + 0.05 x field skill (0.6 at level 5, the old rate; at most 0.9 before traits); a spray lays down 0.84 + 0.02 x machine skill of full protection (full at level 8) | Invented | Lesions low in a closed canopy are easy to miss; a careless operator misses rows |
+| A person gains a point in a skill for each day of their time spent at that work, in the season or kept on in winter (travel not counted); level L to L + 1 takes 6 + 3L points | Invented | |
+| One trait each (the farmer has none): strong back (field and woods work 15% faster), steady hands (machine results as if two levels higher), sharp-eyed (scouting +0.15), early riser (all work 8% faster), hard to tire (tires 30% more slowly), cheerful (own mood never below 0.4; everyone else's target +0.03), hot-headed (mood falls twice as fast while tired above 0.5), careless (scouting -0.1), slow and sure (10% slower), homebody (no winter work) | Invented | |
+| Tiredness rises 0.07 for a full day of work (travel counts) and falls 0.3 for a day without; a part day moves it by 0.07 x the share worked minus 0.3 x the share not worked. Above 0.6 work slows in a straight line to 30% less at 1. Everyone is rested when the season closes, so winter work goes at full strength | Invented | The blend makes one rule of the two ends the specification gives |
+| Mood starts at 0.7 and moves 5% of the way each day to a target: 0.7, plus 0.1 for a bunkhouse bed (hired people), plus or minus 0.1 for each 10% the wage is above or below what the person asked, minus 0.6 x tiredness above 0.5, plus 0.02 for each field dug this season | Invented | |
+| A hired person whose mood stays below 0.25 for seven days running quits; the farmer never does | Invented | |
+| Sundays off is a farm rule, on by default: nobody works on a Sunday, which counts as a day without work. The day of the week is counted from Monday, January 1 of the year 1, by integer arithmetic | Invented rule; the calendar is the proleptic Gregorian | Checked against the civil calendar for every playable year |
+| Each spring three people ask for work, drawn from the campaign seed and the year without touching the game's random stream: a specialty (machine or field work 30% each, woods 20%, building 15%, packing 5%) at 4 to 8, other skills 0 to 5, a trait, and an asking wage of $100 + $40 x best skill + $10 x all skill levels, within 10% either way, to the nearest $10. Those not taken on have found other work when the season begins | Invented | |
+| The hiring hall: a field hand (machine 2, field 5, woods 4, build 3, pack 4) at $450 or a tractor operator (machine 5, field 2, woods 2, build 3, pack 2) at $800, each asking exactly that, with a trait drawn from the seed, and set never to do the other kind's work until the player changes it | Invented | Keeps the hire-by-kind order and its meaning |
+| Two hired people can live out; more need bunkhouse beds | Invented | |
+| Priorities 0 (never) to 4 for each kind of work; defaults from skill: best skill 1, other skills above 2 at 2, the rest 3; the farmer has all at 2, so one farmer works the list as before | Invented | |
+| Each working morning people carry on with what they hold, then the one with the most of the day left takes, among the kinds of work at their first priority, the best of the first three orders they could take (least travel plus 0.07 of a day per place down the list), then their second priority, and so on | Invented | Section 9's rule, within each priority |
+| Machine work needs a tractor; a tractor goes with the order held and is free again when the order is done or let go. The farm has one, and a second once bought. An operator no longer needs a second tractor: one shares the first | Invented | |
+| A foreman (a hired person, one per block) does no field work, is paid 40% more, and each working morning puts on the list the orders reference practice wants for the block's held fields | Invented | Reference practice is sound, not expert |
+| Wages: as section 9, at the wage agreed; a raise or cut takes effect at the next payment and moves the mood target | Invented | |
+| From September 20 to October 10 a picking crew can be hired by the day: $160 a day worked, and every dig goes 40% faster. They leave on October 11 | Invented | Aroostook schools still close for two to three weeks so that students can work the potato harvest |
+| Winter is six months, November to April, one for each cellar month (when the cellar closes early the rest of the winter passes at the year end). Someone kept on is paid each month and puts in 20 crew-days at their skill; the farmer, if set to winter work, 10 unpaid. Anyone laid off is unpaid and back in spring with their skills | Invented | Winter woods work: Aroostook farmers cut wood through the winter |
+
+## 11. The farmstead: land and materials
+
+All game rules from `docs/FARMSTEAD.md` sections 2 and 3. Constants are in `src/sim/params.ts` (from `FELL_DAYS` on)
+and the parcels in `src/sim/farm.ts`; the rules are in `src/sim/land.ts`.
+
+| Rule | Tag | Source |
+| --- | --- | --- |
+| Four tracts join the fourteen parcels, a field's depth behind or beside their blocks: Home Woodlot (spruce, the farm's), Alder Swale (brush by the brook, the farm's), Burnt Hill (poplar, for sale at $5,000), Dufour Back Lot (woods, for sale at $4,000 while the farm holds a Dufour field). Tracts are not let. The back lot does not bring the Dufour house | Invented | |
+| Felling (woods skill) takes 40 crew-days for woods and 16 for brush; it brings out 40 or 5 loads of logs times the feller's yield, 0.7 + 0.06 x woods skill, in proportion to the work. In the growing season it goes at half speed; in winter, at full | Invented | Winter woods work is Aroostook practice: frozen ground carries the logs and the crew is free |
+| A contractor pulls the stumps: $3,000 and ten season days. The tract is then a field, owned, rested (soil 1, no potato years), with 1% early dying and stones 0.75 | Invented | |
+| New ground's first year: a potato crop grows 15% less; a rest year first clears it, and the default plan rests it | Invented | |
+| Standing woods or brush shelter every held field within 20 ground units in a straight line: 6% less water lost, sprays in 30% more wind (9.75 m/s), one more wet hour a day for blight, 0.3 C colder on a frost night. Felling the tract takes all four away | Invented | Windbreaks cut evaporation and wind, and hold damp, still air |
+| Stones, 0 to 1: home fields 0.2 to 0.35, other land 0.3 to 0.45, new ground 0.75. Frost heaves up 0.04 each winter on the open land the farm holds | Invented | Frost heave brings up a fresh crop of stones on Aroostook fields every spring |
+| Stones slow planting and digging to 30% at 1, relative to the home farm's 0.25, which the old job times already allow for: (1 - 0.7 s) / (1 - 0.7 x 0.25) | Invented | |
+| At the dig, stones above 0.2 bruise 0.12 x (s - 0.2) of tubers to No. 2 (cause "stone"), scaled by 1.3 - 0.06 x the digger's machine skill (steady hands count two more levels; careless bruises 20% more). A test dig by hand bruises none | Invented | |
+| Rock picking (field skill, 1.5 crew-days, only when no crop is in the ground) takes 0.4 off and brings in 12 loads of fieldstone for each unit taken. Reference practice picks rocks in spring on a field at 0.6 or more | Invented | Rock picking each spring is Aroostook practice |
+| Cutting the hedgerows (field skill, 2 crew-days, bottom land and mid slope only): the field loses its extra wet hours and half its frost offset, and loses 3% more water. They grow back after four years | Invented | |
+| Tile drains ($4,000, eight season days, the farm's own bottom land only, with no crop in the ground): the field drains like the mid slope and holds 6% less water | Invented | Tile drainage of wet bottom land is Aroostook practice |
+| Logs sell for $55 a load, in spring, in the season or in winter (not between the year's close and the next spring, when the books are shut). Logs and stone the farm lacks for a building are bought at $95 and $40 a load | Invented | |
+| Land is bought a quarter down from cash; the rest is a land mortgage. Each year end the bank takes a tenth of each purchase's loan and 8% on what is still owed, as part of the year's costs. Extra can be paid in spring. Net worth counts what is owed against the land | Invented | |
+
+## 12. The farmstead: buildings and hauling
+
+All game rules from `docs/FARMSTEAD.md` sections 4 and 5. Constants are in `src/sim/params.ts` (from `BUILDINGS` on);
+the rules are in `src/sim/buildings.ts` and `src/sim/season.ts`.
+
+| Rule | Tag | Source |
+| --- | --- | --- |
+| A building is ordered in spring, in season or in winter: its cash part and the materials the yard lacks (logs at $95 a load from the mill, stone at $40 from the quarry) are paid at once, from cash only; the yard's own logs and stone are taken. It goes on the list as a build order (build skill) and stands when its crew-days are done; in winter, people kept on to build work on it | Invented | |
+| One of each kind per yard. Potato houses and bunkhouses can stand in the Dufour yard too, while Dufour land is held; the rest go in the home yard. A Dufour-yard building counts, and is worked on, only while Dufour land is held. A build order stays on the list until the building stands | Invented | |
+| Potato house ($9,000, 30 logs, 25 stone, 30 crew-days): 3,600 cwt more storage at its yard (6,400 at home with ventilation). A contractor-built second house at home ("second potato house", $18,000) stands at once; an old save's second house becomes a built one | Invented | Potato houses banked into the hillside are Aroostook practice |
+| Machine shed ($4,500, 20, 10, 16): machine work 10% faster, and needed before a second or a third tractor | Invented | |
+| Bunkhouse ($3,500, 16, 8, 12): six beds; the first hired take them, and a bed lifts the mood target 0.1 | Invented | |
+| Packing shed ($12,000, 24, 15, 24): in winter each person set to pack packs 30 cwt a crew-day (600 in a month of 20) of the stored No. 1 and B size, oldest lots first, at $0.50 a cwt. Packed No. 1 sells 8% higher and packed B size at 0.75 of the No. 1 price instead of 0.55 | Invented | |
+| Irrigation pond ($6,000, 0, 30, 20, home yard): holds six waterings; a home or intervale field waters in a third of a day for $60. Full each spring from the melt; each day it gains half a watering from the brook and one for each 20 mm of rain, unless the last 30 days brought under 40 mm, when the brook is low and it is empty | Invented | |
+| Farm stand ($600, 4, 0, 4): from August 1 it sells 4 cwt a day of No. 1 from the newest weighed lot at twice the market price, 2.4 times for Dark Red Norland and Yukon Gold and for thin-skinned new potatoes up to September 5. Each day it opens someone minds it, a fifth of their working day (whoever puts packing first); with nobody working (a Sunday off) it stays shut | Invented | |
+| Weather station ($1,800, 0, 0, 1): the forecast's errors (temperature spread, the wet-or-dry call, the rain amount and the wet hours) are 0.6 of the public forecast's; each field shows today's Wallin severity value from its own wet hours | Invented | |
+| Gravelled road ($1,500, 0, 60, 12): travel and hauling take 0.8 of the time | Invented | |
+| Equipment: a third tractor ($16,000; needs the shed and the second); a truck ($14,000) hauls at twice a tractor's rate without taking a tractor | Invented | |
+| Digging lifts the crop into barrels in the field; the dig time no longer includes the haul (2 days a field, 1.25 with the harvester, wherever the field is). A haul order goes to the top of the list by itself. One person with a tractor hauls 900 cwt a day at their machine speed (10% more with the shed), divided by the distance factor of section 9 (1 inside the home farm's own haul, up to about 1.4 for Spruce Lot) | Invented | |
+| Until it is hauled, the crop in the field is exposed: a night at -2 C or colder at the field freezes a fifth of what is there (cause "frost"), and each clear day greens half a percent. When the whole crop is in (under half a cwt left in a dug field, however it went), the weigh ticket is cut (event "weighed"); a lot can be sold or delivered only after it. The season is done only when every dug field is weighed; what is still in barrels at the freeze-up, or when the season is closed, is lost | Invented | |
+
+## 13. The farmstead: incidents
+
+All game rules from `docs/FARMSTEAD.md` section 6. Constants are in `src/sim/params.ts` (from `INCIDENT_DAYS` on);
+the rules are in `src/sim/incidents.ts` and at the end of the season's day in `src/sim/season.ts`.
+
+| Rule | Tag | Source |
+| --- | --- | --- |
+| Incidents happen only in the season. Each is drawn by hashing the campaign seed, the year and the day (not from the game's random stream), so a replay meets the same ones and they do not disturb the crop. Each waits for an answer (four days; a buyer seven) and then takes its default, the last of its choices; open ones take their defaults when the season ends | Invented | |
+| Someone asks for work: 1.2% a day, one at a time; drawn like a spring applicant. Take them on (needs room) or not (the default) | Invented | |
+| A neighbour offers the farm's best hand (most skill in all) 15% more: 0.6% a day while anyone is hired. Match it (the wage goes up 15%) or let them choose (the default): they go if their mood is under 0.6 | Invented | |
+| A tractor breaks down: each day a person drives one, chance 0.4% x (1 + 2 x their tiredness), halved with a machine shed. Out three days waiting for the part (the default), or a rush part for $450, offered while it still helps (until two days before the part would come), has it back the next day. With someone on the farm at machine skill 7 or more it is out one day and nobody is asked. While out, the farm has a tractor fewer, and whoever held it lets it go in the morning | Invented | Long hours and no shed are the usual causes |
+| Someone is hurt: each day a person works in the woods or on a machine while more tired than 0.85, 5%; never for the slow and sure. Out five to ten days, still paid; no choice, and rest prevents it | Invented | |
+| A buyer stops in: 1% a day from August 1 while a weighed lot of this year's of 100 cwt or more is in hand, for the largest. Take it (the whole lot sold at 10% over what it would fetch on the market today) or turn it down (the default); a week | Invented | |
+
+## 14. Things the model leaves out
 
 Colorado potato beetle, early blight, fertility, weeds as a separate system,
 machinery failure, hail, and everything else on the cut list in `docs/DESIGN.md`. The record of what the model gets right and

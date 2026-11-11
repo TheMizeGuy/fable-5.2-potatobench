@@ -1,5 +1,5 @@
 // The ladder: what a new farm reaches for next. Worked out from the farm as it stands, so nothing extra is saved.
-import { HOME_FIELDS, type Campaign } from '../sim/index.ts'
+import { PARCELS, type Campaign } from '../sim/index.ts'
 
 export interface Goal {
   id: string
@@ -14,7 +14,8 @@ export function goals(c: Campaign): Goal[] {
   const fields = c.season?.fields ?? []
   const planted = fields.some(f => f.plantDay >= 0) || years.length > 0
   const dug = c.lots.length > 0 || years.length > 0
-  const more = c.fields.some((f, i) => i >= HOME_FIELDS && f.tenure !== 'none') || past(y => y.rent > 0 || y.land > 0)
+  // Land beyond what the farm began with: the home fields and its own two tracts do not count.
+  const more = c.fields.some((f, i) => PARCELS[i].block !== 'home' && f.tenure !== 'none') || past(y => y.rent > 0 || y.land > 0)
   const hired = c.crew.length > 1 || past(y => y.wages > 0)
   const signed = c.contracts.length > 0 || past(y => y.contracts > 0)
   const tooled = Object.values(c.upgrades).some(Boolean)

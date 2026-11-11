@@ -40,7 +40,7 @@ export interface Outcome {
 }
 
 function blankJobs(): Record<JobKind, number> {
-  return { plant: 0, hill: 0, scout: 0, spray: 0, water: 0, rogue: 0, sample: 0, kill: 0, dig: 0 }
+  return { plant: 0, hill: 0, scout: 0, spray: 0, water: 0, rogue: 0, sample: 0, kill: 0, dig: 0, fell: 0, rocks: 0, brush: 0, build: 0, haul: 0 }
 }
 
 const DONE_EVENT: Record<string, JobKind> = {
@@ -74,7 +74,7 @@ export function play(world: World, name: string, make: BotFactory, startYear: nu
       if (!r.ok) throw new Error(`${name}: cannot begin ${c.year}: ${r.err}`)
       events = []
       let n = 0
-      for (let i = 0; i < S.FIELD_COUNT; i++) if (S.held(c, i)) n++
+      for (let i = 0; i < S.FIELD_COUNT; i++) if (S.isField(c, i)) n++
       held.push(n)
       hands.push(0)
       operator.push(0)

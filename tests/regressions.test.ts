@@ -26,9 +26,9 @@ const FIELDS = [0, 1, 2, 3, 4, 5]
 
 describe('a dig ordered while a vine kill is part done', () => {
   // 1990, seed 7: on August 25 three walks and a spray fill most of the day, so the kill gets only part of it.
-  // The second tractor is bought in spring so that an operator can be hired for the two-crew case.
+  // The farm has a second tractor, so that an operator can work beside the farmer in the two-crew case.
   const start = grow(1990, 7, c => c.season!.day >= S.dayIndex(1990, 7, 25), ['kill', 'dig'], c => {
-    expect(S.apply(world, c, { t: 'buy', upgrade: 'tractor2' }).ok).toBe(true)
+    c.upgrades.tractor2 = true
   })
   for (const j of [...start.season!.jobs]) S.apply(world, start, { t: 'cancel', id: j.id })
   for (const f of [2, 4, 5]) expect(S.apply(world, start, { t: 'job', kind: 'scout', field: f }).ok).toBe(true)
@@ -47,7 +47,7 @@ describe('a dig ordered while a vine kill is part done', () => {
     for (let d = 0; d < 14; d++) {
       events.push(...S.apply(world, c, { t: 'day' }).events)
       if (S.fieldInfo(c, 0).status === 'digging') digging = true
-      if (digging) expect(s.jobs.some(j => j.field === 0 && j.kind !== 'dig'), 'only the dig is left on that field').toBe(false)
+      if (digging) expect(s.jobs.some(j => j.field === 0 && j.kind !== 'dig' && j.kind !== 'haul'), 'only the dig and the haul are left on that field').toBe(false)
     }
     expect(digging).toBe(true)
     expect(S.fieldInfo(c, 0).status).toBe('dug')
@@ -75,7 +75,10 @@ describe('a dig ordered while a vine kill is part done', () => {
     const events = digOut(c)
     const killed = events.filter(e => e.field === 0 && e.type === 'killed')
     expect(killed.length).toBe(1)
-    expect(killed[0].day).toBe(start.season!.day)
+    // On the next working day (a Sunday off does not count).
+    let next = start.season!.day
+    while (S.weekday(start.year, next) === S.SUNDAY) next++
+    expect(killed[0].day).toBe(next)
   })
 
   it('with two crews: a dig the operator starts drops the kill the farmer had begun, and the field is dug once', () => {
