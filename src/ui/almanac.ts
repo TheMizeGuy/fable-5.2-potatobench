@@ -111,9 +111,9 @@ function farmPage(ctx: Ctx, c: S.Campaign): Child {
       const here = mine.filter(i => S.PARCELS[i].block === b)
       const rent = here.filter(i => c.fields[i].tenure === 'rented').reduce((a, i) => a + S.PARCELS[i].rent, 0)
       const far = Math.max(...here.map(i => S.travelDays(S.HOME_YARD, i)))
-      return h('tr', null, h('th', { scope: 'row' }, BLOCK_NAME[b], h('span', { class: 'sub' }, ` ${F.list(here.map(i => S.FIELD_NAMES[i]))}; ${roadTime(far)} from the home yard`)), h('td', null, rent ? `${F.money(rent)} rent` : 'owned'))
+      return h('tr', null, h('th', { scope: 'row' }, BLOCK_NAME[b], h('span', { class: 'sub' }, ` ${F.list(here.map(i => S.FIELD_NAMES[i]))}${b === 'home' ? '' : `; ${roadTime(far)} from the home yard`}`)), h('td', null, rent ? `${F.money(rent)} rent` : 'owned'))
     }))),
-    h('p', { class: 'sub' }, `Rented land is paid for the year when the season begins and stays rented until it is released in spring. A dig far from a potato house takes longer for the haul. Storage: ${F.list(st.houses.map(x => `${x.name.toLowerCase()} ${F.mass(x.cwt)}`))}.`),
+    h('p', { class: 'sub' }, `Rented land is paid for the year when the season begins and stays rented until it is released in spring. A dig far from a potato house takes longer for the haul. Storage: ${F.list(st.houses.map(x => `${x.name.replace(/^(Home|Second)/, w => w.toLowerCase())} ${F.mass(x.cwt)}`))}.`),
     h('h3', { class: 'block-head' }, 'Crews'),
     h('table', { class: 'money' }, h('tbody', null, crews.map(u => h('tr', null,
       h('th', { scope: 'row' }, u.name, h('span', { class: 'sub' }, ` ${R.KIND_NAME[u.kind].toLowerCase()}: ${R.kindDoes(u.kind).toLowerCase().replace(/\.$/, '')}`)),

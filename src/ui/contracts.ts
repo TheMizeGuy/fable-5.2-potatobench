@@ -141,13 +141,15 @@ export function tracker(ctx: Ctx): { el: HTMLElement; update(): void } {
     if (!ks.length) return
     patch(el, JSON.stringify([ks.map(k => [k.id, Math.round(k.delivered), Math.round(k.penalty), k.settled]), ctx.app.settings.units]), () => ks.map(k => {
       const done = k.needed <= 1e-6
-      const said = `${k.buyer}: ${F.mass(k.delivered)} of ${F.mass(k.cwt)} ${k.varietyName} delivered, due ${k.dueBy}${k.settled ? ', closed' : done ? ', filled' : `. Short today it would cost ${F.money(k.penalty)}`}. Open the contracts.`
-      return h('button', { class: `track-row${done ? ' done' : ''}`, type: 'button', testid: `track-${k.id}`, 'aria-label': said, title: ctx.touch() ? undefined : said, onclick: () => openContracts(ctx) },
+      const said = `${k.buyer}: ${F.mass(k.delivered)} of ${F.mass(k.cwt)} ${k.varietyName} delivered, due ${k.dueBy}${k.settled ? ', closed' : done ? ', filled' : `. Short today it would cost ${F.money(k.penalty)}`}.`
+      // What a sighted player reads is the start of the button's name; the rest is said after it.
+      return h('button', { class: `track-row${done ? ' done' : ''}`, type: 'button', testid: `track-${k.id}`, title: ctx.touch() ? undefined : said, onclick: () => openContracts(ctx) },
         icon(done ? 'check' : 'contract', 'ic s'),
         h('span', { class: 'track-v' }, k.varietyName),
         h('span', { class: 'track-n num' }, `${F.num(F.massValue(k.delivered))}/${F.mass(k.cwt)}`),
         h('span', { class: 'track-due' }, k.settled ? 'closed' : DUE_SHORT[k.due]),
-        !done && k.penalty > 0 ? h('span', { class: 'track-pen num' }, F.money(-k.penalty)) : null)
+        !done && k.penalty > 0 ? h('span', { class: 'track-pen num' }, F.money(-k.penalty)) : null,
+        h('span', { class: 'sr' }, `. ${said} Open the contracts.`))
     }))
   }
   return { el, update }
