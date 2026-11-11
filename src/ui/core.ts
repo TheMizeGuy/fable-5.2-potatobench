@@ -12,7 +12,7 @@ export interface Ctx {
   run(cmd: Cmd): Result
   phone(): boolean
   // What the grower knew a moment ago, for "before and after" displays.
-  memo: { estimates: (Estimate | null)[]; soilT: number; digSoilT: Record<number, number>; lots: Record<number, Lot> }
+  memo: { estimates: (Estimate | null)[]; soilT: number; digSoilT: Record<string, number>; lots: Record<string, Lot> }
   sheet: { tab: string; open: boolean }
   dirty(): void
 }

@@ -48,7 +48,7 @@ export function planScreen(ctx: Ctx, labelsLayer: HTMLElement): Screen {
   const L = sheetLayout(ctx, 'plan')
   const placeLabels = fieldLabels(ctx, labelsLayer, i => {
     const p = app.campaign?.plans[i]
-    return !p ? S.FIELD_NAMES[i] : `${S.FIELD_NAMES[i]}: ${p.crop === 'rest' ? 'rest' : S.variety(p.variety).name}`
+    return !p || ctx.phone() ? S.FIELD_NAMES[i] : `${S.FIELD_NAMES[i]}: ${p.crop === 'rest' ? 'rest' : S.variety(p.variety).name}`
   })
   let err = ''
   const fieldErr: string[] = []
@@ -120,6 +120,7 @@ export function planScreen(ctx: Ctx, labelsLayer: HTMLElement): Screen {
           h('tr', null, h('th', { scope: 'row' }, `${potato} potato ${potato === 1 ? 'field' : 'fields'} at ${F.money(S.FIELD_COST)}`), h('td', { class: 'num' }, F.money(-potato * S.FIELD_COST))),
           cert ? h('tr', null, h('th', { scope: 'row' }, `Certified seed for ${cert}`), h('td', { class: 'num' }, F.money(-cert * S.SEED_CWT_PER_FIELD * S.CERT_SEED_PER_CWT))) : null,
           rest ? h('tr', null, h('th', { scope: 'row' }, `${rest} resting at ${F.money(S.REST_COST)}`), h('td', { class: 'num' }, F.money(-rest * S.REST_COST))) : null,
+          h('tr', { class: 'subtotal' }, h('th', { scope: 'row' }, 'This plan'), h('td', { class: 'num', testid: 'plan-cost' }, F.money(-cost))),
           h('tr', { class: 'total' }, h('th', { scope: 'row' }, 'After planting'), h('td', { class: `num${after < 0 ? ' neg' : ''}`, testid: 'plan-after' }, F.money(after))))),
       h('p', { class: over ? 'error-text' : 'sub' }, over
         ? `The bank lends up to ${F.money(-S.OPERATING_LIMIT)} for the spring. Rest a field or use saved seed.`

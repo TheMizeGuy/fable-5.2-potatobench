@@ -18,12 +18,13 @@ export function fieldLabels(ctx: Ctx, layer: HTMLElement, text: (i: number) => s
       const a = ctx.view.fieldAnchor(i)
       const l = els[i]
       const show = a.visible && a.x > ins.left + 30 && a.x < innerWidth - ins.right - 30 && a.y > ins.top + 12 && a.y < innerHeight - ins.bottom - 12
-      l.hidden = !show
+      if (l.hidden === show) l.hidden = !show
       if (!show) continue
       const t = text(i)
       if (l.textContent !== t) l.textContent = t
-      l.style.transform = `translate(${Math.round(a.x)}px, ${Math.round(a.y)}px) translate(-50%, -100%)`
-      l.classList.toggle('on', app.selected === i)
+      const move = `translate(${Math.round(a.x)}px, ${Math.round(a.y)}px) translate(-50%, -100%)`
+      if (l.style.transform !== move) l.style.transform = move
+      if (l.classList.contains('on') !== (app.selected === i)) l.classList.toggle('on', app.selected === i)
     }
   }
 }

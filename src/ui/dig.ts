@@ -18,6 +18,10 @@ const GRADE_ROWS: { key: S.Grade | 'skinned'; label: string; note: () => string 
   { key: 'cull', label: 'Culls', note: () => 'starch factory, $1 a hundredweight' },
 ]
 
+export function lotKey(c: S.Campaign, id: number): string {
+  return `${c.seed}:${c.startYear}:${id}`
+}
+
 function hex(n: number): string {
   return `#${n.toString(16).padStart(6, '0')}`
 }
@@ -187,7 +191,7 @@ function why(ctx: Ctx, c: S.Campaign, lot: S.Lot, cause: S.Cause): string {
       return `The skins had not set: dug ${F.plural(k, 'day')} after the vines died, and skins need ${S.SKIN_DAYS}. They sell as No. 2, or as new potatoes straight off the field before September 5.`
     }
     case 'bruise': {
-      const t = ctx.memo.digSoilT[lot.id]
+      const t = ctx.memo.digSoilT[lotKey(c, lot.id)]
       return `${t !== undefined ? `The soil was ${F.temp(t)} on dig day, and c` : 'C'}old tubers bruise in the digger below about ${F.temp(S.BRUISE_SOIL_T)}. Digging before the ground chills avoids it.`
     }
     case 'blight': {
@@ -215,7 +219,7 @@ export function showWeighIn(ctx: Ctx, lotId: number): DialogSpec {
   const v = S.variety(lot.variety)
   const name = S.FIELD_NAMES[lot.field]
   // Selling scales every grade down together, so a lot seen after a sale is scaled back up to dig-day size.
-  const snap = ctx.memo.lots[lotId]
+  const snap = ctx.memo.lots[lotKey(c, lotId)]
   const now = S.lotCwt(lot)
   const scale = snap ? 1 : now > 0 ? (now + lot.sold) / now : 1
   const base = snap ?? lot

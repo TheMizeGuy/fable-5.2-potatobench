@@ -321,6 +321,7 @@ fieldset.group .seg-opt { flex: 1 1 200px; }
 .ledger-table td { text-align: right; padding: var(--space-1) 0; white-space: nowrap; }
 .ledger-table tr + tr th, .ledger-table tr + tr td { border-top: 1px dotted var(--rule-strong); }
 .ledger-table tr.total th, .ledger-table tr.total td { border-top: 2px solid var(--ink); font-weight: 700; }
+.ledger-table tr.subtotal th, .ledger-table tr.subtotal td { border-top: 1px solid var(--ink-3); font-weight: 600; }
 td.neg, .neg { color: var(--bad); }
 
 /* ------------------------------------------------------------- dialogs and toasts */

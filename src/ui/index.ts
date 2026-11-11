@@ -9,7 +9,7 @@ import * as S from '../sim/index.ts'
 import { Dialogs, Toasts, type Ctx, type Level, type Screen } from './core.ts'
 import { h } from './dom.ts'
 import { setUnits } from './fmt.ts'
-import { showSample, showWeighIn } from './dig.ts'
+import { lotKey, showSample, showWeighIn } from './dig.ts'
 import { titleScreen } from './title.ts'
 import { planScreen } from './plan.ts'
 import { seasonScreen } from './season.ts'
@@ -32,6 +32,7 @@ export const mountHud: MountHud = (root, app, view) => {
 
   let dirty = true
   let held = false
+  let heldAt = 0
   let screen: Screen | null = null
   let builtFor = ''
 
@@ -55,6 +56,7 @@ export const mountHud: MountHud = (root, app, view) => {
   }
   applySettings()
 
+  // Runs after every command, so when a day's events arrive this still holds the day before.
   function remember(): void {
     const c = app.campaign
     if (!c || c.phase !== 'season' || !c.season) return
@@ -96,8 +98,8 @@ export const mountHud: MountHud = (root, app, view) => {
         const lot = Number(e.data?.lot)
         const found = c.lots.find(l => l.id === lot)
         if (!found) continue
-        ctx.memo.digSoilT[lot] = ctx.memo.soilT
-        ctx.memo.lots[lot] = structuredClone(found)
+        ctx.memo.digSoilT[lotKey(c, lot)] = ctx.memo.soilT
+        ctx.memo.lots[lotKey(c, lot)] = structuredClone(found)
         dialogs.enqueue(showWeighIn(ctx, lot))
       } else if (e.level === 'bad' || e.level === 'warn' || STOPS.has(e.type) || e.type === 'sold' || e.type === 'kept') {
         toasts.show(e.text, e.level)
@@ -117,6 +119,7 @@ export const mountHud: MountHud = (root, app, view) => {
         dirty = true
         break
       case 'change':
+        remember()
         dirty = true
         break
       case 'settings':
@@ -139,7 +142,8 @@ export const mountHud: MountHud = (root, app, view) => {
   phoneQuery.addEventListener('change', () => build())
   addEventListener('resize', () => { dirty = true })
 
-  root.addEventListener('pointerdown', () => { held = true }, true)
+  // While a button is pressed its section is not rebuilt, so a click is never lost to a re-render.
+  root.addEventListener('pointerdown', () => { held = true; heldAt = performance.now() }, true)
   const release = () => { if (held) { held = false; dirty = true } }
   document.addEventListener('pointerup', release, true)
   document.addEventListener('pointercancel', release, true)
@@ -178,7 +182,7 @@ export const mountHud: MountHud = (root, app, view) => {
       e.preventDefault()
       if (app.selected < 0) { toasts.show('Choose a field first: [ and ] step through them.', 'info'); return }
       const r = app.do({ t: 'job', kind, field: app.selected })
-      toasts.show(r.ok ? `${S.JOB_LABEL[kind]} ${S.FIELD_NAMES[app.selected]} added to the work list.` : r.err, r.ok ? 'info' : 'warn')
+      toasts.show(r.ok ? `On the work list: ${S.JOB_LABEL[kind].toLowerCase()} ${S.FIELD_NAMES[app.selected]}.` : `${S.JOB_LABEL[kind]} ${S.FIELD_NAMES[app.selected]}: ${r.err}`, r.ok ? 'info' : 'warn')
     }
   })
 
@@ -187,10 +191,10 @@ export const mountHud: MountHud = (root, app, view) => {
   return {
     frame(dt: number) {
       if (`${app.screen === 'title' || !app.campaign ? 'title' : app.screen}|${phoneQuery.matches ? 'phone' : 'wide'}` !== builtFor) build()
+      if (held && performance.now() - heldAt > 1500) held = false
       if (dirty && !held && screen) {
         dirty = false
         screen.update()
-        remember()
         const [t, r, b, l] = screen.insets().map(x => Math.max(0, Math.round(x)))
         app.setInsets(t, r, b, l)
         toasts.place(t, r, l)
