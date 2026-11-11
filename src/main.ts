@@ -29,6 +29,22 @@ if (q.has('year') && !app.savedGame() && app.startYears().includes(Number(q.get(
   app.newGame(Number(q.get('year')), q.has('seed') ? Number(q.get('seed')) : undefined)
 }
 
+// The landing page says what this is an entry in.
+const credit = document.createElement('p')
+credit.id = 'credit'
+credit.style.cssText = 'position:fixed;right:20px;bottom:16px;margin:0;z-index:5;pointer-events:none;text-align:right;color:#f3ecdc;' +
+  'font:600 15px/1.35 "Public Sans Variable","Public Sans",system-ui,sans-serif;text-shadow:0 1px 3px rgb(16 20 14 / .85),0 0 14px rgb(16 20 14 / .5)'
+const creditTop = document.createElement('span')
+creditTop.textContent = 'Fable 5.2 - PotatoBench'
+const creditBy = document.createElement('span')
+creditBy.textContent = 'PotatoBench made by TheMizeGuy'
+creditBy.style.cssText = 'display:block;font-weight:400;font-size:13px'
+credit.append(creditTop, creditBy)
+document.body.append(credit)
+const showCredit = (): void => { credit.style.display = app.screen === 'title' ? '' : 'none' }
+app.on(e => { if (e.type === 'screen') showCredit() })
+showCredit()
+
 let last = performance.now()
 function loop(now: number): void {
   const dt = Math.min(100, now - last)
