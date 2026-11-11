@@ -312,6 +312,7 @@ export function apply(world: World, c: Campaign, cmd: Cmd): Result {
       if (c.phase !== 'season' && c.phase !== 'cellar') return fail('Nothing to sell now.')
       const lot = c.lots.find(l => l.id === cmd.lot)
       if (!lot || !lot.open) return fail('That lot is gone.')
+      if (Number.isNaN(cmd.frac)) return fail('Say how much to sell.')
       if (c.phase === 'season' && c.season) {
         const f = c.season.fields[lot.field]
         if (f.status === 'digging') return fail('Still being dug.')
@@ -324,7 +325,7 @@ export function apply(world: World, c: Campaign, cmd: Cmd): Result {
       const lot = c.lots.find(l => l.id === cmd.lot)
       if (!lot || !lot.open) return fail('That lot is gone.')
       const n = Math.floor(cmd.fields)
-      if (n < 1) return fail('Hold back seed for at least one field.')
+      if (!(n >= 1)) return fail('Hold back seed for at least one field.')
       const need = n * P.SEED_CWT_PER_FIELD
       const have = lot.grades.b + lot.grades.no1
       if (have < need) return fail(`Not enough sound tubers: ${Math.floor(have / P.SEED_CWT_PER_FIELD)} field${have >= 200 ? 's' : ''} worth at most.`)
