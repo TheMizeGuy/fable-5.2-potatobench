@@ -55,10 +55,10 @@ export interface Day {
 
 export type VarietyId = 'norland' | 'superior' | 'katahdin' | 'kennebec' | 'burbank' | 'atlantic' | 'gold' | 'caribou'
 
-export type JobKind = 'plant' | 'hill' | 'scout' | 'spray' | 'water' | 'rogue' | 'sample' | 'kill' | 'dig'
+export type JobKind = 'plant' | 'hill' | 'scout' | 'spray' | 'water' | 'rogue' | 'sample' | 'kill' | 'dig' | 'fell' | 'rocks' | 'brush'
 export type UpgradeId = 'boom' | 'harvester' | 'vent' | 'reel' | 'tractor2' | 'house2'
 export type Grade = 'no1' | 'chef' | 'b' | 'no2' | 'cull'
-export type Cause = 'green' | 'scab' | 'hollow' | 'knob' | 'skin' | 'bruise' | 'blight' | 'frost' | 'rot' | 'small'
+export type Cause = 'green' | 'scab' | 'hollow' | 'knob' | 'skin' | 'bruise' | 'blight' | 'frost' | 'rot' | 'small' | 'stone'
 export type Tenure = 'owned' | 'rented' | 'none'
 export type UnitKind = 'farmer' | 'operator' | 'hand'
 // The five kinds of work. Each person has a level 0..10 in each, and a priority for each.
@@ -67,6 +67,8 @@ export type Trait = 'strong' | 'steady' | 'sharp' | 'early' | 'tireless' | 'chee
 // What a person does from November to April: laid off, felling a tract, packing, or building.
 export type WinterWork = 'off' | 'woods' | 'pack' | 'build'
 export type Rig = '' | 'tractor' | 'truck'
+// What stands on a parcel: open ground, or a tract still to clear (standing woods or brush, or stumps once felled).
+export type Cover = 'open' | 'woods' | 'brush' | 'stumps'
 
 export interface FieldPersist {
   elev: 0 | 1 | 2           // 0 bottom land, 1 mid slope, 2 ridge
@@ -74,6 +76,20 @@ export interface FieldPersist {
   vert: number              // share of plants that will go down early with Verticillium wilt
   streak: number            // consecutive potato years up to last season
   tenure: Tenure            // 'rented' carries into the next spring until released
+  cover: Cover
+  stones: number            // 0..1
+  raw: boolean              // new ground that has not yet had a crop or a rest year
+  felled: number            // crew-days of felling done on a tract
+  brushed: number           // the year its hedgerows were cut back, or -1
+  tiled: boolean            // tile drains are in
+  works: { kind: 'stump' | 'tile'; left: number } | null   // a contractor's job: season days left
+}
+
+// A purchase of land on the mortgage.
+export interface Mortgage {
+  field: number
+  loan: number              // dollars borrowed
+  owed: number              // dollars still owed
 }
 
 export interface FieldPlan {
@@ -265,6 +281,9 @@ export interface YearSummary {
   restIncome: number; storage: number      // parts of revenue and of costs
   wages: number; rent: number; land: number; penalties: number   // parts of costs
   contracts: number                        // part of revenue: deliveries against contracts
+  logs: number                             // part of revenue: logs sold
+  mortgage: number                         // part of costs: the land mortgage's principal and interest
+  works: number                            // part of costs: contractors stumping and tiling
   cwtSold: number; cwtCulled: number
   yieldCwtAcre: number      // marketable, over potato acres
   potatoFields: number
@@ -296,6 +315,9 @@ export interface Campaign {
   nextUnit: number
   applicants: Applicant[]   // this spring's people asking for work, until the season begins
   sundaysOff: boolean       // the farm rule: nobody works Sundays
+  logs: number              // loads of logs in the yard
+  stone: number             // loads of fieldstone in the yard
+  mortgages: Mortgage[]     // land bought on the mortgage, still owed
   offers: Offer[]           // this spring's contract offers, until the season begins
   contracts: Contract[]     // this year's accepted contracts
   month: number             // cellar month index, 0 = November
@@ -308,6 +330,9 @@ export interface Campaign {
   yearLand: number
   yearContracts: number
   yearPenalties: number
+  yearLogs: number
+  yearMortgage: number
+  yearWorks: number
   history: YearSummary[]
   steps: number
 }
@@ -329,6 +354,10 @@ export type Cmd =
   | { t: 'sundays'; off: boolean }
   | { t: 'pickers'; on: boolean }
   | { t: 'winter'; unit: number; work: WinterWork; field?: number }
+  | { t: 'stump'; field: number }
+  | { t: 'tile'; field: number }
+  | { t: 'sellLogs'; loads: number }
+  | { t: 'payMortgage'; amount: number }
   | { t: 'job'; kind: JobKind; field: number; unit?: number }
   | { t: 'assign'; id: number; unit: number }
   | { t: 'cancel'; id: number }

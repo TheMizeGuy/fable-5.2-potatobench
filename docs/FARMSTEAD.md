@@ -253,3 +253,31 @@ text above was silent, or two of its rules collided, the build chose as follows.
   by themselves on October 11.
 - *A foreman* orders only on working days.
 - The command for the rule is `{ t: 'sundays', off: boolean }`.
+
+**Land and materials.**
+
+- *Positions.* The tracts sit a field's depth (13.2 ground units) behind or beside
+  their blocks: Home Woodlot behind North Ridge, Alder Swale beside Bottom Field
+  toward the yard, Burnt Hill behind High Lot, the Dufour Back Lot behind Dufour
+  Upper. Shelter reaches 20 units in a straight line, so each tract shelters the
+  one field beside it (and the woodlot and Burnt Hill shelter each other once
+  either is cleared).
+- *Prices.* Burnt Hill $5,000 and the back lot $4,000 (woodland, cheaper than
+  cleared land). Tracts are never let. The back lot can be bought while the farm
+  holds a Dufour field, and does not by itself bring the Dufour house.
+- *"Ruinous in the growing season".* Felling is allowed in the season, at half
+  speed; in winter it goes at full speed. The text's wish that it be winter work
+  is kept by the price, not a ban.
+- *Stumping fee* $3,000; *tile* $4,000. Both are paid when ordered (spring or
+  season) and count season days; tile goes only under the farm's own bottom land
+  with no crop in the ground.
+- *Stones slow work relative to the home farm's 0.25*, so the old job times hold
+  on the home six: ridge fields at 0.3 to 0.35 plant and dig 4 to 9% slower, the
+  bottom fields at 0.2 4% faster. At 1 the pace is 36% of the old.
+- *Stone bruising* only starts above 0.2 stones, so the home farm loses well
+  under 1% of its tubers to it and new ground about 6%.
+- *A tract cleared in mid season* is a field from the next spring; until then its
+  rocks can be picked. Its default plan is a rest year, which also clears the
+  raw-ground penalty.
+- *The mortgage* is booked as part of the year's costs (the ledger's `mortgage`
+  line), principal and interest together, like every other dollar.

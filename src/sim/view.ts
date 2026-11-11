@@ -2,16 +2,20 @@
 // functions only, so nothing hidden (true tuber weight, latent blight) can leak onto the screen.
 import { DUE_LABEL } from './buyers.ts'
 import { dayIndex, formatDay, weekday, WEEKDAYS, withCommas } from './calendar.ts'
-import { cellarCapacity, openLots, pickersWindow, potatoHouses, WINTER_LABEL, WINTER_WORKS, winterBlock, type PotatoHouse } from './campaign.ts'
+import {
+  cellarCapacity, mortgageDue, mortgageOwed, openLots, pickersWindow, potatoHouses, stumpBlock, timberTracts, WINTER_LABEL, WINTER_WORKS, winterBlock,
+  type PotatoHouse,
+} from './campaign.ts'
 import { hireRoom, travelDays } from './crew.ts'
-import { BLOCK_NAME, HOME_YARD, PARCELS, YARDS, type BlockId } from './farm.ts'
+import { BLOCK_NAME, HOME_YARD, PARCELS, TRACTS, YARDS, type BlockId, type Holding } from './farm.ts'
 import { lotCwt } from './harvest.ts'
 import * as P from './params.ts'
 import { bestSkill, defaultPrio, hasBed, hiredCount, housingLimit, moodWord, payOf, speed, tiredWord, xpNeed } from './people.ts'
+import { brushedNow, clearing, COVER_WORD, fellLeft, fieldEnv, sheltered, standing, type ClearStage } from './land.ts'
 import { FIELD_NAMES, haulFactor, holdsDufour, jobBlock, jobCost, jobDays, jobWait, JOB_LABEL, knownHills, tractorsOwned, workday } from './season.ts'
 import {
   H_DECAYED, H_DUG, H_EMERGED, H_KNOWN, H_ROGUED, H_SAMPLED, H_VIRUS, H_WILT,
-  type Campaign, type Day, type Due, type FieldSeason, type JobKind, type Skill, type Tenure, type Trait, type UnitKind, type VarietyId,
+  type Campaign, type Cover, type Day, type Due, type FieldSeason, type JobKind, type Skill, type Tenure, type Trait, type UnitKind, type VarietyId,
   type WinterWork, type World,
 } from './types.ts'
 import { variety } from './varieties.ts'
@@ -98,6 +102,17 @@ export interface FieldInfo {
   wilt: number              // how hard the plants are drooping for water, 0..1
   deadDays: number
   lot: number
+  // The land under the crop.
+  cover: Cover              // 'open' for a field; a tract still to clear is 'woods', 'brush' or 'stumps', and status 'off'
+  coverWord: string
+  stones: number            // 0..1
+  raw: boolean              // new ground that has not had a crop or a rest year: a first potato crop grows 15% less
+  tiled: boolean
+  brushed: number           // years until cut hedgerows grow back; 0 when they stand
+  sheltered: boolean        // standing woods or brush nearby: less water lost, sprays in more wind, an hour wetter, colder
+  shelteredBy: string       // the name of the tract that shelters it, or ''
+  clearing: { stage: ClearStage; next: string; felled: number } | null   // for a tract: where its clearing stands
+  works: { kind: 'stump' | 'tile'; left: number } | null                 // a contractor at work: season days left
 }
 
 const POSITION = ['bottom land', 'mid slope', 'ridge']
@@ -112,17 +127,27 @@ export function fieldInfo(c: Campaign, fi: number): FieldInfo {
     crop: plan.crop, status: plan.crop === 'rest' ? 'rest' : 'idle', variety: plan.crop === 'rest' ? 'Oats and clover' : variety(plan.variety).name,
     stage: plan.crop === 'rest' ? 'Resting' : 'Not planted', daysIn: 0, canopy: 0, moisture: 1, moistureLabel: 'good', tooWet: false,
     hillPasses: 0, protect: 0, blightKnown: 0, blightHills: 0, scoutAge: -1, stunted: 0, estimate: null, tubers: null, skin: 0, bloom: 0, stand: 1, frosted: 0, rime: false, wilt: 0, deadDays: -1, lot: -1,
+    cover: fp.cover, coverWord: COVER_WORD[fp.cover], stones: fp.stones, raw: fp.raw, tiled: fp.tiled,
+    brushed: brushedNow(c, fi) ? P.BRUSH_YEARS - (c.year - fp.brushed) : 0, sheltered: false, shelteredBy: '',
+    clearing: null, works: fp.works ? { ...fp.works } : null,
+  }
+  const env = fieldEnv(c, fi)
+  if (env.shelter >= 0) { base.sheltered = true; base.shelteredBy = FIELD_NAMES[env.shelter] }
+  if (PARCELS[fi].holding !== 'field') {
+    const cl = clearing(c, fi)
+    base.clearing = { ...cl, felled: standing(fp.cover) ? fp.felled / P.FELL_DAYS[fp.cover] : 1 }
   }
   const f = s?.fields[fi]
-  if (fp.tenure === 'none' || f?.status === 'off') {
+  if (fp.tenure === 'none' || fp.cover !== 'open' || f?.status === 'off') {
     base.status = 'off'
     base.crop = 'rest'
     base.variety = ''
-    base.stage = 'Not the farm\'s'
+    base.stage = fp.tenure === 'none' ? 'Not the farm\'s' : fp.cover === 'woods' ? 'Standing woods' : fp.cover === 'brush' ? 'Brush'
+      : fp.cover === 'stumps' ? 'Stumps' : 'New ground, ready next spring'
     return base
   }
   if (!s || !f) return base
-  const taw = P.TAW_MM[fp.elev]
+  const taw = env.taw
   base.status = f.status
   base.moisture = 1 - f.dr / taw
   base.tooWet = f.wet >= P.WORKABLE_WET_MM
@@ -197,7 +222,7 @@ export function fieldActions(world: World, c: Campaign, fi: number): ActionInfo[
     return {
       kind, label: JOB_LABEL[kind], ok: why === '', why,
       days: jobDays(c, kind, f, fi), cost: jobCost(c, kind),
-      wait: f && d && why === '' ? jobWait(kind, f, d) : '',
+      wait: f && d && why === '' ? jobWait(kind, f, d, fieldEnv(c, fi).wind) : '',
     }
   })
 }
@@ -330,6 +355,7 @@ export interface WinterChoice { work: WinterWork; ok: boolean; why: string }
 export interface WinterInfo {
   months: number                    // November to April
   monthly: number                   // dollars a month in wages for everyone kept on
+  woods: { field: number; name: string; left: number; logs: number }[]   // tracts to fell: crew-days left, loads of logs at a yield of 1
   people: {
     id: number
     name: string
@@ -352,12 +378,16 @@ export function winterInfo(c: Campaign): WinterInfo {
       text: u.winter === 'woods' && u.winterField >= 0 ? `${WINTER_LABEL.woods}: ${FIELD_NAMES[u.winterField]}` : WINTER_LABEL[u.winter],
       pay, crewDays: u.winter === 'off' ? 0 : u.kind === 'farmer' ? P.FARMER_WINTER_DAYS : P.WINTER_DAYS,
       choices: WINTER_WORKS.map(w => {
-        const why = winterBlock(c, u, w, -1)
+        const why = winterBlock(c, u, w, w === 'woods' ? timberTracts(c)[0] ?? -1 : -1)
         return { work: w, ok: why === '', why }
       }),
     }
   })
-  return { months: P.WINTER_MONTHS, monthly, people }
+  const woods = timberTracts(c).map(i => {
+    const cover = c.fields[i].cover as 'woods' | 'brush'
+    return { field: i, name: FIELD_NAMES[i], left: fellLeft(c, i), logs: P.TIMBER[cover] * fellLeft(c, i) / P.FELL_DAYS[cover] }
+  })
+  return { months: P.WINTER_MONTHS, monthly, woods, people }
 }
 
 export interface LabourInfo {
@@ -409,6 +439,13 @@ export interface LandInfo {
   brings: string            // what holding it brings besides the field, in plain words ('' when nothing)
   travel: number            // days of driving from the home yard
   haul: number              // extra share of digging time for the haul to the nearest potato house, once held
+  cover: Cover              // what stands on it: a tract is woods or brush to clear
+  stones: number            // 0..1; a tract's once it is cleared
+  rentable: boolean         // let by the year; a tract is only for sale
+  rentWhy: string           // why it cannot be rented this spring, or ''
+  buyWhy: string            // why it cannot be bought this spring, or ''
+  down: number              // dollars down to buy it: a quarter of the price
+  loan: number              // dollars on the land mortgage if bought
 }
 
 // Every parcel the farm does not own: the land it could rent or buy, and what it rents now.
@@ -418,19 +455,102 @@ export function landInfo(c: Campaign): LandInfo[] {
     const fp = c.fields[i]
     if (fp.tenure === 'owned') continue
     const p = PARCELS[i]
-    const dufour = p.block === 'dufour'
+    const dufour = p.block === 'dufour' && p.holding === 'field'
     let other = false
-    for (let j = 0; j < P.FIELD_COUNT; j++) if (j !== i && PARCELS[j].block === 'dufour' && c.fields[j].tenure !== 'none') other = true
+    for (let j = 0; j < P.FIELD_COUNT; j++) if (j !== i && PARCELS[j].block === 'dufour' && PARCELS[j].holding === 'field' && c.fields[j].tenure !== 'none') other = true
     const house = dufour && !other ? YARDS[1].cellar : 0
-    const brings = !dufour ? '' : house > 0 ? `The Dufour potato house comes with it: ${withCommas(house)} cwt of storage.`
-      : 'It shares the Dufour potato house the farm already has.'
+    const timber = standing(fp.cover) ? `${fp.cover === 'woods' ? 'Woods' : 'Brush'} to clear: about ${P.TIMBER[fp.cover]} loads of logs and ${P.FELL_DAYS[fp.cover]} crew-days of felling, then stumps and rocks.` : ''
+    const brings = timber || (!dufour ? '' : house > 0 ? `The Dufour potato house comes with it: ${withCommas(house)} cwt of storage.`
+      : 'It shares the Dufour potato house the farm already has.')
+    const down = Math.round(p.price * P.MORTGAGE_DOWN)
+    const spring = c.phase === 'plan'
+    const rentWhy = !spring ? 'Land is rented in spring.' : p.holding !== 'field' ? `${p.name} is not let; it can only be bought.` : fp.tenure === 'rented' ? 'Rented already.' : ''
+    const buyWhy = !spring ? 'Land is bought in spring.' : p.holding === 'dufour' && !holdsDufour(c) ? `${p.name} goes with the Dufour place: rent or buy a Dufour field first.`
+      : c.cash < down ? `Not enough cash for the quarter down: $${withCommas(down)}.` : ''
     out.push({
       field: i, name: p.name, block: p.block, elev: fp.elev, position: POSITION[fp.elev], tenure: fp.tenure,
       rent: p.rent, price: p.price, soil: fp.soil, vert: fp.vert, streak: fp.streak, house, brings,
       travel: travelDays(HOME_YARD, i), haul: haulFactor(c, i, holdsDufour(c) || dufour) - 1,
+      cover: fp.cover, stones: standing(fp.cover) ? p.stones : fp.stones, rentable: p.holding === 'field', rentWhy, buyWhy,
+      down, loan: p.price - down,
     })
   }
   return out
+}
+
+// ---------------------------------------------------------------- tracts, materials, the mortgage
+
+export interface TractInfo {
+  field: number
+  name: string
+  block: BlockId
+  cover: Cover
+  coverWord: string
+  tenure: Tenure
+  holding: Holding          // 'owned' from the start, 'sale', or 'dufour' (for sale while Dufour land is held)
+  price: number
+  stage: ClearStage         // the next step: fell, stump, rocks, or done
+  next: string              // the next step in plain words
+  felled: number            // share of the felling done, 0..1
+  fellLeft: number          // crew-days of felling left
+  timber: number            // loads of logs it holds at a yield of 1 (a feller at woods skill 5)
+  shelters: number[]        // held fields its standing cover shelters now
+  works: { kind: 'stump' | 'tile'; left: number } | null
+  stumpFee: number
+  stumpWhy: string          // why the stumps cannot be pulled now, or ''
+  stones: number            // what it will have, or has, once cleared
+}
+
+export function tractInfo(c: Campaign): TractInfo[] {
+  return TRACTS.map(i => {
+    const fp = c.fields[i]
+    const p = PARCELS[i]
+    const cl = clearing(c, i)
+    const fellTotal = standing(fp.cover) ? P.FELL_DAYS[fp.cover] : 0
+    return {
+      field: i, name: p.name, block: p.block, cover: fp.cover, coverWord: COVER_WORD[fp.cover], tenure: fp.tenure, holding: p.holding,
+      price: p.price, stage: cl.stage, next: cl.next,
+      felled: fellTotal ? fp.felled / fellTotal : 1, fellLeft: fellLeft(c, i), timber: standing(fp.cover) ? P.TIMBER[fp.cover] : 0,
+      shelters: sheltered(c, i), works: fp.works ? { ...fp.works } : null,
+      stumpFee: P.STUMP_FEE, stumpWhy: stumpBlock(c, i), stones: standing(fp.cover) || fp.cover === 'stumps' ? p.stones : fp.stones,
+    }
+  })
+}
+
+export interface MaterialsInfo {
+  logs: number              // loads in the yard
+  stone: number             // loads of fieldstone in the yard
+  logPrice: number          // dollars a load, sold to the mill
+  millPrice: number         // dollars a load of logs bought for a building
+  quarryPrice: number       // dollars a load of stone bought for a building
+  sellWhy: string           // why logs cannot be sold now, or ''
+}
+
+export function materialsInfo(c: Campaign): MaterialsInfo {
+  return {
+    logs: c.logs, stone: c.stone, logPrice: P.LOG_PRICE, millPrice: P.MILL_PRICE, quarryPrice: P.QUARRY_PRICE,
+    sellWhy: c.phase === 'over' ? 'The farm is gone.' : c.logs <= 0 ? 'There are no logs in the yard.' : '',
+  }
+}
+
+export interface MortgageInfo {
+  loans: { field: number; name: string; loan: number; owed: number }[]
+  owed: number              // dollars still owed in all
+  principal: number         // dollars off the loans the bank takes at this year end
+  interest: number          // dollars of interest at this year end
+  rate: number              // interest on what is owed, a year
+  down: number              // share of a price paid down when land is bought
+  payWhy: string            // why extra cannot be paid now, or ''
+}
+
+export function mortgageInfo(c: Campaign): MortgageInfo {
+  const owed = mortgageOwed(c)
+  const due = mortgageDue(c)
+  return {
+    loans: c.mortgages.map(m => ({ field: m.field, name: FIELD_NAMES[m.field], loan: m.loan, owed: m.owed })),
+    owed, principal: due.principal, interest: due.interest, rate: P.MORTGAGE_RATE, down: P.MORTGAGE_DOWN,
+    payWhy: owed <= 0 ? 'Nothing is owed on the land.' : c.phase !== 'plan' ? 'Extra is paid on the mortgage in spring.' : c.cash <= 0 ? 'Not enough cash.' : '',
+  }
 }
 
 export interface OfferInfo {
@@ -517,6 +637,6 @@ export function jobWaits(world: World, c: Campaign): Record<number, string> {
   const out: Record<number, string> = {}
   if (!s) return out
   const d = getDay(world, s.year, s.day)
-  for (const j of s.jobs) out[j.id] = jobWait(j.kind, s.fields[j.field], d)
+  for (const j of s.jobs) out[j.id] = jobWait(j.kind, s.fields[j.field], d, fieldEnv(c, j.field).wind)
   return out
 }

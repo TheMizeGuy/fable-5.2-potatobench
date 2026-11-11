@@ -7,6 +7,32 @@ const SETTINGS_KEY = 'the-county/settings'
 export interface SaveFile { v: number; savedAt: number; campaign: Campaign }
 
 type Migration = (c: Record<string, unknown>) => void
+
+// A season record for a parcel the farm does not crop this season.
+function offField(): Record<string, unknown> {
+  return {
+    status: 'off', variety: 'katahdin', seedVirus: 0,
+    plantDay: -1, emergeDay: -1, tiDay: -1, closeDay: -1, matureDay: -1, deadDay: -1, killDay: -1, dugDay: -1,
+    pdSoil: 0, pdAir: 0, pdEmerge: 0,
+    dr: 0, wet: 8, ksAvg: 1, canopy: 0, green: 0, wateredDay: -1,
+    hillPasses: 0, cover: 0.5, weeded: false,
+    residue: 0, lastSpray: -1,
+    scab: 0, hollow: 0, knob: 0, logDays: 0, dryRun: 0, frostT: 0,
+    sev: 0, sevPeak: 0, lastScout: -1, knownSev: 0, seenFromRoad: false,
+    samples: [], sampleN: [], estBias: 1, eye: 0, seedBlight: 0, frostDay: -1, frostShare: 0, rimeDay: -1, digDone: 0, lotId: -1, flags: 0,
+    hState: [], hEmergeAt: [], hPd0: [], hVigor: [], hC: [], hLes: [], hLat: [], hMass: [], hN: [], hTb: [],
+  }
+}
+
+// The land record a new game gives a parcel.
+function newParcel(i: number): Record<string, unknown> {
+  const p = PARCELS[i]
+  return {
+    elev: p.elev, soil: Math.max(0, 1 - 0.5 * p.streak), vert: p.vert, streak: p.streak,
+    tenure: i < HOME_FIELDS || p.holding === 'owned' ? 'owned' : 'none',
+    cover: p.cover, stones: p.cover === 'open' ? p.stones : 0, raw: false, felled: 0, brushed: -1, tiled: false, works: null,
+  }
+}
 // One entry per version step: MIGRATIONS[n] turns a version n campaign into version n + 1.
 const MIGRATIONS: Record<number, Migration> = {
   // Version 2 added the year's rest income and storage bill, the grower's by-eye expectation, and seed blight.
@@ -34,11 +60,12 @@ const MIGRATIONS: Record<number, Migration> = {
     const plans = (c.plans as Record<string, unknown>[] | undefined) ?? []
     if (!Array.isArray(fields) || !Array.isArray(plans)) return
     for (let i = 0; i < fields.length; i++) fields[i].tenure ??= i < HOME_FIELDS ? 'owned' : 'none'
-    for (let i = fields.length; i < PARCELS.length; i++) {
+    // The fourteen parcels of version 3; the tracts come with version 5.
+    for (let i = fields.length; i < V3_PARCELS; i++) {
       const p = PARCELS[i]
       fields.push({ elev: p.elev, soil: Math.max(0, 1 - 0.5 * p.streak), vert: p.vert, streak: p.streak, tenure: 'none' })
     }
-    for (let i = plans.length; i < PARCELS.length; i++) plans.push({ crop: 'rest', variety: 'katahdin', seed: 'certified' })
+    for (let i = plans.length; i < V3_PARCELS; i++) plans.push({ crop: 'rest', variety: 'katahdin', seed: 'certified' })
     const upgrades = c.upgrades as Record<string, unknown> | undefined
     if (upgrades && typeof upgrades === 'object') { upgrades.tractor2 ??= false; upgrades.house2 ??= false }
     c.crew ??= [{ id: 0, kind: 'farmer', name: 'You', at: -1, wage: 0, job: -1, to: -1, road: 0, paidTo: 0 }]
@@ -55,22 +82,7 @@ const MIGRATIONS: Record<number, Migration> = {
       for (const j of season.jobs ?? []) j.unit ??= -1
       for (const w of season.worked ?? []) w.unit ??= 0
       const sf = season.fields
-      if (Array.isArray(sf)) {
-        for (let i = sf.length; i < PARCELS.length; i++) {
-          sf.push({
-            status: 'off', variety: 'katahdin', seedVirus: 0,
-            plantDay: -1, emergeDay: -1, tiDay: -1, closeDay: -1, matureDay: -1, deadDay: -1, killDay: -1, dugDay: -1,
-            pdSoil: 0, pdAir: 0, pdEmerge: 0,
-            dr: 0, wet: 8, ksAvg: 1, canopy: 0, green: 0, wateredDay: -1,
-            hillPasses: 0, cover: 0.5, weeded: false,
-            residue: 0, lastSpray: -1,
-            scab: 0, hollow: 0, knob: 0, logDays: 0, dryRun: 0, frostT: 0,
-            sev: 0, sevPeak: 0, lastScout: -1, knownSev: 0, seenFromRoad: false,
-            samples: [], sampleN: [], estBias: 1, eye: 0, seedBlight: 0, frostDay: -1, frostShare: 0, rimeDay: -1, digDone: 0, lotId: -1, flags: 0,
-            hState: [], hEmergeAt: [], hPd0: [], hVigor: [], hC: [], hLes: [], hLat: [], hMass: [], hN: [], hTb: [],
-          })
-        }
-      }
+      if (Array.isArray(sf)) for (let i = sf.length; i < V3_PARCELS; i++) sf.push(offField())
     }
   },
   // Version 4 made the crew people: skills, a trait, tiredness, mood, an asking wage, priorities, winter work; added
@@ -85,7 +97,43 @@ const MIGRATIONS: Record<number, Migration> = {
     const season = c.season as Record<string, unknown> | null
     if (season && typeof season === 'object') season.pickers ??= false
   },
+  // Version 5 added the land under the crop (cover, stones, new ground, hedgerows, tile, contractors), the four
+  // tracts to clear, logs and fieldstone, the land mortgage, and the stone cause at the dig.
+  4: c => {
+    const fields = (c.fields as Record<string, unknown>[] | undefined) ?? []
+    const plans = (c.plans as Record<string, unknown>[] | undefined) ?? []
+    if (!Array.isArray(fields) || !Array.isArray(plans)) return
+    for (let i = 0; i < fields.length; i++) {
+      const f = fields[i]
+      f.cover ??= 'open'
+      f.stones ??= PARCELS[i]?.stones ?? 0.3
+      f.raw ??= false
+      f.felled ??= 0
+      f.brushed ??= -1
+      f.tiled ??= false
+      if (f.works === undefined) f.works = null
+    }
+    for (let i = fields.length; i < PARCELS.length; i++) fields.push(newParcel(i))
+    for (let i = plans.length; i < PARCELS.length; i++) plans.push({ crop: 'rest', variety: 'katahdin', seed: 'certified' })
+    c.logs ??= 0
+    c.stone ??= 0
+    c.mortgages ??= []
+    for (const k of ['yearLogs', 'yearMortgage', 'yearWorks']) c[k] ??= 0
+    const stoneCause = (lots: unknown) => {
+      for (const l of (lots as { loss?: Record<string, unknown> }[] | undefined) ?? []) if (l?.loss && typeof l.loss === 'object') l.loss.stone ??= 0
+    }
+    stoneCause(c.lots)
+    for (const h of (c.history as Record<string, unknown>[] | undefined) ?? []) {
+      for (const k of ['logs', 'mortgage', 'works']) h[k] ??= 0
+      stoneCause(h.lots)
+    }
+    const season = c.season as { fields?: Record<string, unknown>[] } | null
+    if (season && typeof season === 'object' && Array.isArray(season.fields)) for (let i = season.fields.length; i < PARCELS.length; i++) season.fields.push(offField())
+  },
 }
+
+// Version 3 had fourteen parcels.
+const V3_PARCELS = 14
 
 export function migrate(raw: unknown): Campaign | null {
   if (!raw || typeof raw !== 'object') return null

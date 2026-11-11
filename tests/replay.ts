@@ -8,6 +8,8 @@ export type Sim = typeof SimModule
 
 export const REPLAY = { startYear: 1980, seed: 20240611 }
 
+const WOODLOT = 14
+
 export interface ReplayOptions {
   startYear?: number
   seed?: number
@@ -24,11 +26,12 @@ export function runReplay(sim: Sim, world: World, opts: ReplayOptions = {}): Rep
   const c = opts.campaign ?? sim.createCampaign(world, { seed, startYear })
   const cmds: Cmd[] = []
   const go = (cmd: Cmd) => { cmds.push(cmd); return sim.apply(world, c, cmd) }
+  // The home six each spring. The chipping variety is grown only against a contract, on the rented land.
   const PLANS: [string, string, string][][] = [
     [['potato', 'kennebec', 'certified'], ['rest', 'katahdin', 'certified'], ['potato', 'katahdin', 'certified'], ['rest', 'katahdin', 'certified'], ['potato', 'superior', 'certified'], ['potato', 'katahdin', 'certified']],
-    [['rest', 'katahdin', 'certified'], ['potato', 'katahdin', 'saved'], ['potato', 'kennebec', 'saved'], ['potato', 'atlantic', 'certified'], ['rest', 'katahdin', 'certified'], ['potato', 'katahdin', 'certified']],
+    [['rest', 'katahdin', 'certified'], ['potato', 'katahdin', 'saved'], ['potato', 'kennebec', 'saved'], ['potato', 'kennebec', 'certified'], ['rest', 'katahdin', 'certified'], ['potato', 'katahdin', 'certified']],
     [['potato', 'gold', 'certified'], ['potato', 'burbank', 'certified'], ['rest', 'katahdin', 'certified'], ['potato', 'katahdin', 'saved'], ['potato', 'norland', 'certified'], ['rest', 'katahdin', 'certified']],
-    [['potato', 'kennebec', 'certified'], ['rest', 'katahdin', 'certified'], ['potato', 'katahdin', 'certified'], ['potato', 'kennebec', 'saved'], ['potato', 'atlantic', 'certified'], ['potato', 'katahdin', 'certified']],
+    [['potato', 'kennebec', 'certified'], ['rest', 'katahdin', 'certified'], ['potato', 'katahdin', 'certified'], ['potato', 'kennebec', 'saved'], ['potato', 'kennebec', 'certified'], ['potato', 'katahdin', 'certified']],
     [['potato', 'kennebec', 'certified'], ['potato', 'katahdin', 'certified'], ['potato', 'superior', 'certified'], ['rest', 'katahdin', 'certified'], ['potato', 'gold', 'certified'], ['potato', 'burbank', 'certified']],
   ]
   const BUY = [[], ['reel'], ['vent', 'boom'], ['harvester'], []]
@@ -68,6 +71,11 @@ export function runReplay(sim: Sim, world: World, opts: ReplayOptions = {}): Rep
         go({ t: 'priority', unit: u.id, work: 'machine', level: u.prio.machine === 2 ? 3 : 2 })
         go({ t: 'raise', unit: u.id, wage: u.wage + 30 })
       }
+      // The third spring the stumps are pulled on the woodlot felled over the winter, and some of its logs sold.
+      if (!opts.plain && c.yearIdx === 2) {
+        go({ t: 'stump', field: WOODLOT })
+        if (c.logs >= 10) go({ t: 'sellLogs', loads: Math.floor(c.logs / 2) })
+      }
       PLANS[k].forEach(([crop, variety, seedKind], field) => {
         const r = go({ t: 'plan', field, plan: { crop: crop as 'potato', variety: variety as 'katahdin', seed: seedKind as 'saved' } })
         if (!r.ok) go({ t: 'plan', field, plan: { crop: crop as 'potato', variety: variety as 'katahdin', seed: 'certified' } })
@@ -99,12 +107,18 @@ export function runReplay(sim: Sim, world: World, opts: ReplayOptions = {}): Rep
       if (hand && walk && c.steps % 3 === 0) go({ t: 'assign', id: walk.id, unit: hand.id })
       // The third harvest has pickers for the school break.
       if (!opts.plain && c.yearIdx === 2 && !s.pickers && sim.labourInfo(c).pickers.ok) go({ t: 'pickers', on: true })
+      // New ground has its rocks picked once the stumps are out.
+      const wood = c.fields[WOODLOT]
+      if (!opts.plain && wood.cover === 'open' && wood.stones >= 0.6 && !s.jobs.some(j => j.kind === 'rocks' && j.field === WOODLOT)) go({ t: 'job', kind: 'rocks', field: WOODLOT })
       deliver()
       if (sim.seasonDone(c)) go({ t: 'endSeason' })
       else go({ t: 'day' })
     } else if (c.phase === 'cellar') {
       const open = sim.openLots(c)
       if (c.month === 0) deliver()
+      // The second winter the newest hired person is kept on to fell the home woodlot.
+      const last = c.crew[c.crew.length - 1]
+      if (!opts.plain && c.yearIdx === 1 && c.month === 0 && last.kind !== 'farmer' && last.winter === 'off') go({ t: 'winter', unit: last.id, work: 'woods', field: WOODLOT })
       if (c.month === 0 && open.length) go({ t: 'seed', lot: open[0].id, fields: 2 })
       if (c.month === 2) for (const l of open) go({ t: 'sell', lot: l.id, frac: 0.5 })
       if (c.month === 4) for (const l of open) go({ t: 'sell', lot: l.id, frac: 1 })

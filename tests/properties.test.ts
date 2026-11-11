@@ -56,6 +56,13 @@ const step: fc.Arbitrary<Step> = fc.oneof(
   { weight: 1, arbitrary: fc.record({ t: fc.constant('sundays' as const), off: fc.boolean() }) },
   { weight: 2, arbitrary: fc.record({ t: fc.constant('pickers' as const), on: fc.boolean() }) },
   { weight: 2, arbitrary: fc.record({ t: fc.constant('winterPick' as const), k: fc.nat(8), work: fc.constantFrom('off', 'woods', 'pack', 'build', 'golf'), field: index }) },
+  { weight: 3, arbitrary: fc.record({ t: fc.constant('winterPick' as const), k: fc.nat(8), work: fc.constant('woods'), field: fc.constantFrom(...S.TRACTS) }) },
+  // Land and materials.
+  { weight: 3, arbitrary: fc.record({ t: fc.constant('job' as const), kind: fc.constantFrom('fell' as const, 'rocks' as const, 'brush' as const), field: fc.oneof(index, fc.constantFrom(...S.TRACTS)) }) },
+  { weight: 2, arbitrary: fc.record({ t: fc.constantFrom('stump' as const, 'tile' as const), field: fc.oneof(index, fc.constantFrom(...S.TRACTS)) }) },
+  { weight: 2, arbitrary: fc.record({ t: fc.constant('sellLogs' as const), loads: fc.oneof(fc.double({ min: -2, max: 60 }), fc.constantFrom(NaN, Infinity, 0, 1, 5)) }) },
+  { weight: 1, arbitrary: fc.record({ t: fc.constant('payMortgage' as const), amount: fc.oneof(fc.double({ min: -100, max: 30000 }), fc.constantFrom(NaN, Infinity, 0, 1000)) }) },
+  { weight: 2, arbitrary: fc.record({ t: fc.constant('buyLand' as const), field: fc.constantFrom(...S.TRACTS) }) },
 )
 
 function nonFinite(v: unknown, path: string, out: string[]): void {
@@ -79,7 +86,7 @@ function outOfRange(c: Campaign): string[] {
       check(Number.isInteger(f.hN[i]) && f.hN[i] >= 0, `field ${fi} hN[${i}] ${f.hN[i]}`)
       check(f.hTb[i] >= 0, `field ${fi} hTb[${i}] ${f.hTb[i]}`)
     }
-    const taw = S.TAW_MM[c.fields[fi].elev]
+    const taw = S.TAW_MM[c.fields[fi].elev]   // a tiled field holds less, so this is the most any field can hold
     check(f.canopy >= 0 && f.canopy <= 1 && f.green >= 0 && f.green <= f.canopy + 1e-12, `field ${fi} canopy ${f.canopy} green ${f.green}`)
     check(f.residue >= 0 && f.residue <= 1, `field ${fi} residue ${f.residue}`)
     check(f.dr >= 0 && f.dr <= taw, `field ${fi} dr ${f.dr}`)
@@ -91,7 +98,13 @@ function outOfRange(c: Campaign): string[] {
     for (const [g, v] of Object.entries(l.grades)) check(v >= 0, `lot ${l.id} ${g} ${v}`)
     check(l.skinned >= 0 && l.sold >= 0 && l.revenue >= 0, `lot ${l.id} skinned ${l.skinned} sold ${l.sold}`)
   }
-  for (const f of c.fields) check(f.soil >= 0 && f.soil <= 1 && f.vert > 0 && f.vert < 1, `soil ${f.soil} vert ${f.vert}`)
+  for (const f of c.fields) {
+    check(f.soil >= 0 && f.soil <= 1 && f.vert > 0 && f.vert < 1, `soil ${f.soil} vert ${f.vert}`)
+    check(f.stones >= 0 && f.stones <= 1 && f.felled >= 0 && ['open', 'woods', 'brush', 'stumps'].includes(f.cover), `stones ${f.stones} felled ${f.felled} cover ${f.cover}`)
+    check(!f.works || (f.works.left > 0 && Number.isInteger(f.works.left)), `works ${JSON.stringify(f.works)}`)
+  }
+  check(c.logs >= 0 && c.stone >= 0, `logs ${c.logs} stone ${c.stone}`)
+  for (const m of c.mortgages) check(m.owed > 0 && m.owed <= m.loan + 1e-6 && c.fields[m.field].tenure === 'owned', `mortgage ${JSON.stringify(m)}`)
   check(c.fields.length === S.FIELD_COUNT && c.plans.length === S.FIELD_COUNT, 'one field and one plan per parcel')
   check(c.fields.slice(0, S.HOME_FIELDS).every(f => f.tenure === 'owned'), 'the home six stay owned')
   // The people: one farmer, id 0; no more hired than the farm can house; each person's numbers in range.
@@ -119,9 +132,14 @@ function outOfRange(c: Campaign): string[] {
   for (const k of c.contracts) check(k.delivered >= 0 && k.delivered <= k.cwt + 1e-6 && k.paid >= 0 && k.penalty >= 0, `contract ${k.id} ${k.delivered}/${k.cwt}`)
   const s = c.season
   if (s && c.phase === 'season') {
-    for (let i = 0; i < S.FIELD_COUNT; i++) check((c.fields[i].tenure === 'none') === (s.fields[i].status === 'off'), `field ${i} tenure ${c.fields[i].tenure} status ${s.fields[i].status}`)
+    // Land the farm does not hold is no field; a field in season is held, open ground.
+    for (let i = 0; i < S.FIELD_COUNT; i++) {
+      if (c.fields[i].tenure === 'none') check(s.fields[i].status === 'off', `field ${i} not held but ${s.fields[i].status}`)
+      if (s.fields[i].status !== 'off') check(c.fields[i].tenure !== 'none' && c.fields[i].cover === 'open', `field ${i} ${s.fields[i].status} on ${c.fields[i].cover}`)
+    }
     for (const j of s.jobs) {
-      check(s.fields[j.field].status !== 'off', `order on land the farm does not hold: ${j.kind} ${j.field}`)
+      check(c.fields[j.field].tenure !== 'none', `order on land the farm does not hold: ${j.kind} ${j.field}`)
+      check(s.fields[j.field].status !== 'off' || ['fell', 'rocks', 'brush'].includes(j.kind), `crop order on land that is no field: ${j.kind} ${j.field}`)
       const u = crew.find(x => x.id === j.unit)
       check(j.unit === -1 || (!!u && S.willDo(u, j.kind)), `order ${j.id} pinned to ${j.unit}`)
     }
@@ -194,7 +212,7 @@ describe('random command sequences', () => {
     snapshot(c => c.phase === 'season' && c.contracts.some(k => !k.settled && k.delivered < k.cwt &&
       S.openLots(c).some(l => l.variety === k.variety && c.season!.fields[l.field].status === 'dug' && l.grades.no1 > 0))),
   ]
-  const seen = { sellOk: 0, seedOk: 0, closed: 0, digOk: 0, seasons: 0, landOk: 0, hireOk: 0, pinOk: 0, acceptOk: 0, deliverOk: 0, applicantOk: 0, peopleOk: 0, pickersOk: 0 }
+  const seen = { sellOk: 0, seedOk: 0, closed: 0, digOk: 0, seasons: 0, landOk: 0, hireOk: 0, pinOk: 0, acceptOk: 0, deliverOk: 0, applicantOk: 0, peopleOk: 0, pickersOk: 0, landWorkOk: 0, worksOk: 0, logsOk: 0, mortgageOk: 0 }
 
   it('never throw, never produce NaN or out-of-range state, and move cash only by what is reported', () => {
     const start = fc.oneof(
@@ -209,6 +227,7 @@ describe('random command sequences', () => {
         const hash = S.hashCampaign(c)
         const base = ledgerBase(c)
         const cashBefore = c.cash
+        const logsBefore = c.logs, stoneBefore = c.stone, logMoney = c.yearLogs
         const years = c.history.length
         const lot = s.t === 'sell' ? c.lots.find(l => l.id === s.lot) : undefined
         // A sale in season first settles the time the lot has sat since its dig: the pile shrinks by the stated rate.
@@ -235,6 +254,18 @@ describe('random command sequences', () => {
         if (r.ok && s.t === 'hire' && 'applicant' in s) seen.applicantOk++
         if (r.ok && (s.t === 'raise' || s.t === 'priority' || s.t === 'foreman' || s.t === 'winter' || s.t === 'sundays')) seen.peopleOk++
         if (r.ok && s.t === 'pickers') seen.pickersOk++
+        if (r.ok && s.t === 'job' && (s.kind === 'fell' || s.kind === 'rocks' || s.kind === 'brush')) seen.landWorkOk++
+        if (r.ok && (s.t === 'stump' || s.t === 'tile')) seen.worksOk++
+        if (r.ok && s.t === 'payMortgage') seen.mortgageOk++
+        // Logs leave the yard only when sold, at the mill's price; stone only goes into the yard.
+        if (r.ok && s.t === 'sellLogs') {
+          seen.logsOk++
+          expect(close(logsBefore - c.logs, s.loads), 'sold the loads asked').toBe(true)
+          expect(close(c.yearLogs - logMoney, s.loads * S.LOG_PRICE), 'at the log price').toBe(true)
+        } else {
+          expect(c.logs, `${JSON.stringify(s)} took logs`).toBeGreaterThanOrEqual(logsBefore - 1e-9)
+        }
+        expect(c.stone, `${JSON.stringify(s)} took stone`).toBeGreaterThanOrEqual(stoneBefore - 1e-9)
         if (r.ok && s.t === 'deliver') {
           seen.deliverOk++
           // Hundredweight leave the lot for the contract one for one, and the money is the contract price for them.
@@ -282,6 +313,9 @@ describe('random command sequences', () => {
     expect(seen.applicantOk, all).toBeGreaterThan(3)
     expect(seen.peopleOk, all).toBeGreaterThan(10)
     expect(seen.pickersOk, all).toBeGreaterThan(0)
+    expect(seen.landWorkOk, all).toBeGreaterThan(5)
+    expect(seen.worksOk, all).toBeGreaterThan(0)
+    expect(seen.logsOk, all).toBeGreaterThan(0)
   })
 })
 
@@ -328,6 +362,13 @@ describe('invalid commands', () => {
       { t: 'priority', unit: 0, work: 'field', level: c.crew[0].prio.field }, { t: 'foreman', unit: 0, block: 'home' }, { t: 'foreman', unit: 0, block: null },
       { t: 'sundays', off: c.sundaysOff }, { t: 'winter', unit: 99, work: 'off' }, { t: 'winter', unit: 0, work: 'golf' as S.WinterWork },
       { t: 'winter', unit: 0, work: c.crew[0].winter, field: c.crew[0].winterField },
+      // Land: nothing to fell or stump on a field, no rocks on woods, no hedgerows on the ridge, no tile on the slope,
+      // tracts are not let, the back lot goes with Dufour land, woods are not planted.
+      { t: 'job', kind: 'fell', field: 0 }, { t: 'job', kind: 'rocks', field: 14 }, { t: 'job', kind: 'brush', field: 0 },
+      { t: 'stump', field: 0 }, { t: 'stump', field: 16 }, { t: 'stump', field: -1 }, { t: 'tile', field: 0 }, { t: 'tile', field: 16 }, { t: 'tile', field: 99 },
+      { t: 'rent', field: 16 }, { t: 'rent', field: 14 }, { t: 'plan', field: 14, plan: { crop: 'potato', variety: 'katahdin', seed: 'certified' } },
+      { t: 'sellLogs', loads: c.logs + 1 }, { t: 'sellLogs', loads: 0 }, { t: 'sellLogs', loads: NaN }, { t: 'payMortgage', amount: 1e9 },
+      { t: 'winter', unit: 0, work: 'woods', field: 0 }, { t: 'winter', unit: 0, work: 'woods', field: 16 },
       { t: 'dismiss', unit: 0 }, { t: 'dismiss', unit: 99 }, { t: 'accept', offer: -1 }, { t: 'assign', id: 99999, unit: 0 },
       { t: 'deliver', lot: 99999, contract: 1 }, { t: 'deliver', lot: c.lots[0]?.id ?? 1, contract: -7 },
     ]
@@ -349,6 +390,8 @@ describe('invalid commands', () => {
       if (u.kind !== 'farmer') out.push({ t: 'raise', unit: u.id, wage: u.wage }, { t: 'raise', unit: u.id, wage: 20 }, { t: 'raise', unit: u.id, wage: NaN }, { t: 'foreman', unit: u.id, block: 'moon' as S.BlockId })
       if (u.kind !== 'farmer' && !u.foreman) out.push({ t: 'foreman', unit: u.id, block: null })
     }
+    if (c.fields[17].tenure !== 'owned' && (!S.holdsDufour(c) || c.phase !== 'plan')) out.push({ t: 'buyLand', field: 17 })
+    if (c.phase !== 'plan' || S.mortgageOwed(c) === 0) out.push({ t: 'payMortgage', amount: 100 })
     if (c.phase !== 'cellar') out.push({ t: 'month' }, { t: 'seed', lot: 1, fields: 1 })
     if (c.phase !== 'ledger') out.push({ t: 'next' })
     if (c.phase === 'cellar') for (const l of S.openLots(c)) out.push({ t: 'seed', lot: l.id, fields: 0 }, { t: 'seed', lot: l.id, fields: 1000 })

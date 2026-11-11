@@ -3,6 +3,7 @@ import { dayIndex, formatDay, SUNDAY, weekday, withCommas } from './calendar.ts'
 import { travelDays, turnBefore } from './crew.ts'
 import { distance, DUFOUR_YARD, HOME_FIELDS, HOME_YARD, PARCELS } from './farm.ts'
 import { gradeHill, newLot, finishLot } from './harvest.ts'
+import { brushedNow, COVER_WORD, envTmin, fell, fellLeft, fieldEnv, isField, isOpen, standing, stoneBruise, stoneSpeed, stumped } from './land.ts'
 import * as P from './params.ts'
 import { jobSkill, moodTarget, payOf, scoutChance, SKILL_LABEL, speed, sprayCover, willDo, xpNeed, zeroSkills } from './people.ts'
 import { nextInt, nextUnit } from './rng.ts'
@@ -11,7 +12,7 @@ import {
   type Campaign, type Day, type FieldSeason, type FieldStatus, type GameEvent, type Job, type JobKind, type Rig, type Season, type Skill, type Unit, type World,
 } from './types.ts'
 import { variety } from './varieties.ts'
-import { clamp, fieldTmin, getDay, pDays, pUnit, wallin } from './weather.ts'
+import { clamp, getDay, pDays, pUnit, wallin } from './weather.ts'
 
 const GONE = H_ROGUED | H_SAMPLED | H_DUG | H_DECAYED
 const NO_CROP = H_ROGUED | H_DUG | H_DECAYED
@@ -62,7 +63,8 @@ export function startSeason(world: World, c: Campaign): void {
     u.paidTo = startDay + P.WAGE_DAYS
   }
   for (let i = 0; i < P.FIELD_COUNT; i++) {
-    if (c.fields[i].tenure === 'none') { s.fields.push(emptyField('off')); continue }
+    // Land the farm does not hold, and a tract still to clear, are no field this season.
+    if (!isField(c, i)) { s.fields.push(emptyField('off')); continue }
     const f = emptyField()
     const plan = c.plans[i]
     if (plan.crop === 'potato') {
@@ -99,12 +101,13 @@ export function jobDays(c: Campaign, kind: JobKind, f: FieldSeason | null, field
   if (kind === 'dig') return (c.upgrades.harvester ? 1.25 : P.JOB_DAYS.dig) * (field >= 0 && field < P.FIELD_COUNT ? haulFactor(c, field) : 1)
   if (kind === 'water' && c.upgrades.reel) return 0.5
   if (kind === 'rogue' && f) return Math.min(2, 0.2 + 0.08 * knownHills(f))
+  if (kind === 'fell' && field >= 0 && field < P.FIELD_COUNT) return fellLeft(c, field)
   return P.JOB_DAYS[kind]
 }
 
-// The Dufour yard and its potato house are the farm's while it holds any Dufour field.
+// The Dufour yard and its potato house are the farm's while it holds any Dufour field (the back lot does not count).
 export function holdsDufour(c: Campaign): boolean {
-  for (let i = 0; i < c.fields.length; i++) if (c.fields[i].tenure !== 'none' && PARCELS[i]?.block === 'dufour') return true
+  for (let i = 0; i < c.fields.length; i++) if (c.fields[i].tenure !== 'none' && PARCELS[i]?.block === 'dufour' && PARCELS[i].holding === 'field') return true
   return false
 }
 
@@ -142,7 +145,11 @@ function block(c: Campaign, kind: JobKind, field: number, self: Job | null): str
   if (s.frozen) return 'The ground has frozen.'
   const f = s.fields[field]
   if (!f) return 'No such field.'
-  if (f.status === 'off') return 'This field is not the farm\'s.'
+  if (kind === 'fell' || kind === 'rocks' || kind === 'brush') return landBlock(c, s, kind, field, self)
+  if (f.status === 'off') {
+    if (c.fields[field].tenure === 'none') return 'This field is not the farm\'s.'
+    return isOpen(c, field) ? 'Cleared this season: it can be planted next spring.' : `${FIELD_NAMES[field]} is ${COVER_WORD[c.fields[field].cover]}. Clear it first.`
+  }
   if (f.status === 'rest') return 'This field is resting in oats and clover.'
   if (f.status === 'dug') return 'This field is dug.'
   if (f.status === 'lost') return 'This crop is lost.'
@@ -151,6 +158,7 @@ function block(c: Campaign, kind: JobKind, field: number, self: Job | null): str
   const alive = f.deadDay < 0
   switch (kind) {
     case 'plant':
+      if (c.fields[field].works) return `The contractor is at work in ${FIELD_NAMES[field]}.`
       return f.status === 'idle' ? '' : 'Already planted.'
     case 'hill':
       if (f.status === 'idle') return 'Nothing planted yet.'
@@ -188,18 +196,47 @@ function block(c: Campaign, kind: JobKind, field: number, self: Job | null): str
       if (f.tiDay < 0) return 'No tubers have set yet.'
       return ''
   }
+  return ''
 }
 
-// Why the weather stops this job today, or '' when it can go ahead.
-export function jobWait(kind: JobKind, f: FieldSeason, d: Day): string {
+// Felling, picking rocks and cutting hedgerows: work on the land rather than the crop.
+function landBlock(c: Campaign, s: Season, kind: JobKind, field: number, self: Job | null): string {
+  const fp = c.fields[field]
+  const name = FIELD_NAMES[field]
+  if (fp.tenure === 'none') return 'This field is not the farm\'s.'
+  if (s.jobs.some(j => j !== self && j.kind === kind && j.field === field)) return 'Already on the list.'
   switch (kind) {
-    case 'plant': case 'hill': case 'dig':
+    case 'fell':
+      if (!standing(fp.cover)) return `There is nothing to fell on ${name}.`
+      return ''
+    case 'rocks': {
+      if (fp.cover !== 'open') return `${name} is ${COVER_WORD[fp.cover]}. Fell it and have the stumps pulled first.`
+      if (fp.works) return `The contractor is at work in ${name}.`
+      const st = s.fields[field].status
+      if (st === 'planted' || st === 'growing' || st === 'dead' || st === 'digging') return 'Rocks are picked when no crop is in the ground: before planting, after the dig, or in a rest year.'
+      if (fp.stones < P.ROCKS_MIN) return 'There are hardly any stones left to pick.'
+      return ''
+    }
+    case 'brush':
+      if (fp.cover !== 'open') return `${name} is ${COVER_WORD[fp.cover]}. Clear it first.`
+      if (fp.elev === 2) return 'The ridge has no hedgerows holding cold air: only bottom land and the mid slope do.'
+      if (brushedNow(c, field)) return `Cut back already; it grows back ${P.BRUSH_YEARS} years after it was cut.`
+      return ''
+  }
+  return ''
+}
+
+// Why the weather stops this job today, or '' when it can go ahead. windMax is the most wind a spray can go on in
+// on this field (more where it is sheltered).
+export function jobWait(kind: JobKind, f: FieldSeason, d: Day, windMax = P.SPRAY_WIND): string {
+  switch (kind) {
+    case 'plant': case 'hill': case 'dig': case 'rocks':
       if (d.prcp >= 6) return 'raining'
       if (f.wet >= P.WORKABLE_WET_MM) return 'ground too wet'
       return ''
     case 'spray':
       if (d.prcp >= 2) return 'raining'
-      if (d.wind >= 7.5) return 'too windy'
+      if (d.wind >= windMax) return 'too windy'
       return ''
     case 'kill':
       return d.prcp >= 6 ? 'raining' : ''
@@ -374,6 +411,21 @@ function completeJob(world: World, c: Campaign, s: Season, job: Job, d: Day, out
       for (let i = 0; i < P.HILLS; i++) f.hC[i] *= 0.08
       push(s, out, 'killed', job.field, 'info', `Vines killed in ${name}. Skins set in about two weeks.`)
       break
+    case 'fell':
+      push(s, out, 'felled', job.field, 'good', `${name} is felled. The stumps are left; a contractor can pull them.${sheltering(c, job.field)}`, { logs: Math.round(c.logs) })
+      break
+    case 'rocks': {
+      const fp = c.fields[job.field]
+      const take = Math.min(fp.stones, P.ROCKS_TAKE)
+      fp.stones -= take
+      c.stone += P.ROCKS_LOADS * take
+      push(s, out, 'rocks', job.field, 'info', `Rocks picked off ${name}: ${Math.round(P.ROCKS_LOADS * take * 10) / 10} loads of fieldstone to the yard.`, { stones: Math.round(fp.stones * 100) / 100 })
+      break
+    }
+    case 'brush':
+      c.fields[job.field].brushed = c.year
+      push(s, out, 'brushed', job.field, 'info', `The hedgerows along ${name} are cut back: cold air drains away, but the wind dries it more. They grow back in ${P.BRUSH_YEARS} years.`)
+      break
     case 'dig': {
       const lot = c.lots.find(l => l.id === f.lotId)!
       f.status = 'dug'
@@ -386,7 +438,7 @@ function completeJob(world: World, c: Campaign, s: Season, job: Job, d: Day, out
   }
 }
 
-function digProgress(c: Campaign, s: Season, f: FieldSeason, field: number, job: Job, d: Day): void {
+function digProgress(c: Campaign, s: Season, f: FieldSeason, field: number, job: Job, d: Day, u: Unit): void {
   if (f.lotId < 0) {
     const lot = newLot(c, field, f, s.day, true)
     f.lotId = lot.id
@@ -397,9 +449,10 @@ function digProgress(c: Campaign, s: Season, f: FieldSeason, field: number, job:
   }
   const lot = c.lots.find(l => l.id === f.lotId)!
   const upto = Math.min(P.HILLS, Math.floor((job.done / job.need) * P.HILLS + 1e-6))
+  const stones = stoneBruise(c.fields[field].stones, u)
   for (let i = f.digDone; i < upto; i++) {
     const st = f.hState[i]
-    if ((st & H_EMERGED) && !(st & NO_CROP)) gradeHill(c, s, f, field, i, lot, d)
+    if ((st & H_EMERGED) && !(st & NO_CROP)) gradeHill(c, s, f, field, i, lot, d, stones)
     f.hState[i] = st | H_DUG
     f.hC[i] = 0
   }
@@ -452,10 +505,17 @@ export function workday(c: Campaign, s: Season): boolean {
   return !(c.sundaysOff && weekday(s.year, s.day) === SUNDAY)
 }
 
+// Why the weather holds up this order today, on its own field.
+function waitFor(c: Campaign, s: Season, job: Job, d: Day): string {
+  return jobWait(job.kind, s.fields[job.field], d, job.kind === 'spray' ? fieldEnv(c, job.field).wind : P.SPRAY_WIND)
+}
+
 // Standard crew-days of an order a person gets through in a day of their time.
-function workRate(_c: Campaign, s: Season, u: Unit, job: Job): number {
+function workRate(c: Campaign, s: Season, u: Unit, job: Job): number {
   let r = speed(u, jobSkill(job.kind))
   if (job.kind === 'dig' && s.pickers) r *= P.PICKER_DIG
+  if (job.kind === 'plant' || job.kind === 'dig') r *= stoneSpeed(c.fields[job.field].stones)
+  if (job.kind === 'fell') r *= P.FELL_SEASON
   return r
 }
 
@@ -501,7 +561,8 @@ function work(world: World, c: Campaign, s: Season, t: Turn, job: Job, d: Day, o
   t.left -= time
   t.spent[jobSkill(job.kind)] += time
   s.worked.push({ kind: job.kind, field: job.field, unit: u.id })
-  if (job.kind === 'dig') digProgress(c, s, f, job.field, job, d)
+  if (job.kind === 'dig') digProgress(c, s, f, job.field, job, d, u)
+  if (job.kind === 'fell' && fell(c, job.field, use, u)) job.done = job.need
   if (job.done >= job.need - 1e-6) {
     const k = s.jobs.indexOf(job)
     if (k >= 0) s.jobs.splice(k, 1)
@@ -522,7 +583,7 @@ function choose(c: Campaign, s: Season, u: Unit, d: Day, out: GameEvent[]): { jo
       if (u.prio[jobSkill(job.kind)] !== level || !mayTake(u, job) || heldByOther(c, job, u)) { k++; continue }
       if (!stillWanted(c, s, job, out)) continue
       const rig = rigFor(c, u, job)
-      if (!jobWait(job.kind, s.fields[job.field], d) && rig !== null) cands.push({ job, rig })
+      if (!waitFor(c, s, job, d) && rig !== null) cands.push({ job, rig })
       k++
     }
     let best: { job: Job; rig: Rig } | null = null
@@ -552,7 +613,7 @@ function runCrews(world: World, c: Campaign, s: Season, d: Day, out: GameEvent[]
     const u = t.u
     if (!drive(t)) continue
     const job = u.job >= 0 ? s.jobs.find(j => j.id === u.job) : undefined
-    if (!job || !mayTake(u, job) || !stillWanted(c, s, job, out) || jobWait(job.kind, s.fields[job.field], d)) { letGo(u); continue }
+    if (!job || !mayTake(u, job) || !stillWanted(c, s, job, out) || waitFor(c, s, job, d)) { letGo(u); continue }
     work(world, c, s, t, job, d, out)
   }
   for (;;) {
@@ -625,6 +686,38 @@ export function removePerson(c: Campaign, u: Unit): void {
 export const JOB_LABEL: Record<JobKind, string> = {
   plant: 'Planting', hill: 'Hilling', scout: 'Scouting', spray: 'Spraying', water: 'Watering',
   rogue: 'Roguing', sample: 'Test dig', kill: 'Vine kill', dig: 'Digging',
+  fell: 'Felling', rocks: 'Picking rocks', brush: 'Cutting brush',
+}
+
+// The text for the fields a tract sheltered, now that it is down.
+export function sheltering(c: Campaign, tract: number): string {
+  const out: string[] = []
+  for (let i = 0; i < c.fields.length; i++) {
+    if (!isField(c, i)) continue
+    const p = PARCELS[i], t = PARCELS[tract]
+    const dx = p.x - t.x, dz = p.z - t.z
+    if (dx * dx + dz * dz <= P.SHELTER_RANGE * P.SHELTER_RANGE && fieldEnv(c, i).shelter < 0) out.push(FIELD_NAMES[i])
+  }
+  return out.length ? ` ${out.join(' and ')} ${out.length === 1 ? 'is' : 'are'} out in the open now: drier, windier, and not so frosty.` : ''
+}
+
+// The contractors' day: stumps pulled and tile laid, a season day at a time.
+function contractors(c: Campaign, s: Season, out: GameEvent[]): void {
+  for (let i = 0; i < c.fields.length; i++) {
+    const fp = c.fields[i]
+    if (!fp.works) continue
+    fp.works.left--
+    if (fp.works.left > 0) continue
+    const kind = fp.works.kind
+    fp.works = null
+    if (kind === 'stump') {
+      stumped(c, i)
+      push(s, out, 'stumped', i, 'good', `The stumps are out of ${FIELD_NAMES[i]}. It is a field now: rested, stony new ground, ready to plant next spring.`)
+    } else {
+      fp.tiled = true
+      push(s, out, 'tiled', i, 'good', `Tile drains are in under ${FIELD_NAMES[i]}: it drains like the mid slope now, and holds a little less water in a drought.`)
+    }
+  }
 }
 
 // ---------------------------------------------------------------- the crop
@@ -653,16 +746,17 @@ function fieldDay(world: World, c: Campaign, s: Season, fi: number, d: Day, sevR
   const v = variety(f.variety)
   const name = FIELD_NAMES[fi]
   const elev = fp.elev
-  const taw = P.TAW_MM[elev]
+  const env = fieldEnv(c, fi)
+  const taw = env.taw
 
   // Water balance (FAO-56, one bucket).
   const raw = P.DEPLETION_P * taw
   const ks = f.dr <= raw ? 1 : Math.max(0, (taw - f.dr) / (taw - raw))
   const kc = P.KC_BARE + (P.KC_FULL - P.KC_BARE) * f.canopy
-  f.dr += kc * d.et0 * ks - d.prcp
+  f.dr += kc * d.et0 * env.et * ks - d.prcp
   if (f.dr < 0) f.dr = 0
   if (f.dr > taw) f.dr = taw
-  f.wet = f.wet * P.DRAIN[elev] + d.prcp
+  f.wet = f.wet * env.drain + d.prcp
   const logged = f.wet > P.WATERLOG_MM
   if (logged) f.logDays++
   const ksTol = ks + (1 - ks) * v.drought * 0.5
@@ -696,11 +790,11 @@ function fieldDay(world: World, c: Campaign, s: Season, fi: number, d: Day, sevR
   f.pdSoil += pUnit(soilT)
   f.pdAir += pAir
   const tUnit = pAir / 10
-  const tminF = fieldTmin(d, elev)
+  const tminF = envTmin(d, env)
   if (tminF <= 0) f.rimeDay = s.day
 
   // Late blight weather for this field.
-  const wetH = Math.min(24, d.wetH + P.HUMID_BONUS[elev] + (f.wateredDay === s.day ? 3 : 0))
+  const wetH = Math.max(0, Math.min(24, d.wetH + env.humid + (f.wateredDay === s.day ? 3 : 0)))
   const sev = alive ? wallin(wetH, d.wetT) : 0
   const hotDry = d.tmax >= 29 && d.wetH <= 4
   const cool = d.tmean < 13
@@ -743,7 +837,7 @@ function fieldDay(world: World, c: Campaign, s: Season, fi: number, d: Day, sevR
   }
 
   // Hills.
-  const soilF = 1 - P.SOIL_YIELD * (1 - fp.soil)
+  const soilF = (1 - P.SOIL_YIELD * (1 - fp.soil)) * (fp.raw ? P.RAW_GROUND : 1)
   const matAt = v.matPd
   const weedF = f.weeded || f.closeDay < 0 ? 1 : P.UNWEEDED_FACTOR
   const frostKill = alive && tminF <= P.LEAF_FROST_START ? clamp((P.LEAF_FROST_START - tminF) / P.LEAF_FROST_SPAN, 0, 1) : 0
@@ -910,6 +1004,7 @@ export function stepDay(world: World, c: Campaign): GameEvent[] {
   }
 
   const turns = runCrews(world, c, s, d, out)
+  contractors(c, s, out)
 
   const nb = world.neighbor[String(s.year)]
   if (nb) {

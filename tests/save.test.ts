@@ -17,8 +17,23 @@ type Raw = Record<string, unknown> & {
 // What a person gained in version 4.
 const PERSON_KEYS = ['skills', 'xp', 'trait', 'tired', 'mood', 'ask', 'prio', 'foreman', 'winter', 'winterField', 'low', 'rig']
 
+// What a field's land record gained in version 5.
+const LAND_KEYS = ['cover', 'stones', 'raw', 'felled', 'brushed', 'tiled', 'works']
+const V4_PARCELS = 14
+
 // DOWN[n] takes a campaign saved at version n + 1 back to what a version n build saved.
 const DOWN: Record<number, (o: Raw) => void> = {
+  // Version 5 added the land under the crop, the tracts, materials and the mortgage.
+  4: o => {
+    o.fields = o.fields.slice(0, V4_PARCELS)
+    for (const f of o.fields) for (const k of LAND_KEYS) delete f[k]
+    o.plans = o.plans.slice(0, V4_PARCELS)
+    for (const k of ['logs', 'stone', 'mortgages', 'yearLogs', 'yearMortgage', 'yearWorks']) delete o[k]
+    const noStone = (lots: unknown) => { for (const l of (lots as { loss: Record<string, unknown> }[]) ?? []) delete l.loss.stone }
+    noStone(o.lots)
+    for (const h of o.history) { for (const k of ['logs', 'mortgage', 'works']) delete h[k]; noStone(h.lots) }
+    if (o.season) o.season.fields = o.season.fields.slice(0, V4_PARCELS)
+  },
   // Version 4 made the crew people.
   3: o => {
     for (const u of o.crew as Record<string, unknown>[]) for (const k of PERSON_KEYS) delete u[k]
@@ -55,7 +70,7 @@ function toV(c: S.Campaign, v: number): Raw {
 // A campaign as a version 2 build saved it: the home six only, one farmer, and none of what version 3 added.
 // Only for a campaign that has used none of it.
 function toV2(c: S.Campaign): Raw {
-  expect(c.fields.slice(S.HOME_FIELDS).every(f => f.tenure === 'none')).toBe(true)
+  expect(c.fields.slice(S.HOME_FIELDS, V4_PARCELS).every(f => f.tenure === 'none')).toBe(true)
   expect(c.crew.length).toBe(1)
   expect(c.contracts).toEqual([])
   return toV(c, 2)
@@ -67,12 +82,14 @@ function expectV3(c: S.Campaign): void {
   expect(c.v).toBe(S.SAVE_VERSION)
   expect(c.fields.length).toBe(S.FIELD_COUNT)
   expect(c.plans.length).toBe(S.FIELD_COUNT)
-  expect(c.fields.map(f => f.tenure)).toEqual(S.PARCELS.map((_, i) => i < S.HOME_FIELDS ? 'owned' : 'none'))
+  expect(c.fields.map(f => f.tenure)).toEqual(fresh.fields.map(f => f.tenure))
   for (let i = S.HOME_FIELDS; i < S.FIELD_COUNT; i++) {
-    expect(c.fields[i]).toEqual({ elev: S.PARCELS[i].elev, soil: 1, vert: S.PARCELS[i].vert, streak: 0, tenure: 'none' })
+    expect(c.fields[i]).toEqual(fresh.fields[i])
     expect(c.plans[i].crop).toBe('rest')
     expect(S.fieldInfo(c, i).status).toBe('off')
   }
+  for (let i = 0; i < S.HOME_FIELDS; i++) expect([c.fields[i].cover, c.fields[i].stones, c.fields[i].works]).toEqual(['open', S.PARCELS[i].stones, null])
+  expect([c.logs, c.stone, c.mortgages, c.yearLogs, c.yearMortgage, c.yearWorks]).toEqual([0, 0, [], 0, 0, 0])
   // The farmer is the farmer of a new game: in the home yard, with the farmer's own skills and everything at priority 2.
   expect(c.crew).toEqual(fresh.crew)
   expect([c.nextUnit, c.offers, c.contracts]).toEqual([1, [], []])
@@ -148,7 +165,9 @@ describe('parseSave', () => {
     expect([c.yearRest, c.yearStorage]).toEqual([0, 0])
     for (const h of c.history) expect([h.restIncome, h.storage]).toEqual([0, 0])
     expectV3(c)
-    expect(c.fields.slice(0, S.HOME_FIELDS)).toEqual(JSON.parse(V1).campaign.fields.map((f: object) => ({ ...f, tenure: 'owned' })))
+    expect(c.fields.slice(0, S.HOME_FIELDS)).toEqual(JSON.parse(V1).campaign.fields.map((f: object, i: number) => ({
+      ...f, tenure: 'owned', cover: 'open', stones: S.PARCELS[i].stones, raw: false, felled: 0, brushed: -1, tiled: false, works: null,
+    })))
     expect(S.apply(world, c, { t: 'begin' }).ok).toBe(true)
     for (let guard = 0; c.phase === 'season' && guard < 400; guard++) {
       for (const a of S.advise(world, c)) {
@@ -206,7 +225,9 @@ describe('parseSave', () => {
     // Everything the version 2 save held is as it was.
     expect(c.season!.fields.slice(0, S.HOME_FIELDS)).toEqual(r.campaign.season!.fields.slice(0, S.HOME_FIELDS))
     expect(c.season!.jobs).toEqual(r.campaign.season!.jobs)
-    expect([c.cash, c.lots, c.history, c.seedStock, c.rng]).toEqual([r.campaign.cash, r.campaign.lots, r.campaign.history, r.campaign.seedStock, r.campaign.rng])
+    // A version 2 save knew no stone at the dig: what stones bruised comes back as nothing.
+    const noStone = <T,>(x: T): T => JSON.parse(JSON.stringify(x), (k, v) => k === 'stone' && typeof v === 'number' ? 0 : v)
+    expect([c.cash, c.lots, c.history, c.seedStock, c.rng]).toEqual(noStone([r.campaign.cash, r.campaign.lots, r.campaign.history, r.campaign.seedStock, r.campaign.rng]))
     // It plays on: the season, then a spring with the new land, crews and contracts on offer.
     for (let d = 0; d < 20; d++) expect(S.apply(world, c, { t: 'day' }).ok).toBe(true)
     expect(S.apply(world, c, { t: 'hire', kind: 'hand' }).ok).toBe(true)
@@ -239,6 +260,30 @@ describe('parseSave', () => {
     expect(c.season!.fields).toEqual(r.campaign.season!.fields)
     expect(c.season!.jobs).toEqual(r.campaign.season!.jobs)
     expect([c.cash, c.lots, c.rng]).toEqual([r.campaign.cash, r.campaign.lots, r.campaign.rng])
+    const done = runReplay(S, world, { campaign: c })
+    expect(done.done).toBe(true)
+    expect(done.campaign.history.length).toBe(5)
+    for (const h of done.campaign.history) expect(Number.isFinite(h.cashEnd)).toBe(true)
+  })
+
+  it('migrates a version 4 save made in mid-season: the land gets its stones and the tracts, and it plays on', () => {
+    const r = runReplay(S, world, { ...REPLAY, stopAt: c => c.yearIdx === 1 && c.phase === 'season' && c.season!.day >= S.dayIndex(c.year, 7, 5) && c.lots.length > 0 })
+    expect(r.done).toBe(false)
+    const v4 = toV(r.campaign, 4)
+    expect(v4.fields.length).toBe(14)
+    const c = parseSave(JSON.stringify({ v: 4, savedAt: 12, campaign: v4 }))!.campaign
+    expect(c.v).toBe(S.SAVE_VERSION)
+    const fresh = S.createCampaign(world, { seed: c.seed, startYear: c.startYear })
+    expect(c.fields.length).toBe(S.FIELD_COUNT)
+    expect(c.fields.slice(14)).toEqual(fresh.fields.slice(14))
+    for (let i = 0; i < 14; i++) {
+      expect([c.fields[i].cover, c.fields[i].stones, c.fields[i].raw, c.fields[i].works]).toEqual(['open', S.PARCELS[i].stones, false, null])
+      expect([c.fields[i].tenure, c.fields[i].soil, c.fields[i].streak]).toEqual([r.campaign.fields[i].tenure, r.campaign.fields[i].soil, r.campaign.fields[i].streak])
+    }
+    expect(c.season!.fields.slice(14).every(f => f.status === 'off')).toBe(true)
+    expect(c.season!.fields.slice(0, 14)).toEqual(r.campaign.season!.fields.slice(0, 14))
+    for (const l of c.lots) expect(l.loss.stone).toBe(0)
+    expect([c.logs, c.stone, c.mortgages]).toEqual([0, 0, []])
     const done = runReplay(S, world, { campaign: c })
     expect(done.done).toBe(true)
     expect(done.campaign.history.length).toBe(5)

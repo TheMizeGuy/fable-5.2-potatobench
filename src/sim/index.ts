@@ -20,4 +20,8 @@ export {
   workday,
 } from './season.ts'
 export { makeWorld } from './world.ts'
+export {
+  brushedNow, clearing, COVER_WORD, envTmin, fellLeft, fellYield, fieldEnv, isField, shelterOf, sheltered, standing, stoneBruise, stoneSpeed,
+  type ClearStage, type FieldEnv,
+} from './land.ts'
 export { advise, fieldNeeds, type Advice } from './advice.ts'

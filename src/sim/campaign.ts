@@ -8,7 +8,8 @@ import { sellLot } from './market.ts'
 import * as P from './params.ts'
 import { applicantsFor, fromApplicant, jobSkill, payOf, SKILL_LABEL, speed } from './people.ts'
 import { hash32 } from './rng.ts'
-import { addJob, FIELD_NAMES, holdsDufour, letGo, releaseJob, removePerson, seasonDone, startSeason, stepDay, unitBlock } from './season.ts'
+import { addJob, FIELD_NAMES, holdsDufour, letGo, releaseJob, removePerson, seasonDone, sheltering, startSeason, stepDay, unitBlock } from './season.ts'
+import { brushedNow, COVER_WORD, fell, isField, standing } from './land.ts'
 import type { Campaign, Cmd, Contract, Due, FieldPlan, GameEvent, Lot, Result, Unit, UpgradeId, WinterWork, World, YearSummary } from './types.ts'
 import { variety } from './varieties.ts'
 import { dayIndex, withCommas } from './calendar.ts'
@@ -36,7 +37,8 @@ export function held(c: Campaign, field: number): boolean {
 }
 
 function defaultPlan(c: Campaign, i: number): FieldPlan {
-  if (!held(c, i)) return { ...REST_PLAN }
+  // New ground rests a year first: its first potato crop on raw ground would grow less.
+  if (!isField(c, i) || c.fields[i].raw) return { ...REST_PLAN }
   return { crop: c.fields[i].streak >= 2 ? 'rest' : 'potato', variety: 'katahdin', seed: 'certified' }
 }
 
@@ -55,16 +57,17 @@ export function createCampaign(world: World, opts: { seed: number; startYear: nu
     cash: P.START_CASH,
     fields: PARCELS.map((p, i) => ({
       elev: p.elev, soil: Math.max(0, 1 - 0.5 * p.streak), vert: p.vert, streak: p.streak,
-      tenure: i < HOME_FIELDS ? 'owned' : 'none',
+      tenure: i < HOME_FIELDS || p.holding === 'owned' ? 'owned' : 'none',
+      cover: p.cover, stones: p.cover === 'open' ? p.stones : 0, raw: false, felled: 0, brushed: -1, tiled: false, works: null,
     })),
     plans: [],
     upgrades: { boom: false, harvester: false, vent: false, reel: false, tractor2: false, house2: false },
     seedStock: [], season: null, lots: [], nextLot: 1,
-    crew: [newFarmer()], nextUnit: 1, applicants: [], sundaysOff: true,
+    crew: [newFarmer()], nextUnit: 1, applicants: [], sundaysOff: true, logs: 0, stone: 0, mortgages: [],
     offers: [], contracts: [],
     month: 0,
     yearRevenue: 0, yearCosts: 0, yearRest: 0, yearStorage: 0,
-    yearWages: 0, yearRent: 0, yearLand: 0, yearContracts: 0, yearPenalties: 0,
+    yearWages: 0, yearRent: 0, yearLand: 0, yearContracts: 0, yearPenalties: 0, yearLogs: 0, yearMortgage: 0, yearWorks: 0,
     history: [], steps: 0,
   }
   c.plans = defaultPlans(c)
@@ -83,7 +86,7 @@ export interface PlanCosts { fields: number; rent: number; wages: number; total:
 export function planCosts(c: Campaign): PlanCosts {
   let fields = 0, rent = 0, wages = 0
   for (let i = 0; i < c.plans.length; i++) {
-    if (!held(c, i)) continue
+    if (!isField(c, i)) continue
     const p = c.plans[i]
     if (p.crop === 'rest') fields += P.REST_COST
     else fields += P.FIELD_COST + (p.seed === 'certified' ? P.SEED_CWT_PER_FIELD * P.CERT_SEED_PER_CWT : 0)
@@ -297,12 +300,26 @@ function takeOn(c: Campaign, u: Unit): GameEvent {
   return note(c, 'hired', 'info', `${u.name} is hired as ${as} at $${withCommas(u.wage)} a month.`)
 }
 
-// Why a person cannot be set to this winter work, or '' when they can.
-export function winterBlock(c: Campaign, u: Unit, work: WinterWork, _field = -1): string {
+// The tracts the farm holds with standing woods or brush to fell.
+export function timberTracts(c: Campaign): number[] {
+  const out: number[] = []
+  for (let i = 0; i < c.fields.length; i++) if (c.fields[i].tenure !== 'none' && standing(c.fields[i].cover)) out.push(i)
+  return out
+}
+
+// Why a person cannot be set to this winter work, or '' when they can. Woods work names the tract to fell.
+export function winterBlock(c: Campaign, u: Unit, work: WinterWork, field = -1): string {
   if (work === 'off') return ''
   if (u.trait === 'homebody') return `${u.name} is a homebody and will not work winters.`
   switch (work) {
-    case 'woods': return 'There is no standing timber on the farm to fell.'
+    case 'woods': {
+      if (!Number.isInteger(field) || field < 0 || field >= P.FIELD_COUNT) {
+        return timberTracts(c).length ? 'Say which tract to fell.' : 'There is no standing timber on the farm to fell.'
+      }
+      if (c.fields[field].tenure === 'none') return `${FIELD_NAMES[field]} is not the farm's.`
+      if (!standing(c.fields[field].cover)) return `There is nothing left to fell on ${FIELD_NAMES[field]}.`
+      return ''
+    }
     case 'pack': return 'Packing needs a packing shed.'
     case 'build': return 'Nothing is being built.'
   }
@@ -310,10 +327,18 @@ export function winterBlock(c: Campaign, u: Unit, work: WinterWork, _field = -1)
 }
 
 // One month of winter. Someone kept on is paid and puts in WINTER_DAYS crew-days at their skill; the farmer works
-// unpaid, FARMER_WINTER_DAYS. Anyone laid off is not paid and comes back in spring.
+// unpaid, FARMER_WINTER_DAYS. Anyone laid off is not paid and comes back in spring; so is someone whose winter work
+// has run out, from the month it runs out.
 function winterMonth(c: Campaign, out: GameEvent[]): void {
   for (const u of c.crew) {
     if (u.winter === 'off') continue
+    const why = winterBlock(c, u, u.winter, u.winterField)
+    if (why) {
+      out.push(note(c, 'winterIdle', 'info', `${u.name} is laid off for the rest of the winter: ${why}`))
+      u.winter = 'off'
+      u.winterField = -1
+      continue
+    }
     if (u.kind !== 'farmer') {
       const pay = payOf(u)
       cost(c, pay)
@@ -327,19 +352,37 @@ function winterMonth(c: Campaign, out: GameEvent[]): void {
 const WINTER_SKILL: Record<Exclude<WinterWork, 'off'>, 'woods' | 'pack' | 'build'> = { woods: 'woods', pack: 'pack', build: 'build' }
 
 // What a month of winter work does, in standard crew-days.
-function winterWork(c: Campaign, u: Unit, _days: number, out: GameEvent[]): void {
-  const why = winterBlock(c, u, u.winter, u.winterField)
-  if (why) {
-    out.push(note(c, 'winterIdle', 'warn', `${u.name} has no winter work left: ${why}`))
-    u.winter = 'off'
-    u.winterField = -1
+function winterWork(c: Campaign, u: Unit, days: number, out: GameEvent[]): void {
+  if (u.winter === 'woods') {
+    const i = u.winterField
+    if (fell(c, i, days, u)) {
+      out.push(note(c, 'felled', 'good', `${FIELD_NAMES[i]} is felled over the winter. The stumps are left; a contractor can pull them.${sheltering(c, i)}`, i))
+    }
   }
+}
+
+// Dollars still owed on the land mortgage.
+export function mortgageOwed(c: Campaign): number {
+  let owed = 0
+  for (const m of c.mortgages) owed += m.owed
+  return owed
+}
+
+// What the bank takes at this year end: a tenth of each purchase's loan, and interest on what is still owed.
+export function mortgageDue(c: Campaign): { principal: number; interest: number } {
+  let principal = 0, interest = 0
+  for (const m of c.mortgages) {
+    interest += m.owed * P.MORTGAGE_RATE
+    principal += Math.min(m.owed, m.loan * P.MORTGAGE_PRINCIPAL)
+  }
+  return { principal, interest }
 }
 
 export function netWorth(c: Campaign): number {
   let w = c.cash
   for (const id of Object.keys(c.upgrades) as UpgradeId[]) if (c.upgrades[id]) w += P.UPGRADES[id].cost * 0.5
   for (let i = HOME_FIELDS; i < c.fields.length; i++) if (c.fields[i].tenure === 'owned') w += PARCELS[i].price * P.LAND_WORTH
+  w -= mortgageOwed(c)
   return Math.round(w)
 }
 
@@ -359,6 +402,16 @@ function closeYear(world: World, c: Campaign, out: GameEvent[]): void {
     market += lot.sold
     culled += lot.loss.green + lot.loss.blight + lot.loss.frost + lot.loss.rot + lot.loss.small
   }
+  // The land mortgage: a tenth of each loan and the interest on what is still owed, part of the year's costs.
+  if (c.mortgages.length) {
+    const due = mortgageDue(c)
+    const pay = due.principal + due.interest
+    cost(c, pay)
+    c.yearMortgage += pay
+    for (const m of c.mortgages) m.owed -= Math.min(m.owed, m.loan * P.MORTGAGE_PRINCIPAL)
+    c.mortgages = c.mortgages.filter(m => m.owed > 0.005)
+    out.push(note(c, 'mortgage', 'info', `The bank takes $${withCommas(pay)} on the land mortgage: $${withCommas(due.principal)} off the loan and $${withCommas(due.interest)} interest. $${withCommas(mortgageOwed(c))} is still owed.`))
+  }
   c.cash -= P.NOTE_PAYMENT + P.LIVING
   if (c.cash < 0) {
     interest = Math.round(-c.cash * P.CREDIT_RATE)
@@ -371,6 +424,7 @@ function closeYear(world: World, c: Campaign, out: GameEvent[]): void {
     revenue: c.yearRevenue, costs: c.yearCosts, note: P.NOTE_PAYMENT, living: P.LIVING, interest,
     restIncome: c.yearRest, storage: c.yearStorage,
     wages: c.yearWages, rent: c.yearRent, land: c.yearLand, penalties: c.yearPenalties, contracts: c.yearContracts,
+    logs: c.yearLogs, mortgage: c.yearMortgage, works: c.yearWorks,
     cwtSold: market, cwtCulled: culled,
     yieldCwtAcre: potatoFields ? market / (potatoFields * P.FIELD_ACRES) : 0,
     potatoFields, blightPeak: peak, lots,
@@ -384,10 +438,16 @@ function closeYear(world: World, c: Campaign, out: GameEvent[]): void {
       c.seedStock.push({ variety: lot.variety, fields: lot.seedHeld, virus: lot.virus, blight: lot.blightSeed })
     }
   }
-  // Soil remembers what grew, on the land the farm held this year.
+  // Frost heaves stones up through the winter in every open field the farm holds.
+  for (let i = 0; i < P.FIELD_COUNT; i++) {
+    const fp = c.fields[i]
+    if (fp.tenure !== 'none' && fp.cover === 'open') fp.stones = Math.min(1, fp.stones + P.HEAVE)
+  }
+  // Soil remembers what grew, on the land the farm held this year; new ground has had its first year.
   for (let i = 0; i < P.FIELD_COUNT; i++) {
     if (s.fields[i].status === 'off') continue
     const fp = c.fields[i]
+    fp.raw = false
     const odds = fp.vert / (1 - fp.vert)
     // A potato field that was never planted lay fallow: it counts as a year out of potatoes.
     if (c.plans[i].crop === 'potato' && s.fields[i].plantDay >= 0) {
@@ -426,6 +486,9 @@ function nextYear(world: World, c: Campaign): Result {
   c.yearLand = 0
   c.yearContracts = 0
   c.yearPenalties = 0
+  c.yearLogs = 0
+  c.yearMortgage = 0
+  c.yearWorks = 0
   c.month = 0
   c.season = null
   c.lots = []
@@ -436,12 +499,21 @@ function nextYear(world: World, c: Campaign): Result {
   // Carry the plan forward with the rotation flipped where the soil asks for it, and drop seed that is not there.
   // Rented land and the hired crew carry forward too, until they are released or dismissed.
   c.plans = c.plans.map((p, i) => {
-    if (!held(c, i)) return { ...REST_PLAN }
+    if (!isField(c, i) || c.fields[i].raw) return { ...REST_PLAN }
     const fp = c.fields[i]
     const crop = p.crop === 'potato' && fp.streak >= 2 ? 'rest' : p.crop === 'rest' ? 'potato' : p.crop
     return { crop, variety: p.variety, seed: 'certified' } as FieldPlan
   })
-  return ok()
+  // Hedgerows cut back BRUSH_YEARS ago have grown back.
+  const out: GameEvent[] = []
+  for (let i = 0; i < P.FIELD_COUNT; i++) {
+    const fp = c.fields[i]
+    if (fp.brushed >= 0 && !brushedNow(c, i)) {
+      fp.brushed = -1
+      if (fp.tenure !== 'none') out.push(note(c, 'brushBack', 'info', `The brush has grown back along ${FIELD_NAMES[i]}.`, i))
+    }
+  }
+  return ok(out)
 }
 
 function fieldIndex(field: number): boolean {
@@ -454,6 +526,7 @@ export function apply(world: World, c: Campaign, cmd: Cmd): Result {
       if (c.phase !== 'plan') return fail('Plans are made in spring.')
       if (!fieldIndex(cmd.field)) return fail('No such field.')
       if (!held(c, cmd.field)) return fail(`${FIELD_NAMES[cmd.field]} is not the farm's. Rent or buy it first.`)
+      if (!isField(c, cmd.field)) return fail(`${FIELD_NAMES[cmd.field]} is ${COVER_WORD[c.fields[cmd.field].cover]}. Clear it first.`)
       const v = variety(cmd.plan.variety)
       if (cmd.plan.crop === 'potato' && v.released > c.year) return fail(`${v.name} was not released until ${v.released}.`)
       const before = c.plans[cmd.field]
@@ -480,6 +553,7 @@ export function apply(world: World, c: Campaign, cmd: Cmd): Result {
       const name = FIELD_NAMES[cmd.field]
       if (fp.tenure === 'owned') return fail(`The farm owns ${name}.`)
       if (fp.tenure === 'rented') return fail(`${name} is already rented for this year.`)
+      if (PARCELS[cmd.field].holding !== 'field') return fail(`${name} is not let; it can only be bought.`)
       fp.tenure = 'rented'
       c.plans[cmd.field] = defaultPlan(c, cmd.field)
       return ok([note(c, 'rented', 'info', `${name} is rented for the year: $${withCommas(PARCELS[cmd.field].rent)}, paid when the season begins.`, cmd.field)])
@@ -501,14 +575,65 @@ export function apply(world: World, c: Campaign, cmd: Cmd): Result {
       const fp = c.fields[cmd.field]
       const name = FIELD_NAMES[cmd.field]
       if (fp.tenure === 'owned') return fail(`The farm already owns ${name}.`)
+      if (PARCELS[cmd.field].holding === 'dufour' && !holdsDufour(c)) return fail(`${name} goes with the Dufour place: rent or buy a Dufour field first.`)
       const price = PARCELS[cmd.field].price
-      if (c.cash - price < 0) return fail('Not enough cash. The bank will not lend for land.')
+      const down = Math.round(price * P.MORTGAGE_DOWN)
+      if (c.cash - down < 0) return fail(`Not enough cash for the quarter down: $${withCommas(down)}.`)
       const was = fp.tenure
-      cost(c, price)
-      c.yearLand += price
+      cost(c, down)
+      c.yearLand += down
+      c.mortgages.push({ field: cmd.field, loan: price - down, owed: price - down })
       fp.tenure = 'owned'
       if (was === 'none') c.plans[cmd.field] = defaultPlan(c, cmd.field)
-      return ok([note(c, 'landBought', 'good', `${name} is the farm's: bought for $${withCommas(price)}.`, cmd.field)])
+      return ok([note(c, 'landBought', 'good', `${name} is the farm's: bought for $${withCommas(price)}, $${withCommas(down)} down and $${withCommas(price - down)} on the land mortgage.`, cmd.field)])
+    }
+    case 'stump': {
+      const why = stumpBlock(c, cmd.field)
+      if (why) return fail(why)
+      cost(c, P.STUMP_FEE)
+      c.yearWorks += P.STUMP_FEE
+      c.fields[cmd.field].works = { kind: 'stump', left: P.STUMP_DAYS }
+      return ok([note(c, 'stumping', 'info', `A contractor will pull the stumps on ${FIELD_NAMES[cmd.field]}: $${withCommas(P.STUMP_FEE)}, about ${P.STUMP_DAYS} season days.`, cmd.field)])
+    }
+    case 'tile': {
+      const why = tileBlock(c, cmd.field)
+      if (why) return fail(why)
+      cost(c, P.TILE_FEE)
+      c.yearWorks += P.TILE_FEE
+      c.fields[cmd.field].works = { kind: 'tile', left: P.TILE_DAYS }
+      return ok([note(c, 'tiling', 'info', `A contractor will lay tile drains under ${FIELD_NAMES[cmd.field]}: $${withCommas(P.TILE_FEE)}, about ${P.TILE_DAYS} season days.`, cmd.field)])
+    }
+    case 'sellLogs': {
+      if (c.phase === 'over') return fail('The farm is gone.')
+      if (!Number.isFinite(cmd.loads) || cmd.loads <= 0) return fail('Say how many loads to sell.')
+      if (cmd.loads > c.logs + 1e-9) return fail(`There ${c.logs >= 1 && c.logs < 2 ? 'is' : 'are'} only ${Math.floor(c.logs * 10) / 10} loads of logs in the yard.`)
+      const loads = Math.min(cmd.loads, c.logs)
+      const money = loads * P.LOG_PRICE
+      c.logs -= loads
+      if (c.logs < 1e-9) c.logs = 0
+      c.cash += money
+      c.yearRevenue += money
+      c.yearLogs += money
+      return ok([note(c, 'logsSold', 'good', `Sold ${Math.round(loads * 10) / 10} loads of logs to the mill for $${withCommas(money)}.`)])
+    }
+    case 'payMortgage': {
+      if (c.phase !== 'plan') return fail('Extra is paid on the mortgage in spring.')
+      const owed = mortgageOwed(c)
+      if (owed <= 0) return fail('Nothing is owed on the land.')
+      if (!Number.isFinite(cmd.amount) || cmd.amount <= 0) return fail('Say how much to pay.')
+      if (cmd.amount > owed + 1e-6) return fail(`Only $${withCommas(owed)} is owed.`)
+      if (c.cash - cmd.amount < 0) return fail('Not enough cash.')
+      let left = Math.min(cmd.amount, owed)
+      const paid = left
+      for (const m of c.mortgages) {
+        const take = Math.min(m.owed, left)
+        m.owed -= take
+        left -= take
+      }
+      c.mortgages = c.mortgages.filter(m => m.owed > 0.005)
+      cost(c, paid)
+      c.yearMortgage += paid
+      return ok([note(c, 'mortgagePaid', 'good', `$${withCommas(paid)} paid off the land mortgage. $${withCommas(mortgageOwed(c))} is still owed.`)])
     }
     case 'accept': {
       if (c.phase !== 'plan') return fail('Contracts are signed in spring.')
@@ -760,6 +885,46 @@ export function apply(world: World, c: Campaign, cmd: Cmd): Result {
     }
   }
   return fail('No such command.')
+}
+
+// Why the stumps cannot be pulled on this tract now, or '' when they can.
+export function stumpBlock(c: Campaign, field: number): string {
+  const why = worksPhase(c)
+  if (why) return why
+  if (!fieldIndex(field)) return 'No such field.'
+  const fp = c.fields[field]
+  const name = FIELD_NAMES[field]
+  if (fp.tenure === 'none') return `${name} is not the farm's.`
+  if (standing(fp.cover)) return `${name} is ${COVER_WORD[fp.cover]}. Fell it first.`
+  if (fp.cover !== 'stumps') return `There are no stumps on ${name}.`
+  if (fp.works) return 'The contractor is already there.'
+  if (c.cash - P.STUMP_FEE < 0) return `Not enough cash for the contractor: $${withCommas(P.STUMP_FEE)}.`
+  return ''
+}
+
+// Why tile cannot go in under this field now, or '' when it can.
+export function tileBlock(c: Campaign, field: number): string {
+  const why = worksPhase(c)
+  if (why) return why
+  if (!fieldIndex(field)) return 'No such field.'
+  const fp = c.fields[field]
+  const name = FIELD_NAMES[field]
+  if (fp.tenure !== 'owned') return 'Tile drains go only under the farm\'s own land.'
+  if (fp.cover !== 'open') return `${name} is ${COVER_WORD[fp.cover]}. Clear it first.`
+  if (fp.elev !== 0) return 'Only bottom land needs tile: the slope drains itself.'
+  if (fp.tiled) return `${name} is tiled already.`
+  if (fp.works) return 'The contractor is already there.'
+  const st = c.season?.fields[field].status
+  if (c.phase === 'season' && (st === 'planted' || st === 'growing' || st === 'dead' || st === 'digging')) return 'Tile is laid when no crop is in the ground.'
+  if (c.cash - P.TILE_FEE < 0) return `Not enough cash for the contractor: $${withCommas(P.TILE_FEE)}.`
+  return ''
+}
+
+// Contractors are taken on in spring or in the season, and work season days.
+function worksPhase(c: Campaign): string {
+  if (c.phase === 'plan') return ''
+  if (c.phase === 'season' && c.season && !c.season.frozen) return ''
+  return 'Contractors work in the season: order it in spring.'
 }
 
 export function canEndSeason(c: Campaign): boolean {

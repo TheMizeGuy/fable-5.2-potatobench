@@ -187,7 +187,28 @@ All game rules from `docs/FARMSTEAD.md` section 1, chosen for the decisions they
 | From September 20 to October 10 a picking crew can be hired by the day: $160 a day worked, and every dig goes 40% faster. They leave on October 11 | Invented | Aroostook schools still close for two to three weeks so that students can work the potato harvest |
 | Winter is six months, November to April, one for each cellar month (when the cellar closes early the rest of the winter passes at the year end). Someone kept on is paid each month and puts in 20 crew-days at their skill; the farmer, if set to winter work, 10 unpaid. Anyone laid off is unpaid and back in spring with their skills | Invented | Winter woods work: Aroostook farmers cut wood through the winter |
 
-## 11. Things the model leaves out
+## 11. The farmstead: land and materials
+
+All game rules from `docs/FARMSTEAD.md` sections 2 and 3. Constants are in `src/sim/params.ts` (from `FELL_DAYS` on)
+and the parcels in `src/sim/farm.ts`; the rules are in `src/sim/land.ts`.
+
+| Rule | Tag | Source |
+| --- | --- | --- |
+| Four tracts join the fourteen parcels, a field's depth behind or beside their blocks: Home Woodlot (spruce, the farm's), Alder Swale (brush by the brook, the farm's), Burnt Hill (poplar, for sale at $5,000), Dufour Back Lot (woods, for sale at $4,000 while the farm holds a Dufour field). Tracts are not let. The back lot does not bring the Dufour house | Invented | |
+| Felling (woods skill) takes 40 crew-days for woods and 16 for brush; it brings out 40 or 5 loads of logs times the feller's yield, 0.7 + 0.06 x woods skill, in proportion to the work. In the growing season it goes at half speed; in winter, at full | Invented | Winter woods work is Aroostook practice: frozen ground carries the logs and the crew is free |
+| A contractor pulls the stumps: $3,000 and ten season days. The tract is then a field, owned, rested (soil 1, no potato years), with 1% early dying and stones 0.75 | Invented | |
+| New ground's first year: a potato crop grows 15% less; a rest year first clears it, and the default plan rests it | Invented | |
+| Standing woods or brush shelter every held field within 20 ground units in a straight line: 6% less water lost, sprays in 30% more wind (9.75 m/s), one more wet hour a day for blight, 0.3 C colder on a frost night. Felling the tract takes all four away | Invented | Windbreaks cut evaporation and wind, and hold damp, still air |
+| Stones, 0 to 1: home fields 0.2 to 0.35, other land 0.3 to 0.45, new ground 0.75. Frost heaves up 0.04 each winter on the open land the farm holds | Invented | Frost heave brings up a fresh crop of stones on Aroostook fields every spring |
+| Stones slow planting and digging to 30% at 1, relative to the home farm's 0.25, which the old job times already allow for: (1 - 0.7 s) / (1 - 0.7 x 0.25) | Invented | |
+| At the dig, stones above 0.2 bruise 0.12 x (s - 0.2) of tubers to No. 2 (cause "stone"), scaled by 1.3 - 0.06 x the digger's machine skill (steady hands count two more levels; careless bruises 20% more). A test dig by hand bruises none | Invented | |
+| Rock picking (field skill, 1.5 crew-days, only when no crop is in the ground) takes 0.4 off and brings in 12 loads of fieldstone for each unit taken. Reference practice picks rocks in spring on a field at 0.6 or more | Invented | Rock picking each spring is Aroostook practice |
+| Cutting the hedgerows (field skill, 2 crew-days, bottom land and mid slope only): the field loses its extra wet hours and half its frost offset, and loses 3% more water. They grow back after four years | Invented | |
+| Tile drains ($4,000, eight season days, the farm's own bottom land only, with no crop in the ground): the field drains like the mid slope and holds 6% less water | Invented | Tile drainage of wet bottom land is Aroostook practice |
+| Logs sell for $55 a load. Logs and stone the farm lacks for a building are bought at $95 and $40 a load | Invented | |
+| Land is bought a quarter down from cash; the rest is a land mortgage. Each year end the bank takes a tenth of each purchase's loan and 8% on what is still owed, as part of the year's costs. Extra can be paid in spring. Net worth counts what is owed against the land | Invented | |
+
+## 12. Things the model leaves out
 
 Colorado potato beetle, early blight, fertility, weeds as a separate system,
 machinery failure, hail, and everything else on the cut list in `docs/DESIGN.md`. The record of what the model gets right and

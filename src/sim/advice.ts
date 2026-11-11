@@ -42,9 +42,14 @@ export function advise(world: World, c: Campaign): Advice[] {
   const anyBlight = s.fields.some((_, i) => fieldInfo(c, i).blightHills > 0)
   const killBy = dayIndex(year, 8, 8)
 
+  const spring = s.day < dayIndex(year, 5, 15)
   for (let i = 0; i < P.FIELD_COUNT; i++) {
     const f = fieldInfo(c, i)
     const n = f.name
+    // A very stony field gets its rocks picked in spring, before the planter goes over it or while it rests.
+    if ((f.status === 'idle' || f.status === 'rest') && spring && f.stones >= P.ROCKS_ADVISE && !f.works) {
+      add(i, 'rocks', `Pick the rocks off ${n}.`, 'Frost has heaved up stones. They slow the planter and the digger and bruise the crop at the dig.')
+    }
     if (f.status === 'idle') {
       if (s.day < dayIndex(year, 4, 8)) add(i, 'wait', `Hold off planting ${n}.`, 'It is early. Seed sits and rots in cold ground.')
       else if (t.soilT < 10) add(i, 'wait', `Hold off planting ${n}.`, `The soil is ${f1(t.soilT)}°F. Growers here wait for 50°F; below 45°F the seed rots.`)

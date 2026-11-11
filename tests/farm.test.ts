@@ -57,14 +57,14 @@ function untilDone(c: Campaign, kind: JobKind, field: number): { events: S.GameE
 }
 
 describe('the land', () => {
-  it('has a field for every parcel, named from PARCELS, the home six owned and the rest not the farm\'s', () => {
+  it('has a field for every parcel, named from PARCELS, the home six and two tracts owned and the rest not the farm\'s', () => {
     const c = S.createCampaign(world, { seed: 1, startYear: 1990 })
     expect(S.FIELD_COUNT).toBe(S.PARCELS.length)
     expect(S.FIELD_NAMES).toEqual(S.PARCELS.map(p => p.name))
     for (let i = 0; i < S.FIELD_COUNT; i++) {
       const f = S.fieldInfo(c, i)
       expect([f.name, f.block, f.elev]).toEqual([S.PARCELS[i].name, S.PARCELS[i].block, S.PARCELS[i].elev])
-      expect(f.tenure).toBe(i < S.HOME_FIELDS ? 'owned' : 'none')
+      expect(f.tenure).toBe(i < S.HOME_FIELDS || S.PARCELS[i].holding === 'owned' ? 'owned' : 'none')
       if (i >= S.HOME_FIELDS) {
         expect(f.status).toBe('off')
         // New land starts rested, with little early dying.
@@ -72,7 +72,7 @@ describe('the land', () => {
         expect(c.fields[i].vert).toBeLessThanOrEqual(0.08)
       }
     }
-    expect(S.landInfo(c).map(l => l.field)).toEqual([6, 7, 8, 9, 10, 11, 12, 13])
+    expect(S.landInfo(c).map(l => l.field)).toEqual([6, 7, 8, 9, 10, 11, 12, 13, 16, 17])
     refused(c, { t: 'plan', field: 9, plan: { crop: 'potato', variety: 'katahdin', seed: 'certified' } }, /not the farm's/)
   })
 
@@ -122,7 +122,7 @@ describe('the land', () => {
     tend(c, x => S.seasonDone(x))
     ok(c, { t: 'endSeason' })
     // The rented field in oats and clover brings rest income; the land not held brings none.
-    const resting = c.plans.filter((p, i) => S.held(c, i) && p.crop === 'rest').length
+    const resting = c.plans.filter((p, i) => S.isField(c, i) && p.crop === 'rest').length
     expect(c.yearRest).toBe(resting * S.REST_INCOME)
     expect(resting).toBe(c.plans.slice(0, 6).filter(p => p.crop === 'rest').length + 1)
     while (c.phase === 'cellar') ok(c, { t: 'month' })
@@ -130,22 +130,26 @@ describe('the land', () => {
     expect([c.fields[8].soil, c.fields[8].streak]).toEqual([1, 0])
   })
 
-  it('is bought outright from cash, not on the spring loan, and net worth keeps it at its price', () => {
+  it('is bought a quarter down from cash, the rest on the land mortgage, not on the spring loan; net worth keeps it at its price', () => {
     const c = S.createCampaign(world, { seed: 2, startYear: 2005 })
     ok(c, { t: 'rent', field: 9 })
     const worth = S.netWorth(c)
     const cash = c.cash
     ok(c, { t: 'buyLand', field: 9 })
-    expect(c.cash).toBe(cash - S.PARCELS[9].price)
-    expect([c.yearLand, c.yearCosts]).toEqual([S.PARCELS[9].price, S.PARCELS[9].price])
+    const down = S.PARCELS[9].price * S.MORTGAGE_DOWN
+    expect(c.cash).toBe(cash - down)
+    expect([c.yearLand, c.yearCosts]).toEqual([down, down])
+    expect(c.mortgages).toEqual([{ field: 9, loan: S.PARCELS[9].price - down, owed: S.PARCELS[9].price - down }])
     expect(c.fields[9].tenure).toBe('owned')
     expect(S.netWorth(c)).toBe(worth)
     // Bought land pays no rent and is not given back.
     expect(S.planCosts(c).rent).toBe(0)
     refused(c, { t: 'release', field: 9 }, /owns/)
     refused(c, { t: 'buyLand', field: 9 }, /already owns/)
-    // Short of cash: refused, whatever the bank would lend for the spring.
-    refused(c, { t: 'buyLand', field: 6 }, /cash/)
+    // Short of cash for the quarter down: refused, whatever the bank would lend for the spring.
+    const x = structuredClone(c)
+    x.cash = S.PARCELS[6].price * S.MORTGAGE_DOWN - 1
+    refused(x, { t: 'buyLand', field: 6 }, /cash/)
     ok(c, { t: 'begin' })
     refused(c, { t: 'buyLand', field: 6 }, /spring/)
     refused(c, { t: 'rent', field: 6 }, /spring/)
@@ -230,15 +234,15 @@ describe('travel', () => {
   it('costs a far field more of the day than a near one', () => {
     expect(crewOf(c, 0).at).toBe(-1)
     // The farmer is a little better than average at machine work: a near field is planted in the day, a far one not.
-    expect((1 - S.travelDays(-1, 2)) * rate).toBeGreaterThan(S.JOB_DAYS.plant)
-    expect((1 - S.travelDays(-1, 8)) * rate).toBeLessThan(S.JOB_DAYS.plant)
+    expect((1 - S.travelDays(-1, 2)) * rate * S.stoneSpeed(c.fields[2].stones)).toBeGreaterThan(S.JOB_DAYS.plant)
+    expect((1 - S.travelDays(-1, 8)) * rate * S.stoneSpeed(c.fields[8].stones)).toBeLessThan(S.JOB_DAYS.plant)
     const near = structuredClone(c), far = structuredClone(c)
     ok(near, { t: 'job', kind: 'plant', field: 2 })
     ok(far, { t: 'job', kind: 'plant', field: 8 })
     const nearEvents = days(near, 1)
     days(far, 1)
     expect(nearEvents.some(e => e.type === 'planted' && e.field === 2)).toBe(true)
-    expect(order(far, 'plant', 8)!.done).toBeCloseTo((1 - S.travelDays(-1, 8)) * rate, 12)
+    expect(order(far, 'plant', 8)!.done).toBeCloseTo((1 - S.travelDays(-1, 8)) * rate * S.stoneSpeed(c.fields[8].stones), 12)
     expect([crewOf(near, 0).at, crewOf(far, 0).at]).toEqual([2, 8])
     expect(near.season!.worked).toEqual([{ kind: 'plant', field: 2, unit: 0 }])
     // The farmer holds the planting it began and, on the next day fit for it, finishes it before anything else.
@@ -267,7 +271,7 @@ describe('travel', () => {
     ok(x, { t: 'job', kind: 'plant', field: 8 })
     days(x, 1)
     const job = order(x, 'plant', 8)!
-    expect(job.done).toBeCloseTo((1 - S.travelDays(-1, 8)) * rate, 12)
+    expect(job.done).toBeCloseTo((1 - S.travelDays(-1, 8)) * rate * S.stoneSpeed(c.fields[8].stones), 12)
     ok(x, { t: 'hire', kind: 'operator' })
     const op = x.crew.find(u => u.kind === 'operator')!
     expect(op.at).toBe(-1)

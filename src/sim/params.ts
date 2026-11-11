@@ -2,7 +2,7 @@
 import { PARCELS } from './farm.ts'
 import type { Cause, Due, Grade, JobKind, Skill, Trait, UnitKind, UpgradeId } from './types.ts'
 
-export const SAVE_VERSION = 4
+export const SAVE_VERSION = 5
 
 // Every parcel the farm has or could have; the first six are the home farm.
 export const FIELD_COUNT = PARCELS.length
@@ -88,9 +88,11 @@ export const SIZE_CHEF = 300
 // Labor: share of a working day each job takes on one field.
 export const JOB_DAYS: Record<JobKind, number> = {
   plant: 1, hill: 0.5, scout: 0.2, spray: 0.25, water: 1, rogue: 0.25, sample: 0.1, kill: 0.25, dig: 2,
+  fell: 40, rocks: 1.5, brush: 2,
 }
 export const JOB_COST: Record<JobKind, number> = {
   plant: 150, hill: 60, scout: 0, spray: 110, water: 300, rogue: 0, sample: 0, kill: 120, dig: 500,
+  fell: 0, rocks: 0, brush: 0,
 }
 export const UPGRADES: Record<UpgradeId, { name: string; cost: number; blurb: string }> = {
   boom: { name: 'Boom sprayer', cost: 6000, blurb: 'Spraying a field takes a tenth of a day instead of a quarter.' },
@@ -105,8 +107,8 @@ export const UPGRADES: Record<UpgradeId, { name: string; cost: number; blurb: st
 
 // Crews: who can do what, travel by the farm roads, and how a crew picks its next order.
 export const UNIT_JOBS: Record<UnitKind, JobKind[]> = {
-  farmer: ['plant', 'hill', 'scout', 'spray', 'water', 'rogue', 'sample', 'kill', 'dig'],
-  hand: ['scout', 'rogue', 'sample'],
+  farmer: ['plant', 'hill', 'scout', 'spray', 'water', 'rogue', 'sample', 'kill', 'dig', 'fell', 'rocks', 'brush'],
+  hand: ['scout', 'rogue', 'sample', 'fell', 'rocks', 'brush'],
   operator: ['plant', 'hill', 'spray', 'water', 'kill', 'dig'],
 }
 export const TRAVEL_DAYS_PER_UNIT = 0.0016     // a day's work lost per ground unit driven: a neighbouring field about 0.03
@@ -146,6 +148,7 @@ export const ADVICE_FIELDS_PER_CREW = 6
 export const SKILLS: Skill[] = ['machine', 'field', 'woods', 'build', 'pack']
 export const JOB_SKILL: Record<JobKind, Skill> = {
   plant: 'machine', hill: 'machine', scout: 'field', spray: 'machine', water: 'machine', rogue: 'field', sample: 'field', kill: 'machine', dig: 'machine',
+  fell: 'woods', rocks: 'field', brush: 'field',
 }
 export const SKILL_MAX = 10
 export const SKILL_SPEED_BASE = 0.6            // work in a skill goes at 0.6 + 0.08 x level of normal speed: level 5 is the old speed
@@ -228,6 +231,47 @@ export const WINTER_MONTHS = 6
 export const WINTER_DAYS = 20
 export const FARMER_WINTER_DAYS = 10
 
+// ---------------------------------------------------------------- the farmstead: land and materials (docs/MODEL.md section 11)
+
+export const FELL_DAYS: Record<'woods' | 'brush', number> = { woods: 40, brush: 16 }   // crew-days to fell a tract
+export const TIMBER: Record<'woods' | 'brush', number> = { woods: 40, brush: 5 }       // loads of logs at a yield of 1
+export const FELL_YIELD_BASE = 0.7             // felling yields 0.7 + 0.06 x woods skill of the tract's timber
+export const FELL_YIELD_PER = 0.06
+export const FELL_SEASON = 0.5                 // in the growing season felling goes at half speed: soft ground and flies
+export const STUMP_FEE = 3000                  // a contractor with a bulldozer
+export const STUMP_DAYS = 10                   // season days
+export const TILE_FEE = 4000
+export const TILE_DAYS = 8
+export const RAW_GROUND = 0.85                 // a first potato crop on raw ground grows this share, unless rested first
+export const NEW_GROUND_VERT = 0.01
+export const SHELTER_RANGE = 20                // standing woods and brush shelter held fields within this many ground units
+export const SHELTER_WATER = 0.94              // a sheltered field loses this share of the water an open one does
+export const SHELTER_WIND = 1.3                // and can be sprayed in this much more wind
+export const SHELTER_WET_HOURS = 1             // and stays wet an hour longer
+export const SHELTER_FROST = 0.3               // and is this much colder, C, on a frost night
+export const SPRAY_WIND = 7.5                  // m/s: too windy to spray an open field
+export const STONE_SLOW = 0.7                  // stones slow planting and digging, to 30% at 1
+export const STONE_BASE = 0.25                 // the home farm's usual stones, which the old job times already allow for
+export const STONE_BRUISE = 0.12               // share of tubers bruised by stones at the dig, per unit of stones above STONE_BRUISE_FROM
+export const STONE_BRUISE_FROM = 0.2
+export const BRUISE_SKILL_BASE = 1.3           // stone bruising scaled by 1.3 - 0.06 x the digger's machine skill
+export const BRUISE_SKILL_PER = 0.06
+export const CARELESS_BRUISE = 1.2
+export const HEAVE = 0.04                      // stones frost heaves up each winter
+export const ROCKS_TAKE = 0.4                  // stones one picking takes off
+export const ROCKS_LOADS = 12                  // loads of fieldstone for each unit of stones taken
+export const ROCKS_ADVISE = 0.6                // reference practice picks rocks in spring on a field this stony
+export const ROCKS_MIN = 0.05                  // below this there is nothing worth picking
+export const BRUSH_YEARS = 4                   // cut hedgerows grow back after this many years
+export const BRUSH_WATER = 1.03                // a field without its hedgerows loses this much more water to the wind
+export const TILE_TAW = 0.94                   // a tiled field holds this share of the water in a drought
+export const LOG_PRICE = 55                    // dollars a load, sold
+export const MILL_PRICE = 95                   // dollars a load of logs bought for a building
+export const QUARRY_PRICE = 40                 // dollars a load of stone bought for a building
+export const MORTGAGE_DOWN = 0.25              // land is bought a quarter down, the rest on the mortgage
+export const MORTGAGE_PRINCIPAL = 0.1          // each year end: a tenth of each purchase's loan
+export const MORTGAGE_RATE = 0.08              // and 8% interest on what is still owed
+
 // Money, in constant dollars.
 export const START_CASH = 18000
 export const NOTE_PAYMENT = 10000
@@ -277,6 +321,6 @@ export const SEASON_CURVE: [number, number][] = [   // [day of year, factor]
 export const MONTH_CURVE = [0.922, 0.962, 0.983, 1.015, 1.062, 1.105, 1.099]   // November to May
 export const CELLAR_MONTHS = ['November', 'December', 'January', 'February', 'March', 'April', 'May']
 
-export const CAUSES: Cause[] = ['green', 'scab', 'hollow', 'knob', 'skin', 'bruise', 'blight', 'frost', 'rot', 'small']
+export const CAUSES: Cause[] = ['green', 'scab', 'hollow', 'knob', 'skin', 'bruise', 'blight', 'frost', 'rot', 'small', 'stone']
 export const GRADES: Grade[] = ['no1', 'chef', 'b', 'no2', 'cull']
-export const JOBS: JobKind[] = ['plant', 'hill', 'scout', 'spray', 'water', 'rogue', 'sample', 'kill', 'dig']
+export const JOBS: JobKind[] = ['plant', 'hill', 'scout', 'spray', 'water', 'rogue', 'sample', 'kill', 'dig', 'fell', 'rocks', 'brush']
