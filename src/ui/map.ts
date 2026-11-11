@@ -50,10 +50,9 @@ export function step(list: number[], from: number, back: boolean): number {
 }
 
 const FW = S.COLS * 1.2, FD = S.ROWS * 1.36
-const HIGH = 14
 
 // A map of the farm a few pixels high: every field it holds, and the one place lit. here: a field, or a yard (-1, -2).
-export function where(c: S.Campaign, here: number): SVGElement {
+export function where(c: S.Campaign, here: number, high = 14): SVGElement {
   const parts: { x: number; z: number; w: number; d: number; lit: boolean; yard: boolean }[] = []
   for (let i = 0; i < S.FIELD_COUNT; i++) {
     if (!S.held(c, i) && i !== here) continue
@@ -66,8 +65,8 @@ export function where(c: S.Campaign, here: number): SVGElement {
   }
   const x0 = Math.min(...parts.map(p => p.x)) - 1, x1 = Math.max(...parts.map(p => p.x + p.w)) + 1
   const z0 = Math.min(...parts.map(p => p.z)) - 1, z1 = Math.max(...parts.map(p => p.z + p.d)) + 1
-  const width = Math.max(10, Math.min(40, Math.round(HIGH * (x1 - x0) / (z1 - z0))))
-  return s('svg', { class: 'where', viewBox: `${x0.toFixed(1)} ${z0.toFixed(1)} ${(x1 - x0).toFixed(1)} ${(z1 - z0).toFixed(1)}`, width, height: HIGH, preserveAspectRatio: 'none', 'aria-hidden': 'true' },
+  const width = Math.max(10, Math.min(high * 3, Math.round(high * (x1 - x0) / (z1 - z0))))
+  return s('svg', { class: 'where', viewBox: `${x0.toFixed(1)} ${z0.toFixed(1)} ${(x1 - x0).toFixed(1)} ${(z1 - z0).toFixed(1)}`, width, height: high, preserveAspectRatio: 'none', 'aria-hidden': 'true' },
     parts.map(p => p.yard
       ? s('circle', { class: 'here', cx: (p.x + 4).toFixed(1), cy: (p.z + 4).toFixed(1), r: 4 })
       : s('rect', { class: p.lit ? 'here' : '', x: p.x.toFixed(1), y: p.z.toFixed(1), width: p.w.toFixed(1), height: p.d.toFixed(1) })))

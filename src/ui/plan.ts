@@ -168,10 +168,11 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
   const app = ctx.app
   const top = topBar(ctx, o)
   const card = h('section', { class: 'card plan-card instrument', 'aria-label': 'Plan for the selected field', testid: 'plan-card', hidden: true })
-  const bar = h('section', { class: 'plan-bar instrument', 'aria-label': 'The plan' })
-  const notesSlot = h('div', { class: 'notes-slot' })
+  // The contracts signed stand on the money line: they are money promised.
   const track = tracker(ctx)
-  notesSlot.append(track.el)
+  const barIn = h('div', { class: 'plan-bar-in' })
+  const bar = h('section', { class: 'plan-bar instrument', 'aria-label': 'The plan' }, track.el, barIn)
+  const notesSlot = h('div', { class: 'notes-slot' })
   const el = h('main', { class: 'season plan' }, top.el, notesSlot, h('div', { class: 'bottom' }, card, bar))
   let note = ''
   let focused = false
@@ -332,7 +333,7 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
       const after = c.cash - pc.total
       const over = after < S.OPERATING_LIMIT
       const offers = c.offers.length
-      patch(bar, JSON.stringify([pc, c.cash, c.year, app.settings.units, layout, offers, c.contracts.length, c.crew.length]), () => [
+      patch(barIn, JSON.stringify([pc, c.cash, c.year, app.settings.units, layout, offers, c.contracts.length, c.crew.length]), () => [
         h('p', { class: `plan-money${over ? ' over' : ''}`, testid: 'plan-money' },
           h('span', null, 'This plan ', h('strong', { class: 'num' }, F.money(pc.total))),
           pc.rent || pc.wages ? h('span', { testid: 'plan-rent' }, `with ${F.list([pc.rent ? `rent ${F.money(pc.rent)}` : '', pc.wages ? `wages ${F.money(pc.wages)}` : ''].filter(Boolean))}`) : null,

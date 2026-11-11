@@ -50,7 +50,7 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
   let compact = false
   let far = false
   for (let i = 0; i < S.FIELD_COUNT; i++) {
-    const wrap = h('div', { class: 'plate-wrap', hidden: true })
+    const wrap = h('div', { class: 'plate-wrap gone', hidden: true })
     wraps.push(wrap)
     models.push(null)
     size.push({ w: 120, h: 30, extra: 0 })

@@ -85,7 +85,7 @@ export function unitBar(ctx: Ctx, el: HTMLElement): { update(c: S.Campaign): voi
           },
           icon(KIND_GLYPH[u.kind], 'ic s unit-kind'),
           h('span', { class: 'unit-name' }, u.name),
-          h('span', { class: 'unit-doing' }, icon(d.glyph, 'ic s'), h('span', { class: 'unit-text' }, many ? placeName(d.place) : d.text), many ? where(c, d.place) : null),
+          h('span', { class: 'unit-doing' }, icon(d.glyph, 'ic s'), h('span', { class: 'unit-text' }, many ? placeName(d.place) : d.text), many ? where(c, d.place, 20) : null),
           d.progress > 0 ? gauge(d.progress, { label: d.text, text: `${F.pct(d.progress)} done` }) : null)
         }),
         h('button', { class: 'nicon s crew-open', type: 'button', testid: 'crew-open', 'aria-label': 'The crew: hire or let go', title: touch ? undefined : 'Hire or let go', onclick: () => openCrew(ctx) }, icon('crew'))),

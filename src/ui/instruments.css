@@ -490,6 +490,8 @@
 .plan-money.over strong { color: var(--ember); }
 .plan-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-left: auto; }
 .plan-actions .nbtn .ic { margin-left: calc(-1 * var(--sp-1)); }
+.plan-bar-in { display: contents; }
+.plan-bar .tracker { flex: 1 1 100%; display: flex; flex-wrap: wrap; gap: 0 var(--sp-3); padding: 0; margin-left: calc(-1 * var(--sp-2)); background: none; border: 0; }
 .land-row .card-line { flex: 1 1 260px; }
 .v-contract { color: var(--gold); }
 .vcard input:checked + .vcard-in .v-contract { color: var(--warn-ink); }

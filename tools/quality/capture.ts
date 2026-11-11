@@ -45,7 +45,7 @@ const biggerJuly: Step = async page => { await q(page, `${BIGGER}; app.do({ t: '
 const STATES: State[] = [
   { name: 'title', what: 'Title screen, first visit', sizes: ALL, run: async () => {} },
   { name: 'title-continue', what: 'Title screen with a saved farm', sizes: MAIN, run: async page => { await q(page, `q.start(1987, 3); q.run(q.day(5, 1)); q.g().app.quitToTitle()`) } },
-  { name: 'new-farm', what: 'New farm: choosing the first year', sizes: [...MAIN, 'small', 'land'], run: async page => { await page.getByTestId('choose-year').click() } },
+  { name: 'new-farm', what: 'New farm over a saved one: the question first', sizes: [...MAIN, 'small', 'land'], run: async page => { await q(page, `q.start(1987, 3); q.g().app.quitToTitle()`); await page.getByTestId('play').click() } },
   { name: 'how-it-works', what: 'How it works', sizes: MAIN, run: async page => { await page.getByTestId('how-open').first().click() } },
   { name: 'menu', what: 'Menu and settings, opened in season', sizes: MAIN, run: async page => { await july(page, ''); await page.getByTestId('menu-open').first().click() } },
   { name: 'plan-first', what: 'Spring plan, first year', sizes: ALL, run: async page => { await q(page, `q.g().app.newGame(1987, 3)`) } },
@@ -120,7 +120,7 @@ const STATES: State[] = [
   { name: 'plan-contracts', what: 'Spring: the contracts offered', sizes: [...MAIN, 'small'], run: async page => { await q(page, `q.g().app.newGame(1987, 3)`); await page.getByTestId('contracts-open').click() } },
   { name: 'plan-crew', what: 'Spring: hiring and letting go', sizes: MAIN, run: async page => { await q(page, `q.g().app.newGame(1987, 3); q.g().app.do({ t: 'hire', kind: 'hand' })`); await page.getByTestId('crew-open').click() } },
   { name: 'plan-bigger', what: 'Spring on the bigger farm: rented land, crews, a contract signed', sizes: ALL, run: async page => { await q(page, BIGGER) } },
-  { name: 'plan-bigger-field', what: 'Spring on the bigger farm: a rented field\'s card', sizes: MAIN, run: async page => { await q(page, BIGGER); await page.getByTestId('field-6').click() } },
+  { name: 'plan-bigger-field', what: 'Spring on the bigger farm: a rented field\'s card, picked by its number', sizes: MAIN, run: async page => { await q(page, BIGGER); await page.keyboard.press('7') } },
   { name: 'season-bigger', what: 'July on the bigger farm, nothing selected', sizes: ALL, run: biggerJuly },
   { name: 'season-crew-picked', what: 'July on the bigger farm: a hand picked and a field selected', sizes: [...MAIN, 'small'], run: async (page, size) => {
     await biggerJuly(page, size)
@@ -138,7 +138,7 @@ const STATES: State[] = [
     await q(page, `${BIGGER}; for (let i = 0; i < 14; i++) if (c.plans[i].crop === 'potato' && c.fields[i].tenure !== 'none') app.do({ t: 'plan', field: i, plan: { crop: 'potato', variety: 'kennebec', seed: 'certified' } }); app.do({ t: 'begin' }); q.run(999, ['sell'], 'lot')`)
     await closeAll(page)
     const lot = await q(page, `const c = q.g().app.campaign; const l = c.lots.find(l => l.open); return { id: l.id, field: l.field }`) as { id: number; field: number }
-    await selectField(page, size, lot.field)
+    await q(page, `q.g().app.select(${lot.field})`)
     await page.getByTestId(`weighin-${lot.id}`).click()
     await page.getByTestId('weighin').waitFor({ timeout: 5000 }).catch(() => {})
   } },
