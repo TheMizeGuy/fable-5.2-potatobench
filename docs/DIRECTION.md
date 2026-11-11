@@ -190,3 +190,54 @@ Nobody who built a part judges it.
 | Nothing broke | The simulation's tests, the balance gates and the cross-engine determinism check, unchanged |
 
 Whether the owner says "wow" is the one thing no test here can supply.
+
+## The bigger farm
+
+After the first strategy build the owner's verdict was: more depth, and the map is
+too small. Six fields and one farmer fit on one screen and leave little to
+manage. This section widens the game; the weather, crop, blight, grading and
+cellar models do not change.
+
+### Land
+
+Fourteen fields in four blocks (`src/sim/farm.ts`). The farm starts with the home
+six. The rest is rented by the year or bought:
+
+| Block | Fields | Character |
+| --- | --- | --- |
+| Home | 6 | As before: two ridge, two mid slope, two bottom |
+| The intervale, across the brook | 2 | Deep wet bottom land: heavy crops, frost, blight, close to water |
+| The ridge lots, north | 2 | Early, dry ground |
+| The Dufour place, up the road | 4 | A second farmstead with its own potato house; a long drive from home |
+
+The map is larger than the screen at working zoom, so the camera matters.
+
+### Crews and distance
+
+- The farmer is one crew and can do every job. **Field hands** are hired for the
+  walking jobs (scouting, pulling blighted plants, test digs). A **second tractor**
+  with a hired **operator** does the machine jobs. Wages are paid by the month.
+- Every crew is somewhere. Going to another field takes time in proportion to the
+  distance by the farm roads, so the order jobs are done in matters, and a far
+  block wants a crew of its own.
+- An order goes on the farm's list. Each day every crew takes the earliest order
+  it can do, nearest first; the player can also give an order to one crew.
+- Digging a field far from a potato house is slower: the crop has to be hauled.
+
+### Contracts
+
+Each spring a few buyers offer contracts: a variety, a quantity, a fixed price and
+a date (off the field by late October, or from storage by February). Delivering
+against one pays the contract price; falling short costs a penalty. The chipping
+variety is only worth growing on contract.
+
+### Storage
+
+Each potato house holds what it holds. Renting or buying the Dufour place brings
+its potato house; a second house can be built at home.
+
+### What stays simple
+
+The first year is unchanged: six fields, one farmer, click what glows. Land,
+hands, a second tractor and contracts are offered from the first spring but
+nothing requires them, and reference practice keeps to the home farm.
