@@ -5,7 +5,7 @@ import { h, kbd } from './dom.ts'
 import { icon } from './icons.ts'
 import { JOB_KEY, JOB_VERB, orderHelp } from './rules.ts'
 
-const REPO = 'https://github.com/TheMizeGuy/the-county'
+const REPO = 'https://github.com/TheMizeGuy/fable-5.2-potatobench'
 
 export function openHelp(ctx: Ctx): void {
   const touch = ctx.touch()
