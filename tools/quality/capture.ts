@@ -132,7 +132,7 @@ const STATES: State[] = [
     await q(page, `const { app } = q.g(); for (const i of [0, 2, 6]) app.do({ t: 'job', kind: 'scout', field: i })`)
     const id = await q(page, `const jobs = q.g().app.campaign.season.jobs; return (jobs.find(j => j.kind === 'scout') ?? jobs[0])?.id ?? -1`) as number
     const who = page.getByTestId(`queue-who-${id}`)
-    if (await who.count()) { await page.getByTestId(`queue-${id}`).hover(); await who.click() } else await page.getByTestId(`queue-${id}`).click()
+    if (await who.count()) { await page.getByTestId(`queue-${id}`).focus(); await who.click() } else await page.getByTestId(`queue-${id}`).click()
   } },
   { name: 'weigh-in-deliver', what: 'Dig day on contract: the weigh ticket offers the delivery', sizes: ALL, run: async (page, size) => {
     await q(page, `${BIGGER}; for (let i = 0; i < 14; i++) if (c.plans[i].crop === 'potato' && c.fields[i].tenure !== 'none') app.do({ t: 'plan', field: i, plan: { crop: 'potato', variety: 'kennebec', seed: 'certified' } }); app.do({ t: 'begin' }); q.run(999, ['sell'], 'lot')`)

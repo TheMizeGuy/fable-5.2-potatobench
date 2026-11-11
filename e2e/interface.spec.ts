@@ -298,7 +298,8 @@ test('crews: a picked crew takes the next orders, an order it cannot do says why
   const id = await page.evaluate(() => (globalThis as unknown as { __county: { app: { campaign: { season: { jobs: { id: number; kind: string; field: number; unit: number }[] } } } } }).__county.app.campaign.season.jobs.find(j => j.kind === 'scout' && j.field === 2)!.id)
   await expect(page.getByTestId(`queue-${id}`).locator('.q-tag.pinned')).toHaveText('L')
   // Any crew may take it again, from the choices above the order.
-  await page.getByTestId(`queue-${id}`).hover()
+  // The choices above an order show under the pointer, and to the keyboard when the order has the focus.
+  await page.getByTestId(`queue-${id}`).focus()
   await page.getByTestId(`queue-who-${id}`).click()
   await page.getByTestId(`assign-${id}--1`).click()
   await expect(page.getByTestId(`queue-${id}`).locator('.q-tag.pinned')).toHaveCount(0)
