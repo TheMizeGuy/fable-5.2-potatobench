@@ -132,6 +132,9 @@ test('a first season from the opening to the next spring, with a save that survi
 })
 
 async function winterAndYearEnd(page: Page): Promise<void> {
+  // The last weigh ticket can arrive as the season closes; it is answered first.
+  await page.waitForTimeout(500)
+  while (await page.getByTestId('weighin').count()) await answerTicket(page, true)
   await page.getByTestId('end-season').click()
   await expect(page.getByTestId('month-next')).toBeVisible()
   for (let i = 0; i < 9 && !(await page.getByTestId('year-next').count()); i++) {
