@@ -1,6 +1,7 @@
 // Trial runs for setting the expert's thresholds: variants of the expert, each a change from EXPERT, played over
 // the tournament's start years and compared with the first variant on the same campaigns.
-// Usage: node tools/balance/trial.ts <spec.json>   (env SEEDS=6, FIRST_SEED=1, WORKERS=n, YEARS=every nth start year, GOAL=5)
+// Usage: node tools/balance/trial.ts <spec.json>   (env SEEDS=6, FIRST_SEED=1, WORKERS=n, YEARS=every nth start year, FROM=first
+// start year, GOAL=5)
 // The spec maps a variant name to its changes: { "expert": {}, "home": { "land": [] }, "h3": { "tune": { "hands": { "from": 3, "per": 5 } } } }.
 // The names "reference" and "naive" are those bots. A variant's "economy": { "rent": { "ridge": 3000 }, "price": { ... } }
 // sets the rent and price of every field of a block while it plays, for sizing a change before making it; an entry
@@ -50,7 +51,8 @@ if (!isMainThread) {
   const names = Object.keys(spec).filter(n => n !== '_economy')
   const world = loadWorld()
   const stride = Number(process.env.YEARS ?? 1)
-  const years = (process.env.GOAL === "1" ? world.weather.playable : S.startYears(world)).filter((_, i) => i % stride === 0)
+  const from = Number(process.env.FROM ?? 0)
+  const years = (process.env.GOAL === '1' ? world.weather.playable : S.startYears(world)).filter((y, i) => i % stride === 0 && y >= from)
   const first = Number(process.env.FIRST_SEED ?? 1)
   const seeds = Array.from({ length: Number(process.env.SEEDS ?? 6) }, (_, i) => first + i)
   const goal = Number(process.env.GOAL ?? S.GOAL_YEARS)
@@ -89,4 +91,12 @@ if (!isMainThread) {
     const per = (f: (o: Outcome) => number) => mean(rows.map(f))
     console.log(`| ${n} | ${k(per(o => o.netWorth))} | ${Math.round(per(o => Number(o.kept)) * 100)}% | ${n === base ? '' : `${k(diff)} (${k(quantile(means, 0.025))} to ${k(quantile(means, 0.975))})`} | ${n === base ? '' : `${wins}/${years.length}`} | ${per(o => mean(o.held)).toFixed(1)} (${[0, 1, 2, 3, 4].map(y => mean(rows.filter(o => o.held.length > y).map(o => o.held[y])).toFixed(1)).join(' ')}) | ${per(o => mean(o.hands)).toFixed(2)} | ${per(o => mean(o.operator)).toFixed(2)} | ${k(per(o => o.wages))} | ${k(per(o => o.rent))} | ${k(per(o => o.land))} | ${k(per(o => o.contracts))} | ${k(per(o => o.penalties))} | ${per(o => o.signed).toFixed(1)} |`)
   }
+  // The best variant by start year, on the median over seeds.
+  const best = new Map<string, number>()
+  for (const y of years) {
+    let top = '', v = -Infinity
+    for (const n of names) { const m = quantile(seeds.map(s => res.get(key(n, y, s))!.netWorth), 0.5); if (m > v) { v = m; top = n } }
+    best.set(top, (best.get(top) ?? 0) + 1)
+  }
+  console.log(`Best by start year: ${[...best].sort((a, b) => b[1] - a[1]).map(([n, w]) => `${n} ${w}`).join(', ')}`)
 }

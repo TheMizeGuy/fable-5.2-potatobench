@@ -28,17 +28,17 @@ export const PARCELS: Parcel[] = [
   { name: 'Brook Field', block: 'home', elev: 0, x: -8.4, z: 12.2, rent: 0, price: 0, streak: 0, vert: 0.03 },
   { name: 'Bottom Field', block: 'home', elev: 0, x: 7.8, z: 12.2, rent: 0, price: 0, streak: 1, vert: 0.08 },
   // Across the brook: deep wet bottom land, frosty, close to water.
-  { name: 'Intervale North', block: 'brook', elev: 0, x: -8.4, z: 38, rent: 4000, price: 48000, streak: 0, vert: 0.04 },
-  { name: 'Intervale South', block: 'brook', elev: 0, x: 7.8, z: 38, rent: 4000, price: 48000, streak: 0, vert: 0.05 },
+  { name: 'Intervale North', block: 'brook', elev: 0, x: -8.4, z: 38, rent: 6000, price: 72000, streak: 0, vert: 0.04 },
+  { name: 'Intervale South', block: 'brook', elev: 0, x: 7.8, z: 38, rent: 6000, price: 72000, streak: 0, vert: 0.05 },
   // North along the ridge: early, dry ground under the spruce.
-  { name: 'Spruce Lot', block: 'ridge', elev: 2, x: -44, z: -14.2, rent: 7500, price: 90000, streak: 0, vert: 0.02 },
-  { name: 'High Lot', block: 'ridge', elev: 2, x: -27.8, z: -14.2, rent: 7500, price: 90000, streak: 0, vert: 0.03 },
+  { name: 'Spruce Lot', block: 'ridge', elev: 2, x: -44, z: -14.2, rent: 8000, price: 96000, streak: 0, vert: 0.02 },
+  { name: 'High Lot', block: 'ridge', elev: 2, x: -27.8, z: -14.2, rent: 8000, price: 96000, streak: 0, vert: 0.03 },
   // The Dufour place, up the road to the south, with a potato house of its own. Old potato ground, so a little
   // more wilt in the soil than the lots that were never in potatoes.
-  { name: 'Dufour Upper', block: 'dufour', elev: 2, x: 58, z: -14.2, rent: 4750, price: 57000, streak: 0, vert: 0.06 },
-  { name: 'Dufour Flat', block: 'dufour', elev: 1, x: 74.2, z: -14.2, rent: 4750, price: 57000, streak: 0, vert: 0.05 },
-  { name: 'Dufour Middle', block: 'dufour', elev: 1, x: 58, z: -1, rent: 4750, price: 57000, streak: 0, vert: 0.04 },
-  { name: 'Dufour Lower', block: 'dufour', elev: 0, x: 74.2, z: -1, rent: 4750, price: 57000, streak: 0, vert: 0.08 },
+  { name: 'Dufour Upper', block: 'dufour', elev: 2, x: 58, z: -14.2, rent: 6250, price: 75000, streak: 0, vert: 0.06 },
+  { name: 'Dufour Flat', block: 'dufour', elev: 1, x: 74.2, z: -14.2, rent: 6250, price: 75000, streak: 0, vert: 0.05 },
+  { name: 'Dufour Middle', block: 'dufour', elev: 1, x: 58, z: -1, rent: 6250, price: 75000, streak: 0, vert: 0.04 },
+  { name: 'Dufour Lower', block: 'dufour', elev: 0, x: 74.2, z: -1, rent: 6250, price: 75000, streak: 0, vert: 0.08 },
 ]
 
 export const HOME_FIELDS = 6

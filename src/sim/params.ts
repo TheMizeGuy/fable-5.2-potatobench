@@ -97,7 +97,7 @@ export const UPGRADES: Record<UpgradeId, { name: string; cost: number; blurb: st
   harvester: { name: 'Two-row harvester', cost: 12000, blurb: 'Digging a field takes a day and a quarter instead of two days.' },
   vent: { name: 'Cellar ventilation', cost: 7000, blurb: 'The cellar holds more, shrinks less, and rot spreads more slowly.' },
   reel: { name: 'Irrigation reel', cost: 30000, blurb: 'A pump, pipe and a travelling gun. Watering a field takes half a day instead of a whole one, and costs less.' },
-  tractor2: { name: 'Second tractor', cost: 16000, blurb: 'A second tractor with its planter and hiller. With it the farm can hire an operator for the machine jobs.' },
+  tractor2: { name: 'Second tractor', cost: 10000, blurb: 'A second tractor with its planter and hiller. With it the farm can hire an operator for the machine jobs.' },
   house2: { name: 'Second potato house', cost: 18000, blurb: 'Another potato house at home. The farm can store as much again as the first one holds.' },
 }
 
@@ -156,7 +156,7 @@ export const REST_INCOME = 900
 
 export const CELLAR_CWT = 3600
 export const CELLAR_CWT_VENT = 6400
-export const STORE_COST = 0.3                 // dollars per cwt per month in the cellar: power, sprout control, labour
+export const STORE_COST = 0.2                 // dollars per cwt per month in the cellar: power, sprout control, labour
 export const SHRINK = 0.012
 export const SHRINK_VENT = 0.007
 export const ROT_GROW = 1.1
