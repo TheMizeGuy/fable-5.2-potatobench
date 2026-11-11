@@ -42,6 +42,8 @@ export interface HillDisplay { look: HillLook; ridge: number }
 export const PIXEL = { value: 0.0006 }
 // What the marks on the ground are multiplied by so they hold their brightness under any exposure.
 export const UI_GAIN = { value: 1 }
+// How much wider than their own width the marks on the ground are drawn, so they still show from the strategic view.
+export const MARK_WIDE = { value: 1 }
 
 const PLANT_FN = /* glsl */ `
 attribute vec4 aAt;
@@ -235,7 +237,7 @@ vec4 paintCrop(vec2 f, vec4 h0, vec4 h1, float fine, out float lift) {
 }
 `
 
-interface Mark { mesh: Mesh; un: { uLevel: { value: number }; uGrow: { value: number }; uGain: { value: number }; uDash: { value: number } } }
+interface Mark { mesh: Mesh; un: { uLevel: { value: number }; uGrow: { value: number }; uGain: { value: number }; uDash: { value: number }; uWide: { value: number } } }
 
 interface FieldGfx {
   d0: Uint8Array
@@ -255,6 +257,7 @@ interface FieldGfx {
   keepMid: { value: Vector2 }
   bloomShare: { value: number }
   off: { value: number }
+  avail: { value: number }
   paint: { value: number }
   rimeHere: { value: number }
   bounds: Sphere
@@ -297,6 +300,7 @@ export class Fields {
   private density = 1
   private lodAt = LOD.high
   private stakes: InstancedMesh
+  private stakeWide = 1
   private frustum = new Frustum()
   private pm = new Matrix4()
   private near = new Vector3()
@@ -331,7 +335,7 @@ export class Fields {
     const crop = new Vector4(), soilColor = new Color(SOIL.good)
     const water = { value: 0 }, damp = { value: 0.3 }, cover = { value: 0 }, tint = { value: 0.2 }, dense = { value: 1 }, denseMid = { value: 1.36 }
     const keepNear = { value: new Vector2(0, 1.01) }, keepMid = { value: new Vector2(0, 0) }, bloomShare = { value: 1 }
-    const off = { value: 0 }, paint = { value: 0 }, rimeHere = { value: 0 }
+    const off = { value: 0 }, paint = { value: 0 }, rimeHere = { value: 0 }, avail = { value: 0 }
     const oats = { value: new Vector3(0, 0, 0) }
     const rect = { value: new Vector4(f.x0, f.z0, 1 / FW, 1 / FD) }
     const shared = { uT0: { value: t0 }, uT1: { value: t1 }, uRect: rect, uCrop: { value: crop }, uDense: dense, uKeep: keepNear }
@@ -366,7 +370,7 @@ export class Fields {
       key: 'county-soil',
       uniforms: {
         uT0: { value: t0 }, uT1: { value: t1 }, uSoil: { value: soilColor }, uWater: water, uDamp: damp, uCover: cover, uOff: off,
-        uOffKind: { value: OFF_KIND[i] ?? 0 }, uPaint: paint, uCrop: { value: crop }, uTint: tint, uOatsHere: oats, uRimeHere: rimeHere,
+        uOffKind: { value: OFF_KIND[i] ?? 0 }, uPaint: paint, uCrop: { value: crop }, uTint: tint, uOatsHere: oats, uRimeHere: rimeHere, uAvail: avail,
       },
       vertexHead: `${ROW_FN}\nuniform float uOff;\nuniform float uPaint;`,
       vertexNormal: `vec4 hillN; vec3 shN = soilShape(aF, position.xz, hillN); shN.y *= (1.0 - uOff) * (1.0 - uPaint); objectNormal = normalize(vec3(0.0, 1.0, ${SLOPE.toFixed(4)} - shN.y));`,
@@ -397,6 +401,7 @@ export class Fields {
         uniform float uTint;
         uniform vec3 uOatsHere;
         uniform float uRimeHere;
+        uniform float uAvail;
         varying vec2 vF;
         varying float vProf;
         varying float vRidged;
@@ -448,6 +453,8 @@ export class Fields {
           if (uOff > 0.001) {
             float tall;
             vec3 meadow = offCover(vWorld.xz, vF, uOffKind, broad, fine, grit, tall);
+            // Land to be had stands a little paler and warmer than the land round it.
+            meadow = mix(meadow, meadow * vec3(1.16, 1.12, 0.96) + vec3(0.025, 0.02, 0.0), uAvail * 0.8);
             soil = mix(soil, meadow, uOff);
             poolF *= 1.0 - uOff;
             soilRough = mix(soilRough, 0.9, uOff);
@@ -595,7 +602,7 @@ export class Fields {
     this.disposables.push(ringGeo)
 
     this.gfx.push({
-      d0, d1, t0, t1, crop, soilColor, water, damp, cover, tint, oats, dense, denseMid, keepNear, keepMid, bloomShare, off, paint, rimeHere, bounds,
+      d0, d1, t0, t1, crop, soilColor, water, damp, cover, tint, oats, dense, denseMid, keepNear, keepMid, bloomShare, off, avail, paint, rimeHere, bounds,
       soil, plants, clumps, blossoms, oatMesh: null, ring, pulse, stake, pulseT: 9, selT: 9, lod: 0, any: false,
     })
     this.soilTarget.push(new Color(SOIL.good))
@@ -603,7 +610,7 @@ export class Fields {
   }
 
   private mark(geo: BufferGeometry): Mark {
-    const un = { uLevel: { value: 0 }, uGrow: { value: 0 }, uGain: UI_GAIN, uDash: { value: 0 } }
+    const un = { uLevel: { value: 0 }, uGrow: { value: 0 }, uGain: UI_GAIN, uDash: { value: 0 }, uWide: MARK_WIDE }
     const mat = new ShaderMaterial({
       uniforms: un,
       transparent: true,
@@ -616,10 +623,11 @@ export class Fields {
         attribute vec3 aRing;      // across the band 0..1, distance to the nearest corner, distance along the ring
         attribute vec2 aOut;
         uniform float uGrow;
+        uniform float uWide;
         varying vec3 vRing;
         void main() {
           vRing = aRing;
-          vec3 p = position + vec3(aOut.x, 0.0, aOut.y) * (uGrow + (aRing.x - 0.5) * uGrow * 0.6);
+          vec3 p = position + vec3(aOut.x, 0.0, aOut.y) * (uGrow + (aRing.x - 0.5) * uGrow * 0.6 + aRing.x * 0.3 * (uWide - 1.0));
           gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
         }`,
       fragmentShader: /* glsl */ `
@@ -633,7 +641,7 @@ export class Fields {
           float core = smoothstep(0.2, 0.36, vRing.x) * smoothstep(0.8, 0.64, vRing.x);
           float corner = 1.0 - smoothstep(1.4, 2.2, vRing.y);
           // Land to be had is marked out in dashes, like a surveyor's line.
-          float dash = mix(1.0, max(step(0.45, fract(vRing.z / 1.3)), corner), uDash);
+          float dash = mix(1.0, max(step(0.42, fract(vRing.z / (1.3 * uWide))), corner), uDash);
           float a = uLevel * across * mix(0.62, 1.0, max(corner, 1.0 - core)) * dash;
           if (a < 0.004) discard;
           vec3 pale = mix(vec3(0.95, 0.9, 0.78), vec3(0.98, 0.84, 0.62), uDash);
@@ -690,7 +698,8 @@ export class Fields {
       corners.forEach(([x, z], k) => {
         const on = this.availNow[i] ? 1 : 0
         q.setFromAxisAngle(up, hash2(i, k) * 6.28)
-        m.compose(p.set(x, Math.max(groundY(x, z), fieldBaseY(z)) - 0.04, z), q, s.set(on * 1.3, on * 1.3, on * 1.3))
+        const size = on * 1.3 * Math.min(2.6, MARK_WIDE.value)
+        m.compose(p.set(x, Math.max(groundY(x, z), fieldBaseY(z)) - 0.04, z), q, s.set(size, size, size))
         this.stakes.setMatrixAt(i * 4 + k, m)
       })
     }
@@ -856,10 +865,11 @@ export class Fields {
       const beat = sel && !opts.reduced && g.selT < 1.1 ? 0.18 * Math.sin(g.selT * 11.4) * (1 - g.selT / 1.1) : 0
       const ringWant = sel ? 0.95 + beat : i === opts.hover ? 0.42 : 0
       g.ring.un.uLevel.value += (ringWant - g.ring.un.uLevel.value) * (opts.reduced ? 1 : 1 - Math.exp(-dt * 14))
+      g.avail.value += ((this.availNow[i] ? 1 : 0) - g.avail.value) * kFast
       g.ring.mesh.visible = g.ring.un.uLevel.value > 0.01
       g.ring.un.uDash.value = this.availNow[i] ? 1 : 0
       // Land to be had, marked out in spring.
-      const stakeWant = this.availNow[i] && !sel ? 0.5 : 0
+      const stakeWant = this.availNow[i] && !sel ? (i === opts.hover ? 0.95 : 0.72) : 0
       g.stake.un.uLevel.value += (stakeWant - g.stake.un.uLevel.value) * (opts.reduced ? 1 : kFast)
       g.stake.mesh.visible = g.stake.un.uLevel.value > 0.01
       // An order heard: a ring that opens out from the field and goes.
@@ -872,6 +882,7 @@ export class Fields {
       } else g.pulse.mesh.visible = false
     }
     if (!this.settled) this.stepHills(kFast)
+    if (Math.abs(MARK_WIDE.value - this.stakeWide) > 0.05 * this.stakeWide && this.availNow.some(a => a)) { this.stakeWide = MARK_WIDE.value; this.placeStakes() }
   }
 
   private applyLod(i: number, oats: number, oatsRipe: number): void {

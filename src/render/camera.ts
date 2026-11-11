@@ -18,7 +18,7 @@ export const MOVE_MS = 800
 // long shadows are seen from the side.
 export function pitchFor(dist: number): number {
   const t = smooth(Math.log(MIN_DIST), Math.log(FAR_DIST), Math.log(dist))
-  return mix(0.105, 0.7, Math.pow(t, 0.8)) + 0.12 * smooth(110, 240, dist)
+  return mix(0.105, 0.64, Math.pow(t, 0.8)) + 0.16 * smooth(110, 240, dist)
 }
 
 // cubic-bezier(0.45, 0, 0.2, 1)

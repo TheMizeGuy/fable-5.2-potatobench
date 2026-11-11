@@ -230,6 +230,22 @@ export function buildTerrain(roadTex: Texture): Terrain {
         // The farm's meadow moves: a gust lays the grass over and it shows pale.
         float gust = gustAt(p) * min(uSway, 1.2);
         col *= 1.0 + 0.14 * gust * ours * uLeaf * (1.0 - vSurf.x);
+        // Wildflowers in drifts through the farm's meadow by the season: buttercup, orange hawkweed and daisies from late
+        // June, goldenrod from August. Too small to see one by one from far off, they show as a wash of their colour.
+        {
+          vec2 fp = p * 2.6;
+          vec2 fc = floor(fp);
+          float h1 = hash12(fc), h2 = hash12(fc + 17.3);
+          float drift = smoothstep(0.42, 0.72, texture2D(uNoise, p * 0.019 + 0.7).b);
+          float june = smoothstep(158.0, 172.0, uDay) * (1.0 - smoothstep(208.0, 224.0, uDay));
+          float aug = smoothstep(214.0, 230.0, uDay) * (1.0 - smoothstep(262.0, 282.0, uDay));
+          vec3 early = h2 < 0.42 ? ${linear('#e8c22a')} : h2 < 0.72 ? ${linear('#de5f24')} : ${linear('#eeeadb')};
+          vec3 fcol = mix(early, ${linear('#d9a92a')}, step(0.5, aug));
+          float share = drift * (june * 0.26 + aug * 0.32) * ours * (1.0 - wetHere) * (1.0 - vSurf.x) * (1.0 - smoothstep(0.1, 0.4, vSurf.z));
+          float bloom = step(h1, share) * (1.0 - smoothstep(0.16, 0.3, length(fract(fp) - 0.5)));
+          float far = smoothstep(0.25, 0.9, fwidth(fp.x));
+          col = mix(col, fcol * 0.9, mix(bloom, share * 0.16, far));
+        }
         // the woods' floor on the ridge, the dooryards and the brook's banks
         col = mix(col, ${linear('#3b3125')} * (0.7 + 0.6 * fine), vSurf.x * 0.92);
         col = mix(col, mix(${linear('#8a6e52')}, ${linear('#5b4534')}, uWet) * (0.82 + 0.36 * fine), smoothstep(0.25, 0.75, vSurf.z + (fine - 0.5) * 0.5) * 0.85);
@@ -384,8 +400,8 @@ export function buildTerrain(roadTex: Texture): Terrain {
           totalEmissiveRadiance += skyRadiance( wR, 0.08 ) * fres * mirror;
           vec2 g = texture2D( uNoise, vWorld.xz * 0.9 + vec2( -uTime * 0.25, uTime * 0.07 ) ).rg - 0.5;
           vec3 gN = normalize( vec3( g.x * 1.6 + ripple.x * 2.0, 1.0, g.y * 1.6 + ripple.y * 2.0 ) );
-          float glint = pow( max( dot( reflect( - wV, gN ), uSunDir ), 0.0 ), 90.0 );
-          totalEmissiveRadiance += uSunCol * glint * 2.2 * mirror * cloudShade( vWorld );
+          float glint = pow( max( dot( reflect( - wV, gN ), uSunDir ), 0.0 ), 160.0 ) * smoothstep( 0.55, 0.8, texture2D( uNoise, vWorld.xz * 0.31 + vec2( uTime * 0.04, 0.0 ) ).b );
+          totalEmissiveRadiance += uSunCol * glint * 3.0 * mirror * cloudShade( vWorld );
         }
       `,
     })

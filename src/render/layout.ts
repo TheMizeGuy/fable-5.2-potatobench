@@ -438,7 +438,7 @@ export function yardSpot(yard: number, slot: number, walker: boolean): Spot {
 // Where a crew stands at a field when it is not working the rows: on the lane at the field's corner, each crew a little apart.
 export function parkSpot(field: number, slot = 0): Pt {
   const f = FIELDS[field]
-  return { x: f.x1 + 1.0 - (slot % 3) * 1.6, z: f.z0 - 0.62 - Math.floor(slot / 3) * 0.5 }
+  return { x: f.x1 + 1.0 - (slot % 3) * 2.9, z: f.z0 - 0.62 - Math.floor(slot / 3) * 0.5 }
 }
 
 // ---- The country beyond the walls: a quilt of blocks, each a woodlot or a run of strips. The terrain shader draws the

@@ -45,10 +45,11 @@ export function makeEnv(): Env {
   }
 }
 
-// By day of the year: how high the late-afternoon sun stands (degrees), and the colour of the grass.
+// By day of the year: how high the evening sun stands (degrees), and the colour of the grass. The game is played in
+// the long light of the end of the day, when every plant throws a shadow down its row.
 const SEASON: [number, number, string][] = [
-  [0, 11, '#8f8768'], [60, 14, '#91876a'], [95, 19, '#93865c'], [125, 23, '#7f8a52'], [150, 26, '#6b8a42'], [196, 27, '#68833f'],
-  [228, 25, '#72853f'], [258, 21, '#868541'], [288, 16, '#8e7d4c'], [318, 12, '#877c5e'], [366, 11, '#8f8768'],
+  [0, 9, '#8f8768'], [60, 11, '#91876a'], [95, 14, '#93865c'], [125, 16.5, '#7f8a52'], [150, 18.5, '#6b8a42'], [196, 19, '#68833f'],
+  [228, 18, '#72853f'], [258, 15.5, '#868541'], [288, 12.5, '#8e7d4c'], [318, 10, '#877c5e'], [366, 9, '#8f8768'],
 ]
 
 interface Sky { sun: number; cover: number; shadow: number; deck: number; haze: number; key: number; turbidity: number; mie: number }

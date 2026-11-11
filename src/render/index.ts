@@ -8,7 +8,7 @@ import { CameraRig, type Pose, type Viewport } from './camera.ts'
 import { Kit } from './crew.ts'
 import { copyEnv, easeEnv, envTarget, light, makeEnv, makeLight } from './env.ts'
 import { createFallbackView } from './fallback.ts'
-import { Fields, PIXEL, UI_GAIN, type HillDisplay } from './fields.ts'
+import { Fields, MARK_WIDE, PIXEL, UI_GAIN, type HillDisplay } from './fields.ts'
 import { Flora } from './flora.ts'
 import { Grass } from './grass.ts'
 import { Harvest } from './harvest.ts'
@@ -377,7 +377,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     U.uHaze.value.set(env.haze, 0.011)
     // Mist lies in the low ground: on the brook and the bottom land, thinning fast above it; on a fog day it fills the
     // valley to the mid slope and the ridge stands out of it.
-    U.uMist.value.set((0.5 - 0.3 * env.mistDeep) * env.mist, 2.6 - 1.6 * env.mistDeep, 0.2 + 1.2 * env.mistDeep, 0.85)
+    U.uMist.value.set((0.5 - 0.3 * env.mistDeep) * env.mist, 2.6 - 1.5 * env.mistDeep, 0.2 + 1.9 * env.mistDeep, 0.85)
     U.uCloud.value.x = env.cloudShadow
     U.uCloud.value.y = env.cloud
     U.uSnow.value = env.snow
@@ -476,6 +476,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     birds.update(ambient, Math.max(env.rain, env.snowfall), lit.hazeAway)
     shadows.update(lit.sunDir, lit.sun, focus, rig.focus(), dtMs <= 0.5)
     fields.setFarShadows(!shadows.holdsFarm)
+    MARK_WIDE.value = clamp(rig.cur.dist / 42, 1, 4.5)
     fields.update(dt, cam, { selection: app.selection, hover: app.hover, oats: env.oats, oatsRipe: env.oatsRipe, reduced })
     grass.update(cam)
     flora.update(cam)
