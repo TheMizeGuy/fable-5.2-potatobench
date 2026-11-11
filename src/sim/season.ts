@@ -7,12 +7,13 @@ import { distance, DUFOUR_YARD, HOME_FIELDS, HOME_YARD, PARCELS } from './farm.t
 import { gradeHill, newLot, finishLot, lotCwt } from './harvest.ts'
 import { brushedNow, COVER_WORD, envTmin, fell, fellLeft, fieldEnv, isField, isOpen, standing, stoneBruise, stoneSpeed, stumped } from './land.ts'
 import * as P from './params.ts'
-import { jobSkill, moodTarget, payOf, scoutChance, SKILL_LABEL, speed, sprayCover, willDo, xpNeed, zeroSkills } from './people.ts'
-import { nextInt, nextUnit } from './rng.ts'
+import { breakdownChance, CHOICE_LABEL, defaultChoice, hurtChance, INCIDENT_TITLE, incidentText } from './incidents.ts'
+import { applicantsFor, hurt, jobSkill, moodTarget, payOf, scoutChance, SKILL_LABEL, speed, sprayCover, willDo, xpNeed, zeroSkills } from './people.ts'
+import { hashUnit, nextInt, nextUnit } from './rng.ts'
 import {
   H_DECAYED, H_DUG, H_EMERGED, H_KNOWN, H_ROGUED, H_SAMPLED, H_SEEDBLIGHT, H_VIRUS, H_WILT,
-  type Campaign, type Cause, type Day, type FieldSeason, type FieldStatus, type GameEvent, type Job, type JobKind, type Lot, type Rig, type Season, type Skill,
-  type Unit, type World,
+  type Campaign, type Cause, type Day, type FieldSeason, type FieldStatus, type GameEvent, type Incident, type IncidentKind, type Job, type JobKind, type Lot,
+  type Rig, type Season, type Skill, type Unit, type World,
 } from './types.ts'
 import { variety } from './varieties.ts'
 import { clamp, getDay, pDays, pUnit, skyOf, wallin } from './weather.ts'
@@ -567,7 +568,7 @@ function digProgress(c: Campaign, s: Season, f: FieldSeason, field: number, job:
 //    work it at their own speed until it is done or the day is used up. Someone who finds nothing is idle.
 // People end the day where they worked, and one still on the road carries the rest of the drive into tomorrow.
 
-interface Turn { u: Unit; left: number; idle: boolean; spent: Record<Skill, number> }
+interface Turn { u: Unit; left: number; idle: boolean; spent: Record<Skill, number>; tractor: boolean }
 
 function heldByOther(c: Campaign, job: Job, u: Unit): boolean {
   for (const o of c.crew) if (o !== u && o.job === job.id) return true
@@ -583,15 +584,22 @@ export function tractorsOwned(c: Campaign): number {
   return 1 + (c.upgrades.tractor2 ? 1 : 0) + (c.upgrades.tractor3 ? 1 : 0)
 }
 
+// Tractors that run today: those the farm owns less those broken down.
+export function tractorsRunning(c: Campaign, day: number): number {
+  let out = 0
+  for (const back of c.broken) if (back > day) out++
+  return Math.max(0, tractorsOwned(c) - out)
+}
+
 // What this person would drive to work this order: '' for work on foot, the truck for hauling when it is free, a
-// tractor otherwise, or null when every tractor is taken.
-function rigFor(c: Campaign, u: Unit, job: Job): Rig | null {
+// tractor otherwise, or null when every running tractor is taken.
+function rigFor(c: Campaign, s: Season, u: Unit, job: Job): Rig | null {
   if (jobSkill(job.kind) !== 'machine') return ''
   if (u.rig) return u.rig
   if (job.kind === 'haul' && c.upgrades.truck && !c.crew.some(o => o !== u && o.rig === 'truck')) return 'truck'
   let busy = 0
   for (const o of c.crew) if (o !== u && o.rig === 'tractor') busy++
-  return busy < tractorsOwned(c) ? 'tractor' : null
+  return busy < tractorsRunning(c, s.day) ? 'tractor' : null
 }
 
 // Whether today is a working day: on a Sunday off nobody works.
@@ -662,6 +670,7 @@ function work(world: World, c: Campaign, s: Season, t: Turn, job: Job, d: Day, o
     if (job.kind === 'water' && !job.pond && pondServes(c, job.field)) { job.pond = true; c.pond -= 1 }
     job.need = job.kind === 'water' && job.pond ? P.POND_DAYS : jobDays(c, job.kind, f, job.field)
   }
+  if (u.rig === 'tractor') t.tractor = true
   const rate = workRate(c, s, u, job)
   const use = Math.min(t.left * rate, job.need - job.done)
   const time = Math.min(t.left, use / rate)
@@ -685,6 +694,7 @@ function work(world: World, c: Campaign, s: Season, t: Turn, job: Job, d: Day, o
 function haulWork(c: Campaign, s: Season, t: Turn, job: Job, out: GameEvent[]): void {
   const u = t.u
   const f = s.fields[job.field]
+  if (u.rig === 'tractor') t.tractor = true
   const rate = haulRate(c, u, job.field, u.rig || 'tractor')
   const take = Math.min(t.left * rate, f.inField)
   const time = Math.min(t.left, take / rate)
@@ -732,7 +742,7 @@ function choose(c: Campaign, s: Season, u: Unit, d: Day, out: GameEvent[]): { jo
       const job = s.jobs[k]
       if (u.prio[jobSkill(job.kind)] !== level || !mayTake(u, job) || heldByOther(c, job, u)) { k++; continue }
       if (!stillWanted(c, s, job, out)) continue
-      const rig = rigFor(c, u, job)
+      const rig = rigFor(c, s, u, job)
       if (!waitFor(c, s, job, d) && rig !== null) cands.push({ job, rig })
       k++
     }
@@ -747,11 +757,11 @@ function choose(c: Campaign, s: Season, u: Unit, d: Day, out: GameEvent[]): { jo
   return null
 }
 
-// Who works today: everyone but a foreman, and nobody on a Sunday off.
+// Who works today: everyone but a foreman and anyone laid up hurt, and nobody on a Sunday off.
 function turnsFor(c: Campaign, s: Season): Turn[] {
   if (!workday(c, s)) return []
   const turns: Turn[] = []
-  for (const u of c.crew) if (!u.foreman) turns.push({ u, left: 1, idle: false, spent: zeroSkills() })
+  for (const u of c.crew) if (!u.foreman && !hurt(u, s.day)) turns.push({ u, left: 1, idle: false, spent: zeroSkills(), tractor: false })
   turns.sort((a, b) => turnBefore(a.u, b.u) ? -1 : turnBefore(b.u, a.u) ? 1 : 0)
   return turns
 }
@@ -1222,6 +1232,7 @@ export function stepDay(world: World, c: Campaign): GameEvent[] {
     c.yearWages += P.PICKER_DAY
   }
 
+  morning(c, s, out)
   const { turns, minded } = runCrews(world, c, s, d, out)
   contractors(c, s, out)
   if (minded) standSales(world, c, s)
@@ -1251,6 +1262,7 @@ export function stepDay(world: World, c: Campaign): GameEvent[] {
     if (st === 'planted' || st === 'growing' || st === 'dead' || st === 'digging') fieldDay(world, c, s, i, d, sevRegion, out)
   }
   exposure(c, s, d, out)
+  drawIncidents(c, s, turns, out)
   peopleDay(c, s, turns, out)
 
   const freeze = s.day >= s.lastDay || (s.day > dayIndex(s.year, 9, 1) && s.soilT <= P.FREEZE_UP_SOIL_T)
@@ -1275,6 +1287,7 @@ export function stepDay(world: World, c: Campaign): GameEvent[] {
       }
     }
     leftInField(c, s, out, 'froze in the barrels')
+    closeIncidents(c, s, out)
     push(s, out, 'freeze', -1, 'info', `${formatDay(s.year, s.day)}: the ground has frozen. The season is over.`)
   }
   s.day++
@@ -1287,6 +1300,122 @@ export function seasonDone(c: Campaign): boolean {
   if (!s) return false
   if (s.frozen) return true
   return s.fields.every(f => f.status === 'off' || f.status === 'rest' || (f.status === 'dug' && f.weighed) || f.status === 'lost')
+}
+
+// ---------------------------------------------------------------- incidents
+
+// The morning: broken tractors that are back, incidents nobody answered taking their defaults, and the tractors
+// that are down taken from whoever was holding them.
+function morning(c: Campaign, s: Season, out: GameEvent[]): void {
+  const back = c.broken.filter(b => b <= s.day).length
+  if (back > 0) {
+    c.broken = c.broken.filter(b => b > s.day)
+    push(s, out, 'repaired', -1, 'good', back === 1 ? 'The tractor is going again.' : `${back} tractors are going again.`)
+  }
+  for (const inc of [...c.incidents]) if (inc.until < s.day) resolveIncident(c, s, inc, defaultChoice(inc), out)
+  let running = tractorsRunning(c, s.day)
+  for (const u of c.crew) {
+    if (u.rig !== 'tractor') continue
+    if (running > 0) running--
+    else letGo(u)
+  }
+}
+
+// Opens an incident, with an event saying what happened and what is asked.
+function openIncident(c: Campaign, s: Season, out: GameEvent[], fields: Omit<Incident, 'id' | 'day'>): Incident {
+  const inc: Incident = { id: c.nextIncident++, day: s.day, ...fields }
+  c.incidents.push(inc)
+  const choices = inc.choices.map(ch => CHOICE_LABEL[ch]).join(' or ')
+  push(s, out, 'incident', -1, 'warn', `${INCIDENT_TITLE[inc.kind]}. ${incidentText(c, inc)} ${choices}?`, { incident: inc.id, kind: inc.kind })
+  return inc
+}
+
+// The passive choices, which need nothing but the season: someone not taken on, an offer not matched, a part waited
+// for, a buyer turned away. The active ones are answered through apply().
+export function resolveIncident(c: Campaign, s: Season, inc: Incident, choice: string, out: GameEvent[]): void {
+  const k = c.incidents.indexOf(inc)
+  if (k >= 0) c.incidents.splice(k, 1)
+  switch (choice) {
+    case 'pass':
+      push(s, out, 'incidentDone', -1, 'info', `${inc.applicant!.name} looks for work elsewhere.`, { incident: inc.id })
+      break
+    case 'let': {
+      const u = c.crew.find(x => x.id === inc.unit)
+      if (u && u.mood < P.POACH_MOOD) {
+        removePerson(c, u)
+        push(s, out, 'poached', -1, 'bad', `${u.name} takes the neighbour's offer and goes.`, { incident: inc.id, unit: u.id })
+      } else if (u) {
+        push(s, out, 'incidentDone', -1, 'good', `${u.name} is happy enough here and stays.`, { incident: inc.id, unit: u.id })
+      }
+      break
+    }
+    case 'wait':
+      push(s, out, 'incidentDone', -1, 'info', `The part is on its way: the tractor is back on ${formatDay(s.year, inc.back!)}.`, { incident: inc.id })
+      break
+    case 'refuse':
+      push(s, out, 'incidentDone', -1, 'info', 'The buyer goes on down the road.', { incident: inc.id })
+      break
+  }
+}
+
+// When the season ends, open incidents take their defaults and the tractors are mended over the winter.
+export function closeIncidents(c: Campaign, s: Season, out: GameEvent[]): void {
+  for (const inc of [...c.incidents]) resolveIncident(c, s, inc, defaultChoice(inc), out)
+  c.broken = []
+  for (const u of c.crew) u.out = -1
+}
+
+function openKind(c: Campaign, kind: IncidentKind): boolean {
+  return c.incidents.some(i => i.kind === kind)
+}
+
+// The day's incidents, drawn from the campaign seed and the day (not the game's random stream), so a replay sees the
+// same ones: injuries to people working tired in the woods or on a machine, tractors breaking down, someone asking
+// for work, a neighbour after one of the farm's people, a buyer for a lot.
+function drawIncidents(c: Campaign, s: Season, turns: Turn[], out: GameEvent[]): void {
+  const u01 = (salt: number) => hashUnit(c.seed, s.year, s.day, salt)
+  const shed = hasBuilt(c, 'shed')
+  for (const t of turns) {
+    const u = t.u
+    if (t.spent.machine + t.spent.woods > 0 && u01(7100 + u.id) < hurtChance(u)) {
+      const days = P.HURT_DAYS[0] + Math.floor(u01(7150 + u.id) * (P.HURT_DAYS[1] - P.HURT_DAYS[0] + 1))
+      u.out = s.day + 1 + days
+      letGo(u)
+      push(s, out, 'hurt', -1, 'bad', `${u.name} is hurt, working worn out ${t.spent.woods > 0 ? 'in the woods' : 'on the tractor'}: off for ${days} days, back on ${formatDay(s.year, u.out)}.`, { unit: u.id, days })
+    }
+    if (t.tractor && c.broken.length < tractorsOwned(c)) {
+      if (u01(7200 + u.id) < breakdownChance(u, shed)) {
+        const mechanic = c.crew.some(x => x.skills.machine >= P.MECHANIC && !hurt(x, s.day + 1))
+        const back = s.day + 1 + (mechanic ? 1 : P.BREAK_DAYS)
+        c.broken.push(back)
+        if (mechanic) push(s, out, 'breakdown', -1, 'warn', `A tractor broke down under ${u.name}. There is someone on the farm who can fix it: it is back on ${formatDay(s.year, back)}.`, { unit: u.id })
+        else openIncident(c, s, out, { kind: 'breakdown', until: back - 1, choices: ['rush', 'wait'], unit: u.id, back })
+      }
+    }
+  }
+  if (!openKind(c, 'applicant') && u01(7300) < P.APPLICANT_CHANCE) {
+    const taken = new Set([...c.crew.map(u => u.name), ...c.applicants.map(a => a.name)])
+    const a = applicantsFor(c.seed, s.year, taken, 1, s.day)[0]
+    openIncident(c, s, out, { kind: 'applicant', until: s.day + P.INCIDENT_DAYS, choices: ['hire', 'pass'], applicant: { ...a, id: c.nextIncident } })
+  }
+  if (!openKind(c, 'poach') && u01(7400) < P.POACH_CHANCE) {
+    let best: Unit | null = null, bestSum = -1
+    for (const u of c.crew) {
+      if (u.kind === 'farmer') continue
+      let sum = 0
+      for (const k of P.SKILLS) sum += u.skills[k]
+      if (sum > bestSum) { best = u; bestSum = sum }
+    }
+    if (best) openIncident(c, s, out, { kind: 'poach', until: s.day + P.INCIDENT_DAYS, choices: ['match', 'let'], unit: best.id, wage: Math.round(best.wage * (1 + P.POACH_RAISE)) })
+  }
+  if (!openKind(c, 'buyer') && s.day >= dayIndex(s.year, P.BUYER_FROM.month, P.BUYER_FROM.dom) && u01(7500) < P.BUYER_CHANCE) {
+    let best: Lot | null = null
+    for (const l of c.lots) {
+      if (!l.open || l.year !== s.year || !s.fields[l.field]?.weighed || lotCwt(l) < P.BUYER_MIN_CWT) continue
+      if (!best || lotCwt(l) > lotCwt(best)) best = l
+    }
+    if (best) openIncident(c, s, out, { kind: 'buyer', until: s.day + P.BUYER_DAYS, choices: ['take', 'refuse'], lot: best.id })
+  }
 }
 
 // When the season ends with a crop still in barrels in a field, it is lost there; what was hauled in is weighed.

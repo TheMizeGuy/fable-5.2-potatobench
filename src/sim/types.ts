@@ -58,6 +58,7 @@ export type VarietyId = 'norland' | 'superior' | 'katahdin' | 'kennebec' | 'burb
 export type JobKind = 'plant' | 'hill' | 'scout' | 'spray' | 'water' | 'rogue' | 'sample' | 'kill' | 'dig' | 'fell' | 'rocks' | 'brush' | 'build' | 'haul'
 export type UpgradeId = 'boom' | 'harvester' | 'vent' | 'reel' | 'tractor2' | 'house2' | 'tractor3' | 'truck'
 export type BuildingKind = 'house' | 'shed' | 'bunk' | 'packing' | 'pond' | 'stand' | 'station' | 'road'
+export type IncidentKind = 'applicant' | 'poach' | 'breakdown' | 'buyer'
 export type Grade = 'no1' | 'chef' | 'b' | 'no2' | 'cull'
 export type Cause = 'green' | 'scab' | 'hollow' | 'knob' | 'skin' | 'bruise' | 'blight' | 'frost' | 'rot' | 'small' | 'stone'
 export type Tenure = 'owned' | 'rented' | 'none'
@@ -207,6 +208,22 @@ export interface Unit {
   winterField: number               // the tract felled in winter, or -1
   low: number                       // days running with mood below the quitting line
   rig: Rig                          // what the person is driving for the order held
+  out: number                       // hurt: the day they are back at work, or -1
+}
+
+// Something that happened and asks for a decision. It waits until the day `until` for an answer, then takes its
+// default.
+export interface Incident {
+  id: number
+  kind: IncidentKind
+  day: number
+  until: number
+  choices: string[]         // the first is the active choice; the last is the default
+  applicant?: Applicant     // someone asking for work
+  unit?: number             // the person a neighbour wants, or who drove the tractor that broke
+  wage?: number             // what the neighbour offers
+  lot?: number              // the lot a buyer wants
+  back?: number             // a broken tractor: the day it is back if the farm waits
 }
 
 // Someone asking for work this spring.
@@ -340,6 +357,9 @@ export interface Campaign {
   buildings: Building[]
   nextBuilding: number
   pond: number              // field-waterings in the irrigation pond
+  incidents: Incident[]     // open, waiting for an answer
+  nextIncident: number
+  broken: number[]          // for each tractor out of action, the day it is back
   offers: Offer[]           // this spring's contract offers, until the season begins
   contracts: Contract[]     // this year's accepted contracts
   month: number             // cellar month index, 0 = November
@@ -384,6 +404,7 @@ export type Cmd =
   | { t: 'sellLogs'; loads: number }
   | { t: 'payMortgage'; amount: number }
   | { t: 'build'; kind: BuildingKind; yard: number }
+  | { t: 'answer'; incident: number; choice: string }
   | { t: 'job'; kind: JobKind; field: number; unit?: number }
   | { t: 'assign'; id: number; unit: number }
   | { t: 'cancel'; id: number }

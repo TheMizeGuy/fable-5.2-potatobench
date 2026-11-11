@@ -308,3 +308,20 @@ text above was silent, or two of its rules collided, the build chose as follows.
   to the potato house now slows the hauling instead. A farmer alone now spends
   about three and a half days a field at harvest instead of two, which is the
   point: the harvest is when a second pair of hands, pickers or a truck pay.
+
+**Incidents.**
+
+- *Rates.* Someone asking for work 1.2% a day, a neighbour's offer 0.6%, a buyer
+  1% (from August, with a weighed lot of 100 cwt or more), a breakdown 0.4% a
+  tractor-day times (1 + 2 x the driver's tiredness), an injury 5% a day of
+  woods or machine work while worn out (above 0.85). In play that is a handful
+  a season, more on a farm worked hard with Sundays on.
+- *Who answers what.* The last choice of each is its default (not hired, not
+  matched, waiting for the part, turned down); answers wait four days, a buyer
+  seven. They happen only in the season; the season's end closes them and mends
+  the tractors.
+- *A rush part* is paid like any job, on the season's operating loan.
+- *With a mechanic on the farm* (machine skill 7) a breakdown costs a day and asks
+  nothing, so a rush part would buy nothing.
+- *An injury* is not a question: it is an event, and the person shows as hurt,
+  with the day they are back, in `peopleInfo`.

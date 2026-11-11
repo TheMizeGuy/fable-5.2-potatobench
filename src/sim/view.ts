@@ -3,23 +3,25 @@
 import { DUE_LABEL } from './buyers.ts'
 import { dayIndex, formatDay, weekday, WEEKDAYS, withCommas } from './calendar.ts'
 import {
-  cellarCapacity, mortgageDue, mortgageOwed, openLots, pickersWindow, potatoHouses, stumpBlock, timberTracts, WINTER_LABEL, WINTER_WORKS, winterBlock,
-  type PotatoHouse,
+  answerBlock, cellarCapacity, mortgageDue, mortgageOwed, openLots, pickersWindow, potatoHouses, stumpBlock, timberTracts, WINTER_LABEL, WINTER_WORKS,
+  winterBlock, type PotatoHouse,
 } from './campaign.ts'
 import { hireRoom, travelDays } from './crew.ts'
 import { BLOCK_NAME, DUFOUR_YARD, HOME_YARD, PARCELS, TRACTS, YARDS, type BlockId, type Holding } from './farm.ts'
 import { lotCwt } from './harvest.ts'
 import * as P from './params.ts'
-import { bestSkill, defaultPrio, hasBed, hiredCount, housingLimit, moodWord, payOf, speed, tiredWord, xpNeed } from './people.ts'
+import { bestSkill, defaultPrio, hasBed, hiredCount, housingLimit, hurt, moodWord, payOf, speed, tiredWord, xpNeed } from './people.ts'
+import { CHOICE_LABEL, choiceDoes, defaultChoice, INCIDENT_TITLE, incidentText } from './incidents.ts'
 import { brushedNow, clearing, COVER_WORD, fellLeft, fieldEnv, sheltered, standing, type ClearStage } from './land.ts'
 import {
-  FIELD_NAMES, haulFactor, haulRate, holdsDufour, jobBlock, jobCost, jobDays, jobWait, JOB_LABEL, knownHills, standOpen, tractorsOwned, waitFor, workday,
+  FIELD_NAMES, haulFactor, haulRate, holdsDufour, jobBlock, jobCost, jobDays, jobWait, JOB_LABEL, knownHills, standOpen, tractorsOwned, tractorsRunning,
+  waitFor, workday,
 } from './season.ts'
 import { buildBlock, buildCost, buildingAt, hasBuilt, rain30, roadFactor, YARD_NAME } from './buildings.ts'
 import {
   H_DECAYED, H_DUG, H_EMERGED, H_KNOWN, H_ROGUED, H_SAMPLED, H_VIRUS, H_WILT,
-  type BuildingKind, type Campaign, type Cover, type Day, type Due, type FieldSeason, type JobKind, type Skill, type Tenure, type Trait, type UnitKind,
-  type VarietyId,
+  type BuildingKind, type Campaign, type Cover, type Day, type Due, type FieldSeason, type IncidentKind, type JobKind, type Skill, type Tenure, type Trait,
+  type UnitKind, type VarietyId,
   type WinterWork, type World,
 } from './types.ts'
 import { variety } from './varieties.ts'
@@ -302,6 +304,7 @@ export interface PersonInfo {
   winterText: string
   bed: boolean                      // has a bed in a bunkhouse
   quitIn: number                    // days until they quit if their mood stays this low; -1 when they are not about to
+  hurtUntil: number                 // hurt: the day they are back at work; -1 when not
 }
 
 export function peopleInfo(c: Campaign): PersonInfo[] {
@@ -318,6 +321,7 @@ export function peopleInfo(c: Campaign): PersonInfo[] {
     }
     let doing: string
     if (u.foreman) doing = `Foreman of ${BLOCK_NAME[u.foreman]}`
+    else if (s && !s.frozen && hurt(u, s.day)) doing = `Hurt: back on ${formatDay(s.year, u.out)}`
     else if (c.phase === 'season' && s && !s.frozen) {
       if (rest) doing = 'Sunday: resting'
       else if (j) doing = `${travelling ? 'On the way to' : 'At'} ${JOB_LABEL[j.kind].toLowerCase()}${j.field >= 0 ? ` in ${FIELD_NAMES[j.field]}` : ''}`
@@ -337,6 +341,7 @@ export function peopleInfo(c: Campaign): PersonInfo[] {
       winterText: u.winter === 'woods' && u.winterField >= 0 ? `${WINTER_LABEL.woods}: ${FIELD_NAMES[u.winterField]}` : WINTER_LABEL[u.winter],
       bed: hasBed(c, u),
       quitIn: u.kind !== 'farmer' && u.mood < P.QUIT_MOOD ? Math.max(1, P.QUIT_DAYS - u.low) : -1,
+      hurtUntil: s && hurt(u, s.day) ? u.out : -1,
     }
   })
 }
@@ -412,7 +417,8 @@ export interface LabourInfo {
   restDay: boolean                  // nobody works today: a Sunday off
   sundaysOff: boolean
   tractors: number                  // tractors the farm owns
-  tractorsFree: number              // not held by anyone right now
+  tractorsFree: number              // running and not held by anyone right now
+  broken: number                    // tractors broken down today
   truck: boolean                    // the farm has a truck for hauling
   hired: number                     // hired people
   housing: number                   // how many hired people the farm can house
@@ -435,7 +441,8 @@ export function labourInfo(c: Campaign): LabourInfo {
     weekday: s ? WEEKDAYS[weekday(s.year, s.day)] : '',
     restDay: inSeason && !workday(c, s!),
     sundaysOff: c.sundaysOff,
-    tractors: owned, tractorsFree: Math.max(0, owned - held), truck: c.upgrades.truck,
+    tractors: owned, tractorsFree: Math.max(0, (s && inSeason ? tractorsRunning(c, s.day) : owned) - held), truck: c.upgrades.truck,
+    broken: s && inSeason ? owned - tractorsRunning(c, s.day) : 0,
     hired: hiredCount(c), housing: housingLimit(c), beds: housingLimit(c) - P.HOUSED_OUT, hireWhy: hireRoom(c),
     pickers: { on: !!s?.pickers, ok: pickersWhy === '', why: pickersWhy, perDay: P.PICKER_DAY, digFaster: P.PICKER_DIG },
   }
@@ -594,6 +601,36 @@ export interface StandInfo { built: boolean; open: boolean; sales: number; perDa
 export function standInfo(c: Campaign): StandInfo {
   const s = c.season
   return { built: hasBuilt(c, 'stand'), open: !!s && c.phase === 'season' && !s.frozen && standOpen(c, s), sales: c.yearStand, perDay: P.STAND_CWT }
+}
+
+// ---------------------------------------------------------------- incidents
+
+export interface IncidentChoice { id: string; label: string; does: string; ok: boolean; why: string }
+
+export interface IncidentInfo {
+  id: number
+  kind: IncidentKind
+  title: string
+  text: string              // what happened, in plain words
+  day: number               // the day it came
+  until: number             // the last day it waits for an answer
+  daysLeft: number
+  choices: IncidentChoice[] // each with what it does, and why it cannot be taken now ('' when it can)
+  fallback: string          // the choice taken if nobody answers
+}
+
+// The incidents waiting for an answer.
+export function incidentInfo(c: Campaign): IncidentInfo[] {
+  const day = c.season?.day ?? 0
+  return c.incidents.map(inc => ({
+    id: inc.id, kind: inc.kind, title: INCIDENT_TITLE[inc.kind], text: incidentText(c, inc), day: inc.day, until: inc.until,
+    daysLeft: Math.max(0, inc.until - day + 1),
+    choices: inc.choices.map(ch => {
+      const why = answerBlock(c, inc, ch)
+      return { id: ch, label: CHOICE_LABEL[ch], does: choiceDoes(c, inc, ch), ok: why === '', why }
+    }),
+    fallback: defaultChoice(inc),
+  }))
 }
 
 // ---------------------------------------------------------------- tracts, materials, the mortgage

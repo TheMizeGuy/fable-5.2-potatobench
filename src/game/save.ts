@@ -157,6 +157,13 @@ const MIGRATIONS: Record<number, Migration> = {
       f.weighed ??= f.status === 'dug'
     }
   },
+  // Version 7 added incidents, broken tractors and people laid up hurt.
+  6: c => {
+    c.incidents ??= []
+    c.nextIncident ??= 1
+    c.broken ??= []
+    for (const u of (c.crew as Record<string, unknown>[] | undefined) ?? []) if (u && typeof u === 'object') u.out ??= -1
+  },
 }
 
 // Version 3 had fourteen parcels.

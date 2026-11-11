@@ -8,10 +8,14 @@ import { sellLot } from './market.ts'
 import * as P from './params.ts'
 import { applicantsFor, fromApplicant, jobSkill, payOf, SKILL_LABEL, speed } from './people.ts'
 import { hash32 } from './rng.ts'
-import { addJob, buildJob, FIELD_NAMES, holdsDufour, leftInField, letGo, releaseJob, removePerson, seasonDone, sheltering, startSeason, stepDay, unitBlock } from './season.ts'
+import {
+  addJob, buildJob, closeIncidents, FIELD_NAMES, holdsDufour, leftInField, letGo, releaseJob, removePerson, resolveIncident, seasonDone, sheltering,
+  startSeason, stepDay, unitBlock,
+} from './season.ts'
+import { CHOICE_LABEL } from './incidents.ts'
 import { article, buildBlock, buildCost, buildingAt, buildWork, hasBuilt, startBuilding, YARD_NAME } from './buildings.ts'
 import { brushedNow, COVER_WORD, fell, isField, standing } from './land.ts'
-import type { Campaign, Cmd, Contract, Due, FieldPlan, GameEvent, Lot, Result, Unit, UpgradeId, WinterWork, World, YearSummary } from './types.ts'
+import type { Campaign, Cmd, Contract, Due, FieldPlan, GameEvent, Incident, Lot, Result, Season, Unit, UpgradeId, WinterWork, World, YearSummary } from './types.ts'
 import { variety } from './varieties.ts'
 import { dayIndex, withCommas } from './calendar.ts'
 import { finishLot } from './harvest.ts'
@@ -65,6 +69,7 @@ export function createCampaign(world: World, opts: { seed: number; startYear: nu
     upgrades: { boom: false, harvester: false, vent: false, reel: false, tractor2: false, house2: false, tractor3: false, truck: false },
     seedStock: [], season: null, lots: [], nextLot: 1,
     crew: [newFarmer()], nextUnit: 1, applicants: [], sundaysOff: true, logs: 0, stone: 0, mortgages: [], buildings: [], nextBuilding: 1, pond: 0,
+    incidents: [], nextIncident: 1, broken: [],
     offers: [], contracts: [],
     month: 0,
     yearRevenue: 0, yearCosts: 0, yearRest: 0, yearStorage: 0,
@@ -192,6 +197,7 @@ function endSeason(world: World, c: Campaign): GameEvent[] {
     }
   }
   leftInField(c, s, out, 'was left in the barrels')
+  closeIncidents(c, s, out)
   s.jobs = []
   // The crews go home for the winter.
   for (const u of c.crew) { letGo(u); u.at = HOME_YARD; u.to = HOME_YARD; u.road = 0 }
@@ -596,6 +602,17 @@ export function apply(world: World, c: Campaign, cmd: Cmd): Result {
       if (cmd.upgrade === 'house2') c.buildings.push({ id: c.nextBuilding++, kind: 'house', yard: HOME_YARD, done: P.BUILDINGS.house.days, need: P.BUILDINGS.house.days, built: true })
       return ok()
     }
+    case 'answer': {
+      const s = c.season
+      const inc = c.incidents.find(i => i.id === cmd.incident)
+      if (!inc || c.phase !== 'season' || !s) return fail('No such question is waiting.')
+      if (!inc.choices.includes(cmd.choice)) return fail(`The choices are: ${inc.choices.map(ch => CHOICE_LABEL[ch]).join(', ')}.`)
+      const why = answerBlock(c, inc, cmd.choice)
+      if (why) return fail(why)
+      const out: GameEvent[] = []
+      answer(world, c, s, inc, cmd.choice, out)
+      return ok(out)
+    }
     case 'build': {
       const why = buildBlock(c, cmd.kind, cmd.yard, holdsDufour(c))
       if (why) return fail(why)
@@ -949,6 +966,64 @@ export function apply(world: World, c: Campaign, cmd: Cmd): Result {
     }
   }
   return fail('No such command.')
+}
+
+// Why this answer cannot be given now, or '' when it can.
+export function answerBlock(c: Campaign, inc: Incident, choice: string): string {
+  switch (choice) {
+    case 'hire': return hireRoom(c)
+    case 'match': {
+      const u = c.crew.find(x => x.id === inc.unit)
+      return u ? '' : 'They have gone already.'
+    }
+    case 'take': {
+      const lot = c.lots.find(l => l.id === inc.lot)
+      if (!lot || !lot.open) return 'That lot is gone.'
+      return ''
+    }
+  }
+  return ''
+}
+
+// Carries out an answer. The passive choices are the defaults, shared with the season's day.
+function answer(world: World, c: Campaign, s: Season, inc: Incident, choice: string, out: GameEvent[]): void {
+  const done = () => { c.incidents = c.incidents.filter(i => i !== inc) }
+  switch (choice) {
+    case 'hire': {
+      done()
+      out.push(takeOn(c, fromApplicant(c, inc.applicant!)))
+      return
+    }
+    case 'match': {
+      done()
+      const u = c.crew.find(x => x.id === inc.unit)!
+      const was = u.wage
+      u.wage = inc.wage!
+      out.push(note(c, 'incidentDone', 'info', `${u.name} stays: the wage goes from $${withCommas(was)} to $${withCommas(u.wage)} a month.`))
+      return
+    }
+    case 'rush': {
+      done()
+      cost(c, P.RUSH_PART)
+      const k = c.broken.indexOf(inc.back!)
+      if (k >= 0) c.broken[k] = s.day + 1
+      out.push(note(c, 'incidentDone', 'info', `A rush part for $${withCommas(P.RUSH_PART)}: the tractor is back tomorrow.`))
+      return
+    }
+    case 'take': {
+      done()
+      const lot = c.lots.find(l => l.id === inc.lot)!
+      ageLot(c, lot, s.day)
+      const money = sellLot(world, c, lot, 1)
+      const bonus = money * P.BUYER_PREMIUM
+      c.cash += bonus
+      c.yearRevenue += bonus
+      lot.revenue += bonus
+      out.push(note(c, 'incidentDone', 'good', `Sold the ${variety(lot.variety).name} from ${FIELD_NAMES[lot.field]} to the buyer for $${withCommas(money + bonus)}, 10% over the market.`, lot.field))
+      return
+    }
+  }
+  resolveIncident(c, s, inc, choice, out)
 }
 
 // Why the stumps cannot be pulled on this tract now, or '' when they can.

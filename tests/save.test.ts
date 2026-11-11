@@ -23,6 +23,11 @@ const V4_PARCELS = 14
 
 // DOWN[n] takes a campaign saved at version n + 1 back to what a version n build saved.
 const DOWN: Record<number, (o: Raw) => void> = {
+  // Version 7 added incidents, broken tractors and people laid up hurt (a version 6 build had none of them).
+  6: o => {
+    for (const k of ['incidents', 'nextIncident', 'broken']) delete o[k]
+    for (const u of o.crew as Record<string, unknown>[]) delete u.out
+  },
   // Version 6 added buildings, the third tractor and the truck, the pond, packing, the stand and the haul.
   // (Buildings go with it: a version 5 build had none.)
   5: o => {
@@ -267,7 +272,9 @@ describe('parseSave', () => {
     expect(c.v).toBe(S.SAVE_VERSION)
     const [farmer, hand] = c.crew
     expect([farmer.skills, farmer.prio, farmer.trait, farmer.ask]).toEqual([S.FARMER_SKILLS, { machine: 2, field: 2, woods: 2, build: 2, pack: 2 }, '', 0])
-    expect([hand.kind, hand.skills, hand.ask, hand.wage, hand.prio.machine, hand.prio.field]).toEqual(['hand', S.HAND_SKILLS, S.HAND_WAGE, S.HAND_WAGE, 0, 1])
+    // An old save's wage stands, and is what they are taken to have asked.
+    const wage = r.campaign.crew[1].wage
+    expect([hand.kind, hand.skills, hand.ask, hand.wage, hand.prio.machine, hand.prio.field]).toEqual(['hand', S.HAND_SKILLS, wage, wage, 0, 1])
     expect(S.TRAIT_LIST).toContain(hand.trait)
     for (const u of c.crew) expect([u.tired, u.mood, u.foreman, u.winter, u.low, u.rig]).toEqual([0, S.MOOD_START, '', 'off', 0, ''])
     expect([c.sundaysOff, c.applicants, c.season!.pickers]).toEqual([true, [], false])
@@ -324,6 +331,21 @@ describe('parseSave', () => {
     expect(done.done).toBe(true)
     expect(done.campaign.history.length).toBe(5)
     for (const h of done.campaign.history) expect(Number.isFinite(h.cashEnd)).toBe(true)
+  })
+
+  it('migrates a version 6 save made in mid-season: no incidents, nobody hurt, every tractor running, and it plays on', () => {
+    const r = runReplay(S, world, { ...REPLAY, stopAt: c => c.yearIdx === 1 && c.phase === 'season' && c.season!.day >= S.dayIndex(c.year, 6, 1) && c.incidents.length === 0 && c.broken.length === 0 && c.crew.every(u => u.out < 0) })
+    expect(r.done).toBe(false)
+    const v6 = toV(r.campaign, 6)
+    expect(v6.incidents).toBeUndefined()
+    const c = parseSave(JSON.stringify({ v: 6, savedAt: 14, campaign: v6 }))!.campaign
+    expect(c.v).toBe(S.SAVE_VERSION)
+    expect([c.incidents, c.nextIncident, c.broken]).toEqual([[], 1, []])
+    for (const u of c.crew) expect(u.out).toBe(-1)
+    expect(S.hashCampaign(c)).toBe(S.hashCampaign({ ...r.campaign, nextIncident: 1 }))
+    const done = runReplay(S, world, { campaign: c })
+    expect(done.done).toBe(true)
+    expect(done.campaign.history.length).toBe(5)
   })
 
   it('round-trips a campaign in every phase exactly', () => {

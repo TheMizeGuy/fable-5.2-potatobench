@@ -15,6 +15,7 @@ type Step = Cmd | { t: 'days'; n: number } | { t: 'sellPick'; k: number; frac: n
   | { t: 'dismissPick'; k: number } | { t: 'jobPick'; kind: S.JobKind; field: number; k: number }
   | { t: 'hirePick'; k: number } | { t: 'raisePick'; k: number; wage: number } | { t: 'priorityPick'; k: number; work: string; level: number }
   | { t: 'foremanPick'; k: number; block: string | null } | { t: 'winterPick'; k: number; work: string; field: number }
+  | { t: 'answerPick'; k: number; choice: string }
 
 const index = fc.integer({ min: -2, max: S.FIELD_COUNT + 1 })
 const id = fc.integer({ min: -1, max: 60 })
@@ -43,7 +44,7 @@ const step: fc.Arbitrary<Step> = fc.oneof(
   { weight: 3, arbitrary: fc.record({ t: fc.constant('sell' as const), lot: fc.integer({ min: -1, max: 14 }), frac: amount }) },
   { weight: 2, arbitrary: fc.record({ t: fc.constant('seed' as const), lot: fc.integer({ min: -1, max: 14 }), fields: amount }) },
   { weight: 4, arbitrary: fc.record({ t: fc.constant('sellPick' as const), k: fc.nat(20), frac: amount }) },
-  { weight: 4, arbitrary: fc.record({ t: fc.constant('job' as const), kind: fc.constantFrom('dig' as const, 'kill' as const), field: fc.integer({ min: 0, max: 7 }) }) },
+  { weight: 7, arbitrary: fc.record({ t: fc.constant('job' as const), kind: fc.constantFrom('dig' as const, 'kill' as const), field: fc.integer({ min: 0, max: 7 }) }) },
   { weight: 6, arbitrary: fc.record({ t: fc.constant('seedPick' as const), k: fc.nat(20), fields: amount }) },
   { weight: 3, arbitrary: fc.constant({ t: 'month' as const }) },
   { weight: 2, arbitrary: fc.constant({ t: 'next' as const }) },
@@ -61,6 +62,9 @@ const step: fc.Arbitrary<Step> = fc.oneof(
   { weight: 3, arbitrary: fc.record({ t: fc.constant('job' as const), kind: fc.constantFrom('fell' as const, 'rocks' as const, 'brush' as const), field: fc.oneof(index, fc.constantFrom(...S.TRACTS)) }) },
   { weight: 2, arbitrary: fc.record({ t: fc.constantFrom('stump' as const, 'tile' as const), field: fc.oneof(index, fc.constantFrom(...S.TRACTS)) }) },
   { weight: 2, arbitrary: fc.record({ t: fc.constant('tile' as const), field: fc.constantFrom(4, 5, 6, 7) }) },
+  // Incidents.
+  { weight: 7, arbitrary: fc.record({ t: fc.constant('answerPick' as const), k: fc.nat(4), choice: fc.constantFrom('hire', 'pass', 'match', 'let', 'rush', 'wait', 'take', 'refuse', 'golf') }) },
+  { weight: 1, arbitrary: fc.record({ t: fc.constant('answer' as const), incident: fc.integer({ min: -1, max: 40 }), choice: fc.constantFrom('hire', 'pass', 'golf') }) },
   // Buildings.
   { weight: 3, arbitrary: fc.record({ t: fc.constant('build' as const), kind: fc.constantFrom(...S.BUILDING_KINDS, 'castle' as S.BuildingKind), yard: fc.constantFrom(-1, -1, -2, 0, -3) }) },
   { weight: 1, arbitrary: fc.record({ t: fc.constant('buy' as const), upgrade: fc.constantFrom('tractor3' as const, 'truck' as const) }) },
@@ -109,6 +113,10 @@ function outOfRange(c: Campaign): string[] {
   }
   check(c.logs >= 0 && c.stone >= 0, `logs ${c.logs} stone ${c.stone}`)
   check(c.pond >= 0 && c.pond <= S.POND_CAP, `pond ${c.pond}`)
+  check(c.broken.length <= S.tractorsOwned(c), `${c.broken.length} tractors broken of ${S.tractorsOwned(c)}`)
+  check(c.phase === 'season' || (c.incidents.length === 0 && c.broken.length === 0), `incidents outside the season`)
+  for (const inc of c.incidents) check(inc.choices.length >= 2 && new Set(c.incidents.map(i => i.id)).size === c.incidents.length, `incident ${JSON.stringify(inc)}`)
+  for (const u of c.crew) if (c.season && S.hurt(u, c.season.day)) check(u.job === -1, `${u.name} hurt but holding an order`)
   for (const b of c.buildings) {
     check(b.done >= 0 && b.done <= b.need && b.built === (b.done >= b.need), `building ${JSON.stringify(b)}`)
     check(c.buildings.filter(x => x.kind === b.kind && x.yard === b.yard).length === 1, `two ${b.kind} at ${b.yard}`)
@@ -199,6 +207,10 @@ function resolve(c: Campaign, s: Step): Concrete {
   if (s.t === 'priorityPick') return { t: 'priority', unit: unitAt(s.k), work: s.work as S.Skill, level: s.level }
   if (s.t === 'foremanPick') return { t: 'foreman', unit: unitAt(s.k), block: s.block as S.BlockId | null }
   if (s.t === 'winterPick') return { t: 'winter', unit: unitAt(s.k), work: s.work as S.WinterWork, field: s.field }
+  if (s.t === 'answerPick') {
+    const inc = c.incidents.length ? c.incidents[s.k % c.incidents.length] : undefined
+    return { t: 'answer', incident: inc ? inc.id : -1, choice: inc && s.choice !== 'golf' ? inc.choices[s.k % inc.choices.length] : s.choice }
+  }
   return s
 }
 
@@ -228,11 +240,14 @@ describe('random command sequences', () => {
     snapshot(c => c.phase === 'ledger'),
     snapshot(c => c.phase === 'plan' && c.yearIdx === 2),
     snapshot(c => c.phase === 'season' && c.yearIdx === 1 && c.season!.day >= S.dayIndex(c.year, 8, 25)),
+    // Vines dead and waiting for the digger, in two years.
+    snapshot(c => c.phase === 'season' && c.yearIdx === 0 && c.season!.fields.some(f => f.status === 'dead')),
+    snapshot(c => c.phase === 'season' && c.yearIdx === 3 && c.season!.fields.filter(f => f.status === 'dead').length >= 2),
     // A contract still open and a dug lot of its variety in hand.
     snapshot(c => c.phase === 'season' && c.contracts.some(k => !k.settled && k.delivered < k.cwt &&
       S.openLots(c).some(l => l.variety === k.variety && c.season!.fields[l.field].status === 'dug' && l.grades.no1 > 0))),
   ]
-  const seen = { sellOk: 0, seedOk: 0, closed: 0, digOk: 0, seasons: 0, landOk: 0, hireOk: 0, pinOk: 0, acceptOk: 0, deliverOk: 0, applicantOk: 0, peopleOk: 0, pickersOk: 0, landWorkOk: 0, worksOk: 0, logsOk: 0, mortgageOk: 0, buildOk: 0 }
+  const seen = { sellOk: 0, seedOk: 0, closed: 0, digOk: 0, seasons: 0, landOk: 0, hireOk: 0, pinOk: 0, acceptOk: 0, deliverOk: 0, applicantOk: 0, peopleOk: 0, pickersOk: 0, landWorkOk: 0, worksOk: 0, logsOk: 0, mortgageOk: 0, buildOk: 0, answerOk: 0 }
 
   it('never throw, never produce NaN or out-of-range state, and move cash only by what is reported', () => {
     const start = fc.oneof(
@@ -277,6 +292,7 @@ describe('random command sequences', () => {
         if (r.ok && s.t === 'job' && (s.kind === 'fell' || s.kind === 'rocks' || s.kind === 'brush')) seen.landWorkOk++
         if (r.ok && (s.t === 'stump' || s.t === 'tile')) seen.worksOk++
         if (r.ok && s.t === 'payMortgage') seen.mortgageOk++
+        if (r.ok && s.t === 'answer') seen.answerOk++
         // Logs leave the yard only when sold, at the mill's price, or into a building; stone only into a building, which
         // takes what it needs and buys the rest.
         if (r.ok && s.t === 'sellLogs') {
@@ -345,6 +361,7 @@ describe('random command sequences', () => {
     expect(seen.worksOk, all).toBeGreaterThan(0)
     expect(seen.logsOk, all).toBeGreaterThan(0)
     expect(seen.buildOk, all).toBeGreaterThan(5)
+    expect(seen.answerOk, all).toBeGreaterThan(3)
   })
 })
 
@@ -401,6 +418,8 @@ describe('invalid commands', () => {
       // Buildings: no such kind or yard, a pond only at home, nothing ordered as a job.
       { t: 'build', kind: 'castle' as S.BuildingKind, yard: -1 }, { t: 'build', kind: 'shed', yard: 0 }, { t: 'build', kind: 'pond', yard: -2 },
       { t: 'build', kind: 'shed', yard: -3 }, { t: 'job', kind: 'haul', field: 0 }, { t: 'job', kind: 'build', field: -1 }, { t: 'job', kind: 'build', field: 0 },
+      // Answers to nothing, or not among the choices.
+      { t: 'answer', incident: -1, choice: 'pass' }, ...c.incidents.map(i => ({ t: 'answer' as const, incident: i.id, choice: 'golf' })),
       { t: 'dismiss', unit: 0 }, { t: 'dismiss', unit: 99 }, { t: 'accept', offer: -1 }, { t: 'assign', id: 99999, unit: 0 },
       { t: 'deliver', lot: 99999, contract: 1 }, { t: 'deliver', lot: c.lots[0]?.id ?? 1, contract: -7 },
     ]

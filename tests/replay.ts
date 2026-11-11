@@ -112,6 +112,12 @@ export function runReplay(sim: Sim, world: World, opts: ReplayOptions = {}): Rep
       // New ground has its rocks picked once the stumps are out.
       const wood = c.fields[WOODLOT]
       if (!opts.plain && wood.cover === 'open' && wood.stones >= 0.6 && !s.jobs.some(j => j.kind === 'rocks' && j.field === WOODLOT)) go({ t: 'job', kind: 'rocks', field: WOODLOT })
+      // Questions are answered the day they come: applicants turned away, a neighbour's offer matched, a buyer's
+      // taken, a rush part paid for only at harvest; the default when the answer cannot be given.
+      for (const inc of [...c.incidents]) {
+        const choice = inc.kind === 'applicant' || (inc.kind === 'breakdown' && s.day < sim.dayIndex(c.year, 8, 1)) ? inc.choices[inc.choices.length - 1] : inc.choices[0]
+        if (!go({ t: 'answer', incident: inc.id, choice }).ok) go({ t: 'answer', incident: inc.id, choice: inc.choices[inc.choices.length - 1] })
+      }
       deliver()
       if (sim.seasonDone(c)) go({ t: 'endSeason' })
       else go({ t: 'day' })

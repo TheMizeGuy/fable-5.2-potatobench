@@ -2,7 +2,7 @@
 import { PARCELS } from './farm.ts'
 import type { BuildingKind, Cause, Due, Grade, JobKind, Skill, Trait, UnitKind, UpgradeId, VarietyId } from './types.ts'
 
-export const SAVE_VERSION = 6
+export const SAVE_VERSION = 7
 
 // Every parcel the farm has or could have; the first six are the home farm.
 export const FIELD_COUNT = PARCELS.length
@@ -323,6 +323,30 @@ export const TRUCK_HAUL = 2                    // the truck hauls at twice a tra
 export const FREEZE_IN_FIELD = -2              // C at the field: a night this cold freezes a share of the crop still in the field
 export const FREEZE_SHARE = 0.2
 export const GREEN_IN_FIELD = 0.005            // share of the crop in the field greened each bright day
+
+// ---------------------------------------------------------------- the farmstead: incidents (docs/MODEL.md section 13)
+
+// Each is drawn from the campaign seed and the day, so a replay sees the same ones; each waits a few days for an
+// answer before taking its default.
+export const INCIDENT_DAYS = 4                 // days an incident waits for an answer
+export const APPLICANT_CHANCE = 0.012          // a day in season: someone turns up asking for work
+export const POACH_CHANCE = 0.006              // a day in season with someone hired: a neighbour offers them more
+export const POACH_RAISE = 0.15                // to match, their wage goes up this much
+export const POACH_MOOD = 0.6                  // unmatched, they go if their mood is under this
+export const BREAK_CHANCE = 0.004              // a day a tractor is worked: it breaks down
+export const BREAK_TIRED = 2                   // likelier with long hours: times 1 + 2 x the driver's tiredness
+export const BREAK_SHED = 0.5                  // half as likely with a machine shed
+export const BREAK_DAYS = 3                    // days out waiting for the part
+export const MECHANIC = 7                      // with someone this good at machine work on the farm, a day out
+export const RUSH_PART = 450                   // dollars: a rush part, back in a day
+export const HURT_TIRED = 0.85                 // working tired above this in the woods or on a machine risks an injury
+export const HURT_CHANCE = 0.05                // a day, while that tired
+export const HURT_DAYS = [5, 10]               // days out, at least and at most
+export const BUYER_CHANCE = 0.01               // a day from August on with a weighed lot of 100 cwt or more
+export const BUYER_FROM = { month: 7, dom: 1 }
+export const BUYER_MIN_CWT = 100
+export const BUYER_PREMIUM = 0.1               // over what the lot would fetch on the market
+export const BUYER_DAYS = 7                    // this week only
 
 // Money, in constant dollars.
 export const START_CASH = 18000

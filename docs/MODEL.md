@@ -229,7 +229,21 @@ the rules are in `src/sim/buildings.ts` and `src/sim/season.ts`.
 | Digging lifts the crop into barrels in the field; the dig time no longer includes the haul (2 days a field, 1.25 with the harvester, wherever the field is). A haul order goes to the top of the list by itself. One person with a tractor hauls 900 cwt a day at their machine speed (10% more with the shed), divided by the distance factor of section 9 (1 inside the home farm's own haul, up to about 1.4 for Spruce Lot) | Invented | |
 | Until it is hauled, the crop in the field is exposed: a night at -2 C or colder at the field freezes a fifth of what is there (cause "frost"), and each clear day greens half a percent. When the whole crop is in, the weigh ticket is cut (event "weighed"); a lot can be sold or delivered only after it. The season is done only when every dug field is weighed; what is still in barrels at the freeze-up, or when the season is closed, is lost | Invented | |
 
-## 13. Things the model leaves out
+## 13. The farmstead: incidents
+
+All game rules from `docs/FARMSTEAD.md` section 6. Constants are in `src/sim/params.ts` (from `INCIDENT_DAYS` on);
+the rules are in `src/sim/incidents.ts` and at the end of the season's day in `src/sim/season.ts`.
+
+| Rule | Tag | Source |
+| --- | --- | --- |
+| Incidents happen only in the season. Each is drawn by hashing the campaign seed, the year and the day (not from the game's random stream), so a replay meets the same ones and they do not disturb the crop. Each waits for an answer (four days; a buyer seven) and then takes its default, the last of its choices; open ones take their defaults when the season ends | Invented | |
+| Someone asks for work: 1.2% a day, one at a time; drawn like a spring applicant. Take them on (needs room) or not (the default) | Invented | |
+| A neighbour offers the farm's best hand (most skill in all) 15% more: 0.6% a day while anyone is hired. Match it (the wage goes up 15%) or let them choose (the default): they go if their mood is under 0.6 | Invented | |
+| A tractor breaks down: each day a person drives one, chance 0.4% x (1 + 2 x their tiredness), halved with a machine shed. Out three days waiting for the part (the default), or a rush part for $450 has it back the next day. With someone on the farm at machine skill 7 or more it is out one day and nobody is asked. While out, the farm has a tractor fewer, and whoever held it lets it go in the morning | Invented | Long hours and no shed are the usual causes |
+| Someone is hurt: each day a person works in the woods or on a machine while more tired than 0.85, 5%; never for the slow and sure. Out five to ten days, still paid; no choice, and rest prevents it | Invented | |
+| A buyer stops in: 1% a day from August 1 while a weighed lot of this year's of 100 cwt or more is in hand, for the largest. Take it (the whole lot sold at 10% over what it would fetch on the market today) or turn it down (the default); a week | Invented | |
+
+## 14. Things the model leaves out
 
 Colorado potato beetle, early blight, fertility, weeds as a separate system,
 machinery failure, hail, and everything else on the cut list in `docs/DESIGN.md`. The record of what the model gets right and

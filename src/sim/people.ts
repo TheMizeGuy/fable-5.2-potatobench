@@ -36,7 +36,7 @@ function person(id: number, kind: UnitKind, name: string, skills: Record<Skill, 
   return {
     id, kind, name, at: HOME_YARD, wage, job: -1, to: HOME_YARD, road: 0, paidTo: 0,
     skills: { ...skills }, xp: zeroSkills(), trait, tired: 0, mood: P.MOOD_START, ask, prio,
-    foreman: '', winter: 'off', winterField: -1, low: 0, rig: '',
+    foreman: '', winter: 'off', winterField: -1, low: 0, rig: '', out: -1,
   }
 }
 
@@ -115,6 +115,11 @@ export function upgradePerson(u: Record<string, unknown>, seed: number, year: nu
   u.winterField ??= -1
   u.low ??= 0
   u.rig ??= ''
+}
+
+// Whether a person is laid up hurt today.
+export function hurt(u: Unit, day: number): boolean {
+  return u.out > day
 }
 
 // The level a person works at for results: steady hands count two levels more at machine work.
