@@ -195,7 +195,7 @@ const c1 = new Color(), c2 = new Color(), c3 = new Color(), grey = new Color()
 // the exposure that holds the land at the same brightness whatever the weather.
 // `drift` moves the sun a little through the day (-1 morning side, 1 evening side).
 export function light(env: Env, drift: number, out: Light): Light {
-  const el = clamp(env.sunEl - 0.05 * Math.abs(drift), 0.05, 1.4), az = env.sunAz - 0.2 * drift
+  const el = clamp(env.sunEl - 0.03 * Math.abs(drift), 0.05, 1.4), az = env.sunAz - 0.12 * drift
   out.sunDir.set(Math.sin(az) * Math.cos(el), Math.sin(el), -Math.cos(az) * Math.cos(el))
   const air = out.air
   air.turbidity = env.turbidity

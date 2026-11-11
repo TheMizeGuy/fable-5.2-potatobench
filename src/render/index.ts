@@ -471,7 +471,8 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
 
   function applyLight(dt: number): void {
     // The sun's small journey through the day, smoothed so that days running fast do not make the light flicker.
-    const through = snap.mode === 'season' && app.speed > 0 ? Math.sin((app.dayProgress - 0.25) * Math.PI * 2) : 0
+    // The faster the days go by, the less of each the sun shows, or the shadows would sway.
+    const through = snap.mode === 'season' && app.speed > 0 ? Math.sin((app.dayProgress - 0.25) * Math.PI * 2) / app.speed : 0
     sunDrift += (through - sunDrift) * (1 - Math.exp(-dt / 1.1))
     light(env, reduced ? 0 : sunDrift, lit)
     U.uSunDir.value.copy(lit.sunDir)

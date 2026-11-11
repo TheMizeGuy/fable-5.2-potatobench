@@ -380,7 +380,7 @@ export class Fields {
       key: 'county-blossom',
       uniforms: { ...shared, uTint: tint, uPix: PIXEL },
       translucent: 1.4,
-      ambient: 1.3,
+      ambient: 0.95,
       blade: true,
       vertexHead: `${PLANT_FN}\nattribute vec4 aFlower;\nuniform float uTint;\nuniform float uPix;\nvarying vec3 vTint;\nfloat showF;`,
       // A flower is open to the sky and to whoever looks at it.
