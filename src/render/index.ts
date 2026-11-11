@@ -146,7 +146,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   let framed = -1
   const dugSince = new Map<number, number>()
   const waiters: Waiter[] = []
-  const focus = new Vector3(), ahead = new Vector3()
+  const focus = new Vector3(), ahead = new Vector3(), sunAt = new Vector3()
   const windAt = U.uWindAt.value
 
   // Hills waiting for the tractor or walker to pass: the segment of the day and the place along its path.
@@ -589,7 +589,22 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     if (frameNo % 2 === 0 || frameNo < 4 || dtMs <= 0.5) sky.renderMap(renderer)
     // The opening shot is focused on the bottom fields, half way to what it looks at.
     const sharp = rig.focus() * (snap.mode === 'title' && framing === 'title' ? 0.5 : 1)
-    post.render(scene, cam, { exposure: lit.exposure, focus: sharp, aperture: 0.3 * lens, time, grain: 0.018 }, Math.round(size.w * size.pr), Math.round(size.h * size.pr))
+    // Where the sun stands on the picture, and how much of its light the air shows: most when it is low, the air is
+    // hazy or misty, the sky is open, and the camera looks its way.
+    sunAt.copy(lit.sunDir).multiplyScalar(4000).add(cam.position).project(cam)
+    const facing = cam.getWorldDirection(ahead).dot(lit.sunDir)
+    const low = smooth(0.75, 0.12, lit.sunDir.y)
+    const open = clamp(1 - env.cloud, 0, 1) * (1 - Math.max(env.rain, env.snowfall))
+    const thick = clamp(0.35 + env.haze * 380 + 0.5 * env.mist, 0, 1.3)
+    const shafts = (reduced ? 0.6 : 1) * 0.5 * low * open * thick * smooth(-0.15, 0.55, facing)
+    // The grade follows the light: warm and rich under a low open sun, plainer under cloud, cool on snow.
+    const gold = low * open
+    const cold = clamp(env.snow, 0, 1)
+    post.render(scene, cam, {
+      exposure: lit.exposure, focus: sharp, aperture: 0.3 * lens, time, grain: 0.018,
+      sunX: sunAt.x * 0.5 + 0.5, sunY: sunAt.y * 0.5 + 0.5, shafts: sunAt.z < 1 ? shafts : 0,
+      warm: 0.22 + 0.5 * gold - 0.3 * cold, rich: 0.1 + 0.16 * gold, contrast: 0.14 + 0.1 * open,
+    }, Math.round(size.w * size.pr), Math.round(size.h * size.pr))
     if (!firstFrame) firstFrame = performance.now()
     // Tell whoever is waiting that the land has shown what it had to show.
     for (let k = waiters.length - 1; k >= 0; k--) {
