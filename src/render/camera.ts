@@ -147,7 +147,8 @@ export class CameraRig {
   // `start`: where the shot begins, down at the water with the mist, before it rises to the key frame.
   titlePose(vp: Viewport, start = false): Pose {
     const narrow = 1 - smooth(0.7, 1.3, vp.w / vp.h)
-    if (start) return { x: mix(20.1, 22.6, narrow), z: mix(-13, -6, narrow), dist: mix(44, 40, narrow), yaw: mix(0.5, 0.78, narrow), pitch: -0.071, fov: mix(30, 40, narrow) }
+    // The first frame is already over the blossom; the camera only rises from there.
+    if (start) return { x: mix(20.7, 22.9, narrow), z: mix(-13.2, -6, narrow), dist: mix(42.6, 38.5, narrow), yaw: mix(0.5, 0.78, narrow), pitch: -0.045, fov: mix(30, 40, narrow) }
     return { x: mix(21.7, 23.4, narrow), z: mix(-13.6, -6, narrow), dist: mix(40, 36, narrow), yaw: mix(0.5, 0.78, narrow), pitch: mix(0.004, 0.02, narrow), fov: mix(30, 40, narrow) }
   }
 

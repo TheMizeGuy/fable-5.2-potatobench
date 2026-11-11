@@ -309,7 +309,7 @@ export class Flora {
       translucent: 0.9,
       fragmentHead: 'varying vec4 vTree;',
       // Leaves thin out as they fall: the bare limbs show through, then stand alone.
-      fragmentColor: `${LEAF} diffuseColor.a *= smoothstep(0.0, 0.5, uLeaf * 1.5 - texture2D(uNoise, vMapUv * 0.8 + vTree.xy).a); ${SNOW_RIME_TREE}`,
+      fragmentColor: `${LEAF} diffuseColor.a *= coverGain(vMapUv, 128.0) * smoothstep(0.0, 0.5, uLeaf * 1.5 - texture2D(uNoise, vMapUv * 0.8 + vTree.xy).a); ${SNOW_RIME_TREE}`,
     })
     const crown = place(wood.crown, crownMat, broadNear, 0.8, 0.01, false, crownPatch)
     crown.receiveShadow = true

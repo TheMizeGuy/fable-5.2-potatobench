@@ -301,7 +301,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
         if (first && next.mode === 'title' && !reduced) {
           // The opening: up from the brook and its mist to the key frame, slowly.
           rig.moveTo(rig.titlePose(viewport(), true), true)
-          rig.moveTo(rig.titlePose(viewport()), false, 16000)
+          rig.moveTo(rig.titlePose(viewport()), false, 14000)
         } else rig.moveTo(poseFor(next.mode, viewport()), first || reduced)
       }
       dayT = next.mode === 'title' ? 0 : 1
@@ -321,7 +321,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     if (first) {
       first = false
       copyEnv(env, envT)
-      fields.snap()
+      fields.snap(env.oats)
       harvest.snap()
     }
   }
@@ -578,7 +578,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     fields.setFarShadows(!shadows.holdsFarm)
     fields.update(dt, { selection: app.selection, hover: app.hover, oats: env.oats, oatsRipe: env.oatsRipe, reduced })
     harvest.update(dt, app.speed === 0, clamp(rig.cur.dist / 30, 1, 2.3), reduced)
-    PIXEL.value = (TIERS[tier].msaa ? 1.1 : 0.7) / ((post.target.height) / (2 * Math.tan((cam.fov * Math.PI) / 360)))
+    PIXEL.value = (TIERS[tier].msaa ? 1.7 : 1.4) / ((post.target.height) / (2 * Math.tan((cam.fov * Math.PI) / 360)))
     // The focus is shallow in the opening shot, slight in play, and opens up while the player moves the camera.
     const want = env.lens * (rig.idle < 0.6 ? 0.2 : 1) * (snap.mode === 'title' ? 1 : smooth(60, 16, rig.cur.dist) * 0.9 + 0.5)
     lens += (want - lens) * (1 - Math.exp(-dt / 0.35))
@@ -651,7 +651,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
         sampleHold = -1
         segClock = 1e6
         copyEnv(env, envT)
-        fields.snap()
+        fields.snap(env.oats)
         harvest.snap()
         rig.snap(viewport())
         lens = env.lens

@@ -236,7 +236,8 @@ export function light(env: Env, drift: number, out: Light): Light {
   out.hazeAway.copy(away).lerp(side, 0.35).multiplyScalar(0.9 * out.skyGain).lerp(c3.copy(grey).multiplyScalar(0.86), veil)
   const cap = lum(out.hazeAway) * 3.2
   out.hazeSun.copy(toward).multiplyScalar(Math.min(1, cap / Math.max(lum(toward), 1e-4))).lerp(c3.copy(grey).multiplyScalar(0.9), veil)
-  out.mist.copy(out.hazeAway).lerp(out.hazeSun, 0.35).multiplyScalar(1.15)
+  // Mist is lit: it takes the low sun's colour where the sun reaches it.
+  out.mist.copy(out.hazeAway).lerp(out.hazeSun, 0.35).multiplyScalar(0.9).add(c3.copy(out.sun).multiplyScalar(0.012))
   out.ground.copy(env.grass).multiplyScalar(flat / Math.PI * 0.55)
   if (env.snow > 0.02) out.ground.lerp(c3.setRGB(0.8, 0.85, 0.92).multiplyScalar(flat / Math.PI * 0.8), Math.min(1, env.snow * 1.4))
   return out

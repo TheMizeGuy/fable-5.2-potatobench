@@ -359,13 +359,13 @@ export class Fields {
       vertexWorld: `${sway('aAt.xz', 'max(cWorld.y - aAt.y, 0.0)', '0.55 * (1.0 - 0.6 * uCrop.x) * (1.0 - 0.8 * gp.dead)')}
         cWorld.y += sin(uTime * 6.3 + aLeaf.x * 40.0 + aAt.w * 23.0) * 0.012 * aLeaf.y * aLeaf.z * min(uSway, 1.0) * (1.0 - gp.dead);`,
     }
-    const plantMat = patch(new MeshStandardMaterial({ map: this.leafTex, alphaTest: 0.5, alphaToCoverage: true, side: DoubleSide, roughness: 0.66, metalness: 0 }), {
+    const plantMat = patch(new MeshStandardMaterial({ map: this.leafTex, alphaTest: 0.5, alphaToCoverage: true, side: DoubleSide, roughness: 0.82, metalness: 0 }), {
       ...leafShape,
-      translucent: 1.1,
+      translucent: 1.25,
       ambient: 1.0,
-      shine: 0.25,
+      shine: 0.2,
       fragmentHead: 'varying vec3 vTint;\nvarying float vErode;',
-      fragmentColor: `diffuseColor.rgb *= vTint; diffuseColor.a *= 1.0 - vErode * (0.25 + 0.75 * texture2D(uNoise, vMapUv * 1.7).a); ${SNOW_RIME}`,
+      fragmentColor: `diffuseColor.rgb *= vTint; diffuseColor.a *= coverGain(vMapUv, 256.0) * (1.0 - vErode * (0.25 + 0.75 * texture2D(uNoise, vMapUv * 1.7).a)); ${SNOW_RIME}`,
     })
     const plants = new Mesh(instanced(this.plantGeo), plantMat)
     plants.castShadow = true
@@ -381,8 +381,10 @@ export class Fields {
       uniforms: { ...shared, uTint: tint, uPix: PIXEL },
       translucent: 1.4,
       ambient: 1.3,
+      blade: true,
       vertexHead: `${PLANT_FN}\nattribute vec4 aFlower;\nuniform float uTint;\nuniform float uPix;\nvarying vec3 vTint;\nfloat showF;`,
-      vertexNormal: 'gp = plantAt();\nobjectNormal = vec3(0.0, 1.0, 0.0);',
+      // A flower is open to the sky and to whoever looks at it.
+      vertexNormal: 'gp = plantAt();\nobjectNormal = normalize(vec3(0.0, 1.0, 0.0) + normalize(cameraPosition - aAt.xyz));',
       vertexBegin: /* glsl */ `
         vec3 pl = position;
         pl.y -= 0.1 * gp.droop;
@@ -398,7 +400,9 @@ export class Fields {
         {
           // Far off a flower is drawn no smaller than a pixel, and fewer are drawn, so the field keeps its share of white.
           float fbase = 0.017 + 0.006 * aFlower.w, fsize = max(fbase, length(cWorld.xyz - cameraPosition) * uPix);
-          float fkeep = clamp(fbase * fbase / (fsize * fsize) * 1.5, 0.05, 1.0);
+          float fkeep = clamp(fbase * fbase / (fsize * fsize) * 2.0, 0.05, 1.0);
+          // and stands clear of the leaves, which close over it as they shrink
+          cWorld.y += 0.05 * smoothstep(1.2, 3.0, fsize / fbase);
           fsize *= showF * step(fract(aFlower.w * 7.13 + aAt.w * 3.7), fkeep);
           vec3 fr = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]), fu = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);
           cWorld.xyz += (fr * aFlower.x + fu * aFlower.y) * fsize;
@@ -633,13 +637,15 @@ export class Fields {
   }
 
   // Jump everything to its target, for screenshots and first frames.
-  snap(): void {
+  // oats: the growth of the rest-year cover, as update() is given it.
+  snap(oats: number): void {
     this.cur.set(this.tgt)
     for (let i = 0; i < FIELD_COUNT; i++) {
       const g = this.gfx[i]
       g.soilColor.copy(this.soilTarget[i])
       g.water.value = this.waterTarget[i]
       g.damp.value = this.dampTarget[i]
+      g.cover.value = this.coverTarget[i] * (0.35 + 0.65 * oats)
       g.crop.copy(this.cropTarget[i])
       g.pulseT = 9
       g.selT = 9

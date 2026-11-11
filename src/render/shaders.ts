@@ -120,12 +120,16 @@ float airBetween(float density, float falloff, float base, float ya, float yb, f
   float dy = yb - ya;
   return density * t * (abs(dy) > 1e-3 ? (ea - eb) / (falloff * dy) : ea);
 }
-float hazeAmount(float ya, float yb, float t, vec2 xz) {
+// mistShare: how much of the air in the way is ground mist, which has its own colour.
+float hazeAmount(float ya, float yb, float t, vec2 xz, out float mistShare) {
+  mistShare = 0.0;
   // A fair day's haze belongs to distance: the farm itself stands in clear air.
   float air = airBetween(uHaze.x, uHaze.y, 0.0, ya, yb, t) * mix(smoothstep(40.0, 230.0, t), 1.0, smoothstep(0.0012, 0.003, uHaze.x));
   if (uMist.x > 1e-5) {
     float wisp = 1.0 - uMist.w + uMist.w * 1.7 * texture2D(uNoise, xz * 0.006 + uCloud.zw * 9.0).b;
-    air += airBetween(uMist.x * wisp, uMist.y, uMist.z, ya, yb, min(t, 400.0));
+    float low = airBetween(uMist.x * wisp, uMist.y, uMist.z, ya, yb, min(t, 400.0));
+    mistShare = low / max(air + low, 1e-5);
+    air += low;
   }
   return 1.0 - exp(-air);
 }
@@ -138,6 +142,11 @@ float cloudShade(vec3 p) {
   if (uCloud.x < 0.002) return 1.0;
   vec2 q = p.xz + uSunDir.xz / max(uSunDir.y, 0.14) * 260.0;
   return 1.0 - uCloud.x * cloudCover(cloudField(q)) * smoothstep(uSunlit, uSunlit * 1.8 + 1.0, length(p.xz));
+}
+// A cut-out texture loses its cover as it shrinks on screen; this gives it back. size: the texture's width in texels.
+float coverGain(vec2 uv, float size) {
+  vec2 dx = dFdx(uv * size), dy = dFdy(uv * size);
+  return 1.0 + 0.45 * max(0.5 * log2(max(dot(dx, dx), dot(dy, dy)) + 1e-8), 0.0);
 }
 vec2 skyUv(vec3 d) {
   return vec2(atan(d.z, d.x) * 0.15915494 + 0.5, acos(clamp(d.y, -1.0, 1.0)) * 0.31830989);
@@ -234,7 +243,9 @@ export const HAZE = /* glsl */ `
   {
     vec3 hv = vWorld - cameraPosition;
     float hd = length( hv );
-    gl_FragColor.rgb = mix( gl_FragColor.rgb, hazeTint( hv / max( hd, 1e-4 ) ), hazeAmount( cameraPosition.y, vWorld.y, hd, vWorld.xz ) );
+    float hm;
+    float ha = hazeAmount( cameraPosition.y, vWorld.y, hd, vWorld.xz, hm );
+    gl_FragColor.rgb = mix( gl_FragColor.rgb, mix( hazeTint( hv / max( hd, 1e-4 ) ), uMistCol, hm ), ha );
   }
 `
 
