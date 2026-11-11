@@ -15,8 +15,6 @@ import { planScreen } from './plan.ts'
 import { seasonScreen } from './season.ts'
 import { cellarScreen } from './cellar.ts'
 import { ledgerScreen, overScreen } from './ledger.ts'
-import { openHelp } from './help.ts'
-import { openSettings } from './settings.ts'
 
 // Events that stop the clock; each gets a toast so the player sees why it stopped.
 const STOPS = new Set(['watch', 'blightSeen', 'frost', 'skinSet', 'vinesDead', 'lost', 'freeze', 'dry', 'ti'])
@@ -72,15 +70,21 @@ export const mountHud: MountHud = (root, app, view) => {
     const kind = app.screen === 'title' || !app.campaign ? 'title' : app.screen
     builtFor = `${kind}|${phoneQuery.matches ? 'phone' : 'wide'}`
     screen = kind === 'title' ? titleScreen(ctx)
-      : kind === 'plan' ? planScreen(ctx)
+      : kind === 'plan' ? planScreen(ctx, labels)
         : kind === 'season' ? seasonScreen(ctx, labels)
           : kind === 'cellar' ? cellarScreen(ctx)
             : kind === 'ledger' ? ledgerScreen(ctx)
               : overScreen(ctx)
     screenLayer.append(screen.el)
     root.dataset.screen = kind
+    resized.disconnect()
+    for (const p of screen.el.querySelectorAll('.paper, .rail, .chips')) resized.observe(p)
     dirty = true
   }
+
+  // Panels change size as fonts load and content wraps; the field view must hear about it.
+  const resized = new ResizeObserver(() => { dirty = true })
+  document.fonts?.ready.then(() => { dirty = true })
 
   function onEvents(events: S.GameEvent[]): void {
     const c = app.campaign

@@ -6,34 +6,40 @@ import { sheetLayout } from './plan.ts'
 
 const MONTH_SHORT = ['Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May']
 
-function usualPrice(ctx: Ctx, c: S.Campaign, id: S.VarietyId, m: number): number {
-  const v = S.variety(id)
-  const level = ctx.app.world.priceLevel[String(c.year)] ?? 1
-  return v.price * S.MONTH_CURVE[m] * (v.contract ? 1 + (level - 1) * 0.25 : level)
-}
+// Prices seen so far this winter, by crop year and variety, so the chart can draw the path the market took.
+const seen = new Map<string, number[]>()
 
 function priceChart(ctx: Ctx, c: S.Campaign, id: S.VarietyId): HTMLElement {
   const v = S.variety(id)
   const now = S.basePrice(ctx.app.world, c, id)
-  const usual = S.MONTH_CURVE.map((_, m) => usualPrice(ctx, c, id, m))
+  const key = `${c.seed}:${c.year}:${id}`
+  const path = seen.get(key) ?? []
+  path[c.month] = now
+  seen.set(key, path)
+  const m0 = path.findIndex(p => p !== undefined)
+  const usual = S.MONTH_CURVE.map(k => path[m0] * k / S.MONTH_CURVE[m0])
   const val = (p: number) => F.metric() ? p / 0.0453592 : p
-  const lo = Math.min(...usual, now) * 0.94, hi = Math.max(...usual, now) * 1.04
+  const known = path.map((p, m) => [m, p] as const).filter(([, p]) => p !== undefined)
+  const lo = Math.min(...usual, ...known.map(k => k[1])) * 0.95, hi = Math.max(...usual, ...known.map(k => k[1])) * 1.04
   const W = 280, H = 96, padL = 34, padB = 18
   const x = (m: number) => padL + 12 + (m / 6) * (W - padL - 26)
   const y = (p: number) => 6 + (1 - (p - lo) / (hi - lo)) * (H - padB - 6)
-  const path = usual.map((p, m) => `${m ? 'L' : 'M'}${x(m).toFixed(1)} ${y(p).toFixed(1)}`).join('')
+  const line = (pts: (readonly [number, number])[]) => pts.map(([m, p], k) => `${k ? 'L' : 'M'}${x(m).toFixed(1)} ${y(p).toFixed(1)}`).join('')
+  const ahead = usual.map((p, m) => [m, p] as const).filter(([m]) => m >= m0)
+  const vsUsual = now / usual[c.month] - 1
   return h('figure', { class: 'price-chart' },
-    s('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': `${v.name}: price now ${F.price(now)}; in a usual winter it would run from ${F.price(usual[0])} in November to ${F.price(usual[5])} in April.` },
-      [lo + (hi - lo) * 0.15, lo + (hi - lo) * 0.85].map(p => [
+    s('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': `${v.name}: ${F.price(now)} now. From ${S.CELLAR_MONTHS[m0]}'s price, a usual winter would reach ${F.price(usual[5])} by April.` },
+      [lo + (hi - lo) * 0.12, lo + (hi - lo) * 0.88].map(p => [
         s('line', { class: 'grid', x1: padL, x2: W - 4, y1: y(p).toFixed(1), y2: y(p).toFixed(1) }),
-        s('text', { class: 'axis', x: padL - 4, y: (y(p) + 3).toFixed(1), 'text-anchor': 'end' }, `$${F.num(val(p), F.metric() ? 0 : 0)}`),
+        s('text', { class: 'axis', x: padL - 4, y: (y(p) + 3).toFixed(1), 'text-anchor': 'end' }, `$${F.num(val(p), F.metric() || hi - lo > 3 ? 0 : 1)}`),
       ]),
       MONTH_SHORT.map((m, k) => s('text', { class: `axis${k === c.month ? ' now' : ''}`, x: x(k).toFixed(1), y: H - 4, 'text-anchor': 'middle' }, m)),
-      s('path', { class: 'usual', d: path }),
+      s('path', { class: 'usual', d: line(ahead) }),
+      known.length > 1 ? s('path', { class: 'actual', d: line(known) }) : null,
       s('circle', { class: 'now-dot', cx: x(c.month).toFixed(1), cy: y(now).toFixed(1), r: 4.5 })),
     h('figcaption', null,
-      h('strong', null, v.name), ` now ${F.price(now)} for US No. 1. `,
-      h('span', { class: 'sub' }, `Dashed: a usual winter (USDA, 1979 to 2013), ${now >= usualPrice(ctx, c, id, c.month) ? 'and this year is running above it' : 'and this year is running below it'}.`)))
+      h('strong', null, v.name), ` ${F.price(now)} now for US No. 1. `,
+      h('span', { class: 'sub' }, `Dashed: a usual winter from ${S.CELLAR_MONTHS[m0]}'s price (USDA, 1979 to 2013)${c.month > m0 ? `; this one is running ${Math.abs(vsUsual) < 0.01 ? 'on it' : `${F.pct(Math.abs(vsUsual))} ${vsUsual > 0 ? 'above' : 'below'}`}` : ''}.`)))
 }
 
 export function cellarScreen(ctx: Ctx): Screen {

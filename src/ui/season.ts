@@ -3,6 +3,7 @@ import { meter, patch, type Ctx, type Screen } from './core.ts'
 import { h, icon, kbd } from './dom.ts'
 import * as F from './fmt.ts'
 import { showWeighIn } from './dig.ts'
+import { fieldLabels } from './labels.ts'
 import { soilWord } from './plan.ts'
 import { topBar } from './top.ts'
 
@@ -94,13 +95,7 @@ export function seasonScreen(ctx: Ctx, labelsLayer: HTMLElement): Screen {
     el = h('main', { class: 'season-screen' }, top.el, leftRail, chips, rightRail)
   }
 
-  const labelEls: HTMLElement[] = []
-  for (let i = 0; i < S.FIELD_COUNT; i++) {
-    const l = h('div', { class: 'field-label' }, S.FIELD_NAMES[i])
-    l.addEventListener('click', () => app.select(app.selected === i ? -1 : i))
-    labelEls.push(l)
-    labelsLayer.append(l)
-  }
+  const placeLabels = fieldLabels(ctx, labelsLayer, i => S.FIELD_NAMES[i])
 
   // ------------------------------------------------------------ chips
 
@@ -143,7 +138,7 @@ export function seasonScreen(ctx: Ctx, labelsLayer: HTMLElement): Screen {
     const steps: S.Moisture[] = ['wilting', 'dry', 'drying', 'good', 'wet', 'standing water']
     const at = steps.indexOf(f.moistureLabel)
     return h('div', { class: 'gauge', role: 'img', 'aria-label': `Soil water: ${f.moistureLabel}, ${F.pct(f.moisture)} of the water plants can use` },
-      steps.map((st, k) => h('span', { class: `gauge-step g-${k}${k === at ? ' at' : ''}` })))
+      steps.map((_, k) => h('span', { class: `gauge-step g-${k}${k === at ? ' at' : ''}` })))
   }
 
   function estimateBar(e: S.Estimate, scaleMax: number, cls = ''): HTMLElement {
@@ -448,17 +443,7 @@ export function seasonScreen(ctx: Ctx, labelsLayer: HTMLElement): Screen {
       if (phone && sheet) return [t, 0, innerHeight - sheet.getBoundingClientRect().top, 0]
       return [t, innerWidth - rightRail!.getBoundingClientRect().left, innerHeight - chips.getBoundingClientRect().top, leftRail!.getBoundingClientRect().right]
     },
-    frame() {
-      const ins = app.insets
-      for (let i = 0; i < S.FIELD_COUNT; i++) {
-        const a = ctx.view.fieldAnchor(i)
-        const l = labelEls[i]
-        const show = a.visible && a.x > ins.left + 30 && a.x < innerWidth - ins.right - 30 && a.y > ins.top + 12 && a.y < innerHeight - ins.bottom - 12
-        l.hidden = !show
-        if (show) l.style.transform = `translate(${Math.round(a.x)}px, ${Math.round(a.y)}px) translate(-50%, -100%)`
-        l.classList.toggle('on', app.selected === i)
-      }
-    },
+    frame: placeLabels,
     dispose() {
       labelsLayer.replaceChildren()
     },

@@ -61,7 +61,7 @@ export function ledgerScreen(ctx: Ctx): Screen {
             h('h3', null, 'The crop'),
             y.potatoFields ? yieldBars(ctx, y) : h('p', null, 'No potatoes were grown this year.'),
             h('p', { class: 'sub' }, `Sold per acre of potatoes. ${F.mass(y.cwtCulled)} culled.`),
-            rec?.priceUsdCwt != null ? h('p', { class: 'sub' }, `USDA recorded a Maine price of ${F.price(rec.priceUsdCwt)} in ${y.year}, in that year's dollars; the game counts in today's.`) : null,
+            rec?.priceUsdCwt != null ? h('p', { class: 'sub' }, `USDA recorded a Maine price of ${F.price(rec.priceUsdCwt)} in ${y.year}, in that year's dollars. The game's prices are in constant dollars.`) : null,
             nb ? h('p', { class: 'sub' }, `From the road, the neighbour planted ${F.date(y.year, nb.plant)}, sprayed ${F.plural(nb.sprays, 'time')} and dug from ${F.date(y.year, nb.dig)}.`) : null,
             note ? h('p', { class: 'note' }, note) : null)),
         h('section', { class: 'card' },

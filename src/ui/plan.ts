@@ -2,6 +2,7 @@ import * as S from '../sim/index.ts'
 import { patch, type Ctx, type Screen } from './core.ts'
 import { h } from './dom.ts'
 import * as F from './fmt.ts'
+import { fieldLabels } from './labels.ts'
 import { topBar } from './top.ts'
 
 export const POSITION_NOTE = [
@@ -42,11 +43,16 @@ export function sheetLayout(ctx: Ctx, cls: string): { el: HTMLElement; top: Retu
   }
 }
 
-export function planScreen(ctx: Ctx): Screen {
+export function planScreen(ctx: Ctx, labelsLayer: HTMLElement): Screen {
   const app = ctx.app
   const L = sheetLayout(ctx, 'plan')
+  const placeLabels = fieldLabels(ctx, labelsLayer, i => {
+    const p = app.campaign?.plans[i]
+    return !p ? S.FIELD_NAMES[i] : `${S.FIELD_NAMES[i]}: ${p.crop === 'rest' ? 'rest' : S.variety(p.variety).name}`
+  })
   let err = ''
   const fieldErr: string[] = []
+  let shown = app.selected
 
   function setPlan(i: number, plan: S.FieldPlan): void {
     const r = app.do({ t: 'plan', field: i, plan })
@@ -177,7 +183,12 @@ export function planScreen(ctx: Ctx): Screen {
           err ? h('p', { class: 'error-text', role: 'alert', testid: 'begin-error' }, err) : null,
           h('button', { class: 'btn primary big', type: 'button', testid: 'begin-season', onclick: begin }, `Begin the ${c.year} season`)),
       ])
+      if (app.selected !== shown) {
+        shown = app.selected
+        document.getElementById(`pf-${shown}`)?.closest('article')?.scrollIntoView({ block: 'nearest', behavior: app.settings.reducedMotion ? 'auto' : 'smooth' })
+      }
     },
     insets: L.insets,
+    frame: placeLabels,
   }
 }

@@ -144,7 +144,7 @@ export function plural(n: number, one: string, many = `${one}s`): string {
 
 // The simulation writes its messages in US units with bare dollar figures; this rewrites them for display.
 export function localize(text: string): string {
-  const t = text.replace(/\$(\d{4,})\b/g, (_, d) => `$${group(Number(d))}`)
+  const t = text.replace(/\$(\d{4,})\b/g, (_, d) => `$${group(Number(d))}`).replace(/\b(\d{4,}) cwt\b/g, (_, d) => `${group(Number(d))} cwt`)
   if (!metric()) return t
   return t
     .replace(/(-?\d+)°F/g, (_, f) => `${Math.round((Number(f) - 32) * 5 / 9)}°C`)
