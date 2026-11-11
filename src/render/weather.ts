@@ -212,8 +212,9 @@ export class Weather {
     return mesh
   }
 
+  // `time` is the ambient clock, slowed to nearly nothing under reduced motion; `fall` moves rain and snow and stops there.
   // `dist` is how far the camera is from the middle of the farm; haze is measured from there.
-  update(time: number, env: Env, reduced: boolean, aspect: number, dist: number): void {
+  update(time: number, fall: number, env: Env, aspect: number, dist: number): void {
     const el = env.sunElev, az = env.sunAz
     const d = 60
     this.sun.position.set(CENTER.x + Math.cos(el) * Math.cos(az) * d, Math.sin(el) * d, CENTER.z + Math.cos(el) * Math.sin(az) * d)
@@ -231,11 +232,11 @@ export class Weather {
     this.skyU.uCloud.value = env.cloud
     this.skyU.uRes.value.set(aspect, 1)
     const wx = Math.cos(env.windDir) * env.wind, wz = Math.sin(env.windDir) * env.wind
-    this.rainU.uTime.value = time
+    this.rainU.uTime.value = fall
     this.rainU.uAmount.value = env.rain
     this.rainU.uWind.value.set(wx, wz)
     this.rain.visible = env.rain > 0.01
-    this.snowU.uTime.value = reduced ? time * 0.5 : time
+    this.snowU.uTime.value = fall
     this.snowU.uAmount.value = env.snowfall
     this.snowU.uWind.value.set(wx, wz)
     this.snow.visible = env.snowfall > 0.01

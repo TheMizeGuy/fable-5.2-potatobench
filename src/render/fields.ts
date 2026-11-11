@@ -11,16 +11,28 @@ import { SNOW_RIME, patch, sway } from './shaders.ts'
 import type { FieldVis } from './state.ts'
 import { CLOUD_SHADE } from './terrain.ts'
 
-export const RIDGE_AMP = 0.26
+export const RIDGE_AMP = 0.44
 const N = FIELD_COUNT * HILLS
 const TUFTS_X = 24, TUFTS_Z = 16
 const TUFTS = TUFTS_X * TUFTS_Z
+const SHOWN = 0.002            // below this scale an instance is not drawn at all
 
 const C = {
   young: new Color('#6fa355'), leaf: new Color('#3f7d48'), old: new Color('#8f9a4a'), straw: new Color('#a89452'),
   pale: new Color('#a9bd72'), blight: new Color('#4b3324'), blightDeep: new Color('#241a14'), dead: new Color('#8d7d63'),
-  droop: new Color('#7d8058'), white: new Color('#f2ecf7'), lilac: new Color('#c9b6e0'),
+  droop: new Color('#7d8058'), white: new Color('#f2ecf7'), lilac: new Color('#c9b6e0'), frost: new Color('#2b2a26'),
   oat: new Color('#6f8f63'), oatRipe: new Color('#bda766'),
+}
+
+// Send only the first n instances of these attributes to the GPU.
+export function upload(n: number, ...attrs: (InstancedBufferAttribute | null)[]): void {
+  if (n <= 0) return
+  for (const a of attrs) {
+    if (!a) continue
+    a.clearUpdateRanges()
+    a.addUpdateRange(0, n * a.itemSize)
+    a.needsUpdate = true
+  }
 }
 
 const SOIL: Record<string, string> = {
@@ -57,11 +69,13 @@ export class Fields {
   private outlines: Mesh[] = []
   private outlineMats: MeshBasicMaterial[] = []
   private aSway: InstancedBufferAttribute
+  private aSwayB: InstancedBufferAttribute
   private aBloom: InstancedBufferAttribute
   // Per hill, current and target: width, height, r, g, b, bloom, dead share, dug, pulled, ridge.
   private cur = new Float32Array(N * 10)
   private tgt = new Float32Array(N * 10)
   private wilt = new Float32Array(FIELD_COUNT)
+  private frost = new Float32Array(FIELD_COUNT)
   private rest: boolean[] = new Array(FIELD_COUNT).fill(false)
   private tuftGrow = new Float32Array(FIELD_COUNT)
   private tuftRipe = -1
@@ -94,7 +108,9 @@ export class Fields {
     this.aBloom = new InstancedBufferAttribute(new Float32Array(N), 1)
     this.aBloom.setUsage(DynamicDrawUsage)
     blossomGeo.setAttribute('aBloom', this.aBloom)
-    blossomGeo.setAttribute('aSway', this.aSway)
+    this.aSwayB = new InstancedBufferAttribute(new Float32Array(N).fill(1), 1)
+    this.aSwayB.setUsage(DynamicDrawUsage)
+    blossomGeo.setAttribute('aSway', this.aSwayB)
     const blossomMat = patch(new MeshLambertMaterial({ vertexColors: true, emissive: 0x2a2630 }), {
       vertexHead: 'attribute float aSway; attribute float aBloom; attribute vec3 aFc; attribute float aFk;',
       vertexBegin: 'if (aFk > aBloom) transformed = aFc;',
@@ -115,22 +131,21 @@ export class Fields {
     for (let i = 0; i < FIELD_COUNT; i++) this.buildOutline(i)
   }
 
+  // Instances are packed to the front and only `count` of them drawn; the mesh stays visible so its shaders compile up front.
   private setupInstances(mesh: InstancedMesh): void {
     mesh.instanceMatrix.setUsage(DynamicDrawUsage)
     mesh.castShadow = true
     mesh.receiveShadow = true
     mesh.frustumCulled = false
-    const zero = new Matrix4().makeScale(0, 0, 0)
-    for (let k = 0; k < mesh.count; k++) {
-      mesh.setMatrixAt(k, zero)
-      mesh.setColorAt(k, this.col.set(0xffffff))
-    }
+    mesh.setColorAt(0, this.col.set(0xffffff))
+    mesh.instanceColor!.setUsage(DynamicDrawUsage)
+    mesh.count = 0
     this.group.add(mesh)
   }
 
   private buildSoil(i: number): void {
     const f = FIELDS[i]
-    const nx = COLS * 6, nz = ROWS * 8
+    const nx = COLS * 6, nz = ROWS * 12
     const pos = new Float32Array((nx + 1) * (nz + 1) * 3)
     const fuv = new Float32Array((nx + 1) * (nz + 1) * 2)
     for (let j = 0; j <= nz; j++) {
@@ -171,25 +186,40 @@ export class Fields {
         varying vec2 vF;
         varying float vProf;
         varying float vRidged;
+        varying float vSharp;
+        varying float vDrill;
         varying vec4 vHill;
+        // A row in cross-section, 1 on the crest and 0 in the furrow, and its slope across the row.
+        // Rounded while the rows are low; hilled twice, steep sides meeting in a narrow V.
+        vec2 rowProfile(float fr, float sharp) {
+          float q = abs(fr) * 2.0;
+          float soft = 0.5 + 0.5 * cos(q * 3.14159265);
+          float dSoft = -1.5707963 * sin(q * 3.14159265);
+          float hard = 1.0 - q * q;
+          float dHard = -2.0 * q;
+          return vec2(mix(soft, hard, sharp), mix(dSoft, dHard, sharp) * 2.0 * sign(fr));
+        }
       `,
       vertexNormal: /* glsl */ `
         vec2 cellF = aF * vec2(${COLS}.0, ${ROWS}.0);
         float frF = fract(cellF.y) - 0.5;
-        float profF = 0.5 + 0.5 * cos(frF * 6.2831853);
         float taperF = smoothstep(0.0, 0.03, aF.x) * smoothstep(1.0, 0.97, aF.x) * smoothstep(0.0, 0.02, aF.y) * smoothstep(1.0, 0.98, aF.y);
         vec4 hillF = texture2D(uHill, aF);
+        float sharpF = smoothstep(0.55, 1.0, hillF.b);
+        vec2 profF = rowProfile(frF, sharpF);
         float ampF = uAmp * hillF.b * taperF;
-        objectNormal = normalize(vec3(0.0, 1.0, ampF * (1.0 - hillF.r) * 3.14159 * sin(frF * 6.2831853) / ${SZ.toFixed(2)}));
+        objectNormal = normalize(vec3(0.0, 1.0, -ampF * (1.0 - hillF.r) * profF.y / ${SZ.toFixed(2)}));
       `,
       vertexBegin: /* glsl */ `
         float lumpsF = (vnoise(position.xz * 4.0) - 0.5) * 0.1 + (vnoise(position.xz * 11.0) - 0.5) * 0.05;
-        float hF = ampF * profF;
-        hF = mix(hF, ampF * 0.3 + 0.03 + lumpsF, hillF.r);
+        float hF = ampF * profF.x;
+        hF = mix(hF, ampF * 0.2 + 0.03 + lumpsF, hillF.r);
         transformed.y += hF;
         vF = aF;
-        vProf = mix(profF, 0.5, hillF.r);
-        vRidged = smoothstep(0.0, 0.3, hillF.b) * (1.0 - hillF.r);
+        vProf = mix(profF.x, 0.5, hillF.r);
+        vRidged = smoothstep(0.08, 0.55, hillF.b) * (1.0 - hillF.r);
+        vSharp = sharpF * (1.0 - hillF.r);
+        vDrill = step(0.02, hillF.b) * (1.0 - hillF.r) * (1.0 - smoothstep(0.08, 0.4, hillF.b));
         vHill = hillF;
       `,
       fragmentHead: /* glsl */ `
@@ -201,6 +231,8 @@ export class Fields {
         varying vec2 vF;
         varying float vProf;
         varying float vRidged;
+        varying float vSharp;
+        varying float vDrill;
         varying vec4 vHill;
         float poolF;
       `,
@@ -211,20 +243,29 @@ export class Fields {
           vec4 hc = texture2D(uHill, (floor(cell) + 0.5) / vec2(${COLS}.0, ${ROWS}.0));
           float n = fbm(vWorld.xz * 1.3);
           float fine = vnoise(vWorld.xz * 16.0);
-          vec3 soil = uSoil * (0.84 + 0.3 * n) * (0.86 + 0.24 * fine);
-          soil *= mix(1.0, mix(0.66, 1.1, vProf), vRidged);
+          float grain = mix(0.24, 0.1, vRidged);
+          vec3 soil = uSoil * (0.84 + 0.3 * n) * (1.0 - grain * 0.5 + grain * fine);
+          // Drill lines when planted; the higher the rows are thrown up, the deeper the furrows and the brighter the crests,
+          // with relief shading from the back of the farm, as on a painted relief map, so the faces toward the viewer fall dark.
+          float relief = dot(normalize(vWNormal), vec3(-0.3, 0.62, -0.72));
+          soil *= mix(1.0, mix(0.62, 1.2 + 0.1 * vSharp, vProf) * (0.6 + 0.72 * clamp(relief, -0.3, 1.0)), vRidged);
+          soil *= 1.0 - 0.5 * vSharp * (1.0 - smoothstep(0.0, 0.18, vProf));
+          soil *= 1.0 - 0.22 * vDrill * smoothstep(0.82, 0.97, vProf);
           float clod = smoothstep(0.7, 0.9, vnoise(vWorld.xz * 7.0 + 3.1));
-          soil = mix(soil, soil * 1.2, clod * 0.45 * mix(0.6, vProf, vRidged));
+          soil = mix(soil, soil * 1.2, clod * 0.45 * mix(0.6, vProf, vRidged) * (1.0 - 0.6 * vRidged));
           float lump = vnoise(vWorld.xz * 6.0);
           vec3 turned = uSoil * mix(0.55, 1.05, smoothstep(0.35, 0.75, lump)) * (0.88 + 0.24 * fine);
           soil = mix(soil, turned, vHill.r);
           float hole = hc.g * (1.0 - smoothstep(0.16, 0.3, length(local * vec2(${(SX / SZ).toFixed(2)}, 1.0))));
           soil = mix(soil, soil * 0.45, hole);
-          float cov = uCover * smoothstep(0.25, 0.55, fbm(vWorld.xz * 0.8) * 0.55 + 0.45 * uCover + 0.15 * fine);
-          vec3 clover = vec3(0.105, 0.19, 0.06) * (0.75 + 0.5 * n) * (0.85 + 0.3 * fine);
-          clover = mix(clover, vec3(0.75, 0.72, 0.7), step(0.93, vnoise(vWorld.xz * 22.0)) * 0.6);
-          soil = mix(soil, clover, cov);
-          poolF = uWater * mix(1.0, 1.0 - smoothstep(0.1, 0.35, vProf), vRidged) * smoothstep(0.5, 0.62, fbm(vWorld.xz * 0.35));
+          if (uCover > 0.001) {
+            float cov = uCover * smoothstep(0.25, 0.55, fbm(vWorld.xz * 0.8) * 0.55 + 0.45 * uCover + 0.15 * fine);
+            vec3 clover = vec3(0.105, 0.19, 0.06) * (0.75 + 0.5 * n) * (0.85 + 0.3 * fine);
+            clover = mix(clover, vec3(0.75, 0.72, 0.7), step(0.93, vnoise(vWorld.xz * 22.0)) * 0.6);
+            soil = mix(soil, clover, cov);
+          }
+          poolF = 0.0;
+          if (uWater > 0.001) poolF = uWater * mix(1.0, 1.0 - smoothstep(0.1, 0.35, vProf), vRidged) * smoothstep(0.5, 0.62, fbm(vWorld.xz * 0.35));
           soil = mix(soil, vec3(0.03, 0.035, 0.035), poolF);
           diffuseColor.rgb = soil * (1.0 + uHover * 0.22);
         }
@@ -283,6 +324,7 @@ export class Fields {
       const fv = fields[i]
       this.rest[i] = fv.crop === 'rest'
       this.wilt[i] = fv.wilt
+      this.frost[i] = fv.frosted
       this.soilTarget[i].set(SOIL[fv.moisture] ?? SOIL.good)
       this.waterTarget[i] = fv.moisture === 'standing water' ? 1 : 0
       this.coverTarget[i] = fv.crop === 'rest' ? 1 : 0
@@ -306,17 +348,21 @@ export class Fields {
     const wilt = fv.wilt
     if (look.kind === 'plant') {
       const c = Math.max(0.02, look.canopy)
+      // Frost blackens leaf where it stands: the plant keeps its spread and slumps, it does not turn into a small green one.
+      const frost = fv.frosted > 0 ? Math.min(1, fv.frosted * (0.75 + 0.5 * hash2(k, 21))) : 0
+      const spread = frost > 0 ? Math.min(1, c / Math.max(0.15, 1 - fv.frosted)) : c
       const vig = 0.78 + 0.22 * Math.min(1.2, look.vigor)
       const stunt = look.stunted ? 0.68 : 1
       const bl = Math.min(1, look.blight * 2.2)
-      w = (0.2 + 1.02 * c) * vig * stunt * (1 + 0.16 * wilt) * (1 - 0.1 * bl)
-      h = (0.14 + 0.62 * c) * vig * stunt * (1 - 0.62 * wilt) * (1 - 0.3 * Math.max(0, bl - 0.5)) * (1 - 0.35 * look.yellow)
-      col.copy(C.young).lerp(C.leaf, Math.min(1, Math.max(0, (c - 0.12) / 0.45)))
+      w = (0.2 + 1.02 * spread) * vig * stunt * (1 + 0.16 * wilt) * (1 - 0.1 * bl) * (1 + 0.1 * frost)
+      h = (0.14 + 0.62 * spread) * vig * stunt * (1 - 0.62 * wilt) * (1 - 0.3 * Math.max(0, bl - 0.5)) * (1 - 0.35 * look.yellow) * (1 - 0.55 * frost)
+      col.copy(C.young).lerp(C.leaf, Math.min(1, Math.max(0, (spread - 0.12) / 0.45)))
       if (look.yellow > 0) col.lerp(C.old, Math.min(1, look.yellow * 1.6)).lerp(C.straw, Math.max(0, look.yellow - 0.55) * 1.8)
       if (look.stunted) col.lerp(C.pale, 0.5)
       if (wilt > 0) col.lerp(C.droop, Math.min(1, wilt * 1.1))
       if (bl > 0) col.lerp(C.blight, Math.min(1, bl * 1.6)).lerp(C.blightDeep, Math.max(0, bl - 0.55) * 1.6)
-      bloom = fv.bloom * Math.min(1, Math.max(0, (c - 0.25) / 0.25)) * (1 - look.yellow) * (1 - bl)
+      if (frost > 0) col.lerp(C.frost, Math.min(1, frost * 1.15))
+      bloom = fv.bloom * Math.min(1, Math.max(0, (c - 0.25) / 0.25)) * (1 - look.yellow) * (1 - bl) * (1 - Math.min(1, frost * 1.5))
     } else if (look.kind === 'dead') {
       dead = 1
       w = 0.95
@@ -385,50 +431,62 @@ export class Fields {
     this.settled = true
   }
 
+  // Only the plants, flowers and dead vines that are there are written, packed to the front of each buffer.
   private writeInstances(tints: number[]): void {
     const cur = this.cur
     const { m, q, v, s, col } = this
     const up = new Vector3(0, 1, 0)
+    let np = 0, nb = 0, nd = 0
     for (let i = 0; i < FIELD_COUNT; i++) {
       const data = this.hillData[i]
       const tint = tints[i]
       for (let h = 0; h < HILLS; h++) {
         const k = i * HILLS + h, o = k * 10
-        const p = hillPos(i, h)
-        const jx = (hash2(k, 1) - 0.5) * 0.1, jz = (hash2(k, 2) - 0.5) * 0.08
         const ridge = cur[o + 9], dug = cur[o + 7]
-        const y = fieldBaseY(i, p.z) + RIDGE_AMP * ridge * (1 - dug) + (dug > 0 ? 0.03 : 0)
-        q.setFromAxisAngle(up, (hash2(k, 5) < 0.5 ? 0 : Math.PI) + (hash2(k, 8) - 0.5) * 0.5)
-        const dead = cur[o + 6]
-        const w = cur[o] * (1 - dead), hh = cur[o + 1] * (1 - dead)
-        v.set(p.x + jx, y - 0.02, p.z + jz)
-        m.compose(v, q, s.set(w * SZ * 1.18, hh, w * SZ * 0.94))
-        this.plants.setMatrixAt(k, m)
-        this.blossoms.setMatrixAt(k, m)
-        col.setRGB(cur[o + 2], cur[o + 3], cur[o + 4])
-        this.plants.setColorAt(k, col)
-        col.copy(C.white).lerp(C.lilac, tint * (0.6 + 0.4 * hash2(k, 9)))
-        this.blossoms.setColorAt(k, col)
-        this.aBloom.setX(k, cur[o + 5])
-        this.aSway.setX(k, (1 - 0.6 * this.wilt[i]) * (dead > 0.5 ? 0.2 : 1))
-        const dw = dead * (0.85 + 0.25 * hash2(k, 4))
-        m.compose(v, q, s.set(dw * SZ, dead, dw * SZ))
-        this.deads.setMatrixAt(k, m)
-        const dj = 0.85 + 0.3 * hash2(k, 6)
-        this.deads.setColorAt(k, col.copy(C.dead).multiplyScalar(dj))
         data[h * 4] = Math.round(dug * 255)
         data[h * 4 + 1] = Math.round(cur[o + 8] * 255)
         data[h * 4 + 2] = Math.round(ridge * 255)
         data[h * 4 + 3] = 255
+        const dead = cur[o + 6]
+        const w = cur[o] * (1 - dead), hh = cur[o + 1] * (1 - dead)
+        const plant = w > SHOWN && hh > SHOWN
+        if (!plant && dead <= SHOWN) continue
+        const p = hillPos(i, h)
+        const jx = (hash2(k, 1) - 0.5) * 0.1, jz = (hash2(k, 2) - 0.5) * 0.08
+        const y = fieldBaseY(i, p.z) + RIDGE_AMP * ridge * (1 - dug) + (dug > 0 ? 0.03 : 0)
+        q.setFromAxisAngle(up, (hash2(k, 5) < 0.5 ? 0 : Math.PI) + (hash2(k, 8) - 0.5) * 0.5)
+        v.set(p.x + jx, y - 0.02, p.z + jz)
+        if (plant) {
+          const swayK = (1 - 0.6 * this.wilt[i]) * (1 - 0.7 * this.frost[i]) * (dead > 0.5 ? 0.2 : 1)
+          m.compose(v, q, s.set(w * SZ * 1.18, hh, w * SZ * 0.94))
+          this.plants.setMatrixAt(np, m)
+          this.plants.setColorAt(np, col.setRGB(cur[o + 2], cur[o + 3], cur[o + 4]))
+          this.aSway.setX(np, swayK)
+          np++
+          if (cur[o + 5] > 0.02) {
+            this.blossoms.setMatrixAt(nb, m)
+            this.blossoms.setColorAt(nb, col.copy(C.white).lerp(C.lilac, tint * (0.6 + 0.4 * hash2(k, 9))))
+            this.aBloom.setX(nb, cur[o + 5])
+            this.aSwayB.setX(nb, swayK)
+            nb++
+          }
+        }
+        if (dead > SHOWN) {
+          const dw = dead * (0.85 + 0.25 * hash2(k, 4))
+          m.compose(v, q, s.set(dw * SZ, dead, dw * SZ))
+          this.deads.setMatrixAt(nd, m)
+          this.deads.setColorAt(nd, col.copy(C.dead).multiplyScalar(0.85 + 0.3 * hash2(k, 6)))
+          nd++
+        }
       }
       this.uniforms[i].uHill.value.needsUpdate = true
     }
-    for (const mesh of [this.plants, this.blossoms, this.deads]) {
-      mesh.instanceMatrix.needsUpdate = true
-      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
-    }
-    this.aBloom.needsUpdate = true
-    this.aSway.needsUpdate = true
+    this.plants.count = np
+    this.blossoms.count = nb
+    this.deads.count = nd
+    upload(np, this.plants.instanceMatrix, this.plants.instanceColor, this.aSway)
+    upload(nb, this.blossoms.instanceMatrix, this.blossoms.instanceColor, this.aBloom, this.aSwayB)
+    upload(nd, this.deads.instanceMatrix, this.deads.instanceColor)
   }
 
   private updateTufts(oats: number, ripe: number): void {
@@ -437,10 +495,12 @@ export class Fields {
     this.tuftRipe = key
     const { m, q, v, s, col } = this
     const up = new Vector3(0, 1, 0)
+    let n = 0
     for (let i = 0; i < FIELD_COUNT; i++) {
       const f = FIELDS[i]
       const grow = this.rest[i] ? oats : 0
       this.tuftGrow[i] = grow
+      if (grow <= SHOWN) continue
       for (let t = 0; t < TUFTS; t++) {
         const k = i * TUFTS + t
         const gx = t % TUFTS_X, gz = Math.floor(t / TUFTS_X)
@@ -448,15 +508,16 @@ export class Fields {
         const z = f.z0 + ((gz + 0.5 + (hash2(k, 12) - 0.5) * 0.25) / TUFTS_Z) * FD
         const hgt = grow * (0.5 + 0.35 * hash2(k, 13))
         q.setFromAxisAngle(up, hash2(k, 14) * Math.PI * 2)
-        const wdt = grow > 0 ? 0.75 + 0.45 * hash2(k, 15) : 0
+        const wdt = 0.75 + 0.45 * hash2(k, 15)
         m.compose(v.set(x, fieldBaseY(i, z) - 0.01, z), q, s.set(wdt, hgt, wdt))
-        this.tufts.setMatrixAt(k, m)
+        this.tufts.setMatrixAt(n, m)
         col.copy(C.oat).lerp(C.oatRipe, ripe * (0.7 + 0.3 * hash2(k, 16))).multiplyScalar(0.85 + 0.3 * hash2(k, 17))
-        this.tufts.setColorAt(k, col)
+        this.tufts.setColorAt(n, col)
+        n++
       }
     }
-    this.tufts.instanceMatrix.needsUpdate = true
-    if (this.tufts.instanceColor) this.tufts.instanceColor.needsUpdate = true
+    this.tufts.count = n
+    upload(n, this.tufts.instanceMatrix, this.tufts.instanceColor)
   }
 
   // Height of the top of the crop in a field, for labels.

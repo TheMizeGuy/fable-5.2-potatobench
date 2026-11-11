@@ -22,19 +22,43 @@ import { Poly, heightAt, parkSpot, planDay, serpentine, type Pt, type Reveal, ty
 
 const DAY_ANIM_S = 3.4          // how long a paused day's work takes to play out
 const TITLE_LOOP_S = 46
+const LOST_MS = 3000            // how long a lost WebGL context may stay away before the farm is drawn flat
+const STILL = 0.02              // the pace of water, cloud, mist and smoke under reduced motion
 
+// The view the rest of the game holds. It starts in 3D and turns to the flat drawing if WebGL fails or never comes back.
 export const createFieldView: CreateFieldView = (canvas, app) => {
+  let inner: FieldView
+  const flat = () => {
+    inner = createFallbackView(canvas, app)
+    ;(globalThis as Record<string, unknown>).__countyField = {
+      flat: true,
+      settle() {},
+      seek() {},
+      anchor: (i: number) => inner.fieldAnchor(i),
+      info: () => ({ mode: 'flat' }),
+    }
+  }
   try {
-    return createWebGLView(canvas, app)
+    inner = createWebGLView(canvas, app, () => {
+      console.warn('The County: the 3D view was lost and did not come back, drawing the farm flat.')
+      inner.dispose()
+      flat()
+    })
   } catch (err) {
     console.warn('The County: WebGL is not available, drawing the farm flat.', err)
-    return createFallbackView(canvas, app)
+    flat()
+  }
+  return {
+    resize: () => inner.resize(),
+    frame: dt => inner.frame(dt),
+    fieldAnchor: i => inner.fieldAnchor(i),
+    dispose: () => inner.dispose(),
   }
 }
 
 interface SampleInfo { hill: number; weights: number[]; marks: number[] }
 
-function createWebGLView(canvas: HTMLCanvasElement, app: App): FieldView {
+function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void): FieldView {
   const renderer = new WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' })
   if (!renderer.getContext()) throw new Error('no WebGL context')
   canvas.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;outline:none'
@@ -73,7 +97,12 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App): FieldView {
   let heading = SHED_SPOT.heading
   let travelled = 0
   let time = 0
+  // Clocks for water, cloud, mist and smoke (`ambient`) and for rain and snow (`fall`): under reduced motion the first
+  // nearly stops and the second stops. The farmer's work keeps `time`.
+  let ambient = 0
+  let fall = 0
   let lost = false
+  let lostFor = 0
   let hovered = -1
   let reduced = app.settings.reducedMotion
   const dugSince = new Map<number, number>()
@@ -263,7 +292,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App): FieldView {
       fork.visible = kind === 'sample' || kind === 'rogue'
     }
     const wind = new Vector2(Math.cos(env.windDir) * env.wind, Math.sin(env.windDir) * env.wind)
-    tractor.animate(time, travelled, working, kind, wind)
+    tractor.animate(ambient, travelled, working, kind, wind)
   }
 
   // ---- Input: orbit, zoom, pick
@@ -284,15 +313,17 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App): FieldView {
     })
     return best
   }
+  // One pointer drags to turn the land, two pinch to zoom, and a press that does not move selects.
   const pointers = new Map<number, { x: number; y: number }>()
   let downAt: { x: number; y: number } | null = null
   let dragged = false
+  let slop = 6
   let pinch = 0
   const onDown = (e: PointerEvent) => {
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
-    canvas.setPointerCapture?.(e.pointerId)
-    if (pointers.size === 1) { downAt = { x: e.clientX, y: e.clientY }; dragged = false }
-    if (pointers.size === 2) { const [a, b] = [...pointers.values()]; pinch = Math.hypot(a.x - b.x, a.y - b.y); dragged = true }
+    try { canvas.setPointerCapture?.(e.pointerId) } catch { /* the pointer is already gone */ }
+    if (pointers.size === 1) { downAt = { x: e.clientX, y: e.clientY }; dragged = false; slop = e.pointerType === 'mouse' ? 6 : 12 }
+    if (pointers.size >= 2) { const [a, b] = [...pointers.values()]; pinch = Math.hypot(a.x - b.x, a.y - b.y); dragged = true }
   }
   const onMove = (e: PointerEvent) => {
     const p = pointers.get(e.pointerId)
@@ -306,34 +337,36 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App): FieldView {
     const dx = e.clientX - p.x, dy = e.clientY - p.y
     p.x = e.clientX
     p.y = e.clientY
-    if (pointers.size === 2) {
+    if (pointers.size >= 2) {
       const [a, b] = [...pointers.values()]
       const d = Math.hypot(a.x - b.x, a.y - b.y)
       if (pinch > 0 && d > 0) rig.zoomBy(pinch / d)
       pinch = d
       return
     }
-    if (downAt && !dragged && Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) > 6) dragged = true
+    if (downAt && !dragged && Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) > slop) dragged = true
     if (dragged) rig.orbit(dx, dy)
   }
-  const onUp = (e: PointerEvent) => {
+  const release = (e: PointerEvent, tap: boolean) => {
     const had = pointers.delete(e.pointerId)
     if (pointers.size < 2) pinch = 0
-    if (had && pointers.size === 0 && !dragged && downAt) app.select(pick(e.clientX, e.clientY))
+    if (tap && had && pointers.size === 0 && !dragged && downAt) app.select(pick(e.clientX, e.clientY))
     if (pointers.size === 0) downAt = null
   }
+  const onUp = (e: PointerEvent) => release(e, true)
+  const onCancel = (e: PointerEvent) => release(e, false)
   const onLeave = () => { if (hovered !== -1) { hovered = -1; canvas.style.cursor = 'default' } }
   const onWheel = (e: WheelEvent) => {
     e.preventDefault()
     rig.zoomBy(Math.exp(Math.max(-1, Math.min(1, e.deltaY * (e.deltaMode === 1 ? 0.05 : 0.0015)))))
   }
   const onDbl = () => rig.reset()
-  const onLost = (e: Event) => { e.preventDefault(); lost = true }
+  const onLost = (e: Event) => { e.preventDefault(); lost = true; lostFor = 0 }
   const onRestored = () => { lost = false; dirty = true }
   canvas.addEventListener('pointerdown', onDown)
   canvas.addEventListener('pointermove', onMove)
   canvas.addEventListener('pointerup', onUp)
-  canvas.addEventListener('pointercancel', onUp)
+  canvas.addEventListener('pointercancel', onCancel)
   canvas.addEventListener('pointerleave', onLeave)
   canvas.addEventListener('wheel', onWheel, { passive: false })
   canvas.addEventListener('dblclick', onDbl)
@@ -346,10 +379,11 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App): FieldView {
     return { w, h, top: i.top, right: i.right, bottom: i.bottom, left: i.left }
   }
 
+  const pixelRatio = () => Math.min(2, devicePixelRatio || 1)
   let size = { w: 0, h: 0 }
   function resize(): void {
     const vp = viewport()
-    renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1))
+    renderer.setPixelRatio(pixelRatio())
     renderer.setSize(vp.w, vp.h, false)
     size = { w: vp.w, h: vp.h }
     weather.setPointScale(rig.pixelScale(vp.h) * renderer.getPixelRatio())
@@ -357,34 +391,42 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App): FieldView {
   resize()
 
   function frame(dtMs: number): void {
-    if (lost || document.hidden) return
+    if (document.hidden) return
+    if (lost) {
+      lostFor += dtMs
+      if (lostFor > LOST_MS) giveUp()
+      return
+    }
     const vp = viewport()
-    if (vp.w !== size.w || vp.h !== size.h) resize()
+    // A move to a screen of another density changes the pixel ratio without any resize event.
+    if (vp.w !== size.w || vp.h !== size.h || pixelRatio() !== renderer.getPixelRatio()) resize()
     const dt = Math.min(0.1, dtMs / 1000)
     time += dt
+    ambient += dt * (reduced ? STILL : 1)
+    fall += reduced ? 0 : dt
     if (dirty) rebuild()
     // Day clock: follows the game clock when it runs, plays the day out by itself when paused.
-    if (snap.mode === 'title') dayT = (time / TITLE_LOOP_S) % 1
+    if (snap.mode === 'title') dayT = reduced ? 0.3 : (time / TITLE_LOOP_S) % 1
     else if (dayT < 1) dayT = Math.min(1, app.speed > 0 ? Math.max(dayT + dt / DAY_ANIM_S * 0.25, app.dayProgress) : dayT + dt / DAY_ANIM_S)
     easeEnv(env, envT, 1 - Math.exp(-dt / 1.1))
-    U.uTime.value = time
+    U.uTime.value = ambient
     U.uSway.value = reduced ? 0 : env.wind
     U.uWindDir.value.set(Math.cos(env.windDir), Math.sin(env.windDir))
     U.uSnow.value = env.snow
-    U.uRime.value = env.rime
+    U.uRime.value.set(env.rime0, env.rime1, env.rime2)
     U.uWet.value = env.wet
     U.uGrass.value.copy(env.grass)
     U.uGold.value = env.gold
     U.uCloud.value = reduced ? 0 : env.cloud
     U.uSky.value.copy(env.skyHorizon)
     terrain.water.ice.value = env.ice
-    weather.update(time, env, reduced, vp.w / vp.h, rig.distance())
-    props.update(time, env)
+    weather.update(ambient, fall, env, vp.w / vp.h, rig.distance())
+    props.update(ambient, env)
     placeWorkers(dt)
     fields.update(dt, { selected: app.selected, hovered, oats: env.oats, oatsRipe: env.oatsRipe, wind: env.wind, time, reduced }, tints)
     harvest.update(dt, app.speed === 0)
     const drift = snap.mode === 'title' && !reduced ? Math.sin(time * 0.045) : 0
-    rig.update(dt, vp, app.selected, drift)
+    rig.update(dt, vp, app.selected, drift, reduced)
     renderer.render(scene, rig.camera)
   }
 
@@ -405,7 +447,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App): FieldView {
       canvas.removeEventListener('pointerdown', onDown)
       canvas.removeEventListener('pointermove', onMove)
       canvas.removeEventListener('pointerup', onUp)
-      canvas.removeEventListener('pointercancel', onUp)
+      canvas.removeEventListener('pointercancel', onCancel)
       canvas.removeEventListener('pointerleave', onLeave)
       canvas.removeEventListener('wheel', onWheel)
       canvas.removeEventListener('dblclick', onDbl)
@@ -442,6 +484,11 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App): FieldView {
     },
     info() {
       return { mode: snap.mode, dayT, pending: pending.length, segs: segs.map(s => `${s.kind}@${s.field}`), tractor: tractorAt, fields: snap.fields.map(f => f.status) }
+    },
+    // What the last frame drew, where the camera stood, and the clocks.
+    stats() {
+      const r = renderer.info.render
+      return { triangles: r.triangles, calls: r.calls, pixelRatio: renderer.getPixelRatio(), width: canvas.width, height: canvas.height, camera: rig.where(), time, ambient, fall }
     },
   }
   return view

@@ -9,7 +9,7 @@ import { SNOW_RIME, patch } from './shaders.ts'
 import { STRATA_PX, strataTexture } from './textures.ts'
 
 export const CLOUD_SHADE = /* glsl */ `
-  diffuseColor.rgb *= 1.0 - uCloud * 0.38 * smoothstep(0.48, 0.66, fbm(vWorld.xz * 0.045 + vec2(uTime * 0.035, uTime * 0.012)));
+  if (uCloud > 0.001) diffuseColor.rgb *= 1.0 - uCloud * 0.38 * smoothstep(0.48, 0.66, fbm(vWorld.xz * 0.045 + vec2(uTime * 0.035, uTime * 0.012)));
 `
 
 const STEP = 0.25
