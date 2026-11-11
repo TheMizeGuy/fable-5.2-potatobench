@@ -10,14 +10,14 @@ export interface Pose { x: number; z: number; dist: number; yaw: number; pitch: 
 export const MIN_DIST = 7.5
 const FAR_DIST = 96
 const LENS = 27
-const HOME_YAW = 0.38
+const HOME_YAW = 0.16
 const SLOPE = (profile(5) - profile(-8)) / 13
 export const MOVE_MS = 800
 
 // Looking down steeply from far off, along the rows to the horizon from close in.
 export function pitchFor(dist: number): number {
   const t = smooth(Math.log(MIN_DIST), Math.log(FAR_DIST), Math.log(dist))
-  return mix(0.105, 0.94, Math.pow(t, 0.8))
+  return mix(0.105, 0.82, Math.pow(t, 0.8))
 }
 
 // cubic-bezier(0.45, 0, 0.2, 1)
@@ -57,7 +57,7 @@ const FIELD_MARKS: Vector3[] = FIELDS.flatMap(f => [
 ])
 const FARM_MARKS: Vector3[] = [
   ...FIELD_MARKS, new Vector3(27.4, profile(-20) + 3.2, -20.5), new Vector3(27.2, profile(6) + 3.4, 7), new Vector3(-17.4, profile(-21) + 0.6, -21.6),
-  new Vector3(-17.4, 0.4, 23.5), new Vector3(20, 0.4, 24), new Vector3(8, profile(-22) + 4, -23),
+  new Vector3(-17.4, 0.4, 23.2), new Vector3(20, 0.4, 23.6),
 ]
 
 export class CameraRig {
@@ -142,10 +142,11 @@ export class CameraRig {
     return { x: f.cx, z: f.cz, dist: clamp(h.dist * 0.42, 24, 60), yaw: this.goal.yaw, pitch: pitchFor(clamp(h.dist * 0.42, 24, 60)), fov: LENS }
   }
 
-  // The key frame: low over the brook on a long lens, looking up the slope to the spruce.
+  // The key frame: low over the brook, the bottom fields' blossom close in front, looking up the slope past the
+  // farmstead to the spruce. The camera stands below what it looks at, so the pitch is a little upward.
   titlePose(vp: Viewport): Pose {
     const narrow = 1 - smooth(0.7, 1.3, vp.w / vp.h)
-    return { x: mix(9, 5, narrow), z: -3, dist: mix(58, 82, narrow), yaw: mix(0.25, 0.08, narrow), pitch: mix(0.055, 0.11, narrow), fov: mix(24, 28, narrow) }
+    return { x: mix(21.7, 17.5, narrow), z: mix(-13.6, -14, narrow), dist: mix(40, 44, narrow), yaw: mix(0.5, 0.4, narrow), pitch: mix(0.004, 0.02, narrow), fov: mix(30, 40, narrow) }
   }
 
   // The point of the farm's slope under a pixel.

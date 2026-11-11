@@ -24,7 +24,10 @@ vec3 viewPos(vec2 uv) {
 const COC_GLSL = /* glsl */ `
 uniform vec2 uLens;      // x: the distance in focus, y: aperture
 float cocAt(float z) {
-  return clamp(uLens.y * (abs(1.0 - uLens.x / max(z, 0.05)) - 0.1) / 0.9, 0.0, 1.0);
+  float d = 1.0 - uLens.x / max(z, 0.05);
+  // What is nearer than the focus goes soft, never to a smear.
+  float c = d < 0.0 ? min(-d, 1.3) * 0.55 : d;
+  return clamp(uLens.y * (c - 0.1) / 0.9, 0.0, 1.0);
 }
 `
 
@@ -127,7 +130,7 @@ void main() {
 const FOCUS_FRAG = /* glsl */ `
 uniform sampler2D tSrc;
 uniform vec2 uRes;
-const float REACH = 9.0;
+const float REACH = 7.0;
 const int TAPS = 22;
 float ign(vec2 p) { return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }
 void main() {
@@ -163,7 +166,7 @@ vec3 film(vec3 c) {
   float m = max(c.r, max(c.g, c.b));
   float t = m <= 0.58 ? m : 0.58 + 0.42 * (1.0 - exp(-(m - 0.58) / 0.42));
   vec3 r = c * (t / max(m, 1e-5));
-  return mix(r, vec3(t), 0.72 * smoothstep(1.0, 7.0, m));
+  return mix(r, vec3(t), 0.6 * smoothstep(1.6, 14.0, m));
 }
 void main() {
   vec2 uv = gl_FragCoord.xy / uRes;

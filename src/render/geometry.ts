@@ -150,6 +150,41 @@ export function oatGeometry(): BufferGeometry {
   return finish(b, 'aBlade', 3)
 }
 
+// Meadow grass: a clump of broad blades one unit high, a few carrying a seed head. aBlade as for oats.
+export function grassGeometry(): BufferGeometry {
+  const r = rng(15)
+  const b: Build = { pos: [], nrm: [], uv: [], extra: [], idx: [] }
+  for (let k = 0; k < 13; k++) {
+    const a = r() * Math.PI * 2, lean = 0.18 + r() * 0.5, h = 0.5 + r() * 0.5, w = 0.07 + r() * 0.05, own = r()
+    const bx = Math.cos(a) * 0.16 * r(), bz = Math.sin(a) * 0.16 * r()
+    const px = -Math.sin(a) * w, pz = Math.cos(a) * w
+    const o = b.pos.length / 3
+    ;[0, 0.45, 0.8, 1].forEach((t, j) => {
+      const taper = 1 - t * t
+      const x = bx + Math.cos(a) * lean * t * t, z = bz + Math.sin(a) * lean * t * t, y = h * (t - 0.25 * t * t * lean)
+      for (const s of [-1, 1]) {
+        b.pos.push(x + px * s * taper, y, z + pz * s * taper)
+        b.nrm.push(Math.cos(a) * 0.4, 0.86, Math.sin(a) * 0.4)
+        b.uv.push((s + 1) / 2, t)
+        b.extra.push(own, t, 0)
+      }
+      if (j > 0) { const q = o + (j - 1) * 2; b.idx.push(q, q + 1, q + 2, q + 1, q + 3, q + 2) }
+    })
+    if (k < 3) {
+      const tx = bx + Math.cos(a) * lean * 0.5, tz = bz + Math.sin(a) * lean * 0.5
+      const q = b.pos.length / 3
+      for (const [dx, dy] of [[-0.035, 1.02], [0.035, 1.02], [-0.02, 1.34], [0.02, 1.34]]) {
+        b.pos.push(tx + px / w * dx, h * dy, tz + pz / w * dx)
+        b.nrm.push(Math.cos(a) * 0.3, 0.92, Math.sin(a) * 0.3)
+        b.uv.push(0.5, 1)
+        b.extra.push(own, 1, 1)
+      }
+      b.idx.push(q, q + 1, q + 2, q + 1, q + 3, q + 2)
+    }
+  }
+  return finish(b, 'aBlade', 3)
+}
+
 export function tuberGeometry(): BufferGeometry {
   const g = new SphereGeometry(0.5, 10, 7)
   const p = g.getAttribute('position') as BufferAttribute

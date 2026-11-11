@@ -86,7 +86,7 @@ export class Props {
             vec3 seen = reflect(normalize(vWorld - cameraPosition), normalize(vWNormal));
             float low = 1.0 - smoothstep(0.16, 0.5, uSunDir.y);
             totalEmissiveRadiance += uSunCol * (pow(max(dot(seen, uSunDir), 0.0), 14.0) * 1.3 + 0.16 * low * max(dot(normalize(vWNormal), uSunDir), 0.0)) * cloudShade(vWorld);
-            float lit = step(0.55, fract(sin(floor(vWorld.y * 1.3) * 12.9898 + floor((vWorld.x + vWorld.z) * 1.1) * 78.233) * 43758.5453));
+            float lit = step(0.66, fract(sin(floor(vWorld.y * 1.2) * 12.9898 + floor(vWorld.x * 0.97) * 78.233 + floor(vWorld.z * 0.97) * 37.719) * 43758.5453));
             totalEmissiveRadiance += ${linear('#ffc47a')} * uLamp * lit * 0.9;
           }` : '',
       })

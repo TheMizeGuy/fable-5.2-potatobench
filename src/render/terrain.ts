@@ -5,7 +5,7 @@ import {
   MeshStandardMaterial, Quaternion, Vector3, type Texture,
 } from 'three'
 import {
-  FARM, FIELDS, HOME_WOODS, REGION, ROAD, SPURS, WATER_Y, brookHalf, brookZ, fieldMask, groundY, hillRoadZ, roadDist, townRoadZ,
+  FARM, FIELDS, HOME_WOODS, REGION, ROAD, SPURS, WALLS, WATER_Y, brookHalf, brookZ, fieldMask, groundY, hillRoadZ, roadDist, townRoadZ,
 } from './layout.ts'
 import { hash2, rng } from './noise.ts'
 import { SNOW_RIME, linear, patch } from './shaders.ts'
@@ -106,7 +106,7 @@ export function buildTerrain(roadTex: Texture): Terrain {
       pos[k * 3 + 1] = groundY(x, z) - (home ? fieldMask(x, z, 0.35) * 0.09 : 0)
       pos[k * 3 + 2] = z
       const h = HOME_WOODS
-      const ragged = home ? 5 * (hash2(Math.round(x * 0.4), Math.round(z * 0.4)) - 0.5) : 0
+      const ragged = home ? 3 * (hash2(Math.round(x * 0.4), Math.round(z * 0.4)) - 0.5) : 0
       surf[k * 4] = home && x > h.x0 + ragged && x < h.x1 + ragged && z > h.z0 + ragged && z < h.z1 + 1 ? 1 : 0
       surf[k * 4 + 1] = Math.min(1, Math.abs(z - brookZ(x)) / 8)
       const yard = home ? Math.max(0, 1 - roadDist(x, z) / 2.2) : 0
@@ -146,8 +146,12 @@ export function buildTerrain(roadTex: Texture): Terrain {
         vec4 n2 = texture2D(uNoise, p * 0.043);
         vec4 n3 = texture2D(uNoise, p * 0.31);
         float fine = n3.a, mid = n2.b, broad = n1.b;
-        vec3 grass = uGrass * (0.74 + 0.5 * mid) * (0.88 + 0.24 * fine) * (0.9 + 0.2 * broad);
-        vec3 soil = ${linear('#6e4b38')} * (0.8 + 0.4 * mid) * mix(1.0, 0.62, uWet);
+        // Meadow: no two yards the same green. Clover dark, seed heads pale, worn places thin.
+        float patchy = texture2D(uNoise, p * 0.011).b, tuft = texture2D(uNoise, p * 0.13).a;
+        vec3 grass = uGrass * (0.62 + 0.62 * mid) * (0.82 + 0.36 * fine) * (0.84 + 0.32 * broad);
+        grass = mix(grass, grass * vec3(0.72, 0.95, 0.7), smoothstep(0.52, 0.7, patchy) * uLeaf);
+        grass = mix(grass, grass * vec3(1.32, 1.2, 0.86), smoothstep(0.5, 0.78, tuft) * 0.7 * uLeaf);
+        vec3 soil = ${linear('#7a4c38')} * (0.8 + 0.4 * mid) * mix(1.0, 0.62, uWet);
         landRough = 0.96;
         landBump = (n3.rg - 0.5) * 1.6 + (n2.rg - 0.5) * 0.8;
 
@@ -194,7 +198,7 @@ export function buildTerrain(roadTex: Texture): Terrain {
         // under the six fields the ground is the soil's own colour, so no green shows at a field's edge
         for (int k = 0; k < 6; k++) {
           vec2 fd = max(FIELD_RECT[k].xy - p, p - FIELD_RECT[k].zw);
-          col = mix(col, soil * 0.9, 1.0 - smoothstep(0.0, 0.45, max(fd.x, fd.y)));
+          col = mix(col, soil * (0.8 + 0.3 * fine), 1.0 - smoothstep(0.35, 0.85, max(fd.x, fd.y) + (mid - 0.5) * 0.5));
         }
         col *= mix(1.0, 0.84, uWet * (1.0 - bank));
         landRough = mix(landRough, 0.62, uWet * 0.6);
@@ -296,8 +300,10 @@ export function buildTerrain(roadTex: Texture): Terrain {
           ripple = (f1 + f2 * 0.6) * (1.0 - uIce);
           float shore = abs(vBrook.y);
           frozen = uIce;
-          vec3 deep = ${linear('#2a2f25')}, shallow = ${linear('#6b6450')};
-          vec3 col = mix(deep, shallow, smoothstep(0.35, 0.95, shore));
+          vec3 deep = ${linear('#2f3a36')}, shallow = ${linear('#7a735c')};
+          vec3 col = mix(deep, shallow, smoothstep(0.3, 0.95, shore));
+          // From straight above little sky is mirrored; give the water some of it anyway, so it never reads as tar.
+          col += uHazeAway * 0.22 * (1.0 - uIce);
           col = mix(col, vec3(0.62, 0.68, 0.74) * (0.9 + 0.2 * texture2D(uNoise, vWorld.xz * 0.11).a), uIce);
           col = mix(col, vec3(0.84, 0.88, 0.93), uIce * smoothstep(0.3, 0.7, uSnow) * smoothstep(0.35, 0.6, texture2D(uNoise, vWorld.xz * 0.05).b + uSnow * 0.3));
           diffuseColor.rgb = col;
@@ -337,10 +343,7 @@ function stoneWalls(): InstancedMesh {
       if (r() < 0.3) spots.push([x + (r() - 0.5) * 0.5, z + (r() - 0.5) * 0.5, 0.06 + r() * 0.05, 0])
     }
   }
-  line(-17.5, -21.6, -17.4, 20.4, 0.17)
-  line(-17.5, -21.7, 16.4, -21.7, 0.17)
-  line(16.5, -21.7, 16.5, -8.2, 0.18)
-  line(16.4, 5.6, 16.4, 19.6, 0.18)
+  for (const [x0, z0, x1, z1] of WALLS) line(x0, z0, x1, z1, 0.17)
   line(-18, 20.6, 16, 20.5, 1.9)
   for (const f of FIELDS) if (f.i % 2 === 0) line(f.x1 + 0.9, f.z0 + 0.6, f.x1 + 0.9, f.z1 - 0.6, 0.9)
   const geo = new IcosahedronGeometry(1, 1)

@@ -85,7 +85,7 @@ export function brookZ(x: number): number {
 }
 
 export function brookHalf(x: number): number {
-  return 0.8 + 0.22 * Math.sin(x * 0.13 + 0.7)
+  return 1.15 + 0.3 * Math.sin(x * 0.13 + 0.7)
 }
 
 export const HOUSE = { x: 23.6, z: 4.4 }
@@ -188,13 +188,24 @@ export function fieldAt(x: number, z: number): number {
   return -1
 }
 
+// Stone walls: the north-west boundary, the wall under the woodlot, and the wall along the road with its gateways.
+export const WALLS: [number, number, number, number][] = [
+  [-17.5, -21.6, -17.4, 20.4], [-17.5, -21.7, 16.4, -21.7], [16.5, -21.7, 16.5, -8.2], [16.4, 5.6, 16.4, 19.6],
+]
+
+export function wallDist(x: number, z: number): number {
+  let d = 99
+  for (const [x0, z0, x1, z1] of WALLS) d = Math.min(d, segDist(x, z, [x0, z0], [x1, z1]))
+  return d
+}
+
 // Where the tractor waits when there is nothing to do: on the apron of the potato house.
 export const SHED_SPOT = { x: 21.2, z: -12.6, heading: 2.6 }
 
 // ---- The country beyond the walls: a quilt of blocks, each a woodlot or a run of strips. The terrain shader draws the
 // same quilt from the same numbers (see QUILT_GLSL in terrain.ts), so trees stand where the picture says woods.
 export const REGION = 120
-export const HOME_WOODS = { x0: -44, x1: 5, z0: -58, z1: -23.4 }
+export const HOME_WOODS = { x0: -44, x1: 14.5, z0: -58, z1: -23.4 }
 
 export interface Region { woods: boolean; hard: number; edge: number; angle: number; width: number; key: number }
 

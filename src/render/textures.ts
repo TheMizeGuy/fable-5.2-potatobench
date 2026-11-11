@@ -20,6 +20,33 @@ function tex(c: HTMLCanvasElement, repeat: boolean): CanvasTexture {
   return t
 }
 
+// A cut-out (leaf, flower, spray) as a texture whose clear pixels carry the colour of the drawn ones.
+// A canvas keeps no colour where it is clear, so when the picture is shrunk for distance its edges would go black
+// and a far-off plant with them. Here the mean colour is written under the clear pixels before upload.
+function cutout(c: HTMLCanvasElement): DataTexture {
+  const g = c.getContext('2d')!
+  const img = g.getImageData(0, 0, c.width, c.height)
+  const d = img.data
+  let r = 0, gr = 0, b = 0, n = 0
+  for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 200) { r += d[i]; gr += d[i + 1]; b += d[i + 2]; n++ }
+  if (n) { r /= n; gr /= n; b /= n }
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 3] > 8) continue
+    d[i] = r
+    d[i + 1] = gr
+    d[i + 2] = b
+  }
+  const t = new DataTexture(new Uint8Array(d.buffer), c.width, c.height, RGBAFormat, UnsignedByteType)
+  t.colorSpace = SRGBColorSpace
+  t.flipY = true
+  t.magFilter = LinearFilter
+  t.minFilter = LinearMipmapLinearFilter
+  t.generateMipmaps = true
+  t.anisotropy = 8
+  t.needsUpdate = true
+  return t
+}
+
 // Value noise that repeats every `period` cells, so the texture tiles.
 function tile(x: number, y: number, period: number, seed: number): number {
   const ix = Math.floor(x), iy = Math.floor(y)
@@ -90,10 +117,10 @@ function leaflet(g: CanvasRenderingContext2D, x: number, y: number, len: number,
   }
   const grad = g.createLinearGradient(-wide, 0, wide, 0)
   const l = (v: number) => `rgb(${Math.round(255 * v)},${Math.round(255 * v)},${Math.round(255 * v)})`
-  grad.addColorStop(0, l(tone * 0.74))
-  grad.addColorStop(0.46, l(tone * 0.97))
-  grad.addColorStop(0.54, l(tone * 0.88))
-  grad.addColorStop(1, l(tone * 0.7))
+  grad.addColorStop(0, l(tone * 0.84))
+  grad.addColorStop(0.46, l(tone * 0.99))
+  grad.addColorStop(0.54, l(tone * 0.92))
+  grad.addColorStop(1, l(tone * 0.8))
   body()
   g.fillStyle = grad
   g.fill()
@@ -114,7 +141,7 @@ function leaflet(g: CanvasRenderingContext2D, x: number, y: number, len: number,
   }
   g.stroke()
   // The surface between the veins is quilted: a little shade below each one.
-  g.strokeStyle = 'rgba(0,0,0,0.16)'
+  g.strokeStyle = 'rgba(0,0,0,0.1)'
   g.lineWidth = Math.max(1, wide * 0.09)
   g.beginPath()
   for (let k = 1; k <= 5; k++) {
@@ -130,7 +157,7 @@ function leaflet(g: CanvasRenderingContext2D, x: number, y: number, len: number,
 }
 
 // A potato leaf: a terminal leaflet and three pairs along the stalk, with small ones between. Stalk at the bottom centre.
-export function leafTexture(): CanvasTexture {
+export function leafTexture(): DataTexture {
   const S = 256
   const [c, g] = canvas(S, S)
   const r = rng(71)
@@ -141,22 +168,20 @@ export function leafTexture(): CanvasTexture {
   g.moveTo(S / 2, S - 2)
   g.lineTo(S / 2, 70)
   g.stroke()
-  const pairs: [number, number, number][] = [[218, 62, 40], [164, 78, 50], [108, 84, 54]]
+  const pairs: [number, number, number][] = [[226, 58, 36], [172, 70, 42], [116, 76, 44]]
   for (const [y, len, wide] of pairs) {
     for (const s of [-1, 1]) {
       // small leaflets between the pairs
       leaflet(g, S / 2, y + 28, 26, 15, s * 1.45, 0.82 + r() * 0.1)
-      leaflet(g, S / 2, y, len * 1.32, wide * 0.78, s * (1.08 + r() * 0.16), 0.84 + r() * 0.14)
+      leaflet(g, S / 2, y, len * 1.3, wide * 0.8, s * (1.2 + r() * 0.14), 0.84 + r() * 0.14)
     }
   }
-  leaflet(g, S / 2, 96, 96, 62, 0, 0.98)
-  const t = tex(c, false)
-  t.minFilter = LinearMipmapLinearFilter
-  return t
+  leaflet(g, S / 2, 88, 88, 50, 0, 0.98)
+  return cutout(c)
 }
 
 // A potato flower: five joined petals round a yellow cone.
-export function flowerTexture(): CanvasTexture {
+export function flowerTexture(): DataTexture {
   const S = 64
   const [c, g] = canvas(S, S)
   g.translate(S / 2, S / 2)
@@ -186,18 +211,16 @@ export function flowerTexture(): CanvasTexture {
   g.beginPath()
   g.arc(0, 0, 4, 0, Math.PI * 2)
   g.fill()
-  const t = tex(c, false)
-  t.minFilter = LinearMipmapLinearFilter
-  return t
+  return cutout(c)
 }
 
 // A spray of hardwood leaves for the crowns of birch and maple.
-export function sprayTexture(): CanvasTexture {
+export function sprayTexture(): DataTexture {
   const S = 128
   const [c, g] = canvas(S, S)
   const r = rng(19)
-  for (let k = 0; k < 46; k++) {
-    const x = 14 + r() * (S - 28), y = 14 + r() * (S - 28), a = r() * Math.PI * 2, s = 9 + r() * 8
+  for (let k = 0; k < 110; k++) {
+    const x = 10 + r() * (S - 20), y = 10 + r() * (S - 20), a = r() * Math.PI * 2, s = 5 + r() * 5
     const v = Math.round(255 * (0.62 + r() * 0.38))
     g.save()
     g.translate(x, y)
@@ -210,9 +233,7 @@ export function sprayTexture(): CanvasTexture {
     g.fill()
     g.restore()
   }
-  const t = tex(c, false)
-  t.minFilter = LinearMipmapLinearFilter
-  return t
+  return cutout(c)
 }
 
 // A soft round puff for smoke, dust, spray and exhaust.

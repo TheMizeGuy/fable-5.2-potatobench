@@ -52,13 +52,13 @@ const SEASON: [number, number, string][] = [
 
 interface Sky { sun: number; cover: number; shadow: number; deck: number; haze: number; key: number; turbidity: number; mie: number }
 const SKY: Record<string, Sky> = {
-  clear: { sun: 1, cover: 0.22, shadow: 0.5, deck: 1, haze: 0.00055, key: 1, turbidity: 2.2, mie: 0.004 },
-  cloud: { sun: 0.95, cover: 0.5, shadow: 0.62, deck: 1, haze: 0.0007, key: 0.98, turbidity: 2.8, mie: 0.005 },
+  clear: { sun: 1, cover: 0.22, shadow: 0.22, deck: 1, haze: 0.00055, key: 1, turbidity: 2.2, mie: 0.004 },
+  cloud: { sun: 0.95, cover: 0.5, shadow: 0.34, deck: 1, haze: 0.0007, key: 0.98, turbidity: 2.8, mie: 0.005 },
   overcast: { sun: 0.06, cover: 1, shadow: 0, deck: 1.05, haze: 0.0012, key: 0.86, turbidity: 4, mie: 0.006 },
-  rain: { sun: 0.025, cover: 1, shadow: 0, deck: 0.66, haze: 0.0032, key: 0.76, turbidity: 6, mie: 0.006 },
-  storm: { sun: 0.015, cover: 1, shadow: 0, deck: 0.42, haze: 0.0044, key: 0.64, turbidity: 8, mie: 0.006 },
-  fog: { sun: 0.1, cover: 0.92, shadow: 0, deck: 1.35, haze: 0.0085, key: 0.92, turbidity: 6, mie: 0.006 },
-  snow: { sun: 0.05, cover: 1, shadow: 0, deck: 1.05, haze: 0.0042, key: 0.92, turbidity: 4, mie: 0.006 },
+  rain: { sun: 0.025, cover: 1, shadow: 0, deck: 0.66, haze: 0.0017, key: 0.76, turbidity: 6, mie: 0.006 },
+  storm: { sun: 0.015, cover: 1, shadow: 0, deck: 0.42, haze: 0.0024, key: 0.64, turbidity: 8, mie: 0.006 },
+  fog: { sun: 0.1, cover: 0.92, shadow: 0, deck: 1.35, haze: 0.0052, key: 0.92, turbidity: 6, mie: 0.006 },
+  snow: { sun: 0.05, cover: 1, shadow: 0, deck: 1.05, haze: 0.0026, key: 0.92, turbidity: 4, mie: 0.006 },
 }
 
 const tmp = new Color()
@@ -121,14 +121,14 @@ export function envTarget(snap: Snapshot, out: Env): Env {
   out.lens = 0.22
   if (snap.mode === 'title') {
     // The key frame: about seven on a July evening.
-    out.sunEl = 0.3
-    out.sunAz = -0.78
+    out.sunEl = 0.21
+    out.sunAz = -0.35
     out.cloud = 0.34
     out.cloudShadow = 0.6
     out.turbidity = 3.4
     out.mie = 0.007
-    out.haze = 0.00085
-    out.mist = 0.3
+    out.haze = 0.0011
+    out.mist = 0.62
     out.key = 0.94
     out.dry = 1
     out.lens = 1
@@ -174,13 +174,14 @@ export interface Light {
   skyGain: number
   skySat: number
   skyCap: number           // the brightest any part of the sky may be when it lights the scene
+  skyShow: number          // how bright the sky is drawn
   exposure: number
 }
 
 export function makeLight(): Light {
   return {
     air: { turbidity: 2.2, rayleigh: 1.3, mie: 0.004, g: 0.8 }, sunDir: new Vector3(0, 1, 0), sun: new Color(), deck: new Color(),
-    deckDark: new Color(), hazeSun: new Color(), hazeAway: new Color(), mist: new Color(), ground: new Color(), skyGain: 1, skySat: 0.8, skyCap: 4, exposure: 1,
+    deckDark: new Color(), hazeSun: new Color(), hazeAway: new Color(), mist: new Color(), ground: new Color(), skyGain: 1, skySat: 0.8, skyCap: 4, skyShow: 1, exposure: 1,
   }
 }
 
@@ -209,8 +210,10 @@ export function light(env: Env, drift: number, out: Light): Light {
   // The sky model is too bright beside its own sun, most of all toward evening, and would fill every shadow.
   // Hold a clear sky to about a third of what the sun puts on level ground.
   const rawE = (lum(zenith) * 0.38 + lum(side) * 0.42 + lum(away) * 0.2) * Math.PI
-  out.skyGain = clamp((0.34 * lum(full) * Math.max(out.sunDir.y, 0.12)) / Math.max(rawE, 1e-3), 0.08, 1.2)
-  out.skyCap = 2.4 * out.skyGain * Math.max(lum(zenith), lum(side), lum(away)) * (1 - overcast) + 8 * overcast
+  out.skyGain = clamp((0.4 * lum(full) * Math.max(out.sunDir.y, 0.16)) / Math.max(rawE, 1e-3), 0.08, 1.2)
+  // The sky that is seen keeps more of its brightness than the sky that lights.
+  out.skyShow = Math.sqrt(out.skyGain)
+  out.skyCap = 3.4 * out.skyGain * Math.max(lum(zenith), lum(side), lum(away)) * (1 - overcast) + 8 * overcast
   // Cloud: lit by the sun on top and by the sky beneath when broken, an even grey deck when the sky is closed.
   grey.setRGB(0.93, 0.96, 1).multiplyScalar(env.deck * 1.0)
   out.deck.copy(full).multiplyScalar(0.25).add(c3.copy(zenith).multiplyScalar(0.6)).lerp(grey, overcast)
@@ -222,7 +225,7 @@ export function light(env: Env, drift: number, out: Light): Light {
   // Low sun: meter partly on what faces it, or the evening would be held as bright as noon.
   const facing = lum(out.sun) * 0.45 + skyE
   const metered = flat * 0.62 + facing * 0.38
-  out.exposure = (env.key * 2.35) / Math.max(metered, 0.02)
+  out.exposure = (env.key * 2.9) / Math.max(metered, 0.02)
   // Distance takes the colour of the low sky; fog and rain take the colour of the cloud.
   const thick = smooth(0.0012, 0.004, env.haze)
   const veil = Math.max(overcast, thick)

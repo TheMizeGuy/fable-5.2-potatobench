@@ -55,6 +55,7 @@ export interface Patch {
   fragmentEnd?: string       // after the haze: edit `gl_FragColor`
   translucent?: number       // share of the sun that comes through from behind (leaves)
   ambient?: number           // share of the sky's light this material takes (inside a canopy takes less)
+  shine?: number             // share of the sky's reflection it shows (a leaf's bloom of fine hair shows little)
   noHaze?: boolean
 }
 
@@ -186,16 +187,17 @@ const SUN_BLOCK = /* glsl */ `
   {
     DirectionalLight directionalLight = directionalLights[ 0 ];
     getDirectionalLightInfo( directionalLight, directLight );
-    float sunVis = cloudShade( vWorld );
+    float cloudVis = cloudShade( vWorld ), shade = 1.0;
     #if defined( USE_SHADOWMAP ) && NUM_DIR_LIGHT_SHADOWS > 0
-      if ( receiveShadow ) sunVis *= countyShadow();
+      if ( receiveShadow ) shade = countyShadow();
     #endif
-    vec3 sunLit = directLight.color * sunVis;
-    directLight.color = sunLit;
+    vec3 sunFull = directLight.color * cloudVis;
+    directLight.color = sunFull * shade;
     RE_Direct( directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );
     #ifdef COUNTY_TRANSLUCENT
+      // Light through a leaf: what its neighbours shade still glows a little, as light scattered about in the canopy.
       float backLit = saturate( dot( - geometryNormal, directLight.direction ) );
-      reflectedLight.directDiffuse += sunLit * backLit * COUNTY_TRANSLUCENT * material.diffuseContribution * vec3( 1.0, 1.16, 0.5 ) * RECIPROCAL_PI;
+      reflectedLight.directDiffuse += sunFull * ( 0.3 + 0.7 * shade ) * backLit * COUNTY_TRANSLUCENT * material.diffuseContribution * vec3( 1.0, 1.16, 0.5 ) * RECIPROCAL_PI;
     #endif
   }
 #endif
@@ -208,7 +210,7 @@ const SKY_LIGHT = /* glsl */ `
     iblIrradiance += skyIrradiance( wN ) * COUNTY_AMBIENT;
     #if defined( RE_IndirectSpecular )
       vec3 wR = inverseTransformDirection( reflect( - geometryViewDir, geometryNormal ), viewMatrix );
-      radiance += skyRadiance( wR, material.roughness ) * COUNTY_AMBIENT;
+      radiance += skyRadiance( wR, material.roughness ) * COUNTY_AMBIENT * COUNTY_SHINE;
     #endif
   }
 #endif
@@ -259,7 +261,7 @@ function patchVertex(vs: string, p: Patch, lit: boolean): string {
 
 export function patch<M extends Material>(mat: M, p: Patch = {}): M {
   const key = p.key ?? `county-${serial++}`
-  mat.defines = { ...(mat.defines ?? {}), COUNTY_AMBIENT: (p.ambient ?? 1).toFixed(3), ...(p.defines ?? {}) }
+  mat.defines = { ...(mat.defines ?? {}), COUNTY_AMBIENT: (p.ambient ?? 1).toFixed(3), COUNTY_SHINE: (p.shine ?? 1).toFixed(3), ...(p.defines ?? {}) }
   if (p.translucent) mat.defines.COUNTY_TRANSLUCENT = p.translucent.toFixed(3)
   mat.onBeforeCompile = shader => {
     Object.assign(shader.uniforms, U, p.uniforms ?? {})
@@ -295,7 +297,7 @@ export function depthFor(p: Patch): MeshDepthMaterial {
 
 // Snow settles on what faces up, deepest where it drifts and last to go in the hollows; rime frosts what the night chilled.
 export const SNOW_RIME = snowRime('uSnow', '1.0')
-export const SNOW_RIME_TREE = snowRime('uSnow * 0.5', '0.35')
+export const SNOW_RIME_TREE = snowRime('uSnow * 0.36', '0.35')
 
 function snowRime(amount: string, rimeShare: string): string {
   return /* glsl */ `
@@ -305,7 +307,7 @@ function snowRime(amount: string, rimeShare: string): string {
     if ( snowAmt > 0.001 ) {
       vec4 sn = texture2D( uNoise, vWorld.xz * 0.011 );
       float lie = sn.b * 0.62 + texture2D( uNoise, vWorld.xz * 0.07 ).a * 0.2 + up * 0.18;
-      float cover = smoothstep( 1.02 - snowAmt * 1.25, 1.2 - snowAmt * 1.25, lie ) * smoothstep( 0.2, 0.55, up );
+      float cover = smoothstep( 0.98 - snowAmt * 1.25, 1.24 - snowAmt * 1.25, lie ) * smoothstep( 0.2, 0.55, up );
       vec3 snow = vec3( 0.84, 0.88, 0.93 ) * ( 0.94 + 0.08 * sn.a );
       diffuseColor.rgb = mix( diffuseColor.rgb * ( 1.0 - 0.3 * smoothstep( 0.0, 0.3, cover ) ), snow, smoothstep( 0.12, 0.7, cover ) );
     }

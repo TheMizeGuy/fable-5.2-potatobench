@@ -10,6 +10,7 @@ import { copyEnv, easeEnv, envTarget, light, makeEnv, makeLight } from './env.ts
 import { createFallbackView } from './fallback.ts'
 import { Fields, PIXEL, UI_GAIN, type HillDisplay } from './fields.ts'
 import { Flora } from './flora.ts'
+import { Grass } from './grass.ts'
 import { Harvest } from './harvest.ts'
 import { attachInput } from './input.ts'
 import { FD, FIELDS, FW, ROAD, SHED_SPOT, fieldBaseY } from './layout.ts'
@@ -100,6 +101,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   const roadTex = roadTexture(), leafTex = leafTexture(), flowerTex = flowerTexture(), sprayTex = sprayTexture(), puffTex = puffTexture()
   const terrain = buildTerrain(roadTex)
   const flora = new Flora(sprayTex)
+  const grass = new Grass()
   const props = new Props()
   const fields = new Fields(leafTex, flowerTex)
   const harvest = new Harvest()
@@ -108,7 +110,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   const farmer = new Farmer(kit)
   const particles = new Particles(puffTex)
   const weather = new Weather()
-  scene.add(sky.dome, terrain.group, flora.group, props.group, fields.group, harvest.group, tractor.group, farmer.group, particles.mesh, weather.group)
+  scene.add(sky.dome, terrain.group, flora.group, grass.mesh, props.group, fields.group, harvest.group, tractor.group, farmer.group, particles.mesh, weather.group)
 
   const env = makeEnv(), envT = makeEnv(), lit = makeLight()
   let snap: Snapshot = snapshot(app)
@@ -458,7 +460,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     U.uHazeAway.value.copy(lit.hazeAway)
     U.uMistCol.value.copy(lit.mist)
     U.uHaze.value.set(env.haze, 0.011)
-    U.uMist.value.set(0.16 * env.mist, 1.5, 0.3, 0.8)
+    U.uMist.value.set(0.5 * env.mist, 2.4, 0.2, 0.85)
     U.uCloud.value.x = env.cloudShadow
     U.uCloud.value.y = env.cloud
     U.uSnow.value = env.snow
@@ -469,17 +471,17 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     U.uLeaf.value = env.leaf
     U.uDay.value = snap.day
     U.uSunlit.value += ((snap.mode === 'title' ? 150 : 0) - U.uSunlit.value) * Math.min(1, dt * 1.2)
-    sky.setAir(lit.air, lit.sunDir, lit.skyCap)
-    sky.tune.set(lit.skyGain, lit.skySat, 0.25)
+    sky.setAir(lit.air, lit.sunDir, lit.skyCap, lit.skyGain / lit.skyShow)
+    sky.tune.set(lit.skyShow, lit.skySat, 0.25)
     sky.deck.copy(lit.deck)
     sky.deckDark.copy(lit.deckDark)
     sky.ground.copy(lit.ground)
     UI_GAIN.value = 1.1 / lit.exposure
-    const lamp = snap.mode === 'cellar' ? 0.9 : snap.mode === 'plan' || snap.mode === 'ledger' ? 0.35 : snap.mode === 'title' ? 0.3 : 0
+    const lamp = snap.mode === 'cellar' ? 0.9 : snap.mode === 'plan' || snap.mode === 'ledger' ? 0.35 : snap.mode === 'title' ? 0.22 : 0
     LAMP.value += (lamp / lit.exposure * 0.6 - LAMP.value) * Math.min(1, dt * 2)
   }
   let sunDrift = 0
-  let titleShift = 0.2
+  let titleShift = 0.16
 
   function measure(dtMs: number): void {
     if (warm < 150) { warm++; return }
@@ -552,13 +554,15 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     fields.setFarShadows(!shadows.holdsFarm)
     fields.update(dt, { selection: app.selection, hover: app.hover, oats: env.oats, oatsRipe: env.oatsRipe, reduced })
     harvest.update(dt, app.speed === 0, clamp(rig.cur.dist / 30, 1, 2.3), reduced)
-    PIXEL.value = 0.8 / ((post.target.height) / (2 * Math.tan((cam.fov * Math.PI) / 360)))
+    PIXEL.value = 1.1 / ((post.target.height) / (2 * Math.tan((cam.fov * Math.PI) / 360)))
     // The focus is shallow in the opening shot, slight in play, and opens up while the player moves the camera.
-    const want = env.lens * (rig.idle < 0.6 ? 0.2 : 1) * (snap.mode === 'title' ? 1 : smooth(60, 16, rig.cur.dist) * 1.4 + 0.5)
+    const want = env.lens * (rig.idle < 0.6 ? 0.2 : 1) * (snap.mode === 'title' ? 1 : smooth(60, 16, rig.cur.dist) * 1.2 + 0.6)
     lens += (want - lens) * (1 - Math.exp(-dt / 0.35))
     renderer.info.reset()
     if (frameNo % 2 === 0 || frameNo < 4 || dtMs <= 0.5) sky.renderMap(renderer)
-    post.render(scene, cam, { exposure: lit.exposure, focus: rig.focus(), aperture: 0.3 * lens, time, grain: 0.018 }, Math.round(size.w * size.pr), Math.round(size.h * size.pr))
+    // The opening shot is focused on the bottom fields, half way to what it looks at.
+    const sharp = rig.focus() * (snap.mode === 'title' && framing === 'title' ? 0.5 : 1)
+    post.render(scene, cam, { exposure: lit.exposure, focus: sharp, aperture: 0.3 * lens, time, grain: 0.018 }, Math.round(size.w * size.pr), Math.round(size.h * size.pr))
     // Tell whoever is waiting that the land has shown what it had to show.
     for (let k = waiters.length - 1; k >= 0; k--) {
       const w = waiters[k]
@@ -666,6 +670,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       canvas.removeEventListener('webglcontextrestored', onRestored)
       terrain.dispose()
       flora.dispose()
+      grass.dispose()
       props.dispose()
       fields.dispose()
       harvest.dispose()

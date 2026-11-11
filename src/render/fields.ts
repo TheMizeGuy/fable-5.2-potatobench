@@ -18,7 +18,7 @@ const PLANTS = PLANTED_ROWS * PLANTS_PER_ROW
 const SLOPE = (profile(-8) - profile(5)) / 13
 
 const SOIL: Record<string, string> = {
-  'standing water': '#4a3327', wet: '#553a2b', good: '#6f4d39', drying: '#7c5840', dry: '#8a6248', wilting: '#96705a',
+  'standing water': '#4c3024', wet: '#59382a', good: '#774a37', drying: '#84543d', dry: '#925d44', wilting: '#9d6b54',
 }
 const DAMP: Record<string, number> = { 'standing water': 1, wet: 0.85, good: 0.3, drying: 0.12, dry: 0, wilting: 0 }
 
@@ -51,7 +51,7 @@ Plant plantAt() {
   p.frost = clamp(uCrop.y * (0.7 + 0.6 * p.r.y), 0.0, 1.0) * (1.0 - p.dead);
   p.droop = clamp(max(uCrop.x * 0.9, p.frost * 0.85), 0.0, 1.0) * (1.0 - p.dead);
   float size = (0.17 + 0.83 * pow(p.h0.r, 0.75)) * mix(1.0, 0.6, p.h1.a) * (0.84 + 0.32 * p.r.x) * step(0.004, p.h0.r) * uDense;
-  p.w = size * 0.7 * (1.0 + 0.1 * p.droop);
+  p.w = size * 0.62 * (1.0 + 0.1 * p.droop);
   p.h = size * 0.56 * mix(1.0, 0.32, p.dead);
   float a = aAt.w * 6.2831853;
   p.cs = cos(a);
@@ -76,7 +76,7 @@ const LEAF_SHAPE = /* glsl */ `
 const LEAF_COLOUR = /* glsl */ `
   {
     float grow = gp.h0.r, yellow = gp.h0.g;
-    vec3 col = mix(${linear('#8cc25e')}, ${linear('#5a9c58')}, smoothstep(0.1, 0.6, grow));
+    vec3 col = mix(${linear('#93c95a')}, ${linear('#64a850')}, smoothstep(0.1, 0.6, grow));
     col = mix(col, ${linear('#9aa24c')}, min(1.0, yellow * 1.6));
     col = mix(col, ${linear('#b09a55')}, clamp((yellow - 0.55) * 1.8, 0.0, 1.0));
     col = mix(col, ${linear('#b4c67a')}, 0.6 * gp.h1.a);
@@ -88,12 +88,12 @@ const LEAF_COLOUR = /* glsl */ `
     // On the morning of the frost the leaf is white with rime; it is black by the next day.
     col = mix(col, ${linear('#2b2a26')}, burnt * (1.0 - 0.75 * uCrop.z));
     col = mix(col, ${linear('#a8bcc0')}, 0.55 * uCrop.z * smoothstep(0.2, 0.9, aLeaf.y));
-    col = mix(col, ${linear('#7a6a50')} * (0.8 + 0.4 * gp.r.z), gp.dead);
+    col = mix(col, ${linear('#a3906a')} * (0.8 + 0.4 * gp.r.z), gp.dead);
     col = mix(${linear('#8a9a62')}, col, aLeaf.z);
     // Deep in the canopy little light arrives.
-    col *= mix(0.6, 1.0, smoothstep(0.0, 0.42, position.y)) * (0.9 + 0.2 * gp.r.z);
+    col *= mix(0.7, 1.0, smoothstep(0.0, 0.42, position.y)) * (0.9 + 0.2 * gp.r.z);
     vTint = col;
-    vErode = max(max(gp.dead * 0.8, hit * 0.55), burnt * 0.45 * (1.0 - uCrop.z)) * aLeaf.z;
+    vErode = max(max(gp.dead * 0.55, hit * 0.55), burnt * 0.45 * (1.0 - uCrop.z)) * aLeaf.z;
   }
 `
 
@@ -337,10 +337,11 @@ export class Fields {
       vertexWorld: `${sway('aAt.xz', 'max(cWorld.y - aAt.y, 0.0)', '0.55 * (1.0 - 0.6 * uCrop.x) * (1.0 - 0.8 * gp.dead)')}
         cWorld.y += sin(uTime * 6.3 + aLeaf.x * 40.0 + aAt.w * 23.0) * 0.012 * aLeaf.y * aLeaf.z * min(uSway, 1.0) * (1.0 - gp.dead);`,
     }
-    const plantMat = patch(new MeshStandardMaterial({ map: this.leafTex, alphaTest: 0.5, alphaToCoverage: true, side: DoubleSide, roughness: 0.58, metalness: 0 }), {
+    const plantMat = patch(new MeshStandardMaterial({ map: this.leafTex, alphaTest: 0.5, alphaToCoverage: true, side: DoubleSide, roughness: 0.66, metalness: 0 }), {
       ...leafShape,
       translucent: 1.1,
       ambient: 0.9,
+      shine: 0.3,
       fragmentHead: 'varying vec3 vTint;\nvarying float vErode;',
       fragmentColor: `diffuseColor.rgb *= vTint; diffuseColor.a *= 1.0 - vErode * (0.25 + 0.75 * texture2D(uNoise, vMapUv * 1.7).a); ${SNOW_RIME}`,
     })
@@ -356,7 +357,8 @@ export class Fields {
     const bloomMat = patch(new MeshStandardMaterial({ map: this.flowerTex, alphaTest: 0.5, alphaToCoverage: true, side: DoubleSide, roughness: 0.7, metalness: 0 }), {
       key: 'county-blossom',
       uniforms: { ...shared, uTint: tint, uPix: PIXEL },
-      translucent: 0.5,
+      translucent: 1.4,
+      ambient: 1.3,
       vertexHead: `${PLANT_FN}\nattribute vec4 aFlower;\nuniform float uTint;\nuniform float uPix;\nvarying vec3 vTint;\nfloat showF;`,
       vertexNormal: 'gp = plantAt();\nobjectNormal = vec3(0.0, 1.0, 0.0);',
       vertexBegin: /* glsl */ `
@@ -367,14 +369,14 @@ export class Fields {
           * (1.0 - min(1.0, uCrop.y * 1.5)) * (1.0 - 0.7 * gp.h1.a) * (1.0 - 0.6 * uCrop.x);
         // Not every plant is in flower at once: more of them at the height of the bloom.
         showF = step(aFlower.z, open) * step(gp.r.x, 0.25 + 0.4 * uCrop.w);
-        vTint = mix(${linear('#f6f1fa')}, ${linear('#c4acde')}, uTint * (0.5 + 0.5 * aFlower.w));
+        vTint = mix(${linear('#f8f5fa')}, ${linear('#d3c2e6')}, uTint * (0.4 + 0.6 * aFlower.w));
       `,
       vertexWorld: /* glsl */ `
         ${sway('aAt.xz', 'max(cWorld.y - aAt.y, 0.0)', '0.55')}
         {
           // Far off a flower is drawn no smaller than a pixel, and fewer are drawn, so the field keeps its share of white.
-          float fbase = 0.03 + 0.012 * aFlower.w, fsize = max(fbase, length(cWorld.xyz - cameraPosition) * uPix);
-          float fkeep = clamp(fbase * fbase / (fsize * fsize) * 2.6, 0.1, 1.0);
+          float fbase = 0.017 + 0.006 * aFlower.w, fsize = max(fbase, length(cWorld.xyz - cameraPosition) * uPix);
+          float fkeep = clamp(fbase * fbase / (fsize * fsize) * 2.4, 0.1, 1.0);
           fsize *= showF * step(fract(aFlower.w * 7.13 + aAt.w * 3.7), fkeep);
           vec3 fr = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]), fu = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);
           cWorld.xyz += (fr * aFlower.x + fu * aFlower.y) * fsize;

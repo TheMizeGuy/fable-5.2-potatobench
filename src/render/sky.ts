@@ -123,7 +123,7 @@ export class Sky {
     uSunDir: U.uSunDir, uCloud: U.uCloud, uNoise: U.uNoise, uHaze: U.uHaze, uHazeSun: U.uHazeSun, uHazeAway: U.uHazeAway, uMist: U.uMist,
     uBetaR: { value: new Vector3() }, uBetaM: { value: new Vector3() }, uSunE: { value: 0 }, uMieG: { value: 0.8 },
     uSkyTune: { value: this.tune }, uDeck: { value: this.deck }, uDeckDark: { value: this.deckDark }, uGroundRad: { value: this.ground },
-    uRes: { value: new Vector2(MAP_W, MAP_H) }, uCap: { value: 4 },
+    uRes: { value: new Vector2(MAP_W, MAP_H) }, uCap: { value: 4 }, uLight: { value: 1 },
   }
   private domeMat: ShaderMaterial
   private mapMat: ShaderMaterial
@@ -167,13 +167,14 @@ export class Sky {
       fragmentShader: /* glsl */ `
         uniform vec2 uRes;
         uniform float uCap;
+        uniform float uLight;
         ${SKY_GLSL}
         void main() {
           vec2 uv = gl_FragCoord.xy / uRes;
           float phi = (uv.x - 0.5) * 6.2831853, theta = uv.y * 3.14159265;
           vec3 dir = vec3(sin(theta) * cos(phi), cos(theta), sin(theta) * sin(phi));
           // The glare round the sun is the sun's own light: left in, it would fill every shadow.
-          vec3 c = skyColor(dir, vec3(0.0, 3.0, 0.0), 0.0);
+          vec3 c = skyColor(dir, vec3(0.0, 3.0, 0.0), 0.0) * uLight;
           gl_FragColor = vec4(c * min(1.0, uCap / max(max(c.r, c.g), c.b)), 1.0);
         }`,
     })
@@ -186,8 +187,10 @@ export class Sky {
     this.disposables.push(sphere, this.domeMat, this.mapMat, tri, this.map)
   }
 
-  setAir(air: Air, sun: Vector3, cap: number): void {
+  // light: how much of the sky that is seen also lights the scene.
+  setAir(air: Air, sun: Vector3, cap: number, light: number): void {
     this.uniforms.uCap.value = cap
+    this.uniforms.uLight.value = light
     const b = betas(air)
     this.uniforms.uBetaR.value.set(b.r[0], b.r[1], b.r[2])
     this.uniforms.uBetaM.value.set(b.m[0], b.m[1], b.m[2])
