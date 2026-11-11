@@ -1,30 +1,46 @@
 # The County: design record
 
-A potato farming game played on the real weather of Aroostook County, Maine.
-This file is the reference for what the game is, what it refuses to be, and how
-we know it works. Change it when the design changes.
+A potato farming game played as a real-time strategy game: one farm, grown from
+six fields and one farmer into land, people and buildings.
+This file is the reference for what the game is and how we know it works.
+Change it when the design changes. How it plays and looks is in
+`docs/DIRECTION.md`; people, land and buildings are in `docs/FARMSTEAD.md`.
+
+## How the design got here
+
+The first build was a small, exact simulation of one crop on real weather
+records, with an almanac for an interface. The owner played it and asked, in
+turn, for: strategy-game control and a far better picture; a bigger map and
+more depth; land to clear and buy, buildings, and people to hire, all with real
+logic, in the manner of a colony game; and no real years or record-keeping
+agencies in the player's way. Each of those overruled part of the first design,
+and this record follows the game as it now is.
 
 ## What the game is about
 
 A potato crop is underground. The grower manages what they cannot see, against
-weather they cannot control, with a fixed number of working hours, and learns the
-truth on the day they dig. The whole game is built to make that one situation
-felt.
+weather they cannot control, with the hours of the people they have, and learns
+the truth on the day they dig. Everything the farm becomes (more land, more
+hands, better buildings) is a way of buying a little more control over that.
 
 ## Pillars
 
 1. **You cannot see the crop.** Tuber count, size and health are hidden. The
    player infers them from the canopy, the weather, and test digs, and every
    estimate on screen carries its uncertainty.
-2. **The weather happened.** Each season is a real year at Caribou, Maine, from
-   NOAA's station record. The forecast is uncertain; the almanac afterwards is
-   not.
-3. **Hours are the currency.** One farmer, one day's work per day. Rain closes
-   the field. Every job delays another job.
+2. **The weather is its own master.** Each farm gets seasons of its own, made
+   from its seed out of a long weather record, so no year can be looked up and
+   every season has a character: dry, wet, early, late, a blight year. The
+   forecast can be wrong.
+3. **Hours are the currency.** Every job is somebody's day. Rain closes the
+   field, tired people slow down, and a far field costs the drive.
 4. **Dig day tells the truth.** The harvest is graded tuber by tuber, and every
-   pound lost is attributed to its cause, which is always a decision or a day.
-
-A feature belongs only if it puts pressure on a decision under one of these.
+   pound lost is put down to its cause, which is always a decision or a day.
+5. **The land is the interface.** The player looks at the farm, selects, and
+   gives orders; the numbers are one key away, never in the way.
+6. **Everything has a catch.** Land, people and buildings each give something
+   and cost something through the same weather, water, blight, labour and money
+   the crop runs on. The balance tournament must show each one matters.
 
 ## The loop
 
@@ -57,8 +73,10 @@ plant and a test dig lifts one real hill.
 
 ## Honesty rules for the simulation
 
-- Every rule cites its source in `docs/MODEL.md`. A constant we tuned is marked
-  **invented** there, with the reason.
+- Every crop, weather and disease rule cites its source in `docs/MODEL.md`. A
+  constant we tuned, and every rule of the farmstead layer, is marked
+  **invented** there, with the reason. The weather record the seasons are made
+  from is NOAA's for Caribou, Maine; the game does not show the player that.
 - The core is deterministic and uses only exact arithmetic (`+ - * /`, `sqrt`,
   integer hashing). Anything needing `exp`, `log` or trigonometry is computed in
   the weather pipeline and stored as integers.
