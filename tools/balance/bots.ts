@@ -269,7 +269,9 @@ export interface Tuning {
   loanFloor: number         // the spring plan takes cash no lower than this
   buyLand: number           // buys a field it holds outright when the cash left after it and the spring's planting is at least this
   hands: { from: number; per: number }   // a field hand once more than `from` fields are being walked, another for each `per` more
-  opFields: number          // the operator, once the second tractor is there, for this many potato fields or more
+  opFields: number          // the operator for the spring, once the second tractor is there, for this many potato fields or more
+  op: { hire: number; keep: number }   // in season: hires the operator when the machine work due within a month is more than
+                            // `hire` days, and keeps him another month when it is more than `keep`
   tractor: { fields: number; left: number; reserve: number }   // the second tractor: potato fields, seasons left, cash kept
   house: { left: number; over: number; reserve: number }       // the second potato house: seasons left, cwt the crop overflows storage by, cash kept
   contractGain: number      // signs a contract when it is worth this much more than growing for the open market
@@ -293,10 +295,10 @@ export const TUNING: Tuning = {
     { from: 0, byElev: [['gold', 'kennebec'], ['gold', 'kennebec'], ['katahdin']] },
     { from: 2015, byElev: [['caribou'], ['caribou'], ['caribou']] },
   ],
-  landValue: { ridge: 8500, brook: 5000, dufour: 6500 }, landMargin: 0,
-  loanFloor: -75000, buyLand: -60000,
-  hands: { from: 5, per: 5 }, opFields: 9,
-  tractor: { fields: 9, left: 2, reserve: 0 },
+  landValue: { ridge: 10000, brook: 6000, dufour: 7500 }, landMargin: 0,
+  loanFloor: -75000, buyLand: -75000,
+  hands: { from: 5, per: 5 }, opFields: 11, op: { hire: 24, keep: -Infinity },
+  tractor: { fields: 11, left: 2, reserve: 0 },
   house: { left: 2, over: 3000, reserve: 20000 },
   contractGain: 0, no1Share: 0.8, contractSafety: 0.85,
   yieldAcre: { norland: 251, superior: 287, katahdin: 325, kennebec: 337, burbank: 337, atlantic: 350, gold: 290, caribou: 371 },
@@ -306,7 +308,7 @@ export const TUNING: Tuning = {
 export const EXPERT: ExpertCfg = {
   hill: true, scout: true, spray: true, water: true, sample: true, kill: true, store: true,
   rotation: true, seed: 'auto', equipment: true, variety: null, calendar: false,
-  land: 'auto', hire: true, contracts: 'choose', tractor2: true, house2: true, pin: 'off', tune: TUNING,
+  land: 'auto', hire: true, contracts: 'choose', tractor2: true, house2: false, pin: 'off', tune: TUNING,
 }
 
 const MACHINE: JobKind[] = ['plant', 'hill', 'spray', 'water', 'kill', 'dig']
@@ -445,6 +447,7 @@ export function expert(cfg: ExpertCfg = EXPERT): BotFactory {
     let yearSeen = -1
     let blightOnFarm = false
     let opSide = new Set<BlockId>()                 // blocks whose machine work goes to the operator
+    let opPaidTo = -1                               // the day the operator's next month of wages falls due
     const seedFrom = new Map<number, boolean>()     // lot id -> grown from certified seed
     const digTotal = new Map<number, number>()      // lot id -> marketable cwt when dug
 
@@ -786,14 +789,43 @@ export function expert(cfg: ExpertCfg = EXPERT): BotFactory {
 
     // Hires field hands for the walking while there is more of it than the farmer can keep up with, and lets the
     // crew go once its work is done.
+    // Days of machine work due on the farm within about a month: planting, hilling, the kill and the dig with its
+    // haul, and the spraying and watering on the list.
+    function machineAhead(c: Campaign, info: FieldInfo[], d: number): number {
+      let w = 0
+      for (const f of info) {
+        const m = fm[f.index]
+        const dig = S.jobDays(c, 'dig', null, f.index)
+        if (f.status === 'idle') w += 1
+        else if (f.status === 'planted' || f.status === 'growing') {
+          if (f.canopy < S.CLOSURE) w += (2 - f.hillPasses) * 0.5
+          if (m.ti >= 0 && (isEarly(c, f.index) || killDue(c, f, m) - d <= 30)) w += 0.25 + dig
+        } else if (f.status === 'dead') w += dig
+        else if (f.status === 'digging') w += dig / 2
+      }
+      for (const j of c.season!.jobs) if (j.kind === 'spray' || j.kind === 'water') w += j.need - j.done
+      return w
+    }
+
+    // Hires field hands for the walking while there is more of it than the farmer can keep up with; hires the
+    // operator when a month's machine work is more than the farmer can do, and lets him go when his month is up
+    // and the work is not there.
     function manageCrew(world: World, c: Campaign, info: FieldInfo[], walked: number): void {
       if (!cfg.hire) return
       const hands = hireCount(c, 'hand')
       const want = walked > k.hands.from ? Math.min(S.MAX_HANDS, 1 + Math.floor((walked - k.hands.from - 1) / k.hands.per)) : 0
       if (hands.length < want) S.apply(world, c, { t: 'hire', kind: 'hand' })
       else if (hands.length > want) S.apply(world, c, { t: 'dismiss', unit: hands[hands.length - 1].id })
+      if (!c.upgrades.tractor2) return
+      const d = c.season!.day
       const op = hireCount(c, 'operator')
-      if (op.length && info.every(f => f.status === 'rest' || f.status === 'dug' || f.status === 'lost')) S.apply(world, c, { t: 'dismiss', unit: op[0].id })
+      const ahead = machineAhead(c, info, d)
+      if (!op.length) {
+        if (ahead > k.op.hire && S.apply(world, c, { t: 'hire', kind: 'operator' }).ok) opPaidTo = d + S.WAGE_DAYS
+      } else if (d >= opPaidTo) {
+        if (ahead > k.op.keep) opPaidTo += S.WAGE_DAYS
+        else S.apply(world, c, { t: 'dismiss', unit: op[0].id })
+      }
     }
 
     return {
@@ -847,6 +879,7 @@ export function expert(cfg: ExpertCfg = EXPERT): BotFactory {
         const wantOp = cfg.hire && c.upgrades.tractor2 && n >= k.opFields
         if (wantOp && !op.length) S.apply(world, c, { t: 'hire', kind: 'operator' })
         else if (!wantOp) for (const u of op) S.apply(world, c, { t: 'dismiss', unit: u.id })
+        opPaidTo = S.dayIndex(c.year, S.SEASON_START.month, S.SEASON_START.dom) + S.WAGE_DAYS
         // Keep the spring loan within bounds: give back the rented block worth least, then rest the potato field
         // worth least.
         for (let guard = 0; guard < S.FIELD_COUNT && c.cash - S.planCosts(c).total < k.loanFloor; guard++) {

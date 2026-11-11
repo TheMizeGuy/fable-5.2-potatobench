@@ -50,7 +50,7 @@ if (!isMainThread) {
   const names = Object.keys(spec).filter(n => n !== '_economy')
   const world = loadWorld()
   const stride = Number(process.env.YEARS ?? 1)
-  const years = S.startYears(world).filter((_, i) => i % stride === 0)
+  const years = (process.env.GOAL === "1" ? world.weather.playable : S.startYears(world)).filter((_, i) => i % stride === 0)
   const first = Number(process.env.FIRST_SEED ?? 1)
   const seeds = Array.from({ length: Number(process.env.SEEDS ?? 6) }, (_, i) => first + i)
   const goal = Number(process.env.GOAL ?? S.GOAL_YEARS)
