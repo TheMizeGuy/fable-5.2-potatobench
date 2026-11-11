@@ -25,12 +25,20 @@ function yieldBars(ctx: Ctx, y: S.YearSummary): HTMLElement {
 function moneyTable(y: S.YearSummary, lost: boolean): HTMLElement {
   const rest = y.restIncome ?? 0
   const storage = y.storage ?? 0
+  const contracts = y.contracts ?? 0
+  const wages = y.wages ?? 0, rent = y.rent ?? 0, land = y.land ?? 0, penalties = y.penalties ?? 0
+  const line = (label: string, v: number, testid?: string) => v ? h('tr', { testid }, h('th', { scope: 'row' }, label), h('td', null, F.money(v))) : null
   return h('table', { class: 'money' },
     h('tbody', null,
       h('tr', null, h('th', { scope: 'row' }, 'Cash at the start'), h('td', null, F.money(y.cashStart))),
-      h('tr', null, h('th', { scope: 'row' }, y.cwtSold >= 0.5 ? `Potato sales, ${F.mass(y.cwtSold)}` : 'Potato sales'), h('td', null, y.cwtSold >= 0.5 ? F.money(y.revenue - rest) : 'none')),
+      h('tr', null, h('th', { scope: 'row' }, contracts ? 'Sold on the market' : y.cwtSold >= 0.5 ? `Potato sales, ${F.mass(y.cwtSold)}` : 'Potato sales'), h('td', null, y.cwtSold >= 0.5 ? F.money(y.revenue - rest - contracts) : 'none')),
+      line('Delivered on contract', contracts, 'ledger-contracts'),
       rest ? h('tr', null, h('th', { scope: 'row' }, 'Oats and clover'), h('td', null, F.money(rest))) : null,
-      h('tr', null, h('th', { scope: 'row' }, 'Growing: seed, fields, work, equipment'), h('td', null, F.money(-(y.costs - storage)))),
+      h('tr', null, h('th', { scope: 'row' }, 'Growing: seed, fields, work, equipment'), h('td', null, F.money(-(y.costs - storage - wages - rent - land - penalties)))),
+      line('Wages', -wages, 'ledger-wages'),
+      line('Rent', -rent, 'ledger-rent'),
+      line('Land bought', -land, 'ledger-land'),
+      line('Contract penalties', -penalties, 'ledger-penalties'),
       storage ? h('tr', null, h('th', { scope: 'row' }, 'Storage'), h('td', null, F.money(-storage))) : null,
       h('tr', null, h('th', { scope: 'row' }, 'The note'), h('td', null, F.money(-y.note))),
       h('tr', null, h('th', { scope: 'row' }, 'The household'), h('td', null, F.money(-y.living))),
@@ -101,7 +109,7 @@ function yearSheet(ctx: Ctx, c: S.Campaign, y: S.YearSummary, lost: boolean): Ch
         note ? h('p', { class: 'note year-note' }, note) : null)),
     h('section', null,
       h('h3', { class: 'block-head' }, `The soil going into ${y.year + 1}`),
-      h('ul', { class: 'soil' }, Array.from({ length: S.FIELD_COUNT }, (_, i) => S.fieldInfo(c, i)).map(f => h('li', { class: f.soil < 0.4 ? 'worn' : '' },
+      h('ul', { class: 'soil' }, Array.from({ length: S.FIELD_COUNT }, (_, i) => S.fieldInfo(c, i)).filter(f => f.tenure !== 'none').map(f => h('li', { class: f.soil < 0.4 ? 'worn' : '' },
         h('strong', null, f.name),
         h('span', { class: f.soil < 0.4 ? 'warn-text' : '' }, `soil ${soilWord(f.soil)}`),
         h('span', { class: `sub${f.vert >= 0.15 ? ' warn-text' : ''}` }, `early dying ${F.pct(f.vert)}`)))),

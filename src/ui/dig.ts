@@ -1,5 +1,6 @@
 // The two moments the crop shows itself: the test-dig tray and the weigh ticket, with the full reckoning behind it.
 import * as S from '../sim/index.ts'
+import { deals, deliver, versusMarket } from './contracts.ts'
 import { count, type Ctx, type PaperSpec } from './core.ts'
 import { h, s, type Child } from './dom.ts'
 import * as F from './fmt.ts'
@@ -401,6 +402,14 @@ function sellOrKeep(ctx: Ctx, c: S.Campaign, lot: S.Lot): HTMLElement[] {
   ]
 }
 
+// The potato houses and what is kept in them, with this crop counted in: what will not fit is sold off the field.
+export function storageLine(c: S.Campaign): string {
+  const st = S.storageInfo(c)
+  const over = st.stored - st.capacity
+  const houses = st.houses.length === 1 ? `The potato house holds ${F.mass(st.capacity)}` : `${F.list(st.houses.map(x => `${x.name.replace(/ potato house$/, '').replace(/^Home$/, 'the home one')} ${F.mass(x.cwt)}`))}: ${F.mass(st.capacity)} in all`
+  return `${houses}. Kept, this crop brings what is stored to ${F.mass(st.stored)}${over > 0.5 ? `, and ${F.mass(over)} will not fit: it is sold off the field when the season closes` : `, leaving room for ${F.mass(st.free)}`}.`
+}
+
 // Everything behind the ticket: every grade rule, every cause, and what never grew.
 function reckoning(ctx: Ctx, lotId: number): PaperSpec {
   const c = ctx.app.campaign!
@@ -429,8 +438,7 @@ function reckoning(ctx: Ctx, lotId: number): PaperSpec {
       text: `${F.pct(1 - stand)} of the seed pieces rotted before they came up${planted ? `, after planting on ${F.date(c.year, planted.day)}` : ''}. Seed rots in cold ground; it wants soil near ${F.temp(10)}.`,
     })
   }
-  const inCellar = S.openLots(c).reduce((a, l) => a + S.lotCwt(l), 0)
-  const cap = S.cellarCapacity(c)
+  const st = S.storageInfo(c)
   return {
     title: `The reckoning, ${name}`,
     testid: 'reckoning',
@@ -460,7 +468,7 @@ function reckoning(ctx: Ctx, lotId: number): PaperSpec {
       lot.open ? [
         h('h3', { class: 'block-head' }, 'Sell now or store it?'),
         sellOrKeep(ctx, c, lot),
-        h('p', { class: inCellar > cap ? 'warn-text' : 'sub' }, `The cellar holds ${F.mass(cap)}; kept, this crop brings it to ${F.mass(inCellar)}.${inCellar > cap ? ' Whatever does not fit is sold off the field when the season closes.' : ''}`),
+        h('p', { class: st.stored > st.capacity ? 'warn-text' : 'sub' }, storageLine(c)),
       ] : null,
     ] as Child,
     foot: close => h('button', { class: 'btn primary', type: 'button', testid: 'reckoning-close', autofocus: true, onclick: close }, 'Back to the ticket'),
@@ -487,6 +495,7 @@ export function ticket(ctx: Ctx, lotId: number, o: { fresh: boolean; staged?: bo
   const m = R.sproutMonth(lot.year, lot.dugDay, lot.variety, c.upgrades.vent)
   const dug = digDays(c, lot)
   let answered = false
+  let worthEl: HTMLElement | null = null
 
   return {
     title: `Weigh ticket, ${name}`,
@@ -505,6 +514,7 @@ export function ticket(ctx: Ctx, lotId: number, o: { fresh: boolean; staged?: bo
     body: () => {
       const weight = h('span', { class: 'figure num', testid: 'ticket-weight' }, F.mass(d.market))
       const worth = h('span', { class: 'figure num', testid: 'ticket-value' }, F.money(value))
+      worthEl = worth
       const max = est ? Math.max(500, Math.ceil(Math.max(est.hi, perAcre) / 100) * 100) : 500
       const inside = est ? perAcre >= est.lo && perAcre <= est.hi : false
       const root = h('div', { class: 'ticket' },
@@ -552,16 +562,33 @@ export function ticket(ctx: Ctx, lotId: number, o: { fresh: boolean; staged?: bo
     },
     foot: close => {
       if (!lot.open) return h('button', { class: 'btn primary', type: 'button', testid: `lot-keep-${lot.id}`, autofocus: true, onclick: close }, 'Close')
-      const month = Math.round(S.lotCwt(lot) * S.STORE_COST)
-      return h('div', { class: 'choice' },
-        advice ? h('p', { class: 'choice-advice' }, F.localize(advice.why)) : null,
-        h('div', { class: 'choice-opt' },
-          h('button', { class: 'btn big', type: 'button', testid: `lot-sell-${lot.id}`, onclick: () => { answered = true; if (ctx.run({ t: 'sell', lot: lot.id, frac: 1 }).ok) close() } },
-            'Sell now', h('span', { class: 'num' }, F.money(value))),
-          h('p', { class: 'sub' }, `${F.price(S.basePrice(app.world, c, lot.variety))} today for US No. 1.`)),
-        h('div', { class: 'choice-opt' },
-          h('button', { class: 'btn big', type: 'button', testid: `lot-keep-${lot.id}`, onclick: () => { answered = true; if (fresh) ctx.say(`${F.mass(S.lotCwt(lot))} from ${name} went into the cellar.`, 'info'); close() } }, fresh ? 'Store it' : 'Keep it stored'),
-          h('p', { class: 'sub' }, `${F.upper(R.aprilPhrase(c, v))}. Storing costs ${F.money(month)} a month, and it ${R.sproutText(m)}.`)))
+      const box = h('div', { class: 'choice-box' })
+      let delivered = false
+      // Delivering takes the No. 1 and large tubers a contract wants; what is left still has to be sold or stored.
+      const draw = () => {
+        if (!lot.open) { answered = true; close(); return }
+        const deal = deals(app.world, c, lot)[0]
+        const now = S.lotValue(app.world, c, lot)
+        if (worthEl) worthEl.textContent = F.money(now)
+        const month = Math.round(S.lotCwt(lot) * S.STORE_COST)
+        const st = S.storageInfo(c)
+        box.replaceChildren(h('div', { class: `choice${deal ? ' three' : ''}` },
+          advice && !delivered ? h('p', { class: 'choice-advice' }, F.localize(advice.why)) : null,
+          deal ? h('div', { class: 'choice-opt' },
+            h('button', { class: 'btn big', type: 'button', testid: `lot-deliver-${lot.id}`, onclick: () => { if (deliver(ctx, lot, deal)) { delivered = true; draw() } } },
+              `Deliver to ${deal.k.buyer.replace(/^The /, 'the ')}`, h('span', { class: 'num' }, F.money(deal.pays))),
+            h('p', { class: 'sub' }, `${F.mass(deal.take)} of No. 1 at ${F.price(deal.k.price)}: ${versusMarket(deal)}.${deal.take < deal.k.needed - 0.5 ? ` That leaves ${F.mass(deal.k.needed - deal.take)} still owed.` : ' That fills it.'}`)) : null,
+          h('div', { class: 'choice-opt' },
+            h('button', { class: 'btn big', type: 'button', testid: `lot-sell-${lot.id}`, onclick: () => { answered = true; if (ctx.run({ t: 'sell', lot: lot.id, frac: 1 }).ok) close() } },
+              delivered ? 'Sell the rest' : 'Sell now', h('span', { class: 'num' }, F.money(now))),
+            h('p', { class: 'sub' }, `${F.price(S.basePrice(app.world, c, lot.variety))} today for US No. 1.`)),
+          h('div', { class: 'choice-opt' },
+            h('button', { class: 'btn big', type: 'button', testid: `lot-keep-${lot.id}`, onclick: () => { answered = true; if (fresh) ctx.say(`${F.mass(S.lotCwt(lot))} from ${name} went into the cellar.`, 'info'); close() } }, delivered ? 'Store the rest' : fresh ? 'Store it' : 'Keep it stored'),
+            h('p', { class: 'sub' }, `${F.upper(R.aprilPhrase(c, v))}. Storing costs ${F.money(month)} a month, and it ${R.sproutText(m)}.`),
+            h('p', { class: `sub${st.stored > st.capacity + 0.5 ? ' warn-text' : ''}`, testid: 'store-houses' }, storageLine(c)))))
+      }
+      draw()
+      return box
     },
   }
 }

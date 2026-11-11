@@ -103,7 +103,7 @@ export function titleScreen(ctx: Ctx, o: { onMenu: () => void; onHelp: () => voi
       const c = saved?.campaign
       patch(block, JSON.stringify([c?.year, c?.phase, c?.yearIdx, c?.outcome]), () => [
         h('h1', { class: 't-display title-name' }, 'The County'),
-        h('p', { class: 't-lede premise' }, 'Six fields of potatoes in Aroostook County, Maine, farmed through the weather of real years, with a crop you cannot see until you dig it.'),
+        h('p', { class: 't-lede premise' }, 'A potato farm in Aroostook County, Maine: six fields to start and more to rent or buy, farmed through the weather of real years, with a crop you cannot see until you dig it.'),
         h('div', { class: 'title-actions' },
           c ? h('button', { class: 'nbtn primary big', type: 'button', testid: 'continue', onclick: () => { if (!app.continueGame()) ctx.say('The save could not be read.', 'warn') } },
             'Continue', h('span', { class: 'sub num' }, `${c.year}, ${seasonCount(c)}`)) : null,

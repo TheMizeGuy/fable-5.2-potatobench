@@ -145,6 +145,8 @@
 .loss-why { color: var(--ink-2); }
 .ticket-paper .paper-foot { display: block; }
 .choice { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-2) var(--sp-4); }
+.choice.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.choice.three .btn { white-space: normal; text-align: left; padding: var(--sp-1) var(--sp-3); gap: var(--sp-2); }
 .choice-advice { grid-column: 1 / -1; color: var(--warn-ink); font-weight: 600; }
 .choice-opt { display: grid; gap: var(--sp-1); align-content: start; }
 .choice-opt .btn { width: 100%; justify-content: space-between; }
@@ -168,6 +170,7 @@
   .ticket-paper .choice { grid-template-columns: minmax(0, 1fr); }
   .ticket { gap: var(--sp-3); }
 }
+@media (max-width: 699px) { .choice.three { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 519px) {
   .ticket-form { grid-template-columns: repeat(2, auto); }
   .ticket-form div:nth-child(3) { padding-left: 0; border-left: 0; }
@@ -223,6 +226,15 @@
 .cellar-sum p { display: grid; }
 .cellar-sum .t-label { color: var(--ink-3); }
 .cellar-sum strong { font-size: var(--t-head); line-height: 24px; font-weight: 700; }
+/* The potato houses: one bar across them all, marked where each ends, since what is stored is shared between them. */
+.houses { position: relative; display: grid; gap: var(--sp-1); margin-top: var(--sp-3); }
+.houses > .gauge { display: block; height: 10px; }
+.house-marks { position: absolute; left: 0; right: 0; top: 0; height: 10px; display: flex; pointer-events: none; }
+.house-marks span + span { border-left: 2px solid var(--paper); }
+.house-list { display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-4); font-size: var(--t-small); line-height: 18px; color: var(--ink-2); }
+.house-list li { display: inline-flex; align-items: center; gap: var(--sp-1); }
+.house-list .num { color: var(--ink-3); }
+.lot-deal { color: var(--good-ink); }
 .this-month { margin: var(--sp-4) 0; padding: var(--sp-2) var(--sp-3); background: var(--paper-2); font-size: var(--t-small); line-height: 18px; color: var(--ink-2); }
 .this-month:empty { display: none; }
 .pl-end { font-family: var(--sans); font-size: var(--t-label); fill: var(--ink-3); }
@@ -335,6 +347,24 @@
 .orders-help td, .keys td { font-size: var(--t-small); line-height: 18px; }
 .orders-help th { width: 132px; }
 .help-foot { margin-top: var(--sp-4); }
+.help-farm { margin-top: var(--sp-5); }
+.help-cols.three { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-5); font-size: var(--t-small); line-height: 18px; }
+@media (max-width: 799px) { .help-cols.three { grid-template-columns: minmax(0, 1fr); gap: var(--sp-2); } }
+
+/* ---------------------------------------------------------------- contracts and the crew */
+.offers { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--sp-3); }
+.offer { display: grid; gap: var(--sp-2); align-content: start; padding: var(--sp-3) var(--sp-4); background: var(--paper-hi); border: 1px solid var(--rule); border-radius: var(--radius); }
+.offer.signed { border-color: var(--ink-3); }
+.offer-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-2); }
+.offer-facts { display: grid; gap: var(--sp-h); font-size: var(--t-small); line-height: 18px; }
+.offer-facts div { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: var(--sp-2); }
+.offer-facts dt { color: var(--ink-3); padding-top: 1px; }
+.offer .btn { justify-self: start; }
+.crew-list { display: grid; }
+.crew-row { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: var(--sp-3); align-items: center; padding: var(--sp-3) 0; border-bottom: 1px dotted var(--rule-strong); }
+.crew-row h4 { font-size: var(--t-body); line-height: 22px; }
+.crew-row h4 .sub { font-family: var(--sans); font-weight: 400; }
+.crew-row p { font-size: var(--t-small); line-height: 18px; }
 @media (max-width: 799px) { .help-cols { grid-template-columns: minmax(0, 1fr); gap: var(--sp-4); } }
 
 /* ---------------------------------------------------------------- choosing the year, comparing, equipment */

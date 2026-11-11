@@ -168,6 +168,7 @@ export const mountHud: MountHud = (root, app, view) => {
         dirty = true
         break
       case 'select':
+      case 'unit':
         dirty = true
         break
       case 'saved':

@@ -188,6 +188,15 @@
 .plate.on .plate-marks .bad { color: var(--bad); }
 .docked .plate-in { opacity: 0.86; }
 .docked .plate-in::after { display: none; }
+.plate-wrap.gone { display: none; }
+/* Land to rent or buy: a quiet marker, drawn in outline. */
+.plate.land .plate-in { background: rgb(22 31 27 / 0.55); border-style: dashed; border-color: var(--night-edge); color: var(--cream-2); }
+.plate.land .plate-name { font-weight: 500; }
+.plate.land.on .plate-in { background: var(--cream); border-style: solid; color: var(--night-solid); }
+/* Far out, a plate keeps its name; crowded as well, its glyph. */
+.far .plate-marks, .far .plate-queue, .far .plate-sub, .far:not(.compact) .plate-glyph { display: none; }
+.far .plate-in { padding: 0 var(--sp-2); min-height: 26px; }
+.far .plate-name { font-size: var(--t-small); }
 @media (hover: hover) { .plate:hover:not(.on) .plate-in { background: var(--night-solid); border-color: var(--cream); } }
 
 /* What glows. */
@@ -233,9 +242,43 @@
 .clock-slot { grid-area: clock; display: flex; align-items: center; padding: var(--sp-h); }
 
 .crew { grid-area: crew; display: grid; gap: var(--sp-2); align-content: center; min-height: 48px; padding: var(--sp-2) var(--sp-3); }
-.crew-now { display: grid; grid-template-columns: 20px minmax(0, 1fr); column-gap: var(--sp-2); row-gap: var(--sp-1); align-items: center; }
-.crew-text { font-size: var(--t-small); line-height: 18px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.crew-now .gauge { grid-column: 1 / -1; display: block; height: 3px; }
+/* The unit bar: a chip for each crew. With one crew the chip is a line of what it is doing. */
+.units { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1); min-width: 0; }
+.unit {
+  position: relative;
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  grid-template-areas: 'kind name' 'doing doing';
+  column-gap: var(--sp-1);
+  align-items: center;
+  min-width: 0;
+  padding: var(--sp-1) var(--sp-2) 5px;
+  border: 1px solid var(--night-line);
+  border-radius: var(--radius);
+  color: var(--cream);
+  text-align: left;
+  transition: background-color var(--t-quick) var(--ease-out), border-color var(--t-quick) var(--ease-out);
+}
+.unit-kind { grid-area: kind; color: var(--cream-2); }
+.unit-name { grid-area: name; font-size: var(--t-small); line-height: 16px; font-weight: 600; white-space: nowrap; }
+.unit-doing { grid-area: doing; display: flex; align-items: center; gap: var(--sp-1); min-width: 0; font-size: var(--t-small); line-height: 18px; }
+.unit-doing .ic { color: var(--cream-2); }
+.unit-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.unit .gauge { position: absolute; left: var(--sp-2); right: var(--sp-2); bottom: 2px; height: 2px; }
+.units:not(.many) { flex-wrap: nowrap; }
+.units:not(.many) .unit { flex: 1 1 auto; grid-template-columns: minmax(0, 1fr); grid-template-areas: 'doing'; border-color: transparent; padding: 0; }
+.units:not(.many) .unit-kind, .units:not(.many) .unit-name { display: none; }
+.units:not(.many) .unit-doing { font-weight: 600; gap: var(--sp-2); }
+.units:not(.many) .unit-doing .ic { width: 20px; height: 20px; color: var(--cream); }
+.units:not(.many) .unit .gauge { left: 0; right: 0; bottom: -4px; height: 3px; }
+.units.many .unit-text { display: none; }
+.units.many .unit { min-height: var(--hit); }
+.unit.on { background: var(--cream); border-color: var(--cream); color: var(--night-solid); }
+.unit.on .unit-kind, .unit.on .unit-doing .ic { color: var(--ink-2); }
+.unit.on .where { fill: var(--ink-3); }
+.unit.on .where .here { fill: var(--night-solid); }
+.crew-open { margin-left: auto; }
+@media (hover: hover) { button.unit:hover:not(.on) { background: var(--night-2); border-color: var(--cream); } }
 .queue { display: flex; flex-wrap: nowrap; gap: var(--sp-1); min-height: var(--hit-s); }
 .queue.all { flex-wrap: wrap; }
 .q-item { position: relative; flex: none; }
@@ -252,14 +295,20 @@
   color: var(--cream);
 }
 .q .ic { width: 18px; height: 18px; }
-.where { width: 11px; height: 17px; flex: none; fill: var(--night-edge); }
+.where { flex: none; fill: var(--night-edge); }
 .where .here { fill: var(--cream); }
+.q-tag { min-width: 12px; font-size: var(--t-label); line-height: 14px; font-weight: 700; color: var(--cream-2); text-align: center; }
+.q-tag.pinned { color: var(--night-solid); background: var(--cream); border-radius: 2px; padding: 0 2px; }
+.q-who { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
+.nbtn.s { min-height: var(--hit-s); padding: 0 var(--sp-2); font-size: var(--t-small); gap: var(--sp-1); }
+.nbtn[aria-pressed='true'] { background: var(--cream); border-color: var(--cream); color: var(--night-solid); }
 .q.active { background: var(--night-2); border-color: var(--cream); }
 .q.waiting .ic { opacity: 0.5; }
 .q.more { color: var(--cream-2); font-size: var(--t-small); font-weight: 600; }
+/* Above an order, under the pointer: do it first, and choose who does it. */
+.q-tools { position: absolute; inset: auto 0 100% 0; display: flex; gap: var(--sp-h); opacity: 0; pointer-events: none; }
 .q-first {
-  position: absolute;
-  inset: auto 0 100% 0;
+  flex: 1 1 0;
   height: 24px;
   display: grid;
   place-items: center;
@@ -267,12 +316,11 @@
   border: 1px solid var(--night-line);
   border-radius: var(--radius);
   color: var(--cream);
-  opacity: 0;
-  pointer-events: none;
 }
-.q-item:focus-within .q-first { opacity: 1; pointer-events: auto; }
+.q-item:focus-within .q-tools { opacity: 1; pointer-events: auto; }
+.q-item:has(.q-pop) .q-tools { opacity: 0; pointer-events: none; }
 @media (hover: hover) {
-  .q-item:hover .q-first { opacity: 1; pointer-events: auto; }
+  .q-item:hover .q-tools { opacity: 1; pointer-events: auto; }
   .q:hover, .q-first:hover { background: var(--night-2); border-color: var(--cream); }
 }
 .q-pop {
@@ -281,6 +329,8 @@
   bottom: calc(100% + var(--sp-1));
   z-index: 2;
   display: flex;
+  flex-wrap: wrap;
+  max-width: min(360px, calc(100vw - 32px));
   align-items: center;
   gap: var(--sp-2);
   padding: var(--sp-2);
@@ -370,6 +420,9 @@
 .order.ghost { border-color: transparent; }
 .order.ghost.given { border-color: var(--night-line); color: var(--cream-2); }
 .order.more { flex: 0 0 44px; display: grid; place-items: center; grid-template: none; padding: 0; }
+/* The crew these orders go to, when one is picked. */
+.order-who { flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--sp-h); padding: 0 var(--sp-2) 0 var(--sp-1); border-right: 1px solid var(--night-line); font-size: var(--t-label); line-height: 14px; font-weight: 600; color: var(--gold); }
+.order-who .ic { color: var(--gold); }
 .order.wide { max-width: 240px; }
 @media (hover: hover) {
   button.order:hover:not(.suggested) { background: var(--night-2); border-color: var(--cream); }
@@ -377,10 +430,23 @@
 }
 
 /* ---------------------------------------------------------------- alerts */
-.notes-slot { position: absolute; right: var(--sp-3); bottom: max(var(--sp-3), env(safe-area-inset-bottom, 0px)); width: 288px; pointer-events: none; }
+.notes-slot { position: absolute; right: var(--sp-3); bottom: max(var(--sp-3), env(safe-area-inset-bottom, 0px)); width: 288px; pointer-events: none; display: flex; flex-direction: column; gap: var(--sp-1); }
 /* Where a sheet or the plan's bar holds the bottom edge, notices sit under the top bar instead. */
-.notes-slot.floating, .plan .notes-slot { inset: calc(var(--top, 0px) + var(--sp-3)) auto auto var(--sp-3); }
-.notes-slot.floating .notes, .plan .notes { align-items: flex-start; }
+.notes-slot.floating, .plan .notes-slot, .notes-slot.top-left { inset: calc(var(--top, 0px) + var(--sp-3)) auto auto var(--sp-3); }
+.notes-slot.floating .notes, .plan .notes, .notes-slot.top-left .notes { align-items: flex-start; }
+/* Over the bottom edge the contracts stand under the alerts, so new alerts never move them. */
+.season:not(.plan)[data-layout='wide'] .tracker, .season:not(.plan)[data-layout='mid'] .tracker, .season:not(.plan)[data-layout='narrow'] .tracker { order: 1; }
+.season:not(.plan)[data-layout='wide'] .tracker, .season:not(.plan)[data-layout='mid'] .tracker { align-self: flex-end; }
+
+/* The contracts signed this year, a row each. */
+.tracker { display: grid; gap: var(--sp-h); padding: var(--sp-h); align-self: flex-start; max-width: 100%; }
+.track-row { display: flex; align-items: center; gap: var(--sp-2); min-height: var(--hit-s); padding: 0 var(--sp-2); border-radius: var(--radius); font-size: var(--t-small); line-height: 18px; color: var(--cream); white-space: nowrap; }
+.track-row .ic { color: var(--gold); }
+.track-row.done .ic { color: var(--sage); }
+.track-v { font-weight: 600; }
+.track-due { color: var(--cream-2); }
+.track-pen { color: var(--ember); font-weight: 600; }
+@media (hover: hover) { .track-row:hover { background: var(--night-2); } }
 .notes { display: flex; flex-direction: column; align-items: flex-end; gap: var(--sp-1); }
 .alert {
   pointer-events: auto;
@@ -423,6 +489,10 @@
 .plan-money strong { color: var(--cream); font-size: var(--t-body); font-weight: 700; }
 .plan-money.over strong { color: var(--ember); }
 .plan-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-left: auto; }
+.plan-actions .nbtn .ic { margin-left: calc(-1 * var(--sp-1)); }
+.land-row .card-line { flex: 1 1 260px; }
+.v-contract { color: var(--gold); }
+.vcard input:checked + .vcard-in .v-contract { color: var(--warn-ink); }
 .plan-card { width: min(980px, 100%); grid-template-columns: minmax(0, 1fr); grid-template-areas: none; gap: var(--sp-3); }
 .plan-card > * { grid-area: auto; }
 .plan-card .plan-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-2) var(--sp-5); padding-right: var(--sp-7); }
@@ -526,8 +596,10 @@
 .season[data-layout='narrow'] .tray-host { position: static; grid-area: tray; justify-self: center; }
 .season[data-layout='narrow'].tray-up .card { display: none; }
 .season[data-layout='narrow'] .crew { position: relative; display: flex; align-items: center; gap: var(--sp-2); min-height: 48px; padding: var(--sp-h) var(--sp-2); min-width: 0; }
-.season[data-layout='narrow'] .crew-now { flex: 0 1 auto; min-width: 20px; grid-template-columns: 20px minmax(0, auto); }
-.season[data-layout='narrow'] .crew-now .gauge { display: none; }
+.season[data-layout='narrow'] .units { flex: 0 1 auto; min-width: 20px; }
+.season[data-layout='narrow'] .crew.many { flex-wrap: wrap; padding: var(--sp-1) var(--sp-2); }
+.season[data-layout='narrow'] .crew.many .units { flex: 1 1 100%; }
+.season[data-layout='narrow'] .units.many .unit-name { max-width: 64px; overflow: hidden; text-overflow: ellipsis; }
 .season[data-layout='narrow'] .queue { min-width: 0; }
 .season[data-layout='narrow'] .queue.all { position: absolute; left: 0; right: 0; bottom: calc(100% + var(--sp-1)); padding: var(--sp-2); background: var(--night-solid); border: 1px solid var(--night-line); border-radius: var(--radius); }
 .season[data-layout='narrow'] .notes-slot { inset: auto var(--sp-2) calc(var(--bottom, 64px) - 44px) var(--sp-2); width: auto; }
@@ -539,7 +611,7 @@
 .season[data-layout='narrow'] .plan-card { max-height: calc(100vh - var(--top, 56px) - 190px); overflow-y: auto; overscroll-behavior: contain; }
 .season[data-layout='narrow'] .vcards { grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); }
 @media (max-width: 519px) {
-  .season[data-layout='narrow'] .crew.busy .crew-text { display: none; }
+  .season[data-layout='narrow'] .crew.busy .units:not(.many) .unit-text { display: none; }
   .title-block { left: var(--sp-4); right: var(--sp-4); bottom: var(--sp-5); }
   .title-actions .nbtn { flex: 1 1 140px; }
 }
@@ -554,8 +626,9 @@
 .season[data-layout='short'] .fc-t span { display: none; }
 .season[data-layout='short'] .bottom { inset: auto max(var(--sp-2), env(safe-area-inset-right, 0px)) var(--sp-2) max(var(--sp-2), env(safe-area-inset-left, 0px)); grid-template-columns: auto minmax(0, 1fr); grid-template-areas: 'clock card' 'crew card'; gap: var(--sp-1) var(--sp-2); }
 .season[data-layout='short'] .crew { min-height: 44px; max-width: 200px; padding: var(--sp-h) var(--sp-2); display: flex; align-items: center; gap: var(--sp-2); position: relative; }
-.season[data-layout='short'] .crew.busy .crew-text, .season[data-layout='short'] .crew-now .gauge { display: none; }
-.season[data-layout='short'] .crew-now { grid-template-columns: 20px minmax(0, auto); }
+.season[data-layout='short'] .crew.busy .units:not(.many) .unit-text { display: none; }
+.season[data-layout='short'] .crew.many { flex-wrap: wrap; max-width: 280px; }
+.season[data-layout='short'] .crew.many .units { flex: 1 1 100%; }
 .season[data-layout='short'] .queue.all { position: absolute; left: 0; bottom: calc(100% + var(--sp-1)); width: 320px; padding: var(--sp-2); background: var(--night-solid); border: 1px solid var(--night-line); border-radius: var(--radius); }
 .season[data-layout='short'] .card { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'head orders' 'gauges orders' 'main orders'; gap: var(--sp-1) var(--sp-3); padding: var(--sp-2) var(--sp-3); justify-self: stretch; width: auto; align-self: end; }
 .season[data-layout='short'] .gauges { max-width: 360px; }

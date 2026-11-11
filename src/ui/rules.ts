@@ -112,6 +112,9 @@ export function alertShort(a: Alert): { text: string; glyph: string } {
     case 'freeze': return { text: 'The ground has frozen', glyph: 'frost' }
     case 'dropped': return { text: `${name}${a.text.split(' in ')[0].toLowerCase()} dropped`, glyph: 'warn' }
     case 'sold': return { text: a.text.replace(/^Sold .* for /, `${name}sold for `).replace(/\.$/, ''), glyph: 'check' }
+    case 'delivered': return { text: a.text.replace(/^Delivered .* for /, `${name}delivered for `).replace(/\.$/, ''), glyph: 'deliver' }
+    case 'contractShort': case 'contractFilled': return { text: a.text.replace(/\.$/, ''), glyph: 'contract' }
+    case 'hired': case 'dismissed': return { text: a.text.replace(/\.$/, ''), glyph: 'crew' }
     default: return { text: a.text, glyph: a.level === 'bad' ? 'blight' : a.level === 'warn' ? 'warn' : a.level === 'good' ? 'check' : 'flat' }
   }
 }
@@ -243,7 +246,7 @@ export function outlookText(c: S.Campaign): string {
 
 // Where the price usually stands by April against today, in a phrase, for the weigh ticket.
 export function aprilPhrase(c: S.Campaign, v: S.Variety): string {
-  if (v.contract) return 'a contract price: it does not rise through the winter'
+  if (v.contract) return 'off contract it fetches a processing price, which barely moves through the winter'
   const s = c.season
   const now = c.phase === 'season' && s ? usualFactor(s.day) : S.MONTH_CURVE[Math.min(c.month, S.MONTH_CURVE.length - 1)]
   return `by April it is usually ${F.versus(S.MONTH_CURVE[5] / now, 'above today', 'below today').replace('level with', 'level with today')}`
@@ -255,7 +258,31 @@ export function storageText(c: S.Campaign, cwt: number): string {
 }
 
 export function contractText(v: S.Variety): string {
-  return `${v.name} is grown on contract: the price is the same whenever it is delivered, with no winter rise, so keeping it only costs storage and shrink.`
+  return `${v.name} is a chipping potato. Off contract it fetches only a processing price, ${offContract()} its usual price, and that barely moves through the winter, so keeping it only costs storage and shrink. Against a chip plant's contract it gets the contract price.`
+}
+
+// How far under its usual price the chipping variety sells with no contract.
+export function offContract(): string {
+  return `${F.pct(1 - S.PROCESSING_PRICE)} under`
+}
+
+// ---------------------------------------------------------------- crews
+
+export const KIND_GLYPH: Record<S.UnitKind, string> = { farmer: 'farmer', hand: 'hand', operator: 'tractor' }
+export const KIND_NAME: Record<S.UnitKind, string> = { farmer: 'The farmer', hand: 'Field hand', operator: 'Tractor operator' }
+
+// What a kind of crew can be given, in words.
+export function kindDoes(kind: S.UnitKind): string {
+  if (kind === 'farmer') return 'Every job.'
+  return `${F.upper(F.list(S.UNIT_JOBS[kind].map(j => JOB_NOUN[j])))}.`
+}
+
+const JOB_NOUN: Record<S.JobKind, string> = {
+  plant: 'planting', hill: 'hilling', scout: 'scouting', spray: 'spraying', water: 'watering', rogue: 'pulling blighted plants', sample: 'test digs', kill: 'vine kill', dig: 'digging',
+}
+
+export function initial(name: string): string {
+  return name.slice(0, 1).toUpperCase()
 }
 
 // What saved seed carries, for the stock in hand.

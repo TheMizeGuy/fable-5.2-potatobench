@@ -4,8 +4,9 @@ import { EXIT_MS, gauge, patch, type Ctx, type Level } from './core.ts'
 import { h, type Child } from './dom.ts'
 import * as F from './fmt.ts'
 import { icon } from './icons.ts'
+import { deals, deliver, versusMarket } from './contracts.ts'
 import { culledAtDig } from './dig.ts'
-import { hillWord, isJob, isStale, JOB_KEY, JOB_VERB, jobWhat } from './rules.ts'
+import { hillWord, isJob, isStale, JOB_KEY, JOB_VERB, jobWhat, KIND_GLYPH } from './rules.ts'
 
 const MAX_ORDERS = 5
 const HOLD_MS = 1400
@@ -51,15 +52,21 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
   // After an order is given its button holds its place for a moment, so a second tap never lands on a neighbour.
   let held: { until: number; kinds: S.JobKind[]; given: S.JobKind[] } | null = null
 
+  // The crew the orders go to, when one is picked.
+  function picked(c: S.Campaign): S.Unit | null {
+    return app.unit >= 0 ? c.crew.find(u => u.id === app.unit) ?? null : null
+  }
+
   function offers(c: S.Campaign, sel: number[]): Offer[] {
     const s = c.season!
     const needs = app.needs()
     const by = new Map<S.JobKind, Offer>()
+    const u = picked(c)
     for (const i of sel) {
       const f = S.fieldInfo(c, i)
       const need = needs[i]?.need?.act
       for (const a of S.fieldActions(app.world, c, i)) {
-        if (!a.ok) continue
+        if (!a.ok || (u && !S.canDo(u.kind, a.kind))) continue
         const sc = score(a.kind, f, s, need === a.kind)
         const x = by.get(a.kind)
         if (x) { x.fields.push(i); x.days += a.days; x.cost += a.cost; x.score = Math.max(x.score, sc) }
@@ -79,7 +86,9 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
   function give(kind: S.JobKind, first: boolean): void {
     const c = app.campaign
     if (!c || !c.season) return
-    if (!app.selection.length) { ctx.say(ctx.touch() ? 'Tap a field first, then give it an order.' : 'Select a field first: click it, or press 1 to 6.'); return }
+    if (!app.selection.length) { ctx.say(ctx.touch() ? 'Tap a field first, then give it an order.' : 'Select a field first: click it, or press its number.'); return }
+    const u = picked(c)
+    if (u && !S.canDo(u.kind, kind)) { flash(`${JOB_VERB[kind]}: ${S.unitBlock(c, kind, u.id)} Press its chip again to let any crew take orders.`); return }
     const before = shown(offers(c, app.selection)).map(x => x.kind)
     const res = app.order(kind, { first })
     const took = res.filter(r => r.ok)
@@ -90,13 +99,13 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
     flashed = null
     held = { until: performance.now() + HOLD_MS, kinds: held && performance.now() < held.until ? held.kinds : before, given: [...(held?.given ?? []), kind] }
     setTimeout(() => ctx.dirty(), HOLD_MS + 50)
-    ctx.announce(`${JOB_VERB[kind]}: ${first ? 'first on the list' : 'on the list'} for ${F.list(took.map(r => S.FIELD_NAMES[r.field]))}.`)
+    ctx.announce(`${JOB_VERB[kind]}: ${first ? 'first on the list' : 'on the list'} for ${F.list(took.map(r => S.FIELD_NAMES[r.field]))}${u ? `, for ${u.name === S.FARMER_NAME ? 'you' : u.name}` : ''}.`)
   }
 
   function suggested(): void {
     const c = app.campaign
     if (!c || !c.season) return
-    if (!app.selection.length) { ctx.say(ctx.touch() ? 'Tap a field first.' : 'Select a field first: click it, or press 1 to 6.'); return }
+    if (!app.selection.length) { ctx.say(ctx.touch() ? 'Tap a field first.' : 'Select a field first: click it, or press its number.'); return }
     const fails: string[] = []
     const took: number[] = []
     for (const i of [...app.selection]) {
@@ -144,11 +153,14 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
       h('span', { class: 'order-meta num' }, ` ${meta}`),
       h('span', { class: 'sr' }, `. ${jobWhat(kind)}${kind === suggestedKind ? ' Suggested now.' : ''}`))
     })
+    const u = picked(c)
+    const who = u ? h('span', { class: 'order-who', title: touch ? undefined : `Orders go to ${u.name === S.FARMER_NAME ? 'you' : u.name}` },
+      icon(KIND_GLYPH[u.kind], 'ic s'), h('span', { class: 'order-who-name' }, u.name), h('span', { class: 'sr' }, `: these orders go to ${u.name === S.FARMER_NAME ? 'you' : u.name}`)) : null
     const more = all.length > MAX_ORDERS && !held ? h('button', {
       class: 'order more', type: 'button', testid: 'order-more', 'aria-label': page === 0 ? 'More orders' : 'Back to the first orders', 'aria-pressed': String(page === 1),
       onclick: () => { page = page === 0 ? 1 : 0; ctx.dirty() },
     }, icon(page === 0 ? 'more' : 'back')) : null
-    return cells.length || more ? h('div', { class: 'orders', role: 'group', 'aria-label': 'Orders' }, cells, more) : null
+    return cells.length || more ? h('div', { class: 'orders', role: 'group', 'aria-label': u ? `Orders for ${u.name === S.FARMER_NAME ? 'you' : u.name}` : 'Orders' }, who, cells, more) : null
   }
 
   function line(text: Child, cls = ''): HTMLElement {
@@ -174,13 +186,14 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
             : f.status === 'planted' ? 'Planted. Nothing to do here until the rows are up.'
               : f.status === 'digging' ? `Being dug: ${job ? F.pct(job.done / job.need) : 'part'} of the rows are out. The weigh ticket comes with the last row.`
                 : f.status === 'lost' ? 'This crop is lost.'
-                  : 'Everything this field can take is already on the list.')
+                  : picked(c) ? `Nothing here that ${picked(c)!.name} can do now.`
+                    : 'Everything this field can take is already on the list.')
       }
       return line('')
     }
     const want = sel.filter(i => isJob(needs[i]?.need?.act))
     if (want.length) return line(`${F.list(want.map(i => S.FIELD_NAMES[i]))} ${want.length === 1 ? 'has' : 'have'} a suggested order. ${ctx.touch() ? 'Tap a badge to give it.' : 'Enter gives each its own.'}`, 'need')
-    if (!canAny) return line(s.frozen ? 'The ground has frozen. Nothing more can be done in the field.' : 'None of these fields can take an order now.')
+    if (!canAny) return line(s.frozen ? 'The ground has frozen. Nothing more can be done in the field.' : picked(c) ? `Nothing here that ${picked(c)!.name} can do now.` : 'None of these fields can take an order now.')
     return line('')
   }
 
@@ -253,16 +266,20 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
     if (f.status === 'dug' && lot) {
       const value = lot.open ? S.lotValue(app.world, c, lot) : 0
       const cull = culledAtDig(lot)
+      const deal = deals(app.world, c, lot)[0]
       return [
         head(f.name, `${f.variety} · dug ${F.date(c.year, lot.dugDay, true)}`, 'close'),
         h('div', { class: 'card-main' },
           h('p', { class: 'reading' }, icon('dig', 'ic s'), h('span', null, lot.open
             ? `${F.mass(S.lotCwt(lot))} in the cellar, worth ${F.money(value)} today.${lot.sold > 0 ? ` ${F.mass(lot.sold)} sold for ${F.money(lot.revenue)}.` : ''}`
             : lot.sold > 0 ? `${F.mass(lot.sold)} sold for ${F.money(lot.revenue)}. ${F.mass(cull)} culled.` : 'Nothing was fit to sell.')),
-          need && need.act === 'sell' ? line([h('strong', null, 'Sell. '), F.localize(need.why)], 'need') : line('')),
+          deal ? line(`${deal.k.buyer} takes ${F.mass(deal.take)} for ${F.money(deal.pays)}, ${versusMarket(deal)}.`, 'need')
+            : need && need.act === 'sell' ? line([h('strong', null, 'Sell. '), F.localize(need.why)], 'need') : line('')),
         h('div', { class: 'orders' },
+          deal ? h('button', { class: 'order wide suggested', type: 'button', testid: `field-deliver-${lot.id}`, onclick: () => deliver(ctx, lot, deal) },
+            icon('deliver'), h('span', { class: 'order-name' }, `Deliver to ${deal.k.buyer.replace(/^The /, 'the ')}`), h('span', { class: 'order-meta num' }, F.money(deal.pays))) : null,
           lot.open ? h('button', { class: 'order wide', type: 'button', testid: `field-sell-${lot.id}`, onclick: () => ctx.run({ t: 'sell', lot: lot.id, frac: 1 }) },
-            icon('check'), h('span', { class: 'order-name' }, 'Sell'), h('span', { class: 'order-meta num' }, F.money(value))) : null,
+            icon('check'), h('span', { class: 'order-name' }, deal ? 'Sell all' : 'Sell'), h('span', { class: 'order-meta num' }, F.money(value))) : null,
           h('button', { class: 'order wide', type: 'button', testid: `weighin-${lot.id}`, onclick: () => o.onTicket(lot.id) },
             icon('ticket'), h('span', { class: 'order-name' }, 'Ticket'), h('span', { class: 'order-meta' }, 'the weigh-in'))),
       ]
@@ -289,7 +306,7 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
   }
 
   function update(c: S.Campaign): void {
-    const sel = app.selection.filter(i => i >= 0 && i < S.FIELD_COUNT)
+    const sel = app.selection.filter(i => i >= 0 && i < S.FIELD_COUNT && S.held(c, i))
     const was = el.hidden
     if (!sel.length) {
       // The card leaves as it came: nothing cuts out on one frame.
@@ -312,7 +329,8 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
       f: sel.map(i => { const f = S.fieldInfo(c, i); return [f.status, f.stage, Math.round(f.canopy * 100), Math.round(f.moisture * 50), f.moistureLabel, Math.round(f.protect * 100), f.hillPasses, f.blightHills, f.scoutAge, f.estimate ? [Math.round(f.estimate.lo), Math.round(f.estimate.hi), f.estimate.digs] : 0, Math.round(f.skin * 100), f.lot] }),
       n: app.needs().filter((_, i) => sel.includes(i)).map(x => [x.need?.id, x.need?.why, x.hold?.id, x.hold?.why]),
       lots: c.lots.filter(l => sel.includes(l.field)).map(l => [l.id, l.open, Math.round(S.lotCwt(l)), Math.round(l.sold), l.open ? Math.round(S.lotValue(app.world, c, l)) : 0]),
-      frozen: s.frozen, w: s.watchDay >= 0, soil: Math.round(s.soilT * 2),
+      frozen: s.frozen, w: s.watchDay >= 0, soil: Math.round(s.soilT * 2), unit: app.unit,
+      k: c.contracts.map(k => [k.id, Math.round(k.delivered), k.settled]),
     }
     patch(el, JSON.stringify(model), () => sel.length === 1 ? one(c, sel[0]) : many(c, sel))
     el.setAttribute('aria-label', sel.length === 1 ? `Selected: ${S.FIELD_NAMES[sel[0]]}` : `Selected: ${sel.length} fields`)

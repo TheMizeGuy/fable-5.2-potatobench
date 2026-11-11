@@ -18,7 +18,7 @@ function endSeasonEarly(ctx: Ctx): void {
     const f = S.fieldInfo(c, i)
     if (f.status === 'digging') digging.push(f.name)
     else if (f.status === 'idle') bare.push(f.name)
-    else if (f.status !== 'rest' && f.status !== 'dug' && f.status !== 'lost') left.push(f.name)
+    else if (f.status !== 'rest' && f.status !== 'dug' && f.status !== 'lost' && f.status !== 'off') left.push(f.name)
   }
   void confirmPaper(ctx, {
     title: 'End the season now?',
