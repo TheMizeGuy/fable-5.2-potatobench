@@ -1,19 +1,9 @@
 // The bots must play fair: they see only what a player sees.
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { FIELD_COUNT } from '../src/sim/index.ts'
-import { EXPERT as EXPERT_HOME, expert, naive, play, reference, type ExpertCfg } from '../tools/balance/bots.ts'
+import * as S from '../src/sim/index.ts'
+import { ABLATIONS, EXPERT, expert, naive, play, reference } from '../tools/balance/bots.ts'
 import { loadWorld } from '../tools/balance/world.ts'
-
-// The expert's plan table lists the six home fields. Until the bots are rebuilt for the bigger farm, it is padded
-// for the parcels the farm does not hold: plans for those are refused, so the bot still plays the home farm.
-const EXPERT: ExpertCfg = {
-  ...EXPERT_HOME,
-  tune: {
-    ...EXPERT_HOME.tune,
-    plan: EXPERT_HOME.tune.plan.map(p => ({ ...p, fields: [...p.fields, ...Array.from({ length: FIELD_COUNT - p.fields.length }, () => p.fields[0])] })),
-  },
-}
 
 const SOURCE = readFileSync(new URL('../tools/balance/bots.ts', import.meta.url), 'utf8')
 
@@ -88,5 +78,43 @@ describe('bots play', () => {
 
   it('is deterministic', () => {
     expect(play(world, 'expert', expert(EXPERT), 2003, 4)).toEqual(play(world, 'expert', expert(EXPERT), 2003, 4))
+  })
+
+  it('the naive and reference growers keep to the home six with the farmer alone and sign nothing', () => {
+    for (const r of [play(world, 'naive', naive(), 1999, 3), play(world, 'reference', reference(), 1999, 3)]) {
+      expect(r.held.every(n => n === S.HOME_FIELDS)).toBe(true)
+      expect(r.hands.every(n => n === 0)).toBe(true)
+      expect(r.operator.every(n => n === 0)).toBe(true)
+      expect([r.signed, r.rent, r.land, r.wages]).toEqual([0, 0, 0, 0])
+    }
+  })
+
+  it('the expert takes on land, hands and contracts on the bigger farm', () => {
+    const e = play(world, 'expert', expert(EXPERT), 1999, 3)
+    expect(Math.max(...e.held)).toBeGreaterThan(S.HOME_FIELDS)
+    expect(e.rent + e.land).toBeGreaterThan(0)
+    expect(Math.max(...e.hands)).toBeGreaterThan(0)
+    expect(e.signed).toBeGreaterThan(0)
+    expect(e.contracts).toBeGreaterThan(0)
+  })
+
+  it('each new ablation drops its decision', () => {
+    const cfg = (name: string) => ({ ...EXPERT, ...ABLATIONS.find(a => a.name === name)!.cfg })
+    const home = play(world, 'no-expansion', expert(cfg('no-expansion')), 1999, 3)
+    expect(home.held.every(n => n === S.HOME_FIELDS)).toBe(true)
+    expect(home.rent + home.land).toBe(0)
+    const noHire = play(world, 'no-hire', expert(cfg('no-hire')), 1999, 3)
+    expect(noHire.wages).toBe(0)
+    expect(noHire.hands.every(n => n === 0) && noHire.operator.every(n => n === 0)).toBe(true)
+    const noContracts = play(world, 'no-contracts', expert(cfg('no-contracts')), 1999, 3)
+    expect([noContracts.signed, noContracts.contracts, noContracts.penalties]).toEqual([0, 0, 0])
+    const noTractor = play(world, 'no-tractor2', expert(cfg('no-tractor2')), 1980, 2)
+    expect(noTractor.upgrades).not.toContain('tractor2')
+    expect(noTractor.operator.every(n => n === 0)).toBe(true)
+  })
+
+  it('signing every contract signs every offer it is shown', () => {
+    const all = play(world, 'all-contracts', expert({ ...EXPERT, contracts: 'all' }), 1999, 3)
+    expect(all.signed).toBe(S.CONTRACT_OFFERS * all.years)
   })
 })

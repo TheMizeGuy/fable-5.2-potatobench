@@ -5,7 +5,7 @@ import { writeFileSync, mkdirSync } from 'node:fs'
 import { availableParallelism } from 'node:os'
 import { Worker, isMainThread, parentPort } from 'node:worker_threads'
 import * as S from '../../src/sim/index.ts'
-import { ABLATIONS, canPlay, lineup, play, type Entry, type Outcome } from './bots.ts'
+import { ABLATIONS, BLOCK_BOTS, canPlay, lineup, play, type Entry, type Outcome } from './bots.ts'
 import { bootstrapMeanCI, mean, median, quantile, rng } from './stats.ts'
 import { loadWorld, repoPath } from './world.ts'
 
@@ -40,6 +40,8 @@ interface BotSummary {
   cash: { q1: number; median: number; q3: number }
   netWorth: { q1: number; median: number; q3: number; mean: number }
   yield: number; potatoFields: number
+  held: number; hands: number; operator: number          // per season
+  wages: number; rent: number; land: number; contracts: number; penalties: number; signed: number   // per campaign
   jobs: Record<string, number>
 }
 
@@ -55,6 +57,9 @@ function summarize(e: Entry, rows: Outcome[]): BotSummary {
     netWorth: { q1: quantile(nw, 0.25), median: median(nw), q3: quantile(nw, 0.75), mean: mean(nw) },
     yield: mean(rows.flatMap(r => r.yields)),
     potatoFields: mean(rows.flatMap(r => r.potatoFields)),
+    held: mean(rows.flatMap(r => r.held)), hands: mean(rows.flatMap(r => r.hands)), operator: mean(rows.flatMap(r => r.operator)),
+    wages: mean(rows.map(r => r.wages)), rent: mean(rows.map(r => r.rent)), land: mean(rows.map(r => r.land)),
+    contracts: mean(rows.map(r => r.contracts)), penalties: mean(rows.map(r => r.penalties)), signed: mean(rows.map(r => r.signed)),
     jobs,
   }
 }
@@ -121,7 +126,7 @@ async function main(): Promise<void> {
   const tasks: Task[] = []
   for (const e of entries) for (const y of years) if (canPlay(e, y)) for (const s of seeds) tasks.push({ bot: e.name, startYear: y, seed: s, goal: S.GOAL_YEARS })
   // One-season runs for the no-dominant-plan gate: each real year on its own.
-  const seasonBots = entries.filter(e => e.group === 'variety' || e.name === 'expert' || e.name === 'calendar')
+  const seasonBots = entries.filter(e => e.group === 'variety' || e.group === 'block' || ['expert', 'calendar', 'no-expansion', 'all-contracts'].includes(e.name))
   const seasonTasks: Task[] = []
   for (const e of seasonBots) for (const y of world.weather.playable) if (!e.variety || S.variety(e.variety).released <= y) {
     for (const s of seeds) seasonTasks.push({ bot: e.name, startYear: y, seed: s, goal: 1 })
@@ -173,6 +178,27 @@ async function main(): Promise<void> {
   }
   const calCampWins = winners(calCamp)
   const calSeasonWins = winners(calSeason)
+  // Head to head by start year (median over seeds) and by single season (mean over seeds): the number of years the
+  // first bot comes out ahead of the second.
+  const headCamp = (a: string, b: string) => {
+    let w = 0
+    for (const y of years) if (median(seeds.map(s => byKey.get(key({ bot: a, startYear: y, seed: s }))!.netWorth - byKey.get(key({ bot: b, startYear: y, seed: s }))!.netWorth)) > 0) w++
+    return { wins: w, years: years.length }
+  }
+  const headSeason = (a: string, b: string) => {
+    let w = 0
+    for (const y of world.weather.playable) if (mean(seeds.map(s => seasonByKey.get(key({ bot: a, startYear: y, seed: s }))!.netWorth - seasonByKey.get(key({ bot: b, startYear: y, seed: s }))!.netWorth)) > 0) w++
+    return { wins: w, years: world.weather.playable.length }
+  }
+  // No block of land is always worth holding and none never: holding it every year beats the home farm alone in
+  // BLOCK_LO to BLOCK_HI of the start years, and of the single seasons.
+  const BLOCK_LO = 0.2, BLOCK_HI = 0.8
+  const blocks = BLOCK_BOTS.map(b => ({ ...b, camp: headCamp(b.name, 'no-expansion'), season: headSeason(b.name, 'no-expansion') }))
+  const inBand = (h: { wins: number; years: number }) => h.wins / h.years >= BLOCK_LO && h.wins / h.years <= BLOCK_HI
+  const blocksOk = blocks.every(b => inBand(b.camp) && inBand(b.season))
+  // Signing every contract offered is not better than choosing: it beats the expert in fewer than half the years.
+  const allCamp = headCamp('all-contracts', 'expert'), allSeason = headSeason('all-contracts', 'expert')
+  const allOk = allCamp.wins / allCamp.years < 0.5 && allSeason.wins / allSeason.years < 0.5
   const dominant = (w: WinTable) => Object.keys(w.wins).filter(b => (w.eligible[b] ?? 0) >= 5 && w.wins[b] / w.eligible[b] > 0.5)
   const calShare = (w: WinTable) => (w.wins.calendar ?? 0) / w.years
   const domCamp = dominant(campWins), domSeason = dominant(seasonWins)
@@ -180,7 +206,7 @@ async function main(): Promise<void> {
   const MIN_WINNERS = 4
   const winnersOf = (w: WinTable) => Object.keys(w.wins).length
   const g3 = domCamp.length === 0 && domSeason.length === 0 && winnersOf(campWins) >= MIN_WINNERS && winnersOf(seasonWins) >= MIN_WINNERS &&
-    calShare(calCampWins) < 0.5 && calShare(calSeasonWins) < 0.5
+    calShare(calCampWins) < 0.5 && calShare(calSeasonWins) < 0.5 && blocksOk && allOk
   // Gate 4: the naive bot usually loses the farm and the expert usually keeps it.
   const naiveLost = 1 - sum('naive').kept
   const g4 = naiveLost > 0.5 && sum('expert').kept > 0.5
@@ -189,19 +215,27 @@ async function main(): Promise<void> {
   const gates = [
     { gate: 1, name: 'Skill gradient', pass: g1, detail: `kept: expert ${pct(sum('expert').kept)} > reference ${pct(sum('reference').kept)} > naive ${pct(sum('naive').kept)} (targets: at least 90%, 65% to 80%, at most 10%); net worth expert - reference ${k(er.mean)} (95% CI ${k(er.lo)} to ${k(er.hi)}), reference - naive ${k(rn.mean)} (${k(rn.lo)} to ${k(rn.hi)})` },
     { gate: 2, name: 'Every verb earns its place', pass: g2, detail: abl.map(a => `${a.verb} ${a.p.lo > 0 ? 'earns' : 'does not'} (${k(a.p.mean)}, CI ${k(a.p.lo)} to ${k(a.p.hi)})`).join('; ') },
-    { gate: 3, name: 'No dominant plan', pass: g3, detail: `campaigns: ${winText(campWins)}${domCamp.length ? ` (dominant: ${domCamp.join(', ')})` : ''}, ${winnersOf(campWins)} varieties win some years; single seasons: ${winText(seasonWins)}${domSeason.length ? ` (dominant: ${domSeason.join(', ')})` : ''}, ${winnersOf(seasonWins)} varieties win some years (at least ${MIN_WINNERS} needed); fixed calendar beats the expert in ${calCampWins.wins.calendar ?? 0}/${calCampWins.years} start years and ${calSeasonWins.wins.calendar ?? 0}/${calSeasonWins.years} seasons` },
+    { gate: 3, name: 'No dominant plan', pass: g3, detail: `campaigns: ${winText(campWins)}${domCamp.length ? ` (dominant: ${domCamp.join(', ')})` : ''}, ${winnersOf(campWins)} varieties win some years; single seasons: ${winText(seasonWins)}${domSeason.length ? ` (dominant: ${domSeason.join(', ')})` : ''}, ${winnersOf(seasonWins)} varieties win some years (at least ${MIN_WINNERS} needed); fixed calendar beats the expert in ${calCampWins.wins.calendar ?? 0}/${calCampWins.years} start years and ${calSeasonWins.wins.calendar ?? 0}/${calSeasonWins.years} seasons; holding a block every year beats the home farm alone in ${blocks.map(b => `${b.block} ${b.camp.wins}/${b.camp.years} start years and ${b.season.wins}/${b.season.years} seasons${inBand(b.camp) && inBand(b.season) ? '' : ' (outside ' + pct(BLOCK_LO) + ' to ' + pct(BLOCK_HI) + ')'}`).join(', ')}; signing every contract beats choosing in ${allCamp.wins}/${allCamp.years} start years and ${allSeason.wins}/${allSeason.years} seasons` },
     { gate: 4, name: 'Losable and winnable', pass: g4, detail: `naive loses ${pct(naiveLost)} of campaigns; expert keeps ${pct(sum('expert').kept)}` },
   ]
 
-  const md = report({ years, seeds, summaries, gates, er, rn, abl, campWins, seasonWins, calCampWins, calSeasonWins, campaigns: tasks.length, seasons: seasonTasks.length })
+  const blockRows = blocks.map(b => ({ block: b.block, name: b.name, camp: b.camp, season: b.season, p: paired(byKey, b.name, 'no-expansion', years, seeds) }))
+  const allP = paired(byKey, 'expert', 'all-contracts', years, seeds)
+  const md = report({ years, seeds, summaries, gates, er, rn, abl, campWins, seasonWins, calCampWins, calSeasonWins, campaigns: tasks.length, seasons: seasonTasks.length, blockRows, allCamp, allSeason, allP, band: [BLOCK_LO, BLOCK_HI] })
   mkdirSync(repoPath('docs/balance/'), { recursive: true })
   writeFileSync(repoPath('docs/balance/latest.md'), md)
   const json = {
     setup: { startYears: years, seeds, goalYears: S.GOAL_YEARS, campaigns: tasks.length, seasons: seasonTasks.length },
     gates: gates.map(g => ({ gate: g.gate, name: g.name, pass: g.pass, detail: g.detail })),
-    bots: summaries.map(s => ({ ...s, cash: round(s.cash), netWorth: round(s.netWorth), yield: Math.round(s.yield * 10) / 10, potatoFields: Math.round(s.potatoFields * 100) / 100, kept: Math.round(s.kept * 1000) / 1000 })),
+    bots: summaries.map(s => ({
+      ...s, cash: round(s.cash), netWorth: round(s.netWorth), yield: Math.round(s.yield * 10) / 10, potatoFields: Math.round(s.potatoFields * 100) / 100, kept: Math.round(s.kept * 1000) / 1000,
+      held: Math.round(s.held * 100) / 100, hands: Math.round(s.hands * 100) / 100, operator: Math.round(s.operator * 100) / 100,
+      wages: Math.round(s.wages), rent: Math.round(s.rent), land: Math.round(s.land), contracts: Math.round(s.contracts), penalties: Math.round(s.penalties), signed: Math.round(s.signed * 10) / 10,
+    })),
     paired: { expertVsReference: roundP(er), referenceVsNaive: roundP(rn), ablations: abl.map(a => ({ bot: a.name, verb: a.verb, ...roundP(a.p) })) },
     dominance: { campaigns: campWins, seasons: seasonWins, calendarCampaigns: calCampWins, calendarSeasons: calSeasonWins },
+    land: blockRows.map(b => ({ block: b.block, campaigns: b.camp, seasons: b.season, ...roundP(b.p) })),
+    contracts: { allCampaigns: allCamp, allSeasons: allSeason, expertMinusAll: roundP(allP) },
     perStartYear: Object.fromEntries(years.map(y => [y, Object.fromEntries(entries.filter(e => canPlay(e, y)).map(e => [e.name, Math.round(median(seeds.map(s => byKey.get(key({ bot: e.name, startYear: y, seed: s }))!.netWorth)))]))])),
   }
   writeFileSync(repoPath('docs/balance/latest.json'), JSON.stringify(json, null, 1) + '\n')
@@ -227,12 +261,16 @@ function gateTable(gates: { gate: number; name: string; pass: boolean; detail: s
   return lines.join('\n')
 }
 
+type Head = { wins: number; years: number }
+
 interface ReportIn {
   years: number[]; seeds: number[]; summaries: BotSummary[]
   gates: { gate: number; name: string; pass: boolean; detail: string }[]
   er: Paired; rn: Paired; abl: { name: string; verb: string; p: Paired }[]
   campWins: WinTable; seasonWins: WinTable; calCampWins: WinTable; calSeasonWins: WinTable
   campaigns: number; seasons: number
+  blockRows: { block: string; name: string; camp: Head; season: Head; p: Paired }[]
+  allCamp: Head; allSeason: Head; allP: Paired; band: [number, number]
 }
 
 function report(r: ReportIn): string {
@@ -242,7 +280,7 @@ function report(r: ReportIn): string {
   L.push('## Setup', '')
   L.push(`- ${r.years.length} start years (every year whose five seasons are all playable: ${r.years[0]} to ${r.years[r.years.length - 1]}, skipping those that would reach 1996), ${r.seeds.length} seeds each (${r.seeds.join(', ')}), five-season campaigns. ${r.campaigns} campaigns and ${r.seasons} single seasons.`)
   L.push('- Every bot reads the game only as a player can: the functions in `src/sim/view.ts` and `src/sim/advice.ts`, the market quote, the public campaign fields and the events the game reports. `tests/bots.test.ts` checks the bot source for the names of hidden state.')
-  L.push('- Net worth is cash plus equipment at half its price. A farm is kept when it reaches the end of the fifth year without foreclosure. Marketable yield is the cwt per potato acre that came out of the ground graded saleable, before any storage shrink.')
+  L.push('- Net worth is cash plus equipment at half its price and land the farm bought at its price. A farm is kept when it reaches the end of the fifth year without foreclosure. Marketable yield is the cwt per potato acre that came out of the ground graded saleable, before any storage shrink.')
   L.push('- Intervals are 95% bootstrap intervals that resample whole start years (seeds share their year\'s weather), 2000 resamples.', '')
   L.push('## Gates', '', gateTable(r.gates), '')
   L.push('## Bots', '')
@@ -252,6 +290,10 @@ function report(r: ReportIn): string {
     const jobs = Object.entries(s.jobs).filter(([, n]) => n > 0).map(([j, n]) => `${j} ${Math.round(n)}`).join(', ')
     L.push(`| ${s.bot} | ${s.campaigns} | ${pct(s.kept)} | ${k(s.cash.q1)} / ${k(s.cash.median)} / ${k(s.cash.q3)} | ${k(s.netWorth.median)} (${k(s.netWorth.q1)} to ${k(s.netWorth.q3)}) | ${k(s.netWorth.mean)} | ${s.yield.toFixed(0)} | ${s.potatoFields.toFixed(1)} | ${jobs} |`)
   }
+  L.push('', '### The bigger farm', '')
+  L.push('Per season: fields held, the most field hands on the crew at once, and the share of seasons with the tractor operator. Per campaign: wages, rent, land bought, money from contracts, penalties, and contracts signed.', '')
+  L.push('| Bot | Fields held | Hands | Operator | Wages | Rent | Land bought | Contract sales | Penalties | Contracts signed |', '|---|---|---|---|---|---|---|---|---|---|')
+  for (const s of r.summaries) L.push(`| ${s.bot} | ${s.held.toFixed(1)} | ${s.hands.toFixed(2)} | ${pct(s.operator)} | ${k(s.wages)} | ${k(s.rent)} | ${k(s.land)} | ${k(s.contracts)} | ${k(s.penalties)} | ${s.signed.toFixed(1)} |`)
   L.push('', '## Gate 1 and 4: the skill gradient', '')
   L.push('| Comparison | Pairs | Mean net-worth difference | 95% interval | First better | Kept, first / second |', '|---|---|---|---|---|---|')
   L.push(`| expert - reference | ${r.er.n} | ${k(r.er.mean)} | ${k(r.er.lo)} to ${k(r.er.hi)} | ${pct(r.er.aBetter)} | ${pct(r.er.keptA)} / ${pct(r.er.keptB)} |`)
@@ -267,6 +309,12 @@ function report(r: ReportIn): string {
   for (const n of names) L.push(`| ${n.replace('only-', '')} | ${r.campWins.wins[n] ?? 0} of ${r.campWins.eligible[n] ?? 0} | ${r.seasonWins.wins[n] ?? 0} of ${r.seasonWins.eligible[n] ?? 0} |`)
   L.push(`| fixed calendar against the expert | ${r.calCampWins.wins.calendar ?? 0} of ${r.calCampWins.years} | ${r.calSeasonWins.wins.calendar ?? 0} of ${r.calSeasonWins.years} |`)
   L.push('', 'Best single variety by start year: ' + Object.entries(r.campWins.byYear).map(([y, b]) => `${y} ${b.replace('only-', '')}`).join(', ') + '.', '')
+  L.push('### Land', '')
+  L.push(`Each block bot is the expert holding the home farm and that block every year, rented or bought as the expert would, against the expert on the home farm alone (no-expansion). No block is always worth holding and none never: holding it must come out ahead in ${pct(r.band[0])} to ${pct(r.band[1])} of the start years and of the single seasons.`, '')
+  L.push('| Block | Ahead in start years | Ahead in single seasons | Mean net-worth difference | 95% interval |', '|---|---|---|---|---|')
+  for (const b of r.blockRows) L.push(`| ${b.block} | ${b.camp.wins} of ${b.camp.years} | ${b.season.wins} of ${b.season.years} | ${k(b.p.mean)} | ${k(b.p.lo)} to ${k(b.p.hi)} |`)
+  L.push('', '### Contracts', '')
+  L.push(`Signing every contract offered (all-contracts, planting to fill them) against the expert, who chooses: all-contracts comes out ahead in ${r.allCamp.wins} of ${r.allCamp.years} start years and ${r.allSeason.wins} of ${r.allSeason.years} single seasons; the expert leads it by ${k(r.allP.mean)} (${k(r.allP.lo)} to ${k(r.allP.hi)}). It must come out ahead in fewer than half.`, '')
   return L.join('\n') + '\n'
 }
 
