@@ -78,9 +78,9 @@ repeat a decision the game already asks or add content without pressure:
 | Other crops, livestock, crafting, cooking | The game is about one crop. The rest year is a rotation decision, not a second crop to play. |
 | Characters, quests, dialogue | The neighbour is the reference practice for that real year, reported as what was seen from the road. Nothing else needs a voice. |
 | Walking an avatar | The farmer's time is the resource; steering them is not a decision. |
-| Contract volumes and multiple buyers | One price that moves through the year already makes sell-or-store a real choice. One variety is sold on a chip contract, which only fixes its price. |
+| ~~Contracts~~ | Restored in "The bigger farm": spring contracts with a fixed price, a date and a penalty. |
 | Machinery breakdowns, random disasters | The weather record supplies enough misfortune, and it is real. |
-| Unlockable land | Six fields from the start; rotation is the land decision. |
+| ~~Unlockable land~~ | Restored in "The bigger farm" (docs/DIRECTION.md): the owner asked for a larger map and more to manage. |
 
 ## Verification gates
 
