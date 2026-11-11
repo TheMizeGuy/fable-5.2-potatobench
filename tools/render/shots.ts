@@ -7,6 +7,8 @@ import { chromium, type Page } from '@playwright/test'
 
 const args = process.argv.slice(2).filter(a => !a.startsWith('--'))
 const soft = process.argv.includes('--soft')
+// --pins: mark where each field's plate is pinned, to check that a plate would stand on its own field.
+const pins = process.argv.includes('--pins')
 const base = args[0] ?? 'http://localhost:5317/'
 const out = args[1] ?? 'shots'
 const only = new Set(args.slice(2))
@@ -243,8 +245,8 @@ const shots: Shot[] = [
   { name: 'f05-intervale-mist', size: [1920, 1080], setup: async page => { await bigFarm(page, { rent: [6, 7], until: 186 }); console.log('  ', await playUntil(page, [], `const t = sim.today(app.world, c); return t.sky === 'fog' || (t.day.wetH >= 12 && t.day.tmin > 4) ? t.sky + ' wetH ' + t.day.wetH : ''`)); await settle(page); await view(page, { x: 2, z: 30, dist: 46, yaw: 0.1 }); await frames(page, 8) } },
   {
     name: 'f06-three-crews', size: [1920, 1080], setup: async page => {
-      await bigFarm(page, { rent: [6, 7, 10, 11], hands: 2, operator: true, until: 150 })
-      console.log('  ', await playUntil(page, [], `const n = new Set(c.season.worked.map(w => w.unit)).size; return n >= 3 ? n + ' crews: ' + c.season.worked.map(w => w.unit + ':' + w.kind + '@' + w.field).join(' ') : ''`))
+      await bigFarm(page, { hands: 2, operator: true, until: 150 })
+      console.log('  ', await playUntil(page, [], `const n = new Set(c.season.worked.map(w => w.unit)).size; return n >= 3 && sim.today(app.world, c).sky !== 'rain' ? n + ' crews: ' + c.season.worked.map(w => w.unit + ':' + w.kind + '@' + w.field).join(' ') : ''`))
       await settle(page)
       await page.evaluate(() => (window as any).__county.app.selectUnit(0))
       await seek(page, 0.55, 300, 0.02)
@@ -286,6 +288,21 @@ for (const shot of shots) {
     set(t, r, b, l)
   }, insets)
   await shot.setup(page)
+  if (pins) {
+    await page.evaluate(() => {
+      const f = (window as any).__countyField, held = f.info().held as boolean[]
+      for (let i = 0; i < 14; i++) {
+        const a = f.anchor(i)
+        if (!a.visible) continue
+        const d = document.createElement('div')
+        d.textContent = String(i)
+        d.style.cssText = `position:fixed;left:${a.x - 18}px;top:${a.y - 26}px;width:36px;height:22px;background:${held[i] ? '#1b1d1c' : '#5b5f5c'};color:#f3ecdc;font:600 13px sans-serif;display:flex;align-items:center;justify-content:center;border-radius:3px;z-index:99`
+        const tail = document.createElement('div')
+        tail.style.cssText = `position:fixed;left:${a.x - 3}px;top:${a.y - 4}px;width:6px;height:6px;background:#f3ecdc;border-radius:3px;z-index:99`
+        document.body.append(d, tail)
+      }
+    })
+  }
   const path = `${out}/${shot.name}.png`
   await page.screenshot({ path })
   const info = await page.evaluate(() => {

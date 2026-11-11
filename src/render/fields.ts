@@ -34,7 +34,7 @@ const BLOOM_TINT: Record<string, number> = { norland: 0.9, superior: 0.2, katahd
 const OFF_KIND = [0, 0, 1, 1, 0, 0, 0, 1, 1, 0, 2, 2, 0, 1]
 
 // Where each level of detail takes over, by quality tier: whole plants out to `near`, clumps out to `far`.
-export const LOD = { high: { near: 36, far: 160 }, medium: { near: 26, far: 118 }, low: { near: 17, far: 82 } }
+export const LOD = { high: { near: 36, far: 280 }, medium: { near: 26, far: 180 }, low: { near: 17, far: 110 } }
 
 export interface HillDisplay { look: HillLook; ridge: number }
 
@@ -226,12 +226,12 @@ vec4 paintCrop(vec2 f, vec4 h0, vec4 h1, float fine, out float lift) {
   col = mix(col, ${linear('#a8bcc0')}, 0.45 * uCrop.z);
   col = mix(col, ${linear('#b5a27a')}, h0.a);
   // a rounded row: lit along its crown, dark down its sides into the furrow
-  col *= mix(mix(0.5, 1.05, smoothstep(1.0, 0.1, fr)), 0.82, blur) * (0.86 + 0.28 * fine);
+  col *= mix(mix(0.38, 0.8, smoothstep(1.0, 0.1, fr)), 0.6, blur) * (0.86 + 0.28 * fine);
   // blossom, as white flecks over the leaf
   float open = uCrop.w * smoothstep(0.3, 0.55, grow) * (1.0 - h0.g) * (1.0 - bl) * (1.0 - h0.a) * (1.0 - min(1.0, uCrop.y * 1.5));
-  float fleck = step(1.0 - 0.42 * open, fract(sin(dot(floor(f * vec2(${PLANTS_PER_ROW}.0 * 2.0, ${PLANTED_ROWS}.0 * 2.0)), vec2(12.9898, 78.233))) * 43758.5453));
-  fleck = mix(fleck, 0.42 * open, smoothstep(0.4, 1.2, fwidth(f.x * ${PLANTS_PER_ROW}.0 * 2.0)));
-  col = mix(col, mix(${linear('#f8f5fa')}, ${linear('#d3c2e6')}, uTint) * 1.3, fleck * cover);
+  float fleck = step(1.0 - 0.2 * open, fract(sin(dot(floor(f * vec2(${PLANTS_PER_ROW}.0 * 2.0, ${PLANTED_ROWS}.0 * 2.0)), vec2(12.9898, 78.233))) * 43758.5453));
+  fleck = mix(fleck, 0.14 * open, smoothstep(0.4, 1.2, fwidth(f.x * ${PLANTS_PER_ROW}.0 * 2.0)));
+  col = mix(col, mix(${linear('#f8f5fa')}, ${linear('#d3c2e6')}, uTint) * 0.9, fleck * cover);
   lift = cover;
   return vec4(col, cover);
 }
