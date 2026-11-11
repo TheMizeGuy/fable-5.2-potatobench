@@ -1,8 +1,8 @@
 // Every tunable number in the simulation. docs/MODEL.md gives the source of each, or marks it invented.
 import { PARCELS } from './farm.ts'
-import type { Cause, Due, Grade, JobKind, UnitKind, UpgradeId } from './types.ts'
+import type { Cause, Due, Grade, JobKind, Skill, Trait, UnitKind, UpgradeId } from './types.ts'
 
-export const SAVE_VERSION = 3
+export const SAVE_VERSION = 4
 
 // Every parcel the farm has or could have; the first six are the home farm.
 export const FIELD_COUNT = PARCELS.length
@@ -140,6 +140,93 @@ export const LAND_WORTH = 1                    // net worth counts land the farm
 // Reference practice keeps the advice to what the crews could do: of each job, as many fields at once as the home
 // farm has, for each crew able to do that job.
 export const ADVICE_FIELDS_PER_CREW = 6
+
+// ---------------------------------------------------------------- the farmstead: people (all invented: docs/MODEL.md section 10)
+
+export const SKILLS: Skill[] = ['machine', 'field', 'woods', 'build', 'pack']
+export const JOB_SKILL: Record<JobKind, Skill> = {
+  plant: 'machine', hill: 'machine', scout: 'field', spray: 'machine', water: 'machine', rogue: 'field', sample: 'field', kill: 'machine', dig: 'machine',
+}
+export const SKILL_MAX = 10
+export const SKILL_SPEED_BASE = 0.6            // work in a skill goes at 0.6 + 0.08 x level of normal speed: level 5 is the old speed
+export const SKILL_SPEED_PER = 0.08
+export const XP_BASE = 6                       // crew-days of work to go from level L to L + 1: 6 + 3L
+export const XP_PER_LEVEL = 3
+export const FARMER_SKILLS: Record<Skill, number> = { machine: 6, field: 6, woods: 4, build: 4, pack: 3 }
+// Someone taken on from the hiring hall for a kind of work: average at it, at the standard wage.
+export const HAND_SKILLS: Record<Skill, number> = { machine: 2, field: 5, woods: 4, build: 3, pack: 4 }
+export const OPERATOR_SKILLS: Record<Skill, number> = { machine: 5, field: 2, woods: 2, build: 3, pack: 2 }
+export const SCOUT_BASE = 0.35                 // a scout finds each lesioned hill with chance 0.35 + 0.05 x field skill, to 0.9
+export const SCOUT_PER = 0.05
+export const SCOUT_MAX = 0.9
+export const SPRAY_BASE = 0.84                 // a spray lays down 0.84 + 0.02 x machine skill of full protection, to 1
+export const SPRAY_PER = 0.02
+
+export const TRAITS: Record<Trait, { name: string; text: string }> = {
+  strong: { name: 'Strong back', text: 'Field and woods work 15% faster.' },
+  steady: { name: 'Steady hands', text: 'Machine work comes out as if two levels more skilled.' },
+  sharp: { name: 'Sharp-eyed', text: 'Finds more of the blighted plants when scouting.' },
+  early: { name: 'Early riser', text: 'All work 8% faster.' },
+  tireless: { name: 'Hard to tire', text: 'Tires 30% more slowly.' },
+  cheerful: { name: 'Cheerful', text: 'Never gloomier than middling, and lifts everyone else a little.' },
+  hothead: { name: 'Hot-headed', text: 'Mood falls twice as fast when worn out.' },
+  careless: { name: 'Careless', text: 'Misses more blight when scouting, and bruises more at the dig.' },
+  slow: { name: 'Slow and sure', text: '10% slower, but never hurt.' },
+  homebody: { name: 'Homebody', text: 'Will not work winters.' },
+}
+export const TRAIT_LIST: Trait[] = ['strong', 'steady', 'sharp', 'early', 'tireless', 'cheerful', 'hothead', 'careless', 'slow', 'homebody']
+export const STRONG_SPEED = 1.15
+export const STEADY_LEVELS = 2
+export const SHARP_SCOUT = 0.15
+export const EARLY_SPEED = 1.08
+export const TIRELESS = 0.7
+export const CHEERFUL_FLOOR = 0.4
+export const CHEERFUL_OTHERS = 0.03
+export const HOTHEAD_FALL = 2
+export const CARELESS_SCOUT = 0.1
+export const SLOW_SPEED = 0.9
+
+export const TIRE_PER_DAY = 0.07               // a full day's work; a part day in proportion
+export const REST_PER_DAY = 0.3                // a day without work; a part day in proportion to the time not worked
+export const TIRED_SLOW_FROM = 0.6             // above this, speed falls in a straight line to 30% less at 1
+export const TIRED_SLOW = 0.3
+export const MOOD_START = 0.7
+export const MOOD_BASE = 0.7
+export const MOOD_BED = 0.1                    // a bed in the bunkhouse, for hired people
+export const MOOD_PAY = 1                      // 0.1 for each 10% the wage is above or below what they asked
+export const MOOD_TIRED_FROM = 0.5
+export const MOOD_TIRED = 0.6
+export const MOOD_PER_FIELD = 0.02             // each field brought in this season
+export const MOOD_PULL = 0.05                  // share of the way to the target mood moves each day
+export const MOOD_SPEED_BASE = 0.85            // work goes at 0.85 + 0.25 x mood
+export const MOOD_SPEED_PER = 0.25
+export const QUIT_MOOD = 0.25
+export const QUIT_DAYS = 7
+
+export const APPLICANTS = 3                    // people asking for work each spring
+export const ASK_BASE = 100                    // asking wage: 100 + 40 x best skill + 10 x all skill levels, dollars a month
+export const ASK_BEST = 40
+export const ASK_LEVEL = 10
+export const WAGE_MIN = 100
+export const WAGE_MAX = 4000
+export const HOUSED_OUT = 2                    // hired people who can live out; more need the bunkhouse
+export const PRIORITY_MAX = 4
+export const FOREMAN_PAY = 1.4
+export const FIRST_NAMES = ['Albert', 'Alcide', 'Arthur', 'Beatrice', 'Bernadette', 'Carl', 'Clement', 'Doris', 'Elmer', 'Evelyn', 'Fernand',
+  'Florence', 'Hazel', 'Hollis', 'Ingrid', 'Irene', 'Jeannette', 'Leon', 'Normand', 'Pauline', 'Rita', 'Ruth', 'Verna', 'Yvette']
+export const LAST_NAMES = ['Ouellette', 'Michaud', 'Thibodeau', 'Cyr', 'Pelletier', 'Dube', 'Bouchard', 'Levesque', 'Daigle', 'Theriault', 'Nadeau',
+  'Plourde', 'Hersey', 'Bubar', 'Anderson', 'Espling', 'Collins', 'Haines', 'McCrum', 'Kelley', 'Gagnon', 'Sirois']
+
+// The harvest break: the schools close and a picking crew can be had by the day.
+export const PICKERS_FROM = { month: 8, dom: 20 }   // September 20
+export const PICKERS_TO = { month: 9, dom: 10 }     // October 10
+export const PICKER_DAY = 160                  // dollars a day worked
+export const PICKER_DIG = 1.4                  // every dig goes this much faster
+
+// Winter, November to April: someone kept on is paid each month and puts in this many crew-days at their skill.
+export const WINTER_MONTHS = 6
+export const WINTER_DAYS = 20
+export const FARMER_WINTER_DAYS = 10
 
 // Money, in constant dollars.
 export const START_CASH = 18000

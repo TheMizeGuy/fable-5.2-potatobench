@@ -221,3 +221,35 @@ default.
 The first spring is unchanged: one farmer, six fields, click what glows. Nobody
 has to hire, clear, build or borrow. Each of these opens as the player reaches
 for it.
+
+## 8. As built: where the simulation departs from the text above
+
+The rules as built are listed in `docs/MODEL.md` section 10 onward. Where the
+text above was silent, or two of its rules collided, the build chose as follows.
+
+**People.**
+
+- *Part days of tiredness.* A part day moves tiredness by 0.07 x the share of the
+  day worked minus 0.3 x the share not worked, so the two ends the text gives are
+  one rule, and a short job does not stop someone resting.
+- *Hiring by kind stays.* `{ t: 'hire', kind: 'hand' | 'operator' }` takes
+  someone from the hiring hall: average at that work (level 5), at the old wage,
+  set never to do the other kind's work until the player changes their
+  priorities. Applicants are the way to find someone better or cheaper.
+- *An operator no longer needs a second tractor.* With one tractor, an operator
+  and the farmer share it: the limit on machine work is the tractors, not the
+  people.
+- *Housing replaces the old crew limits* (four hands, one operator): two hired
+  people live out, and more need bunkhouse beds.
+- *Applicants lapse when the season begins*, like contract offers; someone who
+  asks for work later comes as an incident (section 6).
+- *Scouting* is capped at 0.9 from skill; a sharp eye adds after that, and no
+  one does better than 0.95 or worse than 0.05.
+- *Cheerful* lifts every colleague's mood target by 0.03 for each cheerful person
+  on the farm.
+- *Winter is six months*, November to April, one for each cellar month. When the
+  cellar closes early, the rest of the winter's work and pay come at the year end.
+- *Pickers* are paid only for days worked (not Sundays off) and go back to school
+  by themselves on October 11.
+- *A foreman* orders only on working days.
+- The command for the rule is `{ t: 'sundays', off: boolean }`.

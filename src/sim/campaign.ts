@@ -1,13 +1,15 @@
 // The campaign: planning, the season, the cellar and the year-end ledger, all driven through apply().
+import { foremanOrders } from './advice.ts'
 import { contractOffers } from './buyers.ts'
-import { hireBlock, newFarmer, newUnit } from './crew.ts'
-import { DUFOUR_YARD, HOME_FIELDS, HOME_YARD, PARCELS, YARDS } from './farm.ts'
+import { hireBlock, hireRoom, newFarmer, newUnit } from './crew.ts'
+import { BLOCK_NAME, BLOCKS, DUFOUR_YARD, HOME_FIELDS, HOME_YARD, PARCELS, YARDS, type BlockId } from './farm.ts'
 import { lotCwt } from './harvest.ts'
 import { sellLot } from './market.ts'
 import * as P from './params.ts'
+import { applicantsFor, fromApplicant, jobSkill, payOf, SKILL_LABEL, speed } from './people.ts'
 import { hash32 } from './rng.ts'
-import { addJob, FIELD_NAMES, holdsDufour, releaseJob, seasonDone, startSeason, stepDay, unitBlock } from './season.ts'
-import type { Campaign, Cmd, Contract, Due, FieldPlan, GameEvent, Lot, Result, UpgradeId, World, YearSummary } from './types.ts'
+import { addJob, FIELD_NAMES, holdsDufour, letGo, releaseJob, removePerson, seasonDone, startSeason, stepDay, unitBlock } from './season.ts'
+import type { Campaign, Cmd, Contract, Due, FieldPlan, GameEvent, Lot, Result, Unit, UpgradeId, WinterWork, World, YearSummary } from './types.ts'
 import { variety } from './varieties.ts'
 import { dayIndex, withCommas } from './calendar.ts'
 import { finishLot } from './harvest.ts'
@@ -58,7 +60,7 @@ export function createCampaign(world: World, opts: { seed: number; startYear: nu
     plans: [],
     upgrades: { boom: false, harvester: false, vent: false, reel: false, tractor2: false, house2: false },
     seedStock: [], season: null, lots: [], nextLot: 1,
-    crew: [newFarmer()], nextUnit: 1,
+    crew: [newFarmer()], nextUnit: 1, applicants: [], sundaysOff: true,
     offers: [], contracts: [],
     month: 0,
     yearRevenue: 0, yearCosts: 0, yearRest: 0, yearStorage: 0,
@@ -67,7 +69,12 @@ export function createCampaign(world: World, opts: { seed: number; startYear: nu
   }
   c.plans = defaultPlans(c)
   c.offers = contractOffers(c.seed, c.year)
+  c.applicants = springApplicants(c)
   return c
+}
+
+function springApplicants(c: Campaign): ReturnType<typeof applicantsFor> {
+  return applicantsFor(c.seed, c.year, new Set(c.crew.map(u => u.name)))
 }
 
 export interface PlanCosts { fields: number; rent: number; wages: number; total: number }
@@ -82,7 +89,7 @@ export function planCosts(c: Campaign): PlanCosts {
     else fields += P.FIELD_COST + (p.seed === 'certified' ? P.SEED_CWT_PER_FIELD * P.CERT_SEED_PER_CWT : 0)
     if (c.fields[i].tenure === 'rented') rent += PARCELS[i].rent
   }
-  for (const u of c.crew) wages += u.wage
+  for (const u of c.crew) wages += payOf(u)
   return { fields, rent, wages, total: fields + rent + wages }
 }
 
@@ -178,7 +185,8 @@ function endSeason(world: World, c: Campaign): GameEvent[] {
   }
   s.jobs = []
   // The crews go home for the winter.
-  for (const u of c.crew) { u.job = -1; u.at = HOME_YARD; u.to = HOME_YARD; u.road = 0 }
+  for (const u of c.crew) { letGo(u); u.at = HOME_YARD; u.to = HOME_YARD; u.road = 0 }
+  s.pickers = false
   settleContracts(c, 'harvest', out)
   // The potato houses only hold so much: the overflow is sold off the field.
   const cap = cellarCapacity(c)
@@ -261,6 +269,70 @@ function storeMonth(c: Campaign, out: GameEvent[]): void {
     lot.grades.no1 *= keep; lot.grades.chef *= keep; lot.grades.b *= keep; lot.grades.no2 *= keep; lot.skinned *= keep
     lot.loss.rot += before * (1 - shrink) * rotLoss
     if (lotCwt(lot) < 0.5) lot.open = false
+  }
+}
+
+export const WINTER_WORKS: WinterWork[] = ['off', 'woods', 'pack', 'build']
+export const WINTER_LABEL: Record<WinterWork, string> = {
+  off: 'laid off', woods: 'felling in the woods', pack: 'packing in the packing shed', build: 'building',
+}
+
+// Whether today falls in the harvest break, when the schools close and pickers can be had.
+export function pickersWindow(c: Campaign): boolean {
+  const s = c.season
+  if (!s) return false
+  return s.day >= dayIndex(s.year, P.PICKERS_FROM.month, P.PICKERS_FROM.dom) && s.day <= dayIndex(s.year, P.PICKERS_TO.month, P.PICKERS_TO.dom)
+}
+
+// Puts a new person on the books: in season their first month is paid now; in spring it is part of the plan.
+function takeOn(c: Campaign, u: Unit): GameEvent {
+  if (c.phase === 'season' && c.season) {
+    const pay = payOf(u)
+    cost(c, pay)
+    c.yearWages += pay
+    u.paidTo = c.season.day + P.WAGE_DAYS
+  }
+  c.crew.push(u)
+  const as = u.kind === 'hand' ? 'a field hand' : 'a tractor operator'
+  return note(c, 'hired', 'info', `${u.name} is hired as ${as} at $${withCommas(u.wage)} a month.`)
+}
+
+// Why a person cannot be set to this winter work, or '' when they can.
+export function winterBlock(c: Campaign, u: Unit, work: WinterWork, _field = -1): string {
+  if (work === 'off') return ''
+  if (u.trait === 'homebody') return `${u.name} is a homebody and will not work winters.`
+  switch (work) {
+    case 'woods': return 'There is no standing timber on the farm to fell.'
+    case 'pack': return 'Packing needs a packing shed.'
+    case 'build': return 'Nothing is being built.'
+  }
+  return 'No such winter work.'
+}
+
+// One month of winter. Someone kept on is paid and puts in WINTER_DAYS crew-days at their skill; the farmer works
+// unpaid, FARMER_WINTER_DAYS. Anyone laid off is not paid and comes back in spring.
+function winterMonth(c: Campaign, out: GameEvent[]): void {
+  for (const u of c.crew) {
+    if (u.winter === 'off') continue
+    if (u.kind !== 'farmer') {
+      const pay = payOf(u)
+      cost(c, pay)
+      c.yearWages += pay
+    }
+    const days = (u.kind === 'farmer' ? P.FARMER_WINTER_DAYS : P.WINTER_DAYS) * speed(u, WINTER_SKILL[u.winter])
+    winterWork(c, u, days, out)
+  }
+}
+
+const WINTER_SKILL: Record<Exclude<WinterWork, 'off'>, 'woods' | 'pack' | 'build'> = { woods: 'woods', pack: 'pack', build: 'build' }
+
+// What a month of winter work does, in standard crew-days.
+function winterWork(c: Campaign, u: Unit, _days: number, out: GameEvent[]): void {
+  const why = winterBlock(c, u, u.winter, u.winterField)
+  if (why) {
+    out.push(note(c, 'winterIdle', 'warn', `${u.name} has no winter work left: ${why}`))
+    u.winter = 'off'
+    u.winterField = -1
   }
 }
 
@@ -359,6 +431,7 @@ function nextYear(world: World, c: Campaign): Result {
   c.lots = []
   c.contracts = []
   c.offers = contractOffers(c.seed, c.year)
+  c.applicants = springApplicants(c)
   c.phase = 'plan'
   // Carry the plan forward with the rotation flipped where the soil asks for it, and drop seed that is not there.
   // Rented land and the hired crew carry forward too, until they are released or dismissed.
@@ -456,32 +529,112 @@ export function apply(world: World, c: Campaign, cmd: Cmd): Result {
       c.yearRent += pc.rent
       c.yearWages += pc.wages
       c.offers = []
+      c.applicants = []
       startSeason(world, c)
       c.phase = 'season'
       return ok()
     }
     case 'hire': {
+      if ('applicant' in cmd) {
+        const why = hireRoom(c)
+        if (why) return fail(why)
+        const a = c.applicants.find(x => x.id === cmd.applicant)
+        if (!a) return fail(c.phase === 'plan' ? 'No such applicant.' : 'The people who asked for work in spring have found other work.')
+        c.applicants = c.applicants.filter(x => x !== a)
+        return ok([takeOn(c, fromApplicant(c, a))])
+      }
       const why = hireBlock(c, cmd.kind)
       if (why) return fail(why)
-      const u = newUnit(c, cmd.kind as 'hand' | 'operator')
-      if (c.phase === 'season' && c.season) {
-        cost(c, u.wage)
-        c.yearWages += u.wage
-        u.paidTo = c.season.day + P.WAGE_DAYS
-      }
-      c.crew.push(u)
-      const as = u.kind === 'hand' ? 'a field hand' : 'the tractor operator'
-      return ok([note(c, 'hired', 'info', `${u.name} is hired as ${as} at $${withCommas(u.wage)} a month.`)])
+      return ok([takeOn(c, newUnit(c, cmd.kind as 'hand' | 'operator'))])
     }
     case 'dismiss': {
       if (c.phase !== 'plan' && c.phase !== 'season') return fail('Hands are let go in spring or during the season.')
-      const k = c.crew.findIndex(u => u.id === cmd.unit)
-      if (k < 0) return fail('No such hand.')
-      const u = c.crew[k]
+      const u = c.crew.find(x => x.id === cmd.unit)
+      if (!u) return fail('No such hand.')
       if (u.kind === 'farmer') return fail('The farmer stays.')
-      c.crew.splice(k, 1)
-      for (const j of c.season?.jobs ?? []) if (j.unit === u.id) j.unit = -1
+      removePerson(c, u)
       return ok([note(c, 'dismissed', 'info', `${u.name} is let go.`)])
+    }
+    case 'raise': {
+      if (c.phase === 'over') return fail('The farm is gone.')
+      const u = c.crew.find(x => x.id === cmd.unit)
+      if (!u) return fail('No such person.')
+      if (u.kind === 'farmer') return fail('The farmer is not paid a wage; the household draw comes at the year end.')
+      if (!Number.isFinite(cmd.wage)) return fail('Say what the wage should be.')
+      const wage = Math.round(cmd.wage)
+      if (wage < P.WAGE_MIN || wage > P.WAGE_MAX) return fail(`A wage is between $${withCommas(P.WAGE_MIN)} and $${withCommas(P.WAGE_MAX)} a month.`)
+      if (wage === u.wage) return fail(`${u.name} is already paid $${withCommas(wage)} a month.`)
+      const was = u.wage
+      u.wage = wage
+      return ok([note(c, 'raise', 'info', `${u.name}'s wage goes from $${withCommas(was)} to $${withCommas(wage)} a month (asked $${withCommas(u.ask)}).`)])
+    }
+    case 'priority': {
+      if (c.phase === 'over') return fail('The farm is gone.')
+      const u = c.crew.find(x => x.id === cmd.unit)
+      if (!u) return fail('No such person.')
+      if (!P.SKILLS.includes(cmd.work)) return fail('No such kind of work.')
+      if (!Number.isInteger(cmd.level) || cmd.level < 0 || cmd.level > P.PRIORITY_MAX) return fail(`A priority is 0 (never) or 1 (first) to ${P.PRIORITY_MAX}.`)
+      if (u.prio[cmd.work] === cmd.level) return fail(`${u.name} already has ${SKILL_LABEL[cmd.work]} at priority ${cmd.level}.`)
+      u.prio[cmd.work] = cmd.level
+      if (cmd.level === 0) {
+        // Set never to do this work: orders of that kind pinned to them are anyone's, and one held goes back.
+        for (const j of c.season?.jobs ?? []) {
+          if (jobSkill(j.kind) !== cmd.work) continue
+          if (j.unit === u.id) j.unit = -1
+          if (u.job === j.id) letGo(u)
+        }
+      }
+      return ok()
+    }
+    case 'foreman': {
+      if (c.phase === 'over') return fail('The farm is gone.')
+      const u = c.crew.find(x => x.id === cmd.unit)
+      if (!u) return fail('No such person.')
+      if (u.kind === 'farmer') return fail('The farmer runs the whole farm; a foreman is someone hired.')
+      if (cmd.block === null) {
+        if (!u.foreman) return fail(`${u.name} is not a foreman.`)
+        u.foreman = ''
+        return ok([note(c, 'foreman', 'info', `${u.name} goes back to field work.`)])
+      }
+      const block = cmd.block as BlockId
+      if (!BLOCKS.includes(block)) return fail('No such block.')
+      if (u.foreman === block) return fail(`${u.name} is already foreman there.`)
+      if (!PARCELS.some((p, i) => p.block === block && held(c, i))) return fail('The farm holds no land there.')
+      const other = c.crew.find(x => x.foreman === block)
+      if (other) return fail(`${other.name} is foreman there already.`)
+      u.foreman = block
+      for (const j of c.season?.jobs ?? []) if (j.unit === u.id) j.unit = -1
+      letGo(u)
+      return ok([note(c, 'foreman', 'info', `${u.name} is foreman of ${BLOCK_NAME[block]}: they will put on the list what the fields there need, and do no field work.`)])
+    }
+    case 'sundays': {
+      if (c.phase === 'over') return fail('The farm is gone.')
+      if (typeof cmd.off !== 'boolean') return fail('Say whether Sundays are off.')
+      if (c.sundaysOff === cmd.off) return fail(cmd.off ? 'Sundays are already off.' : 'The farm already works Sundays.')
+      c.sundaysOff = cmd.off
+      return ok([note(c, 'sundays', 'info', cmd.off ? 'Sundays off: nobody works on a Sunday.' : 'The farm works Sundays now: a day more each week, and everyone tires.')])
+    }
+    case 'pickers': {
+      const s = c.season
+      if (c.phase !== 'season' || !s || s.frozen) return fail('Pickers are hired during the harvest.')
+      if (typeof cmd.on !== 'boolean') return fail('Say whether to hire the pickers.')
+      if (s.pickers === cmd.on) return fail(cmd.on ? 'The pickers are already here.' : 'There are no pickers to send home.')
+      if (cmd.on && !pickersWindow(c)) return fail('The schools close for the harvest only from September 20 to October 10.')
+      s.pickers = cmd.on
+      return ok([note(c, 'pickers', 'info', cmd.on ? `A picking crew is hired by the day, $${withCommas(P.PICKER_DAY)} a day worked: every dig goes faster.` : 'The pickers are sent home.')])
+    }
+    case 'winter': {
+      if (c.phase === 'over') return fail('The farm is gone.')
+      const u = c.crew.find(x => x.id === cmd.unit)
+      if (!u) return fail('No such person.')
+      if (!WINTER_WORKS.includes(cmd.work)) return fail('No such winter work.')
+      const field = cmd.work === 'woods' ? cmd.field ?? -1 : -1
+      if (u.winter === cmd.work && u.winterField === field) return fail(`${u.name} is already set to that for the winter.`)
+      const why = winterBlock(c, u, cmd.work, field)
+      if (why) return fail(why)
+      u.winter = cmd.work
+      u.winterField = field
+      return ok([note(c, 'winterSet', 'info', cmd.work === 'off' ? `${u.name} will be laid off for the winter, unpaid, and back in spring.` : `${u.name} will be kept on this winter: ${WINTER_LABEL[cmd.work]}.`)])
     }
     case 'job': {
       const why = addJob(c, cmd.kind, cmd.field, cmd.unit ?? -1)
@@ -495,7 +648,7 @@ export function apply(world: World, c: Campaign, cmd: Cmd): Result {
       const why = unitBlock(c, job.kind, cmd.unit)
       if (why) return fail(why)
       job.unit = cmd.unit
-      for (const u of c.crew) if (u.job === job.id && cmd.unit >= 0 && u.id !== cmd.unit) u.job = -1
+      for (const u of c.crew) if (u.job === job.id && cmd.unit >= 0 && u.id !== cmd.unit) letGo(u)
       return ok()
     }
     case 'cancel': {
@@ -518,6 +671,7 @@ export function apply(world: World, c: Campaign, cmd: Cmd): Result {
     case 'day': {
       if (c.phase !== 'season' || !c.season) return fail('The season is not under way.')
       if (c.season.frozen) return fail('The ground has frozen. Close out the season.')
+      foremanOrders(world, c)
       return ok(stepDay(world, c))
     }
     case 'endSeason': {
@@ -589,9 +743,12 @@ export function apply(world: World, c: Campaign, cmd: Cmd): Result {
       const out: GameEvent[] = []
       if (openLots(c).length === 0 || c.month >= P.MONTH_CURVE.length - 1) {
         for (const lot of openLots(c)) sellLot(world, c, lot, 1)
+        // The rest of the winter passes.
+        for (let m = c.month; m < P.WINTER_MONTHS; m++) winterMonth(c, out)
         closeYear(world, c, out)
         return ok(out)
       }
+      winterMonth(c, out)
       storeMonth(c, out)
       c.month++
       if (c.month === P.CONTRACT_WINTER_MONTH) settleContracts(c, 'winter', out)

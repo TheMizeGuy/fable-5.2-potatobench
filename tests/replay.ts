@@ -60,6 +60,14 @@ export function runReplay(sim: Sim, world: World, opts: ReplayOptions = {}): Rep
       for (const field of land.rent) go({ t: 'rent', field })
       for (let h = 0; h < land.hire; h++) go({ t: 'hire', kind: 'hand' })
       if (land.dismiss) for (const u of c.crew.filter(x => x.kind === 'hand')) go({ t: 'dismiss', unit: u.id })
+      // The second spring one of the people asking for work is taken on, set to drive when a tractor is free, and
+      // paid a little over what they asked.
+      if (!opts.plain && c.yearIdx === 1 && c.applicants.length) {
+        go({ t: 'hire', applicant: c.applicants[0].id })
+        const u = c.crew[c.crew.length - 1]
+        go({ t: 'priority', unit: u.id, work: 'machine', level: u.prio.machine === 2 ? 3 : 2 })
+        go({ t: 'raise', unit: u.id, wage: u.wage + 30 })
+      }
       PLANS[k].forEach(([crop, variety, seedKind], field) => {
         const r = go({ t: 'plan', field, plan: { crop: crop as 'potato', variety: variety as 'katahdin', seed: seedKind as 'saved' } })
         if (!r.ok) go({ t: 'plan', field, plan: { crop: crop as 'potato', variety: variety as 'katahdin', seed: 'certified' } })
@@ -84,11 +92,13 @@ export function runReplay(sim: Sim, world: World, opts: ReplayOptions = {}): Rep
         } else if (a.act !== 'close') go({ t: 'job', kind: a.act, field: a.field })
       }
       if (s.jobs.length > 1 && c.steps % 17 === 0) go({ t: 'bump', id: s.jobs[s.jobs.length - 1].id })
-      const scout = s.jobs.find(j => j.kind === 'scout' && j.done === 0)
-      if (scout && c.steps % 23 === 0) go({ t: 'cancel', id: scout.id })
-      const hand = c.crew.find(u => u.kind === 'hand')
+      const sample = s.jobs.find(j => j.kind === 'sample' && j.done === 0)
+      if (sample && c.steps % 23 === 0) go({ t: 'cancel', id: sample.id })
+      const hand = c.crew.find(u => u.kind === 'hand' && u.prio.field > 0)
       const walk = s.jobs.find(j => j.kind === 'scout' && j.unit < 0)
       if (hand && walk && c.steps % 3 === 0) go({ t: 'assign', id: walk.id, unit: hand.id })
+      // The third harvest has pickers for the school break.
+      if (!opts.plain && c.yearIdx === 2 && !s.pickers && sim.labourInfo(c).pickers.ok) go({ t: 'pickers', on: true })
       deliver()
       if (sim.seasonDone(c)) go({ t: 'endSeason' })
       else go({ t: 'day' })

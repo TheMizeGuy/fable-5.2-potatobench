@@ -4,6 +4,9 @@
 
 export type BlockId = 'home' | 'brook' | 'ridge' | 'dufour'
 
+export const BLOCKS: BlockId[] = ['home', 'brook', 'ridge', 'dufour']
+export const BLOCK_NAME: Record<BlockId, string> = { home: 'the home farm', brook: 'the intervale', ridge: 'the ridge lots', dufour: 'the Dufour place' }
+
 export interface Parcel {
   name: string
   block: BlockId

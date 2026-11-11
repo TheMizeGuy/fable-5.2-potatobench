@@ -75,7 +75,10 @@ describe('a dig ordered while a vine kill is part done', () => {
     const events = digOut(c)
     const killed = events.filter(e => e.field === 0 && e.type === 'killed')
     expect(killed.length).toBe(1)
-    expect(killed[0].day).toBe(start.season!.day)
+    // On the next working day (a Sunday off does not count).
+    let next = start.season!.day
+    while (S.weekday(start.year, next) === S.SUNDAY) next++
+    expect(killed[0].day).toBe(next)
   })
 
   it('with two crews: a dig the operator starts drops the kill the farmer had begun, and the field is dug once', () => {

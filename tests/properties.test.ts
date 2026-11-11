@@ -13,6 +13,8 @@ const H_MAX = S.H_EMERGED | S.H_VIRUS | S.H_ROGUED | S.H_SAMPLED | S.H_DUG | S.H
 type Step = Cmd | { t: 'days'; n: number } | { t: 'sellPick'; k: number; frac: number } | { t: 'seedPick'; k: number; fields: number }
   | { t: 'assignPick'; k: number; unit: number } | { t: 'acceptPick'; k: number } | { t: 'deliverPick'; k: number; j: number }
   | { t: 'dismissPick'; k: number } | { t: 'jobPick'; kind: S.JobKind; field: number; k: number }
+  | { t: 'hirePick'; k: number } | { t: 'raisePick'; k: number; wage: number } | { t: 'priorityPick'; k: number; work: string; level: number }
+  | { t: 'foremanPick'; k: number; block: string | null } | { t: 'winterPick'; k: number; work: string; field: number }
 
 const index = fc.integer({ min: -2, max: S.FIELD_COUNT + 1 })
 const id = fc.integer({ min: -1, max: 60 })
@@ -45,6 +47,15 @@ const step: fc.Arbitrary<Step> = fc.oneof(
   { weight: 4, arbitrary: fc.record({ t: fc.constant('seedPick' as const), k: fc.nat(20), fields: amount }) },
   { weight: 3, arbitrary: fc.constant({ t: 'month' as const }) },
   { weight: 2, arbitrary: fc.constant({ t: 'next' as const }) },
+  // People.
+  { weight: 2, arbitrary: fc.record({ t: fc.constant('hirePick' as const), k: fc.nat(5) }) },
+  { weight: 1, arbitrary: fc.record({ t: fc.constant('hire' as const), applicant: fc.integer({ min: -1, max: 300000 }) }) },
+  { weight: 2, arbitrary: fc.record({ t: fc.constant('raisePick' as const), k: fc.nat(8), wage: fc.oneof(fc.integer({ min: -100, max: 5000 }), fc.constantFrom(NaN, Infinity, 450, 450.4, 99, 4001)) }) },
+  { weight: 3, arbitrary: fc.record({ t: fc.constant('priorityPick' as const), k: fc.nat(8), work: fc.constantFrom(...S.SKILLS, 'golf'), level: fc.oneof(fc.integer({ min: -1, max: 5 }), fc.constant(1.5)) }) },
+  { weight: 2, arbitrary: fc.record({ t: fc.constant('foremanPick' as const), k: fc.nat(8), block: fc.constantFrom('home', 'brook', 'ridge', 'dufour', 'moon', null) }) },
+  { weight: 1, arbitrary: fc.record({ t: fc.constant('sundays' as const), off: fc.boolean() }) },
+  { weight: 2, arbitrary: fc.record({ t: fc.constant('pickers' as const), on: fc.boolean() }) },
+  { weight: 2, arbitrary: fc.record({ t: fc.constant('winterPick' as const), k: fc.nat(8), work: fc.constantFrom('off', 'woods', 'pack', 'build', 'golf'), field: index }) },
 )
 
 function nonFinite(v: unknown, path: string, out: string[]): void {
@@ -83,14 +94,26 @@ function outOfRange(c: Campaign): string[] {
   for (const f of c.fields) check(f.soil >= 0 && f.soil <= 1 && f.vert > 0 && f.vert < 1, `soil ${f.soil} vert ${f.vert}`)
   check(c.fields.length === S.FIELD_COUNT && c.plans.length === S.FIELD_COUNT, 'one field and one plan per parcel')
   check(c.fields.slice(0, S.HOME_FIELDS).every(f => f.tenure === 'owned'), 'the home six stay owned')
-  // The crew: one farmer, id 0; at most four hands and one operator, and an operator only with the second tractor.
+  // The people: one farmer, id 0; no more hired than the farm can house; each person's numbers in range.
   const crew = c.crew
   const place = (p: number) => Number.isInteger(p) && p >= -2 && p < S.FIELD_COUNT
   check(crew.filter(u => u.kind === 'farmer').length === 1 && crew[0].id === 0 && crew[0].kind === 'farmer', 'one farmer, first')
   check(new Set(crew.map(u => u.id)).size === crew.length && crew.every(u => u.id < c.nextUnit || u.id === 0), 'unit ids unique')
-  check(crew.filter(u => u.kind === 'hand').length <= S.MAX_HANDS && crew.filter(u => u.kind === 'operator').length <= S.MAX_OPERATORS, 'crew limits')
-  check(!crew.some(u => u.kind === 'operator') || c.upgrades.tractor2, 'an operator needs the second tractor')
-  for (const u of crew) check(place(u.at) && place(u.to) && u.road >= 0 && u.road < 1, `unit ${u.id} at ${u.at} to ${u.to} road ${u.road}`)
+  check(S.hiredCount(c) <= S.housingLimit(c), `${S.hiredCount(c)} hired, room for ${S.housingLimit(c)}`)
+  for (const u of crew) {
+    check(place(u.at) && place(u.to) && u.road >= 0 && u.road < 1, `unit ${u.id} at ${u.at} to ${u.to} road ${u.road}`)
+    check(u.tired >= 0 && u.tired <= 1 && u.mood >= 0 && u.mood <= 1, `unit ${u.id} tired ${u.tired} mood ${u.mood}`)
+    for (const k of S.SKILLS) {
+      check(Number.isInteger(u.skills[k]) && u.skills[k] >= 0 && u.skills[k] <= S.SKILL_MAX && u.xp[k] >= 0, `unit ${u.id} ${k} ${u.skills[k]} xp ${u.xp[k]}`)
+      check(Number.isInteger(u.prio[k]) && u.prio[k] >= 0 && u.prio[k] <= S.PRIORITY_MAX, `unit ${u.id} priority ${k} ${u.prio[k]}`)
+    }
+    check(u.rig === '' || u.job >= 0, `unit ${u.id} drives a ${u.rig} for no order`)
+    check(!u.foreman || u.kind !== 'farmer', 'the farmer is no foreman')
+    check(u.wage >= 0 && Number.isFinite(u.wage), `unit ${u.id} wage ${u.wage}`)
+  }
+  const foremen = crew.filter(u => u.foreman).map(u => u.foreman)
+  check(new Set(foremen).size === foremen.length, `two foremen of one block: ${foremen}`)
+  check(crew.filter(u => u.rig === 'tractor').length <= S.tractorsOwned(c), 'more tractors driven than the farm owns')
   const held = crew.filter(u => u.job >= 0).map(u => u.job)
   check(new Set(held).size === held.length, `two crews hold one order: ${held}`)
   for (const k of c.contracts) check(k.delivered >= 0 && k.delivered <= k.cwt + 1e-6 && k.paid >= 0 && k.penalty >= 0, `contract ${k.id} ${k.delivered}/${k.cwt}`)
@@ -100,7 +123,7 @@ function outOfRange(c: Campaign): string[] {
     for (const j of s.jobs) {
       check(s.fields[j.field].status !== 'off', `order on land the farm does not hold: ${j.kind} ${j.field}`)
       const u = crew.find(x => x.id === j.unit)
-      check(j.unit === -1 || (!!u && S.canDo(u.kind, j.kind)), `order ${j.id} pinned to ${j.unit}`)
+      check(j.unit === -1 || (!!u && S.willDo(u, j.kind)), `order ${j.id} pinned to ${j.unit}`)
     }
     // Two crews never work the same order: each order (one kind on one field) was worked by one crew in a day.
     const by = new Map<string, number>()
@@ -108,8 +131,6 @@ function outOfRange(c: Campaign): string[] {
       const key = `${w.kind}:${w.field}`
       check(!by.has(key) || by.get(key) === w.unit, `${key} worked by ${by.get(key)} and ${w.unit}`)
       by.set(key, w.unit)
-      const u = crew.find(x => x.id === w.unit)
-      check(!u || S.canDo(u.kind, w.kind), `${u?.kind} did ${w.kind}`)
     }
   }
   return bad
@@ -135,6 +156,11 @@ function resolve(c: Campaign, s: Step): Concrete {
   if (s.t === 'deliverPick') return { t: 'deliver', lot: lot(s.k), contract: c.contracts.length ? c.contracts[s.j % c.contracts.length].id : -1 }
   if (s.t === 'dismissPick') return { t: 'dismiss', unit: unitAt(s.k) }
   if (s.t === 'jobPick') return { t: 'job', kind: s.kind, field: s.field, unit: unitAt(s.k) }
+  if (s.t === 'hirePick') return { t: 'hire', applicant: c.applicants.length ? c.applicants[s.k % c.applicants.length].id : -1 }
+  if (s.t === 'raisePick') return { t: 'raise', unit: unitAt(s.k), wage: s.wage }
+  if (s.t === 'priorityPick') return { t: 'priority', unit: unitAt(s.k), work: s.work as S.Skill, level: s.level }
+  if (s.t === 'foremanPick') return { t: 'foreman', unit: unitAt(s.k), block: s.block as S.BlockId | null }
+  if (s.t === 'winterPick') return { t: 'winter', unit: unitAt(s.k), work: s.work as S.WinterWork, field: s.field }
   return s
 }
 
@@ -168,7 +194,7 @@ describe('random command sequences', () => {
     snapshot(c => c.phase === 'season' && c.contracts.some(k => !k.settled && k.delivered < k.cwt &&
       S.openLots(c).some(l => l.variety === k.variety && c.season!.fields[l.field].status === 'dug' && l.grades.no1 > 0))),
   ]
-  const seen = { sellOk: 0, seedOk: 0, closed: 0, digOk: 0, seasons: 0, landOk: 0, hireOk: 0, pinOk: 0, acceptOk: 0, deliverOk: 0 }
+  const seen = { sellOk: 0, seedOk: 0, closed: 0, digOk: 0, seasons: 0, landOk: 0, hireOk: 0, pinOk: 0, acceptOk: 0, deliverOk: 0, applicantOk: 0, peopleOk: 0, pickersOk: 0 }
 
   it('never throw, never produce NaN or out-of-range state, and move cash only by what is reported', () => {
     const start = fc.oneof(
@@ -206,6 +232,9 @@ describe('random command sequences', () => {
         if (r.ok && s.t === 'hire') seen.hireOk++
         if (r.ok && ((s.t === 'job' && (s.unit ?? -1) >= 0) || s.t === 'assign')) seen.pinOk++
         if (r.ok && s.t === 'accept') seen.acceptOk++
+        if (r.ok && s.t === 'hire' && 'applicant' in s) seen.applicantOk++
+        if (r.ok && (s.t === 'raise' || s.t === 'priority' || s.t === 'foreman' || s.t === 'winter' || s.t === 'sundays')) seen.peopleOk++
+        if (r.ok && s.t === 'pickers') seen.pickersOk++
         if (r.ok && s.t === 'deliver') {
           seen.deliverOk++
           // Hundredweight leave the lot for the contract one for one, and the money is the contract price for them.
@@ -250,6 +279,9 @@ describe('random command sequences', () => {
     expect(seen.pinOk, all).toBeGreaterThan(3)
     expect(seen.acceptOk, all).toBeGreaterThan(3)
     expect(seen.deliverOk, all).toBeGreaterThan(0)
+    expect(seen.applicantOk, all).toBeGreaterThan(3)
+    expect(seen.peopleOk, all).toBeGreaterThan(10)
+    expect(seen.pickersOk, all).toBeGreaterThan(0)
   })
 })
 
@@ -290,7 +322,12 @@ describe('invalid commands', () => {
       { t: 'job', kind: 'dig', field: 9 }, { t: 'job', kind: 'scout', field: S.FIELD_COUNT }, { t: 'cancel', id: 99999 }, { t: 'bump', id: -5 },
       { t: 'sell', lot: 99999, frac: 1 }, { t: 'seed', lot: 99999, fields: 1 },
       { t: 'rent', field: 0 }, { t: 'rent', field: -1 }, { t: 'rent', field: S.FIELD_COUNT }, { t: 'release', field: 0 }, { t: 'release', field: 13 },
-      { t: 'buyLand', field: 0 }, { t: 'buyLand', field: 99 }, { t: 'hire', kind: 'farmer' }, { t: 'hire', kind: 'operator' },
+      { t: 'buyLand', field: 0 }, { t: 'buyLand', field: 99 }, { t: 'hire', kind: 'farmer' }, { t: 'hire', applicant: -1 },
+      { t: 'raise', unit: 0, wage: 500 }, { t: 'raise', unit: 99, wage: 500 }, { t: 'priority', unit: 99, work: 'field', level: 1 },
+      { t: 'priority', unit: 0, work: 'field', level: 7 }, { t: 'priority', unit: 0, work: 'field', level: 0.5 }, { t: 'priority', unit: 0, work: 'golf' as S.Skill, level: 1 },
+      { t: 'priority', unit: 0, work: 'field', level: c.crew[0].prio.field }, { t: 'foreman', unit: 0, block: 'home' }, { t: 'foreman', unit: 0, block: null },
+      { t: 'sundays', off: c.sundaysOff }, { t: 'winter', unit: 99, work: 'off' }, { t: 'winter', unit: 0, work: 'golf' as S.WinterWork },
+      { t: 'winter', unit: 0, work: c.crew[0].winter, field: c.crew[0].winterField },
       { t: 'dismiss', unit: 0 }, { t: 'dismiss', unit: 99 }, { t: 'accept', offer: -1 }, { t: 'assign', id: 99999, unit: 0 },
       { t: 'deliver', lot: 99999, contract: 1 }, { t: 'deliver', lot: c.lots[0]?.id ?? 1, contract: -7 },
     ]
@@ -304,15 +341,23 @@ describe('invalid commands', () => {
       if (c.cash < S.PARCELS[6].price) out.push({ t: 'buyLand', field: 6 })
     }
     if (c.phase !== 'plan' && c.phase !== 'season') out.push({ t: 'hire', kind: 'hand' }, ...c.crew.map(u => ({ t: 'dismiss' as const, unit: u.id })))
-    if (c.phase !== 'season') out.push({ t: 'day' }, { t: 'endSeason' }, { t: 'job', kind: 'plant', field: 0 }, { t: 'assign', id: 1, unit: -1 })
+    if (c.phase !== 'season') out.push({ t: 'day' }, { t: 'endSeason' }, { t: 'job', kind: 'plant', field: 0 }, { t: 'assign', id: 1, unit: -1 }, { t: 'pickers', on: true })
+    if (c.phase === 'season' && c.season && !S.labourInfo(c).pickers.ok && !c.season.pickers) out.push({ t: 'pickers', on: true })
+    if (c.phase === 'season' && c.season && !c.season.pickers) out.push({ t: 'pickers', on: false })
+    if (S.hiredCount(c) >= S.housingLimit(c)) out.push({ t: 'hire', kind: 'hand' }, { t: 'hire', kind: 'operator' })
+    for (const u of c.crew) {
+      if (u.kind !== 'farmer') out.push({ t: 'raise', unit: u.id, wage: u.wage }, { t: 'raise', unit: u.id, wage: 20 }, { t: 'raise', unit: u.id, wage: NaN }, { t: 'foreman', unit: u.id, block: 'moon' as S.BlockId })
+      if (u.kind !== 'farmer' && !u.foreman) out.push({ t: 'foreman', unit: u.id, block: null })
+    }
     if (c.phase !== 'cellar') out.push({ t: 'month' }, { t: 'seed', lot: 1, fields: 1 })
     if (c.phase !== 'ledger') out.push({ t: 'next' })
     if (c.phase === 'cellar') for (const l of S.openLots(c)) out.push({ t: 'seed', lot: l.id, fields: 0 }, { t: 'seed', lot: l.id, fields: 1000 })
     if (c.phase === 'season' && c.season) {
-      // A hand does no machine work; nobody else's pin is taken; a dig cannot be pinned to the farmer's absent twin.
-      for (const u of c.crew.filter(x => x.kind === 'hand')) {
+      // Someone set never to do machine work is given none; nobody else's pin is taken; a dig cannot be pinned to the
+      // farmer's absent twin.
+      for (const u of c.crew.filter(x => x.prio.machine === 0)) {
         for (const kind of ['plant', 'hill', 'spray', 'water', 'kill', 'dig'] as const) for (let f = 0; f < S.HOME_FIELDS; f++) out.push({ t: 'job', kind, field: f, unit: u.id })
-        for (const j of c.season.jobs) if (!S.canDo('hand', j.kind)) out.push({ t: 'assign', id: j.id, unit: u.id })
+        for (const j of c.season.jobs) if (!S.willDo(u, j.kind)) out.push({ t: 'assign', id: j.id, unit: u.id })
       }
       for (const j of c.season.jobs) out.push({ t: 'assign', id: j.id, unit: 99 }, { t: 'assign', id: j.id, unit: -2 }, { t: 'assign', id: j.id, unit: 0.5 })
     }

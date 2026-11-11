@@ -1,13 +1,14 @@
-// One growing season: the daily step for weather, water, crop, blight and the crews' work.
-import { dayIndex, formatDay, withCommas } from './calendar.ts'
-import { canDo, travelDays, turnBefore } from './crew.ts'
+// One growing season: the daily step for weather, water, crop, blight and the people's work.
+import { dayIndex, formatDay, SUNDAY, weekday, withCommas } from './calendar.ts'
+import { travelDays, turnBefore } from './crew.ts'
 import { distance, DUFOUR_YARD, HOME_FIELDS, HOME_YARD, PARCELS } from './farm.ts'
 import { gradeHill, newLot, finishLot } from './harvest.ts'
 import * as P from './params.ts'
+import { jobSkill, moodTarget, payOf, scoutChance, SKILL_LABEL, speed, sprayCover, willDo, xpNeed, zeroSkills } from './people.ts'
 import { nextInt, nextUnit } from './rng.ts'
 import {
   H_DECAYED, H_DUG, H_EMERGED, H_KNOWN, H_ROGUED, H_SAMPLED, H_SEEDBLIGHT, H_VIRUS, H_WILT,
-  type Campaign, type Day, type FieldSeason, type FieldStatus, type GameEvent, type Job, type JobKind, type Season, type Unit, type World,
+  type Campaign, type Day, type FieldSeason, type FieldStatus, type GameEvent, type Job, type JobKind, type Rig, type Season, type Skill, type Unit, type World,
 } from './types.ts'
 import { variety } from './varieties.ts'
 import { clamp, fieldTmin, getDay, pDays, pUnit, wallin } from './weather.ts'
@@ -52,11 +53,12 @@ export function startSeason(world: World, c: Campaign): void {
     lastDay: dayIndex(year, P.SEASON_LAST.month, P.SEASON_LAST.dom),
     soilT: Math.max(0.5, soilT / 7 - 1),
     sv: 0, svToday: 0, watchDay: -1, frozen: false,
-    fields: [], jobs: [], nextJob: 1, worked: [], spent: 0, log: [],
+    fields: [], jobs: [], nextJob: 1, worked: [], spent: 0, log: [], pickers: false,
   }
-  // Every crew starts the season in the home yard; hired crews have their first month paid with the plan.
+  // Everyone starts the season rested in the home yard; hired people have their first month paid with the plan.
   for (const u of c.crew) {
-    u.at = HOME_YARD; u.to = HOME_YARD; u.road = 0; u.job = -1
+    u.at = HOME_YARD; u.to = HOME_YARD; u.road = 0; u.job = -1; u.rig = ''
+    u.tired = 0; u.low = 0
     u.paidTo = startDay + P.WAGE_DAYS
   }
   for (let i = 0; i < P.FIELD_COUNT; i++) {
@@ -208,14 +210,16 @@ export function jobWait(kind: JobKind, f: FieldSeason, d: Day): string {
   }
 }
 
-// Why this unit cannot be given this job, or '' when it can.
+// Why this person cannot be given this job, or '' when they can.
 export function unitBlock(c: Campaign, kind: JobKind, unit: number): string {
   if (unit === -1) return ''
   const u = c.crew.find(x => x.id === unit)
   if (!u) return 'No such crew.'
-  if (!canDo(u.kind, kind)) {
-    return u.kind === 'hand' ? `${u.name} is a field hand: scouting, pulling blighted plants and test digs only.`
-      : `${u.name} drives the second tractor: planting, hilling, spraying, watering, vine kill and digging only.`
+  if (u.foreman) return `${u.name} is foreman and does no field work.`
+  const skill = jobSkill(kind)
+  if (u.prio[skill] <= 0) {
+    const as = u.kind === 'hand' && skill === 'machine' ? ' is a field hand and' : u.kind === 'operator' && skill === 'field' ? ' drives the second tractor and' : ''
+    return `${u.name}${as} is set never to do ${SKILL_LABEL[skill]}.`
   }
   return ''
 }
@@ -228,9 +232,15 @@ export function addJob(c: Campaign, kind: JobKind, field: number, unit = -1): st
   return ''
 }
 
+// A person lets go of the order they hold, and of the tractor or truck they were driving for it.
+export function letGo(u: Unit): void {
+  u.job = -1
+  u.rig = ''
+}
+
 // Lets go of an order: any crew holding it goes back to the list (a crew on the road keeps driving).
 export function releaseJob(c: Campaign, id: number): void {
-  for (const u of c.crew) if (u.job === id) u.job = -1
+  for (const u of c.crew) if (u.job === id) letGo(u)
 }
 
 function charge(c: Campaign, amount: number): void {
@@ -274,7 +284,7 @@ function standingHills(f: FieldSeason): number {
   return n
 }
 
-function completeJob(world: World, c: Campaign, s: Season, job: Job, d: Day, out: GameEvent[]): void {
+function completeJob(world: World, c: Campaign, s: Season, job: Job, d: Day, out: GameEvent[], u: Unit): void {
   const f = s.fields[job.field]
   const name = FIELD_NAMES[job.field]
   if (job.kind !== 'dig') charge(c, jobCost(c, job.kind))
@@ -292,10 +302,11 @@ function completeJob(world: World, c: Campaign, s: Season, job: Job, d: Day, out
     case 'scout': {
       f.lastScout = s.day
       let found = 0
+      const eye = scoutChance(u)
       for (let i = 0; i < P.HILLS; i++) {
         const st = f.hState[i]
         if (!(st & H_EMERGED) || (st & GONE)) continue
-        if (f.hLes[i] >= P.LESION_START && ((st & H_KNOWN) || nextUnit(c) < P.SCOUT_DETECT)) {
+        if (f.hLes[i] >= P.LESION_START && ((st & H_KNOWN) || nextUnit(c) < eye)) {
           f.hState[i] = st | H_KNOWN
           found++
         }
@@ -308,7 +319,7 @@ function completeJob(world: World, c: Campaign, s: Season, job: Job, d: Day, out
       break
     }
     case 'spray':
-      f.residue = 1
+      f.residue = sprayCover(u)
       f.lastSpray = s.day
       push(s, out, 'sprayed', job.field, 'info', `${name} sprayed with protectant.`)
       break
@@ -397,20 +408,21 @@ function digProgress(c: Campaign, s: Season, f: FieldSeason, field: number, job:
 
 // ---------------------------------------------------------------- the crews' day
 //
-// Each crew has one day of work a day. In turn:
-// 1. Every crew carries on: one still on the road finishes the drive, then works the order it holds if that order is
-//    still on the list, still allowed to it, still makes sense for the field, and the weather allows it today.
-//    Otherwise it lets the order go (the work done on it stays with the order).
-// 2. Then the crews take orders one at a time. The crew with the most of its day left goes next; on a tie the hands
-//    go first, then the operator, then the farmer, and within a kind the one hired first. It looks down the list for
-//    the first PICK_WINDOW orders it could take: ones it can do, not pinned to another crew, not held by another
-//    crew, and that the weather allows today (on the way, an order that no longer makes sense for its field is
-//    dropped, as before). Of those it takes the one with the least travel plus PICK_LAG for each place down the
-//    list, the earliest on a tie; it drives there and works it until it is done or the day is used up. A crew that
-//    finds nothing to take is idle for the rest of the day.
-// A crew ends the day where it worked, and one still on the road carries the rest of the drive into tomorrow.
+// Each person has one day of work a day (none on a Sunday off, none for a foreman). In turn:
+// 1. Everyone carries on: one still on the road finishes the drive, then works the order they hold if that order is
+//    still on the list, still theirs to do, still makes sense for the field, and the weather allows it today.
+//    Otherwise they let it go (the work done on it stays with the order), and the tractor with it.
+// 2. Then people take orders one at a time. The one with the most of the day left goes next; on a tie the hands go
+//    first, then the operators, then the farmer, and within a kind the one hired first. They look through the kinds
+//    of work in their own priority order (1 first; kinds at the same priority together; 0 never). At each priority
+//    they look down the list for the first PICK_WINDOW orders of those kinds they could take: not pinned to someone
+//    else, not held by someone else, allowed by the weather today, and, for machine work, with a tractor free (on
+//    the way, an order that no longer makes sense for its field is dropped, as before). Of those they take the one
+//    with the least travel plus PICK_LAG for each place down the list, the earliest on a tie; they drive there and
+//    work it at their own speed until it is done or the day is used up. Someone who finds nothing is idle.
+// People end the day where they worked, and one still on the road carries the rest of the drive into tomorrow.
 
-interface Turn { u: Unit; left: number; idle: boolean }
+interface Turn { u: Unit; left: number; idle: boolean; spent: Record<Skill, number> }
 
 function heldByOther(c: Campaign, job: Job, u: Unit): boolean {
   for (const o of c.crew) if (o !== u && o.job === job.id) return true
@@ -418,7 +430,33 @@ function heldByOther(c: Campaign, job: Job, u: Unit): boolean {
 }
 
 function mayTake(u: Unit, job: Job): boolean {
-  return (job.unit < 0 || job.unit === u.id) && canDo(u.kind, job.kind)
+  return (job.unit < 0 || job.unit === u.id) && willDo(u, job.kind)
+}
+
+// Tractors the farm owns.
+export function tractorsOwned(c: Campaign): number {
+  return 1 + (c.upgrades.tractor2 ? 1 : 0)
+}
+
+// What this person would drive to work this order: '' for work on foot, null when every tractor is taken.
+function rigFor(c: Campaign, u: Unit, job: Job): Rig | null {
+  if (jobSkill(job.kind) !== 'machine') return ''
+  if (u.rig) return u.rig
+  let busy = 0
+  for (const o of c.crew) if (o !== u && o.rig === 'tractor') busy++
+  return busy < tractorsOwned(c) ? 'tractor' : null
+}
+
+// Whether today is a working day: on a Sunday off nobody works.
+export function workday(c: Campaign, s: Season): boolean {
+  return !(c.sundaysOff && weekday(s.year, s.day) === SUNDAY)
+}
+
+// Standard crew-days of an order a person gets through in a day of their time.
+function workRate(_c: Campaign, s: Season, u: Unit, job: Job): number {
+  let r = speed(u, jobSkill(job.kind))
+  if (job.kind === 'dig' && s.pickers) r *= P.PICKER_DIG
+  return r
 }
 
 // Re-checks an order against its field as it now is (a dig under way is the exception) and drops it from the list
@@ -456,47 +494,65 @@ function work(world: World, c: Campaign, s: Season, t: Turn, job: Job, d: Day, o
   if (!drive(t) || t.left <= EPS) return
   const f = s.fields[job.field]
   if (job.done === 0) job.need = jobDays(c, job.kind, f, job.field)
-  const use = Math.min(t.left, job.need - job.done)
+  const rate = workRate(c, s, u, job)
+  const use = Math.min(t.left * rate, job.need - job.done)
+  const time = Math.min(t.left, use / rate)
   job.done += use
-  t.left -= use
+  t.left -= time
+  t.spent[jobSkill(job.kind)] += time
   s.worked.push({ kind: job.kind, field: job.field, unit: u.id })
   if (job.kind === 'dig') digProgress(c, s, f, job.field, job, d)
   if (job.done >= job.need - 1e-6) {
     const k = s.jobs.indexOf(job)
     if (k >= 0) s.jobs.splice(k, 1)
-    u.job = -1
-    completeJob(world, c, s, job, d, out)
+    letGo(u)
+    completeJob(world, c, s, job, d, out, u)
   }
 }
 
-function choose(c: Campaign, s: Season, u: Unit, d: Day, out: GameEvent[]): Job | null {
-  const cands: Job[] = []
-  let k = 0
-  while (k < s.jobs.length && cands.length < P.PICK_WINDOW) {
-    const job = s.jobs[k]
-    if (!mayTake(u, job) || heldByOther(c, job, u)) { k++; continue }
-    if (!stillWanted(c, s, job, out)) continue
-    if (!jobWait(job.kind, s.fields[job.field], d)) cands.push(job)
-    k++
+function choose(c: Campaign, s: Season, u: Unit, d: Day, out: GameEvent[]): { job: Job; rig: Rig } | null {
+  for (let level = 1; level <= P.PRIORITY_MAX; level++) {
+    let any = false
+    for (const k of P.SKILLS) if (u.prio[k] === level) any = true
+    if (!any) continue
+    const cands: { job: Job; rig: Rig }[] = []
+    let k = 0
+    while (k < s.jobs.length && cands.length < P.PICK_WINDOW) {
+      const job = s.jobs[k]
+      if (u.prio[jobSkill(job.kind)] !== level || !mayTake(u, job) || heldByOther(c, job, u)) { k++; continue }
+      if (!stillWanted(c, s, job, out)) continue
+      const rig = rigFor(c, u, job)
+      if (!jobWait(job.kind, s.fields[job.field], d) && rig !== null) cands.push({ job, rig })
+      k++
+    }
+    let best: { job: Job; rig: Rig } | null = null
+    let bestCost = Infinity
+    for (let r = 0; r < cands.length; r++) {
+      const cost = travelDays(u.at, cands[r].job.field) + r * P.PICK_LAG
+      if (cost < bestCost) { best = cands[r]; bestCost = cost }
+    }
+    if (best) return best
   }
-  let best: Job | null = null
-  let bestCost = Infinity
-  for (let r = 0; r < cands.length; r++) {
-    const cost = travelDays(u.at, cands[r].field) + r * P.PICK_LAG
-    if (cost < bestCost) { best = cands[r]; bestCost = cost }
-  }
-  return best
+  return null
 }
 
-function runCrews(world: World, c: Campaign, s: Season, d: Day, out: GameEvent[]): void {
-  s.worked = []
-  const turns: Turn[] = c.crew.map(u => ({ u, left: 1, idle: false }))
+// Who works today: everyone but a foreman, and nobody on a Sunday off.
+function turnsFor(c: Campaign, s: Season): Turn[] {
+  if (!workday(c, s)) return []
+  const turns: Turn[] = []
+  for (const u of c.crew) if (!u.foreman) turns.push({ u, left: 1, idle: false, spent: zeroSkills() })
   turns.sort((a, b) => turnBefore(a.u, b.u) ? -1 : turnBefore(b.u, a.u) ? 1 : 0)
+  return turns
+}
+
+function runCrews(world: World, c: Campaign, s: Season, d: Day, out: GameEvent[]): Turn[] {
+  s.worked = []
+  const turns = turnsFor(c, s)
   for (const t of turns) {
     const u = t.u
     if (!drive(t)) continue
     const job = u.job >= 0 ? s.jobs.find(j => j.id === u.job) : undefined
-    if (!job || !mayTake(u, job) || !stillWanted(c, s, job, out) || jobWait(job.kind, s.fields[job.field], d)) { u.job = -1; continue }
+    if (!job || !mayTake(u, job) || !stillWanted(c, s, job, out) || jobWait(job.kind, s.fields[job.field], d)) { letGo(u); continue }
     work(world, c, s, t, job, d, out)
   }
   for (;;) {
@@ -506,11 +562,64 @@ function runCrews(world: World, c: Campaign, s: Season, d: Day, out: GameEvent[]
       if (!t || x.left > t.left) t = x
     }
     if (!t) break
-    const job = choose(c, s, t.u, d, out)
-    if (!job) { t.idle = true; continue }
-    t.u.job = job.id
-    work(world, c, s, t, job, d, out)
+    const pick = choose(c, s, t.u, d, out)
+    if (!pick) { t.idle = true; continue }
+    t.u.job = pick.job.id
+    t.u.rig = pick.rig
+    work(world, c, s, t, pick.job, d, out)
   }
+  return turns
+}
+
+// The end of each person's day: experience in what they worked at, tiredness, mood, and whether they have had enough.
+function peopleDay(c: Campaign, s: Season, turns: Turn[], out: GameEvent[]): void {
+  let fieldsIn = 0
+  for (const f of s.fields) if (f.status === 'dug') fieldsIn++
+  const quit: Unit[] = []
+  for (const u of c.crew) {
+    const t = turns.find(x => x.u === u)
+    const used = t ? Math.max(0, Math.min(1, 1 - t.left)) : 0
+    if (t) {
+      for (const k of P.SKILLS) {
+        if (t.spent[k] <= 0) continue
+        u.xp[k] += t.spent[k]
+        while (u.skills[k] < P.SKILL_MAX && u.xp[k] >= xpNeed(u.skills[k])) {
+          u.xp[k] -= xpNeed(u.skills[k])
+          u.skills[k]++
+          push(s, out, 'skillUp', -1, 'good', `${u.name} is better at ${SKILL_LABEL[k]}: level ${u.skills[k]}.`, { unit: u.id, level: u.skills[k] })
+        }
+        if (u.skills[k] >= P.SKILL_MAX) u.xp[k] = 0
+      }
+    }
+    const tire = P.TIRE_PER_DAY * (u.trait === 'tireless' ? P.TIRELESS : 1)
+    const wasTired = u.tired
+    u.tired = Math.max(0, Math.min(1, u.tired + tire * used - P.REST_PER_DAY * (1 - used)))
+    if (wasTired < 0.85 && u.tired >= 0.85) push(s, out, 'wornOut', -1, 'warn', `${u.name} is worn out: slower, and liable to get hurt on a machine or in the woods.`, { unit: u.id })
+    const target = moodTarget(c, u, fieldsIn)
+    let pull = P.MOOD_PULL
+    if (u.trait === 'hothead' && u.tired > P.MOOD_TIRED_FROM && target < u.mood) pull *= P.HOTHEAD_FALL
+    u.mood += (target - u.mood) * pull
+    if (u.trait === 'cheerful' && u.mood < P.CHEERFUL_FLOOR) u.mood = P.CHEERFUL_FLOOR
+    if (u.mood < 0) u.mood = 0
+    if (u.mood > 1) u.mood = 1
+    if (u.kind === 'farmer') continue
+    if (u.mood < P.QUIT_MOOD) {
+      if (u.low === 0) push(s, out, 'unhappy', -1, 'warn', `${u.name} is unhappy. A week of it and they will quit.`, { unit: u.id })
+      u.low++
+    } else u.low = 0
+    if (u.low >= P.QUIT_DAYS) quit.push(u)
+  }
+  for (const u of quit) {
+    removePerson(c, u)
+    push(s, out, 'quit', -1, 'bad', `${u.name} has had enough and quits.`, { unit: u.id })
+  }
+}
+
+// Takes someone off the farm: the order they held goes back to the list, and orders pinned to them are anyone's.
+export function removePerson(c: Campaign, u: Unit): void {
+  const k = c.crew.indexOf(u)
+  if (k >= 0) c.crew.splice(k, 1)
+  for (const j of c.season?.jobs ?? []) if (j.unit === u.id) j.unit = -1
 }
 
 export const JOB_LABEL: Record<JobKind, string> = {
@@ -781,16 +890,26 @@ export function stepDay(world: World, c: Campaign): GameEvent[] {
   if (s.frozen) return out
   const d = getDay(world, s.year, s.day)
 
-  // Wages fall due every WAGE_DAYS from the day each hand was taken on.
+  // Wages fall due every WAGE_DAYS from the day each person was taken on.
   for (const u of c.crew) {
     while (u.wage > 0 && s.day >= u.paidTo) {
-      charge(c, u.wage)
-      c.yearWages += u.wage
+      const pay = payOf(u)
+      charge(c, pay)
+      c.yearWages += pay
       u.paidTo += P.WAGE_DAYS
     }
   }
+  // The picking crew goes back to school when the harvest break ends; while it is on it is paid for each day worked.
+  if (s.pickers && s.day > dayIndex(s.year, P.PICKERS_TO.month, P.PICKERS_TO.dom)) {
+    s.pickers = false
+    push(s, out, 'pickers', -1, 'info', 'The harvest break is over and the pickers are back in school.')
+  }
+  if (s.pickers && workday(c, s)) {
+    charge(c, P.PICKER_DAY)
+    c.yearWages += P.PICKER_DAY
+  }
 
-  runCrews(world, c, s, d, out)
+  const turns = runCrews(world, c, s, d, out)
 
   const nb = world.neighbor[String(s.year)]
   if (nb) {
@@ -815,11 +934,14 @@ export function stepDay(world: World, c: Campaign): GameEvent[] {
     const st = s.fields[i].status
     if (st === 'planted' || st === 'growing' || st === 'dead' || st === 'digging') fieldDay(world, c, s, i, d, sevRegion, out)
   }
+  peopleDay(c, s, turns, out)
 
   const freeze = s.day >= s.lastDay || (s.day > dayIndex(s.year, 9, 1) && s.soilT <= P.FREEZE_UP_SOIL_T)
   if (freeze) {
     s.frozen = true
     s.jobs = []
+    s.pickers = false
+    for (const u of c.crew) letGo(u)
     for (let i = 0; i < P.FIELD_COUNT; i++) {
       const f = s.fields[i]
       if (f.status === 'digging') {

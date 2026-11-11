@@ -1,16 +1,18 @@
 // What the grower can know. The interface, the renderer and the bots read the game through these
 // functions only, so nothing hidden (true tuber weight, latent blight) can leak onto the screen.
 import { DUE_LABEL } from './buyers.ts'
-import { withCommas } from './calendar.ts'
-import { cellarCapacity, openLots, potatoHouses, type PotatoHouse } from './campaign.ts'
-import { travelDays } from './crew.ts'
-import { HOME_YARD, PARCELS, YARDS, type BlockId } from './farm.ts'
+import { dayIndex, formatDay, weekday, WEEKDAYS, withCommas } from './calendar.ts'
+import { cellarCapacity, openLots, pickersWindow, potatoHouses, WINTER_LABEL, WINTER_WORKS, winterBlock, type PotatoHouse } from './campaign.ts'
+import { hireRoom, travelDays } from './crew.ts'
+import { BLOCK_NAME, HOME_YARD, PARCELS, YARDS, type BlockId } from './farm.ts'
 import { lotCwt } from './harvest.ts'
 import * as P from './params.ts'
-import { FIELD_NAMES, haulFactor, holdsDufour, jobBlock, jobCost, jobDays, jobWait, JOB_LABEL, knownHills } from './season.ts'
+import { bestSkill, defaultPrio, hasBed, hiredCount, housingLimit, moodWord, payOf, speed, tiredWord, xpNeed } from './people.ts'
+import { FIELD_NAMES, haulFactor, holdsDufour, jobBlock, jobCost, jobDays, jobWait, JOB_LABEL, knownHills, tractorsOwned, workday } from './season.ts'
 import {
   H_DECAYED, H_DUG, H_EMERGED, H_KNOWN, H_ROGUED, H_SAMPLED, H_VIRUS, H_WILT,
-  type Campaign, type Day, type Due, type FieldSeason, type JobKind, type Tenure, type UnitKind, type VarietyId, type World,
+  type Campaign, type Day, type Due, type FieldSeason, type JobKind, type Skill, type Tenure, type Trait, type UnitKind, type VarietyId,
+  type WinterWork, type World,
 } from './types.ts'
 import { variety } from './varieties.ts'
 import { forecastFor, getDay, skyOf, wallin, type ForecastDay } from './weather.ts'
@@ -225,6 +227,170 @@ export function crewInfo(c: Campaign): CrewInfo[] {
       travelling, to: travelling ? u.to : u.at, road: travelling ? u.road : 0,
     }
   })
+}
+
+// ---------------------------------------------------------------- people
+
+export interface PersonInfo {
+  id: number
+  name: string
+  kind: UnitKind
+  skills: Record<Skill, number>     // 0..10
+  progress: Record<Skill, number>   // share of the way to the next level, 0..1
+  trait: Trait | ''
+  traitName: string                 // '' for the farmer
+  traitText: string                 // what the trait does, in one sentence
+  tired: number                     // 0..1
+  tiredWord: string
+  mood: number                      // 0..1
+  moodWord: string
+  wage: number                      // dollars a month agreed
+  pay: number                       // dollars a month paid: a foreman earns 40% more
+  ask: number                       // what they asked for; 0 for the farmer
+  prio: Record<Skill, number>       // 0 never, 1 first .. 4
+  speed: Record<Skill, number>      // share of normal speed today at each kind of work
+  doing: string                     // what they are doing now, in words
+  job: { id: number; kind: JobKind; field: number } | null
+  at: number                        // a field index, or -1 the home yard, -2 the Dufour yard
+  to: number
+  travelling: boolean
+  foreman: BlockId | null
+  winter: WinterWork
+  winterField: number
+  winterText: string
+  bed: boolean                      // has a bed in a bunkhouse
+  quitIn: number                    // days until they quit if their mood stays this low; -1 when they are not about to
+}
+
+export function peopleInfo(c: Campaign): PersonInfo[] {
+  const s = c.phase === 'season' ? c.season : null
+  const rest = !!s && !s.frozen && !workday(c, s)
+  return c.crew.map(u => {
+    const j = s && u.job >= 0 ? s.jobs.find(x => x.id === u.job) : undefined
+    const travelling = !!s && u.road > 0
+    const progress = { machine: 0, field: 0, woods: 0, build: 0, pack: 0 }
+    const sp = { machine: 0, field: 0, woods: 0, build: 0, pack: 0 }
+    for (const k of P.SKILLS) {
+      progress[k] = u.skills[k] >= P.SKILL_MAX ? 0 : Math.min(1, u.xp[k] / xpNeed(u.skills[k]))
+      sp[k] = speed(u, k)
+    }
+    let doing: string
+    if (u.foreman) doing = `Foreman of ${BLOCK_NAME[u.foreman]}`
+    else if (c.phase === 'season' && s && !s.frozen) {
+      if (rest) doing = 'Sunday: resting'
+      else if (j) doing = `${travelling ? 'On the way to' : 'At'} ${JOB_LABEL[j.kind].toLowerCase()}${j.field >= 0 ? ` in ${FIELD_NAMES[j.field]}` : ''}`
+      else if (travelling) doing = 'On the road'
+      else doing = 'Nothing to do'
+    } else if (c.phase === 'cellar' || (s && s.frozen)) doing = u.winter === 'off' ? 'Laid off for the winter' : `Kept on: ${WINTER_LABEL[u.winter]}`
+    else doing = 'Waiting for the season'
+    return {
+      id: u.id, name: u.name, kind: u.kind, skills: { ...u.skills }, progress,
+      trait: u.trait, traitName: u.trait ? P.TRAITS[u.trait].name : '', traitText: u.trait ? P.TRAITS[u.trait].text : '',
+      tired: u.tired, tiredWord: tiredWord(u.tired), mood: u.mood, moodWord: moodWord(u.mood),
+      wage: u.wage, pay: payOf(u), ask: u.ask, prio: { ...u.prio }, speed: sp, doing,
+      job: j ? { id: j.id, kind: j.kind, field: j.field } : null,
+      at: u.at, to: travelling ? u.to : u.at, travelling,
+      foreman: u.foreman || null,
+      winter: u.winter, winterField: u.winterField,
+      winterText: u.winter === 'woods' && u.winterField >= 0 ? `${WINTER_LABEL.woods}: ${FIELD_NAMES[u.winterField]}` : WINTER_LABEL[u.winter],
+      bed: hasBed(c, u),
+      quitIn: u.kind !== 'farmer' && u.mood < P.QUIT_MOOD ? Math.max(1, P.QUIT_DAYS - u.low) : -1,
+    }
+  })
+}
+
+export interface ApplicantInfo {
+  id: number
+  name: string
+  skills: Record<Skill, number>
+  best: Skill
+  suits: UnitKind                  // what they would be taken on as: a tractor operator if machine work is their best
+  trait: Trait
+  traitName: string
+  traitText: string
+  ask: number                       // dollars a month
+  prio: Record<Skill, number>       // the priorities they would start with
+  why: string                       // why they cannot be taken on now, or ''
+}
+
+export function applicantInfo(c: Campaign): ApplicantInfo[] {
+  const why = hireRoom(c)
+  return c.applicants.map(a => {
+    const best = bestSkill(a.skills)
+    return {
+      id: a.id, name: a.name, skills: { ...a.skills }, best, suits: best === 'machine' ? 'operator' : 'hand',
+      trait: a.trait, traitName: P.TRAITS[a.trait].name, traitText: P.TRAITS[a.trait].text,
+      ask: a.ask, prio: defaultPrio(a.skills), why,
+    }
+  })
+}
+
+export interface WinterChoice { work: WinterWork; ok: boolean; why: string }
+
+export interface WinterInfo {
+  months: number                    // November to April
+  monthly: number                   // dollars a month in wages for everyone kept on
+  people: {
+    id: number
+    name: string
+    work: WinterWork
+    field: number
+    text: string
+    pay: number                     // dollars a month while kept on; 0 laid off, and for the farmer
+    crewDays: number                // crew-days a month they put in, before their skill
+    choices: WinterChoice[]
+  }[]
+}
+
+export function winterInfo(c: Campaign): WinterInfo {
+  let monthly = 0
+  const people = c.crew.map(u => {
+    const pay = u.winter === 'off' || u.kind === 'farmer' ? 0 : payOf(u)
+    monthly += pay
+    return {
+      id: u.id, name: u.name, work: u.winter, field: u.winterField,
+      text: u.winter === 'woods' && u.winterField >= 0 ? `${WINTER_LABEL.woods}: ${FIELD_NAMES[u.winterField]}` : WINTER_LABEL[u.winter],
+      pay, crewDays: u.winter === 'off' ? 0 : u.kind === 'farmer' ? P.FARMER_WINTER_DAYS : P.WINTER_DAYS,
+      choices: WINTER_WORKS.map(w => {
+        const why = winterBlock(c, u, w, -1)
+        return { work: w, ok: why === '', why }
+      }),
+    }
+  })
+  return { months: P.WINTER_MONTHS, monthly, people }
+}
+
+export interface LabourInfo {
+  weekday: string                   // today's day of the week, in season
+  restDay: boolean                  // nobody works today: a Sunday off
+  sundaysOff: boolean
+  tractors: number                  // tractors the farm owns
+  tractorsFree: number              // not held by anyone right now
+  hired: number                     // hired people
+  housing: number                   // how many hired people the farm can house
+  beds: number                      // bunkhouse beds
+  hireWhy: string                   // why nobody more can be hired now, or ''
+  pickers: { on: boolean; ok: boolean; why: string; perDay: number; digFaster: number }
+}
+
+export function labourInfo(c: Campaign): LabourInfo {
+  const s = c.season
+  const inSeason = c.phase === 'season' && !!s && !s.frozen
+  let held = 0
+  for (const u of c.crew) if (u.rig === 'tractor') held++
+  const owned = tractorsOwned(c)
+  const window = inSeason && pickersWindow(c)
+  const from = formatDay(c.year, dayIndex(c.year, P.PICKERS_FROM.month, P.PICKERS_FROM.dom))
+  const to = formatDay(c.year, dayIndex(c.year, P.PICKERS_TO.month, P.PICKERS_TO.dom))
+  const pickersWhy = !inSeason ? 'Pickers are hired during the harvest.' : !window ? `The schools close for the harvest only from ${from} to ${to}.` : ''
+  return {
+    weekday: s ? WEEKDAYS[weekday(s.year, s.day)] : '',
+    restDay: inSeason && !workday(c, s!),
+    sundaysOff: c.sundaysOff,
+    tractors: owned, tractorsFree: Math.max(0, owned - held),
+    hired: hiredCount(c), housing: housingLimit(c), beds: housingLimit(c) - P.HOUSED_OUT, hireWhy: hireRoom(c),
+    pickers: { on: !!s?.pickers, ok: pickersWhy === '', why: pickersWhy, perDay: P.PICKER_DAY, digFaster: P.PICKER_DIG },
+  }
 }
 
 export interface LandInfo {

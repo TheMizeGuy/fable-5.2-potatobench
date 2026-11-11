@@ -14,32 +14,56 @@ type Raw = Record<string, unknown> & {
   season: { fields: Record<string, unknown>[]; jobs: Record<string, unknown>[]; worked: Record<string, unknown>[]; workLeft?: number } | null
 }
 
+// What a person gained in version 4.
+const PERSON_KEYS = ['skills', 'xp', 'trait', 'tired', 'mood', 'ask', 'prio', 'foreman', 'winter', 'winterField', 'low', 'rig']
+
+// DOWN[n] takes a campaign saved at version n + 1 back to what a version n build saved.
+const DOWN: Record<number, (o: Raw) => void> = {
+  // Version 4 made the crew people.
+  3: o => {
+    for (const u of o.crew as Record<string, unknown>[]) for (const k of PERSON_KEYS) delete u[k]
+    delete o.applicants
+    delete o.sundaysOff
+    if (o.season) delete (o.season as Record<string, unknown>).pickers
+  },
+  // Version 3 added the land beyond the home six, the crew, contracts and their books.
+  2: o => {
+    o.fields = o.fields.slice(0, S.HOME_FIELDS)
+    for (const f of o.fields) delete f.tenure
+    o.plans = o.plans.slice(0, S.HOME_FIELDS)
+    delete o.upgrades.tractor2
+    delete o.upgrades.house2
+    for (const k of ['crew', 'nextUnit', 'offers', 'contracts', 'yearWages', 'yearRent', 'yearLand', 'yearContracts', 'yearPenalties']) delete o[k]
+    for (const h of o.history) for (const k of ['wages', 'rent', 'land', 'penalties', 'contracts']) delete h[k]
+    if (o.season) {
+      o.season.fields = o.season.fields.slice(0, S.HOME_FIELDS)
+      o.season.workLeft = 0.4
+      for (const j of o.season.jobs) { expect(j.unit).toBe(-1); delete j.unit }
+      for (const w of o.season.worked) delete w.unit
+    }
+  },
+}
+
+// A campaign as a build of version v saved it.
+function toV(c: S.Campaign, v: number): Raw {
+  const o = JSON.parse(JSON.stringify(c)) as Raw
+  for (let n = S.SAVE_VERSION - 1; n >= v; n--) DOWN[n](o)
+  o.v = v
+  return o
+}
+
 // A campaign as a version 2 build saved it: the home six only, one farmer, and none of what version 3 added.
 // Only for a campaign that has used none of it.
 function toV2(c: S.Campaign): Raw {
   expect(c.fields.slice(S.HOME_FIELDS).every(f => f.tenure === 'none')).toBe(true)
   expect(c.crew.length).toBe(1)
   expect(c.contracts).toEqual([])
-  const o = JSON.parse(JSON.stringify(c)) as Raw
-  o.v = 2
-  o.fields = o.fields.slice(0, S.HOME_FIELDS)
-  for (const f of o.fields) delete f.tenure
-  o.plans = o.plans.slice(0, S.HOME_FIELDS)
-  delete o.upgrades.tractor2
-  delete o.upgrades.house2
-  for (const k of ['crew', 'nextUnit', 'offers', 'contracts', 'yearWages', 'yearRent', 'yearLand', 'yearContracts', 'yearPenalties']) delete o[k]
-  for (const h of o.history) for (const k of ['wages', 'rent', 'land', 'penalties', 'contracts']) delete h[k]
-  if (o.season) {
-    o.season.fields = o.season.fields.slice(0, S.HOME_FIELDS)
-    o.season.workLeft = 0.4
-    for (const j of o.season.jobs) { expect(j.unit).toBe(-1); delete j.unit }
-    for (const w of o.season.worked) delete w.unit
-  }
-  return o
+  return toV(c, 2)
 }
 
-// What every migrated campaign must have from version 3.
+// What every campaign migrated from version 2 or before must have: what versions 3 and on added, as a new game has it.
 function expectV3(c: S.Campaign): void {
+  const fresh = S.createCampaign(world, { seed: c.seed, startYear: c.year })
   expect(c.v).toBe(S.SAVE_VERSION)
   expect(c.fields.length).toBe(S.FIELD_COUNT)
   expect(c.plans.length).toBe(S.FIELD_COUNT)
@@ -49,8 +73,11 @@ function expectV3(c: S.Campaign): void {
     expect(c.plans[i].crop).toBe('rest')
     expect(S.fieldInfo(c, i).status).toBe('off')
   }
-  expect(c.crew).toEqual([{ id: 0, kind: 'farmer', name: S.FARMER_NAME, at: -1, wage: 0, job: -1, to: -1, road: 0, paidTo: 0 }])
+  // The farmer is the farmer of a new game: in the home yard, with the farmer's own skills and everything at priority 2.
+  expect(c.crew).toEqual(fresh.crew)
   expect([c.nextUnit, c.offers, c.contracts]).toEqual([1, [], []])
+  expect(c.applicants).toEqual(c.phase === 'plan' ? fresh.applicants : [])
+  expect(c.sundaysOff).toBe(true)
   expect([c.upgrades.tractor2, c.upgrades.house2]).toEqual([false, false])
   expect([c.yearWages, c.yearRent, c.yearLand, c.yearContracts, c.yearPenalties]).toEqual([0, 0, 0, 0, 0])
   for (const h of c.history) expect([h.wages, h.rent, h.land, h.penalties, h.contracts]).toEqual([0, 0, 0, 0, 0])
@@ -58,6 +85,7 @@ function expectV3(c: S.Campaign): void {
     expect(c.season.fields.length).toBe(S.FIELD_COUNT)
     expect(c.season.fields.slice(S.HOME_FIELDS).every(f => f.status === 'off' && f.hState.length === 0)).toBe(true)
     expect('workLeft' in c.season).toBe(false)
+    expect(c.season.pickers).toBe(false)
     for (const j of c.season.jobs) expect(j.unit).toBe(-1)
     for (const w of c.season.worked) expect(w.unit).toBe(0)
   }
@@ -167,7 +195,7 @@ describe('parseSave', () => {
   })
 
   it('migrates a version 2 save made in mid-season, keeps the crop as it was, and plays on with the new land and crews', () => {
-    const r = runReplay(S, world, { ...REPLAY, plain: true, stopAt: c => c.yearIdx === 1 && c.phase === 'season' && c.season!.day >= S.dayIndex(c.year, 6, 20) && c.season!.jobs.length > 0 })
+    const r = runReplay(S, world, { ...REPLAY, plain: true, stopAt: c => c.yearIdx === 1 && c.phase === 'season' && c.season!.day >= S.dayIndex(c.year, 6, 20) && c.season!.jobs.length > 0 && c.season!.worked.length > 0 })
     const v2 = toV2(r.campaign)
     expect(v2.season!.worked.length).toBeGreaterThan(0)
     const file = parseSave(JSON.stringify({ v: 2, savedAt: 9, campaign: v2 }))
@@ -187,6 +215,31 @@ describe('parseSave', () => {
     expect(rest.campaign.offers.length).toBe(S.CONTRACT_OFFERS)
     expect(S.apply(world, rest.campaign, { t: 'rent', field: 7 }).ok).toBe(true)
     const done = runReplay(S, world, { campaign: rest.campaign })
+    expect(done.done).toBe(true)
+    expect(done.campaign.history.length).toBe(5)
+    for (const h of done.campaign.history) expect(Number.isFinite(h.cashEnd)).toBe(true)
+  })
+
+  it('migrates a version 3 save made in mid-season: the crew become people as the hiring hall has them, and it plays on', () => {
+    const r = runReplay(S, world, { ...REPLAY, stopAt: c => c.yearIdx === 1 && c.phase === 'season' && c.season!.day >= S.dayIndex(c.year, 6, 25) && c.crew.length > 1 })
+    expect(r.done).toBe(false)
+    const v3 = toV(r.campaign, 3)
+    expect((v3.crew as Record<string, unknown>[])[1].skills).toBeUndefined()
+    const file = parseSave(JSON.stringify({ v: 3, savedAt: 11, campaign: v3 }))
+    expect(file).not.toBeNull()
+    const c = file!.campaign
+    expect(c.v).toBe(S.SAVE_VERSION)
+    const [farmer, hand] = c.crew
+    expect([farmer.skills, farmer.prio, farmer.trait, farmer.ask]).toEqual([S.FARMER_SKILLS, { machine: 2, field: 2, woods: 2, build: 2, pack: 2 }, '', 0])
+    expect([hand.kind, hand.skills, hand.ask, hand.wage, hand.prio.machine, hand.prio.field]).toEqual(['hand', S.HAND_SKILLS, S.HAND_WAGE, S.HAND_WAGE, 0, 1])
+    expect(S.TRAIT_LIST).toContain(hand.trait)
+    for (const u of c.crew) expect([u.tired, u.mood, u.foreman, u.winter, u.low, u.rig]).toEqual([0, S.MOOD_START, '', 'off', 0, ''])
+    expect([c.sundaysOff, c.applicants, c.season!.pickers]).toEqual([true, [], false])
+    // The crop, the list and the books are as they were.
+    expect(c.season!.fields).toEqual(r.campaign.season!.fields)
+    expect(c.season!.jobs).toEqual(r.campaign.season!.jobs)
+    expect([c.cash, c.lots, c.rng]).toEqual([r.campaign.cash, r.campaign.lots, r.campaign.rng])
+    const done = runReplay(S, world, { campaign: c })
     expect(done.done).toBe(true)
     expect(done.campaign.history.length).toBe(5)
     for (const h of done.campaign.history) expect(Number.isFinite(h.cashEnd)).toBe(true)

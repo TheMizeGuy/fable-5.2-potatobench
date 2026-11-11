@@ -210,14 +210,15 @@ describe('the haul', () => {
 })
 
 describe('travel', () => {
-  // 1990: the farm rents Spruce Lot, at the far end of the ridge lots. On the first day fit to plant both it and
-  // Upper Middle, the farmer is still in the home yard.
+  // 1990: the farm rents Spruce Lot, at the far end of the ridge lots. On the first working day fit to plant both it
+  // and Upper Middle, the farmer is still in the home yard.
   const c = S.createCampaign(world, { seed: 1, startYear: 1990 })
   ok(c, { t: 'rent', field: 8 })
   ok(c, { t: 'buy', upgrade: 'tractor2' })
   ok(c, { t: 'begin' })
-  const fit = () => [2, 8].every(i => S.fieldActions(world, c, i).find(a => a.kind === 'plant')!.wait === '')
+  const fit = () => S.workday(c, c.season!) && [2, 8].every(i => S.fieldActions(world, c, i).find(a => a.kind === 'plant')!.wait === '')
   while (!fit()) ok(c, { t: 'day' })
+  const rate = S.speed(c.crew[0], 'machine')
 
   it('runs about 0.03 of a day between neighbouring home fields and 0.11 from home to the Dufour place', () => {
     expect(S.travelDays(0, 1)).toBeCloseTo(0.026, 3)
@@ -228,15 +229,16 @@ describe('travel', () => {
 
   it('costs a far field more of the day than a near one', () => {
     expect(crewOf(c, 0).at).toBe(-1)
+    // The farmer is a little better than average at machine work: a near field is planted in the day, a far one not.
+    expect((1 - S.travelDays(-1, 2)) * rate).toBeGreaterThan(S.JOB_DAYS.plant)
+    expect((1 - S.travelDays(-1, 8)) * rate).toBeLessThan(S.JOB_DAYS.plant)
     const near = structuredClone(c), far = structuredClone(c)
     ok(near, { t: 'job', kind: 'plant', field: 2 })
     ok(far, { t: 'job', kind: 'plant', field: 8 })
-    days(near, 1)
+    const nearEvents = days(near, 1)
     days(far, 1)
-    const a = order(near, 'plant', 2)!.done, b = order(far, 'plant', 8)!.done
-    expect(a).toBeCloseTo(1 - S.travelDays(-1, 2), 12)
-    expect(b).toBeCloseTo(1 - S.travelDays(-1, 8), 12)
-    expect(b).toBeLessThan(a - 0.05)
+    expect(nearEvents.some(e => e.type === 'planted' && e.field === 2)).toBe(true)
+    expect(order(far, 'plant', 8)!.done).toBeCloseTo((1 - S.travelDays(-1, 8)) * rate, 12)
     expect([crewOf(near, 0).at, crewOf(far, 0).at]).toEqual([2, 8])
     expect(near.season!.worked).toEqual([{ kind: 'plant', field: 2, unit: 0 }])
     // The farmer holds the planting it began and, on the next day fit for it, finishes it before anything else.
@@ -262,22 +264,21 @@ describe('travel', () => {
 
   it('lets another crew take over an order the farmer began, and keeps the work done on it', () => {
     const x = structuredClone(c)
-    ok(x, { t: 'job', kind: 'plant', field: 0 })
+    ok(x, { t: 'job', kind: 'plant', field: 8 })
     days(x, 1)
-    const job = order(x, 'plant', 0)!
-    const done = job.done
-    expect(done).toBeCloseTo(1 - S.travelDays(-1, 0), 12)
+    const job = order(x, 'plant', 8)!
+    expect(job.done).toBeCloseTo((1 - S.travelDays(-1, 8)) * rate, 12)
     ok(x, { t: 'hire', kind: 'operator' })
     const op = x.crew.find(u => u.kind === 'operator')!
     expect(op.at).toBe(-1)
     ok(x, { t: 'assign', id: job.id, unit: op.id })
     expect(crewOf(x, 0).job).toBeNull()
     expect(crewOf(x, op.id).job).toBeNull()
-    const { events, worked } = untilDone(x, 'plant', 0)
-    expect(worked).toEqual([{ kind: 'plant', field: 0, unit: op.id }])
-    expect(events.filter(e => e.type === 'planted' && e.field === 0).length).toBe(1)
-    expect(crewOf(x, op.id).at).toBe(0)
-    expect(crewOf(x, 0).at).toBe(0)
+    const { events, worked } = untilDone(x, 'plant', 8)
+    expect(worked).toEqual([{ kind: 'plant', field: 8, unit: op.id }])
+    expect(events.filter(e => e.type === 'planted' && e.field === 8).length).toBe(1)
+    expect(crewOf(x, op.id).at).toBe(8)
+    expect(crewOf(x, 0).at).toBe(8)
   })
 })
 
@@ -303,6 +304,8 @@ describe('crews in midsummer', () => {
     tend(base, x => x.season!.day >= next, ['kill', 'dig'])
   }
   clearList(base)
+  // These tests are about who does what in a day, so the farm works Sundays.
+  ok(base, { t: 'sundays', off: false })
   const up = [0, 1, 2, 3, 4, 5, 8].every(i => S.fieldInfo(base, i).status === 'growing' && S.fieldInfo(base, i).canopy > 0)
 
   function fresh(hands = 1): { c: Campaign; hand: number } {
@@ -363,15 +366,14 @@ describe('crews in midsummer', () => {
     expect(crewOf(c, hand).at).toBe(-1)
   })
 
-  it('has no operator without the second tractor, and keeps to four hands and one operator', () => {
+  it('houses two hired people without a bunkhouse, whatever they were hired for; an operator shares the one tractor', () => {
     const c = S.createCampaign(world, { seed: 3, startYear: 2001 })
-    refused(c, { t: 'hire', kind: 'operator' }, /second tractor/)
+    ok(c, { t: 'hire', kind: 'operator' })
     refused(c, { t: 'hire', kind: 'farmer' })
-    const { c: d } = fresh(S.MAX_HANDS)
-    expect(d.crew.filter(u => u.kind === 'hand').map(u => u.name)).toEqual(S.HAND_NAMES.slice(0, S.MAX_HANDS))
-    refused(d, { t: 'hire', kind: 'hand' }, /as many/)
-    ok(d, { t: 'hire', kind: 'operator' })
-    refused(d, { t: 'hire', kind: 'operator' }, /already has/)
+    const { c: d } = fresh(S.HOUSED_OUT)
+    expect(d.crew.filter(u => u.kind === 'hand').map(u => u.name)).toEqual(S.HAND_NAMES.slice(0, S.HOUSED_OUT))
+    refused(d, { t: 'hire', kind: 'hand' }, /bunkhouse/)
+    refused(d, { t: 'hire', kind: 'operator' }, /bunkhouse/)
     refused(d, { t: 'dismiss', unit: 0 }, /farmer/)
   })
 
@@ -399,13 +401,14 @@ describe('crews in midsummer', () => {
 
   it('carries a drive that does not fit in what is left of the day into the next', () => {
     const { c, hand } = fresh()
+    const rate = S.speed(c.crew.find(u => u.id === hand)!, 'field')
     for (const f of [0, 1, 2, 3, 8]) ok(c, { t: 'job', kind: 'scout', field: f, unit: hand })
     days(c, 1)
     const w = c.season!.worked.filter(x => x.unit === hand).map(x => x.field)
     expect(w.sort()).toEqual([0, 1, 2, 3])
     // Its route, from the home yard round the four home fields in the order walked.
     const route = c.season!.worked.map(x => x.field)
-    let used = S.travelDays(-1, route[0]) + route.length * S.JOB_DAYS.scout
+    let used = S.travelDays(-1, route[0]) + route.length * S.JOB_DAYS.scout / rate
     for (let k = 1; k < route.length; k++) used += S.travelDays(route[k - 1], route[k])
     const last = route[route.length - 1]
     const h = crewOf(c, hand)

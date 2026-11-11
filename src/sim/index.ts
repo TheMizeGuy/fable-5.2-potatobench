@@ -7,12 +7,17 @@ export * from './view.ts'
 export * from './campaign.ts'
 export * from './farm.ts'
 export { BUYERS, contractOffers, DUE_LABEL } from './buyers.ts'
-export { canDo, crewCount, hireBlock, travelDays, UNIT_LABEL } from './crew.ts'
+export { canDo, crewCount, hireBlock, hireRoom, travelDays, UNIT_LABEL } from './crew.ts'
+export {
+  applicantsFor, askFor, bestSkill, defaultPrio, hasBed, housingLimit, hiredCount, jobSkill, moodTarget, moodWord, payOf, resultLevel,
+  scoutChance, SKILL_LABEL, speed, sprayCover, tiredWord, upgradePerson, willDo, xpNeed,
+} from './people.ts'
 export { hashCampaign } from './hash.ts'
 export { lotCwt, tuberWeights, type Tuber } from './harvest.ts'
 export { basePrice, gradePrice, levelNow, lotValue, newPotatoWindow } from './market.ts'
 export {
-  FIELD_NAMES, JOB_LABEL, haulDistance, haulFactor, holdsDufour, jobBlock, jobCost, jobDays, jobWait, knownHills, seasonDone, unitBlock,
+  FIELD_NAMES, JOB_LABEL, haulDistance, haulFactor, holdsDufour, jobBlock, jobCost, jobDays, jobWait, knownHills, seasonDone, tractorsOwned, unitBlock,
+  workday,
 } from './season.ts'
 export { makeWorld } from './world.ts'
 export { advise, fieldNeeds, type Advice } from './advice.ts'

@@ -26,6 +26,16 @@ export function monthDay(year: number, day: number): { month: number; dom: numbe
   return { month, dom: day - start + 1 }
 }
 
+export const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+export const SUNDAY = 6
+
+// Day of the week, 0 Monday to 6 Sunday, by counting days from Monday, January 1 of the year 1 (proleptic Gregorian).
+export function weekday(year: number, day: number): number {
+  const y = year - 1
+  const n = 365 * y + Math.floor(y / 4) - Math.floor(y / 100) + Math.floor(y / 400) + day
+  return ((n % 7) + 7) % 7
+}
+
 // Thousands separators without Intl, so every engine writes the same text.
 export function withCommas(n: number): string {
   const neg = n < 0

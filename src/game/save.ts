@@ -1,5 +1,5 @@
 // Browser-local saves. Every save carries a version; migrate() brings an old one forward.
-import { HOME_FIELDS, PARCELS, SAVE_VERSION, type Campaign } from '../sim/index.ts'
+import { applicantsFor, HOME_FIELDS, PARCELS, SAVE_VERSION, upgradePerson, type Campaign } from '../sim/index.ts'
 
 const KEY = 'the-county/save'
 const SETTINGS_KEY = 'the-county/settings'
@@ -72,6 +72,18 @@ const MIGRATIONS: Record<number, Migration> = {
         }
       }
     }
+  },
+  // Version 4 made the crew people: skills, a trait, tiredness, mood, an asking wage, priorities, winter work; added
+  // the spring's applicants, the Sundays-off rule and the harvest-break pickers.
+  3: c => {
+    const crew = Array.isArray(c.crew) ? c.crew as Record<string, unknown>[] : []
+    const seed = typeof c.seed === 'number' ? c.seed : 0
+    const year = typeof c.year === 'number' ? c.year : 0
+    for (const u of crew) if (u && typeof u === 'object') upgradePerson(u, seed, year)
+    c.sundaysOff ??= true
+    if (c.applicants === undefined) c.applicants = c.phase === 'plan' ? applicantsFor(seed, year, new Set(crew.map(u => String(u.name)))) : []
+    const season = c.season as Record<string, unknown> | null
+    if (season && typeof season === 'object') season.pickers ??= false
   },
 }
 

@@ -1,4 +1,5 @@
 // State and command types for the simulation. Everything here is plain JSON data.
+import type { BlockId } from './farm.ts'
 
 export interface YearWeather {
   n: number
@@ -60,6 +61,12 @@ export type Grade = 'no1' | 'chef' | 'b' | 'no2' | 'cull'
 export type Cause = 'green' | 'scab' | 'hollow' | 'knob' | 'skin' | 'bruise' | 'blight' | 'frost' | 'rot' | 'small'
 export type Tenure = 'owned' | 'rented' | 'none'
 export type UnitKind = 'farmer' | 'operator' | 'hand'
+// The five kinds of work. Each person has a level 0..10 in each, and a priority for each.
+export type Skill = 'machine' | 'field' | 'woods' | 'build' | 'pack'
+export type Trait = 'strong' | 'steady' | 'sharp' | 'early' | 'tireless' | 'cheerful' | 'hothead' | 'careless' | 'slow' | 'homebody'
+// What a person does from November to April: laid off, felling a tract, packing, or building.
+export type WinterWork = 'off' | 'woods' | 'pack' | 'build'
+export type Rig = '' | 'tractor' | 'truck'
 
 export interface FieldPersist {
   elev: 0 | 1 | 2           // 0 bottom land, 1 mid slope, 2 ridge
@@ -145,7 +152,8 @@ export interface Job {
   unit: number              // -1: any crew; otherwise the id of the unit it is pinned to
 }
 
-// A crew: the farmer, a hired field hand, or a hired operator on the second tractor.
+// A person: the farmer, or someone hired. kind is what they were taken on for (a field hand or a tractor operator);
+// what they actually do is set by their priorities.
 export interface Unit {
   id: number                // the farmer is 0
   kind: UnitKind
@@ -156,6 +164,27 @@ export interface Unit {
   to: number                // where it is going; equals `at` when it is not on the road
   road: number              // days of travel left to reach `to`
   paidTo: number            // day of the season until which its wage is paid
+  skills: Record<Skill, number>     // 0..10
+  xp: Record<Skill, number>         // crew-days toward the next level
+  trait: Trait | ''                 // the farmer has none
+  tired: number                     // 0..1
+  mood: number                      // 0..1
+  ask: number                       // the wage they asked for, dollars a month
+  prio: Record<Skill, number>       // 0 never, 1 first .. 4
+  foreman: BlockId | ''             // the block this person is foreman of
+  winter: WinterWork
+  winterField: number               // the tract felled in winter, or -1
+  low: number                       // days running with mood below the quitting line
+  rig: Rig                          // what the person is driving for the order held
+}
+
+// Someone asking for work this spring.
+export interface Applicant {
+  id: number
+  name: string
+  skills: Record<Skill, number>
+  trait: Trait
+  ask: number               // dollars a month
 }
 
 export type Due = 'harvest' | 'winter'
@@ -226,6 +255,7 @@ export interface Season {
   worked: { kind: JobKind; field: number; unit: number }[]   // what each crew did on the last day worked, in order
   spent: number
   log: GameEvent[]
+  pickers: boolean          // a picking crew hired by the day for the harvest break
 }
 
 export interface YearSummary {
@@ -264,6 +294,8 @@ export interface Campaign {
   nextLot: number
   crew: Unit[]              // the farmer first, then hired units in the order hired
   nextUnit: number
+  applicants: Applicant[]   // this spring's people asking for work, until the season begins
+  sundaysOff: boolean       // the farm rule: nobody works Sundays
   offers: Offer[]           // this spring's contract offers, until the season begins
   contracts: Contract[]     // this year's accepted contracts
   month: number             // cellar month index, 0 = November
@@ -289,7 +321,14 @@ export type Cmd =
   | { t: 'accept'; offer: number }
   | { t: 'begin' }
   | { t: 'hire'; kind: UnitKind }
+  | { t: 'hire'; applicant: number }
   | { t: 'dismiss'; unit: number }
+  | { t: 'raise'; unit: number; wage: number }
+  | { t: 'priority'; unit: number; work: Skill; level: number }
+  | { t: 'foreman'; unit: number; block: BlockId | null }
+  | { t: 'sundays'; off: boolean }
+  | { t: 'pickers'; on: boolean }
+  | { t: 'winter'; unit: number; work: WinterWork; field?: number }
   | { t: 'job'; kind: JobKind; field: number; unit?: number }
   | { t: 'assign'; id: number; unit: number }
   | { t: 'cancel'; id: number }

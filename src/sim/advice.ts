@@ -2,13 +2,14 @@
 // The in-game coach shows it, and the reference bot follows it. It tends the fields the farm holds; it has nothing
 // to say about land, hiring or contracts.
 import { dayIndex } from './calendar.ts'
-import { canDo } from './crew.ts'
+import { PARCELS } from './farm.ts'
 import * as P from './params.ts'
+import { willDo } from './people.ts'
 import type { Campaign, JobKind, World } from './types.ts'
 import { fieldInfo, forecast, today } from './view.ts'
 import { openLots } from './campaign.ts'
 import { newPotatoWindow } from './market.ts'
-import { seasonDone } from './season.ts'
+import { addJob, seasonDone, workday } from './season.ts'
 
 export interface Advice {
   id: string
@@ -126,13 +127,27 @@ export function advise(world: World, c: Campaign): Advice[] {
     let left = room.get(kind)
     if (left === undefined) {
       let crews = 0
-      for (const u of c.crew) if (canDo(u.kind, kind)) crews++
+      for (const u of c.crew) if (willDo(u, kind)) crews++
       left = P.ADVICE_FIELDS_PER_CREW * crews
       for (const j of s.jobs) if (j.kind === kind) left--
     }
     room.set(kind, left - 1)
     return left > 0
   })
+}
+
+// Each working morning a foreman puts on the list the orders reference practice wants for the held fields of their
+// block. The player can still order and cancel there.
+export function foremanOrders(world: World, c: Campaign): void {
+  const s = c.season
+  if (c.phase !== 'season' || !s || s.frozen || !workday(c, s)) return
+  const blocks = new Set<string>()
+  for (const u of c.crew) if (u.foreman) blocks.add(u.foreman)
+  if (!blocks.size) return
+  for (const a of advise(world, c)) {
+    if (a.field < 0 || a.act === 'wait' || a.act === 'sell' || a.act === 'close') continue
+    if (blocks.has(PARCELS[a.field].block)) addJob(c, a.act, a.field)
+  }
 }
 
 // For each field: what reference practice wants done there now (need), or why it is leaving the field alone (hold).
