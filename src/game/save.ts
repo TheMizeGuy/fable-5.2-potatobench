@@ -130,6 +130,33 @@ const MIGRATIONS: Record<number, Migration> = {
     const season = c.season as { fields?: Record<string, unknown>[] } | null
     if (season && typeof season === 'object' && Array.isArray(season.fields)) for (let i = season.fields.length; i < PARCELS.length; i++) season.fields.push(offField())
   },
+  // Version 6 added buildings (the old second potato house becomes a finished one at home), the third tractor and the
+  // truck, the pond, packed stock, the stand and packing on the books, and the crop in the field until it is hauled.
+  5: c => {
+    const upgrades = c.upgrades as Record<string, unknown> | undefined
+    const buildings: Record<string, unknown>[] = []
+    if (upgrades && typeof upgrades === 'object') {
+      upgrades.tractor3 ??= false
+      upgrades.truck ??= false
+      if (upgrades.house2 === true) buildings.push({ id: 1, kind: 'house', yard: -1, done: 30, need: 30, built: true })
+    }
+    c.buildings ??= buildings
+    c.nextBuilding ??= buildings.length + 1
+    c.pond ??= 0
+    for (const k of ['yearBuilding', 'yearStand', 'yearPacking']) c[k] ??= 0
+    const packed = (lots: unknown) => { for (const l of (lots as Record<string, unknown>[] | undefined) ?? []) if (l && typeof l === 'object') l.packed ??= 0 }
+    packed(c.lots)
+    for (const h of (c.history as Record<string, unknown>[] | undefined) ?? []) {
+      for (const k of ['building', 'stand', 'packing']) h[k] ??= 0
+      packed(h.lots)
+    }
+    // A field dug under the old rules was hauled in with the dig.
+    const season = c.season as { fields?: Record<string, unknown>[] } | null
+    for (const f of (season && typeof season === 'object' && Array.isArray(season.fields)) ? season.fields : []) {
+      f.inField ??= 0
+      f.weighed ??= f.status === 'dug'
+    }
+  },
 }
 
 // Version 3 had fourteen parcels.

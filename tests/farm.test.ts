@@ -181,25 +181,27 @@ describe('potato houses', () => {
 })
 
 describe('the haul', () => {
-  it('leaves a home dig as it was and lengthens a dig far from any potato house, up to about 40%', () => {
+  it('leaves the dig the same everywhere and slows hauling from a field far from any potato house, up to about 40%', () => {
     const c = S.createCampaign(world, { seed: 5, startYear: 2010 })
-    for (let i = 0; i < S.HOME_FIELDS; i++) expect(S.jobDays(c, 'dig', null, i)).toBe(S.JOB_DAYS.dig)
-    const far = S.jobDays(c, 'dig', null, 8)
-    expect(far).toBeCloseTo(S.JOB_DAYS.dig * (1 + S.HAUL * (S.distance(8, -1) - S.HAUL_FREE)), 12)
-    expect(far / S.JOB_DAYS.dig).toBeGreaterThan(1.35)
-    expect(far / S.JOB_DAYS.dig).toBeLessThan(1.45)
-    for (let i = 0; i < S.FIELD_COUNT; i++) expect(S.jobDays(c, 'dig', null, i)).toBeLessThanOrEqual(far)
-    expect(S.jobDays(c, 'dig', null, 7)).toBeGreaterThan(S.JOB_DAYS.dig)
+    for (let i = 0; i < S.FIELD_COUNT; i++) expect(S.jobDays(c, 'dig', null, i)).toBe(S.JOB_DAYS.dig)
+    for (let i = 0; i < S.HOME_FIELDS; i++) expect(S.haulFactor(c, i)).toBe(1)
+    const far = S.haulFactor(c, 8)
+    expect(far).toBeCloseTo(1 + S.HAUL * (S.distance(8, -1) - S.HAUL_FREE), 12)
+    expect(far).toBeGreaterThan(1.35)
+    expect(far).toBeLessThan(1.45)
+    for (let i = 0; i < S.FIELD_COUNT; i++) expect(S.haulFactor(c, i)).toBeLessThanOrEqual(far)
+    const farmer = c.crew[0]
+    expect(S.haulRate(c, farmer, 0, 'tractor') / S.haulRate(c, farmer, 8, 'tractor')).toBeCloseTo(far, 12)
     // The Dufour fields haul to their own potato house once the farm holds one.
     ok(c, { t: 'rent', field: 11 })
-    for (const i of [10, 11, 12, 13]) expect(S.jobDays(c, 'dig', null, i)).toBe(S.JOB_DAYS.dig)
+    for (const i of [10, 11, 12, 13]) expect(S.haulFactor(c, i)).toBe(1)
     for (const l of S.landInfo(c)) expect(l.haul, l.name).toBeCloseTo(S.haulFactor(c, l.field, true) - 1, 12)
-    // With the harvester the haul still counts.
+    // With the harvester the dig is shorter; the haul is its own order.
     c.upgrades.harvester = true
-    expect(S.jobDays(c, 'dig', null, 8)).toBeCloseTo(1.25 * far / S.JOB_DAYS.dig, 12)
+    expect(S.jobDays(c, 'dig', null, 8)).toBe(1.25)
   })
 
-  it('sets the need of a dig order on a far field', () => {
+  it('a dig order on a far field takes as long as on a home field', () => {
     const c = S.createCampaign(world, { seed: 3, startYear: 2001 })
     ok(c, { t: 'rent', field: 8 })
     ok(c, { t: 'begin' })
@@ -207,18 +209,18 @@ describe('the haul', () => {
     clearList(c)
     ok(c, { t: 'job', kind: 'dig', field: 8 })
     ok(c, { t: 'job', kind: 'dig', field: 0 })
-    expect(order(c, 'dig', 8)!.need).toBeCloseTo(S.haulFactor(c, 8) * S.JOB_DAYS.dig, 12)
+    expect(order(c, 'dig', 8)!.need).toBe(S.JOB_DAYS.dig)
     expect(order(c, 'dig', 0)!.need).toBe(S.JOB_DAYS.dig)
-    expect(S.fieldActions(world, c, 8).find(a => a.kind === 'dig')!.days).toBeCloseTo(order(c, 'dig', 8)!.need, 12)
+    expect(S.fieldActions(world, c, 8).find(a => a.kind === 'dig')!.days).toBe(S.JOB_DAYS.dig)
   })
 })
 
 describe('travel', () => {
-  // 1990: the farm rents Spruce Lot, at the far end of the ridge lots. On the first working day fit to plant both it
+  // 1990: the farm rents Spruce Lot, at the far end of the ridge lots, and has a second tractor. On the first working day fit to plant both it
   // and Upper Middle, the farmer is still in the home yard.
   const c = S.createCampaign(world, { seed: 1, startYear: 1990 })
   ok(c, { t: 'rent', field: 8 })
-  ok(c, { t: 'buy', upgrade: 'tractor2' })
+  c.upgrades.tractor2 = true
   ok(c, { t: 'begin' })
   const fit = () => S.workday(c, c.season!) && [2, 8].every(i => S.fieldActions(world, c, i).find(a => a.kind === 'plant')!.wait === '')
   while (!fit()) ok(c, { t: 'day' })
@@ -290,7 +292,7 @@ describe('crews in midsummer', () => {
   // 2001: every home field in potatoes and Spruce Lot rented; the second tractor bought. Grown on reference
   // practice to mid July, then the list is cleared for each test.
   const base = S.createCampaign(world, { seed: 3, startYear: 2001 })
-  ok(base, { t: 'buy', upgrade: 'tractor2' })
+  base.upgrades.tractor2 = true
   ok(base, { t: 'rent', field: 8 })
   for (const i of [1, 3]) ok(base, { t: 'plan', field: i, plan: { crop: 'potato', variety: 'katahdin', seed: 'certified' } })
   ok(base, { t: 'begin' })
@@ -546,7 +548,7 @@ describe('contracts', () => {
   refused(c, { t: 'accept', offer: offers[0].id }, /No such offer/)
   for (const i of [0, 2]) ok(c, { t: 'plan', field: i, plan: { crop: 'potato', variety: want, seed: 'certified' } })
   ok(c, { t: 'begin' })
-  const dugLot = () => S.openLots(c).find(l => l.variety === want && c.season!.fields[l.field].status === 'dug')
+  const dugLot = () => S.openLots(c).find(l => l.variety === want && c.season!.fields[l.field].status === 'dug' && c.season!.fields[l.field].weighed)
   tend(c, x => S.seasonDone(x) || !!dugLot())
 
   it('signed in spring are kept as contracts with nothing delivered yet', () => {

@@ -7,15 +7,19 @@ import {
   type PotatoHouse,
 } from './campaign.ts'
 import { hireRoom, travelDays } from './crew.ts'
-import { BLOCK_NAME, HOME_YARD, PARCELS, TRACTS, YARDS, type BlockId, type Holding } from './farm.ts'
+import { BLOCK_NAME, DUFOUR_YARD, HOME_YARD, PARCELS, TRACTS, YARDS, type BlockId, type Holding } from './farm.ts'
 import { lotCwt } from './harvest.ts'
 import * as P from './params.ts'
 import { bestSkill, defaultPrio, hasBed, hiredCount, housingLimit, moodWord, payOf, speed, tiredWord, xpNeed } from './people.ts'
 import { brushedNow, clearing, COVER_WORD, fellLeft, fieldEnv, sheltered, standing, type ClearStage } from './land.ts'
-import { FIELD_NAMES, haulFactor, holdsDufour, jobBlock, jobCost, jobDays, jobWait, JOB_LABEL, knownHills, tractorsOwned, workday } from './season.ts'
+import {
+  FIELD_NAMES, haulFactor, haulRate, holdsDufour, jobBlock, jobCost, jobDays, jobWait, JOB_LABEL, knownHills, standOpen, tractorsOwned, waitFor, workday,
+} from './season.ts'
+import { buildBlock, buildCost, buildingAt, hasBuilt, rain30, roadFactor, YARD_NAME } from './buildings.ts'
 import {
   H_DECAYED, H_DUG, H_EMERGED, H_KNOWN, H_ROGUED, H_SAMPLED, H_VIRUS, H_WILT,
-  type Campaign, type Cover, type Day, type Due, type FieldSeason, type JobKind, type Skill, type Tenure, type Trait, type UnitKind, type VarietyId,
+  type BuildingKind, type Campaign, type Cover, type Day, type Due, type FieldSeason, type JobKind, type Skill, type Tenure, type Trait, type UnitKind,
+  type VarietyId,
   type WinterWork, type World,
 } from './types.ts'
 import { variety } from './varieties.ts'
@@ -113,11 +117,17 @@ export interface FieldInfo {
   shelteredBy: string       // the name of the tract that shelters it, or ''
   clearing: { stage: ClearStage; next: string; felled: number } | null   // for a tract: where its clearing stands
   works: { kind: 'stump' | 'tile'; left: number } | null                 // a contractor at work: season days left
+  // The harvest.
+  inField: number           // cwt dug and lying in barrels in the field, not yet hauled in
+  weighed: boolean          // the whole crop is in and the weigh ticket cut: it can be sold or stored
+  // Today's blight risk from this field's own wet hours, 0 to 4 (Wallin severity values), with a weather station;
+  // null without one, or when fieldInfo is asked without the world.
+  blightRisk: number | null
 }
 
 const POSITION = ['bottom land', 'mid slope', 'ridge']
 
-export function fieldInfo(c: Campaign, fi: number): FieldInfo {
+export function fieldInfo(c: Campaign, fi: number, world?: World): FieldInfo {
   const fp = c.fields[fi]
   const plan = c.plans[fi]
   const s = c.season
@@ -130,6 +140,7 @@ export function fieldInfo(c: Campaign, fi: number): FieldInfo {
     cover: fp.cover, coverWord: COVER_WORD[fp.cover], stones: fp.stones, raw: fp.raw, tiled: fp.tiled,
     brushed: brushedNow(c, fi) ? P.BRUSH_YEARS - (c.year - fp.brushed) : 0, sheltered: false, shelteredBy: '',
     clearing: null, works: fp.works ? { ...fp.works } : null,
+    inField: 0, weighed: false, blightRisk: null,
   }
   const env = fieldEnv(c, fi)
   if (env.shelter >= 0) { base.sheltered = true; base.shelteredBy = FIELD_NAMES[env.shelter] }
@@ -147,6 +158,12 @@ export function fieldInfo(c: Campaign, fi: number): FieldInfo {
     return base
   }
   if (!s || !f) return base
+  base.inField = f.inField
+  base.weighed = f.weighed
+  if (world && hasBuilt(c, 'station') && !s.frozen) {
+    const d = getDay(world, s.year, s.day)
+    base.blightRisk = wallin(Math.max(0, Math.min(24, d.wetH + env.humid + (f.wateredDay === s.day ? 3 : 0))), d.wetT)
+  }
   const taw = env.taw
   base.status = f.status
   base.moisture = 1 - f.dr / taw
@@ -221,7 +238,7 @@ export function fieldActions(world: World, c: Campaign, fi: number): ActionInfo[
     const f = s ? s.fields[fi] : null
     return {
       kind, label: JOB_LABEL[kind], ok: why === '', why,
-      days: jobDays(c, kind, f, fi), cost: jobCost(c, kind),
+      days: jobDays(c, kind, f, fi), cost: jobCost(c, kind, fi),
       wait: f && d && why === '' ? jobWait(kind, f, d, fieldEnv(c, fi).wind) : '',
     }
   })
@@ -396,6 +413,7 @@ export interface LabourInfo {
   sundaysOff: boolean
   tractors: number                  // tractors the farm owns
   tractorsFree: number              // not held by anyone right now
+  truck: boolean                    // the farm has a truck for hauling
   hired: number                     // hired people
   housing: number                   // how many hired people the farm can house
   beds: number                      // bunkhouse beds
@@ -417,7 +435,7 @@ export function labourInfo(c: Campaign): LabourInfo {
     weekday: s ? WEEKDAYS[weekday(s.year, s.day)] : '',
     restDay: inSeason && !workday(c, s!),
     sundaysOff: c.sundaysOff,
-    tractors: owned, tractorsFree: Math.max(0, owned - held),
+    tractors: owned, tractorsFree: Math.max(0, owned - held), truck: c.upgrades.truck,
     hired: hiredCount(c), housing: housingLimit(c), beds: housingLimit(c) - P.HOUSED_OUT, hireWhy: hireRoom(c),
     pickers: { on: !!s?.pickers, ok: pickersWhy === '', why: pickersWhy, perDay: P.PICKER_DAY, digFaster: P.PICKER_DIG },
   }
@@ -470,12 +488,112 @@ export function landInfo(c: Campaign): LandInfo[] {
     out.push({
       field: i, name: p.name, block: p.block, elev: fp.elev, position: POSITION[fp.elev], tenure: fp.tenure,
       rent: p.rent, price: p.price, soil: fp.soil, vert: fp.vert, streak: fp.streak, house, brings,
-      travel: travelDays(HOME_YARD, i), haul: haulFactor(c, i, holdsDufour(c) || dufour) - 1,
+      travel: travelDays(HOME_YARD, i) * roadFactor(c), haul: haulFactor(c, i, holdsDufour(c) || dufour) - 1,
       cover: fp.cover, stones: standing(fp.cover) ? p.stones : fp.stones, rentable: p.holding === 'field', rentWhy, buyWhy,
       down, loan: p.price - down,
     })
   }
   return out
+}
+
+// ---------------------------------------------------------------- buildings and hauling
+
+export interface BuildingInfo {
+  kind: BuildingKind
+  yard: number              // -1 the home yard, -2 the Dufour yard
+  yardName: string
+  name: string
+  state: 'none' | 'building' | 'built'
+  progress: number          // share of the building done, 0..1
+  daysLeft: number          // crew-days of building left
+  ok: boolean               // can be ordered now
+  why: string               // why not, or ''
+  cash: number              // the cash part
+  logs: number              // loads of logs it takes
+  stone: number             // loads of stone it takes
+  buyLogs: number           // loads of logs the yard lacks, to be bought at the mill
+  buyStone: number          // loads of stone the yard lacks, to be bought from the quarry
+  total: number             // dollars in all, with what is bought
+  days: number              // crew-days of building
+  does: string              // what it does, in one sentence
+  catch: string             // its catch, in one sentence
+}
+
+// Every kind of building at every yard it can stand in: what stands, what is going up and how far along, and what
+// each would cost now.
+export function buildingInfo(c: Campaign): BuildingInfo[] {
+  const out: BuildingInfo[] = []
+  const dufour = holdsDufour(c)
+  for (const kind of P.BUILDING_KINDS) {
+    const spec = P.BUILDINGS[kind]
+    for (const yard of spec.dufour ? [HOME_YARD, DUFOUR_YARD] : [HOME_YARD]) {
+      const b = buildingAt(c, kind, yard)
+      const cost = buildCost(c, kind)
+      const why = buildBlock(c, kind, yard, dufour)
+      out.push({
+        kind, yard, yardName: YARD_NAME[yard], name: spec.name,
+        state: !b ? 'none' : b.built ? 'built' : 'building', progress: b ? b.done / b.need : 0, daysLeft: b ? b.need - b.done : spec.days,
+        ok: why === '', why, cash: cost.cash, logs: cost.logs, stone: cost.stone, buyLogs: cost.buyLogs, buyStone: cost.buyStone,
+        total: cost.total, days: spec.days, does: spec.does, catch: spec.catch,
+      })
+    }
+  }
+  return out
+}
+
+export interface HaulInfo {
+  field: number
+  name: string
+  cwt: number               // in barrels in the field
+  digging: boolean          // the digger is still at work there
+  daysToHaul: number        // days one person with a tractor would take to bring it in
+  frostChance: number       // percent: tonight's chance of a frost at the coldest field (the forecast's)
+  exposure: string          // what can happen to it, in plain words
+  hauler: number            // the person hauling it now, or -1
+}
+
+// The crop lying in barrels in the fields, and what it is exposed to until it is hauled in.
+export function haulInfo(world: World, c: Campaign): HaulInfo[] {
+  const s = c.season
+  if (c.phase !== 'season' || !s) return []
+  const fc = forecast(world, c, 1)[0]
+  const out: HaulInfo[] = []
+  for (let i = 0; i < P.FIELD_COUNT; i++) {
+    const f = s.fields[i]
+    if (f.inField < 0.5) continue
+    const job = s.jobs.find(j => j.kind === 'haul' && j.field === i)
+    const hauler = job ? c.crew.find(u => u.job === job.id)?.id ?? -1 : -1
+    out.push({
+      field: i, name: FIELD_NAMES[i], cwt: f.inField, digging: f.status === 'digging',
+      daysToHaul: f.inField / haulRate(c, c.crew[0], i, 'tractor'), frostChance: fc ? fc.frostChance : 0,
+      exposure: `A night at ${P.FREEZE_IN_FIELD} C or colder freezes a fifth of it; each bright day greens half a percent.`,
+      hauler,
+    })
+  }
+  return out
+}
+
+export interface PondInfo {
+  built: boolean
+  waterings: number         // field-waterings in the pond now
+  capacity: number
+  rain30: number            // mm of rain in the last 30 days; under POND_DRY_MM the brook is low and the pond dry
+  dryBelow: number
+}
+
+export function pondInfo(world: World, c: Campaign): PondInfo {
+  const s = c.season
+  return {
+    built: hasBuilt(c, 'pond'), waterings: c.pond, capacity: P.POND_CAP,
+    rain30: s ? rain30(world, s.year, s.day - 1) : 0, dryBelow: P.POND_DRY_MM,
+  }
+}
+
+export interface StandInfo { built: boolean; open: boolean; sales: number; perDay: number }
+
+export function standInfo(c: Campaign): StandInfo {
+  const s = c.season
+  return { built: hasBuilt(c, 'stand'), open: !!s && c.phase === 'season' && !s.frozen && standOpen(c, s), sales: c.yearStand, perDay: P.STAND_CWT }
 }
 
 // ---------------------------------------------------------------- tracts, materials, the mortgage
@@ -627,7 +745,8 @@ export function forecast(world: World, c: Campaign, days = 5): ForecastDay[] {
   const s = c.season
   if (!s) return []
   const out: ForecastDay[] = []
-  for (let k = 1; k <= days; k++) out.push(forecastFor(world, c.seed, s.year, s.day + k, k))
+  const err = hasBuilt(c, 'station') ? P.STATION_ERROR : 1
+  for (let k = 1; k <= days; k++) out.push(forecastFor(world, c.seed, s.year, s.day + k, k, err))
   return out
 }
 
@@ -637,6 +756,6 @@ export function jobWaits(world: World, c: Campaign): Record<number, string> {
   const out: Record<number, string> = {}
   if (!s) return out
   const d = getDay(world, s.year, s.day)
-  for (const j of s.jobs) out[j.id] = jobWait(j.kind, s.fields[j.field], d, fieldEnv(c, j.field).wind)
+  for (const j of s.jobs) out[j.id] = waitFor(c, s, j, d)
   return out
 }

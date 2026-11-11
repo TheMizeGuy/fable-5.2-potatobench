@@ -18,7 +18,7 @@ export function newLot(c: Campaign, field: number, f: FieldSeason, day: number, 
     grades: { no1: 0, chef: 0, b: 0, no2: 0, cull: 0 },
     skinned: 0, loss: blankLoss(), rot: 0, skin: 0,
     virus: 0, blightSeed: 0, months: 0, sprouted: false, broke: false,
-    sold: 0, revenue: 0, seedHeld: 0, open: false,
+    sold: 0, revenue: 0, packed: 0, seedHeld: 0, open: false,
   }
   if (register) c.lots.push(lot)
   return lot

@@ -165,9 +165,11 @@ export function hiredCount(c: Campaign): number {
   return n
 }
 
-// Beds in bunkhouses the farm has (none until one is built).
-export function beds(_c: Campaign): number {
-  return 0
+// Beds in the bunkhouses the farm has built.
+export function beds(c: Campaign): number {
+  let n = 0
+  for (const b of c.buildings) if (b.kind === 'bunk' && b.built) n++
+  return n * P.BUNK_BEDS
 }
 
 // How many hired people the farm can house: two live out, the rest in bunkhouse beds.

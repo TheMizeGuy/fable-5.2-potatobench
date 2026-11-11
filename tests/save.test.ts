@@ -23,6 +23,21 @@ const V4_PARCELS = 14
 
 // DOWN[n] takes a campaign saved at version n + 1 back to what a version n build saved.
 const DOWN: Record<number, (o: Raw) => void> = {
+  // Version 6 added buildings, the third tractor and the truck, the pond, packing, the stand and the haul.
+  // (Buildings go with it: a version 5 build had none.)
+  5: o => {
+    for (const k of ['buildings', 'nextBuilding', 'pond', 'yearBuilding', 'yearStand', 'yearPacking']) delete o[k]
+    delete o.upgrades.tractor3
+    delete o.upgrades.truck
+    const noPack = (lots: unknown) => { for (const l of (lots as Record<string, unknown>[]) ?? []) delete l.packed }
+    noPack(o.lots)
+    for (const h of o.history) { for (const k of ['building', 'stand', 'packing']) delete h[k]; noPack(h.lots) }
+    if (o.season) {
+      for (const j of o.season.jobs) expect(j.kind === 'haul', 'a version 5 save has no haul orders').toBe(false)
+      o.season.jobs = o.season.jobs.filter(j => j.kind !== 'build')
+      for (const f of o.season.fields) { delete f.inField; delete f.weighed }
+    }
+  },
   // Version 5 added the land under the crop, the tracts, materials and the mortgage.
   4: o => {
     o.fields = o.fields.slice(0, V4_PARCELS)
@@ -267,7 +282,7 @@ describe('parseSave', () => {
   })
 
   it('migrates a version 4 save made in mid-season: the land gets its stones and the tracts, and it plays on', () => {
-    const r = runReplay(S, world, { ...REPLAY, stopAt: c => c.yearIdx === 1 && c.phase === 'season' && c.season!.day >= S.dayIndex(c.year, 7, 5) && c.lots.length > 0 })
+    const r = runReplay(S, world, { ...REPLAY, stopAt: c => c.yearIdx === 1 && c.phase === 'season' && c.season!.day >= S.dayIndex(c.year, 7, 5) && c.lots.length > 0 && !c.season!.jobs.some(j => j.kind === 'haul') })
     expect(r.done).toBe(false)
     const v4 = toV(r.campaign, 4)
     expect(v4.fields.length).toBe(14)
@@ -284,6 +299,27 @@ describe('parseSave', () => {
     expect(c.season!.fields.slice(0, 14)).toEqual(r.campaign.season!.fields.slice(0, 14))
     for (const l of c.lots) expect(l.loss.stone).toBe(0)
     expect([c.logs, c.stone, c.mortgages]).toEqual([0, 0, []])
+    const done = runReplay(S, world, { campaign: c })
+    expect(done.done).toBe(true)
+    expect(done.campaign.history.length).toBe(5)
+    for (const h of done.campaign.history) expect(Number.isFinite(h.cashEnd)).toBe(true)
+  })
+
+  it('migrates a version 5 save made in mid-season: its second potato house becomes a building, and it plays on', () => {
+    const r = runReplay(S, world, { ...REPLAY, stopAt: c => c.yearIdx === 0 && c.phase === 'season' && c.season!.day >= S.dayIndex(c.year, 6, 10) })
+    expect(r.done).toBe(false)
+    const v5 = toV(r.campaign, 5)
+    expect(v5.buildings).toBeUndefined()
+    v5.upgrades.house2 = true
+    const c = parseSave(JSON.stringify({ v: 5, savedAt: 13, campaign: v5 }))!.campaign
+    expect(c.v).toBe(S.SAVE_VERSION)
+    expect(c.buildings).toEqual([{ id: 1, kind: 'house', yard: -1, done: S.BUILDINGS.house.days, need: S.BUILDINGS.house.days, built: true }])
+    expect([c.nextBuilding, c.pond, c.upgrades.tractor3, c.upgrades.truck]).toEqual([2, 0, false, false])
+    expect(S.storageInfo(c).houses.filter(h => h.at === -1).length).toBe(2)
+    for (const f of c.season!.fields) expect([f.inField, f.weighed]).toEqual([0, f.status === 'dug'])
+    for (const l of c.lots) expect(l.packed).toBe(0)
+    expect(c.season!.jobs).toEqual(r.campaign.season!.jobs)
+    expect(S.buildingInfo(c).find(b => b.kind === 'house' && b.yard === -1)!.state).toBe('built')
     const done = runReplay(S, world, { campaign: c })
     expect(done.done).toBe(true)
     expect(done.campaign.history.length).toBe(5)

@@ -208,7 +208,28 @@ and the parcels in `src/sim/farm.ts`; the rules are in `src/sim/land.ts`.
 | Logs sell for $55 a load. Logs and stone the farm lacks for a building are bought at $95 and $40 a load | Invented | |
 | Land is bought a quarter down from cash; the rest is a land mortgage. Each year end the bank takes a tenth of each purchase's loan and 8% on what is still owed, as part of the year's costs. Extra can be paid in spring. Net worth counts what is owed against the land | Invented | |
 
-## 12. Things the model leaves out
+## 12. The farmstead: buildings and hauling
+
+All game rules from `docs/FARMSTEAD.md` sections 4 and 5. Constants are in `src/sim/params.ts` (from `BUILDINGS` on);
+the rules are in `src/sim/buildings.ts` and `src/sim/season.ts`.
+
+| Rule | Tag | Source |
+| --- | --- | --- |
+| A building is ordered in spring, in season or in winter: its cash part and the materials the yard lacks (logs at $95 a load from the mill, stone at $40 from the quarry) are paid at once, from cash only; the yard's own logs and stone are taken. It goes on the list as a build order (build skill) and stands when its crew-days are done; in winter, people kept on to build work on it | Invented | |
+| One of each kind per yard. Potato houses and bunkhouses can stand in the Dufour yard too, while Dufour land is held; the rest go in the home yard | Invented | |
+| Potato house ($9,000, 30 logs, 25 stone, 30 crew-days): 3,600 cwt more storage at its yard (6,400 at home with ventilation). A contractor-built second house at home ("second potato house", $18,000) stands at once; an old save's second house becomes a built one | Invented | Potato houses banked into the hillside are Aroostook practice |
+| Machine shed ($4,500, 20, 10, 16): machine work 10% faster, and needed before a second or a third tractor | Invented | |
+| Bunkhouse ($3,500, 16, 8, 12): six beds; the first hired take them, and a bed lifts the mood target 0.1 | Invented | |
+| Packing shed ($12,000, 24, 15, 24): in winter each person set to pack packs 30 cwt a crew-day (600 in a month of 20) of the stored No. 1 and B size, oldest lots first, at $0.50 a cwt. Packed No. 1 sells 8% higher and packed B size at 0.75 of the No. 1 price instead of 0.55 | Invented | |
+| Irrigation pond ($6,000, 0, 30, 20, home yard): holds six waterings; a home or intervale field waters in a third of a day for $60. Full each spring from the melt; each day it gains half a watering from the brook and one for each 20 mm of rain, unless the last 30 days brought under 40 mm, when the brook is low and it is empty | Invented | |
+| Farm stand ($600, 4, 0, 4): from August 1 it sells 4 cwt a day of No. 1 from the newest weighed lot at twice the market price, 2.4 times for Dark Red Norland and Yukon Gold and for thin-skinned new potatoes up to September 5. Each day it opens someone minds it, a fifth of their working day (whoever puts packing first); with nobody working (a Sunday off) it stays shut | Invented | |
+| Weather station ($1,800, 0, 0, 1): the forecast's errors (temperature spread, the wet-or-dry call, the rain amount and the wet hours) are 0.6 of the public forecast's; each field shows today's Wallin severity value from its own wet hours | Invented | |
+| Gravelled road ($1,500, 0, 60, 12): travel and hauling take 0.8 of the time | Invented | |
+| Equipment: a third tractor ($16,000; needs the shed and the second); a truck ($14,000) hauls at twice a tractor's rate without taking a tractor | Invented | |
+| Digging lifts the crop into barrels in the field; the dig time no longer includes the haul (2 days a field, 1.25 with the harvester, wherever the field is). A haul order goes to the top of the list by itself. One person with a tractor hauls 900 cwt a day at their machine speed (10% more with the shed), divided by the distance factor of section 9 (1 inside the home farm's own haul, up to about 1.4 for Spruce Lot) | Invented | |
+| Until it is hauled, the crop in the field is exposed: a night at -2 C or colder at the field freezes a fifth of what is there (cause "frost"), and each clear day greens half a percent. When the whole crop is in, the weigh ticket is cut (event "weighed"); a lot can be sold or delivered only after it. The season is done only when every dug field is weighed; what is still in barrels at the freeze-up, or when the season is closed, is lost | Invented | |
+
+## 13. Things the model leaves out
 
 Colorado potato beetle, early blight, fertility, weeds as a separate system,
 machinery failure, hail, and everything else on the cut list in `docs/DESIGN.md`. The record of what the model gets right and

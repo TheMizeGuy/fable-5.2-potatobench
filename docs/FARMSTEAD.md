@@ -281,3 +281,30 @@ text above was silent, or two of its rules collided, the build chose as follows.
   raw-ground penalty.
 - *The mortgage* is booked as part of the year's costs (the ledger's `mortgage`
   line), principal and interest together, like every other dollar.
+
+**Buildings and hauling.**
+
+- *Which buildings can stand in the Dufour yard.* Only a potato house and a
+  bunkhouse; the shed, packing shed, pond, stand, station and road serve the
+  whole farm and go in the home yard.
+- *Buildings are paid from cash*, like equipment and land's down payment; the bank
+  does not lend for them.
+- *The old second potato house.* `{ t: 'buy', upgrade: 'house2' }` still works: a
+  contractor puts up the home house at once for $18,000, against about $9,000 and
+  materials and 30 crew-days of the farm's own work. Either way `upgrades.house2`
+  is true once a second house stands at home.
+- *The stand's catch.* The text gives none; as built, someone minds it for a fifth
+  of a working day each day it opens, so it costs the scarcest thing on the farm.
+- *The weather station's "errors 40% smaller"* scales every error the forecast
+  makes (temperature, the wet-or-dry call, the amount, the wet hours) by 0.6.
+- *The pond* is full each spring and empties whenever the last 30 days brought
+  under 40 mm; otherwise it gains half a watering a day plus one for each 20 mm of
+  rain.
+- *Hauling.* The haul order goes to the top of the list. A hauler who empties the
+  barrels lets the order go until more is dug, so hauling can change hands in a
+  day. The weigh ticket waits for the last barrel, and the season is not done
+  while any field is unweighed. Barrels left at the freeze-up are lost.
+- *Dig time* stays at two days (1.25 with the harvester) everywhere; the distance
+  to the potato house now slows the hauling instead. A farmer alone now spends
+  about three and a half days a field at harvest instead of two, which is the
+  point: the harvest is when a second pair of hands, pickers or a truck pay.

@@ -8,7 +8,8 @@ import { sellLot } from './market.ts'
 import * as P from './params.ts'
 import { applicantsFor, fromApplicant, jobSkill, payOf, SKILL_LABEL, speed } from './people.ts'
 import { hash32 } from './rng.ts'
-import { addJob, FIELD_NAMES, holdsDufour, letGo, releaseJob, removePerson, seasonDone, sheltering, startSeason, stepDay, unitBlock } from './season.ts'
+import { addJob, buildJob, FIELD_NAMES, holdsDufour, leftInField, letGo, releaseJob, removePerson, seasonDone, sheltering, startSeason, stepDay, unitBlock } from './season.ts'
+import { article, buildBlock, buildCost, buildingAt, buildWork, hasBuilt, startBuilding, YARD_NAME } from './buildings.ts'
 import { brushedNow, COVER_WORD, fell, isField, standing } from './land.ts'
 import type { Campaign, Cmd, Contract, Due, FieldPlan, GameEvent, Lot, Result, Unit, UpgradeId, WinterWork, World, YearSummary } from './types.ts'
 import { variety } from './varieties.ts'
@@ -61,13 +62,14 @@ export function createCampaign(world: World, opts: { seed: number; startYear: nu
       cover: p.cover, stones: p.cover === 'open' ? p.stones : 0, raw: false, felled: 0, brushed: -1, tiled: false, works: null,
     })),
     plans: [],
-    upgrades: { boom: false, harvester: false, vent: false, reel: false, tractor2: false, house2: false },
+    upgrades: { boom: false, harvester: false, vent: false, reel: false, tractor2: false, house2: false, tractor3: false, truck: false },
     seedStock: [], season: null, lots: [], nextLot: 1,
-    crew: [newFarmer()], nextUnit: 1, applicants: [], sundaysOff: true, logs: 0, stone: 0, mortgages: [],
+    crew: [newFarmer()], nextUnit: 1, applicants: [], sundaysOff: true, logs: 0, stone: 0, mortgages: [], buildings: [], nextBuilding: 1, pond: 0,
     offers: [], contracts: [],
     month: 0,
     yearRevenue: 0, yearCosts: 0, yearRest: 0, yearStorage: 0,
     yearWages: 0, yearRent: 0, yearLand: 0, yearContracts: 0, yearPenalties: 0, yearLogs: 0, yearMortgage: 0, yearWorks: 0,
+    yearBuilding: 0, yearStand: 0, yearPacking: 0,
     history: [], steps: 0,
   }
   c.plans = defaultPlans(c)
@@ -112,13 +114,16 @@ function savedSeedShort(c: Campaign): string {
 
 export interface PotatoHouse { name: string; at: number; cwt: number }
 
-// The potato houses the farm has now: the home house, a second one at home once built, the Dufour house while
-// Dufour land is held. Ventilation is in the home houses.
+// The potato houses the farm has now: the home house, a second one at home once built, the Dufour house and one
+// built there while Dufour land is held. Ventilation is in the home houses.
 export function potatoHouses(c: Campaign): PotatoHouse[] {
   const home = c.upgrades.vent ? P.CELLAR_CWT_VENT : P.CELLAR_CWT
   const out: PotatoHouse[] = [{ name: 'Home potato house', at: HOME_YARD, cwt: home }]
-  if (c.upgrades.house2) out.push({ name: 'Second potato house', at: HOME_YARD, cwt: home })
-  if (holdsDufour(c)) out.push({ name: 'Dufour potato house', at: DUFOUR_YARD, cwt: YARDS[1].cellar })
+  if (hasBuilt(c, 'house', HOME_YARD)) out.push({ name: 'Second potato house', at: HOME_YARD, cwt: home })
+  if (holdsDufour(c)) {
+    out.push({ name: 'Dufour potato house', at: DUFOUR_YARD, cwt: YARDS[1].cellar })
+    if (hasBuilt(c, 'house', DUFOUR_YARD)) out.push({ name: 'New Dufour potato house', at: DUFOUR_YARD, cwt: P.HOUSE_CWT })
+  }
   return out
 }
 
@@ -186,6 +191,7 @@ function endSeason(world: World, c: Campaign): GameEvent[] {
         : note(c, 'lost', 'bad', `${FIELD_NAMES[i]} was left in the ground.`, i))
     }
   }
+  leftInField(c, s, out, 'was left in the barrels')
   s.jobs = []
   // The crews go home for the winter.
   for (const u of c.crew) { letGo(u); u.at = HOME_YARD; u.to = HOME_YARD; u.road = 0 }
@@ -320,8 +326,11 @@ export function winterBlock(c: Campaign, u: Unit, work: WinterWork, field = -1):
       if (!standing(c.fields[field].cover)) return `There is nothing left to fell on ${FIELD_NAMES[field]}.`
       return ''
     }
-    case 'pack': return 'Packing needs a packing shed.'
-    case 'build': return 'Nothing is being built.'
+    case 'pack':
+      if (!hasBuilt(c, 'packing')) return 'Packing needs a packing shed.'
+      return unpacked(c) >= 1 ? '' : 'Nothing in store is left to pack.'
+    case 'build':
+      return c.buildings.some(b => !b.built) ? '' : 'Nothing is being built.'
   }
   return 'No such winter work.'
 }
@@ -353,11 +362,44 @@ const WINTER_SKILL: Record<Exclude<WinterWork, 'off'>, 'woods' | 'pack' | 'build
 
 // What a month of winter work does, in standard crew-days.
 function winterWork(c: Campaign, u: Unit, days: number, out: GameEvent[]): void {
+  if (u.winter === 'pack') pack(c, days * P.PACK_PER_DAY)
+  if (u.winter === 'build') {
+    let left = days
+    for (const b of c.buildings) {
+      if (b.built || left <= 0) continue
+      const use = Math.min(left, b.need - b.done)
+      left -= use
+      if (buildWork(c, b, use)) out.push(note(c, 'built', 'good', `The ${P.BUILDINGS[b.kind].name.toLowerCase()} in ${YARD_NAME[b.yard]} is built over the winter. ${P.BUILDINGS[b.kind].does}`))
+    }
+  }
   if (u.winter === 'woods') {
     const i = u.winterField
     if (fell(c, i, days, u)) {
       out.push(note(c, 'felled', 'good', `${FIELD_NAMES[i]} is felled over the winter. The stumps are left; a contractor can pull them.${sheltering(c, i)}`, i))
     }
+  }
+}
+
+// Cwt of No. 1 and B size in store not yet packed.
+export function unpacked(c: Campaign): number {
+  let cwt = 0
+  for (const l of openLots(c)) cwt += (l.grades.no1 + l.grades.b) * (1 - l.packed)
+  return cwt
+}
+
+// Packs up to cwt of the stored No. 1 and B size, the oldest lots first, at the packing charge.
+function pack(c: Campaign, cwt: number): void {
+  let left = cwt
+  for (const l of openLots(c)) {
+    const base = l.grades.no1 + l.grades.b
+    const take = Math.min(left, base * (1 - l.packed))
+    if (take <= 0) continue
+    l.packed = Math.min(1, l.packed + take / base)
+    left -= take
+    const charge = take * P.PACK_CHARGE
+    cost(c, charge)
+    c.yearPacking += charge
+    if (left <= 0) break
   }
 }
 
@@ -424,7 +466,7 @@ function closeYear(world: World, c: Campaign, out: GameEvent[]): void {
     revenue: c.yearRevenue, costs: c.yearCosts, note: P.NOTE_PAYMENT, living: P.LIVING, interest,
     restIncome: c.yearRest, storage: c.yearStorage,
     wages: c.yearWages, rent: c.yearRent, land: c.yearLand, penalties: c.yearPenalties, contracts: c.yearContracts,
-    logs: c.yearLogs, mortgage: c.yearMortgage, works: c.yearWorks,
+    logs: c.yearLogs, mortgage: c.yearMortgage, works: c.yearWorks, building: c.yearBuilding, stand: c.yearStand, packing: c.yearPacking,
     cwtSold: market, cwtCulled: culled,
     yieldCwtAcre: potatoFields ? market / (potatoFields * P.FIELD_ACRES) : 0,
     potatoFields, blightPeak: peak, lots,
@@ -489,6 +531,9 @@ function nextYear(world: World, c: Campaign): Result {
   c.yearLogs = 0
   c.yearMortgage = 0
   c.yearWorks = 0
+  c.yearBuilding = 0
+  c.yearStand = 0
+  c.yearPacking = 0
   c.month = 0
   c.season = null
   c.lots = []
@@ -540,11 +585,27 @@ export function apply(world: World, c: Campaign, cmd: Cmd): Result {
       const u = P.UPGRADES[cmd.upgrade]
       if (!u) return fail('No such equipment.')
       if (c.upgrades[cmd.upgrade]) return fail('Already owned.')
+      if ((cmd.upgrade === 'tractor2' || cmd.upgrade === 'tractor3') && !hasBuilt(c, 'shed')) return fail('Another tractor needs the machine shed to stand in.')
+      if (cmd.upgrade === 'tractor3' && !c.upgrades.tractor2) return fail('Buy the second tractor first.')
+      if (cmd.upgrade === 'house2' && buildingAt(c, 'house', HOME_YARD)) return fail('There is a second potato house at home already, standing or going up.')
       if (c.cash - u.cost < 0) return fail('Not enough cash. The bank will not lend for equipment.')
       c.cash -= u.cost
       c.yearCosts += u.cost
       c.upgrades[cmd.upgrade] = true
+      // A contractor puts up the second potato house at once.
+      if (cmd.upgrade === 'house2') c.buildings.push({ id: c.nextBuilding++, kind: 'house', yard: HOME_YARD, done: P.BUILDINGS.house.days, need: P.BUILDINGS.house.days, built: true })
       return ok()
+    }
+    case 'build': {
+      const why = buildBlock(c, cmd.kind, cmd.yard, holdsDufour(c))
+      if (why) return fail(why)
+      const cost = buildCost(c, cmd.kind)
+      const b = startBuilding(c, cmd.kind, cmd.yard)
+      if (c.phase === 'season' && c.season) c.season.jobs.push(buildJob(c.season, b.id, b.yard))
+      const spec = P.BUILDINGS[cmd.kind]
+      const bought = cost.buyLogs > 0 || cost.buyStone > 0 ? `, buying ${[cost.buyLogs > 0 ? `${Math.ceil(cost.buyLogs)} loads of logs` : '', cost.buyStone > 0 ? `${Math.ceil(cost.buyStone)} of stone` : ''].filter(Boolean).join(' and ')}` : ''
+      const when = c.phase === 'season' ? 'It is on the list for whoever builds.' : c.phase === 'cellar' ? 'Someone kept on to build can put it up this winter.' : 'It goes on the list when the season begins.'
+      return ok([note(c, 'building', 'info', `${article(spec.name, true)} ${spec.name.toLowerCase()} is started in ${YARD_NAME[cmd.yard]}: $${withCommas(cost.total)}${bought}, and ${spec.days} crew-days of building. ${when}`)])
     }
     case 'rent': {
       if (c.phase !== 'plan') return fail('Land is rented in spring.')
@@ -780,6 +841,7 @@ export function apply(world: World, c: Campaign, cmd: Cmd): Result {
       if (c.phase !== 'season' || !c.season) return fail('No work list.')
       const k = c.season.jobs.findIndex(j => j.id === cmd.id)
       if (k < 0) return fail('No such job.')
+      if (c.season.jobs[k].kind === 'haul') return fail('The crop in the field has to come in.')
       if (c.season.jobs[k].kind === 'dig' && c.season.jobs[k].done > 0) return fail('The digger is already in the field.')
       c.season.jobs.splice(k, 1)
       releaseJob(c, cmd.id)
@@ -811,6 +873,7 @@ export function apply(world: World, c: Campaign, cmd: Cmd): Result {
       if (c.phase === 'season' && c.season) {
         const f = c.season.fields[lot.field]
         if (f.status === 'digging') return fail('Still being dug.')
+        if (f.status === 'dug' && !f.weighed) return fail('Still in barrels in the field: it can be sold once it is hauled in and weighed.')
         ageLot(c, lot, c.season.day)
       }
       const money = sellLot(world, c, lot, cmd.frac)
@@ -828,6 +891,7 @@ export function apply(world: World, c: Campaign, cmd: Cmd): Result {
       const need = k.cwt - k.delivered
       if (need <= 1e-6) return fail('That contract is filled.')
       if (c.phase === 'season' && c.season && c.season.fields[lot.field].status === 'digging') return fail('Still being dug.')
+      if (c.phase === 'season' && c.season && !c.season.fields[lot.field].weighed) return fail('Still in barrels in the field: it can be delivered once it is hauled in and weighed.')
       if (lot.grades.no1 + lot.grades.chef <= 1e-6) return fail('There is no US No. 1 or large stock left in that lot.')
       if (c.phase === 'season' && c.season) ageLot(c, lot, c.season.day)
       const have = lot.grades.no1 + lot.grades.chef

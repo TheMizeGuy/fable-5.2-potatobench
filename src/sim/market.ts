@@ -57,10 +57,14 @@ export function newPotatoWindow(c: Campaign, lot: Lot): boolean {
   return c.season.day <= cut && c.season.day - lot.dugDay <= 6
 }
 
+// What a lot would fetch on the open market now. Of its No. 1 and B size, the share packed in the packing shed sells
+// at 8% more and at three quarters of the No. 1 price.
 export function lotValue(world: World, c: Campaign, lot: Lot): number {
   const g = lot.grades
   const skinnedAs: Grade = newPotatoWindow(c, lot) ? 'no1' : 'no2'
-  return g.no1 * gradePrice(world, c, lot, 'no1') + g.chef * gradePrice(world, c, lot, 'chef') + g.b * gradePrice(world, c, lot, 'b') +
+  const no1 = gradePrice(world, c, lot, 'no1'), b = gradePrice(world, c, lot, 'b')
+  const pk = lot.packed
+  return g.no1 * no1 * (1 + P.PACK_NO1 * pk) + g.chef * gradePrice(world, c, lot, 'chef') + g.b * (b + pk * (P.PACK_B * no1 - b)) +
     g.no2 * gradePrice(world, c, lot, 'no2') + lot.skinned * gradePrice(world, c, lot, skinnedAs) + g.cull * P.CULL_PRICE
 }
 

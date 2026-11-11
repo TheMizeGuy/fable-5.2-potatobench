@@ -55,8 +55,9 @@ export interface Day {
 
 export type VarietyId = 'norland' | 'superior' | 'katahdin' | 'kennebec' | 'burbank' | 'atlantic' | 'gold' | 'caribou'
 
-export type JobKind = 'plant' | 'hill' | 'scout' | 'spray' | 'water' | 'rogue' | 'sample' | 'kill' | 'dig' | 'fell' | 'rocks' | 'brush'
-export type UpgradeId = 'boom' | 'harvester' | 'vent' | 'reel' | 'tractor2' | 'house2'
+export type JobKind = 'plant' | 'hill' | 'scout' | 'spray' | 'water' | 'rogue' | 'sample' | 'kill' | 'dig' | 'fell' | 'rocks' | 'brush' | 'build' | 'haul'
+export type UpgradeId = 'boom' | 'harvester' | 'vent' | 'reel' | 'tractor2' | 'house2' | 'tractor3' | 'truck'
+export type BuildingKind = 'house' | 'shed' | 'bunk' | 'packing' | 'pond' | 'stand' | 'station' | 'road'
 export type Grade = 'no1' | 'chef' | 'b' | 'no2' | 'cull'
 export type Cause = 'green' | 'scab' | 'hollow' | 'knob' | 'skin' | 'bruise' | 'blight' | 'frost' | 'rot' | 'small' | 'stone'
 export type Tenure = 'owned' | 'rented' | 'none'
@@ -144,6 +145,8 @@ export interface FieldSeason {
   frostShare: number
   rimeDay: number           // last day this field went below freezing
   digDone: number           // hills dug so far
+  inField: number           // cwt dug and in barrels in the field, not yet hauled to a potato house
+  weighed: boolean          // the whole crop is in and the weigh ticket cut
   lotId: number
   flags: number             // one-time announcements
   // Hills, struct of arrays, ROWS * COLS long.
@@ -162,10 +165,22 @@ export interface FieldSeason {
 export interface Job {
   id: number
   kind: JobKind
-  field: number
+  field: number             // the field; for building, the yard (-1 home, -2 Dufour)
   done: number
   need: number
   unit: number              // -1: any crew; otherwise the id of the unit it is pinned to
+  building?: number         // for building: the building's id
+  pond?: boolean            // for watering: drawn from the pond, once begun
+}
+
+// A farm building, standing or under way.
+export interface Building {
+  id: number
+  kind: BuildingKind
+  yard: number              // -1 the home yard, -2 the Dufour yard
+  done: number              // crew-days of building done
+  need: number
+  built: boolean
 }
 
 // A person: the farmer, or someone hired. kind is what they were taken on for (a field hand or a tractor operator);
@@ -240,6 +255,7 @@ export interface Lot {
   broke: boolean
   sold: number                       // cwt sold
   revenue: number
+  packed: number                     // share of the No. 1 and B size packed in the packing shed, 0..1
   seedHeld: number                   // fields' worth held back as seed
   open: boolean                      // still has potatoes to sell
 }
@@ -284,6 +300,9 @@ export interface YearSummary {
   logs: number                             // part of revenue: logs sold
   mortgage: number                         // part of costs: the land mortgage's principal and interest
   works: number                            // part of costs: contractors stumping and tiling
+  building: number                         // part of costs: buildings' cash and the materials bought for them
+  stand: number                            // part of revenue: the farm stand
+  packing: number                          // part of costs: the packing charge
   cwtSold: number; cwtCulled: number
   yieldCwtAcre: number      // marketable, over potato acres
   potatoFields: number
@@ -318,6 +337,9 @@ export interface Campaign {
   logs: number              // loads of logs in the yard
   stone: number             // loads of fieldstone in the yard
   mortgages: Mortgage[]     // land bought on the mortgage, still owed
+  buildings: Building[]
+  nextBuilding: number
+  pond: number              // field-waterings in the irrigation pond
   offers: Offer[]           // this spring's contract offers, until the season begins
   contracts: Contract[]     // this year's accepted contracts
   month: number             // cellar month index, 0 = November
@@ -333,6 +355,9 @@ export interface Campaign {
   yearLogs: number
   yearMortgage: number
   yearWorks: number
+  yearBuilding: number
+  yearStand: number
+  yearPacking: number
   history: YearSummary[]
   steps: number
 }
@@ -358,6 +383,7 @@ export type Cmd =
   | { t: 'tile'; field: number }
   | { t: 'sellLogs'; loads: number }
   | { t: 'payMortgage'; amount: number }
+  | { t: 'build'; kind: BuildingKind; yard: number }
   | { t: 'job'; kind: JobKind; field: number; unit?: number }
   | { t: 'assign'; id: number; unit: number }
   | { t: 'cancel'; id: number }

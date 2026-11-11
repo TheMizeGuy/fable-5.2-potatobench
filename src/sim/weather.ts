@@ -74,10 +74,11 @@ export interface ForecastDay {
   frostChance: number   // percent, for the coldest field
 }
 
-// The forecast for a day, as issued `lead` days before it. Stateless: asking does not change the game.
-export function forecastFor(world: World, seed: number, year: number, day: number, lead: number): ForecastDay {
+// The forecast for a day, as issued `lead` days before it. Stateless: asking does not change the game. err scales its
+// errors: 1 for the public forecast, less with the farm's own weather station.
+export function forecastFor(world: World, seed: number, year: number, day: number, lead: number, err = 1): ForecastDay {
   const d = getDay(world, year, day)
-  const sd = 0.7 + 0.45 * lead
+  const sd = (0.7 + 0.45 * lead) * err
   const hi = d.tmax + sd * hashNormal(seed, year, day, lead * 16 + 1)
   const lo = Math.min(hi - 1, d.tmin + sd * hashNormal(seed, year, day, lead * 16 + 2))
   const wobble = hashNormal(seed, year, day, lead * 16 + 3)
@@ -85,13 +86,13 @@ export function forecastFor(world: World, seed: number, year: number, day: numbe
   // chance nor the amount settles whether it will rain.
   const wet = d.prcp >= 1
   const call = hashUnit(seed, year, day, lead * 16 + 5)
-  const calledWet = wet ? call >= 0.04 + 0.035 * lead + (d.prcp < 3 ? 0.12 : 0) : call < 0.03 + 0.03 * lead
+  const calledWet = wet ? call >= (0.04 + 0.035 * lead + (d.prcp < 3 ? 0.12 : 0)) * err : call < (0.03 + 0.03 * lead) * err
   const rainChance = Math.round((calledWet
     ? clamp((wet ? 80 : 58) - 5 * lead + 12 * wobble, 40, 95)
     : clamp((wet ? 28 : 8) + 3 * lead + 8 * wobble, 0, 35)) / 5) * 5
   const amount = wet ? d.prcp : 2 + 7 * hashUnit(seed, year, day, lead * 16 + 6)
-  const rainMm = calledWet ? Math.max(1, Math.round(amount * clamp(1 + 0.25 * lead * wobble, 0.3, 2.2))) : 0
-  const wetH = clamp(d.wetH + (0.8 + 0.7 * lead) * hashNormal(seed, year, day, lead * 16 + 4), 0, 24)
+  const rainMm = calledWet ? Math.max(1, Math.round(amount * clamp(1 + 0.25 * lead * wobble * err, 0.3, 2.2))) : 0
+  const wetH = clamp(d.wetH + (0.8 + 0.7 * lead) * err * hashNormal(seed, year, day, lead * 16 + 4), 0, 24)
   const sev = wallin(wetH, d.wetT)
   const z = (lo + FROST_OFFSET[0] * 0.7) / (sd + 0.6)
   const frostChance = Math.round(clamp(0.5 - z / 3.2, 0, 1) * 20) * 5

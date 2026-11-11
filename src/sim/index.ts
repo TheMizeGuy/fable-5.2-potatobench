@@ -16,9 +16,12 @@ export { hashCampaign } from './hash.ts'
 export { lotCwt, tuberWeights, type Tuber } from './harvest.ts'
 export { basePrice, gradePrice, levelNow, lotValue, newPotatoWindow } from './market.ts'
 export {
-  FIELD_NAMES, JOB_LABEL, haulDistance, haulFactor, holdsDufour, jobBlock, jobCost, jobDays, jobWait, knownHills, seasonDone, tractorsOwned, unitBlock,
-  workday,
+  FIELD_NAMES, JOB_LABEL, haulDistance, haulFactor, haulRate, holdsDufour, jobBlock, jobCost, jobDays, jobWait, knownHills, placeName, seasonDone,
+  standLot, standOpen, tractorsOwned, unitBlock, waitFor, workday,
 } from './season.ts'
+export {
+  article, buildBlock, buildCost, buildingAt, bunkhouses, hasBuilt, pondServes, rain30, roadFactor, travel, YARD_NAME, type BuildCost,
+} from './buildings.ts'
 export { makeWorld } from './world.ts'
 export {
   brushedNow, clearing, COVER_WORD, envTmin, fellLeft, fellYield, fieldEnv, isField, shelterOf, sheltered, standing, stoneBruise, stoneSpeed,

@@ -6,9 +6,7 @@ import type { Campaign, Cmd, World } from '../src/sim/index.ts'
 
 export type Sim = typeof SimModule
 
-export const REPLAY = { startYear: 1980, seed: 20240611 }
-
-const WOODLOT = 14
+export const REPLAY = { startYear: 2013, seed: 20240611 }
 
 export interface ReplayOptions {
   startYear?: number
@@ -21,11 +19,13 @@ export interface ReplayOptions {
 export interface ReplayResult { campaign: Campaign; hash: string; cmds: Cmd[]; done: boolean }
 
 export function runReplay(sim: Sim, world: World, opts: ReplayOptions = {}): ReplayResult {
-  const startYear = opts.startYear ?? 1980
+  const startYear = opts.startYear ?? 2013
   const seed = opts.seed ?? 20240611
   const c = opts.campaign ?? sim.createCampaign(world, { seed, startYear })
   const cmds: Cmd[] = []
   const go = (cmd: Cmd) => { cmds.push(cmd); return sim.apply(world, c, cmd) }
+  const WOODLOT = 14
+  const RESERVE = 5000
   // The home six each spring. The chipping variety is grown only against a contract, on the rented land.
   const PLANS: [string, string, string][][] = [
     [['potato', 'kennebec', 'certified'], ['rest', 'katahdin', 'certified'], ['potato', 'katahdin', 'certified'], ['rest', 'katahdin', 'certified'], ['potato', 'superior', 'certified'], ['potato', 'katahdin', 'certified']],
@@ -36,7 +36,8 @@ export function runReplay(sim: Sim, world: World, opts: ReplayOptions = {}): Rep
   ]
   const BUY = [[], ['reel'], ['vent', 'boom'], ['harvester'], []]
   // The bigger farm from the second spring: Intervale South rented, then given up for a Dufour field; a field hand
-  // hired, then let go; one contract signed each spring and the crop for it planted on the rented land.
+  // hired, then let go; one contract signed each spring and the crop for it planted on the rented land. Equipment and
+  // buildings are bought only while $5,000 stays in hand.
   const none = { rent: [], release: [], hire: 0, dismiss: false }
   const LAND: { rent: number[]; release: number[]; hire: number; dismiss: boolean }[] = opts.plain ? [none] : [
     none,
@@ -57,19 +58,20 @@ export function runReplay(sim: Sim, world: World, opts: ReplayOptions = {}): Rep
     if (opts.stopAt && opts.stopAt(c)) return { campaign: c, hash: sim.hashCampaign(c), cmds, done: false }
     if (c.phase === 'plan') {
       const k = Math.min(c.yearIdx, PLANS.length - 1)
-      for (const u of BUY[k]) go({ t: 'buy', upgrade: u as 'reel' })
+      for (const u of BUY[k]) if (c.cash - sim.UPGRADES[u as 'reel'].cost >= RESERVE) go({ t: 'buy', upgrade: u as 'reel' })
       const land = LAND[Math.min(c.yearIdx, LAND.length - 1)]
       for (const field of land.release) go({ t: 'release', field })
       for (const field of land.rent) go({ t: 'rent', field })
       for (let h = 0; h < land.hire; h++) go({ t: 'hire', kind: 'hand' })
-      if (land.dismiss) for (const u of c.crew.filter(x => x.kind === 'hand')) go({ t: 'dismiss', unit: u.id })
-      // The second spring one of the people asking for work is taken on, set to drive when a tractor is free, and
-      // paid a little over what they asked.
+      if (land.dismiss) for (const u of c.crew.filter(x => x.kind === 'hand').slice(0, 1)) go({ t: 'dismiss', unit: u.id })
+      // The second spring one of the people asking for work is taken on to haul the crop and do the machine work first,
+      // and paid a little over what they asked; a farm stand and a weather station go up.
       if (!opts.plain && c.yearIdx === 1 && c.applicants.length) {
         go({ t: 'hire', applicant: c.applicants[0].id })
         const u = c.crew[c.crew.length - 1]
-        go({ t: 'priority', unit: u.id, work: 'machine', level: u.prio.machine === 2 ? 3 : 2 })
+        go({ t: 'priority', unit: u.id, work: 'machine', level: 1 })
         go({ t: 'raise', unit: u.id, wage: u.wage + 30 })
+        for (const kind of ['stand', 'station'] as const) if (c.cash - sim.buildCost(c, kind).total >= RESERVE) go({ t: 'build', kind, yard: -1 })
       }
       // The third spring the stumps are pulled on the woodlot felled over the winter, and some of its logs sold.
       if (!opts.plain && c.yearIdx === 2) {
