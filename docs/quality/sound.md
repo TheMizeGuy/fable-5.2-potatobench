@@ -112,9 +112,10 @@ sensitivity peaking near 3 kHz (ISO 226) and sharpness weighting rising from
 
 ## Final measurements
 
-Round 8, Chromium, at the default volume. Firefox and WebKit agree to within
-0.3 LU on every row (`node tools/audio/check.ts chromium firefox webkit`
-prints all three).
+Round 8, Chromium, at the default volume. Firefox and WebKit agree with it to
+within 0.5 LU on every row (the rain differs most); true peaks differ by up
+to 1.8 dB on the chimes, whose partials meet at different phases in Firefox.
+`node tools/audio/check.ts chromium firefox webkit` prints all three.
 
 | render | LUFS | mom | dBTP | pk@max | clicks | DC dB | <80% | 2-5k% | >8k% | L/R | loop | rhythm | att ms | dec ms | own bed dB | >500 Hz | storm dB |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -571,8 +572,8 @@ the clock stops, the cellar from 47 s, a sale at 54 s.
   inside 40 seconds reaches 0.96, about 2 dB into the ceiling; everything at
   once sits on it at 0.97.
 - **Cost.** Every continuous voice runs whatever the weather. 48 seconds of
-  a gale renders in 1.7 s on the laptop that wrote this, building the engine
-  included.
+  a gale renders in 1.3 to 2.1 s in the three engines on the laptop that wrote
+  this, building the engine included.
 
 ## What is still not known
 

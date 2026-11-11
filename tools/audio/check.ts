@@ -20,7 +20,7 @@ const db = (x: number) => (x > 0 ? (20 * Math.log10(x)).toFixed(1) : '-inf').pad
 
 async function offline(page: Page): Promise<void> {
   page.on('pageerror', e => fail(`render page error: ${e.message}`))
-  await page.goto(`${base}src/audio/dev/render.html`)
+  await page.goto(`${base}src/audio/dev/render.html`, { timeout: 120_000 })
   await page.waitForFunction(() => '__lab' in window, null, { timeout: 60_000 })
   const self = only ? { fails: [], report: ['skipped'] } : await page.evaluate(() => (window as unknown as { __lab: Lab }).__lab.selfTest())
   for (const f of self.fails) fail(`self-test: ${f}`)
@@ -61,8 +61,8 @@ async function liveSmoke(page: Page): Promise<void> {
   page.on('pageerror', e => errors.push(e.message))
   page.on('console', m => { if (m.type() === 'error') errors.push(m.text()) })
   await page.addInitScript({ content: TAP })
-  await page.goto(base)
-  await page.waitForFunction(() => '__county' in window)
+  await page.goto(base, { timeout: 120_000 })
+  await page.waitForFunction(() => '__county' in window, null, { timeout: 120_000 })
   console.log('\nLive engine in the game page:')
 
   const state = () => page.evaluate(() => {
@@ -71,6 +71,11 @@ async function liveSmoke(page: Page): Promise<void> {
   })
   const level = (ms: number) => page.evaluate(m => (window as unknown as { __level(ms: number): Promise<Level> }).__level(m), ms)
   const run = (code: string) => page.evaluate(code)
+  // The context's state once it has become `want`, or whatever it is after five seconds: a busy page runs its timers late.
+  const settled = async (want: string) => {
+    for (let i = 0; i < 50 && (await state()) !== want; i++) await page.waitForTimeout(100)
+    return state()
+  }
   const expect = (what: string, ok: boolean, detail: string) => {
     console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${what}: ${detail}`)
     if (!ok) fail(`live: ${what} (${detail})`)
@@ -116,22 +121,19 @@ async function liveSmoke(page: Page): Promise<void> {
   await run(`window.__county.app.setSetting('volume', 0.6)`)
 
   await run(`window.__county.app.setSetting('sound', false)`)
-  await page.waitForTimeout(1000)
-  s = await state()
+  s = await settled('suspended')
   expect('sound off suspends the context', s === 'suspended', `contexts [${s}]`)
   await run(`window.__county.app.setSetting('sound', true)`)
-  await page.waitForTimeout(500)
-  s = await state()
+  s = await settled('running')
   expect('sound on resumes it', s === 'running', `contexts [${s}]`)
 
   await run(`Object.defineProperty(document, 'hidden', { configurable: true, get: () => true }); document.dispatchEvent(new Event('visibilitychange'))`)
-  await page.waitForTimeout(1000)
-  s = await state()
+  s = await settled('suspended')
   expect('hidden tab fades out and suspends', s === 'suspended', `contexts [${s}]`)
   await run(`Object.defineProperty(document, 'hidden', { configurable: true, get: () => false }); document.dispatchEvent(new Event('visibilitychange'))`)
+  s = await settled('running')
   await page.waitForTimeout(1200)
   l = await level(1000)
-  s = await state()
   expect('visible again resumes and fades in', s === 'running' && l.peak > SILENT_PEAK, `contexts [${s}], peak ${db(l.peak)} dB`)
 
   expect('no page errors', errors.length === 0, errors.length ? errors.join(' | ') : 'none')
