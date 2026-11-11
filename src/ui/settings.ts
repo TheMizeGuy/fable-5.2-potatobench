@@ -9,17 +9,20 @@ export function endSeasonEarly(ctx: Ctx): void {
   if (S.seasonDone(c)) { ctx.run({ t: 'endSeason' }); return }
   const left: string[] = []
   const digging: string[] = []
+  const bare: string[] = []
   for (let i = 0; i < S.FIELD_COUNT; i++) {
     const f = S.fieldInfo(c, i)
     if (f.status === 'digging') digging.push(f.name)
+    else if (f.status === 'idle') bare.push(f.name)
     else if (f.status !== 'rest' && f.status !== 'dug' && f.status !== 'lost') left.push(f.name)
   }
   void confirmDialog(ctx, {
     title: 'End the season now?',
     text: [
-      left.length ? h('p', null, `${F.list(left)} ${left.length === 1 ? 'is' : 'are'} still in the ground. ${left.length === 1 ? 'That crop' : 'Those crops'} will be lost, and the work on them with ${left.length === 1 ? 'it' : 'them'}.`) : null,
+      left.length ? h('p', null, `${F.list(left)} ${left.length === 1 ? 'is' : 'are'} still in the ground. ${left.length === 1 ? 'That crop will be lost, and the work that went into it' : 'Those crops will be lost, and the work that went into them'}.`) : null,
+      bare.length ? h('p', null, `${F.list(bare)} ${bare.length === 1 ? 'was' : 'were'} never planted. The ${F.money(S.FIELD_COST)} a field already spent on ${bare.length === 1 ? 'it' : 'them'} is gone, and ${bare.length === 1 ? 'it grows' : 'they grow'} nothing this year.`) : null,
       digging.length ? h('p', null, `${F.list(digging)} ${digging.length === 1 ? 'is' : 'are'} half dug. What is out of the ground is kept; the rest is left.`) : null,
-      h('p', null, 'The cellar opens next, and the season cannot be reopened.'),
+      h('p', null, `The cellar opens next, and the season cannot be reopened. The note and the household, ${F.money(S.NOTE_PAYMENT + S.LIVING)}, still come due at the year end.`),
     ],
     yes: 'End the season',
     no: 'Keep farming',
@@ -42,7 +45,7 @@ export function openSettings(ctx: Ctx): void {
       h('span', null, h('span', { class: 'check-label' }, label), h('span', { class: 'sub' }, hint)))
 
   ctx.dialogs.open({
-    title: 'Menu',
+    title: app.screen === 'title' ? 'Settings' : 'Menu and settings',
     testid: 'settings',
     cls: 'settings',
     body: close => {
@@ -64,11 +67,11 @@ export function openSettings(ctx: Ctx): void {
           h('div', { class: 'seg' },
             (['us', 'metric'] as const).map(u => h('label', { class: 'seg-opt' },
               h('input', { type: 'radio', name: 'units', value: u, checked: set.units === u, testid: `units-${u}`, onchange: () => app.setSetting('units', u) }),
-              h('span', null, u === 'us' ? '°F, inches, hundredweight, acres' : '°C, millimetres, tonnes, hectares'))))),
+              h('span', null, u === 'us' ? '°F, inches, hundredweight, acres' : '°C, millimeters, tonnes, hectares'))))),
         h('fieldset', { class: 'group' },
           h('legend', null, 'Play'),
           toggle('hints', 'Coach', 'Suggest the next job and say why.'),
-          toggle('autoPause', 'Stop the clock for news', 'Pause when blight, frost, a test dig or a harvest needs you.'),
+          toggle('autoPause', 'Stop the clock for news', 'Pause when the coach has something new, or when blight, frost, a test dig or a harvest needs you.'),
           toggle('reducedMotion', 'Reduce motion', 'Fewer moving parts on the land and in the panels.')),
         h('fieldset', { class: 'group' },
           h('legend', null, 'Sound'),

@@ -3,7 +3,8 @@ import type { Ctx } from './core.ts'
 import { h } from './dom.ts'
 
 // Name tags pinned over the fields on the land, hidden wherever a panel covers them.
-export function fieldLabels(ctx: Ctx, layer: HTMLElement, text: (i: number) => string): () => void {
+// quiet: when it says so, only the chosen field keeps its tag, so the tags do not cover a small view of the land.
+export function fieldLabels(ctx: Ctx, layer: HTMLElement, text: (i: number) => string, quiet: () => boolean = () => false): () => void {
   const app = ctx.app
   const els: HTMLElement[] = []
   for (let i = 0; i < S.FIELD_COUNT; i++) {
@@ -14,10 +15,12 @@ export function fieldLabels(ctx: Ctx, layer: HTMLElement, text: (i: number) => s
   }
   return () => {
     const ins = app.insets
+    const only = quiet()
     for (let i = 0; i < S.FIELD_COUNT; i++) {
       const a = ctx.view.fieldAnchor(i)
       const l = els[i]
-      const show = a.visible && a.x > ins.left + 30 && a.x < innerWidth - ins.right - 30 && a.y > ins.top + 12 && a.y < innerHeight - ins.bottom - 12
+      const show = a.visible && (!only || app.selected === i) &&
+        a.x > ins.left + 30 && a.x < innerWidth - ins.right - 30 && a.y > ins.top + 12 && a.y < innerHeight - ins.bottom - 12
       if (l.hidden === show) l.hidden = !show
       if (!show) continue
       const t = text(i)

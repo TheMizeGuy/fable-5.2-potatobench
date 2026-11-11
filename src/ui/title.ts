@@ -17,7 +17,7 @@ export function titleScreen(ctx: Ctx): Screen {
       const c = saved?.campaign
       patch(card, JSON.stringify([c?.year, c?.phase, c?.cash, c?.yearIdx, app.settings.units]), () => [
         h('h1', { class: 'title-name' }, 'The County'),
-        h('p', { class: 'premise' }, 'Six fields of potatoes in Aroostook County, Maine, farmed through the weather of a real year, with a crop you cannot see until you dig it.'),
+        h('p', { class: 'premise' }, 'Six fields of potatoes in Aroostook County, Maine, farmed through the weather of real years, with a crop you cannot see until you dig it.'),
         h('div', { class: 'title-actions' },
           h('button', { class: 'btn primary big', type: 'button', testid: 'new-farm', onclick: () => openNewFarm(ctx) }, 'New farm'),
           c ? h('button', { class: 'btn big continue', type: 'button', testid: 'continue', onclick: () => { if (!app.continueGame()) ctx.toast('The save could not be read.', 'warn') } },
@@ -41,6 +41,7 @@ export function openNewFarm(ctx: Ctx): void {
   const years = app.startYears()
   let pick = years[Math.floor(Math.random() * years.length)]
   const saved = app.savedGame()?.campaign
+  const gaps = years.some((y, k) => k > 0 && y !== years[k - 1] + 1)
   let closeIt = () => {}
   const confirm = h('button', { class: 'btn primary big', type: 'button', testid: 'start-confirm', onclick: () => { closeIt(); app.newGame(pick) } })
   const buttons: HTMLButtonElement[] = []
@@ -73,19 +74,20 @@ export function openNewFarm(ctx: Ctx): void {
             return b
           }))))
       }
+      if (gaps) grid.append(h('p', { class: 'sub' }, 'A farm needs five seasons in a row, so a year is left out where the Caribou record has a gap within the five after it.'))
       draw = () => {
         for (const b of buttons) b.setAttribute('aria-pressed', String(b.textContent === String(pick)))
-        const rec = app.world.records[pick]
-        const note = app.world.notes[pick]
+        // Only what a grower would know going in: the year before. The chosen year's own record waits for its ledger.
+        const before = app.world.records[pick - 1]
         const last = pick + S.GOAL_YEARS - 1
+        const known = before?.yieldCwtAcre != null || before?.priceUsdCwt != null
         detail.replaceChildren(h('div', { class: 'year-detail-in' },
           h('h3', { class: 'year-big' }, String(pick)),
-          h('dl', { class: 'facts' },
-            h('dt', null, 'Maine yield that year'),
-            h('dd', null, rec?.yieldCwtAcre != null ? `${F.perArea(rec.yieldCwtAcre)} (USDA)` : 'not in the USDA record we hold'),
-            h('dt', null, 'Maine price that year'),
-            h('dd', null, rec?.priceUsdCwt != null ? `${F.price(rec.priceUsdCwt)} in ${pick} dollars (USDA)` : 'not in the USDA record we hold')),
-          note ? h('p', { class: 'note' }, note) : null,
+          known ? h('dl', { class: 'facts', testid: 'year-before' },
+            before?.yieldCwtAcre != null ? [h('dt', null, `Maine yield the year before, ${pick - 1}`), h('dd', null, `${F.perArea(before.yieldCwtAcre)} (USDA)`)] : null,
+            before?.priceUsdCwt != null ? [h('dt', null, `Maine price the year before, ${pick - 1}`), h('dd', null, `${F.price(before.priceUsdCwt)} in ${pick - 1} dollars (USDA)`)] : null)
+            : h('p', { class: 'sub', testid: 'year-before' }, `The record we hold has no Maine yield or price for ${pick - 1}, the year before.`),
+          known && !F.metric() ? h('p', { class: 'sub' }, 'A cwt is a hundredweight: 100 lb of potatoes.') : null,
           h('p', null, `Five seasons follow, ${pick} to ${last}, each on the weather recorded at Caribou that year. You will not see it coming; the forecast is all you get.`),
           saved ? h('p', { class: 'warn-text' }, `Starting replaces the farm saved in this browser (${saved.year}, ${PHASE_LABEL[saved.phase].toLowerCase()}).`) : null,
         ))

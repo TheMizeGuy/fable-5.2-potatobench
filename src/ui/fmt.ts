@@ -19,7 +19,7 @@ export function num(n: number, digits = 0): string {
 }
 
 export function money(usd: number): string {
-  const r = Math.round(usd)
+  const r = Math.round(usd) || 0
   return r < 0 ? `−$${group(-r)}` : `$${group(r)}`
 }
 
@@ -59,6 +59,27 @@ export function mass(cwt: number): string {
 }
 
 export function massUnit(): string { return metric() ? 't' : 'cwt' }
+
+// Several weights that are shown beside their total: rounded so that the parts on screen add up to it.
+export function massParts(cwts: number[]): { parts: string[]; total: string } {
+  const k = metric() ? T_PER_CWT * 10 : 1
+  const digits = metric() ? 1 : 0
+  const raw = cwts.map(x => Math.max(0, x) * k)
+  const want = Math.round(raw.reduce((a, x) => a + x, 0))
+  const out = raw.map(Math.floor)
+  const order = raw.map((x, i) => [x - Math.floor(x), i]).sort((a, b) => b[0] - a[0])
+  let short = want - out.reduce((a, x) => a + x, 0)
+  for (const [, i] of order) { if (short <= 0) break; out[i]++; short-- }
+  const show = (n: number) => `${num(metric() ? n / 10 : n, digits)} ${massUnit()}`
+  return { parts: out.map(show), total: show(want) }
+}
+
+// What the cellar charges, for a round weight in the units in use.
+export function storeRate(usdPerCwtMonth: number): string {
+  return metric() ? `${money(usdPerCwtMonth / T_PER_CWT * 10)} per 10 t a month` : `${money(usdPerCwtMonth * 100)} per 100 cwt a month`
+}
+
+export function hundredweight(): string { return metric() ? 'tonne' : 'hundredweight' }
 
 export function massValue(cwt: number): number { return metric() ? cwt * T_PER_CWT : cwt }
 
@@ -142,9 +163,51 @@ export function plural(n: number, one: string, many = `${one}s`): string {
   return `${num(n)} ${n === 1 ? one : many}`
 }
 
-// The simulation writes its messages in US units with bare dollar figures; this rewrites them for display.
+// "both" for two, "all 4" for more.
+export function allOf(n: number): string {
+  return n === 2 ? 'both' : `all ${n}`
+}
+
+// A range that never reads "0–0": the two ends are rounded together, and a range too small to show says so.
+export function span(lo: number, hi: number, unit: string, digits = 0): string {
+  const step = 10 ** -digits
+  if (hi < step / 2) return `under ${num(step, digits)} ${unit}`
+  const a = num(lo, digits), b = num(hi, digits)
+  return a === b ? `about ${b} ${unit}` : `${a}–${b} ${unit}`
+}
+
+export function perAreaSpan(loCwtAcre: number, hiCwtAcre: number): string {
+  return span(perAreaValue(loCwtAcre), perAreaValue(hiCwtAcre), perAreaUnit(), metric() ? 1 : 0)
+}
+
+export function massSpan(loCwt: number, hiCwt: number): string {
+  return span(massValue(loCwt), massValue(hiCwt), massUnit(), metric() ? 1 : 0)
+}
+
+export function gramsSpan(lo: number, hi: number): string {
+  if (metric()) return span(lo, hi, 'g')
+  const a = lo / 28.3495, b = hi / 28.3495
+  return span(a, b, 'oz', b < 10 ? 1 : 0)
+}
+
+export function upper(text: string): string {
+  return text ? text[0].toUpperCase() + text.slice(1) : text
+}
+
+// "15% above" or "4% below", or "level with" when there is nothing in it.
+export function versus(ratio: number, over = 'above', under = 'below'): string {
+  const d = ratio - 1
+  return Math.abs(d) < 0.015 ? 'level with' : `about ${pct(Math.abs(d))} ${d > 0 ? over : under}`
+}
+
+// The simulation writes its messages in US units with bare dollar figures; this rewrites them for display,
+// and keeps to the one name the interface uses for the farm next door.
 export function localize(text: string): string {
-  const t = text.replace(/\$(\d{4,})\b/g, (_, d) => `$${group(Number(d))}`).replace(/\b(\d{4,}) cwt\b/g, (_, d) => `${group(Number(d))} cwt`)
+  const t = text
+    .replace(/the neighbours are killing their vines/g, 'the neighbor is killing the vines')
+    .replace(/the neighbours are/g, 'the neighbor is').replace(/the neighbours have/g, 'the neighbor has')
+    .replace(/neighbour/g, 'neighbor').replace(/travelling/g, 'traveling')
+    .replace(/\$(\d{4,})\b/g, (_, d) => `$${group(Number(d))}`).replace(/\b(\d{4,}) cwt\b/g, (_, d) => `${group(Number(d))} cwt`)
   if (!metric()) return t
   return t
     .replace(/(-?\d+)°F/g, (_, f) => `${Math.round((Number(f) - 32) * 5 / 9)}°C`)

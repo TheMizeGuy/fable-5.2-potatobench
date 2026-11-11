@@ -4,15 +4,29 @@ import type { Cmd, Estimate, Lot, Result } from '../sim/index.ts'
 import { h, icon, morphChildren, type Child } from './dom.ts'
 import { localize } from './fmt.ts'
 
+// wide: a rail each side of the land. side: one tabbed panel beside it. phone: the same panel under it.
+export type Layout = 'wide' | 'side' | 'phone'
+
+// What could be seen of a field before the digger went in.
+export interface Seen { stunted: number; stand: number }
+
 export interface Ctx {
   app: App
   view: FieldView
   dialogs: Dialogs
   toast(text: string, level?: Level): void
   run(cmd: Cmd): Result
+  // Narrow enough that dialogs come up from the bottom edge.
   phone(): boolean
+  layout(): Layout
+  // A finger, not a mouse: no keyboard hints, no hover.
+  touch(): boolean
   // What the grower knew a moment ago, for "before and after" displays.
-  memo: { estimates: (Estimate | null)[]; soilT: number; digSoilT: Record<string, number>; lots: Record<string, Lot> }
+  memo: {
+    estimates: (Estimate | null)[]; soilT: number; digSoilT: Record<string, number>; lots: Record<string, Lot>
+    seen: (Seen | null)[]; digEst: Record<string, Estimate | null>; digSeen: Record<string, Seen | null>
+    sampleBefore: Record<string, Estimate | null>; keptTold: Record<string, boolean>
+  }
   sheet: { tab: string; open: boolean }
   dirty(): void
 }
@@ -65,6 +79,8 @@ export interface DialogSpec {
   testid?: string
   cls?: string
   wide?: boolean
+  // A result the player has to answer: a tap outside does not close it.
+  sticky?: boolean
   body: (close: () => void) => Child
   // Actions that stay in view below the scrolling body.
   foot?: (close: () => void) => Child
@@ -72,7 +88,7 @@ export interface DialogSpec {
   label?: string
 }
 
-interface Open { el: HTMLElement; back: HTMLElement | null; spec: DialogSpec }
+interface Open { el: HTMLElement; back: HTMLElement | null; spec: DialogSpec; at: number }
 
 let dialogSeq = 0
 
@@ -87,7 +103,11 @@ export class Dialogs {
     this.layer = layer
     this.covered = covered
     this.shade = h('div', { class: 'shade', hidden: true })
-    this.shade.addEventListener('click', () => this.closeTop())
+    // A tap meant for what was under the dialog a moment ago must not close it unseen.
+    this.shade.addEventListener('click', () => {
+      const top = this.stack[this.stack.length - 1]
+      if (top && !top.spec.sticky && performance.now() - top.at >= 500) this.remove(top)
+    })
     layer.append(this.shade)
     document.addEventListener('keydown', e => this.trap(e))
   }
@@ -113,10 +133,15 @@ export class Dialogs {
       h('button', { class: 'icon-btn', type: 'button', 'aria-label': spec.label ?? 'Close', testid: 'dialog-close', onclick: close }, icon('close'))),
     h('div', { class: 'dialog-body', 'data-scroll': 'dialog' }, spec.body(close)),
     spec.foot ? h('div', { class: 'dialog-foot' }, spec.foot(close)) : null)
-    const entry: Open = { el, back, spec }
+    const entry: Open = { el, back, spec, at: performance.now() }
     this.stack.push(entry)
     this.layer.append(el)
     this.sync()
+    // A body long enough to scroll has to be reachable from the keyboard.
+    const body = el.querySelector<HTMLElement>('.dialog-body')!
+    const reach = () => { if (body.isConnected && body.scrollHeight > body.clientHeight + 1) { body.tabIndex = 0; body.setAttribute('role', 'group'); body.setAttribute('aria-label', spec.title) } }
+    reach()
+    setTimeout(reach, 700)
     ;(el.querySelector<HTMLElement>('[autofocus]') ?? el).focus({ preventScroll: true })
     return close
   }
@@ -196,20 +221,24 @@ export function confirmDialog(ctx: Ctx, o: { title: string; text: Child; yes: st
 
 export class Toasts {
   readonly el: HTMLElement
+  // Where the land is a narrow strip, one short toast at a time; everything said here is in the diary too.
+  compact = false
   constructor() {
     this.el = h('div', { class: 'toasts', 'aria-live': 'polite', 'aria-relevant': 'additions', role: 'status' })
   }
 
   show(text: string, level: Level = 'info'): void {
+    const said = localize(text)
+    for (const old of [...this.el.children]) if (old.querySelector('span')?.textContent === said) old.remove()
     const glyph = level === 'bad' ? 'spot' : level === 'warn' ? 'warn' : level === 'good' ? 'check' : null
     const t = h('div', { class: `toast ${level}` },
       glyph ? icon(glyph, `ic lv-${level}`) : null,
-      h('span', null, localize(text)),
+      h('span', null, said),
       h('button', { class: 'icon-btn small', type: 'button', 'aria-label': 'Dismiss', onclick: () => t.remove() }, icon('close')))
     this.el.append(t)
-    const keep = innerWidth <= 760 ? 2 : 3
+    const keep = this.compact ? 1 : 3
     while (this.el.children.length > keep) this.el.firstElementChild?.remove()
-    const ms = level === 'bad' ? 14000 : level === 'warn' ? 10000 : 6000
+    const ms = this.compact ? (level === 'bad' ? 8000 : level === 'warn' ? 6500 : 4500) : level === 'bad' ? 14000 : level === 'warn' ? 10000 : 6000
     let left = ms
     let last = performance.now()
     let hover = false
@@ -232,6 +261,7 @@ export class Toasts {
 
   // Keeps the toasts over open land rather than over the panels.
   place(top: number, right: number, left: number): void {
+    this.el.classList.toggle('compact', this.compact)
     const free = innerWidth - left - right
     const w = Math.min(460, Math.max(260, free - 24))
     const x = free >= w ? left + free / 2 : innerWidth / 2
