@@ -17,17 +17,18 @@ export interface Scene {
   cold: number      // 0..1, the thin whistle of a cold wind
   rain: number      // 0..1
   heavy: number     // 0..1, how much of the rain is a downpour
-  birds: number     // song phrases per minute
+  birds: number     // how freely the birds sing: 5 is a fair June morning, 0 is none
   crickets: number  // 0..1
-  chirps: number    // cricket chirps per second
+  chirps: number    // cricket chirps per second, the average over the crickets in earshot
+  pulse: number     // seconds from one pulse of a chirp to the next
   month: number
 }
 
-const QUIET: Scene = { wind: 0.2, cold: 0, rain: 0, heavy: 0, birds: 0, crickets: 0, chirps: 0, month: 5 }
+const QUIET: Scene = { wind: 0.2, cold: 0, rain: 0, heavy: 0, birds: 0, crickets: 0, chirps: 0, pulse: 0.05, month: 5 }
 
-// Phrases per minute on a fair day, May to July.
+// How freely the birds sing on a fair day, April to July.
 const BIRDS_BY_MONTH: Record<number, number> = { 3: 0.8, 4: 4, 5: 5, 6: 3 }
-const CELLAR_WIND = [0.18, 0.2, 0.18, 0.15, 0.13, 0, 0, 0, 0, 0, 0.13, 0.16]
+const CELLAR_WIND = [0.27, 0.3, 0.27, 0.22, 0.2, 0, 0, 0, 0, 0, 0.2, 0.24]
 
 export function sceneFor(input: SceneInput): Scene {
   const m = input.month
@@ -39,7 +40,7 @@ export function sceneFor(input: SceneInput): Scene {
       const winter = m >= 10 || m <= 2
       return {
         ...QUIET, month: m,
-        wind: CELLAR_WIND[m] || 0.12,
+        wind: CELLAR_WIND[m] || 0.18,
         cold: winter ? 0.7 : m === 3 ? 0.3 : 0,
         birds: m === 3 ? 0.5 : m === 4 ? 1.5 : 0,
       }
@@ -70,13 +71,15 @@ export function sceneFor(input: SceneInput): Scene {
   const fair = (w.sky === 'clear' || w.sky === 'cloud') && w.prcp < 1 && w.wind < 8
   const birds = fair ? (BIRDS_BY_MONTH[m] ?? 0) * (w.sky === 'cloud' ? 0.6 : 1) : 0
 
-  let crickets = 0, chirps = 0
-  if ((m === 7 || m === 8) && !wet && w.tmean >= 10) {
-    crickets = clamp01((w.tmean - 8) / 8) * (m === 8 ? 0.75 : 1)
-    // Dolbear's law: chirps a minute = 4 x (degrees F - 40).
-    const f = w.tmean * 1.8 + 32
-    chirps = Math.max(40, Math.min(160, 4 * (f - 40))) / 60
+  // Fall field crickets, adult from late July until the frosts, quiet below about 12 C. Their chirps come about
+  // twice a second at 25 C and their pulses 46 ms apart at 24 C; both slow in the cold, the chirps faster than
+  // the pulses (docs/quality/sound.md has the sources).
+  let crickets = 0, chirps = 0, pulse = QUIET.pulse
+  if ((m === 7 || m === 8) && !wet && w.tmean > 11.5) {
+    crickets = clamp01((w.tmean - 11) / 6) * (m === 8 ? 0.75 : 1)
+    chirps = (1.9 * (Math.min(30, w.tmean) - 6)) / 19
+    pulse = (0.046 * 30.4) / (Math.min(30, w.tmean) + 6)
   }
 
-  return { wind, cold, rain, heavy, birds, crickets, chirps, month: m }
+  return { wind, cold, rain, heavy, birds, crickets, chirps, pulse, month: m }
 }

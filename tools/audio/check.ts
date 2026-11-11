@@ -1,12 +1,16 @@
 // Sound check in a headless browser (Chromium unless others are named):
-// 1. renders every voice through an OfflineAudioContext (src/audio/dev/render.html) and reports peak and RMS,
-//    failing if a voice is silent or peaks above the ceiling;
+// 1. renders every voice, bed, cue, change and scene through an OfflineAudioContext (src/audio/dev/render.html),
+//    measures each, and fails on anything outside the plan in src/audio/dev/plan.ts: silence, peaks over the
+//    ceiling, clicks, DC, loudness outside its window, an audible loop, a lopsided spectrum, a cue its bed covers;
 // 2. loads the game, taps the live output, and checks the autoplay gate, settings, mute and hidden-tab fade.
-// Usage: node tools/audio/check.ts [chromium] [firefox] [webkit]
+// Usage: node tools/audio/check.ts [chromium] [firefox] [webkit] [--only=<case id prefix>]
+// With --only, just the matching offline cases are rendered and judged (for work on one voice).
 import { fileURLToPath } from 'node:url'
 import { chromium, firefox, webkit, type Page } from '@playwright/test'
 import { createServer } from 'vite'
-import { PEAK_LIMIT, SILENT_PEAK, type Report } from '../../src/audio/dev/report.ts'
+import { judge } from '../../src/audio/dev/plan.ts'
+import { DEFAULT_VOLUME, PEAK_LIMIT, SILENT_PEAK, type Lab, type VoiceResult } from '../../src/audio/dev/report.ts'
+import { text } from './table.ts'
 
 const root = fileURLToPath(new URL('../..', import.meta.url))
 const failures: string[] = []
@@ -16,19 +20,19 @@ const db = (x: number) => (x > 0 ? (20 * Math.log10(x)).toFixed(1) : '-inf').pad
 
 async function offline(page: Page): Promise<void> {
   page.on('pageerror', e => fail(`render page error: ${e.message}`))
-  await page.goto(`${base}src/audio/dev/render.html`)
-  await page.waitForFunction(() => '__audioReport' in window, null, { timeout: 180_000 })
-  const report = await page.evaluate(() => (window as unknown as { __audioReport: Report }).__audioReport)
-  if (report.error) { fail(`render failed: ${report.error}`); return }
-  console.log(`\n${engine}\n\nOffline renders, 48 kHz stereo, master volume at its maximum setting (dBFS):\n`)
-  console.log(`${'voice'.padEnd(54)}${'peak'.padStart(7)}${'rms'.padStart(8)}${'loudest'.padStart(9)}${'raw pk'.padStart(8)}`)
-  for (const r of report.results) {
-    let flag = ''
-    if (r.peak < SILENT_PEAK || r.rms < SILENT_PEAK / 20) { flag = 'SILENT'; fail(`${r.name}: silent (peak ${db(r.peak)} dB)`) }
-    if (r.peak > PEAK_LIMIT) { flag = 'CLIPS'; fail(`${r.name}: output peak ${r.peak.toFixed(3)} > ${PEAK_LIMIT}`) }
-    if (r.solo && r.rawPeak > PEAK_LIMIT) { flag = 'HOT'; fail(`${r.name}: raw peak ${r.rawPeak.toFixed(3)} > ${PEAK_LIMIT} before the limiter`) }
-    console.log(`${r.name.padEnd(54)}${db(r.peak)} ${db(r.rms)}  ${db(r.loudest)}  ${db(r.rawPeak)}  ${flag}`)
+  await page.goto(`${base}src/audio/dev/render.html`, { timeout: 120_000 })
+  await page.waitForFunction(() => '__lab' in window, null, { timeout: 60_000 })
+  const self = only ? { fails: [], report: ['skipped'] } : await page.evaluate(() => (window as unknown as { __lab: Lab }).__lab.selfTest())
+  for (const f of self.fails) fail(`self-test: ${f}`)
+  const cases = await page.evaluate(() => (window as unknown as { __lab: Lab }).__lab.cases)
+  const results: VoiceResult[] = []
+  for (let i = 0; i < cases.length; i++) {
+    if (only && !cases[i].id.startsWith(only)) continue
+    results.push((await page.evaluate(k => (window as unknown as { __lab: Lab }).__lab.run(k, false), i)).result)
   }
+  console.log(`\n${engine}\n\nThe instruments:\n${self.report.map(l => `  ${l}`).join('\n')}\n\nOffline renders, 48 kHz stereo, at the default volume:\n\n${text(results)}`)
+  if (only) for (const r of results) console.log(`${r.name}: raw peak ${db(r.rawPeak)} dB, chain gain ${r.m.chain.gain.toFixed(1)} dB, peak ${r.m.chain.squash.toFixed(1)} dB against it, ${(r.cost * 100).toFixed(1)}% of real time to render`)
+  for (const f of results.flatMap(judge)) fail(f)
 }
 
 // Wraps AudioContext so the test can find the game's context and tap what reaches the speakers.
@@ -57,8 +61,8 @@ async function liveSmoke(page: Page): Promise<void> {
   page.on('pageerror', e => errors.push(e.message))
   page.on('console', m => { if (m.type() === 'error') errors.push(m.text()) })
   await page.addInitScript({ content: TAP })
-  await page.goto(base)
-  await page.waitForFunction(() => '__county' in window)
+  await page.goto(base, { timeout: 120_000 })
+  await page.waitForFunction(() => '__county' in window, null, { timeout: 120_000 })
   console.log('\nLive engine in the game page:')
 
   const state = () => page.evaluate(() => {
@@ -67,6 +71,11 @@ async function liveSmoke(page: Page): Promise<void> {
   })
   const level = (ms: number) => page.evaluate(m => (window as unknown as { __level(ms: number): Promise<Level> }).__level(m), ms)
   const run = (code: string) => page.evaluate(code)
+  // The context's state once it has become `want`, or whatever it is after five seconds: a busy page runs its timers late.
+  const settled = async (want: string) => {
+    for (let i = 0; i < 50 && (await state()) !== want; i++) await page.waitForTimeout(100)
+    return state()
+  }
   const expect = (what: string, ok: boolean, detail: string) => {
     console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${what}: ${detail}`)
     if (!ok) fail(`live: ${what} (${detail})`)
@@ -75,13 +84,15 @@ async function liveSmoke(page: Page): Promise<void> {
   await page.waitForTimeout(500)
   let s = await state()
   expect('no audio context before a gesture', s === '', `contexts [${s}]`)
+  const vol = await run('window.__county.app.settings.volume') as number
+  expect('a new player starts at the volume the plan was measured at', vol === DEFAULT_VOLUME, `setting ${vol}, plan ${DEFAULT_VOLUME}`)
 
   await page.mouse.click(600, 20)
   await page.waitForTimeout(400)
   s = await state()
   expect('one running context after the first click', s === 'running', `contexts [${s}]`)
 
-  await page.waitForTimeout(1200)
+  await page.waitForTimeout(3500)
   let l = await level(3000)
   expect('title bed is audible and under the ceiling', l.peak > SILENT_PEAK && l.peak <= PEAK_LIMIT, `peak ${db(l.peak)} dB, rms ${db(l.rms)} dB`)
 
@@ -110,32 +121,31 @@ async function liveSmoke(page: Page): Promise<void> {
   await run(`window.__county.app.setSetting('volume', 0.6)`)
 
   await run(`window.__county.app.setSetting('sound', false)`)
-  await page.waitForTimeout(1000)
-  s = await state()
+  s = await settled('suspended')
   expect('sound off suspends the context', s === 'suspended', `contexts [${s}]`)
   await run(`window.__county.app.setSetting('sound', true)`)
-  await page.waitForTimeout(500)
-  s = await state()
+  s = await settled('running')
   expect('sound on resumes it', s === 'running', `contexts [${s}]`)
 
   await run(`Object.defineProperty(document, 'hidden', { configurable: true, get: () => true }); document.dispatchEvent(new Event('visibilitychange'))`)
-  await page.waitForTimeout(1000)
-  s = await state()
+  s = await settled('suspended')
   expect('hidden tab fades out and suspends', s === 'suspended', `contexts [${s}]`)
   await run(`Object.defineProperty(document, 'hidden', { configurable: true, get: () => false }); document.dispatchEvent(new Event('visibilitychange'))`)
+  s = await settled('running')
   await page.waitForTimeout(1200)
   l = await level(1000)
-  s = await state()
   expect('visible again resumes and fades in', s === 'running' && l.peak > SILENT_PEAK, `contexts [${s}], peak ${db(l.peak)} dB`)
 
   expect('no page errors', errors.length === 0, errors.length ? errors.join(' | ') : 'none')
 }
 
-const server = await createServer({ root, configFile: false, logLevel: 'warn', server: { host: '127.0.0.1', port: 0 } })
+const server = await createServer({ root, configFile: false, logLevel: 'warn', server: { host: '127.0.0.1', port: 0, hmr: false, watch: null } })
 await server.listen()
 const base = server.resolvedUrls!.local[0]
 const ENGINES = { chromium, firefox, webkit }
-const names = process.argv.slice(2)
+const args = process.argv.slice(2)
+const only = args.find(a => a.startsWith('--only='))?.slice(7) ?? ''
+const names = args.filter(a => !a.startsWith('--'))
 
 try {
   for (const name of names.length ? names : ['chromium']) {
@@ -145,7 +155,7 @@ try {
     const browser = await type.launch()
     try {
       await offline(await browser.newPage())
-      await liveSmoke(await browser.newPage())
+      if (!only) await liveSmoke(await browser.newPage())
     } finally {
       await browser.close()
     }
