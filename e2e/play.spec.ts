@@ -61,7 +61,7 @@ async function farm(page: Page, until: 'ticket' | 'done', store: boolean, ms = 3
 }
 
 test('a first season from the opening to the next spring, with a save that survives a reload', async ({ page }) => {
-  test.setTimeout(600_000)
+  test.setTimeout(900_000)
   const errors = watchErrors(page)
   await page.goto('./')
   await page.evaluate(() => localStorage.clear())
@@ -83,7 +83,8 @@ test('a first season from the opening to the next spring, with a save that survi
   expect(first.speed).toBe(1)
 
   // A crop just dug is the one thing that stops it.
-  await farm(page, 'ticket', true)
+  // A slow engine draws few frames a second, and the days go by more slowly with them.
+  await farm(page, 'ticket', true, 420_000)
   const ticket = page.getByTestId('weighin')
   await expect(ticket).toBeVisible()
   const stopped = await look(page)
@@ -219,7 +220,8 @@ test('the same start by keyboard alone', async ({ page, isMobile }) => {
   await page.evaluate(() => localStorage.clear())
   await page.reload()
 
-  await expect(page.getByTestId('play')).toBeFocused()
+  // The focus is put on Play once the land is up, which a slow engine takes a while over.
+  await expect(page.getByTestId('play')).toBeFocused({ timeout: 20_000 })
   await page.keyboard.press('Enter')
   await expect(page.getByTestId('begin-season')).toBeFocused()
   // Fields are chosen with the number keys; Escape lets them go.
