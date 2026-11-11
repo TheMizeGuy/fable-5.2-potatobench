@@ -17,7 +17,7 @@ import { openHelp } from './help.ts'
 import { ledgerScreen, overScreen } from './ledger.ts'
 import { openMenu } from './menu.ts'
 import { planScreen } from './plan.ts'
-import { alertShort } from './rules.ts'
+import { alertShort, countYearsFrom } from './rules.ts'
 import { seasonScreen } from './season.ts'
 import { titleScreen } from './title.ts'
 
@@ -83,6 +83,7 @@ export const mountHud: MountHud = (root, app, view) => {
 
   // A screen change is one movement: the old instruments leave, the land moves, the new ones arrive.
   function build(): void {
+    if (app.campaign) countYearsFrom(app.campaign)
     const old = screen
     const oldEl = old?.el
     old?.dispose?.()
@@ -141,6 +142,7 @@ export const mountHud: MountHud = (root, app, view) => {
   }
 
   app.on(e => {
+    if (app.campaign) countYearsFrom(app.campaign)
     switch (e.type) {
       case 'screen':
         papers.closeAll()

@@ -4,7 +4,7 @@ import { count, patch, type Ctx } from './core.ts'
 import { h } from './dom.ts'
 import * as F from './fmt.ts'
 import { icon } from './icons.ts'
-import { BLIGHT_RISK, forecastSky, SKY_WORD } from './rules.ts'
+import { BLIGHT_RISK, forecastSky, SKY_WORD, yearName } from './rules.ts'
 
 export const PHASE_LABEL: Record<S.Phase, string> = {
   plan: 'Spring plan', season: 'Growing season', cellar: 'In the cellar', ledger: 'Year end', over: 'The end',
@@ -24,10 +24,9 @@ function dateText(c: S.Campaign, form: 'long' | 'mid' | 'short' = 'long'): strin
   return 'The end'
 }
 
-// A farm of its own counts its years by seasons, winter included; one played on the record turns the year in January.
+// A farm counts its years by seasons, winter included.
 function yearText(c: S.Campaign): string {
-  if (S.isFarmYear(c.year)) return S.yearLabel(c.year)
-  return String(c.phase === 'cellar' && c.month >= 2 ? c.year + 1 : c.year)
+  return yearName(c.year)
 }
 
 // How far through the season it is, with the frosts and the start of the blight watch marked on it.

@@ -293,29 +293,34 @@ export function savedSeedText(stock: S.SeedStock[]): string {
   return `Saved seed is free, but it carries more virus every year it is saved: about ${F.pct(virus)} of plants from this stock will come up stunted (certified seed: about ${F.pct(S.VIRUS_CERTIFIED)}), and a stunted plant gives about ${F.pct(1 - S.VIRUS_VIGOR)} less.${blight ? ' Tuber blight went into the cellar with it, and some of that comes back up in the field.' : ''}`
 }
 
-// How a season is counted on the way to keeping the farm: "Year 2 of 5". A farm played on the record also has its year.
+// How a season is counted on the way to keeping the farm: "Year 2 of 5".
 export function seasonCount(c: S.Campaign): string {
-  const n = c.yearIdx < c.goalYears ? `year ${c.yearIdx + 1} of ${c.goalYears}` : `year ${c.yearIdx + 1}`
-  return S.isFarmYear(c.year) ? F.upper(n) : `${c.year}, ${n}`
+  return F.upper(c.yearIdx < c.goalYears ? `year ${c.yearIdx + 1} of ${c.goalYears}` : `year ${c.yearIdx + 1}`)
 }
 
-// A year as a heading names it: "Year 2", or the year itself for a farm played on the record.
+// Every farm counts its years from its first spring, whatever year its weather was made for.
+let firstYear = S.FARM_YEAR0 + 1
+export function countYearsFrom(c: S.Campaign): void {
+  firstYear = c.startYear
+}
+
+// A year as a heading names it: "Year 2".
 export function yearName(year: number): string {
-  return S.yearLabel(year)
+  return `Year ${yearShort(year)}`
 }
 
 // The same in a sentence: "year 2".
 export function yearWord(year: number): string {
-  return S.isFarmYear(year) ? S.yearLabel(year).toLowerCase() : String(year)
+  return `year ${yearShort(year)}`
 }
 
 // The same where there is room only for a figure: a column of years, the axis of a chart.
 export function yearShort(year: number): string {
-  return S.isFarmYear(year) ? String(year - S.FARM_YEAR0) : String(year)
+  return String(year - firstYear + 1)
 }
 
 // "Years 1 to 5", or "Year 3" when they are the same.
 export function yearSpan(a: number, b: number): string {
   if (a === b) return yearName(a)
-  return S.isFarmYear(a) ? `Years ${yearShort(a)} to ${yearShort(b)}` : `${a} to ${b}`
+  return `Years ${yearShort(a)} to ${yearShort(b)}`
 }
