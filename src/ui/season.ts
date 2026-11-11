@@ -157,7 +157,8 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     const jobs = s0.jobs
     const head = jobs.find(j => !waits[j.id]) ?? null
     const layout = ctx.layout()
-    const room = layout === 'narrow' ? Math.max(2, Math.floor((innerWidth - 16 - 148 - 56) / 46)) : layout === 'short' ? 4 : 8
+    // How many orders the strip has room to show before the rest fold behind a count.
+    const room = layout === 'narrow' ? Math.max(2, Math.floor((innerWidth - 16 - 148 - 56) / 46)) : layout === 'short' ? 3 : 6
     const all = expanded || jobs.length <= room
     const list = all ? jobs : jobs.slice(0, room - 1)
     const now = s0.frozen ? 'The ground has frozen' : !jobs.length ? 'Crew idle'

@@ -136,7 +136,7 @@ export function ledgerScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
       const key = JSON.stringify([c.year, c.history.length, c.outcome, app.settings.units])
       patch(sheet, key, () => [
         occasion ? h('header', { class: 'occasion-head', testid: won ? 'kept-moment' : 'lost-moment' },
-          h('span', { class: 't-label' }, `${c.startYear} to ${c.year}`),
+          h('span', { class: 't-label' }, c.startYear === c.year ? String(c.year) : `${c.startYear} to ${c.year}`),
           h('h2', { class: 't-display' }, won ? 'The farm is yours' : 'The farm is sold'),
           h('p', { class: 't-lede', testid: 'outcome' }, won
             ? `Five seasons, and the bank is paid every one of them. You finish with ${F.money(y.cashEnd)}.`
@@ -191,7 +191,7 @@ export function overScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
       const years = c.history.length
       patch(sheet, JSON.stringify([c.history.length, c.outcome, app.settings.units]), () => [
         h('header', { class: 'occasion-head' },
-          h('span', { class: 't-label' }, `${c.startYear} to ${c.year}`),
+          h('span', { class: 't-label' }, c.startYear === c.year ? String(c.year) : `${c.startYear} to ${c.year}`),
           h('h2', { class: 't-display' }, lost ? 'The farm is sold' : 'The farm is yours'),
           h('p', { class: 't-lede', testid: 'outcome' }, lost
             ? `After ${F.plural(years, 'season')} the bank called the note. The land, the house and the potato house went at auction${last ? ` with the farm ${F.money(-last.cashEnd)} in debt` : ''}.`

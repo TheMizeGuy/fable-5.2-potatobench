@@ -428,7 +428,7 @@
 .season.is-paused .tray-host { top: calc(var(--top, 56px) + 48px); }
 
 /* ---------------------------------------------------------------- spring */
-.plan .bottom { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'card' 'bar'; justify-items: center; }
+.season.plan[data-layout] .bottom { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'card' 'bar'; justify-items: center; }
 .plan-bar { grid-area: bar; width: min(980px, 100%); display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3) var(--sp-5); flex-wrap: wrap; padding: var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-4); }
 .plan-money { display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-5); font-size: var(--t-small); line-height: 18px; color: var(--cream-2); }
 .plan-money strong { color: var(--cream); font-size: var(--t-body); font-weight: 700; }
@@ -506,6 +506,7 @@
 .season[data-layout='narrow'] .order, .season[data-layout='short'] .order { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'ic' 'name' 'meta'; justify-items: center; row-gap: 0; padding: var(--sp-h); text-align: center; max-width: none; }
 .season[data-layout='narrow'] .order .ic, .season[data-layout='short'] .order .ic { width: 18px; height: 18px; }
 .season[data-layout='narrow'] .order-name, .season[data-layout='short'] .order-name { font-size: var(--t-label); line-height: 14px; max-width: 100%; }
+.season[data-layout='narrow'] .order-meta, .season[data-layout='short'] .order-meta { white-space: normal; text-align: center; }
 /* Five orders take the whole row; the way to the rest sits by the close button. */
 .season[data-layout='narrow'] .order.more { position: absolute; top: var(--sp-1); right: 44px; width: var(--hit); height: var(--hit); min-height: 0; border-color: transparent; }
 .season[data-layout='narrow'] .card-head { padding-right: 88px; }
@@ -556,7 +557,8 @@
 .season[data-layout='short'] .tb-year, .season[data-layout='short'] .track { display: none; }
 .season[data-layout='short'] .fc { min-width: 0; padding: var(--sp-h) 6px; column-gap: var(--sp-1); }
 .season[data-layout='short'] .cash { font-size: var(--t-lede); }
-@media (max-width: 739px) { .season[data-layout='short'] .fc-t span { display: none; } }
+/* A phone on its side has room for the day's high; the low is in the almanac. */
+.season[data-layout='short'] .fc-t span { display: none; }
 .season[data-layout='short'] .bottom { inset: auto max(var(--sp-2), env(safe-area-inset-right, 0px)) var(--sp-2) max(var(--sp-2), env(safe-area-inset-left, 0px)); grid-template-columns: auto minmax(0, 1fr); grid-template-areas: 'clock card' 'crew card'; gap: var(--sp-1) var(--sp-2); }
 .season[data-layout='short'] .crew { min-height: 44px; max-width: 200px; padding: var(--sp-h) var(--sp-2); display: flex; align-items: center; gap: var(--sp-2); position: relative; }
 .season[data-layout='short'] .crew.busy .crew-text, .season[data-layout='short'] .crew-now .gauge { display: none; }
