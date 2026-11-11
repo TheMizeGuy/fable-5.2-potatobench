@@ -24,6 +24,7 @@ import { Sky } from './sky.ts'
 import { snapshot, type Mode, type Snapshot } from './state.ts'
 import { buildTerrain } from './terrain.ts'
 import { flowerTexture, leafTexture, noiseTexture, puffTexture, roadTexture, sprayTexture } from './textures.ts'
+import { Birds } from './birds.ts'
 import { Weather } from './weather.ts'
 import { Poly, heightAt, parkSpot, planDay, type Pt, type Reveal, type Seg } from './work.ts'
 
@@ -112,7 +113,8 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   const farmer = new Farmer(kit)
   const particles = new Particles(puffTex)
   const weather = new Weather()
-  scene.add(sky.dome, terrain.group, flora.group, grass.mesh, props.group, fields.group, harvest.group, tractor.group, farmer.group, particles.mesh, weather.group)
+  const birds = new Birds()
+  scene.add(sky.dome, terrain.group, flora.group, grass.mesh, props.group, fields.group, harvest.group, tractor.group, farmer.group, particles.mesh, weather.group, birds.mesh)
 
   const env = makeEnv(), envT = makeEnv(), lit = makeLight()
   let snap: Snapshot = snapshot(app)
@@ -571,6 +573,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     particles.update(dt * (reduced ? 0.3 : 1), wx * env.wind * 1.6, wz * env.wind * 1.6)
     focus.set(rig.cur.x, fieldBaseY(rig.cur.z), rig.cur.z)
     weather.update(fall, env.rain, env.snowfall, wx * env.wind, wz * env.wind, cam.getWorldDirection(ahead).multiplyScalar(30).add(cam.position), lit.hazeAway, (size.h * size.pr) / (2 * Math.tan((cam.fov * Math.PI) / 360)))
+    birds.update(ambient, Math.max(env.rain, env.snowfall), lit.hazeAway)
     shadows.update(lit.sunDir, lit.sun, focus, rig.focus(), dtMs <= 0.5)
     fields.setFarShadows(!shadows.holdsFarm)
     fields.update(dt, { selection: app.selection, hover: app.hover, oats: env.oats, oatsRipe: env.oatsRipe, reduced })
@@ -704,6 +707,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       kit.dispose()
       particles.dispose()
       weather.dispose()
+      birds.dispose()
       sky.dispose()
       shadows.dispose()
       post.dispose()

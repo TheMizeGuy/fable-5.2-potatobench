@@ -315,8 +315,8 @@ export function buildTerrain(roadTex: Texture): Terrain {
           // Peat-dark water over a stony bed, pale where it runs thin at the edges and white where it breaks over stones.
           vec3 deep = ${linear('#232a22')}, shallow = ${linear('#85775a')};
           vec3 col = mix(deep, shallow, smoothstep(0.42, 0.9, shore + (texture2D(uNoise, vWorld.xz * 0.23).a - 0.5) * 0.3));
-          float reach = max(smoothstep(0.78, 0.97, 0.5 - 0.5 * sin(vWorld.x * 0.13 + 0.7)), smoothstep(0.9, 0.99, 0.5 + 0.5 * sin(vWorld.x * 0.31 + 2.0)));
-          float broken = texture2D(uNoise, vWorld.xz * vec2(0.8, 1.9) + vec2(-uTime * 0.16, 0.0)).a * 0.6 + texture2D(uNoise, vWorld.xz * vec2(1.7, 3.1) + vec2(-uTime * 0.23, 0.0)).a * 0.4;
+          float reach = smoothstep(0.9, 1.0, 0.5 - 0.5 * sin(vWorld.x * 0.13 + 0.7));
+          float broken = texture2D(uNoise, vWorld.xz * vec2(0.19, 0.83) + vec2(-uTime * 0.05, 0.0)).a * 0.6 + texture2D(uNoise, vWorld.zx * vec2(1.31, 0.43) + vec2(0.0, -uTime * 0.09)).a * 0.4;
           riffle = reach * smoothstep(0.5, 0.75, broken) * (1.0 - uIce) * smoothstep(0.95, 0.5, shore);
           col = mix(col, vec3(0.42, 0.46, 0.45), riffle * 0.5);
           col = mix(col, vec3(0.62, 0.68, 0.74) * (0.9 + 0.2 * texture2D(uNoise, vWorld.xz * 0.11).a), uIce);

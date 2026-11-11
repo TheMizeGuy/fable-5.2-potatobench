@@ -263,6 +263,7 @@ export class Fields {
         varying float vDrill;
         varying vec4 vHill;
         float poolF;
+        float poolOpen;
         float soilRough;
         vec2 soilBump;
       `,
@@ -282,12 +283,14 @@ export class Fields {
           soil = mix(soil, soil * 0.4, hole);
           // Under a closed canopy the ground gets what light the leaves let through.
           vec4 over = texture2D(uT0, vF);
-          soil *= mix(vec3(1.0), vec3(0.34, 0.5, 0.3), smoothstep(0.4, 0.95, over.r) * (1.0 - over.a) * (1.0 - vHill.r));
+          float shaded = smoothstep(0.4, 0.95, over.r) * (1.0 - over.a) * (1.0 - vHill.r);
+          soil *= mix(vec3(1.0), vec3(0.34, 0.5, 0.3), shaded);
+          poolOpen = 1.0 - 0.35 * shaded;
           float cov = uCover * smoothstep(0.2, 0.5, broad * 0.6 + 0.42 * uCover + 0.2 * fine);
           vec3 clover = uGrass * vec3(0.6, 0.98, 0.58) * (0.66 + 0.68 * fine);
           clover = mix(clover, vec3(0.74, 0.62, 0.7), step(0.8, grit) * step(0.55, fine) * 0.55 * uLeaf);
           soil = mix(soil, clover, cov);
-          poolF = uWater * mix(1.0, 1.0 - smoothstep(0.06, 0.3, vProf), vRidged) * smoothstep(0.4, 0.55, broad * 0.6 + 0.4 * texture2D(uNoise, vWorld.xz * 0.017).b);
+          poolF = uWater * mix(1.0, 1.0 - smoothstep(0.12, 0.5, vProf), vRidged) * smoothstep(0.34, 0.5, broad * 0.6 + 0.4 * texture2D(uNoise, vWorld.xz * 0.017).b);
           soil = mix(soil, vec3(0.018, 0.02, 0.018), poolF * 0.92);
           diffuseColor.rgb = soil;
           soilBump = ((n2.rg - 0.5) * 1.2 + (n3.rg - 0.5)) * (1.0 - poolF) * (1.0 - 0.5 * cov);
@@ -299,6 +302,17 @@ export class Fields {
       fragmentNormal: /* glsl */ `
         normal = normalize(normal + (viewMatrix * vec4(soilBump.x, 0.0, soilBump.y, 0.0)).xyz * 0.55);
         normal = normalize(mix(normal, (viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz, poolF));
+      `,
+      // Water standing in the furrows shows the sky, from any height.
+      fragmentEmissive: /* glsl */ `
+        if ( poolF > 0.01 ) {
+          vec3 pN = inverseTransformDirection( normal, viewMatrix );
+          vec3 pV = normalize( cameraPosition - vWorld );
+          vec3 pR = reflect( - pV, pN );
+          pR.y = abs( pR.y );
+          float pF = 0.4 + 0.6 * pow( 1.0 - max( dot( pN, pV ), 0.0 ), 4.0 );
+          totalEmissiveRadiance += skyRadiance( pR, 0.1 ) * pF * poolF * poolOpen;
+        }
       `,
     })
     const soil = new Mesh(soilGeo, soilMat)

@@ -1,14 +1,15 @@
 // One picture of the field view for working on the look: runs a snippet in the page, then takes a screenshot.
-// Usage: node tools/render/look.ts <base-url> <out.png> [WxH] [snippet.js] [--ui] [--soft]
+// Usage: node tools/render/look.ts <base-url> <out.png> [WxH] [snippet.js] [--ui] [--soft] [--browser=firefox|webkit]
 // The snippet is the body of an async function with `app`, `sim`, `field` (window.__countyField) and `frames(n)` in scope.
 import { readFileSync } from 'node:fs'
-import { chromium } from '@playwright/test'
+import { chromium, firefox, webkit } from '@playwright/test'
 
 const args = process.argv.slice(2).filter(a => !a.startsWith('--'))
 const [base, out, size = '1440x900', snippet] = args
 const [w, h] = size.split('x').map(Number)
 const soft = process.argv.includes('--soft')
-const browser = await chromium.launch({
+const other = process.argv.find(a => a.startsWith('--browser='))?.slice(10)
+const browser = other === 'firefox' ? await firefox.launch() : other === 'webkit' ? await webkit.launch() : await chromium.launch({
   args: soft ? ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] : ['--use-angle=metal', '--ignore-gpu-blocklist', '--enable-gpu'],
 })
 const page = await browser.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: 1 })

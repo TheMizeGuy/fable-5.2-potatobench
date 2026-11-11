@@ -296,7 +296,7 @@ export class Flora {
         diffuseColor.rgb = mix(${linear('#5e5448')}, birch, step(0.45, vTree.x) * step(vUp, 0.62));
         ${SNOW_RIME_TREE}`,
     })
-    place(wood.wood, barkMat, broadNear, 1, 0.01, false)
+    place(wood.wood, barkMat, broadNear, 0.8, 0.01, false)
     const crownPatch: Patch = {
       key: 'county-crown',
       vertexHead: 'attribute vec4 aTree; varying vec4 vTree;',
@@ -311,7 +311,7 @@ export class Flora {
       // Leaves thin out as they fall: the bare limbs show through, then stand alone.
       fragmentColor: `${LEAF} diffuseColor.a *= smoothstep(0.0, 0.5, uLeaf * 1.5 - texture2D(uNoise, vMapUv * 0.8 + vTree.xy).a); ${SNOW_RIME_TREE}`,
     })
-    const crown = place(wood.crown, crownMat, broadNear, 1, 0.01, false, crownPatch)
+    const crown = place(wood.crown, crownMat, broadNear, 0.8, 0.01, false, crownPatch)
     crown.receiveShadow = true
     const coreMat = patch(new MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0 }), {
       ...windy,
@@ -320,7 +320,7 @@ export class Flora {
       fragmentHead: 'varying vec4 vTree;',
       fragmentColor: `${LEAF} diffuseColor.rgb *= 0.36 + 0.5 * texture2D(uNoise, vWorld.xz * 1.3 + vWorld.y * 0.9).a; ${SNOW_RIME_TREE}`,
     })
-    place(wood.core, coreMat, broadNear, 1, 0.01, false)
+    place(wood.core, coreMat, broadNear, 0.8, 0.01, false)
     const farMat = patch(new MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0 }), {
       ...windy,
       vertexHead: 'attribute vec4 aTree; varying vec4 vTree; varying float vUp; varying float vBark;',

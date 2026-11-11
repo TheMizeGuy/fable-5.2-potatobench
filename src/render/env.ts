@@ -47,8 +47,8 @@ export function makeEnv(): Env {
 
 // By day of the year: how high the late-afternoon sun stands (degrees), and the colour of the grass.
 const SEASON: [number, number, string][] = [
-  [0, 11, '#8f8768'], [60, 14, '#91876a'], [95, 19, '#93865c'], [125, 23, '#7f8a52'], [150, 26, '#62893f'], [196, 27, '#5c8239'],
-  [228, 25, '#6a853c'], [258, 21, '#84853f'], [288, 16, '#8e7d4c'], [318, 12, '#877c5e'], [366, 11, '#8f8768'],
+  [0, 11, '#8f8768'], [60, 14, '#91876a'], [95, 19, '#93865c'], [125, 23, '#7f8a52'], [150, 26, '#6b8a42'], [196, 27, '#68833f'],
+  [228, 25, '#72853f'], [258, 21, '#868541'], [288, 16, '#8e7d4c'], [318, 12, '#877c5e'], [366, 11, '#8f8768'],
 ]
 
 interface Sky { sun: number; cover: number; shadow: number; deck: number; haze: number; key: number; turbidity: number; mie: number }
