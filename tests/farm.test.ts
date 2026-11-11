@@ -133,6 +133,7 @@ describe('the land', () => {
   it('is bought outright from cash, not on the spring loan, and net worth keeps it at its price', () => {
     const c = S.createCampaign(world, { seed: 2, startYear: 2005 })
     ok(c, { t: 'rent', field: 9 })
+    c.cash = S.PARCELS[9].price + 30000
     const worth = S.netWorth(c)
     const cash = c.cash
     ok(c, { t: 'buyLand', field: 9 })
@@ -474,6 +475,7 @@ describe('advice', () => {
     for (const i of [1, 3]) ok(c, { t: 'plan', field: i, plan: { crop: 'potato', variety: 'katahdin', seed: 'certified' } })
     ok(c, { t: 'rent', field: 8 })
     ok(c, { t: 'rent', field: 9 })
+    c.cash += S.PARCELS[8].rent + S.PARCELS[9].rent
     ok(c, { t: 'begin' })
     const plants = () => S.advise(world, c).filter(a => a.act === 'plant')
     const fit = () => [0, 1, 2, 3, 4, 5, 8, 9].filter(i => !S.fieldInfo(c, i).tooWet)
