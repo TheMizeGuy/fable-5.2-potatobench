@@ -504,6 +504,8 @@ export function ticket(ctx: Ctx, lotId: number, o: { fresh: boolean; staged?: bo
     cls: `ticket-paper${staged ? ' staged' : ''}`,
     sticky: fresh && lot.open,
     bare: true,
+    // A dig-day ticket still waiting when its crop has already been sold or delivered has nothing to ask.
+    stale: () => fresh && !lot.open,
     closeLabel: lot.open ? 'Store it and close' : 'Close',
     onClose: () => {
       if (!fresh || app.campaign !== c || c.phase !== 'season') return

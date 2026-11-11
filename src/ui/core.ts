@@ -128,6 +128,8 @@ export interface PaperSpec {
   foot?: (close: () => void) => Child
   onClose?: () => void
   closeLabel?: string
+  // For a paper that waits its turn: true once it has nothing left to ask, so it is dropped instead of opened.
+  stale?: () => boolean
 }
 
 interface Open { el: HTMLElement; back: HTMLElement | null; spec: PaperSpec; at: number }
@@ -207,11 +209,12 @@ export class Papers {
 
   // Papers raised by the game wait their turn behind whatever is open.
   enqueue(spec: PaperSpec): void {
+    if (spec.stale?.()) return
     if (!this.isOpen()) this.open(spec)
     else this.queue.push(spec)
   }
 
-  pending(): number { return this.queue.length }
+  pending(): number { return this.queue.filter(s => !s.stale?.()).length }
 
   closeTop(): void {
     const top = this.stack[this.stack.length - 1]
@@ -228,11 +231,15 @@ export class Papers {
     const k = this.stack.indexOf(entry)
     if (k < 0) return
     this.stack.splice(k, 1)
+    this.queue = this.queue.filter(s => !s.stale?.())
     const gone = () => {
       entry.el.remove()
       this.leaving--
       this.sync()
-      if (this.stack.length === 0 && this.leaving === 0 && this.queue.length) this.open(this.queue.shift()!)
+      if (this.stack.length === 0 && this.leaving === 0) {
+        this.queue = this.queue.filter(s => !s.stale?.())
+        if (this.queue.length) this.open(this.queue.shift()!)
+      }
     }
     this.leaving++
     entry.el.inert = true
