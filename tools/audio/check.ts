@@ -87,7 +87,7 @@ async function liveSmoke(page: Page): Promise<void> {
 
   await run(`(() => {
     const { app } = window.__county
-    app.setSetting('autoPause', false)
+    app.setSetting('pauseOnAlerts', false)
     const years = app.startYears()
     app.newGame(years[Math.floor(years.length / 2)], 7)
     app.do({ t: 'begin' })

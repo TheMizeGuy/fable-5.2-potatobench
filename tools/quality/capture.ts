@@ -108,7 +108,7 @@ const STATES: State[] = [
 
 // Runs in the page: what styles are actually in use on screen, and what overflows.
 const AUDIT = `(() => {
-  const out = { size: {}, color: {}, bg: {}, radius: {}, weight: {}, family: {}, small: [], clipped: [], tiny: [],
+  const out = { size: {}, color: {}, bg: {}, radius: {}, weight: {}, family: {}, small: [], clipped: [], tiny: [], words: 0, controls: 0,
     overflowX: document.documentElement.scrollWidth - document.documentElement.clientWidth }
   const bump = (o, k) => { o[k] = (o[k] || 0) + 1 }
   const name = el => (el.dataset.testid || el.className || el.tagName).toString().slice(0, 40)
@@ -119,7 +119,9 @@ const AUDIT = `(() => {
     const cs = getComputedStyle(el)
     if (cs.visibility === 'hidden' || cs.opacity === '0') continue
     const text = [...el.childNodes].some(n => n.nodeType === 3 && n.nodeValue.trim())
+    if (el.matches('button, a[href], input, select, [role=button], [role=tab]')) out.controls++
     if (text) {
+      for (const n of el.childNodes) if (n.nodeType === 3) out.words += n.nodeValue.trim().split(/\\s+/).filter(Boolean).length
       bump(out.size, cs.fontSize); bump(out.color, cs.color); bump(out.weight, cs.fontWeight); bump(out.family, cs.fontFamily.split(',')[0].trim())
       if (parseFloat(cs.fontSize) < 12) out.small.push(name(el) + ' ' + cs.fontSize)
       if (cs.overflow !== 'visible' && el.scrollWidth > el.clientWidth + 1) out.clipped.push(name(el))
@@ -131,7 +133,7 @@ const AUDIT = `(() => {
   return out
 })()`
 
-interface Audit { size: Record<string, number>; color: Record<string, number>; bg: Record<string, number>; radius: Record<string, number>; weight: Record<string, number>; family: Record<string, number>; small: string[]; clipped: string[]; tiny: string[]; overflowX: number }
+interface Audit { size: Record<string, number>; color: Record<string, number>; bg: Record<string, number>; radius: Record<string, number>; weight: Record<string, number>; family: Record<string, number>; small: string[]; clipped: string[]; tiny: string[]; words: number; controls: number; overflowX: number }
 const audits: Record<string, Audit> = {}
 
 const browser = await chromium.launch({ args: GPU })
@@ -186,6 +188,8 @@ writeFileSync(join(out, 'styles.json'), JSON.stringify({
   distinct: Object.fromEntries(Object.entries(total).map(([k, v]) => [k, Object.keys(v).length])),
   inUse: Object.fromEntries(Object.entries(total).map(([k, v]) => [k, ranked(v)])),
   problems,
+  // How much the player is asked to read and choose between on each frame.
+  load: Object.fromEntries(Object.entries(audits).map(([f, a]) => [f, { words: a.words, controls: a.controls }])),
 }, null, 1) + '\n')
 console.log('distinct in use:', Object.entries(total).map(([k, v]) => `${k} ${Object.keys(v).length}`).join(', '), `| frames with layout problems: ${Object.keys(problems).length}`)
 const bad = index.filter(x => x.errors.length)

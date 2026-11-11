@@ -96,7 +96,7 @@ await triangles(page, 'midsummer')
 // A whole season at the top speed, with the reference practice queued as it comes up.
 await page.evaluate(({ year, seed }) => {
   const { app, sim } = (window as any).__county
-  app.setSetting('autoPause', false)
+  app.setSetting('pauseOnAlerts', false)
   app.newGame(year, seed)
   app.do({ t: 'begin' })
   ;(window as any).__driver = setInterval(() => {

@@ -33,7 +33,7 @@ export function endSeasonEarly(ctx: Ctx): void {
 export function openSettings(ctx: Ctx): void {
   const app = ctx.app
   const set = app.settings
-  const toggle = (key: 'sound' | 'reducedMotion' | 'hints' | 'autoPause', label: string, hint: string) =>
+  const toggle = (key: 'sound' | 'reducedMotion' | 'hints' | 'pauseOnAlerts', label: string, hint: string) =>
     h('label', { class: 'check' },
       h('input', {
         type: 'checkbox', checked: set[key], testid: `set-${key}`, onchange: (e: Event) => {
@@ -71,7 +71,7 @@ export function openSettings(ctx: Ctx): void {
         h('fieldset', { class: 'group' },
           h('legend', null, 'Play'),
           toggle('hints', 'Coach', 'Suggest the next job and say why.'),
-          toggle('autoPause', 'Stop the clock for news', 'Pause when the coach has something new, or when blight, frost, a test dig or a harvest needs you.'),
+          toggle('pauseOnAlerts', 'Stop the clock for news', 'Pause when the coach has something new, or when blight, frost, a test dig or a harvest needs you.'),
           toggle('reducedMotion', 'Reduce motion', 'Fewer moving parts on the land and in the panels.')),
         h('fieldset', { class: 'group' },
           h('legend', null, 'Sound'),

@@ -1,53 +1,89 @@
-// The running game: owns the campaign, the clock, saving, and tells the views when something changed.
-import { advise, apply, createCampaign, seasonDone, startYears, type Campaign, type Cmd, type GameEvent, type Phase, type Result, type World } from '../sim/index.ts'
+// The running game: owns the campaign, the clock, the selection and the orders, saving, and tells the views what changed.
+import {
+  apply, createCampaign, fieldInfo, fieldNeeds, seasonDone, startYears,
+  type Advice, type Campaign, type Cmd, type GameEvent, type JobKind, type Phase, type Result, type World,
+} from '../sim/index.ts'
 import { clearSave, parseSave, readSave, readSettings, serialize, writeSave, writeSettings, type SaveFile } from './save.ts'
 
 export type Speed = 0 | 1 | 2 | 3
-export const DAYS_PER_SECOND = [0, 0.8, 2.5, 8]
+export const DAYS_PER_SECOND = [0, 0.6, 1.8, 6]
+
+export type Quality = 'auto' | 'high' | 'medium' | 'low'
 
 export interface Settings {
   units: 'us' | 'metric'
   sound: boolean
   volume: number
   reducedMotion: boolean
-  hints: boolean
-  autoPause: boolean
+  hints: boolean            // the one-line tips that come with a badge the first time
+  pauseOnAlerts: boolean    // stop the clock, not just slow it, when something needs the player
+  quality: Quality
 }
 
-const DEFAULT_SETTINGS: Settings = { units: 'us', sound: true, volume: 0.6, reducedMotion: false, hints: true, autoPause: true }
+const DEFAULT_SETTINGS: Settings = { units: 'us', sound: true, volume: 0.6, reducedMotion: false, hints: true, pauseOnAlerts: false, quality: 'auto' }
 
 export type Screen = 'title' | Phase
+
+export interface Alert {
+  id: number
+  year: number
+  day: number
+  field: number             // -1 when not about one field
+  level: GameEvent['level']
+  type: string
+  text: string
+}
+
+export interface OrderResult { field: number; ok: boolean; err: string }
 
 export type AppEvent =
   | { type: 'change' }
   | { type: 'events'; events: GameEvent[]; dayPassed: boolean }
   | { type: 'screen'; screen: Screen }
-  | { type: 'select'; field: number }
+  | { type: 'select'; field: number; fields: number[] }
+  | { type: 'hover'; field: number }
+  | { type: 'focus'; field: number }
+  | { type: 'order'; kind: JobKind; fields: number[] }
+  | { type: 'alert'; alert: Alert }
   | { type: 'speed'; speed: Speed }
   | { type: 'settings' }
   | { type: 'insets' }
   | { type: 'saved'; ok: boolean }
 
-// Events that stop the clock so the player can respond.
-const PAUSE_ON = new Set(['watch', 'blightSeen', 'frost', 'dug', 'skinSet', 'vinesDead', 'lost', 'freeze', 'sample', 'dry', 'ti'])
+// A decision that cannot wait stops the clock whatever the settings say.
+const STOP_FOR = new Set(['dug', 'freeze'])
+// Events worth an alert even though they are not warnings.
+const NOTABLE = new Set(['dug', 'sample', 'skinSet', 'emerged', 'ti', 'mature', 'watch'])
+const ALERTS_KEPT = 24
 
 export class App {
   readonly world: World
   campaign: Campaign | null = null
-  selected = -1
+  // Fields the player has selected, in the order they were clicked.
+  selection: number[] = []
+  // The field under the pointer, or -1.
+  hover = -1
   speed: Speed = 0
   settings: Settings
   // How far through the current day the clock is, 0..1, for smooth animation.
   dayProgress = 0
   screen: Screen = 'title'
-  // Screen edges covered by interface panels, in CSS pixels. The field view keeps the farm inside what is left.
+  // Screen edges covered by the interface, in CSS pixels. The field view keeps the farm inside what is left.
   insets = { top: 0, right: 0, bottom: 0, left: 0 }
-  // Why the clock last stopped itself, in the game's words ('' when the player stopped it).
+  // Why the clock last stopped or slowed itself, in the game's words ('' when the player set it).
   pauseReason = ''
+  // The most recent alerts, newest last.
+  alerts: Alert[] = []
+  // True while fast-forwarding to the next thing that needs the player.
+  running = false
+  private nextAlert = 1
   private advised = new Set<string>()
   private listeners = new Set<(e: AppEvent) => void>()
   private dirty = false
   private sinceSave = 0
+  private revision = 0
+  private needsAt = -1
+  private needsCache: { need: Advice | null; hold: Advice | null }[] = []
 
   constructor(world: World) {
     this.world = world
@@ -66,6 +102,11 @@ export class App {
 
   private emit(e: AppEvent): void {
     for (const fn of [...this.listeners]) fn(e)
+  }
+
+  // The most recently selected field, or -1.
+  get selected(): number {
+    return this.selection.length ? this.selection[this.selection.length - 1] : -1
   }
 
   startYears(): number[] {
@@ -104,10 +145,13 @@ export class App {
 
   private afterLoad(): void {
     this.speed = 0
+    this.running = false
     this.pauseReason = ''
     this.advised = new Set()
+    this.alerts = []
     this.dayProgress = 0
-    this.selected = -1
+    this.selection = []
+    this.revision++
     this.setScreen(this.campaign!.phase)
     this.save()
     this.emit({ type: 'change' })
@@ -116,6 +160,7 @@ export class App {
   quitToTitle(): void {
     this.save()
     this.speed = 0
+    this.running = false
     this.setScreen('title')
   }
 
@@ -123,6 +168,8 @@ export class App {
     clearSave()
     this.campaign = null
     this.speed = 0
+    this.running = false
+    this.selection = []
     this.setScreen('title')
     this.emit({ type: 'change' })
   }
@@ -139,25 +186,79 @@ export class App {
     const r = apply(this.world, c, cmd)
     if (!r.ok) return r
     this.dirty = true
+    this.revision++
+    for (const e of r.events) if (e.level !== 'info' || NOTABLE.has(e.type)) this.alert(c, e)
     if (cmd.t === 'day') {
       this.emit({ type: 'events', events: r.events, dayPassed: true })
-      const stop = r.events.find(e => PAUSE_ON.has(e.type) || e.level === 'bad')
-      const fresh = this.freshAdvice()
-      if (this.settings.autoPause && this.speed > 0 && (stop || fresh)) {
-        this.pauseReason = stop ? stop.text : fresh
-        this.setSpeed(0)
-      }
-      if (seasonDone(c) && this.speed > 0) { this.pauseReason = 'The season is done.'; this.setSpeed(0) }
+      this.paceAfterDay(c, r.events)
     } else if (r.events.length) {
       this.emit({ type: 'events', events: r.events, dayPassed: false })
     }
     if (c.phase !== this.screen && this.screen !== 'title') {
-      this.setSpeed(0)
+      this.halt('')
       this.setScreen(c.phase)
       this.save()
     }
     this.emit({ type: 'change' })
     return r
+  }
+
+  private alert(c: Campaign, e: GameEvent): void {
+    const a: Alert = { id: this.nextAlert++, year: c.year, day: e.day, field: e.field, level: e.level, type: e.type, text: e.text }
+    this.alerts.push(a)
+    if (this.alerts.length > ALERTS_KEPT) this.alerts.splice(0, this.alerts.length - ALERTS_KEPT)
+    this.emit({ type: 'alert', alert: a })
+  }
+
+  // After a day: stop for a decision, and otherwise slow to normal speed (or stop, if the player asked for that)
+  // when something new needs them.
+  private paceAfterDay(c: Campaign, events: GameEvent[]): void {
+    const fresh = this.freshNeed()
+    if (this.speed === 0) return
+    const decision = events.find(e => STOP_FOR.has(e.type))
+    const trouble = events.find(e => e.level === 'bad' || e.level === 'warn')
+    if (seasonDone(c)) this.halt('The season is done.')
+    else if (decision) this.halt(decision.text)
+    else if (trouble || fresh) {
+      const why = trouble ? trouble.text : fresh
+      if (this.settings.pauseOnAlerts) this.halt(why)
+      else if (this.speed > 1 || this.running) {
+        this.running = false
+        this.speed = 1
+        this.pauseReason = why
+        this.emit({ type: 'speed', speed: 1 })
+      }
+    }
+  }
+
+  private halt(why: string): void {
+    this.running = false
+    this.dayProgress = 0
+    if (this.speed === 0) return
+    this.speed = 0
+    this.pauseReason = why
+    this.emit({ type: 'speed', speed: 0 })
+  }
+
+  // The text of the first thing the reference practice now wants that it did not want yesterday.
+  private freshNeed(): string {
+    const c = this.campaign
+    if (!c || c.phase !== 'season') return ''
+    const now = this.needs().map(n => n.need).filter((a): a is Advice => !!a && a.act !== 'scout' && a.act !== 'sample')
+    const first = now.find(a => !this.advised.has(a.id))
+    this.advised = new Set(now.map(a => a.id))
+    return first ? first.text : ''
+  }
+
+  // What each field needs now under reference practice (need), or why it is being left alone (hold).
+  needs(): { need: Advice | null; hold: Advice | null }[] {
+    const c = this.campaign
+    if (!c) return []
+    if (this.needsAt !== this.revision) {
+      this.needsCache = fieldNeeds(this.world, c)
+      this.needsAt = this.revision
+    }
+    return this.needsCache
   }
 
   setInsets(top: number, right: number, bottom: number, left: number): void {
@@ -167,31 +268,97 @@ export class App {
     this.emit({ type: 'insets' })
   }
 
-  // The coach's first mention of something to do stops the clock, so a new player is never run past it.
-  private freshAdvice(): string {
-    const c = this.campaign
-    if (!c || c.phase !== 'season') return ''
-    const now = advise(this.world, c).filter(a => a.act !== 'wait' && a.act !== 'scout' && a.act !== 'sample')
-    const first = now.find(a => !this.advised.has(a.id))
-    this.advised = new Set(now.map(a => a.id))
-    return first && this.settings.hints ? first.text : ''
+  // ---------------------------------------------------------------- selection
+
+  // Selects one field, or with add toggles it in the selection. -1 clears.
+  select(field: number, add = false): void {
+    let next: number[]
+    if (field < 0) next = []
+    else if (!add) next = [field]
+    else next = this.selection.includes(field) ? this.selection.filter(f => f !== field) : [...this.selection, field]
+    this.setSelection(next)
   }
 
-  select(field: number): void {
-    if (this.selected === field) return
-    this.selected = field
-    this.emit({ type: 'select', field })
+  // Selects every field in the same state as this one: same crop, same stage of the season.
+  selectLike(field: number): void {
+    const c = this.campaign
+    if (!c || field < 0) return
+    const of = (i: number) => { const f = fieldInfo(c, i); return `${f.crop}|${f.status}` }
+    const key = of(field)
+    const all = c.fields.map((_, i) => i).filter(i => of(i) === key)
+    this.setSelection([...all.filter(i => i !== field), field])
   }
+
+  private setSelection(next: number[]): void {
+    if (next.length === this.selection.length && next.every((f, k) => f === this.selection[k])) return
+    this.selection = next
+    this.emit({ type: 'select', field: this.selected, fields: next })
+  }
+
+  setHover(field: number): void {
+    if (this.hover === field) return
+    this.hover = field
+    this.emit({ type: 'hover', field })
+  }
+
+  // Asks the field view to bring a field into frame (-1: the whole farm).
+  focus(field: number): void {
+    this.emit({ type: 'focus', field })
+  }
+
+  // ---------------------------------------------------------------- orders
+
+  // Gives an order to the selected fields (or the ones named). It reaches every field that can take it.
+  order(kind: JobKind, opts: { fields?: number[]; first?: boolean } = {}): OrderResult[] {
+    const c = this.campaign
+    const fields = opts.fields ?? this.selection
+    const out: OrderResult[] = []
+    if (!c) return out
+    const taken: number[] = []
+    for (const field of fields) {
+      const r = apply(this.world, c, { t: 'job', kind, field })
+      out.push({ field, ok: r.ok, err: r.err })
+      if (!r.ok) continue
+      taken.push(field)
+      const jobs = c.season?.jobs ?? []
+      if (opts.first && jobs.length) apply(this.world, c, { t: 'bump', id: jobs[jobs.length - 1].id })
+    }
+    if (taken.length) {
+      this.dirty = true
+      this.revision++
+      this.emit({ type: 'order', kind, fields: taken })
+      this.emit({ type: 'change' })
+    }
+    return out
+  }
+
+  // Gives a field the order reference practice has for it now, if it has one.
+  smartOrder(field: number): OrderResult {
+    const need = this.needs()[field]?.need
+    if (!need) return { field, ok: false, err: this.needs()[field]?.hold?.why ?? 'Nothing needs doing here now.' }
+    if (need.act === 'sell' || need.act === 'close' || need.act === 'wait') return { field, ok: false, err: need.text }
+    return this.order(need.act, { fields: [field] })[0]
+  }
+
+  // ---------------------------------------------------------------- the clock
 
   setSpeed(speed: Speed): void {
+    this.running = false
+    this.pauseReason = ''
     if (this.speed === speed) return
-    if (speed > 0) this.pauseReason = ''
     this.speed = speed
+    if (speed === 0) this.dayProgress = 0
     this.emit({ type: 'speed', speed })
   }
 
   togglePause(): void {
     this.setSpeed(this.speed === 0 ? 1 : 0)
+  }
+
+  // Fast-forwards until something needs the player, then drops to normal speed.
+  runUntilNeeded(): void {
+    this.setSpeed(3)
+    this.running = true
   }
 
   setSetting<K extends keyof Settings>(key: K, value: Settings[K]): void {

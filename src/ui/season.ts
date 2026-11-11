@@ -490,11 +490,11 @@ export function seasonScreen(ctx: Ctx, labelsLayer: HTMLElement): Screen {
   function clockNote(c: S.Campaign, actionable: boolean): HTMLElement | null {
     if (S.seasonDone(c) || app.speed !== 0) return null
     const go = ctx.touch() ? 'tap a speed button' : 'press Space or a speed button'
-    const self = app.settings.autoPause ? '' : ' It will not stop itself: that is switched off in the menu.'
+    const self = app.settings.pauseOnAlerts ? '' : ' It will not stop itself: that is switched off in the menu.'
     const next = c.season!.jobs.length
-      ? `${F.upper(go)} to let the days run.${app.settings.autoPause ? ' The clock stops itself when something needs you.' : self}`
+      ? `${F.upper(go)} to let the days run.${app.settings.pauseOnAlerts ? ' The clock stops itself when something needs you.' : self}`
       : actionable ? `Queue some work, then ${go} to let the days run.${self}`
-        : `Nothing can be queued yet: ${go} and let the days run.${app.settings.autoPause ? ' The clock stops itself when the coach has something for you.' : self}`
+        : `Nothing can be queued yet: ${go} and let the days run.${app.settings.pauseOnAlerts ? ' The clock stops itself when the coach has something for you.' : self}`
     return h('p', { class: 'clock-note', testid: 'clock-note' }, icon('pause'),
       h('span', null, app.pauseReason ? h('strong', null, `The clock stopped itself: ${F.localize(app.pauseReason)} `) : 'The clock is stopped. ', next))
   }
@@ -504,7 +504,7 @@ export function seasonScreen(ctx: Ctx, labelsLayer: HTMLElement): Screen {
     const advice = S.advise(app.world, c)
     const actionable = advice.some(a => a.act !== 'wait')
     if (!app.settings.hints) {
-      patch(coach, JSON.stringify(['off', app.speed, app.pauseReason, s0.jobs.length, actionable, ctx.touch(), app.settings.autoPause, S.seasonDone(c)]), () => [
+      patch(coach, JSON.stringify(['off', app.speed, app.pauseReason, s0.jobs.length, actionable, ctx.touch(), app.settings.pauseOnAlerts, S.seasonDone(c)]), () => [
         h('div', { class: 'card-head' }, h('h2', { id: 'coach-h' }, 'Coach')),
         h('p', { class: 'sub' }, 'The coach is off. Turn it on in the menu.'),
         clockNote(c, actionable),
@@ -515,7 +515,7 @@ export function seasonScreen(ctx: Ctx, labelsLayer: HTMLElement): Screen {
     if (hold && (hold.day !== s0.day || performance.now() - hold.at > 2500)) hold = null
     const items = hold ? hold.items.map(g => ({ g, done: !cur.some(x => groupKey(x) === groupKey(g)) })) : cur.map(g => ({ g, done: false }))
     const done = S.seasonDone(c)
-    const model = { g: items, sp: app.speed, done, q: s0.jobs.length, u: app.settings.units, why: app.pauseReason, t: ctx.touch(), ap: app.settings.autoPause, actionable }
+    const model = { g: items, sp: app.speed, done, q: s0.jobs.length, u: app.settings.units, why: app.pauseReason, t: ctx.touch(), ap: app.settings.pauseOnAlerts, actionable }
     let first = true
     patch(coach, JSON.stringify(model), () => [
       h('div', { class: 'card-head' }, h('h2', { id: 'coach-h' }, 'Coach'), h('span', { class: 'sub' }, 'what a careful grower would do')),

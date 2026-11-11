@@ -116,3 +116,12 @@ export function advise(world: World, c: Campaign): Advice[] {
   out.sort((a, b) => Number(b.urgent) - Number(a.urgent))
   return out
 }
+
+// For each field: what reference practice wants done there now (need), or why it is leaving the field alone (hold).
+export function fieldNeeds(world: World, c: Campaign): { need: Advice | null; hold: Advice | null }[] {
+  const all = advise(world, c)
+  return c.fields.map((_, i) => ({
+    need: all.find(a => a.field === i && a.act !== 'wait') ?? null,
+    hold: all.find(a => a.field === i && a.act === 'wait') ?? null,
+  }))
+}

@@ -49,6 +49,8 @@ export const createFieldView: CreateFieldView = (canvas, app) => {
     flat()
   }
   return {
+    ready: Promise.resolve(),
+    quality: () => inner.quality(),
     resize: () => inner.resize(),
     frame: dt => inner.frame(dt),
     fieldAnchor: i => inner.fieldAnchor(i),
@@ -432,6 +434,8 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
 
   const anchor = new Vector3()
   const view: FieldView = {
+    ready: Promise.resolve(),
+    quality: () => ({ tier: 'high', fps: 0 }),
     resize,
     frame,
     fieldAnchor(i) {
