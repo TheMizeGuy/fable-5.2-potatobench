@@ -137,8 +137,9 @@ export function planDay(snap: Snapshot, shown: HillDisplay[][], from: Pt, sample
   const segs: Seg[] = []
   let at = from
   const claimed = new Set<number>()
-  // A test dig comes first: its hill is what the player is waiting to see.
-  const list: Work[] = snap.worked.slice().sort((a, b) => Number(b.kind === 'sample') - Number(a.kind === 'sample'))
+  // A test dig comes first, then any digging: they are what the player is waiting to see.
+  const first = (w: Work) => (w.kind === 'sample' ? 2 : w.kind === 'dig' ? 1 : 0)
+  const list: Work[] = snap.worked.slice().sort((a, b) => first(b) - first(a))
   for (const w of list) {
     const f = snap.fields[w.field]
     const reveals: Reveal[] = []

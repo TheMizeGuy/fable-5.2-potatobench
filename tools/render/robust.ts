@@ -48,21 +48,21 @@ const startSeason = (page: Page, day = 0) => page.evaluate(day => {
 }, day)
 
 // Play a year under reference practice up to (not including) a day.
-const playTo = (page: Page, until: number) => page.evaluate(until => {
+const playTo = (page: Page, until: number, skip = '') => page.evaluate(([until, skip]) => {
   const { app, sim } = (window as any).__county
   app.newGame(1977, 5)
   app.do({ t: 'begin' })
   const c = app.campaign
   while (c.phase === 'season' && c.season.day < until) {
     for (const a of sim.advise(app.world, c)) {
-      if (a.act === 'wait' || a.act === 'close') continue
+      if (a.act === 'wait' || a.act === 'close' || a.act === skip) continue
       if (a.act === 'sell') app.do({ t: 'sell', lot: a.lot, frac: 1 })
       else app.do({ t: 'job', kind: a.act, field: a.field })
     }
     if (!app.do({ t: 'day' }).ok) break
   }
   ;(window as any).__countyField.settle()
-}, until)
+}, [until, skip] as [number, string])
 
 // Hide the interface and hold the screen edges it would cover, so only the field view is under test.
 const panels = (page: Page, top: number, right: number, bottom: number, left: number) => page.evaluate(([t, r, b, l]) => {
@@ -367,7 +367,7 @@ async function changed(page: Page, a: Buffer, b: Buffer): Promise<number> {
   await page.context().close()
 }
 
-// ---- The interface waits for the land: whenShown settles once the test-dig hill has been lifted.
+// ---- The interface waits for the land: whenShown settles once the test-dig hill has been lifted, or the day's rows dug.
 {
   const { page, errors } = await open()
   await playTo(page, 203)
@@ -392,6 +392,23 @@ async function changed(page: Page, a: Buffer, b: Buffer): Promise<number> {
     return performance.now() - t0
   })
   check(idle < 200, `with nothing to show it settles at once (${Math.round(idle)} ms)`)
+  // A day's digging: the last row is out before the interface is let go.
+  await playTo(page, 264, 'dig')
+  const dug = await page.evaluate(async () => {
+    const { app, sim } = (window as any).__county
+    const f = (window as any).__countyField
+    const job = sim.advise(app.world, app.campaign).find((a: any) => a.act === 'dig')
+    if (!job) return null
+    app.do({ t: 'job', kind: 'dig', field: job.field })
+    const t0 = performance.now()
+    app.do({ t: 'day' })
+    const wait = f.whenShown('dig', job.field)
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))
+    const pendingAtStart = f.info().pending
+    await wait
+    return { ms: performance.now() - t0, pendingAtStart, pendingAtEnd: f.info().pending, field: job.field }
+  })
+  check(!!dug && dug.pendingAtStart > 0 && dug.pendingAtEnd === 0 && dug.ms > 400 && dug.ms < 2700, `whenShown('dig', ${dug?.field}) settles when the last row is out, inside its cap (${Math.round(dug?.ms ?? 0)} ms, hills waiting at the start ${dug?.pendingAtStart}, at the end ${dug?.pendingAtEnd})`)
   check(errors.length === 0, `whenShown: no page errors (${errors.join(' | ')})`)
   await page.context().close()
 }
