@@ -2,17 +2,12 @@
 // while the farmer works, and a few restrained cues for what happens. Silent until the first user gesture.
 import type { App, AppEvent, Screen } from '../game/app.ts'
 import type { CreateSound } from '../game/contracts.ts'
-import { monthDay, today, type GameEvent } from '../sim/index.ts'
+import { monthDay, today } from '../sim/index.ts'
 import { Ambience } from './ambience.ts'
-import * as cue from './cues.ts'
+import { Director } from './director.ts'
 import { sceneFor, type SceneInput } from './scene.ts'
-import { createRig, volumeGain, type Rig } from './synth.ts'
+import { FADE_IN, FADE_OUT, createRig, volumeGain, type Rig } from './synth.ts'
 
-// Warning chime pitches: A minor pentatonic, low. More serious is lower.
-const WARN_HZ: [string, number][] = [
-  ['lost', 146.8], ['breakdown', 146.8], ['blightSeen', 196], ['frost', 261.6], ['freeze', 261.6], ['watch', 220], ['dry', 164.8],
-]
-const BAD_HZ = 196
 const HAND_JOBS = new Set(['scout', 'rogue', 'sample'])
 const GESTURES = ['pointerdown', 'pointerup', 'touchend', 'keydown', 'click']
 
@@ -24,19 +19,18 @@ function audioContextClass(): Ctor | null {
   return w.AudioContext ?? w.webkitAudioContext ?? null
 }
 
-export const createSound: CreateSound = app => {
+export const createSound: CreateSound = (app: App) => {
   const AC = audioContextClass()
   if (!AC || typeof document === 'undefined') return { frame() {}, dispose() {} }
 
   let ctx: AudioContext | null = null
   let rig: Rig | null = null
   let amb: Ambience | null = null
+  let director: Director | null = null
   let gestured = false
   let sinceScene = Infinity
   let suspendTimer = 0
   let lastScreen: Screen = app.screen
-  let barrelUntil = 0
-  const lastCue: Record<string, number> = {}
 
   const wanted = () => gestured && app.settings.sound && !document.hidden
   const live = () => ctx !== null && ctx.state === 'running' && wanted()
@@ -50,6 +44,7 @@ export const createSound: CreateSound = app => {
     rig = createRig(ctx, ctx.destination, { seed: (Date.now() ^ 0x5bd1e995) >>> 0, master: true })
     rig.volume.gain.value = 0
     amb = new Ambience(rig, ctx.currentTime)
+    director = new Director(rig)
     sinceScene = Infinity
   }
 
@@ -58,7 +53,7 @@ export const createSound: CreateSound = app => {
     clearTimeout(suspendTimer)
     if (!wanted()) {
       if (!ctx || !rig || ctx.state === 'closed') return
-      rig.volume.gain.setTargetAtTime(0, ctx.currentTime, 0.08)
+      rig.volume.gain.setTargetAtTime(0, ctx.currentTime, FADE_OUT)
       const c = ctx
       suspendTimer = window.setTimeout(() => { if (!wanted() && c.state === 'running') c.suspend().catch(() => {}) }, 600)
       return
@@ -66,7 +61,7 @@ export const createSound: CreateSound = app => {
     if (!ctx) start()
     if (!ctx || !rig) return
     if (ctx.state !== 'running') ctx.resume().catch(() => {})
-    rig.volume.gain.setTargetAtTime(volumeGain(Number(app.settings.volume)), ctx.currentTime, 0.25)
+    rig.volume.gain.setTargetAtTime(volumeGain(Number(app.settings.volume)), ctx.currentTime, FADE_IN)
   }
 
   function onGesture(): void {
@@ -98,52 +93,15 @@ export const createSound: CreateSound = app => {
     return s.worked.some(w => !HAND_JOBS.has(w.kind)) ? [1, 1] : [0.4, 0]
   }
 
-  function ready(key: string, gap: number, now: number): boolean {
-    if (now - (lastCue[key] ?? -Infinity) < gap) return false
-    lastCue[key] = now
-    return true
-  }
-
-  function onEvents(events: GameEvent[]): void {
-    if (!live() || !rig || !ctx) return
-    const now = ctx.currentTime
-    const has = new Set(events.map(e => e.type))
-    let k = 0
-    const slot = () => now + 0.03 + 0.11 * k++
-
-    if (has.has('planted') && ready('planted', 0.3, now)) cue.planted(rig, slot())
-    if (has.has('hilled') && ready('hilled', 0.3, now)) cue.hilled(rig, slot())
-    if (has.has('sprayed') && ready('sprayed', 0.3, now)) cue.sprayed(rig, slot())
-    if (has.has('watered') && ready('watered', 0.3, now)) cue.watered(rig, slot())
-    if ((has.has('dug') || has.has('sample')) && now >= barrelUntil) {
-      const dig = has.has('dug')
-      const sample = events.find(e => e.type === 'sample')
-      const w = sample?.data?.weights
-      barrelUntil = cue.barrel(rig, slot(), dig ? 'dig' : 'sample', Array.isArray(w) ? w.length : 5)
-    }
-    if ((has.has('sold') || has.has('overflow')) && ready('sold', 0.15, now)) cue.sold(rig, slot())
-
-    let hz = 0
-    for (const [type, f] of WARN_HZ) if (has.has(type)) { hz = f; break }
-    if (!hz && events.some(e => e.level === 'bad' && e.type !== 'dug')) hz = BAD_HZ
-    if (hz && ready('warn', 1, now)) cue.chime(rig, slot(), hz)
-
-    // The bank calling the note closes the year with no cadence.
-    if (events.some(e => e.type === 'lost' && e.field < 0)) lastCue.cadence = now
-    if (has.has('kept') && ready('cadence', 4, now)) cue.cadence(rig, slot() + 0.25, 'kept')
-  }
-
   function onScreen(screen: Screen): void {
     sinceScene = Infinity
-    if (screen === 'ledger' && lastScreen === 'cellar' && live() && rig && ctx && ready('cadence', 4, ctx.currentTime)) {
-      cue.cadence(rig, ctx.currentTime + 0.2, 'ledger')
-    }
+    if (screen === 'ledger' && lastScreen === 'cellar' && live() && director && ctx) director.ledger(ctx.currentTime)
     lastScreen = screen
   }
 
   const off = app.on((e: AppEvent) => {
     if (e.type === 'settings') apply()
-    else if (e.type === 'events') onEvents(e.events)
+    else if (e.type === 'events') { if (live() && director && ctx) director.events(e.events, ctx.currentTime) }
     else if (e.type === 'screen') onScreen(e.screen)
   })
   for (const g of GESTURES) window.addEventListener(g, onGesture, true)
@@ -171,6 +129,7 @@ export const createSound: CreateSound = app => {
       ctx = null
       rig = null
       amb = null
+      director = null
     },
   }
 }

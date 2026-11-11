@@ -1,181 +1,209 @@
-// Renders every voice through an OfflineAudioContext and publishes peak and RMS on window.__audioReport.
-// Driven by tools/audio/check.ts; also readable by opening this page in the dev server.
-import { Ambience, Birds, phrase } from '../ambience.ts'
-import * as cue from '../cues.ts'
-import { sceneFor, type Scene, type SceneInput } from '../scene.ts'
-import { createRig, volumeGain, type Rig } from '../synth.ts'
-import { PEAK_LIMIT, SILENT_PEAK, type Report, type VoiceResult } from './report.ts'
+// Renders each case through an OfflineAudioContext, measures it, and on request hands back a WAV and pictures.
+// Driven by tools/audio/check.ts and tools/audio/render.ts through window.__lab.
+import { createRig, volumeGain } from '../synth.ts'
+import * as A from './analyze.ts'
+import { CASES, WORST_BED, type Case } from './cases.ts'
+import { picture, wav } from './picture.ts'
+import { DEFAULT_VOLUME, type Lab, type Metrics, type Rendered, type VoiceResult } from './report.ts'
 
 const SR = 48000
+const SEED = 20260611
 
-interface Case { name: string; seconds: number; solo: boolean; play(rig: Rig, seconds: number): void }
-
-type Layer = 'wind' | 'rain' | 'birds' | 'crickets'
-
-function only(s: Scene, keep: Layer[]): Scene {
-  return {
-    ...s,
-    wind: keep.includes('wind') ? s.wind : 0,
-    cold: keep.includes('wind') ? s.cold : 0,
-    rain: keep.includes('rain') ? s.rain : 0,
-    heavy: keep.includes('rain') ? s.heavy : 0,
-    birds: keep.includes('birds') ? s.birds : 0,
-    crickets: keep.includes('crickets') ? s.crickets : 0,
+async function render(c: Case, master: boolean, volume: number): Promise<Float32Array[]> {
+  const ctx = new OfflineAudioContext(2, Math.ceil(c.seconds * SR), SR)
+  const rig = createRig(ctx, ctx.destination, { seed: SEED, master })
+  const v = volumeGain(volume)
+  if (c.fadeIn) {
+    rig.volume.gain.value = 0
+    rig.volume.gain.setTargetAtTime(v, 0, 0.25)
+  } else {
+    rig.volume.gain.value = v
   }
+  c.play(rig, c.seconds)
+  const b = await ctx.startRendering()
+  return [b.getChannelData(0), b.getChannelData(1)]
 }
 
-function season(month: number, wind: number, prcp: number, sky: NonNullable<SceneInput['weather']>['sky'], tmean: number): SceneInput {
-  return { place: 'season', month, weather: { wind, prcp, sky, tmean } }
+function samplePeak(chans: Float32Array[]): number {
+  let p = 0
+  for (const c of chans) for (let i = 0; i < c.length; i++) { const a = Math.abs(c[i]); if (a > p) p = a }
+  return p
 }
 
-function ambient(name: string, seconds: number, input: SceneInput, keep: Layer[] | null, engine: [number, number] = [0, 0]): Case {
-  return {
-    name, seconds, solo: keep !== null && keep.length === 1,
-    play(rig, secs) {
-      const a = new Ambience(rig, 0)
-      const s = sceneFor(input)
-      a.setScene(keep ? only(s, keep) : s, 0)
-      a.setEngine(engine[0], engine[1], 0)
-      a.schedule(0, secs)
-    },
+const profiles = new Map<string, Promise<Float64Array>>()
+
+function profileOf(id: string): Promise<Float64Array> {
+  let p = profiles.get(id)
+  if (!p) {
+    const c = CASES.find(x => x.id === id)
+    if (!c) throw new Error(`no bed ${id}`)
+    p = render(c, true, DEFAULT_VOLUME).then(ch => A.bedProfile(ch, SR, 6))
+    profiles.set(id, p)
   }
+  return p
 }
 
-function tractor(name: string, level: number, load: number): Case {
-  return {
-    name, seconds: 8, solo: true,
-    play(rig, secs) {
-      const a = new Ambience(rig, 0)
-      a.setScene(only(sceneFor({ place: 'title', month: 5, weather: null }), []), 0)
-      a.setEngine(level, load, 0)
-      a.schedule(0, secs)
-    },
-  }
-}
+const f0 = (x: number) => x.toFixed(0)
+const f1 = (x: number) => x.toFixed(1)
 
-function bird(name: string, song: Parameters<typeof phrase>[3]): Case {
-  return {
-    name, seconds: 4, solo: true,
-    play(rig) {
-      const b = new Birds(rig)
-      phrase(rig, b.out, 0.1, song, 1, 0)
-    },
-  }
-}
-
-function oneShot(name: string, seconds: number, play: (rig: Rig) => void): Case {
-  return { name, seconds, solo: true, play }
-}
-
-const CASES: Case[] = [
-  ambient('ambience: title screen', 20, { place: 'title', month: 5, weather: null }, null),
-  ambient('ambience: spring plan', 12, { place: 'plan', month: 3, weather: null }, null),
-  ambient('ambience: cellar, January', 12, { place: 'cellar', month: 0, weather: null }, null),
-  ambient('ambience: June, fair', 20, season(5, 3.2, 0, 'clear', 17), null),
-  ambient('ambience: August night', 12, season(7, 2.5, 0, 'clear', 19), null),
-  ambient('wind: breeze, 3.2 m/s', 12, season(5, 3.2, 0, 'overcast', 15), ['wind']),
-  ambient('wind: gale, 11 m/s, October', 12, season(9, 11, 0, 'overcast', 6), ['wind']),
-  {
-    name: 'wind: cold whistle alone', seconds: 12, solo: true,
-    play(rig, secs) {
-      const a = new Ambience(rig, 0)
-      a.setScene({ ...only(sceneFor({ place: 'title', month: 0, weather: null }), []), cold: 0.7 }, 0)
-      a.schedule(0, secs)
-    },
-  },
-  ambient('rain: light, 3 mm', 10, season(6, 2, 3, 'rain', 16), ['rain']),
-  ambient('rain: heavy, 18 mm', 10, season(6, 4, 18, 'rain', 16), ['rain']),
-  ambient('rain: storm, 45 mm', 10, season(7, 8, 45, 'storm', 18), ['rain']),
-  ambient('birds: May morning', 24, season(4, 2, 0, 'clear', 12), ['birds']),
-  bird('bird: white-throated sparrow', 'sparrow'),
-  bird('bird: chickadee', 'chickadee'),
-  bird('bird: robin', 'robin'),
-  bird('bird: trill', 'trill'),
-  ambient('crickets: August, 20 C', 10, season(7, 2, 0, 'clear', 20), ['crickets']),
-  tractor('tractor: working', 1, 1),
-  tractor('tractor: idling (work on foot)', 0.4, 0),
-  oneShot('cue: planted', 1.5, r => cue.planted(r, 0.05)),
-  oneShot('cue: hilled', 1.5, r => cue.hilled(r, 0.05)),
-  oneShot('cue: sprayed', 1.5, r => cue.sprayed(r, 0.05)),
-  oneShot('cue: watered', 1.5, r => cue.watered(r, 0.05)),
-  oneShot('cue: test dig (6 tubers)', 3, r => { cue.barrel(r, 0.05, 'sample', 6) }),
-  oneShot('cue: dug', 4, r => { cue.barrel(r, 0.05, 'dig', 0) }),
-  oneShot('cue: sold', 1.5, r => cue.sold(r, 0.05)),
-  oneShot('cue: warning, frost', 6, r => cue.chime(r, 0.05, 261.6)),
-  oneShot('cue: warning, blight watch', 6, r => cue.chime(r, 0.05, 220)),
-  oneShot('cue: warning, blight seen', 6, r => cue.chime(r, 0.05, 196)),
-  oneShot('cue: warning, dry', 6, r => cue.chime(r, 0.05, 164.8)),
-  oneShot('cue: warning, lost', 6, r => cue.chime(r, 0.05, 146.8)),
-  oneShot('cue: year-end ledger', 6, r => { cue.cadence(r, 0.05, 'ledger') }),
-  oneShot('cue: five seasons kept', 7, r => { cue.cadence(r, 0.05, 'kept') }),
-  {
-    name: 'stress: storm, gale, tractor and every cue at once', seconds: 8, solo: false,
-    play(rig, secs) {
-      const a = new Ambience(rig, 0)
-      const s = sceneFor(season(9, 12, 60, 'storm', 4))
-      a.setScene({ ...s, birds: 6, crickets: 1, chirps: 2.5, month: 5 }, 0)
-      a.setEngine(1, 1, 0)
-      a.schedule(0, secs)
-      for (const t of [2.5, 4.5]) {
-        cue.planted(rig, t); cue.hilled(rig, t); cue.sprayed(rig, t); cue.watered(rig, t)
-        cue.barrel(rig, t, 'dig', 0); cue.barrel(rig, t, 'sample', 8); cue.sold(rig, t)
-        cue.chime(rig, t, 146.8); cue.chime(rig, t, 261.6); cue.cadence(rig, t, 'kept')
+function features(c: Case, chans: Float32Array[]): string[] {
+  const out: string[] = []
+  const m = A.mid(chans)
+  for (const f of c.features ?? []) {
+    if (f === 'notes') {
+      for (const n of A.notes(m, SR, 1500, 8000, 14)) {
+        out.push(`note at ${n.at.toFixed(3)} s, ${f0(n.dur * 1000)} ms, ${f0(n.hz0)} to ${f0(n.hz1)} Hz (range ${f0(n.lo)}-${f0(n.hi)}), ${f1(n.db)} dB`)
       }
-    },
-  },
+    } else if (f === 'lines') {
+      out.push('spectral lines: ' + A.spectralPeaks(m, SR, 16384, 60, 9000, 10).map(p => `${f0(p.hz)} Hz ${f1(p.db)} dB`).join(', '))
+    } else if (f === 'engine') {
+      const late = m.subarray(6 * SR)
+      out.push('spectral lines 8-700 Hz: ' + A.spectralPeaks(late, SR, 65536, 8, 700, 14).map(p => `${f1(p.hz)} Hz ${f1(p.db)} dB`).join(', '))
+      out.push('octave bands 31.5 Hz to 4 kHz, dB re the 125 Hz band: ' + A.octaves(late, SR).map(f1).join(' '))
+    } else if (f === 'pulses') {
+      const on = A.onsets(chans, SR, 0.25, 5)
+      const chirps: number[][] = []
+      for (const t of on) {
+        const last = chirps[chirps.length - 1]
+        if (last && t - last[last.length - 1] < 0.08) last.push(t); else chirps.push([t])
+      }
+      const inner: number[] = []
+      for (const ch of chirps) for (let i = 1; i < ch.length; i++) inner.push(ch[i] - ch[i - 1])
+      const gaps = chirps.slice(1).map((ch, i) => ch[0] - chirps[i][0])
+      const mean = (a: number[]) => a.reduce((x, y) => x + y, 0) / Math.max(1, a.length)
+      const sd = (a: number[]) => Math.sqrt(mean(a.map(x => (x - mean(a)) ** 2)))
+      out.push(`${chirps.length} chirps; pulses in each: ${chirps.map(ch => ch.length).join(' ')}`)
+      out.push(`pulse period ${f1(mean(inner) * 1000)} ms; chirp period ${f0(mean(gaps) * 1000)} ms (sd ${f0(sd(gaps) * 1000)} ms), ${f1(60 / mean(gaps))} chirps a minute`)
+      out.push('carrier: ' + A.spectralPeaks(m, SR, 16384, 2000, 9000, 3).map(p => `${f0(p.hz)} Hz ${f1(p.db)} dB`).join(', '))
+    } else if (f === 'knocks') {
+      const on = A.onsets(chans, SR, 0.1, 25)
+      const env = A.envelope(chans, SR)
+      const lv = on.map(t => { let p = 0; for (let i = Math.round(t * 1000); i < Math.min(env.length, Math.round(t * 1000) + 40); i++) p = Math.max(p, env[i]); return p })
+      out.push(`${on.length} knocks at ${on.map(t => t.toFixed(2)).join(' ')} s`)
+      out.push(`gaps ${on.slice(1).map((t, i) => f0((t - on[i]) * 1000)).join(' ')} ms; levels ${lv.map(p => f1(A.db(p))).join(' ')} dB`)
+      out.push('spectral lines: ' + A.spectralPeaks(m, SR, 8192, 50, 4000, 8).map(p => `${f0(p.hz)} Hz ${f1(p.db)} dB`).join(', '))
+    } else if (f === 'rain') {
+      const late = m.subarray(8 * SR)
+      out.push(`level in 0.6-1.2 kHz ${f1(A.bandLevel(late, SR, 600, 1200))} dB, in 4.4-5.6 kHz ${f1(A.bandLevel(late, SR, 4400, 5600))} dB, in 6-8 kHz ${f1(A.bandLevel(late, SR, 6000, 8000))} dB`)
+    } else if (f === 'ridge') {
+      const p = A.bandPeak(m.subarray(8 * SR), SR, 150, 6000)
+      out.push(`band peaks at ${f0(p.hz)} Hz, 3 dB down at ${f0(p.from)} and ${f0(p.to)} Hz`)
+    } else if (f === 'gusts') {
+      const w = A.levelWander(m, SR, 10)
+      out.push(`level second by second: standard deviation ${f1(w.sd)} dB, from ${f1(w.lo)} to +${f1(w.hi)} dB about its mean`)
+    }
+  }
+  return out
+}
+
+async function run(i: number, files: boolean): Promise<Rendered> {
+  const c = CASES[i]
+  const began = performance.now()
+  const chans = await render(c, true, DEFAULT_VOLUME)
+  const cost = (performance.now() - began) / 1000 / c.seconds
+  const loud = A.loudness(chans, SR)
+  const b = A.bands(chans, SR)
+  const long = c.kind === 'bed' || c.kind === 'voice' || c.kind === 'scene'
+  const m: Metrics = {
+    truePeak: A.db(A.truePeak(chans)),
+    lufs: loud.integrated, momentary: loud.momentaryMax, shortTerm: loud.shortTermMax,
+    dc: A.dcOffset(chans),
+    clicks: A.clicks(chans, SR),
+    sub80: b.sub80, harsh: b.harsh, hiss: b.hiss, centroid: b.centroid,
+    corr: A.stereoCorrelation(chans),
+    wave: long && c.seconds >= 8 ? A.waveRepeat(chans, SR) : null,
+    rhythm: long && c.seconds >= 8 ? A.rhythmRepeat(chans, SR) : null,
+    shape: c.kind === 'cue' ? A.shape(chans, SR) : null,
+    mask: null, worst: null, chain: { gain: 0, squash: 0 },
+  }
+  if (c.kind === 'cue') {
+    const cp = A.cueProfile(chans, SR)
+    if (c.over) m.mask = { ...A.masking(cp, await profileOf(c.over)), bed: c.over }
+    m.worst = A.masking(cp, await profileOf(WORST_BED))
+  }
+  const peakMax = samplePeak(await render(c, true, 1))
+  const raw = await render(c, false, 1)
+  const rawPeak = samplePeak(raw)
+  const rms = (ch: Float32Array[]) => Math.sqrt(ch.reduce((sum, d) => sum + d.reduce((q, v) => q + v * v, 0), 0))
+  if (!c.fadeIn && rawPeak > 0) {
+    const gain = A.db(rms(chans) / (rms(raw) * volumeGain(DEFAULT_VOLUME)))
+    m.chain = { gain, squash: A.db(samplePeak(chans) / (rawPeak * volumeGain(DEFAULT_VOLUME))) - gain }
+  }
+  const result: VoiceResult = {
+    id: c.id, name: c.name, kind: c.kind, seconds: c.seconds, solo: c.solo, ticks: c.ticks === true, periodic: c.periodic === true, song: c.song === true, plan: c.plan,
+    m, peakMax, rawPeak, cost, features: features(c, chans),
+  }
+  if (!files) return { result, wav: '', png: '', small: '', zoom: '' }
+  const win = c.win ?? (c.seconds <= 4 ? 2048 : 4096)
+  const note = `${c.seconds} s   ${f1(m.lufs)} LUFS   peak ${f1(m.truePeak)} dBTP   FFT ${win}`
+  return {
+    result,
+    wav: wav(chans, SR),
+    png: picture(chans, SR, { title: c.name, note, win, scale: 1 }),
+    // The small picture for the write-up: the close-up for a single bird or cricket, the whole spectrum otherwise.
+    small: picture(chans, SR, {
+      title: c.name, note: `${c.seconds} s  ${f1(m.lufs)} LUFS`, scale: 0.5, levels: 16, cell: 2,
+      win: c.band && c.solo ? Math.min(win, 1024) : win, band: c.band && c.solo ? c.band : undefined,
+    }),
+    zoom: c.band ? picture(chans, SR, { title: `${c.name}, ${c.band[0]} to ${c.band[1]} Hz`, note, win: Math.min(win, 1024), scale: 1, band: c.band }) : '',
+  }
+}
+
+// The smallest step, in dBFS, that the click test finds when one `len` samples wide is planted in a clean render.
+function smallestStep(clean: Float32Array[], len: number): number {
+  const at = Math.floor(clean[0].length / 2)
+  for (let dbfs = -66; dbfs <= -20; dbfs += 2) {
+    const size = Math.pow(10, dbfs / 20)
+    const bad = clean.map(ch => ch.slice())
+    for (const ch of bad) for (let i = at; i < ch.length; i++) ch[i] += size * Math.min(1, (i - at + 1) / len)
+    const k = A.clicks(bad, SR)
+    if (k.count >= 1 && Math.abs(k.at - at / SR) <= 0.01) return dbfs
+  }
+  return 0
+}
+
+// Proves the instruments can see. A step planted in a clean render must be found, a clean render must pass, and
+// the loudness meter must read a known signal correctly. Each [case, seconds in, one-sample limit, 1 ms limit]
+// is the largest planted step, in dBFS, allowed to go unfound in that kind of sound (0: none is required; a step
+// smeared over a millisecond hides in noise from this test).
+const SEEN: [string, number, number, number][] = [
+  ['cue-warn-watch', 2, -50, -30],
+  ['tractor-working', 8, -48, -16],
+  ['bed-june', 12, -34, 0],
 ]
 
-async function render(c: Case, master: boolean): Promise<AudioBuffer> {
-  const ctx = new OfflineAudioContext(2, Math.ceil(c.seconds * SR), SR)
-  const rig = createRig(ctx, ctx.destination, { seed: 20260611, master })
-  rig.volume.gain.value = volumeGain(1)
-  c.play(rig, c.seconds)
-  return ctx.startRendering()
-}
-
-function measure(b: AudioBuffer): { peak: number; rms: number; loudest: number } {
-  const win = Math.floor(0.05 * b.sampleRate)
-  let peak = 0, sum = 0, loudest = 0
-  const chans = Array.from({ length: b.numberOfChannels }, (_, i) => b.getChannelData(i))
-  let w = 0, wn = 0
-  for (let i = 0; i < b.length; i++) {
-    for (const d of chans) {
-      const x = d[i]
-      const a = Math.abs(x)
-      if (a > peak) peak = a
-      sum += x * x
-      w += x * x
-    }
-    if (++wn === win) {
-      loudest = Math.max(loudest, Math.sqrt(w / (win * chans.length)))
-      w = 0
-      wn = 0
-    }
+async function selfTest(): Promise<{ fails: string[]; report: string[] }> {
+  const fails: string[] = []
+  const report: string[] = []
+  for (const [id, from, oneLimit, wideLimit] of SEEN) {
+    const c = CASES.find(x => x.id === id)!
+    const clean = (await render(c, true, DEFAULT_VOLUME)).map(ch => ch.slice(from * SR, (from + 3) * SR))
+    if (A.clicks(clean, SR).count !== 0) fails.push(`click test flags the clean render of ${c.name}`)
+    const one = smallestStep(clean, 1), wide = smallestStep(clean, 48)
+    report.push(`click test in ${c.name}: finds a one-sample step from ${one} dBFS, a step 1 ms wide ${wide ? `from ${wide} dBFS` : 'not at all up to -20 dBFS'}`)
+    if (one > oneLimit) fails.push(`click test needs a one-sample step of ${one} dBFS in ${c.name}; the limit is ${oneLimit}`)
+    if (wide > wideLimit) fails.push(`click test needs a 1 ms step of ${wide} dBFS in ${c.name}; the limit is ${wideLimit}`)
   }
-  return { peak, rms: Math.sqrt(sum / (b.length * chans.length)), loudest }
+  // How hard the engine is to run. Every continuous voice is built and runs whatever the weather, so a gale
+  // stands for all of them; sounds scheduled a moment ahead in the game are all built at once in a render, and
+  // would overstate it.
+  const busy = CASES.find(x => x.id === 'bed-october-gale')!
+  const began = performance.now()
+  await render(busy, true, DEFAULT_VOLUME)
+  report.push(`cost: ${busy.seconds} s of a gale, every continuous voice running, renders in ${((performance.now() - began) / 1000).toFixed(1)} s, building the engine included`)
+  const tone = new Float32Array(SR)
+  for (let i = 0; i < SR; i++) tone[i] = 0.5 * Math.sin((2 * Math.PI * 997 * i) / SR)
+  const l = A.loudness([tone, tone], SR).integrated
+  // A 997 Hz sine at -6 dBFS in both channels reads -6.0 LUFS on a BS.1770 meter.
+  report.push(`loudness meter: a -6.0 dBFS 997 Hz stereo sine reads ${l.toFixed(2)} LUFS`)
+  if (Math.abs(l - -6.0) > 0.15) fails.push(`loudness meter reads ${l.toFixed(2)} LUFS for a -6 dBFS 997 Hz stereo sine, not -6.0`)
+  return { fails, report }
 }
 
-async function run(): Promise<Report> {
-  const results: VoiceResult[] = []
-  for (const c of CASES) {
-    const out = measure(await render(c, true))
-    const raw = measure(await render(c, false))
-    results.push({ name: c.name, seconds: c.seconds, solo: c.solo, peak: out.peak, rms: out.rms, loudest: out.loudest, rawPeak: raw.peak })
-  }
-  return { results, error: '' }
+const lab: Lab = {
+  cases: CASES.map(c => ({ id: c.id, name: c.name, kind: c.kind, seconds: c.seconds })),
+  defaultVolume: DEFAULT_VOLUME,
+  run, selfTest,
 }
-
-const db = (x: number) => (x > 0 ? (20 * Math.log10(x)).toFixed(1) : '-inf').padStart(6)
-
-run().then(
-  report => {
-    ;(window as unknown as { __audioReport: Report }).__audioReport = report
-    document.getElementById('out')!.textContent = report.results
-      .map(r => `${r.name.padEnd(52)} peak ${db(r.peak)} dB  rms ${db(r.rms)} dB  raw ${db(r.rawPeak)} dB` +
-        (r.peak > PEAK_LIMIT || (r.solo && r.rawPeak > PEAK_LIMIT) ? '  CLIPS' : r.peak < SILENT_PEAK ? '  SILENT' : ''))
-      .join('\n')
-  },
-  (err: unknown) => {
-    ;(window as unknown as { __audioReport: Report }).__audioReport = { results: [], error: String(err instanceof Error ? err.stack ?? err.message : err) }
-  },
-)
+;(window as unknown as { __lab: Lab }).__lab = lab
+document.getElementById('out')!.textContent = `${CASES.length} cases ready. Run tools/audio/check.ts or tools/audio/render.ts.`
