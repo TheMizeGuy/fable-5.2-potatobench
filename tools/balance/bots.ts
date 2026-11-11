@@ -223,7 +223,7 @@ export interface ExpertCfg {
   contracts: 'choose' | 'none' | 'all'
   tractor2: boolean
   house2: boolean
-  pin: boolean              // orders on the far land go to the crew working there
+  pin: 'off' | 'far' | 'home'   // machine work on the far land is the operator's, or on the home farm the farmer's
   tune: Tuning
 }
 
@@ -264,9 +264,10 @@ export interface Tuning {
   earlyDate: number         // without a test dig: dig this many days after August 1
   fieldRevenue: number      // what a healthy potato field brings in, for the rotation plan
   plan: { from: number; byElev: VarietyId[][] }[]   // varieties by preference on bottom land, mid slope and ridge, from a year on
-  land: { block: BlockId; from: number; left: number; cash: number }[]   // land to hold: from a year, with this many seasons left and this much cash in spring
+  landValue: Partial<Record<BlockId, number>>   // what a healthy field of each block nets in a potato season before rent, crews included
+  landMargin: number        // rents a field when its plan for the seasons left is worth more than this
   loanFloor: number         // the spring plan takes cash no lower than this
-  buyLand: number           // buys a field it holds outright when this much cash would be left
+  buyLand: number           // buys a field it holds outright when the cash left after it and the spring's planting is at least this
   hands: { from: number; per: number }   // a field hand once more than `from` fields are being walked, another for each `per` more
   opFields: number          // the operator, once the second tractor is there, for this many potato fields or more
   tractor: { fields: number; left: number; reserve: number }   // the second tractor: potato fields, seasons left, cash kept
@@ -274,12 +275,12 @@ export interface Tuning {
   contractGain: number      // signs a contract when it is worth this much more than growing for the open market
   no1Share: number          // share of the marketable crop that is US No. 1 and large, for sizing contracts
   contractSafety: number    // plants for this share of the usual crop when filling a contract
+  // What the expert has learned to expect of each variety: marketable cwt an acre, and the share of its listed price a
+  // hundredweight fetches sold the usual way (at the dig or from the cellar). Rules of thumb from its own play.
+  yieldAcre: Record<VarietyId, number>
+  realized: Record<VarietyId, number>
 }
 
-// What the expert has learned to expect of each variety: marketable cwt an acre and the share of its listed price a
-// hundredweight fetches sold the usual way (at the dig or from the cellar). Rules of thumb from its own play.
-export const YIELD: Record<VarietyId, number> = { norland: 251, superior: 287, katahdin: 325, kennebec: 337, burbank: 337, atlantic: 350, gold: 290, caribou: 371 }
-export const REALIZED: Record<VarietyId, number> = { norland: 1.05, superior: 0.95, katahdin: 0.95, kennebec: 0.95, burbank: 0.97, atlantic: S.PROCESSING_PRICE, gold: 0.95, caribou: 0.92 }
 
 export const TUNING: Tuning = {
   sprayMode: 'severe', spraySv: 30, sprayProtect: 0.3, sprayProtectFound: 0.5, scoutEvery: 4, scoutFound: 5, rogueMax: 2,
@@ -292,22 +293,20 @@ export const TUNING: Tuning = {
     { from: 0, byElev: [['gold', 'kennebec'], ['gold', 'kennebec'], ['katahdin']] },
     { from: 2015, byElev: [['caribou'], ['caribou'], ['caribou']] },
   ],
-  land: [
-    { block: 'ridge', from: 0, left: 1, cash: -Infinity },
-    { block: 'brook', from: 0, left: 1, cash: -Infinity },
-    { block: 'dufour', from: 0, left: 1, cash: -Infinity },
-  ],
-  loanFloor: -70000, buyLand: -30000,
+  landValue: { ridge: 8500, brook: 5000, dufour: 6500 }, landMargin: 0,
+  loanFloor: -75000, buyLand: -60000,
   hands: { from: 5, per: 5 }, opFields: 9,
   tractor: { fields: 9, left: 2, reserve: 0 },
   house: { left: 2, over: 3000, reserve: 20000 },
   contractGain: 0, no1Share: 0.8, contractSafety: 0.85,
+  yieldAcre: { norland: 251, superior: 287, katahdin: 325, kennebec: 337, burbank: 337, atlantic: 350, gold: 290, caribou: 371 },
+  realized: { norland: 1.05, superior: 0.95, katahdin: 0.95, kennebec: 0.95, burbank: 0.97, atlantic: S.PROCESSING_PRICE, gold: 0.95, caribou: 0.92 },
 }
 
 export const EXPERT: ExpertCfg = {
   hill: true, scout: true, spray: true, water: true, sample: true, kill: true, store: true,
   rotation: true, seed: 'auto', equipment: true, variety: null, calendar: false,
-  land: 'auto', hire: true, contracts: 'choose', tractor2: true, house2: true, pin: true, tune: TUNING,
+  land: 'auto', hire: true, contracts: 'choose', tractor2: true, house2: true, pin: 'off', tune: TUNING,
 }
 
 const MACHINE: JobKind[] = ['plant', 'hill', 'spray', 'water', 'kill', 'dig']
@@ -489,7 +488,7 @@ export function expert(cfg: ExpertCfg = EXPERT): BotFactory {
     }
 
     // What a field of a variety is worth sold on the open market, by the expert's rules of thumb.
-    const openValue = (id: VarietyId) => YIELD[id] * S.FIELD_ACRES * S.variety(id).price * REALIZED[id]
+    const openValue = (id: VarietyId) => k.yieldAcre[id] * S.FIELD_ACRES * S.variety(id).price * k.realized[id]
 
     const useSaved = (v: VarietyId) => S.variety(v).virus <= 0.5
     const isEarly = (c: Campaign, i: number) => k.earlyMarket.includes(c.plans[i].variety)
@@ -591,32 +590,81 @@ export function expert(cfg: ExpertCfg = EXPERT): BotFactory {
 
     // ------------------------------------------------------------ spring: land, contracts, plans, machinery, crew
 
-    function wantedBlocks(c: Campaign): BlockId[] {
-      if (Array.isArray(cfg.land)) return cfg.land
-      const left = yearsLeft(c)
-      return k.land.filter(r => c.year >= r.from && left >= r.left && c.cash >= r.cash).map(r => r.block)
+    const PER_FIELD = S.FIELD_COST + S.SEED_CWT_PER_FIELD * S.CERT_SEED_PER_CWT
+    let landMove = new Map<number, 'potato' | 'rest'>()   // this year's crop on each field beyond the home six it holds
+
+    // The next few seasons of a field the farm does not own: each year grow potatoes, rest it, or leave it to its
+    // owner (its soil is then as it was), paying the rent in every year it is held. value is a potato season on a
+    // healthy field of that block, before rent. Returns the best first move and what the whole plan is worth.
+    function landPlan(vert: number, soil: number, value: number, rent: number, years: number): { first: 'potato' | 'rest' | 'off'; worth: number } {
+      const healthy = fieldValue(0.03, 1)
+      let best = -Infinity, first: 'potato' | 'rest' | 'off' = 'off'
+      const go = (t: number, v: number, s: number, total: number, move: 'potato' | 'rest' | 'off') => {
+        if (t === years) { if (total > best) { best = total; first = move } return }
+        const odds = v / (1 - v)
+        const grow = odds * S.VERT_GROW, rest = odds * S.VERT_REST
+        go(t + 1, Math.min(0.95, grow / (1 + grow)), Math.max(0, s + S.SOIL_AFTER_POTATO), total + value - (healthy - fieldValue(v, s)) - rent, t === 0 ? 'potato' : move)
+        go(t + 1, Math.max(0.01, rest / (1 + rest)), 1, total + S.REST_INCOME - S.REST_COST - rent, t === 0 ? 'rest' : move)
+        go(t + 1, v, s, total, t === 0 ? 'off' : move)
+      }
+      go(0, vert, soil, 0, 'off')
+      return { first, worth: best }
     }
 
-    // Rents or buys the blocks it wants and gives back rented land it does not. A field is bought outright when the
-    // cash left after the price and a spring's planting on every field it will hold is at least buyLand.
-    function takeLand(world: World, c: Campaign, want: BlockId[]): void {
-      const fields = S.HOME_FIELDS + want.reduce((a, b) => a + BLOCK_FIELDS[b].length, 0)
-      const planting = fields * (S.FIELD_COST + S.SEED_CWT_PER_FIELD * S.CERT_SEED_PER_CWT)
+    // The land it holds this year beyond the home six. Chosen: each field whose plan for the seasons left beats
+    // leaving it, best first, as far as the spring loan goes. Fixed (cfg.land a list): every field of those blocks.
+    // It rents them, or buys a field outright when the cash left after the price and the spring's planting is at
+    // least buyLand, and gives back rented land it no longer wants.
+    function takeLand(world: World, c: Campaign, homePotato: number): void {
+      const left = yearsLeft(c)
+      landMove = new Map()
+      let planting = homePotato * PER_FIELD
+      const want = new Set<number>()
+      const cost = (i: number, move: 'potato' | 'rest') => (move === 'potato' ? PER_FIELD : S.REST_COST) + (S.fieldInfo(c, i).tenure === 'owned' ? 0 : S.PARCELS[i].rent)
+      const options: { i: number; move: 'potato' | 'rest'; worth: number }[] = []
+      for (const b of FAR) {
+        for (const i of BLOCK_FIELDS[b]) {
+          const f = S.fieldInfo(c, i)
+          const owned = f.tenure === 'owned'
+          if (Array.isArray(cfg.land) ? cfg.land.includes(b) : owned) {
+            const move = cfg.rotation ? bestFirstCrop(f.vert, f.soil, left) : 'potato'
+            want.add(i); landMove.set(i, move); planting += cost(i, move)
+            continue
+          }
+          if (Array.isArray(cfg.land)) continue
+          const lp = landPlan(f.vert, f.soil, k.landValue[b] ?? 0, S.PARCELS[i].rent, left)
+          if (lp.first !== 'off' && lp.worth > k.landMargin) options.push({ i, move: cfg.rotation ? lp.first : 'potato', worth: lp.worth })
+        }
+      }
+      for (const o of options.sort((a, b) => b.worth - a.worth)) {
+        if (c.cash - planting - cost(o.i, o.move) < k.loanFloor) continue
+        want.add(o.i); landMove.set(o.i, o.move); planting += cost(o.i, o.move)
+      }
       for (const b of FAR) {
         for (const i of BLOCK_FIELDS[b]) {
           const tenure = S.fieldInfo(c, i).tenure
-          if (!want.includes(b)) { if (tenure === 'rented') S.apply(world, c, { t: 'release', field: i }); continue }
+          if (!want.has(i)) { if (tenure === 'rented') S.apply(world, c, { t: 'release', field: i }); continue }
           if (tenure === 'owned') continue
-          if (c.cash - S.PARCELS[i].price - planting >= k.buyLand && S.apply(world, c, { t: 'buyLand', field: i }).ok) continue
+          if (c.cash - S.PARCELS[i].price - planting >= k.buyLand && S.apply(world, c, { t: 'buyLand', field: i }).ok) {
+            planting -= S.PARCELS[i].rent
+            continue
+          }
           if (tenure === 'none') S.apply(world, c, { t: 'rent', field: i })
         }
       }
     }
 
+    // What holding a field is worth this year, for giving land back when the loan will not stretch.
+    function heldNet(c: Campaign, i: number): number {
+      const f = S.fieldInfo(c, i)
+      const value = (k.landValue[f.block] ?? 0) - (fieldValue(0.03, 1) - fieldValue(f.vert, f.soil))
+      return (f.crop === 'potato' ? value : S.REST_INCOME - S.REST_COST) - (f.tenure === 'owned' ? 0 : S.PARCELS[i].rent)
+    }
+
     // Contracts worth signing, given the potato fields planned and the variety each would grow.
     function signContracts(world: World, c: Campaign, fields: { i: number; elev: number; v: VarietyId }[]): void {
       if (cfg.contracts === 'none' || !fields.length) return
-      const perField = (id: VarietyId) => YIELD[id] * S.FIELD_ACRES * k.no1Share * k.contractSafety
+      const perField = (id: VarietyId) => k.yieldAcre[id] * S.FIELD_ACRES * k.no1Share * k.contractSafety
       const offers = [...S.offerInfo(c)].sort((a, b) => b.price / b.usual - a.price / a.usual)
       const need = new Map<VarietyId, number>()
       for (const o of offers) {
@@ -631,7 +679,7 @@ export function expert(cfg: ExpertCfg = EXPERT): BotFactory {
           const others = fields.filter(f => f.v !== o.variety && !need.has(f.v))
           if (switching > others.length) continue
           const lost = others.map(f => openValue(f.v) - openValue(o.variety)).sort((a, b) => a - b).slice(0, switching).reduce((a, x) => a + x, 0)
-          const gain = o.cwt * (o.price - v.price * REALIZED[o.variety]) - lost
+          const gain = o.cwt * (o.price - v.price * k.realized[o.variety]) - lost
           if (gain <= k.contractGain) continue
         }
         if (S.apply(world, c, { t: 'accept', offer: o.id }).ok) need.set(o.variety, (need.get(o.variety) ?? 0) + o.cwt)
@@ -657,7 +705,7 @@ export function expert(cfg: ExpertCfg = EXPERT): BotFactory {
     // The blocks the operator works: the far land, until it has about half the potato fields.
     function sideFor(c: Campaign): Set<BlockId> {
       const out = new Set<BlockId>()
-      if (!cfg.pin || !hireCount(c, 'operator').length) return out
+      if (cfg.pin !== 'far' || !hireCount(c, 'operator').length) return out
       let total = 0
       const count = new Map<BlockId, number>()
       for (const f of infos(c)) if (f.crop === 'potato') { total++; count.set(f.block, (count.get(f.block) ?? 0) + 1) }
@@ -760,13 +808,17 @@ export function expert(cfg: ExpertCfg = EXPERT): BotFactory {
             if (!c.upgrades[b.id] && c.year >= b.from && left >= b.left && c.cash - S.UPGRADES[b.id].cost >= k.reserve) S.apply(world, c, { t: 'buy', upgrade: b.id })
           }
         }
-        const want = wantedBlocks(c)
-        takeLand(world, c, want)
+        let homePotato = 0
+        for (let i = 0; i < S.HOME_FIELDS; i++) {
+          const f = S.fieldInfo(c, i)
+          if (!cfg.rotation || bestFirstCrop(f.vert, f.soil, left) === 'potato') homePotato++
+        }
+        takeLand(world, c, homePotato)
         const stock = new Map<VarietyId, number>()
         for (const x of c.seedStock) stock.set(x.variety, (stock.get(x.variety) ?? 0) + x.fields)
         const potato: { i: number; elev: number; v: VarietyId }[] = []
         for (const f of infos(c)) {
-          const crop = cfg.rotation ? bestFirstCrop(f.vert, f.soil, left) : 'potato'
+          const crop = landMove.get(f.index) ?? (cfg.rotation ? bestFirstCrop(f.vert, f.soil, left) : 'potato')
           if (crop === 'rest') { setPlan(world, c, f.index, { crop: 'rest', variety: 'katahdin', seed: 'certified' }); continue }
           potato.push({ i: f.index, elev: f.elev, v: defaultVariety(c, f.elev) })
         }
@@ -780,11 +832,14 @@ export function expert(cfg: ExpertCfg = EXPERT): BotFactory {
         }
         // Machinery and the crew for the land it holds.
         const n = potato.length
-        if (cfg.tractor2 && cfg.hire && !c.upgrades.tractor2 && n >= k.tractor.fields && left >= k.tractor.left && c.cash - S.UPGRADES.tractor2.cost >= k.tractor.reserve) {
+        // Bought from cash, so only when the spring's plan still fits the loan afterwards.
+        const fits = (cost: number) => c.cash - cost - S.planCosts(c).total - (cfg.hire && n >= k.opFields ? S.OPERATOR_WAGE : 0) >= k.loanFloor
+        if (cfg.tractor2 && cfg.hire && !c.upgrades.tractor2 && n >= k.tractor.fields && left >= k.tractor.left &&
+          c.cash - S.UPGRADES.tractor2.cost >= k.tractor.reserve && fits(S.UPGRADES.tractor2.cost)) {
           S.apply(world, c, { t: 'buy', upgrade: 'tractor2' })
         }
-        if (cfg.house2 && !c.upgrades.house2 && left >= k.house.left && c.cash - S.UPGRADES.house2.cost >= k.house.reserve) {
-          const crop = potato.reduce((a, p) => a + YIELD[p.v] * S.FIELD_ACRES, 0)
+        if (cfg.house2 && !c.upgrades.house2 && left >= k.house.left && c.cash - S.UPGRADES.house2.cost >= k.house.reserve && fits(S.UPGRADES.house2.cost)) {
+          const crop = potato.reduce((a, p) => a + k.yieldAcre[p.v] * S.FIELD_ACRES, 0)
           if (crop - S.cellarCapacity(c) >= k.house.over) S.apply(world, c, { t: 'buy', upgrade: 'house2' })
         }
         for (const u of hireCount(c, 'hand')) S.apply(world, c, { t: 'dismiss', unit: u.id })
@@ -792,11 +847,17 @@ export function expert(cfg: ExpertCfg = EXPERT): BotFactory {
         const wantOp = cfg.hire && c.upgrades.tractor2 && n >= k.opFields
         if (wantOp && !op.length) S.apply(world, c, { t: 'hire', kind: 'operator' })
         else if (!wantOp) for (const u of op) S.apply(world, c, { t: 'dismiss', unit: u.id })
-        // Keep the spring loan within bounds: give back the nearest rented land first.
-        for (const b of [...FAR].reverse()) {
-          if (c.cash - S.planCosts(c).total >= k.loanFloor) break
-          if (Array.isArray(cfg.land)) break
-          for (const i of BLOCK_FIELDS[b]) if (S.fieldInfo(c, i).tenure === 'rented') S.apply(world, c, { t: 'release', field: i })
+        // Keep the spring loan within bounds: give back the rented block worth least, then rest the potato field
+        // worth least.
+        for (let guard = 0; guard < S.FIELD_COUNT && c.cash - S.planCosts(c).total < k.loanFloor; guard++) {
+          const rented = infos(c).filter(f => f.tenure === 'rented')
+          if (!Array.isArray(cfg.land) && rented.length) {
+            S.apply(world, c, { t: 'release', field: rented.sort((a, b) => heldNet(c, a.index) - heldNet(c, b.index))[0].index })
+            continue
+          }
+          const worst = infos(c).filter(f => f.crop === 'potato').sort((a, b) => fieldValue(a.vert, a.soil) - fieldValue(b.vert, b.soil))[0]
+          if (!worst) break
+          setPlan(world, c, worst.index, { crop: 'rest', variety: 'katahdin', seed: 'certified' })
         }
       },
 
@@ -918,7 +979,9 @@ export function expert(cfg: ExpertCfg = EXPERT): BotFactory {
         // Machine work on the operator's side of the farm is his; hands walk wherever they are needed.
         const crew = S.crewInfo(c)
         const opId = crew.find(u => u.kind === 'operator')?.id ?? -1
-        const pinFor = (kind: JobKind, field: number) => opId >= 0 && MACHINE.includes(kind) && opSide.has(S.PARCELS[field].block) ? opId : -1
+        const pinFor = (kind: JobKind, field: number) => opId < 0 || !MACHINE.includes(kind) ? -1
+          : cfg.pin === 'far' ? (opSide.has(S.PARCELS[field].block) ? opId : -1)
+            : cfg.pin === 'home' && field < S.HOME_FIELDS ? 0 : -1
         for (const w of want) {
           const unit = pinFor(w.kind, w.field)
           const j = s.jobs.find(x => x.kind === w.kind && x.field === w.field)
