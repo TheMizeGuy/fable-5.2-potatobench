@@ -242,10 +242,10 @@ export function buildTerrain(roadTex: Texture): Terrain {
           float aug = smoothstep(214.0, 230.0, uDay) * (1.0 - smoothstep(262.0, 282.0, uDay));
           vec3 early = h2 < 0.42 ? ${linear('#e8c22a')} : h2 < 0.72 ? ${linear('#de5f24')} : ${linear('#eeeadb')};
           vec3 fcol = mix(early, ${linear('#d9a92a')}, step(0.5, aug));
-          float share = drift * (june * 0.26 + aug * 0.32) * ours * (1.0 - wetHere) * (1.0 - vSurf.x) * (1.0 - smoothstep(0.1, 0.4, vSurf.z));
-          float bloom = step(h1, share) * (1.0 - smoothstep(0.16, 0.3, length(fract(fp) - 0.5)));
+          float share = drift * (june * 0.18 + aug * 0.24) * ours * (1.0 - wetHere) * (1.0 - vSurf.x) * (1.0 - smoothstep(0.1, 0.4, vSurf.z));
+          float bloom = step(h1, share) * (1.0 - smoothstep(0.09, 0.2, length(fract(fp) - 0.5)));
           float far = smoothstep(0.25, 0.9, fwidth(fp.x));
-          col = mix(col, fcol * 0.9, mix(bloom, share * 0.16, far));
+          col = mix(col, fcol * 0.8, mix(bloom, share * 0.1, far));
         }
         // the woods' floor on the ridge, the dooryards and the brook's banks
         col = mix(col, ${linear('#3b3125')} * (0.7 + 0.6 * fine), vSurf.x * 0.92);
