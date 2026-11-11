@@ -98,7 +98,7 @@ export const UPGRADES: Record<UpgradeId, { name: string; cost: number; blurb: st
 // Money, in constant dollars.
 export const START_CASH = 18000
 export const NOTE_PAYMENT = 10000
-export const LIVING = 15000
+export const LIVING = 13000
 export const CREDIT_LIMIT = -20000            // carried past year end, the bank forecloses below this
 export const OPERATING_LIMIT = -75000         // the spring operating loan, repaid from the crop
 export const CREDIT_RATE = 0.1

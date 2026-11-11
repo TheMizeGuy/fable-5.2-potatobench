@@ -188,33 +188,48 @@ export interface ExpertCfg {
 
 // The expert's thresholds, set by trial runs over the tournament years (docs/balance/README.md).
 export interface Tuning {
-  sprayMode: 'noblight' | 'forecast' | 'severe' | 'hybrid'
-  spraySv: number           // severe mode: season severity values before a blight day calls for a spray
+  sprayMode: 'noblight' | 'forecast' | 'severe' | 'hybrid' | 'found'
+  spraySv: number           // season severity values before a blight day calls for a spray
   sprayProtect: number      // spray when the protectant left is below this and blight weather is due
   sprayProtectFound: number // the same once blight has been found on the farm
   scoutEvery: number
   scoutFound: number
   rogueMax: number
-  sampleAll: boolean        // false: test dig only where tuber size or tuber blight can change the vine kill
+  sampleAt: number          // first test dig, days after tuber set
+  sampleEarly: number       // the same for an early variety grown for the early market
+  sampleHills: number       // hills lifted, one a day
   plantSoilT: number
   killFrom: number          // first late vine kill, days after August 1
   killGap: number           // days between late fields
   killAfterMature: number   // days after the vines start going down
-  buy: UpgradeId[]
+  killValue: number         // kill once the crop's value grows by less than this share a day (0: off)
+  killDelay: number         // days the late kill waits while the crop is still gaining value fast
+  delayValue: number        // the value growth a day that counts as fast
+  buy: { id: UpgradeId; from: number; left: number }[]   // equipment, from a year, with this many seasons left
   reserve: number           // cash kept after buying equipment
   waterScab: number         // water below this moisture in the scab window after tuber set
   waterLate: number
-  earlyFields: number
-  newPotatoes: boolean      // early varieties dug green in August and sold off the field
+  waterScabHand: number     // the same without the irrigation reel, when watering takes a whole day
+  waterLateHand: number
+  earlyMarket: VarietyId[]  // varieties dug green and sold off the field before the new-potato market closes
+  earlyValue: number        // early market: dig once the crop's value at today's price grows by less than this a day
+  earlyBy: number           // and in any case by this many days after August 1
+  earlyDate: number         // without a test dig: dig this many days after August 1
   fieldRevenue: number      // what a healthy potato field brings in, for the rotation plan
-  byElev: VarietyId[][]     // varieties by preference for bottom land, mid slope and ridge
+  plan: { from: number; fields: VarietyId[][] }[]   // varieties by preference for each field, from a year on
 }
 
 export const TUNING: Tuning = {
-  sprayMode: 'severe', spraySv: 40, sprayProtect: 0.3, sprayProtectFound: 0.5, scoutEvery: 5, scoutFound: 3, rogueMax: 12,
-  sampleAll: false, plantSoilT: 8, killFrom: 40, killGap: 4, killAfterMature: 15, buy: ['reel', 'vent'], reserve: 0,
-  waterScab: 0.65, waterLate: 0.6, earlyFields: 0, fieldRevenue: 25000,
-  byElev: [['caribou', 'kennebec'], ['caribou', 'kennebec'], ['caribou', 'kennebec']], newPotatoes: false,
+  sprayMode: 'severe', spraySv: 30, sprayProtect: 0.3, sprayProtectFound: 0.5, scoutEvery: 4, scoutFound: 5, rogueMax: 2,
+  sampleAt: -3, sampleEarly: 20, sampleHills: 1, plantSoilT: 7, killFrom: 40, killGap: 4, killAfterMature: 15,
+  killValue: 0, killDelay: 14, delayValue: 0.004,
+  buy: [{ id: 'vent', from: 0, left: 2 }, { id: 'reel', from: 2015, left: 3 }], reserve: 0,
+  waterScab: 0.65, waterLate: 0.6, waterScabHand: 0.75, waterLateHand: 0.65,
+  earlyMarket: ['norland'], earlyValue: 0, earlyBy: 25, earlyDate: 12, fieldRevenue: 25000,
+  plan: [
+    { from: 0, fields: [['katahdin'], ['katahdin'], ['gold', 'kennebec'], ['gold', 'kennebec'], ['gold', 'kennebec'], ['gold', 'kennebec']] },
+    { from: 2015, fields: [['caribou'], ['caribou'], ['caribou'], ['caribou'], ['caribou'], ['caribou']] },
+  ],
 }
 
 export const EXPERT: ExpertCfg = {
@@ -226,7 +241,7 @@ interface FieldMem {
   plant: number; ti: number; mature: number; dead: number
   lastSpray: number
   samples: { day: number; weights: number[]; marks: number[] }[]
-  est: { day: number; mean: number }[]
+  est: { day: number; mean: number; digs: number }[]
   tuberBlight: boolean
   blightHere: boolean
   certified: boolean
@@ -246,8 +261,37 @@ function seasonIndex(day: number): number {
   return k[k.length - 1][1]
 }
 
-const EARLY: VarietyId[] = ['norland', 'superior']
 const MARK_BLIGHT = 7
+const MARK_HOLLOW = 3
+const HOLLOW_FROM = 220     // grams: hollow heart strikes only tubers above this
+const GRAMS_PER_HILL = S.FIELD_ACRES / (S.HILLS * S.CWT_PER_HILL_GRAM)   // per plant, for each cwt an acre
+
+// Tuber sizes under a hill relative to their mean, as the game draws them (tuberWeights in src/sim/harvest.ts),
+// widened by the hill-to-hill spread in how many tubers set.
+const SIZE_SPREAD: number[] = (() => {
+  const raw: number[] = []
+  for (let a = 0; a < 16; a++) {
+    for (let b = 0; b < 16; b++) {
+      const u = (a + 0.5) / 16, u2 = (b + 0.5) / 16
+      for (const h of [1.27, 1.08, 0.93, 0.83]) raw.push((0.22 + u + 1.6 * u2 * u2) * h)
+    }
+  }
+  const m = raw.reduce((x, y) => x + y, 0) / raw.length
+  return raw.map(x => x / m)
+})()
+
+// What a gram of crop is worth, as a share of the No. 1 price, when the tubers average m grams.
+export function sizeValue(m: number, large: number, hollow: number): number {
+  let v = 0, w = 0
+  for (const s of SIZE_SPREAD) {
+    const x = m * s
+    let p = x < S.SIZE_SMALL ? 0 : x < S.SIZE_A ? S.GRADE_PRICE.b : x > S.SIZE_CHEF ? large : 1
+    if (x > HOLLOW_FROM) p = p * (1 - hollow) + S.GRADE_PRICE.no2 * hollow
+    v += p * s
+    w += s
+  }
+  return v / w
+}
 
 // NoBlight (UMaine 2418, Table 2): the longest safe spray interval from the last week's severity values and rain.
 export function noBlightInterval(sv7: number, rain7mm: number): number {
@@ -258,15 +302,16 @@ export function noBlightInterval(sv7: number, rain7mm: number): number {
   return 14
 }
 
-// What a lot is worth in the cellar month by month, as share of the season-average price of sound No. 1,
-// from the public storage rules: shrink, sprouting at the variety's dormancy, and rot started by the
-// blighted tubers that showed on the picking table.
-export function cellarValues(l: Lot, vent: boolean, digTotal: number): number[] {
+// What a lot is worth in the cellar month by month, as a share of its variety's average No. 1 price, from the
+// public storage rules: the price through the winter at the level the quote shows now, shrink, sprouting at the
+// variety's dormancy, rot started by the blighted tubers that showed on the picking table, and the cellar charge.
+export function cellarValues(l: Lot, vent: boolean, digTotal: number, level = 1, from = 0): number[] {
   const v = S.variety(l.variety)
   const dorm = v.dormancy + (vent ? 25 : 0)
+  const rent = S.STORE_COST / v.price
   let decay = Math.min(0.6, (digTotal > 0 ? l.loss.blight / digTotal : 0) + 0.012 * (1 - l.skin))
-  let keep = 1, sprouted = false
-  const out = [S.MONTH_CURVE[0]]
+  let keep = 1, paid = 0, sprouted = l.sprouted
+  const out = [S.MONTH_CURVE[0] * level * (sprouted ? 0.85 : 1)]
   for (let months = 1; months < S.MONTH_CURVE.length; months++) {
     let sh = vent ? S.SHRINK_VENT : S.SHRINK
     if (months === 1) sh += 0.03 * (1 - l.skin)
@@ -279,8 +324,9 @@ export function cellarValues(l: Lot, vent: boolean, digTotal: number): number[] 
       decay = Math.min(0.9, decay + grow)
       if (decay >= S.ROT_BREAK) { lost = 0.55; decay = 0.06 }
     }
+    if (months > from) paid += rent * keep
     keep *= (1 - sh) * (1 - lost)
-    out.push(S.MONTH_CURVE[months] * (sprouted ? 0.85 : 1) * keep)
+    out.push(S.MONTH_CURVE[months] * level * (sprouted ? 0.85 : 1) * keep - paid)
   }
   return out
 }
@@ -302,7 +348,7 @@ export function expert(cfg: ExpertCfg = EXPERT): BotFactory {
     // Expected net for a potato field from its soil and wilt, by the rules of thumb a grower carries.
     function fieldValue(vert: number, soil: number): number {
       const yf = (1 - 0.45 * vert) * (1 - 0.07 * (1 - soil)) * (1 - 0.06 * (1 - soil))
-      return k.fieldRevenue * yf - 11000
+      return k.fieldRevenue * yf - (S.FIELD_COST + S.SEED_CWT_PER_FIELD * S.CERT_SEED_PER_CWT + 1300)
     }
 
     function bestFirstCrop(vert: number, soil: number, years: number): 'potato' | 'rest' {
@@ -328,15 +374,16 @@ export function expert(cfg: ExpertCfg = EXPERT): BotFactory {
       return first
     }
 
-    function chooseVariety(c: Campaign, f: FieldInfo, earlySlot: boolean): VarietyId {
+    function chooseVariety(c: Campaign, f: FieldInfo): VarietyId {
       if (cfg.variety) return cfg.variety
       const have = new Set(S.availableVarieties(c.year).map(v => v.id))
-      const pick = (...ids: VarietyId[]) => ids.find(id => have.has(id)) ?? 'katahdin'
-      if (earlySlot) return pick('superior', 'norland')
-      return pick(...k.byElev[f.elev], 'kennebec', 'katahdin')
+      let fields = k.plan[0].fields
+      for (const p of k.plan) if (p.from <= c.year) fields = p.fields
+      return fields[f.index].find(id => have.has(id)) ?? 'katahdin'
     }
 
     const useSaved = (v: VarietyId) => S.variety(v).virus <= 0.5
+    const isEarly = (c: Campaign, i: number) => k.earlyMarket.includes(c.plans[i].variety)
 
     function absorb(e: GameEvent): void {
       if (e.field < 0) return
@@ -363,34 +410,73 @@ export function expert(cfg: ExpertCfg = EXPERT): BotFactory {
       }
     }
 
-    function growthSlowing(m: FieldMem): boolean {
+    // Daily growth of the yield estimate over the last few days (one bias, so the change is the crop's).
+    function massGrowth(m: FieldMem): number | null {
       const e = m.est
-      if (e.length < 8) return false
-      const now = e[e.length - 1], before = e[e.length - 8]
-      return before.mean > 0 && (now.mean - before.mean) / before.mean < 0.05
+      for (let j = e.length - 1; j >= 5; j--) {
+        const now = e[j], back = e[j - 5]
+        if (back.digs === now.digs && back.mean > 0) return (now.mean / back.mean) ** (1 / (now.day - back.day)) - 1
+      }
+      return null
+    }
+
+    // How fast the crop's value is growing, a share a day: tubers gain weight, but past the No. 1 sizes they lose
+    // price and run hollow. The tuber size is what the test digs show, or without one the yield estimate spread
+    // over the variety's usual set.
+    function valueGrowth(world: World, c: Campaign, f: FieldInfo, m: FieldMem): number | null {
+      const g = massGrowth(m)
+      if (g === null || !f.estimate) return null
+      const id = c.plans[f.index].variety
+      const quote = { variety: id, sprouted: false } as Lot
+      const large = S.gradePrice(world, c, quote, 'chef') / S.gradePrice(world, c, quote, 'no1')
+      let big = 0, holl = 0
+      for (const x of m.samples) x.weights.forEach((w, j) => { if (w > HOLLOW_FROM) { big++; if (x.marks[j] === MARK_HOLLOW) holl++ } })
+      const hollow = Math.max(S.variety(id).hollow, big >= 2 ? holl / big : 0)
+      const mean = f.tubers ? (f.tubers.lo + f.tubers.hi) / 2 : f.estimate.mean * GRAMS_PER_HILL / S.variety(id).set
+      // How the price of a gram moves with the tubers' size, taken over a wide step so grade edges do not jump.
+      const e = Math.log(sizeValue(mean * 1.1, large, hollow) / sizeValue(mean / 1.1, large, hollow)) / Math.log(1.21)
+      return (1 + g) ** (1 + e) - 1
     }
 
     // Late fields are killed in turn, bottom land first (it frosts first), so the digger can follow two weeks on.
     function lateRank(c: Campaign, i: number): number {
       const late = c.plans.map((p, j) => ({ p, j, e: S.fieldInfo(c, j).elev }))
-        .filter(x => x.p.crop === 'potato' && !EARLY.includes(x.p.variety))
+        .filter(x => x.p.crop === 'potato' && !isEarly(c, x.j))
         .sort((a, b) => a.e - b.e || a.j - b.j)
       return Math.max(0, late.findIndex(x => x.j === i))
     }
 
-    function wantKill(c: Campaign, f: FieldInfo, m: FieldMem, d: number, frostSoon: boolean): boolean {
+    // The day the vines are due to be killed by the calendar: some days after they start going down, or in turn.
+    function killDue(c: Campaign, f: FieldInfo, m: FieldMem): number {
+      const due = S.dayIndex(c.year, 7, 1) + k.killFrom + lateRank(c, f.index) * k.killGap
+      return m.mature >= 0 ? Math.min(due, m.mature + k.killAfterMature) : due
+    }
+
+    function wantKill(world: World, c: Campaign, f: FieldInfo, m: FieldMem, d: number, frostSoon: boolean): boolean {
       const at = (mo: number, dom: number) => S.dayIndex(c.year, mo, dom)
       if (cfg.calendar) return d >= at(7, 28)
       if (f.blightKnown >= 0.15 || m.tuberBlight) return true
-      if (m.mature >= 0 && d - m.mature >= k.killAfterMature) return true
-      if (d >= at(7, 1) + k.killFrom + lateRank(c, f.index) * k.killGap) return true
-      if (frostSoon && d >= at(8, 5)) return true
-      const last = m.samples[m.samples.length - 1]
-      if (last && d >= at(7, 15) && S.variety(c.plans[f.index].variety).hollow >= 0.1) {
-        const big = last.weights.filter(w => w > 220).length / Math.max(1, last.weights.length)
-        if (big >= 0.4) return true
+      const vg = valueGrowth(world, c, f, m)
+      if (vg !== null && k.killValue > 0 && d >= at(7, 15) && vg < k.killValue) return true
+      const due = killDue(c, f, m)
+      if (d >= due) {
+        // The crop is still gaining value fast: give it a few more days if no frost is coming.
+        if (vg !== null && k.killDelay > 0 && vg >= k.delayValue && d < due + k.killDelay && !frostSoon) return false
+        return true
       }
+      if (frostSoon && d >= at(8, 5)) return true
       return false
+    }
+
+    // Early market: the crop gains weight while the new-potato premium falls; dig when the value stops rising.
+    function wantEarlyDig(world: World, c: Campaign, f: FieldInfo, m: FieldMem, d: number): boolean {
+      const at = (mo: number, dom: number) => S.dayIndex(c.year, mo, dom)
+      if (cfg.calendar) return d >= at(7, 20)
+      if (d >= at(7, 1) + k.earlyBy) return true
+      if (d < at(6, 10)) return false
+      const vg = valueGrowth(world, c, f, m)
+      if (vg !== null && k.earlyValue > -1) return (1 + vg) * seasonIndex(d + 1) / seasonIndex(d) - 1 < k.earlyValue
+      return d >= at(7, 1) + k.earlyDate
     }
 
     function sellInSeason(world: World, c: Campaign): void {
@@ -402,12 +488,12 @@ export function expert(cfg: ExpertCfg = EXPERT): BotFactory {
         if (!digTotal.has(l.id)) digTotal.set(l.id, S.lotCwt(l) + l.sold)
         const v = S.variety(l.variety)
         if (!cfg.store || (S.newPotatoWindow(c, l) && l.skinned > 0)) { sellAll(world, c, l); continue }
-        const best = Math.max(...cellarValues(l, vent, digTotal.get(l.id)!))
         // The year's price level, read off how far today's quote sits from the seasonal index.
         const frac = Math.max(0, Math.min(1, (s.day - 212) / 92))
         const quote = S.basePrice(world, c, l.variety) / v.price
         const level = v.contract || frac < 0.15 ? 1 : 1 + (quote / seasonIndex(s.day) - 1) / frac
-        if (quote >= best * level) { sellAll(world, c, l); continue }
+        const best = Math.max(...cellarValues(l, vent, digTotal.get(l.id)!, level))
+        if (quote >= best) { sellAll(world, c, l); continue }
         keep.push({ l, value: best / quote })
       }
       if (!allIn(c)) return
@@ -454,21 +540,17 @@ export function expert(cfg: ExpertCfg = EXPERT): BotFactory {
         sev = []; rain = []; lastDay = -1; blightOnFarm = false
         yearSeen = c.year
         const left = yearsLeft(c)
-        if (cfg.equipment && left >= 2) {
-          for (const u of k.buy) {
-            if (!c.upgrades[u] && c.cash - S.UPGRADES[u].cost >= k.reserve) S.apply(world, c, { t: 'buy', upgrade: u })
+        if (cfg.equipment) {
+          for (const b of k.buy) {
+            if (!c.upgrades[b.id] && c.year >= b.from && left >= b.left && c.cash - S.UPGRADES[b.id].cost >= k.reserve) S.apply(world, c, { t: 'buy', upgrade: b.id })
           }
         }
         const stock = new Map<VarietyId, number>()
         for (const x of c.seedStock) stock.set(x.variety, (stock.get(x.variety) ?? 0) + x.fields)
-        // Ridge fields first: they warm and drain first, and the first of them grows the early crop.
-        const order = infos(c).sort((a, b) => b.elev - a.elev || a.index - b.index)
-        let earlyLeft = k.earlyFields
-        for (const f of order) {
+        for (const f of infos(c)) {
           const crop = cfg.rotation ? bestFirstCrop(f.vert, f.soil, left) : 'potato'
           if (crop === 'rest') { setPlan(world, c, f.index, { crop: 'rest', variety: 'katahdin', seed: 'certified' }); continue }
-          const v = chooseVariety(c, f, earlyLeft > 0)
-          earlyLeft--
+          const v = chooseVariety(c, f)
           const have = stock.get(v) ?? 0
           let saved = have > 0 && (cfg.seed === 'always' || useSaved(v))
           if (saved && setPlan(world, c, f.index, { crop: 'potato', variety: v, seed: 'saved' })) stock.set(v, have - 1)
@@ -497,20 +579,21 @@ export function expert(cfg: ExpertCfg = EXPERT): BotFactory {
         const frostSoon = fc.slice(0, 3).some(x => x.frostChance >= 40)
         const rainSoon = fc.slice(0, 2).some(x => x.rainChance >= 60 && x.rainMm >= 8)
         const watch = s.watchDay >= 0
+        const reel = c.upgrades.reel
 
         for (const f of infos(c)) {
           const i = f.index
           const m = fm[i]
-          const early = k.newPotatoes && EARLY.includes(c.plans[i].variety)
+          const early = isEarly(c, i)
           if (f.status === 'idle') {
             const ready = cfg.calendar
               ? d >= at(4, 12 + (2 - f.elev) * 3)
               : d >= at(4, 3) && t.soilT >= k.plantSoilT && !f.tooWet && !(t.soilT < 11 && fc.slice(0, 2).some(x => x.rainMm >= 15 && x.rainChance >= 60))
-            if (ready) add('plant', i, 70 + f.elev)
+            if (ready) add('plant', i, 70 + f.elev + (early ? 3 : 0))
             continue
           }
           if (f.status === 'growing') {
-            if (f.estimate) m.est.push({ day: d, mean: f.estimate.mean })
+            if (f.estimate) m.est.push({ day: d, mean: f.estimate.mean, digs: f.estimate.digs })
             const up = f.canopy > 0
             if (cfg.hill && up) {
               if (cfg.calendar) {
@@ -546,6 +629,11 @@ export function expert(cfg: ExpertCfg = EXPERT): BotFactory {
                   const badDay = t.severity >= 2 || fc[0].blight >= 2 || fc[1].blight >= 2
                   if ((since >= gap && f.protect < 0.5) || (badDay && f.protect < k.sprayProtect)) add('spray', i, 80)
                 } else if (watch && f.blightHills > k.rogueMax && f.protect < k.sprayProtectFound) add('spray', i, 80)
+              } else if (k.sprayMode === 'found') {
+                // Once blight is on the farm, ahead of any blight day; before that only in a bad year, ahead of a bad day.
+                const due = t.severity >= 1 || fc[0].blight >= 1 || fc[1].blight >= 1
+                const bad = watch && s.sv >= k.spraySv && (t.severity >= 2 || fc[0].blight >= 2 || fc[1].blight >= 2)
+                if ((blightOnFarm && due && f.protect < k.sprayProtectFound) || (bad && f.protect < k.sprayProtect)) add('spray', i, 80)
               } else if (watch) {
                 // Only in a bad blight year, ahead of a bad blight day, or where there is too much to pull.
                 const bad = s.sv >= k.spraySv && (t.severity >= 2 || fc[0].blight >= 2 || fc[1].blight >= 2)
@@ -554,18 +642,20 @@ export function expert(cfg: ExpertCfg = EXPERT): BotFactory {
               }
             }
             if (cfg.water && m.ti >= 0 && m.mature < 0) {
+              const scabWindow = d - m.ti <= 35
+              const below = reel ? (scabWindow ? k.waterScab : k.waterLate) : (scabWindow ? k.waterScabHand : k.waterLateHand)
               if (cfg.calendar) {
                 if (d === at(6, 25)) add('water', i, 40)
-              } else if (f.moisture < (d - m.ti <= 35 ? k.waterScab : k.waterLate) && !rainSoon) add('water', i, 40 + (1 - f.moisture) * 10)
+              } else if (f.moisture < below && !rainSoon) add('water', i, 40 + (1 - f.moisture) * 10)
             }
-            const sampleUseful = k.sampleAll || m.blightHere || S.variety(c.plans[i].variety).hollow >= 0.1
-            if (cfg.sample && sampleUseful && m.ti >= 0 && m.samples.length === 0 && (cfg.calendar ? d >= at(7, 5) : d - m.ti >= (early ? 25 : 40))) add('sample', i, 30)
+            // A negative sampleAt digs that many days before the vines are due to be killed.
+            const sampleDue = m.ti >= 0 && (cfg.calendar ? m.samples.length === 0 && d >= at(7, 5)
+              : m.samples.length < k.sampleHills && (early ? d - m.ti >= k.sampleEarly : k.sampleAt >= 0 ? d - m.ti >= k.sampleAt : d >= killDue(c, f, m) + k.sampleAt))
+            if (cfg.sample && sampleDue) add('sample', i, 30)
             if (m.ti >= 0) {
               if (early) {
-                // New potatoes: dug green in August and sold off the field while the skins are thin.
-                const go = cfg.calendar ? d >= at(7, 20) : d >= at(7, 10) && (growthSlowing(m) || d >= at(7, 28))
-                if (go) add('dig', i, 88)
-              } else if (cfg.kill && wantKill(c, f, m, d, frostSoon)) add('kill', i, 85)
+                if (wantEarlyDig(world, c, f, m, d)) add('dig', i, 88)
+              } else if (cfg.kill && wantKill(world, c, f, m, d, frostSoon)) add('kill', i, 85)
               else if (!cfg.kill && d >= at(8, 15)) add('dig', i, 86 - f.elev)
             }
           }
@@ -595,7 +685,10 @@ export function expert(cfg: ExpertCfg = EXPERT): BotFactory {
         if (c.month === 0 && cfg.store) holdSeed(world, c)
         for (const l of S.openLots(c)) {
           if (!cfg.store || l.broke) { sellAll(world, c, l); continue }
-          const vals = cellarValues(l, c.upgrades.vent, digTotal.get(l.id) ?? S.lotCwt(l) + l.sold)
+          const v = S.variety(l.variety)
+          // The quote now, over the usual price for the month, is the level the rest of the winter starts from.
+          const level = S.basePrice(world, c, l.variety) / (v.price * S.MONTH_CURVE[c.month])
+          const vals = cellarValues(l, c.upgrades.vent, digTotal.get(l.id) ?? S.lotCwt(l) + l.sold, level, c.month)
           let best = c.month
           for (let m = c.month + 1; m < vals.length; m++) if (vals[m] > vals[best]) best = m
           if (best === c.month) sellAll(world, c, l)

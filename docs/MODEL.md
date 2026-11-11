@@ -87,7 +87,7 @@ and `src/sim/varieties.ts`.
 | --- | --- | --- |
 | Price through the year: August 0.966, September 0.887, October 0.878, November 0.922, rising to 1.105 in April | Sourced | Maine monthly prices over the season average, 1979 to 2013, USDA NASS (`06-economics-records.md`) |
 | Each year's price level is that year's real Maine season-average price over its nine-year trend, limited to 0.55 to 1.6 | Derived | USDA NASS annual price, `data/records/maine_potato_nass.csv` |
-| Variety base prices (11.5 to 17 dollars per cwt of No. 1) | Invented | Ordered by market class; fresh sells above the all-potato price and processing below it (`06`) |
+| Variety base prices (13 to 16.20 dollars per cwt of No. 1) | Invented | Ordered by market class; fresh sells above the all-potato price and processing below it (`06`). Yukon Gold, Russet Burbank and Atlantic were last set by the balance tournament so no single variety wins most years (`docs/balance/README.md`) |
 | A chip contract moves a quarter as much as the market | Invented | Contracts fix most of the price before planting |
 | Money is in constant present-day dollars | Design choice | Fifty years of nominal prices would make eras incomparable |
 | Shrink 1.2% a month, 0.7% with ventilation | Sourced | About 6% over eight months (`04`, `06`) |

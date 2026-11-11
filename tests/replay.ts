@@ -6,7 +6,7 @@ import type { Campaign, Cmd, World } from '../src/sim/index.ts'
 
 export type Sim = typeof SimModule
 
-export const REPLAY = { startYear: 1987, seed: 20240611 }
+export const REPLAY = { startYear: 1980, seed: 20240611 }
 
 export interface ReplayOptions {
   startYear?: number
@@ -18,7 +18,7 @@ export interface ReplayOptions {
 export interface ReplayResult { campaign: Campaign; hash: string; cmds: Cmd[]; done: boolean }
 
 export function runReplay(sim: Sim, world: World, opts: ReplayOptions = {}): ReplayResult {
-  const startYear = opts.startYear ?? 1987
+  const startYear = opts.startYear ?? 1980
   const seed = opts.seed ?? 20240611
   const c = opts.campaign ?? sim.createCampaign(world, { seed, startYear })
   const cmds: Cmd[] = []
