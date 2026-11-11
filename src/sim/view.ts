@@ -3,7 +3,7 @@
 import * as P from './params.ts'
 import { FIELD_NAMES, jobBlock, jobCost, jobDays, jobWait, JOB_LABEL, knownHills } from './season.ts'
 import {
-  H_DECAYED, H_DUG, H_EMERGED, H_KNOWN, H_ROGUED, H_SAMPLED, H_VIRUS,
+  H_DECAYED, H_DUG, H_EMERGED, H_KNOWN, H_ROGUED, H_SAMPLED, H_VIRUS, H_WILT,
   type Campaign, type Day, type FieldSeason, type JobKind, type World,
 } from './types.ts'
 import { variety } from './varieties.ts'
@@ -33,21 +33,25 @@ export function estimateYield(c: Campaign, fi: number): Estimate | null {
 }
 
 export type HillKind = 'bare' | 'seed' | 'plant' | 'dead' | 'dug' | 'pulled'
-export interface HillLook { kind: HillKind; canopy: number; vigor: number; blight: number; stunted: boolean }
+// yellow: how far the plant has gone down (ripening, or dying early with wilt), 0..1.
+export interface HillLook { kind: HillKind; canopy: number; vigor: number; blight: number; stunted: boolean; yellow: number }
 
 export function hillLook(f: FieldSeason, i: number): HillLook {
   const st = f.hState.length ? f.hState[i] : 0
-  if (!f.hState.length) return { kind: 'bare', canopy: 0, vigor: 1, blight: 0, stunted: false }
-  if (st & (H_DUG | H_SAMPLED)) return { kind: 'dug', canopy: 0, vigor: 1, blight: 0, stunted: false }
-  if (st & H_ROGUED) return { kind: 'pulled', canopy: 0, vigor: 1, blight: 0, stunted: false }
-  if (!(st & H_EMERGED)) return { kind: 'seed', canopy: 0, vigor: 1, blight: 0, stunted: false }
+  if (!f.hState.length) return { kind: 'bare', canopy: 0, vigor: 1, blight: 0, stunted: false, yellow: 0 }
+  if (st & (H_DUG | H_SAMPLED)) return { kind: 'dug', canopy: 0, vigor: 1, blight: 0, stunted: false, yellow: 0 }
+  if (st & H_ROGUED) return { kind: 'pulled', canopy: 0, vigor: 1, blight: 0, stunted: false, yellow: 0 }
+  if (!(st & H_EMERGED)) return { kind: 'seed', canopy: 0, vigor: 1, blight: 0, stunted: false, yellow: 0 }
   const dead = f.deadDay >= 0
+  const matAt = variety(f.variety).matPd * ((st & H_WILT) ? P.VERT_EARLY : 1)
+  const over = f.pdAir - f.hPd0[i] - matAt
   return {
     kind: dead ? 'dead' : 'plant',
     canopy: f.hC[i],
     vigor: f.hVigor[i],
     blight: st & H_KNOWN ? f.hLes[i] : 0,
     stunted: (st & H_VIRUS) !== 0,
+    yellow: dead ? 1 : over <= 0 ? 0 : Math.min(1, over / 110),
   }
 }
 
@@ -78,6 +82,8 @@ export interface FieldInfo {
   stunted: number           // share of plants visibly stunted by virus
   estimate: Estimate | null
   skin: number              // skin set once the vines are dead, 0..1
+  bloom: number             // how much of the field is in flower, 0..1
+  wilt: number              // how hard the plants are drooping for water, 0..1
   deadDays: number
   lot: number
 }
@@ -92,7 +98,7 @@ export function fieldInfo(c: Campaign, fi: number): FieldInfo {
     index: fi, name: FIELD_NAMES[fi], elev: fp.elev, position: POSITION[fp.elev], soil: fp.soil, vert: fp.vert, streak: fp.streak,
     crop: plan.crop, status: plan.crop === 'rest' ? 'rest' : 'idle', variety: plan.crop === 'rest' ? 'Oats and clover' : variety(plan.variety).name,
     stage: plan.crop === 'rest' ? 'Resting' : 'Not planted', daysIn: 0, canopy: 0, moisture: 1, moistureLabel: 'good', tooWet: false,
-    hillPasses: 0, protect: 0, blightKnown: 0, blightHills: 0, scoutAge: -1, stunted: 0, estimate: null, skin: 0, deadDays: -1, lot: -1,
+    hillPasses: 0, protect: 0, blightKnown: 0, blightHills: 0, scoutAge: -1, stunted: 0, estimate: null, skin: 0, bloom: 0, wilt: 0, deadDays: -1, lot: -1,
   }
   if (!s) return base
   const f = s.fields[fi]
@@ -119,6 +125,13 @@ export function fieldInfo(c: Campaign, fi: number): FieldInfo {
     base.blightHills = knownHills(f)
   }
   base.blightKnown = f.knownSev
+  if (f.status === 'growing') {
+    base.wilt = Math.max(0, Math.min(1, (0.42 - base.moisture) / 0.3))
+    if (f.tiDay >= 0) {
+      const k = s.day - f.tiDay
+      base.bloom = k < 4 ? k / 4 : k <= 14 ? 1 : k < 24 ? (24 - k) / 10 : 0
+    }
+  }
   base.scoutAge = f.lastScout < 0 ? -1 : s.day - f.lastScout
   base.estimate = estimateYield(c, fi)
   if (f.deadDay >= 0) {
