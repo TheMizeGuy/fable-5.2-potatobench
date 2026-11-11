@@ -14,7 +14,7 @@ function blankLoss(): Record<Cause, number> {
 export function newLot(c: Campaign, field: number, f: FieldSeason, day: number, register: boolean): Lot {
   const lot: Lot = {
     id: register ? c.nextLot++ : -1,
-    field, variety: f.variety, year: c.year, dugDay: day,
+    field, variety: f.variety, year: c.year, dugDay: day, aged: day,
     grades: { no1: 0, chef: 0, b: 0, no2: 0, cull: 0 },
     skinned: 0, loss: blankLoss(), rot: 0, skin: 0,
     virus: 0, blightSeed: 0, months: 0, sprouted: false, broke: false,

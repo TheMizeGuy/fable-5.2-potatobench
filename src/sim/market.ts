@@ -1,4 +1,5 @@
 // What a hundredweight is worth today, and selling.
+import { dayIndex } from './calendar.ts'
 import * as P from './params.ts'
 import { hashNormal } from './rng.ts'
 import type { Campaign, Grade, Lot, VarietyId, World } from './types.ts'
@@ -51,9 +52,8 @@ export function gradePrice(world: World, c: Campaign, lot: Lot, grade: Grade): n
 // Thin-skinned tubers sell as new potatoes only straight from the field, early.
 export function newPotatoWindow(c: Campaign, lot: Lot): boolean {
   if (c.phase !== 'season' || !c.season) return false
-  const last = P.NEW_POTATO_LAST
-  const cut = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334][last.month] + last.dom - 1
-  return c.season.day <= cut + 1 && c.season.day - lot.dugDay <= 6
+  const cut = dayIndex(c.year, P.NEW_POTATO_LAST.month, P.NEW_POTATO_LAST.dom)
+  return c.season.day <= cut && c.season.day - lot.dugDay <= 6
 }
 
 export function lotValue(world: World, c: Campaign, lot: Lot): number {

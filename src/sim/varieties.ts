@@ -32,7 +32,7 @@ export interface Variety {
 export const VARIETIES: Variety[] = [
   {
     id: 'norland', name: 'Dark Red Norland', released: 1957, maturity: 'early', market: 'Red tablestock',
-    blurb: 'Early red. Off the field before the worst of the blight and sold at a red-potato price, but it wilts in a dry spell and sprouts by Christmas.',
+    blurb: 'Early red. Off the field before the worst of the blight and sold at a red-potato price, but it wilts in a dry spell and sprouts within three months of the dig.',
     tiPd: 120, matPd: 450, set: 9, bulk: 1.25, blightLeaf: 1.15, blightTuber: 1.2, scab: 0.58, hollow: 0.03, green: 1.0, rough: 0.8,
     drought: 0.1, virus: 0.9, dormancy: 60, price: 15.5, chefBonus: false, contract: false, skin: 0x9c3a3a, flesh: 0xf6efd8, shape: 1.05,
   },
@@ -50,13 +50,13 @@ export const VARIETIES: Variety[] = [
   },
   {
     id: 'kennebec', name: 'Kennebec', released: 1948, maturity: 'late', market: 'Round white tablestock',
-    blurb: 'Heavy yields and the best field resistance to blight. Scabs badly in dry ground, and the big tubers roughen if left to oversize.',
+    blurb: 'Heavy yields and the best field resistance to blight. Scabs badly in dry ground, and the tubers roughen when a dry spell breaks.',
     tiPd: 150, matPd: 680, set: 7, bulk: 1.02, blightLeaf: 0.48, blightTuber: 0.6, scab: 2.45, hollow: 0.08, green: 1.3, rough: 1.5,
     drought: 0.6, virus: 0.3, dormancy: 140, price: 13, chefBonus: false, contract: false, skin: 0xe0cb9c, flesh: 0xfaf5e6, shape: 1.25,
   },
   {
     id: 'burbank', name: 'Russet Burbank', released: 1902, maturity: 'very late', market: 'Russet bakers and fry stock',
-    blurb: 'The baking potato. Never finishes in a Maine season, so every September day counts, and uneven water turns it knobby and hollow. Keeps until June.',
+    blurb: 'The baking potato. Never finishes in a Maine season, so every September day counts, and uneven water turns it knobby and hollow. Keeps into April, the longest on the list.',
     tiPd: 175, matPd: 850, set: 10, bulk: 1.0, blightLeaf: 0.7, blightTuber: 1.1, scab: 0.47, hollow: 0.138, green: 0.7, rough: 1.7,
     drought: 0.3, virus: 0.85, dormancy: 160, price: 14, chefBonus: true, contract: false, skin: 0xa6794e, flesh: 0xf5eeda, shape: 1.7,
   },
@@ -74,7 +74,7 @@ export const VARIETIES: Variety[] = [
   },
   {
     id: 'caribou', name: 'Caribou Russet', released: 2015, maturity: 'late', market: 'Russet bakers and fry stock',
-    blurb: 'Released by the University of Maine in 2015. A russet that finishes in a Maine season, with high yield, smooth tubers and little scab. It will not keep far past New Year.',
+    blurb: 'Released by the University of Maine in 2015. A russet that finishes in a Maine season, with high yield, smooth tubers and little scab. It will not keep far past January.',
     tiPd: 150, matPd: 700, set: 8, bulk: 1.03, blightLeaf: 1.0, blightTuber: 1.0, scab: 0.6, hollow: 0.03, green: 0.8, rough: 0.9,
     drought: 0.4, virus: 1.0, dormancy: 80, price: 14, chefBonus: true, contract: false, skin: 0xa9825a, flesh: 0xf6f0dc, shape: 1.6,
   },

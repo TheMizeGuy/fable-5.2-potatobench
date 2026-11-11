@@ -14,6 +14,7 @@ const MIGRATIONS: Record<number, Migration> = {
     c.yearRest ??= 0
     c.yearStorage ??= 0
     for (const h of (c.history as Record<string, unknown>[] | undefined) ?? []) { h.restIncome ??= 0; h.storage ??= 0 }
+    for (const l of (c.lots as Record<string, unknown>[] | undefined) ?? []) l.aged ??= l.dugDay
     const season = c.season as { fields?: Record<string, unknown>[] } | null
     for (const f of season?.fields ?? []) {
       const mass = Array.isArray(f.hMass) ? (f.hMass as number[]).reduce((a, b) => a + b, 0) : 0

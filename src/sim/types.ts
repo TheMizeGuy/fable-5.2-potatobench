@@ -146,6 +146,7 @@ export interface Lot {
   variety: VarietyId
   year: number
   dugDay: number
+  aged: number                       // day up to which storage has been charged and the pile shrunk
   grades: Record<Grade, number>      // cwt
   skinned: number                    // cwt of otherwise No. 1 tubers with unset skins
   loss: Record<Cause, number>        // cwt downgraded or culled, by cause

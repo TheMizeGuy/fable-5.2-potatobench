@@ -101,7 +101,9 @@ function endSeason(world: World, c: Campaign): GameEvent[] {
         if (lot) finishLot(c, f, lot)
       }
       f.status = f.status === 'digging' ? 'dug' : 'lost'
-      if (f.status === 'lost') out.push(note(c, 'lost', 'bad', `${FIELD_NAMES[i]} was left in the ground.`, i))
+      if (f.status === 'lost') out.push(f.plantDay < 0
+        ? note(c, 'lost', 'warn', `${FIELD_NAMES[i]} was never planted.`, i)
+        : note(c, 'lost', 'bad', `${FIELD_NAMES[i]} was left in the ground.`, i))
     }
   }
   s.jobs = []
@@ -123,18 +125,10 @@ function endSeason(world: World, c: Campaign): GameEvent[] {
   const nov1 = dayIndex(c.year, 10, 1)
   let rent = 0, kept = 0
   for (const lot of openLots(c)) {
-    const months = Math.max(0, (nov1 - lot.dugDay) / 30)
-    const cwt = lotCwt(lot)
-    rent += cwt * P.STORE_COST * months
-    const keep = 1 - (c.upgrades.vent ? P.SHRINK_VENT : P.SHRINK) * months
-    lot.grades.no1 *= keep; lot.grades.chef *= keep; lot.grades.b *= keep; lot.grades.no2 *= keep; lot.skinned *= keep
+    rent += ageLot(c, lot, nov1)
     kept += lotCwt(lot)
   }
-  rent = Math.round(rent)
   if (rent > 0) {
-    c.cash -= rent
-    c.yearCosts += rent
-    c.yearStorage += rent
     out.push(note(c, 'stored', 'info', `${withCommas(kept)} cwt is in the cellar. Keeping it since the dig has cost $${withCommas(rent)}.`))
   }
   const rest = c.yearRest
@@ -142,6 +136,20 @@ function endSeason(world: World, c: Campaign): GameEvent[] {
   c.phase = 'cellar'
   c.month = 0
   return out
+}
+
+// Charges storage and shrinks the pile for the time a lot has sat since it was last accounted for.
+function ageLot(c: Campaign, lot: Lot, toDay: number): number {
+  const months = (toDay - lot.aged) / 30
+  if (months <= 0) return 0
+  const rent = Math.round(lotCwt(lot) * P.STORE_COST * months)
+  const keep = 1 - (c.upgrades.vent ? P.SHRINK_VENT : P.SHRINK) * months
+  lot.grades.no1 *= keep; lot.grades.chef *= keep; lot.grades.b *= keep; lot.grades.no2 *= keep; lot.skinned *= keep
+  lot.aged = toDay
+  c.cash -= rent
+  c.yearCosts += rent
+  c.yearStorage += rent
+  return rent
 }
 
 function storeMonth(c: Campaign, out: GameEvent[]): void {
@@ -196,7 +204,7 @@ function closeYear(world: World, c: Campaign, out: GameEvent[]): void {
   let potatoFields = 0, market = 0, culled = 0, peak = 0
   for (let i = 0; i < P.FIELD_COUNT; i++) {
     const f = s.fields[i]
-    if (c.plans[i].crop === 'potato') potatoFields++
+    if (c.plans[i].crop === 'potato' && f.plantDay >= 0) potatoFields++
     if (f.sevPeak > peak) peak = f.sevPeak
   }
   for (const lot of lots) {
@@ -349,6 +357,7 @@ export function apply(world: World, c: Campaign, cmd: Cmd): Result {
       if (c.phase === 'season' && c.season) {
         const f = c.season.fields[lot.field]
         if (f.status === 'digging') return fail('Still being dug.')
+        ageLot(c, lot, c.season.day)
       }
       const money = sellLot(world, c, lot, cmd.frac)
       return ok([note(c, 'sold', 'good', `Sold ${variety(lot.variety).name} from ${FIELD_NAMES[lot.field]} for $${withCommas(money)}.`, lot.field)])

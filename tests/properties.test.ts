@@ -127,7 +127,10 @@ describe('random command sequences', () => {
         const cashBefore = c.cash
         const years = c.history.length
         const lot = s.t === 'sell' ? c.lots.find(l => l.id === s.lot) : undefined
-        const before = lot ? { have: S.lotCwt(lot), sold: lot.sold } : null
+        // A sale in season first settles the time the lot has sat since its dig: the pile shrinks by the stated rate.
+        const sat = lot && c.phase === 'season' && c.season ? Math.max(0, (c.season.day - lot.aged) / 30) : 0
+        const shrunk = 1 - (c.upgrades.vent ? S.SHRINK_VENT : S.SHRINK) * sat
+        const before = lot ? { have: S.lotCwt(lot) * shrunk, sold: lot.sold } : null
         let r: { ok: boolean; err: string }
         try { r = applyStep(c, s) } catch (e) { throw new Error(`${JSON.stringify(s)} threw ${(e as Error).message}`) }
         if (!r.ok && s.t !== 'days') expect(S.hashCampaign(c), `${JSON.stringify(s)} failed (${r.err}) but changed the state`).toBe(hash)
