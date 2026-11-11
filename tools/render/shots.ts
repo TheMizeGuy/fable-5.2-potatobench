@@ -13,11 +13,12 @@ const only = new Set(args.slice(2))
 mkdirSync(out, { recursive: true })
 
 interface Insets { top?: number; right?: number; bottom?: number; left?: number }
+interface View { x?: number; z?: number; dist?: number; yaw?: number; pitch?: number; fov?: number }
 
 interface Shot {
   name: string
   size?: [number, number]
-  // Screen edges covered by the interface; drawn as grey stand-in panels. Default: a left panel on a desktop, a bottom sheet on a phone.
+  // Screen edges covered by the interface. Default: the thin top bar and the low command card of the season screen.
   insets?: Insets
   setup: (page: Page) => Promise<void>
 }
@@ -40,36 +41,40 @@ async function playTo(page: Page, year: number, seed: number, until: number, ski
   }, { year, seed, until, skip })
 }
 
-// Keep playing, a day at a time, until a field shows frost-blackened leaf (or the season ends).
-async function playToFrost(page: Page, skip: string[]): Promise<string> {
-  return page.evaluate(skip => {
+// Keep playing a day at a time until the test says so (or the season ends). Returns what the test returned.
+async function playUntil(page: Page, skip: string[], test: string): Promise<string> {
+  return page.evaluate(({ skip, test }) => {
     const { app, sim } = (window as any).__county
     const c = app.campaign
-    for (let n = 0; n < 120 && c.phase === 'season'; n++) {
-      const hit = [0, 1, 2, 3, 4, 5].map(i => sim.fieldInfo(c, i)).filter((f: any) => f.frosted > 0.2 && f.rime)
-      if (hit.length) return `day ${c.season.day}: ${hit.map((f: any) => `${f.name} ${Math.round(f.frosted * 100)}% frosted`).join(', ')}`
+    const hit = new Function('app', 'sim', 'c', test)
+    for (let n = 0; n < 140 && c.phase === 'season'; n++) {
+      const r = hit(app, sim, c)
+      if (r) return `day ${c.season.day}: ${r}`
       for (const a of sim.advise(app.world, c)) {
         if (a.act === 'wait' || a.act === 'close' || skip.includes(a.act)) continue
         if (a.act !== 'sell') app.do({ t: 'job', kind: a.act, field: a.field })
       }
       if (!app.do({ t: 'day' }).ok) break
     }
-    return 'no frost found'
-  }, skip)
+    return 'not found'
+  }, { skip, test })
 }
 
+const SKY = (kind: string) => `return sim.today(app.world, c).sky === '${kind}' ? '${kind}' : ''`
+const FROST = `const hit = [0, 1, 2, 3, 4, 5].map(i => sim.fieldInfo(c, i)).filter(f => f.frosted > 0.2 && f.rime); return hit.length ? hit.map(f => f.name + ' ' + Math.round(f.frosted * 100) + '% frosted').join(', ') : ''`
+
 // One more day of work, left for the field view to play out.
-async function step(page: Page, skip: string[] = []): Promise<void> {
-  await page.evaluate(skip => {
+async function step(page: Page, skip: string[] = [], only: string[] = []): Promise<void> {
+  await page.evaluate(({ skip, only }) => {
     const { app, sim } = (window as any).__county
     const c = app.campaign
     for (const a of sim.advise(app.world, c)) {
-      if (a.act === 'wait' || a.act === 'close' || skip.includes(a.act)) continue
+      if (a.act === 'wait' || a.act === 'close' || skip.includes(a.act) || (only.length && !only.includes(a.act))) continue
       if (a.act === 'sell') app.do({ t: 'sell', lot: a.lot, frac: 1 })
       else app.do({ t: 'job', kind: a.act, field: a.field })
     }
     app.do({ t: 'day' })
-  }, skip)
+  }, { skip, only })
 }
 
 // Set how many times each field has been hilled (a test-only edit of the campaign) and redraw.
@@ -95,80 +100,88 @@ async function settle(page: Page): Promise<void> {
   await frames(page, 3)
 }
 
-async function seek(page: Page, t: number, wait: number): Promise<void> {
+async function seek(page: Page, t: number, waitMs: number, pace = 1): Promise<void> {
   await frames(page, 2)
-  await page.evaluate(t => (window as any).__countyField.seek(t), t)
-  await frames(page, wait)
+  await page.evaluate(([t, pace]) => (window as any).__countyField.seek(t, pace), [t, pace])
+  await page.waitForTimeout(waitMs)
 }
 
-const select = (page: Page, i: number) => page.evaluate(i => (window as any).__county.app.select(i), i)
-const july = (page: Page) => playTo(page, 1977, 5, 184)
-// The wide layout's panels at 1440 x 900: header, coach and weather on the left, fields and work on the right, field cards below.
-const RAILS: Insets = { top: 80, left: 322, right: 390, bottom: 110 }
+// Close on the tractor while the day's work creeps on, so dust and wheels are in the picture and it stays in the frame.
+async function onTractor(page: Page, v: View, dx = 0, dz = 0): Promise<void> {
+  const t = await page.evaluate(() => (window as any).__countyField.info().tractor)
+  await view(page, { ...v, x: t.x + dx, z: t.z + dz })
+  await frames(page, 4)
+}
+
+const view = (page: Page, v: View) => page.evaluate(v => (window as any).__countyField.view(v), v)
+const select = (page: Page, i: number, add = false) => page.evaluate(([i, add]) => (window as any).__county.app.select(i, add), [i, add] as [number, boolean])
+const july = (page: Page) => playTo(page, 1977, 5, 190)
+const title = async (page: Page) => {
+  await page.evaluate(() => (window as any).__county.app.quitToTitle())
+  await settle(page)
+  // The tractor coming down past the dooryard, with its dust behind it.
+  await seek(page, 0.2, 3600)
+}
+const NONE: Insets = {}
+// Low over the rows, looking along them to the north-west.
+const ROWS: View = { x: 5, z: 12.4, dist: 9, yaw: -1.32, pitch: 0.13 }
+const winter = async (page: Page, months: number) => {
+  await playTo(page, 1977, 5, 400)
+  await page.evaluate(months => {
+    const { app } = (window as any).__county
+    if (app.campaign.phase === 'season') app.do({ t: 'endSeason' })
+    for (let k = 0; k < months && app.campaign.phase === 'cellar'; k++) app.do({ t: 'month' })
+  }, months)
+}
 
 const shots: Shot[] = [
-  { name: '01-title', setup: async page => { await page.evaluate(() => (window as any).__county.app.quitToTitle()); await settle(page); await frames(page, 20) } },
+  { name: '01-opening-1920', size: [1920, 1080], insets: NONE, setup: title },
+  { name: '01-opening-1440', insets: NONE, setup: title },
+  { name: '01-opening-phone', size: [390, 844], insets: NONE, setup: title },
   { name: '02-spring-plan', setup: async page => { await page.evaluate(() => (window as any).__county.app.newGame(1977, 5)); await settle(page) } },
-  { name: '03-planting', setup: async page => { await playTo(page, 1977, 5, 139); await select(page, 4); await settle(page); await step(page); await seek(page, 0.62, 6) } },
-  { name: '04-june-emerging', setup: async page => { await playTo(page, 1977, 5, 160); await settle(page) } },
-  { name: '05-july-bloom', setup: async page => { await july(page); await settle(page) } },
-  { name: '06-rain', setup: async page => { await playTo(page, 1977, 5, 205); await settle(page); await frames(page, 6) } },
-  { name: '07-fog-morning', setup: async page => { await playTo(page, 1977, 5, 172); await settle(page); await frames(page, 4) } },
-  { name: '08-august-blight', setup: async page => { await playTo(page, 1979, 5, 226, ['spray', 'rogue']); await settle(page); await select(page, 4); await settle(page) } },
-  { name: '09-drought', setup: async page => { await playTo(page, 1995, 5, 222, ['water']); await settle(page) } },
-  { name: '10-september-dead-vines', setup: async page => { await playTo(page, 1977, 5, 254); await settle(page) } },
-  { name: '11-dig-day', setup: async page => { await playTo(page, 1977, 5, 264); await select(page, 0); await settle(page); await step(page); await seek(page, 0.42, 8) } },
+  { name: '03-planting', setup: async page => { await playTo(page, 1977, 5, 139); await settle(page); await step(page); await seek(page, 0.5, 400) } },
+  { name: '03b-planting-close', setup: async page => { await playTo(page, 1977, 5, 139); await settle(page); await step(page); await seek(page, 0.5, 900, 0.02); await onTractor(page, { dist: 12, yaw: 0.9, pitch: 0.3 }, 1.5, 0.4) } },
+  { name: '04-june-emergence', setup: async page => { await playTo(page, 1977, 5, 168); await playUntil(page, [], SKY('clear')); await settle(page) } },
+  { name: '05-july-bloom', setup: async page => { await july(page); await playUntil(page, [], SKY('clear')); await settle(page) } },
+  { name: '05b-july-rows', setup: async page => { await july(page); await playUntil(page, [], SKY('clear')); await settle(page); await view(page, ROWS); await frames(page, 30) } },
+  { name: '06-selected-and-hovered', setup: async page => { await july(page); await playUntil(page, [], SKY('clear')); await select(page, 3); await select(page, 4, true); await page.evaluate(() => (window as any).__county.app.setHover(0)); await settle(page); await frames(page, 30) } },
+  { name: '07-rain', setup: async page => { await july(page); console.log('  ', await playUntil(page, [], SKY('rain'))); await settle(page); await frames(page, 6) } },
+  { name: '08-fog-morning', setup: async page => { await playTo(page, 1977, 5, 165); console.log('  ', await playUntil(page, [], SKY('fog'))); await settle(page); await frames(page, 4) } },
+  { name: '09-drought-wilt', setup: async page => { await playTo(page, 1995, 5, 222, ['water']); console.log('  ', await playUntil(page, ['water'], `const w = Math.max(...[0,1,2,3,4,5].map(i => sim.fieldInfo(c, i).wilt)); return w > 0.5 && sim.today(app.world, c).sky === 'clear' ? 'wilt ' + w.toFixed(2) : ''`)); await settle(page) } },
+  { name: '10-scouted-blight', setup: async page => { await playTo(page, 1979, 5, 226, ['spray', 'rogue']); await settle(page); await select(page, 4); await settle(page) } },
+  { name: '10b-blight-close', setup: async page => { await playTo(page, 1979, 5, 226, ['spray', 'rogue']); await settle(page); const f = await page.evaluate(() => { const { app, sim } = (window as any).__county; let best = -1, at = 0; for (let i = 0; i < 6; i++) { const f = sim.fieldInfo(app.campaign, i); const b = f.status === 'growing' ? f.blightHills : -1; if (b > best) { best = b; at = i } } return at }); const a = [[-8.4, -14], [7.8, -14], [-8.4, -1], [7.8, -1], [-8.4, 12], [7.8, 12]][f]; await view(page, { x: a[0], z: a[1], dist: 17, yaw: 0.4, pitch: 0.5 }); await frames(page, 6) } },
+  { name: '11-first-frost', setup: async page => { await playTo(page, 2020, 5, 255, ['kill', 'dig']); console.log('  ', await playUntil(page, ['kill', 'dig'], FROST)); await settle(page) } },
+  { name: '11b-frost-close', setup: async page => { await playTo(page, 2020, 5, 255, ['kill', 'dig']); await playUntil(page, ['kill', 'dig'], FROST); await settle(page); await view(page, { x: 6, z: 12, dist: 12, yaw: -0.9, pitch: 0.3 }); await frames(page, 6) } },
+  { name: '12-september-dead-vines', setup: async page => { await playTo(page, 1977, 5, 252); console.log('  ', await playUntil(page, ['dig'], SKY('clear'))); await settle(page) } },
+  { name: '13-dig-day', setup: async page => { await playTo(page, 1977, 5, 264); await settle(page); await step(page); await seek(page, 0.45, 1200) } },
   {
-    name: '11b-dig-closeup', setup: async page => {
-      await playTo(page, 1977, 5, 264); await select(page, 0); await settle(page)
-      await page.mouse.move(900, 400)
-      for (let k = 0; k < 5; k++) await page.mouse.wheel(0, -300)
-      await step(page); await seek(page, 0.36, 8)
-    },
-  },
-  { name: '12-first-frost', setup: async page => { await playTo(page, 1995, 5, 258); await settle(page) } },
-  {
-    name: '13-winter-cellar', setup: async page => {
-      await playTo(page, 1977, 5, 400)
-      await page.evaluate(() => { const { app } = (window as any).__county; if (app.campaign.phase === 'season') app.do({ t: 'endSeason' }); app.do({ t: 'month' }); app.do({ t: 'month' }) })
-      await settle(page); await frames(page, 6)
+    name: '13b-dig-close', setup: async page => {
+      await playTo(page, 1977, 5, 264); await settle(page); await step(page); await seek(page, 0.45, 1000); await seek(page, 0.47, 900, 0.02)
+      await onTractor(page, { dist: 12, yaw: 0.9, pitch: 0.3 }, 1.5, 0.4)
     },
   },
   {
-    name: '13b-ledger-thaw', setup: async page => {
-      await playTo(page, 1977, 5, 400)
-      await page.evaluate(() => { const { app } = (window as any).__county; if (app.campaign.phase === 'season') app.do({ t: 'endSeason' }); for (let k = 0; k < 12 && app.campaign.phase === 'cellar'; k++) app.do({ t: 'month' }) })
-      await settle(page); await frames(page, 4)
+    name: '14-test-dig', setup: async page => {
+      await playTo(page, 1977, 5, 203); await settle(page)
+      await page.evaluate(() => { const { app } = (window as any).__county; app.do({ t: 'job', kind: 'sample', field: 2 }); app.do({ t: 'day' }) })
+      await frames(page, 3)
+      const seg = await page.evaluate(() => (window as any).__countyField.info())
+      console.log('  ', JSON.stringify(seg.segs))
+      const waited = await page.evaluate(async () => { const f = (window as any).__countyField; const t0 = performance.now(); await f.whenShown('sample', 2); f.seek(f.info().dayT, 0.004); return Math.round(performance.now() - t0) })
+      console.log('  ', `the hill was up ${waited} ms after the order`)
+      const t = await page.evaluate(() => { const i = (window as any).__countyField.info(); return i.farmer ?? i.tractor })
+      // He stands in the furrow below the hill, facing up the slope: look back at him across it.
+      await view(page, { x: t.x - 0.1, z: t.z - 0.7, dist: 6.5, yaw: 2.5, pitch: 0.62 })
+      await frames(page, 20)
     },
   },
-  { name: '14-selected-field', setup: async page => { await july(page); await select(page, 3); await settle(page) } },
-  { name: '14b-test-dig', setup: async page => { await playTo(page, 1977, 5, 203); await select(page, 2); await settle(page); await step(page); await seek(page, 0.27, 3) } },
-  { name: '15-phone-title', size: [390, 844], setup: async page => { await page.evaluate(() => (window as any).__county.app.quitToTitle()); await settle(page); await frames(page, 10) } },
-  { name: '16-phone-july', size: [390, 844], setup: async page => { await july(page); await settle(page) } },
-
-  // Hilling: the same fields on the same day, never hilled, hilled once and hilled twice, then side by side; the panels as on a laptop.
-  ...[0, 1, 2].map(p => ({ name: `20-hilling-${p}`, insets: RAILS, setup: async (page: Page) => { await playTo(page, 1977, 5, 166, ['hill']); await hilled(page, [p, p, p, p, p, p]); await settle(page) } })),
-  { name: '20-hilling-mixed', insets: RAILS, setup: async page => { await playTo(page, 1977, 5, 166, ['hill']); await hilled(page, [0, 1, 2, 0, 1, 2]); await settle(page) } },
-  { name: '20-hilling-mixed-early', insets: RAILS, setup: async page => { await playTo(page, 1977, 5, 152, ['hill']); await hilled(page, [0, 1, 2, 0, 1, 2]); await settle(page) } },
-
-  // Frost: late September 2020, vines not killed, the first night that blackens leaf; the bottom fields freeze first.
-  {
-    name: '21-frost-morning', setup: async page => {
-      await playTo(page, 2020, 5, 255, ['kill', 'dig'])
-      console.log('  ', await playToFrost(page, ['kill', 'dig']))
-      await settle(page)
-    },
-  },
-  { name: '21b-frost-before', setup: async page => { await playTo(page, 2020, 5, 255, ['kill', 'dig']); await settle(page) } },
-  {
-    name: '21c-frost-two-days-on', setup: async page => {
-      await playTo(page, 2020, 5, 255, ['kill', 'dig'])
-      await playToFrost(page, ['kill', 'dig'])
-      await step(page, ['kill', 'dig']); await step(page, ['kill', 'dig'])
-      await settle(page)
-    },
-  },
-
+  { name: '15-winter', setup: async page => { await winter(page, 2); await settle(page); await frames(page, 6) } },
+  { name: '16-thaw', setup: async page => { await winter(page, 12); await settle(page); await frames(page, 4) } },
+  // Hilling: the same fields on the same day, never hilled, hilled once and hilled twice, side by side.
+  { name: '17-hilling-0-1-2', setup: async page => { await playTo(page, 1977, 5, 152, ['hill']); await hilled(page, [0, 0, 1, 1, 2, 2]); await settle(page); await view(page, { x: -1, z: -1, dist: 46, yaw: 0.02, pitch: 0.62 }); await frames(page, 6) } },
+  { name: '17b-hilling-close', setup: async page => { await playTo(page, 1977, 5, 152, ['hill']); await hilled(page, [0, 0, 1, 1, 2, 2]); await settle(page); await view(page, { x: -1.6, z: 5.6, dist: 10, yaw: -1.2, pitch: 0.3 }); await frames(page, 6) } },
+  { name: '18-july-medium', setup: async page => { await july(page); await playUntil(page, [], SKY('clear')); await page.evaluate(() => (window as any).__county.app.setSetting('quality', 'medium')); await settle(page) } },
+  { name: '19-july-low', setup: async page => { await july(page); await playUntil(page, [], SKY('clear')); await page.evaluate(() => (window as any).__county.app.setSetting('quality', 'low')); await settle(page) } },
   // A thin stand: seed planted early into cold, wet ground, with gaps where it rotted.
   {
     name: '22-thin-stand', setup: async page => {
@@ -187,20 +200,13 @@ const shots: Shot[] = [
       await settle(page)
     },
   },
-
-  // Sizes: the farm kept visible and as large as the free area allows, with a field selected too.
+  // Sizes: the farm kept whole inside what the interface leaves free.
   ...([
-    ['30-size-320x640', [320, 640], {}],
-    ['31-size-320x640-sheet', [320, 640], { top: 60, bottom: 330 }],
-    ['32-size-390x844-sheet', [390, 844], { top: 110, bottom: 300 }],
-    ['33-size-844x390-right', [844, 390], { top: 50, right: 420 }],
-    ['34-size-1024x700-rails', [1024, 700], { top: 80, left: 320, right: 390 }],
-    ['35-size-1440x900', [1440, 900], {}],
-    ['36-size-1440x900-rails', [1440, 900], RAILS],
-  ] as [string, [number, number], Insets][]).flatMap(([name, size, insets]) => [
-    { name, size, insets, setup: async (page: Page) => { await july(page); await settle(page) } },
-    { name: `${name}-selected`, size, insets, setup: async (page: Page) => { await july(page); await select(page, 0); await settle(page) } },
-  ]),
+    ['30-size-390x844', [390, 844], { top: 52, bottom: 190 }],
+    ['31-size-844x390', [844, 390], { top: 44, bottom: 96 }],
+    ['32-size-1024x700', [1024, 700], { top: 52, bottom: 150 }],
+    ['33-size-1920x1080', [1920, 1080], { top: 56, bottom: 160 }],
+  ] as [string, [number, number], Insets][]).map(([name, size, insets]) => ({ name, size, insets, setup: async (page: Page) => { await july(page); await settle(page) } })),
 ]
 
 const browser = await chromium.launch({
@@ -215,21 +221,15 @@ for (const shot of shots) {
   page.on('pageerror', e => errors.push(`${shot.name}: ${e.message}`))
   await page.goto(base)
   await page.waitForFunction(() => (window as any).__countyField !== undefined)
-  // Stand in for the interface: the real panels are hidden and grey blocks mark the screen edges they would cover.
-  const insets = shot.insets ?? (w < 600 ? { bottom: Math.round(h * 0.42) } : { left: 346 })
+  // The interface is hidden; the screen edges it would cover are held as given.
+  const insets = shot.insets ?? { top: 56, bottom: 150 }
   await page.evaluate(i => {
     const { app } = (window as any).__county
     ;(document.getElementById('ui') as HTMLElement).style.display = 'none'
     const t = i.top ?? 0, r = i.right ?? 0, b = i.bottom ?? 0, l = i.left ?? 0
-    // The hidden interface would report no panels at all; hold the stand-in edges instead.
     const set = app.setInsets.bind(app)
     app.setInsets = () => set(t, r, b, l)
     set(t, r, b, l)
-    const box = (css: string) => { const d = document.createElement('div'); d.style.cssText = `position:fixed;background:rgba(243,236,220,0.82);border:1px solid #c9bfa6;pointer-events:none;${css}`; document.body.append(d) }
-    if (t) box(`left:0;right:0;top:0;height:${t}px`)
-    if (b) box(`left:0;right:0;bottom:0;height:${b}px`)
-    if (l) box(`left:0;top:${t}px;bottom:${b}px;width:${l}px`)
-    if (r) box(`right:0;top:${t}px;bottom:${b}px;width:${r}px`)
   }, insets)
   await shot.setup(page)
   const path = `${out}/${shot.name}.png`
@@ -237,7 +237,8 @@ for (const shot of shots) {
   const info = await page.evaluate(() => {
     const f = (window as any).__countyField
     const anchors = [0, 1, 2, 3, 4, 5].map(i => f.anchor(i))
-    return { ...f.info(), anchors: anchors.map((a: any) => (a.visible ? `${Math.round(a.x)},${Math.round(a.y)}` : 'off')).join(' '), triangles: f.stats ? f.stats().triangles : undefined }
+    const s = f.stats ? f.stats() : {}
+    return { ...f.info(), anchors: anchors.map((a: any) => (a.visible ? `${Math.round(a.x)},${Math.round(a.y)}` : 'off')).join(' '), triangles: s.triangles, calls: s.calls, fps: s.fps }
   })
   console.log(path, JSON.stringify(info))
   await page.close()

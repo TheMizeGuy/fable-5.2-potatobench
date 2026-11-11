@@ -2,7 +2,7 @@
 // and which hills change as they pass (planted, hilled, killed, dug, pulled, blight found).
 import { COLS, HILLS, type HillLook, type JobKind } from '../sim/index.ts'
 import type { HillDisplay } from './fields.ts'
-import { FIELDS, ROAD, SHED_SPOT, SZ, fieldBaseY, groundY, hillPos } from './layout.ts'
+import { FIELDS, ROAD, SHED_SPOT, SZ, fieldAt, fieldBaseY, groundY, hillPos } from './layout.ts'
 import type { Snapshot, Work } from './state.ts'
 
 export interface Pt { x: number; z: number }
@@ -21,6 +21,7 @@ export interface Seg {
 }
 
 const TRACTOR_JOBS = new Set<string>(['plant', 'hill', 'spray', 'kill', 'water', 'dig'])
+const LANE = 1.16        // the headland above a field, where the tractor travels
 
 export class Poly {
   pts: Pt[]
@@ -56,49 +57,53 @@ export class Poly {
   }
 }
 
+// Where the tractor stands while the farmer works a field on foot: on the headland at the field's corner.
 export function parkSpot(field: number): Pt {
   const f = FIELDS[field]
-  return field % 2 === 1 ? { x: f.x1 + 1.0, z: f.z0 - 0.15 } : { x: f.x1 + 0.6, z: f.z0 - 0.2 }
+  return { x: f.x1 + (field % 2 === 1 ? 1.3 : 0.9), z: f.z0 - 0.5 }
 }
 
-// From a to b, by the road when the trip changes terrace.
-export function route(a: Pt, b: Pt): Pt[] {
-  if (Math.abs(a.z - b.z) < 2.5 && Math.abs(a.x - b.x) < 14) return [a, b]
-  const pts: Pt[] = [a]
-  const roadAt = (z: number): Pt => {
-    for (let k = 0; k < ROAD.length - 1; k++) {
-      const [x0, z0] = ROAD[k], [x1, z1] = ROAD[k + 1]
-      if ((z >= z0 && z <= z1) || (z >= z1 && z <= z0)) {
-        const t = z1 === z0 ? 0 : (z - z0) / (z1 - z0)
-        return { x: x0 + (x1 - x0) * t, z }
-      }
+// The farm road at a given distance down the slope. Above the dooryard a track runs on up beside the fields.
+function roadAt(z: number): Pt {
+  if (z < -9.6) return { x: 17.3, z }
+  for (let k = 0; k < ROAD.length - 1; k++) {
+    const [x0, z0] = ROAD[k], [x1, z1] = ROAD[k + 1]
+    if ((z >= z0 && z <= z1) || (z >= z1 && z <= z0)) {
+      const t = z1 === z0 ? 0 : (z - z0) / (z1 - z0)
+      return { x: x0 + (x1 - x0) * t, z }
     }
-    return { x: ROAD[0][0], z }
   }
-  const ra = roadAt(a.z), rb = roadAt(b.z)
+  return { x: 17.6, z }
+}
+
+// From a to b, by the road when the trip changes level.
+export function route(a: Pt, b: Pt): Pt[] {
+  if (Math.abs(a.z - b.z) < 2.5 && Math.abs(a.x - b.x) < 18) return [a, b]
+  const pts: Pt[] = [a]
   const lowA = laneZ(a), lowB = laneZ(b)
   if (Math.abs(lowA - a.z) > 0.05) pts.push({ x: a.x, z: lowA })
   pts.push(roadAt(lowA))
-  const dir = Math.sign(rb.z - ra.z)
-  for (const [x, z] of ROAD) if ((z - lowA) * dir > 0 && (lowB - z) * dir > 0) pts.push({ x, z })
+  const dir = Math.sign(lowB - lowA)
+  for (const [x, z] of ROAD) if (z > -9.6 && (z - lowA) * dir > 0 && (lowB - z) * dir > 0) pts.push({ x, z })
   pts.push(roadAt(lowB))
   if (Math.abs(lowB - b.z) > 0.05) pts.push({ x: b.x, z: lowB })
   pts.push(b)
   return pts
 }
 
-// Inside a terrace, travel along its back headland so as not to cross the crop.
+// Inside the fields, travel along the headland above so as not to cross the crop.
 function laneZ(p: Pt): number {
-  for (const f of FIELDS) if (p.z >= f.z0 - 1 && p.z <= f.z1 + 0.6 && p.x < 12.5) return f.z0 - 0.3
+  for (const f of FIELDS) if (p.z >= f.z0 - LANE - 0.4 && p.z <= f.z1 + 0.6 && p.x < 16.4) return f.z0 - LANE
   return p.z
 }
 
+// Up one simulated row and back down the next: four planted rows to a pass.
 export function serpentine(field: number, rows: number[]): Pt[] {
   const f = FIELDS[field]
   const pts: Pt[] = []
   for (const r of rows) {
     const z = f.z0 + (r + 0.5) * SZ
-    const a = { x: f.x1 + 0.45, z }, b = { x: f.x0 - 0.45, z }
+    const a = { x: f.x1 + 0.8, z }, b = { x: f.x0 - 0.8, z }
     if (r % 2 === 0) pts.push(a, b)
     else pts.push(b, a)
   }
@@ -109,8 +114,8 @@ function scoutWalk(field: number): Pt[] {
   const f = FIELDS[field]
   const pts: Pt[] = []
   for (let k = 0; k <= 6; k++) {
-    const x = f.x1 - 0.4 - (k / 6) * (f.x1 - f.x0 - 0.8)
-    pts.push({ x, z: k % 2 ? f.z1 - 1.0 : f.z0 + 1.0 })
+    const x = f.x1 - 0.5 - (k / 6) * (f.x1 - f.x0 - 1)
+    pts.push({ x, z: k % 2 ? f.z1 - 1.2 : f.z0 + 1.2 })
   }
   return pts
 }
@@ -132,7 +137,9 @@ export function planDay(snap: Snapshot, shown: HillDisplay[][], from: Pt, sample
   const segs: Seg[] = []
   let at = from
   const claimed = new Set<number>()
-  const list: Work[] = snap.worked.slice()
+  // A test dig comes first, then any digging: they are what the player is waiting to see.
+  const first = (w: Work) => (w.kind === 'sample' ? 2 : w.kind === 'dig' ? 1 : 0)
+  const list: Work[] = snap.worked.slice().sort((a, b) => first(b) - first(a))
   for (const w of list) {
     const f = snap.fields[w.field]
     const reveals: Reveal[] = []
@@ -159,17 +166,19 @@ export function planDay(snap: Snapshot, shown: HillDisplay[][], from: Pt, sample
       path = scoutWalk(w.field)
     } else {
       const start = parkSpot(w.field)
-      path = [{ x: start.x - 0.3, z: start.z + 0.4 }]
+      path = [{ x: start.x - 0.5, z: start.z + 0.6 }]
       const order = changedHills.slice().sort((a, b) => (Math.floor(a / COLS) - Math.floor(b / COLS)) || ((a % COLS) - (b % COLS)) * (Math.floor(a / COLS) % 2 ? 1 : -1))
       for (const h of order) {
         const p = hillPos(w.field, h)
-        path.push({ x: p.x + 0.25, z: p.z + 0.5 * SZ })
+        // The farmer stands in the furrow below the hill, facing it.
+        path.push({ x: p.x + 0.1, z: p.z + SZ * 0.62 })
       }
       if (order.length === 0) path.push(hillPos(w.field, Math.floor(HILLS / 2)))
-      path.push({ x: start.x - 0.3, z: start.z + 0.4 })
+      // A test dig ends at the hill: the farmer stays to look at what came up.
+      if (w.kind !== 'sample' || order.length === 0) path.push({ x: start.x - 0.5, z: start.z + 0.6 })
     }
     const poly = new Poly(path)
-    const lag = tractor ? (w.kind === 'dig' ? 1.3 : w.kind === 'plant' ? 0.9 : 0.8) : 0.1
+    const lag = tractor ? (w.kind === 'dig' ? 1.7 : w.kind === 'plant' ? 1.1 : 1.0) : 0.05
     for (const h of changedHills) {
       const p = hillPos(w.field, h)
       reveals.push({
@@ -200,7 +209,5 @@ export function planDay(snap: Snapshot, shown: HillDisplay[][], from: Pt, sample
 }
 
 export function heightAt(x: number, z: number): number {
-  for (const f of FIELDS) if (x >= f.x0 && x <= f.x1 && z >= f.z0 && z <= f.z1) return fieldBaseY(f.i, z) + 0.1
-  return groundY(x, z)
+  return fieldAt(x, z) >= 0 ? fieldBaseY(z) + 0.05 : groundY(x, z)
 }
-

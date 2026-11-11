@@ -30,6 +30,14 @@ export function smooth(e0: number, e1: number, x: number): number {
   return t * t * (3 - 2 * t)
 }
 
+export function clamp(x: number, a: number, b: number): number {
+  return x < a ? a : x > b ? b : x
+}
+
+export function mix(a: number, b: number, t: number): number {
+  return a + (b - a) * t
+}
+
 // A seeded generator for scattering props.
 export function rng(seed: number): () => number {
   let s = seed >>> 0
@@ -42,7 +50,13 @@ export function rng(seed: number): () => number {
   }
 }
 
+// ihash() gives the same number as hash2() above, so the land's quilt can be laid out here and drawn in a shader.
 export const GLSL_NOISE = /* glsl */ `
+float ihash(ivec2 p) {
+  uint h = (uint(p.x) * 374761393u) ^ (uint(p.y) * 668265263u);
+  h = (h ^ (h >> 13u)) * 1274126177u;
+  return float(h ^ (h >> 16u)) / 4294967296.0;
+}
 float hash12(vec2 p) {
   vec3 p3 = fract(vec3(p.xyx) * 0.1031);
   p3 += dot(p3, p3.yzx + 33.33);

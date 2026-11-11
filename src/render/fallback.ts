@@ -5,7 +5,7 @@ import { COLS, FIELD_COUNT, HILLS, ROWS } from '../sim/index.ts'
 import { snapshot, type Snapshot } from './state.ts'
 
 const SOIL: Record<string, string> = {
-  'standing water': '#3f2e23', wet: '#4a3528', good: '#614634', drying: '#6d5039', dry: '#7a5a43', wilting: '#8c6c52',
+  'standing water': '#4c3024', wet: '#59382a', good: '#774a37', drying: '#84543d', dry: '#925d44', wilting: '#9d6b54',
 }
 
 export function createFallbackView(original: HTMLCanvasElement, app: App): FieldView {
@@ -26,6 +26,7 @@ export function createFallbackView(original: HTMLCanvasElement, app: App): Field
   let snap: Snapshot = snapshot(app)
   let dirty = true
   let dpr = 1
+  let rings: { field: number; until: number }[] = []
 
   function layout(): void {
     const W = canvas.clientWidth || innerWidth, H = canvas.clientHeight || innerHeight
@@ -53,6 +54,8 @@ export function createFallbackView(original: HTMLCanvasElement, app: App): Field
     grad.addColorStop(1, winter ? '#dde1e1' : '#e9eee6')
     ctx.fillStyle = grad
     ctx.fillRect(0, 0, W, H)
+    const now = performance.now()
+    rings = rings.filter(r => r.until > now)
     rects.forEach((r, i) => {
       const f = snap.fields[i]
       ctx.fillStyle = winter ? '#e4e8ea' : f.crop === 'rest' ? '#5f7f3d' : SOIL[f.moisture] ?? SOIL.good
@@ -63,7 +66,7 @@ export function createFallbackView(original: HTMLCanvasElement, app: App): Field
           const look = f.hills[h]
           const cx = r.x + ((h % COLS) + 0.5) * cw, cy = r.y + (Math.floor(h / COLS) + 0.5) * ch
           if (look.kind === 'plant' || look.kind === 'dead') {
-            ctx.fillStyle = look.kind === 'dead' ? '#6e5f4a' : look.blight > 0.05 ? '#4b3324' : look.yellow > 0.4 ? '#8f9a4a' : look.stunted ? '#a9bd72' : '#3f7d48'
+            ctx.fillStyle = look.kind === 'dead' ? '#8a7a5c' : look.blight > 0.05 ? '#4b3324' : look.yellow > 0.4 ? '#8f9a4a' : look.stunted ? '#a9bd72' : '#3f7d48'
             ctx.beginPath()
             ctx.arc(cx, cy, Math.max(1.5, (0.15 + 0.4 * look.canopy) * Math.min(cw, ch)), 0, Math.PI * 2)
             ctx.fill()
@@ -77,23 +80,36 @@ export function createFallbackView(original: HTMLCanvasElement, app: App): Field
           }
         }
       }
-      if (app.selected === i) {
+      const selected = app.selection.includes(i), ringing = rings.some(q => q.field === i)
+      if (selected || app.hover === i || ringing) {
         ctx.strokeStyle = '#f3ecdc'
-        ctx.lineWidth = 3
+        ctx.globalAlpha = selected || ringing ? 1 : 0.5
+        ctx.lineWidth = ringing ? 5 : selected ? 3 : 2
         ctx.strokeRect(r.x - 3, r.y - 3, r.w + 6, r.h + 6)
+        ctx.globalAlpha = 1
       }
     })
-    dirty = false
+    dirty = rings.length > 0
   }
 
-  const onClick = (e: MouseEvent) => {
+  const at = (e: MouseEvent): number => {
     const b = canvas.getBoundingClientRect()
     const x = e.clientX - b.left, y = e.clientY - b.top
-    app.select(rects.findIndex(r => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h))
+    return rects.findIndex(r => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h)
   }
+  const onClick = (e: MouseEvent) => { const i = at(e); app.select(i, i >= 0 && e.shiftKey) }
+  const onDouble = (e: MouseEvent) => { const i = at(e); if (i >= 0) app.selectLike(i) }
+  const onMenu = (e: MouseEvent) => { e.preventDefault(); const i = at(e); if (i >= 0) app.smartOrder(i) }
+  const onMove = (e: MouseEvent) => app.setHover(at(e))
+  const onLeave = () => app.setHover(-1)
   canvas.addEventListener('click', onClick)
+  canvas.addEventListener('dblclick', onDouble)
+  canvas.addEventListener('contextmenu', onMenu)
+  canvas.addEventListener('mousemove', onMove)
+  canvas.addEventListener('mouseleave', onLeave)
   const off = app.on(e => {
     if (e.type === 'insets') layout()
+    else if (e.type === 'order') { for (const f of e.fields) rings.push({ field: f, until: performance.now() + 700 }); dirty = true }
     else if (e.type !== 'saved' && e.type !== 'speed') { snap = snapshot(app); dirty = true }
   })
   layout()
@@ -112,6 +128,10 @@ export function createFallbackView(original: HTMLCanvasElement, app: App): Field
     dispose() {
       off()
       canvas.removeEventListener('click', onClick)
+      canvas.removeEventListener('dblclick', onDouble)
+      canvas.removeEventListener('contextmenu', onMenu)
+      canvas.removeEventListener('mousemove', onMove)
+      canvas.removeEventListener('mouseleave', onLeave)
     },
   }
 }

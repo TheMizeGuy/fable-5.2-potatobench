@@ -46,12 +46,14 @@ export interface Snapshot {
   worked: Work[]
   next: Work | null
   frozen: boolean
-  rime: number[] | null    // in the season, rime on the ridge, mid-slope and bottom terraces
+  rime: number[] | null    // in the season, rime on the ridge, mid-slope and bottom land
+  wetGround: number        // how wet the ground lies, 0 dust-dry to 1 standing water
 }
 
 const BARE: sim.HillLook = { kind: 'bare', canopy: 0, vigor: 1, blight: 0, stunted: false, yellow: 0 }
 
 const RIDGE_BY_PASSES = [0.1, 0.55, 1]
+const WETNESS: Record<string, number> = { 'standing water': 1, wet: 0.8, good: 0.34, drying: 0.16, dry: 0.04, wilting: 0 }
 
 export function snapshot(app: App): Snapshot {
   const c = app.campaign
@@ -122,11 +124,13 @@ export function snapshot(app: App): Snapshot {
   const worked: Work[] = []
   if (s && mode === 'season') for (const w of s.worked) if (!worked.some(x => x.kind === w.kind && x.field === w.field)) worked.push({ kind: w.kind, field: w.field })
   const nextJob = s && mode === 'season' && s.jobs.length ? s.jobs[0] : null
+  const wetGround = fields.reduce((a, f) => a + (WETNESS[f.moisture] ?? 0.3), 0) / fields.length
   return {
     mode, year: c.year, day, seasonDay: s ? s.day : -1, month: c.month, fields, weather, worked,
     next: nextJob ? { kind: nextJob.kind, field: nextJob.field } : null,
     frozen: s ? s.frozen : false,
     rime,
+    wetGround: mode === 'season' ? wetGround : 0.3,
   }
 }
 
@@ -145,19 +149,19 @@ function phaseWeather(mode: Mode, month: number): { weather: Weather; day: numbe
   return { weather: w(skies[m], tmins[m], tmins[m] + 9, 4.5, snow[m], 0), day: (318 + m * 30.4) % 365 }
 }
 
-// The title screen: a farm in midsummer bloom.
+// The title screen: the farm on a July evening, the potatoes in blossom and the oats in head.
 function showcase(): Snapshot {
   const fields: FieldVis[] = []
   const setup: [boolean, sim.VarietyId, number, number][] = [
-    [true, 'katahdin', 0.92, 1], [false, 'katahdin', 0, 0], [true, 'superior', 0.95, 1],
-    [true, 'kennebec', 0.86, 0.8], [false, 'katahdin', 0, 0], [true, 'gold', 0.82, 1],
+    [true, 'katahdin', 0.93, 0.85], [false, 'katahdin', 0, 0], [false, 'katahdin', 0, 0],
+    [true, 'superior', 0.95, 1], [true, 'kennebec', 0.94, 1], [true, 'gold', 0.9, 1],
   ]
   for (let i = 0; i < sim.FIELD_COUNT; i++) {
     const [potato, v, canopy, bloom] = setup[i]
     const hills: sim.HillLook[] = []
     for (let h = 0; h < sim.HILLS; h++) {
       const j = hash2(i * 131 + h, 7)
-      hills.push(potato ? { kind: 'plant', canopy: Math.min(1, canopy * (0.88 + 0.2 * j)), vigor: 0.9 + 0.2 * hash2(h, i), blight: 0, stunted: false, yellow: 0 } : BARE)
+      hills.push(potato ? { kind: 'plant', canopy: Math.min(1, canopy * (0.9 + 0.16 * j)), vigor: 0.9 + 0.2 * hash2(h, i), blight: 0, stunted: false, yellow: 0 } : BARE)
     }
     fields.push({
       crop: potato ? 'potato' : 'rest', status: potato ? 'growing' : 'rest', hills, ridge: potato ? 1 : 0, moisture: 'good', bloom, wilt: 0,
@@ -166,7 +170,7 @@ function showcase(): Snapshot {
   }
   return {
     mode: 'title', year: 1987, day: 196, seasonDay: -1, month: 0, fields,
-    weather: { sky: 'clear', tmin: 13, tmax: 25, wind: 3.5, wdir: 250, prcp: 0, wetH: 6, snwd: 0 },
-    worked: [{ kind: 'spray', field: 2 }], next: null, frozen: false, rime: null,
+    weather: { sky: 'clear', tmin: 13, tmax: 25, wind: 2.6, wdir: 250, prcp: 0, wetH: 6, snwd: 0 },
+    worked: [], next: null, frozen: false, rime: null, wetGround: 0.1,
   }
 }
