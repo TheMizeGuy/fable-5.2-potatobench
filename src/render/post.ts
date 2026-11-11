@@ -1,13 +1,19 @@
-// The lens: the scene is drawn in open-ended light, then given contact shade, a shallow focus, a little bloom,
-// a filmic curve, anti-aliasing and grain on its way to the screen.
+// The lens: the scene is drawn in open-ended light, then given contact shade, shafts of light from a low sun,
+// a shallow focus, a little bloom, a filmic curve, a grade that follows the light, anti-aliasing and grain.
 import {
   BufferAttribute, BufferGeometry, DepthTexture, HalfFloatType, LinearFilter, Matrix4, Mesh, NearestFilter, OrthographicCamera,
-  RGBAFormat, Scene, ShaderMaterial, UnsignedByteType, UnsignedIntType, Vector2, Vector4, WebGLRenderTarget,
+  RGBAFormat, Scene, ShaderMaterial, UnsignedByteType, UnsignedIntType, Vector2, Vector3, Vector4, WebGLRenderTarget,
   type PerspectiveCamera, type Texture, type WebGLRenderer,
 } from 'three'
 
 export interface PostOptions { msaa: number; ao: boolean; focus: boolean; bloom: boolean }
-export interface Shot { exposure: number; focus: number; aperture: number; time: number; grain: number }
+export interface Shot {
+  exposure: number; focus: number; aperture: number; time: number; grain: number
+  // Where the sun stands on the picture (0..1 each way, may lie outside it) and how strongly its light shows in the air.
+  sunX: number; sunY: number; shafts: number
+  // The grade: warmth laid over the highlights against cool in the shade, richness, and contrast.
+  warm: number; rich: number; contrast: number
+}
 
 const VERT = 'void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }'
 
@@ -77,6 +83,36 @@ void main() {
     wsum += w;
   }
   gl_FragColor = vec4(wsum > 0.0 ? sum / wsum : 1.0);
+}
+`
+
+// Light in the air: every point looks toward the sun and gathers what open sky lies between.
+const SHAFT_FRAG = /* glsl */ `
+uniform sampler2D tScene;
+uniform sampler2D tDepth;
+uniform vec2 uRes;
+uniform vec3 uSun;       // where the sun is on the picture, and its strength
+uniform float uExposure;
+const int STEPS = 36;
+float ign(vec2 p) { return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }
+void main() {
+  vec2 uv = gl_FragCoord.xy / uRes;
+  vec2 to = uSun.xy - uv;
+  float far = length(to * vec2(uRes.x / uRes.y, 1.0));
+  vec2 stride = to * (0.92 / float(STEPS));
+  vec2 p = uv + stride * ign(gl_FragCoord.xy);
+  vec3 sum = vec3(0.0);
+  float keep = 1.0;
+  for (int i = 0; i < STEPS; i++) {
+    vec2 q = clamp(p, vec2(0.001), vec2(0.999));
+    float open = step(0.99999, texture2D(tDepth, q).r);
+    sum += min(texture2D(tScene, q).rgb * uExposure, vec3(6.0)) * open * keep;
+    keep *= 0.955;
+    p += stride;
+  }
+  // Strongest round the sun, gone a little over a picture's height away from it.
+  float reach = smoothstep(1.35, 0.05, far);
+  gl_FragColor = vec4(sum * (uSun.z * reach * reach / float(STEPS)), 1.0);
 }
 `
 
@@ -158,9 +194,23 @@ uniform sampler2D tScene;
 uniform sampler2D tAO;
 uniform sampler2D tBloom;
 uniform sampler2D tFocus;
+uniform sampler2D tShaft;
 uniform vec2 uRes;
 uniform vec4 uUse;       // contact shade, focus, bloom, vignette
 uniform float uExposure;
+uniform float uShaft;
+uniform vec3 uGrade;     // warmth, richness, contrast
+// The grade, on the finished picture: warm where the light falls and cool in the shade, the quiet colours
+// brought up more than the loud ones, and a little more bite in the middle.
+vec3 grade(vec3 c) {
+  float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+  vec3 tone = mix(vec3(0.93, 0.99, 1.09), vec3(1.07, 1.01, 0.91), smoothstep(0.12, 0.72, l));
+  c *= mix(vec3(1.0), tone, uGrade.x);
+  float spread = max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b));
+  c = mix(vec3(dot(c, vec3(0.2126, 0.7152, 0.0722))), c, 1.0 + uGrade.y * (1.0 - spread));
+  c = clamp(c, 0.0, 1.0);
+  return mix(c, c * c * (3.0 - 2.0 * c), uGrade.z);
+}
 vec3 film(vec3 c) {
   // Straight up to the middle tones, so a lit colour is the colour it was painted; a soft shoulder above.
   float m = max(c.r, max(c.g, c.b));
@@ -182,9 +232,11 @@ void main() {
   }
   col *= uExposure;
   col += texture2D(tBloom, uv).rgb * uUse.z;
+  col += texture2D(tShaft, uv).rgb * uShaft;
   vec2 q = (uv - 0.5) * vec2(1.0, uRes.y / uRes.x) * 1.25;
   col *= 1.0 - uUse.w * smoothstep(0.25, 1.0, length(q) * 1.45);
   col = film(col);
+  col = grade(col);
   col = mix(12.92 * col, 1.055 * pow(max(col, vec3(1e-5)), vec3(1.0 / 2.4)) - 0.055, step(0.0031308, col));
   gl_FragColor = vec4(col, 1.0);
 }
@@ -224,6 +276,9 @@ export class Post {
   private cam2 = new OrthographicCamera(-1, 1, 1, -1, 0, 1)
   private sceneRT!: WebGLRenderTarget
   private half: WebGLRenderTarget[] = []      // ao, ao blur, focus source, focus
+  private shaft!: WebGLRenderTarget
+  private sun = new Vector3()
+  private gradeV = new Vector3()
   private bloom: WebGLRenderTarget[] = []
   private glow: WebGLRenderTarget[] = []
   private ldr!: WebGLRenderTarget
@@ -248,6 +303,7 @@ export class Post {
     const lens = { value: new Vector2(50, 0) }
     make('ao', AO_FRAG, { ...depth(), uRes: res(), uProjScale: { value: 500 } })
     make('aoBlur', AO_BLUR_FRAG, { ...depth(), tAO: { value: null }, uRes: res(), uDir: { value: new Vector2(1, 0) } })
+    make('shaft', SHAFT_FRAG, { tScene: { value: null }, tDepth: { value: null }, uRes: res(), uSun: { value: this.sun }, uExposure: { value: 1 } })
     make('bright', BRIGHT_FRAG, { tScene: { value: null }, uRes: res(), uExposure: { value: 1 } })
     make('down', DOWN_FRAG, { tSrc: { value: null }, uRes: res() })
     make('up', UP_FRAG, { tSrc: { value: null }, tAdd: { value: null }, uRes: res() })
@@ -256,6 +312,7 @@ export class Post {
     make('finish', FINISH_FRAG, {
       ...depth(), tScene: { value: null }, tAO: { value: null }, tBloom: { value: null }, tFocus: { value: null }, uRes: res(),
       uUse: { value: new Vector4(1, 1, 1, 0.16) }, uExposure: { value: 1 }, uLens: lens,
+      tShaft: { value: null }, uShaft: { value: 0 }, uGrade: { value: this.gradeV },
     })
     make('out', OUT_FRAG, { tSrc: { value: null }, uRes: res(), uOut: res(), uGrain: { value: new Vector2(0.02, 0) } })
     this.quad = new Mesh(this.tri, this.mats.out)
@@ -279,6 +336,7 @@ export class Post {
     const hw = Math.max(2, w >> 1), hh = Math.max(2, h >> 1)
     const rt = (tw: number, th: number, t = type) => new WebGLRenderTarget(tw, th, { type: t, format: RGBAFormat, depthBuffer: false, minFilter: LinearFilter, magFilter: LinearFilter })
     this.half = [rt(hw, hh, UnsignedByteType), rt(hw, hh, UnsignedByteType), rt(hw, hh), rt(hw, hh)]
+    this.shaft = rt(hw, hh)
     let bw = hw, bh = hh
     for (let k = 0; k < 5 && bw > 8 && bh > 8; k++) {
       this.bloom.push(rt(bw, bh))
@@ -290,7 +348,7 @@ export class Post {
   }
 
   private free(): void {
-    for (const t of [this.sceneRT, this.ldr, ...this.half, ...this.bloom, ...this.glow]) if (t) { t.depthTexture?.dispose(); t.dispose() }
+    for (const t of [this.sceneRT, this.ldr, this.shaft, ...this.half, ...this.bloom, ...this.glow]) if (t) { t.depthTexture?.dispose(); t.dispose() }
     this.half = []
     this.bloom = []
     this.glow = []
@@ -339,9 +397,16 @@ export class Post {
         src = this.glow[k].texture
       }
     }
+    // Shafts are worth their pass only when the sun is low, the air has something in it and the lens is turned that way.
+    const shafts = o.bloom && shot.shafts > 0.01
+    if (shafts) {
+      this.sun.set(shot.sunX, shot.sunY, shot.shafts)
+      this.pass('shaft', this.shaft, { tScene: color, tDepth: depth, uExposure: shot.exposure })
+    }
+    this.gradeV.set(shot.warm, shot.rich, shot.contrast)
     const use = this.mats.finish.uniforms.uUse.value as Vector4
     use.set(o.ao ? 1 : 0, lensOn ? 1 : 0, o.bloom && this.bloom.length ? 0.22 : 0, 0.2)
-    this.pass('finish', this.ldr, { tDepth: depth, tScene: color, tAO: ao.texture, tBloom: this.glow.length ? this.glow[0].texture : color, tFocus: focus.texture, uExposure: shot.exposure })
+    this.pass('finish', this.ldr, { tDepth: depth, tScene: color, tAO: ao.texture, tBloom: this.glow.length ? this.glow[0].texture : color, tFocus: focus.texture, uExposure: shot.exposure, tShaft: this.shaft.texture, uShaft: shafts ? 1 : 0 })
     ;(this.mats.out.uniforms.uOut.value as Vector2).set(outW, outH)
     ;(this.mats.out.uniforms.uGrain.value as Vector2).set(shot.grain, shot.time)
     const m = this.mats.out
