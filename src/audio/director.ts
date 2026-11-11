@@ -56,6 +56,11 @@ export class Director {
     if (has.has('kept') && this.ready('cadence', 4, now)) cue.cadence(rig, slot() + 0.25, 'kept')
   }
 
+  // The player gave an order and it was taken.
+  order(now: number): void {
+    if (this.ready('order', 0.09, now)) cue.heard(this.rig, now + 0.01)
+  }
+
   // The year closing: the cellar gives way to the ledger. Silent if the kept or lost close has just begun.
   ledger(now: number): void {
     if (this.ready('cadence', 4, now)) cue.cadence(this.rig, now + 0.2, 'ledger')

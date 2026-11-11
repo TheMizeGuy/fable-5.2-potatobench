@@ -41,6 +41,14 @@ export function planted(rig: Rig, t: number): void {
   }
 }
 
+// An order heard: one knuckle on the tractor's fender. Short and dry, so it can answer every order without tiring.
+export function heard(rig: Rig, t: number): void {
+  const out = voiceOut(rig, vary(rig, 0, 0.3), 0.04)
+  const hz = vary(rig, 330, 0.04)
+  tone(rig, out, t, hz * 1.5, 0.16, 0.002, 0.028, hz, 0.03)
+  burst(rig, out, t, 0.2, 0.002, 0.014, filter(rig.ctx, 'bandpass', 1900, 1.4), filter(rig.ctx, 'lowpass', 3200))
+}
+
 // Soil turned up over the row: two soft sweeps of the hiller.
 export function hilled(rig: Rig, t: number): void {
   const ctx = rig.ctx

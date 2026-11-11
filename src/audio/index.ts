@@ -102,6 +102,7 @@ export const createSound: CreateSound = (app: App) => {
   const off = app.on((e: AppEvent) => {
     if (e.type === 'settings') apply()
     else if (e.type === 'events') { if (live() && director && ctx) director.events(e.events, ctx.currentTime) }
+    else if (e.type === 'order') { if (live() && director && ctx) director.order(ctx.currentTime) }
     else if (e.type === 'screen') onScreen(e.screen)
   })
   for (const g of GESTURES) window.addEventListener(g, onGesture, true)
