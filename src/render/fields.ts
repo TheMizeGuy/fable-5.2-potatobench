@@ -634,6 +634,7 @@ export class Fields {
         uniform float uLevel;
         uniform float uGain;
         uniform float uDash;
+        uniform float uWide;
         varying vec3 vRing;
         void main() {
           // A pale line with a dark edge, so it shows on snow as well as on soil. Heavier at the corners.

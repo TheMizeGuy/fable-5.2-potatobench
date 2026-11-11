@@ -157,7 +157,7 @@ function hardwood(seed: number, birch: boolean): { wood: BufferGeometry; crown: 
   crown.setIndex(ci)
   // The dark heart of each mass of leaves, smaller than the mass, so the crown is not seen through but keeps its holes.
   const parts = lobes.map(([lx, ly, lz, lr], k) => {
-    const g = lump(lr * 0.55, 1, k + seed * 7)
+    const g = lump(lr * 0.55, 0, k + seed * 7)
     g.translate(lx, ly, lz)
     return g
   })
@@ -211,7 +211,7 @@ interface Chunk { near: InstancedMesh[]; far: InstancedMesh[]; sphere: Sphere; f
 // into a shadow it cannot reach. On and near the farm a patch has whole trees for when the camera is close and simpler
 // ones for when it is not.
 const CELL = 34
-const NEAR_AT = { high: 80, medium: 58, low: 40 }
+const NEAR_AT = { high: 185, medium: 135, low: 92 }
 
 export class Flora {
   readonly group = new Group()

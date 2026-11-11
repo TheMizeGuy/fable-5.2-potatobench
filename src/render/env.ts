@@ -48,8 +48,8 @@ export function makeEnv(): Env {
 // By day of the year: how high the evening sun stands (degrees), and the colour of the grass. The game is played in
 // the long light of the end of the day, when every plant throws a shadow down its row.
 const SEASON: [number, number, string][] = [
-  [0, 9, '#8f8768'], [60, 11, '#91876a'], [95, 14, '#93865c'], [125, 16.5, '#7f8a52'], [150, 18.5, '#6b8a42'], [196, 19, '#68833f'],
-  [228, 18, '#72853f'], [258, 15.5, '#868541'], [288, 12.5, '#8e7d4c'], [318, 10, '#877c5e'], [366, 9, '#8f8768'],
+  [0, 8, '#8f8768'], [60, 10, '#91876a'], [95, 12, '#93865c'], [125, 14, '#7f8a52'], [150, 15.5, '#6b8a42'], [196, 16, '#68833f'],
+  [228, 15, '#72853f'], [258, 13.5, '#868541'], [288, 11.5, '#8e7d4c'], [318, 9, '#877c5e'], [366, 8, '#8f8768'],
 ]
 
 interface Sky { sun: number; cover: number; shadow: number; deck: number; haze: number; key: number; turbidity: number; mie: number }
@@ -84,11 +84,11 @@ export function envTarget(snap: Snapshot, out: Env): Env {
   out.haze = sky.haze
   out.turbidity = sky.turbidity
   out.mie = sky.mie
-  // September's air is dusty and gold; the light goes amber as the sun drops through it.
+  // Evening air holds a little dust; September's more, and the light goes amber as the sun drops through it.
   const harvest = smooth(235, 262, d) * (1 - smooth(292, 312, d))
   if (w.sky === 'clear' || w.sky === 'cloud') {
-    out.turbidity += 2.6 * harvest
-    out.mie += 0.004 * harvest
+    out.turbidity += 0.7 + 2.6 * harvest
+    out.mie += 0.0015 + 0.004 * harvest
     out.haze += 0.0003 * harvest
   }
   out.rain = w.sky === 'rain' || w.sky === 'storm' ? clamp(w.prcp / 14, 0.3, 1) : 0
