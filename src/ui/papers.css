@@ -349,6 +349,7 @@
 .help-foot { margin-top: var(--sp-4); }
 .help-farm { margin-top: var(--sp-5); }
 .help-cols.three { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-5); font-size: var(--t-small); line-height: 18px; }
+.paper-body .help-cols.three p { margin: 0; }
 @media (max-width: 799px) { .help-cols.three { grid-template-columns: minmax(0, 1fr); gap: var(--sp-2); } }
 
 /* ---------------------------------------------------------------- contracts and the crew */

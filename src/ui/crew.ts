@@ -170,8 +170,8 @@ export function openCrew(ctx: Ctx): void {
             h('div', null,
               h('h4', { class: 't-head' }, KIND_NAME[kind], h('span', { class: 'sub num' }, ` ${F.money(wage)} a month`)),
               h('p', null, kindDoes(kind)),
-              kind === 'operator' ? h('p', { class: 'sub' }, `Drives the second tractor, so the machine jobs can go on in two fields at once. Without a second tractor there is nothing for an operator to drive${c.upgrades.tractor2 ? '' : ': it is bought in spring, under Equipment'}.`) : null,
-              why ? h('p', { class: 'sub warn-text' }, why) : null),
+              kind === 'operator' ? h('p', { class: 'sub' }, 'Drives the second tractor, so the machine jobs can go on in two fields at once.') : null,
+              why ? h('p', { class: 'sub warn-text' }, `${why}${kind === 'operator' && !c.upgrades.tractor2 ? ' It is bought in spring, under Equipment.' : ''}`) : null),
             why ? null : h('button', {
               class: 'btn', type: 'button', testid: `hire-${kind}`,
               onclick: () => { const r = ctx.run({ t: 'hire', kind }); if (r.ok) { ctx.announce(F.localize(r.events[0]?.text ?? 'Hired.')); draw() } },
