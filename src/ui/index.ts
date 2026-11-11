@@ -53,6 +53,7 @@ export const mountHud: MountHud = (root, app, view) => {
     touch: () => touchQuery.matches,
     reduced: () => app.settings.reducedMotion,
     memo: { estimates: [], soilT: 10, digSoilT: {}, lots: {}, seen: [], digEst: {}, digSeen: {}, sampleBefore: {} },
+    clock: { auto: true },
     dirty: () => { dirty = true },
   }
 
@@ -96,6 +97,9 @@ export const mountHud: MountHud = (root, app, view) => {
     if (oldEl && !ctx.reduced()) {
       oldEl.classList.add('leaving')
       oldEl.inert = true
+      // For its last moment the old screen is only a picture: nothing in it can be found or focused.
+      if (oldEl.contains(document.activeElement)) (document.activeElement as HTMLElement).blur()
+      for (const n of oldEl.querySelectorAll('[data-testid]')) n.removeAttribute('data-testid')
       setTimeout(() => oldEl.remove(), EXIT_MS)
       screen.el.classList.add('arriving')
     } else oldEl?.remove()
@@ -199,7 +203,8 @@ export const mountHud: MountHud = (root, app, view) => {
       if (app.screen !== 'title' && app.campaign) { e.preventDefault(); menu() }
       return
     }
-    if (papers.isOpen()) return
+    // A paper on its way out no longer takes keys; only a second Escape waits for it to be gone.
+    if (papers.top()) return
     if (screen?.key?.(e)) { e.preventDefault(); return }
     if (e.ctrlKey || e.metaKey || e.altKey || t.closest?.('input')) return
     const k = e.key.toLowerCase()

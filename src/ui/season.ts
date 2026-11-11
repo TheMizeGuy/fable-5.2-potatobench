@@ -62,9 +62,13 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     if (e) openTray(e, false)
   }
 
+  // When the clock last changed pace and when the last order was given, so the days do not race off under a hand.
+  let pacedAt = 0
+  let orderedAt = 0
   const off = app.on(ev => {
-    if (ev.type !== 'events') return
-    for (const e of ev.events) if (e.type === 'sample') openTray(e, app.speed < 3)
+    if (ev.type === 'speed') { pacedAt = performance.now(); setTimeout(() => ctx.dirty(), 4200) }
+    else if (ev.type === 'order') { orderedAt = performance.now(); setTimeout(() => ctx.dirty(), 2700) }
+    else if (ev.type === 'events') for (const e of ev.events) if (e.type === 'sample') openTray(e, app.speed < 3)
   })
 
   // ------------------------------------------------------------ plates, badges and the nine sentences
@@ -80,6 +84,8 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       const act = needs[i].need?.act
       if (!isJob(act) || seen.has(act)) continue
       hint = { kind: act, field: i, at: performance.now() }
+      // A sentence nobody has time to read teaches nothing.
+      if (app.speed > 1) app.setSpeed(1)
       seen.add(act)
       try { localStorage.setItem(HINTS_KEY, JSON.stringify([...seen])) } catch { /* storage blocked: the tip may show again */ }
       ctx.announce(hintText(act))
@@ -170,7 +176,6 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
         return h('li', { class: 'q-item', k: `q-${j.id}` },
           h('button', {
             class: `q${j === head ? ' active' : ''}${waits[j.id] ? ' waiting' : ''}`, type: 'button', testid: `queue-${j.id}`, 'aria-expanded': touch ? String(pop === j.id) : null,
-            'aria-label': `${what}${waits[j.id] ? `, waiting: ${waits[j.id]}` : j.done > 0 ? `, ${F.pct(j.done / j.need)} done` : ''}. ${touch ? 'Tap for its choices.' : `Click to cancel${k > 0 ? '; Ctrl-click to do it first' : ''}.`}`,
             title: touch ? undefined : `${what}${waits[j.id] ? ` (waiting: ${waits[j.id]})` : ''}. Click to cancel${k > 0 ? ', Ctrl-click to do it first' : ''}`,
             onclick: (e: Event) => {
               const m = e as MouseEvent
@@ -181,7 +186,8 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
             oncontextmenu: (e: Event) => { e.preventDefault(); bump(j.id) },
             onpointerenter: (e: Event) => { if ((e as PointerEvent).pointerType === 'mouse') app.setHover(j.field) },
             onpointerleave: () => { if (app.hover === j.field) app.setHover(-1) },
-          }, icon(j.kind), h('span', { class: 'q-n num' }, String(j.field + 1))),
+          }, icon(j.kind), h('span', { class: 'q-n num', 'aria-hidden': 'true' }, String(j.field + 1)),
+          h('span', { class: 'sr' }, `${what}${waits[j.id] ? `, waiting: ${waits[j.id]}` : j.done > 0 ? `, ${F.pct(j.done / j.need)} done` : ''}. ${touch ? 'Tap for its choices.' : `Click to cancel${k > 0 ? '; Ctrl-click to do it first' : ''}.`}`)),
           !touch && k > 0 ? h('button', { class: 'q-first', type: 'button', testid: `queue-first-${j.id}`, 'aria-label': `Do ${what.toLowerCase()} first`, title: 'Do it first', onclick: () => bump(j.id) }, icon('first', 'ic s')) : null,
           touch && pop === j.id ? h('div', { class: 'q-pop', role: 'group', 'aria-label': what },
             h('span', { class: 'q-pop-title' }, what),
@@ -189,9 +195,10 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
             h('button', { class: 'nbtn', type: 'button', testid: `queue-cancel-${j.id}`, disabled: lockDig, onclick: () => cancel(j.id) }, icon('close', 'ic s'), 'Cancel')) : null)
       }),
       jobs.length > room ? h('li', { class: 'q-item' }, h('button', {
-        class: 'q more', type: 'button', testid: 'queue-more', 'aria-expanded': String(expanded), 'aria-label': expanded ? 'Show fewer orders' : `Show all ${jobs.length} orders`,
+        class: 'q more', type: 'button', testid: 'queue-more', 'aria-expanded': String(expanded),
         onclick: () => { expanded = !expanded; ctx.dirty() },
-      }, expanded ? icon('back') : h('span', { class: 'num' }, `+${jobs.length - list.length}`))) : null) : null,
+      }, expanded ? icon('back') : h('span', { class: 'num', 'aria-hidden': 'true' }, `+${jobs.length - list.length}`),
+      h('span', { class: 'sr' }, expanded ? 'Show fewer orders' : `Show all ${jobs.length} orders`))) : null) : null,
     ])
   }
 
@@ -238,8 +245,8 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     const digit = /^(?:Digit|Numpad)([1-6])$/.exec(e.code)
     if (digit && !e.ctrlKey) { app.select(Number(digit[1]) - 1, e.shiftKey); return true }
     if (e.ctrlKey && !KEY_JOB[k.toLowerCase()]) return false
-    if (k === '+' || k === '=') { if (!S.seasonDone(c)) app.setSpeed(Math.min(3, app.speed + 1) as 1 | 2 | 3); return true }
-    if (k === '-' || k === '_') { if (app.speed > 1) app.setSpeed((app.speed - 1) as 1 | 2); return true }
+    if (k === '+' || k === '=') { if (!S.seasonDone(c)) { ctx.clock.auto = false; app.setSpeed(Math.min(3, app.speed + 1) as 1 | 2 | 3) } return true }
+    if (k === '-' || k === '_') { if (app.speed > 1) { ctx.clock.auto = false; app.setSpeed((app.speed - 1) as 1 | 2) } return true }
     if (k === 'Backspace' || k === 'Delete') {
       const jobs = c.season.jobs
       const mine = app.selection.length ? jobs.filter(j => app.selection.includes(j.field)) : jobs
@@ -249,7 +256,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       return true
     }
     const low = k.toLowerCase()
-    if (low === 'f' && !e.ctrlKey) { if (!S.seasonDone(c)) app.runUntilNeeded(); return true }
+    if (low === 'f' && !e.ctrlKey) { if (!S.seasonDone(c)) { ctx.clock.auto = true; app.runUntilNeeded() } return true }
     const kind = KEY_JOB[low]
     if (kind) { card.give(kind, e.ctrlKey || e.shiftKey); return true }
     return false
@@ -271,7 +278,10 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       const low = layout === 'narrow' || layout === 'short'
       el.classList.toggle('tight', layout === 'narrow' && innerHeight < 720 && (app.selection.length > 0 || !!tray))
       clockSlot.hidden = !low
-      if (low) patch(clockSlot, JSON.stringify([app.speed, app.running, S.seasonDone(c), ctx.touch()]), () => clock(ctx, true))
+      if (low) patch(clockSlot, JSON.stringify([app.speed, app.running, ctx.clock.auto, S.seasonDone(c), ctx.touch()]), () => clock(ctx, true))
+      const now = performance.now()
+      const quiet = !app.needs().some(n => n.need && n.need.act !== 'close') && c.season.jobs.length === 0
+      if (ctx.clock.auto && app.speed === 1 && quiet && !tray && !S.seasonDone(c) && !ctx.papers.isOpen() && now - pacedAt > 4000 && now - orderedAt > 2500) app.runUntilNeeded()
       const stopped = app.speed === 0 && !S.seasonDone(c)
       paused.hidden = !stopped
       el.classList.toggle('is-paused', stopped)
@@ -290,7 +300,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       const parts = narrow && tray ? [crew, clockSlot, card.el, trayHost] : [crew, clockSlot, card.el]
       const tops = parts.filter(x => x.offsetParent !== null && x.offsetHeight > 0).map(x => x.getBoundingClientRect().top)
       // On an upright phone a row above the instruments is kept for the latest alert, so the land never shifts for it.
-      return [t, 0, innerHeight - Math.min(...tops, innerHeight) + (narrow ? 44 : 8), 0]
+      return [t, 0, innerHeight - Math.min(...tops, innerHeight) + (narrow ? 48 : 8), 0]
     },
     frame: () => P.frame(),
     dispose() {

@@ -1,5 +1,10 @@
 /* Instruments: the plates, the top bar, the command card, the crew strip and the alerts. Small, dark, cream lettering. */
 .plate-layer, .screen-layer, .paper-layer { position: absolute; inset: 0; pointer-events: none; }
+/* Plates sit under the instruments, whatever order they take among themselves. */
+.plate-layer { z-index: 0; }
+.screen-layer { z-index: 1; }
+.notes-slot.floating { z-index: 2; }
+.paper-layer { z-index: 3; }
 .screen-layer > * { position: absolute; inset: 0; pointer-events: none; }
 .hud.waiting .screen-layer, .hud.waiting .plate-layer { visibility: hidden; }
 .screen-layer > .leaving { animation: leave var(--t-exit) var(--ease-in) forwards; }
@@ -38,6 +43,7 @@
 }
 .nicon.s { width: var(--hit-s); height: var(--hit-s); }
 .nicon[aria-pressed='true'] { background: var(--cream); color: var(--night-solid); }
+.nicon.armed { box-shadow: inset 0 0 0 1px var(--cream); }
 .speed-x { font-size: var(--t-body); font-weight: 700; }
 .nbtn {
   display: inline-flex;
@@ -120,6 +126,7 @@
 .clock { display: flex; gap: var(--sp-h); }
 
 .paused {
+  animation: arrive var(--t-base) var(--ease-out);
   position: absolute;
   right: var(--sp-3);
   top: calc(var(--top, 56px) + var(--sp-2));
@@ -137,7 +144,6 @@
 /* ---------------------------------------------------------------- plates */
 /* The button is the target; the chip inside it is what is drawn, so a finger gets 40 px and the land keeps its room. */
 .plate-wrap { position: absolute; left: 0; top: 0; padding-bottom: 6px; pointer-events: none; will-change: transform; }
-.plate-wrap:has(.hint) { z-index: 2; }
 .plate { position: relative; pointer-events: auto; display: inline-flex; align-items: center; min-height: 30px; white-space: nowrap; color: var(--cream); }
 .plate-in {
   position: relative;
@@ -315,6 +321,8 @@
   padding: var(--sp-3) var(--sp-4);
 }
 .card.in { animation: rise var(--t-base) var(--ease-out); }
+.card.out { animation: sink var(--t-exit) var(--ease-in) forwards; pointer-events: none; }
+@keyframes sink { to { opacity: 0; transform: translateY(6px); } }
 .card-head { grid-area: head; min-width: 0; }
 .card-head .t-head { white-space: nowrap; }
 .card-sub { font-size: var(--t-small); line-height: 18px; color: var(--cream-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -386,7 +394,9 @@
 
 /* ---------------------------------------------------------------- alerts */
 .notes-slot { position: absolute; right: var(--sp-3); bottom: max(var(--sp-3), env(safe-area-inset-bottom, 0px)); width: 288px; pointer-events: none; }
-.notes-slot.floating { bottom: calc(var(--bottom, 0px) + var(--sp-3)); }
+/* Where a sheet or the plan's bar holds the bottom edge, notices sit under the top bar instead. */
+.notes-slot.floating, .plan .notes-slot { inset: calc(var(--top, 0px) + var(--sp-3)) auto auto var(--sp-3); }
+.notes-slot.floating .notes, .plan .notes { align-items: flex-start; }
 .notes { display: flex; flex-direction: column; align-items: flex-end; gap: var(--sp-1); }
 .alert {
   pointer-events: auto;
@@ -426,10 +436,11 @@
 .plan-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-left: auto; }
 .plan-card { width: min(980px, 100%); grid-template-columns: minmax(0, 1fr); grid-template-areas: none; gap: var(--sp-3); }
 .plan-card > * { grid-area: auto; }
-.plan-card .card-head { padding-right: var(--sp-7); }
-.plan-card .card-head .t-head, .plan-card .card-sub { white-space: normal; }
+.plan-card .plan-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-2) var(--sp-5); padding-right: var(--sp-7); }
+.plan-card .plan-head > div:first-child { flex: 1 1 320px; display: block; }
+.plan-card .card-head .t-head, .plan-card .card-sub { white-space: normal; overflow: visible; }
 .plan-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-4); }
-.plan-cost { font-size: var(--t-head); line-height: 24px; font-weight: 700; margin-right: auto; }
+.plan-cost { font-size: var(--t-head); line-height: 24px; font-weight: 700; }
 .nseg { display: inline-flex; border: 1px solid rgb(243 236 220 / 0.5); border-radius: var(--radius); overflow: hidden; max-width: 100%; }
 .nseg-opt { position: relative; display: flex; flex: 1 1 auto; }
 .nseg-opt + .nseg-opt { border-left: 1px solid rgb(243 236 220 / 0.5); }
@@ -482,7 +493,8 @@
 /* Where the card is narrow or low: gauges with glyphs for names, and orders set close. */
 .season[data-layout='narrow'] .card-head, .season[data-layout='short'] .card-head { display: flex; align-items: baseline; gap: var(--sp-2); padding-right: var(--sp-7); }
 .season[data-layout='narrow'] .card-head .t-head, .season[data-layout='short'] .card-head .t-head { font-size: var(--t-lede); }
-.season[data-layout='narrow'] .card-head > div, .season[data-layout='short'] .card-head > div { display: flex; align-items: baseline; gap: var(--sp-2); min-width: 0; }
+.season[data-layout='narrow'] .card-head > div, .season[data-layout='short'] .card-head > div { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--sp-2); min-width: 0; }
+.season[data-layout='narrow'] .card-sub, .season[data-layout='short'] .card-sub { overflow: visible; }
 .season[data-layout='narrow'] .gauges, .season[data-layout='short'] .gauges { padding-right: 0; gap: var(--sp-3); }
 .season[data-layout='narrow'] .g-head, .season[data-layout='short'] .g-head { justify-content: flex-start; align-items: center; gap: var(--sp-1); }
 .season[data-layout='narrow'] .g-label, .season[data-layout='short'] .g-label { display: none; }
@@ -494,7 +506,12 @@
 .season[data-layout='narrow'] .order, .season[data-layout='short'] .order { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'ic' 'name' 'meta'; justify-items: center; row-gap: 0; padding: var(--sp-h); text-align: center; max-width: none; }
 .season[data-layout='narrow'] .order .ic, .season[data-layout='short'] .order .ic { width: 18px; height: 18px; }
 .season[data-layout='narrow'] .order-name, .season[data-layout='short'] .order-name { font-size: var(--t-label); line-height: 14px; max-width: 100%; }
-.season[data-layout='narrow'] .order.more, .season[data-layout='short'] .order.more { flex: 0 0 40px; }
+/* Five orders take the whole row; the way to the rest sits by the close button. */
+.season[data-layout='narrow'] .order.more { position: absolute; top: var(--sp-1); right: 44px; width: var(--hit); height: var(--hit); min-height: 0; border-color: transparent; }
+.season[data-layout='narrow'] .card-head { padding-right: 88px; }
+.season[data-layout='short'] .order.more { flex: 0 0 40px; }
+.season[data-layout='narrow'] .estimate .gauge, .season[data-layout='short'] .estimate .gauge { width: 64px; }
+.season[data-layout='narrow'] .estimate, .season[data-layout='short'] .estimate { flex-wrap: wrap; row-gap: 0; }
 .season[data-layout='narrow'] .paused, .season[data-layout='short'] .paused { display: none; }
 
 /* Upright phones and tablets: two rows on top, and the clock by the thumb with the crew. */
@@ -519,7 +536,7 @@
 .season[data-layout='narrow'] .crew-now .gauge { display: none; }
 .season[data-layout='narrow'] .queue { min-width: 0; }
 .season[data-layout='narrow'] .queue.all { position: absolute; left: 0; right: 0; bottom: calc(100% + var(--sp-1)); padding: var(--sp-2); background: var(--night-solid); border: 1px solid var(--night-line); border-radius: var(--radius); }
-.season[data-layout='narrow'] .notes-slot { inset: auto var(--sp-2) calc(var(--bottom, 64px) - 40px) var(--sp-2); width: auto; }
+.season[data-layout='narrow'] .notes-slot { inset: auto var(--sp-2) calc(var(--bottom, 64px) - 44px) var(--sp-2); width: auto; }
 .season[data-layout='narrow'] .notes { align-items: flex-start; }
 .season[data-layout='narrow'] .card { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'head' 'gauges' 'main' 'orders'; gap: 6px; padding: var(--sp-2) var(--sp-3); width: min(640px, 100%); }
 .season[data-layout='narrow'] .plan-bar { padding: var(--sp-2); }
@@ -547,6 +564,8 @@
 .season[data-layout='short'] .queue.all { position: absolute; left: 0; bottom: calc(100% + var(--sp-1)); width: 320px; padding: var(--sp-2); background: var(--night-solid); border: 1px solid var(--night-line); border-radius: var(--radius); }
 .season[data-layout='short'] .card { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'head orders' 'gauges orders' 'main orders'; gap: var(--sp-1) var(--sp-3); padding: var(--sp-2) var(--sp-3); justify-self: stretch; width: auto; align-self: end; }
 .season[data-layout='short'] .gauges { max-width: 360px; }
+.season[data-layout='short'] .card-head { padding-right: 0; }
+.season[data-layout='short'] .card-head .nicon { position: static; margin: -8px -8px -8px auto; }
 .season[data-layout='short'] .orders { align-self: center; }
 .season[data-layout='short'] .order { flex: 0 0 58px; min-height: 60px; }
 .season[data-layout='short'] .card-line { display: none; }

@@ -52,7 +52,9 @@ function cashLine(c: S.Campaign): SVGElement {
     'aria-label': `Cash at each year end: ${c.history.map(z => `${z.year} ${F.money(z.cashEnd)}`).join(', ')}. The bank calls the note below ${F.money(S.CREDIT_LIMIT)}.`,
   },
   s('path', { class: 'cl-zero', d: `M${L} ${y(0).toFixed(1)}H${W - Rt}` }),
+  s('text', { class: 'cl-label', x: L, y: (y(0) - 4).toFixed(1) }, F.money(0)),
   s('path', { class: 'cl-call', d: `M${L} ${y(S.CREDIT_LIMIT).toFixed(1)}H${W - Rt}` }),
+  s('text', { class: 'cl-label call', x: L, y: (y(S.CREDIT_LIMIT) - 4).toFixed(1) }, `${F.money(S.CREDIT_LIMIT)}: the bank calls the note`),
   s('path', { class: 'cl-path', d, pathLength: 1 }),
   pts.map((v, k) => k ? s('rect', { class: `cl-dot${v < 0 ? ' neg' : ''}`, x: (x(k) - 3).toFixed(1), y: (y(v) - 3).toFixed(1), width: 6, height: 6 }) : null),
   c.history.map((z, k) => s('text', { class: 'cl-year', x: x(k + 1).toFixed(1), y: H - 6 }, String(z.year))))
@@ -63,7 +65,7 @@ function historyTable(ctx: Ctx, c: S.Campaign, write: boolean): HTMLElement[] {
   const world = ctx.app.world
   const cell = (x: number | null | undefined) => x != null ? F.num(F.perAreaValue(x), F.metric() ? 1 : 0) : '–'
   return [
-    h('div', { class: 'table-wrap' }, h('table', { class: `money history${write ? ' write' : ''}` },
+    h('div', { class: 'table-wrap', tabindex: '0', role: 'group', 'aria-label': 'The farm year by year' }, h('table', { class: `money history${write ? ' write' : ''}` },
       h('caption', { class: 'sr' }, 'The farm year by year'),
       h('thead', null, h('tr', null,
         h('th', { scope: 'col' }, 'Year'), h('th', { scope: 'col' }, 'Came in'), h('th', { scope: 'col' }, 'Went out'), h('th', { scope: 'col' }, 'Year end'),
@@ -102,7 +104,6 @@ function yearSheet(ctx: Ctx, c: S.Campaign, y: S.YearSummary, lost: boolean): Ch
       h('ul', { class: 'soil' }, Array.from({ length: S.FIELD_COUNT }, (_, i) => S.fieldInfo(c, i)).map(f => h('li', { class: f.soil < 0.4 ? 'worn' : '' },
         h('strong', null, f.name),
         h('span', { class: f.soil < 0.4 ? 'warn-text' : '' }, `soil ${soilWord(f.soil)}`),
-        h('span', { class: 'sub' }, `${F.plural(f.streak, 'year')} in potatoes`),
         h('span', { class: `sub${f.vert >= 0.15 ? ' warn-text' : ''}` }, `early dying ${F.pct(f.vert)}`)))),
       h('p', { class: 'sub' }, 'Potatoes after potatoes wear the soil and build up early dying. A rest year puts the soil back at once and wears early dying down slowly.')),
   ]

@@ -54,7 +54,7 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
         h('span', { class: 'plate-in' },
           icon(m.glyph, 'ic s'),
           h('span', { class: 'plate-name' }, m.name),
-          m.sub ? h('span', { class: 'plate-sub' }, m.sub) : null,
+          m.sub ? [' ', h('span', { class: 'plate-sub' }, m.sub)] : null,
           m.marks.length ? h('span', { class: 'plate-marks' }, m.marks.map(k => icon(k.glyph, `ic s ${k.cls}`))) : null,
           m.queue.length ? h('span', { class: 'plate-queue' }, m.queue.map(q => icon(q.glyph, `ic s${q.active ? ' active' : ''}`))) : null)),
         m.badge ? h('button', {
@@ -65,6 +65,7 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
           h('span', null, m.hint.text),
           h('button', { class: 'nicon s', type: 'button', 'aria-label': 'Dismiss this tip', testid: 'hint-close', onclick: m.hint.onClose }, icon('close', 'ic s'))) : null,
       ])
+      wrap.style.zIndex = m.hint ? '4' : on ? '3' : m.badge ? '2' : '1'
       const plate = wrap.firstElementChild as HTMLElement | null
       const badge = wrap.querySelector<HTMLElement>('.badge')
       if (plate) size[i] = { w: plate.offsetWidth, h: plate.offsetHeight, extra: badge ? badge.offsetWidth + 4 : 0 }
@@ -106,6 +107,9 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
         if (apart(j, k) < GAP && want[j].y - size[j].h - 8 < want[k].y) { want[k].y = want[j].y - size[j].h - 8; want[k].docked = true }
       }
     }
+    // Where there is no room for six, they overlap: the selected plate and the ones with a need stay on top.
+    const ceiling = ins.top + GAP
+    for (let i = 0; i < S.FIELD_COUNT; i++) want[i].y = Math.max(want[i].y, ceiling + size[i].h + 6)
     for (let i = 0; i < S.FIELD_COUNT; i++) {
       const w = want[i], was = at[i]
       if (Math.abs(w.x - was.x) < 0.25 && Math.abs(w.y - was.y) < 0.25 && w.docked === was.docked) continue

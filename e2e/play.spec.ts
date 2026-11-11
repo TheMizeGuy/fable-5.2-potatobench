@@ -65,7 +65,7 @@ test('a first season from the opening to the next spring, with a save that survi
   await expect(page.locator('#ui [data-testid^="field-"]')).toHaveCount(6)
   await page.getByTestId('begin-season').click()
   await expect(page.getByTestId('forecast')).toBeVisible()
-  expect((await look(page)).running).toBe(true)
+  await expect.poll(async () => (await look(page)).running).toBe(true)
 
   // The first thing that needs doing slows the clock to normal speed. It does not stop it.
   await expect(page.locator(BADGE).first()).toBeVisible({ timeout: 120_000 })
@@ -157,9 +157,9 @@ test('the same start by keyboard alone', async ({ page, isMobile }) => {
   await page.keyboard.press('Space')
   await expect(page.getByTestId('paused')).toBeHidden()
   await page.keyboard.press('+')
-  expect((await look(page)).speed).toBe(2)
+  await expect.poll(async () => (await look(page)).speed).toBe(2)
   await page.keyboard.press('-')
-  expect((await look(page)).speed).toBe(1)
+  await expect.poll(async () => (await look(page)).speed).toBe(1)
   await page.keyboard.press('Space')
 
   // An order by its letter; the same letter cannot be given twice, and the card says why.
@@ -183,6 +183,6 @@ test('the same start by keyboard alone', async ({ page, isMobile }) => {
   await page.keyboard.press('Escape')
   await expect(page.getByTestId('menu')).toHaveCount(0)
   await page.keyboard.press('f')
-  expect((await look(page)).running).toBe(true)
+  await expect.poll(async () => (await look(page)).running).toBe(true)
   expect(errors, errors.join('\n')).toEqual([])
 })

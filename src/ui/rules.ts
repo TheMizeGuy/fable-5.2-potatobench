@@ -28,18 +28,18 @@ export function jobWhat(kind: S.JobKind): string {
   }
 }
 
-// When a careful grower gives the order, for the one page of help.
-export function jobWhen(kind: S.JobKind): string {
+// What an order does and when a careful grower gives it, in two short sentences, for the one page of help.
+export function orderHelp(kind: S.JobKind): string {
   switch (kind) {
-    case 'plant': return `When the soil reaches about ${F.temp(10)}, usually in May. Seed in cold, wet ground rots.`
-    case 'hill': return 'Twice: when the plants are a hand high, and again before the rows close.'
-    case 'scout': return 'Weekly; every five days once the blight watch is on.'
-    case 'spray': return 'Before blight weather, and again as rain and new leaf wear it away.'
-    case 'water': return 'When the ground is dry while the tubers are sizing. Slow and costly without the irrigation reel.'
-    case 'rogue': return 'While there are only a few blighted plants.'
-    case 'sample': return 'After the tubers set. It is the only look at the crop before dig day.'
-    case 'kill': return `Early September, or sooner if blight is winning. Skins need ${S.SKIN_DAYS} days.`
-    case 'dig': return 'Once the skins are set, and before the ground freezes.'
+    case 'plant': return `Puts the seed in. Wait for soil near ${F.temp(10)}: in colder ground it rots.`
+    case 'hill': return 'Pulls soil over the row to cover the tubers and bury weeds. Twice, before the rows close.'
+    case 'scout': return 'Walks the rows for blight, which shows only up close. Weekly; more often on a blight watch.'
+    case 'spray': return 'Puts protectant on the leaf. Before blight weather: it cures nothing, and rain and new leaf wear it off.'
+    case 'water': return `Irrigates ${F.metric() ? 'about 25 mm' : 'about an inch'}. When the ground is dry while the tubers size.`
+    case 'rogue': return 'Pulls and bags the blighted plants you have found. While they are few.'
+    case 'sample': return 'Lifts one hill to show its tubers. Your only look at the crop before dig day.'
+    case 'kill': return `Kills the vines: growth stops and skins set in ${S.SKIN_DAYS} days. Early September, or sooner if blight is winning.`
+    case 'dig': return 'Lifts the crop and grades every tuber. Once the skins are set, and before the ground freezes.'
   }
 }
 

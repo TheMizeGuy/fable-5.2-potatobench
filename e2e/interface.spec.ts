@@ -75,12 +75,12 @@ test('only the orders that can be given are offered, and one that cannot says wh
   await page.keyboard.press('p')
   await expect.poll(async () => (await look(page)).queue).toBe(2)
   const items = page.locator('#ui .queue .q:not(.more)')
-  await expect(items.first()).toHaveAttribute('aria-label', /Planting North Ridge/)
+  await expect(items.first()).toContainText('Planting North Ridge')
   await items.nth(1).click({ modifiers: ['Control'] })
-  await expect(items.first()).toHaveAttribute('aria-label', /Planting Upper Middle/)
+  await expect(items.first()).toContainText('Planting Upper Middle')
   await items.first().click()
   await expect.poll(async () => (await look(page)).queue).toBe(1)
-  await expect(items.first()).toHaveAttribute('aria-label', /Planting North Ridge/)
+  await expect(items.first()).toContainText('Planting North Ridge')
   // A resting field offers nothing and says so in one line.
   await page.getByTestId('field-1').click()
   await expect(orders).toHaveCount(0)
@@ -97,12 +97,13 @@ test('never more than five orders, and under 80 words with nothing selected', as
   expect(await wordsOnScreen(page)).toBeLessThan(80)
   await page.getByTestId('field-2').click()
   const orders = page.locator('#ui [data-testid="card"] button.order:not(.more)')
-  expect(await orders.count()).toBeGreaterThan(0)
+  await expect(orders.first()).toBeVisible()
   expect(await orders.count()).toBeLessThanOrEqual(5)
   // The rest are one press away, and the letter keys reach them all.
   if (await page.getByTestId('order-more').count()) {
     const first = await orders.evaluateAll(els => els.map(e => (e as HTMLElement).dataset.testid))
     await page.getByTestId('order-more').click()
+    await expect(page.getByTestId('order-more')).toHaveAttribute('aria-pressed', 'true')
     const rest = await orders.evaluateAll(els => els.map(e => (e as HTMLElement).dataset.testid))
     expect(rest.length).toBeGreaterThan(0)
     expect(rest.some(x => first.includes(x))).toBe(false)
@@ -190,7 +191,7 @@ for (const [w, h] of [[320, 640], [390, 844], [844, 390], [820, 1180], [1024, 70
         }
         for (const el of document.querySelectorAll<HTMLElement>('#ui .topbar *, #ui .card *, #ui .crew *')) {
           const text = [...el.childNodes].some(n => n.nodeType === 3 && (n.nodeValue ?? '').trim())
-          if (text && el.scrollWidth > el.clientWidth + 1 && getComputedStyle(el).overflow !== 'visible' && !el.matches('.card-sub, .crew-text, .card-line')) out.push(`clipped: ${el.className}`)
+          if (text && el.scrollWidth > el.clientWidth + 1 && getComputedStyle(el).overflow !== 'visible' && !el.matches('.sr, .crew-text')) out.push(`clipped: ${el.className}`)
         }
         const spans = [...document.querySelectorAll<HTMLElement>('#ui .topbar > *')].map(e => e.getBoundingClientRect()).filter(r => r.width > 0)
         for (let a = 0; a < spans.length; a++) for (let b = a + 1; b < spans.length; b++) {
@@ -280,7 +281,7 @@ test('the menu: settings take effect, ending early says what is lost, and the sa
   await expect(page.getByTestId('forecast')).toBeVisible()
   // Metric reaches the instruments.
   await page.getByTestId('field-0').click()
-  await expect(page.locator('#ui [data-testid="card"] .reading')).toContainText('°C')
+  await expect(page.locator('#ui [data-testid="card"] .card-known')).toContainText('°C')
   await page.keyboard.press('Escape')
   await page.keyboard.press('m')
   await page.getByTestId('save-delete').click()
@@ -301,13 +302,14 @@ test('winter: each stored crop is a card, seed can be held back, and the year cl
   await putAway(page)
   await expect(page.getByTestId('date')).toHaveText('November')
   const lots = page.locator('#ui .lot')
-  expect(await lots.count()).toBeGreaterThan(0)
   await expect(lots.first()).toContainText('Storage')
   await expect(lots.first()).toContainText(/sprout/i)
-  await lots.first().locator('[data-testid^="lot-seed-open-"]').click()
-  await expect(lots.first().locator('[data-testid^="seed-cost-"]')).toContainText('virus')
-  await lots.first().locator('.seed-row .btn.primary').click()
-  await expect(lots.first()).toContainText('seed held for 1 field')
+  // A pile with a field's worth of sound tubers in it can give up seed.
+  const seedLot = lots.filter({ has: page.locator('[data-testid^="lot-seed-open-"]') }).first()
+  await seedLot.locator('[data-testid^="lot-seed-open-"]').click()
+  await expect(seedLot.locator('[data-testid^="seed-cost-"]')).toContainText('virus')
+  await seedLot.locator('.seed-row .btn.primary').click()
+  await expect(page.locator('#ui .lot', { hasText: 'seed held for 1 field' })).toHaveCount(1)
   await page.getByTestId('month-next').click()
   await expect(page.getByTestId('date')).toHaveText('December')
   await expect(page.getByTestId('this-month')).toContainText('Storage for November')

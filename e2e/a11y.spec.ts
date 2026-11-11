@@ -6,10 +6,11 @@ import { expect, open, putAway, reach } from './helpers.ts'
 const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']
 
 async function serious(page: Page): Promise<string[]> {
-  await page.waitForTimeout(350)
+  // Papers and instruments fade in; contrast is measured once they have arrived.
+  await page.waitForTimeout(600)
   const r = await new AxeBuilder({ page }).withTags(TAGS).analyze()
   return r.violations.filter(v => v.impact === 'serious' || v.impact === 'critical')
-    .map(v => `${v.id}: ${v.help} (${v.nodes.slice(0, 3).map(n => n.target.join(' ')).join('; ')})`)
+    .map(v => `${v.id}: ${v.help} (${v.nodes.slice(0, 3).map(n => `${n.target.join(' ')} [${[...n.any, ...n.all, ...n.none].map(c => c.message).join(' ')}]`).join('; ')})`)
 }
 
 test.beforeEach(({ browserName }) => {
@@ -61,7 +62,9 @@ test('the season: instruments, the card, the almanac, the menu and its confirmat
     expect(await serious(page), `almanac: ${tab}`).toEqual([])
   }
   await page.keyboard.press('Escape')
+  await expect(page.getByTestId('almanac')).toHaveCount(0)
   await page.keyboard.press('m')
+  await expect(page.getByTestId('menu')).toBeVisible()
   expect(await serious(page), 'menu').toEqual([])
   await page.getByTestId('end-season-early').click()
   expect(await serious(page), 'end the season early').toEqual([])

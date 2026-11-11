@@ -32,6 +32,9 @@ export interface Ctx {
     seen: (Seen | null)[]; digEst: Record<string, Estimate | null>; digSeen: Record<string, Seen | null>
     sampleBefore: Record<string, Estimate | null>
   }
+  // "Run until needed" is a way of playing, not one press: while it is on, the days run on again by themselves
+  // once nothing is asked for. Choosing a speed by hand turns it off.
+  clock: { auto: boolean }
   dirty(): void
 }
 
@@ -381,7 +384,7 @@ export class Notes {
   private row(n: Note): HTMLElement {
     const inner = [icon(n.glyph, 'ic s'), h('span', null, n.text)]
     const row = n.field >= 0
-      ? h('button', { class: `alert lv-${n.level}`, type: 'button', 'aria-label': `${n.full} Go there.`, testid: 'alert', onclick: () => this.onGo(n.field) }, inner)
+      ? h('button', { class: `alert lv-${n.level}`, type: 'button', testid: 'alert', onclick: () => this.onGo(n.field) }, inner, h('span', { class: 'sr' }, '. Go there.'))
       : h('div', { class: `alert lv-${n.level}`, testid: 'notice' }, inner)
     row.dataset.id = n.id
     return row

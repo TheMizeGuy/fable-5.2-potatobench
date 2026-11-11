@@ -481,6 +481,7 @@ export function ticket(ctx: Ctx, lotId: number, o: { fresh: boolean; staged?: bo
   const staged = fresh && !!o.staged && !ctx.reduced()
   const advice = S.advise(app.world, c).find(a => a.act === 'sell' && a.lot === lotId)
   const m = R.sproutMonth(lot.year, lot.dugDay, lot.variety, c.upgrades.vent)
+  const dug = digDays(c, lot)
   let answered = false
 
   return {
@@ -504,9 +505,14 @@ export function ticket(ctx: Ctx, lotId: number, o: { fresh: boolean; staged?: bo
       const inside = est ? perAcre >= est.lo && perAcre <= est.hi : false
       const root = h('div', { class: 'ticket' },
         h('header', { class: 'ticket-head' },
-          h('span', { class: 't-label' }, `Weigh ticket · ${c.year} No. ${lot.id}`),
+          h('span', { class: 't-label' }, 'Weigh ticket'),
           h('h3', { class: 't-moment' }, name),
-          h('p', { class: 'sub' }, `${v.name} · ${digDatesText(c, lot)} · ${F.area(S.FIELD_ACRES)}`)),
+          // Set out as the form a scale house fills in.
+          h('dl', { class: 'ticket-form' },
+            h('div', null, h('dt', { class: 't-label' }, 'Variety'), h('dd', null, v.name)),
+            h('div', null, h('dt', { class: 't-label' }, 'Dug'), h('dd', { class: 'num' }, dug.end > dug.start ? `${F.date(lot.year, dug.start, true)} to ${F.date(lot.year, dug.end, true)}` : F.date(lot.year, dug.start, true))),
+            h('div', null, h('dt', { class: 't-label' }, 'Off'), h('dd', { class: 'num' }, F.area(S.FIELD_ACRES))),
+            h('div', null, h('dt', { class: 't-label' }, 'Ticket'), h('dd', { class: 'num' }, `${c.year}-${lot.id}`)))),
         est ? h('div', { class: 'carried' },
           h('span', { class: 't-label' }, 'You expected'),
           h('span', { class: 'gauge range', role: 'img', 'aria-label': `Your estimate ${F.perAreaSpan(est.lo, est.hi)}; the field gave ${F.perArea(perAcre)}` },

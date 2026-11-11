@@ -49,7 +49,7 @@ export function openCompare(ctx: Ctx): void {
     size: 'wide',
     body: () => [
       h('p', { class: 't-lede' }, 'What each variety is like, from the same facts the fields are grown by. No one of them wins every year.'),
-      h('div', { class: 'table-wrap' }, h('table', { class: 'compare' },
+      h('div', { class: 'table-wrap', tabindex: '0', role: 'group', 'aria-label': 'Varieties side by side' }, h('table', { class: 'compare' },
         h('thead', null, h('tr', null, h('th', { scope: 'col' }, 'Variety'), cols.map(([label]) => h('th', { scope: 'col' }, label)))),
         h('tbody', null, vs.map(v => h('tr', null,
           h('th', { scope: 'row' }, h('span', { class: 'v-name' }, v.name), h('span', { class: 'sub' }, v.market)),
@@ -169,7 +169,9 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
 
   function begin(): void {
     const r = ctx.run({ t: 'begin' })
-    if (r.ok) app.runUntilNeeded()
+    if (!r.ok) return
+    ctx.clock.auto = true
+    app.runUntilNeeded()
   }
 
   function plateModel(i: number): PlateModel {
@@ -183,21 +185,22 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
       sub: potato ? v.name : 'Rest year',
       marks: potato && p.seed === 'saved' ? [{ glyph: 'sprout', cls: 'warn' }] : [],
       queue: [], badge: null,
-      said: `${S.FIELD_NAMES[i]}, field ${i + 1}: ${potato ? `${v.name} on ${p.seed} seed` : 'a rest year in oats and clover'}. ${F.money(fieldCost(p))}.`,
+      said: `${S.FIELD_NAMES[i]} ${potato ? v.name : 'Rest year'}: field ${i + 1}, ${potato ? `on ${p.seed} seed` : 'in oats and clover'}, ${F.money(fieldCost(p))}.`,
     }
   }
   const P = plates(ctx, plateLayer, { model: plateModel, onBadge: () => {} })
 
   function varietyCard(c: S.Campaign, v: S.Variety, on: boolean): HTMLElement {
     return h('label', { class: 'vcard' },
-      h('input', { type: 'radio', name: 'variety', value: v.id, checked: on, testid: `plan-variety-${v.id}`, k: `v-${v.id}`, 'aria-label': `${v.name}: ${varietyTraits(v, c, app.world).join(', ')}`, onchange: () => setPlan({ variety: v.id }) }),
+      h('input', { type: 'radio', name: 'variety', value: v.id, checked: on, testid: `plan-variety-${v.id}`, k: `v-${v.id}`, 'aria-describedby': `v-more-${v.id}`, onchange: () => setPlan({ variety: v.id }) }),
       h('span', { class: 'vcard-in' },
         h('span', { class: 'v-name' }, v.name),
         h('span', { class: 'v-marks' },
           h('span', null, icon('stale', 'ic s'), v.maturity),
           h('span', null, icon('bulk', 'ic s'), R.yieldWord(v).split(',')[0]),
           h('span', null, icon('blight-old', 'ic s'), R.blightWord(v, true))),
-        h('span', { class: 'v-price num' }, F.price(v.price))))
+        h('span', { class: 'v-price num' }, F.price(v.price))),
+      h('span', { class: 'sr', id: `v-more-${v.id}` }, varietyTraits(v, c, app.world).join(', ')))
   }
 
   function drawCard(c: S.Campaign, sel: number[]): Child {
@@ -213,20 +216,20 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
     const saved = stock.reduce((a, x) => a + x.fields, 0)
     const cost = sel.reduce((a, j) => a + fieldCost(c.plans[j]), 0)
     return [
-      h('header', { class: 'card-head' },
+      h('header', { class: 'card-head plan-head' },
         h('div', null,
           h('h2', { class: 't-head', testid: 'card-title' }, one ? info.name : `${sel.length} fields`),
           h('p', { class: 'card-sub' }, one
             ? `${R.POSITION_NOTE[info.elev]} ${F.plural(info.streak, 'year')} in potatoes, soil ${R.soilWord(info.soil)}, early dying in ${F.pct(info.vert)} of plants.`
             : F.list(sel.map(j => S.FIELD_NAMES[j])))),
+        h('div', { class: 'plan-row' },
+          h('div', { class: 'nseg', role: 'radiogroup', 'aria-label': 'Crop' },
+            (['potato', 'rest'] as const).map(crop => h('label', { class: 'nseg-opt' },
+              h('input', { type: 'radio', name: 'crop', value: crop, checked: same('crop') && p.crop === crop, testid: `plan-crop-${crop}`, k: `crop-${crop}`, onchange: () => setPlan({ crop }) }),
+              h('span', null, crop === 'potato' ? 'Potatoes' : 'Rest year')))),
+          h('span', { class: 'plan-cost num', testid: 'field-cost' }, F.money(cost)),
+          potato ? h('button', { class: 'nbtn', type: 'button', testid: 'compare-open', onclick: () => openCompare(ctx) }, 'Compare') : null),
         h('button', { class: 'nicon', type: 'button', testid: 'card-close', 'aria-label': 'Deselect', onclick: () => app.select(-1) }, icon('close'))),
-      h('div', { class: 'plan-row' },
-        h('div', { class: 'nseg', role: 'radiogroup', 'aria-label': 'Crop' },
-          (['potato', 'rest'] as const).map(crop => h('label', { class: 'nseg-opt' },
-            h('input', { type: 'radio', name: 'crop', value: crop, checked: same('crop') && p.crop === crop, testid: `plan-crop-${crop}`, k: `crop-${crop}`, onchange: () => setPlan({ crop }) }),
-            h('span', null, crop === 'potato' ? 'Potatoes' : 'Rest year')))),
-        h('span', { class: 'plan-cost num', testid: 'field-cost' }, F.money(cost)),
-        potato ? h('button', { class: 'nbtn', type: 'button', testid: 'compare-open', onclick: () => openCompare(ctx) }, 'Compare') : null),
       potato ? [
         h('div', { class: 'vcards', role: 'radiogroup', 'aria-label': 'Variety' }, vs.map(x => varietyCard(c, x, same('variety') && x.id === p.variety))),
         h('p', { class: 'card-line note' }, same('variety') ? v.blurb : 'These fields are in different varieties.'),
@@ -294,8 +297,10 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
       // The one thing to do here is under the keyboard from the start.
       if (!focused && !ctx.papers.isOpen()) {
         const start = bar.querySelector<HTMLElement>('[data-testid="begin-season"]')
-        if (document.activeElement === document.body || document.activeElement === null) start?.focus({ preventScroll: true })
-        focused = document.activeElement === start || (document.activeElement !== document.body && document.activeElement !== null)
+        const at = document.activeElement
+        const free = !at || at === document.body || !!at.closest('[inert]')
+        if (free) start?.focus({ preventScroll: true })
+        focused = document.activeElement === start || !free
         if (!focused) setTimeout(() => ctx.dirty(), 200)
       }
     },

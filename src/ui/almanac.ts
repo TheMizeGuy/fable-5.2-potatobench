@@ -23,7 +23,7 @@ function forecastPage(ctx: Ctx, c: S.Campaign): Child {
       h('div', null,
         h('p', { class: 't-head' }, `${R.SKY_WORD[t.sky]} today`),
         h('p', { class: 'num' }, `High ${F.temp(d.tmax)}, low ${F.temp(d.tmin)}. Rain ${F.rain(d.prcp)}. Soil ${F.temp(t.soilT)} at the station, a degree or two colder on the bottom land.`))),
-    h('div', { class: 'table-wrap' }, h('table', { class: 'money forecast-table' },
+    h('div', { class: 'table-wrap', tabindex: '0', role: 'group', 'aria-label': 'The next five days' }, h('table', { class: 'money forecast-table' },
       h('caption', { class: 'sr' }, 'The next five days'),
       h('thead', null, h('tr', null, ['Day', `High, ${F.tempUnit()}`, `Low, ${F.tempUnit()}`, 'Rain', 'How much', 'Blight weather', 'Frost'].map(x => h('th', { scope: 'col' }, x)))),
       h('tbody', null, fc.map(x => h('tr', null,

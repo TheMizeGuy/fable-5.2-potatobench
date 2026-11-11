@@ -137,14 +137,15 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
       const meta = tight ? `${F.days(x.days).replace(/ days?$/, 'd')}${x.cost ? ` ${F.money(x.cost)}` : ''}` : `${F.days(x.days)}${x.cost ? ` · ${F.money(x.cost)}` : ''}`
       return h('button', {
         class: `order${kind === suggestedKind ? ' suggested' : ''}`, type: 'button', testid: `order-${kind}`, 'aria-keyshortcuts': JOB_KEY[kind],
-        'aria-label': `${JOB_VERB[kind]}${part ? `, ${part} fields` : ''}: ${F.days(x.days)}${x.cost ? `, ${F.money(x.cost)}` : ', no charge'}. ${jobWhat(kind)}${kind === suggestedKind ? ' Suggested now.' : ''}`,
         title: touch ? undefined : jobWhat(kind),
         onclick: (e: Event) => give(kind, (e as MouseEvent).ctrlKey || (e as MouseEvent).metaKey),
+        oncontextmenu: (e: Event) => { e.preventDefault(); give(kind, true) },
       },
       icon(kind),
-      h('span', { class: 'order-name' }, tight && kind === 'kill' ? 'Kill' : JOB_VERB[kind], part ? h('span', { class: 'order-part num' }, part) : null),
-      touch ? null : h('span', { class: 'key' }, JOB_KEY[kind]),
-      h('span', { class: 'order-meta num' }, meta))
+      h('span', { class: 'order-name' }, tight && kind === 'kill' ? 'Kill' : JOB_VERB[kind], part ? h('span', { class: 'order-part num' }, ` ${part}`) : null),
+      touch ? null : h('span', { class: 'key', 'aria-hidden': 'true' }, JOB_KEY[kind]),
+      h('span', { class: 'order-meta num' }, ` ${meta}`),
+      h('span', { class: 'sr' }, `. ${jobWhat(kind)}${kind === suggestedKind ? ' Suggested now.' : ''}`))
     })
     const more = all.length > MAX_ORDERS && !held ? h('button', {
       class: 'order more', type: 'button', testid: 'order-more', 'aria-label': page === 0 ? 'More orders' : 'Back to the first orders', 'aria-pressed': String(page === 1),
@@ -293,8 +294,18 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
   function update(c: S.Campaign): void {
     const sel = app.selection.filter(i => i >= 0 && i < S.FIELD_COUNT)
     const was = el.hidden
-    el.hidden = sel.length === 0
-    if (!sel.length) { shownFor = ''; return }
+    if (!sel.length) {
+      // The card leaves as it came: nothing cuts out on one frame.
+      if (!el.hidden && shownFor !== '' && !ctx.reduced()) {
+        el.classList.remove('in')
+        el.classList.add('out')
+        setTimeout(() => { if (!app.selection.length) { el.hidden = true; el.classList.remove('out'); ctx.dirty() } }, 160)
+      } else if (!el.classList.contains('out')) el.hidden = true
+      shownFor = ''
+      return
+    }
+    el.classList.remove('out')
+    el.hidden = false
     const key = sel.join(',')
     if (key !== shownFor) { shownFor = key; page = 0; held = null; flashed = null }
     const s = c.season!
