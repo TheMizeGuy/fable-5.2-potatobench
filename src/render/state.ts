@@ -22,6 +22,18 @@ export interface FieldVis {
   grams: number            // what the lot says came out of each dug hill, 0 before digging
   dark: number             // share of the lot lost to blight, rot or frost
   green: number            // share lost to greening
+  // The land under the crop.
+  ours: boolean            // owned or rented, whether a field or a tract still to clear
+  cover: sim.Cover         // 'open' for a field; a tract is 'woods', 'brush' or 'stumps' until it is cleared
+  clearStage: sim.ClearStage | ''   // for a tract: the next step ('fell', 'stump', 'rocks', 'done'); '' for a field
+  felled: number           // share of a tract's felling done, 0..1
+  works: 'stump' | 'tile' | ''      // a contractor at work here
+  stones: number           // 0..1
+  raw: boolean             // new ground, not yet cropped or rested
+  tiled: boolean
+  hedge: number            // how grown-up the hedgerows are: 0 just cut .. 1 standing
+  sheltered: boolean       // standing woods or brush beside it
+  inField: number          // cwt dug and standing in barrels in the field
 }
 
 export interface Weather {
@@ -47,6 +59,36 @@ export interface UnitVis {
   along: number            // share of the drive from `at` to `to` already made (1 when not on the road)
   job: Work | null         // the order it holds
   worked: Work[]
+  rig: sim.Rig             // what they are driving for the order held: '', 'tractor' or 'truck'
+  tired: number            // 0..1
+  mood: number             // 0..1
+  hurt: boolean            // laid up today
+  resting: boolean         // a day off (a Sunday the farm keeps)
+  winter: sim.WinterWork   // what they do in the cellar months
+  winterField: number      // the tract felled in winter, or -1
+}
+
+export interface BuildingVis {
+  kind: sim.BuildingKind
+  yard: number             // -1 the home yard, -2 the Dufour yard
+  built: boolean
+  progress: number         // 0..1 while it is going up
+}
+
+// The farmstead beyond the fields: what stands, what lies in the yard, what waits for an answer.
+export interface FarmVis {
+  buildings: BuildingVis[] // those standing or going up
+  logs: number             // loads in the yard
+  stone: number            // loads of fieldstone in the yard
+  pond: number             // how full the irrigation pond stands, 0..1 (0 when there is none)
+  standOpen: boolean
+  tractors: number         // owned
+  broken: number           // of them broken down today
+  truck: boolean
+  pickers: boolean         // a picking crew is on for the harvest break
+  dufour: boolean          // Dufour land is held, so its yard is the farm's
+  equipment: sim.UpgradeId[]
+  incidents: { kind: sim.IncidentKind; unit: number }[]
 }
 
 export interface Snapshot {
@@ -59,6 +101,7 @@ export interface Snapshot {
   weather: Weather
   worked: Work[]
   units: UnitVis[]
+  farm: FarmVis
   next: Work | null
   frozen: boolean
   rime: number[] | null    // in the season, rime on the ridge, mid-slope and bottom land
@@ -125,6 +168,17 @@ export function snapshot(app: App): Snapshot {
       variety: plan.variety,
       lot: info.lot,
       grams, dark, green,
+      ours: info.tenure !== 'none',
+      cover: info.cover,
+      clearStage: info.clearing ? info.clearing.stage : '',
+      felled: info.clearing ? info.clearing.felled : 0,
+      works: info.works ? info.works.kind : '',
+      stones: info.stones,
+      raw: info.raw,
+      tiled: info.tiled,
+      hedge: info.brushed > 0 ? 1 - info.brushed / sim.BRUSH_YEARS : 1,
+      sheltered: info.sheltered,
+      inField: info.inField,
     })
   }
   let weather: Weather
@@ -142,9 +196,16 @@ export function snapshot(app: App): Snapshot {
   const worked: Work[] = []
   const inSeason = !!s && mode === 'season'
   if (inSeason) for (const w of s.worked) if (!worked.some(x => x.kind === w.kind && x.field === w.field)) worked.push({ kind: w.kind, field: w.field })
+  const people = sim.peopleInfo(c)
+  const resting = inSeason && !s.frozen && !sim.workday(c, s)
   const units: UnitVis[] = sim.crewInfo(c).map(u => {
     const trip = u.travelling ? sim.travelDays(u.at, u.to) : 0
+    const p = people.find(x => x.id === u.id)
+    const hurt = !!p && inSeason && p.hurtUntil > s.day
     return {
+      rig: c.crew.find(x => x.id === u.id)?.rig ?? '',
+      tired: p ? p.tired : 0, mood: p ? p.mood : 1, hurt, resting: resting && !hurt,
+      winter: p ? p.winter : 'off', winterField: p ? p.winterField : -1,
       id: u.id, kind: u.kind, name: u.name,
       at: inSeason ? u.at : sim.HOME_YARD, to: inSeason ? u.to : sim.HOME_YARD,
       along: u.travelling && trip > 0 ? Math.max(0, Math.min(1, 1 - u.road / trip)) : 1,
@@ -155,8 +216,22 @@ export function snapshot(app: App): Snapshot {
   const nextJob = inSeason && s.jobs.length ? s.jobs[0] : null
   const heldFields = fields.filter(f => f.held)
   const wetGround = heldFields.reduce((a, f) => a + (WETNESS[f.moisture] ?? 0.3), 0) / Math.max(1, heldFields.length)
+  const pond = sim.pondInfo(app.world, c)
+  const farm: FarmVis = {
+    buildings: sim.buildingInfo(c).filter(b => b.state !== 'none').map(b => ({ kind: b.kind, yard: b.yard, built: b.state === 'built', progress: b.progress })),
+    logs: c.logs, stone: c.stone,
+    pond: pond.built && pond.capacity > 0 ? Math.max(0, Math.min(1, pond.waterings / pond.capacity)) : 0,
+    standOpen: sim.standInfo(c).open,
+    tractors: sim.tractorsOwned(c),
+    broken: inSeason ? sim.tractorsOwned(c) - sim.tractorsRunning(c, s.day) : 0,
+    truck: !!c.upgrades.truck,
+    pickers: inSeason && s.pickers,
+    dufour: sim.holdsDufour(c),
+    equipment: (Object.keys(c.upgrades) as sim.UpgradeId[]).filter(k => c.upgrades[k]),
+    incidents: c.incidents.map(i => ({ kind: i.kind, unit: i.unit ?? -1 })),
+  }
   return {
-    mode, year: c.year, day, seasonDay: s ? s.day : -1, month: c.month, fields, weather, worked, units,
+    mode, year: c.year, day, seasonDay: s ? s.day : -1, month: c.month, fields, weather, worked, units, farm,
     next: nextJob ? { kind: nextJob.kind, field: nextJob.field } : null,
     frozen: s ? s.frozen : false,
     rime,
@@ -199,12 +274,15 @@ function showcase(): Snapshot {
       held, available: false,
       crop: potato ? 'potato' : 'rest', status: !held ? 'off' : potato ? 'growing' : 'rest', hills, ridge: potato ? 1 : 0, moisture: 'good', bloom, wilt: 0,
       frosted: 0, rime: 0, variety: v, lot: -1, grams: 0, dark: 0, green: 0,
+      ours: held || sim.PARCELS[i].holding === 'owned', cover: sim.PARCELS[i].cover, clearStage: sim.PARCELS[i].cover === 'open' ? '' : 'fell', felled: 0, works: '',
+      stones: sim.PARCELS[i].stones, raw: false, tiled: false, hedge: 1, sheltered: false, inField: 0,
     })
   }
   return {
     mode: 'title', year: 1987, day: 196, seasonDay: -1, month: 0, fields,
     weather: { sky: 'clear', tmin: 13, tmax: 25, wind: 2.6, wdir: 250, prcp: 0, wetH: 6, snwd: 0 },
-    worked: [], units: [{ id: 0, kind: 'farmer', name: '', at: -1, to: -1, along: 1, job: null, worked: [] }],
+    worked: [], units: [{ id: 0, kind: 'farmer', name: '', at: -1, to: -1, along: 1, job: null, worked: [], rig: '', tired: 0, mood: 1, hurt: false, resting: false, winter: 'off', winterField: -1 }],
+    farm: { buildings: [], logs: 0, stone: 0, pond: 0, standOpen: false, tractors: 1, broken: 0, truck: false, pickers: false, dufour: false, equipment: [], incidents: [] },
     next: null, frozen: false, rime: null, wetGround: 0.1,
   }
 }

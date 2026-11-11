@@ -44,6 +44,7 @@ export type AppEvent =
   | { type: 'select'; field: number; fields: number[] }
   | { type: 'hover'; field: number }
   | { type: 'unit'; unit: number }
+  | { type: 'yard'; yard: number }
   | { type: 'focus'; field: number }
   | { type: 'order'; kind: JobKind; fields: number[] }
   | { type: 'alert'; alert: Alert }
@@ -52,10 +53,15 @@ export type AppEvent =
   | { type: 'insets' }
   | { type: 'saved'; ok: boolean }
 
-// A decision that cannot wait stops the clock whatever the settings say.
-const STOP_FOR = new Set(['dug', 'freeze'])
+// A decision that cannot wait stops the clock whatever the settings say: a crop weighed in (sell or store), an
+// incident that asks for an answer, the freeze.
+const STOP_FOR = new Set(['weighed', 'incident', 'freeze'])
 // Events worth an alert even though they are not warnings.
-const NOTABLE = new Set(['dug', 'sample', 'skinSet', 'emerged', 'ti', 'mature', 'watch'])
+const NOTABLE = new Set([
+  'dug', 'weighed', 'sample', 'skinSet', 'emerged', 'ti', 'mature', 'watch',
+  'skillUp', 'hired', 'quit', 'hurt', 'poached', 'incident', 'incidentDone', 'breakdown', 'repaired',
+  'felled', 'stumped', 'tiled', 'rocks', 'brushed', 'brushBack', 'building', 'built', 'pondDry', 'frozenInField',
+])
 const ALERTS_KEPT = 24
 
 export class App {
@@ -68,8 +74,10 @@ export class App {
   selection: number[] = []
   // The field under the pointer, or -1.
   hover = -1
-  // The crew the player has picked to give orders to, or -1 for whichever crew is free.
+  // The person the player has picked to give orders to, or -1 for whoever is free.
   unit = -1
+  // The yard the player has selected to build in or look over: -1 the home yard, -2 the Dufour yard, 0 none.
+  yard = 0
   speed: Speed = 0
   settings: Settings
   // How far through the current day the clock is, 0..1, for smooth animation.
@@ -182,6 +190,7 @@ export class App {
     this.dayProgress = 0
     this.selection = []
     this.unit = -1
+    this.yard = 0
     this.revision++
     this.meetNeighbor()
     this.setScreen(this.campaign!.phase)
@@ -323,6 +332,7 @@ export class App {
   }
 
   private setSelection(next: number[]): void {
+    if (next.length && this.yard !== 0) this.selectYard(0)
     if (next.length === this.selection.length && next.every((f, k) => f === this.selection[k])) return
     this.selection = next
     this.emit({ type: 'select', field: this.selected, fields: next })
@@ -333,6 +343,14 @@ export class App {
     if (this.unit === unit) return
     this.unit = unit
     this.emit({ type: 'unit', unit })
+  }
+
+  // Selects a yard (-1 home, -2 Dufour), where buildings are ordered; 0 clears. Fields and a yard are not held at once.
+  selectYard(yard: number): void {
+    if (this.yard === yard) return
+    this.yard = yard
+    if (yard !== 0) this.setSelection([])
+    this.emit({ type: 'yard', yard })
   }
 
   setHover(field: number): void {

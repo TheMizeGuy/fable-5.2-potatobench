@@ -17,6 +17,7 @@ export interface Input {
 export function attachInput(
   canvas: HTMLCanvasElement, app: App, rig: CameraRig, viewport: () => Viewport,
   pick: (x: number, y: number) => number, pickUnit: (x: number, y: number) => number, home: () => void,
+  pickYard: (x: number, y: number) => number = () => 0,
 ): Input {
   const pointers = new Map<number, { x: number; y: number }>()
   let downAt: { x: number; y: number; button: number; touch: boolean } | null = null
@@ -123,8 +124,10 @@ export function attachInput(
           else home()
           lastClick.t = 0
         } else {
+          const yard = i < 0 ? pickYard(p.x, p.y) : 0
           app.select(i, i >= 0 && e.shiftKey)
-          if (i < 0) app.selectUnit(-1)
+          app.selectYard(yard)
+          if (i < 0 && yard === 0) app.selectUnit(-1)
           lastClick = { t: now, x: p.x, y: p.y, field: i }
         }
       }

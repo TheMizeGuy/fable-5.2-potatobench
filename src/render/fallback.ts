@@ -142,6 +142,8 @@ export function createFallbackView(original: HTMLCanvasElement, app: App): Field
       const r = rects[i]
       return r ? { x: r.x + r.w / 2, y: r.y + r.h - 6, visible: true } : { x: 0, y: 0, visible: false }
     },
+    unitAnchor: () => ({ x: 0, y: 0, visible: false }),
+    yardAnchor: () => ({ x: 0, y: 0, visible: false }),
     dispose() {
       off()
       canvas.removeEventListener('click', onClick)

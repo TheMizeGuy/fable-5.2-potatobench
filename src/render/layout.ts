@@ -111,6 +111,19 @@ export const POTATO_HOUSE = { x: 23.4, z: -17.6 }
 export const DUFOUR_HOUSE = { x: 93.6, z: 2.4 }
 export const DUFOUR_BARN = { x: 95.2, z: -6.2 }
 export const DUFOUR_POTATO_HOUSE = { x: 89.8, z: -14.0 }
+// The middle of each yard (-1 home, -2 Dufour), and how far from it a click still means the yard.
+export const YARD_AT: Record<number, { x: number; z: number; reach: number }> = {
+  [-1]: { x: 23.7, z: -6.6, reach: 13 },
+  [-2]: { x: 93, z: -6, reach: 11 },
+}
+// The yard at a point on the ground, or 0.
+export function yardAt(x: number, z: number): number {
+  for (const yard of [-1, -2]) {
+    const p = YARD_AT[yard]
+    if (Math.abs(x - p.x) <= p.reach * 0.55 && Math.abs(z - p.z) <= p.reach) return yard
+  }
+  return 0
+}
 
 // Ground levelled for the buildings: each sits a step higher up the slope than the last.
 const PADS = [

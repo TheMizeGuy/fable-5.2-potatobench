@@ -2,11 +2,12 @@
 import type { App } from './app.ts'
 
 // The field view draws the land and owns the pointer on the canvas and the camera keys:
-//   click a field: app.select(i); with Shift held: app.select(i, true); on empty ground: app.select(-1)
+//   click a field or a tract: app.select(i); with Shift held: app.select(i, true); on empty ground: app.select(-1)
+//   click a yard or one of its buildings: app.selectYard(yard) (-1 home, -2 Dufour); the selected yard (app.yard) is marked
 //   double-click a field: app.selectLike(i); on empty ground: frame the whole farm
 //   right-click or long-press a field: app.smartOrder(i)
 //   pointer over a field: app.setHover(i)
-//   click a crew (a tractor, the farmer or a hand): app.selectUnit(id); the picked crew (app.unit) is marked
+//   click a person, or the tractor or truck they are on: app.selectUnit(id); the picked person (app.unit) is marked
 //   drag: pan; wheel or pinch: zoom toward the pointer; right-drag, two-finger twist, Q and E: turn; arrow keys: pan; Home: whole farm
 // It draws the selection (app.selection), the hover (app.hover) and a ring on the fields of an 'order' app event,
 // and moves the camera to a field on a 'focus' app event. Every other key belongs to the interface.
@@ -18,6 +19,9 @@ export interface FieldView {
   frame(dtMs: number): void
   // Where a field's plate should sit: the top centre of the field, in CSS pixels relative to the canvas.
   fieldAnchor(field: number): { x: number; y: number; visible: boolean }
+  // Where a person is on the screen (a point just above them), and where a yard's marker should sit.
+  unitAnchor(unit: number): { x: number; y: number; visible: boolean }
+  yardAnchor(yard: number): { x: number; y: number; visible: boolean }
   // Settles once the land has shown a test dig's hill lifted, or the last row of a day's digging come out
   // (at once when there is nothing to show), so the paper result can arrive after the land has shown it.
   whenShown(kind: 'sample' | 'dig', field: number): Promise<void>

@@ -13,7 +13,7 @@ import { Flora } from './flora.ts'
 import { Grass } from './grass.ts'
 import { Harvest } from './harvest.ts'
 import { attachInput } from './input.ts'
-import { FD, FIELDS, fieldBaseY } from './layout.ts'
+import { FD, FIELDS, fieldBaseY, groundY, YARD_AT, yardAt } from './layout.ts'
 import { clamp, smooth } from './noise.ts'
 import { Particles } from './particles.ts'
 import { Post } from './post.ts'
@@ -78,6 +78,8 @@ export const createFieldView: CreateFieldView = (canvas, app) => {
     resize: () => inner.resize(),
     frame: dt => inner.frame(dt),
     fieldAnchor: i => inner.fieldAnchor(i),
+    unitAnchor: u => inner.unitAnchor(u),
+    yardAnchor: y => inner.yardAnchor(y),
     whenShown: (kind, field) => inner.whenShown(kind, field),
     dispose: () => inner.dispose(),
   }
@@ -346,7 +348,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     let best = -1, bd = Infinity
     quads.forEach((tris, i) => {
       const f = snap.fields[i]
-      if (!f.held && !f.available) return
+      if (!f.held && !f.available && !f.ours) return
       for (const t of tris) {
         if (ray.ray.intersectTriangle(t.a, t.b, t.c, false, hit)) {
           const d = hit.distanceToSquared(ray.ray.origin)
@@ -356,12 +358,25 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     })
     return best
   }
+  // The yard under a point on the screen (-1 home, -2 Dufour), or 0: where the ray meets the yard's level ground.
+  function pickYard(x: number, y: number): number {
+    if (snap.mode === 'title') return 0
+    const vp = viewport()
+    ray.setFromCamera(ndc.set((x / vp.w) * 2 - 1, -(y / vp.h) * 2 + 1), rig.camera)
+    const o = ray.ray.origin, d = ray.ray.direction
+    for (const yard of [-1, -2]) {
+      const p = YARD_AT[yard]
+      const t = d.y < -1e-4 ? (groundY(p.x, p.z) - o.y) / d.y : -1
+      if (t > 0 && yardAt(o.x + d.x * t, o.z + d.z * t) === yard) return yard
+    }
+    return 0
+  }
   function pickUnit(x: number, y: number): number {
     if (snap.mode === 'title') return -1
     const vp = viewport()
     return crews.pick(x, y, rig.camera, vp.w, vp.h, snap.mode === 'season' || app.unit >= 0)
   }
-  const input = attachInput(canvas, app, rig, viewport, pick, pickUnit, goHome)
+  const input = attachInput(canvas, app, rig, viewport, pick, pickUnit, goHome, pickYard)
 
   function applyLight(dt: number): void {
     // The sun's small journey through the day, smoothed so that days running fast do not make the light flicker.
@@ -560,6 +575,23 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     return { x, y, visible: inFront && x >= 0 && x <= vp.w && y >= 0 && y <= vp.h }
   }
 
+  function screenAt(x: number, y: number, z: number): { x: number; y: number; visible: boolean } {
+    const vp = viewport()
+    anchor.set(x, y, z).project(rig.camera)
+    const sx = (anchor.x + 1) / 2 * vp.w, sy = (1 - anchor.y) / 2 * vp.h
+    return { x: sx, y: sy, visible: anchor.z < 1 && sx >= 0 && sx <= vp.w && sy >= 0 && sy <= vp.h }
+  }
+
+  function unitAnchor(id: number): { x: number; y: number; visible: boolean } {
+    const u = crews.where().units.find(x => x.id === id)
+    return u ? screenAt(u.x, groundY(u.x, u.z) + 1.9, u.z) : { x: 0, y: 0, visible: false }
+  }
+
+  function yardAnchor(yard: number): { x: number; y: number; visible: boolean } {
+    const p = YARD_AT[yard]
+    return p ? screenAt(p.x, groundY(p.x, p.z) + 6.5, p.z) : { x: 0, y: 0, visible: false }
+  }
+
   // Settles when the land has shown the test dig's hill lifted, or the last row of the day's digging come out.
   function whenShown(kind: 'sample' | 'dig', field: number): Promise<void> {
     return new Promise(resolve => {
@@ -630,7 +662,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
         return { x: (v.x + 1) / 2 * vp.w, y: (1 - v.y) / 2 * vp.h }
       },
       // What a click at a point on the screen would pick.
-      pickAt: (x: number, y: number) => ({ field: pick(x, y), unit: pickUnit(x, y), mode: snap.mode, held: snap.fields.map(f => f.held), available: snap.fields.map(f => f.available) }),
+      pickAt: (x: number, y: number) => ({ field: pick(x, y), unit: pickUnit(x, y), yard: pickYard(x, y), mode: snap.mode, held: snap.fields.map(f => f.held), available: snap.fields.map(f => f.available) }),
       parts: () => Object.keys(parts),
       show(name: string, on: boolean) { if (parts[name]) parts[name].visible = on },
       shadowsOn(on: boolean) { for (const l of shadows.lights) l.castShadow = on },
@@ -653,6 +685,8 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     resize,
     frame,
     fieldAnchor,
+    unitAnchor,
+    yardAnchor,
     whenShown,
     dispose() {
       off()
