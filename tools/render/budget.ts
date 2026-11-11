@@ -100,15 +100,15 @@ function browsersOnGpu(): number {
   } catch { return 0 }
 }
 let mine = 0
-async function quiet(label: string): Promise<boolean> {
-  for (let k = 0; k < 90; k++) {
+async function quiet(label: string, tries = 6): Promise<boolean> {
+  for (let k = 0; k < tries; k++) {
     if (browsersOnGpu() <= mine) return true
     await new Promise(r => setTimeout(r, 10000))
   }
   console.log(`  (the GPU was still shared at ${label}: these numbers are high)`)
   return false
 }
-await quiet('start')
+await quiet('start', 30)
 const browser = await chromium.launch({ args: GPU })
 const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1 })
 const errors: string[] = []
