@@ -379,7 +379,7 @@ export class Flora {
         ${LEAF}
         vec4 clump = texture2D(uNoise, vWorld.xz * 1.7 + vWorld.y * 1.9);
         farBump = (clump.rg - 0.5) * 2.2 * uLeaf;
-        diffuseColor.rgb = mix(${linear('#5a5046')}, diffuseColor.rgb * (0.4 + 0.75 * clump.a), uLeaf * (1.0 - step(0.5, vBark))) * (0.4 + 0.55 * vUp);
+        diffuseColor.rgb = mix(${linear('#5a5046')}, diffuseColor.rgb * vec3(0.92, 0.95, 0.85) * (0.28 + 0.62 * clump.a), uLeaf * (1.0 - step(0.5, vBark))) * (0.34 + 0.46 * vUp);
         ${SNOW_RIME_TREE}`,
       fragmentNormal: 'normal = normalize(normal + (viewMatrix * vec4(farBump.x, 0.0, farBump.y, 0.0)).xyz);',
     })
