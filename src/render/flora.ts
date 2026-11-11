@@ -351,7 +351,8 @@ export class Flora {
           // Bark: birch where the tree's number says so, white with dark bands; the rest grey-brown.
           float band = step(0.8, fract(vUp * 23.0 + vTree.x * 7.0)) * step(0.4, fract(vUp * 7.3));
           vec3 birch = mix(${linear('#e4e0d4')}, ${linear('#3a3632')}, band);
-          diffuseColor.rgb = mix(${linear('#5e5448')}, birch, step(0.45, vTree.x) * step(vUp, 0.62)) * 0.8;
+          // darker than it looks: the leaves' glow when the sun is behind them is on the bark too
+          diffuseColor.rgb = mix(${linear('#5e5448')}, birch, step(0.45, vTree.x) * step(vUp, 0.62)) * 0.52;
           diffuseColor.a = 1.0;
         } else if (vPart < 1.5) {
           diffuseColor.rgb = vec3(1.0);
