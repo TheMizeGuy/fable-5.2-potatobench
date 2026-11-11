@@ -58,7 +58,7 @@ const SKY: Record<string, Sky> = {
   overcast: { sun: 0.06, cover: 1, shadow: 0, deck: 1.05, haze: 0.0012, key: 0.86, turbidity: 4, mie: 0.006 },
   rain: { sun: 0.025, cover: 1, shadow: 0, deck: 0.66, haze: 0.0017, key: 0.76, turbidity: 6, mie: 0.006 },
   storm: { sun: 0.015, cover: 1, shadow: 0, deck: 0.42, haze: 0.0024, key: 0.64, turbidity: 8, mie: 0.006 },
-  fog: { sun: 0.1, cover: 0.92, shadow: 0, deck: 1.35, haze: 0.0034, key: 0.92, turbidity: 6, mie: 0.006 },
+  fog: { sun: 0.1, cover: 0.92, shadow: 0, deck: 1.35, haze: 0.0015, key: 0.92, turbidity: 6, mie: 0.006 },
   snow: { sun: 0.05, cover: 1, shadow: 0, deck: 1.05, haze: 0.0026, key: 0.92, turbidity: 4, mie: 0.006 },
 }
 
@@ -95,8 +95,8 @@ export function envTarget(snap: Snapshot, out: Env): Env {
   out.wind = clamp(w.wind / 8, 0.08, 1.4) * (w.sky === 'storm' ? 1.4 : 1)
   out.windDir = w.wdir < 0 ? 0.6 : ((w.wdir + 180) * Math.PI) / 180
   const growing = d > 130 && d < 290 && w.tmin > 2
-  out.mist = w.sky === 'fog' ? 1 : growing && w.wetH >= 10 ? Math.min(0.8, (w.wetH - 9) / 9) : 0
-  out.mistDeep = w.sky === 'fog' ? 1 : 0.35
+  out.mist = w.sky === 'fog' ? 0.8 : growing && w.wetH >= 10 ? Math.min(0.8, (w.wetH - 9) / 9) : 0
+  out.mistDeep = w.sky === 'fog' ? 0.6 : 0.35
   // In the season each part of the slope frosts as its own fields did last night; otherwise the picture of the time of year.
   const rime = w.tmin < 0 && w.snwd < 20 ? Math.min(1, 0.35 + -w.tmin / 4) : 0
   out.rime0 = snap.rime ? snap.rime[0] : rime
