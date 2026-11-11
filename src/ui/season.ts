@@ -295,7 +295,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       const low = layout === 'narrow' || layout === 'short'
       el.classList.toggle('tight', layout === 'narrow' && innerHeight < 720 && (app.selection.length > 0 || !!tray))
       clockSlot.hidden = !low
-      if (low) patch(clockSlot, JSON.stringify([app.speed, app.running, ctx.clock.auto, S.seasonDone(c), ctx.touch()]), () => clock(ctx, true))
+      if (low) patch(clockSlot, JSON.stringify([app.speed, app.running, ctx.clock.auto, S.seasonDone(c), ctx.awaiting, ctx.touch()]), () => clock(ctx, true))
       const now = performance.now()
       const quiet = !app.needs().some(n => n.need && n.need.act !== 'close') && c.season.jobs.length === 0
       if (ctx.clock.auto && app.speed === 1 && quiet && !tray && !S.seasonDone(c) && !ctx.papers.isOpen() && now - pacedAt > 4000 && now - orderedAt > 2500) app.runUntilNeeded()

@@ -27,6 +27,8 @@ export interface Ctx {
   touch(): boolean
   reduced(): boolean
   // What the grower knew a moment ago, for "before and after" displays.
+  // Weigh tickets waiting for the land to finish showing their dig.
+  awaiting: number
   memo: {
     estimates: (Estimate | null)[]; soilT: number; digSoilT: Record<string, number>; lots: Record<string, Lot>
     seen: (Seen | null)[]; digEst: Record<string, Estimate | null>; digSeen: Record<string, Seen | null>

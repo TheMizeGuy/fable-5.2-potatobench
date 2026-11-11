@@ -72,7 +72,7 @@ function cells(ctx: Ctx, c: S.Campaign): Cell[] {
 export function clock(ctx: Ctx, compact: boolean): HTMLElement {
   const app = ctx.app
   const c = app.campaign!
-  if (S.seasonDone(c)) {
+  if (S.seasonDone(c) && !ctx.awaiting) {
     return h('button', { class: 'nbtn primary', type: 'button', testid: 'end-season', onclick: () => ctx.run({ t: 'endSeason' }) }, 'Close out the season')
   }
   const keys = !ctx.touch()
@@ -119,7 +119,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     const fc = season ? cells(ctx, c) : []
     const withClock = season && (layout === 'wide' || layout === 'mid')
     const model = {
-      p: c.phase, d: dateText(c, form), y: yearText(c), cash: Math.round(c.cash), sp: app.speed, run: app.running, auto: ctx.clock.auto, done: season && S.seasonDone(c), layout,
+      p: c.phase, d: dateText(c, form), y: yearText(c), cash: Math.round(c.cash), sp: app.speed, run: app.running, auto: ctx.clock.auto, done: season && S.seasonDone(c) && !ctx.awaiting, layout,
       day: c.season?.day, w: c.season?.watchDay, f: c.season?.log.filter(e => e.type === 'frost').length, u: app.settings.units, t: ctx.touch(), withClock, snug,
     }
     el.dataset.phase = c.phase

@@ -50,6 +50,7 @@ export const mountHud: MountHud = (root, app, view) => {
     layout: layoutNow,
     touch: () => touchQuery.matches,
     reduced: () => app.settings.reducedMotion,
+    awaiting: 0,
     memo: { estimates: [], soilT: 10, digSoilT: {}, lots: {}, seen: [], digEst: {}, digSeen: {}, sampleBefore: {} },
     clock: { auto: true },
     dirty: () => { dirty = true },
@@ -129,7 +130,12 @@ export const mountHud: MountHud = (root, app, view) => {
         ctx.memo.digEst[key] = ctx.memo.estimates[e.field] ?? null
         ctx.memo.digSeen[key] = ctx.memo.seen[e.field] ?? null
         const staged = app.speed < 3
-        void view.whenShown('dig', e.field).then(() => { if (app.campaign === c) papers.enqueue(ticket(ctx, lot, { fresh: true, staged })) })
+        ctx.awaiting++
+        void view.whenShown('dig', e.field).then(() => {
+          ctx.awaiting--
+          if (app.campaign === c && app.screen === 'season') papers.enqueue(ticket(ctx, lot, { fresh: true, staged }))
+          dirty = true
+        })
       }
     }
   }
