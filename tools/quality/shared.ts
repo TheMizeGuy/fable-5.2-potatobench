@@ -1,7 +1,9 @@
 // Shared by the capture tools: how to reach a state of the game through the real app.
 import type { Page } from '@playwright/test'
 
-export const GPU = ['--use-angle=metal', '--ignore-gpu-blocklist', '--enable-gpu']
+export const GPU = process.platform === 'darwin' ? ['--use-angle=metal', '--ignore-gpu-blocklist', '--enable-gpu']
+  : process.platform === 'win32' ? ['--use-angle=d3d11', '--ignore-gpu-blocklist', '--enable-gpu']
+    : ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist']
 
 // Runs in the page: ways to reach a state through the real app, following the in-game advice.
 export const HELPER = `window.__q = {

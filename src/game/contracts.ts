@@ -17,6 +17,9 @@ export interface FieldView {
   frame(dtMs: number): void
   // Where a field's plate should sit: the top centre of the field, in CSS pixels relative to the canvas.
   fieldAnchor(field: number): { x: number; y: number; visible: boolean }
+  // Settles once the land has shown a test dig's hill lifted, or the last row of a day's digging come out
+  // (at once when there is nothing to show), so the paper result can arrive after the land has shown it.
+  whenShown(kind: 'sample' | 'dig', field: number): Promise<void>
   // The quality tier in use and the frame rate measured, for the settings screen.
   quality(): { tier: 'high' | 'medium' | 'low' | 'flat'; fps: number }
   dispose(): void

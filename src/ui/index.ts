@@ -128,7 +128,8 @@ export const mountHud: MountHud = (root, app, view) => {
         ctx.memo.lots[key] = structuredClone(found)
         ctx.memo.digEst[key] = ctx.memo.estimates[e.field] ?? null
         ctx.memo.digSeen[key] = ctx.memo.seen[e.field] ?? null
-        papers.enqueue(ticket(ctx, lot, { fresh: true, staged: app.speed < 3 }))
+        const staged = app.speed < 3
+        void view.whenShown('dig', e.field).then(() => { if (app.campaign === c) papers.enqueue(ticket(ctx, lot, { fresh: true, staged })) })
       }
     }
   }

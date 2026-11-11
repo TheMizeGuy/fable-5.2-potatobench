@@ -117,6 +117,7 @@ export function createFallbackView(original: HTMLCanvasElement, app: App): Field
   return {
     ready: Promise.resolve(),
     quality: () => ({ tier: 'flat', fps: 0 }),
+    whenShown: () => Promise.resolve(),
     resize: layout,
     frame() {
       if (dirty && !document.hidden) draw()

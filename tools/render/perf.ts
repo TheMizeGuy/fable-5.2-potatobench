@@ -60,7 +60,7 @@ async function measure(page: Page, label: string, seconds = 5): Promise<void> {
   console.log(`    GPU for the frame (ms) ${summary(r.gpu)}`)
 }
 
-const browser = await chromium.launch({ args: ['--use-angle=metal', '--ignore-gpu-blocklist', '--enable-gpu'] })
+const browser = await chromium.launch({ args: [process.platform === 'win32' ? '--use-angle=d3d11' : '--use-angle=metal', '--ignore-gpu-blocklist', '--enable-gpu'] })
 for (const [w, h] of [[1440, 900], [1920, 1080]]) {
   const page = await browser.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: 1 })
   const errors: string[] = []

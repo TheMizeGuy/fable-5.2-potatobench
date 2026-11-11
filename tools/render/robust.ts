@@ -12,7 +12,7 @@ const out = args[1] ?? 'shots'
 mkdirSync(out, { recursive: true })
 const GL = process.argv.includes('--soft')
   ? ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist']
-  : ['--use-angle=metal', '--ignore-gpu-blocklist', '--enable-gpu']
+  : [process.platform === 'win32' ? '--use-angle=d3d11' : '--use-angle=metal', '--ignore-gpu-blocklist', '--enable-gpu']
 let failed = 0
 const check = (ok: boolean, what: string) => { console.log(`${ok ? 'ok  ' : 'FAIL'} ${what}`); if (!ok) failed++ }
 

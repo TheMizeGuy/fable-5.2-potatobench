@@ -10,7 +10,7 @@ const [w, h] = size.split('x').map(Number)
 const soft = process.argv.includes('--soft')
 const other = process.argv.find(a => a.startsWith('--browser='))?.slice(10)
 const browser = other === 'firefox' ? await firefox.launch() : other === 'webkit' ? await webkit.launch() : await chromium.launch({
-  args: soft ? ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] : ['--use-angle=metal', '--ignore-gpu-blocklist', '--enable-gpu'],
+  args: soft ? ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] : [process.platform === 'win32' ? '--use-angle=d3d11' : '--use-angle=metal', '--ignore-gpu-blocklist', '--enable-gpu'],
 })
 const page = await browser.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: 1 })
 const errors: string[] = []

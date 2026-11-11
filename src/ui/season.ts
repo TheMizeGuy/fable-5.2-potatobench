@@ -70,7 +70,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   const off = app.on(ev => {
     if (ev.type === 'speed') { pacedAt = performance.now(); setTimeout(() => ctx.dirty(), 4200) }
     else if (ev.type === 'order') { orderedAt = performance.now(); setTimeout(() => ctx.dirty(), 2700) }
-    else if (ev.type === 'events') for (const e of ev.events) if (e.type === 'sample') openTray(e, app.speed < 3)
+    else if (ev.type === 'events') for (const e of ev.events) if (e.type === 'sample') { const staged = app.speed < 3; void ctx.view.whenShown('sample', e.field).then(() => { if (app.screen === 'season') openTray(e, staged) }) }
   })
 
   // ------------------------------------------------------------ plates, badges and the nine sentences

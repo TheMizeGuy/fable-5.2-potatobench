@@ -79,6 +79,7 @@ export const createFieldView: CreateFieldView = (canvas, app) => {
     resize: () => inner.resize(),
     frame: dt => inner.frame(dt),
     fieldAnchor: i => inner.fieldAnchor(i),
+    whenShown: (kind, field) => inner.whenShown(kind, field),
     dispose: () => inner.dispose(),
   }
 }
@@ -694,6 +695,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     resize,
     frame,
     fieldAnchor,
+    whenShown,
     dispose() {
       off()
       input.dispose()
