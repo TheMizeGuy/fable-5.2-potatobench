@@ -139,7 +139,7 @@ export const mountHud: MountHud = (root, app, view) => {
   phoneQuery.addEventListener('change', () => build())
   addEventListener('resize', () => { dirty = true })
 
-  document.addEventListener('pointerdown', () => { held = true }, true)
+  root.addEventListener('pointerdown', () => { held = true }, true)
   const release = () => { if (held) { held = false; dirty = true } }
   document.addEventListener('pointerup', release, true)
   document.addEventListener('pointercancel', release, true)

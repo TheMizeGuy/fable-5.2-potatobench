@@ -150,6 +150,7 @@ kbd {
   outline: 3px solid var(--focus);
   outline-offset: 2px;
 }
+.hud .dialog:focus-visible { outline: none; }
 .hud .seg-opt input:focus-visible + span,
 .hud .check input:focus-visible + span { outline: 3px solid var(--focus); outline-offset: 2px; }
 

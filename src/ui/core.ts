@@ -28,13 +28,17 @@ export interface Screen {
 }
 
 const keys = new WeakMap<Element, string>()
+const FOCUSABLE = 'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), [tabindex="0"]'
 
-// Rebuilds a section only when what it shows has changed, keeping keyboard focus where it was.
+// Rebuilds a section only when what it shows has changed, keeping keyboard focus where it was:
+// on the same control if it is still there and usable, otherwise on the one now in its place.
 export function patch(el: HTMLElement, key: string, render: () => Child): void {
   if (keys.get(el) === key) return
   keys.set(el, key)
   const active = document.activeElement as HTMLElement | null
-  const fk = active && el.contains(active) ? active.dataset.k : undefined
+  const inside = !!active && el.contains(active)
+  const fk = inside ? active!.dataset.k : undefined
+  const at = inside ? [...el.querySelectorAll<HTMLElement>(FOCUSABLE)].indexOf(active!) : -1
   const scrolls = [...el.querySelectorAll<HTMLElement>('[data-scroll]')].map(x => [x.dataset.scroll, x.scrollTop] as const)
   const box = h('div', null, render())
   el.replaceChildren(...box.childNodes)
@@ -42,10 +46,12 @@ export function patch(el: HTMLElement, key: string, render: () => Child): void {
     const x = el.querySelector<HTMLElement>(`[data-scroll="${name}"]`)
     if (x) x.scrollTop = top
   }
-  if (fk) {
-    const t = el.querySelector<HTMLElement>(`[data-k="${CSS.escape(fk)}"]`)
-    if (t && !(t as HTMLButtonElement).disabled) t.focus({ preventScroll: true })
-  }
+  if (!inside) return
+  const same = fk ? el.querySelector<HTMLElement>(`[data-k="${CSS.escape(fk)}"]`) : null
+  if (same && same.matches(FOCUSABLE)) { same.focus({ preventScroll: true }); return }
+  const now = [...el.querySelectorAll<HTMLElement>(FOCUSABLE)]
+  const next = now[Math.min(Math.max(at, 0), now.length - 1)]
+  next?.focus({ preventScroll: true })
 }
 
 export function forget(el: HTMLElement): void {
@@ -83,7 +89,7 @@ export class Dialogs {
     this.shade = h('div', { class: 'shade', hidden: true })
     this.shade.addEventListener('click', () => this.closeTop())
     layer.append(this.shade)
-    layer.addEventListener('keydown', e => this.trap(e))
+    document.addEventListener('keydown', e => this.trap(e))
   }
 
   isOpen(): boolean { return this.stack.length > 0 }
@@ -111,8 +117,7 @@ export class Dialogs {
     this.stack.push(entry)
     this.layer.append(el)
     this.sync()
-    const first = el.querySelector<HTMLElement>('[autofocus]') ?? el.querySelector<HTMLElement>('.dialog-body button:not(:disabled), .dialog-body [href], .dialog-body input, .dialog-body select, .dialog-foot button')
-    ;(first ?? el).focus({ preventScroll: true })
+    ;(el.querySelector<HTMLElement>('[autofocus]') ?? el).focus({ preventScroll: true })
     return close
   }
 
@@ -156,16 +161,18 @@ export class Dialogs {
     document.documentElement.classList.toggle('has-dialog', n > 0)
   }
 
+  // Tab is moved by hand so the cycle is the same in every engine (Safari skips buttons by default).
   private trap(e: KeyboardEvent): void {
     if (e.key !== 'Tab') return
     const top = this.stack[this.stack.length - 1]
     if (!top) return
     const items = [...top.el.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')]
-      .filter(x => !(x as HTMLButtonElement).disabled && x.offsetParent !== null)
+      .filter(x => !(x as HTMLButtonElement).disabled && x.offsetParent !== null && x.tabIndex >= 0)
     if (!items.length) return
-    const first = items[0], last = items[items.length - 1]
-    if (e.shiftKey && (document.activeElement === first || document.activeElement === top.el)) { e.preventDefault(); last.focus() }
-    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
+    e.preventDefault()
+    const at = items.indexOf(document.activeElement as HTMLElement)
+    const next = at < 0 ? (e.shiftKey ? items.length - 1 : 0) : (at + (e.shiftKey ? -1 : 1) + items.length) % items.length
+    items[next].focus()
   }
 }
 

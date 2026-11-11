@@ -27,6 +27,7 @@ function setAttrs(el: Element, attrs: Attrs | null | undefined): void {
 export function h<K extends keyof HTMLElementTagNameMap>(tag: K, attrs?: Attrs | null, ...kids: Child[]): HTMLElementTagNameMap[K] {
   const el = document.createElement(tag)
   setAttrs(el, attrs)
+  if (el.dataset.testid && !el.dataset.k) el.dataset.k = el.dataset.testid
   append(el, kids)
   return el
 }

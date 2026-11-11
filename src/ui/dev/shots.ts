@@ -1,8 +1,8 @@
 // Walks every screen at desktop and phone size, saves named screenshots, runs axe, and fails on any console error.
-// Usage: node src/ui/dev/shots.ts [output folder]
+// Usage: node src/ui/dev/shots.ts [output folder]    (ENGINE=firefox or ENGINE=webkit to use another browser)
 import { mkdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { chromium, type Page } from '@playwright/test'
+import { chromium, firefox, webkit, type Page } from '@playwright/test'
 import { AxeBuilder } from '@axe-core/playwright'
 import { createServer } from 'vite'
 import type { App } from '../../game/app.ts'
@@ -84,6 +84,17 @@ async function keyboard(page: Page, tag: string): Promise<void> {
   if (tag === 'phone') await page.getByTestId('tab-work').click()
   if (id >= 0) await page.getByTestId(`job-cancel-${id}`).click()
   expect((await state()).jobs.length === 0, `${tag}: cancel did not empty the work list`)
+  await page.getByTestId('field-0').click()
+  if (tag === 'phone') await page.getByTestId('tab-field').click()
+  await page.getByTestId('act-plant').focus()
+  await page.keyboard.press('Enter')
+  await page.waitForTimeout(100)
+  expect((await state()).jobs.includes('plant:0'), `${tag}: Enter on Plant did not queue it`)
+  expect(await page.evaluate(() => !!document.activeElement?.closest('.fieldpanel')), `${tag}: focus was lost after queuing a job from the keyboard`)
+  const id2 = await page.evaluate(() => window.__county.app.campaign!.season!.jobs[0]?.id ?? -1)
+  if (tag === 'phone') await page.getByTestId('tab-work').click()
+  if (id2 >= 0) await page.getByTestId(`job-cancel-${id2}`).click()
+  await page.keyboard.press('Escape')
   await page.getByTestId('how-open').focus()
   await page.keyboard.press('Enter')
   await page.getByTestId('how').waitFor()
@@ -133,7 +144,9 @@ async function play(page: Page, stop: 'day' | 'dug' | 'done', until = 0): Promis
 }
 
 async function walk(tag: string, width: number, height: number): Promise<void> {
-  const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] })
+  const engine = process.env.ENGINE ?? 'chromium'
+  const browser = engine === 'firefox' ? await firefox.launch() : engine === 'webkit' ? await webkit.launch()
+    : await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] })
   const context = await browser.newContext({ viewport: { width, height } })
   const page = await context.newPage()
   try {
