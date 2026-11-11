@@ -2,7 +2,7 @@
 // The farm's own fields are drawn in full; land it does not hold is pale, and dashed when it can be had.
 import type { App } from '../game/app.ts'
 import type { FieldView } from '../game/contracts.ts'
-import { COLS, FIELD_COUNT, HILLS, ROWS } from '../sim/index.ts'
+import { COLS, HILLS, ROWS } from '../sim/index.ts'
 import { FIELDS } from './layout.ts'
 import { snapshot, type Snapshot } from './state.ts'
 

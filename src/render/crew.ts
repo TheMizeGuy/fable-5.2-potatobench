@@ -187,7 +187,6 @@ export class Tractor {
   readonly body = new Group()
   readonly driver: Group
   readonly ring: Mesh
-  private kit: Kit
   private implements = new Map<Implement, Group>()
   private rear: Group[] = []
   private front: Group[] = []
@@ -200,7 +199,6 @@ export class Tractor {
   current: Implement = 'none'
 
   constructor(kit: Kit, paint: Paint = RED, coat = '#3f5243', cap = '#b9492e') {
-    this.kit = kit
     const k = kit, g = this.body
     this.group.add(g)
     const body = k.mat(paint.body, 0.42), trim = k.mat(paint.trim, 0.6), dark = k.mat('#2a2a27', 0.8), iron = k.mat('#5c5d5a', 0.5, 0.6), steel = k.mat('#8b8d88', 0.45, 0.7)
