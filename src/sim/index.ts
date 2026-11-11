@@ -15,4 +15,6 @@ export {
   FIELD_NAMES, JOB_LABEL, haulDistance, haulFactor, holdsDufour, jobBlock, jobCost, jobDays, jobWait, knownHills, seasonDone, unitBlock,
 } from './season.ts'
 export { makeWorld } from './world.ts'
+export { climateWorld, isFarmYear, makeYear, priceLevelFor, yearLabel, FARM_YEAR0, FARM_YEARS } from './climate.ts'
+export { hash32, hashUnit } from './rng.ts'
 export { advise, fieldNeeds, type Advice } from './advice.ts'
