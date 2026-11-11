@@ -2,6 +2,7 @@
 // the home view and the whole map with ten fields in crop, and a close view along the rows; and, with --parts, what each
 // part of the scene costs in the home view at the high tier (the frame with that part hidden, against the whole).
 // Usage: node tools/render/budget.ts <base-url> [--parts] [--size=1920x1080]
+import { execFileSync } from 'node:child_process'
 import { chromium, type Page } from '@playwright/test'
 import { GPU } from '../quality/shared.ts'
 
@@ -91,6 +92,23 @@ async function bigFarm(page: Page): Promise<void> {
   })
 }
 
+// Other browsers on the GPU (other checks running on the same machine) make every number here wrong: wait them out.
+function browsersOnGpu(): number {
+  try {
+    const all = execFileSync('nvidia-smi', [], { encoding: 'utf8' })
+    return (all.match(/chrome-headless-shell|firefox|webkit|MiniBrowser|msedge/gi) ?? []).length
+  } catch { return 0 }
+}
+let mine = 0
+async function quiet(label: string): Promise<boolean> {
+  for (let k = 0; k < 90; k++) {
+    if (browsersOnGpu() <= mine) return true
+    await new Promise(r => setTimeout(r, 10000))
+  }
+  console.log(`  (the GPU was still shared at ${label}: these numbers are high)`)
+  return false
+}
+await quiet('start')
 const browser = await chromium.launch({ args: GPU })
 const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1 })
 const errors: string[] = []
@@ -99,6 +117,7 @@ page.on('console', m => { if (m.type() === 'error') errors.push(m.text()) })
 await page.addInitScript({ content: INSTRUMENT })
 await page.goto(base)
 await page.waitForFunction(() => (window as any).__countyField?.stats?.().firstFrame > 0)
+mine = browsersOnGpu()
 const gpuName = await page.evaluate(() => {
   const gl = (document.getElementById('field') as HTMLCanvasElement).getContext('webgl2')!
   const e = gl.getExtension('WEBGL_debug_renderer_info')
@@ -125,7 +144,10 @@ for (const [label, set] of views) {
   for (const t of ['high', 'medium', 'low']) {
     await tier(t)
     await set()
-    line(label, await measure(page))
+    await quiet(label)
+    const m = await measure(page)
+    line(label, m)
+    if (browsersOnGpu() > mine) console.log('    (another browser started on the GPU during this measurement)')
   }
 }
 if (parts) {
