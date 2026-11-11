@@ -377,7 +377,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     U.uHaze.value.set(env.haze, 0.011)
     // Mist lies in the low ground: on the brook and the bottom land, thinning fast above it; on a fog day it fills the
     // valley to the mid slope and the ridge stands out of it.
-    U.uMist.value.set((0.5 - 0.3 * env.mistDeep) * env.mist, 2.6 - 1.5 * env.mistDeep, 0.2 + 1.9 * env.mistDeep, 0.85)
+    U.uMist.value.set((0.5 - 0.36 * env.mistDeep) * env.mist, 2.6 - 1.5 * env.mistDeep, 0.2 + 1.9 * env.mistDeep, 0.85)
     U.uCloud.value.x = env.cloudShadow
     U.uCloud.value.y = env.cloud
     U.uSnow.value = env.snow
