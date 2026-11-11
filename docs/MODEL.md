@@ -31,7 +31,7 @@ and `src/sim/varieties.ts`.
 | Rule | Tag | Source |
 | --- | --- | --- |
 | Thermal time in P-days: cardinal temperatures 7, 21 and 30°C; four-point daily weighting 5, 8, 8, 3 over 24 | Sourced | Sands, Hackett and Nix (1979), as implemented in the Oregon State and PNW models (`01-crop-growth.md`) |
-| Emergence after about 95 P-days of soil thermal time, spread 85% to 120% between hills | Derived / invented | Tuned to Idaho's 20 to 25 days at 50°F soil (`01-crop-growth.md`); the spread between hills is invented |
+| Emergence after about 130 P-days of soil thermal time, spread 85% to 120% between hills | Derived / invented | Idaho reports 20 to 25 days at 50°F soil (`01-crop-growth.md`). The game's soil warms as fast as the air, so the threshold was raised to bring emergence closer to NASS's dates; it still runs about a week early (`docs/verification/model-vs-record.md`). The spread between hills is invented. |
 | Seed pieces rot in soil below 7°C when it is wet (1.2% of unemerged hills a day, 3% below 4.5°C) | Invented magnitudes | The trigger is sourced (extension planting guidance); no published hazard rate was found |
 | Tuber initiation 130 to 175 P-days after emergence by variety; senescence from 450 (early) to 850 (Russet Burbank) | Sourced / invented | Manitoba P-day tables give three cultivars; the rest are placed within their maturity class (`01`, `03-varieties.md`) |
 | Canopy grows logistically, about 40 days from emergence to closed rows in midsummer | Derived | Matches full cover at about 650°C·d after emergence (LINTUL-POTATO-DSS) |
@@ -47,7 +47,8 @@ and `src/sim/varieties.ts`.
 | --- | --- | --- |
 | One-bucket root-zone balance; crop coefficient from 0.4 (bare) to 1.15 (full canopy); depletion fraction 0.35; stress factor Ks = (TAW - Dr) / ((1 - p) TAW) | Sourced | FAO-56 chapters 6 and 8 |
 | Available water 93 mm in the bottom land, 84 mid slope, 72 on the ridge | Sourced / invented | SSURGO Caribou gravelly loam gives about 93 mm over 18 in; the slope positions are invented |
-| Irrigation applies 25 mm | Sourced | About an inch per set is standard practice |
+| Irrigation applies 25 mm; without a reel it takes the farmer a full day and $300 a field, with one half a day and $200; the reel costs $30,000 | Sourced / invented | An inch per set is standard practice. The costs are invented and were set by the balance tournament so that irrigation pays only in dry eras, as in Aroostook, where most potatoes are rain-fed (`07`). |
+| Growth falls to 30% of normal, not zero, when the root zone is empty | Invented | Brings the model's irrigation response (+15%) to the UMaine trials' (+17%) |
 | The ground is too wet to work above 11 mm of surface wetness, which drains at 28% (bottom) to 55% (ridge) a day | Invented | Tuned toward NASS's average of 5.3 workable days a week (`07`) |
 | Standing water cuts growth by 40% that day and builds rot | Invented magnitudes | Direction sourced (`01`, `04`) |
 
@@ -58,7 +59,8 @@ and `src/sim/varieties.ts`.
 | Daily severity value 0 to 4 from wet hours and their temperature | Sourced | Wallin's table as used in Blitecast (Krause, Massie and Hyre 1975) (`02-late-blight.md`); tested cell by cell |
 | The game counts total wet hours in the noon-to-noon day; the published table uses the longest continuous run | Departure | The station data is reduced to totals. Totals are equal or higher than the longest run, so the game's blight watch can come earlier than the true Blitecast would. |
 | Blight watch at 18 accumulated severity values | Sourced | Blitecast first-spray threshold |
-| Outside spores can arrive only after the watch threshold, more often as the season's severity total grows | Invented | Stands in for regional inoculum |
+| Outside spores can arrive only after the watch threshold, more often as the season's severity total grows; blight also jumps to random hills in the same field and to other fields | Invented | Stands in for regional inoculum and wind-borne spread, and keeps a focus from being contained by pulling plants alone |
+| A walk finds 60% of the hills with visible lesions; latent infections cannot be seen | Invented | Lesions low in a closed canopy are easy to miss |
 | Latent period 4 days, 6 when cool | Sourced | About 4 days at 13 to 23°C, 7 below 10°C (`02`) |
 | Lesions grow, and spread to hills up to two away, only on days with a severity value; hot dry days (29°C and few wet hours) stop both | Sourced direction, invented rates | Rates set so an unsprayed average variety goes from 1% to 90% in roughly three to four weeks of favourable weather, the range MacKenzie (1981) and Fry (1978) report |
 | Variety foliage susceptibility 0.48 (Kennebec) to 1.38 (Superior) | Sourced | Penn State 2018 trial, area under the disease curve relative to Atlantic (`03`) |
@@ -77,6 +79,7 @@ and `src/sim/varieties.ts`.
 | Hollow heart by variety on large tubers, worse after cold soil in the first four weeks of tuber growth or a dry spell broken by rain | Sourced | Maine trial incidence for Atlantic, Russet Burbank and Caribou Russet; trigger from `04` |
 | Knobs and growth cracks after a dry spell of five days or more is broken | Sourced direction | `04` |
 | Skins set 14 days after the vines die; unset skins cost grade and keeping quality | Sourced | `04` |
+| A test dig lifts one plant: it stops growing and its tubers go in with the crop | Design choice | One plant in a field is no loss worth modelling; the dig is there for what it shows |
 | Bruising when the soil is below 8°C at digging | Sourced | Pulp below 45 to 50°F (`04`) |
 | Tubers freeze in the hill at an air minimum of -4.4°C, less under a full hill or snow | Invented threshold | `07` proposes 24°F; tuber tissue freezes near 30°F |
 | The ground freezes for good when soil temperature falls to 0.5°C after October 1, or on November 10 | Invented | Ends the season |
@@ -85,12 +88,13 @@ and `src/sim/varieties.ts`.
 
 | Rule | Tag | Source |
 | --- | --- | --- |
-| Price through the year: August 0.966, September 0.887, October 0.878, November 0.922, rising to 1.105 in April | Sourced | Maine monthly prices over the season average, 1979 to 2013, USDA NASS (`06-economics-records.md`) |
+| Price through the year from mid August: September 0.887, October 0.878, November 0.922, rising to 1.105 in April | Sourced | Maine monthly prices over the season average, 1979 to 2013, USDA NASS (`06-economics-records.md`) |
+| A new-crop premium before that: 1.4 on July 1 falling to 1.05 by mid August | Invented | Anchored on the US fresh new-crop premium of 1.32 to 1.44 (`06`); Maine's own August average is only 0.966. It is what makes an early variety worth growing. |
 | Each year's price level is that year's real Maine season-average price over its nine-year trend, limited to 0.55 to 1.6 | Derived | USDA NASS annual price, `data/records/maine_potato_nass.csv` |
 | Variety base prices (13 to 16.20 dollars per cwt of No. 1) | Invented | Ordered by market class; fresh sells above the all-potato price and processing below it (`06`). Yukon Gold, Russet Burbank and Atlantic were last set by the balance tournament so no single variety wins most years (`docs/balance/README.md`) |
 | A chip contract moves a quarter as much as the market | Invented | Contracts fix most of the price before planting |
 | Money is in constant present-day dollars | Design choice | Fifty years of nominal prices would make eras incomparable |
-| Shrink 1.2% a month, 0.7% with ventilation | Sourced | About 6% over eight months (`04`, `06`) |
+| Shrink 1.2% a month, 0.7% with ventilation; the cellar costs $0.30 per cwt per month | Sourced / invented | About 6% shrink over eight months (`04`, `06`). The storage charge is invented, of the order of the recorded $0.81 per cwt for six months in 1980 dollars (`06`). |
 | Hidden rot roughly doubles each month and breaks a pile down past 22% | Invented | Anchored to "5% late blight is the limit of storable" (`04`) |
 | Dormancy by variety, 60 days (Norland) to 160 (Russet Burbank) | Sourced / invented | Russet Burbank from Idaho data; others scaled or placed by class (`03`) |
 | Culls bring one dollar a hundredweight | Sourced | `06` |
