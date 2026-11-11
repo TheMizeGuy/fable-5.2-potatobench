@@ -21,7 +21,7 @@ const amount = fc.oneof(fc.double({ min: -1, max: 3 }), fc.constantFrom(0, 0.25,
 const step: fc.Arbitrary<Step> = fc.oneof(
   { weight: 2, arbitrary: fc.record({ t: fc.constant('plan' as const), field: index, plan: fc.record({ crop: fc.constantFrom('potato' as const, 'rest' as const), variety: fc.constantFrom(...VARIETIES), seed: fc.constantFrom('certified' as const, 'saved' as const) }) }) },
   { weight: 1, arbitrary: fc.record({ t: fc.constant('buy' as const), upgrade: fc.constantFrom('boom' as const, 'harvester' as const, 'vent' as const, 'reel' as const, 'tractor2' as const, 'house2' as const) }) },
-  { weight: 2, arbitrary: fc.record({ t: fc.constantFrom('rent' as const, 'release' as const, 'buyLand' as const), field: index }) },
+  { weight: 5, arbitrary: fc.record({ t: fc.constantFrom('rent' as const, 'release' as const, 'buyLand' as const), field: index }) },
   { weight: 2, arbitrary: fc.record({ t: fc.constant('hire' as const), kind: fc.constantFrom('hand' as const, 'operator' as const, 'farmer' as const) }) },
   { weight: 1, arbitrary: fc.record({ t: fc.constant('dismiss' as const), unit }) },
   { weight: 1, arbitrary: fc.record({ t: fc.constant('dismissPick' as const), k: fc.nat(8) }) },
