@@ -1,8 +1,9 @@
 // The running game: owns the campaign, the clock, the selection and the orders, saving, and tells the views what changed.
 import {
-  apply, createCampaign, fieldInfo, fieldNeeds, seasonDone, startYears,
+  apply, climateWorld, createCampaign, fieldInfo, fieldNeeds, isFarmYear, seasonDone, startYears, FARM_YEAR0,
   type Advice, type Campaign, type Cmd, type GameEvent, type JobKind, type Phase, type Result, type World,
 } from '../sim/index.ts'
+import { neighborYear } from './neighbor.ts'
 import { clearSave, parseSave, readSave, readSettings, serialize, writeSave, writeSettings, type SaveFile } from './save.ts'
 
 export type Speed = 0 | 1 | 2 | 3
@@ -58,7 +59,10 @@ const NOTABLE = new Set(['dug', 'sample', 'skinSet', 'emerged', 'ti', 'mature', 
 const ALERTS_KEPT = 24
 
 export class App {
-  readonly world: World
+  // The world of the farm being played: its own made-up years, or the record for a farm started in a real year.
+  world: World
+  // The long record the made-up years are put together from.
+  readonly record: World
   campaign: Campaign | null = null
   // Fields the player has selected, in the order they were clicked.
   selection: number[] = []
@@ -90,6 +94,7 @@ export class App {
 
   constructor(world: World) {
     this.world = world
+    this.record = world
     this.settings = readSettings(DEFAULT_SETTINGS)
     try {
       if (typeof matchMedia === 'function' && localStorage.getItem('the-county/settings') === null) {
@@ -113,16 +118,36 @@ export class App {
   }
 
   startYears(): number[] {
-    return startYears(this.world)
+    return startYears(this.record)
+  }
+
+  // A farm started in a real year plays on the record; every other farm gets years of its own from its seed.
+  private worldFor(c: Campaign): World {
+    return isFarmYear(c.startYear) ? climateWorld(this.record, c.seed) : this.record
+  }
+
+  // The neighbor's season is worked out before the player's begins, so news from the road can arrive on its days.
+  private meetNeighbor(): void {
+    const c = this.campaign
+    if (!c || !isFarmYear(c.year) || this.world.neighbor[String(c.year)]) return
+    const n = neighborYear(this.world, c.seed, c.year)
+    if (n) this.world.neighbor[String(c.year)] = n
   }
 
   savedGame(): SaveFile | null {
     return readSave()
   }
 
-  newGame(startYear: number, seed?: number): void {
+  // Starts a farm. With no year it is a farm of its own with weather made from its seed; a year plays the record.
+  newGame(startYear?: number, seed?: number): void {
     const s = seed ?? (crypto.getRandomValues(new Uint32Array(1))[0] | 0)
-    this.campaign = createCampaign(this.world, { seed: s, startYear })
+    if (startYear === undefined) {
+      this.world = climateWorld(this.record, s)
+      this.campaign = createCampaign(this.world, { seed: s, startYear: FARM_YEAR0 + 1 })
+    } else {
+      this.world = this.record
+      this.campaign = createCampaign(this.world, { seed: s, startYear })
+    }
     this.afterLoad()
   }
 
@@ -130,6 +155,7 @@ export class App {
     const file = readSave()
     if (!file) return false
     this.campaign = file.campaign
+    this.world = this.worldFor(file.campaign)
     this.afterLoad()
     return true
   }
@@ -138,6 +164,7 @@ export class App {
     const file = parseSave(text)
     if (!file) return false
     this.campaign = file.campaign
+    this.world = this.worldFor(file.campaign)
     this.afterLoad()
     return true
   }
@@ -156,6 +183,7 @@ export class App {
     this.selection = []
     this.unit = -1
     this.revision++
+    this.meetNeighbor()
     this.setScreen(this.campaign!.phase)
     this.save()
     this.emit({ type: 'change' })
@@ -189,6 +217,7 @@ export class App {
     if (!c) return { ok: false, err: 'No game in progress.', events: [] }
     const r = apply(this.world, c, cmd)
     if (!r.ok) return r
+    if (cmd.t === 'next') this.meetNeighbor()
     this.dirty = true
     this.revision++
     for (const e of r.events) if (e.level !== 'info' || NOTABLE.has(e.type)) this.alert(c, e)
