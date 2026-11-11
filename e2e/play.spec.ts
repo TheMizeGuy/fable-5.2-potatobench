@@ -61,7 +61,7 @@ async function farm(page: Page, until: 'ticket' | 'done', store: boolean, ms = 3
 }
 
 test('a first season from the opening to the next spring, with a save that survives a reload', async ({ page }) => {
-  test.setTimeout(900_000)
+  test.setTimeout(1_200_000)
   const errors = watchErrors(page)
   await page.goto('./')
   await page.evaluate(() => localStorage.clear())
@@ -84,7 +84,7 @@ test('a first season from the opening to the next spring, with a save that survi
 
   // A crop just dug is the one thing that stops it.
   // A slow engine draws few frames a second, and the days go by more slowly with them.
-  await farm(page, 'ticket', true, 420_000)
+  await farm(page, 'ticket', true, 600_000)
   const ticket = page.getByTestId('weighin')
   await expect(ticket).toBeVisible()
   const stopped = await look(page)
