@@ -2,7 +2,10 @@ import { defineConfig, devices } from '@playwright/test'
 
 // BASE_URL points the same tests at the deployed site: BASE_URL=https://themizeguy.github.io/the-county/ npm run test:e2e
 const live = process.env.BASE_URL
-const gl = ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist']
+// Chromium renders on the real GPU on a Mac and in software elsewhere.
+const gl = process.platform === 'darwin'
+  ? ['--use-angle=metal', '--ignore-gpu-blocklist', '--enable-gpu']
+  : ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist']
 
 export default defineConfig({
   testDir: 'e2e',
