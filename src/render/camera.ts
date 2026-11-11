@@ -106,12 +106,14 @@ export class CameraRig {
     return { x: clamp((vp.left - vp.right) / 2, -vp.w * 0.3, vp.w * 0.3), y: clamp((vp.top - vp.bottom) / 2, -vp.h * 0.3, vp.h * 0.3) }
   }
 
-  private fit(marks: Vector3[], vp: Viewport): Pose {
+  private fit(marks: Vector3[], vp: Viewport, start = 90): Pose {
     const fw = Math.max(160, vp.w - vp.left - vp.right), fh = Math.max(140, vp.h - vp.top - vp.bottom)
     const off = this.offsetFor(vp)
-    const p: Pose = { x: FARM_CENTER.x, z: FARM_CENTER.z, dist: 90, yaw: HOME_YAW, pitch: 0, fov: LENS }
+    let cx0 = 0, cz0 = 0
+    for (const m of marks) { cx0 += m.x; cz0 += m.z }
+    const p: Pose = { x: cx0 / marks.length, z: cz0 / marks.length, dist: start, yaw: HOME_YAW, pitch: 0, fov: LENS }
     const margin = Math.min(fw, fh) * 0.045
-    for (let k = 0; k < 8; k++) {
+    for (let k = 0; k < 12; k++) {
       p.pitch = pitchFor(p.dist)
       this.place(this.probe, p, vp, off.x, off.y)
       let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity
@@ -120,7 +122,8 @@ export class CameraRig {
         const x = (this.v.x + 1) / 2 * vp.w, y = (1 - this.v.y) / 2 * vp.h
         x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y)
       }
-      p.dist = clamp(p.dist * Math.max((x1 - x0) / (fw - margin * 2), (y1 - y0) / (fh - margin * 2)), 20, 420)
+      // a step at a time, so marks that start behind the camera cannot throw the fit out
+      p.dist = clamp(p.dist * clamp(Math.max((x1 - x0) / (fw - margin * 2), (y1 - y0) / (fh - margin * 2)), 0.6, 1.6), 20, 420)
       // Centre what is to be seen in the free area.
       const cx = vp.left + fw / 2, cy = vp.top + fh / 2
       const g0 = this.ground(this.probe, (x0 + x1) / 2, (y0 + y1) / 2, vp, p), g1 = this.ground(this.probe, cx, cy, vp, p)
@@ -150,7 +153,7 @@ export class CameraRig {
     const key = `${vp.w}|${vp.h}|${vp.top}|${vp.right}|${vp.bottom}|${vp.left}`
     if (key === this.wholeKey) return this.wholePose
     this.wholeKey = key
-    this.wholePose = this.fit(ALL_MARKS, vp)
+    this.wholePose = this.fit(ALL_MARKS, vp, 200)
     return this.wholePose
   }
 

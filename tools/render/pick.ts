@@ -13,8 +13,16 @@ const errors: string[] = []
 page.on('pageerror', e => errors.push(e.message))
 await page.goto(base)
 await page.waitForFunction(() => (window as any).__countyField?.stats?.().firstFrame > 0)
-await page.evaluate(() => { for (const el of [...document.body.children]) if (el.tagName !== 'CANVAS' && el.tagName !== 'SCRIPT') (el as HTMLElement).style.display = 'none' })
-const settle = () => page.evaluate(() => (window as any).__countyField.settle())
+// Only the field view is checked here: whatever the interface puts over it is taken away before each click.
+const bare = () => page.evaluate(() => { for (const el of [...document.body.children]) if (el.tagName !== 'CANVAS' && el.tagName !== 'SCRIPT') (el as HTMLElement).style.display = 'none' })
+// The edges the interface covers, held at the season screen's: a thin top bar and a low command card.
+await page.evaluate(() => {
+  const { app } = (window as any).__county
+  const set = app.setInsets.bind(app)
+  app.setInsets = () => set(56, 0, 150, 0)
+  set(56, 0, 150, 0)
+})
+const settle = async () => { await page.evaluate(() => (window as any).__countyField.settle()); await bare() }
 // The middle of a field on screen (a little up from its plate's pin).
 const centre = (p: Page, i: number) => p.evaluate(i => {
   const f = (window as any).__countyField
@@ -27,11 +35,23 @@ const state = () => page.evaluate(() => { const { app } = (window as any).__coun
 // Spring: the whole map, so every parcel is on screen.
 await page.evaluate(() => { const { app } = (window as any).__county; app.newGame(1977, 5) })
 await settle()
-await page.evaluate(() => (window as any).__countyField.home())
-await settle()
+// The interface may bring a selected field into frame: put the whole map back before each click.
+const whole = async () => {
+  await page.evaluate(() => { const { app } = (window as any).__county; app.select(-1); app.focus(-1) })
+  await settle()
+  await page.evaluate(() => (window as any).__countyField.home())
+  await settle()
+}
 for (const i of [3, 7, 9, 12]) {
-  await click(await centre(page, i))
+  await whole()
+  const at = await centre(page, i)
+  const would = at ? await page.evaluate(([x, y]) => (window as any).__countyField.pickAt(x, y), [at.x, at.y]) : null
+  await click(at)
   const s = await state()
+  if (!(s.sel.length === 1 && s.sel[0] === i)) {
+    console.log('   at', JSON.stringify(at), 'the view would pick', JSON.stringify(would).slice(0, 40), 'camera', JSON.stringify(await page.evaluate(() => { const f = (window as any).__countyField; return { cam: f.stats().camera, framing: f.info().framing, anchors: Array.from({ length: 14 }, (_, k) => f.anchor(k)).map((a: any) => `${Math.round(a.x)},${Math.round(a.y)}`).join(' ') } })))
+    await page.screenshot({ path: `out/pick-${i}.png` })
+  }
   check(s.sel.length === 1 && s.sel[0] === i, `spring: a click on parcel ${i} (${i < 6 ? 'the farm’s' : 'to be had'}) selects it (selection ${JSON.stringify(s.sel)})`)
 }
 // The season: land not held cannot be picked; a crew can.

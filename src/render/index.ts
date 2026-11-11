@@ -620,6 +620,8 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
         const vp = viewport()
         return { x: (v.x + 1) / 2 * vp.w, y: (1 - v.y) / 2 * vp.h }
       },
+      // What a click at a point on the screen would pick.
+      pickAt: (x: number, y: number) => ({ field: pick(x, y), unit: pickUnit(x, y), mode: snap.mode, held: snap.fields.map(f => f.held), available: snap.fields.map(f => f.available) }),
       parts: () => Object.keys(parts),
       show(name: string, on: boolean) { if (parts[name]) parts[name].visible = on },
       shadowsOn(on: boolean) { for (const l of shadows.lights) l.castShadow = on },
