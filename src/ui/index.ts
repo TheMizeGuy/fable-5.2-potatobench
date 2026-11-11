@@ -1,89 +1,70 @@
-// The interface: an almanac and ledger laid over the land.
+// The interface: small dark instruments over the land, and papers for what is read.
 import '@fontsource-variable/fraunces/opsz.css'
 import '@fontsource-variable/fraunces/opsz-italic.css'
 import '@fontsource-variable/public-sans'
 import './style.css'
-import './screens.css'
+import './instruments.css'
+import './papers.css'
 import type { MountHud } from '../game/contracts.ts'
 import * as S from '../sim/index.ts'
-import { Dialogs, Toasts, type Ctx, type Layout, type Level, type Screen } from './core.ts'
-import { h } from './dom.ts'
-import { plural, setUnits } from './fmt.ts'
-import { lotKey, showSample, showWeighIn } from './dig.ts'
-import { titleScreen } from './title.ts'
-import { planScreen } from './plan.ts'
-import { seasonScreen } from './season.ts'
+import { openAlmanac } from './almanac.ts'
 import { cellarScreen } from './cellar.ts'
+import { EXIT_MS, layoutNow, Notes, Papers, unname, type Ctx, type Level, type Screen } from './core.ts'
+import { lotKey, ticket } from './dig.ts'
+import { h } from './dom.ts'
+import { setUnits } from './fmt.ts'
+import { openHelp } from './help.ts'
 import { ledgerScreen, overScreen } from './ledger.ts'
-
-// Events that stop the clock; each gets a toast so the player sees why it stopped.
-const STOPS = new Set(['watch', 'blightSeen', 'frost', 'skinSet', 'vinesDead', 'lost', 'freeze', 'dry', 'ti'])
-const JOB_KEYS: Record<string, S.JobKind> = { p: 'plant', h: 'hill', c: 'scout', s: 'spray', w: 'water', r: 'rogue', t: 'sample', k: 'kill', d: 'dig' }
-
-// Two rails need about 1200 px. Below that one tabbed panel sits beside the land, or under it where the window is
-// tall and narrow. A phone on its side always gets the panel beside the land.
-function layoutNow(): Layout {
-  const w = innerWidth, h = innerHeight
-  if (h <= 500 && w > h) return 'side'
-  if (w <= 760 || (w <= 900 && h >= w * 1.15)) return 'phone'
-  return w < 1200 ? 'side' : 'wide'
-}
-
-// The top bar: everything on one line, one line without the masthead, or two short rows.
-function barNow(): string {
-  const w = innerWidth, h = innerHeight
-  if (h <= 500 && w > h) return 'row'
-  return w < 700 ? 'stack' : w < 1100 ? 'row' : 'full'
-}
+import { openMenu } from './menu.ts'
+import { planScreen } from './plan.ts'
+import { alertShort } from './rules.ts'
+import { seasonScreen } from './season.ts'
+import { titleScreen } from './title.ts'
 
 export const mountHud: MountHud = (root, app, view) => {
-  root.classList.add('hud')
+  root.classList.add('hud', 'waiting')
+  const plateLayer = h('div', { class: 'plate-layer' })
   const screenLayer = h('div', { class: 'screen-layer' })
-  const labels = h('div', { class: 'labels', 'aria-hidden': 'true' })
-  const toasts = new Toasts()
-  const dialogLayer = h('div', { class: 'dialog-layer' })
-  root.replaceChildren(screenLayer, labels, toasts.el, dialogLayer)
-  const dialogs = new Dialogs(dialogLayer, [screenLayer, labels])
-  const phoneQuery = matchMedia('(max-width: 760px)')
+  const floating = h('div', { class: 'notes-slot floating' })
+  const paperLayer = h('div', { class: 'paper-layer' })
+  const notes = new Notes()
+  root.replaceChildren(plateLayer, screenLayer, floating, notes.liveRegion, paperLayer)
+  const papers = new Papers(paperLayer, [screenLayer, plateLayer, floating], app)
   const touchQuery = matchMedia('(pointer: coarse)')
 
   let dirty = true
   let held = false
   let heldAt = 0
   let screen: Screen | null = null
-  let builtFor = ''
+  let sinceTick = 0
 
   const ctx: Ctx = {
-    app, view, dialogs,
-    toast: (text: string, level: Level = 'info') => toasts.show(text, level),
+    app, view, papers, notes,
+    say: (text: string, level: Level = 'info') => notes.push({ text, level, ttl: level === 'bad' ? 12000 : level === 'warn' ? 9000 : 6000 }),
+    announce: (text: string) => { notes.liveRegion.textContent = text },
     run(cmd) {
       const r = app.do(cmd)
-      if (!r.ok) toasts.show(r.err, 'warn')
+      if (!r.ok) notes.push({ text: r.err, level: 'warn', ttl: 9000 })
       return r
     },
-    phone: () => phoneQuery.matches,
     layout: layoutNow,
     touch: () => touchQuery.matches,
-    memo: { estimates: [], soilT: 10, digSoilT: {}, lots: {}, seen: [], digEst: {}, digSeen: {}, sampleBefore: {}, keptTold: {} },
-    sheet: { tab: app.settings.hints ? 'coach' : 'field', open: true },
+    reduced: () => app.settings.reducedMotion,
+    memo: { estimates: [], soilT: 10, digSoilT: {}, lots: {}, seen: [], digEst: {}, digSeen: {}, sampleBefore: {} },
+    clock: { auto: true },
     dirty: () => { dirty = true },
   }
+
+  notes.onGo = field => { app.select(field); app.focus(field) }
+
+  const menu = () => openMenu(ctx, { onHelp: () => openHelp(ctx), onAlmanac: () => openAlmanac(ctx) })
+  const almanac = () => openAlmanac(ctx)
 
   function applySettings(): void {
     setUnits(app.settings.units)
     document.documentElement.classList.toggle('reduce-motion', app.settings.reducedMotion)
   }
   applySettings()
-
-  function frameSize(): void {
-    root.dataset.bar = barNow()
-    root.classList.toggle('short', innerHeight <= 500)
-    // Not much height under the land: the field chips drop their stage line.
-    root.classList.toggle('tight', innerHeight <= 500 || (layoutNow() === 'phone' && innerHeight < 700))
-    root.classList.toggle('touch', touchQuery.matches)
-    toasts.compact = layoutNow() === 'phone' || innerHeight <= 500
-  }
-  frameSize()
 
   // Runs after every command, so when a day's events arrive this still holds the day before.
   function remember(): void {
@@ -99,47 +80,46 @@ export const mountHud: MountHud = (root, app, view) => {
     if (t) ctx.memo.soilT = t.soilT
   }
 
-  function shape(): string {
-    return `${app.screen === 'title' || !app.campaign ? 'title' : app.screen}|${layoutNow()}`
-  }
-
+  // A screen change is one movement: the old instruments leave, the land moves, the new ones arrive.
   function build(): void {
-    screen?.dispose?.()
-    screenLayer.replaceChildren()
-    labels.replaceChildren()
+    const old = screen
+    const oldEl = old?.el
+    old?.dispose?.()
     const kind = app.screen === 'title' || !app.campaign ? 'title' : app.screen
-    builtFor = shape()
-    root.dataset.layout = layoutNow()
-    screen = kind === 'title' ? titleScreen(ctx)
-      : kind === 'plan' ? planScreen(ctx, labels)
-        : kind === 'season' ? seasonScreen(ctx, labels)
-          : kind === 'cellar' ? cellarScreen(ctx)
-            : kind === 'ledger' ? ledgerScreen(ctx)
-              : overScreen(ctx)
+    screen = kind === 'title' ? titleScreen(ctx, { onMenu: menu, onHelp: () => openHelp(ctx) })
+      : kind === 'plan' ? planScreen(ctx, plateLayer, { onMenu: menu })
+        : kind === 'season' ? seasonScreen(ctx, plateLayer, { onMenu: menu, onAlmanac: almanac })
+          : kind === 'cellar' ? cellarScreen(ctx, { onMenu: menu })
+            : kind === 'ledger' ? ledgerScreen(ctx, { onMenu: menu })
+              : overScreen(ctx, { onMenu: menu })
+    if (oldEl && !ctx.reduced()) {
+      oldEl.classList.add('leaving')
+      oldEl.inert = true
+      // For its last moment the old screen is only a picture: nothing in it can be found or focused.
+      if (oldEl.contains(document.activeElement)) (document.activeElement as HTMLElement).blur()
+      unname(oldEl)
+      setTimeout(() => oldEl.remove(), EXIT_MS)
+      screen.el.classList.add('arriving')
+    } else oldEl?.remove()
     screenLayer.append(screen.el)
+    ;(screen.notes ?? floating).append(notes.el)
     root.dataset.screen = kind
     resized.disconnect()
-    for (const p of screen.el.querySelectorAll('.paper, .rail, .chips')) resized.observe(p)
+    for (const p of screen.el.children) resized.observe(p)
     dirty = true
   }
 
-  // Panels change size as fonts load and content wraps; the field view must hear about it.
+  // Instruments change size as fonts load and content wraps; the field view must hear about it.
   const resized = new ResizeObserver(() => { dirty = true })
   document.fonts?.ready.then(() => { dirty = true })
 
-  // What the last batch of events already told the player, so a stop is not explained twice.
-  let told = new Set<string>()
-
   function onEvents(events: S.GameEvent[]): void {
     const c = app.campaign
-    told = new Set()
+    if (!c) return
     for (const e of events) {
-      told.add(e.text)
-      if (e.type === 'sample' && c) {
-        const before = ctx.memo.estimates[e.field] ?? null
-        ctx.memo.sampleBefore[`${c.seed}:${c.year}:${e.field}:${e.day}`] = before
-        dialogs.enqueue(showSample(ctx, e, before))
-      } else if (e.type === 'dug' && c) {
+      if (e.type === 'sample') {
+        ctx.memo.sampleBefore[`${c.seed}:${c.year}:${e.field}:${e.day}`] = ctx.memo.estimates[e.field] ?? null
+      } else if (e.type === 'dug') {
         const lot = Number(e.data?.lot)
         const found = c.lots.find(l => l.id === lot)
         if (!found) continue
@@ -148,11 +128,7 @@ export const mountHud: MountHud = (root, app, view) => {
         ctx.memo.lots[key] = structuredClone(found)
         ctx.memo.digEst[key] = ctx.memo.estimates[e.field] ?? null
         ctx.memo.digSeen[key] = ctx.memo.seen[e.field] ?? null
-        dialogs.enqueue(showWeighIn(ctx, lot, true))
-      } else if (e.type === 'watch' && c?.season && !c.season.fields.some(f => f.status === 'growing')) {
-        toasts.show(`${e.text} Nothing is up yet, so there is nothing to protect.`, e.level)
-      } else if (e.level === 'bad' || e.level === 'warn' || STOPS.has(e.type) || e.type === 'sold' || e.type === 'kept') {
-        toasts.show(e.text, e.level)
+        papers.enqueue(ticket(ctx, lot, { fresh: true, staged: app.speed < 3 }))
       }
     }
   }
@@ -160,14 +136,22 @@ export const mountHud: MountHud = (root, app, view) => {
   app.on(e => {
     switch (e.type) {
       case 'screen':
-        if (e.screen !== 'season' && e.screen !== 'title') dialogs.closeAll()
-        toasts.clear()
+        papers.closeAll()
+        notes.clear()
         build()
         break
       case 'events':
         onEvents(e.events)
         dirty = true
         break
+      case 'alert': {
+        const a = e.alert
+        // The tray and the ticket speak for themselves, and a clean walk shows on the field's own card.
+        if (app.screen !== 'season' || a.type === 'sample' || a.type === 'dug' || (a.type === 'scout' && a.level !== 'bad')) break
+        const short = alertShort(a)
+        notes.push({ level: a.level, glyph: short.glyph, text: short.text, full: a.text, field: a.field, day: a.day })
+        break
+      }
       case 'change':
         remember()
         dirty = true
@@ -177,23 +161,25 @@ export const mountHud: MountHud = (root, app, view) => {
         dirty = true
         break
       case 'select':
-        if (ctx.layout() !== 'wide' && e.field >= 0) { ctx.sheet.tab = 'field'; ctx.sheet.open = true }
         dirty = true
         break
       case 'saved':
-        if (!e.ok) toasts.show('This browser would not store the save. Export it from the menu to keep it.', 'warn')
+        if (!e.ok) notes.push({ text: 'This browser would not store the save. Export it from the menu to keep it.', level: 'warn', ttl: 12000 })
         break
-      case 'speed':
-        // The clock stopped itself for something no toast or dialog has explained: say what.
-        if (e.speed === 0 && app.pauseReason && !told.has(app.pauseReason)) toasts.show(`The clock stopped: ${app.pauseReason}`, 'info')
-        told = new Set()
+      case 'speed': {
+        // The clock stopped itself for something nothing on screen has said: say what.
+        const c = app.campaign
+        if (e.speed === 0 && app.pauseReason && app.screen === 'season' && c && !S.seasonDone(c) && !papers.isOpen() && !notes.has(app.pauseReason)) {
+          notes.push({ text: `Stopped: ${app.pauseReason}`, level: 'info', ttl: 9000 })
+        }
         dirty = true
         break
+      }
     }
   })
 
-  addEventListener('resize', () => { frameSize(); dirty = true })
-  touchQuery.addEventListener('change', () => { frameSize(); build() })
+  addEventListener('resize', () => { dirty = true })
+  touchQuery.addEventListener('change', () => { dirty = true })
 
   // While a button is pressed its section is not rebuilt, so a click is never lost to a re-render.
   root.addEventListener('pointerdown', () => { held = true; heldAt = performance.now() }, true)
@@ -201,73 +187,66 @@ export const mountHud: MountHud = (root, app, view) => {
   document.addEventListener('pointerup', release, true)
   document.addEventListener('pointercancel', release, true)
 
-  // A mouse click leaves focus on the button; drop it so Space goes back to pausing the clock.
+  // A mouse click leaves focus on the button; drop it so Space goes back to the clock.
   root.addEventListener('click', e => {
     const b = (e.target as HTMLElement).closest('button')
     if (b && e.detail > 0 && !b.closest('.dialog')) b.blur()
   })
 
   document.addEventListener('keydown', e => {
-    if (e.ctrlKey || e.metaKey || e.altKey) return
     const t = e.target as HTMLElement
-    const c = app.campaign
-    const inSeason = app.screen === 'season' && !!c && !!c.season
     if (e.key === 'Escape') {
-      if (dialogs.isOpen()) { e.preventDefault(); dialogs.closeTop(); return }
-      if (app.selected >= 0) { e.preventDefault(); app.select(-1) }
-      // Let go of whatever button had the focus, so Space is the clock's again.
-      if (inSeason && t.closest('button')) t.blur()
+      if (papers.isOpen()) { e.preventDefault(); papers.closeTop(); return }
+      if (screen?.key?.(e)) { e.preventDefault(); return }
+      if (app.screen !== 'title' && app.campaign) { e.preventDefault(); menu() }
       return
     }
-    // 0 stops the clock wherever the focus is, even with a window open.
-    if (e.key === '0' && inSeason && !t.closest('input:not([type="radio"]):not([type="checkbox"]), select, textarea, [contenteditable]')) {
-      e.preventDefault()
-      app.setSpeed(0)
-      return
-    }
-    if (dialogs.isOpen()) return
-    if (t.closest('input, select, textarea, [contenteditable]')) return
-    if (!inSeason || !c) return
-    const onButton = t.closest('button') !== null
-    const k = e.key
-    if (k === ' ' && !onButton) { e.preventDefault(); app.togglePause(); return }
-    if (k >= '1' && k <= '3') { e.preventDefault(); app.setSpeed(Number(k) as 1 | 2 | 3); return }
-    if (k === '[' || k === ']' || k === 'ArrowLeft' || k === 'ArrowRight') {
-      e.preventDefault()
-      const step = k === '[' || k === 'ArrowLeft' ? -1 : 1
-      const n = S.FIELD_COUNT
-      app.select(app.selected < 0 ? (step > 0 ? 0 : n - 1) : (app.selected + step + n) % n)
-      return
-    }
-    const kind = JOB_KEYS[k.toLowerCase()]
-    // With Shift the job goes to every field that can take it.
-    if (kind && e.shiftKey) {
-      e.preventDefault()
-      const fields = Array.from({ length: S.FIELD_COUNT }, (_, i) => i).filter(i => S.jobBlock(c, kind, i) === '')
-      for (const i of fields) app.do({ t: 'job', kind, field: i })
-      toasts.show(fields.length ? `On the work list: ${S.JOB_LABEL[kind].toLowerCase()} in ${plural(fields.length, 'field')}.` : `${S.JOB_LABEL[kind]}: no field can take it now.`, fields.length ? 'info' : 'warn')
-      return
-    }
-    if (kind) {
-      e.preventDefault()
-      if (app.selected < 0) { toasts.show('Choose a field first: [ and ] step through them.', 'info'); return }
-      const r = app.do({ t: 'job', kind, field: app.selected })
-      toasts.show(r.ok ? `On the work list: ${S.JOB_LABEL[kind].toLowerCase()} ${S.FIELD_NAMES[app.selected]}.` : `${S.JOB_LABEL[kind]} ${S.FIELD_NAMES[app.selected]}: ${r.err}`, r.ok ? 'info' : 'warn')
-    }
+    // A paper on its way out no longer takes keys; only a second Escape waits for it to be gone.
+    if (papers.top()) return
+    if (screen?.key?.(e)) { e.preventDefault(); return }
+    if (e.ctrlKey || e.metaKey || e.altKey || t.closest?.('input')) return
+    const k = e.key.toLowerCase()
+    if (k === 'm' && app.screen !== 'title' && app.campaign) { e.preventDefault(); menu() }
+    else if (k === 'i' && app.screen === 'season') { e.preventDefault(); almanac() }
   })
 
   build()
+  // Until the land can be drawn the name stands alone, where the title will set it; then the ground gives way to the land.
+  const splash = document.getElementById('splash')
+  const splashName = splash?.querySelector<HTMLElement>('.splash-name')
+  let waiting = true
+  function placeSplash(): void {
+    const name = root.querySelector('.title-name')
+    if (!splashName || !name) return
+    const r = name.getBoundingClientRect()
+    splashName.style.left = `${r.left}px`
+    splashName.style.top = `${r.top}px`
+    splashName.style.bottom = 'auto'
+  }
+  void view.ready.then(() => {
+    waiting = false
+    placeSplash()
+    root.classList.remove('waiting')
+    if (!splash) return
+    splash.classList.add('gone')
+    setTimeout(() => splash.remove(), 700)
+  })
 
   return {
     frame(dt: number) {
-      if (shape() !== builtFor) build()
       if (held && performance.now() - heldAt > 1500) held = false
+      sinceTick += dt
+      if (sinceTick > 500) { sinceTick = 0; if (notes.count()) notes.prune(app.campaign?.season && app.screen === 'season' ? app.campaign.season.day : -1) }
       if (dirty && !held && screen) {
         dirty = false
+        root.dataset.layout = layoutNow()
+        root.classList.toggle('touch', touchQuery.matches)
         screen.update()
         const [t, r, b, l] = screen.insets().map(x => Math.max(0, Math.round(x)))
         app.setInsets(t, r, b, l)
-        toasts.place(t, r, l)
+        root.style.setProperty('--top', `${t}px`)
+        root.style.setProperty('--bottom', `${b}px`)
+        if (waiting) placeSplash()
       }
       screen?.frame?.(dt)
     },

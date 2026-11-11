@@ -13,7 +13,7 @@ interface Strip { name: string; what: string; frames: number; gap: number; setup
 const july = async (p: Page) => { await q(p, `q.start(1987, 3); q.run(q.day(6, 12))`); await closeAll(p) }
 
 const STRIPS: Strip[] = [
-  { name: 'dialog-open', what: 'Title: the new-farm dialog opens', frames: 6, gap: 60, setup: async () => {}, go: async p => { await p.getByTestId('new-farm').click({ noWaitAfter: true }) } },
+  { name: 'dialog-open', what: 'Title: the new-farm dialog opens', frames: 6, gap: 60, setup: async () => {}, go: async p => { await p.getByTestId('choose-year').click({ noWaitAfter: true }) } },
   { name: 'begin-season', what: 'Spring plan gives way to the season', frames: 8, gap: 120, setup: async p => { await q(p, `q.g().app.newGame(1987, 3)`) }, go: async p => { await p.getByTestId('begin-season').click({ noWaitAfter: true }) } },
   { name: 'field-select', what: 'Selecting a field: the camera and the panel', frames: 8, gap: 120, setup: july, go: async p => { await p.getByTestId('field-4').first().click({ noWaitAfter: true }) } },
   { name: 'days-running', what: 'The clock running at normal speed in July', frames: 10, gap: 180, setup: july, go: async p => { await q(p, `q.g().app.setSpeed(1)`) } },

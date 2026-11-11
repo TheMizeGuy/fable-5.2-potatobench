@@ -122,6 +122,8 @@ export function days(d: number): string {
     const n = whole ? `${whole}${part}` : part
     return `${n} ${q <= 4 ? 'day' : 'days'}`
   }
+  const tenth = Math.round(d * 10)
+  if (Math.abs(d * 10 - tenth) < 0.02 && (tenth === 1 || tenth === 2)) return `${tenth === 1 ? '⅒' : '⅕'} day`
   if (d < 1) return `${num(Math.max(0.1, d), 1)} day`
   return `${num(d, 1)} days`
 }

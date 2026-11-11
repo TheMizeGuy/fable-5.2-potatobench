@@ -26,11 +26,8 @@ const ALL = Object.keys(SIZES)
 type Step = (page: Page, size: string) => Promise<void>
 interface State { name: string; what: string; sizes: string[]; run: Step }
 
-const isPhone = (size: string) => SIZES[size].width <= 760
-
-async function selectField(page: Page, size: string, i: number): Promise<void> {
+async function selectField(page: Page, _size: string, i: number): Promise<void> {
   await page.getByTestId(`field-${i}`).first().click()
-  if (isPhone(size)) await page.getByTestId('tab-field').click().catch(() => {})
 }
 
 const july: Step = async page => { await q(page, `q.start(1987, 3); q.run(q.day(6, 12))`); await closeAll(page) }
@@ -38,9 +35,9 @@ const july: Step = async page => { await q(page, `q.start(1987, 3); q.run(q.day(
 const STATES: State[] = [
   { name: 'title', what: 'Title screen, first visit', sizes: ALL, run: async () => {} },
   { name: 'title-continue', what: 'Title screen with a saved farm', sizes: MAIN, run: async page => { await q(page, `q.start(1987, 3); q.run(q.day(5, 1)); q.g().app.quitToTitle()`) } },
-  { name: 'new-farm', what: 'New farm: choosing the first year', sizes: [...MAIN, 'small', 'land'], run: async page => { await page.getByTestId('new-farm').click() } },
-  { name: 'how-it-works', what: 'How it works', sizes: MAIN, run: async page => { await page.getByRole('button', { name: 'How it works' }).first().click() } },
-  { name: 'menu', what: 'Menu and settings, opened in season', sizes: MAIN, run: async page => { await july(page, ''); await page.getByTestId('settings-open').first().click() } },
+  { name: 'new-farm', what: 'New farm: choosing the first year', sizes: [...MAIN, 'small', 'land'], run: async page => { await page.getByTestId('choose-year').click() } },
+  { name: 'how-it-works', what: 'How it works', sizes: MAIN, run: async page => { await page.getByTestId('how-open').first().click() } },
+  { name: 'menu', what: 'Menu and settings, opened in season', sizes: MAIN, run: async page => { await july(page, ''); await page.getByTestId('menu-open').first().click() } },
   { name: 'plan-first', what: 'Spring plan, first year', sizes: ALL, run: async page => { await q(page, `q.g().app.newGame(1987, 3)`) } },
   { name: 'plan-second', what: 'Spring plan, second year, after a full season', sizes: MAIN, run: async page => { await q(page, `q.start(1987, 3); q.year(3); q.g().app.do({ t: 'next' })`); await closeAll(page) } },
   { name: 'season-first-day', what: 'April 20: the season opens and nothing can be done yet', sizes: [...MAIN, 'small'], run: async page => { await q(page, `q.start(1987, 3)`) } },
@@ -50,8 +47,7 @@ const STATES: State[] = [
   { name: 'season-worklist', what: 'July: a full work list', sizes: MAIN, run: async (page, size) => {
     await july(page, size)
     await q(page, `const { app } = q.g(); for (const k of ['scout', 'spray', 'sample']) for (let i = 0; i < 6; i++) app.do({ t: 'job', kind: k, field: i })`)
-    await page.getByTestId(`field-0`).first().click()
-    if (isPhone(size)) await page.getByTestId('tab-work').click().catch(() => {})
+    await selectField(page, size, 0)
   } },
   { name: 'season-blight', what: 'August 1979, never sprayed: blight found and spreading', sizes: MAIN, run: async (page, size) => { await q(page, `q.start(1979, 3); q.run(q.day(7, 15), ['spray', 'rogue'])`); await closeAll(page); await selectField(page, size, 4) } },
   { name: 'season-drought', what: 'August 1995: drought', sizes: MAIN, run: async (page, size) => { await q(page, `q.start(1995, 3); q.run(q.day(7, 10), ['water'])`); await closeAll(page); await selectField(page, size, 0) } },
@@ -72,6 +68,8 @@ const STATES: State[] = [
     await closeAll(page)
     await q(page, `const { app } = q.g(); app.do({ t: 'job', kind: 'sample', field: 2 }); app.do({ t: 'bump', id: app.campaign.season.jobs.at(-1).id }); app.do({ t: 'day' })`)
     await page.getByTestId('sample-dialog').waitFor({ timeout: 5000 }).catch(() => {})
+    // The tray sets its tubers down and narrows the estimate over about two seconds: the frame is of the end.
+    await page.waitForTimeout(2600)
     void size
   } },
   { name: 'weigh-in', what: 'Dig day: the weigh-in', sizes: ALL, run: async (page, size) => {
@@ -85,7 +83,7 @@ const STATES: State[] = [
   { name: 'season-done', what: 'Everything dug: closing out the season', sizes: MAIN, run: async page => { await q(page, `q.start(1987, 3); q.run(999, ['sell'])`); await closeAll(page) } },
   { name: 'end-early', what: 'Ending the season early: the confirmation', sizes: MAIN, run: async (page, size) => {
     await july(page, size)
-    await page.getByTestId('settings-open').first().click()
+    await page.getByTestId('menu-open').first().click()
     await page.getByTestId('end-season-early').click()
   } },
   { name: 'cellar-november', what: 'The cellar in November', sizes: ALL, run: async page => { await q(page, `q.start(1987, 3); q.run(999, ['sell']); q.winter(0, 9)`); await closeAll(page) } },
@@ -94,6 +92,8 @@ const STATES: State[] = [
   { name: 'ledger-fifth', what: 'The fifth ledger: the farm is kept (or not)', sizes: MAIN, run: async page => {
     await q(page, `const { app } = q.g(); app.newGame(2012, 3); for (let y = 0; y < 5; y++) { app.do({ t: 'begin' }); q.year(4); if (y < 4) app.do({ t: 'next' }) }`)
     await closeAll(page)
+    // The five years write themselves in row by row: the frame is of the finished sheet.
+    await page.waitForTimeout(1800)
   } },
   { name: 'ledger-lost', what: 'The ledger when the bank calls the note', sizes: MAIN, run: async page => {
     await q(page, `const { app } = q.g(); app.newGame(1990, 3); for (let y = 0; y < 5 && app.campaign.outcome === ''; y++) { if (y) app.do({ t: 'next' }); app.do({ t: 'begin' }); app.do({ t: 'endSeason' }); q.winter(12, 0) }`)

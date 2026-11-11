@@ -38,10 +38,12 @@ export const HELPER = `window.__q = {
 
 export const q = (page: Page, code: string) => page.evaluate(`(() => { const q = window.__q; ${code} })()`)
 
+// Puts every paper and tray away, and leaves the clock stopped: answering a weigh ticket sets the days running again.
 export async function closeAll(page: Page): Promise<void> {
   for (let i = 0; i < 24; i++) {
-    if (!(await page.locator('.dialog').count())) return
+    if (!(await page.locator('.dialog, .tray-paper').count())) break
     await page.keyboard.press('Escape')
-    await page.waitForTimeout(80)
+    await page.waitForTimeout(220)
   }
+  await q(page, `const { app } = q.g(); if (app.campaign && app.speed > 0) app.setSpeed(0)`)
 }
