@@ -1,0 +1,38 @@
+{
+  "name": "the-county",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The County: a potato farming game played on the real weather of Aroostook County, Maine",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --port 4173 --strictPort",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "weather:fetch": "node tools/weather/fetch.mjs",
+    "weather:build": "node tools/weather/build.mjs",
+    "balance": "node tools/balance/run.ts",
+    "validate": "node tools/validate/run.ts"
+  },
+  "dependencies": {
+    "@fontsource-variable/fraunces": "5.3.0",
+    "@fontsource-variable/public-sans": "5.3.0",
+    "three": "0.187.0"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
+    "@playwright/test": "1.65.0",
+    "@types/node": "^24.0.0",
+    "@types/three": "0.187.0",
+    "fast-check": "4.10.2",
+    "typescript": "7.0.2",
+    "vite": "8.3.8",
+    "vitest": "5.1.0"
+  }
+}
