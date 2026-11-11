@@ -241,3 +241,33 @@ its potato house; a second house can be built at home.
 The first year is unchanged: six fields, one farmer, click what glows. Land,
 hands, a second tractor and contracts are offered from the first spring but
 nothing requires them, and reference practice keeps to the home farm.
+
+## The hook
+
+The owner's bar for the interface: as intuitive and easy to understand as it
+can be, fitting in without a seam, and it should hook you. What that means here:
+
+1. **Ten seconds to the first order.** Play starts the farm at once. The days run
+   and stop at the first thing to do, with the field glowing and one sentence
+   beside it. The first click has a visible answer: a ring, a knock, the tractor
+   setting off.
+2. **Always a next thing.** A short ladder of goals (`src/game/goals.ts`): plant a
+   field, bring in a crop, see the spring, buy equipment, sign a contract, hire
+   help, farm more land, keep the farm. One line under the date shows the next
+   one; reaching it is marked, briefly, and the next appears.
+3. **One new thing at a time.** Land, people, contracts and buildings each appear
+   when the ladder reaches them, with one sentence, never all on the first
+   spring.
+4. **Every action answers.** An order shows on the field and in the queue at
+   once; a refused order says why in a few words where the player is looking.
+5. **The land tells you.** What needs doing is read off the map (a badge, a
+   colour, a worker walking), not out of a panel.
+6. **Reward where it is earned.** The crop coming out of the ground, the weigh
+   ticket, the bank satisfied, a new field broken in: these get the staging and
+   the sound. Routine does not.
+7. **Nothing to read first.** No tutorial screen, no form, no word a new player
+   has to look up before the first order.
+
+Proof: first-time players who are given only the address. Measured: seconds to
+the first order, whether they finish a season without opening help, and what
+they say they would do next.
