@@ -1,19 +1,8 @@
 // The bots must play fair: they see only what a player sees.
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { FIELD_COUNT } from '../src/sim/index.ts'
-import { EXPERT as EXPERT_HOME, expert, naive, play, reference, type ExpertCfg } from '../tools/balance/bots.ts'
+import { ABLATIONS, EXPERT, expert, naive, play, reference } from '../tools/balance/bots.ts'
 import { loadWorld } from '../tools/balance/world.ts'
-
-// The expert's plan table lists the six home fields. Until the bots are rebuilt for the bigger farm, it is padded
-// for the parcels the farm does not hold: plans for those are refused, so the bot still plays the home farm.
-const EXPERT: ExpertCfg = {
-  ...EXPERT_HOME,
-  tune: {
-    ...EXPERT_HOME.tune,
-    plan: EXPERT_HOME.tune.plan.map(p => ({ ...p, fields: [...p.fields, ...Array.from({ length: FIELD_COUNT - p.fields.length }, () => p.fields[0])] })),
-  },
-}
 
 const SOURCE = readFileSync(new URL('../tools/balance/bots.ts', import.meta.url), 'utf8')
 
