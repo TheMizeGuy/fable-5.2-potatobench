@@ -61,7 +61,7 @@ function conifer(whorls: number, spokes: number, width: number, seed: number): B
 // A hardwood one unit high: a flared trunk that forks into limbs and branches, and at their ends masses of leaf sprays,
 // so the crown has an uneven outline with sky through it. Each leaf card carries how deep in the crown it sits
 // (aShade), so the inside of the crown is dark and its sunny top light. A birch is narrower, airier and drooping.
-function hardwood(seed: number, birch: boolean): { wood: BufferGeometry; crown: BufferGeometry; core: BufferGeometry } {
+function hardwood(seed: number, birch: boolean): BufferGeometry {
   const r = rng(seed)
   const pos: number[] = [], nrm: number[] = [], idx: number[] = []
   const limb = (ax: number, ay: number, az: number, bx: number, by: number, bz: number, ra: number, rb: number) => {
@@ -163,7 +163,20 @@ function hardwood(seed: number, birch: boolean): { wood: BufferGeometry; crown: 
   })
   const core = mergeGeometries(parts)!
   for (const p of parts) p.dispose()
-  return { wood, crown, core }
+  // One geometry, one draw: trunk and limbs (part 0), the dark hearts (part 1), the leaf cards (part 2).
+  const tag = (g: BufferGeometry, part: number): BufferGeometry => {
+    const flat = g.index ? g.toNonIndexed() : g.clone()
+    const n = flat.getAttribute('position').count
+    if (!flat.getAttribute('uv')) flat.setAttribute('uv', new BufferAttribute(new Float32Array(n * 2), 2))
+    if (!flat.getAttribute('aShade')) flat.setAttribute('aShade', new BufferAttribute(new Float32Array(n).fill(1), 1))
+    flat.setAttribute('aPart', new BufferAttribute(new Float32Array(n).fill(part), 1))
+    for (const name of Object.keys(flat.attributes)) if (!['position', 'normal', 'uv', 'aShade', 'aPart'].includes(name)) flat.deleteAttribute(name)
+    return flat
+  }
+  const pieces = [tag(wood, 0), tag(core, 1), tag(crown, 2)]
+  const tree = mergeGeometries(pieces)!
+  for (const g of [wood, core, crown, ...pieces]) g.dispose()
+  return tree
 }
 
 // A rounded, uneven mass with smooth shading.
@@ -317,39 +330,41 @@ export class Flora {
         diffuseColor.rgb *= mix(summer, fall, turned) * vTree.z;
       }
     `
-    const barkMat = patch(new MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0, side: DoubleSide }), {
-      ...windy,
-      vertexHead: 'attribute vec4 aTree; varying vec4 vTree; varying float vUp;',
-      vertexBegin: 'vTree = aTree; vUp = position.y;',
-      fragmentHead: 'varying vec4 vTree; varying float vUp;',
-      // Birch where the tree's number says so: white bark with dark bands. The rest grey-brown.
-      fragmentColor: `
-        float band = step(0.8, fract(vUp * 23.0 + vTree.x * 7.0)) * step(0.4, fract(vUp * 7.3));
-        vec3 birch = mix(${linear('#e4e0d4')}, ${linear('#3a3632')}, band);
-        diffuseColor.rgb = mix(${linear('#5e5448')}, birch, step(0.45, vTree.x) * step(vUp, 0.62));
-        ${SNOW_RIME_TREE}`,
-    })
     const crownPatch: Patch = {
-      key: 'county-crown',
-      vertexHead: 'attribute vec4 aTree; attribute float aShade; varying vec4 vTree; varying float vShade;',
-      vertexBegin: 'vTree = aTree; vShade = aShade;',
+      key: 'county-hardwood',
+      vertexHead: 'attribute vec4 aTree; attribute float aShade; attribute float aPart; varying vec4 vTree; varying float vShade; varying float vPart; varying float vUp;',
+      // the dark hearts shrink to nothing as the leaves go
+      vertexBegin: /* glsl */ `
+        vTree = aTree; vShade = aShade; vPart = aPart; vUp = position.y;
+        if (aPart > 0.5 && aPart < 1.5) { transformed *= vec3(uLeaf, 1.0, uLeaf); transformed.y = mix(0.6, transformed.y, uLeaf); }
+      `,
       vertexWorld: `${sway('vec2(instanceMatrix[3].x, instanceMatrix[3].z)', 'max(cWorld.y - instanceMatrix[3].y, 0.0)', '0.035')}
-        cWorld.xyz += sin(uTime * 3.1 + position.x * 31.0 + position.y * 17.0 + aTree.x * 20.0) * 0.012 * aTree.w * min(uSway, 1.0);`,
+        cWorld.xyz += sin(uTime * 3.1 + position.x * 31.0 + position.y * 17.0 + aTree.x * 20.0) * 0.012 * aTree.w * min(uSway, 1.0) * step(1.5, aPart);`,
     }
-    const crownMat = patch(new MeshStandardMaterial({ map: sprayTex, alphaTest: 0.5, alphaToCoverage: true, side: DoubleSide, roughness: 0.7, metalness: 0 }), {
+    const crownMat = patch(new MeshStandardMaterial({ map: sprayTex, alphaTest: 0.5, alphaToCoverage: true, side: DoubleSide, roughness: 0.75, metalness: 0 }), {
       ...crownPatch,
       translucent: 0.9,
       ambient: 0.85,
-      fragmentHead: 'varying vec4 vTree; varying float vShade;',
-      // Deep in the crown is dark; leaves thin out as they fall, the bare limbs show through, then stand alone.
-      fragmentColor: `${LEAF} diffuseColor.rgb *= vShade * (0.86 + 0.28 * texture2D(uNoise, vMapUv * 0.37 + vTree.xy).a); diffuseColor.a *= coverGain(vMapUv, 128.0) * smoothstep(0.0, 0.5, uLeaf * 1.5 - texture2D(uNoise, vMapUv * 0.8 + vTree.xy).a); ${SNOW_RIME_TREE}`,
-    })
-    const coreMat = patch(new MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0 }), {
-      ...windy,
-      vertexHead: 'attribute vec4 aTree; varying vec4 vTree;',
-      vertexBegin: 'vTree = aTree; transformed *= vec3(uLeaf, 1.0, uLeaf); transformed.y = mix(0.6, transformed.y, uLeaf);',
-      fragmentHead: 'varying vec4 vTree;',
-      fragmentColor: `${LEAF} diffuseColor.rgb *= 0.26 + 0.34 * texture2D(uNoise, vWorld.xz * 1.3 + vWorld.y * 0.9).a; ${SNOW_RIME_TREE}`,
+      fragmentHead: 'varying vec4 vTree; varying float vShade; varying float vPart; varying float vUp;',
+      fragmentColor: /* glsl */ `
+        if (vPart < 0.5) {
+          // Bark: birch where the tree's number says so, white with dark bands; the rest grey-brown.
+          float band = step(0.8, fract(vUp * 23.0 + vTree.x * 7.0)) * step(0.4, fract(vUp * 7.3));
+          vec3 birch = mix(${linear('#e4e0d4')}, ${linear('#3a3632')}, band);
+          diffuseColor.rgb = mix(${linear('#5e5448')}, birch, step(0.45, vTree.x) * step(vUp, 0.62)) * 0.8;
+          diffuseColor.a = 1.0;
+        } else if (vPart < 1.5) {
+          diffuseColor.rgb = vec3(1.0);
+          ${LEAF}
+          diffuseColor.rgb *= 0.22 + 0.3 * texture2D(uNoise, vWorld.xz * 1.3 + vWorld.y * 0.9).a;
+          diffuseColor.a = 1.0;
+        } else {
+          // Deep in the crown is dark; leaves thin out as they fall, the bare limbs show through, then stand alone.
+          ${LEAF}
+          diffuseColor.rgb *= vShade * (0.86 + 0.28 * texture2D(uNoise, vMapUv * 0.37 + vTree.xy).a);
+          diffuseColor.a *= coverGain(vMapUv, 128.0) * smoothstep(0.0, 0.5, uLeaf * 1.5 - texture2D(uNoise, vMapUv * 0.8 + vTree.xy).a);
+        }
+        ${SNOW_RIME_TREE}`,
     })
     const farMat = patch(new MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0 }), {
       ...windy,
@@ -369,19 +384,19 @@ export class Flora {
       fragmentColor: `diffuseColor.rgb = mix(${linear('#5a5046')}, mix(${linear('#3f6a36')}, ${linear('#a8843a')}, uGold * vTree.y), uLeaf) * vTree.z * (0.65 + 0.55 * vUp); ${SNOW_RIME_TREE}`,
     })
     const crownDepth = depthFor(crownPatch)
-    this.disposables.push(cMat, barkMat, crownMat, coreMat, farMat, alderMat, crownDepth)
+    this.disposables.push(cMat, crownMat, farMat, alderMat, crownDepth)
     const maple = hardwood(3, false), birch = hardwood(11, true)
     const g = {
       spruce: conifer(9, 7, 0.2, 5), conFar: conifer(6, 6, 0.2, 13), conDistant: conifer(4, 5, 0.21, 17),
       far1: hardwoodFar(1), far0: hardwoodFar(0),
     }
-    this.disposables.push(maple.wood, maple.crown, maple.core, birch.wood, birch.crown, birch.core, ...Object.values(g))
+    this.disposables.push(maple, birch, ...Object.values(g))
     const k = (geo: BufferGeometry, mat: MeshStandardMaterial, wide: number, sink: number, shadow = true, depth?: MeshDepthMaterial): Kind => ({ geo, mat, wide, sink, shadow, depth })
     // What each tree is drawn with close to, and far from, the camera.
     const near: Record<string, Kind[]> = {
       spruce: [k(g.spruce, cMat, 1, 0.02)],
-      maple: [k(maple.wood, barkMat, 0.8, 0.01), k(maple.crown, crownMat, 0.8, 0.01, true, crownDepth), k(maple.core, coreMat, 0.8, 0.01)],
-      birch: [k(birch.wood, barkMat, 0.7, 0.01), k(birch.crown, crownMat, 0.7, 0.01, true, crownDepth), k(birch.core, coreMat, 0.7, 0.01)],
+      maple: [k(maple, crownMat, 0.8, 0.01, true, crownDepth)],
+      birch: [k(birch, crownMat, 0.7, 0.01, true, crownDepth)],
       shrub: [k(g.far1, alderMat, 1.7, 0.42)],
     }
     const far: Record<string, Kind[]> = {

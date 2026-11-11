@@ -46,7 +46,7 @@ export class Kit {
     mesh.position.set(x, y, z)
     mesh.castShadow = true
     mesh.receiveShadow = true
-    mesh.layers.enable(1)
+    // a crew is small: its shadow is drawn in the fine cascade only
     mesh.layers.enable(3)
     parent.add(mesh)
     return mesh
@@ -107,7 +107,7 @@ export class Kit {
     const disc = new CylinderGeometry(inner * 1.02, inner * 1.02, wide * 0.7, 16)
     disc.rotateX(Math.PI / 2)
     this.put(disc, paint, 0, 0, 0, g)
-    this.cyl(r * 0.18, r * 0.18, wide * 0.9, this.mat('#2a2a27', 0.6), 0, 0, 0, g, true, 8)
+    this.cyl(r * 0.18, r * 0.18, wide * 0.9, rubber, 0, 0, 0, g, true, 8)
     for (let k = 0; k < lugs; k++) {
       const a = (k / lugs) * Math.PI * 2
       const lug = this.box(r * 0.16, r * 0.06, wide * 0.9, rubber, Math.cos(a) * r, Math.sin(a) * r, 0, g)
