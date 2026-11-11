@@ -309,7 +309,8 @@ test('crews: a picked crew takes the next orders, an order it cannot do says why
 
 test('Tab and Shift-Tab walk the fields that need something, both ways', async ({ page }) => {
   await startSeason(page)
-  await reach(page, `q.run(q.day(6, 12))`)
+  // With the list cleared, every field reference practice has something for shows its need again.
+  await reach(page, `const { app } = q.g(); q.run(q.day(6, 12)); for (const j of [...app.campaign.season.jobs]) app.do({ t: 'cancel', id: j.id })`)
   await putAway(page)
   const want = await page.evaluate(() => (globalThis as unknown as { __county: { app: { needs(): { need: { act: string } | null }[] } } }).__county.app.needs().map((n, i) => n.need && n.need.act !== 'close' ? i : -1).filter(i => i >= 0))
   test.skip(want.length < 2, 'fewer than two fields need something on this day')
