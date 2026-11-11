@@ -1,6 +1,6 @@
 import { defineConfig, devices } from '@playwright/test'
 
-// BASE_URL points the same tests at the deployed site: BASE_URL=https://themizeguy.github.io/the-county/ npm run test:e2e
+// BASE_URL points the same tests at the deployed site: BASE_URL=https://themizeguy.github.io/fable-5.2-potatobench/ npm run test:e2e
 const live = process.env.BASE_URL
 // Chromium renders on the real GPU where there is one to ask for: Metal on a Mac, Direct3D on Windows.
 const gl = process.platform === 'darwin' ? ['--use-angle=metal', '--ignore-gpu-blocklist', '--enable-gpu']
