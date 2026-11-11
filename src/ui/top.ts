@@ -1,112 +1,145 @@
+// The top bar: the date, the weather, the cash and the clock.
 import * as S from '../sim/index.ts'
 import { patch, type Ctx } from './core.ts'
-import { h, icon, s } from './dom.ts'
+import { h } from './dom.ts'
 import * as F from './fmt.ts'
-import { openHelp } from './help.ts'
-import { openSettings } from './settings.ts'
+import { icon } from './icons.ts'
+import { BLIGHT_RISK, forecastSky, SKY_WORD } from './rules.ts'
 
 export const PHASE_LABEL: Record<S.Phase, string> = {
   plan: 'Spring plan', season: 'Growing season', cellar: 'In the cellar', ledger: 'Year end', over: 'The end',
 }
 
-const SPEED_LABEL = ['Pause', 'Run slowly, about a day a second', 'Run faster, two or three days a second', 'Run fast, eight days a second']
+const SPEED_NAME = ['Pause', 'Normal speed', 'Fast', 'Fastest']
+const SPEED_ICON = ['pause', 'play', 'fast', 'fastest']
 
-// form: 'long' with the weekday spelled out, 'mid' with it shortened, 'short' with the month shortened too.
 export function dateText(c: S.Campaign, form: 'long' | 'mid' | 'short' = 'long'): string {
   if (c.phase === 'season' && c.season) {
     const d = c.season.day
-    return form === 'long' ? `${F.dateLong(c.year, d)}, ${c.year}` : `${F.weekday(c.year, d, true)}, ${F.date(c.year, d, form === 'short')}, ${c.year}`
+    return form === 'long' ? F.dateLong(c.year, d) : form === 'mid' ? `${F.weekday(c.year, d, true)}, ${F.date(c.year, d, true)}` : F.date(c.year, d, true)
   }
-  if (c.phase === 'cellar') return `${S.CELLAR_MONTHS[c.month]} ${c.month < 2 ? c.year : c.year + 1}`
-  if (c.phase === 'plan') return `Spring ${c.year}`
-  if (c.phase === 'ledger') return `Year end ${c.year}`
-  return `${c.year}`
+  if (c.phase === 'cellar') return S.CELLAR_MONTHS[c.month]
+  if (c.phase === 'plan') return 'Spring'
+  if (c.phase === 'ledger') return 'Year end'
+  return 'The end'
 }
 
-function seasonStrip(c: S.Campaign): SVGElement | null {
+function yearText(c: S.Campaign): string {
+  return String(c.phase === 'cellar' && c.month >= 2 ? c.year + 1 : c.year)
+}
+
+// How far through the season it is, with the frosts and the start of the blight watch marked on it.
+function seasonTrack(c: S.Campaign): HTMLElement | null {
   const ss = c.season
   if (!ss) return null
   const y = c.year
   const a = S.dayIndex(y, S.SEASON_START.month, S.SEASON_START.dom)
   const b = S.dayIndex(y, S.SEASON_LAST.month, S.SEASON_LAST.dom)
-  const W = 300
-  const x = (d: number) => ((d - a) / (b - a)) * W
+  const x = (d: number) => `${(Math.max(0, Math.min(1, (d - a) / (b - a))) * 100).toFixed(1)}%`
   const now = Math.min(ss.day, b)
-  const kids: SVGElement[] = [
-    s('rect', { class: 'strip-track', x: 0, y: 7, width: W, height: 6, rx: 1 }),
-    s('rect', { class: 'strip-fill', x: 0, y: 7, width: Math.max(0, x(now)).toFixed(1), height: 6, rx: 1 }),
-  ]
-  for (let m = 4; m <= 10; m++) {
-    const d = S.dayIndex(y, m, 1)
-    kids.push(s('line', { class: 'strip-tick', x1: x(d).toFixed(1), x2: x(d).toFixed(1), y1: 5, y2: 15 }))
-    kids.push(s('text', { class: 'strip-label', x: (x(d) + 3).toFixed(1), y: 25 }, F.monthName(m, true)))
-  }
-  for (const e of ss.log) {
-    if (e.type === 'frost') kids.push(s('rect', { class: 'strip-frost', x: (x(e.day) - 1).toFixed(1), y: 3, width: 2, height: 14 }))
-  }
-  if (ss.watchDay >= 0) {
-    const wx = x(ss.watchDay)
-    kids.push(s('path', { class: 'strip-watch', d: `M${(wx - 4).toFixed(1)} 0h8l-4 6z` }))
-  }
-  kids.push(s('rect', { class: 'strip-now', x: (x(now) - 1.5).toFixed(1), y: 2, width: 3, height: 16 }))
-  return s('svg', {
-    class: 'strip', viewBox: `0 0 ${W} 28`, preserveAspectRatio: 'none', role: 'img',
-    'aria-label': `Season from ${F.date(y, a)} to ${F.date(y, b)}: ${Math.round(((now - a) / (b - a)) * 100)}% gone${ss.watchDay >= 0 ? `, blight watch since ${F.date(y, ss.watchDay)}` : ''}`,
-  }, kids)
+  const frosts = ss.log.filter(e => e.type === 'frost').map(e => e.day).filter((d, k, all) => all.indexOf(d) === k)
+  return h('span', {
+    class: 'gauge track', role: 'img',
+    'aria-label': `The season runs ${F.date(y, a)} to ${F.date(y, b)}: ${Math.round(((now - a) / (b - a)) * 100)}% gone${ss.watchDay >= 0 ? `. Blight watch since ${F.date(y, ss.watchDay)}` : ''}`,
+  },
+  h('i', { style: `width:${x(now)}` }),
+  [4, 5, 6, 7, 8, 9, 10].map(m => h('u', { style: `left:${x(S.dayIndex(y, m, 1))}` })),
+  frosts.map(d => h('u', { class: 'frost', style: `left:${x(d)}` })),
+  ss.watchDay >= 0 ? h('u', { class: 'watch', style: `left:${x(ss.watchDay)}` }) : null)
 }
 
-export function topBar(ctx: Ctx): { el: HTMLElement; update(): void } {
-  const el = h('header', { class: 'topbar paper' })
+interface Cell { sky: string; hi: number; lo: number; rain: number; blight: number; frost: number; said: string }
+
+function cells(ctx: Ctx, c: S.Campaign): Cell[] {
+  const t = S.today(ctx.app.world, c)
+  if (!t) return []
+  const d = t.day
+  const out: Cell[] = [{
+    sky: t.sky, hi: d.tmax, lo: d.tmin, rain: -1, blight: Math.min(3, t.severity), frost: d.tmin <= 0 ? 100 : 0,
+    said: `Today: ${SKY_WORD[t.sky].toLowerCase()}, high ${F.temp(d.tmax)}, low ${F.temp(d.tmin)}${d.prcp >= 0.5 ? `, rain ${F.rain(d.prcp)}` : ''}${t.severity > 0 ? ', blight weather' : ''}.`,
+  }]
+  for (const f of S.forecast(ctx.app.world, c, 5)) {
+    const sky = forecastSky(f)
+    out.push({
+      sky, hi: f.hi, lo: f.lo, rain: f.rainChance, blight: f.blight, frost: f.frostChance,
+      said: `${F.weekday(c.year, f.day)}: high about ${F.temp(f.hi)}, low about ${F.temp(f.lo)}, ${f.rainChance}% chance of rain${f.blight > 0 ? `, blight risk ${BLIGHT_RISK[f.blight]}` : ''}${f.frostChance >= 30 ? `, ${f.frostChance}% chance of frost` : ''}.`,
+    })
+  }
+  return out
+}
+
+// The clock: every speed as its own button where there is room, three buttons where there is not.
+export function clock(ctx: Ctx, compact: boolean): HTMLElement {
+  const app = ctx.app
+  const c = app.campaign!
+  if (S.seasonDone(c)) {
+    return h('button', { class: 'nbtn primary', type: 'button', testid: 'end-season', onclick: () => ctx.run({ t: 'endSeason' }) }, 'Close out the season')
+  }
+  const keys = !ctx.touch()
+  const run = h('button', {
+    class: 'nicon', type: 'button', testid: 'run', 'aria-pressed': String(app.running),
+    'aria-label': `Run until something needs you${keys ? ' (F)' : ''}`, title: keys ? 'Run until something needs you (F)' : undefined,
+    onclick: () => app.runUntilNeeded(),
+  }, icon('run'))
+  if (compact) {
+    const next = (app.speed === 0 ? 1 : app.speed % 3 + 1) as 1 | 2 | 3
+    return h('div', { class: 'clock', role: 'group', 'aria-label': 'Clock' },
+      h('button', {
+        class: 'nicon', type: 'button', testid: 'speed-toggle', 'aria-pressed': String(app.speed === 0),
+        'aria-label': app.speed === 0 ? 'Paused. Run the clock' : 'Pause the clock', onclick: () => app.togglePause(),
+      }, icon(app.speed === 0 ? 'play' : 'pause')),
+      h('button', {
+        class: 'nicon speed-x num', type: 'button', testid: 'speed-cycle', 'aria-label': `${SPEED_NAME[app.speed === 0 ? 1 : app.speed]}. Change to ${SPEED_NAME[next].toLowerCase()}`,
+        onclick: () => app.setSpeed(next),
+      }, `${app.speed === 0 ? 1 : app.speed}×`),
+      run)
+  }
+  return h('div', { class: 'clock', role: 'group', 'aria-label': 'Clock' },
+    ([0, 1, 2, 3] as const).map(k => h('button', {
+      class: 'nicon', type: 'button', testid: `speed-${k}`, 'aria-pressed': String(app.speed === k && !(k === 3 && app.running)),
+      'aria-label': `${SPEED_NAME[k]}${keys && k === 0 ? ' (Space)' : ''}`, title: keys ? (k === 0 ? 'Pause (Space)' : `${SPEED_NAME[k]} (+ and −)`) : undefined,
+      onclick: () => app.setSpeed(k),
+    }, icon(SPEED_ICON[k]))),
+    run)
+}
+
+export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void }): { el: HTMLElement; update(): void } {
+  const el = h('header', { class: 'topbar instrument' })
   const app = ctx.app
   function update(): void {
     const c = app.campaign
     if (!c) return
+    const layout = ctx.layout()
     const season = c.phase === 'season' && !!c.season
-    const done = season && S.seasonDone(c)
-    const bar = document.querySelector<HTMLElement>('.hud')?.dataset.bar ?? 'full'
-    const form = bar === 'full' ? 'long' : bar === 'row' ? 'mid' : 'short'
-    const stopped = season && app.speed === 0 && !done ? app.pauseReason : ''
+    const form = layout === 'wide' || layout === 'mid' ? 'long' : layout === 'narrow' && innerWidth >= 380 ? 'mid' : 'short'
+    const fc = season ? cells(ctx, c) : []
+    const withClock = season && (layout === 'wide' || layout === 'mid')
     const model = {
-      p: c.phase, y: c.year, i: c.yearIdx, g: c.goalYears, d: dateText(c, form), cash: Math.round(c.cash), sp: app.speed, done, bar, stopped,
-      day: c.season?.day, w: c.season?.watchDay, f: c.season?.log.filter(e => e.type === 'frost').length, u: app.settings.units, t: ctx.touch(),
+      p: c.phase, d: dateText(c, form), y: yearText(c), cash: Math.round(c.cash), sp: app.speed, run: app.running, done: season && S.seasonDone(c), layout,
+      day: c.season?.day, w: c.season?.watchDay, f: c.season?.log.filter(e => e.type === 'frost').length, u: app.settings.units, t: ctx.touch(), withClock,
     }
-    el.classList.toggle('has-clock', season)
-    patch(el, JSON.stringify(model), () => {
-      const count = c.yearIdx < c.goalYears ? `${bar === 'full' ? 'season ' : ''}${c.yearIdx + 1} of ${c.goalYears}` : `year ${c.yearIdx + 1}`
-      const loan = c.cash < 0 && (c.phase === 'season' || c.phase === 'cellar')
-      return [
-        h('div', { class: 'tb-id' },
-          h('span', { class: 'wordmark' }, 'The County'),
-          h('span', { class: 'tb-phase' }, h('span', { testid: 'phase' }, bar === 'stack' && season ? 'Season' : PHASE_LABEL[c.phase]), bar === 'stack' && season ? ' ' : ' · ', count)),
-        h('div', { class: 'tb-date' },
-          h('span', { class: 'date', testid: 'date' }, dateText(c, form)),
-          season ? seasonStrip(c) : null),
-        season ? h('div', { class: 'clock', role: 'group', 'aria-label': 'Clock' },
-          [0, 1, 2, 3].map(k => {
-            const off = done && k > 0
-            const keys = ctx.touch() ? '' : ` (${k === 0 ? '0 or Space' : k})`
-            const why = k === 0 && stopped ? `. It stopped itself: ${F.localize(stopped)}` : ''
-            return h('button', {
-              class: 'clock-btn', type: 'button', testid: `speed-${k}`, 'aria-pressed': String(app.speed === k && !off), 'aria-label': `${SPEED_LABEL[k]}${why}`,
-              disabled: off, title: off ? 'The season is over' : `${SPEED_LABEL[k]}${keys}${why}`, onclick: () => app.setSpeed(k as 0 | 1 | 2 | 3),
-            }, k === 0 ? icon('pause') : speedGlyph(k))
-          })) : null,
-        h('div', { class: 'tb-cash' },
-          h('span', { class: 'label' }, loan ? (bar === 'full' ? 'Cash · spring loan' : 'Spring loan') : 'Cash'),
-          h('span', { class: `cash${c.cash < 0 ? ' neg' : ''}`, testid: 'cash' }, F.money(c.cash))),
-        done ? h('button', { class: 'btn primary end', type: 'button', testid: 'end-season', onclick: () => ctx.run({ t: 'endSeason' }) }, 'Close out the season') : null,
-        h('div', { class: 'tb-menu' },
-          h('button', { class: 'icon-btn', type: 'button', testid: 'how-open', 'aria-label': 'How it works', title: 'How it works', onclick: () => openHelp(ctx) }, icon('help')),
-          h('button', { class: 'icon-btn', type: 'button', testid: 'settings-open', 'aria-label': 'Menu and settings', title: 'Menu and settings', onclick: () => openSettings(ctx) }, icon('menu'))),
-      ]
-    })
+    el.dataset.phase = c.phase
+    patch(el, JSON.stringify(model), () => [
+      h('div', { class: 'tb-date' },
+        h('span', { class: 'date', testid: 'date' }, dateText(c, form)),
+        h('span', { class: 'tb-year num' }, yearText(c)),
+        season ? seasonTrack(c) : null),
+      season ? h('button', {
+        class: 'forecast', type: 'button', testid: 'forecast',
+        'aria-label': `${fc.map(x => x.said).join(' ')} Open the almanac for the forecast in full.`,
+        onclick: () => o.onAlmanac?.(),
+      }, fc.map((x, k) => h('span', { class: `fc${k === 0 ? ' today' : ''} far-${k}` },
+        icon(x.sky),
+        h('span', { class: 'fc-t num' }, h('b', null, `${F.degrees(x.hi)}°`), h('span', null, `${F.degrees(x.lo)}°`)),
+        h('span', { class: 'fc-m' },
+          x.rain >= 30 ? h('span', { class: 'fc-rain num' }, `${x.rain}%`) : null,
+          x.blight > 0 ? h('span', { class: 'pips' }, Array.from({ length: x.blight }, () => h('i'))) : null,
+          x.frost >= 30 ? icon('frost', `ic s${x.frost >= 60 ? ' sure' : ''}`) : null)))) : h('span', { class: 'tb-fill' }),
+      h('div', { class: 'tb-right' },
+        h('span', { class: `cash num${c.cash < 0 ? ' neg' : ''}`, testid: 'cash', 'aria-label': c.cash < 0 ? `${F.money(-c.cash)} owed on the spring loan` : `Cash ${F.money(c.cash)}` }, F.money(c.cash)),
+        withClock ? clock(ctx, false) : null,
+        h('button', { class: 'nicon', type: 'button', testid: 'menu-open', 'aria-label': `Menu${ctx.touch() ? '' : ' (M)'}`, title: ctx.touch() ? undefined : 'Menu (M)', onclick: () => o.onMenu() }, icon('menu'))),
+    ])
   }
   return { el, update }
-}
-
-function speedGlyph(k: number): SVGElement {
-  const w = 6 + 6 * k
-  const paths: SVGElement[] = []
-  for (let i = 0; i < k; i++) paths.push(s('path', { d: `M${3 + i * 6} 5l6 5-6 5z` }))
-  return s('svg', { class: 'ic speed', viewBox: `0 0 ${w + 4} 20`, 'aria-hidden': 'true', style: `width:${(w + 4) * 0.9}px` }, paths)
 }

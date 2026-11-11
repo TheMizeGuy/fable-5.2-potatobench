@@ -1,4 +1,5 @@
 import { expect, type Page } from '@playwright/test'
+import { closeAll, HELPER, q } from '../tools/quality/shared.ts'
 
 export function watchErrors(page: Page): string[] {
   const errors: string[] = []
@@ -7,40 +8,66 @@ export function watchErrors(page: Page): string[] {
   return errors
 }
 
+// Opens the game on a clean browser. A query such as ?year=1990&seed=7 starts a fixed farm at its spring plan.
 export async function open(page: Page, query = ''): Promise<void> {
   await page.goto('./' + query)
-  await page.waitForFunction(() => '__county' in globalThis)
+  await page.waitForFunction(() => '__county' in globalThis && !document.getElementById('splash'))
 }
 
-// Plays days forward under the in-game advice until the test says stop. Runs in the page, through the real app.
-export async function playUntil(page: Page, stop: 'firstDig' | 'seasonDone'): Promise<void> {
-  await page.evaluate(stop => {
-    const { app, sim } = (globalThis as any).__county
-    const c = app.campaign
-    let guard = 0
-    while (c.phase === 'season' && guard++ < 400) {
-      if (stop === 'firstDig' && c.lots.some((l: any) => l.open)) return
-      if (sim.seasonDone(c)) return
-      for (const a of sim.advise(app.world, c)) {
-        if (a.act === 'wait' || a.act === 'close' || a.act === 'sell') continue
-        app.do({ t: 'job', kind: a.act, field: a.field })
-      }
-      app.do({ t: 'day' })
+// For the screens a test only looks at: the capture tools' way of reaching a state through the real app.
+// The play test never uses it.
+export async function reach(page: Page, code: string): Promise<void> {
+  await page.evaluate(HELPER)
+  await q(page, code)
+}
+
+export async function putAway(page: Page): Promise<void> {
+  await closeAll(page)
+}
+
+// Starts the fixed farm's first season the way a player does, and stops the clock on its first day.
+export async function startSeason(page: Page): Promise<void> {
+  await open(page, '?year=1990&seed=7')
+  await page.getByTestId('begin-season').click()
+  await expect(page.getByTestId('date')).toBeVisible()
+  await pause(page)
+}
+
+// What the instruments show, read from the page as a player would read it.
+export interface Seen { paused: boolean; running: boolean; speed: number; date: string; cash: string; badges: string[]; ticket: boolean; done: boolean; hint: boolean; tray: boolean; queue: number }
+
+export async function look(page: Page): Promise<Seen> {
+  return page.evaluate(() => {
+    const el = (id: string) => document.querySelector<HTMLElement>(`#ui [data-testid="${id}"]`)
+    const pressed = (id: string) => el(id)?.getAttribute('aria-pressed') === 'true'
+    const cycle = el('speed-cycle')?.textContent ?? ''
+    const done = !!el('end-season')
+    return {
+      paused: !done && (el('speed-0') ? pressed('speed-0') : pressed('speed-toggle')),
+      running: pressed('run'),
+      speed: el('speed-0') ? [1, 2, 3].find(k => pressed(`speed-${k}`)) ?? (pressed('run') ? 3 : 0) : Number(cycle[0] ?? 0),
+      date: el('date')?.textContent ?? '',
+      cash: el('cash')?.textContent ?? '',
+      badges: [...document.querySelectorAll<HTMLElement>('#ui [data-testid^="badge-"]')].map(b => b.dataset.testid!),
+      ticket: !!el('weighin'),
+      done,
+      hint: !!el('hint'),
+      tray: !!el('sample-dialog'),
+      queue: document.querySelectorAll('#ui [data-testid^="queue-"]:not([data-testid^="queue-first"]):not([data-testid="queue-more"]):not([data-testid^="queue-cancel"])').length,
     }
-  }, stop)
+  })
 }
 
-export async function closeDialogs(page: Page): Promise<void> {
-  for (let i = 0; i < 30; i++) {
-    const dialog = page.locator('.dialog').last()
-    if (!(await dialog.count())) return
-    await page.keyboard.press('Escape')
-    await page.waitForTimeout(80)
-  }
+export async function pause(page: Page): Promise<void> {
+  if ((await look(page)).paused) return
+  const whole = page.getByTestId('speed-0')
+  await ((await whole.count()) ? whole : page.getByTestId('speed-toggle')).click()
+  await expect.poll(async () => (await look(page)).paused).toBe(true)
 }
 
-export async function cash(page: Page): Promise<string> {
-  return (await page.getByTestId('cash').first().textContent()) ?? ''
+export async function noSidewaysScroll(page: Page): Promise<void> {
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
+  expect(overflow).toBeLessThanOrEqual(1)
 }
 
 export { expect }
