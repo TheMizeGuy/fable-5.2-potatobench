@@ -69,7 +69,7 @@ export function gradeHill(c: Campaign, s: Season, f: FieldSeason, field: number,
     }
     if (!mark && u(3) < pFrost) mark = MARK.frost
     if (!mark && u(4) < pRot) mark = MARK.rot
-    if (!mark && u(5) < Math.min(0.7, 0.008 + v.green * (1 - f.cover) * (0.1 + w / 900))) mark = MARK.green
+    if (!mark && u(5) < Math.min(0.7, 0.01 + v.green * (1 - f.cover) * (0.08 + w / 1500))) mark = MARK.green
     if (!mark && w < P.SIZE_SMALL) mark = MARK.small
     if (mark) {
       lot.grades.cull += cwt

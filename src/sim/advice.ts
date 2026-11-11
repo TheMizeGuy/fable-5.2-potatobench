@@ -67,8 +67,10 @@ export function advise(world: World, c: Campaign): Advice[] {
       if (up && exposed && (t.watch || (blightSoon && t.sv >= 12) || anyBlight)) {
         add(i, 'spray', `Spray ${n}.`, anyBlight ? 'There is blight on the farm. Protectant only works if it is on the leaf before the spores.' : 'The blight watch is on and the leaves are unprotected.', anyBlight || blightSoon)
       }
-      if (s0.tiDay >= 0 && f.moisture < 0.38 && !rainSoon && s0.matureDay < 0) {
-        add(i, 'water', `Water ${n}.`, 'The ground is dry and no rain is coming. Dry soil while tubers bulk costs yield and brings scab.')
+      // Most Aroostook potatoes are rain-fed: watering is advised only with a reel, or when the crop is wilting.
+      const dry = c.upgrades.reel ? 0.38 : 0.2
+      if (s0.tiDay >= 0 && f.moisture < dry && !rainSoon && s0.matureDay < 0) {
+        add(i, 'water', `Water ${n}.`, c.upgrades.reel ? 'The ground is dry and no rain is coming. Dry soil while tubers bulk costs yield and brings scab.' : 'The plants are wilting and no rain is coming. Hauling water is slow, but this field is losing its crop.')
       }
       if (s0.tiDay >= 0 && s.day - s0.tiDay >= 28 && (f.estimate?.digs ?? 0) < 1) {
         add(i, 'sample', `Test dig in ${n}.`, 'One hill lifted tells you more about the crop than a week of looking at the tops.')

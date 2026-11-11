@@ -1,5 +1,5 @@
 // One growing season: the daily step for weather, water, crop, blight and the farmer's work.
-import { dayIndex, formatDay } from './calendar.ts'
+import { dayIndex, formatDay, withCommas } from './calendar.ts'
 import { gradeHill, newLot, finishLot } from './harvest.ts'
 import * as P from './params.ts'
 import { nextInt, nextUnit } from './rng.ts'
@@ -11,6 +11,7 @@ import { variety } from './varieties.ts'
 import { clamp, fieldTmin, getDay, pDays, pUnit, wallin } from './weather.ts'
 
 const GONE = H_ROGUED | H_SAMPLED | H_DUG | H_DECAYED
+const NO_CROP = H_ROGUED | H_DUG | H_DECAYED
 
 const F_EMERGED = 1, F_TI = 2, F_CLOSED = 4, F_MATURE = 8, F_DRY = 16, F_SKIN = 32, F_LOGGED = 64
 
@@ -32,7 +33,7 @@ function emptyField(): FieldSeason {
     residue: 0, lastSpray: -1,
     scab: 0, hollow: 0, knob: 0, logDays: 0, dryRun: 0, frostT: 0,
     sev: 0, sevPeak: 0, lastScout: -1, knownSev: 0, seenFromRoad: false,
-    samples: [], estBias: 1, digDone: 0, lotId: -1, flags: 0,
+    samples: [], sampleN: [], estBias: 1, digDone: 0, lotId: -1, flags: 0,
     hState: [], hEmergeAt: [], hPd0: [], hVigor: [], hC: [], hLes: [], hLat: [], hMass: [], hN: [], hTb: [],
   }
 }
@@ -82,13 +83,13 @@ function push(s: Season, out: GameEvent[], type: string, field: number, level: G
 export function jobDays(c: Campaign, kind: JobKind, f: FieldSeason | null): number {
   if (kind === 'spray' && c.upgrades.boom) return 0.1
   if (kind === 'dig' && c.upgrades.harvester) return 1.25
-  if (kind === 'water' && c.upgrades.reel) return 0.34
-  if (kind === 'rogue' && f) return Math.min(1.5, 0.15 + 0.03 * knownHills(f))
+  if (kind === 'water' && c.upgrades.reel) return 0.5
+  if (kind === 'rogue' && f) return Math.min(2, 0.2 + 0.08 * knownHills(f))
   return P.JOB_DAYS[kind]
 }
 
 export function jobCost(c: Campaign, kind: JobKind): number {
-  if (kind === 'water' && c.upgrades.reel) return 120
+  if (kind === 'water' && c.upgrades.reel) return 200
   return P.JOB_COST[kind]
 }
 
@@ -289,9 +290,11 @@ function completeJob(world: World, c: Campaign, s: Season, job: Job, d: Day, out
       const lot = newLot(c, job.field, f, s.day, false)
       const tubers = gradeHill(c, s, f, job.field, i, lot, d)
       f.samples.push(mean > 0 ? f.hMass[i] / mean : 1)
+      f.sampleN.push(tubers.length)
+      // The lifted plant stops growing; its tubers go in with the crop.
       f.hState[i] |= H_SAMPLED
       const grams = Math.round(f.hMass[i])
-      f.hMass[i] = 0; f.hC[i] = 0; f.hLes[i] = 0; f.hLat[i] = 0
+      f.hC[i] = 0; f.hLes[i] = 0; f.hLat[i] = 0
       push(s, out, 'sample', job.field, 'info',
         `Test dig in ${name}: ${tubers.length} tubers, ${(grams / 453.6).toFixed(1)} lb under one hill.`,
         { hill: i, grams, weights: tubers.map(t => Math.round(t.w)), marks: tubers.map(t => t.mark) })
@@ -310,7 +313,7 @@ function completeJob(world: World, c: Campaign, s: Season, job: Job, d: Day, out
       f.dugDay = s.day
       finishLot(c, f, lot)
       const total = lot.grades.no1 + lot.grades.chef + lot.grades.b + lot.grades.no2 + lot.skinned
-      push(s, out, 'dug', job.field, 'good', `${name} is dug: ${Math.round(total)} cwt to sell, ${Math.round(lot.grades.cull)} cwt culled.`, { lot: lot.id })
+      push(s, out, 'dug', job.field, 'good', `${name} is dug: ${withCommas(total)} cwt to sell, ${withCommas(lot.grades.cull)} cwt culled.`, { lot: lot.id })
       break
     }
   }
@@ -327,7 +330,7 @@ function digProgress(c: Campaign, s: Season, f: FieldSeason, field: number, job:
   const upto = Math.min(P.HILLS, Math.floor((job.done / job.need) * P.HILLS + 1e-6))
   for (let i = f.digDone; i < upto; i++) {
     const st = f.hState[i]
-    if ((st & H_EMERGED) && !(st & GONE)) gradeHill(c, s, f, field, i, lot, d)
+    if ((st & H_EMERGED) && !(st & NO_CROP)) gradeHill(c, s, f, field, i, lot, d)
     f.hState[i] = st | H_DUG
     f.hC[i] = 0
   }
@@ -400,7 +403,8 @@ function fieldDay(world: World, c: Campaign, s: Season, fi: number, d: Day, sevR
   f.wet = f.wet * P.DRAIN[elev] + d.prcp
   const logged = f.wet > P.WATERLOG_MM
   if (logged) f.logDays++
-  const ksCrop = (ks + (1 - ks) * v.drought * 0.5) * (logged ? 0.6 : 1)
+  const ksTol = ks + (1 - ks) * v.drought * 0.5
+  const ksCrop = (P.STRESS_FLOOR + (1 - P.STRESS_FLOOR) * ksTol) * (logged ? 0.6 : 1)
   f.ksAvg = 0.8 * f.ksAvg + 0.2 * ks
   if (d.prcp >= P.STORM_MM) f.cover = Math.max(P.COVER_BY_PASSES[0], f.cover - P.STORM_EROSION)
 
@@ -463,7 +467,7 @@ function fieldDay(world: World, c: Campaign, s: Season, fi: number, d: Day, sevR
       }
       if (spor > 0) {
         const pJump = Math.min(0.9, P.JUMP * spor * (sev / 4))
-        if (nextUnit(c) < pJump * 4) tryInfect(c, f, nextInt(c, P.HILLS), v.blightLeaf, cool)
+        if (nextUnit(c) < pJump * 8) tryInfect(c, f, nextInt(c, P.HILLS), v.blightLeaf, cool)
         for (let o = 0; o < P.FIELD_COUNT; o++) {
           if (o === fi) continue
           const g = s.fields[o]
@@ -614,6 +618,13 @@ export function stepDay(world: World, c: Campaign): GameEvent[] {
   const d = getDay(world, s.year, s.day)
 
   runJobs(world, c, s, d, out)
+
+  const nb = world.neighbor[String(s.year)]
+  if (nb) {
+    const news = s.day === nb.plant ? 'are planting' : s.day === nb.hill1 ? 'are hilling' : s.day === nb.firstSpray ? 'have the sprayer out'
+      : s.day === nb.kill ? 'are killing their vines' : s.day === nb.dig ? 'have started digging' : ''
+    if (news) push(s, out, 'neighbor', -1, 'info', `From the road: the neighbours ${news}.`)
+  }
 
   s.soilT += P.SOIL_T_GAIN * (d.tmean - s.soilT)
   let sevRegion = 0

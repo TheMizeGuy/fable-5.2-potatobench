@@ -13,7 +13,7 @@ const MIGRATIONS: Record<number, Migration> = {}
 export function migrate(raw: unknown): Campaign | null {
   if (!raw || typeof raw !== 'object') return null
   const c = raw as Record<string, unknown>
-  let v = typeof c.v === 'number' ? c.v : 0
+  let v = typeof c.v === 'number' && Number.isInteger(c.v) ? c.v : 0
   if (v < 1 || v > SAVE_VERSION) return null
   while (v < SAVE_VERSION) {
     const step = MIGRATIONS[v]

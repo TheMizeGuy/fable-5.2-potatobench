@@ -16,7 +16,7 @@ export function estimateYield(c: Campaign, fi: number): Estimate | null {
   const f = c.season?.fields[fi]
   if (!f || f.tiDay < 0 || f.status === 'dug' || f.status === 'lost' || f.status === 'rest') return null
   let mass = 0
-  for (let i = 0; i < P.HILLS; i++) if (!(f.hState[i] & (H_DUG | H_SAMPLED | H_ROGUED | H_DECAYED))) mass += f.hMass[i]
+  for (let i = 0; i < P.HILLS; i++) if (!(f.hState[i] & (H_DUG | H_ROGUED | H_DECAYED))) mass += f.hMass[i]
   const truth = (mass * P.CWT_PER_HILL_GRAM) / P.FIELD_ACRES
   const n = f.samples.length
   let wSum = 1 / 0.04, mSum = f.estBias / 0.04
@@ -81,6 +81,8 @@ export interface FieldInfo {
   scoutAge: number          // days since the field was walked, -1 if never
   stunted: number           // share of plants visibly stunted by virus
   estimate: Estimate | null
+  // Known only from test digs: tubers under a hill, and the average tuber weight in grams that implies.
+  tubers: { perHill: number; lo: number; hi: number; digs: number } | null
   skin: number              // skin set once the vines are dead, 0..1
   bloom: number             // how much of the field is in flower, 0..1
   wilt: number              // how hard the plants are drooping for water, 0..1
@@ -98,7 +100,7 @@ export function fieldInfo(c: Campaign, fi: number): FieldInfo {
     index: fi, name: FIELD_NAMES[fi], elev: fp.elev, position: POSITION[fp.elev], soil: fp.soil, vert: fp.vert, streak: fp.streak,
     crop: plan.crop, status: plan.crop === 'rest' ? 'rest' : 'idle', variety: plan.crop === 'rest' ? 'Oats and clover' : variety(plan.variety).name,
     stage: plan.crop === 'rest' ? 'Resting' : 'Not planted', daysIn: 0, canopy: 0, moisture: 1, moistureLabel: 'good', tooWet: false,
-    hillPasses: 0, protect: 0, blightKnown: 0, blightHills: 0, scoutAge: -1, stunted: 0, estimate: null, skin: 0, bloom: 0, wilt: 0, deadDays: -1, lot: -1,
+    hillPasses: 0, protect: 0, blightKnown: 0, blightHills: 0, scoutAge: -1, stunted: 0, estimate: null, tubers: null, skin: 0, bloom: 0, wilt: 0, deadDays: -1, lot: -1,
   }
   if (!s) return base
   const f = s.fields[fi]
@@ -134,6 +136,13 @@ export function fieldInfo(c: Campaign, fi: number): FieldInfo {
   }
   base.scoutAge = f.lastScout < 0 ? -1 : s.day - f.lastScout
   base.estimate = estimateYield(c, fi)
+  if (base.estimate && f.sampleN.length) {
+    let n = 0
+    for (const x of f.sampleN) n += x
+    const perHill = n / f.sampleN.length
+    const gramsPerHill = P.FIELD_ACRES / (P.HILLS * P.CWT_PER_HILL_GRAM)
+    base.tubers = { perHill, lo: base.estimate.lo * gramsPerHill / perHill, hi: base.estimate.hi * gramsPerHill / perHill, digs: f.sampleN.length }
+  }
   if (f.deadDay >= 0) {
     base.deadDays = s.day - f.deadDay
     base.skin = Math.min(1, base.deadDays / P.SKIN_DAYS)

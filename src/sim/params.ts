@@ -20,7 +20,7 @@ export const GOAL_YEARS = 5
 export const PD_MIN = 7
 export const PD_OPT = 21
 export const PD_MAX = 30
-export const EMERGE_PD = 95
+export const EMERGE_PD = 130
 export const SOIL_T_GAIN = 0.2                 // daily pull of soil temperature toward air temperature
 
 // Canopy.
@@ -43,6 +43,7 @@ export const DRAIN = [0.72, 0.6, 0.45]         // share of surface wetness left 
 export const WORKABLE_WET_MM = 11
 export const WATERLOG_MM = 34
 export const IRRIGATION_MM = 25
+export const STRESS_FLOOR = 0.3               // growth left when the root zone is empty
 
 // Frost.
 export const FROST_OFFSET = [-1.6, -0.5, 0.4]  // C on a calm clear night, by field position
@@ -54,20 +55,20 @@ export const FREEZE_UP_SOIL_T = 0.5
 // Late blight.
 export const SV_THRESHOLD = 18                 // Blitecast: first spray
 export const SV_START = { month: 4, dom: 25 }  // severity values count from May 25
-export const ARRIVE_PER_SEV = 0.06             // chance per field per day that outside spores land, per severity value
+export const ARRIVE_PER_SEV = 0.09             // chance per field per day that outside spores land, per severity value
 export const LATENT_DAYS = 4
 export const LESION_START = 0.03
 export const LESION_GROW = 0.06                // lesion share added per day per severity value
 export const SPREAD = 0.9
-export const JUMP = 0.012
+export const JUMP = 0.03
 export const PROTECT = 0.95                    // best share of infections a fresh protectant stops
 export const RESIDUE_DECAY = 0.9
 export const ROAD_SEV = 0.08                   // field blight share visible without scouting
-export const SCOUT_DETECT = 0.9
+export const SCOUT_DETECT = 0.6
 export const HUMID_BONUS = [2, 0, -1]          // extra wet hours by field position
 
 // Hills and defects.
-export const COVER_BY_PASSES = [0.35, 0.72, 1]
+export const COVER_BY_PASSES = [0.5, 0.8, 1]
 export const STORM_MM = 35
 export const STORM_EROSION = 0.07
 export const SKIN_DAYS = 14
@@ -85,13 +86,13 @@ export const JOB_DAYS: Record<JobKind, number> = {
   plant: 1, hill: 0.5, scout: 0.2, spray: 0.25, water: 1, rogue: 0.25, sample: 0.1, kill: 0.25, dig: 2,
 }
 export const JOB_COST: Record<JobKind, number> = {
-  plant: 150, hill: 60, scout: 0, spray: 110, water: 240, rogue: 0, sample: 0, kill: 120, dig: 500,
+  plant: 150, hill: 60, scout: 0, spray: 110, water: 300, rogue: 0, sample: 0, kill: 120, dig: 500,
 }
 export const UPGRADES: Record<UpgradeId, { name: string; cost: number; blurb: string }> = {
   boom: { name: 'Boom sprayer', cost: 6000, blurb: 'Spraying a field takes a tenth of a day instead of a quarter.' },
   harvester: { name: 'Two-row harvester', cost: 12000, blurb: 'Digging a field takes a day and a quarter instead of two days.' },
   vent: { name: 'Cellar ventilation', cost: 7000, blurb: 'The cellar holds more, shrinks less, and rot spreads more slowly.' },
-  reel: { name: 'Irrigation reel', cost: 8000, blurb: 'Watering a field takes a third of a day and costs less.' },
+  reel: { name: 'Irrigation reel', cost: 30000, blurb: 'A pump, pipe and a travelling gun. Watering a field takes half a day instead of a whole one, and costs less.' },
 }
 
 // Money, in constant dollars.
@@ -109,6 +110,7 @@ export const REST_INCOME = 900
 
 export const CELLAR_CWT = 3600
 export const CELLAR_CWT_VENT = 6400
+export const STORE_COST = 0.3                 // dollars per cwt per month in the cellar: power, sprout control, labour
 export const SHRINK = 0.012
 export const SHRINK_VENT = 0.007
 export const ROT_GROW = 1.1
@@ -133,8 +135,9 @@ export const GRADE_PRICE: Record<Grade, number> = { no1: 1, chef: 1.1, b: 0.55, 
 export const CULL_PRICE = 1                  // dollars per cwt, at the starch factory
 // Price through the year relative to the season average.
 // Maine monthly price over the season average, 1979-2013 (USDA NASS).
+// From mid August on these are the record; the new-crop premium before that is invented (see docs/MODEL.md).
 export const SEASON_CURVE: [number, number][] = [   // [day of year, factor]
-  [196, 1.02], [227, 0.966], [258, 0.887], [288, 0.878], [319, 0.922],
+  [182, 1.4], [196, 1.32], [213, 1.2], [227, 1.05], [244, 0.93], [258, 0.887], [288, 0.878], [319, 0.922],
 ]
 export const MONTH_CURVE = [0.922, 0.962, 0.983, 1.015, 1.062, 1.105, 1.099]   // November to May
 export const CELLAR_MONTHS = ['November', 'December', 'January', 'February', 'March', 'April', 'May']

@@ -109,6 +109,7 @@ export interface FieldSeason {
   sevPeak: number
   lastScout: number; knownSev: number; seenFromRoad: boolean
   samples: number[]         // each test dig: that hill's mass relative to the field mean
+  sampleN: number[]         // and how many tubers were under it
   estBias: number
   digDone: number           // hills dug so far
   lotId: number

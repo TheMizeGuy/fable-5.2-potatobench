@@ -44,7 +44,7 @@ export function gradePrice(world: World, c: Campaign, lot: Lot, grade: Grade): n
   if (grade === 'cull') return P.CULL_PRICE
   const v = variety(lot.variety)
   let k = P.GRADE_PRICE[grade]
-  if (grade === 'chef') k = v.chefBonus ? 1.15 : 0.92
+  if (grade === 'chef') k = v.chefBonus ? 1.15 : 0.8
   return basePrice(world, c, lot.variety) * k * (lot.sprouted ? 0.85 : 1)
 }
 

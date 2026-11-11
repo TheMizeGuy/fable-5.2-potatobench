@@ -26,6 +26,15 @@ export function monthDay(year: number, day: number): { month: number; dom: numbe
   return { month, dom: day - start + 1 }
 }
 
+// Thousands separators without Intl, so every engine writes the same text.
+export function withCommas(n: number): string {
+  const neg = n < 0
+  let s = String(Math.round(Math.abs(n)))
+  let out = ''
+  while (s.length > 3) { out = ',' + s.slice(-3) + out; s = s.slice(0, -3) }
+  return (neg ? '-' : '') + s + out
+}
+
 export function formatDay(year: number, day: number, short = false): string {
   const { month, dom } = monthDay(year, day)
   return `${(short ? MONTHS_SHORT : MONTHS)[month]} ${dom}`
