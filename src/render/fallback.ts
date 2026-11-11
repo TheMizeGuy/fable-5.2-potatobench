@@ -1,7 +1,9 @@
-// When WebGL cannot start: a flat drawing of the six fields, so the game can still be read and played.
+// When WebGL cannot start: a flat drawing of every parcel where it lies, so the game can still be read and played.
+// The farm's own fields are drawn in full; land it does not hold is pale, and dashed when it can be had.
 import type { App } from '../game/app.ts'
 import type { FieldView } from '../game/contracts.ts'
 import { COLS, FIELD_COUNT, HILLS, ROWS } from '../sim/index.ts'
+import { FIELDS } from './layout.ts'
 import { snapshot, type Snapshot } from './state.ts'
 
 const SOIL: Record<string, string> = {
@@ -35,12 +37,12 @@ export function createFallbackView(original: HTMLCanvasElement, app: App): Field
     canvas.height = Math.round(H * dpr)
     const i = app.insets
     const aw = Math.max(120, W - i.left - i.right), ah = Math.max(120, H - i.top - i.bottom)
-    const gap = Math.min(aw, ah) * 0.03
-    const fw = Math.min((aw - gap * 3) / 2, ((ah - gap * 4) / 3) * (COLS / ROWS) * 0.9)
-    const fh = (fw * ROWS) / COLS / 0.9
-    const x0 = i.left + (aw - (fw * 2 + gap)) / 2, y0 = i.top + (ah - (fh * 3 + gap * 2)) / 2
-    rects = []
-    for (let k = 0; k < FIELD_COUNT; k++) rects.push({ x: x0 + (k % 2) * (fw + gap), y: y0 + Math.floor(k / 2) * (fh + gap), w: fw, h: fh })
+    // The map's own extent, fitted into the free area.
+    const x0 = Math.min(...FIELDS.map(f => f.x0)), x1 = Math.max(...FIELDS.map(f => f.x1))
+    const z0 = Math.min(...FIELDS.map(f => f.z0)), z1 = Math.max(...FIELDS.map(f => f.z1))
+    const k = Math.min((aw * 0.94) / (x1 - x0), (ah * 0.94) / (z1 - z0))
+    const ox = i.left + (aw - (x1 - x0) * k) / 2, oy = i.top + (ah - (z1 - z0) * k) / 2
+    rects = FIELDS.map(f => ({ x: ox + (f.x0 - x0) * k, y: oy + (f.z0 - z0) * k, w: (f.x1 - f.x0) * k, h: (f.z1 - f.z0) * k }))
     dirty = true
   }
 
@@ -58,9 +60,23 @@ export function createFallbackView(original: HTMLCanvasElement, app: App): Field
     rings = rings.filter(r => r.until > now)
     rects.forEach((r, i) => {
       const f = snap.fields[i]
-      ctx.fillStyle = winter ? '#e4e8ea' : f.crop === 'rest' ? '#5f7f3d' : SOIL[f.moisture] ?? SOIL.good
-      ctx.fillRect(r.x, r.y, r.w, r.h)
-      if (!winter && f.crop === 'potato') {
+      if (!f.held) {
+        ctx.fillStyle = winter ? '#d8dcd8' : '#9aa37a'
+        ctx.fillRect(r.x, r.y, r.w, r.h)
+        if (f.available) {
+          ctx.setLineDash([6, 5])
+          ctx.strokeStyle = '#f3ecdc'
+          ctx.lineWidth = 2
+          ctx.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2)
+          ctx.setLineDash([])
+        }
+      }
+      if (!f.held && !(app.selection.includes(i) || app.hover === i)) return
+      if (f.held) {
+        ctx.fillStyle = winter ? '#e4e8ea' : f.crop === 'rest' ? '#5f7f3d' : SOIL[f.moisture] ?? SOIL.good
+        ctx.fillRect(r.x, r.y, r.w, r.h)
+      }
+      if (f.held && !winter && f.crop === 'potato') {
         const cw = r.w / COLS, ch = r.h / ROWS
         for (let h = 0; h < HILLS; h++) {
           const look = f.hills[h]
@@ -95,7 +111,7 @@ export function createFallbackView(original: HTMLCanvasElement, app: App): Field
   const at = (e: MouseEvent): number => {
     const b = canvas.getBoundingClientRect()
     const x = e.clientX - b.left, y = e.clientY - b.top
-    return rects.findIndex(r => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h)
+    return rects.findIndex((r, i) => (snap.fields[i].held || snap.fields[i].available) && x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h)
   }
   const onClick = (e: MouseEvent) => { const i = at(e); app.select(i, i >= 0 && e.shiftKey) }
   const onDouble = (e: MouseEvent) => { const i = at(e); if (i >= 0) app.selectLike(i) }
@@ -124,7 +140,7 @@ export function createFallbackView(original: HTMLCanvasElement, app: App): Field
     },
     fieldAnchor(i) {
       const r = rects[i]
-      return r ? { x: r.x + r.w / 2, y: r.y, visible: true } : { x: 0, y: 0, visible: false }
+      return r ? { x: r.x + r.w / 2, y: r.y + r.h - 6, visible: true } : { x: 0, y: 0, visible: false }
     },
     dispose() {
       off()

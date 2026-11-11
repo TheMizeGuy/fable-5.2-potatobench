@@ -1,7 +1,7 @@
 // The camera of a strategy map: it looks at a point on the farm from a distance, steep when far and low when near.
 // The player's own moves are damped; moves the game makes (a change of screen, a field brought into frame) are timed.
 import { PerspectiveCamera, Vector3 } from 'three'
-import { FARM, FARM_CENTER, FIELDS, fieldBaseY, groundY, profile } from './layout.ts'
+import { FARM_CENTER, FIELDS, LAND, fieldBaseY, groundY, profile } from './layout.ts'
 import { clamp, mix, smooth } from './noise.ts'
 
 export interface Viewport { w: number; h: number; top: number; right: number; bottom: number; left: number }
@@ -14,10 +14,11 @@ const HOME_YAW = 0.16
 const SLOPE = (profile(5) - profile(-8)) / 13
 export const MOVE_MS = 800
 
-// Looking down steeply from far off, along the rows to the horizon from close in.
+// Looking down from far off, along the rows to the horizon from close in. Never straight down: the low light and the
+// long shadows are seen from the side.
 export function pitchFor(dist: number): number {
   const t = smooth(Math.log(MIN_DIST), Math.log(FAR_DIST), Math.log(dist))
-  return mix(0.105, 0.82, Math.pow(t, 0.8))
+  return mix(0.105, 0.7, Math.pow(t, 0.8)) + 0.12 * smooth(110, 240, dist)
 }
 
 // cubic-bezier(0.45, 0, 0.2, 1)
@@ -50,15 +51,19 @@ function blend(a: Pose, b: Pose, t: number, out: Pose): Pose {
   return out
 }
 
-// What has to be in frame for the farm to be whole: the six fields, the farmstead, the brook.
-const FIELD_MARKS: Vector3[] = FIELDS.flatMap(f => [
+const corners = (f: (typeof FIELDS)[number]) => [
   new Vector3(f.x0, fieldBaseY(f.z0) + 0.5, f.z0), new Vector3(f.x1, fieldBaseY(f.z0) + 0.5, f.z0),
   new Vector3(f.x0, fieldBaseY(f.z1), f.z1), new Vector3(f.x1, fieldBaseY(f.z1), f.z1),
-])
+]
+// What has to be in frame for the home farm to be whole: its six fields, the farmstead, the brook. The other blocks then
+// reach in from the edges, so it is plain there is more land than the screen holds.
+const FIELD_MARKS: Vector3[] = FIELDS.filter(f => f.block === 'home').flatMap(corners)
 const FARM_MARKS: Vector3[] = [
   ...FIELD_MARKS, new Vector3(27.4, profile(-20) + 3.2, -20.5), new Vector3(27.2, profile(6) + 3.4, 7), new Vector3(-17.4, profile(-21) + 0.6, -21.6),
   new Vector3(-17.4, 0.4, 23.2), new Vector3(20, 0.4, 23.6),
 ]
+// Every parcel and the Dufour yard: the whole map.
+const ALL_MARKS: Vector3[] = [...FIELDS.flatMap(corners), new Vector3(96, profile(-6) + 3, -6), new Vector3(27.4, profile(-20) + 3.2, -20.5)]
 
 export class CameraRig {
   readonly camera = new PerspectiveCamera(LENS, 1, 0.3, 9000)
@@ -70,6 +75,8 @@ export class CameraRig {
   private shiftGoal = { x: 0, y: 0 }
   private homeKey = ''
   private homePose: Pose = { ...this.goal }
+  private wholeKey = ''
+  private wholePose: Pose = { ...this.goal }
   private v = new Vector3()
   private probe = new PerspectiveCamera(LENS, 1, 0.3, 9000)
   private tmp: Pose = { ...this.goal }
@@ -77,7 +84,7 @@ export class CameraRig {
   idle = 99
 
   private place(c: PerspectiveCamera, p: Pose, vp: Viewport, sx: number, sy: number): void {
-    const ty = profile(clamp(p.z, -40, 30)) + 0.35
+    const ty = profile(clamp(p.z, -40, 50)) + 0.35
     const cp = Math.cos(p.pitch), sp = Math.sin(p.pitch)
     c.fov = p.fov
     c.aspect = vp.w / vp.h
@@ -99,41 +106,58 @@ export class CameraRig {
     return { x: clamp((vp.left - vp.right) / 2, -vp.w * 0.3, vp.w * 0.3), y: clamp((vp.top - vp.bottom) / 2, -vp.h * 0.3, vp.h * 0.3) }
   }
 
-  // The view that holds the whole farm inside what the interface leaves free.
+  private fit(marks: Vector3[], vp: Viewport): Pose {
+    const fw = Math.max(160, vp.w - vp.left - vp.right), fh = Math.max(140, vp.h - vp.top - vp.bottom)
+    const off = this.offsetFor(vp)
+    const p: Pose = { x: FARM_CENTER.x, z: FARM_CENTER.z, dist: 90, yaw: HOME_YAW, pitch: 0, fov: LENS }
+    const margin = Math.min(fw, fh) * 0.045
+    for (let k = 0; k < 8; k++) {
+      p.pitch = pitchFor(p.dist)
+      this.place(this.probe, p, vp, off.x, off.y)
+      let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity
+      for (const m of marks) {
+        this.v.copy(m).project(this.probe)
+        const x = (this.v.x + 1) / 2 * vp.w, y = (1 - this.v.y) / 2 * vp.h
+        x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y)
+      }
+      p.dist = clamp(p.dist * Math.max((x1 - x0) / (fw - margin * 2), (y1 - y0) / (fh - margin * 2)), 20, 420)
+      // Centre what is to be seen in the free area.
+      const cx = vp.left + fw / 2, cy = vp.top + fh / 2
+      const g0 = this.ground(this.probe, (x0 + x1) / 2, (y0 + y1) / 2, vp, p), g1 = this.ground(this.probe, cx, cy, vp, p)
+      p.x += g0.x - g1.x
+      p.z += g0.z - g1.z
+    }
+    p.pitch = pitchFor(p.dist)
+    return p
+  }
+
+  // The view that holds the home farm inside what the interface leaves free.
   home(vp: Viewport): Pose {
     const key = `${vp.w}|${vp.h}|${vp.top}|${vp.right}|${vp.bottom}|${vp.left}`
     if (key === this.homeKey) return this.homePose
     this.homeKey = key
-    const fw = Math.max(160, vp.w - vp.left - vp.right), fh = Math.max(140, vp.h - vp.top - vp.bottom)
+    const fw = Math.max(160, vp.w - vp.left - vp.right)
     // On a narrow window the six fields fill the room and the farmyard may run off the edge.
     const wide = smooth(520, 900, fw)
-    const off = this.offsetFor(vp)
-    const fit = (marks: Vector3[]): Pose => {
-      const p: Pose = { x: FARM_CENTER.x, z: FARM_CENTER.z, dist: 90, yaw: HOME_YAW, pitch: 0, fov: LENS }
-      const margin = Math.min(fw, fh) * 0.045
-      for (let k = 0; k < 7; k++) {
-        p.pitch = pitchFor(p.dist)
-        this.place(this.probe, p, vp, off.x, off.y)
-        let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity
-        for (const m of marks) {
-          this.v.copy(m).project(this.probe)
-          const x = (this.v.x + 1) / 2 * vp.w, y = (1 - this.v.y) / 2 * vp.h
-          x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y)
-        }
-        p.dist = clamp(p.dist * Math.max((x1 - x0) / (fw - margin * 2), (y1 - y0) / (fh - margin * 2)), 20, 260)
-        // Centre what is to be seen in the free area.
-        const cx = vp.left + fw / 2, cy = vp.top + fh / 2
-        const g0 = this.ground(this.probe, (x0 + x1) / 2, (y0 + y1) / 2, vp, p), g1 = this.ground(this.probe, cx, cy, vp, p)
-        p.x += g0.x - g1.x
-        p.z += g0.z - g1.z
-      }
-      p.pitch = pitchFor(p.dist)
-      return p
-    }
-    const a = fit(FIELD_MARKS), b = fit(FARM_MARKS)
+    const a = this.fit(FIELD_MARKS, vp), b = this.fit(FARM_MARKS, vp)
     this.homePose = blend(a, b, wide, { ...a })
     this.homePose.pitch = pitchFor(this.homePose.dist)
     return this.homePose
+  }
+
+  // The view that holds every parcel: the whole map.
+  whole(vp: Viewport): Pose {
+    const key = `${vp.w}|${vp.h}|${vp.top}|${vp.right}|${vp.bottom}|${vp.left}`
+    if (key === this.wholeKey) return this.wholePose
+    this.wholeKey = key
+    this.wholePose = this.fit(ALL_MARKS, vp)
+    return this.wholePose
+  }
+
+  // True when the camera is at (or going to) this view.
+  at(p: Pose): boolean {
+    const g = this.goal
+    return Math.hypot(g.x - p.x, g.z - p.z) < 1.5 && Math.abs(Math.log(g.dist / p.dist)) < 0.08 && Math.abs(g.yaw - p.yaw) < 0.05
   }
 
   // The view of one field: it fills about half the free area.
@@ -156,7 +180,7 @@ export class CameraRig {
   private ground(c: PerspectiveCamera, px: number, py: number, vp: Viewport, at: Pose): { x: number; z: number } {
     this.v.set((px / vp.w) * 2 - 1, -(py / vp.h) * 2 + 1, 0.5).unproject(c).sub(c.position).normalize()
     const o = c.position, d = this.v
-    const y0 = profile(clamp(at.z, -40, 30)) + 0.1
+    const y0 = profile(clamp(at.z, -40, 50)) + 0.1
     const den = d.y - SLOPE * d.z
     let t = (y0 + SLOPE * (o.z - at.z) - o.y) / (Math.abs(den) > 1e-4 ? den : -1e-4)
     if (t < 0 || t > 600) t = 600
@@ -170,9 +194,9 @@ export class CameraRig {
 
   private bound(vp: Viewport): void {
     const g = this.goal
-    g.x = clamp(g.x, FARM.x0 + 2, FARM.x1 - 2)
-    g.z = clamp(g.z, FARM.z0 + 2, FARM.z1 - 2)
-    g.dist = clamp(g.dist, MIN_DIST, Math.max(this.home(vp).dist * 1.12, 70))
+    g.x = clamp(g.x, LAND.x0 + 4, LAND.x1 - 4)
+    g.z = clamp(g.z, LAND.z0 + 2, LAND.z1 - 2)
+    g.dist = clamp(g.dist, MIN_DIST, Math.max(this.whole(vp).dist * 1.06, this.home(vp).dist * 1.12, 70))
     g.pitch = pitchFor(g.dist)
     g.fov = LENS
   }
@@ -270,7 +294,7 @@ export class CameraRig {
 
   // Where the lens is focused: the distance from the camera to what it looks at.
   focus(): number {
-    return this.v.set(this.cur.x, profile(clamp(this.cur.z, -40, 30)), this.cur.z).distanceTo(this.camera.position)
+    return this.v.set(this.cur.x, profile(clamp(this.cur.z, -40, 50)), this.cur.z).distanceTo(this.camera.position)
   }
 
   where(): { x: number; y: number; z: number; dist: number; yaw: number } {

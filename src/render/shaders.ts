@@ -318,8 +318,12 @@ export function depthFor(p: Patch): MeshDepthMaterial {
 // Snow settles on what faces up, deepest where it drifts and last to go in the hollows; rime frosts what the night chilled.
 export const SNOW_RIME = snowRime('uSnow', '1.0')
 export const SNOW_RIME_TREE = snowRime('uSnow * 0.36', '0.35')
+// The same, with the rime of one place (a field's own frost last night) instead of the rime by height on the slope.
+export function snowRimeAt(amount: string, rime: string): string {
+  return snowRime(amount, '1.0', rime)
+}
 
-function snowRime(amount: string, rimeShare: string): string {
+function snowRime(amount: string, rimeShare: string, rime = 'rimeAt( vWorld.y )'): string {
   return /* glsl */ `
   {
     float snowAmt = ${amount};
@@ -335,7 +339,7 @@ function snowRime(amount: string, rimeShare: string): string {
       diffuseColor.rgb = mix( diffuseColor.rgb * ( 1.0 - 0.3 * smoothstep( 0.0, 0.3, cover ) ), snow, smoothstep( 0.12, 0.7, cover ) );
     }
     if ( uRime.x + uRime.y + uRime.z > 0.001 ) {
-      float rimeHere = ${rimeShare} * rimeAt( vWorld.y ) * smoothstep( 0.0, 0.5, up );
+      float rimeHere = ${rimeShare} * ${rime} * smoothstep( 0.0, 0.5, up );
       #ifndef COUNTY_BLADE
         rimeHere *= 1.0 - 0.45 * clamp( dot( vWNormal, uSunDir ) * 2.0 - 0.6, 0.0, 1.0 );
       #endif

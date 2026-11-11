@@ -5,7 +5,10 @@ import {
   MeshStandardMaterial, Quaternion, Vector3, type Texture,
 } from 'three'
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import { FARM, FARM_CENTER, HOME_WOODS, POTATO_HOUSE, brookHalf, brookZ, groundY, hillRoadZ, roadDist, townRoadZ, woodsAt } from './layout.ts'
+import {
+  DUFOUR_BARN, DUFOUR_HOUSE, DUFOUR_POTATO_HOUSE, FARM, FARM_CENTER, HOME_WOODS, POTATO_HOUSE, brookHalf, brookZ, fieldMask, groundY, hillRoadZ, roadDist,
+  townRoadZ, woodsAt,
+} from './layout.ts'
 import { hash2, rng } from './noise.ts'
 import { SNOW_RIME_TREE, depthFor, linear, patch, sway, type Patch } from './shaders.ts'
 
@@ -174,11 +177,12 @@ export class Flora {
   constructor(sprayTex: Texture) {
     const r = rng(2024)
     const spruceNear: Tree[] = [], firNear: Tree[] = [], coniferFar: Tree[] = [], coniferDistant: Tree[] = [], broadNear: Tree[] = [], broadFar: Tree[] = [], shrubs: Tree[] = []
+    const built = [POTATO_HOUSE, DUFOUR_POTATO_HOUSE, DUFOUR_HOUSE, DUFOUR_BARN]
     const open = (x: number, z: number) =>
       roadDist(x, z) > 1.8 && Math.abs(z - townRoadZ(x)) > 3.2 && Math.abs(z - hillRoadZ(x)) > 3.2 && Math.abs(z - brookZ(x)) > brookHalf(x) + 0.7
-      && Math.hypot(x - POTATO_HOUSE.x, z - POTATO_HOUSE.z) > 5.2
+      && built.every(b => Math.hypot(x - b.x, z - b.z) > 5.2) && fieldMask(x, z, 1.2) < 0.01
 
-    // The home woodlot on the ridge above the fields.
+    // The woods along the ridge above the fields: whole trees over the home farm, simpler ones further along.
     const h = HOME_WOODS
     for (let z = h.z0 - 4; z < h.z1 + 1; z += 1.9) {
       for (let x = h.x0 - 4; x < h.x1 + 4; x += 1.9) {
@@ -187,15 +191,28 @@ export class Flora {
         if (w.woods < 0.5 || !open(jx, jz) || r() < 0.1) continue
         const front = jz > h.z1 - 4.5
         const t: Tree = { x: jx, z: jz, s: (front ? 3.6 : 5.2) + r() * 3.4, r: r(), hue: r() }
-        if (r() < w.hard) broadNear.push({ ...t, s: 3.2 + r() * 2.2 })
-        else (r() < 0.36 ? firNear : spruceNear).push(t)
+        const near = jx > -30 && jx < 36 && jz > -48
+        if (r() < w.hard) (near ? broadNear : broadFar).push({ ...t, s: 3.2 + r() * 2.2 })
+        else if (near) (r() < 0.36 ? firNear : spruceNear).push(t)
+        else coniferFar.push(t)
       }
     }
-    // By the house, along the lane and on the brook.
+    // By the house, along the lane and on the brook; the Dufour dooryard's maple, and a few along the road between.
     broadNear.push({ x: 27.3, z: 9.4, s: 6.4, r: 0.3, hue: 0.12 }, { x: 20.2, z: 10.6, s: 3.4, r: 0.7, hue: 0.62 }, { x: 27.6, z: -2.4, s: 4.4, r: 0.5, hue: 0.8 })
-    for (let k = 0; k < 4; k++) spruceNear.push({ x: 27.6 + r() * 1.4, z: -12 + k * 2.3 + r(), s: 4 + r() * 2.2, r: r(), hue: r() })
+    for (let k = 0; k < 4; k++) {
+      const t = { x: 28.2 + r() * 1.4, z: -8.6 + k * 2.3 + r(), s: 4 + r() * 2.2, r: r(), hue: r() }
+      if (roadDist(t.x, t.z) > 1.8) spruceNear.push(t)
+    }
+    broadNear.push({ x: 97.4, z: 6.6, s: 6.8, r: 0.22, hue: 0.2 }, { x: 89.0, z: 4.6, s: 4.2, r: 0.62, hue: 0.7 })
+    for (let k = 0; k < 3; k++) spruceNear.push({ x: 98.6 + r() * 1.6, z: -10 + k * 2.6, s: 4.2 + r() * 2, r: r(), hue: r() })
+    for (let x = 30; x < 48; x += 2.2 + r() * 3) {
+      const side = r() < 0.5 ? -1 : 1, z = -8.4 - (x - 30) * 0.0 + side * (2.4 + r() * 1.2) - (x < 40 ? (40 - x) * 0.35 : 0)
+      if (!open(x, z)) continue
+      if (r() < 0.55) shrubs.push({ x, z, s: 1.2 + r(), r: r(), hue: r() })
+      else broadNear.push({ x, z, s: 3.4 + r() * 2.4, r: r(), hue: r() })
+    }
     for (let x = -150; x < 170; x += 1.5 + r() * 2.6) {
-      if (Math.abs(x - 17.8) < 3.2 || (x > -26 && x < 13)) continue
+      if (Math.abs(x - 17.8) < 3.2 || Math.abs(x - 92.6) < 3.2 || (x > -26 && x < 13)) continue
       const side = r() < 0.5 ? -1 : 1, bz = brookZ(x), off = brookHalf(x) + 0.9 + r() * 1.6
       // Fewer on the farm's own bank, so the view across the brook stays open.
       if (side < 0 && x > FARM.x0 - 4 && x < FARM.x1 && r() < 0.62) continue

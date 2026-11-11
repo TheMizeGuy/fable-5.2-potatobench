@@ -1,7 +1,7 @@
 // The pointer on the land and the camera keys, as src/game/contracts.ts lays them down:
 // drag pans, the wheel or a pinch zooms toward the pointer, right-drag or a twist or Q and E turn, arrows pan, Home frames
-// the farm; a click selects, Shift-click adds, a double-click selects alike, a right-click or long press gives the
-// field its order. A drag never selects.
+// the farm; a click on a crew picks it, a click on a field selects it, Shift-click adds, a double-click selects alike, a
+// click on empty ground lets both go; a right-click or long press gives the field its order. A drag never selects.
 import type { App } from '../game/app.ts'
 import type { CameraRig, Viewport } from './camera.ts'
 
@@ -16,7 +16,7 @@ export interface Input {
 
 export function attachInput(
   canvas: HTMLCanvasElement, app: App, rig: CameraRig, viewport: () => Viewport,
-  pick: (x: number, y: number) => number, home: () => void,
+  pick: (x: number, y: number) => number, pickUnit: (x: number, y: number) => number, home: () => void,
 ): Input {
   const pointers = new Map<number, { x: number; y: number }>()
   let downAt: { x: number; y: number; button: number; touch: boolean } | null = null
@@ -36,9 +36,9 @@ export function attachInput(
     const [a, b] = [...pointers.values()]
     return { dist: Math.hypot(a.x - b.x, a.y - b.y), angle: Math.atan2(b.y - a.y, b.x - a.x), x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
   }
-  const hover = (i: number) => {
-    app.setHover(i)
-    if (!downAt) canvas.style.cursor = i >= 0 ? 'pointer' : 'grab'
+  const hover = (i: number, unit = -1) => {
+    app.setHover(unit >= 0 ? -1 : i)
+    if (!downAt) canvas.style.cursor = i >= 0 || unit >= 0 ? 'pointer' : 'grab'
   }
 
   const onDown = (e: PointerEvent) => {
@@ -70,7 +70,7 @@ export function attachInput(
     const p = local(e)
     const was = pointers.get(e.pointerId)
     if (!was) {
-      if (e.pointerType === 'mouse') hover(pick(p.x, p.y))
+      if (e.pointerType === 'mouse') { const u = pickUnit(p.x, p.y); hover(u >= 0 ? -1 : pick(p.x, p.y), u) }
       return
     }
     const vp = viewport()
@@ -108,9 +108,13 @@ export function attachInput(
     }
     if (tap && had && pointers.size === 0 && downAt && !dragged && !consumed) {
       const p = local(e)
+      const unit = downAt.button === 0 ? pickUnit(p.x, p.y) : -1
       const i = pick(p.x, p.y)
       if (downAt.button === 2) {
         if (i >= 0) app.smartOrder(i)
+      } else if (unit >= 0) {
+        app.selectUnit(unit)
+        lastClick = { t: 0, x: p.x, y: p.y, field: -2 }
       } else if (downAt.button === 0) {
         const now = performance.now()
         const again = now - lastClick.t < DOUBLE_MS && Math.hypot(p.x - lastClick.x, p.y - lastClick.y) < 12 && lastClick.field === i
@@ -120,6 +124,7 @@ export function attachInput(
           lastClick.t = 0
         } else {
           app.select(i, i >= 0 && e.shiftKey)
+          if (i < 0) app.selectUnit(-1)
           lastClick = { t: now, x: p.x, y: p.y, field: i }
         }
       }
