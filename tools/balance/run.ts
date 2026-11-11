@@ -1,6 +1,6 @@
 // The balance tournament: every bot over every start year and several seeds, five-season campaigns.
 // Evaluates verification gates 1 to 4 of docs/DESIGN.md and writes docs/balance/latest.md and latest.json.
-// Usage: npm run balance   (env SEEDS=6, WORKERS=n)
+// Usage: npm run balance   (env SEEDS=24, WORKERS=n)
 import { writeFileSync, mkdirSync } from 'node:fs'
 import { availableParallelism } from 'node:os'
 import { Worker, isMainThread, parentPort } from 'node:worker_threads'
@@ -114,9 +114,9 @@ async function main(): Promise<void> {
   const t0 = performance.now()
   const world = loadWorld()
   const years = S.startYears(world)
-  const seeds = Array.from({ length: Number(process.env.SEEDS ?? 6) }, (_, i) => i + 1)
+  const seeds = Array.from({ length: Number(process.env.SEEDS ?? 24) }, (_, i) => i + 1)
   const entries = lineup()
-  const workers = Math.max(1, Number(process.env.WORKERS ?? Math.min(8, availableParallelism() - 1)))
+  const workers = Math.max(1, Number(process.env.WORKERS ?? Math.min(16, availableParallelism() - 1)))
 
   const tasks: Task[] = []
   for (const e of entries) for (const y of years) if (canPlay(e, y)) for (const s of seeds) tasks.push({ bot: e.name, startYear: y, seed: s, goal: S.GOAL_YEARS })

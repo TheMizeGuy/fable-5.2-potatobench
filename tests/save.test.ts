@@ -60,6 +60,56 @@ describe('parseSave', () => {
     expect(Number.isFinite(c.cash)).toBe(true)
   })
 
+  it('migrates the version 1 save: the fields version 2 added are there, and a whole year plays on from it', () => {
+    const c = parseSave(V1)!.campaign
+    expect(JSON.parse(V1).campaign.yearRest).toBeUndefined()
+    expect([c.yearRest, c.yearStorage]).toEqual([0, 0])
+    for (const h of c.history) expect([h.restIncome, h.storage]).toEqual([0, 0])
+    expect(S.apply(world, c, { t: 'begin' }).ok).toBe(true)
+    for (let guard = 0; c.phase === 'season' && guard < 400; guard++) {
+      for (const a of S.advise(world, c)) {
+        if (a.act === 'sell') S.apply(world, c, { t: 'sell', lot: a.lot, frac: 1 })
+        else if (a.act !== 'wait' && a.act !== 'close') S.apply(world, c, { t: 'job', kind: a.act, field: a.field })
+      }
+      S.apply(world, c, S.seasonDone(c) ? { t: 'endSeason' } : { t: 'day' })
+    }
+    for (let m = 0; m < 10 && c.phase === 'cellar'; m++) S.apply(world, c, { t: 'month' })
+    expect(c.phase).toBe('ledger')
+    expect(c.history.length).toBe(2)
+    const h = c.history[1]
+    expect(h.restIncome).toBe(2 * S.REST_INCOME)
+    expect(h.storage).toBeGreaterThan(0)
+    expect(c.cash).toBeCloseTo(h.cashStart + h.revenue - h.costs - h.note - h.living - h.interest, 6)
+    expect(S.apply(world, c, { t: 'next' }).ok).toBe(true)
+  })
+
+  it('migrates a version 1 save made in mid-season and plays the season out', () => {
+    const r = runReplay(S, world, { ...REPLAY, stopAt: c => c.yearIdx === 1 && c.phase === 'season' && c.season!.day >= S.dayIndex(c.year, 7, 1) })
+    const old = JSON.parse(serialize(r.campaign, 7)) as { v: number; campaign: Record<string, unknown> & { season: { fields: Record<string, unknown>[] }; history: Record<string, unknown>[] } }
+    // Back to the version 1 shape: none of the fields version 2 added.
+    old.v = 1
+    old.campaign.v = 1
+    delete old.campaign.yearRest
+    delete old.campaign.yearStorage
+    for (const h of old.campaign.history) { delete h.restIncome; delete h.storage }
+    for (const f of old.campaign.season.fields) for (const k of ['eye', 'seedBlight', 'frostDay', 'frostShare', 'rimeDay']) delete f[k]
+    const c = parseSave(JSON.stringify(old))!.campaign
+    expect(c.v).toBe(S.SAVE_VERSION)
+    expect([c.yearRest, c.yearStorage]).toEqual([0, 0])
+    for (const h of c.history) expect([h.restIncome, h.storage]).toEqual([0, 0])
+    for (const f of c.season!.fields) {
+      expect(f.eye).toBe(f.hMass.reduce((a, b) => a + b, 0))
+      expect([f.seedBlight, f.frostDay, f.frostShare, f.rimeDay, f.samples, f.sampleN]).toEqual([0, -1, 0, -1, [], []])
+    }
+    const growing = [0, 1, 2, 3, 4, 5].filter(i => S.fieldInfo(c, i).estimate)
+    expect(growing.length).toBeGreaterThan(0)
+    for (const i of growing) expect(Number.isFinite(S.fieldInfo(c, i).estimate!.mean)).toBe(true)
+    const rest = runReplay(S, world, { campaign: c })
+    expect(rest.done).toBe(true)
+    expect(rest.campaign.history.length).toBe(5)
+    for (const h of rest.campaign.history) expect(Number.isFinite(h.cashEnd)).toBe(true)
+  })
+
   it('round-trips a campaign in every phase exactly', () => {
     const at = [
       (c: S.Campaign) => c.phase === 'season' && c.season!.day >= S.dayIndex(c.year, 7, 20),
