@@ -78,13 +78,23 @@ repeat a decision the game already asks or add content without pressure:
 | Other crops, livestock, crafting, cooking | The game is about one crop. The rest year is a rotation decision, not a second crop to play. |
 | Characters, quests, dialogue | The neighbour is the reference practice for that real year, reported as what was seen from the road. Nothing else needs a voice. |
 | Walking an avatar | The farmer's time is the resource; steering them is not a decision. |
-| Contracts and multiple buyers | One price that moves through the year already makes sell-or-store a real choice. |
+| Contract volumes and multiple buyers | One price that moves through the year already makes sell-or-store a real choice. One variety is sold on a chip contract, which only fixes its price. |
 | Machinery breakdowns, random disasters | The weather record supplies enough misfortune, and it is real. |
 | Unlockable land | Six fields from the start; rotation is the land decision. |
 
 ## Verification gates
 
-Ship only when these hold. Results live in `docs/VERIFICATION.md`.
+Ship only when these hold, or the exception is recorded here. Results: gates 1 to 4 in
+`docs/balance/latest.md`, gate 5 in `docs/verification/model-vs-record.md`, gates 6 to 8 and
+the summary in `docs/VERIFICATION.md`. The quality of every screen is judged separately,
+by `docs/QUALITY.md`.
+
+**Exception on record.** Gate 2 fails for one verb: in bot play a test dig is worth nothing
+($0.3k, interval -$0.2k to $1.0k over 24 seeds), because the decisions it could inform
+(when to kill the vines, whether to store) turn out not to depend on it. It stays in the
+game because it is the player's only look at the hidden crop, which is the first pillar,
+and the blind playtesters named it the best moment of the season. It is a known weakness
+of the design, not a solved one.
 
 1. **Skill gradient.** Over many real years and seeds: expert bot > reference
    bot > naive bot on five-season survival and net worth.
