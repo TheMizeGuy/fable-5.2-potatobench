@@ -108,7 +108,7 @@ async function quiet(label: string, tries = 6): Promise<boolean> {
   console.log(`  (the GPU was still shared at ${label}: these numbers are high)`)
   return false
 }
-await quiet('start', 30)
+await quiet('start', 12)
 const browser = await chromium.launch({ args: GPU })
 const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1 })
 const errors: string[] = []
