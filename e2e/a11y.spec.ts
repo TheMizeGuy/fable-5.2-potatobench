@@ -17,12 +17,9 @@ test.beforeEach(({ browserName }) => {
   test.skip(browserName !== 'chromium', 'axe is run once, in Chromium')
 })
 
-test('the opening, the year picker, the help and the settings', async ({ page }) => {
+test('the opening, the help and the settings', async ({ page }) => {
   await open(page)
   expect(await serious(page), 'opening').toEqual([])
-  await page.getByTestId('choose-year').click()
-  expect(await serious(page), 'choose the year').toEqual([])
-  await page.keyboard.press('Escape')
   await page.getByTestId('how-open').click()
   expect(await serious(page), 'how to play').toEqual([])
   await page.keyboard.press('Escape')
@@ -44,20 +41,36 @@ test('spring: the map, the plan card and its papers', async ({ page }) => {
   await page.getByTestId('money-close').click()
   await page.getByTestId('equipment-open').click()
   expect(await serious(page), 'equipment').toEqual([])
+  await page.getByTestId('equipment-close').click()
+  await page.getByTestId('land-10').click()
+  expect(await serious(page), 'land card').toEqual([])
+  await page.getByTestId('crew-open').click()
+  expect(await serious(page), 'the crew').toEqual([])
+  await page.getByTestId('crew').getByTestId('hire-hand').click()
+  await page.getByTestId('crew-close').click()
+  await page.getByTestId('contracts-open').click()
+  expect(await serious(page), 'contracts').toEqual([])
+  await page.getByTestId('contracts').locator('[data-testid^="accept-"]').first().click()
+  await page.getByTestId('contracts-close').click()
+  expect(await serious(page), 'spring with a contract and a hand').toEqual([])
 })
 
 test('the season: instruments, the card, the almanac, the menu and its confirmation', async ({ page }) => {
   await open(page, '?year=1990&seed=7')
+  await reach(page, `const { app } = q.g(); app.do({ t: 'hire', kind: 'hand' }); app.do({ t: 'accept', offer: 19901 })`)
   await page.getByTestId('begin-season').click()
   await reach(page, `q.g().app.setSpeed(0); q.run(q.day(6, 20))`)
   await putAway(page)
   expect(await serious(page), 'season').toEqual([])
+  await page.getByTestId('unit-1').click()
+  expect(await serious(page), 'a crew picked').toEqual([])
+  await page.getByTestId('unit-1').click()
   await page.getByTestId('field-2').click()
   expect(await serious(page), 'a field selected').toEqual([])
   await page.getByTestId('field-4').click({ modifiers: ['Shift'] })
   expect(await serious(page), 'two fields selected').toEqual([])
   await page.keyboard.press('i')
-  for (const tab of ['forecast', 'blight', 'fields', 'diary', 'prices']) {
+  for (const tab of ['forecast', 'blight', 'fields', 'farm', 'diary', 'prices']) {
     await page.getByTestId(`almanac-${tab}`).click()
     expect(await serious(page), `almanac: ${tab}`).toEqual([])
   }

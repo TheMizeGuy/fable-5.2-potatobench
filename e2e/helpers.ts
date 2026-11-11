@@ -53,7 +53,7 @@ export async function look(page: Page): Promise<Seen> {
       done,
       hint: !!el('hint'),
       tray: !!el('sample-dialog'),
-      queue: document.querySelectorAll('#ui [data-testid^="queue-"]:not([data-testid^="queue-first"]):not([data-testid="queue-more"]):not([data-testid^="queue-cancel"])').length,
+      queue: document.querySelectorAll('#ui [data-testid^="queue-"]:not([data-testid^="queue-first"]):not([data-testid="queue-more"]):not([data-testid^="queue-cancel"]):not([data-testid^="queue-who"])').length,
     }
   })
 }

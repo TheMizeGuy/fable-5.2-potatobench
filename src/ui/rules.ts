@@ -112,6 +112,9 @@ export function alertShort(a: Alert): { text: string; glyph: string } {
     case 'freeze': return { text: 'The ground has frozen', glyph: 'frost' }
     case 'dropped': return { text: `${name}${a.text.split(' in ')[0].toLowerCase()} dropped`, glyph: 'warn' }
     case 'sold': return { text: a.text.replace(/^Sold .* for /, `${name}sold for `).replace(/\.$/, ''), glyph: 'check' }
+    case 'delivered': return { text: a.text.replace(/^Delivered .* for /, `${name}delivered for `).replace(/\.$/, ''), glyph: 'deliver' }
+    case 'contractShort': case 'contractFilled': return { text: a.text.replace(/\.$/, ''), glyph: 'contract' }
+    case 'hired': case 'dismissed': return { text: a.text.replace(/\.$/, ''), glyph: 'crew' }
     default: return { text: a.text, glyph: a.level === 'bad' ? 'blight' : a.level === 'warn' ? 'warn' : a.level === 'good' ? 'check' : 'flat' }
   }
 }
@@ -235,7 +238,7 @@ export function outlookText(c: S.Campaign): string {
   const s = c.season
   const low = Math.min(...S.SEASON_CURVE.map(p => p[1]))
   const nov = S.MONTH_CURVE[0], apr = S.MONTH_CURVE[5]
-  const base = `September and October are usually the low of the year; November runs about ${F.pct(nov / low - 1)} above it and April about ${F.pct(apr / low - 1)} (USDA, Maine, 1979 to 2013).`
+  const base = `September and October are usually the low of the year; November runs about ${F.pct(nov / low - 1)} above it and April about ${F.pct(apr / low - 1)}.`
   if (c.phase !== 'season' || !s) return base
   const now = usualFactor(s.day)
   return `${base} Against today's price that puts November ${F.versus(nov / now)} and April ${F.versus(apr / now)}.`
@@ -243,7 +246,7 @@ export function outlookText(c: S.Campaign): string {
 
 // Where the price usually stands by April against today, in a phrase, for the weigh ticket.
 export function aprilPhrase(c: S.Campaign, v: S.Variety): string {
-  if (v.contract) return 'a contract price: it does not rise through the winter'
+  if (v.contract) return 'off contract it fetches a processing price, which barely moves through the winter'
   const s = c.season
   const now = c.phase === 'season' && s ? usualFactor(s.day) : S.MONTH_CURVE[Math.min(c.month, S.MONTH_CURVE.length - 1)]
   return `by April it is usually ${F.versus(S.MONTH_CURVE[5] / now, 'above today', 'below today').replace('level with', 'level with today')}`
@@ -255,7 +258,31 @@ export function storageText(c: S.Campaign, cwt: number): string {
 }
 
 export function contractText(v: S.Variety): string {
-  return `${v.name} is grown on contract: the price is the same whenever it is delivered, with no winter rise, so keeping it only costs storage and shrink.`
+  return `${v.name} is a chipping potato. Off contract it fetches only a processing price, ${offContract()} its usual price, and that barely moves through the winter, so keeping it only costs storage and shrink. Against a chip plant's contract it gets the contract price.`
+}
+
+// How far under its usual price the chipping variety sells with no contract.
+export function offContract(): string {
+  return `${F.pct(1 - S.PROCESSING_PRICE)} under`
+}
+
+// ---------------------------------------------------------------- crews
+
+export const KIND_GLYPH: Record<S.UnitKind, string> = { farmer: 'farmer', hand: 'hand', operator: 'tractor' }
+export const KIND_NAME: Record<S.UnitKind, string> = { farmer: 'The farmer', hand: 'Field hand', operator: 'Tractor operator' }
+
+// What a kind of crew can be given, in words.
+export function kindDoes(kind: S.UnitKind): string {
+  if (kind === 'farmer') return 'Every job.'
+  return `${F.upper(F.list(S.UNIT_JOBS[kind].map(j => JOB_NOUN[j])))}.`
+}
+
+const JOB_NOUN: Record<S.JobKind, string> = {
+  plant: 'planting', hill: 'hilling', scout: 'scouting', spray: 'spraying', water: 'watering', rogue: 'pulling blighted plants', sample: 'test digs', kill: 'vine kill', dig: 'digging',
+}
+
+export function initial(name: string): string {
+  return name.slice(0, 1).toUpperCase()
 }
 
 // What saved seed carries, for the stock in hand.
@@ -266,7 +293,29 @@ export function savedSeedText(stock: S.SeedStock[]): string {
   return `Saved seed is free, but it carries more virus every year it is saved: about ${F.pct(virus)} of plants from this stock will come up stunted (certified seed: about ${F.pct(S.VIRUS_CERTIFIED)}), and a stunted plant gives about ${F.pct(1 - S.VIRUS_VIGOR)} less.${blight ? ' Tuber blight went into the cellar with it, and some of that comes back up in the field.' : ''}`
 }
 
-// How a season is counted on the way to keeping the farm.
+// How a season is counted on the way to keeping the farm: "Year 2 of 5". A farm played on the record also has its year.
 export function seasonCount(c: S.Campaign): string {
-  return c.yearIdx < c.goalYears ? `season ${c.yearIdx + 1} of ${c.goalYears}` : `year ${c.yearIdx + 1}`
+  const n = c.yearIdx < c.goalYears ? `year ${c.yearIdx + 1} of ${c.goalYears}` : `year ${c.yearIdx + 1}`
+  return S.isFarmYear(c.year) ? F.upper(n) : `${c.year}, ${n}`
+}
+
+// A year as a heading names it: "Year 2", or the year itself for a farm played on the record.
+export function yearName(year: number): string {
+  return S.yearLabel(year)
+}
+
+// The same in a sentence: "year 2".
+export function yearWord(year: number): string {
+  return S.isFarmYear(year) ? S.yearLabel(year).toLowerCase() : String(year)
+}
+
+// The same where there is room only for a figure: a column of years, the axis of a chart.
+export function yearShort(year: number): string {
+  return S.isFarmYear(year) ? String(year - S.FARM_YEAR0) : String(year)
+}
+
+// "Years 1 to 5", or "Year 3" when they are the same.
+export function yearSpan(a: number, b: number): string {
+  if (a === b) return yearName(a)
+  return S.isFarmYear(a) ? `Years ${yearShort(a)} to ${yearShort(b)}` : `${a} to ${b}`
 }

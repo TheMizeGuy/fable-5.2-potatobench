@@ -4,7 +4,7 @@ import * as S from '../sim/index.ts'
 import { confirmPaper, type Ctx } from './core.ts'
 import { h } from './dom.ts'
 import * as F from './fmt.ts'
-import { seasonCount } from './rules.ts'
+import { seasonCount, yearWord } from './rules.ts'
 import { PHASE_LABEL } from './top.ts'
 
 function endSeasonEarly(ctx: Ctx): void {
@@ -18,7 +18,7 @@ function endSeasonEarly(ctx: Ctx): void {
     const f = S.fieldInfo(c, i)
     if (f.status === 'digging') digging.push(f.name)
     else if (f.status === 'idle') bare.push(f.name)
-    else if (f.status !== 'rest' && f.status !== 'dug' && f.status !== 'lost') left.push(f.name)
+    else if (f.status !== 'rest' && f.status !== 'dug' && f.status !== 'lost' && f.status !== 'off') left.push(f.name)
   }
   void confirmPaper(ctx, {
     title: 'End the season now?',
@@ -112,7 +112,7 @@ export function openMenu(ctx: Ctx, o: { onHelp: () => void; onAlmanac: () => voi
             class: 'btn', type: 'button', testid: 'save-export', disabled: !c, onclick: () => {
               const text = app.exportSave()
               if (!text || !c) return
-              const a = h('a', { href: URL.createObjectURL(new Blob([text], { type: 'application/json' })), download: `the-county-${c.startYear}-${c.year}.json` })
+              const a = h('a', { href: URL.createObjectURL(new Blob([text], { type: 'application/json' })), download: `the-county-${yearWord(c.year).replace(' ', '-')}.json` })
               document.body.append(a)
               a.click()
               a.remove()
@@ -136,7 +136,7 @@ export function openMenu(ctx: Ctx, o: { onHelp: () => void; onAlmanac: () => voi
       const season = c!.phase === 'season'
       return h('div', { class: 'menu-cols' },
         h('nav', { class: 'menu-nav', 'aria-label': 'Menu' },
-          h('p', { class: 'sub' }, `${c!.year}, ${seasonCount(c!)} · ${PHASE_LABEL[c!.phase].toLowerCase()}`),
+          h('p', { class: 'sub' }, `${seasonCount(c!)} · ${PHASE_LABEL[c!.phase].toLowerCase()}`),
           h('button', { class: 'btn primary big', type: 'button', testid: 'menu-continue', autofocus: true, onclick: close }, 'Continue'),
           season ? h('button', { class: 'btn big', type: 'button', testid: 'menu-almanac', onclick: () => { close(); o.onAlmanac() } }, 'The almanac') : null,
           h('button', { class: 'btn big', type: 'button', testid: 'how-open', onclick: () => o.onHelp() }, 'How to play'),

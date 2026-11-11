@@ -1,12 +1,20 @@
 // Gate 7: a player can start a farm, work a season, dig, sell, close the year, and find the save again.
 // Everything here goes through the interface: clicks on badges, plates and the command card, and the keyboard.
+// Play gives a farm of its own with seasons made from a random seed, so nothing here may count on one year's weather.
 import { test, type Page } from '@playwright/test'
-import { expect, look, noSidewaysScroll, pause, watchErrors } from './helpers.ts'
+import { expect, look, noSidewaysScroll, pause, reach, watchErrors } from './helpers.ts'
 
 const BADGE = '#ui [data-testid^="badge-"]'
 
 async function answerTicket(page: Page, store: boolean): Promise<void> {
   const ticket = page.getByTestId('weighin')
+  // A crop a contract wants goes to the buyer first; what is left is sold or stored.
+  const deliver = ticket.locator('[data-testid^="lot-deliver-"]')
+  if (await deliver.count()) {
+    await deliver.click()
+    await page.waitForTimeout(200)
+    if (!(await ticket.count())) return
+  }
   const sell = ticket.locator('[data-testid^="lot-sell-"]')
   const advised = await ticket.locator('.choice-advice').count()
   if ((await sell.count()) && (advised || !store)) await sell.click()
@@ -17,9 +25,9 @@ async function answerTicket(page: Page, store: boolean): Promise<void> {
 // Plays the days as they come: reads a tip and puts it away, gives each field what its badge asks for (every third
 // one through the command card), keeps the clock running, and answers weigh tickets. Stops at the first ticket or
 // when the season is done.
-async function farm(page: Page, until: 'ticket' | 'done', store: boolean): Promise<void> {
+async function farm(page: Page, until: 'ticket' | 'done', store: boolean, ms = 300_000): Promise<void> {
   let given = 0
-  const deadline = Date.now() + 300_000
+  const deadline = Date.now() + ms
   while (Date.now() < deadline) {
     const s = await look(page)
     if (s.ticket) {
@@ -53,7 +61,7 @@ async function farm(page: Page, until: 'ticket' | 'done', store: boolean): Promi
 }
 
 test('a first season from the opening to the next spring, with a save that survives a reload', async ({ page }) => {
-  test.setTimeout(600_000)
+  test.setTimeout(900_000)
   const errors = watchErrors(page)
   await page.goto('./')
   await page.evaluate(() => localStorage.clear())
@@ -75,7 +83,8 @@ test('a first season from the opening to the next spring, with a save that survi
   expect(first.speed).toBe(1)
 
   // A crop just dug is the one thing that stops it.
-  await farm(page, 'ticket', true)
+  // A slow engine draws few frames a second, and the days go by more slowly with them.
+  await farm(page, 'ticket', true, 420_000)
   const ticket = page.getByTestId('weighin')
   await expect(ticket).toBeVisible()
   const stopped = await look(page)
@@ -105,6 +114,27 @@ test('a first season from the opening to the next spring, with a save that survi
 
   // The rest of the season, the winter, and the year end.
   await farm(page, 'done', false)
+  await winterAndYearEnd(page)
+  // A made-up first year can be hard enough to lose the farm; either way the sheet says so and the game goes on.
+  if (await page.getByTestId('lost-moment').count()) {
+    await page.getByTestId('year-next').click()
+    await expect(page.getByTestId('over-title')).toBeVisible()
+  } else {
+    await expect(page.getByTestId('outcome')).toContainText('The bank is satisfied')
+    await page.getByTestId('year-next').click()
+    await expect(page.getByTestId('begin-season')).toBeVisible()
+    await expect(page.getByTestId('date')).toHaveText('Spring')
+    await expect(page.locator('#ui main:not(.leaving) .tb-year')).toHaveText('Year 2')
+  }
+
+  await noSidewaysScroll(page)
+  expect(errors, errors.join('\n')).toEqual([])
+})
+
+async function winterAndYearEnd(page: Page): Promise<void> {
+  // The last weigh ticket can arrive as the season closes; it is answered first.
+  await page.waitForTimeout(500)
+  while (await page.getByTestId('weighin').count()) await answerTicket(page, true)
   await page.getByTestId('end-season').click()
   await expect(page.getByTestId('month-next')).toBeVisible()
   for (let i = 0; i < 9 && !(await page.getByTestId('year-next').count()); i++) {
@@ -114,11 +144,73 @@ test('a first season from the opening to the next spring, with a save that survi
     await page.waitForTimeout(250)
   }
   await expect(page.getByTestId('year-next')).toBeVisible()
-  await expect(page.getByTestId('outcome')).toContainText('The bank is satisfied')
-  await page.getByTestId('year-next').click()
-  await expect(page.getByTestId('begin-season')).toBeVisible()
-  await expect(page.getByTestId('date')).toHaveText('Spring')
+}
 
+test('a second year on a bigger farm: rented land, a hired hand, and a contract delivered against', async ({ page }) => {
+  test.setTimeout(900_000)
+  const errors = watchErrors(page)
+  await page.goto('./')
+  await page.evaluate(() => localStorage.clear())
+  await page.reload()
+  await page.getByTestId('play').click()
+  await expect(page.getByTestId('begin-season')).toBeVisible()
+  // The first year is not what this is about: it is run by the reference practice, and the cash topped up before the
+  // year closes so that a hard first year cannot end the farm before the second begins.
+  await reach(page, `const { app } = q.g(); app.do({ t: 'begin' }); q.run(999, ['sell']); app.campaign.cash += 60000; q.winter(12, 3); app.do({ t: 'next' })`)
+  await expect(page.getByTestId('begin-season')).toBeVisible()
+  await expect(page.locator('#ui main:not(.leaving) .tb-year')).toHaveText('Year 2')
+
+  // Land: the marker across the brook opens its card, and Rent puts a plate on it and the rent on the money line.
+  const land = page.getByTestId('land-6')
+  await expect(land).toBeVisible()
+  await land.click()
+  const card = page.getByTestId('plan-card')
+  await expect(card).toContainText('across the brook')
+  await card.getByTestId('land-rent').click()
+  await expect(page.getByTestId('field-6')).toBeVisible()
+  await expect(page.getByTestId('plan-money')).toContainText('rent $1,300')
+  await page.keyboard.press('Escape')
+
+  // A field hand, from the crew paper.
+  await page.getByTestId('crew-open').click()
+  await page.getByTestId('crew').getByTestId('hire-hand').click()
+  await expect(page.getByTestId('crew')).toContainText('Lucien')
+  await page.getByTestId('crew-close').click()
+  await expect(page.getByTestId('plan-money')).toContainText('wages $450')
+
+  // A contract, and every potato field planned to its variety: a double-click takes them all.
+  await page.getByTestId('contracts-open').click()
+  const offer = page.getByTestId('contracts').locator('[data-testid^="accept-"]').first()
+  const variety = await page.getByTestId('contracts').locator('[data-testid^="offer-"]').first().locator('.offer-head .sub').textContent()
+  await offer.click()
+  await expect(page.getByTestId('contracts').locator('.offer.signed')).toHaveCount(1)
+  await page.getByTestId('contracts-close').click()
+  await expect(page.getByTestId('tracker')).toBeVisible()
+  const potato = await page.locator('#ui .plate:not(.land)').evaluateAll(els => els.find(e => !/Rest year/.test(e.textContent ?? ''))?.getAttribute('data-testid'))
+  await page.getByTestId(potato!).dblclick()
+  await card.locator('.vcard', { hasText: variety!.trim() }).locator('input').check({ force: true })
+  await expect(page.getByTestId(potato!)).toContainText(variety!.trim())
+  await page.keyboard.press('Escape')
+
+  // The season, with two crews on the bar.
+  await page.getByTestId('begin-season').click()
+  await expect(page.getByTestId('forecast')).toBeVisible()
+  await expect(page.locator('#ui .unit')).toHaveCount(2)
+  await page.getByTestId('unit-1').click()
+  await expect(page.getByTestId('unit-1')).toHaveAttribute('aria-pressed', 'true')
+  await page.getByTestId('unit-1').click()
+  await expect(page.getByTestId('unit-1')).toHaveAttribute('aria-pressed', 'false')
+  // A whole season in one go, with more land to work than the first year had.
+  await farm(page, 'done', true, 600_000)
+  const delivered = await page.evaluate(() => (globalThis as unknown as { __county: { app: { campaign: { contracts: { delivered: number }[] } } } }).__county.app.campaign.contracts[0].delivered)
+  expect(delivered).toBeGreaterThan(0)
+
+  // The year end counts the rent, the wages and what the contract paid.
+  await winterAndYearEnd(page)
+  const sheet = page.locator('#ui .ledger-sheet')
+  await expect(sheet.getByTestId('ledger-rent')).toContainText('$1,300')
+  await expect(sheet.getByTestId('ledger-wages')).toBeVisible()
+  await expect(sheet.getByTestId('ledger-contracts')).toBeVisible()
   await noSidewaysScroll(page)
   expect(errors, errors.join('\n')).toEqual([])
 })
@@ -131,7 +223,8 @@ test('the same start by keyboard alone', async ({ page, isMobile }) => {
   await page.evaluate(() => localStorage.clear())
   await page.reload()
 
-  await expect(page.getByTestId('play')).toBeFocused()
+  // The focus is put on Play once the land is up, which a slow engine takes a while over.
+  await expect(page.getByTestId('play')).toBeFocused({ timeout: 20_000 })
   await page.keyboard.press('Enter')
   await expect(page.getByTestId('begin-season')).toBeFocused()
   // Fields are chosen with the number keys; Escape lets them go.

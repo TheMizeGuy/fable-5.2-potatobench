@@ -32,10 +32,20 @@ async function selectField(page: Page, _size: string, i: number): Promise<void> 
 
 const july: Step = async page => { await q(page, `q.start(1987, 3); q.run(q.day(6, 12))`); await closeAll(page) }
 
+// A spring on the bigger farm: the intervale and a Dufour field rented, a hand and an operator on the second tractor,
+// the packer's Kennebec contract signed and two home fields planned to Kennebec. The cash for the tractor is put in
+// by hand; these frames are about the screens.
+const BIGGER = `const { app } = q.g(); app.newGame(1987, 3); const c = app.campaign
+  for (const f of [6, 10]) app.do({ t: 'rent', field: f })
+  app.do({ t: 'hire', kind: 'hand' }); c.cash += 30000; app.do({ t: 'buy', upgrade: 'tractor2' }); app.do({ t: 'hire', kind: 'operator' })
+  app.do({ t: 'accept', offer: 19873 })
+  for (const f of [0, 2, 6]) app.do({ t: 'plan', field: f, plan: { crop: 'potato', variety: 'kennebec', seed: 'certified' } })`
+const biggerJuly: Step = async page => { await q(page, `${BIGGER}; app.do({ t: 'begin' }); q.run(q.day(6, 12))`); await closeAll(page) }
+
 const STATES: State[] = [
   { name: 'title', what: 'Title screen, first visit', sizes: ALL, run: async () => {} },
   { name: 'title-continue', what: 'Title screen with a saved farm', sizes: MAIN, run: async page => { await q(page, `q.start(1987, 3); q.run(q.day(5, 1)); q.g().app.quitToTitle()`) } },
-  { name: 'new-farm', what: 'New farm: choosing the first year', sizes: [...MAIN, 'small', 'land'], run: async page => { await page.getByTestId('choose-year').click() } },
+  { name: 'new-farm', what: 'New farm over a saved one: the question first', sizes: [...MAIN, 'small', 'land'], run: async page => { await q(page, `q.start(1987, 3); q.g().app.quitToTitle()`); await page.getByTestId('play').click() } },
   { name: 'how-it-works', what: 'How it works', sizes: MAIN, run: async page => { await page.getByTestId('how-open').first().click() } },
   { name: 'menu', what: 'Menu and settings, opened in season', sizes: MAIN, run: async page => { await july(page, ''); await page.getByTestId('menu-open').first().click() } },
   { name: 'plan-first', what: 'Spring plan, first year', sizes: ALL, run: async page => { await q(page, `q.g().app.newGame(1987, 3)`) } },
@@ -104,7 +114,46 @@ const STATES: State[] = [
     await closeAll(page)
   } },
   { name: 'metric', what: 'July with metric units', sizes: MAIN, run: async (page, size) => { await july(page, size); await q(page, `q.g().app.setSetting('units', 'metric')`); await selectField(page, size, 2) } },
+
+  // The bigger farm.
+  { name: 'plan-land', what: 'Spring: land to rent or buy, its card open', sizes: ALL, run: async page => { await q(page, `q.g().app.newGame(1987, 3)`); await page.getByTestId('land-10').click() } },
+  { name: 'plan-contracts', what: 'Spring: the contracts offered', sizes: [...MAIN, 'small'], run: async page => { await q(page, `q.g().app.newGame(1987, 3)`); await page.getByTestId('contracts-open').click() } },
+  { name: 'plan-crew', what: 'Spring: hiring and letting go', sizes: MAIN, run: async page => { await q(page, `q.g().app.newGame(1987, 3); q.g().app.do({ t: 'hire', kind: 'hand' })`); await page.getByTestId('crew-open').click() } },
+  { name: 'plan-bigger', what: 'Spring on the bigger farm: rented land, crews, a contract signed', sizes: ALL, run: async page => { await q(page, BIGGER) } },
+  { name: 'plan-bigger-field', what: 'Spring on the bigger farm: a rented field\'s card, picked by its number', sizes: MAIN, run: async page => { await q(page, BIGGER); await page.keyboard.press('7') } },
+  { name: 'season-bigger', what: 'July on the bigger farm, nothing selected', sizes: ALL, run: biggerJuly },
+  { name: 'season-crew-picked', what: 'July on the bigger farm: a hand picked and a field selected', sizes: [...MAIN, 'small'], run: async (page, size) => {
+    await biggerJuly(page, size)
+    await page.getByTestId('unit-1').click()
+    await selectField(page, size, 2)
+  } },
+  { name: 'season-queue-who', what: 'July on the bigger farm: choosing who does an order', sizes: MAIN, run: async (page, size) => {
+    await biggerJuly(page, size)
+    await q(page, `const { app } = q.g(); for (const i of [0, 2, 6]) app.do({ t: 'job', kind: 'scout', field: i })`)
+    const id = await q(page, `const jobs = q.g().app.campaign.season.jobs; return (jobs.find(j => j.kind === 'scout') ?? jobs[0])?.id ?? -1`) as number
+    const who = page.getByTestId(`queue-who-${id}`)
+    if (await who.count()) { await page.getByTestId(`queue-${id}`).focus(); await who.click() } else await page.getByTestId(`queue-${id}`).click()
+  } },
+  { name: 'weigh-in-deliver', what: 'Dig day on contract: the weigh ticket offers the delivery', sizes: ALL, run: async (page, size) => {
+    await q(page, `${BIGGER}; for (let i = 0; i < 14; i++) if (c.plans[i].crop === 'potato' && c.fields[i].tenure !== 'none') app.do({ t: 'plan', field: i, plan: { crop: 'potato', variety: 'kennebec', seed: 'certified' } }); app.do({ t: 'begin' }); q.run(999, ['sell'], 'lot')`)
+    await closeAll(page)
+    const lot = await q(page, `const c = q.g().app.campaign; const l = c.lots.find(l => l.open); return { id: l.id, field: l.field }`) as { id: number; field: number }
+    await q(page, `q.g().app.select(${lot.field})`)
+    await page.getByTestId(`weighin-${lot.id}`).click()
+    await page.getByTestId('weighin').waitFor({ timeout: 5000 }).catch(() => {})
+  } },
+  { name: 'cellar-houses', what: 'Winter with the Dufour potato house and a second one at home, a winter contract open', sizes: [...MAIN, 'small', 'land'], run: async page => {
+    await q(page, `const { app } = q.g(); app.newGame(1987, 3); const c = app.campaign; app.do({ t: 'rent', field: 10 }); c.cash += 30000; app.do({ t: 'buy', upgrade: 'house2' })
+      app.do({ t: 'accept', offer: 19871 }); for (const f of [0, 2]) app.do({ t: 'plan', field: f, plan: { crop: 'potato', variety: 'atlantic', seed: 'certified' } })
+      app.do({ t: 'begin' }); q.run(999, ['sell']); q.winter(0, 9)`)
+    await closeAll(page)
+  } },
+  { name: 'ledger-bigger', what: 'Year end on the bigger farm: wages, rent and a contract', sizes: MAIN, run: async page => { await q(page, `${BIGGER}; app.do({ t: 'begin' }); q.year(3)`); await closeAll(page) } },
+  { name: 'almanac-farm', what: 'The almanac: land, crews and contracts', sizes: MAIN, run: async (page, size) => { await biggerJuly(page, size); await page.keyboard.press('i'); await page.getByTestId('almanac-farm').click() } },
+  { name: 'how-bigger', what: 'How to play, with the bigger farm', sizes: ['desk'], run: async page => { await page.getByTestId('how-open').first().click(); await page.locator('.help-farm').scrollIntoViewIfNeeded() } },
 ]
+// ALL_SIZES=1 takes every state at all eight sizes.
+if (process.env.ALL_SIZES) for (const s of STATES) s.sizes = ALL
 
 // Runs in the page: what styles are actually in use on screen, and what overflows.
 const AUDIT = `(() => {
@@ -161,15 +210,21 @@ async function shoot(ctx: BrowserContext, state: State, size: string): Promise<v
   await page.close()
 }
 
-await Promise.all(ALL.map(async size => {
-  const s = SIZES[size]
-  const ctx = await browser.newContext({ viewport: { width: s.width, height: s.height }, deviceScaleFactor: s.scale ?? 1, hasTouch: !!s.touch, isMobile: !!s.touch && s.width < 900 })
-  await ctx.addInitScript(HELPER)
-  for (const state of STATES) {
-    if (!state.sizes.includes(size) || !state.name.includes(filter)) continue
-    await shoot(ctx, state, size)
+// SIZES=desk,phone keeps to those sizes. PAR sets how many sizes are drawn at once (two by default).
+const only = process.env.SIZES ? process.env.SIZES.split(',') : ALL
+const par = Math.max(1, Number(process.env.PAR ?? 2))
+const queue = ALL.filter(size => only.includes(size))
+await Promise.all(Array.from({ length: par }, async () => {
+  for (let size = queue.shift(); size; size = queue.shift()) {
+    const s = SIZES[size]
+    const ctx = await browser.newContext({ viewport: { width: s.width, height: s.height }, deviceScaleFactor: s.scale ?? 1, hasTouch: !!s.touch, isMobile: !!s.touch && s.width < 900 })
+    await ctx.addInitScript(HELPER)
+    for (const state of STATES) {
+      if (!state.sizes.includes(size) || !state.name.includes(filter)) continue
+      await shoot(ctx, state, size)
+    }
+    await ctx.close()
   }
-  await ctx.close()
 }))
 await browser.close()
 
