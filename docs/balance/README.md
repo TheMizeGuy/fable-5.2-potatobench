@@ -2,30 +2,41 @@
 
 `npm run balance` plays every bot below over every start year in `startYears(world)` with 24 seeds,
 five-season campaigns, and judges verification gates 1 to 4 of `docs/DESIGN.md`. Results are in
-`latest.md` (tables) and `latest.json` (the same, plus each bot's median net worth by start year). The
-whole run takes about 50 seconds on sixteen worker threads (`SEEDS` and `WORKERS` override).
+`latest.md` (tables) and `latest.json` (the same, plus each bot's median net worth by start year). Since
+the bigger farm the whole run takes about eight minutes on fourteen worker threads of the Windows box
+mizepc2 (`tools/remote/pc2.sh bal 'npm run balance' docs/balance <local folder>`; `SEEDS` and `WORKERS`
+override). It is not run on the laptop.
 
 The tournament used six seeds until the third pass, when a gate passed on seeds 1 to 6 and failed to
 repeat on any other six (see the tuning log below). At 24 seeds the gate verdicts no longer turn on the
 seed draw.
 
 The code is in `tools/balance/`: `bots.ts` (the bots and the campaign driver), `run.ts` (the
-tournament and the gate verdicts), `stats.ts`, `world.ts`.
+tournament and the gate verdicts), `trial.ts` (trial runs of expert variants against each other, which
+can also set the land's rents and prices and the equipment prices while they play, for sizing a change
+before it is made), `stats.ts`, `world.ts`.
 
 The gates are judged against these targets:
 
 1. Expert > reference > naive on kept farms, and on net worth with each 95% interval above zero; the
    expert keeps at least 90% of farms, the reference 65% to 80%, the naive bot at most 10%.
-2. Every ablation of the expert loses net worth, with the 95% interval above zero.
+2. Every ablation of the expert loses net worth, with the 95% interval above zero: every verb, and
+   since the bigger farm every new decision (land beyond the home six, hired crews, contracts, the
+   second tractor).
 3. No single-variety expert wins more than half of the start years or of the single seasons it can
    play, at least four varieties win some years (over campaigns and over seasons), and the
-   fixed-calendar expert loses to the expert in most years.
+   fixed-calendar expert loses to the expert in most years. Since the bigger farm also: no block of land
+   is always worth holding and none never (holding it every year beats the home farm alone in 20% to 80%
+   of the start years, and of the single seasons), and signing every contract offered beats choosing in
+   fewer than half of the start years and of the single seasons.
 4. The naive bot loses more than half of its farms and the expert keeps more than half.
 
 ## Fair play
 
 A bot reads the game only as a player can: `fieldInfo`, `fieldActions`, `today`, `forecast`,
-`jobWaits` and `advise`; the market quote (`basePrice`, `gradePrice`, `lotValue`, `newPotatoWindow`,
+`jobWaits` and `advise`; on the bigger farm `crewInfo`, `offerInfo`, `contractInfo`, `planCosts`,
+`cellarCapacity`, `held` and the dig time with its haul (`jobDays`); the published land table (each
+parcel's block, slope, rent and price) and equipment prices; the market quote (`basePrice`, `gradePrice`, `lotValue`, `newPotatoWindow`,
 which use only a lot's public grades and today's price); the public campaign fields; the published
 rules in `src/sim/params.ts` and `src/sim/varieties.ts` (storage charge, shrink, dormancy in a cool
 cellar, the soil warming a degree earlier on the ridge and later on the bottom land, rotation, prices);
@@ -38,11 +49,14 @@ the source of `bots.ts` for those names and checks that the check catches them.
 
 | Bot | What it does |
 |---|---|
-| naive | Plants all six fields to certified Katahdin on May 20, does nothing else, digs on September 20 whatever state the vines are in, and sells each lot as soon as it is dug. |
-| reference | Follows `advise()` as given with the default plans, no equipment, keeps every lot in the cellar and sells in March (month 4). Without an irrigation reel the advice waters only a wilting field, so the reference is in effect a dryland grower, as most of Aroostook is. |
+| naive | Plants the six home fields to certified Katahdin on May 20, does nothing else, digs on September 20 whatever state the vines are in, and sells each lot as soon as it is dug. |
+| reference | Follows `advise()` as given with the default plans, no equipment, keeps every lot in the cellar and sells in March (month 4). Without an irrigation reel the advice waters only a wilting field, so the reference is in effect a dryland grower, as most of Aroostook is. It keeps to the home six with the farmer alone and signs no contracts, as reference practice does by design. |
 | expert | The best fair play found, described below. |
-| no-hill, no-scout (scouting and roguing), no-spray, no-water, no-sample (test digs), no-kill (the vines die on their own or are dug green from September 15), no-store (sells at the dig), no-rotation (potatoes on all six fields every year), saved-seed (holds back seed every year and plants saved seed wherever there is stock), no-equipment | The expert with one verb or decision taken away. Without test digs the expert times the vine kill from the yield estimate and the variety's usual tuber set instead. |
-| only-*variety* | The expert with every potato field in one variety. It plays only the start years in which its variety had been released. Dark Red Norland goes to the early market, as the expert would grow it. |
+| no-hill, no-scout (scouting and roguing), no-spray, no-water, no-sample (test digs), no-kill (the vines die on their own or are dug green from September 15), no-store (sells at the dig), no-rotation (potatoes on every field it holds every year), saved-seed (holds back seed every year and plants saved seed wherever there is stock), no-equipment (no cellar ventilation or irrigation reel) | The expert with one verb or decision taken away. Without test digs the expert times the vine kill from the yield estimate and the variety's usual tuber set instead. |
+| no-expansion (the home six only), no-hire (the farmer alone), no-contracts, no-tractor2 | The expert with one decision of the bigger farm taken away; the rest of its play adapts as it would. |
+| with-brook, with-ridge, with-dufour | The expert holding the home farm and that one block every year, rented or bought as the expert would. Against no-expansion they say whether each block is worth holding. |
+| all-contracts | The expert signing every contract offered and planting to fill them. |
+| only-*variety* | The expert with every potato field in one variety, signing contracts only for that variety. It plays only the start years in which its variety had been released. Dark Red Norland goes to the early market, as the expert would grow it. |
 | calendar | The expert held to the same dates every year: planting May 12-18 by slope, hilling 30 and 44 days after planting, weekly spraying from July 1, one watering on July 25, a test dig on August 5, vine kill on August 28 and digging from September 12. |
 
 ### The expert
@@ -51,10 +65,9 @@ the source of `bots.ts` for those names and checks that the check catches them.
   on also the irrigation reel when three or more remain. Plans each field by enumerating every
   potato-or-rest sequence for the seasons left, valuing a potato year by the field's visible wilt and
   soil (`fieldInfo`), the published rotation rules (`SOIL_AFTER_POTATO`, `VERT_GROW`, `VERT_REST`) and
-  the published field and seed costs. Grows Katahdin on the two ridge fields and Yukon Gold on the four
-  lower ones (Kennebec until Gold's release in 1980). From Caribou Russet's release in 2015 it grows
-  Caribou on the four upper fields and Atlantic on the two bottom fields: the contract crop sells at the
-  dig for the price it will fetch all winter, which leaves the cellar to the russet. Plants
+  the published field and seed costs. Grows Katahdin on ridge fields and Yukon Gold on mid-slope and
+  bottom fields (Kennebec until Gold's release in 1980), and from Caribou Russet's release in 2015
+  Caribou everywhere; Atlantic only against a chip contract (below). Plants
   first-generation saved seed of the low-virus varieties (Katahdin, Kennebec) when a clean lot grown
   from certified seed was held back; certified seed otherwise.
 - **Planting.** From May 3 when the field's own soil reaches 8 C (the station reading, a degree more on
@@ -82,9 +95,35 @@ the source of `bots.ts` for those names and checks that the check catches them.
   sells at the dig when the cellar cannot beat it. A lot's cellar value counts the storage charge and
   shrink from the day of the dig, sprouting once the lot has been out of the ground longer than its
   dormancy plus the cool cellar's 40 days (65 with ventilation), rot started by the blighted tubers
-  seen on the picking table, and for a contract variety one price all winter. When everything is in it
-  sells what the cellar cannot hold, the poorest keepers first. In the cellar each lot is sold in its
-  best month.
+  seen on the picking table, and for Atlantic off contract one processing price all winter. When
+  everything is in it sells what the potato houses cannot hold, the poorest keepers first. In the cellar
+  each lot is sold in its best month.
+
+#### On the bigger farm
+
+- **Land.** Each spring, for every field beyond the home six that the farm does not own, it plans the seasons
+  left: each year grow potatoes, rest the field, or leave it to its owner (whose land keeps its soil as it was),
+  paying the rent in every year it holds it. A potato season is valued at what a healthy field of that block
+  nets before rent by the expert's own experience (ridge lots $10,000, the intervale $6,000, the Dufour fields
+  $7,500, crews and the haul included), less what the field's soil and wilt take off by the published rotation
+  rules. It takes the fields whose plan beats leaving them, best first, as far as the spring loan stretches to the
+  bank's limit, and gives back rented land whose next season would be a rest. It buys a field it holds outright
+  when its price and the spring's planting still leave the farm inside the spring loan; bought land is rotated
+  like the home six.
+- **Crews.** A field hand while more than five fields are being walked (one for six to ten, two for eleven or
+  more), let go when the walking falls off. The second tractor in a spring with nine or more potato fields and two
+  or more seasons left, if the plan still fits the loan after it; the operator with the plan for nine or more
+  potato fields, or in season once more than 24 days of machine work fall due within a month, and kept for the
+  rest of the season. Orders are not pinned: the game's own nearest-first choice wasted less than pinning the
+  operator to the far land did.
+- **Contracts.** Each offer is valued against selling the same crop the usual way (by rule of thumb 0.95 of the
+  variety's price for the storable varieties, 0.8 for Atlantic off contract), less what is lost on fields that
+  must switch variety to fill it; it signs when the gain is positive, and plants enough fields of the contract
+  variety, at 85% of the usual No. 1 crop, on the slope that variety does best on. Atlantic is grown only against
+  a contract. Each dug lot of a contract variety goes to the open contracts first, those due off the field
+  before those due from storage; what is left is sold or stored as before, and winter contracts still open are
+  filled from the cellar.
+- **The second potato house** is never built: it lost money in every trial.
 
 ## How the expert's thresholds were set
 
