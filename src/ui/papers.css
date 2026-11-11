@@ -368,26 +368,7 @@
 .crew-row p { font-size: var(--t-small); line-height: 18px; }
 @media (max-width: 799px) { .help-cols { grid-template-columns: minmax(0, 1fr); gap: var(--sp-4); } }
 
-/* ---------------------------------------------------------------- choosing the year, comparing, equipment */
-.year-cols { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: var(--sp-6); }
-.year-grid { display: grid; gap: var(--sp-2); align-content: start; }
-.decade { display: grid; grid-template-columns: 56px minmax(0, 1fr); align-items: center; gap: var(--sp-2); }
-.decade .t-label { color: var(--ink-3); }
-.decade-years { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: var(--sp-h); }
-.year { min-height: var(--hit-s); border: 1px solid var(--rule-strong); border-radius: var(--radius); background: var(--paper-hi); font-size: var(--t-small); font-weight: 600; text-align: center; padding: 0; }
-.year.gap { border: 0; background: none; }
-.year[aria-pressed='true'] { background: var(--ink); border-color: var(--ink); color: var(--paper-hi); }
-@media (hover: hover) { .year:hover:not([aria-pressed='true']) { border-color: var(--ink); } }
-.year-detail { display: grid; gap: var(--sp-3); align-content: start; }
-.year-big { font-size: var(--t-display-min); }
-.facts { display: grid; gap: var(--sp-1); }
-.facts dt { color: var(--ink-3); margin-top: var(--sp-2); }
-@media (max-width: 899px) {
-  .year-cols { grid-template-columns: minmax(0, 1fr); gap: var(--sp-4); }
-  .decade { grid-template-columns: minmax(0, 1fr); }
-  .decade-years { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-  .year { min-height: var(--hit); }
-}
+/* ---------------------------------------------------------------- comparing, equipment */
 .compare { font-size: var(--t-small); line-height: 18px; }
 .compare th, .compare td { padding: var(--sp-2) var(--sp-3) var(--sp-2) 0; border-bottom: 1px dotted var(--rule-strong); vertical-align: top; text-align: left; }
 .compare thead th { font-size: var(--t-label); line-height: 16px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); border-bottom: 1px solid var(--ink-3); }
