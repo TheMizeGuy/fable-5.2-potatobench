@@ -199,6 +199,9 @@ export interface Tuning {
   sampleEarly: number       // the same for an early variety grown for the early market
   sampleHills: number       // hills lifted, one a day
   plantSoilT: number
+  plantField: boolean       // read the planting temperature for each field's position on the slope
+  plantWetT: number         // below this soil temperature, hold off when heavy rain is forecast
+  plantRainMm: number
   killFrom: number          // first late vine kill, days after August 1
   killGap: number           // days between late fields
   killAfterMature: number   // days after the vines start going down
@@ -211,6 +214,9 @@ export interface Tuning {
   waterLate: number
   waterScabHand: number     // the same without the irrigation reel, when watering takes a whole day
   waterLateHand: number
+  rainDays: number          // watering waits when the forecast for this many days calls for rain this likely and heavy
+  rainChance: number
+  rainMm: number
   earlyMarket: VarietyId[]  // varieties dug green and sold off the field before the new-potato market closes
   earlyValue: number        // early market: dig once the crop's value at today's price grows by less than this a day
   earlyBy: number           // and in any case by this many days after August 1
@@ -221,14 +227,14 @@ export interface Tuning {
 
 export const TUNING: Tuning = {
   sprayMode: 'severe', spraySv: 30, sprayProtect: 0.3, sprayProtectFound: 0.5, scoutEvery: 4, scoutFound: 5, rogueMax: 2,
-  sampleAt: -3, sampleEarly: 20, sampleHills: 1, plantSoilT: 7, killFrom: 40, killGap: 4, killAfterMature: 15,
+  sampleAt: -3, sampleEarly: 20, sampleHills: 1, plantSoilT: 8, plantField: true, plantWetT: 11, plantRainMm: 15, killFrom: 40, killGap: 4, killAfterMature: 15,
   killValue: 0, killDelay: 14, delayValue: 0.004,
   buy: [{ id: 'vent', from: 0, left: 2 }, { id: 'reel', from: 2015, left: 3 }], reserve: 0,
-  waterScab: 0.65, waterLate: 0.6, waterScabHand: 0.75, waterLateHand: 0.65,
+  waterScab: 0.65, waterLate: 0.6, waterScabHand: 0.75, waterLateHand: 0.65, rainDays: 2, rainChance: 60, rainMm: 12,
   earlyMarket: ['norland'], earlyValue: 0, earlyBy: 25, earlyDate: 12, fieldRevenue: 25000,
   plan: [
     { from: 0, fields: [['katahdin'], ['katahdin'], ['gold', 'kennebec'], ['gold', 'kennebec'], ['gold', 'kennebec'], ['gold', 'kennebec']] },
-    { from: 2015, fields: [['caribou'], ['caribou'], ['caribou'], ['caribou'], ['caribou'], ['caribou']] },
+    { from: 2015, fields: [['caribou'], ['caribou'], ['caribou'], ['caribou'], ['atlantic'], ['atlantic']] },
   ],
 }
 
@@ -302,20 +308,30 @@ export function noBlightInterval(sv7: number, rain7mm: number): number {
   return 14
 }
 
-// What a lot is worth in the cellar month by month, as a share of its variety's average No. 1 price, from the
-// public storage rules: the price through the winter at the level the quote shows now, shrink, sprouting at the
-// variety's dormancy, rot started by the blighted tubers that showed on the picking table, and the cellar charge.
-export function cellarValues(l: Lot, vent: boolean, digTotal: number, level = 1, from = 0): number[] {
+// What a lot is worth in the cellar month by month (0 = November), as a share of its variety's average No. 1
+// price, from the public storage rules: the price through the winter at the level the quote shows now (a contract
+// pays one price all winter), shrink and the cellar charge from the day of the dig, sprouting once the lot has been
+// out of the ground longer than its dormancy in a cool cellar, and rot started by the blighted tubers that showed
+// on the picking table. In season the time from the dig to November is still to be paid.
+export function cellarValues(l: Lot, vent: boolean, digTotal: number, level = 1, from = 0, inSeason = false): number[] {
   const v = S.variety(l.variety)
-  const dorm = v.dormancy + (vent ? 25 : 0)
+  const dorm = v.dormancy + S.COOL_CELLAR_DAYS + (vent ? S.VENT_DAYS : 0)
+  const outDays = S.dayIndex(l.year, 10, 1) - l.dugDay
   const rent = S.STORE_COST / v.price
+  const shrink = vent ? S.SHRINK_VENT : S.SHRINK
+  const price = (m: number) => v.contract ? 1 + (level - 1) * 0.25 : S.MONTH_CURVE[m] * level
   let decay = Math.min(0.6, (digTotal > 0 ? l.loss.blight / digTotal : 0) + 0.012 * (1 - l.skin))
   let keep = 1, paid = 0, sprouted = l.sprouted
-  const out = [S.MONTH_CURVE[0] * level * (sprouted ? 0.85 : 1)]
+  if (inSeason) {
+    const before = Math.max(0, outDays / 30)
+    paid = rent * before
+    keep = 1 - shrink * before
+  }
+  const out = [price(0) * (sprouted ? 0.85 : 1) * keep - paid]
   for (let months = 1; months < S.MONTH_CURVE.length; months++) {
-    let sh = vent ? S.SHRINK_VENT : S.SHRINK
+    let sh = shrink
     if (months === 1) sh += 0.03 * (1 - l.skin)
-    if (!sprouted && months * 30 > dorm) sprouted = true
+    if (!sprouted && outDays + months * 30 > dorm) sprouted = true
     if (sprouted) sh += S.SPROUT_SHRINK
     let lost = 0
     if (decay > 0) {
@@ -326,9 +342,16 @@ export function cellarValues(l: Lot, vent: boolean, digTotal: number, level = 1,
     }
     if (months > from) paid += rent * keep
     keep *= (1 - sh) * (1 - lost)
-    out.push(S.MONTH_CURVE[months] * level * (sprouted ? 0.85 : 1) * keep - paid)
+    out.push(price(months) * (sprouted ? 0.85 : 1) * keep - paid)
   }
   return out
+}
+
+// The year's price level, read off how far a quote sits from the usual price for the day (a contract moves a
+// quarter as far as the open market). frac is how much of the level the market knows yet.
+function levelFrom(v: ReturnType<typeof S.variety>, quote: number, usual: number, frac: number): number {
+  if (frac < 0.15) return 1
+  return 1 + (v.contract ? (quote - 1) / 0.25 : quote / usual - 1) / frac
 }
 
 export function expert(cfg: ExpertCfg = EXPERT): BotFactory {
@@ -410,7 +433,8 @@ export function expert(cfg: ExpertCfg = EXPERT): BotFactory {
       }
     }
 
-    // Daily growth of the yield estimate over the last few days (one bias, so the change is the crop's).
+    // Daily growth of the yield estimate over the last few days, between test digs: the growth the grower
+    // expects from the leaf and the weather, not the tubers' own.
     function massGrowth(m: FieldMem): number | null {
       const e = m.est
       for (let j = e.length - 1; j >= 5; j--) {
@@ -488,11 +512,10 @@ export function expert(cfg: ExpertCfg = EXPERT): BotFactory {
         if (!digTotal.has(l.id)) digTotal.set(l.id, S.lotCwt(l) + l.sold)
         const v = S.variety(l.variety)
         if (!cfg.store || (S.newPotatoWindow(c, l) && l.skinned > 0)) { sellAll(world, c, l); continue }
-        // The year's price level, read off how far today's quote sits from the seasonal index.
         const frac = Math.max(0, Math.min(1, (s.day - 212) / 92))
         const quote = S.basePrice(world, c, l.variety) / v.price
-        const level = v.contract || frac < 0.15 ? 1 : 1 + (quote / seasonIndex(s.day) - 1) / frac
-        const best = Math.max(...cellarValues(l, vent, digTotal.get(l.id)!, level))
+        const level = levelFrom(v, quote, seasonIndex(s.day), frac)
+        const best = Math.max(...cellarValues(l, vent, digTotal.get(l.id)!, level, 0, true))
         if (quote >= best) { sellAll(world, c, l); continue }
         keep.push({ l, value: best / quote })
       }
@@ -577,7 +600,7 @@ export function expert(cfg: ExpertCfg = EXPERT): BotFactory {
         const add = (kind: JobKind, field: number, pri: number) => want.push({ kind, field, pri })
         const blightSoon = fc.slice(0, 3).some(x => x.blight >= 2)
         const frostSoon = fc.slice(0, 3).some(x => x.frostChance >= 40)
-        const rainSoon = fc.slice(0, 2).some(x => x.rainChance >= 60 && x.rainMm >= 8)
+        const rainSoon = fc.slice(0, k.rainDays).some(x => x.rainChance >= k.rainChance && x.rainMm >= k.rainMm)
         const watch = s.watchDay >= 0
         const reel = c.upgrades.reel
 
@@ -586,9 +609,11 @@ export function expert(cfg: ExpertCfg = EXPERT): BotFactory {
           const m = fm[i]
           const early = isEarly(c, i)
           if (f.status === 'idle') {
+            // The ridge warms a degree ahead of the station reading and the bottom land a degree behind.
+            const soilT = t.soilT + (k.plantField ? S.SOIL_T_OFFSET[f.elev] : 0)
             const ready = cfg.calendar
               ? d >= at(4, 12 + (2 - f.elev) * 3)
-              : d >= at(4, 3) && t.soilT >= k.plantSoilT && !f.tooWet && !(t.soilT < 11 && fc.slice(0, 2).some(x => x.rainMm >= 15 && x.rainChance >= 60))
+              : d >= at(4, 3) && soilT >= k.plantSoilT && !f.tooWet && !(soilT < k.plantWetT && fc.slice(0, 2).some(x => x.rainMm >= k.plantRainMm && x.rainChance >= 60))
             if (ready) add('plant', i, 70 + f.elev + (early ? 3 : 0))
             continue
           }
@@ -687,7 +712,7 @@ export function expert(cfg: ExpertCfg = EXPERT): BotFactory {
           if (!cfg.store || l.broke) { sellAll(world, c, l); continue }
           const v = S.variety(l.variety)
           // The quote now, over the usual price for the month, is the level the rest of the winter starts from.
-          const level = S.basePrice(world, c, l.variety) / (v.price * S.MONTH_CURVE[c.month])
+          const level = levelFrom(v, S.basePrice(world, c, l.variety) / v.price, S.MONTH_CURVE[c.month], 1)
           const vals = cellarValues(l, c.upgrades.vent, digTotal.get(l.id) ?? S.lotCwt(l) + l.sold, level, c.month)
           let best = c.month
           for (let m = c.month + 1; m < vals.length; m++) if (vals[m] > vals[best]) best = m

@@ -34,7 +34,7 @@ describe('Wallin severity values', () => {
   })
 })
 
-describe('physiological days (Sands, Hackett and Nichols 1979)', () => {
+describe('physiological days (Sands, Hackett and Nix 1979)', () => {
   // Worked by hand: P(t) = 10 (1 - x^2), x = (t - 21) / 14 below 21 C and (t - 21) / 9 above, 0 outside 7-30 C;
   // the day is (5 P(tmin) + 8 P((2 tmin + tmax) / 3) + 8 P((tmin + 2 tmax) / 3) + 3 P(tmax)) / 24.
   it('matches hand-computed daily values', () => {
