@@ -6,6 +6,7 @@ import type { App } from './app.ts'
 //   double-click a field: app.selectLike(i); on empty ground: frame the whole farm
 //   right-click or long-press a field: app.smartOrder(i)
 //   pointer over a field: app.setHover(i)
+//   click a crew (a tractor, the farmer or a hand): app.selectUnit(id); the picked crew (app.unit) is marked
 //   drag: pan; wheel or pinch: zoom toward the pointer; right-drag, two-finger twist, Q and E: turn; arrow keys: pan; Home: whole farm
 // It draws the selection (app.selection), the hover (app.hover) and a ring on the fields of an 'order' app event,
 // and moves the camera to a field on a 'focus' app event. Every other key belongs to the interface.

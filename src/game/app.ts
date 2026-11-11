@@ -42,6 +42,7 @@ export type AppEvent =
   | { type: 'screen'; screen: Screen }
   | { type: 'select'; field: number; fields: number[] }
   | { type: 'hover'; field: number }
+  | { type: 'unit'; unit: number }
   | { type: 'focus'; field: number }
   | { type: 'order'; kind: JobKind; fields: number[] }
   | { type: 'alert'; alert: Alert }
@@ -63,6 +64,8 @@ export class App {
   selection: number[] = []
   // The field under the pointer, or -1.
   hover = -1
+  // The crew the player has picked to give orders to, or -1 for whichever crew is free.
+  unit = -1
   speed: Speed = 0
   settings: Settings
   // How far through the current day the clock is, 0..1, for smooth animation.
@@ -151,6 +154,7 @@ export class App {
     this.alerts = []
     this.dayProgress = 0
     this.selection = []
+    this.unit = -1
     this.revision++
     this.setScreen(this.campaign!.phase)
     this.save()
@@ -285,7 +289,7 @@ export class App {
     if (!c || field < 0) return
     const of = (i: number) => { const f = fieldInfo(c, i); return `${f.crop}|${f.status}` }
     const key = of(field)
-    const all = c.fields.map((_, i) => i).filter(i => of(i) === key)
+    const all = c.fields.map((_, i) => i).filter(i => c.fields[i].tenure !== 'none' && of(i) === key)
     this.setSelection([...all.filter(i => i !== field), field])
   }
 
@@ -293,6 +297,13 @@ export class App {
     if (next.length === this.selection.length && next.every((f, k) => f === this.selection[k])) return
     this.selection = next
     this.emit({ type: 'select', field: this.selected, fields: next })
+  }
+
+  // Picks a crew: orders given while it is picked go to that crew. -1 lets any free crew take them.
+  selectUnit(unit: number): void {
+    if (this.unit === unit) return
+    this.unit = unit
+    this.emit({ type: 'unit', unit })
   }
 
   setHover(field: number): void {
@@ -309,14 +320,16 @@ export class App {
   // ---------------------------------------------------------------- orders
 
   // Gives an order to the selected fields (or the ones named). It reaches every field that can take it.
-  order(kind: JobKind, opts: { fields?: number[]; first?: boolean } = {}): OrderResult[] {
+  // With a crew picked (or named) the order is that crew's; otherwise any crew able to do it takes it.
+  order(kind: JobKind, opts: { fields?: number[]; first?: boolean; unit?: number } = {}): OrderResult[] {
     const c = this.campaign
     const fields = opts.fields ?? this.selection
     const out: OrderResult[] = []
     if (!c) return out
     const taken: number[] = []
     for (const field of fields) {
-      const r = apply(this.world, c, { t: 'job', kind, field })
+      const unit = opts.unit ?? this.unit
+      const r = apply(this.world, c, unit >= 0 ? { t: 'job', kind, field, unit } : { t: 'job', kind, field })
       out.push({ field, ok: r.ok, err: r.err })
       if (!r.ok) continue
       taken.push(field)

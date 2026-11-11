@@ -85,6 +85,7 @@ export function stageGlyph(f: S.FieldInfo): string {
     case 'dead': return 'dead'
     case 'digging': return 'dig'
     case 'dug': return 'dug'
+    case 'off': return 'rest'
     case 'lost': return 'close'
   }
 }
