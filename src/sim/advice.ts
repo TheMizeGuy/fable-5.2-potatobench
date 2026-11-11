@@ -112,7 +112,7 @@ export function advise(world: World, c: Campaign): Advice[] {
   }
   for (const lot of openLots(c)) {
     const f = s.fields[lot.field]
-    if (f.status !== 'dug') continue
+    if (f.status !== 'dug' || !f.weighed) continue
     if (newPotatoWindow(c, lot) && lot.skinned > 20) {
       add(lot.field, 'sell', `Sell the ${fieldInfo(c, lot.field).name} crop now.`, 'Thin-skinned new potatoes bring a premium this week and will not keep.', true, lot.id)
     } else if (lot.loss.blight > 0.03 * (lot.grades.no1 + lot.grades.b + lot.grades.no2 + lot.grades.chef + lot.grades.cull)) {

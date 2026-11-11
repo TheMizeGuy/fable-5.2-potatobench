@@ -74,7 +74,8 @@ describe('building', () => {
     expect([info.state, info.progress]).toEqual(['building', 0])
     ok(c, { t: 'begin' })
     const job = c.season!.jobs.find(j => j.kind === 'build')!
-    expect([job.field, job.building]).toEqual([HOME, c.buildings[0].id])
+    expect([job.field, job.building, job.need]).toEqual([HOME, c.buildings[0].id, S.BUILDINGS.house.days])
+    refused(c, { t: 'cancel', id: job.id }, /paid for/)
     const events: S.GameEvent[] = []
     for (let k = 0; k < 80 && !S.hasBuilt(c, 'house'); k++) events.push(...days(c, 1))
     expect(events.some(e => e.type === 'built')).toBe(true)
@@ -164,6 +165,15 @@ describe('the machine shed', () => {
 })
 
 describe('the bunkhouse', () => {
+  it('in the Dufour yard, beds people only while the farm holds Dufour land', () => {
+    const c = spring()
+    ok(c, { t: 'rent', field: 10 })
+    c.buildings.push({ id: c.nextBuilding++, kind: 'bunk', yard: DUFOUR, done: 12, need: 12, built: true })
+    expect(S.housingLimit(c)).toBe(S.HOUSED_OUT + S.BUNK_BEDS)
+    ok(c, { t: 'release', field: 10 })
+    expect(S.housingLimit(c)).toBe(S.HOUSED_OUT)
+  })
+
   it('beds six more hired people, who are happier in them; without one, two is the most', () => {
     const c = spring()
     ok(c, { t: 'hire', kind: 'hand' })
@@ -429,6 +439,27 @@ describe('hauling', () => {
     }
     expect(froze).toBe(true)
     expect(lot.loss.green).toBeGreaterThan(0)
+  })
+
+  it('a dug field whose last barrels freeze in the night is weighed, not left waiting for a hauler', () => {
+    const c = structuredClone(base)
+    ok(c, { t: 'job', kind: 'dig', field })
+    for (let k = 0; k < 40 && S.fieldInfo(c, field).status !== 'dug'; k++) days(c, 1)
+    const f = c.season!.fields[field]
+    if (f.weighed) {
+      f.weighed = false
+      c.season!.jobs.unshift({ id: c.season!.nextJob++, kind: 'haul', field, done: 0, need: 0, unit: -1 })
+    }
+    // A sliver left in the barrels on the eve of a hard frost at the field, and nobody to haul it.
+    let frost = c.season!.day
+    while (S.envTmin(S.getDay(world, 1990, frost), S.fieldEnv(c, field)) > S.FREEZE_IN_FIELD) frost++
+    for (const u of c.crew) u.prio.machine = 0
+    while (c.season!.day < frost) { f.inField = 0.6; days(c, 1) }
+    f.inField = 0.6
+    const events = days(c, 1)
+    expect(events.some(e => e.type === 'weighed' && e.field === field)).toBe(true)
+    expect(f.weighed).toBe(true)
+    expect(c.season!.jobs.some(j => j.kind === 'haul')).toBe(false)
   })
 
   it('what is still in barrels when the ground freezes is lost', () => {

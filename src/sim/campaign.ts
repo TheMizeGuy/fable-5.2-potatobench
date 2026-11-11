@@ -6,10 +6,10 @@ import { BLOCK_NAME, BLOCKS, DUFOUR_YARD, HOME_FIELDS, HOME_YARD, PARCELS, YARDS
 import { lotCwt } from './harvest.ts'
 import { sellLot } from './market.ts'
 import * as P from './params.ts'
-import { applicantsFor, fromApplicant, jobSkill, payOf, SKILL_LABEL, speed } from './people.ts'
+import { applicantsFor, fromApplicant, gainXp, jobSkill, payOf, SKILL_LABEL, speed } from './people.ts'
 import { hash32 } from './rng.ts'
 import {
-  addJob, buildJob, closeIncidents, FIELD_NAMES, holdsDufour, leftInField, letGo, releaseJob, removePerson, resolveIncident, seasonDone, sheltering,
+  addJob, buildable, buildJob, closeIncidents, FIELD_NAMES, holdsDufour, leftInField, letGo, releaseJob, removePerson, resolveIncident, seasonDone, sheltering,
   startSeason, stepDay, unitBlock,
 } from './season.ts'
 import { CHOICE_LABEL } from './incidents.ts'
@@ -200,7 +200,7 @@ function endSeason(world: World, c: Campaign): GameEvent[] {
   closeIncidents(c, s, out)
   s.jobs = []
   // The crews go home for the winter.
-  for (const u of c.crew) { letGo(u); u.at = HOME_YARD; u.to = HOME_YARD; u.road = 0 }
+  for (const u of c.crew) { letGo(u); u.at = HOME_YARD; u.to = HOME_YARD; u.road = 0; u.tired = 0 }
   s.pickers = false
   settleContracts(c, 'harvest', out)
   // The potato houses only hold so much: the overflow is sold off the field.
@@ -336,7 +336,7 @@ export function winterBlock(c: Campaign, u: Unit, work: WinterWork, field = -1):
       if (!hasBuilt(c, 'packing')) return 'Packing needs a packing shed.'
       return unpacked(c) >= 1 ? '' : 'Nothing in store is left to pack.'
     case 'build':
-      return c.buildings.some(b => !b.built) ? '' : 'Nothing is being built.'
+      return c.buildings.some(b => buildable(c, b)) ? '' : 'Nothing is being built.'
   }
   return 'No such winter work.'
 }
@@ -359,8 +359,10 @@ function winterMonth(c: Campaign, out: GameEvent[]): void {
       cost(c, pay)
       c.yearWages += pay
     }
-    const days = (u.kind === 'farmer' ? P.FARMER_WINTER_DAYS : P.WINTER_DAYS) * speed(u, WINTER_SKILL[u.winter])
-    winterWork(c, u, days, out)
+    const skill = WINTER_SKILL[u.winter]
+    const time = u.kind === 'farmer' ? P.FARMER_WINTER_DAYS : P.WINTER_DAYS
+    winterWork(c, u, time * speed(u, skill), out)
+    for (const level of gainXp(u, skill, time)) out.push(note(c, 'skillUp', 'good', `${u.name} is better at ${SKILL_LABEL[skill]}: level ${level}.`))
   }
 }
 
@@ -372,7 +374,7 @@ function winterWork(c: Campaign, u: Unit, days: number, out: GameEvent[]): void 
   if (u.winter === 'build') {
     let left = days
     for (const b of c.buildings) {
-      if (b.built || left <= 0) continue
+      if (!buildable(c, b) || left <= 0) continue
       const use = Math.min(left, b.need - b.done)
       left -= use
       if (buildWork(c, b, use)) out.push(note(c, 'built', 'good', `The ${P.BUILDINGS[b.kind].name.toLowerCase()} in ${YARD_NAME[b.yard]} is built over the winter. ${P.BUILDINGS[b.kind].does}`))
@@ -618,7 +620,7 @@ export function apply(world: World, c: Campaign, cmd: Cmd): Result {
       if (why) return fail(why)
       const cost = buildCost(c, cmd.kind)
       const b = startBuilding(c, cmd.kind, cmd.yard)
-      if (c.phase === 'season' && c.season) c.season.jobs.push(buildJob(c.season, b.id, b.yard))
+      if (c.phase === 'season' && c.season) c.season.jobs.push(buildJob(c.season, b))
       const spec = P.BUILDINGS[cmd.kind]
       const bought = cost.buyLogs > 0 || cost.buyStone > 0 ? `, buying ${[cost.buyLogs > 0 ? `${Math.ceil(cost.buyLogs)} loads of logs` : '', cost.buyStone > 0 ? `${Math.ceil(cost.buyStone)} of stone` : ''].filter(Boolean).join(' and ')}` : ''
       const when = c.phase === 'season' ? 'It is on the list for whoever builds.' : c.phase === 'cellar' ? 'Someone kept on to build can put it up this winter.' : 'It goes on the list when the season begins.'
@@ -682,7 +684,7 @@ export function apply(world: World, c: Campaign, cmd: Cmd): Result {
       return ok([note(c, 'tiling', 'info', `A contractor will lay tile drains under ${FIELD_NAMES[cmd.field]}: $${withCommas(P.TILE_FEE)}, about ${P.TILE_DAYS} season days.`, cmd.field)])
     }
     case 'sellLogs': {
-      if (c.phase === 'over') return fail('The farm is gone.')
+      if (c.phase !== 'plan' && c.phase !== 'season' && c.phase !== 'cellar') return fail('Logs are sold in spring, in the season or in winter.')
       if (!Number.isFinite(cmd.loads) || cmd.loads <= 0) return fail('Say how many loads to sell.')
       if (cmd.loads > c.logs + 1e-9) return fail(`There ${c.logs >= 1 && c.logs < 2 ? 'is' : 'are'} only ${Math.floor(c.logs * 10) / 10} loads of logs in the yard.`)
       const loads = Math.min(cmd.loads, c.logs)
@@ -859,6 +861,7 @@ export function apply(world: World, c: Campaign, cmd: Cmd): Result {
       const k = c.season.jobs.findIndex(j => j.id === cmd.id)
       if (k < 0) return fail('No such job.')
       if (c.season.jobs[k].kind === 'haul') return fail('The crop in the field has to come in.')
+      if (c.season.jobs[k].kind === 'build') return fail('The building is paid for: it stays on the list until it stands.')
       if (c.season.jobs[k].kind === 'dig' && c.season.jobs[k].done > 0) return fail('The digger is already in the field.')
       c.season.jobs.splice(k, 1)
       releaseJob(c, cmd.id)
@@ -972,6 +975,7 @@ export function apply(world: World, c: Campaign, cmd: Cmd): Result {
 export function answerBlock(c: Campaign, inc: Incident, choice: string): string {
   switch (choice) {
     case 'hire': return hireRoom(c)
+    case 'rush': return c.season && inc.back! <= c.season.day + 1 ? 'The part comes tomorrow anyway.' : ''
     case 'match': {
       const u = c.crew.find(x => x.id === inc.unit)
       return u ? '' : 'They have gone already.'

@@ -190,6 +190,14 @@ describe('a tractor breaking down', () => {
     expect(c.yearCosts - costs).toBe(S.RUSH_PART)
     expect(S.tractorsRunning(c, c.season!.day)).toBe(0)
     expect(S.tractorsRunning(c, c.season!.day + 1)).toBe(1)
+    // On the last day it is offered, a rush part still brings the tractor back a day early.
+    const last = structuredClone(base)
+    run(last, day)
+    const inc2 = last.incidents.find(i => i.kind === 'breakdown')!
+    expect(inc2.until).toBe(inc2.back! - 2)
+    while (last.season!.day < inc2.until) ok(last, { t: 'day' })
+    ok(last, { t: 'answer', incident: inc2.id, choice: 'rush' })
+    expect(last.broken).toEqual([inc2.back! - 1])
   })
 
   it('with someone on the farm good with machines it is a day out, and nobody is asked', () => {

@@ -496,6 +496,7 @@ describe('winter', () => {
     tend(c, x => S.seasonDone(x))
     ok(c, { t: 'endSeason' })
     expect(hand.winter).toBe('off')
+    for (const u of c.crew) expect(u.tired).toBe(0)
     const wages = c.yearWages
     while (c.phase === 'cellar') ok(c, { t: 'month' })
     expect(c.yearWages).toBe(wages)

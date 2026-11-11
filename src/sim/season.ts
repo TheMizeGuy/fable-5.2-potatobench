@@ -3,16 +3,16 @@ import { dayIndex, formatDay, SUNDAY, weekday, withCommas } from './calendar.ts'
 import { buildWork, hasBuilt, pondServes, rain30, travel, YARD_NAME } from './buildings.ts'
 import { basePrice } from './market.ts'
 import { turnBefore } from './crew.ts'
-import { distance, DUFOUR_YARD, HOME_FIELDS, HOME_YARD, PARCELS } from './farm.ts'
+import { distance, DUFOUR_YARD, holdsDufourLand, HOME_FIELDS, HOME_YARD, PARCELS } from './farm.ts'
 import { gradeHill, newLot, finishLot, lotCwt } from './harvest.ts'
 import { brushedNow, COVER_WORD, envTmin, fell, fellLeft, fieldEnv, isField, isOpen, standing, stoneBruise, stoneSpeed, stumped } from './land.ts'
 import * as P from './params.ts'
 import { breakdownChance, CHOICE_LABEL, defaultChoice, hurtChance, INCIDENT_TITLE, incidentText } from './incidents.ts'
-import { applicantsFor, hurt, jobSkill, moodTarget, payOf, scoutChance, SKILL_LABEL, speed, sprayCover, willDo, xpNeed, zeroSkills } from './people.ts'
+import { applicantsFor, gainXp, hurt, jobSkill, moodTarget, payOf, scoutChance, SKILL_LABEL, speed, sprayCover, willDo, zeroSkills } from './people.ts'
 import { hashUnit, nextInt, nextUnit } from './rng.ts'
 import {
   H_DECAYED, H_DUG, H_EMERGED, H_KNOWN, H_ROGUED, H_SAMPLED, H_SEEDBLIGHT, H_VIRUS, H_WILT,
-  type Campaign, type Cause, type Day, type FieldSeason, type FieldStatus, type GameEvent, type Incident, type IncidentKind, type Job, type JobKind, type Lot,
+  type Building, type Campaign, type Cause, type Day, type FieldSeason, type FieldStatus, type GameEvent, type Incident, type IncidentKind, type Job, type JobKind, type Lot,
   type Rig, type Season, type Skill, type Unit, type World,
 } from './types.ts'
 import { variety } from './varieties.ts'
@@ -87,13 +87,13 @@ export function startSeason(world: World, c: Campaign): void {
     s.fields.push(f)
   }
   // The buildings under way go on the list; the pond is full from the spring melt.
-  for (const b of c.buildings) if (!b.built) s.jobs.push(buildJob(s, b.id, b.yard))
+  for (const b of c.buildings) if (buildable(c, b)) s.jobs.push(buildJob(s, b))
   if (hasBuilt(c, 'pond')) c.pond = P.POND_CAP
   c.season = s
 }
 
-export function buildJob(s: Season, building: number, yard: number): Job {
-  return { id: s.nextJob++, kind: 'build', field: yard, done: 0, need: 0, unit: -1, building }
+export function buildJob(s: Season, b: Building): Job {
+  return { id: s.nextJob++, kind: 'build', field: b.yard, done: b.done, need: b.need, unit: -1, building: b.id }
 }
 
 function push(s: Season, out: GameEvent[], type: string, field: number, level: GameEvent['level'], text: string, data?: GameEvent['data']): void {
@@ -121,8 +121,12 @@ export function jobDays(c: Campaign, kind: JobKind, f: FieldSeason | null, field
 
 // The Dufour yard and its potato house are the farm's while it holds any Dufour field (the back lot does not count).
 export function holdsDufour(c: Campaign): boolean {
-  for (let i = 0; i < c.fields.length; i++) if (c.fields[i].tenure !== 'none' && PARCELS[i]?.block === 'dufour' && PARCELS[i].holding === 'field') return true
-  return false
+  return holdsDufourLand(c.fields)
+}
+
+// A building that can be worked on: not yet standing, and in the Dufour yard only while Dufour land is held.
+export function buildable(c: Campaign, b: Building): boolean {
+  return !b.built && (b.yard !== DUFOUR_YARD || holdsDufour(c))
 }
 
 // Road distance from a field to the nearest potato house the farm has (or would have, with dufour set).
@@ -173,7 +177,7 @@ function block(c: Campaign, kind: JobKind, field: number, self: Job | null): str
   if (kind === 'build') {
     if (!self) return 'Building goes on the list with the order to build.'
     const b = c.buildings.find(x => x.id === self.building)
-    return b && !b.built ? '' : 'There is nothing left to build.'
+    return b && buildable(c, b) ? '' : 'There is nothing left to build.'
   }
   if (kind === 'haul') {
     if (!self) return 'Hauling goes on the list by itself as the digger lifts the crop.'
@@ -522,6 +526,7 @@ function exposure(c: Campaign, s: Season, d: Day, out: GameEvent[]): void {
       push(s, out, 'frozenInField', i, 'bad', `A hard frost on the barrels in ${FIELD_NAMES[i]}: ${withCommas(frozen)} cwt froze before it was hauled in.`, { cwt: Math.round(frozen) })
     }
     if (bright) lose(f, lot, f.inField * P.GREEN_IN_FIELD, 'green')
+    if (f.status === 'dug' && f.inField < 0.5) weigh(s, f, i, lot, out)
   }
 }
 
@@ -871,14 +876,7 @@ function peopleDay(c: Campaign, s: Season, turns: Turn[], out: GameEvent[]): voi
     const used = t ? Math.max(0, Math.min(1, 1 - t.left)) : 0
     if (t) {
       for (const k of P.SKILLS) {
-        if (t.spent[k] <= 0) continue
-        u.xp[k] += t.spent[k]
-        while (u.skills[k] < P.SKILL_MAX && u.xp[k] >= xpNeed(u.skills[k])) {
-          u.xp[k] -= xpNeed(u.skills[k])
-          u.skills[k]++
-          push(s, out, 'skillUp', -1, 'good', `${u.name} is better at ${SKILL_LABEL[k]}: level ${u.skills[k]}.`, { unit: u.id, level: u.skills[k] })
-        }
-        if (u.skills[k] >= P.SKILL_MAX) u.xp[k] = 0
+        for (const level of gainXp(u, k, t.spent[k])) push(s, out, 'skillUp', -1, 'good', `${u.name} is better at ${SKILL_LABEL[k]}: level ${level}.`, { unit: u.id, level })
       }
     }
     const tire = P.TIRE_PER_DAY * (u.trait === 'tireless' ? P.TIRELESS : 1)
@@ -1389,7 +1387,7 @@ function drawIncidents(c: Campaign, s: Season, turns: Turn[], out: GameEvent[]):
         const back = s.day + 1 + (mechanic ? 1 : P.BREAK_DAYS)
         c.broken.push(back)
         if (mechanic) push(s, out, 'breakdown', -1, 'warn', `A tractor broke down under ${u.name}. There is someone on the farm who can fix it: it is back on ${formatDay(s.year, back)}.`, { unit: u.id })
-        else openIncident(c, s, out, { kind: 'breakdown', until: back - 1, choices: ['rush', 'wait'], unit: u.id, back })
+        else openIncident(c, s, out, { kind: 'breakdown', until: back - 2, choices: ['rush', 'wait'], unit: u.id, back })
       }
     }
   }

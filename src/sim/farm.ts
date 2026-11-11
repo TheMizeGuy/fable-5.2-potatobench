@@ -70,6 +70,12 @@ export const YARDS: Yard[] = [
   { name: 'Dufour yard', block: 'dufour', x: 90, z: -6, cellar: 2400 },
 ]
 
+// Whether the farm holds a Dufour field (rented or owned), and so the Dufour yard. The back lot does not count.
+export function holdsDufourLand(fields: { tenure: string }[]): boolean {
+  for (let i = 0; i < fields.length; i++) if (fields[i].tenure !== 'none' && PARCELS[i]?.block === 'dufour' && PARCELS[i].holding === 'field') return true
+  return false
+}
+
 // A place a crew can be: a field (0 and up) or a yard (-1 the home yard, -2 the Dufour yard).
 export function placeXZ(place: number): { x: number; z: number } {
   return place >= 0 ? PARCELS[place] : YARDS[-place - 1]

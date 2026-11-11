@@ -110,18 +110,26 @@ describe('clearing the woodlot', () => {
   ok(c, { t: 'winter', unit: hand.id, work: 'woods', field: WOODLOT })
   refused(c, { t: 'winter', unit: hand.id, work: 'woods', field: WOODLOT }, /already/)
   const wages = c.yearWages, logs0 = c.logs
+  const woods0 = { level: hand.skills.woods, xp: hand.xp.woods }
   const winter = winterThenSpring(c)
 
   it('felling in winter yields logs by the feller\'s woods skill, and is paid for the months it takes', () => {
     expect(c.fields[WOODLOT].cover).toBe('stumps')
     expect(winter.some(e => e.type === 'felled' && e.field === WOODLOT)).toBe(true)
-    expect(c.logs - logs0).toBeCloseTo(S.TIMBER.woods * S.fellYield(hand), 9)
+    // The yield is the feller's at the time: it grows as the winter teaches them.
+    expect(c.logs - logs0).toBeGreaterThanOrEqual(S.TIMBER.woods * (S.FELL_YIELD_BASE + S.FELL_YIELD_PER * woods0.level) - 1e-9)
+    expect(c.logs - logs0).toBeLessThanOrEqual(S.TIMBER.woods * S.fellYield(hand) + 1e-9)
+    expect(hand.skills.woods).toBeGreaterThan(woods0.level)
     expect(S.fellYield(hand)).toBeCloseTo(S.FELL_YIELD_BASE + S.FELL_YIELD_PER * hand.skills.woods, 12)
-    // 40 crew-days at a little under 20 a month: three months paid, then laid off for the rest of the winter.
-    const months = Math.ceil(S.FELL_DAYS.woods / (S.WINTER_DAYS * S.speed(hand, 'woods')))
-    expect(c.history[0].wages - wages).toBe(months * S.HAND_WAGE)
+    // 40 crew-days at about 20 a month: paid for the months it takes, then laid off for the rest of the winter.
+    const months = (c.history[0].wages - wages) / S.HAND_WAGE
+    expect(Number.isInteger(months) && months >= 2 && months < S.WINTER_MONTHS).toBe(true)
     expect(winter.some(e => e.type === 'winterIdle')).toBe(true)
     expect(hand.winter).toBe('off')
+    // Each month's twenty days count toward the woods skill, as days of work do in the season.
+    let points = hand.xp.woods - woods0.xp
+    for (let l = woods0.level; l < hand.skills.woods; l++) points += S.xpNeed(l)
+    expect(points).toBeCloseTo(months * S.WINTER_DAYS, 9)
   })
 
   it('takes the shelter away: the ridge field below dries faster, loses its extra wet hour, sprays in less wind and is not so frosty', () => {
@@ -375,6 +383,10 @@ describe('logs', () => {
   it('sell to the mill by the load', () => {
     const c = S.createCampaign(world, { seed: 1, startYear: 1990 })
     refused(c, { t: 'sellLogs', loads: 1 }, /only 0 loads/)
+    const ledger = structuredClone(c)
+    ledger.phase = 'ledger'
+    ledger.logs = 10
+    refused(ledger, { t: 'sellLogs', loads: 1 }, /spring, in the season or in winter/)
     c.logs = 10
     ok(c, { t: 'sellLogs', loads: 4 })
     expect([c.logs, c.yearLogs, c.yearRevenue]).toEqual([6, 4 * S.LOG_PRICE, 4 * S.LOG_PRICE])

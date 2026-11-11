@@ -1,5 +1,5 @@
 // People: skills and what they do to speed and results, traits, tiredness, mood, wages, housing, applicants.
-import { HOME_YARD } from './farm.ts'
+import { holdsDufourLand, HOME_YARD } from './farm.ts'
 import * as P from './params.ts'
 import { hashUnit } from './rng.ts'
 import type { Applicant, Campaign, JobKind, Skill, Trait, Unit, UnitKind } from './types.ts'
@@ -170,10 +170,10 @@ export function hiredCount(c: Campaign): number {
   return n
 }
 
-// Beds in the bunkhouses the farm has built.
+// Beds in the bunkhouses the farm has built (one in the Dufour yard only while Dufour land is held).
 export function beds(c: Campaign): number {
   let n = 0
-  for (const b of c.buildings) if (b.kind === 'bunk' && b.built) n++
+  for (const b of c.buildings) if (b.kind === 'bunk' && b.built && (b.yard === HOME_YARD || holdsDufourLand(c.fields))) n++
   return n * P.BUNK_BEDS
 }
 
@@ -211,6 +211,20 @@ export function tiredWord(t: number): string {
 
 export function moodWord(m: number): string {
   return m >= 0.85 ? 'happy' : m >= 0.65 ? 'content' : m >= 0.45 ? 'fed up' : m >= 0.25 ? 'unhappy' : 'about to quit'
+}
+
+// Puts days of a person's time at a kind of work into their experience; returns each level gained.
+export function gainXp(u: Unit, skill: Skill, days: number): number[] {
+  const levels: number[] = []
+  if (days <= 0) return levels
+  u.xp[skill] += days
+  while (u.skills[skill] < P.SKILL_MAX && u.xp[skill] >= xpNeed(u.skills[skill])) {
+    u.xp[skill] -= xpNeed(u.skills[skill])
+    u.skills[skill]++
+    levels.push(u.skills[skill])
+  }
+  if (u.skills[skill] >= P.SKILL_MAX) u.xp[skill] = 0
+  return levels
 }
 
 // Points needed to go from this level to the next.

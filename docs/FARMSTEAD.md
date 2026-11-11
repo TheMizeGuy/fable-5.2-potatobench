@@ -252,6 +252,8 @@ text above was silent, or two of its rules collided, the build chose as follows.
 - *Pickers* are paid only for days worked (not Sundays off) and go back to school
   by themselves on October 11.
 - *A foreman* orders only on working days.
+- *Winter work teaches*, a point a day as in the season, and everyone is rested
+  when the season closes.
 - The command for the rule is `{ t: 'sundays', off: boolean }`.
 
 **Land and materials.**
@@ -281,12 +283,17 @@ text above was silent, or two of its rules collided, the build chose as follows.
   raw-ground penalty.
 - *The mortgage* is booked as part of the year's costs (the ledger's `mortgage`
   line), principal and interest together, like every other dollar.
+- *Logs* sell in spring, in the season or in winter, never between the year's
+  close and the next spring, when the books are shut.
 
 **Buildings and hauling.**
 
 - *Which buildings can stand in the Dufour yard.* Only a potato house and a
   bunkhouse; the shed, packing shed, pond, stand, station and road serve the
-  whole farm and go in the home yard.
+  whole farm and go in the home yard. One there counts, and is worked on, only
+  while Dufour land is held.
+- *A build order cannot be cancelled*: the building is paid for, and the order
+  stays until it stands. Priorities decide who works on it and when.
 - *Buildings are paid from cash*, like equipment and land's down payment; the bank
   does not lend for them.
 - *The old second potato house.* `{ t: 'buy', upgrade: 'house2' }` still works: a
@@ -320,7 +327,8 @@ text above was silent, or two of its rules collided, the build chose as follows.
   matched, waiting for the part, turned down); answers wait four days, a buyer
   seven. They happen only in the season; the season's end closes them and mends
   the tractors.
-- *A rush part* is paid like any job, on the season's operating loan.
+- *A rush part* is paid like any job, on the season's operating loan, and is
+  offered only while it would bring the tractor back sooner.
 - *With a mechanic on the farm* (machine skill 7) a breakdown costs a day and asks
   nothing, so a rush part would buy nothing.
 - *An injury* is not a question: it is an event, and the person shows as hurt,
