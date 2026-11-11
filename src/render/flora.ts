@@ -12,7 +12,7 @@ import {
 import { hash2, rng } from './noise.ts'
 import { SNOW_RIME_TREE, depthFor, linear, patch, sway, type Patch } from './shaders.ts'
 
-interface Tree { x: number; z: number; s: number; r: number; hue: number }
+interface Tree { x: number; z: number; s: number; r: number; hue: number; w?: number }
 
 // A conifer one unit high: whorls of drooping boughs, each a ragged skirt, darker toward the trunk.
 function conifer(whorls: number, spokes: number, width: number, seed: number): BufferGeometry {
@@ -210,7 +210,7 @@ interface Chunk { near: InstancedMesh[]; far: InstancedMesh[]; sphere: Sphere; f
 // Trees are laid out in patches of ground, each its own set of meshes so what is out of sight is not drawn, nor drawn
 // into a shadow it cannot reach. On and near the farm a patch has whole trees for when the camera is close and simpler
 // ones for when it is not.
-const CELL = 34
+const CELL = 64
 const NEAR_AT = { high: 185, medium: 135, low: 92 }
 
 export class Flora {
@@ -223,14 +223,15 @@ export class Flora {
   constructor(sprayTex: Texture) {
     const r = rng(2024)
     // Trees that can be seen close (on and near the farm), and trees only ever seen from far off.
-    type Cls = 'spruce' | 'fir' | 'maple' | 'birch' | 'shrub' | 'conFar' | 'conDistant' | 'broadFar' | 'broadDistant'
-    const trees: Record<Cls, Tree[]> = { spruce: [], fir: [], maple: [], birch: [], shrub: [], conFar: [], conDistant: [], broadFar: [], broadDistant: [] }
+    type Cls = 'spruce' | 'maple' | 'birch' | 'shrub' | 'conFar' | 'conDistant' | 'broadFar' | 'broadDistant'
+    const trees: Record<Cls, Tree[]> = { spruce: [], maple: [], birch: [], shrub: [], conFar: [], conDistant: [], broadFar: [], broadDistant: [] }
     const built = [POTATO_HOUSE, DUFOUR_POTATO_HOUSE, DUFOUR_HOUSE, DUFOUR_BARN]
     const open = (x: number, z: number) =>
       roadDist(x, z) > 1.8 && Math.abs(z - townRoadZ(x)) > 3.2 && Math.abs(z - hillRoadZ(x)) > 3.2 && Math.abs(z - brookZ(x)) > brookHalf(x) + 0.7
       && built.every(b => Math.hypot(x - b.x, z - b.z) > 5.2) && fieldMask(x, z, 1.2) < 0.01
     const broad = (t: Tree) => (t.r < 0.45 ? trees.maple : trees.birch).push(t)
-    const conifer1 = (t: Tree) => (r() < 0.36 ? trees.fir : trees.spruce).push(t)
+    // a fir is a slimmer spruce
+    const conifer1 = (t: Tree) => trees.spruce.push(r() < 0.36 ? { ...t, w: 0.66 } : t)
 
     // The woods along the ridge above the fields.
     const h = HOME_WOODS
@@ -371,20 +372,20 @@ export class Flora {
     this.disposables.push(cMat, barkMat, crownMat, coreMat, farMat, alderMat, crownDepth)
     const maple = hardwood(3, false), birch = hardwood(11, true)
     const g = {
-      spruce: conifer(9, 7, 0.2, 5), fir: conifer(11, 6, 0.13, 9), conFar: conifer(6, 6, 0.2, 13), conDistant: conifer(4, 5, 0.21, 17),
+      spruce: conifer(9, 7, 0.2, 5), conFar: conifer(6, 6, 0.2, 13), conDistant: conifer(4, 5, 0.21, 17),
       far1: hardwoodFar(1), far0: hardwoodFar(0),
     }
     this.disposables.push(maple.wood, maple.crown, maple.core, birch.wood, birch.crown, birch.core, ...Object.values(g))
     const k = (geo: BufferGeometry, mat: MeshStandardMaterial, wide: number, sink: number, shadow = true, depth?: MeshDepthMaterial): Kind => ({ geo, mat, wide, sink, shadow, depth })
     // What each tree is drawn with close to, and far from, the camera.
     const near: Record<string, Kind[]> = {
-      spruce: [k(g.spruce, cMat, 1, 0.02)], fir: [k(g.fir, cMat, 1, 0.02)],
+      spruce: [k(g.spruce, cMat, 1, 0.02)],
       maple: [k(maple.wood, barkMat, 0.8, 0.01), k(maple.crown, crownMat, 0.8, 0.01, true, crownDepth), k(maple.core, coreMat, 0.8, 0.01)],
       birch: [k(birch.wood, barkMat, 0.7, 0.01), k(birch.crown, crownMat, 0.7, 0.01, true, crownDepth), k(birch.core, coreMat, 0.7, 0.01)],
       shrub: [k(g.far1, alderMat, 1.7, 0.42)],
     }
     const far: Record<string, Kind[]> = {
-      spruce: [k(g.conFar, cMat, 1, 0.02)], fir: [k(g.conFar, cMat, 0.75, 0.02)],
+      spruce: [k(g.conFar, cMat, 1, 0.02)],
       maple: [k(g.far1, farMat, 1.15, 0.2)], birch: [k(g.far1, farMat, 0.95, 0.2)], shrub: [k(g.far0, alderMat, 1.7, 0.42)],
       conFar: [k(g.conFar, cMat, 1, 0.02)], conDistant: [k(g.conDistant, cMat, 1, 0.02, false)],
       broadFar: [k(g.far1, farMat, 1.15, 0.2)], broadDistant: [k(g.far0, farMat, 1.15, 0.2, false)],
@@ -423,7 +424,7 @@ export class Flora {
     const info = new Float32Array(trees.length * 4)
     trees.forEach((t, n) => {
       q.setFromAxisAngle(up, t.r * 6.283)
-      const w = t.s * kind.wide * (0.82 + 0.36 * t.r)
+      const w = t.s * kind.wide * (t.w ?? 1) * (0.82 + 0.36 * t.r)
       mesh.setMatrixAt(n, m.compose(p.set(t.x, groundY(t.x, t.z) - kind.sink * t.s, t.z), q, sc.set(w, t.s, w)))
       info.set([t.r, t.hue, 0.78 + 0.44 * hash2(Math.round(t.x * 7), Math.round(t.z * 7)), t.s], n * 4)
     })

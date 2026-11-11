@@ -18,6 +18,7 @@ export interface Seg {
   reveals: Reveal[]      // `at` is arc length along `path`
   start: number          // share of the day
   end: number
+  polys?: { travel: Poly; path: Poly }
 }
 
 export const TRACTOR_JOBS = new Set<string>(['plant', 'hill', 'spray', 'kill', 'water', 'dig'])

@@ -297,7 +297,8 @@ export class Crews {
       kind = seg.kind
       const span = Math.max(1e-6, seg.end - seg.start)
       let p = Math.min(1, (f.dayT - seg.start) / span)
-      const travel = new Poly(seg.travel)
+      seg.polys ??= { travel: new Poly(seg.travel), path: new Poly(seg.path) }
+      const travel = seg.polys.travel
       let tShare = seg.kind === 'travel' ? 1 : travel.length > 0.3 ? Math.min(0.4, 0.12 + travel.length / 150) : 0
       if (seg.kind === 'sample' || seg.kind === 'dig') {
         // However long the day is, the hill is up or the last row out inside two and a half seconds, and the day waits for it.
@@ -306,7 +307,7 @@ export class Crews {
         tShare = drive / (drive + work)
         if (p < 0.92 && f.season) this.stageHold = this.stageHold < 0 ? seg.end - 1e-3 : Math.min(this.stageHold, seg.end - 1e-3)
       }
-      const path = new Poly(seg.path)
+      const path = seg.polys.path
       // A hand walks the whole way; the farmer drives to the field and gets down for the walking jobs.
       const handWalks = !u.tractor
       if (p < tShare || seg.kind === 'travel') {

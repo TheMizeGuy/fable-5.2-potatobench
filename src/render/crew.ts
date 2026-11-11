@@ -3,8 +3,9 @@
 // people rather than boxes.
 import {
   BoxGeometry, CapsuleGeometry, CylinderGeometry, DoubleSide, ExtrudeGeometry, Group, LatheGeometry, Mesh, MeshStandardMaterial,
-  RingGeometry, ShaderMaterial, Shape, SphereGeometry, TorusGeometry, Vector2, type BufferGeometry, type Material,
+  RingGeometry, ShaderMaterial, Shape, SphereGeometry, TorusGeometry, Vector2, type BufferGeometry, type Material, type Object3D,
 } from 'three'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import type { JobKind } from '../sim/index.ts'
 import { UI_GAIN } from './fields.ts'
 import type { Particles } from './particles.ts'
@@ -113,6 +114,38 @@ export class Kit {
       lug.rotation.z = a + Math.PI / 2 + 0.35
     }
     return g
+  }
+
+  // Merges the still parts under a group into one mesh per material, leaving the groups under it (the parts that move)
+  // and meshes marked to keep (moved one by one) as they are, so a machine is a few draws rather than a hundred.
+  bake(g: Object3D): void {
+    for (const c of [...g.children]) if (!(c as Mesh).isMesh) this.bake(c)
+    const byMat = new Map<Material, Mesh[]>()
+    for (const c of g.children) {
+      const m = c as Mesh
+      if (!m.isMesh || m.userData.keep || !(m.material as Material).isMaterial) continue
+      const list = byMat.get(m.material as Material) ?? []
+      list.push(m)
+      byMat.set(m.material as Material, list)
+    }
+    for (const [mat, list] of byMat) {
+      if (list.length < 2) continue
+      const geos = list.map(m => {
+        m.updateMatrix()
+        const flat = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone()
+        for (const name of Object.keys(flat.attributes)) if (name !== 'position' && name !== 'normal') flat.deleteAttribute(name)
+        return flat.applyMatrix4(m.matrix)
+      })
+      const merged = mergeGeometries(geos)
+      for (const x of geos) x.dispose()
+      if (!merged) continue
+      const mesh = new Mesh(merged, mat)
+      mesh.castShadow = mesh.receiveShadow = true
+      mesh.layers.mask = list[0].layers.mask
+      for (const m of list) g.remove(m)
+      g.add(mesh)
+      this.disposables.push(merged)
+    }
   }
 
   dispose(): void {
@@ -243,6 +276,7 @@ export class Tractor {
       for (const s of [-1, 1]) {
         const d = k.cyl(0.15, 0.15, 0.015, steel, -1.0, 0.15, z + s * 0.07, hiller, true, 14)
         d.rotation.y = s * 0.5
+        d.userData.keep = true
         this.discs.push(d)
       }
     }
@@ -270,6 +304,7 @@ export class Tractor {
     k.rounded(0.6, 0.2, 1.46, 0.08, green, -1.08, 0.36, 0, flail)
     k.box(0.2, 0.12, 1.46, k.mat('#3c5335', 0.6), -1.42, 0.3, 0, flail)
     this.drum = k.cyl(0.11, 0.11, 1.38, dark, -1.1, 0.22, 0, flail, true, 8)
+    this.drum.userData.keep = true
     k.box(0.4, 0.05, 0.08, iron, -0.82, 0.4, 0, flail)
     for (const z of [-0.78, 0.78]) k.cyl(0.12, 0.12, 0.06, dark, -1.4, 0.13, z, flail, true, 10)
     this.addImpl('flail', flail)
@@ -278,7 +313,7 @@ export class Tractor {
     const bed = new Group()
     k.box(1.3, 0.04, 0.9, steel, 0, 0, 0, bed)
     for (const z of [-0.47, 0.47]) k.box(1.36, 0.22, 0.05, k.mat('#b23a25', 0.42), 0, 0.09, z, bed)
-    for (let n = 0; n < 10; n++) this.chain.push(k.box(0.03, 0.05, 0.88, dark, -0.6 + n * 0.13, 0.05, 0, bed))
+    for (let n = 0; n < 10; n++) { const c = k.box(0.03, 0.05, 0.88, dark, -0.6 + n * 0.13, 0.05, 0, bed); c.userData.keep = true; this.chain.push(c) }
     bed.position.set(-1.5, 0.36, 0)
     bed.rotation.z = 0.3
     digger.add(bed)
@@ -287,6 +322,7 @@ export class Tractor {
     for (const z of [-0.52, 0.52]) k.wheel(0.22, 0.09, 0, '#8b8d88', -1.9, 0.22, z, digger)
     this.addImpl('digger', digger)
     this.setImplement('none')
+    k.bake(this.body)
   }
 
   private addImpl(name: Implement, g: Group): void {
@@ -447,5 +483,6 @@ export class Walker {
     this.figure.add(this.fork)
     this.ring = unitRing(0.62)
     this.group.add(this.figure, this.ring)
+    kit.bake(this.figure)
   }
 }
