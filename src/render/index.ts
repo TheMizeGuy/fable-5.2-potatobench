@@ -603,7 +603,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     post.render(scene, cam, {
       exposure: lit.exposure, focus: sharp, aperture: 0.3 * lens, time, grain: 0.018,
       sunX: sunAt.x * 0.5 + 0.5, sunY: sunAt.y * 0.5 + 0.5, shafts: sunAt.z < 1 ? shafts : 0,
-      warm: 0.22 + 0.5 * gold - 0.3 * cold, rich: 0.1 + 0.16 * gold, contrast: 0.14 + 0.1 * open,
+      warm: 0.22 + 0.5 * gold - 0.3 * cold, rich: 0.1 + 0.14 * gold, contrast: 0.09 + 0.08 * open,
     }, Math.round(size.w * size.pr), Math.round(size.h * size.pr))
     if (!firstFrame) firstFrame = performance.now()
     // Tell whoever is waiting that the land has shown what it had to show.
