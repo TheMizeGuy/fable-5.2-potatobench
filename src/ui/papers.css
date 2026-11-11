@@ -226,7 +226,7 @@
 .this-month { margin: var(--sp-4) 0; padding: var(--sp-2) var(--sp-3); background: var(--paper-2); font-size: var(--t-small); line-height: 18px; color: var(--ink-2); }
 .this-month:empty { display: none; }
 .pl-end { font-family: var(--sans); font-size: var(--t-label); fill: var(--ink-3); }
-.lots { display: grid; gap: var(--sp-3); margin-bottom: var(--sp-4); }
+.lots { display: grid; gap: var(--sp-3); margin: var(--sp-3) 0 var(--sp-4); }
 .lot { padding: var(--sp-3) var(--sp-4); background: var(--paper-hi); border: 1px solid var(--rule); border-radius: var(--radius); display: grid; gap: var(--sp-3); }
 .lot-head { display: flex; justify-content: space-between; gap: var(--sp-3); }
 .lot-worth { text-align: right; }

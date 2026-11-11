@@ -21,18 +21,22 @@ export interface PlateModel {
 const GAP = 6
 
 interface Box { x: number; y: number; docked: boolean }
+// w, h: the plate. extra: the badge hanging off its right end.
+interface Size { w: number; h: number; extra: number }
 
 export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => PlateModel; onBadge: (i: number) => void }): { update(): void; frame(): void; dispose(): void } {
   const app = ctx.app
   const wraps: HTMLElement[] = []
-  // w, h: the plate. extra: the badge hanging off its right end.
-  const size: { w: number; h: number; extra: number }[] = []
+  // size: the plates as drawn now. full: as drawn with their names, which is what decides whether they fit.
+  const size: Size[] = []
+  const full: Size[] = []
   const at: Box[] = []
   let compact = false
   for (let i = 0; i < S.FIELD_COUNT; i++) {
     const wrap = h('div', { class: 'plate-wrap' })
     wraps.push(wrap)
     size.push({ w: 120, h: 30, extra: 0 })
+    full.push({ w: 120, h: 30, extra: 0 })
     at.push({ x: -1, y: -1, docked: false })
     layer.append(wrap)
   }
@@ -74,25 +78,18 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
       const plate = wraps[i].firstElementChild as HTMLElement | null
       const badge = wraps[i].querySelector<HTMLElement>('.badge')
       if (plate) size[i] = { w: plate.offsetWidth, h: plate.offsetHeight, extra: badge ? badge.offsetWidth + 4 : 0 }
+      if (!compact) full[i] = size[i]
     }
   }
 
-  // Every frame: each plate sits on the top centre of its field, stays clear of the instruments, and never
-  // covers another plate. A field out of frame keeps its plate at the nearest edge.
-  function frame(): void {
+  // Where each plate goes for plates of these sizes: on the top centre of its field, clear of the instruments
+  // and of each other. over: there was not the room, and some had to overlap.
+  function place(sz: Size[]): { want: Box[]; over: boolean } {
     const ins = app.insets
-    // Where six named plates cannot stand clear of each other, all but the selected one fold down to their glyphs.
-    const room = innerHeight - ins.top - ins.bottom
-    const tight = room < S.FIELD_COUNT * (size[0].h + 8) + 8
-    if (tight !== compact) {
-      compact = tight
-      layer.classList.toggle('compact', compact)
-      measure()
-    }
     const want: Box[] = []
     for (let i = 0; i < S.FIELD_COUNT; i++) {
       const a = ctx.view.fieldAnchor(i)
-      const { w, h: hh, extra } = size[i]
+      const { w, h: hh, extra } = sz[i]
       const x0 = GAP + w / 2, x1 = innerWidth - GAP - w / 2 - extra
       const y0 = ins.top + GAP + hh + 6, y1 = innerHeight - ins.bottom - GAP
       const x = Math.max(x0, Math.min(Math.max(x0, x1), a.x)), y = Math.max(y0, Math.min(Math.max(y0, y1), a.y))
@@ -101,14 +98,14 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
     // Lower plates give way downward to the ones above them; then any pushed past the bottom edge climb back,
     // lifting what they meet.
     const apart = (j: number, k: number) => want[j].x < want[k].x
-      ? want[k].x - size[k].w / 2 - (want[j].x + size[j].w / 2 + size[j].extra)
-      : want[j].x - size[j].w / 2 - (want[k].x + size[k].w / 2 + size[k].extra)
+      ? want[k].x - sz[k].w / 2 - (want[j].x + sz[j].w / 2 + sz[j].extra)
+      : want[j].x - sz[j].w / 2 - (want[k].x + sz[k].w / 2 + sz[k].extra)
     const order = want.map((_, i) => i).sort((p, q) => want[p].y - want[q].y || p - q)
     for (let n = 1; n < order.length; n++) {
       const j = order[n]
       for (let m = 0; m < n; m++) {
         const k = order[m]
-        if (apart(j, k) < GAP && want[j].y - size[j].h - 8 < want[k].y) want[j].y = want[k].y + size[j].h + 8
+        if (apart(j, k) < GAP && want[j].y - sz[j].h - 8 < want[k].y) want[j].y = want[k].y + sz[j].h + 8
       }
     }
     const floor = innerHeight - ins.bottom - GAP
@@ -117,12 +114,29 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
       if (want[j].y > floor) { want[j].y = floor; want[j].docked = true }
       for (let m = n - 1; m >= 0; m--) {
         const k = order[m]
-        if (apart(j, k) < GAP && want[j].y - size[j].h - 8 < want[k].y) { want[k].y = want[j].y - size[j].h - 8; want[k].docked = true }
+        if (apart(j, k) < GAP && want[j].y - sz[j].h - 8 < want[k].y) { want[k].y = want[j].y - sz[j].h - 8; want[k].docked = true }
       }
     }
     // Where there is no room for six, they overlap: the selected plate and the ones with a need stay on top.
     const ceiling = ins.top + GAP
-    for (let i = 0; i < S.FIELD_COUNT; i++) want[i].y = Math.max(want[i].y, ceiling + size[i].h + 6)
+    let over = false
+    for (let i = 0; i < S.FIELD_COUNT; i++) {
+      if (want[i].y < ceiling + sz[i].h + 5) over = true
+      want[i].y = Math.max(want[i].y, ceiling + sz[i].h + 6)
+    }
+    return { want, over }
+  }
+
+  // Every frame. Where named plates would have to overlap, all but the selected one fold down to their glyphs;
+  // the test is always made with the full sizes, so the fold cannot flicker.
+  function frame(): void {
+    const named = place(full)
+    if (named.over !== compact) {
+      compact = named.over
+      layer.classList.toggle('compact', compact)
+      measure()
+    }
+    const want = compact ? place(size).want : named.want
     for (let i = 0; i < S.FIELD_COUNT; i++) {
       const w = want[i], was = at[i]
       if (Math.abs(w.x - was.x) < 0.25 && Math.abs(w.y - was.y) < 0.25 && w.docked === was.docked) continue

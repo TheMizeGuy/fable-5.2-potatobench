@@ -394,7 +394,9 @@ export class Notes {
     const before = new Map<string, number>()
     for (const row of this.el.children) before.set((row as HTMLElement).dataset.id!, row.getBoundingClientRect().top)
     const have = new Map([...this.el.children].map(row => [(row as HTMLElement).dataset.id!, row as HTMLElement]))
-    const rows = this.items.map(n => have.get(n.id) ?? this.row(n))
+    // The pinned row takes one of the places, so the stack never grows past what the screen has room for.
+    const shown = !this.pinned ? this.items : this.keep > 1 ? this.items.slice(1 - this.keep) : []
+    const rows = shown.map(n => have.get(n.id) ?? this.row(n))
     if (this.pinned) { this.pinned.el.dataset.id = 'pinned'; rows.push(this.pinned.el) }
     this.el.replaceChildren(...rows)
     if (reducedNow()) return

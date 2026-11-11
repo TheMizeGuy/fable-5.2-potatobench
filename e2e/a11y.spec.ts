@@ -62,7 +62,7 @@ test('the season: instruments, the card, the almanac, the menu and its confirmat
     expect(await serious(page), `almanac: ${tab}`).toEqual([])
   }
   await page.keyboard.press('Escape')
-  await expect(page.getByTestId('almanac')).toHaveCount(0)
+  await expect(page.locator('#ui .dialog')).toHaveCount(0)
   await page.keyboard.press('m')
   await expect(page.getByTestId('menu')).toBeVisible()
   expect(await serious(page), 'menu').toEqual([])

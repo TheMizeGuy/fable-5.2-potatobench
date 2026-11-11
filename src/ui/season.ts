@@ -99,7 +99,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     // The tip sits with the alerts, wearing its badge's glyph, so it never covers a field.
     if (hint) {
       const kind = hint.kind
-      const how = hint.first ? ` ${ctx.touch() ? 'Tap' : 'Click'} the lit badge to give the order.` : ''
+      const how = hint.first ? ` ${ctx.touch() ? 'Tap' : 'Click'} the lit badge.` : ''
       ctx.notes.pin({ key: `tip-${kind}`, glyph: kind, text: `${hintText(kind)}${how}`, tile: true, onClose: () => { hint = null; ctx.dirty() } })
     } else if (app.speed === 0 && !S.seasonDone(c) && !c.season!.jobs.length && !needs.some(n => n.need)) {
       // Stopped with nothing to do: the one thing to say is that the days have to run.
