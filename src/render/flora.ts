@@ -2,14 +2,17 @@
 // and the woodlots and hedgerows of the country beyond. Near the farm they are whole trees; far off, simpler ones.
 import {
   BufferAttribute, BufferGeometry, CylinderGeometry, DoubleSide, Group, IcosahedronGeometry, InstancedBufferAttribute, InstancedMesh, Matrix4,
-  MeshStandardMaterial, Quaternion, Vector3, type Texture,
+  MeshStandardMaterial, Quaternion, Sphere, Vector3, type MeshDepthMaterial, type PerspectiveCamera, type Texture,
 } from 'three'
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import { FARM, FARM_CENTER, HOME_WOODS, POTATO_HOUSE, brookHalf, brookZ, groundY, hillRoadZ, roadDist, townRoadZ, woodsAt } from './layout.ts'
+import {
+  DUFOUR_BARN, DUFOUR_HOUSE, DUFOUR_POTATO_HOUSE, FARM, FARM_CENTER, HOME_WOODS, POTATO_HOUSE, brookHalf, brookZ, fieldMask, groundY, hillRoadZ, roadDist,
+  townRoadZ, woodsAt,
+} from './layout.ts'
 import { hash2, rng } from './noise.ts'
 import { SNOW_RIME_TREE, depthFor, linear, patch, sway, type Patch } from './shaders.ts'
 
-interface Tree { x: number; z: number; s: number; r: number; hue: number }
+interface Tree { x: number; z: number; s: number; r: number; hue: number; w?: number }
 
 // A conifer one unit high: whorls of drooping boughs, each a ragged skirt, darker toward the trunk.
 function conifer(whorls: number, spokes: number, width: number, seed: number): BufferGeometry {
@@ -55,60 +58,93 @@ function conifer(whorls: number, spokes: number, width: number, seed: number): B
   return g
 }
 
-// A hardwood one unit high: a trunk and limbs, and a crown of leaf sprays set on a few rounded masses.
-function hardwood(seed: number): { wood: BufferGeometry; crown: BufferGeometry; core: BufferGeometry } {
+// A hardwood one unit high: a flared trunk that forks into limbs and branches, and at their ends masses of leaf sprays,
+// so the crown has an uneven outline with sky through it. Each leaf card carries how deep in the crown it sits
+// (aShade), so the inside of the crown is dark and its sunny top light. A birch is narrower, airier and drooping.
+function hardwood(seed: number, birch: boolean): BufferGeometry {
   const r = rng(seed)
   const pos: number[] = [], nrm: number[] = [], idx: number[] = []
   const limb = (ax: number, ay: number, az: number, bx: number, by: number, bz: number, ra: number, rb: number) => {
     const o = pos.length / 3
     const dx = bx - ax, dy = by - ay, dz = bz - az
     const ux = Math.abs(dy) > 0.9 * Math.hypot(dx, dy, dz) ? 1 : 0, uy = ux ? 0 : 1
-    let sx = dy * 0 - dz * uy, sy = dz * ux - dx * 0, sz = dx * uy - dy * ux
+    let sx = -dz * uy, sy = dz * ux, sz = dx * uy - dy * ux
     const sl = Math.hypot(sx, sy, sz) || 1
     sx /= sl; sy /= sl; sz /= sl
     const l = Math.hypot(dx, dy, dz) || 1
     const tx = (dy * sz - dz * sy) / l, ty = (dz * sx - dx * sz) / l, tz = (dx * sy - dy * sx) / l
-    for (let k = 0; k < 5; k++) {
-      const a = (k / 5) * Math.PI * 2, c = Math.cos(a), s = Math.sin(a)
+    for (let k = 0; k < 6; k++) {
+      const a = (k / 6) * Math.PI * 2, c = Math.cos(a), s = Math.sin(a)
       const nx = sx * c + tx * s, ny = sy * c + ty * s, nz = sz * c + tz * s
       pos.push(ax + nx * ra, ay + ny * ra, az + nz * ra, bx + nx * rb, by + ny * rb, bz + nz * rb)
       nrm.push(nx, ny, nz, nx, ny, nz)
-      const q = o + k * 2, n = o + ((k + 1) % 5) * 2
+      const q = o + k * 2, n = o + ((k + 1) % 6) * 2
       idx.push(q, n, q + 1, q + 1, n, n + 1)
     }
   }
-  limb(0, 0, 0, 0.02, 0.5, 0.01, 0.04, 0.026)
+  // the trunk, flared at the foot
+  limb(0, -0.02, 0, 0.01, 0.12, 0, birch ? 0.04 : 0.06, birch ? 0.026 : 0.036)
+  const top = birch ? 0.62 : 0.4
+  limb(0.01, 0.12, 0, 0.02, top, 0.01, birch ? 0.026 : 0.036, birch ? 0.014 : 0.026)
   const lobes: [number, number, number, number][] = []
-  for (let k = 0; k < 5; k++) {
-    const a = k * 2.4 + r(), d = k === 0 ? 0 : 0.14 + r() * 0.12
-    const lx = Math.cos(a) * d, lz = Math.sin(a) * d, ly = 0.58 + r() * 0.24 - d * 0.5
-    lobes.push([lx, ly, lz, 0.17 + r() * 0.07])
-    limb(0.02, 0.36 + r() * 0.12, 0.01, lx, ly, lz, 0.02, 0.006)
+  const spread = birch ? 0.17 : 0.28
+  const limbs = birch ? 4 : 4 + Math.floor(r() * 2)
+  for (let k = 0; k < limbs; k++) {
+    const a = k * (Math.PI * 2 / limbs) + r() * 0.8
+    const h0 = (birch ? 0.3 : 0.3) + r() * (top - 0.32)
+    const out = spread * (0.65 + 0.5 * r()), rise = (birch ? 0.3 : 0.26) + r() * 0.16
+    const ex = Math.cos(a) * out, ez = Math.sin(a) * out, ey = h0 + rise
+    limb(0.015, h0, 0.005, ex, ey, ez, birch ? 0.012 : 0.02, 0.008)
+    // each limb forks into two branches, a mass of leaves at each tip
+    for (const turn of [-0.55, 0.6]) {
+      const b = a + turn + (r() - 0.5) * 0.4, len = (birch ? 0.09 : 0.13) * (0.7 + 0.6 * r())
+      const fx = ex + Math.cos(b) * len, fz = ez + Math.sin(b) * len, fy = ey + (birch ? 0.02 : 0.06) + r() * 0.07 - (birch ? 0.05 * r() : 0)
+      limb(ex, ey, ez, fx, fy, fz, 0.008, 0.004)
+      lobes.push([fx, fy, fz, (birch ? 0.095 : 0.13) + r() * (birch ? 0.04 : 0.06)])
+    }
+  }
+  // the crown's top, and masses filling in over the trunk
+  lobes.push([0.02, top + (birch ? 0.28 : 0.3), 0.01, birch ? 0.11 : 0.16])
+  for (let k = 0; k < (birch ? 2 : 3); k++) {
+    const a = r() * 6.283, d = 0.06 + r() * 0.08
+    lobes.push([Math.cos(a) * d, top + 0.12 + r() * 0.14, Math.sin(a) * d, (birch ? 0.1 : 0.14) + r() * 0.04])
   }
   const wood = new BufferGeometry()
   wood.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3))
   wood.setAttribute('normal', new BufferAttribute(new Float32Array(nrm), 3))
   wood.setIndex(idx)
 
-  const cp: number[] = [], cn: number[] = [], cu: number[] = [], ci: number[] = []
+  // the crown's middle and top, for how deep a card sits
+  let mx = 0, my = 0, mz = 0
+  for (const [lx, ly, lz] of lobes) { mx += lx; my += ly; mz += lz }
+  mx /= lobes.length; my /= lobes.length; mz /= lobes.length
+  let reach = 0
+  for (const [lx, ly, lz, lr] of lobes) reach = Math.max(reach, Math.hypot(lx - mx, (ly - my) * 1.3, lz - mz) + lr)
+  const cp: number[] = [], cn: number[] = [], cu: number[] = [], cs: number[] = [], ci: number[] = []
   for (const [lx, ly, lz, lr] of lobes) {
-    for (let k = 0; k < 26; k++) {
+    const cards = birch ? 26 : 34
+    for (let k = 0; k < cards; k++) {
       // points spread through the outer part of the lobe, cards facing outward and tilted at random
       const u = r() * 2 - 1, a = r() * Math.PI * 2, q = Math.sqrt(1 - u * u)
       const nx = q * Math.cos(a), ny = u * 0.8 + 0.2, nz = q * Math.sin(a)
-      const out = 0.74 + 0.3 * r()
-      const px = lx + nx * lr * out, py = ly + ny * lr * out, pz = lz + nz * lr * out
-      const size = lr * (0.42 + r() * 0.3)
+      const out = 0.55 + 0.5 * r()
+      const px = lx + nx * lr * out, py = ly + ny * lr * out * (birch ? 1.25 : 1), pz = lz + nz * lr * out
+      const size = lr * (0.36 + r() * 0.26)
       let tx = -nz, tz = nx
       const tl = Math.hypot(tx, tz) || 1
       tx /= tl; tz /= tl
-      const bx = ny * tz, by = nz * tx - nx * tz, bz = -ny * tx
+      const droop = birch ? -0.6 : 0
+      const bx = ny * tz, by = nz * tx - nx * tz + droop, bz = -ny * tx
+      // how deep: 0 in the heart of the crown, 1 on its outside; lit more on the top
+      const depth = Math.min(1, Math.hypot(px - mx, (py - my) * 1.3, pz - mz) / reach)
+      const shade = Math.min(1.15, 0.35 + 0.65 * Math.pow(depth, 1.4) + 0.25 * Math.max(0, (py - my) / reach))
       const o = cp.length / 3
       for (const [su, sv] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
         cp.push(px + (tx * su + bx * sv) * size, py + by * sv * size, pz + (tz * su + bz * sv) * size)
         const l = Math.hypot(nx, ny + 0.35, nz)
         cn.push(nx / l, (ny + 0.35) / l, nz / l)
         cu.push((su + 1) / 2, (sv + 1) / 2)
+        cs.push(shade)
       }
       ci.push(o, o + 1, o + 2, o + 1, o + 3, o + 2)
     }
@@ -117,16 +153,30 @@ function hardwood(seed: number): { wood: BufferGeometry; crown: BufferGeometry; 
   crown.setAttribute('position', new BufferAttribute(new Float32Array(cp), 3))
   crown.setAttribute('normal', new BufferAttribute(new Float32Array(cn), 3))
   crown.setAttribute('uv', new BufferAttribute(new Float32Array(cu), 2))
+  crown.setAttribute('aShade', new BufferAttribute(new Float32Array(cs), 1))
   crown.setIndex(ci)
-  // The dark heart of each mass of leaves, so the crown is not seen through.
+  // The dark heart of each mass of leaves, smaller than the mass, so the crown is not seen through but keeps its holes.
   const parts = lobes.map(([lx, ly, lz, lr], k) => {
-    const g = lump(lr * 0.74, 1, k + seed * 7)
+    const g = lump(lr * 0.55, 0, k + seed * 7)
     g.translate(lx, ly, lz)
     return g
   })
   const core = mergeGeometries(parts)!
   for (const p of parts) p.dispose()
-  return { wood, crown, core }
+  // One geometry, one draw: trunk and limbs (part 0), the dark hearts (part 1), the leaf cards (part 2).
+  const tag = (g: BufferGeometry, part: number): BufferGeometry => {
+    const flat = g.index ? g.toNonIndexed() : g.clone()
+    const n = flat.getAttribute('position').count
+    if (!flat.getAttribute('uv')) flat.setAttribute('uv', new BufferAttribute(new Float32Array(n * 2), 2))
+    if (!flat.getAttribute('aShade')) flat.setAttribute('aShade', new BufferAttribute(new Float32Array(n).fill(1), 1))
+    flat.setAttribute('aPart', new BufferAttribute(new Float32Array(n).fill(part), 1))
+    for (const name of Object.keys(flat.attributes)) if (!['position', 'normal', 'uv', 'aShade', 'aPart'].includes(name)) flat.deleteAttribute(name)
+    return flat
+  }
+  const pieces = [tag(wood, 0), tag(core, 1), tag(crown, 2)]
+  const tree = mergeGeometries(pieces)!
+  for (const g of [wood, core, crown, ...pieces]) g.dispose()
+  return tree
 }
 
 // A rounded, uneven mass with smooth shading.
@@ -167,18 +217,36 @@ function hardwoodFar(detail: number): BufferGeometry {
   return merged
 }
 
+interface Kind { geo: BufferGeometry; mat: MeshStandardMaterial; wide: number; sink: number; depth?: MeshDepthMaterial; shadow: boolean }
+interface Chunk { near: InstancedMesh[]; far: InstancedMesh[]; sphere: Sphere; fixed: boolean }
+
+// Trees are laid out in patches of ground, each its own set of meshes so what is out of sight is not drawn, nor drawn
+// into a shadow it cannot reach. On and near the farm a patch has whole trees for when the camera is close and simpler
+// ones for when it is not.
+const CELL = 64
+const NEAR_AT = { high: 150, medium: 115, low: 80 }
+
 export class Flora {
   readonly group = new Group()
   private disposables: { dispose(): void }[] = []
+  private chunks = new Map<string, Chunk>()
+  private nearAt = NEAR_AT.high
+  private v = new Vector3()
 
   constructor(sprayTex: Texture) {
     const r = rng(2024)
-    const spruceNear: Tree[] = [], firNear: Tree[] = [], coniferFar: Tree[] = [], coniferDistant: Tree[] = [], broadNear: Tree[] = [], broadFar: Tree[] = [], shrubs: Tree[] = []
+    // Trees that can be seen close (on and near the farm), and trees only ever seen from far off.
+    type Cls = 'spruce' | 'maple' | 'birch' | 'shrub' | 'conFar' | 'conDistant' | 'broadFar' | 'broadDistant'
+    const trees: Record<Cls, Tree[]> = { spruce: [], maple: [], birch: [], shrub: [], conFar: [], conDistant: [], broadFar: [], broadDistant: [] }
+    const built = [POTATO_HOUSE, DUFOUR_POTATO_HOUSE, DUFOUR_HOUSE, DUFOUR_BARN]
     const open = (x: number, z: number) =>
       roadDist(x, z) > 1.8 && Math.abs(z - townRoadZ(x)) > 3.2 && Math.abs(z - hillRoadZ(x)) > 3.2 && Math.abs(z - brookZ(x)) > brookHalf(x) + 0.7
-      && Math.hypot(x - POTATO_HOUSE.x, z - POTATO_HOUSE.z) > 5.2
+      && built.every(b => Math.hypot(x - b.x, z - b.z) > 5.2) && fieldMask(x, z, 1.2) < 0.01
+    const broad = (t: Tree) => (t.r < 0.45 ? trees.maple : trees.birch).push(t)
+    // a fir is a slimmer spruce
+    const conifer1 = (t: Tree) => trees.spruce.push(r() < 0.36 ? { ...t, w: 0.66 } : t)
 
-    // The home woodlot on the ridge above the fields.
+    // The woods along the ridge above the fields.
     const h = HOME_WOODS
     for (let z = h.z0 - 4; z < h.z1 + 1; z += 1.9) {
       for (let x = h.x0 - 4; x < h.x1 + 4; x += 1.9) {
@@ -187,28 +255,39 @@ export class Flora {
         if (w.woods < 0.5 || !open(jx, jz) || r() < 0.1) continue
         const front = jz > h.z1 - 4.5
         const t: Tree = { x: jx, z: jz, s: (front ? 3.6 : 5.2) + r() * 3.4, r: r(), hue: r() }
-        if (r() < w.hard) broadNear.push({ ...t, s: 3.2 + r() * 2.2 })
-        else (r() < 0.36 ? firNear : spruceNear).push(t)
+        if (r() < w.hard) broad({ ...t, s: 3.2 + r() * 2.2 })
+        else conifer1(t)
       }
     }
-    // By the house, along the lane and on the brook.
-    broadNear.push({ x: 27.3, z: 9.4, s: 6.4, r: 0.3, hue: 0.12 }, { x: 20.2, z: 10.6, s: 3.4, r: 0.7, hue: 0.62 }, { x: 27.6, z: -2.4, s: 4.4, r: 0.5, hue: 0.8 })
-    for (let k = 0; k < 4; k++) spruceNear.push({ x: 27.6 + r() * 1.4, z: -12 + k * 2.3 + r(), s: 4 + r() * 2.2, r: r(), hue: r() })
+    // By the house, along the lane and on the brook; the Dufour dooryard's maple, and a few along the road between.
+    broad({ x: 27.3, z: 9.4, s: 6.4, r: 0.3, hue: 0.12 }); broad({ x: 20.2, z: 10.6, s: 3.4, r: 0.7, hue: 0.62 }); broad({ x: 27.6, z: -2.4, s: 4.4, r: 0.5, hue: 0.8 })
+    for (let k = 0; k < 4; k++) {
+      const t = { x: 28.2 + r() * 1.4, z: -8.6 + k * 2.3 + r(), s: 4 + r() * 2.2, r: r(), hue: r() }
+      if (roadDist(t.x, t.z) > 1.8) trees.spruce.push(t)
+    }
+    broad({ x: 97.4, z: 6.6, s: 6.8, r: 0.22, hue: 0.2 }); broad({ x: 89.0, z: 4.6, s: 4.2, r: 0.62, hue: 0.7 })
+    for (let k = 0; k < 3; k++) trees.spruce.push({ x: 98.6 + r() * 1.6, z: -10 + k * 2.6, s: 4.2 + r() * 2, r: r(), hue: r() })
+    for (let x = 30; x < 48; x += 2.2 + r() * 3) {
+      const side = r() < 0.5 ? -1 : 1, z = -8.4 + side * (2.4 + r() * 1.2) - (x < 40 ? (40 - x) * 0.35 : 0)
+      if (!open(x, z)) continue
+      if (r() < 0.55) trees.shrub.push({ x, z, s: 1.2 + r(), r: r(), hue: r() })
+      else broad({ x, z, s: 3.4 + r() * 2.4, r: r(), hue: r() })
+    }
     for (let x = -150; x < 170; x += 1.5 + r() * 2.6) {
-      if (Math.abs(x - 17.8) < 3.2 || (x > -26 && x < 13)) continue
+      if (Math.abs(x - 17.8) < 3.2 || Math.abs(x - 92.6) < 3.2 || (x > -26 && x < 13)) continue
       const side = r() < 0.5 ? -1 : 1, bz = brookZ(x), off = brookHalf(x) + 0.9 + r() * 1.6
       // Fewer on the farm's own bank, so the view across the brook stays open.
       if (side < 0 && x > FARM.x0 - 4 && x < FARM.x1 && r() < 0.62) continue
       const z = bz + side * off
-      if (r() < 0.72) shrubs.push({ x, z, s: 1.1 + r() * 1.1, r: r(), hue: r() })
-      else (Math.abs(x - FARM_CENTER.x) < 90 ? broadNear : broadFar).push({ x, z: bz + side * (off + 1), s: 3 + r() * 2.4, r: r(), hue: r() })
+      if (r() < 0.72) trees.shrub.push({ x, z, s: 1.1 + r() * 1.1, r: r(), hue: r() })
+      else broad({ x, z: bz + side * (off + 1), s: 3 + r() * 2.4, r: r(), hue: r() })
     }
     // The country: woodlots thinning with distance, each tree standing for more as they go, and hedgerow trees.
     const reach = 1500
     for (let tries = 0; tries < 160000; tries++) {
       const a = r() * Math.PI * 2, d = 40 + Math.pow(r(), 1.7) * reach
       const x = FARM_CENTER.x + Math.cos(a) * d, z = FARM_CENTER.z + Math.sin(a) * d
-      if (coniferFar.length + broadFar.length + coniferDistant.length > 11000) break
+      if (trees.conFar.length + trees.broadFar.length + trees.conDistant.length + trees.broadDistant.length > 11000) break
       const w = woodsAt(x, z)
       if (w.woods <= 0 || !open(x, z)) continue
       const sparse = 1 / (1 + d / 260)
@@ -216,51 +295,25 @@ export class Flora {
       const grow = 1 + d / 520
       const t: Tree = { x, z, s: (4.2 + r() * 3.6) * grow, r: r(), hue: r() }
       const near = d < 95
-      if (r() < w.hard) (near ? broadNear : broadFar).push({ ...t, s: (3.2 + r() * 2.4) * grow })
-      else if (near) (r() < 0.36 ? firNear : spruceNear).push(t)
-      else (d < 340 ? coniferFar : coniferDistant).push(t)
+      if (r() < w.hard) {
+        if (near) broad({ ...t, s: (3.2 + r() * 2.4) * grow })
+        else (d < 330 ? trees.broadFar : trees.broadDistant).push({ ...t, s: (3.2 + r() * 2.4) * grow })
+      } else if (near) conifer1(t)
+      else (d < 340 ? trees.conFar : trees.conDistant).push(t)
     }
     // Trees round the neighbours' farmsteads.
     for (const [fx, fz] of FARMSTEADS) {
       for (let k = 0; k < 5; k++) {
         const x = fx + (r() - 0.5) * 16, z = fz + (r() - 0.5) * 14
         if (Math.hypot(x - fx, z - fz) < 5 || !open(x, z)) continue
-        ;(r() < 0.6 ? broadFar : coniferFar).push({ x, z, s: 4.5 + r() * 3, r: r(), hue: r() })
+        ;(r() < 0.6 ? trees.broadFar : trees.conFar).push({ x, z, s: 4.5 + r() * 3, r: r(), hue: r() })
       }
-    }
-
-    const m = new Matrix4(), q = new Quaternion(), p = new Vector3(), sc = new Vector3(), up = new Vector3(0, 1, 0)
-    const place = (geo: BufferGeometry, mat: MeshStandardMaterial, trees: Tree[], wide: number, sink: number, far: boolean, depth?: Patch): InstancedMesh => {
-      const mesh = new InstancedMesh(geo, mat, trees.length)
-      const info = new Float32Array(trees.length * 4)
-      trees.forEach((t, k) => {
-        q.setFromAxisAngle(up, t.r * 6.283)
-        const w = t.s * wide * (0.82 + 0.36 * t.r)
-        mesh.setMatrixAt(k, m.compose(p.set(t.x, groundY(t.x, t.z) - sink * t.s, t.z), q, sc.set(w, t.s, w)))
-        info.set([t.r, t.hue, 0.78 + 0.44 * hash2(k, 5), t.s], k * 4)
-      })
-      geo.setAttribute('aTree', new InstancedBufferAttribute(info, 4))
-      mesh.instanceMatrix.needsUpdate = true
-      mesh.castShadow = true
-      mesh.receiveShadow = !far
-      // Far trees shadow only into the last cascade; near ones into all three.
-      if (!far) mesh.layers.enable(1)
-      mesh.layers.enable(2)
-      mesh.frustumCulled = false
-      if (depth) {
-        const d = depthFor(depth)
-        mesh.customDepthMaterial = d
-        this.disposables.push(d)
-      }
-      this.group.add(mesh)
-      this.disposables.push(geo, mat)
-      return mesh
     }
 
     const windy: Patch = { vertexWorld: sway('vec2(instanceMatrix[3].x, instanceMatrix[3].z)', 'max(cWorld.y - instanceMatrix[3].y, 0.0)', '0.02') }
-    const coniferMat = (key: string) => patch(new MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.9, metalness: 0, side: DoubleSide }), {
+    const cMat = patch(new MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.9, metalness: 0, side: DoubleSide }), {
       ...windy,
-      key,
+      key: 'county-conifer',
       ambient: 0.62,
       vertexHead: 'attribute vec4 aTree; varying vec4 vTree;',
       vertexBegin: 'vTree = aTree;',
@@ -268,70 +321,68 @@ export class Flora {
       // Each bough's needles catch the light a little differently.
       fragmentColor: `diffuseColor.rgb *= mix(${linear('#13231b')}, ${linear('#223b27')}, vTree.y) * vTree.z * (0.72 + 0.56 * texture2D(uNoise, vWorld.xz * 0.8 + vWorld.y * 0.9).a); ${SNOW_RIME_TREE}`,
     })
-    place(conifer(9, 7, 0.2, 5), coniferMat('county-conifer'), spruceNear, 1, 0.02, false)
-    place(conifer(11, 6, 0.13, 9), coniferMat('county-conifer'), firNear, 1, 0.02, false)
-    place(conifer(6, 6, 0.2, 13), coniferMat('county-conifer'), coniferFar, 1, 0.02, true)
-    // Beyond the reach of any shadow map: these only stand against the sky.
-    place(conifer(4, 5, 0.21, 17), coniferMat('county-conifer'), coniferDistant, 1, 0.02, true).castShadow = false
-
     // Hardwoods: green in summer, turning by the tree in late September, bare by November.
     const LEAF = /* glsl */ `
       {
-        vec3 summer = mix(${linear('#5c8a3c')}, ${linear('#7da04a')}, vTree.y);
+        vec3 summer = mix(${linear('#557f38')}, ${linear('#7da04a')}, vTree.y);
         vec3 fall = vTree.x < 0.34 ? ${linear('#c4562a')} : vTree.x < 0.7 ? ${linear('#dcae3a')} : ${linear('#c9822e')};
         float turned = smoothstep(vTree.y * 0.55, vTree.y * 0.55 + 0.45, uGold);
         diffuseColor.rgb *= mix(summer, fall, turned) * vTree.z;
       }
     `
-    const wood = hardwood(3)
-    const barkMat = patch(new MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0, side: DoubleSide }), {
-      ...windy,
-      vertexHead: 'attribute vec4 aTree; varying vec4 vTree; varying float vUp;',
-      vertexBegin: 'vTree = aTree; vUp = position.y;',
-      fragmentHead: 'varying vec4 vTree; varying float vUp;',
-      // Birch where the tree's number says so: white bark with dark bands. The rest grey-brown.
-      fragmentColor: `
-        float band = step(0.8, fract(vUp * 23.0 + vTree.x * 7.0)) * step(0.4, fract(vUp * 7.3));
-        vec3 birch = mix(${linear('#e4e0d4')}, ${linear('#3a3632')}, band);
-        diffuseColor.rgb = mix(${linear('#5e5448')}, birch, step(0.45, vTree.x) * step(vUp, 0.62));
-        ${SNOW_RIME_TREE}`,
-    })
-    place(wood.wood, barkMat, broadNear, 0.8, 0.01, false)
     const crownPatch: Patch = {
-      key: 'county-crown',
-      vertexHead: 'attribute vec4 aTree; varying vec4 vTree;',
-      vertexBegin: 'vTree = aTree;',
+      key: 'county-hardwood',
+      vertexHead: 'attribute vec4 aTree; attribute float aShade; attribute float aPart; varying vec4 vTree; varying float vShade; varying float vPart; varying float vUp;',
+      // the dark hearts shrink to nothing as the leaves go
+      vertexBegin: /* glsl */ `
+        vTree = aTree; vShade = aShade; vPart = aPart; vUp = position.y;
+        if (aPart > 0.5 && aPart < 1.5) { transformed *= vec3(uLeaf, 1.0, uLeaf); transformed.y = mix(0.6, transformed.y, uLeaf); }
+      `,
       vertexWorld: `${sway('vec2(instanceMatrix[3].x, instanceMatrix[3].z)', 'max(cWorld.y - instanceMatrix[3].y, 0.0)', '0.035')}
-        cWorld.xyz += sin(uTime * 3.1 + position.x * 31.0 + position.y * 17.0 + aTree.x * 20.0) * 0.012 * aTree.w * min(uSway, 1.0);`,
+        cWorld.xyz += sin(uTime * 3.1 + position.x * 31.0 + position.y * 17.0 + aTree.x * 20.0) * 0.012 * aTree.w * min(uSway, 1.0) * step(1.5, aPart);`,
     }
-    const crownMat = patch(new MeshStandardMaterial({ map: sprayTex, alphaTest: 0.5, alphaToCoverage: true, side: DoubleSide, roughness: 0.7, metalness: 0 }), {
+    const crownMat = patch(new MeshStandardMaterial({ map: sprayTex, alphaTest: 0.5, alphaToCoverage: true, side: DoubleSide, roughness: 0.75, metalness: 0 }), {
       ...crownPatch,
       translucent: 0.9,
-      fragmentHead: 'varying vec4 vTree;',
-      // Leaves thin out as they fall: the bare limbs show through, then stand alone.
-      fragmentColor: `${LEAF} diffuseColor.a *= coverGain(vMapUv, 128.0) * smoothstep(0.0, 0.5, uLeaf * 1.5 - texture2D(uNoise, vMapUv * 0.8 + vTree.xy).a); ${SNOW_RIME_TREE}`,
+      ambient: 0.85,
+      fragmentHead: 'varying vec4 vTree; varying float vShade; varying float vPart; varying float vUp;',
+      fragmentColor: /* glsl */ `
+        if (vPart < 0.5) {
+          // Bark: birch where the tree's number says so, white with dark bands; the rest grey-brown.
+          float band = step(0.8, fract(vUp * 23.0 + vTree.x * 7.0)) * step(0.4, fract(vUp * 7.3));
+          vec3 birch = mix(${linear('#e4e0d4')}, ${linear('#3a3632')}, band);
+          // darker than it looks: the leaves' glow when the sun is behind them is on the bark too
+          diffuseColor.rgb = mix(${linear('#5e5448')}, birch, step(0.45, vTree.x) * step(vUp, 0.62)) * 0.52;
+          diffuseColor.a = 1.0;
+        } else if (vPart < 1.5) {
+          diffuseColor.rgb = vec3(1.0);
+          ${LEAF}
+          diffuseColor.rgb *= 0.22 + 0.3 * texture2D(uNoise, vWorld.xz * 1.3 + vWorld.y * 0.9).a;
+          diffuseColor.a = 1.0;
+        } else {
+          // Deep in the crown is dark; leaves thin out as they fall, the bare limbs show through, then stand alone.
+          ${LEAF}
+          diffuseColor.rgb *= vShade * (0.86 + 0.28 * texture2D(uNoise, vMapUv * 0.37 + vTree.xy).a);
+          diffuseColor.a *= coverGain(vMapUv, 128.0) * smoothstep(0.0, 0.5, uLeaf * 1.5 - texture2D(uNoise, vMapUv * 0.8 + vTree.xy).a);
+        }
+        ${SNOW_RIME_TREE}`,
     })
-    const crown = place(wood.crown, crownMat, broadNear, 0.8, 0.01, false, crownPatch)
-    crown.receiveShadow = true
-    const coreMat = patch(new MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0 }), {
-      ...windy,
-      vertexHead: 'attribute vec4 aTree; varying vec4 vTree;',
-      vertexBegin: 'vTree = aTree; transformed *= vec3(uLeaf, 1.0, uLeaf); transformed.y = mix(0.6, transformed.y, uLeaf);',
-      fragmentHead: 'varying vec4 vTree;',
-      fragmentColor: `${LEAF} diffuseColor.rgb *= 0.36 + 0.5 * texture2D(uNoise, vWorld.xz * 1.3 + vWorld.y * 0.9).a; ${SNOW_RIME_TREE}`,
-    })
-    place(wood.core, coreMat, broadNear, 0.8, 0.01, false)
     const farMat = patch(new MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0 }), {
       ...windy,
       vertexHead: 'attribute vec4 aTree; varying vec4 vTree; varying float vUp; varying float vBark;',
       // With the leaves down a far tree is a thin grey shape.
       vertexBegin: 'vTree = aTree; vUp = position.y; vBark = step(length(position.xz), 0.045) * step(position.y, 0.42); transformed.xz *= mix(0.45, 1.0, uLeaf);',
-      fragmentHead: 'varying vec4 vTree; varying float vUp; varying float vBark;',
-      // Leaf masses: mottled, darker underneath, the trunk bare below.
-      fragmentColor: `${LEAF} diffuseColor.rgb = mix(${linear('#5a5046')}, diffuseColor.rgb * (0.66 + 0.7 * texture2D(uNoise, vWorld.xz * 0.7 + vWorld.y * 0.5).a), uLeaf * (1.0 - step(0.5, vBark))) * (0.5 + 0.66 * vUp); ${SNOW_RIME_TREE}`,
+      fragmentHead: 'varying vec4 vTree; varying float vUp; varying float vBark; vec2 farBump;',
+      ambient: 0.8,
+      // Leaf masses broken into clumps of light and shade, darker underneath, the trunk bare below.
+      fragmentColor: /* glsl */ `
+        ${LEAF}
+        vec4 clump = texture2D(uNoise, vWorld.xz * 1.7 + vWorld.y * 1.9);
+        farBump = (clump.rg - 0.5) * 2.2 * uLeaf;
+        diffuseColor.rgb = mix(${linear('#5a5046')}, diffuseColor.rgb * vec3(0.92, 0.95, 0.85) * (0.28 + 0.62 * clump.a), uLeaf * (1.0 - step(0.5, vBark))) * (0.34 + 0.46 * vUp);
+        ${SNOW_RIME_TREE}`,
+      fragmentNormal: 'normal = normalize(normal + (viewMatrix * vec4(farBump.x, 0.0, farBump.y, 0.0)).xyz);',
     })
-    place(hardwoodFar(1), farMat, broadFar.filter(t => Math.hypot(t.x - FARM_CENTER.x, t.z) < 330), 1.15, 0.2, true)
-    place(hardwoodFar(0), farMat, broadFar.filter(t => Math.hypot(t.x - FARM_CENTER.x, t.z) >= 330), 1.15, 0.2, true).castShadow = false
     // Alder: the same rounded masses, low and dark, standing in the brook's bank.
     const alderMat = patch(new MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0 }), {
       ...windy,
@@ -340,7 +391,94 @@ export class Flora {
       fragmentHead: 'varying vec4 vTree; varying float vUp;',
       fragmentColor: `diffuseColor.rgb = mix(${linear('#5a5046')}, mix(${linear('#3f6a36')}, ${linear('#a8843a')}, uGold * vTree.y), uLeaf) * vTree.z * (0.65 + 0.55 * vUp); ${SNOW_RIME_TREE}`,
     })
-    place(hardwoodFar(1), alderMat, shrubs, 1.7, 0.42, false)
+    const crownDepth = depthFor(crownPatch)
+    this.disposables.push(cMat, crownMat, farMat, alderMat, crownDepth)
+    const maple = hardwood(3, false), birch = hardwood(11, true)
+    const g = {
+      spruce: conifer(9, 7, 0.2, 5), conFar: conifer(6, 6, 0.2, 13), conDistant: conifer(4, 5, 0.21, 17),
+      far1: hardwoodFar(1), far0: hardwoodFar(0),
+    }
+    this.disposables.push(maple, birch, ...Object.values(g))
+    const k = (geo: BufferGeometry, mat: MeshStandardMaterial, wide: number, sink: number, shadow = true, depth?: MeshDepthMaterial): Kind => ({ geo, mat, wide, sink, shadow, depth })
+    // What each tree is drawn with close to, and far from, the camera.
+    const near: Record<string, Kind[]> = {
+      spruce: [k(g.spruce, cMat, 1, 0.02)],
+      maple: [k(maple, crownMat, 0.8, 0.01, true, crownDepth)],
+      birch: [k(birch, crownMat, 0.7, 0.01, true, crownDepth)],
+      shrub: [k(g.far1, alderMat, 1.7, 0.42)],
+    }
+    const far: Record<string, Kind[]> = {
+      spruce: [k(g.conFar, cMat, 1, 0.02)],
+      maple: [k(g.far1, farMat, 1.15, 0.2)], birch: [k(g.far1, farMat, 0.95, 0.2)], shrub: [k(g.far0, alderMat, 1.7, 0.42)],
+      conFar: [k(g.conFar, cMat, 1, 0.02)], conDistant: [k(g.conDistant, cMat, 1, 0.02, false)],
+      broadFar: [k(g.far1, farMat, 1.15, 0.2)], broadDistant: [k(g.far0, farMat, 1.15, 0.2, false)],
+    }
+    // Lay each class out by patch: near-and-far patches on and round the farm, far-only patches beyond.
+    for (const cls of Object.keys(trees) as Cls[]) {
+      const byCell = new Map<string, Tree[]>()
+      const both = cls in near
+      for (const t of trees[cls]) {
+        const cell = both ? CELL : 720
+        const key = `${both ? 'n' : 'f'}|${Math.floor(t.x / cell)}|${Math.floor(t.z / cell)}`
+        let list = byCell.get(key)
+        if (!list) byCell.set(key, (list = []))
+        list.push(t)
+      }
+      for (const [key, list] of byCell) {
+        let ch = this.chunks.get(key)
+        if (!ch) this.chunks.set(key, (ch = { near: [], far: [], sphere: new Sphere(), fixed: !both }))
+        for (const kind of far[cls]) ch.far.push(this.place(kind, list, true))
+        if (both) for (const kind of near[cls]) ch.near.push(this.place(kind, list, false))
+      }
+    }
+    for (const ch of this.chunks.values()) {
+      const all = [...ch.near, ...ch.far]
+      all.forEach((m, i) => { if (i === 0) ch.sphere.copy(m.boundingSphere!); else ch.sphere.union(m.boundingSphere!) })
+      for (const m of ch.near) m.visible = false
+    }
+  }
+
+  private place(kind: Kind, trees: Tree[], far: boolean): InstancedMesh {
+    const m = new Matrix4(), q = new Quaternion(), p = new Vector3(), sc = new Vector3(), up = new Vector3(0, 1, 0)
+    const geo = new BufferGeometry()
+    geo.index = kind.geo.index
+    for (const name of Object.keys(kind.geo.attributes)) geo.setAttribute(name, kind.geo.attributes[name])
+    const mesh = new InstancedMesh(geo, kind.mat, trees.length)
+    const info = new Float32Array(trees.length * 4)
+    trees.forEach((t, n) => {
+      q.setFromAxisAngle(up, t.r * 6.283)
+      const w = t.s * kind.wide * (t.w ?? 1) * (0.82 + 0.36 * t.r)
+      mesh.setMatrixAt(n, m.compose(p.set(t.x, groundY(t.x, t.z) - kind.sink * t.s, t.z), q, sc.set(w, t.s, w)))
+      info.set([t.r, t.hue, 0.78 + 0.44 * hash2(Math.round(t.x * 7), Math.round(t.z * 7)), t.s], n * 4)
+    })
+    geo.setAttribute('aTree', new InstancedBufferAttribute(info, 4))
+    mesh.instanceMatrix.needsUpdate = true
+    mesh.computeBoundingSphere()
+    mesh.castShadow = kind.shadow
+    mesh.receiveShadow = !far
+    // Whole trees shadow into every cascade; far ones only into the last, wide one.
+    mesh.layers.enable(2)
+    if (!far) { mesh.layers.enable(1); mesh.layers.enable(3) } else mesh.userData.far = true
+    if (kind.depth) mesh.customDepthMaterial = kind.depth
+    this.group.add(mesh)
+    this.disposables.push(geo)
+    return mesh
+  }
+
+  setTier(tier: 'high' | 'medium' | 'low'): void {
+    this.nearAt = NEAR_AT[tier]
+  }
+
+  // Whole trees in the patches near the camera, simple ones in the rest.
+  update(camera: PerspectiveCamera): void {
+    const c = camera.position
+    for (const ch of this.chunks.values()) {
+      if (ch.fixed) continue
+      const d = Math.max(0, this.v.copy(ch.sphere.center).distanceTo(c) - ch.sphere.radius)
+      const near = d < this.nearAt
+      for (const m of ch.near) m.visible = near
+      for (const m of ch.far) m.visible = !near
+    }
   }
 
   dispose(): void {

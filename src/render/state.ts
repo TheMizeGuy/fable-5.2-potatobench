@@ -6,6 +6,8 @@ import { hash2 } from './noise.ts'
 export type Mode = 'title' | 'plan' | 'season' | 'cellar' | 'ledger' | 'over'
 
 export interface FieldVis {
+  held: boolean            // the farm's this year (owned or rented); otherwise somebody else's ground
+  available: boolean       // spring, and this land is not the farm's: it can be rented or bought
   crop: 'potato' | 'rest'
   status: string
   hills: sim.HillLook[]
@@ -35,6 +37,18 @@ export interface Weather {
 
 export interface Work { kind: sim.JobKind; field: number }
 
+// A crew as the farm knows it: where it is, where it is driving to, and what it did today, in order.
+export interface UnitVis {
+  id: number
+  kind: sim.UnitKind
+  name: string
+  at: number               // a field, or -1 the home yard, -2 the Dufour yard
+  to: number
+  along: number            // share of the drive from `at` to `to` already made (1 when not on the road)
+  job: Work | null         // the order it holds
+  worked: Work[]
+}
+
 export interface Snapshot {
   mode: Mode
   year: number
@@ -44,6 +58,7 @@ export interface Snapshot {
   fields: FieldVis[]
   weather: Weather
   worked: Work[]
+  units: UnitVis[]
   next: Work | null
   frozen: boolean
   rime: number[] | null    // in the season, rime on the ridge, mid-slope and bottom land
@@ -67,18 +82,19 @@ export function snapshot(app: App): Snapshot {
   for (let i = 0; i < sim.FIELD_COUNT; i++) {
     const plan = c.plans[i]
     const info = sim.fieldInfo(c, i)
+    const held = info.tenure !== 'none' && info.status !== 'off'
     let frost = 0
-    if (night && night.snwd < 20) {
+    if (night && night.snwd < 20 && held) {
       const t = sim.fieldTmin(night, info.elev)
       // A light silvering at zero, white hoarfrost three degrees below.
       if (info.rime || t <= 0) frost = Math.min(1, 0.25 + Math.max(0, -t) / 3.2)
-      const terrace = Math.floor(i / 2)
+      const terrace = 2 - info.elev
       rime![terrace] = Math.max(rime![terrace], frost)
     }
     const hills: sim.HillLook[] = []
     let planted = false, dug = 0
     for (let h = 0; h < sim.HILLS; h++) {
-      const look = s && plan.crop === 'potato' ? sim.hillLook(s.fields[i], h) : BARE
+      const look = held && s && plan.crop === 'potato' ? sim.hillLook(s.fields[i], h) : BARE
       if (look.kind !== 'bare') planted = true
       if (look.kind === 'dug') dug++
       hills.push(look)
@@ -95,7 +111,9 @@ export function snapshot(app: App): Snapshot {
       }
     }
     fields.push({
-      crop: plan.crop,
+      held,
+      available: !held && mode === 'plan',
+      crop: held ? plan.crop : 'rest',
       status: info.status,
       hills,
       ridge: planted ? RIDGE_BY_PASSES[Math.min(2, info.hillPasses)] : 0,
@@ -122,11 +140,23 @@ export function snapshot(app: App): Snapshot {
     day = w.day
   }
   const worked: Work[] = []
-  if (s && mode === 'season') for (const w of s.worked) if (!worked.some(x => x.kind === w.kind && x.field === w.field)) worked.push({ kind: w.kind, field: w.field })
-  const nextJob = s && mode === 'season' && s.jobs.length ? s.jobs[0] : null
-  const wetGround = fields.reduce((a, f) => a + (WETNESS[f.moisture] ?? 0.3), 0) / fields.length
+  const inSeason = !!s && mode === 'season'
+  if (inSeason) for (const w of s.worked) if (!worked.some(x => x.kind === w.kind && x.field === w.field)) worked.push({ kind: w.kind, field: w.field })
+  const units: UnitVis[] = sim.crewInfo(c).map(u => {
+    const trip = u.travelling ? sim.travelDays(u.at, u.to) : 0
+    return {
+      id: u.id, kind: u.kind, name: u.name,
+      at: inSeason ? u.at : sim.HOME_YARD, to: inSeason ? u.to : sim.HOME_YARD,
+      along: u.travelling && trip > 0 ? Math.max(0, Math.min(1, 1 - u.road / trip)) : 1,
+      job: inSeason && u.job ? { kind: u.job.kind, field: u.job.field } : null,
+      worked: inSeason ? s.worked.filter(w => w.unit === u.id).map(w => ({ kind: w.kind, field: w.field })) : [],
+    }
+  })
+  const nextJob = inSeason && s.jobs.length ? s.jobs[0] : null
+  const heldFields = fields.filter(f => f.held)
+  const wetGround = heldFields.reduce((a, f) => a + (WETNESS[f.moisture] ?? 0.3), 0) / Math.max(1, heldFields.length)
   return {
-    mode, year: c.year, day, seasonDay: s ? s.day : -1, month: c.month, fields, weather, worked,
+    mode, year: c.year, day, seasonDay: s ? s.day : -1, month: c.month, fields, weather, worked, units,
     next: nextJob ? { kind: nextJob.kind, field: nextJob.field } : null,
     frozen: s ? s.frozen : false,
     rime,
@@ -149,7 +179,8 @@ function phaseWeather(mode: Mode, month: number): { weather: Weather; day: numbe
   return { weather: w(skies[m], tmins[m], tmins[m] + 9, 4.5, snow[m], 0), day: (318 + m * 30.4) % 365 }
 }
 
-// The title screen: the farm on a July evening, the potatoes in blossom and the oats in head.
+// The title screen: the farm on a July evening, the home fields in blossom and the oats in head, the land beyond as
+// the farm starts the game: somebody else's.
 function showcase(): Snapshot {
   const fields: FieldVis[] = []
   const setup: [boolean, sim.VarietyId, number, number][] = [
@@ -157,20 +188,23 @@ function showcase(): Snapshot {
     [true, 'superior', 0.95, 1], [true, 'kennebec', 0.94, 1], [true, 'gold', 0.9, 1],
   ]
   for (let i = 0; i < sim.FIELD_COUNT; i++) {
-    const [potato, v, canopy, bloom] = setup[i]
+    const held = i < setup.length
+    const [potato, v, canopy, bloom] = setup[i] ?? [false, 'katahdin' as sim.VarietyId, 0, 0]
     const hills: sim.HillLook[] = []
     for (let h = 0; h < sim.HILLS; h++) {
       const j = hash2(i * 131 + h, 7)
       hills.push(potato ? { kind: 'plant', canopy: Math.min(1, canopy * (0.9 + 0.16 * j)), vigor: 0.9 + 0.2 * hash2(h, i), blight: 0, stunted: false, yellow: 0 } : BARE)
     }
     fields.push({
-      crop: potato ? 'potato' : 'rest', status: potato ? 'growing' : 'rest', hills, ridge: potato ? 1 : 0, moisture: 'good', bloom, wilt: 0,
+      held, available: false,
+      crop: potato ? 'potato' : 'rest', status: !held ? 'off' : potato ? 'growing' : 'rest', hills, ridge: potato ? 1 : 0, moisture: 'good', bloom, wilt: 0,
       frosted: 0, rime: 0, variety: v, lot: -1, grams: 0, dark: 0, green: 0,
     })
   }
   return {
     mode: 'title', year: 1987, day: 196, seasonDay: -1, month: 0, fields,
     weather: { sky: 'clear', tmin: 13, tmax: 25, wind: 2.6, wdir: 250, prcp: 0, wetH: 6, snwd: 0 },
-    worked: [], next: null, frozen: false, rime: null, wetGround: 0.1,
+    worked: [], units: [{ id: 0, kind: 'farmer', name: '', at: -1, to: -1, along: 1, job: null, worked: [] }],
+    next: null, frozen: false, rime: null, wetGround: 0.1,
   }
 }

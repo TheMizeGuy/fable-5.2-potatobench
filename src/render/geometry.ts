@@ -79,6 +79,38 @@ export function plantGeometry(): BufferGeometry {
   return finish(b, 'aLeaf', 3)
 }
 
+// The same plant at middle distance: seven broad leaves in two tiers and no stems, about a third of the triangles.
+export function clumpGeometry(): BufferGeometry {
+  const r = rng(43)
+  const b: Build = { pos: [], nrm: [], uv: [], extra: [], idx: [] }
+  const leaf = (az: number, y: number, rise: number, len: number, id: number) => {
+    const wide = len * 1.05
+    const dir = [Math.cos(az) * Math.cos(rise), Math.sin(rise), Math.sin(az) * Math.cos(rise)]
+    const side = [-Math.sin(az), 0, Math.cos(az)]
+    const bend = rise - 0.85
+    const dir2 = [Math.cos(az) * Math.cos(bend), Math.sin(bend), Math.sin(az) * Math.cos(bend)]
+    const p0 = [Math.cos(az) * 0.03, y, Math.sin(az) * 0.03]
+    const p1 = [p0[0] + dir[0] * len * 0.5, p0[1] + dir[1] * len * 0.5, p0[2] + dir[2] * len * 0.5]
+    const p2 = [p1[0] + dir2[0] * len * 0.5, p1[1] + dir2[1] * len * 0.5, p1[2] + dir2[2] * len * 0.5]
+    const o = b.pos.length / 3
+    for (const [p, v] of [[p0, 0], [p1, 0.5], [p2, 1]] as [number[], number][]) {
+      for (const s of [-1, 1]) {
+        const x = p[0] + side[0] * s * wide * 0.5, yy = p[1], z = p[2] + side[2] * s * wide * 0.5
+        const nn = norm([x * 0.9, (yy - 0.1) * 1.4 + 0.45, z * 0.9])
+        b.pos.push(x, yy, z)
+        b.nrm.push(nn[0], nn[1], nn[2])
+        b.uv.push((s + 1) / 2, v)
+        b.extra.push(id, v, 1)
+      }
+    }
+    for (let k = 0; k < 2; k++) { const a = o + k * 2; b.idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2) }
+  }
+  const golden = 2.39996
+  for (let k = 0; k < 4; k++) leaf(k * golden + 0.2, 0.1 + r() * 0.06, 0.32 + r() * 0.15, 0.52 + r() * 0.06, r())
+  for (let k = 0; k < 3; k++) leaf(k * golden + 1.4, 0.3 + r() * 0.06, 0.95 + r() * 0.2, 0.4 + r() * 0.06, r())
+  return finish(b, 'aLeaf', 3)
+}
+
 // Flowers in clusters held just above the canopy. Each is a small card that turns to face the eye.
 // position: where the flower sits on the unit plant. aFlower: the card's corner (x, y), the share of bloom at which it
 // opens, and its own number.

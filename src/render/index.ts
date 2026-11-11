@@ -1,19 +1,19 @@
 // The field view: the farm in its country, drawn with three.js, played like a strategy map.
 // Falls back to a flat drawing without WebGL.
-import { PCFShadowMap, Raycaster, Scene, Triangle, Vector2, Vector3, WebGLRenderer } from 'three'
+import { PCFShadowMap, Raycaster, Scene, Triangle, Vector2, Vector3, WebGLRenderer, type Object3D } from 'three'
 import type { App } from '../game/app.ts'
 import type { CreateFieldView, FieldView } from '../game/contracts.ts'
 import { FIELD_COUNT, HILLS } from '../sim/index.ts'
 import { CameraRig, type Pose, type Viewport } from './camera.ts'
-import { Farmer, Kit, Tractor, implementFor, stoop, stride } from './crew.ts'
+import { Kit } from './crew.ts'
 import { copyEnv, easeEnv, envTarget, light, makeEnv, makeLight } from './env.ts'
 import { createFallbackView } from './fallback.ts'
-import { Fields, PIXEL, UI_GAIN, type HillDisplay } from './fields.ts'
+import { Fields, MARK_WIDE, PIXEL, UI_GAIN, type HillDisplay } from './fields.ts'
 import { Flora } from './flora.ts'
 import { Grass } from './grass.ts'
 import { Harvest } from './harvest.ts'
 import { attachInput } from './input.ts'
-import { FD, FIELDS, FW, ROAD, SHED_SPOT, fieldBaseY } from './layout.ts'
+import { FD, FIELDS, fieldBaseY } from './layout.ts'
 import { clamp, smooth } from './noise.ts'
 import { Particles } from './particles.ts'
 import { Post } from './post.ts'
@@ -25,23 +25,22 @@ import { snapshot, type Mode, type Snapshot } from './state.ts'
 import { buildTerrain } from './terrain.ts'
 import { flowerTexture, leafTexture, noiseTexture, puffTexture, roadTexture, sprayTexture } from './textures.ts'
 import { Birds } from './birds.ts'
+import { Crews, type PendingReveal } from './units.ts'
 import { Weather } from './weather.ts'
-import { Poly, heightAt, parkSpot, planDay, type Pt, type Reveal, type Seg } from './work.ts'
+import { Poly, type Reveal } from './work.ts'
 
 const DAY_ANIM_S = 3.4          // how long a paused day's work takes to play out
 const TITLE_LOOP_S = 44
 const LOST_MS = 3000            // how long a lost WebGL context may stay away before the farm is drawn flat
 const STILL = 0.02              // the pace of water, cloud, mist and smoke under reduced motion
 const SHOWN_CAP_S = 2.5         // the longest whenShown() keeps the interface waiting
-// A test dig and a day's digging keep their own time, inside the cap: the drive to the field, then the work.
-const STAGE_DRIVE_S = 0.5
-const STAGE_S = { sample: 2, dig: 1.7 }
 
 type Tier = 'high' | 'medium' | 'low'
 // What each setting keeps. Going down: the shallow focus and the contact shade go first, then shadow detail, then
-// the size the scene is drawn at and the number of plants.
+// the size the scene is drawn at and the number of plants; and whole plants give way to clumps, and clumps to rows
+// painted on the ground, nearer the camera.
 const TIERS: Record<Tier, { scale: number; pixels: number; msaa: number; ao: boolean; focus: boolean; shadow: [number, number, number]; density: number }> = {
-  high: { scale: 1, pixels: 3.7e6, msaa: 4, ao: true, focus: true, shadow: [4096, 2048, 2048], density: 1 },
+  high: { scale: 1, pixels: 3.7e6, msaa: 4, ao: true, focus: true, shadow: [3072, 2048, 2048], density: 1 },
   medium: { scale: 1, pixels: 2.6e6, msaa: 4, ao: false, focus: false, shadow: [2048, 1024, 1024], density: 1 },
   low: { scale: 0.72, pixels: 1.4e6, msaa: 0, ao: false, focus: false, shadow: [1024, 1024, 512], density: 0.5 },
 }
@@ -111,26 +110,23 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   const fields = new Fields(leafTex, flowerTex)
   const harvest = new Harvest()
   const kit = new Kit()
-  const tractor = new Tractor(kit)
-  const farmer = new Farmer(kit)
+  const crews = new Crews(kit)
   const particles = new Particles(puffTex)
   const weather = new Weather()
   const birds = new Birds()
-  scene.add(sky.dome, terrain.group, flora.group, grass.mesh, props.group, fields.group, harvest.group, tractor.group, farmer.group, particles.mesh, weather.group, birds.mesh)
+  scene.add(sky.dome, terrain.group, flora.group, grass.group, props.group, fields.group, harvest.group, crews.group, particles.mesh, weather.group, birds.mesh)
+  // Whatever throws a shadow near at hand throws it into the fine cascade; the far trees and farmsteads only into the wide one.
+  scene.traverse(o => { if (o.castShadow && !o.userData.far) o.layers.enable(3) })
 
   const env = makeEnv(), envT = makeEnv(), lit = makeLight()
   let snap: Snapshot = snapshot(app)
   let shown: HillDisplay[][] = snap.fields.map(f => f.hills.map(look => ({ look, ridge: f.ridge })))
-  let segs: Seg[] = []
   let dayT = 1
   let dirty = true, dayPassed = false, first = true
   const samples = new Map<number, SampleInfo>()
-  let tractorAt: Pt = { x: SHED_SPOT.x, z: SHED_SPOT.z }
-  let heading = SHED_SPOT.heading
-  let travelled = 0
   let time = 0
   // Clocks for water, cloud, mist and smoke (`ambient`) and for rain and snow (`fall`): under reduced motion the first
-  // nearly stops and the second stops. The farmer's work keeps `time`.
+  // nearly stops and the second stops. The crews' work keeps `time`.
   let ambient = 0
   let fall = 0
   let lost = false
@@ -142,15 +138,15 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   let firstFrame = 0
   let smokeAt = 0
   // What the camera was last asked to frame; the player's own hand on it makes it 'free'.
-  let framing: 'title' | 'home' | 'field' | 'free' = 'home'
+  let framing: 'title' | 'home' | 'whole' | 'field' | 'free' = 'home'
   let framed = -1
   const dugSince = new Map<number, number>()
   const waiters: Waiter[] = []
   const focus = new Vector3(), ahead = new Vector3(), sunAt = new Vector3()
   const windAt = U.uWindAt.value
 
-  // Hills waiting for the tractor or walker to pass: the segment of the day and the place along its path.
-  let pending: (Reveal & { seg: number })[] = []
+  // Hills waiting for a crew to pass: which crew, the segment of its day and the place along its path.
+  let pending: PendingReveal[] = []
 
   // ---- quality
   let tier: Tier = app.settings.quality === 'auto' ? ((navigator.hardwareConcurrency ?? 8) <= 4 ? 'medium' : 'high') : app.settings.quality
@@ -173,7 +169,10 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     const scale = Math.min(t.scale, Math.sqrt(t.pixels / Math.max(1, vp.w * vp.h * pr * pr)))
     post.setSize(Math.max(2, Math.round(vp.w * pr * scale)), Math.max(2, Math.round(vp.h * pr * scale)), { msaa: t.msaa, ao: t.ao, focus: t.focus, bloom: true })
     shadows.setSizes(t.shadow)
-    fields.setDensity(t.density)
+    fields.setTier(tier, t.density)
+    grass.setTier(tier)
+    flora.setTier(tier)
+    crews.setScreen(vp.w, vp.h)
     reframe(reduced)
   }
 
@@ -185,14 +184,18 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   function reframe(still: boolean): void {
     const vp = viewport()
     if (framing === 'free') return
-    const to = framing === 'title' ? rig.titlePose(vp) : framing === 'field' && framed >= 0 ? rig.fieldPose(framed, vp) : rig.home(vp)
+    const to = framing === 'title' ? rig.titlePose(vp) : framing === 'field' && framed >= 0 ? rig.fieldPose(framed, vp) : framing === 'whole' ? rig.whole(vp) : rig.home(vp)
     if (rig.moving()) rig.retarget(to)
     else rig.moveTo(to, still, 500)
   }
 
+  // Home: the home farm, with the other blocks reaching in from the edges. Home again: the whole map.
   function goHome(): void {
-    framing = snap.mode === 'title' ? 'title' : 'home'
-    rig.moveTo(poseFor(snap.mode, viewport()), reduced)
+    const vp = viewport()
+    if (snap.mode === 'title') { framing = 'title'; rig.moveTo(rig.titlePose(vp), reduced); return }
+    const again = framing === 'home' && rig.at(rig.home(vp))
+    framing = again ? 'whole' : 'home'
+    rig.moveTo(again ? rig.whole(vp) : rig.home(vp), reduced)
   }
 
   const off = app.on(e => {
@@ -219,15 +222,9 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
         framing = 'field'
         framed = e.field
         rig.moveTo(rig.fieldPose(e.field, vp), reduced)
-      } else goHome()
+      } else { framing = 'free'; goHome() }
     } else if (e.type === 'insets') reframe(reduced)
   })
-
-  // The title screen: the tractor comes out of the potato house and down the farm road, over the bridge and away.
-  function titleSeg(): Seg {
-    const travel: Pt[] = [{ x: 23.4, z: -15.6 }, ...ROAD.map(([x, z]) => ({ x, z }))]
-    return { kind: 'travel', field: -1, walker: false, travel, path: [travel[travel.length - 1]], reveals: [], start: 0, end: 0.8 }
-  }
 
   function display(f: number, h: number, s: Snapshot): HillDisplay {
     return { look: s.fields[f].hills[h], ridge: s.fields[f].ridge }
@@ -242,17 +239,29 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       const s = samples.get(r.field) ?? lastSample.get(r.field)
       harvest.sample(r.field, r.hill, s && s.hill === r.hill ? s.weights : [], s && s.hill === r.hill ? s.marks : [], fv.variety)
     } else if (r.tubers === 'dig') {
-      const seg = segs.find(sg => sg.field === r.field && sg.kind === 'dig')
-      const along = seg ? new Poly(seg.path).at(r.at) : { dx: -1, dz: 0 }
+      const along = digDir.get(r.field) ?? { dx: -1, dz: 0 }
       harvest.dig(r.field, r.hill, { variety: fv.variety, gramsPerHill: fv.grams, dark: fv.dark, green: fv.green }, along)
     }
   }
   // The day's test digs, kept after the snapshot is rebuilt so the reveal can lay out the hill's own tubers.
   const lastSample = new Map<number, SampleInfo>()
+  // Which way the digger is going over each field being dug, for where the tubers land.
+  const digDir = new Map<number, { dx: number; dz: number }>()
 
   function flush(animate: boolean): void {
     for (const r of pending) reveal(r, animate && pending.length < 200)
     pending = []
+  }
+
+  // A crew has gone this far along its day: reveal the hills it has passed.
+  function passed(unit: number, seg: number, arc: number): void {
+    if (!pending.length) return
+    const keep: PendingReveal[] = []
+    for (const r of pending) {
+      if (r.unit === unit && (r.seg < seg || (r.seg === seg && r.at <= arc))) reveal(r, true)
+      else keep.push(r)
+    }
+    pending = keep
   }
 
   function rebuild(): void {
@@ -268,16 +277,14 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     const sameDay = !dayPassed && !first && prev.mode === next.mode && prev.year === next.year && prev.seasonDay === next.seasonDay
     if (sameSeason) {
       for (const [f, s] of samples) lastSample.set(f, s)
-      segs = planDay(next, shown, tractorAt, new Map([...samples].map(([f, s]) => [f, s.hill])))
-      pending = []
-      segs.forEach((s, k) => { for (const r of s.reveals) pending.push({ ...r, seg: k }) })
+      pending = crews.plan(next, shown, new Map([...samples].map(([f, s]) => [f, s.hill])))
       const wait = new Set(pending.map(r => r.field * HILLS + r.hill))
       shown = next.fields.map((f, i) => f.hills.map((_, h) => (wait.has(i * HILLS + h) ? shown[i][h] : display(i, h, next))))
       dayT = 0
-      clockSeg = -2
-      stageHold = -1
+      digDir.clear()
+      for (const s of crews.segments()) if (s.kind === 'dig' && !digDir.has(s.field)) { const p = new Poly(s.path).at(0); digDir.set(s.field, { dx: p.dx, dz: p.dz }) }
       // A key moment about to play where the player is not looking: bring the field into frame, unless their hand is on the camera.
-      const staged = segs.find(s => s.kind === 'sample' || (s.kind === 'dig' && prev.fields[s.field].status !== 'digging'))
+      const staged = crews.staged(prev)
       if (staged && !reduced && app.speed < 3 && rig.idle > 2.5) {
         const to = rig.fieldPose(staged.field, viewport())
         const far = Math.hypot(rig.cur.x - to.x, rig.cur.z - to.z) > FD * 0.8 || rig.cur.dist > to.dist * 1.3
@@ -285,18 +292,15 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       }
     } else if (sameDay) {
       // A command in the middle of the day: keep the day playing, refresh everything not waiting to be revealed.
+      crews.sync(next)
       const wait = new Set(pending.map(r => r.field * HILLS + r.hill))
       shown = next.fields.map((f, i) => f.hills.map((_, h) => (wait.has(i * HILLS + h) ? shown[i][h] : display(i, h, next))))
     } else {
       flush(false)
       shown = next.fields.map((f, i) => f.hills.map((_, h) => display(i, h, next)))
-      segs = next.mode === 'title' ? [titleSeg()] : []
-      if (first || prev.mode !== next.mode) {
-        if (next.mode !== 'title') {
-          const p = next.mode === 'season' && next.next ? parkSpot(next.next.field) : { x: SHED_SPOT.x, z: SHED_SPOT.z }
-          tractorAt = p
-          heading = next.mode === 'season' && next.next ? Math.PI : SHED_SPOT.heading
-        }
+      if (first || prev.mode !== next.mode || prev.year !== next.year) {
+        crews.rest(next)
+        if (next.mode === 'title') crews.title()
         particles.clear()
         // A change of screen is a move of the camera, not a cut.
         framing = next.mode === 'title' ? 'title' : 'home'
@@ -305,7 +309,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
           rig.moveTo(rig.titlePose(viewport(), true), true)
           rig.moveTo(rig.titlePose(viewport()), false, 14000)
         } else rig.moveTo(poseFor(next.mode, viewport()), first || reduced)
-      }
+      } else crews.sync(next)
       dayT = next.mode === 'title' ? 0 : 1
     }
     for (let i = 0; i < FIELD_COUNT; i++) {
@@ -328,126 +332,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     }
   }
 
-  // Where the tractor and walker are at this point of the day, and which pending hills they have passed.
-  function placeWorkers(dt: number): void {
-    let segIdx = -1
-    for (let k = 0; k < segs.length; k++) if (dayT >= segs[k].start) segIdx = k
-    const seg: Seg | null = segIdx >= 0 ? segs[segIdx] : null
-    if (segIdx !== clockSeg) { clockSeg = segIdx; segClock = 0 } else segClock += dt * (app.speed > 0 ? 1 : replayPace)
-    stageHold = -1
-    const passedUpTo = (arc: number) => {
-      if (!pending.length) return
-      const keep: typeof pending = []
-      for (const r of pending) {
-        if (r.seg < segIdx || (r.seg === segIdx && r.at <= arc)) reveal(r, true)
-        else keep.push(r)
-      }
-      pending = keep
-    }
-    let pos: Pt = tractorAt, dir = { dx: Math.cos(heading), dz: Math.sin(heading) }
-    let working = 0
-    let walkerOn = false
-    let walkPos: Pt = pos, walkDir = dir
-    let kind: Seg['kind'] = 'travel'
-    let bent = 0, walking = 0
-    if (seg) {
-      kind = seg.kind
-      const span = Math.max(1e-6, seg.end - seg.start)
-      let u = Math.min(1, (dayT - seg.start) / span)
-      const travel = new Poly(seg.travel)
-      let tShare = seg.kind === 'travel' ? 1 : travel.length > 0.3 ? Math.min(0.4, 0.12 + travel.length / 150) : 0
-      if (seg.kind === 'sample' || seg.kind === 'dig') {
-        // However long the day is, the hill is up or the last row out inside two and a half seconds, and the day waits for it.
-        const drive = travel.length > 0.3 ? STAGE_DRIVE_S : 0, work = STAGE_S[seg.kind]
-        u = Math.min(1, segClock / (drive + work))
-        tShare = drive / (drive + work)
-        if (u < 0.92 && snap.mode === 'season') stageHold = seg.end - 1e-3
-      }
-      const path = new Poly(seg.path)
-      if (u < tShare || seg.kind === 'travel') {
-        // ease in and out of a trip
-        const s = seg.kind === 'travel' ? u : u / tShare
-        const p = travel.at((s * s * (3 - 2 * s)) * travel.length)
-        pos = p
-        dir = p
-        passedUpTo(-1)
-      } else {
-        const w = (u - tShare) / (1 - tShare)
-        if (!seg.walker) {
-          // Dig day is staged: the digger is lowered at the row's end, the rows come out, and the tractor stands at the finish.
-          const lead = seg.kind === 'dig' ? 0.05 : 0, tail = seg.kind === 'dig' ? 0.08 : 0
-          const run = clamp((w - lead) / (1 - lead - tail), 0, 1)
-          const p = path.at(run * path.length)
-          pos = p
-          dir = p
-          working = run > 0 && run < 1 ? 1 : 0
-          passedUpTo(run >= 1 ? Infinity : run * path.length)
-        } else {
-          const end = travel.at(travel.length)
-          pos = end
-          dir = travel.length > 0.01 ? end : dir
-          if (seg.kind === 'sample') {
-            // The test dig is staged: the walk in, the fork set and the hill lifted, then a moment to look.
-            const walk = Math.min(1, w / 0.5)
-            const p = path.at(walk * path.length)
-            walkPos = p
-            walkDir = walk < 1 ? p : { dx: 0, dz: -1 }
-            walking = walk < 1 ? 1 : 0
-            bent = smooth(0.5, 0.62, w) * (1 - 0.6 * smooth(0.66, 0.8, w))
-            passedUpTo(w >= 0.64 ? Infinity : -1)
-            walkerOn = true
-          } else {
-            const p = path.at(w * path.length)
-            walkPos = p
-            walkDir = p
-            walkerOn = w < 1
-            walking = 1
-            passedUpTo(w * path.length)
-          }
-        }
-      }
-      tractor.setImplement(seg.kind === 'travel' ? tractor.current : implementFor(seg.kind))
-    } else if (snap.mode !== 'season') {
-      tractor.setImplement('none')
-    }
-    // A jump (the title's loop starting again) is not a drive.
-    const step = Math.hypot(pos.x - tractorAt.x, pos.z - tractorAt.z)
-    const moved = step > 3 ? 0 : step
-    travelled += moved
-    let turn = 0
-    if (moved > 1e-4 || seg) {
-      const target = Math.atan2(dir.dz, dir.dx)
-      let d = target - heading
-      while (d > Math.PI) d -= Math.PI * 2
-      while (d < -Math.PI) d += Math.PI * 2
-      turn = clamp(d * 1.5, -1, 1)
-      heading += step > 3 ? d : moved > 1e-4 ? d * Math.min(1, dt * 7 + moved * 2) : 0
-    }
-    tractorAt = { x: pos.x, z: pos.z }
-    const y = heightAt(pos.x, pos.z)
-    const ahead = heightAt(pos.x + Math.cos(heading) * 0.6, pos.z + Math.sin(heading) * 0.6)
-    const behind = heightAt(pos.x - Math.cos(heading) * 0.6, pos.z - Math.sin(heading) * 0.6)
-    tractor.group.position.set(pos.x, y + 0.01, pos.z)
-    tractor.group.rotation.set(0, -heading, Math.atan2(ahead - behind, 1.2), 'YXZ')
-    tractor.driver.visible = !walkerOn
-    farmer.group.visible = walkerOn
-    if (walkerOn) {
-      farmer.group.position.set(walkPos.x, heightAt(walkPos.x, walkPos.z) + 0.02, walkPos.z)
-      farmer.group.rotation.y = -Math.atan2(walkDir.dz, walkDir.dx)
-      stride(farmer.figure, time * 9, walking)
-      stoop(farmer.figure, bent)
-      farmer.fork.visible = kind === 'sample' || kind === 'rogue'
-    }
-    // Units carry a ring on the ground when seen from far off.
-    const far = smooth(34, 70, rig.cur.dist) * (snap.mode === 'season' ? 0.75 : 0)
-    ;(tractor.ring.material as unknown as { uniforms: { uLevel: { value: number } } }).uniforms.uLevel.value = far * (seg && seg.kind !== 'travel' && !seg.walker ? 1 : 0.5)
-    ;(farmer.ring.material as unknown as { uniforms: { uLevel: { value: number } } }).uniforms.uLevel.value = far
-    tractor.ring.rotation.z = 0
-    const idle = snap.mode !== 'season' && snap.mode !== 'title'
-    tractor.animate(dt, travelled, moved, turn, working, kind, env.dry, particles, reduced || idle)
-  }
-
-  // ---- picking
+  // ---- picking: the farm's own fields, and in spring the land that can be had; and the crews.
   const ray = new Raycaster()
   const ndc = new Vector2(), hit = new Vector3()
   const quads = FIELDS.map(f => {
@@ -460,6 +345,8 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     ray.setFromCamera(ndc.set((x / vp.w) * 2 - 1, -(y / vp.h) * 2 + 1), rig.camera)
     let best = -1, bd = Infinity
     quads.forEach((tris, i) => {
+      const f = snap.fields[i]
+      if (!f.held && !f.available) return
       for (const t of tris) {
         if (ray.ray.intersectTriangle(t.a, t.b, t.c, false, hit)) {
           const d = hit.distanceToSquared(ray.ray.origin)
@@ -469,7 +356,12 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     })
     return best
   }
-  const input = attachInput(canvas, app, rig, viewport, pick, goHome)
+  function pickUnit(x: number, y: number): number {
+    if (snap.mode === 'title') return -1
+    const vp = viewport()
+    return crews.pick(x, y, rig.camera, vp.w, vp.h, snap.mode === 'season' || app.unit >= 0)
+  }
+  const input = attachInput(canvas, app, rig, viewport, pick, pickUnit, goHome)
 
   function applyLight(dt: number): void {
     // The sun's small journey through the day, smoothed so that days running fast do not make the light flicker.
@@ -483,7 +375,9 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     U.uHazeAway.value.copy(lit.hazeAway)
     U.uMistCol.value.copy(lit.mist)
     U.uHaze.value.set(env.haze, 0.011)
-    U.uMist.value.set((0.5 - 0.36 * env.mistDeep) * env.mist, 2.4 - 1.85 * env.mistDeep, 0.2, 0.85)
+    // Mist lies in the low ground: on the brook and the bottom land, thinning fast above it; on a fog day it fills the
+    // valley to the mid slope and the ridge stands out of it.
+    U.uMist.value.set((0.5 - 0.36 * env.mistDeep) * env.mist, 2.6 - 1.5 * env.mistDeep, 0.2 + 1.9 * env.mistDeep, 0.85)
     U.uCloud.value.x = env.cloudShadow
     U.uCloud.value.y = env.cloud
     U.uSnow.value = env.snow
@@ -504,8 +398,8 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     LAMP.value += (lamp / lit.exposure * 0.6 - LAMP.value) * Math.min(1, dt * 2)
   }
   let sunDrift = 0
+  const spent = { crews: 0, update: 0, draw: 0 }
   let replayPace = 1
-  let clockSeg = -2, segClock = 0, stageHold = -1
   let titleShift = 0.16
 
   function measure(dtMs: number): void {
@@ -548,7 +442,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     // Day clock: follows the game clock when it runs, plays the day out by itself when paused.
     if (snap.mode === 'title') dayT = reduced ? 0.36 : (((time / TITLE_LOOP_S + titleShift) % 1) + 1) % 1
     else if (dayT < 1) dayT = Math.min(1, app.speed > 0 ? Math.max(dayT + dt / DAY_ANIM_S * 0.25, app.dayProgress) : dayT + dt / DAY_ANIM_S * replayPace)
-    if (stageHold >= 0 && snap.mode === 'season') dayT = Math.min(dayT, stageHold)
+    if (crews.stageHold >= 0 && snap.mode === 'season') dayT = Math.min(dayT, crews.stageHold)
     easeEnv(env, envT, 1 - Math.exp(-dt / 1.1))
     applyLight(dt)
     const pace = reduced ? STILL : 1
@@ -561,30 +455,40 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     U.uCloud.value.z = windAt.x * 0.0009
     U.uCloud.value.w = windAt.y * 0.0009
     terrain.water.ice.value = env.ice
+    for (let i = 0; i < FIELD_COUNT; i++) terrain.held.value[i] = fields.held[i]
     input.frame(dt)
     if (rig.idle < 0.2 && framing !== 'free') framing = 'free'
     rig.update(dt, vp, reduced, snap.mode === 'title' && framing === 'title' && !reduced ? Math.sin(time * 0.05) : 0)
     const cam = rig.camera
     sky.dome.position.copy(cam.position)
-    placeWorkers(dt)
+    const t0 = performance.now()
+    crews.place({
+      dt, dayT, advancing: app.speed > 0, pace: replayPace, time, reduced, idle: snap.mode !== 'season' && snap.mode !== 'title',
+      season: snap.mode === 'season', dist: rig.cur.dist, dust: env.dry, picked: app.unit, particles, passed,
+    })
     // Smoke from the kitchen chimney on cold days.
     smokeAt += dt * pace
     if (env.smoke > 0.2 && smokeAt > 0.16) {
       smokeAt = 0
       particles.emit(props.chimney.x, props.chimney.y, props.chimney.z, (Math.random() - 0.5) * 0.1, 0.5, (Math.random() - 0.5) * 0.1, 0.12, 0.3, 4.5, 0.74, 0.74, 0.76, 0.36 * env.smoke, 0.8)
     }
+    const t1 = performance.now()
     particles.update(dt * (reduced ? 0.3 : 1), wx * env.wind * 1.6, wz * env.wind * 1.6)
     focus.set(rig.cur.x, fieldBaseY(rig.cur.z), rig.cur.z)
     weather.update(fall, env.rain, env.snowfall, wx * env.wind, wz * env.wind, cam.getWorldDirection(ahead).multiplyScalar(30).add(cam.position), lit.hazeAway, (size.h * size.pr) / (2 * Math.tan((cam.fov * Math.PI) / 360)))
     birds.update(ambient, Math.max(env.rain, env.snowfall), lit.hazeAway)
     shadows.update(lit.sunDir, lit.sun, focus, rig.focus(), dtMs <= 0.5)
     fields.setFarShadows(!shadows.holdsFarm)
-    fields.update(dt, { selection: app.selection, hover: app.hover, oats: env.oats, oatsRipe: env.oatsRipe, reduced })
+    MARK_WIDE.value = clamp(rig.cur.dist / 42, 1, 4.5)
+    fields.update(dt, cam, { selection: app.selection, hover: app.hover, oats: env.oats, oatsRipe: env.oatsRipe, reduced })
+    grass.update(cam)
+    flora.update(cam)
     harvest.update(dt, app.speed === 0, clamp(rig.cur.dist / 30, 1, 2.3), reduced)
     PIXEL.value = (TIERS[tier].msaa ? 1.7 : 1.4) / ((post.target.height) / (2 * Math.tan((cam.fov * Math.PI) / 360)))
     // The focus is shallow in the opening shot, slight in play, and opens up while the player moves the camera.
     const want = env.lens * (rig.idle < 0.6 ? 0.2 : 1) * (snap.mode === 'title' ? 1 : smooth(60, 16, rig.cur.dist) * 0.9 + 0.5)
     lens += (want - lens) * (1 - Math.exp(-dt / 0.35))
+    const t2 = performance.now()
     renderer.info.reset()
     if (frameNo % 2 === 0 || frameNo < 4 || dtMs <= 0.5) sky.renderMap(renderer)
     // The opening shot is focused on the bottom fields, half way to what it looks at.
@@ -605,6 +509,11 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       sunX: sunAt.x * 0.5 + 0.5, sunY: sunAt.y * 0.5 + 0.5, shafts: sunAt.z < 1 ? shafts : 0,
       warm: 0.22 + 0.5 * gold - 0.3 * cold, rich: 0.1 + 0.14 * gold, contrast: 0.09 + 0.08 * open,
     }, Math.round(size.w * size.pr), Math.round(size.h * size.pr))
+    const t3 = performance.now()
+    // how long the frame's own work and its drawing take, smoothed, for the tools
+    spent.crews += (t1 - t0 - spent.crews) * 0.05
+    spent.update += (t2 - t1 - spent.update) * 0.05
+    spent.draw += (t3 - t2 - spent.draw) * 0.05
     if (!firstFrame) firstFrame = performance.now()
     // Tell whoever is waiting that the land has shown what it had to show.
     for (let k = waiters.length - 1; k >= 0; k--) {
@@ -626,19 +535,29 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   canvas.addEventListener('webglcontextlost', onLost)
   canvas.addEventListener('webglcontextrestored', onRestored)
 
-  // Where a field's plate hangs: over the edge of the field that is furthest up the screen, whichever way the camera is turned.
-  const anchor = new Vector3()
+  // Where a field's plate is pinned: the middle of the field's near edge (the edge nearest the camera), a little inside
+  // the crop and on the ground, so a plate standing on it sits on its own field. When that edge is under the interface
+  // at the bottom of the screen, the pin moves up the field's middle just far enough to be in the clear.
+  const anchor = new Vector3(), far = new Vector3()
   function fieldAnchor(i: number): { x: number; y: number; visible: boolean } {
     const f = FIELDS[i]
     if (!f) return { x: 0, y: 0, visible: false }
-    const yaw = rig.cur.yaw
-    const dx = Math.sin(yaw), dz = -Math.cos(yaw)
-    const reach = Math.abs(dx) * FW / 2 + Math.abs(dz) * FD / 2
-    const z = f.cz + dz * reach
-    anchor.set(f.cx + dx * reach, fieldBaseY(clamp(z, f.z0, f.z1)) + 0.55, z).project(rig.camera)
     const vp = viewport()
-    const x = (anchor.x + 1) / 2 * vp.w, y = (1 - anchor.y) / 2 * vp.h
-    return { x, y, visible: anchor.z < 1 && x >= 0 && x <= vp.w && y >= 0 && y <= vp.h }
+    const cam = rig.camera.position
+    const near = fields.nearEdge(i, cam.x, cam.z)
+    far.set(2 * f.cx - near.x, near.y, 2 * f.cz - near.z)
+    const floor = vp.h - vp.bottom - 10
+    let x = 0, y = 0, inFront = false
+    for (let k = 0; k <= 6; k++) {
+      anchor.copy(near).lerp(far, k / 12)
+      anchor.y = fieldBaseY(anchor.z) + 0.35
+      anchor.project(rig.camera)
+      x = (anchor.x + 1) / 2 * vp.w
+      y = (1 - anchor.y) / 2 * vp.h
+      inFront = anchor.z < 1
+      if (!inFront || y <= floor) break
+    }
+    return { x, y, visible: inFront && x >= 0 && x <= vp.w && y >= 0 && y <= vp.h }
   }
 
   // Settles when the land has shown the test dig's hill lifted, or the last row of the day's digging come out.
@@ -646,6 +565,12 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     return new Promise(resolve => {
       waiters.push({ kind, field, resolve, born: frameNo, until: time + SHOWN_CAP_S, seen: false, settle: 0 })
     })
+  }
+
+  // For measuring what each part of the scene costs: the parts by name, which the tools can switch off.
+  const parts: Record<string, Object3D> = {
+    terrain: terrain.group, flora: flora.group, grass: grass.group, props: props.group, fields: fields.group, harvest: harvest.group,
+    crews: crews.group, particles: particles.mesh, weather: weather.group, birds: birds.mesh, sky: sky.dome,
   }
 
   rebuild()
@@ -666,12 +591,11 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
         flush(false)
         dayT = snap.mode === 'title' ? dayT : 1
         replayPace = 1
-        stageHold = -1
-        segClock = 1e6
+        crews.settle()
         copyEnv(env, envT)
-        fields.snap(env.oats)
-        harvest.snap()
         rig.snap(viewport())
+        fields.snap(env.oats, rig.camera)
+        harvest.snap()
         lens = env.lens
         frame(0.2)
       },
@@ -684,7 +608,11 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
         titleShift = dayT - time / TITLE_LOOP_S
       },
       info() {
-        return { mode: snap.mode, dayT, pending: pending.length, segs: segs.map(s => `${s.kind}@${s.field}`), tractor: tractorAt, farmer: farmer.group.visible ? { x: farmer.group.position.x, z: farmer.group.position.z, turn: farmer.group.rotation.y } : null, fields: snap.fields.map(f => f.status), tier, framing, rings: fields.ringing() }
+        const w = crews.where()
+        return {
+          mode: snap.mode, dayT, pending: pending.length, segs: crews.segsInfo(), tractor: w.tractor, farmer: w.farmer, units: w.units,
+          fields: snap.fields.map(f => f.status), held: snap.fields.map(f => f.held), tier, framing, rings: fields.ringing(), lods: fields.lods(),
+        }
       },
       whenShown,
       // For working on the look: put the camera somewhere.
@@ -692,6 +620,20 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
         framing = 'free'
         rig.moveTo({ ...rig.goal, ...p }, true)
       },
+      home() { goHome() },
+      // Where a crew is on the screen, for clicking it in checks.
+      unitAt(id: number) {
+        const u = crews.where().units.find(x => x.id === id)
+        if (!u) return null
+        const v = new Vector3(u.x, fieldBaseY(u.z) + 0.5, u.z).project(rig.camera)
+        const vp = viewport()
+        return { x: (v.x + 1) / 2 * vp.w, y: (1 - v.y) / 2 * vp.h }
+      },
+      // What a click at a point on the screen would pick.
+      pickAt: (x: number, y: number) => ({ field: pick(x, y), unit: pickUnit(x, y), mode: snap.mode, held: snap.fields.map(f => f.held), available: snap.fields.map(f => f.available) }),
+      parts: () => Object.keys(parts),
+      show(name: string, on: boolean) { if (parts[name]) parts[name].visible = on },
+      shadowsOn(on: boolean) { for (const l of shadows.lights) l.castShadow = on },
       env, lit, rig,
       // What the last frame drew, where the camera stood, and the clocks.
       stats() {
@@ -699,6 +641,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
         return {
           triangles: r.triangles, calls: r.calls, pixelRatio: renderer.getPixelRatio(), width: canvas.width, height: canvas.height,
           camera: rig.where(), time, ambient, fall, exposure: lit.exposure, tier, fps, drawn: [post.target.width, post.target.height], firstFrame,
+          spent: { crews: +spent.crews.toFixed(2), update: +spent.update.toFixed(2), draw: +spent.draw.toFixed(2) }, objects: scene.children.reduce((n, c) => { let k = 0; c.traverse(() => k++); return n + k }, 0),
         }
       },
     }
@@ -723,6 +666,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       props.dispose()
       fields.dispose()
       harvest.dispose()
+      crews.dispose()
       kit.dispose()
       particles.dispose()
       weather.dispose()

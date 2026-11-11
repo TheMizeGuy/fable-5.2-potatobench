@@ -1,12 +1,13 @@
 // The farmstead: the connected farm (big house, little house, back house, barn) stepping up the slope, the potato house
-// banked into the hill, the bridge, and the neighbours' houses and barns far off.
+// banked into the hill, the bridge; the Dufour place up the road, smaller and plainer, with its own banked potato house;
+// and the neighbours' houses and barns far off.
 import {
   BoxGeometry, BufferAttribute, BufferGeometry, CylinderGeometry, ExtrudeGeometry, Group, InstancedMesh, Matrix4, Mesh,
   MeshStandardMaterial, Quaternion, Shape, Vector3,
 } from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { FARMSTEADS } from './flora.ts'
-import { BARN, HOUSE, POTATO_HOUSE, WATER_Y, brookZ, groundY, padLevel } from './layout.ts'
+import { BARN, DUFOUR_BARN, DUFOUR_HOUSE, DUFOUR_POTATO_HOUSE, HOUSE, POTATO_HOUSE, WATER_Y, brookZ, groundY, padLevel } from './layout.ts'
 import { SNOW_RIME, linear, patch } from './shaders.ts'
 
 type Finish = 'plain' | 'clapboard' | 'boards' | 'shingle' | 'metal' | 'brick' | 'stone' | 'glass'
@@ -54,8 +55,10 @@ export class Props {
 
   constructor() {
     this.farmhouse()
-    this.potatoHouse()
-    this.bridge()
+    this.potatoHouse(POTATO_HOUSE.x, POTATO_HOUSE.z, padLevel(3), 4.2, 6.2, 1.15, 1.25)
+    this.bridge(17.8)
+    this.dufour()
+    this.bridge(92.6)
     for (const { mat, geos } of this.parts.values()) {
       const merged = mergeGeometries(geos)!
       for (const g of geos) g.dispose()
@@ -204,12 +207,10 @@ export class Props {
     for (let k = 0; k < 3; k++) this.box(0.34, 0.3 - k * 0.02, 1.5 - k * 0.2, '#8a7458', 'boards', hx - 1.36, y1 + 0.2 + k * 0.28, hz - 7.0)
   }
 
-  private potatoHouse(): void {
-    const px = POTATO_HOUSE.x, pz = POTATO_HOUSE.z
-    const y = padLevel(3)
-    const w = 4.2, l = 6.2, wall = 1.15, rise = 1.25
+  // A potato house: a frame house above, shingled and weathered grey; concrete below where the door is; the hill banked
+  // up both sides and round the back. Its door faces down the slope (+z).
+  private potatoHouse(px: number, pz: number, y: number, w: number, l: number, wall: number, rise: number): void {
     const front = pz + l / 2
-    // The frame house above, shingled and weathered grey; concrete below, where the door is.
     const top = this.gabled(w, l, wall, rise, '#8f8a80', 'shingle', '#5d5a56', 'shingle', px, y, pz)
     this.box(w + 0.1, 0.62, 0.16, '#a8a295', 'stone', px, y + 0.3, front + 0.02)
     for (const s of [-1, 1]) {
@@ -218,9 +219,9 @@ export class Props {
       this.box(0.18, 0.8, 1.8, '#a8a295', 'stone', px + s * (w / 2 + 0.05), y + 0.34, front + 0.8)
     }
     this.box(1.9, 0.1, 0.12, '#3b352e', 'plain', px, y + 1.16, front + 0.09)
-    this.window(px, y + 1.7, front, 1, 0.3, 0.3)
+    this.window(px, y + wall + 0.55, front, 1, 0.3, 0.3)
     // ventilators on the ridge
-    for (const vz of [pz - 1.6, pz + 1.3]) {
+    for (const vz of l > 5.5 ? [pz - 1.6, pz + 1.3] : [pz]) {
       this.box(0.36, 0.36, 0.36, '#9aa0a0', 'metal', px, top + 0.14, vz)
       this.gabled(0.5, 0.5, 0, 0.16, '#9aa0a0', 'metal', '#9aa0a0', 'metal', px, top + 0.32, vz)
     }
@@ -252,8 +253,38 @@ export class Props {
     this.disposables.push(berm)
   }
 
-  private bridge(): void {
-    const x = 17.8, z = brookZ(17.8)
+  // The Dufour place: a cape gone grey for want of paint with its ell and woodshed, an old barn of weathered boards,
+  // and a potato house banked into the slope above the yard.
+  private dufour(): void {
+    const white = '#d9d3c2', trim = '#e8e2d2', roof = '#56575a', boards = '#7a7266', rust = '#7d5a46', door = '#4e5a48'
+    const hx = DUFOUR_HOUSE.x, hz = DUFOUR_HOUSE.z, hy = padLevel(4)
+    // a cape: one and a half storeys, the long side to the yard, a chimney in the middle of the ridge
+    const ridge = this.gabled(3.2, 4.4, 1.35, 1.35, white, 'clapboard', roof, 'shingle', hx, hy, hz)
+    this.box(3.26, 0.14, 4.46, '#8a857c', 'stone', hx, hy + 0.02, hz)
+    for (const wz of [hz - 1.3, hz + 1.3]) this.window(hx - 1.6, hy + 0.75, wz, 0)
+    this.box(0.06, 0.86, 0.44, door, 'plain', hx - 1.62, hy + 0.48, hz)
+    this.box(0.5, 0.1, 0.9, '#8a857c', 'stone', hx - 1.85, hy + 0.04, hz)
+    for (const wx of [hx - 0.7, hx + 0.7]) this.window(wx, hy + 0.75, hz + 2.2, 1, 0.32, 0.48)
+    this.window(hx, hy + 1.95, hz + 2.2, 1, 0.26, 0.4)
+    this.box(0.42, 0.9, 0.42, '#7c4737', 'brick', hx, ridge + 0.05, hz)
+    // the ell and the woodshed behind it, each a little lower
+    this.gabled(2.2, 2.8, 1.2, 0.8, white, 'clapboard', roof, 'shingle', hx + 0.2, hy + 0.05, hz - 3.5)
+    this.window(hx - 0.9, hy + 0.7, hz - 3.2, 0, 0.3, 0.44)
+    this.gabled(2.0, 2.4, 1.1, 0.7, boards, 'boards', rust, 'metal', hx + 0.3, hy + 0.1, hz - 6.0)
+    for (let k = 0; k < 3; k++) this.box(0.32, 0.28 - k * 0.02, 1.3 - k * 0.2, '#8a7458', 'boards', hx - 0.95, hy + 0.2 + k * 0.26, hz - 6.0)
+    // the barn: old boards gone silver, a rusted roof, the great door to the yard
+    const bx = DUFOUR_BARN.x, bz = DUFOUR_BARN.z, by = padLevel(5)
+    this.gabled(3.8, 5.0, 2.1, 1.6, boards, 'boards', rust, 'metal', bx, by, bz)
+    this.box(3.86, 0.18, 5.06, '#8a857c', 'stone', bx, by + 0.04, bz)
+    this.box(0.07, 1.6, 1.6, '#5f584e', 'boards', bx - 1.92, by + 0.85, bz + 0.2)
+    this.box(0.08, 0.08, 2.4, trim, 'plain', bx - 1.93, by + 1.7, bz + 0.2)
+    this.window(bx - 1.9, by + 2.6, bz + 0.2, 0, 0.26, 0.26)
+    const ph = DUFOUR_POTATO_HOUSE
+    this.potatoHouse(ph.x, ph.z, padLevel(6), 3.6, 5.0, 1.0, 1.1)
+  }
+
+  private bridge(x: number): void {
+    const z = brookZ(x)
     const deck = Math.max(groundY(x, z - 2), WATER_Y + 0.42)
     for (let k = 0; k < 9; k++) this.box(1.9, 0.07, 0.3, k % 2 ? '#7a6753' : '#6d5b48', 'boards', x, deck + 0.02, z - 1.36 + k * 0.34)
     for (const dx of [-0.82, 0.82]) {
@@ -301,6 +332,7 @@ export class Props {
     })
     mesh.castShadow = true
     mesh.layers.enable(2)
+    mesh.userData.far = true
     mesh.frustumCulled = false
     this.group.add(mesh)
     this.disposables.push(geo, mat)

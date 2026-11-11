@@ -7,6 +7,10 @@ import { chromium, type Page } from '@playwright/test'
 
 const args = process.argv.slice(2).filter(a => !a.startsWith('--'))
 const soft = process.argv.includes('--soft')
+// --pins: mark where each field's plate is pinned, to check that a plate would stand on its own field.
+const pins = process.argv.includes('--pins')
+// --flat: no WebGL, so the flat drawing is what is captured.
+const flat = process.argv.includes('--flat')
 const base = args[0] ?? 'http://localhost:5317/'
 const out = args[1] ?? 'shots'
 const only = new Set(args.slice(2))
@@ -59,6 +63,39 @@ async function playUntil(page: Page, skip: string[], test: string): Promise<stri
     return 'not found'
   }, { skip, test })
 }
+
+// The bigger farm: a farm that rents (test-only: given the cash to) the parcels named and plants them, hires hands and an
+// operator on a second tractor, and plays under reference practice up to a day.
+interface Big { year?: number; seed?: number; rent?: number[]; hands?: number; operator?: boolean; until?: number; skip?: string[] }
+async function bigFarm(page: Page, o: Big): Promise<string> {
+  return page.evaluate(o => {
+    const { app, sim } = (window as any).__county
+    app.newGame(o.year ?? 1977, o.seed ?? 5)
+    const c = app.campaign
+    c.cash = Math.max(c.cash, 400000)
+    const kinds = ['katahdin', 'superior', 'kennebec', 'gold', 'norland', 'atlantic']
+    const errs: string[] = []
+    const say = (r: any) => { if (!r.ok) errs.push(r.err) }
+    for (const f of o.rent ?? []) {
+      say(app.do({ t: 'rent', field: f }))
+      say(app.do({ t: 'plan', field: f, plan: { crop: 'potato', variety: kinds[f % kinds.length], seed: 'certified' } }))
+    }
+    if (o.operator) { say(app.do({ t: 'buy', upgrade: 'tractor2' })); say(app.do({ t: 'hire', kind: 'operator' })) }
+    for (let k = 0; k < (o.hands ?? 0); k++) say(app.do({ t: 'hire', kind: 'hand' }))
+    if (o.until === undefined) return errs.join(' | ')
+    say(app.do({ t: 'begin' }))
+    while (c.phase === 'season' && c.season.day < o.until) {
+      for (const a of sim.advise(app.world, c)) {
+        if (a.act === 'wait' || a.act === 'close' || (o.skip ?? []).includes(a.act)) continue
+        if (a.act === 'sell') app.do({ t: 'sell', lot: a.lot, frac: 1 })
+        else app.do({ t: 'job', kind: a.act, field: a.field })
+      }
+      if (!app.do({ t: 'day' }).ok) break
+    }
+    return errs.join(' | ')
+  }, o)
+}
+const ALL_LAND = [6, 7, 8, 9, 10, 11, 12, 13]
 
 const SKY = (kind: string) => `return sim.today(app.world, c).sky === '${kind}' ? '${kind}' : ''`
 const FROST = `const hit = [0, 1, 2, 3, 4, 5].map(i => sim.fieldInfo(c, i)).filter(f => f.frosted > 0.2 && f.rime); return hit.length ? hit.map(f => f.name + ' ' + Math.round(f.frosted * 100) + '% frosted').join(', ') : ''`
@@ -200,6 +237,27 @@ const shots: Shot[] = [
       await settle(page)
     },
   },
+  // ---- The bigger farm.
+  { name: 'f01-opening', size: [1920, 1080], insets: NONE, setup: title },
+  { name: 'f02-whole-farm', size: [1920, 1080], setup: async page => { console.log('  ', await bigFarm(page, { rent: ALL_LAND, hands: 2, operator: true, until: 196 })); await settle(page); await page.evaluate(() => (window as any).__countyField.home()); await settle(page) } },
+  { name: 'f02b-whole-farm-home', size: [1920, 1080], setup: async page => { await bigFarm(page, { rent: ALL_LAND, hands: 2, operator: true, until: 196 }); await settle(page) } },
+  { name: 'f03-spring-land', size: [1920, 1080], setup: async page => { await bigFarm(page, {}); await settle(page) } },
+  { name: 'f03b-spring-whole', size: [1920, 1080], setup: async page => { await bigFarm(page, { rent: [7] }); await settle(page); await page.evaluate(() => (window as any).__county.app.select(10)); await page.evaluate(() => (window as any).__countyField.view({ x: 30, z: 4, dist: 170 })); await settle(page) } },
+  { name: 'f04-dufour', size: [1920, 1080], setup: async page => { await bigFarm(page, { rent: [10, 11, 12, 13], hands: 1, operator: true, until: 198 }); await settle(page); await view(page, { x: 72, z: -6, dist: 48, yaw: 0.35 }); await frames(page, 8) } },
+  { name: 'f05-intervale-mist', size: [1920, 1080], setup: async page => { await bigFarm(page, { rent: [6, 7], until: 186 }); console.log('  ', await playUntil(page, [], `const t = sim.today(app.world, c); return t.sky === 'fog' || (t.day.wetH >= 12 && t.day.tmin > 4) ? t.sky + ' wetH ' + t.day.wetH : ''`)); await settle(page); await view(page, { x: 2, z: 30, dist: 46, yaw: 0.1 }); await frames(page, 8) } },
+  {
+    name: 'f06-three-crews', size: [1920, 1080], setup: async page => {
+      await bigFarm(page, { hands: 2, operator: true, until: 150 })
+      console.log('  ', await playUntil(page, [], `const n = new Set(c.season.worked.map(w => w.unit)).size; return n >= 3 && sim.today(app.world, c).sky !== 'rain' ? n + ' crews: ' + c.season.worked.map(w => w.unit + ':' + w.kind + '@' + w.field).join(' ') : ''`))
+      await settle(page)
+      await page.evaluate(() => (window as any).__county.app.selectUnit(0))
+      await seek(page, 0.55, 300, 0.02)
+      await frames(page, 6)
+    },
+  },
+  { name: 'f07-strategic-july', size: [1920, 1080], setup: async page => { await july(page); await playUntil(page, [], SKY('clear')); await settle(page) } },
+  { name: 'f08-close-rows', size: [1920, 1080], setup: async page => { await july(page); await playUntil(page, [], SKY('clear')); await settle(page); await view(page, ROWS); await frames(page, 30) } },
+  { name: 'f09-fog', size: [1920, 1080], setup: async page => { await bigFarm(page, { rent: [6, 7], until: 165 }); console.log('  ', await playUntil(page, [], SKY('fog'))); await settle(page); await frames(page, 4) } },
   // Sizes: the farm kept whole inside what the interface leaves free.
   ...([
     ['30-size-390x844', [390, 844], { top: 52, bottom: 190 }],
@@ -210,7 +268,7 @@ const shots: Shot[] = [
 ]
 
 const browser = await chromium.launch({
-  args: soft ? ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] : [process.platform === 'win32' ? '--use-angle=d3d11' : '--use-angle=metal', '--ignore-gpu-blocklist', '--enable-gpu'],
+  args: flat ? ['--disable-webgl', '--disable-3d-apis'] : soft ? ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] : [process.platform === 'win32' ? '--use-angle=d3d11' : '--use-angle=metal', '--ignore-gpu-blocklist', '--enable-gpu'],
 })
 const errors: string[] = []
 for (const shot of shots) {
@@ -225,18 +283,33 @@ for (const shot of shots) {
   const insets = shot.insets ?? { top: 56, bottom: 150 }
   await page.evaluate(i => {
     const { app } = (window as any).__county
-    ;(document.getElementById('ui') as HTMLElement).style.display = 'none'
+    for (const el of [...document.body.children]) if (el.tagName !== 'CANVAS' && el.tagName !== 'SCRIPT') (el as HTMLElement).style.display = 'none'
     const t = i.top ?? 0, r = i.right ?? 0, b = i.bottom ?? 0, l = i.left ?? 0
     const set = app.setInsets.bind(app)
     app.setInsets = () => set(t, r, b, l)
     set(t, r, b, l)
   }, insets)
   await shot.setup(page)
+  if (pins) {
+    await page.evaluate(() => {
+      const f = (window as any).__countyField, held = f.info().held as boolean[]
+      for (let i = 0; i < 14; i++) {
+        const a = f.anchor(i)
+        if (!a.visible) continue
+        const d = document.createElement('div')
+        d.textContent = String(i)
+        d.style.cssText = `position:fixed;left:${a.x - 18}px;top:${a.y - 26}px;width:36px;height:22px;background:${held[i] ? '#1b1d1c' : '#5b5f5c'};color:#f3ecdc;font:600 13px sans-serif;display:flex;align-items:center;justify-content:center;border-radius:3px;z-index:99`
+        const tail = document.createElement('div')
+        tail.style.cssText = `position:fixed;left:${a.x - 3}px;top:${a.y - 4}px;width:6px;height:6px;background:#f3ecdc;border-radius:3px;z-index:99`
+        document.body.append(d, tail)
+      }
+    })
+  }
   const path = `${out}/${shot.name}.png`
   await page.screenshot({ path })
   const info = await page.evaluate(() => {
     const f = (window as any).__countyField
-    const anchors = [0, 1, 2, 3, 4, 5].map(i => f.anchor(i))
+    const anchors = Array.from({ length: 14 }, (_, i) => f.anchor(i))
     const s = f.stats ? f.stats() : {}
     return { ...f.info(), anchors: anchors.map((a: any) => (a.visible ? `${Math.round(a.x)},${Math.round(a.y)}` : 'off')).join(' '), triangles: s.triangles, calls: s.calls, fps: s.fps }
   })
