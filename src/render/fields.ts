@@ -95,6 +95,8 @@ const LEAF_COLOUR = /* glsl */ `
     col *= mix(0.46, 1.0, smoothstep(0.02, 0.44, position.y)) * (0.9 + 0.2 * gp.r.z) * (0.84 + 0.32 * fract(aLeaf.x * 0.618 + gp.r.x * 5.0));
     vTint = col;
     vErode = max(max(gp.dead * 0.32, hit * 0.55), burnt * 0.45 * (1.0 - uCrop.z)) * aLeaf.z;
+    // Seen from far off a plant keeps as many of its leaves as it has canopy, so a half-grown field shows its soil.
+    vKeep = step(fract(sin(aLeaf.x * 91.7 + gp.r.y * 47.3) * 43758.5), max(0.3 + 0.7 * smoothstep(0.35, 0.9, grow), gp.dead));
   }
 `
 
@@ -350,7 +352,7 @@ export class Fields {
     const leafShape: Patch = {
       key: 'county-plant',
       uniforms: shared,
-      vertexHead: `${PLANT_FN}\nattribute vec3 aLeaf;\nvarying vec3 vTint;\nvarying float vErode;`,
+      vertexHead: `${PLANT_FN}\nattribute vec3 aLeaf;\nvarying vec3 vTint;\nvarying float vErode;\nvarying float vKeep;`,
       vertexNormal: /* glsl */ `
         gp = plantAt();
         objectNormal = normalize(vec3(gp.cs * objectNormal.x + gp.sn * objectNormal.z, objectNormal.y + 0.3 * gp.droop, -gp.sn * objectNormal.x + gp.cs * objectNormal.z));
@@ -364,8 +366,8 @@ export class Fields {
       translucent: 1.25,
       ambient: 1.0,
       shine: 0.2,
-      fragmentHead: 'varying vec3 vTint;\nvarying float vErode;',
-      fragmentColor: `diffuseColor.rgb *= vTint; diffuseColor.a *= coverGain(vMapUv, 256.0) * (1.0 - vErode * (0.25 + 0.75 * texture2D(uNoise, vMapUv * 1.7).a)); ${SNOW_RIME}`,
+      fragmentHead: 'varying vec3 vTint;\nvarying float vErode;\nvarying float vKeep;',
+      fragmentColor: `diffuseColor.rgb *= vTint; float cg = coverGain(vMapUv, 256.0); diffuseColor.a *= cg * (1.0 - (1.0 - vKeep) * smoothstep(1.2, 1.9, cg)) * (1.0 - vErode * (0.25 + 0.75 * texture2D(uNoise, vMapUv * 1.7).a)); ${SNOW_RIME}`,
     })
     const plants = new Mesh(instanced(this.plantGeo), plantMat)
     plants.castShadow = true
