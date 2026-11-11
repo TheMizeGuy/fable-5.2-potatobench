@@ -332,6 +332,7 @@ export class Props {
     })
     mesh.castShadow = true
     mesh.layers.enable(2)
+    mesh.userData.far = true
     mesh.frustumCulled = false
     this.group.add(mesh)
     this.disposables.push(geo, mat)

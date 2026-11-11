@@ -763,6 +763,7 @@ export class Fields {
     mesh.receiveShadow = true
     mesh.customDepthMaterial = depthFor(shape)
     mesh.layers.enable(1)
+    mesh.layers.enable(3)
     this.group.add(mesh)
     this.disposables.push(geo, mat, mesh.customDepthMaterial)
     return mesh

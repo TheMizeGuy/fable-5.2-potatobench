@@ -46,6 +46,7 @@ export class Kit {
     mesh.castShadow = true
     mesh.receiveShadow = true
     mesh.layers.enable(1)
+    mesh.layers.enable(3)
     parent.add(mesh)
     return mesh
   }

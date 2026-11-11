@@ -115,6 +115,8 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   const weather = new Weather()
   const birds = new Birds()
   scene.add(sky.dome, terrain.group, flora.group, grass.group, props.group, fields.group, harvest.group, crews.group, particles.mesh, weather.group, birds.mesh)
+  // Whatever throws a shadow near at hand throws it into the fine cascade; the far trees and farmsteads only into the wide one.
+  scene.traverse(o => { if (o.castShadow && !o.userData.far) o.layers.enable(3) })
 
   const env = makeEnv(), envT = makeEnv(), lit = makeLight()
   let snap: Snapshot = snapshot(app)
@@ -169,6 +171,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     shadows.setSizes(t.shadow)
     fields.setTier(tier, t.density)
     grass.setTier(tier)
+    flora.setTier(tier)
     crews.setScreen(vp.w, vp.h)
     reframe(reduced)
   }
@@ -475,6 +478,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     fields.setFarShadows(!shadows.holdsFarm)
     fields.update(dt, cam, { selection: app.selection, hover: app.hover, oats: env.oats, oatsRipe: env.oatsRipe, reduced })
     grass.update(cam)
+    flora.update(cam)
     harvest.update(dt, app.speed === 0, clamp(rig.cur.dist / 30, 1, 2.3), reduced)
     PIXEL.value = (TIERS[tier].msaa ? 1.7 : 1.4) / ((post.target.height) / (2 * Math.tan((cam.fov * Math.PI) / 360)))
     // The focus is shallow in the opening shot, slight in play, and opens up while the player moves the camera.

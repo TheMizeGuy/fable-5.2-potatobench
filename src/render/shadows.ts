@@ -24,8 +24,9 @@ export class SunShadows {
       l.shadow.mapSize.set(2048, 2048)
       l.shadow.radius = k === 0 ? 1.6 : 1.3
       l.shadow.autoUpdate = k === 0
-      // Only what is flagged for a far cascade is drawn into it.
-      if (k > 0) l.shadow.camera.layers.set(k)
+      // Only what is flagged for a cascade is drawn into it: layer 3 for the fine one round the camera's focus, 1 and 2 for
+      // the wider ones.
+      l.shadow.camera.layers.set(k === 0 ? 3 : k)
       scene.add(l, l.target)
       this.lights.push(l)
     }

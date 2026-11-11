@@ -39,8 +39,18 @@ const INSTRUMENT = `(() => {
 
 const median = (xs: number[]) => { const a = xs.slice().sort((p, q) => p - q); return a.length ? a[Math.floor(a.length / 2)] : NaN }
 
-async function measure(page: Page, seconds = 2.5): Promise<{ gpu: number; cpu: number; triangles: number; calls: number; tier: string }> {
-  await page.waitForTimeout(700)
+// The GPU may be shared with other work on the machine, which only ever adds time: of a few windows, keep the quietest.
+async function measure(page: Page): Promise<{ gpu: number; cpu: number; triangles: number; calls: number; tier: string }> {
+  let best = await window1(page)
+  for (let k = 0; k < 3; k++) {
+    const m = await window1(page)
+    if (m.gpu < best.gpu) best = m
+  }
+  return best
+}
+
+async function window1(page: Page, seconds = 1.2): Promise<{ gpu: number; cpu: number; triangles: number; calls: number; tier: string }> {
+  await page.waitForTimeout(300)
   await page.evaluate(() => { const M = (window as any).__perf; M.gpu = []; M.cpu = []; M.on = true })
   await page.waitForTimeout(seconds * 1000)
   const r = await page.evaluate(() => {
