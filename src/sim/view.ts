@@ -11,24 +11,21 @@ import { forecastFor, getDay, skyOf, wallin, type ForecastDay } from './weather.
 
 export interface Estimate { mean: number; lo: number; hi: number; digs: number }
 
+const PRIOR_VAR = 0.22 * 0.22     // how far off a practised eye runs
+const DIG_VAR = 0.25 * 0.25       // how far one hill runs from its field
+
 // Total tuber weight in cwt per acre as an experienced eye would put it: a guess that test digs sharpen.
 export function estimateYield(c: Campaign, fi: number): Estimate | null {
   const f = c.season?.fields[fi]
   if (!f || f.tiDay < 0 || f.status === 'dug' || f.status === 'lost' || f.status === 'rest') return null
-  let mass = 0
-  for (let i = 0; i < P.HILLS; i++) if (!(f.hState[i] & (H_DUG | H_ROGUED | H_DECAYED))) mass += f.hMass[i]
-  const truth = (mass * P.CWT_PER_HILL_GRAM) / P.FIELD_ACRES
+  // What the grower expects from the leaf, the weather and the calendar, corrected by the hills lifted so far.
+  // Nothing here reads the tubers themselves except through a test dig.
+  const eye = (f.eye * P.CWT_PER_HILL_GRAM) / P.FIELD_ACRES
   const n = f.samples.length
-  let wSum = 1 / 0.04, mSum = f.estBias / 0.04
-  if (n > 0) {
-    let r = 0
-    for (const x of f.samples) r += x
-    wSum += n / 0.1
-    mSum += (r / n) * (n / 0.1)
-  }
-  const bias = mSum / wSum
+  let wSum = 1 / PRIOR_VAR, mSum = f.estBias / PRIOR_VAR
+  for (const k of f.samples) { wSum += 1 / DIG_VAR; mSum += k / DIG_VAR }
   const sd = Math.sqrt(1 / wSum)
-  const mean = truth * bias
+  const mean = eye * (mSum / wSum)
   return { mean, lo: Math.max(0, mean * (1 - 1.5 * sd)), hi: mean * (1 + 1.5 * sd), digs: n }
 }
 
@@ -85,6 +82,9 @@ export interface FieldInfo {
   tubers: { perHill: number; lo: number; hi: number; digs: number } | null
   skin: number              // skin set once the vines are dead, 0..1
   bloom: number             // how much of the field is in flower, 0..1
+  stand: number             // share of the seed that came up, 0..1 (1 until the field is up)
+  frosted: number           // share of the leaf blackened by frost in the last week, 0..1
+  rime: boolean             // this field froze last night
   wilt: number              // how hard the plants are drooping for water, 0..1
   deadDays: number
   lot: number
@@ -100,7 +100,7 @@ export function fieldInfo(c: Campaign, fi: number): FieldInfo {
     index: fi, name: FIELD_NAMES[fi], elev: fp.elev, position: POSITION[fp.elev], soil: fp.soil, vert: fp.vert, streak: fp.streak,
     crop: plan.crop, status: plan.crop === 'rest' ? 'rest' : 'idle', variety: plan.crop === 'rest' ? 'Oats and clover' : variety(plan.variety).name,
     stage: plan.crop === 'rest' ? 'Resting' : 'Not planted', daysIn: 0, canopy: 0, moisture: 1, moistureLabel: 'good', tooWet: false,
-    hillPasses: 0, protect: 0, blightKnown: 0, blightHills: 0, scoutAge: -1, stunted: 0, estimate: null, tubers: null, skin: 0, bloom: 0, wilt: 0, deadDays: -1, lot: -1,
+    hillPasses: 0, protect: 0, blightKnown: 0, blightHills: 0, scoutAge: -1, stunted: 0, estimate: null, tubers: null, skin: 0, bloom: 0, stand: 1, frosted: 0, rime: false, wilt: 0, deadDays: -1, lot: -1,
   }
   if (!s) return base
   const f = s.fields[fi]
@@ -108,6 +108,8 @@ export function fieldInfo(c: Campaign, fi: number): FieldInfo {
   base.status = f.status
   base.moisture = 1 - f.dr / taw
   base.tooWet = f.wet >= P.WORKABLE_WET_MM
+  base.rime = f.rimeDay >= 0 && f.rimeDay === s.day - 1
+  if (f.frostDay >= 0 && s.day - f.frostDay <= 6 && f.deadDay < 0) base.frosted = f.frostShare
   base.moistureLabel = f.wet > P.WATERLOG_MM ? 'standing water' : base.tooWet ? 'wet'
     : base.moisture > 0.65 ? 'good' : base.moisture > 0.45 ? 'drying' : base.moisture > 0.25 ? 'dry' : 'wilting'
   if (f.status === 'rest') return base
@@ -124,6 +126,11 @@ export function fieldInfo(c: Campaign, fi: number): FieldInfo {
       if ((st & H_EMERGED) && !(st & (H_DUG | H_SAMPLED | H_ROGUED))) { up++; if (st & H_VIRUS) stunted++ }
     }
     base.stunted = up ? stunted / up : 0
+    if (f.emergeDay >= 0) {
+      let rotted = 0
+      for (let i = 0; i < P.HILLS; i++) if (f.hState[i] & H_DECAYED) rotted++
+      base.stand = 1 - rotted / P.HILLS
+    }
     base.blightHills = knownHills(f)
   }
   base.blightKnown = f.knownSev

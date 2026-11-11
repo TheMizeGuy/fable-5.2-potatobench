@@ -6,7 +6,7 @@ import { hash32 } from './rng.ts'
 import { addJob, FIELD_NAMES, seasonDone, startSeason, stepDay } from './season.ts'
 import type { Campaign, Cmd, FieldPlan, GameEvent, Lot, Result, UpgradeId, World, YearSummary } from './types.ts'
 import { variety } from './varieties.ts'
-import { withCommas } from './calendar.ts'
+import { dayIndex, withCommas } from './calendar.ts'
 import { finishLot } from './harvest.ts'
 import { hasYear } from './weather.ts'
 
@@ -44,7 +44,7 @@ export function createCampaign(world: World, opts: { seed: number; startYear: nu
     plans: [],
     upgrades: { boom: false, harvester: false, vent: false, reel: false },
     seedStock: [], season: null, lots: [], nextLot: 1, month: 0,
-    yearRevenue: 0, yearCosts: 0, history: [], steps: 0,
+    yearRevenue: 0, yearCosts: 0, yearRest: 0, yearStorage: 0, history: [], steps: 0,
   }
   c.plans = defaultPlans(c)
   return c
@@ -94,6 +94,7 @@ function endSeason(world: World, c: Campaign): GameEvent[] {
     if (f.status === 'rest') {
       c.cash += P.REST_INCOME
       c.yearRevenue += P.REST_INCOME
+      c.yearRest += P.REST_INCOME
     } else if (f.status !== 'dug' && f.status !== 'lost') {
       if (f.status === 'digging') {
         const lot = c.lots.find(l => l.id === f.lotId)
@@ -118,6 +119,26 @@ function endSeason(world: World, c: Campaign): GameEvent[] {
       out.push(note(c, 'overflow', 'warn', `No room in the cellar: ${withCommas(have * frac)} cwt of ${variety(lot.variety).name} sold off the field for $${withCommas(money)}.`, lot.field))
     }
   }
+  // What was kept has been sitting in the cellar since its dig: that time is charged and shrinks the pile too.
+  const nov1 = dayIndex(c.year, 10, 1)
+  let rent = 0, kept = 0
+  for (const lot of openLots(c)) {
+    const months = Math.max(0, (nov1 - lot.dugDay) / 30)
+    const cwt = lotCwt(lot)
+    rent += cwt * P.STORE_COST * months
+    const keep = 1 - (c.upgrades.vent ? P.SHRINK_VENT : P.SHRINK) * months
+    lot.grades.no1 *= keep; lot.grades.chef *= keep; lot.grades.b *= keep; lot.grades.no2 *= keep; lot.skinned *= keep
+    kept += lotCwt(lot)
+  }
+  rent = Math.round(rent)
+  if (rent > 0) {
+    c.cash -= rent
+    c.yearCosts += rent
+    c.yearStorage += rent
+    out.push(note(c, 'stored', 'info', `${withCommas(kept)} cwt is in the cellar. Keeping it since the dig has cost $${withCommas(rent)}.`))
+  }
+  const rest = c.yearRest
+  if (rest > 0) out.push(note(c, 'rest', 'info', `The oats and clover brought in $${withCommas(rest)}.`))
   c.phase = 'cellar'
   c.month = 0
   return out
@@ -130,7 +151,8 @@ function storeMonth(c: Campaign, out: GameEvent[]): void {
     lot.months++
     let shrink = vent ? P.SHRINK_VENT : P.SHRINK
     if (lot.months === 1) shrink += 0.03 * (1 - lot.skin)
-    if (!lot.sprouted && lot.months * 30 > v.dormancy + (vent ? 25 : 0)) {
+    const stored = dayIndex(lot.year, 10, 1) - lot.dugDay + lot.months * 30
+    if (!lot.sprouted && stored > v.dormancy + P.COOL_CELLAR_DAYS + (vent ? P.VENT_DAYS : 0)) {
       lot.sprouted = true
       out.push(note(c, 'sprout', 'warn', `The ${v.name} from ${FIELD_NAMES[lot.field]} has started to sprout.`, lot.field))
     }
@@ -144,8 +166,9 @@ function storeMonth(c: Campaign, out: GameEvent[]): void {
         lot.broke = true
         rotLoss = 0.55
         lot.rot = 0.06
+        const seed = lot.seedHeld > 0 ? ' The seed held back from it is lost with it.' : ''
         lot.seedHeld = 0
-        out.push(note(c, 'breakdown', 'bad', `Rot has run through the ${v.name} from ${FIELD_NAMES[lot.field]}. More than half the pile is gone.`, lot.field))
+        out.push(note(c, 'breakdown', 'bad', `Rot has run through the ${v.name} from ${FIELD_NAMES[lot.field]}. More than half the pile is gone.${seed}`, lot.field))
       }
     }
     const keep = (1 - shrink) * (1 - rotLoss)
@@ -153,6 +176,7 @@ function storeMonth(c: Campaign, out: GameEvent[]): void {
     const rent = Math.round(before * P.STORE_COST)
     c.cash -= rent
     c.yearCosts += rent
+    c.yearStorage += rent
     lot.grades.no1 *= keep; lot.grades.chef *= keep; lot.grades.b *= keep; lot.grades.no2 *= keep; lot.skinned *= keep
     lot.loss.rot += before * (1 - shrink) * rotLoss
     if (lotCwt(lot) < 0.5) lot.open = false
@@ -189,6 +213,7 @@ function closeYear(world: World, c: Campaign, out: GameEvent[]): void {
     cashStart: c.history.length ? c.history[c.history.length - 1].cashEnd : P.START_CASH,
     cashEnd: c.cash,
     revenue: c.yearRevenue, costs: c.yearCosts, note: P.NOTE_PAYMENT, living: P.LIVING, interest,
+    restIncome: c.yearRest, storage: c.yearStorage,
     cwtSold: market, cwtCulled: culled,
     yieldCwtAcre: potatoFields ? market / (potatoFields * P.FIELD_ACRES) : 0,
     potatoFields, blightPeak: peak, lots,
@@ -206,7 +231,8 @@ function closeYear(world: World, c: Campaign, out: GameEvent[]): void {
   for (let i = 0; i < P.FIELD_COUNT; i++) {
     const fp = c.fields[i]
     const odds = fp.vert / (1 - fp.vert)
-    if (c.plans[i].crop === 'potato') {
+    // A potato field that was never planted lay fallow: it counts as a year out of potatoes.
+    if (c.plans[i].crop === 'potato' && s.fields[i].plantDay >= 0) {
       fp.soil = Math.max(0, fp.soil + P.SOIL_AFTER_POTATO)
       fp.streak++
       const o = odds * P.VERT_GROW
@@ -235,6 +261,8 @@ function nextYear(world: World, c: Campaign): Result {
   c.yearIdx++
   c.yearRevenue = 0
   c.yearCosts = 0
+  c.yearRest = 0
+  c.yearStorage = 0
   c.month = 0
   c.season = null
   c.lots = []
@@ -277,7 +305,7 @@ export function apply(world: World, c: Campaign, cmd: Cmd): Result {
       const short = savedSeedShort(c)
       if (short) return fail(short)
       const cost = planCost(c)
-      if (c.cash - cost < P.OPERATING_LIMIT) return fail('The bank will not lend that much for the spring. Rest a field or use saved seed.')
+      if (c.cash - cost < P.OPERATING_LIMIT) return fail('The bank will not lend that much for the spring. Rest a field, or plant saved seed: it is free, but it carries virus.')
       c.cash -= cost
       c.yearCosts += cost
       startSeason(world, c)
@@ -329,6 +357,7 @@ export function apply(world: World, c: Campaign, cmd: Cmd): Result {
       if (c.phase !== 'cellar') return fail('Seed is held back from the cellar.')
       const lot = c.lots.find(l => l.id === cmd.lot)
       if (!lot || !lot.open) return fail('That lot is gone.')
+      if (lot.broke) return fail('Rot has been through that pile. It is not fit for seed.')
       const n = Math.floor(cmd.fields)
       if (!(n >= 1)) return fail('Hold back seed for at least one field.')
       const need = n * P.SEED_CWT_PER_FIELD

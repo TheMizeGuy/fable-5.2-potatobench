@@ -1,5 +1,5 @@
 // The running game: owns the campaign, the clock, saving, and tells the views when something changed.
-import { apply, createCampaign, seasonDone, startYears, type Campaign, type Cmd, type GameEvent, type Phase, type Result, type World } from '../sim/index.ts'
+import { advise, apply, createCampaign, seasonDone, startYears, type Campaign, type Cmd, type GameEvent, type Phase, type Result, type World } from '../sim/index.ts'
 import { clearSave, parseSave, readSave, readSettings, serialize, writeSave, writeSettings, type SaveFile } from './save.ts'
 
 export type Speed = 0 | 1 | 2 | 3
@@ -42,6 +42,9 @@ export class App {
   screen: Screen = 'title'
   // Screen edges covered by interface panels, in CSS pixels. The field view keeps the farm inside what is left.
   insets = { top: 0, right: 0, bottom: 0, left: 0 }
+  // Why the clock last stopped itself, in the game's words ('' when the player stopped it).
+  pauseReason = ''
+  private advised = new Set<string>()
   private listeners = new Set<(e: AppEvent) => void>()
   private dirty = false
   private sinceSave = 0
@@ -49,9 +52,11 @@ export class App {
   constructor(world: World) {
     this.world = world
     this.settings = readSettings(DEFAULT_SETTINGS)
-    if (typeof matchMedia === 'function' && localStorage.getItem('the-county/settings') === null) {
-      this.settings.reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches
-    }
+    try {
+      if (typeof matchMedia === 'function' && localStorage.getItem('the-county/settings') === null) {
+        this.settings.reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches
+      }
+    } catch { /* storage blocked: play on without saved settings */ }
   }
 
   on(fn: (e: AppEvent) => void): () => void {
@@ -99,6 +104,8 @@ export class App {
 
   private afterLoad(): void {
     this.speed = 0
+    this.pauseReason = ''
+    this.advised = new Set()
     this.dayProgress = 0
     this.selected = -1
     this.setScreen(this.campaign!.phase)
@@ -134,8 +141,13 @@ export class App {
     this.dirty = true
     if (cmd.t === 'day') {
       this.emit({ type: 'events', events: r.events, dayPassed: true })
-      if (this.settings.autoPause && r.events.some(e => PAUSE_ON.has(e.type) || e.level === 'bad')) this.setSpeed(0)
-      if (seasonDone(c)) this.setSpeed(0)
+      const stop = r.events.find(e => PAUSE_ON.has(e.type) || e.level === 'bad')
+      const fresh = this.freshAdvice()
+      if (this.settings.autoPause && this.speed > 0 && (stop || fresh)) {
+        this.pauseReason = stop ? stop.text : fresh
+        this.setSpeed(0)
+      }
+      if (seasonDone(c) && this.speed > 0) { this.pauseReason = 'The season is done.'; this.setSpeed(0) }
     } else if (r.events.length) {
       this.emit({ type: 'events', events: r.events, dayPassed: false })
     }
@@ -155,6 +167,16 @@ export class App {
     this.emit({ type: 'insets' })
   }
 
+  // The coach's first mention of something to do stops the clock, so a new player is never run past it.
+  private freshAdvice(): string {
+    const c = this.campaign
+    if (!c || c.phase !== 'season') return ''
+    const now = advise(this.world, c).filter(a => a.act !== 'wait' && a.act !== 'scout' && a.act !== 'sample')
+    const first = now.find(a => !this.advised.has(a.id))
+    this.advised = new Set(now.map(a => a.id))
+    return first && this.settings.hints ? first.text : ''
+  }
+
   select(field: number): void {
     if (this.selected === field) return
     this.selected = field
@@ -163,6 +185,7 @@ export class App {
 
   setSpeed(speed: Speed): void {
     if (this.speed === speed) return
+    if (speed > 0) this.pauseReason = ''
     this.speed = speed
     this.emit({ type: 'speed', speed })
   }

@@ -33,7 +33,7 @@ function emptyField(): FieldSeason {
     residue: 0, lastSpray: -1,
     scab: 0, hollow: 0, knob: 0, logDays: 0, dryRun: 0, frostT: 0,
     sev: 0, sevPeak: 0, lastScout: -1, knownSev: 0, seenFromRoad: false,
-    samples: [], sampleN: [], estBias: 1, digDone: 0, lotId: -1, flags: 0,
+    samples: [], sampleN: [], estBias: 1, eye: 0, seedBlight: 0, frostDay: -1, frostShare: 0, rimeDay: -1, digDone: 0, lotId: -1, flags: 0,
     hState: [], hEmergeAt: [], hPd0: [], hVigor: [], hC: [], hLes: [], hLat: [], hMass: [], hN: [], hTb: [],
   }
 }
@@ -63,7 +63,7 @@ export function startSeason(world: World, c: Campaign): void {
         if (stock) { stock.fields -= 1; virus = stock.virus; seedBlight = stock.blight }
       }
       f.seedVirus = virus
-      f.knownSev = seedBlight        // carried to planting, then cleared
+      f.seedBlight = seedBlight
     }
     s.fields.push(f)
   }
@@ -135,6 +135,7 @@ export function jobBlock(c: Campaign, kind: JobKind, field: number): string {
     case 'water':
       if (f.status === 'idle') return 'Nothing planted yet.'
       if (!alive) return 'The vines are dead.'
+      if (f.wet >= P.WORKABLE_WET_MM) return 'The ground is already wet.'
       return ''
     case 'rogue':
       if (!alive || f.status === 'idle') return 'No living plants to pull.'
@@ -186,11 +187,11 @@ function charge(c: Campaign, amount: number): void {
 }
 
 function plantField(c: Campaign, s: Season, f: FieldSeason, vert: number): void {
-  const seedBlight = f.knownSev
-  f.knownSev = 0
+  const seedBlight = f.seedBlight
+  f.seedBlight = 0
   f.status = 'planted'
   f.plantDay = s.day
-  f.estBias = 0.78 + 0.44 * nextUnit(c)
+  f.estBias = 0.7 + 0.6 * nextUnit(c)
   f.hState = zeros(P.HILLS); f.hEmergeAt = zeros(P.HILLS); f.hPd0 = zeros(P.HILLS); f.hVigor = zeros(P.HILLS)
   f.hC = zeros(P.HILLS); f.hLes = zeros(P.HILLS); f.hLat = zeros(P.HILLS); f.hMass = zeros(P.HILLS)
   f.hN = zeros(P.HILLS); f.hTb = zeros(P.HILLS)
@@ -211,20 +212,20 @@ function tryInfect(c: Campaign, f: FieldSeason, i: number, leafSus: number, cool
   if (nextUnit(c) < leafSus * (1 - P.PROTECT * f.residue)) f.hLat[i] = P.LATENT_DAYS + (cool ? 2 : 0)
 }
 
-function fieldMeanMass(f: FieldSeason): number {
-  let sum = 0, n = 0
+// Hills whose tubers will come out at the dig.
+function standingHills(f: FieldSeason): number {
+  let n = 0
   for (let i = 0; i < P.HILLS; i++) {
     const st = f.hState[i]
-    if (!(st & H_EMERGED) || (st & GONE)) continue
-    sum += f.hMass[i]; n++
+    if ((st & H_EMERGED) && !(st & NO_CROP)) n++
   }
-  return n ? sum / n : 0
+  return n
 }
 
 function completeJob(world: World, c: Campaign, s: Season, job: Job, d: Day, out: GameEvent[]): void {
   const f = s.fields[job.field]
   const name = FIELD_NAMES[job.field]
-  charge(c, jobCost(c, job.kind))
+  if (job.kind !== 'dig') charge(c, jobCost(c, job.kind))
   switch (job.kind) {
     case 'plant':
       plantField(c, s, f, c.fields[job.field].vert)
@@ -266,6 +267,7 @@ function completeJob(world: World, c: Campaign, s: Season, job: Job, d: Day, out
       break
     case 'rogue': {
       let pulled = 0
+      const standing = standingHills(f)
       for (let i = 0; i < P.HILLS; i++) {
         const st = f.hState[i]
         if ((st & H_KNOWN) && !(st & GONE)) {
@@ -275,6 +277,7 @@ function completeJob(world: World, c: Campaign, s: Season, job: Job, d: Day, out
         }
       }
       f.knownSev = 0
+      if (standing > 0) f.eye *= 1 - pulled / standing
       push(s, out, 'rogued', job.field, 'info', `Pulled and bagged ${pulled} blighted ${pulled === 1 ? 'hill' : 'hills'} in ${name}.`, { pulled })
       break
     }
@@ -285,11 +288,12 @@ function completeJob(world: World, c: Campaign, s: Season, job: Job, d: Day, out
         if ((st & H_EMERGED) && !(st & GONE)) pool.push(i)
       }
       if (!pool.length) break
-      const mean = fieldMeanMass(f)
+      const standing = standingHills(f)
+      const expect = standing > 0 ? f.eye / standing : 0
       const i = pool[nextInt(c, pool.length)]
       const lot = newLot(c, job.field, f, s.day, false)
       const tubers = gradeHill(c, s, f, job.field, i, lot, d)
-      f.samples.push(mean > 0 ? f.hMass[i] / mean : 1)
+      f.samples.push(expect > 0 ? f.hMass[i] / expect : 1)
       f.sampleN.push(tubers.length)
       // The lifted plant stops growing; its tubers go in with the crop.
       f.hState[i] |= H_SAMPLED
@@ -324,6 +328,8 @@ function digProgress(c: Campaign, s: Season, f: FieldSeason, field: number, job:
     const lot = newLot(c, field, f, s.day, true)
     f.lotId = lot.id
     f.status = 'digging'
+    charge(c, jobCost(c, 'dig'))
+    s.jobs = s.jobs.filter(j => j.field !== field || j.kind === 'dig')
     if (f.deadDay < 0) f.deadDay = s.day
   }
   const lot = c.lots.find(l => l.id === f.lotId)!
@@ -344,8 +350,8 @@ function runJobs(world: World, c: Campaign, s: Season, d: Day, out: GameEvent[])
   while (k < s.jobs.length && s.workLeft > 1e-6) {
     const job = s.jobs[k]
     const f = s.fields[job.field]
-    // A job already begun stays valid; one not yet begun is re-checked against the field as it now is.
-    if (job.done === 0) {
+    // Every job is re-checked against the field as it now is, begun or not (a dig under way is the exception).
+    if (!(job.kind === 'dig' && job.done > 0)) {
       s.jobs.splice(k, 1)
       const why = jobBlock(c, job.kind, job.field)
       if (why) {
@@ -353,6 +359,7 @@ function runJobs(world: World, c: Campaign, s: Season, d: Day, out: GameEvent[])
         continue
       }
       s.jobs.splice(k, 0, job)
+      if (job.done === 0) job.need = jobDays(c, job.kind, f)
     }
     if (jobWait(job.kind, f, d)) { k++; continue }
     const use = Math.min(s.workLeft, job.need - job.done)
@@ -417,7 +424,7 @@ function fieldDay(world: World, c: Campaign, s: Season, fi: number, d: Day, sevR
       f.dryRun = 0
     }
     if (s.day - f.tiDay <= 35 && f.dr > 0.55 * taw) f.scab++
-    if (s.day - f.tiDay <= 28 && s.soilT < 12.8) f.hollow += 0.2
+    if (s.day - f.tiDay <= 28 && s.soilT + P.SOIL_T_OFFSET[elev] < 12.8) f.hollow += 0.2
   }
   if (alive && !(f.flags & F_DRY) && f.emergeDay >= 0 && f.ksAvg < 0.55) {
     f.flags |= F_DRY
@@ -430,10 +437,12 @@ function fieldDay(world: World, c: Campaign, s: Season, fi: number, d: Day, sevR
 
   // Thermal time.
   const pAir = pDays(d.tmin, d.tmax)
-  f.pdSoil += pUnit(s.soilT)
+  const soilT = s.soilT + P.SOIL_T_OFFSET[elev]
+  f.pdSoil += pUnit(soilT)
   f.pdAir += pAir
   const tUnit = pAir / 10
   const tminF = fieldTmin(d, elev)
+  if (tminF <= 0) f.rimeDay = s.day
 
   // Late blight weather for this field.
   const wetH = Math.min(24, d.wetH + P.HUMID_BONUS[elev] + (f.wateredDay === s.day ? 3 : 0))
@@ -500,7 +509,7 @@ function fieldDay(world: World, c: Campaign, s: Season, fi: number, d: Day, sevR
         f.hPd0[i] = f.pdAir
         if (st & H_SEEDBLIGHT) f.hLat[i] = P.LATENT_DAYS + 3
       } else {
-        if (s.soilT < 7 && f.wet > 8 && nextUnit(c) < (s.soilT < 4.5 ? 0.03 : 0.012)) f.hState[i] = st | H_DECAYED
+        if (soilT < 7 && nextUnit(c) < (soilT < 4.5 ? 0.04 : 0.016) * (f.wet > 8 ? 2 : 1)) f.hState[i] = st | H_DECAYED
         continue
       }
     }
@@ -538,6 +547,13 @@ function fieldDay(world: World, c: Campaign, s: Season, fi: number, d: Day, sevR
   f.sev = living > 0 ? sumLes / living : 0
   if (f.sev > f.sevPeak) f.sevPeak = f.sev
   f.knownSev = knownSeverity(f)
+  if (bulking) {
+    let stunted = 0
+    for (let i = 0; i < P.HILLS; i++) if ((f.hState[i] & H_VIRUS) && (f.hState[i] & H_EMERGED) && !(f.hState[i] & GONE)) stunted++
+    const seen = f.canopy * (1 - f.knownSev) * (1 - (1 - P.VIRUS_VIGOR) * (up > 0 ? stunted / up : 0))
+    const part = clamp((f.pdAir - f.pdEmerge - v.tiPd) / P.PARTITION_PD, 0, 1)
+    f.eye += P.BULK_G_PER_MJ * d.rs * seen * tUnit * ksCrop * soilF * part * v.bulk * weedF * planted
+  }
 
   // Protectant wears off, faster while the canopy is still adding leaf, and washes off in rain.
   if (f.residue > 0) {
@@ -559,7 +575,9 @@ function fieldDay(world: World, c: Campaign, s: Season, fi: number, d: Day, sevR
     f.emergeDay = s.day
     f.pdEmerge = f.pdAir
     f.flags |= F_EMERGED
-    push(s, out, 'emerged', fi, 'good', `${name} is up: rows of green from the road.`)
+    const gaps = Math.round((1 - planted / P.HILLS) * 100)
+    if (gaps >= 8) push(s, out, 'emerged', fi, 'warn', `${name} is up, but thin: about ${gaps}% of the seed rotted in cold ground.`, { gaps })
+    else push(s, out, 'emerged', fi, 'good', `${name} is up: rows of green from the road.`)
   }
   if (f.status === 'planted' && planted === 0) {
     f.status = 'lost'
@@ -567,6 +585,7 @@ function fieldDay(world: World, c: Campaign, s: Season, fi: number, d: Day, sevR
     return
   }
   if (alive && f.emergeDay >= 0) {
+    if (frostKill >= 0.05) { f.frostDay = s.day; f.frostShare = frostKill }
     if (frostKill >= 0.25) {
       push(s, out, 'frost', fi, 'bad', `Frost in ${name}: ${Math.round(frostKill * 100)}% of the leaf blackened.`, { kill: Math.round(frostKill * 100) })
     }

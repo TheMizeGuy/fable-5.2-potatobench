@@ -64,7 +64,7 @@ export const VARIETIES: Variety[] = [
     id: 'atlantic', name: 'Atlantic', released: 1976, maturity: 'mid', market: 'Chip contract',
     blurb: 'The chipping standard. Sold on contract, so the price holds when the market falls and misses out when it soars. Big tubers go hollow.',
     tiPd: 145, matPd: 650, set: 8, bulk: 1.12, blightLeaf: 1.0, blightTuber: 1.1, scab: 1.0, hollow: 0.154, green: 1.0, rough: 0.9,
-    drought: 0.3, virus: 0.75, dormancy: 100, price: 13.75, chefBonus: false, contract: true, skin: 0xd9c491, flesh: 0xf8f2de, shape: 1.05,
+    drought: 0.3, virus: 0.75, dormancy: 100, price: 12.5, chefBonus: false, contract: true, skin: 0xd9c491, flesh: 0xf8f2de, shape: 1.05,
   },
   {
     id: 'gold', name: 'Yukon Gold', released: 1980, maturity: 'mid', market: 'Yellow specialty',

@@ -1,7 +1,7 @@
 // Every tunable number in the simulation. docs/MODEL.md gives the source of each, or marks it invented.
 import type { Cause, Grade, JobKind, UpgradeId } from './types.ts'
 
-export const SAVE_VERSION = 1
+export const SAVE_VERSION = 2
 
 export const FIELD_COUNT = 6
 export const ROWS = 8
@@ -16,11 +16,12 @@ export const SEASON_START = { month: 3, dom: 20 }   // April 20
 export const SEASON_LAST = { month: 10, dom: 10 }   // November 10
 export const GOAL_YEARS = 5
 
-// Thermal time (Sands, Hackett and Nichols 1979).
+// Thermal time (Sands, Hackett and Nix 1979).
 export const PD_MIN = 7
 export const PD_OPT = 21
 export const PD_MAX = 30
 export const EMERGE_PD = 130
+export const SOIL_T_OFFSET = [-1, 0, 1]          // C: the bottom land warms late, the ridge early
 export const SOIL_T_GAIN = 0.2                 // daily pull of soil temperature toward air temperature
 
 // Canopy.
@@ -117,6 +118,8 @@ export const ROT_GROW = 1.1
 export const ROT_GROW_VENT = 0.6
 export const ROT_BREAK = 0.22
 export const SPROUT_SHRINK = 0.03
+export const COOL_CELLAR_DAYS = 40             // dormancy gained by holding at 39F instead of the 45F the variety figures assume
+export const VENT_DAYS = 25
 
 export const SOIL_AFTER_POTATO = -0.5        // two potato years running bring the full continuous-potato penalty
 export const SOIL_YIELD = 0.07               // total yield lost in continuous potato (Larkin 2022: 0.93x)

@@ -18,7 +18,7 @@ function seasonFactor(day: number): number {
 }
 
 // The year's price level becomes known as the harvest comes in.
-function levelNow(world: World, c: Campaign): number {
+export function levelNow(world: World, c: Campaign): number {
   const level = world.priceLevel[String(c.year)] ?? 1
   if (c.phase !== 'season' || !c.season) return level
   return 1 + (level - 1) * clamp((c.season.day - 212) / 92, 0, 1)
@@ -33,11 +33,11 @@ function drift(c: Campaign): number {
 // Dollars per hundredweight of US No. 1 for a variety, now.
 export function basePrice(world: World, c: Campaign, id: VarietyId): number {
   const v = variety(id)
+  if (v.contract) return v.price * (1 + (levelNow(world, c) - 1) * 0.25)
   const seasonal = c.phase === 'season' && c.season
     ? seasonFactor(c.season.day)
     : P.MONTH_CURVE[Math.min(c.month, P.MONTH_CURVE.length - 1)] * drift(c)
-  const level = levelNow(world, c)
-  return v.price * seasonal * (v.contract ? 1 + (level - 1) * 0.25 : level)
+  return v.price * seasonal * levelNow(world, c)
 }
 
 export function gradePrice(world: World, c: Campaign, lot: Lot, grade: Grade): number {

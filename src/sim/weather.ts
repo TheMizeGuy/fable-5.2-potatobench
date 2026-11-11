@@ -35,7 +35,7 @@ export function getDay(world: World, year: number, day: number): Day {
   }
 }
 
-// Sands, Hackett and Nichols (1979): daily development units from temperature, 0 to 10.
+// Sands, Hackett and Nix (1979): daily development units from temperature, 0 to 10.
 export function pUnit(t: number): number {
   if (t <= PD_MIN || t >= PD_MAX) return 0
   const span = t < PD_OPT ? PD_OPT - PD_MIN : PD_MAX - PD_OPT
@@ -81,11 +81,16 @@ export function forecastFor(world: World, seed: number, year: number, day: numbe
   const hi = d.tmax + sd * hashNormal(seed, year, day, lead * 16 + 1)
   const lo = Math.min(hi - 1, d.tmin + sd * hashNormal(seed, year, day, lead * 16 + 2))
   const wobble = hashNormal(seed, year, day, lead * 16 + 3)
+  // The forecaster calls each day wet or dry and is sometimes wrong, more often further out, so neither the
+  // chance nor the amount settles whether it will rain.
   const wet = d.prcp >= 1
-  const rainChance = Math.round((wet
-    ? clamp(92 - 9 * lead + 10 * wobble, 25, 98)
-    : clamp(4 + 6 * lead + 9 * wobble, 0, 65)) / 5) * 5
-  const rainMm = wet ? Math.max(1, Math.round(d.prcp * clamp(1 + 0.2 * lead * wobble, 0.3, 2))) : rainChance >= 40 ? 2 : 0
+  const call = hashUnit(seed, year, day, lead * 16 + 5)
+  const calledWet = wet ? call >= 0.04 + 0.035 * lead + (d.prcp < 3 ? 0.12 : 0) : call < 0.03 + 0.03 * lead
+  const rainChance = Math.round((calledWet
+    ? clamp((wet ? 80 : 58) - 5 * lead + 12 * wobble, 40, 95)
+    : clamp((wet ? 28 : 8) + 3 * lead + 8 * wobble, 0, 35)) / 5) * 5
+  const amount = wet ? d.prcp : 2 + 7 * hashUnit(seed, year, day, lead * 16 + 6)
+  const rainMm = calledWet ? Math.max(1, Math.round(amount * clamp(1 + 0.25 * lead * wobble, 0.3, 2.2))) : 0
   const wetH = clamp(d.wetH + (0.8 + 0.7 * lead) * hashNormal(seed, year, day, lead * 16 + 4), 0, 24)
   const sev = wallin(wetH, d.wetT)
   const z = (lo + FROST_OFFSET[0] * 0.7) / (sd + 0.6)

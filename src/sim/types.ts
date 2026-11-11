@@ -108,9 +108,14 @@ export interface FieldSeason {
   sev: number               // true mean blight lesion share over living hills
   sevPeak: number
   lastScout: number; knownSev: number; seenFromRoad: boolean
-  samples: number[]         // each test dig: that hill's mass relative to the field mean
+  samples: number[]         // each test dig: that hill's mass relative to what the grower expected of a hill
   sampleN: number[]         // and how many tubers were under it
   estBias: number
+  eye: number               // tuber weight the grower would expect from what can be seen, grams over the field's hills
+  seedBlight: number        // blight share in the seed, until planting
+  frostDay: number          // last day frost blackened the leaf, and how much of it
+  frostShare: number
+  rimeDay: number           // last day this field went below freezing
   digDone: number           // hills dug so far
   lotId: number
   flags: number             // one-time announcements
@@ -191,6 +196,7 @@ export interface YearSummary {
   year: number
   cashStart: number; cashEnd: number
   revenue: number; costs: number; note: number; living: number; interest: number
+  restIncome: number; storage: number      // parts of revenue and of costs
   cwtSold: number; cwtCulled: number
   yieldCwtAcre: number      // marketable, over potato acres
   potatoFields: number
@@ -221,6 +227,8 @@ export interface Campaign {
   month: number             // cellar month index, 0 = November
   yearRevenue: number
   yearCosts: number
+  yearRest: number
+  yearStorage: number
   history: YearSummary[]
   steps: number
 }

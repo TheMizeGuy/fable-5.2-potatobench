@@ -24,7 +24,10 @@ const sound = createSound(app)
 
 // A fixed seed and year from the address bar make a run repeatable: ?year=1987&seed=42
 const q = new URLSearchParams(location.search)
-if (q.has('year')) app.newGame(Number(q.get('year')), q.has('seed') ? Number(q.get('seed')) : undefined)
+// It never replaces a farm already saved in this browser, and only starts in a year that can be played.
+if (q.has('year') && !app.savedGame() && app.startYears().includes(Number(q.get('year')))) {
+  app.newGame(Number(q.get('year')), q.has('seed') ? Number(q.get('seed')) : undefined)
+}
 
 let last = performance.now()
 function loop(now: number): void {
