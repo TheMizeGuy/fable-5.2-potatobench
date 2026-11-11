@@ -156,7 +156,7 @@ const shots: Shot[] = [
   { name: '13-dig-day', setup: async page => { await playTo(page, 1977, 5, 264); await settle(page); await step(page); await seek(page, 0.45, 1200) } },
   {
     name: '13b-dig-close', setup: async page => {
-      await playTo(page, 1977, 5, 264); await settle(page); await step(page); await seek(page, 0.45, 1300); await seek(page, 0.47, 900, 0.02)
+      await playTo(page, 1977, 5, 264); await settle(page); await step(page); await seek(page, 0.45, 1000); await seek(page, 0.47, 900, 0.02)
       await onTractor(page, { dist: 12, yaw: 0.9, pitch: 0.3 }, 1.5, 0.4)
     },
   },

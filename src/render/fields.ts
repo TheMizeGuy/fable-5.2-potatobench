@@ -402,7 +402,7 @@ export class Fields {
         {
           // Far off a flower is drawn no smaller than a pixel, and fewer are drawn, so the field keeps its share of white.
           float fbase = 0.017 + 0.006 * aFlower.w, fsize = max(fbase, length(cWorld.xyz - cameraPosition) * uPix);
-          float fkeep = clamp(fbase * fbase / (fsize * fsize) * 2.0, 0.05, 1.0);
+          float fkeep = clamp(fbase * fbase / (fsize * fsize) * 2.0, 0.012, 1.0);
           // and stands clear of the leaves, which close over it as they shrink
           cWorld.y += 0.05 * smoothstep(1.2, 3.0, fsize / fbase);
           fsize *= showF * step(fract(aFlower.w * 7.13 + aAt.w * 3.7), fkeep);
