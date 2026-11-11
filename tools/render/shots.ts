@@ -9,6 +9,8 @@ const args = process.argv.slice(2).filter(a => !a.startsWith('--'))
 const soft = process.argv.includes('--soft')
 // --pins: mark where each field's plate is pinned, to check that a plate would stand on its own field.
 const pins = process.argv.includes('--pins')
+// --flat: no WebGL, so the flat drawing is what is captured.
+const flat = process.argv.includes('--flat')
 const base = args[0] ?? 'http://localhost:5317/'
 const out = args[1] ?? 'shots'
 const only = new Set(args.slice(2))
@@ -266,7 +268,7 @@ const shots: Shot[] = [
 ]
 
 const browser = await chromium.launch({
-  args: soft ? ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] : [process.platform === 'win32' ? '--use-angle=d3d11' : '--use-angle=metal', '--ignore-gpu-blocklist', '--enable-gpu'],
+  args: flat ? ['--disable-webgl', '--disable-3d-apis'] : soft ? ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] : [process.platform === 'win32' ? '--use-angle=d3d11' : '--use-angle=metal', '--ignore-gpu-blocklist', '--enable-gpu'],
 })
 const errors: string[] = []
 for (const shot of shots) {

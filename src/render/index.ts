@@ -398,6 +398,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     LAMP.value += (lamp / lit.exposure * 0.6 - LAMP.value) * Math.min(1, dt * 2)
   }
   let sunDrift = 0
+  const spent = { crews: 0, update: 0, draw: 0 }
   let replayPace = 1
   let titleShift = 0.16
 
@@ -460,6 +461,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     rig.update(dt, vp, reduced, snap.mode === 'title' && framing === 'title' && !reduced ? Math.sin(time * 0.05) : 0)
     const cam = rig.camera
     sky.dome.position.copy(cam.position)
+    const t0 = performance.now()
     crews.place({
       dt, dayT, advancing: app.speed > 0, pace: replayPace, time, reduced, idle: snap.mode !== 'season' && snap.mode !== 'title',
       season: snap.mode === 'season', dist: rig.cur.dist, dust: env.dry, picked: app.unit, particles, passed,
@@ -470,6 +472,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       smokeAt = 0
       particles.emit(props.chimney.x, props.chimney.y, props.chimney.z, (Math.random() - 0.5) * 0.1, 0.5, (Math.random() - 0.5) * 0.1, 0.12, 0.3, 4.5, 0.74, 0.74, 0.76, 0.36 * env.smoke, 0.8)
     }
+    const t1 = performance.now()
     particles.update(dt * (reduced ? 0.3 : 1), wx * env.wind * 1.6, wz * env.wind * 1.6)
     focus.set(rig.cur.x, fieldBaseY(rig.cur.z), rig.cur.z)
     weather.update(fall, env.rain, env.snowfall, wx * env.wind, wz * env.wind, cam.getWorldDirection(ahead).multiplyScalar(30).add(cam.position), lit.hazeAway, (size.h * size.pr) / (2 * Math.tan((cam.fov * Math.PI) / 360)))
@@ -485,6 +488,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     // The focus is shallow in the opening shot, slight in play, and opens up while the player moves the camera.
     const want = env.lens * (rig.idle < 0.6 ? 0.2 : 1) * (snap.mode === 'title' ? 1 : smooth(60, 16, rig.cur.dist) * 0.9 + 0.5)
     lens += (want - lens) * (1 - Math.exp(-dt / 0.35))
+    const t2 = performance.now()
     renderer.info.reset()
     if (frameNo % 2 === 0 || frameNo < 4 || dtMs <= 0.5) sky.renderMap(renderer)
     // The opening shot is focused on the bottom fields, half way to what it looks at.
@@ -505,6 +509,11 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       sunX: sunAt.x * 0.5 + 0.5, sunY: sunAt.y * 0.5 + 0.5, shafts: sunAt.z < 1 ? shafts : 0,
       warm: 0.22 + 0.5 * gold - 0.3 * cold, rich: 0.1 + 0.14 * gold, contrast: 0.09 + 0.08 * open,
     }, Math.round(size.w * size.pr), Math.round(size.h * size.pr))
+    const t3 = performance.now()
+    // how long the frame's own work and its drawing take, smoothed, for the tools
+    spent.crews += (t1 - t0 - spent.crews) * 0.05
+    spent.update += (t2 - t1 - spent.update) * 0.05
+    spent.draw += (t3 - t2 - spent.draw) * 0.05
     if (!firstFrame) firstFrame = performance.now()
     // Tell whoever is waiting that the land has shown what it had to show.
     for (let k = waiters.length - 1; k >= 0; k--) {
@@ -632,6 +641,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
         return {
           triangles: r.triangles, calls: r.calls, pixelRatio: renderer.getPixelRatio(), width: canvas.width, height: canvas.height,
           camera: rig.where(), time, ambient, fall, exposure: lit.exposure, tier, fps, drawn: [post.target.width, post.target.height], firstFrame,
+          spent: { crews: +spent.crews.toFixed(2), update: +spent.update.toFixed(2), draw: +spent.draw.toFixed(2) }, objects: scene.children.reduce((n, c) => { let k = 0; c.traverse(() => k++); return n + k }, 0),
         }
       },
     }

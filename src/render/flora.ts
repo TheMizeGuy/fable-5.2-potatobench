@@ -395,7 +395,7 @@ export class Flora {
       const byCell = new Map<string, Tree[]>()
       const both = cls in near
       for (const t of trees[cls]) {
-        const cell = both ? CELL : 160
+        const cell = both ? CELL : 720
         const key = `${both ? 'n' : 'f'}|${Math.floor(t.x / cell)}|${Math.floor(t.z / cell)}`
         let list = byCell.get(key)
         if (!list) byCell.set(key, (list = []))

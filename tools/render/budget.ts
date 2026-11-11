@@ -40,8 +40,10 @@ const INSTRUMENT = `(() => {
 
 const median = (xs: number[]) => { const a = xs.slice().sort((p, q) => p - q); return a.length ? a[Math.floor(a.length / 2)] : NaN }
 
+interface M { gpu: number; cpu: number; triangles: number; calls: number; tier: string; spent?: { crews: number; update: number; draw: number }; objects?: number }
+
 // The GPU may be shared with other work on the machine, which only ever adds time: of a few windows, keep the quietest.
-async function measure(page: Page): Promise<{ gpu: number; cpu: number; triangles: number; calls: number; tier: string }> {
+async function measure(page: Page): Promise<M> {
   let best = await window1(page)
   for (let k = 0; k < 3; k++) {
     const m = await window1(page)
@@ -50,7 +52,7 @@ async function measure(page: Page): Promise<{ gpu: number; cpu: number; triangle
   return best
 }
 
-async function window1(page: Page, seconds = 1.2): Promise<{ gpu: number; cpu: number; triangles: number; calls: number; tier: string }> {
+async function window1(page: Page, seconds = 1.2): Promise<M> {
   await page.waitForTimeout(300)
   await page.evaluate(() => { const M = (window as any).__perf; M.gpu = []; M.cpu = []; M.on = true })
   await page.waitForTimeout(seconds * 1000)
@@ -58,13 +60,14 @@ async function window1(page: Page, seconds = 1.2): Promise<{ gpu: number; cpu: n
     const M = (window as any).__perf
     M.on = false
     const s = (window as any).__countyField.stats()
-    return { gpu: M.gpu, cpu: M.cpu, triangles: s.triangles, calls: s.calls, tier: s.tier }
+    return { gpu: M.gpu, cpu: M.cpu, triangles: s.triangles, calls: s.calls, tier: s.tier, spent: s.spent, objects: s.objects }
   })
-  return { gpu: median(r.gpu), cpu: median(r.cpu), triangles: r.triangles, calls: r.calls, tier: r.tier }
+  return { gpu: median(r.gpu), cpu: median(r.cpu), triangles: r.triangles, calls: r.calls, tier: r.tier, spent: r.spent, objects: r.objects }
 }
 
-const line = (label: string, m: { gpu: number; cpu: number; triangles: number; calls: number; tier: string }) =>
-  console.log(`  ${label.padEnd(34)} ${m.tier.padEnd(6)} GPU ${m.gpu.toFixed(2).padStart(6)} ms  CPU ${m.cpu.toFixed(2).padStart(5)} ms  ${(m.triangles / 1e6).toFixed(2).padStart(5)}M triangles  ${String(m.calls).padStart(4)} calls`)
+const line = (label: string, m: M) =>
+  console.log(`  ${label.padEnd(34)} ${m.tier.padEnd(6)} GPU ${m.gpu.toFixed(2).padStart(6)} ms  CPU ${m.cpu.toFixed(2).padStart(5)} ms  ${(m.triangles / 1e6).toFixed(2).padStart(5)}M triangles  ${String(m.calls).padStart(4)} calls`
+    + (m.spent ? `  (crews ${m.spent.crews} ms, updates ${m.spent.update} ms, drawing ${m.spent.draw} ms, ${m.objects} objects)` : ''))
 
 // Ten fields in crop: the home six (two of them in their rest year) and six more taken on, with a second tractor and two hands.
 async function bigFarm(page: Page): Promise<void> {

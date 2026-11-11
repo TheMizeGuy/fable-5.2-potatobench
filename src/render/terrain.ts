@@ -4,6 +4,7 @@ import {
   BufferAttribute, BufferGeometry, Color, DoubleSide, DynamicDrawUsage, Group, IcosahedronGeometry, InstancedMesh, Matrix4, Mesh,
   MeshStandardMaterial, Quaternion, Vector3, type Texture,
 } from 'three'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { FIELD_COUNT } from '../sim/index.ts'
 import {
   BLOCKS, FIELDS, FORD, LAND, REGION, WALLS, WATER_Y, WAYS, brookHalf, brookZ, fordAt, gravelDist, groundY, hillRoadZ,
@@ -287,6 +288,7 @@ export function buildTerrain(roadTex: Texture): Terrain {
     fragmentRoughness: 'roughnessFactor = mix(0.95, 0.5, uWet * 0.7);',
   })
   const farmRoad = roadMat('#b29474', '#6b5440', false), townRoad = roadMat('#c2b396', '#857763', false), trackMat = roadMat('#a88a68', '#5e4a38', true)
+  const laid = new Map<MeshStandardMaterial, BufferGeometry[]>()
   const ribbon = (pts: [number, number][], width: number, mat: MeshStandardMaterial, lift: number): void => {
     const p: number[] = [], uv: number[] = [], ix: number[] = []
     let len = 0
@@ -320,11 +322,9 @@ export function buildTerrain(roadTex: Texture): Terrain {
     g.setAttribute('uv', new BufferAttribute(new Float32Array(uv), 2))
     g.setIndex(ix)
     g.computeVertexNormals()
-    const mesh = new Mesh(g, mat)
-    mesh.receiveShadow = true
-    mesh.renderOrder = 1
-    group.add(mesh)
-    disposables.push(g)
+    const list = laid.get(mat) ?? []
+    list.push(g)
+    laid.set(mat, list)
   }
   for (const w of WAYS) {
     if (w.kind === 'road') ribbon(w.pts, w.pts === WAYS[0].pts ? 1.5 : 1.35, farmRoad, 0.035)
@@ -337,6 +337,16 @@ export function buildTerrain(roadTex: Texture): Terrain {
   }
   ribbon(longRoad(townRoadZ), 2.4, townRoad, 0.06)
   ribbon(longRoad(hillRoadZ), 2.4, townRoad, 0.08)
+  // one draw for each kind of way
+  for (const [mat, geos] of laid) {
+    const g = mergeGeometries(geos)!
+    for (const x of geos) x.dispose()
+    const mesh = new Mesh(g, mat)
+    mesh.receiveShadow = true
+    mesh.renderOrder = 1
+    group.add(mesh)
+    disposables.push(g)
+  }
   disposables.push(farmRoad, townRoad, trackMat)
 
   // ---- The brook: a ribbon of water down the valley, thin over the gravel of the ford.
