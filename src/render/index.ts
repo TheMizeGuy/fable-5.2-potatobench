@@ -40,7 +40,7 @@ type Tier = 'high' | 'medium' | 'low'
 // the size the scene is drawn at and the number of plants; and whole plants give way to clumps, and clumps to rows
 // painted on the ground, nearer the camera.
 const TIERS: Record<Tier, { scale: number; pixels: number; msaa: number; ao: boolean; focus: boolean; shadow: [number, number, number]; density: number }> = {
-  high: { scale: 1, pixels: 3.7e6, msaa: 4, ao: true, focus: true, shadow: [4096, 2048, 2048], density: 1 },
+  high: { scale: 1, pixels: 3.7e6, msaa: 4, ao: true, focus: true, shadow: [3072, 2048, 2048], density: 1 },
   medium: { scale: 1, pixels: 2.6e6, msaa: 4, ao: false, focus: false, shadow: [2048, 1024, 1024], density: 1 },
   low: { scale: 0.72, pixels: 1.4e6, msaa: 0, ao: false, focus: false, shadow: [1024, 1024, 512], density: 0.5 },
 }

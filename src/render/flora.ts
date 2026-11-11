@@ -224,7 +224,7 @@ interface Chunk { near: InstancedMesh[]; far: InstancedMesh[]; sphere: Sphere; f
 // into a shadow it cannot reach. On and near the farm a patch has whole trees for when the camera is close and simpler
 // ones for when it is not.
 const CELL = 64
-const NEAR_AT = { high: 185, medium: 135, low: 92 }
+const NEAR_AT = { high: 150, medium: 115, low: 80 }
 
 export class Flora {
   readonly group = new Group()
@@ -372,9 +372,16 @@ export class Flora {
       vertexHead: 'attribute vec4 aTree; varying vec4 vTree; varying float vUp; varying float vBark;',
       // With the leaves down a far tree is a thin grey shape.
       vertexBegin: 'vTree = aTree; vUp = position.y; vBark = step(length(position.xz), 0.045) * step(position.y, 0.42); transformed.xz *= mix(0.45, 1.0, uLeaf);',
-      fragmentHead: 'varying vec4 vTree; varying float vUp; varying float vBark;',
-      // Leaf masses: mottled, darker underneath, the trunk bare below.
-      fragmentColor: `${LEAF} diffuseColor.rgb = mix(${linear('#5a5046')}, diffuseColor.rgb * (0.66 + 0.7 * texture2D(uNoise, vWorld.xz * 0.7 + vWorld.y * 0.5).a), uLeaf * (1.0 - step(0.5, vBark))) * (0.5 + 0.66 * vUp); ${SNOW_RIME_TREE}`,
+      fragmentHead: 'varying vec4 vTree; varying float vUp; varying float vBark; vec2 farBump;',
+      ambient: 0.8,
+      // Leaf masses broken into clumps of light and shade, darker underneath, the trunk bare below.
+      fragmentColor: /* glsl */ `
+        ${LEAF}
+        vec4 clump = texture2D(uNoise, vWorld.xz * 1.7 + vWorld.y * 1.9);
+        farBump = (clump.rg - 0.5) * 2.2 * uLeaf;
+        diffuseColor.rgb = mix(${linear('#5a5046')}, diffuseColor.rgb * (0.4 + 0.75 * clump.a), uLeaf * (1.0 - step(0.5, vBark))) * (0.4 + 0.55 * vUp);
+        ${SNOW_RIME_TREE}`,
+      fragmentNormal: 'normal = normalize(normal + (viewMatrix * vec4(farBump.x, 0.0, farBump.y, 0.0)).xyz);',
     })
     // Alder: the same rounded masses, low and dark, standing in the brook's bank.
     const alderMat = patch(new MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0 }), {
