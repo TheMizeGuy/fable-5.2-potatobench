@@ -1,9 +1,11 @@
 // Every tunable number in the simulation. docs/MODEL.md gives the source of each, or marks it invented.
-import type { Cause, Grade, JobKind, UpgradeId } from './types.ts'
+import { PARCELS } from './farm.ts'
+import type { Cause, Due, Grade, JobKind, UnitKind, UpgradeId } from './types.ts'
 
-export const SAVE_VERSION = 2
+export const SAVE_VERSION = 3
 
-export const FIELD_COUNT = 6
+// Every parcel the farm has or could have; the first six are the home farm.
+export const FIELD_COUNT = PARCELS.length
 export const ROWS = 8
 export const COLS = 12
 export const HILLS = ROWS * COLS
@@ -67,6 +69,7 @@ export const RESIDUE_DECAY = 0.9
 export const ROAD_SEV = 0.08                   // field blight share visible without scouting
 export const SCOUT_DETECT = 0.6
 export const HUMID_BONUS = [2, 0, -1]          // extra wet hours by field position
+export const JUMP_NEAR = 30                    // road distance within which blight jumps to another field at full rate
 
 // Hills and defects.
 export const COVER_BY_PASSES = [0.5, 0.8, 1]
@@ -94,7 +97,49 @@ export const UPGRADES: Record<UpgradeId, { name: string; cost: number; blurb: st
   harvester: { name: 'Two-row harvester', cost: 12000, blurb: 'Digging a field takes a day and a quarter instead of two days.' },
   vent: { name: 'Cellar ventilation', cost: 7000, blurb: 'The cellar holds more, shrinks less, and rot spreads more slowly.' },
   reel: { name: 'Irrigation reel', cost: 30000, blurb: 'A pump, pipe and a travelling gun. Watering a field takes half a day instead of a whole one, and costs less.' },
+  tractor2: { name: 'Second tractor', cost: 16000, blurb: 'A second tractor with its planter and hiller. With it the farm can hire an operator for the machine jobs.' },
+  house2: { name: 'Second potato house', cost: 18000, blurb: 'Another potato house at home. The farm can store as much again as the first one holds.' },
 }
+
+// ---------------------------------------------------------------- the bigger farm (all invented: docs/MODEL.md section 9)
+
+// Crews: who can do what, travel by the farm roads, and how a crew picks its next order.
+export const UNIT_JOBS: Record<UnitKind, JobKind[]> = {
+  farmer: ['plant', 'hill', 'scout', 'spray', 'water', 'rogue', 'sample', 'kill', 'dig'],
+  hand: ['scout', 'rogue', 'sample'],
+  operator: ['plant', 'hill', 'spray', 'water', 'kill', 'dig'],
+}
+export const TRAVEL_DAYS_PER_UNIT = 0.0016     // a day's work lost per ground unit driven: a neighbouring field about 0.03
+export const PICK_WINDOW = 3                   // a crew chooses among this many of the orders it could take next
+export const PICK_LAG = 0.07                   // days of travel a crew would rather drive than skip one place down the list: more than any two home fields are apart
+export const HAND_WAGE = 450                   // dollars a month
+export const OPERATOR_WAGE = 800
+export const WAGE_DAYS = 30                    // wages are paid for this many days at a time, from the day hired
+export const MAX_HANDS = 4
+export const MAX_OPERATORS = 1
+export const FARMER_NAME = 'You'
+export const HAND_NAMES = ['Lucien', 'Marie', 'Gerald', 'Theresa', 'Roland', 'Dot']
+export const OPERATOR_NAMES = ['Wendell', 'Aurele']
+
+// A dig hauls the crop to the nearest potato house the farm has. The home six are inside the haul the dig time
+// already allows for; beyond that each ground unit adds this share, so the longest haul (Spruce Lot) adds about 40%.
+export const HAUL = 0.014
+export const HAUL_FREE = 51
+
+// Contracts offered each spring.
+export const CONTRACT_OFFERS = 3
+export const CONTRACT_CWT_MIN = 1000           // about the US No. 1 crop of one field
+export const CONTRACT_CWT_MAX = 2000
+export const CONTRACT_PRICE: Record<Due, [number, number]> = { harvest: [0.92, 1.02], winter: [1.02, 1.12] }   // times the average-year price
+export const CONTRACT_PENALTY = 0.3            // share of the contract value of what was not delivered
+export const CONTRACT_WINTER_MONTH = 4         // cellar month (0 November) when winter contracts fall due: March
+export const PROCESSING_PRICE = 0.8            // the chipping variety off contract sells at this share of its price
+
+export const LAND_WORTH = 1                    // net worth counts land the farm bought at this share of its price
+
+// Reference practice keeps the advice to what the crews could do: of each job, as many fields at once as the home
+// farm has, for each crew able to do that job.
+export const ADVICE_FIELDS_PER_CREW = 6
 
 // Money, in constant dollars.
 export const START_CASH = 18000

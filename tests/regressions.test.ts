@@ -6,9 +6,11 @@ import { loadWorld } from '../tools/balance/world.ts'
 
 const world = loadWorld()
 
-// Reference practice up to the day `until` turns true, leaving the jobs in `skip` to the test.
-function grow(year: number, seed: number, until: (c: Campaign) => boolean, skip: JobKind[] = ['kill', 'dig']): Campaign {
+// Reference practice up to the day `until` turns true, leaving the jobs in `skip` to the test. spring runs before
+// the season begins.
+function grow(year: number, seed: number, until: (c: Campaign) => boolean, skip: JobKind[] = ['kill', 'dig'], spring?: (c: Campaign) => void): Campaign {
   const c = S.createCampaign(world, { seed, startYear: year })
+  spring?.(c)
   expect(S.apply(world, c, { t: 'begin' }).ok).toBe(true)
   for (let guard = 0; !until(c); guard++) {
     expect(guard < 400 && c.phase === 'season').toBe(true)
@@ -22,26 +24,23 @@ function grow(year: number, seed: number, until: (c: Campaign) => boolean, skip:
 
 const FIELDS = [0, 1, 2, 3, 4, 5]
 
-describe('a dig that starts while a vine kill is part done', () => {
+describe('a dig ordered while a vine kill is part done', () => {
   // 1990, seed 7: on August 25 three walks and a spray fill most of the day, so the kill gets only part of it.
-  const c = grow(1990, 7, c => c.season!.day >= S.dayIndex(1990, 7, 25))
-  const s = c.season!
-  for (const j of [...s.jobs]) S.apply(world, c, { t: 'cancel', id: j.id })
-  for (const f of [2, 4, 5]) expect(S.apply(world, c, { t: 'job', kind: 'scout', field: f }).ok).toBe(true)
-  expect(S.apply(world, c, { t: 'job', kind: 'spray', field: 0 }).ok).toBe(true)
-  expect(S.apply(world, c, { t: 'job', kind: 'kill', field: 0 }).ok).toBe(true)
-  S.apply(world, c, { t: 'day' })
-  const kill = s.jobs.find(j => j.kind === 'kill' && j.field === 0)
-
-  it('starts from a kill that has had part of a day', () => {
-    expect(kill).toBeDefined()
-    expect(kill!.done).toBeGreaterThan(0)
-    expect(kill!.done).toBeLessThan(kill!.need)
-    expect(S.fieldInfo(c, 0).status).toBe('growing')
+  // The second tractor is bought in spring so that an operator can be hired for the two-crew case.
+  const start = grow(1990, 7, c => c.season!.day >= S.dayIndex(1990, 7, 25), ['kill', 'dig'], c => {
+    expect(S.apply(world, c, { t: 'buy', upgrade: 'tractor2' }).ok).toBe(true)
   })
+  for (const j of [...start.season!.jobs]) S.apply(world, start, { t: 'cancel', id: j.id })
+  for (const f of [2, 4, 5]) expect(S.apply(world, start, { t: 'job', kind: 'scout', field: f }).ok).toBe(true)
+  expect(S.apply(world, start, { t: 'job', kind: 'spray', field: 0 }).ok).toBe(true)
+  expect(S.apply(world, start, { t: 'job', kind: 'kill', field: 0 }).ok).toBe(true)
+  S.apply(world, start, { t: 'day' })
+  const killOf = (c: Campaign) => c.season!.jobs.find(j => j.kind === 'kill' && j.field === 0)
 
-  it('drops the kill, digs the field once, and refuses a second dig', () => {
-    expect(S.apply(world, c, { t: 'job', kind: 'dig', field: 0 }).ok).toBe(true)
+  // Runs two weeks with a dig ordered first on the field, checking that once digging starts nothing else is left there.
+  function digOut(c: Campaign, unit = -1): S.GameEvent[] {
+    const s = c.season!
+    expect(S.apply(world, c, { t: 'job', kind: 'dig', field: 0, unit }).ok).toBe(true)
     S.apply(world, c, { t: 'bump', id: s.jobs.find(j => j.kind === 'dig')!.id })
     const events: S.GameEvent[] = []
     let digging = false
@@ -52,7 +51,6 @@ describe('a dig that starts while a vine kill is part done', () => {
     }
     expect(digging).toBe(true)
     expect(S.fieldInfo(c, 0).status).toBe('dug')
-    expect(events.filter(e => e.field === 0 && e.type === 'killed')).toEqual([])
     expect(events.filter(e => e.field === 0 && e.type === 'dug').length).toBe(1)
     expect(c.lots.filter(l => l.field === 0).length).toBe(1)
     const before = S.hashCampaign(c)
@@ -60,6 +58,36 @@ describe('a dig that starts while a vine kill is part done', () => {
     expect(again.ok).toBe(false)
     expect(again.err).toBe('This field is dug.')
     expect(S.hashCampaign(c)).toBe(before)
+    return events
+  }
+
+  it('starts from a kill that has had part of a day, held by the farmer', () => {
+    const kill = killOf(start)
+    expect(kill).toBeDefined()
+    expect(kill!.done).toBeGreaterThan(0)
+    expect(kill!.done).toBeLessThan(kill!.need)
+    expect(S.fieldInfo(start, 0).status).toBe('growing')
+    expect(S.crewInfo(start)[0].job).toEqual({ id: kill!.id, kind: 'kill', field: 0 })
+  })
+
+  it('with one crew: the farmer finishes the kill it began before the dig, and the field is dug once', () => {
+    const c = structuredClone(start)
+    const events = digOut(c)
+    const killed = events.filter(e => e.field === 0 && e.type === 'killed')
+    expect(killed.length).toBe(1)
+    expect(killed[0].day).toBe(start.season!.day)
+  })
+
+  it('with two crews: a dig the operator starts drops the kill the farmer had begun, and the field is dug once', () => {
+    const c = structuredClone(start)
+    expect(S.apply(world, c, { t: 'hire', kind: 'operator' }).ok).toBe(true)
+    const op = c.crew.find(u => u.kind === 'operator')!
+    // The kill goes to the operator too, so the farmer lets it go; the operator does the dig first.
+    expect(S.apply(world, c, { t: 'assign', id: killOf(c)!.id, unit: op.id }).ok).toBe(true)
+    expect(S.crewInfo(c)[0].job).toBeNull()
+    const events = digOut(c, op.id)
+    expect(events.filter(e => e.field === 0 && e.type === 'killed')).toEqual([])
+    expect(events.some(e => e.type === 'dropped' && e.field === 0)).toBe(false)
   })
 })
 
@@ -169,7 +197,8 @@ describe('watering', () => {
 describe('a potato field that was never planted', () => {
   it('counts as a year out of potatoes, like a rest', () => {
     const c = S.createCampaign(world, { seed: 3, startYear: 2001 })
-    expect(c.plans.map(p => p.crop)).toEqual(['potato', 'rest', 'potato', 'rest', 'potato', 'potato'])
+    // The home six, then the land the farm does not hold, which keeps a rest-year placeholder.
+    expect(c.plans.map(p => p.crop)).toEqual(['potato', 'rest', 'potato', 'rest', 'potato', 'potato', ...Array.from({ length: S.FIELD_COUNT - 6 }, () => 'rest')])
     const before = structuredClone(c.fields)
     expect(S.apply(world, c, { t: 'begin' }).ok).toBe(true)
     expect(S.apply(world, c, { t: 'job', kind: 'plant', field: 0 }).ok).toBe(true)
@@ -190,5 +219,8 @@ describe('a potato field that was never planted', () => {
       expect(c.fields[i].soil, `field ${i}`).toBe(1)
       expect(odds(c.fields[i].vert), `field ${i}`).toBeCloseTo(Math.max(odds(0.01), odds(before[i].vert) * S.VERT_REST), 9)
     }
+    // Land the farm did not hold is not the farm's to rest: its record does not move.
+    expect(c.fields.slice(6)).toEqual(before.slice(6))
+    expect(c.history[0].restIncome).toBe(2 * S.REST_INCOME)
   })
 })

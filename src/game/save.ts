@@ -1,5 +1,5 @@
 // Browser-local saves. Every save carries a version; migrate() brings an old one forward.
-import { SAVE_VERSION, type Campaign } from '../sim/index.ts'
+import { HOME_FIELDS, PARCELS, SAVE_VERSION, type Campaign } from '../sim/index.ts'
 
 const KEY = 'the-county/save'
 const SETTINGS_KEY = 'the-county/settings'
@@ -26,6 +26,51 @@ const MIGRATIONS: Record<number, Migration> = {
       f.sampleN ??= []
       f.samples = []
       f.sampleN = []
+    }
+  },
+  // Version 3 added the land beyond the home six, the crew, contracts, two pieces of equipment and their books.
+  2: c => {
+    const fields = (c.fields as Record<string, unknown>[] | undefined) ?? []
+    const plans = (c.plans as Record<string, unknown>[] | undefined) ?? []
+    if (!Array.isArray(fields) || !Array.isArray(plans)) return
+    for (let i = 0; i < fields.length; i++) fields[i].tenure ??= i < HOME_FIELDS ? 'owned' : 'none'
+    for (let i = fields.length; i < PARCELS.length; i++) {
+      const p = PARCELS[i]
+      fields.push({ elev: p.elev, soil: Math.max(0, 1 - 0.5 * p.streak), vert: p.vert, streak: p.streak, tenure: 'none' })
+    }
+    for (let i = plans.length; i < PARCELS.length; i++) plans.push({ crop: 'rest', variety: 'katahdin', seed: 'certified' })
+    const upgrades = c.upgrades as Record<string, unknown> | undefined
+    if (upgrades && typeof upgrades === 'object') { upgrades.tractor2 ??= false; upgrades.house2 ??= false }
+    c.crew ??= [{ id: 0, kind: 'farmer', name: 'You', at: -1, wage: 0, job: -1, to: -1, road: 0, paidTo: 0 }]
+    c.nextUnit ??= 1
+    c.offers ??= []
+    c.contracts ??= []
+    for (const k of ['yearWages', 'yearRent', 'yearLand', 'yearContracts', 'yearPenalties']) c[k] ??= 0
+    for (const h of (c.history as Record<string, unknown>[] | undefined) ?? []) {
+      for (const k of ['wages', 'rent', 'land', 'penalties', 'contracts']) h[k] ??= 0
+    }
+    const season = c.season as { fields?: Record<string, unknown>[]; jobs?: Record<string, unknown>[]; worked?: Record<string, unknown>[]; workLeft?: unknown } | null
+    if (season && typeof season === 'object') {
+      delete season.workLeft
+      for (const j of season.jobs ?? []) j.unit ??= -1
+      for (const w of season.worked ?? []) w.unit ??= 0
+      const sf = season.fields
+      if (Array.isArray(sf)) {
+        for (let i = sf.length; i < PARCELS.length; i++) {
+          sf.push({
+            status: 'off', variety: 'katahdin', seedVirus: 0,
+            plantDay: -1, emergeDay: -1, tiDay: -1, closeDay: -1, matureDay: -1, deadDay: -1, killDay: -1, dugDay: -1,
+            pdSoil: 0, pdAir: 0, pdEmerge: 0,
+            dr: 0, wet: 8, ksAvg: 1, canopy: 0, green: 0, wateredDay: -1,
+            hillPasses: 0, cover: 0.5, weeded: false,
+            residue: 0, lastSpray: -1,
+            scab: 0, hollow: 0, knob: 0, logDays: 0, dryRun: 0, frostT: 0,
+            sev: 0, sevPeak: 0, lastScout: -1, knownSev: 0, seenFromRoad: false,
+            samples: [], sampleN: [], estBias: 1, eye: 0, seedBlight: 0, frostDay: -1, frostShare: 0, rimeDay: -1, digDone: 0, lotId: -1, flags: 0,
+            hState: [], hEmergeAt: [], hPd0: [], hVigor: [], hC: [], hLes: [], hLat: [], hMass: [], hN: [], hTb: [],
+          })
+        }
+      }
     }
   },
 }

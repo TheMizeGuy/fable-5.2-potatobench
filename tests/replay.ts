@@ -13,6 +13,7 @@ export interface ReplayOptions {
   seed?: number
   campaign?: Campaign                 // continue this campaign instead of starting one
   stopAt?: (c: Campaign) => boolean   // pause before the next step when this turns true
+  plain?: boolean                     // the home farm only, one farmer, no contracts: what an older build could save
 }
 
 export interface ReplayResult { campaign: Campaign; hash: string; cmds: Cmd[]; done: boolean }
@@ -31,16 +32,43 @@ export function runReplay(sim: Sim, world: World, opts: ReplayOptions = {}): Rep
     [['potato', 'kennebec', 'certified'], ['potato', 'katahdin', 'certified'], ['potato', 'superior', 'certified'], ['rest', 'katahdin', 'certified'], ['potato', 'gold', 'certified'], ['potato', 'burbank', 'certified']],
   ]
   const BUY = [[], ['reel'], ['vent', 'boom'], ['harvester'], []]
+  // The bigger farm from the second spring: Intervale South rented, then given up for a Dufour field; a field hand
+  // hired, then let go; one contract signed each spring and the crop for it planted on the rented land.
+  const none = { rent: [], release: [], hire: 0, dismiss: false }
+  const LAND: { rent: number[]; release: number[]; hire: number; dismiss: boolean }[] = opts.plain ? [none] : [
+    none,
+    { rent: [7], release: [], hire: 1, dismiss: false },
+    { rent: [12], release: [7], hire: 0, dismiss: false },
+    { rent: [], release: [], hire: 0, dismiss: true },
+    none,
+  ]
+  // Delivers what the dug lots can give to the open contracts for their variety.
+  const deliver = () => {
+    for (const k of c.contracts) {
+      if (k.settled) continue
+      for (const l of sim.openLots(c)) if (l.variety === k.variety && k.delivered < k.cwt) go({ t: 'deliver', lot: l.id, contract: k.id })
+    }
+  }
   let guard = 0
   while (guard++ < 20000) {
     if (opts.stopAt && opts.stopAt(c)) return { campaign: c, hash: sim.hashCampaign(c), cmds, done: false }
     if (c.phase === 'plan') {
       const k = Math.min(c.yearIdx, PLANS.length - 1)
       for (const u of BUY[k]) go({ t: 'buy', upgrade: u as 'reel' })
+      const land = LAND[Math.min(c.yearIdx, LAND.length - 1)]
+      for (const field of land.release) go({ t: 'release', field })
+      for (const field of land.rent) go({ t: 'rent', field })
+      for (let h = 0; h < land.hire; h++) go({ t: 'hire', kind: 'hand' })
+      if (land.dismiss) for (const u of c.crew.filter(x => x.kind === 'hand')) go({ t: 'dismiss', unit: u.id })
       PLANS[k].forEach(([crop, variety, seedKind], field) => {
         const r = go({ t: 'plan', field, plan: { crop: crop as 'potato', variety: variety as 'katahdin', seed: seedKind as 'saved' } })
         if (!r.ok) go({ t: 'plan', field, plan: { crop: crop as 'potato', variety: variety as 'katahdin', seed: 'certified' } })
       })
+      const offer = c.yearIdx > 0 && !opts.plain ? c.offers[0] : undefined
+      if (offer) {
+        go({ t: 'accept', offer: offer.id })
+        for (const field of land.rent) go({ t: 'plan', field, plan: { crop: 'potato', variety: offer.variety, seed: 'certified' } })
+      }
       if (!go({ t: 'begin' }).ok) {
         for (let f = 5; f >= 0; f--) {
           go({ t: 'plan', field: f, plan: { crop: 'rest', variety: 'katahdin', seed: 'certified' } })
@@ -51,16 +79,22 @@ export function runReplay(sim: Sim, world: World, opts: ReplayOptions = {}): Rep
       const s = c.season!
       for (const a of sim.advise(world, c)) {
         if (a.act === 'wait') continue
-        if (a.act === 'sell') go({ t: 'sell', lot: a.lot, frac: c.steps % 2 ? 1 : 0.5 })
-        else if (a.act !== 'close') go({ t: 'job', kind: a.act, field: a.field })
+        if (a.act === 'sell') {
+          if (!c.contracts.some(k => !k.settled && k.variety === c.lots.find(l => l.id === a.lot)?.variety)) go({ t: 'sell', lot: a.lot, frac: c.steps % 2 ? 1 : 0.5 })
+        } else if (a.act !== 'close') go({ t: 'job', kind: a.act, field: a.field })
       }
       if (s.jobs.length > 1 && c.steps % 17 === 0) go({ t: 'bump', id: s.jobs[s.jobs.length - 1].id })
       const scout = s.jobs.find(j => j.kind === 'scout' && j.done === 0)
       if (scout && c.steps % 23 === 0) go({ t: 'cancel', id: scout.id })
+      const hand = c.crew.find(u => u.kind === 'hand')
+      const walk = s.jobs.find(j => j.kind === 'scout' && j.unit < 0)
+      if (hand && walk && c.steps % 3 === 0) go({ t: 'assign', id: walk.id, unit: hand.id })
+      deliver()
       if (sim.seasonDone(c)) go({ t: 'endSeason' })
       else go({ t: 'day' })
     } else if (c.phase === 'cellar') {
       const open = sim.openLots(c)
+      if (c.month === 0) deliver()
       if (c.month === 0 && open.length) go({ t: 'seed', lot: open[0].id, fields: 2 })
       if (c.month === 2) for (const l of open) go({ t: 'sell', lot: l.id, frac: 0.5 })
       if (c.month === 4) for (const l of open) go({ t: 'sell', lot: l.id, frac: 1 })

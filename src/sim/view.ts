@@ -1,10 +1,16 @@
 // What the grower can know. The interface, the renderer and the bots read the game through these
 // functions only, so nothing hidden (true tuber weight, latent blight) can leak onto the screen.
+import { DUE_LABEL } from './buyers.ts'
+import { withCommas } from './calendar.ts'
+import { cellarCapacity, openLots, potatoHouses, type PotatoHouse } from './campaign.ts'
+import { travelDays } from './crew.ts'
+import { HOME_YARD, PARCELS, YARDS, type BlockId } from './farm.ts'
+import { lotCwt } from './harvest.ts'
 import * as P from './params.ts'
-import { FIELD_NAMES, jobBlock, jobCost, jobDays, jobWait, JOB_LABEL, knownHills } from './season.ts'
+import { FIELD_NAMES, haulFactor, holdsDufour, jobBlock, jobCost, jobDays, jobWait, JOB_LABEL, knownHills } from './season.ts'
 import {
   H_DECAYED, H_DUG, H_EMERGED, H_KNOWN, H_ROGUED, H_SAMPLED, H_VIRUS, H_WILT,
-  type Campaign, type Day, type FieldSeason, type JobKind, type World,
+  type Campaign, type Day, type Due, type FieldSeason, type JobKind, type Tenure, type UnitKind, type VarietyId, type World,
 } from './types.ts'
 import { variety } from './varieties.ts'
 import { forecastFor, getDay, skyOf, wallin, type ForecastDay } from './weather.ts'
@@ -17,7 +23,7 @@ const DIG_VAR = 0.25 * 0.25       // how far one hill runs from its field
 // Total tuber weight in cwt per acre as an experienced eye would put it: a guess that test digs sharpen.
 export function estimateYield(c: Campaign, fi: number): Estimate | null {
   const f = c.season?.fields[fi]
-  if (!f || f.tiDay < 0 || f.status === 'dug' || f.status === 'lost' || f.status === 'rest') return null
+  if (!f || f.tiDay < 0 || f.status === 'dug' || f.status === 'lost' || f.status === 'rest' || f.status === 'off') return null
   // What the grower expects from the leaf, the weather and the calendar, corrected by the hills lifted so far.
   // Nothing here reads the tubers themselves except through a test dig.
   const eye = (f.eye * P.CWT_PER_HILL_GRAM) / P.FIELD_ACRES
@@ -57,6 +63,8 @@ export type Moisture = 'standing water' | 'wet' | 'good' | 'drying' | 'dry' | 'w
 export interface FieldInfo {
   index: number
   name: string
+  tenure: Tenure            // 'none': not the farm's, and status is 'off'
+  block: BlockId
   elev: number
   position: string
   soil: number
@@ -97,13 +105,21 @@ export function fieldInfo(c: Campaign, fi: number): FieldInfo {
   const plan = c.plans[fi]
   const s = c.season
   const base: FieldInfo = {
-    index: fi, name: FIELD_NAMES[fi], elev: fp.elev, position: POSITION[fp.elev], soil: fp.soil, vert: fp.vert, streak: fp.streak,
+    index: fi, name: FIELD_NAMES[fi], tenure: fp.tenure, block: PARCELS[fi].block,
+    elev: fp.elev, position: POSITION[fp.elev], soil: fp.soil, vert: fp.vert, streak: fp.streak,
     crop: plan.crop, status: plan.crop === 'rest' ? 'rest' : 'idle', variety: plan.crop === 'rest' ? 'Oats and clover' : variety(plan.variety).name,
     stage: plan.crop === 'rest' ? 'Resting' : 'Not planted', daysIn: 0, canopy: 0, moisture: 1, moistureLabel: 'good', tooWet: false,
     hillPasses: 0, protect: 0, blightKnown: 0, blightHills: 0, scoutAge: -1, stunted: 0, estimate: null, tubers: null, skin: 0, bloom: 0, stand: 1, frosted: 0, rime: false, wilt: 0, deadDays: -1, lot: -1,
   }
-  if (!s) return base
-  const f = s.fields[fi]
+  const f = s?.fields[fi]
+  if (fp.tenure === 'none' || f?.status === 'off') {
+    base.status = 'off'
+    base.crop = 'rest'
+    base.variety = ''
+    base.stage = 'Not the farm\'s'
+    return base
+  }
+  if (!s || !f) return base
   const taw = P.TAW_MM[fp.elev]
   base.status = f.status
   base.moisture = 1 - f.dr / taw
@@ -178,10 +194,138 @@ export function fieldActions(world: World, c: Campaign, fi: number): ActionInfo[
     const f = s ? s.fields[fi] : null
     return {
       kind, label: JOB_LABEL[kind], ok: why === '', why,
-      days: jobDays(c, kind, f), cost: jobCost(c, kind),
+      days: jobDays(c, kind, f, fi), cost: jobCost(c, kind),
       wait: f && d && why === '' ? jobWait(kind, f, d) : '',
     }
   })
+}
+
+// ---------------------------------------------------------------- crews, land, contracts, storage
+
+export interface CrewInfo {
+  id: number
+  kind: UnitKind
+  name: string
+  at: number                // a field index, or -1 the home yard, -2 the Dufour yard
+  wage: number              // dollars a month
+  job: { id: number; kind: JobKind; field: number } | null   // the order it is working or going to
+  travelling: boolean
+  to: number                // where it is going (equals at when it is not travelling)
+  road: number              // days of driving left
+}
+
+export function crewInfo(c: Campaign): CrewInfo[] {
+  const s = c.phase === 'season' ? c.season : null
+  return c.crew.map(u => {
+    const j = s && u.job >= 0 ? s.jobs.find(x => x.id === u.job) : undefined
+    const travelling = !!s && u.road > 0
+    return {
+      id: u.id, kind: u.kind, name: u.name, at: u.at, wage: u.wage,
+      job: j ? { id: j.id, kind: j.kind, field: j.field } : null,
+      travelling, to: travelling ? u.to : u.at, road: travelling ? u.road : 0,
+    }
+  })
+}
+
+export interface LandInfo {
+  field: number
+  name: string
+  block: BlockId
+  elev: number
+  position: string
+  tenure: Tenure            // 'rented' or 'none'
+  rent: number              // dollars a year, paid when the season begins
+  price: number             // dollars to buy, from cash
+  soil: number
+  vert: number
+  streak: number
+  house: number             // cwt of potato house that comes with it (the Dufour house, when no other Dufour field is held)
+  brings: string            // what holding it brings besides the field, in plain words ('' when nothing)
+  travel: number            // days of driving from the home yard
+  haul: number              // extra share of digging time for the haul to the nearest potato house, once held
+}
+
+// Every parcel the farm does not own: the land it could rent or buy, and what it rents now.
+export function landInfo(c: Campaign): LandInfo[] {
+  const out: LandInfo[] = []
+  for (let i = 0; i < P.FIELD_COUNT; i++) {
+    const fp = c.fields[i]
+    if (fp.tenure === 'owned') continue
+    const p = PARCELS[i]
+    const dufour = p.block === 'dufour'
+    let other = false
+    for (let j = 0; j < P.FIELD_COUNT; j++) if (j !== i && PARCELS[j].block === 'dufour' && c.fields[j].tenure !== 'none') other = true
+    const house = dufour && !other ? YARDS[1].cellar : 0
+    const brings = !dufour ? '' : house > 0 ? `The Dufour potato house comes with it: ${withCommas(house)} cwt of storage.`
+      : 'It shares the Dufour potato house the farm already has.'
+    out.push({
+      field: i, name: p.name, block: p.block, elev: fp.elev, position: POSITION[fp.elev], tenure: fp.tenure,
+      rent: p.rent, price: p.price, soil: fp.soil, vert: fp.vert, streak: fp.streak, house, brings,
+      travel: travelDays(HOME_YARD, i), haul: haulFactor(c, i, holdsDufour(c) || dufour) - 1,
+    })
+  }
+  return out
+}
+
+export interface OfferInfo {
+  id: number
+  buyer: string
+  variety: VarietyId
+  varietyName: string
+  cwt: number               // US No. 1 and large tubers
+  price: number             // dollars per cwt
+  due: Due
+  dueBy: string             // when it must be delivered, in words
+  value: number             // dollars, if all delivered
+  usual: number             // the variety's open-market No. 1 price in an average year, for comparison
+  penaltyRate: number       // share of the value of what is not delivered charged at the due date
+}
+
+export interface ContractInfo extends OfferInfo {
+  delivered: number         // cwt
+  needed: number            // cwt still to deliver
+  paid: number              // dollars received so far
+  settled: boolean          // the due date has passed
+  penalty: number           // charged at the due date if settled; otherwise what the shortfall would cost today
+}
+
+function offerView(o: { id: number; buyer: string; variety: VarietyId; cwt: number; price: number; due: Due }): OfferInfo {
+  const v = variety(o.variety)
+  return {
+    id: o.id, buyer: o.buyer, variety: o.variety, varietyName: v.name, cwt: o.cwt, price: o.price, due: o.due,
+    dueBy: DUE_LABEL[o.due], value: o.cwt * o.price, usual: v.contract ? v.price * P.PROCESSING_PRICE : v.price,
+    penaltyRate: P.CONTRACT_PENALTY,
+  }
+}
+
+// This spring's offers, until the season begins.
+export function offerInfo(c: Campaign): OfferInfo[] {
+  return c.offers.map(offerView)
+}
+
+// This year's accepted contracts.
+export function contractInfo(c: Campaign): ContractInfo[] {
+  return c.contracts.map(k => {
+    const needed = Math.max(0, k.cwt - k.delivered)
+    return {
+      ...offerView(k), delivered: k.delivered, needed, paid: k.paid, settled: k.settled,
+      penalty: k.settled ? k.penalty : needed * k.price * P.CONTRACT_PENALTY,
+    }
+  })
+}
+
+export interface StorageInfo {
+  houses: PotatoHouse[]     // each potato house the farm has now, with where it is and what it holds
+  capacity: number          // cwt
+  stored: number            // cwt in the lots still in hand
+  free: number              // cwt of room left
+}
+
+export function storageInfo(c: Campaign): StorageInfo {
+  const capacity = cellarCapacity(c)
+  let stored = 0
+  for (const l of openLots(c)) stored += lotCwt(l)
+  return { houses: potatoHouses(c), capacity, stored, free: Math.max(0, capacity - stored) }
 }
 
 export interface TodayInfo { day: Day; sky: ReturnType<typeof skyOf>; soilT: number; severity: number; sv: number; watch: boolean }
