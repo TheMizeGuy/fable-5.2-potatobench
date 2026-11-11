@@ -220,7 +220,7 @@ test('Play starts a farm of its own, counted in years of its own, and a new farm
   await expect(page.getByTestId('choose-year')).toHaveCount(0)
   await page.getByTestId('play').click()
   await expect(page.getByTestId('begin-season')).toBeVisible()
-  await expect(page.locator('#ui .tb-year')).toHaveText('Year 1')
+  await expect(page.locator('#ui main:not(.leaving) .tb-year')).toHaveText('Year 1')
   await expect(page.locator('#ui [data-testid^="field-"].plate')).toHaveCount(6)
   await page.getByTestId('menu-open').click()
   await page.getByTestId('quit-title').click()

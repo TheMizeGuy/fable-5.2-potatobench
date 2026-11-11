@@ -123,7 +123,7 @@ test('a first season from the opening to the next spring, with a save that survi
     await page.getByTestId('year-next').click()
     await expect(page.getByTestId('begin-season')).toBeVisible()
     await expect(page.getByTestId('date')).toHaveText('Spring')
-    await expect(page.locator('#ui .tb-year')).toHaveText('Year 2')
+    await expect(page.locator('#ui main:not(.leaving) .tb-year')).toHaveText('Year 2')
   }
 
   await noSidewaysScroll(page)
@@ -154,7 +154,7 @@ test('a second year on a bigger farm: rented land, a hired hand, and a contract 
   // year closes so that a hard first year cannot end the farm before the second begins.
   await reach(page, `const { app } = q.g(); app.do({ t: 'begin' }); q.run(999, ['sell']); app.campaign.cash += 60000; q.winter(12, 3); app.do({ t: 'next' })`)
   await expect(page.getByTestId('begin-season')).toBeVisible()
-  await expect(page.locator('#ui .tb-year')).toHaveText('Year 2')
+  await expect(page.locator('#ui main:not(.leaving) .tb-year')).toHaveText('Year 2')
 
   // Land: the marker across the brook opens its card, and Rent puts a plate on it and the rent on the money line.
   const land = page.getByTestId('land-6')
