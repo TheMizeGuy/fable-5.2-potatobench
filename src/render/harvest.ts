@@ -87,7 +87,7 @@ export class Harvest {
       const y = bp.getY(i), rad = Math.hypot(bp.getX(i), bp.getZ(i))
       const hoop = Math.abs(y - 0.13) < 0.02 || Math.abs(y - 0.37) < 0.02
       // the open top shows the crop inside, paler than the staves
-      const c = y > 0.43 && rad < 0.16 ? [0.78, 0.66, 0.44] : hoop ? [0.06, 0.05, 0.045] : [0.52, 0.44, 0.32]
+      const c = y > 0.43 && rad < 0.16 ? [0.62, 0.48, 0.28] : hoop ? [0.05, 0.04, 0.035] : [0.36, 0.25, 0.14]
       col.set(c, i * 3)
     }
     bg.setAttribute('color', new BufferAttribute(col, 3))

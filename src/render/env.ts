@@ -16,6 +16,7 @@ export interface Env {
   key: number              // how bright the picture is held: overcast is flat, not dark
   haze: number             // density of the air at the brook, per unit of distance
   mist: number             // ground mist in the low fields, 0..1
+  mistDeep: number         // 0: a thin sheet on the brook; 1: fog filling the bottom land and thinning up the slope
   rain: number
   snowfall: number
   wind: number
@@ -39,7 +40,7 @@ export interface Env {
 export function makeEnv(): Env {
   return {
     sunEl: 0.7, sunAz: -0.66, sunScale: 1, turbidity: 2.2, mie: 0.004, cloud: 0.2, cloudShadow: 0.5, deck: 1, key: 1, haze: 0.0006,
-    mist: 0, rain: 0, snowfall: 0, wind: 0.3, windDir: 0.4, rime0: 0, rime1: 0, rime2: 0, snow: 0, wet: 0, dry: 0,
+    mist: 0, mistDeep: 0, rain: 0, snowfall: 0, wind: 0.3, windDir: 0.4, rime0: 0, rime1: 0, rime2: 0, snow: 0, wet: 0, dry: 0,
     grass: new Color('#6f8a45'), leaf: 1, gold: 0, oats: 1, oatsRipe: 0, ice: 0, smoke: 0, lens: 0.2,
   }
 }
@@ -57,7 +58,7 @@ const SKY: Record<string, Sky> = {
   overcast: { sun: 0.06, cover: 1, shadow: 0, deck: 1.05, haze: 0.0012, key: 0.86, turbidity: 4, mie: 0.006 },
   rain: { sun: 0.025, cover: 1, shadow: 0, deck: 0.66, haze: 0.0017, key: 0.76, turbidity: 6, mie: 0.006 },
   storm: { sun: 0.015, cover: 1, shadow: 0, deck: 0.42, haze: 0.0024, key: 0.64, turbidity: 8, mie: 0.006 },
-  fog: { sun: 0.1, cover: 0.92, shadow: 0, deck: 1.35, haze: 0.0052, key: 0.92, turbidity: 6, mie: 0.006 },
+  fog: { sun: 0.1, cover: 0.92, shadow: 0, deck: 1.35, haze: 0.0034, key: 0.92, turbidity: 6, mie: 0.006 },
   snow: { sun: 0.05, cover: 1, shadow: 0, deck: 1.05, haze: 0.0026, key: 0.92, turbidity: 4, mie: 0.006 },
 }
 
@@ -95,6 +96,7 @@ export function envTarget(snap: Snapshot, out: Env): Env {
   out.windDir = w.wdir < 0 ? 0.6 : ((w.wdir + 180) * Math.PI) / 180
   const growing = d > 130 && d < 290 && w.tmin > 2
   out.mist = w.sky === 'fog' ? 1 : growing && w.wetH >= 10 ? Math.min(0.8, (w.wetH - 9) / 9) : 0
+  out.mistDeep = w.sky === 'fog' ? 1 : 0.35
   // In the season each part of the slope frosts as its own fields did last night; otherwise the picture of the time of year.
   const rime = w.tmin < 0 && w.snwd < 20 ? Math.min(1, 0.35 + -w.tmin / 4) : 0
   out.rime0 = snap.rime ? snap.rime[0] : rime
@@ -129,6 +131,7 @@ export function envTarget(snap: Snapshot, out: Env): Env {
     out.mie = 0.007
     out.haze = 0.0011
     out.mist = 0.62
+    out.mistDeep = 0
     out.key = 0.94
     out.dry = 1
     out.lens = 1
@@ -143,7 +146,7 @@ export function envTarget(snap: Snapshot, out: Env): Env {
 }
 
 const NUM_KEYS = [
-  'sunEl', 'sunAz', 'sunScale', 'turbidity', 'mie', 'cloud', 'cloudShadow', 'deck', 'key', 'haze', 'mist', 'rain', 'snowfall', 'wind',
+  'sunEl', 'sunAz', 'sunScale', 'turbidity', 'mie', 'cloud', 'cloudShadow', 'deck', 'key', 'haze', 'mist', 'mistDeep', 'rain', 'snowfall', 'wind',
   'rime0', 'rime1', 'rime2', 'snow', 'wet', 'dry', 'leaf', 'gold', 'oats', 'oatsRipe', 'ice', 'smoke', 'lens',
 ] as const
 

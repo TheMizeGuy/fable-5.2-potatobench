@@ -50,9 +50,9 @@ Plant plantAt() {
   p.dead = p.h0.a;
   p.frost = clamp(uCrop.y * (0.7 + 0.6 * p.r.y), 0.0, 1.0) * (1.0 - p.dead);
   p.droop = clamp(max(uCrop.x * 0.9, p.frost * 0.85), 0.0, 1.0) * (1.0 - p.dead);
-  float size = (0.17 + 0.83 * pow(p.h0.r, 0.75)) * mix(1.0, 0.6, p.h1.a) * (0.84 + 0.32 * p.r.x) * step(0.004, p.h0.r) * uDense;
-  p.w = size * 0.62 * (1.0 + 0.1 * p.droop);
-  p.h = size * 0.56 * mix(1.0, 0.32, p.dead);
+  float size = (0.22 + 0.78 * pow(p.h0.r, 0.75)) * mix(1.0, 0.6, p.h1.a) * (0.84 + 0.32 * p.r.x) * step(0.004, p.h0.r) * uDense;
+  p.w = size * 0.8 * (1.0 + 0.1 * p.droop);
+  p.h = size * 0.56 * mix(1.0, 0.36, p.dead);
   float a = aAt.w * 6.2831853;
   p.cs = cos(a);
   p.sn = sin(a);
@@ -61,7 +61,8 @@ Plant plantAt() {
   return p;
 }
 vec3 plantPlace(vec3 pl) {
-  return gp.at + vec3((gp.cs * pl.x + gp.sn * pl.z) * gp.w, pl.y * gp.h, (-gp.sn * pl.x + gp.cs * pl.z) * gp.w);
+  // Wider along the row than across it: the rows close first, the furrows between them last.
+  return gp.at + vec3((gp.cs * pl.x + gp.sn * pl.z) * gp.w * 1.35, pl.y * gp.h, (-gp.sn * pl.x + gp.cs * pl.z) * gp.w);
 }
 `
 
@@ -76,7 +77,7 @@ const LEAF_SHAPE = /* glsl */ `
 const LEAF_COLOUR = /* glsl */ `
   {
     float grow = gp.h0.r, yellow = gp.h0.g;
-    vec3 col = mix(${linear('#93c95a')}, ${linear('#64a850')}, smoothstep(0.1, 0.6, grow));
+    vec3 col = mix(${linear('#a2d85c')}, ${linear('#62b04c')}, smoothstep(0.08, 0.7, grow));
     col = mix(col, ${linear('#9aa24c')}, min(1.0, yellow * 1.6));
     col = mix(col, ${linear('#b09a55')}, clamp((yellow - 0.55) * 1.8, 0.0, 1.0));
     col = mix(col, ${linear('#b4c67a')}, 0.6 * gp.h1.a);
@@ -88,12 +89,12 @@ const LEAF_COLOUR = /* glsl */ `
     // On the morning of the frost the leaf is white with rime; it is black by the next day.
     col = mix(col, ${linear('#2b2a26')}, burnt * (1.0 - 0.75 * uCrop.z));
     col = mix(col, ${linear('#a8bcc0')}, 0.55 * uCrop.z * smoothstep(0.2, 0.9, aLeaf.y));
-    col = mix(col, ${linear('#a3906a')} * (0.8 + 0.4 * gp.r.z), gp.dead);
+    col = mix(col, ${linear('#b5a27a')} * (0.8 + 0.4 * gp.r.z), gp.dead);
     col = mix(${linear('#8a9a62')}, col, aLeaf.z);
     // Deep in the canopy little light arrives.
     col *= mix(0.7, 1.0, smoothstep(0.0, 0.42, position.y)) * (0.9 + 0.2 * gp.r.z);
     vTint = col;
-    vErode = max(max(gp.dead * 0.55, hit * 0.55), burnt * 0.45 * (1.0 - uCrop.z)) * aLeaf.z;
+    vErode = max(max(gp.dead * 0.32, hit * 0.55), burnt * 0.45 * (1.0 - uCrop.z)) * aLeaf.z;
   }
 `
 
@@ -204,7 +205,7 @@ export class Fields {
     const bounds = new Sphere(new Vector3(f.cx, fieldBaseY(f.cz) + 0.3, f.cz), Math.hypot(FW, FD) / 2 + 1)
 
     // ---- soil
-    const nx = 96, nz = PLANTED_ROWS * 8
+    const nx = 48, nz = PLANTED_ROWS * 8
     const pos = new Float32Array((nx + 1) * (nz + 1) * 3), fuv = new Float32Array((nx + 1) * (nz + 1) * 2)
     for (let j = 0; j <= nz; j++) {
       for (let k = 0; k <= nx; k++) {
@@ -340,8 +341,8 @@ export class Fields {
     const plantMat = patch(new MeshStandardMaterial({ map: this.leafTex, alphaTest: 0.5, alphaToCoverage: true, side: DoubleSide, roughness: 0.66, metalness: 0 }), {
       ...leafShape,
       translucent: 1.1,
-      ambient: 0.9,
-      shine: 0.3,
+      ambient: 1.0,
+      shine: 0.25,
       fragmentHead: 'varying vec3 vTint;\nvarying float vErode;',
       fragmentColor: `diffuseColor.rgb *= vTint; diffuseColor.a *= 1.0 - vErode * (0.25 + 0.75 * texture2D(uNoise, vMapUv * 1.7).a); ${SNOW_RIME}`,
     })
@@ -376,7 +377,7 @@ export class Fields {
         {
           // Far off a flower is drawn no smaller than a pixel, and fewer are drawn, so the field keeps its share of white.
           float fbase = 0.017 + 0.006 * aFlower.w, fsize = max(fbase, length(cWorld.xyz - cameraPosition) * uPix);
-          float fkeep = clamp(fbase * fbase / (fsize * fsize) * 2.4, 0.1, 1.0);
+          float fkeep = clamp(fbase * fbase / (fsize * fsize) * 1.5, 0.05, 1.0);
           fsize *= showF * step(fract(aFlower.w * 7.13 + aAt.w * 3.7), fkeep);
           vec3 fr = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]), fu = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);
           cWorld.xyz += (fr * aFlower.x + fu * aFlower.y) * fsize;
@@ -417,11 +418,13 @@ export class Fields {
           uniform float uGain;
           varying vec3 vRing;
           void main() {
-            float across = smoothstep(0.0, 0.3, vRing.x) * smoothstep(1.0, 0.7, vRing.x);
+            // A pale line with a dark edge, so it shows on snow as well as on soil. Heavier at the corners.
+            float across = smoothstep(0.0, 0.18, vRing.x) * smoothstep(1.0, 0.82, vRing.x);
+            float core = smoothstep(0.2, 0.36, vRing.x) * smoothstep(0.8, 0.64, vRing.x);
             float corner = 1.0 - smoothstep(1.4, 2.2, vRing.y);
-            float a = uLevel * across * mix(0.5, 1.0, corner);
+            float a = uLevel * across * mix(0.62, 1.0, max(corner, 1.0 - core));
             if (a < 0.004) discard;
-            gl_FragColor = vec4(vec3(0.95, 0.9, 0.78) * uGain, a);
+            gl_FragColor = vec4(mix(vec3(0.02, 0.03, 0.02), vec3(0.95, 0.9, 0.78), core) * uGain, a);
           }`,
       })
       const mesh = new Mesh(ringGeo, mat)
@@ -590,6 +593,11 @@ export class Fields {
     for (const i of fields) if (this.gfx[i]) this.gfx[i].pulseT = 0
   }
 
+  // The fields whose ring is still on the ground.
+  ringing(): number[] {
+    return this.gfx.map((g, i) => (g.pulseT < 0.7 ? i : -1)).filter(i => i >= 0)
+  }
+
   private stepHills(k: number): void {
     const cur = this.cur, tgt = this.tgt
     let moving = false
@@ -677,7 +685,7 @@ export class Fields {
 // A band round a field, lying on the ground just outside the crop.
 function ringGeometry(i: number): BufferGeometry {
   const f = FIELDS[i]
-  const pad = 0.42, w = 0.2
+  const pad = 0.4, w = 0.3
   const pos: number[] = [], ring: number[] = [], out: number[] = [], idx: number[] = []
   const corners: [number, number][] = [[f.x0 - pad, f.z0 - pad], [f.x1 + pad, f.z0 - pad], [f.x1 + pad, f.z1 + pad], [f.x0 - pad, f.z1 + pad]]
   for (let s = 0; s < 4; s++) {

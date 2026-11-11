@@ -133,6 +133,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   let frameNo = 0
   let reduced = app.settings.reducedMotion
   let lens = 0.2
+  let firstFrame = 0
   let smokeAt = 0
   // What the camera was last asked to frame; the player's own hand on it makes it 'free'.
   let framing: 'title' | 'home' | 'field' | 'free' = 'home'
@@ -460,7 +461,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     U.uHazeAway.value.copy(lit.hazeAway)
     U.uMistCol.value.copy(lit.mist)
     U.uHaze.value.set(env.haze, 0.011)
-    U.uMist.value.set(0.5 * env.mist, 2.4, 0.2, 0.85)
+    U.uMist.value.set((0.5 - 0.36 * env.mistDeep) * env.mist, 2.4 - 1.85 * env.mistDeep, 0.2, 0.85)
     U.uCloud.value.x = env.cloudShadow
     U.uCloud.value.y = env.cloud
     U.uSnow.value = env.snow
@@ -554,7 +555,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     fields.setFarShadows(!shadows.holdsFarm)
     fields.update(dt, { selection: app.selection, hover: app.hover, oats: env.oats, oatsRipe: env.oatsRipe, reduced })
     harvest.update(dt, app.speed === 0, clamp(rig.cur.dist / 30, 1, 2.3), reduced)
-    PIXEL.value = 1.1 / ((post.target.height) / (2 * Math.tan((cam.fov * Math.PI) / 360)))
+    PIXEL.value = (TIERS[tier].msaa ? 1.1 : 0.7) / ((post.target.height) / (2 * Math.tan((cam.fov * Math.PI) / 360)))
     // The focus is shallow in the opening shot, slight in play, and opens up while the player moves the camera.
     const want = env.lens * (rig.idle < 0.6 ? 0.2 : 1) * (snap.mode === 'title' ? 1 : smooth(60, 16, rig.cur.dist) * 1.2 + 0.6)
     lens += (want - lens) * (1 - Math.exp(-dt / 0.35))
@@ -563,6 +564,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     // The opening shot is focused on the bottom fields, half way to what it looks at.
     const sharp = rig.focus() * (snap.mode === 'title' && framing === 'title' ? 0.5 : 1)
     post.render(scene, cam, { exposure: lit.exposure, focus: sharp, aperture: 0.3 * lens, time, grain: 0.018 }, Math.round(size.w * size.pr), Math.round(size.h * size.pr))
+    if (!firstFrame) firstFrame = performance.now()
     // Tell whoever is waiting that the land has shown what it had to show.
     for (let k = waiters.length - 1; k >= 0; k--) {
       const w = waiters[k]
@@ -636,7 +638,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
         titleShift = dayT - time / TITLE_LOOP_S
       },
       info() {
-        return { mode: snap.mode, dayT, pending: pending.length, segs: segs.map(s => `${s.kind}@${s.field}`), tractor: tractorAt, fields: snap.fields.map(f => f.status), tier, framing }
+        return { mode: snap.mode, dayT, pending: pending.length, segs: segs.map(s => `${s.kind}@${s.field}`), tractor: tractorAt, fields: snap.fields.map(f => f.status), tier, framing, rings: fields.ringing() }
       },
       whenShown,
       // For working on the look: put the camera somewhere.
@@ -650,7 +652,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
         const r = renderer.info.render
         return {
           triangles: r.triangles, calls: r.calls, pixelRatio: renderer.getPixelRatio(), width: canvas.width, height: canvas.height,
-          camera: rig.where(), time, ambient, fall, exposure: lit.exposure, tier, fps, drawn: [post.target.width, post.target.height],
+          camera: rig.where(), time, ambient, fall, exposure: lit.exposure, tier, fps, drawn: [post.target.width, post.target.height], firstFrame,
         }
       },
     }

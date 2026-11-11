@@ -146,7 +146,7 @@ export class CameraRig {
   // farmstead to the spruce. The camera stands below what it looks at, so the pitch is a little upward.
   titlePose(vp: Viewport): Pose {
     const narrow = 1 - smooth(0.7, 1.3, vp.w / vp.h)
-    return { x: mix(21.7, 17.5, narrow), z: mix(-13.6, -14, narrow), dist: mix(40, 44, narrow), yaw: mix(0.5, 0.4, narrow), pitch: mix(0.004, 0.02, narrow), fov: mix(30, 40, narrow) }
+    return { x: mix(21.7, 23.4, narrow), z: mix(-13.6, -6, narrow), dist: mix(40, 36, narrow), yaw: mix(0.5, 0.78, narrow), pitch: mix(0.004, 0.02, narrow), fov: mix(30, 40, narrow) }
   }
 
   // The point of the farm's slope under a pixel.

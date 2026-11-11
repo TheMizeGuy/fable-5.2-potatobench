@@ -83,7 +83,7 @@ export class Grass {
         float seed = mix(1.0, smoothstep(0.5, 1.0, uLeaf), aBlade.z);
         vec3 gl = position * vec3(0.62 * seed, 1.0, 0.62 * seed) * vec3(0.7 + 0.6 * fract(aAt.w), 1.0, 0.7 + 0.6 * fract(aAt.w));
         transformed = aAt.xyz + vec3(gbc * gl.x + gbs * gl.z, gl.y * tall, -gbs * gl.x + gbc * gl.z);
-        vec3 gcol = uGrass * mix(vec3(0.5, 0.72, 0.42), vec3(1.05, 1.12, 0.7), aBlade.y) * (0.78 + 0.44 * fract(aAt.w * 0.173));
+        vec3 gcol = uGrass * mix(vec3(0.7, 0.9, 0.56), vec3(1.2, 1.25, 0.78), aBlade.y) * (0.82 + 0.4 * fract(aAt.w * 0.173));
         gcol = mix(gcol, uGrass * vec3(1.5, 1.3, 0.8), aBlade.z * 0.7);
         vTint = gcol;
       `,

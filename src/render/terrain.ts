@@ -182,7 +182,7 @@ export function buildTerrain(roadTex: Texture): Terrain {
           vec3 spruce = ${linear('#1c3026')} * (0.65 + 0.7 * bough);
           vec3 broad = mix(${linear('#3c6a30')}, mix(${linear('#b5532a')}, ${linear('#d6b23e')}, fine), uGold * step(0.35, mid)) * (0.6 + 0.8 * bough);
           broad = mix(${linear('#5a5046')} * (0.7 + 0.5 * bough), broad, uLeaf);
-          vec3 woods = mix(spruce, broad, step(1.0 - l.hard * 0.75, texture2D(uNoise, p * 0.021).a));
+          vec3 woods = mix(spruce, broad * 0.62, smoothstep(0.92 - l.hard * 0.7, 1.08 - l.hard * 0.7, texture2D(uNoise, p * 0.021).a + (bough - 0.5) * 0.3));
           float ragged = (mid - 0.5) * 6.0;
           float inWoods = l.woods * smoothstep(1.5, 4.0, l.edge + ragged);
           float hedge = (1.0 - l.woods) * (1.0 - smoothstep(1.0, 2.6, l.edge + ragged * 0.3));
@@ -303,7 +303,7 @@ export function buildTerrain(roadTex: Texture): Terrain {
           vec3 deep = ${linear('#2f3a36')}, shallow = ${linear('#7a735c')};
           vec3 col = mix(deep, shallow, smoothstep(0.3, 0.95, shore));
           // From straight above little sky is mirrored; give the water some of it anyway, so it never reads as tar.
-          col += uHazeAway * 0.22 * (1.0 - uIce);
+          col += uHazeAway * 0.07 * (1.0 - uIce);
           col = mix(col, vec3(0.62, 0.68, 0.74) * (0.9 + 0.2 * texture2D(uNoise, vWorld.xz * 0.11).a), uIce);
           col = mix(col, vec3(0.84, 0.88, 0.93), uIce * smoothstep(0.3, 0.7, uSnow) * smoothstep(0.35, 0.6, texture2D(uNoise, vWorld.xz * 0.05).b + uSnow * 0.3));
           diffuseColor.rgb = col;

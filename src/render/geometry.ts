@@ -154,12 +154,12 @@ export function oatGeometry(): BufferGeometry {
 export function grassGeometry(): BufferGeometry {
   const r = rng(15)
   const b: Build = { pos: [], nrm: [], uv: [], extra: [], idx: [] }
-  for (let k = 0; k < 13; k++) {
-    const a = r() * Math.PI * 2, lean = 0.18 + r() * 0.5, h = 0.5 + r() * 0.5, w = 0.07 + r() * 0.05, own = r()
+  for (let k = 0; k < 12; k++) {
+    const a = r() * Math.PI * 2, lean = 0.18 + r() * 0.5, h = 0.5 + r() * 0.5, w = 0.035 + r() * 0.03, own = r()
     const bx = Math.cos(a) * 0.16 * r(), bz = Math.sin(a) * 0.16 * r()
     const px = -Math.sin(a) * w, pz = Math.cos(a) * w
     const o = b.pos.length / 3
-    ;[0, 0.45, 0.8, 1].forEach((t, j) => {
+    ;[0, 0.5, 1].forEach((t, j) => {
       const taper = 1 - t * t
       const x = bx + Math.cos(a) * lean * t * t, z = bz + Math.sin(a) * lean * t * t, y = h * (t - 0.25 * t * t * lean)
       for (const s of [-1, 1]) {

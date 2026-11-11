@@ -235,10 +235,9 @@ export function regionAt(x: number, z: number): Region {
 // Whether trees stand here: the home woodlot on the ridge, the woodlots of the quilt, and the hedgerows between blocks.
 export function woodsAt(x: number, z: number): { woods: number; hard: number } {
   const h = HOME_WOODS
-  // No trees on the farm itself, nor on the neighbour's ground to the north-west where the evening sun comes from,
-  // nor across the brook where the opening shot looks from.
+  // No trees on the farm itself, nor on the neighbour's ground to the north-west where the evening sun comes from.
   if (x > FARM.x0 - 1.5 && x < FARM.x1 + 1.5 && z > FARM.z0 && z < FARM.z1 + 6) return { woods: 0, hard: 0 }
-  if ((x > -150 && x <= FARM.x0 && z > FARM.z0 - 6 && z < FARM.z1 + 8) || (x > -46 && x < 44 && z >= FARM.z1 && z < 86)) return { woods: 0, hard: 0 }
+  if (x > -150 && x <= FARM.x0 && z > FARM.z0 - 6 && z < FARM.z1 + 8) return { woods: 0, hard: 0 }
   const ragged = 5 * (fbm2(x * 0.09, z * 0.09) - 0.5)
   if (x > h.x0 + ragged && x < h.x1 + ragged && z > h.z0 + ragged && z < h.z1) return { woods: 1, hard: z > h.z1 - 5 ? 0.6 : 0.16 }
   const r = regionAt(x, z)
