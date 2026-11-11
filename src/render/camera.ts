@@ -144,8 +144,10 @@ export class CameraRig {
 
   // The key frame: low over the brook, the bottom fields' blossom close in front, looking up the slope past the
   // farmstead to the spruce. The camera stands below what it looks at, so the pitch is a little upward.
-  titlePose(vp: Viewport): Pose {
+  // `start`: where the shot begins, down at the water with the mist, before it rises to the key frame.
+  titlePose(vp: Viewport, start = false): Pose {
     const narrow = 1 - smooth(0.7, 1.3, vp.w / vp.h)
+    if (start) return { x: mix(20.1, 22.6, narrow), z: mix(-13, -6, narrow), dist: mix(44, 40, narrow), yaw: mix(0.5, 0.78, narrow), pitch: -0.071, fov: mix(30, 40, narrow) }
     return { x: mix(21.7, 23.4, narrow), z: mix(-13.6, -6, narrow), dist: mix(40, 36, narrow), yaw: mix(0.5, 0.78, narrow), pitch: mix(0.004, 0.02, narrow), fov: mix(30, 40, narrow) }
   }
 

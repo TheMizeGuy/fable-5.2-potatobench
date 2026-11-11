@@ -81,7 +81,7 @@ export function macroY(x: number, z: number): number {
 
 export function brookZ(x: number): number {
   const w = smooth(0, 220, Math.max(Math.abs(x - FARM_CENTER.x) - 34, 0))
-  return BROOK_Z0 + 1.3 * Math.sin(x * 0.075 + 0.4) + 0.6 * Math.sin(x * 0.19 + 1.7) - wander(x, BROOK_Z0, w)
+  return BROOK_Z0 + 2 * Math.sin(x * 0.085 + 1.2) + Math.sin(x * 0.21 + 0.3) + 0.35 * Math.sin(x * 0.47 + 5.4) - wander(x, BROOK_Z0, w)
 }
 
 export function brookHalf(x: number): number {

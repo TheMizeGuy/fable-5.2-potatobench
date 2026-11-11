@@ -68,8 +68,9 @@ export class Grass {
     geo.instanceCount = at.length / 4
     geo.boundingSphere = new Sphere(new Vector3(5, 3, 9), 60)
     const mat = patch(new MeshStandardMaterial({ color: 0xffffff, side: DoubleSide, roughness: 0.8, metalness: 0 }), {
-      translucent: 0.8,
+      translucent: 0.5,
       shine: 0.3,
+      blade: true,
       vertexHead: 'attribute vec4 aAt;\nattribute vec3 aBlade;\nvarying vec3 vTint;',
       vertexNormal: /* glsl */ `
         float ga = floor(aAt.w) * 0.0437, gc = cos(ga), gs = sin(ga);

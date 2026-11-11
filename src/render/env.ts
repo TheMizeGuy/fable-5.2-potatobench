@@ -45,10 +45,10 @@ export function makeEnv(): Env {
   }
 }
 
-// By day of the year: how high the afternoon sun stands (degrees), and the colour of the grass.
+// By day of the year: how high the late-afternoon sun stands (degrees), and the colour of the grass.
 const SEASON: [number, number, string][] = [
-  [0, 12, '#8d8a70'], [60, 18, '#8d8a6c'], [95, 27, '#8b8860'], [125, 33, '#7d8a52'], [150, 38, '#62893f'], [196, 40, '#5c8239'],
-  [228, 35, '#6a853c'], [258, 26, '#84853f'], [288, 19, '#8e7d4c'], [318, 13, '#857c60'], [366, 12, '#8d8a70'],
+  [0, 11, '#8f8768'], [60, 14, '#91876a'], [95, 19, '#93865c'], [125, 23, '#7f8a52'], [150, 26, '#62893f'], [196, 27, '#5c8239'],
+  [228, 25, '#6a853c'], [258, 21, '#84853f'], [288, 16, '#8e7d4c'], [318, 12, '#877c5e'], [366, 11, '#8f8768'],
 ]
 
 interface Sky { sun: number; cover: number; shadow: number; deck: number; haze: number; key: number; turbidity: number; mie: number }
@@ -73,7 +73,7 @@ export function envTarget(snap: Snapshot, out: Env): Env {
   const t = clamp((d - a[0]) / (b[0] - a[0]), 0, 1)
   const sky = SKY[w.sky] ?? SKY.clear
   out.sunEl = ((a[1] + (b[1] - a[1]) * t) * Math.PI) / 180
-  out.sunAz = -1.05
+  out.sunAz = -1.25
   out.grass.set(a[2]).lerp(tmp.set(b[2]), t)
   out.sunScale = sky.sun
   out.cloud = sky.cover
@@ -228,7 +228,8 @@ export function light(env: Env, drift: number, out: Light): Light {
   // Low sun: meter partly on what faces it, or the evening would be held as bright as noon.
   const facing = lum(out.sun) * 0.45 + skyE
   const metered = flat * 0.62 + facing * 0.38
-  out.exposure = (env.key * 2.9) / Math.max(metered, 0.02)
+  // Snow in the sun is the brightest thing there is: hold it below white.
+  out.exposure = (env.key * 2.9) / Math.max(metered, 0.02) * (1 - 0.3 * Math.min(1, env.snow * 1.5) * (1 - overcast))
   // Distance takes the colour of the low sky; fog and rain take the colour of the cloud.
   const thick = smooth(0.0012, 0.004, env.haze)
   const veil = Math.max(overcast, thick)

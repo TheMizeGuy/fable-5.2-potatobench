@@ -100,10 +100,17 @@ async function settle(page: Page): Promise<void> {
   await frames(page, 3)
 }
 
-async function seek(page: Page, t: number, waitMs: number): Promise<void> {
+async function seek(page: Page, t: number, waitMs: number, pace = 1): Promise<void> {
   await frames(page, 2)
-  await page.evaluate(t => (window as any).__countyField.seek(t), t)
+  await page.evaluate(([t, pace]) => (window as any).__countyField.seek(t, pace), [t, pace])
   await page.waitForTimeout(waitMs)
+}
+
+// Close on the tractor while the day's work creeps on, so dust and wheels are in the picture and it stays in the frame.
+async function onTractor(page: Page, v: View, dx = 0, dz = 0): Promise<void> {
+  const t = await page.evaluate(() => (window as any).__countyField.info().tractor)
+  await view(page, { ...v, x: t.x + dx, z: t.z + dz })
+  await frames(page, 4)
 }
 
 const view = (page: Page, v: View) => page.evaluate(v => (window as any).__countyField.view(v), v)
@@ -133,7 +140,7 @@ const shots: Shot[] = [
   { name: '01-opening-phone', size: [390, 844], insets: NONE, setup: title },
   { name: '02-spring-plan', setup: async page => { await page.evaluate(() => (window as any).__county.app.newGame(1977, 5)); await settle(page) } },
   { name: '03-planting', setup: async page => { await playTo(page, 1977, 5, 139); await settle(page); await step(page); await seek(page, 0.5, 400) } },
-  { name: '03b-planting-close', setup: async page => { await playTo(page, 1977, 5, 139); await settle(page); await step(page); await seek(page, 0.5, 400); const t = await page.evaluate(() => (window as any).__countyField.info().tractor); await view(page, { x: t.x, z: t.z + 1, dist: 13, yaw: 0.5, pitch: 0.42 }); await frames(page, 6) } },
+  { name: '03b-planting-close', setup: async page => { await playTo(page, 1977, 5, 139); await settle(page); await step(page); await seek(page, 0.5, 900, 0.02); await onTractor(page, { dist: 12, yaw: 0.9, pitch: 0.3 }, 1.5, 0.4) } },
   { name: '04-june-emergence', setup: async page => { await playTo(page, 1977, 5, 168); await playUntil(page, [], SKY('clear')); await settle(page) } },
   { name: '05-july-bloom', setup: async page => { await july(page); await playUntil(page, [], SKY('clear')); await settle(page) } },
   { name: '05b-july-rows', setup: async page => { await july(page); await playUntil(page, [], SKY('clear')); await settle(page); await view(page, ROWS); await frames(page, 30) } },
@@ -149,9 +156,8 @@ const shots: Shot[] = [
   { name: '13-dig-day', setup: async page => { await playTo(page, 1977, 5, 264); await settle(page); await step(page); await seek(page, 0.45, 1200) } },
   {
     name: '13b-dig-close', setup: async page => {
-      await playTo(page, 1977, 5, 264); await settle(page); await step(page); await seek(page, 0.45, 1500)
-      const t = await page.evaluate(() => (window as any).__countyField.info().tractor)
-      await view(page, { x: t.x + 1.5, z: t.z + 0.5, dist: 12, yaw: 0.6, pitch: 0.36 }); await frames(page, 8)
+      await playTo(page, 1977, 5, 264); await settle(page); await step(page); await seek(page, 0.45, 600); await seek(page, 0.47, 900, 0.02)
+      await onTractor(page, { dist: 12, yaw: 0.9, pitch: 0.3 }, 1.5, 0.4)
     },
   },
   {
@@ -161,10 +167,12 @@ const shots: Shot[] = [
       await frames(page, 3)
       const seg = await page.evaluate(() => (window as any).__countyField.info())
       console.log('  ', JSON.stringify(seg.segs))
-      await page.waitForTimeout(3300)
-      const t = await page.evaluate(() => (window as any).__countyField.info().tractor)
-      await view(page, { x: t.x - 6, z: t.z + 3, dist: 9, yaw: 0.3, pitch: 0.42 })
-      await page.waitForTimeout(600)
+      const waited = await page.evaluate(async () => { const f = (window as any).__countyField; const t0 = performance.now(); await f.whenShown('sample', 2); f.seek(f.info().dayT, 0.004); return Math.round(performance.now() - t0) })
+      console.log('  ', `the hill was up ${waited} ms after the order`)
+      const t = await page.evaluate(() => { const i = (window as any).__countyField.info(); return i.farmer ?? i.tractor })
+      // He stands in the furrow below the hill, facing up the slope: look back at him across it.
+      await view(page, { x: t.x - 0.1, z: t.z - 0.7, dist: 6.5, yaw: 2.5, pitch: 0.62 })
+      await frames(page, 20)
     },
   },
   { name: '15-winter', setup: async page => { await winter(page, 2); await settle(page); await frames(page, 6) } },

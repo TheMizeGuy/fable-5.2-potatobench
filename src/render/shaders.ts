@@ -56,6 +56,7 @@ export interface Patch {
   translucent?: number       // share of the sun that comes through from behind (leaves)
   ambient?: number           // share of the sky's light this material takes (inside a canopy takes less)
   shine?: number             // share of the sky's reflection it shows (a leaf's bloom of fine hair shows little)
+  blade?: boolean            // grass and grain: lit as if every blade faced up, and aglow when the sun is behind it
   noHaze?: boolean
 }
 
@@ -120,7 +121,8 @@ float airBetween(float density, float falloff, float base, float ya, float yb, f
   return density * t * (abs(dy) > 1e-3 ? (ea - eb) / (falloff * dy) : ea);
 }
 float hazeAmount(float ya, float yb, float t, vec2 xz) {
-  float air = airBetween(uHaze.x, uHaze.y, 0.0, ya, yb, t);
+  // A fair day's haze belongs to distance: the farm itself stands in clear air.
+  float air = airBetween(uHaze.x, uHaze.y, 0.0, ya, yb, t) * mix(smoothstep(40.0, 230.0, t), 1.0, smoothstep(0.0012, 0.003, uHaze.x));
   if (uMist.x > 1e-5) {
     float wisp = 1.0 - uMist.w + uMist.w * 1.7 * texture2D(uNoise, xz * 0.006 + uCloud.zw * 9.0).b;
     air += airBetween(uMist.x * wisp, uMist.y, uMist.z, ya, yb, min(t, 400.0));
@@ -196,7 +198,11 @@ const SUN_BLOCK = /* glsl */ `
     RE_Direct( directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );
     #ifdef COUNTY_TRANSLUCENT
       // Light through a leaf: what its neighbours shade still glows a little, as light scattered about in the canopy.
-      float backLit = saturate( dot( - geometryNormal, directLight.direction ) );
+      #ifdef COUNTY_BLADE
+        float backLit = 0.12 + 0.88 * pow( saturate( dot( - geometryViewDir, directLight.direction ) ), 2.0 );
+      #else
+        float backLit = saturate( dot( - geometryNormal, directLight.direction ) );
+      #endif
       reflectedLight.directDiffuse += sunFull * ( 0.3 + 0.7 * shade ) * backLit * COUNTY_TRANSLUCENT * material.diffuseContribution * vec3( 1.0, 1.16, 0.5 ) * RECIPROCAL_PI;
     #endif
   }
@@ -263,6 +269,7 @@ export function patch<M extends Material>(mat: M, p: Patch = {}): M {
   const key = p.key ?? `county-${serial++}`
   mat.defines = { ...(mat.defines ?? {}), COUNTY_AMBIENT: (p.ambient ?? 1).toFixed(3), COUNTY_SHINE: (p.shine ?? 1).toFixed(3), ...(p.defines ?? {}) }
   if (p.translucent) mat.defines.COUNTY_TRANSLUCENT = p.translucent.toFixed(3)
+  if (p.blade) mat.defines.COUNTY_BLADE = 1
   mat.onBeforeCompile = shader => {
     Object.assign(shader.uniforms, U, p.uniforms ?? {})
     shader.vertexShader = patchVertex(shader.vertexShader, p, true)
@@ -271,7 +278,9 @@ export function patch<M extends Material>(mat: M, p: Patch = {}): M {
     fs = fs.replace('#include <shadowmap_pars_fragment>', `#include <shadowmap_pars_fragment>\n${SHADOW_LIB}`)
     if (p.fragmentColor) fs = fs.replace('#include <color_fragment>', `#include <color_fragment>\n${p.fragmentColor}`)
     if (p.fragmentRoughness) fs = fs.replace('#include <metalnessmap_fragment>', `#include <metalnessmap_fragment>\n${p.fragmentRoughness}`)
-    if (p.fragmentNormal) fs = fs.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>\n${p.fragmentNormal}`)
+    // A blade is seen from both sides but lit from above on both: undo three's flip of the normal on back faces.
+    const blade = p.blade ? '#ifdef DOUBLE_SIDED\n  normal *= faceDirection;\n#endif\n' : ''
+    if (p.fragmentNormal || blade) fs = fs.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>\n${blade}${p.fragmentNormal ?? ''}`)
     if (p.fragmentEmissive) fs = fs.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>\n${p.fragmentEmissive}`)
     fs = fs.replace('#include <lights_fragment_begin>', LIGHTS)
     fs = fs.replace('#include <fog_fragment>', `${p.noHaze ? '' : HAZE}\n${p.fragmentEnd ?? ''}`)
@@ -304,15 +313,21 @@ function snowRime(amount: string, rimeShare: string): string {
   {
     float snowAmt = ${amount};
     float up = clamp( vWNormal.y, 0.0, 1.0 );
+    #ifdef COUNTY_BLADE
+      up = max( up, 0.75 );
+    #endif
     if ( snowAmt > 0.001 ) {
       vec4 sn = texture2D( uNoise, vWorld.xz * 0.011 );
-      float lie = sn.b * 0.62 + texture2D( uNoise, vWorld.xz * 0.07 ).a * 0.2 + up * 0.18;
-      float cover = smoothstep( 0.98 - snowAmt * 1.25, 1.24 - snowAmt * 1.25, lie ) * smoothstep( 0.2, 0.55, up );
+      float lie = sn.b * 0.56 + texture2D( uNoise, vWorld.xz * 0.07 ).a * 0.2 + texture2D( uNoise, vWorld.xz * 0.37 ).a * 0.1 + texture2D( uNoise, vWorld.xz * 1.6 ).a * 0.05 + up * 0.18;
+      float cover = smoothstep( 1.0 - snowAmt * 1.25, 1.3 - snowAmt * 1.25, lie ) * smoothstep( 0.2, 0.55, up );
       vec3 snow = vec3( 0.84, 0.88, 0.93 ) * ( 0.94 + 0.08 * sn.a );
       diffuseColor.rgb = mix( diffuseColor.rgb * ( 1.0 - 0.3 * smoothstep( 0.0, 0.3, cover ) ), snow, smoothstep( 0.12, 0.7, cover ) );
     }
     if ( uRime.x + uRime.y + uRime.z > 0.001 ) {
-      float rimeHere = ${rimeShare} * rimeAt( vWorld.y ) * smoothstep( 0.0, 0.5, up ) * ( 1.0 - 0.45 * clamp( dot( vWNormal, uSunDir ) * 2.0 - 0.6, 0.0, 1.0 ) );
+      float rimeHere = ${rimeShare} * rimeAt( vWorld.y ) * smoothstep( 0.0, 0.5, up );
+      #ifndef COUNTY_BLADE
+        rimeHere *= 1.0 - 0.45 * clamp( dot( vWNormal, uSunDir ) * 2.0 - 0.6, 0.0, 1.0 );
+      #endif
       float crystals = texture2D( uNoise, vWorld.xz * 0.21 ).a * 0.55 + texture2D( uNoise, vWorld.xz * 0.045 ).b * 0.45;
       diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.74, 0.83, 0.9 ), rimeHere * ( 0.7 + 0.3 * smoothstep( 0.3, 0.7, crystals ) ) );
     }

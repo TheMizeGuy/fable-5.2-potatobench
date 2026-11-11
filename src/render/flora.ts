@@ -1,7 +1,7 @@
 // Trees: the spruce and fir of the ridge woodlot, birch and maple along its edge and by the house, alder on the brook,
 // and the woodlots and hedgerows of the country beyond. Near the farm they are whole trees; far off, simpler ones.
 import {
-  BufferAttribute, BufferGeometry, DoubleSide, Group, IcosahedronGeometry, InstancedBufferAttribute, InstancedMesh, Matrix4,
+  BufferAttribute, BufferGeometry, CylinderGeometry, DoubleSide, Group, IcosahedronGeometry, InstancedBufferAttribute, InstancedMesh, Matrix4,
   MeshStandardMaterial, Quaternion, Vector3, type Texture,
 } from 'three'
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
@@ -92,12 +92,13 @@ function hardwood(seed: number): { wood: BufferGeometry; crown: BufferGeometry; 
 
   const cp: number[] = [], cn: number[] = [], cu: number[] = [], ci: number[] = []
   for (const [lx, ly, lz, lr] of lobes) {
-    for (let k = 0; k < 16; k++) {
-      // points spread over the lobe's surface, cards facing outward and tilted at random
+    for (let k = 0; k < 26; k++) {
+      // points spread through the outer part of the lobe, cards facing outward and tilted at random
       const u = r() * 2 - 1, a = r() * Math.PI * 2, q = Math.sqrt(1 - u * u)
       const nx = q * Math.cos(a), ny = u * 0.8 + 0.2, nz = q * Math.sin(a)
-      const px = lx + nx * lr * 0.95, py = ly + ny * lr * 0.95, pz = lz + nz * lr * 0.95
-      const size = lr * (0.5 + r() * 0.3)
+      const out = 0.74 + 0.3 * r()
+      const px = lx + nx * lr * out, py = ly + ny * lr * out, pz = lz + nz * lr * out
+      const size = lr * (0.42 + r() * 0.3)
       let tx = -nz, tz = nx
       const tl = Math.hypot(tx, tz) || 1
       tx /= tl; tz /= tl
@@ -119,7 +120,7 @@ function hardwood(seed: number): { wood: BufferGeometry; crown: BufferGeometry; 
   crown.setIndex(ci)
   // The dark heart of each mass of leaves, so the crown is not seen through.
   const parts = lobes.map(([lx, ly, lz, lr], k) => {
-    const g = lump(lr * 0.8, 1, k + seed * 7)
+    const g = lump(lr * 0.74, 1, k + seed * 7)
     g.translate(lx, ly, lz)
     return g
   })
@@ -129,7 +130,7 @@ function hardwood(seed: number): { wood: BufferGeometry; crown: BufferGeometry; 
 }
 
 // A rounded, uneven mass with smooth shading.
-function lump(radius: number, detail: number, seed: number): BufferGeometry {
+function lump(radius: number, detail: number, seed: number, rough = 0.5): BufferGeometry {
   const ico = new IcosahedronGeometry(radius, detail)
   ico.deleteAttribute('uv')
   ico.deleteAttribute('normal')
@@ -137,7 +138,7 @@ function lump(radius: number, detail: number, seed: number): BufferGeometry {
   ico.dispose()
   const p = g.getAttribute('position') as BufferAttribute
   for (let i = 0; i < p.count; i++) {
-    const j = 1 + (hash2(Math.round(p.getX(i) / radius * 17) + seed * 7, Math.round(p.getY(i) / radius * 17 + p.getZ(i) / radius * 9)) - 0.5) * 0.36
+    const j = 1 + (hash2(Math.round(p.getX(i) / radius * 17) + seed * 7, Math.round(p.getY(i) / radius * 17 + p.getZ(i) / radius * 9)) - 0.5) * rough
     p.setXYZ(i, p.getX(i) * j, p.getY(i) * j * 0.86, p.getZ(i) * j)
   }
   g.computeVertexNormals()
@@ -148,11 +149,19 @@ function lump(radius: number, detail: number, seed: number): BufferGeometry {
 function hardwoodFar(detail: number): BufferGeometry {
   const r = rng(21)
   const parts: BufferGeometry[] = []
-  for (let k = 0; k < 4; k++) {
-    const g = lump(0.2 + r() * 0.07, detail, k)
-    g.translate(k === 0 ? 0 : (r() - 0.5) * 0.3, 0.56 + r() * 0.22, k === 0 ? 0 : (r() - 0.5) * 0.3)
+  // One broad mass, others crowding round it and smaller ones breaking the outline, on a bare length of trunk.
+  const masses: [number, number, number, number][] = [[0, 0.6, 0, 0.27]]
+  for (let k = 0; k < 5; k++) { const a = k * 1.26 + r(); masses.push([Math.cos(a) * 0.21, 0.38 + r() * 0.3, Math.sin(a) * 0.21, 0.15 + r() * 0.07]) }
+  for (let k = 0; k < (detail ? 4 : 2); k++) { const a = r() * 6.28; masses.push([Math.cos(a) * 0.34, 0.34 + r() * 0.4, Math.sin(a) * 0.34, 0.08 + r() * 0.05]) }
+  masses.forEach(([x, y, z, rad], k) => {
+    const g = lump(rad, k < 3 ? detail : 0, k, 0.8)
+    g.translate(x, y, z)
     parts.push(g)
-  }
+  })
+  const trunk = new CylinderGeometry(0.024, 0.04, 0.4, 5, 1, true)
+  trunk.deleteAttribute('uv')
+  trunk.translate(0, 0.2, 0)
+  parts.push(trunk)
   const merged = mergeGeometries(parts)!
   for (const p of parts) p.dispose()
   return merged
@@ -256,13 +265,14 @@ export class Flora {
       vertexHead: 'attribute vec4 aTree; varying vec4 vTree;',
       vertexBegin: 'vTree = aTree;',
       fragmentHead: 'varying vec4 vTree;',
-      fragmentColor: `diffuseColor.rgb *= mix(${linear('#101e17')}, ${linear('#1c3322')}, vTree.y) * vTree.z; ${SNOW_RIME_TREE}`,
+      // Each bough's needles catch the light a little differently.
+      fragmentColor: `diffuseColor.rgb *= mix(${linear('#13231b')}, ${linear('#223b27')}, vTree.y) * vTree.z * (0.72 + 0.56 * texture2D(uNoise, vWorld.xz * 0.8 + vWorld.y * 0.9).a); ${SNOW_RIME_TREE}`,
     })
     place(conifer(9, 7, 0.2, 5), coniferMat('county-conifer'), spruceNear, 1, 0.02, false)
     place(conifer(11, 6, 0.13, 9), coniferMat('county-conifer'), firNear, 1, 0.02, false)
-    place(conifer(4, 5, 0.2, 13), coniferMat('county-conifer'), coniferFar, 1, 0.02, true)
+    place(conifer(6, 6, 0.2, 13), coniferMat('county-conifer'), coniferFar, 1, 0.02, true)
     // Beyond the reach of any shadow map: these only stand against the sky.
-    place(conifer(3, 4, 0.21, 17), coniferMat('county-conifer'), coniferDistant, 1, 0.02, true).castShadow = false
+    place(conifer(4, 5, 0.21, 17), coniferMat('county-conifer'), coniferDistant, 1, 0.02, true).castShadow = false
 
     // Hardwoods: green in summer, turning by the tree in late September, bare by November.
     const LEAF = /* glsl */ `
@@ -308,16 +318,17 @@ export class Flora {
       vertexHead: 'attribute vec4 aTree; varying vec4 vTree;',
       vertexBegin: 'vTree = aTree; transformed *= vec3(uLeaf, 1.0, uLeaf); transformed.y = mix(0.6, transformed.y, uLeaf);',
       fragmentHead: 'varying vec4 vTree;',
-      fragmentColor: `${LEAF} diffuseColor.rgb *= 0.5; ${SNOW_RIME_TREE}`,
+      fragmentColor: `${LEAF} diffuseColor.rgb *= 0.36 + 0.5 * texture2D(uNoise, vWorld.xz * 1.3 + vWorld.y * 0.9).a; ${SNOW_RIME_TREE}`,
     })
     place(wood.core, coreMat, broadNear, 1, 0.01, false)
     const farMat = patch(new MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0 }), {
       ...windy,
-      vertexHead: 'attribute vec4 aTree; varying vec4 vTree; varying float vUp;',
+      vertexHead: 'attribute vec4 aTree; varying vec4 vTree; varying float vUp; varying float vBark;',
       // With the leaves down a far tree is a thin grey shape.
-      vertexBegin: 'vTree = aTree; vUp = position.y; transformed.xz *= mix(0.45, 1.0, uLeaf);',
-      fragmentHead: 'varying vec4 vTree; varying float vUp;',
-      fragmentColor: `${LEAF} diffuseColor.rgb = mix(${linear('#5a5046')}, diffuseColor.rgb, uLeaf) * (0.7 + 0.5 * vUp); ${SNOW_RIME_TREE}`,
+      vertexBegin: 'vTree = aTree; vUp = position.y; vBark = step(length(position.xz), 0.045) * step(position.y, 0.42); transformed.xz *= mix(0.45, 1.0, uLeaf);',
+      fragmentHead: 'varying vec4 vTree; varying float vUp; varying float vBark;',
+      // Leaf masses: mottled, darker underneath, the trunk bare below.
+      fragmentColor: `${LEAF} diffuseColor.rgb = mix(${linear('#5a5046')}, diffuseColor.rgb * (0.66 + 0.7 * texture2D(uNoise, vWorld.xz * 0.7 + vWorld.y * 0.5).a), uLeaf * (1.0 - step(0.5, vBark))) * (0.5 + 0.66 * vUp); ${SNOW_RIME_TREE}`,
     })
     place(hardwoodFar(1), farMat, broadFar.filter(t => Math.hypot(t.x - FARM_CENTER.x, t.z) < 330), 1.15, 0.2, true)
     place(hardwoodFar(0), farMat, broadFar.filter(t => Math.hypot(t.x - FARM_CENTER.x, t.z) >= 330), 1.15, 0.2, true).castShadow = false

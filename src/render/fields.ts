@@ -77,7 +77,7 @@ const LEAF_SHAPE = /* glsl */ `
 const LEAF_COLOUR = /* glsl */ `
   {
     float grow = gp.h0.r, yellow = gp.h0.g;
-    vec3 col = mix(${linear('#a2d85c')}, ${linear('#62b04c')}, smoothstep(0.08, 0.7, grow));
+    vec3 col = mix(${linear('#a2d85c')}, ${linear('#52a84e')}, smoothstep(0.08, 0.7, grow));
     col = mix(col, ${linear('#9aa24c')}, min(1.0, yellow * 1.6));
     col = mix(col, ${linear('#b09a55')}, clamp((yellow - 0.55) * 1.8, 0.0, 1.0));
     col = mix(col, ${linear('#b4c67a')}, 0.6 * gp.h1.a);
@@ -91,8 +91,8 @@ const LEAF_COLOUR = /* glsl */ `
     col = mix(col, ${linear('#a8bcc0')}, 0.55 * uCrop.z * smoothstep(0.2, 0.9, aLeaf.y));
     col = mix(col, ${linear('#b5a27a')} * (0.8 + 0.4 * gp.r.z), gp.dead);
     col = mix(${linear('#8a9a62')}, col, aLeaf.z);
-    // Deep in the canopy little light arrives.
-    col *= mix(0.7, 1.0, smoothstep(0.0, 0.42, position.y)) * (0.9 + 0.2 * gp.r.z);
+    // Deep in the canopy little light arrives; and no two leaves are quite one green.
+    col *= mix(0.46, 1.0, smoothstep(0.02, 0.44, position.y)) * (0.9 + 0.2 * gp.r.z) * (0.84 + 0.32 * fract(aLeaf.x * 0.618 + gp.r.x * 5.0));
     vTint = col;
     vErode = max(max(gp.dead * 0.32, hit * 0.55), burnt * 0.45 * (1.0 - uCrop.z)) * aLeaf.z;
   }
@@ -120,11 +120,14 @@ vec2 rowProfile(float fr, float sharp) {
 vec3 soilShape(vec2 f, vec2 xz, out vec4 hill) {
   hill = texture2D(uT1, f);
   float fr = fract(f.y * ${PLANTED_ROWS}.0) - 0.5;
-  float taper = smoothstep(0.0, 0.012, f.x) * smoothstep(1.0, 0.988, f.x) * smoothstep(0.0, 0.01, f.y) * smoothstep(1.0, 0.99, f.y);
+  float taper = smoothstep(0.0, 0.035, f.x) * smoothstep(1.0, 0.965, f.x) * smoothstep(0.0, 0.02, f.y) * smoothstep(1.0, 0.98, f.y);
   vec2 prof = rowProfile(fr, smoothstep(0.55, 1.0, hill.b));
   float amp = ${RIDGE_AMP.toFixed(3)} * hill.b * taper * (1.0 - 0.75 * smoothstep(0.3, 1.0, uSnow));
   float lumps = (textureLod(uNoise, xz * 0.37, 0.0).a - 0.5) * 0.1;
   float h = mix(amp * prof.x, amp * 0.2 + 0.025 + lumps * taper, hill.r);
+  // The tilled ground runs under the turf at its edge, so a field has no rim.
+  float rim = min(min(f.x, 1.0 - f.x) * ${FW.toFixed(2)}, min(f.y, 1.0 - f.y) * ${FD.toFixed(2)});
+  h += 0.015 - 0.1 * (1.0 - smoothstep(0.0, 0.3, rim));
   return vec3(h, amp * (1.0 - hill.r) * prof.y / ${ROW.toFixed(3)}, mix(prof.x, 0.5, hill.r));
 }
 `
@@ -231,7 +234,7 @@ export class Fields {
     soilGeo.boundingSphere = bounds
     const soilShape: Patch = {
       key: 'county-soil',
-      uniforms: { uT1: { value: t1 }, uSoil: { value: soilColor }, uWater: water, uDamp: damp, uCover: cover },
+      uniforms: { uT0: { value: t0 }, uT1: { value: t1 }, uSoil: { value: soilColor }, uWater: water, uDamp: damp, uCover: cover },
       vertexHead: ROW_FN,
       vertexNormal: `vec4 hillN; vec3 shN = soilShape(aF, position.xz, hillN); objectNormal = normalize(vec3(0.0, 1.0, ${SLOPE.toFixed(4)} - shN.y));`,
       vertexBegin: /* glsl */ `
@@ -248,6 +251,7 @@ export class Fields {
     const soilMat = patch(new MeshStandardMaterial({ color: 0xffffff, roughness: 0.95, metalness: 0 }), {
       ...soilShape,
       fragmentHead: /* glsl */ `
+        uniform sampler2D uT0;
         uniform sampler2D uT1;
         uniform vec3 uSoil;
         uniform float uWater;
@@ -276,6 +280,9 @@ export class Fields {
           soil = mix(soil, turned, vHill.r);
           float hole = hc.g * (1.0 - smoothstep(0.22, 0.44, length(fract(cell) - 0.5)));
           soil = mix(soil, soil * 0.4, hole);
+          // Under a closed canopy the ground gets what light the leaves let through.
+          vec4 over = texture2D(uT0, vF);
+          soil *= mix(vec3(1.0), vec3(0.34, 0.5, 0.3), smoothstep(0.4, 0.95, over.r) * (1.0 - over.a) * (1.0 - vHill.r));
           float cov = uCover * smoothstep(0.2, 0.5, broad * 0.6 + 0.42 * uCover + 0.2 * fine);
           vec3 clover = uGrass * vec3(0.6, 0.98, 0.58) * (0.66 + 0.68 * fine);
           clover = mix(clover, vec3(0.74, 0.62, 0.7), step(0.8, grit) * step(0.55, fine) * 0.55 * uLeaf);
@@ -486,7 +493,9 @@ export class Fields {
     }
     const mat = patch(new MeshStandardMaterial({ color: 0xffffff, side: DoubleSide, roughness: 0.72, metalness: 0 }), {
       ...shape,
-      translucent: 0.7,
+      translucent: 0.45,
+      blade: true,
+      shine: 0.4,
       vertexBegin: shape.vertexBegin + /* glsl */ `
         {
           float ripe = uOats.y * (0.7 + 0.3 * fract(aAt.w * 17.3));

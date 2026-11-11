@@ -32,6 +32,8 @@ const TITLE_LOOP_S = 44
 const LOST_MS = 3000            // how long a lost WebGL context may stay away before the farm is drawn flat
 const STILL = 0.02              // the pace of water, cloud, mist and smoke under reduced motion
 const SHOWN_CAP_S = 2.5         // the longest whenShown() keeps the interface waiting
+const SAMPLE_DRIVE_S = 0.5      // a test dig keeps its own time: the drive to the field, then the walk in and the lift
+const SAMPLE_S = 2
 
 type Tier = 'high' | 'medium' | 'low'
 // What each setting keeps. Going down: the shallow focus and the contact shade go first, then shadow detail, then
@@ -140,7 +142,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   let framed = -1
   const dugSince = new Map<number, number>()
   const waiters: Waiter[] = []
-  const focus = new Vector3()
+  const focus = new Vector3(), ahead = new Vector3()
   const windAt = U.uWindAt.value
 
   // Hills waiting for the tractor or walker to pass: the segment of the day and the place along its path.
@@ -268,6 +270,8 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       const wait = new Set(pending.map(r => r.field * HILLS + r.hill))
       shown = next.fields.map((f, i) => f.hills.map((_, h) => (wait.has(i * HILLS + h) ? shown[i][h] : display(i, h, next))))
       dayT = 0
+      clockSeg = -2
+      sampleHold = -1
       // A key moment about to play where the player is not looking: bring the field into frame, unless their hand is on the camera.
       const staged = segs.find(s => s.kind === 'sample' || (s.kind === 'dig' && prev.fields[s.field].status !== 'digging'))
       if (staged && !reduced && app.speed < 3 && rig.idle > 2.5) {
@@ -292,7 +296,11 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
         particles.clear()
         // A change of screen is a move of the camera, not a cut.
         framing = next.mode === 'title' ? 'title' : 'home'
-        rig.moveTo(poseFor(next.mode, viewport()), first || reduced)
+        if (first && next.mode === 'title' && !reduced) {
+          // The opening: up from the brook and its mist to the key frame, slowly.
+          rig.moveTo(rig.titlePose(viewport(), true), true)
+          rig.moveTo(rig.titlePose(viewport()), false, 16000)
+        } else rig.moveTo(poseFor(next.mode, viewport()), first || reduced)
       }
       dayT = next.mode === 'title' ? 0 : 1
     }
@@ -321,6 +329,8 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     let segIdx = -1
     for (let k = 0; k < segs.length; k++) if (dayT >= segs[k].start) segIdx = k
     const seg: Seg | null = segIdx >= 0 ? segs[segIdx] : null
+    if (segIdx !== clockSeg) { clockSeg = segIdx; segClock = 0 } else segClock += dt * (app.speed > 0 ? 1 : replayPace)
+    sampleHold = -1
     const passedUpTo = (arc: number) => {
       if (!pending.length) return
       const keep: typeof pending = []
@@ -339,9 +349,16 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     if (seg) {
       kind = seg.kind
       const span = Math.max(1e-6, seg.end - seg.start)
-      const u = Math.min(1, (dayT - seg.start) / span)
+      let u = Math.min(1, (dayT - seg.start) / span)
       const travel = new Poly(seg.travel)
-      const tShare = seg.kind === 'travel' ? 1 : travel.length > 0.3 ? Math.min(0.4, 0.12 + travel.length / 150) : 0
+      let tShare = seg.kind === 'travel' ? 1 : travel.length > 0.3 ? Math.min(0.4, 0.12 + travel.length / 150) : 0
+      if (seg.kind === 'sample') {
+        // However long the day is, the hill is up inside two and a half seconds, and the day waits for it.
+        const drive = travel.length > 0.3 ? SAMPLE_DRIVE_S : 0
+        u = Math.min(1, segClock / (drive + SAMPLE_S))
+        tShare = drive / (drive + SAMPLE_S)
+        if (u < 0.92 && snap.mode === 'season') sampleHold = seg.end - 1e-3
+      }
       const path = new Poly(seg.path)
       if (u < tShare || seg.kind === 'travel') {
         // ease in and out of a trip
@@ -482,6 +499,8 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     LAMP.value += (lamp / lit.exposure * 0.6 - LAMP.value) * Math.min(1, dt * 2)
   }
   let sunDrift = 0
+  let replayPace = 1
+  let clockSeg = -2, segClock = 0, sampleHold = -1
   let titleShift = 0.16
 
   function measure(dtMs: number): void {
@@ -523,7 +542,8 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     if (dirty) rebuild()
     // Day clock: follows the game clock when it runs, plays the day out by itself when paused.
     if (snap.mode === 'title') dayT = reduced ? 0.36 : (((time / TITLE_LOOP_S + titleShift) % 1) + 1) % 1
-    else if (dayT < 1) dayT = Math.min(1, app.speed > 0 ? Math.max(dayT + dt / DAY_ANIM_S * 0.25, app.dayProgress) : dayT + dt / DAY_ANIM_S)
+    else if (dayT < 1) dayT = Math.min(1, app.speed > 0 ? Math.max(dayT + dt / DAY_ANIM_S * 0.25, app.dayProgress) : dayT + dt / DAY_ANIM_S * replayPace)
+    if (sampleHold >= 0 && snap.mode === 'season') dayT = Math.min(dayT, sampleHold)
     easeEnv(env, envT, 1 - Math.exp(-dt / 1.1))
     applyLight(dt)
     const pace = reduced ? STILL : 1
@@ -550,14 +570,14 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     }
     particles.update(dt * (reduced ? 0.3 : 1), wx * env.wind * 1.6, wz * env.wind * 1.6)
     focus.set(rig.cur.x, fieldBaseY(rig.cur.z), rig.cur.z)
-    weather.update(fall, env.rain, env.snowfall, wx * env.wind, wz * env.wind, focus, lit.hazeAway, (size.h * size.pr) / (2 * Math.tan((cam.fov * Math.PI) / 360)))
+    weather.update(fall, env.rain, env.snowfall, wx * env.wind, wz * env.wind, cam.getWorldDirection(ahead).multiplyScalar(30).add(cam.position), lit.hazeAway, (size.h * size.pr) / (2 * Math.tan((cam.fov * Math.PI) / 360)))
     shadows.update(lit.sunDir, lit.sun, focus, rig.focus(), dtMs <= 0.5)
     fields.setFarShadows(!shadows.holdsFarm)
     fields.update(dt, { selection: app.selection, hover: app.hover, oats: env.oats, oatsRipe: env.oatsRipe, reduced })
     harvest.update(dt, app.speed === 0, clamp(rig.cur.dist / 30, 1, 2.3), reduced)
     PIXEL.value = (TIERS[tier].msaa ? 1.1 : 0.7) / ((post.target.height) / (2 * Math.tan((cam.fov * Math.PI) / 360)))
     // The focus is shallow in the opening shot, slight in play, and opens up while the player moves the camera.
-    const want = env.lens * (rig.idle < 0.6 ? 0.2 : 1) * (snap.mode === 'title' ? 1 : smooth(60, 16, rig.cur.dist) * 1.2 + 0.6)
+    const want = env.lens * (rig.idle < 0.6 ? 0.2 : 1) * (snap.mode === 'title' ? 1 : smooth(60, 16, rig.cur.dist) * 0.9 + 0.5)
     lens += (want - lens) * (1 - Math.exp(-dt / 0.35))
     renderer.info.reset()
     if (frameNo % 2 === 0 || frameNo < 4 || dtMs <= 0.5) sky.renderMap(renderer)
@@ -573,7 +593,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       let done = time >= w.until || reduced || app.speed >= 3
       if (!has && frameNo > w.born) {
         if (!w.seen) done = true
-        else if (w.settle === 0) w.settle = time + (w.kind === 'sample' ? 0.55 : 0.7)
+        else if (w.settle === 0) w.settle = time + (w.kind === 'sample' ? 0.45 : 0.7)
         else if (time >= w.settle) done = true
       }
       if (done) { waiters.splice(k, 1); w.resolve() }
@@ -624,6 +644,9 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
         if (dirty) rebuild()
         flush(false)
         dayT = snap.mode === 'title' ? dayT : 1
+        replayPace = 1
+        sampleHold = -1
+        segClock = 1e6
         copyEnv(env, envT)
         fields.snap()
         harvest.snap()
@@ -632,13 +655,15 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
         frame(0.2)
       },
       anchor: (i: number) => fieldAnchor(i),
-      seek(t: number) {
+      // pace: how fast a paused day's work then plays on, 1 as in play.
+      seek(t: number, pace = 1) {
         if (dirty) rebuild()
+        replayPace = pace
         dayT = Math.max(0, Math.min(1, t))
         titleShift = dayT - time / TITLE_LOOP_S
       },
       info() {
-        return { mode: snap.mode, dayT, pending: pending.length, segs: segs.map(s => `${s.kind}@${s.field}`), tractor: tractorAt, fields: snap.fields.map(f => f.status), tier, framing, rings: fields.ringing() }
+        return { mode: snap.mode, dayT, pending: pending.length, segs: segs.map(s => `${s.kind}@${s.field}`), tractor: tractorAt, farmer: farmer.group.visible ? { x: farmer.group.position.x, z: farmer.group.position.z, turn: farmer.group.rotation.y } : null, fields: snap.fields.map(f => f.status), tier, framing, rings: fields.ringing() }
       },
       whenShown,
       // For working on the look: put the camera somewhere.

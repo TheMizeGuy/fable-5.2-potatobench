@@ -1,10 +1,10 @@
-// What falls: rain and snow, in a box of air that stays round what the camera looks at.
+// What falls: rain and snow, in a box of air that stays in front of the camera.
 import {
   BufferAttribute, BufferGeometry, Color, Group, LineSegments, Points, ShaderMaterial, Vector2, Vector3,
 } from 'three'
 import { rng } from './noise.ts'
 
-const BOX = 'vec3(70.0, 30.0, 70.0)'
+const BOX = 'vec3(64.0, 34.0, 64.0)'
 // Each drop keeps its own place in the box and wraps round as the box moves with the camera.
 const WRAP = /* glsl */ `
 vec3 wrap(vec3 seed, vec3 fallen, vec3 centre) {
@@ -25,7 +25,7 @@ export class Weather {
   constructor() {
     const r = rng(8)
     {
-      const n = 5200
+      const n = 9000
       const seed = new Float32Array(n * 2 * 4)
       for (let k = 0; k < n; k++) {
         const s = [r(), r(), r(), 0]
@@ -47,10 +47,11 @@ export class Weather {
           void main() {
             vec3 dir = normalize(vec3(uWind.x * 0.22, -1.0, uWind.y * 0.22));
             vec3 p = wrap(aSeed.xyz, dir * uFall * 24.0, uCentre);
-            p -= dir * aSeed.w * (0.7 + 0.5 * fract(aSeed.x * 7.1));
+            p -= dir * aSeed.w * (0.34 + 0.3 * fract(aSeed.x * 7.1));
+            vec4 mv = viewMatrix * vec4(p, 1.0);
             // Whether a drop is falling is its own affair, not a matter of where it is: light rain is thin everywhere.
-            vA = step(fract(aSeed.x * 91.7 + aSeed.y * 47.3 + aSeed.z * 13.1), uAmount) * (0.32 + 0.22 * aSeed.w);
-            gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
+            vA = step(fract(aSeed.x * 91.7 + aSeed.y * 47.3 + aSeed.z * 13.1), uAmount) * (0.16 + 0.22 * aSeed.w) * smoothstep(2.0, 9.0, -mv.z);
+            gl_Position = projectionMatrix * mv;
           }`,
         fragmentShader: 'uniform vec3 uColor;\nvarying float vA;\nvoid main() {\n  if (vA < 0.01) discard;\n  gl_FragColor = vec4(uColor, vA);\n}',
       })
@@ -79,7 +80,7 @@ export class Weather {
             p.z += cos(uFall * 0.7 + aSeed.x * 30.0) * 0.4;
             vA = step(aSeed.z, uAmount);
             vec4 mv = viewMatrix * vec4(p, 1.0);
-            gl_PointSize = clamp(uScale * (0.05 + 0.05 * aSeed.x) / -mv.z, 1.0, 14.0);
+            gl_PointSize = clamp(uScale * (0.028 + 0.03 * aSeed.x) / -mv.z, 1.0, 9.0);
             gl_Position = projectionMatrix * mv;
           }`,
         fragmentShader: 'uniform vec3 uColor;\nvarying float vA;\nvoid main() {\n  vec2 d = gl_PointCoord - 0.5;\n  float a = vA * smoothstep(0.5, 0.15, length(d));\n  if (a < 0.01) discard;\n  gl_FragColor = vec4(uColor, a * 0.85);\n}',
