@@ -1,59 +1,201 @@
-// Placeholder interface: a plain debug panel that can play the whole game.
+// The interface: an almanac and ledger laid over the land.
+import '@fontsource-variable/fraunces/opsz.css'
+import '@fontsource-variable/fraunces/opsz-italic.css'
+import '@fontsource-variable/public-sans'
+import './style.css'
+import './screens.css'
 import type { MountHud } from '../game/contracts.ts'
 import * as S from '../sim/index.ts'
+import { Dialogs, Toasts, type Ctx, type Level, type Screen } from './core.ts'
+import { h } from './dom.ts'
+import { setUnits } from './fmt.ts'
+import { showSample, showWeighIn } from './dig.ts'
+import { titleScreen } from './title.ts'
+import { planScreen } from './plan.ts'
+import { seasonScreen } from './season.ts'
+import { cellarScreen } from './cellar.ts'
+import { ledgerScreen, overScreen } from './ledger.ts'
+import { openHelp } from './help.ts'
+import { openSettings } from './settings.ts'
 
-export const mountHud: MountHud = (root, app) => {
-  root.style.cssText = 'position:fixed;inset:0;pointer-events:none;font:13px/1.35 system-ui;color:#eee'
-  const box = document.createElement('div')
-  box.style.cssText = 'position:absolute;left:8px;top:8px;bottom:8px;width:330px;overflow:auto;background:#000a;padding:8px;pointer-events:auto'
-  root.append(box)
-  const btn = (label: string, fn: () => void, off = false) => {
-    const b = document.createElement('button')
-    b.textContent = label
-    b.disabled = off
-    b.style.cssText = 'margin:2px;font:inherit'
-    b.onclick = () => { fn(); draw() }
-    return b
+// Events that stop the clock; each gets a toast so the player sees why it stopped.
+const STOPS = new Set(['watch', 'blightSeen', 'frost', 'skinSet', 'vinesDead', 'lost', 'freeze', 'dry', 'ti'])
+const JOB_KEYS: Record<string, S.JobKind> = { p: 'plant', h: 'hill', c: 'scout', s: 'spray', w: 'water', r: 'rogue', t: 'sample', k: 'kill', d: 'dig' }
+
+export const mountHud: MountHud = (root, app, view) => {
+  root.classList.add('hud')
+  const screenLayer = h('div', { class: 'screen-layer' })
+  const labels = h('div', { class: 'labels', 'aria-hidden': 'true' })
+  const toasts = new Toasts()
+  const dialogLayer = h('div', { class: 'dialog-layer' })
+  root.replaceChildren(screenLayer, labels, toasts.el, dialogLayer)
+  const dialogs = new Dialogs(dialogLayer, [screenLayer, labels])
+  const phoneQuery = matchMedia('(max-width: 760px)')
+
+  let dirty = true
+  let held = false
+  let screen: Screen | null = null
+  let builtFor = ''
+
+  const ctx: Ctx = {
+    app, view, dialogs,
+    toast: (text: string, level: Level = 'info') => toasts.show(text, level),
+    run(cmd) {
+      const r = app.do(cmd)
+      if (!r.ok) toasts.show(r.err, 'warn')
+      return r
+    },
+    phone: () => phoneQuery.matches,
+    memo: { estimates: [], soilT: 10, digSoilT: {}, lots: {} },
+    sheet: { tab: app.settings.hints ? 'coach' : 'field', open: true },
+    dirty: () => { dirty = true },
   }
-  const line = (text: string) => { const p = document.createElement('div'); p.textContent = text; return p }
-  function draw(): void {
-    box.replaceChildren()
+
+  function applySettings(): void {
+    setUnits(app.settings.units)
+    document.documentElement.classList.toggle('reduce-motion', app.settings.reducedMotion)
+  }
+  applySettings()
+
+  function remember(): void {
     const c = app.campaign
-    if (!c || app.screen === 'title') {
-      box.append(line('The County (debug interface)'))
-      const years = app.startYears()
-      box.append(btn('New game', () => app.newGame(years[Math.floor(years.length / 2)])))
-      if (app.savedGame()) box.append(btn('Continue', () => { app.continueGame() }))
+    if (!c || c.phase !== 'season' || !c.season) return
+    for (let i = 0; i < S.FIELD_COUNT; i++) ctx.memo.estimates[i] = S.fieldInfo(c, i).estimate
+    const t = S.today(app.world, c)
+    if (t) ctx.memo.soilT = t.soilT
+  }
+
+  function build(): void {
+    screen?.dispose?.()
+    screenLayer.replaceChildren()
+    labels.replaceChildren()
+    const kind = app.screen === 'title' || !app.campaign ? 'title' : app.screen
+    builtFor = `${kind}|${phoneQuery.matches ? 'phone' : 'wide'}`
+    screen = kind === 'title' ? titleScreen(ctx)
+      : kind === 'plan' ? planScreen(ctx)
+        : kind === 'season' ? seasonScreen(ctx, labels)
+          : kind === 'cellar' ? cellarScreen(ctx)
+            : kind === 'ledger' ? ledgerScreen(ctx)
+              : overScreen(ctx)
+    screenLayer.append(screen.el)
+    root.dataset.screen = kind
+    dirty = true
+  }
+
+  function onEvents(events: S.GameEvent[]): void {
+    const c = app.campaign
+    for (const e of events) {
+      if (e.type === 'sample') {
+        const before = ctx.memo.estimates[e.field] ?? null
+        dialogs.enqueue(showSample(ctx, e, before))
+      } else if (e.type === 'dug' && c) {
+        const lot = Number(e.data?.lot)
+        const found = c.lots.find(l => l.id === lot)
+        if (!found) continue
+        ctx.memo.digSoilT[lot] = ctx.memo.soilT
+        ctx.memo.lots[lot] = structuredClone(found)
+        dialogs.enqueue(showWeighIn(ctx, lot))
+      } else if (e.level === 'bad' || e.level === 'warn' || STOPS.has(e.type) || e.type === 'sold' || e.type === 'kept') {
+        toasts.show(e.text, e.level)
+      }
+    }
+  }
+
+  app.on(e => {
+    switch (e.type) {
+      case 'screen':
+        if (e.screen !== 'season' && e.screen !== 'title') dialogs.closeAll()
+        toasts.clear()
+        build()
+        break
+      case 'events':
+        onEvents(e.events)
+        dirty = true
+        break
+      case 'change':
+        dirty = true
+        break
+      case 'settings':
+        applySettings()
+        dirty = true
+        break
+      case 'select':
+        if (ctx.phone() && e.field >= 0) { ctx.sheet.tab = 'field'; ctx.sheet.open = true }
+        dirty = true
+        break
+      case 'saved':
+        if (!e.ok) toasts.show('This browser would not store the save. Export it from the menu to keep it.', 'warn')
+        break
+      case 'speed':
+        dirty = true
+        break
+    }
+  })
+
+  phoneQuery.addEventListener('change', () => build())
+  addEventListener('resize', () => { dirty = true })
+
+  document.addEventListener('pointerdown', () => { held = true }, true)
+  const release = () => { if (held) { held = false; dirty = true } }
+  document.addEventListener('pointerup', release, true)
+  document.addEventListener('pointercancel', release, true)
+
+  // A mouse click leaves focus on the button; drop it so Space goes back to pausing the clock.
+  root.addEventListener('click', e => {
+    const b = (e.target as HTMLElement).closest('button')
+    if (b && e.detail > 0 && !b.closest('.dialog')) b.blur()
+  })
+
+  document.addEventListener('keydown', e => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return
+    if (e.key === 'Escape') {
+      if (dialogs.isOpen()) { e.preventDefault(); dialogs.closeTop(); return }
+      if (app.selected >= 0) { e.preventDefault(); app.select(-1) }
       return
     }
-    box.append(line(`${c.year}  phase ${c.phase}  cash $${Math.round(c.cash)}`))
-    if (c.phase === 'plan') {
-      c.plans.forEach((p, i) => box.append(line(`${S.FIELD_NAMES[i]}: ${p.crop} ${p.variety} ${p.seed}`), btn('toggle', () => app.do({ t: 'plan', field: i, plan: { ...p, crop: p.crop === 'rest' ? 'potato' : 'rest' } }))))
-      box.append(btn('Begin season', () => app.do({ t: 'begin' })))
-    } else if (c.phase === 'season' && c.season) {
-      const s = c.season, t = S.today(app.world, c)!
-      box.append(line(`${S.formatDay(c.year, s.day)}  ${t.sky}  ${t.day.tmin.toFixed(0)}..${t.day.tmax.toFixed(0)}C rain ${t.day.prcp}mm soil ${t.soilT.toFixed(1)}C sv ${t.sv}`))
-      ;[0, 1, 2, 3].forEach(k => box.append(btn(['pause', '1x', '3x', '8x'][k], () => app.setSpeed(k as 0))))
-      box.append(btn('day', () => app.do({ t: 'day' })), btn('end season', () => app.do({ t: 'endSeason' })))
-      box.append(line('work: ' + s.jobs.map(j => `${j.kind}@${j.field}`).join(', ')))
-      for (let i = 0; i < S.FIELD_COUNT; i++) {
-        const f = S.fieldInfo(c, i)
-        box.append(line(`${i === app.selected ? '> ' : ''}${f.name} [${f.variety}] ${f.stage} canopy ${(f.canopy * 100).toFixed(0)}% water ${f.moistureLabel} blight ${(f.blightKnown * 100).toFixed(0)}% est ${f.estimate ? `${f.estimate.lo.toFixed(0)}-${f.estimate.hi.toFixed(0)}` : '-'}`))
-        for (const a of S.fieldActions(app.world, c, i)) if (a.ok) box.append(btn(a.kind, () => app.do({ t: 'job', kind: a.kind, field: i })))
+    if (dialogs.isOpen()) return
+    const t = e.target as HTMLElement
+    if (t.closest('input, select, textarea, [contenteditable]')) return
+    const c = app.campaign
+    if (app.screen !== 'season' || !c || !c.season) return
+    const onButton = t.closest('button') !== null
+    const k = e.key
+    if (k === ' ' && !onButton) { e.preventDefault(); app.togglePause(); return }
+    if (k >= '0' && k <= '3') { e.preventDefault(); app.setSpeed(Number(k) as 0 | 1 | 2 | 3); return }
+    if (k === '[' || k === ']' || k === 'ArrowLeft' || k === 'ArrowRight') {
+      e.preventDefault()
+      const step = k === '[' || k === 'ArrowLeft' ? -1 : 1
+      const n = S.FIELD_COUNT
+      app.select(app.selected < 0 ? (step > 0 ? 0 : n - 1) : (app.selected + step + n) % n)
+      return
+    }
+    const kind = JOB_KEYS[k.toLowerCase()]
+    if (kind && !e.shiftKey) {
+      e.preventDefault()
+      if (app.selected < 0) { toasts.show('Choose a field first: [ and ] step through them.', 'info'); return }
+      const r = app.do({ t: 'job', kind, field: app.selected })
+      toasts.show(r.ok ? `${S.JOB_LABEL[kind]} ${S.FIELD_NAMES[app.selected]} added to the work list.` : r.err, r.ok ? 'info' : 'warn')
+    }
+  })
+
+  build()
+
+  return {
+    frame(dt: number) {
+      if (`${app.screen === 'title' || !app.campaign ? 'title' : app.screen}|${phoneQuery.matches ? 'phone' : 'wide'}` !== builtFor) build()
+      if (dirty && !held && screen) {
+        dirty = false
+        screen.update()
+        remember()
+        const [t, r, b, l] = screen.insets().map(x => Math.max(0, Math.round(x)))
+        app.setInsets(t, r, b, l)
+        toasts.place(t, r, l)
       }
-      for (const l of S.openLots(c)) box.append(btn(`sell lot ${l.id} ($${Math.round(S.lotValue(app.world, c, l))})`, () => app.do({ t: 'sell', lot: l.id, frac: 1 })))
-      s.log.slice(-8).forEach(e => box.append(line(`${S.formatDay(c.year, e.day, true)} ${e.text}`)))
-    } else if (c.phase === 'cellar') {
-      box.append(line(`Cellar, ${S.CELLAR_MONTHS[c.month]}`))
-      for (const l of S.openLots(c)) box.append(line(`lot ${l.id} ${l.variety} ${Math.round(S.lotCwt(l))} cwt`), btn(`sell ($${Math.round(S.lotValue(app.world, c, l))})`, () => app.do({ t: 'sell', lot: l.id, frac: 1 })))
-      box.append(btn('next month', () => app.do({ t: 'month' })))
-    } else if (c.phase === 'ledger') {
-      const h = c.history[c.history.length - 1]
-      box.append(line(`Year ${h.year}: revenue ${Math.round(h.revenue)} costs ${Math.round(h.costs)} cash ${Math.round(h.cashEnd)} ${c.outcome}`))
-      box.append(btn('next year', () => app.do({ t: 'next' })))
-    } else box.append(line(`Over: ${c.outcome}`), btn('title', () => app.quitToTitle()))
+      screen?.frame?.(dt)
+    },
+    dispose() {
+      screen?.dispose?.()
+      root.replaceChildren()
+    },
   }
-  app.on(e => { if (e.type !== 'saved') draw() })
-  draw()
-  return { frame() {}, dispose() { box.remove() } }
 }
