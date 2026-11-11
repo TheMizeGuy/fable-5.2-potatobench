@@ -270,8 +270,9 @@ export interface Tuning {
   buyLand: number           // buys a field it holds outright when the cash left after it and the spring's planting is at least this
   hands: { from: number; per: number }   // a field hand once more than `from` fields are being walked, another for each `per` more
   opFields: number          // the operator for the spring, once the second tractor is there, for this many potato fields or more
-  op: { hire: number; keep: number }   // in season: hires the operator when the machine work due within a month is more than
-                            // `hire` days, and keeps him another month when it is more than `keep`
+  op: { hire: number; keep: number; water: number }   // in season: hires the operator when the machine work due within a
+                            // month is more than `hire` days or the watering waiting is `water` days, and keeps him another
+                            // month when the work due is more than `keep`
   tractor: { fields: number; left: number; reserve: number }   // the second tractor: potato fields, seasons left, cash kept
   house: { left: number; over: number; reserve: number }       // the second potato house: seasons left, cwt the crop overflows storage by, cash kept
   contractGain: number      // signs a contract when it is worth this much more than growing for the open market
@@ -297,7 +298,7 @@ export const TUNING: Tuning = {
   ],
   landValue: { ridge: 10000, brook: 6000, dufour: 7500 }, landMargin: 0,
   loanFloor: -75000, buyLand: -75000,
-  hands: { from: 5, per: 5 }, opFields: 9, op: { hire: 24, keep: -Infinity },
+  hands: { from: 5, per: 5 }, opFields: 9, op: { hire: 24, keep: -Infinity, water: Infinity },
   tractor: { fields: 9, left: 2, reserve: 0 },
   house: { left: 2, over: 3000, reserve: 20000 },
   contractGain: 0, no1Share: 0.8, contractSafety: 0.85,
@@ -820,8 +821,10 @@ export function expert(cfg: ExpertCfg = EXPERT): BotFactory {
       const d = c.season!.day
       const op = hireCount(c, 'operator')
       const ahead = machineAhead(c, info, d)
+      let watering = 0
+      for (const j of c.season!.jobs) if (j.kind === 'water') watering += j.need - j.done
       if (!op.length) {
-        if (ahead > k.op.hire && S.apply(world, c, { t: 'hire', kind: 'operator' }).ok) opPaidTo = d + S.WAGE_DAYS
+        if ((ahead > k.op.hire || watering >= k.op.water) && S.apply(world, c, { t: 'hire', kind: 'operator' }).ok) opPaidTo = d + S.WAGE_DAYS
       } else if (d >= opPaidTo) {
         if (ahead > k.op.keep) opPaidTo += S.WAGE_DAYS
         else S.apply(world, c, { t: 'dismiss', unit: op[0].id })
