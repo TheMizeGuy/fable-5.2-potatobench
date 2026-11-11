@@ -243,7 +243,10 @@ export function seasonScreen(ctx: Ctx, labelsLayer: HTMLElement): Screen {
           h('div', { class: 'est-head' }, h('span', { class: 'label' }, 'Yield estimate'), h('span', { class: 'sub' }, est.digs ? `${F.plural(est.digs, 'test dig')}` : 'by eye, no test digs')),
           estimateBar(est, scaleMax),
           h('p', { class: 'est-text' }, h('strong', { class: 'num' }, span(est.lo, est.hi)),
-            h('span', { class: 'sub' }, ` · ${massSpan(est.lo * S.FIELD_ACRES, est.hi * S.FIELD_ACRES)} for the field`))) : (f.status === 'growing' ? h('p', { class: 'sub est-none' }, 'No estimate until the tubers set.') : null),
+            h('span', { class: 'sub' }, ` · ${massSpan(est.lo * S.FIELD_ACRES, est.hi * S.FIELD_ACRES)} for the field`)),
+          f.tubers
+            ? h('p', { class: 'sub est-size' }, `Tuber size, from the test ${f.tubers.digs === 1 ? 'dig' : 'digs'}: about ${F.num(f.tubers.perHill, 0)} to a hill, averaging ${F.grams(f.tubers.lo)} to ${F.grams(f.tubers.hi)} each. US No. 1 starts at ${F.grams(S.SIZE_A)}; over ${F.grams(S.SIZE_CHEF)} counts as large.`)
+            : h('p', { class: 'sub est-size' }, 'Tuber size is unknown until a test dig.')) : (f.status === 'growing' ? h('p', { class: 'sub est-none' }, 'No estimate until the tubers set.') : null),
         f.deadDays >= 0 && f.status !== 'dug' && f.status !== 'lost' ? h('div', { class: 'skin' },
           h('div', { class: 'est-head' }, h('span', { class: 'label' }, 'Skin set'), h('span', { class: 'sub' }, `vines dead ${F.plural(f.deadDays, 'day')}`)),
           meter(f.skin, { label: 'Skin set', cls: 'skin-fill' }),

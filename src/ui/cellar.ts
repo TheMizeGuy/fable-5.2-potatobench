@@ -103,7 +103,7 @@ export function cellarScreen(ctx: Ctx): Screen {
           h('h2', null, `The cellar, ${S.CELLAR_MONTHS[c.month]}`),
           h('ol', { class: 'months', 'aria-label': 'Winter months' }, MONTH_SHORT.map((m, k) => h('li', { class: k === c.month ? 'now' : k < c.month ? 'past' : '', 'aria-current': k === c.month ? 'true' : undefined }, m)))),
         app.settings.hints ? h('p', { class: 'hint' },
-          'Prices usually climb through the winter, but the pile shrinks a little every month, faster once it sprouts, and rot can run through a pile that went in with blight. Sell some, hold some.') : null,
+          `Prices usually climb through the winter, but keeping potatoes costs ${F.money(S.STORE_COST * 100)} per ${F.metric() ? '4.5 t' : '100 cwt'} a month, the pile shrinks a little every month, faster once it sprouts, and rot can run through a pile that went in with blight. Sell some, hold some.`) : null,
         h('div', { class: 'cellar-summary' },
           h('div', { class: 'cellar-top' },
             h('div', { class: 'capacity' },
@@ -117,7 +117,7 @@ export function cellarScreen(ctx: Ctx): Screen {
         h('footer', { class: 'sheet-foot' },
           h('p', { class: 'sub' }, last
             ? lots.length ? 'May is the last month. Whatever is left is sold at May prices when the year closes.' : 'With the cellar empty, the year can close.'
-            : `Next month the pile shrinks a little and prices move.`),
+            : `Next month the pile shrinks a little, the storage bill comes, and prices move.`),
           h('button', { class: 'btn primary big', type: 'button', testid: 'month-next', onclick: () => ctx.run({ t: 'month' }) },
             last ? (lots.length ? 'Sell the rest and close the year' : 'Close the year') : `On to ${S.CELLAR_MONTHS[c.month + 1]}`)),
       ])

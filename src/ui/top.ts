@@ -77,7 +77,7 @@ export function topBar(ctx: Ctx): { el: HTMLElement; update(): void } {
           disabled: done && k > 0, title: done && k > 0 ? 'The season is over' : `${SPEED_LABEL[k]} (${k === 0 ? 'Space' : k})`, onclick: () => app.setSpeed(k as 0 | 1 | 2 | 3),
         }, k === 0 ? icon('pause') : speedGlyph(k)))) : null,
       h('div', { class: 'tb-cash' },
-        h('span', { class: 'label' }, 'Cash'),
+        h('span', { class: 'label' }, c.cash < 0 && (c.phase === 'season' || c.phase === 'cellar') ? 'Cash · spring loan' : 'Cash'),
         h('span', { class: `cash${c.cash < 0 ? ' neg' : ''}`, testid: 'cash' }, F.money(c.cash))),
       done ? h('button', { class: 'btn primary end', type: 'button', testid: 'end-season', onclick: () => ctx.run({ t: 'endSeason' }) }, 'Close out the season') : null,
       h('div', { class: 'tb-menu' },

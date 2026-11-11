@@ -1,7 +1,7 @@
 import type { App } from '../game/app.ts'
 import type { FieldView } from '../game/contracts.ts'
 import type { Cmd, Estimate, Lot, Result } from '../sim/index.ts'
-import { h, icon, type Child } from './dom.ts'
+import { h, icon, morphChildren, type Child } from './dom.ts'
 import { localize } from './fmt.ts'
 
 export interface Ctx {
@@ -41,7 +41,7 @@ export function patch(el: HTMLElement, key: string, render: () => Child): void {
   const at = inside ? [...el.querySelectorAll<HTMLElement>(FOCUSABLE)].indexOf(active!) : -1
   const scrolls = [...el.querySelectorAll<HTMLElement>('[data-scroll]')].map(x => [x.dataset.scroll, x.scrollTop] as const)
   const box = h('div', null, render())
-  el.replaceChildren(...box.childNodes)
+  morphChildren(el, box)
   for (const [name, top] of scrolls) {
     const x = el.querySelector<HTMLElement>(`[data-scroll="${name}"]`)
     if (x) x.scrollTop = top
