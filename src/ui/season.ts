@@ -1,20 +1,22 @@
 // The season: the land, a plate on each field, and five small instruments.
 import * as S from '../sim/index.ts'
 import { commandCard } from './card.ts'
-import { gauge, patch, type Ctx, type Screen } from './core.ts'
-import { h } from './dom.ts'
+import { EXIT_MS, gauge, patch, unname, type Ctx, type Screen } from './core.ts'
+import { h, s } from './dom.ts'
 import * as F from './fmt.ts'
 import { icon } from './icons.ts'
 import { ticket, trayPaper } from './dig.ts'
 import { plates, type PlateModel } from './plates.ts'
-import { hint as hintText, JOB_DOING, JOB_VERB, KEY_JOB, stageGlyph } from './rules.ts'
+import { hint as hintText, isJob, isStale, JOB_DOING, JOB_VERB, KEY_JOB, stageGlyph } from './rules.ts'
 import { clock, topBar } from './top.ts'
 
 const HINTS_KEY = 'the-county/hints'
 const HINT_MS = 45000
 
-function isJob(act: S.Advice['act'] | undefined): act is S.JobKind {
-  return !!act && act !== 'wait' && act !== 'sell' && act !== 'close'
+// Which of the six fields, as a place: two on the ridge, two mid slope, two on the bottom land.
+function where(field: number): SVGElement {
+  return s('svg', { class: 'where', viewBox: '0 0 11 17', 'aria-hidden': 'true' },
+    Array.from({ length: S.FIELD_COUNT }, (_, i) => s('rect', { class: i === field ? 'here' : '', x: (i % 2) * 6, y: Math.floor(i / 2) * 6, width: 5, height: 5 })))
 }
 
 function hintsSeen(): Set<string> {
@@ -42,7 +44,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     const old = tray.el
     tray = null
     if (ctx.reduced()) old.remove()
-    else { old.classList.add('out'); setTimeout(() => old.remove(), 160) }
+    else { old.classList.add('out'); unname(old); setTimeout(() => old.remove(), EXIT_MS) }
     ctx.dirty()
   }
 
@@ -74,24 +76,35 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   // ------------------------------------------------------------ plates, badges and the nine sentences
 
   const seen = hintsSeen()
-  let hint: { kind: S.JobKind; field: number; at: number } | null = null
+  // first: nothing has been taught yet, so this tip also says how an order is given.
+  let hint: { kind: S.JobKind; field: number; at: number; first: boolean } | null = null
 
-  function updateHint(): void {
+  function updateHint(c: S.Campaign): void {
     const needs = app.needs()
     if (hint && (needs[hint.field]?.need?.act !== hint.kind || performance.now() - hint.at > HINT_MS || !app.settings.hints)) hint = null
-    if (hint || !app.settings.hints) return
-    for (let i = 0; i < needs.length; i++) {
-      const act = needs[i].need?.act
-      if (!isJob(act) || seen.has(act)) continue
-      hint = { kind: act, field: i, at: performance.now() }
-      // A sentence nobody has time to read teaches nothing.
-      if (app.speed > 1) app.setSpeed(1)
-      seen.add(act)
-      try { localStorage.setItem(HINTS_KEY, JSON.stringify([...seen])) } catch { /* storage blocked: the tip may show again */ }
-      ctx.announce(hintText(act))
-      setTimeout(() => ctx.dirty(), HINT_MS + 100)
-      return
+    if (!hint && app.settings.hints) {
+      for (let i = 0; i < needs.length; i++) {
+        const act = needs[i].need?.act
+        if (!isJob(act) || seen.has(act)) continue
+        hint = { kind: act, field: i, at: performance.now(), first: seen.size === 0 }
+        // A sentence nobody has time to read teaches nothing.
+        if (app.speed > 1) app.setSpeed(1)
+        seen.add(act)
+        try { localStorage.setItem(HINTS_KEY, JSON.stringify([...seen])) } catch { /* storage blocked: the tip may show again */ }
+        ctx.announce(hintText(act))
+        setTimeout(() => ctx.dirty(), HINT_MS + 100)
+        break
+      }
     }
+    // The tip sits with the alerts, wearing its badge's glyph, so it never covers a field.
+    if (hint) {
+      const kind = hint.kind
+      const how = hint.first ? ` ${ctx.touch() ? 'Tap' : 'Click'} the lit badge to give the order.` : ''
+      ctx.notes.pin({ key: `tip-${kind}`, glyph: kind, text: `${hintText(kind)}${how}`, tile: true, onClose: () => { hint = null; ctx.dirty() } })
+    } else if (app.speed === 0 && !S.seasonDone(c) && !c.season!.jobs.length && !needs.some(n => n.need)) {
+      // Stopped with nothing to do: the one thing to say is that the days have to run.
+      ctx.notes.pin({ key: 'idle', glyph: 'play', text: 'Nothing needs doing now. Let the days run.' })
+    } else ctx.notes.unpin()
   }
 
   function plateModel(i: number): PlateModel {
@@ -104,8 +117,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     const said: string[] = []
     if (live && (f.moistureLabel === 'dry' || f.moistureLabel === 'wilting')) { marks.push({ glyph: 'dry', cls: f.moistureLabel === 'wilting' ? 'bad' : 'warn' }); said.push(`soil ${f.moistureLabel}`) }
     if (f.blightHills > 0 && (live || f.status === 'dead')) {
-      const stale = f.scoutAge < 0 || f.scoutAge >= 7
-      marks.push({ glyph: stale ? 'blight-old' : 'blight', cls: 'bad' })
+      marks.push({ glyph: isStale(f) ? 'blight-old' : 'blight', cls: 'bad' })
       said.push(`blight seen on ${F.plural(f.blightHills, 'hill')}${f.scoutAge >= 0 ? `, walked ${F.ago(f.scoutAge)}` : ''}`)
     }
     const anyBlight = s0.fields.some((_, k) => S.fieldInfo(c, k).blightHills > 0)
@@ -123,7 +135,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       glyph: stageGlyph(f),
       marks, queue, badge,
       said: `${f.name}, field ${i + 1}: ${f.status === 'rest' ? 'resting in oats and clover' : `${f.variety}, ${f.stage.toLowerCase()}`}${said.length ? `; ${said.join('; ')}` : ''}${badge ? `. Needs: ${F.localize(need!.text)}` : '.'}`,
-      hint: hint && hint.field === i ? { text: hintText(hint.kind), onClose: () => { hint = null; ctx.dirty() } } : undefined,
+      taught: !!hint && !!badge && need?.act === hint.kind,
     }
   }
 
@@ -187,9 +199,9 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
             oncontextmenu: (e: Event) => { e.preventDefault(); bump(j.id) },
             onpointerenter: (e: Event) => { if ((e as PointerEvent).pointerType === 'mouse') app.setHover(j.field) },
             onpointerleave: () => { if (app.hover === j.field) app.setHover(-1) },
-          }, icon(j.kind), h('span', { class: 'q-n num', 'aria-hidden': 'true' }, String(j.field + 1)),
+          }, icon(j.kind), where(j.field),
           h('span', { class: 'sr' }, `${what}${waits[j.id] ? `, waiting: ${waits[j.id]}` : j.done > 0 ? `, ${F.pct(j.done / j.need)} done` : ''}. ${touch ? 'Tap for its choices.' : `Click to cancel${k > 0 ? '; Ctrl-click to do it first' : ''}.`}`)),
-          !touch && k > 0 ? h('button', { class: 'q-first', type: 'button', testid: `queue-first-${j.id}`, 'aria-label': `Do ${what.toLowerCase()} first`, title: 'Do it first', onclick: () => bump(j.id) }, icon('first', 'ic s')) : null,
+          !touch && k > 0 ? h('button', { class: 'q-first', type: 'button', testid: `queue-first-${j.id}`, 'aria-label': `${what}: do it first`, title: 'Do it first', onclick: () => bump(j.id) }, icon('first', 'ic s')) : null,
           touch && pop === j.id ? h('div', { class: 'q-pop', role: 'group', 'aria-label': what },
             h('span', { class: 'q-pop-title' }, what),
             k > 0 ? h('button', { class: 'nbtn', type: 'button', testid: `queue-first-${j.id}`, onclick: () => bump(j.id) }, icon('first', 'ic s'), 'First') : null,
@@ -205,13 +217,14 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
 
   // ------------------------------------------------------------ keys
 
-  function nextNeed(): boolean {
+  function nextNeed(from: number, last: boolean): boolean {
     const needs = app.needs()
     const want = needs.map((n, i) => (n.need && n.need.act !== 'close' ? i : -1)).filter(i => i >= 0)
-    if (!want.length) return false
-    const next = want.find(i => i > app.selected) ?? want[0]
+    const next = want.find(i => i > from) ?? (last ? undefined : want[0])
+    if (next === undefined) return false
     app.select(next)
     app.focus(next)
+    plateLayer.querySelector<HTMLElement>(`[data-k="field-${next}"]`)?.focus({ preventScroll: true })
     const n = needs[next].need!
     ctx.announce(`${S.FIELD_NAMES[next]} selected. ${F.localize(n.text)} ${F.localize(n.why)} Enter gives the order.`)
     return true
@@ -222,8 +235,12 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     const c = app.campaign
     if (!c || !c.season) return false
     const t = e.target as HTMLElement
-    const onPlate = !!t.closest?.('.plate, .badge')
-    const onControl = !!t.closest?.('button, input, a')
+    const plate = t.closest?.<HTMLElement>('.plate')
+    const onPlate = !!plate || !!t.closest?.('.badge')
+    const at = plate ? Number(plate.dataset.testid?.split('-')[1]) : -1
+    // On the plate of the one selected field, Enter and Space are the game's keys: pressing the plate again would do nothing.
+    const onSelected = at >= 0 && app.selection.length === 1 && app.selected === at
+    const onControl = !!t.closest?.('button, input, a') && !onSelected
     const k = e.key
     if (k === 'Escape') {
       if (pop >= 0 || expanded) { pop = -1; expanded = false; ctx.dirty(); return true }
@@ -232,10 +249,9 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       return false
     }
     if (k === 'Tab') {
-      if (e.shiftKey || e.ctrlKey || (onControl && !onPlate)) return false
-      if (!nextNeed()) return false
-      ;(document.activeElement as HTMLElement | null)?.blur?.()
-      return true
+      // Tab walks the fields that need something, in order, and after the last of them goes on into the instruments.
+      if (e.shiftKey || e.ctrlKey || (!!t.closest?.('button, input, a') && !onPlate)) return false
+      return nextNeed(at >= 0 ? at : app.selected, onPlate)
     }
     if (k === 'Enter' || k === ' ') {
       if (onControl || e.ctrlKey) return false
@@ -287,7 +303,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       paused.hidden = !stopped
       el.classList.toggle('is-paused', stopped)
       if (stopped) patch(paused, String(ctx.touch()), () => [icon('pause', 'ic s'), 'Paused', ctx.touch() ? null : h('span', { class: 'key' }, 'Space')])
-      updateHint()
+      updateHint(c)
       P.update()
       updateCrew(c)
       card.update(c)

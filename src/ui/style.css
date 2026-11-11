@@ -22,6 +22,7 @@
   --loam: #7a5a43;
   --loam-wet: #4a3528;
   --leaf: #3f7d48;
+  --leaf-young: #6fa355;
   --scrim: rgb(29 42 36 / 0.55);
 
   /* instruments */
@@ -29,6 +30,7 @@
   --night-solid: #161f1b;
   --night-2: rgb(243 236 220 / 0.09);
   --night-line: rgb(243 236 220 / 0.2);
+  --night-edge: rgb(243 236 220 / 0.45);
   --cream: #f3ecdc;
   --cream-2: #c9c4b0;
   --gold: #eebb55;
@@ -47,7 +49,8 @@
   --t-head: 20px;
   --t-title: 24px;
   --t-moment: 32px;
-  --t-display: clamp(48px, 3vw + 32px, 96px);
+  --t-display-min: 48px;
+  --t-display: clamp(var(--t-display-min), 3vw + 32px, 96px);
 
   --sp-h: 2px;
   --sp-1: 4px;
@@ -78,7 +81,7 @@
   :root { --hit: 44px; --hit-s: 40px; }
 }
 
-/* Reduced motion: cuts, and fades of 120 ms or less. */
+/* Reduced motion: cuts, and fades of 120 ms or less. Nothing waits on a delay to appear. */
 :root.reduce-motion {
   --t-base: 0ms;
   --t-move: 0ms;
@@ -86,6 +89,7 @@
   --t-reveal: 0ms;
   --stagger: 0ms;
 }
+.reduce-motion .hud *, .reduce-motion .hud *::before, .reduce-motion .hud *::after { animation: none !important; }
 
 html, body { margin: 0; height: 100%; overflow: hidden; background: var(--night-solid); }
 
@@ -208,7 +212,6 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: var(--night-
   .btn:hover:not(:disabled) { border-color: var(--ink); background: var(--paper); }
   .btn.primary:hover:not(:disabled) { background: var(--ink-2); }
   .btn.danger:hover:not(:disabled) { background: var(--bad-wash); }
-  .btn.danger.solid:hover:not(:disabled) { background: #8a3320; }
   .paper .icon-btn:hover:not(:disabled) { background: var(--paper-2); }
   .link:hover { color: var(--ink); }
 }
@@ -312,5 +315,4 @@ kbd {
 
 /* A figure that has just changed. */
 .changed { animation: changed 1200ms var(--ease-out); }
-.reduce-motion .changed { animation: none; }
 @keyframes changed { from { background-color: var(--warn-wash); } to { background-color: transparent; } }

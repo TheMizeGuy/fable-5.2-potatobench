@@ -84,8 +84,10 @@ export function patch(el: HTMLElement, key: string, render: () => Child): void {
   else active?.blur()
 }
 
-export function forget(el: HTMLElement): void {
-  keys.delete(el)
+// Something on its way out is only a picture: nothing in it can be found by name.
+export function unname(el: Element): void {
+  el.removeAttribute('data-testid')
+  for (const n of el.querySelectorAll('[data-testid]')) n.removeAttribute('data-testid')
 }
 
 function reducedNow(): boolean {
@@ -129,7 +131,14 @@ export interface PaperSpec {
 interface Open { el: HTMLElement; back: HTMLElement | null; spec: PaperSpec; at: number }
 
 let paperSeq = 0
-const EXIT_MS = 160
+// How long anything takes to leave: the same figure as --t-exit in the stylesheet.
+export const EXIT_MS = 160
+
+// A paper opened from the keyboard hands the focus back when it closes; one opened by hand does not, so that
+// Space stays the clock's.
+let byKeyboard = false
+document.addEventListener('keydown', () => { byKeyboard = true }, true)
+document.addEventListener('pointerdown', () => { byKeyboard = false }, true)
 
 export class Papers {
   private stack: Open[] = []
@@ -161,7 +170,7 @@ export class Papers {
 
   open(spec: PaperSpec): () => void {
     const id = `paper-${++paperSeq}`
-    const back = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null
+    const back = byKeyboard && document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null
     let closed = false
     const close = () => {
       if (closed) return
@@ -225,6 +234,9 @@ export class Papers {
     }
     this.leaving++
     entry.el.inert = true
+    unname(entry.el)
+    // What was covered is live again at once, so the focus can go back to it.
+    this.sync()
     entry.spec.onClose?.()
     if (this.stack.length === 0 && !this.queue.length && this.resume) {
       const r = this.resume
@@ -302,6 +314,8 @@ export class Notes {
   private items: Note[] = []
   private seq = 0
   private hovered = false
+  // One row that stays below the alerts until it is put away: a tip, or what to do when nothing is happening.
+  private pinned: { key: string; el: HTMLElement } | null = null
   keep = 3
   // Where the rows sit over the land itself, each one goes after this long (0: it stays).
   maxAge = 0
@@ -341,7 +355,23 @@ export class Notes {
 
   clear(): void {
     this.items = []
+    this.pinned = null
     this.el.replaceChildren()
+  }
+
+  pin(o: { key: string; glyph: string; text: string; tile?: boolean; onClose?: () => void }): void {
+    if (this.pinned?.key === o.key) return
+    const el = h('div', { class: `alert${o.onClose ? ' tip' : ''}${o.tile ? ' tiled' : ''}`, role: 'note', testid: o.onClose ? 'hint' : 'idle-note' },
+      icon(o.glyph, 'ic s'), h('span', null, o.text),
+      o.onClose ? h('button', { class: 'nicon s', type: 'button', 'aria-label': 'Put this tip away', testid: 'hint-close', onclick: o.onClose }, icon('close', 'ic s')) : null)
+    this.pinned = { key: o.key, el }
+    this.draw()
+  }
+
+  unpin(key?: string): void {
+    if (!this.pinned || (key !== undefined && this.pinned.key !== key)) return
+    this.pinned = null
+    this.draw()
   }
 
   // How many rows this screen has room for.
@@ -365,6 +395,7 @@ export class Notes {
     for (const row of this.el.children) before.set((row as HTMLElement).dataset.id!, row.getBoundingClientRect().top)
     const have = new Map([...this.el.children].map(row => [(row as HTMLElement).dataset.id!, row as HTMLElement]))
     const rows = this.items.map(n => have.get(n.id) ?? this.row(n))
+    if (this.pinned) { this.pinned.el.dataset.id = 'pinned'; rows.push(this.pinned.el) }
     this.el.replaceChildren(...rows)
     if (reducedNow()) return
     // Rows that were already there glide to their new place.
@@ -402,11 +433,4 @@ export function gauge(value: number, o: { label: string; text?: string; cls?: st
   },
   h('i', { style: `width:${(v * 100).toFixed(1)}%` }),
   o.mark !== undefined ? h('b', { style: `left:${(Math.max(0, Math.min(1, o.mark)) * 100).toFixed(1)}%` }) : null)
-}
-
-export function btn(label: Child, onclick: () => void, o: { cls?: string; testid?: string; disabled?: boolean; aria?: string; k?: string; autofocus?: boolean } = {}): HTMLButtonElement {
-  return h('button', {
-    class: `btn ${o.cls ?? ''}`, type: 'button', testid: o.testid, disabled: o.disabled, 'aria-label': o.aria, k: o.k ?? o.testid, autofocus: o.autofocus,
-    onclick: () => onclick(),
-  }, label)
 }

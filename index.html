@@ -17,16 +17,18 @@
         left: max(48px, env(safe-area-inset-left, 0px));
         bottom: 256px;
         margin: 0;
-        font: 600 clamp(48px, 3vw + 32px, 96px) / 0.92 'Fraunces Variable', Georgia, 'Times New Roman', serif;
+        font: 600 clamp(56px, 6vw + 16px, 128px) / 0.92 'Fraunces Variable', Georgia, 'Times New Roman', serif;
         letter-spacing: -0.02em;
         color: #f3ecdc;
       }
       @media (max-width: 519px) { .splash-name { left: 16px; bottom: 300px; } }
+      @media (max-height: 500px) and (orientation: landscape) { .splash-name { font-size: 48px; } }
       @media (prefers-reduced-motion: reduce) { #splash { transition: none; } }
+      .reduce-motion #splash { transition: none; }
     </style>
   </head>
   <body>
-    <canvas id="field" aria-label="The farm: six fields on a slope"></canvas>
+    <canvas id="field" role="img" aria-label="The farm: six fields on a slope"></canvas>
     <div id="ui"></div>
     <div id="splash" aria-hidden="true"><p class="splash-name">The County</p></div>
     <noscript>The County needs JavaScript to run.</noscript>

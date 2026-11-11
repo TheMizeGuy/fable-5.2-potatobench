@@ -9,7 +9,7 @@ import type { MountHud } from '../game/contracts.ts'
 import * as S from '../sim/index.ts'
 import { openAlmanac } from './almanac.ts'
 import { cellarScreen } from './cellar.ts'
-import { layoutNow, Notes, Papers, type Ctx, type Level, type Screen } from './core.ts'
+import { EXIT_MS, layoutNow, Notes, Papers, unname, type Ctx, type Level, type Screen } from './core.ts'
 import { lotKey, ticket } from './dig.ts'
 import { h } from './dom.ts'
 import { setUnits } from './fmt.ts'
@@ -20,8 +20,6 @@ import { planScreen } from './plan.ts'
 import { alertShort } from './rules.ts'
 import { seasonScreen } from './season.ts'
 import { titleScreen } from './title.ts'
-
-const EXIT_MS = 160
 
 export const mountHud: MountHud = (root, app, view) => {
   root.classList.add('hud', 'waiting')
@@ -99,7 +97,7 @@ export const mountHud: MountHud = (root, app, view) => {
       oldEl.inert = true
       // For its last moment the old screen is only a picture: nothing in it can be found or focused.
       if (oldEl.contains(document.activeElement)) (document.activeElement as HTMLElement).blur()
-      for (const n of oldEl.querySelectorAll('[data-testid]')) n.removeAttribute('data-testid')
+      unname(oldEl)
       setTimeout(() => oldEl.remove(), EXIT_MS)
       screen.el.classList.add('arriving')
     } else oldEl?.remove()

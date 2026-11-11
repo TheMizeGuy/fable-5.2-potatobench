@@ -7,7 +7,7 @@ import { seasonCount } from './rules.ts'
 import { PHASE_LABEL } from './top.ts'
 
 // Years a first farm has a fair chance in: the neighbor's crop came in at or above its usual and blight stayed small.
-export function soundYears(world: S.World): number[] {
+function soundYears(world: S.World): number[] {
   const ys = S.startYears(world)
   const known = ys.map(y => world.neighbor[y]).filter(Boolean).map(n => n.yieldCwtAcre).sort((a, b) => a - b)
   const median = known.length ? known[Math.floor(known.length / 2)] : 0
@@ -33,7 +33,7 @@ export async function startNewFarm(ctx: Ctx, year?: number): Promise<void> {
 }
 
 // For anyone who wants a particular year. Only what a grower would know going in is shown: the year before.
-export function openYearPicker(ctx: Ctx): void {
+function openYearPicker(ctx: Ctx): void {
   const app = ctx.app
   const years = app.startYears()
   let pick = years[Math.floor(Math.random() * years.length)]

@@ -43,7 +43,7 @@ function moneyTable(y: S.YearSummary, lost: boolean): HTMLElement {
 function cashLine(c: S.Campaign): SVGElement {
   const pts = [c.history[0].cashStart, ...c.history.map(y => y.cashEnd)]
   const lo = Math.min(S.CREDIT_LIMIT, ...pts) - 4000, hi = Math.max(...pts, 0) + 4000
-  const W = 520, H = 150, L = 8, Rt = 8
+  const W = 520, H = 150, L = 8, Rt = 28
   const x = (k: number) => L + (k / (pts.length - 1)) * (W - L - Rt)
   const y = (v: number) => 10 + (1 - (v - lo) / (hi - lo)) * (H - 34)
   const d = pts.map((v, k) => `${k ? 'L' : 'M'}${x(k).toFixed(1)} ${y(v).toFixed(1)}`).join('')

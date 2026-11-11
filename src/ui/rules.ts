@@ -10,7 +10,7 @@ export const JOB_VERB: Record<S.JobKind, string> = {
 }
 // What the crew is doing, before the field's name.
 export const JOB_DOING: Record<S.JobKind, string> = {
-  plant: 'Planting', hill: 'Hilling', scout: 'Walking', spray: 'Spraying', water: 'Watering', rogue: 'Roguing', sample: 'Test dig in', kill: 'Killing vines in', dig: 'Digging',
+  plant: 'Planting', hill: 'Hilling', scout: 'Scouting', spray: 'Spraying', water: 'Watering', rogue: 'Roguing', sample: 'Test dig in', kill: 'Killing vines in', dig: 'Digging',
 }
 
 // One line each: what the job does.
@@ -20,7 +20,7 @@ export function jobWhat(kind: S.JobKind): string {
     case 'hill': return 'Pulls soil up over the row: it keeps the tubers out of the light and the blight, and buries the weeds.'
     case 'scout': return 'Walks the rows looking for blight, which only shows up close.'
     case 'spray': return 'Puts protectant on the leaves. It stops spores taking hold; it does not cure a blighted plant.'
-    case 'water': return `Irrigates ${F.metric() ? 'about 25 mm' : 'about an inch'}.`
+    case 'water': return `Irrigates ${inch()}.`
     case 'rogue': return 'Pulls up and bags the blighted plants you have found, so they stop throwing spores at the rest.'
     case 'sample': return 'Lifts one hill so you can see the tubers: how many, how big, and what is wrong with them.'
     case 'kill': return 'Kills the vines. The tubers stop growing and their skins start to set.'
@@ -35,7 +35,7 @@ export function orderHelp(kind: S.JobKind): string {
     case 'hill': return 'Pulls soil over the row to cover the tubers and bury weeds. Twice, before the rows close.'
     case 'scout': return 'Walks the rows for blight, which shows only up close. Weekly; more often on a blight watch.'
     case 'spray': return 'Puts protectant on the leaf. Before blight weather: it cures nothing, and rain and new leaf wear it off.'
-    case 'water': return `Irrigates ${F.metric() ? 'about 25 mm' : 'about an inch'}. When the ground is dry while the tubers size.`
+    case 'water': return `Irrigates ${inch()}. When the ground is dry while the tubers size.`
     case 'rogue': return 'Pulls and bags the blighted plants you have found. While they are few.'
     case 'sample': return 'Lifts one hill to show its tubers. Your only look at the crop before dig day.'
     case 'kill': return `Kills the vines: growth stops and skins set in ${S.SKIN_DAYS} days. Early September, or sooner if blight is winning.`
@@ -43,19 +43,36 @@ export function orderHelp(kind: S.JobKind): string {
   }
 }
 
-// The whole of the teaching: one sentence the first time each kind of badge appears.
+// The whole of the teaching: a sentence or two the first time each kind of badge appears.
 export function hint(kind: S.JobKind): string {
   switch (kind) {
-    case 'plant': return `Plant now: the soil has reached ${F.temp(10)}. In colder ground the seed sits and rots.`
-    case 'hill': return 'Hilling pulls soil over the row to cover the coming tubers and bury the weeds. Twice, before the rows close.'
-    case 'scout': return 'Walk the rows: blight shows only up close, and a week-old reading is a guess.'
-    case 'spray': return 'Spray before blight weather: protectant stops spores taking hold, cures nothing, and wears off in rain and new leaf.'
-    case 'water': return 'Water when the ground is dry while the tubers size: dry soil costs yield and brings scab.'
-    case 'rogue': return 'Rogue: pull and bag the blighted plants you have found, so they stop throwing spores at the rest.'
+    case 'plant': return `The soil has reached ${F.temp(10)}, warm enough to plant. In colder ground the seed sits and rots.`
+    case 'hill': return 'Hilling pulls soil over the row to cover the coming tubers and bury the weeds. Do it twice, before the rows close.'
+    case 'scout': return 'Scouting walks the rows. Blight shows only up close, and a week-old reading is a guess.'
+    case 'spray': return 'Spray before blight weather. Protectant stops spores taking hold, cures nothing, and wears off in rain and new leaf.'
+    case 'water': return `Dry soil while the tubers size costs yield and brings scab. Watering puts on ${inch()}.`
+    case 'rogue': return 'To rogue is to pull and bag the blighted plants you have found, so they stop throwing spores at the rest.'
     case 'sample': return 'A test dig lifts one hill so you can see the tubers. It is your only look before dig day.'
-    case 'kill': return `Kill the vines when the crop is made: the tubers stop growing and skins take ${S.SKIN_DAYS} days to set.`
-    case 'dig': return 'Digging lifts the crop and grades every tuber. Wait for set skins if frost allows: thin skins do not keep.'
+    case 'kill': return `Kill the vines once the crop is made. The tubers stop growing, and skins take ${S.SKIN_DAYS} days to set.`
+    case 'dig': return 'Digging lifts the crop and grades every tuber. Wait for set skins if frost allows, because thin skins do not keep.'
   }
+}
+
+function inch(): string {
+  return F.metric() ? `about ${S.IRRIGATION_MM} mm` : 'about an inch'
+}
+
+export function isJob(act: S.Advice['act'] | undefined): act is S.JobKind {
+  return !!act && act !== 'wait' && act !== 'sell' && act !== 'close'
+}
+
+// A blight reading is a guess once the field has gone a week unwalked.
+export function isStale(f: S.FieldInfo): boolean {
+  return f.scoutAge < 0 || f.scoutAge >= 7
+}
+
+export function hillWord(passes: number): string {
+  return passes >= 2 ? 'twice' : passes === 1 ? 'once, of two' : 'not yet'
 }
 
 // The glyph for where a field is in its year.
@@ -110,7 +127,7 @@ export const SKY_WORD: Record<string, string> = {
 export const BLIGHT_RISK = ['none', 'some', 'high', 'severe']
 
 // The usual price through the season relative to the season average (USDA monthly record, as the simulation holds it).
-export function usualFactor(day: number): number {
+function usualFactor(day: number): number {
   const c = S.SEASON_CURVE
   if (day <= c[0][0]) return c[0][1]
   for (let i = 1; i < c.length; i++) {
@@ -120,7 +137,7 @@ export function usualFactor(day: number): number {
 }
 
 // What a large tuber brings against a US No. 1 of the same variety.
-export function largeRatio(world: S.World, c: S.Campaign, id: S.VarietyId): number {
+function largeRatio(world: S.World, c: S.Campaign, id: S.VarietyId): number {
   const lot = { variety: id, sprouted: false } as S.Lot
   const no1 = S.gradePrice(world, c, lot, 'no1')
   return no1 > 0 ? S.gradePrice(world, c, lot, 'chef') / no1 : 1
@@ -153,12 +170,6 @@ export function keepsUntil(year: number, id: S.VarietyId, vent: boolean): string
 export function yieldWord(v: S.Variety): string {
   const k = v.bulk * (v.matPd - v.tiPd)
   return k < 430 ? 'light' : k < 520 ? 'moderate' : k < 620 ? 'heavy' : 'heaviest, if September holds'
-}
-
-// The same, as a mark out of four.
-export function yieldMark(v: S.Variety): number {
-  const k = v.bulk * (v.matPd - v.tiPd)
-  return k < 430 ? 1 : k < 520 ? 2 : k < 620 ? 3 : 4
 }
 
 // How many tubers a hill sets, and so how they size: '' when it is nothing out of the ordinary.

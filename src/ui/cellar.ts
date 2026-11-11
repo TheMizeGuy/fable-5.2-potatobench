@@ -28,9 +28,9 @@ function priceLine(ctx: Ctx, c: S.Campaign, id: S.VarietyId): SVGElement {
   })
   const all = [...past, ...ahead.map(a => a.lo), ...ahead.map(a => a.hi)]
   const lo = Math.min(...all) * 0.98, hi = Math.max(...all) * 1.02
-  const W = 220, H = 44
+  const W = 220, H = 56
   const x = (m: number) => 4 + (m / LAST) * (W - 8)
-  const y = (p: number) => 4 + (1 - (p - lo) / (hi - lo || 1)) * (H - 8)
+  const y = (p: number) => 4 + (1 - (p - lo) / (hi - lo || 1)) * (H - 22)
   const path = (pts: [number, number][]) => pts.map(([m, p], k) => `${k ? 'L' : 'M'}${x(m).toFixed(1)} ${y(p).toFixed(1)}`).join('')
   const band = ahead.length > 1 ? `${path(ahead.map(a => [a.m, a.hi]))}${path(ahead.map(a => [a.m, a.lo] as [number, number]).reverse()).replace('M', 'L')}z` : ''
   const april = ahead.find(a => a.m === 5)
@@ -41,7 +41,9 @@ function priceLine(ctx: Ctx, c: S.Campaign, id: S.VarietyId): SVGElement {
   },
   band ? s('path', { class: 'pl-band', d: band }) : null,
   past.length > 1 ? s('path', { class: 'pl-past', d: path(past.map((p, m) => [m, p])) }) : null,
-  MONTH_SHORT.map((_, m) => s('path', { class: 'pl-tick', d: `M${x(m).toFixed(1)} ${H - 3}v3` })),
+  MONTH_SHORT.map((_, m) => s('path', { class: 'pl-tick', d: `M${x(m).toFixed(1)} ${H - 14}v3` })),
+  s('text', { class: 'pl-end', x: 4, y: H - 1 }, MONTH_SHORT[0]),
+  s('text', { class: 'pl-end', x: W - 4, y: H - 1, 'text-anchor': 'end' }, MONTH_SHORT[LAST]),
   s('rect', { class: 'pl-now', x: (x(c.month) - 3).toFixed(1), y: (y(now) - 3).toFixed(1), width: 6, height: 6 }))
 }
 
@@ -106,8 +108,8 @@ export function cellarScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
     return h('article', { class: 'lot', 'aria-labelledby': `lot-h-${lot.id}`, k: `lot-${lot.id}` },
       h('header', { class: 'lot-head' },
         h('div', null,
-          h('h3', { id: `lot-h-${lot.id}`, class: 't-head' }, v.name),
-          h('p', { class: 'sub' }, `from ${S.FIELD_NAMES[lot.field]} · ${F.mass(S.lotCwt(lot))}${lot.seedHeld ? ` · seed held for ${F.plural(lot.seedHeld, 'field')}` : ''}`)),
+          h('h3', { id: `lot-h-${lot.id}`, class: 't-head' }, S.FIELD_NAMES[lot.field]),
+          h('p', { class: 'sub' }, `${v.name} · ${F.mass(S.lotCwt(lot))}${lot.seedHeld ? ` · seed held for ${F.plural(lot.seedHeld, 'field')}` : ''}`)),
         h('div', { class: 'lot-worth' },
           h('span', { class: 'figure num', testid: `lot-value-${lot.id}`, 'data-lot': lot.id }, F.money(value)),
           h('span', { class: 'sub num' }, `${F.price(S.basePrice(app.world, c, lot.variety))} for No. 1`))),

@@ -1,10 +1,11 @@
 // The command card: what is selected, what is known about it, and the orders it can take now.
 import * as S from '../sim/index.ts'
-import { gauge, patch, type Ctx, type Level } from './core.ts'
+import { EXIT_MS, gauge, patch, type Ctx, type Level } from './core.ts'
 import { h, type Child } from './dom.ts'
 import * as F from './fmt.ts'
 import { icon } from './icons.ts'
-import { JOB_KEY, JOB_VERB, jobWhat } from './rules.ts'
+import { culledAtDig } from './dig.ts'
+import { hillWord, isJob, isStale, JOB_KEY, JOB_VERB, jobWhat } from './rules.ts'
 
 const MAX_ORDERS = 5
 const HOLD_MS = 1400
@@ -23,10 +24,6 @@ export interface Card {
   // Gives each selected field what reference practice has for it.
   suggested(): void
   flash(text: string, level?: Level): void
-}
-
-function isJob(act: S.Advice['act'] | undefined): act is S.JobKind {
-  return !!act && act !== 'wait' && act !== 'sell' && act !== 'close'
 }
 
 // How much an order matters here now, to choose five when more than five can be given.
@@ -199,7 +196,7 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
       cell('Leaf', 'leaf', F.pct(f.canopy), gauge(f.canopy, { label: 'Leaf cover', cls: 'leaf' })),
       cell('Water', 'water', waterWord, gauge(Math.min(1, f.moisture), { label: 'Soil water', text: `${f.moistureLabel}, ${F.pct(f.moisture)} of what plants can use`, cls: waterCls }), waterCls),
       cell('Protection', 'shield', f.protect > 0.02 ? F.pct(f.protect) : 'none', gauge(f.protect, { label: 'Protectant on the leaf', cls: watch && f.protect < 0.35 ? 'warn' : '' }), watch && f.protect < 0.35 && f.status === 'growing' ? 'warn' : ''),
-      cell('Hill', 'hill', `${f.hillPasses} of 2`, gauge(f.hillPasses / 2, { label: 'Hilled', text: f.hillPasses >= 2 ? 'twice' : f.hillPasses === 1 ? 'once, of two' : 'not yet', mark: 0.5 })))
+      cell('Hill', 'hill', `${f.hillPasses} of 2`, gauge(f.hillPasses / 2, { label: 'Hilled', text: hillWord(f.hillPasses), mark: 0.5 })))
   }
 
   // Blight as last seen, and how old that is. Before the rows are up, the soil; once the vines are dead, the skins.
@@ -219,7 +216,7 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
       return h('p', { class: 'reading' }, icon('dig', 'ic s'), h('span', null, `${job ? F.pct(job.done / job.need) : 'Part'} of the rows are out.`))
     }
     const age = f.scoutAge
-    const stale = age < 0 || age >= 7
+    const stale = isStale(f)
     const seen = f.blightHills > 0
     return h('p', { class: `reading${seen ? ' blight' : ''}${stale ? ' stale' : ''}`, testid: 'blight-reading' },
       icon(seen ? (stale ? 'blight-old' : 'blight') : stale ? 'stale' : 'check', 'ic s'),
@@ -255,7 +252,7 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
     const lot = f.lot >= 0 ? c.lots.find(l => l.id === f.lot) : undefined
     if (f.status === 'dug' && lot) {
       const value = lot.open ? S.lotValue(app.world, c, lot) : 0
-      const cull = (['green', 'blight', 'frost', 'rot', 'small'] as S.Cause[]).reduce((a, k) => a + lot.loss[k], 0)
+      const cull = culledAtDig(lot)
       return [
         head(f.name, `${f.variety} · dug ${F.date(c.year, lot.dugDay, true)}`, 'close'),
         h('div', { class: 'card-main' },
@@ -299,7 +296,7 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
       if (!el.hidden && shownFor !== '' && !ctx.reduced()) {
         el.classList.remove('in')
         el.classList.add('out')
-        setTimeout(() => { if (!app.selection.length) { el.hidden = true; el.classList.remove('out'); ctx.dirty() } }, 160)
+        setTimeout(() => { if (!app.selection.length) { el.hidden = true; el.classList.remove('out'); ctx.dirty() } }, EXIT_MS)
       } else if (!el.classList.contains('out')) el.hidden = true
       shownFor = ''
       return

@@ -8,7 +8,7 @@ import { plates, type PlateModel } from './plates.ts'
 import * as R from './rules.ts'
 import { topBar } from './top.ts'
 
-export function varietyTraits(v: S.Variety, c: S.Campaign, world: S.World): string[] {
+function varietyTraits(v: S.Variety, c: S.Campaign, world: S.World): string[] {
   return [
     `${v.maturity} maturing`,
     v.market.toLowerCase(),
@@ -27,7 +27,7 @@ function fieldCost(p: S.FieldPlan): number {
 }
 
 // Every variety that can be planted this year, side by side.
-export function openCompare(ctx: Ctx): void {
+function openCompare(ctx: Ctx): void {
   const app = ctx.app
   const c = app.campaign
   if (!c) return
@@ -287,8 +287,8 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
       patch(bar, JSON.stringify([cost, c.cash, c.year, app.settings.units, layout]), () => [
         h('p', { class: `plan-money${over ? ' over' : ''}`, testid: 'plan-money' },
           h('span', null, 'This plan ', h('strong', { class: 'num' }, F.money(cost))),
-          h('span', null, after < 0 ? 'the bank lends ' : 'from cash, leaving ', h('strong', { class: 'num' }, F.money(Math.abs(after)))),
-          h('span', null, 'due at year end ', h('strong', { class: 'num' }, F.money(S.NOTE_PAYMENT + S.LIVING)))),
+          h('span', null, after < 0 ? 'on the bank\'s spring loan ' : 'from cash, leaving ', h('strong', { class: 'num' }, F.money(Math.abs(after)))),
+          h('span', null, 'the note and household, at year end ', h('strong', { class: 'num' }, F.money(S.NOTE_PAYMENT + S.LIVING)))),
         h('div', { class: 'plan-actions' },
           h('button', { class: 'nbtn', type: 'button', testid: 'money-open', onclick: () => openMoney(ctx) }, 'The money'),
           h('button', { class: 'nbtn', type: 'button', testid: 'equipment-open', onclick: () => openEquipment(ctx) }, 'Equipment'),
@@ -296,7 +296,7 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
       ])
       // The one thing to do here is under the keyboard from the start.
       if (!focused && !ctx.papers.isOpen()) {
-        const start = bar.querySelector<HTMLElement>('[data-testid="begin-season"]')
+        const start = bar.querySelector<HTMLElement>('[data-k="begin-season"]')
         const at = document.activeElement
         const free = !at || at === document.body || !!at.closest('[inert]')
         if (free) start?.focus({ preventScroll: true })

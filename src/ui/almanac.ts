@@ -72,7 +72,7 @@ function fieldsPage(ctx: Ctx, c: S.Campaign): Child {
       if (f.status === 'idle' || f.status === 'planted') add('Soil here', `${F.temp((t ? t.soilT : 0) + S.SOIL_T_OFFSET[f.elev])}; seed wants about ${F.temp(10)}`)
       if (f.status === 'growing' || f.status === 'planted') {
         add('Leaf', `${F.pct(f.canopy)} of the ground${f.bloom > 0.2 ? ', in flower' : ''}${f.frosted >= 0.05 ? `; ${F.pct(f.frosted)} blackened by frost` : ''}`)
-        add('Hilled', f.hillPasses >= 2 ? 'twice' : f.hillPasses === 1 ? 'once, of two' : 'not yet')
+        add('Hilled', R.hillWord(f.hillPasses))
         add('Protectant', f.protect > 0.02 ? `${F.pct(f.protect)} left` : 'none')
       }
       if (f.status !== 'dug' && f.status !== 'lost') add('Soil water', `${f.moistureLabel}${f.tooWet ? ', too wet to work' : f.wilt > 0.3 ? ', plants drooping' : ''}`)

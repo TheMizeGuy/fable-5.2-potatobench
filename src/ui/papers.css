@@ -33,6 +33,8 @@
   grid-template-rows: auto minmax(0, 1fr) auto;
   animation: paper-in var(--t-move) var(--ease-out);
 }
+.hud .dialog:focus-visible, .hud .paper-body:focus-visible { outline: none; }
+.hud .paper-body:focus-visible { box-shadow: inset 0 0 0 2px var(--cold-ink); }
 .dialog.small { width: min(460px, calc(100vw - 32px)); }
 .dialog.wide { width: min(940px, calc(100vw - 32px)); }
 .dialog.out { animation: paper-out var(--t-exit) var(--ease-in) forwards; }
@@ -64,7 +66,7 @@
 @keyframes paper-rise { from { opacity: 0; transform: translateY(12px); } }
 @keyframes paper-fall { to { opacity: 0; transform: translateY(8px); } }
 .tray-head { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--sp-2); }
-.tray-head .icon-btn { margin: -6px -10px 0 0; }
+.tray-head .icon-btn { margin: calc(-1 * var(--sp-1)) calc(-1 * var(--sp-2)) 0 0; }
 .tray-lede { margin: var(--sp-1) 0 var(--sp-2); color: var(--ink-2); }
 .tray { display: block; max-width: 100%; height: auto; }
 .flat-rim { fill: #b08a5e; stroke: #6f5335; }
@@ -83,10 +85,10 @@
 .m-blight { fill: #3a2418; opacity: 0.85; }
 .m-frost { fill: #b9c3c9; opacity: 0.6; }
 .m-rot { fill: #2f2416; opacity: 0.8; }
-.tray-w, .tray-m, .tray-scale-label { font-family: var(--sans); font-size: 12px; text-anchor: middle; fill: #f3ecdc; font-variant-numeric: tabular-nums; }
+.tray-w, .tray-m, .tray-scale-label { font-family: var(--sans); font-size: var(--t-label); text-anchor: middle; fill: var(--paper); font-variant-numeric: tabular-nums; }
 .tray-w { font-weight: 600; }
 .tray-m { fill: #f0d2b2; }
-.tray-scale { stroke: #f3ecdc; stroke-width: 1; fill: none; }
+.tray-scale { stroke: var(--paper); stroke-width: 1; fill: none; }
 .tray-scale-label { text-anchor: start; }
 .tally { margin-top: var(--sp-2); color: var(--ink-2); }
 .narrowing { display: grid; gap: var(--sp-1); margin-top: var(--sp-3); padding-top: var(--sp-3); border-top: 1px solid var(--rule); }
@@ -106,12 +108,12 @@
 @keyframes drop { from { opacity: 0; transform: scaleY(0); } }
 
 /* ---------------------------------------------------------------- the weigh ticket */
-.ticket-paper { width: min(600px, calc(100vw - 32px)); }
+@media (min-width: 700px) { .ticket-paper { width: min(600px, calc(100vw - 32px)); } }
 .ticket-paper .paper-body { padding-top: var(--sp-5); }
 .ticket { display: grid; gap: var(--sp-4); }
 .ticket-head { display: grid; gap: var(--sp-1); }
 .ticket-head .t-label { color: var(--ink-3); }
-.ticket-head .t-moment { padding-right: var(--sp-7); }
+.ticket-head .t-title { padding-right: var(--sp-7); }
 .ticket-form { display: grid; grid-template-columns: repeat(4, auto); margin-top: var(--sp-2); border-top: 1px solid var(--ink-3); border-bottom: 3px double var(--rule-strong); }
 .ticket-form div { padding: var(--sp-1) var(--sp-3) var(--sp-2); border-left: 1px solid var(--rule); }
 .ticket-form div:first-child { padding-left: 0; border-left: 0; }
@@ -120,24 +122,25 @@
 .carried .t-label { color: var(--ink-3); }
 .carried .gauge { display: block; height: 10px; }
 .carried-text { grid-column: 1 / -1; }
-.ticket-big { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-4); }
+.ticket-big { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--sp-6); align-items: end; }
+.ticket-big > div:first-child .figure { font-size: var(--t-display-min); line-height: 1; }
 .ticket-big .t-label { display: block; color: var(--ink-3); }
 .ticket-big .sub { display: block; }
 .gradebar { display: flex; height: 20px; gap: 1px; background: var(--paper); box-shadow: 0 0 0 1px var(--ink-3); }
 .gradebar i { flex: 1 1 0; min-width: 2px; }
 .g-no1 { background: var(--good); }
-.g-chef { background: #6fa355; }
+.g-chef { background: var(--leaf-young); }
 .g-b { background: var(--warn-wash); }
 .g-no2 { background: var(--warn); }
 .g-skinned { background: var(--cold-wash); }
 .g-cull { background: var(--loam-wet); }
 .grade-key { display: flex; flex-wrap: wrap; gap: var(--sp-1) var(--sp-4); margin-top: calc(-1 * var(--sp-2)); font-size: var(--t-small); line-height: 18px; }
-.grade-key li { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.grade-key li { display: inline-flex; align-items: center; gap: var(--sp-1); white-space: nowrap; }
 .grade-key i { width: 10px; height: 10px; box-shadow: 0 0 0 1px var(--ink-3); }
 .grade-key .num { font-weight: 600; }
 .losses .t-label { color: var(--ink-3); }
 .losses ol { margin: var(--sp-1) 0 var(--sp-2); }
-.losses li { display: grid; grid-template-columns: minmax(96px, auto) 72px minmax(0, 1fr); gap: var(--sp-3); align-items: baseline; padding: var(--sp-1) 0; border-bottom: 1px dotted var(--rule-strong); }
+.losses li { display: grid; grid-template-columns: 148px 72px minmax(0, 1fr); gap: var(--sp-3); align-items: baseline; padding: var(--sp-1) 0; border-bottom: 1px dotted var(--rule-strong); }
 .losses li .num { text-align: right; white-space: nowrap; }
 .loss-why { color: var(--ink-2); }
 .ticket-paper .paper-foot { display: block; }
@@ -153,8 +156,18 @@
 .staged .losses .t-label { animation: fade var(--t-base) var(--ease-out) 1500ms backwards; }
 .staged .losses li { animation: fade var(--t-base) var(--ease-out) backwards; animation-delay: calc(1600ms + var(--n) * 140ms); }
 .staged .losses .btn { animation: fade var(--t-base) var(--ease-out) 2100ms backwards; }
+.staged .paper-foot > * { animation: fade var(--t-base) var(--ease-out) 1500ms backwards; }
 @keyframes fade { from { opacity: 0; } }
 @keyframes fill { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+/* On a phone held sideways the choice stands beside the ticket, so the weight is in the first view. */
+@media (max-height: 500px) and (orientation: landscape) {
+  .dialog.ticket-paper { left: 50%; right: auto; top: 8px; bottom: 8px; transform: translateX(-50%); width: min(860px, calc(100vw - 16px)); max-height: none; grid-template-columns: minmax(0, 1fr) 264px; grid-template-rows: minmax(0, 1fr); border-width: 1px; border-radius: var(--radius); animation-name: fade; }
+  .dialog.ticket-paper.out { animation-name: shade-out; }
+  .ticket-paper > .paper-body { grid-row: 1; grid-column: 1; padding-top: var(--sp-3); }
+  .ticket-paper > .paper-foot { grid-row: 1; grid-column: 2; display: grid; align-content: center; border-top: 0; border-left: 1px solid var(--rule); border-radius: 0; padding: var(--sp-7) var(--sp-3) var(--sp-3); }
+  .ticket-paper .choice { grid-template-columns: minmax(0, 1fr); }
+  .ticket { gap: var(--sp-3); }
+}
 @media (max-width: 519px) {
   .ticket-form { grid-template-columns: repeat(2, auto); }
   .ticket-form div:nth-child(3) { padding-left: 0; border-left: 0; }
@@ -210,7 +223,9 @@
 .cellar-sum p { display: grid; }
 .cellar-sum .t-label { color: var(--ink-3); }
 .cellar-sum strong { font-size: var(--t-head); line-height: 24px; font-weight: 700; }
-.this-month { margin: var(--sp-4) 0; padding: var(--sp-2) var(--sp-3); min-height: 88px; background: var(--paper-2); font-size: var(--t-small); line-height: 18px; color: var(--ink-2); }
+.this-month { margin: var(--sp-4) 0; padding: var(--sp-2) var(--sp-3); background: var(--paper-2); font-size: var(--t-small); line-height: 18px; color: var(--ink-2); }
+.this-month:empty { display: none; }
+.pl-end { font-family: var(--sans); font-size: var(--t-label); fill: var(--ink-3); }
 .lots { display: grid; gap: var(--sp-3); margin-bottom: var(--sp-4); }
 .lot { padding: var(--sp-3) var(--sp-4); background: var(--paper-hi); border: 1px solid var(--rule); border-radius: var(--radius); display: grid; gap: var(--sp-3); }
 .lot-head { display: flex; justify-content: space-between; gap: var(--sp-3); }
@@ -218,7 +233,7 @@
 .lot-worth .figure { font-size: var(--t-title); line-height: 28px; }
 .lot-facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--sp-4); align-items: center; }
 .lot-facts ul { display: grid; gap: var(--sp-h); font-size: var(--t-small); line-height: 18px; }
-.lot-facts li { display: flex; gap: 6px; align-items: flex-start; }
+.lot-facts li { display: flex; gap: var(--sp-1); align-items: flex-start; }
 .lot-facts .ic { margin-top: 1px; }
 .price-line { display: block; }
 .pl-band { fill: var(--good); opacity: 0.28; stroke: none; }
@@ -231,6 +246,7 @@
 .stepper { display: inline-flex; align-items: center; gap: var(--sp-1); border: 1px solid var(--ink-3); border-radius: var(--radius); background: var(--paper-hi); }
 .stepper .num { min-width: 64px; text-align: center; font-weight: 600; }
 @media (max-width: 519px) {
+  .sheet-foot > .sub { display: none; }
   .lot-facts { grid-template-columns: minmax(0, 1fr); gap: var(--sp-2); }
   .cellar-sum strong { font-size: var(--t-lede); }
 }
@@ -264,7 +280,7 @@
 @keyframes draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
 .cl-dot { fill: var(--ink); }
 .cl-dot.neg { fill: var(--bad); }
-.cl-year, .cl-label { font-family: var(--sans); font-size: 12px; text-anchor: middle; fill: var(--ink-3); font-variant-numeric: tabular-nums; }
+.cl-year, .cl-label { font-family: var(--sans); font-size: var(--t-label); text-anchor: middle; fill: var(--ink-3); font-variant-numeric: tabular-nums; }
 .cl-label { text-anchor: start; }
 .cl-label.call { fill: var(--bad); }
 .history td, .history th { padding-right: var(--sp-2); }
@@ -332,7 +348,7 @@
 .year[aria-pressed='true'] { background: var(--ink); border-color: var(--ink); color: var(--paper-hi); }
 @media (hover: hover) { .year:hover:not([aria-pressed='true']) { border-color: var(--ink); } }
 .year-detail { display: grid; gap: var(--sp-3); align-content: start; }
-.year-big { font-size: 48px; }
+.year-big { font-size: var(--t-display-min); }
 .facts { display: grid; gap: var(--sp-1); }
 .facts dt { color: var(--ink-3); margin-top: var(--sp-2); }
 @media (max-width: 899px) {

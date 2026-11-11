@@ -13,7 +13,7 @@ export const PHASE_LABEL: Record<S.Phase, string> = {
 const SPEED_NAME = ['Pause', 'Normal speed', 'Fast', 'Fastest']
 const SPEED_ICON = ['pause', 'play', 'fast', 'fastest']
 
-export function dateText(c: S.Campaign, form: 'long' | 'mid' | 'short' = 'long'): string {
+function dateText(c: S.Campaign, form: 'long' | 'mid' | 'short' = 'long'): string {
   if (c.phase === 'season' && c.season) {
     const d = c.season.day
     return form === 'long' ? F.dateLong(c.year, d) : form === 'mid' ? `${F.weekday(c.year, d, true)}, ${F.date(c.year, d, true)}` : F.date(c.year, d, true)
@@ -139,13 +139,15 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
           x.blight > 0 ? h('span', { class: 'pips' }, Array.from({ length: x.blight }, () => h('i'))) : null,
           x.frost >= 30 ? icon('frost', `ic s${x.frost >= 60 ? ' sure' : ''}`) : null)))) : h('span', { class: 'tb-fill' }),
       h('div', { class: 'tb-right' },
-        h('span', { class: `cash num${c.cash < 0 ? ' neg' : ''}`, testid: 'cash', 'aria-label': c.cash < 0 ? `${F.money(-c.cash)} owed on the spring loan` : `Cash ${F.money(c.cash)}` }, F.money(c.cash)),
+        h('span', { class: 'cash num', testid: 'cash' },
+          h('span', { class: 'sr' }, c.cash < 0 ? 'Owed on the spring loan: ' : 'Cash: '),
+          h('span', { class: 'cash-v' }, F.money(c.cash))),
         withClock ? clock(ctx, snug) : null,
         h('button', { class: 'nicon', type: 'button', testid: 'menu-open', 'aria-label': `Menu${ctx.touch() ? '' : ' (M)'}`, title: ctx.touch() ? undefined : 'Menu (M)', onclick: () => o.onMenu() }, icon('menu'))),
     ])
     // Out of season the cash moves in a few large steps: each one counts, so it is seen to move.
     const cash = Math.round(c.cash)
-    const shown = el.querySelector<HTMLElement>('[data-testid="cash"]')
+    const shown = el.querySelector<HTMLElement>('.cash-v')
     if (shown && !season && cashWas !== null && cashWas !== cash) count(shown, cashWas, cash, n => F.money(n))
     cashWas = cash
   }

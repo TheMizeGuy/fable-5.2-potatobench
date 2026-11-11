@@ -92,6 +92,8 @@ const STATES: State[] = [
   { name: 'ledger-fifth', what: 'The fifth ledger: the farm is kept (or not)', sizes: MAIN, run: async page => {
     await q(page, `const { app } = q.g(); app.newGame(2012, 3); for (let y = 0; y < 5; y++) { app.do({ t: 'begin' }); q.year(4); if (y < 4) app.do({ t: 'next' }) }`)
     await closeAll(page)
+    // The five years write themselves in row by row: the frame is of the finished sheet.
+    await page.waitForTimeout(1800)
   } },
   { name: 'ledger-lost', what: 'The ledger when the bank calls the note', sizes: MAIN, run: async page => {
     await q(page, `const { app } = q.g(); app.newGame(1990, 3); for (let y = 0; y < 5 && app.campaign.outcome === ''; y++) { if (y) app.do({ t: 'next' }); app.do({ t: 'begin' }); app.do({ t: 'endSeason' }); q.winter(12, 0) }`)

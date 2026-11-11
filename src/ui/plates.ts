@@ -14,8 +14,8 @@ export interface PlateModel {
   badge: { glyph: string; label: string; urgent: boolean } | null
   // What a screen reader hears for the plate.
   said: string
-  // One sentence that comes with a badge the first time its kind appears.
-  hint?: { text: string; onClose: () => void }
+  // The badge a tip is about holds a ring until the tip is put away.
+  taught?: boolean
 }
 
 const GAP = 6
@@ -28,6 +28,7 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
   // w, h: the plate. extra: the badge hanging off its right end.
   const size: { w: number; h: number; extra: number }[] = []
   const at: Box[] = []
+  let compact = false
   for (let i = 0; i < S.FIELD_COUNT; i++) {
     const wrap = h('div', { class: 'plate-wrap' })
     wraps.push(wrap)
@@ -41,10 +42,10 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
       const m = o.model(i)
       const on = app.selection.includes(i)
       const wrap = wraps[i]
-      patch(wrap, JSON.stringify([m.name, m.glyph, m.sub, m.marks, m.queue, m.badge, m.said, on, m.hint?.text, ctx.touch()]), () => [
+      patch(wrap, JSON.stringify([m.name, m.glyph, m.sub, m.marks, m.queue, m.badge, m.said, on, m.taught, ctx.touch()]), () => [
         h('button', {
           class: `plate${on ? ' on' : ''}`, type: 'button', testid: `field-${i}`, 'aria-pressed': String(on), 'aria-label': m.said,
-          'aria-keyshortcuts': String(i + 1),
+          'aria-keyshortcuts': String(i + 1), title: ctx.touch() ? undefined : m.said,
           onclick: (e: Event) => app.select(i, (e as MouseEvent).shiftKey),
           ondblclick: () => app.selectLike(i),
           oncontextmenu: (e: Event) => { e.preventDefault(); o.onBadge(i) },
@@ -58,16 +59,20 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
           m.marks.length ? h('span', { class: 'plate-marks' }, m.marks.map(k => icon(k.glyph, `ic s ${k.cls}`))) : null,
           m.queue.length ? h('span', { class: 'plate-queue' }, m.queue.map(q => icon(q.glyph, `ic s${q.active ? ' active' : ''}`))) : null)),
         m.badge ? h('button', {
-          class: `badge${m.badge.urgent ? ' urgent' : ''}`, type: 'button', testid: `badge-${i}`, 'aria-label': m.badge.label,
+          class: `badge${m.badge.urgent ? ' urgent' : ''}${m.taught ? ' taught' : ''}`, type: 'button', testid: `badge-${i}`, 'aria-label': m.badge.label,
+          title: ctx.touch() ? undefined : m.badge.label,
           onclick: () => o.onBadge(i),
         }, icon(m.badge.glyph)) : null,
-        m.hint ? h('div', { class: 'hint', role: 'note', testid: 'hint' },
-          h('span', null, m.hint.text),
-          h('button', { class: 'nicon s', type: 'button', 'aria-label': 'Dismiss this tip', testid: 'hint-close', onclick: m.hint.onClose }, icon('close', 'ic s'))) : null,
       ])
-      wrap.style.zIndex = m.hint ? '4' : on ? '3' : m.badge ? '2' : '1'
-      const plate = wrap.firstElementChild as HTMLElement | null
-      const badge = wrap.querySelector<HTMLElement>('.badge')
+      wrap.style.zIndex = on ? '3' : m.badge ? '2' : '1'
+    }
+    measure()
+  }
+
+  function measure(): void {
+    for (let i = 0; i < S.FIELD_COUNT; i++) {
+      const plate = wraps[i].firstElementChild as HTMLElement | null
+      const badge = wraps[i].querySelector<HTMLElement>('.badge')
       if (plate) size[i] = { w: plate.offsetWidth, h: plate.offsetHeight, extra: badge ? badge.offsetWidth + 4 : 0 }
     }
   }
@@ -76,6 +81,14 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
   // covers another plate. A field out of frame keeps its plate at the nearest edge.
   function frame(): void {
     const ins = app.insets
+    // Where six named plates cannot stand clear of each other, all but the selected one fold down to their glyphs.
+    const room = innerHeight - ins.top - ins.bottom
+    const tight = room < S.FIELD_COUNT * (size[0].h + 8) + 8
+    if (tight !== compact) {
+      compact = tight
+      layer.classList.toggle('compact', compact)
+      measure()
+    }
     const want: Box[] = []
     for (let i = 0; i < S.FIELD_COUNT; i++) {
       const a = ctx.view.fieldAnchor(i)
@@ -117,8 +130,6 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
       const wrap = wraps[i]
       wrap.style.transform = `translate(${w.x.toFixed(1)}px, ${w.y.toFixed(1)}px) translate(-50%, -100%)`
       wrap.classList.toggle('docked', w.docked)
-      wrap.classList.toggle('hint-left', w.x > innerWidth / 2)
-      wrap.classList.toggle('hint-below', w.y - size[i].h - 96 < ins.top)
     }
   }
 
@@ -126,6 +137,7 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
     update,
     frame,
     dispose() {
+      layer.classList.remove('compact')
       for (const w of wraps) w.remove()
       if (app.hover >= 0) app.setHover(-1)
     },

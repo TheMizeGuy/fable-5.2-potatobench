@@ -7,7 +7,7 @@ import * as F from './fmt.ts'
 import { seasonCount } from './rules.ts'
 import { PHASE_LABEL } from './top.ts'
 
-export function endSeasonEarly(ctx: Ctx): void {
+function endSeasonEarly(ctx: Ctx): void {
   const c = ctx.app.campaign
   if (!c || c.phase !== 'season' || !c.season) return
   if (S.seasonDone(c)) { ctx.run({ t: 'endSeason' }); return }
@@ -45,7 +45,7 @@ export function openMenu(ctx: Ctx, o: { onHelp: () => void; onAlmanac: () => voi
         type: 'checkbox', checked: set[key], testid: `set-${key}`, onchange: (e: Event) => {
           const on = (e.target as HTMLInputElement).checked
           app.setSetting(key, on)
-          if (key === 'sound') document.querySelector<HTMLInputElement>('[data-testid="set-volume"]')!.disabled = !on
+          if (key === 'sound') document.querySelector<HTMLInputElement>('[data-k="set-volume"]')!.disabled = !on
         },
       }),
       h('span', null, h('span', { class: 'check-label' }, label), h('span', { class: 'sub' }, hint)))
