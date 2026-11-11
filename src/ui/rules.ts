@@ -238,7 +238,7 @@ export function outlookText(c: S.Campaign): string {
   const s = c.season
   const low = Math.min(...S.SEASON_CURVE.map(p => p[1]))
   const nov = S.MONTH_CURVE[0], apr = S.MONTH_CURVE[5]
-  const base = `September and October are usually the low of the year; November runs about ${F.pct(nov / low - 1)} above it and April about ${F.pct(apr / low - 1)} (USDA, Maine, 1979 to 2013).`
+  const base = `September and October are usually the low of the year; November runs about ${F.pct(nov / low - 1)} above it and April about ${F.pct(apr / low - 1)}.`
   if (c.phase !== 'season' || !s) return base
   const now = usualFactor(s.day)
   return `${base} Against today's price that puts November ${F.versus(nov / now)} and April ${F.versus(apr / now)}.`
@@ -293,7 +293,29 @@ export function savedSeedText(stock: S.SeedStock[]): string {
   return `Saved seed is free, but it carries more virus every year it is saved: about ${F.pct(virus)} of plants from this stock will come up stunted (certified seed: about ${F.pct(S.VIRUS_CERTIFIED)}), and a stunted plant gives about ${F.pct(1 - S.VIRUS_VIGOR)} less.${blight ? ' Tuber blight went into the cellar with it, and some of that comes back up in the field.' : ''}`
 }
 
-// How a season is counted on the way to keeping the farm.
+// How a season is counted on the way to keeping the farm: "Year 2 of 5". A farm played on the record also has its year.
 export function seasonCount(c: S.Campaign): string {
-  return c.yearIdx < c.goalYears ? `season ${c.yearIdx + 1} of ${c.goalYears}` : `year ${c.yearIdx + 1}`
+  const n = c.yearIdx < c.goalYears ? `year ${c.yearIdx + 1} of ${c.goalYears}` : `year ${c.yearIdx + 1}`
+  return S.isFarmYear(c.year) ? F.upper(n) : `${c.year}, ${n}`
+}
+
+// A year as a heading names it: "Year 2", or the year itself for a farm played on the record.
+export function yearName(year: number): string {
+  return S.yearLabel(year)
+}
+
+// The same in a sentence: "year 2".
+export function yearWord(year: number): string {
+  return S.isFarmYear(year) ? S.yearLabel(year).toLowerCase() : String(year)
+}
+
+// The same where there is room only for a figure: a column of years, the axis of a chart.
+export function yearShort(year: number): string {
+  return S.isFarmYear(year) ? String(year - S.FARM_YEAR0) : String(year)
+}
+
+// "Years 1 to 5", or "Year 3" when they are the same.
+export function yearSpan(a: number, b: number): string {
+  if (a === b) return yearName(a)
+  return S.isFarmYear(a) ? `Years ${yearShort(a)} to ${yearShort(b)}` : `${a} to ${b}`
 }

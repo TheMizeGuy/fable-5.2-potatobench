@@ -526,7 +526,7 @@ export function ticket(ctx: Ctx, lotId: number, o: { fresh: boolean; staged?: bo
             h('div', null, h('dt', { class: 't-label' }, 'Variety'), h('dd', null, v.name)),
             h('div', null, h('dt', { class: 't-label' }, 'Dug'), h('dd', { class: 'num' }, dug.end > dug.start ? `${F.date(lot.year, dug.start, true)} to ${F.date(lot.year, dug.end, true)}` : F.date(lot.year, dug.start, true))),
             h('div', null, h('dt', { class: 't-label' }, 'Off'), h('dd', { class: 'num' }, F.area(S.FIELD_ACRES))),
-            h('div', null, h('dt', { class: 't-label' }, 'Ticket'), h('dd', { class: 'num' }, `${c.year}-${lot.id}`)))),
+            h('div', null, h('dt', { class: 't-label' }, 'Ticket'), h('dd', { class: 'num' }, `${R.yearShort(c.year)}-${lot.id}`)))),
         est ? h('div', { class: 'carried' },
           h('span', { class: 't-label' }, 'You expected'),
           h('span', { class: 'gauge range', role: 'img', 'aria-label': `Your estimate ${F.perAreaSpan(est.lo, est.hi)}; the field gave ${F.perArea(perAcre)}` },

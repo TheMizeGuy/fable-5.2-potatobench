@@ -24,8 +24,9 @@ export interface PlateModel {
 }
 
 const GAP = 6
-// Pixels per ground unit below which the camera is far enough out for the plates to keep only their names.
-const FAR_IN = 6, FAR_OUT = 7.5
+// With more fields in view than the home six, plates keep only their names once a field is narrower on screen than a
+// plate (a field is about 14 ground units across): below FAR_IN pixels a unit, and back above FAR_OUT.
+const FAR_IN = 8.5, FAR_OUT = 10
 
 // on: over its field. docked: pushed inside the free part of the window. shelf: its field has no place on the map
 // yet, so it waits in a row under the top bar. gone: its field is off screen and nothing calls for it.
@@ -125,12 +126,18 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
     const want: Box[] = []
     const shown: number[] = []
     const shelf: number[] = []
+    // Of the land off screen, one marker for each block waits at the edge, so the player knows which way it lies.
+    const pointed = new Set<string>()
+    for (let i = 0; i < S.FIELD_COUNT; i++) if (models[i]?.land && ctx.view.fieldAnchor(i).visible) pointed.add(S.PARCELS[i].block)
     for (let i = 0; i < S.FIELD_COUNT; i++) {
       const m = models[i]
       if (!m) { want.push({ x: -1, y: -1, place: 'gone' }); continue }
       const a = ctx.view.fieldAnchor(i)
       if (!finite(a)) { want.push({ x: 0, y: 0, place: 'shelf' }); shelf.push(i); shown.push(i); continue }
-      const wanted = app.selection.includes(i) || !!m.badge
+      const block = S.PARCELS[i].block
+      const first = !!m.land && !a.visible && !pointed.has(block)
+      if (first) pointed.add(block)
+      const wanted = app.selection.includes(i) || !!m.badge || first
       if (!a.visible && !wanted) { want.push({ x: a.x, y: a.y, place: 'gone' }); continue }
       const { w, h: hh, extra } = sz[i]
       const x0 = GAP + w / 2, x1 = innerWidth - GAP - w / 2 - extra
@@ -139,13 +146,26 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
       want.push({ x, y, place: !a.visible || Math.abs(x - a.x) > 1 || Math.abs(y - a.y) > 1 ? 'docked' : 'on' })
       shown.push(i)
     }
-    // Plates with nowhere on the map to go stand in a row under the top bar, in the middle.
+    // Plates with nowhere on the map to go stand in rows under the top bar, in the middle.
     if (shelf.length) {
-      const total = shelf.reduce((a, i) => a + sz[i].w + sz[i].extra + GAP, -GAP)
-      let x = Math.max(GAP, (innerWidth - total) / 2)
+      const rows: number[][] = [[]]
+      let used = 0
       for (const i of shelf) {
-        want[i] = { x: x + sz[i].w / 2, y: ins.top + GAP + sz[i].h + 6, place: 'shelf' }
-        x += sz[i].w + sz[i].extra + GAP
+        const w = sz[i].w + sz[i].extra + GAP
+        if (used + w > innerWidth - GAP && rows[rows.length - 1].length) { rows.push([]); used = 0 }
+        rows[rows.length - 1].push(i)
+        used += w
+      }
+      let y = ins.top + GAP
+      for (const row of rows) {
+        const total = row.reduce((a, i) => a + sz[i].w + sz[i].extra + GAP, -GAP)
+        const tall = Math.max(...row.map(i => sz[i].h))
+        let x = Math.max(GAP, (innerWidth - total) / 2)
+        y += tall + 6
+        for (const i of row) {
+          want[i] = { x: x + sz[i].w / 2, y, place: 'shelf' }
+          x += sz[i].w + sz[i].extra + GAP
+        }
       }
     }
     // Lower plates give way downward to the ones above them; then any pushed past the bottom edge climb back,
@@ -184,7 +204,9 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
   // the selected one fold down to their glyphs; the test is always made with the full sizes, so the fold cannot flicker.
   function frame(): void {
     const k = scale()
-    const nowFar = far ? k < FAR_OUT : k < FAR_IN
+    let inView = 0
+    for (let i = 0; i < S.FIELD_COUNT; i++) if (models[i] && ctx.view.fieldAnchor(i).visible) inView++
+    const nowFar = inView > S.HOME_FIELDS && (far ? k < FAR_OUT : k < FAR_IN)
     if (nowFar !== far) {
       far = nowFar
       compact = false

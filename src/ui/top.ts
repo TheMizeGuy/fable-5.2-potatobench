@@ -24,7 +24,9 @@ function dateText(c: S.Campaign, form: 'long' | 'mid' | 'short' = 'long'): strin
   return 'The end'
 }
 
+// A farm of its own counts its years by seasons, winter included; one played on the record turns the year in January.
 function yearText(c: S.Campaign): string {
+  if (S.isFarmYear(c.year)) return S.yearLabel(c.year)
   return String(c.phase === 'cellar' && c.month >= 2 ? c.year + 1 : c.year)
 }
 

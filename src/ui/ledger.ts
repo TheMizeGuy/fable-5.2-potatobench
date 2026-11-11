@@ -3,16 +3,14 @@ import * as S from '../sim/index.ts'
 import { count, patch, type Ctx, type Screen } from './core.ts'
 import { h, s, type Child } from './dom.ts'
 import * as F from './fmt.ts'
-import { soilWord, varietyName } from './rules.ts'
+import { soilWord, varietyName, yearName, yearShort, yearSpan, yearWord } from './rules.ts'
 import { startNewFarm } from './title.ts'
 import { topBar } from './top.ts'
 
 function yieldBars(ctx: Ctx, y: S.YearSummary): HTMLElement {
-  const rec = ctx.app.world.records[y.year]
-  const nb = ctx.app.world.neighbor[y.year]
+  const nb = ctx.app.world.neighbor[String(y.year)]
   const rows: [string, number, string][] = [['Your farm', y.yieldCwtAcre, 'you']]
   if (nb) rows.push([`The neighbor, ${varietyName(nb.variety)}`, nb.yieldCwtAcre, 'nb'])
-  if (rec?.yieldCwtAcre != null) rows.push(['Maine, USDA', rec.yieldCwtAcre, 'usda'])
   const max = Math.max(...rows.map(r => r[1]), 1) * 1.1
   return h('table', { class: 'yield-bars' },
     h('caption', { class: 'sr' }, 'Yield sold per acre'),
@@ -57,7 +55,7 @@ function cashLine(c: S.Campaign): SVGElement {
   const d = pts.map((v, k) => `${k ? 'L' : 'M'}${x(k).toFixed(1)} ${y(v).toFixed(1)}`).join('')
   return s('svg', {
     class: 'cash-line', viewBox: `0 0 ${W} ${H}`, role: 'img',
-    'aria-label': `Cash at each year end: ${c.history.map(z => `${z.year} ${F.money(z.cashEnd)}`).join(', ')}. The bank calls the note below ${F.money(S.CREDIT_LIMIT)}.`,
+    'aria-label': `Cash at each year end: ${c.history.map(z => `${yearWord(z.year)} ${F.money(z.cashEnd)}`).join(', ')}. The bank calls the note below ${F.money(S.CREDIT_LIMIT)}.`,
   },
   s('path', { class: 'cl-zero', d: `M${L} ${y(0).toFixed(1)}H${W - Rt}` }),
   s('text', { class: 'cl-label', x: L, y: (y(0) - 4).toFixed(1) }, F.money(0)),
@@ -65,10 +63,10 @@ function cashLine(c: S.Campaign): SVGElement {
   s('text', { class: 'cl-label call', x: L, y: (y(S.CREDIT_LIMIT) - 4).toFixed(1) }, `${F.money(S.CREDIT_LIMIT)}: the bank calls the note`),
   s('path', { class: 'cl-path', d, pathLength: 1 }),
   pts.map((v, k) => k ? s('rect', { class: `cl-dot${v < 0 ? ' neg' : ''}`, x: (x(k) - 3).toFixed(1), y: (y(v) - 3).toFixed(1), width: 6, height: 6 }) : null),
-  c.history.map((z, k) => s('text', { class: 'cl-year', x: x(k + 1).toFixed(1), y: H - 6 }, String(z.year))))
+  c.history.map((z, k) => s('text', { class: 'cl-year', x: x(k + 1).toFixed(1), y: H - 6 }, yearShort(z.year))))
 }
 
-// Every year played, set against USDA's record for Maine and the neighbor's crop.
+// Every year played, set against the neighbor's crop.
 function historyTable(ctx: Ctx, c: S.Campaign, write: boolean): HTMLElement[] {
   const world = ctx.app.world
   const cell = (x: number | null | undefined) => x != null ? F.num(F.perAreaValue(x), F.metric() ? 1 : 0) : '–'
@@ -77,24 +75,22 @@ function historyTable(ctx: Ctx, c: S.Campaign, write: boolean): HTMLElement[] {
       h('caption', { class: 'sr' }, 'The farm year by year'),
       h('thead', null, h('tr', null,
         h('th', { scope: 'col' }, 'Year'), h('th', { scope: 'col' }, 'Came in'), h('th', { scope: 'col' }, 'Went out'), h('th', { scope: 'col' }, 'Year end'),
-        h('th', { scope: 'col' }, 'Yield'), h('th', { scope: 'col' }, 'Neighbor'), h('th', { scope: 'col' }, 'Maine'))),
+        h('th', { scope: 'col' }, 'Yield'), h('th', { scope: 'col' }, 'Neighbor'))),
       h('tbody', null, c.history.map((y, k) => h('tr', { style: `--n:${k}` },
-        h('th', { scope: 'row' }, String(y.year)),
+        h('th', { scope: 'row' }, yearShort(y.year)),
         h('td', null, F.money(y.revenue)),
         h('td', null, F.money(y.costs + y.note + y.living + y.interest)),
         h('td', { class: y.cashEnd < 0 ? 'neg' : '' }, F.money(y.cashEnd)),
         h('td', null, y.potatoFields ? cell(y.yieldCwtAcre) : '–'),
-        h('td', null, cell(world.neighbor[y.year]?.yieldCwtAcre)),
-        h('td', null, cell(world.records[y.year]?.yieldCwtAcre))))))),
-    h('p', { class: 'sub' }, `Yields in ${F.perAreaUnit()} sold. Maine is USDA's recorded average; the neighbor is the farm next door under ordinary good practice.`),
+        h('td', null, cell(world.neighbor[String(y.year)]?.yieldCwtAcre))))))),
+    h('p', { class: 'sub' }, `Yields in ${F.perAreaUnit()} sold. The neighbor is the farm next door, under ordinary good practice on the same weather.`),
   ]
 }
 
 // The year's own sheet: what came in, what went out, where the farm stands.
 function yearSheet(ctx: Ctx, c: S.Campaign, y: S.YearSummary, lost: boolean): Child {
   const app = ctx.app
-  const note = app.world.notes[y.year]
-  const nb = app.world.neighbor[y.year]
+  const nb = app.world.neighbor[String(y.year)]
   return [
     h('div', { class: 'ledger-cols' },
       h('section', null,
@@ -104,11 +100,11 @@ function yearSheet(ctx: Ctx, c: S.Campaign, y: S.YearSummary, lost: boolean): Ch
       h('section', null,
         h('h3', { class: 'block-head' }, 'The crop'),
         y.potatoFields ? [yieldBars(ctx, y), h('p', { class: 'sub' }, `Sold per acre of potatoes. ${F.mass(y.cwtCulled)} culled.`)]
-          : h('p', null, `No potatoes were planted in ${y.year}, so there was no crop to sell.`),
+          : h('p', null, `No potatoes were planted in ${yearWord(y.year)}, so there was no crop to sell.`),
         nb ? h('p', { class: 'sub' }, `From the road, the neighbor planted ${F.date(y.year, nb.plant)}, sprayed ${F.plural(nb.sprays, 'time')} and dug from ${F.date(y.year, nb.dig)}.`) : null,
-        note ? h('p', { class: 'note year-note' }, note) : null)),
+      )),
     h('section', null,
-      h('h3', { class: 'block-head' }, `The soil going into ${y.year + 1}`),
+      h('h3', { class: 'block-head' }, `The soil going into ${yearWord(y.year + 1)}`),
       h('ul', { class: 'soil' }, Array.from({ length: S.FIELD_COUNT }, (_, i) => S.fieldInfo(c, i)).filter(f => f.tenure !== 'none').map(f => h('li', { class: f.soil < 0.4 ? 'worn' : '' },
         h('strong', null, f.name),
         h('span', { class: f.soil < 0.4 ? 'warn-text' : '' }, `soil ${soilWord(f.soil)}`),
@@ -144,7 +140,7 @@ export function ledgerScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
       const key = JSON.stringify([c.year, c.history.length, c.outcome, app.settings.units])
       patch(sheet, key, () => [
         occasion ? h('header', { class: 'occasion-head', testid: won ? 'kept-moment' : 'lost-moment' },
-          h('span', { class: 't-label' }, c.startYear === c.year ? String(c.year) : `${c.startYear} to ${c.year}`),
+          h('span', { class: 't-label' }, yearSpan(c.startYear, c.year)),
           h('h2', { class: 't-display' }, won ? 'The farm is yours' : 'The farm is sold'),
           h('p', { class: 't-lede', testid: 'outcome' }, won
             ? `Five seasons, and the bank is paid every one of them. You finish with ${F.money(y.cashEnd)}.`
@@ -152,19 +148,19 @@ export function ledgerScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
           c.history.length > 1 ? [
             cashLine(c),
             h('p', { class: 'sub' }, won
-              ? `Cash at each year end. ${closest.year} was the nearest thing: ${closest.cashEnd < 0 ? `${F.money(-closest.cashEnd)} in debt` : `${F.money(closest.cashEnd)} in hand`}, with the bank's line at ${F.money(S.CREDIT_LIMIT)}.`
+              ? `Cash at each year end. ${yearName(closest.year)} was the nearest thing: ${closest.cashEnd < 0 ? `${F.money(-closest.cashEnd)} in debt` : `${F.money(closest.cashEnd)} in hand`}, with the bank's line at ${F.money(S.CREDIT_LIMIT)}.`
               : `Cash at each year end, and the line at ${F.money(S.CREDIT_LIMIT)} where the bank calls the note.`),
             historyTable(ctx, c, true),
           ] : null) : h('header', { class: 'sheet-head double' },
-          h('h2', { class: 't-title' }, `The ${y.year} ledger`),
+          h('h2', { class: 't-title' }, `The ledger, ${yearWord(y.year)}`),
           h('p', { class: 't-lede', testid: 'outcome' }, kept ? 'The farm is yours, and the bank is satisfied.'
             : `The bank is satisfied. ${F.upper(F.plural(left, 'season'))} to go.`)),
-        occasion ? h('h3', { class: 't-title year-title' }, `The ${y.year} ledger`) : null,
+        occasion ? h('h3', { class: 't-title year-title' }, `The ledger, ${yearWord(y.year)}`) : null,
         yearSheet(ctx, c, y, lost),
         h('footer', { class: 'sheet-foot' },
           kept ? h('button', { class: 'btn big', type: 'button', testid: 'new-farm', onclick: () => startNewFarm(ctx) }, 'Start a new farm') : null,
           h('button', { class: 'btn big primary', type: 'button', testid: 'year-next', onclick: () => ctx.run({ t: 'next' }) },
-            lost ? 'Close the book' : !more ? 'See how it ended' : won ? `Farm on: plan ${y.year + 1}` : `Plan ${y.year + 1}`)),
+            lost ? 'Close the book' : !more ? 'See how it ended' : won ? `Farm on: plan ${yearWord(y.year + 1)}` : `Plan ${yearWord(y.year + 1)}`)),
       ])
       // The year-end figure counts up once, when the sheet first arrives.
       if (staged !== key) {
@@ -199,14 +195,14 @@ export function overScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
       const years = c.history.length
       patch(sheet, JSON.stringify([c.history.length, c.outcome, app.settings.units]), () => [
         h('header', { class: 'occasion-head' },
-          h('span', { class: 't-label' }, c.startYear === c.year ? String(c.year) : `${c.startYear} to ${c.year}`),
+          h('span', { class: 't-label' }, yearSpan(c.startYear, c.year)),
           h('h2', { class: 't-display' }, lost ? 'The farm is sold' : 'The farm is yours'),
           h('p', { class: 't-lede', testid: 'outcome' }, lost
             ? `After ${F.plural(years, 'season')} the bank called the note. The land, the house and the potato house went at auction${last ? ` with the farm ${F.money(-last.cashEnd)} in debt` : ''}.`
-            : `You kept the farm through ${F.plural(years, 'season')}, ${c.startYear} to ${c.year}${last ? `, and finished with ${F.money(last.cashEnd)}` : ''}. The weather record ends here.`),
+            : `You kept the farm through ${F.plural(years, 'season')}${last ? `, and finished with ${F.money(last.cashEnd)}` : ''}. This is as far as the farm's years go.`),
           years > 1 ? cashLine(c) : null,
           historyTable(ctx, c, false),
-          last && lost ? [h('h3', { class: 'block-head' }, `The last year, ${last.year}`), moneyTable(last, true)] : null),
+          last && lost ? [h('h3', { class: 'block-head' }, `The last year, ${yearWord(last.year)}`), moneyTable(last, true)] : null),
         h('footer', { class: 'sheet-foot' },
           h('button', { class: 'btn big', type: 'button', testid: 'over-title', onclick: () => app.quitToTitle() }, 'Back to the title'),
           h('button', { class: 'btn primary big', type: 'button', testid: 'new-farm', onclick: () => startNewFarm(ctx) }, 'Start a new farm')),

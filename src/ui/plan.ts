@@ -49,7 +49,7 @@ function openCompare(ctx: Ctx): void {
     ['Large tubers', v => F.upper(R.largeRule(app.world, c, v.id, true))],
   ]
   ctx.papers.open({
-    title: `Varieties for ${c.year}`,
+    title: `Varieties for ${R.yearWord(c.year)}`,
     testid: 'compare',
     size: 'wide',
     body: () => [
@@ -83,9 +83,9 @@ function openMoney(ctx: Ctx): void {
   const rented = mine.filter(i => c.fields[i].tenure === 'rented').length
   const crews = c.crew.filter(u => u.wage > 0).length
   const y = c.history[c.history.length - 1]
-  const rec = y ? app.world.records[y.year] : undefined
+  const nb = y ? app.world.neighbor[String(y.year)] : undefined
   ctx.papers.open({
-    title: `The money, spring ${c.year}`,
+    title: `The money: ${R.yearName(c.year)}, spring`,
     testid: 'money',
     size: 'medium',
     body: () => [
@@ -110,7 +110,7 @@ function openMoney(ctx: Ctx): void {
           row('Due', S.NOTE_PAYMENT + S.LIVING, { cls: 'total' }))),
       h('p', { class: 'sub' }, `Debt left after those is carried into next year at ${F.pct(S.CREDIT_RATE)} interest, and the bank calls the note if it is more than ${F.money(-S.CREDIT_LIMIT)}. Each job in the field is charged as it is done, wages by the month, and the cellar by the month. Land and equipment are bought from cash.`),
       y ? [
-        h('h3', { class: 'block-head' }, `Last year, ${y.year}`),
+        h('h3', { class: 'block-head' }, `Last year, ${R.yearWord(y.year)}`),
         h('table', { class: 'money' },
           h('tbody', null,
             row('Potato sales', y.revenue - y.restIncome - y.contracts),
@@ -123,7 +123,7 @@ function openMoney(ctx: Ctx): void {
             y.penalties ? row('Contract penalties', -y.penalties) : null,
             row('Note, household and interest', -(y.note + y.living + y.interest)),
             row('Cash at year end', y.cashEnd, { cls: 'total' }))),
-        h('p', { class: 'sub' }, `${y.potatoFields ? `Your yield sold: ${F.perArea(y.yieldCwtAcre)}.` : 'No potatoes were grown.'}${rec?.yieldCwtAcre != null ? ` Maine averaged ${F.perArea(rec.yieldCwtAcre)} (USDA).` : ''}`),
+        h('p', { class: 'sub' }, `${y.potatoFields ? `Your yield sold: ${F.perArea(y.yieldCwtAcre)}.` : 'No potatoes were grown.'}${nb ? ` The neighbor sold ${F.perArea(nb.yieldCwtAcre)}.` : ''}`),
       ] : null,
     ],
     foot: close => h('button', { class: 'btn primary', type: 'button', testid: 'money-close', autofocus: true, onclick: close }, 'Back to the plan'),

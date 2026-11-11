@@ -4,7 +4,7 @@ import { patch, type Ctx } from './core.ts'
 import { h, type Child } from './dom.ts'
 import * as F from './fmt.ts'
 import { icon } from './icons.ts'
-import { offContract } from './rules.ts'
+import { offContract, yearWord } from './rules.ts'
 
 const DUE_SHORT: Record<S.Due, string> = { harvest: 'by fall', winter: 'by March' }
 
@@ -88,7 +88,7 @@ export function openContracts(ctx: Ctx): void {
   const app = ctx.app
   if (!app.campaign) return
   ctx.papers.open({
-    title: `Contracts, ${app.campaign.year}`,
+    title: `Contracts, ${yearWord(app.campaign.year)}`,
     testid: 'contracts',
     size: 'wide',
     body: () => {

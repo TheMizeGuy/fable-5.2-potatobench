@@ -57,7 +57,7 @@ export function openHelp(ctx: Ctx): void {
           h('p', null, h('strong', null, 'Crews. '), `You do every job. Field hands walk, pull and test-dig; an operator drives a second tractor. Every drive between fields costs part of the day, so far land wants a crew of its own.`),
           h('p', null, h('strong', null, 'Contracts. '), `In spring buyers offer a fixed price for a quantity, due by fall or by March. Deliver from the weigh ticket or the cellar; what is short costs ${Math.round(S.CONTRACT_PENALTY * 100)}% of its value.`))),
       h('p', { class: 'sub help-foot' },
-        'Every season is a real year, on the weather NOAA recorded at Caribou, Maine. Yields and prices are USDA\'s. Each rule and its source is in the ',
+        'Every farm has seasons of its own, and the forecast is all you see of them ahead. Each rule of the crop and where it comes from is in the ',
         h('a', { class: 'link', href: `${REPO}/blob/main/docs/MODEL.md`, target: '_blank', rel: 'noopener' }, 'model notes'), '.'),
     ],
     foot: close => h('button', { class: 'btn primary', type: 'button', testid: 'how-close', autofocus: true, onclick: close }, ctx.app.screen === 'title' ? 'Back' : 'Back to the farm'),
