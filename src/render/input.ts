@@ -18,6 +18,7 @@ export function attachInput(
   canvas: HTMLCanvasElement, app: App, rig: CameraRig, viewport: () => Viewport,
   pick: (x: number, y: number) => number, pickUnit: (x: number, y: number) => number, home: () => void,
   pickYard: (x: number, y: number) => number = () => 0,
+  frameField: (field: number) => void = () => {},
 ): Input {
   const pointers = new Map<number, { x: number; y: number }>()
   let downAt: { x: number; y: number; button: number; touch: boolean } | null = null
@@ -120,8 +121,8 @@ export function attachInput(
         const now = performance.now()
         const again = now - lastClick.t < DOUBLE_MS && Math.hypot(p.x - lastClick.x, p.y - lastClick.y) < 12 && lastClick.field === i
         if (again) {
-          if (i >= 0) app.selectLike(i)
-          else home()
+          // A double-click on a field selects every field in its state and brings it into frame.
+          if (i >= 0) { app.selectLike(i); frameField(i) } else home()
           lastClick.t = 0
         } else {
           const yard = i < 0 ? pickYard(p.x, p.y) : 0

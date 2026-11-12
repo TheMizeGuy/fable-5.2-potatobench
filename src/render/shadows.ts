@@ -1,23 +1,35 @@
 // The sun and its shadow in three cascades: a fine one round what the camera looks at, a wider one, and one for the
 // country beyond. The first light carries the sunlight; the other two carry no light, only their shadow maps, which
 // the shared lighting code in shaders.ts reads.
+// Sizes are metres. From the field tier the fine cascade holds the field in hand at about a hand's breadth to the
+// texel, so a person throws a shadow; the second holds the fields beyond and the edge of the woods; the third the
+// back country, where a wood shades as a mass.
 import { DirectionalLight, Matrix4, Vector3, type Color, type Scene } from 'three'
+import { clamp } from './noise.ts'
 import { U } from './shaders.ts'
 
 const UP = new Vector3(0, 1, 0), ORIGIN = new Vector3()
+// How far ahead of the point looked at each cascade is centred, as a share of its radius: the picture shows far more
+// ground beyond that point than before it.
+const LEAD = [0.25, 0.42, 0.5]
+// Which frame of its turn each cascade is redrawn on: never two on the same frame.
+const TURN = [0, 3, 5]
 
 export class SunShadows {
   readonly lights: DirectionalLight[] = []
-  private radius = [40, 130, 480]
+  private radius = [160, 560, 2000]
   private basis = new Matrix4()
   private right = new Vector3()
   private up = new Vector3()
   private c = new Vector3()
   private frame = 0
-  // True while the first cascade is wide enough to hold the whole farm.
+  // True while the first cascade is wide enough to hold a whole field: the plants then need throw no shadow into the second.
   holdsFarm = false
-  // The fine cascade is redrawn every frame, or every other on a slow machine.
-  nearEvery = 1
+  // How often each cascade is redrawn, in frames (the quality setting's): the fine one every frame or every other, the
+  // wider ones less often. They are redrawn on different frames, so no frame carries all three.
+  every: [number, number, number] = [2, 4, 12]
+  // A tool may hold a cascade as it is (never redrawn), to see what redrawing it costs.
+  held = [false, false, false]
 
   constructor(scene: Scene) {
     for (let k = 0; k < 3; k++) {
@@ -42,30 +54,35 @@ export class SunShadows {
     })
   }
 
-  // focus: the point on the ground the camera looks at; dist: how far the camera is from it.
-  update(sunDir: Vector3, color: Color, focus: Vector3, dist: number, all: boolean): void {
+  // focus: the point on the ground the picture is looking at; dist: how far the camera is from it; aheadX, aheadZ: the
+  // way the camera looks, on the ground. all: redraw every cascade now (a still picture).
+  update(sunDir: Vector3, color: Color, focus: Vector3, dist: number, all: boolean, aheadX = 0, aheadZ = 0): void {
     this.lights[0].color.copy(color)
     this.frame++
     // Steps of radius, so zooming does not make every shadow crawl.
-    const r0 = Math.min(260, Math.max(12, 12 * Math.pow(1.3, Math.round(Math.log(dist * 0.6 / 12) / Math.log(1.3)))))
+    const r0 = clamp(12 * Math.pow(1.3, Math.round(Math.log(Math.max(dist, 1) * 0.34 / 12) / Math.log(1.3))), 12, 420)
     this.radius[0] = r0
-    this.radius[1] = Math.min(900, r0 * 3.4)
-    this.radius[2] = Math.min(3000, this.radius[1] * 3.6)
-    this.holdsFarm = r0 > 200
+    this.radius[1] = clamp(r0 * 3.4, 150, 1500)
+    this.radius[2] = clamp(this.radius[1] * 3.6, 900, 4500)
+    this.holdsFarm = r0 >= 100
     this.basis.lookAt(sunDir, ORIGIN, UP)
     this.right.setFromMatrixColumn(this.basis, 0)
     this.up.setFromMatrixColumn(this.basis, 1)
+    // A low sun lays the cascade out along the ground: the light must stand far enough back to hold all of it.
+    const slope = Math.max(sunDir.y / Math.max(Math.hypot(sunDir.x, sunDir.z), 1e-3), 0.16)
     for (let k = 0; k < 3; k++) {
       const l = this.lights[k], sh = l.shadow
-      const due = all || (k === 0 && this.frame % this.nearEvery === 0) || (k === 1 && this.frame % 2 === 0) || (k === 2 && this.frame % 6 === 3)
-      if (k === 0) sh.autoUpdate = this.nearEvery <= 1
+      const n = Math.max(1, this.every[k])
+      const due = !this.held[k] && (all || this.frame % n === TURN[k] % n)
+      if (k === 0) sh.autoUpdate = n <= 1 && !this.held[0]
       if (!due) continue
       if (!sh.autoUpdate) sh.needsUpdate = true
       const r = this.radius[k], texel = (2 * r) / sh.mapSize.x
+      this.c.set(focus.x + aheadX * r * LEAD[k], focus.y, focus.z + aheadZ * r * LEAD[k])
       // Snap to the map's own grid, so shadows hold still as the camera pans.
-      const cx = Math.round(focus.dot(this.right) / texel) * texel, cy = Math.round(focus.dot(this.up) / texel) * texel
-      this.c.copy(focus).addScaledVector(this.right, cx - focus.dot(this.right)).addScaledVector(this.up, cy - focus.dot(this.up))
-      const back = r * 1.2 + (k === 0 ? 200 : k === 1 ? 400 : 900)
+      const px = this.c.dot(this.right), py = this.c.dot(this.up)
+      this.c.addScaledVector(this.right, Math.round(px / texel) * texel - px).addScaledVector(this.up, Math.round(py / texel) * texel - py)
+      const back = Math.min(r / slope, 6500) + 140
       l.target.position.copy(this.c)
       l.position.copy(this.c).addScaledVector(sunDir, back)
       l.target.updateMatrixWorld()
@@ -73,12 +90,14 @@ export class SunShadows {
       const cam = sh.camera
       cam.left = -r; cam.right = r; cam.top = r; cam.bottom = -r
       cam.near = 1
-      cam.far = back * 2 + r
+      cam.far = back * 2
       cam.updateProjectionMatrix()
-      sh.bias = -0.00012 - 0.00005 * k
+      // The ground lies nearly along a low sun's light, so from one texel to the next its depth in the map changes by
+      // texel over slope: the bias is a share of that, in metres, whatever the map's own depth.
+      sh.bias = -(0.02 + 0.32 * texel / slope) / (cam.far - cam.near)
       sh.normalBias = texel * (k === 0 ? 1.1 : 1.6)
     }
-    U.uShadowFade.value.set(dist + this.radius[2] * 0.62, dist + this.radius[2] * 0.9)
+    U.uShadowFade.value.set(dist + this.radius[2] * 0.7, dist + this.radius[2] * 0.95)
   }
 
   dispose(): void {

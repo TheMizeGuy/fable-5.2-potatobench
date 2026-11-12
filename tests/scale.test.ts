@@ -3,8 +3,9 @@
 import { describe, expect, it } from 'vitest'
 import { FIELD_ACRES } from '../src/sim/index.ts'
 import { BAY_WIDE, FD, FIELDS, FW, PLANTED_ROWS, ROW, WIDE } from '../src/render/layout.ts'
+import { PERSON, TRACTOR, TRUCK } from '../src/render/living.ts'
 import {
-  BARN, BUNK, DUFOUR_BUILT, HOUSE, HOUSE2, HOUSE_AREA, HOUSE_DOOR, NEIGHBOUR, PACKING, PERSON, POLE, POTATO_HOUSE, PUMP, SHED, SHED_BAY, STAND, TRACTOR, TRUCK,
+  BARN, BUNK, DUFOUR_BUILT, HOUSE, HOUSE2, HOUSE_AREA, HOUSE_DOOR, NEIGHBOUR, PACKING, POLE, POTATO_HOUSE, PUMP, SHED, SHED_BAY, STAND,
 } from '../src/render/measures.ts'
 import { K, KV, S } from '../src/render/scale.ts'
 

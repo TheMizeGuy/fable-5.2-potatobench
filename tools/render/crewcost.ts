@@ -1,5 +1,5 @@
 // What the people, machines and animals cost: a farm of twelve at spring work with three tractors and the truck, from
-// the playing view and close up, at each quality tier, with them drawn and with them hidden.
+// the field tier, the farm tier and the yard tier, at each quality tier, with them drawn and with them hidden.
 // Usage: node tools/render/crewcost.ts <base-url> [--size=1920x1080]
 import { chromium, type Page } from '@playwright/test'
 import { GPU } from '../quality/shared.ts'
@@ -97,8 +97,9 @@ await page.waitForTimeout(300)
 const did: string = await page.evaluate(() => (window as any).__county.app.campaign.season.worked.map((w: any) => `${w.unit}:${w.kind}`).join(' '))
 console.log(`${W}x${H}  ${worked}; the day's work: ${did}`)
 const views: [string, () => Promise<void>][] = [
-  ['playing view', async () => { await f('home') }],
-  ['close on the farmer', async () => { const t = await page.evaluate(() => (window as any).__countyField.info().tractor); await f('view', { x: t.x, z: t.z, dist: 14, yaw: 0.9, pitch: 0.3 }) }],
+  ['field tier', async () => { await f('view', { frame: 'field', field: 2, x: 0.5, z: 0.3, dist: 552 }) }],
+  ['farm tier', async () => { await f('view', { frame: 'land', x: 9, z: 1, dist: 96 }) }],
+  ['yard tier, on the farmer', async () => { const t = await page.evaluate(() => (window as any).__countyField.info().tractor); await f('view', { frame: 'near', x: t.x, z: t.z, dist: 8, yaw: 0.9, pitch: 0.3 }) }],
 ]
 for (const [label, set] of views) {
   for (const tier of ['high', 'medium', 'low']) {
@@ -111,7 +112,7 @@ for (const [label, set] of views) {
     await f('show', 'crews', false)
     const off = await measure(page)
     await f('show', 'crews', true)
-    console.log(`  ${label.padEnd(20)} ${tier.padEnd(6)} GPU ${on.gpu.toFixed(2)} ms (without them ${off.gpu.toFixed(2)})  CPU ${on.cpu.toFixed(2)} ms, of it their placing ${on.crews} ms  ${(on.triangles / 1e6).toFixed(2)}M triangles (${((on.triangles - off.triangles) / 1e3).toFixed(0)}k theirs)  ${on.calls} calls (${on.calls - off.calls} theirs)  ${on.parts} parts`)
+    console.log(`  ${label.padEnd(26)} ${tier.padEnd(6)} GPU ${on.gpu.toFixed(2)} ms (without them ${off.gpu.toFixed(2)})  CPU ${on.cpu.toFixed(2)} ms, of it their placing ${on.crews} ms  ${(on.triangles / 1e6).toFixed(2)}M triangles (${((on.triangles - off.triangles) / 1e3).toFixed(0)}k theirs)  ${on.calls} calls (${on.calls - off.calls} theirs)  ${on.parts} parts`)
   }
 }
 console.log(errors.length ? `  page errors: ${errors.join(' | ')}` : '  no page errors')

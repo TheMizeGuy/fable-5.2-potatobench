@@ -4,7 +4,7 @@ import { Color, PCFShadowMap, Raycaster, Scene, Triangle, Vector2, Vector3, WebG
 import type { App } from '../game/app.ts'
 import type { CreateFieldView, FieldView } from '../game/contracts.ts'
 import { FIELD_COUNT, HILLS } from '../sim/index.ts'
-import { CameraRig, MOVE_MS, type Pose, type Viewport } from './camera.ts'
+import { CameraRig, HOME_FIELD, MOVE_MS, type Pose, type TierName, type Viewport } from './camera.ts'
 import { Clearing } from './clearing.ts'
 import { EVENING, MORNING, copyEnv, easeEnv, envTarget, light, makeEnv, makeLight } from './env.ts'
 import { FarHills } from './far.ts'
@@ -14,14 +14,14 @@ import { Flora } from './flora.ts'
 import { Grass } from './grass.ts'
 import { Harvest } from './harvest.ts'
 import { attachInput } from './input.ts'
-import { DUFOUR, FD, FIELDS, FW, HOME, LAND, WATER_Y, brookZ, fieldBaseY, groundY, YARD_AT, yardAt } from './layout.ts'
+import { DUFOUR, FD, FIELDS, FW, HOME, LAND, POTATO_HOUSE, ROAD, WATER_Y, brookZ, fieldBaseY, groundY, YARD_AT, yardAt } from './layout.ts'
 import { clamp, hash2, smooth } from './noise.ts'
 import { K, KV, S } from './scale.ts'
 import { Particles } from './particles.ts'
 import { Pond } from './pond.ts'
 import { Post } from './post.ts'
 import { LAMP, Props } from './props.ts'
-import { U } from './shaders.ts'
+import { CLOUD_TURN, HAZE_FALL, U } from './shaders.ts'
 import { SunShadows } from './shadows.ts'
 import { Sky } from './sky.ts'
 import { snapshot, type Mode, type Snapshot } from './state.ts'
@@ -33,22 +33,34 @@ import { Weather } from './weather.ts'
 import { Poly, type Reveal } from './work.ts'
 
 const DAY_ANIM_S = 3.4          // how long a paused day's work takes to play out
-const TITLE_LOOP_S = 44
-const TITLE_MOVE_S = 36         // the opening shot's way down from the wide view to the low one, and as long back
+// The opening shot, in seconds: down from the far view to the road, a stay there while the tractor goes by, up again,
+// and a stay at the top. The tractor's trip down the farm road is timed to it.
+const TITLE_DOWN_S = 38, TITLE_STAY_S = 20, TITLE_UP_S = 30, TITLE_TOP_S = 8
+const TITLE_LOOP_S = TITLE_DOWN_S + TITLE_STAY_S + TITLE_UP_S + TITLE_TOP_S
+// The tractor in the opening: how far down the road it is as the camera comes to rest (metres), and its pace.
+const TITLE_MEET_M = 60, TITLE_PACE = 2.8
 const HOUR_HOLD_S = 6           // the least time between a morning's light and an evening's
 const LOST_MS = 3000            // how long a lost WebGL context may stay away before the farm is drawn flat
 const STILL = 0.02              // the pace of water, cloud, mist and smoke under reduced motion
 const SHOWN_CAP_S = 2.5         // the longest whenShown() keeps the interface waiting
 
 type Tier = 'high' | 'medium' | 'low'
-// What each setting keeps. Going down: the shallow focus and the contact shade go first, then shadow detail and the
-// finer shafts of light, then the size the scene is drawn at and the number of plants; and whole plants give way to
-// clumps, and clumps to rows painted on the ground, nearer the camera. `near`: how often the fine shadow round the
-// camera's focus is redrawn (every frame, or every other).
-const TIERS: Record<Tier, { scale: number; pixels: number; msaa: number; ao: boolean; focus: boolean; shafts: number; shadow: [number, number, number]; near: number; density: number }> = {
-  high: { scale: 1, pixels: 3.7e6, msaa: 4, ao: true, focus: true, shafts: 40, shadow: [3072, 2048, 2048], near: 1, density: 1 },
-  medium: { scale: 1, pixels: 2.3e6, msaa: 2, ao: false, focus: false, shafts: 20, shadow: [2048, 1024, 1024], near: 1, density: 1 },
-  low: { scale: 0.72, pixels: 1.2e6, msaa: 0, ao: false, focus: false, shafts: 0, shadow: [1024, 1024, 512], near: 2, density: 0.5 },
+// What each setting keeps. A frame costs in two ways: the pixels it fills, and the things it draws (most of them
+// trees, drawn once into the picture and again into each shadow map). Each step down takes from both.
+//   high: everything; the fine shadow redrawn every other frame, the second every fourth, the widest every twelfth
+//     (most of what a frame draws is trees, and more than half of those were being drawn into shadow maps).
+//   medium: the picture at 2.3 million pixels with lighter smoothing of edges; no contact shade or soft focus; shadow
+//     maps at half the detail, the wider two redrawn less often; shorter shafts; clouds followed in fewer steps;
+//     and what the other parts drop at this setting (whole trees, plants and grass nearer the camera only).
+//   low: the picture at 1.1 million pixels with no multisampling; the fine shadow redrawn every third frame, the
+//     second every twelfth, the widest (the back country's woods) once a second; no shafts or bloom; flat-bottomed
+//     clouds; and the other parts' low setting (fewer whole plants, trees as simple shapes, sparse grass, people
+//     without shadows).
+// `every`: how often each shadow cascade is redrawn, in frames.
+const TIERS: Record<Tier, { scale: number; pixels: number; msaa: number; ao: boolean; focus: boolean; bloom: boolean; shafts: number; clouds: number; shadow: [number, number, number]; every: [number, number, number]; density: number }> = {
+  high: { scale: 1, pixels: 3.7e6, msaa: 4, ao: true, focus: true, bloom: true, shafts: 40, clouds: 6, shadow: [3072, 2048, 2048], every: [2, 4, 12], density: 1 },
+  medium: { scale: 1, pixels: 2.3e6, msaa: 2, ao: false, focus: false, bloom: true, shafts: 20, clouds: 4, shadow: [2048, 1024, 1024], every: [2, 6, 24], density: 1 },
+  low: { scale: 0.7, pixels: 1.1e6, msaa: 0, ao: false, focus: false, bloom: false, shafts: 0, clouds: 2, shadow: [1024, 1024, 512], every: [3, 12, 60], density: 0.5 },
 }
 const DOWN: Record<Tier, Tier> = { high: 'medium', medium: 'low', low: 'low' }
 
@@ -135,6 +147,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   lap('fields')
   const harvest = new Harvest()
   const crews = new Crews()
+  crews.setStand(i => flora.stand(i))
   lap('crews')
   const particles = new Particles(puffTex)
   const weather = new Weather()
@@ -164,9 +177,11 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   let lens = 0.2
   let firstFrame = 0
   let smokeAt = 0
-  // What the camera was last asked to frame; the player's own hand on it makes it 'free'.
-  let framing: 'title' | 'home' | 'whole' | 'field' | 'free' = 'home'
-  let framed = -1
+  // What the camera was last asked to frame (the opening shot, or one of its four tiers); the player's own hand on it
+  // makes it 'free'. `framed`: the field of the field tier; `framedYard`: the yard of the yard tier.
+  let framing: 'title' | TierName | 'free' = 'field'
+  let framed = HOME_FIELD
+  let framedYard = -1
   const dugSince = new Map<number, number>()
   const barrelPeak = new Map<number, number>()
   const waiters: Waiter[] = []
@@ -209,8 +224,10 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     renderer.setSize(vp.w, vp.h, false)
     size = { w: vp.w, h: vp.h, pr }
     const scale = Math.min(t.scale, Math.sqrt(t.pixels / Math.max(1, vp.w * vp.h * pr * pr)))
-    post.setSize(Math.max(2, Math.round(vp.w * pr * scale)), Math.max(2, Math.round(vp.h * pr * scale)), { msaa: t.msaa, ao: t.ao, focus: t.focus, bloom: true, shafts: t.shafts })
-    shadows.nearEvery = t.near
+    post.setSize(Math.max(2, Math.round(vp.w * pr * scale)), Math.max(2, Math.round(vp.h * pr * scale)), { msaa: t.msaa, ao: t.ao, focus: t.focus, bloom: t.bloom, shafts: t.shafts })
+    sky.setSteps(t.clouds)
+    weather.setTier(tier)
+    shadows.every = t.every
     shadows.setSizes(t.shadow)
     fields.setTier(tier, t.density)
     grass.setTier(tier)
@@ -221,34 +238,75 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     reframe(reduced)
   }
 
-  // The opening shot goes down from its wide view to its low one and back, without end; a tool can hold it at a point.
+  // The opening shot goes down from its far view to its low one, stays, and goes back, without end; a tool can hold
+  // it at a point of the way down.
   let titleClock = 0
   let titleFixed = -1
+  const ease = (u: number) => 0.5 - 0.5 * Math.cos(Math.PI * clamp(u, 0, 1))
   function titleU(): number {
     if (titleFixed >= 0) return titleFixed
-    return reduced ? 0 : 0.5 - 0.5 * Math.cos((Math.PI * titleClock) / TITLE_MOVE_S)
+    if (reduced) return 0
+    const t = titleClock % TITLE_LOOP_S
+    return t < TITLE_DOWN_S + TITLE_STAY_S ? ease(t / TITLE_DOWN_S) : 1 - ease((t - TITLE_DOWN_S - TITLE_STAY_S) / TITLE_UP_S)
+  }
+  // The length of the tractor's way in the opening (the people's part lays it from the potato house down the farm road).
+  const titleRoad = ROAD.reduce((n, p, k) => n + (k ? Math.hypot(p[0] - ROAD[k - 1][0], p[1] - ROAD[k - 1][1]) : Math.hypot(p[0] - POTATO_HOUSE.x, p[1] - POTATO_HOUSE.z)), 0)
+  // Where the tractor is on its way, as a share of the day the people's part plays out (its trip is the first 0.8).
+  function titleDay(): number {
+    // Held by a tool at a point of the way down: as it would be then, and at the low view with the tractor in frame.
+    const t = titleFixed >= 0 ? titleFixed * TITLE_DOWN_S + (titleFixed >= 1 ? 6.5 : 0) : titleClock % TITLE_LOOP_S
+    const share = clamp((TITLE_MEET_M + TITLE_PACE * (t - TITLE_DOWN_S)) / titleRoad, 0, 1)
+    // The people's part eases a trip in and out (a smooth step of its clock): ask for the clock that gives this share.
+    return (0.5 - Math.sin(Math.asin(1 - 2 * share) / 3)) * 0.8
   }
 
-  function poseFor(mode: Mode, vp: Viewport): Pose {
-    return mode === 'title' ? rig.titlePose(vp, titleU()) : rig.home(vp)
+  // The view a screen opens on: the season is played from the field tier, beside the farmstead; every other screen
+  // shows the home farm whole.
+  const tierFor = (mode: Mode): TierName => (mode === 'season' ? 'field' : 'farm')
+  // What is framed now, as a view inside what the interface leaves free. yaw: the way the player has turned the view.
+  function framedPose(vp: Viewport, yaw?: number): Pose {
+    if (framing === 'title') return rig.titlePose(vp, titleU())
+    if (framing === 'field') return rig.field(framed, vp, yaw)
+    if (framing === 'yard') return rig.yard(framedYard, vp, yaw)
+    return framing === 'county' ? rig.county(vp) : rig.farm(vp)
   }
+  const turned = () => (framing === 'field' || framing === 'yard' ? rig.goal.yaw : undefined)
 
   // After the window or the interface's edges change: hold whatever was framed.
   function reframe(still: boolean): void {
-    const vp = viewport()
     if (framing === 'free') return
-    const to = framing === 'title' ? rig.titlePose(vp, titleU()) : framing === 'field' && framed >= 0 ? rig.fieldPose(framed, vp) : framing === 'whole' ? rig.whole(vp) : rig.home(vp)
+    const to = framedPose(viewport(), turned())
     if (rig.moving()) rig.retarget(to)
     else rig.moveTo(to, still, 500)
   }
 
-  // Home: the home farm, with the other blocks reaching in from the edges. Home again: the whole map.
+  // Bring a field into frame at the field tier, the way the view is turned now.
+  function frameField(i: number, still = reduced): void {
+    framing = 'field'
+    framed = i
+    rig.moveTo(rig.field(i, viewport(), rig.goal.yaw), still)
+  }
+  // The field nearest to where the picture is looking.
+  function fieldInView(): number {
+    const at = rig.looksAt(viewport())
+    let best = HOME_FIELD, bd = Infinity
+    snap.fields.forEach((f, i) => {
+      if (!f.held && !f.ours) return
+      const d = Math.hypot(FIELDS[i].cx - at.x, FIELDS[i].cz - at.z)
+      if (d < bd) { bd = d; best = i }
+    })
+    return best
+  }
+
+  // Home steps out through the tiers and back: the field, the farm, the county, the field again. From a view of the
+  // player's own it goes to the field tier, on the field they were looking at.
   function goHome(): void {
     const vp = viewport()
     if (snap.mode === 'title') { framing = 'title'; rig.moveTo(rig.titlePose(vp, titleU()), reduced); return }
-    const again = framing === 'home' && rig.isAt(rig.home(vp))
-    framing = again ? 'whole' : 'home'
-    rig.moveTo(again ? rig.whole(vp) : rig.home(vp), reduced)
+    const at = framing !== 'free' && framing !== 'title' && rig.isAt(framedPose(vp, turned())) ? framing : 'free'
+    if (at === 'free' || at === 'county') { frameField(at === 'county' ? framed : fieldInView()); return }
+    framing = at === 'farm' ? 'county' : 'farm'
+    rig.moveTo(framedPose(vp), reduced, 1100)
   }
 
   const off = app.on(e => {
@@ -270,12 +328,12 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       if (app.settings.quality !== 'auto' && app.settings.quality !== tier) { tier = app.settings.quality; resize() }
     } else if (e.type === 'order') fields.ringOrder(e.fields)
     else if (e.type === 'focus') {
-      const vp = viewport()
-      if (e.field >= 0 && e.field < FIELD_COUNT) {
-        framing = 'field'
-        framed = e.field
-        rig.moveTo(rig.fieldPose(e.field, vp), reduced)
-      } else { framing = 'free'; goHome() }
+      if (e.field >= 0 && e.field < FIELD_COUNT) frameField(e.field)
+      else {
+        // The whole farm is asked for.
+        framing = 'farm'
+        rig.moveTo(rig.farm(viewport()), reduced)
+      }
     } else if (e.type === 'insets') reframe(reduced)
   })
 
@@ -339,9 +397,9 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       // A key moment about to play where the player is not looking: bring the field into frame, unless their hand is on the camera.
       const staged = crews.staged(prev)
       if (staged && !reduced && app.speed < 3 && rig.idle > 2.5) {
-        const to = rig.fieldPose(staged.field, viewport())
+        const to = rig.field(staged.field, viewport(), rig.goal.yaw)
         const far = Math.hypot(rig.cur.x - to.x, rig.cur.z - to.z) > FD * 0.8 || rig.cur.dist > to.dist * 1.3
-        if (far) { framing = 'field'; framed = staged.field; rig.moveTo(to, false) }
+        if (far) frameField(staged.field, false)
       }
     } else if (sameDay) {
       // A command in the middle of the day: keep the day playing, refresh everything not waiting to be revealed.
@@ -356,9 +414,10 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
         if (next.mode === 'title') crews.title()
         particles.clear()
         // A change of screen is a move of the camera, not a cut.
-        framing = next.mode === 'title' ? 'title' : 'home'
+        framing = next.mode === 'title' ? 'title' : tierFor(next.mode)
+        framed = HOME_FIELD
         // To and from the opening shot the camera swings a long way round: give it time.
-        rig.moveTo(poseFor(next.mode, viewport()), first || reduced, next.mode === 'title' || prev.mode === 'title' ? 2200 : MOVE_MS)
+        rig.moveTo(framedPose(viewport()), first || reduced, next.mode === 'title' || prev.mode === 'title' ? 2600 : MOVE_MS)
       } else crews.sync(next)
       dayT = next.mode === 'title' ? 0 : 1
     }
@@ -442,7 +501,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     const vp = viewport()
     return crews.pick(x, y, rig.camera, vp.w, vp.h, snap.mode === 'season' || app.unit >= 0)
   }
-  const input = attachInput(canvas, app, rig, viewport, pick, pickUnit, goHome, pickYard)
+  const input = attachInput(canvas, app, rig, viewport, pick, pickUnit, goHome, pickYard, i => frameField(i))
 
   // The hour the scene is lit for. The day's own picture may be a morning (fog, a white frost, deep mist); days going
   // by quickly are never shown as mornings and stand in the plainer light of mid afternoon, and the light turns from
@@ -454,9 +513,8 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     const season = snap.mode === 'season'
     const want = dayHour < 0 && (!season || app.speed <= 1)
     if (want !== morning && (now || !season || app.speed === 0 || time - hourSince > HOUR_HOLD_S)) { morning = want; hourSince = time }
-    // The evening is not held still: over a couple of minutes the sun sinks a little and comes back, and every shadow with it.
-    const breathe = reduced ? 0 : 0.045 * (0.5 - 0.5 * Math.cos((time * Math.PI * 2) / 140))
-    envT.hour = !season ? dayHour : morning ? MORNING + breathe : app.speed >= 3 ? 0.72 : app.speed === 2 ? 0.87 : EVENING - breathe
+    // Between changes the sun holds still: a sun that crept would make every fine shadow on the land crawl.
+    envT.hour = !season ? dayHour : morning ? MORNING : app.speed >= 3 ? 0.72 : app.speed === 2 ? 0.87 : EVENING
   }
 
   const shaftTint = new Color(), veilTint = new Color(), leafLight = new Color()
@@ -471,11 +529,13 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     U.uHazeSun.value.copy(lit.hazeSun)
     U.uHazeAway.value.copy(lit.hazeAway)
     U.uMistCol.value.copy(lit.mist)
-    U.uHaze.value.set(env.haze, 0.0085 / S)
+    U.uHaze.value.set(env.haze, HAZE_FALL)
     U.uNight.value = lit.night
     // Mist lies in the low ground: on the brook and the bottom land, thinning fast above it; on a fog day it fills the
     // valley to the mid slope and the ridge stands out of it.
-    U.uMist.value.set(((0.36 - 0.24 * env.mistDeep) * env.mist) / S, (2.6 - 1.5 * env.mistDeep) / S, (0.2 + 1.9 * env.mistDeep) * KV, 0.8)
+    // In metres: a sheet a few metres deep over the water and the bottom fields, gone by the middle fields; on a fog
+    // day it stands some twenty metres deep, thinner, and only the ridge fields and the woods rise out of it.
+    U.uMist.value.set((0.04 - 0.02 * env.mistDeep) * env.mist, 1 / (2.2 + 5 * env.mistDeep), WATER_Y + 1.6 + 5.5 * env.mistDeep, 0.8)
     U.uCloud.value.x = env.cloudShadow
     U.uCloud.value.y = env.cloud
     U.uSnow.value = env.snow
@@ -501,8 +561,8 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     LAMP.value += (lamp / lit.exposure - LAMP.value) * Math.min(1, dt * 2)
   }
   const spent = { crews: 0, update: 0, draw: 0 }
+  const tally = { frames: 0, triangles: 0, calls: 0 }
   let replayPace = 1
-  let titleShift = 0.16
   let gustHeading = 0.4, gustRun = 0, mistAt = 0
   const cloudAt = new Vector2()
 
@@ -548,7 +608,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     frameNo++
     if (dirty) rebuild()
     // Day clock: follows the game clock when it runs, plays the day out by itself when paused.
-    if (snap.mode === 'title') dayT = reduced ? 0.36 : (((time / TITLE_LOOP_S + titleShift) % 1) + 1) % 1
+    if (snap.mode === 'title') dayT = reduced ? 0.12 : titleDay()
     else if (dayT < 1) dayT = Math.min(1, app.speed > 0 ? Math.max(dayT + dt / DAY_ANIM_S * 0.25, app.dayProgress) : dayT + dt / DAY_ANIM_S * replayPace)
     if (crews.stageHold >= 0 && snap.mode === 'season') dayT = Math.min(dayT, crews.stageHold)
     aimHour(false)
@@ -565,10 +625,12 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     while (swing > Math.PI) swing -= Math.PI * 2
     while (swing < -Math.PI) swing += Math.PI * 2
     gustHeading += swing * (1 - Math.exp(-dt / 7))
-    gustRun += (2.6 + 5.5 * env.wind) * dt * pace
+    // A front runs down the wind at some metres a second, and crosses a field in a quarter of a minute; the clouds'
+    // shadows go a little slower than a walking tractor in a light air and as fast as a truck in a blow.
+    gustRun += (5 + 9 * env.wind) * dt * pace
     U.uGust.value.set(Math.cos(gustHeading), Math.sin(gustHeading), gustRun, env.wind)
-    cloudAt.x -= wx * (4 + 8 * env.wind) * 0.0015 * dt * pace
-    cloudAt.y -= wz * (4 + 8 * env.wind) * 0.0015 * dt * pace
+    cloudAt.x -= (wx * (5 + 11 * env.wind) * dt * pace) / CLOUD_TURN
+    cloudAt.y -= (wz * (5 + 11 * env.wind) * dt * pace) / CLOUD_TURN
     U.uCloud.value.z = cloudAt.x
     U.uCloud.value.w = cloudAt.y
     terrain.water.ice.value = env.ice
@@ -591,11 +653,12 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       dt, dayT, advancing: app.speed > 0, pace: replayPace, time, reduced, idle: snap.mode !== 'season' && snap.mode !== 'title',
       season: snap.mode === 'season', dist: rig.cur.dist, dust: env.dry, dark: clamp((LAMP.value * lit.exposure) / 5, 0, 1), picked: app.unit, particles, passed, snap, env, camera: cam,
     })
-    // Smoke from the kitchen chimney: all day in the cold, a thread of it at supper time.
+    // Smoke from the kitchen chimney: all day in the cold, a thread of it at supper time. It goes on rising and leans
+    // away downwind, a plume a few roofs high: from two fields off it says where the house is and which way the wind sets.
     smokeAt += dt * pace
-    if (env.smoke > 0.2 && smokeAt > 0.16) {
+    if (env.smoke > 0.2 && smokeAt > 0.3) {
       smokeAt = 0
-      particles.emit(props.chimney.x, props.chimney.y, props.chimney.z, (Math.random() - 0.5) * 0.2, 1.1, (Math.random() - 0.5) * 0.2, 0.26, 0.66, 4.5, 0.74, 0.74, 0.76, 0.36 * env.smoke, 0.8)
+      particles.emit(props.chimney.x, props.chimney.y, props.chimney.z, (Math.random() - 0.5) * 0.2, 1.1, (Math.random() - 0.5) * 0.2, 0.3, 0.42, 15, 0.74, 0.74, 0.76, 0.3 * env.smoke, 0.85, 1.1 / (1 + env.wind))
     }
     props.update({ dt: dt * pace, time: ambient, env, lit, dist: rig.cur.dist, yard: app.yard, particles, eye: cam.position })
     // The brook breathes on a still damp morning: wisps that lift off the water and thin away.
@@ -603,22 +666,29 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     const breath = Math.max(env.mist, 0.5 * Math.max(env.rime0, env.rime2)) * (1 - Math.max(env.rain, env.snowfall)) * (1 - 0.6 * Math.min(1, env.wind))
     if (breath > 0.12 && mistAt > 0.2) {
       mistAt = 0
-      const x = clamp(rig.cur.x + (Math.random() - 0.5) * 120 * S, LAND.x0 - 100 * S, LAND.x1 + 100 * S)
-      particles.emit(x, WATER_Y + 0.7, brookZ(x) + (Math.random() - 0.5) * 3.4 * S, (Math.random() - 0.5) * 0.4, 0.2 + Math.random() * 0.2, (Math.random() - 0.5) * 0.4, 2.9, 1, 9, 0.9, 0.92, 0.95, 0.11 * breath, 0.5)
+      const reach = clamp(rig.cur.dist * 1.6, 120, 900)
+      const x = clamp(rig.cur.x + (Math.random() - 0.5) * 2 * reach, LAND.x0 - 300, LAND.x1 + 300)
+      const big = clamp(rig.cur.dist / 90, 1, 3.2)
+      particles.emit(x, WATER_Y + 0.8, brookZ(x) + (Math.random() - 0.5) * 9, (Math.random() - 0.5) * 0.5, 0.25 + Math.random() * 0.3, (Math.random() - 0.5) * 0.5, 3.2 * big, 1.1 * big, 11, 0.9, 0.92, 0.95, 0.11 * breath, 0.5)
     }
     const t1 = performance.now()
-    particles.update(dt * (reduced ? 0.3 : 1), wx * env.wind * 1.6, wz * env.wind * 1.6)
-    focus.set(rig.cur.x, fieldBaseY(rig.cur.z), rig.cur.z)
+    particles.update(dt * (reduced ? 0.3 : 1), wx * env.wind * 4, wz * env.wind * 4)
+    // Where the picture is looking: the ground in the middle of what the interface leaves free.
+    const eyes = rig.looksAt(vp)
+    focus.set(eyes.x, fieldBaseY(eyes.z), eyes.z)
+    const eyeDist = focus.distanceTo(rig.camera.position)
     // The air that rain, snow and leaves fall through reaches from the camera past what it looks at.
-    const span = clamp(rig.cur.dist / 26, 1, 24)
+    const span = clamp(eyeDist / 45, 1, 40)
     leafLight.copy(lit.sun).multiplyScalar(0.3).add(lit.hazeAway)
     weather.update({
       fall, rain: env.rain, snowfall: env.snowfall, leaves: env.fall * (0.35 + 0.65 * Math.min(1, env.wind * 2)), windX: wx * env.wind, windZ: wz * env.wind,
-      centre: ahead.set(rig.cur.x, fieldBaseY(rig.cur.z) + 9 * span, rig.cur.z), span, tint: lit.hazeAway, light: leafLight,
-      resX: post.target.width, resY: post.target.height, floor: fieldBaseY(rig.cur.z),
+      centre: ahead.set(eyes.x, focus.y, eyes.z).lerp(rig.camera.position, 0.45), span, tint: lit.hazeAway, light: leafLight,
+      resX: post.target.width, resY: post.target.height, floor: focus.y,
     })
     birds.update(ambient, Math.max(env.rain, env.snowfall, lit.night), lit.hazeAway)
-    shadows.update(lit.sunDir, lit.sun, focus, rig.focus(), dtMs <= 0.5)
+    rig.camera.getWorldDirection(ahead)
+    const flat = Math.hypot(ahead.x, ahead.z) || 1
+    shadows.update(lit.sunDir, lit.sun, focus, eyeDist, dtMs <= 0.5, ahead.x / flat, ahead.z / flat)
     fields.setFarShadows(!shadows.holdsFarm)
     MARK_WIDE.value = clamp(rig.cur.dist / (42 * S), 1, 4.5 * K / S)
     fields.update(dt, cam, { selection: app.selection, hover: app.hover, oats: env.oats, oatsRipe: env.oatsRipe, reduced })
@@ -626,12 +696,14 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     flora.update(cam)
     harvest.update(dt, app.speed === 0, clamp(rig.cur.dist / (30 * S), 1, 2.3), reduced)
     PIXEL.value = (TIERS[tier].msaa ? 1.7 : 1.4) / ((post.target.height) / (2 * Math.tan((cam.fov * Math.PI) / 360)))
-    // The focus is shallow in the opening shot, slight in play, and opens up while the player moves the camera.
-    const want = env.lens * (rig.idle < 0.6 ? 0.2 : 1) * (snap.mode === 'title' ? 0.5 : smooth(40 * S, 12 * S, rig.cur.dist) * 1.3 + 0.1)
+    // A landscape seen whole is sharp from front to back: a soft focus would make a model of it. Only close in, among
+    // things a few metres off, does the lens go a little soft behind them; it opens up while the player moves the camera.
+    const want = env.lens * (rig.idle < 0.6 ? 0.2 : 1) * smooth(90, 14, rig.cur.dist) * (snap.mode === 'title' ? 0.7 : 1.2)
     lens += (want - lens) * (1 - Math.exp(-dt / 0.35))
     const t2 = performance.now()
     renderer.info.reset()
     if (frameNo % 2 === 0 || frameNo < 4 || dtMs <= 0.5) sky.renderMap(renderer)
+    const skyDrew = renderer.info.render.triangles
     const sharp = rig.focus()
     // Where the sun stands on the picture, and how much of its light the air shows: most when it is low, the air is
     // hazy or misty, the sky is open, and the camera looks its way.
@@ -639,7 +711,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     const facing = cam.getWorldDirection(ahead).dot(lit.skySun)
     const falling = Math.max(env.rain, env.snowfall)
     const open = clamp(1 - env.cloud, 0, 1) * (1 - falling)
-    const thick = clamp(0.45 + env.haze * 420 + 0.6 * env.mist, 0, 1.4)
+    const thick = clamp(0.45 + env.haze * 380 + 0.6 * env.mist, 0, 1.4)
     const shafts = (reduced ? 0.7 : 1) * lit.low * lit.day * Math.min(1, env.sunScale * 1.5) * (0.35 + 0.65 * open) * thick * smooth(0.25, 0.8, facing)
     const peak = Math.max(lit.sun.r, lit.sun.g, lit.sun.b, 1e-4)
     shaftTint.copy(lit.sun).multiplyScalar(1 / peak)
@@ -657,10 +729,15 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       warm: 0.2 + 0.5 * gold + 0.1 * autumn * open - 0.3 * cold - 0.28 * lit.night,
       rich: 0.1 + 0.15 * gold + 0.1 * autumn - 0.05 * falling,
       contrast: 0.1 + 0.09 * open * lit.day + 0.06 * env.storm,
-      veil: 0.1 * env.mist + 0.12 * env.rain + 0.14 * env.snowfall, veilTint,
+      veil: 0.08 * env.mist + 0.07 * env.rain + 0.1 * env.snowfall, veilTint,
       vignette: snap.mode === 'title' ? 0.3 : 0.2 + 0.1 * lit.night + 0.06 * env.storm,
     }, Math.round(size.w * size.pr), Math.round(size.h * size.pr))
     const t3 = performance.now()
+    // What the frames draw, summed, so a tool can take the mean over many: the shadow maps are redrawn on different
+    // frames, and one frame's count says little.
+    tally.frames++
+    tally.triangles += renderer.info.render.triangles - skyDrew
+    tally.calls += renderer.info.render.calls
     // how long the frame's own work and its drawing take, smoothed, for the tools
     spent.crews += (t1 - t0 - spent.crews) * 0.05
     spent.update += (t2 - t1 - spent.update) * 0.05
@@ -776,7 +853,6 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
         if (dirty) rebuild()
         replayPace = pace
         dayT = Math.max(0, Math.min(1, t))
-        titleShift = dayT - time / TITLE_LOOP_S
       },
       info() {
         const w = crews.where()
@@ -823,6 +899,19 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       // For working on the light: set parts of the day's air by hand; they hold until the game next changes the day.
       tune(o: Record<string, number>) { Object.assign(envT, o); Object.assign(env, o); if (typeof o.hour === 'number') dayHour = o.hour },
       home() { goHome() },
+      // Put the camera at a tier ('yard', 'field', 'farm', 'county'); n: the field or the yard.
+      tier(name: TierName, n?: number) {
+        framing = name
+        if (name === 'field') framed = n ?? HOME_FIELD
+        if (name === 'yard') framedYard = n ?? -1
+        rig.moveTo(framedPose(viewport()), true)
+      },
+      // The mean of what each frame drew since the last call (triangles and draw calls over every pass).
+      mean() {
+        const m = { frames: tally.frames, triangles: tally.frames ? tally.triangles / tally.frames : 0, calls: tally.frames ? tally.calls / tally.frames : 0 }
+        tally.frames = tally.triangles = tally.calls = 0
+        return m
+      },
       // Where a crew is on the screen, for clicking it in checks.
       unitAt(id: number) {
         const u = crews.where().units.find(x => x.id === id)
@@ -833,11 +922,15 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
         // on the body: half way between the ground under them and the point over their head
         return { x: ((v.x + 1) / 2 * vp.w + at.x) / 2, y: ((1 - v.y) / 2 * vp.h + at.y) / 2 }
       },
+      // Where the interface pins a person's face.
+      unitPin: (id: number) => unitAnchor(id),
       // What a click at a point on the screen would pick.
       pickAt: (x: number, y: number) => ({ field: pick(x, y), unit: pickUnit(x, y), yard: pickYard(x, y), mode: snap.mode, held: snap.fields.map(f => f.held), available: snap.fields.map(f => f.available) }),
       parts: () => Object.keys(parts),
       show(name: string, on: boolean) { if (parts[name]) parts[name].visible = on },
       shadowsOn(on: boolean) { for (const l of shadows.lights) l.castShadow = on },
+      // Stop (or go on) redrawing one shadow cascade, to measure what it costs.
+      cascade(k: number, on: boolean) { shadows.held[k] = !on },
       env, lit, rig,
       // What the last frame drew, where the camera stood, and the clocks.
       stats() {

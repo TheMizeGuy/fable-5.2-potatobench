@@ -1,14 +1,12 @@
 // The sizes of the few things the eye reads scale from (docs/SCALE.md), in metres, from the numbers they are drawn
-// with: the models' own sizes times the factor each is drawn at. tests/scale.test.ts holds them to the standard.
+// with. tests/scale.test.ts holds them to the standard. This file reads nothing that draws, so the land's plan can
+// read it; the sizes of people, machines and animals, which come from their models, are in living.ts.
 import { S } from './scale.ts'
 
-// People and machines are modelled small (a figure 0.82 tall, the tractor 1.61 long) and drawn at this size, which is
+// People and machines are modelled small (a figure 0.83 tall, the tractor 1.61 long) and drawn at this size, which is
 // true size, whatever the distance. People against the machines' scale: FIGURE.
 export const TRUE_SIZE = 2.1
 export const FIGURE = 1.05
-export const PERSON = { tall: 0.82 * TRUE_SIZE * FIGURE }
-export const TRACTOR = { long: 1.61 * TRUE_SIZE, wide: 0.93 * TRUE_SIZE, tall: 1.26 * TRUE_SIZE }
-export const TRUCK = { long: 2.94 * TRUE_SIZE, wide: 0.96 * TRUE_SIZE }
 
 // Buildings, in the small units they are drawn in (the Builder brings them up by S). `w` is across the ridge, `l`
 // along it, `wall` the eaves above the floor and `rise` the ridge above the eaves.

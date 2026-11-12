@@ -1,6 +1,8 @@
-// What each view costs on the GPU at each quality tier: GPU time per frame, triangles and draw calls, for the opening,
-// the home view and the whole map with ten fields in crop, and a close view along the rows; and, with --parts, what each
-// part of the scene costs in the home view at the high tier (the frame with that part hidden, against the whole).
+// What each view costs on the GPU at each quality setting: GPU time per frame, and the triangles and draw calls of a
+// frame as the mean over many (the shadow maps are redrawn on different frames, so one frame's count says little), for
+// the opening and for the camera's four tiers (yard, field, farm, county) with ten fields in crop and people at work;
+// and, with --parts, what each part of the scene costs from the field tier at the high setting (with that part hidden,
+// against the whole).
 // Usage: node tools/render/budget.ts <base-url> [--parts] [--size=1920x1080]
 import { execFileSync } from 'node:child_process'
 import { chromium, type Page } from '@playwright/test'
@@ -52,17 +54,20 @@ async function measure(page: Page): Promise<M> {
   return best
 }
 
-async function window1(page: Page, seconds = 1.2): Promise<M> {
+async function window1(page: Page, seconds = 1.5): Promise<M> {
   await page.waitForTimeout(300)
-  await page.evaluate(() => { const M = (window as any).__perf; M.gpu = []; M.cpu = []; M.on = true })
+  await page.evaluate(() => { const M = (window as any).__perf; M.gpu = []; M.cpu = []; M.on = true; (window as any).__countyField.mean() })
   await page.waitForTimeout(seconds * 1000)
   const r = await page.evaluate(() => {
     const M = (window as any).__perf
     M.on = false
-    const s = (window as any).__countyField.stats()
-    return { gpu: M.gpu, cpu: M.cpu, triangles: s.triangles, calls: s.calls, tier: s.tier, spent: s.spent, objects: s.objects }
+    const f = (window as any).__countyField, s = f.stats(), mean = f.mean()
+    return { gpu: M.gpu, cpu: M.cpu, triangles: mean.triangles, calls: mean.calls, tier: s.tier, spent: s.spent, objects: s.objects }
   })
-  return { gpu: median(r.gpu), cpu: median(r.cpu), triangles: r.triangles, calls: r.calls, tier: r.tier, spent: r.spent, objects: r.objects }
+  // The mean of the GPU's time too: a frame that redraws the wide shadow map costs more than its neighbours, and the
+  // middle frame would hide it.
+  const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : NaN)
+  return { gpu: mean(r.gpu), cpu: median(r.cpu), triangles: r.triangles, calls: Math.round(r.calls), tier: r.tier, spent: r.spent, objects: r.objects }
 }
 
 const line = (label: string, m: M) =>
@@ -92,7 +97,12 @@ async function bigFarm(page: Page): Promise<void> {
       if (!app.do({ t: 'day' }).ok) break
     }
     for (let n = 0; n < 30 && sim.today(app.world, c).sky !== 'clear'; n++) app.do({ t: 'day' })
+    // A day's work for everyone, left part way through: people and machines out on the land.
+    for (const a of sim.advise(app.world, c)) if (a.act !== 'wait' && a.act !== 'close' && a.act !== 'sell') app.do({ t: 'job', kind: a.act, field: a.field })
+    app.do({ t: 'day' })
   })
+  await page.evaluate(() => (window as any).__countyField.settle())
+  await page.evaluate(() => (window as any).__countyField.seek(0.5, 0.003))
 }
 
 // Other browsers on the GPU (other checks running on the same machine) make every number here wrong: wait them out.
@@ -139,12 +149,16 @@ await page.evaluate(() => {
 const settle = () => page.evaluate(() => (window as any).__countyField.settle())
 const tier = (t: string) => page.evaluate(t => (window as any).__county.app.setSetting('quality', t), t)
 
+const at = (name: string) => async () => { await page.evaluate(name => (window as any).__countyField.tier(name), name); await page.waitForTimeout(500) }
 const views: [string, () => Promise<void>][] = [
-  ['opening', async () => { await page.evaluate(() => (window as any).__county.app.quitToTitle()); await settle() }],
-  ['home view, ten fields in crop', async () => { await bigFarm(page); await settle() }],
-  ['whole map, ten fields in crop', async () => { await page.evaluate(() => (window as any).__countyField.home()); await settle() }],
-  ['close along the rows', async () => { await page.evaluate(() => (window as any).__countyField.view({ frame: 'field', field: 5, x: 0.3, z: 0.52, dist: 12, yaw: -1.32, pitch: 0.13 })); await settle() }],
+  ['opening, from far off', async () => { await page.evaluate(() => { (window as any).__county.app.quitToTitle(); (window as any).__countyField.titleAt(0) }); await settle() }],
+  ['opening, by the road', async () => { await page.evaluate(() => (window as any).__countyField.titleAt(1)); await settle() }],
+  ['yard tier', async () => { await page.evaluate(() => (window as any).__countyField.titleAt(-1)); await bigFarm(page); await at('yard')() }],
+  ['field tier (the playing view)', at('field')],
+  ['farm tier', at('farm')],
+  ['county tier', at('county')],
 ]
+const table: Record<string, Record<string, M>> = {}
 for (const [label, set] of views) {
   for (const t of ['high', 'medium', 'low']) {
     await tier(t)
@@ -152,26 +166,36 @@ for (const [label, set] of views) {
     await quiet(label)
     const m = await measure(page)
     line(label, m)
+    ;(table[label] ??= {})[t] = m
     if (browsersOnGpu() > mine) console.log('    (another browser started on the GPU during this measurement)')
   }
 }
+console.log('  the settings against each other (GPU time, low and medium as a share of high):')
+for (const [label, row] of Object.entries(table)) console.log(`    ${label.padEnd(34)} medium ${(row.medium.gpu / row.high.gpu * 100).toFixed(0)}%  low ${(row.low.gpu / row.high.gpu * 100).toFixed(0)}%`)
 if (parts) {
   await tier('high')
-  await page.evaluate(() => { const f = (window as any).__countyField; f.home() })
-  await settle()
+  await at('field')()
+  await quiet('parts')
   const all = await measure(page)
-  line('home view, everything', all)
+  line('field tier, everything', all)
   const names: string[] = await page.evaluate(() => (window as any).__countyField.parts())
   for (const n of names) {
     await page.evaluate(n => (window as any).__countyField.show(n, false), n)
+    await page.waitForTimeout(400)
     const m = await measure(page)
-    console.log(`    without ${n.padEnd(10)} saves ${(all.gpu - m.gpu).toFixed(2).padStart(6)} ms GPU, ${((all.triangles - m.triangles) / 1e6).toFixed(2)}M triangles, ${all.calls - m.calls} calls`)
+    console.log(`    without ${n.padEnd(10)} saves ${(all.gpu - m.gpu).toFixed(2).padStart(6)} ms GPU, ${((all.triangles - m.triangles) / 1e6).toFixed(2).padStart(5)}M triangles, ${String(all.calls - m.calls).padStart(4)} calls`)
     await page.evaluate(n => (window as any).__countyField.show(n, true), n)
   }
-  await page.evaluate(() => (window as any).__countyField.shadowsOn(false))
-  const ns = await measure(page)
-  console.log(`    without shadows   saves ${(all.gpu - ns.gpu).toFixed(2).padStart(6)} ms GPU, ${((all.triangles - ns.triangles) / 1e6).toFixed(2)}M triangles, ${all.calls - ns.calls} calls`)
-  await page.evaluate(() => (window as any).__countyField.shadowsOn(true))
+  // Each shadow cascade in turn: what it costs to keep it drawn.
+  for (const k of [0, 1, 2]) {
+    await page.evaluate(k => (window as any).__countyField.cascade(k, false), k)
+    await page.waitForTimeout(400)
+    const m = await measure(page)
+    console.log(`    without the ${['fine', 'second', 'widest'][k].padEnd(6)} shadow map redrawn  saves ${(all.gpu - m.gpu).toFixed(2).padStart(6)} ms GPU, ${((all.triangles - m.triangles) / 1e6).toFixed(2).padStart(5)}M triangles, ${String(all.calls - m.calls).padStart(4)} calls`)
+    await page.evaluate(k => (window as any).__countyField.cascade(k, true), k)
+  }
+  const again = await measure(page)
+  console.log(`    (everything again: ${again.gpu.toFixed(2)} ms GPU; the difference from the first, ${(again.gpu - all.gpu).toFixed(2)} ms, is how far these can be trusted)`)
 }
 // --land: what the land's own parts cost (the frame with the part hidden, against the whole) in each tier of view and
 // at each quality setting. Triangles and calls are averaged over several frames, since the shadow passes take turns.
