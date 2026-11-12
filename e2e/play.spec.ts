@@ -365,6 +365,10 @@ test('the same start by keyboard alone', async ({ page, isMobile }) => {
   await reach(page, `const { app } = q.g(); for (let k = 0; k < 90 && !app.needs().some(n => n.need && n.need.act === 'plant'); k++) { app.campaign.incidents = []; app.do({ t: 'day' }) } app.campaign.incidents = []; app.resumeAfterCard()`)
   // Tab finds the field that needs something; Enter gives it the order.
   await expect(page.locator(BADGE).first()).toBeVisible({ timeout: 30_000 })
+  if (await page.getByTestId('spray-ask').isVisible().catch(() => false)) {
+    await page.keyboard.press('Digit2')
+    await expect(page.getByTestId('spray-ask')).toBeHidden()
+  }
   await page.keyboard.press('Tab')
   await expect(page.getByTestId('card')).toBeVisible()
   await expect(page.locator('#ui .plate[aria-pressed="true"]')).toHaveCount(1)

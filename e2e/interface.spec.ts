@@ -161,10 +161,9 @@ test('the crop orders hold their places when one is given, and under 80 words wi
 test('a test dig is a tray beside the land, does not stop the clock, and can be reopened', async ({ page }) => {
   const errors = watchErrors(page)
   await startSeason(page)
-  await reach(page, `q.run(q.day(6, 28), ['sample'])`)
+  // Spraying settled for the season first, as a player would when the question comes, so the days can run.
+  await reach(page, `q.g().app.do({ t: 'sprayWay', way: 'ask' }); q.run(q.day(6, 28), ['sample'])`)
   await putAway(page)
-  // Spraying settled for the season, as a player would when the question comes, so the days can run.
-  await reach(page, `const { app } = q.g(); if (!app.do({ t: 'sprayWay', way: 'auto' }).ok) {}`)
   await page.getByTestId('field-2').click()
   await page.keyboard.press('Shift+t')
   await expect.poll(async () => (await look(page)).queue).toBeGreaterThan(0)
@@ -884,10 +883,9 @@ test('blight weather asks once how to spray this season, and a worn-out hand can
   await expect(ask).toBeVisible()
   expect((await look(page)).paused).toBe(true)
   // Decide later: the days go on, and the card does not come straight back.
+  const day0 = await game<number>(page, 'app.campaign.season.day')
   await page.keyboard.press('Escape')
   await expect(ask).toBeHidden()
-  await page.keyboard.press('Space')
-  const day0 = await game<number>(page, 'app.campaign.season.day')
   await expect.poll(() => game<number>(page, 'app.campaign.season.day'), { timeout: 15_000 }).toBeGreaterThan(day0)
   await expect(ask).toBeHidden()
   await reach(page, `q.g().app.setSpeed(0)`)
