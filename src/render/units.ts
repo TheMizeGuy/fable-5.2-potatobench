@@ -650,7 +650,7 @@ export class Crews {
 
   private over(a: Actor, out: Vector3): Vector3 {
     // (a driver still walking to the machine is where they are seen, not in its seat)
-    const r = a.aboard && a.rig && !(Number.isFinite(a.sx) && Math.hypot(a.sx - a.rig.sx, a.sz - a.rig.sz) > 1) ? a.rig : null
+    const r = a.aboard && a.rig && !(Number.isFinite(a.sx) && Math.hypot(a.sx - a.rig.sx, a.sz - a.rig.sz) > 0.3) ? a.rig : null
     // the tractor's seat is a little behind its middle
     const back = r && r.kind === 'tractor' ? 0.44 * TRUE_SIZE : 0
     const x = r ? r.sx - Math.cos(r.heading) * back : a.sx, z = r ? r.sz - Math.sin(r.heading) * back : a.sz
@@ -782,7 +782,7 @@ export class Crews {
       const holder = r.holder >= 0 ? this.actors.find(a => a.id === r.holder) : undefined
       // A driver seen still walking to the machine (it stood elsewhere when they took it): the machine waits for them,
       // and they are seen on foot until they are at it.
-      const walking = !!holder && holder.aboard && Number.isFinite(holder.sx) && Math.hypot(holder.sx - r.sx, holder.sz - r.sz) > 1
+      const walking = !!holder && holder.aboard && Number.isFinite(holder.sx) && Math.hypot(holder.sx - r.sx, holder.sz - r.sz) > 0.3
       if (walking) {
         this.follow(holder!, this.vFoot, FOOT_MOST, { x: r.sx, z: r.sz })
         holder!.heading = Math.atan2(r.sz - holder!.sz, r.sx - holder!.sx)

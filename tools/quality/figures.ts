@@ -41,11 +41,13 @@ async function settle(): Promise<void> {
 
 if (!measure) {
   // A farm in July: the farmer driving the sprayer, a hand walking the rows, the others as the day has them.
-  await q(page, `${FARM}; q.run(q.day(6, 6), ['spray']); app.campaign.incidents = []
+  await q(page, `${FARM}; app.do({ t: 'sundays', off: false }); q.run(q.day(6, 6), ['spray']); app.campaign.incidents = []
     const c2 = app.campaign; for (const j of [...c2.season.jobs]) app.do({ t: 'cancel', id: j.id })
     app.do({ t: 'job', kind: 'spray', field: 0, unit: c2.crew[0].id }); app.do({ t: 'job', kind: 'scout', field: 2, unit: c2.crew[1].id })`)
   await settle()
-  await page.waitForTimeout(6000)
+  // under way for a moment, then the clock stopped so each is pictured at it (the camera still comes in on them)
+  await page.waitForTimeout(3000)
+  await q(page, `q.g().app.setSpeed(0)`)
   const people = await q(page, `return q.g().app.campaign.crew.map(u => ({ id: u.id, name: u.name }))`) as { id: number; name: string }[]
   const rows: string[] = []
   for (const p of people) {
