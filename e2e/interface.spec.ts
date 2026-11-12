@@ -91,13 +91,14 @@ test('only the orders that can be given are offered, and one that cannot says wh
   // The coach still says why it would wait.
   await page.keyboard.press('Escape')
   await page.getByTestId('field-0').click()
-  // The coach says why it would wait, or why now: whichever the soil on this day calls for.
+  // The coach says why it would wait; or, when the soil says now, planting is the suggested order, filled, with the fist.
   const holding = await game<boolean>(page, '!!app.needs()[0].hold')
-  await expect(page.getByTestId('card-line')).toContainText(holding ? 'Hold off planting' : 'Plant.')
+  if (holding) await expect(page.getByTestId('card-line')).toContainText('Hold off planting')
+  else await expect(page.getByTestId('order-plant')).toHaveClass(/is-suggested/)
   // Given, the order joins the crew's list, and its place on the card holds still for a moment.
   await page.getByTestId('order-plant').click()
   await expect.poll(async () => (await look(page)).queue).toBe(1)
-  await expect(page.locator('#ui [data-testid="card"] .order.given')).toHaveCount(1)
+  await expect(page.locator('#ui [data-testid="card"] .order.is-given')).toHaveCount(1)
   await page.keyboard.press('p')
   await expect(page.getByTestId('card-line')).toContainText('Already on the list')
   // A second field, then that order is put first with Ctrl, and the first is cancelled with a click.
@@ -209,29 +210,53 @@ for (const [w, h] of [[320, 640], [390, 844], [844, 390], [820, 1180], [1024, 70
     await reach(page, `q.run(q.day(6, 12))`)
     await putAway(page)
     for (const selected of [false, true]) {
-      if (selected) await page.getByTestId('field-2').click()
-      await page.waitForTimeout(500)
+      // Picked by its number, as a field the camera may not have in frame is: the land is brought round to it.
+      if (selected) await page.keyboard.press('Digit3')
+      await page.waitForTimeout(1500)
       const found = await page.evaluate(sel => {
         const out: string[] = []
-        const box = (q: string) => { const e = document.querySelector<HTMLElement>(`#ui ${q}`); return e && e.offsetParent !== null && e.offsetHeight > 0 ? e.getBoundingClientRect() : null }
-        const top = box('.topbar')!
-        const low = ['.card', '.crew', '.clock-slot'].map(box).filter((r): r is DOMRect => !!r)
-        const free = Math.min(...low.map(r => r.top)) - top.bottom
-        if (free < innerHeight * 0.5) out.push(`the land has ${Math.round(free)} of ${innerHeight} px${sel ? ' with a field selected' : ''}`)
-        if (document.documentElement.scrollWidth > innerWidth) out.push('the page scrolls sideways')
-        for (const q of ['.topbar', '.card', '.crew', '.clock-slot']) {
-          const r = box(q)
-          if (r && (r.left < -0.5 || r.right > innerWidth + 0.5 || r.bottom > innerHeight + 0.5)) out.push(`${q} runs off the window`)
+        const shown = (e: Element | null): e is HTMLElement => !!e && (e as HTMLElement).offsetParent !== null && (e as HTMLElement).offsetHeight > 0
+        const rect = (q: string) => [...document.querySelectorAll<HTMLElement>(`#ui ${q}`)].filter(shown).map(e => e.getBoundingClientRect())
+        // What the interface lays over the land: the two boards and the goal slip, the bar, the time book and its list,
+        // the alerts, the clock at the thumb.
+        const parts = ['.topbar .almanac > .mount', '.topbar .goal', '.topbar .bank > .mount', '.command', '.timebook', '.queue', '.notes .alert', '.clock-slot', '.paused']
+        const boxes = parts.flatMap(rect)
+        const desk = innerWidth >= 900 && innerHeight > 500
+        // On a phone held upright the top is one board, no more than a fifth of the height (design/season.phone.html).
+        const board = rect('.topbar .almanac > .mount')[0]
+        if (innerWidth < 900 && innerHeight > 500 && board && board.bottom > innerHeight / 5 + 2) out.push(`the top board takes ${Math.round(board.bottom)} of ${innerHeight} px`)
+        // At least half the window is land on a desk, whatever is selected.
+        if (desk) {
+          let free = 0, all = 0
+          for (let y = 5; y < innerHeight; y += 10) for (let x = 5; x < innerWidth; x += 10) {
+            all++
+            if (!boxes.some(r => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom)) free++
+          }
+          if (free < all * 0.5) out.push(`the land has ${Math.round(free / all * 100)}% of the window${sel ? ' with a field selected' : ''}`)
         }
-        for (const el of document.querySelectorAll<HTMLElement>('#ui .topbar *, #ui .card *, #ui .crew *')) {
+        // The field in hand is never under the interface: its tag is on the land, clear of everything, and so is the
+        // middle of its near edge, where the land shows it.
+        if (sel) {
+          const tag = document.querySelector<HTMLElement>('#ui [data-testid="field-2"]')
+          const r = tag && shown(tag) ? tag.getBoundingClientRect() : null
+          if (!r) out.push('the tag of the field in hand is not on the land')
+          else if (boxes.some(b => r.left < b.right - 1 && r.right > b.left + 1 && r.top < b.bottom - 1 && r.bottom > b.top + 1)) out.push('the tag of the field in hand is under the interface')
+          const a = (globalThis as unknown as { __countyField?: { anchor?: (i: number) => { x: number; y: number; visible: boolean } } }).__countyField?.anchor?.(2)
+          if (a?.visible && boxes.some(b => a.x > b.left && a.x < b.right && a.y > b.top && a.y < b.bottom)) out.push('the field in hand is under the interface')
+        }
+        if (document.documentElement.scrollWidth > innerWidth) out.push('the page scrolls sideways')
+        for (const q of ['.topbar', '.command', '.timebook', '.queue', '.clock-slot', '.notes']) {
+          for (const r of rect(q)) if (r.left < -0.5 || r.right > innerWidth + 0.5 || r.bottom > innerHeight + 0.5 || r.top < -0.5) out.push(`${q} runs off the window`)
+        }
+        for (const el of document.querySelectorAll<HTMLElement>('#ui .topbar *, #ui .command *, #ui .timebook *, #ui .queue *')) {
           const text = [...el.childNodes].some(n => n.nodeType === 3 && (n.nodeValue ?? '').trim())
-          if (text && el.scrollWidth > el.clientWidth + 1 && getComputedStyle(el).overflow !== 'visible' && !el.matches('.sr, .unit-text, .unit-name')) out.push(`clipped: ${el.className}`)
+          if (text && el.scrollWidth > el.clientWidth + 1 && getComputedStyle(el).overflow !== 'visible' && !el.matches('.sr')) out.push(`clipped: ${el.className}`)
         }
         const spans = [...document.querySelectorAll<HTMLElement>('#ui .topbar > *')].map(e => e.getBoundingClientRect()).filter(r => r.width > 0)
         for (let a = 0; a < spans.length; a++) for (let b = a + 1; b < spans.length; b++) {
           const x = Math.min(spans[a].right, spans[b].right) - Math.max(spans[a].left, spans[b].left)
           const y = Math.min(spans[a].bottom, spans[b].bottom) - Math.max(spans[a].top, spans[b].top)
-          if (x > 1 && y > 1) out.push('parts of the top bar overlap')
+          if (x > 1 && y > 1) out.push('parts of the top overlap')
         }
         if (matchMedia('(pointer: coarse)').matches) {
           for (const el of document.querySelectorAll<HTMLElement>('#ui button')) {
@@ -239,7 +264,7 @@ for (const [w, h] of [[320, 640], [390, 844], [844, 390], [820, 1180], [1024, 70
             if (r.width && r.height && (r.width < 39.5 || r.height < 39.5)) out.push(`small target: ${el.dataset.testid ?? el.className}`)
           }
         }
-        if (sel && document.querySelectorAll('#ui .card button.order:not(.more)').length > 5) out.push('more than five orders')
+        if (sel && document.querySelectorAll('#ui .command button.order').length > 5) out.push('more than five orders')
         return out
       }, selected)
       expect(found, found.join('; ')).toEqual([])
@@ -275,7 +300,7 @@ test('spring land: a marker opens a card, renting puts a plate and the rent on t
   const hand = money(await game<number>(page, 'sim.HAND_WAGE'))
   const plan = async () => money(await game<number>(page, 'sim.planCosts(app.campaign).total'))
   const before = await plan()
-  await expect(page.locator('#ui .plate.land').first()).toBeVisible()
+  await expect(page.locator('#ui .tag-at.is-land .plate').first()).toBeVisible()
   await page.getByTestId('land-10').click()
   const card = page.getByTestId('plan-card')
   await expect(card).toContainText('Dufour Upper')
@@ -442,7 +467,7 @@ test('the menu: settings take effect, ending early says what is lost, and the sa
   await expect(page.getByTestId('forecast')).toBeVisible()
   // Metric reaches the instruments.
   await page.getByTestId('field-0').click()
-  await expect(page.locator('#ui [data-testid="card"] .card-known')).toContainText('°C')
+  await expect(page.locator('#ui [data-testid="card"] .readings')).toContainText('°C')
   await page.keyboard.press('Escape')
   await page.keyboard.press('m')
   await page.getByTestId('save-delete').click()
@@ -604,11 +629,11 @@ test('building: Y opens the yard, a building is chosen and ordered, and it goes 
   const yard = page.getByTestId('yard-card')
   await expect(yard).toBeVisible()
   await expect(yard.getByTestId('yard-title')).toHaveText('The home yard')
-  await yard.getByTestId('build-pick-stand').click()
-  const detail = yard.getByTestId('build-detail')
-  await expect(detail).toContainText('Catch:')
-  await expect(detail).toContainText('crew-days of building')
-  await yard.getByTestId('build-stand').click()
+  // Each building is an order on the yard's bar: its cost in dollars, logs and crew-days, then its catch.
+  const stand = yard.getByTestId('build-stand')
+  await expect(stand).toContainText('Catch:')
+  await expect(stand).toContainText(/crew-days?/)
+  await stand.click()
   expect(await game<number>(page, 'app.campaign.buildings.filter(b => b.kind === "stand").length')).toBe(1)
   await expect(yard.getByTestId('going-stand')).toBeVisible()
   // The order is on the list, and it cannot be cancelled: it is paid for.
@@ -632,7 +657,10 @@ test('an incident is one card with its choices and what each does; put away, it 
   await expect(card).toContainText('Someone asks for work')
   await expect(card.getByTestId('answer-hire')).toContainText('starts at')
   await expect(card.getByTestId('answer-pass')).toContainText('elsewhere')
-  await expect(card).toContainText('Left unanswered')
+  await expect(card).toContainText('Unanswered')
+  // Each reply says what it costs against the other, in plain words.
+  await expect(card.getByTestId('answer-hire')).toContainText('a month in wages')
+  await expect(card.getByTestId('answer-pass')).toContainText('Costs nothing')
   await page.keyboard.press('Escape')
   await expect(card).toBeHidden()
   await page.getByTestId('incident-open').click()
@@ -651,7 +679,8 @@ test('a tract cleared through the interface: felled, the stumps pulled, the rock
   await reach(page, `const { app } = q.g(); app.campaign.cash += 20000; app.select(14)`)
   const card = page.getByTestId('card')
   await expect(card.getByTestId('card-title')).toHaveText('Home Woodlot')
-  await expect(card.getByTestId('clear-track')).toContainText('Standing')
+  await expect(card.getByTestId('clear-track')).toContainText('Fell')
+  await expect(card.getByTestId('clear-track')).toHaveAttribute('aria-label', /standing/)
   await expect(card).toContainText('loads of logs')
   // X fells, for the axe.
   await page.keyboard.press('x')

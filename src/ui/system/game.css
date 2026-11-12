@@ -211,3 +211,16 @@
 .topbar[data-layout='mid'] .goal .fist { --i: 28px; }
 .topbar[data-layout='mid'] .balance { padding: 5px 12px 5px 16px; }
 .topbar[data-layout='short'] .goal { min-height: var(--touch); }
+
+/* ---------------------------------------------------------------- the HUD's layers and a change of screen */
+.plate-layer, .screen-layer, .paper-layer { position: absolute; inset: 0; pointer-events: none; }
+.plate-layer { z-index: 0; }
+.screen-layer { z-index: 1; }
+.notes-slot.floating { z-index: 2; }
+.paper-layer { z-index: 3; }
+.screen-layer > * { position: absolute; inset: 0; pointer-events: none; }
+.hud.waiting .screen-layer, .hud.waiting .plate-layer { visibility: hidden; }
+.screen-layer > .leaving { animation: screen-leave var(--t-leave) var(--ease-in) forwards; }
+.screen-layer > .arriving { animation: screen-arrive var(--t-slip) var(--ease-out) var(--t-leave) backwards; }
+@keyframes screen-leave { to { opacity: 0; } }
+@keyframes screen-arrive { from { opacity: 0; } }

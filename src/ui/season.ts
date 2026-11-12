@@ -1,4 +1,6 @@
-// The season: the land, a plate on each field, the people bar, and one card for whatever is selected.
+// The season (design/season.html): the land, with a stencilled tag on each field and a face pin on each person; the
+// two boards at the top; the time book of people at the foot with the alerts beside it; and, for whatever is
+// selected, a command bar docked at the edge of the land with the selection drawn on the land itself.
 import type { Goal } from '../game/goals.ts'
 import { nextGoal } from '../game/goals.ts'
 import * as S from '../sim/index.ts'
@@ -6,16 +8,19 @@ import { yardCard, YARD_TITLE } from './build.ts'
 import { commandCard } from './card.ts'
 import { EXIT_MS, patch, unname, type Ctx, type Screen } from './core.ts'
 import { openCrew, unitBar } from './crew.ts'
-import { h } from './dom.ts'
+import { h, s } from './dom.ts'
 import * as F from './fmt.ts'
 import { icon } from './icons.ts'
 import { incidentCard } from './incident.ts'
 import { ticket, trayPaper } from './dig.ts'
 import { digitFor, fieldForDigit, isTract } from './map.ts'
 import { personCard, workGrid } from './people.ts'
+import { pins } from './pins.ts'
 import { plates, type PlateModel } from './plates.ts'
-import { BUILD_GLYPH, hint as hintText, isJob, isStale, jobText, JOB_VERB, KEY_JOB, stageGlyph } from './rules.ts'
+import { hint as hintText, isJob, isStale, jobText, JOB_VERB, KEY_JOB, stageGlyph } from './rules.ts'
+import type { Ink } from './system/parts.ts'
 import { clock, topBar } from './top.ts'
+import './season.css'
 
 const HINTS_KEY = 'the-county/hints'
 const HINT_MS = 45000
@@ -30,14 +35,50 @@ type Target = { field: number } | { yard: number } | { hire: true } | { unit: nu
 const GOAL_ACT: Record<string, S.JobKind> = { plant: 'plant', walk: 'scout', hill: 'hill', spray: 'spray', sample: 'sample', kill: 'kill', dig: 'dig' }
 const COVER_GLYPH: Record<S.Cover, string> = { woods: 'woods', brush: 'brush', stumps: 'stump', open: 'rocks' }
 
+// The people a decision has stopped: whoever was on the tractor that broke down.
+export function stoppedBy(c: S.Campaign | null): Set<number> {
+  return new Set((c?.incidents ?? []).filter(i => i.kind === 'breakdown' && i.unit !== undefined).map(i => i.unit!))
+}
+
+// A need's stamp is inked by kind: blight and loss red, water blue, any other work due in ink.
+function inkFor(act: string, urgent: boolean, f: S.FieldInfo): Ink {
+  if (act === 'water') return 'blue'
+  if (act === 'rogue' || (urgent && (f.blightHills > 0 || act === 'kill' || act === 'dig'))) return 'red'
+  return 'ink'
+}
+
+// The four corners of a field on the screen to a CSS matrix that lays a 1000 px square on them, so the selection is
+// drawn on the land and follows the camera by its transform alone (a projective map, Heckbert's unit square to quad).
+const SQ = 1000
+function quadMatrix(p: { x: number; y: number }[]): string {
+  const [p0, p1, p2, p3] = p
+  const sx = p0.x - p1.x + p2.x - p3.x, sy = p0.y - p1.y + p2.y - p3.y
+  let a: number, b: number, c: number, d: number, g = 0, hh = 0
+  if (Math.abs(sx) < 1e-6 && Math.abs(sy) < 1e-6) {
+    a = p1.x - p0.x; b = p1.y - p0.y; c = p3.x - p0.x; d = p3.y - p0.y
+  } else {
+    const dx1 = p1.x - p2.x, dx2 = p3.x - p2.x, dy1 = p1.y - p2.y, dy2 = p3.y - p2.y
+    const den = dx1 * dy2 - dx2 * dy1
+    if (Math.abs(den) < 1e-9) return ''
+    g = (sx * dy2 - dx2 * sy) / den
+    hh = (dx1 * sy - sx * dy1) / den
+    a = p1.x - p0.x + g * p1.x; b = p1.y - p0.y + g * p1.y
+    c = p3.x - p0.x + hh * p3.x; d = p3.y - p0.y + hh * p3.y
+  }
+  const k = 1 / SQ
+  if (![a, b, c, d, g, hh].every(Number.isFinite)) return ''
+  return `matrix3d(${[a * k, b * k, 0, g * k, c * k, d * k, 0, hh * k, 0, 0, 1, 0, p0.x, p0.y, 0, 1].map(v => +v.toFixed(7)).join(',')})`
+}
+
 export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () => void; onAlmanac: () => void }): Screen {
   const app = ctx.app
   const top = topBar(ctx, { ...o, show: g => show(target(g)), canShow: g => !!target(g) })
-  const crew = h('section', { class: 'crew instrument', 'aria-label': 'People, and the list of orders' })
-  const clockSlot = h('div', { class: 'clock-slot instrument' })
-  const notesSlot = h('div', { class: 'notes-slot' })
-  const trayHost = h('div', { class: 'tray-host' })
-  const paused = h('p', { class: 'paused instrument', testid: 'paused', hidden: true })
+  const crew = h('div', { class: 'crew sys' })
+  const clockSlot = h('div', { class: 'clock-slot dock sys' })
+  const notesSlot = h('div', { class: 'notes-slot sys' })
+  const trayHost = h('div', { class: 'tray-host sys' })
+  const paused = h('p', { class: 'paused sys', testid: 'paused', hidden: true })
+  const veil = h('div', { class: 'veil sys', hidden: true })
   let tray: { el: HTMLElement; field: number; day: number } | null = null
 
   const openTicket = (lot: number) => { const spec = ticket(ctx, lot, { fresh: false }); if (spec) ctx.papers.open(spec) }
@@ -46,8 +87,49 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   const yard = yardCard(ctx)
   const grid = workGrid(ctx)
   const incident = incidentCard(ctx)
-  const el = h('main', { class: 'season' }, top.el, paused, notesSlot, incident.el, grid.el,
-    h('div', { class: 'bottom' }, trayHost, card.el, person.el, yard.el, clockSlot, crew))
+  const el = h('main', { class: 'season-screen' }, veil, top.el, paused, card.el, yard.el, person.el, grid.el, trayHost,
+    h('div', { class: 'foot' }, h('div', { class: 'foot-book' }, crew, clockSlot), notesSlot), incident.el)
+
+  // The selection drawn on the land: a dashed line round each selected field laid on its corners, a registration mark
+  // at each corner. Under the tags and pins, over the land.
+  const selLayer = h('div', { class: 'sel-layer', 'aria-hidden': 'true' })
+  plateLayer.prepend(selLayer)
+  const selDrawn = new Map<number, { quad: SVGElement; marks: HTMLElement[]; unit: number }>()
+
+  function drawSelection(): void {
+    const want = new Set(app.selection)
+    for (const [i, d] of selDrawn) if (!want.has(i)) { d.quad.remove(); for (const m of d.marks) m.remove(); selDrawn.delete(i) }
+    const ins = app.insets
+    for (const i of want) {
+      let d = selDrawn.get(i)
+      if (!d) {
+        const quad = s('svg', { class: 'select sel-quad sys', width: SQ, height: SQ, viewBox: `0 0 ${SQ} ${SQ}` },
+          s('rect', { class: 'under', x: 0, y: 0, width: SQ, height: SQ }), s('rect', { class: 'line', x: 0, y: 0, width: SQ, height: SQ }))
+        const marks = [0, 1, 2, 3].map(() => h('span', { class: 'reg-at' }, s('svg', { class: 'select sel-mark sys', width: 30, height: 30, viewBox: '-15 -15 30 30' }, s('g', { class: 'reg' },
+          s('path', { class: 'u', d: 'M-13 0h26M0 -13v26' }), s('circle', { class: 'u', r: 7 }), s('circle', { r: 7 }), s('path', { d: 'M-13 0h26M0 -13v26' })))))
+        selLayer.append(quad, ...marks)
+        d = { quad, marks, unit: 0 }
+        selDrawn.set(i, d)
+      }
+      const p = ctx.view.fieldCorners(i)
+      // Only a field wholly in front of the camera is outlined: a corner behind it would fold the outline over.
+      const ok = p.length === 4 && p.every(q => q.visible && Number.isFinite(q.x) && Number.isFinite(q.y) && Math.abs(q.x) < innerWidth * 4 && Math.abs(q.y) < innerHeight * 4)
+      const m3 = ok ? quadMatrix(p) : ''
+      d.quad.style.display = m3 ? '' : 'none'
+      if (!m3) { for (const m of d.marks) m.style.display = 'none'; continue }
+      d.quad.style.transform = m3
+      // The line keeps its printed weight whatever the field's size on the screen.
+      const across = Math.max(30, Math.hypot(p[1].x - p[0].x, p[1].y - p[0].y), Math.hypot(p[3].x - p[0].x, p[3].y - p[0].y))
+      const unit = SQ / across
+      if (Math.abs(unit - d.unit) > d.unit * 0.12) { d.unit = unit; d.quad.style.setProperty('--u', unit.toFixed(2)) }
+      p.forEach((q, k) => {
+        const m = d!.marks[k]
+        const seen = q.x > ins.left - 8 && q.x < innerWidth - ins.right + 8 && q.y > ins.top - 8 && q.y < innerHeight - ins.bottom + 8
+        m.style.display = seen ? '' : 'none'
+        if (seen) m.style.transform = `translate3d(${q.x.toFixed(1)}px, ${q.y.toFixed(1)}px, 0)`
+      })
+    }
+  }
 
   // ------------------------------------------------------------ the goal, and where it is reached
 
@@ -110,14 +192,9 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     if (e) openTray(e, false)
   }
 
-  // When the clock last changed pace and when the last order was given, so the days do not race off under a hand.
-  let pacedAt = 0
-  let orderedAt = 0
   let frostWarned = -1
   const off = app.on(ev => {
-    if (ev.type === 'speed') { pacedAt = performance.now(); setTimeout(() => ctx.dirty(), 4200) }
-    else if (ev.type === 'order') { orderedAt = performance.now(); setTimeout(() => ctx.dirty(), 2700) }
-    else if (ev.type === 'yard' || ev.type === 'unit') ctx.dirty()
+    if (ev.type === 'yard' || ev.type === 'unit' || ev.type === 'select') ctx.dirty()
     else if (ev.type === 'events') {
       for (const e of ev.events) if (e.type === 'sample') { const staged = app.speed < 3; void ctx.view.whenShown('sample', e.field).then(() => { if (app.screen === 'season') openTray(e, staged) }) }
       if (ev.dayPassed) warnFrost()
@@ -135,13 +212,13 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     ctx.notes.push({ level: 'warn', glyph: 'frost', text: `${worst.name}: frost tonight, ${F.mass(worst.cwt)} in barrels`, full: `A ${worst.frostChance}% chance of frost tonight, with ${F.mass(worst.cwt)} still in barrels in ${worst.name}. A hard frost takes a fifth of it.`, field: worst.field, day: s0.day })
   }
 
-  // ------------------------------------------------------------ plates, badges and the nine sentences
+  // ------------------------------------------------------------ tags, stamps and the tips
 
   const seen = hintsSeen()
   // first: nothing has been taught yet, so this tip also says how an order is given.
   let hint: { kind: S.JobKind; field: number; at: number; first: boolean } | null = null
 
-  function updateHint(c: S.Campaign): void {
+  function updateHint(): void {
     const needs = app.needs()
     if (hint && (needs[hint.field]?.need?.act !== hint.kind || performance.now() - hint.at > HINT_MS || !app.settings.hints)) hint = null
     if (!hint && app.settings.hints) {
@@ -156,13 +233,12 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
         break
       }
     }
-    // The tip sits with the alerts, wearing its badge's glyph, so it never covers a field.
+    // The tip is a slip with the alerts, wearing its stamp's cut, so it never covers a field.
     if (hint) {
       const kind = hint.kind
-      const how = hint.first ? ` ${ctx.touch() ? 'Tap' : 'Click'} the lit badge, or right-click the field.` : ''
-      ctx.notes.pin({ key: `tip-${kind}`, glyph: kind, text: `${hintText(kind)}${how}`, tile: true, onClose: () => { hint = null; ctx.dirty() } })
+      const how = hint.first ? ` ${ctx.touch() ? 'Tap' : 'Click'} the ringed stamp.` : ''
+      ctx.notes.pin({ key: `tip-${kind}`, glyph: kind, text: `${hintText(kind)}${how}`, onClose: () => { hint = null; ctx.dirty() } })
     } else ctx.notes.unpin()
-    void c
   }
 
   // Woods and brush to clear come forward once the farm has a year behind it, or as soon as the player starts on them.
@@ -197,9 +273,10 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     }
     const anyBlight = s0.fields.some((_, k) => S.fieldInfo(c, k).blightHills > 0)
     if (f.status === 'growing' && f.protect < 0.35 && (s0.watchDay >= 0 || anyBlight)) { marks.push({ glyph: 'bare', cls: 'warn' }); said.push('leaves unprotected') }
+    let sub: string | undefined
     if (f.inField >= 0.5) {
       const frost = frostAt[i] ?? 0
-      marks.push({ glyph: 'haul', cls: frost >= 30 ? 'bad' : '', n: F.massValue(f.inField) >= 1000 ? `${F.num(F.massValue(f.inField) / 1000, 1)}k` : F.num(F.massValue(f.inField)) })
+      sub = `${F.massValue(f.inField) >= 1000 ? `${F.num(F.massValue(f.inField) / 1000, 1)}k` : F.num(F.massValue(f.inField))} in barrels`
       said.push(`${F.mass(f.inField)} in barrels${frost >= 30 ? `, ${frost}% frost tonight` : ''}`)
     }
     if (f.works) { marks.push({ glyph: f.works.kind, cls: '' }); said.push(f.works.kind === 'stump' ? 'stumps being pulled' : 'tile going in') }
@@ -210,15 +287,15 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     if (queue.length) said.push(`on the list: ${F.list(queued.map(j => JOB_VERB[j.kind].toLowerCase()))}`)
     const lot = f.lot >= 0 ? c.lots.find(l => l.id === f.lot) : undefined
     const badge = need && isJob(need.act)
-      ? { glyph: need.act as string, label: `${F.localize(need.text)} ${F.localize(need.why)}`, urgent: need.urgent }
-      : need && need.act === 'sell' && lot ? { glyph: 'ticket', label: `${F.localize(need.text)} ${F.localize(need.why)}`, urgent: need.urgent } : null
+      ? { glyph: need.act as string, label: `${F.localize(need.text)} ${F.localize(need.why)}`, urgent: need.urgent, ink: inkFor(need.act, need.urgent, f) }
+      : need && need.act === 'sell' && lot ? { glyph: 'ticket', label: `${F.localize(need.text)} ${F.localize(need.why)}`, urgent: need.urgent, ink: 'ink' as Ink } : null
     const key = digitFor(c, i)
     const what = tract ? (f.cover === 'open' ? 'new ground, ready next spring' : f.coverWord) : f.status === 'rest' ? 'resting in oats and clover' : `${f.variety}, ${f.stage.toLowerCase()}`
     return {
       name: f.name,
       glyph: tract ? COVER_GLYPH[f.cover] : stageGlyph(f),
-      marks, queue, badge, key, cls: tract ? 'tract' : undefined,
-      said: `${f.name}, ${key ? `key ${key}` : f.block === 'home' ? 'the home farm' : 'beyond the home farm'}: ${what}${said.length ? `; ${said.join('; ')}` : ''}${badge ? `. Needs: ${F.localize(need!.text)}` : '.'}`,
+      sub, marks, queue, badge, key, cls: tract ? 'tract' : undefined,
+      said: `${key ? `key ${key}` : f.block === 'home' ? 'the home farm' : 'beyond the home farm'}: ${what}${said.length ? `; ${said.join('; ')}` : ''}${badge ? `. Needs: ${F.localize(need!.text)}` : '.'}`,
       taught: !!badge && ((!!hint && need?.act === hint.kind) || goalField === i),
     }
   }
@@ -233,16 +310,23 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     else ctx.say(`${S.FIELD_NAMES[i]}: ${r.err}`, 'info')
   }
 
-  // The cards that float over the land: nothing on the land is left under them.
-  const covers = (): DOMRect[] => [incident.el, grid.el].filter(x => !x.hidden && x.offsetParent !== null).map(x => x.getBoundingClientRect())
+  // What floats over the land: nothing on the land is left under it.
+  const floating = () => [card.el, yard.el, person.el, grid.el, incident.el, trayHost.firstElementChild as HTMLElement | null]
+  // Read once a frame, before anything on the land is moved, so the frame never forces a second layout.
+  let coverCache: DOMRect[] | null = null
+  const covers = (): DOMRect[] => coverCache ?? floating().filter((x): x is HTMLElement => !!x && !x.hidden && x.offsetParent !== null).map(x => x.getBoundingClientRect())
   const P = plates(ctx, plateLayer, { model: plateModel, onBadge, covers })
+  const people = pins(ctx, plateLayer, {
+    tags: () => [...P.boxes(), ...yardMarks.filter(m => !m.wrap.hidden && m.at).map(m => new DOMRect(m.at!.x - m.w / 2, m.at!.y - 22, m.w, 44))], covers,
+    stopped: () => stoppedBy(app.campaign),
+  })
 
   // ------------------------------------------------------------ the yards on the land
 
   const yardMarks = [S.HOME_YARD, S.DUFOUR_YARD].map(y => {
-    const wrap = h('div', { class: 'plate-wrap yard-wrap gone', hidden: true })
+    const wrap = h('div', { class: 'yard-at gone', hidden: true })
     plateLayer.append(wrap)
-    return { y, wrap, key: '' }
+    return { y, wrap, w: 150, at: null as { x: number; y: number } | null }
   })
 
   function updateYards(c: S.Campaign, goalYard: number): void {
@@ -255,27 +339,54 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       const sel = app.yard === m.y
       const name = m.y === S.HOME_YARD ? 'Home yard' : 'Dufour yard'
       patch(m.wrap, JSON.stringify([sel, up ? [up.kind, Math.round(up.done / up.need * 100)] : 0, goalYard === m.y, ctx.touch()]), () => h('button', {
-        class: `plate yard${sel ? ' on' : ''}${goalYard === m.y ? ' goal-ring' : ''}`, type: 'button', testid: m.y === S.HOME_YARD ? 'yard-home' : 'yard-dufour', 'aria-pressed': String(sel),
+        class: `yard-tag sys plate yard${sel ? ' is-sel on' : ''}${goalYard === m.y ? ' goal-ring' : ''}`, type: 'button', testid: m.y === S.HOME_YARD ? 'yard-home' : 'yard-dufour', 'aria-pressed': String(sel),
         'aria-label': `${YARD_TITLE[m.y]}${up ? `: ${S.BUILDINGS[up.kind].name.toLowerCase()} going up, ${F.pct(up.done / up.need)} built` : ''}. Build here${ctx.touch() ? '' : ' (Y)'}.`,
         onclick: () => app.selectYard(sel ? 0 : m.y),
-      }, h('span', { class: 'plate-in' }, icon('yard', 'ic s plate-glyph'), h('span', { class: 'plate-name' }, name),
-        up ? h('span', { class: 'plate-queue' }, icon(BUILD_GLYPH[up.kind], 'ic s active'), h('span', { class: 'num yard-pct' }, F.pct(up.done / up.need))) : null)))
+      }, icon('yard', 'i'), name, up ? h('span', { class: 'yard-pct num' }, F.pct(up.done / up.need)) : null))
+      m.w = (m.wrap.firstElementChild as HTMLElement | null)?.offsetWidth || m.w
     }
   }
 
   function placeYards(): void {
+    const cv = covers()
     for (const m of yardMarks) {
       if (m.wrap.hidden) continue
       const a = ctx.view.yardAnchor(m.y)
       const ins = app.insets
-      const ok = a.visible && Number.isFinite(a.x) && Number.isFinite(a.y) && a.y > ins.top + 40 && a.y < innerHeight - ins.bottom && a.x > ins.left + 40 && a.x < innerWidth - ins.right - 40 &&
-        !covers().some(cv => a.x > cv.left - 60 && a.x < cv.right + 60 && a.y > cv.top && a.y < cv.bottom + 34)
+      const ok = a.visible && Number.isFinite(a.x) && Number.isFinite(a.y) && a.y > ins.top + 40 && a.y < innerHeight - ins.bottom && a.x > ins.left + 60 && a.x < innerWidth - ins.right - 60 &&
+        !cv.some(r => a.x > r.left - 80 && a.x < r.right + 80 && a.y > r.top - 20 && a.y < r.bottom + 20)
       m.wrap.classList.toggle('gone', !ok)
-      if (ok) m.wrap.style.transform = `translate(${a.x.toFixed(1)}px, ${a.y.toFixed(1)}px) translate(-50%, -100%)`
+      m.at = ok ? { x: a.x, y: a.y } : null
+      if (ok) m.wrap.style.transform = `translate3d(${a.x.toFixed(1)}px, ${a.y.toFixed(1)}px, 0)`
     }
   }
 
-  // ------------------------------------------------------------ the people bar and the list
+  // ------------------------------------------------------------ the bar's side: never over the thing it belongs to
+
+  let side: 'right' | 'left' = 'right'
+  function placeBar(): void {
+    const layout = ctx.layout()
+    const bar = !card.el.hidden ? card.el : !yard.el.hidden ? yard.el : null
+    const leftTaken = grid.isOpen() || !person.el.hidden
+    if (!bar || layout === 'narrow' || leftTaken) { if (side !== 'right') { side = 'right'; el.classList.remove('docked-left'); ctx.dirty() } return }
+    // Where the thing selected lies on the screen.
+    let box: { l: number; r: number } | null = null
+    if (bar === card.el && app.selection.length) {
+      const xs = app.selection.flatMap(i => ctx.view.fieldCorners(i).filter(q => q.visible && Number.isFinite(q.x)).map(q => q.x))
+      if (xs.length) box = { l: Math.min(...xs), r: Math.max(...xs) }
+    } else if (bar === yard.el) {
+      const a = ctx.view.yardAnchor(app.yard)
+      if (a.visible) box = { l: a.x - 90, r: a.x + 90 }
+    }
+    if (!box) return
+    const w = bar.offsetWidth + 16
+    const overRight = Math.max(0, box.r - (innerWidth - w)), overLeft = Math.max(0, w - box.l)
+    const span = Math.max(1, box.r - box.l)
+    const want = side === 'right' ? (overRight > span * 0.25 && overLeft < overRight ? 'left' : 'right') : (overLeft > span * 0.25 && overRight < overLeft ? 'right' : 'left')
+    if (want !== side) { side = want; el.classList.toggle('docked-left', side === 'left'); ctx.dirty() }
+  }
+
+  // ------------------------------------------------------------ the time book and the list
 
   const units = unitBar(ctx, crew, {
     waiting: () => app.campaign ? incident.waiting(app.campaign) : [],
@@ -288,8 +399,8 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
 
   // ------------------------------------------------------------ keys
 
-  // Tab walks the fields that need something, Shift-Tab walks back. last: on a plate, so after the end of them the
-  // keyboard goes on into the instruments instead of coming round again.
+  // Tab walks the fields that need something, Shift-Tab walks back. last: on a tag, so after the end of them the
+  // keyboard goes on into the boards instead of coming round again.
   function nextNeed(from: number, last: boolean, back: boolean): boolean {
     const needs = app.needs()
     const want = needs.map((n, i) => (n.need && n.need.act !== 'close' ? i : -1)).filter(i => i >= 0)
@@ -311,14 +422,15 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     if (!c || !c.season) return false
     const t = e.target as HTMLElement
     const plate = t.closest?.<HTMLElement>('.plate')
-    const onPlate = !!plate || !!t.closest?.('.badge')
-    const at = plate ? Number(plate.dataset.testid?.split('-')[1]) : -1
-    // On the plate of the one selected field, Enter and Space are the game's keys: pressing the plate again would do nothing.
+    const onPlate = !!plate || !!t.closest?.('.need')
+    const at = plate?.dataset.testid?.startsWith('field-') ? Number(plate.dataset.testid.split('-')[1]) : -1
+    // On the tag of the one selected field, Enter and Space are the game's keys: pressing the tag again would do nothing.
     const onSelected = at >= 0 && app.selection.length === 1 && app.selected === at
     const onControl = !!t.closest?.('button, input, a') && !onSelected
     const k = e.key
     if (k === 'Escape') {
       if (top.escape()) return true
+      if (people.escape()) return true
       if (units.escape()) return true
       if (grid.isOpen()) { grid.toggle(false); return true }
       if (incident.putAway()) return true
@@ -341,7 +453,11 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     }
     const digit = /^(?:Digit|Numpad)([0-9])$/.exec(e.code)
     if (digit && !e.ctrlKey) {
-      const i = fieldForDigit(c, Number(digit[1]))
+      const n = Number(digit[1])
+      // A telegram's replies and a yard's buildings are numbered: while one is up, its numbers are its own.
+      if (incident.isUp() && n >= 1 && incident.reply(n)) return true
+      if (app.yard !== 0 && n >= 1 && yard.pick(n)) return true
+      const i = fieldForDigit(c, n)
       if (i >= 0) { app.select(i, e.shiftKey); if (!ctx.view.fieldAnchor(i).visible) app.focus(i) }
       return true
     }
@@ -395,58 +511,82 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       if (!c || !c.season) return
       const layout = ctx.layout()
       el.dataset.layout = layout
-      const people = c.crew.length > 1
-      const personUp = people && app.unit >= 0 && !app.selection.length && app.yard === 0
-      el.classList.toggle('selected', app.selection.length > 0 || personUp || app.yard !== 0)
+      const many = c.crew.length > 1
+      const personUp = many && app.unit >= 0 && !app.selection.length && app.yard === 0
+      const selected = app.selection.length > 0 || app.yard !== 0
+      el.classList.toggle('selected', selected)
+      el.classList.toggle('person-up', personUp || grid.isOpen())
       el.classList.toggle('tray-up', !!tray)
-      el.classList.toggle('low-h', innerHeight < 760)
       // What the goal points at: the field it lights, the yard it rings.
       const g = nextGoal(c)
       const tgt = target(g)
       goalField = tgt && 'field' in tgt ? tgt.field : -1
       frostAt = Object.fromEntries(S.haulInfo(app.world, c).map(x => [x.field, x.frostChance]))
       top.update()
-      // On a phone the clock sits by the thumb, with the crew.
+      // On a phone the clock sits by the thumb, over the time book.
       const low = layout === 'narrow' || layout === 'short'
-      el.classList.toggle('tight', layout === 'narrow' && innerHeight < 720 && (app.selection.length > 0 || !!tray || personUp || app.yard !== 0))
       clockSlot.hidden = !low
-      if (low) patch(clockSlot, JSON.stringify([app.speed, app.resumeSpeed, S.seasonDone(c), ctx.awaiting, ctx.touch()]), () => clock(ctx, true, o.onMenu))
-      // Stopped, the one obvious way on: a press goes on at the speed the clock had.
+      if (low) patch(clockSlot, JSON.stringify([app.speed, app.resumeSpeed, S.seasonDone(c), ctx.awaiting, ctx.touch()]), () => clock(ctx, false, o.onMenu))
+      // Stopped by the player, the one obvious way on: a press goes on at the speed the clock had. Stopped for a
+      // decision, the bank board's own tag says so instead.
+      const stoppedFor = c.incidents.length > 0 || ctx.awaiting > 0
       const stopped = app.speed === 0 && !S.seasonDone(c)
-      paused.hidden = !stopped
-      el.classList.toggle('is-paused', stopped)
-      if (stopped) patch(paused, JSON.stringify([ctx.touch(), app.resumeSpeed]), () => h('button', { class: 'paused-go', type: 'button', testid: 'paused-go', onclick: () => app.togglePause() },
-        icon('play', 'ic s'), `Paused: go on at ${app.resumeSpeed || 1}×`, ctx.touch() ? null : h('span', { class: 'key' }, 'Space')))
-      updateHint(c)
+      paused.hidden = !stopped || (stoppedFor && layout !== 'narrow')
+      el.classList.toggle('is-paused', !paused.hidden)
+      if (!paused.hidden) patch(paused, JSON.stringify([ctx.touch(), app.resumeSpeed]), () => h('button', { class: 'paused-go btn', type: 'button', testid: 'paused-go', onclick: () => app.togglePause() },
+        icon('play', 'i'), h('span', { class: 'sr' }, 'Paused. '), `Go on at ${app.resumeSpeed || 1}×`, ctx.touch() ? null : h('span', { class: 'key' }, 'Space')))
+      updateHint()
       P.update()
       updateYards(c, tgt && 'yard' in tgt ? tgt.yard : 0)
       units.update(c)
+      people.update(c)
       card.update(c)
       person.update(c, personUp)
-      yard.update(c)
+      const build = g?.id === 'build' ? (S.buildingInfo(c).filter(b => b.yard === app.yard && b.state === 'none' && b.ok).sort((a, b) => a.total - b.total)[0]?.kind ?? null) : null
+      yard.update(c, build)
       if (c.crew.length < 3 && grid.isOpen()) grid.toggle(false)
       grid.update(c)
       incident.update(c)
-      el.classList.toggle('incident-up', incident.isUp())
+      const up = incident.isUp()
+      veil.hidden = !up
+      el.classList.toggle('incident-up', up)
       ctx.notes.limit(1)
       ctx.notes.maxAge = layout === 'short' ? 9000 : 0
       ctx.notes.prune(c.season.day)
     },
     insets() {
-      const t = top.el.getBoundingClientRect().bottom
-      const narrow = ctx.layout() === 'narrow'
-      const parts = [crew, clockSlot, card.el, person.el, yard.el, ...(narrow && tray ? [trayHost] : [])]
-      const tops = parts.filter(x => x.offsetParent !== null && x.offsetHeight > 0).map(x => x.getBoundingClientRect().top)
-      // On an upright phone a row above the instruments is kept for the latest alert, and the contracts, so the land
-      // never shifts for them.
-      const row = narrow ? 48 : 8
-      return [t, 0, innerHeight - Math.min(...tops, innerHeight) + row, 0]
+      const layout = ctx.layout()
+      // Where things rest, not where a card being laid down happens to be this frame: offsets ignore transforms.
+      const box = (x: HTMLElement) => {
+        let l = 0, t0 = 0
+        for (let e: HTMLElement | null = x; e && e !== el; e = e.offsetParent as HTMLElement | null) { l += e.offsetLeft; t0 += e.offsetTop }
+        return { left: l, top: t0, right: l + x.offsetWidth, bottom: t0 + x.offsetHeight }
+      }
+      const t = Math.max(top.el.getBoundingClientRect().bottom, ...[...top.el.querySelectorAll<HTMLElement>('.almanac > .mount, .bank > .mount')].map(x => x.getBoundingClientRect().bottom))
+      const vis = (x: HTMLElement) => !x.hidden && x.offsetParent !== null && x.offsetHeight > 0
+      // The time book, its list and the alerts at the foot; the clock with them on a phone.
+      const low = [...(crew.children as HTMLCollectionOf<HTMLElement>), clockSlot, notesSlot].filter(vis).map(x => box(x).top)
+      const bottom = innerHeight - Math.min(...low, innerHeight) + 6
+      // The bar docked at its edge; on a phone it is a sheet over the foot.
+      const bar = [card.el, yard.el].find(vis)
+      let right = 0, left = 0
+      if (bar && layout !== 'narrow') {
+        const r = box(bar)
+        if (side === 'left') left = r.right + 8
+        else right = innerWidth - r.left + 8
+      }
+      if (bar && layout === 'narrow') return [t, 0, innerHeight - box(bar).top + 6, 0]
+      // A person's page and the work grid stand at the left on a desk: the land is framed beside them.
+      if (layout === 'wide' || layout === 'mid') for (const x of [person.el, grid.el]) if (vis(x)) left = Math.max(left, box(x).right + 8)
+      return [t, right, bottom, left]
     },
-    frame: () => { P.frame(); placeYards() },
+    frame: () => { coverCache = null; coverCache = covers(); placeBar(); P.frame(); placeYards(); people.frame(); drawSelection(); coverCache = null },
     dispose() {
       off()
       P.dispose()
+      people.dispose()
       units.dispose()
+      selLayer.remove()
       for (const m of yardMarks) m.wrap.remove()
     },
   }

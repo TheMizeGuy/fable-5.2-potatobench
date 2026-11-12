@@ -67,7 +67,9 @@ test('the season: instruments, the card, the almanac, the menu and its confirmat
   await page.getByTestId('unit-1').click()
   await page.getByTestId('field-2').click()
   expect(await serious(page), 'a field selected').toEqual([])
-  await page.getByTestId('field-4').click({ modifiers: ['Shift'] })
+  // A second field by its number: the camera holds a few fields in frame, and the number reaches any of them.
+  await page.keyboard.press('Shift+Digit5')
+  await expect(page.getByTestId('card-title')).toHaveText('2 fields')
   expect(await serious(page), 'two fields selected').toEqual([])
   await page.keyboard.press('i')
   for (const tab of ['forecast', 'blight', 'fields', 'farm', 'diary', 'prices']) {
@@ -140,7 +142,7 @@ test('the farmstead: the goals, a person, the work grid, the yard, an incident, 
   expect(await serious(page), 'the work grid').toEqual([])
   await page.keyboard.press('Escape')
   await page.keyboard.press('y')
-  await page.getByTestId('build-pick-shed').click()
+  await expect(page.getByTestId('yard-card')).toBeVisible()
   expect(await serious(page), 'the yard').toEqual([])
   await page.keyboard.press('Escape')
   await page.getByTestId('materials').click()

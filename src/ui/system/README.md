@@ -10,7 +10,7 @@ rules, `design/kit.sheet.html` for every component). A screen is right when it m
 | `system.css` | `design/system.css` carried over by `node tools/ui/port.ts` (fonts from `public/fonts`, `font-display: swap`, flat sample colours for the frames' photographs). Never edit it: change `design/system.css`, run the tool. `tests/ui-system.test.ts` fails if they drift. |
 | `game.css` | What a live screen needs beyond the frames: pointer events, every size, live states. Placement only, no new looks. |
 | `grain.png` | The paper grain, the one texture (a static tile). |
-| `people.ts` | `portrait(person, size)`, `pin(person, state)`. |
+| `people.ts` | `portrait(person, size)`, `ringed(person, ring, size)`, `pin(person, state, o)`, `ringOf(order)` and the ring palette `RINGS`. |
 | `parts.ts` | `order()`, `need()`, `tag()`, `stamp()`, `key()`, `fist()`, `fold()`, `coupon()`, `meter()`, `range()`, `tens()`, `slip()`, `tip()`. |
 | `kit.ts` | The living kit: open the game with `?kit`. Capture state `kit` in `tools/quality/capture.ts`. |
 | `../icons.ts` | `icon(name, cls)` from the sprite `design/icons.svg` (106 drawings); `mountSprites()` puts both sprites in the page. |
@@ -20,14 +20,14 @@ rules, `design/kit.sheet.html` for every component). A screen is right when it m
 ## How to make each thing
 
 - **Icon**: `icon('spray')` (20 px, class `ic`); in a system component use class `i` and size with `--i`: `icon('spray', 'i')`.
-- **Person**: `portrait(unit, 46)` (anything with a `name`; the farmer's name is `You`). `pin(unit, 'rest' | 'picked' | 'needs' | 'hurt', { label })` for the land: place it with `transform: translate3d(x, y, 0)` from `unitAnchor`, never scale it.
+- **Person**: `portrait(unit, 46)` (anything with a `name`; the farmer's name is `You`). Looks are keyed on the name, so two people can share a shirt: each person on a farm also has a ring, `ringOf(their index in campaign.crew)`, and the time book, the cards and the pin all show it (`ringed(unit, ring, 46)` beside a name, `pin(unit, state, { ring })` on the land). `pin(unit, 'rest' | 'picked' | 'needs' | 'hurt', { label, ring, onclick, count })`: with `onclick` it is a button named by what it shows; `count` makes it stand for several people together. Place it with `transform: translate3d(x, y, 0)` from `unitAnchor`, never scale it.
 - **Field tag**: `tag({ name, icon: stageGlyph(f), selected, listed: { icon }, need: need({ ink, icon, label, next }) })`. Inks: `red` blight or loss, `ochre` the suggested next order (`next: true` rings it), `blue` water, `ink` other work due. Place with a transform from `fieldAnchor`.
 - **Order on a command bar**: `order({ key: 'S', icon: 'spray', name: 'Spray', cost: '¼ day · $110', catch: 'Before the rain', suggested, given })` inside `div.orders` inside `section.command.sheet.sys`.
 - **Selection on the land**: an SVG `.select` with a dashed `.line` polygon round the field and a `.reg` mark at each corner (see `design/tools/regmarks.py`).
 - **Sheet**: any surface is `.sheet` (lifted) or `.sheet.laid`; `.s-buff` only for the weigh ticket, `.s-canary` only for the goal; boards are `.mount` round a `.face`.
 - **Buttons**: `.btn`, `.btn.go` (the one strong action on a sheet), `.btn.quiet`, `.btn.hazard` (cannot be undone: Let go, End the season early). Real form inputs: `.check-in` (checkbox over `.tick`), `.seg-in` (radios), `.slider-in` (range).
 - **The rest**: `fold()`, `coupon()` (inside `.ways`), `meter()`, `range()`, `tens()`, `slip()`, `tip()`, `stamp()`.
-- Every component root carries `.sys`: the old stylesheets (`instruments.css`, `papers.css`, `screens.css`) cannot reach inside it (each of their selectors ends in `:not(.sys, .sys *)`). Put `.sys` on the root of each rebuilt screen part.
+- Every component root carries `.sys`: the old stylesheets (`legacy.css`, `papers.css`, `screens.css`) cannot reach inside it (each of their selectors ends in `:not(.sys, .sys *)`). Put `.sys` on the root of each rebuilt screen part. `tag()`, `need()` and `order()` take `attrs` for a live screen's handlers and test ids.
 
 ## Rules
 
@@ -65,9 +65,12 @@ its last user:
 
 ## Done here, left for the screen writers
 
-Rebuilt end to end: the title (`title.ts`, design/title.html) and the top of every screen (`top.ts`: the almanac board
-and the bank board, design/season.html), with the clock's behaviour and every test id unchanged. Everything else is
-an old layout in the new materials until it is rebuilt: the field card (to the command bar), the plates (to tags and
-need stamps), the crew strip (to the time book and pins), the incident card (to the telegram), the weigh ticket and
-the scale, the spring plan, the cellar, the ledger, the menu and how to play, the almanac, the person card and the
-work grid. Phone: the season screen's clock slot (`clock(ctx, true, onMenu)`) already carries the menu at the thumb.
+Rebuilt end to end: the title (`title.ts`, design/title.html), the top of every screen (`top.ts`: the almanac board
+and the bank board, design/season.html), and the season screen (`season.ts` with `season.css`): the field tags and
+need stamps (`plates.ts`, which the spring plan draws its tags with too), the face pins (`pins.ts`), the time book and
+the list (`crew.ts`), the command bar for a field, a tract (`card.ts`) and a yard (`build.ts`), the person card and the
+work grid (`people.ts`), the telegram (`incident.ts`), the alerts as order-book slips (`Notes` in `core.ts`) and the
+selection drawn on the land from the field view's `fieldCorners`. Still old layouts in the new materials: the weigh
+ticket and the scale, the spring plan, the cellar, the ledger, the menu and how to play, the almanac; what they still
+use of the old instruments' rules is in `legacy.css`, which goes with the last of them. Phone: the season screen's
+clock at the thumb is the whole clock (`clock(ctx, false, onMenu)`), with the menu.

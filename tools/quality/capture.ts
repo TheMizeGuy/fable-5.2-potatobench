@@ -26,8 +26,11 @@ const ALL = Object.keys(SIZES)
 type Step = (page: Page, size: string) => Promise<void>
 interface State { name: string; what: string; sizes: string[]; run: Step; full?: boolean }
 
+// A field's tag is clicked where the camera has it in frame; otherwise it is picked the way its number key picks it.
 async function selectField(page: Page, _size: string, i: number): Promise<void> {
-  await page.getByTestId(`field-${i}`).first().click()
+  const tag = page.getByTestId(`field-${i}`).first()
+  const clicked = await tag.isVisible() && await tag.click({ timeout: 4000 }).then(() => true, () => false)
+  if (!clicked) { await q(page, `q.g().app.select(${i}); q.g().app.focus(${i})`); await page.waitForTimeout(1200) }
 }
 
 const july: Step = async page => { await q(page, `q.start(1987, 3); q.run(q.day(6, 12))`); await closeAll(page) }
@@ -51,7 +54,29 @@ const farmPeople: Step = async page => {
   await closeAll(page)
 }
 
+// The season frames' day (design/season.html and its sisters), a working day: July 13 of a first year on the farm, the packer's
+// Kennebec contract signed, the three who asked for work taken on and a hand from the hall. The clock is left stopped
+// (the frames show it at 1x) so no day, and no decision, comes between the state and its picture.
+const frameJuly: Step = async page => {
+  await q(page, `const { app } = q.g(); app.newGame(1987, 3); const c = app.campaign; c.cash += 20000
+    c.buildings.push({ id: c.nextBuilding++, kind: 'bunk', yard: -1, done: 12, need: 12, built: true })
+    for (const a of [...c.applicants]) app.do({ t: 'hire', applicant: a.id })
+    app.do({ t: 'hire', kind: 'hand' }); app.do({ t: 'accept', offer: 19873 })
+    app.do({ t: 'begin' }); q.run(q.day(6, 13)); c.incidents = []`)
+  await closeAll(page)
+}
+
 const STATES: State[] = [
+  // Each season frame in design/, in the game, to set beside the frame's picture.
+  { name: 'frame-season', what: 'design/season.html: July, five people, nothing selected', sizes: [...MAIN, 'land'], run: frameJuly },
+  { name: 'frame-card', what: 'design/season-card.html: a field selected, its command bar', sizes: [...MAIN, 'land'], run: async (page, size) => { await frameJuly(page, size); await q(page, `q.g().app.select(2); q.g().app.focus(2)`); await page.waitForTimeout(800) } },
+  { name: 'frame-people', what: 'design/people.html: a person picked and the work grid open', sizes: MAIN, run: async (page, size) => { await frameJuly(page, size); await page.getByTestId('unit-1').click(); await page.getByTestId('grid-open').click() } },
+  { name: 'frame-incident', what: 'design/incident.html: a tractor broken down, the telegram', sizes: [...MAIN, 'land'], run: async (page, size) => {
+    await frameJuly(page, size)
+    await q(page, `const { app } = q.g(); const c = app.campaign; c.incidents.push({ id: c.nextIncident++, kind: 'breakdown', day: c.season.day, until: c.season.day + 2, choices: ['rush', 'wait'], unit: 0, back: c.season.day + 3 }); app.setSpeed(1); app.setSpeed(0)`)
+  } },
+  { name: 'frame-yard', what: 'design/yard.html: the home yard selected, its buildings as orders', sizes: MAIN, run: async (page, size) => { await frameJuly(page, size); await q(page, `const { app } = q.g(); const c = app.campaign; c.cash += 40000; c.logs = 18; c.stone = 25; app.do({ t: 'build', kind: 'shed', yard: -1 }); app.selectYard(-1)`) } },
+  { name: 'frame-tract', what: 'design/tract.html: the Home Woodlot selected while it is felled', sizes: MAIN, run: async (page, size) => { await frameJuly(page, size); await q(page, `const { app } = q.g(); app.campaign.fields[14].felled = 12; app.select(14); app.focus(14)`); await page.waitForTimeout(800) } },
   { name: 'title', what: 'Title screen, first visit', sizes: ALL, run: async () => {} },
   // The living kit of the interface (src/ui/system/kit.ts), the whole page, to set beside design/kit.sheet.html.
   { name: 'kit', what: 'The interface system: every component in every state', sizes: ['desk', 'phone'], full: true, run: async page => { await page.goto(`${base}${base.includes('?') ? '&' : '?'}kit`); await page.waitForSelector('.kit .k-icons'); await page.evaluate(() => document.fonts.ready) } },
@@ -199,10 +224,9 @@ const STATES: State[] = [
   { name: 'farm-people', what: 'June, four people on the farm, nothing selected', sizes: ALL, run: farmPeople },
   { name: 'farm-person', what: 'June: a hired person\'s card', sizes: ALL, run: async (page, size) => { await farmPeople(page, size); await page.getByTestId('unit-1').click() } },
   { name: 'farm-grid', what: 'June: the work grid', sizes: ALL, run: async (page, size) => { await farmPeople(page, size); await page.getByTestId('grid-open').click() } },
-  { name: 'farm-yard', what: 'June: the home yard\'s card, a machine shed chosen', sizes: ALL, run: async (page, size) => {
+  { name: 'farm-yard', what: 'June: the home yard\'s bar, its buildings numbered as orders', sizes: ALL, run: async (page, size) => {
     await farmPeople(page, size)
     await q(page, `const { app } = q.g(); app.campaign.cash += 60000; app.campaign.logs = 12; app.campaign.stone = 8; app.selectYard(-1)`)
-    await page.getByTestId('build-pick-shed').click()
   } },
   { name: 'farm-building', what: 'July: a machine shed going up, people on it', sizes: ALL, run: async (page, size) => {
     await farmPeople(page, size)
@@ -222,7 +246,10 @@ const STATES: State[] = [
   { name: 'farm-materials', what: 'Logs and fieldstone in the yard: selling logs', sizes: MAIN, run: async (page, size) => {
     await farmPeople(page, size)
     await q(page, `const c = q.g().app.campaign; c.logs = 23.4; c.stone = 9.6; dispatchEvent(new Event('resize'))`)
-    await page.getByTestId('materials').click()
+    // On a phone the bank board gives way to the clock at the thumb: the logs are sold from the yard's bar.
+    const chip = page.getByTestId('materials')
+    if (await chip.isVisible()) await chip.click()
+    else await q(page, `q.g().app.selectYard(-1)`)
   } },
   { name: 'farm-barrels', what: 'Dig day: a field dug, barrels waiting to be hauled', sizes: MAIN, run: async (page, size) => {
     await q(page, `q.start(1987, 3); q.run('digging', ['sell'], 'status'); const { app } = q.g(); for (let k = 0; k < 2; k++) app.do({ t: 'day' }); app.setSpeed(0)
