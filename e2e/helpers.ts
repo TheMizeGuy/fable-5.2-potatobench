@@ -3,7 +3,8 @@ import { closeAll, HELPER, q } from '../tools/quality/shared.ts'
 
 export function watchErrors(page: Page): string[] {
   const errors: string[] = []
-  page.on('console', m => { if (m.type() === 'error') errors.push(m.text()) })
+  // WebKit prints its own notice when the GPU drops a context; the game takes the flat drawing, which is not a fault.
+  page.on('console', m => { if (m.type() === 'error' && m.text() !== 'WebGL: context lost.') errors.push(m.text()) })
   page.on('pageerror', e => errors.push(String(e)))
   return errors
 }
