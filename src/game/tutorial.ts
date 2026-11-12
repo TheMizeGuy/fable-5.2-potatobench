@@ -124,6 +124,12 @@ function potatoFields(c: S.Campaign | null): number[] {
 const cash = (l: Look) => `$${Math.max(0, Math.round(l.c?.cash ?? 0)).toLocaleString('en-US')}`
 // The farm holds land beyond the home six: a block a foreman could run.
 const beyond = (l: Look) => !!l.c?.fields.some((f, i) => i >= S.HOME_FIELDS && f.tenure !== 'none' && S.PARCELS[i].block !== 'home')
+const usd = (n: number) => `${n < 0 ? '-' : ''}$${Math.abs(Math.round(n)).toLocaleString('en-US')}`
+// Planting by the one rule the field's card and the routine use.
+const fit = (l: Look, field: number) => !!l.c && field >= 0 && S.plantReady(l.world, l.c, field).ok
+const JOB_WORD: Partial<Record<S.JobKind, string>> = { plant: 'Planting', spray: 'Spraying', haul: 'Hauling', dig: 'Digging', kill: 'Killing the vines', water: 'Watering', rogue: 'Pulling blighted plants', hill: 'Hilling', scout: 'Walking a field', sample: 'A test dig' }
+// The first pressing job, in a few words: "Spraying North Ridge".
+const pressed = (l: Look) => { const p = l.c ? S.pressing(l.world, l.c)[0] : undefined; return p ? `${JOB_WORD[p.kind] ?? 'Work'} ${name(p.field)}` : 'Work' }
 const owed = () => `$${(S.NOTE_PAYMENT + S.LIVING).toLocaleString('en-US')}`
 const tract = (l: Look) => S.TRACTS.find(i => l.c && l.c.fields[i].tenure !== 'none' && (l.c.fields[i].cover === 'woods' || l.c.fields[i].cover === 'brush')) ?? -1
 
@@ -170,7 +176,8 @@ export const LESSONS: Lesson[] = [
   },
   {
     id: 'watch', part: 'opening', moment: true, holds: true, name: 'Watch the first planting', uses: ['pan', 'zoom'],
-    when: l => inSeason(l) && jobOn(l, 'plant') && !anyField(l, f => f.emergeDay >= 0),
+    // The routine lists planting by the one planting rule; a planting already begun counts too, for a quick crew.
+    when: l => inSeason(l) && !anyField(l, f => f.emergeDay >= 0) && (jobOn(l, 'plant') || anyField(l, f => f.plantDay >= 0 && (l.c?.season?.day ?? 0) - f.plantDay <= 3)),
     done: (l, g, since) => g.has('pan') || g.has('zoom') || (!!since && !!l.c?.season && l.c.season.day >= since.d + 3),
     ask: l => by(l, 'Planting has begun. Roll the wheel over the fields to come closer and watch.', 'Planting has begun. Pinch the fields to come closer and watch.', 'Planting has begun. The arrow keys bring you over the fields to watch.'),
     why: () => 'The clock is held for this note, and goes on once you have looked.',
@@ -186,7 +193,7 @@ export const LESSONS: Lesson[] = [
   },
   {
     id: 'plant', part: 'opening', moment: true, holds: true, name: 'Give the first order',
-    when: l => inSeason(l) && needFor(l, 'plant') >= 0,
+    when: l => inSeason(l) && needFor(l, 'plant') >= 0 && fit(l, needFor(l, 'plant')),
     done: l => jobOn(l, 'plant') || anyField(l, f => f.plantDay >= 0),
     ask: l => {
       const f = name(Math.max(0, needFor(l, 'plant')))
@@ -297,7 +304,7 @@ export const LESSONS: Lesson[] = [
     id: 'sprayauto', part: 'year', name: 'Leave spraying to the crew', read: true,
     when: (l, g) => inSeason(l) && g.passed('spray') && !auto(l, 'spray'),
     done: (l, g, since) => auto(l, 'spray') || g.has('noted:sprayauto') || (!!since && !!l.c?.season && l.c.season.day >= since.d + 6),
-    ask: () => 'Spraying can be left to the crew for the season, paying for each spray as it is done.',
+    ask: l => { const o = l.c ? S.sprayOutlook(l.world, l.c) : null; return o && o.passes ? `Spraying can be left to the crew for the season: about ${o.passes} passes, about ${usd(o.dollars)}.` : 'Spraying can be left to the crew for the season, paying for each spray as it is done.' },
     why: () => 'Who does what switches any kind of work between by itself and asking you.',
   },
   {
@@ -334,7 +341,7 @@ export const LESSONS: Lesson[] = [
     when: l => inSeason(l) && (jobOn(l, 'dig') || anyField(l, f => f.status === 'digging' || f.status === 'dug' || f.inField >= 0.5)),
     done: (l, g, since) => g.has('noted:owed') || (!!since && !!l.c && (l.c.phase !== 'season' || (!!l.c.season && l.c.season.day >= since.d + 5))),
     ask: () => `The crop pays for the year. At the year end ${owed()} comes due: the bank's note and the household's keep.`,
-    why: () => 'Sell or store with that in mind. The pass book at the top right shows where you stand.',
+    why: l => l.c ? `Sold today, everything would leave the farm ${usd(S.moneyNow(l.world, l.c).after)} after those bills.` : 'Sell or store with that in mind.',
     point: () => ({ testid: ['cash'] }),
   },
   order({
@@ -383,7 +390,7 @@ export const LESSONS: Lesson[] = [
   },
   {
     id: 'yard', part: 'year', name: 'Raise a building', uses: ['fold:raise'],
-    when: (l, g) => l.screen === 'cellar' && g.passed('cellar') && !!l.c && S.buildingInfo(l.c).some(b => b.ok),
+    when: (l, g) => l.screen === 'cellar' && g.passed('cellar') && !!l.c && S.goalCosts(l.c).some(x => x.id.startsWith('build:') && x.can),
     done: (l, g) => g.has('fold:raise') || (!!l.c && l.c.buildings.length > 0),
     ask: l => `${l.input === 'touch' ? 'Tap' : 'Open'} Raise a building: your own logs and stone, put up over the winter.`,
     why: () => 'Whoever you set to Build puts it up. A second potato house holds more crop.',
@@ -451,6 +458,13 @@ export const LESSONS: Lesson[] = [
     point: () => ({ testid: ['forecast'] }),
   },
   {
+    id: 'pressing', part: 'year', name: 'Work that cannot wait', read: true,
+    when: (l, g) => inSeason(l) && g.passed('person') && !!l.c && S.pressing(l.world, l.c).length > 0,
+    done: (l, g, since) => g.has('noted:pressing') || (!!since && !!l.c && S.pressing(l.world, l.c).length === 0),
+    ask: l => `${pressed(l)} cannot wait, and nobody will take it as things stand.`,
+    why: () => 'The note at the foot says what is in its way, and how to clear it.',
+  },
+  {
     id: 'hand', part: 'spring', holds: true, name: 'Meet a hand', uses: ['unit:hand'],
     when: (l, g) => inSeason(l) && !!hand(l) && (g.passed('calls2') || (l.c?.history.length ?? 0) === 0),
     done: (_l, g) => g.has('unit:hand'),
@@ -472,7 +486,7 @@ export const LESSONS: Lesson[] = [
   },
   {
     id: 'foreman', part: 'spring', name: 'Name a foreman', read: true,
-    when: (l, g) => inSeason(l) && !!hand(l) && g.passed('hand') && beyond(l),
+    when: (l, g) => inSeason(l) && !!hand(l) && g.passed('hand') && beyond(l) && !!l.c && S.goalCosts(l.c).some(x => x.id === 'foreman' && x.can),
     done: (l, g) => g.has('noted:foreman') || !!l.c?.crew.some(u => u.foreman !== ''),
     ask: l => `A hand can run a block of land as its foreman: Foreman, on ${first(hand(l)?.name ?? 'their')}'s card.`,
     why: () => 'Each morning they put the block\'s work on the list, the calls too. It suits land far from home.',

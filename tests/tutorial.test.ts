@@ -199,7 +199,7 @@ describe('the guided first year', () => {
       for (const id of run.passed) passed.add(id)
       expect(run.shown.slice(0, 3)).toEqual(['money', 'begin', 'clock'])
       // The opening is over before anything that is not needed to watch the planting.
-      expect(run.shown.indexOf('boards')).toBeGreaterThan(run.shown.indexOf('person'))
+      expect(run.shown.indexOf("boards"), `${seed} ${askMe}: ${run.shown.join(" ")}`).toBeGreaterThan(run.shown.indexOf("person"))
       expect(run.c.phase).toBe('plan')
       expect(run.shown[run.shown.length - 1]).toBe('seed')
       // With the routine, the crew's own work is never asked for: the calls are.
