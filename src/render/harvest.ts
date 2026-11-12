@@ -181,7 +181,7 @@ export class Harvest {
     })
   }
 
-  // Barrels stand in ranks where the crop has been picked up, on fields being dug or just dug.
+  // Barrels stand in ranks where the crop has been picked up, on fields being dug or with the crop still out.
   setBarrelFields(active: boolean[], dug: (field: number, hill: number) => boolean): void {
     for (let f = 0; f < FIELD_COUNT; f++) {
       for (let h = 0; h < HILLS; h++) {

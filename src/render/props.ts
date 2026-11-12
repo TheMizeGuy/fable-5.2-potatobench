@@ -11,7 +11,7 @@ import { smooth } from './noise.ts'
 import type { Particles } from './particles.ts'
 import { drawPlot, drawSite, type SiteLook, type SiteMarks } from './sites.ts'
 import type { Snapshot } from './state.ts'
-import { country, cupsShape, machines, materials, passingCar, poles, roadTruck, vaneShape, yardLife, type MachineLook } from './yard.ts'
+import { country, cupsShape, materials, passingCar, poles, roadTruck, standCar, vaneShape, yardLife } from './yard.ts'
 
 // How much lamplight the hour calls for, set by the light's side of the scene (0 day .. about 1 a winter evening).
 export const LAMP = { value: 0 }
@@ -159,16 +159,7 @@ export class Props {
       this.swap(this.plots[yard], free[yard].map(s => s.kind).join(), () => { for (const s of free[yard]) drawPlot(b, s); return null })
     }
     this.swap(this.piles, `${Math.min(99, Math.round(farm.logs))}|${Math.min(99, Math.round(farm.stone))}`, () => { materials(b, farm.logs, farm.stone); return null })
-    // Machines at rest: what the farm owns less what is out at work today.
-    const out = (kinds: string[]) => snap.units.some(u => (u.job && kinds.includes(u.job.kind)) || u.worked.some(w => kinds.includes(w.kind)))
-    const driving = snap.units.filter(u => u.rig === 'tractor').length
-    const has = (id: string) => farm.equipment.some(e => e === id)
-    const m: MachineLook = {
-      tractors: Math.max(0, Math.min(2, farm.tractors - Math.max(1, driving))), truck: farm.truck && !snap.units.some(u => u.rig === 'truck'),
-      sprayer: has('boom') && !out(['spray', 'kill']), harvester: has('harvester') && !out(['dig']), reel: has('reel') && !out(['water']),
-      shed: farm.buildings.some(q => q.kind === 'shed' && q.built), car: farm.standOpen,
-    }
-    this.swap(this.parked, Object.values(m).map(v => +v).join(), () => { machines(b, m); return null })
+    this.swap(this.parked, farm.standOpen ? 'car' : '', () => { if (farm.standOpen) standCar(b); return null })
     this.dufourSmoke = farm.dufour
   }
 

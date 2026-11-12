@@ -5,7 +5,7 @@ import { IRON, TRIM, barrel, chimney, door, foundation, leanRoof, level, roof, s
 import { FIN, type Builder, type V3 } from './builder.ts'
 import { cordwood } from './farmstead.ts'
 import { FARMSTEADS } from './flora.ts'
-import { BAYS, DUFOUR_BARN, HOUSE, IMPLEMENT_SPOTS, LOG_DECKS, SITES, STONE_PILE, TRUCK_SPOT, groundY, townRoadZ, type Spot } from './layout.ts'
+import { DUFOUR_BARN, HOUSE, LOG_DECKS, SITES, STONE_PILE, groundY, townRoadZ, type Spot } from './layout.ts'
 import { hash2 } from './noise.ts'
 
 const BARK = '#5f4d3d', CUT = '#d0ae78'
@@ -42,26 +42,7 @@ export function materials(b: Builder, logs: number, stone: number): void {
   }
 }
 
-// ---- Stand-ins for the farm's machines at rest, until the real ones are parked here. Each faces +x.
-function tractor(b: Builder, body: string, rim: string): void {
-  b.box(0.22, 0.44, 0, 1.0, 0.18, 0.24, '#5c5d5a', FIN.plain)
-  b.box(0.3, 0.67, 0, 0.82, 0.26, 0.32, body, FIN.plain)
-  b.box(0.74, 0.6, 0, 0.08, 0.38, 0.31, body, FIN.plain)
-  b.box(0.79, 0.58, 0, 0.02, 0.28, 0.24, '#2a2a27', FIN.plain)
-  b.box(-0.1, 0.74, 0, 0.26, 0.2, 0.3, body, FIN.plain)
-  b.box(-0.47, 0.8, 0, 0.24, 0.05, 0.24, '#2a2a27', FIN.plain)
-  b.box(-0.58, 0.9, 0, 0.03, 0.2, 0.2, '#2a2a27', FIN.plain)
-  for (const z of [-0.36, 0.36]) {
-    wheel(b, [-0.42, 0.37, z], [0, 0, 1], 0.37, 0.2, rim, 12)
-    b.box(-0.42, 0.79, z, 0.62, 0.035, 0.24, body, FIN.plain)
-    b.box(-0.74, 0.62, z, 0.035, 0.34, 0.24, body, FIN.plain)
-    wheel(b, [0.62, 0.2, z * 0.86], [0, 0, 1], 0.2, 0.1, rim, 10)
-  }
-  b.cyl([0.42, 0.78, 0.09], [0.42, 1.24, 0.09], 0.026, 0.026, 6, '#2a2a27', FIN.plain)
-  b.beam([-0.08, 0.76, 0], [-0.3, 1.0, 0], 0.024, 0.024, '#2a2a27', FIN.plain)
-  b.cyl([-0.3, 0.98, -0.1], [-0.3, 1.0, 0.1], 0.03, 0.03, 6, '#2a2a27', FIN.plain)
-}
-
+// ---- A truck for the town road and a car for the stand. Each faces +x.
 function truck(b: Builder, body: string): void {
   // a farm truck of the day: a rounded hood, a tall cab, a stake body
   b.box(-0.1, 0.38, 0, 2.3, 0.1, 0.5, '#2a2a27', FIN.plain)
@@ -101,51 +82,6 @@ function car(b: Builder, body: string): void {
   b.box(-0.97, 0.3, 0, 0.04, 0.06, 0.74, '#c9ccc8', FIN.metal)
 }
 
-function sprayer(b: Builder): void {
-  b.box(0, 0.34, 0, 1.0, 0.06, 0.5, '#5c5d5a', FIN.plain)
-  b.cyl([0, 0.62, -0.38], [0, 0.62, 0.38], 0.24, 0.24, 12, '#e3dfd2', FIN.plain, { cap: 'ab' })
-  for (const sg of [-1, 1]) {
-    wheel(b, [-0.1, 0.2, sg * 0.44], [0, 0, 1], 0.2, 0.09, '#8b8d88', 10)
-    // the boom folded up each side
-    b.beam([-0.42, 0.5, sg * 0.3], [-0.5, 1.75, sg * 0.36], 0.04, 0.04, '#8b8d88', FIN.metal)
-    b.beam([-0.5, 1.75, sg * 0.36], [-0.44, 0.95, sg * 0.52], 0.03, 0.03, '#8b8d88', FIN.metal)
-  }
-  b.box(-0.42, 0.5, 0, 0.05, 0.05, 0.9, '#8b8d88', FIN.metal)
-  b.beam([0.5, 0.34, 0], [1.1, 0.3, 0], 0.05, 0.05, '#5c5d5a', FIN.plain)
-}
-
-function harvester(b: Builder): void {
-  const red = '#a43a27'
-  b.box(0, 0.42, 0, 2.0, 0.08, 0.9, '#5c5d5a', FIN.plain)
-  for (const sg of [-1, 1]) {
-    wheel(b, [-0.3, 0.26, sg * 0.56], [0, 0, 1], 0.26, 0.14, red, 10)
-    b.box(0, 0.66, sg * 0.46, 1.9, 0.42, 0.04, red, FIN.plain)
-  }
-  // the lifting web up from the share, the picking table, the boom that carries the crop over to the truck
-  b.beam([1.2, 0.2, 0], [0.2, 0.95, 0], 0.84, 0.05, '#77797a', FIN.metal, { ex: 0.9 })
-  b.box(-0.45, 0.92, 0, 1.0, 0.05, 0.86, '#77797a', FIN.metal, { ex: 0.9 })
-  b.beam([-0.9, 0.9, 0], [-1.2, 1.7, 0.9], 0.34, 0.06, red, FIN.plain)
-  b.box(1.26, 0.14, 0, 0.14, 0.03, 0.84, '#8b8d88', FIN.metal)
-  for (const x of [-0.9, 0.0]) for (const sg of [-1, 1]) b.box(x, 1.12, sg * 0.44, 0.04, 0.5, 0.04, red, FIN.plain)
-  b.box(-0.45, 1.36, 0, 1.0, 0.03, 0.94, '#c9c2ae', FIN.cloth)
-  b.beam([1.0, 0.42, 0], [1.9, 0.34, 0], 0.06, 0.06, '#5c5d5a', FIN.plain)
-}
-
-function reel(b: Builder): void {
-  b.box(0, 0.3, 0, 1.3, 0.06, 0.6, '#5c5d5a', FIN.plain)
-  for (const sg of [-1, 1]) {
-    wheel(b, [-0.1, 0.2, sg * 0.42], [0, 0, 1], 0.2, 0.09, '#b7791f', 10)
-    b.cyl([0, 0.85, sg * 0.27], [0, 0.85, sg * 0.3], 0.56, 0.56, 14, '#b7791f', FIN.plain, { cap: 'ab' })
-    b.beam([-0.3, 0.3, sg * 0.3], [0, 0.85, sg * 0.3], 0.04, 0.05, '#5c5d5a', FIN.plain)
-    b.beam([0.3, 0.3, sg * 0.3], [0, 0.85, sg * 0.3], 0.04, 0.05, '#5c5d5a', FIN.plain)
-  }
-  b.cyl([0, 0.85, -0.27], [0, 0.85, 0.27], 0.42, 0.42, 14, '#22221f', FIN.plain, { ex: 0.9 })
-  // the gun on its little cart, hitched behind
-  b.box(-1.0, 0.22, 0, 0.5, 0.04, 0.5, '#5c5d5a', FIN.plain)
-  for (const sg of [-1, 1]) wheel(b, [-1.0, 0.12, sg * 0.28], [0, 0, 1], 0.12, 0.05, '#b7791f', 8)
-  b.beam([-1.0, 0.24, 0], [-1.25, 0.7, 0], 0.035, 0.035, '#8b8d88', FIN.metal)
-}
-
 function wagon(b: Builder): void {
   b.box(0, 0.5, 0, 2.3, 0.06, 0.95, '#8a7458', FIN.boards)
   for (const sg of [-1, 1]) b.box(0, 0.44, sg * 0.3, 2.2, 0.08, 0.08, '#6d5b48', FIN.wood)
@@ -160,32 +96,14 @@ function wagon(b: Builder): void {
   b.beam([1.15, 0.38, 0], [2.3, 0.2, 0], 0.06, 0.06, '#6d5b48', FIN.wood)
 }
 
-export interface MachineLook { tractors: number; truck: boolean; sprayer: boolean; harvester: boolean; reel: boolean; shed: boolean; car: boolean }
-
-const PAINTS: [string, string][] = [['#8e918b', '#9b3a26'], ['#3f6a4c', '#d8c38a']]
-
-// Machines the farm owns and is not using today, parked where it keeps them: tractors and the truck in the machine
-// shed's bays, the sprayer, the harvester and the reel in the grass at its end; a customer's car at the stand.
-export function machines(b: Builder, m: MachineLook): void {
-  const put = (s: Spot, draw: () => void, y = groundY(s.x, s.z) + 0.02) => {
-    b.at(s.x, y, s.z, -s.heading, y)
-    draw()
-  }
-  // a second and a third tractor are only ever owned once the shed stands
-  const shed = SITES.find(s => s.kind === 'shed' && s.yard === -1)!
-  const floor = level(shed.x, shed.z, shed.w, shed.d).top + 0.05
-  if (m.shed) for (let k = 0; k < Math.min(2, m.tractors); k++) put(BAYS[k], () => tractor(b, ...PAINTS[k]), floor)
-  if (m.truck) {
-    if (m.shed) put({ ...BAYS[2], z: BAYS[2].z - 0.25 }, () => truck(b, '#3d5a6e'), floor)
-    else put(TRUCK_SPOT, () => truck(b, '#3d5a6e'))
-  }
-  if (m.harvester) put(IMPLEMENT_SPOTS.harvester, () => harvester(b))
-  if (m.sprayer) put(IMPLEMENT_SPOTS.sprayer, () => sprayer(b))
-  if (m.reel) put(IMPLEMENT_SPOTS.reel, () => reel(b))
-  if (m.car) {
-    const s = SITES.find(q => q.kind === 'stand' && q.yard === -1)!
-    put({ x: s.x - 1.9, z: s.z + 0.5, heading: 0.12 - Math.PI / 2 }, () => car(b, '#7d9aa8'))
-  }
+// A customer's car at the stand on the days it is open. (The farm's own machines are drawn where they stand, working
+// or parked, by units.ts.)
+export function standCar(b: Builder): void {
+  const s = SITES.find(q => q.kind === 'stand' && q.yard === -1)!
+  const at: Spot = { x: s.x - 1.9, z: s.z + 0.5, heading: 0.12 - Math.PI / 2 }
+  const y = groundY(at.x, at.z) + 0.02
+  b.at(at.x, y, at.z, -at.heading, y)
+  car(b, '#7d9aa8')
 }
 
 // ---- The life of the yards, home and Dufour: fixed things, made once.

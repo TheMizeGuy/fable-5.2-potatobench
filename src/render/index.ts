@@ -6,7 +6,6 @@ import type { CreateFieldView, FieldView } from '../game/contracts.ts'
 import { FIELD_COUNT, HILLS } from '../sim/index.ts'
 import { CameraRig, MOVE_MS, type Pose, type Viewport } from './camera.ts'
 import { Clearing } from './clearing.ts'
-import { Kit } from './crew.ts'
 import { EVENING, MORNING, copyEnv, easeEnv, envTarget, light, makeEnv, makeLight } from './env.ts'
 import { FarHills } from './far.ts'
 import { createFallbackView } from './fallback.ts'
@@ -119,8 +118,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   const props = new Props()
   const fields = new Fields(leafTex, flowerTex)
   const harvest = new Harvest()
-  const kit = new Kit()
-  const crews = new Crews(kit)
+  const crews = new Crews()
   const particles = new Particles(puffTex)
   const weather = new Weather()
   const birds = new Birds()
@@ -202,6 +200,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     flora.setTier(tier)
     props.setTier(tier)
     crews.setScreen(vp.w, vp.h)
+    crews.setTier(tier)
     reframe(reduced)
   }
 
@@ -568,11 +567,12 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     rig.update(dt, vp, reduced)
     applyLight(dt)
     const cam = rig.camera
+    crews.shudder(cam, dt, reduced)
     sky.dome.position.copy(cam.position)
     const t0 = performance.now()
     crews.place({
       dt, dayT, advancing: app.speed > 0, pace: replayPace, time, reduced, idle: snap.mode !== 'season' && snap.mode !== 'title',
-      season: snap.mode === 'season', dist: rig.cur.dist, dust: env.dry, picked: app.unit, particles, passed,
+      season: snap.mode === 'season', dist: rig.cur.dist, dust: env.dry, dark: clamp((LAMP.value * lit.exposure) / 5, 0, 1), picked: app.unit, particles, passed, snap, env, camera: cam,
     })
     // Smoke from the kitchen chimney: all day in the cold, a thread of it at supper time.
     smokeAt += dt * pace
@@ -702,8 +702,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   }
 
   function unitAnchor(id: number): { x: number; y: number; visible: boolean } {
-    const u = crews.where().units.find(x => x.id === id)
-    return u ? screenAt(u.x, groundY(u.x, u.z) + 1.9, u.z) : { x: 0, y: 0, visible: false }
+    return crews.anchor(id, far) ? screenAt(far.x, far.y, far.z) : { x: 0, y: 0, visible: false }
   }
 
   function yardAnchor(yard: number): { x: number; y: number; visible: boolean } {
@@ -763,7 +762,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       info() {
         const w = crews.where()
         return {
-          mode: snap.mode, dayT, pending: pending.length, segs: crews.segsInfo(), tractor: w.tractor, farmer: w.farmer, units: w.units,
+          mode: snap.mode, dayT, pending: pending.length, segs: crews.segsInfo(), tractor: w.tractor, farmer: w.farmer, units: w.units, rigs: w.rigs, parts: crews.prims.count,
           fields: snap.fields.map(f => f.status), held: snap.fields.map(f => f.held), tier, framing, rings: fields.ringing(), lods: fields.lods(),
         }
       },
@@ -782,9 +781,11 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       unitAt(id: number) {
         const u = crews.where().units.find(x => x.id === id)
         if (!u) return null
+        const at = unitAnchor(id)
         const v = new Vector3(u.x, fieldBaseY(u.z) + 0.5, u.z).project(rig.camera)
         const vp = viewport()
-        return { x: (v.x + 1) / 2 * vp.w, y: (1 - v.y) / 2 * vp.h }
+        // on the body: half way between the ground under them and the point over their head
+        return { x: ((v.x + 1) / 2 * vp.w + at.x) / 2, y: ((1 - v.y) / 2 * vp.h + at.y) / 2 }
       },
       // What a click at a point on the screen would pick.
       pickAt: (x: number, y: number) => ({ field: pick(x, y), unit: pickUnit(x, y), yard: pickYard(x, y), mode: snap.mode, held: snap.fields.map(f => f.held), available: snap.fields.map(f => f.available) }),
@@ -828,7 +829,6 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       fields.dispose()
       harvest.dispose()
       crews.dispose()
-      kit.dispose()
       particles.dispose()
       weather.dispose()
       birds.dispose()

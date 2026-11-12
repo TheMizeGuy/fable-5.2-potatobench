@@ -90,6 +90,7 @@ export interface FarmVis {
   dufour: boolean          // Dufour land is held, so its yard is the farm's
   equipment: sim.UpgradeId[]
   incidents: { kind: sim.IncidentKind; unit: number }[]
+  applicants: number       // people asking for work this spring
 }
 
 export interface Snapshot {
@@ -105,6 +106,7 @@ export interface Snapshot {
   farm: FarmVis
   next: Work | null
   frozen: boolean
+  restDay: boolean         // the day just worked was a day off: nobody worked
   rime: number[] | null    // in the season, rime on the ridge, mid-slope and bottom land
   wetGround: number        // how wet the ground lies, 0 dust-dry to 1 standing water
 }
@@ -231,11 +233,13 @@ export function snapshot(app: App): Snapshot {
     dufour: sim.holdsDufour(c),
     equipment: (Object.keys(c.upgrades) as sim.UpgradeId[]).filter(k => c.upgrades[k]),
     incidents: c.incidents.map(i => ({ kind: i.kind, unit: i.unit ?? -1 })),
+    applicants: mode === 'plan' ? c.applicants.length : 0,
   }
   return {
     mode, year: c.year, day, seasonDay: s ? s.day : -1, month: c.month, fields, weather, worked, units, farm,
     next: nextJob ? { kind: nextJob.kind, field: nextJob.field } : null,
     frozen: s ? s.frozen : false,
+    restDay: inSeason && !s.frozen && s.day > s.startDay && c.sundaysOff && sim.weekday(s.year, s.day - 1) === sim.SUNDAY,
     rime,
     wetGround: mode === 'season' ? wetGround : 0.3,
   }
@@ -284,7 +288,7 @@ function showcase(): Snapshot {
     mode: 'title', year: 1987, day: 196, seasonDay: -1, month: 0, fields,
     weather: { sky: 'clear', tmin: 13, tmax: 25, wind: 2.6, wdir: 250, prcp: 0, wetH: 6, snwd: 0 },
     worked: [], units: [{ id: 0, kind: 'farmer', name: '', at: -1, to: -1, along: 1, job: null, worked: [], rig: '', tired: 0, mood: 1, hurt: false, resting: false, winter: 'off', winterField: -1 }],
-    farm: { buildings: [], logs: 0, stone: 0, pond: 0, standOpen: false, tractors: 1, broken: 0, truck: false, pickers: false, dufour: false, equipment: [], incidents: [] },
-    next: null, frozen: false, rime: null, wetGround: 0.1,
+    farm: { buildings: [], logs: 0, stone: 0, pond: 0, standOpen: false, tractors: 1, broken: 0, truck: false, pickers: false, dufour: false, equipment: [], incidents: [], applicants: 0 },
+    next: null, frozen: false, restDay: false, rime: null, wetGround: 0.1,
   }
 }
