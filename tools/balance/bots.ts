@@ -439,7 +439,7 @@ export const TUNING: Tuning = {
   byElev: [['caribou'], ['caribou'], ['caribou']],
   landValue: { ridge: 10000, brook: 6000, dufour: 7500 }, landMargin: 0,
   loanFloor: -75000, buyLand: -60000, buyLeft: 5, fieldCash: 15000, yearEndSafety: 30000, prepayKeep: 40000, potatoShare: 0.5, flipLoss: 4000,
-  walkFrom: 5, walkPer: 7, tractor: { fields: 10, left: 2 }, truckFields: 8, driverFields: 13, tractor3Fields: 13, hallValue: 1000,
+  walkFrom: 5, walkPer: 8, tractor: { fields: 12, left: 2 }, truckFields: 8, driverFields: 15, tractor3Fields: 15, hallValue: 1000,
   rocksAt: 0.45, rocksSpring: 0.6, brushElev: [0], rushFrom: 2, pickerBacklog: 4, pickerBarrels: 500, standGain: 70, haulDays: 1.7, peakHire: 18, peakKeep: 12,
   buildFloor: 5000, houseOver: 1500, packStock: 3000, pondWaterings: 3, sundayTired: 0.5, sundayJobs: 2,
   contractGain: 0, no1Share: 0.8, contractSafety: 0.85,

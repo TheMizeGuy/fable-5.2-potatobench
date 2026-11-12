@@ -102,7 +102,7 @@ export const UPGRADES: Record<UpgradeId, { name: string; cost: number; blurb: st
   tractor2: { name: 'Second tractor', cost: 6000, blurb: 'A second tractor with its planter and hiller: two people can do machine work at once. It needs the machine shed.' },
   house2: { name: 'Second potato house', cost: 18000, blurb: 'A contractor puts up a potato house at home at once. The farm can store as much again as the first one holds. Built by the farm\'s own people it costs less.' },
   tractor3: { name: 'Third tractor', cost: 8000, blurb: 'A third tractor: three people on machine work at once. It needs the machine shed and the second tractor.' },
-  truck: { name: 'Truck', cost: 8000, blurb: 'Hauls the crop in at twice a tractor\'s rate, and leaves the tractor free.' },
+  truck: { name: 'Truck', cost: 6000, blurb: 'Hauls the crop in at twice a tractor\'s rate, and leaves the tractor free.' },
 }
 
 // ---------------------------------------------------------------- the bigger farm (all invented: docs/MODEL.md section 9)
@@ -197,7 +197,7 @@ export const TIRED_SLOW_FROM = 0.6             // above this, speed falls in a s
 export const TIRED_SLOW = 0.3
 export const MOOD_START = 0.7
 export const MOOD_BASE = 0.7
-export const MOOD_BED = 0.1                    // a bed in the bunkhouse, for hired people
+export const MOOD_BED = 0.2                    // a bed in the bunkhouse, for hired people
 export const MOOD_PAY = 1                      // 0.1 for each 10% the wage is above or below what they asked
 export const MOOD_TIRED_FROM = 0.5
 export const MOOD_TIRED = 1
@@ -242,7 +242,7 @@ export const FELL_YIELD_PER = 0.06
 export const FELL_SEASON = 0.5                 // in the growing season felling goes at half speed: soft ground and flies
 export const STUMP_FEE = 6000                  // a contractor with a bulldozer
 export const STUMP_DAYS = 10                   // season days
-export const TILE_FEE = 2000
+export const TILE_FEE = 1000
 export const TILE_DAYS = 8
 export const RAW_GROUND = 0.85                 // a first potato crop on raw ground grows this share, unless rested first
 export const NEW_GROUND_VERT = 0.01
@@ -279,22 +279,22 @@ export const MORTGAGE_RATE = 0.06              // and 8% interest on what is sti
 export interface BuildingSpec { name: string; cash: number; logs: number; stone: number; days: number; dufour: boolean; does: string; catch: string }
 // dufour: whether one can stand at the Dufour yard too (one of each kind per yard).
 export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
-  house: { name: 'Potato house', cash: 9000, logs: 30, stone: 25, days: 30, dufour: true,
+  house: { name: 'Potato house', cash: 7000, logs: 30, stone: 25, days: 30, dufour: true,
     does: 'Stores 3,600 cwt at its yard (6,400 at home with ventilation).', catch: 'It costs as much as a field\'s growing and takes a month of building.' },
   shed: { name: 'Machine shed', cash: 4500, logs: 20, stone: 10, days: 16, dufour: false,
     does: 'Machine work goes 10% faster, breakdowns are half as likely, and a second and third tractor can be kept.', catch: 'Money and materials that grow no potatoes.' },
   bunk: { name: 'Bunkhouse', cash: 3500, logs: 16, stone: 8, days: 12, dufour: true,
     does: 'Beds for six hired people, who are happier for them.', catch: 'Beds are only worth having with people to fill them, and every one is a wage.' },
   packing: { name: 'Packing shed', cash: 8000, logs: 24, stone: 15, days: 24, dufour: false,
-    does: 'In winter, people set to pack grade the stored crop: packed No. 1 brings 8% more and B size three quarters of the No. 1 price.', catch: 'Packing costs a charge a hundredweight and someone kept on, and paid, all winter.' },
+    does: 'In winter, people set to pack grade the stored crop: packed No. 1 brings 15% more and B size three quarters of the No. 1 price.', catch: 'Packing costs a charge a hundredweight and someone kept on, and paid, all winter.' },
   pond: { name: 'Irrigation pond', cash: 6000, logs: 0, stone: 30, days: 20, dufour: false,
     does: 'Holds six waterings: a home or intervale field waters in a third of a day for $60.', catch: 'When a month brings under 40 mm of rain the brook runs low and the pond is dry, just when it is wanted.' },
   stand: { name: 'Farm stand', cash: 600, logs: 4, stone: 0, days: 4, dufour: false,
-    does: 'From August 1 it sells about 4 cwt a day from the newest lot at twice the market price, more for red, yellow and new potatoes.', catch: 'Someone has to mind it: a fifth of a working day, every day it is open.' },
+    does: 'From August 1 it sells about 6 cwt a day from the newest lot at twice the market price, more for red, yellow and new potatoes.', catch: 'Someone has to mind it: a fifth of a working day, every day it is open.' },
   station: { name: 'Weather station', cash: 1000, logs: 0, stone: 0, days: 1, dufour: false,
     does: 'The forecast\'s errors are 40% smaller, and each field shows today\'s blight risk from its own wet hours.', catch: 'The weather is still the weather: the forecast still errs, and knowing the risk does not spray the field.' },
-  road: { name: 'Gravelled road', cash: 1500, logs: 0, stone: 60, days: 12, dufour: false,
-    does: 'Travel and hauling 20% quicker.', catch: 'Sixty loads of stone, or $2,400 of it from the quarry.' },
+  road: { name: 'Gravelled road', cash: 1500, logs: 0, stone: 40, days: 12, dufour: false,
+    does: 'Travel and hauling 30% quicker.', catch: 'Forty loads of stone, or $1,600 of it from the quarry.' },
 }
 export const BUILDING_KINDS: BuildingKind[] = ['house', 'shed', 'bunk', 'packing', 'pond', 'stand', 'station', 'road']
 export const HOUSE_CWT = 3600                  // a built potato house; at home with ventilation it holds CELLAR_CWT_VENT
