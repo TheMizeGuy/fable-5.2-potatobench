@@ -889,6 +889,8 @@ test('blight weather asks once how to spray this season, and a worn-out hand can
   await expect.poll(() => game<number>(page, 'app.campaign.season.day'), { timeout: 15_000 }).toBeGreaterThan(day0)
   await expect(ask).toBeHidden()
   await reach(page, `q.g().app.setSpeed(0)`)
+  // (a test dig the crew made while the days ran is put away first)
+  if (await page.getByTestId('sample-close').isVisible().catch(() => false)) await page.getByTestId('sample-close').click()
   // Asked again from a field's card or Who does what.
   await page.keyboard.press('g')
   await page.getByTestId('spray-ask-open').click()
@@ -906,6 +908,7 @@ test('blight weather asks once how to spray this season, and a worn-out hand can
   // Asked once: it does not come back by itself; Who does what asks it again.
   await page.waitForTimeout(400)
   await expect(page.getByTestId('spray-ask')).toBeHidden()
+  if (await page.getByTestId('sample-close').isVisible().catch(() => false)) await page.getByTestId('sample-close').click()
   await page.keyboard.press('g')
   await page.getByTestId('spray-ask-open').click()
   await page.getByTestId('spray-ask').getByTestId('spray-way-ask').click()
