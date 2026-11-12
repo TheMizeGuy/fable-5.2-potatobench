@@ -27,6 +27,8 @@ export interface Look {
   fold?: string
   // Days until the soil is fit to plant, as the boards have it (-1 when not known).
   wait?: number
+  // A card that wants an answer is up: the note waits behind it, and brings nothing onto the screen yet.
+  carded?: boolean
 }
 
 // Where a lesson points: a control by its test id (the first of several that is on screen), a field's tag, a field's
@@ -139,6 +141,8 @@ function potatoFields(c: S.Campaign | null): number[] {
   if (c) for (let i = 0; i < S.FIELD_COUNT; i++) if (S.held(c, i) && S.isField(c, i) && c.plans[i]?.crop === 'potato') out.push(i)
   return out.length ? out : [potatoField(c)]
 }
+// The fields held that rest this year.
+const resting = (c: S.Campaign | null) => { let n = 0; if (c) for (let i = 0; i < S.FIELD_COUNT; i++) if (S.held(c, i) && S.isField(c, i) && c.plans[i]?.crop === 'rest') n++; return n }
 const cash = (l: Look) => `$${Math.max(0, Math.round(l.c?.cash ?? 0)).toLocaleString('en-US')}`
 // The farm holds land beyond the home six: a block a foreman could run.
 const beyond = (l: Look) => !!l.c?.fields.some((f, i) => i >= S.HOME_FIELDS && f.tenure !== 'none' && S.PARCELS[i].block !== 'home')
@@ -191,8 +195,8 @@ export const LESSONS: Lesson[] = [
     id: 'fields', part: 'opening', name: 'Your fields', read: true, reveals: ['tags'],
     when: l => inSeason(l) && firstYear(l),
     done: (_l, g) => g.has('noted:fields'),
-    ask: l => `These tags are your ${potatoFields(l.c).length} potato fields. Nothing is planted yet: the soil is too cold.`,
-    why: () => 'Your crew plants them by itself when the soil warms.',
+    ask: l => { const n = potatoFields(l.c).length; const rest = resting(l.c); return `${rest ? `These tags are your fields: ${n} in potatoes, ${rest} resting.` : `These tags are your ${n} potato fields.`} Nothing is planted yet: the soil is too cold.` },
+    why: () => 'Your crew plants the potatoes by itself when the soil warms.',
     point: l => ({ fields: potatoFields(l.c) }),
   },
   {
@@ -208,8 +212,8 @@ export const LESSONS: Lesson[] = [
     // Planting under way, not an order waiting for warm soil.
     when: l => inSeason(l) && firstYear(l) && (!!l.c?.season?.jobs.some(j => j.kind === 'plant' && j.done > 0) || anyField(l, f => f.plantDay >= 0)),
     done: (_l, g) => g.has('noted:plantday'),
-    ask: () => 'Planting has begun, with no order from you. That face on the land is you, doing the work.',
-    why: l => by(l, 'Click the face to see what you are doing.', 'Tap the face to see what you are doing.', 'Your name at the foot says what you are doing.'),
+    ask: () => 'Planting has begun, with no order from you. You are one of the crew: your face at the foot says what you are doing.',
+    why: () => 'The same face on the land is you, at work.',
     point: l => ({ unit: farmer(l) }),
     skip: l => unplanted(l) ? 'Skip to the end of planting' : null,
   },
@@ -592,7 +596,7 @@ export class Guide {
     if (cuts(best) && this.onShow && this.onShow !== best!.id && !cuts(lesson(this.onShow) ?? null)) this.waiting = this.onShow
     else if (best && !cuts(best)) this.waiting = ''
     this.onShow = best && !cuts(best) ? best.id : ''
-    if (best?.reveals) for (const p of best.reveals) this.note(`show:${p}`)
+    if (best?.reveals && !l.carded) for (const p of best.reveals) this.note(`show:${p}`)
     if (best && !this.p.since[best.id]) {
       const c = l.c
       const since = { y: c?.year ?? 0, d: c?.season?.day ?? -1, m: c?.month ?? 0, inc: c?.incidents[0]?.id ?? -1 }

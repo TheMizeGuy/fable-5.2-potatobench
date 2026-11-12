@@ -568,8 +568,9 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     if (shown(root.querySelector('#raise-list'))) guide.note('fold:raise')
     const l = lookNow()
     offer = guide.offerFor(c, app.screen)
-    due = offer ? null : paced(guide.current(l))
     const carded = cardUp(l)
+    l.carded = carded
+    due = offer ? null : paced(guide.current(l))
     now = due && carded ? null : due
     // A skip ahead runs on past a telegram once it is answered, to the note it was for. A paper (the weigh ticket)
     // ends it, and so does the player's own hand on the clock.
