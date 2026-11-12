@@ -63,6 +63,9 @@
 .season-screen .press-pop .btn { flex: none; min-height: 36px; padding: 0 10px; font-size: 14px; }
 .touch .season-screen .press-pop .btn { min-height: 44px; }
 .season-screen .q .q-by { display: grid; place-items: center; color: var(--ink-2); }
+.season-screen .q-help { display: inline-flex; align-items: center; gap: 2px; height: 36px; padding: 0 6px; margin-left: -2px; font-size: 13px; color: var(--paper); background: var(--st-ochre); box-shadow: inset 0 0 0 1px var(--ink); }
+.season-screen .q-help .i { --i: 13px; }
+.touch .season-screen .q-help { height: 40px; min-width: 40px; }
 .season-screen .q .q-by .i { --i: 12px; }
 .season-screen .q.by-you { box-shadow: inset 0 0 0 1px var(--hair), inset 0 -2px 0 var(--pencil); }
 .season-screen .q.more { font: 400 16px/1 var(--f-gothic); letter-spacing: .04em; }
@@ -91,6 +94,7 @@
 
 /* Alerts: slips from the order book, one at a time, beside the time book. */
 .season-screen .notes-slot { min-width: 0; }
+.season-screen .notes-slot .alert.over-land { pointer-events: none; opacity: .55; }
 .notes.alerts { position: static; display: grid; gap: var(--s2); justify-items: start; }
 .notes.alerts .alert { animation: slip-up var(--t-slip) var(--ease-out); text-align: left; }
 .notes.alerts .alert.warn .i { color: var(--ochre); }
@@ -119,6 +123,7 @@
 .tag-wrap .need { animation: stamp-in var(--t-stamp) var(--ease-out); }
 .tag-wrap .tag .listed .stamp { animation: stamp-down var(--t-stamp) var(--ease-out); }
 .tag-wrap.still .need, .tag-wrap.still .tag .listed .stamp { animation: none; }
+.tag-wrap .need.fading { opacity: .35; cursor: default; transition: opacity var(--t-slip) var(--ease-out); }
 @keyframes stamp-in { from { transform: rotate(-2deg) scale(1.15); } }
 @keyframes stamp-down { from { transform: rotate(2deg) scale(1.15); } }
 /* Crowded, the tags keep their cut and stamp; far out, their names and stamps. */
@@ -169,7 +174,7 @@
 /* The crop's nine orders, each in its own place whatever the field's state; one that cannot be given is greyed. */
 .season-screen .command .orders.slots { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 10px 12px 4px; }
 .season-screen .command .orders.slots .order-who { grid-column: 1 / -1; }
-.season-screen .command .orders.slots .order { grid-template-columns: auto 1fr; grid-template-rows: 24px 20px 18px; align-content: start; align-items: center; height: 80px; min-height: 0; padding: 6px 8px 7px; gap: 2px 6px; }
+.season-screen .command .orders.slots .order { grid-template-columns: auto 1fr; grid-template-rows: 22px 18px 16px; align-content: start; align-items: center; height: 70px; min-height: 0; padding: 5px 8px 5px; gap: 1px 6px; }
 .season-screen .command .orders.slots .order .key { grid-row: 1; grid-column: 1; }
 .season-screen .command .orders.slots .order > .i { grid-row: 1; grid-column: 2; justify-self: end; --i: 18px; }
 .season-screen .command .orders.slots .order .name { grid-row: 2; grid-column: 1 / -1; font-size: 17px; line-height: 1.05; overflow-wrap: anywhere; }

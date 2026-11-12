@@ -229,6 +229,7 @@ export const mountHud: MountHud = (root, app, view, sound) => {
       if (papers.isOpen()) { e.preventDefault(); papers.closeTop(); return }
       if (who.escape()) { e.preventDefault(); return }
       if (screen?.key?.(e)) { e.preventDefault(); return }
+      if (performance.now() - papers.closedAt < 1500) { e.preventDefault(); return }
       if (app.screen !== 'title' && app.campaign) { e.preventDefault(); menu() }
       return
     }

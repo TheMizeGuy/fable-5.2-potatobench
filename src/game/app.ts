@@ -300,6 +300,7 @@ export class App {
     const c = this.campaign
     if (!c || seasonDone(c)) return
     this.setSpeed(this.resumeSpeed || 1)
+    this.resumedAt = performance.now()
   }
 
   // What reference practice now wants that it did not want yesterday: each kind of order said once, as an alert that
@@ -489,9 +490,14 @@ export class App {
     this.emit({ type: 'settings' })
   }
 
+  // While a pointer is held down on the land (a drag, a press on a stamp) the days wait, so nothing is lost to it.
+  pressing = false
+  // When an answer last set the days going again (performance.now()), so a Space just after it is not taken back.
+  resumedAt = 0
+
   tick(dtMs: number): void {
     const c = this.campaign
-    if (c && this.screen === 'season' && this.speed > 0 && c.season && !seasonDone(c)) {
+    if (c && this.screen === 'season' && this.speed > 0 && c.season && !seasonDone(c) && !this.pressing) {
       this.dayProgress += (Math.min(dtMs, 250) / 1000) * DAYS_PER_SECOND[this.speed]
       let guard = 0
       while (this.dayProgress >= 1 && guard++ < 3 && this.speed > 0) {
