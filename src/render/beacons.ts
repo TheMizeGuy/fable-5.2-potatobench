@@ -125,13 +125,13 @@ export class Beacons {
             vec4 clip = mix(a, b, position.y);
             // Its true width on the screen, and the least it is drawn at: a needle the eye can find.
             float px = half0 * projectionMatrix[0][0] / uPx.x / max(clip.w, 0.1);
-            float wide = max(px, 2.0) * (1.0 - pinch * position.y);
+            float wide = max(px, 2.4) * (1.0 - pinch * position.y);
             clip.x += position.x * wide * uPx.x * clip.w;
             // The sunward side is lit and the other is in shade: which is which depends on where the sun stands.
             vec3 eye = normalize(aAt.xyz - cameraPosition);
             vSide = position.x * sign(eye.x * uSunDir.z - eye.z * uSunDir.x);
             // Once the real thing is wide enough on the screen this gives way to it.
-            vShow = (1.0 - smoothstep(2.2, 4.0, px)) * step(0.3, min(a.w, b.w));
+            vShow = (1.0 - smoothstep(7.0, 11.0, px)) * step(0.3, min(a.w, b.w));
             vWorld = mix(foot, top, position.y);
             gl_Position = clip;
           }`,
@@ -144,12 +144,14 @@ export class Beacons {
             float lit = smoothstep(-0.25, 0.25, vSide);
             // (A white tower in a low sun is still seen as white: the light on it keeps half its colour.)
             vec3 sun = mix(vec3(dot(uSunCol, vec3(0.2126, 0.7152, 0.0722))), uSunCol, 0.5);
-            vec3 col = vCol * (sun * (0.08 + 0.92 * lit) * 1.1 + skyIrradiance(vec3(0.0, 1.0, 0.0)) * 0.5) * 0.3183;
+            vec3 col = vCol * (sun * (0.08 + 0.92 * lit) * 1.1 + skyIrradiance(vec3(0.0, 1.0, 0.0))) * 0.3183;
             // It stands in the same air as the land round it, but a bright thing against a dull one carries further.
             vec3 hv = vWorld - cameraPosition;
             float hd = length(hv), hm;
             float ha = hazeAmount(cameraPosition.y, vWorld.y, hd, vWorld.xz, hm) * 0.45;
             col = mix(col, hazeTint(hv / hd), ha);
+            // Under a closed sky nothing far off is darker than the air it stands in.
+            col = max(col, hazeTint(hv / hd) * ha * 0.9);
             gl_FragColor = vec4(col, vShow);
           }`,
       })

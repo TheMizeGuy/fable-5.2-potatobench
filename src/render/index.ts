@@ -286,7 +286,10 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   function frameField(i: number, still = reduced, square = false): void {
     framing = 'field'
     framed = i
-    rig.moveTo(square ? rig.field(i, viewport()) : rig.field(i, viewport(), rig.goal.yaw), still)
+    const to = square ? rig.field(i, viewport()) : rig.field(i, viewport(), rig.goal.yaw)
+    // A long way to go takes a little longer, so the land is seen to glide by and not to jump.
+    const way = Math.hypot(to.x - rig.cur.x, to.z - rig.cur.z) / Math.max(to.dist, rig.cur.dist)
+    rig.moveTo(to, still, MOVE_MS * clamp(0.8 + way * 1.6, 1, 2.2))
   }
   // The field nearest to where the picture is looking.
   function fieldInView(): number {
