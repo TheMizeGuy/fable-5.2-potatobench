@@ -9,6 +9,7 @@ import { h, type Child } from './dom.ts'
 import * as F from './fmt.ts'
 import { icon } from './icons.ts'
 import { BLIGHT_RISK, forecastSky, plantingIn, SKY_WORD, yearName } from './rules.ts'
+import { term } from './glossary.ts'
 import { fist } from './system/parts.ts'
 
 export const PHASE_LABEL: Record<S.Phase, string> = {
@@ -274,8 +275,8 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
           class: `t-figure cash${c.cash < 0 ? ' neg' : ''}`, testid: 'cash',
           title: ctx.touch() || c.cash >= 0 ? undefined : 'Owed on the spring operating loan: the crop pays it back. The bank calls the note if the year closes too far under.',
         }, h('span', { class: 'sr' }, 'Cash: '), h('span', { class: 'cash-v num' }, F.money(c.cash))),
-        season && !phone ? h('span', { class: 'due num', testid: 'due', title: ctx.touch() ? undefined : 'The note on the farm and the household\'s share, taken at the year end' },
-          `${F.money(S.NOTE_PAYMENT + S.LIVING + Math.round(S.mortgageInfo(c).principal + S.mortgageInfo(c).interest))} due at the year end`) : null)
+        season && !phone ? h('span', { class: 'due num', testid: 'due' },
+          `${F.money(S.NOTE_PAYMENT + S.LIVING + Math.round(S.mortgageInfo(c).principal + S.mortgageInfo(c).interest))} `, term('due at the year end')) : null)
       return [
         h('section', { class: 'almanac', 'aria-label': 'Date, weather and the next goal' },
           h('div', { class: 'mount' },

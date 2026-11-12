@@ -11,6 +11,7 @@ import { culledAtDig } from './dig.ts'
 import { ringFor } from './crew.ts'
 import { isTract } from './map.ts'
 import { firstName, hillWord, isJob, isStale, JOB_KEY, JOB_VERB, jobText, jobWhat, stonesText, stonesWord } from './rules.ts'
+import { term } from './glossary.ts'
 import { meter, order, range } from './system/parts.ts'
 import { ringed } from './system/people.ts'
 
@@ -263,6 +264,12 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
     return parts
   }
 
+  function headWith(label: string, title: string, sub: Child): HTMLElement {
+    return h('header', { class: 'command-head' },
+      h('div', null, h('p', { class: 't-label' }, label), h('h2', { class: 't-title', testid: 'card-title' }, title), h('p', { class: 't-caption' }, sub)),
+      h('button', { class: 'close', type: 'button', testid: 'card-close', 'data-k': 'close', 'aria-label': `Deselect${ctx.touch() ? '' : ' (Escape)'}`, onclick: () => app.select(-1) }, icon('close', 'i')))
+  }
+
   function head(label: string, title: string, sub: string): HTMLElement {
     return h('header', { class: 'command-head' },
       h('div', null, h('p', { class: 't-label' }, label), h('h2', { class: 't-title', testid: 'card-title' }, title), sub ? h('p', { class: 't-caption' }, sub) : null),
@@ -309,7 +316,7 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
     const waterKind = f.moistureLabel === 'wilting' ? 'bad' : f.moistureLabel === 'dry' ? 'warn' : f.tooWet ? 'wet' : undefined
     const waterWord = f.moistureLabel === 'standing water' ? 'flooded' : f.moistureLabel
     const bare = watch && f.protect < 0.35 && f.status === 'growing'
-    const cell = (label: string, value: string, m: HTMLElement, cls = '') => h('div', { class: `gauge${cls ? ` ${cls}` : ''}` }, h('span', { class: 't-label' }, label), h('b', null, value), m)
+    const cell = (label: string, value: string, m: HTMLElement, cls = '') => h('div', { class: `gauge${cls ? ` ${cls}` : ''}` }, h('span', { class: 't-label' }, term(label, label === 'Hill' ? 'hilled' : label.toLowerCase())), h('b', null, value), m)
     return h('div', { class: 'gauges' },
       cell('Leaf', F.pct(f.canopy), meter(f.canopy, { label: 'Leaf cover' })),
       cell('Water', waterWord, meter(Math.min(1, f.moisture), { label: 'Soil water', text: `${f.moistureLabel}, ${F.pct(f.moisture)} of what plants can use`, kind: waterKind }), waterKind === 'wet' ? '' : waterKind ?? ''),
@@ -422,7 +429,7 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
       return [head('Field record', f.name, f.status === 'rest' ? 'Oats and clover, resting' : `${f.variety}, lost`), land.length ? h('div', { class: 'readings' }, land) : null, adviceLine(c, [i], !!rows), rows]
     }
     return [
-      head('Field record', f.name, `${f.variety}, ${(SHORT_STAGE[f.stage] ?? f.stage).toLowerCase()}`),
+      headWith('Field record', f.name, [`${f.variety}, `, term((SHORT_STAGE[f.stage] ?? f.stage).toLowerCase())]),
       gauges(c, f),
       h('div', { class: 'readings' }, known(c, f), land),
       adviceLine(c, [i], !!rows),
