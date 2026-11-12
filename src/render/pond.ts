@@ -1,14 +1,14 @@
-// The irrigation pond: earth banked up in a ring on the flat by the brook, raw while it is being dug and grassed over
-// once it stands; its water at the level the farm has left in it, and wet mud between that and the full mark.
+// The irrigation pond: a level bed cut into the foot of the slope and a dam banked up round it, highest on the brook's
+// side; raw while it is being dug and grassed over once it stands; its water at the level the farm has left in it, and wet mud between that and the full mark.
 import { BufferAttribute, BufferGeometry, Group, Mesh, MeshStandardMaterial } from 'three'
 import { POND, groundY } from './layout.ts'
 import { fbm2 } from './noise.ts'
 import { SNOW_RIME, linear, patch } from './shaders.ts'
 import type { FarmVis } from './state.ts'
 
-const RINGS = [0, 0.3, 0.55, 0.74, 0.86, 0.96, 1.04, 1.1, 1.3, 1.56, 1.84]
+const RINGS = [0, 0.3, 0.55, 0.74, 0.86, 0.96, 1.04, 1.1, 1.28, 1.5, 1.72]
 const SEGS = 44
-const BANK = 0.3
+const BANK = 0.42
 
 export class Pond {
   readonly group = new Group()
@@ -26,22 +26,22 @@ export class Pond {
       const a = (seg / SEGS) * Math.PI * 2, k = RINGS[ring] * (ring < 8 ? reach(a) : 0.5 + 0.5 * reach(a))
       return [POND.x + Math.cos(a) * POND.rx * k, POND.z + Math.sin(a) * POND.rz * k]
     }
-    let high = -1e9, low = 1e9
-    for (let s = 0; s < SEGS; s++) {
-      const [x, z] = at(6, s), y = groundY(x, z)
-      high = Math.max(high, y)
-      low = Math.min(low, y)
-    }
-    const crest = high + BANK
-    this.bedY = low + 0.02
-    this.fullY = crest - 0.11
+    // The bed is level, at the height of the highest ground it is cut into, and dished a little toward its middle.
+    let top = -1e9
+    for (let r = 0; r <= 3; r++) for (let s = 0; s < SEGS; s++) { const [x, z] = at(r, s); top = Math.max(top, groundY(x, z)) }
+    top += 0.04
+    const crest = top + BANK
+    const bed = (k: number, g: number) => Math.max(g + 0.03, top - 0.17 * (1 - (k / 0.74) ** 2))
+    this.bedY = bed(0, groundY(POND.x, POND.z))
+    this.fullY = crest - 0.1
     const pos: number[] = [], rise: number[] = [], part: number[] = [], idx: number[] = []
     for (let r = 0; r < RINGS.length; r++) {
       for (let s = 0; s <= SEGS; s++) {
         const [x, z] = at(r, s % SEGS), g = groundY(x, z)
         const k = RINGS[r]
         // the bed, the inner slope up to a level crest, the outer slope down into the meadow
-        const up = k <= 0.74 ? 0.035 : k <= 1.1 ? 0.035 + (crest - g - 0.035) * Math.min(1, (k - 0.74) / 0.22) ** 1.4 : (crest - g) * Math.max(0, 1 - (k - 1.1) / 0.72) ** 1.5 - 0.07 * Math.min(1, (k - 1.1) / 0.72)
+        const up = k <= 0.74 ? bed(k, g) - g : k <= 1.1 ? top + (crest - top) * Math.min(1, (k - 0.74) / 0.22) ** 1.4 - g
+          : (crest - g) * Math.max(0, 1 - (k - 1.1) / 0.62) ** 1.4 - 0.07 * Math.min(1, (k - 1.1) / 0.62)
         pos.push(x, g + up, z)
         rise.push(up)
         part.push(k <= 0.74 ? 0 : k < 1.0 ? 0.5 : 1)
@@ -81,7 +81,7 @@ export class Pond {
           // Below the full mark the bed is mud: wet and dark by the water, drying pale and cracked above it.
           float below = (1.0 - smoothstep(uFull - 0.03, uFull + 0.02, vWorld.y)) * step(0.999, uDug) * (1.0 - step(0.75, vPart));
           float dryness = smoothstep(uLevel, uLevel + 0.22, vWorld.y);
-          vec3 mud = mix(${linear('#33271d')}, ${linear('#8d7a60')} * (0.8 + 0.4 * step(0.45, fine)), dryness);
+          vec3 mud = mix(${linear('#33271d')}, ${linear('#8d7a60')} * (0.88 + 0.2 * smoothstep(0.3, 0.7, fine)) * (1.0 - 0.34 * (1.0 - smoothstep(0.012, 0.05, abs(texture2D(uNoise, vWorld.xz * 0.9).b - 0.5)))), dryness);
           col = mix(col, mud, below);
           pondWet = below * (1.0 - dryness);
           diffuseColor.rgb = col;
@@ -137,7 +137,7 @@ export class Pond {
     this.group.visible = !!b
     if (!b) return
     this.dug.value = b.built ? 1 : Math.max(0.05, b.progress)
-    const y = this.bedY + 0.03 + Math.max(0, Math.min(1, farm.pond)) * (this.fullY - this.bedY - 0.03)
+    const y = this.bedY + 0.05 + Math.max(0, Math.min(1, farm.pond)) * (this.fullY - this.bedY - 0.05)
     this.level.value = y
     this.water.position.y = y
     this.water.visible = b.built

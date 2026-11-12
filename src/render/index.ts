@@ -15,7 +15,7 @@ import { Grass } from './grass.ts'
 import { Harvest } from './harvest.ts'
 import { attachInput } from './input.ts'
 import { FD, FIELDS, fieldBaseY, groundY, YARD_AT, yardAt } from './layout.ts'
-import { clamp, smooth } from './noise.ts'
+import { clamp, hash2, smooth } from './noise.ts'
 import { Particles } from './particles.ts'
 import { Pond } from './pond.ts'
 import { Post } from './post.ts'
@@ -147,6 +147,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   let framing: 'title' | 'home' | 'whole' | 'field' | 'free' = 'home'
   let framed = -1
   const dugSince = new Map<number, number>()
+  const barrelPeak = new Map<number, number>()
   const waiters: Waiter[] = []
   const focus = new Vector3(), ahead = new Vector3(), sunAt = new Vector3()
   const windAt = U.uWindAt.value
@@ -323,8 +324,14 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       if (st === 'dug' && !dugSince.has(i)) dugSince.set(i, next.seasonDay)
       if (st !== 'dug') dugSince.delete(i)
     }
-    const barrels = next.fields.map((f, i) => next.mode === 'season' && (f.status === 'digging' || (f.status === 'dug' && next.seasonDay - (dugSince.get(i) ?? next.seasonDay) < 4)))
-    harvest.setBarrelFields(barrels, (f, h) => shown[f][h].look.kind === 'dug' && next.fields[f].hills[h].kind === 'dug')
+    // Barrels stand in a field while its crop waits there to be hauled, fewer as it goes in.
+    const barrels = next.fields.map((f, i) => {
+      const peak = Math.max(f.inField, next.mode === 'season' ? barrelPeak.get(i) ?? 0 : 0)
+      barrelPeak.set(i, peak)
+      return next.mode === 'season' && (f.status === 'digging' || f.inField > 0.5)
+    })
+    harvest.setBarrelFields(barrels, (f, h) => shown[f][h].look.kind === 'dug' && next.fields[f].hills[h].kind === 'dug'
+      && (next.fields[f].status === 'digging' || hash2(h, f + 3) <= next.fields[f].inField / Math.max(1, barrelPeak.get(f) ?? 1)))
     fields.setTargets(next.fields, shown, next.mode === 'plan')
     clearing.set(next.fields)
     pond.set(next.farm)

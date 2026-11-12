@@ -136,13 +136,14 @@ function broadleaf(seed: number, form: Form, detail: number): BufferGeometry {
     lobes.push([-0.14, 0.66 + r() * 0.06, -0.08, 0.1, detail])
     lobes.push([0.17, 0.48, 0.12, 0.07, 0], [-0.2, 0.5, 0.06, 0.065, 0])
   } else {
-    crownY = 0.5
+    // leafy to the ground: its stems show only in winter
+    crownY = 0.4
     for (let k = 0; k < 6; k++) {
-      const a = (k / 6) * 6.283 + r() * 0.8, d = 0.2 + r() * 0.16, y = 0.36 + r() * 0.34
-      lobes.push([Math.cos(a) * d, y, Math.sin(a) * d, 0.17 + r() * 0.07, k < 3 ? detail : 0])
-      limb(wood, Math.cos(a) * 0.03, -0.02, Math.sin(a) * 0.03, Math.cos(a) * d * 0.8, y, Math.sin(a) * d * 0.8, 0.016, 0.007, 3)
+      const a = (k / 6) * 6.283 + r() * 0.8, d = 0.2 + r() * 0.16, y = 0.2 + r() * 0.3
+      lobes.push([Math.cos(a) * d, y, Math.sin(a) * d, 0.18 + r() * 0.07, k < 3 ? detail : 0])
+      limb(wood, Math.cos(a) * 0.03, -0.02, Math.sin(a) * 0.03, Math.cos(a) * d * 0.8, y + 0.1, Math.sin(a) * d * 0.8, 0.012, 0.005, 3)
     }
-    lobes.push([0.03, 0.74, -0.02, 0.19, detail], [-0.05, 0.56, 0.06, 0.2, 0])
+    lobes.push([0.03, 0.62, -0.02, 0.2, detail], [-0.05, 0.42, 0.06, 0.22, 0])
   }
   // limbs into the masses, each ending in twigs
   if (form !== 'bush') {

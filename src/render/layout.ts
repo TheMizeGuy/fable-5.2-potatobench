@@ -576,4 +576,4 @@ export function woodsAt(x: number, z: number): { woods: number; hard: number } {
 }
 
 // The irrigation pond, when the farm digs one: banked up on the flat between the bottom fields and the brook.
-export const POND = { x: 8.7, z: 21.45, rx: 3.3, rz: 1.75 }
+export const POND = { x: 8.7, z: 21.1, rx: 3.3, rz: 1.75 }
