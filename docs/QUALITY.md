@@ -121,3 +121,90 @@ new, the five-second test and first-time players, which have not been run on thi
 found); bare hardwood twigs are scribble close up in winter; tags crowd the lower left in spring and a few are cut
 by the sheet's edge; a field off screen has no tag and is picked by its number; the balance gates for the farmstead
 are partly unmet (`docs/balance/README.md`).
+
+## What a frame costs
+
+Measured after `live-5`, when the drawing was made lighter (`tools/render/budget.ts`, on the Windows box with an
+RTX 2080 Ti at 1920 by 1080, pixel ratio 1; ten fields in crop and people at work in the four tiers).
+
+**How it is measured, and why the figures above were wrong.** The frame times in Results came from a GPU timer
+wrapped round each frame while the browser kept the display's beat. That timer counts whatever else waits on the
+beat, and a graphics card with little to do slows itself down, so a cheap frame read as 13 to 16 ms whatever the
+setting: the far views never cost 15 ms. The tool now lets the browser draw as fast as it can and takes the time from
+one frame to the next, which is the whole cost of a frame (the page's own work, the browser's and the GPU's). It
+opens the live build beside the new one and measures them turn about, eight times each, keeping the quietest, so
+other work on the machine falls on both alike. The renderer has its own timer for each pass and each part
+(`src/render/probe.ts`), used for the second table.
+
+**Before and after** (milliseconds from one frame to the next, drawing as fast as it can; `before` is `live-5`;
+triangles and draw calls are the mean of a frame, every pass counted):
+
+| view | before: high, medium, low | after: high, medium, low | triangles at high | draw calls at high |
+| --- | --- | --- | --- | --- |
+| opening, from far off | 7.0, 5.6, 2.4 | 5.4, 3.6, 2.0 | 3.54M to 1.36M | 703 to 289 |
+| opening, by the road | 5.2, 5.1, 1.9 | 3.9, 2.6, 1.8 | 2.96M to 2.77M | 275 to 229 |
+| yard tier | 5.0, 4.3, 2.0 | 4.3, 2.9, 1.8 | 3.54M to 3.34M | 325 to 272 |
+| field tier (the playing view) | 7.6, 4.8, 2.2 | 6.2, 2.9, 1.8 | 2.90M to 1.56M | 460 to 261 |
+| farm tier | 6.5, 5.4, 2.5 | 5.2, 3.4, 1.9 | 3.43M to 1.38M | 666 to 277 |
+| county tier | 7.0, 5.4, 2.7 | 5.5, 3.5, 2.0 | 3.61M to 1.40M | 752 to 303 |
+
+Every view is under 12 ms at the high setting (it was before, by this measure). The middle setting now costs 47 to
+67% of the high one in every view (it cost 62 to 97%), the low one 30 to 46% (28 to 41%). In a quieter stretch the
+new build's playing view measured 4.4, 2.8 and 1.8 ms and the county tier 5.4 to 5.8, 3.8 and 2.1. The machine was
+shared with other checks throughout, and single figures moved by a millisecond or two from run to run; the counts of
+triangles and draw calls do not move.
+
+**Where a frame at the high setting goes** (the GPU's time for each pass at its middle value, the new build):
+
+| view | all passes | the picture | of which the land | trees as cards | shadow maps | lens |
+| --- | --- | --- | --- | --- | --- | --- |
+| opening, from far off | 6.0 ms | 5.5 | 2.4 | 1.2 | 0.1 | 0.4 |
+| opening, by the road | 3.8 | 3.2 | 0.7 | 0.6 | 0.1 | 0.4 |
+| yard tier | 4.3 | 3.4 | 1.0 | 1.0 | 0.4 | 0.4 |
+| field tier | 4.1 | 3.5 | 0.9 | 1.4 | 0.1 | 0.4 |
+| farm tier | 5.8 | 5.2 | 2.0 | 1.3 | 0.1 | 0.4 |
+| county tier | 6.1 | 5.5 | 2.3 | 1.3 | 0.1 | 0.4 |
+
+The land's own surface is the dearest thing in every far view; the shadow maps, which were about 1 to 2.5 ms of a
+far view's frame (two million triangles of trees redrawn every other frame), are now a tenth of a millisecond. (The
+field and farm tiers were measured here with their fine map redrawn only now and then; with people at work it is
+redrawn every other frame again, with cards, and costs a little more than this.)
+
+**What was changed.**
+
+- The picture's size. The high setting draws no more than a 1920 by 1080 screen's pixels however dense the display:
+  a window of 1512 by 982 at two device pixels to one was drawn at 2387 by 1550 (3.70 million pixels) and is drawn at
+  1786 by 1160 (2.07 million), stretched over the 3024 by 1964 canvas along curves that keep its edges. The middle
+  setting draws 1.45 million pixels and the low one 0.9 million (they drew 2.3 and 1.1).
+- Frames not drawn. A display faster than sixty a second is drawn on every second or third beat. A paused game with
+  nothing moving and no hand on it comes to rest after five seconds (wind, water, smoke and weather ease to a stop)
+  and is drawn twice a second until something is touched: 2 frames a second where there were 60, and 18 to 69 ms of
+  GPU time a second where there were 438 to 787. The first frame after a touch is drawn on the next beat and the
+  land is moving at full pace again in a third of a second. An opening nobody has touched for a minute and a half
+  is drawn at half pace.
+- Shadows. The fine shadow map is redrawn only when the sun or the ground it covers has moved, where nothing in it
+  moves to be seen (from the county tier, or with nobody at work). From the farm tier out the trees' cards throw
+  that shadow, as they throw the two wider ones, in place of two million triangles of simpler trees.
+- Trees. The farm's tree cards are gathered into blocks drawn as one where every patch of a block is far enough to
+  be cards (several hundred draws fewer in the far views).
+- The land. Its surface is drawn after what stands on it, so what they cover is never shaded, and the sky after the
+  land. Its fine grid lines (the yards', the brook's) no longer run across the whole land: a third of its triangles
+  are gone, with no change to its shape where the shape matters. A loop in its shading that read textures for each
+  parcel reads them once.
+- Contact shade is not computed where nothing in the picture is near enough to show it.
+- The setting a machine starts on is chosen from its first frames timed whole, not from the graphics chip's name,
+  and remembered; after that the picture's size follows whether frames keep their beat (down after two slow
+  stretches, up only after a wait that doubles each time going up did not hold), and the setting comes down a step
+  if at its smallest they still do not. (Under a test driver none of this runs, so that a tool's pictures do not
+  depend on what else the machine was doing: `tools/render/budget.ts --adapt` turns it on to watch it work.)
+
+**A fault found on the way.** The far woods are cards alone and threw no shadow in the fine map, so a wood was lit
+inside that map's reach and shaded outside it: from straight down at the county tier, a hard light band. The cards
+now throw it wherever that map is wide enough to take them (the farm tier and out). In the playing view the woods
+behind the fields are a little darker than they were, and evenly so.
+
+**Not measured.** Nothing here ran on a MacBook or on any integrated graphics. On an Apple-silicon laptop at two
+device pixels to one the high setting should shade a little over half the pixels it did (2.07 million against 3.70
+million), draw two fifths of the triangles in the far views, and on a 120-a-second display draw half the frames;
+which setting its first frames choose, and what a frame costs there, has to be read on the machine itself (the menu
+says which setting is drawing and at how many frames a second).
