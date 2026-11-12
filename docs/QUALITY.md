@@ -210,3 +210,50 @@ device pixels to one the high setting should shade a little over half the pixels
 million), draw two fifths of the triangles in the far views, and on a 120-a-second display draw half the frames;
 which setting its first frames choose, and what a frame costs there, has to be read on the machine itself (the menu
 says which setting is drawing and at how many frames a second).
+
+## Wave three: bugs and UX, checked by players who see only pictures
+
+After live-5 the owner asked for a camera that tips down, lighter rendering, a card for anyone clicked, a far more
+intuitive interface and a full tutorial, then for bugs and UX only. The work was steered by rounds of blind
+first-time players (`tools/quality/player.mjs`: a fresh agent with a character and no knowledge of the game sends a
+few mouse and keyboard actions at a time and gets back only a picture). Each round's findings, the players' own
+notes and the record of every move are in `docs/quality/players/`.
+
+Scores out of ten, rounds one to five (live-5, the first routine build, the second, live-9, live-13):
+
+| Player | Knowing what to do next | Looks | Wanting to keep playing |
+| --- | --- | --- | --- |
+| Strategy veteran | 6, 5, 5, 7, 7 | 9, 9, 9, 9, 9 | 7, 7, 7, 8, 8 |
+| Careful casual | 6, 6, 7, 7, 7 | 9, 9, 9, 9, 9 | 8, 7, 8, 7, 8 |
+| Impatient explorer (turns the guide down) | 3, 4, 4, 6, 6 | 9, 9, 8, 9, 9 | 6, 6, 6, 7, 7 |
+
+The final build (live-14) has the fixes made after round five and has not been played by a round of its own.
+
+### The final build's checks (mizepc2, RTX 2080 Ti, the box otherwise idle)
+
+- Unit tests: 620 of 620.
+- Browser suite, Chromium and the phone project (`e2e/tutorial`, `play`, `interface`, `a11y`, `foot`): 52 passed,
+  3 skipped, 0 failed, in 7.5 minutes.
+- Saves from three earlier formats (v2 season, cellar and spring; the live-4 v7 save) open and play with 0 errors.
+- `tools/render/tilt.ts`: 6 of 6.
+
+Not run on the final build: Firefox and WebKit; the capture sweep at eight sizes for every state (each writer
+captured the states they touched); the GPU budget; anything on a MacBook or integrated graphics.
+
+### Open, from round five and the writers' reports
+
+- A contract's forecast in the season reads the tubers in the ground today, not the crop expected at the dig, and
+  counts every grade against a No. 1 promise: it can fall far below what was promised with no reason shown.
+- With a person selected, a right-click on a field does not send them to its work.
+- A click on a worker can change the speed; "Stopped: ... wants an answer" can stay after the answer.
+- Plant is offered in cold ground with no warning on the button, and the weigh ticket does not name cold planting.
+- The crew's kill date is on the field's card and in notes, not on its tag; resting fields do not say what grows.
+- Zoomed out, tags float away from their fields; the Home flag failed once on a second press.
+- Follow was not seen for someone driving; someone passing through a door stayed out of sight for a moment.
+- The guide's spring note still sits in the sheet on an upright phone, over all but one applicant.
+- A sheet that grows moves its Back button; a telegram arriving can take a click aimed elsewhere; the "Takes first"
+  icons have no labels.
+- One pin click in eighteen misses a person walking out from under their pin.
+- Start-up: about 6 s to the first frame on a quiet test box, nearly all of it one shader's compile; the splash
+  says what it is waiting for but stands still for the first 3 s. A plan is in the start-up writer's report.
+- Balance gates G2 and G3 still fail (traps: foreman, bunkhouse, second and third tractor; one build order best).
