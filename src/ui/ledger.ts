@@ -76,6 +76,22 @@ function worthTable(c: S.Campaign): HTMLElement {
       r('What the farm is worth', S.netWorth(c) + built, 'total')))
 }
 
+// What next spring brings, in a few lines; the step up the ladder stands in the sheet's foot.
+function yearAhead(c: S.Campaign): HTMLElement | null {
+  const tired = S.FIELD_NAMES.filter((_, i) => S.isField(c, i) && c.plans[i].crop === 'potato' && c.fields[i].streak >= 2)
+  const standing = S.tractInfo(c).filter(t => t.tenure !== 'none' && t.stage !== 'done').map(t => t.name)
+  const m = S.mortgageInfo(c)
+  const lines = [
+    `${S.APPLICANTS} people will ask for work, buyers will bring contracts, and land comes up to rent or buy.`,
+    tired.length ? `${F.list(tired)} ${tired.length === 1 ? 'has' : 'have'} had two potato years running: the plan rests ${tired.length === 1 ? 'it' : 'them'}.` : '',
+    standing.length ? `${F.list(standing)} still ${standing.length === 1 ? 'stands' : 'stand'} to be cleared into ${standing.length === 1 ? 'a field' : 'fields'}.` : '',
+    m.owed > 0 ? `The land mortgage takes ${F.money(m.principal + m.interest)} at the next year end.` : '',
+  ].filter(Boolean)
+  return h('section', { class: 'ahead', testid: 'year-ahead' },
+    h('h3', { class: 'block-head' }, 'The year ahead'),
+    h('ul', { class: 'deeds' }, lines.map(t => h('li', null, t))))
+}
+
 const SKILL_UP = /^(.*) is better at (.*): level (\d+)\.$/
 
 // What happened to the farm and its people this year, from the year's own record.
@@ -188,6 +204,7 @@ function yearSheet(ctx: Ctx, c: S.Campaign, y: S.YearSummary, lost: boolean): Ch
         h('span', { class: f.soil < 0.4 ? 'warn-text' : '' }, `soil ${soilWord(f.soil)}`),
         h('span', { class: `sub${f.vert >= 0.15 ? ' warn-text' : ''}` }, `early dying ${F.pct(f.vert)}`)))),
       h('p', { class: 'sub' }, 'Potatoes after potatoes wear the soil and build up early dying. A rest year puts the soil back at once and wears early dying down slowly.')),
+    lost ? null : yearAhead(c),
   ]
 }
 

@@ -299,7 +299,7 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
         // In the first spring the ways to grow the farm wait under one quiet line.
         first && k === 1 ? h('p', { class: 'fold-group', k: 'fold-group' }, 'When you want more') : null,
         h('div', { class: `fold${on ? ' open' : ''}`, k: `fold-${f.id}` },
-          h('button', { class: 'fold-row', type: 'button', testid: f.open, 'aria-expanded': String(on), 'aria-controls': `fold-${f.id}`, onclick: () => toggle(f.id) },
+          h('button', { class: 'fold-row', type: 'button', testid: f.open, 'aria-expanded': String(on), 'aria-controls': on ? `fold-${f.id}` : null, onclick: () => toggle(f.id) },
             icon(f.glyph, 'ic fold-ic'),
             h('span', { class: 'fold-name' }, f.name),
             h('span', { class: 'fold-state' }, f.state),

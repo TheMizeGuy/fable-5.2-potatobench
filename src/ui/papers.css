@@ -308,6 +308,7 @@
 .deeds li { position: relative; padding-left: var(--sp-4); font-size: var(--t-small); line-height: 18px; color: var(--ink-2); }
 .deeds li::before { content: ''; position: absolute; left: var(--sp-1); top: 7px; width: 5px; height: 5px; background: var(--good); }
 .built { margin-top: var(--sp-2); }
+.ahead { display: grid; gap: var(--sp-2); }
 .built-facts { display: grid; gap: var(--sp-1); }
 .built-facts div { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: var(--sp-3); padding: var(--sp-1) 0; border-bottom: 1px dotted var(--rule-strong); }
 .built-facts dt { color: var(--ink-3); padding-top: 1px; }
