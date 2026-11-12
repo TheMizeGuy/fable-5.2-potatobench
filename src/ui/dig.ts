@@ -501,10 +501,11 @@ function reckoning(ctx: Ctx, lotId: number): PaperSpec {
 }
 
 // The weigh ticket. fresh: this is dig day itself, so it is staged and wants an answer.
-export function ticket(ctx: Ctx, lotId: number, o: { fresh: boolean; staged?: boolean }): PaperSpec {
+export function ticket(ctx: Ctx, lotId: number, o: { fresh: boolean; staged?: boolean }): PaperSpec | null {
   const app = ctx.app
-  const c = app.campaign!
-  const lot = c.lots.find(l => l.id === lotId)!
+  const c = app.campaign
+  const lot = c?.lots.find(l => l.id === lotId)
+  if (!c || !lot) return null
   const v = S.variety(lot.variety)
   const name = S.FIELD_NAMES[lot.field]
   const key = lotKey(c, lotId)
@@ -531,7 +532,7 @@ export function ticket(ctx: Ctx, lotId: number, o: { fresh: boolean; staged?: bo
     sticky: fresh && lot.open,
     bare: true,
     // A dig-day ticket still waiting when its crop has already been sold or delivered has nothing to ask.
-    stale: () => fresh && !lot.open,
+    stale: () => (fresh && !lot.open) || app.campaign !== c || !c.lots.includes(lot),
     closeLabel: lot.open ? 'Store it and close' : 'Close',
     onClose: () => {
       if (!fresh || app.campaign !== c || c.phase !== 'season') return

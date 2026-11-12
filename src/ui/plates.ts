@@ -42,7 +42,8 @@ function finite(a: { x: number; y: number }): boolean {
   return Number.isFinite(a.x) && Number.isFinite(a.y)
 }
 
-export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => PlateModel | null; onBadge: (i: number) => void }): { update(): void; frame(): void; dispose(): void } {
+// covers: floating cards over the land (an incident, the work grid) that a plate must not sit under.
+export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => PlateModel | null; onBadge: (i: number) => void; covers?: () => DOMRect[] }): { update(): void; frame(): void; dispose(): void } {
   const app = ctx.app
   const wraps: HTMLElement[] = []
   const models: (PlateModel | null)[] = []
@@ -130,24 +131,27 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
     const want: Box[] = []
     const shown: number[] = []
     const shelf: number[] = []
-    // Of the land off screen, one marker for each block waits at the edge, so the player knows which way it lies.
+    // In view means on the land the interface leaves free: a field under a sheet or a card is as good as off screen.
+    const inView = (a: { x: number; y: number; visible: boolean }) => a.visible && a.x >= ins.left && a.x <= innerWidth - ins.right && a.y >= ins.top && a.y <= innerHeight - ins.bottom
+    // Of the land out of view, one marker for each block waits at the edge, so the player knows which way it lies.
     const pointed = new Set<string>()
-    for (let i = 0; i < S.FIELD_COUNT; i++) if (models[i]?.land && ctx.view.fieldAnchor(i).visible) pointed.add(S.PARCELS[i].block)
+    for (let i = 0; i < S.FIELD_COUNT; i++) if (models[i]?.land && inView(ctx.view.fieldAnchor(i))) pointed.add(S.PARCELS[i].block)
     for (let i = 0; i < S.FIELD_COUNT; i++) {
       const m = models[i]
       if (!m) { want.push({ x: -1, y: -1, place: 'gone' }); continue }
       const a = ctx.view.fieldAnchor(i)
       if (!finite(a)) { want.push({ x: 0, y: 0, place: 'shelf' }); shelf.push(i); shown.push(i); continue }
       const block = S.PARCELS[i].block
-      const first = !!m.land && !a.visible && !pointed.has(block)
+      const seen = inView(a)
+      const first = !!m.land && !seen && !pointed.has(block)
       if (first) pointed.add(block)
       const wanted = app.selection.includes(i) || !!m.badge || first
-      if (!a.visible && !wanted) { want.push({ x: a.x, y: a.y, place: 'gone' }); continue }
+      if (!seen && !wanted) { want.push({ x: a.x, y: a.y, place: 'gone' }); continue }
       const { w, h: hh, extra } = sz[i]
-      const x0 = GAP + w / 2, x1 = innerWidth - GAP - w / 2 - extra
+      const x0 = ins.left + GAP + w / 2, x1 = innerWidth - ins.right - GAP - w / 2 - extra
       const y0 = ins.top + GAP + hh + 6, y1 = innerHeight - ins.bottom - GAP
       const x = Math.max(x0, Math.min(Math.max(x0, x1), a.x)), y = Math.max(y0, Math.min(Math.max(y0, y1), a.y))
-      want.push({ x, y, place: !a.visible || Math.abs(x - a.x) > 1 || Math.abs(y - a.y) > 1 ? 'docked' : 'on' })
+      want.push({ x, y, place: !seen || Math.abs(x - a.x) > 1 || Math.abs(y - a.y) > 1 ? 'docked' : 'on' })
       shown.push(i)
     }
     // Plates with nowhere on the map to go stand in rows under the top bar, in the middle.
@@ -200,6 +204,15 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
     for (const i of shown) {
       if (want[i].y < ceiling + sz[i].h + 5) over = true
       want[i].y = Math.max(want[i].y, ceiling + sz[i].h + 6)
+    }
+    // A plate that would sit under a floating card is put away until the card goes, rather than left there unclickable.
+    const covers = o.covers?.() ?? []
+    if (covers.length) {
+      for (const i of shown) {
+        const b = want[i]
+        const l = b.x - sz[i].w / 2, r = b.x + sz[i].w / 2 + sz[i].extra, t = b.y - sz[i].h
+        if (covers.some(cv => l < cv.right && r > cv.left && t < cv.bottom && b.y > cv.top)) want[i] = { x: b.x, y: b.y, place: 'gone' }
+      }
     }
     return { want, over }
   }

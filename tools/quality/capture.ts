@@ -187,6 +187,11 @@ const STATES: State[] = [
   { name: 'almanac-buildings', what: 'The almanac: buildings', sizes: ['desk'], run: async (page, size) => { await biggerJuly(page, size); await page.keyboard.press('i'); await page.getByTestId('almanac-buildings').click() } },
 
   // The farmstead on the season screen: people, the work grid, building, incidents, tracts, hauling, the goals.
+  { name: 'farm-continue', what: 'A saved farm continued from the title: stopped, with one way on', sizes: ALL, run: async page => {
+    await q(page, `q.start(1987, 3); q.run(q.day(5, 12)); const { app } = q.g(); app.setSpeed(0); app.save(); app.quitToTitle()`)
+    await page.getByTestId('continue').click()
+    await page.getByTestId('paused-go').waitFor({ timeout: 10_000 }).catch(() => {})
+  } },
   { name: 'farm-start', what: 'Year 1, the first day: Start the season pressed, the clock running at 1x', sizes: ALL, run: async page => { await q(page, `q.g().app.newGame(undefined, 3)`); await page.getByTestId('begin-season').click(); await page.waitForTimeout(1200) } },
   { name: 'farm-goals', what: 'The first day: the goal list opened from the line under the date', sizes: ALL, run: async page => { await q(page, `q.start(1987, 3)`); await page.getByTestId('goal').first().click() } },
   { name: 'farm-people', what: 'June, four people on the farm, nothing selected', sizes: ALL, run: farmPeople },
