@@ -432,6 +432,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       if (c.crew.length < 3 && grid.isOpen()) grid.toggle(false)
       grid.update(c)
       incident.update(c)
+      el.classList.toggle('incident-up', incident.isUp())
       ctx.notes.limit(low ? 1 : 3)
       ctx.notes.maxAge = layout === 'short' ? 9000 : 0
       ctx.notes.prune(c.season.day)
