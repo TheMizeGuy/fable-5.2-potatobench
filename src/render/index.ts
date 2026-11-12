@@ -596,7 +596,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       smokeAt = 0
       particles.emit(props.chimney.x, props.chimney.y, props.chimney.z, (Math.random() - 0.5) * 0.2, 1.1, (Math.random() - 0.5) * 0.2, 0.26, 0.66, 4.5, 0.74, 0.74, 0.76, 0.36 * env.smoke, 0.8)
     }
-    props.update({ dt: dt * pace, time: ambient, env, lit, dist: rig.cur.dist, yard: app.yard, particles })
+    props.update({ dt: dt * pace, time: ambient, env, lit, dist: rig.cur.dist, yard: app.yard, particles, eye: cam.position })
     // The brook breathes on a still damp morning: wisps that lift off the water and thin away.
     mistAt += dt * pace
     const breath = Math.max(env.mist, 0.5 * Math.max(env.rime0, env.rime2)) * (1 - Math.max(env.rain, env.snowfall)) * (1 - 0.6 * Math.min(1, env.wind))

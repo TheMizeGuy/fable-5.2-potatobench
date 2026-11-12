@@ -2,7 +2,7 @@
 // raises (drawn as far along as the work is), what lies and stands about the yards, and the neighbours far off.
 // The shapes are in farmstead.ts, sites.ts and yard.ts; this keeps them in step with the game.
 import { BufferAttribute, BufferGeometry, DoubleSide, Group, Mesh, ShaderMaterial, Vector3 } from 'three'
-import { Builder, DUSK, LAMP_LUM, builtDepth, builtMaterial, type V3 } from './builder.ts'
+import { Builder, DUSK, LAMP_LUM, builtDepth, builtMaterial, each, type V3 } from './builder.ts'
 import type { Env, Light } from './env.ts'
 import { farmstead, type Marks } from './farmstead.ts'
 import { UI_GAIN } from './fields.ts'
@@ -13,12 +13,17 @@ import { smooth } from './noise.ts'
 import type { Particles } from './particles.ts'
 import { drawPlot, drawSite, type SiteLook, type SiteMarks } from './sites.ts'
 import type { Snapshot } from './state.ts'
-import { country, cupsShape, materials, passingCar, poles, roadTruck, standCar, vaneShape, yardLife } from './yard.ts'
+import { country, cupsShape, materials, passingCar, poles, roadTruck, standCar, vaneShape, yardBones, yardLife } from './yard.ts'
 
 // How much lamplight the hour calls for, set by the light's side of the scene (0 day .. about 1 a winter evening).
 export const LAMP = { value: 0 }
 
-export interface PropsFrame { dt: number; time: number; env: Env; lit: Light; dist: number; yard: number; particles: Particles }
+export interface PropsFrame { dt: number; time: number; env: Env; lit: Light; dist: number; yard: number; particles: Particles; eye?: Vector3 }
+
+// How far from a yard the camera can be and its small things still be drawn, by quality tier; and the same for the
+// fences, the orchard and the wire along the roads.
+const LIFE_REACH = { high: 620, medium: 380, low: 170 }
+const BONES_REACH = { high: 1e9, medium: 2400, low: 900 }
 
 interface Standing { key: string; mesh: Mesh | null; marks: SiteMarks | null }
 
@@ -32,6 +37,9 @@ export class Props {
   private marks: Marks
   private fixed: Mesh[] = []
   private life: Mesh
+  private bones: Mesh
+  private wires: Mesh
+  private far: Mesh
   private sites: Standing = { key: 'none', mesh: null, marks: null }
   private piles: Standing = { key: '', mesh: null, marks: null }
   private parked: Standing = { key: '', mesh: null, marks: null }
@@ -53,20 +61,22 @@ export class Props {
     const b = this.b
     this.marks = farmstead(b)
     this.fixed.push(b.mesh(this.mat, this.depth))
+    yardBones(b)
+    this.bones = b.mesh(this.mat, this.depth)
+    // fences and fruit trees throw their shadow near at hand, not into the map of the whole country
+    each(this.bones, m => m.layers.disable(2))
     yardLife(b)
     this.life = b.mesh(this.mat, this.depth)
+    // small things throw shadow only into the fine cascade
+    each(this.life, m => { m.layers.disable(1); m.layers.disable(2) })
     poles(b)
-    const wires = b.mesh(this.mat, this.depth)
-    wires.castShadow = false
-    this.fixed.push(wires)
+    this.wires = b.mesh(this.mat, this.depth)
+    each(this.wires, m => { m.layers.disable(2); m.frustumCulled = false })
     country(b)
-    const far = b.mesh(this.mat, this.depth)
+    this.far = b.mesh(this.mat, this.depth)
     // seen from a long way off: their shadow is drawn in the wide cascade only
-    far.layers.disable(1)
-    far.layers.disable(3)
-    far.userData.far = true
-    far.frustumCulled = false
-    this.fixed.push(far)
+    each(this.far, m => { m.layers.disable(1); m.layers.disable(3); m.userData.far = true; m.frustumCulled = false })
+    this.fixed.push(this.bones, this.wires, this.far)
     this.group.add(...this.fixed, this.life)
     const c = this.marks.smoke[0]
     this.chimney.set(c[0], c[1], c[2])
@@ -75,8 +85,7 @@ export class Props {
       useFrame(TRUE)
       draw()
       const m = b.mesh(this.mat, this.depth)
-      m.layers.disable(1)
-      m.layers.disable(2)
+      each(m, q => { q.layers.disable(1); q.layers.disable(2) })
       this.group.add(m)
       return m
     }
@@ -110,7 +119,7 @@ export class Props {
     slot.key = key
     if (slot.mesh) {
       this.group.remove(slot.mesh)
-      slot.mesh.geometry.dispose()
+      each(slot.mesh, m => m.geometry.dispose())
       slot.mesh = null
     }
     slot.marks = draw ? draw() : null
@@ -168,6 +177,10 @@ export class Props {
 
   setTier(tier: 'high' | 'medium' | 'low'): void {
     this.tier = tier
+    // on a slow machine the country throws no shadow and the wire along the roads none
+    each(this.far, m => { m.castShadow = tier !== 'low' })
+    each(this.wires, m => { m.castShadow = tier === 'high' })
+    each(this.bones, m => { m.castShadow = tier !== 'low' })
   }
 
   update(f: PropsFrame): void {
@@ -175,8 +188,16 @@ export class Props {
     const want = (LAMP.value * f.lit.exposure) / 0.6
     DUSK.value = smooth(0.1, 0.8, want)
     LAMP_LUM.value = 1.0 / Math.max(0.05, f.lit.exposure)
-    // Small things go when the camera is far off or the machine is a slow one.
-    this.life.visible = this.tier !== 'low' || f.dist < 60 * S
+    // Small things go when the camera is far from both yards, sooner on a slower machine.
+    let away = f.dist
+    if (f.eye) {
+      away = Infinity
+      for (const yard of [-1, -2]) away = Math.min(away, Math.hypot(f.eye.x - YARD_AT[yard].x, f.eye.y, f.eye.z - YARD_AT[yard].z))
+    }
+    // a lamp in a window is the yard's sign of life from the fields: it carries, as a point of light does
+    LAMP_LUM.value *= 1 + Math.min(4, Math.max(0, away - 120) / 160)
+    this.life.visible = away < LIFE_REACH[this.tier]
+    this.bones.visible = this.wires.visible = away < BONES_REACH[this.tier]
     for (const yard of [-1, -2]) {
       this.outline[yard].visible = f.yard === yard
       const p = this.plots[yard].mesh
@@ -199,6 +220,11 @@ export class Props {
       const cold = f.env.smoke
       // the cookstove, on days too warm for a fire to show much
       if (cold <= 0.2 && Math.random() < 0.6) f.particles.emit(this.chimney.x, this.chimney.y, this.chimney.z, (Math.random() - 0.5) * 0.13, 0.75, (Math.random() - 0.5) * 0.13, 0.15, 0.44, 3.2, 0.74, 0.74, 0.76, 0.1, 0.8)
+      // From the fields a chimney's own wisp is too small to see: the plume it becomes down the wind is what shows.
+      if (away > 160 && away < 1800) {
+        const big = Math.min(4.5, away / 130)
+        f.particles.emit(this.chimney.x, this.chimney.y + 1, this.chimney.z, (Math.random() - 0.5) * 0.3, 1.5, (Math.random() - 0.5) * 0.3, 0.3 * big, 0.3 * big, 12, 0.8, 0.8, 0.83, 0.16 + 0.14 * cold, 0.7)
+      }
       for (const p of this.smokes) f.particles.emit(p[0], p[1], p[2], (Math.random() - 0.5) * 0.18, 0.92, (Math.random() - 0.5) * 0.18, 0.2, 0.53, 3.6, 0.72, 0.72, 0.75, 0.16 + 0.2 * cold, 0.8)
       if (this.dufourSmoke && cold > 0.2) { const p = this.marks.smoke[1]; f.particles.emit(p[0], p[1], p[2], (Math.random() - 0.5) * 0.22, 1.1, (Math.random() - 0.5) * 0.22, 0.26, 0.66, 4.5, 0.74, 0.74, 0.76, 0.34 * cold, 0.8) }
     }
@@ -221,8 +247,8 @@ export class Props {
   }
 
   dispose(): void {
-    for (const m of [...this.fixed, this.life, this.barnVane, this.vane, this.cups, this.truck, this.car, ...Object.values(this.outline)]) m.geometry.dispose()
-    for (const s of [this.sites, this.piles, this.parked, ...Object.values(this.plots)]) s.mesh?.geometry.dispose()
+    for (const m of [...this.fixed, this.life, this.barnVane, this.vane, this.cups, this.truck, this.car, ...Object.values(this.outline)]) each(m, q => q.geometry.dispose())
+    for (const s of [this.sites, this.piles, this.parked, ...Object.values(this.plots)]) if (s.mesh) each(s.mesh, q => q.geometry.dispose())
     this.mat.dispose()
     this.depth.dispose()
     this.outlineMat.dispose()

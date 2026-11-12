@@ -5,7 +5,7 @@ import * as L from './layout.ts'
 import { K, NOW, S, type Frame } from './scale.ts'
 
 export { useFrame, TRUE } from './scale.ts'
-export { HOME, DUFOUR, BRIDGE, PONDSIDE, ROADSIDE } from './layout.ts'
+export { HOME, DUFOUR, BRIDGE, PONDSIDE, ROADSIDE, STANDSIDE } from './layout.ts'
 export type { Spot, Pt } from './layout.ts'
 export type Site = L.SmallSite & { frame: Frame }
 
