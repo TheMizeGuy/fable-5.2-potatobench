@@ -342,8 +342,8 @@ export const CASES: Case[] = [
   }, { band: [300, 4000], features: ['blows'] }),
   voice('leaves', 'harvest: dry leaves blowing, wind 5 m/s', 30, { lufs: [-56, -42] }, (rig, secs) => {
     const l = new Leaves(rig)
-    l.set(1, 0.62)
-    steps(secs, (from, to) => l.schedule(from, to))
+    l.set(1, 0.62, 0)
+    void secs
   }, { periodic: false, ticks: true }),
   voice('frost', 'winter: a tree cracking in the frost', 6, { momentary: [-40, -27] }, (rig, secs) => {
     const f = new Frost(rig)

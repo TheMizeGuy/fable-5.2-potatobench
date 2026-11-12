@@ -21,19 +21,32 @@ let engine = ''
 const fail = (msg: string) => failures.push(`${engine}: ${msg}`)
 const db = (x: number) => (x > 0 ? (20 * Math.log10(x)).toFixed(1) : '-inf').padStart(6)
 
-async function offline(page: Page): Promise<void> {
+async function lab(page: Page): Promise<void> {
   page.on('pageerror', e => fail(`render page error: ${e.message}`))
   await page.goto(`${base}src/audio/dev/render.html`, { timeout: 120_000 })
   await page.waitForFunction(() => '__lab' in window, null, { timeout: 60_000 })
-  const self = only.length ? { fails: [], report: ['skipped'] } : await page.evaluate(() => (window as unknown as { __lab: Lab }).__lab.selfTest())
+}
+
+// Renders on every page given at once, each taking the next case not yet begun.
+async function offline(pages: Page[]): Promise<void> {
+  for (const p of pages) await lab(p)
+  const page = pages[0]
+  const self = only.length || quick ? { fails: [], report: ['skipped'] } : await page.evaluate(() => (window as unknown as { __lab: Lab }).__lab.selfTest())
   for (const f of self.fails) fail(`self-test: ${f}`)
   const cases = await page.evaluate(() => (window as unknown as { __lab: Lab }).__lab.cases)
-  const results: VoiceResult[] = []
-  for (let i = 0; i < cases.length; i++) {
-    if (only.length && !only.some(p => cases[i].id.startsWith(p))) continue
-    results.push((await page.evaluate(([k, q]) => (window as unknown as { __lab: Lab }).__lab.run(k as number, false, q as boolean), [i, quick])).result)
-    console.log(`${results.length} ${cases[i].id}`)
-  }
+  const todo = cases.map((_, i) => i).filter(i => !only.length || only.some(p => cases[i].id.startsWith(p)))
+  const found: (VoiceResult | undefined)[] = []
+  let next = 0, done = 0
+  await Promise.all(pages.map(async p => {
+    while (next < todo.length) {
+      const slot = next++
+      const began = Date.now()
+      const r = (await p.evaluate(([k, q]) => (window as unknown as { __lab: Lab }).__lab.run(k as number, false, q as boolean), [todo[slot], quick])).result
+      found[slot] = r
+      console.log(`${++done}/${todo.length} ${r.id}: ${((Date.now() - began) / 1000).toFixed(1)} s, of which ${(r.cost * r.seconds).toFixed(1)} s to render ${r.seconds} s of sound`)
+    }
+  }))
+  const results = found.filter((r): r is VoiceResult => !!r)
   console.log(`\n${engine}\n\nThe instruments:\n${self.report.map(l => `  ${l}`).join('\n')}\n\nOffline renders, 48 kHz stereo, at the default volume:\n\n${text(results)}`)
   if (only.length) for (const r of results) console.log(`${r.name}: raw peak ${db(r.rawPeak)} dB, chain gain ${r.m.chain.gain.toFixed(1)} dB, peak ${r.m.chain.squash.toFixed(1)} dB against it, ${(r.cost * 100).toFixed(1)}% of real time to render`)
   if (showFeatures) for (const r of results) if (r.features.length) console.log(`\n${r.name}\n${r.features.map(l => `  ${l}`).join('\n')}`)
@@ -177,6 +190,8 @@ const only = (args.find(a => a.startsWith('--only='))?.slice(7) ?? '').split(','
 const offlineOnly = args.includes('--offline')
 const showFeatures = args.includes('--features')
 const quick = args.includes('--quick')
+// Pages rendering at once: WORKERS in the environment, two unless told.
+const workers = Math.max(1, Math.min(4, Number(process.env.WORKERS) || 2))
 const names = args.filter(a => !a.startsWith('--'))
 
 try {
@@ -186,7 +201,9 @@ try {
     engine = name
     const browser = await type.launch()
     try {
-      await offline(await browser.newPage())
+      const pages = [await browser.newPage()]
+      for (let k = 1; k < workers; k++) pages.push(await browser.newPage())
+      await offline(pages)
       if (!only.length && !offlineOnly) await liveSmoke(await browser.newPage())
     } finally {
       await browser.close()
@@ -196,7 +213,7 @@ try {
   await server.close()
 }
 
-if (quick) console.log('\nA quick run: peaks at the volume\'s top, raw levels and the comparisons were not measured.')
+if (quick) console.log('\nA quick run: clicks, repeats, true peaks and the comparisons were not measured.')
 if (failures.length) {
   console.log(`\nFAIL (${failures.length})`)
   for (const f of failures) console.log(`  ${f}`)

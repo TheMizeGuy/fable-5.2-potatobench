@@ -1,6 +1,6 @@
 // Renders each case through an OfflineAudioContext, measures it, and on request hands back a WAV and pictures.
 // Driven by tools/audio/check.ts and tools/audio/render.ts through window.__lab.
-import { createRig, volumeGain } from '../synth.ts'
+import { CEILING_KNEE, OUTPUT_TRIM, ceiling, createRig, volumeGain } from '../synth.ts'
 import * as A from './analyze.ts'
 import { CASES, WORST_BED, type Case } from './cases.ts'
 import { picture, wav } from './picture.ts'
@@ -104,8 +104,8 @@ function features(c: Case, chans: Float32Array[]): string[] {
   return out
 }
 
-// `quick` leaves out the two extra renders (the volume at its top, and the raw bus): for rounds of level-setting,
-// where only loudness and masking are wanted. The peaks it reports are then those at the default volume.
+// `quick` leaves out the tests for clicks, repeats and true peak: for rounds of level-setting, where only loudness
+// and masking are wanted. The peak it reports at the default volume is then the sample peak.
 async function run(i: number, files: boolean, quick = false): Promise<Rendered> {
   const c = CASES[i]
   const began = performance.now()
@@ -115,14 +115,14 @@ async function run(i: number, files: boolean, quick = false): Promise<Rendered> 
   const b = A.bands(chans, SR)
   const long = c.kind === 'bed' || c.kind === 'voice' || c.kind === 'scene'
   const m: Metrics = {
-    truePeak: A.db(A.truePeak(chans)),
+    truePeak: A.db(quick ? samplePeak(chans) : A.truePeak(chans)),
     lufs: loud.integrated, momentary: loud.momentaryMax, shortTerm: loud.shortTermMax,
     dc: A.dcOffset(chans),
-    clicks: A.clicks(chans, SR),
+    clicks: quick ? { count: 0, worst: 0, at: 0, jump: 0, scale: 0 } : A.clicks(chans, SR),
     sub80: b.sub80, harsh: b.harsh, hiss: b.hiss, centroid: b.centroid,
     corr: A.stereoCorrelation(chans),
-    wave: long && c.seconds >= 8 ? A.waveRepeat(chans, SR) : null,
-    rhythm: long && c.seconds >= 8 ? A.rhythmRepeat(chans, SR) : null,
+    wave: !quick && long && c.seconds >= 8 ? A.waveRepeat(chans, SR) : null,
+    rhythm: !quick && long && c.seconds >= 8 ? A.rhythmRepeat(chans, SR) : null,
     shape: c.kind === 'cue' ? A.shape(chans, SR) : null,
     mask: null, worst: null, chain: { gain: 0, squash: 0 },
   }
@@ -131,13 +131,25 @@ async function run(i: number, files: boolean, quick = false): Promise<Rendered> 
     if (c.over) m.mask = { ...A.masking(cp, await profileOf(c.over)), bed: c.over }
     m.worst = A.masking(cp, await profileOf(WORST_BED))
   }
-  const peakMax = quick ? samplePeak(chans) : samplePeak(await render(c, true, 1))
-  const raw = quick ? [] : await render(c, false, 1)
-  const rawPeak = samplePeak(raw)
-  const rms = (ch: Float32Array[]) => Math.sqrt(ch.reduce((sum, d) => sum + d.reduce((q, v) => q + v * v, 0), 0))
-  if (!c.fadeIn && rawPeak > 0) {
-    const gain = A.db(rms(chans) / (rms(raw) * volumeGain(DEFAULT_VOLUME)))
-    m.chain = { gain, squash: A.db(samplePeak(chans) / (rawPeak * volumeGain(DEFAULT_VOLUME))) - gain }
+  // The master chain has no memory: a gain, then the ceiling sample by sample. While a render stays under the
+  // ceiling's knee at the default volume, what it would be with the volume at its top, and what the bus held
+  // before the chain, follow from it exactly. Only a render that reaches the knee is made again to find them.
+  const peak = samplePeak(chans)
+  const v = volumeGain(DEFAULT_VOLUME)
+  let peakMax: number, rawPeak: number
+  if (peak < CEILING_KNEE - 0.01) {
+    peakMax = ceiling((peak * volumeGain(1)) / v)
+    rawPeak = peak / (OUTPUT_TRIM * v)
+    m.chain = { gain: A.db(OUTPUT_TRIM), squash: 0 }
+  } else {
+    peakMax = samplePeak(await render(c, true, 1))
+    const raw = await render(c, false, 1)
+    rawPeak = samplePeak(raw)
+    const rms = (ch: Float32Array[]) => Math.sqrt(ch.reduce((sum, d) => sum + d.reduce((q, x) => q + x * x, 0), 0))
+    if (!c.fadeIn && rawPeak > 0) {
+      const gain = A.db(rms(chans) / (rms(raw) * v))
+      m.chain = { gain, squash: A.db(peak / (rawPeak * v)) - gain }
+    }
   }
   const result: VoiceResult = {
     id: c.id, name: c.name, kind: c.kind, seconds: c.seconds, solo: c.solo, ticks: c.ticks === true, periodic: c.periodic === true, song: c.song === true, plan: c.plan,

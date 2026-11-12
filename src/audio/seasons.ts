@@ -3,7 +3,7 @@
 // and trees cracking in the frost in deep winter. Each is built the first time it is wanted, so a year that never
 // reaches it never pays for it.
 import type { Scene } from './scene.ts'
-import { Fader, Glide, filter, gain, noiseSource, panner, strike, swell, wanderingLoop, type Rand, type Rig } from './synth.ts'
+import { Fader, Glide, filter, gain, noiseSource, panner, spread, strike, swell, texture, tick, wanderingLoop, type Rand, type Rig } from './synth.ts'
 
 // When the next of a sound that comes now and then is due. The wait is drawn for the sound at its fullest and
 // stretched by how much of it there is at the moment, so a season coming in thins it out without fixing a wait
@@ -40,7 +40,6 @@ export class Brook {
   level: Fader | null = null
   riffle: Glide | null = null
   amount = 0
-  next = 0
   nextRiffle = 0
 
   constructor(rig: Rig) {
@@ -58,44 +57,40 @@ export class Brook {
     const hi = filter(ctx, 'bandpass', 1700, 1.6)
     wanderingLoop(rig, rig.noise, t, 1.07).connect(hi).connect(gain(ctx, 0.5)).connect(this.level.input)
     this.riffle = new Glide(hi.frequency, 1700)
+    // Air caught under the water rings as it rises: a short note sliding up. A bubble of a millimetre's radius
+    // rings near 3 kHz and one of five near 650 Hz.
+    const bubbles = texture(rig, 9.7, 36, (add, sr, r) => {
+      const f = 600 * Math.pow(2, 2.2 * r())
+      const up = 1.2 + 0.3 * r()
+      const amp = 0.15 + 1.1 * r() * r()
+      const tau = 0.006 + 0.008 * r()
+      const len = Math.floor(tau * 8 * sr)
+      let ph = 0
+      for (let j = 0; j < len; j++) {
+        const x = j / sr
+        ph += (2 * Math.PI * f * Math.pow(up, Math.min(1, x / 0.03))) / sr
+        add(j, amp * Math.sin(ph) * Math.min(1, x / 0.002) * Math.exp(-x / tau))
+      }
+    })
+    spread(rig, bubbles, t, 0.3).connect(gain(ctx, 1.2)).connect(this.level.input)
   }
 
   set(amount: number, t: number): void {
     if (amount > 0.01 && !this.level) this.build(t)
     if (!this.level) return
-    this.level.to(0.05 * amount, t, 3)
+    this.level.to(0.028 * amount, t, 3)
     this.amount = amount
   }
 
   schedule(from: number, to: number): void {
     const r = this.rig.rand
-    if (!this.level || !this.riffle || this.amount <= 0.01) { this.next = from + r(); return }
+    if (!this.riffle || this.amount <= 0.01) return
     if (this.nextRiffle < from) this.nextRiffle = from
     while (this.nextRiffle < to) {
       const at = this.nextRiffle + 1.2 + 2.6 * r()
       this.riffle.to(1200 + 1400 * r(), this.nextRiffle, at)
       this.nextRiffle = at
     }
-    if (this.next < from) this.next = from + 0.2 * r()
-    while (this.next < to) {
-      this.bubble(this.next)
-      this.next += -Math.log(1 - r()) / (4 + 8 * this.amount)
-    }
-  }
-
-  // Air caught under the water rings as it rises: a short note sliding up. A bubble a millimetre across rings
-  // near 3 kHz and one of five near 650 Hz.
-  private bubble(t: number): void {
-    const ctx = this.rig.ctx
-    const r = this.rig.rand
-    const f = 600 * Math.pow(2, 2.2 * r())
-    const o = ctx.createOscillator()
-    o.frequency.setValueAtTime(f, t)
-    o.frequency.exponentialRampToValueAtTime(f * (1.2 + 0.3 * r()), t + 0.03)
-    const s = strike(ctx, t, 0.15 + 1.1 * r() * r(), 0.002, 0.006 + 0.008 * r())
-    o.connect(s.g).connect(this.level!.input)
-    o.start(t)
-    o.stop(s.end)
   }
 }
 
@@ -223,7 +218,7 @@ export class Bees {
     waver.frequency.value = 9 + 5 * r()
     waver.connect(gain(ctx, hz * 0.02)).connect(o.frequency)
     const g = ctx.createGain()
-    swell(g.gain, t, dur, 0.03 * (0.5 + 0.5 * r()), dur * 0.48, dur * 0.48)
+    swell(g.gain, t, dur, 0.02 * (0.5 + 0.5 * r()), dur * 0.48, dur * 0.48)
     const pan = panner(ctx, 0)
     const side = r() < 0.5 ? -1 : 1
     pan.pan.setValueAtTime(-0.85 * side, t)
@@ -329,9 +324,9 @@ export class Geese {
     g.gain.linearRampToValueAtTime(0.75 * amp, t + end - 0.08)
     g.gain.linearRampToValueAtTime(0, t + end)
     // The bill and throat: two bands of the buzz let through.
-    o.connect(filter(ctx, 'bandpass', 1250, 2.2)).connect(gain(ctx, 0.05)).connect(g)
-    o.connect(filter(ctx, 'bandpass', 2450, 3)).connect(gain(ctx, 0.03)).connect(g)
-    o.connect(gain(ctx, 0.008)).connect(g)
+    o.connect(filter(ctx, 'bandpass', 1250, 2.2)).connect(gain(ctx, 0.125)).connect(g)
+    o.connect(filter(ctx, 'bandpass', 2450, 3)).connect(gain(ctx, 0.075)).connect(g)
+    o.connect(gain(ctx, 0.02)).connect(g)
     g.connect(out)
     o.start(t)
     o.stop(t + end + 0.02)
@@ -361,7 +356,7 @@ export class Crows {
 
   private call(t: number): void {
     const rig = this.rig, ctx = rig.ctx, r = rig.rand
-    const out = gain(ctx, 0.35 + 0.65 * r())
+    const out = gain(ctx, 0.5 + 0.5 * r())
     const pan = panner(ctx, 1.6 * r() - 0.8)
     out.connect(filter(ctx, 'lowpass', 2400, 0.5)).connect(pan).connect(rig.bus)
     pan.connect(gain(ctx, 0.5)).connect(rig.verb)
@@ -388,7 +383,7 @@ export class Crows {
     rasp.frequency.value = hz / 2.03
     rasp.connect(gain(ctx, 0.45)).connect(rough.gain)
     const env = ctx.createGain()
-    swell(env.gain, t, dur, 0.08, 0.03, dur * 0.4)
+    swell(env.gain, t, dur, 0.25, 0.03, dur * 0.4)
     const breath = noiseSource(rig, t)
     o.connect(rough)
     breath.connect(gain(ctx, 0.7)).connect(rough)
@@ -427,14 +422,14 @@ export class Frost {
 
   private report(t: number): void {
     const rig = this.rig, ctx = rig.ctx, r = rig.rand
-    const amp = 0.25 + 0.5 * r()
+    const amp = 0.3 + 0.2 * r()
     const pan = panner(ctx, 1.6 * r() - 0.8)
     const far = filter(ctx, 'lowpass', 2600, 0.5)
     far.connect(pan)
     pan.connect(gain(ctx, 0.6)).connect(rig.bus)
     pan.connect(rig.verb)
     const n = noiseSource(rig, t)
-    const s = strike(ctx, t, amp, 0.001, 0.016 + 0.012 * r())
+    const s = strike(ctx, t, amp, 0.001, 0.025 + 0.02 * r())
     n.connect(filter(ctx, 'bandpass', 900 + 600 * r(), 0.7)).connect(s.g).connect(far)
     n.stop(s.end)
     const o = ctx.createOscillator()
@@ -450,48 +445,43 @@ export class Frost {
 // Dry leaves let go by the hardwoods, blowing across the ground: little runs of crisp ticks, thicker in the gusts.
 export class Leaves {
   rig: Rig
-  out: GainNode | null = null
-  amount = 0
-  next = -1
+  level: Fader | null = null
+  gusts: Glide | null = null
 
   constructor(rig: Rig) {
     this.rig = rig
   }
 
+  private build(t: number): void {
+    const rig = this.rig, ctx = rig.ctx
+    this.level = new Fader(ctx)
+    this.level.output.connect(rig.bus)
+    this.level.output.connect(gain(ctx, 0.08)).connect(rig.verb)
+    // One leaf skittering: a few ticks as it catches and lets go.
+    const runs = texture(rig, 11.3, 18, (add, sr, r) => {
+      const level = 0.3 + 0.7 * r() * r()
+      const n = 3 + Math.floor(6 * r())
+      let at = 0
+      for (let k = 0; k < n; k++) {
+        tick(add, sr, r, at, 3300 + 2200 * r(), 1.6, 0.003 + 0.004 * r(), level * (0.5 + 0.5 * r()))
+        at += 0.02 + 0.06 * r()
+      }
+    })
+    const gust = gain(ctx, 1)
+    spread(rig, runs, t, 0.85).connect(filter(ctx, 'highpass', 2200)).connect(gust).connect(this.level.input)
+    this.gusts = new Glide(gust.gain, 1)
+  }
+
   // How dry and loose the leaves are, times how hard it blows.
-  set(dry: number, wind: number): void {
-    this.amount = dry * (0.25 + 0.75 * wind)
+  set(dry: number, wind: number, t: number): void {
+    const amount = dry * (0.25 + 0.75 * wind)
+    if (amount > 0.02 && !this.level) this.build(t)
+    this.level?.to(0.07 * amount, t, 2)
   }
 
-  schedule(from: number, to: number): void {
-    const rig = this.rig, r = rig.rand
-    if (this.amount <= 0.02) { this.next = from + r(); return }
-    if (this.next < from) this.next = from + 0.5 * r()
-    while (this.next < to) {
-      this.skitter(this.next)
-      this.next += -Math.log(1 - r()) / (0.5 + 3.5 * this.amount)
-    }
-  }
-
-  private skitter(t: number): void {
-    const rig = this.rig, ctx = rig.ctx, r = rig.rand
-    if (!this.out) {
-      this.out = gain(ctx, 1)
-      this.out.connect(rig.bus)
-      this.out.connect(gain(ctx, 0.08)).connect(rig.verb)
-    }
-    const pan = panner(ctx, 1.8 * r() - 0.9)
-    pan.connect(this.out)
-    const level = 0.025 + 0.06 * r() * r()
-    const n = 3 + Math.floor(6 * r())
-    let at = t
-    for (let k = 0; k < n; k++) {
-      const src = noiseSource(rig, at)
-      const s = strike(ctx, at, level * (0.5 + 0.5 * r()), 0.0008, 0.003 + 0.004 * r())
-      src.connect(filter(ctx, 'bandpass', 3300 + 2200 * r(), 1.1)).connect(filter(ctx, 'highpass', 2200)).connect(s.g).connect(pan)
-      src.stop(s.end)
-      at += 0.02 + 0.06 * r()
-    }
+  // The wind's gusts carry them: `g` is the gust's strength about 1.
+  gust(g: number, from: number, at: number): void {
+    this.gusts?.to(g * g, from, at)
   }
 }
 
@@ -522,7 +512,7 @@ export class Seasons {
     this.geese.set(s.geese)
     this.crows.set(s.crows)
     this.frost.set(s.frost)
-    this.leaves.set(s.dry, s.wind)
+    this.leaves.set(s.dry, s.wind, t)
   }
 
   schedule(from: number, to: number): void {
@@ -532,6 +522,5 @@ export class Seasons {
     this.geese.schedule(from, to)
     this.crows.schedule(from, to)
     this.frost.schedule(from, to)
-    this.leaves.schedule(from, to)
   }
 }

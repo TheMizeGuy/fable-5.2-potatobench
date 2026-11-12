@@ -29,11 +29,19 @@ const features: string[] = []
 let compared: Compared | null = null
 const image = (dataUrl: string) => Buffer.from(dataUrl.slice(dataUrl.indexOf(',') + 1), 'base64')
 
+// Pages rendering at once: WORKERS in the environment, two unless told.
+const workers = Math.max(1, Math.min(4, Number(process.env.WORKERS) || 2))
+
 try {
-  const page = await browser.newPage()
-  page.on('pageerror', e => { console.error(`page error: ${e.message}`); process.exitCode = 1 })
-  await page.goto(`${server.resolvedUrls!.local[0]}src/audio/dev/render.html`)
-  await page.waitForFunction(() => '__lab' in window, null, { timeout: 60_000 })
+  const pages = []
+  for (let k = 0; k < workers; k++) {
+    const p = await browser.newPage()
+    p.on('pageerror', e => { console.error(`page error: ${e.message}`); process.exitCode = 1 })
+    await p.goto(`${server.resolvedUrls!.local[0]}src/audio/dev/render.html`)
+    await p.waitForFunction(() => '__lab' in window, null, { timeout: 60_000 })
+    pages.push(p)
+  }
+  const page = pages[0]
   const cases = await page.evaluate(() => (window as unknown as { __lab: Lab }).__lab.cases)
   if (!only.length) {
     const self = await page.evaluate(() => (window as unknown as { __lab: Lab }).__lab.selfTest())
@@ -41,19 +49,28 @@ try {
     console.log(self.report.join('\n'))
     for (const f of self.fails) { console.error(`self-test: ${f}`); process.exitCode = 1 }
   }
-  for (let i = 0; i < cases.length; i++) {
-    const c = cases[i]
-    if (only.length && !only.some(p => c.id.startsWith(p))) continue
-    const r = await page.evaluate(k => (window as unknown as { __lab: Lab }).__lab.run(k, true), i) as Rendered
-    const stem = `${String(i + 1).padStart(2, '0')}-${c.id}`
-    writeFileSync(join(out, `${stem}.wav`), Buffer.from(r.wav, 'base64'))
-    writeFileSync(join(out, `${stem}.png`), image(r.png))
-    writeFileSync(join(out, 'small', `${c.id}.png`), image(r.small))
-    if (r.zoom) writeFileSync(join(out, `${stem}-zoom.png`), image(r.zoom))
-    results.push(r.result)
-    if (r.result.features.length) features.push(`${c.name}\n${r.result.features.map(l => `  ${l}`).join('\n')}`)
-    console.log(`${stem}  ${r.result.m.lufs.toFixed(1)} LUFS`)
-  }
+  const todo = cases.map((_, i) => i).filter(i => !only.length || only.some(p => cases[i].id.startsWith(p)))
+  const found: (VoiceResult | undefined)[] = []
+  const lines: (string | undefined)[] = []
+  let next = 0
+  await Promise.all(pages.map(async p => {
+    while (next < todo.length) {
+      const slot = next++
+      const i = todo[slot]
+      const c = cases[i]
+      const r = await p.evaluate(k => (window as unknown as { __lab: Lab }).__lab.run(k, true), i) as Rendered
+      const stem = `${String(i + 1).padStart(3, '0')}-${c.id}`
+      writeFileSync(join(out, `${stem}.wav`), Buffer.from(r.wav, 'base64'))
+      writeFileSync(join(out, `${stem}.png`), image(r.png))
+      writeFileSync(join(out, 'small', `${c.id}.png`), image(r.small))
+      if (r.zoom) writeFileSync(join(out, `${stem}-zoom.png`), image(r.zoom))
+      found[slot] = r.result
+      if (r.result.features.length) lines[slot] = `${c.name}\n${r.result.features.map(l => `  ${l}`).join('\n')}`
+      console.log(`${stem}  ${r.result.m.lufs.toFixed(1)} LUFS`)
+    }
+  }))
+  for (const r of found) if (r) results.push(r)
+  for (const l of lines) if (l) features.push(l)
   if (!only.length) compared = await page.evaluate(() => (window as unknown as { __lab: Lab }).__lab.compare())
 } finally {
   await browser.close()

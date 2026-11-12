@@ -76,16 +76,22 @@ export function createRig(ctx: BaseAudioContext, dest: AudioNode, opts: RigOptio
 }
 
 // The gain between the volume control and the output. The loudness plan was set with it in place.
-const OUTPUT_TRIM = 1.95
+export const OUTPUT_TRIM = 1.95
+// Up to here the ceiling leaves a sample as it is.
+export const CEILING_KNEE = 0.7
 
-// The limiter, a soft ceiling: unity up to 0.7, then bending toward 0.97 and never past it. The input is
-// pre-scaled by 0.25, so the curve spans inputs of -4..4.
+// The limiter, a soft ceiling, for a sample's size: unity up to the knee, then bending toward 0.97 and never
+// past it.
+export function ceiling(a: number): number {
+  return a <= CEILING_KNEE ? a : CEILING_KNEE + 0.27 * Math.tanh((a - CEILING_KNEE) / 0.27)
+}
+
+// The input is pre-scaled by 0.25, so the curve spans inputs of -4..4.
 function ceilingCurve(n: number): Float32Array<ArrayBuffer> {
   const c = new Float32Array(n)
   for (let i = 0; i < n; i++) {
     const x = (i / (n - 1)) * 8 - 4
-    const a = Math.abs(x)
-    const y = a <= 0.7 ? a : 0.7 + 0.27 * Math.tanh((a - 0.7) / 0.27)
+    const y = ceiling(Math.abs(x))
     c[i] = x < 0 ? -y : y
   }
   return c
@@ -164,6 +170,50 @@ export function wanderingLoop(rig: Rig, buffer: AudioBuffer, t: number, rate: nu
   return s
 }
 
+// A stretch of many small sounds (bubbles, sparks, dry leaves), written once with wrap-around so that it loops
+// without a seam. `one` writes a single sound through `add(samples after its start, value)`. Sounds this many and
+// this small cost nothing to play from a buffer, where a node for each would cost a great deal.
+export function texture(rig: Rig, seconds: number, count: number, one: (add: (j: number, v: number) => void, sr: number, rand: Rand) => void): AudioBuffer {
+  const sr = rig.ctx.sampleRate
+  const n = Math.floor(sr * seconds)
+  const b = rig.ctx.createBuffer(1, n, sr)
+  const d = b.getChannelData(0)
+  for (let k = 0; k < count; k++) {
+    const start = Math.floor(rig.rand() * n)
+    one((j, v) => { d[(start + j) % n] += v }, sr, rig.rand)
+  }
+  let peak = 0
+  for (let i = 0; i < n; i++) peak = Math.max(peak, Math.abs(d[i]))
+  if (peak > 0) for (let i = 0; i < n; i++) d[i] *= 0.9 / peak
+  return b
+}
+
+// A short burst of noise ringing in a band around `hz`, dying in `tau` seconds: a tick, a spark, a leaf.
+export function tick(add: (j: number, v: number) => void, sr: number, rand: Rand, at: number, hz: number, q: number, tau: number, amp: number): void {
+  const w = (2 * Math.PI * hz) / sr
+  const r = Math.exp(-w / (2 * q))
+  const a1 = 2 * r * Math.cos(w), a2 = r * r
+  const len = Math.floor(tau * 7 * sr)
+  const from = Math.floor(at * sr)
+  let y1 = 0, y2 = 0
+  for (let j = 0; j < len; j++) {
+    const y = (rand() * 2 - 1) * Math.exp(-j / (tau * sr)) + a1 * y1 - a2 * y2
+    y2 = y1
+    y1 = y
+    add(from + j, amp * y * (1 - r))
+  }
+}
+
+// Plays one buffer round on three passes at different, wandering speeds, spread from left to right, so that the
+// stretch is never heard coming round.
+export function spread(rig: Rig, buffer: AudioBuffer, t: number, width: number, centre = 0): AudioNode {
+  const out = gain(rig.ctx, 1)
+  for (const [rate, pan] of [[1, -1], [0.811, 0], [0.887, 1]]) {
+    wanderingLoop(rig, buffer, t, rate).connect(panner(rig.ctx, centre + width * pan)).connect(out)
+  }
+  return out
+}
+
 // Endless noise for a continuous voice, in stereo. Three passes over the one buffer at different, wandering
 // speeds: two summed in the middle and one as the difference between the sides. Nothing comes round the same
 // twice, and the sum to mono is still plain noise.
@@ -183,8 +233,7 @@ export function noiseBed(rig: Rig, t: number, width: number): AudioNode {
 
 // A gain envelope with no corners: a raised-cosine rise to `peak`, a hold, and a raised-cosine fall, over `dur`.
 export function swell(g: AudioParam, t: number, dur: number, peak: number, rise: number, fall: number): void {
-  // Silent from the start of time: a value set "now" could land inside the curve if the clock has moved on.
-  g.setValueAtTime(0, 0)
+  g.value = 0
   g.setValueCurveAtTime(curve(peak, true), t, rise)
   g.setValueCurveAtTime(curve(peak, false), t + dur - fall, fall)
 }

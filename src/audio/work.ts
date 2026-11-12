@@ -4,7 +4,7 @@
 // in the bouts and rests of a person working.
 import { vary } from './cues.ts'
 import { barrelRoll, chop, hammer, plank, sawStroke, snap, stone, swish, treeFall } from './farmstead.ts'
-import { Fader, Glide, Smooth, filter, gain, noiseSource, panner, strike, wanderingLoop, type Rig } from './synth.ts'
+import { Fader, Glide, Smooth, filter, gain, noiseSource, panner, strike, texture, tick, wanderingLoop, type Rig } from './synth.ts'
 
 export type WorkKind = 'fell' | 'rocks' | 'brush' | 'build' | 'barrels'
 
@@ -41,7 +41,7 @@ class Site {
   }
 
   set(amount: number, t: number): void {
-    this.level.to(amount <= 0 ? 0 : amount >= 0.9 ? 1 : 0.3, t, 0.7)
+    this.level.to(amount <= 0 ? 0 : amount >= 0.9 ? 0.45 : 0.13, t, 0.7)
     if (amount > 0.02) {
       this.top.to(amount >= 0.9 ? 9000 : 1800, t, 0.6, 1)
       this.amount = amount
@@ -160,6 +160,11 @@ export class Work {
       const flame = gain(ctx, 0.2)
       wanderingLoop(rig, rig.noise, from, 0.97).connect(filter(ctx, 'lowpass', 420, 0.6)).connect(filter(ctx, 'highpass', 90)).connect(flame).connect(s.out)
       this.roar = new Glide(flame.gain, 0.2)
+      // Sparks and small sticks letting go: most of them faint, a few sharp.
+      const sparks = texture(rig, 8.3, 60, (add, sr, rand) => {
+        tick(add, sr, rand, 0, 2200 + 4200 * rand(), 0.9, 0.0015 + 0.004 * rand(), 0.08 + 0.92 * rand() * rand() * rand())
+      })
+      for (const rate of [1, 0.83]) wanderingLoop(rig, sparks, from, rate).connect(gain(ctx, 0.3)).connect(s.out)
     }
     if (this.nextFlare < from) this.nextFlare = from
     while (this.nextFlare < to) {
@@ -167,17 +172,11 @@ export class Work {
       this.roar.to(0.12 + 0.2 * r(), this.nextFlare, at)
       this.nextFlare = at
     }
-    if (this.nextSpit < from) this.nextSpit = from + 0.05 * r()
+    // A knot letting go, with some body to it.
+    if (this.nextSpit < from) this.nextSpit = from + 2 * r()
     while (this.nextSpit < to) {
-      const t = this.nextSpit
-      const amp = 0.05 + 0.55 * r() * r() * r()
-      const g = strike(ctx, t, amp, 0.0004, 0.0015 + 0.004 * r())
-      const n = noiseSource(rig, t)
-      n.connect(filter(ctx, 'highpass', 1500 + 3000 * r())).connect(g.g).connect(s.out)
-      n.stop(g.end)
-      // A knot letting go has some body to it.
-      if (amp > 0.3) snap(rig, s.out, t, amp * 0.5)
-      this.nextSpit += -Math.log(1 - r()) / 14
+      snap(rig, s.out, this.nextSpit, 0.12 + 0.2 * r())
+      this.nextSpit += 1 + 5 * r()
     }
     if (s.next < from) s.next = from + r()
     while (s.next < to) {

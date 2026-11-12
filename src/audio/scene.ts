@@ -140,7 +140,8 @@ export function sceneFor(input: SceneInput): Scene {
   return {
     wind, cold, rain, heavy, birds, crickets, chirps, pulse, month: m,
     leaf: cal.leaf,
-    dry: cal.dry * (wet ? 0.25 : rain > 0 ? 0.6 : 1),
+    // Wet leaves lie still, and so do leaves under snow.
+    dry: cal.dry * (wet || w.sky === 'snow' ? 0.2 : rain > 0 ? 0.6 : 1),
     brook: Math.min(1, cal.brook + (w.prcp > 6 ? 0.2 : 0)),
     peepers, peeps, bees, geese, crows,
     frost: w.tmean < -3 ? 0.6 : 0,

@@ -24,6 +24,8 @@ export class Wind {
   leafGust: Glide
   whistleGust: Glide
   whistlePitch: Glide
+  // Told of each gust as it is set: its strength about 1, when it begins and when it is at its height.
+  onGust: ((g: number, from: number, at: number) => void) | null = null
   amount = 0
   next = 0
 
@@ -75,7 +77,7 @@ export class Wind {
     const v = windLevel(wind)
     this.level.to(0.7 * v, t, 2)
     this.sighLevel.to(v, t, 2)
-    this.leafLevel.to(0.12 * v * wind * (0.35 + 0.75 * leaf + 2 * dry), t, 2)
+    this.leafLevel.to(0.12 * v * wind * (0.4 + 0.6 * leaf + 0.8 * dry), t, 2)
     this.cold.to(0.04 * cold, t, 2.5)
   }
 
@@ -98,6 +100,7 @@ export class Wind {
       this.leafGust.to(Math.pow(g, 1.5), t, at)
       this.whistleGust.to(Math.pow(g, 1.5), t, at)
       this.whistlePitch.to(760 + 650 * r(), t, at)
+      this.onGust?.(g, t, at)
       this.next = at
     }
   }
@@ -734,6 +737,7 @@ export class Ambience {
     this.birds = new Birds(rig)
     this.seasons = new Seasons(rig)
     this.work = new Work(rig)
+    this.wind.onGust = (g, from, at) => this.seasons.leaves.gust(g, from, at)
   }
 
   setScene(s: Scene, t: number): void {
