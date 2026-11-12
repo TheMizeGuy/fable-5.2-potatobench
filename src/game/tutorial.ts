@@ -187,14 +187,14 @@ export const LESSONS: Lesson[] = [
     when: l => inSeason(l) && !anyField(l, f => f.emergeDay >= 0) && (!!l.c?.season?.jobs.some(j => j.kind === 'plant' && j.done > 0) || anyField(l, f => f.plantDay >= 0 && (l.c?.season?.day ?? 0) - f.plantDay <= 3)),
     done: (l, g, since) => g.has('pan') || g.has('zoom') || (!!since && !!l.c?.season && l.c.season.day >= since.d + 3),
     ask: l => {
-      const a = auto(l, 'plant') ? 'Planting has begun with no order: routine work starts by itself.' : 'Planting has begun.'
+      const a = auto(l, 'plant') ? 'Planting has begun by itself: nothing for you to do.' : 'Planting has begun.'
       return `${a} ${by(l, 'Roll the wheel over the fields to watch.', 'Pinch the fields to come closer and watch.', 'The arrow keys bring you over the fields.')}`
     },
     why: () => 'The clock is held for this note, and goes on once you have looked.',
     point: l => ({ unit: farmer(l) }),
   },
   {
-    id: 'person', part: 'opening', moment: true, holds: true, name: 'Meet your people', read: true, uses: ['unit'],
+    id: 'person', part: 'opening', moment: true, name: 'Meet your people', read: true, uses: ['unit'],
     when: (l, g) => inSeason(l) && g.passed('watch'),
     done: (l, g, since) => g.has('noted:person') || g.has('unit'),
     ask: l => by(l, 'Click this face: it is you. In the first year you do every job yourself.', 'Tap this face: it is you. In the first year you do every job yourself.', 'This face is you. In the first year you do every job yourself.'),
@@ -216,7 +216,7 @@ export const LESSONS: Lesson[] = [
     id: 'routine', part: 'opening', moment: true, name: 'Routine work and your calls', read: true,
     when: (l, g) => inSeason(l) && routineJob(l) && g.passed('person'),
     done: (l, g, since) => g.has('noted:routine'),
-    ask: () => 'Routine work goes on the list by itself: planting, hilling, walking the rows, digging.',
+    ask: () => 'Routine work goes on the list by itself: planting, hilling, walking, digging. Nothing for you to do there.',
     why: () => 'Your calls come as stamps on the fields: spray, water, kill the vines. Who does what switches any of them.',
     point: () => ({ testid: ['queue-*'] }),
   },
@@ -269,7 +269,7 @@ export const LESSONS: Lesson[] = [
     when: l => inSeason(l) && l.asking === 'spray',
     done: (l, _g, since) => !!since && l.asking !== 'spray',
     ask: l => `Blight weather: the crew asks how spraying is to be done. ${by(l, 'Click one reply.', 'Tap one reply.', 'Tab to a reply, then Enter.')}`,
-    why: () => 'Who does what, or a field\'s spray order, changes the answer later.',
+    why: () => 'Spray wears off with rain and new leaf, so it is done again all season. Who does what changes the answer later.',
     point: () => ({ testid: ['spray-way-auto', 'spray-ask'] }),
   },
   {
@@ -316,7 +316,7 @@ export const LESSONS: Lesson[] = [
   order({
     id: 'spray', act: 'spray', name: 'Spray before the blight', did: l => anyField(l, f => f.lastSpray >= 0),
     ask: (l, f) => `Blight weather is coming. ${click(l)} the stamp on ${f} to spray it.`,
-    why: 'Protectant must be on the leaf before the spores land. Rain and new leaf wear it off.',
+    why: 'Protectant must be on the leaf before the spores land. Rain and new leaf wear it off: spray again every week or two.',
   }),
   {
     id: 'sprayauto', part: 'year', name: 'Leave spraying to the crew', read: true,
@@ -500,7 +500,7 @@ export const LESSONS: Lesson[] = [
     why: () => 'The note at the foot says what is in its way, and how to clear it.',
   },
   {
-    id: 'hand', part: 'spring', holds: true, name: 'Meet a hand', uses: ['unit:hand'],
+    id: 'hand', part: 'spring', name: 'Meet a hand', uses: ['unit:hand'],
     when: (l, g) => inSeason(l) && !!hand(l) && (g.passed('calls2') || (l.c?.history.length ?? 0) === 0),
     done: (_l, g) => g.has('unit:hand'),
     ask: l => {

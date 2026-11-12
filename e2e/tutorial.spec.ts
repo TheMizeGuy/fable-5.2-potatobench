@@ -115,6 +115,20 @@ async function covers(page: Page, target: string): Promise<string[]> {
     const tgt = t ? document.querySelector(`#ui [data-testid="${t}"]`) : null
     const panel = tgt?.closest('.queue, .cat-open, .command, .person-card, .work, .telegram, .paper-layer .dialog') ?? null
     if (seen(slip)) for (const e of [tgt, panel]) if (seen(e) && !slip.contains(e) && meet(slip.getBoundingClientRect(), e.getBoundingClientRect())) out.push(`the slip lies over ${e.dataset.testid ?? e.className}`)
+    // In spring: no row of the catalogue and no applicant, as much of each as its scrolling list shows.
+    const shown = (e: HTMLElement) => {
+      let r = e.getBoundingClientRect()
+      for (let p = e.parentElement; p; p = p.parentElement) {
+        if (!/(auto|scroll|hidden)/.test(getComputedStyle(p).overflowY)) continue
+        const c = p.getBoundingClientRect()
+        r = new DOMRect(r.x, Math.max(r.top, c.top), r.width, Math.max(0, Math.min(r.bottom, c.bottom) - Math.max(r.top, c.top)))
+      }
+      return r
+    }
+    if (seen(slip)) for (const e of document.querySelectorAll<HTMLElement>('#ui .catalogue .cat-fold > .fold, #ui .catalogue .fold.more, #ui .catalogue .applicant')) {
+      const r = shown(e)
+      if (seen(e) && !slip.contains(e) && r.height > 0 && meet(slip.getBoundingClientRect(), r)) out.push(`the slip lies over the catalogue's ${e.dataset.testid ?? e.className}`)
+    }
     const fist = document.querySelector<HTMLElement>('#ui [data-testid="guide-fist"]:not([hidden])')
     if (seen(fist)) {
       // Read from the elements themselves: the layers over the land let the pointer through.
@@ -144,7 +158,7 @@ async function closer(page: Page, mobile: boolean): Promise<void> {
   for (let k = 0; k < 4; k++) { await page.mouse.wheel(0, -240); await page.waitForTimeout(60) }
 }
 
-const HOLDING = new Set(['watch', 'person', 'plant', 'rest', 'scout', 'hill', 'spray', 'sample', 'water', 'rogue', 'kill', 'dig', 'hand'])
+const HOLDING = new Set(['watch', 'plant', 'rest', 'scout', 'hill', 'spray', 'sample', 'water', 'rogue', 'kill', 'dig'])
 
 test('a guided first year: offered on a new farm, taken, and followed through the opening by what it says alone', async ({ page, isMobile }) => {
   test.setTimeout(900_000)

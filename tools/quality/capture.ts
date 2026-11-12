@@ -351,12 +351,12 @@ const STATES: State[] = [
 
   // The guided first year (src/ui/tutorial.ts): the offer, and a lesson at each kind of moment. Last, since each starts
   // the guide afresh in the browser's storage and the states before them should not meet it.
-  { name: 'guide-offer', what: 'Guide: a new farm from the title, the offer in the catalogue', sizes: ALL, run: async page => {
+  { name: 'guide-offer', what: 'Guide: a new farm from the title, the offer in the catalogue', sizes: ALL, run: springClear(async page => {
     await q(page, `window.__countyGuide.reset()`); await page.getByTestId('play').first().click(); await page.getByTestId('guide-offer').waitFor()
-  } },
-  { name: 'guide-money', what: 'Guide: the offer taken, the money said before the first Start the season', sizes: ALL, run: async page => {
+  }) },
+  { name: 'guide-money', what: 'Guide: the offer taken, the money said before the first Start the season', sizes: ALL, run: springClear(async page => {
     await q(page, `window.__countyGuide.reset()`); await page.getByTestId('play').first().click(); await page.getByTestId('guide-accept').click()
-  } },
+  }) },
   { name: 'guide-clock', what: 'Guide: the first day, the clock held, start the days', sizes: ALL, run: guideAt('clock') },
   { name: 'guide-watch', what: 'Guide: planting day, the clock held while the first planting is watched', sizes: ALL, run: guideAt('watch', `${DAYS}(() => c.season.jobs.some(j => j.kind === 'plant'))`) },
   { name: 'guide-person', what: 'Guide: you, at work on the land, the clock held for the click', sizes: ALL, run: guideAt('person', `${DAYS}(() => c.season.jobs.some(j => j.kind === 'plant'))`) },
@@ -383,19 +383,45 @@ const STATES: State[] = [
   { name: 'guide-book', what: 'Guide: the account book at the first year end', sizes: ALL, run: async page => {
     await q(page, `window.__countyGuide.reset(); window.__countyGuide.skipTo('book'); q.start(1987, 3); q.year(3)`); await closeAll(page)
   } },
-  { name: 'guide-spring', what: 'Guide: the second spring, People in the catalogue', sizes: ALL, run: async page => {
+  { name: 'guide-spring', what: 'Guide: the second spring, People in the catalogue', sizes: ALL, run: springClear(async page => {
     await q(page, `q.start(1987, 3); q.year(3); q.g().app.do({ t: 'next' }); window.__countyGuide.reset(); window.__countyGuide.skipTo('people')`); await closeAll(page)
-  } },
-  { name: 'guide-hire', what: 'Guide: the second spring, People just opened, the note on what to do there', sizes: ALL, run: async page => {
+  }) },
+  { name: 'guide-hire', what: 'Guide: the second spring, People just opened, the note on what to do there', sizes: ALL, run: springClear(async page => {
     await q(page, `q.start(1987, 3); q.year(3); q.g().app.do({ t: 'next' }); window.__countyGuide.reset(); window.__countyGuide.skipTo('people')`); await closeAll(page)
     await page.getByTestId('crew-open').first().click(); await page.waitForTimeout(900)
-  } },
-  { name: 'guide-fold', what: 'Guide: the second spring with Equipment open, the note down to its one line', sizes: ALL, run: async page => {
+  }) },
+  { name: 'guide-fold', what: 'Guide: the second spring with Equipment open, the note beside the sheet or set aside', sizes: ALL, run: springClear(async page => {
     await q(page, `q.start(1987, 3); q.year(3); q.g().app.do({ t: 'next' }); window.__countyGuide.reset(); window.__countyGuide.skipTo('seed')`); await closeAll(page)
     await page.getByTestId('equipment-open').first().click(); await page.waitForTimeout(900)
-  } },
+  }) },
   { name: 'guide-paper', what: 'Guide: its own paper from the menu, every lesson to see again', sizes: ALL, run: async (page, size) => { await guideAt('clock')(page, size); await page.getByTestId('menu-open').first().click(); await page.getByTestId('guide-open').click() } },
 ]
+
+// In spring the guide's note lies over no row of the catalogue and no applicant (as much of each as its list shows):
+// the frame is marked with the error when it does.
+function springClear(step: Step): Step {
+  return async (page, size) => {
+    await step(page, size)
+    await page.waitForTimeout(1500)
+    const over = await page.evaluate(() => {
+      const slip = document.querySelector<HTMLElement>('#ui [data-testid="guide-slip"]:not([hidden]):not(.gone), #ui [data-testid="guide-offer"]')
+      if (!slip) return []
+      const s = slip.getBoundingClientRect()
+      const out: string[] = []
+      for (const e of document.querySelectorAll<HTMLElement>('#ui .catalogue .cat-fold > .fold, #ui .catalogue .fold.more, #ui .catalogue .applicant')) {
+        let r = e.getBoundingClientRect()
+        for (let p = e.parentElement; p; p = p.parentElement) {
+          if (!/(auto|scroll|hidden)/.test(getComputedStyle(p).overflowY)) continue
+          const c = p.getBoundingClientRect()
+          r = new DOMRect(r.x, Math.max(r.top, c.top), r.width, Math.max(0, Math.min(r.bottom, c.bottom) - Math.max(r.top, c.top)))
+        }
+        if (r.height > 0 && s.left < r.right && s.right > r.left && s.top < r.bottom && s.bottom > r.top) out.push(e.dataset.testid ?? e.className)
+      }
+      return out
+    })
+    if (over.length) throw new Error(`the guide lies over ${over.join(', ')}`)
+  }
+}
 
 // A new farm from the title with the guide taken, into its first season, every lesson before this one passed by.
 function guideAt(id: string, then = ''): Step {
