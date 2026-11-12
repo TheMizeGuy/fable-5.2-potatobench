@@ -16,6 +16,9 @@
 //   --idle   frames drawn and GPU time spent in a second: the opening left alone, the game paused with the camera
 //            still, the game paused while the camera turns, and the game running.
 //   --land   what the land's own parts cost in four views at each setting.
+//   --spring the first spring of a new farm with the days running at 1x and the interface on, as a player first has
+//            it: the display's beats that reach the page in a second, the frames drawn, and the days that pass (0.7 a
+//            second if the page keeps its beat), with tree cards in the fine shadow and without.
 //   --adapt  the game left to choose for itself, as in a player's browser: the setting it starts on from its first
 //            frames timed, then the picture made nine times too dear to draw and what it does about it, then made
 //            cheap again and how long it takes to come back.
@@ -39,15 +42,18 @@ const ROUNDS = Number(opt('rounds') ?? 5)
 // Before a page runs: a switch that stops its drawing (the renderer draws nothing while the document is hidden), and
 // a timer round each animation frame for a build that has none of its own.
 const INSTRUMENT = `(() => {
-  const M = window.__perf = { gpu: [], on: false, begun: 0, lost: 0, error: 0 }
+  const M = window.__perf = { gpu: [], on: false, begun: 0, lost: 0 }
   Object.defineProperty(document, 'hidden', { configurable: true, get: () => window.__paused === true })
   const raf = window.requestAnimationFrame.bind(window)
   let pend = [], ext = null, gl = null
-  window.requestAnimationFrame = cb => raf(ts => {
+  // (a page that is stopped is given its turns a few times a second: left to run free it would spin through
+  // hundreds of empty ones and take the processor from the page being measured)
+  const soon = fn => (window.__paused === true ? setTimeout(() => raf(fn), 150) : raf(fn))
+  window.requestAnimationFrame = cb => soon(ts => {
     if (!M.on) return cb(ts)
     if (!gl) { const c = document.getElementById('field'); gl = c && c.getContext('webgl2'); if (gl) ext = gl.getExtension('EXT_disjoint_timer_query_webgl2') }
     let q = null
-    if (ext) { q = gl.createQuery(); gl.beginQuery(ext.TIME_ELAPSED_EXT, q); M.begun++; const e = gl.getError(); if (e) M.error = e }
+    if (ext) { q = gl.createQuery(); gl.beginQuery(ext.TIME_ELAPSED_EXT, q); M.begun++ }
     try { cb(ts) } finally {
       if (q) {
         gl.endQuery(ext.TIME_ELAPSED_EXT)
@@ -95,7 +101,7 @@ async function window1(s: Side, seconds = 1.5, how: 'whole' | 'passes' | 'parts'
     const w = window as any, f = w.__countyField, st = f.stats(), mean = f.mean(), secs = (performance.now() - w.__t0) / 1000
     let rows: Row[] = [], sum = 0, n = 0
     if (probe) { const c = f.cost(); rows = c.rows; sum = c.sum; n = c.frames; f.probe(false) } else { w.__perf.on = false; n = w.__perf.gpu.length; for (const g of w.__perf.gpu) sum += g }
-    const timer = probe || n ? '' : `no frame was timed from outside: ${w.__perf.begun} begun, ${w.__perf.lost} lost to a break in the GPU's clock, error ${w.__perf.error}`
+    const timer = probe || n ? '' : `no frame was timed from outside: ${w.__perf.begun} begun, ${w.__perf.lost} lost to a break in the GPU's clock`
     return { timer, rows, sum, n, mean, secs, tier: st.tier, spent: st.spent, objects: st.objects, drawn: st.drawn, samples: st.samples ?? -1, canvas: [st.width, st.height] }
   }, probe)
   if (r.timer) console.log(`    (${s.name}: ${r.timer})`)
@@ -308,7 +314,7 @@ async function oneAtATime(): Promise<void> {
 }
 
 const table: Record<string, Record<string, M[]>> = {}
-if (!flag('idle') && !flag('land') && !flag('adapt')) {
+if (!flag('idle') && !flag('land') && !flag('adapt') && !flag('spring')) {
   for (const [key, label, set] of views) {
     for (const t of ['high', 'medium', 'low']) {
       await tier(t)
@@ -416,6 +422,40 @@ if (flag('land')) {
     }
   }
 }
+// --spring: a new farm's first days at 1x, the interface as the player has it.
+if (flag('spring')) {
+  for (const s of sides) await stop(s, true)
+  const p = await browser.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 })
+  p.on('pageerror', e => errors.push(`spring: ${e.message}`))
+  await p.goto(base)
+  await p.waitForFunction(() => (window as any).__countyField?.stats?.().firstFrame > 0, null, { timeout: 120000 })
+  await p.evaluate(() => { const { app } = (window as any).__county; app.newGame(1977, 5); app.do({ t: 'begin' }); app.setSpeed(1) })
+  await p.waitForTimeout(4000)
+  const stretch = async (label: string) => {
+    const r = await p.evaluate(async () => {
+      const w = window as any, f = w.__countyField, c = w.__county.app.campaign
+      let beats = 0, on = true
+      const count = () => { beats++; if (on) requestAnimationFrame(count) }
+      requestAnimationFrame(count)
+      f.mean()
+      const day0 = c.season.day, t0 = performance.now()
+      await new Promise(r => setTimeout(r, 8000))
+      on = false
+      const secs = (performance.now() - t0) / 1000, m = f.mean(), s = f.stats()
+      return { beats: beats / secs, frames: m.frames / secs, days: (c.season.day - day0) / secs, triangles: m.triangles, calls: m.calls, dist: s.camera.dist, spent: s.spent, pace: f.pace() }
+    })
+    console.log(`  ${label.padEnd(34)} ${r.beats.toFixed(1)} beats, ${r.frames.toFixed(1)} frames and ${r.days.toFixed(2)} days a second; ${mega(r.triangles)}M triangles, ${Math.round(r.calls)} calls; camera ${Math.round(r.dist)} m off; drawing on the CPU ${r.spent.draw} ms, crews ${r.spent.crews} ms, updates ${r.spent.update} ms; pace ${JSON.stringify(r.pace)}`)
+  }
+  await stretch('the first spring at 1x')
+  await p.evaluate(() => (window as any).__countyField.tryWithout('cards', true))
+  await stretch('  with no cards in the fine shadow')
+  await p.evaluate(() => { const f = (window as any).__countyField; f.tryWithout('cards', false); f.tryWithout('lazy', true) })
+  await stretch('  with the fine shadow redrawn always')
+  await p.evaluate(() => (window as any).__countyField.tryWithout('lazy', false))
+  await stretch('the first spring at 1x, again')
+  await p.close()
+}
+
 // --adapt: the game's own following of what frames cost.
 if (flag('adapt')) {
   await turn(sides, now)

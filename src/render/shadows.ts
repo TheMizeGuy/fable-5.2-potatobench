@@ -24,16 +24,16 @@ export class SunShadows {
   private c = new Vector3()
   private frame = 0
   // What each cascade was last drawn with. The two wide ones hold nothing that moves by itself; nor does the fine one
-  // once it is `wide` (only people and machines a texel or two long), or once it holds a field and nobody is at work
-  // (only leaves in the wind, a texel's breadth). Those are drawn again only when the sun or the ground they cover
-  // has moved, and now and then regardless.
+  // once it covers the country (people and machines are then a texel or two long), or once it holds a field and
+  // nobody is at work (only leaves in the wind, a texel's breadth). Those are drawn again only when the sun or the
+  // ground they cover has moved, and now and then regardless.
   private drawn = [0, 1, 2].map(() => ({ sun: new Vector3(), c: new Vector3(), r: 0 }))
   // True while the first cascade is wide enough to hold a whole field: the plants then need throw no shadow into the second.
   holdsFarm = false
   // True while the first cascade covers the farm and more (the farm tier of view and beyond): a texel of it is then a
-  // hand's length or more, what moves in it moves by less than that from one frame to the next, and a tree's card
-  // stands for the tree in this cascade as in the other two (so that a wood is shaded alike on both sides of the line
-  // where one cascade gives way to the next; the far woods, which are cards alone, threw no shadow in this one).
+  // hand's length or more, and a tree's card stands for the tree in this cascade as in the other two (so that a wood
+  // is shaded alike on both sides of the line where one cascade gives way to the next; the far woods, which are cards
+  // alone, threw no shadow in this one).
   wide = false
   // How often each cascade is redrawn, in frames (the quality setting's): the fine one every frame or every other, the
   // wider ones less often. They are redrawn on different frames, so no frame carries all three.
@@ -91,7 +91,7 @@ export class SunShadows {
     this.up.setFromMatrixColumn(this.basis, 1)
     // A low sun lays the cascade out along the ground: the light must stand far enough back to hold all of it.
     const slope = Math.max(sunDir.y / Math.max(Math.hypot(sunDir.x, sunDir.z), 1e-3), 0.16)
-    const lazy = !this.eager && (this.wide || (this.holdsFarm && calm))
+    const lazy = !this.eager && (calm ? this.holdsFarm : r0 >= 250)
     for (let k = 0; k < 3; k++) {
       const l = this.lights[k], sh = l.shadow
       const n = Math.max(1, this.every[k])
