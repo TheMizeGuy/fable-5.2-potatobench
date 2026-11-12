@@ -860,7 +860,8 @@ export class Fields {
       if (this.rest[i] && !this.gfx[i].oatMesh) this.gfx[i].oatMesh = this.buildOats(i)
       this.cropTarget[i].set(fv.wilt, fv.frosted, fv.rime, fv.bloom)
       this.soilTarget[i].set(SOIL[fv.moisture] ?? SOIL.good)
-      this.waterTarget[i] = fv.held && fv.moisture === 'standing water' ? 1 : 0
+      // Standing water after a soaking; wet ground still shines in its furrows until it drains.
+      this.waterTarget[i] = !fv.held ? 0 : fv.moisture === 'standing water' ? 1 : fv.moisture === 'wet' ? 0.4 : 0
       this.dampTarget[i] = DAMP[fv.moisture] ?? 0.3
       this.coverTarget[i] = this.rest[i] ? 1 : 0
       // A tract under trees or stumps, new ground waiting for its first spring, or somebody else's hay.
@@ -988,7 +989,8 @@ export class Fields {
     const bloomGeo = g.blossoms.geometry as InstancedBufferGeometry
     const count = lod < 0.5 ? PLANTS : lod < 1.5 ? PLANTS / 2 : PLANTS / 4
     bloomGeo.instanceCount = this.density < 1 ? Math.min(count, PLANTS / 2) : count
-    g.bloomShare.value = PLANTS / bloomGeo.instanceCount
+    // Drawn small, each flower is already a pixel wide: fewer of them, or the field goes white.
+    g.bloomShare.value = PLANTS / bloomGeo.instanceCount * (this.density < 1 ? 0.45 : 1)
     g.blossoms.visible = g.any && this.cropTarget[i].w > 0.01
     // Only whole plants throw shadow into the second cascade; nothing painted throws any.
     const near1 = this.farShadows && lod < 0.5
