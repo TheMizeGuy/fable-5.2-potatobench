@@ -173,5 +173,46 @@ if (parts) {
   console.log(`    without shadows   saves ${(all.gpu - ns.gpu).toFixed(2).padStart(6)} ms GPU, ${((all.triangles - ns.triangles) / 1e6).toFixed(2)}M triangles, ${all.calls - ns.calls} calls`)
   await page.evaluate(() => (window as any).__countyField.shadowsOn(true))
 }
+// --land: what the land's own parts cost (the frame with the part hidden, against the whole) in each tier of view and
+// at each quality setting. Triangles and calls are averaged over several frames, since the shadow passes take turns.
+if (process.argv.includes('--land')) {
+  const LAND_VIEWS: [string, Record<string, unknown>][] = [
+    ['yard tier', { frame: 'field', field: 5, x: 0.72, z: 0.62, dist: 30, yaw: -0.95, pitch: 0.3 }],
+    ['field tier', { frame: 'land', x: 8, z: -1, dist: 27, yaw: -0.44 }],
+    ['farm tier', { frame: 'land', x: 9, z: 1, dist: 96 }],
+    ['county tier', { frame: 'land', x: 22, z: 6, dist: 190 }],
+  ]
+  const MINE = ['terrain', 'flora', 'grass', 'fields', 'clearing']
+  const steady = async (): Promise<M> => {
+    let best = await window1(page, 0.9)
+    const again = await window1(page, 0.9)
+    if (again.gpu < best.gpu) best = again
+    let tris = 0, calls = 0
+    for (let k = 0; k < 6; k++) {
+      await page.waitForTimeout(70)
+      const st = await page.evaluate(() => (window as any).__countyField.stats())
+      tris += st.triangles / 6; calls += st.calls / 6
+    }
+    return { ...best, triangles: tris, calls: Math.round(calls) }
+  }
+  await bigFarm(page)
+  await settle()
+  for (const t of ['high', 'medium', 'low']) {
+    await tier(t)
+    for (const [label, v] of LAND_VIEWS) {
+      await page.evaluate(v => (window as any).__countyField.view(v), v)
+      await page.waitForTimeout(700)
+      const all = await steady()
+      const cost: string[] = []
+      for (const n of MINE) {
+        await page.evaluate(n => (window as any).__countyField.show(n, false), n)
+        const m = await steady()
+        cost.push(`${n} ${(all.gpu - m.gpu).toFixed(1)} ms ${((all.triangles - m.triangles) / 1e6).toFixed(2)}M ${all.calls - m.calls}c`)
+        await page.evaluate(n => (window as any).__countyField.show(n, true), n)
+      }
+      console.log(`  land ${t.padEnd(6)} ${label.padEnd(11)} whole frame GPU ${all.gpu.toFixed(2).padStart(6)} ms ${(all.triangles / 1e6).toFixed(2)}M ${all.calls}c | ${cost.join(' | ')}`)
+    }
+  }
+}
 console.log(errors.length ? `  page errors: ${errors.join(' | ')}` : '  no page errors')
 await browser.close()

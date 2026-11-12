@@ -134,3 +134,18 @@ person carries a marker of constant size.
 
 Not yet done (phase B): the barn and the house are still shorter than the standard's (13.2 m and 7.9 m), markers for
 people, the camera's tiers, far trees as impostors, the hill squares' edges, and the viewers' estimates.
+
+### Phase B, the land
+
+- **The crop.** The rows are painted with every stripe averaged over the pixel it falls in, so they carry to the
+  field tier without shimmer and fade to a tone beyond it; where whole plants are not drawn each row is a ridge of
+  leaf in the ground itself, so the window of plants has no edge. A simulated hill's numbers are read smoothly
+  between hills: blight is a ragged dark focus with a yellow halo, dead vine ends at a ragged line, dug ground ends
+  along the digger's pairs of rows, frost takes the low places first, and a test dig is a trampled patch with a rag
+  on a lath. Fields have headlands at the rows' ends and the sprayer's wheelings every twenty rows.
+- **Far fields** are drawn in a few broad faces (past 260 m at the high setting, 90 m at the low).
+- **Trees** have three levels (whole within 150 m, simpler to 300 m, simplest beyond, with shadows only in the wide
+  cascade); the low setting draws half the far woods. Old pasture trees, a row of maples down the lane, wall-line
+  brush and alder along the brook stand on the farm's open ground.
+- **The land's end.** The terrain reaches 6.4 km past the farm's own country and the far hills stand at its edge;
+  the neighbours' quilt thins to woods by distances that scale with K.

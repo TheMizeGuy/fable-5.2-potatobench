@@ -22,7 +22,7 @@ const CELL = 36
 const STEP = 0.46
 // How far off a square keeps all its clumps; how far off rank grass is no longer drawn; and how far off the sward has
 // sunk out of sight. By tier.
-const REACH = { high: { full: 26, gone: 120, sward: 64 }, medium: { full: 20, gone: 90, sward: 46 }, low: { full: 14, gone: 60, sward: 0 } }
+const REACH = { high: { full: 22, gone: 120, sward: 48 }, medium: { full: 16, gone: 90, sward: 34 }, low: { full: 14, gone: 60, sward: 0 } }
 // The most squares laid out in one frame while the camera moves.
 const PER_FRAME = 2
 
@@ -92,8 +92,8 @@ export class Grass {
         }
         if (rank <= 0.01 && ours <= 0.01) continue
         if (!this.clear(x, z, false)) continue
-        if (hash2(k, 11) < rank) put(x, z, bank < 2.4 * S ? 0.5 - bank * 0.05 : 0.2 + 0.45 * hash2(k, 17), k, 'r')
-        else if (hash2(k, 19) < 0.17 * ours) put(x, z, 0.06 + 0.3 * hash2(k, 17) * hash2(k, 23), k, 's')
+        if (hash2(k, 11) < Math.min(0.9, rank * 1.5)) put(x, z, bank < 2.4 * S ? 0.5 - bank * 0.05 : 0.08 + 0.3 * hash2(k, 17), k, 'r')
+        else if (hash2(k, 19) < 0.5 * ours) put(x, z, 0.03 + 0.22 * hash2(k, 17) * hash2(k, 23), k, 's')
       }
     }
     const cell: Cell = { patches: [], x: cx, z: cz }
@@ -135,7 +135,7 @@ export class Grass {
           float gb = floor(aAt.w) * 0.0437, gbc = cos(gb), gbs = sin(gb);
           float season = mix(0.4, 1.0, uLeaf) * (1.0 - 0.7 * smoothstep(0.2, 0.8, uSnow));
           float sink = 1.0 - smoothstep(uFade.x, uFade.y, distance(aAt.xyz, cameraPosition));
-          float tall = (0.2 + 0.75 * fract(aAt.w)) * (0.8 + 0.4 * fract(aAt.w * 0.0531)) * season * sink;
+          float tall = (0.2 + 0.75 * fract(aAt.w)) * (0.8 + 0.4 * fract(aAt.w * 0.0531)) * season * sink * 0.72;
           float seed = mix(1.0, smoothstep(0.5, 1.0, uLeaf), aBlade.z);
           vec3 gl = position * vec3(0.62 * seed, 1.0, 0.62 * seed) * vec3(0.7 + 0.6 * fract(aAt.w), 1.0, 0.7 + 0.6 * fract(aAt.w)) * vec3(uThin, 1.0, uThin);
           transformed = aAt.xyz + vec3(gbc * gl.x + gbs * gl.z, gl.y * tall, -gbs * gl.x + gbc * gl.z);
@@ -204,7 +204,7 @@ export class Grass {
         p.mesh.visible = true
         p.geo.instanceCount = Math.max(1, Math.round(p.all * k))
         // the sward's clumps are few and broad: each stands for the grass round it
-        p.thin.value = Math.min(2.4, 1 / Math.sqrt(k)) * (p.sward ? 1.7 : 1)
+        p.thin.value = Math.min(2.4, 1 / Math.sqrt(k)) * (p.sward ? 1.6 : 1)
         if (p.sward) p.fade.value.set(far * 0.3, far * 0.8)
       }
     }

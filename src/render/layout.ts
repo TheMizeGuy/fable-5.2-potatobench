@@ -59,7 +59,7 @@ const NEAR_W = 150, NEAR_E = 170, Y_W = 11.5, Y_E = 17
 const PLACED: [number, number][] = KNOTS.map(([z, y]) =>
   z < -NEAR_W ? [-K * NEAR_W + (z + NEAR_W), KV * Y_W + (y - Y_W)] : z > NEAR_E ? [K * NEAR_E + (z - NEAR_E), KV * Y_E + (y - Y_E)] : [K * z, KV * y])
 // How far the country is drawn: the far end of the slope's profile.
-export const REACH = K * NEAR_E + 3430
+export const REACH = K * NEAR_E + 6400
 const P_STEP = 1, P_Z0 = Math.floor(PLACED[0][0]), P_N = Math.ceil((PLACED[PLACED.length - 1][0] - P_Z0) / P_STEP) + 2
 const PROFILE = new Float32Array(P_N)
 {
@@ -617,7 +617,7 @@ export function parkSpot(field: number, slot = 0): Pt {
 // ---- The country beyond the walls: a quilt of blocks, each a woodlot or a run of strips. The terrain shader draws the
 // same quilt from the same numbers (see QUILT_GLSL in terrain.ts), so trees stand where the picture says woods.
 // The neighbours' strips grow with the land, as our fields do.
-export const QUILT = { region: 120 * K, width0: 12 * K, width1: 14 * K, far0: 1400, far1: 4800, run: 3.4 }
+export const QUILT = { region: 120 * K, width0: 12 * K, width1: 14 * K, far0: 117 * K, far1: 400 * K, run: 3.4 }
 export const REGION = QUILT.region
 // The woods on the ridge, all along above the fields from beyond the ridge lots to past the Dufour place, and back over
 // the crest.

@@ -283,6 +283,19 @@ export function buildTerrain(): Terrain {
         // The farm's meadow moves: a gust lays the grass over and it shows pale.
         float gust = gustAt(p) * min(uSway, 1.2);
         col *= 1.0 + 0.14 * gust * ours * uLeaf * (1.0 - vSurf.x);
+        // Pasture and mowing: no two pieces of it grazed or grown alike, and the cattle's paths wandering across it.
+        {
+          float piece = texture2D(uNoise, p * 0.0023 + 0.61).b, rough = texture2D(uNoise, p * 0.0041 + 0.23).b;
+          float meadow = ours * (1.0 - vSurf.x) * (1.0 - smoothstep(0.1, 0.4, vSurf.z));
+          col *= mix(1.0, 0.8 + 0.44 * smoothstep(0.35, 0.65, piece), meadow);
+          // fern and hardhack coming in where it is not kept down, rusty by September
+          vec3 brake = mix(grass * vec3(0.74, 0.86, 0.5), ${linear('#8a6a3c')} * (0.8 + 0.4 * fine), smoothstep(236.0, 262.0, uDay));
+          col = mix(col, brake * (0.7 + 0.6 * tuft), smoothstep(0.6, 0.7, rough + (mid - 0.5) * 0.2) * 0.6 * meadow * uLeaf);
+          float trailN = texture2D(uNoise, p * 0.0052 + 0.17).b, pxm = length(fwidth(pw));
+          float off = abs(trailN - 0.5) / max(fwidth(trailN), 1e-5) * pxm;
+          float trail = (1.0 - smoothstep(0.2, 0.55 + pxm, off)) * smoothstep(0.4, 0.5, piece) * (1.0 - smoothstep(1.2, 3.5, pxm));
+          col = mix(col, ${linear('#7f6a4f')} * (0.8 + 0.4 * fine) * mix(1.0, 0.7, uWet), trail * 0.55 * meadow);
+        }
         // Wildflowers in drifts through the farm's meadow by the season: buttercup, orange hawkweed and daisies from late
         // June, goldenrod from August. Too small to see one by one from far off, they show as a wash of their colour.
         {
@@ -313,6 +326,14 @@ export function buildTerrain(): Terrain {
         float floorK = smoothstep(0.25, 0.75, vSurf.x + (mid - 0.5) * 0.7);
         vec3 duff = mix(${linear('#43372a')}, ${linear('#2d3b22')}, smoothstep(0.4, 0.7, patchy + (fine - 0.5) * 0.4)) * (0.7 + 0.6 * fine);
         col = mix(col, duff, floorK * 0.94);
+        // From far off a wood is its canopy: what shows between the trees drawn there is crowns, not floor.
+        {
+          float cfar = smoothstep(140.0, 380.0, distance(vWorld, cameraPosition));
+          vec4 cr = texture2D(uNoise, p * 0.071);
+          vec3 canopy = mix(${linear('#14261c')}, ${linear('#2f4c2b')}, cr.a * cr.a) * (0.5 + 0.7 * cr.a);
+          col = mix(col, canopy, floorK * 0.94 * cfar);
+          landBump = mix(landBump, (cr.rg - 0.5) * 11.0, floorK * cfar);
+        }
         col = mix(col, mix(${linear('#8a6e52')}, ${linear('#5b4534')}, uWet) * (0.82 + 0.36 * fine), smoothstep(0.25, 0.75, vSurf.z + (fine - 0.5) * 0.5) * 0.85);
         float bank = 1.0 - smoothstep(0.1, 0.24, vSurf.y + (mid - 0.5) * 0.1);
         vec3 gravel = mix(${linear('#8c8676')}, ${linear('#4c4033')}, 0.45 + 0.4 * fine) * mix(1.0, 0.7, uWet);

@@ -14,7 +14,7 @@ const RINGS = [
 ]
 const STEPS = 512
 // The ridges stand beyond the land that is drawn, however far that reaches.
-const OUT = Math.max(0, REACH * 1.45 - 4400)
+const OUT = REACH - 150 - 4700
 const FOOT = -160
 
 export class FarHills {
