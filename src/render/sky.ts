@@ -118,9 +118,9 @@ vec3 nightSky(vec3 d, float disc, float night) {
     float r = length(fract(uv) - 0.2 - 0.6 * h.xy);
     float twinkle = 0.75 + 0.25 * sin(uSkyMore.w * (1.5 + 3.0 * h.y) + h.x * 40.0);
     float bright = fract(h.z * 37.0);
-    col += vec3(0.9, 0.95, 1.1) * night * step(0.8, h.z) * smoothstep(0.1, 0.0, r) * (0.015 + 0.2 * bright * bright) * twinkle * smoothstep(0.02, 0.2, d.y);
+    col += vec3(0.9, 0.95, 1.1) * night * step(0.72, h.z) * smoothstep(0.13, 0.0, r) * (0.03 + 0.42 * bright * bright) * twinkle * smoothstep(0.02, 0.2, d.y);
     float seas = texture2D(uNoise, (d.xz - uMoon.xz) * 9.0 + 0.4).b;
-    col += vec3(0.86, 0.87, 0.82) * night * smoothstep(0.99975, 0.99984, cm) * (0.7 + 0.5 * seas) * 0.3;
+    col += vec3(0.86, 0.87, 0.82) * night * smoothstep(0.99965, 0.99978, cm) * (0.7 + 0.5 * seas) * 0.5;
   }
   return col + vec3(0.22, 0.3, 0.46) * night * (pow(cm, 700.0) * 0.05 + pow(cm, 30.0) * 0.006);
 }
@@ -138,31 +138,36 @@ vec3 skyColor(vec3 dir, vec3 eye, float disc) {
   vec2 ph = d.xz / (d.y + 0.2);
   float streak = texture2D(uNoise, vec2(ph.x * 0.16 + ph.y * 0.05, ph.y * 0.62 - ph.x * 0.04) + uCloud.zw * 0.2).a;
   float bank = texture2D(uNoise, ph * 0.07 + 0.31 + uCloud.zw * 0.2).b;
-  float high = uSkyMore.x * smoothstep(0.5, 0.95, streak * 0.5 + bank * 0.62) * smoothstep(0.0, 0.14, dir.y);
+  float high = uSkyMore.x * smoothstep(0.64, 1.0, streak * 0.5 + bank * 0.62) * smoothstep(0.0, 0.14, dir.y);
   col = mix(col, uHighCol * (0.8 + 0.4 * streak) + sunCol * 0.012 * pow(max(cosT, 0.0), 6.0), high * 0.75);
 
   // Cumulus: a layer that curves down to the horizon, so far cloud stands in ranks. Shared with its shadow on the land.
   vec2 p = eye.xz + d.xz / (d.y + 0.05) * CLOUD_H;
   float wisp = texture2D(uNoise, p * 0.0047 + uCloud.zw * 2.3).a;
-  float shape = cloudField(p) + (wisp - 0.5) * 0.11;
+  float curl = texture2D(uNoise, p * 0.0125 + uCloud.zw * 4.0).b;
+  float shape = cloudField(p) + (wisp - 0.5) * 0.1 + (curl - 0.5) * 0.07;
   float dens = cloudCover(shape) * smoothstep(0.0, 0.05, dir.y);
   vec2 toSun = uSunDir.xz / max(length(uSunDir.xz), 1e-3);
-  float ahead = cloudField(p + toSun * 70.0);
-  // A cloud is bright where it thins toward the light and grey in its body; its base, seen from below, is darkest.
-  float edge = clamp(0.5 + (shape - ahead) * 4.5, 0.0, 1.0);
-  float thick = smoothstep(0.0, 0.3, shape - cloudEdge());
-  float lit = clamp(edge * (1.0 - 0.55 * thick) + 0.28 * (1.0 - thick), 0.0, 1.0);
+  float ahead = cloudField(p + toSun * 110.0);
+  // A cloud has a side toward the light and a side away, and a base that is darkest seen from below. With the sun
+  // beyond it, it is its thin edges that shine and its body that is dark.
+  float edge = clamp((shape - ahead) * 5.0, -1.0, 1.0);
+  float thick = smoothstep(0.0, 0.4, shape - cloudEdge());
+  float front = clamp(0.5 + 0.6 * edge - 0.3 * thick, 0.0, 1.0);
+  float back = clamp(0.12 + 0.8 * (1.0 - thick) + 0.4 * edge, 0.0, 1.0);
+  float lit = mix(front, back, smoothstep(0.0, 0.8, cosT));
   vec3 cloud = mix(uDeckDark, uDeck, lit);
   // A closed sky is not one grey: it lies in long soft folds, and hangs darker where rain is in it.
-  float fold = texture2D(uNoise, p * 0.00034 + uCloud.zw * 0.5).b;
+  float fold = texture2D(uNoise, p * 0.00034 + uCloud.zw * 0.5).b * 0.62 + texture2D(uNoise, p * 0.0012 + 0.3 + uCloud.zw * 0.9).b * 0.38;
   float torn = fold * 0.6 + wisp * 0.4;
-  cloud *= (0.84 + 0.3 * fold) * (1.0 - uSkyMore.y * 0.55 * smoothstep(0.3, 0.75, torn));
+  float closed = smoothstep(0.75, 1.0, uCloud.y);
+  cloud *= mix(1.0, 0.66 + 0.62 * fold, closed) * (1.0 - uSkyMore.y * 0.5 * smoothstep(0.3, 0.75, torn));
   // Thin cloud before the sun lets it through: a bright edge.
   cloud += uRim * pow(max(cosT, 0.0), 14.0) * (1.0 - 0.8 * thick) * 1.4;
 
   float sun = smoothstep(0.999962, 0.999985, cosT) * disc * mix(1.0, uSkyTune.z, dens);
-  float aureole = pow(max(cosT, 0.0), 2600.0) * 0.7 + pow(max(cosT, 0.0), 220.0) * 0.05;
-  col += sunCol * (sun * 14.0 + aureole * (1.0 - 0.8 * dens));
+  float aureole = pow(max(cosT, 0.0), 5000.0) * 0.5 + pow(max(cosT, 0.0), 260.0) * 0.045;
+  col += sunCol * (sun * 16.0 + aureole * (1.0 - 0.8 * dens));
   col = mix(col, cloud, dens);
   float low = max(dir.y, 0.0015);
   float air = uHaze.x * exp(-uHaze.y * max(eye.y, 0.0)) / (uHaze.y * low);
@@ -233,7 +238,7 @@ export class Sky {
           vec3 v = c * uExposure;
           float m = max(v.r, max(v.g, v.b));
           float held = m <= 0.62 ? m : 0.62 + 1.5 * (1.0 - exp(-(m - 0.62) / 1.5));
-          float through = smoothstep(0.99994, 0.999985, dot(d, uSkySun));
+          float through = smoothstep(0.99972, 0.99994, dot(d, uSkySun));
           gl_FragColor = vec4(c * mix(held / max(m, 1e-5), 1.0, through), 1.0);
         }`,
     })

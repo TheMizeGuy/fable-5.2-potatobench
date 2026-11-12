@@ -58,14 +58,14 @@ export function makeEnv(): Env {
 // By day of the year: how high the low sun of the playing light stands (degrees), and the colour of the grass. The game
 // is played in the long light at the end of the day, when every plant, wall and tree throws a shadow.
 const SEASON: [number, number, string][] = [
-  [0, 10, '#8f8768'], [60, 10.5, '#91876a'], [95, 11.5, '#93865c'], [125, 12.5, '#7f8a52'], [150, 13, '#6b8a42'], [196, 13.5, '#68833f'],
-  [228, 13, '#72853f'], [258, 12.5, '#868541'], [288, 11.5, '#8e7d4c'], [318, 10.5, '#877c5e'], [366, 10, '#8f8768'],
+  [0, 9.5, '#8f8768'], [60, 10, '#91876a'], [95, 10.5, '#93865c'], [125, 11.5, '#7f8a52'], [150, 12, '#6b8a42'], [196, 12, '#68833f'],
+  [228, 12, '#72853f'], [258, 11.5, '#868541'], [288, 10.5, '#8e7d4c'], [318, 10, '#877c5e'], [366, 9.5, '#8f8768'],
 ]
 
 interface Sky { sun: number; cover: number; shadow: number; high: number; deck: number; haze: number; key: number; turbidity: number; mie: number; storm: number }
 const SKY: Record<string, Sky> = {
-  clear: { sun: 1, cover: 0.34, shadow: 0.8, high: 0.55, deck: 1, haze: 0.0006, key: 1, turbidity: 2.4, mie: 0.0045, storm: 0 },
-  cloud: { sun: 0.97, cover: 0.56, shadow: 0.84, high: 0.3, deck: 1, haze: 0.0007, key: 0.98, turbidity: 2.8, mie: 0.005, storm: 0.12 },
+  clear: { sun: 1, cover: 0.37, shadow: 0.8, high: 0.42, deck: 1, haze: 0.0006, key: 1, turbidity: 2.8, mie: 0.0045, storm: 0 },
+  cloud: { sun: 0.97, cover: 0.55, shadow: 0.84, high: 0.3, deck: 1, haze: 0.0007, key: 0.98, turbidity: 3.1, mie: 0.005, storm: 0.12 },
   overcast: { sun: 0.06, cover: 1, shadow: 0, high: 0, deck: 0.96, haze: 0.001, key: 0.8, turbidity: 4, mie: 0.006, storm: 0.4 },
   rain: { sun: 0.025, cover: 1, shadow: 0, high: 0, deck: 0.6, haze: 0.0015, key: 0.66, turbidity: 6, mie: 0.006, storm: 0.8 },
   storm: { sun: 0.015, cover: 1, shadow: 0, high: 0, deck: 0.4, haze: 0.002, key: 0.56, turbidity: 8, mie: 0.006, storm: 1 },
@@ -160,8 +160,8 @@ export function envTarget(snap: Snapshot, out: Env): Env {
     out.high = 0.7
     out.turbidity = 3
     out.mie = 0.006
-    out.haze = 0.0008
-    out.mist = 0.8
+    out.haze = 0.00065
+    out.mist = 1
     out.mistDeep = 0.12
     out.key = 0.96
     out.dry = 1
@@ -186,12 +186,13 @@ const NUM_KEYS = [
   'rain', 'snowfall', 'wind', 'rime0', 'rime1', 'rime2', 'snow', 'wet', 'dry', 'leaf', 'gold', 'fall', 'oats', 'oatsRipe', 'ice', 'smoke', 'lens',
 ] as const
 
-// The clock goes forward only: from evening to a morning it passes through the night, from a morning to evening
-// through the day. A small step back (evening to mid afternoon) is taken as it is.
+// Between two hours of daylight the sun goes over the top, whichever way that is: the picture never goes dark between
+// one day of the season and the next. Out of the night it goes forward, through the dawn.
 export function stepHour(cur: number, target: number, dt: number): number {
   let gap = target - cur
-  if (gap < -0.5) gap += CYCLE
-  if (gap > CYCLE - 0.5) gap -= CYCLE
+  const daylight = Math.abs(cur) <= 1.05 && Math.abs(target) <= 1.05
+  if (!daylight && gap < -0.5) gap += CYCLE
+  if (!daylight && gap > CYCLE - 0.5) gap -= CYCLE
   const rate = Math.max(0.3, Math.abs(gap) / 2.4)
   let h = cur + Math.sign(gap) * Math.min(Math.abs(gap), rate * dt)
   if (h > CYCLE / 2) h -= CYCLE
@@ -239,7 +240,8 @@ export interface Light {
   day: number              // share of the sun's own light still falling
 }
 
-const MOON = new Vector3(Math.sin(-1.02) * Math.cos(0.3), Math.sin(0.3), -Math.cos(-1.02) * Math.cos(0.3))
+// The moon stands where the evening sun did, over the open ground, so its light lies along the snow.
+const MOON = new Vector3(Math.sin(-1.16) * Math.cos(0.24), Math.sin(0.24), -Math.cos(-1.16) * Math.cos(0.24))
 
 export function makeLight(): Light {
   return {
@@ -253,17 +255,19 @@ export function makeLight(): Light {
 const lum = (c: Color) => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b
 const c1 = new Color(), c2 = new Color(), c3 = new Color(), grey = new Color(), moonlight = new Color()
 const lit = new Vector3()
-// In a northern summer the sun rises and sets on the far side of the farm from the playing camera, to the right and to
-// the left of the ridge, and passes behind the camera at noon; so morning and evening both light the land from beyond
-// it, and from over the neighbours' open ground at either end of the woods, so the low light reaches the fields.
-const AZ_LOW = 1.2
+// The sun passes behind the playing camera at noon and comes low on either hand: in the evening over the neighbours'
+// open ground beyond the north wall, a little behind the farm, so crops and trees are lit from behind; in the morning
+// along the slope from the south, past the farmstead. From anywhere else the woods on the ridge would keep a low sun
+// off the fields.
+const AZ_EVENING = 1.2, AZ_MORNING = 1.5
 
 // The light that follows from the hour and the air: where the sun is and its colour through the air, what the sky
 // gives, the colour of distance, and the exposure that holds the land at the same brightness whatever the weather.
 // `toSun`: how far the camera looks toward the sun, -1..1; looking into it, the lens is stopped down a little.
 export function light(env: Env, toSun: number, out: Light): Light {
   const ah = Math.abs(env.hour)
-  const round = ah <= 1 ? AZ_LOW + (Math.PI - AZ_LOW) * (1 - Math.pow(ah, 1.3)) : AZ_LOW - (ah - 1) * 0.5
+  const azLow = env.hour >= 0 ? AZ_EVENING : AZ_MORNING
+  const round = ah <= 1 ? azLow + (Math.PI - azLow) * (1 - Math.pow(ah, 1.3)) : azLow - (ah - 1) * 0.5
   const az = (env.hour >= 0 ? -round : round) + env.azShift
   const elTrue = ah <= 1 ? env.elLow + (env.elNoon - env.elLow) * (1 - Math.pow(ah, 1.7)) : env.elLow - ((ah - 1) / 0.3) * (env.elLow + 0.16)
   const day = smooth(-0.025, 0.06, elTrue)
@@ -281,7 +285,7 @@ export function light(env: Env, toSun: number, out: Light): Light {
   air.mie = env.mie
   const overcast = smooth(0.62, 0.97, env.cloud)
   const full = sunLight(lit, air, c1).multiplyScalar(day)
-  moonlight.setRGB(0.42, 0.56, 0.9).multiplyScalar(0.085 * smooth(-0.03, -0.13, elTrue) * (1 - 0.8 * overcast))
+  moonlight.setRGB(0.46, 0.6, 0.92).multiplyScalar(0.17 * smooth(-0.03, -0.13, elTrue) * (1 - 0.8 * overcast))
   out.sun.copy(full).multiplyScalar(env.sunScale).add(moonlight)
   // The clear sky toward and away from the sun, low down, and overhead.
   const sx = lit.x, sz = lit.z, sl = Math.hypot(sx, sz) || 1
@@ -293,21 +297,21 @@ export function light(env: Env, toSun: number, out: Light): Light {
   // The sky model is too bright beside its own sun, most of all toward evening, and would fill every shadow.
   // Hold a clear sky to a share of what the sun puts on level ground; with the sun gone the sky is all there is.
   const rawE = (lum(zenith) * 0.38 + lum(side) * 0.42 + lum(away) * 0.2) * Math.PI
-  const held = clamp((0.4 * lum(full) * Math.max(lit.y, 0.16)) / Math.max(rawE, 1e-3), 0.08, 1.2)
+  const held = clamp((0.28 * lum(full) * Math.max(lit.y, 0.16)) / Math.max(rawE, 1e-3), 0.08, 1.2)
   out.skyGain = held + (1 - held) * (1 - day)
   // The sky that is seen keeps more of its brightness than the sky that lights.
   out.skyShow = Math.sqrt(out.skyGain)
   // Cloud: lit by the sun on top and by the sky beneath when broken, an even grey deck when the sky is closed.
   const nightSky = c3.copy(NIGHT_HORIZON).lerp(NIGHT_ZENITH, 0.55).clone()
   grey.setRGB(0.93, 0.96, 1).multiplyScalar(env.deck * (day + 0.05 * night)).add(c3.copy(nightSky).multiplyScalar(2.2 * night * env.deck))
-  out.deck.copy(full).multiplyScalar(0.25).add(c3.copy(zenith).multiplyScalar(0.6)).add(c3.copy(nightSky).multiplyScalar(1.6 * night)).add(c3.copy(moonlight).multiplyScalar(0.5)).lerp(grey, overcast)
+  out.deck.copy(full).multiplyScalar(0.25).add(c3.copy(zenith).multiplyScalar(0.6)).add(c3.copy(nightSky).multiplyScalar(1.6 * night)).add(c3.copy(moonlight).multiplyScalar(0.16)).lerp(grey, overcast)
   out.deckDark.copy(full).multiplyScalar(0.06).add(c3.copy(side).multiplyScalar(0.7)).add(c3.copy(nightSky).multiplyScalar(0.8 * night)).lerp(c3.copy(grey).multiplyScalar(0.62 - 0.2 * env.storm), overcast)
   out.deckDark.multiplyScalar(1 - 0.35 * env.storm * (1 - overcast))
   // Thin cloud before the sun, and ice cloud far above everything, take the sun's own colour.
   out.rim.copy(full).multiplyScalar(0.5 * (1 - overcast))
-  out.high.copy(full).multiplyScalar(0.2).add(c3.copy(zenith).multiplyScalar(0.55)).add(c3.copy(nightSky).multiplyScalar(1.3 * night)).add(c3.copy(moonlight).multiplyScalar(0.3))
+  out.high.copy(full).multiplyScalar(0.2).add(c3.copy(zenith).multiplyScalar(0.55)).add(c3.copy(nightSky).multiplyScalar(1.3 * night)).add(c3.copy(moonlight).multiplyScalar(0.07))
   // After sunset the sky above where it went keeps its colour for a while.
-  const dusk = smooth(0.08, -0.02, elTrue) * smooth(-0.3, -0.06, elTrue)
+  const dusk = smooth(0.08, -0.02, elTrue) * smooth(-0.22, -0.05, elTrue)
   out.glow.setRGB(1, 0.42, 0.16).multiplyScalar(0.07 * dusk * (1 - overcast))
   // The light of the whole sky on level ground.
   const skyNight = lum(nightSky) * Math.PI * night
@@ -322,12 +326,24 @@ export function light(env: Env, toSun: number, out: Light): Light {
   out.exposure = ((env.key * 2.9) / Math.max(metered, 0.004)) * (1 - 0.3 * Math.min(1, env.snow * 1.5) * (1 - overcast) * day) * (1 - 0.74 * night)
   // Into the sun the lens is stopped down a little, so the sky keeps its colour; away from it, opened.
   out.exposure *= 1 - 0.16 * out.low * day * (1 - overcast) * clamp(toSun, -0.5, 1)
+  // The sky is far brighter than the land a low sun lights, and a picture exposed for the land would show its cloud as
+  // one pale mass. As a graduated filter does, hold the cloud to what the lens can show: tops just under white, bodies
+  // in the middle, so a cloud has a lit edge and a base.
+  const broken = 1 - overcast
+  const top = lum(out.deck) * out.exposure, body = lum(out.deckDark) * out.exposure
+  if (top > 0.95) out.deck.multiplyScalar(0.95 / top)
+  const want = 0.4 - 0.13 * env.storm
+  if (body > want) out.deckDark.multiplyScalar(1 + (want / body - 1) * broken)
+  const edge = lum(out.rim) * out.exposure
+  if (edge > 1.5) out.rim.multiplyScalar(1.5 / edge)
+  const ice = lum(out.high) * out.exposure
+  if (ice > 0.9) out.high.multiplyScalar(0.9 / ice)
   // Distance takes the colour of the low sky; fog and rain take the colour of the cloud.
   const thick = smooth(0.0012, 0.004, env.haze)
   const veil = Math.max(overcast, thick)
   const dark = c3.copy(NIGHT_HORIZON).multiplyScalar(night).clone()
   out.hazeAway.copy(away).lerp(side, 0.35).multiplyScalar(0.9 * out.skyGain).add(dark).lerp(c3.copy(grey).multiplyScalar(0.86), veil)
-  const cap = lum(out.hazeAway) * 2.3
+  const cap = lum(out.hazeAway) * 1.9
   out.hazeSun.copy(toward).multiplyScalar(Math.min(1, cap / Math.max(lum(toward), 1e-4))).add(dark).add(c3.copy(out.glow).multiplyScalar(0.5)).lerp(c3.copy(grey).multiplyScalar(0.9), veil)
   // Mist is lit: it takes the low sun's colour where the sun reaches it.
   out.mist.copy(out.hazeAway).lerp(out.hazeSun, 0.35).multiplyScalar(0.9).add(c3.copy(out.sun).multiplyScalar(0.014))

@@ -217,6 +217,9 @@ vec3 grade(vec3 c) {
   float spread = max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b));
   c = mix(vec3(dot(c, vec3(0.2126, 0.7152, 0.0722))), c, 1.0 + uGrade.y * (1.0 - spread));
   c = clamp(c, 0.0, 1.0);
+  // Paint greens go a little toward olive, as film takes them, so the colour that is left belongs to the light.
+  float green = clamp((c.g - max(c.r, c.b)) * 4.0, 0.0, 1.0);
+  c = mix(c, vec3(dot(c, vec3(0.2126, 0.7152, 0.0722))) + vec3(0.025, 0.0, -0.012), 0.3 * green);
   c = mix(c, c * c * (3.0 - 2.0 * c), uGrade.z);
   return c + uVeil.rgb * uVeil.a * (1.0 - c) * (1.0 - c);
 }

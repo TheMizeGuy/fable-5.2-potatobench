@@ -166,9 +166,12 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     const small = (navigator.hardwareConcurrency ?? 8) <= 4
     if (/swiftshader|llvmpipe|software|basic render/.test(chip)) return 'low'
     if (/intel|adreno|mali|powervr|videocore|radeon\(tm\) graphics|radeon graphics|vega \d/.test(chip) && !/arc\(tm\) a\d/.test(chip)) return small ? 'low' : 'medium'
+    // Apple's own chips: the larger ones carry the high setting; the base ones, and a browser that will not say, start in the middle.
+    if (/apple/.test(chip) && !/ (pro|max|ultra)\b/.test(chip)) return 'medium'
     return small ? 'medium' : 'high'
   }
-  let tier: Tier = app.settings.quality === 'auto' ? startTier() : app.settings.quality
+  const startedAt = app.settings.quality === 'auto' ? startTier() : app.settings.quality
+  let tier: Tier = startedAt
   const times: number[] = []
   let slow = 0, fps = 60, warm = 0
 
@@ -413,7 +416,9 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     const season = snap.mode === 'season'
     const want = dayHour < 0 && (!season || app.speed <= 1)
     if (want !== morning && (now || !season || app.speed === 0 || time - hourSince > HOUR_HOLD_S)) { morning = want; hourSince = time }
-    envT.hour = !season ? dayHour : morning ? MORNING : app.speed >= 3 ? 0.72 : app.speed === 2 ? 0.87 : EVENING
+    // The evening is not held still: over a couple of minutes the sun sinks a little and comes back, and every shadow with it.
+    const breathe = reduced ? 0 : 0.045 * (0.5 - 0.5 * Math.cos((time * Math.PI * 2) / 140))
+    envT.hour = !season ? dayHour : morning ? MORNING + breathe : app.speed >= 3 ? 0.72 : app.speed === 2 ? 0.87 : EVENING - breathe
   }
 
   const shaftTint = new Color(), veilTint = new Color(), leafLight = new Color()
@@ -454,7 +459,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     sky.ground.copy(lit.ground)
     UI_GAIN.value = 1.1 / lit.exposure
     // Lamps are lit when it is dark enough to want one: after sunset, and one or two under a black storm.
-    const lamp = 3 * smooth(0.5, 0.95, 1 - lit.day) + 0.5 * smooth(0.7, 1, env.storm) * smooth(0.9, 1, env.cloud)
+    const lamp = 5 * smooth(0.5, 0.95, 1 - lit.day) + 0.5 * smooth(0.7, 1, env.storm) * smooth(0.9, 1, env.cloud)
     LAMP.value += (lamp / lit.exposure - LAMP.value) * Math.min(1, dt * 2)
   }
   const spent = { crews: 0, update: 0, draw: 0 }
@@ -522,8 +527,8 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     gustHeading += swing * (1 - Math.exp(-dt / 7))
     gustRun += (2.6 + 5.5 * env.wind) * dt * pace
     U.uGust.value.set(Math.cos(gustHeading), Math.sin(gustHeading), gustRun, env.wind)
-    cloudAt.x -= wx * (4 + 8 * env.wind) * 0.00105 * dt * pace
-    cloudAt.y -= wz * (4 + 8 * env.wind) * 0.00105 * dt * pace
+    cloudAt.x -= wx * (4 + 8 * env.wind) * 0.0015 * dt * pace
+    cloudAt.y -= wz * (4 + 8 * env.wind) * 0.0015 * dt * pace
     U.uCloud.value.z = cloudAt.x
     U.uCloud.value.w = cloudAt.y
     terrain.water.ice.value = env.ice
@@ -767,7 +772,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
         const r = renderer.info.render
         return {
           triangles: r.triangles, calls: r.calls, pixelRatio: renderer.getPixelRatio(), width: canvas.width, height: canvas.height,
-          camera: rig.where(), time, ambient, fall, exposure: lit.exposure, tier, fps, drawn: [post.target.width, post.target.height], firstFrame,
+          camera: rig.where(), time, ambient, fall, exposure: lit.exposure, tier, startedAt, fps, drawn: [post.target.width, post.target.height], firstFrame,
           spent: { crews: +spent.crews.toFixed(2), update: +spent.update.toFixed(2), draw: +spent.draw.toFixed(2) }, objects: scene.children.reduce((n, c) => { let k = 0; c.traverse(() => k++); return n + k }, 0),
         }
       },

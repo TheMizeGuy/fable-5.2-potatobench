@@ -20,7 +20,7 @@ const CREST = 0.082
 
 // By distance: the pitch, how far below level the lens itself points, and the lens (degrees, vertical).
 const VIEW: [number, number, number, number][] = [
-  [7.5, 0.13, 0.04, 36], [16, 0.19, 0.085, 38], [34, 0.29, 0.16, 42], [58, 0.385, 0.225, 44], [110, 0.5, 0.3, 44], [240, 0.68, 0.43, 42],
+  [7.5, 0.13, 0.04, 36], [16, 0.19, 0.085, 38], [34, 0.29, 0.16, 42], [58, 0.385, 0.225, 44], [110, 0.66, 0.33, 44], [180, 0.86, 0.47, 42], [300, 1, 0.6, 40],
 ]
 function viewAt(dist: number, k: 1 | 2 | 3): number {
   const l = Math.log(dist)

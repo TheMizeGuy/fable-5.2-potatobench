@@ -113,11 +113,11 @@ export const CLOUD_GLSL = /* glsl */ `
 // How high the cumulus stands. Low, so a cloud's shadow is of a size to be seen crossing a field.
 const float CLOUD_H = 420.0;
 float cloudField(vec2 p) {
-  vec2 q = p * 0.00105 + uCloud.zw;
-  float crowd = texture2D(uNoise, q * 0.29 + 0.17).b;
+  vec2 q = p * 0.0015 + uCloud.zw;
+  float crowd = texture2D(uNoise, q * 0.23 + 0.17).b;
   float body = texture2D(uNoise, q).b;
   float lump = texture2D(uNoise, q * 3.1 + vec2(0.43, 0.11) + uCloud.zw * 0.6).b;
-  return clamp((crowd * 0.3 + body * 0.48 + lump * 0.22 - 0.5) * 1.75 + 0.5, 0.0, 1.0);
+  return clamp((crowd * 0.3 + body * 0.44 + lump * 0.26 - 0.5) * 1.75 + 0.5, 0.0, 1.0);
 }
 // Where in the field a cloud begins, for the share of the sky that is cloud; a closed sky has no gaps.
 float cloudEdge() {
@@ -125,7 +125,7 @@ float cloudEdge() {
 }
 float cloudCover(float field) {
   float edge = cloudEdge();
-  return smoothstep(edge, edge + 0.15, field);
+  return smoothstep(edge, edge + 0.11, field);
 }
 `
 
@@ -150,8 +150,8 @@ float hazeAmount(float ya, float yb, float t, vec2 xz, out float mistShare) {
   if (uMist.x > 1e-5) {
     // Mist lies in banks with clear air between, drifting; and however deep, what stands in it still shows through.
     float bank = texture2D(uNoise, xz * 0.0071 + uCloud.zw * 6.0).b * 0.65 + texture2D(uNoise, xz * 0.031 - uCloud.zw * 11.0).b * 0.35;
-    float wisp = 1.0 - uMist.w + uMist.w * 2.0 * smoothstep(0.25, 0.8, bank);
-    float low = min(airBetween(uMist.x * wisp, uMist.y, uMist.z, ya, yb, min(t, 400.0)), 1.9);
+    float wisp = 1.0 - uMist.w + uMist.w * 2.6 * smoothstep(0.32, 0.78, bank);
+    float low = min(airBetween(uMist.x * wisp, uMist.y, uMist.z, ya, yb, min(t, 400.0)), 1.3);
     mistShare = low / max(air + low, 1e-5);
     air += low;
   }
@@ -382,7 +382,7 @@ function snowRime(amount: string, rimeShare: string, rime = 'rimeAt( vWorld.y )'
       #endif
       // Where the sun has reached it the rime is already going; it stays white in every shadow the low sun throws.
       #if defined( USE_SHADOWMAP ) && NUM_DIR_LIGHT_SHADOWS > 0
-        rimeHere *= mix( 1.0, 0.34, countyShadow() * ( 1.0 - uNight ) );
+        rimeHere *= mix( 1.0, 0.66, countyShadow() * ( 1.0 - uNight ) );
       #endif
       float crystals = texture2D( uNoise, vWorld.xz * 0.21 ).a * 0.55 + texture2D( uNoise, vWorld.xz * 0.045 ).b * 0.45;
       diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.74, 0.83, 0.9 ), rimeHere * ( 0.7 + 0.3 * smoothstep( 0.3, 0.7, crystals ) ) );

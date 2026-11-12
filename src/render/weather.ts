@@ -47,7 +47,7 @@ export class Weather {
       return { mesh, mat, u }
     }
     // Rain: streaks along the way it falls, never thinner than a pixel and a half.
-    this.rain = make(11000, /* glsl */ `
+    this.rain = make(18000, /* glsl */ `
       attribute vec4 aSeed;
       uniform float uFall; uniform float uAmount; uniform vec2 uWind; uniform vec2 uPx;
       varying float vA; varying float vX;
@@ -56,13 +56,13 @@ export class Weather {
         vec3 dir = normalize(vec3(uWind.x * 0.24, -1.0, uWind.y * 0.24));
         vec3 head = wrap(aSeed.xyz, dir * uFall * (21.0 + 9.0 * aSeed.w), vec3(70.0, 44.0, 70.0) * uSpan);
         vec4 a = projectionMatrix * viewMatrix * vec4(head, 1.0);
-        vec4 b = projectionMatrix * viewMatrix * vec4(head - dir * (0.5 + 0.7 * aSeed.w) * pow(uSpan, 0.8), 1.0);
+        vec4 b = projectionMatrix * viewMatrix * vec4(head - dir * (0.34 + 0.4 * aSeed.w) * pow(uSpan, 0.6), 1.0);
         vec2 along = (b.xy / max(b.w, 1e-3) - a.xy / max(a.w, 1e-3)) / uPx;
         vec2 across = normalize(vec2(-along.y, along.x) + 1e-5) * uPx;
         vec4 clip = mix(a, b, position.y);
-        clip.xy += across * position.x * 0.8 * clip.w;
+        clip.xy += across * position.x * 0.62 * clip.w;
         // Whether a drop is falling is its own affair, not a matter of where it is: light rain is thin everywhere.
-        vA = step(fract(aSeed.x * 91.7 + aSeed.y * 47.3 + aSeed.z * 13.1), uAmount) * (0.2 + 0.3 * aSeed.w) * smoothstep(1.5, 7.0, a.w) * step(0.0, min(a.w, b.w));
+        vA = step(fract(aSeed.x * 91.7 + aSeed.y * 47.3 + aSeed.z * 13.1), uAmount) * (0.1 + 0.2 * aSeed.w) * smoothstep(1.5, 7.0, a.w) * step(0.0, min(a.w, b.w));
         vX = position.x;
         gl_Position = clip;
       }`, 'uniform vec3 uColor;\nvarying float vA; varying float vX;\nvoid main() {\n  float a = vA * (1.0 - vX * vX);\n  if (a < 0.01) discard;\n  gl_FragColor = vec4(uColor, a);\n}')
@@ -112,7 +112,7 @@ export class Weather {
         // Thick under the trees along the ridge, a few carried everywhere.
         float near = mix(0.12, 1.0, smoothstep(-8.0, -22.0, p.z));
         vA = step(aSeed.z, uAmount * near * tiny) * step(0.3, clip.w);
-        vCol = mix(mix(vec3(0.52, 0.13, 0.03), vec3(0.62, 0.36, 0.05), smoothstep(0.2, 0.6, aSeed.y)), vec3(0.34, 0.07, 0.03), step(0.82, aSeed.y)) * uLight;
+        vCol = mix(mix(vec3(0.52, 0.13, 0.03), vec3(0.62, 0.36, 0.05), smoothstep(0.2, 0.6, aSeed.y)), vec3(0.34, 0.07, 0.03), step(0.82, aSeed.y)) * uLight * 0.6;
         gl_Position = clip;
       }`, 'varying float vA; varying vec2 vUv; varying vec3 vCol;\nvoid main() {\n  if (vA * step(length(vUv * vec2(1.0, 0.7)), 0.9) < 0.5) discard;\n  gl_FragColor = vec4(vCol, 1.0);\n}', { uLight: { value: new Color() }, uFloor: { value: 0 } })
     this.leaves.mat.transparent = false
@@ -138,7 +138,7 @@ export class Weather {
       f.u.uSpan.value = o.span
       f.u.uPx.value.set(2 / Math.max(1, o.resX), 2 / Math.max(1, o.resY))
     })
-    this.rain.u.uColor.value.copy(o.tint).multiplyScalar(1.6)
+    this.rain.u.uColor.value.copy(o.tint).multiplyScalar(1.35)
     this.snow.u.uColor.value.copy(o.tint).multiplyScalar(2.6)
     this.leaves.u.uLight.value.copy(o.light)
     this.leaves.u.uFloor.value = o.floor
