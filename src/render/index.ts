@@ -123,6 +123,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   const terrain = buildTerrain()
   lap('terrain')
   const flora = new Flora()
+  flora.bake(renderer)
   lap('trees')
   const clearing = new Clearing(flora)
   const pond = new Pond()

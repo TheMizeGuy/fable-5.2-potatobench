@@ -675,6 +675,33 @@ shots.push(
   cropShot('g9-lane-eye', 1977, 196, [], { frame: 'land', x: 10, z: 5.6, dist: 1.5, yaw: -1.5708, pitch: 0.07, tilt: 0 }),
 )
 
+// ---- The land by tier of view: yard (close to), field (the playing view), farm, county.
+const FARM_TIER: View = { frame: 'land', x: 9, z: 1, dist: 62 }
+const COUNTY_TIER: View = { frame: 'land', x: 22, z: 4, dist: 150 }
+shots.push(
+  cropShot('t-field-1-bare', 1977, 128, [], FIELD_TIER),
+  cropShot('t-field-2-planted', 1977, 147, [], FIELD_TIER),
+  cropShot('t-field-3-emerged', 1977, 163, [], FIELD_TIER),
+  cropShot('t-field-4-closed', 1977, 186, [], FIELD_TIER),
+  cropShot('t-field-5-bloom', 1977, 190, [], FIELD_TIER),
+  cropShot('t-field-6-dead', 1977, 260, ['dig'], FIELD_TIER),
+  cropShot('t-field-7-dug', 1977, 268, [], FIELD_TIER),
+  cropShot('t-field-8-october', 1977, 288, [], FIELD_TIER),
+  cropShot('t-field-blight', 1979, 205, ['spray', 'rogue'], tierOn(4), BLIGHT_STATES),
+  landShot('t-field-tract-felled', 190, CLEARING[1][1].replaceAll('@', '14'), tierOn(14)),
+  landShot('t-field-tract-rocks', 190, CLEARING[4][1].replaceAll('@', '14'), tierOn(14)),
+  cropShot('t-yard-2-planted', 1977, 147, [], nearOn(5)),
+  cropShot('t-yard-4-closed', 1977, 186, [], nearOn(5)),
+  cropShot('t-yard-5-bloom', 1977, 190, [], nearOn(5)),
+  cropShot('t-yard-blight', 1979, 205, ['spray', 'rogue'], nearOn(4)),
+  cropShot('t-yard-lane', 1977, 196, [], { frame: 'land', x: 10, z: 5.6, dist: 1.5, yaw: -1.5708, pitch: 0.07, tilt: 0 }),
+  cropShot('t-yard-wood-edge', 1977, 196, [], { frame: 'land', x: -2, z: -19.5, dist: 5, yaw: 0.3, pitch: 0.14, tilt: 0 }),
+  cropShot('t-farm-july', 1977, 196, [], FARM_TIER),
+  cropShot('t-farm-october', 1977, 288, [], FARM_TIER),
+  cropShot('t-county-july', 1977, 196, [], COUNTY_TIER),
+  cropShot('t-county-october', 1977, 288, [], COUNTY_TIER),
+)
+
 const browser = await chromium.launch({
   args: flat ? ['--disable-webgl', '--disable-3d-apis'] : soft ? ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] : [process.platform === 'win32' ? '--use-angle=d3d11' : '--use-angle=metal', '--ignore-gpu-blocklist', '--enable-gpu'],
 })
