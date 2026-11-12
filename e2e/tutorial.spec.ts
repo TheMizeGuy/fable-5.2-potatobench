@@ -22,7 +22,7 @@ async function fresh(page: Page): Promise<void> {
 }
 
 interface Seen {
-  phase: string; speed: number; day: number; sold: number; done: boolean
+  phase: string; speed: number; day: number; sold: number; done: boolean; stopped: string
   // The guide's note: its lesson, what it points at, its words, and the keys it carries.
   note: string; target: string; noteWords: number; cardWords: number; keys: string[]
   // What asks for attention now.
@@ -78,7 +78,7 @@ async function see(page: Page): Promise<Seen> {
     if (vis(ui.querySelector('.tray-paper'))) asking.push('tray')
     const sell = ui.querySelector<HTMLElement>('.paper-layer [data-testid^="lot-sell-"]')
     return {
-      phase: c?.phase ?? 'title', speed: app.speed, day: c?.season?.day ?? -1, sold: c ? c.lots.filter((l: any) => l.sold > 0).length : 0, done: !!ui.querySelector('[data-testid="end-season"]'),
+      phase: c?.phase ?? 'title', speed: app.speed, stopped: app.pauseReason ?? '', day: c?.season?.day ?? -1, sold: c ? c.lots.filter((l: any) => l.sold > 0).length : 0, done: !!ui.querySelector('[data-testid="end-season"]'),
       note: slip?.dataset.lesson ?? '', target: slip?.dataset.target ?? '', noteWords: count(said), cardWords: card ? count(read(card)) : 0,
       keys: slip ? [...slip.querySelectorAll<HTMLElement>('button')].filter(vis).map(b => b.dataset.testid ?? '') : [],
       asking,
@@ -176,7 +176,7 @@ test('a guided first year: offered as a card, taken, and followed from Play to t
     if (s.ticketSell) { quiet = 0; did.push('ticket'); console.log(`the weigh ticket: ${s.paperWords} words`); await page.locator(`#ui [data-testid="${s.ticketSell}"]`).click(); await page.waitForTimeout(300); continue }
     if (s.asking.includes('tray')) { await page.getByTestId('sample-close').click().catch(() => {}); continue }
     // Nothing asks: the days run by themselves. A clock stopped with nothing said would be a fault.
-    if (s.speed === 0 && !s.asking.length) expect(++quiet, `the clock stands with nothing on the screen saying why, after ${did.join(' > ')}`).toBeLessThan(40)
+    if (s.speed === 0 && !s.asking.length) expect(++quiet, `the clock stands with nothing on the screen saying why (${s.stopped}), after ${did.join(' > ')}`).toBeLessThan(40)
     else quiet = 0
     await page.waitForTimeout(250)
   }

@@ -72,7 +72,9 @@ with only the present one named in a word (Plant, Tend, Kill, Dig, Sell): an ord
 the spraying question (with "Keep the fields sprayed" marked the usual choice), the telegrams the year sends, and
 each weigh ticket. A note with a wait after it carries "Skip to <the next thing>": the days run at the fastest speed
 to the next note, then go back to the speed they had. A telegram on the way stops them, and answered, they run on to
-the note the skip was for; a weigh ticket ends the skip, and so does the player's own hand on the clock. No telegram comes in a farm's first year before its
+the note the skip was for; a weigh ticket ends the skip, and so does the player's own hand on the clock. A stop the
+guide has explained once (frost on the barrels) is not made again that year: the crew sees to it and the days go
+on, so the clock never stands with nothing on the screen saying why. No telegram comes in a farm's first year before its
 first planting is finished (before mid-June; `QUIET_UNTIL`, `drawIncidents` in `src/sim/season.ts`), so nothing asks
 a question before the player has seen a field planted.
 

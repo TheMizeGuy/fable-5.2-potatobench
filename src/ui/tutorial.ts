@@ -502,6 +502,13 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
       stopNow()
       return
     }
+    // A stop the guide has explained once (frost on the barrels) is not made again: the crew sees to it, and the
+    // days go on.
+    const c0 = app.campaign
+    if (!want && !holding && app.speed === 0 && c0 && guidedYear(c0) && app.screen === 'season' && guide.passed('frost') && /frost/i.test(app.pauseReason) && !app.holding && !S.seasonDone(c0) && !cardUp(lookNow())) {
+      app.setSpeed((app.resumeSpeed || 1) as 1 | 2 | 3)
+      return
+    }
     if (want && !holding) {
       // Running: stopped here. Stopped by the game (a card, a frost): the speed it would go on at. Stopped by the
       // player: it stays so. A skip ahead ends at the next note, but runs on past one that only breaks in.
