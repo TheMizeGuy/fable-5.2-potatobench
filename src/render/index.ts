@@ -103,6 +103,7 @@ export const createFieldView: CreateFieldView = (canvas, app) => {
     thingAnchor: t => inner.thingAnchor(t),
     thingAt: (x, y) => inner.thingAt(x, y),
     follow: u => inner.follow(u),
+    home: () => inner.home(),
     yardAnchor: y => inner.yardAnchor(y),
     whenShown: (kind, field) => inner.whenShown(kind, field),
     dispose: () => inner.dispose(),
@@ -995,7 +996,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       // Where a crew is on the screen, for clicking it in checks.
       unitAt(id: number) {
         const u = crews.where().units.find(x => x.id === id)
-        if (!u) return null
+        if (!u || !crews.anchor(id, far)) return null
         const at = unitAnchor(id)
         const v = new Vector3(u.x, fieldBaseY(u.z) + 0.9, u.z).project(rig.camera)
         const vp = viewport()
@@ -1041,6 +1042,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     thingAnchor,
     thingAt,
     follow,
+    home: goHome,
     yardAnchor,
     whenShown,
     dispose() {

@@ -43,6 +43,8 @@ export interface FieldView {
   thingAt(x: number, y: number): Thing | null
   // Brings a person into the middle of the picture and keeps them there until the player moves the view; -1 lets go.
   follow(unit: number): void
+  // What the Home key does: back out to the farm, and in again.
+  home(): void
   yardAnchor(yard: number): { x: number; y: number; visible: boolean }
   // Settles once the land has shown a test dig's hill lifted, or the last row of a day's digging come out
   // (at once when there is nothing to show), so the paper result can arrive after the land has shown it.

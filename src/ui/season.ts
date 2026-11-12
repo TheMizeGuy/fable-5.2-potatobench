@@ -79,6 +79,8 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   const trayHost = h('div', { class: 'tray-host sys' })
   const paused = h('p', { class: 'paused sys', testid: 'paused', hidden: true })
   const veil = h('div', { class: 'veil sys', hidden: true })
+  // The way back from a zoom, a pan or a tilt, always in the same place: what the Home key does.
+  const homeKey = h('button', { class: 'iconbtn view-home sys', type: 'button', testid: 'view-home', 'aria-label': 'Back to the whole farm (Home)', title: 'Back to the whole farm (Home)', onclick: () => ctx.view.home() }, icon('land', 'i'))
   let tray: { el: HTMLElement; field: number; day: number } | null = null
 
   const openTicket = (lot: number) => { const spec = ticket(ctx, lot, { fresh: false }); if (spec) ctx.papers.open(spec) }
@@ -87,7 +89,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   const yard = yardCard(ctx)
   const grid = workGrid(ctx)
   const incident = incidentCard(ctx)
-  const el = h('main', { class: 'season-screen' }, veil, top.el, paused, card.el, yard.el, person.el, grid.el, trayHost,
+  const el = h('main', { class: 'season-screen' }, veil, top.el, paused, homeKey, card.el, yard.el, person.el, grid.el, trayHost,
     h('div', { class: 'foot' }, h('div', { class: 'foot-book' }, crew, clockSlot), notesSlot), incident.el)
 
   // The selection drawn on the land: a dashed line round each selected field laid on its corners, a registration mark

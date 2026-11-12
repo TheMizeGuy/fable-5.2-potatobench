@@ -1367,9 +1367,9 @@ export class Crews {
 
   // The person under a point on the screen (CSS pixels), or -1. A person is a few pixels tall from the playing view, so
   // the reach is generous: anywhere on their body or within twenty-six pixels of it, at the foot of their pin, or on
-  // the machine they have in hand. The nearest, by how far inside its reach the point falls.
+  // the machine they have in hand. Of those within reach, the nearest on the screen.
   pick(x: number, y: number, camera: PerspectiveCamera, w: number, h: number, _markers = false): number {
-    let best = -1, bd = 1
+    let best = -1, bd = Infinity
     const screen = (px: number, py: number, pz: number): [number, number] | null => {
       this.v.set(px, py, pz).project(camera)
       return this.v.z > 1 ? null : [(this.v.x + 1) / 2 * w, (1 - this.v.y) / 2 * h]
@@ -1377,8 +1377,8 @@ export class Crews {
     const reach = (at: [number, number] | null, top: [number, number] | null, least: number, id: number) => {
       if (!at) return
       const r = Math.max(least, top ? Math.hypot(top[0] - at[0], top[1] - at[1]) * 1.15 : 0)
-      const d = Math.hypot(at[0] - x, at[1] - y) / r
-      if (d < bd) { bd = d; best = id }
+      const d = Math.hypot(at[0] - x, at[1] - y)
+      if (d < r && d < bd) { bd = d; best = id }
     }
     for (const a of this.actors) {
       if (a.away || a.shown < 0.5) continue

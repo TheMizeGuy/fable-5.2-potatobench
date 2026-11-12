@@ -592,6 +592,53 @@ test('people: a chip opens the card, priorities set by click and key, a raise, a
   expect(errors, errors.join('\n')).toEqual([])
 })
 
+test('a person clicked on the land: their card opens beside them, says who and what, takes an order, and goes on Escape', async ({ page, isMobile }) => {
+  const errors = watchErrors(page)
+  await farmWithPeople(page)
+  const name = await game<string>(page, 'app.campaign.crew.find(u => u.id === 1).name')
+  // On their body: the scene's own pick, where the check tool clicks it.
+  const body = await page.evaluate(() => (globalThis as unknown as { __countyField: { unitAt(id: number): { x: number; y: number } | null } }).__countyField.unitAt(1))
+  const pin = page.getByTestId('pin-1')
+  if (await pin.isVisible().catch(() => false)) {
+    await pin.click()
+    // a pin standing for several people opens to them
+    const pick = page.getByTestId('pin-pick-1')
+    if (await pick.isVisible().catch(() => false)) await pick.click()
+  }
+  else if (body) await page.mouse.click(body.x, body.y)
+  else await page.evaluate(() => (globalThis as unknown as { __county: { app: { selectUnit(id: number, from: string): void } } }).__county.app.selectUnit(1, 'land'))
+  const card = page.getByTestId('whois')
+  await expect(card).toBeVisible()
+  await expect(card.getByTestId('whois-name')).toHaveText(name)
+  await expect(card.getByTestId('whois-now')).not.toBeEmpty()
+  // The page at the foot stays shut: this card is the one beside them.
+  await expect(page.getByTestId('person-card')).toBeHidden()
+  if (!isMobile) {
+    const a = await page.evaluate(() => (globalThis as unknown as { __countyField: { unitPin(id: number): { x: number; y: number; visible: boolean } } }).__countyField.unitPin(1))
+    const r = (await card.boundingBox())!
+    if (a.visible) {
+      const dx = Math.max(r.x - a.x, 0, a.x - (r.x + r.width)), dy = Math.max(r.y - a.y, 0, a.y - (r.y + r.height))
+      expect(Math.hypot(dx, dy)).toBeLessThan(240)
+    }
+  }
+  // One press puts a kind of work first for them.
+  await card.getByTestId('whois-first-field').click()
+  expect(await game<number>(page, 'app.campaign.crew.find(u => u.id === 1).prio.field')).toBe(1)
+  await expect(card.getByTestId('whois-first-field')).toHaveAttribute('aria-pressed', 'true')
+  // Their page opens from it.
+  await card.getByTestId('whois-more').click()
+  await expect(page.getByTestId('person-card')).toBeVisible()
+  await expect(card).toBeHidden()
+  await page.keyboard.press('Escape')
+  await expect(page.getByTestId('person-card')).toBeHidden()
+  // And back on the land, Escape puts it away.
+  await page.evaluate(() => (globalThis as unknown as { __county: { app: { selectUnit(id: number, from: string): void } } }).__county.app.selectUnit(1, 'land'))
+  await expect(card).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(card).toBeHidden()
+  expect(errors, errors.join('\n')).toEqual([])
+})
+
 test('the work grid: G opens it, a click or a key sets a cell, and the farm rules say their cost and catch', async ({ page }) => {
   const errors = watchErrors(page)
   await farmWithPeople(page)

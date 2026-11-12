@@ -244,6 +244,12 @@
 .telegram .lapse .stamp { flex: none; }
 
 /* ---------------------------------------------------------------- paused, the tray, the clock at the thumb */
+/* The way back to the whole farm, at the right of the land's foot. */
+.season-screen .view-home { position: absolute; right: max(var(--gutter), env(safe-area-inset-right, 0px)); bottom: calc(var(--bottom, 140px) + 8px); z-index: 1;
+  background: var(--paper) url(./system/grain.png); background-blend-mode: multiply; box-shadow: var(--laid); }
+.season-screen.selected:not([data-layout='narrow']) .view-home { display: none; }
+.season-screen[data-layout='narrow'].selected .view-home, .season-screen[data-layout='narrow'].person-up .view-home, .season-screen.incident-up .view-home { display: none; }
+@media (hover: hover) { .season-screen .view-home:hover { box-shadow: var(--laid), inset 0 0 0 1px var(--ink); } }
 .season-screen .paused { position: absolute; right: max(var(--gutter), env(safe-area-inset-right, 0px)); top: calc(var(--top, 220px) + 8px); z-index: 2; }
 .season-screen .paused-go { gap: 10px; background: var(--paper) url(./system/grain.png); background-blend-mode: multiply; box-shadow: var(--laid), inset 0 0 0 1px var(--ink); font-size: 16px; }
 .season-screen .paused-go .i { --i: 16px; }
