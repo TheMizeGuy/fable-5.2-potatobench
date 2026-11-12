@@ -95,7 +95,7 @@ function fieldsPage(ctx: Ctx, c: S.Campaign): Child {
     if (f.status === 'rest') add('This year', `Oats and clover, which earn ${F.money(S.REST_INCOME)} in the fall`)
     else {
       add('Stage', f.daysIn > 0 && f.status !== 'dug' && f.status !== 'lost' ? `${f.stage}, day ${f.daysIn} since planting` : f.stage)
-      if (f.status === 'idle' || f.status === 'planted') { const pr = S.plantReady(ctx.app.world, c, i); add('Soil here', `${F.temp(pr.soilT)}. Seed needs ${F.temp(pr.need)}, and it rots below ${F.temp(pr.rots)}`) }
+      if (f.status === 'idle' || f.status === 'planted') { const pr = S.plantReady(ctx.app.world, c, i); add('Soil here', `${F.temp(pr.soilT)}, seed needs ${F.temp(pr.need)} and rots below ${F.temp(pr.rots)}`) }
       if (f.status === 'growing' || f.status === 'planted') {
         add('Leaves', `cover ${F.pct(f.canopy)} of the ground${f.bloom > 0.2 ? ', in flower' : ''}${f.frosted >= 0.05 ? `, ${F.pct(f.frosted)} blackened by frost` : ''}`)
         add('Hilled', R.hillWord(f.hillPasses))
@@ -140,13 +140,13 @@ function farmPage(ctx: Ctx, c: S.Campaign): Child {
     sec('How land works'),
     rules([
       ['Renting', 'You get a field for the year and pay when the season starts.', 'You pay the rent again every year you keep it.'],
-      ['Buying', `You pay ${F.pct(S.MORTGAGE_DOWN)} down, the rest goes on the land mortgage, and the field is yours for good.`, `At the end of each year the bank takes a tenth of the loan plus ${F.pct(S.MORTGAGE_RATE)} interest, on top of the yearly bank payment.`],
+      ['Buying', `You pay ${F.pct(S.MORTGAGE_DOWN)} down, the rest goes on the land mortgage, and the field is yours for good.`, `At the end of each year the bank takes ${F.pct(S.MORTGAGE_PRINCIPAL)} of the loan plus ${F.pct(S.MORTGAGE_RATE)} interest, on top of the yearly bank payment.`],
       ['Clearing a tract', `Fell the trees, have the stumps pulled (${F.money(S.STUMP_FEE)}) and pick the rocks, and woods or brush becomes a field.`, 'New ground is stony, and its first potato crop is smaller unless it rests a year first.'],
       ['Shelter', 'Standing woods shelter the field next to them, so it loses less water and you can spray in more wind.', 'It also gets an hour more blight weather and colder frosts.'],
       ['Stones', 'Picking rocks speeds up planting and digging and saves the crop from bruising.', 'Frost pushes more stones up every winter, and picking takes people and time while no crop is in the field.'],
       ['Brush', 'Cutting the hedgerows lets damp air and frost drain off a bottom or mid-slope field.', `The wind dries the field out more, and the hedgerows grow back in ${S.BRUSH_YEARS} years.`],
       ['Tile drains', 'They make bottom land drain like the slope.', `A contractor charges ${F.money(S.TILE_FEE)}, and only on land you own with no crop in it.`],
-      ['Logs and stone', `Felling gives you logs and picking rocks gives you fieldstone. Both go into buildings, and logs also sell for ${F.money(S.LOG_PRICE)} a load.`, `Whatever a building is short of you buy, at ${F.money(S.MILL_PRICE)} a load of logs and ${F.money(S.QUARRY_PRICE)} a load of stone.`],
+      ['Logs and stone', `Felling gives you logs and picking rocks gives you fieldstone. Both go into buildings, and logs also sell for ${F.money(S.LOG_PRICE)} a load.`, `You buy whatever a building is short of, at ${F.money(S.MILL_PRICE)} a load of logs and ${F.money(S.QUARRY_PRICE)} a load of stone.`],
     ]),
   ]
 }
@@ -165,7 +165,7 @@ function peoplePage(c: S.Campaign): Child {
     }))),
     sec('How people work'),
     rules([
-      ['Skills', 'There are five, each from 0 to 10: machines, field, woods, building and packing. More skill means faster, better work.', `People learn by doing. Going from level L to L + 1 takes ${S.XP_BASE} + ${S.XP_PER_LEVEL} × L days of that work.`],
+      ['Skills', 'There are five, each from 0 to 10: machines, field, woods, building and packing. More skill means faster, better work.', `People learn by doing. The first level takes ${S.XP_BASE} days of that work, and each level after takes ${S.XP_PER_LEVEL} days more than the last.`],
       ['Traits', 'Everyone you hire has one, like a strong back, an early riser or sharp eyes.', 'Read it before you hire, because careless people bruise the crop and a homebody won\'t work winters.'],
       ['Priorities', 'Each person picks up work in their own order, from 1 (first) to 4 (last), or never.', 'You can still give an order to one person, and they\'ll do it whatever their priorities are.'],
       ['Tiredness', 'A day off rests people, and rested people work at full speed.', 'Worn-out people slow down, lose heart and get hurt in the woods or on a machine.'],
@@ -202,9 +202,9 @@ function incidentsPage(c: S.Campaign): Child {
       : h('p', { class: 'alm-empty' }, icon('check', 'i'), 'Nothing needs an answer right now.'),
     sec('What can happen'),
     rules([
-      [F.localize(S.INCIDENT_TITLE.applicant), 'Hire them, with their own skills and trait, or let them look elsewhere.', `They'll wait ${S.INCIDENT_DAYS} days for an answer.`],
+      [F.localize(S.INCIDENT_TITLE.applicant), 'Hire them or let them look elsewhere. Each comes with their own skills and trait.', `They'll wait ${S.INCIDENT_DAYS} days for an answer.`],
       [F.localize(S.INCIDENT_TITLE.poach), `Match the offer, which is ${F.pct(S.POACH_RAISE)} more pay, or let them decide.`, 'Unhappy people take the offer and leave.'],
-      ['A tractor breaks down', `It's out for ${S.BREAK_DAYS} days, or you can pay ${F.money(S.RUSH_PART)} for a rush part. Someone with machine skill ${S.MECHANIC} or higher gets it running in a day.`, 'Long hours with tired people make breakdowns more likely, and a machine shed halves the risk.'],
+      [F.localize(S.INCIDENT_TITLE.breakdown), `It's out for ${S.BREAK_DAYS} days, or you can pay ${F.money(S.RUSH_PART)} for a rush part. Someone with machine skill ${S.MECHANIC} or higher gets it running in a day.`, 'Long hours with tired people make breakdowns more likely, and a machine shed halves the risk.'],
       ['Someone is hurt', `They're out for ${S.HURT_DAYS[0]} to ${S.HURT_DAYS[1]} days.`, 'It only happens to worn-out people working in the woods or on a machine, so rest prevents it.'],
       [F.localize(S.INCIDENT_TITLE.buyer), `They offer ${F.pct(S.BUYER_PREMIUM)} over the market price for a whole stored crop, this week only.`, 'Once it\'s sold it\'s gone, so you can\'t hold it for the spring price.'],
     ]),

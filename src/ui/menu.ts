@@ -24,8 +24,8 @@ function endSeasonEarly(ctx: Ctx): void {
   void confirmPaper(ctx, {
     title: 'End the season now?',
     text: [
-      left.length ? h('p', null, `${F.list(left)} ${left.length === 1 ? 'is' : 'are'} still in the ground. You'll lose ${left.length === 1 ? 'that crop and the work that went into it' : 'those crops and the work that went into them'}.`) : null,
-      bare.length ? h('p', null, `${F.list(bare)} ${bare.length === 1 ? 'was' : 'were'} never planted. The ${F.money(S.FIELD_COST)} a field you already spent on ${bare.length === 1 ? 'it' : 'them'} is gone, and ${bare.length === 1 ? 'it' : 'they'} won't grow anything this year.`) : null,
+      left.length ? h('p', null, `${F.list(left)} still ${left.length === 1 ? 'has its crop' : 'have their crops'} in the ground. You'll lose ${left.length === 1 ? 'that crop and the work that went into it' : 'those crops and the work that went into them'}.`) : null,
+      bare.length ? h('p', null, `${F.list(bare)} ${bare.length === 1 ? 'was' : 'were'} never planted. The ${F.money(S.FIELD_COST)}${bare.length === 1 ? '' : ' a field'} you already spent on ${bare.length === 1 ? 'it' : 'them'} is gone, and ${bare.length === 1 ? 'it' : 'they'} won't grow anything this year.`) : null,
       digging.length ? h('p', null, `${F.list(digging)} ${digging.length === 1 ? 'is' : 'are'} only partly dug. You keep what's already out of the ground and lose the rest.`) : null,
       h('p', null, `Winter in the cellar comes next, and you can't come back to this season. You'll still owe ${F.money(S.NOTE_PAYMENT + S.LIVING)} for the bank payment and your family's living costs at the end of the year.`),
     ],
@@ -77,7 +77,7 @@ export function openMenu(ctx: Ctx, o: { onHelp: () => void; onAlmanac: () => voi
         const text = await f.text()
         file.value = ''
         if (app.importSave(text)) { ctx.say('Save loaded.', 'good'); close() }
-        else status.textContent = 'That file isn\'t a save from this game, or it\'s from a newer version.'
+        else status.textContent = 'That file isn\'t a save from this game, or it\'s from a newer version. Try a different file.'
       })
       const q = ctx.view.quality()
       const vol = Math.round(set.volume * 100)

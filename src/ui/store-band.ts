@@ -20,6 +20,6 @@ export function storeCall(o: { now: number; months: S.StoreMonth[]; best: S.Stor
   const sure = d > spread
   return {
     store: sure,
-    phrase: `stored until ${b.name} it usually brings about ${F.money(b.net)} after storage costs and shrinkage, give or take ${F.money(spread)}. That's ${F.money(d)} more than today${sure ? '' : ', but prices can swing that much by then, so don\'t count on it'}${b.sprouted ? ', even though it will have sprouted' : ''}`,
+    phrase: `stored until ${b.name} it usually brings about ${F.money(b.net)} after storage costs and shrinkage, give or take ${F.money(spread)}. That's ${F.money(d)} more than today${b.sprouted ? ', even after it sprouts' : ''}${sure ? '' : ', but prices can swing that much by then, so don\'t count on it'}`,
   }
 }

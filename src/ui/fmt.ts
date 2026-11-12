@@ -168,6 +168,11 @@ export function plural(n: number, one: string, many = `${one}s`): string {
   return `${num(n)} ${n === 1 ? one : many}`
 }
 
+// "once", "twice", "3 times".
+export function times(n: number): string {
+  return n === 1 ? 'once' : n === 2 ? 'twice' : plural(n, 'time')
+}
+
 // "both" for two, "all 4" for more.
 export function allOf(n: number): string {
   return n === 2 ? 'both' : `all ${n}`

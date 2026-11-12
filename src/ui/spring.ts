@@ -68,7 +68,7 @@ function fieldsBody(ctx: Ctx, c: S.Campaign): Child {
       const t = tracts.find(x => x.field === i)
       return catRow({
         icon: TRACT_GLYPH[fp.cover], name: S.FIELD_NAMES[i], testid: `fold-field-${i}`, onclick: () => look(ctx, i),
-        what: `${F.upper(S.COVER_WORD[fp.cover])}, ${t?.stage === 'fell' ? `${Math.ceil(t.fellLeft)} crew-days to fell` : t?.stage === 'stump' ? 'ready for a contractor to pull' : 'rocks to pick'}`,
+        what: `${F.upper(S.COVER_WORD[fp.cover])}, ${t?.stage === 'fell' ? `${Math.ceil(t.fellLeft)} crew-days to fell` : t?.stage === 'stump' ? 'for a contractor to pull' : 'rocks to pick'}`,
       })
     }
     return catRow({
@@ -86,7 +86,7 @@ const SKILL_WORD: [S.Skill, string][] = [['machine', 'Machine'], ['field', 'Fiel
 function bedText(c: S.Campaign): string {
   const L = S.labourInfo(c)
   if (L.hireWhy) return L.hireWhy
-  return L.hired < S.HOUSED_OUT ? 'Two hired people can live off the farm.' : `Free bunks: ${L.housing - L.hired} of ${L.beds}.`
+  return L.hired < S.HOUSED_OUT ? 'Two hired people can live in town.' : `Free bunks: ${L.housing - L.hired} of ${L.beds}.`
 }
 
 // An applicant as the catalogue lists them: portrait, trait in a word, five skill boxes (on a phone the best one, as
@@ -166,7 +166,7 @@ function peopleBody(ctx: Ctx, c: S.Campaign, onTry: (err: string) => void, onClo
   }
   return [
     ...S.applicantInfo(c).map(a => applicant(ctx, a, one, onTry)),
-    h('div', { class: 'cat-hall hall-row' }, h('p', { class: 't-label', title: 'Workers from the hiring hall are average at every job.' }, 'Or the hiring hall'), hall('hand'), hall('operator'),
+    h('div', { class: 'cat-hall hall-row' }, h('p', { class: 't-label', title: 'Workers from the hiring hall are average at the job they\'re hired for.' }, 'Or the hiring hall'), hall('hand'), hall('operator'),
       L.hireWhy ? h('p', { class: 't-caption' }, L.hireWhy) : null),
     hired.length ? [
       h('p', { class: 't-label cat-sub' }, `Your crew: ${L.hired} of ${L.housing} places filled`, L.hireWhy ? null : h('span', { class: 't-caption' }, ` ${bedText(c)}`)),
@@ -201,7 +201,7 @@ function landBody(ctx: Ctx, c: S.Campaign, onClose: () => void): Child {
 }
 
 export function stoneWord(stones: number): string {
-  return stones >= 0.6 ? 'very stony' : stones >= 0.35 ? 'fairly stony' : 'only a little stony'
+  return stones >= 0.6 ? 'very stony' : stones >= 0.35 ? 'stony' : 'a little stony'
 }
 
 // The head of a card on the land: what kind of record, the name, a line under it, and the way to let it go.
@@ -377,7 +377,7 @@ export function springFolds(ctx: Ctx, c: S.Campaign, onTry: (err: string) => voi
     figure: pc.wages ? `${F.money(pc.wages)} a month` : undefined, body: () => peopleBody(ctx, c, onTry, onClose),
   }, {
     id: 'land', open: 'land-open', testid: 'land', glyph: 'land', name: 'Land',
-    state: land.length ? `${forRent} to rent, ${land.length} for sale` : 'You hold all of it', body: () => landBody(ctx, c, onClose),
+    state: land.length ? `${forRent} to rent, ${land.length} for sale` : 'Nothing for sale', body: () => landBody(ctx, c, onClose),
   }, {
     id: 'contracts', open: 'contracts-open', testid: 'contracts', glyph: 'contract', name: 'Contracts',
     state: [offers ? `${offers} offered` : 'No more offers', signed ? `${signed} signed` : ''].filter(Boolean).join(', '),

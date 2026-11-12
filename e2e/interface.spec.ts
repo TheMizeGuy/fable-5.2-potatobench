@@ -367,7 +367,7 @@ test('spring land: a marker opens a card, renting puts a plate and the rent on t
   await expect(page.getByTestId('plan-money')).toContainText(line('wages', hand))
   await page.getByTestId('contracts-open').click()
   const contracts = page.getByTestId('contracts')
-  await expect(contracts.getByTestId('offer-19903')).toContainText('Without a contract Atlantic sells for 20% under')
+  await expect(contracts.getByTestId('offer-19903')).toContainText('Without a contract Atlantic sells 20% under')
   await contracts.getByTestId('accept-19903').click()
   await expect(contracts.locator('.offer.signed')).toHaveCount(1)
   await page.getByTestId('contracts-close').click()

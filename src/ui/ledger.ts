@@ -38,9 +38,9 @@ export function yearSentence(y: S.YearSummary): string {
   const kept = (y.land ?? 0) + (y.building ?? 0) + (y.works ?? 0)
   const reasons = st.reasons.map(r => `${F.money(Math.abs(Math.round(r.amount)))} ${r.amount < 0 ? 'for' : 'from'} ${r.label[0].toLowerCase()}${r.label.slice(1)}`)
   const gap = Math.round(st.ended - st.began)
-  const head = `You started the year with ${F.money(st.began)} and ended it with ${F.money(st.ended)}, ${gap === 0 ? 'exactly the same' : `${F.money(Math.abs(gap))} ${gap < 0 ? 'less' : 'more'}`}.`
-  const keep = kept && gap < 0 ? ` ${F.money(kept)} of what you spent went on land, buildings and clearing, which you keep.` : ''
-  return `${head} The biggest reasons were ${F.list(reasons)}.${keep}`
+  const head = `You started the year with ${F.money(st.began)} and ended it with ${F.money(st.ended)}, which is ${gap === 0 ? 'exactly the same' : `${F.money(Math.abs(gap))} ${gap < 0 ? 'less' : 'more'}`}.`
+  const keep = kept && gap < 0 ? ` ${F.money(kept)} of what you spent paid for land, buildings and clearing, which you keep.` : ''
+  return `${head} The biggest ${reasons.length === 1 ? 'reason was' : 'reasons were'} ${F.list(reasons)}.${keep}`
 }
 
 function cashBook(y: S.YearSummary, lost: boolean): HTMLElement {
@@ -75,7 +75,7 @@ function cashBook(y: S.YearSummary, lost: boolean): HTMLElement {
       cashLine('Storage', -storage),
       cashLine([term('Bank payment', 'the note'), y.note > 0 && !lost ? stamp('Paid', { ink: 'violet', small: true }) : null], -y.note, { always: true }),
       cashLine(term('Living costs', 'the household'), -y.living, { always: true }),
-      cashLine('Interest on the debt you carry over', -y.interest)),
+      cashLine('Interest on your debt', -y.interest)),
     h('tfoot', null,
       h('tr', { class: 'total' }, h('td', null, 'Cash at year end'), h('td', { class: `m num${y.cashEnd < 0 ? ' c-red' : ''}`, colspan: 2, 'data-cash': '' }, F.money(y.cashEnd))),
       lost ? h('tr', { class: 'call' }, h('td', null, 'Bank calls in the loan below'), h('td', { class: 'm num', colspan: 2 }, F.money(S.CREDIT_LIMIT))) : null))
@@ -116,7 +116,7 @@ function yearOnFarm(c: S.Campaign): HTMLElement | null {
   for (const u of c.crew) if (u.kind !== 'farmer') people.set(u.name, [])
   for (const d of deeds) if (d.who) { if (!people.has(d.who)) people.set(d.who, []); people.get(d.who)!.push(d.text) }
   // Who is on the books now: the year's wages are not kept person by person.
-  const paid = new Map(c.crew.filter(u => u.kind !== 'farmer').map(u => [u.name, `paid ${F.money(S.payOf(u))} a month and ${u.winter === 'off' ? 'laid off for the winter' : 'kept on through the winter'}.`]))
+  const paid = new Map(c.crew.filter(u => u.kind !== 'farmer').map(u => [u.name, `hired at ${F.money(S.payOf(u))} a month, ${u.winter === 'off' ? 'laid off for the winter' : 'kept on through the winter'}.`]))
   const farm = deeds.filter(d => !d.who)
   if (!deeds.length && !people.size) return null
   return h('section', { class: 'b-people', testid: deeds.length ? 'ledger-deeds' : undefined },
@@ -166,7 +166,7 @@ function crop(ctx: Ctx, y: S.YearSummary): HTMLElement {
     rows.map(([label, v, cls]) => h('p', null, h('span', null, label),
       h('span', { class: `cbar${cls}`, role: 'img', 'aria-label': `${label}: ${F.perArea(v)}` }, h('i', { style: `width:${(v / max * 100).toFixed(1)}%` })),
       h('b', { class: 'num' }, F.num(F.perAreaValue(v), F.metric() ? 1 : 0)))),
-    h('p', { class: 't-caption', testid: 'crop-sprays' }, `You culled ${F.mass(y.cwtCulled)}.${F.cwtNote()} ${y.sprays !== undefined && y.potatoFields > 0 ? `You sprayed each field about ${F.plural(Math.round(y.sprays / y.potatoFields), 'time')}${nb ? ` and your neighbor sprayed ${F.plural(nb.sprays, 'time')}` : ''}. ` : ''}${nb ? `Your neighbor grew ${varietyName(nb.variety)}, planted on ${F.date(y.year, nb.plant)} and dug from ${F.date(y.year, nb.dig)}.` : ''}`))
+    h('p', { class: 't-caption', testid: 'crop-sprays' }, `You culled ${F.mass(y.cwtCulled)}. ${y.sprays !== undefined && y.potatoFields > 0 ? `You sprayed each field about ${F.times(Math.round(y.sprays / y.potatoFields))}${nb ? ` and your neighbor sprayed ${F.times(nb.sprays)}` : ''}. ` : ''}${nb ? `Your neighbor grew ${varietyName(nb.variety)}, planted on ${F.date(y.year, nb.plant)} and dug from ${F.date(y.year, nb.dig)}.` : ''}${F.cwtNote()}`))
 }
 
 const kilo = (v: number) => v === 0 ? '0' : `${v < 0 ? '−' : ''}${Math.abs(v / 1000)}k`
@@ -270,7 +270,7 @@ function farmBuilt(c: S.Campaign): HTMLElement | null {
   const machines = (Object.keys(S.UPGRADES) as S.UpgradeId[]).filter(id => c.upgrades[id] && id !== 'house2').map(id => S.UPGRADES[id].name.toLowerCase())
   const rows: [string, string, string][] = [
     ['field', 'Fields', `${held} in use${held > S.HOME_FIELDS ? `, ${held - S.HOME_FIELDS} more than the ${S.HOME_FIELDS} you started with` : ''}`],
-    ...(cleared ? [['stump', 'Cleared', `${F.plural(cleared, 'tract')} of woods and brush turned into fields`] as [string, string, string]] : []),
+    ...(cleared ? [['stump', 'Cleared', `${F.plural(cleared, 'tract')} of woods and brush turned into ${cleared === 1 ? 'a field' : 'fields'}`] as [string, string, string]] : []),
     ...(standing.length ? [['build', 'Built', F.upper(F.list(standing))] as [string, string, string]] : []),
     ...(people.length ? [['people', 'People', F.list(people)] as [string, string, string]] : []),
     ...(machines.length ? [['machine', 'Machines', F.upper(F.list(machines))] as [string, string, string]] : []),
@@ -375,7 +375,7 @@ export function ledgerScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
         !lost ? nextGoalSlip(ctx, c) : null,
         kept ? h('button', { class: 'btn', type: 'button', testid: 'new-farm', onclick: () => startNewFarm(ctx) }, 'Start a new farm') : null,
         h('button', { class: 'btn go', type: 'button', testid: 'year-next', onclick: () => ctx.run({ t: 'next' }) },
-          lost ? 'Close the ledger' : !more ? 'See how it ended' : won ? 'Keep farming' : `Plan ${yearWord(y.year + 1)}`, icon('arrow', 'i')),
+          lost ? 'Close the ledger' : !more ? 'See how it ended' : won ? `Keep farming in ${yearWord(y.year + 1)}` : `Plan ${yearWord(y.year + 1)}`, icon('arrow', 'i')),
       ]
       patch(book, key, () => {
         if (occasion) {
@@ -408,7 +408,7 @@ export function ledgerScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
             h('header', { class: 'book-head' },
               h('p', { class: 't-label' }, `Year ${c.yearIdx + 1} of ${c.goalYears}`),
               h('h1', { class: 't-title book-title' }, `The ledger, ${yearWord(y.year)}`),
-              h('p', { class: 'it b-verdict', testid: 'outcome' }, kept ? 'The farm is yours, and the bank has been paid.' : `You've paid the bank for this year. ${F.upper(F.plural(left, 'season'))} to go.`),
+              h('p', { class: 'it b-verdict', testid: 'outcome' }, kept ? 'The farm is yours, and the bank is happy.' : `The bank is happy this year. ${F.upper(F.plural(left, 'season'))} to go.`),
               h('p', { class: 'b-plain', testid: 'year-sentence' }, `${yearSentence(y)} ${againstUsual(y.cashEnd - y.cashStart)}`)),
             cashBook(y, false),
             y.cashEnd < 0 ? h('p', { class: 'b-debt' }, h('b', { class: 'c-red' }, 'In debt,'), ` but inside the bank's limit. It only calls in the loan below `, h('span', { class: 'num nowrap' }, F.money(S.CREDIT_LIMIT)), '.') : null,

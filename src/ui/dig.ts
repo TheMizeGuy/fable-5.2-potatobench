@@ -281,7 +281,7 @@ function narrowing(before: S.Estimate | null, after: S.Estimate, hill: number, s
       h('span', { class: 't-label' }, 'Now'),
       now,
       h('b', { class: 'num' }, lo, '–', hi)),
-    h('p', { class: 't-caption' }, `Yield in ${F.perAreaUnit()}, from ${F.plural(after.digs, 'test dig')}.${F.cwtNote()} The tick is this hill. One hill isn't the whole field, so the range shifts without closing.`))
+    h('p', { class: 't-caption' }, `Yield in ${F.perAreaUnit()}, from ${F.plural(after.digs, 'test dig')}. The tick is this hill, and one hill isn't the whole field, so the range moves but never narrows to one number.${F.cwtNote()}`))
 }
 
 // The tray paper for one test dig. It sits beside the land and does not stop the clock.
@@ -360,7 +360,7 @@ function phrase(ctx: Ctx, c: S.Campaign, lot: S.Lot, cause: S.Cause): string {
         const kt = S.killTiming(c, lot.field)
         const on = F.date(c.year, x.killed.day, true)
         if (kt.killed >= 0 && kt.early >= EARLY_DAYS) return `the vines were killed on ${on}, ${F.plural(kt.early, 'day')} early, before these finished growing`
-        return `the vines were killed on ${on}${KILL_ASKED[kt.why] ? `, on schedule because ${KILL_ASKED[kt.why]}` : ''}, trading some size for skins that set in time`
+        return `the vines were killed on ${on}${KILL_ASKED[kt.why] ? `, on schedule because ${KILL_ASKED[kt.why]}` : ''}, trading some size for skins that toughened in time`
       }
       if (x.died) return x.died.text.startsWith('Frost') ? 'frost killed the vines before these grew to size' : x.died.text.startsWith('Blight') ? 'blight killed the vines before these grew to size' : 'the vines died back before these grew to size'
       return 'dug while the vines were green, before these grew to size'
@@ -381,7 +381,7 @@ function why(ctx: Ctx, c: S.Campaign, lot: S.Lot, cause: S.Cause): string {
       const storms: number[] = []
       if (planted) for (let d = planted.day; d < lot.dugDay && d < (c.season?.day ?? 0); d++) if (S.getDay(ctx.app.world, c.year, d).prcp >= S.STORM_MM) storms.push(d)
       const barrels = weighDay(c, lot) - lot.dugDay
-      return `Potatoes that grow up into the light turn green and bitter. ${name} was ${p === 0 ? 'never hilled, and hilling twice' : p === 1 ? 'hilled once, and a second hilling' : 'hilled twice'}${p < 2 ? ' before the rows close would have kept them covered' : ''}.`
+      return `Potatoes that grow up into the light turn green and bitter. ${name} was ${p === 0 ? 'never hilled, and hilling twice' : p === 1 ? 'hilled once, and a second hilling' : 'hilled twice'}${p < 2 ? ' before the rows close keeps them covered' : ''}.`
         + (storms.length ? ` Heavy rain on ${F.list(storms.map(date))} washed soil off the hills.` : '')
         + (barrels > 2 ? ` The crop sat ${barrels} days in barrels in the field, and every sunny day turns more of it green.` : '')
         + (v.green >= 1.3 ? ` ${v.name} forms its potatoes high in the hill.` : '')
@@ -391,11 +391,11 @@ function why(ctx: Ctx, c: S.Campaign, lot: S.Lot, cause: S.Cause): string {
       const watered = fieldLog(c, lot.field, 'watered').length
       const inWindow = !!dry && !!ti && dry.day >= ti.day - 7 && dry.day <= ti.day + 35
       return `Common scab shows up when the soil is dry in the five weeks after the potatoes form${ti ? ` (in ${name}, ${date(ti.day)} to ${date(ti.day + 35)})` : ''}.`
-        + (inWindow ? ` ${name} was drying out by ${date(dry.day)}.` : ` ${name} was dry for part of that time.`)
-        + (watered ? ` It was watered ${F.plural(watered, 'time')}.` : reel ? ' It wasn\'t watered.' : '')
+        + (inWindow ? ` ${name} was drying out by ${date(dry.day)}` : ` ${name} was dry for part of that time`)
+        + (watered ? ` and was watered ${F.times(watered)}.` : reel ? ' and wasn\'t watered.' : '.')
         + ` ${water}`
-        + ` ${v.name} ${v.scab >= 1.3 ? 'scabs easily' : v.scab < 0.7 ? 'resists scab' : 'is about average for scab'}.`
-        + (f.soil < 0.6 ? ' Growing potatoes year after year leaves scab in the soil.' : '')
+        + ` ${v.name} ${v.scab >= 1.3 ? 'scabs easily' : v.scab < 0.7 ? 'resists scab' : 'is about average for scab'}`
+        + (f.soil < 0.6 ? ', and growing potatoes year after year leaves scab in the soil.' : '.')
     }
     case 'hollow':
       return `The big potatoes went hollow inside. That happens when growth stalls in a dry spell and then surges after rain, or when the soil is cold as the potatoes form.${dry ? ` ${name} was drying out by ${date(dry.day)}.` : ''} ${v.name} ${v.hollow >= 0.1 ? 'is prone to it' : 'rarely has this problem'}.`
@@ -415,7 +415,7 @@ function why(ctx: Ctx, c: S.Campaign, lot: S.Lot, cause: S.Cause): string {
     case 'blight': {
       const seen = facts(c, lot).blight
       const sprays = fieldLog(c, lot.field, 'sprayed').length
-      return `Rain washed spores off blighted leaves down into the hill. ${seen ? `Blight was first found in ${name} on ${date(seen.day)}` : 'Blight was never found on the leaves here, so it got in unseen'}${sprays ? `, and the field was sprayed ${F.plural(sprays, 'time')}` : ', and the field wasn\'t sprayed'}. A full hill and killing the vines early keep spores off the potatoes.`
+      return `Rain washed spores off blighted leaves down into the hill. ${seen ? `Blight was first found in ${name} on ${date(seen.day)}` : 'Blight was never found on the leaves here, so it got in unseen'}${sprays ? `, and the field was sprayed ${F.times(sprays)}` : ', and the field wasn\'t sprayed'}. A full hill and killing the vines early keep spores off the potatoes.`
     }
     case 'frost': {
       const nights = barrelFrosts(c, lot)
@@ -579,7 +579,7 @@ function reckoning(ctx: Ctx, lotId: number): PaperSpec {
           h('tbody', null, losses.map(x => h('tr', null,
             h('th', { scope: 'row' }, term(CAUSE_LABEL[x.k])),
             h('td', { class: 'num' }, `−${F.mass(x.cwt)}`),
-            h('td', null, h('span', { class: 't-label' }, x.k === 'skin' ? 'Downgraded' : CULLED.includes(x.k) ? 'Culled' : 'Down to No. 2'), h('p', null, why(ctx, c, lot, x.k))))))) : h('p', null, 'Every potato made a grade. A clean harvest.')),
+            h('td', null, h('span', { class: 't-label' }, x.k === 'skin' ? 'Downgraded' : CULLED.includes(x.k) ? 'Culled' : 'Down to No. 2'), h('p', null, why(ctx, c, lot, x.k))))))) : h('p', null, 'Every potato kept its grade. A clean harvest.')),
       never.length ? h('section', { class: 'reck-part' },
         head('What never grew'),
         h('table', { class: 'losses reck-causes' },
@@ -901,10 +901,10 @@ export function ticket(ctx: Ctx, lotId: number, o: { fresh: boolean; staged?: bo
             h('caption', { class: 't-label' }, losses.length ? 'The biggest losses' : 'Losses'),
             h('tbody', null, losses.length ? losses.slice(0, 3).map(x => h('tr', null,
               h('th', { scope: 'row' }, term(CAUSE_LABEL[x.k])), h('td', { class: 'num' }, `−${F.mass(x.cwt)}`), h('td', null, phrase(ctx, c, lot, x.k))))
-              : h('tr', null, h('td', { colspan: 3 }, 'Every potato made a grade. A clean harvest.')))),
+              : h('tr', null, h('td', { colspan: 3 }, 'Every potato kept its grade. A clean harvest.')))),
           box))
 
-      const reckon = () => h('button', { class: 'btn quiet', type: 'button', testid: 'reckoning-open', onclick: () => ctx.papers.open(reckoning(ctx, lotId)) }, 'The full breakdown')
+      const reckon = () => h('button', { class: 'btn quiet', type: 'button', testid: 'reckoning-open', onclick: () => ctx.papers.open(reckoning(ctx, lotId)) }, 'See full breakdown')
       let delivered = false
       // Delivering takes the No. 1 and large tubers a contract wants; what is left still has to be sold or stored.
       const draw = () => {

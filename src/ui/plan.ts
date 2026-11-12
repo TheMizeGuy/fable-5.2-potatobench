@@ -60,7 +60,7 @@ function openCompare(ctx: Ctx): void {
         h('tbody', null, vs.map(v => h('tr', null,
           h('th', { scope: 'row' }, h('b', null, v.name), h('span', { class: 't-caption' }, v.market)),
           cols.map(([label, text]) => h('td', { 'data-label': label, class: label === 'Price' && v.contract ? 'c-ochre' : null }, text(v)))))))),
-      h('p', { class: 't-caption' }, `Price is for US No. 1 in a usual year, averaged over the season.${F.cwtNote()} Harvest prices run lower and spring prices higher, but a contract price stays the same all season. Without a contract the chipping variety only gets a processing price, ${R.offContract()} its usual price. Large potatoes, over ${F.grams(S.SIZE_CHEF)}, sell for more or less than the No. 1 price, depending on the variety. "Keeps until" is the last cellar month before a crop dug around September 25 starts to sprout${c.upgrades.vent ? ', with the ventilation' : ''}. Yield is what a full season can produce before weather, blight and the kill date cut into it.`),
+      h('p', { class: 't-caption' }, `Price is for US No. 1 in a usual year, averaged over the season. Harvest prices run lower and spring prices higher, but a contract price stays the same all season. Without a contract the chipping variety only gets a processing price, ${R.offContract()} its usual price. Large potatoes, over ${F.grams(S.SIZE_CHEF)}, sell for more or less than the No. 1 price, depending on the variety. "Keeps until" is the last cellar month before a crop dug around September 25 starts to sprout${c.upgrades.vent ? ', with the ventilation' : ''}. Yield is what a full season can produce before weather, blight and the kill date cut into it.${F.cwtNote()}`),
     ],
     foot: close => h('button', { class: 'btn go', type: 'button', testid: 'compare-close', autofocus: true, onclick: close }, 'Back to the plan', icon('arrow', 'i')),
   })
@@ -110,7 +110,7 @@ function openMoney(ctx: Ctx): void {
       pc.wages ? ` After that, wages are ${F.money(pc.wages)} every month until the season ends, and you keep paying anyone you keep on over the winter.` : ''),
       h('p', { class: 't-label dlg-sub' }, 'Due at the end of the year'),
       h('div', { class: 'ledger-lines' },
-        after < 0 && after >= S.OPERATING_LIMIT ? line('The spring loan, repaid', -after) : null,
+        after < 0 && after >= S.OPERATING_LIMIT ? line('Spring loan repayment', -after) : null,
         line(term('The yearly bank payment', 'the note'), S.NOTE_PAYMENT),
         line(term('Your family\'s living costs', 'the household'), S.LIVING),
         m.owed > 0 ? line(`The land mortgage, ${F.money(m.owed)} owed`, Math.round(m.principal + m.interest)) : null,
@@ -133,7 +133,7 @@ function openMoney(ctx: Ctx): void {
           y.works ? line('Contractors', -y.works) : null,
           y.penalties ? line('Contract penalties', -y.penalties) : null,
           line('Bank payment, living costs and interest', -(y.note + y.living + y.interest)),
-          line(h('b', null, 'Cash at the end of the year'), y.cashEnd, { cls: 'total' })),
+          line(h('b', null, 'Cash at year end'), y.cashEnd, { cls: 'total' })),
         h('p', { class: 't-caption' }, `${y.potatoFields ? `You sold ${F.perArea(y.yieldCwtAcre)}.` : 'You didn\'t grow potatoes.'}${nb ? ` Your neighbor sold ${F.perArea(nb.yieldCwtAcre)}.` : ''}`),
       ] : null,
     ],
@@ -256,7 +256,7 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
       sub: potato ? v.name : 'Resting',
       marks: [...(potato && p.seed === 'saved' ? [{ glyph: 'sprout', cls: 'warn' }] : []), ...(rented ? [{ glyph: 'land', cls: '' }] : [])],
       queue: [], badge: null, key,
-      said: `${S.FIELD_NAMES[i]}, ${potato ? `${v.name} on ${p.seed} seed` : 'Rest year in oats and clover'}${rented ? ', rented' : ''}, ${F.money(fieldCost(p))}.${key ? ` Press ${key} to select it.` : ''}`,
+      said: `${S.FIELD_NAMES[i]}. ${potato ? `${v.name} on ${p.seed} seed` : 'Rest year in oats and clover'}${rented ? ', rented' : ''}, ${F.money(fieldCost(p))}.${key ? ` Press ${key} to select it.` : ''}`,
     }
   }
   const P = plates(ctx, plateLayer, { model: plateModel, onBadge: () => {}, covers: () => card.hidden ? [] : [card.getBoundingClientRect()] })
@@ -296,14 +296,14 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
     const cost = sel.reduce((a, j) => a + fieldCost(c.plans[j]), 0)
     return [
       cardHead(ctx, one ? 'Field record' : 'Fields', one ? info.name : `${sel.length} fields`, one
-        ? [`${R.POSITION_NOTE[info.elev]} ${info.streak ? `${F.upper(F.plural(info.streak, 'year'))} of potatoes in a row` : 'No potatoes last year'}, the soil is ${R.soilWord(info.soil)} and `, term('early dying'), ` hits ${F.pct(info.vert)} of plants.${info.raw ? ' It\'s new ground, so a first crop will be smaller unless it rests a year.' : ''}`]
+        ? [`${R.POSITION_NOTE[info.elev]} ${info.streak > 1 ? `Potatoes ${info.streak} years in a row` : info.streak ? 'Potatoes last year' : 'No potatoes last year'}. The soil is ${R.soilWord(info.soil)} and `, term('early dying'), ` hits ${F.pct(info.vert)} of plants.${info.raw ? ' It\'s new ground, so a first crop will be smaller unless it rests a year.' : ''}`]
         : F.list(sel.map(j => S.FIELD_NAMES[j]))),
       h('div', { class: 'card-crop' },
         choice('crop', 'Crop', [['potato', 'Potatoes', same('crop') && potato, () => setPlan({ crop: 'potato' })], ['rest', 'Rest year', same('crop') && !potato, () => setPlan({ crop: 'rest' })]]),
         h('p', { class: 'card-cost' }, h('span', { class: 't-label' }, sel.length > 1 ? 'Together' : 'Costs'), h('b', { class: 'num', testid: 'field-cost' }, F.money(cost)))),
       potato ? [
         h('div', { class: 'vgrid', role: 'radiogroup', 'aria-label': 'Variety' }, vs.map(x => varietyBox(c, x, same('variety') && x.id === p.variety))),
-        h('p', { class: 'note card-note' }, same('variety') ? `${v.blurb}${v.contract ? ` Without a contract it sells for ${R.offContract()} its usual price.` : ''}` : 'These fields are planted with different varieties.',
+        h('p', { class: 'note card-note' }, same('variety') ? `${v.blurb}${v.contract ? ` Without a contract it sells ${R.offContract()} its usual price.` : ''}` : 'These fields are planted with different varieties.',
           ' ', h('button', { class: 'btn quiet', type: 'button', testid: 'compare-open', onclick: () => openCompare(ctx) }, 'Compare them all')),
         // Where the seed comes from is always on the card: saved seed is free once some is held back in the cellar.
         h('div', { class: 'card-seed' },
@@ -355,7 +355,7 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
     const loan = over ? 0 : mn.loan
     const due = over ? mn.due.total - mn.due.loan : mn.due.total
     const what = pc.rent || pc.wages ? `with ${F.list([pc.rent ? `rent ${F.money(pc.rent)}` : '', pc.wages ? `wages ${F.money(pc.wages)}` : ''].filter(Boolean))}` : ''
-    const parts = F.list([loan ? 'the spring loan' : '', `the yearly bank payment ${F.money(mn.due.note)}`, `your family's living costs ${F.money(mn.due.household)}`, mn.due.mortgage > 0 ? `the land mortgage ${F.money(Math.round(mn.due.mortgage))}` : ''].filter(Boolean))
+    const parts = F.list([loan ? 'the spring loan' : '', `${F.money(mn.due.note)} for the yearly bank payment`, `${F.money(mn.due.household)} for your family's living costs`, mn.due.mortgage > 0 ? `${F.money(Math.round(mn.due.mortgage))} for the land mortgage` : ''].filter(Boolean))
     return [
       h('div', { class: `plan-money${over ? ' over' : ''}`, testid: 'plan-money' },
         h('p', { class: 'lead quiet pm-cash' }, h('span', { class: 'it' }, c.cash < 0 ? 'Owed from last year' : 'You have'), h('span', { class: 'dots' }),
@@ -364,14 +364,14 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
           h('b', { class: 'num big' }, F.money(pc.total))),
         h('p', { class: 'lead quiet pm-loan' }, h('span', { class: 'it' }, over ? 'More than the bank will lend' : after < 0 ? term('The bank\'s spring loan', 'spring loan') : 'Left in cash'), h('span', { class: 'dots' }),
           over ? null : h('span', { class: 'num', testid: 'plan-loan' }, F.money(Math.abs(after)))),
-        h('p', { class: 'lead quiet' }, h('span', { class: 'it' }, term('Due at the end of the year', 'due at the year end'), ', from your crop'), h('span', { class: 'dots' }),
+        h('p', { class: 'lead quiet' }, h('span', { class: 'it' }, term('Due at the end of the year', 'due at the year end'), ctx.layout() === 'narrow' ? null : ', from your crop'), h('span', { class: 'dots' }),
           h('span', { class: 'num c-red', testid: 'plan-due' }, F.money(due))),
         h('p', { class: 't-caption pm-parts' }, `That's ${parts}. You keep whatever's left.`),
         c.history.length ? null : h('p', { class: 't-caption pm-usual', testid: 'plan-usual', title: ctx.touch() ? undefined : usualFirstYear(mn.due.note + mn.due.household).full }, usualFirstYear(mn.due.note + mn.due.household).short)),
       over ? h('p', { class: 't-caption c-red', role: 'alert' }, 'Rest a field or plant saved seed, because the bank won\'t lend any more this spring.') : null,
       h('div', { class: 'blank-go' },
         h('button', { class: 'btn go wide', type: 'button', testid: 'begin-season', onclick: begin }, 'Start the season', icon('arrow', 'i')),
-        h('button', { class: 'btn quiet', type: 'button', testid: 'money-open', onclick: () => openMoney(ctx) }, 'The money')),
+        h('button', { class: 'btn quiet', type: 'button', testid: 'money-open', onclick: () => openMoney(ctx) }, 'See the money')),
     ]
   }
 
@@ -426,7 +426,7 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
       patch(mast, JSON.stringify([c.year, c.yearIdx]), () => drawMast(c))
       patch(rows, JSON.stringify([...state, open, nextGoal(c)?.id, c.applicants.map(a => a.id), c.crew.map(u => [u.id, u.wage, u.foreman]), c.offers.map(x => x.id), c.contracts.map(k => k.id),
         c.upgrades, c.mortgages.map(m => Math.round(m.owed)), c.sundaysOff, Math.round(c.cash), c.buildings.length]), () => drawRows(c))
-      patch(foot, JSON.stringify([S.planCosts(c), Math.round(c.cash), c.mortgages.map(m => Math.round(m.owed)), app.settings.units]), () => drawFoot(c))
+      patch(foot, JSON.stringify([S.planCosts(c), Math.round(c.cash), c.mortgages.map(m => Math.round(m.owed)), app.settings.units, layout]), () => drawFoot(c))
       el.style.setProperty('--foot-h', `${Math.round(foot.offsetHeight)}px`)
       // The one thing to do here is under the keyboard from the start.
       if (!focused && !ctx.papers.isOpen()) {

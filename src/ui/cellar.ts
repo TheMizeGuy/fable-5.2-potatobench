@@ -106,7 +106,7 @@ export function cellarScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
         lot.sprouted ? h('li', { class: 'c-ochre' }, icon('sprout', 'i'), h('span', null, 'It\'s sprouting, so it\'s worth 15% less and shrinks faster'))
           : h('li', null, icon('sprout', 'i'), h('span', null, m > c.month ? F.upper(R.sproutText(m)) : 'It\'ll start sprouting soon')),
         lot.broke ? h('li', { class: 'c-red' }, icon('blight', 'i'), h('span', null, 'Rot has spread through it')) : null,
-        lot.packed > 0.005 ? h('li', { testid: `lot-packed-${lot.id}` }, icon('box', 'i'), h('span', null, `${F.pct(lot.packed)} of its No. 1 and B size is packed, so No. 1 sells for ${F.pct(S.PACK_NO1)} more and B size for ${F.pct(S.PACK_B)} of the No. 1 price`)) : null,
+        lot.packed > 0.005 ? h('li', { testid: `lot-packed-${lot.id}` }, icon('box', 'i'), h('span', null, `${F.pct(lot.packed)} of its No. 1 and B size is packed, and packed No. 1 sells for ${F.pct(S.PACK_NO1)} more and packed B size for ${F.pct(S.PACK_B)} of the No. 1 price`)) : null,
         h('li', null, icon('store', 'i'), h('span', null, `Storage costs ${F.money(rent)} a month, about ${F.money(storageSoFar)} so far`))),
       deal ? h('p', { class: 'lot-deal' }, `${deal.k.buyer} will take ${F.mass(deal.take)} of No. 1 at ${F.price(deal.k.price)}, ${versusMarket(deal)}.`) : null,
       h('div', { class: 'lot-actions' },
@@ -130,7 +130,7 @@ export function cellarScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
             onclick: () => { if (ctx.run({ t: 'seed', lot: lot.id, fields: n }).ok) { seedOpen[lot.id] = false; ctx.say(`You held back ${F.mass(n * S.SEED_CWT_PER_FIELD)} of ${v.name}, enough to plant ${F.plural(n, 'field')} next spring.`, 'good') } },
           }, `Hold back ${F.mass(n * S.SEED_CWT_PER_FIELD)}`)),
         h('p', { class: 't-caption', testid: `seed-cost-${lot.id}` },
-          `Seed you hold back is free to plant next spring, while certified seed costs ${F.money(S.SEED_CWT_PER_FIELD * S.CERT_SEED_PER_CWT)} a field. But it carries this crop's virus, which builds up every year you save it, and any blight that went into the cellar with it comes back in the field.`,
+          `Seed you hold back is free to plant next spring (certified seed costs ${F.money(S.SEED_CWT_PER_FIELD * S.CERT_SEED_PER_CWT)} a field), but it carries this crop's virus, which builds up every year you save it, and any blight that went into the cellar with it comes back in the field.`,
           grewWith !== undefined ? ` This crop grew from seed with about ${F.pct(grewWith)} virus, and ${v.name} ${R.seedWord(v)}.` : '')) : null)
   }
 
