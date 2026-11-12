@@ -34,6 +34,8 @@ async function wordsOnScreen(page: Page): Promise<{ n: number; by: string }> {
     for (const el of document.querySelectorAll<HTMLElement>('#ui *')) {
       const r = el.getBoundingClientRect()
       if (!r.width || !r.height || r.bottom < 0 || r.top > innerHeight) continue
+      // A screen on its way out is a picture fading, not words given to read.
+      if (el.closest('.leaving, [inert]')) continue
       const cs = getComputedStyle(el)
       if (cs.visibility === 'hidden' || cs.opacity === '0') continue
       let here = 0
