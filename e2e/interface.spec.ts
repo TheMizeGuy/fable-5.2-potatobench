@@ -366,7 +366,9 @@ test('a crop a contract wants: the weigh ticket delivers it and the tracker coun
   await open(page, '?year=1990&seed=7')
   await reach(page, `const { app } = q.g(); const c = app.campaign; app.do({ t: 'accept', offer: 19901 })
     for (let i = 0; i < 6; i++) if (c.plans[i].crop === 'potato') app.do({ t: 'plan', field: i, plan: { crop: 'potato', variety: 'kennebec', seed: 'certified' } })
-    app.do({ t: 'begin' }); app.setSpeed(0); q.run(999, ['sell'], 'lot')`)
+    app.do({ t: 'begin' }); app.setSpeed(0); q.run(999, ['sell'], 'lot')
+    // A crop is delivered once it is hauled in and weighed.
+    for (let k = 0; k < 10 && c.season.fields.some(f => f.status === 'dug' && !f.weighed); k++) app.do({ t: 'day' }); app.setSpeed(0)`)
   const ticket = page.getByTestId('weighin')
   await expect(ticket).toBeVisible({ timeout: 30_000 })
   const deliver = ticket.locator('[data-testid^="lot-deliver-"]')
@@ -527,7 +529,7 @@ test('people: a chip opens the card, priorities set by click and key, a raise, a
   await card.getByTestId('prio-field').focus()
   await page.keyboard.press('0')
   expect(await prio('field')).toBe(0)
-  await expect(card.getByTestId('prio-field')).toHaveText('–')
+  await expect(card.getByTestId('prio-field')).toContainText('priority –')
   await page.keyboard.press('1')
   expect(await prio('field')).toBe(1)
   // A raise goes to what they asked, or a tenth more.
