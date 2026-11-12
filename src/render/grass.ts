@@ -94,7 +94,7 @@ export class Grass {
         if (on >= 0) {
           // Somebody else's hay stands tall, pasture is grazed short, stubble grows a few weeds.
           const sort = OFF_KIND[on] ?? 0
-          if (on >= 6 && on < 14 && hash2(k, 11) < (sort === 0 ? 0.66 : sort === 1 ? 0.5 : 0.14)) put(jx, jz, sort === 0 ? 0.5 + 0.45 * hash2(k, 17) : 0.12 + 0.3 * hash2(k, 17), 's', on)
+          if (on >= 6 && on < 14 && hash2(k, 11) < (sort === 0 ? 0.9 : sort === 1 ? 0.6 : 0.14)) put(jx, jz, sort === 0 ? 0.42 + 0.4 * hash2(k, 17) : 0.1 + 0.26 * hash2(k, 17), 's', on)
           continue
         }
         const ours = oursAt(jx, jz, 2)
@@ -102,7 +102,13 @@ export class Grass {
         const clump = hash2(Math.floor(jx / 3.1), Math.floor(jz / 3.1)) < 0.34 ? hash2(Math.floor(jx / 1.1) + 7, Math.floor(jz / 1.1)) : 0
         const want = (0.02 + 0.5 * fieldMask(jx, jz, 2.1) + 0.4 * Math.max(0, 1 - Math.abs(roadDist(jx, jz) - 1.3) / 0.5) + 0.7 * clump * clump) * ours
         if (hash2(k, 11) < want) put(jx, jz, 0.15 + 0.4 * hash2(k, 17))
-        else if (hash2(k, 19) < 0.55 * ours) put(jx, jz, 0.1 + 0.34 * hash2(k, 17) * hash2(k, 23), 's')
+        else {
+          // the sward: thick, low, uneven
+          for (let n = 0; n < 2; n++) {
+            if (hash2(k, 19 + n) > 0.8 * ours) continue
+            put(x + (hash2(k, 29 + n) - 0.5) * step * 1.6, z + (hash2(k, 31 + n) - 0.5) * step * 1.6, 0.06 + 0.3 * hash2(k, 17 + n) * hash2(k, 23), 's')
+          }
+        }
       }
     }
     const src = grassGeometry()

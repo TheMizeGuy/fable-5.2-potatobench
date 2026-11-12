@@ -85,8 +85,8 @@ Plant plantAt() {
 vec3 plantPlace(vec3 pl) {
   // Wider along the row than across it: the rows close first, the furrows between them last.
   // Where only every other plant is drawn, each stands for its neighbour along the row, and keeps to its own row.
-  float half = step(1.2, uDense);
-  return gp.at + vec3((gp.cs * pl.x + gp.sn * pl.z) * gp.w * mix(1.35, 1.8, half), pl.y * gp.h, (-gp.sn * pl.x + gp.cs * pl.z) * gp.w * mix(0.94, 0.62, half));
+  float sparse = step(1.2, uDense);
+  return gp.at + vec3((gp.cs * pl.x + gp.sn * pl.z) * gp.w * mix(1.35, 1.8, sparse), pl.y * gp.h, (-gp.sn * pl.x + gp.cs * pl.z) * gp.w * mix(0.94, 0.7, sparse));
 }
 `
 
@@ -180,7 +180,8 @@ vec3 offCover(vec2 p, vec2 f, float kind, float broad, float fine, float grit, o
   tall = 0.0;
   if (kind < 0.5) {
     // Hay: tall and streaked with the lie of the grass, seed heads buff in July, cut into windrows in early August.
-    float mown = smoothstep(0.42, 0.58, abs(fract(f.x * 1.85 + f.y * 0.65 + (broad - 0.5) * 0.5) - 0.5) * 2.0) * smoothstep(212.0, 216.0, d) * (1.0 - smoothstep(236.0, 252.0, d));
+    // The mower works across the piece over ten days in early August; the cut hay lies in windrows, then is gone.
+    float mown = smoothstep(0.0, 0.05, (d - 212.0) / 10.0 - f.x + (broad - 0.5) * 0.12) * (1.0 - smoothstep(236.0, 252.0, d));
     float streak = texture2D(uNoise, vec2(p.x * 0.09 + p.y * 0.02, p.y * 0.6)).a;
     col = mix(dead, live * vec3(1.06, 1.0, 0.76), green) * (0.9 + 0.2 * streak);
     col = mix(col, ${linear('#b7a378')} * (0.85 + 0.3 * fine), 0.42 * smoothstep(168.0, 192.0, d) * (1.0 - mown) * green);
@@ -239,11 +240,11 @@ vec4 paintCrop(vec2 f, vec4 h0, vec4 h1, float fine, out float lift) {
   col = mix(col, ${linear('#a8bcc0')}, 0.45 * uCrop.z);
   col = mix(col, ${linear('#b5a27a')}, h0.a);
   // a rounded row: lit along its crown, dark down its sides into the furrow
-  col *= mix(mix(0.38, 0.8, smoothstep(1.0, 0.1, fr)), 0.6, blur) * (0.86 + 0.28 * fine);
+  col *= mix(mix(0.26, 0.84, smoothstep(0.95, 0.25, fr)), 0.6, blur) * (0.86 + 0.28 * fine);
   // blossom, as white flecks over the leaf
   float open = uCrop.w * smoothstep(0.3, 0.55, grow) * (1.0 - h0.g) * (1.0 - bl) * (1.0 - h0.a) * (1.0 - min(1.0, uCrop.y * 1.5));
   float fleck = step(1.0 - 0.2 * open, fract(sin(dot(floor(f * vec2(${PLANTS_PER_ROW}.0 * 2.0, ${PLANTED_ROWS}.0 * 2.0)), vec2(12.9898, 78.233))) * 43758.5453));
-  fleck = mix(fleck, 0.14 * open, smoothstep(0.4, 1.2, fwidth(f.x * ${PLANTS_PER_ROW}.0 * 2.0)));
+  fleck = mix(fleck, 0.14 * open, smoothstep(0.4, 1.2, fwidth(f.x * ${PLANTS_PER_ROW}.0 * 2.0))) * (1.0 - uUnder * (1.0 - uPaint));
   col = mix(col, mix(${linear('#f8f5fa')}, ${linear('#d3c2e6')}, uTint) * 0.9, fleck * cover);
   lift = cover;
   return vec4(col, cover);
@@ -272,6 +273,7 @@ interface FieldGfx {
   off: { value: number }
   avail: { value: number }
   paint: { value: number }
+  under: { value: number }
   rimeHere: { value: number }
   tract: { value: Vector4 }
   ground: { value: Vector4 }
@@ -360,7 +362,7 @@ export class Fields {
     const crop = new Vector4(), soilColor = new Color(SOIL.good)
     const water = { value: 0 }, damp = { value: 0.3 }, cover = { value: 0 }, tint = { value: 0.2 }, dense = { value: 1 }, denseMid = { value: 1.36 }
     const keepNear = { value: new Vector2(0, 1.01) }, keepMid = { value: new Vector2(0, 0) }, bloomShare = { value: 1 }
-    const off = { value: 0 }, paint = { value: 0 }, rimeHere = { value: 0 }, avail = { value: 0 }, open = { value: 1 }
+    const off = { value: 0 }, paint = { value: 0 }, under = { value: 0 }, rimeHere = { value: 0 }, avail = { value: 0 }, open = { value: 1 }
     const tract = { value: new Vector4() }, ground = { value: new Vector4(PARCELS[i].stones, 0, 0, 0) }
     // A stand is felled from the side toward the farm; the swale from the road.
     const fell = { value: PARCELS[i].cover === 'brush' ? new Vector3(1, 0, 0) : new Vector3(0, -1, 1) }
@@ -398,7 +400,7 @@ export class Fields {
       key: 'county-soil',
       uniforms: {
         uT0: { value: t0 }, uT1: { value: t1 }, uSoil: { value: soilColor }, uWater: water, uDamp: damp, uCover: cover, uOff: off,
-        uOffKind: { value: OFF_KIND[i] ?? 0 }, uPaint: paint, uCrop: { value: crop }, uTint: tint, uOatsHere: oats, uRimeHere: rimeHere, uAvail: avail,
+        uOffKind: { value: OFF_KIND[i] ?? 0 }, uPaint: paint, uUnder: under, uCrop: { value: crop }, uTint: tint, uOatsHere: oats, uRimeHere: rimeHere, uAvail: avail,
         uTract: tract, uGround: ground, uFell: fell,
       },
       vertexHead: `${ROW_FN}\nuniform float uOff;\nuniform float uPaint;`,
@@ -426,6 +428,7 @@ export class Fields {
         uniform float uOff;
         uniform float uOffKind;
         uniform float uPaint;
+        uniform float uUnder;      // the crop's rows painted under plants drawn at middle distance, so what shows between their leaves is the row
         uniform vec4 uCrop;
         uniform float uTint;
         uniform vec3 uOatsHere;
@@ -464,7 +467,8 @@ export class Fields {
           // Under a closed canopy the ground gets what light the leaves let through.
           vec4 over = texture2D(uT0, vF);
           float shaded = smoothstep(0.4, 0.95, over.r) * (1.0 - over.a) * (1.0 - vHill.r);
-          soil *= mix(vec3(1.0), vec3(0.34, 0.5, 0.3), shaded * (1.0 - uPaint));
+          float paintK = max(uPaint, uUnder);
+          soil *= mix(vec3(1.0), vec3(0.34, 0.5, 0.3), shaded * (1.0 - paintK));
           poolOpen = 1.0 - 0.35 * shaded;
           float cov = uCover * smoothstep(0.2, 0.5, broad * 0.6 + 0.42 * uCover + 0.2 * fine);
           vec3 clover = uGrass * vec3(0.6, 0.98, 0.58) * (0.66 + 0.68 * fine);
@@ -485,14 +489,14 @@ export class Fields {
           poolF = uWater * (1.0 - uGround.z) * mix(1.0, 1.0 - smoothstep(0.12, 0.5, vProf), vRidged) * smoothstep(0.34, 0.5, broad * 0.6 + 0.4 * texture2D(uNoise, vWorld.xz * 0.017).b);
           soilRough = mix(mix(0.96, 0.66, uDamp), 0.04, poolF);
           // Far off, the crop and the rest-year oats are painted where plants would stand.
-          if (uPaint > 0.001) {
+          if (paintK > 0.001) {
             float lift;
             vec4 crop = paintCrop(vF, over, vHill, fine, lift);
-            soil = mix(soil, crop.rgb, crop.a * uPaint);
+            soil = mix(soil, crop.rgb, crop.a * paintK);
             vec3 oat = mix(${linear('#7fa46a')}, ${linear('#cfb56b')}, uOatsHere.y) * (0.78 + 0.4 * fine);
             soil = mix(soil, oat, uOatsHere.x * smoothstep(0.1, 0.6, uOatsHere.x) * 0.85 * uPaint);
-            poolF *= 1.0 - crop.a * uPaint;
-            soilRough = mix(soilRough, 0.8, crop.a * uPaint);
+            poolF *= 1.0 - crop.a * paintK;
+            soilRough = mix(soilRough, 0.8, crop.a * paintK);
           }
           if (uOff > 0.001) {
             float tall;
@@ -642,7 +646,7 @@ export class Fields {
           // Far off a flower is drawn no smaller than a pixel, and fewer are drawn, so the field keeps its share of white.
           // uShare: how many plants each drawn one stands for.
           float fbase = 0.017 + 0.006 * aFlower.w, fsize = max(fbase, length(cWorld.xyz - cameraPosition) * uPix);
-          float fkeep = clamp(fbase * fbase / (fsize * fsize) * 2.0 * uShare, 0.012, 1.0);
+          float fkeep = clamp(fbase * fbase / (fsize * fsize) * 1.3 * uShare, 0.012, 1.0);
           // and stands clear of the leaves, which close over it as they shrink
           cWorld.y += 0.05 * smoothstep(1.2, 3.0, fsize / fbase);
           fsize *= showF * step(fract(aFlower.w * 7.13 + aAt.w * 3.7), fkeep);
@@ -666,7 +670,7 @@ export class Fields {
     this.disposables.push(ringGeo)
 
     this.gfx.push({
-      d0, d1, t0, t1, crop, soilColor, water, damp, cover, tint, oats, dense, denseMid, keepNear, keepMid, bloomShare, off, avail, paint, rimeHere, tract, ground, open, bounds,
+      d0, d1, t0, t1, crop, soilColor, water, damp, cover, tint, oats, dense, denseMid, keepNear, keepMid, bloomShare, off, avail, paint, under, rimeHere, tract, ground, open, bounds,
       soil, plants, clumps, blossoms, oatMesh: null, ring, pulse, stake, pulseT: 9, selT: 9, lod: 0, any: false,
     })
     this.soilTarget.push(new Color(SOIL.good))
@@ -977,6 +981,7 @@ export class Fields {
     if (lod < 1) g.keepMid.value.set(0, lod)
     else g.keepMid.value.set(lod - 1, 1.01)
     g.paint.value = Math.max(0, Math.min(1, lod - 1))
+    g.under.value = Math.max(0, Math.min(1, (lod - 0.4) / 0.45))
     g.plants.visible = g.any && nearOn
     g.clumps.visible = g.any && midOn
     // The blossom thins with distance; each flower drawn stands for more.

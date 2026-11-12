@@ -97,7 +97,7 @@ function limb(w: Wood, ax: number, ay: number, az: number, bx: number, by: numbe
   }
 }
 
-type Form = 'maple' | 'birch' | 'bush'
+type Form = 'maple' | 'birch' | 'bush' | 'distant'
 
 // A hardwood one unit high: a trunk forking into limbs and twigs (what stands in winter), and a crown of rounded masses
 // of leaf that shade together as one volume, darker underneath and inside. A birch is narrow on a tall pale stem, often
@@ -120,6 +120,10 @@ function broadleaf(seed: number, form: Form, detail: number): BufferGeometry {
       const a = r() * 6.283, d = 0.31 + r() * 0.06
       lobes.push([Math.cos(a) * d, 0.46 + r() * 0.26, Math.sin(a) * d, 0.09 + r() * 0.035, 0])
     }
+  } else if (form === 'distant') {
+    // seen only from far off: the crown in four masses on a stub of trunk
+    limb(wood, 0, -0.03, 0, 0.02, 0.4, 0.01, 0.045, 0.028, 4)
+    lobes.push([0.02, 0.76, 0, 0.24, 0], [0.2, 0.54, 0.08, 0.2, 0], [-0.16, 0.56, 0.13, 0.19, 0], [-0.04, 0.52, -0.21, 0.19, 0])
   } else if (form === 'birch') {
     crownY = 0.7
     const lean = 0.05
@@ -146,13 +150,13 @@ function broadleaf(seed: number, form: Form, detail: number): BufferGeometry {
     lobes.push([0.03, 0.62, -0.02, 0.2, detail], [-0.05, 0.42, 0.06, 0.22, 0])
   }
   // limbs into the masses, each ending in twigs
-  if (form !== 'bush') {
+  if (form === 'maple' || form === 'birch') {
     const from = form === 'maple' ? 0.36 : 0.56
     lobes.forEach(([lx, ly, lz, lr], k) => {
       const hy = from - 0.1 * r(), reach = 0.82
       const ex = lx * reach, ey = Math.max(hy + 0.06, ly - lr * 0.2), ez = lz * reach
       limb(wood, 0.015, hy, 0.005, ex, ey, ez, form === 'maple' ? 0.02 : 0.011, 0.007, 4)
-      if (detail === 0 && k > 3) return
+      if (detail === 0) return
       for (let q = 0; q < 2; q++) {
         const a = r() * 6.283, tl = lr * (0.7 + 0.4 * r())
         limb(wood, ex, ey, ez, ex + Math.cos(a) * tl * 0.7, ey + tl * (0.4 + 0.5 * r()), ez + Math.sin(a) * tl * 0.7, 0.006, 0.002, 3)
@@ -228,7 +232,7 @@ type Cls = 'spruce' | 'maple' | 'birch' | 'bush' | 'conBack' | 'broadBack' | 'co
 // into a shadow it cannot reach. On and near the farm a patch has whole trees for when the camera is close and simpler
 // ones for when it is not.
 const CELL = 64
-const NEAR_AT = { high: 150, medium: 115, low: 45 }
+const NEAR_AT = { high: 70, medium: 50, low: 30 }
 
 export class Flora {
   readonly group = new Group()
@@ -464,7 +468,7 @@ export class Flora {
     const g = {
       spruce: conifer(10, 7, 0.21, 5, true), spruceFar: conifer(10, 7, 0.21, 5, false), conMid: conifer(7, 6, 0.21, 13, false), conFar: conifer(5, 5, 0.215, 17, false), conDistant: conifer(3, 4, 0.23, 19, false),
       maple: broadleaf(3, 'maple', 1), birch: broadleaf(11, 'birch', 1), bush: broadleaf(23, 'bush', 1),
-      mapleFar: broadleaf(3, 'maple', 0), birchFar: broadleaf(11, 'birch', 0), bushFar: broadleaf(23, 'bush', 0),
+      mapleFar: broadleaf(3, 'maple', 0), birchFar: broadleaf(11, 'birch', 0), bushFar: broadleaf(23, 'bush', 0), distant: broadleaf(31, 'distant', 0),
     }
     this.disposables.push(...Object.values(g))
     const k = (geo: BufferGeometry, mat: MeshStandardMaterial, wide: number, sink: number, shadow = true, depth?: MeshDepthMaterial): Kind => ({ geo, mat, wide, sink, shadow, depth })
@@ -478,7 +482,7 @@ export class Flora {
       bush: k(g.bushFar, leafMat, 1.25, 0.04, true, leafDepth),
       conBack: k(g.conMid, cMat, 1, 0.02), broadBack: k(g.mapleFar, leafMat, 1.1, 0.01, true, leafDepth),
       conFar: k(g.conFar, cMat, 1, 0.02), conDistant: k(g.conDistant, cMat, 1, 0.02, false),
-      broadFar: k(g.mapleFar, leafMat, 1.1, 0.01, true, leafDepth), broadDistant: k(g.mapleFar, leafMat, 1.1, 0.01, false),
+      broadFar: k(g.distant, leafMat, 1.1, 0.01, true, leafDepth), broadDistant: k(g.distant, leafMat, 1.1, 0.01, false),
     }
     // Lay each class out by patch: near-and-far patches on and round the farm, far-only patches beyond.
     for (const cls of Object.keys(trees) as Cls[]) {
@@ -494,7 +498,9 @@ export class Flora {
       for (const [key, list] of byCell) {
         let ch = this.chunks.get(key)
         if (!ch) this.chunks.set(key, (ch = { near: [], far: [], sphere: new Sphere(), fixed: !both }))
-        ch.far.push(this.place(this.far[cls], list, true))
+        // Drawn from the side of the farm first, so the trees in front hide those behind before they are shaded.
+        list.sort((a, b) => b.z - a.z)
+        ch.far.push(this.place(this.far[cls], list, !both))
         if (both) ch.near.push(this.place(this.near[cls], list, false))
       }
     }
@@ -547,7 +553,7 @@ export class Flora {
       for (let n = trees.length - 1; n >= 0; n--) if (cls(trees[n]) === c) ranks.push(n)
       if (!ranks.length) continue
       const sub = ranks.map(n => trees[n])
-      const near = this.place(this.near[c], sub, false), far = this.place(this.far[c], sub, true)
+      const near = this.place(this.near[c], sub, false), far = this.place(this.far[c], sub, false)
       ch.near.push(near)
       ch.far.push(far)
       stand.sets.push({ mesh: near, ranks }, { mesh: far, ranks })
@@ -582,7 +588,8 @@ export class Flora {
     return far ? this.far.bush : this.near.bush
   }
 
-  private place(kind: Kind, trees: Tree[], far: boolean): InstancedMesh {
+  // wide: seen only from far off, so it throws its shadow into the widest cascade alone.
+  private place(kind: Kind, trees: Tree[], wide: boolean): InstancedMesh {
     const m = new Matrix4(), q = new Quaternion(), p = new Vector3(), sc = new Vector3(), up = new Vector3(0, 1, 0)
     const geo = new BufferGeometry()
     geo.index = kind.geo.index
@@ -600,9 +607,8 @@ export class Flora {
     mesh.computeBoundingSphere()
     mesh.castShadow = kind.shadow
     mesh.receiveShadow = true
-    // Whole trees shadow into every cascade; far ones only into the last, wide one.
     mesh.layers.enable(2)
-    if (!far) { mesh.layers.enable(1); mesh.layers.enable(3) } else mesh.userData.far = true
+    if (!wide) { mesh.layers.enable(1); mesh.layers.enable(3) } else mesh.userData.far = true
     if (kind.depth) mesh.customDepthMaterial = kind.depth
     this.group.add(mesh)
     this.disposables.push(geo)

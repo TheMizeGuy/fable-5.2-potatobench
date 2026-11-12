@@ -109,13 +109,13 @@ export class Clearing {
       for (let d = 0.5; d < len - 0.3; d += 0.6 + r() * 0.8) {
         const t = d / len, off = (r() - 0.5) * 0.7
         const x = x0 + (x1 - x0) * t + nx * off, z = z0 + (z1 - z0) * t + nz * off
-        if (fbm2(x * 0.16 + 5.3, z * 0.16 + 1.7) < 0.44 || roadDist(x, z) < 0.95) continue
+        if (fbm2(x * 0.16 + 5.3, z * 0.16 + 1.7) < 0.41 || roadDist(x, z) < 0.95) continue
         let field = -1, best = 3.6
         for (const f of FIELDS) {
           const fd = Math.hypot(Math.max(f.x0 - x, x - f.x1, 0), Math.max(f.z0 - z, z - f.z1, 0))
           if (fd < best) { best = fd; field = f.i }
         }
-        this.hedges.push({ x, z, field, s: 0.75 + r() * 0.8, r: r() })
+        this.hedges.push({ x, z, field, s: (1.0 + r() * 1.0) * (r() < 0.12 ? 1.5 : 1), r: r() })
       }
     }
     const kind = flora.bush(true)
@@ -156,7 +156,7 @@ export class Clearing {
     this.hedges.forEach((h, n) => {
       const grown = h.field >= 0 ? fields[h.field].hedge : 1
       // Just cut, a hedgerow is stubs and sprouts; it stands again in four years.
-      const k = 0.15 + 0.85 * Math.pow(grown, 0.8)
+      const k = 0.1 + 0.9 * grown
       this.q.setFromAxisAngle(UP, h.r * 6.283)
       const w = h.s * 1.05 * (0.84 + 0.32 * h.r) * (0.4 + 0.6 * k)
       this.brush.setMatrixAt(n, this.m.compose(this.p.set(h.x, groundY(h.x, h.z) - 0.04, h.z), this.q, this.s.set(w, h.s * k, w)))

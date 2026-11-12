@@ -212,8 +212,7 @@ const landShots: Shot[] = [
     name: 'c5-tiled-after-rain', size: [1920, 1080], setup: async page => {
       await playTo(page, 1977, 5, 140)
       await land(page, `c.fields[4].tiled = true`)
-      console.log('  ', await playUntil(page, [], `const d = sim.today(app.world, c).day; return d.prcp > 12 ? 'rain ' + d.prcp : ''`))
-      console.log('  ', await playUntil(page, [], `return sim.today(app.world, c).sky === 'clear' || sim.today(app.world, c).sky === 'cloud' ? [4, 5].map(i => sim.fieldInfo(c, i).moistureLabel).join(' / ') : ''`))
+      console.log('  ', await playUntil(page, [], `const a = sim.fieldInfo(c, 4).moistureLabel, b = sim.fieldInfo(c, 5).moistureLabel, sky = sim.today(app.world, c).sky; return a !== b && (sky === 'clear' || sky === 'cloud') ? 'tiled ' + a + ' / untiled ' + b : ''`))
       await settle(page)
       await view(page, { x: -0.3, z: 12.2, dist: 44, yaw: 0.16, pitch: 0.55 })
       await frames(page, 8)
