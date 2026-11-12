@@ -56,10 +56,10 @@
 .season-screen .press-chip { color: var(--paper); background: var(--red); box-shadow: none; gap: 6px; }
 .season-screen .press-chip .i { color: var(--paper); }
 .season-screen .press-chip .press-word { font: 400 14px/1 var(--f-gothic); letter-spacing: .05em; text-transform: uppercase; }
-.season-screen .q-pop.press-pop { width: min(420px, calc(100vw - 2 * var(--gutter, 16px))); min-width: 0; }
-.season-screen .press-pop .press { display: flex; align-items: center; gap: 8px; margin: 0; padding: 6px 8px 6px 10px; font-size: 15px; line-height: 1.25; background: var(--paper) url(./system/grain.png); background-blend-mode: multiply; box-shadow: var(--laid), inset 0 0 0 2px var(--red); }
+.season-screen .q-pop.press-pop { width: min(440px, calc(100vw - 2 * var(--gutter, 16px))); min-width: 0; max-height: min(60vh, 420px); overflow-y: auto; }
+.season-screen .press-pop .press { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; padding: 6px 8px 6px 10px; font-size: 15px; line-height: 1.25; background: var(--paper) url(./system/grain.png); background-blend-mode: multiply; box-shadow: var(--laid), inset 0 0 0 2px var(--red); }
 .season-screen .press-pop .press > .i { --i: 18px; color: var(--red); flex: none; }
-.season-screen .press-pop .press-text { flex: 1; min-width: 0; }
+.season-screen .press-pop .press-text { flex: 1 1 220px; min-width: 0; }
 .season-screen .press-pop .btn { flex: none; min-height: 36px; padding: 0 10px; font-size: 14px; }
 .touch .season-screen .press-pop .btn { min-height: 44px; }
 .season-screen .q .q-by { display: grid; place-items: center; color: var(--ink-2); }

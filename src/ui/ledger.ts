@@ -12,7 +12,7 @@ import { soilWord, varietyName, yearName, yearShort, yearSpan, yearWord } from '
 import { goals, nextGoal } from '../game/goals.ts'
 import { startNewFarm } from './title.ts'
 import { openForeman } from './spring.ts'
-import { topBar } from './top.ts'
+import { light, topBar } from './top.ts'
 import { fist, stamp } from './system/parts.ts'
 import { portrait } from './system/people.ts'
 
@@ -165,7 +165,7 @@ function crop(ctx: Ctx, y: S.YearSummary): HTMLElement {
     rows.map(([label, v, cls]) => h('p', null, h('span', null, label),
       h('span', { class: `cbar${cls}`, role: 'img', 'aria-label': `${label}: ${F.perArea(v)}` }, h('i', { style: `width:${(v / max * 100).toFixed(1)}%` })),
       h('b', { class: 'num' }, F.num(F.perAreaValue(v), F.metric() ? 1 : 0)))),
-    h('p', { class: 't-caption' }, `${F.mass(y.cwtCulled)} culled.${nb ? ` The neighbor grew ${varietyName(nb.variety)}: planted ${F.date(y.year, nb.plant)}, sprayed ${F.plural(nb.sprays, 'time')}, dug from ${F.date(y.year, nb.dig)}.` : ''}`))
+    h('p', { class: 't-caption', testid: 'crop-sprays' }, `${F.mass(y.cwtCulled)} culled. ${y.sprays !== undefined ? `You sprayed ${F.plural(y.sprays, 'time')}${nb ? `; the neighbor ${F.plural(nb.sprays, 'time')}` : ''}. ` : ''}${nb ? `The neighbor grew ${varietyName(nb.variety)}: planted ${F.date(y.year, nb.plant)}, dug from ${F.date(y.year, nb.dig)}.` : ''}`))
 }
 
 const kilo = (v: number) => v === 0 ? '0' : `${v < 0 ? '−' : ''}${Math.abs(v / 1000)}k`
@@ -331,7 +331,7 @@ function nextGoalSlip(ctx: Ctx, c: S.Campaign): HTMLElement | null {
   const body = [here || goal.now ? fist() : null, h('span', null, h('span', { class: 'b-next-w' }, 'Next: '), h('b', null, goal.title),
     h('span', { class: 't-caption b-how' }, here ? `${goal.how} Name one now.` : goal.now ? goal.how : `${goal.how} ${goal.when}.`))]
   return here
-    ? h('button', { class: 'next-goal sheet laid s-canary', type: 'button', testid: 'next-goal', onclick: () => openForeman(ctx) }, body)
+    ? h('button', { class: 'next-goal sheet laid s-canary', type: 'button', testid: 'next-goal', onclick: () => { openForeman(ctx); light('.cat-foreman .btn') } }, body)
     : h('p', { class: 'next-goal sheet laid s-canary', testid: 'next-goal' }, body)
 }
 
