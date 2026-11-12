@@ -20,7 +20,7 @@ const SPEED_NAME = ['Paused', '1× speed', '2× speed', '3× speed']
 
 // The date leaf: in the season the day, its month and weekday; outside it, one word for where the year is.
 function leaf(c: S.Campaign): HTMLElement {
-  const year = h('span', { class: 'year t-label tb-year num' }, yearName(c.year))
+  const year = h('span', { class: 'year t-label tb-year num' }, yearName(S.yearNow(c)))
   if (c.phase === 'season' && c.season) {
     const d = c.season.day
     const { month, dom } = S.monthDay(c.year, d)

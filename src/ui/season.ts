@@ -207,7 +207,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   function warnFrost(): void {
     const c = app.campaign
     const s0 = c?.season
-    if (!c || !s0 || frostWarned === s0.day) return
+    if (!c || !s0 || frostWarned === s0.day || s0.log.some(e => e.type === 'frostBarrels' && e.day === s0.day)) return
     const worst = S.haulInfo(app.world, c).filter(x => x.frostChance >= 40).sort((a, b) => b.cwt - a.cwt)[0]
     if (!worst) return
     frostWarned = s0.day

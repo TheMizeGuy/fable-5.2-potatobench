@@ -86,7 +86,7 @@ function openMoney(ctx: Ctx): void {
   const nb = y ? app.world.neighbor[String(y.year)] : undefined
   const growing = y ? y.costs - y.wages - y.rent - y.land - y.penalties - y.storage - y.mortgage - y.works - y.building - y.packing : 0
   ctx.papers.open({
-    title: `The money, ${R.yearName(c.year)}`,
+    title: `The money, ${R.yearName(S.yearNow(c))}`,
     kicker: 'The order blank in full',
     testid: 'money',
     size: 'medium',

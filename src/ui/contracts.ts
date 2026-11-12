@@ -102,6 +102,7 @@ function signedCard(c: S.Campaign, k: S.ContractInfo): HTMLElement {
       h('span', { class: 'num' }, F.price(k.price))),
     r.el,
     h('p', { class: 't-caption' }, `${F.mass(k.delivered)} of ${F.mass(k.cwt)} delivered, due ${k.dueBy}. ${F.upper(r.said)}.`,
+      k.settled || k.needed <= 1e-6 ? null : ' On the due date the buyer takes what is still owed from the potato house, at the contract price; only what is short after that is charged as a penalty.',
       k.penalty > 0 ? h('span', { class: 'c-red' }, ` ${k.settled ? 'Penalty' : 'Short today'}: ${F.money(-k.penalty)}.`) : null))
 }
 

@@ -80,10 +80,12 @@ export function cellarScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
     const n = Math.max(1, Math.min(seedMax, seedN[lot.id] ?? 1))
     const sell = (frac: number) => { ctx.run({ t: 'sell', lot: lot.id, frac }) }
     const m = R.sproutMonth(lot.year, lot.dugDay, lot.variety, c.upgrades.vent)
-    const next = c.month < LAST ? S.MONTH_CURVE[c.month + 1] / S.MONTH_CURVE[c.month] - 1 : 0
-    const heading: [string, string] = v.contract ? ['flat', 'Off contract, a processing price that barely moves']
-      : c.month >= LAST ? ['flat', 'May is the last month']
-        : [next > 0.004 ? 'up' : next < -0.004 ? 'fall' : 'flat', `${S.CELLAR_MONTHS[c.month + 1]} usually runs ${next >= 0 ? `${F.num(next * 100, 1)}% higher` : `${F.num(-next * 100, 1)}% lower`}`]
+    // Kept another month, or to the best month ahead: what it would bring after the charge, shrink and sprouting.
+    const o = S.storeOutlook(app.world, c, lot)
+    const nx = o.months[0]
+    const gain = nx ? nx.net - value : 0
+    const heading: [string, string] = !nx ? ['flat', 'May is the last month: what is left is sold at its end']
+      : [gain > 0.5 ? 'up' : gain < -0.5 ? 'fall' : 'flat', `Kept to ${nx.name}: about ${F.money(nx.net)}, ${Math.abs(gain) < 0.5 ? 'the same as selling now' : `${F.money(Math.abs(gain))} ${gain > 0 ? 'more' : 'less'} than selling now`}${o.best && o.best !== nx && o.best.net > Math.max(value, nx.net) + 0.5 ? `; ${o.best.name} is the best, about ${F.money(o.best.net)}` : ''}`]
     const grewWith = c.season?.fields[lot.field]?.seedVirus
     const rent = Math.round(S.lotCwt(lot) * S.STORE_COST)
     const deal = deals(app.world, c, lot)[0]
@@ -91,7 +93,7 @@ export function cellarScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
     return h('article', { class: 'lot', 'aria-labelledby': `lot-h-${lot.id}`, k: `lot-${lot.id}` },
       h('header', { class: 'lot-head' },
         h('h3', { id: `lot-h-${lot.id}` }, S.FIELD_NAMES[lot.field]),
-        h('span', { class: 'lot-value num', testid: `lot-value-${lot.id}`, 'data-lot': lot.id }, F.money(value))),
+        h('span', { class: 'lot-value num', testid: `lot-value-${lot.id}`, 'data-lot': lot.id, title: ctx.touch() ? undefined : 'What selling it today pays' }, F.money(value))),
       h('p', { class: 'lot-sub quiet' }, `${v.name} · ${F.mass(S.lotCwt(lot))}${lot.seedHeld ? ` · seed held for ${F.plural(lot.seedHeld, 'field')}` : ''}`,
         h('span', { class: 'num' }, ` · ${F.price(S.basePrice(app.world, c, lot.variety))} for No. 1`)),
       h('ul', { class: 'lot-facts' },
@@ -157,7 +159,7 @@ export function cellarScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
       patch(sheet, JSON.stringify(model), () => [
         h('header', { class: 'winter-head' },
           h('div', null,
-            h('p', { class: 't-label' }, `${month} · ${R.yearName(c.year)} · The cellar months`),
+            h('p', { class: 't-label' }, `${month} · ${R.yearName(S.yearNow(c))} · The cellar months`),
             h('h2', { class: 't-title', id: 'winter-h' }, 'The winter\'s work')),
           h('p', { class: 'num w-wages' }, wages ? [h('b', null, F.money(wages)), ' a month in wages'] : 'Nobody paid this winter')),
         h('div', { class: `w-body${c.crew.length <= 1 ? ' few' : ''}`, 'data-scroll': 'winter' },

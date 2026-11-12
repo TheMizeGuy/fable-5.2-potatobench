@@ -239,7 +239,7 @@ function pricesPage(ctx: Ctx, c: S.Campaign): Child {
     lots.length ? [
       sec('In the cellar'),
       book(lots.map(l => [`${S.variety(l.variety).name} from ${S.FIELD_NAMES[l.field]}, ${F.mass(S.lotCwt(l))}`, F.money(S.lotValue(world, c, l))])),
-      h('p', { class: 't-caption' }, 'Worth today. Select a dug field to sell its crop or see its weigh ticket.'),
+      h('p', { class: 't-caption' }, 'What selling pays today. Select a dug field to sell its crop or see its weigh ticket.'),
     ] : null,
     ks.length ? [
       sec('Contracts'),
