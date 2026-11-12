@@ -164,7 +164,7 @@ const STATES: State[] = [
   { name: 'how-keys', what: 'How to play, with every key and order unfolded', sizes: MAIN, run: async page => { await page.getByTestId('how-open').first().click(); await page.getByTestId('how-keys').click() } },
 
   // The farmstead's papers.
-  { name: 'plan-tract', what: 'Spring: the farm\'s own woodlot, its clearing and what it yields', sizes: MAIN, run: async page => { await q(page, `q.g().app.newGame(1987, 3)`); await page.getByTestId('field-14').click() } },
+  { name: 'plan-tract', what: 'Spring: the farm\'s own woodlot, its clearing and what it yields', sizes: MAIN, run: async page => { await q(page, `q.g().app.newGame(1987, 3)`); await page.getByTestId('fields-open').click(); await page.getByTestId('fold-field-14').click() } },
   { name: 'plan-equipment', what: 'Spring: the equipment fold, with what each needs first', sizes: MAIN, run: async page => { await q(page, `q.g().app.newGame(1987, 3)`); await page.getByTestId('equipment-open').click() } },
   { name: 'plan-mortgage', what: 'A later spring with land bought on the mortgage: the bank fold', sizes: MAIN, run: async page => {
     await q(page, `q.start(1987, 3); q.year(3); const { app } = q.g(); app.do({ t: 'next' }); app.campaign.cash += 40000; app.do({ t: 'buyLand', field: 6 })`)
