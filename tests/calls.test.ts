@@ -457,3 +457,111 @@ describe('the kill day, ahead and after', () => {
     expect(near / compared).toBeGreaterThanOrEqual(0.8)
   })
 })
+
+describe('round five', () => {
+  // A coach-tended first year, each command the coach would give.
+  function tend(w: World, c: Campaign): void {
+    for (const a of S.advise(w, c)) if (a.act !== 'wait' && a.act !== 'close' && a.act !== 'sell') S.apply(w, c, { t: 'job', kind: a.act, field: a.field })
+  }
+
+  it('the year-end figure counts the crop from planting on, and the bank is said to call only when even the top falls short', () => {
+    let inside = 0, said = 0, likely = 0
+    for (let seed = 1; seed <= 8; seed++) {
+      const { w, c } = farm(seed)
+      const seen: S.MoneyNow[] = []
+      for (let g = 0; g < 400 && playing(c); g++) {
+        tend(w, c)
+        if (g % 10 === 0) {
+          const m = S.moneyNow(w, c)
+          // From the first day of the season the potato fields count, planted or still to plant.
+          expect(m.growing, `seed ${seed} day ${g}`).toBeGreaterThan(0)
+          seen.push(m)
+        }
+        ok(w, c, { t: 'day' })
+      }
+      const end = S.moneyNow(w, c).after
+      for (const m of seen) {
+        said++
+        if (end >= m.range.lo && end <= m.range.hi) inside++
+        if (m.callRisk === 'likely' && end >= S.CREDIT_LIMIT) likely++
+      }
+    }
+    expect(inside / said).toBeGreaterThanOrEqual(0.8)
+    expect(likely).toBe(0)
+    // Where the limit falls in the range: under the middle is possible, under the top is likely.
+    const { w, c } = farm(1)
+    const m = S.moneyNow(w, c)
+    expect(m.callRisk).toBe('none')
+    c.cash += S.CREDIT_LIMIT - m.after - 1
+    expect(S.moneyNow(w, c).callRisk).toBe('possible')
+    c.cash -= m.range.hi - m.after + 2
+    expect(S.moneyNow(w, c).callRisk).toBe('likely')
+  })
+
+  it('a buyer never offers for a lot that is no longer there', () => {
+    const { w, c } = farm(1)
+    for (let g = 0; g < 400 && playing(c) && !c.season!.fields.some(f => f.weighed); g++) { tend(w, c); ok(w, c, { t: 'day' }) }
+    const lot = S.openLots(c).find(l => c.season!.fields[l.field].weighed)!
+    // A buyer's telegram for the lot, then the player sells it off the ticket before reading the telegram.
+    c.incidents.push({ id: c.nextIncident++, kind: 'buyer', day: c.season!.day, until: c.season!.day + 4, choices: ['take', 'refuse'], lot: lot.id })
+    const r = ok(w, c, { t: 'sell', lot: lot.id, frac: 1 })
+    expect(c.incidents.some(i => i.kind === 'buyer')).toBe(false)
+    expect(r.events.some(e => e.type === 'incidentDone' && /no longer there/.test(e.text))).toBe(true)
+  })
+
+  it('a routine spray on vines about to be killed is not pressed on the player, and the outlook says what holds an order', () => {
+    let checked = 0, held = 0
+    for (const seed of [1, 2, 3, 4]) {
+      const { w, c } = farm(seed)
+      ok(w, c, { t: 'sprayWay', way: 'auto' })
+      for (let g = 0; g < 400 && playing(c); g++) {
+        const s = c.season!
+        const spray = s.jobs.find(j => j.kind === 'spray')
+        const f = spray ? s.fields[spray.field] : null
+        if (spray && f && f.tiDay >= 0 && f.deadDay < 0 && !s.jobs.some(j => j.kind === 'kill' && j.field === spray.field)) {
+          const x = structuredClone(c)
+          ok(w, x, { t: 'job', kind: 'kill', field: spray.field })
+          const o = S.jobOutlook(w, x).find(y => y.id === spray.id)!
+          if (o.unit < 0) {
+            expect(o.leaves, o.why).toBe(true)
+            expect(S.pressing(w, x).some(p => p.job === spray.id)).toBe(false)
+            checked++
+          }
+        }
+        for (const o of S.jobOutlook(w, c)) {
+          expect(o.why).not.toMatch(/^You takes|^You is/)
+          if (/once the .+ in .+ is done/.test(o.why)) held++
+        }
+        tend(w, c)
+        ok(w, c, { t: 'day' })
+      }
+    }
+    expect(checked).toBeGreaterThan(0)
+    expect(held).toBeGreaterThan(0)
+  })
+
+  it('blight found on a walk stays seen on the field after the hills are pulled', () => {
+    let found = 0
+    for (let seed = 1; seed <= 12 && !found; seed++) {
+      const { w, c } = farm(seed)
+      for (let g = 0; g < 400 && playing(c); g++) {
+        tend(w, c)
+        const ev = ok(w, c, { t: 'day' }).events
+        for (const e of ev.filter(x => x.type === 'scout' && x.level === 'bad')) {
+          found++
+          const day = c.season!.day - 1
+          // From then on, whatever is pulled, the field says blight was seen, and since when.
+          for (let k = 0; k < 20 && playing(c); k++) {
+            const info = S.fieldInfo(c, e.field)
+            expect(info.blightSeen, `${S.FIELD_NAMES[e.field]} ${S.formatDay(c.year, c.season!.day)}`).toBe(true)
+            expect(info.blightFoundDay).toBeLessThanOrEqual(day)
+            ok(w, c, { t: 'day' })
+          }
+          break
+        }
+        if (found) break
+      }
+    }
+    expect(found).toBeGreaterThan(0)
+  })
+})

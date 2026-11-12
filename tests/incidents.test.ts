@@ -315,6 +315,8 @@ describe('a buyer', () => {
     expect(S.lotCwt(lot)).toBeGreaterThan(have * (1 - S.SHRINK * (S.BUYER_DAYS + 2) / 30))
     const d = structuredClone(base)
     ok(d, { t: 'sell', lot: inc.lot!, frac: 1 })
-    refused(d, { t: 'answer', incident: inc.id, choice: 'take' }, /gone/)
+    // Sold meanwhile, the offer goes with the lot: nothing is left to answer.
+    expect(d.incidents.some(x => x.id === inc.id)).toBe(false)
+    refused(d, { t: 'answer', incident: inc.id, choice: 'take' }, /No such question/)
   })
 })
