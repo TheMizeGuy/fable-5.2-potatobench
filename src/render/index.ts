@@ -289,7 +289,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     const to = square ? rig.field(i, viewport()) : rig.field(i, viewport(), rig.goal.yaw)
     // A long way to go takes a little longer, so the land is seen to glide by and not to jump.
     const way = Math.hypot(to.x - rig.cur.x, to.z - rig.cur.z) / Math.max(to.dist, rig.cur.dist)
-    rig.moveTo(to, still, MOVE_MS * clamp(0.8 + way * 1.6, 1, 2.2))
+    rig.moveTo(to, still, MOVE_MS * clamp(0.8 + way * 1.6, 1, 1.8))
   }
   // The field nearest to where the picture is looking.
   function fieldInView(): number {
@@ -736,9 +736,10 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       exposure: lit.exposure, focus: sharp, aperture: 0.3 * lens, time, grain: 0.018,
       sunX: sunAt.x * 0.5 + 0.5, sunY: sunAt.y * 0.5 + 0.5, shafts: sunAt.z < 1 ? shafts : 0, shaftTint,
       warm: 0.2 + 0.5 * gold + 0.1 * autumn * open - 0.3 * cold - 0.28 * lit.night,
-      rich: 0.1 + 0.15 * gold + 0.1 * autumn - 0.05 * falling,
-      contrast: 0.1 + 0.09 * open * lit.day + 0.06 * env.storm,
-      veil: 0.08 * env.mist + 0.07 * env.rain + 0.1 * env.snowfall, veilTint,
+      // Rain is wet and dark: its colours deepen and its darks go down, where snow and mist pale theirs.
+      rich: 0.1 + 0.15 * gold + 0.1 * autumn + 0.16 * env.rain - 0.05 * env.snowfall,
+      contrast: 0.1 + 0.09 * open * lit.day + 0.06 * env.storm + 0.16 * env.rain,
+      veil: 0.08 * env.mist + 0.05 * env.snowfall, veilTint,
       vignette: snap.mode === 'title' ? 0.3 : 0.2 + 0.1 * lit.night + 0.06 * env.storm,
     }, Math.round(size.w * size.pr), Math.round(size.h * size.pr))
     const t3 = performance.now()

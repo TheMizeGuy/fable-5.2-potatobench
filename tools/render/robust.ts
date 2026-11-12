@@ -261,7 +261,7 @@ async function changed(page: Page, a: Buffer, b: Buffer): Promise<number> {
   const track: { x: number; y: number }[] = await page.evaluate(() => new Promise(res => {
     const seen: { x: number; y: number }[] = []
     const f = (window as any).__countyField
-    const tick = () => { const p = f.anchor(4); seen.push({ x: p.x, y: p.y }); if (seen.length < 70) requestAnimationFrame(tick); else res(seen) }
+    const tick = () => { const p = f.anchor(4); seen.push({ x: p.x, y: p.y }); if (seen.length < 130) requestAnimationFrame(tick); else res(seen) }
     requestAnimationFrame(tick)
   }))
   const jumps = track.slice(1).map((p, k) => Math.hypot(p.x - track[k].x, p.y - track[k].y))

@@ -216,7 +216,7 @@ vec3 skyColor(vec3 dir, vec3 eye, float disc) {
   float low = max(dir.y, 0.0015);
   // The sky has its own air in it already: the land's haze is laid over only its lowest few degrees, where the far
   // country goes into it; in thick weather it stands higher, so no skyline shows through rain or snow.
-  float air = uHaze.x * ${HAZE_PER_M.toFixed(3)} / (0.0042 * low) + smoothstep(0.0009, 0.002, uHaze.x) * 0.6 / low;
+  float air = uHaze.x * ${HAZE_PER_M.toFixed(3)} / (0.0042 * low) + smoothstep(0.0006, 0.0013, uHaze.x) * 0.6 / low;
   air += min(uMist.x * exp(-uMist.y * max(eye.y - uMist.z, -1.5)) / (uMist.y * low), uMist.x * 60.0);
   col = mix(col, hazeTint(d), 1.0 - exp(-air));
   return mix(col, uGroundRad, smoothstep(0.0, -0.35, dir.y));
