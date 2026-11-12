@@ -396,6 +396,7 @@ export interface Tuning {
   potatoShare: number       // plants potatoes on at least this share of the fields held
   flipLoss: number          // when a field gives up no more than this by it against its best rotation
   yearEndSafety: number     // cash a purchase must leave at the year end, as far as the spring can tell
+  prepayKeep: number        // pays extra off the mortgage in spring with what the year end would leave beyond this
   walkFrom: number          // someone to walk the fields once more than this many potato fields are grown, another for each walkPer more
   walkPer: number
   tractor: { fields: number; left: number }    // the second tractor: potato fields, seasons left
@@ -437,8 +438,8 @@ export const TUNING: Tuning = {
   earlyMarket: ['norland'], earlyBy: 25, earlyDate: 12, fieldRevenue: 25000,
   byElev: [['caribou'], ['caribou'], ['caribou']],
   landValue: { ridge: 10000, brook: 6000, dufour: 7500 }, landMargin: 0,
-  loanFloor: -75000, buyLand: -60000, buyLeft: 5, fieldCash: 15000, yearEndSafety: 30000, potatoShare: 0.5, flipLoss: 4000,
-  walkFrom: 5, walkPer: 5, tractor: { fields: 7, left: 2 }, truckFields: 8, driverFields: 11, tractor3Fields: 13, hallValue: 1000,
+  loanFloor: -75000, buyLand: -60000, buyLeft: 5, fieldCash: 15000, yearEndSafety: 30000, prepayKeep: 40000, potatoShare: 0.5, flipLoss: 4000,
+  walkFrom: 5, walkPer: 7, tractor: { fields: 10, left: 2 }, truckFields: 8, driverFields: 13, tractor3Fields: 13, hallValue: 1000,
   rocksAt: 0.45, rocksSpring: 0.6, brushElev: [0], rushFrom: 2, pickerBacklog: 4, pickerBarrels: 500, standGain: 70, haulDays: 1.7, peakHire: 18, peakKeep: 12,
   buildFloor: 5000, houseOver: 1500, packStock: 3000, pondWaterings: 3, sundayTired: 0.5, sundayJobs: 2,
   contractGain: 0, no1Share: 0.8, contractSafety: 0.85,
@@ -1330,6 +1331,12 @@ export function expert(cfg: ExpertCfg = EXPERT): BotFactory {
         manPeople(world, c, n)
         sellSpareLogs(world, c)
         orderBuildings(world, c)
+        // Cash the year will not need goes off the land mortgage, which saves its interest.
+        const owed = S.mortgageOwed(c)
+        if (owed > 0) {
+          const extra = Math.min(owed, c.cash, yearEndCash(c) - k.prepayKeep, reserve() - (k.loanFloor + 30000))
+          if (extra >= 1000) S.apply(world, c, { t: 'payMortgage', amount: Math.floor(extra) })
+        }
         // Keep the spring loan within bounds: give back the rented field worth least, then rest the potato field
         // worth least.
         for (let guard = 0; guard < S.FIELD_COUNT && reserve() < k.loanFloor; guard++) {
