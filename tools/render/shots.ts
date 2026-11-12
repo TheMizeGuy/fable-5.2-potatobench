@@ -366,7 +366,7 @@ const shots: Shot[] = [
   },
   // ---- The bigger farm.
   { name: 'f01-opening', size: [1920, 1080], insets: NONE, setup: title },
-  { name: 'f02-whole-farm', size: [1920, 1080], setup: async page => { console.log('  ', await bigFarm(page, { rent: ALL_LAND, hands: 2, operator: true, until: 196 })); await settle(page); await page.evaluate(() => (window as any).__countyField.home()); await settle(page) } },
+  { name: 'f02-whole-farm', size: [1920, 1080], setup: async page => { console.log('  ', await bigFarm(page, { rent: ALL_LAND, hands: 2, operator: true, until: 196 })); await settle(page); await page.evaluate(() => (window as any).__countyField.tier('county')); await settle(page) } },
   { name: 'f02b-whole-farm-home', size: [1920, 1080], setup: async page => { await bigFarm(page, { rent: ALL_LAND, hands: 2, operator: true, until: 196 }); await settle(page) } },
   { name: 'f03-spring-land', size: [1920, 1080], setup: async page => { await bigFarm(page, {}); await settle(page) } },
   { name: 'f03b-spring-whole', size: [1920, 1080], setup: async page => { await bigFarm(page, { rent: [7] }); await settle(page); await page.evaluate(() => (window as any).__county.app.select(10)); await page.evaluate(() => (window as any).__countyField.view({ frame: 'land', x: 30, z: 4, dist: 170 })); await settle(page) } },
@@ -445,7 +445,7 @@ const shots: Shot[] = [
     },
   })),
   // ---- The light: the opening at three points of its move, and the playing view through the year's weather.
-  ...[0, 0.5, 1].map((u, k) => ({ name: `L01-title-${'abc'[k]}`, size: [1920, 1080] as [number, number], insets: NONE, setup: async (page: Page) => { await page.evaluate(u => (window as any).__countyField.titleAt(u), u); await title(page) } })),
+  ...[0, 0.6, 1].map((u, k) => ({ name: `L01-title-${'abc'[k]}`, size: [1920, 1080] as [number, number], insets: NONE, setup: async (page: Page) => { await page.evaluate(u => (window as any).__countyField.titleAt(u), u); await title(page) } })),
   { name: 'L02-play-july', size: [1920, 1080], setup: async page => { await july(page); await playUntil(page, [], SKY('clear')); await settle(page); await frames(page, 20) } },
   { name: 'L03-play-overcast', size: [1920, 1080], setup: async page => { await july(page); console.log('  ', await playUntil(page, [], SKY('overcast'))); await settle(page); await frames(page, 20) } },
   { name: 'L04-play-rain', size: [1920, 1080], setup: async page => { await july(page); console.log('  ', await playUntil(page, [], SKY('rain'))); await settle(page); await frames(page, 20) } },
@@ -455,12 +455,18 @@ const shots: Shot[] = [
   { name: 'L07-play-snow', size: [1920, 1080], setup: async page => { await playTo(page, 1977, 5, 268, ['dig']); await settle(page); await page.evaluate(() => (window as any).__countyField.tune({ snow: 0.5, snowfall: 1, rain: 0, cloud: 1, cloudShadow: 0, sunScale: 0.05, deck: 1.05, haze: 0.0026, key: 0.92, storm: 0.15, high: 0, rime0: 0, rime1: 0, rime2: 0, mist: 0, wet: 0.5, dry: 0 })); await frames(page, 30) } },
   { name: 'L07b-snow-morning', size: [1920, 1080], setup: async page => { await playTo(page, 1977, 5, 268, ['dig']); await settle(page); await page.evaluate(() => (window as any).__countyField.tune({ snow: 0.62, snowfall: 0, rain: 0, cloud: 0.2, cloudShadow: 0.8, sunScale: 1, deck: 1, haze: 0.0006, key: 1, storm: 0, high: 0.5, rime0: 0, rime1: 0, rime2: 0, mist: 0.2, wet: 0.4, dry: 0, hour: -1 })); await frames(page, 30) } },
   { name: 'L08-winter-night', size: [1920, 1080], setup: async page => { await winter(page, 2); await settle(page); await frames(page, 20) } },
-  { name: 'L09-close-bloom', size: [1920, 1080], setup: async page => { await july(page); await playUntil(page, [], SKY('clear')); await settle(page); await view(page, { x: 6, z: 12.6, dist: 10, yaw: -1.0 }); await frames(page, 30) } },
-  { name: 'L10-whole-map', size: [1920, 1080], setup: async page => { await bigFarm(page, { rent: ALL_LAND, hands: 2, operator: true, until: 196 }); await playUntil(page, [], SKY('clear')); await settle(page); await page.evaluate(() => (window as any).__countyField.home()); await settle(page); await frames(page, 20) } },
+  { name: 'L09-close-bloom', size: [1920, 1080], setup: async page => { await july(page); await playUntil(page, [], SKY('clear')); await settle(page); await view(page, { frame: 'field', field: 5, x: 0.45, z: 0.55, dist: 22, yaw: -1.0 }); await frames(page, 30) } },
+  { name: 'L10-whole-map', size: [1920, 1080], setup: async page => { await bigFarm(page, { rent: ALL_LAND, hands: 2, operator: true, until: 196 }); await playUntil(page, [], SKY('clear')); await settle(page); await page.evaluate(() => (window as any).__countyField.tier('county')); await settle(page); await frames(page, 20) } },
   { name: 'L11-clearing-storm', size: [1920, 1080], setup: async page => { await july(page); console.log('  ', await playUntil(page, [], `const t = sim.today(app.world, c); const wet = [0, 1, 2, 3, 4, 5].filter(i => ['wet', 'standing water'].includes(sim.fieldInfo(c, i).moistureLabel)).length; return wet >= 3 && (t.sky === 'clear' || t.sky === 'cloud') ? t.sky + ', ' + wet + ' fields wet' : ''`)); await settle(page); await frames(page, 20) } },
   { name: 'L12-frost-morning', size: [1920, 1080], setup: async page => { await playTo(page, 2020, 5, 255, ['kill', 'dig']); console.log('  ', await playUntil(page, ['kill', 'dig'], FROST)); await settle(page); await frames(page, 20) } },
-  { name: 'L13-walk-in', size: [1920, 1080], setup: async page => { await july(page); await playUntil(page, [], SKY('clear')); await settle(page); await view(page, { x: 4, z: 13, dist: 7.5, yaw: -0.5 }); await frames(page, 30) } },
-  { name: 'L14-mid-zoom', size: [1920, 1080], setup: async page => { await july(page); await playUntil(page, [], SKY('clear')); await settle(page); await view(page, { x: 6, z: 2, dist: 28, yaw: -0.44 }); await frames(page, 30) } },
+  { name: 'L13-walk-in', size: [1920, 1080], setup: async page => { await july(page); await playUntil(page, [], SKY('clear')); await settle(page); await view(page, { frame: 'field', field: 5, x: 0.4, z: 0.6, dist: 7.5, yaw: -0.5 }); await frames(page, 30) } },
+  { name: 'L14-mid-zoom', size: [1920, 1080], setup: async page => { await july(page); await playUntil(page, [], SKY('clear')); await settle(page); await view(page, { frame: 'field', field: 3, x: 0.5, z: 0.6, dist: 180, yaw: -0.44 }); await frames(page, 30) } },
+  // The camera's four tiers on a July evening with people and machines at work, and the playing view as the season's
+  // command bar leaves it (the right quarter covered).
+  ...(['yard', 'field', 'farm', 'county'] as const).map((name, k) => ({ name: `T${k + 1}-${name}`, size: [1920, 1080] as [number, number], setup: async (page: Page) => { await atWork(page); await page.evaluate(name => (window as any).__countyField.tier(name), name); await frames(page, 30) } })),
+  { name: 'T5-field-season-bar', size: [1920, 1080], insets: { top: 56, right: 480, bottom: 90 }, setup: async page => { await atWork(page); await frames(page, 30) } },
+  { name: 'T6-farm-spring-sheet', size: [1920, 1080], insets: { top: 56, right: 640 }, setup: async page => { await page.evaluate(() => (window as any).__county.app.newGame(1977, 5)); await settle(page); await frames(page, 30) } },
+  { name: 'T7-eye-level', size: [1920, 1080], insets: NONE, setup: async page => { await atWork(page); await view(page, { frame: 'home', x: 18.8, z: -9.7, dist: 7.7, yaw: -2.21, pitch: 0.105, tilt: 0 }); await frames(page, 30) } },
   // Wind and cloud shadow: the same breezy day three seconds apart, to see the gusts and the shade move.
   ...[0, 3000].map((wait, k) => ({ name: `L15-wind-${'ab'[k]}`, size: [1920, 1080] as [number, number], setup: async (page: Page) => { await july(page); await playUntil(page, [], SKY('clear')); await settle(page); await page.evaluate(() => (window as any).__countyField.tune({ wind: 0.9, cloud: 0.5 })); await frames(page, 20); await page.waitForTimeout(wait) } })),
   // Sizes: the farm kept whole inside what the interface leaves free.
@@ -572,6 +578,8 @@ const sunday = async (page: Page) => { console.log('  ', await farm(page, SUNDAY
 // A day with nothing ordered and no machine shed: the tractor stands at the barn's corner and the two hands taken on
 // that morning wait in the dooryard.
 const yardDay = async (page: Page) => { console.log('  ', await farm(page, `start(); put('bunk'); hire(2); say(app.do({ t: 'begin' })); run(186); clear(); hire(2)`)); await settle(page); await farm(page, `app.do({ t: 'day' })`); await hold(page, 0.5, 900) }
+// The same day for the camera's tiers.
+async function atWork(page: Page): Promise<void> { await working(page) }
 const K_SIZE: [number, number] = [1920, 1080]
 // A bar a hundred metres long on the picture, measured on the ground at the middle of what the camera looks at.
 async function scaleBar(page: Page): Promise<void> {
@@ -626,7 +634,7 @@ shots.push(
 shots.push(
   { name: 'k1-play-july', size: K_SIZE, setup: working },
   { name: 'k2-whole-farm', size: K_SIZE, setup: async page => { await working(page); await view(page, { frame: 'land', x: 9, z: 1, dist: 96 }); await frames(page, 10) } },
-  { name: 'k3-whole-map', size: K_SIZE, setup: async page => { await working(page); await page.evaluate(() => (window as any).__countyField.home()); await page.evaluate(() => (window as any).__countyField.rig.snap({ w: innerWidth, h: innerHeight, top: 56, right: 0, bottom: 150, left: 0 })); await frames(page, 10) } },
+  { name: 'k3-whole-map', size: K_SIZE, setup: async page => { await working(page); await page.evaluate(() => (window as any).__countyField.tier('county')); await page.evaluate(() => (window as any).__countyField.rig.snap({ w: innerWidth, h: innerHeight, top: 56, right: 0, bottom: 150, left: 0 })); await frames(page, 10) } },
   // From a standing person's eye north of the barn: its corner, the tractor, the hands in the dooryard, and the middle
   // field running away behind them.
   { name: 'k4-eye-level-barn', size: K_SIZE, insets: NONE, setup: async page => { await yardDay(page); await view(page, { frame: 'home', x: 18.8, z: -9.7, dist: 7.7, yaw: -2.21, pitch: 0.105, tilt: 0 }); await frames(page, 30) } },

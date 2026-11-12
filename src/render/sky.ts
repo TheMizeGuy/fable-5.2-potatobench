@@ -141,39 +141,67 @@ vec3 skyColor(vec3 dir, vec3 eye, float disc) {
   float high = uSkyMore.x * smoothstep(0.64, 1.0, streak * 0.5 + bank * 0.62) * smoothstep(0.0, 0.14, dir.y);
   col = mix(col, uHighCol * (0.8 + 0.4 * streak) + sunCol * 0.012 * pow(max(cosT, 0.0), 6.0), high * 0.75);
 
-  // Cumulus: a layer that curves down to the horizon, so far cloud stands in ranks. Shared with its shadow on the land.
-  vec2 p = eye.xz + d.xz / (d.y + 0.05) * CLOUD_H;
-  float wisp = texture2D(uNoise, p * 0.0047 + uCloud.zw * 2.3).a;
-  float curl = texture2D(uNoise, p * 0.0125 + uCloud.zw * 4.0).b;
-  float fray = texture2D(uNoise, p * 0.034 + uCloud.zw * 7.0).a;
-  float shape = cloudField(p) + (wisp - 0.5) * 0.1 + (curl - 0.5) * 0.07 + (fray - 0.5) * 0.05;
-  // Before the sun itself the cloud is thin, so the sun is a disc in a glow and never a smear.
-  float dens = cloudCover(shape) * smoothstep(0.0, 0.05, dir.y) * (1.0 - 0.85 * pow(max(cosT, 0.0), 900.0));
+  // Cumulus with body. The cloud is a slab of air over a flat base, and the line of sight is followed up through it
+  // from the base: a cloud stands tallest where it is thickest, so from the side it is seen as a heap with a dark
+  // floor, a lit shoulder toward the sun and a grey one away, and far cloud stands in ranks down to the horizon.
+  // The field is the one that throws the shadows on the land.
+  // (Toward the horizon the layer is drawn nearer than it is, or its clouds would shrink to a grain.)
+  float reach = 1.0 / (d.y + 0.14);
+  // Seen low, the line of sight would run through one cloud into the next: it is followed up only as far as one cloud's breadth.
+  float lean = min(reach, 1.4);
   vec2 toSun = uSunDir.xz / max(length(uSunDir.xz), 1e-3);
-  float ahead = cloudField(p + toSun * 110.0);
-  // A cloud has a side toward the light and a side away, and a base that is darkest seen from below. With the sun
-  // beyond it, it is its thin edges that shine and its body that is dark.
-  float edge = clamp((shape - ahead) * 5.0, -1.0, 1.0);
-  float thick = smoothstep(0.0, 0.4, shape - cloudEdge());
-  float front = clamp(0.5 + 0.6 * edge - 0.3 * thick, 0.0, 1.0);
-  float back = clamp(0.12 + 0.8 * (1.0 - thick) + 0.4 * edge, 0.0, 1.0);
-  float lit = mix(front, back, smoothstep(0.0, 0.8, cosT));
-  vec3 cloud = mix(uDeckDark, uDeck, lit);
-  // A closed sky is not one grey: it lies in long soft folds, and hangs darker where rain is in it.
-  float fold = texture2D(uNoise, p * 0.00034 + uCloud.zw * 0.5).b * 0.62 + texture2D(uNoise, p * 0.0012 + 0.3 + uCloud.zw * 0.9).b * 0.38;
-  float torn = fold * 0.6 + wisp * 0.4;
   float closed = smoothstep(0.75, 1.0, uCloud.y);
+  // Seen from the side a cloud covers more of the sky than its footprint does of the ground: its foot is drawn in a little.
+  float edge0 = cloudEdge() + 0.07 * (1.0 - closed);
+  // Only cloud near the sun in the picture is seen against the light.
+  float into = smoothstep(0.5, 0.96, cosT);
+  float dens = 0.0, thick = 0.0;
+  vec3 cloud = vec3(0.0);
+  vec2 p = eye.xz + d.xz * reach * CLOUD_H;
+  for (int i = 0; i < CLOUD_STEPS; i++) {
+    float up = (float(i) + 0.5) / float(CLOUD_STEPS);
+    vec2 q = p + d.xz * lean * CLOUD_T * up;
+    float wisp = texture2D(uNoise, q * 0.0019 + uCloud.zw * 2.3).a;
+    float curl = texture2D(uNoise, q * 0.0061 + uCloud.zw * 4.0).b;
+    float shape = cloudField(q) + (wisp - 0.5) * 0.1 + (curl - 0.5) * 0.06 * (0.4 + up);
+    // How much cloud there is at this height: all of the footprint at the base, only the heart of it at the top.
+    float a = smoothstep(0.0, 0.07 + 0.05 * up, shape - edge0 - up * (0.26 - 0.2 * closed)) * (1.0 - 0.45 * up);
+    // The shoulder toward the sun is lit, the one away from it is in the cloud's own shade.
+    // (No branch and no early way out of this loop: a texture read inside either loses its level of detail on some
+    // graphics chips, and the far cloud would turn to grit.)
+    float sunward = cloudField(q + toSun * 190.0);
+    float side = clamp((shape - sunward) * 4.5, -1.0, 1.0);
+    float body = smoothstep(0.0, 0.34, shape - edge0 - up * 0.26);
+    // Seen with the light: a bright top and sunward side over a grey floor. Seen against it: bright thin edges
+    // round a dark body.
+    float front = clamp(0.66 + 0.26 * up + 0.4 * side - 0.3 * body * (1.0 - up), 0.0, 1.0);
+    float back = clamp(0.2 + 0.8 * (1.0 - body) + 0.3 * side, 0.0, 1.0);
+    float lit = mix(front, back, into);
+    float take = a * (1.0 - dens);
+    cloud += mix(uDeckDark, uDeck, lit) * take;
+    thick += body * take;
+    dens += take;
+  }
+  cloud /= max(dens, 1e-4);
+  thick /= max(dens, 1e-4);
+  // A closed sky is not one grey: it lies in long soft folds, and hangs darker where rain is in it.
+  float fold = texture2D(uNoise, p * 0.00016 + uCloud.zw * 0.5).b * 0.62 + texture2D(uNoise, p * 0.00055 + 0.3 + uCloud.zw * 0.9).b * 0.38;
+  float torn = fold * 0.6 + texture2D(uNoise, p * 0.0019 + uCloud.zw * 2.3).a * 0.4;
   cloud *= mix(1.0, 0.52 + 0.86 * fold, closed) * (1.0 - uSkyMore.y * 0.5 * smoothstep(0.3, 0.75, torn));
   // Thin cloud before the sun lets it through: a bright edge.
   cloud += uRim * pow(max(cosT, 0.0), 14.0) * (1.0 - 0.8 * thick) * 1.4;
+  // Before the sun itself the cloud is thin, so the sun is a disc in a glow and never a smear.
+  dens *= smoothstep(0.0, 0.05, dir.y) * (1.0 - 0.85 * pow(max(cosT, 0.0), 900.0));
 
   float sun = smoothstep(0.999962, 0.999985, cosT) * disc * mix(1.0, uSkyTune.z, dens);
   float aureole = pow(max(cosT, 0.0), 5000.0) * 0.5 + pow(max(cosT, 0.0), 260.0) * 0.045;
   col += sunCol * (sun * 16.0 + aureole * (1.0 - 0.8 * dens));
   col = mix(col, cloud, dens);
   float low = max(dir.y, 0.0015);
-  float air = uHaze.x * ${HAZE_PER_M.toFixed(3)} * exp(-uHaze.y * max(eye.y, 0.0)) / (uHaze.y * low);
-  air += min(uMist.x * exp(-uMist.y * max(eye.y - uMist.z, -1.5)) / (uMist.y * low), uMist.x * 160.0);
+  // The sky has its own air in it already: the land's haze is laid over only its lowest few degrees, where the far
+  // country goes into it; in thick weather it stands higher, so no skyline shows through rain or snow.
+  float air = uHaze.x * ${HAZE_PER_M.toFixed(3)} / (0.0042 * low) + smoothstep(0.0009, 0.002, uHaze.x) * 0.6 / low;
+  air += min(uMist.x * exp(-uMist.y * max(eye.y - uMist.z, -1.5)) / (uMist.y * low), uMist.x * 60.0);
   col = mix(col, hazeTint(d), 1.0 - exp(-air));
   return mix(col, uGroundRad, smoothstep(0.0, -0.35, dir.y));
 }
@@ -220,6 +248,7 @@ export class Sky {
       uniforms: this.uniforms,
       side: BackSide,
       depthWrite: false,
+      defines: { CLOUD_STEPS: 6 },
       vertexShader: /* glsl */ `
         varying vec3 vDir;
         void main() {
@@ -241,10 +270,11 @@ export class Sky {
           float m = max(v.r, max(v.g, v.b));
           float held = m <= 0.55 ? m : 0.55 + 0.6 * (1.0 - exp(-(m - 0.55) / 1.0));
           float through = smoothstep(0.99972, 0.99994, dot(d, uSkySun));
-          gl_FragColor = vec4(c * mix(held / max(m, 1e-5), 1.0, through), 1.0);
+          // (A closed sky has no sun to hold back, and must stay the brightness of the air the far land goes into.)
+          gl_FragColor = vec4(c * mix(held / max(m, 1e-5), 1.0, max(through, smoothstep(0.75, 1.0, uCloud.y))), 1.0);
         }`,
     })
-    const sphere = new SphereGeometry(4200, 48, 24)
+    const sphere = new SphereGeometry(9000, 48, 24)
     this.dome = new Mesh(sphere, this.domeMat)
     this.dome.frustumCulled = false
     // Drawn after the land, where the land has left the sky showing.
@@ -257,6 +287,7 @@ export class Sky {
       uniforms: this.uniforms,
       depthTest: false,
       depthWrite: false,
+      defines: { CLOUD_STEPS: 3 },
       vertexShader: 'void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }',
       fragmentShader: /* glsl */ `
         uniform vec2 uRes;
@@ -268,7 +299,7 @@ export class Sky {
           float phi = (uv.x - 0.5) * 6.2831853, theta = uv.y * 3.14159265;
           vec3 dir = vec3(sin(theta) * cos(phi), cos(theta), sin(theta) * sin(phi));
           // The glare round the sun is the sun's own light: left in, it would fill every shadow.
-          vec3 c = skyColor(dir, vec3(0.0, 3.0, 0.0), 0.0) * uLight;
+          vec3 c = skyColor(dir, vec3(0.0, 12.0, 0.0), 0.0) * uLight;
           gl_FragColor = vec4(c * min(1.0, uCap / max(max(c.r, c.g), c.b)), 1.0);
         }`,
     })
@@ -293,6 +324,13 @@ export class Sky {
     this.uniforms.uBetaM.value.set(b.m[0], b.m[1], b.m[2])
     this.uniforms.uSunE.value = sunStrength(sun.y)
     this.uniforms.uMieG.value = air.g
+  }
+
+  // How many steps the clouds' body is followed through (the quality setting's).
+  setSteps(n: number): void {
+    if (this.domeMat.defines.CLOUD_STEPS === n) return
+    this.domeMat.defines.CLOUD_STEPS = n
+    this.domeMat.needsUpdate = true
   }
 
   // Redraw the map of the sky that lights the scene.

@@ -6,12 +6,13 @@ import {
 import { FRAG_LIB, HAZE, SHARED, U } from './shaders.ts'
 
 const CAP = 900
+const N = 15
 
 export class Particles {
   readonly mesh: Mesh
   private n = 0
-  // Per puff: position, velocity, size, growth, age, life, colour, alpha, how far the wind takes it.
-  private p = new Float32Array(CAP * 14)
+  // Per puff: position, velocity, size, growth, age, life, colour, alpha, how far the wind takes it, how fast it goes on rising.
+  private p = new Float32Array(CAP * N)
   private at: InstancedBufferAttribute
   private tint: InstancedBufferAttribute
   private geo = new InstancedBufferGeometry()
@@ -66,10 +67,11 @@ export class Particles {
     this.mesh.renderOrder = 8
   }
 
-  // drift: how much of the wind the puff takes (0 heavy clods, 1 smoke).
-  emit(x: number, y: number, z: number, vx: number, vy: number, vz: number, size: number, grow: number, life: number, r: number, g: number, b: number, alpha: number, drift = 1): void {
+  // drift: how much of the wind the puff takes (0 heavy clods, 1 smoke). lift: metres a second it keeps rising (warm
+  // smoke), after the push it was given has died away.
+  emit(x: number, y: number, z: number, vx: number, vy: number, vz: number, size: number, grow: number, life: number, r: number, g: number, b: number, alpha: number, drift = 1, lift = 0): void {
     if (this.n >= CAP) return
-    this.p.set([x, y, z, vx, vy, vz, size, grow, 0, life, r, g, b, alpha * 10 + Math.min(0.99, drift) ], this.n * 14)
+    this.p.set([x, y, z, vx, vy, vz, size, grow, 0, life, r, g, b, alpha * 10 + Math.min(0.99, drift), lift], this.n * N)
     this.n++
   }
 
@@ -77,15 +79,15 @@ export class Particles {
     const p = this.p, at = this.at.array as Float32Array, tint = this.tint.array as Float32Array
     let n = 0
     for (let k = 0; k < this.n; k++) {
-      const o = k * 14
+      const o = k * N
       const age = p[o + 8] + dt, life = p[o + 9]
       if (age >= life) continue
-      const q = n * 14
-      if (q !== o) p.copyWithin(q, o, o + 14)
+      const q = n * N
+      if (q !== o) p.copyWithin(q, o, o + N)
       const packed = p[q + 13], alpha = Math.floor(packed) / 10, drift = packed - Math.floor(packed)
       p[q + 8] = age
       p[q] += (p[q + 3] + windX * drift) * dt
-      p[q + 1] += p[q + 4] * dt
+      p[q + 1] += (p[q + 4] + p[q + 14]) * dt
       p[q + 2] += (p[q + 5] + windZ * drift) * dt
       const slow = Math.exp(-dt * 1.4)
       p[q + 3] *= slow

@@ -39,7 +39,7 @@ await settle()
 const whole = async () => {
   await page.evaluate(() => { const { app } = (window as any).__county; app.select(-1); app.focus(-1) })
   await settle()
-  await page.evaluate(() => (window as any).__countyField.home())
+  await page.evaluate(() => (window as any).__countyField.tier('county'))
   await settle()
 }
 for (const i of [3, 7, 9, 12]) {
@@ -64,7 +64,7 @@ await page.evaluate(() => {
   for (let n = 0; n < 6; n++) app.do({ t: 'day' })
 })
 await settle()
-await page.evaluate(() => (window as any).__countyField.home())
+await page.evaluate(() => (window as any).__countyField.tier('county'))
 await settle()
 await click(await centre(page, 10))
 check((await state()).sel.length === 0, 'season: a click on land the farm does not hold selects nothing')

@@ -1,31 +1,38 @@
-// The camera of a strategy map that is also a landscape: it looks at a point on the farm from a distance, and the lens
-// is raised above that line so the far edge of the picture takes in the woods, the hills and a band of sky. Far off it
-// looks down more steeply; close in it comes down to a walker's eye level among the rows.
+// The camera of a strategy map that is also a landscape. It looks at a point on the land from a distance, and the lens
+// is raised above that line so the far edge of the picture takes in the woods, the back country, the hills and a band
+// of sky. It has four tiers, and zooms smoothly through them: the yard (down to a walker's eye level), the field (the
+// playing view: the field in hand about a third of the picture's width, three to five fields in frame), the farm (the
+// whole home farm) and the county (every parcel). Whatever it frames, it frames inside what the interface leaves free.
 // The player's own moves are damped; moves the game makes (a change of screen, a field brought into frame) are timed.
+import { FAR_REACH } from './far.ts'
 import { PerspectiveCamera, Vector3 } from 'three'
-import { FALL, FARM_CENTER, FIELDS, HOME, DUFOUR, LAND, fieldBaseY, groundY, profile } from './layout.ts'
+import { FALL, FARM, FIELDS, YARD_AT, fieldBaseY, groundY, profile } from './layout.ts'
 import { clamp, mix, smooth } from './noise.ts'
-import { K, S, toWorld } from './scale.ts'
 
 export interface Viewport { w: number; h: number; top: number; right: number; bottom: number; left: number }
 // pitch: how steeply the camera looks down at its point on the ground. tilt: how far the lens is raised above that line.
 export interface Pose { x: number; z: number; dist: number; yaw: number; pitch: number; fov: number; tilt: number }
+export type TierName = 'yard' | 'field' | 'farm' | 'county'
 
 export const MIN_DIST = 7.5
-// How far the picture reaches: past the far hills.
-export const FAR = 16000
-// The farm is seen from the brook side, turned toward the low sun: three-quarter back light.
-const HOME_YAW = -0.24
+// How far the picture reaches: past the last range of hills (src/render/far.ts).
+export const FAR = FAR_REACH + 3200
+// The land is seen from the brook side, turned toward the low sun: three-quarter back light.
+export const HOME_YAW = -0.24
+// The field the playing view opens on: the one beside the farmstead, so the yard is in the picture.
+export const HOME_FIELD = 3
 const SLOPE = -FALL
 export const MOVE_MS = 800
-// How high the far hills stand above the level line of the eye, seen from the playing height (radians).
-const CREST = 0.082
+// How high the far hills stand above the level line of the eye (radians).
+const CREST = 0.05
 
-// By distance: the pitch, how far below level the lens itself points, and the lens (degrees, vertical).
-// The walker's eye is a true distance; every other row is a view of the land and stands K times as far off.
-const VIEW: [number, number, number, number][] = ([
-  [7.5, 0.13, 0.04, 36], [16, 0.19, 0.085, 38], [34, 0.29, 0.16, 42], [58, 0.385, 0.225, 44], [110, 0.66, 0.33, 44], [180, 0.86, 0.47, 42], [300, 1, 0.6, 40],
-] as [number, number, number, number][]).map(([d, ...rest], k) => [k === 0 ? d : d * K, ...rest] as [number, number, number, number])
+// By distance in metres: the pitch, how far below level the lens itself points, and the lens (degrees, vertical).
+// Near a yard the eye comes down to a walker's; from the field tier out the level line stays on the picture, so
+// there is always a horizon; the lens draws in a little with distance, so far hills do not shrink to a thread.
+const VIEW: [number, number, number, number][] = [
+  [7.5, 0.09, 0, 40], [25, 0.16, 0.05, 40], [70, 0.24, 0.1, 41], [200, 0.32, 0.15, 42], [420, 0.38, 0.165, 42],
+  [700, 0.47, 0.19, 41], [1100, 0.6, 0.23, 39], [2200, 0.74, 0.27, 37], [8000, 0.9, 0.3, 35],
+]
 function viewAt(dist: number, k: 1 | 2 | 3): number {
   const l = Math.log(dist)
   let i = 0
@@ -68,68 +75,81 @@ function blend(a: Pose, b: Pose, t: number, out: Pose): Pose {
   return out
 }
 
-// A curve from a to c that leans toward b: no corner anywhere along it.
-function curve(a: Pose, b: Pose, c: Pose, t: number, out: Pose): Pose {
-  const u = 1 - t, wa = u * u, wb = 2 * u * t, wc = t * t
-  out.x = wa * a.x + wb * b.x + wc * c.x
-  out.z = wa * a.z + wb * b.z + wc * c.z
-  out.dist = Math.exp(wa * Math.log(a.dist) + wb * Math.log(b.dist) + wc * Math.log(c.dist))
-  out.yaw = wa * a.yaw + wb * b.yaw + wc * c.yaw
-  out.pitch = wa * a.pitch + wb * b.pitch + wc * c.pitch
-  out.fov = wa * a.fov + wb * b.fov + wc * c.fov
-  out.tilt = wa * a.tilt + wb * b.tilt + wc * c.tilt
-  return out
-}
-
 const corners = (f: (typeof FIELDS)[number]) => [
   new Vector3(f.x0, fieldBaseY(f.z0) + 1, f.z0), new Vector3(f.x1, fieldBaseY(f.z0) + 1, f.z0),
   new Vector3(f.x0, fieldBaseY(f.z1), f.z1), new Vector3(f.x1, fieldBaseY(f.z1), f.z1),
 ]
-// What has to be in frame for the home farm to be whole: its six fields, the farmstead, the brook. The other blocks then
-// reach in from the edges, so it is plain there is more land than the screen holds.
-const FIELD_MARKS: Vector3[] = FIELDS.filter(f => f.block === 'home').flatMap(corners)
-const mark = (p: { x: number; z: number }, up: number) => new Vector3(p.x, profile(p.z) + up, p.z)
+// A yard, with its roofs.
+const yardMarks = (yard: number): Vector3[] => {
+  const y = YARD_AT[yard]
+  return [0, 10].flatMap(up => [[y.x0, y.z0], [y.x1, y.z0], [y.x0, y.z1], [y.x1, y.z1]].map(([x, z]) => new Vector3(x, profile(z) + up, z)))
+}
+// The farm tier holds the home farm as its walls hold it: the six fields, the farmstead and its back yard, the swale
+// and the woodlot behind; the county tier every parcel and both yards.
 const FARM_MARKS: Vector3[] = [
-  ...FIELD_MARKS, mark(toWorld(HOME, 27.4, -20.5), 3.2 * S), mark(toWorld(HOME, 27.2, 7), 3.4 * S), mark({ x: -17.4 * K, z: -21.6 * K }, 1.3),
-  mark({ x: -17.4 * K, z: 20.5 * K }, 0), mark({ x: 20 * K, z: 20.5 * K }, 0),
+  ...FIELDS.filter(f => f.block === 'home').flatMap(corners), ...yardMarks(-1),
+  ...[[FARM.x0, FARM.z0], [FARM.x1, FARM.z0], [FARM.x0, FARM.z1], [FARM.x1, FARM.z1]].map(([x, z]) => new Vector3(x, profile(z), z)),
 ]
-// Every parcel and the Dufour yard: the whole map.
-const ALL_MARKS: Vector3[] = [...FIELDS.flatMap(corners), mark(toWorld(DUFOUR, 96, -6), 3 * S), mark(toWorld(HOME, 27.4, -20.5), 3.2 * S)]
+const ALL_MARKS: Vector3[] = [...FIELDS.flatMap(corners), ...yardMarks(-1), ...yardMarks(-2)]
+// Where the camera's point on the ground may go: over every parcel and yard, and a little beyond.
+const ROAM = (() => {
+  let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity
+  for (const m of ALL_MARKS) { x0 = Math.min(x0, m.x); x1 = Math.max(x1, m.x); z0 = Math.min(z0, m.z); z1 = Math.max(z1, m.z) }
+  return { x0: x0 - 120, x1: x1 + 120, z0: z0 - 120, z1: z1 + 160 }
+})()
 
-// The opening shot looks into the last of the sun, along the brook and the rows that run toward it. It starts high
-// beyond the brook with the whole farm below and the hills behind; comes down over the bridge (the middle view only
-// bends its way); and ends low on the farm road with the blossom at its feet and the sun in the tops of the spruce.
-// (Its places are on the land, in plan units; the last view is among things of true size, so it stands nearer.)
-const TITLE: Pose[] = ([
-  [{ x: 2, z: 8, dist: 68, yaw: -1, pitch: 0.19, fov: 32, tilt: 0.125 }, K],
-  [{ x: -29, z: 1.9, dist: 40, yaw: -1.05, pitch: 0.1, fov: 32, tilt: 0.1 }, K * 0.7],
-  [{ x: -6.1, z: -8.3, dist: 26, yaw: -1.08, pitch: 0.05, fov: 33, tilt: 0.06 }, K * 0.45],
-] as [Pose, number][]).map(([p, far]) => ({ ...p, x: p.x * K, z: p.z * K, dist: p.dist * far }))
+// The opening shot. It starts high and far beyond the brook, looking into the last of the sun, so the size of the
+// country is the first thing seen: the whole farm small below, the woods, the back country and the hills. It comes down
+// over the swale and the farm road, and ends at a walker's height beside the road below the dooryard, the tractor
+// coming down it with its driver, the blossom of the middle field beyond and the sun low over the ridge.
+// Each is the place looked at, how far off, and the way of looking.
+const TITLE: Pose[] = [
+  { x: 40, z: -20, dist: 1650, yaw: -1.02, pitch: 0.27, fov: 31, tilt: 0.152 },
+  { x: 120, z: 30, dist: 640, yaw: -1.0, pitch: 0.19, fov: 32, tilt: 0.1 },
+  { x: 180, z: 20, dist: 170, yaw: -0.95, pitch: 0.11, fov: 33, tilt: 0.07 },
+  { x: 207, z: 2, dist: 24, yaw: -0.72, pitch: 0.04, fov: 36, tilt: 0.045 },
+]
+// The time of each of those along the move, 0..1: most of it is spent coming down the last of the way.
+const TITLE_AT = [0, 0.4, 0.74, 1]
+
+// A smooth curve through numbers given at times: no corner anywhere (Catmull-Rom).
+function through(v: number[], at: number[], u: number): number {
+  let i = 0
+  while (i < v.length - 2 && at[i + 1] <= u) i++
+  const t = clamp((u - at[i]) / (at[i + 1] - at[i]), 0, 1)
+  const p0 = v[Math.max(0, i - 1)], p1 = v[i], p2 = v[i + 1], p3 = v[Math.min(v.length - 1, i + 2)]
+  const h = at[i + 1] - at[i]
+  const m1 = i > 0 ? ((p2 - p0) / (at[i + 1] - at[i - 1])) * h : p2 - p1
+  const m2 = i + 2 < v.length ? ((p3 - p1) / (at[i + 2] - at[i])) * h : p2 - p1
+  const t2 = t * t, t3 = t2 * t
+  return (2 * t3 - 3 * t2 + 1) * p1 + (t3 - 2 * t2 + t) * m1 + (-2 * t3 + 3 * t2) * p2 + (t3 - t2) * m2
+}
+
+interface Fit { start: number; yaw: number; wide: number; tall: number; at?: number }
 
 export class CameraRig {
-  readonly camera = new PerspectiveCamera(44, 1, 0.3, FAR)
+  readonly camera = new PerspectiveCamera(42, 1, 0.5, FAR)
   // Where the player has asked the camera to be, and where it is.
-  readonly goal: Pose = { x: FARM_CENTER.x, z: FARM_CENTER.z, dist: 60 * K, yaw: HOME_YAW, pitch: pitchFor(60 * K), fov: fovFor(60 * K), tilt: tiltFor(60 * K) }
+  readonly goal: Pose = this.at({ x: FIELDS[HOME_FIELD].cx, z: FIELDS[HOME_FIELD].cz, dist: 420, yaw: HOME_YAW })
   readonly cur: Pose = { ...this.goal }
   private move: { from: Pose; to: Pose; t: number; ms: number } | null = null
   private shift = { x: 0, y: 0 }
   private shiftGoal = { x: 0, y: 0 }
-  private homeKey = ''
-  private homePose: Pose = { ...this.goal }
-  private wholeKey = ''
-  private wholePose: Pose = { ...this.goal }
+  private fits = new Map<string, Pose>()
   private titled: Pose = { ...this.goal }
   private v = new Vector3()
-  private probe = new PerspectiveCamera(44, 1, 0.3, FAR)
+  private probe = new PerspectiveCamera(42, 1, 0.5, FAR)
   // Seconds since the player last moved the camera by hand.
   idle = 99
 
   private place(c: PerspectiveCamera, p: Pose, vp: Viewport, sx: number, sy: number): void {
-    const ty = profile(clamp(p.z, -40 * K, 50 * K)) + 0.8
+    const ty = profile(clamp(p.z, ROAM.z0, ROAM.z1)) + 0.8
     const cp = Math.cos(p.pitch), sp = Math.sin(p.pitch)
     c.fov = p.fov
     c.aspect = vp.w / vp.h
-    c.near = clamp(p.dist * 0.03, 0.4, 10)
+    // The nearer the nearest thing drawn, the less depth there is to tell a road from the ground under it a
+    // kilometre off: the near edge of the picture stands as far out as each distance allows.
+    c.near = clamp(p.dist * 0.06, 0.8, 40)
     c.far = FAR
     const x = p.x - Math.sin(p.yaw) * cp * p.dist, z = p.z + Math.cos(p.yaw) * cp * p.dist
     let y = ty + sp * p.dist
@@ -164,23 +184,25 @@ export class CameraRig {
   }
 
   // The view that holds `marks` in the ground the interface leaves free, below the band of woods, hills and sky.
-  private fit(marks: Vector3[], vp: Viewport, start = 60 * K, yaw = HOME_YAW): Pose {
-    const fw = Math.max(160, vp.w - vp.left - vp.right)
+  // wide, tall: the share of that ground's width and height the marks are to take. at: how far down it their middle
+  // sits (left out: as low as they will go, so the room to spare is given to the hills and the sky).
+  private fit(marks: Vector3[], vp: Viewport, o: Fit): Pose {
+    const fw = Math.max(120, vp.w - vp.left - vp.right)
     const off = this.offsetFor(vp)
     let cx0 = 0, cz0 = 0
     for (const m of marks) { cx0 += m.x; cz0 += m.z }
-    const p = this.at({ x: cx0 / marks.length, z: cz0 / marks.length, dist: start, yaw })
+    const p = this.at({ x: cx0 / marks.length, z: cz0 / marks.length, dist: o.start, yaw: o.yaw })
     // What the marks cover on the picture from the view as it stands, and the ground they are to be kept in.
     const box = { x0: 0, x1: 0, y0: 0, y1: 0, top: 0, fh: 0, margin: 0 }
     const look = () => {
       Object.assign(p, this.at(p))
       this.place(this.probe, p, vp, off.x, off.y)
-      // Where the crest of the far hills stands on the picture: the farm is kept below it, with room for the woods between.
+      // Where the crest of the far hills stands on the picture: the land is kept below it, with room for the woods between.
       const focal = vp.h / 2 / Math.tan((p.fov * Math.PI) / 360)
       const crest = vp.h / 2 + off.y - focal * Math.tan(p.pitch - p.tilt + CREST)
-      box.top = Math.max(vp.top, Math.min(crest + vp.h * 0.06, vp.h * 0.42))
-      box.fh = Math.max(140, vp.h - vp.bottom - box.top)
-      box.margin = Math.min(fw, box.fh) * 0.04
+      box.top = Math.max(vp.top, Math.min(crest + vp.h * 0.05, vp.h * 0.45))
+      box.fh = Math.max(100, vp.h - vp.bottom - box.top)
+      box.margin = Math.min(fw, box.fh) * 0.035
       box.x0 = box.y0 = Infinity
       box.x1 = box.y1 = -Infinity
       for (const m of marks) {
@@ -189,65 +211,90 @@ export class CameraRig {
         box.x0 = Math.min(box.x0, x); box.x1 = Math.max(box.x1, x); box.y0 = Math.min(box.y0, y); box.y1 = Math.max(box.y1, y)
       }
     }
-    // Put the marks in the middle from side to side and low in the free ground: what room there is to spare goes to
-    // the hills and the sky, not to whatever lies in front of the farm.
     const centre = () => {
       for (let j = 0; j < 6; j++) {
         look()
-        const cx = vp.left + fw / 2, cy = Math.max(box.top + box.fh / 2, vp.h - vp.bottom - box.margin - (box.y1 - box.y0) / 2)
+        const cx = vp.left + fw / 2
+        const low = vp.h - vp.bottom - box.margin - (box.y1 - box.y0) / 2
+        const cy = o.at === undefined ? Math.max(box.top + box.fh / 2, low) : Math.min(box.top + box.fh * o.at, low)
         const g0 = this.ground(this.probe, (box.x0 + box.x1) / 2, (box.y0 + box.y1) / 2, vp, p), g1 = this.ground(this.probe, cx, cy, vp, p)
         p.x += (g0.x - g1.x) * 0.85
         p.z += (g0.z - g1.z) * 0.85
       }
     }
     // The distance comes in a part of the way at a time, the marks centred again at each, so the two cannot chase each other.
-    for (let k = 0; k < 22; k++) {
+    for (let k = 0; k < 26; k++) {
       centre()
       look()
-      const over = Math.max((box.x1 - box.x0) / (fw - box.margin * 2), (box.y1 - box.y0) / (box.fh - box.margin * 2))
-      p.dist = clamp(p.dist * clamp(Math.pow(over, 0.6), 0.8, 1.25), 16 * S, 420 * K)
+      const over = Math.max((box.x1 - box.x0) / (fw * o.wide - box.margin * 2), (box.y1 - box.y0) / (box.fh * o.tall - box.margin * 2))
+      p.dist = clamp(p.dist * clamp(Math.pow(over, 0.6), 0.8, 1.25), 30, 12000)
     }
     centre()
     return this.at(p)
   }
 
-  // The view that holds the home farm inside what the interface leaves free.
-  home(vp: Viewport): Pose {
-    const key = `${vp.w}|${vp.h}|${vp.top}|${vp.right}|${vp.bottom}|${vp.left}`
-    if (key === this.homeKey) return this.homePose
-    this.homeKey = key
-    const fw = Math.max(160, vp.w - vp.left - vp.right)
-    // On a narrow window the six fields fill the room and the farmyard may run off the edge.
-    const wide = smooth(520, 900, fw)
-    const a = this.fit(FIELD_MARKS, vp), b = this.fit(FARM_MARKS, vp)
-    this.homePose = this.at(blend(a, b, wide, { ...a }))
-    return this.homePose
+  private cached(name: string, vp: Viewport, make: () => Pose): Pose {
+    const key = `${name}|${vp.w}|${vp.h}|${vp.top}|${vp.right}|${vp.bottom}|${vp.left}`
+    let p = this.fits.get(key)
+    if (!p) {
+      if (this.fits.size > 60) this.fits.clear()
+      p = make()
+      this.fits.set(key, p)
+    }
+    return p
   }
 
-  // The view that holds every parcel: the whole map.
-  whole(vp: Viewport): Pose {
-    const key = `${vp.w}|${vp.h}|${vp.top}|${vp.right}|${vp.bottom}|${vp.left}`
-    if (key === this.wholeKey) return this.wholePose
-    this.wholeKey = key
-    this.wholePose = this.fit(ALL_MARKS, vp, 170 * K, HOME_YAW * 0.55)
-    return this.wholePose
+  // The field tier: the field in hand about a third of the free width (more of it on an upright window), low in the
+  // picture, with the fields beyond it, the woods, the hills and the sky above.
+  field(i: number, vp: Viewport, yaw = HOME_YAW): Pose {
+    const f = FIELDS[i] ?? FIELDS[HOME_FIELD]
+    const fw = Math.max(120, vp.w - vp.left - vp.right)
+    // A third of what is free, and never less than three tenths of the window: under a sheet the field does not shrink away.
+    const wide = Math.min(0.62, Math.max(mix(0.8, 0.36, smooth(420, 1000, fw)), (0.3 * vp.w) / fw))
+    return this.cached(`field${f.i}@${yaw.toFixed(2)}`, vp, () => this.fit(corners(f), vp, { start: 420, yaw, wide, tall: 0.42, at: 0.7 }))
+  }
+
+  // The farm tier: the six home fields and the farmstead.
+  farm(vp: Viewport): Pose {
+    return this.cached('farm', vp, () => this.fit(FARM_MARKS, vp, { start: 900, yaw: HOME_YAW, wide: 1, tall: 1 }))
+  }
+
+  // The county tier: every parcel and both yards, the whole map.
+  county(vp: Viewport): Pose {
+    return this.cached('county', vp, () => this.fit(ALL_MARKS, vp, { start: 2800, yaw: HOME_YAW * 0.5, wide: 1, tall: 1 }))
+  }
+
+  // The yard tier: a farmstead filling the free ground, from a little above its roofs.
+  yard(yard: number, vp: Viewport, yaw = HOME_YAW): Pose {
+    return this.cached(`yard${yard}@${yaw.toFixed(2)}`, vp, () => this.fit(yardMarks(YARD_AT[yard] ? yard : -1), vp, { start: 80, yaw, wide: 0.8, tall: 0.6, at: 0.6 }))
+  }
+
+  tier(name: TierName, vp: Viewport, field = HOME_FIELD, yard = -1): Pose {
+    return name === 'yard' ? this.yard(yard, vp) : name === 'field' ? this.field(field, vp) : name === 'farm' ? this.farm(vp) : this.county(vp)
+  }
+
+  // The tier a distance belongs to.
+  tierOf(dist: number, vp: Viewport): TierName {
+    const f = this.field(HOME_FIELD, vp).dist, a = this.farm(vp).dist, c = this.county(vp).dist
+    return dist < f * 0.45 ? 'yard' : dist < Math.sqrt(f * a) ? 'field' : dist < Math.sqrt(a * c) ? 'farm' : 'county'
   }
 
   // True when the camera is at (or going to) this view.
   isAt(p: Pose): boolean {
     const g = this.goal
-    return Math.hypot(g.x - p.x, g.z - p.z) < 1.5 * K && Math.abs(Math.log(g.dist / p.dist)) < 0.08 && Math.abs(turn(g.yaw, p.yaw)) < 0.05
-  }
-
-  // The view of one field: it fills about half the free area.
-  fieldPose(i: number, vp: Viewport): Pose {
-    const f = FIELDS[i], h = this.home(vp)
-    return this.at({ x: f.cx, z: f.cz, dist: clamp(h.dist * 0.5, 22 * K, 46 * K), yaw: this.goal.yaw })
+    return Math.hypot(g.x - p.x, g.z - p.z) < 0.04 * p.dist + 2 && Math.abs(Math.log(g.dist / p.dist)) < 0.08 && Math.abs(turn(g.yaw, p.yaw)) < 0.05
   }
 
   // The opening shot at a point of its move, 0..1 (see TITLE).
   titlePose(vp: Viewport, u = 0): Pose {
-    const p = curve(TITLE[0], TITLE[1], TITLE[2], clamp(u, 0, 1), this.titled)
+    const p = this.titled, t = clamp(u, 0, 1)
+    p.x = through(TITLE.map(k => k.x), TITLE_AT, t)
+    p.z = through(TITLE.map(k => k.z), TITLE_AT, t)
+    p.dist = Math.exp(through(TITLE.map(k => Math.log(k.dist)), TITLE_AT, t))
+    p.yaw = through(TITLE.map(k => k.yaw), TITLE_AT, t)
+    p.pitch = through(TITLE.map(k => k.pitch), TITLE_AT, t)
+    p.fov = through(TITLE.map(k => k.fov), TITLE_AT, t)
+    p.tilt = through(TITLE.map(k => k.tilt), TITLE_AT, t)
     // An upright window sees less to either side: stand back and widen the lens.
     const narrow = 1 - smooth(0.7, 1.3, vp.w / vp.h)
     p.fov = mix(p.fov, 46, narrow)
@@ -259,12 +306,17 @@ export class CameraRig {
   private ground(c: PerspectiveCamera, px: number, py: number, vp: Viewport, at: Pose): { x: number; z: number } {
     this.v.set((px / vp.w) * 2 - 1, -(py / vp.h) * 2 + 1, 0.5).unproject(c).sub(c.position).normalize()
     const o = c.position, d = this.v
-    const y0 = profile(clamp(at.z, -40 * K, 50 * K)) + 0.2
+    const y0 = profile(clamp(at.z, ROAM.z0, ROAM.z1)) + 0.2
     const den = d.y - SLOPE * d.z
     let t = (y0 + SLOPE * (o.z - at.z) - o.y) / (Math.abs(den) > 1e-4 ? den : -1e-4)
-    const far = at.dist * 3.2 + 40 * K
+    const far = at.dist * 3.2 + 300
     if (t < 0 || t > far) t = far
     return { x: o.x + d.x * t, z: o.z + d.z * t }
+  }
+
+  // The ground in the middle of what the interface leaves free: where the picture is looking.
+  looksAt(vp: Viewport): { x: number; z: number } {
+    return this.ground(this.camera, vp.left + (vp.w - vp.left - vp.right) / 2, vp.top + (vp.h - vp.top - vp.bottom) * 0.56, vp, this.cur)
   }
 
   private byHand(): void {
@@ -274,9 +326,9 @@ export class CameraRig {
 
   private bound(vp: Viewport): void {
     const g = this.goal
-    g.x = clamp(g.x, LAND.x0 + 4 * S, LAND.x1 - 4 * S)
-    g.z = clamp(g.z, LAND.z0 + 2 * S, LAND.z1 - 2 * S)
-    g.dist = clamp(g.dist, MIN_DIST, Math.max(this.whole(vp).dist * 1.06, this.home(vp).dist * 1.12, 70 * K))
+    g.x = clamp(g.x, ROAM.x0, ROAM.x1)
+    g.z = clamp(g.z, ROAM.z0, ROAM.z1)
+    g.dist = clamp(g.dist, MIN_DIST, Math.max(this.county(vp).dist * 1.15, this.farm(vp).dist * 1.3, 1200))
     g.pitch = pitchFor(g.dist)
     g.fov = fovFor(g.dist)
     g.tilt = tiltFor(g.dist)
@@ -368,7 +420,7 @@ export class CameraRig {
 
   // Where the lens is focused: the distance from the camera to what it looks at.
   focus(): number {
-    return this.v.set(this.cur.x, profile(clamp(this.cur.z, -40 * K, 50 * K)), this.cur.z).distanceTo(this.camera.position)
+    return this.v.set(this.cur.x, profile(clamp(this.cur.z, ROAM.z0, ROAM.z1)), this.cur.z).distanceTo(this.camera.position)
   }
 
   where(): { x: number; y: number; z: number; dist: number; yaw: number } {
