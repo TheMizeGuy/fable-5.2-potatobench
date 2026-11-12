@@ -30,7 +30,7 @@ export class Props {
   private marks: Marks
   private fixed: Mesh[] = []
   private life: Mesh
-  private standing = new Map<Site, Standing>()
+  private sites: Standing = { key: 'none', mesh: null, marks: null }
   private piles: Standing = { key: '', mesh: null, marks: null }
   private parked: Standing = { key: '', mesh: null, marks: null }
   private plots: Record<number, Standing> = { [-1]: { key: '', mesh: null, marks: null }, [-2]: { key: '', mesh: null, marks: null } }
@@ -124,32 +124,36 @@ export class Props {
     const hired = snap.units.length > 1
     const packing = snap.mode === 'cellar' && snap.units.some(u => u.winter === 'pack')
     const free: Record<number, Site[]> = { [-1]: [], [-2]: [] }
-    let changed = false
+    const looks: [Site, SiteLook][] = []
+    let key = ''
     for (const s of SITES) {
       const bv = farm.buildings.find(q => q.kind === s.kind && q.yard === s.yard)
+      if (!bv) { free[s.yard].push(s); key += '|'; continue }
       const look: SiteLook = {
-        progress: bv?.progress ?? 0, built: !!bv?.built, lived: s.kind === 'bunk' ? hired : s.kind === 'packing' ? packing : false,
+        progress: bv.progress, built: bv.built, lived: s.kind === 'bunk' ? hired : s.kind === 'packing' ? packing : false,
         open: farm.standOpen, autumn: snap.day > 244 && snap.day < 320,
       }
-      const key = !bv ? '' : bv.built ? `b${+look.lived}${s.kind === 'stand' ? `${+look.open}${+look.autumn}` : ''}` : `p${Math.round(bv.progress * 48)}`
-      let slot = this.standing.get(s)
-      if (!slot) this.standing.set(s, (slot = { key: '', mesh: null, marks: null }))
-      if (this.swap(slot, key, bv ? () => drawSite(b, s, look) : null)) changed = true
-      if (!bv) free[s.yard].push(s)
+      looks.push([s, look])
+      key += bv.built ? `b${+look.lived}${s.kind === 'stand' ? `${+look.open}${+look.autumn}` : ''}|` : `p${Math.round(bv.progress * 48)}|`
     }
-    if (changed) {
-      this.smokes = []
-      let vane: V3 | null = null, cups: V3 | null = null
-      for (const slot of this.standing.values()) {
-        if (!slot.marks) continue
-        this.smokes.push(...slot.marks.smoke)
-        vane = slot.marks.vane ?? vane
-        cups = slot.marks.cups ?? cups
+    // Every site in one mesh, drawn again when any of them moves on: a day's building at most.
+    const changed = this.swap(this.sites, key, () => {
+      const all: SiteMarks = { smoke: [], vane: null, cups: null }
+      for (const [s, look] of looks) {
+        const m = drawSite(b, s, look)
+        all.smoke.push(...m.smoke)
+        all.vane = m.vane ?? all.vane
+        all.cups = m.cups ?? all.cups
       }
-      this.vane.visible = !!vane
-      this.cups.visible = !!cups
-      if (vane) this.vane.position.set(...vane)
-      if (cups) this.cups.position.set(...cups)
+      return all
+    })
+    if (changed) {
+      const m = this.sites.marks
+      this.smokes = m ? m.smoke : []
+      this.vane.visible = !!m?.vane
+      this.cups.visible = !!m?.cups
+      if (m?.vane) this.vane.position.set(...m.vane)
+      if (m?.cups) this.cups.position.set(...m.cups)
     }
     for (const yard of [-1, -2]) {
       this.swap(this.plots[yard], free[yard].map(s => s.kind).join(), () => { for (const s of free[yard]) drawPlot(b, s); return null })
@@ -199,6 +203,8 @@ export class Props {
     if (this.smokeAt > 0.22) {
       this.smokeAt = 0
       const cold = f.env.smoke
+      // the cookstove, on days too warm for a fire to show much
+      if (cold <= 0.2 && Math.random() < 0.6) f.particles.emit(this.chimney.x, this.chimney.y, this.chimney.z, (Math.random() - 0.5) * 0.06, 0.34, (Math.random() - 0.5) * 0.06, 0.07, 0.2, 3.2, 0.74, 0.74, 0.76, 0.1, 0.8)
       for (const p of this.smokes) f.particles.emit(p[0], p[1], p[2], (Math.random() - 0.5) * 0.08, 0.42, (Math.random() - 0.5) * 0.08, 0.09, 0.24, 3.6, 0.72, 0.72, 0.75, 0.16 + 0.2 * cold, 0.8)
       if (this.dufourSmoke && cold > 0.2) { const p = this.marks.smoke[1]; f.particles.emit(p[0], p[1], p[2], (Math.random() - 0.5) * 0.1, 0.5, (Math.random() - 0.5) * 0.1, 0.12, 0.3, 4.5, 0.74, 0.74, 0.76, 0.34 * cold, 0.8) }
     }
@@ -222,7 +228,7 @@ export class Props {
 
   dispose(): void {
     for (const m of [...this.fixed, this.life, this.barnVane, this.vane, this.cups, this.truck, this.car, ...Object.values(this.outline)]) m.geometry.dispose()
-    for (const s of [...this.standing.values(), this.piles, this.parked, ...Object.values(this.plots)]) s.mesh?.geometry.dispose()
+    for (const s of [this.sites, this.piles, this.parked, ...Object.values(this.plots)]) s.mesh?.geometry.dispose()
     this.mat.dispose()
     this.depth.dispose()
     this.outlineMat.dispose()

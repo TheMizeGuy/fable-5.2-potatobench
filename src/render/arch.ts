@@ -205,6 +205,17 @@ export function door(b: Builder, f: Face, s: number, y0: number, w: number, h: n
   }
 }
 
+// A lantern on a bracket by a door: the first light lit when the day goes.
+export function lantern(b: Builder, f: Face, s: number, y: number): void {
+  fbox(b, f, s, y + 0.075, 0.025, 0.025, 0.15, IRON, FIN.plain)
+  b.lathe(fp(f, s, y + 0.055, 0.13), [[0.065, 0], [0.012, 0.045]], 6, IRON, FIN.plain)
+  fbox(b, f, s, y - 0.058, 0.07, 0.014, 0.07, IRON, FIN.plain, 0.095)
+  const h = 0.05, w = 0.03, o0 = 0.1, o1 = 0.16, lit = [1, 1, 0]
+  b.panel(fp(f, s - w, y - h, o1), fp(f, s + w, y - h, o1), fp(f, s + w, y + h, o1), fp(f, s - w, y + h, o1), lit, FIN.glass)
+  b.panel(fp(f, s + w, y - h, o1), fp(f, s + w, y - h, o0), fp(f, s + w, y + h, o0), fp(f, s + w, y + h, o1), lit, FIN.glass)
+  b.panel(fp(f, s - w, y - h, o0), fp(f, s - w, y - h, o1), fp(f, s - w, y + h, o1), fp(f, s - w, y + h, o0), lit, FIN.glass)
+}
+
 // A brick stack from y0 to `top`, corbelled out under its cap.
 export function chimney(b: Builder, x: number, z: number, y0: number, top: number, w: number, d: number, color = '#7a4636'): void {
   b.box(x, (y0 + top) / 2, z, w, top - y0, d, color, FIN.brick, { skip: 'b', ex: [0.8, 1] })

@@ -2,7 +2,7 @@
 // the work is: the site staked out and the materials delivered, the foundation, the frame going up bent by bent, boards
 // and roof, and then the finished building in use.
 import {
-  FIELDSTONE, IRON, LUMBER, TRIM, barrel, door, fbox, foundation, fp, leanRoof, level, lumber, pad, roof, shell, stoneHeap, stovepipe, tipped, trims, win,
+  FIELDSTONE, IRON, LUMBER, TRIM, barrel, door, fbox, foundation, fp, lantern, leanRoof, level, lumber, pad, roof, shell, stoneHeap, stovepipe, tipped, trims, win,
 } from './arch.ts'
 import { FIN, type Builder, type V3 } from './builder.ts'
 import { bankEarth, potatoHouse } from './farmstead.ts'
@@ -233,6 +233,7 @@ function bunk(b: Builder, s: Site, look: SiteLook, marks: SiteMarks): void {
   const lit = (k: number) => (look.lived ? 0.03 + k * 0.05 : 1.5)
   const ds = l / 2 + 0.9
   door(b, sh.W, ds, 0.03, 0.42, 0.9, GREEN, { kind: 'panel' })
+  if (look.lived) lantern(b, sh.W, ds + 0.36, 0.96)
   let k = 0
   for (const sw of [0.62, 1.66, l - 0.62]) win(b, sh.W, sw, 0.78, 0.34, 0.5, { cols: 2, rows: 4, seed: lit(k++) })
   for (const sw of [0.9, l - 0.9]) win(b, sh.E, sw, 0.78, 0.34, 0.5, { cols: 2, rows: 4, seed: lit(k++) })

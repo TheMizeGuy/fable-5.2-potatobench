@@ -368,7 +368,9 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     const o = ray.ray.origin, d = ray.ray.direction
     for (const yard of [-1, -2]) {
       const p = YARD_AT[yard]
-      const t = d.y < -1e-4 ? (groundY(p.x, p.z) - o.y) / d.y : -1
+      // the yard lies on the slope: follow the ray down to the ground it meets, not to one level
+      let t = -1, y = groundY(p.x, p.z)
+      for (let k = 0; k < 3 && d.y < -1e-4; k++) { t = (y - o.y) / d.y; y = groundY(o.x + d.x * t, o.z + d.z * t) }
       if (t > 0 && yardAt(o.x + d.x * t, o.z + d.z * t) === yard) return yard
     }
     return 0

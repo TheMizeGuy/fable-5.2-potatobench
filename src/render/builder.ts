@@ -435,8 +435,8 @@ export function builtMaterial(): MeshStandardMaterial {
           base = mix(base, vec3(0.2, 0.085, 0.04) * (0.7 + 0.6 * fine), rust * amount);
           base *= 0.88 + 0.22 * streak;
           bBump.x = s * (smoothstep(0.84, 0.9, fr) - smoothstep(0.94, 1.0, fr)) * 1.4;
-          bRough = mix(0.42, 0.85, rust * amount);
-          bMetal = mix(0.55, 0.0, rust * amount);
+          bRough = mix(0.55, 0.85, rust * amount);
+          bMetal = mix(0.35, 0.0, rust * amount);
           bSnow = 0.72;
           open = 1.0;
         } else if (fin == ${FIN.brick}) {

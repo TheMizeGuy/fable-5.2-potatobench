@@ -329,13 +329,29 @@ const shots: Shot[] = [
   { name: 'c13-piles-full', size: [1920, 1080], insets: NONE, setup: async page => { await yardFarm(page, { logs: 60, stone: 70 }); await settle(page); await view(page, DOORYARD); await frames(page, 8) } },
   { name: 'c14-yard-dusk-snow', size: [1920, 1080], insets: NONE, setup: async page => { await yardFarm(page, { progress: 1, logs: 20, stone: 10, machines: true, hands: 3, winter: 2 }); await settle(page); await view(page, { x: 27, z: -5, dist: 40, yaw: 0.55, pitch: 0.34 }); await frames(page, 8) } },
   { name: 'c15-yard-winter-home', size: [1920, 1080], setup: async page => { await yardFarm(page, { progress: 1, logs: 20, stone: 10, machines: true, hands: 3, winter: 3 }); await settle(page) } },
+  { name: 'c16-dufour-winter', size: [1920, 1080], insets: NONE, setup: async page => { await yardFarm(page, { progress: 1, dufour: true, hands: 2, winter: 3 }); await settle(page); await view(page, DUFOUR_YARD); await frames(page, 8) } },
+  { name: 'c30-neighbour', size: [1920, 1080], insets: NONE, setup: async page => { await july(page); await playUntil(page, [], SKY('clear')); await settle(page); await view(page, { x: 118, z: 46, dist: 34, yaw: 2.4, pitch: 0.42 }); await frames(page, 8) } },
+  {
+    // the truck that goes by on the town road now and then: wait for it, then look where it is
+    name: 'c31-town-road', size: [1920, 1080], insets: NONE, setup: async page => {
+      await july(page); await playUntil(page, [], SKY('clear')); await settle(page)
+      for (let k = 0; k < 200; k++) {
+        const t = await page.evaluate(() => (window as any).__countyField.stats().ambient % 170)
+        if (t > 44 && t < 52) break
+        await page.waitForTimeout(1000)
+      }
+      const t = await page.evaluate(() => (window as any).__countyField.stats().ambient % 170)
+      const x = -230 + 500 * ((t + 1.2 - 6) / 90)
+      await view(page, { x, z: 48 + 9 * Math.sin(x / 170 + 0.6) + 4 * Math.sin(x / 61) - 2, dist: 16, yaw: 0.5, pitch: 0.24 }); await frames(page, 6)
+    },
+  },
   ...([
     ['c20-shed', { x: 33.6, z: -5.4, dist: 13, yaw: 0.35, pitch: 0.26 }],
     ['c21-bunk', { x: 39.2, z: -12.6, dist: 12, yaw: 0.4, pitch: 0.24 }],
     ['c22-packing', { x: 32.4, z: 0.6, dist: 14, yaw: 0.02, pitch: 0.3 }],
     ['c23-station-pump', { x: 32.6, z: 6.4, dist: 13, yaw: 0.2, pitch: 0.3 }],
     ['c24-second-house', { x: 30, z: -15.5, dist: 16, yaw: 0.25, pitch: 0.26 }],
-    ['c25-machines', { x: 39.6, z: -4.6, dist: 12, yaw: 0.3, pitch: 0.3 }],
+    ['c25-machines', { x: 39.8, z: -4.9, dist: 11, yaw: -1.25, pitch: 0.32 }],
     ['c26-dooryard', { x: 21.2, z: 1.2, dist: 12, yaw: 1.25, pitch: 0.2 }],
     ['c27-yard-selected', { x: 30, z: -7, dist: 62, yaw: 0.16, pitch: 0.58 }],
   ] as [string, View][]).map(([name, v]) => ({

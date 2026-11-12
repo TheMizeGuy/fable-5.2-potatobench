@@ -1,7 +1,7 @@
 // The buildings that stand from the first day: the connected farm at home (big house, little house, back house, barn),
 // the banked potato houses, the Dufour place gone grey for want of paint, and the plank bridges.
 import {
-  FIELDSTONE, IRON, TRIM, barrel, chimney, door, fbox, foundation, fp, leanRoof, level, rod, roof, shell, trims, win, type Face,
+  FIELDSTONE, IRON, TRIM, barrel, chimney, door, fbox, foundation, fp, lantern, leanRoof, level, rod, roof, shell, trims, win, type Face,
 } from './arch.ts'
 import { FIN, type Builder, type V3 } from './builder.ts'
 import {
@@ -72,6 +72,7 @@ function house(b: Builder, m: Marks): void {
     win(b, sh.W, 0.52, 0.8, 0.32, 0.5, { cols: 3, rows: 4, seed: 0.02 })
     win(b, sh.W, 2.5, 0.8, 0.32, 0.5, { cols: 3, rows: 4, seed: 0.06 })
     door(b, sh.W, 1.5, 0.02, 0.42, 0.88, GREEN, { kind: 'panel' })
+    lantern(b, sh.W, 1.87, 0.96)
     for (const s of [0.7, 2.3]) win(b, sh.E, s, 0.8, 0.32, 0.5, { cols: 3, rows: 4, seed: 0.12 })
     // the porch: boards on stone piers, square posts, a rail, a shingled roof, steps down to the yard
     const px0 = -1.15, px1 = -2.12
@@ -142,6 +143,7 @@ function barn(b: Builder, m: Marks): void {
   door(b, sh.W, 2.72, 0.04, 1.9, 1.88, DARK_RED, { kind: 'x', trim: null })
   fbox(b, sh.W, 2.9, 2.0, 4.1, 0.08, 0.07, TRIM, FIN.plain)
   for (const s of [2.42, 4.38]) fbox(b, sh.W, s, 0.98, 0.07, 1.96, 0.03, TRIM, FIN.plain)
+  lantern(b, sh.W, 4.62, 1.7)
   for (const s of [0.62, 1.34, 5.0, 5.56]) win(b, sh.W, s, 1.3, 0.3, 0.3, { cols: 2, rows: 2, barn: true, seed: 1.2 })
   for (const s of [0.9, 2.2, 3.8, 5.1]) win(b, sh.E, s, 1.9, 0.3, 0.3, { cols: 2, rows: 2, barn: true, seed: 1.2 })
   // The gable to the brook: a man door, the hay door under its hood with the fork's track, the loft window.
@@ -205,8 +207,7 @@ export function potatoHouse(b: Builder, px: number, pz: number, w: number, l: nu
   fbox(b, sh.S, w / 2, 0.24, w + 0.14, 1.0, 0.1, CONCRETE, FIN.concrete, 0, { ex: [0.85, 1] })
   for (const sg of [-1, 1]) door(b, sh.S, w / 2 + sg * 0.45, 0.02, 0.86, 1.1, '#5c4d40', { kind: 'x', trim: null })
   fbox(b, sh.S, w / 2, 1.19, 2.0, 0.11, 0.13, '#4a4038', FIN.wood, 0.06)
-  fbox(b, sh.S, w / 2, 1.34, 0.05, 0.1, 0.16, IRON, FIN.plain, 0.1)
-  b.lathe(fp(sh.S, w / 2, 1.3, 0.3), [[0.1, 0], [0.02, 0.06]], 7, '#3d4a43', FIN.plain)
+  lantern(b, sh.S, w / 2, 1.4)
   win(b, sh.S, w / 2, wall + rise * 0.42, 0.34, 0.3, { cols: 2, rows: 2, barn: true, seed: 0.5 })
   win(b, sh.N, w / 2, wall + rise * 0.42, 0.3, 0.26, { cols: 2, rows: 2, barn: true })
   // wing walls hold back the bank each side of the doors, stepping down to the apron

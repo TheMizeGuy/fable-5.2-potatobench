@@ -245,11 +245,11 @@ function appleTree(b: Builder, x: number, z: number, s: number, seed: number): v
       const r = (0.2 + 0.08 * rnd()) * s
       const c: V3 = [p[0] + Math.cos(a) * d, p[1] + (0.08 - 0.14 * rnd()) * s, p[2] + Math.sin(a) * d]
       b.blob(c, [r * 0.66, r * 0.5, r * 0.66], seed * 7 + k * 5 + q, '#2c4426', FIN.leaf, { detail: 0, rough: 0.2, round: heart, tint: 0.7 })
-      for (let j = 0; j < 26; j++) {
+      for (let j = 0; j < 36; j++) {
         const u = rnd() * 2 - 1, t = rnd() * 6.283, w = Math.sqrt(1 - u * u), out = 0.55 + 0.5 * rnd()
         const o: V3 = [w * Math.cos(t), u * 0.8 + 0.15, w * Math.sin(t)]
         const at: V3 = [c[0] + o[0] * r * out, c[1] + o[1] * r * out * 0.8, c[2] + o[2] * r * out]
-        const size = (0.075 + 0.05 * rnd()) * s
+        const size = (0.07 + 0.04 * rnd()) * s
         // across the way out, tipped a little at random
         const rx = rnd() - 0.5, ry = rnd() - 0.5, rz = rnd() - 0.5
         let ux = o[1] * rz - o[2] * ry, uy = o[2] * rx - o[0] * rz, uz = o[0] * ry - o[1] * rx
@@ -257,7 +257,7 @@ function appleTree(b: Builder, x: number, z: number, s: number, seed: number): v
         ux /= ul; uy /= ul; uz /= ul
         const vx = o[1] * uz - o[2] * uy + o[0] * 0.3, vy = o[2] * ux - o[0] * uz + o[1] * 0.3 - 0.25, vz = o[0] * uy - o[1] * ux + o[2] * 0.3
         const nrm: V3 = [at[0] - heart[0], (at[1] - heart[1]) * 1.2 + 0.25 * s, at[2] - heart[2]]
-        b.card(at, [ux * size, uy * size, uz * size], [vx * size * 0.75, vy * size * 0.75, vz * size * 0.75], nrm, greens[(j + k) % 4], FIN.leaf, 1, 0.72 + 0.4 * out * rnd() + 0.12 * o[1])
+        b.card(at, [ux * size * 0.42, uy * size * 0.42, uz * size * 0.42], [vx * size, vy * size, vz * size], nrm, greens[(j + k) % 4], FIN.leaf, 1, 0.72 + 0.4 * out * rnd() + 0.12 * o[1])
       }
     }
   })
