@@ -795,7 +795,8 @@ shots.push(
   cropShot('t-yard-4-closed', 1977, 186, [], nearOn(5)),
   cropShot('t-yard-5-bloom', 1977, 190, [], nearOn(5)),
   cropShot('t-yard-blight', 1979, 205, ['spray', 'rogue'], nearOn(4)),
-  ...['flora', 'crews', 'props', 'birds'].map(part => ({ name: `dbg-no-${part}`, size: [960, 540] as [number, number], setup: async (page: Page) => { await playTo(page, 1977, 5, 147); await playUntil(page, [], SKY('clear')); await settle(page); await view(page, nearOn(5)); await page.evaluate(p => (window as any).__countyField.show(p, false), part); await frames(page, 12) } })),
+  // What is the dark bar in the sky of the yard-tier field views? The same corner of the picture with each part hidden.
+  ...[10, 11, 12, 13, 14].map(k => ({ name: `dbg-bar-${k}`, size: G_SIZE, setup: async (page: Page) => { await playTo(page, 1977, 5, 147); await playUntil(page, [], SKY('clear')); await settle(page); await view(page, nearOn(5)); console.log('  props children', await page.evaluate(k => (window as any).__countyField.showChild('props', k, false), k)); await frames(page, 12) } })),
   cropShot('t-yard-lane', 1977, 196, [], { frame: 'land', x: 10, z: 5.6, dist: 1.5, yaw: -1.5708, pitch: 0.07, tilt: 0 }),
   cropShot('t-yard-brook', 1977, 196, [], { frame: 'land', x: 6, z: 20.2, dist: 3.2, yaw: 0.5, pitch: 0.2, tilt: 0 }),
   cropShot('t-yard-wood-edge', 1977, 196, [], { frame: 'land', x: -2, z: -19.5, dist: 5, yaw: 0.3, pitch: 0.14, tilt: 0 }),
@@ -825,6 +826,35 @@ shots.push(
   ...MONTHS.map((m, k) => winterShot(`w-day-yard-${k + 1}-${m}`, k, 'yard', 0.78)),
   winterShot('w-farm-7-may-thaw', 6, 'farm'), winterShot('w-yard-7-may-thaw', 6, 'yard'),
   winterShot('w-farm-8-spring-sheet', -1, 'farm'), winterShot('w-yard-8-spring-sheet', -1, 'yard'),
+)
+
+// ---- The open ground: lanes, field edges, the woods' edge, the neighbours' country, the brook, the pasture; each from
+// near at hand and all of it from the field tier, in July and in January (January by a low afternoon sun).
+const OPEN_POSES: [string, View][] = [
+  ['1-lane', { frame: 'land', x: 9, z: 5.6, dist: 2.6, yaw: -1.5708, pitch: 0.2, tilt: 0 }],
+  ['2-field-edge', { frame: 'land', x: 9, z: 20.4, dist: 3.4, yaw: -1.2, pitch: 0.24, tilt: 0 }],
+  ['3-woods-edge', { frame: 'land', x: 21, z: -25.5, dist: 6.5, yaw: 0.12, pitch: 0.2, tilt: 0 }],
+  ['5-brook', { frame: 'near', x: 66, z: 309, dist: 25, yaw: 2.05, pitch: 0.42, tilt: 0 }],
+  ['6-pasture', { frame: 'land', x: 26, z: 10, dist: 4.5, yaw: 0.6, pitch: 0.22, tilt: 0 }],
+]
+const openShot = (name: string, january: boolean, go: (page: Page) => Promise<unknown>): Shot => ({
+  name, size: G_SIZE, setup: async page => {
+    if (january) await winter(page, 2)
+    else { await playTo(page, 1977, 5, 196); await playUntil(page, [], SKY('clear')) }
+    await settle(page)
+    if (january) await page.evaluate(() => (window as any).__countyField.tune({ hour: 0.78, snowfall: 0, cloud: 0.25, cloudShadow: 0.6, sunScale: 1, deck: 1, key: 1, storm: 0, haze: 0.0006 }))
+    await go(page)
+    await frames(page, 30)
+  },
+})
+const tierGo = (name: string) => (page: Page) => page.evaluate(t => (window as any).__countyField.tier(t), name)
+shots.push(
+  ...[false, true].flatMap(jan => [
+    ...OPEN_POSES.map(([n, v]) => openShot(`o-${jan ? 'jan' : 'jul'}-yard-${n}`, jan, page => view(page, v))),
+    openShot(`o-${jan ? 'jan' : 'jul'}-field`, jan, tierGo('field')),
+    openShot(`o-${jan ? 'jan' : 'jul'}-farm-4-neighbours`, jan, tierGo('farm')),
+    openShot(`o-${jan ? 'jan' : 'jul'}-county-4-neighbours`, jan, tierGo('county')),
+  ]),
 )
 
 const browser = await chromium.launch({
@@ -866,7 +896,7 @@ for (const shot of shots) {
     })
   }
   const path = `${out}/${shot.name}.png`
-  await page.screenshot({ path })
+  await page.screenshot(shot.name.startsWith('dbg-bar-') ? { path, clip: { x: 780, y: 30, width: 120, height: 110 } } : { path })
   const info = await page.evaluate(() => {
     const f = (window as any).__countyField
     const anchors = Array.from({ length: (f.info().held ?? []).length || 18 }, (_, i) => f.anchor(i))
