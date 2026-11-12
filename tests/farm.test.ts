@@ -31,6 +31,8 @@ function days(c: Campaign, n: number): S.GameEvent[] {
 
 // Reference practice, day by day, until `until` turns true; jobs in `skip` and all selling are left to the test.
 function tend(c: Campaign, until: (c: Campaign) => boolean, skip: JobKind[] = []): void {
+  // Work the test leaves undone is not ordered by the routine either.
+  for (const k of skip) if (S.routineInfo(c).some(r => r.kind === k && r.auto)) S.apply(world, c, { t: 'routine', kind: k, auto: false })
   for (let guard = 0; !until(c); guard++) {
     expect(guard < 400 && c.phase === 'season').toBe(true)
     for (const a of S.advise(world, c)) {
@@ -298,6 +300,8 @@ describe('crews in midsummer', () => {
   for (const i of [1, 3]) ok(base, { t: 'plan', field: i, plan: { crop: 'potato', variety: 'katahdin', seed: 'certified' } })
   ok(base, { t: 'begin' })
   tend(base, x => x.season!.day >= S.dayIndex(2001, 6, 12), ['kill', 'dig'])
+  // These tests give every order by hand.
+  for (const r of S.routineInfo(base)) if (r.auto) ok(base, { t: 'routine', kind: r.kind, auto: false })
   // Two dry, calm days ahead, so the weather holds up none of the jobs the tests give.
   const calm = (x: Campaign, n: number) => {
     for (let k = 0; k < n; k++) {
