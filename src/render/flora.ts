@@ -4,12 +4,13 @@
 import {
   BufferAttribute, BufferGeometry, DoubleSide, Group, IcosahedronGeometry, InstancedBufferAttribute, InstancedMesh, Matrix4,
   MeshStandardMaterial, Quaternion, Sphere, Vector3, type MeshDepthMaterial, type PerspectiveCamera, type WebGLRenderer,
+  Color, EqualDepth, PerspectiveCamera as Lens, WebGLRenderTarget, type Object3D, type Scene,
 } from 'three'
 import { fenceRuns } from './bounds.ts'
 import { BARE_SHIFT, CARD, CARD_FRAGMENT, CARD_SHADOW, CARD_SHADOW_HEAD, CARD_VERTEX, bakeCards, cardGeometry, cardMaps } from './cards.ts'
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { PARCELS, TRACTS } from '../sim/index.ts'
-import { DUFOUR, DUFOUR_BARN, DUFOUR_HOUSE, DUFOUR_POTATO_HOUSE, FARM, FARM_CENTER, FD, FIELDS, FW, HOME, HOME_WOODS, KEEP_CLEAR, LAND, POND, POTATO_HOUSE, WIDE, YARD_TREES, brookHalf, brookZ, fieldMask, groundY, hillRoadZ, oursAt, regionAt, ridgeWoodAt, roadDist, townRoadZ, tractAt, woodFront, woodsAt, WALLS, GATEWAYS, YARD_AT, ROAD, BRIDGE_X, PASTURE, VILLAGE, SIDING, WOOD_GATE, wallDist, FORD } from './layout.ts'
+import { DUFOUR, DUFOUR_BARN, DUFOUR_HOUSE, DUFOUR_POTATO_HOUSE, FARM, FARM_CENTER, FD, FIELDS, FW, HOME, HOME_WOODS, KEEP_CLEAR, LAND, POND, POTATO_HOUSE, WIDE, YARD_TREES, brookHalf, brookZ, fieldMask, groundY, hillRoadZ, oursAt, regionAt, ridgeWoodAt, roadDist, townRoadZ, tractAt, woodFront, woodsAt, WALLS, GATEWAYS, YARD_AT, ROAD, BRIDGE_X, PASTURE, VILLAGE, SIDING, WOOD_GATE, wallDist, FORD, HOUSE } from './layout.ts'
 import { fbm2, hash2, rng, smooth } from './noise.ts'
 import { K, KV, S, toWorld } from './scale.ts'
 import { depthFor, linear, patch, snowRimeAt, sway, type Patch } from './shaders.ts'
@@ -250,9 +251,15 @@ type Cls = 'spruce' | 'maple' | 'birch' | 'bush' | 'apple' | 'conBack' | 'broadB
 // into a shadow it cannot reach. On and near the farm a patch has whole trees for when the camera is close and simpler
 // ones for when it is not.
 const CELL = 100
-const NEAR_AT = { high: 100, medium: 75, low: 45 }
+const YARDS = [HOUSE, DUFOUR_HOUSE]
+// What is drawn in two passes, for the check that this machine can.
+const KINDS = ['conifer cards', 'hardwood cards', 'leaves']
+// Whole within this of the camera: the trees a player stands beside. (It was 100 m and 200 at the high setting:
+// level across a field, the wood's edge a hundred metres off was whole trees one behind another, ten of their
+// leaves' fragments to every pixel of the picture and four in five of them hidden.)
+const NEAR_AT = { high: 60, medium: 50, low: 40 }
 // Past this a tree is a card.
-const MID_AT = { high: 200, medium: 150, low: 90 }
+const MID_AT = { high: 150, medium: 120, low: 90 }
 // Trees at true size: spruce and fir 15 to 25 m, maple and birch a little under, brush head-high and more.
 const T = S
 // Whole trees stand this far back from the front of the ridge woods; behind them, fewer and simpler ones, each standing
@@ -357,12 +364,100 @@ export class Flora {
   private nearAt = NEAR_AT.high
   private thin: InstancedMesh[] = []
   private cardMeshes: InstancedMesh[] = []
+  private treeLeaf!: MeshStandardMaterial
+  private treeLeafFirst!: MeshStandardMaterial
+  private treeLeafSecond!: MeshStandardMaterial
+  // Every mesh that has a first pass.
+  private paired: InstancedMesh[] = []
+  private leavesTwo = true
+  private conFirst!: MeshStandardMaterial
+  private conSecond!: MeshStandardMaterial
+  private leafFirst!: MeshStandardMaterial
+  private leafSecond!: MeshStandardMaterial
+  // True while the cards are drawn in two passes (the start-up check may say this machine cannot).
+  private two = true
   private low = false
   // Patches that have changed how they are drawn so far, for the tools.
   swaps = 0
+  // A card mesh and its first pass: the first is drawn when the mesh is in the picture and the two passes are on.
+  private pair(m: InstancedMesh): void {
+    const first = m.userData.first as InstancedMesh | undefined
+    if (!first) return
+    const two = this.two && (m.userData.kind !== 'leaves' || this.leavesTwo)
+    first.visible = two && (m.layers.mask & 1) !== 0
+    m.material = (two ? m.userData.second : m.userData.one) as MeshStandardMaterial
+  }
+
+  // Draw the cards in two passes, or in one as they were.
+  twoPass(on: boolean): void {
+    this.two = on
+    for (const m of this.paired) this.pair(m)
+  }
+  get twoPassOn(): boolean { return this.two }
+  // A card mesh of each kind with the material it has in one pass, to be compiled with the rest before the check.
+  onePass(): [InstancedMesh, MeshStandardMaterial][] {
+    const out: [InstancedMesh, MeshStandardMaterial][] = []
+    for (const kind of KINDS) { const m = this.paired.find(x => x.userData.kind === kind); if (m) out.push([m, m.userData.one as MeshStandardMaterial]) }
+    return out
+  }
+
+  // Whether the two passes place a card alike on this machine: a patch of each kind of card is drawn into a small
+  // picture in one pass and then in two, and the pixels each leaves are counted. Where they do not agree (the second
+  // pass would then leave holes) the cards go back to one pass. Gives the counts, one pass then two, for each kind.
+  checkTwoPass(renderer: WebGLRenderer, scene: Scene): { ok: boolean; pixels: number[] } {
+    const rt = new WebGLRenderTarget(256, 256, { depthBuffer: true })
+    const px = new Uint8Array(256 * 256 * 4), lens = new Lens(30, 1, 1, 4000), was = renderer.getRenderTarget(), colour = new Color()
+    renderer.getClearColor(colour)
+    const alpha = renderer.getClearAlpha()
+    lens.layers.set(7)
+    scene.traverse(o => { if ((o as { isLight?: boolean }).isLight) o.layers.enable(7) })
+    const pixels: number[] = []
+    let ok = true
+    for (const kind of KINDS) {
+      const m = this.paired.find(x => x.userData.kind === kind && x.count >= (kind === 'leaves' ? 3 : 40))
+      if (!m || !m.boundingSphere) { ok = false; continue }
+      const first = m.userData.first as InstancedMesh, keep = { visible: m.visible, first: first.visible, material: m.material, parents: [] as [Object3D, boolean][] }
+      for (let o: Object3D | null = m.parent; o; o = o.parent) { keep.parents.push([o, o.visible]); o.visible = true }
+      const c = m.boundingSphere.center, r = m.boundingSphere.radius
+      lens.position.set(c.x + r * 0.4, c.y + r * 0.5, c.z + r * 1.7)
+      lens.lookAt(c)
+      lens.updateMatrixWorld(true)
+      m.visible = true
+      const layers = m.layers.mask
+      m.layers.enable(7)
+      first.layers.enable(7)
+      const count = (two: boolean): number => {
+        m.material = (two ? m.userData.second : m.userData.one) as MeshStandardMaterial
+        first.visible = two
+        renderer.setRenderTarget(rt)
+        renderer.setClearColor(0x000000, 0)
+        renderer.clear()
+        renderer.render(scene, lens)
+        renderer.readRenderTargetPixels(rt, 0, 0, 256, 256, px)
+        let n = 0
+        for (let k = 3; k < px.length; k += 4) if (px[k] > 0) n++
+        return n
+      }
+      const one = count(false), two = count(true)
+      pixels.push(one, two)
+      if (one < 200 || two < one * 0.995 || two > one * 1.005) ok = false
+      m.layers.mask = layers
+      first.layers.disable(7)
+      m.visible = keep.visible
+      first.visible = keep.first
+      m.material = keep.material
+      for (const [o, v] of keep.parents) o.visible = v
+    }
+    renderer.setClearColor(colour, alpha)
+    renderer.setRenderTarget(was)
+    rt.dispose()
+    return { ok: ok && pixels.length === KINDS.length * 2, pixels }
+  }
+
   // For the tools: nothing drawn of the trees as trees (whole and simpler), or of their cards.
-  private without = { whole: false, cards: false }
-  tryWithout(kind: 'whole' | 'cards', on: boolean): void {
+  // ('reach': whole trees to 100 m of the camera and simpler ones to 200, wherever it stands, as they were.)
+  private without = { whole: false, cards: false, reach: false }
+  tryWithout(kind: 'whole' | 'cards' | 'reach', on: boolean): void {
     this.without[kind] = on
     for (const ch of this.chunks.values()) ch.level = -1
     for (const b of this.blocks) b.state = -1
@@ -652,7 +747,7 @@ export class Flora {
       vertexWorld: `${sway('vec2(instanceMatrix[3].x, instanceMatrix[3].z)', 'max(cWorld.y - instanceMatrix[3].y, 0.0)', '0.034')}
         cWorld.xyz += sin(uTime * 2.7 + position.x * 23.0 + position.y * 17.0 + aTree.x * 20.0) * 0.035 * min(aTree.w / ${S.toFixed(2)}, 6.0) * 0.2 * min(uSway, 1.0) * step(0.5, aPart);`,
     }
-    const leafMat = patch(new MeshStandardMaterial({ color: 0xffffff, alphaTest: 0.5, alphaToCoverage: true, side: DoubleSide, roughness: 0.9, metalness: 0 }), {
+    const treeLeafSpec: Patch = {
       ...leafPatch,
       translucent: 0.6,
       ambient: 0.92,
@@ -662,10 +757,16 @@ export class Flora {
         ${LEAF_LOOK}
         ${treeSnow('vObj', '0.75 * (1.0 - step(0.5, vPart))')}`,
       fragmentNormal: 'normal = normalize(normal + (viewMatrix * vec4(leafBump.x, 0.0, leafBump.y, 0.0)).xyz * 0.5);',
-    })
+    }
+    const leafMat = patch(new MeshStandardMaterial({ color: 0xffffff, alphaTest: 0.5, alphaToCoverage: true, side: DoubleSide, roughness: 0.9, metalness: 0 }), treeLeafSpec)
     // In the shadow pass a crown thins with its leaves.
     const leafDepth = depthFor({ ...leafPatch, vertexBegin: `${leafPatch.vertexBegin} if (aPart > 0.5) transformed.xz *= smoothstep(0.0, 0.6, uLeaf);` })
     this.disposables.push(cMat, leafMat, leafDepth)
+    // A hardwood's leaves in two passes, as the cards are.
+    this.treeLeaf = leafMat
+    this.treeLeafFirst = patch(Object.assign(leafMat.clone(), { colorWrite: false }), { ...treeLeafSpec, pass: 'first' })
+    this.treeLeafSecond = patch(Object.assign(leafMat.clone(), { depthFunc: EqualDepth, depthWrite: false, alphaToCoverage: false }), { ...treeLeafSpec, pass: 'second' })
+    this.disposables.push(this.treeLeafFirst, this.treeLeafSecond)
 
     const g = {
       spruce: conifer(10, 7, 0.21, 5, true), spruceFar: conifer(10, 7, 0.21, 5, false), conMid: conifer(7, 6, 0.21, 13, false), conFar: conifer(5, 5, 0.215, 17, false), conDistant: conifer(3, 4, 0.23, 19, false),
@@ -686,7 +787,7 @@ export class Flora {
       conFar: k(g.conFar, cMat, 1, 0.02), conDistant: k(g.conDistant, cMat, 1, 0.02, false),
       broadFar: k(g.distant, leafMat, 1.1, 0.01, true, leafDepth), broadDistant: k(g.distant, leafMat, 1.1, 0.01, false),
     }
-    this.conCard = patch(new MeshStandardMaterial({ color: 0xffffff, roughness: 0.92, metalness: 0, side: DoubleSide }), {
+    const conSpec: Patch = {
       key: 'county-conifer-card',
       ambient: 0.78,
       translucent: 0.14,
@@ -707,8 +808,9 @@ export class Flora {
           ${treeSnow('vObj', '0.6')}
         }`,
       fragmentNormal: 'normal = normalize((viewMatrix * vec4(cardWN, 0.0)).xyz);',
-    })
-    this.leafCard = patch(new MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0, side: DoubleSide, alphaToCoverage: true }), {
+    }
+    this.conCard = patch(new MeshStandardMaterial({ color: 0xffffff, roughness: 0.92, metalness: 0, side: DoubleSide }), conSpec)
+    const leafSpec: Patch = {
       key: 'county-hardwood-card',
       translucent: 0.6,
       ambient: 0.92,
@@ -770,7 +872,8 @@ export class Flora {
         }
         ${snowRimeAt('0.0', '0.35 * rimeAt( vWorld.y )')}`,
       fragmentNormal: 'normal = normalize((viewMatrix * vec4(cardWN, 0.0)).xyz + (viewMatrix * vec4(leafBump.x, 0.0, leafBump.y, 0.0)).xyz * 0.5);',
-    })
+    }
+    this.leafCard = patch(new MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0, side: DoubleSide, alphaToCoverage: true }), leafSpec)
     this.cardDepth = [depthFor({ key: 'county-conifer-card', defines: { CARD_CONIFER: 1 }, uniforms: cardMaps, ...CARD_VERTEX }), depthFor({ key: 'county-hardwood-card', uniforms: cardMaps, ...CARD_VERTEX }),
       depthFor({ key: 'county-conifer-card-thin', defines: { CARD_CONIFER: 1, CARD_THIN: 1 }, uniforms: cardMaps, ...CARD_VERTEX }), depthFor({ key: 'county-hardwood-card-thin', defines: { CARD_THIN: 1 }, uniforms: cardMaps, ...CARD_VERTEX })]
     for (const d of this.cardDepth) {
@@ -779,6 +882,13 @@ export class Flora {
     }
     this.cardCells = [g.spruce, g.maple, g.birch, g.bush]
     this.disposables.push(this.cardGeo, this.conCard, this.leafCard, ...this.cardDepth)
+    // The cards in two passes (see `pass` in the shared patch): their depth first, then lit where the depth is theirs.
+    const second = { depthFunc: EqualDepth, depthWrite: false, alphaToCoverage: false }
+    this.conFirst = patch(Object.assign(this.conCard.clone(), { colorWrite: false }), { ...conSpec, pass: 'first' })
+    this.conSecond = patch(Object.assign(this.conCard.clone(), second), { ...conSpec, pass: 'second' })
+    this.leafFirst = patch(Object.assign(this.leafCard.clone(), { colorWrite: false }), { ...leafSpec, pass: 'first' })
+    this.leafSecond = patch(Object.assign(this.leafCard.clone(), second), { ...leafSpec, pass: 'second' })
+    this.disposables.push(this.conFirst, this.conSecond, this.leafFirst, this.leafSecond)
     // Lay each class out by patch. On and round the farm a patch has whole trees for when the camera is close, simpler
     // ones for the middle distance and cards beyond; the far woods are cards alone.
     // A patch's cards are two meshes whatever stands in it: its conifers and its hardwoods.
@@ -987,6 +1097,16 @@ export class Flora {
     mesh.castShadow = kind.shadow
     mesh.receiveShadow = true
     if (kind.depth) mesh.customDepthMaterial = kind.depth
+    if (kind.mat === this.treeLeaf) {
+      const first = new InstancedMesh(geo, this.treeLeafFirst, trees.length)
+      first.instanceMatrix = mesh.instanceMatrix
+      first.boundingSphere = mesh.boundingSphere
+      first.renderOrder = -20
+      mesh.add(first)
+      Object.assign(mesh.userData, { first, one: this.treeLeaf, second: this.treeLeafSecond, kind: 'leaves' })
+      mesh.material = this.treeLeafSecond
+      this.paired.push(mesh)
+    }
     this.group.add(mesh)
     this.disposables.push(geo)
     return mesh
@@ -998,7 +1118,8 @@ export class Flora {
     const geo = new BufferGeometry()
     geo.index = this.cardGeo.index
     for (const name of Object.keys(this.cardGeo.attributes)) geo.setAttribute(name, this.cardGeo.attributes[name])
-    const mesh = new InstancedMesh(geo, conifer ? this.conCard : this.leafCard, trees.length)
+    const mesh = new InstancedMesh(geo, conifer ? this.conSecond : this.leafSecond, trees.length)
+    mesh.userData.conifer = conifer
     const info = new Float32Array(trees.length * 4)
     trees.forEach((t, n) => {
       q.setFromAxisAngle(up, t.r * 6.283)
@@ -1016,6 +1137,14 @@ export class Flora {
     mesh.layers.enable(1)
     mesh.layers.enable(2)
     mesh.customDepthMaterial = this.cardDepth[(conifer ? 0 : 1) + (wood ? 2 : 0)]
+    // Its first pass: the same cards, drawn before any card is lit, into the picture's depth alone.
+    const first = new InstancedMesh(geo, conifer ? this.conFirst : this.leafFirst, trees.length)
+    first.instanceMatrix = mesh.instanceMatrix
+    first.boundingSphere = mesh.boundingSphere
+    first.renderOrder = -20
+    mesh.add(first)
+    Object.assign(mesh.userData, { first, one: conifer ? this.conCard : this.leafCard, second: conifer ? this.conSecond : this.leafSecond, kind: conifer ? 'conifer cards' : 'hardwood cards' })
+    this.paired.push(mesh)
     this.cardMeshes.push(mesh)
     this.group.add(mesh)
     this.disposables.push(geo)
@@ -1031,53 +1160,74 @@ export class Flora {
     for (const ch of this.chunks.values()) ch.level = -1
     for (const b of this.blocks) b.state = -1
     // The low setting draws half the far woods, the middle one three quarters.
-    for (const m of this.thin) m.count = Math.ceil((m.userData.all as number) * (tier === 'low' ? 0.5 : tier === 'medium' ? 0.75 : 1))
+    for (const m of this.thin) {
+      m.count = Math.ceil((m.userData.all as number) * (tier === 'low' ? 0.5 : tier === 'medium' ? 0.75 : 1))
+      ;(m.userData.first as InstancedMesh).count = m.count
+    }
   }
 
   // Whole trees in the patches near the camera, simpler ones beyond them, cards in the rest. A patch's cards are in the
   // two wider shadows always, and in the picture only when they are what is drawn of it.
   // wide: the fine shadow covers the farm and more, and a card is small in it: the cards then throw that shadow too,
   // and the simpler trees kept standing for it are not drawn at all.
-  update(camera: PerspectiveCamera, wide = false): void {
+  // looks: the ground the picture looks at. Trees are whole beside a camera that is down among them, and beside what
+  // a higher camera looks at (the yard's own trees from the yard tier); the trees under a high camera are not.
+  update(camera: PerspectiveCamera, wide = false, looks?: Vector3): void {
     const c = camera.position
+    const low = this.without.reach ? 1 : Math.min(1, Math.max(0, (70 - (c.y - groundY(c.x, c.z))) / 40))
+    const nearAt = this.without.reach ? 100 : this.nearAt, midAt = this.without.reach ? 200 : this.midAt
+    // (what a high camera looks at keeps its trees whole only where that is a yard: the trees a player stands beside)
+    if (this.without.reach || (looks && !YARDS.some(y => Math.hypot(looks!.x - y.x, looks!.z - y.z) < 90))) looks = undefined
+    // A hardwood's leaves are drawn in two passes only from low down, where trees stand behind trees: looked down
+    // on, few leaves hide others and the first pass would be so many triangles for nothing.
+    const leaves = low > 0.5
+    if (leaves !== this.leavesTwo) { this.leavesTwo = leaves; for (const m of this.paired) if (m.userData.kind === 'leaves') this.pair(m) }
     // in a few bands of distance, and by material within each: every change of material is paid for
     const band = (far: number) => -8 + (far < 250 ? 0 : far < 600 ? 1 : far < 1400 ? 2 : 3)
     for (const ch of this.chunks.values()) {
       ch.want = 2
       if (ch.fixed) continue
       const d = Math.max(0, this.v.copy(ch.sphere.center).distanceTo(c) - ch.sphere.radius * 0.6)
-      ch.want = d < this.nearAt ? 0 : d < this.midAt ? 1 : 2
+      ch.want = d < nearAt * low ? 0 : d < midAt * (0.4 + 0.6 * low) ? 1 : 2
+      if (looks && ch.want > 0 && d < midAt * 2) {
+        const at = Math.max(0, Math.hypot(ch.sphere.center.x - looks.x, ch.sphere.center.z - looks.z) - ch.sphere.radius * 0.6)
+        if (at < nearAt * 0.75) ch.want = 0
+        else if (at < midAt * 0.7) ch.want = Math.min(ch.want, 1)
+      }
     }
     for (const b of this.blocks) {
       b.whole = b.parts.every(p => p.want === 2)
-      if (b.whole) { const order = band(b.centre.distanceTo(c)); for (const m of b.cards) m.renderOrder = order }
+      if (b.whole) { const order = band(b.centre.distanceTo(c)); for (const m of b.cards) { m.renderOrder = order; (m.userData.first as InstancedMesh).renderOrder = order - 12 } }
       const state = (b.whole ? 1 : 0) + (wide ? 2 : 0)
       if (state === b.state) continue
       b.state = state
       for (const m of b.cards) {
         m.visible = b.whole && !this.without.cards
         if (wide) m.layers.enable(3); else m.layers.disable(3)
+        this.pair(m)
       }
     }
     for (const ch of this.chunks.values()) {
       const level = ch.want, whole = ch.block?.whole ?? false
-      if (!whole) { const order = band(this.v.copy(ch.sphere.center).distanceTo(c)); for (const m of ch.cards) m.renderOrder = order }
+      if (!whole) { const order = band(this.v.copy(ch.sphere.center).distanceTo(c)); for (const m of ch.cards) { m.renderOrder = order; (m.userData.first as InstancedMesh).renderOrder = order - 12 } }
       const state = level + (wide ? 4 : 0) + (whole ? 8 : 0)
       if (state === ch.level) continue
       ch.level = state
       this.swaps++
-      for (const m of ch.near) m.visible = level === 0 && !this.without.whole
+      for (const m of ch.near) { m.visible = level === 0 && !this.without.whole; this.pair(m) }
       // A card in the fine shadow would be a great sheet of the map to fill: where a patch is drawn as cards, its
       // simpler trees still stand in the fine shadow, out of the picture.
       for (const m of ch.far) {
         m.visible = (level === 1 || (level === 2 && !this.low && !wide)) && !this.without.whole
         m.layers.set(3)
         if (level === 1) m.layers.enable(0)
+        this.pair(m)
       }
       for (const m of ch.cards) {
         m.visible = !whole && !this.without.cards
         if (level === 2) m.layers.enable(0); else m.layers.disable(0)
         if (level === 2 && wide) m.layers.enable(3); else m.layers.disable(3)
+        this.pair(m)
       }
     }
   }
