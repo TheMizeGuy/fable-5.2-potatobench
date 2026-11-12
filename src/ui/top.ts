@@ -2,6 +2,7 @@
 // days of forecast and the season ruled under them, with the canary goal slip hung below. On the right the bank
 // board: the balance, the clock's keys and the menu, and the contracts as ranges.
 import { goals, nextGoal, seasonStep, type Goal } from '../game/goals.ts'
+import { SPEED_X } from '../game/app.ts'
 import * as S from '../sim/index.ts'
 import { contractRows } from './contracts.ts'
 import { count, patch, type Ctx } from './core.ts'
@@ -15,7 +16,7 @@ export const PHASE_LABEL: Record<S.Phase, string> = {
   plan: 'Spring plan', season: 'Growing season', cellar: 'In the cellar', ledger: 'Year end', over: 'The end',
 }
 
-const SPEED_NAME = ['Paused', '1× speed', '2× speed', '3× speed']
+const SPEED_NAME = ['Paused', `${SPEED_X[1]} speed`, `${SPEED_X[2]} speed`, `${SPEED_X[3]} speed`]
 
 // The date leaf: in the season the day, its month and weekday; outside it, one word for where the year is.
 function leaf(c: S.Campaign): HTMLElement {
@@ -91,14 +92,14 @@ export function clock(ctx: Ctx, compact: boolean, onMenu?: () => void): HTMLElem
   const at = paused ? app.resumeSpeed || 1 : app.speed
   const pause = h('button', {
     class: `k${paused ? ' stopped' : ''}`, type: 'button', testid: compact ? 'speed-toggle' : 'speed-0', 'aria-pressed': String(paused),
-    'aria-label': paused ? `Paused. Go on at ${at}×${keys ? ' (Space)' : ''}` : `Pause${keys ? ' (Space)' : ''}`,
-    title: keys ? (paused ? `Go on at ${at}× (Space)` : 'Pause (Space)') : undefined, onclick: () => app.togglePause(),
+    'aria-label': paused ? `Paused. Go on at ${SPEED_X[at]}${keys ? ' (Space)' : ''}` : `Pause${keys ? ' (Space)' : ''}`,
+    title: keys ? (paused ? `Go on at ${SPEED_X[at]} (Space)` : 'Pause (Space)') : undefined, onclick: () => app.togglePause(),
   }, icon(paused ? 'play' : 'pause'))
   if (compact) {
     const next = (at % 3 + 1) as 1 | 2 | 3
     return h('div', { class: 'clock sys compact', role: 'group', 'aria-label': 'Clock' }, pause,
       h('button', { class: 'k speed-x num', type: 'button', testid: 'speed-cycle', 'aria-pressed': String(!paused), onclick: () => app.setSpeed(next) },
-        `${at}×`, h('span', { class: 'sr' }, ` speed${paused ? ', paused' : ''}. Change to ${SPEED_NAME[next]}`)),
+        SPEED_X[at], h('span', { class: 'sr' }, ` speed${paused ? ', paused' : ''}. Change to ${SPEED_NAME[next]}`)),
       onMenu ? menuKey(ctx, onMenu) : null)
   }
   return h('div', { class: 'clock sys', role: 'group', 'aria-label': 'Clock' }, pause,
@@ -106,7 +107,7 @@ export function clock(ctx: Ctx, compact: boolean, onMenu?: () => void): HTMLElem
       class: `k speed-x num${paused && k === at ? ' armed' : ''}`, type: 'button', testid: `speed-${k}`, 'aria-pressed': String(app.speed === k),
       title: keys ? `${SPEED_NAME[k]} (F steps through the speeds; + and − too)` : undefined,
       onclick: () => app.setSpeed(k),
-    }, `${k}×`, h('span', { class: 'sr' }, ` speed${paused && k === at ? ', the speed it goes on at' : ''}`))),
+    }, SPEED_X[k], h('span', { class: 'sr' }, ` speed${paused && k === at ? ', the speed it goes on at' : ''}`))),
     onMenu ? menuKey(ctx, onMenu) : null)
 }
 
@@ -388,7 +389,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     // While the soil warms there is nothing to do but wait: a key beside the slip lets the weeks go by at 3x.
     const faster = wait > 0 && app.speed < 3 && !S.seasonDone(c)
       ? h('button', { class: 'btn goal-go', type: 'button', testid: 'goal-faster', title: ctx.touch() ? undefined : 'The clock stops by itself when there is work (F steps the speed)', onclick: () => app.setSpeed(3) },
-        icon('fast', 'i'), 'Let the weeks go: 3×') : null
+        icon('fast', 'i'), `Let the weeks go: ${SPEED_X[3]}`) : null
     // The fist points only at what can be done now and paid for: the season's pressing call first (a long goal waits
     // in the quiet line under it), then the goal when its control can be reached; anything else is said quietly.
     const reach = !!g && wait <= 0 && g.now && !g.block && (o.canShow?.(g) ?? false)

@@ -177,7 +177,7 @@ export const LESSONS: Lesson[] = [
     id: 'clock', part: 'opening', name: 'Start the clock', uses: ['run'],
     when: inSeason,
     done: (_l, g) => g.has('run'),
-    ask: l => by(l, 'Nothing grows until the soil warms. Press 3× to let the days run.', 'Nothing grows until the soil warms. Tap 3× to let the days run.', 'Nothing grows until the soil warms. Space starts the days; F makes them faster.'),
+    ask: l => by(l, 'Nothing grows until the soil warms. Press 8× to let the days run.', 'Nothing grows until the soil warms. Tap 8× to let the days run.', 'Nothing grows until the soil warms. Space starts the days; F makes them faster.'),
     why: l => auto(l, 'plant') ? 'The clock was held for you. The crew plants by itself once the ground is fit.' : 'The clock was held for you. A ringed stamp comes when the ground is fit to plant.',
     point: () => ({ testid: ['goal-faster', 'speed-3', 'speed-cycle', 'speed-toggle'] }),
   },

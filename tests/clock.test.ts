@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { App, DAYS_PER_SECOND, type AppEvent } from '../src/game/app.ts'
+import { App, DAYS_PER_SECOND, SPEED_X, type AppEvent } from '../src/game/app.ts'
 import * as S from '../src/sim/index.ts'
 import { loadWorld } from '../tools/balance/world.ts'
 
@@ -57,13 +57,16 @@ describe('the clock', () => {
     expect(app.speed).toBe(2)
   })
 
-  it('has pause and three speeds in step, the fastest still a season in about a minute and a half', () => {
+  it('has pause and three speeds named for what they are, the first slow enough to watch, the fastest a season in under two minutes', () => {
     expect(DAYS_PER_SECOND.length).toBe(4)
     expect(DAYS_PER_SECOND[0]).toBe(0)
-    expect(DAYS_PER_SECOND[2] / DAYS_PER_SECOND[1]).toBeCloseTo(2)
-    expect(DAYS_PER_SECOND[3] / DAYS_PER_SECOND[1]).toBeCloseTo(3)
-    // At 1x a day lasts long enough to watch the work and give an order.
-    expect(1 / DAYS_PER_SECOND[1]).toBeGreaterThan(1.2)
+    // Each speed's name is its true multiple of the first.
+    for (const k of [1, 2, 3]) expect(SPEED_X[k]).toBe(`${Math.round(DAYS_PER_SECOND[k] / DAYS_PER_SECOND[1])}×`)
+    expect(DAYS_PER_SECOND[2]).toBeGreaterThan(DAYS_PER_SECOND[1])
+    expect(DAYS_PER_SECOND[3]).toBeGreaterThan(DAYS_PER_SECOND[2])
+    // At the first speed a day lasts long enough to watch the people work and give an order (the owner: 0.7 days a
+    // second was "way too fast").
+    expect(1 / DAYS_PER_SECOND[1]).toBeGreaterThanOrEqual(4)
     const season = 204
     expect(season / DAYS_PER_SECOND[3]).toBeGreaterThan(60)
     expect(season / DAYS_PER_SECOND[3]).toBeLessThan(150)
@@ -85,14 +88,14 @@ describe('the clock', () => {
 
   it('a new need is said as an alert that names the field, without changing the speed', () => {
     const app = farm()
-    app.setSpeed(2)
+    app.setSpeed(3)
     const c = app.campaign!
-    play(app, 60, () => app.alerts.some(a => a.type === 'need'))
+    play(app, 100, () => app.alerts.some(a => a.type === 'need'))
     const need = app.alerts.find(a => a.type === 'need')
     expect(need).toBeDefined()
     expect(need!.field).toBeGreaterThanOrEqual(0)
-    // Still at 2x, unless an incident card arrived the same day.
-    expect(app.speed === 2 || c.incidents.length > 0).toBe(true)
+    // Still at the speed set, unless an incident card arrived the same day.
+    expect(app.speed === 3 || c.incidents.length > 0).toBe(true)
   })
 
   it('stops for a card that needs an answer, and goes on at the speed it had once it is answered', () => {

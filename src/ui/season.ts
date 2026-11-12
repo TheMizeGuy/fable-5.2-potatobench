@@ -2,6 +2,7 @@
 // two boards at the top; the time book of people at the foot with the alerts beside it; and, for whatever is
 // selected, a command bar docked at the edge of the land with the selection drawn on the land itself.
 import type { Goal } from '../game/goals.ts'
+import { SPEED_X } from '../game/app.ts'
 import { nextGoal } from '../game/goals.ts'
 import * as S from '../sim/index.ts'
 import { yardCard, YARD_TITLE } from './build.ts'
@@ -531,7 +532,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       if (onControl) (t.closest?.('button, a') as HTMLElement | null)?.blur()
       // Just after an answer set the days going by themselves, Space is taken as "go on", not as a pause: the chip
       // that says the days are running is lit again instead.
-      if (app.speed > 0 && performance.now() - app.resumedAt < 1000) { ranAt = performance.now(); ctx.dirty(); ctx.announce(`The days are running at ${app.speed}×.`); return true }
+      if (app.speed > 0 && performance.now() - app.resumedAt < 1000) { ranAt = performance.now(); ctx.dirty(); ctx.announce(`The days are running at ${SPEED_X[app.speed]}.`); return true }
       app.togglePause()
       return true
     }
@@ -624,13 +625,13 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       paused.hidden = !stopped || (stoppedFor && layout !== 'narrow')
       el.classList.toggle('is-paused', !paused.hidden)
       if (!paused.hidden) patch(paused, JSON.stringify([ctx.touch(), app.resumeSpeed]), () => h('button', { class: 'paused-go btn', type: 'button', testid: 'paused-go', onclick: () => app.togglePause() },
-        icon('play', 'i'), h('span', { class: 'sr' }, 'Paused. '), `Go on at ${app.resumeSpeed || 1}×`, ctx.touch() ? null : h('span', { class: 'key' }, 'Space')))
+        icon('play', 'i'), h('span', { class: 'sr' }, 'Paused. '), `Go on at ${SPEED_X[app.resumeSpeed || 1]}`, ctx.touch() ? null : h('span', { class: 'key' }, 'Space')))
       const wasRunning = !running.hidden
       running.hidden = app.speed === 0 || S.seasonDone(c) || (stoppedFor && layout !== 'narrow') || (layout === 'narrow' && app.selection.length > 0)
       if (!running.hidden && !wasRunning) ranAt = performance.now()
       if (!running.hidden) {
         patch(running, JSON.stringify([ctx.touch(), app.speed]), () => h('button', { class: 'paused-go btn', type: 'button', testid: 'running-stop', onclick: () => app.togglePause() },
-          icon('pause', 'i'), `Days running at ${app.speed}×`, ctx.touch() ? null : h('span', { class: 'key' }, 'Space')))
+          icon('pause', 'i'), `Days running at ${SPEED_X[app.speed]}`, ctx.touch() ? null : h('span', { class: 'key' }, 'Space')))
         running.classList.toggle('lit', performance.now() - ranAt < 2400)
         if (performance.now() - ranAt < 2400) setTimeout(() => ctx.dirty(), 2450)
       }

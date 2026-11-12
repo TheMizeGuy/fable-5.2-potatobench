@@ -8,9 +8,11 @@ import { neighborYear } from './neighbor.ts'
 import { clearSave, parseSave, readSave, readSettings, serialize, writeSave, writeSettings, type SaveFile } from './save.ts'
 
 export type Speed = 0 | 1 | 2 | 3
-// Pause and three speeds in step, as a strategy game has them: at 1x a day takes about a second and a half, time to
-// watch the people work and give the next order; at 3x a season goes by in about a minute and a half.
-export const DAYS_PER_SECOND = [0, 0.7, 1.4, 2.1]
+// Pause and three speeds, as a strategy game has them: at the first a day takes four seconds, time to watch the
+// people work and give the next order; the second is three times that; at the third a season goes by in under two
+// minutes. Each is named for what it really is against the first.
+export const DAYS_PER_SECOND = [0, 0.25, 0.75, 2]
+export const SPEED_X = ['', '1×', '3×', '8×']
 
 export type Quality = 'auto' | 'high' | 'medium' | 'low'
 

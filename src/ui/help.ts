@@ -20,7 +20,7 @@ function figs(touch: boolean): HTMLElement {
   return h('div', { class: 'figs' },
     fig(1, tag({ name: 'North Ridge', icon: 'bloom', selected: true, still: true }), 'Pick a field', touch ? 'Tap its tag, or the field. Its card opens with what it needs.' : 'Click its tag, or the field. Its card opens at the right with what it needs.'),
     fig(2, tag({ name: 'Upper Middle', icon: 'bloom', need: spray, still: true }), 'Give the order', touch ? 'Tap the stamp: it gives the order the field needs.' : 'Click the stamp, or right-click the field: it gives the order the field needs.'),
-    fig(3, h('div', { class: 'clock' }, h('span', { class: 'k' }, icon('pause', 'i')), h('span', { class: 'k', 'aria-pressed': 'true' }, '1×'), h('span', { class: 'k' }, '2×'), h('span', { class: 'k' }, '3×')),
+    fig(3, h('div', { class: 'clock' }, h('span', { class: 'k' }, icon('pause', 'i')), h('span', { class: 'k', 'aria-pressed': 'true' }, '1×'), h('span', { class: 'k' }, '3×'), h('span', { class: 'k' }, '8×')),
       'Let the days run', touch ? 'The days run at the speed you set, and stop when a card needs you.' : 'The days run at the speed you set, and stop when a card needs you. Space pauses.'))
 }
 
@@ -64,7 +64,7 @@ export function openHelp(ctx: Ctx): void {
               row(keys('1', '–', '9', '0'), 'Select one of the first ten fields. With Shift, add it.'),
               row(keys('Tab'), 'The next field that needs something.'),
               row(keys('Enter'), 'Give the selection the order it needs.'),
-              row(keys('Space', 'F', '+', '−'), 'Pause and go on; step through 1×, 2×, 3×; faster; slower.'),
+              row(keys('Space', 'F', '+', '−'), 'Pause and go on; step through 1×, 3×, 8×; faster; slower.'),
               row(keys('Backspace'), 'Take the last order off the list.'),
               row(keys('I', 'M', 'Esc'), 'The almanac; the menu; let go.'),
               row(keys('Arrows', 'Q', 'E', 'Home'), 'Move, turn, and frame the farm.'),
