@@ -118,4 +118,21 @@ motion, screen readers). The clock is Pause and three speeds and never changes s
 
 ## Results
 
-(Filled in when the rebuild is checked.)
+The rebuild is in the game: the system as code (`src/ui/system`, with a kit page at `?kit` and a test that fails if
+it drifts from `design/system.css`), the title, the season screen (boards, field tags and need stamps by kind, face
+pins that cluster, the command bar docked beside the land with the selection drawn on the field, the time book, the
+person card and work grid, the yard and tract bars, the telegram) and every sheet (the spring catalogue, the weigh
+ticket with the scale's reveal and its sound, winter, the account book at the year's end, the menu, how to play, the
+almanac).
+
+Checked so far: each screen set beside its frame by the writer who rebuilt it and by the creative director for the
+title, the season screen, the command bar, the telegram, the spring sheet and the weigh ticket; captures of the key
+screens at eight sizes with no layout faults and no page errors; the browser suite (see `docs/QUALITY.md` for the
+counts of the build that shipped).
+
+Known to fall short of the frames: a selected yard has no dashed outline on the land; tags with nothing needed are a
+size smaller than drawn; the person card keeps a priority column the frame does not show; the menu lacks the
+frame's "saved" note; some old rules still load from `src/ui/legacy.css`, `papers.css` and `screens.css`.
+
+Not yet run: the blind pairs of the old interface against the new, first-time players in a real browser, measured
+contrast in the live game, and the audit for anything that looks default.
