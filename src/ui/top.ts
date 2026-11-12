@@ -243,7 +243,16 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     }
     el.dataset.phase = c.phase
     el.dataset.layout = layout
-    patch(el, JSON.stringify(model), () => [
+    // On an upright phone in the season there is one board: the balance is its third column (design/season.phone.html).
+    const phone = season && layout === 'narrow'
+    patch(el, JSON.stringify(model), () => {
+    const balance = h('div', { class: 'balance' },
+      h('span', { class: 't-label when' }, c.cash < 0 ? 'On the loan' : 'Balance'),
+      h('span', {
+        class: `t-figure cash${c.cash < 0 ? ' neg' : ''}`, testid: 'cash',
+        title: ctx.touch() || c.cash >= 0 ? undefined : 'Owed on the spring operating loan: the crop pays it back. The bank calls the note if the year closes too far under.',
+      }, h('span', { class: 'sr' }, 'Cash: '), h('span', { class: 'cash-v num' }, F.money(c.cash))))
+    return [
       h('section', { class: 'almanac', 'aria-label': 'Date, weather and the next goal' },
         h('div', { class: 'mount' },
           h('div', { class: `face${season ? '' : ' plain'}` },
@@ -258,19 +267,15 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
                 h('span', { class: 'wet num' },
                   x.rain >= 30 ? `${x.rain}%` : null,
                   x.blight > 0 ? icon('blight', 'i risk') : null,
-                  x.frost >= 30 ? icon('frost', 'i cold') : null)))) : null),
+                  x.frost >= 30 ? icon('frost', 'i cold') : null)))) : null,
+            phone ? balance : null),
           season ? seasonTrack(c) : null),
         goalSlip(c, g, gone, season),
         pop === 'goals' ? ladder(c, g) : null),
-      h('section', { class: 'bank', 'aria-label': 'Money, the clock and the contracts' },
+      phone ? null : h('section', { class: 'bank', 'aria-label': 'Money, the clock and the contracts' },
         h('div', { class: 'mount' },
           h('div', { class: 'face' },
-            h('div', { class: 'balance' },
-              h('span', { class: 't-label when' }, c.cash < 0 ? 'On the loan' : 'Balance'),
-              h('span', {
-                class: `t-figure cash${c.cash < 0 ? ' neg' : ''}`, testid: 'cash',
-                title: ctx.touch() || c.cash >= 0 ? undefined : 'Owed on the spring operating loan: the crop pays it back. The bank calls the note if the year closes too far under.',
-              }, h('span', { class: 'sr' }, 'Cash: '), h('span', { class: 'cash-v num' }, F.money(c.cash)))),
+            balance,
             withClock ? clock(ctx, layout === 'mid' && innerWidth < 1100, withMenu ? o.onMenu : undefined)
               : withMenu ? h('div', { class: 'clock plan' }, h('span', { class: 't-label season-word' }, PHASE_LABEL[c.phase]), menuKey(ctx, o.onMenu)) : null,
             mats ? h('button', {
@@ -281,7 +286,8 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
             season || c.phase === 'cellar' ? contracts.part(c) : null)),
         pop === 'materials' && mats ? materials(c) : null,
         stopped ? h('p', { class: 'stopped-tag', role: 'status' }, icon('pause', 'i'), 'Stopped for you') : null),
-    ])
+    ]
+    })
     // Out of season the cash moves in a few large steps: each one counts, so it is seen to move.
     const cash = Math.round(c.cash)
     const v = el.querySelector<HTMLElement>('.cash-v')

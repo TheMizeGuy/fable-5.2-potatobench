@@ -140,19 +140,12 @@
 .topbar[data-layout='narrow'] .goal { min-width: 0; margin-left: 12px; padding: 6px 12px 6px 10px; grid-template-columns: 26px 1fr auto; }
 .topbar[data-layout='narrow'] .goal .fist { --i: 26px; }
 .topbar[data-layout='narrow'] .goal .goal-t { font-size: 16px; }
-/* the bank board shrinks to the balance (and the menu outside the season), docked over the almanac board's right */
-.topbar[data-layout='narrow'] .bank { position: absolute; right: 10px; top: max(10px, env(safe-area-inset-top, 0px)); width: auto; }
-.topbar[data-layout='narrow'][data-phase='season'] .bank .mount { padding: 0; background: none; box-shadow: none; }
-.topbar[data-layout='narrow'][data-phase='season'] .bank .face { background: none; }
-.topbar[data-layout='narrow'][data-phase='season'] .balance { flex-direction: column; align-items: flex-end; gap: 2px; border: 0; padding: 10px 14px 0 0; background: none; }
-.topbar[data-layout='narrow'][data-phase='season'] .balance .t-figure { font-size: 21px; }
-.topbar[data-layout='narrow'][data-phase='season'] .face { grid-template-columns: 112px minmax(0, 1fr) 118px; }
-.topbar[data-layout='narrow'][data-phase='season'] .forecast { grid-column: 2; }
-.topbar[data-layout='narrow'][data-phase='season'] .contracts { display: none; }
-.topbar[data-layout='narrow']:not([data-phase='season']) .almanac { padding-right: 0; }
-.topbar[data-layout='narrow']:not([data-phase='season']) .bank { width: 220px; }
-.topbar[data-layout='narrow']:not([data-phase='season']) .balance .t-figure { font-size: 22px; }
-@media (max-width: 359px) { .topbar[data-layout='narrow'][data-phase='season'] .face { grid-template-columns: 96px minmax(0, 1fr) 104px; } .topbar[data-layout='narrow'] .forecast .d:nth-child(n+4) { display: none; } .topbar[data-layout='narrow'] .forecast { grid-template-columns: repeat(2, 1fr); } }
+/* the balance is the board's third column; outside the season the bank board keeps the menu, under the almanac */
+.topbar[data-layout='narrow'][data-phase='season'] .face { grid-template-columns: 104px minmax(0, 1fr) 112px; }
+.topbar[data-layout='narrow'] .face .balance { flex-direction: column; justify-content: center; align-items: flex-end; gap: 2px; padding: 0 9px; border: 0; border-left: 1px solid var(--ink); background: none; }
+.topbar[data-layout='narrow'] .face .balance .t-figure { font-size: 20px; }
+.topbar[data-layout='narrow']:not([data-phase='season']) .bank { width: 100%; margin-top: 8px; }
+@media (max-width: 359px) { .topbar[data-layout='narrow'][data-phase='season'] .face { grid-template-columns: 88px minmax(0, 1fr) 100px; } .topbar[data-layout='narrow'] .leaf .day { font-size: 38px; } .topbar[data-layout='narrow'] .forecast .d:nth-child(n+4) { display: none; } .topbar[data-layout='narrow'] .forecast { grid-template-columns: repeat(2, 1fr); } }
 
 /* A phone on its side: the boards as low as they go. */
 .topbar[data-layout='short'] { padding-top: 6px; gap: 8px; }
