@@ -356,6 +356,8 @@
    takes the catalogue's place over the order blank. */
 .spring-screen[data-layout='narrow'] .topbar .bank { width: 100%; margin-top: 0; }
 .spring-screen[data-layout='narrow'] .topbar { flex-wrap: wrap; row-gap: 6px; }
+/* A contract's buyer and variety wrap on the narrowest phones rather than cut off. */
+.spring-screen[data-layout='narrow'] .contract .who { white-space: normal; overflow: visible; flex-wrap: wrap; }
 .spring-screen[data-layout='narrow'] .topbar .almanac { max-width: none; width: 100%; }
 /* the balance and the menu on one line, as design/spring.phone.html sets them */
 .spring-screen[data-layout='narrow'] .topbar .bank .face { display: grid; grid-template-columns: minmax(0, 1fr) 56px; }
