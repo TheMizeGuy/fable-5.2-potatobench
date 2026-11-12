@@ -100,7 +100,7 @@ wilt and digging are drawn as ragged patches and worked strips inside it, never 
 
 ### Phase A: one metre for everything, and the blockout K is chosen from
 
-`src/render/scale.ts` holds `K` (10 until one is chosen; `VITE_K` builds another), `KV` (its square root, for the
+`src/render/scale.ts` holds `K` (12, chosen as below; `VITE_K` builds another), `KV` (its square root, for the
 farm's own relief) and `S` (2.2). `layout.ts` is written in metres through them: the simulation's parcels times K;
 each yard a true-size island (its plan times S about a frame that moves with K); every width true (farm lane 3 m,
 farm road 3.6 m, town road 5.8 m, walls about a metre); rows at 0.9 m and plants at 0.3 m whatever the field's size.
@@ -123,6 +123,14 @@ front of each wood and thinner ones behind, under a cap. On the RTX 2080 Ti at 1
 with ten fields in crop: 10.8 ms of GPU at K 8, 15.2 ms at K 10, 10.0 to 15.7 ms at K 12 (the machine was shared
 for some runs), with 5.2, 8.9 and 11.9 million triangles over all passes; the scene builds in 1.6 s at K 12 and the
 first frame comes 4.7 to 7.9 s after the page is asked for, most of it shaders compiling.
+
+**K is 12.** Chosen from the three blockouts (seven fixed views each, with a 100 m scale bar on the plan): it is the
+one size at which the drawn field is the field the simulation has always described and the weigh ticket prints (5.57
+acres against 5; K 10 gives 3.87 and K 8 gives 2.48); the field is 13 barn lengths wide; from eye level beside the
+barn it runs away to the hills as a real one does; and it costs no more per frame than K 10, because detail follows
+the camera. What it costs is in the default view: with the whole home farm in frame the barn is about 35 pixels
+long and a person 5, so the default view moves in to the field tier (three to five fields in frame) and every
+person carries a marker of constant size.
 
 Not yet done (phase B): the barn and the house are still shorter than the standard's (13.2 m and 7.9 m), markers for
 people, the camera's tiers, far trees as impostors, the hill squares' edges, and the viewers' estimates.

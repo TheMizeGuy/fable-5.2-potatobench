@@ -5,7 +5,7 @@
 // (A build or a tool may set it from outside, as VITE_K, to try another size of land.)
 const given = Number((import.meta as { env?: Record<string, string | undefined> }).env?.VITE_K ?? (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.VITE_K)
 // The land factor: plan units to metres. Meant to work from 8 to 12 by changing this one number.
-export const K = given >= 4 && given <= 16 ? given : 10
+export const K = given >= 4 && given <= 16 ? given : 12
 // Relief: the farm's own slope grows by this, so the land rolls without becoming a hillside.
 export const KV = Math.sqrt(K)
 // Made and grown things, from the size they were first drawn at to true size.
