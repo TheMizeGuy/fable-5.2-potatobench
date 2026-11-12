@@ -197,6 +197,8 @@ async function shoot(ctx: BrowserContext, state: State, size: string): Promise<v
     await page.goto(base)
     await page.waitForFunction(() => '__county' in globalThis)
     await page.evaluate(() => localStorage.clear())
+    // The opening is only itself once the land is up and the name has left the splash for the title.
+    await page.waitForFunction(() => !document.getElementById('splash'), null, { timeout: 30_000 }).catch(() => {})
     await state.run(page, size)
     await page.evaluate(() => (globalThis as unknown as { __countyField?: { settle?: () => void } }).__countyField?.settle?.())
     await page.waitForTimeout(900)

@@ -1,4 +1,4 @@
-// The opening: the land, the name, one line, Play.
+// The opening: the land, the name, one line, Play. The benchmark's credit sits quietly in the corner.
 import { confirmPaper, patch, type Ctx, type Screen } from './core.ts'
 import { h } from './dom.ts'
 import { seasonCount } from './rules.ts'
@@ -23,7 +23,10 @@ export async function startNewFarm(ctx: Ctx): Promise<void> {
 export function titleScreen(ctx: Ctx, o: { onMenu: () => void; onHelp: () => void }): Screen {
   const app = ctx.app
   const block = h('div', { class: 'title-block' })
-  const el = h('main', { class: 'title-screen' }, block)
+  const credit = h('p', { class: 'title-credit', testid: 'credit' },
+    h('span', { class: 'credit-top' }, 'Fable 5.2 - PotatoBench'),
+    h('span', { class: 'credit-by' }, 'PotatoBench made by TheMizeGuy'))
+  const el = h('main', { class: 'title-screen' }, block, credit)
   let focused = false
   return {
     el,
@@ -32,10 +35,10 @@ export function titleScreen(ctx: Ctx, o: { onMenu: () => void; onHelp: () => voi
       const c = saved?.campaign
       patch(block, JSON.stringify([c?.year, c?.phase, c?.yearIdx, c?.outcome]), () => [
         h('h1', { class: 't-display title-name' }, 'The County'),
-        h('p', { class: 't-lede premise' }, 'Six fields of potatoes to start and more to rent or buy, five seasons of weather nobody can know, and a crop you cannot see until you dig it.'),
+        h('p', { class: 't-lede premise' }, 'Grow a crop you cannot see until you dig it. Hire hands, clear the woods, raise the barns, and keep the farm five seasons.'),
         h('div', { class: 'title-actions' },
           c ? h('button', { class: 'nbtn primary big', type: 'button', testid: 'continue', onclick: () => { if (!app.continueGame()) ctx.say('The save could not be read.', 'warn') } },
-            'Continue', h('span', { class: 'sub num' }, seasonCount(c))) : null,
+            'Continue', h('span', { class: 'sub num' }, `${seasonCount(c)}, ${PHASE_LABEL[c.phase].toLowerCase()}`)) : null,
           h('button', { class: `nbtn big${c ? '' : ' primary'}`, type: 'button', testid: 'play', onclick: () => { void startNewFarm(ctx) } }, c ? 'New farm' : 'Play')),
         h('p', { class: 'title-links' },
           h('button', { class: 'tlink', type: 'button', testid: 'how-open', onclick: () => o.onHelp() }, 'How to play'),
