@@ -82,6 +82,9 @@ async function toTicket(page: Page, setup: string, hold = ''): Promise<void> {
   await page.getByTestId('weighin').waitFor({ timeout: 10_000 })
 }
 
+// Runs the days, answering any question its own way, until the test given is true (a season at most).
+const DAYS = `const c = app.campaign; const sim = q.g().sim; (ok => { for (let n = 0; n < 220 && !ok() && !sim.seasonDone(c); n++) { for (const i of [...c.incidents]) app.do({ t: 'answer', incident: i.id, choice: sim.defaultChoice(i) }); app.do({ t: 'day' }) } app.setSpeed(0) })`
+
 const STATES: State[] = [
   // Each season frame in design/, in the game, to set beside the frame's picture.
   { name: 'frame-season', what: 'design/season.html: July, five people, nothing selected', sizes: [...MAIN, 'land'], run: frameJuly },
@@ -307,7 +310,8 @@ const STATES: State[] = [
   { name: 'guide-card', what: 'Guide: a field picked, its card read', sizes: ALL, run: async (page, size) => { await guideAt('card')(page, size); await q(page, `q.g().app.select(0)`); await page.waitForTimeout(900) } },
   { name: 'guide-person', what: 'Guide: you, on the land', sizes: ALL, run: guideAt('person') },
   { name: 'guide-clock', what: 'Guide: start the clock', sizes: ALL, run: guideAt('clock') },
-  { name: 'guide-plant', what: 'Guide: planting day, the fist on the ringed stamp', sizes: ALL, run: guideAt('plant', `while (!app.needs().some(n => n.need && n.need.act === 'plant')) app.do({ t: 'day' })`) },
+  { name: 'guide-watch', what: 'Guide: planting day, the routine puts planting on the list and the crew takes it up', sizes: ALL, run: guideAt('watch', `${DAYS}(() => c.season.jobs.some(j => j.kind === 'plant'))`) },
+  { name: 'guide-spray', what: 'Guide: the first call, spraying before blight weather, the fist on its stamp', sizes: ALL, run: guideAt('spray', `${DAYS}(() => app.needs().some(n => n.need && n.need.act === 'spray'))`) },
   { name: 'guide-telegram', what: 'Guide: a telegram, the lesson beside it', sizes: ALL, run: guideAt('telegram', `const c = app.campaign; c.incidents.push({ id: c.nextIncident++, kind: 'breakdown', day: c.season.day, until: c.season.day + 2, choices: ['rush', 'wait'], unit: 0, back: c.season.day + 3 }); app.setSpeed(1); app.setSpeed(0)`) },
   { name: 'guide-ticket', what: 'Guide: the first weigh ticket, the lesson beside it', sizes: ALL, run: async page => {
     await q(page, `window.__countyGuide.reset(); window.__countyGuide.skipTo('ticket')`)
