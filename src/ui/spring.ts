@@ -111,7 +111,7 @@ function applicant(ctx: Ctx, a: S.ApplicantInfo, one: boolean, onTry: (err: stri
 // A hired person made foreman of a block the farm holds, or put back to field work: the same choice as their card.
 export function foremanRow(ctx: Ctx, c: S.Campaign, p: S.PersonInfo, onTry: (err: string) => void): HTMLElement {
   const blocks = S.BLOCKS.filter(b => S.PARCELS.some((x, i) => x.block === b && S.held(c, i)))
-  const name = (b: S.BlockId) => BLOCK_NAME[b].replace(/^The /, '').split(',')[0]
+  const name = (b: S.BlockId) => F.upper(BLOCK_NAME[b].replace(/^The /, '').split(',')[0])
   return h('p', { class: 'cat-foreman', role: 'group', 'aria-label': `${p.name}: foreman of`, testid: `spring-foreman-${p.id}` },
     h('span', { class: 't-label' }, icon('foreman', 'i'), term('Foreman', 'foreman'), ' of'),
     blocks.map(b => {

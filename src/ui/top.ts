@@ -8,7 +8,7 @@ import { count, patch, type Ctx } from './core.ts'
 import { h, type Child } from './dom.ts'
 import * as F from './fmt.ts'
 import { icon } from './icons.ts'
-import { BLIGHT_RISK, firstName, forecastSky, plantingIn, SKY_WORD, yearName } from './rules.ts'
+import { BLIGHT_RISK, firstName, forecastSky, JOB_VERB, plantingIn, SKY_WORD, yearName } from './rules.ts'
 import { fist } from './system/parts.ts'
 
 export const PHASE_LABEL: Record<S.Phase, string> = {
@@ -121,17 +121,21 @@ function progressText(g: Goal): string {
 
 // The one figure that answers "am I all right?" through a season: what the farm would have after the year-end bills
 // if every lot and the crop in the ground sold today (S.moneyNow), with how it is made up.
-export function outlook(ctx: Ctx, c: S.Campaign): { figure: number; why: string } {
+// Before the tubers set there is no crop to count: the figure is then what the year end takes before the crop pays,
+// said as that, not as a verdict.
+export function outlook(ctx: Ctx, c: S.Campaign): { figure: number; why: string; label: string; before: boolean } {
   const m = S.moneyNow(ctx.app.world, c)
   const figure = Math.round(m.after / 100) * 100
   const s = c.season
-  const unset = s ? s.fields.filter((f, i) => S.isField(c, i) && (f.status === 'growing' || f.status === 'planted') && !S.estimateYield(c, i)).length : 0
+  const unset = s ? s.fields.filter((f, i) => S.isField(c, i) && (f.status === 'growing' || f.status === 'planted' || f.status === 'idle') && !S.estimateYield(c, i)).length : 0
+  const before = m.growing <= 0 && m.stored <= 0 && unset > 0
   const parts = m.parts.map(p => `${p.label} ${F.money(Math.round(p.amount))}`)
-  const verdict = figure >= 0 ? 'The year would end in the black.'
-    : figure >= S.CREDIT_LIMIT ? `The year would end in debt, inside the bank's limit of ${F.money(S.CREDIT_LIMIT)}: it carries the debt at interest.`
-      : `The year would end past the bank's limit of ${F.money(S.CREDIT_LIMIT)}: it would call the note.`
-  const early = unset ? ` ${F.upper(F.plural(unset, 'field'))} not yet setting tubers ${unset === 1 ? 'counts' : 'count'} for nothing yet.` : ''
-  return { figure, why: `If everything sold today: ${parts.join('; ')}. ${verdict}${early}` }
+  const verdict = before ? 'The crop has not set yet, so nothing is counted for it: this is what the crop has to make up by the year end.'
+    : figure >= 0 ? 'The year would end in the black.'
+      : figure >= S.CREDIT_LIMIT ? `The year would end in debt, inside the bank's limit of ${F.money(S.CREDIT_LIMIT)}: it carries the debt at interest.`
+        : `The year would end past the bank's limit of ${F.money(S.CREDIT_LIMIT)}: it would call the note.`
+  const early = unset && !before ? ` ${F.upper(F.plural(unset, 'field'))} not yet setting tubers ${unset === 1 ? 'counts' : 'count'} for nothing yet.` : ''
+  return { figure, before, label: before ? 'Year end before the crop: ' : 'Year end, sold today: ', why: `${before ? 'As things stand' : 'If everything sold today'}: ${parts.join('; ')}. ${verdict}${early}` }
 }
 
 // Said before logs are sold: the buildings not yet up that would take them, and what buying them back costs.
@@ -189,7 +193,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
   let callsFor: unknown = null
   let callList: Call[] = []
   let viewFor: unknown = null
-  let viewNow: { figure: number; why: string } | null = null
+  let viewNow: ReturnType<typeof outlook> | null = null
   const closePop = (e: Event) => { if (pop && !(e.target as HTMLElement).closest?.('.tb-pop, .goal, .materials')) { pop = ''; ctx.dirty() } }
   document.addEventListener('pointerdown', closePop, true)
 
@@ -266,7 +270,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
 
   function callsNow(c: S.Campaign): Call[] {
     const urgent: Call[] = S.pressing(app.world, c).map(p => ({
-      id: `p-${p.kind}-${p.field}`, act: p.kind, field: p.field, text: `${S.JOB_LABEL[p.kind]} ${S.FIELD_NAMES[p.field]}`, why: `${F.upper(p.why)}. ${p.inWay}`,
+      id: `p-${p.kind}-${p.field}`, act: p.kind, field: p.field, text: `${JOB_VERB[p.kind]} ${S.FIELD_NAMES[p.field]}`, why: `${F.upper(p.why)}. ${p.inWay}`,
       fix: p.fix, fixLabel: p.fix?.t === 'job' ? 'Order it' : p.fix?.t === 'priority' ? `${firstName(c.crew.find(u => u.id === (p.fix as { unit: number }).unit)?.name ?? 'Someone')} first` : 'Show me',
     }))
     const calls: Call[] = app.needs().map((n, field) => ({ need: n.need!, field }))
@@ -331,7 +335,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
         onclick: () => { pop = pop === 'goals' ? '' : 'goals'; ctx.dirty() },
       }, callFirst ? fist() : null, h('span', { class: 'goal-body' }, h('span', { class: 'sr' }, callFirst ? 'Now: ' : 'Next goal: '),
         h('b', { class: 'goal-t' }, callFirst ? F.localize(call!.text) : g!.title),
-        callFirst ? (g ? h('span', { class: 'goal-when' }, `then: ${g.title.toLowerCase()}`) : null) : h('span', { class: 'goal-when' }, notYet(c, g!))),
+        callFirst ? (g ? h('span', { class: 'goal-when' }, `then: ${g.title.toLowerCase()}${reach ? '' : `, ${notYet(c, g)}`}`) : null) : h('span', { class: 'goal-when' }, notYet(c, g!))),
       h('span', { class: 'sr' }, `. ${callFirst ? F.localize(call!.why) : g!.why} Open the goals.`))
       const go = callFirst ? h('button', { class: 'btn goal-go', type: 'button', testid: 'goal-do', onclick: () => takeCall(call!) }, icon(call!.fix ? 'check' : 'arrow', 'i'), call!.fixLabel) : null
       return go ? h('div', { class: 'goal-row' }, quiet, go) : quiet
@@ -390,8 +394,8 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
           title: ctx.touch() || c.cash >= 0 ? undefined : 'Owed on the spring operating loan: the crop pays it back. The bank calls the note if the year closes too far under.',
         }, h('span', { class: 'sr' }, 'Cash: '), h('span', { class: 'cash-v num' }, F.money(c.cash))),
         season && !phone && view ? h('span', {
-          class: `due outlook term num${view.figure < S.CREDIT_LIMIT ? ' c-red' : view.figure < 0 ? ' c-ochre' : ' c-green'}`, testid: 'outlook', tabindex: '0', 'data-tip': view.why,
-        }, 'Year end, sold today: ', h('b', null, F.money(view.figure)), h('span', { class: 'sr' }, `. ${view.why}`)) : null)
+          class: `due outlook term num${view.before ? '' : view.figure < S.CREDIT_LIMIT ? ' c-red' : view.figure < 0 ? ' c-ochre' : ' c-green'}`, testid: 'outlook', tabindex: '0', 'data-tip': view.why,
+        }, view.label, h('b', null, F.money(view.figure)), h('span', { class: 'sr' }, `. ${view.why}`)) : null)
       return [
         h('section', { class: 'almanac', 'aria-label': 'Date, weather and the next goal' },
           h('div', { class: 'mount' },

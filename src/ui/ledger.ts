@@ -36,10 +36,10 @@ export function yearSentence(y: S.YearSummary): string {
   const st = S.yearStory(y)
   const kept = (y.land ?? 0) + (y.building ?? 0) + (y.works ?? 0)
   const reasons = st.reasons.map(r => `${r.label.toLowerCase()} ${r.amount < 0 ? 'took' : 'brought'} ${F.money(Math.abs(Math.round(r.amount)))}`)
-  const less = st.ended < st.began
-  const head = `You began the year with ${F.money(st.began)} and end it with ${F.money(st.ended)}${less ? ', less than you began' : ''}`
-  const keep = kept && less ? ` Of what went out, ${F.money(kept)} bought land, buildings and clearing, which the farm keeps.` : ''
-  return `${head}, because ${F.list(reasons)}.${keep}`
+  const gap = Math.round(st.ended - st.began)
+  const head = `You began the year with ${F.money(st.began)} and end it with ${F.money(st.ended)}: ${gap === 0 ? 'the same' : `${F.money(Math.abs(gap))} ${gap < 0 ? 'less' : 'more'}`}.`
+  const keep = kept && gap < 0 ? ` Of what went out, ${F.money(kept)} bought land, buildings and clearing, which the farm keeps.` : ''
+  return `${head} The largest reasons: ${reasons.join('; ')}.${keep}`
 }
 
 function cashBook(y: S.YearSummary, lost: boolean): HTMLElement {
