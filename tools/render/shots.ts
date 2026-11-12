@@ -346,7 +346,7 @@ for (const shot of shots) {
   if (pins) {
     await page.evaluate(() => {
       const f = (window as any).__countyField, held = f.info().held as boolean[]
-      for (let i = 0; i < 14; i++) {
+      for (let i = 0; i < held.length; i++) {
         const a = f.anchor(i)
         if (!a.visible) continue
         const d = document.createElement('div')
@@ -362,7 +362,7 @@ for (const shot of shots) {
   await page.screenshot({ path })
   const info = await page.evaluate(() => {
     const f = (window as any).__countyField
-    const anchors = Array.from({ length: 14 }, (_, i) => f.anchor(i))
+    const anchors = Array.from({ length: (f.info().held ?? []).length || 18 }, (_, i) => f.anchor(i))
     const s = f.stats ? f.stats() : {}
     return { ...f.info(), anchors: anchors.map((a: any) => (a.visible ? `${Math.round(a.x)},${Math.round(a.y)}` : 'off')).join(' '), triangles: s.triangles, calls: s.calls, fps: s.fps }
   })

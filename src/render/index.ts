@@ -350,6 +350,8 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     const c = new Vector3(f.x1, fieldBaseY(f.z1) + 0.25, f.z1), d = new Vector3(f.x0, fieldBaseY(f.z1) + 0.25, f.z1)
     return [new Triangle(a, b, c), new Triangle(a, c, d)]
   })
+  // A tract under trees is picked by its canopy too: the same quad at the height of the crowns.
+  const crowns = quads.map(tris => tris.map(t => new Triangle(t.a.clone().setY(t.a.y + 4.5), t.b.clone().setY(t.b.y + 4.5), t.c.clone().setY(t.c.y + 4.5))))
   function pick(x: number, y: number): number {
     const vp = viewport()
     ray.setFromCamera(ndc.set((x / vp.w) * 2 - 1, -(y / vp.h) * 2 + 1), rig.camera)
@@ -357,7 +359,8 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     quads.forEach((tris, i) => {
       const f = snap.fields[i]
       if (!f.held && !f.available && !f.ours) return
-      for (const t of tris) {
+      const wooded = f.cover === 'woods' && f.felled < 0.9
+      for (const t of wooded ? [...tris, ...crowns[i]] : tris) {
         if (ray.ray.intersectTriangle(t.a, t.b, t.c, false, hit)) {
           const d = hit.distanceToSquared(ray.ray.origin)
           if (d < bd) { bd = d; best = i }
@@ -504,7 +507,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     fields.setFarShadows(!shadows.holdsFarm)
     MARK_WIDE.value = clamp(rig.cur.dist / 42, 1, 4.5)
     fields.update(dt, cam, { selection: app.selection, hover: app.hover, oats: env.oats, oatsRipe: env.oatsRipe, reduced })
-    grass.update(cam)
+    grass.update(cam, fields.off)
     flora.update(cam)
     harvest.update(dt, app.speed === 0, clamp(rig.cur.dist / 30, 1, 2.3), reduced)
     PIXEL.value = (TIERS[tier].msaa ? 1.7 : 1.4) / ((post.target.height) / (2 * Math.tan((cam.fov * Math.PI) / 360)))

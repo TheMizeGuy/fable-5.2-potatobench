@@ -9,10 +9,10 @@ import { FIELD_COUNT, PARCELS } from '../sim/index.ts'
 import { OFF_GLSL, OFF_KIND } from './fields.ts'
 import {
   BLOCKS, FIELDS, FORD, LAND, REGION, WALLS, WATER_Y, WAYS, brookHalf, brookZ, fordAt, gravelDist, groundY, hillRoadZ,
-  ridgeWoodAt, roadDist, townRoadZ, tractAt, wallDist,
+  TRACT_LINE, ridgeWoodAt, roadDist, townRoadZ, tractAt, wallDist,
 } from './layout.ts'
 import { hash2, rng, smooth } from './noise.ts'
-import { SNOW_RIME, linear, patch } from './shaders.ts'
+import { SNOW_RIME, linear, patch, snowRimeAt } from './shaders.ts'
 
 export interface Terrain {
   group: Group
@@ -91,7 +91,7 @@ vec3 cropColor(float kind, float tone, float day, vec3 soil, vec3 grass, out flo
     leaf = mix(leaf, ${linear('#d9dcc9')}, 0.2 * ramp(190.0, 198.0, d) * (1.0 - ramp(212.0, 222.0, d)));
     leaf = mix(leaf, ${linear('#7a6f48')}, down);
     col = mix(soil, leaf, up * (1.0 - dug));
-    rows = (0.25 + 0.75 * (1.0 - up)) * step(128.0, d) * (1.0 - dug);
+    rows = max((0.25 + 0.75 * (1.0 - up)) * step(128.0, d) * (1.0 - dug), 0.4 * dug);
   } else if (kind < 0.58) {
     float up = ramp(128.0, 160.0, d), ripe = ramp(205.0, 232.0, d), cut = ramp(242.0, 250.0, d);
     vec3 oat = mix(${linear('#7fa46a')}, ${linear('#cfb56b')}, ripe);
@@ -130,8 +130,9 @@ export function buildTerrain(): Terrain {
       pos[k * 3] = x
       pos[k * 3 + 1] = groundY(x, z) - (home ? underField(x, z) * 0.09 : 0)
       pos[k * 3 + 2] = z
-      const stand = tractAt(x, z, 0.5)
-      surf[k * 4] = stand >= 0 && PARCELS[stand].cover === 'woods' ? 1 : ridgeWoodAt(x, z)
+      // Under a tract's own trees the floor is the woods'; the line cut round it is a green ride.
+      const stand = tractAt(x, z, TRACT_LINE), inside = tractAt(x, z, -0.5)
+      surf[k * 4] = stand >= 0 && PARCELS[stand].cover === 'woods' ? (inside >= 0 ? 1 : 0.2) : ridgeWoodAt(x, z)
       surf[k * 4 + 1] = Math.min(1, Math.abs(z - brookZ(x)) / 8)
       // Trodden earth in the dooryards and along the gravel by them; a worn verge along the road between.
       const yard = Math.min(Math.hypot(x - 23.6, (z + 4) * 0.7), Math.hypot(x - 91.5, (z + 4) * 0.8)) < 12 ? 1 : 0.4
@@ -227,6 +228,10 @@ export function buildTerrain(): Terrain {
           // mowing and tillage lines that carry at any distance
           float sweep = 0.5 + 0.5 * cos(l.q.x * 6.2831853 / (l.width * 0.2));
           crop *= 0.9 + 0.14 * sweep * (1.0 - smoothstep(0.5, 2.0, fwidth(l.q.x) / (l.width * 0.2)));
+          // The sprayer's wheelings through potatoes and grain, and the lie of the crop where wind and rain have been at it.
+          float wheel = (1.0 - smoothstep(0.05, 0.2, abs(abs(fract(l.q.x / 3.6) - 0.5) * 3.6 - 0.9))) * (1.0 - smoothstep(0.3, 1.2, fwidth(l.q.x)));
+          crop *= 1.0 - 0.26 * wheel * step(kind, 0.58) * ramp(150.0, 175.0, uDay) * (1.0 - ramp(246.0, 262.0, uDay));
+          crop *= 0.84 + 0.32 * texture2D(uNoise, p * 0.037 + tone).a;
           float verge = min(min(fx, 1.0 - fx) * l.width, min(fy, 1.0 - fy) * runL * 0.6);
           float aa = fwidth(qx) * 1.5;
           vec3 rough = grass * mix(vec3(0.86, 0.9, 0.76), vec3(1.08, 1.02, 0.84), tuft);
@@ -315,7 +320,7 @@ export function buildTerrain(): Terrain {
         landRough = mix(landRough, 0.35, wetHere * uWet);
         diffuseColor.rgb = col;
       }
-      ${SNOW_RIME}
+      ${snowRimeAt('uSnow * (1.0 - 0.7 * smoothstep(-0.03, 0.07, vWNormal.x) * (1.0 - smoothstep(0.42, 0.7, uSnow)))', 'rimeAt( vWorld.y )')}
     `,
     fragmentRoughness: 'roughnessFactor = landRough;',
     fragmentNormal: 'normal = normalize(normal + (viewMatrix * vec4(landBump.x, 0.0, landBump.y, 0.0)).xyz * 0.22);',
@@ -344,7 +349,7 @@ export function buildTerrain(): Terrain {
         float wear = clamp(rut * ${kind === 'track' ? '1.0' : '1.3'} - 0.18 + (fine - 0.5) * 0.5 + (mid - 0.5) * 0.5 + ${kind === 'track' ? '(broad - 0.6) * 0.9' : '0.12'}, 0.0, 1.0);
         vec3 dirt = mix(${linear('#7f6248')}, ${linear('#b09472')}, wear * (0.6 + 0.4 * fine)) * mix(1.0, 0.56, uWet);
         float dirtA = smoothstep(0.2, 0.62, wear) * smoothstep(0.0, 0.1, edge) * ${kind === 'track' ? '0.8' : '0.95'};
-        vec3 stone = mix(${linear('#9c978a')}, ${linear('#c6c0ae')}, fine) * (0.9 + 0.2 * step(0.62, rn.b)) * (1.0 - 0.1 * rut) * mix(1.0, 0.72, uWet);
+        vec3 stone = mix(${linear('#8c877a')}, ${linear('#b4ae9c')}, fine) * (0.86 + 0.24 * step(0.62, rn.b)) * (1.0 - 0.2 * rut) * mix(1.0, 0.72, uWet);
         float stoneA = smoothstep(0.0, 0.07, edge + (fine - 0.5) * 0.06);
         float g = ${kind === 'town' ? '1.0' : kind === 'track' ? '0.0' : '1.0 - smoothstep(uGravel * 1.2 - 0.06, uGravel * 1.2, length(vWorld.xz - vec2(23.4, -13.2)) / 78.0 + (mid - 0.5) * 0.05)'};
         // Water stands in the ruts of a dirt road after rain; in a wet spring it is mud from side to side.
@@ -355,8 +360,14 @@ export function buildTerrain(): Terrain {
         diffuseColor.a = mix(dirtA, stoneA, g);
       }
       ${SNOW_RIME}
-      // Under snow the way shows only where it is trodden or ploughed out.
-      diffuseColor.a *= 1.0 - ${kind === 'track' ? '0.9' : '0.55'} * smoothstep(0.4, 0.9, uSnow);`,
+      {
+        // Under snow a way shows only where it is trodden: the farm road between the house and the potato house.
+        float snowed = smoothstep(0.4, 0.9, uSnow);
+        float trod = ${kind === 'farm' ? '1.0 - smoothstep(16.0, 26.0, distance(vWorld.xz, vec2(21.0, -5.0)))' : '0.0'};
+        float ruts = max(exp(-pow((vRoad.x - 0.27) / 0.13, 2.0)), exp(-pow((vRoad.x - 0.73) / 0.13, 2.0)));
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.5, 0.55, 0.62) * (0.8 + 0.3 * texture2D(uNoise, vWorld.xz * 0.7).a), snowed * trod);
+        diffuseColor.a = mix(diffuseColor.a, max(ruts * trod, diffuseColor.a * ${kind === 'track' ? '0.1' : '0.4'}), snowed);
+      }`,
     fragmentRoughness: 'roughnessFactor = mix(mix(0.95, 0.6, uWet * 0.7), 0.05, roadPool);',
   })
   const farmRoad = roadMat('farm'), townRoad = roadMat('town'), trackMat = roadMat('track')
@@ -459,10 +470,10 @@ export function buildTerrain(): Terrain {
           // Pools and runs along its length. Peat-dark in the pools, amber where it runs thin over gravel, clear at the edge.
           float pool = smoothstep(0.34, 0.7, texture2D(uNoise, vec2(vWorld.x * 0.012, 0.37)).b);
           float depth = (1.0 - max(smoothstep(0.28, 0.92, shore + wob * 0.34), ford * 0.85)) * (0.5 + 0.5 * pool);
-          vec3 col = mix(${linear('#9a8660')}, mix(${linear('#55502f')}, ${linear('#1c2622')}, smoothstep(0.4, 0.85, depth)), smoothstep(0.0, 0.45, depth));
+          vec3 col = mix(${linear('#9a8660')}, mix(${linear('#5e5c3b')}, ${linear('#273936')}, smoothstep(0.4, 0.85, depth)), smoothstep(0.0, 0.45, depth));
           float broken = texture2D(uNoise, vWorld.xz * vec2(0.19, 0.83) + vec2(-uTime * 0.05, 0.0)).a * 0.6 + texture2D(uNoise, vWorld.zx * vec2(1.31, 0.43) + vec2(0.0, -uTime * 0.09)).a * 0.4;
           riffle = max((1.0 - pool) * 0.7, ford) * smoothstep(0.54, 0.8, broken) * (1.0 - frozen) * smoothstep(0.95, 0.45, shore);
-          col = mix(col, vec3(0.4, 0.44, 0.43), riffle * 0.5);
+          col = mix(col, vec3(0.5, 0.54, 0.52), riffle * 0.6);
           // the current drawn out in lines
           col *= 0.9 + 0.2 * texture2D(uNoise, vWorld.xz * vec2(0.035, 0.62) + vec2(-uTime * 0.045, 0.0)).a;
           vec3 ice = vec3(0.6, 0.67, 0.74) * (0.9 + 0.2 * texture2D(uNoise, vWorld.xz * 0.11).a);
@@ -479,7 +490,7 @@ export function buildTerrain(): Terrain {
         {
           vec3 wN = inverseTransformDirection( normal, viewMatrix );
           vec3 wV = normalize( cameraPosition - vWorld );
-          float fres = 0.06 + 0.94 * pow( 1.0 - max( dot( wN, wV ), 0.0 ), 5.0 );
+          float fres = 0.13 + 0.87 * pow( 1.0 - max( dot( wN, wV ), 0.0 ), 5.0 );
           vec3 wR = reflect( - wV, wN );
           wR.y = abs( wR.y );
           // Rain breaks the mirror.
@@ -544,6 +555,14 @@ function stoneWalls(): InstancedMesh {
         spots.push([cx + Math.cos(a) * dd * 1.4, cz + Math.sin(a) * dd, s, dd < 0.2 ? s * 0.7 : 0])
       }
     }
+  }
+  // Boulders the ice left on the hill pasture, too big to move.
+  for (let k = 0; k < 90; k++) {
+    const x = 6 + r() * 36, z = -26 - r() * 52
+    if (ridgeWoodAt(x, z) > 0.4 || roadDist(x, z) < 2 || r() < 0.35) continue
+    const s = 0.22 + 0.5 * r() * r()
+    spots.push([x, z, s, -s * 0.25])
+    if (r() < 0.5) spots.push([x + (r() - 0.5) * 1.2, z + (r() - 0.5) * 1.2, s * 0.5, -s * 0.1])
   }
   const geo = new IcosahedronGeometry(1, 1)
   const gp = geo.getAttribute('position') as BufferAttribute

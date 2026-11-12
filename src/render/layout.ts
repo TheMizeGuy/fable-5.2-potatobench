@@ -506,6 +506,8 @@ export function openCountry(x: number, z: number): number {
   return 1 - smooth(-6, 10, d)
 }
 
+// A tract's bounds are a line cut through the woods, this far outside its corners.
+export const TRACT_LINE = 1.3
 // The tracts that start the game under trees, and whether a point lies on one.
 const WOODED = TRACTS.filter(i => PARCELS[i].cover !== 'open').map(i => FIELDS[i])
 export function tractAt(x: number, z: number, pad = 0): number {
@@ -543,7 +545,7 @@ export function ridgeWoodAt(x: number, z: number): number {
 // Whether trees stand here: the woods on the ridge, the woodlots of the quilt, and the hedgerows between blocks.
 // hard: the share of them that are hardwoods. The tracts' own stands are not counted: they come and go with the clearing.
 export function woodsAt(x: number, z: number): { woods: number; hard: number } {
-  if (tractAt(x, z, 0.5) >= 0) return { woods: 0, hard: 0 }
+  if (tractAt(x, z, TRACT_LINE) >= 0) return { woods: 0, hard: 0 }
   const ridge = ridgeWoodAt(x, z)
   if (ridge > 0.02) {
     // Hardwoods along the front and in stands through the spruce.

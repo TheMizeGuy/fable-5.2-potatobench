@@ -6,9 +6,9 @@ import { fbm2 } from './noise.ts'
 import { SNOW_RIME, linear, patch } from './shaders.ts'
 import type { FarmVis } from './state.ts'
 
-const RINGS = [0, 0.3, 0.55, 0.74, 0.86, 0.96, 1.04, 1.1, 1.24, 1.42, 1.62]
+const RINGS = [0, 0.3, 0.55, 0.74, 0.86, 0.96, 1.04, 1.1, 1.3, 1.56, 1.84]
 const SEGS = 44
-const BANK = 0.42
+const BANK = 0.3
 
 export class Pond {
   readonly group = new Group()
@@ -41,7 +41,7 @@ export class Pond {
         const [x, z] = at(r, s % SEGS), g = groundY(x, z)
         const k = RINGS[r]
         // the bed, the inner slope up to a level crest, the outer slope down into the meadow
-        const up = k <= 0.74 ? 0.035 : k <= 1.1 ? 0.035 + (crest - g - 0.035) * Math.min(1, (k - 0.74) / 0.22) ** 1.4 : (crest - g) * Math.max(0, 1 - (k - 1.1) / 0.5) ** 1.6 - 0.07 * Math.min(1, (k - 1.1) / 0.5)
+        const up = k <= 0.74 ? 0.035 : k <= 1.1 ? 0.035 + (crest - g - 0.035) * Math.min(1, (k - 0.74) / 0.22) ** 1.4 : (crest - g) * Math.max(0, 1 - (k - 1.1) / 0.72) ** 1.5 - 0.07 * Math.min(1, (k - 1.1) / 0.72)
         pos.push(x, g + up, z)
         rise.push(up)
         part.push(k <= 0.74 ? 0 : k < 1.0 ? 0.5 : 1)
@@ -74,7 +74,7 @@ export class Pond {
           vec4 n = texture2D(uNoise, vWorld.xz * 0.43);
           float fine = n.a, broad = texture2D(uNoise, vWorld.xz * 0.06).b;
           vec3 clay = mix(${linear('#7b5f48')}, ${linear('#9c8062')}, fine) * (0.82 + 0.3 * broad);
-          vec3 turf = uGrass * (0.7 + 0.5 * broad) * (0.84 + 0.32 * fine);
+          vec3 turf = uGrass * (0.62 + 0.62 * broad) * (0.78 + 0.44 * fine) * mix(vec3(1.2, 1.07, 0.78), vec3(0.86, 0.95, 0.84), smoothstep(0.3, 0.7, texture2D(uNoise, vWorld.xz * 0.19).a));
           // Grass takes the bank once the digging is done; the inside stays clay down to the water.
           float grown = smoothstep(0.92, 1.0, uDug) * smoothstep(0.55, 0.95, vPart + (fine - 0.5) * 0.4);
           vec3 col = mix(clay, turf, grown);

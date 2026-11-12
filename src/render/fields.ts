@@ -74,12 +74,17 @@ Plant plantAt() {
   p.cs = cos(a);
   p.sn = sin(a);
   vec2 jit = (p.r.yz - 0.5) * vec2(${(PLANT * 0.4).toFixed(3)}, ${(ROW * 0.16).toFixed(3)});
+  // The tractor's wheels run in the same two furrows all season: the rows beside them stand back from it.
+  float rowI = floor((aAt.z - uRect.y) / ${ROW.toFixed(3)});
+  float tram = step(abs(rowI - 7.5), 0.6) + step(abs(rowI - 23.5), 0.6);
+  p.w *= 1.0 - 0.22 * tram;
+  jit.y += (fract((rowI + 0.5) * 0.5) < 0.5 ? 0.055 : -0.055) * tram;
   p.at = vec3(aAt.x + jit.x, aAt.y + ${RIDGE_AMP.toFixed(3)} * p.h1.b * (1.0 - p.h1.r) - 0.012, aAt.z + jit.y);
   return p;
 }
 vec3 plantPlace(vec3 pl) {
   // Wider along the row than across it: the rows close first, the furrows between them last.
-  return gp.at + vec3((gp.cs * pl.x + gp.sn * pl.z) * gp.w * 1.35, pl.y * gp.h, (-gp.sn * pl.x + gp.cs * pl.z) * gp.w * 0.86);
+  return gp.at + vec3((gp.cs * pl.x + gp.sn * pl.z) * gp.w * 1.35, pl.y * gp.h, (-gp.sn * pl.x + gp.cs * pl.z) * gp.w * 0.94);
 }
 `
 
@@ -91,7 +96,7 @@ const LEAF_SHAPE = /* glsl */ `
   transformed = plantPlace(pl);
   // A leaf that reaches over the furrow hangs into it, so the rows keep their shape after the canopy closes.
   float furrow = smoothstep(0.2, 0.56, abs(transformed.z - gp.at.z) / ${ROW.toFixed(3)});
-  transformed.y -= 0.36 * gp.h * furrow * (1.0 - gp.dead);
+  transformed.y -= 0.32 * gp.h * furrow * (1.0 - gp.dead);
 `
 
 // The leaf's colour from its hill's state, shared by the plants and by the crop painted into the ground far off.
@@ -119,7 +124,7 @@ const LEAF_COLOUR = /* glsl */ `
     col = mix(col, ${linear('#b5a27a')} * (0.8 + 0.4 * gp.r.z), gp.dead);
     col = mix(${linear('#8a9a62')}, col, aLeaf.z);
     // Deep in the canopy little light arrives; and no two leaves are quite one green.
-    col *= mix(0.46, 1.0, smoothstep(0.02, 0.44, position.y)) * (0.9 + 0.2 * gp.r.z) * (0.84 + 0.32 * fract(aLeaf.x * 0.618 + gp.r.x * 5.0)) * mix(1.1, 0.46, furrow);
+    col *= mix(0.46, 1.0, smoothstep(0.02, 0.44, position.y)) * (0.9 + 0.2 * gp.r.z) * (0.84 + 0.32 * fract(aLeaf.x * 0.618 + gp.r.x * 5.0)) * mix(1.12, 0.6, furrow);
     vTint = col;
     vErode = max(max(gp.dead * 0.32, hit * 0.55), burnt * 0.45 * (1.0 - uCrop.z)) * aLeaf.z;
     // Seen from far off a plant keeps as many of its leaves as it has canopy, so a half-grown field shows its soil.
@@ -223,6 +228,8 @@ vec4 paintCrop(vec2 f, vec4 h0, vec4 h1, float fine, out float lift) {
   float e = rowsPx * 2.0 + 0.04;
   float sharp = 1.0 - smoothstep(wide - e, wide + e, fr + 0.18 * (1.0 - closed) * abs(along - 0.5));
   float cover = mix(sharp, clamp(wide, 0.0, 1.0), blur);
+  float rowP = f.y * ${PLANTED_ROWS}.0;
+  cover *= 1.0 - 0.8 * max(1.0 - smoothstep(0.1, 0.34, abs(rowP - 8.0)), 1.0 - smoothstep(0.1, 0.34, abs(rowP - 24.0)));
   vec3 col = leafTint(grow, h0.g, h1.a, uCrop.x);
   float bl = clamp(h0.b * 2.4, 0.0, 1.0);
   col = mix(col, mix(${linear('#4b3324')}, ${linear('#241a14')}, fine), smoothstep(0.0, 0.25, bl * 1.3 - fine));
@@ -460,7 +467,7 @@ export class Fields {
           clover = mix(clover, vec3(0.74, 0.62, 0.7), step(0.8, grit) * step(0.55, fine) * 0.55 * uLeaf);
           soil = mix(soil, clover, cov);
           // New ground lies pale and cloddy; stones show on every field by how stony it is.
-          soil = mix(soil, soil * vec3(1.2, 1.14, 1.0) * (0.86 + 0.3 * step(0.55, grit)), uGround.w * 0.7 * (1.0 - cov));
+          soil = mix(soil, mix(soil, ${linear('#9d7856')}, 0.55) * (0.84 + 0.32 * step(0.55, grit)), uGround.w * (1.0 - cov));
           float stone = smoothstep(0.84 - 0.16 * uGround.x, 0.9 - 0.16 * uGround.x, n3.a * 0.7 + fine * 0.3) * min(1.0, uGround.x * 1.6);
           soil = mix(soil, vec3(0.42, 0.41, 0.38) * (0.7 + 0.6 * broad), stone * 0.8 * (1.0 - shaded) * (1.0 - cov));
           // Tile: the trenches stand open down the fall while they are laid; afterwards the ground over each drain dries first.
@@ -470,7 +477,7 @@ export class Fields {
             soil = mix(soil, ${linear('#9c7c58')} * (0.8 + 0.4 * fine), (1.0 - smoothstep(0.14, 0.5, lat + (fine - 0.5) * 0.2)) * laid * 0.8);
             soil = mix(soil, ${linear('#241812')}, (1.0 - smoothstep(0.05, 0.13, lat)) * laid);
           }
-          soil *= 1.0 + 0.3 * uGround.z * uDamp * (1.0 - smoothstep(0.1, 1.0, lat + (fine - 0.5) * 0.5));
+          soil *= 1.0 + uGround.z * smoothstep(0.2, 0.8, uDamp) * (0.1 + 0.4 * (1.0 - smoothstep(0.1, 1.0, lat + (fine - 0.5) * 0.5)));
           poolF = uWater * (1.0 - uGround.z) * mix(1.0, 1.0 - smoothstep(0.12, 0.5, vProf), vRidged) * smoothstep(0.34, 0.5, broad * 0.6 + 0.4 * texture2D(uNoise, vWorld.xz * 0.017).b);
           soilRough = mix(mix(0.96, 0.66, uDamp), 0.04, poolF);
           // Far off, the crop and the rest-year oats are painted where plants would stand.
@@ -649,7 +656,8 @@ export class Fields {
 
     // ---- marks on the ground: the selection, the ring that answers an order, and the stakes of land to be had
     const ringGeo = ringGeometry(i)
-    const ring = this.mark(ringGeo), pulse = this.mark(ringGeo), stake = this.mark(ringGeo)
+    const wooded = PARCELS[i].cover !== 'open'
+    const ring = this.mark(ringGeo, wooded), pulse = this.mark(ringGeo, wooded), stake = this.mark(ringGeo, wooded)
     stake.un.uDash.value = 1
     this.disposables.push(ringGeo)
 
@@ -663,7 +671,7 @@ export class Fields {
     this.groundTarget.push(new Vector4(PARCELS[i].stones, 0, 0, 0))
   }
 
-  private mark(geo: BufferGeometry): Mark {
+  private mark(geo: BufferGeometry, wooded: boolean): Mark {
     const un = { uLevel: { value: 0 }, uGrow: { value: 0 }, uGain: UI_GAIN, uDash: { value: 0 }, uWide: MARK_WIDE }
     const mat = new ShaderMaterial({
       uniforms: un,
@@ -703,6 +711,8 @@ export class Fields {
           gl_FragColor = vec4(mix(vec3(0.02, 0.03, 0.02), pale, core) * uGain, a);
         }`,
     })
+    // On a tract the mark is drawn over the trees that stand on it.
+    mat.depthTest = !wooded
     const mesh = new Mesh(geo, mat)
     mesh.renderOrder = 6
     mesh.visible = false
@@ -753,7 +763,7 @@ export class Fields {
       corners.forEach(([x, z], k) => {
         const on = this.availNow[i] ? 1 : 0
         q.setFromAxisAngle(up, hash2(i, k) * 6.28)
-        const size = on * 1.3 * Math.min(2.6, MARK_WIDE.value)
+        const size = on * 1.3 * Math.min(2.6, MARK_WIDE.value) * (PARCELS[i].cover !== 'open' ? 1.7 : 1)
         m.compose(p.set(x, Math.max(groundY(x, z), fieldBaseY(z)) - 0.04, z), q, s.set(size, size, size))
         this.stakes.setMatrixAt(i * 4 + k, m)
       })

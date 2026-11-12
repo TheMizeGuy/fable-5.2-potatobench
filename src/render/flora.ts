@@ -275,7 +275,7 @@ export class Flora {
     // Under its edge: saplings, young birch and brush, in and out along the front.
     for (let x = h.x0 - 2; x < h.x1 + 2; x += 0.55 + r() * 0.7) {
       const z = Math.min(-22.5, woodFront(x) + 2.1 - r() * 3.4)
-      if (ridgeWoodAt(x, z - 2.5) < 0.3 || tractAt(x, z, 0.7) >= 0 || !open(x, z)) continue
+      if (ridgeWoodAt(x, z - 2.5) < 0.3 || tractAt(x, z, 1.4) >= 0 || !open(x, z)) continue
       const q = r(), t = { x, z, s: 0, r: r(), hue: r() }
       if (q < 0.5) trees.bush.push({ ...t, s: 0.7 + r() * 0.9, kind: 3 })
       else if (q < 0.78) trees.spruce.push({ ...t, s: 1.2 + r() * 1.9, kind: 0, w: 1.25 })
@@ -295,7 +295,6 @@ export class Flora {
     }
     // By the house, along the lane and on the brook; the Dufour dooryard's maple, and a few along the road between.
     trees.maple.push({ x: 28.3, z: 4.6, s: 6.6, r: 0.3, hue: 0.12, kind: 0 }, { x: 27.6, z: -2.4, s: 4.6, r: 0.5, hue: 0.8, kind: 0 })
-    trees.birch.push({ x: 20.0, z: 5.9, s: 3.8, r: 0.7, hue: 0.62, kind: 1 })
     for (let k = 0; k < 4; k++) {
       const t = { x: 28.2 + r() * 1.4, z: -8.6 + k * 2.3 + r(), s: 4.2 + r() * 2.4, r: r(), hue: r(), kind: 0 }
       if (roadDist(t.x, t.z) > 1.8) trees.spruce.push(t)
@@ -325,7 +324,7 @@ export class Flora {
       const a = r() * Math.PI * 2, d = 40 + Math.pow(r(), 1.7) * reach
       const x = FARM_CENTER.x + Math.cos(a) * d, z = FARM_CENTER.z + Math.sin(a) * d
       if (trees.conFar.length + trees.broadFar.length + trees.conDistant.length + trees.broadDistant.length > 11000) break
-      if (ridgeWoodAt(x, z) > 0.02 || tractAt(x, z, 1) >= 0) continue
+      if (ridgeWoodAt(x, z) > 0.02 || tractAt(x, z, 1.4) >= 0) continue
       const w = woodsAt(x, z)
       if (w.woods <= 0 || !open(x, z)) continue
       const sparse = 1 / (1 + d / 260)
@@ -411,23 +410,25 @@ export class Flora {
             diffuseColor.rgb = bark * 0.62 * (0.8 + 0.3 * texture2D(uNoise, q.xy * 0.9).a);
             diffuseColor.a = 1.0;
           } else {
-            vec2 at = q.xz * 0.5 + q.y * vec2(0.37, -0.29) + own * 7.0;
-            vec4 cl = texture2D(uNoise, at);
-            float fine = texture2D(uNoise, at * 2.9 + 0.37).a;
+            // looked up from above on what faces the sky and from the side on what does not, so it never smears
+            vec2 atTop = q.xz * 0.5 + own * 7.0, atSide = vec2(q.x + q.z, q.y * 1.2) * 0.45 + own * 5.0;
+            float sky = smoothstep(0.35, 0.75, abs(normalize(vRound).y));
+            vec4 cl = mix(texture2D(uNoise, atSide), texture2D(uNoise, atTop), sky);
+            float fine = mix(texture2D(uNoise, atSide * 2.9 + 0.37).a, texture2D(uNoise, atTop * 2.9 + 0.37).a, sky);
             leafBump = (cl.rg - 0.5) * 2.4;
             vec3 summer = mix(${linear('#456f30')}, ${linear('#7c9c45')}, vTree.y);
             summer = mix(summer, mix(${linear('#587f3a')}, ${linear('#8fa850')}, vTree.y), step(0.5, sp) * step(sp, 1.5));
             summer = mix(summer, mix(${linear('#6b8a4a')}, ${linear('#96a85c')}, vTree.y), step(1.5, sp) * step(sp, 2.5));
             summer = mix(summer, mix(${linear('#38592e')}, ${linear('#55733a')}, vTree.y), step(2.5, sp));
-            vec3 young = mix(${linear('#a7c456')}, ${linear('#c7cf6a')}, own);
+            vec3 young = mix(${linear('#93b354')}, ${linear('#b2c268')}, own) * mix(1.0, 0.8, step(2.5, sp));
             vec3 col = mix(young, summer, smoothstep(140.0, 178.0, uDay));
-            vec3 fall = own < 0.3 ? ${linear('#b53f25')} : own < 0.62 ? ${linear('#cf7526')} : ${linear('#dba733')};
-            fall = mix(fall, mix(${linear('#dcb536')}, ${linear('#e6c644')}, own), step(0.5, sp) * step(sp, 2.5));
+            vec3 fall = own < 0.2 ? ${linear('#a03c27')} : own < 0.58 ? ${linear('#c06d2b')} : ${linear('#cb9d39')};
+            fall = mix(fall, mix(${linear('#c9a236')}, ${linear('#d8b644')}, own), step(0.5, sp) * step(sp, 2.5));
             fall = mix(fall, ${linear('#8a7a3a')}, step(2.5, sp));
             float late = 0.12 * step(1.5, sp) + 0.2 * step(2.5, sp) - 0.1 * (1.0 - step(0.5, sp));
             float start = clamp(0.18 + vTree.y * 0.42 + late, 0.16, 0.72);
             float turned = smoothstep(start, start + 0.3, uGold + (cl.b - 0.5) * 0.3);
-            col = mix(col, fall * (0.9 + 0.25 * cl.a), turned);
+            col = mix(col, fall * (0.78 + 0.34 * cl.a), turned);
             // Masses of leaf within the mass: light where they face the sky, dark under and between.
             float clump = smoothstep(0.3, 0.72, cl.b * 0.7 + fine * 0.3 + (vShade - 0.7) * 0.85);
             diffuseColor.rgb = col * mix(0.4, 1.1, clump) * (0.62 + 0.38 * vShade) * (0.88 + 0.24 * fine) * vTree.z;
@@ -447,7 +448,7 @@ export class Flora {
     this.disposables.push(cMat, leafMat, leafDepth)
 
     const g = {
-      spruce: conifer(10, 7, 0.21, 5, true), conMid: conifer(7, 6, 0.21, 13, false), conFar: conifer(5, 5, 0.215, 17, false), conDistant: conifer(3, 4, 0.23, 19, false),
+      spruce: conifer(10, 7, 0.21, 5, true), spruceFar: conifer(10, 7, 0.21, 5, false), conMid: conifer(7, 6, 0.21, 13, false), conFar: conifer(5, 5, 0.215, 17, false), conDistant: conifer(3, 4, 0.23, 19, false),
       maple: broadleaf(3, 'maple', 1), birch: broadleaf(11, 'birch', 1), bush: broadleaf(23, 'bush', 1),
       mapleFar: broadleaf(3, 'maple', 0), birchFar: broadleaf(11, 'birch', 0), bushFar: broadleaf(23, 'bush', 0),
     }
@@ -459,7 +460,7 @@ export class Flora {
       bush: k(g.bush, leafMat, 1.25, 0.04, true, leafDepth),
     }
     this.far = {
-      spruce: k(g.conMid, cMat, 1, 0.02), maple: k(g.mapleFar, leafMat, 1.06, 0.01, true, leafDepth), birch: k(g.birchFar, leafMat, 0.94, 0.01, true, leafDepth),
+      spruce: k(g.spruceFar, cMat, 1, 0.02), maple: k(g.mapleFar, leafMat, 1.06, 0.01, true, leafDepth), birch: k(g.birchFar, leafMat, 0.94, 0.01, true, leafDepth),
       bush: k(g.bushFar, leafMat, 1.25, 0.04, true, leafDepth),
       conBack: k(g.conMid, cMat, 1, 0.02), broadBack: k(g.mapleFar, leafMat, 1.1, 0.01, true, leafDepth),
       conFar: k(g.conFar, cMat, 1, 0.02), conDistant: k(g.conDistant, cMat, 1, 0.02, false),
@@ -501,9 +502,9 @@ export class Flora {
     const order: number[] = []
     // Burnt Hill went to poplar and birch; the home woodlot is spruce; the back lot is mixed.
     const hardShare = i === 16 ? 0.82 : i === 14 ? 0.14 : 0.5
-    for (let z = f.z0 + 0.5; z < f.z1 - 0.3; z += step) {
-      for (let x = f.x0 + 0.5; x < f.x1 - 0.3; x += step) {
-        const jx = Math.min(f.x1 - 0.4, Math.max(f.x0 + 0.4, x + (r() - 0.5) * step * 0.9)), jz = Math.min(f.z1 - 0.4, Math.max(f.z0 + 0.4, z + (r() - 0.5) * step * 0.9))
+    for (let z = f.z0 + 0.8; z < f.z1 - 0.5; z += step) {
+      for (let x = f.x0 + 0.8; x < f.x1 - 0.6; x += step) {
+        const jx = Math.min(f.x1 - 0.7, Math.max(f.x0 + 0.7, x + (r() - 0.5) * step * 0.9)), jz = Math.min(f.z1 - 0.45, Math.max(f.z0 + 0.7, z + (r() - 0.5) * step * 0.9))
         if (r() < 0.08) continue
         const t = { x: jx, z: jz, r: r(), hue: r() }
         const tall = 0.8 + 0.44 * fbm2(jx * 0.055 + 3.7, jz * 0.07 + 1.1)
