@@ -95,6 +95,53 @@ describe('spraying', () => {
   })
 })
 
+describe('spraying this season', () => {
+  it('not this year: nothing asks for a spray, the routine orders none, the player may still order one, and next year asks again', () => {
+    const { w, c } = farm(1)
+    expect(S.sprayWayNow(c)).toBeNull()
+    ok(w, c, { t: 'routine', kind: 'spray', auto: true })
+    expect(S.sprayWayNow(c)).toBe('auto')
+    for (let g = 0; g < 300 && playing(c) && !c.season!.jobs.some(j => j.kind === 'spray'); g++) ok(w, c, { t: 'day' })
+    expect(c.season!.jobs.some(j => j.kind === 'spray' && j.by === 'routine')).toBe(true)
+    ok(w, c, { t: 'sprayWay', way: 'none' })
+    expect(S.apply(w, c, { t: 'sprayWay', way: 'none' }).ok).toBe(false)
+    expect([S.sprayWayNow(c), c.routine.spray]).toEqual(['none', false])
+    expect(c.season!.jobs.some(j => j.kind === 'spray')).toBe(false)
+    // Who does what's "ask me" takes it back from not this year.
+    const ask = structuredClone(c)
+    ok(w, ask, { t: 'routine', kind: 'spray', auto: false })
+    expect(S.sprayWayNow(ask)).toBe('ask')
+    let mine = false
+    for (let g = 0; g < 300 && playing(c); g++) {
+      expect(S.advise(w, c).some(a => a.act === 'spray')).toBe(false)
+      expect(S.fieldNeeds(w, c).some(n => n.need?.act === 'spray')).toBe(false)
+      expect(S.pressing(w, c).some(p => p.kind === 'spray')).toBe(false)
+      expect(c.season!.jobs.some(j => j.kind === 'spray' && j.by !== 'you')).toBe(false)
+      const f = c.season!.fields.findIndex(x => x.status === 'growing' && x.emergeDay >= 0 && x.deadDay < 0)
+      if (!mine && f >= 0) { ok(w, c, { t: 'job', kind: 'spray', field: f }); mine = true }
+      ok(w, c, { t: 'day' })
+    }
+    expect(mine).toBe(true)
+    if (c.phase === 'season') ok(w, c, { t: 'endSeason' })
+    while (c.phase === 'cellar') ok(w, c, { t: 'month' })
+    ok(w, c, { t: 'next' })
+    expect(S.sprayWayNow(c)).toBeNull()
+  })
+
+  it('ask me each time leaves the stamps and the orders to the player', () => {
+    const { w, c } = farm(2)
+    ok(w, c, { t: 'sprayWay', way: 'ask' })
+    expect([S.sprayWayNow(c), c.routine.spray]).toEqual(['ask', false])
+    let asked = false
+    for (let g = 0; g < 300 && playing(c); g++) {
+      asked ||= S.fieldNeeds(w, c).some(n => n.need?.act === 'spray')
+      expect(c.season!.jobs.some(j => j.kind === 'spray')).toBe(false)
+      ok(w, c, { t: 'day' })
+    }
+    expect(asked).toBe(true)
+  })
+})
+
 describe('the vine kill', () => {
   // The player kills the vines the evening the coach first asks, as the guide's stamp has them do.
   function killWhenAsked(w: World, c: Campaign, set?: (c: Campaign, field: number) => void): number {
@@ -147,5 +194,99 @@ describe('the vine kill', () => {
     expect(k.asked).toBe(-1)
     expect(k.why).toBe('')
     expect(k.early).toBeGreaterThan(0)
+  })
+})
+
+describe('the dig and the kill left to the crew', () => {
+  it('the routine never digs green: the kill is pressed with its date, the crew kills on that date, and the dig waits for the skins', () => {
+    for (const seed of [1, 2, 3, 4, 5, 6]) {
+      const { w, c } = farm(seed)
+      const said = new Map<number, string>()
+      for (let g = 0; g < 300 && playing(c); g++) {
+        for (const p of S.pressing(w, c)) if (p.kind === 'kill' && p.job < 0) said.set(p.field, p.inWay)
+        ok(w, c, { t: 'day' })
+      }
+      const s = c.season!
+      const greenDig = S.dayIndex(c.year, S.DIG_GREEN.month, S.DIG_GREEN.dom)
+      s.fields.forEach((f, i) => {
+        if (f.plantDay < 0 || f.dugDay < 0) return
+        const at = `seed ${seed} ${S.FIELD_NAMES[i]}`
+        expect(f.deadDay, at).toBeGreaterThanOrEqual(0)
+        expect(f.dugDay - f.deadDay >= S.SKIN_DAYS || f.dugDay >= greenDig, at).toBe(true)
+        expect(c.lots.find(l => l.field === i)!.skin, `${at}: skins set at the dig`).toBe(1)
+        if (f.killDay < 0) return
+        const m = /^The crew kills the vines on ([A-Z][a-z]+ \d+) unless you keep them up/.exec(said.get(i) ?? '')
+        expect(m, `${at}: ${said.get(i)}`).not.toBeNull()
+        // Ordered that morning, and done as soon as the weather and the work ahead of it let the crew.
+        const on = Array.from({ length: 5 }, (_, k) => S.formatDay(c.year, f.killDay - k))
+        expect(on, at).toContain(m![1])
+      })
+    }
+  })
+
+  it('a vine kill taken off the list keeps the vines up: the crew does not kill them by itself', () => {
+    const { w, c } = farm(1)
+    let field = -1
+    for (let g = 0; g < 300 && playing(c) && field < 0; g++) {
+      ok(w, c, { t: 'day' })
+      const j = c.season!.jobs.find(x => x.kind === 'kill' && x.by === 'routine')
+      if (j) { field = j.field; ok(w, c, { t: 'cancel', id: j.id }) }
+    }
+    expect(field).toBeGreaterThanOrEqual(0)
+    for (let g = 0; g < 300 && playing(c) && c.season!.fields[field].status === 'growing'; g++) {
+      expect(S.pressing(w, c).some(p => p.kind === 'kill' && p.field === field)).toBe(false)
+      ok(w, c, { t: 'day' })
+      expect(c.season!.jobs.some(x => x.kind === 'kill' && x.field === field)).toBe(false)
+    }
+    expect(c.season!.fields[field].killDay).toBe(-1)
+  })
+
+  it('keep the vines up, said before the crew kills them: nothing is killed, nothing pressed, and taking it back restores the date', () => {
+    const { w, c } = farm(1)
+    let field = -1
+    for (let g = 0; g < 300 && playing(c) && field < 0; g++) {
+      field = S.pressing(w, c).find(p => p.kind === 'kill')?.field ?? -1
+      if (field < 0) ok(w, c, { t: 'day' })
+    }
+    expect(field).toBeGreaterThanOrEqual(0)
+    ok(w, c, { t: 'keepVines', field, keep: true })
+    expect(S.apply(w, c, { t: 'keepVines', field, keep: true }).ok).toBe(false)
+    const back = structuredClone(c)
+    for (let g = 0; g < 300 && playing(c) && c.season!.fields[field].status === 'growing'; g++) {
+      expect(S.pressing(w, c).some(p => p.kind === 'kill' && p.field === field)).toBe(false)
+      ok(w, c, { t: 'day' })
+      expect(c.season!.jobs.some(x => x.kind === 'kill' && x.field === field)).toBe(false)
+    }
+    expect(c.season!.fields[field].killDay).toBe(-1)
+    ok(w, back, { t: 'keepVines', field, keep: false })
+    expect(S.pressing(w, back).find(p => p.kind === 'kill' && p.field === field)?.inWay).toMatch(/^The crew kills the vines on/)
+  })
+
+  it('an ask that has lapsed starts no clock: the crew kills nothing the coach no longer asks for', () => {
+    const { w, c } = farm(1)
+    for (let g = 0; g < 300 && playing(c) && !c.season!.fields.some(f => f.tiDay >= 0 && f.status === 'growing'); g++) ok(w, c, { t: 'day' })
+    const s = c.season!
+    const i = s.fields.findIndex(f => f.tiDay >= 0 && f.status === 'growing')
+    // A frost the coach once killed for, a month ago, that never came.
+    s.fields[i].killAsked = s.day - 30
+    s.fields[i].killWhy = 'frost'
+    for (let g = 0; g < 10; g++) {
+      if (S.advise(w, c).some(a => a.act === 'kill' && a.field === i)) break
+      expect(S.pressing(w, c).some(p => p.kind === 'kill' && p.field === i)).toBe(false)
+      ok(w, c, { t: 'day' })
+      expect(s.jobs.some(j => j.kind === 'kill' && j.field === i)).toBe(false)
+    }
+  })
+
+  it('kill dates come after the other pressing work, so the one row shown is what cannot wait today', () => {
+    for (const seed of [1, 2, 3, 4]) {
+      const { w, c } = farm(seed)
+      for (let g = 0; g < 300 && playing(c); g++) {
+        const kinds = S.pressing(w, c).map(p => p.kind)
+        const k = kinds.indexOf('kill')
+        if (k >= 0) expect(kinds.slice(k).every(x => x === 'kill')).toBe(true)
+        ok(w, c, { t: 'day' })
+      }
+    }
   })
 })

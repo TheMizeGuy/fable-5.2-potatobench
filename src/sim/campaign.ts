@@ -15,9 +15,9 @@ import {
 import { CHOICE_LABEL } from './incidents.ts'
 import { article, buildBlock, buildCost, buildingAt, buildWork, hasBuilt, startBuilding, YARD_NAME } from './buildings.ts'
 import { brushedNow, COVER_WORD, fell, isField, standing } from './land.ts'
-import type { Campaign, Cmd, Contract, Due, FieldPlan, GameEvent, Incident, JobKind, Lot, Result, RoutineKind, Season, Unit, UpgradeId, WinterWork, World, YearSummary } from './types.ts'
+import type { Campaign, Cmd, Contract, Due, FieldPlan, GameEvent, Incident, JobKind, Lot, Result, RoutineKind, Season, SprayWay, Unit, UpgradeId, WinterWork, World, YearSummary } from './types.ts'
 import { variety } from './varieties.ts'
-import { dayIndex, withCommas } from './calendar.ts'
+import { dayIndex, formatDay, withCommas } from './calendar.ts'
 import { ageLot, finishLot } from './harvest.ts'
 import { hasYear } from './weather.ts'
 import { yearLabel } from './climate.ts'
@@ -365,7 +365,7 @@ function winterMonth(c: Campaign, out: GameEvent[]): void {
     if (u.winter === 'off') continue
     const why = winterBlock(c, u, u.winter, u.winterField)
     if (why) {
-      out.push(note(c, 'winterIdle', 'info', `${u.name} is laid off for the rest of the winter: ${why}`))
+      out.push(note(c, 'winterIdle', 'info', `${winterOff(u)}: ${why}`))
       u.winter = 'off'
       u.winterField = -1
       continue
@@ -380,6 +380,21 @@ function winterMonth(c: Campaign, out: GameEvent[]): void {
     winterWork(c, u, time * speed(u, skill), out)
     for (const level of gainXp(u, skill, time)) out.push(note(c, 'skillUp', 'good', `${u.name} is better at ${SKILL_LABEL[skill]}: level ${level}.`))
   }
+  // Work that ran out this month lays its people off now, not a month on, so the winter's lines say what they do.
+  for (const u of c.crew) {
+    if (u.winter === 'off') continue
+    const why = winterBlock(c, u, u.winter, u.winterField)
+    if (!why) continue
+    const other = u.winter === 'woods' ? timberTracts(c).filter(i => i !== u.winterField) : []
+    const more = other.length ? ` ${FIELD_NAMES[other[0]]} still stands, if it is to be felled.` : ''
+    out.push(note(c, 'winterIdle', 'info', `${winterOff(u)}: ${why}${more}`))
+    u.winter = 'off'
+    u.winterField = -1
+  }
+}
+
+function winterOff(u: Unit): string {
+  return u.kind === 'farmer' ? 'You stop work for the rest of the winter' : `${u.name} is laid off for the rest of the winter`
 }
 
 const WINTER_SKILL: Record<Exclude<WinterWork, 'off'>, 'woods' | 'pack' | 'build'> = { woods: 'woods', pack: 'pack', build: 'build' }
@@ -622,6 +637,11 @@ export function yearNowLabel(c: Campaign): string {
 // Whether this kind of work goes on the list by itself.
 export function routineOn(c: Campaign, kind: JobKind): boolean {
   return (P.ROUTINE_KINDS as JobKind[]).includes(kind) && (c.routine?.[kind as RoutineKind] ?? P.ROUTINE_DEFAULT[kind as RoutineKind])
+}
+
+// How spraying is done this season, or null when the player has not said this year.
+export function sprayWayNow(c: Campaign): SprayWay | null {
+  return c.sprayWay && c.sprayWay.year === c.year ? c.sprayWay.way : null
 }
 
 // The farm's standing orders, in the order they are listed.
@@ -903,6 +923,7 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
       const why = addJob(c, cmd.kind, cmd.field, cmd.unit ?? -1, 'you')
       if (why) return fail(why)
       noteKillAsks(world, c, asked)
+      if (cmd.kind === 'kill') delete c.season!.fields[cmd.field].keepVines
       return ok()
     }
     case 'rest': {
@@ -916,13 +937,40 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
       if (mode === 'now') letGo(u)
       return ok([note(c, 'rest', 'info', mode === 'now' ? `${u.name} takes time off until rested.` : mode === 'push' ? `${u.name} works on however tired: slower, and liable to get hurt on a machine or in the woods.` : `${u.name} will rest by themselves once worn out.`)])
     }
+    case 'keepVines': {
+      if (c.phase !== 'season' || !c.season) return fail('The season is not under way.')
+      const f = fieldIndex(cmd.field) ? c.season.fields[cmd.field] : undefined
+      if (!f) return fail('No such field.')
+      if (typeof cmd.keep !== 'boolean') return fail('Say whether the vines are kept up.')
+      if (!!f.keepVines === cmd.keep) return fail(cmd.keep ? 'The vines are already kept up.' : 'The crew already kills these vines when they are due.')
+      if (cmd.keep) {
+        f.keepVines = true
+        for (const j of c.season.jobs.filter(x => x.kind === 'kill' && x.field === cmd.field && x.by === 'routine')) { c.season.jobs.splice(c.season.jobs.indexOf(j), 1); releaseJob(c, j.id) }
+      } else delete f.keepVines
+      return ok([note(c, 'keepVines', 'info', cmd.keep ? `The vines in ${FIELD_NAMES[cmd.field]} stay up until you order them killed; dug green from ${formatDay(c.year, dayIndex(c.year, P.DIG_GREEN.month, P.DIG_GREEN.dom))} if they are still up.`
+        : `The crew kills the vines in ${FIELD_NAMES[cmd.field]} by itself when they are due.`)])
+    }
+    case 'sprayWay': {
+      if (c.phase === 'over') return fail('The farm is gone.')
+      if (cmd.way !== 'auto' && cmd.way !== 'ask' && cmd.way !== 'none') return fail('Keep the fields sprayed, ask each time, or not this year.')
+      if (sprayWayNow(c) === cmd.way) return fail('Spraying is already done that way this year.')
+      c.sprayWay = { year: c.year, way: cmd.way }
+      c.routine.spray = cmd.way === 'auto'
+      // Not this year: the sprays the routine put on the list come off it; the player's own orders stand.
+      if (cmd.way === 'none' && c.season) {
+        for (const j of c.season.jobs.filter(x => x.kind === 'spray' && x.by === 'routine')) { c.season.jobs.splice(c.season.jobs.indexOf(j), 1); releaseJob(c, j.id) }
+      }
+      return ok([note(c, 'routine', 'info', cmd.way === 'auto' ? 'Spraying goes on the list by itself now, wherever a field needs it.'
+        : cmd.way === 'ask' ? 'Spraying waits for your order now.' : 'No spraying this year: no field is asked to be sprayed, and blight, if it comes, goes unchecked.')])
+    }
     case 'routine': {
       if (c.phase === 'over') return fail('The farm is gone.')
       if (!(P.ROUTINE_KINDS as JobKind[]).includes(cmd.kind)) return fail(`${JOB_LABEL[cmd.kind] ?? 'That'} is never ordered by itself.`)
       if (typeof cmd.auto !== 'boolean') return fail('Say whether it is done by itself.')
       const kind = cmd.kind as RoutineKind
-      if (c.routine[kind] === cmd.auto) return fail(cmd.auto ? `${JOB_LABEL[kind]} is already done by itself.` : `${JOB_LABEL[kind]} already waits for you.`)
+      if (c.routine[kind] === cmd.auto && !(kind === 'spray' && sprayWayNow(c) === 'none')) return fail(cmd.auto ? `${JOB_LABEL[kind]} is already done by itself.` : `${JOB_LABEL[kind]} already waits for you.`)
       c.routine[kind] = cmd.auto
+      if (kind === 'spray') c.sprayWay = { year: c.year, way: cmd.auto ? 'auto' : 'ask' }
       return ok([note(c, 'routine', 'info', cmd.auto ? `${JOB_LABEL[kind]} goes on the list by itself now, wherever a field needs it.` : `${JOB_LABEL[kind]} waits for your order now.`)])
     }
     case 'assign': {
@@ -943,6 +991,8 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
       if (c.season.jobs[k].kind === 'haul') return fail('The crop in the field has to come in.')
       if (c.season.jobs[k].kind === 'build') return fail('The building is paid for: it stays on the list until it stands.')
       if (c.season.jobs[k].kind === 'dig' && c.season.jobs[k].done > 0) return fail('The digger is already in the field.')
+      // A vine kill taken off the list is the player keeping the vines up: the crew does not kill them by itself.
+      if (c.season.jobs[k].kind === 'kill') c.season.fields[c.season.jobs[k].field].keepVines = true
       c.season.jobs.splice(k, 1)
       releaseJob(c, cmd.id)
       return ok()

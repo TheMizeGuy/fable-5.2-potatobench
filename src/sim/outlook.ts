@@ -9,7 +9,7 @@ import { lotValue, basePrice } from './market.ts'
 import * as P from './params.ts'
 import { housingLimit, hiredCount, hurt, jobSkill, resting, SKILL_LABEL, willDo } from './people.ts'
 import { jobCost, pressingWhy, standingBy, tractorsRunning, waitFor, workday } from './season.ts'
-import { asks } from './advice.ts'
+import { asks, killByItself } from './advice.ts'
 import type { BuildingKind, Campaign, Cmd, Job, JobKind, KillWhy, UpgradeId, World, YearSummary } from './types.ts'
 import { estimateYield, fieldInfo } from './view.ts'
 import { getDay } from './weather.ts'
@@ -109,7 +109,9 @@ export function pressing(world: World, c: Campaign): Pressing[] {
     out.push({ kind: j.kind, field: j.field, job: j.id, why, inWay: o.why, fix: best ? { t: 'priority', unit: best.id, work: skill, level: 1 } : null })
   }
   // A spray is pressing where the coach asks for one under a blight watch and the routine does not order it.
-  const sprays = s.watchDay >= 0 ? new Set(asks(world, c).filter(a => a.act === 'spray').map(a => a.field)) : new Set<number>()
+  const all = asks(world, c)
+  const sprays = s.watchDay >= 0 ? new Set(all.filter(a => a.act === 'spray').map(a => a.field)) : new Set<number>()
+  const kills: Pressing[] = []
   for (let i = 0; i < P.FIELD_COUNT; i++) {
     if (!held(c, i)) continue
     const f = s.fields[i]
@@ -120,9 +122,15 @@ export function pressing(world: World, c: Campaign): Pressing[] {
         ? `Sprayed on ${formatDay(s.year, f.lastSpray)}, and that has worn thin. Each order is one pass: spraying waits for your order.`
         : 'Not sprayed yet this season. Spraying waits for your order.')
     }
+    // After the rest: the date the crew kills by itself is days off.
+    const kill = killByItself(c, i, all)
+    if (kill >= 0 && !queued('kill')) {
+      kills.push({ kind: 'kill', field: i, job: -1, why: 'the vines are due to come off', fix: { t: 'job', kind: 'kill', field: i },
+        inWay: `The crew kills the vines on ${formatDay(s.year, Math.max(kill, s.day))} unless you keep them up, so the skins set before the dig.` })
+    }
     if (f.inField >= 0.5 && !f.weighed && s.frostHaul === s.day && !queued('haul')) want('haul', 'a frost is coming on the barrels', 'Hauling waits for your order.')
   }
-  return out
+  return [...out, ...kills]
 }
 
 // ---------------------------------------------------------------- money

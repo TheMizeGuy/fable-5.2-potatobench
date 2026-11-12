@@ -6,7 +6,7 @@ import * as P from './params.ts'
 import { willDo } from './people.ts'
 import type { Campaign, GameEvent, JobKind, KillWhy, World } from './types.ts'
 import { fieldInfo, forecast, today } from './view.ts'
-import { openLots } from './campaign.ts'
+import { openLots, sprayWayNow } from './campaign.ts'
 import { newPotatoWindow } from './market.ts'
 import { addJob, FIELD_NAMES, JOB_LABEL, letGo, seasonDone, standingBy, workday } from './season.ts'
 import { hasBuilt } from './buildings.ts'
@@ -32,6 +32,30 @@ export function advise(world: World, c: Campaign): Advice[] {
 // Everything reference practice asks for now, before the cap on how much goes on the list at once.
 export function asks(world: World, c: Campaign): Advice[] {
   return everything(world, c)
+}
+
+// The day the crew kills this field's vines by itself, or -1: only where the dig is the routine's and the kill the
+// player's call, while the coach asks for it (all: what it asks now), the vines are up and the player has not kept
+// them up. KILL_WAIT days after this run of asking began, and no later than leaves the skins two weeks to set before
+// the green dig.
+export function killByItself(c: Campaign, field: number, all: Advice[]): number {
+  const s = c.season
+  const f = s?.fields[field]
+  if (!s || !f || f.keepVines || f.status !== 'growing' || f.deadDay >= 0) return -1
+  if (standingBy(c, 'kill', field) || !standingBy(c, 'dig', field)) return -1
+  if (!all.some(a => a.act === 'kill' && a.field === field)) return -1
+  const since = f.killSince ?? s.day
+  const latest = dayIndex(s.year, P.DIG_GREEN.month, P.DIG_GREEN.dom) - P.SKIN_DAYS
+  return Math.max(since, Math.min(since + P.KILL_WAIT, latest))
+}
+
+// Each morning: the day the coach's present run of asking for a field's kill began, cleared when it stops asking.
+function noteKillRun(c: Campaign, all: Advice[]): void {
+  const s = c.season!
+  s.fields.forEach((f, i) => {
+    if (all.some(a => a.act === 'kill' && a.field === i)) f.killSince ??= s.day
+    else if (!s.jobs.some(j => j.kind === 'kill' && j.field === i)) delete f.killSince
+  })
 }
 
 // The first day reference practice asks for each field's vines to be killed, and why, kept on the field so the
@@ -62,9 +86,11 @@ function everything(world: World, c: Campaign): Advice[] {
   const rainSoon = fc.slice(0, 3).some(d => d.rainChance >= 60 && d.rainMm >= 8)
   const blightSoon = fc.slice(0, 3).some(d => d.blight >= 2)
   const frostSoon = fc.slice(0, 2).some(d => d.frostChance >= 50)
-  const hardFrostNear = s.day >= dayIndex(year, 9, 8)
+  // Dead vines wait for set skins until the date a green crop is dug, so the crop is in before the freeze-up.
+  const digNow = s.day >= dayIndex(year, P.DIG_GREEN.month, P.DIG_GREEN.dom)
   const anyBlight = s.fields.some((_, i) => fieldInfo(c, i).blightHills > 0)
   const killBy = dayIndex(year, 8, 8)
+  const noSpray = sprayWayNow(c) === 'none'
 
   const spring = s.day < dayIndex(year, 5, 15)
   for (let i = 0; i < P.FIELD_COUNT; i++) {
@@ -102,7 +128,7 @@ function everything(world: World, c: Campaign): Advice[] {
       if (tending && up && f.blightHills > 0 && f.blightHills <= 8 && f.blightKnown < 0.04) {
         add(i, 'rogue', `Pull the blighted ${f.blightHills === 1 ? 'hill' : 'hills'} in ${n}.`, `${f.blightHills === 1 ? 'One hill is' : `${f.blightHills} hills are`} throwing spores. Out of the field, they cannot.`, true)
       }
-      if (tending && up && f.protect < 0.35 && (t.watch || (blightSoon && t.sv >= 12) || anyBlight)) {
+      if (tending && up && f.protect < 0.35 && !noSpray && (t.watch || (blightSoon && t.sv >= 12) || anyBlight)) {
         const why = anyBlight ? 'There is blight on the farm. Protectant only works if it is on the leaf before the spores.'
           : !t.watch ? 'Blight weather is forecast and the watch is close. Protectant has to be on the leaf before the spores.'
             : f.protect > 0.02 ? 'The blight watch is on and the protectant is wearing thin.' : 'The blight watch is on and the leaves are unprotected.'
@@ -139,8 +165,8 @@ function everything(world: World, c: Campaign): Advice[] {
       add(i, 'haul', `Haul the crop in from ${n}.`, frost ? `A frost is forecast: ${Math.round(f.inField)} cwt in barrels would lose a fifth of itself in the night.` : `${Math.round(f.inField)} cwt is in barrels in the field. Until it is in, frost and sun take some of it.`, frost)
     }
     if (f.status === 'dead') {
-      if (f.skin >= 1 || hardFrostNear) {
-        add(i, 'dig', `Dig ${n}.`, f.skin >= 1 ? 'Skins are set.' : 'Hard frost is close. Thin skins are better than frozen tubers.', hardFrostNear)
+      if (f.skin >= 1 || digNow) {
+        add(i, 'dig', `Dig ${n}.`, f.skin >= 1 ? 'Skins are set.' : 'Hard frost is close. Thin skins are better than frozen tubers.', digNow)
       } else {
         add(i, 'wait', `Let ${n} sit.`, `Skins are ${Math.round(f.skin * 100)}% set. Tubers dug now skin, and skinned tubers do not keep.`)
       }
@@ -208,13 +234,20 @@ export function standingOrders(world: World, c: Campaign): GameEvent[] {
   if (threatened) s.frostHaul = s.day
   const all = everything(world, c)
   noteKillAsks(world, c, all)
+  noteKillRun(c, all)
   if (!workday(c, s)) return out
   // A frost forecast for tonight: a lone hauler digs no more than the rest of the day can haul in (season.ts, work).
   s.frostLow = forecastFor(world, c.seed, s.year, s.day, 1, hasBuilt(c, 'station') ? P.STATION_ERROR : 1).lo
   for (const a of withinReach(c, all)) {
     if (a.field < 0 || a.act === 'wait' || a.act === 'sell' || a.act === 'close') continue
+    if (a.act === 'kill' && s.fields[a.field].keepVines) continue
     const by = standingBy(c, a.act, a.field)
     if (by) addJob(c, a.act, a.field, -1, by)
+  }
+  // The vines' kill, overdue where the dig is the routine's: the crew sees to it rather than dig green.
+  for (let i = 0; i < P.FIELD_COUNT; i++) {
+    const when = killByItself(c, i, all)
+    if (when >= 0 && s.day >= when && !s.jobs.some(j => j.kind === 'kill' && j.field === i)) addJob(c, 'kill', i, -1, 'routine')
   }
   const cold: string[] = []
   for (let i = 0; i < P.FIELD_COUNT; i++) {
