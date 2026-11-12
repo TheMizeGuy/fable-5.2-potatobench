@@ -508,7 +508,7 @@ export function poles(b: Builder): void {
     const z = townRoadZ(x) + 2.4
     line.push([x, groundY(x, z), z])
   }
-  const lane: V3[] = [[26, 0, townRoadZ(26) + 2.4], [21.9, 0, 47.6], [20.6, 0, 39.0], [19.9, 0, 31.2], [19.6, 0, 24.6], [19.5, 0, 18.0], [19.6, 0, 11.4], [20.9, 0, 6.9]]
+  const lane: V3[] = [[26, 0, townRoadZ(26) + 2.4], [21.9, 0, 47.6], [20.6, 0, 39.0], [19.9, 0, 31.2], [19.6, 0, 24.6], [17.2, 0, 18.5], [16.75, 0, 12.0], [20.9, 0, 6.9]]
   for (const p of lane) p[1] = groundY(p[0], p[2])
   b.at(0, 0, 0, 0, 0)
   const pole = (p: V3, arm: boolean, k: number) => {

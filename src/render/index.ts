@@ -5,6 +5,7 @@ import type { App } from '../game/app.ts'
 import type { CreateFieldView, FieldView } from '../game/contracts.ts'
 import { FIELD_COUNT, HILLS } from '../sim/index.ts'
 import { CameraRig, MOVE_MS, type Pose, type Viewport } from './camera.ts'
+import { Clearing } from './clearing.ts'
 import { Kit } from './crew.ts'
 import { EVENING, MORNING, copyEnv, easeEnv, envTarget, light, makeEnv, makeLight } from './env.ts'
 import { FarHills } from './far.ts'
@@ -15,8 +16,9 @@ import { Grass } from './grass.ts'
 import { Harvest } from './harvest.ts'
 import { attachInput } from './input.ts'
 import { FD, FIELDS, WATER_Y, brookZ, fieldBaseY, groundY, YARD_AT, yardAt } from './layout.ts'
-import { clamp, smooth } from './noise.ts'
+import { clamp, hash2, smooth } from './noise.ts'
 import { Particles } from './particles.ts'
+import { Pond } from './pond.ts'
 import { Post } from './post.ts'
 import { LAMP, Props } from './props.ts'
 import { U } from './shaders.ts'
@@ -24,7 +26,7 @@ import { SunShadows } from './shadows.ts'
 import { Sky } from './sky.ts'
 import { snapshot, type Mode, type Snapshot } from './state.ts'
 import { buildTerrain } from './terrain.ts'
-import { flowerTexture, leafTexture, noiseTexture, puffTexture, roadTexture, sprayTexture } from './textures.ts'
+import { flowerTexture, leafTexture, noiseTexture, puffTexture } from './textures.ts'
 import { Birds } from './birds.ts'
 import { Crews, type PendingReveal } from './units.ts'
 import { Weather } from './weather.ts'
@@ -108,9 +110,11 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   const sky = new Sky()
   const shadows = new SunShadows(scene)
   const post = new Post(renderer)
-  const roadTex = roadTexture(), leafTex = leafTexture(), flowerTex = flowerTexture(), sprayTex = sprayTexture(), puffTex = puffTexture()
-  const terrain = buildTerrain(roadTex)
-  const flora = new Flora(sprayTex)
+  const leafTex = leafTexture(), flowerTex = flowerTexture(), puffTex = puffTexture()
+  const terrain = buildTerrain()
+  const flora = new Flora()
+  const clearing = new Clearing(flora)
+  const pond = new Pond()
   const grass = new Grass()
   const props = new Props()
   const fields = new Fields(leafTex, flowerTex)
@@ -122,7 +126,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   const birds = new Birds()
   const farHills = new FarHills()
   scene.add(farHills.mesh)
-  scene.add(sky.dome, terrain.group, flora.group, grass.group, props.group, fields.group, harvest.group, crews.group, particles.mesh, weather.group, birds.mesh)
+  scene.add(sky.dome, terrain.group, flora.group, clearing.group, pond.group, grass.group, props.group, fields.group, harvest.group, crews.group, particles.mesh, weather.group, birds.mesh)
   // Whatever throws a shadow near at hand throws it into the fine cascade; the far trees and farmsteads only into the wide one.
   scene.traverse(o => { if (o.castShadow && !o.userData.far) o.layers.enable(3) })
 
@@ -149,6 +153,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   let framing: 'title' | 'home' | 'whole' | 'field' | 'free' = 'home'
   let framed = -1
   const dugSince = new Map<number, number>()
+  const barrelPeak = new Map<number, number>()
   const waiters: Waiter[] = []
   const focus = new Vector3(), ahead = new Vector3(), sunAt = new Vector3()
   const windAt = U.uWindAt.value
@@ -346,9 +351,19 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       if (st === 'dug' && !dugSince.has(i)) dugSince.set(i, next.seasonDay)
       if (st !== 'dug') dugSince.delete(i)
     }
-    const barrels = next.fields.map((f, i) => next.mode === 'season' && (f.status === 'digging' || (f.status === 'dug' && next.seasonDay - (dugSince.get(i) ?? next.seasonDay) < 4)))
-    harvest.setBarrelFields(barrels, (f, h) => shown[f][h].look.kind === 'dug' && next.fields[f].hills[h].kind === 'dug')
-    fields.setTargets(next.fields, shown)
+    // Barrels stand in a field while its crop waits there to be hauled, fewer as it goes in.
+    const barrels = next.fields.map((f, i) => {
+      const peak = Math.max(f.inField, next.mode === 'season' ? barrelPeak.get(i) ?? 0 : 0)
+      barrelPeak.set(i, peak)
+      return next.mode === 'season' && (f.status === 'digging' || f.inField > 0.5)
+    })
+    harvest.setBarrelFields(barrels, (f, h) => shown[f][h].look.kind === 'dug' && next.fields[f].hills[h].kind === 'dug'
+      && (next.fields[f].status === 'digging' || hash2(h, f + 3) <= next.fields[f].inField / Math.max(1, barrelPeak.get(f) ?? 1)))
+    fields.setTargets(next.fields, shown, next.mode === 'plan')
+    clearing.set(next.fields)
+    pond.set(next.farm)
+    const gravelled = next.farm.buildings.find(b => b.kind === 'road')
+    terrain.gravel.value = gravelled ? (gravelled.built ? 1 : gravelled.progress) : 0
     props.sync(next)
     envTarget(next, envT)
     dayHour = envT.hour
@@ -372,6 +387,8 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     const c = new Vector3(f.x1, fieldBaseY(f.z1) + 0.25, f.z1), d = new Vector3(f.x0, fieldBaseY(f.z1) + 0.25, f.z1)
     return [new Triangle(a, b, c), new Triangle(a, c, d)]
   })
+  // A tract under trees is picked by its canopy too: the same quad at the height of the crowns.
+  const crowns = quads.map(tris => tris.map(t => new Triangle(t.a.clone().setY(t.a.y + 4.5), t.b.clone().setY(t.b.y + 4.5), t.c.clone().setY(t.c.y + 4.5))))
   function pick(x: number, y: number): number {
     const vp = viewport()
     ray.setFromCamera(ndc.set((x / vp.w) * 2 - 1, -(y / vp.h) * 2 + 1), rig.camera)
@@ -379,7 +396,8 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     quads.forEach((tris, i) => {
       const f = snap.fields[i]
       if (!f.held && !f.available && !f.ours) return
-      for (const t of tris) {
+      const wooded = f.cover === 'woods' && f.felled < 0.9
+      for (const t of wooded ? [...tris, ...crowns[i]] : tris) {
         if (ray.ray.intersectTriangle(t.a, t.b, t.c, false, hit)) {
           const d = hit.distanceToSquared(ray.ray.origin)
           if (d < bd) { bd = d; best = i }
@@ -538,7 +556,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     U.uCloud.value.z = cloudAt.x
     U.uCloud.value.w = cloudAt.y
     terrain.water.ice.value = env.ice
-    for (let i = 0; i < FIELD_COUNT; i++) terrain.held.value[i] = fields.held[i]
+    for (let i = 0; i < FIELD_COUNT; i++) { terrain.held.value[i] = fields.held[i]; terrain.off.value[i] = fields.off[i]; terrain.avail.value[i] = fields.avail[i] }
     input.frame(dt)
     if (rig.idle < 0.2 && framing !== 'free') framing = 'free'
     if (snap.mode === 'title' && framing === 'title') {
@@ -587,7 +605,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     fields.setFarShadows(!shadows.holdsFarm)
     MARK_WIDE.value = clamp(rig.cur.dist / 42, 1, 4.5)
     fields.update(dt, cam, { selection: app.selection, hover: app.hover, oats: env.oats, oatsRipe: env.oatsRipe, reduced })
-    grass.update(cam)
+    grass.update(cam, fields.off)
     flora.update(cam)
     harvest.update(dt, app.speed === 0, clamp(rig.cur.dist / 30, 1, 2.3), reduced)
     PIXEL.value = (TIERS[tier].msaa ? 1.7 : 1.4) / ((post.target.height) / (2 * Math.tan((cam.fov * Math.PI) / 360)))
@@ -702,7 +720,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
 
   // For measuring what each part of the scene costs: the parts by name, which the tools can switch off.
   const parts: Record<string, Object3D> = {
-    terrain: terrain.group, flora: flora.group, grass: grass.group, props: props.group, fields: fields.group, harvest: harvest.group,
+    terrain: terrain.group, flora: flora.group, clearing: clearing.group, pond: pond.group, grass: grass.group, props: props.group, fields: fields.group, harvest: harvest.group,
     crews: crews.group, particles: particles.mesh, weather: weather.group, birds: birds.mesh, sky: sky.dome, far: farHills.mesh,
   }
 
@@ -803,6 +821,8 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       canvas.removeEventListener('webglcontextrestored', onRestored)
       terrain.dispose()
       flora.dispose()
+      clearing.dispose()
+      pond.dispose()
       grass.dispose()
       props.dispose()
       fields.dispose()
@@ -816,7 +836,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       sky.dispose()
       shadows.dispose()
       post.dispose()
-      for (const t of [noise, roadTex, leafTex, flowerTex, sprayTex, puffTex]) t.dispose()
+      for (const t of [noise, leafTex, flowerTex, puffTex]) t.dispose()
       renderer.dispose()
     },
   }

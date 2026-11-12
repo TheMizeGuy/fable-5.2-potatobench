@@ -1,6 +1,6 @@
 // Where everything on the farm and in the country round it sits. Pure numbers, shared by the 3D view, picking and the 2D fallback.
 // x runs along the rows (north on the left), z down the slope from the spruce ridge (west) to the brook (east), y up.
-import { COLS, FIELD_COUNT, PARCELS, ROWS, type BlockId, type BuildingKind } from '../sim/index.ts'
+import { COLS, FIELD_COUNT, PARCELS, ROWS, TRACTS, type BlockId, type BuildingKind } from '../sim/index.ts'
 import { clamp, fbm2, hash2, mix, smooth } from './noise.ts'
 
 export const SUB = 4                  // plants drawn per simulated hill, each way
@@ -23,8 +23,9 @@ export const FIELDS: FieldRect[] = Array.from({ length: FIELD_COUNT }, (_, i) =>
 
 export interface Rect { x0: number; x1: number; z0: number; z1: number }
 
-// The home farm inside its walls, and east of the farmstead the back yard where its new buildings go.
-export const FARM: Rect = { x0: -18.4, x1: 42.5, z0: -22.6, z1: 25.5 }
+// The home farm inside its walls; east of the farmstead the back yard where its new buildings go, and below that the
+// swale and the pond.
+export const FARM: Rect = { x0: -18.4, x1: 44.6, z0: -22.6, z1: 25.5 }
 export const FARM_CENTER = { x: 4.6, z: 0.4 }
 // Each block of land with its headlands and walls, and the Dufour farmstead. Inside them the ground is the farm's.
 export const BLOCKS: Record<BlockId, Rect> = {
@@ -41,8 +42,8 @@ const BROOK_Z0 = 22.6
 // The slope through the farm, west to east: far ridge, two hills, our ridge, the fields, the brook, the flat of the
 // intervale beyond it, then the land rising again to the town road and the hills.
 const KNOTS: [number, number][] = [
-  [-3600, 120], [-2300, 100], [-1500, 108], [-1100, 82], [-760, 42], [-520, 40], [-380, 22], [-215, 19], [-120, 8.5], [-72, 6.3],
-  [-40, 6.7], [-21, 5.1], [-8, 3.735], [5, 2.37], [18.5, 0.95], [BROOK_Z0, 0.26], [27, 0.6], [31, 0.74], [45, 0.98], [53, 2.3], [80, 5.5],
+  [-3600, 120], [-2300, 100], [-1500, 108], [-1100, 82], [-760, 52], [-520, 44], [-380, 29], [-235, 23], [-150, 11.5], [-104, 13.2],
+  [-78, 15.4], [-60, 13.7], [-46, 10.5], [-33, 6.95], [-22.2, 5.24], [-21, 5.1], [-8, 3.735], [5, 2.37], [18.5, 0.95], [BROOK_Z0, 0.26], [27, 0.6], [31, 0.74], [45, 0.98], [53, 2.3], [80, 5.5],
   [170, 17], [320, 24], [540, 58], [900, 75], [1500, 118], [3600, 150],
 ]
 const P_Z0 = -3500, P_STEP = 0.5, P_N = 14001
@@ -70,7 +71,17 @@ export function profile(z: number): number {
 }
 
 function outside(x: number, z: number): number {
-  return Math.max(LAND.x0 - x, x - LAND.x1, LAND.z0 - z - 8, z - LAND.z1, 0)
+  return Math.max(LAND.x0 - x, x - LAND.x1, LAND.z0 - z - 10, z - LAND.z1, 0)
+}
+
+// The ridge behind the fields: its crest rises and falls along its length, and behind the farmstead it dips to a saddle.
+export const SADDLE = { x: 23.5, half: 12 }
+function ridgeRise(x: number, z: number): number {
+  const k = smooth(-34, -60, z) * (1 - smooth(-150, -250, z))
+  if (k <= 0) return 0
+  const along = fbm2(x / 85 + 2.7, z / 150 + 5.1) - 0.5
+  const saddle = Math.exp(-(((x - SADDLE.x) / SADDLE.half) ** 2))
+  return k * (7.5 * along - 5.2 * saddle)
 }
 
 // How far the valley's line wanders north and south of the farm.
@@ -83,10 +94,11 @@ export function macroY(x: number, z: number): number {
   const d = outside(x, z)
   if (d <= 0) return profile(z)
   const w = smooth(0, 220, d)
+  const rise = ridgeRise(x, z)
   const zw = z + wander(x, z, w)
   const valley = smooth(8, 90, Math.abs(zw - BROOK_Z0))
   const swell = (0.35 + 0.65 * smooth(200, 1400, d)) * 24 * (fbm2(x / 340 + 7.3, z / 340 - 2.1) - 0.5) * 2
-  return profile(zw) + w * valley * (swell + 3 * (fbm2(x / 90, z / 90) - 0.5))
+  return profile(zw) + rise + w * valley * (swell + 3 * (fbm2(x / 90, z / 90) - 0.5))
 }
 
 export function brookZ(x: number): number {
@@ -158,9 +170,12 @@ export const SITES: Site[] = [
 export function siteOf(kind: BuildingKind, yard: number): Site | undefined {
   return SITES.find(s => s.kind === kind && s.yard === yard)
 }
-// Where the pond's basin is taken to lie (the pump house stands on its bank), and where the yard keeps what comes
-// off the land: logs decked by the dooryard and across the back lane, fieldstone tipped at the barn's corner.
-export const POND_AT = { x: 37.4, z: 10.6, rx: 3.4, rz: 2.4 }
+// Where the pond's basin lies: dug into the slope east of the swale, clear of the pump house on its upper bank and of
+// the intake pipe that runs down past its west side to the brook.
+export const POND = { x: 39.6, z: 11.0, rx: 2.6, rz: 2.2 }
+export const POND_AT = POND
+// Where the yard keeps what comes off the land: logs decked by the dooryard and across the back lane, fieldstone
+// tipped at the barn's corner.
 export const LOG_DECKS: Spot[] = [{ x: 20.05, z: -2.8, heading: 0 }, { x: 31.5, z: -9.7, heading: 0 }, { x: 33.6, z: -9.7, heading: 0 }]
 export const STONE_PILE: Pt = { x: 20.75, z: -9.35 }
 // Where machines the farm owns stand when nobody is on them (a heading is the way it faces: cos, sin in x, z): the
@@ -180,7 +195,7 @@ export const KEEP_CLEAR: { x: number; z: number; r: number }[] = [
 
 // Ground levelled for the buildings: each sits a step higher up the slope than the last.
 const PADS = [
-  { x: HOUSE.x, z: HOUSE.z, rx: 2.9, rz: 2.9, at: 4.6 },
+  { x: HOUSE.x, z: HOUSE.z - 0.4, rx: 2.9, rz: 2.3, at: 4.6 },
   { x: HOUSE.x + 0.1, z: -0.1, rx: 2.4, rz: 2.8, at: 0.4 },
   { x: BARN.x, z: BARN.z, rx: 3.5, rz: 4.1, at: -5.2 },
   { x: POTATO_HOUSE.x, z: -13.1, rx: 2.9, rz: 1.9, at: -14.0 },
@@ -203,12 +218,14 @@ export interface Way { kind: WayKind; pts: [number, number][] }
 const LANE_RIDGE = -20.8, LANE_MID = -7.6, LANE_LOW = 5.6, LANE_BROOK = 31.4, LANE_FOOT = 18.8
 
 // The farm road: from the potato house down past the dooryard, over the brook and out to the town road.
+// Below the dooryard it keeps to the foot of the bottom field's headland, clear of the swale.
+// Its first eleven points run from the potato house to the bridge (the gravelling's marks follow them).
 export const ROAD: [number, number][] = [
-  [23.4, -13.2], [20.9, -12.0], [18.9, -9.6], [18.508, LANE_MID], [17.9, -4.5], [17.7, 3.4], [17.767, LANE_LOW], [17.9, 10], [17.6, 17],
-  [17.8, 22.4], [18.3, 30], [18.458, LANE_BROOK], [19.2, 38], [20.2, 47.5], [20.6, townRoadZ(20.6)],
+  [23.4, -13.2], [20.9, -12.0], [18.9, -9.6], [18.508, LANE_MID], [17.9, -4.5], [17.5, 3.4], [16.5, LANE_LOW], [15.95, 7.1], [15.9, 15.6],
+  [16.2, 18.4], [17.8, 22.4], [18.3, 30], [18.458, LANE_BROOK], [19.2, 38], [20.2, 47.5], [20.6, townRoadZ(20.6)],
 ]
 export const SPURS: [number, number][][] = [
-  [[17.7, 3.4], [21.3, 3.6]],
+  [[17.5, 3.4], [21.3, 3.6]],
   [[17.9, -4.5], [21.2, -5.6]],
 ]
 // The road to the Dufour place: out past the potato house, over the neighbour's ground, and along the Dufour lane.
@@ -241,7 +258,7 @@ export const WAYS: Way[] = [
   { kind: 'track', pts: lane(LANE_RIDGE, [-52.0, -35.9, -19.8, -16.4, -0.3, 15.8, 17.2]) },
   { kind: 'track', pts: [[17.2, LANE_RIDGE], [17.2, -14.2], [17.4, -11.6], [18.9, -9.6]] },
   { kind: 'track', pts: lane(LANE_MID, [-16.4, -0.3, 15.8, 18.508]) },
-  { kind: 'track', pts: lane(LANE_LOW, [-16.4, -0.3, 15.8, 17.767]) },
+  { kind: 'track', pts: lane(LANE_LOW, [-16.4, -0.3, 15.8, 16.5]) },
   // Down between the home fields and through the ford to the intervale.
   { kind: 'track', pts: down(-0.3, [LANE_RIDGE, LANE_MID, LANE_LOW, LANE_FOOT, 22.0, 27.0, LANE_BROOK]) },
   { kind: 'track', pts: lane(LANE_BROOK, [-16.4, -0.3, 15.8, 18.458]) },
@@ -459,10 +476,15 @@ export function groundY(x: number, z: number): number {
   const road = 1 - smooth(0.6, 1.6, roadDist(x, z))
   const field = home ? fieldMask(x, z, 0.7) : 0
   const bank = smooth(0.6, 3, db)
-  // Between the blocks the meadow lies in long low swells.
-  const swell = home ? 0.32 * (1 - fieldMask(x, z, 5)) * (fbm2(x * 0.045 + 11.3, z * 0.06 - 4.1) - 0.5) * 2 : 0
+  // Between the blocks the meadow lies in long swells and hollows, which the roads ride over; the yards lie quieter.
+  let calm = 0
+  if (home) for (const yard of [-1, -2]) {
+    const p = YARD_AT[yard]
+    calm = Math.max(calm, 1 - smooth(1, 9, Math.max(p.x0 - x, x - p.x1, p.z0 - z, z - p.z1 - 4)))
+  }
+  const swell = home ? mix((1 - fieldMask(x, z, 7)) * (0.5 + 0.9 * (1 - fieldMask(x, z, 15))), 0.32 * (1 - fieldMask(x, z, 5)), calm) * (fbm2(x * 0.045 + 11.3, z * 0.06 - 4.1) - 0.5) * 2 : 0
   const amp = 0.11 * (1 - field) * (1 - flat) * (1 - 0.85 * road) * bank
-  return y + amp * (fbm2(x * 0.23 + 4.2, z * 0.23) - 0.5) * 2 + swell * (1 - flat) * (1 - road) * bank
+  return y + amp * (fbm2(x * 0.23 + 4.2, z * 0.23) - 0.5) * 2 + swell * (1 - flat) * smooth(1.2, 7, db)
 }
 
 // The smooth surface a field's soil lies on.
@@ -484,7 +506,7 @@ export function fieldAt(x: number, z: number): number {
 // Stone walls round each block, where field stone was cleared by hand and piled; tracks pass through gateways.
 export const WALLS: [number, number, number, number][] = [
   // home: the north boundary, the wall under the woodlot, and the wall along the road with the dooryard's opening
-  [-17.5, -21.6, -17.4, 20.4], [-17.5, -21.7, 16.4, -21.7], [16.5, -21.7, 16.5, -8.2], [16.4, 5.6, 16.4, 19.6],
+  [-17.5, -21.6, -17.4, 20.4], [-17.5, -21.7, 16.4, -21.7], [16.5, -21.7, 16.5, -8.2], [31.6, 7.6, 31.6, 18.2],
   // the ridge lots
   [-53.4, -21.7, -17.5, -21.7], [-53.4, -21.7, -53.4, -7.2], [-53.4, -7.2, -17.5, -7.2],
   // the intervale: open to the brook, walled on the other three sides
@@ -521,12 +543,13 @@ export function parkSpot(field: number, slot = 0): Pt {
 // ---- The country beyond the walls: a quilt of blocks, each a woodlot or a run of strips. The terrain shader draws the
 // same quilt from the same numbers (see QUILT_GLSL in terrain.ts), so trees stand where the picture says woods.
 export const REGION = 120
-// The woods on the ridge, all along above the fields from beyond the ridge lots to past the Dufour place.
-export const HOME_WOODS = { x0: -62, x1: 100, z0: -58, z1: -23.4 }
-// Where the woods break: behind the home potato house and farmstead, and where the Dufour road climbs out.
-export const WOOD_GAPS: Rect[] = [{ x0: 14.5, x1: 31, z0: -40, z1: -20 }]
+// The woods on the ridge, all along above the fields from beyond the ridge lots to past the Dufour place, and back over
+// the crest.
+export const HOME_WOODS = { x0: -62, x1: 100, z0: -98, z1: -23.4 }
+// Where the woods break: an old hill pasture runs up the saddle behind the home potato house and farmstead.
+const WOOD_GAP = { x: 22.75, half: 8.25 }
 
-export interface Region { woods: boolean; hard: number; edge: number; angle: number; width: number; key: number }
+export interface Region { woods: boolean; hard: number; edge: number; angle: number; width: number; key: number; qx: number; bx: number; bz: number }
 
 export function regionAt(x: number, z: number): Region {
   const cx = Math.floor(x / REGION), cz = Math.floor(z / REGION)
@@ -541,14 +564,25 @@ export function regionAt(x: number, z: number): Region {
     }
   }
   const far = Math.hypot(sx - FARM_CENTER.x, sz)
+  const angle = (hash2(bx + 77, bz + 301) < 0.5 ? 0 : Math.PI / 2) + (hash2(bx + 5, bz + 9) - 0.5) * 0.7
   return {
     woods: hash2(bx + 19, bz - 83) < 0.26 + 0.42 * smooth(700, 2400, far),
     hard: hash2(bx + 43, bz + 7),
     edge: (d2 - d1) * 0.5,
-    angle: (hash2(bx + 77, bz + 301) < 0.5 ? 0 : Math.PI / 2) + (hash2(bx + 5, bz + 9) - 0.5) * 0.7,
+    angle,
     width: 12 + 14 * hash2(bx - 3, bz + 41),
     key: bx * 7919 + bz * 104729,
+    qx: Math.cos(angle) * (x - sx) + Math.sin(angle) * (z - sz), bx, bz,
   }
+}
+
+// A neighbour's strips, as the terrain shader lays them: how far a point is from the nearer side of its strip, and
+// whether a hedgerow has grown up along that side.
+export function stripEdge(x: number, z: number): { d: number; hedged: boolean } {
+  const r = regionAt(x, z)
+  const u = r.qx / r.width, s = Math.floor(u), fx = u - s
+  const side = fx < 0.5 ? s : s + 1
+  return { d: Math.min(fx, 1 - fx) * r.width, hedged: !r.woods && hash2(side * 7 + r.bx * 13, r.bz * 29 + 91) < 0.4 }
 }
 
 // Inside the farm's country (all its blocks and the ground between) the quilt's woods give way to open land.
@@ -557,29 +591,61 @@ export function openCountry(x: number, z: number): number {
   return 1 - smooth(-6, 10, d)
 }
 
-function inWoodsRidge(x: number, z: number, ragged: number): boolean {
+// A tract's bounds are a line cut through the woods, this far outside its corners.
+export const TRACT_LINE = 1.3
+// The tracts that start the game under trees, and whether a point lies on one.
+const WOODED = TRACTS.filter(i => PARCELS[i].cover !== 'open').map(i => FIELDS[i])
+export function tractAt(x: number, z: number, pad = 0): number {
+  for (const f of WOODED) if (x > f.x0 - pad && x < f.x1 + pad && z > f.z0 - pad && z < f.z1 + pad) return f.i
+  return -1
+}
+
+// The front of the ridge woods at x: bays where old pasture runs up into the trees, points where the spruce comes down
+// to the wall. Along a tract of woods the trees stand to its line.
+export function woodFront(x: number): number {
+  const bay = 9 * smooth(0.46, 0.8, fbm2(x * 0.043 + 9.1, 3.3)) + 2.6 * (fbm2(x * 0.17, 7.7) - 0.5)
+  let hold = 0
+  for (const f of WOODED) if (f.cz < -20) hold = Math.max(hold, 1 - smooth(0.5, 6, Math.max(f.x0 - x, x - f.x1)))
+  return HOME_WOODS.z1 - Math.max(0, bay) * (1 - hold)
+}
+
+// 1 in the pasture that runs up the saddle, narrowing as it climbs and closing beyond the crest.
+function woodGap(x: number, z: number): number {
+  if (z < -112) return 0
+  const half = WOOD_GAP.half * (1 - 0.5 * smooth(-28, -80, z)) + 3.4 * (fbm2(z * 0.09, 1.3) - 0.5)
+  const cx = WOOD_GAP.x + 3 * (fbm2(z * 0.05 + 4.2, 8.8) - 0.5)
+  return (1 - smooth(half - 1.6, half + 1.6, Math.abs(x - cx))) * smooth(-112, -92, z)
+}
+
+// How surely trees stand at a point of the ridge woods, 0..1: thinning at the ragged front and sides, none in the gap.
+export function ridgeWoodAt(x: number, z: number): number {
   const h = HOME_WOODS
-  if (!(x > h.x0 + ragged && x < h.x1 + ragged && z > h.z0 + ragged && z < h.z1)) return false
-  for (const g of WOOD_GAPS) if (x > g.x0 + ragged && x < g.x1 + ragged && z > g.z0 && z < g.z1) return false
-  return true
+  if (x < h.x0 - 8 || x > h.x1 + 8 || z < h.z0 - 10 || z > h.z1 + 2) return 0
+  let d = smooth(-0.9, 2.2, woodFront(x) - z)
+  d *= smooth(h.x0 - 6, h.x0 + 5, x + 9 * (fbm2(z * 0.06, 2.1) - 0.5)) * (1 - smooth(h.x1 - 5, h.x1 + 6, x + 9 * (fbm2(z * 0.06, 5.9) - 0.5)))
+  d *= smooth(h.z0 - 8, h.z0 + 8, z + 14 * (fbm2(x * 0.025, 6.4) - 0.5))
+  return d * (1 - woodGap(x, z))
 }
 
 // Whether trees stand here: the woods on the ridge, the woodlots of the quilt, and the hedgerows between blocks.
+// hard: the share of them that are hardwoods. The tracts' own stands are not counted: they come and go with the clearing.
 export function woodsAt(x: number, z: number): { woods: number; hard: number } {
-  const h = HOME_WOODS
-  const ragged = 5 * (fbm2(x * 0.09, z * 0.09) - 0.5)
-  if (inWoodsRidge(x, z, ragged)) return { woods: 1, hard: z > h.z1 - 5 ? 0.6 : 0.16 }
+  if (tractAt(x, z, TRACT_LINE) >= 0) return { woods: 0, hard: 0 }
+  const ridge = ridgeWoodAt(x, z)
+  if (ridge > 0.02) {
+    // Hardwoods along the front and in stands through the spruce.
+    const front = 1 - smooth(1.5, 6, woodFront(x) - z)
+    const stand = smooth(0.5, 0.72, fbm2(x * 0.034 + 1.9, z * 0.05 + 7.3))
+    return { woods: ridge, hard: Math.min(0.92, 0.1 + 0.55 * front + 0.66 * stand) }
+  }
   // No trees on the farm's land, nor on the neighbour's ground to the north-west where the evening sun comes from.
   if (oursAt(x, z, 1.5) > 0.01) return { woods: 0, hard: 0 }
   if (x > -150 && x <= LAND.x0 + 4 && z > FARM.z0 - 6 && z < FARM.z1 + 8) return { woods: 0, hard: 0 }
   const open = openCountry(x, z)
   if (open > 0.5) return { woods: 0, hard: 0 }
+  const ragged = 5 * (fbm2(x * 0.09, z * 0.09) - 0.5)
   const r = regionAt(x, z)
   if (r.woods) return { woods: smooth(1.5, 6, r.edge + ragged * 0.6) * (1 - open * 2), hard: r.hard }
   return { woods: r.edge < 1.6 ? 0.45 : 0, hard: 0.75 }
 }
 
-// The rows of the ridge woods' edge for the terrain shader: whether a grid point is under the ridge woods.
-export function ridgeWoods(x: number, z: number, ragged: number): boolean {
-  return inWoodsRidge(x, z, ragged)
-}

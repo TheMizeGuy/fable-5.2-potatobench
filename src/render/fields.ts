@@ -9,7 +9,7 @@ import {
   Vector4, type PerspectiveCamera, type Texture,
 } from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import { COLS, FIELD_COUNT, HILLS, ROWS, type HillLook } from '../sim/index.ts'
+import { COLS, FIELD_COUNT, HILLS, PARCELS, ROWS, STUMP_DAYS, TILE_DAYS, type HillLook } from '../sim/index.ts'
 import { blossomGeometry, clumpGeometry, oatGeometry, plantGeometry } from './geometry.ts'
 import { FD, FIELDS, FW, PLANT, PLANTED_ROWS, PLANTS_PER_ROW, ROW, fieldBaseY, groundY, profile } from './layout.ts'
 import { hash2 } from './noise.ts'
@@ -31,7 +31,7 @@ const DAMP: Record<string, number> = { 'standing water': 1, wet: 0.85, good: 0.3
 const BLOOM_TINT: Record<string, number> = { norland: 0.9, superior: 0.2, katahdin: 0.35, kennebec: 0.08, burbank: 0.12, atlantic: 0.55, gold: 0.8, caribou: 0.3 }
 
 // What somebody else's ground is in, by parcel: 0 hay, 1 pasture, 2 last year's stubble.
-const OFF_KIND = [0, 0, 1, 1, 0, 0, 0, 1, 1, 0, 2, 2, 0, 1]
+export const OFF_KIND = [0, 0, 1, 1, 0, 0, 0, 1, 1, 0, 2, 2, 0, 1, 0, 1, 1, 0]
 
 // Where each level of detail takes over, by quality tier: whole plants out to `near`, clumps out to `far`.
 export const LOD = { high: { near: 36, far: 280 }, medium: { near: 26, far: 180 }, low: { near: 17, far: 110 } }
@@ -52,6 +52,7 @@ uniform sampler2D uT1;
 uniform vec4 uRect;
 uniform vec4 uCrop;        // wilt, share of leaf blackened by frost, rime this morning, bloom
 uniform float uDense;
+uniform float uOpen;       // how the wind reaches this field: less in the lee of standing woods
 uniform vec2 uKeep;        // the plants drawn by this mesh: those whose own number falls in [x, y)
 struct Plant { vec3 at; float w; float h; float cs; float sn; float droop; float dead; float frost; vec4 h0; vec4 h1; vec3 r; };
 Plant gp;
@@ -73,12 +74,19 @@ Plant plantAt() {
   p.cs = cos(a);
   p.sn = sin(a);
   vec2 jit = (p.r.yz - 0.5) * vec2(${(PLANT * 0.4).toFixed(3)}, ${(ROW * 0.16).toFixed(3)});
+  // The tractor's wheels run in the same two furrows all season: the rows beside them stand back from it.
+  float rowI = floor((aAt.z - uRect.y) / ${ROW.toFixed(3)});
+  float tram = step(abs(rowI - 7.5), 0.6) + step(abs(rowI - 23.5), 0.6);
+  p.w *= 1.0 - 0.22 * tram;
+  jit.y += (fract((rowI + 0.5) * 0.5) < 0.5 ? 0.055 : -0.055) * tram;
   p.at = vec3(aAt.x + jit.x, aAt.y + ${RIDGE_AMP.toFixed(3)} * p.h1.b * (1.0 - p.h1.r) - 0.012, aAt.z + jit.y);
   return p;
 }
 vec3 plantPlace(vec3 pl) {
   // Wider along the row than across it: the rows close first, the furrows between them last.
-  return gp.at + vec3((gp.cs * pl.x + gp.sn * pl.z) * gp.w * 1.35, pl.y * gp.h, (-gp.sn * pl.x + gp.cs * pl.z) * gp.w);
+  // Where only every other plant is drawn, each stands for its neighbour along the row, and keeps to its own row.
+  float sparse = step(1.2, uDense);
+  return gp.at + vec3((gp.cs * pl.x + gp.sn * pl.z) * gp.w * mix(1.35, 1.8, sparse), pl.y * gp.h, (-gp.sn * pl.x + gp.cs * pl.z) * gp.w * mix(0.94, 0.7, sparse));
 }
 `
 
@@ -88,6 +96,9 @@ const LEAF_SHAPE = /* glsl */ `
   pl.xz *= 1.0 + 0.18 * gp.droop * aLeaf.y * aLeaf.z;
   pl.y = max(pl.y, 0.02);
   transformed = plantPlace(pl);
+  // A leaf that reaches over the furrow hangs into it, so the rows keep their shape after the canopy closes.
+  float furrow = smoothstep(0.2, 0.5, abs(transformed.z - gp.at.z) / ${ROW.toFixed(3)});
+  transformed.y -= 0.46 * gp.h * furrow * (1.0 - gp.dead);
 `
 
 // The leaf's colour from its hill's state, shared by the plants and by the crop painted into the ground far off.
@@ -115,7 +126,7 @@ const LEAF_COLOUR = /* glsl */ `
     col = mix(col, ${linear('#b5a27a')} * (0.8 + 0.4 * gp.r.z), gp.dead);
     col = mix(${linear('#8a9a62')}, col, aLeaf.z);
     // Deep in the canopy little light arrives; and no two leaves are quite one green.
-    col *= mix(0.46, 1.0, smoothstep(0.02, 0.44, position.y)) * (0.9 + 0.2 * gp.r.z) * (0.84 + 0.32 * fract(aLeaf.x * 0.618 + gp.r.x * 5.0));
+    col *= mix(0.46, 1.0, smoothstep(0.02, 0.44, position.y)) * (0.9 + 0.2 * gp.r.z) * (0.84 + 0.32 * fract(aLeaf.x * 0.618 + gp.r.x * 5.0)) * mix(1.14, 0.46, furrow);
     vTint = col;
     vErode = max(max(gp.dead * 0.32, hit * 0.55), burnt * 0.45 * (1.0 - uCrop.z)) * aLeaf.z;
     // Seen from far off a plant keeps as many of its leaves as it has canopy, so a half-grown field shows its soil.
@@ -158,7 +169,7 @@ vec3 soilShape(vec2 f, vec2 xz, out vec4 hill) {
 `
 
 // Somebody else's ground: hay, pasture or last year's stubble, through the year. Moves with the wind where it stands tall.
-const OFF_GLSL = /* glsl */ `
+export const OFF_GLSL = /* glsl */ `
 vec3 offCover(vec2 p, vec2 f, float kind, float broad, float fine, float grit, out float tall) {
   float d = uDay;
   float green = smoothstep(118.0, 150.0, d) * (1.0 - 0.55 * smoothstep(262.0, 300.0, d));
@@ -169,7 +180,8 @@ vec3 offCover(vec2 p, vec2 f, float kind, float broad, float fine, float grit, o
   tall = 0.0;
   if (kind < 0.5) {
     // Hay: tall and streaked with the lie of the grass, seed heads buff in July, cut into windrows in early August.
-    float mown = step(0.5, fract(f.x * 3.7 + f.y * 1.3)) * smoothstep(212.0, 216.0, d) * (1.0 - smoothstep(236.0, 252.0, d));
+    // The mower works across the piece over ten days in early August; the cut hay lies in windrows, then is gone.
+    float mown = smoothstep(0.0, 0.05, (d - 212.0) / 10.0 - f.x + (broad - 0.5) * 0.12) * (1.0 - smoothstep(236.0, 252.0, d));
     float streak = texture2D(uNoise, vec2(p.x * 0.09 + p.y * 0.02, p.y * 0.6)).a;
     col = mix(dead, live * vec3(1.06, 1.0, 0.76), green) * (0.9 + 0.2 * streak);
     col = mix(col, ${linear('#b7a378')} * (0.85 + 0.3 * fine), 0.42 * smoothstep(168.0, 192.0, d) * (1.0 - mown) * green);
@@ -219,6 +231,8 @@ vec4 paintCrop(vec2 f, vec4 h0, vec4 h1, float fine, out float lift) {
   float e = rowsPx * 2.0 + 0.04;
   float sharp = 1.0 - smoothstep(wide - e, wide + e, fr + 0.18 * (1.0 - closed) * abs(along - 0.5));
   float cover = mix(sharp, clamp(wide, 0.0, 1.0), blur);
+  float rowP = f.y * ${PLANTED_ROWS}.0;
+  cover *= 1.0 - 0.8 * max(1.0 - smoothstep(0.1, 0.34, abs(rowP - 8.0)), 1.0 - smoothstep(0.1, 0.34, abs(rowP - 24.0)));
   vec3 col = leafTint(grow, h0.g, h1.a, uCrop.x);
   float bl = clamp(h0.b * 2.4, 0.0, 1.0);
   col = mix(col, mix(${linear('#4b3324')}, ${linear('#241a14')}, fine), smoothstep(0.0, 0.25, bl * 1.3 - fine));
@@ -226,11 +240,11 @@ vec4 paintCrop(vec2 f, vec4 h0, vec4 h1, float fine, out float lift) {
   col = mix(col, ${linear('#a8bcc0')}, 0.45 * uCrop.z);
   col = mix(col, ${linear('#b5a27a')}, h0.a);
   // a rounded row: lit along its crown, dark down its sides into the furrow
-  col *= mix(mix(0.38, 0.8, smoothstep(1.0, 0.1, fr)), 0.6, blur) * (0.86 + 0.28 * fine);
+  col *= mix(mix(0.26, 0.84, smoothstep(0.95, 0.25, fr)), 0.6, blur) * (0.86 + 0.28 * fine);
   // blossom, as white flecks over the leaf
   float open = uCrop.w * smoothstep(0.3, 0.55, grow) * (1.0 - h0.g) * (1.0 - bl) * (1.0 - h0.a) * (1.0 - min(1.0, uCrop.y * 1.5));
   float fleck = step(1.0 - 0.2 * open, fract(sin(dot(floor(f * vec2(${PLANTS_PER_ROW}.0 * 2.0, ${PLANTED_ROWS}.0 * 2.0)), vec2(12.9898, 78.233))) * 43758.5453));
-  fleck = mix(fleck, 0.14 * open, smoothstep(0.4, 1.2, fwidth(f.x * ${PLANTS_PER_ROW}.0 * 2.0)));
+  fleck = mix(fleck, 0.14 * open, smoothstep(0.4, 1.2, fwidth(f.x * ${PLANTS_PER_ROW}.0 * 2.0))) * (1.0 - uUnder * (1.0 - uPaint));
   col = mix(col, mix(${linear('#f8f5fa')}, ${linear('#d3c2e6')}, uTint) * 0.9, fleck * cover);
   lift = cover;
   return vec4(col, cover);
@@ -259,7 +273,11 @@ interface FieldGfx {
   off: { value: number }
   avail: { value: number }
   paint: { value: number }
+  under: { value: number }
   rimeHere: { value: number }
+  tract: { value: Vector4 }
+  ground: { value: Vector4 }
+  open: { value: number }
   bounds: Sphere
   soil: Mesh
   plants: Mesh
@@ -286,9 +304,15 @@ export class Fields {
   private coverTarget = new Float32Array(FIELD_COUNT)
   private offTarget = new Float32Array(FIELD_COUNT)
   private rimeTarget = new Float32Array(FIELD_COUNT)
+  private tractTarget: Vector4[] = []
+  private groundTarget: Vector4[] = []
+  private heldTarget = new Float32Array(FIELD_COUNT)
+  private bare: boolean[] = new Array(FIELD_COUNT).fill(false)
   private cropTarget: Vector4[] = []
   private rest: boolean[] = new Array(FIELD_COUNT).fill(false)
   private availNow: boolean[] = new Array(FIELD_COUNT).fill(false)
+  // In spring, a tract of the farm's still to clear: its bounds are drawn, as a lot there is work to do on.
+  private lotNow: boolean[] = new Array(FIELD_COUNT).fill(false)
   private settled = false
   private disposables: { dispose(): void }[] = []
   private plantGeo: BufferGeometry
@@ -306,8 +330,11 @@ export class Fields {
   private near = new Vector3()
   // Plants throw shadows into the second cascade only while the first does not already hold them.
   farShadows = true
-  // Whether each parcel is the farm's, as drawn now (eased), for the land round it.
+  // Whether each parcel is tilled ground of the farm's, as drawn now (eased), for the land round it; and whether it is
+  // somebody else's hay or pasture, and marked out to be had.
   readonly held: number[] = new Array(FIELD_COUNT).fill(1)
+  readonly off: number[] = new Array(FIELD_COUNT).fill(0)
+  readonly avail: number[] = new Array(FIELD_COUNT).fill(0)
 
   constructor(leafTex: Texture, flowerTex: Texture) {
     this.leafTex = leafTex
@@ -335,10 +362,13 @@ export class Fields {
     const crop = new Vector4(), soilColor = new Color(SOIL.good)
     const water = { value: 0 }, damp = { value: 0.3 }, cover = { value: 0 }, tint = { value: 0.2 }, dense = { value: 1 }, denseMid = { value: 1.36 }
     const keepNear = { value: new Vector2(0, 1.01) }, keepMid = { value: new Vector2(0, 0) }, bloomShare = { value: 1 }
-    const off = { value: 0 }, paint = { value: 0 }, rimeHere = { value: 0 }, avail = { value: 0 }
+    const off = { value: 0 }, paint = { value: 0 }, under = { value: 0 }, rimeHere = { value: 0 }, avail = { value: 0 }, open = { value: 1 }
+    const tract = { value: new Vector4() }, ground = { value: new Vector4(PARCELS[i].stones, 0, 0, 0) }
+    // A stand is felled from the side toward the farm; the swale from the road.
+    const fell = { value: PARCELS[i].cover === 'brush' ? new Vector3(1, 0, 0) : new Vector3(0, -1, 1) }
     const oats = { value: new Vector3(0, 0, 0) }
     const rect = { value: new Vector4(f.x0, f.z0, 1 / FW, 1 / FD) }
-    const shared = { uT0: { value: t0 }, uT1: { value: t1 }, uRect: rect, uCrop: { value: crop }, uDense: dense, uKeep: keepNear }
+    const shared = { uT0: { value: t0 }, uT1: { value: t1 }, uRect: rect, uCrop: { value: crop }, uDense: dense, uKeep: keepNear, uOpen: open }
     const bounds = new Sphere(new Vector3(f.cx, fieldBaseY(f.cz) + 0.3, f.cz), Math.hypot(FW, FD) / 2 + 1)
 
     // ---- soil
@@ -370,7 +400,8 @@ export class Fields {
       key: 'county-soil',
       uniforms: {
         uT0: { value: t0 }, uT1: { value: t1 }, uSoil: { value: soilColor }, uWater: water, uDamp: damp, uCover: cover, uOff: off,
-        uOffKind: { value: OFF_KIND[i] ?? 0 }, uPaint: paint, uCrop: { value: crop }, uTint: tint, uOatsHere: oats, uRimeHere: rimeHere, uAvail: avail,
+        uOffKind: { value: OFF_KIND[i] ?? 0 }, uPaint: paint, uUnder: under, uCrop: { value: crop }, uTint: tint, uOatsHere: oats, uRimeHere: rimeHere, uAvail: avail,
+        uTract: tract, uGround: ground, uFell: fell,
       },
       vertexHead: `${ROW_FN}\nuniform float uOff;\nuniform float uPaint;`,
       vertexNormal: `vec4 hillN; vec3 shN = soilShape(aF, position.xz, hillN); shN.y *= (1.0 - uOff) * (1.0 - uPaint); objectNormal = normalize(vec3(0.0, 1.0, ${SLOPE.toFixed(4)} - shN.y));`,
@@ -397,11 +428,15 @@ export class Fields {
         uniform float uOff;
         uniform float uOffKind;
         uniform float uPaint;
+        uniform float uUnder;      // the crop's rows painted under plants drawn at middle distance, so what shows between their leaves is the row
         uniform vec4 uCrop;
         uniform float uTint;
         uniform vec3 uOatsHere;
         uniform float uRimeHere;
         uniform float uAvail;
+        uniform vec4 uTract;       // a tract being cleared: how much of this look shows, share felled, share torn up by the bulldozer, 1 for brush
+        uniform vec4 uGround;      // stones, share of the tile laid while the trenches stand open, 1 once tiled, 1 for raw new ground
+        uniform vec3 uFell;
         varying vec2 vF;
         varying float vProf;
         varying float vRidged;
@@ -432,23 +467,36 @@ export class Fields {
           // Under a closed canopy the ground gets what light the leaves let through.
           vec4 over = texture2D(uT0, vF);
           float shaded = smoothstep(0.4, 0.95, over.r) * (1.0 - over.a) * (1.0 - vHill.r);
-          soil *= mix(vec3(1.0), vec3(0.34, 0.5, 0.3), shaded * (1.0 - uPaint));
+          float paintK = max(uPaint, uUnder);
+          soil *= mix(vec3(1.0), vec3(0.34, 0.5, 0.3), shaded * (1.0 - paintK));
           poolOpen = 1.0 - 0.35 * shaded;
           float cov = uCover * smoothstep(0.2, 0.5, broad * 0.6 + 0.42 * uCover + 0.2 * fine);
           vec3 clover = uGrass * vec3(0.6, 0.98, 0.58) * (0.66 + 0.68 * fine);
           clover = mix(clover, vec3(0.74, 0.62, 0.7), step(0.8, grit) * step(0.55, fine) * 0.55 * uLeaf);
           soil = mix(soil, clover, cov);
-          poolF = uWater * mix(1.0, 1.0 - smoothstep(0.12, 0.5, vProf), vRidged) * smoothstep(0.34, 0.5, broad * 0.6 + 0.4 * texture2D(uNoise, vWorld.xz * 0.017).b);
+          // New ground lies pale and cloddy; stones show on every field by how stony it is.
+          soil = mix(soil, mix(soil, ${linear('#9d7856')}, 0.55) * (0.84 + 0.32 * step(0.55, grit)), uGround.w * (1.0 - cov));
+          float stone = smoothstep(0.84 - 0.16 * uGround.x, 0.9 - 0.16 * uGround.x, n3.a * 0.7 + fine * 0.3) * min(1.0, uGround.x * 1.6);
+          soil = mix(soil, vec3(0.42, 0.41, 0.38) * (0.7 + 0.6 * broad), stone * 0.8 * (1.0 - shaded) * (1.0 - cov));
+          // Tile: the trenches stand open down the fall while they are laid; afterwards the ground over each drain dries first.
+          float lat = abs(fract(vWorld.x / 2.6 + 0.5) - 0.5) * 2.6;
+          if (uGround.y > 0.001) {
+            float laid = 1.0 - smoothstep(uGround.y - 0.01, uGround.y + 0.01, vF.x);
+            soil = mix(soil, ${linear('#9c7c58')} * (0.8 + 0.4 * fine), (1.0 - smoothstep(0.14, 0.5, lat + (fine - 0.5) * 0.2)) * laid * 0.8);
+            soil = mix(soil, ${linear('#241812')}, (1.0 - smoothstep(0.05, 0.13, lat)) * laid);
+          }
+          soil *= 1.0 + uGround.z * smoothstep(0.3, 0.7, max(uDamp, uWet)) * (0.06 + 0.4 * (1.0 - smoothstep(0.1, 1.0, lat + (fine - 0.5) * 0.5)));
+          poolF = uWater * (1.0 - uGround.z) * mix(1.0, 1.0 - smoothstep(0.12, 0.5, vProf), vRidged) * smoothstep(0.34, 0.5, broad * 0.6 + 0.4 * texture2D(uNoise, vWorld.xz * 0.017).b);
           soilRough = mix(mix(0.96, 0.66, uDamp), 0.04, poolF);
           // Far off, the crop and the rest-year oats are painted where plants would stand.
-          if (uPaint > 0.001) {
+          if (paintK > 0.001) {
             float lift;
             vec4 crop = paintCrop(vF, over, vHill, fine, lift);
-            soil = mix(soil, crop.rgb, crop.a * uPaint);
+            soil = mix(soil, crop.rgb, crop.a * paintK);
             vec3 oat = mix(${linear('#7fa46a')}, ${linear('#cfb56b')}, uOatsHere.y) * (0.78 + 0.4 * fine);
             soil = mix(soil, oat, uOatsHere.x * smoothstep(0.1, 0.6, uOatsHere.x) * 0.85 * uPaint);
-            poolF *= 1.0 - crop.a * uPaint;
-            soilRough = mix(soilRough, 0.8, crop.a * uPaint);
+            poolF *= 1.0 - crop.a * paintK;
+            soilRough = mix(soilRough, 0.8, crop.a * paintK);
           }
           if (uOff > 0.001) {
             float tall;
@@ -458,6 +506,25 @@ export class Fields {
             soil = mix(soil, meadow, uOff);
             poolF *= 1.0 - uOff;
             soilRough = mix(soilRough, 0.9, uOff);
+          }
+          if (uTract.x > 0.001) {
+            // Under the trees: needle duff, or the wet sod of the swale. Where they have been felled: scuffed duff, chips
+            // and sawdust, skid trails, green coming. Where the bulldozer has been: torn subsoil in its cleat marks.
+            float u = dot(vF, uFell.xy) + uFell.z + (broad - 0.5) * 0.12 + (fine - 0.5) * 0.05;
+            vec3 duff = mix(${linear('#3b3125')} * (0.7 + 0.6 * fine), uGrass * vec3(0.5, 0.66, 0.42) * (0.7 + 0.6 * fine), uTract.w);
+            vec3 cut = mix(${linear('#6f5a44')}, ${linear('#927a5a')}, fine) * (0.78 + 0.44 * broad);
+            cut = mix(cut, ${linear('#d2bd92')}, step(0.74, grit) * step(0.4, fine) * 0.7);
+            float trail = 1.0 - smoothstep(0.05, 0.3, abs(fract(vWorld.x * 0.21 + 0.25 * sin(vWorld.z * 0.5)) - 0.5));
+            cut = mix(cut, ${linear('#4b3a2b')} * (0.8 + 0.4 * fine), trail * 0.55);
+            cut = mix(cut, uGrass * vec3(0.8, 0.95, 0.6), smoothstep(0.55, 0.8, texture2D(uNoise, vWorld.xz * 0.13).b) * 0.45 * uLeaf);
+            cut = mix(cut, uGrass * vec3(0.62, 0.74, 0.5) * (0.7 + 0.6 * fine), uTract.w * 0.5);
+            vec3 look = mix(duff, cut, 1.0 - smoothstep(uTract.y - 0.03, uTract.y + 0.03, u + 0.03 - 0.06 * step(0.999, uTract.y)));
+            float cleat = 0.5 + 0.5 * cos(vWorld.z * 6.2831853 / 0.42 + 2.0 * sin(vWorld.x * 0.7));
+            vec3 torn = mix(${linear('#96744e')}, ${linear('#6b4a36')}, smoothstep(0.3, 0.7, fine + (broad - 0.5) * 0.6)) * (0.74 + 0.3 * cleat) * mix(1.0, 0.66, uWet);
+            look = mix(look, torn, (1.0 - smoothstep(uTract.z - 0.03, uTract.z + 0.03, u + 0.03)) * step(0.001, uTract.z));
+            soil = mix(soil, look, uTract.x);
+            poolF *= 1.0 - uTract.x;
+            soilRough = mix(soilRough, 0.95, uTract.x);
           }
           soil = mix(soil, vec3(0.018, 0.02, 0.018), poolF * 0.92);
           diffuseColor.rgb = soil;
@@ -522,7 +589,7 @@ export class Fields {
         objectNormal = normalize(vec3(gp.cs * objectNormal.x + gp.sn * objectNormal.z, objectNormal.y + 0.3 * gp.droop, -gp.sn * objectNormal.x + gp.cs * objectNormal.z));
       `,
       vertexBegin: LEAF_SHAPE + LEAF_COLOUR,
-      vertexWorld: `${sway('aAt.xz', 'max(cWorld.y - aAt.y, 0.0)', '0.55 * (1.0 - 0.6 * uCrop.x) * (1.0 - 0.8 * gp.dead)')}
+      vertexWorld: `${sway('aAt.xz', 'max(cWorld.y - aAt.y, 0.0)', '0.55 * uOpen * (1.0 - 0.6 * uCrop.x) * (1.0 - 0.8 * gp.dead)')}
         cWorld.y += sin(uTime * 6.3 + aLeaf.x * 40.0 + aAt.w * 23.0) * 0.012 * aLeaf.y * aLeaf.z * min(uSway, 1.0) * (1.0 - gp.dead);`,
     })
     const leafMat = (shape: Patch) => patch(new MeshStandardMaterial({ map: this.leafTex, alphaTest: 0.5, alphaToCoverage: true, side: DoubleSide, roughness: 0.82, metalness: 0 }), {
@@ -557,9 +624,9 @@ export class Fields {
     const bloomMat = patch(new MeshStandardMaterial({ map: this.flowerTex, alphaTest: 0.5, alphaToCoverage: true, side: DoubleSide, roughness: 0.7, metalness: 0 }), {
       key: 'county-blossom',
       uniforms: { ...shared, uKeep: { value: new Vector2(0, 1.01) }, uTint: tint, uPix: PIXEL, uShare: bloomShare },
-      translucent: 1.4,
+      translucent: 0.2,
       through: [1, 0.97, 0.9],
-      ambient: 0.95,
+      ambient: 0.9,
       blade: true,
       vertexHead: `${PLANT_FN}\nattribute vec4 aFlower;\nuniform float uTint;\nuniform float uPix;\nuniform float uShare;\nvarying vec3 vTint;\nfloat showF;`,
       // A flower is open to the sky and to whoever looks at it.
@@ -572,7 +639,7 @@ export class Fields {
           * (1.0 - min(1.0, uCrop.y * 1.5)) * (1.0 - 0.7 * gp.h1.a) * (1.0 - 0.6 * uCrop.x);
         // Not every plant is in flower at once: more of them at the height of the bloom.
         showF = step(aFlower.z, open) * step(gp.r.x, 0.25 + 0.4 * uCrop.w);
-        vTint = mix(${linear('#f8f5fa')}, ${linear('#d3c2e6')}, uTint * (0.4 + 0.6 * aFlower.w));
+        vTint = mix(${linear('#f8f5fa')}, ${linear('#d3c2e6')}, uTint * (0.4 + 0.6 * aFlower.w)) * 0.74;
       `,
       vertexWorld: /* glsl */ `
         ${sway('aAt.xz', 'max(cWorld.y - aAt.y, 0.0)', '0.55')}
@@ -580,7 +647,7 @@ export class Fields {
           // Far off a flower is drawn no smaller than a pixel, and fewer are drawn, so the field keeps its share of white.
           // uShare: how many plants each drawn one stands for.
           float fbase = 0.017 + 0.006 * aFlower.w, fsize = max(fbase, length(cWorld.xyz - cameraPosition) * uPix);
-          float fkeep = clamp(fbase * fbase / (fsize * fsize) * 2.0 * uShare, 0.012, 1.0);
+          float fkeep = clamp(fbase * fbase / (fsize * fsize) * 1.3 * uShare, 0.012, 1.0);
           // and stands clear of the leaves, which close over it as they shrink
           cWorld.y += 0.05 * smoothstep(1.2, 3.0, fsize / fbase);
           fsize *= showF * step(fract(aFlower.w * 7.13 + aAt.w * 3.7), fkeep);
@@ -598,19 +665,22 @@ export class Fields {
 
     // ---- marks on the ground: the selection, the ring that answers an order, and the stakes of land to be had
     const ringGeo = ringGeometry(i)
-    const ring = this.mark(ringGeo), pulse = this.mark(ringGeo), stake = this.mark(ringGeo)
+    const wooded = PARCELS[i].cover !== 'open'
+    const ring = this.mark(ringGeo, wooded), pulse = this.mark(ringGeo, wooded), stake = this.mark(ringGeo, wooded)
     stake.un.uDash.value = 1
     this.disposables.push(ringGeo)
 
     this.gfx.push({
-      d0, d1, t0, t1, crop, soilColor, water, damp, cover, tint, oats, dense, denseMid, keepNear, keepMid, bloomShare, off, avail, paint, rimeHere, bounds,
+      d0, d1, t0, t1, crop, soilColor, water, damp, cover, tint, oats, dense, denseMid, keepNear, keepMid, bloomShare, off, avail, paint, under, rimeHere, tract, ground, open, bounds,
       soil, plants, clumps, blossoms, oatMesh: null, ring, pulse, stake, pulseT: 9, selT: 9, lod: 0, any: false,
     })
     this.soilTarget.push(new Color(SOIL.good))
     this.cropTarget.push(new Vector4())
+    this.tractTarget.push(new Vector4())
+    this.groundTarget.push(new Vector4(PARCELS[i].stones, 0, 0, 0))
   }
 
-  private mark(geo: BufferGeometry): Mark {
+  private mark(geo: BufferGeometry, wooded: boolean): Mark {
     const un = { uLevel: { value: 0 }, uGrow: { value: 0 }, uGain: UI_GAIN, uDash: { value: 0 }, uWide: MARK_WIDE }
     const mat = new ShaderMaterial({
       uniforms: un,
@@ -650,6 +720,8 @@ export class Fields {
           gl_FragColor = vec4(mix(vec3(0.02, 0.03, 0.02), pale, core) * uGain, a);
         }`,
     })
+    // On a tract the mark is drawn over the trees that stand on it.
+    mat.depthTest = !wooded
     const mesh = new Mesh(geo, mat)
     mesh.renderOrder = 6
     mesh.visible = false
@@ -700,7 +772,7 @@ export class Fields {
       corners.forEach(([x, z], k) => {
         const on = this.availNow[i] ? 1 : 0
         q.setFromAxisAngle(up, hash2(i, k) * 6.28)
-        const size = on * 1.3 * Math.min(2.6, MARK_WIDE.value)
+        const size = on * 1.3 * Math.min(2.6, MARK_WIDE.value) * (PARCELS[i].cover !== 'open' ? 1.7 : 1)
         m.compose(p.set(x, Math.max(groundY(x, z), fieldBaseY(z)) - 0.04, z), q, s.set(size, size, size))
         this.stakes.setMatrixAt(i * 4 + k, m)
       })
@@ -781,7 +853,7 @@ export class Fields {
   }
 
   // Set what each hill should look like. `display` may hold hills still waiting to be revealed by the crews.
-  setTargets(fields: FieldVis[], display: HillDisplay[][]): void {
+  setTargets(fields: FieldVis[], display: HillDisplay[][], spring = false): void {
     let stakes = false
     for (let i = 0; i < FIELD_COUNT; i++) {
       const fv = fields[i]
@@ -789,12 +861,23 @@ export class Fields {
       if (this.rest[i] && !this.gfx[i].oatMesh) this.gfx[i].oatMesh = this.buildOats(i)
       this.cropTarget[i].set(fv.wilt, fv.frosted, fv.rime, fv.bloom)
       this.soilTarget[i].set(SOIL[fv.moisture] ?? SOIL.good)
-      this.waterTarget[i] = fv.held && fv.moisture === 'standing water' ? 1 : 0
+      // Standing water after a soaking; wet ground still shines in its furrows until it drains.
+      this.waterTarget[i] = !fv.held ? 0 : fv.moisture === 'standing water' ? 1 : fv.moisture === 'wet' ? 0.4 : 0
       this.dampTarget[i] = DAMP[fv.moisture] ?? 0.3
       this.coverTarget[i] = this.rest[i] ? 1 : 0
-      this.offTarget[i] = fv.held ? 0 : 1
+      // A tract under trees or stumps, new ground waiting for its first spring, or somebody else's hay.
+      const tract = fv.cover !== 'open', fresh = !tract && fv.ours && !fv.held
+      const standing = fv.cover === 'woods' || fv.cover === 'brush'
+      this.offTarget[i] = fv.held || tract || fresh ? 0 : 1
+      this.heldTarget[i] = fv.held || fresh ? 1 : 0
+      this.bare[i] = tract && standing && fv.felled <= 0
+      const torn = fv.works === 'stump' ? Math.max(0.04, 1 - fv.worksLeft / STUMP_DAYS) : 0
+      this.tractTarget[i].set(tract ? 1 : 0, standing ? fv.felled : 1, torn, PARCELS[i].cover === 'brush' ? 1 : 0)
+      this.groundTarget[i].set(tract ? 0 : fv.stones, fv.works === 'tile' ? Math.max(0.05, 1 - fv.worksLeft / TILE_DAYS) : 0, fv.tiled ? 1 : 0, fv.raw && !tract ? 1 : 0)
+      this.gfx[i].open.value = fv.sheltered ? 0.6 : 1.15
       this.rimeTarget[i] = fv.rime
       if (this.availNow[i] !== fv.available) { this.availNow[i] = fv.available; stakes = true }
+      this.lotNow[i] = spring && fv.ours && fv.cover !== 'open'
       this.gfx[i].tint.value = BLOOM_TINT[fv.variety] ?? 0.2
       for (let h = 0; h < HILLS; h++) {
         const d = display[i][h]
@@ -856,7 +939,13 @@ export class Fields {
       g.off.value += (this.offTarget[i] - g.off.value) * kSlow
       if (Math.abs(this.offTarget[i] - g.off.value) < 0.002) g.off.value = this.offTarget[i]
       g.rimeHere.value += (this.rimeTarget[i] - g.rimeHere.value) * kSlow
-      this.held[i] = 1 - g.off.value
+      this.held[i] += (this.heldTarget[i] - this.held[i]) * kSlow
+      this.off[i] = g.off.value
+      this.avail[i] = g.avail.value
+      g.tract.value.lerp(this.tractTarget[i], kSlow)
+      g.ground.value.lerp(this.groundTarget[i], kSlow)
+      // Somebody else's ground and the floor of a standing wood are the land's own to draw.
+      g.soil.visible = g.off.value < 0.999 && !(this.bare[i] && g.tract.value.x > 0.99 && g.tract.value.y < 0.002)
       g.crop.lerp(this.cropTarget[i], kSlow)
       const want = this.lodFor(i, camera)
       g.lod = Math.abs(want - g.lod) > 0.6 ? want : g.lod + (want - g.lod) * kLod
@@ -865,7 +954,7 @@ export class Fields {
       const sel = opts.selection.includes(i)
       g.selT = sel ? g.selT + dt : 0
       const beat = sel && !opts.reduced && g.selT < 1.1 ? 0.18 * Math.sin(g.selT * 11.4) * (1 - g.selT / 1.1) : 0
-      const ringWant = sel ? 0.95 + beat : i === opts.hover ? 0.42 : 0
+      const ringWant = sel ? 0.95 + beat : i === opts.hover ? 0.42 : this.lotNow[i] ? 0.34 : 0
       g.ring.un.uLevel.value += (ringWant - g.ring.un.uLevel.value) * (opts.reduced ? 1 : 1 - Math.exp(-dt * 14))
       g.avail.value += ((this.availNow[i] ? 1 : 0) - g.avail.value) * kFast
       g.ring.mesh.visible = g.ring.un.uLevel.value > 0.01
@@ -894,18 +983,20 @@ export class Fields {
     if (lod < 1) g.keepMid.value.set(0, lod)
     else g.keepMid.value.set(lod - 1, 1.01)
     g.paint.value = Math.max(0, Math.min(1, lod - 1))
+    g.under.value = Math.max(0, Math.min(1, (lod - 0.4) / 0.45))
     g.plants.visible = g.any && nearOn
     g.clumps.visible = g.any && midOn
     // The blossom thins with distance; each flower drawn stands for more.
     const bloomGeo = g.blossoms.geometry as InstancedBufferGeometry
     const count = lod < 0.5 ? PLANTS : lod < 1.5 ? PLANTS / 2 : PLANTS / 4
     bloomGeo.instanceCount = this.density < 1 ? Math.min(count, PLANTS / 2) : count
-    g.bloomShare.value = PLANTS / bloomGeo.instanceCount
+    // Drawn small, each flower is already a pixel wide: fewer of them, or the field goes white.
+    g.bloomShare.value = PLANTS / bloomGeo.instanceCount * (this.density < 1 ? 0.45 : 1)
     g.blossoms.visible = g.any && this.cropTarget[i].w > 0.01
     // Only whole plants throw shadow into the second cascade; nothing painted throws any.
     const near1 = this.farShadows && lod < 0.5
     for (const m of [g.plants, g.soil]) { if (near1) m.layers.enable(1); else m.layers.disable(1) }
-    g.soil.castShadow = lod < 1.5 && g.off.value < 0.5
+    g.soil.castShadow = lod < 1.5 && g.off.value < 0.5 && g.tract.value.x < 0.5
     g.clumps.castShadow = lod < 1.5
     const rest = this.rest[i]
     g.oats.value.set(rest ? oats : 0, oatsRipe, 1)
@@ -958,7 +1049,13 @@ export class Fields {
       g.cover.value = this.coverTarget[i] * (0.35 + 0.65 * oats)
       g.off.value = this.offTarget[i]
       g.rimeHere.value = this.rimeTarget[i]
-      this.held[i] = 1 - g.off.value
+      this.held[i] = this.heldTarget[i]
+      this.off[i] = g.off.value
+      g.avail.value = this.availNow[i] ? 1 : 0
+      this.avail[i] = g.avail.value
+      g.tract.value.copy(this.tractTarget[i])
+      g.ground.value.copy(this.groundTarget[i])
+      g.soil.visible = g.off.value < 0.999 && !this.bare[i]
       g.crop.copy(this.cropTarget[i])
       if (camera) g.lod = this.lodFor(i, camera)
       g.pulseT = 9
