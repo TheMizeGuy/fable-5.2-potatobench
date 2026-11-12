@@ -136,7 +136,8 @@ describe('the clock', () => {
     app.settings.pauseOnAlerts = true
     app.setSpeed(2)
     c0(app).incidents = []
-    play(app, 60, () => app.speed === 0, false)
+    // A first year's telegrams wait for the planting, so the first thing new may be weeks off.
+    play(app, 240, () => app.speed === 0, false)
     expect(app.speed).toBe(0)
     expect(app.pauseReason).not.toBe('')
   })

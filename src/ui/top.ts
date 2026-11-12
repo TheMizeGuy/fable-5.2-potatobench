@@ -45,8 +45,11 @@ function seasonTrack(c: S.Campaign): HTMLElement | null {
   const x = (d: number) => `${(Math.max(0, Math.min(1, (d - a) / (b - a))) * 100).toFixed(1)}%`
   const now = Math.min(ss.day, b)
   const frosts = ss.log.filter(e => e.type === 'frost').map(e => e.day).filter((d, k, all) => all.indexOf(d) === k)
+  // On a phone the board has no room for a row of phases: the track's own ends say where the year is, and what is next.
+  const at = PHASES.findIndex(p => p.id === phaseNow(c))
+  const ends = (month: string, phase: string) => h('span', { class: 't-label' }, h('span', { class: 'mo' }, month), h('span', { class: 'ph' }, phase))
   return h('div', { class: 'season-track' },
-    h('span', { class: 't-label' }, F.monthName(S.SEASON_START.month, true)),
+    ends(F.monthName(S.SEASON_START.month, true), PHASES[at]?.short ?? ''),
     h('span', {
       class: 'bar', role: 'img',
       'aria-label': `The season runs ${F.date(y, a)} to ${F.date(y, b)}: ${Math.round(((now - a) / (b - a)) * 100)}% gone${ss.watchDay >= 0 ? `. Blight watch since ${F.date(y, ss.watchDay)}` : ''}`,
@@ -55,7 +58,42 @@ function seasonTrack(c: S.Campaign): HTMLElement | null {
     frosts.map(d => h('u', { class: 'frost', style: `left:${x(d)}` })),
     ss.watchDay >= 0 ? h('u', { class: 'watch', style: `left:${x(ss.watchDay)}` }) : null,
     h('b', { style: `left:${x(now)}` })),
-    h('span', { class: 't-label' }, F.monthName(S.SEASON_LAST.month, true)))
+    ends(F.monthName(S.SEASON_LAST.month, true), PHASES[at + 1] ? `then ${PHASES[at + 1].short}` : ''))
+}
+
+// What the year asks, in order: where the farm is in it, and what comes next. For every player.
+const PHASES: { id: string; name: string; short: string; from: [number, number]; says: string }[] = [
+  { id: 'plant', name: 'Plant', short: 'Plant', from: [S.SEASON_START.month, S.SEASON_START.dom], says: 'Plant: the crew plants each field once the soil is warm enough, in May.' },
+  { id: 'tend', name: 'Tend', short: 'Tend', from: [6, 1], says: 'Tend: the crew hills and walks the rows. Your call is the spraying, when blight weather comes.' },
+  { id: 'kill', name: 'Kill the vines', short: 'Kill vines', from: [9, 1], says: 'Kill the vines: in September, so the skins toughen for digging.' },
+  { id: 'dig', name: 'Dig and weigh', short: 'Dig', from: [9, 20], says: 'Dig and weigh: the crew digs and hauls each field, and it is weighed at the potato house.' },
+  { id: 'sell', name: 'Sell or store', short: 'Sell', from: [10, 20], says: 'Sell or store: each weighed crop is sold at once, or stored to sell over the winter.' },
+]
+
+// The phase the farm is in, by what the fields show, not by the date alone.
+export function phaseNow(c: S.Campaign): string {
+  const ss = c.season
+  if (!ss) return ''
+  const pot = c.plans.map((p, i) => (p?.crop === 'potato' && S.held(c, i) ? i : -1)).filter(i => i >= 0)
+  const f = (i: number) => ss.fields[i]
+  if (pot.some(i => f(i).plantDay < 0 && f(i).status !== 'dug')) return 'plant'
+  if (pot.length && pot.every(i => f(i).weighed || f(i).status === 'off')) return 'sell'
+  if (pot.some(i => f(i).status === 'digging' || f(i).status === 'dug' || f(i).inField >= 0.5)) return 'dig'
+  if (pot.some(i => f(i).killDay >= 0 || f(i).status === 'dead' || !!S.killOutlook(c, i)?.asked)) return 'kill'
+  return 'tend'
+}
+
+function phaseRow(c: S.Campaign): HTMLElement | null {
+  if (!c.season) return null
+  const y = c.year
+  const now = phaseNow(c)
+  const at = PHASES.findIndex(p => p.id === now)
+  const end = S.dayIndex(y, S.SEASON_LAST.month, S.SEASON_LAST.dom)
+  const start = (k: number) => (k < PHASES.length ? S.dayIndex(y, PHASES[k].from[0], PHASES[k].from[1]) : end)
+  return h('ol', { class: 'phases', testid: 'phases', 'aria-label': `The year, in order. Now: ${PHASES[at]?.name ?? ''}${PHASES[at + 1] ? `; next: ${PHASES[at + 1].name}` : ''}` },
+    PHASES.map((p, k) => h('li', {
+      class: `term${k === at ? ' now' : k < at ? ' past' : ''}`, style: `flex:${start(k + 1) - start(k)}`, tabindex: '0', 'data-tip': p.says, 'aria-current': k === at ? 'step' : null,
+    }, h('span', { class: 'long' }, p.name), h('span', { class: 'short', 'aria-hidden': 'true' }, p.short))))
 }
 
 interface Cell { day: string; sky: string; hi: number; rain: number; blight: number; frost: number; said: string }
@@ -457,7 +495,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
       ladder: pop === 'goals' ? goals(c).map(x => [x.id, x.done, progressText(x), x.block, x.now && !x.done && !!o.canShow?.(x)]) : 0, reach: g ? !!o.canShow?.(g) : false,
       call: season ? pressing(c)?.id ?? '' : '', block: g?.block ?? '', view: view?.why ?? '', moved: moved?.text ?? '', last: lastMoved,
       jobs: season ? [...new Set(c.season!.jobs.map(j => j.kind))].sort().join() : '', auto: season ? S.routineInfo(c).filter(r => r.auto).map(r => r.kind).join() : '',
-      k: season || c.phase === 'cellar' ? contracts.key() : 0,
+      k: season || c.phase === 'cellar' ? contracts.key() : 0, ph: season ? phaseNow(c) : '',
     }
     el.dataset.phase = c.phase
     el.dataset.layout = layout
@@ -494,7 +532,8 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
                     x.blight > 0 ? icon('blight', 'i risk') : null,
                     x.frost >= 30 ? icon('frost', 'i cold') : null)))) : null,
               phone ? balance : null),
-            season ? seasonTrack(c) : null),
+            season ? seasonTrack(c) : null,
+            season ? phaseRow(c) : null),
           goalSlip(c, g, gone, season),
           pop === 'goals' ? ladder(c, g) : null),
         phone ? null : h('section', { class: 'bank', 'aria-label': 'Money, the clock and the contracts' },

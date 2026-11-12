@@ -73,6 +73,19 @@
 @media (hover: hover) { .topbar .forecast:hover .d { background: var(--paper-2); } }
 .topbar .season-track .bar > u { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--blue); }
 .topbar .season-track .bar > u.watch { background: var(--red); opacity: .55; }
+/* The year under the track: what it asks, in order, the present one filled. */
+.topbar .season-track .ph { display: none; }
+.topbar .phases { display: flex; gap: 2px; margin: 0; padding: 0 12px 6px; list-style: none; background: var(--paper-2); }
+.topbar .phases li { flex-basis: auto; min-width: 0; padding: 2px 4px 1px; text-align: center; white-space: nowrap; overflow: hidden;
+  font: 400 11px/1.2 var(--f-gothic); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); box-shadow: inset 0 2px 0 var(--hair); cursor: help; }
+.topbar .phases li .short { display: none; }
+.topbar .phases li.past { color: var(--ink-3, var(--ink-2)); opacity: .7; }
+.topbar .phases li.now { color: var(--paper); background: var(--ink); box-shadow: none; }
+.topbar[data-layout='mid'] .phases li .long { display: none; }
+.topbar[data-layout='mid'] .phases li .short { display: inline; }
+.topbar[data-layout='narrow'] .phases, .topbar[data-layout='short'] .phases { display: none; }
+.topbar[data-layout='narrow'] .season-track .mo { display: none; }
+.topbar[data-layout='narrow'] .season-track .ph { display: inline; color: var(--ink); }
 /* the goal slip, a button: open it for the goals; beside it while the soil warms, the key that lets the weeks go */
 .topbar .goal-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
 /* a goal not yet in reach: said on plain paper, without the fist */

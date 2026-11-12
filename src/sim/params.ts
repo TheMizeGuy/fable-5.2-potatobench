@@ -330,6 +330,7 @@ export const GREEN_IN_FIELD = 0.005            // share of the crop in the field
 // answer before taking its default.
 export const INCIDENT_DAYS = 4                 // days an incident waits for an answer
 export const TELEGRAM_GAP = 7                  // days between telegrams, but for a broken tractor
+export const QUIET_UNTIL = { month: 6, dom: 15 } // a first year's telegrams wait for the planting, this long at most
 export const APPLICANT_CHANCE = 0.012          // a day in season: someone turns up asking for work
 export const POACH_CHANCE = 0.01              // a day in season with someone hired: a neighbour offers them more
 export const POACH_RAISE = 0.15                // to match, their wage goes up this much

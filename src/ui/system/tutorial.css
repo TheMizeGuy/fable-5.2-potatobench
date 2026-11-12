@@ -30,8 +30,6 @@
 .guide-slot:empty { display: none; }
 .guide-slot { padding: 0 24px 12px; }
 .guide.docked { box-shadow: var(--laid); animation: guide-in var(--t-slip) var(--ease-out); }
-.guide.offer .guide-yes { min-height: var(--touch); gap: 8px; padding: 0 14px 0 10px; }
-.guide.offer .guide-yes .fist { --i: 26px; }
 .guide-slot.folded .guide.docked { gap: 2px; padding-top: 6px; }
 .guide-slot.folded .guide-head, .guide-slot.folded .guide-why { display: none; }
 .guide-slot.folded .guide-ask { font-size: var(--t-body, 15px); }
@@ -65,3 +63,50 @@
 @keyframes guide-nudge { from { translate: calc(var(--nx) * -1) calc(var(--ny) * -1); } to { translate: var(--nx) var(--ny); } }
 .reduce-motion .guide, .reduce-motion .guide-fist .fist { animation: none; }
 @media (prefers-reduced-motion: reduce) { .guide, .guide-fist .fist { animation: none; } }
+
+/* The cards in the middle of the screen: the offer, and what a year is. The land shows dimmed behind. */
+.guide-veil { position: absolute; inset: 0; background: rgb(24 20 14 / 0.42); pointer-events: auto; }
+.guide-cardslot { position: absolute; inset: 0; display: grid; place-items: center; padding: 12px; pointer-events: none; }
+.guide-cardslot > .guide-card:is(.sys, .sys *) { position: relative; left: auto; top: auto; transform: none; width: min(620px, 100%); max-height: 100%; overflow-y: auto;
+  display: grid; gap: 12px; pointer-events: auto; animation: guide-in var(--t-slip) var(--ease-out); }
+.guide-card .gc-head { display: grid; gap: 4px; padding-bottom: 8px; border-bottom: 3px double var(--ink); }
+.guide-card .gc-head .t-title { font-size: 30px; line-height: 1.05; }
+.guide-card .gc-lead { font: 400 var(--t-lead)/1.35 var(--f-text); }
+.guide-card .gc-deal { font: italic 400 16px/1.35 var(--f-text); color: var(--ink-2); }
+.guide-card .replies { padding-bottom: 4px; }
+.guide-card .reply .c-title { display: flex; align-items: center; gap: 10px; }
+.guide-card .reply .c-title .fist { --i: 26px; }
+.guide-card .guide-foot { justify-content: space-between; }
+.guide-card .guide-foot .btn.go { min-height: var(--touch); padding: 0 18px; }
+.gc-year { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0; margin: 0; padding: 0; list-style: none; counter-reset: step; }
+.gc-year li { display: grid; justify-items: center; gap: 4px; padding: 10px 4px 8px; text-align: center; border-left: 1px solid var(--hair); position: relative; }
+.gc-year li:first-child { border-left: 0; }
+.gc-year li .i { --i: 30px; color: var(--ink); }
+.gc-year li b { font: 400 15px/1.1 var(--f-gothic); letter-spacing: .05em; text-transform: uppercase; }
+.gc-year li .t-label { color: var(--ink-2); }
+#ui[data-layout='narrow'] .guide-card .replies { grid-template-columns: 1fr; }
+#ui[data-layout='narrow'] .guide-card .gc-head .t-title { font-size: 24px; }
+#ui[data-layout='narrow'] .gc-year li b { font-size: 12px; }
+#ui[data-layout='narrow'] .gc-year li .i { --i: 22px; }
+#ui[data-layout='narrow'] .gc-year li .t-label { display: none; }
+#ui[data-layout='short'] .guide-card { gap: 8px; }
+#ui[data-layout='short'] .guide-card .gc-head .t-title { font-size: 22px; }
+#ui[data-layout='short'] .gc-year li { padding: 4px; }
+#ui[data-layout='short'] .gc-year li .i { --i: 20px; }
+
+/* A note newly come takes no press for a moment. */
+.guide.fresh .guide-foot { pointer-events: none; }
+/* The agent's one line inside a card of the game's own (a first telegram, a first weigh ticket). */
+.guide-line { margin: 0; padding: 6px 10px; font: 400 15px/1.3 var(--f-text); background: var(--paper-2, #f4ecd4); border-left: 3px solid var(--ink); }
+
+/* The screen grows with the player: a piece a guided first year has not brought in yet keeps its place, unseen. */
+.hud.st-hide-tags .plate-layer .tag-wrap, .hud.st-hide-tags .plate-layer .sel-layer { visibility: hidden; }
+.hud.st-hide-stamps .plate-layer .need { visibility: hidden; }
+.hud.st-hide-people .plate-layer .pin-at, .hud.st-hide-people .plate-layer .pin-list-at, .hud.st-hide-people .crew .timebook { visibility: hidden; }
+.hud.st-hide-list .crew .queue { visibility: hidden; }
+.hud.st-hide-forecast .topbar .forecast { visibility: hidden; }
+.hud.st-hide-after .topbar .after { visibility: hidden; }
+/* One voice: while a note or a card is up the slip keeps to one line, and nothing at the foot competes. */
+.hud.noting .topbar .goal .goal-when, .hud.noting .topbar .goal-go, .hud.noting .topbar .goal .fist { display: none; }
+.hud.noting .notes, .hud.voice .notes { visibility: hidden; }
+.hud.guided .season-screen .paused, .hud.guided .season-screen .running { visibility: hidden; }

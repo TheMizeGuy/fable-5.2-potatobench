@@ -9,7 +9,8 @@ import { icon } from './icons.ts'
 import { ringFor } from './crew.ts'
 import { answerSpray, putSprayAway, SPRAY_WAYS, sprayAsking, sprayDoes, sprayWay } from './people.ts'
 import { firstName, jobText, SKILL_NAME } from './rules.ts'
-import { key, stamp } from './system/parts.ts'
+import { fist, key, stamp } from './system/parts.ts'
+import { agentLine } from './tutorial.ts'
 import { portrait, ringed } from './system/people.ts'
 
 export interface IncidentCard {
@@ -120,6 +121,7 @@ export function incidentCard(ctx: Ctx): IncidentCard {
       h('div', { class: 'tg-body' },
         about(c, inc),
         h('div', null, h('h2', { id: 'incident-title' }, F.localize(info.title)), h('p', null, who(c, inc, info)))),
+      agentLine('telegram', `${c.seed}:${c.year}:${info.id}`),
       h('div', { class: `replies${info.choices.length > 2 ? ' three' : ''}` }, info.choices.map((ch, k) => ch.ok
         ? h('button', { class: `reply${ch.id === info.fallback ? '' : ' first'}`, type: 'button', testid: `answer-${ch.id}`, 'aria-keyshortcuts': keys ? String(k + 1) : null, onclick: () => answer(c, info, ch) },
           key(String(k + 1)), h('b', { class: 'c-title' }, ch.label), h('span', { class: 'c-does' }, does(c, inc, ch)), h('span', { class: 'c-cost' }, cost(c, inc, ch)))
@@ -140,11 +142,12 @@ export function incidentCard(ctx: Ctx): IncidentCard {
         h('button', { class: 'close tg-later', type: 'button', testid: 'spray-ask-close', 'aria-label': `Decide later${keys ? ' (Escape)' : ''}`, title: keys ? 'Decide later (Escape)' : undefined, onclick: () => putAway() }, icon('close', 'i'))),
       h('div', { class: 'tg-body' },
         icon('spray', 'i tg-ic'),
-        h('div', null, h('h2', { id: 'incident-title' }, 'Spraying this season'), h('p', null, 'Protectant has to be on the leaf before the spores land; rain and new leaf wear it off. How is spraying to be done?'))),
+        h('div', null, h('h2', { id: 'incident-title' }, 'Spraying this season'), h('p', null, 'Blight is a disease that can take a whole field in one wet week. A spray protects a field for about a week, then wears off. How is it to be done this season?'))),
       h('div', { class: 'replies three' }, SPRAY_WAYS.map((w, k) => h('button', {
         class: `reply${w.id === 'auto' ? ' first' : ''}${now === w.id ? ' is-on' : ''}`, type: 'button', testid: `spray-way-${w.id}`, 'aria-keyshortcuts': keys ? String(k + 1) : null,
         'aria-pressed': now ? String(now === w.id) : null, onclick: () => answerSprayHere(c, w.id),
-      }, key(String(k + 1)), h('b', { class: 'c-title' }, w.name), h('span', { class: 'c-does' }, sprayDoes(ctx, c, w.id))))))
+      }, key(String(k + 1)), h('b', { class: 'c-title' }, w.name, w.id === 'auto' ? fist() : null),
+      h('span', { class: 'c-does' }, w.id === 'auto' ? h('b', { class: 'usual', testid: 'spray-usual' }, 'The usual choice. ') : null, sprayDoes(ctx, c, w.id))))))
   }
 
   function answerSprayHere(c: S.Campaign, way: 'auto' | 'ask' | 'none'): void {

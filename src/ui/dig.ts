@@ -10,6 +10,7 @@ import { icon } from './icons.ts'
 import * as R from './rules.ts'
 import { storeCall } from './store-band.ts'
 import { coupon, range } from './system/parts.ts'
+import { agentLine } from './tutorial.ts'
 
 const CAUSE_LABEL: Record<S.Cause, string> = {
   green: 'Greened', scab: 'Scab', hollow: 'Hollow heart', knob: 'Knobs and cracks', skin: 'Thin skins',
@@ -875,6 +876,7 @@ export function ticket(ctx: Ctx, lotId: number, o: { fresh: boolean; staged?: bo
               h('h2', { id: `tk-${lotId}` }, 'Weigh ticket')),
             stamp,
             fresh ? null : h('button', { class: 'close', type: 'button', 'aria-label': lot.open ? 'Close the ticket' : 'Close', onclick: close }, icon('close', 'i'))),
+          fresh && lot.open ? agentLine('ticket', `${c.seed}:${lot.year}:${lotId}`) : null,
           h('p', { class: 'tk-line' },
             h('span', null, h('span', { class: 't-label' }, 'Variety'), ' ', h('b', null, v.name)),
             h('span', null, h('span', { class: 't-label' }, 'Dug'), ' ', h('b', { class: 'num' }, daySpan(lot.year, dug.start, dug.end))),

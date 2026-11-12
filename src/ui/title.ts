@@ -6,10 +6,10 @@ import { h } from './dom.ts'
 import { icon } from './icons.ts'
 import { seasonCount } from './rules.ts'
 import { PHASE_LABEL } from './top.ts'
-import { startedFarm } from './tutorial.ts'
+import { guidedFarm, startedFarm } from './tutorial.ts'
 
 // Starts a farm of its own, with seasons made for it. A farm still in play is not replaced unasked.
-export async function startNewFarm(ctx: Ctx): Promise<void> {
+export async function startNewFarm(ctx: Ctx, guided = false): Promise<void> {
   const app = ctx.app
   const saved = app.savedGame()?.campaign
   if (saved && saved.phase !== 'over' && saved.outcome !== 'lost') {
@@ -22,7 +22,9 @@ export async function startNewFarm(ctx: Ctx): Promise<void> {
   }
   ctx.papers.closeAll()
   app.newGame()
-  if (app.campaign) startedFarm(app.campaign.seed)
+  if (!app.campaign) return
+  if (guided) guidedFarm()
+  else startedFarm(app.campaign.seed)
 }
 
 function engraving(): HTMLElement {
@@ -61,6 +63,8 @@ export function titleScreen(ctx: Ctx, o: { onMenu: () => void; onHelp: () => voi
           : h('button', { class: 'btn go wide', type: 'button', testid: 'play', onclick: () => { void startNewFarm(ctx) } }, 'Play', icon('arrow', 'i')),
         c ? h('button', { class: 'cv-item lead', type: 'button', testid: 'play', onclick: () => { void startNewFarm(ctx) } },
           h('b', null, 'New farm'), h('span', { class: 'dots' }), h('span', { class: 'it quiet' }, 'from the first spring')) : null,
+        h('button', { class: 'cv-item lead', type: 'button', testid: 'play-guided', onclick: () => { void startNewFarm(ctx, true) } },
+          h('b', null, 'Guided first year'), h('span', { class: 'dots' }), h('span', { class: 'it quiet' }, 'a new farm, shown step by step')),
         h('button', { class: 'cv-item lead', type: 'button', testid: 'how-open', onclick: () => o.onHelp() }, h('b', null, 'How to play'), h('span', { class: 'dots' }), h('span', { class: 'chev', 'aria-hidden': 'true' }, '›')),
         h('button', { class: 'cv-item lead', type: 'button', testid: 'menu-open', onclick: () => o.onMenu() }, h('b', null, 'Settings'), h('span', { class: 'dots' }), h('span', { class: 'chev', 'aria-hidden': 'true' }, '›')),
       ])

@@ -41,7 +41,8 @@ function until(c: Campaign, kind: S.IncidentKind): S.Incident {
   return inc!
 }
 
-// 1990, seed 7, with a hand and an operator: someone asks for work on June 7. 1995, seed 2: a neighbour on May 10.
+// 1990, seed 7, with a hand and an operator: someone asks for work on June 7. 1995, seed 13: a neighbour on May 21,
+// once the first planting is in (a first year's telegrams wait for it).
 function farm(year: number, seed: number): Campaign {
   const c = S.createCampaign(world, { seed, startYear: year })
   ok(c, { t: 'hire', kind: 'hand' })
@@ -103,7 +104,7 @@ describe('someone asking for work', () => {
 })
 
 describe('a neighbour\'s offer', () => {
-  const c = farm(1995, 2)
+  const c = farm(1995, 13)
   const inc = until(c, 'poach')
   const u = c.crew.find(x => x.id === inc.unit)!
 

@@ -123,7 +123,7 @@ describe('the routine', () => {
 
 describe('telegrams', () => {
   it('a neighbour\'s refused offer for someone is not made again that year, and one stranger asks for work a season', () => {
-    const c = S.createCampaign(world, { seed: 2, startYear: 1995 })
+    const c = S.createCampaign(world, { seed: 13, startYear: 1995 })
     ok(c, { t: 'hire', kind: 'hand' })
     ok(c, { t: 'hire', kind: 'operator' })
     ok(c, { t: 'begin' })

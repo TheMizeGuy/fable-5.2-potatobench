@@ -1491,6 +1491,10 @@ function openKind(c: Campaign, kind: IncidentKind): boolean {
 function drawIncidents(c: Campaign, s: Season, turns: Turn[], out: GameEvent[]): void {
   const u01 = (salt: number) => hashUnit(c.seed, s.year, s.day, salt)
   const shed = hasBuilt(c, 'shed')
+  // In a farm's first year no telegram comes before its first planting is finished (or mid-June, on a farm that
+  // has not planted by then).
+  const firstPlanting = c.history.length === 0 && s.day < dayIndex(s.year, P.QUIET_UNTIL.month, P.QUIET_UNTIL.dom) &&
+    c.plans.some((p, i) => p?.crop === 'potato' && c.fields[i].tenure !== 'none' && s.fields[i].plantDay < 0)
   for (const t of turns) {
     const u = t.u
     if (t.spent.machine + t.spent.woods > 0 && u01(7100 + u.id) < hurtChance(u)) {
@@ -1499,7 +1503,7 @@ function drawIncidents(c: Campaign, s: Season, turns: Turn[], out: GameEvent[]):
       letGo(u)
       push(s, out, 'hurt', -1, 'bad', `${u.name} is hurt, working worn out ${t.spent.woods > 0 ? 'in the woods' : 'on the tractor'}: off for ${days} days, back on ${formatDay(s.year, u.out)}.`, { unit: u.id, days })
     }
-    if (t.tractor && c.broken.length < tractorsOwned(c)) {
+    if (t.tractor && c.broken.length < tractorsOwned(c) && !firstPlanting) {
       if (u01(7200 + u.id) < breakdownChance(u, shed)) {
         const mechanic = c.crew.some(x => x.skills.machine >= P.MECHANIC && !hurt(x, s.day + 1))
         const back = s.day + 1 + (mechanic ? 1 : P.BREAK_DAYS)
@@ -1510,6 +1514,7 @@ function drawIncidents(c: Campaign, s: Season, turns: Turn[], out: GameEvent[]):
     }
   }
   c.heard ??= []
+  if (firstPlanting) return
   // An offer, someone asking for work or a buyer waits a week after the last telegram; a breakdown does not.
   if (s.telegram !== undefined && s.day - s.telegram < P.TELEGRAM_GAP) return
   if (!openKind(c, 'applicant') && !c.heard.includes('applicant') && u01(7300) < P.APPLICANT_CHANCE) {

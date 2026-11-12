@@ -460,3 +460,7 @@
 /* The pop of work that cannot wait opens from the list's own left edge, so it stays inside the window. */
 .season-screen .queue { position: relative; }
 .season-screen .q-item.press-item { position: static; }
+
+/* The usual choice on the spraying card. */
+.telegram .reply .c-title .fist { --i: 22px; margin-left: 8px; vertical-align: -3px; }
+.telegram .reply .usual { font-weight: 700; }
