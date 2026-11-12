@@ -57,6 +57,10 @@
   --u: 4px; --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px; --s7: 48px;
   --gutter: 16px;
   --touch: 44px;
+  --key: 40px;             /* a standard key's height, the same wherever it is (44 under a finger) */
+  --key-s: 34px;           /* a minor key's */
+  --major: 56px;           /* a major key's, at least */
+  --card: #c9b88f;         /* the edge of the card a key is cut from, showing under its face */
 
   /* depth: printed (on the sheet), laid (a tag, a slip), lifted (a card, a sheet) */
   --laid: 0 0 0 1px var(--edge), 0 1px 1px rgba(20, 14, 6, .3), 0 4px 10px -4px rgba(20, 14, 6, .5);
@@ -138,38 +142,94 @@ table .num, .tab { font-variant-numeric: lining-nums proportional-nums; }
 /* the printer's fist points at the one next thing */
 .fist { color: var(--ink); }
 
-/* 7 ---------------------------------------------------------------- controls */
-/* A printed box. Hover doubles its rule, press inks it in, selected is solid ink, disabled is voided. */
+/* 7 ---------------------------------------------------------------- controls: depth and weight */
+/* What can be pressed stands off the paper; what is only read is ink on it. A control is a key cut from card: a face
+   inside an ink rim, the card's own edge under the face, a shadow on the paper below. It stands higher under the
+   pointer and goes down under the press. How far it stands and how big it is say what the press costs (docs/UI.md,
+   "Controls: depth and weight"): data-w is major, std or minor, set where the control is made (h() does it).
+   The edge is marked important so that no screen's stylesheet flattens a key by accident: a screen changes a key
+   through the --w- properties, never through box-shadow. Marks on the land (a tag, a stamp, a pin) keep their own
+   shapes and stand off the land by their own shadows. The faces of real form inputs are keys too. */
+:is([data-w], .seg-in label > span, .vbox-in, .check-in .tick):not(.tag, .need, .yard-tag, .pin) {
+  --w-up: 3px;                       /* how far the key stands off the paper */
+  --w-h: var(--w-up);                /* how much of that shows now: none while it is down */
+  --w-rim: 1px; --w-sep: 1px; --w-line: var(--ink); --w-side: var(--card);
+  --w-mark: 0 0 0 0 transparent;     /* a bar or ring a state adds */
+  --w-in: 0 0 0 0 transparent;       /* the shade inside a key that is down */
+  --w-cast: 0 2px 3px -1px rgba(20, 14, 6, .45);
+  --w-key: inset 0 0 0 var(--w-rim) var(--w-line), var(--w-mark), inset var(--w-in),
+    inset 0 calc(0px - var(--w-h) - var(--w-rim)) 0 0 var(--w-side), inset 0 calc(0px - var(--w-h) - var(--w-rim) - var(--w-sep)) 0 0 var(--w-line), var(--w-cast);
+  box-shadow: var(--w-key) !important; cursor: pointer;
+  transition: translate var(--t-tap) var(--ease-out), box-shadow var(--t-tap) var(--ease-out), background-color var(--t-tap) linear;
+}
+[data-w='major'] { --w-up: 6px; --w-rim: 2px; --w-cast: 0 4px 6px -2px rgba(20, 14, 6, .55); }
+[data-w='minor'] { --w-up: 2px; --w-line: var(--ink-2); --w-cast: 0 1px 1px rgba(20, 14, 6, .3); }
+/* under the pointer it stands a little higher; under the press it goes down, and a major one has furthest to go */
+[data-w].is-hover { --w-h: calc(var(--w-up) + 1px); --w-cast: 0 6px 9px -4px rgba(20, 14, 6, .6); }
+@media (hover: hover) {
+  [data-w]:hover:not([disabled], [aria-disabled='true'], .is-off, .is-given, .is-busy, [aria-pressed='true'], [aria-expanded='true'], .is-on) { --w-h: calc(var(--w-up) + 1px); --w-cast: 0 6px 9px -4px rgba(20, 14, 6, .6); }
+}
+[data-w]:active:not([disabled], [aria-disabled='true'], .is-off, .is-given), [data-w].is-pressed {
+  translate: 0 2px; --w-h: 0px; --w-sep: 0px; --w-in: 0 3px 4px -1px rgba(20, 14, 6, .5); --w-cast: 0 0 0 0 transparent; transition-duration: 40ms; }
+/* On, chosen: the key stays down and is filled in pencil, the mark for what the player chose. */
+[data-w]:is([aria-pressed='true'], [aria-checked='true'], [aria-current='page'], .is-on):not(.tag, .need, .yard-tag, .pin), :is(.seg-in, .vbox) input:checked + :is(span, .vbox-in) {
+  --w-h: 0px; --w-sep: 0px; --w-in: 0 3px 4px -1px rgba(10, 8, 4, .55); --w-cast: 0 0 0 0 transparent;
+  color: var(--paper) !important; background-color: var(--pencil) !important; }
+[data-w]:is([aria-pressed='true'], [aria-checked='true'], [aria-current='page'], .is-on):not(.tag, .need, .yard-tag, .pin) :is(.sub, .quiet, .t-caption) { color: var(--paper) !important; }
+/* Open: a key that holds a part of the sheet open stays down, unfilled. */
+[data-w][aria-expanded='true'] { --w-h: 0px; --w-sep: 0px; --w-in: 0 3px 4px -1px rgba(20, 14, 6, .4); --w-cast: 0 0 0 0 transparent; }
+/* Armed: where the clock goes on from. A broken bar along the foot of a key that still stands. */
+[data-w].armed { background-image: repeating-linear-gradient(90deg, var(--ink) 0 6px, transparent 6px 10px); background-repeat: no-repeat; background-size: calc(100% - 14px) 3px; background-position: 50% calc(100% - var(--w-up) - 6px); }
+/* Suggested: ochre, with the printer's fist. */
+[data-w].is-suggested { --w-rim: 2px; --w-side: #b07a1f; color: var(--ink); background-color: var(--st-ochre) !important; }
+/* Busy: half down, a broken line running along its foot. */
+[data-w]:is(.is-busy, [aria-busy='true']) { --w-h: 1px; --w-cast: 0 0 0 0 transparent; cursor: progress; }
+/* Greyed: flat and voided; it says why under the pointer. */
+[data-w]:is([disabled], [aria-disabled='true'], .is-off):not(.is-given), .seg-in input:disabled + span { --w-h: 0px; --w-sep: 0px; --w-line: rgba(30, 28, 25, .35); --w-cast: 0 0 0 0 transparent; cursor: not-allowed;
+  background-image: repeating-linear-gradient(135deg, transparent 0 5px, rgba(30, 28, 25, .08) 5px 6px); }
+[data-w][disabled] { color: rgba(30, 28, 25, .55) !important; }
+[data-w].is-focus { outline: 3px solid var(--blue); outline-offset: 3px; }
+
+/* A key with words on it. */
 .btn { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: var(--touch); padding: 0 16px;
-  font: 400 var(--t-body)/1.1 var(--f-text); color: var(--ink); background: var(--paper); box-shadow: inset 0 0 0 1px var(--ink); border-radius: 1px; text-align: left; }
-.btn:hover, .btn.is-hover { box-shadow: inset 0 0 0 1px var(--ink), inset 0 0 0 3px var(--paper), inset 0 0 0 4px var(--ink); }
-.btn:active, .btn.is-pressed { background: var(--paper-2); box-shadow: inset 0 0 0 1px var(--ink), inset 0 2px 3px rgba(30, 28, 25, .35); transform: translateY(1px); }
+  font: 400 var(--t-body)/1.1 var(--f-text); color: var(--ink); background: var(--paper); box-shadow: inset 0 0 0 1px var(--ink); border-radius: 2px; text-align: left; }
 .btn:focus-visible, .btn.is-focus { outline: 3px solid var(--blue); outline-offset: 3px; }
-.btn[aria-pressed="true"], .btn.is-on { color: var(--paper); background: var(--ink); box-shadow: none; }
-.btn[disabled], .btn.is-off { color: rgba(30, 28, 25, .5); box-shadow: inset 0 0 0 1px rgba(30, 28, 25, .35); cursor: default;
-  background: var(--paper) repeating-linear-gradient(135deg, transparent 0 5px, rgba(30, 28, 25, .08) 5px 6px); }
-.btn.is-busy::after { content: ''; position: absolute; left: 8px; right: 8px; bottom: 7px; height: 2px; background: repeating-linear-gradient(90deg, var(--ink) 0 3px, transparent 3px 6px); clip-path: inset(0 40% 0 0); }
+.btn.is-busy::after { content: ''; position: absolute; left: 8px; right: 8px; bottom: 8px; height: 2px; background: repeating-linear-gradient(90deg, currentColor 0 3px, transparent 3px 6px); clip-path: inset(0 40% 0 0); }
 .btn .sub { font-size: var(--t-caption); color: var(--ink-2); }
 .btn .i { --i: 18px; }
-/* the one strong action on a sheet */
-.btn.go { min-height: 52px; padding: 0 22px; color: var(--paper); background: var(--ink); justify-content: space-between;
-  box-shadow: 0 0 0 1px var(--ink), inset 0 0 0 3px var(--ink), inset 0 0 0 4px rgba(246, 241, 228, .55); font: 400 23px/1 var(--f-gothic); letter-spacing: .08em; text-transform: uppercase; }
-.btn.go:hover, .btn.go.is-hover { background: #3a352d; }
-.btn.go:active, .btn.go.is-pressed { background: #000; transform: translateY(1px); }
-.btn.go .i { --i: 22px; }
-.btn.quiet { box-shadow: none; background: none; min-height: var(--touch); padding: 0 4px; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
-/* a step that cannot be undone: printed with a hazard border, worded in red */
-.btn.hazard { color: var(--red); background: var(--paper); box-shadow: none; border: 5px solid transparent;
-  border-image: repeating-linear-gradient(-45deg, var(--red) 0 6px, var(--paper) 6px 12px) 5; }
-.btn.hazard:hover, .btn.hazard.is-hover { background: #fbefe9; }
 .btn.wide { width: 100%; }
+/* Standard: a plain key, the same height wherever it is; its cost sits small at its side. */
+.btn[data-w='std'] { min-height: var(--key) !important; padding-bottom: 3px; }
+/* Minor: close, back, more, change. A small quiet key, or an underlined word. */
+.btn[data-w='minor'] { min-height: var(--key-s) !important; padding: 0 12px 2px; font: 400 var(--t-caption)/1.1 var(--f-text); letter-spacing: 0; text-transform: none; }
+.btn.quiet { --w-key: 0 0 0 0 transparent; background: none; padding: 0 4px; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+@media (hover: hover) { .btn.quiet:hover { text-decoration-thickness: 2px; } }
+.btn.quiet:active { translate: 0 1px; }
+/* Major: money, time, or it cannot be taken back. The biggest and heaviest key on its paper, its price or what
+   follows on a second line. One on a paper may be filled (.go): the one the game would press. */
+.btn[data-w='major'] { min-height: var(--major) !important; padding: 2px 18px 9px !important; flex-wrap: wrap; align-content: center; justify-content: flex-start; gap: 3px 10px;
+  font: 400 22px/1 var(--f-gothic); letter-spacing: .08em; text-transform: uppercase; }
+.btn[data-w='major'] .sub { flex-basis: 100%; font: 400 15px/1.15 var(--f-text); letter-spacing: 0; text-transform: none; color: var(--ink-2); }
+.btn[data-w='major'] .i { --i: 22px; }
+.btn[data-w='major'] > .i:last-child { margin-left: auto; }
+[data-w='major'].go { --w-side: #7a694f; --w-line: #0c0a08; color: var(--paper); background-color: var(--ink); }
+[data-w='major'].go .sub { color: rgba(246, 241, 228, .85); }
+[data-w='major'].go.is-hover { background-color: #37322a; }
+@media (hover: hover) { [data-w='major'].go:hover { background-color: #37322a; } }
+[data-w='major'].go:active, [data-w='major'].go.is-pressed { background-color: #000; }
+/* a step that cannot be undone: hazard stripes round it, worded in red, and it asks once more */
+.btn.hazard { --w-line: var(--red); --w-side: #e2bdb2; color: var(--red); background: var(--paper); border: 5px solid transparent;
+  border-image: repeating-linear-gradient(-45deg, var(--red) 0 6px, var(--paper) 6px 12px) 5; }
+.btn.hazard[data-w='major'] { padding: 0 12px 6px !important; }
+.btn.hazard .sub { color: var(--red); }
+.btn.hazard.is-hover { background-color: #fbefe9; }
+@media (hover: hover) { .btn.hazard:hover { background-color: #fbefe9; } }
+/* a key of the keyboard, printed: flat, since it is read and not pressed */
 .key { display: inline-grid; place-items: center; min-width: 24px; height: 24px; padding: 0 5px; font: 400 15px/1 var(--f-gothic); letter-spacing: .03em;
-  color: var(--ink); background: var(--paper); box-shadow: inset 0 0 0 1px var(--ink), inset 0 -2px 0 rgba(30, 28, 25, .22); border-radius: 2px; }
-.iconbtn { display: inline-grid; place-items: center; width: var(--touch); height: var(--touch); color: var(--ink); }
-.iconbtn:hover, .iconbtn.is-hover { box-shadow: inset 0 0 0 1px var(--ink); }
-.iconbtn.is-on { color: var(--paper); background: var(--ink); }
+  color: var(--ink); background: var(--paper); box-shadow: inset 0 0 0 1px var(--ink); border-radius: 3px; }
+.iconbtn { display: inline-grid; place-items: center; width: var(--touch); height: var(--touch); padding-bottom: 3px; color: var(--ink); background: var(--paper); border-radius: 2px; }
 .seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; }
-.seg .btn { padding: 0 8px; justify-content: center; font-size: 14px; }
+.seg .btn { padding: 0 8px 3px; justify-content: center; font-size: 14px; }
 .seg .btn + .btn { margin-left: -1px; }
 .check { display: flex; gap: 10px; align-items: flex-start; min-height: var(--touch); padding-top: 10px; font-size: var(--t-body); line-height: 1.3; }
 .check .tick { margin-top: -2px; }
@@ -179,7 +239,7 @@ table .num, .tab { font-variant-numeric: lining-nums proportional-nums; }
   linear-gradient(var(--ink), var(--ink)) 0 calc(100% - 7px) / 100% 1px no-repeat; }
 .slider .fill { position: absolute; left: 0; bottom: 7px; height: 4px; background: var(--ink); }
 .slider .knob { position: absolute; bottom: 4px; width: 14px; height: 20px; transform: translateX(-50%); background: var(--ink); clip-path: polygon(0 0, 100% 0, 100% 60%, 50% 100%, 0 60%); }
-.close { display: grid; place-items: center; width: var(--touch); height: var(--touch); margin: -10px -12px 0 0; flex: none; }
+.close { display: grid; place-items: center; width: var(--key-s); height: var(--key-s); margin: -10px -12px 0 0; padding-bottom: 2px; flex: none; background: var(--paper); border-radius: 2px; }
 .close .i { --i: 18px; }
 /* a meter: a ruled scale, filled in ink (or the ink of its warning) */
 .meter { position: relative; height: 8px; box-shadow: inset 0 0 0 1px var(--ink); background: repeating-linear-gradient(90deg, transparent 0 calc(10% - 1px), var(--hair) calc(10% - 1px) 10%); }
@@ -233,7 +293,8 @@ table .num, .tab { font-variant-numeric: lining-nums proportional-nums; }
 .season-track .bar > i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--pencil); }
 .season-track .bar > b { position: absolute; top: -5px; bottom: -5px; width: 3px; margin-left: -1.5px; background: var(--red); }
 /* the one next thing: the canary slip, hung from the board */
-.goal { position: relative; display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 10px; width: max-content; min-width: 330px; margin: -2px 0 0 18px; padding: 9px 14px 9px 12px;
+.goal { --w-side: #c2aa3c; --w-cast: 0 1px 1px rgba(20, 14, 6, .3), 0 4px 10px -4px rgba(20, 14, 6, .5);
+  position: relative; display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 10px; width: max-content; min-width: 330px; margin: -2px 0 0 18px; padding: 9px 14px 9px 12px;
   background: var(--canary) url(img/grain.png); background-blend-mode: multiply; box-shadow: var(--laid); }
 .goal::before, .goal::after { content: ''; position: absolute; top: -8px; width: 10px; height: 14px; background: #8d8a83; border-radius: 2px; box-shadow: inset 0 0 0 1px #3d3a34; }
 .goal::before { left: 18px; } .goal::after { right: 18px; }
@@ -251,11 +312,11 @@ table .num, .tab { font-variant-numeric: lining-nums proportional-nums; }
 .balance .neg { color: var(--red); }
 .balance .when { text-align: left; }
 .clock { display: grid; grid-template-columns: repeat(4, 1fr) 52px; border-bottom: 1px solid var(--ink); }
-.clock .k { display: grid; place-items: center; height: var(--touch); font: 400 21px/1 var(--f-gothic); letter-spacing: .06em; border-left: 1px solid var(--hair); }
-.clock .k:first-child { border-left: 0; }
+/* the clock's keys stand in one bank, rim to rim; the speed that runs is the key that is down */
+.clock .k { display: grid; place-items: center; height: var(--touch); padding-bottom: 3px; font: 400 21px/1 var(--f-gothic); letter-spacing: .06em; background-color: var(--paper); }
+.clock .k + .k, .clock .k + .menu { margin-left: -1px; }
 .clock .k .i { --i: 16px; }
-.clock .k[aria-pressed="true"] { color: var(--paper); background: var(--ink); }
-.clock .menu { display: grid; place-items: center; border-left: 1px solid var(--ink); background: var(--manila) url(img/grain.png); background-blend-mode: multiply; }
+.clock .menu { --w-side: #b39a63; display: grid; place-items: center; padding-bottom: 3px; background: var(--manila) url(img/grain.png); background-blend-mode: multiply; }
 .clock .menu .i { --i: 22px; }
 .contract { display: grid; grid-template-columns: 1fr auto; gap: 6px 10px; padding: 8px 12px 10px; }
 .contract .range { grid-column: 1 / -1; margin: 6px 0 2px; }
@@ -275,6 +336,10 @@ table .num, .tab { font-variant-numeric: lining-nums proportional-nums; }
 .person .doing { display: flex; align-items: center; gap: 3px; font: 400 13px/1 var(--f-gothic); letter-spacing: .05em; text-transform: uppercase; color: var(--ink-2); }
 .person .doing .i { --i: 13px; }
 .person.is-picked { background: var(--paper-2); box-shadow: inset 0 -4px 0 var(--ink); }
+/* a person who can be picked is a key in the book's bank; picked, it is down with a bar of ink along its foot */
+.person[data-w] { border-left: 0; padding-bottom: 10px; background: var(--paper); }
+.person[data-w] + .person[data-w] { margin-left: -1px; }
+.person[data-w]:is(.is-picked, [aria-pressed='true']) { --w-mark: inset 0 -4px 0 var(--ink); color: var(--ink) !important; background-color: var(--paper-2) !important; }
 .person .flag { position: absolute; top: 4px; right: 8px; }
 .person .next { position: absolute; left: 2px; bottom: calc(100% + 14px); transform: rotate(-1.5deg); text-align: left; }
 .timebook .tools { display: grid; border-left: 1px solid var(--rule-red); }
@@ -283,7 +348,8 @@ table .num, .tab { font-variant-numeric: lining-nums proportional-nums; }
 .alert { display: flex; align-items: center; gap: 10px; min-height: var(--touch); padding: 8px 14px 8px 12px; max-width: 380px; font-size: 15px; line-height: 1.2;
   background: var(--paper) url(img/grain.png); background-blend-mode: multiply; box-shadow: var(--laid); }
 .alert .i { --i: 18px; }
-.alert.bad { box-shadow: var(--laid), inset 5px 0 0 var(--red); padding-left: 16px; }
+.alert.bad { --w-mark: inset 5px 0 0 var(--red); box-shadow: var(--laid), inset 5px 0 0 var(--red); padding-left: 16px; }
+.alert[data-w] { padding-bottom: 11px; }
 .alert.bad .i { color: var(--red); }
 .alert.water .i { color: var(--blue); }
 
@@ -354,20 +420,20 @@ table .num, .tab { font-variant-numeric: lining-nums proportional-nums; }
 .readings .range { flex: 1; }
 /* orders: real buttons; key, then cost, then the catch; the suggested one filled, with the fist */
 .orders { display: grid; align-content: start; gap: 6px; padding: 10px 12px 12px; }
-.order { position: relative; display: grid; grid-template-columns: 30px 26px 1fr auto; grid-template-rows: auto auto; align-items: center; gap: 1px 10px; min-height: 58px; padding: 7px 12px 7px 10px;
-  background: var(--paper); box-shadow: inset 0 0 0 1px var(--ink), 0 2px 0 rgba(30, 28, 25, .25); text-align: left; width: 100%; }
+.order { position: relative; display: grid; grid-template-columns: 30px 26px 1fr auto; grid-template-rows: auto auto; align-items: center; gap: 1px 10px; min-height: 58px; padding: 6px 12px 9px 10px;
+  background: var(--paper); box-shadow: inset 0 0 0 1px var(--ink); text-align: left; width: 100%; }
+.order[data-w='major'] { min-height: 66px; padding-bottom: 14px; }
 .order .key { grid-row: span 2; }
 .order > .i { grid-row: span 2; --i: 24px; }
 .order .name { font: 400 22px/1 var(--f-gothic); letter-spacing: .06em; text-transform: uppercase; }
 .order .cost { font: 700 16px/1 var(--f-text); justify-self: end; white-space: nowrap; }
 .order .catch { grid-column: 3 / -1; font: 400 14px/1.2 var(--f-text); color: var(--ink-2); }
-.order:hover, .order.is-hover { box-shadow: inset 0 0 0 1px var(--ink), inset 0 0 0 3px var(--paper), inset 0 0 0 4px var(--ink), 0 2px 0 rgba(30, 28, 25, .25); }
-.order:active, .order.is-pressed { transform: translateY(2px); box-shadow: inset 0 0 0 1px var(--ink); background: var(--paper-2); }
 .order.is-focus { outline: 3px solid var(--blue); outline-offset: 2px; }
-.order.is-suggested { background: var(--st-ochre); box-shadow: inset 0 0 0 2px var(--ink), 0 3px 0 var(--ink); }
+.order.is-suggested { background: var(--st-ochre); }
 .order.is-suggested .catch { color: var(--ink); }
 .order.is-suggested .fist { position: absolute; left: -46px; top: 50%; transform: translateY(-50%); --i: 34px; color: var(--paper); filter: drop-shadow(0 0 1px #000) drop-shadow(0 1px 1px #000); }
-.order.is-given { background: var(--paper-2); box-shadow: inset 0 0 0 1px var(--pencil); }
+/* given: on the list already, so it lies flat in pencil and is not pressed again */
+.order.is-given { --w-h: 0px; --w-sep: 0px; --w-line: var(--pencil); --w-cast: 0 0 0 0 transparent; background: var(--paper-2); box-shadow: inset 0 0 0 1px var(--pencil); cursor: default; }
 .order.is-given .name, .order.is-given .cost { color: var(--pencil); }
 .order.is-given .stamp { justify-self: end; }
 .command .note { padding: 0 18px 12px; font-size: 14px; color: var(--ink-2); }
@@ -413,7 +479,7 @@ table .num, .tab { font-variant-numeric: lining-nums proportional-nums; }
 .grid tbody th .bust { width: 28px; height: 28px; vertical-align: middle; margin-right: 8px; }
 .grid td { padding: 0; border-bottom: 1px solid var(--hair); border-left: 1px solid var(--rule-red); }
 /* a cell: the priority as a plain figure, the first ringed in pencil, the person's skill as a quiet bar along its foot */
-.cell { position: relative; display: grid; place-items: center; width: 100%; height: 47px; font: 400 23px/1 var(--f-gothic); color: var(--ink); }
+.cell { --w-up: 2px; --w-rim: 0px; --w-cast: 0 0 0 0 transparent; position: relative; display: grid; place-items: center; width: 100%; height: 47px; padding-bottom: 3px; font: 400 23px/1 var(--f-gothic); color: var(--ink); }
 .cell::after { content: ''; position: absolute; left: 6px; bottom: 5px; height: 3px; width: calc((100% - 12px) * var(--sk, 0) / 10); background: rgba(75, 70, 61, .45); }
 .cell.never { color: var(--ink-2); }
 .cell.first::before { content: ''; position: absolute; left: 50%; top: 50%; width: 32px; height: 32px; transform: translate(-50%, -54%) rotate(-8deg); border: 2px solid var(--pencil); border-radius: 50% 46% 52% 44%; }
@@ -436,13 +502,14 @@ table .num, .tab { font-variant-numeric: lining-nums proportional-nums; }
 .tg-body h2 { font: 700 26px/1.1 var(--f-text); }
 .tg-body p { font-size: 17px; margin-top: 4px; }
 .replies { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding: 4px 0 12px; }
-.reply { position: relative; display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto 1fr auto; gap: 6px 10px; padding: 12px 14px 12px; min-height: 146px; text-align: left;
-  background: var(--paper) url(img/grain.png); background-blend-mode: multiply; box-shadow: inset 0 0 0 1px var(--ink), 0 3px 0 rgba(30, 28, 25, .3); }
+.reply { position: relative; display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto 1fr auto; gap: 6px 10px; padding: 12px 14px 19px; min-height: 146px; text-align: left;
+  background: var(--paper) url(img/grain.png); background-blend-mode: multiply; box-shadow: inset 0 0 0 1px var(--ink); }
+/* the reply already chosen is ringed in pencil, not filled: its words stay ink on paper */
+.reply:is(.is-on, [aria-pressed='true']) { --w-rim: 4px; --w-line: var(--pencil); color: var(--ink) !important; background-color: var(--paper-2) !important; }
 .reply .key { grid-row: 1; }
 .reply .c-title { font: 400 23px/1 var(--f-gothic); letter-spacing: .06em; text-transform: uppercase; align-self: center; }
 .reply .c-does { grid-column: 1 / -1; font-size: 15px; line-height: 1.3; }
 .reply .c-cost { grid-column: 1 / -1; font: 700 17px/1.2 var(--f-text); padding-top: 8px; border-top: 1px solid var(--hair); }
-.reply:hover, .reply.is-hover { box-shadow: inset 0 0 0 1px var(--ink), inset 0 0 0 3px var(--paper), inset 0 0 0 4px var(--ink), 0 3px 0 rgba(30, 28, 25, .3); }
 .reply.is-focus { outline: 3px solid var(--blue); outline-offset: 3px; }
 .lapse { display: flex; align-items: center; gap: 12px; font-size: 15px; color: var(--ink-2); }
 
@@ -477,8 +544,9 @@ table .num, .tab { font-variant-numeric: lining-nums proportional-nums; }
 .losses td.num { text-align: right; white-space: nowrap; font-weight: 700; color: var(--red); }
 .ways { display: grid; grid-template-columns: 1.1fr 1fr 1fr; gap: 12px; padding-top: 30px; }
 /* a way to take the crop: a real tear-off coupon, perforated round, with its own button line */
-.way { position: relative; display: grid; grid-template-rows: auto auto 1fr auto; gap: 5px; padding: 12px 14px 10px; text-align: left; min-height: 168px;
-  background: var(--paper) url(img/grain.png); background-blend-mode: multiply; outline: 2px dashed rgba(30, 28, 25, .6); outline-offset: -2px; box-shadow: 0 3px 0 rgba(30, 28, 25, .25); }
+/* The whole coupon is the key; its button line names the press. It tears off along the perforation at its head. */
+.way { position: relative; display: grid; grid-template-rows: auto auto 1fr auto; gap: 5px; padding: 12px 14px 19px; text-align: left; min-height: 168px;
+  background: var(--paper) url(img/grain.png); background-blend-mode: multiply; border-top: 2px dashed rgba(30, 28, 25, .6); box-shadow: inset 0 0 0 2px var(--ink); }
 .way .t-label { color: var(--ink); display: flex; align-items: center; gap: 6px; }
 .way .t-label .i { --i: 17px; }
 .way .amount { font: 700 32px/1 var(--f-text); width: max-content; }
@@ -486,13 +554,13 @@ table .num, .tab { font-variant-numeric: lining-nums proportional-nums; }
 .way .does { font-size: 14px; line-height: 1.25; color: var(--ink-2); }
 .way .take { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px 7px; margin: 4px -4px 0; font: 400 18px/1 var(--f-gothic); letter-spacing: .08em; text-transform: uppercase; box-shadow: inset 0 0 0 1px var(--ink); }
 .way .take .key { min-width: 22px; height: 22px; font-size: 14px; }
-.way.is-best { background-color: var(--paper); outline-color: var(--ink); }
+.way.is-best { background-color: var(--paper); }
 .way.is-best .take { color: var(--paper); background: var(--ink); }
 .way.is-best .take .key { color: var(--ink); }
 .brings { position: absolute; left: -2px; top: -26px; display: flex; align-items: center; gap: 6px; padding: 5px 10px 4px 8px; font: 400 15px/1 var(--f-gothic); letter-spacing: .1em; text-transform: uppercase;
   background: var(--manila) url(img/grain.png); background-blend-mode: multiply; box-shadow: 0 0 0 1px var(--edge); }
 .brings .i { --i: 20px; }
-.way:hover, .way.is-hover { outline-style: solid; }
+.way.is-focus { outline: 3px solid var(--blue); outline-offset: 3px; }
 
 /* the reveal: the platform scale's printed face, its needle sweeping round the grades before the ticket prints */
 .scale-face { position: absolute; left: 50%; top: 40px; transform: translateX(-50%); width: 560px; padding: 22px 22px 18px; text-align: center; }
@@ -510,12 +578,13 @@ table .num, .tab { font-variant-numeric: lining-nums proportional-nums; }
 .masthead h1 { font: 400 56px/.85 var(--f-gothic); letter-spacing: .02em; text-transform: uppercase; color: var(--green); }
 .masthead .t-label { color: var(--green); padding-bottom: 4px; }
 .cat-body { overflow: hidden; padding: 0 24px; }
-.fold { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; border-bottom: 1px solid var(--hair); font-size: 16px; }
+/* a fold is a key the width of the sheet; open, it stays down */
+.fold { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; margin-top: 6px; padding: 0 12px 3px; background: var(--paper); font-size: 16px; }
 .fold .i { --i: 19px; }
 .fold b { font-size: 18px; }
 .fold .quiet { font-size: 15px; }
 .fold .chev { font: 400 22px/1 var(--f-text); color: var(--ink-2); }
-.fold.open { border-bottom: 1px solid var(--ink); }
+.fold.open { background-color: var(--paper-2); }
 .applicant { display: grid; grid-template-columns: 52px 1fr 106px; grid-template-areas: 'face who price' 'face skills hire'; gap: 6px 14px; padding: 10px 0; border-bottom: 1px solid var(--hair); }
 .applicant > .bust { grid-area: face; width: 52px; height: 52px; }
 .applicant .who { grid-area: who; }
@@ -610,7 +679,7 @@ table .num, .tab { font-variant-numeric: lining-nums proportional-nums; }
 .year-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--ink); }
 .year-row div { display: grid; gap: 3px; font-size: 14px; }
 .year-row b { font: 400 18px/1 var(--f-gothic); letter-spacing: .08em; text-transform: uppercase; }
-.keys-fold { display: flex; align-items: center; gap: 10px; min-height: var(--touch); padding-top: 8px; font-size: 16px; }
+.keys-fold { display: flex; align-items: center; gap: 10px; min-height: var(--touch); margin-top: 8px; padding: 0 12px 2px; background: var(--paper); font-size: 16px; }
 
 /* winter: the cellar months, a page of the time book per person */
 .winter { position: absolute; left: 50%; top: 28px; transform: translateX(-50%); width: 960px; padding: 18px 26px 18px; }
@@ -643,10 +712,10 @@ table .num, .tab { font-variant-numeric: lining-nums proportional-nums; }
 .cv-cut .cut { width: 200px; height: auto; display: block; }
 .cv-cut p { font: italic 400 17px/1.35 var(--f-text); color: var(--ink); }
 .cv-cut figcaption { grid-column: 1 / -1; font-size: 14px; color: var(--ink-2); }
-.cv-menu { display: grid; gap: 2px; align-content: end; }
+.cv-menu { display: grid; gap: 6px; align-content: end; }
 .cv-menu .t-label { padding-bottom: 6px; border-bottom: 1px solid var(--ink); margin-bottom: 8px; letter-spacing: .24em; }
-.cv-menu .btn.go { font-size: 30px; min-height: 62px; margin-bottom: 6px; }
-.cv-item { min-height: 46px; font-size: 18px; border-bottom: 1px solid var(--hair); }
+.cv-menu .btn.go { --major: 62px; font-size: 30px; margin-bottom: 6px; }
+.cv-item { min-height: 46px; padding: 0 12px 3px; font-size: 18px; background: var(--paper); }
 .cv-item .it { font-size: 16px; white-space: nowrap; }
 .cv-item .chev { font-size: 22px; color: var(--ink-2); }
 .imprint { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--ink); text-align: center; }

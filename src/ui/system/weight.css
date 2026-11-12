@@ -1,0 +1,46 @@
+/* The control rule (design/system.css § 7, docs/UI.md "Controls: depth and weight") fitted to what only the live
+   game has: a finger's key height, the controls of the season screen that the frames never drew, and the kit's
+   specimens. A key is changed here through the --w- properties only; its edge is the system's. */
+.touch { --key: 44px; --key-s: 44px; }
+/* a phone on its side has no height to spare: a major key keeps its rim, edge and type and gives up some height */
+[data-layout='short'] { --major: 48px; }
+.reduce-motion [data-w] { transition: none; }
+
+/* the time book: the list of work, its chips and their small keys */
+.season-screen .q { padding-bottom: 3px; }
+.season-screen .q.active { --w-rim: 2px; }
+.season-screen .q.nobody { --w-rim: 2px; --w-line: var(--red); }
+.season-screen .q.by-you { --w-side: var(--pencil); }
+.season-screen .press-chip { --w-line: #4f160f; --w-side: #6b2118; }
+.season-screen .q-help { --w-line: var(--ink); --w-side: #b07a1f; }
+.season-screen .q-x { padding-bottom: 2px; }
+.pin-list .pl-row { padding-bottom: 7px; background-color: var(--paper); }
+.pin-list .pl-row + .pl-row { border-top: 0; margin-top: -1px; }
+.pin-list .pl-row.is-picked { --w-h: 0px; --w-sep: 0px; --w-mark: inset 4px 0 0 var(--ink); background-color: var(--paper-2); }
+.work .w-who { padding: 4px 8px 6px 4px; background-color: var(--paper); }
+/* a farm rule is a key with a tick box on it: ticked, it still stands, and the pencil tick says it is on */
+.work .check.rule { padding: 8px 10px 11px; background-color: var(--paper); }
+.work .check.rule[aria-pressed='true'] { --w-h: var(--w-up); --w-sep: 1px; --w-in: 0 0 0 0 transparent; --w-cast: 0 2px 3px -1px rgba(20, 14, 6, .45); color: var(--ink) !important; background-color: var(--paper) !important; }
+.work .check.rule[aria-pressed='true'] :is(.sub, .quiet, .t-caption) { color: var(--ink-2) !important; }
+.key-btn { padding-bottom: 3px; }
+.person-card .prio.key { padding-bottom: 3px; }
+
+/* over the land: the key that lets the days go on, and the one that stops them */
+.season-screen .running .paused-go { --w-line: var(--ink-2); }
+.season-screen .running.lit .paused-go { --w-rim: 2px; --w-line: var(--ink); --w-mark: 0 0 0 4px var(--st-ochre); }
+
+/* the faces of real form inputs */
+.check-in .tick { --w-up: 2px; --w-cast: 0 1px 1px rgba(20, 14, 6, .3); }
+.seg-in label > span { min-height: var(--key); padding-bottom: 3px; }
+@media (hover: hover) { .seg-in label:hover input:not(:checked, :disabled) + span { --w-h: calc(var(--w-up) + 1px); --w-cast: 0 6px 9px -4px rgba(20, 14, 6, .6); } }
+.seg-in label:active input:not(:checked, :disabled) + span, .vbox:active input:not(:checked) + .vbox-in { translate: 0 2px; --w-h: 0px; --w-sep: 0px; --w-in: 0 3px 4px -1px rgba(20, 14, 6, .5); --w-cast: 0 0 0 0 transparent; }
+
+/* The kit's own layout for this rule's specimens. */
+.kit .k-weights { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-bottom: 14px; }
+.kit .k-paper { display: grid; align-content: start; gap: 12px; padding: 14px 16px 16px; box-shadow: var(--laid); }
+.kit .k-paper.buff { background-color: var(--buff); }
+.kit .k-paper.wire { background-color: #efe3bf; }
+.kit .k-paper .row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 12px; }
+.kit .k-paper .row > div { display: grid; gap: 4px; justify-items: start; }
+.kit .k-facts { display: grid; gap: 4px; font-size: 15px; }
+@media (max-width: 760px) { .kitbody .k-weights { grid-template-columns: 1fr; } }

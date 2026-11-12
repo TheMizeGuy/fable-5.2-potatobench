@@ -8,6 +8,7 @@ import './style.css'
 import './legacy.css'
 import './papers.css'
 import './screens.css'
+import './system/weight.css'
 import type { MountHud } from '../game/contracts.ts'
 import * as S from '../sim/index.ts'
 import { openAlmanac } from './almanac.ts'
@@ -219,9 +220,12 @@ export const mountHud: MountHud = (root, app, view, sound) => {
   document.addEventListener('pointerup', release, true)
   document.addEventListener('pointercancel', release, true)
 
-  // A mouse click leaves focus on the button; drop it so Space goes back to the clock.
+  // A mouse click leaves focus on the button; drop it so Space goes back to the clock. A control that names a sound
+  // (data-sound: every major one does) has it asked of the sound, which plays the cues it knows.
   root.addEventListener('click', e => {
     const b = (e.target as HTMLElement).closest('button')
+    const cue = (e.target as HTMLElement).closest<HTMLElement>('[data-sound]')?.dataset.sound
+    if (cue) ctx.cue(cue)
     if (b && e.detail > 0 && !b.closest('.dialog')) b.blur()
   })
 

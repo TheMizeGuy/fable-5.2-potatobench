@@ -2,8 +2,8 @@
    the look of every component is design/system.css. */
 
 /* A control a goal's "Show me" led to: ringed in the fist's ochre for a few seconds. */
-.btn.goal-ring:is(.sys *) { box-shadow: inset 0 0 0 1px var(--ink), 0 0 0 3px var(--st-ochre), 0 0 0 4px var(--ink); }
-.fold.goal-ring:is(.sys *) { box-shadow: inset 5px 0 0 var(--st-ochre); padding-left: 12px; background: var(--paper-2); }
+[data-w].goal-ring { --w-mark: 0 0 0 3px var(--st-ochre), 0 0 0 4px var(--ink); }
+.fold.goal-ring:is(.sys *) { --w-mark: inset 5px 0 0 var(--st-ochre), 0 0 0 3px var(--st-ochre), 0 0 0 4px var(--ink); padding-left: 16px; background-color: var(--paper-2); }
 
 /* What moved the money, under the balance for a moment. */
 .topbar .balance .cash-moved { flex-basis: 100%; text-align: right; font: italic 400 13px/1.25 var(--f-text); color: var(--ink-2); animation: sh-fade var(--t-slip) var(--ease-out); }
@@ -98,7 +98,7 @@
 .menu-dialog .check { cursor: pointer; }
 .menu-dialog .check-in { margin-top: 0; }
 .menu-dialog .slider { grid-template-columns: 1fr 34px; }
-.menu-dialog .menu-delete { justify-content: center; color: var(--red); }
+.menu-dialog .menu-delete { margin-top: 6px; }
 .menu-dialog .form-status:empty { display: none; }
 @media (max-height: 760px) { .menu-dialog .mini-mark .county { font-size: 64px; } .dialog.sys.menu-dialog { top: 30px; } }
 @media (max-width: 899px) {
@@ -172,9 +172,10 @@
 .alm-page { grid-area: page; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--s3) var(--s5) var(--s5); }
 .alm-page:focus-visible { outline: 3px solid var(--blue); outline-offset: -3px; }
 .alm-index { grid-area: index; display: flex; flex-direction: column; padding-top: 56px; overflow-y: auto; background: var(--manila) url(./grain.png); background-blend-mode: multiply; box-shadow: inset 1px 0 0 var(--edge); }
-.alm-tab { display: flex; align-items: center; gap: 9px; flex: none; min-height: 48px; padding: 0 12px 0 16px; text-align: left; font: 400 17px/1 var(--f-gothic); letter-spacing: .08em; text-transform: uppercase; color: var(--ink); border-bottom: 1px solid var(--edge); box-shadow: inset 1px 0 0 var(--edge); }
+.alm-tab { display: flex; align-items: center; gap: 9px; flex: none; min-height: 48px; padding: 0 12px 0 16px; text-align: left; font: 400 17px/1 var(--f-gothic); letter-spacing: .08em; text-transform: uppercase; color: var(--ink); }
 .alm-tab .i { --i: 18px; flex: none; }
-.alm-tab.on { background: var(--paper) url(./grain.png); background-blend-mode: multiply; box-shadow: inset 4px 0 0 var(--ink); }
+/* an index tab is a manila key; the page that is open is the key that is down (design/system.css, "On") */
+.alm-tab { --w-side: #b39a63; padding-bottom: 3px; }
 .alm-tab:focus-visible { outline: 3px solid var(--blue); outline-offset: -3px; }
 @media (hover: hover) { .alm-tab:not(.on):hover { background-color: #e3cf9f; } }
 .alm-title { margin-bottom: var(--s3); padding-bottom: 6px; font: 400 28px/1 var(--f-gothic); letter-spacing: .08em; text-transform: uppercase; border-bottom: 1px solid var(--ink); }
@@ -231,8 +232,7 @@
   .alm-mark { font-size: 34px; }
   .alm-mark .the { font-size: 20px; }
   .alm-index { flex-direction: row; padding: 8px var(--s4) 0; overflow-x: auto; overflow-y: hidden; background: none; box-shadow: inset 0 -1px 0 var(--ink); scrollbar-width: none; }
-  .alm-tab { min-height: 44px; padding: 0 12px; gap: 7px; font-size: 16px; border: 0; border-radius: 4px 4px 0 0; background: var(--manila) url(./grain.png); background-blend-mode: multiply; box-shadow: inset 0 0 0 1px var(--edge); margin-right: 3px; }
-  .alm-tab.on { box-shadow: inset 1px 1px 0 var(--ink), inset -1px 0 0 var(--ink), inset 0 4px 0 var(--ink); }
+  .alm-tab { min-height: 44px; padding: 0 12px 3px; gap: 7px; font-size: 16px; border: 0; border-radius: 4px 4px 0 0; background: var(--manila) url(./grain.png); background-blend-mode: multiply; margin-right: 3px; }
   .alm-page { padding: var(--s3) var(--s4) max(var(--s4), env(safe-area-inset-bottom, 0px)); }
   .alm-title { font-size: 24px; }
   .alm-fields { grid-template-columns: minmax(0, 1fr); }
@@ -295,12 +295,12 @@
 .spring-screen .catalogue { top: max(var(--gutter), env(safe-area-inset-top, 0px)); right: max(var(--gutter), env(safe-area-inset-right, 0px)); bottom: max(var(--gutter), env(safe-area-inset-bottom, 0px));
   max-width: calc(100vw - 2 * var(--gutter)); animation: sh-left var(--t-sheet) var(--ease-paper); }
 .spring-screen .cat-body { overflow-y: auto; overscroll-behavior: contain; }
-.cat-fold .fold { padding: 0 2px; }
+.cat-fold .fold { padding: 0 12px 3px; }
 .cat-open { padding: 2px 0 8px; display: grid; gap: 6px; border-bottom: 1px solid var(--hair); }
 .cat-open .t-caption { padding: 4px 0 0; }
 .cat-sub { padding-top: 8px; }
 .cat-list { display: grid; }
-.cat-row { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 40px; padding: 2px 4px; text-align: left; font-size: 15px; border-bottom: 1px solid var(--hair); }
+.cat-row { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 40px; margin-top: 4px; padding: 2px 10px 5px; text-align: left; font-size: 15px; background-color: var(--paper); }
 .cat-row .i { --i: 18px; color: var(--ink-2); }
 .cat-row b { white-space: nowrap; }
 .cat-row .it { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
@@ -322,9 +322,7 @@
 .cat-foreman { grid-column: 2 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
 .cat-foreman .t-label { display: inline-flex; align-items: center; gap: 6px; }
 .cat-foreman .t-label .i { --i: 16px; }
-.cat-foreman .btn { min-height: 40px; padding: 0 12px; font-size: 14px; }
-.cat-foreman .btn[aria-pressed='true'] { color: var(--paper); background: var(--ink); }
-.touch .cat-foreman .btn { min-height: 44px; }
+.cat-foreman .btn { padding: 0 12px 3px; font-size: 14px; }
 .cat-done { display: flex; justify-content: flex-end; }
 .cat-equip li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--hair); }
 .cat-equip b { font-size: 16px; }
@@ -356,18 +354,17 @@
 .vgrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; padding: 10px 18px 4px; }
 .vbox { position: relative; display: flex; }
 .vbox input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
-.vbox-in { display: grid; align-content: start; gap: 2px; width: 100%; padding: 7px 8px 8px; background: var(--paper); box-shadow: inset 0 0 0 1px var(--ink); font-size: 13px; line-height: 1.2; }
+.vbox-in { display: grid; align-content: start; gap: 2px; width: 100%; padding: 7px 8px 11px; background: var(--paper); box-shadow: inset 0 0 0 1px var(--ink); font-size: 13px; line-height: 1.2; }
 .vbox-in b { font-size: 15px; line-height: 1.1; }
 .vbox-in .num { font: 700 14px/1.2 var(--f-text); margin-top: 2px; }
-.vbox input:checked + .vbox-in { color: var(--paper); background: var(--ink); }
 .vbox input:checked + .vbox-in .c-ochre { color: var(--canary); }
 .vbox input:focus-visible + .vbox-in { outline: 3px solid var(--blue); outline-offset: 2px; }
-@media (hover: hover) { .vbox:hover input:not(:checked) + .vbox-in { box-shadow: inset 0 0 0 1px var(--ink), inset 0 0 0 3px var(--paper), inset 0 0 0 4px var(--ink); } }
+@media (hover: hover) { .vbox:hover input:not(:checked) + .vbox-in { --w-h: calc(var(--w-up) + 1px); --w-cast: 0 6px 9px -4px rgba(20, 14, 6, .6); } }
 .card-note { padding: 8px 18px; font-size: 14px; color: var(--ink-2); }
 .card-note .btn.quiet { min-height: 32px; font-style: normal; color: var(--ink); }
 .card-seed { display: grid; gap: 6px; padding: 8px 18px; border-top: 1px solid var(--hair); }
 .card-seed .seg-in input:disabled { cursor: not-allowed; }
-.card-seed .seg-in input:disabled + span { color: var(--ink-2); background: repeating-linear-gradient(135deg, transparent 0 5px, var(--hair) 5px 6px), var(--paper); }
+.card-seed .seg-in input:disabled + span { color: var(--ink-2); }
 .order-blank .pm-parts { padding-top: 2px; }
 .card-tenure { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 10px 18px 14px; border-top: 1px solid var(--ink); font-size: 15px; }
 .card-tenure p { flex: 1 1 200px; }

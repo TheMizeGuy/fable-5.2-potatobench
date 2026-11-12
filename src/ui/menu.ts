@@ -114,7 +114,7 @@ export function openMenu(ctx: Ctx, o: { onHelp: () => void; onAlmanac: () => voi
           o.onGuide ? h('button', { class: 'btn wide', type: 'button', testid: 'guide-open', onclick: () => o.onGuide!() }, icon('fist', 'i'), 'The guided first year') : null,
           season && !S.seasonDone(c!) ? h('button', { class: 'btn wide hazard', type: 'button', testid: 'end-season-early', onclick: () => { close(); endSeasonEarly(ctx) } }, icon('skip', 'i'), 'End the season early') : null,
           inGame ? h('button', { class: 'btn wide', type: 'button', testid: 'quit-title', onclick: () => { close(); app.quitToTitle() } }, icon('letgo', 'i'), 'Quit to the title') : null,
-          h('button', { class: 'btn wide quiet menu-delete', type: 'button', testid: 'save-delete', disabled: !app.savedGame() && !c, onclick: deleteSave }, 'Delete the save')),
+          h('button', { class: 'btn wide hazard menu-delete', type: 'button', testid: 'save-delete', disabled: !app.savedGame() && !c, onclick: deleteSave }, 'Delete the save')),
         h('p', { class: 't-caption' }, 'The game saves itself in this browser.'),
         file, status)
       const settings = h('section', { 'aria-label': 'Settings' },

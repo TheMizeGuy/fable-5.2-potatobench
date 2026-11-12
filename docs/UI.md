@@ -100,6 +100,103 @@ reveal by reach, the land is the interface, every number has a why, few words (u
 nothing selected), it answers, short loops inside long ones, one hand, works everywhere (keyboard, phone, reduced
 motion, screen readers). The clock is Pause and three speeds and never changes speed by itself.
 
+## Controls: depth and weight
+
+The owner, after playing: "the papers cool but its hard to distinguish like should I click this", and "the more
+important an action the button should almost imply the weight of the choice". Every control was a printed box one
+pixel deep, the same whether it closed a card or sold the year's crop, and some lines of plain text were buttons.
+
+**What can be pressed stands off the paper. What is only read is ink on it.** A control is a key cut from card: a
+face inside an ink rim, the card's own edge showing under the face, a shadow on the paper below. Under the pointer
+it stands a pixel higher; under the press the edge closes up and the key goes down; a focus ring goes round it; the
+pointer is a hand. A fact has no rim that looks like a key, no edge, no shadow and no hand. A word that is pressed is
+underlined. A printed key cap (`key()`) is flat, because it is read.
+
+How far a key stands, and how big it is, says what its press costs. The weight is on the control as `data-w`:
+
+| Weight | What the press costs | How it looks |
+| --- | --- | --- |
+| `major` | Money, time, or it cannot be taken back | The biggest key on its paper: at least 56 px high (12 px more than a standard key), a 2 px rim, a 6 px edge, gothic capitals, its price or what follows on a second line. One on a paper may be filled in ink: the one the game would press. It carries `data-sound`. A destroying one has hazard stripes round it and asks once more. |
+| `std` | An order, an answer, a choice that can be changed | A plain key 40 px high wherever it is (44 px under a finger), a 1 px rim, a 3 px edge, its key letter where it has one, its cost small at the side. An order on a command bar is the same key two lines high. |
+| `minor` | Nothing: close, back, more, change | A small quiet key (34 px, a grey rim, a 2 px edge) or an underlined word. It never competes. |
+
+States, each of which looks unlike the others and unlike a filled major key:
+
+| State | How it looks |
+| --- | --- |
+| On, chosen | The key stays down and is filled in pencil grey, the mark for what the player chose. A chosen reply is ringed in pencil instead, so its words stay ink on paper; a picked person keeps a bar of ink along the foot. |
+| Open | A key that holds a part of a sheet open stays down, unfilled. |
+| Armed | The speed the clock goes on from: a broken bar along the foot of a key that still stands. |
+| Stopped | The pause key while the game is paused: down and red. |
+| Suggested | Ochre, with the printer's fist. |
+| Busy | Half down, a broken line along its foot, the pointer a wait. |
+| Greyed | Flat and hatched, the pointer a no-entry, and it says why under the pointer (`title`) or in its own catch line. |
+| Given | An order already on the list: flat, in pencil, stamped. |
+
+Every action in the game and its weight (`src/ui/system/weight.ts` is the table the game reads):
+
+| Action | Where | Weight |
+| --- | --- | --- |
+| Continue; Play, when there is no farm to go on with | The cover | major, filled |
+| Start the season | The spring plan's order blank | major, filled |
+| Close out the season | The bank board, once everything is dug | major, filled |
+| On to the next month; Close the year; Sell the rest and close the year | Winter | major, filled |
+| Plan next year; See how it ended; Close the book | The account book | major, filled |
+| Start a new farm | The account book; after the farm is lost (filled there) | major |
+| Sell, Sell half, Deliver, Store, Hold back seed | The weigh ticket's coupons (the one that brings most is filled), a dug field's card, winter's piles | major |
+| Sell logs | The yard, winter, the stock on the bank board | major |
+| Hire | The spring catalogue, the crew paper | major |
+| Raise (a wage) | A person's page | major |
+| Let go | A person's card and page, the crew paper, the spring catalogue | major, destroying: asks once more |
+| Buy a machine | The spring catalogue | major |
+| Rent, Buy, Buy for cash, Release (land); Pull stumps | A piece of land's card | major |
+| Build, raise a building | The yard's card, winter | major |
+| Pay down the mortgage | The spring catalogue's bank fold | major |
+| Accept a contract | The contracts | major |
+| A telegram's replies; the spraying question's replies; the guide's offer | The telegram | major |
+| The step itself, on a paper that asks once more | The confirmation | major (striped when it destroys) |
+| End the season early | The menu | major, destroying: asks once more |
+| Delete the save | The menu | major, destroying: asks once more |
+| A field's orders: Plant, Hill, Scout, Spray, Water, Rogue, Test dig, Kill vines, Dig, Haul | The command bar | std |
+| Order it, and the other fixes of a need | The work list, the goal slip | std |
+| Show me | The goal slip, the goals, the guide | std |
+| Skip ahead; Got it; Noted; Begin | The guide's note | std |
+| The answer keys of a choice that can be changed: winter work, foreman of a block, by itself or ask me, farm rules, varieties, seed, Sundays | Winter, a person's page, the work grid, the spring cards | std |
+| Follow; Their page; Hiring; Who has it | A person's or a thing's card | std |
+| Rest choices; what a person takes first; the priority keys and cells | A person's card and page, the work grid | std |
+| Pause and the three speeds; the menu key | The clock | std |
+| A field's tag, a need's stamp, a yard's tag, a person's pin | The land | std (they keep their own shapes) |
+| A person in the time book; a job on the work list | The time book | std |
+| Who does what; Hire someone; A question waiting; Back to the whole farm; Show them on the land | The time book's tools, the land | std |
+| The catalogue's folds and their rows; the almanac's index tabs | Spring, the almanac | std |
+| The almanac; Save a copy; Load a saved farm; How to play; The guided first year; Continue; Quit to the title | The menu | std |
+| New farm, Guided first year, How to play, Settings | The cover's contents | std |
+| Cancel, Keep it | The confirmation | std |
+| The ticket; Hold back seed (opens it); the stepper | A dug field's card, winter | std |
+| Close, Deselect, Decide later, Put away | Every card, paper and tray | minor |
+| Back, Done, Back to the plan, Back to the ticket | The foot of a paper | minor |
+| The goal slip and the next goal (they open the goals) | The almanac board, the account book | minor |
+| The forecast, a contract, the stock (each opens its paper) | The boards | minor |
+| More orders; the rest of the work list; All the keys | The command bar, the work list, How to play | minor |
+| Take it off the list; Do it first; Who does it; Let them help | The work list's small keys | minor |
+| Compare them all; The money; The full reckoning; change the spraying; see the test dig | Underlined words | minor |
+| Skip; Stop the guide; Again | The guide | minor |
+
+A destroying control is never the one in focus when its question opens: the other answer is.
+
+Where it lives: the rule is `design/system.css` § 7 (ported to `src/ui/system/system.css`); what only the live game
+has is fitted in `src/ui/system/weight.css`; `h()` marks every button and link it makes with its weight from
+`src/ui/system/weight.ts`, and a helper (`order`, `fold`, `slip`) or a screen may say `data-w` itself. A key's edge
+is marked important, so a screen changes a key through the `--w-` properties (`--w-up`, `--w-rim`, `--w-line`,
+`--w-side`, `--w-mark`) and never through `box-shadow`. The kit page (`?kit`) shows each weight in each state on
+each paper; `e2e/weight.spec.ts` reads the rule off the live game on each main paper at a desk and on a phone.
+
+Known gaps: a major key has its price or consequence on a second line only where the screen already printed one in
+the button (the coupons, the replies, Sell, Deliver, Buy, Build, Raise, Let go on a person's page, Continue); Hire,
+Accept, Start the season and the season's and the year's closing keys have one line. `data-sound` names the cue
+`press`, which the sound does not have yet. The design folder's still frames were drawn before this rule and show
+the old printed boxes.
+
 ## Where the system lives
 
 - `design/`: the reference frames, the kit sheet (tokens, every control in every state, the icon family, the

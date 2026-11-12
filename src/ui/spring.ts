@@ -3,7 +3,7 @@
 // cards for a field, a lot or a tract picked on the land.
 import * as S from '../sim/index.ts'
 import { springContracts } from './contracts.ts'
-import type { Ctx } from './core.ts'
+import { confirmPaper, type Ctx } from './core.ts'
 import { h, type Child } from './dom.ts'
 import * as F from './fmt.ts'
 import { term } from './glossary.ts'
@@ -173,7 +173,14 @@ function peopleBody(ctx: Ctx, c: S.Campaign, onTry: (err: string) => void, onClo
         portrait(p, 32),
         h('b', null, p.name),
         h('span', { class: 'it quiet' }, `${p.traitName}, ${F.money(p.pay)} a month`),
-        h('button', { class: 'btn hazard', type: 'button', testid: `dismiss-${p.id}`, onclick: () => { if (tryRun(ctx, { t: 'dismiss', unit: p.id }, onTry) && ctx.app.unit === p.id) ctx.app.selectUnit(-1) } }, 'Let go'),
+        // Letting someone go cannot be taken back, so it asks once more here as it does on their card.
+        h('button', {
+          class: 'btn hazard', type: 'button', testid: `dismiss-${p.id}`,
+          onclick: async () => {
+            const yes = await confirmPaper(ctx, { title: `Let ${p.name.split(' ')[0]} go?`, text: 'They leave today and they will not come back.', yes: 'Let them go', danger: true })
+            if (yes && tryRun(ctx, { t: 'dismiss', unit: p.id }, onTry) && ctx.app.unit === p.id) ctx.app.selectUnit(-1)
+          },
+        }, 'Let go'),
         foremanRow(ctx, c, p, onTry)))),
     ] : null,
     done('crew-close', onClose),
@@ -310,7 +317,7 @@ function equipmentBody(ctx: Ctx, c: S.Campaign, onTry: (err: string) => void, on
         h('div', null, h('b', null, u.name), h('p', { class: 't-caption' }, F.localize(u.blurb)), why ? h('p', { class: 't-caption c-ochre' }, why) : null),
         c.upgrades[id] ? h('span', { class: 'stamp sm' }, 'Owned')
           : h('button', {
-            class: 'btn cat-buy', type: 'button', testid: `buy-${id}`, disabled: !!why,
+            class: 'btn cat-buy', type: 'button', testid: `buy-${id}`, disabled: !!why, title: why || undefined,
             onclick: () => tryRun(ctx, { t: 'buy', upgrade: id }, onTry),
           }, 'Buy', h('span', { class: 'sub num' }, F.money(u.cost)), loanAdds(u.cost) >= 0.5 ? h('span', { class: 'loan-adds num' }, `+${F.money(loanAdds(u.cost))} on the loan`) : null))
     })),
@@ -323,7 +330,7 @@ function equipmentBody(ctx: Ctx, c: S.Campaign, onTry: (err: string) => void, on
 function bankBody(ctx: Ctx, c: S.Campaign, onTry: (err: string) => void, onClose: () => void): Child {
   const m = S.mortgageInfo(c)
   const pay = (amount: number, label: string) => h('button', {
-    class: 'btn', type: 'button', testid: `pay-${Math.round(amount)}`, disabled: !!m.payWhy || c.cash < amount,
+    class: 'btn', type: 'button', testid: `pay-${Math.round(amount)}`, disabled: !!m.payWhy || c.cash < amount, title: m.payWhy || undefined,
     onclick: () => tryRun(ctx, { t: 'payMortgage', amount }, onTry),
   }, label, h('span', { class: 'sub num' }, F.money(amount)))
   return [
