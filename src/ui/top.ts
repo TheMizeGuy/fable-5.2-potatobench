@@ -66,7 +66,7 @@ const PHASES: { id: string; glyph: string; name: string; short: string; from: [n
   { id: 'plant', glyph: 'plant', name: 'Plant', short: 'Plant', from: [S.SEASON_START.month, S.SEASON_START.dom], says: 'Plant. Your crew plants each field in May, once the soil is warm enough.' },
   { id: 'tend', glyph: 'hill', name: 'Tend', short: 'Tend', from: [6, 1], says: 'Tend. Your crew hills and scouts the fields. Spraying is your decision when blight weather arrives.' },
   { id: 'kill', glyph: 'kill', name: 'Kill the vines', short: 'Kill', from: [9, 1], says: 'Kill the vines. This happens in September, so the skins toughen up for harvest.' },
-  { id: 'dig', glyph: 'dig', name: 'Dig and weigh', short: 'Dig', from: [9, 20], says: 'Dig and weigh. Your crew digs and hauls each field, and the crop is weighed at the potato house.' },
+  { id: 'dig', glyph: 'dig', name: 'Harvest', short: 'Dig', from: [9, 20], says: 'Harvest. Your crew digs and hauls each field, and the crop is weighed at the potato house.' },
   { id: 'sell', glyph: 'ticket', name: 'Sell or store', short: 'Sell', from: [10, 20], says: 'Sell or store. You can sell each weighed crop right away, or store it to sell over the winter.' },
 ]
 
