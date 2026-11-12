@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The County - people</title>
+<link rel="stylesheet" href="system.css">
+</head>
+<body>
+<!--SPRITES-->
+<main class="stage july" aria-label="The farm, July: Normand Nadeau picked">
+  <!--@almanac-->
+  <!--@bank-->
+
+  <!--@tag x="492" y="352" nm="North Ridge" need="need-rogue"-->
+  <!--@tag x="826" y="380" nm="South Ridge" icon="rest"-->
+  <!--@tag x="790" y="470" nm="Lower Middle" icon="rest"-->
+  <div class="yard-tag" style="left:1150px;top:330px"><i class="i i-yard"></i>Home yard</div>
+  <!--@pin-you x="655" y="414"-->
+  <!--@pin-normand x="1040" y="300" cls=" is-picked" name="name-normand" label="Normand, picked: felling in the Home Woodlot"-->
+  <!--@pin-alcide x="1082" y="452"-->
+
+  <!-- a person: a page of the time book -->
+  <section class="person-card sheet" aria-label="Normand Nadeau">
+    <header class="pc-head">
+      <svg class="bust" style="--shirt:#2f6f9f;--hat:#3b3f45;--skin:#d9a47c;--hair:#2b211a"><use href="#bust-cap-moustache"/></svg>
+      <div>
+        <h2 class="t-title" style="font-size:26px">Normand Nadeau</h2>
+        <p style="font-size:15px;margin-top:3px"><b>Slow and sure:</b> <span class="quiet">10% slower, but never hurt.</span></p>
+      </div>
+      <button class="close" aria-label="Close (Escape)"><i class="i i-close"></i></button>
+    </header>
+    <table class="skills">
+      <caption class="sr">Skills, out of ten</caption>
+      <tr><th scope="row"><i class="i i-machine"></i>Machine</th><td class="lv num">3</td><td><span class="tens" style="--lv:3;--xp:.4"></span></td></tr>
+      <tr><th scope="row"><i class="i i-field"></i>Field</th><td class="lv num">2</td><td><span class="tens" style="--lv:2;--xp:.7"></span></td></tr>
+      <tr class="best"><th scope="row"><i class="i i-woods"></i>Woods</th><td class="lv num">8</td><td><span class="tens best" style="--lv:8;--xp:.25"></span></td></tr>
+      <tr><th scope="row"><i class="i i-hammer"></i>Build</th><td class="lv num">5</td><td><span class="tens" style="--lv:5;--xp:.1"></span></td></tr>
+      <tr><th scope="row"><i class="i i-pack"></i>Pack</th><td class="lv num">5</td><td><span class="tens" style="--lv:5;--xp:.55"></span></td></tr>
+    </table>
+    <dl class="state">
+      <div><dt class="c-ochre">Weary</dt><dd>nine days without a Sunday</dd></div>
+      <div><dt>Content</dt><dd>a bed in the bunkhouse; paid what he asked</dd></div>
+    </dl>
+    <p class="pay lead"><span><b class="num">$630</b> a month</span><span class="dots"></span><span class="quiet">asked $630</span></p>
+    <div class="pc-actions">
+      <button class="btn"><i class="i i-raise"></i><span>Raise<span class="sub num">to $690</span></span></button>
+      <button class="btn"><i class="i i-foreman"></i><span>Foreman<span class="sub">+40% pay</span></span></button>
+      <button class="btn hazard"><i class="i i-letgo"></i><span>Let go<span class="sub" style="color:var(--red)">today</span></span></button>
+    </div>
+  </section>
+
+  <!-- who does what: the time book's ruled grid -->
+  <section class="work sheet" aria-label="Who does what">
+    <header class="command-head" style="padding:0 0 8px">
+      <div><h2 class="t-title" style="font-size:26px">Who does what</h2><p class="t-caption">1 is done first; a dash is never. The bar is the skill.</p></div>
+      <button class="close" aria-label="Close"><i class="i i-close"></i></button>
+    </header>
+    <table class="grid">
+      <thead><tr><th></th><th scope="col"><i class="i i-machine"></i><span class="t-label">Machine</span></th><th scope="col"><i class="i i-field"></i><span class="t-label">Field</span></th><th scope="col"><i class="i i-woods"></i><span class="t-label">Woods</span></th><th scope="col"><i class="i i-hammer"></i><span class="t-label">Build</span></th><th scope="col"><i class="i i-pack"></i><span class="t-label">Pack</span></th></tr></thead>
+      <tbody>
+        <tr><th scope="row"><svg class="bust" style="--shirt:#b8402e;--hat:#d8c48a;--skin:#e8b996;--hair:#5a3d24"><use href="#bust-farmer"/></svg>You</th><td><button class="cell first" style="--sk:6">1</button></td><td><button class="cell" style="--sk:6">2</button></td><td><button class="cell" style="--sk:4">2</button></td><td><button class="cell" style="--sk:4">3</button></td><td><button class="cell" style="--sk:3">3</button></td></tr>
+        <tr class="is-picked"><th scope="row"><svg class="bust" style="--shirt:#2f6f9f;--hat:#3b3f45;--skin:#d9a47c;--hair:#2b211a"><use href="#bust-cap-moustache"/></svg>Normand</th><td><button class="cell" style="--sk:3">2</button></td><td><button class="cell" style="--sk:2">3</button></td><td><button class="cell first" style="--sk:8">1</button></td><td><button class="cell is-focus" style="--sk:5">2</button></td><td><button class="cell" style="--sk:5">2</button></td></tr>
+        <tr><th scope="row"><svg class="bust" style="--shirt:#d9a441;--hat:#8c5a2b;--skin:#c48a62;--hair:#8a6a3c"><use href="#bust-felt-beard"/></svg>Alcide</th><td><button class="cell" style="--sk:1">3</button></td><td><button class="cell" style="--sk:2">3</button></td><td><button class="cell" style="--sk:2">3</button></td><td><button class="cell first" style="--sk:8">1</button></td><td><button class="cell" style="--sk:3">2</button></td></tr>
+        <tr><th scope="row"><svg class="bust" style="--shirt:#6b4c8a;--hat:#9c3226;--skin:#f0c8a8;--hair:#7a3b1f"><use href="#bust-kerchief"/></svg>Verna</th><td><button class="cell" style="--sk:5">2</button></td><td><button class="cell first" style="--sk:7">1</button></td><td><button class="cell" style="--sk:4">2</button></td><td><button class="cell" style="--sk:4">4</button></td><td><button class="cell never" style="--sk:3">–</button></td></tr>
+        <tr><th scope="row"><svg class="bust" style="--shirt:#e7e0cf;--hat:#27425c;--skin:#a8704c;--hair:#1c1c1c"><use href="#bust-curls"/></svg>Lucien</th><td><button class="cell never" style="--sk:2">–</button></td><td><button class="cell first" style="--sk:5">1</button></td><td><button class="cell" style="--sk:4">2</button></td><td><button class="cell" style="--sk:3">3</button></td><td><button class="cell" style="--sk:4">2</button></td></tr>
+      </tbody>
+    </table>
+    <label class="check"><i class="tick on"></i><span><b>Sundays off</b> <span class="quiet">Everyone rests a day a week. Working Sundays gains a day, and tires everyone.</span></span></label>
+  </section>
+
+  <!--@timebook c1=" is-picked" grid=" is-on"-->
+</main>
+</body>
+</html>

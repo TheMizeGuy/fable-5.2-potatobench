@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The County - weigh ticket</title>
+<link rel="stylesheet" href="system.css">
+</head>
+<body>
+<!--SPRITES-->
+<main class="stage october" aria-label="Dig day: North Ridge weighed">
+  <div class="veil deep"></div>
+  <!--@bank cash="−$38,790" p0="true" p1="false" contract="none" extra="stopped"-->
+
+  <section class="ticket sheet" role="dialog" aria-modal="true" aria-labelledby="tk-title">
+    <div class="stub" aria-label="Ticket number 1-1"><span>No. 1-1 <b>North Ridge</b></span></div>
+    <div class="tk">
+      <header class="tk-head">
+        <div><p class="t-label"><i class="i i-scale" style="--i:16px"></i> Home potato house</p><h2 id="tk-title">Weigh ticket</h2></div>
+        <svg class="weighed" viewBox="0 0 160 160" role="img" aria-label="Stamped: weighed, September 19, year 1">
+          <defs><path id="wr-t" d="M26 80a54 54 0 0 1 108 0"/><path id="wr-b" d="M30 80a50 50 0 0 0 100 0"/></defs>
+          <circle cx="80" cy="80" r="74" fill="none" stroke="currentColor" stroke-width="4"/>
+          <circle cx="80" cy="80" r="67" fill="none" stroke="currentColor" stroke-width="1.6"/>
+          <circle cx="80" cy="80" r="40" fill="none" stroke="currentColor" stroke-width="1.6"/>
+          <text font-family="Gothic" font-size="16" letter-spacing="2.5" fill="currentColor"><textPath href="#wr-t" startOffset="50%" text-anchor="middle">HOME POTATO HOUSE</textPath></text>
+          <text font-family="Gothic" font-size="15" letter-spacing="3" fill="currentColor"><textPath href="#wr-b" startOffset="50%" text-anchor="middle">YEAR 1</textPath></text>
+          <text x="80" y="77" font-family="Gothic" font-size="25" letter-spacing="1.5" text-anchor="middle" fill="currentColor">WEIGHED</text>
+          <text x="80" y="99" font-family="Gothic" font-size="18" letter-spacing="2" text-anchor="middle" fill="currentColor">SEP 19</text>
+        </svg>
+      </header>
+      <p class="tk-line"><span><span class="t-label">Variety</span> <b>Kennebec</b></span><span><span class="t-label">Dug</span> <b class="num">Sep 16 to 18</b></span><span><span class="t-label">Off</span> <b class="num">5 acres</b></span></p>
+      <div class="tk-net">
+        <p class="net"><span class="stamped huge">1,374</span><span class="unit">cwt<br>to sell</span></p>
+        <div class="net-side">
+          <p><span class="t-label">Worth today</span></p>
+          <p class="t-figure num">$12,348</p>
+          <p class="quiet num">275 cwt/acre · 56 cwt culled</p>
+          <span class="range" role="img" aria-label="You expected 245 to 373 cwt an acre; it gave 286"><span class="band" style="left:28%;width:36%"></span><span class="mark" style="left:40%"></span></span>
+          <p style="font-size:15px">You expected 245–373 from 2 test digs. It gave <b>286</b>: inside.</p>
+        </div>
+      </div>
+      <div class="grades">
+        <div class="gradebar" role="img" aria-label="Grades"><i class="g1" style="width:70.8%"></i><i class="g4" style="width:14.8%"></i><i class="g3" style="width:9.5%"></i><i class="g2" style="width:1%"></i><i class="g5" style="width:3.9%"></i></div>
+        <ul>
+          <li class="lead"><i class="sw g1"></i>US No. 1<span class="dots"></span><b class="num">1,013</b></li>
+          <li class="lead"><i class="sw g4"></i>US No. 2<span class="dots"></span><b class="num">211</b></li>
+          <li class="lead"><i class="sw g3"></i>B size<span class="dots"></span><b class="num">136</b></li>
+          <li class="lead"><i class="sw g2"></i>Large<span class="dots"></span><b class="num">14</b></li>
+          <li class="lead quiet"><i class="sw g5"></i>Culls<span class="dots"></span><b class="num">56</b></li>
+        </ul>
+      </div>
+      <table class="losses">
+        <caption class="t-label">The largest losses</caption>
+        <tr><th>Scab</th><td class="num">−121 cwt</td><td>dry soil in the weeks after the tubers set</td></tr>
+        <tr><th>Knobs and cracks</th><td class="num">−60 cwt</td><td>a dry spell broken by rain</td></tr>
+        <tr><th>Too small</th><td class="num">−42 cwt</td><td>vines killed Sep 2, before these sized</td></tr>
+      </table>
+      <div class="ways" role="group" aria-label="Take the crop">
+        <button class="way is-best">
+          <span class="brings"><i class="i i-fist"></i>Brings most</span>
+          <span class="t-label"><i class="i i-deliver"></i>Deliver to the packer</span>
+          <span class="amount ringed num">$12,846<svg class="ring" viewBox="0 0 200 60" preserveAspectRatio="none" aria-hidden="true"><path d="M26 10C70 1 160-1 190 12c12 8 8 30-22 40C126 62 50 61 16 50 0 44 0 24 34 8"/><path d="M40 6c50-6 120-5 150 6" style="stroke-width:1.2"/></svg></span>
+          <span class="does">1,028 cwt at $12.50: $2,298 over the market. 472 cwt still owed.</span>
+          <span class="take"><span>Deliver</span><span class="key">1</span></span>
+        </button>
+        <button class="way">
+          <span class="t-label"><i class="i i-sell"></i>Sell now</span>
+          <span class="amount num">$12,348</span>
+          <span class="does">$10.29/cwt today for US No. 1.</span>
+          <span class="take"><span>Sell</span><span class="key">2</span></span>
+        </button>
+        <button class="way">
+          <span class="t-label"><i class="i i-store"></i>Keep it stored</span>
+          <span class="amount num">−$206<small>/mo</small></span>
+          <span class="does">By April usually 25% above today; it sprouts as April opens.</span>
+          <span class="take"><span>Store</span><span class="key">3</span></span>
+        </button>
+      </div>
+      <p class="tk-more"><button class="btn quiet">The full reckoning</button></p>
+    </div>
+  </section>
+</main>
+</body>
+</html>

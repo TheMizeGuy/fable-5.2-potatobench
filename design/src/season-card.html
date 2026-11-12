@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The County - a field selected</title>
+<link rel="stylesheet" href="system.css">
+</head>
+<body>
+<!--SPRITES-->
+<main class="stage july" aria-label="The farm, July: Upper Middle selected">
+  <!--@sel-upper-middle-->
+  <!--@almanac-->
+  <!--@bank-->
+
+  <!--@tag x="492" y="352" nm="North Ridge" need="need-rogue"-->
+  <!--@tag x="826" y="380" nm="South Ridge" icon="rest"-->
+  <!--@tag x="452" y="446" nm="Upper Middle" cls=" is-sel" listed="listed-scout" need="need-spray"-->
+  <!--@tag x="790" y="470" nm="Lower Middle" icon="rest"-->
+  <!--@tag x="300" y="578" nm="Brook Field" need="need-water"-->
+  <!--@tag x="700" y="608" nm="Bottom Field" need="need-hill"-->
+  <div class="yard-tag" style="left:1150px;top:330px"><i class="i i-yard"></i>Home yard</div>
+
+  <!--@pin-you x="655" y="414" label="You, spraying; next, scouting Upper Middle"-->
+  <!--@pin-normand x="252" y="300" label="Normand, felling"-->
+  <!--@pin-alcide x="1082" y="452" label="Alcide, building"-->
+  <!--@pin-verna x="736" y="344" cls=" needs" badge="badge-needs" label="Verna, worn out: needs you"-->
+
+  <!-- the field's card: a command bar docked at the right edge -->
+  <section class="command sheet" aria-label="Selected: Upper Middle">
+    <header class="command-head">
+      <div>
+        <p class="t-label">Field record</p>
+        <h2 class="t-title">Upper Middle</h2>
+        <p class="t-caption">Katahdin, in bloom</p>
+      </div>
+      <button class="close" aria-label="Deselect (Escape)"><i class="i i-close"></i></button>
+    </header>
+    <div class="gauges">
+      <div class="gauge"><span class="t-label">Leaf</span><b>82%</b><span class="meter"><i style="width:82%"></i></span></div>
+      <div class="gauge warn"><span class="t-label">Water</span><b>dry</b><span class="meter warn"><i style="width:34%"></i></span></div>
+      <div class="gauge bad"><span class="t-label">Protection</span><b>none</b><span class="meter bad"><i style="width:0"></i></span></div>
+      <div class="gauge"><span class="t-label">Hill</span><b>twice</b><span class="meter half"><i style="width:100%"></i></span></div>
+    </div>
+    <div class="readings">
+      <p><i class="i i-check"></i>No blight seen <span class="quiet">· walked 9 days ago</span></p>
+      <p><i class="i i-bloom"></i><b>260–340</b> cwt/acre <span class="range"><span class="band" style="left:44%;width:16%"></span></span><span class="quiet">by eye</span></p>
+    </div>
+    <div class="orders" role="group" aria-label="Orders">
+      <button class="order is-suggested"><i class="i i-fist fist"></i><span class="key">S</span><i class="i i-spray"></i><span class="name">Spray</span><span class="cost">¼ day · $110</span><span class="catch">Before Wednesday’s rain: blight weather is here.</span></button>
+      <button class="order is-given"><span class="key">C</span><i class="i i-scout"></i><span class="name">Scout</span><span class="stamp sm">On the list</span><span class="catch">Last walked 9 days ago.</span></button>
+      <button class="order"><span class="key">W</span><i class="i i-water"></i><span class="name">Water</span><span class="cost">1 day · $300</span><span class="catch">Rain may do it on Wednesday.</span></button>
+      <button class="order"><span class="key">T</span><i class="i i-sample"></i><span class="name">Test dig</span><span class="cost">⅒ day</span><span class="catch">Your only look at the crop.</span></button>
+      <button class="order"><span class="key">K</span><i class="i i-kill"></i><span class="name">Kill vines</span><span class="cost">¼ day · $120</span><span class="catch">Too soon: it ends the growing.</span></button>
+    </div>
+  </section>
+
+  <!--@timebook c3=" needs" d3="Worn out" next="next-scout"-->
+  <section class="alerts" aria-label="Alerts">
+    <p class="alert water"><i class="i i-water"></i>Brook Field: drying out</p>
+    <p class="alert bad"><i class="i i-blight"></i>North Ridge: blight on 2 hills</p>
+  </section>
+</main>
+</body>
+</html>

@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The County - menu</title>
+<link rel="stylesheet" href="system.css">
+</head>
+<body>
+<!--SPRITES-->
+<main class="stage july" aria-label="The menu, over the farm; the clock stopped">
+  <div class="veil"></div>
+  <!--@bank p0="true" p1="false" contract="none"-->
+
+  <!-- the office file, open: the menu on its left page, the settings form on its right -->
+  <section class="file" role="dialog" aria-modal="true" aria-label="Menu and settings">
+    <span class="file-tab">The office file</span>
+    <div class="file-pages">
+      <section aria-label="Menu">
+        <p class="t-label">Year 1 of 5 · July 12</p>
+        <h1 class="mini-mark"><span class="the">The</span><span class="county">County</span></h1>
+        <div class="rule double"></div>
+        <nav class="menu-list">
+          <button class="btn go wide">Continue <i class="i i-arrow"></i></button>
+          <button class="btn wide"><i class="i i-save"></i>Save a copy<span class="sub" style="margin-left:auto">saved Jul 12</span></button>
+          <button class="btn wide"><i class="i i-ticket"></i>Load a saved farm</button>
+          <button class="btn wide"><i class="i i-key"></i>How to play</button>
+          <button class="btn wide hazard"><i class="i i-skip"></i>End the season early</button>
+          <button class="btn wide"><i class="i i-letgo"></i>Quit to the title</button>
+        </nav>
+        <p class="t-caption" style="margin-top:12px">The game saves itself in this browser.</p>
+      </section>
+      <section aria-label="Settings">
+        <header class="form-head"><h2 class="t-title" style="font-size:26px">Settings</h2><button class="close" aria-label="Close (Escape)"><i class="i i-close"></i></button></header>
+        <fieldset class="f-row"><legend class="t-label">Units</legend>
+          <div class="seg"><button class="btn" aria-pressed="true">°F, inches, cwt, acres</button><button class="btn">°C, mm, tonnes, hectares</button></div></fieldset>
+        <fieldset class="f-row"><legend class="t-label">Sound</legend>
+          <label class="check"><i class="tick on"></i><span><b>Sound</b> <span class="quiet">weather, machinery and the farm</span></span></label>
+          <div class="slider" aria-label="Volume 70"><span class="scale" role="slider" aria-valuenow="70" aria-valuemin="0" aria-valuemax="100"><i class="fill" style="width:70%"></i><i class="knob" style="left:70%"></i></span><b class="num">70</b></div></fieldset>
+        <fieldset class="f-row"><legend class="t-label">Play</legend>
+          <label class="check"><i class="tick on"></i><span><b>Hints</b> <span class="quiet">a sentence the first time each order is called for</span></span></label>
+          <label class="check"><i class="tick"></i><span><b>Pause on alerts</b> <span class="quiet">stop the clock when something new needs you</span></span></label>
+          <label class="check"><i class="tick"></i><span><b>Reduce motion</b> <span class="quiet">papers change at once; the land holds still</span></span></label></fieldset>
+        <fieldset class="f-row"><legend class="t-label">Picture</legend>
+          <div class="seg"><button class="btn" aria-pressed="true">Auto</button><button class="btn">High</button><button class="btn">Medium</button><button class="btn">Low</button></div>
+          <p class="t-caption">Drawing full detail at 60 frames a second.</p></fieldset>
+      </section>
+    </div>
+  </section>
+</main>
+</body>
+</html>

@@ -1,0 +1,17 @@
+<!--defaults cash="−$22,820" neg="neg" p0="false" p1="true" contract="contract-kennebec" extra=""-->
+  <section class="bank" aria-label="Cash, clock and contract">
+    <div class="mount">
+      <div class="face">
+        <div class="balance"><span class="t-label when">Balance</span><span class="t-figure {{neg}}">{{cash}}</span></div>
+        <div class="clock" role="group" aria-label="Clock">
+          <button class="k" aria-pressed="{{p0}}" aria-label="Pause"><i class="i i-pause"></i></button>
+          <button class="k" aria-pressed="{{p1}}">1×</button>
+          <button class="k" aria-pressed="false">2×</button>
+          <button class="k" aria-pressed="false">3×</button>
+          <button class="menu" aria-label="Menu"><i class="i i-menu"></i></button>
+        </div>
+        <!--@{{contract}}-->
+      </div>
+    </div>
+    <!--@{{extra}}-->
+  </section>
