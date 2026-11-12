@@ -8,7 +8,7 @@ import {
 } from 'three'
 import { grassGeometry } from './geometry.ts'
 import {
-  BARN, DUFOUR_BARN, DUFOUR_HOUSE, DUFOUR_POTATO_HOUSE, HOME_WOODS, HOUSE, LAND, POTATO_HOUSE, WALLS, brookHalf, brookZ, fieldMask, groundY, oursAt,
+  BARN, DUFOUR_BARN, DUFOUR_HOUSE, DUFOUR_POTATO_HOUSE, HOME_WOODS, HOUSE, KEEP_CLEAR, LAND, POTATO_HOUSE, WALLS, brookHalf, brookZ, fieldMask, groundY, oursAt,
   roadDist,
 } from './layout.ts'
 import { hash2, rng } from './noise.ts'
@@ -39,6 +39,7 @@ export class Grass {
       if (Math.abs(z - brookZ(x)) < brookHalf(x) + 0.12) return false
       if (z < HOME_WOODS.z1 + 0.6) return false
       for (const y of yards) if (Math.hypot(x - y.x, (z - y.z) * 0.7) < 3.6) return false
+      for (const c of KEEP_CLEAR) if (Math.hypot(x - c.x, z - c.z) < c.r) return false
       return true
     }
     // size: 0..1, how tall this clump stands among its kind. Packed with its own number.

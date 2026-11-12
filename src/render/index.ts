@@ -174,6 +174,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     fields.setTier(tier, t.density)
     grass.setTier(tier)
     flora.setTier(tier)
+    props.setTier(tier)
     crews.setScreen(vp.w, vp.h)
     reframe(reduced)
   }
@@ -322,6 +323,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     const barrels = next.fields.map((f, i) => next.mode === 'season' && (f.status === 'digging' || (f.status === 'dug' && next.seasonDay - (dugSince.get(i) ?? next.seasonDay) < 4)))
     harvest.setBarrelFields(barrels, (f, h) => shown[f][h].look.kind === 'dug' && next.fields[f].hills[h].kind === 'dug')
     fields.setTargets(next.fields, shown)
+    props.sync(next)
     envTarget(next, envT)
     samples.clear()
     dayPassed = false
@@ -366,7 +368,9 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     const o = ray.ray.origin, d = ray.ray.direction
     for (const yard of [-1, -2]) {
       const p = YARD_AT[yard]
-      const t = d.y < -1e-4 ? (groundY(p.x, p.z) - o.y) / d.y : -1
+      // the yard lies on the slope: follow the ray down to the ground it meets, not to one level
+      let t = -1, y = groundY(p.x, p.z)
+      for (let k = 0; k < 3 && d.y < -1e-4; k++) { t = (y - o.y) / d.y; y = groundY(o.x + d.x * t, o.z + d.z * t) }
       if (t > 0 && yardAt(o.x + d.x * t, o.z + d.z * t) === yard) return yard
     }
     return 0
@@ -487,6 +491,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       smokeAt = 0
       particles.emit(props.chimney.x, props.chimney.y, props.chimney.z, (Math.random() - 0.5) * 0.1, 0.5, (Math.random() - 0.5) * 0.1, 0.12, 0.3, 4.5, 0.74, 0.74, 0.76, 0.36 * env.smoke, 0.8)
     }
+    props.update({ dt: dt * pace, time: ambient, env, lit, dist: rig.cur.dist, yard: app.yard, particles })
     const t1 = performance.now()
     particles.update(dt * (reduced ? 0.3 : 1), wx * env.wind * 1.6, wz * env.wind * 1.6)
     focus.set(rig.cur.x, fieldBaseY(rig.cur.z), rig.cur.z)
