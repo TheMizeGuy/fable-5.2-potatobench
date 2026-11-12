@@ -11,6 +11,7 @@ import * as R from './rules.ts'
 import { meter } from './system/parts.ts'
 import { topBar } from './top.ts'
 import { winterWork } from './winter.ts'
+import { priceBand } from './store-band.ts'
 
 const LAST = S.MONTH_CURVE.length - 1
 
@@ -85,8 +86,10 @@ export function cellarScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
     const o = S.storeOutlook(app.world, c, lot)
     const nx = o.months[0]
     const gain = nx ? nx.net - value : 0
+    // The usual curve is a guess: a month's price can wander a tenth from it, so a move inside that is called flat.
+    const spread = nx ? Math.round((nx.net * priceBand(1)) / 10) * 10 : 0
     const heading: [string, string] = !nx ? ['flat', 'May is the last month: what is left is sold at its end']
-      : [gain > 0.5 ? 'up' : gain < -0.5 ? 'fall' : 'flat', `Kept to ${nx.name}: about ${F.money(nx.net)}, ${Math.abs(gain) < 0.5 ? 'the same as selling now' : `${F.money(Math.abs(gain))} ${gain > 0 ? 'more' : 'less'} than selling now`}${o.best && o.best !== nx && o.best.net > Math.max(value, nx.net) + Math.max(25, value * 0.01) ? `; ${o.best.name} is the best, about ${F.money(o.best.net)}` : ''}`]
+      : [gain > spread ? 'up' : gain < -spread ? 'fall' : 'flat', `Kept to ${nx.name}: usually about ${F.money(nx.net)}, give or take ${F.money(spread)}; ${Math.abs(gain) < 0.5 ? 'the same as selling now' : `${F.money(Math.abs(gain))} ${gain > 0 ? 'more' : 'less'} than selling now`}${o.best && o.best !== nx && o.best.net > Math.max(value, nx.net) + Math.max(25, value * 0.01) ? `; ${o.best.name} is usually the best, about ${F.money(o.best.net)}` : ''}`]
     const grewWith = c.season?.fields[lot.field]?.seedVirus
     const rent = Math.round(S.lotCwt(lot) * S.STORE_COST)
     const deal = deals(app.world, c, lot)[0]

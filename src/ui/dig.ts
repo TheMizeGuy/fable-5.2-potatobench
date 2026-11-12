@@ -8,6 +8,7 @@ import * as F from './fmt.ts'
 import { term } from './glossary.ts'
 import { icon } from './icons.ts'
 import * as R from './rules.ts'
+import { storeCall } from './store-band.ts'
 import { coupon, range } from './system/parts.ts'
 
 const CAUSE_LABEL: Record<S.Cause, string> = {
@@ -353,9 +354,8 @@ function phrase(ctx: Ctx, c: S.Campaign, lot: S.Lot, cause: S.Cause): string {
         // Whether the kill came before the coach asked for it (the player's early kill) or when asked (the trade it asked for).
         const kt = S.killTiming(c, lot.field)
         const on = F.date(c.year, x.killed.day, true)
-        if (kt.killed >= 0 && kt.early > 0) return `the vines were killed on ${on}, ${F.plural(kt.early, 'day')} before they were due: these had not sized`
-        if (kt.killed >= 0 && kt.asked >= 0) return `the vines were killed on ${on} as asked: small ones traded for set skins`
-        return `the vines were killed on ${on}, before these sized`
+        if (kt.killed >= 0 && kt.early > 0) return `the vines were killed on ${on}, ${F.plural(kt.early, 'day')} before the kill was due: these had not finished sizing`
+        return `the vines were killed on ${on}: small ones traded for skins set before the frost`
       }
       if (x.died) return x.died.text.startsWith('Frost') ? 'frost finished the vines before these sized' : x.died.text.startsWith('Blight') ? 'blight took the vines before these sized' : 'the vines went down before these sized'
       return 'dug green, before they sized'
@@ -495,7 +495,7 @@ function sellOrKeep(ctx: Ctx, c: S.Campaign, lot: S.Lot): HTMLElement[] {
   const v = S.variety(lot.variety)
   const m = R.sproutMonth(lot.year, lot.dugDay, lot.variety, c.upgrades.vent)
   return [
-    h('p', null, `Today's price for ${v.name}: ${F.price(S.basePrice(world, c, lot.variety))} for US No. 1. Selling this crop today pays `, h('strong', { class: 'num' }, F.money(S.lotValue(world, c, lot))), `; ${R.storePhrase(S.storeOutlook(world, c, lot))}.`),
+    h('p', null, `Today's price for ${v.name}: ${F.price(S.basePrice(world, c, lot.variety))} for US No. 1. Selling this crop today pays `, h('strong', { class: 'num' }, F.money(S.lotValue(world, c, lot))), `; ${storeCall(S.storeOutlook(world, c, lot)).phrase}.`),
     ...(v.contract ? [h('p', null, R.contractText(v))] : [h('p', null, R.outlookText(c)), h('p', null, R.moodText(world, c))]),
     h('p', null, R.storageText(c, S.lotCwt(lot))),
     h('p', null, `Dug ${F.date(lot.year, lot.dugDay)}, this ${v.name} ${R.sproutText(m)}${m < S.CELLAR_MONTHS.length ? '. Sprouted potatoes sell for 15% less and shrink faster' : ''}.`),
@@ -921,7 +921,8 @@ export function ticket(ctx: Ctx, lotId: number, o: { fresh: boolean; staged?: bo
           ? `The farm stand sells about ${F.mass(S.STAND_CWT)} a day of this crop at twice the market price${s0 && s0.day < S.dayIndex(c.year, S.STAND_FROM.month, S.STAND_FROM.dom) ? ', from August 1' : ''}, while it is the newest in.`
           : ''
         const outlook = S.storeOutlook(app.world, c, lot)
-        const best = deal && deal.pays >= deal.market - 0.5 ? 'deliver' : advice || !outlook.best || outlook.best.net <= now + 0.5 ? 'sell' : 'store'
+        const call = storeCall(outlook)
+        const best = deal && deal.pays >= deal.market - 0.5 ? 'deliver' : advice || !call.store ? 'sell' : 'store'
         let n = 0
         const k = () => String(++n)
         const list: Way[] = []
@@ -941,7 +942,7 @@ export function ticket(ctx: Ctx, lotId: number, o: { fresh: boolean; staged?: bo
         const storeWay = add(coupon({
           icon: 'store', label: delivered ? 'Store the rest' : fresh ? 'Store it' : 'Keep it stored', take: 'Store', key: k(), best: best === 'store',
           amount: [h('span', { 'aria-hidden': 'true' }, `−${F.money(month).replace('−', '')}`, h('small', null, '/mo')), h('span', { class: 'sr' }, `Storing costs ${F.money(month)} a month.`)],
-          does: `${F.upper(R.storePhrase(outlook))}. It ${R.sproutText(m)}.`,
+          does: `${F.upper(call.phrase)}. It ${R.sproutText(m)}.`,
           testid: `lot-keep-${lot.id}`,
           onclick: e => { if (busy) return; answered = true; if (fresh) ctx.say(`${F.mass(S.lotCwt(lot))} from ${name} went into the cellar.`, 'info'); tear(e.currentTarget as HTMLElement, close) },
         }))
