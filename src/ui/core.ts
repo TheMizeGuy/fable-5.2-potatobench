@@ -1,4 +1,4 @@
-import type { App } from '../game/app.ts'
+import type { Alert, App } from '../game/app.ts'
 import type { FieldView } from '../game/contracts.ts'
 import type { Cmd, Estimate, Lot, Result } from '../sim/index.ts'
 import { h, morphChildren, type Child } from './dom.ts'
@@ -48,6 +48,8 @@ export interface Screen {
   key?(e: KeyboardEvent): boolean
   // Where the alerts sit on this screen.
   notes?: HTMLElement
+  // Where an alert takes the player when it is clicked, for alerts about something other than a field.
+  goFor?(a: Alert): (() => void) | null
   dispose?(): void
 }
 
@@ -312,7 +314,7 @@ export function confirmPaper(ctx: Ctx, o: { title: string; text: Child; yes: str
 
 // ---------------------------------------------------------------- alerts and notices
 
-export interface Note { id: string; level: Level; glyph: string; text: string; full: string; field: number; day: number; born: number; ttl: number }
+export interface Note { id: string; level: Level; glyph: string; text: string; full: string; field: number; day: number; born: number; ttl: number; go?: () => void }
 
 const LEVEL_GLYPH: Record<Level, string> = { info: 'flat', good: 'check', warn: 'warn', bad: 'blight' }
 
@@ -340,13 +342,13 @@ export class Notes {
   get liveRegion(): HTMLElement { return this.live }
 
   // text: what the row shows. full: what a screen reader hears (the whole sentence).
-  push(o: { level?: Level; glyph?: string; text: string; full?: string; field?: number; day?: number; ttl?: number }): void {
+  push(o: { level?: Level; glyph?: string; text: string; full?: string; field?: number; day?: number; ttl?: number; go?: (() => void) | null }): void {
     const level = o.level ?? 'info'
     const text = localize(o.text)
     const full = localize(o.full ?? o.text)
     const dup = this.items.find(n => n.full === full)
     if (dup) this.drop(dup)
-    this.items.push({ id: `n${++this.seq}`, level, glyph: o.glyph ?? LEVEL_GLYPH[level], text, full, field: o.field ?? -1, day: o.day ?? -1, born: performance.now(), ttl: o.ttl ?? 0 })
+    this.items.push({ id: `n${++this.seq}`, level, glyph: o.glyph ?? LEVEL_GLYPH[level], text, full, field: o.field ?? -1, day: o.day ?? -1, born: performance.now(), ttl: o.ttl ?? 0, go: o.go ?? undefined })
     while (this.items.length > this.keep) this.items.shift()
     this.live.textContent = full
     this.draw()
@@ -425,8 +427,8 @@ export class Notes {
 
   private row(n: Note): HTMLElement {
     const inner = [icon(n.glyph, 'ic s'), h('span', null, n.text)]
-    const row = n.field >= 0
-      ? h('button', { class: `alert lv-${n.level}`, type: 'button', testid: 'alert', onclick: () => this.onGo(n.field) }, inner, h('span', { class: 'sr' }, '. Go there.'))
+    const row = n.go || n.field >= 0
+      ? h('button', { class: `alert lv-${n.level}`, type: 'button', testid: 'alert', onclick: () => (n.go ? n.go() : this.onGo(n.field)) }, inner, h('span', { class: 'sr' }, '. Go there.'))
       : h('div', { class: `alert lv-${n.level}`, testid: 'notice' }, inner)
     row.dataset.id = n.id
     return row

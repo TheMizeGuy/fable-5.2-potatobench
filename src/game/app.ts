@@ -33,6 +33,7 @@ export interface Alert {
   level: GameEvent['level']
   type: string
   text: string
+  data?: GameEvent['data']  // the event's own figures: the person, the building, the incident it is about
 }
 
 export interface OrderResult { field: number; ok: boolean; err: string }
@@ -246,7 +247,7 @@ export class App {
   }
 
   private alert(c: Campaign, e: GameEvent): void {
-    const a: Alert = { id: this.nextAlert++, year: c.year, day: e.day, field: e.field, level: e.level, type: e.type, text: e.text }
+    const a: Alert = { id: this.nextAlert++, year: c.year, day: e.day, field: e.field, level: e.level, type: e.type, text: e.text, data: e.data }
     this.alerts.push(a)
     if (this.alerts.length > ALERTS_KEPT) this.alerts.splice(0, this.alerts.length - ALERTS_KEPT)
     this.emit({ type: 'alert', alert: a })
