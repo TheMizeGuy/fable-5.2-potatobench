@@ -1,7 +1,7 @@
 // The design system's components that have structure, built so they cannot be put together wrongly: each carries its
 // classes (design/system.css), its words for a screen reader and its keyboard behaviour. Every root is marked .sys,
 // which keeps the old stylesheets off it.
-import { h, type Child } from '../dom.ts'
+import { h, s, type Child } from '../dom.ts'
 import { icon } from '../icons.ts'
 
 type Click = (e: Event) => void
@@ -76,14 +76,21 @@ export function fold(o: { icon: string; name: string; state?: string; figure?: s
 }
 
 // A way to take something (the weigh ticket's three): a tear-off coupon with its own button line and key.
-// best: the one that brings most, tabbed and filled.
-export function coupon(o: { icon: string; label: string; amount: Child; does: string; take: string; key: string; best?: boolean; testid?: string; onclick?: Click }): HTMLElement {
+// best: the one that brings most, tabbed and filled, its amount ringed in pencil.
+export function coupon(o: { icon: string; label: string; amount: Child; does: Child; take: string; key: string; best?: boolean; testid?: string; onclick?: Click }): HTMLElement {
   return h('button', { class: `way sys${o.best ? ' is-best' : ''}`, type: 'button', testid: o.testid, 'aria-keyshortcuts': o.key, onclick: o.onclick },
     o.best ? h('span', { class: 'brings' }, fist(), 'Brings most') : null,
     h('span', { class: 't-label' }, icon(o.icon, 'i'), o.label),
-    h('span', { class: 'amount num' }, o.amount),
+    h('span', { class: `amount num${o.best ? ' ringed' : ''}` }, o.amount, o.best ? ring() : null),
     h('span', { class: 'does' }, o.does),
     h('span', { class: 'take' }, h('span', null, o.take), key(o.key)))
+}
+
+// The pencil ring round a figure (design/ticket.html): drawn by hand, stretched to what it rings.
+function ring(): SVGElement {
+  return s('svg', { class: 'ring', viewBox: '0 0 200 60', preserveAspectRatio: 'none', 'aria-hidden': 'true' },
+    s('path', { d: 'M26 10C70 1 160-1 190 12c12 8 8 30-22 40C126 62 50 61 16 50 0 44 0 24 34 8' }),
+    s('path', { d: 'M40 6c50-6 120-5 150 6', style: 'stroke-width:1.2' }))
 }
 
 // A meter: a ruled scale filled in ink, or in the ink of its warning. half: a tick at the middle (hilled once of two).
