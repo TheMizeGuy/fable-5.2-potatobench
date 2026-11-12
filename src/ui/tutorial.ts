@@ -121,9 +121,10 @@ function hardOnes(root: HTMLElement): Box[] {
   return hard
 }
 
-function obstacles(root: HTMLElement): { hard: Box[]; soft: Box[] } {
+function obstacles(root: HTMLElement): { hard: Box[]; soft: Box[]; costs: { b: Box; cost: number }[] } {
   const hard = hardOnes(root)
   const soft: Box[] = []
+  const costs: { b: Box; cost: number }[] = []
   const main = root.querySelector<HTMLElement>('.screen-layer > main:not(.leaving)')
   const walk = (el: Element, depth: number) => {
     for (const k of el.children) {
@@ -133,23 +134,29 @@ function obstacles(root: HTMLElement): { hard: Box[]; soft: Box[] } {
       const cs = getComputedStyle(k)
       const clear = cs.backgroundColor === 'rgba(0, 0, 0, 0)' && cs.backgroundImage === 'none' && cs.boxShadow === 'none'
       if (clear && depth < 4 && (r.width > innerWidth * 0.6 || r.height > innerHeight * 0.6 || k.children.length)) walk(k, depth + 1)
-      else soft.push(box(r))
+      else {
+        soft.push(box(r))
+        // The boards at the top repeat what the screen below says; a sheet of words does not.
+        costs.push({ b: box(r), cost: k.closest('.topbar, .top') ? 1 : 4 })
+      }
     }
   }
   if (main) walk(main, 0)
   for (const el of root.querySelectorAll('.notes .alert')) if (shown(el)) soft.push(box(el.getBoundingClientRect()))
-  return { hard, soft }
+  return { hard, soft, costs }
 }
 
 // The first free place for a box this size, nearest the top of the land and its middle; null when there is none.
-function findPlace(w: number, hgt: number, avoid: Box[]): { x: number; y: number } | null {
+// over: panels it may lie over if it must, each with what covering it costs (a board little, a sheet of words more).
+function findPlace(w: number, hgt: number, avoid: Box[], over: { b: Box; cost: number }[] = []): { x: number; y: number } | null {
   const m = 12, step = 16
   let best: { x: number; y: number; s: number } | null = null
+  const area = (a: Box, b: Box) => Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left)) * Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top))
   for (let y = m; y + hgt <= innerHeight - m; y += step) {
     for (let x = m; x + w <= innerWidth - m; x += step) {
       const b = { left: x, top: y, right: x + w, bottom: y + hgt }
       if (avoid.some(a => meets(b, a))) continue
-      const s = y + Math.abs(x + w / 2 - innerWidth / 2) * 0.35
+      const s = y + Math.abs(x + w / 2 - innerWidth / 2) * 0.35 + over.reduce((t, o) => t + area(b, o.b) * o.cost / 40, 0)
       if (!best || s < best.s) best = { x, y, s }
     }
   }
@@ -368,7 +375,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
       const inside = ([x, y]: [number, number, string]) => x >= 4 && y >= 4 && x + s <= innerWidth - 4 && y + s <= innerHeight - 4
       const free = ([x, y]: [number, number, string]) => !docked || !meets({ left: x, top: y, right: x + s, bottom: y + s }, box(docked))
       // Never over another control it would hide: a clock, a command bar, a paper.
-      const hard = hardOnes(root)
+      const hard = [...hardOnes(root), ...[...root.querySelectorAll('.goal')].filter(shown).map(e => box(e.getBoundingClientRect()))]
       const clear = ([x, y]: [number, number, string]) => !hard.some(a => meets({ left: x, top: y, right: x + s, bottom: y + s }, a))
       // And off the field tags where it can be, so the name of what it points at stays readable.
       const tags = [...root.querySelectorAll('.plate-layer .tag')].filter(shown).map(e => box(e.getBoundingClientRect()))
@@ -391,7 +398,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     const at = place ? { left: place.x, top: place.y, right: place.x + slip.offsetWidth, bottom: place.y + slip.offsetHeight } : null
     if (placedFor === key && t0 - checked < 250 && (!at || !must.some(a => meets(at, a)))) return
     checked = t0
-    const { hard, soft } = obstacles(root)
+    const { hard, soft, costs } = obstacles(root)
     if (t.at) hard.push(pad(t.at, 10))
     if (fistBox) hard.push(pad(fistBox, 4))
     const w = slip.offsetWidth, ht = slip.offsetHeight
@@ -401,9 +408,10 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     let found: { x: number; y: number } | null = null
     // First off every panel and every field tag; then off the panels; then off only what it must never cover.
     const tags = [...root.querySelectorAll('.plate-layer .tag')].filter(shown).map(e => box(e.getBoundingClientRect()))
-    for (const [k, compact, also] of [[0, false, tags], [0, false, []], [0, true, []], [1, false, []], [1, true, []]] as const) {
+    // Over a panel only when it must, and then short, where it hides least.
+    for (const [k, compact, also] of [[0, false, tags], [0, false, []], [0, true, []], [1, true, []], [1, false, []]] as const) {
       slip.classList.toggle('compact', compact)
-      found = findPlace(slip.offsetWidth, slip.offsetHeight, [...(k === 0 ? [...hard, ...soft] : hard), ...also].map(a => pad(a, 8)))
+      found = findPlace(slip.offsetWidth, slip.offsetHeight, [...(k === 0 ? [...hard, ...soft] : hard), ...also].map(a => pad(a, 8)), k === 1 ? costs : [])
       if (found) { tier = k; break }
     }
     slip.classList.toggle('gone', !found)
