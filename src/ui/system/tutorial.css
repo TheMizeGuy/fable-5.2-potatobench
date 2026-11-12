@@ -103,10 +103,17 @@
 .hud.st-hide-tags .plate-layer .tag-wrap, .hud.st-hide-tags .plate-layer .sel-layer { visibility: hidden; }
 .hud.st-hide-stamps .plate-layer .need { visibility: hidden; }
 .hud.st-hide-people .plate-layer .pin-at, .hud.st-hide-people .plate-layer .pin-list-at, .hud.st-hide-people .crew .timebook { visibility: hidden; }
-.hud.st-hide-list .crew .queue { visibility: hidden; }
+.hud.st-hide-list .crew .queue, .hud.st-hide-list .plate-layer .listed { visibility: hidden; }
 .hud.st-hide-forecast .topbar .forecast { visibility: hidden; }
 .hud.st-hide-after .topbar .after { visibility: hidden; }
 /* One voice: while a note or a card is up the slip keeps to one line, and nothing at the foot competes. */
 .hud.noting .topbar .goal .goal-when, .hud.noting .topbar .goal-go, .hud.noting .topbar .goal .fist { display: none; }
 .hud.noting .notes, .hud.voice .notes { visibility: hidden; }
-.hud.guided .season-screen .paused, .hud.guided .season-screen .running { visibility: hidden; }
+.hud.noting .season-screen .paused, .hud.noting .season-screen .running, .hud.voice .season-screen .paused, .hud.voice .season-screen .running { visibility: hidden; }
+/* In the guided first year the notes say what is next; the goal slip comes with the second year. */
+.hud.guided .topbar :is(.goal, .goal-go) { visibility: hidden; }
+/* And the boards say less: figures for today and tomorrow, an order on a tag as its mark alone, no line for what
+   the money just did. */
+.hud.guided .topbar .forecast .d:nth-child(n+4) :is(.hi, .pct) { display: none; }
+.hud.guided .plate-layer .listed .stamp { display: none; }
+.hud.guided .topbar .cash-moved { display: none; }

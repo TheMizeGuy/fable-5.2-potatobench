@@ -506,7 +506,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
       // Running: stopped here. Stopped by the game (a card, a frost): the speed it would go on at. Stopped by the
       // player: it stays so. A skip ahead ends at the next note, but runs on past one that only breaks in.
       const was = app.speed > 0 ? app.speed : app.pauseReason && app.pauseReason !== HOLD ? app.resumeSpeed || 1 : 0
-      const speed = fastFrom >= 0 && !due!.urgent ? fastFrom : was
+      const speed = fastFrom < 0 ? was : due!.urgent ? 3 : fastFrom
       if (!due!.urgent) fastFrom = -1
       holding = { id: want, speed }
       if (app.speed > 0) stopNow()
@@ -571,8 +571,10 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     due = offer ? null : paced(guide.current(l))
     const carded = cardUp(l)
     now = due && carded ? null : due
-    // A skip ahead that meets a card ends there: answered, the days go on at the speed they had.
-    if (fastFrom >= 0 && carded && app.speed === 0 && app.pauseReason !== HOLD) { app.resumeSpeed = fastFrom as 1 | 2 | 3; fastFrom = -1 }
+    // A skip ahead runs on past a telegram once it is answered, to the note it was for. A paper (the weigh ticket)
+    // ends it, and so does the player's own hand on the clock.
+    if (fastFrom >= 0 && l.paper && app.speed === 0) { app.resumeSpeed = fastFrom as 1 | 2 | 3; fastFrom = -1 }
+    else if (fastFrom >= 0 && !carded && (app.speed === 0 ? !app.pauseReason : app.speed !== 3)) fastFrom = -1
     hold()
     // The cards in the middle: the offer, and what a year is.
     const card = offer ? 'offer' : now?.card ? now.id : ''

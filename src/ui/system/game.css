@@ -78,11 +78,8 @@
 .topbar .phases { display: flex; gap: 2px; margin: 0; padding: 0 12px 6px; list-style: none; background: var(--paper-2); }
 .topbar .phases li { flex-basis: auto; min-width: 0; padding: 2px 4px 1px; text-align: center; white-space: nowrap; overflow: hidden;
   font: 400 11px/1.2 var(--f-gothic); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); box-shadow: inset 0 2px 0 var(--hair); cursor: help; }
-.topbar .phases li .short { display: none; }
 .topbar .phases li.past { color: var(--ink-3, var(--ink-2)); opacity: .7; }
 .topbar .phases li.now { color: var(--paper); background: var(--ink); box-shadow: none; }
-.topbar[data-layout='mid'] .phases li .long { display: none; }
-.topbar[data-layout='mid'] .phases li .short { display: inline; }
 .topbar[data-layout='narrow'] .phases, .topbar[data-layout='short'] .phases { display: none; }
 .topbar[data-layout='narrow'] .season-track .mo { display: none; }
 .topbar[data-layout='narrow'] .season-track .ph { display: inline; color: var(--ink); }

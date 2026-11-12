@@ -10,7 +10,9 @@ import { expect, noSidewaysScroll, watchErrors } from './helpers.ts'
 const NOTE_WORDS = 35
 const CARD_WORDS = 80
 const FIRST_DAY_WORDS = 80
-const SEASON_WORDS = 125
+// With a note up, and with a telegram or the spraying question up (the card is the one voice then).
+const SEASON_WORDS = 100
+const TELEGRAM_WORDS = 120
 
 async function fresh(page: Page): Promise<void> {
   await page.goto('./')
@@ -25,10 +27,10 @@ interface Seen {
   note: string; target: string; noteWords: number; cardWords: number; keys: string[]
   // What asks for attention now.
   asking: string[]
-  // Words on the season screen with the note's.
-  words: number
+  // Words a player can see on the season screen, the land's tags and the note, field names aside.
+  words: number; text: string
   hidden: string[]
-  ticketSell: string
+  ticketSell: string; paperWords: number
 }
 
 async function see(page: Page): Promise<Seen> {
@@ -42,12 +44,30 @@ async function see(page: Page): Promise<Seen> {
       return r.width > 0 && r.height > 0 && getComputedStyle(e).visibility !== 'hidden'
     }
     const count = (t: string) => t.trim().split(/\s+/).filter(Boolean).length
+    // The words in view: not a screen reader's, not what is held back, not what is off the screen.
+    const read = (from: Element | null): string => {
+      if (!from) return ''
+      const out: string[] = []
+      const walk = document.createTreeWalker(from, NodeFilter.SHOW_TEXT)
+      for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+        const p = n.parentElement
+        const t = n.textContent?.trim()
+        if (!p || !t || p.closest('.sr, [hidden], .leaving, .out, .gone')) continue
+        if (!p.checkVisibility({ opacityProperty: true, visibilityProperty: true } as CheckVisibilityOptions)) continue
+        const r = p.getBoundingClientRect()
+        if (r.width < 2 || r.height < 2 || r.bottom < 0 || r.top > innerHeight || r.right < 0 || r.left > innerWidth) continue
+        out.push(t)
+      }
+      return out.join(' ')
+    }
     const slip = [...ui.querySelectorAll<HTMLElement>('[data-testid="guide-slip"]')].find(vis) ?? null
-    const said = slip ? [...slip.querySelectorAll<HTMLElement>('.guide-ask, .guide-why')].filter(vis).map(e => e.innerText).join(' ') : ''
+    const screen = ui.querySelector<HTMLElement>('.season-screen:not(.leaving)')
+    const said = slip ? [...slip.querySelectorAll<HTMLElement>('.guide-ask, .guide-why')].filter(vis).map(e => read(e)).join(' ') : ''
     const card = [...ui.querySelectorAll<HTMLElement>('.guide-card')].find(vis) ?? null
     // What is on the land: the tags, stamps and faces, the fields' names aside.
-    let land = ui.querySelector<HTMLElement>('.plate-layer')?.innerText ?? ''
+    let land = read(ui.querySelector('.plate-layer'))
     for (const n of sim.FIELD_NAMES as string[]) land = land.split(n).join(' ')
+    const text = `${read(screen)} | ${land} | ${slip && !slip.classList.contains('guide-card') ? read(slip) : ''}`
     const asking: string[] = []
     if (slip) asking.push('note')
     if (vis(ui.querySelector('[data-testid="guide-offer"]'))) asking.push('offer')
@@ -56,16 +76,15 @@ async function see(page: Page): Promise<Seen> {
     if ([...ui.querySelectorAll('.notes .alert')].some(vis)) asking.push('toast')
     if (vis(ui.querySelector('.press-pop'))) asking.push('pop')
     if (vis(ui.querySelector('.tray-paper'))) asking.push('tray')
-    const screen = ui.querySelector<HTMLElement>('.season-screen:not(.leaving)')
     const sell = ui.querySelector<HTMLElement>('.paper-layer [data-testid^="lot-sell-"]')
     return {
       phase: c?.phase ?? 'title', speed: app.speed, day: c?.season?.day ?? -1, sold: c ? c.lots.filter((l: any) => l.sold > 0).length : 0, done: !!ui.querySelector('[data-testid="end-season"]'),
-      note: slip?.dataset.lesson ?? '', target: slip?.dataset.target ?? '', noteWords: count(said), cardWords: card ? count(card.innerText) : 0,
+      note: slip?.dataset.lesson ?? '', target: slip?.dataset.target ?? '', noteWords: count(said), cardWords: card ? count(read(card)) : 0,
       keys: slip ? [...slip.querySelectorAll<HTMLElement>('button')].filter(vis).map(b => b.dataset.testid ?? '') : [],
       asking,
-      words: count(screen ? screen.innerText : '') + count(land) + (slip && !slip.classList.contains('guide-card') ? count(slip.innerText) : 0),
+      words: count(text.replace(/\|/g, ' ')), text,
       hidden: [...ui.classList].filter(k => k.startsWith('st-hide-')).map(k => k.slice(8)),
-      ticketSell: sell && vis(sell) ? sell.dataset.testid! : '',
+      ticketSell: sell && vis(sell) ? sell.dataset.testid! : '', paperWords: count(read(ui.querySelector('.paper-layer > .dialog:not(.out)'))),
     }
   })
 }
@@ -77,7 +96,7 @@ function check(s: Seen, did: string[]): void {
   if (s.phase === 'season' && s.asking.length && !s.asking.includes('toast')) expect(s.speed, `the clock stands while ${s.asking[0]} is up, ${at}`).toBe(0)
   if (s.note) expect(s.noteWords, `${s.note} says it in ${NOTE_WORDS} words or fewer`).toBeLessThanOrEqual(NOTE_WORDS)
   expect(s.cardWords, `a card of ${CARD_WORDS} words or fewer ${at}`).toBeLessThanOrEqual(CARD_WORDS)
-  if (s.phase === 'season') expect(s.words, `words on the season screen ${at}`).toBeLessThanOrEqual(SEASON_WORDS)
+  if (s.phase === 'season') expect(s.words, `words on the season screen ${at}: ${s.text}`).toBeLessThanOrEqual(s.asking.includes('telegram') ? TELEGRAM_WORDS : SEASON_WORDS)
 }
 
 test('a guided first year: offered as a card, taken, and followed from Play to the first sale by what the notes ask alone', async ({ page, isMobile }) => {
@@ -105,33 +124,46 @@ test('a guided first year: offered as a card, taken, and followed from Play to t
   const did: string[] = []
   let first = true
   const words: number[] = []
+  let cardMost = 0
   let quiet = 0
-  for (let step = 0; step < 400; step++) {
-    const s = await see(page)
+  // The whole season at the first speed is ten minutes: the skips ahead make it far less.
+  const until = Date.now() + 720_000
+  let moved = { day: -1, at: Date.now() }
+  while (Date.now() < until) {
+    let s = await see(page)
     check(s, did)
     if (s.sold > 0) break
     expect(s.phase === 'plan' || s.phase === 'season', `still in the first season (${s.phase})`).toBe(true)
+    if (s.day !== moved.day || s.asking.length) moved = { day: s.day, at: Date.now() }
+    expect(Date.now() - moved.at, `the days stand with nothing asked, after ${did.join(' > ')} (day ${s.day}, speed ${s.speed})`).toBeLessThan(20_000)
     if (s.note) {
       quiet = 0
       if (did[did.length - 1] !== s.note) {
         did.push(s.note)
+        // Read as a player reads it: once it has settled.
+        await page.waitForTimeout(600)
+        s = await see(page)
+        check(s, did)
+        if (s.note !== did[did.length - 1]) continue
         words.push(s.words)
+        console.log(`${s.note} (day ${s.day}, ${s.words} words): ${s.text}`)
         // The first day of a guided season: the land, the date and the cash, and one note.
         if (s.note === 'fields' && first) {
           first = false
           console.log(`the first guided day: ${s.words} words on the screen; held back: ${s.hidden.join(', ')}`)
-          expect(s.words).toBeLessThanOrEqual(FIRST_DAY_WORDS)
+          expect(s.words, s.text).toBeLessThanOrEqual(FIRST_DAY_WORDS)
           expect(s.hidden.sort()).toEqual(['after', 'forecast', 'list', 'people', 'stamps'])
           await expect(page.getByTestId('guide-held')).toBeVisible()
         }
       }
-      // Only what the note asks: its skip ahead, its Noted, or the control it points at.
-      const key = s.keys.includes('guide-ahead') ? 'guide-ahead' : s.keys.includes('guide-noted') ? 'guide-noted' : ''
+      // Only what the note asks: the stamp it says to click, its skip ahead, its Noted, or the control it points at.
+      const key = s.note === 'stamp' && s.target.startsWith('badge-') ? '' : s.keys.includes('guide-ahead') ? 'guide-ahead' : s.keys.includes('guide-noted') ? 'guide-noted' : ''
       if (key) await page.locator(`#ui [data-testid="guide-slip"] [data-testid="${key}"]`).first().click()
       else await page.locator(`#ui [data-testid="${s.target}"]`).first().click()
       await page.waitForTimeout(120)
       continue
     }
+    if (s.asking.includes('telegram')) cardMost = Math.max(cardMost, s.words)
     if (s.asking.includes('telegram')) {
       // A telegram or the spraying question: the usual reply (the one marked first), as the card's agent line says.
       quiet = 0
@@ -141,14 +173,15 @@ test('a guided first year: offered as a card, taken, and followed from Play to t
       await page.waitForTimeout(200)
       continue
     }
-    if (s.ticketSell) { quiet = 0; did.push('ticket'); await page.locator(`#ui [data-testid="${s.ticketSell}"]`).click(); await page.waitForTimeout(300); continue }
+    if (s.ticketSell) { quiet = 0; did.push('ticket'); console.log(`the weigh ticket: ${s.paperWords} words`); await page.locator(`#ui [data-testid="${s.ticketSell}"]`).click(); await page.waitForTimeout(300); continue }
     if (s.asking.includes('tray')) { await page.getByTestId('sample-close').click().catch(() => {}); continue }
     // Nothing asks: the days run by themselves. A clock stopped with nothing said would be a fault.
     if (s.speed === 0 && !s.asking.length) expect(++quiet, `the clock stands with nothing on the screen saying why, after ${did.join(' > ')}`).toBeLessThan(40)
+    else quiet = 0
     await page.waitForTimeout(250)
   }
   console.log(`followed: ${did.join(' > ')}`)
-  console.log(`words on the screen at each note: ${words.join(' ')}`)
+  console.log(`words on the screen at each note: ${words.join(' ')}; the most with a telegram up: ${cardMost}`)
   expect((await see(page)).sold, `a crop sold, after ${did.join(' > ')}`).toBeGreaterThan(0)
   // The opening: what the game is, the land, planting day; then the year.
   expect(did.slice(0, 5)).toEqual(['frame', 'begin', 'fields', 'look', 'plantday'])

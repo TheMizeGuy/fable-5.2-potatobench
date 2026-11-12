@@ -93,7 +93,7 @@ function phaseRow(c: S.Campaign): HTMLElement | null {
   return h('ol', { class: 'phases', testid: 'phases', 'aria-label': `The year, in order. Now: ${PHASES[at]?.name ?? ''}${PHASES[at + 1] ? `; next: ${PHASES[at + 1].name}` : ''}` },
     PHASES.map((p, k) => h('li', {
       class: `term${k === at ? ' now' : k < at ? ' past' : ''}`, style: `flex:${start(k + 1) - start(k)}`, tabindex: '0', 'data-tip': p.says, 'aria-current': k === at ? 'step' : null,
-    }, h('span', { class: 'long' }, p.name), h('span', { class: 'short', 'aria-hidden': 'true' }, p.short))))
+    }, h('span', { class: 'sr' }, p.name), h('span', { 'aria-hidden': 'true' }, p.short))))
 }
 
 interface Cell { day: string; sky: string; hi: number; rain: number; blight: number; frost: number; said: string }
@@ -528,7 +528,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
                   icon(x.sky, 'i'),
                   h('span', { class: 'hi num' }, `${F.degrees(x.hi)}°`),
                   h('span', { class: 'wet num' },
-                    x.rain >= 30 ? `${x.rain}%` : null,
+                    x.rain >= 30 ? h('span', { class: 'pct' }, `${x.rain}%`) : null,
                     x.blight > 0 ? icon('blight', 'i risk') : null,
                     x.frost >= 30 ? icon('frost', 'i cold') : null)))) : null,
               phone ? balance : null),

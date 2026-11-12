@@ -7,7 +7,7 @@ import { h, type Child } from './dom.ts'
 import * as F from './fmt.ts'
 import { icon } from './icons.ts'
 import { ringFor } from './crew.ts'
-import { answerSpray, putSprayAway, SPRAY_WAYS, sprayAsking, sprayDoes, sprayWay } from './people.ts'
+import { answerSpray, putSprayAway, SPRAY_WAYS, sprayAsking, sprayWay } from './people.ts'
 import { firstName, jobText, SKILL_NAME } from './rules.ts'
 import { fist, key, stamp } from './system/parts.ts'
 import { agentLine } from './tutorial.ts'
@@ -142,12 +142,20 @@ export function incidentCard(ctx: Ctx): IncidentCard {
         h('button', { class: 'close tg-later', type: 'button', testid: 'spray-ask-close', 'aria-label': `Decide later${keys ? ' (Escape)' : ''}`, title: keys ? 'Decide later (Escape)' : undefined, onclick: () => putAway() }, icon('close', 'i'))),
       h('div', { class: 'tg-body' },
         icon('spray', 'i tg-ic'),
-        h('div', null, h('h2', { id: 'incident-title' }, 'Spraying this season'), h('p', null, 'Blight is a disease that can take a whole field in one wet week. A spray protects a field for about a week, then wears off. How is it to be done this season?'))),
+        h('div', null, h('h2', { id: 'incident-title' }, 'Spraying this season'), h('p', null, 'Blight can take a whole field in one wet week. A spray protects a field for about a week.'))),
       h('div', { class: 'replies three' }, SPRAY_WAYS.map((w, k) => h('button', {
         class: `reply${w.id === 'auto' ? ' first' : ''}${now === w.id ? ' is-on' : ''}`, type: 'button', testid: `spray-way-${w.id}`, 'aria-keyshortcuts': keys ? String(k + 1) : null,
         'aria-pressed': now ? String(now === w.id) : null, onclick: () => answerSprayHere(c, w.id),
       }, key(String(k + 1)), h('b', { class: 'c-title' }, w.name, w.id === 'auto' ? fist() : null),
-      h('span', { class: 'c-does' }, w.id === 'auto' ? h('b', { class: 'usual', testid: 'spray-usual' }, 'The usual choice. ') : null, sprayDoes(ctx, c, w.id))))))
+      h('span', { class: 'c-does' }, w.id === 'auto' ? h('b', { class: 'usual', testid: 'spray-usual' }, 'The usual choice. ') : null, sprayShort(c, w.id))))))
+  }
+
+  // The card's own few words for each way; the people's sheet has the long ones.
+  function sprayShort(c: S.Campaign, way: 'auto' | 'ask' | 'none'): string {
+    if (way === 'ask') return 'A stamp on a field when it wants spraying.'
+    if (way === 'none') return 'Blight, if it comes, goes unchecked.'
+    const o = S.sprayOutlook(app.world, c)
+    return o.dollars > 0 ? `The crew does it by itself: about ${F.money(o.dollars)} this season.` : 'The crew does it by itself.'
   }
 
   function answerSprayHere(c: S.Campaign, way: 'auto' | 'ask' | 'none'): void {

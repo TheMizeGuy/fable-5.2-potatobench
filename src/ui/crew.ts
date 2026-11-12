@@ -9,6 +9,7 @@ import { placeName, where } from './map.ts'
 import { doingGlyph, idleWithWork, sprayWay } from './people.ts'
 import { firstName, initial, JOB_DOING, JOB_VERB, jobText, KIND_GLYPH, KIND_NAME, kindDoes, personSign, SKILL_NAME, type Sign } from './rules.ts'
 import { portrait, ringed, ringOf } from './system/people.ts'
+import { guidedYear } from './tutorial.ts'
 
 // What a crew is doing now, in a few words, and the glyph and place that go with it.
 export interface Doing { glyph: string; text: string; place: number; progress: number }
@@ -287,14 +288,16 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
     const goal = hooks.goal()
     const stopped = new Set(c.incidents.filter(i => i.kind === 'breakdown' && i.unit !== undefined).map(i => i.unit!))
     // How many orders the list has room for before the rest fold behind a count.
-    const room = layout === 'narrow' ? Math.max(3, Math.floor((innerWidth - 120) / 52)) : layout === 'short' ? 4 : 7
+    // In the guided first year: the next two, and a count.
+    const guided = guidedYear(c)
+    const room = guided ? 3 : layout === 'narrow' ? Math.max(3, Math.floor((innerWidth - 120) / 52)) : layout === 'short' ? 4 : 7
     const now = crews.map(u => doing(c, u, waits, crews))
     const signs = people.map(p => personSign(p, idleWithWork(c, p, waits)))
     if (next && performance.now() >= next.until) next = null
     const model = {
       j: jobs.map(j => [j.id, j.kind, j.field, j.unit, Math.round(j.need > 0 ? j.done / j.need * 20 : 0), waits[j.id]]),
       u: crews.map((u, k) => [u.id, u.name, now[k].text, now[k].place, Math.round(now[k].progress * 20), signs[k]?.glyph, signs[k]?.cls, doingGlyph(c, people[k]), doingWord(c, people[k])]),
-      pick: app.unit, expanded, pop, popWho, layout, room, touch, h: c.fields.map(f => f.tenure), w: waiting.map(x => x.id), grid: hooks.gridOpen(), hire: hooks.hireShown(), goal,
+      pick: app.unit, expanded, pop, popWho, layout, room, guided, touch, h: c.fields.map(f => f.tenure), w: waiting.map(x => x.id), grid: hooks.gridOpen(), hire: hooks.hireShown(), goal,
       next: next ? [next.unit, next.kind, next.field] : 0, stopped: [...stopped],
       pr: c.crew.map(u => [u.id, u.prio, u.job, u.rest]),
       fate: [...f.of.values()].map(o => [o.id, o.unit, o.when, o.why]), press: f.pressing.map(p => [p.kind, p.field, p.why, p.inWay]),
@@ -302,7 +305,7 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
     el.classList.toggle('busy', jobs.length > 0)
     el.classList.toggle('many', many)
     patch(el, JSON.stringify(model), () => [
-      queue(c, jobs, crews, people, waits, many, room, f.of, pressingChip(c, f.pressing.filter(p => !(p.kind === 'spray' && sprayWay(c) === 'none')))),
+      queue(c, jobs, crews, people, waits, many, room, f.of, pressingChip(c, f.pressing.filter(p => !(p.kind === 'spray' && sprayWay(c) === 'none') && !(p.kind === 'kill' && p.job < 0 && guided)))),
       h('section', { class: 'timebook mount sys', 'aria-label': 'People' },
         h('div', { class: `page units${many ? ' many' : ''}${people.length > 5 ? ' crowded' : ''}`, role: 'group', 'aria-label': 'People' },
           people.map((p, k) => cell(c, p, now[k], signs[k], many, goal === 'person' && k === 1, stopped.has(p.id))),

@@ -391,7 +391,7 @@ export const LESSONS: Lesson[] = [
   },
   {
     id: 'hand', part: 'spring', name: 'Meet a hand', read: true, uses: ['unit:hand'],
-    when: (l, g) => inSeason(l) && !!hand(l) && (g.passed('calls2') || (firstYear(l) && g.passed('plantday'))),
+    when: (l, g) => inSeason(l) && !!hand(l) && g.passed('calls2'),
     done: (_l, g) => g.has('unit:hand') || g.has('noted:hand'),
     ask: l => {
       const n = first(hand(l)?.name ?? 'A hand')
