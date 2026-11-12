@@ -146,6 +146,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   lap('fields')
   const harvest = new Harvest()
   const crews = new Crews()
+  crews.setStand(i => flora.stand(i))
   lap('crews')
   const particles = new Particles(puffTex)
   const weather = new Weather()
@@ -920,6 +921,8 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
         // on the body: half way between the ground under them and the point over their head
         return { x: ((v.x + 1) / 2 * vp.w + at.x) / 2, y: ((1 - v.y) / 2 * vp.h + at.y) / 2 }
       },
+      // Where the interface pins a person's face.
+      unitPin: (id: number) => unitAnchor(id),
       // What a click at a point on the screen would pick.
       pickAt: (x: number, y: number) => ({ field: pick(x, y), unit: pickUnit(x, y), yard: pickYard(x, y), mode: snap.mode, held: snap.fields.map(f => f.held), available: snap.fields.map(f => f.available) }),
       parts: () => Object.keys(parts),

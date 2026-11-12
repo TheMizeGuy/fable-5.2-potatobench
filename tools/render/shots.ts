@@ -570,6 +570,83 @@ const strips: Strip[] = [
   { name: 's4-clock', n: 10, gap: 340, setup: async page => { await farm(page, SPRING); await settle(page); await page.evaluate(() => (window as any).__county.app.setSpeed(1)) } },
 ]
 shots.push(...people)
+// ---- The big land (phase B): people, machines and work from the field tier (three to five fields in frame), the farm
+// tier and the yard tier (the walk-in). `pins` stands a plain disc where the interface pins each person's face
+// (unitAnchor), so the frame shows what a player has to find them by.
+const FIELD_TIER = 330, FARM_TIER = 96
+async function pinPeople(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const f = (window as any).__countyField
+    for (const u of f.info().units as { id: number }[]) {
+      const a = f.unitPin(u.id)
+      if (!a.visible) continue
+      const d = document.createElement('div')
+      d.textContent = String(u.id)
+      d.style.cssText = `position:fixed;left:${a.x - 11}px;top:${a.y - 30}px;width:22px;height:22px;border-radius:11px;background:#f3ecdc;border:2px solid #1b1d1c;box-sizing:border-box;color:#1b1d1c;font:600 11px sans-serif;display:flex;align-items:center;justify-content:center;z-index:99`
+      const stem = document.createElement('div')
+      stem.style.cssText = `position:fixed;left:${a.x - 1}px;top:${a.y - 8}px;width:2px;height:8px;background:#1b1d1c;z-index:99`
+      document.body.append(d, stem)
+    }
+  })
+}
+const fieldTier = (page: Page, field: number, x = 0.5, z = 0.5) => view(page, { frame: 'field', field, x, z, dist: FIELD_TIER })
+// The field a kind of work was done in today, and who did it.
+const did = (page: Page, kind: string): Promise<{ field: number; unit: number }> => page.evaluate(kind => {
+  const w = (window as any).__county.app.campaign.season.worked.find((x: any) => x.kind === kind)
+  return w ? { field: w.field, unit: w.unit } : { field: 0, unit: 0 }
+}, kind)
+const AUTUMN = `start(); put('bunk'); fleet(); hire(4); say(app.do({ t: 'begin' })); run(244, ['kill']); clear(); job('kill', 0, 0)`
+const BLIGHT = `start(5, 1979); hire(1); say(app.do({ t: 'begin' })); run(200, ['spray', 'rogue'])`
+const HILLING = `start(); say(app.do({ t: 'begin' })); run(160, ['hill']); clear(); job('hill', 0, 0)`
+// a woodlot nearly half felled, so the cut line is out in the open
+const FELLING = `start(); hire(2); say(app.do({ t: 'begin' })); run(139, ['plant']); clear(); app.campaign.fields[14].felled = 18; app.emit({ type: 'change' }); job('fell', 14, 1)`
+// Each kind of work: how to reach a day on which it is done.
+const KINDS: [string, string, string][] = [
+  ['plant', SPRING, `until(['plant'])`], ['rocks', SPRING, `until(['rocks'])`], ['fell', FELLING, `until(['fell'])`], ['brush', SPRING, `until(['brush'])`], ['build', SPRING, `until(['build'])`],
+  ['spray', SUMMER, `until(['spray'])`], ['scout', SUMMER, `until(['scout'])`], ['sample', SUMMER, `until(['sample'])`], ['water', SUMMER, `until(['water'])`], ['hill', HILLING, `until(['hill'])`],
+  ['rogue', BLIGHT, `seekWork('rogue', ['spray'])`], ['kill', AUTUMN, `until(['kill'])`], ['dig', HARVEST, `job('dig', 0, 0); until(['dig'])`], ['haul', HARVEST, `job('dig', 0, 0); until(['dig']); until(['haul'], 4)`],
+]
+const reach = async (page: Page, scenario: string, then: string, at = 0.55, ms = 2600) => {
+  await farm(page, scenario)
+  await settle(page)
+  console.log('  ', await farm(page, then))
+  // to that point of the day, and on from it at a person's and a machine's own pace (the clock is stopped)
+  await seek(page, at, ms, 1)
+}
+const big: Shot[] = [
+  { name: 'b01-spring-field', size: [1920, 1080], setup: async page => { await reach(page, SPRING, `until(['plant', 'rocks', 'fell', 'build'])`); await fieldTier(page, 3, 0.2, 0.1); await frames(page, 12); await pinPeople(page) } },
+  { name: 'b02-spring-farm', size: [1920, 1080], setup: async page => { await reach(page, SPRING, `until(['plant', 'rocks', 'fell', 'build'])`); await view(page, { frame: 'land', x: 9, z: 1, dist: FARM_TIER }); await frames(page, 12); await pinPeople(page) } },
+  { name: 'b03-spring-field-bare', size: [1920, 1080], setup: async page => { await reach(page, SPRING, `until(['plant', 'rocks', 'fell', 'build'])`); await fieldTier(page, 3, 0.2, 0.1); await frames(page, 12) } },
+  ...KINDS.flatMap(([kind, scenario, then]): Shot[] => [
+    { name: `b1-${kind}-field`, size: [1920, 1080], setup: async page => { await reach(page, scenario, then); const w = await did(page, kind); if (w.field >= 0) await fieldTier(page, w.field); else await view(page, { frame: 'home', x: 30, z: -6, dist: 120 }); await frames(page, 12) } },
+    { name: `b2-${kind}-yard`, setup: async page => { await reach(page, scenario, then); const w = await did(page, kind); await onUnit(page, w.unit, kind === 'fell' ? { dist: 9, yaw: 0, pitch: 0.95 } : kind === 'build' ? { dist: 9, yaw: -2.2, pitch: 0.5 } : kind === 'dig' ? { dist: 13, yaw: 0.2, pitch: 0.4 } : { dist: 8, yaw: 0.7, pitch: 0.32 }, 0, kind === 'fell' ? 0.6 : 0); await frames(page, 8) } },
+  ]),
+  { name: 'b30-harvest-field', size: [1920, 1080], setup: async page => { await reach(page, HARVEST, `job('dig', 0, 0); job('dig', 2, 1); until(['dig']); until(['haul'], 3)`, 0.5, 3000); await fieldTier(page, 0, 0.5, 0.9); await frames(page, 12); await pinPeople(page) } },
+  { name: 'b31-harvest-yard', setup: async page => { await reach(page, HARVEST, `job('dig', 0, 0); until(['dig']); until(['haul'], 4)`, 0.3, 3000); const w = await did(page, 'haul'); await onUnit(page, w.unit, { dist: 11, yaw: 2.2, pitch: 0.3 }); await frames(page, 8) } },
+  { name: 'b32-sunday-yard', setup: async page => { await farm(page, SUNDAY); await settle(page); await farm(page, `app.do({ t: 'day' })`); await page.waitForTimeout(3000); await page.evaluate(() => (window as any).__countyField.settle()); await view(page, { frame: 'home', x: 20.6, z: 1.6, dist: 9, yaw: 1.0, pitch: 0.3 }); await frames(page, 10) } },
+  { name: 'b33-breakdown-yard', setup: async page => { await farm(page, `start(); hire(1); say(app.do({ t: 'begin' })); run(186); clear(); job('spray', 0, 0); until(['spray']); const c = app.campaign; c.broken.push(c.season.day + 3); c.incidents.push({ id: c.nextIncident++, kind: 'breakdown', day: c.season.day, until: c.season.day + 4, choices: ['rush', 'wait'], unit: 0, back: c.season.day + 3 }); app.emit({ type: 'change' })`); await settle(page); await farm(page, `app.do({ t: 'day' })`); await page.waitForTimeout(1500); await page.evaluate(() => (window as any).__countyField.settle()); await onTractor(page, { dist: 7, yaw: 0.9, pitch: 0.3 }, 0.4, 0.2) } },
+  { name: 'b34-figures-yard', setup: async page => { await farm(page, `start(); put('bunk'); app.do({ t: 'rent', field: 10 }); put('bunk', -2); hire(11)`); await settle(page); await onUnit(page, 3, { dist: 4.4, yaw: 0.3, pitch: 0.16 }); await frames(page, 10) } },
+  { name: 'b35-callers-yard', setup: async page => { await farm(page, `start(); hire(2); say(app.do({ t: 'begin' })); run(186); const c = app.campaign, d = c.season.day; c.incidents.push({ id: c.nextIncident++, kind: 'poach', day: d, until: d + 4, choices: ['match', 'refuse'], unit: 1, wage: 900 }, { id: c.nextIncident++, kind: 'buyer', day: d, until: d + 7, choices: ['take', 'refuse'], lot: 0 }, { id: c.nextIncident++, kind: 'applicant', day: d, until: d + 4, choices: ['hire', 'refuse'], applicant: { id: 99, name: 'Test', skills: { machine: 3, field: 3, woods: 3, build: 3, pack: 3 }, trait: 'strong', ask: 700 } }); app.emit({ type: 'change' })`); await settle(page); await view(page, { frame: 'home', x: 19.6, z: 3.4, dist: 8, yaw: 0.6, pitch: 0.36 }); await frames(page, 10) } },
+  { name: 'b36-animals-yard', setup: async page => { await reach(page, SPRING, `until(['rocks'])`, 0.6, 4000); const w = await did(page, 'rocks'); await onUnit(page, w.unit, { dist: 7, yaw: 0.9, pitch: 0.26 }, 1.5, 0); await frames(page, 8) } },
+]
+shots.push(...big)
+// One day's work at each speed of the clock, from the field tier; and with the clock stopped, when it is literal.
+const dayStrip = (speed: number, n: number, gap: number): Strip => ({
+  name: `t${speed}-day`, n, gap, setup: async page => {
+    await farm(page, SPRING)
+    await settle(page)
+    await view(page, { frame: 'field', field: 2, x: 0.5, z: 0.3, dist: 260 })
+    await frames(page, 10)
+    if (speed > 0) await page.evaluate(sp => (window as any).__county.app.setSpeed(sp), speed)
+    // (stopped, the work is literal: the drive out from the yard alone takes a minute and a half, so the day is taken
+    // up at its middle)
+    else { await farm(page, `app.do({ t: 'day' })`); await seek(page, 0.5, 400, 1) }
+  },
+})
+strips.push(dayStrip(1, 9, 170), dayStrip(2, 9, 85), dayStrip(3, 9, 55), dayStrip(0, 8, 5000))
+strips.push({ name: 't0-plant-close', n: 6, gap: 1500, setup: async page => { await farm(page, SPRING); await settle(page); await farm(page, `app.do({ t: 'day' })`); await page.waitForTimeout(9000); await onTractor(page, { dist: 8, yaw: 0.9, pitch: 0.28 }, 1.2, 0.3) } })
+strips.push({ name: 't0-fell-close', n: 8, gap: 900, setup: async page => { await farm(page, `start(); hire(2); say(app.do({ t: 'begin' })); run(139, ['plant']); clear(); app.campaign.fields[14].felled = 12; app.emit({ type: 'change' }); job('fell', 14, 1)`); await settle(page); await farm(page, `until(['fell'])`); await hold(page, 0.8, 2500); await onUnit(page, await worker(page, 'fell'), { dist: 17, yaw: 0, pitch: 1.05 }, 0, 0); await farm(page, `app.do({ t: 'day' })`); await page.waitForTimeout(1200) } })
+
 
 // ---- The blockout for choosing the size of the land: the same seven views whatever K is.
 // A July day with the sprayer out, people in three fields, and one hand with nothing to do standing in the dooryard.

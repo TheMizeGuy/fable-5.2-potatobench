@@ -48,7 +48,8 @@ export interface Weather {
   snwd: number
 }
 
-export interface Work { kind: sim.JobKind; field: number }
+// share: how far the order has got by the day's end, 0..1 (1 once it is finished); only on a person's own work.
+export interface Work { kind: sim.JobKind; field: number; share?: number }
 
 // A crew as the farm knows it: where it is, where it is driving to, and what it did today, in order.
 export interface UnitVis {
@@ -67,6 +68,7 @@ export interface UnitVis {
   resting: boolean         // a day off (a Sunday the farm keeps)
   winter: sim.WinterWork   // what they do in the cellar months
   winterField: number      // the tract felled in winter, or -1
+  livesOut: boolean        // hired, with no bed on the farm: comes and goes by the road
 }
 
 export interface BuildingVis {
@@ -209,12 +211,15 @@ export function snapshot(app: App): Snapshot {
     return {
       rig: c.crew.find(x => x.id === u.id)?.rig ?? '',
       tired: p ? p.tired : 0, mood: p ? p.mood : 1, hurt, resting: resting && !hurt,
-      winter: p ? p.winter : 'off', winterField: p ? p.winterField : -1,
+      winter: p ? p.winter : 'off', winterField: p ? p.winterField : -1, livesOut: !!p && p.kind !== 'farmer' && !p.bed,
       id: u.id, kind: u.kind, name: u.name,
       at: inSeason ? u.at : sim.HOME_YARD, to: inSeason ? u.to : sim.HOME_YARD,
       along: u.travelling && trip > 0 ? Math.max(0, Math.min(1, 1 - u.road / trip)) : 1,
       job: inSeason && u.job ? { kind: u.job.kind, field: u.job.field } : null,
-      worked: inSeason ? s.worked.filter(w => w.unit === u.id).map(w => ({ kind: w.kind, field: w.field })) : [],
+      worked: inSeason ? s.worked.filter(w => w.unit === u.id).map(w => {
+        const j = s.jobs.find(x => x.kind === w.kind && x.field === w.field)
+        return { kind: w.kind, field: w.field, share: j && j.need > 0 ? Math.max(0, Math.min(1, j.done / j.need)) : 1 }
+      }) : [],
     }
   })
   const nextJob = inSeason && s.jobs.length ? s.jobs[0] : null
@@ -287,7 +292,7 @@ function showcase(): Snapshot {
   return {
     mode: 'title', year: 1987, day: 196, seasonDay: -1, month: 0, fields,
     weather: { sky: 'clear', tmin: 13, tmax: 25, wind: 2.6, wdir: 250, prcp: 0, wetH: 6, snwd: 0 },
-    worked: [], units: [{ id: 0, kind: 'farmer', name: '', at: -1, to: -1, along: 1, job: null, worked: [], rig: '', tired: 0, mood: 1, hurt: false, resting: false, winter: 'off', winterField: -1 }],
+    worked: [], units: [{ id: 0, kind: 'farmer', name: '', at: -1, to: -1, along: 1, job: null, worked: [], rig: '', tired: 0, mood: 1, hurt: false, resting: false, winter: 'off', winterField: -1, livesOut: false }],
     farm: { buildings: [], logs: 0, stone: 0, pond: 0, standOpen: false, tractors: 1, broken: 0, truck: false, pickers: false, dufour: false, equipment: [], incidents: [], applicants: 0 },
     next: null, frozen: false, restDay: false, rime: null, wetGround: 0.1,
   }
