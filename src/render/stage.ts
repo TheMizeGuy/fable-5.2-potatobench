@@ -165,7 +165,7 @@ export class Stage {
     const brushy = f.snap.fields[st.field]?.cover === 'brush'
     const T = brushy ? 6.5 : 10.5, tCut = brushy ? 3 : 5.6, tDown = tCut + (brushy ? 0.8 : 1.5)
     const n = Math.floor(st.t / T), t = st.t - n * T
-    const spots: [number, number][] = [[1.25, 0.2], [1.7, -1.5], [1.2, 1.7]]
+    const spots: [number, number][] = [[0.95, 0.2], [1.3, -1.5], [0.9, 1.7]]
     const [tx, tz] = spots[n % 3]
     const sideways = n % 2 ? 1 : -1
     const H = brushy ? 1.25 : 2.7 + 0.5 * hash(n), r = brushy ? 0.035 : 0.08
@@ -244,26 +244,26 @@ export class Stage {
         }
       } else if (k === 2 || (k === 1 && !pair)) {
         // bucking a log at the landing
-        if (this.go(st, w, f, -0.75, -2.4, 0)) {
+        if (this.go(st, w, f, -0.62, -2.4, 0)) {
           const u = frac(st.t / 1.1 + 0.3)
           swing(w.pose, u < 0.55 ? 1 - ease(u / 0.55) : u < 0.68 ? (u - 0.55) / 0.13 : 1, true)
           w.pose.tool = 'axe'
         }
-        this.P(st, s, -0.2, 0.07, -2.9, c)
-        this.P(st, s, -0.2, 0.07, -1.7, e)
+        this.P(st, s, -0.08, 0.07, -2.9, c)
+        this.P(st, s, -0.08, 0.07, -1.7, e)
         pr.put('log', c, d.subVectors(e, c), Y, 0.15 * s, c.distanceTo(e), 0.15 * s, WHITE)
       } else {
         // dragging the tops to the brush pile
         const u = frac(st.t / 7 + k * 0.31)
         const out = u < 0.5
-        if (this.go(st, w, f, out ? 0.6 : -1.3, out ? 2.6 : 3.4 + 0.4 * (k % 2), 0, out ? 0 : 1) && out) stoop(w.pose.reset(), 0.9, st.t * 3)
+        if (this.go(st, w, f, out ? 0.5 : -0.3, out ? 2.6 : -4.2 - 0.4 * (k % 2), 0, out ? 0 : 1) && out) stoop(w.pose.reset(), 0.9, st.t * 3)
         if (!out) w.pose.held = 'brush'
       }
     })
     if (brushy) return
     // the team: out to the tree light, back to the landing with a log on the chain
     const TT = 17, tt = frac(st.t / TT + 0.4) * TT
-    const from: [number, number] = [-1.15, 3.2], to: [number, number] = [0.9, sideways * 1.4]
+    const from: [number, number] = [-0.25, 3.4], to: [number, number] = [0.6, sideways * 1.6]
     const going = tt < 5.5, hitching = tt >= 5.5 && tt < 7.5, hauling = tt >= 7.5 && tt < 15
     const u = going ? ease(tt / 5.5) : hitching ? 1 : hauling ? 1 - ease((tt - 7.5) / 7.5) : 0
     const hx = from[0] + (to[0] - from[0]) * u, hz = from[1] + (to[1] - from[1]) * u
@@ -289,7 +289,7 @@ export class Stage {
     // logs at the landing
     d.set(-Math.sin(h), 0, Math.cos(h))
     for (let k = 0; k < 3; k++) {
-      this.P(st, s, -1.45 + 0.17 * (k % 2) + (k === 2 ? 0.08 : 0), 0.07 + (k === 2 ? 0.14 : 0), 3.6, c)
+      this.P(st, s, -0.45 + 0.17 * (k % 2) + (k === 2 ? 0.08 : 0), 0.07 + (k === 2 ? 0.14 : 0), 4.6, c)
       pr.put('log', c, d, Y, 0.15 * s, 1.9 * s, 0.15 * s, WHITE)
     }
   }
@@ -304,7 +304,7 @@ export class Stage {
     const leg = (2 * half) / 0.32 + 5
     const k = Math.floor(st.t / leg), u = st.t - k * leg
     const along = Math.min(1, u / (leg - 5)), dir = k % 2 ? -1 : 1
-    const bx = dir * (-half + 2 * half * along) / Math.max(1, s * 0.75), bz = (-3 + (k % 4) * 2) / Math.max(1, s * 0.75)
+    const bx = dir * (-half + 2 * half * along) / s, bz = (-3 + (k % 4) * 2) / s
     const moving = along < 1 && f.going
     const unloading = along >= 1
     if (unloading) st.load = Math.max(0, st.load - f.dt * 3)
@@ -359,7 +359,8 @@ export class Stage {
   private brush(st: Site, ws: Worker[], f: StageFrame): void {
     const pr = f.pr, s = f.s
     const burning = f.wind < 0.5 && !f.cold
-    const fx = 1.5, fz = 0
+    // the hedge is ahead of the spot; the pile and the fire behind, on the headland
+    const fx = -0.9, fz = 0
     this.P(st, s, fx, 0, fz, a)
     // the pile, and on a still day the fire in it
     for (let n = 0; n < 6; n++) {
@@ -384,18 +385,18 @@ export class Stage {
       const lz = (r % 2 ? 1 : -1) * (1.3 + 1.5 * Math.floor(r / 2))
       const T = 8, t = frac(st.t / T + r * 0.37 + w.id * 0.21) * T
       if (t < 3.6) {
-        if (this.go(st, w, f, -0.2, lz, Math.PI)) {
+        if (this.go(st, w, f, 0.1, lz, 0)) {
           const u = frac(t / 1.2)
           swing(w.pose, u < 0.5 ? 1 - ease(u / 0.5) : u < 0.64 ? (u - 0.5) / 0.14 : 1, false, 0.3)
           w.pose.tool = 'hook'
         }
       } else if (t < 4.6) {
-        if (this.go(st, w, f, -0.35, lz, Math.PI)) stoop(w.pose.reset(), Math.sin((t - 3.6) * Math.PI), st.t * 4)
+        if (this.go(st, w, f, 0.25, lz, 0)) stoop(w.pose.reset(), Math.sin((t - 3.6) * Math.PI), st.t * 4)
       } else if (t < 6.6) {
-        const there = this.go(st, w, f, fx - 0.75, fz + Math.sign(lz) * 0.5, -Math.sign(lz) * 0.6, 1)
+        const there = this.go(st, w, f, fx + 0.7, fz + Math.sign(lz) * 0.45, Math.PI - Math.sign(lz) * 0.5, 1)
         w.pose.held = 'brush'
         if (there) { lifting(w.pose, 0.7, Math.sign(lz)); w.pose.held = t < 6.2 ? 'brush' : '' }
-      } else if (this.go(st, w, f, -0.2, lz, Math.PI)) stand(w.pose, st.t, w.tired)
+      } else if (this.go(st, w, f, 0.1, lz, 0)) stand(w.pose, st.t, w.tired)
     })
   }
 
@@ -510,34 +511,45 @@ export class Stage {
     const ch = Math.cos(heading), sh = Math.sin(heading)
     // beside the bed, on the side away from the crop
     const flank = (lx: number, lz: number, out2: Pt) => { out2.x = px + (ch * lx - sh * lz) * s; out2.z = pz + (sh * lx + ch * lz) * s; return out2 }
+    w.lift = 0
+    if (!w.rig) {
+      // no machine of their own to load: lending a hand with the barrels at the field
+      this.local(st, s, 1.6 + 1.1 * r, -1.5, PT)
+      w.x = PT.x
+      w.z = PT.z
+      w.heading = st.spot.heading - Math.PI / 2
+      w.aboard = false
+      if (loading) { lifting(w.pose, frac(st.t / 1.7 + r * 0.4), 1, 0.1); w.pose.held = frac(st.t / 1.7 + r * 0.4) > 0.24 && frac(st.t / 1.7 + r * 0.4) < 0.78 ? 'barrel' : '' }
+      else stand(w.pose, st.t, w.tired, 1)
+      return
+    }
     w.aboard = out
     if (out) return
-    w.lift = 0
-    if (done) { flank(-0.9, 1.0, PT); w.x = PT.x; w.z = PT.z; w.heading = heading + 0.6; stand(w.pose, st.t, w.tired, 1); return }
+    if (done) { flank(-0.9, -1.0, PT); w.x = PT.x; w.z = PT.z; w.heading = heading - 0.6; stand(w.pose, st.t, w.tired, 1); return }
     // a barrel at a time: up from the ground and round onto the bed, or down off it and round to the door
-    flank(-1.05, 0.98, PT)
+    flank(-1.05, -0.98, PT)
     w.x = PT.x
     w.z = PT.z
     const cyc = frac(st.t / 1.5 + r * 0.5)
     if (loading) {
       lifting(w.pose, cyc, 0, 0.16)
-      w.heading = heading - Math.PI / 2 + Math.PI * (1 - ease(span(0.4, 0.66, cyc)))
+      w.heading = heading - Math.PI / 2 + Math.PI * ease(span(0.4, 0.66, cyc))
       w.pose.held = cyc > 0.24 && cyc < 0.78 ? 'barrel' : ''
       // barrels brought to the headland, waiting to go
       const left = CAP - load
       for (let n = 0; n < Math.min(left, 6); n++) {
-        flank(-0.6 - 0.44 * n, 1.8 + 0.1 * (n % 2), PT)
+        flank(-0.6 - 0.44 * n, -1.8 - 0.1 * (n % 2), PT)
         a.set(PT.x, heightAt(PT.x, PT.z), PT.z)
         pr.put('barrel', a, Y, X, 0.42 * s, 0.42 * s, 0.42 * s, WHITE)
       }
     } else if (unloading) {
       lifting(w.pose, 1 - cyc, 0, 0.16)
-      w.heading = heading - Math.PI / 2 + Math.PI * ease(span(0.3, 0.6, cyc))
+      w.heading = heading + Math.PI / 2 - Math.PI * ease(span(0.3, 0.6, cyc))
       w.pose.held = cyc > 0.2 && cyc < 0.74 ? 'barrel' : ''
       // set down, and rolled on its side to the big door
       const door = houseDoor(houseFor(st.field, f.snap.farm.dufour))
       const rolling = frac(st.t / 1.5 + r * 0.5 + 0.3)
-      flank(-1.05, 1.7, PT)
+      flank(-1.05, -1.7, PT)
       a.set(PT.x, heightAt(PT.x, PT.z) + 0.17 * s, PT.z)
       b.set(door.x, heightAt(door.x, door.z) + 0.17 * s, door.z - 0.6)
       c.copy(a).lerp(b, rolling)

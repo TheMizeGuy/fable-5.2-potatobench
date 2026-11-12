@@ -3,7 +3,7 @@
 import { COLS, HILLS, ROWS, type BuildingKind, type HillLook, type JobKind } from '../sim/index.ts'
 import type { HillDisplay } from './fields.ts'
 import {
-  BARN, DUFOUR_POTATO_HOUSE, FIELDS, HOUSE, POTATO_HOUSE, SZ, fieldAt, fieldBaseY, groundY, hillPos, parkSpot, route, yardSpot, type Pt,
+  BARN, DUFOUR_POTATO_HOUSE, FIELDS, HOUSE, POTATO_HOUSE, SZ, WALLS, fieldAt, fieldBaseY, groundY, hillPos, parkSpot, route, yardSpot, type FieldRect, type Pt,
 } from './layout.ts'
 import type { Snapshot, UnitVis } from './state.ts'
 
@@ -97,7 +97,7 @@ export function houseFor(field: number, dufour: boolean): number {
 
 // Where each machine is kept: the tractors on the potato house apron, the truck by the barn.
 export function machineHome(kind: 'tractor' | 'truck', k: number): Spot {
-  if (kind === 'truck') return { x: BARN.x - 3.9, z: BARN.z + 2.6, heading: 0.25 }
+  if (kind === 'truck') return { x: BARN.x - 4.0, z: BARN.z + 3.7, heading: -0.3 }
   return yardSpot(-1, k, false)
 }
 
@@ -121,8 +121,17 @@ export function sickSpot(k: number): Spot {
 // Where people stand about before the season and between jobs at home: the farmer by the kitchen door, the rest by the barn.
 export function idleSpot(yard: number, slot: number, farmer: boolean): Spot {
   if (yard === -1 && farmer) return { x: HOUSE.x - 2.9, z: HOUSE.z - 2.0, heading: 2.6 }
-  return yardSpot(yard, slot, true)
+  if (yard !== -1) return yardSpot(yard, slot, true)
+  // in the dooryard between the barn and the road, in loose knots, turned to one another
+  const [x, z] = DOORYARD[slot % DOORYARD.length]
+  const knot = DOORYARD_KNOTS[Math.floor((slot % DOORYARD.length) / 3) % DOORYARD_KNOTS.length]
+  return { x, z, heading: Math.atan2(knot[1] - z, knot[0] - x) }
 }
+const DOORYARD: [number, number][] = [
+  [20.7, -7.5], [20.0, -6.9], [20.8, -6.5], [19.5, -8.9], [20.4, -9.3], [19.3, -9.9],
+  [20.6, -4.6], [19.8, -4.1], [19.6, -5.1], [19.1, -7.3], [18.9, -6.4], [19.6, -6.0],
+]
+const DOORYARD_KNOTS: [number, number][] = [[20.5, -7.0], [19.75, -9.4], [20.0, -4.6], [19.2, -6.6]]
 
 // Callers: where someone waits at the gate, where a neighbour's truck pulls in, where a buyer leaves his car.
 export const GATE: Spot = { x: 18.7, z: 4.9, heading: 0.5 }
@@ -160,8 +169,9 @@ export function restAt(place: number, slot: number, walker: boolean): Pt & { hea
 export function siteAt(kind: JobKind, field: number): Spot {
   const f = FIELDS[field]
   if (!f) return { x: 0, z: 0, heading: 0 }
-  if (kind === 'fell') return { x: f.cx, z: f.z1 - 1.6, heading: -Math.PI / 2 }
-  if (kind === 'brush') return { x: f.cx, z: f.z1 + 0.5, heading: Math.PI / 2 }
+  // felling at the edge the farm comes at the tract from, facing into it: the swale from the road, the woods from the lane
+  if (kind === 'fell') return f.i === 15 ? { x: f.x0 + 2.4, z: f.cz, heading: 0 } : { x: f.cx, z: f.z1 + 0.4, heading: -Math.PI / 2 }
+  if (kind === 'brush') return hedgeSpot(f)
   if (kind === 'haul') return { x: f.x1 + 0.9, z: f.cz, heading: -Math.PI / 2 }
   return { x: f.cx, z: f.cz, heading: 0 }
 }
@@ -172,6 +182,24 @@ export function waterWay(snap: Snapshot, field: number, pondDrawn: boolean): 'ta
   const block = FIELDS[field]?.block
   if (pondDrawn && (block === 'home' || block === 'brook')) return 'pipe'
   return snap.farm.equipment.includes('reel') ? 'reel' : 'tank'
+}
+
+// Where a field's hedgerow is cut back: on the headland by its nearest wall, facing the wall.
+function hedgeSpot(f: FieldRect): Spot {
+  let best: Spot = { x: f.cx, z: f.z1 + 0.6, heading: Math.PI / 2 }, bd = Infinity
+  for (const [x0, z0, x1, z1] of WALLS) {
+    const upright = Math.abs(x1 - x0) < Math.abs(z1 - z0)
+    if (upright) {
+      if (f.cz < Math.min(z0, z1) - 3 || f.cz > Math.max(z0, z1) + 3) continue
+      const side = x0 > f.cx ? 1 : -1, edge = side > 0 ? f.x1 : f.x0, d = Math.abs(x0 - edge)
+      if (d < bd) { bd = d; best = { x: edge + side * Math.min(0.9, d * 0.6), z: f.cz, heading: side > 0 ? 0 : Math.PI } }
+    } else {
+      if (f.cx < Math.min(x0, x1) - 3 || f.cx > Math.max(x0, x1) + 3) continue
+      const side = z0 > f.cz ? 1 : -1, edge = side > 0 ? f.z1 : f.z0, d = Math.abs(z0 - edge)
+      if (d < bd) { bd = d; best = { x: f.cx, z: edge + side * Math.min(0.9, d * 0.6), heading: side > 0 ? Math.PI / 2 : -Math.PI / 2 } }
+    }
+  }
+  return best
 }
 
 // Up one simulated row and back down the next: four planted rows to a pass, with a turn out on the headland between.

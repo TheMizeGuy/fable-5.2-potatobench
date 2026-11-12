@@ -18,7 +18,7 @@ import { Stage, type StageFrame, type Worker } from './stage.ts'
 import type { Snapshot, UnitVis } from './state.ts'
 import { Car, GRIME, PAINTS, Tractor, implementFor, type MachineFrame, type MachineState } from './tractor.ts'
 import {
-  BUYER, CALLER, GATE, MACHINE_JOBS, OFF_FARM, Poly, heightAt, idleSpot, machineHome, planDay, restAt, sickSpot, sundaySpot,
+  BUYER, CALLER, GATE, MACHINE_JOBS, OFF_FARM, Poly, buildSite, heightAt, idleSpot, machineHome, planDay, restAt, sickSpot, siteAt, sundaySpot,
   type CrewFrom, type Reveal, type Ride, type Seg, type Spot,
 } from './work.ts'
 
@@ -159,9 +159,9 @@ export class Crews {
         varying vec2 vUv; varying vec2 vInfo; varying vec3 vCol;
         void main() {
           float r = length(vUv), aa = fwidth(r) * 1.3;
-          float band = smoothstep(0.74 - aa, 0.74 + aa, r) * (1.0 - smoothstep(0.92 - aa, 0.92 + aa, r));
-          float inner = smoothstep(0.5 - aa, 0.5 + aa, r) * (1.0 - smoothstep(0.58 - aa, 0.58 + aa, r)) * vInfo.y;
-          float wash = (1.0 - smoothstep(0.0, 0.74, r)) * 0.16 * vInfo.y;
+          float band = smoothstep(0.68 - aa, 0.68 + aa, r) * (1.0 - smoothstep(0.94 - aa, 0.94 + aa, r));
+          float inner = smoothstep(0.44 - aa, 0.44 + aa, r) * (1.0 - smoothstep(0.54 - aa, 0.54 + aa, r)) * vInfo.y;
+          float wash = (1.0 - smoothstep(0.2, 0.7, r)) * (0.26 + 0.14 * vInfo.y);
           float a = max(max(band, inner * (0.7 + 0.3 * sin(uTime * 4.0))), wash) * vInfo.x;
           if (a < 0.01) discard;
           vec3 col = mix(vCol, vec3(1.0, 0.84, 0.42), 0.55 * vInfo.y) + 0.25 * vInfo.y;
@@ -280,9 +280,23 @@ export class Crews {
         else if (u.winter === 'build') { const b = snap.farm.buildings.find(x => !x.built); if (b) a.post = `${b.yard}|build` }
         if (a.kind !== 'farmer' && !a.post) a.shown = 0
         if (a.kind === 'farmer' && !a.post) r = { x: HOUSE.x - 2.9, z: HOUSE.z - 5.6, heading: 0.2 }
+        // already out at the work
+        if (a.post.endsWith('|fell')) r = siteAt('fell', u.winterField)
+        else if (a.post.endsWith('|pack')) r = buildSite('packing', -1)
+        else if (a.post) { const b = snap.farm.buildings.find(x => !x.built); if (b) r = buildSite(b.kind, b.yard) }
       }
       a.x = r.x; a.z = r.z; a.heading = r.heading
       a.worker.x = a.x; a.worker.z = a.z
+      // part way through work with a machine: it stands where they are
+      if (snap.mode === 'season' && u.rig && u.at >= 0) {
+        const rig = this.rigs.find(x => x.kind === u.rig && x.holder < 0 && !x.broken)
+        if (rig) {
+          const at = restAt(u.at, a.slot, false)
+          rig.x = at.x; rig.z = at.z; rig.heading = at.heading; rig.holder = a.id
+          a.rig = rig
+          a.x = at.x + 0.2; a.z = at.z + 1.0
+        }
+      }
     }
     if (snap.mode === 'season') this.goals(snap)
   }
@@ -442,12 +456,16 @@ export class Crews {
     this.rings = 0
     this.ringMat.uniforms.uTime.value = f.time
     const snap = f.snap, env = f.env
-    const grown = smooth(24, 115, f.dist)
-    const bigMachine = 1 + 1.0 * grown, big = bigMachine * FIGURE
+    // People and machines are drawn larger than life as the camera draws back, so that a person never falls below
+    // about fifty pixels on the screen and a tractor about sixty.
+    const perUnit = this.screenH / (2 * Math.tan((f.camera.fov * Math.PI) / 360)) / Math.max(1, f.dist)
+    const bigMachine = clamp(64 / (1.27 * perUnit), 1, 2.9)
+    const big = clamp(50 / (0.78 * FIGURE * perUnit), 1, bigMachine * 1.3) * FIGURE
     const cold = env.snow > 0.3
     this.cold = cold
     const going = snap.mode === 'season' ? f.advancing || f.dayT < 1 : snap.mode !== 'title'
-    const far = smooth(30, 70, f.dist) * (f.season ? 0.8 : 0.5)
+    const far = smooth(22, 55, f.dist) * (f.season ? 1 : 0.6)
+    this.far = far
     GRIME.value.set(0.52, 0.42, 0.31).lerp(V.set(0.2, 0.15, 0.11), clamp(env.wet * 1.4 - 0.3, 0, 1))
     const sf: StageFrame = { pr, particles: f.particles, dt: f.dt, time: f.time, s: big, snap, wind: env.wind, cold, still: f.reduced, going }
     const mf: MachineFrame = {
@@ -497,7 +515,7 @@ export class Crews {
         if (a.aboard) return
         if (!going) this.idle(a, f, w.pose)
         this.figure(a, w.pose, big, w.lift)
-        this.ring(a.x, heightAt(a.x, a.z), a.z, 0.5 * big, a, f, far)
+        this.ring(a.x, heightAt(a.x, a.z), a.z, 0.56 * big, a, f, far)
       })
     }
 
@@ -541,7 +559,7 @@ export class Crews {
     this.rAt.setXYZW(k, x, y + 0.07, z, radius * (1 + 0.25 * picked))
     this.rInfo.setXY(k, level * (picked ? 1 : 0.85), picked)
     const c = a.dress.shirt
-    this.rCol.setXYZ(k, c.r * 1.5 + 0.08, c.g * 1.5 + 0.08, c.b * 1.5 + 0.08)
+    this.rCol.setXYZ(k, c.r * 1.7 + 0.1, c.g * 1.7 + 0.1, c.b * 1.7 + 0.1)
   }
 
   private figure(a: Actor, pose: Pose, scale: number, lift = 0): void {
@@ -552,6 +570,8 @@ export class Crews {
     a.scale = scale
   }
   private cold = false
+  private screenH = 900
+  private far = 0
   private pondWas = 0
 
   // Between jobs and at the day's end: standing easy, or sitting down when worn out.
@@ -605,7 +625,7 @@ export class Crews {
       this.atEase(a, f, pose, big)
       if (a.aboard && rig) { a.x = rig.x; a.z = rig.z; a.heading = rig.heading; return null }
       this.figure(a, pose, big)
-      this.ring(a.x, heightAt(a.x, a.z), a.z, 0.5 * big, a, f, smooth(30, 70, f.dist) * (f.season ? 0.8 : 0.5))
+      this.ring(a.x, heightAt(a.x, a.z), a.z, 0.56 * big, a, f, this.far)
       return null
     }
     const span = Math.max(1e-6, seg.end - seg.start)
@@ -638,6 +658,10 @@ export class Crews {
     } else {
       const w = (p - tShare) / (1 - tShare)
       if (seg.site) {
+        // the way there went by unseen (the clock ran fast): they are there
+        const spot = seg.path[0]
+        if (Math.hypot(spot.x - a.x, spot.z - a.z) > 9 && !rig) { a.x = spot.x; a.z = spot.z }
+        if (rig && seg.ride && Math.hypot(spot.x - rig.x, spot.z - rig.z) > 9 && w < 0.4) { rig.x = spot.x; rig.z = spot.z; rig.moved = 0 }
         site = { key: seg.site, kind: seg.site.split('|')[1], field: seg.field, w }
       } else if (!seg.walker && rig) {
         // Dig day is staged: the digger is lowered at the row's end, the rows come out, and the tractor stands at the finish.
@@ -689,7 +713,7 @@ export class Crews {
     a.x = px
     a.z = pz
     this.figure(a, pose, big)
-    this.ring(a.x, heightAt(a.x, a.z), a.z, 0.5 * big, a, f, smooth(30, 70, f.dist) * (f.season ? 0.8 : 0.5))
+    this.ring(a.x, heightAt(a.x, a.z), a.z, 0.56 * big, a, f, this.far)
     return null
   }
 
@@ -869,8 +893,8 @@ export class Crews {
     void sf
   }
 
-  // The screen's size in CSS pixels (kept for the callers of the old pin markers).
-  setScreen(_w: number, _h: number): void {}
+  // The screen's size in CSS pixels, for how large people must be drawn to be seen.
+  setScreen(_w: number, h: number): void { this.screenH = Math.max(200, h) }
 
   // The person under a point on the screen (CSS pixels), or -1: on their body, or on the machine they are on. The reach
   // is generous when they are small on the screen.

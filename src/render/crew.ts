@@ -365,7 +365,7 @@ const a = new Vector3(), b = new Vector3(), c = new Vector3(), d = new Vector3()
 const X = new Vector3(1, 0, 0), Y = new Vector3(0, 1, 0), Z = new Vector3(0, 0, 1)
 const WOOD = new Color('#8a6f4c'), STEEL = new Color('#8b8d88'), IRON = new Color('#3a3b3a'), SACK = new Color('#b39a6b'), WICKER = new Color('#a98452')
 const STONE = new Color('#8f8a80'), LEATHER = new Color('#5b3d27'), LINEN = new Color('#e6e1d4'), TUBER = new Color('#c9a878'), PALE = new Color('#d8c9a2')
-const BRUSH = new Color('#4d5a34'), ALU = new Color('#b9bcc0')
+const BRUSH = new Color('#4d5a34'), ALU = new Color('#b9bcc0'), EYE = new Color('#1d1612')
 
 // The joint between `root` and `goal` of a limb with bones l1 and l2, bent toward `bend`. Returns the joint in `out`.
 function joint(root: Vector3, goal: Vector3, l1: number, l2: number, bend: Vector3, out: Vector3): void {
@@ -482,6 +482,11 @@ export function drawFigure(pr: Prims, at: Matrix4, dress: Dress, p: Pose): void 
   pr.put('ball', head, HU, HF, 0.06 * s, 0.066 * s, 0.057 * s, dress.skin)
   a.copy(head).addScaledVector(HF, 0.052 * s).addScaledVector(HU, -0.008 * s)
   pr.put('ball', a, HU, HF, 0.016 * s, 0.014 * s, 0.013 * s, dress.skin)
+  // eyes, and the brows' shadow over them
+  for (const side of [-1, 1]) {
+    a.copy(head).addScaledVector(HF, 0.05 * s).addScaledVector(HU, 0.012 * s).addScaledVector(HR, side * 0.022 * s)
+    pr.put('ball', a, HU, HF, 0.0075 * s, 0.009 * s, 0.0085 * s, EYE)
+  }
   // hair: over the back of the head and down to the collar
   b.copy(HU).addScaledVector(HF, -0.55).normalize()
   a.copy(head).addScaledVector(HF, -0.006 * s)
