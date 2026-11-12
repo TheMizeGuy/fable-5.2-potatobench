@@ -298,7 +298,9 @@ test('the progress survives a reload, and any lesson can be shown again from How
   await page.getByTestId('menu-open').first().click()
   await page.getByTestId('guide-open').click()
   await expect(page.getByTestId('guide')).toBeVisible()
-  await page.getByTestId('guide-on').uncheck()
+  // The tick is drawn over the box: the label is what a player clicks.
+  await page.locator('#ui label.guide-on').click()
+  await expect(page.getByTestId('guide-on')).not.toBeChecked()
   // From the menu: one lesson again, with the guide off.
   await page.getByTestId('guide-again-clock').click()
   await expect(page.getByTestId('guide')).toHaveCount(0)
@@ -312,7 +314,8 @@ test('the progress survives a reload, and any lesson can be shown again from How
   await page.getByTestId('how-open').click()
   await page.getByTestId('how-guide').click()
   await expect(page.getByTestId('guide')).toBeVisible()
-  await page.getByTestId('guide-on').check()
+  await page.locator('#ui label.guide-on').click()
+  await expect(page.getByTestId('guide-on')).toBeChecked()
   await page.getByTestId('guide-close').click()
   await expect.poll(() => page.evaluate(() => (globalThis as unknown as { __countyGuide: { on: boolean } }).__countyGuide.on)).toBe(true)
   expect(errors, errors.join('\n')).toEqual([])
