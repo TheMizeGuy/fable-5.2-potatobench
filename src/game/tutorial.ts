@@ -105,6 +105,7 @@ function potatoField(c: S.Campaign | null): number {
   return 0
 }
 const farmer = (l: Look) => l.c?.crew[0]?.id ?? 0
+const over = (l: Look) => l.c?.season?.frozen ? 'The ground has frozen and the season is over.' : 'The crop is in and the season is over.'
 const hand = (l: Look) => l.c?.crew.find(u => u.kind !== 'farmer') ?? null
 // A job the routine put on the list by itself (Campaign.routine, where the simulation has it).
 const routineJob = (l: Look) => !!l.c?.season?.jobs.some(j => j.by === 'routine')
@@ -346,7 +347,7 @@ export const LESSONS: Lesson[] = [
     id: 'close', part: 'year', name: 'Close out the season', urgent: true,
     when: l => inSeason(l) && !!l.c && S.seasonDone(l.c),
     done: (l, _g, since) => !!since && !!l.c && l.c.phase !== 'season',
-    ask: l => by(l, 'The ground has frozen and the season is over. Press Close out the season.', 'The ground has frozen and the season is over. Tap Close out the season.', 'The ground has frozen and the season is over. Close out the season.'),
+    ask: l => by(l, `${over(l)} Press Close out the season.`, `${over(l)} Tap Close out the season.`, `${over(l)} Close out the season.`),
     why: () => 'Winter is next: what you stored waits in the cellar to be sold.',
     point: () => ({ testid: ['end-season'] }),
   },
