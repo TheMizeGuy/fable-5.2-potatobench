@@ -373,9 +373,6 @@ const STATES: State[] = [
   { name: 'guide-stamp', what: 'Guide: a call that is the player\'s, the fist on its stamp', sizes: ALL, run: guideAt('stamp', `app.do({ t: 'sprayWay', way: 'ask' }); ${DAYS}(() => app.needs().some(n => n.need && n.need.act === 'spray'))`) },
   { name: 'guide-kill', what: 'Guide: the crop nearly made, killing the vines said', sizes: ALL, run: guideAt('kill', `app.do({ t: 'sprayWay', way: 'auto' }); ${DAYS}(() => sim.pressing(app.world, c).some(p => p.kind === 'kill') || c.season.jobs.some(j => j.kind === 'kill'))`) },
   { name: 'guide-dig', what: 'Guide: the dig begun', sizes: ALL, run: guideAt('dig', `app.do({ t: 'sprayWay', way: 'auto' }); ${DAYS}(() => c.season.fields.some(f => f.status === 'digging' || f.status === 'dug'))`) },
-  { name: 'guide-held', what: 'Guide: a note up and the clock pressed: the days stay stopped', sizes: ALL, run: async (page, size) => {
-    await guideAt('plantday', `${DAYS}(() => c.season.fields.some(f => f.plantDay >= 0))`)(page, size)
-  } },
   { name: 'guide-telegram', what: 'Guide: the first telegram, the agent\'s line inside it and no note beside it', sizes: ALL, run: guideAt('blight', `const c = app.campaign; c.incidents.push({ id: c.nextIncident++, kind: 'breakdown', day: c.season.day, until: c.season.day + 2, choices: ['rush', 'wait'], unit: 0, back: c.season.day + 3 }); app.setSpeed(1); app.setSpeed(0)`) },
   { name: 'guide-ticket', what: 'Guide: the first weigh ticket, the agent\'s line inside it and no note beside it', sizes: ALL, run: async page => {
     await q(page, `window.__countyGuide.reset(); window.__countyGuide.skipTo('bills')`)

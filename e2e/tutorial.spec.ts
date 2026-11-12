@@ -246,6 +246,33 @@ test('key 1 takes the guide, the title starts a guided farm outright, and a relo
   expect(errors, errors.join('\n')).toEqual([])
 })
 
+test('the clock is the player\'s: Space puts a note away, the next one holds the days again, and after the last they run', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'a phone has no keyboard')
+  test.setTimeout(240_000)
+  const errors = watchErrors(page)
+  await fresh(page)
+  await page.getByTestId('play').click()
+  await page.getByTestId('guide-accept').click()
+  await page.locator('#ui [data-testid="guide-slip"] [data-testid="guide-noted"]').click()
+  await page.getByTestId('begin-season').click()
+  const note = page.locator('#ui [data-testid="guide-slip"]:not([hidden])')
+  await expect(note).toHaveAttribute('data-lesson', 'fields', { timeout: 15_000 })
+  await expect(page.getByTestId('guide-held')).toBeVisible()
+  expect((await see(page)).speed).toBe(0)
+  await page.waitForTimeout(600)
+  await page.keyboard.press('Space')
+  // The note after it comes at once and stops the days again: none ran between the two.
+  await expect(note).toHaveAttribute('data-lesson', 'look')
+  const day = (await see(page)).day
+  await expect.poll(async () => (await see(page)).speed).toBe(0)
+  await page.waitForTimeout(600)
+  await page.keyboard.press('Space')
+  await expect(note).toHaveCount(0)
+  await expect.poll(async () => (await see(page)).speed).toBeGreaterThan(0)
+  expect((await see(page)).day).toBeGreaterThanOrEqual(day)
+  expect(errors, errors.join('\n')).toEqual([])
+})
+
 test('the axe checks pass with the offer, the year card and a note showing', async ({ page, isMobile }) => {
   test.skip(isMobile, 'run at the desk')
   test.setTimeout(240_000)
