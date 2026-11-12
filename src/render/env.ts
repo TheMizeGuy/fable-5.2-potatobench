@@ -102,9 +102,9 @@ export function envTarget(snap: Snapshot, out: Env): Env {
   // Evening air holds a little dust; September's more, and the light goes amber as the sun drops through it.
   const harvest = smooth(235, 262, d) * (1 - smooth(292, 312, d))
   if (fair) {
-    out.turbidity += 0.7 + 2.6 * harvest
-    out.mie += 0.0015 + 0.004 * harvest
-    out.haze += 0.0003 * harvest
+    out.turbidity += 0.5 + 0.9 * harvest
+    out.mie += 0.0015 + 0.002 * harvest
+    out.haze += 0.0002 * harvest
   }
   out.rain = w.sky === 'rain' || w.sky === 'storm' ? clamp(w.prcp / 14, 0.3, 1) : 0
   out.snowfall = w.sky === 'snow' ? 1 : 0
