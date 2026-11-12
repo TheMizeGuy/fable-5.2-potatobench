@@ -311,7 +311,7 @@ export function confirmPaper(ctx: Ctx, o: { title: string; text: Child; yes: str
     let answered = false
     ctx.papers.open({
       title: o.title,
-      kicker: o.danger ? 'Cannot be undone' : undefined,
+      kicker: o.danger ? 'This can\'t be undone' : undefined,
       testid: 'confirm',
       size: 'small',
       cls: 'confirm',
@@ -387,7 +387,7 @@ export class Notes {
     if (this.pinned?.key === o.key) return
     const el = h('div', { class: `alert hint${o.onClose ? ' closable' : ''}`, role: 'note', testid: o.onClose ? 'hint' : 'idle-note' },
       icon(o.glyph, 'i'), h('span', null, o.text),
-      o.onClose ? h('button', { class: 'close', type: 'button', 'aria-label': 'Put this tip away', testid: 'hint-close', onclick: o.onClose }, icon('close', 'i')) : null)
+      o.onClose ? h('button', { class: 'close', type: 'button', 'aria-label': 'Dismiss this tip', testid: 'hint-close', onclick: o.onClose }, icon('close', 'i')) : null)
     this.pinned = { key: o.key, el }
     this.draw()
   }

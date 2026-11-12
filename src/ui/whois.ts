@@ -9,8 +9,8 @@ import { doing, doingWord, openCrew, ringFor } from './crew.ts'
 import { h, type Child } from './dom.ts'
 import * as F from './fmt.ts'
 import { icon } from './icons.ts'
-import { doingGlyph, doingText, restControl, restWords } from './people.ts'
-import { firstName, jobText, KIND_NAME, moodWhy, personSign, SKILL_NAME } from './rules.ts'
+import { doingGlyph, doingText, moodSaid, restControl, restWords } from './people.ts'
+import { firstName, jobText, KIND_NAME, LET_GO_TEXT, moodWhy, personSign, SKILL_NAME } from './rules.ts'
 import { ringed } from './system/people.ts'
 import './whois.css'
 
@@ -29,30 +29,30 @@ export interface Whois {
 }
 
 // What a thing is, in a name and a line.
-function thingWords(c: S.Campaign, t: Thing): { name: string; line: string; glyph: string } {
-  const who = (id: number) => { const u = c.crew.find(x => x.id === id); return u ? (u.kind === 'farmer' ? 'you' : firstName(u.name)) : '' }
+function thingWords(c: S.Campaign, t: Thing, touch = false): { name: string; line: string; glyph: string } {
+  const who = (id: number) => { const u = c.crew.find(x => x.id === id); return u ? (u.kind === 'farmer' ? 'You have' : `${firstName(u.name)} has`) : '' }
   switch (t.kind) {
     case 'tractor': case 'truck': {
       const name = t.kind === 'tractor' ? (t.k ? `Your ${t.k === 1 ? 'second' : 'third'} tractor` : 'Your tractor') : 'Your truck'
       const holder = t.holder >= 0 ? who(t.holder) : ''
       const job = holder && c.season ? c.season.jobs.find(j => c.crew.find(u => u.id === t.holder)?.job === j.id) : undefined
-      return { name, glyph: t.kind === 'tractor' ? 'machine' : 'haul', line: holder ? `With ${holder}${job ? `: ${jobText(job, c, job.building).replace(/^./, x => x.toLowerCase())}` : ''}.` : c.phase === 'season' ? 'Nobody on it now: free for whoever needs it next, where it was left.' : 'In the shed until the season.' }
+      return { name, glyph: t.kind === 'tractor' ? 'machine' : 'haul', line: holder ? `${holder} it${job ? ` for ${jobText(job, c, job.building).replace(/^./, x => x.toLowerCase())}` : ''}.` : c.phase === 'season' ? 'Nobody is using it. It\'s parked where it was left, free for whoever needs it next.' : 'In the shed until the season starts.' }
     }
     case 'asking': {
       const a = c.applicants[t.k]
-      return { name: a ? a.name : 'Someone at the gate', glyph: 'hire', line: a ? `Asking for work at ${F.money(a.ask)} a month.` : 'Asking for work.' }
+      return { name: a ? a.name : 'Someone at the gate', glyph: 'hire', line: a ? `Looking for work at ${F.money(a.ask)} a month.` : 'Looking for work.' }
     }
-    case 'neighbour': return { name: t.k ? 'The neighbour\'s truck' : 'A neighbour', glyph: 'ask', line: 'Come to offer one of your people more pay. The telegram says how much.' }
-    case 'buyer': return { name: t.k ? 'The buyer\'s car' : 'A produce buyer', glyph: 'sell', line: 'Come to buy a whole lot over the market. The telegram has the offer.' }
-    case 'picker': return { name: 'A picker', glyph: 'pickers', line: 'Hired by the day while the crop comes out of the ground.' }
-    case 'cow': return { name: 'The neighbour\'s cows', glyph: 'rest', line: 'On his pasture by the home yard. They graze; they are not yours.' }
-    case 'deer': return { name: 'A deer', glyph: 'woods', line: 'At the wood\'s edge. It goes into the trees when anyone comes near.' }
+    case 'neighbour': return { name: t.k ? 'The neighbor\'s truck' : 'A neighbor', glyph: 'ask', line: 'Here to offer one of your people more pay. The telegram says how much.' }
+    case 'buyer': return { name: t.k ? 'The buyer\'s car' : 'A produce buyer', glyph: 'sell', line: 'Here to buy a whole lot for more than the market price. The telegram has the offer.' }
+    case 'picker': return { name: 'A picker', glyph: 'pickers', line: 'Hired by the day to help while the crop is being dug.' }
+    case 'cow': return { name: 'The neighbor\'s cows', glyph: 'rest', line: 'Grazing in his pasture by the home yard. They aren\'t yours.' }
+    case 'deer': return { name: 'A deer', glyph: 'woods', line: 'At the edge of the woods. It slips into the trees when anyone gets close.' }
     case 'yard': {
       const built = c.buildings.filter(b => b.yard === t.k && b.built).map(b => S.BUILDINGS[b.kind].name.toLowerCase())
       const stands = t.k === S.HOME_YARD ? ['the farmhouse', 'the potato house', ...built] : built
       return {
         name: t.k === S.HOME_YARD ? 'The home yard' : 'The Dufour yard', glyph: 'house',
-        line: `${stands.length ? `${F.upper(F.list(stands))}.` : 'Nothing built here yet.'} Buildings go up here in the season: press Y, or click the yard then.`,
+        line: `${stands.length ? `${F.upper(F.list(stands))}.` : 'Nothing is built here yet.'} You can build here during the season${touch ? ' by tapping the yard' : '. Press Y, or click the yard'}.`,
       }
     }
   }
@@ -96,7 +96,7 @@ export function whois(ctx: Ctx, layer: HTMLElement): Whois {
     const busy = !!p.job || !!p.foreman || p.hurtUntil >= 0 || p.travelling
     const lower = (t: string) => t.replace(/^./, x => x.toLowerCase())
     const detail = c.phase === 'cellar' ? lower(p.winterText) : !season ? 'waiting for the season to start' : busy ? lower(doingText(c, p))
-      : now && now.text.startsWith('Waiting') ? lower(now.text) : `${now && now.text.startsWith('Idle at ') ? `${now.text.slice(5)}: ` : ''}${c.season!.jobs.length ? 'nothing on the list they will take' : 'the list is empty'}`
+      : now && now.text.startsWith('Waiting') ? lower(now.text) : `${now && now.text.startsWith('Idle at ') ? `${now.text.slice(5)}, ` : ''}${c.season!.jobs.length ? `nothing on the work list for ${farmer ? 'you' : 'them'}` : 'the work list is empty'}`
     const sign = personSign(p, false)
     const best = [...S.SKILLS].sort((a, b) => p.skills[b] - p.skills[a])[0]
     const pulls = moodWhy(c, p)
@@ -107,49 +107,49 @@ export function whois(ctx: Ctx, layer: HTMLElement): Whois {
         ringed(p, ring, 46),
         h('div', null,
           h('h2', { class: 't-head', id: 'whois-name', testid: 'whois-name' }, name),
-          h('p', { class: 't-caption' }, farmer ? 'The farmer: every job, no wage' : `${KIND_NAME[p.kind]}${p.traitName ? ` · ${p.traitName.toLowerCase()}` : ''}`)),
+          h('p', { class: 't-caption' }, farmer ? 'The farmer · every job, no wage' : `${KIND_NAME[p.kind]}${p.traitName ? ` · ${p.traitName.toLowerCase()}` : ''}`)),
         h('button', { class: 'close', type: 'button', testid: 'whois-close', 'aria-label': `Close${keys ? ' (Escape)' : ''}`, onclick: () => app.selectUnit(-1) }, icon('close', 'i'))),
       h('p', { class: 'whois-now', testid: 'whois-now' }, icon(season ? doingGlyph(c, p) : c.phase === 'cellar' ? 'winter' : 'idle', 'i'),
         h('span', null, h('b', null, season ? doingWord(c, p) : c.phase === 'cellar' ? 'This winter' : 'Spring'), ' ', h('span', { class: busy ? '' : 'quiet' }, detail))),
       // Where to look for them: on a machine they are its driver; off the land, indoors in the yard.
-      place === 'machine' ? h('p', { class: 'whois-where quiet', testid: 'whois-where' }, icon('machine', 'i'), 'Driving: look for the tractor.')
+      place === 'machine' ? h('p', { class: 'whois-where quiet', testid: 'whois-where' }, icon('machine', 'i'), 'Driving, so look for the tractor.')
         : place === 'away' && c.phase !== 'cellar' ? h('p', { class: 'whois-where quiet', testid: 'whois-where' }, icon('house', 'i'), 'Indoors in the yard, out of sight.') : null,
       h('dl', { class: 'whois-state' },
         h('div', null, h('dt', { class: p.tired >= S.HURT_TIRED ? 'c-red' : p.tired >= S.TIRED_SLOW_FROM ? 'c-ochre' : '' }, F.upper(p.tiredWord)),
           h('dd', null, sign?.glyph === 'hurt' ? `hurt, back on ${F.date(c.year, p.hurtUntil, true)}` : restWords(c, p))),
         h('div', null, h('dt', { class: p.quitIn >= 0 ? 'c-red' : p.mood < 0.45 ? 'c-ochre' : '' }, F.upper(p.moodWord)),
-          h('dd', null, p.quitIn >= 0 ? `quits in ${F.plural(p.quitIn, 'day')} unless it lifts` : pulls.length ? pulls.slice(0, 2).map(x => x.text).join('; ') : 'nothing pulling either way')),
-        h('div', null, h('dt', null, 'Best at'), h('dd', null, `${SKILL_NAME[best].toLowerCase()}, ${p.skills[best]} of 10`)),
-        h('div', null, h('dt', null, 'Pay'), h('dd', { class: 'num' }, farmer ? 'none: the household takes its share at the year end' : `${F.money(p.pay)} a month${p.foreman ? ' as foreman' : ''}`))),
+          h('dd', null, p.quitIn >= 0 ? `will quit in ${F.plural(p.quitIn, 'day')} unless their mood improves` : pulls.length ? moodSaid(pulls.slice(0, 2)) : 'no strong reasons either way')),
+        h('div', null, h('dt', null, 'Best at'), h('dd', null, `${SKILL_NAME[best].toLowerCase()}, ${p.skills[best]} out of 10`)),
+        h('div', null, h('dt', null, 'Pay'), h('dd', { class: 'num' }, farmer ? 'none, living costs come out at the end of the year' : `${F.money(p.pay)} a month${p.foreman ? ' as foreman' : ''}`))),
       // The work they take first: one press puts a kind of work first for them.
       c.phase === 'cellar' ? h('div', { class: 'whois-first', role: 'group', 'aria-label': `${name} this winter` },
         h('span', { class: 't-label' }, 'This winter'),
         S.winterInfo(c).people.find(x => x.id === p.id)?.choices.map(ch => h('button', {
           class: `btn${p.winter === ch.work ? ' is-on' : ''}`, type: 'button', testid: `whois-winter-${ch.work}`, 'aria-pressed': String(p.winter === ch.work), disabled: !ch.ok && p.winter !== ch.work, title: ch.why || undefined,
           onclick: () => run({ t: 'winter', unit: p.id, work: ch.work, field: ch.work === 'woods' ? S.timberTracts(c)[0] : undefined }, `${name}: ${WINTER_WORDS[ch.work].toLowerCase()} this winter.`),
-        }, WINTER_WORDS[ch.work]))) : p.foreman ? null : h('div', { class: 'whois-first', role: 'group', 'aria-label': `The work ${name} takes first` },
-        h('span', { class: 't-label', title: keys ? 'The work they take before any other: press one to put it first' : undefined }, 'Takes first'),
+        }, WINTER_WORDS[ch.work]))) : p.foreman ? null : h('div', { class: 'whois-first', role: 'group', 'aria-label': `The work ${farmer ? 'you do' : `${name} does`} first` },
+        h('span', { class: 't-label', title: keys ? 'The work they do before anything else. Click one to put it first.' : undefined }, 'First priority'),
         S.SKILLS.map(k => h('button', {
           class: `key-btn${p.prio[k] === 1 ? ' is-on' : ''}${p.prio[k] === 0 ? ' never' : ''}`, type: 'button', testid: `whois-first-${k}`, 'aria-pressed': String(p.prio[k] === 1),
           title: keys ? `${SKILL_SHORT[k]} work first` : undefined,
-          onclick: () => run({ t: 'priority', unit: p.id, work: k, level: 1 }, `${name}: ${SKILL_NAME[k].toLowerCase()} first.`),
+          onclick: () => run({ t: 'priority', unit: p.id, work: k, level: 1 }, `${name}: ${SKILL_NAME[k].toLowerCase()} work first.`),
         }, icon(SKILL_CUT[k], 'i'), h('span', { class: 'sr' }, `${SKILL_SHORT[k]} first`)))),
       restControl(ctx, c, p.id, 'whois-rest'),
       h('div', { class: 'whois-acts' },
         h('button', {
           class: `btn${ctx.view.followed() === p.id ? ' is-on' : ''}`, type: 'button', testid: 'whois-follow', 'aria-pressed': String(ctx.view.followed() === p.id),
-          title: keys ? 'The camera keeps them in the middle until you move it' : undefined,
-          onclick: () => { const on = ctx.view.followed() === p.id; ctx.view.follow(on ? -1 : p.id); ctx.announce(on ? 'Not following.' : `Following ${name}: the camera keeps them in the middle until you move it.`); ctx.dirty() },
+          title: keys ? 'The camera stays centered on them until you move it' : undefined,
+          onclick: () => { const on = ctx.view.followed() === p.id; ctx.view.follow(on ? -1 : p.id); ctx.announce(on ? 'Stopped following.' : `Following ${name}. The camera stays centered on them until you move it.`); ctx.dirty() },
         }, icon('scout', 'i'), ctx.view.followed() === p.id ? 'Following' : 'Follow'),
-        c.phase === 'season' && c.crew.length > 1 ? h('button', { class: 'btn', type: 'button', testid: 'whois-more', onclick: () => app.selectUnit(p.id, 'list') }, icon('people', 'i'), 'Their page') : null,
+        c.phase === 'season' && c.crew.length > 1 ? h('button', { class: 'btn', type: 'button', testid: 'whois-more', onclick: () => app.selectUnit(p.id, 'list') }, icon('people', 'i'), 'Details') : null,
         c.phase === 'plan' ? h('button', { class: 'btn', type: 'button', testid: 'whois-more', onclick: () => openCrew(ctx) }, icon('people', 'i'), 'Hiring') : null,
         farmer ? null : h('button', {
           class: 'btn hazard', type: 'button', testid: 'whois-letgo',
           onclick: async () => {
-            const yes = await confirmPaper(ctx, { title: `Let ${firstName(p.name)} go?`, text: 'They leave today. The month already paid is not given back, and they will not come back.', yes: 'Let them go', danger: true })
+            const yes = await confirmPaper(ctx, { title: `Let ${firstName(p.name)} go?`, text: LET_GO_TEXT, yes: 'Let them go', danger: true })
             if (!yes) return
             const r = ctx.run({ t: 'dismiss', unit: p.id })
-            if (r.ok) { app.selectUnit(-1); ctx.announce(`${p.name} is let go.`) }
+            if (r.ok) { app.selectUnit(-1); ctx.announce(`You let ${p.name} go.`) }
           },
         }, icon('letgo', 'i'), 'Let go')),
     ]
@@ -178,14 +178,14 @@ export function whois(ctx: Ctx, layer: HTMLElement): Whois {
     const t = c && app.screen !== 'title' ? app.thing : null
     tcard.hidden = !t
     if (t && c) {
-      const w = thingWords(c, t.thing)
+      const w = thingWords(c, t.thing, ctx.touch())
       patch(tcard, JSON.stringify([t.thing, w, ctx.touch()]), () => [
         h('header', { class: 'whois-head' },
           h('span', { class: 'thing-ic' }, icon(w.glyph, 'i')),
           h('div', null, h('h2', { class: 't-head', id: 'thing-name', testid: 'thing-name' }, w.name), h('p', { class: 't-caption' }, w.line)),
           h('button', { class: 'close', type: 'button', testid: 'thing-close', 'aria-label': `Close${ctx.touch() ? '' : ' (Escape)'}`, onclick: () => app.inspect(null) }, icon('close', 'i'))),
         t.thing.kind === 'asking' && c.phase === 'plan' ? h('div', { class: 'whois-acts' }, h('button', { class: 'btn', type: 'button', testid: 'thing-hire', onclick: () => { app.inspect(null); openCrew(ctx) } }, icon('hire', 'i'), 'Hiring')) : null,
-        t.thing.holder >= 0 ? h('div', { class: 'whois-acts' }, h('button', { class: 'btn', type: 'button', testid: 'thing-holder', onclick: () => app.selectUnit(t.thing.holder, 'land') }, icon('people', 'i'), 'Who has it')) : null,
+        t.thing.holder >= 0 ? h('div', { class: 'whois-acts' }, h('button', { class: 'btn', type: 'button', testid: 'thing-holder', onclick: () => app.selectUnit(t.thing.holder, 'land') }, icon('people', 'i'), 'See who has it')) : null,
       ])
       sizes = { ...sizes, tw: tcard.offsetWidth || sizes.tw, th: tcard.offsetHeight || sizes.th }
     }

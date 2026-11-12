@@ -11,7 +11,7 @@ const range = () => `${F.money(-USUAL_YEAR.hi)} to ${F.money(-USUAL_YEAR.lo)}`
 export function usualFirstYear(bills: number): { short: string; full: string } {
   return {
     short: `A first year usually ends ${range()} down.`,
-    full: `A first year worked as the guide works it usually ends ${range()} under where it began: the crop pays what it costs to grow, and the note and the household take ${F.money(bills)} whatever it makes.`,
+    full: `A first year played the way the tutorial suggests usually ends ${range()} below where it started. The crop covers what it costs to grow, but the bank payment and your family's living costs take ${F.money(bills)} no matter what it earns.`,
   }
 }
 
@@ -19,5 +19,5 @@ export function usualFirstYear(bills: number): { short: string; full: string } {
 export function againstUsual(change: number): string {
   if (change > USUAL_YEAR.hi) return `Better than a usual year, which ends ${range()} down.`
   if (change < USUAL_YEAR.lo) return `Worse than a usual year, which ends ${range()} down.`
-  return `A usual year: most end ${range()} down.`
+  return `A usual year. Most end ${range()} down.`
 }
