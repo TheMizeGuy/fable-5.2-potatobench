@@ -1,5 +1,6 @@
 // People (design/people.html): a page of the time book for one person, and the work grid with the farm's rules.
 import * as S from '../sim/index.ts'
+import { keepSprayedLine } from './spray-words.ts'
 import { confirmPaper, EXIT_MS, patch, type Ctx } from './core.ts'
 import { h, type Child } from './dom.ts'
 import * as F from './fmt.ts'
@@ -144,8 +145,7 @@ export const SPRAY_WAYS: { id: SprayWay; glyph: string; name: string }[] = [
 export function sprayDoes(ctx: Ctx, c: S.Campaign, way: SprayWay): string {
   if (way === 'ask') return 'A stamp on a field when it wants spraying; the order is yours.'
   if (way === 'none') return 'No spraying and no stamps for it. Blight, if it comes, goes unchecked.'
-  const o = S.sprayOutlook(ctx.app.world, c)
-  return o.passes ? `The crew sprays when it wears thin: about ${o.passes} passes, ${F.money(o.dollars)} this season.` : 'The crew sprays when it wears thin.'
+  return keepSprayedLine(ctx.app.world, c)
 }
 
 export function answerSpray(ctx: Ctx, c: S.Campaign, way: SprayWay): void {
