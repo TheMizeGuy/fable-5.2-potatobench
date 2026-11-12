@@ -35,9 +35,11 @@ a running clock: nothing is shown while the days run except what has stopped the
 telegram, the spraying question, a weigh ticket, the offer). While a card is up the guide says nothing beside it;
 the first telegram and the first weigh ticket carry one line from the agent inside the card. In the guided first
 year: no hint toasts, no toast for news that is not bad (the crew starting work, the kill dates), no test-dig tray
-laid on the land unasked, and the goal slip's "do this next" is quiet while a note is up. For every player: toasts
-are hidden while a note or a card is up, and the first-time tip for an order is five words ("Spray: click the
-ringed stamp.").
+laid on the land unasked, no goal slip in the season (the notes say what is next; it contradicted them: "Spray
+before the blight" under a note saying there was nothing to do), and no "Needs your order" chip for a vine kill the
+crew will do by itself. For every player: toasts and the "Go on" and "Days running" keys are hidden while a note or
+a card is up, the spraying question is three short replies, and the first-time tip for an order is five words
+("Spray: click the ringed stamp.").
 
 **E. Each note says what, why and what to do.** What the thing is, why it matters as a consequence, and what to do
 now (often: nothing). 35 words at most, in plain words: no term is used before a note has said what it is (blight is
@@ -59,10 +61,17 @@ A hidden piece keeps its place in the layout (`visibility: hidden` on a class of
 nothing moves when it arrives. A skipped or passed note still brings its pieces. Stopping the guide, or any year
 after the first, shows everything.
 
+What has arrived says less than it does in a later year (the root's class `guided`): the forecast gives its figures
+for today and tomorrow and only the day, the sky and the blight leaf after that; an order on a field's tag is its
+mark without the words "On the list"; the list of work is the next two orders and a count; the line saying what the
+money just did is left out. The year's phases on the date board are one short word each for every player (Plant,
+Tend, Kill vines, Dig, Sell).
+
 **G. Few decisions, no dead time.** The crew plants, hills, walks, digs and hauls by itself. The first year asks for
 the spraying question (with "Keep the fields sprayed" marked the usual choice), the telegrams the year sends, and
 each weigh ticket. A note with a wait after it carries "Skip to <the next thing>": the days run at the fastest speed
-to the next note or card, then go back to the speed they had. No telegram comes in a farm's first year before its
+to the next note, then go back to the speed they had. A telegram on the way stops them, and answered, they run on to
+the note the skip was for; a weigh ticket ends the skip, and so does the player's own hand on the clock. No telegram comes in a farm's first year before its
 first planting is finished (before mid-June; `QUIET_UNTIL`, `drawIncidents` in `src/sim/season.ts`), so nothing asks
 a question before the player has seen a field planted.
 
@@ -76,11 +85,16 @@ the account book, the second spring) are as they were, held to 40 words.
 | A note's words (what it asks and why) | 35 | `tests/tutorial.test.ts` (every first-year note, three ways of playing, real seasons), `e2e/tutorial.spec.ts` (as shown) |
 | A later lesson's words | 40 | `tests/tutorial.test.ts` |
 | A card's words (the offer, what a year is) | 80 | `e2e/tutorial.spec.ts` |
-| Words on the season screen with a note up, field names aside: the first guided day | 80 | `e2e/tutorial.spec.ts` |
-| The same, any moment of the guided first year | 125 | `e2e/tutorial.spec.ts` |
+| Words in view on the season screen with a note up (boards, land, list, people and the note with its keys; field names aside): the first guided day | 80 | `e2e/tutorial.spec.ts` |
+| The same, any moment of the guided first year | 100 | `e2e/tutorial.spec.ts` |
+| The same with a telegram or the spraying question up instead of a note | 120 | `e2e/tutorial.spec.ts` |
 | Things asking for attention at once (note, offer, telegram or spraying card, weigh ticket or other paper, toast, test-dig tray, pressing-work pop) | 1 | `e2e/tutorial.spec.ts`, at every step |
 | The clock's speed while a note or a card is up | 0 | `e2e/tutorial.spec.ts`, at every step |
 | Notes from Play to the first sale | 16 kinds | `e2e/tutorial.spec.ts`; `tests/tutorial.test.ts` holds a whole simulated first year to 18 |
+
+The budgets are held by cutting the screen, not by raising the number. The weigh ticket is the one paper allowed to
+be rich (a field's whole account: about 215 words); it is laid over the screen and is not counted in the screen's
+words.
 
 ## The guided first year, note by note
 
