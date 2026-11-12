@@ -149,6 +149,7 @@ export function incidentCard(ctx: Ctx): IncidentCard {
 
   function answerSprayHere(c: S.Campaign, way: 'auto' | 'ask' | 'none'): void {
     answerSpray(ctx, c, way)
+    if (el.contains(document.activeElement)) (document.activeElement as HTMLElement).blur()
     app.holding = ''
     if (!S.incidentInfo(c).some(x => !away.has(x.id)) && !ctx.papers.isOpen()) app.resumeAfterCard()
   }
@@ -211,6 +212,7 @@ export function incidentCard(ctx: Ctx): IncidentCard {
   function putAway(): boolean {
     if (shown < 0 && putSprayAway(ctx)) {
       app.holding = ''
+      if (el.contains(document.activeElement)) (document.activeElement as HTMLElement).blur()
       const c = app.campaign
       if (c && !S.incidentInfo(c).some(x => !away.has(x.id)) && !ctx.papers.isOpen()) app.resumeAfterCard()
       return true

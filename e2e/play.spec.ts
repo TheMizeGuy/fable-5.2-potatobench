@@ -42,6 +42,13 @@ async function answerTicket(page: Page, store: boolean): Promise<void> {
 // Answers the first open incident: on its card where the instruments show one (a button named for the choice), and
 // through the test hook where they do not. take: the first choice rather than the default. Returns how it was answered.
 async function answerIncident(page: Page, take: boolean): Promise<'card' | 'hook' | ''> {
+  // The spraying question comes on the telegram card once a season: answered as most players would, ask me each time.
+  const spray = page.getByTestId('spray-way-ask')
+  if (await spray.isVisible().catch(() => false)) {
+    await spray.click()
+    await expect(page.getByTestId('spray-ask')).toBeHidden()
+    return 'card'
+  }
   const inc = await game<{ id: number; choice: string; label: string } | null>(page, `(() => { const i = c.incidents[0]; if (!i) return null
     const ch = ${take} && !(i.choices[0] === 'hire' && sim.hireRoom(c)) ? i.choices[0] : i.choices[i.choices.length - 1]
     return { id: i.id, choice: ch, label: sim.CHOICE_LABEL[ch] } })()`)
@@ -80,6 +87,7 @@ async function farm(page: Page, until: 'ticket' | 'done', o: { store: boolean; m
       throw new Error('the season ended before a crop was dug')
     }
     if (s.incidents) { const how = await answerIncident(page, false); if (how) o.answered?.push(how); continue }
+    if (s.spray) { await answerIncident(page, false); continue }
     if (s.paper) { await page.keyboard.press('Escape'); continue }
     if (s.hint) { await page.getByTestId('hint-close').click({ timeout: 3000 }).catch(() => {}); continue }
     if (s.tray) { await page.getByTestId('sample-close').click({ timeout: 3000 }).catch(() => {}); continue }
@@ -357,6 +365,10 @@ test('the same start by keyboard alone', async ({ page, isMobile }) => {
   await reach(page, `const { app } = q.g(); for (let k = 0; k < 90 && !app.needs().some(n => n.need && n.need.act === 'plant'); k++) { app.campaign.incidents = []; app.do({ t: 'day' }) } app.campaign.incidents = []; app.resumeAfterCard()`)
   // Tab finds the field that needs something; Enter gives it the order.
   await expect(page.locator(BADGE).first()).toBeVisible({ timeout: 30_000 })
+  if (await page.getByTestId('spray-ask').isVisible().catch(() => false)) {
+    await page.keyboard.press('Digit2')
+    await expect(page.getByTestId('spray-ask')).toBeHidden()
+  }
   await page.keyboard.press('Tab')
   await expect(page.getByTestId('card')).toBeVisible()
   await expect(page.locator('#ui .plate[aria-pressed="true"]')).toHaveCount(1)
