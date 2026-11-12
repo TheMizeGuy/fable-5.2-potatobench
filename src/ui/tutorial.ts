@@ -478,7 +478,9 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     offer = guide.offerFor(c, app.screen)
     now = offer ? null : paced(guide.showing(l))
     hold()
-    const docked = app.screen === 'plan'
+    // In spring the note floats beside the sheet, covering none of its rows; on a phone, where the sheet is the whole
+    // width, it sits in the sheet above the order blank.
+    const docked = app.screen === 'plan' && ctx.layout() === 'narrow'
     const held = !!now && app.screen === 'season' && app.speed === 0 && (guide.holdsClock(c) || app.pauseReason === HOLD || !!now?.holds)
     const p = now?.point?.(l) ?? null
     const t = resolve(ctx, root, p)
@@ -489,18 +491,18 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
       const close = sheet?.querySelector<HTMLElement>('button.close')
       cover = close && shown(close) ? close : null
     }
-    target = cover?.dataset.testid ?? (p && 'fields' in p && p.fields.some(i => `field-${i}` === picked) ? picked : t.id)
+    target = cover?.dataset.testid ?? (p && 'fields' in p && p.fields.some(i => `field-${i}` === picked) && shown(root.querySelector(`[data-testid="${picked}"]`)) ? picked : t.id)
     // Something on the land to point at, none of it in view.
     const lost = !!p && !('testid' in p) && !t.at && app.screen === 'season'
     const fieldOf = !p ? -1 : 'field' in p ? p.field : 'badge' in p ? p.badge : 'fields' in p ? p.fields[0] ?? -1 : -1
     showField = app.screen === 'season' && fieldOf >= 0 && !cover && (lost || hiddenAt(t)) ? fieldOf : -1
     // The spring's notes go into the catalogue; everything else floats.
     if (slot) {
-      const inSlot = docked && slot.isConnected
+      const inSlot = app.screen === 'plan' && slot.isConnected
       // A fold open that the note is not about keeps all its room: the note waits until it is closed.
       const fold = root.querySelector('.catalogue .cat-open')
-      away = !!now && !!fold && !(t.el && fold.contains(t.el))
-      const on = inSlot && !away
+      away = docked && !!now && !!fold && !(t.el && fold.contains(t.el))
+      const on = inSlot && docked && !away
       patch(slot, JSON.stringify([inSlot && offer, on && now ? [now.id, now.ask(l), now.why(l), guide.replaying(now.id), lost] : 0, input]), () =>
         inSlot && offer ? h('section', { class: 'guide docked offer', testid: 'guide-offer', 'aria-label': 'A guided first year' }, offerBody(ctx))
           : on && now ? h('section', { class: 'guide docked', testid: 'guide-slip', 'data-lesson': now.id, 'data-target': target, 'aria-labelledby': 'guide-ask' }, slipBody(ctx, now, l, held, lost, !!cover)) : null)
@@ -600,11 +602,14 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     const key = `${l.id}|${innerWidth}x${innerHeight}|${slip.offsetWidth}x${slip.offsetHeight}`
     const t0 = performance.now()
     // Every frame: nothing it must never cover has come over it (a card sliding in, a telegram).
-    const must = [...hardOnes(root), ...(t.at ? [pad(t.at, 10)] : []), ...(fistBox ? [pad(fistBox, 4)] : []), ...(noteBox ? [noteBox] : [])]
+    const cat = app.screen === 'plan' ? root.querySelector('.catalogue') : null
+    const catBox = cat && shown(cat) ? [box(cat.getBoundingClientRect())] : []
+    const must = [...hardOnes(root), ...catBox, ...(t.at ? [pad(t.at, 10)] : []), ...(fistBox ? [pad(fistBox, 4)] : []), ...(noteBox ? [noteBox] : [])]
     const at = place ? { left: place.x, top: place.y, right: place.x + slip.offsetWidth, bottom: place.y + slip.offsetHeight } : null
     if (placedFor === key && t0 - checked < 250 && (!at || !must.some(a => meets(at, a)))) return
     checked = t0
     const { hard, soft, costs } = obstacles(root)
+    hard.push(...catBox)
     if (t.at) hard.push(pad(t.at, 10))
     if (fistBox) hard.push(pad(fistBox, 4))
     if (noteBox) hard.push(noteBox)
@@ -620,7 +625,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     // Last, short, over a person's card or the list rather than not at all: a clock, a command bar, a question, a paper
     // and what it points at are still never covered.
     const must2 = [...[...root.querySelectorAll('.clock, .command, .telegram, .dialog, [data-testid="paused"], .tray-paper')].filter(shown).map(e => box(e.getBoundingClientRect())),
-      ...(t.at ? [pad(t.at, 10)] : []), ...(fistBox ? [pad(fistBox, 4)] : []), ...(noteBox ? [noteBox] : [])]
+      ...catBox, ...(t.at ? [pad(t.at, 10)] : []), ...(fistBox ? [pad(fistBox, 4)] : []), ...(noteBox ? [noteBox] : [])]
     const holder = t.el?.closest('.queue, .cat-open, .command, .person-card, .work')
     if (holder) must2.push(box(holder.getBoundingClientRect()))
     for (const [k, compact, also] of [[0, false, tags], [0, false, []], [0, true, []], [1, true, []], [1, false, []], [2, true, []]] as const) {

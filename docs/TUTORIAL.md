@@ -32,8 +32,10 @@ paper disc with a keyline so it reads over any land. There is no slideshow, no s
   again ("Again": it comes back the next time its moment does, guide on or off). Progress is kept in the browser under
   its own key, `the-county/tutorial`, apart from the save, and survives a reload.
 - **Holds the clock for a click, and says so.** In the guided first season Start the season leaves the clock stopped
-  until the note that starts it. A note that asks for a click on something the days move (a need's stamp, a face on
-  the land) or to watch something happen (the first planting) stops the clock while it shows, says "Clock held", and
+  until the note that starts it. Only a note that asks for a click on something the days would carry away (a need's
+  stamp, whose moment passes) or to watch something happen (the first planting) stops the clock while it shows; a note
+  that is only information (meeting your people, a hand's face, what the crew does) lets the days run until Noted. A
+  holding note says "Clock held", and
   lets the clock go on at the speed it had once it passes. While it holds, a line under the clock itself says "Held
   for the agent's note. Any speed goes on." Any speed key starts the clock at once, and a player who starts it is not
   stopped again for that note. Only the player's own press counts: the game
@@ -47,8 +49,10 @@ paper disc with a keyline so it reads over any land. There is no slideshow, no s
   card, the grid) is still open, so People is not left half read for Land, for eight seconds at most: a card left open
   never silences the guide. A note that cuts in (urgent, or one that holds the clock) is the only kind that takes over
   from a note on show.
-- **Placed where it covers nothing it is about.** In spring the slip sits in the catalogue; while a fold the note is
-  not about is open (Equipment, say) the note is set aside, fist and all, and comes back when the fold closes.
+- **Placed where it covers nothing it is about.** In spring the slip floats beside the sheet, on the land, and lies
+  over no row of the catalogue and no applicant. On a phone, where the sheet takes the whole width, it sits in the
+  sheet above the order blank, and while a fold it is not about is open (Equipment, say) it is set aside, fist and all,
+  until the fold closes. The browser test and the spring captures at all eight sizes check that no row is covered.
 - **A press meant for it never falls through.** For half a second after a note goes (passed, Noted, set aside), a
   press where it lay is taken by nothing, so a click on Noted just as it left never opens what was under it. Elsewhere it floats at
   the first clear place nearest the top middle of the land, keeping off the boards, the time book and every panel; it
@@ -91,7 +95,7 @@ ends them is already true. "Holds" marks a note that stops the clock while it sh
 | 2 | Start the first season | The first spring's plan | The season begins | Start the season; says a first year usually ends $4,000 to $24,000 down, as the spring sheet does, and why |
 | 3 | Start the clock | The season, the clock held | The clock running | Let the weeks go: 3× (or 3×) |
 | 4 | Watch the first planting (holds) | Planting on the list by the one planting rule, or just begun | The camera brought closer or moved, or three days run | You, on the land; says the routine began it with no order |
-| 5 | Meet your people (holds) | After 4 | You picked, or Noted | Your face |
+| 5 | Meet your people | After 4 | You picked, or Noted | Your face |
 | 6 | Give the first order (holds) | A planting stamp ("ask me" only) | A planting order on the list | That field's stamp |
 | 7 | Routine work and your calls | A job the routine listed, after 5 | Noted | The list |
 | 8 | Plant the rest (holds) | One field planted, more stamps ("ask me" only) | Every field planted, or several picked at once | The next stamp |
@@ -142,7 +146,7 @@ list, a reason to turn the view and a crop to read on a card.
 | The money and the loan | A later spring | The money opened | The money |
 | Start the second season | A later spring | The season begins | Start the season |
 | The season's calls | The second season | Noted | The forecast |
-| Meet a hand (holds) | The season, with someone hired, after the calls | A hand picked | Their face |
+| Meet a hand | The season, with someone hired, after the calls | A hand picked | Their face |
 | Who does what | The season, three or more on the farm | The work grid opened | The grid at the foot |
 | Name a foreman | After a hand was picked, with land beyond the home six and a hand to name | Noted, or a foreman named | Foreman on their card, where it shows |
 

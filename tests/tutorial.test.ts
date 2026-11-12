@@ -149,7 +149,8 @@ describe('the guided first year', () => {
     expect(g.passed('plant')).toBe(true)
     g.note('zoom')
     expect(g.current(look(w, c))?.id).toBe('person')
-    expect(lesson('person')?.holds).toBe(true)
+    // Meeting your people is only information: the days run while it is up.
+    expect(lesson('person')?.holds).toBeFalsy()
     expect(g.current(look(w, c, { unit: c.crew[0].id }))?.id).toBe('routine')
     g.noted('routine')
     // The rest of the opening, with the forecast and the almanac where the weather first makes them worth reading.
@@ -314,7 +315,7 @@ describe('the guided first year', () => {
     g.noted('calls2')
     const l = look(w, c)
     expect(g.current(l)?.id).toBe('hand')
-    expect(g.current(l)?.holds).toBe(true)
+    expect(g.current(l)?.holds).toBeFalsy()
     const u = c.crew.find(x => x.kind !== 'farmer')!
     expect(g.current(l)?.point?.(l)).toEqual({ unit: u.id })
     // A foreman only once there is land beyond the home farm to give one (the intervale is rented here).

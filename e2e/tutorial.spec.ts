@@ -115,6 +115,20 @@ async function covers(page: Page, target: string): Promise<string[]> {
     const tgt = t ? document.querySelector(`#ui [data-testid="${t}"]`) : null
     const panel = tgt?.closest('.queue, .cat-open, .command, .person-card, .work, .telegram, .paper-layer .dialog') ?? null
     if (seen(slip)) for (const e of [tgt, panel]) if (seen(e) && !slip.contains(e) && meet(slip.getBoundingClientRect(), e.getBoundingClientRect())) out.push(`the slip lies over ${e.dataset.testid ?? e.className}`)
+    // In spring: no row of the catalogue and no applicant, as much of each as its scrolling list shows.
+    const shown = (e: HTMLElement) => {
+      let r = e.getBoundingClientRect()
+      for (let p = e.parentElement; p; p = p.parentElement) {
+        if (!/(auto|scroll|hidden)/.test(getComputedStyle(p).overflowY)) continue
+        const c = p.getBoundingClientRect()
+        r = new DOMRect(r.x, Math.max(r.top, c.top), r.width, Math.max(0, Math.min(r.bottom, c.bottom) - Math.max(r.top, c.top)))
+      }
+      return r
+    }
+    if (seen(slip)) for (const e of document.querySelectorAll<HTMLElement>('#ui .catalogue .cat-fold > .fold, #ui .catalogue .fold.more, #ui .catalogue .applicant')) {
+      const r = shown(e)
+      if (seen(e) && !slip.contains(e) && r.height > 0 && meet(slip.getBoundingClientRect(), r)) out.push(`the slip lies over the catalogue's ${e.dataset.testid ?? e.className}`)
+    }
     const fist = document.querySelector<HTMLElement>('#ui [data-testid="guide-fist"]:not([hidden])')
     if (seen(fist)) {
       // Read from the elements themselves: the layers over the land let the pointer through.
@@ -144,7 +158,7 @@ async function closer(page: Page, mobile: boolean): Promise<void> {
   for (let k = 0; k < 4; k++) { await page.mouse.wheel(0, -240); await page.waitForTimeout(60) }
 }
 
-const HOLDING = new Set(['watch', 'person', 'plant', 'rest', 'scout', 'hill', 'spray', 'sample', 'water', 'rogue', 'kill', 'dig', 'hand'])
+const HOLDING = new Set(['watch', 'plant', 'rest', 'scout', 'hill', 'spray', 'sample', 'water', 'rogue', 'kill', 'dig'])
 
 test('a guided first year: offered on a new farm, taken, and followed through the opening by what it says alone', async ({ page, isMobile }) => {
   test.setTimeout(900_000)
@@ -237,7 +251,9 @@ test('a guided first year: offered on a new farm, taken, and followed through th
         break
       case 'field': {
         // It asks for a field's tag: the one its fist marks, or any on the screen.
-        const marked = page.locator(`#ui [data-testid="${target}"]`).first()
+        let marked = page.locator(`#ui [data-testid="${target}"]`).first()
+        // The tags settle again when the view moves: the slip names the field it means now.
+        if (!(await marked.isVisible())) { await page.waitForTimeout(800); marked = page.locator(`#ui [data-testid="${(await slip(page)).target}"]`).first() }
         if (!(await marked.isVisible())) {
           // Out of view, the slip says how to bring the farm back.
           await expect(page.getByTestId('guide-lost')).toBeVisible()
@@ -258,9 +274,10 @@ test('a guided first year: offered on a new farm, taken, and followed through th
         await page.locator('#ui [data-testid^="answer-"]').first().click(); break
       default: {
         // Any other lesson: what its fist marks, or Noted.
+        // With the days running under a note to read, a note that holds the clock may come in front of it first.
         const marked = target ? page.locator(`#ui [data-testid="${target}"]`).first() : null
         const book = target.startsWith('pin-') ? page.locator(`#ui [data-testid="unit-${target.slice(4)}"]`).first() : null
-        if (page.getByTestId('guide-noted') && await page.getByTestId('guide-noted').count() && !(marked && await marked.isVisible() && id === 'person')) await page.getByTestId('guide-noted').click({ timeout: 15_000 })
+        if (page.getByTestId('guide-noted') && await page.getByTestId('guide-noted').count() && !(marked && await marked.isVisible() && id === 'person')) await page.getByTestId('guide-noted').click({ timeout: 5_000 }).catch(() => {})
         else if (marked && await marked.isVisible()) await marked.click()
         else if (book && await book.isVisible()) await book.click()
         // Out of reach for now: a player may skip it, as the slip offers.
