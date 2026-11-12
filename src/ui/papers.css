@@ -303,6 +303,19 @@
 .soil li { display: grid; padding: var(--sp-2) var(--sp-3); background: var(--paper-hi); border: 1px solid var(--rule); border-radius: var(--radius); font-size: var(--t-small); line-height: 18px; }
 .soil strong { font-family: var(--serif); font-size: var(--t-body); }
 .money .call th, .money .call td { border: 0; color: var(--bad); font-weight: 600; }
+.money th .sub { font-size: var(--t-label); }
+.deeds { display: grid; gap: var(--sp-1); }
+.deeds li { position: relative; padding-left: var(--sp-4); font-size: var(--t-small); line-height: 18px; color: var(--ink-2); }
+.deeds li::before { content: ''; position: absolute; left: var(--sp-1); top: 7px; width: 5px; height: 5px; background: var(--good); }
+.built { margin-top: var(--sp-2); }
+.built-facts { display: grid; gap: var(--sp-1); }
+.built-facts div { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: var(--sp-3); padding: var(--sp-1) 0; border-bottom: 1px dotted var(--rule-strong); }
+.built-facts dt { color: var(--ink-3); padding-top: 1px; }
+.next-goal { flex: 1 1 220px; margin-right: auto; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 var(--sp-2); align-items: baseline; }
+.next-goal .t-label { color: var(--good-ink); }
+.next-goal strong { font-family: var(--serif); font-size: var(--t-body); }
+.next-goal .sub { grid-column: 1 / -1; }
+@media (max-width: 519px) { .next-goal .sub { display: none; } }
 @media (max-width: 519px) { .soil { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 /* The two occasions get the whole window. */
@@ -363,6 +376,41 @@
 @media (max-width: 699px) { .menu-cols { grid-template-columns: minmax(0, 1fr); gap: var(--sp-5); } }
 
 .help-lede { max-width: 62ch; margin-bottom: var(--sp-4); }
+/* Three pictures and three verbs: each picture is the instrument itself, drawn still. */
+.how-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-4); }
+.how-steps li { display: grid; gap: var(--sp-2); align-content: start; }
+.how-steps p { font-size: var(--t-small); line-height: 18px; color: var(--ink-2); }
+.how-steps .t-head { display: flex; align-items: center; gap: var(--sp-2); }
+.how-n { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--ink); color: var(--paper-hi); font-family: var(--sans); font-size: var(--t-small); font-weight: 700; }
+.how-pic { position: relative; display: grid; place-items: center; height: 96px; pointer-events: none; background: linear-gradient(160deg, #3d5a3a, #5b4532); border-color: var(--rule-strong); }
+.how-pic .plate { pointer-events: none; }
+.how-cursor { position: absolute; left: calc(50% + 34px); top: calc(50% + 6px); color: var(--cream); transform: rotate(-30deg); }
+.plate-wrap-pic { position: relative; display: inline-flex; margin-right: 34px; }
+.how-pic .clock { display: flex; gap: var(--sp-h); padding: var(--sp-h); background: var(--night); border: 1px solid var(--night-line); border-radius: var(--radius); }
+.how-year { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--sp-2); margin-top: var(--sp-5); padding-top: var(--sp-3); border-top: 1px solid var(--rule); counter-reset: none; }
+.how-year li { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 0 var(--sp-2); align-content: start; font-size: var(--t-small); line-height: 18px; color: var(--ink-2); }
+.how-year li .ic { color: var(--good-ink); margin-top: 1px; }
+.how-year strong { color: var(--ink); }
+.how-year li span { grid-column: 2; }
+.how-grow { margin-top: var(--sp-3); max-width: 70ch; }
+.how-more { margin-top: var(--sp-3); border-top: 1px dotted var(--rule-strong); border-bottom: 1px dotted var(--rule-strong); border-radius: 0; }
+.how-more-box .help-cols { margin-top: var(--sp-3); }
+@media (max-width: 799px) {
+  .how-steps { grid-template-columns: minmax(0, 1fr); gap: var(--sp-3); }
+  .how-steps li { grid-template-columns: 112px minmax(0, 1fr); grid-template-rows: auto 1fr; column-gap: var(--sp-3); }
+  .how-pic { grid-row: span 2; height: 72px; }
+  .how-pic .plate-in { padding: 0 var(--sp-1); }
+  .how-pic .plate-name { font-size: var(--t-small); }
+  .how-year { grid-template-columns: minmax(0, 1fr); gap: var(--sp-1); }
+}
+
+/* A mechanic in two lines: what it gives, and its catch. */
+.rules { display: grid; }
+.rules div { display: grid; grid-template-columns: 176px minmax(0, 1fr); gap: 0 var(--sp-4); padding: var(--sp-2) 0; border-bottom: 1px dotted var(--rule-strong); }
+.rules dt { grid-row: span 2; font-family: var(--serif); font-weight: 600; }
+.rules dd { font-size: var(--t-small); line-height: 18px; color: var(--ink-2); }
+.rules dd.catch { color: var(--warn-ink); }
+@media (max-width: 699px) { .rules div { grid-template-columns: minmax(0, 1fr); } .rules dt { grid-row: auto; } }
 .help-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-6); }
 .keys th, .orders-help th { white-space: nowrap; padding: var(--sp-1) var(--sp-3) var(--sp-1) 0; vertical-align: top; font-weight: 600; }
 .keys td, .orders-help td { padding: var(--sp-1) 0; vertical-align: top; }
