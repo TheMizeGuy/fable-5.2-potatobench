@@ -298,15 +298,21 @@ function equipNeeds(c: S.Campaign, id: S.UpgradeId): string {
 
 function equipmentBody(ctx: Ctx, c: S.Campaign, onTry: (err: string) => void, onClose: () => void): Child {
   const ids = Object.keys(S.UPGRADES) as S.UpgradeId[]
+  // Equipment comes out of the cash in hand; the plan still costs what it did, so the spring loan lends that much more.
+  const plan = S.planCost(c)
+  const loanAdds = (cost: number) => Math.max(0, plan - (c.cash - cost)) - Math.max(0, plan - c.cash)
   return [
-    h('p', { class: 't-caption' }, `Bought from cash, ${F.money(Math.max(0, c.cash))} now.`),
+    h('p', { class: 't-caption', testid: 'equip-cash' }, `Paid from the cash in hand, ${F.money(Math.max(0, c.cash))} now. The plan still costs what it did, so what a machine takes out of cash the spring loan lends instead: its price goes on the loan and on what is due at the year end.`),
     h('ul', { class: 'cat-list cat-equip' }, ids.map(id => {
       const u = S.UPGRADES[id]
       const why = c.upgrades[id] ? '' : equipNeeds(c, id)
       return h('li', null,
         h('div', null, h('b', null, u.name), h('p', { class: 't-caption' }, F.localize(u.blurb)), why ? h('p', { class: 't-caption c-ochre' }, why) : null),
         c.upgrades[id] ? h('span', { class: 'stamp sm' }, 'Owned')
-          : h('button', { class: 'btn', type: 'button', testid: `buy-${id}`, disabled: !!why, onclick: () => tryRun(ctx, { t: 'buy', upgrade: id }, onTry) }, 'Buy', h('span', { class: 'sub num' }, F.money(u.cost))))
+          : h('button', {
+            class: 'btn cat-buy', type: 'button', testid: `buy-${id}`, disabled: !!why,
+            onclick: () => tryRun(ctx, { t: 'buy', upgrade: id }, onTry),
+          }, 'Buy', h('span', { class: 'sub num' }, F.money(u.cost)), loanAdds(u.cost) >= 0.5 ? h('span', { class: 'loan-adds num' }, `+${F.money(loanAdds(u.cost))} on the loan`) : null))
     })),
     done('equipment-close', onClose),
   ]

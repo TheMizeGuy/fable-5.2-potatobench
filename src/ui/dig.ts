@@ -17,6 +17,8 @@ const CAUSE_LABEL: Record<S.Cause, string> = {
 }
 const CULLED: S.Cause[] = ['green', 'blight', 'frost', 'rot', 'small']
 // Why the season asked for the vines to be killed (S.killTiming), as the ticket says it: a trade, never a fault.
+// A kill this many days or more before it was due is the player's loss; a day or two either way is the trade.
+const EARLY_DAYS = 3
 const KILL_ASKED: Record<string, string> = { blight: 'blight was winning', frost: 'frost was coming', made: 'the crop was made', late: 'the season was running out' }
 
 export function lotKey(c: S.Campaign, id: number): string {
@@ -356,7 +358,7 @@ function phrase(ctx: Ctx, c: S.Campaign, lot: S.Lot, cause: S.Cause): string {
         // Whether the kill came before the coach asked for it (the player's early kill) or when asked (the trade it asked for).
         const kt = S.killTiming(c, lot.field)
         const on = F.date(c.year, x.killed.day, true)
-        if (kt.killed >= 0 && kt.early > 0) return `the vines were killed on ${on}, ${F.plural(kt.early, 'day')} before the kill was due: these had not finished sizing`
+        if (kt.killed >= 0 && kt.early >= EARLY_DAYS) return `the vines were killed on ${on}, ${F.plural(kt.early, 'day')} before the kill was due: these had not finished sizing`
         return `the vines were killed on ${on}${KILL_ASKED[kt.why] ? `, as asked: ${KILL_ASKED[kt.why]}` : ''}: small ones traded for skins set in time`
       }
       if (x.died) return x.died.text.startsWith('Frost') ? 'frost finished the vines before these sized' : x.died.text.startsWith('Blight') ? 'blight took the vines before these sized' : 'the vines went down before these sized'
@@ -428,7 +430,7 @@ function why(ctx: Ctx, c: S.Campaign, lot: S.Lot, cause: S.Cause): string {
       const blight = facts(c, lot).blight
       let end = ` In ${name} they were dug green on ${date(lot.dugDay)}.`
       const kt = S.killTiming(c, lot.field)
-      if (killed && (!died || killed.day <= died.day) && kt.killed >= 0 && kt.early > 0) {
+      if (killed && (!died || killed.day <= died.day) && kt.killed >= 0 && kt.early >= EARLY_DAYS) {
         end = ` In ${name} the vines were killed on ${date(killed.day)}, ${F.plural(kt.early, 'day')} before they were due: the tubers had not finished sizing.`
       } else if (killed && (!died || killed.day <= died.day) && kt.killed >= 0 && kt.asked >= 0) {
         end = ` In ${name} the vines were killed on ${date(killed.day)}, as the season asked${KILL_ASKED[kt.why] ? `: ${KILL_ASKED[kt.why]}` : ''}. A share of small tubers is the price of skins set in time.`

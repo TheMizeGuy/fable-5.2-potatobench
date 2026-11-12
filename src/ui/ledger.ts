@@ -13,6 +13,7 @@ import { goals, nextGoal } from '../game/goals.ts'
 import { startNewFarm } from './title.ts'
 import { openForeman } from './spring.ts'
 import { light, topBar } from './top.ts'
+import { againstUsual } from './usual-year.ts'
 import { fist, stamp } from './system/parts.ts'
 import { portrait } from './system/people.ts'
 
@@ -165,7 +166,7 @@ function crop(ctx: Ctx, y: S.YearSummary): HTMLElement {
     rows.map(([label, v, cls]) => h('p', null, h('span', null, label),
       h('span', { class: `cbar${cls}`, role: 'img', 'aria-label': `${label}: ${F.perArea(v)}` }, h('i', { style: `width:${(v / max * 100).toFixed(1)}%` })),
       h('b', { class: 'num' }, F.num(F.perAreaValue(v), F.metric() ? 1 : 0)))),
-    h('p', { class: 't-caption', testid: 'crop-sprays' }, `${F.mass(y.cwtCulled)} culled. ${y.sprays !== undefined ? `You sprayed ${F.plural(y.sprays, 'time')}${nb ? `; the neighbor ${F.plural(nb.sprays, 'time')}` : ''}. ` : ''}${nb ? `The neighbor grew ${varietyName(nb.variety)}: planted ${F.date(y.year, nb.plant)}, dug from ${F.date(y.year, nb.dig)}.` : ''}`))
+    h('p', { class: 't-caption', testid: 'crop-sprays' }, `${F.mass(y.cwtCulled)} culled. ${y.sprays !== undefined && y.potatoFields > 0 ? `You sprayed about ${F.plural(Math.round(y.sprays / y.potatoFields), 'time')} a field${nb ? `; the neighbor ${nb.sprays}` : ''}. ` : ''}${nb ? `The neighbor grew ${varietyName(nb.variety)}: planted ${F.date(y.year, nb.plant)}, dug from ${F.date(y.year, nb.dig)}.` : ''}`))
 }
 
 const kilo = (v: number) => v === 0 ? '0' : `${v < 0 ? '−' : ''}${Math.abs(v / 1000)}k`
@@ -408,7 +409,7 @@ export function ledgerScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
               h('p', { class: 't-label' }, `Year ${c.yearIdx + 1} of ${c.goalYears}`),
               h('h1', { class: 't-title book-title' }, `The ledger, ${yearWord(y.year)}`),
               h('p', { class: 'it b-verdict', testid: 'outcome' }, kept ? 'The farm is yours, and the bank is satisfied.' : `The bank is satisfied. ${F.upper(F.plural(left, 'season'))} to go.`),
-              h('p', { class: 'b-plain', testid: 'year-sentence' }, yearSentence(y))),
+              h('p', { class: 'b-plain', testid: 'year-sentence' }, `${yearSentence(y)} ${againstUsual(y.cashEnd - y.cashStart)}`)),
             cashBook(y, false),
             y.cashEnd < 0 ? h('p', { class: 'b-debt' }, h('b', { class: 'c-red' }, 'In debt,'), ` inside the bank's limit: it calls the note only below `, h('span', { class: 'num nowrap' }, F.money(S.CREDIT_LIMIT)), '.') : null,
             yearOnFarm(c),

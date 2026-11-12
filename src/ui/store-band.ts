@@ -3,10 +3,10 @@
 import type * as S from '../sim/index.ts'
 import * as F from './fmt.ts'
 
-// How far a month's price can wander from the usual curve, as a share, for a month this many ahead: about a tenth a
-// month out and up to a fifth over a winter (tests/store-band.test.ts holds it to nine months in ten).
+// How far what a kept lot comes to can stray from the outlook, as a share, for a month this many ahead: about 7% a
+// month out, growing with the square root of the months (tests/store-band.test.ts holds it to nine months in ten).
 export function priceBand(ahead: number): number {
-  return Math.min(0.2, 0.05 + 0.06 * Math.sqrt(Math.max(1, ahead)))
+  return Math.min(0.2, 0.068 * Math.sqrt(Math.max(1, ahead)))
 }
 
 // Whether keeping a lot is the way that brings most: only when the best month ahead beats selling today by more than
