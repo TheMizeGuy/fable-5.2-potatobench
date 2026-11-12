@@ -1,12 +1,13 @@
 // Everyone and everything that works on the map: each person of the farm, on foot, on a tractor or in the truck,
 // playing out their own day along the farm's roads; the machines, kept where they were left; the work staged at each
-// place; and the callers, pickers and animals that come with it. A ring on the ground marks who is picked, and a click
-// on a person or the machine they are on picks them.
+// place; and the callers, pickers and animals that come with it. Everything is drawn at its true size whatever the
+// distance: the interface pins a face to each person at `anchor`, the scene marks only the ground under whoever is
+// picked, and a click near a person, their pin's foot or their machine picks them.
 import {
   BufferAttribute, Color, Group, InstancedBufferAttribute, InstancedBufferGeometry, Matrix4, Mesh, ShaderMaterial, Vector3, type PerspectiveCamera,
 } from 'three'
 import type { UnitKind } from '../sim/index.ts'
-import { COWS, DEER, drawBeast, drawCrow } from './animals.ts'
+import { COWS, COW_SCALE as COW, DEER, drawBeast, drawCrow } from './animals.ts'
 import { Pose, dressFor, dressOf, drawFigure, drawn, figureMatrix, forking, hammering, sit, stand, stoop, swing, walk, type Dress } from './crew.ts'
 import type { Env } from './env.ts'
 import { UI_GAIN, type HillDisplay } from './fields.ts'
@@ -19,18 +20,19 @@ export { TRUE_SIZE }
 import { clamp, hash2, smooth } from './noise.ts'
 import type { Particles } from './particles.ts'
 import { Prims } from './prims.ts'
+import type { StandTree } from './flora.ts'
 import { Stage, type StageFrame, type Worker } from './stage.ts'
 import type { Snapshot, UnitVis } from './state.ts'
 import { Car, GRIME, PAINTS, Tractor, Yarded, implementFor, type MachineFrame, type MachineState, type YardKind } from './tractor.ts'
 import {
-  BUYER, CALLER, DOORYARD_AT, GATE, MACHINE_JOBS, OFF_FARM, PORCH_AT, Poly, buildSite, heightAt, idleSpot, machineHome, packSite, planDay, restAt, sickSpot, siteAt, sundaySpot,
+  BUYER, CALLER, DOORYARD_AT, GATE, MACHINE_JOBS, OFF_FARM, PACE, PORCH_AT, Poly, buildSite, heightAt, idleSpot, machineHome, packSite, planDay, restAt, sickSpot, siteAt, sundaySpot,
   type CrewFrom, type Reveal, type Ride, type Seg, type Spot,
 } from './work.ts'
 
 // A test dig and a day's digging keep their own time: the drive to the field, then the work.
 const STAGE_DRIVE_S = 0.5
 const STAGE_S = { sample: 2, dig: 1.7 }
-const MAX_RINGS = 48
+const MAX_RINGS = 2
 
 export type PendingReveal = Reveal & { unit: number; seg: number }
 
@@ -79,6 +81,9 @@ interface Actor {
   head: Vector3
   scale: number
   next: number[]           // per segment: the next reveal not yet passed
+  u: number                // their own clock through the day's script, 0..1
+  lastT: number            // the day clock when it was last followed
+  ay: number               // how high over the ground their pin stands, eased so it does not jump
 }
 
 interface Leaver { dress: Dress; path: Poly; at: number; gait: number }
@@ -197,7 +202,7 @@ export class Crews {
     return {
       id: u.id, kind: u.kind, slot, dress: dressFor(u.id), coat: dressFor(u.id, true), segs: [], clockSeg: -2, segClock: 0,
       x: rest.x, z: rest.z, heading: rest.heading, rig: null, aboard: false, shown: 0, away: false, home: null, about: DOORYARD_AT, gait: u.id * 1.3, goal: null, state: 'idle', post: '',
-      tired: u.tired, worn: u.tired, style: (u.id * 7) % 5, pose: new Pose().reset(), head: new Vector3(rest.x, 1, rest.z), scale: 1, next: [],
+      tired: u.tired, worn: u.tired, style: (u.id * 7) % 5, pose: new Pose().reset(), head: new Vector3(rest.x, 1, rest.z), scale: 1, next: [], u: 1, lastT: 1, ay: 2.2,
       worker: { id: u.id, dress: dressFor(u.id), tired: 0, w: 0, x: rest.x, z: rest.z, heading: 0, lift: 0, pose: new Pose().reset(), aboard: false, rig: null },
     }
   }
@@ -275,6 +280,7 @@ export class Crews {
     this.mode = snap.mode
     this.sync(snap)
     this.pondWas = snap.farm.pond
+    this.progress.clear()
     this.leavers = []
     this.gangs.clear()
     this.stage.clear()
@@ -288,6 +294,7 @@ export class Crews {
       a.aboard = false
       a.segs = []
       a.clockSeg = -2
+      a.u = a.lastT = 1
       a.shown = 1
       a.post = ''
       a.state = 'idle'
@@ -347,6 +354,9 @@ export class Crews {
       else { a.state = 'idle'; a.goal = u.at < 0 ? idleSpot(u.at, a.slot, a.kind === 'farmer') : null }
       a.home = a.state === 'sunday' || (a.state === 'idle' && a.goal && u.at === -1 && a.kind !== 'farmer') ? a.goal : null
       a.about = a.state === 'sunday' ? PORCH_AT : DOORYARD_AT
+      // Someone who lives out is not on the farm on a day off: they are back by the road with the next day's work.
+      a.away = snap.restDay && u.livesOut && a.state === 'sunday'
+      if (a.away) { a.goal = null; a.home = null; a.x = OFF_FARM.x; a.z = OFF_FARM.z; a.shown = 0 }
     }
     // A tractor broken down: whoever was driving it (or else whoever has nothing to do) is at its engine.
     for (const r of this.rigs) {
@@ -402,12 +412,20 @@ export class Crews {
       id: a.id, slot: a.slot, farmer: a.kind === 'farmer', ride: rides.get(a.id)!, goal: a.goal,
       at: a.aboard && a.rig ? { x: a.rig.x, z: a.rig.z } : { x: a.x, z: a.z }, machine: a.rig ? { x: a.rig.x, z: a.rig.z } : null,
     }))
-    const plans = planDay(snap, shown, from, samples, snap.farm.pond < this.pondWas - 0.02)
+    const was = new Map(this.progress)
+    const plans = planDay(snap, shown, from, samples, snap.farm.pond < this.pondWas - 0.02, key => was.get(key))
     this.pondWas = snap.farm.pond
+    // how far each job has now got, for where tomorrow's part of it begins
+    for (const u of snap.units) for (const w of u.worked) {
+      const key = `${w.field}|${w.kind}`
+      if (w.share === undefined || w.share >= 1) this.progress.delete(key)
+      else this.progress.set(key, w.share)
+    }
     const out: PendingReveal[] = []
     this.actors.forEach((a, k) => {
       a.segs = plans[k]
       a.clockSeg = -2
+      a.u = a.lastT = 0
       a.next = a.segs.map(() => 0)
       a.segs.forEach((s, j) => { for (const r of s.reveals) out.push({ ...r, unit: k, seg: j }) })
     })
@@ -427,7 +445,7 @@ export class Crews {
 
   // Finish any staged work at once (for screenshots).
   settle(): void {
-    for (const a of this.actors) { a.clockSeg = a.segs.length - 1; a.segClock = 1e6 }
+    for (const a of this.actors) { a.clockSeg = a.segs.length - 1; a.segClock = 1e6; a.u = a.lastT = 1 }
     this.stageHold = -1
   }
 
@@ -448,13 +466,26 @@ export class Crews {
     }
   }
 
-  // A point just above a person's head, in the world; false when there is no such person.
+  // Where a person's pin stands: a point over their head at a fixed height above the ground they are on (or the seat
+  // they are in), so it does not bob as they walk or dip as they bend; false when there is no such person on the farm.
   anchor(id: number, out: Vector3): boolean {
     const a = this.actors.find(x => x.id === id)
-    if (!a || a.shown < 0.5) return false
-    out.copy(a.head)
-    out.y += 0.16 * a.scale
+    if (!a || a.away || a.shown < 0.5) return false
+    this.over(a, out)
     return true
+  }
+
+  private over(a: Actor, out: Vector3): Vector3 {
+    const r = a.aboard ? a.rig : null
+    // the tractor's seat is a little behind its middle
+    const back = r && r.kind === 'tractor' ? 0.44 * TRUE_SIZE : 0
+    const x = r ? r.x - Math.cos(r.heading) * back : a.x, z = r ? r.z - Math.sin(r.heading) * back : a.z
+    return out.set(x, heightAt(x, z) + a.ay, z)
+  }
+
+  // The land's trees on a tract, in the order they are felled.
+  setStand(stand: (field: number) => StandTree[]): void {
+    this.standOf = stand
   }
 
   // A tree coming down close by shakes the camera a little.
@@ -482,19 +513,19 @@ export class Crews {
     this.rings = 0
     this.ringMat.uniforms.uTime.value = f.time
     const snap = f.snap, env = f.env
-    // People and machines are drawn at true size whatever the distance. What keeps them findable from far off is the
-    // ring at their feet, which never falls below about thirty pixels across.
-    const perUnit = this.screenH / (2 * Math.tan((f.camera.fov * Math.PI) / 360)) / Math.max(1, f.dist)
+    // People and machines are drawn at true size whatever the distance.
     const bigMachine = TRUE_SIZE
     const big = TRUE_SIZE * FIGURE
-    this.mark = Math.max(0.56 * big, 15 / perUnit)
+    this.mark = 0.56 * big
+    this.perUnit = this.screenH / (2 * Math.tan((f.camera.fov * Math.PI) / 360))
+    // With the clock stopped a day's work is literal: everyone goes on at the pace of a person or a machine.
     const cold = env.snow > 0.3
     this.cold = cold
     const going = snap.mode === 'season' ? f.advancing || f.dayT < 1 : snap.mode !== 'title'
-    const far = smooth(22 * S, 55 * S, f.dist) * (f.season ? 1 : 0.6)
-    this.far = far
+    const far = 0
+    this.literal = snap.mode === 'season' && !f.advancing && f.pace > 0.5
     GRIME.value.set(0.52, 0.42, 0.31).lerp(V.set(0.2, 0.15, 0.11), clamp(env.wet * 1.4 - 0.3, 0, 1))
-    const sf: StageFrame = { pr, particles: f.particles, dt: f.dt, time: f.time, s: big, snap, wind: env.wind, cold, still: f.reduced, going }
+    const sf: StageFrame = { pr, particles: f.particles, dt: f.dt, time: f.time, s: big, snap, wind: env.wind, cold, still: f.reduced, going, stand: this.standOf }
     const mf: MachineFrame = {
       dt: f.dt, time: f.time, particles: f.particles, dust: f.dust, mud: clamp(env.wet * 1.5 - 0.5, 0, 1), still: f.reduced || f.idle, cold: snap.weather.tmin < 4,
       lamps: clamp(Math.max(f.dark, env.cloud > 0.9 ? 0.5 + 0.5 * Math.max(env.rain, env.mist) : 0), 0, 1),
@@ -592,6 +623,11 @@ export class Crews {
       y.draw(pr)
     }
 
+    // Each pin's height: over a standing head, or over the seat.
+    for (const a of this.actors) {
+      const want = a.aboard && a.rig ? (a.rig.kind === 'truck' ? 2.75 : 3.1) : 0.82 * big * a.dress.tall + 0.32
+      a.ay += (want - a.ay) * Math.min(1, f.dt * 8)
+    }
     this.callersAndLife(f, mf, big, bigMachine, going)
     this.ringGeo.instanceCount = this.rings
     this.rAt.needsUpdate = true
@@ -600,13 +636,13 @@ export class Crews {
     pr.end()
   }
 
-  private ring(x: number, y: number, z: number, radius: number, a: Actor, f: CrewFrame, far: number): void {
-    const picked = a.id === f.picked ? 1 : 0
-    const level = Math.max(far, picked) * a.shown
-    if (level < 0.02 || this.rings >= MAX_RINGS) return
+  // The mark on the ground under whoever is picked (and nobody else): never less than about thirty pixels across.
+  private ring(x: number, y: number, z: number, radius: number, a: Actor, f: CrewFrame, _far: number): void {
+    if (a.id !== f.picked || a.shown < 0.5 || this.rings >= MAX_RINGS) return
     const k = this.rings++
-    this.rAt.setXYZW(k, x, y + 0.07, z, radius * (1 + 0.25 * picked))
-    this.rInfo.setXY(k, level * (picked ? 1 : 0.85), picked)
+    const away = f.camera.position.distanceTo(V.set(x, y, z))
+    this.rAt.setXYZW(k, x, y + 0.07, z, Math.max(radius * 1.25, (16 * away) / this.perUnit))
+    this.rInfo.setXY(k, 1, 1)
     const c = a.dress.shirt
     this.rCol.setXYZ(k, c.r * 1.7 + 0.1, c.g * 1.7 + 0.1, c.b * 1.7 + 0.1)
   }
@@ -627,6 +663,10 @@ export class Crews {
   private screenH = 900
   private lively = true
   private far = 0
+  private perUnit = 1000
+  private literal = false
+  private progress = new Map<string, number>()
+  private standOf: (field: number) => StandTree[] = () => []
   private pondWas = 0
 
   // Between jobs and at the day's end: standing easy, or sitting down when worn out.
@@ -649,8 +689,14 @@ export class Crews {
 
   // One person at this point of their day. Returns the staged work they are at, if any.
   private step(a: Actor, k: number, f: CrewFrame, going: boolean, big: number): { key: string; kind: string; field: number; w: number } | null {
+    // Their own clock through the day's script. With the game's clock running it keeps the day's time (catching up,
+    // never jumping, when the clock starts again); with it stopped it goes on at a person's or a machine's own pace,
+    // unless a tool holds the day at a point.
+    const jumped = f.dayT < a.lastT - 1e-6 || f.dayT > a.lastT + 0.2
+    if (!this.literal || jumped) a.u = jumped || !f.advancing ? f.dayT : Math.min(f.dayT, a.u + f.dt * 3)
+    a.lastT = f.dayT
     let segIdx = -1
-    for (let s = 0; s < a.segs.length; s++) if (f.dayT >= a.segs[s].start) segIdx = s
+    for (let s = 0; s < a.segs.length; s++) if (a.u >= a.segs[s].start) segIdx = s
     const seg: Seg | null = segIdx >= 0 ? a.segs[segIdx] : null
     if (segIdx !== a.clockSeg) { a.clockSeg = segIdx; a.segClock = 0 } else a.segClock += f.dt * (f.advancing ? 1 : f.pace)
     const pose = a.pose.reset()
@@ -661,7 +707,7 @@ export class Crews {
     const foot = (e: { x: number; z: number; dx?: number; dz?: number }, load = 0) => {
       const step = Math.hypot(e.x - a.x, e.z - a.z)
       if (step > 1e-4 && step < 3 && e.dx !== undefined) a.heading = Math.atan2(e.dz!, e.dx)
-      a.gait += Math.min(f.dt * 13, (step / (0.46 * big)) * Math.PI * 2)
+      a.gait += Math.min(f.dt * 11, (step / (0.46 * big)) * Math.PI * 2)
       px = e.x; pz = e.z
       walk(pose, a.gait, step > 1e-4 ? 1 : 0, a.tired, load)
       a.aboard = false
@@ -683,12 +729,28 @@ export class Crews {
       return null
     }
     const span = Math.max(1e-6, seg.end - seg.start)
-    let p = Math.min(1, (f.dayT - seg.start) / span)
     seg.polys ??= { walkTo: new Poly(seg.walkTo), travel: new Poly(seg.travel), path: new Poly(seg.path) }
     const { walkTo, travel, path } = seg.polys
     const lw = seg.walkTo.length ? walkTo.length : 0, lt = travel.length
     let tShare = seg.kind === 'travel' ? 1 : lw + lt > 0.3 ? Math.min(0.4, 0.12 + (lw + lt) / (150 * K)) : 0
-    if (seg.kind === 'sample' || seg.kind === 'dig') {
+    if (this.literal && a.u < 1) {
+      // metres a second into a share of this part of the day
+      const p0 = Math.min(1, (a.u - seg.start) / span)
+      let dp: number
+      if (seg.kind === 'travel' || p0 < tShare) {
+        const q = seg.kind === 'travel' ? p0 : p0 / tShare, e = q * q * (3 - 2 * q)
+        const wShare = lw > 0 ? lw / (lw + lt * 0.5) : 0
+        const driving = e >= wShare && !!seg.ride && !!rig
+        const v = driving ? (rig!.kind === 'truck' ? PACE.truck : PACE.lane) : a.worn > 0.6 ? PACE.worn : PACE.walk
+        dp = ((v * f.dt) / Math.max(1, (lw + lt * 0.5) * (e >= wShare ? 2 : 1) * Math.max(0.35, 6 * q * (1 - q)))) * (seg.kind === 'travel' ? 1 : tShare)
+      } else if (seg.site) dp = (f.dt / (seg.kind === 'haul' ? 150 : 900)) * (1 - tShare)
+      else if (!seg.walker && rig) dp = ((PACE.work * f.dt) / Math.max(1, path.length)) * (1 - tShare)
+      else if (seg.kind === 'sample') dp = 0
+      else dp = ((PACE.walk * 0.6 * f.dt) / Math.max(1, path.length)) * (1 - tShare)
+      a.u = Math.min(1, a.u + dp * span)
+    }
+    let p = Math.min(1, (a.u - seg.start) / span)
+    if (seg.kind === 'sample' || (seg.kind === 'dig' && !this.literal)) {
       // However long the day is, the hill is up or the last row out inside two and a half seconds, and the day waits for it.
       const drive = lw + lt > 0.3 ? STAGE_DRIVE_S : 0, work = STAGE_S[seg.kind]
       p = Math.min(1, a.segClock / (drive + work))
@@ -917,7 +979,7 @@ export class Crews {
       g.pickers.forEach((p, k) => {
         const dx = p.tx - p.x, dz = p.tz - p.z, dist = Math.hypot(dx, dz)
         if (dist > 0.25 * big) {
-          const step = Math.min(dist, (going ? 2.6 : 0) * big * f.dt)
+          const step = Math.min(dist, (!going ? 0 : this.literal ? PACE.walk * 1.5 : Math.max(6, dist * 2.5)) * f.dt)
           p.x += (dx / dist) * step
           p.z += (dz / dist) * step
           p.heading = Math.atan2(dz, dx)
@@ -930,9 +992,10 @@ export class Crews {
           pose.reset()
           stoop(pose, p.bent * (0.82 + 0.18 * Math.sin(f.time * 3 + k)), f.time * 6 + k)
           if (p.wait <= 0 && g.recent.length) {
-            const t = g.recent[Math.max(0, g.recent.length - 1 - Math.floor(Math.random() * Math.min(14, g.recent.length)))]
-            p.tx = t.x + (Math.random() - 0.5) * 0.9 * S
-            p.tz = t.z + (Math.random() - 0.5) * 0.9 * S
+            // in a line along the freshly dug rows, each to their own stretch of it, following the digger
+            const t = g.recent[g.recent.length - 1], n = g.pickers.length
+            p.tx = t.x + (k - (n - 1) / 2) * 3.4 + (Math.random() - 0.5) * 1.6
+            p.tz = t.z + (Math.random() - 0.5) * 3.6
             p.wait = 1.2 + Math.random() * 2.2
           }
         }
@@ -973,7 +1036,7 @@ export class Crews {
           if (Math.abs(nx - COW_AT.x) < 22 && Math.abs(nz - COW_AT.z) < 22) { c.x = nx; c.z = nz } else c.h += Math.PI * 0.6
         }
         // the neighbour's stock is scenery: never drawn as large as the farm's own people are from far off
-        drawBeast(pr, COWS[c.kind], c.x, heightAt(c.x, c.z), c.z, c.h, Math.min(big, 1.5 * TRUE_SIZE) * 0.9, f.time * 3 + c.kind, c.walking ? 0.7 : 0, c.walking ? 0 : 1)
+        drawBeast(pr, COWS[c.kind], c.x, heightAt(c.x, c.z), c.z, c.h, big * COW, f.time * 3 + c.kind, c.walking ? 0.7 : 0, c.walking ? 0 : 1)
       }
     }
     // A deer at the wood's edge, gone into the trees when anyone comes near.
@@ -984,7 +1047,7 @@ export class Crews {
     d.t += f.dt
     if (this.lively && d.away < 0.99 && snap.mode !== 'title') {
       const z = d.z - d.away * 5 * S
-      drawBeast(pr, DEER, d.x - d.away * 2 * S, heightAt(d.x, z), z, near ? -1.9 : 0.4, Math.min(big, 1.5 * TRUE_SIZE) * 0.9 * (1 - 0.5 * d.away), d.away > 0.02 ? f.time * 14 : 0, d.away > 0.02 && d.away < 0.99 ? 1 : 0, near ? 0 : (Math.sin(d.t * 0.4) > 0.2 ? 1 : 0))
+      drawBeast(pr, DEER, d.x - d.away * 2 * S, heightAt(d.x, z), z, near ? -1.9 : 0.4, big * 0.95 * (1 - 0.5 * d.away), d.away > 0.02 ? f.time * 14 : 0, d.away > 0.02 && d.away < 0.99 ? 1 : 0, near ? 0 : (Math.sin(d.t * 0.4) > 0.2 ? 1 : 0))
     }
   }
 
@@ -997,24 +1060,30 @@ export class Crews {
   // The screen's size in CSS pixels, for how large people must be drawn to be seen.
   setScreen(_w: number, h: number): void { this.screenH = Math.max(200, h) }
 
-  // The person under a point on the screen (CSS pixels), or -1: on their body, or on the machine they are on. The reach
-  // is generous when they are small on the screen.
+  // The person under a point on the screen (CSS pixels), or -1. A person is a few pixels tall from the playing view, so
+  // the reach is generous: anywhere on their body or within twenty-six pixels of it, at the foot of their pin, or on
+  // the machine they have in hand. The nearest, by how far inside its reach the point falls.
   pick(x: number, y: number, camera: PerspectiveCamera, w: number, h: number, _markers = false): number {
-    let best = -1, bd = Infinity
+    let best = -1, bd = 1
     const screen = (px: number, py: number, pz: number): [number, number] | null => {
       this.v.set(px, py, pz).project(camera)
       return this.v.z > 1 ? null : [(this.v.x + 1) / 2 * w, (1 - this.v.y) / 2 * h]
     }
+    const reach = (at: [number, number] | null, top: [number, number] | null, least: number, id: number) => {
+      if (!at) return
+      const r = Math.max(least, top ? Math.hypot(top[0] - at[0], top[1] - at[1]) * 1.15 : 0)
+      const d = Math.hypot(at[0] - x, at[1] - y) / r
+      if (d < bd) { bd = d; best = id }
+    }
     for (const a of this.actors) {
-      if (a.shown < 0.5) continue
-      const s = a.scale
-      const base = heightAt(a.x, a.z)
-      const body = screen(a.x, base + (a.aboard ? 0.6 : 0.4) * s, a.z)
-      if (!body) continue
-      const edge = screen(a.x, base + (a.aboard ? 1.5 : 0.95) * s, a.z)
-      const r = Math.max(22, edge ? Math.hypot(edge[0] - body[0], edge[1] - body[1]) * (a.aboard ? 1.25 : 1.1) : 22)
-      const d = Math.hypot(body[0] - x, body[1] - y)
-      if (d < r && d < bd) { bd = d; best = a.id }
+      if (a.away || a.shown < 0.5) continue
+      const o = this.over(a, V2), ox = o.x, oy = o.y, oz = o.z
+      const base = oy - a.ay
+      // the body (half way up it, out to its head), and the foot of the pin
+      reach(screen(ox, base + a.ay * 0.45, oz), screen(ox, oy, oz), 26, a.id)
+      reach(screen(ox, oy, oz), null, 22, a.id)
+      const r = a.rig
+      if (r) reach(screen(r.x, heightAt(r.x, r.z) + 1.1, r.z), screen(r.x + 2.4, heightAt(r.x, r.z) + 1.1, r.z), 30, a.id)
     }
     return best
   }
@@ -1030,7 +1099,7 @@ export class Crews {
   }
 }
 
-// The neighbour's cows graze the pasture east of the home yard.
+// The neighbour's cows graze the pasture east of the home yard. 
 const COW_AT = { x: 37 * K, z: 2 * K }
 const YARD_KINDS: YardKind[] = ['harvester', 'sprayer', 'reel']
 const POSE = new Pose()

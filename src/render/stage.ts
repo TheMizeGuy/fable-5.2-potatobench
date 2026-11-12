@@ -3,11 +3,12 @@
 // where the work wants them, gives them the motions of it, and draws what the work needs around them.
 import { Color, Vector3 } from 'three'
 import type { BuildingKind, JobKind } from '../sim/index.ts'
-import { GREY_HORSE, HORSE, drawBeast, withers } from './animals.ts'
+import { DRAUGHT, GREY_HORSE, HORSE, drawBeast, withers } from './animals.ts'
 import { COLORS, Pose, STAND_HIP, forking, hammering, lifting, sawing, stand, stoop, swing, walk, type Dress } from './crew.ts'
 import { FIELDS, route, siteOf } from './layout.ts'
 import type { Particles } from './particles.ts'
 import type { Prims } from './prims.ts'
+import type { StandTree } from './flora.ts'
 import type { Snapshot } from './state.ts'
 import { Poly, buildSite, heightAt, houseDoor, houseFor, packSite, siteAt, type Pt, type Spot } from './work.ts'
 
@@ -37,6 +38,7 @@ export interface StageFrame {
   cold: boolean            // snow on the ground
   still: boolean           // reduced motion
   going: boolean           // the work is going on (the clock runs, or the day is being played out)
+  stand: (field: number) => StandTree[]   // a tract's trees in the order they are felled (the land's own)
 }
 
 interface Site {
@@ -51,13 +53,16 @@ interface Site {
   trip: Poly | null
   ph: number
   piles: [number, number]  // stones put off at each end of the field
+  falls: Fall[]            // trees coming down and lying to be limbed
 }
+
+interface Fall { x: number; z: number; h: number; conifer: boolean; bush: boolean; t: number; side: number; down: boolean }
 
 const Y = new Vector3(0, 1, 0), X = new Vector3(1, 0, 0)
 const a = new Vector3(), b = new Vector3(), c = new Vector3(), d = new Vector3(), e = new Vector3(), g = new Vector3()
 const SPRUCE = new Color('#1f3a2a'), ALDER = new Color('#51683a'), ALDER_DARK = new Color('#3f5632'), WHITE = new Color(1, 1, 1), SLED = new Color('#6f5a41'), CHAIN = new Color('#2b2b2a')
 const FLAME = [new Color(7, 2.4, 0.5), new Color(8, 4.2, 0.9), new Color(5, 1.2, 0.3)], EMBER = new Color('#2a1c14'), WATER = new Color('#cfe0ea')
-const ORANGE = new Color('#b8642a'), DRUM = new Color('#23262a'), GRAVEL = new Color('#8f8a80')
+const ORANGE = new Color('#b8642a'), DRUM = new Color('#23262a'), GRAVEL = new Color('#8f8a80'), HARDWOOD = new Color('#4f6a34'), HARDWOOD_DARK = new Color('#3c5229')
 
 const ease = (t: number) => t * t * (3 - 2 * t)
 const clamp01 = (t: number) => (t < 0 ? 0 : t > 1 ? 1 : t)
@@ -87,13 +92,11 @@ export class Stage {
     let st = this.sites.get(key)
     if (!st) {
       const spot = kind === 'build' || kind === 'pack' ? this.yardSpot(kind, field, f.snap) : siteAt((kind === 'reel' || kind === 'pipe' ? 'haul' : kind) as JobKind, field)
-      st = { kind, field, spot, t: hash(field + kind.length) * 20, seen: this.frame, load: 0, n: 0, at: new Map(), trip: null, ph: 0, piles: [3, 0] }
+      st = { kind, field, spot, t: hash(field + kind.length) * 20, seen: this.frame, load: 0, n: kind === 'fell' ? -1 : 0, at: new Map(), trip: null, ph: 0, piles: [3, 0], falls: [] }
       this.sites.set(key, st)
     }
     st.seen = this.frame
     if (f.going) st.t += f.dt
-    // felling follows the line the stand has been cut back to
-    if (kind === 'fell') st.spot = siteAt('fell', field, f.snap.fields[field]?.felled ?? 0)
     switch (kind) {
       case 'fell': this.fell(st, ws, f); break
       case 'rocks': this.rocks(st, ws, f); break
@@ -160,153 +163,180 @@ export class Stage {
     return out.set((dx * ch + dz * sh) / fs, (world.y - heightAt(w.x, w.z) - w.lift * s) / fs, (-dx * sh + dz * ch) / fs)
   }
 
-  private puff(f: StageFrame, at: Vector3, n: number, spread: number, r: number, g: number, bl: number, alpha: number, life = 1.4, rise = 0.5): void {
+  private puff(f: StageFrame, at: Vector3, n: number, spread: number, r: number, g: number, bl: number, alpha: number, life = 1.4, rise = 0.5, size = 0.22): void {
     if (f.still) return
     for (let k = 0; k < n; k++) {
       const q = Math.random
-      f.particles.emit(at.x + (q() - 0.5) * spread, at.y + q() * 0.1, at.z + (q() - 0.5) * spread, (q() - 0.5) * 0.8, rise * (0.4 + q()), (q() - 0.5) * 0.8, 0.1 * f.s, 0.5 * f.s, life * (0.6 + q() * 0.8), r, g, bl, alpha, 0.6)
+      f.particles.emit(at.x + (q() - 0.5) * spread, at.y + q() * 0.1 + size * 0.5, at.z + (q() - 0.5) * spread, (q() - 0.5) * 0.8, rise * (0.4 + q()), (q() - 0.5) * 0.8, size, size * 2.2, life * (0.6 + q() * 0.8), r, g, bl, alpha, 0.6)
     }
   }
 
   // ---- felling
 
+  // Felling is done at the land's own trees. The stand is the land writer's (its trees in the order they come down);
+  // the people work at the next one still standing, and each tree the land takes away as the day's felling is counted
+  // falls here in its place, is limbed where it lies, and is left to the land's own stems, stumps and slash.
   private fell(st: Site, ws: Worker[], f: StageFrame): void {
     const pr = f.pr, s = f.s
-    const brushy = f.snap.fields[st.field]?.cover === 'brush'
-    const T = brushy ? 6.5 : 10.5, tCut = brushy ? 3 : 5.6, tDown = tCut + (brushy ? 0.8 : 1.5)
-    const n = Math.floor(st.t / T), t = st.t - n * T
-    const spots: [number, number][] = [[0.95, 0.2], [1.3, -1.5], [0.9, 1.7]]
-    const [tx, tz] = spots[n % 3]
-    const sideways = n % 2 ? 1 : -1
-    // the tree is no bigger than the woods it stands in, however large the people are drawn
-    const ts = Math.min(s, TREE_MOST) / s
-    const H = (brushy ? 1.5 : 2.7 + 0.5 * hash(n)) * (brushy ? 1 : ts), r = 0.08 * ts
-    // the tree: standing and shivering under the axe, going over, lying to be limbed
-    const fall = t < tCut ? 0 : Math.pow(span(tCut, tDown, t), 2.4)
-    const struck = t < tCut ? 0.012 * Math.sin(st.t * 23) * Math.max(0, Math.sin(st.t * 5)) : 0
-    const ang = fall * (Math.PI / 2 - 0.04) + struck
-    this.P(st, s, tx, 0, tz, a)
-    const h = st.spot.heading
-    d.set(-Math.sin(h) * sideways, 0, Math.cos(h) * sideways)
-    b.copy(Y).multiplyScalar(Math.cos(ang)).addScaledVector(d, Math.sin(ang))
-    const limbed = span(tDown + 0.6, T - 0.8, t)
-    const gone = span(T - 0.5, T, t)
-    if (brushy) {
-      // an alder clump: a handful of stems leaning out from one stool, in leaf toward their ends
-      for (let k = 0; k < 5; k++) {
-        const az = hash(n * 7 + k) * 6.28, len = H * (0.65 + 0.5 * hash(n * 13 + k)) * (1 - 0.3 * limbed)
-        e.set(Math.cos(az), 0, Math.sin(az))
-        c.copy(b).addScaledVector(e, (0.16 + 0.3 * hash(n * 11 + k)) * (1 - 0.8 * fall)).normalize()
-        pr.put('log', a, c, X, 0.045 * s, len * s, 0.045 * s, WHITE)
-        for (const q of [0.62, 0.96]) {
-          g.copy(a).addScaledVector(c, q * len * s)
-          pr.put('ball', g, c, X, 0.19 * s * (1 - limbed), 0.25 * s * (1 - limbed), 0.19 * s * (1 - limbed), k % 2 ? ALDER : ALDER_DARK)
+    const fv = f.snap.fields[st.field]
+    const brushy = fv?.cover === 'brush'
+    const trees = f.stand(st.field)
+    const n = trees.length
+    const share = fv && (fv.cover === 'woods' || fv.cover === 'brush') ? Math.max(0, Math.min(1, fv.felled)) : 1
+    const cut = Math.round(share * n)
+    if (st.n < 0 || cut < st.n) st.n = cut
+    // those the land has just taken down: the last few fall here, one after another
+    if (cut > st.n) {
+      for (let k = Math.max(st.n, cut - 3); k < cut; k++) st.falls.push({ x: trees[k].x, z: trees[k].z, h: this.tall(trees[k]), conifer: trees[k].conifer, bush: trees[k].bush, t: -0.7 * (k - Math.max(st.n, cut - 3)), side: k % 2 ? 1 : -1, down: false })
+      st.n = cut
+    }
+    // The work stands before the next tree to come down, facing into the stand.
+    const next = n ? trees[Math.min(cut, n - 1)] : null
+    const h = brushy ? 0 : -Math.PI / 2
+    if (next) st.spot = { x: next.x - Math.cos(h) * 1.0 * s, z: next.z - Math.sin(h) * 1.0 * s, heading: h }
+    const tx = 1.0, tz = 0
+    for (const t of st.falls) {
+      if (f.going) t.t += f.dt
+      if (t.t < 0) continue
+      const fall = Math.pow(span(0, 1.5, t.t), 2.4), limbed = span(2.2, 5.5, t.t), ang = fall * (Math.PI / 2 - 0.04)
+      a.set(t.x, heightAt(t.x, t.z), t.z)
+      // away from the standing timber, a little to one side
+      d.set(-Math.cos(h) + t.side * 0.5 * Math.sin(h), 0, -Math.sin(h) - t.side * 0.5 * Math.cos(h)).normalize()
+      b.copy(Y).multiplyScalar(Math.cos(ang)).addScaledVector(d, Math.sin(ang))
+      this.tree(pr, t, a, b, limbed)
+      if (!t.down && t.t >= 1.5) {
+        // down: the crash, needles and dust (snow in winter) thrown up all along it
+        t.down = true
+        for (let k = 0; k < 5; k++) {
+          c.copy(a).addScaledVector(d, (0.25 + 0.17 * k) * t.h)
+          if (f.cold) this.puff(f, c, 4, 2.4, 0.9, 0.93, 0.97, 0.5, 2.6, 1.2, 1.6)
+          else this.puff(f, c, 3, 2.4, 0.5, 0.44, 0.33, 0.34, 2.4, 1.2, 1.6)
         }
-      }
-    } else {
-      pr.put('log', a, b, X, r * 2 * s, H * s * (1 - 0.25 * limbed), r * 2 * s, WHITE)
-      for (let k = 0; k < 5; k++) {
-        const wide = (1.25 - 0.2 * k) * (1 - limbed * (0.4 + 0.12 * k)) * (1 - gone) * ts
-        if (wide <= 0.02) continue
-        c.copy(a).addScaledVector(b, (0.24 + 0.155 * k) * H * s)
-        pr.put('bough', c, b, X, wide * s, 0.34 * H * s, wide * s, SPRUCE)
+        if (!t.bush) { this.thud = 1; this.thudAt.copy(a) }
       }
     }
-    if (t >= tDown && st.n !== n) {
-      // down: the crash, needles and dust (snow in winter) thrown up all along it
-      st.n = n
-      for (let k = 0; k < 5; k++) {
-        c.copy(a).addScaledVector(d, (0.3 + 0.2 * k) * H * s)
-        if (f.cold) this.puff(f, c, 5, 0.6 * s, 0.9, 0.93, 0.97, 0.5, 1.6)
-        else this.puff(f, c, 4, 0.6 * s, 0.5, 0.44, 0.33, 0.34, 1.5)
-      }
-      if (!brushy) { this.thud = 1; this.thudAt.copy(a) }
-    }
+    st.falls = st.falls.filter(t => t.t < 6)
+    const falling = st.falls.find(t => t.t >= -0.3 && t.t < 2.1), lying = st.falls.find(t => t.t >= 2.1)
     // the people
     const pair = ws.length >= 2 && !brushy
     ws.forEach((w, k) => {
       w.rig = null
       w.aboard = false
       if (k <= 1 && (k === 0 || pair)) {
-        if (t < tCut) {
-          if (pair) {
-            // a crosscut saw between two: one pulls as the other gives
-            const sd = k === 0 ? -1 : 1
-            if (this.go(st, w, f, tx, tz + sd * 0.74, -sd * Math.PI / 2)) {
-              const x = Math.sin(st.t * 5.4) * (k === 0 ? 1 : -1)
-              sawing(w.pose, x, 0.21)
-              if (k === 0) {
-                const dz = 0.09 * Math.sin(st.t * 5.4)
-                this.P(st, s, tx, 0.22, tz - 0.52 + dz, c)
-                this.P(st, s, tx, 0.22, tz + 0.52 + dz, e)
-                pr.put('box', c, d.subVectors(e, c), Y, 0.075 * s, c.distanceTo(e), 0.006 * s, COLORS.STEEL)
-                if (!f.still && Math.random() < 0.3) { this.P(st, s, tx, 0.2, tz, c); f.particles.emit(c.x, c.y, c.z, (Math.random() - 0.5) * 0.4, 0.2, (Math.random() - 0.5) * 0.4, 0.03 * s, 0.1, 0.7, 0.78, 0.66, 0.45, 0.5, 0.2) }
-              }
-            }
-          } else if (this.go(st, w, f, tx - 0.47, tz + 0.1, 0)) {
-            const u = frac(st.t / (brushy ? 0.95 : 1.25) + w.id * 0.37)
-            const kk = u < 0.5 ? 1 - ease(u / 0.5) : u < 0.62 ? Math.pow((u - 0.5) / 0.12, 1.5) : 1
-            swing(w.pose, kk, false, brushy ? 0.3 : 0.12)
-            w.pose.tool = brushy ? 'hook' : 'axe'
-            if (!f.still && u > 0.6 && u < 0.66) { this.P(st, s, tx - 0.06, 0.3, tz, c); f.particles.emit(c.x, c.y, c.z, -0.5 + Math.random() * 0.3, 0.5, (Math.random() - 0.5), 0.025 * s, 0.05, 0.6, 0.8, 0.68, 0.46, 0.8, 0.1) }
-          }
-        } else if (t < tDown + 0.5) {
+        if (falling) {
           // stand clear and watch it go
-          if (this.go(st, w, f, tx - 0.9, tz - sideways * (0.5 + 0.5 * k), 0.4 * sideways)) stand(w.pose, st.t, w.tired, k ? 3 : 0)
-          if (!pair && !st.at.get(w.id)!.walking) w.pose.tool = ''
-        } else if (this.go(st, w, f, tx - 0.42, tz + sideways * (0.9 + 0.75 * k) * H / 2.9, 0)) {
-          // limbing: down the trunk with the axe
-          const u = frac(st.t / 1.05 + k * 0.5)
-          const kk = u < 0.55 ? 1 - ease(u / 0.55) : u < 0.68 ? (u - 0.55) / 0.13 : 1
-          swing(w.pose, kk, true)
+          if (this.go(st, w, f, tx - 2.2, tz + (k ? 1.4 : -1.2), 0.2)) stand(w.pose, st.t, w.tired, k ? 3 : 0)
+        } else if (lying) {
+          // limbing: along the trunk with the axe
+          const at = 0.25 + 0.3 * k
+          d.set(-Math.cos(h) + lying.side * 0.5 * Math.sin(h), 0, -Math.sin(h) - lying.side * 0.5 * Math.cos(h)).normalize()
+          if (this.goTo(st, w, f, lying.x + d.x * lying.h * at - d.z * 0.9, lying.z + d.z * lying.h * at + d.x * 0.9, Math.atan2(d.x, -d.z))) {
+            const u = frac(st.t / 1.05 + k * 0.5)
+            swing(w.pose, u < 0.55 ? 1 - ease(u / 0.55) : u < 0.68 ? (u - 0.55) / 0.13 : 1, true)
+            w.pose.tool = brushy ? 'hook' : 'axe'
+          }
+        } else if (pair) {
+          // a crosscut saw between two: one pulls as the other gives
+          const sd = k === 0 ? -1 : 1
+          if (this.go(st, w, f, tx, tz + sd * 0.74, -sd * Math.PI / 2)) {
+            const x = Math.sin(st.t * 5.4) * (k === 0 ? 1 : -1)
+            sawing(w.pose, x, 0.21)
+            if (k === 0) {
+              const dz = 0.09 * Math.sin(st.t * 5.4)
+              this.P(st, s, tx, 0.22, tz - 0.52 + dz, c)
+              this.P(st, s, tx, 0.22, tz + 0.52 + dz, e)
+              pr.put('box', c, d.subVectors(e, c), Y, 0.075 * s, c.distanceTo(e), 0.006 * s, COLORS.STEEL)
+              if (!f.still && Math.random() < 0.3) { this.P(st, s, tx, 0.2, tz, c); f.particles.emit(c.x, c.y, c.z, (Math.random() - 0.5) * 0.4, 0.2, (Math.random() - 0.5) * 0.4, 0.03 * s, 0.1, 0.7, 0.78, 0.66, 0.45, 0.5, 0.2) }
+            }
+          }
+        } else if (this.go(st, w, f, tx - 0.47, tz + 0.1, 0)) {
+          const u = frac(st.t / (brushy ? 0.95 : 1.25) + w.id * 0.37)
+          const kk = u < 0.5 ? 1 - ease(u / 0.5) : u < 0.62 ? Math.pow((u - 0.5) / 0.12, 1.5) : 1
+          swing(w.pose, kk, false, brushy ? 0.3 : 0.12)
           w.pose.tool = brushy ? 'hook' : 'axe'
+          if (!f.still && u > 0.6 && u < 0.66) { this.P(st, s, tx - 0.06, 0.3, tz, c); f.particles.emit(c.x, c.y, c.z, -0.5 + Math.random() * 0.3, 0.5, (Math.random() - 0.5), 0.025 * s, 0.05, 0.6, 0.8, 0.68, 0.46, 0.8, 0.1) }
         }
       } else if (k === 2 || (k === 1 && !pair)) {
-        // bucking a log at the landing
-        if (this.go(st, w, f, -0.62, -2.4, 0)) {
+        // bucking a log on the cut ground behind
+        if (this.go(st, w, f, -3.0, -2.4, 0)) {
           const u = frac(st.t / 1.1 + 0.3)
           swing(w.pose, u < 0.55 ? 1 - ease(u / 0.55) : u < 0.68 ? (u - 0.55) / 0.13 : 1, true)
           w.pose.tool = 'axe'
         }
-        this.P(st, s, -0.08, 0.07, -2.9, c)
-        this.P(st, s, -0.08, 0.07, -1.7, e)
+        this.P(st, s, -2.45, 0.07, -3.4, c)
+        this.P(st, s, -2.45, 0.07, -1.4, e)
         pr.put('log', c, d.subVectors(e, c), Y, 0.15 * s, c.distanceTo(e), 0.15 * s, WHITE)
       } else {
-        // dragging the tops to the brush pile
-        const u = frac(st.t / 7 + k * 0.31)
+        // dragging the tops to a brush pile
+        const u = frac(st.t / 9 + k * 0.31)
         const out = u < 0.5
-        if (this.go(st, w, f, out ? 0.5 : -0.3, out ? 2.6 : -4.2 - 0.4 * (k % 2), 0, out ? 0 : 1) && out) stoop(w.pose.reset(), 0.9, st.t * 3)
+        if (this.go(st, w, f, out ? -0.6 : -4.2, out ? 2.6 : -5.2 - 0.6 * (k % 2), 0, out ? 0 : 1) && out) stoop(w.pose.reset(), 0.9, st.t * 3)
         if (!out) w.pose.held = 'brush'
       }
     })
     if (brushy) return
-    // the team: out to the tree light, back to the landing with a log on the chain
-    // It brings the last tree's log in to the landing while this one is cut, stands there until it is down, then goes out to it.
-    const landing: [number, number] = [-0.45, 3.1], last = spots[(n + 2) % 3]
-    const from: [number, number] = [last[0] - 0.6, last[1]], to: [number, number] = [tx - 0.6, tz]
-    const tHaul = 4.4, tOut = tDown + 0.9
-    const hauling = t < tHaul, going = t >= tOut
-    const u = hauling ? ease(t / tHaul) : going ? ease((t - tOut) / (T - tOut)) : 0
-    const p0 = hauling ? from : landing, p1 = hauling ? landing : going ? to : landing
-    const hx = p0[0] + (p1[0] - p0[0]) * u, hz = p0[1] + (p1[1] - p0[1]) * u
+    // The team: a log on the chain from the cut line back over the cleared ground, and out again light.
+    const T = 22, t = frac(st.t / T) * T
+    const from: [number, number] = [-1.2, 2.2], to: [number, number] = [-9.5, 3.4]
+    const hauling = t < 12, going = t >= 14
+    const u = hauling ? ease(t / 12) : going ? 1 - ease((t - 14) / (T - 14)) : 1
+    const hx = from[0] + (to[0] - from[0]) * u, hz = from[1] + (to[1] - from[1]) * u
     this.local(st, s, hx, hz, PT)
-    const dirx = hauling || going ? p1[0] - p0[0] : tx - landing[0], dirz = hauling || going ? p1[1] - p0[1] : tz - landing[1]
-    const hh = h + Math.atan2(dirz, dirx)
+    const hh = h + Math.atan2(to[1] - from[1], to[0] - from[0]) + (going ? Math.PI : 0)
     const moving = (going || hauling) && f.going ? 1 : 0
     for (const sd of [-1, 1]) {
-      const ox = -Math.sin(hh) * sd * 0.15 * s, oz = Math.cos(hh) * sd * 0.15 * s
-      drawBeast(pr, sd < 0 ? HORSE : GREY_HORSE, PT.x + ox, heightAt(PT.x + ox, PT.z + oz), PT.z + oz, hh, s * 0.86, st.t * 7 + sd, moving, 0)
+      const ox = -Math.sin(hh) * sd * 0.42 * s, oz = Math.cos(hh) * sd * 0.42 * s
+      drawBeast(pr, sd < 0 ? HORSE : GREY_HORSE, PT.x + ox, heightAt(PT.x + ox, PT.z + oz), PT.z + oz, hh, s * DRAUGHT, st.t * 7 + sd, moving, 0)
       if (hauling) {
         c.copy(withers)
-        e.set(PT.x - Math.cos(hh) * 0.95 * s, heightAt(PT.x, PT.z) + 0.1 * s, PT.z - Math.sin(hh) * 0.95 * s)
+        e.set(PT.x - Math.cos(hh) * 2.6 * s, heightAt(PT.x, PT.z) + 0.1 * s, PT.z - Math.sin(hh) * 2.6 * s)
         pr.rod('cyl', c, e, 0.008 * s, CHAIN)
       }
     }
     if (hauling) {
-      c.set(PT.x - Math.cos(hh) * 0.95 * s, heightAt(PT.x, PT.z) + 0.08 * s, PT.z - Math.sin(hh) * 0.95 * s)
+      c.set(PT.x - Math.cos(hh) * 2.6 * s, heightAt(PT.x, PT.z) + 0.2, PT.z - Math.sin(hh) * 2.6 * s)
       d.set(-Math.cos(hh), 0, -Math.sin(hh))
-      pr.put('log', c, d, Y, 0.16 * s, 1.9 * s, 0.16 * s, WHITE)
-      if (!f.still && moving && Math.random() < 0.25) f.particles.emit(c.x, c.y, c.z, 0, 0.2, 0, 0.1 * s, 0.4 * s, 1.2, f.cold ? 0.9 : 0.5, f.cold ? 0.93 : 0.42, f.cold ? 0.97 : 0.32, 0.25, 0.4)
+      pr.put('log', c, d, Y, 0.38, 7.5, 0.38, WHITE)
+      if (!f.still && moving && Math.random() < 0.25) f.particles.emit(c.x, c.y, c.z, 0, 0.2, 0, 0.5, 0.9, 2.2, f.cold ? 0.9 : 0.5, f.cold ? 0.93 : 0.42, f.cold ? 0.97 : 0.32, 0.25, 0.4)
+    }
+  }
+
+  // How tall one of the land's trees stands, in metres.
+  private tall(t: StandTree): number {
+    return t.bush ? Math.max(2.4, t.s * 2.6) : Math.max(6, t.s)
+  }
+
+  // One of the land's trees as it goes over: a trunk along `up` from its foot, in bough or in leaf.
+  private tree(pr: Prims, t: Fall, foot: Vector3, up: Vector3, limbed: number): void {
+    const H = t.h
+    if (t.bush) {
+      for (let k = 0; k < 5; k++) {
+        const az = hash(t.x * 7 + k) * 6.28, len = H * (0.65 + 0.5 * hash(t.z * 13 + k)) * (1 - 0.3 * limbed)
+        e.set(Math.cos(az), 0, Math.sin(az))
+        c.copy(up).addScaledVector(e, 0.3 * up.y).normalize()
+        pr.put('log', foot, c, X, 0.1, len, 0.1, WHITE)
+        for (const q of [0.62, 0.96]) {
+          g.copy(foot).addScaledVector(c, q * len)
+          pr.put('ball', g, c, X, 0.42 * (1 - limbed), 0.55 * (1 - limbed), 0.42 * (1 - limbed), k % 2 ? ALDER : ALDER_DARK)
+        }
+      }
+      return
+    }
+    const r = 0.026 * H + 0.03
+    pr.put('log', foot, up, X, r * 2, H * (1 - 0.26 * limbed), r * 2, WHITE)
+    if (t.conifer) {
+      for (let k = 0; k < 6; k++) {
+        const wide = H * (0.3 - 0.04 * k) * (1 - limbed)
+        if (wide <= 0.05) continue
+        c.copy(foot).addScaledVector(up, (0.2 + 0.135 * k) * H)
+        pr.put('bough', c, up, X, wide, 0.3 * H, wide, SPRUCE)
+      }
+    } else {
+      for (let k = 0; k < 4; k++) {
+        c.copy(foot).addScaledVector(up, (0.56 + 0.13 * k) * H).addScaledVector(X, (hash(k + t.x) - 0.5) * 0.12 * H)
+        const w2 = H * (0.19 - 0.02 * k) * (1 - limbed)
+        if (w2 > 0.05) pr.put('ball', c, up, X, w2, w2 * 0.8, w2, k % 2 ? HARDWOOD : HARDWOOD_DARK)
+      }
     }
   }
 
@@ -343,8 +373,8 @@ export class Stage {
       }
     }
     const hh = st.spot.heading + (dir > 0 ? 0 : Math.PI)
-    this.local(st, s, bx + dir * 1.15, bz, PT)
-    drawBeast(pr, HORSE, PT.x, heightAt(PT.x, PT.z), PT.z, hh, s * 0.86, st.t * 6, moving ? 0.8 : 0, unloading ? 0.6 * span(1, 3, u - stops * TS) : 0)
+    this.local(st, s, bx + dir * 1.75, bz, PT)
+    drawBeast(pr, HORSE, PT.x, heightAt(PT.x, PT.z), PT.z, hh, s * DRAUGHT, st.t * 6, moving ? 0.8 : 0, unloading ? 0.6 * span(1, 3, u - stops * TS) : 0)
     c.copy(withers)
     // the boat: two runners and a deck of planks, low to the ground
     this.P(st, s, bx, 0.05, bz, a)
@@ -412,7 +442,11 @@ export class Stage {
       }
       if (!f.still && f.going) {
         const q = Math.random
-        if (q() < 0.9) f.particles.emit(a.x + (q() - 0.5) * 0.3 * s, a.y + 0.4 * s, a.z + (q() - 0.5) * 0.3 * s, (q() - 0.5) * 0.2, 1.1 + q() * 0.6, (q() - 0.5) * 0.2, 0.16 * s, 0.55 * s, 4.5 + q() * 3, 0.62, 0.61, 0.6, 0.5, 0.9)
+        // (the air does not carry a puff far up: the column is laid in along its length)
+        if (q() < 0.7) {
+          const up = Math.pow(q(), 1.4) * 34
+          f.particles.emit(a.x + (q() - 0.5) * (0.6 + 0.12 * up), a.y + 0.8 + up, a.z + (q() - 0.5) * (0.6 + 0.12 * up), 0, 0.9, 0, 0.7 + 0.16 * up, 0.5 + 0.03 * up, 5 + q() * 4, 0.6, 0.59, 0.58, 0.5 * (1 - up / 46), 0.35 + up / 60)
+        }
         if (q() < 0.2) f.particles.emit(a.x, a.y + 0.3 * s, a.z, (q() - 0.5) * 0.8, 1.6 + q(), (q() - 0.5) * 0.8, 0.018 * s, 0, 0.9, 6, 2.2, 0.5, 0.9, 0.5)
       }
     }

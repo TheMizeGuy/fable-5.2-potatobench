@@ -68,6 +68,8 @@ export type Held = '' | 'sack' | 'basket' | 'barrel' | 'stone' | 'bag' | 'tray' 
 
 const THIGH = 0.19, SHIN = 0.19, UPPER = 0.135, FORE = 0.135, TORSO = 0.225, SHOULDER = 0.105, HIPW = 0.05, ANKLE = 0.035
 export const STAND_HIP = 0.445
+// How tall a figure stands as modelled: hip, trunk, neck to the middle of the head, and the head's own half height.
+export const FIGURE_TALL = STAND_HIP + TORSO + 0.088 + 0.066
 
 // How a figure holds itself, in its own space. Feet and hands are places to reach; knees and elbows follow.
 export class Pose {

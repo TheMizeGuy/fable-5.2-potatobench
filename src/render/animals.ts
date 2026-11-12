@@ -23,6 +23,9 @@ export const HORSE: Beast = {
   long: 0.56, high: 0.66, deep: 0.3, wide: 0.24, neck: 0.3, head: 0.24, leg: 0.036,
   coat: new Color('#6b4630'), point: new Color('#2a1f18'), face: new Color('#5c3c29'), horns: false, collar: true, patches: 0,
 }
+// A draught horse stands about 1.7 m at the shoulder and a cow about 1.4: the models' heights times the figure scale
+// times these.
+export const DRAUGHT = 1.17, COW_SCALE = 1.27
 export const GREY_HORSE: Beast = { ...HORSE, coat: new Color('#8f8a82'), point: new Color('#4a4743'), face: new Color('#8f8a82') }
 export const COWS: Beast[] = [
   { long: 0.56, high: 0.5, deep: 0.3, wide: 0.26, neck: 0.2, head: 0.2, leg: 0.034, coat: new Color('#6e3b22'), point: new Color('#6e3b22'), face: new Color('#e9e2d2'), horns: true, collar: false, patches: 0 },

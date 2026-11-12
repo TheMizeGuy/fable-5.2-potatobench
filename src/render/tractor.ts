@@ -136,6 +136,15 @@ class Shop {
   }
 }
 
+// The tractor's own measures, in the small units it is modelled in: where its back axle and its nose are, its wheels,
+// how far apart they stand, and the top of its stack. The truck's: from its bumper to the end of its bed.
+export const TRACTOR_MODEL = { axle: -0.42, wheel: 0.37, tyre: 0.21, track: 0.36, nose: 0.82, stack: 1.26 }
+export const TRUCK_MODEL = { nose: 1.145, bed: 1.55, wide: 0.96 }
+export const TRACTOR_SIZE = {
+  long: TRACTOR_MODEL.nose - (TRACTOR_MODEL.axle - TRACTOR_MODEL.wheel), wide: 2 * TRACTOR_MODEL.track + TRACTOR_MODEL.tyre, tall: TRACTOR_MODEL.stack,
+}
+export const TRUCK_SIZE = { long: TRUCK_MODEL.nose + 0.24 + TRUCK_MODEL.bed, wide: TRUCK_MODEL.wide }
+
 export interface Paint { body: string; frame: string; rim: string; seat: string }
 // The farm's first tractor is old and red; the second a grey one with a red belly; the third green with yellow wheels.
 export const PAINTS: Paint[] = [
@@ -177,7 +186,7 @@ function tractorBody(p: Paint): BufferGeometry {
   s.box(0.08, 0.2, 0.08, IRON, 0.62, 0.33, 0)
   // stack, air cleaner, steering column and wheel, lamps on their stalks
   s.cyl(0.024, 0.028, 0.5, DARK, 0.42, 1.0, 0.09, false, 8)
-  s.cyl(0.036, 0.036, 0.02, DARK, 0.42, 1.25, 0.09, false, 8)
+  s.cyl(0.036, 0.036, 0.02, DARK, 0.42, TRACTOR_MODEL.stack - 0.01, 0.09, false, 8)
   s.cyl(0.045, 0.045, 0.14, STEEL, 0.56, 0.87, -0.08, false, 10)
   s.cyl(0.012, 0.012, 0.38, DARK, -0.13, 0.9, 0, false, 6, 0.9)
   const wheel = new TorusGeometry(0.1, 0.011, 6, 16)
@@ -313,7 +322,7 @@ function motorGeometry(kind: Motor, paint: string): BufferGeometry {
     for (const z of [-0.28, 0.28]) s.ball(0.05, '#f0e6b8', 0.94, 0.46, z, 0.5, 1, 1)
     return s.done()
   }
-  const bed = kind === 'truck' ? 1.55 : 0.95, back = -0.2 - bed
+  const bed = kind === 'truck' ? TRUCK_MODEL.bed : 0.95, back = -0.2 - bed
   // the frame, the hood and its grille, the cab, the running boards and front mudguards
   s.box(bed + 1.5, 0.08, 0.34, DARK, back / 2 + 0.55, 0.3, 0)
   s.rounded(0.62, 0.3, 0.5, 0.11, paint, 0.74, 0.56, 0)
@@ -394,6 +403,7 @@ abstract class Machine {
   scale = 1
   travelled = 0
   protected puffAt = 0
+  protected trail = 0
   protected running = 0
   protected rims: Color
   protected disposables: { dispose(): void }[] = []
@@ -455,40 +465,45 @@ abstract class Machine {
   }
 
   // The exhaust, and what the wheels throw up. (sx, sy, sz): the stack's mouth; back: where the back wheels are.
+  // Sizes are metres, and what is left in the air is laid down by the distance covered as well as by time, so that a
+  // machine at work can be found from across the farm by the dust hanging along the way it went, at any clock speed.
   protected fumes(f: MachineFrame, st: MachineState, sx: number, sy: number, sz: number, back: number, half: number): void {
     if (f.still) { this.running = 0; return }
     const speed = f.dt > 0 ? st.moved / f.dt : 0
     const on = speed > 0.3 || st.working > 0
-    const r = Math.random
-    const s = this.scale
+    const r = Math.random, pt = f.particles
     if (on && this.running <= 0) {
-      // the engine catches: a dark cough of smoke, thicker on a cold morning
-      for (let n = 0; n < (f.cold ? 9 : 5); n++) {
-        this.at(sx, sy, sz, p0)
-        f.particles.emit(p0.x, p0.y, p0.z, (r() - 0.5) * 0.3, 0.7 + r() * 0.7, (r() - 0.5) * 0.3, 0.07 * s, (0.5 + r() * 0.4) * s, 1.6 + r() * 1.4, 0.16, 0.16, 0.17, f.cold ? 0.6 : 0.45, 0.7)
+      // the engine catches: a dark cough that stands over the machine for a few seconds, taller on a cold morning
+      this.at(sx, sy, sz, p0)
+      for (let n = 0; n < (f.cold ? 10 : 5); n++) {
+        const up = r() * (f.cold ? 7 : 3.5)
+        pt.emit(p0.x + (r() - 0.5) * 0.5, p0.y + up, p0.z + (r() - 0.5) * 0.5, 0, 0.8, 0, 0.3 + 0.14 * up, 0.45, 2.5 + r() * 2.5, 0.17, 0.17, 0.18, f.cold ? 0.55 : 0.4, 0.45 + up / 14)
       }
     }
     this.running = on ? 1.5 : Math.max(0, this.running - f.dt)
     this.puffAt += f.dt
-    const every = 0.05
-    while (this.puffAt > every) {
-      this.puffAt -= every
-      if (on && r() < 0.5) {
-        this.at(sx, sy, sz, p0)
-        f.particles.emit(p0.x, p0.y, p0.z, 0, 0.9 + r() * 0.4, 0, 0.05 * s, 0.3 * s, 1.1 + r() * 0.6, 0.28, 0.28, 0.3, f.cold ? 0.42 : 0.28, 0.6)
+    if (on && speed < 12 && this.puffAt > 0.09) {
+      this.puffAt = 0
+      this.at(sx, sy, sz, p0)
+      pt.emit(p0.x, p0.y, p0.z, 0, 1.1 + r() * 0.5, 0, 0.12, 0.7, 1.2 + r() * 0.8, 0.3, 0.3, 0.32, f.cold ? 0.42 : 0.26, 0.6)
+      // mud flung off the tyres on a wet day: dark, heavy, soon down
+      if (f.mud > 0.3 && speed > 0.5 && r() < f.mud * 0.5) {
+        this.at(back - 0.1, 0.2, r() < 0.5 ? -half : half, p0)
+        pt.emit(p0.x, p0.y, p0.z, -fwd.x * (0.6 + r()), 0.9 + r() * 0.8, -fwd.z * (0.6 + r()), 0.1, 0.03, 0.5 + r() * 0.3, 0.17, 0.12, 0.09, 0.9, 0.05)
       }
-      if (speed <= 0.5) continue
-      for (const z of [-half, half]) {
-        if (f.dust > 0.05 && r() < Math.min(1, f.dust * speed * 0.3)) {
-          this.at(back - r() * 0.3, 0.12, z + (r() - 0.5) * 0.2, p0)
-          f.particles.emit(p0.x, p0.y, p0.z, -fwd.x * 0.3 + (r() - 0.5) * 0.3, 0.25 + r() * 0.3, -fwd.z * 0.3 + (r() - 0.5) * 0.3, 0.16 * s, (0.5 + r() * 0.4) * s, 2.6 + r() * 2.2, 0.62, 0.5, 0.39, 0.4 * f.dust, 0.5)
-        }
-        // mud flung off the tyres on a wet day: dark, heavy, soon down
-        if (f.mud > 0.3 && r() < f.mud * speed * 0.25) {
-          this.at(back - 0.1, 0.2, z, p0)
-          f.particles.emit(p0.x, p0.y, p0.z, -fwd.x * (0.6 + r()), 0.9 + r() * 0.8, -fwd.z * (0.6 + r()), 0.05 * s, 0.02, 0.5 + r() * 0.3, 0.17, 0.12, 0.09, 0.9, 0.05)
-        }
-      }
+    }
+    if (speed <= 1.5) { this.trail = 0; return }
+    this.trail += st.moved
+    const dust = Math.max(f.dust, st.working > 0 && (st.kind === 'plant' || st.kind === 'hill' || st.kind === 'dig') ? 0.3 + 0.3 * f.dust : 0) * (1 - f.mud)
+    let guard = 0
+    while (this.trail > 5 && guard++ < 14) {
+      this.trail -= 5
+      if (dust < 0.06) continue
+      // where the back wheels were that far back along the way it came
+      const bx = this.x - fwd.x * (this.trail + 1.5), bz = this.z - fwd.z * (this.trail + 1.5)
+      const soil = st.working > 0
+      pt.emit(bx + (r() - 0.5) * 1.6, this.y + 0.5, bz + (r() - 0.5) * 1.6, (r() - 0.5) * 0.5, 0.5 + r() * 0.5, (r() - 0.5) * 0.5, 0.8 + r() * 0.5, 0.9 + r() * 0.5, 5 + r() * 5,
+        soil ? 0.5 : 0.64, soil ? 0.39 : 0.53, soil ? 0.3 : 0.42, 0.42 * Math.min(1, dust * 1.4), 0.55)
     }
   }
 
@@ -507,6 +522,8 @@ export class Tractor extends Machine {
   private hitch = new Group()
   // 0 lowered into work .. 1 carried
   private lift = 1
+  private near = 0
+  private wake = 0
   private hoodUp = 0
   broken = false
 
@@ -554,7 +571,7 @@ export class Tractor extends Machine {
     this.hood.rotation.z = this.hoodUp * 0.95
     const shake = st.moved > 0 && !f.still ? Math.sin(this.travelled * 31) * 0.004 : 0
     this.group.position.y = this.y + shake
-    for (const z of [-0.36, 0.36]) this.wheel(pr, 'tread', -0.42, 0.37, z, 0.37, 0.21)
+    for (const z of [-TRACTOR_MODEL.track, TRACTOR_MODEL.track]) this.wheel(pr, 'tread', TRACTOR_MODEL.axle, TRACTOR_MODEL.wheel, z, TRACTOR_MODEL.wheel, TRACTOR_MODEL.tyre)
     for (const z of [-0.31, 0.31]) this.wheel(pr, 'tyre', 0.62, 0.2, z, 0.2, 0.1, -st.turn * 0.5)
     this.seated(pr, f, st, -0.44, 0.8, 0)
     // lamps are lit only with someone at the wheel
@@ -622,26 +639,30 @@ export class Tractor extends Machine {
   }
 
   private puffWork(f: MachineFrame, st: MachineState): void {
-    const r = Math.random, s = this.scale, pt = f.particles
+    const r = Math.random, pt = f.particles
     const emit = (x: number, y: number, z: number, vx: number, vy: number, vz: number, size: number, grow: number, life: number, cr: number, cg: number, cb: number, alpha: number, drift: number) => {
       this.at(x, y, z, p0)
-      pt.emit(p0.x, p0.y, p0.z, fwd.x * vx + side.x * vz, vy, fwd.z * vx + side.z * vz, size * s, grow * s, life, cr, cg, cb, alpha, drift)
+      pt.emit(p0.x, p0.y, p0.z, fwd.x * vx + side.x * vz, vy, fwd.z * vx + side.z * vz, size, grow, life, cr, cg, cb, alpha, drift)
     }
-    const n = Math.max(1, Math.round(f.dt / 0.045))
-    for (let k = 0; k < n; k++) {
-      if (st.kind === 'spray') {
-        // a fine mist under the whole boom, hanging and going with the wind
-        for (let m = 0; m < 4; m++) emit(-1.26, 0.42, (r() - 0.5) * 2.9, -0.25, -0.05 + r() * 0.1, 0, 0.11, 0.42, 1.5 + r() * 1.4, 0.88, 0.92, 0.94, 0.26, 0.95)
-      } else if (st.kind === 'water') {
-        for (const sd of [-1, 1]) {
-          emit(-1.55, 1.46, sd * 0.8, 0, 0.5 + r() * 0.5, sd * (1.6 + r()), 0.1, 0.5, 1.3 + r() * 0.5, 0.8, 0.86, 0.9, 0.34, 0.5)
-          emit(-1.55, 1.46, sd * 0.8, 0, 0.2, sd * (2.6 + r()), 0.08, 0.34, 1.1, 0.8, 0.86, 0.9, 0.3, 0.3)
-        }
-      } else if (st.kind === 'kill') {
-        emit(-1.5, 0.2, (r() - 0.5) * 1.3, -(0.6 + r() * 0.6), 0.4 + r() * 0.5, 0, 0.1, 0.24, 0.9 + r() * 0.5, 0.5, 0.52, 0.3, 0.42, 0.4)
-      } else if (st.kind === 'dig' || st.kind === 'hill' || st.kind === 'plant') {
-        if (r() < (st.kind === 'dig' ? 1 : 0.45)) emit(st.kind === 'dig' ? -1.9 : -1.15, 0.16, (r() - 0.5) * 1.1, -0.3, 0.3 + r() * 0.3, 0, 0.12, 0.3, 1.2 + r(), 0.42, 0.31, 0.24, (st.kind === 'dig' ? 0.4 : 0.22) * (0.3 + 0.7 * f.dust), 0.3)
-      }
+    const speed = f.dt > 0 ? st.moved / f.dt : 0
+    // Close to: fine spray under the boom, water thrown from the tank's pipe, chaff, turned earth.
+    this.near += f.dt
+    if (speed < 12 && this.near > 0.06) {
+      this.near = 0
+      if (st.kind === 'spray') for (let m = 0; m < 2; m++) emit(-1.26, 0.42, (r() - 0.5) * 2.9, -0.25, -0.05 + r() * 0.1, 0, 0.24, 0.9, 1.5 + r() * 1.4, 0.88, 0.92, 0.94, 0.26, 0.95)
+      else if (st.kind === 'water') for (const sd of [-1, 1]) emit(-1.55, 1.46, sd * 0.8, 0, 1 + r(), sd * (3.4 + 2 * r()), 0.2, 1.1, 1.3 + r() * 0.5, 0.8, 0.86, 0.9, 0.34, 0.5)
+      else if (st.kind === 'kill') emit(-1.5, 0.2, (r() - 0.5) * 1.3, -(1.2 + r()), 0.8 + r(), 0, 0.2, 0.5, 0.9 + r() * 0.5, 0.5, 0.52, 0.3, 0.42, 0.4)
+      else if (st.kind === 'dig' && r() < 0.6) emit(-1.9, 0.16, (r() - 0.5) * 1.1, -0.6, 0.6 + r() * 0.6, 0, 0.25, 0.6, 1.2 + r(), 0.42, 0.31, 0.24, 0.3, 0.3)
+    }
+    // From far off: a drift hanging over the rows just worked, going with the wind.
+    this.wake += st.moved
+    let guard = 0
+    while (this.wake > 4 && guard++ < 16) {
+      this.wake -= 4
+      const bx = -1.3 - this.wake / this.scale
+      if (st.kind === 'spray') for (const z of [-0.8, 0.8]) emit(bx, 0.5, z + (r() - 0.5) * 0.8, 0, 0.15, 0, 1.3 + r() * 0.6, 1.0, 4 + r() * 3.5, 0.9, 0.93, 0.95, 0.2, 0.95)
+      else if (st.kind === 'water') emit(bx, 0.9, (r() - 0.5) * 3, 0, 0.3, 0, 1.6, 1.1, 3 + r() * 2, 0.84, 0.89, 0.93, 0.2, 0.7)
+      else if (st.kind === 'kill') emit(bx, 0.4, (r() - 0.5) * 1.3, 0, 0.4, 0, 0.9, 0.7, 3 + r() * 2, 0.55, 0.56, 0.33, 0.3, 0.5)
     }
   }
 }
