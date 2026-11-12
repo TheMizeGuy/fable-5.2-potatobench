@@ -160,7 +160,11 @@ test('a guided first year: offered on a new farm, taken, and followed through th
 
   const did: string[] = []
   const passed = (id: string) => page.evaluate(i => (globalThis as unknown as { __countyGuide: { passed(id: string): boolean } }).__countyGuide.passed(i), id)
-  const sown = () => page.evaluate(() => (globalThis as unknown as { __county: { app: { campaign: { season: { fields: { plantDay: number }[] } | null } } } }).__county.app.campaign.season?.fields.some(f => f.plantDay >= 0) ?? false)
+  // Planting begun, as the "watch" note counts it: a field planted, or a planting order under way.
+  const sown = () => page.evaluate(() => {
+    const s = (globalThis as unknown as { __county: { app: { campaign: { season: { fields: { plantDay: number }[]; jobs: { kind: string; done: number }[] } | null } } } }).__county.app.campaign.season
+    return !!s && (s.fields.some(f => f.plantDay >= 0) || s.jobs.some(j => j.kind === 'plant' && j.done > 0))
+  })
   // The opening is followed to its end: the first planting watched and the field's card read.
   const finished = async () => (await passed('card')) || ((await passed('field')) && (await sown()))
   for (let step = 0; step < 60 && !(await finished()); step++) {
@@ -187,9 +191,6 @@ test('a guided first year: offered on a new farm, taken, and followed through th
       await expect.poll(async () => (await look(page)).paused, { message: `${id} holds the clock` }).toBe(true)
       await expect(page.getByTestId('guide-held')).toBeVisible()
     }
-    // Where a field it points at is on the screen, the fist is beside it.
-    const there = /^(field|badge)-/.test(target) && await page.locator(`#ui [data-testid="${target}"]`).first().isVisible().catch(() => false)
-    if (there) await expect(page.getByTestId('guide-fist'), `${id}: the fist is on ${target}`).toBeVisible()
     // Something lies over what it asks for: the slip offers Show me, which brings that field into frame.
     if (await page.getByTestId('guide-hidden').isVisible().catch(() => false)) {
       await expect(page.getByTestId('guide-fist')).toBeHidden()
@@ -205,6 +206,9 @@ test('a guided first year: offered on a new farm, taken, and followed through th
       await page.waitForTimeout(600)
       continue
     }
+    // Where a field it points at is on the screen with nothing over it, the fist is beside it.
+    const there = /^(field|badge)-/.test(target) && await page.locator(`#ui [data-testid="${target}"]`).first().isVisible().catch(() => false)
+    if (there && !(await page.getByTestId('guide-hidden').isVisible().catch(() => false))) await expect(page.getByTestId('guide-fist'), `${id}: the fist is on ${target}`).toBeVisible()
     switch (id) {
       case 'begin':
         await page.getByTestId(target).click()
@@ -269,8 +273,11 @@ test('a guided first year: offered on a new farm, taken, and followed through th
   expect(await sown()).toBe(true)
   // The opening is only what is needed to watch the first planting: no tour before the first days run.
   expect(did.slice(0, 3)).toEqual(['money', 'begin', 'clock'])
-  for (const id of ['watch', 'person']) expect(did).toContain(id)
-  expect(did.indexOf('person')).toBeLessThan(did.indexOf('turn') < 0 ? 999 : did.indexOf('turn'))
+  // A face clicked: your own, or a hand's when one was hired in the first days (the same click, the same card).
+  expect(did).toContain('watch')
+  const face = did.findIndex(id => id === 'person' || id === 'hand')
+  expect(face, 'a face is clicked in the opening').toBeGreaterThanOrEqual(0)
+  expect(face).toBeLessThan(did.indexOf('turn') < 0 ? 999 : did.indexOf('turn'))
   // Once the opening's held lessons pass, the clock goes on at the speed it had.
   await noSidewaysScroll(page)
   expect(errors, errors.join('\n')).toEqual([])

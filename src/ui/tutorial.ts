@@ -323,6 +323,8 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
   let said = ''
   let target = ''
   let cover: HTMLElement | null = null
+  // Of several fields a note will take, the one the fist went beside.
+  let picked = ''
   // The field a note points at, when it is out of view or something lies over it; and the spring note set aside while
   // a fold it is not about is read.
   let showField = -1
@@ -487,7 +489,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
       const close = sheet?.querySelector<HTMLElement>('button.close')
       cover = close && shown(close) ? close : null
     }
-    target = cover?.dataset.testid ?? t.id
+    target = cover?.dataset.testid ?? (p && 'fields' in p && p.fields.some(i => `field-${i}` === picked) ? picked : t.id)
     // Something on the land to point at, none of it in view.
     const lost = !!p && !('testid' in p) && !t.at && app.screen === 'season'
     const fieldOf = !p ? -1 : 'field' in p ? p.field : 'badge' in p ? p.badge : 'fields' in p ? p.fields[0] ?? -1 : -1
@@ -533,16 +535,14 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     slipAt = visible ? box(visible.getBoundingClientRect()) : slipAt
     if (!l || away || showField >= 0) { hand.hidden = true; if (!l) place = null; if (!l || away) return }
     const lk = lookNow()
-    const t0r = resolve(ctx, root, l.point?.(lk) ?? null)
+    const pt = l.point?.(lk) ?? null
+    const t0r = resolve(ctx, root, pt)
     // Under a card: the fist goes to the card's cross.
-    const t = cover && shown(cover) ? { ...t0r, el: cover, at: box(cover.getBoundingClientRect()) } : t0r
+    let t = cover && shown(cover) ? { ...t0r, el: cover, at: box(cover.getBoundingClientRect()) } : t0r
     // The fist beside the target, pointing at it: left of it, else right, above, below.
     let fistBox: Box | null = null
     if (t.at && showField < 0) {
-      const cx = (t.at.left + t.at.right) / 2, cy = (t.at.top + t.at.bottom) / 2, s = 44, g = 6
-      const up: [number, number, string] = [cx - s / 2, t.at.top - s - g, 'd'], down: [number, number, string] = [cx - s / 2, t.at.bottom + g, 'u']
-      // Beside it, else toward the middle of the screen from it.
-      const tries: [number, number, string][] = [[t.at.left - s - g, cy - s / 2, 'r'], [t.at.right + g, cy - s / 2, 'l'], ...(cy < innerHeight / 2 ? [down, up] : [up, down])]
+      const s = 44, g = 6
       // In spring the slip is in the catalogue: the fist keeps off it.
       const docked = slot?.isConnected ? slot.querySelector('.guide')?.getBoundingClientRect() : undefined
       const inside = ([x, y]: [number, number, string]) => x >= 4 && y >= 4 && x + s <= innerWidth - 4 && y + s <= innerHeight - 4
@@ -559,11 +559,22 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
       const bare = ([x, y]: [number, number, string]) => !tags.some(a => meets({ left: x, top: y, right: x + s, bottom: y + s }, a))
       // With no clear place beside it (inside a telegram, under the order blank on a phone) the slip's words do alone.
       const small = ctx.layout() === 'narrow' || ctx.layout() === 'short'
-      const fit = docked && small ? null : tries.find(f => inside(f) && free(f) && clear(f) && bare(f)) ?? tries.find(f => inside(f) && free(f) && clear(f)) ?? null
+      const fitFor = (at: Box): [number, number, string] | null => {
+        const cx = (at.left + at.right) / 2, cy = (at.top + at.bottom) / 2
+        const up: [number, number, string] = [cx - s / 2, at.top - s - g, 'd'], down: [number, number, string] = [cx - s / 2, at.bottom + g, 'u']
+        // Beside it, else toward the middle of the screen from it.
+        const tries: [number, number, string][] = [[at.left - s - g, cy - s / 2, 'r'], [at.right + g, cy - s / 2, 'l'], ...(cy < innerHeight / 2 ? [down, up] : [up, down])]
+        return docked && small ? null : tries.find(f => inside(f) && free(f) && clear(f) && bare(f)) ?? tries.find(f => inside(f) && free(f) && clear(f)) ?? null
+      }
+      // Any of several fields will do: the first whose tag has room for the fist beside it.
+      const options = !cover && pt && 'fields' in pt ? pt.fields.map(i => resolve(ctx, root, { field: i })).filter(x => !!x.at && !hiddenAt(x)) : [t]
+      let fit: [number, number, string] | null = null
+      for (const o of options) { fit = fitFor(o.at!); if (fit) { t = o; break } }
       if (fit) {
         fistBox = { left: fit[0], top: fit[1], right: fit[0] + s, bottom: fit[1] + s }
         hand.style.transform = `translate3d(${fit[0].toFixed(1)}px, ${fit[1].toFixed(1)}px, 0)`
         hand.dataset.to = fit[2]
+        if (t.id !== picked) { picked = t.id; if (!slip.hidden) slip.dataset.target = target = t.id }
       }
     }
     hand.hidden = !fistBox
