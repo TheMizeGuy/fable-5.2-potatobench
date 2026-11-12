@@ -629,9 +629,17 @@ export function workday(c: Campaign, s: Season): boolean {
   return s.frostHaul === s.day || !(c.sundaysOff && weekday(s.year, s.day) === SUNDAY)
 }
 
-// Why the weather holds up this order today, on its own field (building in a yard stops only for heavy rain).
+// The soil's part of the one planting rule (outlook.ts, plantReady): not before the season's earliest planting date,
+// and the soil at the seed's temperature.
+export function soilFit(s: Season): boolean {
+  return s.day >= dayIndex(s.year, P.PLANT_FROM.month, P.PLANT_FROM.dom) && s.soilT >= P.PLANT_SOIL_C
+}
+
+// Why the weather holds up this order today, on its own field (building in a yard stops only for heavy rain). The
+// routine's planting waits for the soil the planting rule asks for; the player's own order goes when they say.
 export function waitFor(c: Campaign, s: Season, job: Job, d: Day): string {
   if (job.field < 0) return d.prcp >= 15 ? 'heavy rain' : ''
+  if (job.kind === 'plant' && job.by !== 'you' && !soilFit(s)) return 'the soil is too cold'
   return jobWait(job.kind, s.fields[job.field], d, job.kind === 'spray' ? fieldEnv(c, job.field).wind : P.SPRAY_WIND)
 }
 
@@ -1429,6 +1437,7 @@ function morning(c: Campaign, s: Season, out: GameEvent[]): void {
 function openIncident(c: Campaign, s: Season, out: GameEvent[], fields: Omit<Incident, 'id' | 'day'>): Incident {
   const inc: Incident = { id: c.nextIncident++, day: s.day, ...fields }
   c.incidents.push(inc)
+  s.telegram = s.day
   const choices = inc.choices.map(ch => CHOICE_LABEL[ch]).join(' or ')
   push(s, out, 'incident', -1, 'warn', `${INCIDENT_TITLE[inc.kind]}. ${incidentText(c, inc)} ${choices}?`, { incident: inc.id, kind: inc.kind })
   return inc
@@ -1498,13 +1507,15 @@ function drawIncidents(c: Campaign, s: Season, turns: Turn[], out: GameEvent[]):
     }
   }
   c.heard ??= []
+  // An offer, someone asking for work or a buyer waits a week after the last telegram; a breakdown does not.
+  if (s.telegram !== undefined && s.day - s.telegram < P.TELEGRAM_GAP) return
   if (!openKind(c, 'applicant') && !c.heard.includes('applicant') && u01(7300) < P.APPLICANT_CHANCE) {
     c.heard.push('applicant')
     const taken = new Set([...c.crew.map(u => u.name), ...c.applicants.map(a => a.name)])
     const a = applicantsFor(c.seed, s.year, taken, 1, s.day)[0]
     openIncident(c, s, out, { kind: 'applicant', until: s.day + P.INCIDENT_DAYS, choices: ['hire', 'pass'], applicant: { ...a, id: c.nextIncident } })
   }
-  if (!openKind(c, 'poach') && u01(7400) < P.POACH_CHANCE) {
+  if (!openKind(c, 'poach') && s.telegram !== s.day && u01(7400) < P.POACH_CHANCE) {
     let best: Unit | null = null, bestSum = -1
     for (const u of c.crew) {
       if (u.kind === 'farmer' || c.heard.includes(`poach:${u.id}`)) continue
@@ -1517,7 +1528,7 @@ function drawIncidents(c: Campaign, s: Season, turns: Turn[], out: GameEvent[]):
       openIncident(c, s, out, { kind: 'poach', until: s.day + P.INCIDENT_DAYS, choices: ['match', 'let'], unit: best.id, wage: Math.round(best.wage * (1 + P.POACH_RAISE)) })
     }
   }
-  if (!openKind(c, 'buyer') && s.day >= dayIndex(s.year, P.BUYER_FROM.month, P.BUYER_FROM.dom) && u01(7500) < P.BUYER_CHANCE) {
+  if (!openKind(c, 'buyer') && s.telegram !== s.day && s.day >= dayIndex(s.year, P.BUYER_FROM.month, P.BUYER_FROM.dom) && u01(7500) < P.BUYER_CHANCE) {
     let best: Lot | null = null
     for (const l of c.lots) {
       if (!l.open || l.year !== s.year || !s.fields[l.field]?.weighed || lotCwt(l) < P.BUYER_MIN_CWT || c.heard.includes(`buyer:${l.id}`)) continue

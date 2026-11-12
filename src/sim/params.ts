@@ -329,6 +329,7 @@ export const GREEN_IN_FIELD = 0.005            // share of the crop in the field
 // Each is drawn from the campaign seed and the day, so a replay sees the same ones; each waits a few days for an
 // answer before taking its default.
 export const INCIDENT_DAYS = 4                 // days an incident waits for an answer
+export const TELEGRAM_GAP = 7                  // days between telegrams, but for a broken tractor
 export const APPLICANT_CHANCE = 0.012          // a day in season: someone turns up asking for work
 export const POACH_CHANCE = 0.01              // a day in season with someone hired: a neighbour offers them more
 export const POACH_RAISE = 0.15                // to match, their wage goes up this much
@@ -371,6 +372,9 @@ export const SHRINK_VENT = 0.007
 export const ROT_GROW = 1.1
 export const ROT_GROW_VENT = 0.6
 export const ROT_BREAK = 0.22
+// Blight that goes into the pile looking sound, for each cwt culled for blight at the table: what the storage outlook
+// expects from the weigh ticket (measured over thirty coach-tended first years).
+export const ROT_HIDDEN = 0.45
 export const SPROUT_SHRINK = 0.03
 export const COOL_CELLAR_DAYS = 40             // dormancy gained by holding at 39F instead of the 45F the variety figures assume
 export const VENT_DAYS = 25
@@ -412,6 +416,7 @@ export const FROST_HAUL_C = 0
 // The one planting rule: the field's own soil at this, C (50 F); below the rot line (45 F) seed rots.
 export const PLANT_SOIL_C = 10
 export const PLANT_ROT_C = 7.2
+export const PLANT_FROM = { month: 4, dom: 8 }   // May 8: the earliest planting
 // Cwt a dig lifts for each day of digging done, before the first barrels show what this field gives.
 export const DIG_CWT_GUESS = 750
 // A lone hauler holds the dig back when tonight's forecast low at the field is within this of freezing the barrels.
@@ -424,5 +429,10 @@ export const DIG_GREEN = { month: 9, dom: 5 }   // October 5
 // after the coach first asks, and no later than two weeks of skin set before the green dig, unless the player kept
 // them up (advice.ts, killByItself).
 export const KILL_WAIT = 7
+// Reference practice asks for the vines to be killed by this date, or this many days after the crop is made.
+export const KILL_BY = { month: 8, dom: 8 }      // September 8
+export const KILL_MADE_DAYS = 4
+// A kill this many days or fewer ahead of the asking counts as asked on the weigh ticket.
+export const KILL_GRACE = 3
 export const FROST_HAUL_CHANCE = 40
 export const JOBS: JobKind[] = ['plant', 'hill', 'scout', 'spray', 'water', 'rogue', 'sample', 'kill', 'dig', 'fell', 'rocks', 'brush']

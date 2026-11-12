@@ -89,7 +89,7 @@ function everything(world: World, c: Campaign): Advice[] {
   // Dead vines wait for set skins until the date a green crop is dug, so the crop is in before the freeze-up.
   const digNow = s.day >= dayIndex(year, P.DIG_GREEN.month, P.DIG_GREEN.dom)
   const anyBlight = s.fields.some((_, i) => fieldInfo(c, i).blightHills > 0)
-  const killBy = dayIndex(year, 8, 8)
+  const killBy = dayIndex(year, P.KILL_BY.month, P.KILL_BY.dom)
   const noSpray = sprayWayNow(c) === 'none'
 
   const spring = s.day < dayIndex(year, 5, 15)
@@ -111,7 +111,7 @@ function everything(world: World, c: Campaign): Advice[] {
       const s0 = s.fields[i]
       const up = s0.emergeDay >= 0
       const blightWinning = f.blightKnown >= 0.2
-      const made = s0.matureDay >= 0 && s.day - s0.matureDay >= 4
+      const made = s0.matureDay >= 0 && s.day - s0.matureDay >= P.KILL_MADE_DAYS
       const frostKill = frostSoon && s.day >= dayIndex(year, 8, 1)
       const killDue = s0.tiDay >= 0 && (s.day >= killBy || made || blightWinning || frostKill)
       // Once the vines are coming off there is nothing left to tend.
@@ -222,16 +222,14 @@ export function frostOnBarrels(world: World, c: Campaign, field: number): boolea
 
 // Each working morning the farm's standing orders put on the list what reference practice wants, for the kinds of work
 // the routine does by itself, on every held field; a foreman does every kind on their block, the calls included. The
-// player can still order, cancel and bump. Ahead of a frost, the crop in the barrels is hauled first, and the morning
-// says so.
+// player can still order, cancel and bump. Ahead of a frost, the crop in the barrels is hauled first; the evening
+// before says so (frostAhead).
 export function standingOrders(world: World, c: Campaign): GameEvent[] {
   const s = c.season
   const out: GameEvent[] = []
   if (c.phase !== 'season' || !s || s.frozen) return out
-  // A frost coming on crop in barrels is hauled ahead of, Sunday or not; the morning says so once for a cold spell.
-  const threatened = s.fields.some((f, i) => f.inField >= 0.5 && !f.weighed && frostOnBarrels(world, c, i))
-  const first = threatened && s.frostHaul !== s.day - 1
-  if (threatened) s.frostHaul = s.day
+  // A frost coming on crop in barrels is hauled ahead of, Sunday or not; the evening before said so (frostAhead).
+  if (s.fields.some((f, i) => f.inField >= 0.5 && !f.weighed && frostOnBarrels(world, c, i))) s.frostHaul = s.day
   const all = everything(world, c)
   noteKillAsks(world, c, all)
   noteKillRun(c, all)
@@ -263,14 +261,25 @@ export function standingOrders(world: World, c: Campaign): GameEvent[] {
       const j = u.job >= 0 ? s.jobs.find(x => x.id === u.job) : undefined
       if (j && j.kind !== 'haul' && MACHINE_WORK.includes(j.kind) && s.jobs.some(x => x.kind === 'haul' && standingBy(c, 'haul', x.field))) letGo(u)
     }
-    if (first) {
-      const e: GameEvent = { day: s.day, type: 'frostBarrels', field: -1, level: 'warn',
-        text: `Frost is forecast on the crop still in barrels: ${cold.join(', ')}. Hauling it in comes first, Sundays too, until it is in.` }
-      s.log.push(e)
-      out.push(e)
-    }
   }
   return out
+}
+
+// The evening before a frost on crop still in barrels, once for a cold spell: the one warning, dated the day the
+// barrels are hauled in ahead of it, so the player hears of it while there is still a day to act.
+export function frostAhead(world: World, c: Campaign): GameEvent[] {
+  const s = c.season
+  if (c.phase !== 'season' || !s || s.frozen) return []
+  const cold: string[] = []
+  for (let i = 0; i < P.FIELD_COUNT; i++) {
+    const f = s.fields[i]
+    if (f.inField >= 0.5 && !f.weighed && frostOnBarrels(world, c, i)) cold.push(`${withCommas(f.inField)} cwt in ${FIELD_NAMES[i]}`)
+  }
+  if (!cold.length || s.frostHaul === s.day - 1) return []
+  const e: GameEvent = { day: s.day, type: 'frostBarrels', field: -1, level: 'warn',
+    text: `Frost is forecast on the crop still in barrels: ${cold.join(', ')}. Hauling it in comes first, Sundays too, until it is in.` }
+  s.log.push(e)
+  return [e]
 }
 
 // For each field: what reference practice wants of the player now (need), or why it is leaving the field alone
