@@ -589,9 +589,11 @@ const did = (page: Page, kind: string): Promise<{ field: number; unit: number }>
 const AUTUMN = `start(); put('bunk'); fleet(); hire(4); say(app.do({ t: 'begin' })); run(244, ['kill']); clear(); job('kill', 0, 0)`
 const BLIGHT = `start(5, 1979); hire(1); say(app.do({ t: 'begin' })); run(200, ['spray', 'rogue'])`
 const HILLING = `start(); say(app.do({ t: 'begin' })); run(160, ['hill']); clear(); job('hill', 0, 0)`
+// a woodlot nearly half felled, so the cut line is out in the open
+const FELLING = `start(); hire(2); say(app.do({ t: 'begin' })); run(139, ['plant']); clear(); app.campaign.fields[14].felled = 18; app.emit({ type: 'change' }); job('fell', 14, 1)`
 // Each kind of work: how to reach a day on which it is done.
 const KINDS: [string, string, string][] = [
-  ['plant', SPRING, `until(['plant'])`], ['rocks', SPRING, `until(['rocks'])`], ['fell', SPRING, `until(['fell'])`], ['brush', SPRING, `until(['brush'])`], ['build', SPRING, `until(['build'])`],
+  ['plant', SPRING, `until(['plant'])`], ['rocks', SPRING, `until(['rocks'])`], ['fell', FELLING, `until(['fell'])`], ['brush', SPRING, `until(['brush'])`], ['build', SPRING, `until(['build'])`],
   ['spray', SUMMER, `until(['spray'])`], ['scout', SUMMER, `until(['scout'])`], ['sample', SUMMER, `until(['sample'])`], ['water', SUMMER, `until(['water'])`], ['hill', HILLING, `until(['hill'])`],
   ['rogue', BLIGHT, `seekWork('rogue', ['spray'])`], ['kill', AUTUMN, `until(['kill'])`], ['dig', HARVEST, `job('dig', 0, 0); until(['dig'])`], ['haul', HARVEST, `job('dig', 0, 0); until(['dig']); until(['haul'], 4)`],
 ]
@@ -608,7 +610,7 @@ const big: Shot[] = [
   { name: 'b03-spring-field-bare', size: [1920, 1080], setup: async page => { await reach(page, SPRING, `until(['plant', 'rocks', 'fell', 'build'])`); await fieldTier(page, 3, 0.2, 0.1); await frames(page, 12) } },
   ...KINDS.flatMap(([kind, scenario, then]): Shot[] => [
     { name: `b1-${kind}-field`, size: [1920, 1080], setup: async page => { await reach(page, scenario, then); const w = await did(page, kind); if (w.field >= 0) await fieldTier(page, w.field); else await view(page, { frame: 'home', x: 30, z: -6, dist: 120 }); await frames(page, 12) } },
-    { name: `b2-${kind}-yard`, setup: async page => { await reach(page, scenario, then); const w = await did(page, kind); await onUnit(page, w.unit, kind === 'fell' ? { dist: 9, yaw: 0, pitch: 0.42 } : { dist: 8, yaw: 0.7, pitch: 0.32 }, 0, kind === 'fell' ? -1.5 : 0); await frames(page, 8) } },
+    { name: `b2-${kind}-yard`, setup: async page => { await reach(page, scenario, then); const w = await did(page, kind); await onUnit(page, w.unit, kind === 'fell' ? { dist: 11, yaw: 0, pitch: 0.72 } : { dist: 8, yaw: 0.7, pitch: 0.32 }, 0, kind === 'fell' ? -1 : 0); await frames(page, 8) } },
   ]),
   { name: 'b30-harvest-field', size: [1920, 1080], setup: async page => { await reach(page, HARVEST, `job('dig', 0, 0); job('dig', 2, 1); until(['dig']); until(['haul'], 3)`, 0.5, 3000); await fieldTier(page, 0, 0.5, 0.9); await frames(page, 12); await pinPeople(page) } },
   { name: 'b31-harvest-yard', setup: async page => { await reach(page, HARVEST, `job('dig', 0, 0); until(['dig']); until(['haul'], 4)`, 0.3, 3000); const w = await did(page, 'haul'); await onUnit(page, w.unit, { dist: 11, yaw: 2.2, pitch: 0.3 }); await frames(page, 8) } },

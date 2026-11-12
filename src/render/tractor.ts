@@ -510,7 +510,7 @@ abstract class Machine {
       const bx = this.x - fwd.x * (this.trail + 1.5), bz = this.z - fwd.z * (this.trail + 1.5)
       const soil = st.working > 0
       pt.emit(bx + (r() - 0.5) * 1.6, this.y + 0.9, bz + (r() - 0.5) * 1.6, (r() - 0.5) * 0.5, 0.6 + r() * 0.6, (r() - 0.5) * 0.5, 1.6 + r() * 0.9, 1.3 + r() * 0.5, 7 + r() * 5,
-        soil ? 0.55 : 0.68, soil ? 0.43 : 0.57, soil ? 0.33 : 0.45, 0.5 * Math.min(1, dust * 1.4), 0.55)
+        soil ? 0.72 : 0.78, soil ? 0.62 : 0.7, soil ? 0.5 : 0.58, 0.62 * Math.min(1, dust * 1.4), 0.55)
     }
   }
 

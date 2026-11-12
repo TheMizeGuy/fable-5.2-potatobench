@@ -84,11 +84,14 @@ interface Actor {
   u: number                // their own clock through the day's script, 0..1
   lastT: number            // the day clock when it was last followed
   ay: number               // how high over the ground their pin stands, eased so it does not jump
+  arc: number              // how far along the row in hand they have worked, metres
+  arcSeg: Seg | null       // and which part of the day that is
+  beat: number             // a clock for stopping and bending on a walk through the crop
 }
 
 interface Leaver { dress: Dress; path: Poly; at: number; gait: number }
 interface Picker { dress: Dress; x: number; z: number; tx: number; tz: number; wait: number; heading: number; gait: number; bent: number }
-interface Gang { field: number; pickers: Picker[]; recent: Pt[]; crows: { x: number; z: number; fx: number; fz: number; tx: number; tz: number; t: number; wait: number; h: number }[]; idle: number }
+interface Gang { field: number; lead: { x: number; z: number; dx: number; dz: number }; pickers: Picker[]; recent: Pt[]; crows: { x: number; z: number; fx: number; fz: number; tx: number; tz: number; t: number; wait: number; h: number }[]; idle: number }
 
 export interface CrewFrame {
   dt: number
@@ -202,7 +205,7 @@ export class Crews {
     return {
       id: u.id, kind: u.kind, slot, dress: dressFor(u.id), coat: dressFor(u.id, true), segs: [], clockSeg: -2, segClock: 0,
       x: rest.x, z: rest.z, heading: rest.heading, rig: null, aboard: false, shown: 0, away: false, home: null, about: DOORYARD_AT, gait: u.id * 1.3, goal: null, state: 'idle', post: '',
-      tired: u.tired, worn: u.tired, style: (u.id * 7) % 5, pose: new Pose().reset(), head: new Vector3(rest.x, 1, rest.z), scale: 1, next: [], u: 1, lastT: 1, ay: 2.2,
+      tired: u.tired, worn: u.tired, style: (u.id * 7) % 5, pose: new Pose().reset(), head: new Vector3(rest.x, 1, rest.z), scale: 1, next: [], u: 1, lastT: 1, ay: 2.2, arc: 0, arcSeg: null, beat: 0,
       worker: { id: u.id, dress: dressFor(u.id), tired: 0, w: 0, x: rest.x, z: rest.z, heading: 0, lift: 0, pose: new Pose().reset(), aboard: false, rig: null },
     }
   }
@@ -339,7 +342,7 @@ export class Crews {
     const travel: Pt[] = [{ x: POTATO_HOUSE.x, z: POTATO_HOUSE.z + 2 * S }, ...ROAD.map(([x, z]) => ({ x, z }))]
     a.rig = rig
     rig.holder = a.id
-    a.segs = [{ kind: 'travel', field: -1, walker: false, ride: 'tractor', walkTo: [], travel, path: [travel[travel.length - 1]], reveals: [], start: 0, end: 0.8, site: '' }]
+    a.segs = [{ kind: 'travel', field: -1, walker: false, ride: 'tractor', walkTo: [], travel, path: [travel[travel.length - 1]], reveals: [], start: 0, end: 0.8, site: '', lit: false, from: 0 }]
     a.clockSeg = -2
   }
 
@@ -413,7 +416,7 @@ export class Crews {
       at: a.aboard && a.rig ? { x: a.rig.x, z: a.rig.z } : { x: a.x, z: a.z }, machine: a.rig ? { x: a.rig.x, z: a.rig.z } : null,
     }))
     const was = new Map(this.progress)
-    const plans = planDay(snap, shown, from, samples, snap.farm.pond < this.pondWas - 0.02, key => was.get(key))
+    const plans = planDay(snap, shown, from, samples, snap.farm.pond < this.pondWas - 0.02, key => was.get(key), this.stopped)
     this.pondWas = snap.farm.pond
     // how far each job has now got, for where tomorrow's part of it begins
     for (const u of snap.units) for (const w of u.worked) {
@@ -523,6 +526,8 @@ export class Crews {
     this.cold = cold
     const far = 0
     this.literal = snap.mode === 'season' && !f.advancing && f.pace > 0.5
+    this.stopped = !f.advancing
+    this.pace = clamp(f.dist / 40, 2.6, 14)
     // the work goes on while the clock runs, while the day is being played out, and (literal) until everyone is done
     const going = snap.mode === 'season' ? f.advancing || f.dayT < 1 || (this.literal && this.actors.some(a => a.u < 1)) : snap.mode !== 'title'
     GRIME.value.set(0.52, 0.42, 0.31).lerp(V.set(0.2, 0.15, 0.11), clamp(env.wet * 1.4 - 0.3, 0, 1))
@@ -666,6 +671,8 @@ export class Crews {
   private far = 0
   private perUnit = 1000
   private literal = false
+  private stopped = false
+  private pace = 6
   private progress = new Map<string, number>()
   private standOf: (field: number) => StandTree[] = () => []
   private pondWas = 0
@@ -677,7 +684,8 @@ export class Crews {
   }
 
   private driveTo(r: Rig, x: number, z: number, heading: number, moved: number, dt: number, exact = false): void {
-    const jump = moved > 3
+    // (a real jump: a new screen, a day held at another point by a tool)
+    const jump = moved > 60
     let d = heading - r.heading
     while (d > Math.PI) d -= Math.PI * 2
     while (d < -Math.PI) d += Math.PI * 2
@@ -747,11 +755,11 @@ export class Crews {
       } else if (seg.site) dp = (f.dt / (seg.kind === 'haul' ? 150 : 900)) * (1 - tShare)
       else if (!seg.walker && rig) dp = ((PACE.work * f.dt) / Math.max(1, path.length)) * (1 - tShare)
       else if (seg.kind === 'sample') dp = 0
-      else dp = ((PACE.walk * 0.6 * f.dt) / Math.max(1, path.length)) * (1 - tShare)
+      else dp = ((PACE.walk * 0.7 * f.dt) / Math.max(1, path.length)) * (1 - tShare)
       a.u = Math.min(1, a.u + dp * span)
     }
     let p = Math.min(1, (a.u - seg.start) / span)
-    if (seg.kind === 'sample' || (seg.kind === 'dig' && !this.literal)) {
+    if (seg.kind === 'sample') {
       // However long the day is, the hill is up or the last row out inside two and a half seconds, and the day waits for it.
       const drive = lw + lt > 0.3 ? STAGE_DRIVE_S : 0, work = STAGE_S[seg.kind]
       p = Math.min(1, a.segClock / (drive + work))
@@ -782,14 +790,23 @@ export class Crews {
         if (rig && seg.ride && Math.hypot(spot.x - rig.x, spot.z - rig.z) > 9 * S && w < 0.4) { rig.x = spot.x; rig.z = spot.z; rig.moved = 0 }
         site = { key: seg.site, kind: seg.site.split('|')[1], field: seg.field, w }
       } else if (!seg.walker && rig) {
-        // Dig day is staged: the digger is lowered at the row's end, the rows come out, and the tractor stands at the finish.
-        const lead = seg.kind === 'dig' ? 0.05 : 0, tail = seg.kind === 'dig' ? 0.08 : 0
-        const run = clamp((w - lead) / (1 - lead - tail), 0, 1)
-        ride(path.at(run * path.length))
-        rig.state.working = run > 0 && run < 1 ? 1 : 0
-        rig.state.kind = seg.kind
         if (tractor) tractor.setImplement(implementFor(seg.kind, f.snap.farm.equipment.includes('harvester')))
-        const arc = run >= 1 ? Infinity : run * path.length
+        rig.state.kind = seg.kind
+        let arc: number
+        if (seg.lit) {
+          // literally: along every pass of the day's ground, which changes where the machine has been
+          ride(path.at(w * path.length))
+          rig.state.working = w > 0 && w < 1 ? 1 : 0
+          arc = w >= 1 ? Infinity : w * path.length
+        } else {
+          // the band's leading row at a pace that looks right from where the camera is; the band fills in behind
+          if (a.arcSeg !== seg) { a.arcSeg = seg; a.arc = seg.from }
+          const on = w < 1 && a.arc < path.length - 0.5
+          if (on && going) a.arc = Math.min(path.length, a.arc + (this.literal ? PACE.work : this.pace) * f.dt)
+          ride(path.at(a.arc))
+          rig.state.working = on ? 1 : 0
+          arc = w >= 1 ? Infinity : w * path.length
+        }
         passed(arc)
         if (seg.kind === 'dig') this.dug(a, segIdx, seg, arc, f.snap)
       } else if (seg.kind === 'sample') {
@@ -825,23 +842,25 @@ export class Crews {
         }
         passed(w >= 0.64 ? Infinity : -1)
       } else {
-        // walking the rows: the scout stops and bends to a plant; pulling blighted plants, a stoop at each and a sack filling
-        const stops = seg.kind === 'scout' ? 7 : Math.min(14, Math.max(3, seg.path.length - 2))
-        const u = w * stops, n = Math.floor(u), q = u - n
-        const moveShare = seg.kind === 'scout' ? 0.62 : 0.5
-        const along = (n + Math.min(1, q / moveShare)) / stops
-        const e = path.at(Math.min(1, along) * path.length)
-        if (q < moveShare || w >= 1) foot(e, 0)
+        // Walking the rows at a walker's pace, stopping every few steps: the scout bends to a plant; pulling blighted
+        // plants, a stoop at each and a sack filling. What they find or pull shows over the day (or, literally, as
+        // they come to it).
+        if (a.arcSeg !== seg) { a.arcSeg = seg; a.arc = seg.from; a.beat = 0 }
+        if (going) a.beat += f.dt
+        const cycle = seg.kind === 'scout' ? 5.2 : 3.6, walking = a.beat % cycle < cycle - 1.5
+        const on = w < 1 && a.arc < path.length - 0.3
+        if (on && walking && going) a.arc = Math.min(path.length, a.arc + (a.worn > 0.6 ? PACE.worn : PACE.walk) * (this.literal ? 1 : clamp(f.dist / 110, 1, 2.5)) * f.dt)
+        const e = path.at(a.arc)
+        if (walking || !on) foot(e, 0)
         else {
           px = e.x; pz = e.z
           a.aboard = false
-          const bend = Math.sin(((q - moveShare) / (1 - moveShare)) * Math.PI)
           pose.reset()
-          stoop(pose, bend, f.time * 5, seg.kind !== 'scout')
+          stoop(pose, Math.sin((((a.beat % cycle) - (cycle - 1.5)) / 1.5) * Math.PI), f.time * 5, seg.kind !== 'scout')
         }
         if (seg.kind === 'rogue') { pose.held = 'sack'; pose.size = 0.6 + 0.6 * w }
-        if (w >= 1) this.idle(a, f, pose)
-        passed(w * path.length)
+        if (!on) this.idle(a, f, pose)
+        passed(w >= 1 ? Infinity : seg.lit ? a.arc : w * path.length)
       }
     }
     if (site) return site
@@ -907,11 +926,13 @@ export class Crews {
     let g = this.gangs.get(seg.field)
     if (!g) {
       const corner = restAt(seg.field, 1, true)
-      g = { field: seg.field, pickers: [], recent: [], crows: [], idle: 0 }
+      g = { field: seg.field, lead: { x: corner.x, z: corner.z, dx: -1, dz: 0 }, pickers: [], recent: [], crows: [], idle: 0 }
       for (let k = 0; k < 5; k++) g.crows.push({ x: corner.x - (3 + k) * S, z: corner.z + 2 * S, fx: 0, fz: 0, tx: corner.x - (3 + k) * S, tz: corner.z + 2 * S, t: 1, wait: 1 + k, h: k })
       this.gangs.set(seg.field, g)
     }
     g.idle = 0
+    // where the digger is, and which way it is going: the pickers work in a line behind it
+    if (a.rig) g.lead = { x: a.rig.x, z: a.rig.z, dx: Math.cos(a.rig.heading), dz: Math.sin(a.rig.heading) }
     const want = snap.farm.pickers ? 9 : 2
     while (g.pickers.length < want) {
       const k = g.pickers.length
@@ -980,7 +1001,7 @@ export class Crews {
       g.pickers.forEach((p, k) => {
         const dx = p.tx - p.x, dz = p.tz - p.z, dist = Math.hypot(dx, dz)
         if (dist > 0.25 * big) {
-          const step = Math.min(dist, (!going ? 0 : this.literal ? PACE.walk * 1.5 : Math.max(6, dist * 2.5)) * f.dt)
+          const step = Math.min(dist, (!going ? 0 : this.literal ? PACE.walk * 1.5 : Math.max(this.pace * 1.2, dist > 40 ? dist * 2.5 : 0)) * f.dt)
           p.x += (dx / dist) * step
           p.z += (dz / dist) * step
           p.heading = Math.atan2(dz, dx)
@@ -992,11 +1013,11 @@ export class Crews {
           p.bent = Math.min(1, p.bent + f.dt * 3)
           pose.reset()
           stoop(pose, p.bent * (0.82 + 0.18 * Math.sin(f.time * 3 + k)), f.time * 6 + k)
-          if (p.wait <= 0 && g.recent.length) {
-            // in a line along the freshly dug rows, each to their own stretch of it, following the digger
-            const t = g.recent[g.recent.length - 1], n = g.pickers.length
-            p.tx = t.x + (k - (n - 1) / 2) * 3.4 + (Math.random() - 0.5) * 1.6
-            p.tz = t.z + (Math.random() - 0.5) * 3.6
+          if (p.wait <= 0) {
+            // in a line along the freshly dug rows behind the digger, each to their own stretch of it
+            const back = 7 + 3.4 * k + (Math.random() - 0.5) * 1.6, across = (Math.random() - 0.5) * 3.6
+            p.tx = g.lead.x - g.lead.dx * back - g.lead.dz * across
+            p.tz = g.lead.z - g.lead.dz * back + g.lead.dx * across
             p.wait = 1.2 + Math.random() * 2.2
           }
         }
