@@ -420,5 +420,9 @@ export const DIG_FROST_MARGIN = 1
 export const MARKETABLE_SHARE = 0.85
 // Reference practice digs a crop whose vines are still up from this date, so it is in before the freeze-up.
 export const DIG_GREEN = { month: 9, dom: 5 }   // October 5
+// Where the dig is the routine's and the kill the player's call, the crew kills the vines by itself this many days
+// after the coach first asks, and no later than two weeks of skin set before the green dig, unless the player kept
+// them up (advice.ts, killByItself).
+export const KILL_WAIT = 7
 export const FROST_HAUL_CHANCE = 40
 export const JOBS: JobKind[] = ['plant', 'hill', 'scout', 'spray', 'water', 'rogue', 'sample', 'kill', 'dig', 'fell', 'rocks', 'brush']

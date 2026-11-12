@@ -9,7 +9,7 @@ import { lotValue, basePrice } from './market.ts'
 import * as P from './params.ts'
 import { housingLimit, hiredCount, hurt, jobSkill, resting, SKILL_LABEL, willDo } from './people.ts'
 import { jobCost, pressingWhy, standingBy, tractorsRunning, waitFor, workday } from './season.ts'
-import { asks } from './advice.ts'
+import { asks, killByItself } from './advice.ts'
 import type { BuildingKind, Campaign, Cmd, Job, JobKind, KillWhy, UpgradeId, World, YearSummary } from './types.ts'
 import { estimateYield, fieldInfo } from './view.ts'
 import { getDay } from './weather.ts'
@@ -119,6 +119,10 @@ export function pressing(world: World, c: Campaign): Pressing[] {
       want('spray', 'blight weather will not wait', f.lastSpray >= 0
         ? `Sprayed on ${formatDay(s.year, f.lastSpray)}, and that has worn thin. Each order is one pass: spraying waits for your order.`
         : 'Not sprayed yet this season. Spraying waits for your order.')
+    }
+    const kill = killByItself(c, i)
+    if (kill >= 0 && !queued('kill')) {
+      want('kill', 'the vines are due to come off', `The crew kills the vines on ${formatDay(s.year, Math.max(kill, s.day))} unless you say otherwise, so the skins set before the dig.`)
     }
     if (f.inField >= 0.5 && !f.weighed && s.frostHaul === s.day && !queued('haul')) want('haul', 'a frost is coming on the barrels', 'Hauling waits for your order.')
   }

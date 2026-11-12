@@ -163,6 +163,7 @@ export interface FieldSeason {
   flags: number             // one-time announcements
   killAsked?: number        // the first day reference practice asked for the vines to be killed
   killWhy?: KillWhy          // and why it asked
+  keepVines?: boolean       // the player cancelled a vine kill here: the crew leaves the vines up
   // Hills, struct of arrays, ROWS * COLS long.
   hState: number[]
   hEmergeAt: number[]

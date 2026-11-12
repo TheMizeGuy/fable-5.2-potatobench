@@ -34,6 +34,18 @@ export function asks(world: World, c: Campaign): Advice[] {
   return everything(world, c)
 }
 
+// The day the crew kills this field's vines by itself, or -1: only where the dig is the routine's and the kill the
+// player's call, once the coach has asked, the vines are up and the player has not kept them up. KILL_WAIT days after
+// the asking, and no later than leaves the skins two weeks to set before the green dig.
+export function killByItself(c: Campaign, field: number): number {
+  const s = c.season
+  const f = s?.fields[field]
+  if (!s || !f || f.killAsked === undefined || f.keepVines || f.status !== 'growing' || f.deadDay >= 0) return -1
+  if (standingBy(c, 'kill', field) || !standingBy(c, 'dig', field)) return -1
+  const latest = dayIndex(s.year, P.DIG_GREEN.month, P.DIG_GREEN.dom) - P.SKIN_DAYS
+  return Math.max(f.killAsked, Math.min(f.killAsked + P.KILL_WAIT, latest))
+}
+
 // The first day reference practice asks for each field's vines to be killed, and why, kept on the field so the
 // weigh ticket can tell a kill the season asked for from one ahead of it (outlook.ts, killTiming).
 export function noteKillAsks(world: World, c: Campaign, all: Advice[] = everything(world, c)): void {
@@ -62,7 +74,8 @@ function everything(world: World, c: Campaign): Advice[] {
   const rainSoon = fc.slice(0, 3).some(d => d.rainChance >= 60 && d.rainMm >= 8)
   const blightSoon = fc.slice(0, 3).some(d => d.blight >= 2)
   const frostSoon = fc.slice(0, 2).some(d => d.frostChance >= 50)
-  const hardFrostNear = s.day >= dayIndex(year, 9, 8)
+  // Dead vines wait for set skins until the date a green crop is dug, so the crop is in before the freeze-up.
+  const digNow = s.day >= dayIndex(year, P.DIG_GREEN.month, P.DIG_GREEN.dom)
   const anyBlight = s.fields.some((_, i) => fieldInfo(c, i).blightHills > 0)
   const killBy = dayIndex(year, 8, 8)
 
@@ -139,8 +152,8 @@ function everything(world: World, c: Campaign): Advice[] {
       add(i, 'haul', `Haul the crop in from ${n}.`, frost ? `A frost is forecast: ${Math.round(f.inField)} cwt in barrels would lose a fifth of itself in the night.` : `${Math.round(f.inField)} cwt is in barrels in the field. Until it is in, frost and sun take some of it.`, frost)
     }
     if (f.status === 'dead') {
-      if (f.skin >= 1 || hardFrostNear) {
-        add(i, 'dig', `Dig ${n}.`, f.skin >= 1 ? 'Skins are set.' : 'Hard frost is close. Thin skins are better than frozen tubers.', hardFrostNear)
+      if (f.skin >= 1 || digNow) {
+        add(i, 'dig', `Dig ${n}.`, f.skin >= 1 ? 'Skins are set.' : 'Hard frost is close. Thin skins are better than frozen tubers.', digNow)
       } else {
         add(i, 'wait', `Let ${n} sit.`, `Skins are ${Math.round(f.skin * 100)}% set. Tubers dug now skin, and skinned tubers do not keep.`)
       }
@@ -213,8 +226,14 @@ export function standingOrders(world: World, c: Campaign): GameEvent[] {
   s.frostLow = forecastFor(world, c.seed, s.year, s.day, 1, hasBuilt(c, 'station') ? P.STATION_ERROR : 1).lo
   for (const a of withinReach(c, all)) {
     if (a.field < 0 || a.act === 'wait' || a.act === 'sell' || a.act === 'close') continue
+    if (a.act === 'kill' && s.fields[a.field].keepVines) continue
     const by = standingBy(c, a.act, a.field)
     if (by) addJob(c, a.act, a.field, -1, by)
+  }
+  // The vines' kill, overdue where the dig is the routine's: the crew sees to it rather than dig green.
+  for (let i = 0; i < P.FIELD_COUNT; i++) {
+    const when = killByItself(c, i)
+    if (when >= 0 && s.day >= when && !s.jobs.some(j => j.kind === 'kill' && j.field === i)) addJob(c, 'kill', i, -1, 'routine')
   }
   const cold: string[] = []
   for (let i = 0; i < P.FIELD_COUNT; i++) {

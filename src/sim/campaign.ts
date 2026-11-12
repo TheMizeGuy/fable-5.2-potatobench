@@ -903,6 +903,7 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
       const why = addJob(c, cmd.kind, cmd.field, cmd.unit ?? -1, 'you')
       if (why) return fail(why)
       noteKillAsks(world, c, asked)
+      if (cmd.kind === 'kill') delete c.season!.fields[cmd.field].keepVines
       return ok()
     }
     case 'rest': {
@@ -943,6 +944,8 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
       if (c.season.jobs[k].kind === 'haul') return fail('The crop in the field has to come in.')
       if (c.season.jobs[k].kind === 'build') return fail('The building is paid for: it stays on the list until it stands.')
       if (c.season.jobs[k].kind === 'dig' && c.season.jobs[k].done > 0) return fail('The digger is already in the field.')
+      // A vine kill taken off the list is the player keeping the vines up: the crew does not kill them by itself.
+      if (c.season.jobs[k].kind === 'kill') c.season.fields[c.season.jobs[k].field].keepVines = true
       c.season.jobs.splice(k, 1)
       releaseJob(c, cmd.id)
       return ok()

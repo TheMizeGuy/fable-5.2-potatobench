@@ -149,3 +149,48 @@ describe('the vine kill', () => {
     expect(k.early).toBeGreaterThan(0)
   })
 })
+
+describe('the dig and the kill left to the crew', () => {
+  it('the routine never digs green: the kill is pressed with its date, the crew kills on that date, and the dig waits for the skins', () => {
+    for (const seed of [1, 2, 3, 4, 5, 6]) {
+      const { w, c } = farm(seed)
+      const said = new Map<number, string>()
+      for (let g = 0; g < 300 && playing(c); g++) {
+        for (const p of S.pressing(w, c)) if (p.kind === 'kill' && p.job < 0 && !said.has(p.field)) said.set(p.field, p.inWay)
+        ok(w, c, { t: 'day' })
+      }
+      const s = c.season!
+      const greenDig = S.dayIndex(c.year, S.DIG_GREEN.month, S.DIG_GREEN.dom)
+      s.fields.forEach((f, i) => {
+        if (f.plantDay < 0 || f.dugDay < 0) return
+        const at = `seed ${seed} ${S.FIELD_NAMES[i]}`
+        expect(f.deadDay, at).toBeGreaterThanOrEqual(0)
+        expect(f.dugDay - f.deadDay >= S.SKIN_DAYS || f.dugDay >= greenDig, at).toBe(true)
+        expect(c.lots.find(l => l.field === i)!.skin, `${at}: skins set at the dig`).toBe(1)
+        if (f.killDay < 0) return
+        const m = /^The crew kills the vines on ([A-Z][a-z]+ \d+) unless you say otherwise/.exec(said.get(i) ?? '')
+        expect(m, `${at}: ${said.get(i)}`).not.toBeNull()
+        // Ordered that morning, and done as soon as the weather and the work ahead of it let the crew.
+        const on = Array.from({ length: 5 }, (_, k) => S.formatDay(c.year, f.killDay - k))
+        expect(on, at).toContain(m![1])
+      })
+    }
+  })
+
+  it('a vine kill taken off the list keeps the vines up: the crew does not kill them by itself', () => {
+    const { w, c } = farm(1)
+    let field = -1
+    for (let g = 0; g < 300 && playing(c) && field < 0; g++) {
+      ok(w, c, { t: 'day' })
+      const j = c.season!.jobs.find(x => x.kind === 'kill' && x.by === 'routine')
+      if (j) { field = j.field; ok(w, c, { t: 'cancel', id: j.id }) }
+    }
+    expect(field).toBeGreaterThanOrEqual(0)
+    for (let g = 0; g < 300 && playing(c) && c.season!.fields[field].status === 'growing'; g++) {
+      expect(S.pressing(w, c).some(p => p.kind === 'kill' && p.field === field)).toBe(false)
+      ok(w, c, { t: 'day' })
+      expect(c.season!.jobs.some(x => x.kind === 'kill' && x.field === field)).toBe(false)
+    }
+    expect(c.season!.fields[field].killDay).toBe(-1)
+  })
+})
