@@ -26,6 +26,7 @@ export interface Worker {
   aboard: boolean          // in the seat of its machine
   rig: { x: number; z: number; heading: number; load: number } | null
   loads: number            // hauling: how many loads the day's part of it comes to
+  lit: boolean             // this part of the day was planned with the clock stopped
 }
 
 export interface StageFrame {
@@ -80,6 +81,9 @@ function shareOf(snap: Snapshot, kind: string, field: number): number {
   return p
 }
 
+// A lap of hauling with the clock running, as shares of it: standing to load (and again to unload), and when the
+// door is reached.
+const LAP_STAND = 0.18, LAP_DOOR = 0.5
 // How far past a field's end the stones are put off: beyond where the tractors turn.
 const HEAP_OUT = 13
 
@@ -103,6 +107,18 @@ export class Stage {
   // A tree has come down: how hard, and where, for whoever shakes the camera.
   thud = 0
   readonly thudAt = new Vector3()
+
+  // Where someone last stood at a piece of work, if they have been at it: the way back to it ends there.
+  // A load is on, or going on, or coming off: the trip in hand is seen through to the potato house door.
+  tripOpen(key: string, id: number): boolean {
+    const j = this.sites.get(key)?.job.get(id)
+    return !!j && j.t > 0.02 && j.t < LAP_DOOR + LAP_STAND
+  }
+
+  placeOf(key: string, id: number): Pt | null {
+    const m = this.sites.get(key)?.at.get(id)
+    return m ? { x: m.x, z: m.z } : null
+  }
 
   // The land's hold on trees counted as felled: how many of a tract's last ones to leave standing.
   hold: (field: number, n: number) => void = () => {}
@@ -183,7 +199,7 @@ export class Stage {
     m.walking = dist > (m.walking ? 0.06 : 0.4) * f.s
     if (m.walking) {
       // (a long way to their own part of the work is hurried over)
-      const step = Math.min(dist, (f.going ? Math.max(1.5 * f.s * (1 - 0.4 * w.tired), dist > 14 ? dist * 0.9 : 0) : 0) * f.dt)
+      const step = Math.min(dist, (f.going ? Math.max(1.5 * f.s * (1 - 0.4 * w.tired), dist > 14 ? Math.min(dist * 0.9, f.pace * 1.5) : 0) : 0) * f.dt)
       m.x += (dx / dist) * step
       m.z += (dz / dist) * step
       w.heading = Math.atan2(dz, dx)
@@ -683,14 +699,16 @@ export class Stage {
     // two days long (a job of a day or two would otherwise never be seen to leave the field), and a drive too long
     // to make in its share of that at a pace that reads is cut, as the way to any work is: away from one end, in to
     // the other.
-    const q0 = f.literal ? 0.22 : 0.18, q1 = 0.5, q2 = q1 + q0
+    const literal = f.literal && w.lit
+    const q0 = literal ? 0.22 : LAP_STAND, q1 = LAP_DOOR, q2 = q1 + q0
     const lapS = Math.min(3.4, Math.max(2.4, 2 * f.day)), legS = lapS * (q1 - q0), reach = f.lane * legS
-    if (f.literal) j.t = frac(Math.min(0.99999, w.w) * Math.max(1, w.loads))
-    else if (f.going) j.t = frac(j.t + f.dt / lapS)
+    if (literal) j.t = frac(Math.min(0.99999, w.w) * Math.max(1, w.loads))
+    // (the clock stopped on a day that was running: the load in hand is seen in to the door, and no more)
+    else if (f.going) j.t = f.literal ? (j.t < q2 ? Math.min(q2, j.t + f.dt / lapS) : j.t) : frac(j.t + f.dt / lapS)
     const lap = j.t
     const loading = lap < q0, out = lap >= q0 && lap < q1, unloading = lap >= q1 && lap < q2, back = lap >= q2
     const leg = (u: number): number => {
-      if (f.literal || trip.length <= reach * 1.25) return ease(u)
+      if (literal || trip.length <= reach * 1.25) return ease(u)
       if (u < 0.4) return ((reach * 0.4) / trip.length) * (u / 0.4) * (u / 0.4)
       const r = (u - 0.4) / 0.6
       return 1 - ((reach * 0.6) / trip.length) * (1 - r) * (1 - r)

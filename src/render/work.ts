@@ -177,7 +177,8 @@ export const OFF_FARM: Pt = { x: ROAD[13][0], z: ROAD[13][1] }
 export function buildSite(kind: BuildingKind, yard: number): Spot {
   const s = siteOf(kind, yard) ?? siteOf('shed', -1)!
   const earth = kind === 'pond' || kind === 'road'
-  const w = earth ? s.work[0] : s.work[2]
+  // (the farm stand fronts the town road: its bench stands at its side, off the road)
+  const w = earth ? s.work[0] : kind === 'stand' ? s.work[3] : s.work[2]
   const dx = s.x - w.x, dz = s.z - w.z, l = Math.hypot(dx, dz) || 1
   const out = earth ? 0 : 1.3 * S
   return { x: w.x - (dx / l) * out, z: w.z - (dz / l) * out, heading: Math.atan2(dz, dx) }
