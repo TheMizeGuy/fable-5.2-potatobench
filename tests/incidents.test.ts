@@ -67,13 +67,13 @@ describe('incidents', () => {
     const c = farm(1990, 7)
     const inc = until(c, 'applicant')
     expect(inc.until).toBe(inc.day + S.INCIDENT_DAYS)
-    const info = S.incidentInfo(c)[0]
+    const info = S.incidentInfo(c).find(x => x.id === inc.id)!
     expect(info.choices.map(x => x.id)).toEqual(['hire', 'pass'])
     expect(info.fallback).toBe('pass')
     for (const ch of info.choices) expect(ch.does.length).toBeGreaterThan(10)
     const crew = c.crew.length
     let events: S.GameEvent[] = []
-    while (c.incidents.length && c.season!.day <= inc.until + 1) events = events.concat(tendDay(c))
+    while (c.incidents.some(i => i.id === inc.id) && c.season!.day <= inc.until + 1) events = events.concat(tendDay(c))
     expect(c.incidents.find(i => i.id === inc.id)).toBeUndefined()
     expect(events.some(e => e.type === 'incidentDone' && e.data!.incident === inc.id)).toBe(true)
     expect(c.crew.length).toBe(crew)
@@ -84,9 +84,10 @@ describe('someone asking for work', () => {
   it('taken on, starts at their asking wage with their own skills and trait; with no room, cannot be', () => {
     const c = farm(1990, 7)
     const inc = until(c, 'applicant')
-    // Two hired already, no bunkhouse: no room.
+    // Two hired already (topped up if a neighbour took one), no bunkhouse: no room.
+    while (S.hiredCount(c) < S.HOUSED_OUT) ok(c, { t: 'hire', kind: 'hand' })
     refused(c, { t: 'answer', incident: inc.id, choice: 'hire' }, /bunkhouse/)
-    expect(S.incidentInfo(c)[0].choices[0].ok).toBe(false)
+    expect(S.incidentInfo(c).find(x => x.id === inc.id)!.choices[0].ok).toBe(false)
     refused(c, { t: 'answer', incident: inc.id, choice: 'golf' }, /choices/)
     ok(c, { t: 'dismiss', unit: c.crew[1].id })
     const wages = c.yearWages
@@ -94,7 +95,7 @@ describe('someone asking for work', () => {
     const u = c.crew[c.crew.length - 1]
     expect([u.name, u.skills, u.trait, u.wage]).toEqual([inc.applicant!.name, inc.applicant!.skills, inc.applicant!.trait, inc.applicant!.ask])
     expect(c.yearWages - wages).toBe(inc.applicant!.ask)
-    expect(c.incidents).toEqual([])
+    expect(c.incidents.find(i => i.id === inc.id)).toBeUndefined()
     refused(c, { t: 'answer', incident: inc.id, choice: 'hire' }, /No such question/)
   })
 })
