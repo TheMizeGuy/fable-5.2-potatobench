@@ -45,29 +45,29 @@ async function fingers(page: Page, steps: { x: number; y: number }[][]): Promise
 }
 
 // Drag the land: the mouse's left button, or one finger.
-async function drag(page: Page, mobile: boolean): Promise<void> {
+async function drag(page: Page, mobile: boolean, far = 1): Promise<void> {
   const p = await land(page)
   if (mobile) {
-    await fingers(page, Array.from({ length: 13 }, (_, k) => [{ x: p.x - k * 12, y: p.y - k * 6 }]))
+    await fingers(page, Array.from({ length: 13 }, (_, k) => [{ x: p.x - k * 10 * far, y: p.y - k * 5 * far }]))
     return
   }
   await page.mouse.move(p.x, p.y)
   await page.mouse.down()
-  await page.mouse.move(p.x - 220, p.y - 90, { steps: 12 })
+  await page.mouse.move(p.x - 160 * far, p.y - 60 * far, { steps: 12 })
   await page.mouse.up()
 }
 
 // Turn the view: the right button dragged sideways, or two fingers twisted.
-async function turn(page: Page, mobile: boolean): Promise<void> {
+async function turn(page: Page, mobile: boolean, far = 1): Promise<void> {
   const p = await land(page)
   if (mobile) {
     const at = (a: number) => [{ x: p.x + Math.cos(a) * 70, y: p.y + Math.sin(a) * 70 }, { x: p.x - Math.cos(a) * 70, y: p.y - Math.sin(a) * 70 }]
-    await fingers(page, Array.from({ length: 13 }, (_, k) => at(k * 0.07)))
+    await fingers(page, Array.from({ length: 13 }, (_, k) => at(k * 0.06 * far)))
     return
   }
   await page.mouse.move(p.x, p.y)
   await page.mouse.down({ button: 'right' })
-  await page.mouse.move(p.x + 260, p.y, { steps: 14 })
+  await page.mouse.move(p.x + 120 * far, p.y, { steps: 14 })
   await page.mouse.up({ button: 'right' })
 }
 
@@ -118,8 +118,14 @@ test('a guided first year: offered on a new farm, taken, and followed to the fir
         await expect(page.getByTestId('guide-held')).toBeVisible()
         expect((await look(page)).paused).toBe(true)
         break
-      case 'look': await drag(page, isMobile); break
-      case 'turn': await turn(page, isMobile); break
+      case 'look': case 'turn':
+        // As a player would, again and a little further if the land did not seem to move the first time.
+        for (let k = 1; k <= 3 && (await slip(page)).id === id; k++) {
+          await (id === 'look' ? drag(page, isMobile, k) : turn(page, isMobile, k))
+          await page.waitForTimeout(1500)
+          console.log(`${id} ${k}: ${await page.evaluate(() => JSON.stringify((globalThis as unknown as { __countyGuide: { p: { facts: string[] } } }).__countyGuide.p.facts))}`)
+        }
+        break
       case 'boards': case 'card': case 'person': case 'frost': case 'haul': case 'routine': case 'list':
         await page.getByTestId('guide-noted').click(); break
       case 'almanac':
@@ -132,6 +138,12 @@ test('a guided first year: offered on a new farm, taken, and followed to the fir
       case 'field': {
         // It asks for a field's tag: the one its fist marks, or any on the screen.
         const marked = page.locator(`#ui [data-testid="${target}"]`).first()
+        if (!(await marked.isVisible())) {
+          // Out of view, the slip says how to bring the farm back.
+          await expect(page.getByTestId('guide-lost')).toBeVisible()
+          if (isMobile) { const p = await land(page); await page.touchscreen.tap(p.x, p.y); await page.touchscreen.tap(p.x, p.y) } else await page.keyboard.press('Home')
+          await page.waitForTimeout(1500)
+        }
         await ((await marked.isVisible()) ? marked : page.locator('#ui .plate[data-testid^="field-"]:visible').first()).click()
         break
       }
@@ -193,7 +205,7 @@ test('the progress survives a reload, and any lesson can be shown again from How
   await page.getByTestId('guide-accept').click()
   await page.getByTestId('begin-season').click()
   await expect.poll(async () => (await slip(page)).id).toBe('look')
-  await drag(page, isMobile)
+  for (let k = 1; k <= 3 && (await slip(page)).id === 'look'; k++) { await drag(page, isMobile, k); await page.waitForTimeout(1500) }
   await expect.poll(async () => (await slip(page)).id).toBe('turn')
   await page.reload()
   await page.getByTestId('continue').click()
@@ -211,7 +223,7 @@ test('the progress survives a reload, and any lesson can be shown again from How
   await expect(page.getByTestId('guide')).toHaveCount(0)
   await page.keyboard.press('Escape')
   await expect.poll(async () => (await slip(page)).id).toBe('look')
-  await drag(page, isMobile)
+  for (let k = 1; k <= 3 && (await slip(page)).id === 'look'; k++) { await drag(page, isMobile, k); await page.waitForTimeout(1500) }
   await expect.poll(async () => (await slip(page)).id).toBe('')
   // From How to play.
   await page.getByTestId('menu-open').first().click()

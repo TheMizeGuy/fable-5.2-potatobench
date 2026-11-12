@@ -34,6 +34,7 @@ export function springSlot(): HTMLElement {
 // ---------------------------------------------------------------- the guide's own paper: every lesson, to see again
 
 const PARTS: Part[] = ['opening', 'year', 'spring']
+const by = (i: Input, mouse: string, touch: string, keys: string) => i === 'touch' ? touch : i === 'keys' ? keys : mouse
 
 export function openGuide(ctx: Ctx): void {
   ctx.papers.open({
@@ -155,7 +156,8 @@ function holdLine(): HTMLElement {
   return h('span', { class: 't-label guide-held', testid: 'guide-held' }, icon('pause', 'i'), 'Clock held')
 }
 
-function slipBody(ctx: Ctx, x: Lesson, l: Look, held: boolean): HTMLElement[] {
+// lost: what it points at is on the land but out of view, so the slip says how to bring the farm back.
+function slipBody(ctx: Ctx, x: Lesson, l: Look, held: boolean, lost = false): (HTMLElement | null)[] {
   const at = guide.place(x)
   const again = guide.replaying(x.id)
   const where = x.part === 'opening' ? `${PART_NAME.opening}, ${at.n} of ${at.of}` : PART_NAME[x.part]
@@ -166,6 +168,7 @@ function slipBody(ctx: Ctx, x: Lesson, l: Look, held: boolean): HTMLElement[] {
       held ? holdLine() : h('p', { class: 't-label guide-n' }, where)),
     h('p', { class: 'guide-ask', id: 'guide-ask' }, x.ask(l)),
     h('p', { class: 'guide-why t-caption' }, x.why(l)),
+    lost ? h('p', { class: 'guide-lost t-caption', testid: 'guide-lost' }, icon('field', 'i'), by(l.input, 'Out of view: Home, or a double-click on open ground, brings the farm back.', 'Out of view: a double-tap on open ground brings the farm back.', 'Out of view: Home brings the farm back.')) : null,
     h('footer', { class: 'guide-foot' },
       x.read || again ? h('button', { class: 'btn', type: 'button', testid: 'guide-noted', onclick: done }, icon('check', 'i'), x.read ? 'Noted' : 'Got it') : null,
       h('button', { class: 'btn quiet', type: 'button', testid: 'guide-skip', onclick: () => { guide.skip(x.id); ctx.dirty() } }, 'Skip'),
@@ -312,18 +315,20 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     const p = now?.point?.(l) ?? null
     const t = resolve(ctx, root, p)
     target = t.id
+    // Something on the land to point at, none of it in view.
+    const lost = !!p && !('testid' in p) && !t.at && app.screen === 'season'
     // The spring's notes go into the catalogue; everything else floats.
     if (slot) {
       const inSlot = docked && slot.isConnected
-      patch(slot, JSON.stringify([inSlot && offer, inSlot && now ? [now.id, now.ask(l), now.why(l), guide.replaying(now.id)] : 0, input]), () =>
+      patch(slot, JSON.stringify([inSlot && offer, inSlot && now ? [now.id, now.ask(l), now.why(l), guide.replaying(now.id), lost] : 0, input]), () =>
         inSlot && offer ? h('section', { class: 'guide docked offer', testid: 'guide-offer', 'aria-label': 'A guided first year' }, offerBody(ctx))
-          : inSlot && now ? h('section', { class: 'guide docked', testid: 'guide-slip', 'data-lesson': now.id, 'data-target': target, 'aria-labelledby': 'guide-ask' }, slipBody(ctx, now, l, held)) : null)
+          : inSlot && now ? h('section', { class: 'guide docked', testid: 'guide-slip', 'data-lesson': now.id, 'data-target': target, 'aria-labelledby': 'guide-ask' }, slipBody(ctx, now, l, held, lost)) : null)
       if (inSlot && now) slot.querySelector<HTMLElement>('.guide')?.setAttribute('data-target', target)
     }
     const floating = !!now && !docked
     slip.hidden = !floating
     if (floating && now) {
-      patch(slip, JSON.stringify([now.id, now.ask(l), now.why(l), held, guide.replaying(now.id), input]), () => slipBody(ctx, now!, l, held))
+      patch(slip, JSON.stringify([now.id, now.ask(l), now.why(l), held, guide.replaying(now.id), input, lost]), () => slipBody(ctx, now!, l, held, lost))
       slip.dataset.lesson = now.id
       slip.dataset.target = target
       slip.dataset.testid = 'guide-slip'
