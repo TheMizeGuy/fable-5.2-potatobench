@@ -5,12 +5,15 @@ import {
 } from 'three'
 import { FRAG_LIB, HAZE, SHARED, U } from './shaders.ts'
 
-const CAP = 900
+// The most puffs alive at once: machines at work in several fields lay dust, exhaust and spray by the hundred.
+const CAP = 2400
+const SHARE = { high: 1, medium: 0.7, low: 0.42 }
 const N = 15
 
 export class Particles {
   readonly mesh: Mesh
   private n = 0
+  private most = CAP
   // Per puff: position, velocity, size, growth, age, life, colour, alpha, how far the wind takes it, how fast it goes on rising.
   private p = new Float32Array(CAP * N)
   private at: InstancedBufferAttribute
@@ -70,7 +73,7 @@ export class Particles {
   // drift: how much of the wind the puff takes (0 heavy clods, 1 smoke). lift: metres a second it keeps rising (warm
   // smoke), after the push it was given has died away.
   emit(x: number, y: number, z: number, vx: number, vy: number, vz: number, size: number, grow: number, life: number, r: number, g: number, b: number, alpha: number, drift = 1, lift = 0): void {
-    if (this.n >= CAP) return
+    if (this.n >= this.most) return
     this.p.set([x, y, z, vx, vy, vz, size, grow, 0, life, r, g, b, alpha * 10 + Math.min(0.99, drift), lift], this.n * N)
     this.n++
   }
@@ -109,6 +112,10 @@ export class Particles {
     if (n > 0) {
       for (const a of [this.at, this.tint]) { a.clearUpdateRanges(); a.addUpdateRange(0, n * 4); a.needsUpdate = true }
     }
+  }
+
+  setTier(tier: 'high' | 'medium' | 'low'): void {
+    this.most = Math.round(CAP * SHARE[tier])
   }
 
   clear(): void {

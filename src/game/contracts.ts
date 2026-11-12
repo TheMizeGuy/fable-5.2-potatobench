@@ -4,11 +4,12 @@ import type { App } from './app.ts'
 // The field view draws the land and owns the pointer on the canvas and the camera keys:
 //   click a field or a tract: app.select(i); with Shift held: app.select(i, true); on empty ground: app.select(-1)
 //   click a yard or one of its buildings: app.selectYard(yard) (-1 home, -2 Dufour); the selected yard (app.yard) is marked
-//   double-click a field: app.selectLike(i); on empty ground: frame the whole farm
+//   double-click a field: app.selectLike(i) and bring it into frame; on empty ground: as Home
 //   right-click or long-press a field: app.smartOrder(i)
 //   pointer over a field: app.setHover(i)
 //   click a person, or the tractor or truck they are on: app.selectUnit(id); the picked person (app.unit) is marked
-//   drag: pan; wheel or pinch: zoom toward the pointer; right-drag, two-finger twist, Q and E: turn; arrow keys: pan; Home: whole farm
+//   drag: pan; wheel or pinch: zoom toward the pointer; right-drag, two-finger twist, Q and E: turn; arrow keys: pan;
+//   Home: out a tier (the field in hand, the home farm, the whole map, and round again)
 // It draws the selection (app.selection), the hover (app.hover) and a ring on the fields of an 'order' app event,
 // and moves the camera to a field on a 'focus' app event. Every other key belongs to the interface.
 export interface FieldView {

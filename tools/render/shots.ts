@@ -452,7 +452,7 @@ const shots: Shot[] = [
   { name: 'L05-play-mist', size: [1920, 1080], setup: async page => { await playTo(page, 1977, 5, 176); console.log('  ', await playUntil(page, [], `const t = sim.today(app.world, c); return t.sky === 'fog' || (t.day.wetH >= 15 && t.day.tmin > 4 && (t.sky === 'clear' || t.sky === 'cloud')) ? t.sky + ' wetH ' + t.day.wetH : ''`)); await settle(page); await frames(page, 20) } },
   { name: 'L06-play-october', size: [1920, 1080], setup: async page => { await playTo(page, 1977, 5, 279, ['dig']); console.log('  ', await playUntil(page, ['dig'], SKY('clear'))); await settle(page); await frames(page, 20) } },
   // First snow: where a season has none before it ends, the day's air is set by hand to a snowfall's.
-  { name: 'L07-play-snow', size: [1920, 1080], setup: async page => { await playTo(page, 1977, 5, 268, ['dig']); await settle(page); await page.evaluate(() => (window as any).__countyField.tune({ snow: 0.5, snowfall: 1, rain: 0, cloud: 1, cloudShadow: 0, sunScale: 0.05, deck: 1.05, haze: 0.0026, key: 0.92, storm: 0.15, high: 0, rime0: 0, rime1: 0, rime2: 0, mist: 0, wet: 0.5, dry: 0 })); await frames(page, 30) } },
+  { name: 'L07-play-snow', size: [1920, 1080], setup: async page => { await playTo(page, 1977, 5, 268, ['dig']); await settle(page); await page.evaluate(() => (window as any).__countyField.tune({ snow: 0.5, snowfall: 1, rain: 0, cloud: 1, cloudShadow: 0, sunScale: 0.05, deck: 1.05, haze: 0.0013, key: 0.9, storm: 0.15, high: 0, rime0: 0, rime1: 0, rime2: 0, mist: 0, wet: 0.5, dry: 0 })); await frames(page, 30) } },
   { name: 'L07b-snow-morning', size: [1920, 1080], setup: async page => { await playTo(page, 1977, 5, 268, ['dig']); await settle(page); await page.evaluate(() => (window as any).__countyField.tune({ snow: 0.62, snowfall: 0, rain: 0, cloud: 0.2, cloudShadow: 0.8, sunScale: 1, deck: 1, haze: 0.0006, key: 1, storm: 0, high: 0.5, rime0: 0, rime1: 0, rime2: 0, mist: 0.2, wet: 0.4, dry: 0, hour: -1 })); await frames(page, 30) } },
   { name: 'L08-winter-night', size: [1920, 1080], setup: async page => { await winter(page, 2); await settle(page); await frames(page, 20) } },
   { name: 'L09-close-bloom', size: [1920, 1080], setup: async page => { await july(page); await playUntil(page, [], SKY('clear')); await settle(page); await view(page, { frame: 'field', field: 5, x: 0.45, z: 0.55, dist: 22, yaw: -1.0 }); await frames(page, 30) } },
@@ -466,7 +466,20 @@ const shots: Shot[] = [
   ...(['yard', 'field', 'farm', 'county'] as const).map((name, k) => ({ name: `T${k + 1}-${name}`, size: [1920, 1080] as [number, number], setup: async (page: Page) => { await atWork(page); await page.evaluate(name => (window as any).__countyField.tier(name), name); await frames(page, 30) } })),
   { name: 'T5-field-season-bar', size: [1920, 1080], insets: { top: 56, right: 480, bottom: 90 }, setup: async page => { await atWork(page); await frames(page, 30) } },
   { name: 'T6-farm-spring-sheet', size: [1920, 1080], insets: { top: 56, right: 640 }, setup: async page => { await page.evaluate(() => (window as any).__county.app.newGame(1977, 5)); await settle(page); await frames(page, 30) } },
+  // An upright phone: the field tier with the horizon in its top fifth, and the farm tier.
+  { name: 'T8-phone-field', size: [390, 844], insets: { top: 52, bottom: 190 }, setup: async page => { await atWork(page); await frames(page, 30) } },
+  { name: 'T9-phone-farm', size: [390, 844], insets: { top: 52, bottom: 190 }, setup: async page => { await atWork(page); await page.evaluate(() => (window as any).__countyField.tier('farm')); await frames(page, 30) } },
+  // Dusk from the field and the farm tiers: lamps in the windows, ours and the neighbours'.
+  ...(['field', 'farm'] as const).map(name => ({ name: `L16-dusk-${name}`, size: [1920, 1080] as [number, number], setup: async (page: Page) => { await july(page); await playUntil(page, [], SKY('clear')); await settle(page); await page.evaluate(name => { const f = (window as any).__countyField; f.tier(name); f.tune({ hour: 1.17, cloud: 0.2, mist: 0.2 }) }, name); await frames(page, 40) } })),
+  // The horizon's landmarks: the village and its church through the saddle, and the water tower down the town road.
+  { name: 'L17-church', size: [1920, 1080], setup: async page => { await july(page); await playUntil(page, [], SKY('clear')); await settle(page); await page.evaluate(() => (window as any).__countyField.tier('farm')); await frames(page, 30) } },
+  { name: 'L18-water-tower', size: [1920, 1080], setup: async page => { await july(page); await playUntil(page, [], SKY('clear')); await settle(page); await view(page, { frame: 'land', x: 60, z: 10, dist: 40, yaw: 1.2 }); await frames(page, 30) } },
+  // A roof seen at a low angle at the high setting: the contact shade must not hatch it.
+  { name: 'L19-roof', size: [1920, 1080], insets: NONE, setup: async page => { await july(page); await playUntil(page, [], SKY('clear')); await settle(page); await view(page, { frame: 'home', x: 23.6, z: -15.2, dist: 14, yaw: 0.3, pitch: 0.22 }); await frames(page, 30) } },
   { name: 'T7-eye-level', size: [1920, 1080], insets: NONE, setup: async page => { await atWork(page); await view(page, { frame: 'home', x: 18.8, z: -9.7, dist: 7.7, yaw: -2.21, pitch: 0.105, tilt: 0 }); await frames(page, 30) } },
+  // Thick weather from the farm tier, where the far side of the farm is furthest: it must still be played in.
+  ...(['overcast', 'rain', 'fog'] as const).map(sky => ({ name: `L20-farm-${sky}`, size: [1920, 1080] as [number, number], setup: async (page: Page) => { await playTo(page, 1977, 5, sky === 'fog' ? 165 : 190); console.log('  ', await playUntil(page, [], SKY(sky))); await settle(page); await page.evaluate(() => (window as any).__countyField.tier('farm')); await frames(page, 20) } })),
+  { name: 'L20-farm-snow', size: [1920, 1080], setup: async page => { await playTo(page, 1977, 5, 268, ['dig']); await settle(page); await page.evaluate(() => { const f = (window as any).__countyField; f.tier('farm'); f.tune({ snow: 0.5, snowfall: 1, rain: 0, cloud: 1, cloudShadow: 0, sunScale: 0.05, deck: 1.05, haze: 0.0013, key: 0.9, storm: 0.15, high: 0, rime0: 0, rime1: 0, rime2: 0, mist: 0, wet: 0.5, dry: 0 }) }); await frames(page, 30) } },
   // Wind and cloud shadow: the same breezy day three seconds apart, to see the gusts and the shade move.
   ...[0, 3000].map((wait, k) => ({ name: `L15-wind-${'ab'[k]}`, size: [1920, 1080] as [number, number], setup: async (page: Page) => { await july(page); await playUntil(page, [], SKY('clear')); await settle(page); await page.evaluate(() => (window as any).__countyField.tune({ wind: 0.9, cloud: 0.5 })); await frames(page, 20); await page.waitForTimeout(wait) } })),
   // Sizes: the farm kept whole inside what the interface leaves free.
@@ -723,6 +736,8 @@ shots.push(
 // ---- The land at its true size: the crop through its stages from the field tier and from close to, the months,
 // blight, the dig, the stages of clearing a tract, the whole farm, the whole map, and a lane at eye level.
 const FIELD_TIER: View = { frame: 'land', x: 8, z: -1, dist: 27, yaw: -0.44 }
+// The camera's own field tier, wherever the camera's writer has put it.
+const CAMERA_FIELD: View = {}
 const tierOn = (field: number): View => ({ frame: 'field', field, x: 0.5, z: 0.5, dist: 320, yaw: -0.44 })
 const nearOn = (field: number): View => ({ frame: 'field', field, x: 0.72, z: 0.62, dist: 30, yaw: -0.95, pitch: 0.3 })
 const midOn = (field: number): View => ({ frame: 'field', field, x: 0.72, z: 0.62, dist: 95, yaw: -0.95, pitch: 0.36 })
@@ -733,7 +748,8 @@ const cropShot = (name: string, year: number, day: number, skip: string[], v: Vi
     console.log('  ', await playUntil(page, skip, name.includes('bloom') ? `return sim.fieldInfo(c, 5).bloom > 0.9 && sim.today(app.world, c).sky === 'clear' ? 'bloom' : ''` : SKY('clear')))
     if (after) console.log('  ', await page.evaluate(after))
     await settle(page)
-    await view(page, v)
+    if (v === CAMERA_FIELD) await page.evaluate(() => (window as any).__countyField.tier('field'))
+    else await view(page, v)
     await frames(page, 12)
   },
 })
@@ -758,6 +774,34 @@ shots.push(
   cropShot('g7-whole-farm', 1977, 196, [], { frame: 'land', x: 9, z: 1, dist: 96 }),
   { name: 'g8-whole-map', size: G_SIZE, setup: async page => { await bigFarm(page, { rent: ALL_LAND, hands: 2, operator: true, until: 196 }); await playUntil(page, [], SKY('clear')); await settle(page); await page.evaluate(() => (window as any).__countyField.home()); await settle(page); await page.evaluate(() => (window as any).__countyField.home()); await settle(page); await frames(page, 20) } },
   cropShot('g9-lane-eye', 1977, 196, [], { frame: 'land', x: 10, z: 5.6, dist: 1.5, yaw: -1.5708, pitch: 0.07, tilt: 0 }),
+)
+
+// ---- The land by tier of view: yard (close to), field (the playing view), farm, county.
+const FARM_VIEW: View = { frame: 'land', x: 9, z: 1, dist: 62 }
+const COUNTY_TIER: View = { frame: 'land', x: 22, z: 4, dist: 150 }
+shots.push(
+  cropShot('t-field-1-bare', 1977, 128, [], CAMERA_FIELD),
+  cropShot('t-field-2-planted', 1977, 147, [], CAMERA_FIELD),
+  cropShot('t-field-3-emerged', 1977, 163, [], CAMERA_FIELD),
+  cropShot('t-field-4-closed', 1977, 186, [], CAMERA_FIELD),
+  cropShot('t-field-5-bloom', 1977, 190, [], CAMERA_FIELD),
+  cropShot('t-field-6-dead', 1977, 260, ['dig'], CAMERA_FIELD),
+  cropShot('t-field-7-dug', 1977, 268, [], CAMERA_FIELD),
+  cropShot('t-field-8-october', 1977, 288, [], CAMERA_FIELD),
+  cropShot('t-field-blight', 1979, 205, ['spray', 'rogue'], tierOn(4), BLIGHT_STATES),
+  landShot('t-field-tract-felled', 190, CLEARING[1][1].replaceAll('@', '14'), tierOn(14)),
+  landShot('t-field-tract-rocks', 190, CLEARING[4][1].replaceAll('@', '14'), tierOn(14)),
+  cropShot('t-yard-2-planted', 1977, 147, [], nearOn(5)),
+  cropShot('t-yard-4-closed', 1977, 186, [], nearOn(5)),
+  cropShot('t-yard-5-bloom', 1977, 190, [], nearOn(5)),
+  cropShot('t-yard-blight', 1979, 205, ['spray', 'rogue'], nearOn(4)),
+  ...['flora', 'crews', 'props', 'birds'].map(part => ({ name: `dbg-no-${part}`, size: [960, 540] as [number, number], setup: async (page: Page) => { await playTo(page, 1977, 5, 147); await playUntil(page, [], SKY('clear')); await settle(page); await view(page, nearOn(5)); await page.evaluate(p => (window as any).__countyField.show(p, false), part); await frames(page, 12) } })),
+  cropShot('t-yard-lane', 1977, 196, [], { frame: 'land', x: 10, z: 5.6, dist: 1.5, yaw: -1.5708, pitch: 0.07, tilt: 0 }),
+  cropShot('t-yard-wood-edge', 1977, 196, [], { frame: 'land', x: -2, z: -19.5, dist: 5, yaw: 0.3, pitch: 0.14, tilt: 0 }),
+  cropShot('t-farm-july', 1977, 196, [], FARM_VIEW),
+  cropShot('t-farm-october', 1977, 288, [], FARM_VIEW),
+  cropShot('t-county-july', 1977, 196, [], COUNTY_TIER),
+  cropShot('t-county-october', 1977, 288, [], COUNTY_TIER),
 )
 
 const browser = await chromium.launch({

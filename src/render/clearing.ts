@@ -130,7 +130,6 @@ export class Clearing {
     this.brush.castShadow = true
     this.brush.receiveShadow = true
     this.brush.frustumCulled = false
-    this.brush.layers.enable(1)
     if (kind.depth) this.brush.customDepthMaterial = kind.depth
     this.group.add(this.brush)
     this.disposables.push(geo)

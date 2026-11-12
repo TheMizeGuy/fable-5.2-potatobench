@@ -206,7 +206,7 @@ if (process.argv.includes('--land')) {
     ['farm tier', { frame: 'land', x: 9, z: 1, dist: 96 }],
     ['county tier', { frame: 'land', x: 22, z: 6, dist: 190 }],
   ]
-  const MINE = ['terrain', 'flora', 'grass', 'fields', 'clearing']
+  const MINE = ['terrain', 'flora', 'farwoods', 'grass', 'fields', 'clearing']
   const steady = async (): Promise<M> => {
     let best = await window1(page, 0.9)
     const again = await window1(page, 0.9)
@@ -234,6 +234,13 @@ if (process.argv.includes('--land')) {
         cost.push(`${n} ${(all.gpu - m.gpu).toFixed(1)} ms ${((all.triangles - m.triangles) / 1e6).toFixed(2)}M ${all.calls - m.calls}c`)
         await page.evaluate(n => (window as any).__countyField.show(n, true), n)
       }
+      // and what the trees cost in the picture alone: the frame with no shadows drawn, with and without them
+      await page.evaluate(() => (window as any).__countyField.shadowsOn(false))
+      const bare = await steady()
+      await page.evaluate(() => (window as any).__countyField.show('flora', false))
+      const bareNo = await steady()
+      await page.evaluate(() => { const f = (window as any).__countyField; f.show('flora', true); f.shadowsOn(true) })
+      cost.push(`all shadows ${(all.gpu - bare.gpu).toFixed(1)} ms`, `trees with no shadows drawn ${(bare.gpu - bareNo.gpu).toFixed(1)} ms`)
       console.log(`  land ${t.padEnd(6)} ${label.padEnd(11)} whole frame GPU ${all.gpu.toFixed(2).padStart(6)} ms ${(all.triangles / 1e6).toFixed(2)}M ${all.calls}c | ${cost.join(' | ')}`)
     }
   }

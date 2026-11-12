@@ -161,3 +161,16 @@ people, the camera's tiers, far trees as impostors, the hill squares' edges, and
   brush and alder along the brook stand on the farm's open ground.
 - **The land's end.** The terrain reaches 6.4 km past the farm's own country and the far hills stand at its edge;
   the neighbours' quilt thins to woods by distances that scale with K.
+
+### Phase B, the land, second round
+
+- **Far trees are cards.** Each kind of tree is drawn once, from three heights of eye, into an atlas that keeps what
+  the tree's own material colours it from (where on the tree, which way it faces, its shade, leaf or wood); a card
+  is then coloured and lit by the tree's own code, so it turns with the season and takes the day's light and the
+  snow. Whole trees within 100 m, simpler ones to 200 m, cards beyond (75 and 150 m, 45 and 90 m at the lower
+  settings). Trees throw the fine shadow as meshes and the two wider shadows as cards. `src/render/cards.ts`.
+- **The ground** is a ten-metre grid over the country, five over the home farm, finer over the yards and the brook.
+- **The crop from above.** Rows are kept wherever one is a pixel wide; past that a field keeps the line where each
+  pass of the planter met the next, a grain along its rows, and the lie of its ground (rank and dark in the low
+  places, thin and pale on the knolls, held back under the woods). Bare ground shows the harrow's bouts; planted
+  ground is ridged from the day it is planted.

@@ -100,17 +100,19 @@ const ROAM = (() => {
 
 // The opening shot. It starts high and far beyond the brook, looking into the last of the sun, so the size of the
 // country is the first thing seen: the whole farm small below, the woods, the back country and the hills. It comes down
-// over the swale and the farm road, and ends at a walker's height beside the road below the dooryard, the tractor
-// coming down it with its driver, the blossom of the middle field beyond and the sun low over the ridge.
+// over the swale, and ends a barn's height over the pasture below the dooryard: the farmstead, the tractor coming
+// down the lane with its driver, the rows of the middle field running away to the woods and the hills, the sun low
+// ahead. The title's card covers the left third of the window, so all of that is composed into the right two thirds;
+// and the camera stands clear of every tree and pole.
 // Each is the place looked at, how far off, and the way of looking.
 const TITLE: Pose[] = [
   { x: 40, z: -20, dist: 1650, yaw: -1.02, pitch: 0.27, fov: 31, tilt: 0.152 },
   { x: 120, z: 30, dist: 640, yaw: -1.0, pitch: 0.19, fov: 32, tilt: 0.1 },
-  { x: 180, z: 20, dist: 170, yaw: -0.95, pitch: 0.11, fov: 33, tilt: 0.07 },
-  { x: 207, z: 2, dist: 24, yaw: -0.72, pitch: 0.04, fov: 36, tilt: 0.045 },
+  { x: 200, z: -10, dist: 200, yaw: -1.04, pitch: 0.14, fov: 33, tilt: 0.085 },
+  { x: 208, z: -31, dist: 100, yaw: -1.1, pitch: 0.12, fov: 34, tilt: 0.07 },
 ]
 // The time of each of those along the move, 0..1: most of it is spent coming down the last of the way.
-const TITLE_AT = [0, 0.4, 0.74, 1]
+const TITLE_AT = [0, 0.4, 0.78, 1]
 
 // A smooth curve through numbers given at times: no corner anywhere (Catmull-Rom).
 function through(v: number[], at: number[], u: number): number {
@@ -169,17 +171,27 @@ export class CameraRig {
     return { x: clamp((vp.left - vp.right) / 2, -vp.w * 0.3, vp.w * 0.3), y: clamp((vp.top - vp.bottom) / 2, -vp.h * 0.3, vp.h * 0.3) }
   }
 
+  // How upright the window is, 0 (a screen) to 1 (a phone held upright). An upright window is narrow: with the
+  // screen's lens it would see one field and no sky, so it is given a wider lens, pointed a little lower, which puts
+  // the horizon in its top fifth and several fields below it.
+  private upright = 0
+  private shape(vp: Viewport): void {
+    this.upright = 1 - smooth(0.62, 1, vp.w / vp.h)
+  }
+
   // A view at a distance, with the pitch, lens and raise that go with it.
   at(p: { x: number; z: number; dist: number; yaw: number }): Pose {
-    return { x: p.x, z: p.z, dist: p.dist, yaw: p.yaw, pitch: pitchFor(p.dist), fov: fovFor(p.dist), tilt: tiltFor(p.dist) }
+    const n = this.upright
+    return { x: p.x, z: p.z, dist: p.dist, yaw: p.yaw, pitch: pitchFor(p.dist), fov: fovFor(p.dist) + 20 * n, tilt: tiltFor(p.dist) - 0.07 * n }
   }
 
   // A view given in part (by a tool): what is not given follows from the distance.
   complete(p: Partial<Pose>): Pose {
     const dist = p.dist ?? this.goal.dist
+    const std = this.at({ x: 0, z: 0, dist, yaw: 0 })
     return {
       x: p.x ?? this.goal.x, z: p.z ?? this.goal.z, dist, yaw: p.yaw ?? this.goal.yaw,
-      pitch: p.pitch ?? pitchFor(dist), fov: p.fov ?? fovFor(dist), tilt: p.tilt ?? (p.pitch === undefined ? tiltFor(dist) : Math.min(tiltFor(dist), Math.max(0, p.pitch - 0.04))),
+      pitch: p.pitch ?? std.pitch, fov: p.fov ?? std.fov, tilt: p.tilt ?? (p.pitch === undefined ? std.tilt : Math.min(std.tilt, Math.max(0, p.pitch - 0.04))),
     }
   }
 
@@ -187,6 +199,7 @@ export class CameraRig {
   // wide, tall: the share of that ground's width and height the marks are to take. at: how far down it their middle
   // sits (left out: as low as they will go, so the room to spare is given to the hills and the sky).
   private fit(marks: Vector3[], vp: Viewport, o: Fit): Pose {
+    this.shape(vp)
     const fw = Math.max(120, vp.w - vp.left - vp.right)
     const off = this.offsetFor(vp)
     let cx0 = 0, cz0 = 0
@@ -250,7 +263,7 @@ export class CameraRig {
     const f = FIELDS[i] ?? FIELDS[HOME_FIELD]
     const fw = Math.max(120, vp.w - vp.left - vp.right)
     // A third of what is free, and never less than three tenths of the window: under a sheet the field does not shrink away.
-    const wide = Math.min(0.62, Math.max(mix(0.8, 0.36, smooth(420, 1000, fw)), (0.3 * vp.w) / fw))
+    const wide = Math.min(0.62, Math.max(mix(0.56, 0.36, smooth(420, 1000, fw)), (0.3 * vp.w) / fw))
     return this.cached(`field${f.i}@${yaw.toFixed(2)}`, vp, () => this.fit(corners(f), vp, { start: 420, yaw, wide, tall: 0.42, at: 0.7 }))
   }
 
@@ -329,9 +342,11 @@ export class CameraRig {
     g.x = clamp(g.x, ROAM.x0, ROAM.x1)
     g.z = clamp(g.z, ROAM.z0, ROAM.z1)
     g.dist = clamp(g.dist, MIN_DIST, Math.max(this.county(vp).dist * 1.15, this.farm(vp).dist * 1.3, 1200))
-    g.pitch = pitchFor(g.dist)
-    g.fov = fovFor(g.dist)
-    g.tilt = tiltFor(g.dist)
+    this.shape(vp)
+    const std = this.at(g)
+    g.pitch = std.pitch
+    g.fov = std.fov
+    g.tilt = std.tilt
   }
 
   // Drag: the ground that was under the pointer stays under it.

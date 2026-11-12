@@ -97,8 +97,8 @@ await page.waitForTimeout(300)
 const did: string = await page.evaluate(() => (window as any).__county.app.campaign.season.worked.map((w: any) => `${w.unit}:${w.kind}`).join(' '))
 console.log(`${W}x${H}  ${worked}; the day's work: ${did}`)
 const views: [string, () => Promise<void>][] = [
-  ['field tier', async () => { await f('view', { frame: 'field', field: 2, x: 0.5, z: 0.3, dist: 552 }) }],
-  ['farm tier', async () => { await f('view', { frame: 'land', x: 9, z: 1, dist: 96 }) }],
+  ['field tier', async () => { await f('tier', 'field', 2) }],
+  ['farm tier', async () => { await f('tier', 'farm') }],
   ['yard tier, on the farmer', async () => { const t = await page.evaluate(() => (window as any).__countyField.info().tractor); await f('view', { frame: 'near', x: t.x, z: t.z, dist: 8, yaw: 0.9, pitch: 0.3 }) }],
 ]
 for (const [label, set] of views) {

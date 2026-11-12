@@ -109,7 +109,8 @@ float gustAt(vec2 xz) {
   // A front is some 70 m from the next along the wind and a couple of hundred long: three or so are on a field at once.
   float broad = textureLod(uNoise, q * vec2(0.0046, 0.0017), 0.0).b;
   float fine = textureLod(uNoise, q * vec2(0.021, 0.0093) + 0.37, 0.0).b;
-  return smoothstep(0.36, 0.74, broad * 0.72 + fine * 0.28);
+  // A front has a leading edge: the crop is seen to go pale along a line that travels, not to fade in and out.
+  return smoothstep(0.44, 0.62, broad * 0.72 + fine * 0.28);
 }
 `
 
@@ -126,7 +127,7 @@ export const CLOUD_TURN = 1150
 export const CLOUD_GLSL = /* glsl */ `
 // How high the bases of the cumulus stand, and how tall the tallest is.
 const float CLOUD_H = 780.0;
-const float CLOUD_T = 300.0;
+const float CLOUD_T = 620.0;
 float cloudField(vec2 p) {
   vec2 q = p * ${(1 / CLOUD_TURN).toFixed(6)} + uCloud.zw;
   float crowd = texture2D(uNoise, q * 0.19 + 0.17).b;
