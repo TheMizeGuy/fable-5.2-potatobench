@@ -798,6 +798,8 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
         rig.moveTo(rig.complete(q), true)
       },
       scale: { K, S, KV },
+      // Where a point of the ground is on the screen (for tools that draw over the picture).
+      screenOf: (x: number, z: number, up = 0) => screenAt(x, groundY(x, z) + up, z),
       // Hold the opening shot at a point of its move (0 the wide view, 1 the low one); below 0 lets it run.
       titleAt(u: number) { titleFixed = u },
       // For working on the light: set parts of the day's air by hand; they hold until the game next changes the day.

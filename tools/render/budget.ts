@@ -126,7 +126,9 @@ const gpuName = await page.evaluate(() => {
   const e = gl.getExtension('WEBGL_debug_renderer_info')
   return e ? gl.getParameter(e.UNMASKED_RENDERER_WEBGL) : 'unknown'
 })
+const loaded = await page.evaluate(() => { const f = (window as any).__countyField; return { first: f.stats().firstFrame, K: f.scale?.K } })
 console.log(`${W}x${H}  ${gpuName}`)
+console.log(`  K ${loaded.K}: the first frame ${(loaded.first / 1000).toFixed(2)} s after the page was asked for`)
 await page.evaluate(() => {
   const { app } = (window as any).__county
   for (const el of [...document.body.children]) if (el.id !== 'field' && el.tagName !== 'CANVAS' && el.tagName !== 'SCRIPT') (el as HTMLElement).style.display = 'none'

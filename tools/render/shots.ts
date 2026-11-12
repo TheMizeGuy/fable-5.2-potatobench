@@ -495,7 +495,7 @@ const farm = (page: Page, body: string): Promise<string> => page.evaluate(`(() =
 async function onUnit(page: Page, id: number, v: View, dx = 0, dz = 0): Promise<void> {
   await frames(page, 3)
   const u = await page.evaluate(id => (window as any).__countyField.info().units.find((x: any) => x.id === id), id)
-  if (u) await view(page, { ...v, x: u.x + dx, z: u.z + dz })
+  if (u) await view(page, { ...v, frame: 'near', x: u.x + dx * 2.2, z: u.z + dz * 2.2 })
   await frames(page, 6)
 }
 // The day's work held part way through, the people moving at their own pace.
@@ -562,6 +562,40 @@ const strips: Strip[] = [
 ]
 shots.push(...people)
 
+// ---- The blockout for choosing the size of the land: the same seven views whatever K is.
+// A July day with the sprayer out, people in three fields, and one hand with nothing to do standing in the dooryard.
+const working = async (page: Page) => { console.log('  ', await farm(page, SUMMER + `; hire(1)`)); await settle(page); console.log('  ', await farm(page, `until(['spray', 'scout'])`)); await hold(page, 0.5, 1200) }
+const sunday = async (page: Page) => { console.log('  ', await farm(page, SUNDAY.replace('run(170)', 'run(192)'))); await settle(page); await farm(page, `app.do({ t: 'day' })`); await hold(page, 0.5, 900) }
+// A day with nothing ordered and no machine shed: the tractor stands at the barn's corner and the two hands taken on
+// that morning wait in the dooryard.
+const yardDay = async (page: Page) => { console.log('  ', await farm(page, `start(); put('bunk'); hire(2); say(app.do({ t: 'begin' })); run(186); clear(); hire(2)`)); await settle(page); await farm(page, `app.do({ t: 'day' })`); await hold(page, 0.5, 900) }
+const K_SIZE: [number, number] = [1920, 1080]
+// A bar a hundred metres long on the picture, measured on the ground at the middle of what the camera looks at.
+async function scaleBar(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const f = (window as any).__countyField, c = f.rig.cur
+    const a = f.screenOf(c.x - 50, c.z + 0), b = f.screenOf(c.x + 50, c.z + 0)
+    const w = Math.hypot(b.x - a.x, b.y - a.y)
+    const bar = document.createElement('div')
+    bar.style.cssText = `position:fixed;left:60px;bottom:60px;width:${w}px;height:10px;background:#fff;border:2px solid #111;box-sizing:border-box;z-index:99`
+    const label = document.createElement('div')
+    label.textContent = `100 m   (K ${f.scale.K}: a field is ${Math.round(14.4 * f.scale.K)} by ${Math.round(10.88 * f.scale.K)} m)`
+    label.style.cssText = 'position:fixed;left:60px;bottom:76px;font:600 20px sans-serif;color:#fff;text-shadow:0 0 4px #000,0 0 2px #000;z-index:99'
+    document.body.append(bar, label)
+  })
+}
+shots.push(
+  { name: 'k1-play-july', size: K_SIZE, setup: working },
+  { name: 'k2-whole-farm', size: K_SIZE, setup: async page => { await working(page); await view(page, { frame: 'land', x: 9, z: 1, dist: 96 }); await frames(page, 10) } },
+  { name: 'k3-whole-map', size: K_SIZE, setup: async page => { await working(page); await page.evaluate(() => (window as any).__countyField.home()); await page.evaluate(() => (window as any).__countyField.rig.snap({ w: innerWidth, h: innerHeight, top: 56, right: 0, bottom: 150, left: 0 })); await frames(page, 10) } },
+  // From a standing person's eye north of the barn: its corner, the tractor, the hands in the dooryard, and the middle
+  // field running away behind them.
+  { name: 'k4-eye-level-barn', size: K_SIZE, insets: NONE, setup: async page => { await yardDay(page); await view(page, { frame: 'home', x: 18.8, z: -9.7, dist: 7.7, yaw: -2.21, pitch: 0.105, tilt: 0 }); await frames(page, 30) } },
+  { name: 'k5-house-door', size: K_SIZE, insets: NONE, setup: async page => { await sunday(page); await view(page, { frame: 'home', x: 22.3, z: 3.2, dist: 6.4, yaw: 0.72, pitch: 0.09, tilt: 0 }); await frames(page, 30) } },
+  { name: 'k6-title-last', size: K_SIZE, insets: NONE, setup: async page => { await page.evaluate(() => (window as any).__countyField.titleAt(1)); await title(page) } },
+  { name: 'k7-plan', size: K_SIZE, insets: NONE, setup: async page => { await working(page); await view(page, { frame: 'land', x: 9, z: 1, dist: 66, yaw: 0, pitch: 1.5, tilt: 0, fov: 40 }); await frames(page, 10); await scaleBar(page) } },
+)
+
 const browser = await chromium.launch({
   args: flat ? ['--disable-webgl', '--disable-3d-apis'] : soft ? ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] : [process.platform === 'win32' ? '--use-angle=d3d11' : '--use-angle=metal', '--ignore-gpu-blocklist', '--enable-gpu'],
 })
@@ -606,7 +640,7 @@ for (const shot of shots) {
     const f = (window as any).__countyField
     const anchors = Array.from({ length: (f.info().held ?? []).length || 18 }, (_, i) => f.anchor(i))
     const s = f.stats ? f.stats() : {}
-    return { ...f.info(), anchors: anchors.map((a: any) => (a.visible ? `${Math.round(a.x)},${Math.round(a.y)}` : 'off')).join(' '), triangles: s.triangles, calls: s.calls, fps: s.fps }
+    return { K: f.scale?.K, ...f.info(), anchors: anchors.map((a: any) => (a.visible ? `${Math.round(a.x)},${Math.round(a.y)}` : 'off')).join(' '), triangles: s.triangles, calls: s.calls, fps: s.fps }
   })
   console.log(path, JSON.stringify(info))
   await page.close()
