@@ -174,3 +174,14 @@ people, the camera's tiers, far trees as impostors, the hill squares' edges, and
   pass of the planter met the next, a grain along its rows, and the lie of its ground (rank and dark in the low
   places, thin and pale on the knolls, held back under the woods). Bare ground shows the harrow's bouts; planted
   ground is ridged from the day it is planted.
+
+### Phase B, the land, third round
+
+- **Winter** (`src/render/snow.ts`). New snow lies thin and even and what stands on the ground shows through it;
+  deep snow buries that under drifts laid down the wind; going, it lies in the drifts' cores, the hollows and the
+  ditches. Trees take snow bough by bough; a bare hardwood is its twigs, drawn as lines close to and as a thin dark
+  mass from far off. Walls, lanes, the yard's trodden paths and the brook's open lead stand dark out of it.
+- **Tree shadows.** The two wide cascades are redrawn only when the sun or the ground they cover has moved; a wood
+  throws them from two cards in five, each half as wide again; none on the low setting (`shadows.ts`, `cards.ts`).
+- **Ways are benched into the slope**: level across the tread within 2 m, the ground cut and filled out to 8.5 m.
+- **Whole plants end by distance from the eye**, an arc across the field, over a band.
