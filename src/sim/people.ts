@@ -36,7 +36,7 @@ function person(id: number, kind: UnitKind, name: string, skills: Record<Skill, 
   return {
     id, kind, name, at: HOME_YARD, wage, job: -1, to: HOME_YARD, road: 0, paidTo: 0,
     skills: { ...skills }, xp: zeroSkills(), trait, tired: 0, mood: P.MOOD_START, ask, prio,
-    foreman: '', winter: 'off', winterField: -1, low: 0, rig: '', out: -1,
+    foreman: '', winter: 'off', winterField: -1, low: 0, rig: '', out: -1, rest: 'auto',
   }
 }
 
@@ -115,6 +115,14 @@ export function upgradePerson(u: Record<string, unknown>, seed: number, year: nu
   u.winterField ??= -1
   u.low ??= 0
   u.rig ??= ''
+  u.rest ??= 'auto'
+}
+
+// Whether a person takes today off: rests by themselves once worn out (unless told to work on), or was told to rest
+// until fresh.
+export function resting(u: Unit): boolean {
+  const mode = u.rest ?? 'auto'
+  return mode === 'now' || (mode === 'auto' && u.tired >= P.HURT_TIRED)
 }
 
 // Whether a person is laid up hurt today.

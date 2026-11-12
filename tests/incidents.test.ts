@@ -152,6 +152,8 @@ describe('a tractor breaking down', () => {
 
   // 2001, seed 3: the farmer alone, worn out, spraying every day until the day the draw falls under the chance.
   const base = S.createCampaign(world, { seed: 3, startYear: 2001 })
+  // The farmer is told to work on worn out, so the worn-out driver of these tests is at the wheel.
+  base.crew[0].rest = 'push'
   ok(base, { t: 'begin' })
   for (let g = 0; g < 400 && base.season!.day < S.dayIndex(2001, 6, 1); g++) tendDay(base, ['kill', 'dig'])
   ok(base, { t: 'sundays', off: false })
@@ -240,6 +242,7 @@ describe('someone hurt', () => {
     ok(c, { t: 'begin' })
     for (let g = 0; g < 400 && c.season!.day < S.dayIndex(2001, 6, 1); g++) tendDay(c, ['kill', 'dig'])
     ok(c, { t: 'sundays', off: false })
+    ok(c, { t: 'rest', unit: 0, mode: 'push' })
     // These tests give every order by hand.
     for (const r of S.routineInfo(c)) if (r.auto) ok(c, { t: 'routine', kind: r.kind, auto: false })
     // Felling the woodlot, worn out, until the day the draw falls under the chance (a day dry enough to work).
