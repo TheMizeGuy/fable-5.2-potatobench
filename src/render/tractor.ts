@@ -494,16 +494,23 @@ abstract class Machine {
     }
     if (speed <= 1.5) { this.trail = 0; return }
     this.trail += st.moved
-    const dust = Math.max(f.dust, st.working > 0 && (st.kind === 'plant' || st.kind === 'hill' || st.kind === 'dig') ? 0.3 + 0.3 * f.dust : 0) * (1 - f.mud)
+    const dust = Math.max(f.dust, st.working > 0 && (st.kind === 'plant' || st.kind === 'hill' || st.kind === 'dig') ? 0.5 + 0.3 * f.dust : 0) * (1 - f.mud)
     let guard = 0
-    while (this.trail > 5 && guard++ < 14) {
-      this.trail -= 5
+    // closer together at a working pace, when each puff is all there is to see of it
+    const every = speed < 12 ? 2.5 : 6
+    while (this.trail > every && guard++ < 14) {
+      this.trail -= every
+      if (speed >= 12 && r() < 0.5) {
+        // exhaust left standing along the way
+        this.at(sx, sy, sz, p0)
+        pt.emit(p0.x - fwd.x * this.trail, p0.y + 1 + r() * 2, p0.z - fwd.z * this.trail, 0, 0.6, 0, 0.9, 0.7, 2.5 + r() * 2, 0.3, 0.3, 0.32, 0.22, 0.6)
+      }
       if (dust < 0.06) continue
       // where the back wheels were that far back along the way it came
       const bx = this.x - fwd.x * (this.trail + 1.5), bz = this.z - fwd.z * (this.trail + 1.5)
       const soil = st.working > 0
-      pt.emit(bx + (r() - 0.5) * 1.6, this.y + 0.5, bz + (r() - 0.5) * 1.6, (r() - 0.5) * 0.5, 0.5 + r() * 0.5, (r() - 0.5) * 0.5, 0.8 + r() * 0.5, 0.9 + r() * 0.5, 5 + r() * 5,
-        soil ? 0.5 : 0.64, soil ? 0.39 : 0.53, soil ? 0.3 : 0.42, 0.42 * Math.min(1, dust * 1.4), 0.55)
+      pt.emit(bx + (r() - 0.5) * 1.6, this.y + 0.9, bz + (r() - 0.5) * 1.6, (r() - 0.5) * 0.5, 0.6 + r() * 0.6, (r() - 0.5) * 0.5, 1.6 + r() * 0.9, 1.3 + r() * 0.5, 7 + r() * 5,
+        soil ? 0.55 : 0.68, soil ? 0.43 : 0.57, soil ? 0.33 : 0.45, 0.5 * Math.min(1, dust * 1.4), 0.55)
     }
   }
 
@@ -660,9 +667,9 @@ export class Tractor extends Machine {
     while (this.wake > 4 && guard++ < 16) {
       this.wake -= 4
       const bx = -1.3 - this.wake / this.scale
-      if (st.kind === 'spray') for (const z of [-0.8, 0.8]) emit(bx, 0.5, z + (r() - 0.5) * 0.8, 0, 0.15, 0, 1.3 + r() * 0.6, 1.0, 4 + r() * 3.5, 0.9, 0.93, 0.95, 0.2, 0.95)
+      if (st.kind === 'spray') for (const z of [-0.9, 0.9]) emit(bx, 0.7, z + (r() - 0.5) * 0.8, 0, 0.2, 0, 2.0 + r() * 0.8, 1.3, 5 + r() * 4, 0.92, 0.95, 0.97, 0.26, 0.95)
       else if (st.kind === 'water') emit(bx, 0.9, (r() - 0.5) * 3, 0, 0.3, 0, 1.6, 1.1, 3 + r() * 2, 0.84, 0.89, 0.93, 0.2, 0.7)
-      else if (st.kind === 'kill') emit(bx, 0.4, (r() - 0.5) * 1.3, 0, 0.4, 0, 0.9, 0.7, 3 + r() * 2, 0.55, 0.56, 0.33, 0.3, 0.5)
+      else if (st.kind === 'kill') emit(bx, 0.6, (r() - 0.5) * 1.3, 0, 0.5, 0, 1.5, 1.0, 4 + r() * 3, 0.58, 0.58, 0.36, 0.34, 0.5)
     }
   }
 }

@@ -521,9 +521,10 @@ export class Crews {
     // With the clock stopped a day's work is literal: everyone goes on at the pace of a person or a machine.
     const cold = env.snow > 0.3
     this.cold = cold
-    const going = snap.mode === 'season' ? f.advancing || f.dayT < 1 : snap.mode !== 'title'
     const far = 0
     this.literal = snap.mode === 'season' && !f.advancing && f.pace > 0.5
+    // the work goes on while the clock runs, while the day is being played out, and (literal) until everyone is done
+    const going = snap.mode === 'season' ? f.advancing || f.dayT < 1 || (this.literal && this.actors.some(a => a.u < 1)) : snap.mode !== 'title'
     GRIME.value.set(0.52, 0.42, 0.31).lerp(V.set(0.2, 0.15, 0.11), clamp(env.wet * 1.4 - 0.3, 0, 1))
     const sf: StageFrame = { pr, particles: f.particles, dt: f.dt, time: f.time, s: big, snap, wind: env.wind, cold, still: f.reduced, going, stand: this.standOf }
     const mf: MachineFrame = {

@@ -564,7 +564,7 @@ shots.push(...people)
 // ---- The big land (phase B): people, machines and work from the field tier (three to five fields in frame), the farm
 // tier and the yard tier (the walk-in). `pins` stands a plain disc where the interface pins each person's face
 // (unitAnchor), so the frame shows what a player has to find them by.
-const FIELD_TIER = 46 * 12, FARM_TIER = 96
+const FIELD_TIER = 330, FARM_TIER = 96
 async function pinPeople(page: Page): Promise<void> {
   await page.evaluate(() => {
     const f = (window as any).__countyField
@@ -599,7 +599,8 @@ const reach = async (page: Page, scenario: string, then: string, at = 0.55, ms =
   await farm(page, scenario)
   await settle(page)
   console.log('  ', await farm(page, then))
-  await hold(page, at, ms)
+  // to that point of the day, and on from it at a person's and a machine's own pace (the clock is stopped)
+  await seek(page, at, ms, 1)
 }
 const big: Shot[] = [
   { name: 'b01-spring-field', size: [1920, 1080], setup: async page => { await reach(page, SPRING, `until(['plant', 'rocks', 'fell', 'build'])`); await fieldTier(page, 3, 0.2, 0.1); await frames(page, 12); await pinPeople(page) } },
@@ -607,7 +608,7 @@ const big: Shot[] = [
   { name: 'b03-spring-field-bare', size: [1920, 1080], setup: async page => { await reach(page, SPRING, `until(['plant', 'rocks', 'fell', 'build'])`); await fieldTier(page, 3, 0.2, 0.1); await frames(page, 12) } },
   ...KINDS.flatMap(([kind, scenario, then]): Shot[] => [
     { name: `b1-${kind}-field`, size: [1920, 1080], setup: async page => { await reach(page, scenario, then); const w = await did(page, kind); if (w.field >= 0) await fieldTier(page, w.field); else await view(page, { frame: 'home', x: 30, z: -6, dist: 120 }); await frames(page, 12) } },
-    { name: `b2-${kind}-yard`, setup: async page => { await reach(page, scenario, then); const w = await did(page, kind); await onUnit(page, w.unit, { dist: 8, yaw: 0.7, pitch: 0.32 }); await frames(page, 8) } },
+    { name: `b2-${kind}-yard`, setup: async page => { await reach(page, scenario, then); const w = await did(page, kind); await onUnit(page, w.unit, kind === 'fell' ? { dist: 9, yaw: 0, pitch: 0.42 } : { dist: 8, yaw: 0.7, pitch: 0.32 }, 0, kind === 'fell' ? -1.5 : 0); await frames(page, 8) } },
   ]),
   { name: 'b30-harvest-field', size: [1920, 1080], setup: async page => { await reach(page, HARVEST, `job('dig', 0, 0); job('dig', 2, 1); until(['dig']); until(['haul'], 3)`, 0.5, 3000); await fieldTier(page, 0, 0.5, 0.9); await frames(page, 12); await pinPeople(page) } },
   { name: 'b31-harvest-yard', setup: async page => { await reach(page, HARVEST, `job('dig', 0, 0); until(['dig']); until(['haul'], 4)`, 0.3, 3000); const w = await did(page, 'haul'); await onUnit(page, w.unit, { dist: 11, yaw: 2.2, pitch: 0.3 }); await frames(page, 8) } },
@@ -623,7 +624,7 @@ const dayStrip = (speed: number, n: number, gap: number): Strip => ({
   name: `t${speed}-day`, n, gap, setup: async page => {
     await farm(page, SPRING)
     await settle(page)
-    await fieldTier(page, 2, 0.5, 0.3)
+    await view(page, { frame: 'field', field: 2, x: 0.5, z: 0.3, dist: 260 })
     await frames(page, 10)
     if (speed > 0) await page.evaluate(sp => (window as any).__county.app.setSpeed(sp), speed)
     else { await farm(page, `app.do({ t: 'day' })`); await frames(page, 3) }
