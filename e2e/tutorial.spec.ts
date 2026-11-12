@@ -101,9 +101,52 @@ async function clear(page: Page, target: string): Promise<void> {
     .filter(r => r.width > 0 && r.height > 0), target)
   // In spring the slip sits in the catalogue itself, beside its own order blank.
   for (const o of others) if (!String(o.name).includes('catalogue')) expect(meets(sb, o), `the slip lies over ${o.name}`).toBe(false)
+  expect(await covers(page, target)).toEqual([])
 }
 
-test('a guided first year: offered on a new farm, taken, and followed to the first planting by what it says alone', async ({ page, isMobile }) => {
+// What the guide covers that it must not: the panel holding what it points at (the list, an open fold, a card), and,
+// under the pointing hand, any words, figure, face or control a player reads or presses.
+async function covers(page: Page, target: string): Promise<string[]> {
+  return page.evaluate(t => {
+    const out: string[] = []
+    const meet = (a: DOMRect, b: DOMRect) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top
+    const seen = (e: Element | null): e is HTMLElement => !!e && e instanceof HTMLElement && e.offsetParent !== null && !e.closest('.leaving, [hidden], .out')
+    const slip = document.querySelector<HTMLElement>('#ui [data-testid="guide-slip"]:not([hidden]):not(.gone)')
+    const tgt = t ? document.querySelector(`#ui [data-testid="${t}"]`) : null
+    const panel = tgt?.closest('.queue, .cat-open, .command, .person-card, .work, .telegram, .paper-layer .dialog') ?? null
+    if (seen(slip)) for (const e of [tgt, panel]) if (seen(e) && !slip.contains(e) && meet(slip.getBoundingClientRect(), e.getBoundingClientRect())) out.push(`the slip lies over ${e.dataset.testid ?? e.className}`)
+    const fist = document.querySelector<HTMLElement>('#ui [data-testid="guide-fist"]:not([hidden])')
+    if (seen(fist)) {
+      // Read from the elements themselves: the layers over the land let the pointer through.
+      const f = fist.getBoundingClientRect()
+      const busy = 'svg, img, button, a, input, label, .tag, .need, .pin, .portrait, .key, .t-figure'
+      const range = document.createRange()
+      for (const el of document.querySelectorAll<HTMLElement>('#ui *')) {
+        if (el.closest('.guide-layer, .leaving, [hidden], .gone, .sr')) continue
+        const boxes: DOMRect[] = []
+        if (el.matches(busy)) { if (!el.parentElement?.closest(busy)) boxes.push(el.getBoundingClientRect()) }
+        else for (const n of el.childNodes) if (n.nodeType === 3 && (n.nodeValue ?? '').trim()) { range.selectNodeContents(n); boxes.push(range.getBoundingClientRect()) }
+        for (const b of boxes) if (b.width > 0 && b.height > 0 && meet(f, b)) out.push(`the hand lies on ${el.dataset.testid ?? el.className ?? el.tagName}`)
+      }
+    }
+    return [...new Set(out)]
+  }, target)
+}
+
+// Bring the land closer: the wheel at a desk, two fingers spread on a phone.
+async function closer(page: Page, mobile: boolean): Promise<void> {
+  const p = await land(page, mobile ? 40 : 0)
+  if (mobile) {
+    await fingers(page, Array.from({ length: 13 }, (_, k) => [{ x: p.x - p.r * (0.4 + k * 0.05), y: p.y }, { x: p.x + p.r * (0.4 + k * 0.05), y: p.y }]))
+    return
+  }
+  await page.mouse.move(p.x, p.y)
+  for (let k = 0; k < 4; k++) { await page.mouse.wheel(0, -240); await page.waitForTimeout(60) }
+}
+
+const HOLDING = new Set(['watch', 'person', 'plant', 'rest', 'scout', 'hill', 'spray', 'sample', 'water', 'rogue', 'kill', 'dig', 'hand'])
+
+test('a guided first year: offered on a new farm, taken, and followed through the opening by what it says alone', async ({ page, isMobile }) => {
   test.setTimeout(900_000)
   const errors = watchErrors(page)
   await fresh(page)
@@ -116,25 +159,29 @@ test('a guided first year: offered on a new farm, taken, and followed to the fir
   await expect(offer).toHaveCount(0)
 
   const did: string[] = []
-  let planted = false
+  const passed = (id: string) => page.evaluate(i => (globalThis as unknown as { __countyGuide: { passed(id: string): boolean } }).__countyGuide.passed(i), id)
   const sown = () => page.evaluate(() => (globalThis as unknown as { __county: { app: { campaign: { season: { fields: { plantDay: number }[] } | null } } } }).__county.app.campaign.season?.fields.some(f => f.plantDay >= 0) ?? false)
-  for (let step = 0; step < 40 && !planted; step++) {
-    if (await sown()) { planted = true; break }
+  // The opening is followed to its end: the first planting watched and the field's card read.
+  const finished = async () => (await passed('card')) || ((await passed('field')) && (await sown()))
+  for (let step = 0; step < 60 && !(await finished()); step++) {
     // Each lesson is waited for as a player would: it is on the screen, or the days are running toward it. A later
     // telegram has no lesson of its own (the first one taught it): it is answered as that one was.
     await expect.poll(async () => {
       if (!(await slip(page)).id && (await look(page)).incidents) await page.locator('#ui [data-testid^="answer-"]').first().click().catch(() => {})
-      return (await sown()) ? 'sown' : (await slip(page)).id
+      return (await finished()) ? 'done' : (await slip(page)).id
     }, { timeout: 120_000, message: `after ${did.join(' ')}` }).not.toBe('')
-    if (await sown()) { planted = true; break }
+    if (await finished()) break
     const { id, target } = await slip(page)
     console.log(`${id} at ${(await look(page)).speed}×`)
-    // Between one lesson and the next, or under a paper a moment: look again.
     if (!id) continue
     if (did[did.length - 1] !== id) did.push(id)
     await clear(page, target)
-    // Where a field it points at is on the screen, the fist is beside it (beside a control inside a telegram or the
-    // catalogue on a phone there may be no clear place for it, and the slip's words do alone).
+    // A lesson that asks for a click on something the days move holds the clock, and says so.
+    if (HOLDING.has(id)) {
+      await expect.poll(async () => (await look(page)).paused, { message: `${id} holds the clock` }).toBe(true)
+      await expect(page.getByTestId('guide-held')).toBeVisible()
+    }
+    // Where a field it points at is on the screen, the fist is beside it.
     const there = /^(field|badge)-/.test(target) && await page.locator(`#ui [data-testid="${target}"]`).first().isVisible().catch(() => false)
     if (there) await expect(page.getByTestId('guide-fist'), `${id}: the fist is on ${target}`).toBeVisible()
     switch (id) {
@@ -145,16 +192,17 @@ test('a guided first year: offered on a new farm, taken, and followed to the fir
         await expect(page.getByTestId('guide-held')).toBeVisible()
         expect((await look(page)).paused).toBe(true)
         break
-      case 'look': case 'turn':
+      case 'watch':
+        for (let k = 1; k <= 4 && (await slip(page)).id === id; k++) { await closer(page, isMobile); await page.waitForTimeout(1200) }
+        break
+      case 'turn':
         // As a player would, again and a little further if the land did not seem to move the first time.
         for (let k = 1; k <= 5 && (await slip(page)).id === id; k++) {
-          await (id === 'look' ? drag(page, isMobile, Math.min(k, 3)) : turn(page, isMobile, Math.min(k, 3)))
+          await turn(page, isMobile, Math.min(k, 3))
           await page.waitForTimeout(1500)
           console.log(`${id} ${k}: ${await page.evaluate(() => JSON.stringify((globalThis as unknown as { __countyGuide: { p: { facts: string[] } } }).__countyGuide.p.facts))}`)
         }
         break
-      case 'boards': case 'card': case 'person': case 'frost': case 'haul': case 'routine': case 'list':
-        await page.getByTestId('guide-noted').click(); break
       case 'almanac':
         // It says the cross closes it: the almanac is opened and put away again.
         await page.locator(`#ui [data-testid="${target}"]`).first().click()
@@ -176,38 +224,35 @@ test('a guided first year: offered on a new farm, taken, and followed to the fir
         await ((await marked.isVisible()) ? marked : page.locator('#ui .plate[data-testid^="field-"]:visible').first()).click()
         break
       }
-      case 'clock': case 'fast': case 'plant': case 'rest':
+      case 'clock': case 'plant': case 'rest':
         await page.locator(`#ui [data-testid="${target}"]`).first().click(); break
       case 'telegram':
         await page.locator('#ui [data-testid^="answer-"]').first().click(); break
-      case 'watch':
-        await expect.poll(sown, { timeout: 120_000 }).toBe(true)
-        planted = true
+      case 'stopped':
+        // It says Space goes on.
+        if (isMobile) await page.locator('#ui [data-testid="speed-toggle"], #ui [data-testid="speed-0"]').first().click()
+        else await page.keyboard.press('Space')
         break
       default: {
-        // Any other lesson the year brings first (a hand hired by telegram, a call): what its fist marks, or Noted.
+        // Any other lesson: what its fist marks, or Noted.
         const marked = target ? page.locator(`#ui [data-testid="${target}"]`).first() : null
         const book = target.startsWith('pin-') ? page.locator(`#ui [data-testid="unit-${target.slice(4)}"]`).first() : null
-        if (marked && await marked.isVisible()) await marked.click()
+        if (page.getByTestId('guide-noted') && await page.getByTestId('guide-noted').count() && !(marked && await marked.isVisible() && id === 'person')) await page.getByTestId('guide-noted').click()
+        else if (marked && await marked.isVisible()) await marked.click()
         else if (book && await book.isVisible()) await book.click()
-        else if (await page.getByTestId('guide-noted').count()) await page.getByTestId('guide-noted').click()
         // Out of reach for now: a player may skip it, as the slip offers.
         else await page.getByTestId('guide-skip').click()
       }
     }
-    if (await sown()) { planted = true; break }
-    await expect.poll(async () => (await sown()) ? '' : (await slip(page)).id, { timeout: 120_000, message: `${id} did not pass` }).not.toBe(id)
+    await expect.poll(async () => (await finished()) ? '' : (await slip(page)).id, { timeout: 120_000, message: `${id} did not pass` }).not.toBe(id)
   }
   console.log(`followed: ${did.join(' > ')}`)
-  expect(planted).toBe(true)
-  // The routine plants by itself once the soil is warm; at 3× the planting itself can take a moment, so seeing it is
-  // not required here, only that it happened.
-  for (const id of ['begin', 'look', 'turn', 'boards', 'almanac', 'field', 'person']) expect(did).toContain(id)
-  // The clock's lesson comes after the camera's, unless the player started the days first and it was passed over.
-  if (did.includes('clock')) expect(did.indexOf('look')).toBeLessThan(did.indexOf('clock'))
-  // Nothing was locked and the clock was never moved by the guide: it runs at the speed the player last chose.
-  const s = await look(page)
-  expect(s.paused || s.speed === 3).toBe(true)
+  expect(await sown()).toBe(true)
+  // The opening is only what is needed to watch the first planting: no tour before the first days run.
+  expect(did.slice(0, 3)).toEqual(['money', 'begin', 'clock'])
+  for (const id of ['watch', 'person']) expect(did).toContain(id)
+  expect(did.indexOf('person')).toBeLessThan(did.indexOf('turn') < 0 ? 999 : did.indexOf('turn'))
+  // Once the opening's held lessons pass, the clock goes on at the speed it had.
   await noSidewaysScroll(page)
   expect(errors, errors.join('\n')).toEqual([])
 })
@@ -235,44 +280,47 @@ test('refused, it shows nothing: Straight in, then a first season to its first p
   expect(errors, errors.join('\n')).toEqual([])
 })
 
-test('the progress survives a reload, and any lesson can be shown again from How to play and the menu', async ({ page, isMobile }) => {
+test('the progress survives a reload, and any lesson can be shown again from How to play and the menu', async ({ page }) => {
   test.setTimeout(300_000)
   const errors = watchErrors(page)
   await fresh(page)
   await page.getByTestId('play').click()
   await page.getByTestId('guide-accept').click()
+  await expect.poll(async () => (await slip(page)).id).toBe('money')
+  await page.getByTestId('guide-noted').click()
+  await expect.poll(async () => (await slip(page)).id, { timeout: 10_000 }).toBe('begin')
   await page.getByTestId('begin-season').click()
-  await expect.poll(async () => (await slip(page)).id).toBe('look')
-  for (let k = 1; k <= 3 && (await slip(page)).id === 'look'; k++) { await drag(page, isMobile, k); await page.waitForTimeout(1500) }
-  await expect.poll(async () => (await slip(page)).id).toBe('turn')
+  await expect.poll(async () => (await slip(page)).id, { timeout: 10_000 }).toBe('clock')
   await page.reload()
   await page.getByTestId('continue').click()
-  await expect.poll(async () => (await slip(page)).id).toBe('turn')
+  await expect.poll(async () => (await slip(page)).id, { timeout: 10_000 }).toBe('clock')
   // Skip one step, then put the whole guide away: nothing shows.
   await page.getByTestId('guide-skip').click()
-  await expect.poll(async () => (await slip(page)).id).toBe('boards')
-  await page.getByTestId('guide-stop').click()
-  await expect(page.locator('#ui [data-testid="guide-slip"]')).toHaveCount(0)
-  // From the menu: the guide's own paper, and one lesson again.
+  await expect.poll(async () => (await slip(page)).id).toBe('')
+  await expect.poll(() => page.evaluate(() => (globalThis as unknown as { __countyGuide: { passed(id: string): boolean } }).__countyGuide.passed('clock'))).toBe(true)
   await page.getByTestId('menu-open').first().click()
   await page.getByTestId('guide-open').click()
   await expect(page.getByTestId('guide')).toBeVisible()
-  await page.getByTestId('guide-again-look').click()
+  // The tick is drawn over the box: the label is what a player clicks.
+  await page.locator('#ui label.guide-on').click()
+  await expect(page.getByTestId('guide-on')).not.toBeChecked()
+  // From the menu: one lesson again, with the guide off.
+  await page.getByTestId('guide-again-clock').click()
   await expect(page.getByTestId('guide')).toHaveCount(0)
   await page.keyboard.press('Escape')
-  await expect.poll(async () => (await slip(page)).id).toBe('look')
-  for (let k = 1; k <= 3 && (await slip(page)).id === 'look'; k++) { await drag(page, isMobile, k); await page.waitForTimeout(1500) }
+  await expect.poll(async () => (await slip(page)).id, { timeout: 10_000 }).toBe('clock')
+  await page.locator(`#ui [data-testid="${(await slip(page)).target}"]`).first().click()
   await expect.poll(async () => (await slip(page)).id).toBe('')
-  // From How to play.
+  // From How to play: the guide back on.
+  await page.keyboard.press('Space')
   await page.getByTestId('menu-open').first().click()
   await page.getByTestId('how-open').click()
   await page.getByTestId('how-guide').click()
   await expect(page.getByTestId('guide')).toBeVisible()
-  await page.getByTestId('guide-on').check()
+  await page.locator('#ui label.guide-on').click()
+  await expect(page.getByTestId('guide-on')).toBeChecked()
   await page.getByTestId('guide-close').click()
-  await page.keyboard.press('Escape')
-  await page.keyboard.press('Escape')
-  await expect.poll(async () => (await slip(page)).id).toBe('boards')
+  await expect.poll(() => page.evaluate(() => (globalThis as unknown as { __countyGuide: { on: boolean } }).__countyGuide.on)).toBe(true)
   expect(errors, errors.join('\n')).toEqual([])
 })
 
@@ -290,8 +338,9 @@ test('the axe checks pass with the offer, a lesson and the guide\'s paper showin
   expect(await serious(), 'the offer').toEqual([])
   await page.getByTestId('guide-accept').click()
   expect(await serious(), 'the spring lesson').toEqual([])
+  await page.getByTestId('guide-noted').click()
   await page.getByTestId('begin-season').click()
-  await expect.poll(async () => (await slip(page)).id).toBe('look')
+  await expect.poll(async () => (await slip(page)).id, { timeout: 10_000 }).toBe('clock')
   expect(await serious(), 'a lesson on the land').toEqual([])
   await page.getByTestId('menu-open').first().click()
   await page.getByTestId('guide-open').click()

@@ -10,6 +10,8 @@ import { fist } from './system/parts.ts'
 import './system/tutorial.css'
 
 export const guide = new Guide(localStore())
+// The pause reason the guide's own hold leaves on the clock.
+const HOLD = 'The county agent has a note for you.'
 // For the browser tests and the capture tool, as window.__county is.
 ;(globalThis as Record<string, unknown>).__countyGuide = guide
 
@@ -115,7 +117,7 @@ function resolve(ctx: Ctx, root: HTMLElement, p: Point | null): { el: HTMLElemen
 // them. hard: what it must never cover (a clock, a command bar, a telegram, a paper, a test-dig tray, a person's card).
 function hardOnes(root: HTMLElement): Box[] {
   const hard: Box[] = []
-  for (const el of root.querySelectorAll('.clock, .command, .telegram, .dialog, [data-testid="paused"], .tray-paper, .person-card, .work, .pin-list-at, .tb-pop')) {
+  for (const el of root.querySelectorAll('.clock, .command, .telegram, .dialog, [data-testid="paused"], .tray-paper, .person-card, .work, .pin-list-at, .tb-pop, .queue, .cat-open')) {
     if (shown(el)) hard.push(box(el.getBoundingClientRect()))
   }
   return hard
@@ -163,6 +165,36 @@ function findPlace(w: number, hgt: number, avoid: Box[], over: { b: Box; cost: n
   return best
 }
 
+// Everything on the screen a player reads or presses: words, figures, faces, keys, tags, stamps and controls, as boxes.
+// Read from the elements themselves (the layers over the land let the pointer through, so asking the page what lies
+// at a point would find only the land), and only the boxes of the words, not the paragraphs round them.
+const BUSY = 'svg, img, button, a, input, label, .tag, .need, .pin, .portrait, .key, .t-figure'
+export function busyBoxes(root: HTMLElement): Box[] {
+  const out: Box[] = []
+  const range = document.createRange()
+  for (const el of root.querySelectorAll<HTMLElement>('*')) {
+    if (el.closest('.guide-layer, .leaving, [hidden], .gone, .sr')) continue
+    if (el.matches(BUSY)) {
+      if (el.parentElement?.closest(BUSY)) continue
+      const r = el.getBoundingClientRect()
+      if (r.width > 0 && r.height > 0) out.push(box(r))
+      continue
+    }
+    for (const n of el.childNodes) {
+      if (n.nodeType !== 3 || !(n.nodeValue ?? '').trim()) continue
+      range.selectNodeContents(n)
+      const r = range.getBoundingClientRect()
+      if (r.width > 0 && r.height > 0) out.push(box(r))
+    }
+  }
+  return out
+}
+
+// Whether a box lies over nothing a player reads or presses.
+export function bareAt(busy: Box[], b: Box): boolean {
+  return !busy.some(a => meets(b, a))
+}
+
 // ---------------------------------------------------------------- the slip
 
 function holdLine(): HTMLElement {
@@ -201,21 +233,34 @@ function offerBody(ctx: Ctx): HTMLElement[] {
 
 // ---------------------------------------------------------------- the camera, read from the scene's anchors
 
-interface Sig { cx: number; cy: number; spread: number; angle: number; ratio: number }
+// Where each parcel's anchor is on the screen, by parcel: two of these, taken a gesture apart, say how the view moved.
+type Sig = Map<number, { x: number; y: number }>
 
-function signature(ctx: Ctx): Sig | null {
-  const pts: { x: number; y: number }[] = []
-  for (let i = 0; i < S.HOME_FIELDS; i++) {
+function signature(ctx: Ctx): Sig {
+  const pts: Sig = new Map()
+  for (let i = 0; i < S.FIELD_COUNT; i++) {
     const a = ctx.view.fieldAnchor(i)
-    if (a.visible && Number.isFinite(a.x) && Number.isFinite(a.y) && Math.abs(a.x) < innerWidth * 6 && Math.abs(a.y) < innerHeight * 6) pts.push(a)
+    if (a.visible && Number.isFinite(a.x) && Number.isFinite(a.y) && Math.abs(a.x) < innerWidth * 20 && Math.abs(a.y) < innerHeight * 20) pts.set(i, { x: a.x, y: a.y })
   }
-  if (pts.length < 3) return null
-  const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length
-  const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length
-  const sx = Math.sqrt(pts.reduce((s, p) => s + (p.x - cx) ** 2, 0) / pts.length)
-  const sy = Math.sqrt(pts.reduce((s, p) => s + (p.y - cy) ** 2, 0) / pts.length)
-  const a = pts[0], b = pts[pts.length - 1]
-  return { cx, cy, spread: Math.hypot(sx, sy), angle: Math.atan2(b.y - a.y, b.x - a.x), ratio: sy / Math.max(1, sx) }
+  return pts
+}
+
+// Pan, zoom, turn and tip between two signatures, over the parcels seen in both; null with fewer than two.
+function moved(b: Sig, s: Sig): { pan: number; zoom: number; turn: number; tip: number } | null {
+  const ids = [...b.keys()].filter(i => s.has(i))
+  if (ids.length < 2) return null
+  const stat = (m: Sig) => {
+    const ps = ids.map(i => m.get(i)!)
+    const cx = ps.reduce((t, p) => t + p.x, 0) / ps.length, cy = ps.reduce((t, p) => t + p.y, 0) / ps.length
+    const sx = Math.sqrt(ps.reduce((t, p) => t + (p.x - cx) ** 2, 0) / ps.length), sy = Math.sqrt(ps.reduce((t, p) => t + (p.y - cy) ** 2, 0) / ps.length)
+    const a = ps[0], z = ps[ps.length - 1]
+    return { cx, cy, spread: Math.max(1, Math.hypot(sx, sy)), angle: Math.atan2(z.y - a.y, z.x - a.x), ratio: sy / Math.max(1, sx) }
+  }
+  const p = stat(b), q = stat(s)
+  return {
+    pan: Math.hypot(q.cx - p.cx, q.cy - p.cy), zoom: Math.abs(q.spread / p.spread - 1),
+    turn: Math.abs(Math.atan2(Math.sin(q.angle - p.angle), Math.cos(q.angle - p.angle))), tip: Math.abs(q.ratio / Math.max(0.01, p.ratio) - 1),
+  }
 }
 
 // ---------------------------------------------------------------- mounting
@@ -247,7 +292,10 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
   // 0: clear of every panel; 1: clear only of what it must never cover.
   let tier = 0
   let checked = 0
-  const cam: { base: Sig | null; until: number; kind: 'pan' | 'zoom' | 'turn' | 'two' } = { base: null, until: 0, kind: 'pan' }
+  let placedAt = 0
+  let busy: Box[] | null = null
+  let busyAt = 0
+  const cam: { base: Sig | null; until: number; kind: 'pan' | 'zoom' | 'turn' | 'two'; travel: number } = { base: null, until: 0, kind: 'pan', travel: 0 }
 
   function papers(): string[] {
     return [...root.querySelectorAll<HTMLElement>('.paper-layer > .dialog:not(.out)')].map(d => d.dataset.testid ?? 'paper')
@@ -258,6 +306,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     return {
       c: app.campaign, world: app.world, screen: app.screen, selection: app.selection, unit: app.unit, yard: app.yard, speed: app.speed,
       needs: app.campaign?.phase === 'season' ? app.needs().map(n => n.need) : [], paper: ps[ps.length - 1] ?? '', papers: ps, input,
+      stopped: app.pauseReason === HOLD ? '' : app.pauseReason,
     }
   }
 
@@ -268,21 +317,22 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
   // Q, E and the page keys turn or tip), and whether the land on screen really moved that way.
   function camMoved(): void {
     const b = cam.base
-    const s = signature(ctx)
-    if (!b || !s) return
-    const turn = Math.atan2(Math.sin(s.angle - b.angle), Math.cos(s.angle - b.angle))
+    if (!b) return
+    const m = moved(b, signature(ctx))
     const k = cam.kind
-    if (k === 'pan' && Math.hypot(s.cx - b.cx, s.cy - b.cy) > 40) guide.note('pan')
-    if ((k === 'zoom' || k === 'two') && Math.abs(s.spread / b.spread - 1) > 0.1) guide.note('zoom')
-    if ((k === 'turn' || k === 'two') && Math.abs(turn) > 0.1) guide.note('turn')
-    if (k === 'turn' && Math.abs(s.ratio / b.ratio - 1) > 0.08) guide.note('tip')
+    // The farm all but out of view, before or after: the gesture's own travel says it moved the view.
+    if (!m) { if (cam.travel >= 40) guide.note(k === 'two' ? 'turn' : k); return }
+    if (k === 'pan' && m.pan > 40) guide.note('pan')
+    if ((k === 'zoom' || k === 'two') && m.zoom > 0.1) guide.note('zoom')
+    if ((k === 'turn' || k === 'two') && m.turn > 0.1) guide.note('turn')
+    if (k === 'turn' && m.tip > 0.08) guide.note('tip')
   }
   const CAM_KEYS: Record<string, 'pan' | 'turn'> = { ArrowLeft: 'pan', ArrowRight: 'pan', ArrowUp: 'pan', ArrowDown: 'pan', q: 'turn', Q: 'turn', e: 'turn', E: 'turn', PageUp: 'turn', PageDown: 'turn' }
   const touches = new Set<number>()
   function gesture(on: boolean, kind: 'pan' | 'zoom' | 'turn' | 'two'): void {
-    if (app.screen !== 'season' || !(now?.id === 'look' || now?.id === 'turn')) { cam.base = null; return }
+    if (app.screen !== 'season' || !(now?.id === 'watch' || now?.id === 'turn')) { cam.base = null; return }
     if (on) {
-      if (!cam.base || (kind !== cam.kind && kind !== 'pan')) { cam.base = signature(ctx); cam.kind = kind }
+      if (!cam.base || (kind !== cam.kind && kind !== 'pan')) { cam.base = signature(ctx); cam.kind = kind; cam.travel = 0 }
       cam.until = performance.now() + 900
     } else cam.until = performance.now() + 400
   }
@@ -293,10 +343,11 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     if (p.pointerType === 'touch') { if (e.type === 'pointerdown') touches.add(p.pointerId); else if (e.type === 'pointerup') touches.delete(p.pointerId) }
     if (e.type === 'pointermove' && !p.buttons) return
     const kind = touches.size >= 2 ? 'two' : p.buttons & 2 || p.button === 2 ? 'turn' : 'pan'
+    if (e.type === 'pointermove') cam.travel += Math.hypot(p.movementX || 0, p.movementY || 0)
     gesture(e.type !== 'pointerup', kind)
   }
   const onLift = (e: PointerEvent) => touches.delete(e.pointerId)
-  const onCamKey = (e: KeyboardEvent) => { const k = CAM_KEYS[e.key]; if (k) gesture(e.type === 'keydown', k) }
+  const onCamKey = (e: KeyboardEvent) => { const k = CAM_KEYS[e.key]; if (k) { if (e.type === 'keydown') cam.travel += 20; gesture(e.type === 'keydown', k) } }
   for (const t of ['pointerdown', 'pointermove', 'pointerup', 'wheel']) document.addEventListener(t, onCanvas, { capture: true, passive: true })
   document.addEventListener('pointercancel', onLift, true)
   document.addEventListener('keydown', onCamKey, true)
@@ -315,17 +366,60 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     if (shown(root.querySelector('[data-testid="work-grid"]'))) guide.note('open:work-grid')
   }
 
+  // 20: a lesson that asks for a click on something the days move holds the clock while it shows, and lets it go on at
+  // the speed it had once it passes. A player who starts the clock themselves is not stopped again for that lesson.
+  let holding: { id: string; speed: number } | null = null
+  const overridden = new Set<string>()
+  function hold(): void {
+    const want = now && now.holds && app.screen === 'season' && !overridden.has(now.id) ? now.id : ''
+    if (holding && app.speed > 0) { overridden.add(holding.id); holding = null }
+    if (want && !holding) {
+      // Already stopped (by the player, or a question): it stays so, and the player starting it again is their call.
+      holding = { id: want, speed: app.speed }
+      if (app.speed > 0) { app.setSpeed(0); app.pauseReason = HOLD; ctx.dirty() }
+    } else if (want && holding) holding.id = want
+    else if (!want && holding && !resting) {
+      const back = holding.speed
+      holding = null
+      if (back > 0 && app.speed === 0 && app.pauseReason === HOLD) app.setSpeed(back as 1 | 2 | 3)
+    }
+  }
+
+  // 22: one lesson at a time and never a step ahead of the click. After one passes, the next waits a moment, and waits
+  // while a panel its click opened (a catalogue fold, a paper, a person's card, the grid) is still open.
+  let lastId = ''
+  let restUntil = 0
+  let waitFor: string[] = []
+  let resting = false
+  const PANELS = ['.cat-open', '.paper-layer > .dialog:not(.out)', '.person-card:not([hidden])', '.work:not([hidden])']
+  const panelsOpen = () => PANELS.filter(sel => !!root.querySelector(sel))
+  function paced(x: Lesson | null): Lesson | null {
+    const t = performance.now()
+    resting = false
+    if (x?.id !== lastId) {
+      if (lastId && guide.passed(lastId)) { restUntil = t + 1200; waitFor = panelsOpen() }
+      lastId = x?.id ?? ''
+    }
+    if (!x || x.urgent || x.paper) return x
+    waitFor = waitFor.filter(sel => !!root.querySelector(sel))
+    resting = t < restUntil || waitFor.length > 0
+    if (resting) { stale = true; return null }
+    return x
+  }
+
   function render(): void {
     const c = app.campaign
     // Started with the offer unanswered: straight in.
     if (c && app.screen === 'season' && !guide.p.offered && guide.p.offerSeed === c.seed) guide.refuse()
     if (app.screen === 'plan') notePlan()
     if (app.screen === 'season') noteOpen()
+    if (shown(root.querySelector('#raise-list'))) guide.note('fold:raise')
     const l = lookNow()
     offer = guide.offerFor(c, app.screen)
-    now = offer ? null : guide.showing(l)
+    now = offer ? null : paced(guide.showing(l))
+    hold()
     const docked = app.screen === 'plan'
-    const held = !!now && app.screen === 'season' && guide.holdsClock(c) && app.speed === 0
+    const held = !!now && app.screen === 'season' && app.speed === 0 && (guide.holdsClock(c) || app.pauseReason === HOLD || !!now?.holds)
     const p = now?.point?.(l) ?? null
     const t = resolve(ctx, root, p)
     target = t.id
@@ -374,9 +468,12 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
       const docked = slot?.isConnected ? slot.querySelector('.guide')?.getBoundingClientRect() : undefined
       const inside = ([x, y]: [number, number, string]) => x >= 4 && y >= 4 && x + s <= innerWidth - 4 && y + s <= innerHeight - 4
       const free = ([x, y]: [number, number, string]) => !docked || !meets({ left: x, top: y, right: x + s, bottom: y + s }, box(docked))
-      // Never over another control it would hide: a clock, a command bar, a paper.
+      // Never over another control it would hide (a clock, a command bar, a paper), nor over anything to be read.
       const hard = [...hardOnes(root), ...[...root.querySelectorAll('.goal')].filter(shown).map(e => box(e.getBoundingClientRect()))]
-      const clear = ([x, y]: [number, number, string]) => !hard.some(a => meets({ left: x, top: y, right: x + s, bottom: y + s }, a))
+      const t0 = performance.now()
+      if (!busy || t0 - busyAt > 250) { busy = busyBoxes(root); busyAt = t0 }
+      const words = busy
+      const clear = ([x, y]: [number, number, string]) => !hard.some(a => meets({ left: x, top: y, right: x + s, bottom: y + s }, a)) && bareAt(words, pad({ left: x, top: y, right: x + s, bottom: y + s }, 2))
       // And off the field tags where it can be, so the name of what it points at stays readable.
       const tags = [...root.querySelectorAll('.plate-layer .tag')].filter(shown).map(e => box(e.getBoundingClientRect()))
       const bare = ([x, y]: [number, number, string]) => !tags.some(a => meets({ left: x, top: y, right: x + s, bottom: y + s }, a))
@@ -404,7 +501,8 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     const w = slip.offsetWidth, ht = slip.offsetHeight
     const here = place ? { left: place.x, top: place.y, right: place.x + w, bottom: place.y + ht } : null
     // Stay put while the place is still clear; move only when something comes over it.
-    if (here && placedFor === key && !(tier === 0 ? [...hard, ...soft] : hard).some(a => meets(here, pad(a, 6)))) return
+    const retry = tier !== 0 && t0 - placedAt > 1000
+    if (here && placedFor === key && !retry && !(tier === 0 ? [...hard, ...soft] : hard).some(a => meets(here, pad(a, 6)))) return
     let found: { x: number; y: number } | null = null
     // First off every panel and every field tag; then off the panels; then off only what it must never cover.
     const tags = [...root.querySelectorAll('.plate-layer .tag')].filter(shown).map(e => box(e.getBoundingClientRect()))
@@ -417,6 +515,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     slip.classList.toggle('gone', !found)
     place = found
     placedFor = `${l.id}|${innerWidth}x${innerHeight}|${slip.offsetWidth}x${slip.offsetHeight}`
+    placedAt = t0
     if (found) slip.style.transform = `translate3d(${found.x}px, ${found.y}px, 0)`
   }
 
@@ -428,7 +527,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
         since = 0
         render()
       }
-      if (now && (now.id === 'look' || now.id === 'turn') && app.screen === 'season') watchCamera()
+      if (now && (now.id === 'watch' || now.id === 'turn') && app.screen === 'season') watchCamera()
       placeAll()
     },
     dispose() {
