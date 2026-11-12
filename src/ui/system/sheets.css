@@ -3,6 +3,18 @@
 
 /* A control a goal's "Show me" led to: ringed in the fist's ochre for a few seconds. */
 .btn.goal-ring:is(.sys *) { box-shadow: inset 0 0 0 1px var(--ink), 0 0 0 3px var(--st-ochre), 0 0 0 4px var(--ink); }
+.fold.goal-ring:is(.sys *) { box-shadow: inset 5px 0 0 var(--st-ochre); padding-left: 12px; background: var(--paper-2); }
+
+/* What moved the money, under the balance for a moment. */
+.topbar .balance .cash-moved { flex-basis: 100%; text-align: right; font: italic 400 13px/1.25 var(--f-text); color: var(--ink-2); animation: sh-fade var(--t-slip) var(--ease-out); }
+
+/* Out of the season the date leaf is one word ("November", "Year end"): the year goes under it, never over it. */
+.topbar .leaf.word { padding-right: 14px; }
+.topbar .leaf.word .year { position: static; display: block; margin-top: 6px; }
+.topbar[data-layout='narrow'] .leaf.word .year, .topbar[data-layout='short'] .leaf.word .year { display: none; }
+
+/* The splash's name gives way at once when the land is ready, so it never stands over the title's own name. */
+#splash.gone .splash-name { opacity: 0; transition: opacity 120ms linear; }
 /* The year end as things stand, under the balance: its reckoning opens leftward, in from the window's edge. */
 .topbar .outlook.term { display: block; }
 .topbar .outlook.term b { font-weight: 700; }

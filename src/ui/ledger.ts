@@ -12,7 +12,7 @@ import { soilWord, varietyName, yearName, yearShort, yearSpan, yearWord } from '
 import { goals, nextGoal } from '../game/goals.ts'
 import { startNewFarm } from './title.ts'
 import { openForeman } from './spring.ts'
-import { topBar } from './top.ts'
+import { light, topBar } from './top.ts'
 import { fist, stamp } from './system/parts.ts'
 import { portrait } from './system/people.ts'
 
@@ -331,7 +331,7 @@ function nextGoalSlip(ctx: Ctx, c: S.Campaign): HTMLElement | null {
   const body = [here || goal.now ? fist() : null, h('span', null, h('span', { class: 'b-next-w' }, 'Next: '), h('b', null, goal.title),
     h('span', { class: 't-caption b-how' }, here ? `${goal.how} Name one now.` : goal.now ? goal.how : `${goal.how} ${goal.when}.`))]
   return here
-    ? h('button', { class: 'next-goal sheet laid s-canary', type: 'button', testid: 'next-goal', onclick: () => openForeman(ctx) }, body)
+    ? h('button', { class: 'next-goal sheet laid s-canary', type: 'button', testid: 'next-goal', onclick: () => { openForeman(ctx); light('.cat-foreman .btn') } }, body)
     : h('p', { class: 'next-goal sheet laid s-canary', testid: 'next-goal' }, body)
 }
 

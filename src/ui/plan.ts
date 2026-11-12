@@ -13,6 +13,7 @@ import * as R from './rules.ts'
 import { cardHead, fieldCost, landCard, springFolds, tenureRow, tractCard, type Fold } from './spring.ts'
 import { fold } from './system/parts.ts'
 import { topBar } from './top.ts'
+import { nextGoal } from '../game/goals.ts'
 import { holdsClock, springSlot } from './tutorial.ts'
 
 function varietyTraits(v: S.Variety, c: S.Campaign, world: S.World): string[] {
@@ -88,7 +89,7 @@ function openMoney(ctx: Ctx): void {
   const nb = y ? app.world.neighbor[String(y.year)] : undefined
   const growing = y ? y.costs - y.wages - y.rent - y.land - y.penalties - y.storage - y.mortgage - y.works - y.building - y.packing : 0
   ctx.papers.open({
-    title: `The money, ${R.yearName(S.yearNow(c))}`,
+    title: `The money, ${R.yearName(c.year)}`,
     kicker: 'The order blank in full',
     testid: 'money',
     size: 'medium',
@@ -212,11 +213,24 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
     if (!held) app.setSpeed(1)
   }
 
+  // A fold opened or closed stays where it was under the pointer: the sheet scrolls by what moved above it, and when
+  // closing leaves too little below to scroll back, a spacer holds the rows still until the pointer leaves the sheet.
   function toggle(id: Fold): void {
+    const head = () => rows.querySelector<HTMLElement>(`[data-k="fold-${id}"]`)
+    const was = head()?.getBoundingClientRect().top
     open = open === id ? null : id
     ctx.dirty()
-    if (open) requestAnimationFrame(() => rows.querySelector<HTMLElement>(`[data-k="fold-${id}"]`)?.scrollIntoView({ block: 'nearest', behavior: ctx.reduced() ? 'auto' : 'smooth' }))
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const now = head()?.getBoundingClientRect().top
+      if (was === undefined || now === undefined) return
+      const shift = now - was
+      if (Math.abs(shift) < 1) return
+      const room = body.scrollHeight - body.clientHeight - body.scrollTop
+      if (shift > room) body.style.paddingBottom = `${Math.ceil(shift - room)}px`
+      body.scrollTop += shift
+    }))
   }
+  sheet.addEventListener('pointerleave', () => { if (body.style.paddingBottom) body.style.paddingBottom = '' })
 
   function plateModel(i: number): PlateModel | null {
     const c = app.campaign!
@@ -315,15 +329,19 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
     const phone = ctx.layout() === 'narrow'
     // On a phone the folds after the people stand as one row of buttons until one is opened (design/spring.phone.html).
     const later = phone ? folds.filter(f => f.id !== 'fields' && f.id !== 'people' && f.id !== open) : []
+    // The fold where the slip's goal is reached is ringed, and says so, so it is found without the slip.
+    const g = nextGoal(c)
+    const goalAt = g && g.now && !g.block ? goalFold[g.id] : undefined
     return [
       folds.filter(f => !later.includes(f)).map(f => {
         const on = open === f.id
-        return h('div', { class: 'cat-fold', k: `fold-${f.id}` },
-          fold({ icon: f.glyph, name: f.name, state: phone ? f.short ?? f.state : f.state, figure: f.figure, open: on, controls: on ? `fold-${f.id}` : undefined, testid: f.open, onclick: () => toggle(f.id) }),
+        const el = fold({ icon: f.glyph, name: f.name, state: goalAt === f.id && !on ? `${g!.title} here` : phone ? f.short ?? f.state : f.state, figure: f.figure, open: on, controls: on ? `fold-${f.id}` : undefined, testid: f.open, onclick: () => toggle(f.id) })
+        if (goalAt === f.id && !on) el.classList.add('goal-ring')
+        return h('div', { class: 'cat-fold', k: `fold-${f.id}` }, el,
           on ? h('div', { class: 'cat-open', id: `fold-${f.id}`, testid: f.testid }, f.body()) : null)
       }),
       later.length ? h('div', { class: 'fold more', role: 'group', 'aria-label': 'The other folds', k: 'fold-more' },
-        later.map(f => h('button', { class: 'btn', type: 'button', testid: f.open, 'aria-expanded': 'false', onclick: () => toggle(f.id) }, icon(f.glyph, 'i'), f.name))) : null,
+        later.map(f => h('button', { class: `btn${goalAt === f.id ? ' goal-ring' : ''}`, type: 'button', testid: f.open, 'aria-expanded': 'false', onclick: () => toggle(f.id) }, icon(f.glyph, 'i'), f.name))) : null,
     ]
   }
 
@@ -405,7 +423,7 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
       } else note = ''
       const state = [c.year, c.history.length, c.plans, c.fields.map(f => [f.tenure, f.cover]), c.seedStock.length, app.settings.units, layout]
       patch(mast, JSON.stringify([c.year, c.yearIdx]), () => drawMast(c))
-      patch(rows, JSON.stringify([...state, open, c.applicants.map(a => a.id), c.crew.map(u => [u.id, u.wage, u.foreman]), c.offers.map(x => x.id), c.contracts.map(k => k.id),
+      patch(rows, JSON.stringify([...state, open, nextGoal(c)?.id, c.applicants.map(a => a.id), c.crew.map(u => [u.id, u.wage, u.foreman]), c.offers.map(x => x.id), c.contracts.map(k => k.id),
         c.upgrades, c.mortgages.map(m => Math.round(m.owed)), c.sundaysOff, Math.round(c.cash), c.buildings.length]), () => drawRows(c))
       patch(foot, JSON.stringify([S.planCosts(c), Math.round(c.cash), c.mortgages.map(m => Math.round(m.owed)), app.settings.units]), () => drawFoot(c))
       el.style.setProperty('--foot-h', `${Math.round(foot.offsetHeight)}px`)

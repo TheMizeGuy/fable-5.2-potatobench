@@ -163,7 +163,7 @@ export function cellarScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
       patch(sheet, JSON.stringify(model), () => [
         h('header', { class: 'winter-head' },
           h('div', null,
-            h('p', { class: 't-label' }, `${month} · ${R.yearName(S.yearNow(c))} · `, term('The cellar months', 'the cellar months')),
+            h('p', { class: 't-label' }, `${month} · ${R.yearName(c.year)} · `, term('The cellar months', 'the cellar months')),
             h('h2', { class: 't-title', id: 'winter-h' }, 'The winter\'s work')),
           h('p', { class: 'num w-wages' }, wages ? [h('b', null, F.money(wages)), ' a month in wages'] : 'Nobody paid this winter')),
         h('div', { class: `w-body${c.crew.length <= 1 ? ' few' : ''}`, 'data-scroll': 'winter' },
@@ -174,6 +174,10 @@ export function cellarScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
             h('div', { class: 'sec-h' }, h('h2', { id: 'cellar-h' }, 'The crop in store'),
               h('span', { class: 't-caption num' }, `sold ${F.money(sales)} · storage ${F.money(c.yearStorage)} so far`)),
             houses(st),
+            // Said once where the button stands, for every lot that has one.
+            lots.some(l => !l.broke && Math.floor((l.grades.b + l.grades.no1) / S.SEED_CWT_PER_FIELD) >= 1)
+              ? h('p', { class: 't-caption c-seed-note', testid: 'seed-explained' }, term('Hold back seed', 'hold back seed'), `: keep some of a lot as next spring's seed. It is free to plant, where certified seed costs ${F.money(S.SEED_CWT_PER_FIELD * S.CERT_SEED_PER_CWT)} a field, but it carries this crop's virus.`)
+              : null,
             lots.length ? h('div', { class: 'lots' }, lots.map(l => lotCard(c, l, weights > 0 ? c.yearStorage * weight(l) / weights : 0)))
               : h('p', { class: 'quiet c-empty' }, 'The cellar is empty. Nothing is left to sell from this crop.'))),
         h('footer', { class: 'winter-next' },
