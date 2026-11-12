@@ -18,20 +18,25 @@ function money(n: number): string {
   return `$${Math.round(n).toLocaleString('en-US')}`
 }
 
+// Answers the ticket on screen. The next field's ticket can open the moment this one closes, so what is waited for is
+// this lot's own choice going, not every ticket.
 async function answerTicket(page: Page, store: boolean): Promise<void> {
   const ticket = page.getByTestId('weighin')
+  const keep = ticket.locator('[data-testid^="lot-keep-"]')
+  const id = (await keep.first().getAttribute('data-testid'))?.replace('lot-keep-', '') ?? ''
+  const mine = page.getByTestId(`lot-keep-${id}`)
   // A crop a contract wants goes to the buyer first; what is left is sold or stored.
-  const deliver = ticket.locator('[data-testid^="lot-deliver-"]')
+  const deliver = ticket.getByTestId(`lot-deliver-${id}`)
   if (await deliver.count()) {
     await deliver.click()
     await page.waitForTimeout(200)
-    if (!(await ticket.count())) return
+    if (!(await mine.count())) return
   }
-  const sell = ticket.locator('[data-testid^="lot-sell-"]')
+  const sell = ticket.getByTestId(`lot-sell-${id}`)
   const advised = await ticket.locator('.choice-advice').count()
   if ((await sell.count()) && (advised || !store)) await sell.click()
-  else await ticket.locator('[data-testid^="lot-keep-"]').click()
-  await expect(ticket).toHaveCount(0)
+  else await mine.click()
+  await expect(mine).toHaveCount(0)
 }
 
 // Answers the first open incident: on its card where the instruments show one (a button named for the choice), and
