@@ -71,13 +71,13 @@ export class Wind {
   }
 
   // `leaf` is how much leaf the hardwoods carry and `dry` how much of it has turned: bare woods hardly rustle,
-  // June's hush, and October's rattle most of all.
+  // June's hush, and October's rattle most of all, though a gale's own roar covers it.
   set(wind: number, cold: number, leaf: number, dry: number, t: number): void {
     this.amount = wind
     const v = windLevel(wind)
     this.level.to(0.7 * v, t, 2)
     this.sighLevel.to(v, t, 2)
-    this.leafLevel.to(0.12 * v * wind * (0.4 + 0.6 * leaf + 0.8 * dry), t, 2)
+    this.leafLevel.to(0.12 * v * wind * (0.4 + 0.6 * leaf + 0.8 * dry * (1 - 0.7 * wind)), t, 2)
     this.cold.to(0.04 * cold, t, 2.5)
   }
 
@@ -689,7 +689,7 @@ export function song(rig: Rig, out: AudioNode, t: number, s: Singer): number {
       for (let k = 0; k < n; k++) {
         const d = about(0.17, 0.08)
         const g = ctx.createGain()
-        swell(g.gain, at, d, 0.3, 0.018, 0.03)
+        swell(g.gain, at, d, 0.24, 0.018, 0.03)
         const stack = ctx.createOscillator()
         stack.type = 'sawtooth'
         stack.frequency.value = p / 8.5

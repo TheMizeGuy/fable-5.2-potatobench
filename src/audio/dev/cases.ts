@@ -184,7 +184,7 @@ const YEAR_END: SceneInput = { place: 'yearEnd', month: 4, weather: null }
 // The four that must be told apart with the eyes shut.
 const SPRING = season(4, 3, 0, 'clear', 12, 20)
 const HIGH_SUMMER = season(7, 2.5, 0, 'clear', 20, 5)
-const HARVEST = season(9, 5, 0, 'cloud', 9, 5)
+const HARVEST = season(9, 4.2, 0, 'cloud', 9, 5)
 const DEEP_WINTER: SceneInput = { place: 'cellar', month: 0, weather: null }
 
 // How loud a cue of each rank may be at its loudest 400 ms, in LUFS at the default volume.
@@ -263,26 +263,26 @@ export const CASES: Case[] = [
   bed('bed-august-evening', 'bed: August, fair and warm, crickets', 24, [-45, -35], season(7, 2.5, 0, 'clear', 19), null),
   bed('bed-september', 'bed: late September, fair', 24, [-43, -33], SEPTEMBER, null, [0, 0], { ticks: true }),
   bed('bed-september-work', 'bed: late September, digging', 24, [-38, -31], SEPTEMBER, null, [1, 1], { ticks: true }),
-  bed('bed-october-gale', 'bed: October gale, 11 m/s', 48, [-32, -26], season(9, 11, 0, 'overcast', 6), null, [0, 0], { ticks: true }),
+  bed('bed-october-gale', 'bed: October gale, 11 m/s', 48, [-32, -25], season(9, 11, 0, 'overcast', 6), null, [0, 0], { ticks: true }),
   bed('bed-storm-work', 'bed: storm, 45 mm, tractor working (the loudest bed)', 48, [-29, -22], STORM, null, [1, 1], { ticks: true }),
-  bed('bed-cellar-november', 'bed: cellar, November', 48, [-50, -40], CELLAR, null, [0, 0], { ticks: true }),
-  bed('bed-cellar-january', 'bed: cellar, January', 48, [-50, -40], DEEP_WINTER, null, [0, 0], { ticks: true }),
+  bed('bed-cellar-november', 'bed: cellar, November', 48, [-50, -38], CELLAR, null, [0, 0], { ticks: true }),
+  bed('bed-cellar-january', 'bed: cellar, January', 48, [-50, -38], DEEP_WINTER, null, [0, 0], { ticks: true }),
   bed('bed-year-end', 'bed: ledger and year end', 24, [-48, -35], YEAR_END, null),
   bed('bed-may-rain', 'bed: mild wet May day, the peepers at their height', 30, [-43, -33], season(4, 2.5, 4, 'rain', 11, 10), null, [0, 0], { ticks: true }),
   bed('bed-july', 'bed: July, fair, the potatoes in blossom', 40, [-45, -33], season(6, 2.5, 0, 'clear', 21, 15), null),
-  bed('bed-snow', 'bed: November, snow on the dug fields', 40, [-50, -36], season(10, 4, 3, 'snow', -4, 5), null, [0, 0], { ticks: true }),
+  bed('bed-snow', 'bed: November, snow on the dug fields', 40, [-50, -35], season(10, 4, 3, 'snow', -4, 5), null, [0, 0], { ticks: true }),
   {
     id: 'bed-work-far', name: 'bed: June, fair, every kind of work going on somewhere, none picked', seconds: 40, kind: 'bed', solo: false, song: true, ticks: true, plan: { lufs: [-43, -33] },
     play(rig, secs) { drive(rig, secs, [[0, { input: JUNE, work: ALL_FAR }]]) },
   },
 
-  bed('season-spring', 'season: spring, a fair morning in late May', 60, [-43, -33], SPRING, null, [0, 0], { season: 'spring' }),
-  bed('season-summer', 'season: high summer, a warm day in early August', 60, [-45, -35], HIGH_SUMMER, null, [0, 0], { season: 'high summer' }),
-  bed('season-harvest', 'season: harvest, a grey day in early October', 60, [-43, -33], HARVEST, null, [0, 0], { season: 'harvest', ticks: true }),
-  bed('season-winter', 'season: deep winter, January', 60, [-50, -40], DEEP_WINTER, null, [0, 0], { season: 'deep winter', ticks: true }),
+  bed('season-spring', 'season: spring, a fair morning in late May', 90, [-43, -33], SPRING, null, [0, 0], { season: 'spring' }),
+  bed('season-summer', 'season: high summer, a warm day in early August', 90, [-45, -35], HIGH_SUMMER, null, [0, 0], { season: 'high summer' }),
+  bed('season-harvest', 'season: harvest, a grey day in early October', 90, [-43, -33], HARVEST, null, [0, 0], { season: 'harvest', ticks: true }),
+  bed('season-winter', 'season: deep winter, January', 90, [-50, -38], DEEP_WINTER, null, [0, 0], { season: 'deep winter', ticks: true }),
 
   bed('wind-breeze', 'wind: breeze, 3.2 m/s, 90 s', 90, [-48, -38], season(5, 3.2, 0, 'overcast', 15), ['wind'], [0, 0], { features: ['gusts'] }),
-  bed('wind-gale', 'wind: gale, 11 m/s, October', 48, [-32, -26], season(9, 11, 0, 'overcast', 6), ['wind'], [0, 0], { features: ['gusts'] }),
+  bed('wind-gale', 'wind: gale, 11 m/s, October', 48, [-32, -25], season(9, 11, 0, 'overcast', 6), ['wind'], [0, 0], { features: ['gusts'] }),
   ridge('wind-ridge-breeze', 'wind: the spruce ridge alone, 3.2 m/s', 3.2),
   ridge('wind-ridge-gale', 'wind: the spruce ridge alone, 7.5 m/s and over', 11),
   {
@@ -310,7 +310,7 @@ export const CASES: Case[] = [
     },
   },
 
-  voice('brook', 'spring: the brook in flood', 30, { lufs: [-52, -40] }, (rig, secs) => {
+  voice('brook', 'spring: the brook in flood', 30, { lufs: [-48, -36] }, (rig, secs) => {
     const b = new Brook(rig)
     b.set(1, 0)
     steps(secs, (from, to) => b.schedule(from, to))
@@ -340,7 +340,7 @@ export const CASES: Case[] = [
     c.schedule(0, 1)
     void secs
   }, { band: [300, 4000], features: ['blows'] }),
-  voice('leaves', 'harvest: dry leaves blowing, wind 5 m/s', 30, { lufs: [-56, -42] }, (rig, secs) => {
+  voice('leaves', 'harvest: dry leaves blowing, wind 5 m/s', 30, { lufs: [-50, -38] }, (rig, secs) => {
     const l = new Leaves(rig)
     l.set(1, 0.62, 0)
     void secs

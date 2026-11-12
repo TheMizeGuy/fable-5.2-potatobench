@@ -124,7 +124,7 @@ export class Work {
         sawStroke(rig, s.out, s.next, dur, push ? 0.28 : 0.2, push ? 1150 : 950, 50)
         s.next += dur + 0.07
       } else {
-        s.next = treeFall(rig, s.out, s.next + 0.6, 0.6) + 1.5
+        s.next = treeFall(rig, s.out, s.next + 0.6, 0.45) + 1.5
       }
     }
   }

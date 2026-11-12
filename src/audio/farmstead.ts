@@ -29,8 +29,8 @@ const BAR: Mode[] = [[1, 1, 0.8], [2, 0.3, 0.45], [3.01, 0.1, 0.22], [4.1, 0.04,
 
 // A small piece of iron against another: a latch, a pawl, a link of chain.
 function click(rig: Rig, out: AudioNode, t: number, hz: number, amp: number, tc: number): void {
-  ring(rig, out, t, amp, [[1, 1, tc], [1.83, 0.6, tc * 0.7], [2.9, 0.35, tc * 0.5]], hz, 0.0006)
-  burst(rig, out, t, amp * 2, 0.0005, 0.002, filter(rig.ctx, 'highpass', 3000))
+  ring(rig, out, t, amp, [[1, 1, tc], [1.83, 0.6, tc * 0.7], [2.9, 0.35, tc * 0.5]], hz, 0.001)
+  burst(rig, out, t, amp * 1.4, 0.001, 0.005, filter(rig.ctx, 'highpass', 3000))
 }
 
 // Wood fibre letting go.
@@ -43,7 +43,7 @@ function crack(rig: Rig, out: AudioNode, t: number, amp: number, hz = 1500): voi
 export function chop(rig: Rig, out: AudioNode, t: number, amp: number): void {
   const ctx = rig.ctx
   const tune = vary(rig, 1, 0.06)
-  burst(rig, out, t, 0.9 * amp, 0.001, 0.007, filter(ctx, 'bandpass', vary(rig, 2600, 0.15), 0.8), filter(ctx, 'lowpass', 6000))
+  burst(rig, out, t, 0.6 * amp, 0.001, 0.007, filter(ctx, 'bandpass', vary(rig, 2600, 0.15), 0.8), filter(ctx, 'lowpass', 6000))
   tone(rig, out, t, 150, 0.25 * amp, 0.003, 0.03, 85, 0.03)
   ring(rig, out, t, 0.3 * amp, TRUNK, tune)
   const back = t + vary(rig, 0.23, 0.12)
@@ -117,8 +117,8 @@ export function treeFall(rig: Rig, out: AudioNode, t: number, amp: number): numb
 export function stone(rig: Rig, out: AudioNode, t: number, amp: number, onStone: boolean): void {
   const ctx = rig.ctx
   if (onStone) {
-    ring(rig, out, t, 0.14 * amp, [[1, 1, 0.006], [1.47, 0.7, 0.005], [2.2, 0.5, 0.004], [3.1, 0.3, 0.003]], vary(rig, 2100, 0.25), 0.0005)
-    burst(rig, out, t, 0.3 * amp, 0.0005, 0.003, filter(ctx, 'highpass', 1800), filter(ctx, 'lowpass', 9000))
+    ring(rig, out, t, 0.14 * amp, [[1, 1, 0.006], [1.47, 0.7, 0.005], [2.2, 0.5, 0.004], [3.1, 0.3, 0.003]], vary(rig, 2100, 0.25), 0.001)
+    burst(rig, out, t, 0.3 * amp, 0.001, 0.003, filter(ctx, 'highpass', 1800), filter(ctx, 'lowpass', 9000))
     ring(rig, out, t, 0.12 * amp, BOAT, vary(rig, 1, 0.05))
   } else {
     ring(rig, out, t, 0.32 * amp, BOAT, vary(rig, 1, 0.06), 0.003)
@@ -208,7 +208,7 @@ function latch(rig: Rig, out: AudioNode, t: number, amp: number): void {
 
 function rap(rig: Rig, out: AudioNode, t: number, amp: number): void {
   ring(rig, out, t, 0.2 * amp, DOOR, vary(rig, 1, 0.02))
-  burst(rig, out, t, 0.3 * amp, 0.001, 0.006, filter(rig.ctx, 'bandpass', 1700, 1), filter(rig.ctx, 'lowpass', 4000))
+  burst(rig, out, t, 0.24 * amp, 0.001, 0.006, filter(rig.ctx, 'bandpass', 1700, 1), filter(rig.ctx, 'lowpass', 4000))
 }
 
 function stampDown(rig: Rig, out: AudioNode, t: number, amp: number): void {
@@ -328,8 +328,8 @@ export function pickYard(rig: Rig, t: number, yard: number): void {
 export function hired(rig: Rig, t: number): number {
   const out = voiceOut(rig, vary(rig, -0.2, 0.3), 0.2)
   latch(rig, out, t, 0.07)
-  step(rig, out, t + 0.26, 0.56)
-  step(rig, out, t + 0.26 + vary(rig, 0.3, 0.1), 0.75)
+  step(rig, out, t + 0.26, 0.48)
+  step(rig, out, t + 0.26 + vary(rig, 0.3, 0.1), 0.64)
   return t + 0.9
 }
 
@@ -337,12 +337,12 @@ export function hired(rig: Rig, t: number): number {
 export function left(rig: Rig, t: number): number {
   const ctx = rig.ctx
   const out = voiceOut(rig, vary(rig, 0.2, 0.3), 0.3)
-  step(rig, out, t, 0.45)
-  step(rig, out, t + vary(rig, 0.32, 0.1), 0.32)
+  step(rig, out, t, 0.38)
+  step(rig, out, t + vary(rig, 0.32, 0.1), 0.27)
   const d = t + 0.72
-  tone(rig, out, d, 110, 0.2, 0.005, 0.07, 60, 0.06)
-  ring(rig, out, d, 0.14, DOOR, 0.97, 0.003)
-  burst(rig, out, d, 0.26, 0.003, 0.02, filter(ctx, 'lowpass', 1500))
+  tone(rig, out, d, 110, 0.17, 0.005, 0.07, 60, 0.06)
+  ring(rig, out, d, 0.12, DOOR, 0.97, 0.003)
+  burst(rig, out, d, 0.22, 0.003, 0.02, filter(ctx, 'lowpass', 1500))
   click(rig, out, d + 0.03, 1650, 0.05, 0.02)
   click(rig, out, d + 0.075, 1900, 0.03, 0.015)
   return d + 0.5
@@ -353,10 +353,10 @@ export function better(rig: Rig, t: number): number {
   const out = voiceOut(rig, vary(rig, 0.1, 0.5), 0.25)
   const hz = vary(rig, 880, 0.03)
   ring(rig, out, t, 0.14, [[1, 1, 0.025], [2.76, 0.4, 0.015]], hz, 0.001)
-  burst(rig, out, t, 0.25, 0.0005, 0.003, filter(rig.ctx, 'bandpass', 2600, 0.8))
+  burst(rig, out, t, 0.2, 0.001, 0.005, filter(rig.ctx, 'bandpass', 2600, 0.8))
   const at = t + vary(rig, 0.16, 0.1)
-  ring(rig, out, at, 0.11, ANVIL, hz * 1.335, 0.001)
-  burst(rig, out, at, 0.2, 0.0005, 0.002, filter(rig.ctx, 'highpass', 4000))
+  ring(rig, out, at, 0.11, ANVIL, hz * 1.335, 0.0015)
+  burst(rig, out, at, 0.12, 0.001, 0.005, filter(rig.ctx, 'highpass', 4000))
   return at + 0.5
 }
 

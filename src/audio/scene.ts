@@ -44,8 +44,9 @@ export const QUIET: Scene = {
 // call from the wood's edge, now and then.
 const BIRDS_BY_MONTH: Record<number, number> = { 3: 0.8, 4: 4, 5: 5, 6: 3, 8: 0.5, 9: 0.6, 10: 0.5 }
 const CELLAR_WIND = [0.27, 0.3, 0.27, 0.22, 0.2, 0, 0, 0, 0, 0, 0.2, 0.24]
-// The brook: in flood with the snowmelt, low in August, up a little with the fall rains.
-const BROOK_BY_MONTH = [0, 0, 0.3, 1, 0.75, 0.45, 0.25, 0.15, 0.2, 0.3, 0.3, 0]
+// The brook: in flood with the snowmelt and all but dry by August. Running water is spring's sound, so the little
+// it rises with the fall rains is kept small.
+const BROOK_BY_MONTH = [0, 0, 0.3, 1, 0.75, 0.45, 0.25, 0.12, 0.1, 0.12, 0.12, 0]
 
 // 0 before a, rising to 1 at b, 1 until c, falling to 0 at d. All in months and fractions of one (4.5 is mid-May).
 function span(when: number, a: number, b: number, c: number, d: number): number {
@@ -126,7 +127,7 @@ export function sceneFor(input: SceneInput): Scene {
 
   // Spring peepers call from the thaw into June, hardest in mild wet weather and least under a bright sky.
   const mild = clamp01((w.tmean - 4) / 6)
-  const peepers = w.sky === 'storm' ? 0 : span(when, 3.55, 3.9, 5.15, 5.9) * mild * (w.sky === 'clear' ? 0.45 : w.sky === 'cloud' ? 0.7 : 1)
+  const peepers = w.sky === 'storm' ? 0 : span(when, 3.55, 3.9, 5.15, 5.9) * mild * (w.sky === 'clear' ? 0.6 : w.sky === 'cloud' ? 0.8 : 1)
   const peeps = 0.76 + 0.054 * Math.max(0, Math.min(22, w.tmean))
 
   // Bumblebees work the potato blossom on fair warm days from late June into August.
@@ -141,7 +142,7 @@ export function sceneFor(input: SceneInput): Scene {
     wind, cold, rain, heavy, birds, crickets, chirps, pulse, month: m,
     leaf: cal.leaf,
     // Wet leaves lie still, and so do leaves under snow.
-    dry: cal.dry * (wet || w.sky === 'snow' ? 0.2 : rain > 0 ? 0.6 : 1),
+    dry: w.sky === 'snow' ? 0 : cal.dry * (wet ? 0.2 : rain > 0 ? 0.6 : 1),
     brook: Math.min(1, cal.brook + (w.prcp > 6 ? 0.2 : 0)),
     peepers, peeps, bees, geese, crows,
     frost: w.tmean < -3 ? 0.6 : 0,

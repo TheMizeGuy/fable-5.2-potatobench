@@ -95,16 +95,16 @@ slider's top is 8.9 dB above that.
 | Layer | Target | Why |
 | --- | --- | --- |
 | Title, plan, ledger | -48 to -35 integrated | A breeze, the brook and a bird now and then. |
-| Cellar and deep winter | -50 to -40 | Close to silence. |
+| Cellar and deep winter | -50 to -38 | Close to silence: a thin wind, with a tree cracking or a chickadee now and then. (-50 to -40 before those were added: one crack in a quiet minute moves the gated figure by 2 LU.) |
 | Fair-weather beds, the four seasons | -45 to -33 | A breeze, with birds, frogs, crickets or geese. |
 | Tractor working, alone | -41 to -33 | Hours of it must be ignorable. |
 | The truck hauling, picked | -44 to -34 | Under the tractor. |
 | Rain | light -45 to -36, heavy -35 to -28, storm -32 to -25 | |
-| Gale | -32 to -26 | |
+| Gale | -32 to -25 | The top was -26. The same gale, with the same spectrum to half a decibel, came out 1.8 LU louder when the farmstead's voices changed which gusts the render happened to draw: forty-eight seconds is six or seven gusts. |
 | Loudest bed (storm, gale, tractor) | -29 to -22 | Nothing continuous goes above this. |
 | One bird's song | -38 to -27, loudest 400 ms | Under the cues. |
 | Work, picked (felling, building, brush, rocks, barrels) | -46 to -29 integrated, by kind | Present, and under a working tractor's bed with the cue that crowns it still to come. |
-| Work, going on somewhere | -56 to -41 | Quiet by default: 10 dB down and dulled, as if across the farm. |
+| Work, going on somewhere | -56 to -41 | Quiet by default: 11 dB down and dulled, as if across the farm. |
 | A pick (field, tract, person, yard) | -42 to -31, loudest 400 ms | Heard many times a minute: barely there. |
 | The order knock | -38 to -27 | Answers every order. |
 | Routine cues: planted, hilled, sprayed, watered, sold, rocks, brush, a paper signed, a building begun, a matter closed | -31 to -24 | About 10 LU over a fair bed. |
@@ -162,7 +162,7 @@ does. Each cue has a least gap (the table below), and the director
   the air to itself. When the farm is kept or lost the close is the reward and
   no goal sounds over it.
 
-Work is quiet by default: 10 dB down and low-passed at 1.8 kHz while it is only
+Work is quiet by default: 11 dB down and low-passed at 1.8 kHz while it is only
 going on somewhere, at full level only when the player has picked the person
 doing it or the place it is done, silent when the clock is stopped, on a
 Sunday the farm keeps, and when the weather stops the work. Reduced motion
@@ -291,7 +291,7 @@ seasons has voices the other three do not:
 | | Spring (late April to June) | High summer (July, August) | Harvest (mid September to the freeze) | Deep winter (the cellar months) |
 | --- | --- | --- | --- | --- |
 | Its own | Peepers along the brook; the brook in flood; the full run of birdsong | Field crickets; a bumblebee going by in the blossom; wind in full leaf | Geese going over; crows on the dug ground; dry leaves blowing and rattling; a thin cold edge to the wind | A thin cold wind; a tree cracking in the frost; nothing running |
-| Shared with | Wind | Wind, a low brook | Wind, the chickadee's call, a low brook | The chickadee's call, a crow now and then |
+| Shared with | Wind | Wind, a trickle of the brook | Wind, the chickadee's call | The chickadee's call, a crow now and then |
 | Never there | Crickets, bees, geese, dry leaves | Birdsong, peepers, geese | Peepers, crickets, song | Water, insects, frogs, geese, rain |
 
 The voices come in and go out over two or three weeks, not at the turn of a
@@ -588,7 +588,7 @@ heard once a second at most, not once a field.
 | Within a note | Rises through it, by about 15% | Rises 14% as written (0.93 to 1.07 of the frog's pitch); measured 12% |
 | Length | 90 to 250 ms | 120 to 190 ms as written; measured 107 to 153 ms once the frogs have faded in |
 | Rate | 1.27 a second on average, faster when warm: 0.76 + 0.054 a second for each degree (one thesis, read from its index only) | The same line: 1.41 a second at 12 C, each frog 0.75 to 1.35 of that; this one 1.08 |
-| When | From mid April, at their height in May; mostly late afternoon and night, most on warm wet nights, "sporadic" by day | Late April to late June; loudest on a mild wet or overcast day, 0.45 of that under a clear sky, silent under 4 C |
+| When | From mid April, at their height in May; mostly late afternoon and night, most on warm wet nights, "sporadic" by day | Late April to late June; loudest on a mild wet or overcast day, 0.6 of that under a clear sky, silent under 4 C |
 | Together | "Sleigh bells"; no two in step | Eight frogs, each at its own pitch and pace |
 
 Still different: a real chorus is hundreds of frogs and can be deafening at
@@ -652,8 +652,10 @@ No reference. A wash of noise around 520 Hz, a narrower band between 1.2 and
 2.6 kHz that wanders, and bubbles: short notes sliding upward from 600 Hz to
 2.8 kHz, the pitches at which air bubbles from five millimetres in radius
 down to a little over one ring under water (Minnaert's resonance: 3.26 kHz
-divided by the radius in millimetres). It runs full with the snowmelt in April, falls through the summer to
-a sixth of that in August, and rises a little with the fall rains.
+divided by the radius in millimetres). It runs full with the snowmelt in
+April and falls to an eighth of that by August. A real brook rises again with
+the fall rains; this one is kept low, because running water is how spring is
+told from October with the eyes shut.
 
 ### Frost and dry leaves
 
@@ -662,7 +664,7 @@ Extension), at -20 F and below for thick-barked trees. The render is one
 report from up the ridge every 18 to 52 seconds in the three coldest months: a
 burst around 1 kHz dying in 20 ms, a thump under it, and the hill giving it
 back through the reverb. Dry leaves are runs of three to eight ticks between
-3.3 and 5.5 kHz, thicker in the gusts, from late September until they are
+4 and 8 kHz, above the band where birds sing, thicker in the gusts, from late September until they are
 under snow. Neither was matched to a measurement.
 
 ### Felling: the axe, the crosscut saw, the tree
@@ -946,8 +948,8 @@ there.
 | `scene-clearing` | 60 | October. An axe and saw far off in the woodlot; at 14 s the feller is picked and it comes close; the last tree at 44 s, then the anvil; a tract picked and a contractor signed for. Is far too quiet to notice, or near too loud to leave on? |
 | `scene-haul` | 60 | Dig day: the tractor, a basket into the barrel, the truck far then near with barrels rolling down the ramp, the weigh ticket and the goal at 40 s, a knock at 48 s, a sale. |
 | `scene-raising` | 60 | June: hammering and sawing far, then near; the last nail and a goal at 36 s; a knock, someone hired. |
-| `work-fell`, `work-build`, `work-brush`, `work-rocks`, `work-barrels` | 15 each | Each kind of work alone and close. Wood, or clicks? |
-| `season-spring`, `season-harvest` | 30 each | The two richest beds at length: anything that nags? |
+| `work-fell`, `work-build`, `work-brush`, `work-rocks`, `work-barrels` | the first 15 of each | Each kind of work alone and close. Wood, or clicks? (`work-fell` brings a tree down about once a minute.) |
+| `season-spring`, `season-harvest` | the first 30 of each | The two richest beds at length: anything that nags? |
 | `geese`, `crow`, `peepers`, `bird-dee`, `bee`, `frost` | 40 in all | The new voices alone. The geese and the crow are the least certain. |
 | `change-cues` | 44 | The cues that were there before, for comparison: do the new ones belong with them? |
 | `scene-june`, `scene-august`, `scene-dig` | as time allows | The first rebuild's scenes; they should sound as they did, with a brook under June. |

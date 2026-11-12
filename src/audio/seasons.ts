@@ -78,7 +78,7 @@ export class Brook {
   set(amount: number, t: number): void {
     if (amount > 0.01 && !this.level) this.build(t)
     if (!this.level) return
-    this.level.to(0.028 * amount, t, 3)
+    this.level.to(0.045 * amount, t, 3)
     this.amount = amount
   }
 
@@ -138,7 +138,7 @@ export class Peepers {
   set(level: number, rate: number, t: number): void {
     if (level > 0.02 && !this.level) this.build(t)
     if (!this.level) return
-    this.level.to(0.02 * level, t, 2.5)
+    this.level.to(0.028 * level, t, 2.5)
     if (level > 0.02) {
       this.rate = rate
       this.until = Infinity
@@ -218,7 +218,7 @@ export class Bees {
     waver.frequency.value = 9 + 5 * r()
     waver.connect(gain(ctx, hz * 0.02)).connect(o.frequency)
     const g = ctx.createGain()
-    swell(g.gain, t, dur, 0.02 * (0.5 + 0.5 * r()), dur * 0.48, dur * 0.48)
+    swell(g.gain, t, dur, 0.013 * (0.6 + 0.4 * r()), dur * 0.48, dur * 0.48)
     const pan = panner(ctx, 0)
     const side = r() < 0.5 ? -1 : 1
     pan.pan.setValueAtTime(-0.85 * side, t)
@@ -324,9 +324,9 @@ export class Geese {
     g.gain.linearRampToValueAtTime(0.75 * amp, t + end - 0.08)
     g.gain.linearRampToValueAtTime(0, t + end)
     // The bill and throat: two bands of the buzz let through.
-    o.connect(filter(ctx, 'bandpass', 1250, 2.2)).connect(gain(ctx, 0.125)).connect(g)
-    o.connect(filter(ctx, 'bandpass', 2450, 3)).connect(gain(ctx, 0.075)).connect(g)
-    o.connect(gain(ctx, 0.02)).connect(g)
+    o.connect(filter(ctx, 'bandpass', 1250, 2.2)).connect(gain(ctx, 0.105)).connect(g)
+    o.connect(filter(ctx, 'bandpass', 2450, 3)).connect(gain(ctx, 0.063)).connect(g)
+    o.connect(gain(ctx, 0.017)).connect(g)
     g.connect(out)
     o.start(t)
     o.stop(t + end + 0.02)
@@ -383,7 +383,7 @@ export class Crows {
     rasp.frequency.value = hz / 2.03
     rasp.connect(gain(ctx, 0.45)).connect(rough.gain)
     const env = ctx.createGain()
-    swell(env.gain, t, dur, 0.25, 0.03, dur * 0.4)
+    swell(env.gain, t, dur, 0.2, 0.03, dur * 0.4)
     const breath = noiseSource(rig, t)
     o.connect(rough)
     breath.connect(gain(ctx, 0.7)).connect(rough)
@@ -422,7 +422,7 @@ export class Frost {
 
   private report(t: number): void {
     const rig = this.rig, ctx = rig.ctx, r = rig.rand
-    const amp = 0.3 + 0.2 * r()
+    const amp = 0.21 + 0.14 * r()
     const pan = panner(ctx, 1.6 * r() - 0.8)
     const far = filter(ctx, 'lowpass', 2600, 0.5)
     far.connect(pan)
@@ -463,25 +463,25 @@ export class Leaves {
       const n = 3 + Math.floor(6 * r())
       let at = 0
       for (let k = 0; k < n; k++) {
-        tick(add, sr, r, at, 3300 + 2200 * r(), 1.6, 0.003 + 0.004 * r(), level * (0.5 + 0.5 * r()))
+        tick(add, sr, r, at, 4000 + 4000 * r(), 1.6, 0.002 + 0.003 * r(), level * (0.5 + 0.5 * r()))
         at += 0.02 + 0.06 * r()
       }
     })
     const gust = gain(ctx, 1)
-    spread(rig, runs, t, 0.85).connect(filter(ctx, 'highpass', 2200)).connect(gust).connect(this.level.input)
+    spread(rig, runs, t, 0.85).connect(filter(ctx, 'highpass', 3000)).connect(gust).connect(this.level.input)
     this.gusts = new Glide(gust.gain, 1)
   }
 
   // How dry and loose the leaves are, times how hard it blows.
   set(dry: number, wind: number, t: number): void {
-    const amount = dry * (0.25 + 0.75 * wind)
+    const amount = dry * (0.5 + 0.25 * wind)
     if (amount > 0.02 && !this.level) this.build(t)
-    this.level?.to(0.07 * amount, t, 2)
+    this.level?.to(0.16 * amount, t, 2)
   }
 
   // The wind's gusts carry them: `g` is the gust's strength about 1.
   gust(g: number, from: number, at: number): void {
-    this.gusts?.to(g * g, from, at)
+    this.gusts?.to(Math.pow(g, 1.5), from, at)
   }
 }
 
