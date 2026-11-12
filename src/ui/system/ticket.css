@@ -1,0 +1,182 @@
+/* Dig day in the game: the platform scale, the weigh ticket, the full reckoning and the test-dig tray, placed at every
+   size, with their live states and the reveal's movements (design/ticket.html, design/ticket-reveal.html, MOTION.md).
+   The look of every component is design/system.css. */
+
+/* ---------------------------------------------------------------- the paper the ticket comes on */
+.dialog.sys.dig-paper { top: 19px; transform: translateX(-50%); max-height: calc(100vh - 19px); max-height: calc(100dvh - 19px);
+  display: flex; flex-direction: column; animation-name: dig-in; }
+.dialog.sys.dig-paper.out { animation-name: dig-out; }
+.dialog.sys.dig-paper.is-reveal { animation: none; }
+/* The ticket scrolls inside the paper where the screen is too short for it; the padding keeps its keyline and shadow. */
+.dialog.dig-paper > .dlg-body { flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: 1px var(--s4) var(--s6); }
+@keyframes dig-in { from { transform: translate(-50%, 14px); } }
+@keyframes dig-out { to { opacity: 0; transform: translate(-50%, 10px); } }
+
+.dig-day { --dial: min(470px, calc(100vw - 2 * var(--gutter) - 92px), calc(100vh - 250px));
+  position: relative; display: grid; justify-items: center; }
+@supports (height: 100dvh) { .dig-day { --dial: min(470px, calc(100vw - 2 * var(--gutter) - 92px), calc(100dvh - 250px)); } }
+.dig-day.revealing { min-height: calc(var(--dial) + 250px); }
+
+/* ---------------------------------------------------------------- the scale's face, over the ticket while it prints */
+.dig-day .scale-face { position: absolute; z-index: 1; left: 50%; top: 20px; transform: none; width: calc(var(--dial) + 90px); margin-left: calc(var(--dial) / -2 - 45px); }
+.dig-day .dial { width: var(--dial); height: var(--dial); }
+.scale-face > .t-label { color: var(--ink); }
+.scale-face .readout .t-label { color: var(--violet); font-size: 18px; }
+.revealing .printing { clip-path: inset(0 0 100% 0); }
+.dial .d-band { opacity: 0; transition: opacity var(--t-slip) var(--ease-out); }
+.dial .d-band.is-in { opacity: 1; }
+
+/* ---------------------------------------------------------------- the weigh ticket */
+.dialog.dig-paper .ticket { position: relative; left: auto; top: auto; transform: none; width: 760px; max-width: 100%; }
+.ticket.is-waiting { visibility: hidden; }
+.ticket .weighed.is-up { opacity: 0; }
+.ticket .stamped.huge .nm-cell { display: inline-block; }
+.ticket .stamped.huge .nm-wait { opacity: 0; }
+.ticket .tk-head { grid-template-columns: 1fr auto auto; }
+.tk-head .t-label { display: flex; align-items: center; gap: 5px; }
+.tk-head .t-label .i { --i: 16px; }
+.tk-head .close { margin: -8px -14px 0 4px; }
+.ticket .tk-line { flex-wrap: wrap; row-gap: 2px; }
+.net-side .carried { font-size: 15px; }
+.grades ul .lead { min-width: 0; }
+.losses td:last-child { width: 100%; }
+.losses td[colspan] { padding-left: 0; font-style: italic; color: var(--ink-2); }
+.ways.two { grid-template-columns: 1fr 1fr; }
+.way.is-torn { transform-origin: 0 0; pointer-events: none; }
+.choice-advice { color: var(--ink); }
+.ticket .tk-more { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--s1) var(--s5); padding-top: var(--s2); }
+.tk-more .btn.quiet { padding-left: 4px; }
+.tk-more .btn:not(.quiet) { min-width: 120px; }
+.tk-notes { flex: 1 1 280px; display: grid; gap: 2px; padding-top: 11px; font: italic 400 var(--t-caption)/1.3 var(--f-text); color: var(--ink-2); }
+.tk-notes .c-ochre { color: var(--ochre); }
+.tk-notes .choice-stand { display: flex; gap: 6px; align-items: flex-start; }
+.tk-notes .choice-stand .i { --i: 16px; margin-top: 1px; }
+/* A sixth grade no frame shows (thin skins): the No. 2 hatch turned the other way. */
+.g6:is(.sys, .sys *) { background: repeating-linear-gradient(45deg, var(--ink) 0 1.4px, transparent 1.4px 4px); }
+
+/* A desk too short for the frame's ticket: the ticket goes wider, the grades and the losses side by side. */
+@media (min-width: 700px) and (max-height: 860px) {
+  .dialog.dig-paper .ticket { width: min(980px, calc(100vw - 2 * var(--gutter) - 2 * var(--s4))); }
+  .dig-paper .tk { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); column-gap: var(--s5); padding: 12px 22px 12px; }
+  .dig-paper .tk > :not(.grades, .losses) { grid-column: 1 / -1; }
+  .dig-paper .grades { align-self: start; border-bottom: 0; padding-top: 10px; }
+  .dig-paper .grades ul { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 18px; }
+  .dig-paper .losses { align-self: start; margin-top: 4px; }
+  .dig-paper .tk-head h2 { font-size: 42px; }
+  .dig-paper .weighed { width: 104px; height: 104px; margin-bottom: -22px; }
+  .dig-paper .stamped.huge { font-size: 132px; }
+  .dig-paper .tk-net { padding: 6px 0 4px; border-bottom: 1px solid var(--ink); }
+  .dig-paper .ways { padding-top: 28px; }
+  .dig-paper .way { min-height: 0; padding: 10px 12px 8px; }
+  .dig-paper .ticket .tk-more { padding-top: 2px; }
+}
+@media (min-width: 700px) and (max-height: 500px) {
+  .dig-day { --dial: calc(100vh - 176px); }
+  .dig-day .scale-face { top: 8px; padding: 12px 22px 10px; }
+  .dig-day .scale-face .readout .stamped { font-size: 40px; }
+}
+
+/* A phone: the ticket takes the screen's width and comes up from the foot; the ways come straight after the weight,
+   stacked, each with its take line beside its amount. */
+@media (max-width: 699px) {
+  .dialog.sys.dig-paper { left: 0; right: 0; top: auto; bottom: 0; width: auto; max-width: none; transform: none; max-height: calc(100vh - 12px); max-height: calc(100dvh - 12px); animation-name: sh-up; }
+  .dialog.sys.dig-paper.out { animation-name: sh-down; }
+  .dialog.dig-paper > .dlg-body { padding: 1px 0 0; }
+  .dialog.dig-paper .ticket { width: 100%; grid-template-columns: 40px minmax(0, 1fr); }
+  .dig-paper .stub span { font-size: 20px; }
+  .dig-paper .tk { display: flex; flex-direction: column; padding: 10px 14px max(16px, env(safe-area-inset-bottom, 0px)); }
+  .dig-paper .tk > .choice { order: 1; }
+  .dig-paper .tk > .grades, .dig-paper .tk > .losses { order: 2; }
+  .dig-paper .tk-head h2 { font-size: 36px; }
+  .dig-paper .weighed { width: 84px; height: 84px; margin: -4px -6px -14px 0; }
+  .dig-paper .tk-line { gap: 2px 16px; font-size: 15px; }
+  .dig-paper .tk-net { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .dig-paper .stamped.huge { font-size: min(104px, 24vw); }
+  .dig-paper .net .unit { font-size: 22px; padding-bottom: 8px; }
+  .dig-paper .net-side .range { width: 100%; max-width: 260px; }
+  .dig-paper .grades ul { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 16px; }
+  .dig-paper .losses tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+  .dig-paper .losses td:last-child { grid-column: 1 / -1; width: auto; padding-left: 0; }
+  .dig-paper .losses th { border-bottom: 0; }
+  .dig-paper .losses td.num { border-bottom: 0; }
+  .dig-paper .ways { grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 30px 0 4px; }
+  .dig-paper .ways > .way.is-best:not(:first-child) { margin-top: 20px; }
+  .dig-paper .way { min-height: 0; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto auto; column-gap: 12px; padding: 10px 12px; }
+  .dig-paper .way .t-label { grid-column: 1 / -1; }
+  .dig-paper .way .amount { grid-column: 1; grid-row: 2; align-self: center; }
+  .dig-paper .way .take { grid-column: 2; grid-row: 2; align-self: center; gap: 12px; min-height: 44px; margin: 0; }
+  .dig-paper .way .does { grid-column: 1 / -1; grid-row: 3; }
+  .dig-paper .tk-more { padding-bottom: 8px; }
+}
+
+/* ---------------------------------------------------------------- the full reckoning, in the ticket's hand */
+.reck { display: grid; gap: var(--s5); }
+.reck-lede { font-size: var(--t-lead); line-height: 1.35; }
+.reck-lede .stamped { font-size: 21px; }
+.reck-part { display: grid; gap: var(--s2); }
+.reck-h { padding-bottom: 5px; border-bottom: 1px solid var(--ink); }
+.reck-part .losses { margin-top: 0; }
+.reck-grades th { white-space: nowrap; }
+.reck-grades .reck-note { font: italic 400 var(--t-caption)/1.3 var(--f-text); color: var(--ink-2); }
+.reck .reck-grades td.num { color: var(--ink); text-align: right; white-space: nowrap; }
+.reck .reck-grades td.share { font-weight: 400; color: var(--ink-2); width: 4.5em; }
+.reck .reck-causes th, .reck .reck-causes td { vertical-align: top; padding-top: 8px; padding-bottom: 8px; }
+.reck-causes td:last-child .t-label { display: block; margin-bottom: 3px; }
+.reck-causes p { font-size: var(--t-body); line-height: 1.35; }
+.reck-keep p { max-width: 72ch; }
+.reckoning-paper .dlg-foot .btn .i { --i: 16px; }
+@media (max-width: 699px) {
+  .reck .losses tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+  .reck .losses td:not(.num) { grid-column: 1 / -1; padding-left: 0; }
+  .reck .reck-grades tr { grid-template-columns: minmax(0, 1fr) auto auto; }
+  .reck .reck-grades .reck-note { grid-row: 2; }
+  .reck .losses th, .reck .losses td.num { border-bottom: 0; }
+}
+
+/* ---------------------------------------------------------------- the test-dig tray */
+.tray-paper.sys { width: 392px; max-width: calc(100vw - 16px); padding: var(--s3) var(--s4) var(--s4); animation: tray-in var(--t-sheet) var(--ease-paper); }
+.tray-paper.sys.out { animation: tray-out var(--t-leave) var(--ease-in) forwards; }
+.tray-paper[data-layout='short'] { max-height: calc(100vh - var(--top, 44px) - 12px); overflow-y: auto; }
+@keyframes tray-in { from { transform: translateY(14px); } }
+@keyframes tray-out { to { opacity: 0; transform: translateY(10px); } }
+.tray-head { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--s2); padding-bottom: var(--s2); border-bottom: 3px double var(--ink); }
+.tray-head .t-label { display: flex; align-items: center; gap: 5px; margin-bottom: 3px; }
+.tray-head .t-label .i { --i: 16px; }
+.tray-head h2 { font: 400 34px/.9 var(--f-gothic); letter-spacing: .05em; text-transform: uppercase; }
+.tray-head .close { margin: -6px -12px 0 0; }
+.tray-lede { margin: var(--s2) 0 var(--s3); font-size: var(--t-body); }
+.tray-lede .stamped { font-size: 19px; }
+.tray-paper .tray { display: block; max-width: 100%; height: auto; }
+.tray-paper .flat-rim { fill: var(--paper-2); stroke: var(--edge); stroke-width: 1.5; }
+.tray-paper .flat-bed { fill: none; stroke: var(--hair); stroke-width: 1; }
+.tray-paper .flat-slat { stroke: var(--ink); stroke-width: 1; fill: none; opacity: .45; }
+.tray-paper .t-shadow { fill: var(--ink); opacity: .2; }
+.tray-paper .t-edge { fill: none; stroke: #4a3528; stroke-width: 1; opacity: .75; }
+.tray-paper .t-eye { fill: none; stroke: #4a3528; stroke-width: .9; stroke-linecap: round; opacity: .6; }
+.tray-paper .t-net { fill: #5a4026; opacity: .5; }
+.tray-paper .m-green { fill: #7d9a3c; opacity: .8; }
+.tray-paper .m-scab { fill: #6b4a2e; }
+.tray-paper .m-cut { stroke: #f6efd8; stroke-width: 1.4; fill: none; }
+.tray-paper .m-hollow { fill: #3a2a1c; }
+.tray-paper .m-skin { fill: #f6efd8; opacity: .75; }
+.tray-paper .m-bruise { fill: #3b3f4a; opacity: .55; }
+.tray-paper .m-blight { fill: #3a2418; opacity: .85; }
+.tray-paper .m-frost { fill: #b9c3c9; opacity: .6; }
+.tray-paper .m-rot { fill: #2f2416; opacity: .8; }
+.tray-paper .tray-w { font: 400 15px/1 var(--f-gothic); letter-spacing: .03em; fill: var(--violet); text-anchor: middle; font-variant-numeric: tabular-nums; }
+.tray-paper .tray-m { font: italic 400 14px/1 var(--f-text); fill: var(--ink-2); text-anchor: middle; }
+.tray-paper .tray-scale { stroke: var(--ink); stroke-width: 1; fill: none; }
+.tray-paper .tray-scale-label { font: 400 13px/1 var(--f-gothic); letter-spacing: .1em; fill: var(--ink-2); }
+.tray-paper .tally { display: grid; gap: 1px; margin-top: var(--s3); padding: 6px 12px 7px; background-color: var(--paper); font-size: var(--t-body); }
+.tray-paper .narrowing { display: grid; gap: var(--s2); margin-top: var(--s3); padding-top: var(--s3); border-top: 1px solid var(--ink); }
+.tray-paper .nrow { display: grid; grid-template-columns: 52px minmax(0, 1fr) 80px; gap: var(--s3); align-items: center; }
+.tray-paper .nrow .t-label { color: var(--ink); }
+.tray-paper .nrow .num { text-align: right; white-space: nowrap; font-size: var(--t-body); }
+.tray-paper .nrow.was { color: var(--ink-2); }
+.tray-paper .nrow.was .t-label { color: var(--ink-2); }
+.tray-paper .nrow.was .range { opacity: .55; }
+/* The tray sets the tubers down one by one, then the mark of the hill, then the band narrows. A press skips it. */
+.tray-paper.staged .tuber { animation: tray-set var(--t-slip) var(--ease-out) backwards; animation-delay: calc(var(--n) * 90ms); }
+.tray-paper.staged .now .mark { animation: tray-mark var(--t-stamp) var(--ease-out) backwards; animation-delay: var(--at, 0ms); }
+@keyframes tray-set { from { opacity: 0; transform: translateY(-8px); } }
+@keyframes tray-mark { from { transform: scaleY(0); } }

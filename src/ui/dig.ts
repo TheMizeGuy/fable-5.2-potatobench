@@ -1,4 +1,5 @@
-// The two moments the crop shows itself: the test-dig tray and the weigh ticket, with the full reckoning behind it.
+// The two moments the crop shows itself: the test-dig tray, and dig day: the platform scale's face, the weigh ticket
+// it prints and the full reckoning behind it (design/ticket-reveal.html, design/ticket.html, design/MOTION.md).
 import * as S from '../sim/index.ts'
 import { deals, deliver, versusMarket } from './contracts.ts'
 import { count, type Ctx, type PaperSpec } from './core.ts'
@@ -6,6 +7,7 @@ import { h, s, type Child } from './dom.ts'
 import * as F from './fmt.ts'
 import { icon } from './icons.ts'
 import * as R from './rules.ts'
+import { coupon, range } from './system/parts.ts'
 
 const CAUSE_LABEL: Record<S.Cause, string> = {
   green: 'Greened', scab: 'Scab', hollow: 'Hollow heart', knob: 'Knobs and cracks', skin: 'Thin skins',
@@ -55,11 +57,46 @@ function digDatesText(c: S.Campaign, lot: S.Lot): string {
   return end > start ? `dug ${F.date(lot.year, start)} to ${F.date(lot.year, end)}` : `dug ${F.date(lot.year, start)}`
 }
 
+// "Sep 16 to 18", "Sep 29 to Oct 2", "Sep 16".
+function daySpan(year: number, a: number, b: number): string {
+  if (b <= a) return F.date(year, a, true)
+  const same = S.monthDay(year, a).month === S.monthDay(year, b).month
+  return `${F.date(year, a, true)} to ${same ? S.monthDay(year, b).dom : F.date(year, b, true)}`
+}
+
+// A weight without its unit, as a machine stamps it: "1,374".
+function bare(cwt: number): string {
+  return F.mass(cwt).replace(/ (cwt|t)$/, '')
+}
+
+// What a capture asks the staging to hold still on (tools/quality/capture.ts): 'sweep' or 'tear'.
+function held(what: string): boolean {
+  return document.documentElement.dataset.hold === what
+}
+
+// --ease-out and --ease-paper, for movements driven from here.
+const EASE_PAPER = 'cubic-bezier(.3, 1.25, .5, 1)'
+const EASE_IN = 'cubic-bezier(.5, 0, .9, .4)'
+function bezier(x1: number, y1: number, x2: number, y2: number): (t: number) => number {
+  const at = (u: number, a: number, b: number) => 3 * a * u * (1 - u) ** 2 + 3 * b * u * u * (1 - u) + u ** 3
+  return t => {
+    let lo = 0, hi = 1, u = t
+    for (let i = 0; i < 24; i++) {
+      const x = at(u, x1, x2)
+      if (Math.abs(x - t) < 1e-4) break
+      if (x < t) lo = u; else hi = u
+      u = (lo + hi) / 2
+    }
+    return at(u, y1, y2)
+  }
+}
+const easeOut = bezier(0.2, 0.7, 0.2, 1)
+
 // ---------------------------------------------------------------- the test dig
 
 interface Placed { w: number; mark: number; k: number; x: number; ground: number; a: number; b: number; rot: number }
 
-const LABEL_H = 34
+const LABEL_H = 36
 // What a mark is called under its tuber, in a word or two.
 const TRAY_MARK: Record<S.Cause, string> = { green: 'green', scab: 'scab', hollow: 'hollow', knob: 'knobby', skin: 'thin skin', bruise: 'bruised', blight: 'blight', frost: 'frozen', rot: 'rot', small: 'small', stone: 'stone bruise' }
 
@@ -144,6 +181,8 @@ function tuberMark(t: Placed): SVGElement[] {
 
 let traySeq = 0
 
+// The grading tray, printed: a keylined board with the hill's tubers on it at true relative size, each weight stamped
+// under its tuber and its mark written beside, a two-inch rule in the corner.
 function tray(weights: number[], marks: number[], v: S.Variety, W: number, close: boolean): SVGElement {
   const L = layoutTray(weights, marks, v.shape, W, close)
   const id = `tray${++traySeq}`
@@ -155,11 +194,11 @@ function tray(weights: number[], marks: number[], v: S.Variety, W: number, close
         s('stop', { offset: '0', 'stop-color': '#fff6e0', 'stop-opacity': '0.42' }),
         s('stop', { offset: '0.5', 'stop-color': '#fff6e0', 'stop-opacity': '0' }),
         s('stop', { offset: '1', 'stop-color': '#2a1a0c', 'stop-opacity': '0.42' }))),
-    s('rect', { class: 'flat-rim', x: 0.5, y: 0.5, width: W - 1, height: H - 1 }),
-    s('rect', { class: 'flat-bed', x: 6, y: 6, width: W - 12, height: H - 12 }),
+    s('rect', { class: 'flat-rim', x: 0.75, y: 0.75, width: W - 1.5, height: H - 1.5 }),
+    s('rect', { class: 'flat-bed', x: 5, y: 5, width: W - 10, height: H - 10 }),
   ]
   const grounds = [...new Set(L.items.map(t => t.ground))]
-  for (const g of grounds) kids.push(s('path', { class: 'flat-slat', d: `M6 ${(g + 1.5).toFixed(1)}H${W - 6}` }))
+  for (const g of grounds) kids.push(s('path', { class: 'flat-slat', d: `M5 ${(g + 1.5).toFixed(1)}H${W - 5}` }))
   L.items.forEach((t, n) => {
     const cause = t.mark > 0 ? S.CAUSES[t.mark - 1] : null
     const { a, b } = t
@@ -184,12 +223,12 @@ function tray(weights: number[], marks: number[], v: S.Variety, W: number, close
         cause === 'knob' ? s('path', { class: 't-knob', d: blob(b * 0.5, b * 0.42, t.k), fill: hex(v.skin), transform: `translate(${(a * 0.92).toFixed(1)} ${(-b * 0.5).toFixed(1)})` }) : null,
         cause === 'hollow' ? null : eyes,
         s('path', { class: 't-edge', d })),
-      s('text', { class: 'tray-w', x: t.x.toFixed(1), y: (t.ground + 17).toFixed(1) }, F.grams(t.w)),
-      cause ? s('text', { class: 'tray-m', x: t.x.toFixed(1), y: (t.ground + 31).toFixed(1) }, TRAY_MARK[cause]) : null))
+      s('text', { class: 'tray-w', x: t.x.toFixed(1), y: (t.ground + 18).toFixed(1) }, F.grams(t.w)),
+      cause ? s('text', { class: 'tray-m', x: t.x.toFixed(1), y: (t.ground + 33).toFixed(1) }, TRAY_MARK[cause]) : null))
   })
   const len = (F.metric() ? 5 : 5.08) * L.pxPerCm
   kids.push(s('path', { class: 'tray-scale', d: `M14 ${H - 13}v-5M14 ${H - 15.5}h${len.toFixed(1)}M${(14 + len).toFixed(1)} ${H - 13}v-5` }))
-  kids.push(s('text', { class: 'tray-scale-label', x: (20 + len).toFixed(1), y: H - 11 }, F.metric() ? '5 cm' : '2 in'))
+  kids.push(s('text', { class: 'tray-scale-label', x: (20 + len).toFixed(1), y: H - 10 }, F.metric() ? '5 cm' : '2 in'))
   const sound = marks.filter(m => m === 0).length
   return s('svg', {
     class: 'tray', width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: 'img',
@@ -197,37 +236,45 @@ function tray(weights: number[], marks: number[], v: S.Variety, W: number, close
   }, kids)
 }
 
-// The estimate before and now on one scale, with the hill itself as a tick.
+// The estimate before and now on one scale, with the hill itself as the violet mark. Staged, the band narrows from
+// the old range to the new one (a clip opening on the union of the two), and the figures count.
 function narrowing(before: S.Estimate | null, after: S.Estimate, hill: number, staged: boolean, delay: number): HTMLElement {
   // The scale is fitted to these figures, so the narrowing is wide enough to see.
   const max = Math.ceil(Math.max(after.hi, before?.hi ?? 0, hill) * 1.2 / 50) * 50 || 50
-  const band = (e: S.Estimate) => `left:${(e.lo / max * 100).toFixed(1)}%;width:${Math.max(1.5, (e.hi - e.lo) / max * 100).toFixed(1)}%`
-  const from = before ?? after
-  const now = h('i', { style: band(staged ? from : after) })
-  const lo = h('span', null, ''), hi = h('span', null, '')
   const digits = F.metric() ? 1 : 0
   const show = (n: number) => F.num(F.perAreaValue(n), digits)
-  lo.textContent = show(staged ? from.lo : after.lo)
-  hi.textContent = show(staged ? from.hi : after.hi)
+  const from = before ?? after
+  const now = range({ lo: after.lo, hi: after.hi, max, mark: hill > 0 ? Math.min(hill, max) : undefined, cls: 'now',
+    label: `Now: ${F.perAreaSpan(after.lo, after.hi)}. A field of hills like this one would give ${F.perArea(hill)}.` })
+  const lo = h('span', null, show(staged ? from.lo : after.lo)), hi = h('span', null, show(staged ? from.hi : after.hi))
+  now.style.setProperty('--at', `${Math.max(0, delay - 300)}ms`)
   if (staged) {
+    const band = now.querySelector<HTMLElement>('.band')!
+    const u0 = Math.min(from.lo, after.lo), u1 = Math.max(from.hi, after.hi)
+    const x = (v: number) => `${(Math.max(0, Math.min(1, v / max)) * 100).toFixed(1)}%`
+    const inset = (e: S.Estimate) => `inset(0 ${((u1 - e.hi) / (u1 - u0 || 1) * 100).toFixed(1)}% 0 ${((e.lo - u0) / (u1 - u0 || 1) * 100).toFixed(1)}%)`
+    band.style.left = x(u0)
+    band.style.width = `calc(${x(u1)} - ${x(u0)})`
+    band.style.clipPath = inset(from)
     setTimeout(() => {
       if (!now.isConnected) return
-      now.setAttribute('style', band(after))
+      band.style.transition = 'clip-path 600ms var(--ease-out)'
+      band.style.clipPath = inset(after)
       count(lo, from.lo, after.lo, show)
       count(hi, from.hi, after.hi, show)
+      setTimeout(() => { band.style.cssText = `left:${x(after.lo)};width:calc(${x(after.hi)} - ${x(after.lo)})` }, 640)
     }, delay)
   }
   return h('div', { class: 'narrowing' },
     before ? h('div', { class: 'nrow was' },
       h('span', { class: 't-label' }, 'Before'),
-      h('span', { class: 'gauge range', role: 'img', 'aria-label': `Before: ${F.perAreaSpan(before.lo, before.hi)}` }, h('i', { style: band(before) })),
+      range({ lo: before.lo, hi: before.hi, max, label: `Before: ${F.perAreaSpan(before.lo, before.hi)}` }),
       h('span', { class: 'num' }, F.perAreaSpan(before.lo, before.hi).replace(` ${F.perAreaUnit()}`, ''))) : null,
     h('div', { class: 'nrow' },
       h('span', { class: 't-label' }, 'Now'),
-      h('span', { class: 'gauge range', role: 'img', 'aria-label': `Now: ${F.perAreaSpan(after.lo, after.hi)}. A field of hills like this one would give ${F.perArea(hill)}.` },
-        now, hill > 0 ? h('b', { class: 'tick', style: `left:${Math.min(100, hill / max * 100).toFixed(1)}%;animation-delay:${Math.max(0, delay - 300)}ms` }) : null),
-      h('span', { class: 'num strong' }, lo, '–', hi)),
-    h('p', { class: 'sub' }, `${F.perAreaUnit()}, from ${F.plural(after.digs, 'test dig')}. The tick is this hill. One hill is not the field: the range moves, it does not close.`))
+      now,
+      h('b', { class: 'num' }, lo, '–', hi)),
+    h('p', { class: 't-caption' }, `${F.perAreaUnit()}, from ${F.plural(after.digs, 'test dig')}. The tick is this hill. One hill is not the field: the range moves, it does not close.`))
 }
 
 // The tray paper for one test dig. It sits beside the land and does not stop the clock.
@@ -245,26 +292,28 @@ export function trayPaper(ctx: Ctx, e: S.GameEvent, before: S.Estimate | null, o
     tally.set(key, (tally.get(key) ?? 0) + 1)
   })
   const alone = grams * S.PLANTS_PER_ACRE / S.GRAMS_PER_CWT
-  const W = ctx.layout() === 'narrow' ? Math.min(360, innerWidth - 48) : 360
+  const narrow = ctx.layout() === 'narrow'
+  const W = narrow ? Math.min(360, innerWidth - 48) : 360
   const staged = o.staged && !ctx.reduced()
   const arrive = Math.min(6, weights.length) * 90 + 420
-  const el = h('section', { class: `paper tray-paper${staged ? ' staged' : ''}`, role: 'region', 'aria-label': `Test dig, ${S.FIELD_NAMES[e.field]}`, testid: 'sample-dialog' },
+  const el = h('section', { class: `tray-paper sheet sys${staged ? ' staged' : ''}`, role: 'region', 'aria-label': `Test dig, ${S.FIELD_NAMES[e.field]}`, testid: 'sample-dialog', 'data-layout': ctx.layout() },
     h('header', { class: 'tray-head' },
       h('div', null,
-        h('span', { class: 't-label' }, 'Test dig'),
-        h('h2', { class: 't-head' }, S.FIELD_NAMES[e.field])),
-      h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Put the tray away', testid: 'sample-close', onclick: o.onClose }, icon('close'))),
-    h('p', { class: 't-small tray-lede' }, `${F.date(c.year, e.day)}: one hill of ${v.name}. ${F.plural(weights.length, 'tuber')}, ${F.hillMass(grams)}.`),
+        h('p', { class: 't-label' }, icon('sample', 'i'), 'Test dig'),
+        h('h2', null, S.FIELD_NAMES[e.field])),
+      h('button', { class: 'close', type: 'button', 'aria-label': 'Put the tray away', testid: 'sample-close', onclick: o.onClose }, icon('close', 'i'))),
+    h('p', { class: 'tray-lede' }, `${F.date(c.year, e.day)}: one hill of ${v.name}. ${F.plural(weights.length, 'tuber')}, `, h('span', { class: 'stamped' }, F.hillMass(grams)), '.'),
     // On a phone the tubers keep to one row where they can, so the tray leaves the land its room.
-    tray(weights, marks, v, W, ctx.layout() === 'narrow'),
-    h('p', { class: 't-small tally' }, [...tally].map(([k, n]) => `${n} ${k}`).join(' · ')),
+    tray(weights, marks, v, W, narrow),
+    h('div', { class: 'tally sheet laid', role: 'list', 'aria-label': 'The tally' },
+      [...tally].map(([k, n]) => h('p', { class: 'lead', role: 'listitem' }, h('span', null, F.upper(k)), h('span', { class: 'dots' }), h('b', { class: 'num' }, n)))),
     after ? narrowing(before, after, alone, staged, arrive + 500) : null)
   // A click anywhere on the tray skips the staging.
   if (staged) el.addEventListener('pointerdown', () => el.classList.remove('staged'), { once: true })
   return el
 }
 
-// ---------------------------------------------------------------- dig day
+// ---------------------------------------------------------------- dig day: the causes
 
 interface Facts { name: string; f: S.FieldInfo; v: S.Variety; planted?: S.GameEvent; killed?: S.GameEvent; died?: S.GameEvent; dry?: S.GameEvent; blight?: S.GameEvent }
 
@@ -383,9 +432,13 @@ function why(ctx: Ctx, c: S.Campaign, lot: S.Lot, cause: S.Cause): string {
   }
 }
 
+// ---------------------------------------------------------------- dig day: the grades
+
 type GradeKey = S.Grade | 'skinned'
 const GRADE_LABEL: Record<GradeKey, string> = { no1: 'US No. 1', chef: 'Large', b: 'B size', no2: 'US No. 2', skinned: 'Thin-skinned', cull: 'Culls' }
 const GRADE_ORDER: GradeKey[] = ['no1', 'chef', 'b', 'no2', 'skinned', 'cull']
+// The printer's tints (design/system.css .g1 to .g5); thin skins, a sixth grade no frame shows, take the hatch turned.
+const TINT: Record<GradeKey, string> = { no1: 'g1', chef: 'g2', b: 'g3', no2: 'g4', skinned: 'g6', cull: 'g5' }
 
 function gradeNote(ctx: Ctx, c: S.Campaign, lot: S.Lot, key: GradeKey): string {
   const last = S.dayIndex(lot.year, S.NEW_POTATO_LAST.month, S.NEW_POTATO_LAST.dom)
@@ -399,8 +452,11 @@ function gradeNote(ctx: Ctx, c: S.Campaign, lot: S.Lot, key: GradeKey): string {
   }
 }
 
-// The crop as it stood on dig day, whatever has been sold since.
-function atDig(ctx: Ctx, c: S.Campaign, lot: S.Lot): { known: boolean; market: number; cull: number; total: number; rows: { key: GradeKey; cwt: number }[] } {
+interface AtDig { known: boolean; market: number; cull: number; total: number; rows: { key: GradeKey; cwt: number }[] }
+
+// The crop as it stood on dig day, whatever has been sold since. The grades come largest first, as the grader
+// fills its bins, the culls last.
+function atDig(ctx: Ctx, c: S.Campaign, lot: S.Lot): AtDig {
   const snap = ctx.memo.lots[lotKey(c, lot.id)]
   const now = S.lotCwt(lot)
   // Selling scales every grade down together, so a lot seen after a sale is scaled back up to dig-day size.
@@ -411,7 +467,13 @@ function atDig(ctx: Ctx, c: S.Campaign, lot: S.Lot): { known: boolean; market: n
   const market = known ? S.lotCwt(base) * scale : lot.sold
   const amount = (k: GradeKey) => k === 'cull' ? cull : (k === 'skinned' ? base.skinned : base.grades[k]) * scale
   const rows = GRADE_ORDER.map(key => ({ key, cwt: amount(key) })).filter(r => r.cwt >= 0.5 || r.key === 'no1')
+  rows.sort((a, b) => (a.key === 'cull' ? 1 : 0) - (b.key === 'cull' ? 1 : 0) || b.cwt - a.cwt)
   return { known, market, cull, total: market + cull, rows }
+}
+
+function gradebar(d: AtDig, parts: string[]): HTMLElement {
+  return h('div', { class: 'gradebar', role: 'img', 'aria-label': `By grade: ${d.rows.map((r, k) => `${GRADE_LABEL[r.key]} ${parts[k]}`).join(', ')}` },
+    d.rows.map(r => h('i', { class: TINT[r.key], style: `width:${(d.total > 0 ? r.cwt / d.total * 100 : 0).toFixed(1)}%` })))
 }
 
 // What a grower weighs before keeping a crop, in full.
@@ -435,7 +497,14 @@ export function storageLine(c: S.Campaign): string {
   return `${houses}. Kept, this crop brings what is stored to ${F.mass(st.stored)}${over > 0.5 ? `, and ${F.mass(over)} will not fit: it is sold off the field when the season closes` : `, leaving room for ${F.mass(st.free)}`}.`
 }
 
-// Everything behind the ticket: every grade rule, every cause, and what never grew.
+function ticketNo(c: S.Campaign, lot: S.Lot): string {
+  return `${R.yearShort(lot.year || c.year)}-${lot.id}`
+}
+
+// ---------------------------------------------------------------- the full reckoning
+
+// Everything behind the ticket, in the ticket's own hand: every grade and its rule, every cause in full, what never
+// grew, and whether to sell or keep.
 function reckoning(ctx: Ctx, lotId: number): PaperSpec {
   const c = ctx.app.campaign!
   const lot = c.lots.find(l => l.id === lotId)!
@@ -464,43 +533,230 @@ function reckoning(ctx: Ctx, lotId: number): PaperSpec {
     })
   }
   const st = S.storageInfo(c)
+  const head = (text: string) => h('h3', { class: 'reck-h t-label' }, text)
   return {
     title: `The reckoning, ${name}`,
+    kicker: `Behind weigh ticket No. ${ticketNo(c, lot)}`,
     testid: 'reckoning',
     size: 'wide',
-    body: () => [
-      h('p', { class: 't-lede' }, `${F.upper(digDatesText(c, lot))}. ${S.variety(lot.variety).name} off ${F.area(S.FIELD_ACRES)}: ${F.mass(d.market)} to sell and ${F.mass(d.cull)} culled.`),
-      h('h3', { class: 'block-head' }, 'Grade by grade'),
-      d.known ? h('table', { class: 'money grades' },
-        h('thead', null, h('tr', null, h('th', { scope: 'col' }, 'Grade'), h('th', { scope: 'col' }, 'Weight'), h('th', { scope: 'col' }, 'Share'))),
-        h('tbody', null, d.rows.map((r, k) => h('tr', null,
-          h('th', { scope: 'row' }, GRADE_LABEL[r.key], h('span', { class: 'sub' }, ` ${gradeNote(ctx, c, lot, r.key)}`)),
-          h('td', null, shown.parts[k]),
-          h('td', null, d.total > 0 ? (r.cwt / d.total < 0.005 ? 'under 1%' : F.pct(r.cwt / d.total)) : ''))))) : h('p', { class: 'sub' }, 'The grade sheet for this crop went with the sale.'),
-      h('h3', { class: 'block-head' }, losses.length ? `What lost grade: ${F.mass(lost)}` : 'Nothing lost grade'),
-      losses.length ? h('ul', { class: 'causes' }, losses.map(x => h('li', null,
-        h('div', { class: 'cause-head' },
-          h('strong', null, CAUSE_LABEL[x.k]),
-          h('span', { class: 'num' }, F.mass(x.cwt)),
-          h('span', { class: 'sub' }, x.k === 'skin' ? 'downgraded' : CULLED.includes(x.k) ? 'culled' : 'down to No. 2')),
-        h('p', null, why(ctx, c, lot, x.k))))) : h('p', null, 'Every tuber made a grade. A clean dig.'),
-      never.length ? [
-        h('h3', { class: 'block-head' }, 'What never grew'),
-        h('ul', { class: 'causes' }, never.map(x => h('li', null,
-          h('div', { class: 'cause-head' }, h('strong', null, x.head), h('span', { class: 'num' }, `about ${F.mass(x.cwt)}`), h('span', { class: 'sub' }, 'not in the crop')),
-          h('p', null, x.text)))),
-      ] : null,
-      lot.open ? [
-        h('h3', { class: 'block-head' }, 'Sell now or store it?'),
+    cls: 'reckoning-paper',
+    body: () => h('div', { class: 'reck' },
+      h('p', { class: 'reck-lede' }, `${F.upper(digDatesText(c, lot))}. ${S.variety(lot.variety).name} off ${F.area(S.FIELD_ACRES)}: `,
+        h('span', { class: 'stamped' }, F.mass(d.market)), ' to sell and ', h('span', { class: 'stamped' }, F.mass(d.cull)), ' culled.'),
+      h('section', { class: 'reck-part' },
+        head('Grade by grade'),
+        d.known ? [
+          gradebar(d, shown.parts),
+          h('table', { class: 'losses reck-grades' },
+            h('thead', { class: 'sr' }, h('tr', null, h('th', { scope: 'col' }, 'Grade'), h('th', { scope: 'col' }, 'What it fetches'), h('th', { scope: 'col' }, 'Weight'), h('th', { scope: 'col' }, 'Share'))),
+            h('tbody', null, d.rows.map((r, k) => h('tr', null,
+              h('th', { scope: 'row' }, h('i', { class: `sw ${TINT[r.key]}` }), GRADE_LABEL[r.key]),
+              h('td', { class: 'reck-note' }, gradeNote(ctx, c, lot, r.key)),
+              h('td', { class: 'num' }, shown.parts[k]),
+              h('td', { class: 'num share' }, d.total > 0 ? (r.cwt / d.total < 0.005 ? 'under 1%' : F.pct(r.cwt / d.total)) : ''))))),
+        ] : h('p', { class: 't-caption' }, 'The grade sheet for this crop went with the sale.')),
+      h('section', { class: 'reck-part' },
+        head(losses.length ? `What lost grade: ${F.mass(lost)}` : 'Nothing lost grade'),
+        losses.length ? h('table', { class: 'losses reck-causes' },
+          h('tbody', null, losses.map(x => h('tr', null,
+            h('th', { scope: 'row' }, CAUSE_LABEL[x.k]),
+            h('td', { class: 'num' }, `−${F.mass(x.cwt)}`),
+            h('td', null, h('span', { class: 't-label' }, x.k === 'skin' ? 'Downgraded' : CULLED.includes(x.k) ? 'Culled' : 'Down to No. 2'), h('p', null, why(ctx, c, lot, x.k))))))) : h('p', null, 'Every tuber made a grade. A clean dig.')),
+      never.length ? h('section', { class: 'reck-part' },
+        head('What never grew'),
+        h('table', { class: 'losses reck-causes' },
+          h('tbody', null, never.map(x => h('tr', null,
+            h('th', { scope: 'row' }, x.head),
+            h('td', { class: 'num' }, `about ${F.mass(x.cwt)}`),
+            h('td', null, h('span', { class: 't-label' }, 'Not in the crop'), h('p', null, x.text))))))) : null,
+      lot.open ? h('section', { class: 'reck-part reck-keep' },
+        head('Sell now or store it?'),
         sellOrKeep(ctx, c, lot),
-        h('p', { class: st.stored > st.capacity ? 'warn-text' : 'sub' }, storageLine(c)),
-      ] : null,
-    ] as Child,
-    foot: close => h('button', { class: 'btn primary', type: 'button', testid: 'reckoning-close', autofocus: true, onclick: close }, 'Back to the ticket'),
+        h('p', { class: st.stored > st.capacity ? 'c-ochre' : 'quiet' }, storageLine(c))) : null),
+    foot: close => h('button', { class: 'btn', type: 'button', testid: 'reckoning-close', autofocus: true, onclick: close }, icon('back', 'i'), 'Back to the ticket'),
   }
 }
 
-// The weigh ticket. fresh: this is dig day itself, so it is staged and wants an answer.
+// ---------------------------------------------------------------- dig day: the platform scale
+
+// The dial's own units: hundreds of cwt, or tonnes.
+function dialUnits(cwt: number): number {
+  return F.metric() ? F.massValue(cwt) : cwt / 100
+}
+
+// The scale's capacity rounded up to a figure a maker would print, with the needle well short of it, and a step for
+// the numbers round the rim that gives five to ten of them.
+function capacity(gross: number): { max: number; step: number } {
+  const caps = [5, 10, 20, 30, 40, 50, 60, 80, 100, 120, 150, 200, 300, 400, 500, 600, 800, 1000]
+  const max = caps.find(k => gross <= k * 0.87) ?? Math.ceil(gross / 0.87 / 100) * 100
+  const step = [1, 2, 5, 10, 20, 25, 50, 100, 200].find(k => max / k <= 10 && Number.isInteger(max / k)) ?? max / 10
+  return { max, step }
+}
+
+let dialSeq = 0
+
+interface Dial { el: SVGElement; set(v: number, ghosts?: [number, number] | null): void }
+
+// The printed face of the potato house's platform scale (design/tools/dial.py, drawn live): the grades as they came
+// off the grader round the rim in the printer's tints, each inked in as the needle passes it.
+function dial(rows: { key: GradeKey; cwt: number }[], gross: number, inked: boolean): Dial {
+  const id = `dial${++dialSeq}`
+  const C = 235, A0 = -225, A1 = 45
+  const g = dialUnits(gross)
+  const { max, step } = capacity(g)
+  const deg = (v: number) => A0 + (A1 - A0) * Math.max(0, Math.min(1, v / max))
+  const pt = (v: number, r: number): [number, number] => { const a = deg(v) * Math.PI / 180; return [C + r * Math.cos(a), C + r * Math.sin(a)] }
+  const f = (n: number) => n.toFixed(1)
+  const arc = (v0: number, v1: number, r0: number, r1: number) => {
+    const large = (v1 - v0) / max * (A1 - A0) > 180 ? 1 : 0
+    const [x0, y0] = pt(v0, r1), [x1, y1] = pt(v1, r1), [x2, y2] = pt(v1, r0), [x3, y3] = pt(v0, r0)
+    return `M${f(x0)} ${f(y0)}A${r1} ${r1} 0 ${large} 1 ${f(x1)} ${f(y1)}L${f(x2)} ${f(y2)}A${r0} ${r0} 0 ${large} 0 ${f(x3)} ${f(y3)}Z`
+  }
+  const mid = (v0: number, v1: number, r: number) => {
+    const large = (v1 - v0) / max * (A1 - A0) > 180 ? 1 : 0
+    const [x0, y0] = pt(v0, r), [x1, y1] = pt(v1, r)
+    return `M${f(x0)} ${f(y0)}A${r} ${r} 0 ${large} 1 ${f(x1)} ${f(y1)}`
+  }
+  const INK = '#1e1c19', INK2 = '#4b463d', RED = '#9c3226'
+  const pattern: Record<GradeKey, SVGElement | null> = {
+    no1: s('pattern', { id: `${id}-g1`, width: 4, height: 4, patternUnits: 'userSpaceOnUse' }, s('rect', { width: 4, height: 4, fill: INK })),
+    chef: s('pattern', { id: `${id}-g2`, width: 4, height: 4, patternUnits: 'userSpaceOnUse' }, s('path', { d: 'M0 1h4', stroke: INK, 'stroke-width': 1.4 })),
+    b: s('pattern', { id: `${id}-g3`, width: 4, height: 4, patternUnits: 'userSpaceOnUse' }, s('circle', { cx: 2, cy: 2, r: 1.1, fill: INK })),
+    no2: s('pattern', { id: `${id}-g4`, width: 5, height: 5, patternUnits: 'userSpaceOnUse', patternTransform: 'rotate(45)' }, s('path', { d: 'M0 0v5', stroke: INK, 'stroke-width': 1.5 })),
+    skinned: s('pattern', { id: `${id}-g6`, width: 5, height: 5, patternUnits: 'userSpaceOnUse', patternTransform: 'rotate(-45)' }, s('path', { d: 'M0 0v5', stroke: INK, 'stroke-width': 1.5 })),
+    cull: null,
+  }
+  const kids: Child[] = [
+    s('defs', null, rows.map(r => pattern[r.key]), s('path', { id: `${id}-top`, d: 'M145 235a90 90 0 0 1 180 0' })),
+    s('circle', { cx: C, cy: C, r: 232, fill: '#2c2620' }),
+    s('circle', { cx: C, cy: C, r: 224, fill: '#f6f1e4', stroke: INK, 'stroke-width': 2 }),
+    s('circle', { cx: C, cy: C, r: 160, fill: 'none', stroke: INK, 'stroke-width': 1 }),
+    // The rim's track, dashed where no grade has come yet.
+    s('path', { d: arc(0, max, 176, 200), fill: 'none', stroke: INK, 'stroke-width': 1, 'stroke-dasharray': '3 3' }),
+  ]
+  const bands: { v0: number; v1: number; fill: SVGElement | null; line: SVGElement }[] = []
+  let v = 0
+  for (const r of rows) {
+    const w = dialUnits(r.cwt)
+    const v0 = v, v1 = v + w
+    v = v1
+    const pat = pattern[r.key]
+    const fill = pat ? s('path', { class: 'd-ink', d: mid(v0, v1, 188), fill: 'none', stroke: `url(#${pat.getAttribute('id')})`, 'stroke-width': 24, pathLength: 1, 'stroke-dasharray': '1 1', 'stroke-dashoffset': inked ? 0 : 1 }) : null
+    const sweep = (v1 - v0) / max * (A1 - A0) * Math.PI / 180 * 208
+    const label = GRADE_LABEL[r.key].toUpperCase()
+    const [lx, ly] = pt((v0 + v1) / 2, 208)
+    const named = sweep >= label.length * 8.6 + 10
+      ? s('text', { x: f(lx), y: f(ly), 'text-anchor': 'middle', 'font-family': 'Gothic', 'font-size': 14, 'letter-spacing': 1.5, fill: INK, transform: `rotate(${f(deg((v0 + v1) / 2) + 90)} ${f(lx)} ${f(ly)})` }, label)
+      : null
+    const line = s('g', { class: `d-band${inked ? ' is-in' : ''}` },
+      s('path', { d: arc(v0, v1, 176, 200), fill: 'none', stroke: INK, 'stroke-width': 1.2 }), named)
+    kids.push(fill, line)
+    bands.push({ v0, v1, fill, line })
+  }
+  // The graduations: a long mark at each half step, the figures at each step.
+  const minor = step / 10
+  for (let k = 0; k <= Math.round(max / minor); k++) {
+    const val = k * minor
+    const big = k % 5 === 0
+    const [x0, y0] = pt(val, big ? 172 : 166), [x1, y1] = pt(val, 152)
+    kids.push(s('line', { x1: f(x0), y1: f(y0), x2: f(x1), y2: f(y1), stroke: INK, 'stroke-width': big ? 2.2 : 1 }))
+    if (k % 10 === 0) {
+      const [x, y] = pt(val, 132)
+      kids.push(s('text', { x: f(x), y: f(y + 9), 'text-anchor': 'middle', 'font-family': 'Gothic', 'font-size': 28, fill: INK }, String(Math.round(val * 10) / 10)))
+    }
+  }
+  kids.push(
+    s('text', { 'font-family': 'Gothic', 'font-size': 15, 'letter-spacing': 3, fill: INK2 }, s('textPath', { href: `#${id}-top`, startOffset: '50%', 'text-anchor': 'middle' }, 'FARMERS’ PLATFORM SCALE')),
+    s('text', { x: C, y: C + 62, 'text-anchor': 'middle', 'font-family': 'Gothic', 'font-size': 18, 'letter-spacing': 3, fill: INK2 }, F.metric() ? 'TONNES' : 'CWT × 100'),
+    s('text', { x: C, y: C + 86, 'text-anchor': 'middle', 'font-family': 'Caslon', 'font-style': 'italic', 'font-size': 15, fill: INK2 }, `capacity ${F.metric() ? `${max} t` : F.mass(max * 100)}`))
+  // The needle, drawn pointing straight up and turned; two faint places it has just swept through follow it round.
+  const ghost = (op: number) => s('line', { class: 'd-ghost', x1: C, y1: C, x2: C, y2: C - 168, stroke: RED, 'stroke-width': 5, 'stroke-linecap': 'round', opacity: op })
+  const ghosts = [ghost(0.12), ghost(0.22)]
+  const needle = s('line', { x1: C, y1: C + 30, x2: C, y2: C - 170, stroke: RED, 'stroke-width': 5, 'stroke-linecap': 'round' })
+  kids.push(ghosts, needle, s('circle', { cx: C, cy: C, r: 15, fill: INK }), s('circle', { cx: C, cy: C, r: 5, fill: RED }))
+  const names = rows.map(r => GRADE_LABEL[r.key].replace('Large', 'large').replace('Culls', 'culls'))
+  const el = s('svg', { viewBox: '0 0 470 470', role: 'img', 'aria-label': `The scale: the needle round to ${F.mass(gross)}, past ${F.list(names)}` }, kids)
+  const turn = (x: SVGElement, val: number) => x.setAttribute('transform', `rotate(${f(deg(val) + 90)} ${C} ${C})`)
+  const set = (val: number, trail: [number, number] | null = null) => {
+    turn(needle, val)
+    ghosts.forEach((x, k) => { if (trail) { x.style.display = ''; turn(x, trail[k]) } else x.style.display = 'none' })
+    for (const b of bands) {
+      const p = Math.max(0, Math.min(1, (val - b.v0) / (b.v1 - b.v0 || 1)))
+      b.fill?.setAttribute('stroke-dashoffset', (1 - p).toFixed(3))
+      b.line.classList.toggle('is-in', val > b.v0 + 1e-6 || p >= 1)
+    }
+  }
+  set(inked ? g : 0)
+  return { el, set: (val, trail) => set(val, trail ?? null) }
+}
+
+interface Face { el: HTMLElement; slip: HTMLElement; set(f: number, trail?: [number, number] | null): void }
+
+// The scale's face as a sheet: the dial, the violet figure counting under it, and the slot the ticket prints from.
+function scaleFace(c: S.Campaign, lot: S.Lot, d: AtDig): Face {
+  const name = S.FIELD_NAMES[lot.field]
+  const g = dial(d.rows, d.total, false)
+  const gross = dialUnits(d.total)
+  const figure = h('span', { class: 'stamped' }, bare(0))
+  const slip = h('div', { class: 'slip' }, h('span', null, 'Weigh ticket'), h('span', { class: 'stamped' }, `No. ${ticketNo(c, lot)}`))
+  const el = h('section', { class: 'scale-face sheet', role: 'status', 'aria-label': `Weighing ${name}: ${F.mass(d.total)} off the field` },
+    h('p', { class: 't-label' }, `${name} · ${S.variety(lot.variety).name} · on the scale`),
+    h('div', { class: 'dial' }, g.el),
+    h('p', { class: 'readout', 'aria-hidden': 'true' }, figure, h('span', { class: 't-label' }, `${F.massUnit()} off the field`)),
+    h('div', { class: 'printing', 'aria-hidden': 'true' }, slip))
+  return {
+    el, slip,
+    set(f, trail) {
+      g.set(gross * f, trail ? [gross * trail[0], gross * trail[1]] : null)
+      figure.textContent = bare(d.total * f)
+    },
+  }
+}
+
+// ---------------------------------------------------------------- dig day: the weigh ticket
+
+let stampSeq = 0
+
+// The round violet stamp the scale house brings down on a weighed crop.
+function weighedStamp(date: string, year: string): SVGElement {
+  const id = `wr${++stampSeq}`
+  const ring = (r: number, w: number) => s('circle', { cx: 80, cy: 80, r, fill: 'none', stroke: 'currentColor', 'stroke-width': w })
+  return s('svg', { class: 'weighed', viewBox: '0 0 160 160', role: 'img', 'aria-label': `Stamped: weighed, ${date}, ${year}` },
+    s('defs', null, s('path', { id: `${id}-t`, d: 'M26 80a54 54 0 0 1 108 0' }), s('path', { id: `${id}-b`, d: 'M30 80a50 50 0 0 0 100 0' })),
+    ring(74, 4), ring(67, 1.6), ring(40, 1.6),
+    s('text', { 'font-family': 'Gothic', 'font-size': 16, 'letter-spacing': 2.5, fill: 'currentColor' }, s('textPath', { href: `#${id}-t`, startOffset: '50%', 'text-anchor': 'middle' }, 'HOME POTATO HOUSE')),
+    s('text', { 'font-family': 'Gothic', 'font-size': 15, 'letter-spacing': 3, fill: 'currentColor' }, s('textPath', { href: `#${id}-b`, startOffset: '50%', 'text-anchor': 'middle' }, year.toUpperCase())),
+    s('text', { x: 80, y: 77, 'font-family': 'Gothic', 'font-size': 25, 'letter-spacing': 1.5, 'text-anchor': 'middle', fill: 'currentColor' }, 'WEIGHED'),
+    s('text', { x: 80, y: 99, 'font-family': 'Gothic', 'font-size': 18, 'letter-spacing': 2, 'text-anchor': 'middle', fill: 'currentColor' }, date.toUpperCase()))
+}
+
+// The violet net weight arriving like a numbering machine: digit by digit, left to right, in at most 600 ms.
+function numbering(el: HTMLElement, text: string, ms: number): () => void {
+  const chars = [...text]
+  const cells = chars.map(ch => h('span', { class: 'nm-cell' }, ch))
+  el.replaceChildren(...cells)
+  const digits = cells.filter((_, k) => /\d/.test(chars[k]))
+  const each = ms / Math.max(1, digits.length)
+  const timers: number[] = []
+  cells.forEach(x => x.classList.add('nm-wait'))
+  let shown = 0
+  const strike = () => {
+    // A digit and whatever stands before it up to the last one struck: "1," then "3", "7", "4".
+    const upTo = cells.indexOf(digits[shown])
+    for (let k = 0; k <= upTo; k++) cells[k].classList.remove('nm-wait')
+    digits[shown].animate([{ transform: 'translateY(-6px)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: Math.min(90, each), easing: 'ease-out' })
+    if (++shown < digits.length) timers.push(window.setTimeout(strike, each))
+    else done()
+  }
+  const done = () => { timers.forEach(clearTimeout); el.textContent = text }
+  timers.push(window.setTimeout(strike, 0))
+  return done
+}
+
+interface Way { el: HTMLElement; key: string }
+
+// The weigh ticket. fresh: this is dig day itself, so it wants an answer, and unless the clock was racing it is
+// weighed on the scale first.
 export function ticket(ctx: Ctx, lotId: number, o: { fresh: boolean; staged?: boolean }): PaperSpec | null {
   const app = ctx.app
   const c = app.campaign
@@ -516,118 +772,268 @@ export function ticket(ctx: Ctx, lotId: number, o: { fresh: boolean; staged?: bo
   const perAcre = d.total / S.FIELD_ACRES
   const value = lot.open ? S.lotValue(app.world, c, lot) : lot.revenue
   const fresh = o.fresh
-  const staged = fresh && !!o.staged && !ctx.reduced()
+  const reveal = fresh && !!o.staged && !ctx.reduced() && d.known && d.total > 0
   const advice = S.advise(app.world, c).find(a => a.act === 'sell' && a.lot === lotId)
   const m = R.sproutMonth(lot.year, lot.dugDay, lot.variety, c.upgrades.vent)
   const dug = digDays(c, lot)
   const inDay = weighDay(c, lot)
+  const no = ticketNo(c, lot)
   let answered = false
+  let busy = false
   let worthEl: HTMLElement | null = null
+  let paper: HTMLElement | null = null
+  let ways: Way[] = []
+  let revealing = false
+  let skip: () => void = () => {}
+
+  // While this ticket is on top its ways answer to their keys, and during the reveal any key or press skips to the end.
+  const onKey = (e: KeyboardEvent) => {
+    if (!paper?.isConnected) { off(); return }
+    if (ctx.papers.top() !== paper || e.ctrlKey || e.metaKey || e.altKey) return
+    if (revealing) { if (e.key !== 'Escape' && e.key !== 'Tab') skip(); return }
+    const way = ways.find(w => w.key === e.key)
+    if (way && !busy) { e.preventDefault(); way.el.click() }
+  }
+  const onPress = () => { if (revealing && paper && ctx.papers.top() === paper) skip() }
+  const shade = () => paper?.parentElement?.querySelector<HTMLElement>(':scope > .veil')
+  const off = () => {
+    document.removeEventListener('keydown', onKey)
+    document.removeEventListener('pointerdown', onPress, true)
+  }
+
+  // Taking a way tears its coupon off along the perforation, then the ticket goes or shows what is left.
+  const tear = (el: HTMLElement, then: () => void) => {
+    busy = true
+    ctx.cue('tearOff')
+    if (ctx.reduced()) { then(); return }
+    el.classList.add('is-torn')
+    const a = el.animate([
+      { transform: 'none', clipPath: 'inset(0 0 0 0)' },
+      { transform: 'translateY(6px) rotate(3deg)', clipPath: 'inset(3px 0 0 0)' },
+    ], { duration: 260, easing: EASE_IN, fill: 'forwards' })
+    if (held('tear')) return
+    a.onfinish = then
+  }
 
   return {
     title: `Weigh ticket, ${name}`,
     testid: 'weighin',
     size: 'medium',
-    cls: `ticket-paper${staged ? ' staged' : ''}`,
+    plain: true,
+    cls: `dig-paper${reveal ? ' is-reveal' : ''}`,
     sticky: fresh && lot.open,
-    bare: true,
     // A dig-day ticket still waiting when its crop has already been sold or delivered has nothing to ask.
     stale: () => (fresh && !lot.open) || app.campaign !== c || !c.lots.includes(lot),
     closeLabel: lot.open ? 'Store it and close' : 'Close',
     onClose: () => {
+      off()
+      shade()?.classList.remove('deep')
       if (!fresh || app.campaign !== c || c.phase !== 'season') return
       if (lot.open && !answered) ctx.say(`${F.mass(S.lotCwt(lot))} from ${name} went into the cellar.`, 'info')
       // The decision is made: the days run again.
       if (!ctx.papers.pending()) app.resumeAfterCard()
     },
-    body: () => {
-      const weight = h('span', { class: 'figure num', testid: 'ticket-weight' }, F.mass(d.market))
-      const worth = h('span', { class: 'figure num', testid: 'ticket-value' }, F.money(value))
+    body: close => {
+      const sold = !lot.open
+      const net = h('span', { class: 'stamped huge num', testid: 'ticket-weight' }, bare(d.market))
+      const worth = h('span', { class: 't-figure num', testid: 'ticket-value' }, F.money(value))
       worthEl = worth
+      const stampDay = inDay >= 0 ? inDay : dug.end
+      const stamp = weighedStamp(F.date(lot.year, stampDay, true), R.yearName(lot.year))
       const max = est ? Math.max(500, Math.ceil(Math.max(est.hi, perAcre) / 100) * 100) : 500
       const inside = est ? perAcre >= est.lo && perAcre <= est.hi : false
-      const root = h('div', { class: 'ticket' },
-        h('header', { class: 'ticket-head' },
-          h('span', { class: 't-label' }, 'Weigh ticket'),
-          h('h3', { class: 't-title' }, name),
-          // Set out as the form a scale house fills in.
-          h('dl', { class: 'ticket-form' },
-            h('div', null, h('dt', { class: 't-label' }, 'Variety'), h('dd', null, v.name)),
-            h('div', null, h('dt', { class: 't-label' }, 'Dug'), h('dd', { class: 'num' }, dug.end > dug.start ? `${F.date(lot.year, dug.start, true)} to ${F.date(lot.year, dug.end, true)}` : F.date(lot.year, dug.start, true))),
-            inDay >= 0 && inDay > dug.end
-              ? h('div', null, h('dt', { class: 't-label' }, 'Hauled in'), h('dd', { class: 'num' }, F.date(lot.year, inDay, true)))
-              : h('div', null, h('dt', { class: 't-label' }, 'Off'), h('dd', { class: 'num' }, F.area(S.FIELD_ACRES))),
-            h('div', null, h('dt', { class: 't-label' }, 'Ticket'), h('dd', { class: 'num' }, `${R.yearShort(c.year)}-${lot.id}`)))),
-        est ? h('div', { class: 'carried' },
-          h('span', { class: 't-label' }, 'You expected'),
-          h('span', { class: 'gauge range', role: 'img', 'aria-label': `Your estimate ${F.perAreaSpan(est.lo, est.hi)}; the field gave ${F.perArea(perAcre)}` },
-            h('i', { style: `left:${(est.lo / max * 100).toFixed(1)}%;width:${Math.max(1.5, (est.hi - est.lo) / max * 100).toFixed(1)}%` }),
-            h('b', { class: 'tick truth', style: `left:${Math.min(100, perAcre / max * 100).toFixed(1)}%` })),
-          h('p', { class: 'carried-text', testid: 'carried' }, h('span', { class: 'num' }, F.perAreaSpan(est.lo, est.hi)), `, ${est.digs ? `from ${F.plural(est.digs, 'test dig')}` : 'by eye'}. The field gave `,
-            h('strong', { class: 'num' }, F.perArea(perAcre)), `, culls and all: ${inside ? 'inside your range' : perAcre < est.lo ? 'under your range' : 'over your range'}.`)) : null,
-        h('div', { class: 'ticket-big' },
-          h('div', null, h('span', { class: 't-label' }, lot.open ? 'To sell' : 'Sold'), weight, h('span', { class: 'sub num' }, `${F.perArea(d.market / S.FIELD_ACRES)} · ${F.mass(d.cull)} culled`)),
-          h('div', null, h('span', { class: 't-label' }, lot.open ? 'Worth today' : 'Sold for'), worth, h('span', { class: 'sub num' }, lot.open ? `${F.price(S.basePrice(app.world, c, lot.variety))} for No. 1` : ''))),
-        d.known ? [
-          h('div', { class: 'gradebar', role: 'img', 'aria-label': `By grade: ${d.rows.map((r, k) => `${GRADE_LABEL[r.key]} ${parts.parts[k]}`).join(', ')}` },
-            d.rows.map(r => h('i', { class: `g-${r.key}`, style: `flex-grow:${Math.max(r.cwt, d.total * 0.004).toFixed(2)}` }))),
-          h('ul', { class: 'grade-key' }, d.rows.map((r, k) => h('li', null, h('i', { class: `g-${r.key}` }), h('span', null, GRADE_LABEL[r.key]), h('span', { class: 'num' }, parts.parts[k])))),
-        ] : h('p', { class: 'sub' }, 'The grade sheet for this crop went with the sale.'),
-        h('div', { class: 'losses' },
-          h('h4', { class: 't-label' }, losses.length ? 'The largest losses' : 'Losses'),
-          losses.length ? h('ol', null, losses.slice(0, 3).map((x, k) => h('li', { style: `--n:${k}` },
-            h('strong', null, CAUSE_LABEL[x.k]), h('span', { class: 'num' }, F.mass(x.cwt)), h('span', { class: 'loss-why' }, phrase(ctx, c, lot, x.k))))) : h('p', null, 'Every tuber made a grade. A clean dig.'),
-          h('button', { class: 'btn small', type: 'button', testid: 'reckoning-open', onclick: () => ctx.papers.open(reckoning(ctx, lotId)) }, 'The full reckoning')))
-      if (staged) {
-        // The truth lands on the estimate first, then the scale fills as the weight counts, then the losses.
-        setTimeout(() => { if (root.isConnected && root.closest('.staged')) { count(weight, 0, d.market, n => F.mass(n)); count(worth, 0, value, n => F.money(n)) } }, 800)
-        // A press or a key anywhere on the ticket skips to the end of it.
-        setTimeout(() => {
-          const paper = root.closest<HTMLElement>('.staged')
-          const skip = () => paper?.classList.remove('staged')
-          paper?.addEventListener('pointerdown', skip, { once: true })
-          paper?.addEventListener('keydown', skip, { once: true })
-        }, 0)
-      }
-      return root
-    },
-    foot: close => {
-      if (!lot.open) return h('button', { class: 'btn primary', type: 'button', testid: `lot-keep-${lot.id}`, autofocus: true, onclick: close }, 'Close')
-      const box = h('div', { class: 'choice-box' })
+      const box = h('div', { class: 'choice' })
+
+      const tk = h('article', { class: `ticket sheet s-buff${reveal ? ' is-waiting' : ''}`, 'aria-labelledby': `tk-${lotId}` },
+        h('div', { class: 'stub', role: 'img', 'aria-label': `Ticket number ${no}, ${name}` }, h('span', null, `No. ${no} `, h('b', null, name))),
+        h('div', { class: 'tk' },
+          h('header', { class: 'tk-head' },
+            h('div', null,
+              h('p', { class: 't-label' }, icon('scale', 'i'), 'Home potato house'),
+              h('h2', { id: `tk-${lotId}` }, 'Weigh ticket')),
+            stamp,
+            fresh ? null : h('button', { class: 'close', type: 'button', 'aria-label': lot.open ? 'Close the ticket' : 'Close', onclick: close }, icon('close', 'i'))),
+          h('p', { class: 'tk-line' },
+            h('span', null, h('span', { class: 't-label' }, 'Variety'), ' ', h('b', null, v.name)),
+            h('span', null, h('span', { class: 't-label' }, 'Dug'), ' ', h('b', { class: 'num' }, daySpan(lot.year, dug.start, dug.end))),
+            inDay > dug.end ? h('span', null, h('span', { class: 't-label' }, 'Hauled in'), ' ', h('b', { class: 'num' }, F.date(lot.year, inDay, true))) : null,
+            h('span', null, h('span', { class: 't-label' }, 'Off'), ' ', h('b', { class: 'num' }, F.area(S.FIELD_ACRES)))),
+          h('div', { class: 'tk-net' },
+            h('p', { class: 'net' }, net, h('span', { class: 'unit' }, F.massUnit(), h('br'), sold ? 'sold' : 'to sell')),
+            h('div', { class: 'net-side' },
+              h('p', null, h('span', { class: 't-label' }, sold ? 'Sold for' : 'Worth today')),
+              h('p', null, worth),
+              h('p', { class: 'quiet num' }, `${F.perArea(d.market / S.FIELD_ACRES)} · ${F.mass(d.cull)} culled`),
+              est ? [
+                range({ lo: est.lo, hi: est.hi, max, mark: perAcre, label: `You expected ${F.perAreaSpan(est.lo, est.hi)}; the field gave ${F.perArea(perAcre)}` }),
+                h('p', { class: 'carried', testid: 'carried' }, 'You expected ', h('span', { class: 'num' }, F.perAreaSpan(est.lo, est.hi)), ` ${est.digs ? `from ${F.plural(est.digs, 'test dig')}` : 'by eye'}. The field gave `,
+                  h('b', { class: 'num' }, F.perArea(perAcre)), `, culls and all: ${inside ? 'inside' : perAcre < est.lo ? 'under' : 'over'}.`),
+              ] : null)),
+          d.known ? h('div', { class: 'grades' },
+            gradebar(d, parts.parts),
+            h('ul', null, d.rows.map((r, k) => h('li', { class: `lead${r.key === 'cull' ? ' quiet' : ''}` },
+              h('i', { class: `sw ${TINT[r.key]}` }), GRADE_LABEL[r.key], h('span', { class: 'dots' }), h('b', { class: 'num' }, parts.parts[k].replace(/ (cwt|t)$/, '')))))) : h('p', { class: 'grades t-caption' }, 'The grade sheet for this crop went with the sale.'),
+          h('table', { class: 'losses' },
+            h('caption', { class: 't-label' }, losses.length ? 'The largest losses' : 'Losses'),
+            h('tbody', null, losses.length ? losses.slice(0, 3).map(x => h('tr', null,
+              h('th', { scope: 'row' }, CAUSE_LABEL[x.k]), h('td', { class: 'num' }, `−${F.mass(x.cwt)}`), h('td', null, phrase(ctx, c, lot, x.k))))
+              : h('tr', null, h('td', { colspan: 3 }, 'Every tuber made a grade. A clean dig.')))),
+          box))
+
+      const reckon = () => h('button', { class: 'btn quiet', type: 'button', testid: 'reckoning-open', onclick: () => ctx.papers.open(reckoning(ctx, lotId)) }, 'The full reckoning')
       let delivered = false
       // Delivering takes the No. 1 and large tubers a contract wants; what is left still has to be sold or stored.
       const draw = () => {
-        if (!lot.open) { answered = true; close(); return }
+        busy = false
+        if (!lot.open && !sold) { answered = true; close(); return }
+        if (sold) {
+          ways = []
+          box.replaceChildren(h('p', { class: 'tk-more' }, h('button', { class: 'btn', type: 'button', testid: `lot-keep-${lot.id}`, autofocus: true, onclick: close }, 'Close'), reckon()))
+          return
+        }
         const deal = deals(app.world, c, lot)[0]
         const now = S.lotValue(app.world, c, lot)
         if (worthEl) worthEl.textContent = F.money(now)
         const month = Math.round(S.lotCwt(lot) * S.STORE_COST)
         const st = S.storageInfo(c)
         // The farm stand sells from the newest crop weighed, whatever is chosen here.
-        const s = c.season
-        const newest = s ? S.standLot(c, s) : undefined
+        const s0 = c.season
+        const newest = s0 ? S.standLot(c, s0) : undefined
         const stand = S.hasBuilt(c, 'stand') && newest?.id === lot.id
-          ? `The farm stand sells about ${F.mass(S.STAND_CWT)} a day of this crop at twice the market price${s && s.day < S.dayIndex(c.year, S.STAND_FROM.month, S.STAND_FROM.dom) ? ', from August 1' : ''}, while it is the newest in.`
+          ? `The farm stand sells about ${F.mass(S.STAND_CWT)} a day of this crop at twice the market price${s0 && s0.day < S.dayIndex(c.year, S.STAND_FROM.month, S.STAND_FROM.dom) ? ', from August 1' : ''}, while it is the newest in.`
           : ''
-        box.replaceChildren(h('div', { class: `choice${deal ? ' three' : ''}` },
-          advice && !delivered ? h('p', { class: 'choice-advice' }, F.localize(advice.why)) : null,
-          deal ? h('div', { class: 'choice-opt' },
-            h('button', { class: 'btn big', type: 'button', testid: `lot-deliver-${lot.id}`, onclick: () => { if (deliver(ctx, lot, deal)) { delivered = true; draw() } } },
-              `Deliver to ${deal.k.buyer.replace(/^The /, 'the ')}`, h('span', { class: 'num' }, F.money(deal.pays))),
-            h('p', { class: 'sub' }, `${F.mass(deal.take)} of No. 1 at ${F.price(deal.k.price)}: ${versusMarket(deal)}.${deal.take < deal.k.needed - 0.5 ? ` That leaves ${F.mass(deal.k.needed - deal.take)} still owed.` : ' That fills it.'}`)) : null,
-          h('div', { class: 'choice-opt' },
-            h('button', { class: 'btn big', type: 'button', testid: `lot-sell-${lot.id}`, onclick: () => { answered = true; if (ctx.run({ t: 'sell', lot: lot.id, frac: 1 }).ok) close() } },
-              delivered ? 'Sell the rest' : 'Sell now', h('span', { class: 'num' }, F.money(now))),
-            h('p', { class: 'sub' }, `${F.price(S.basePrice(app.world, c, lot.variety))} today for US No. 1.`)),
-          h('div', { class: 'choice-opt' },
-            h('button', { class: 'btn big', type: 'button', testid: `lot-keep-${lot.id}`, onclick: () => { answered = true; if (fresh) ctx.say(`${F.mass(S.lotCwt(lot))} from ${name} went into the cellar.`, 'info'); close() } }, delivered ? 'Store the rest' : fresh ? 'Store it' : 'Keep it stored'),
-            h('p', { class: 'sub' }, `${F.upper(R.aprilPhrase(c, v))}. Storing costs ${F.money(month)} a month, and it ${R.sproutText(m)}.`),
-            S.hasBuilt(c, 'packing') ? h('p', { class: 'sub good-text', testid: 'store-packing' }, `Packed over the winter, its No. 1 brings ${F.pct(S.PACK_NO1)} more and B size ${F.pct(S.PACK_B)} of the No. 1 price, less ${F.money(S.PACK_CHARGE)} a hundredweight.`) : null,
-            h('p', { class: `sub${st.stored > st.capacity + 0.5 ? ' warn-text' : ''}`, testid: 'store-houses' }, storageLine(c))),
-          stand ? h('p', { class: 'choice-stand sub', testid: 'ticket-stand' }, icon('house', 'ic s'), stand) : null))
+        const best = deal && deal.pays >= deal.market - 0.5 ? 'deliver' : advice || v.contract || !keepGains(c, lot, now) ? 'sell' : 'store'
+        let n = 0
+        const k = () => String(++n)
+        const list: Way[] = []
+        const add = (el: HTMLElement) => { list.push({ el, key: el.getAttribute('aria-keyshortcuts') ?? '' }); return el }
+        const deliverWay = deal ? add(coupon({
+          icon: 'deliver', label: `Deliver to ${deal.k.buyer.replace(/^The /, 'the ')}`, amount: F.money(deal.pays), take: 'Deliver', key: k(), best: best === 'deliver',
+          does: `${F.mass(deal.take)} at ${F.price(deal.k.price)}: ${versusMarket(deal)}.${deal.take < deal.k.needed - 0.5 ? ` ${F.mass(deal.k.needed - deal.take)} still owed.` : ' That fills it.'}`,
+          testid: `lot-deliver-${lot.id}`,
+          onclick: e => { if (busy || !deliver(ctx, lot, deal)) return; delivered = true; tear(e.currentTarget as HTMLElement, draw) },
+        })) : null
+        const sellWay = add(coupon({
+          icon: 'sell', label: delivered ? 'Sell the rest' : 'Sell now', amount: F.money(now), take: 'Sell', key: k(), best: best === 'sell',
+          does: advice && !delivered ? h('span', { class: 'choice-advice' }, F.localize(advice.why)) : `${F.price(S.basePrice(app.world, c, lot.variety))} today for US No. 1.`,
+          testid: `lot-sell-${lot.id}`,
+          onclick: e => { if (busy) return; answered = true; if (ctx.run({ t: 'sell', lot: lot.id, frac: 1 }).ok) tear(e.currentTarget as HTMLElement, close) },
+        }))
+        const storeWay = add(coupon({
+          icon: 'store', label: delivered ? 'Store the rest' : fresh ? 'Store it' : 'Keep it stored', take: 'Store', key: k(), best: best === 'store',
+          amount: [h('span', { 'aria-hidden': 'true' }, `−${F.money(month).replace('−', '')}`, h('small', null, '/mo')), h('span', { class: 'sr' }, `Storing costs ${F.money(month)} a month.`)],
+          does: `${F.upper(R.aprilPhrase(c, v))}; it ${R.sproutText(m)}.`,
+          testid: `lot-keep-${lot.id}`,
+          onclick: e => { if (busy) return; answered = true; if (fresh) ctx.say(`${F.mass(S.lotCwt(lot))} from ${name} went into the cellar.`, 'info'); tear(e.currentTarget as HTMLElement, close) },
+        }))
+        ways = list
+        box.replaceChildren(
+          h('div', { class: `ways${deal ? '' : ' two'}`, role: 'group', 'aria-label': 'Take the crop' }, deliverWay, sellWay, storeWay),
+          h('div', { class: 'tk-more' },
+            reckon(),
+            h('div', { class: 'tk-notes' },
+              h('p', { class: st.stored > st.capacity + 0.5 ? 'c-ochre' : '', testid: 'store-houses' }, storageLine(c)),
+              S.hasBuilt(c, 'packing') ? h('p', { testid: 'store-packing' }, `Packed over the winter, its No. 1 brings ${F.pct(S.PACK_NO1)} more and B size ${F.pct(S.PACK_B)} of the No. 1 price, less ${F.money(S.PACK_CHARGE)} a hundredweight.`) : null,
+              stand ? h('p', { class: 'choice-stand', testid: 'ticket-stand' }, icon('stand', 'i'), stand) : null)))
       }
       draw()
-      return box
+
+      const root = h('div', { class: `dig-day${reveal ? ' revealing' : ''}`, 'data-layout': ctx.layout() }, tk)
+      const placeLayout = () => { if (!root.isConnected) { removeEventListener('resize', placeLayout); return } root.dataset.layout = ctx.layout() }
+      addEventListener('resize', placeLayout)
+
+      // Mounted: find the paper this sits in, listen for keys, dim the land further.
+      setTimeout(() => {
+        paper = root.closest<HTMLElement>('.dialog')
+        if (!paper) return
+        shade()?.classList.add('deep')
+        document.addEventListener('keydown', onKey)
+        document.addEventListener('pointerdown', onPress, true)
+      }, 0)
+
+      if (!reveal) {
+        if (fresh) ctx.cue('ticket')
+        return root
+      }
+
+      // The reveal (MOTION.md, "Dig day"): the scale's face laid down, the needle sweeping round the grades as the
+      // figure counts, the ticket fed out of the slot, the face lifted away and the ticket laid in its place, the
+      // net weight numbered and the Weighed stamp brought down.
+      const face = scaleFace(c, lot, d)
+      root.prepend(face.el)
+      revealing = true
+      stamp.classList.add('is-up')
+      net.textContent = ''
+      const timers: number[] = []
+      let raf = 0
+      let stopNumbers: (() => void) | null = null
+      const at = (ms: number, fn: () => void) => { timers.push(window.setTimeout(() => { if (root.isConnected) fn() }, ms)) }
+      const end = () => {
+        revealing = false
+        timers.forEach(clearTimeout)
+        cancelAnimationFrame(raf)
+        stopNumbers?.()
+        net.textContent = bare(d.market)
+        face.el.remove()
+        root.classList.remove('revealing')
+        tk.classList.remove('is-waiting')
+        stamp.classList.remove('is-up')
+      }
+      skip = () => { if (revealing && !held('sweep')) end() }
+      face.el.animate([{ transform: 'translateY(14px)' }, { transform: 'none' }], { duration: 320, easing: EASE_PAPER })
+      const SWEEP = 1400
+      at(320, () => {
+        // The sound runs to the same clock: a clack per band, the feed, the numbering machine, the stamp.
+        ctx.cue('ticket')
+        const t0 = performance.now()
+        const lag = (p: number, back: number) => easeOut(Math.max(0, p - back))
+        const step = (now: number) => {
+          if (!root.isConnected) return
+          const p = Math.min(1, (now - t0) / SWEEP)
+          const fr = easeOut(p)
+          if (held('sweep') && fr >= 0.72) { face.set(fr, [lag(p, 0.1), lag(p, 0.05)]); return }
+          face.set(fr, p < 1 ? [lag(p, 0.1), lag(p, 0.05)] : null)
+          if (p < 1) raf = requestAnimationFrame(step)
+          else printed()
+        }
+        raf = requestAnimationFrame(step)
+      })
+      const printed = () => {
+        const printing = face.slip.parentElement!
+        at(50, () => {
+          printing.animate([{ clipPath: 'inset(0 0 100% 0)' }, { clipPath: 'inset(0 0 0 0)' }], { duration: 500, easing: 'linear', fill: 'forwards' })
+          face.slip.animate([{ transform: 'translateY(-100%)' }, { transform: 'none' }], { duration: 500, easing: 'linear', fill: 'forwards' })
+        })
+        at(550, () => {
+          face.el.animate([{ transform: 'none', opacity: 1 }, { transform: 'translateY(-16px)', opacity: 0 }], { duration: 200, easing: EASE_IN, fill: 'forwards' })
+          tk.classList.remove('is-waiting')
+          tk.animate([{ transform: 'translateY(14px)' }, { transform: 'none' }], { duration: 320, easing: EASE_PAPER })
+        })
+        at(760, () => { face.el.remove(); root.classList.remove('revealing') })
+        at(900, () => { stopNumbers = numbering(net, bare(d.market), 500) })
+        at(1550, () => {
+          stamp.classList.remove('is-up')
+          stamp.animate([{ transform: 'rotate(10deg) scale(1.2)', opacity: 0 }, { transform: 'rotate(10deg) scale(1)', opacity: 1 }], { duration: 140, easing: 'cubic-bezier(.2, .7, .2, 1)' })
+        })
+        at(1700, end)
+      }
+      return root
     },
   }
+}
+
+// Whether keeping the crop to April usually pays after storage and shrink, by the season's usual price curve.
+function keepGains(c: S.Campaign, lot: S.Lot, now: number): boolean {
+  const day = c.season?.day ?? -1
+  const curve = S.SEASON_CURVE
+  let today = S.MONTH_CURVE[Math.min(c.month, S.MONTH_CURVE.length - 1)]
+  if (c.phase === 'season' && day >= 0) {
+    today = curve[curve.length - 1][1]
+    if (day <= curve[0][0]) today = curve[0][1]
+    else for (let i = 1; i < curve.length; i++) if (day <= curve[i][0]) { today = curve[i - 1][1] + ((day - curve[i - 1][0]) / (curve[i][0] - curve[i - 1][0])) * (curve[i][1] - curve[i - 1][1]); break }
+  }
+  const months = c.phase === 'season' ? 6 : Math.max(0, 5 - c.month)
+  const shrink = c.upgrades.vent ? S.SHRINK_VENT : S.SHRINK
+  const april = now * (S.MONTH_CURVE[5] / today) * (1 - shrink * months) - S.lotCwt(lot) * S.STORE_COST * months
+  return april > now
 }
