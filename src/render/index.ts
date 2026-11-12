@@ -1,7 +1,7 @@
 // The field view: the farm in its country, drawn with three.js, played like a strategy map.
 // Falls back to a flat drawing without WebGL.
 import {
-  BackSide, Color, DoubleSide, FloatType, FrontSide, Group, PCFShadowMap, Raycaster, Scene, Triangle, Vector2, Vector3, WebGLRenderer, WebGLRenderTarget,
+  BackSide, Color, CustomBlending, DoubleSide, FloatType, FrontSide, Group, OneFactor, PCFShadowMap, Raycaster, Scene, Triangle, Vector2, Vector3, WebGLRenderer, WebGLRenderTarget, ZeroFactor,
   type Material, type Mesh, type MeshDepthMaterial, type MeshStandardMaterial, type Object3D, type Side,
 } from 'three'
 import { DAYS_PER_SECOND, type App } from '../game/app.ts'
@@ -1111,6 +1111,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     })
   }
 
+  const under = (o: Object3D, root: Object3D): boolean => { for (let p: Object3D | null = o; p; p = p.parent) if (p === root) return true; return false }
   // For measuring what each part of the scene costs: the parts by name, which the tools can switch off.
   const parts: Record<string, Object3D> = {
     terrain: terrain.group, flora: flora.group, clearing: clearing.group, pond: pond.group, grass: grass.group, props: props.group, fields: fields.group, harvest: harvest.group,
@@ -1352,14 +1353,61 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
         if (on && known === null) trial = []
       },
       // Draw the frame without one of the things that make it cheaper: 'order' (the land and the sky drawn last),
+      // 'cardshadow' (far patches' cards in the fine shadow map from the yard tier's distance, not only the farm tier's),
       // 'cards' (cards in the fine shadow when it is wide), 'lazy' (the fine shadow redrawn only when it has
       // moved, where nothing in it moves to be seen), 'contact' (no contact shade where nothing is near enough to show it).
-      tryWithout(name: 'order' | 'cards' | 'lazy' | 'contact' | 'corners' | 'thin' | 'half' | 'reach' | 'plants' | 'near' | 'a2c', on: boolean) {
+      tryWithout(name: 'order' | 'cards' | 'lazy' | 'contact' | 'corners' | 'thin' | 'half' | 'reach' | 'plants' | 'near' | 'a2c' | 'cardshadow', on: boolean) {
+        if (name === 'cardshadow') { shadows.early = !on; return }
         if (name !== 'order' && name !== 'cards' && name !== 'lazy' && name !== 'contact') { fields.tryWithout(name, on); return }
         if (name === 'lazy') shadows.eager = on
         else without[name] = on
         terrain.under.renderOrder = without.order ? 0 : 50
         above.renderOrder = without.order ? 0 : 60
+      },
+      // Nothing drawn of the trees as trees, or of their cards (for the tool that lays a view's cost to its parts).
+      trees(kind: 'whole' | 'cards', on: boolean) { flora.tryWithout(kind, !on) },
+      // How much drawing a part is, whatever the machine: the fragments of it that are drawn, as a multiple of the
+      // picture's pixels (a cut-out counts for as much of the pixel as it covers), first all of them, then those in
+      // front of what was drawn before them. kind: 'cards', 'whole' (trees as trees), 'farwoods', 'grass', 'props'.
+      work(kind: 'cards' | 'whole' | 'farwoods' | 'grass' | 'props'): [number, number] {
+        const root = kind === 'farwoods' ? flora.farWoods : kind === 'grass' ? grass.group : kind === 'props' ? props.group : flora.group
+        const meshes: Mesh[] = []
+        root.traverse(o => {
+          const m = o as Mesh
+          if (!m.isMesh || !m.layers.test(rig.camera.layers) || (kind === 'cards' && !m.userData.far) || (kind === 'whole' && m.userData.far) || (root === flora.group && kind !== 'cards' && kind !== 'whole')) return
+          if (kind !== 'farwoods' && root === flora.group && flora.farWoods && under(m, flora.farWoods)) return
+          meshes.push(m)
+        })
+        const mats = new Set<Material>()
+        for (const m of meshes) { m.layers.enable(7); for (const x of Array.isArray(m.material) ? m.material : [m.material]) mats.add(x) }
+        scene.traverse(o => { if ((o as { isLight?: boolean }).isLight) o.layers.enable(7) })
+        const kept = [...mats].map(x => [x, x.blending, x.blendSrc, x.blendDst, x.blendSrcAlpha, x.blendDstAlpha, x.depthTest] as const)
+        for (const x of mats) { x.blending = CustomBlending; x.blendSrc = ZeroFactor; x.blendDst = OneFactor; x.blendSrcAlpha = OneFactor; x.blendDstAlpha = OneFactor }
+        const w = 960, h = Math.round(960 * post.target.height / Math.max(1, post.target.width))
+        const rt = new WebGLRenderTarget(w, h, { type: FloatType, depthBuffer: true })
+        const px = new Float32Array(w * h * 4), was = renderer.getRenderTarget(), colour = new Color(), mask = rig.camera.layers.mask
+        renderer.getClearColor(colour)
+        const alpha = renderer.getClearAlpha()
+        rig.camera.layers.set(7)
+        const out: number[] = []
+        for (const depth of [false, true]) {
+          for (const x of mats) x.depthTest = depth
+          renderer.setRenderTarget(rt)
+          renderer.setClearColor(0x000000, 0)
+          renderer.clear()
+          renderer.render(scene, rig.camera)
+          renderer.readRenderTargetPixels(rt, 0, 0, w, h, px)
+          let sum = 0
+          for (let k = 3; k < px.length; k += 4) sum += px[k]
+          out.push(sum / (w * h))
+        }
+        rig.camera.layers.mask = mask
+        for (const [x, blending, src, dst, srcA, dstA, depthTest] of kept) Object.assign(x, { blending, blendSrc: src, blendDst: dst, blendSrcAlpha: srcA, blendDstAlpha: dstA, depthTest })
+        for (const m of meshes) m.layers.disable(7)
+        renderer.setClearColor(colour, alpha)
+        renderer.setRenderTarget(was)
+        rt.dispose()
+        return [out[0], out[1]]
       },
       // How much drawing the crop's whole plants are, whatever the machine: their fragments as a multiple of the
       // picture's pixels, first all that pass the leaf's cut-out, then those that are also in front of what was drawn
@@ -1473,7 +1521,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     }
     // Whatever a tool changes is drawn at once, as what a player changes is.
     const changing = hooks as unknown as Record<string, (...a: unknown[]) => unknown>
-    for (const name of ['settle', 'seek', 'view', 'titleAt', 'tune', 'home', 'tier', 'show', 'showChild', 'shadowsOn', 'force', 'cascade', 'emptyCascade', 'adapt', 'uncap', 'tryWithout']) {
+    for (const name of ['settle', 'seek', 'view', 'titleAt', 'tune', 'home', 'tier', 'show', 'showChild', 'shadowsOn', 'force', 'cascade', 'emptyCascade', 'adapt', 'uncap', 'tryWithout', 'trees']) {
       const call = changing[name]
       changing[name] = (...a) => { pacing.wake(); return call(...a) }
     }

@@ -12,6 +12,8 @@ const UP = new Vector3(0, 1, 0), ORIGIN = new Vector3()
 // How far ahead of the point looked at each cascade is centred, as a share of its radius: the picture shows far more
 // ground beyond that point than before it.
 const LEAD = [0.25, 0.42, 0.5]
+// How wide the fine cascade is (its radius in metres) before a far patch's cards throw its shadow in place of trees.
+const WIDE_AT = 55
 // Which frame of its turn each cascade is redrawn on: never two on the same frame, at any setting's turns (the fine
 // one every 2 or 3 frames, the middle one every 4, 6 or 12, the wide one every 12, 24 or 60).
 const TURN = [0, 1, 11]
@@ -36,6 +38,11 @@ export class SunShadows {
   // is shaded alike on both sides of the line where one cascade gives way to the next; the far woods, which are cards
   // alone, threw no shadow in this one).
   wide = false
+  // The cards stand for the trees in the fine cascade from the yard tier's distance out, not only from the farm
+  // tier's: a patch drawn as cards is two hundred metres from the camera or more, and the simpler trees that stood
+  // in the fine map for it (six hundred thousand triangles of them, level over a field from 160 m) shaded nothing
+  // a card does not. A tool may put it back as it was.
+  early = true
   // How often each cascade is redrawn, in frames (the quality setting's): the fine one every frame or every other, the
   // wider ones less often. They are redrawn on different frames, so no frame carries all three.
   every: [number, number, number] = [2, 4, 12]
@@ -89,7 +96,7 @@ export class SunShadows {
     this.radius[1] = clamp(r0 * 3.4, 150, 1500)
     this.radius[2] = clamp(this.radius[1] * 3.6, 900, 4500)
     this.holdsFarm = r0 >= 100
-    this.wide = r0 >= 160
+    this.wide = r0 >= (this.early ? WIDE_AT : 160)
     this.basis.lookAt(sunDir, ORIGIN, UP)
     this.right.setFromMatrixColumn(this.basis, 0)
     this.up.setFromMatrixColumn(this.basis, 1)
