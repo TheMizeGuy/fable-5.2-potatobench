@@ -84,7 +84,9 @@ Plant plantAt() {
 }
 vec3 plantPlace(vec3 pl) {
   // Wider along the row than across it: the rows close first, the furrows between them last.
-  return gp.at + vec3((gp.cs * pl.x + gp.sn * pl.z) * gp.w * 1.35, pl.y * gp.h, (-gp.sn * pl.x + gp.cs * pl.z) * gp.w * 0.94);
+  // Where only every other plant is drawn, each stands for its neighbour along the row, and keeps to its own row.
+  float half = step(1.2, uDense);
+  return gp.at + vec3((gp.cs * pl.x + gp.sn * pl.z) * gp.w * mix(1.35, 1.8, half), pl.y * gp.h, (-gp.sn * pl.x + gp.cs * pl.z) * gp.w * mix(0.94, 0.62, half));
 }
 `
 
@@ -95,8 +97,8 @@ const LEAF_SHAPE = /* glsl */ `
   pl.y = max(pl.y, 0.02);
   transformed = plantPlace(pl);
   // A leaf that reaches over the furrow hangs into it, so the rows keep their shape after the canopy closes.
-  float furrow = smoothstep(0.2, 0.56, abs(transformed.z - gp.at.z) / ${ROW.toFixed(3)});
-  transformed.y -= 0.32 * gp.h * furrow * (1.0 - gp.dead);
+  float furrow = smoothstep(0.2, 0.5, abs(transformed.z - gp.at.z) / ${ROW.toFixed(3)});
+  transformed.y -= 0.46 * gp.h * furrow * (1.0 - gp.dead);
 `
 
 // The leaf's colour from its hill's state, shared by the plants and by the crop painted into the ground far off.
@@ -124,7 +126,7 @@ const LEAF_COLOUR = /* glsl */ `
     col = mix(col, ${linear('#b5a27a')} * (0.8 + 0.4 * gp.r.z), gp.dead);
     col = mix(${linear('#8a9a62')}, col, aLeaf.z);
     // Deep in the canopy little light arrives; and no two leaves are quite one green.
-    col *= mix(0.46, 1.0, smoothstep(0.02, 0.44, position.y)) * (0.9 + 0.2 * gp.r.z) * (0.84 + 0.32 * fract(aLeaf.x * 0.618 + gp.r.x * 5.0)) * mix(1.12, 0.6, furrow);
+    col *= mix(0.46, 1.0, smoothstep(0.02, 0.44, position.y)) * (0.9 + 0.2 * gp.r.z) * (0.84 + 0.32 * fract(aLeaf.x * 0.618 + gp.r.x * 5.0)) * mix(1.14, 0.46, furrow);
     vTint = col;
     vErode = max(max(gp.dead * 0.32, hit * 0.55), burnt * 0.45 * (1.0 - uCrop.z)) * aLeaf.z;
     // Seen from far off a plant keeps as many of its leaves as it has canopy, so a half-grown field shows its soil.
@@ -307,6 +309,8 @@ export class Fields {
   private cropTarget: Vector4[] = []
   private rest: boolean[] = new Array(FIELD_COUNT).fill(false)
   private availNow: boolean[] = new Array(FIELD_COUNT).fill(false)
+  // In spring, a tract of the farm's still to clear: its bounds are drawn, as a lot there is work to do on.
+  private lotNow: boolean[] = new Array(FIELD_COUNT).fill(false)
   private settled = false
   private disposables: { dispose(): void }[] = []
   private plantGeo: BufferGeometry
@@ -477,7 +481,7 @@ export class Fields {
             soil = mix(soil, ${linear('#9c7c58')} * (0.8 + 0.4 * fine), (1.0 - smoothstep(0.14, 0.5, lat + (fine - 0.5) * 0.2)) * laid * 0.8);
             soil = mix(soil, ${linear('#241812')}, (1.0 - smoothstep(0.05, 0.13, lat)) * laid);
           }
-          soil *= 1.0 + uGround.z * smoothstep(0.2, 0.8, uDamp) * (0.1 + 0.4 * (1.0 - smoothstep(0.1, 1.0, lat + (fine - 0.5) * 0.5)));
+          soil *= 1.0 + uGround.z * smoothstep(0.3, 0.7, max(uDamp, uWet)) * (0.06 + 0.4 * (1.0 - smoothstep(0.1, 1.0, lat + (fine - 0.5) * 0.5)));
           poolF = uWater * (1.0 - uGround.z) * mix(1.0, 1.0 - smoothstep(0.12, 0.5, vProf), vRidged) * smoothstep(0.34, 0.5, broad * 0.6 + 0.4 * texture2D(uNoise, vWorld.xz * 0.017).b);
           soilRough = mix(mix(0.96, 0.66, uDamp), 0.04, poolF);
           // Far off, the crop and the rest-year oats are painted where plants would stand.
@@ -844,7 +848,7 @@ export class Fields {
   }
 
   // Set what each hill should look like. `display` may hold hills still waiting to be revealed by the crews.
-  setTargets(fields: FieldVis[], display: HillDisplay[][]): void {
+  setTargets(fields: FieldVis[], display: HillDisplay[][], spring = false): void {
     let stakes = false
     for (let i = 0; i < FIELD_COUNT; i++) {
       const fv = fields[i]
@@ -867,6 +871,7 @@ export class Fields {
       this.gfx[i].open.value = fv.sheltered ? 0.6 : 1.15
       this.rimeTarget[i] = fv.rime
       if (this.availNow[i] !== fv.available) { this.availNow[i] = fv.available; stakes = true }
+      this.lotNow[i] = spring && fv.ours && fv.cover !== 'open'
       this.gfx[i].tint.value = BLOOM_TINT[fv.variety] ?? 0.2
       for (let h = 0; h < HILLS; h++) {
         const d = display[i][h]
@@ -943,7 +948,7 @@ export class Fields {
       const sel = opts.selection.includes(i)
       g.selT = sel ? g.selT + dt : 0
       const beat = sel && !opts.reduced && g.selT < 1.1 ? 0.18 * Math.sin(g.selT * 11.4) * (1 - g.selT / 1.1) : 0
-      const ringWant = sel ? 0.95 + beat : i === opts.hover ? 0.42 : 0
+      const ringWant = sel ? 0.95 + beat : i === opts.hover ? 0.42 : this.lotNow[i] ? 0.34 : 0
       g.ring.un.uLevel.value += (ringWant - g.ring.un.uLevel.value) * (opts.reduced ? 1 : 1 - Math.exp(-dt * 14))
       g.avail.value += ((this.availNow[i] ? 1 : 0) - g.avail.value) * kFast
       g.ring.mesh.visible = g.ring.un.uLevel.value > 0.01

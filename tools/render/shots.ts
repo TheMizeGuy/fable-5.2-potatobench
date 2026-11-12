@@ -207,7 +207,18 @@ const landShots: Shot[] = [
   ...CLEARING.map(([stage, edit]) => landShot(`c2-swale-${stage}`, 190, edit.replaceAll('@', '15'), SWALE)),
   landShot('c3-half-felled-playing', 190, CLEARING[1][1].replaceAll('@', '14') + '; c.fields[15].felled = 8; c.fields[16].tenure = "owned"; c.fields[16].felled = 30'),
   landShot('c4-hedgerows-0-to-4', 190, `[2, 3, 4, 5].forEach((i, k) => { c.fields[i].brushed = c.year - k })`, { x: 0, z: 6, dist: 62, yaw: 0.16, pitch: 0.56 }),
-  landShot('c5-tiled-after-rain', 150, `c.fields[4].tiled = true`, { x: -0.3, z: 12.2, dist: 44, yaw: 0.16, pitch: 0.55 }, 'rain'),
+  // The bottom fields the first clear day after rain: Brook Field (left) tiled before it fell, Bottom Field not.
+  {
+    name: 'c5-tiled-after-rain', size: [1920, 1080], setup: async page => {
+      await playTo(page, 1977, 5, 140)
+      await land(page, `c.fields[4].tiled = true`)
+      console.log('  ', await playUntil(page, [], `const d = sim.today(app.world, c).day; return d.prcp > 12 ? 'rain ' + d.prcp : ''`))
+      console.log('  ', await playUntil(page, [], `return sim.today(app.world, c).sky === 'clear' || sim.today(app.world, c).sky === 'cloud' ? [4, 5].map(i => sim.fieldInfo(c, i).moistureLabel).join(' / ') : ''`))
+      await settle(page)
+      await view(page, { x: -0.3, z: 12.2, dist: 44, yaw: 0.16, pitch: 0.55 })
+      await frames(page, 8)
+    },
+  },
   landShot('c5b-tile-laying', 135, `c.fields[5].works = { kind: 'tile', left: 4 }`, { x: 7.8, z: 12.2, dist: 30, yaw: 0.16, pitch: 0.5 }),
   landShot('c6-pond-full', 190, `${POND_BUILT}; c.pond = 6`, POND_VIEW),
   landShot('c6b-pond-low', 190, `${POND_BUILT}; c.pond = 1`, POND_VIEW),

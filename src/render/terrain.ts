@@ -206,6 +206,8 @@ export function buildTerrain(): Terrain {
         // The farm's own ground: meadow round its blocks of fields; the neighbours' quilt beyond.
         float ours = 0.0;
         for (int k = 0; k < ${blocks.length}; k++) ours = max(ours, 1.0 - smoothstep(-1.5, 2.5 + (mid - 0.5) * 2.0, rectDist(BLOCK_RECT[k], p)));
+        // The hill behind the fields, where it is not under trees, is rough pasture.
+        ours = max(ours, 1.0 - smoothstep(-3.0, 5.0 + (mid - 0.5) * 6.0, rectDist(vec4(${(LAND.x0 - 10).toFixed(1)}, -112.0, ${(LAND.x1 + 6).toFixed(1)}, -20.0), p)));
         // Inside the farm's country the quilt's woods give way to open land.
         float od = max(max(${LAND.x0.toFixed(1)} - p.x, p.x - ${LAND.x1.toFixed(1)}), max(-26.0 - p.y, p.y - ${(LAND.z1 + 4).toFixed(1)}));
         float open = 1.0 - smoothstep(-6.0, 10.0, od);
@@ -213,7 +215,7 @@ export function buildTerrain(): Terrain {
         {
           Land l = landAt(p);
           // Strip edges wander a little, as a ploughman's do, and each strip ends in a headland of rough grass.
-          float qx = l.q.x + (n2.b - 0.5) * 2.2 + (broad - 0.5) * 4.0;
+          float qx = l.q.x + (n2.b - 0.5) * 0.7 + (broad - 0.5) * 1.6;
           float strip = floor(qx / l.width), fx = fract(qx / l.width);
           float runL = l.width * 3.4, shift = ihash(ivec2(int(strip) + l.cell.x * 31, l.cell.y * 17 + 5));
           float along = floor(l.q.y / runL + shift), fy = fract(l.q.y / runL + shift);
@@ -251,6 +253,11 @@ export function buildTerrain(): Terrain {
           float inWoods = l.woods * smoothstep(1.5, 4.0, l.edge + ragged) * (1.0 - smoothstep(0.3, 0.5, open));
           float hedge = (1.0 - l.woods) * (1.0 - smoothstep(1.0, 2.6, l.edge + ragged * 0.3)) * (1.0 - open);
           vec3 outland = mix(crop, woods, max(inWoods, hedge * 0.8));
+          // Hedgerows grown up along some of the strips' sides (stripEdge() in layout.ts stands bushes on the same lines).
+          float hu = l.q.x / l.width, hfx = fract(hu), hside = hfx < 0.5 ? floor(hu) : floor(hu) + 1.0;
+          float hedged = step(ihash(ivec2(int(hside) * 7 + l.cell.x * 13, l.cell.y * 29 + 91)), 0.4) * (1.0 - l.woods);
+          float hrow = hedged * (1.0 - smoothstep(0.25, 1.25, min(hfx, 1.0 - hfx) * l.width + (fine - 0.5) * 1.1));
+          outland = mix(outland, broadleaf * 0.55, hrow * 0.8);
           landRough = mix(0.96, 1.0, inWoods);
           landBump = mix(landBump, (crown.rg - 0.5) * 11.0, max(inWoods, hedge * 0.8) * (1.0 - ours));
           col = mix(outland, col, ours);

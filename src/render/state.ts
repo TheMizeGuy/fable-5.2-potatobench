@@ -7,7 +7,7 @@ export type Mode = 'title' | 'plan' | 'season' | 'cellar' | 'ledger' | 'over'
 
 export interface FieldVis {
   held: boolean            // the farm's this year (owned or rented); otherwise somebody else's ground
-  available: boolean       // spring, and this land is not the farm's: it can be rented or bought
+  available: boolean       // spring, and this land is not the farm's (field or tract): it can be rented or bought
   crop: 'potato' | 'rest'
   status: string
   hills: sim.HillLook[]
@@ -156,7 +156,7 @@ export function snapshot(app: App): Snapshot {
     }
     fields.push({
       held,
-      available: !held && mode === 'plan',
+      available: !held && mode === 'plan' && info.tenure === 'none',
       crop: held ? plan.crop : 'rest',
       status: info.status,
       hills,

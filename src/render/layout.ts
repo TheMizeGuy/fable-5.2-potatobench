@@ -475,7 +475,7 @@ export const HOME_WOODS = { x0: -62, x1: 100, z0: -98, z1: -23.4 }
 // Where the woods break: an old hill pasture runs up the saddle behind the home potato house and farmstead.
 const WOOD_GAP = { x: 22.75, half: 8.25 }
 
-export interface Region { woods: boolean; hard: number; edge: number; angle: number; width: number; key: number }
+export interface Region { woods: boolean; hard: number; edge: number; angle: number; width: number; key: number; qx: number; bx: number; bz: number }
 
 export function regionAt(x: number, z: number): Region {
   const cx = Math.floor(x / REGION), cz = Math.floor(z / REGION)
@@ -490,14 +490,25 @@ export function regionAt(x: number, z: number): Region {
     }
   }
   const far = Math.hypot(sx - FARM_CENTER.x, sz)
+  const angle = (hash2(bx + 77, bz + 301) < 0.5 ? 0 : Math.PI / 2) + (hash2(bx + 5, bz + 9) - 0.5) * 0.7
   return {
     woods: hash2(bx + 19, bz - 83) < 0.26 + 0.42 * smooth(700, 2400, far),
     hard: hash2(bx + 43, bz + 7),
     edge: (d2 - d1) * 0.5,
-    angle: (hash2(bx + 77, bz + 301) < 0.5 ? 0 : Math.PI / 2) + (hash2(bx + 5, bz + 9) - 0.5) * 0.7,
+    angle,
     width: 12 + 14 * hash2(bx - 3, bz + 41),
     key: bx * 7919 + bz * 104729,
+    qx: Math.cos(angle) * (x - sx) + Math.sin(angle) * (z - sz), bx, bz,
   }
+}
+
+// A neighbour's strips, as the terrain shader lays them: how far a point is from the nearer side of its strip, and
+// whether a hedgerow has grown up along that side.
+export function stripEdge(x: number, z: number): { d: number; hedged: boolean } {
+  const r = regionAt(x, z)
+  const u = r.qx / r.width, s = Math.floor(u), fx = u - s
+  const side = fx < 0.5 ? s : s + 1
+  return { d: Math.min(fx, 1 - fx) * r.width, hedged: !r.woods && hash2(side * 7 + r.bx * 13, r.bz * 29 + 91) < 0.4 }
 }
 
 // Inside the farm's country (all its blocks and the ground between) the quilt's woods give way to open land.

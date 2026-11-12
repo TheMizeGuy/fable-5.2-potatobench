@@ -9,7 +9,7 @@ import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferG
 import { PARCELS, TRACTS } from '../sim/index.ts'
 import {
   DUFOUR_BARN, DUFOUR_HOUSE, DUFOUR_POTATO_HOUSE, FARM, FARM_CENTER, FD, FIELDS, FW, HOME_WOODS, POND, POTATO_HOUSE, brookHalf, brookZ, fieldMask,
-  groundY, hillRoadZ, ridgeWoodAt, roadDist, townRoadZ, tractAt, woodFront, woodsAt,
+  groundY, hillRoadZ, oursAt, ridgeWoodAt, roadDist, stripEdge, townRoadZ, tractAt, woodFront, woodsAt,
 } from './layout.ts'
 import { fbm2, hash2, rng, smooth } from './noise.ts'
 import { SNOW_RIME_TREE, depthFor, linear, patch, sway, type Patch } from './shaders.ts'
@@ -338,6 +338,19 @@ export class Flora {
       } else if (near) soft(t)
       else (d < 340 ? trees.conFar : trees.conDistant).push({ ...t, w: 1.1 })
     }
+    // Hedgerows between the neighbours' strips round the farm: brush, with a tree here and there. Low to the north-west,
+    // where the evening sun comes from.
+    for (let z = -18; z < 150; z += 1.05) {
+      for (let x = -150; x < 200; x += 1.05) {
+        const jx = x + (r() - 0.5), jz = z + (r() - 0.5)
+        const e = stripEdge(jx, jz)
+        if (!e.hedged || e.d > 0.75 || r() < 0.3) continue
+        if (oursAt(jx, jz, 2) > 0.01 || woodsAt(jx, jz).woods > 0 || !open(jx, jz) || tractAt(jx, jz, 1.4) >= 0) continue
+        const low = jx < -18 && jz < 34
+        if (r() < (low ? 0.94 : 0.7)) trees.bush.push({ x: jx, z: jz, s: 0.8 + r() * 0.9, r: r(), hue: r(), kind: 3 })
+        else hard({ x: jx, z: jz, s: (low ? 2.4 : 3.2) + r() * 2.4, r: r(), hue: r() }, 0.25)
+      }
+    }
     // Trees round the neighbours' farmsteads.
     for (const [fx, fz] of FARMSTEADS) {
       for (let k = 0; k < 5; k++) {
@@ -497,15 +510,16 @@ export class Flora {
   private plantStand(i: number): void {
     const f = FIELDS[i], brush = PARCELS[i].cover === 'brush'
     const r = rng(900 + i * 31)
-    const step = brush ? 1.12 : 1.62
+    const step = brush ? 0.98 : 1.5
     const list: StandTree[] = []
     const order: number[] = []
     // Burnt Hill went to poplar and birch; the home woodlot is spruce; the back lot is mixed.
     const hardShare = i === 16 ? 0.82 : i === 14 ? 0.14 : 0.5
     for (let z = f.z0 + 0.8; z < f.z1 - 0.5; z += step) {
       for (let x = f.x0 + 0.8; x < f.x1 - 0.6; x += step) {
-        const jx = Math.min(f.x1 - 0.7, Math.max(f.x0 + 0.7, x + (r() - 0.5) * step * 0.9)), jz = Math.min(f.z1 - 0.45, Math.max(f.z0 + 0.7, z + (r() - 0.5) * step * 0.9))
-        if (r() < 0.08) continue
+        const jx = Math.min(f.x1 - 0.7, Math.max(f.x0 + 0.7, x + (r() - 0.5) * step * 1.7)), jz = Math.min(f.z1 - 0.45, Math.max(f.z0 + 0.7, z + (r() - 0.5) * step * 1.7))
+        // thickets and openings
+        if (r() > 0.42 + 1.1 * fbm2(jx * 0.31 + i * 3.1, jz * 0.31 + 5.7)) continue
         const t = { x: jx, z: jz, r: r(), hue: r() }
         const tall = 0.8 + 0.44 * fbm2(jx * 0.055 + 3.7, jz * 0.07 + 1.1)
         let tree: StandTree

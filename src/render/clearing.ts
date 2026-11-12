@@ -102,12 +102,14 @@ export class Clearing {
 
     // Hedgerow brush along the walls, in runs with gaps; each bush belongs to the field it stands beside.
     const r = rng(41)
-    for (const [x0, z0, x1, z1] of WALLS) {
+    // Along the walls, along what is left of the old wall above the brook, and between Lower Middle and the road.
+    const lines: [number, number, number, number][] = [...WALLS, [-17, 19.5, 15.6, 19.5], [16.75, -6.6, 16.75, 4.4]]
+    for (const [x0, z0, x1, z1] of lines) {
       const len = Math.hypot(x1 - x0, z1 - z0), nx = -(z1 - z0) / len, nz = (x1 - x0) / len
       for (let d = 0.5; d < len - 0.3; d += 0.6 + r() * 0.8) {
         const t = d / len, off = (r() - 0.5) * 0.7
         const x = x0 + (x1 - x0) * t + nx * off, z = z0 + (z1 - z0) * t + nz * off
-        if (fbm2(x * 0.16 + 5.3, z * 0.16 + 1.7) < 0.47 || roadDist(x, z) < 1.7) continue
+        if (fbm2(x * 0.16 + 5.3, z * 0.16 + 1.7) < 0.44 || roadDist(x, z) < 0.95) continue
         let field = -1, best = 3.6
         for (const f of FIELDS) {
           const fd = Math.hypot(Math.max(f.x0 - x, x - f.x1, 0), Math.max(f.z0 - z, z - f.z1, 0))

@@ -325,7 +325,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     }
     const barrels = next.fields.map((f, i) => next.mode === 'season' && (f.status === 'digging' || (f.status === 'dug' && next.seasonDay - (dugSince.get(i) ?? next.seasonDay) < 4)))
     harvest.setBarrelFields(barrels, (f, h) => shown[f][h].look.kind === 'dug' && next.fields[f].hills[h].kind === 'dug')
-    fields.setTargets(next.fields, shown)
+    fields.setTargets(next.fields, shown, next.mode === 'plan')
     clearing.set(next.fields)
     pond.set(next.farm)
     const gravelled = next.farm.buildings.find(b => b.kind === 'road')
