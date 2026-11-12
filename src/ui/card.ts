@@ -236,7 +236,7 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
     const next = t.works ? `The bulldozer is pulling stumps: ${F.plural(t.works.left, 'season day')} more.` : t.next ? F.localize(t.next) : f.status === 'off' ? 'Cleared. It can be cropped next spring: a year in oats and clover first lifts the raw ground.' : ''
     return [
       head(t.name, `${F.upper(t.coverWord)} · ${t.tenure === 'none' ? `for sale, ${F.money(t.price)}` : 'the farm\'s'}`, 'close'),
-      h('ol', { class: 'clear-track', testid: 'clear-track', 'aria-label': `Clearing: ${steps[at].word.toLowerCase()}, step ${at + 1} of ${steps.length}` },
+      h('ol', { class: 'tract-track', testid: 'clear-track', 'aria-label': `Clearing: ${steps[at].word.toLowerCase()}, step ${at + 1} of ${steps.length}` },
         steps.map((st, k) => h('li', { class: k < at ? 'done' : k === at ? 'now' : '' },
           icon(k < at ? 'check' : st.glyph, 'ic s'), h('span', null, st.word),
           k === 0 && at === 0 && t.felled > 0 ? gauge(t.felled, { label: 'Felled', text: `${F.pct(t.felled)} felled` }) : null))),

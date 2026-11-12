@@ -283,7 +283,7 @@ export function workGrid(ctx: Ctx): WorkGrid {
     const l = S.labourInfo(c)
     const pickFrom = F.date(c.year, S.dayIndex(c.year, S.PICKERS_FROM.month, S.PICKERS_FROM.dom), true)
     const pickTo = F.date(c.year, S.dayIndex(c.year, S.PICKERS_TO.month, S.PICKERS_TO.dom), true)
-    return h('div', { class: 'rules', role: 'group', 'aria-label': 'Farm rules' },
+    return h('div', { class: 'farm-rules', role: 'group', 'aria-label': 'Farm rules' },
       h('div', { class: 'rule-row' },
         h('button', {
           class: 'nbtn s', type: 'button', testid: 'rule-sundays', 'aria-pressed': String(l.sundaysOff),
