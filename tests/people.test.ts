@@ -262,7 +262,7 @@ describe('tiredness', () => {
     expect(S.speed(u, 'machine') / fresh).toBeCloseTo(1 - S.TIRED_SLOW / 2, 12)
   })
 
-  it('rises 0.07 a full working day and falls 0.3 a day off, so a tired crew rests back to speed', () => {
+  it('rises TIRE_PER_DAY a full working day and falls REST_PER_DAY a day off, so a tired crew rests back to speed', () => {
     const c = structuredClone(mid)
     ok(c, { t: 'sundays', off: false })
     const farmer = c.crew[0]
@@ -281,7 +281,7 @@ describe('tiredness', () => {
     farmer.tired = 0.95
     const slow = S.speed(farmer, 'field')
     days(c, 1)
-    expect(farmer.tired).toBeCloseTo(0.65, 12)
+    expect(farmer.tired).toBeCloseTo(0.95 - S.REST_PER_DAY, 12)
     days(c, 1)
     expect(S.speed(farmer, 'field')).toBeGreaterThan(slow)
   })

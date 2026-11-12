@@ -9,8 +9,11 @@ export function neighborYear(world: World, seed: number, year: number): Neighbor
     const out: NeighborYear = { plant: -1, hill1: -1, hill2: -1, firstSpray: -1, sprays: 0, kill: -1, dig: -1, yieldCwtAcre: 0, blightPct: 0, variety: '' }
     let sprays = 0, peak = 0
     for (let guard = 0; guard < 280 && c.phase === 'season' && !seasonDone(c); guard++) {
+      // Each field gets the order the advice has for it, as the reference bot plays.
+      const done = new Set<number>()
       for (const a of advise(world, c)) {
-        if (a.act === 'wait' || a.act === 'close' || a.act === 'sell') continue
+        if (a.act === 'wait' || a.act === 'close' || a.act === 'sell' || done.has(a.field)) continue
+        done.add(a.field)
         apply(world, c, { t: 'job', kind: a.act, field: a.field })
       }
       const r = apply(world, c, { t: 'day' })
