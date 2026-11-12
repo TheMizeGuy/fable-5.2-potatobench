@@ -187,7 +187,7 @@ function settleContracts(c: Campaign, due: Due | 'all', out: GameEvent[]): void 
       if (k.cwt - k.delivered <= 1e-6) break
       if (lot.variety !== k.variety || (c.season && c.phase === 'season' && !c.season.fields[lot.field]?.weighed)) continue
       const d = deliverLot(c, lot, k)
-      if (d.take > 1e-6) out.push(note(c, 'delivered', 'good', `${k.buyer} collected the ${withCommas(d.take)} cwt of ${variety(k.variety).name} you still owed on the contract from your potato house, and paid $${withCommas(d.money)}.`, lot.field))
+      if (d.take > 1e-6) out.push(note(c, 'delivered', 'good', `${k.buyer} collected ${withCommas(d.take)} cwt of ${variety(k.variety).name} from your potato house toward the contract and paid $${withCommas(d.money)}.`, lot.field))
     }
     k.settled = true
     const short = k.cwt - k.delivered
@@ -714,7 +714,7 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
       const b = startBuilding(c, cmd.kind, cmd.yard)
       if (c.phase === 'season' && c.season) c.season.jobs.push(buildJob(c.season, b))
       const spec = P.BUILDINGS[cmd.kind]
-      const bought = cost.buyLogs > 0 || cost.buyStone > 0 ? `, including ${[cost.buyLogs > 0 ? `${Math.ceil(cost.buyLogs)} loads of logs` : '', cost.buyStone > 0 ? `${Math.ceil(cost.buyStone)} of stone` : ''].filter(Boolean).join(' and ')} you had to buy,` : ''
+      const bought = cost.buyLogs > 0 || cost.buyStone > 0 ? `, including ${[cost.buyLogs > 0 ? `${Math.ceil(cost.buyLogs)} loads of logs` : '', cost.buyStone > 0 ? `${Math.ceil(cost.buyStone)} loads of stone` : ''].filter(Boolean).join(' and ')} you had to buy,` : ''
       const when = c.phase === 'season' ? 'It\'s on the work list for whoever builds.' : c.phase === 'cellar' ? 'Anyone you keep on to build can put it up this winter.' : 'It goes on the work list when the season starts.'
       return ok([note(c, 'building', 'info', `${article(spec.name, true)} ${spec.name.toLowerCase()} is started in ${YARD_NAME[cmd.yard]}. It costs $${withCommas(cost.total)}${bought} and takes ${spec.days} crew-days of building. ${when}`)])
     }
@@ -776,7 +776,7 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
       return ok([note(c, 'tiling', 'info', `A contractor will lay tile drains under ${FIELD_NAMES[cmd.field]}. It costs $${withCommas(P.TILE_FEE)} and takes about ${P.TILE_DAYS} season days.`, cmd.field)])
     }
     case 'sellLogs': {
-      if (c.phase !== 'plan' && c.phase !== 'season' && c.phase !== 'cellar') return fail('You can sell logs in spring, in the season or in winter.')
+      if (c.phase !== 'plan' && c.phase !== 'season' && c.phase !== 'cellar') return fail('You can sell logs in spring, during the season, or in winter.')
       if (!Number.isFinite(cmd.loads) || cmd.loads <= 0) return fail('Choose how many loads to sell.')
       if (cmd.loads > c.logs + 1e-9) return fail(`There ${c.logs >= 1 && c.logs < 2 ? 'is' : 'are'} only ${Math.floor(c.logs * 10) / 10} loads of logs in the yard.`)
       const loads = Math.min(cmd.loads, c.logs)
@@ -918,7 +918,7 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
       if (s.pickers === cmd.on) return fail(cmd.on ? 'The pickers are already here.' : 'There are no pickers to send home.')
       if (cmd.on && !pickersWindow(c)) return fail('Schools only close for the harvest from September 20 to October 10.')
       s.pickers = cmd.on
-      return ok([note(c, 'pickers', 'info', cmd.on ? `A picking crew is hired at $${withCommas(P.PICKER_DAY)} for each day worked, and every dig goes faster.` : 'The pickers are sent home.')])
+      return ok([note(c, 'pickers', 'info', cmd.on ? `A picking crew is hired at $${withCommas(P.PICKER_DAY)} for each day worked, and digging goes faster.` : 'The pickers are sent home.')])
     }
     case 'winter': {
       if (c.phase === 'over') return fail('The farm is gone.')
@@ -926,7 +926,7 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
       if (!u) return fail('No such person.')
       if (!WINTER_WORKS.includes(cmd.work)) return fail('No such winter work.')
       const field = cmd.work === 'woods' ? cmd.field ?? -1 : -1
-      if (u.winter === cmd.work && u.winterField === field) return fail(`${subject(u, 'is', 'You are')} already set to that for the winter.`)
+      if (u.winter === cmd.work && u.winterField === field) return fail(`${subject(u, 'is', 'You\'re')} already set to that for the winter.`)
       const why = winterBlock(c, u, cmd.work, field)
       if (why) return fail(why)
       u.winter = cmd.work
@@ -949,7 +949,7 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
       if (!u) return fail('No such person.')
       const mode = cmd.mode ?? 'now'
       if (mode !== 'now' && mode !== 'auto' && mode !== 'push') return fail('Choose one: rest now, rest when worn out, or keep working.')
-      if (u.rest === mode) return fail(mode === 'now' ? `${subject(u, 'is', 'You are')} already resting.` : mode === 'push' ? `${subject(u, 'is', 'You are')} already told to keep working.` : `${subject(u, 'already rests', 'You already rest')} when worn out.`)
+      if (u.rest === mode) return fail(mode === 'now' ? `${subject(u, 'is', 'You\'re')} already resting.` : mode === 'push' ? `${subject(u, 'is', 'You\'re')} already told to keep working.` : `${subject(u, 'already rests', 'You already rest')} when worn out.`)
       u.rest = mode
       if (mode === 'now') letGo(u)
       return ok([note(c, 'rest', 'info', mode === 'now' ? `${subject(u, 'takes', 'You take')} time off until rested.` : mode === 'push' ? `${subject(u, 'will', 'You\'ll')} keep working no matter how tired, which is slower and risks an injury on a machine or in the woods.` : `${subject(u, 'will', 'You\'ll')} rest automatically once worn out.`)])

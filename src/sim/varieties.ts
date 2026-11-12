@@ -57,7 +57,7 @@ export const VARIETIES: Variety[] = [
   },
   {
     id: 'burbank', name: 'Russet Burbank', released: 1902, maturity: 'very late', market: 'Russets for baking and fries',
-    blurb: 'The classic baking potato. It never quite finishes in a season this short, so every September day counts, and uneven watering turns it knobby and hollow. It stores into April, longer than any other variety here.',
+    blurb: 'The classic baking potato. It never quite finishes in a season this short, so every September day counts, and uneven moisture turns it knobby and hollow. It stores into April, longer than any other variety here.',
     tiPd: 175, matPd: 850, set: 10, bulk: 1.0, blightLeaf: 0.7, blightTuber: 1.1, scab: 0.47, hollow: 0.138, green: 0.7, rough: 1.7,
     drought: 0.3, virus: 0.85, dormancy: 160, usual: 291, price: 14, chefBonus: true, contract: false, skin: 0xa6794e, flesh: 0xf5eeda, shape: 1.7,
   },

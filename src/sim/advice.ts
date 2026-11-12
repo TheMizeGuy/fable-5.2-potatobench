@@ -3,7 +3,7 @@
 // to say about land, hiring or contracts.
 import { dayIndex, withCommas } from './calendar.ts'
 import * as P from './params.ts'
-import { willDo } from './people.ts'
+import { jobSkill, SKILL_LABEL, willDo } from './people.ts'
 import type { Campaign, GameEvent, JobKind, KillWhy, World } from './types.ts'
 import { fieldInfo, forecast, today } from './view.ts'
 import { openLots, sprayWayNow } from './campaign.ts'
@@ -126,7 +126,7 @@ function everything(world: World, c: Campaign): Advice[] {
         add(i, 'scout', `Walk ${n}.`, t.watch ? 'It\'s blight weather, and the spots only show up close, a few days after infection.' : 'A weekly walk catches trouble while it\'s still small.')
       }
       if (tending && up && f.blightHills > 0 && f.blightHills <= 8 && f.blightKnown < 0.04) {
-        add(i, 'rogue', `Pull the blighted ${f.blightHills === 1 ? 'hill' : 'hills'} in ${n}.`, `${f.blightHills === 1 ? 'One hill is' : `${f.blightHills} hills are`} spreading spores, so pull ${f.blightHills === 1 ? 'it' : 'them'} before the blight spreads.`, true)
+        add(i, 'rogue', `Pull the blighted ${f.blightHills === 1 ? 'hill' : 'hills'} in ${n}.`, `${f.blightHills === 1 ? 'One hill is' : `${f.blightHills} hills are`} shedding spores, so pull ${f.blightHills === 1 ? 'it' : 'them'} before the blight spreads.`, true)
       }
       if (tending && up && f.protect < 0.35 && !noSpray && (t.watch || (blightSoon && t.sv >= 12) || anyBlight)) {
         const why = anyBlight ? 'Blight is on your farm. Spray only protects leaves it reaches before the blight does, so don\'t wait.'
@@ -293,11 +293,11 @@ export function fieldNeeds(world: World, c: Campaign): { need: Advice | null; ho
     const mine = all.filter(a => a.field === i)
     const need = mine.find(a => a.act !== 'wait' && !(job(a) && standingBy(c, a.act as JobKind, i)))
       ?? raw.filter(a => a.field === i && job(a) && standingBy(c, a.act as JobKind, i) && nobody(a.act as JobKind))
-        .map(a => ({ ...a, why: `${a.why} Nobody on the farm will do ${JOB_LABEL[a.act as JobKind].toLowerCase()}, so set someone's priority for it.` }))[0]
+        .map(a => ({ ...a, why: `${a.why} Nobody on the farm will do ${SKILL_LABEL[jobSkill(a.act as JobKind)]}, so set someone's priority for it.` }))[0]
       ?? null
     const auto = mine.find(a => job(a) && standingBy(c, a.act as JobKind, i))
     const hold = mine.find(a => a.act === 'wait')
-      ?? (auto ? { ...auto, act: 'wait' as const, text: `${JOB_LABEL[auto.act as JobKind]} goes on the work list automatically.`, why: `Your crew does this on its own. ${auto.why}`, urgent: false } : null)
+      ?? (auto ? { ...auto, act: 'wait' as const, text: `${JOB_LABEL[auto.act as JobKind]} goes on the work list automatically.`, why: `You don't need to order it. ${auto.why}`, urgent: false } : null)
     return { need: need ?? null, hold }
   })
 }

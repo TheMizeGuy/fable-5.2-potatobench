@@ -51,7 +51,7 @@ export function choiceDoes(c: Campaign, inc: Incident, choice: string): string {
     case 'match': return `Their wage goes up ${Math.round(P.POACH_RAISE * 100)}% to $${withCommas(inc.wage!)} a month.`
     case 'let': {
       const u = c.crew.find(x => x.id === inc.unit)
-      return u && u.mood < P.POACH_MOOD ? `${u.name} isn't happy here and will leave.` : `${u?.name ?? 'They'} will stay only if happy enough here, and will leave if their mood is under ${P.POACH_MOOD}.`
+      return u && u.mood < P.POACH_MOOD ? `${u.name} isn't happy here and will leave.` : `${u?.name ?? 'They'} will stay if they're happy enough here, but will leave if their mood is under ${P.POACH_MOOD}.`
     }
     case 'rush': return `It costs $${withCommas(P.RUSH_PART)}, and the tractor is back tomorrow.`
     case 'wait': return `It's free, and the tractor is back on ${formatDay(c.year, inc.back!)}.`

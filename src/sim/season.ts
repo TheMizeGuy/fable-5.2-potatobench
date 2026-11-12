@@ -194,7 +194,7 @@ function block(c: Campaign, kind: JobKind, field: number, self: Job | null): str
   if (kind === 'fell' || kind === 'rocks' || kind === 'brush') return landBlock(c, s, kind, field, self)
   if (f.status === 'off') {
     if (c.fields[field].tenure === 'none') return 'This field isn\'t yours.'
-    return isOpen(c, field) ? 'This was cleared this season, so you can plant it next spring.' : `${FIELD_NAMES[field]} is still ${COVER_WORD[c.fields[field].cover]}. Clear it first.`
+    return isOpen(c, field) ? 'It was cleared this season, so you can plant it next spring.' : `${FIELD_NAMES[field]} is still ${COVER_WORD[c.fields[field].cover]}. Clear it first.`
   }
   if (f.status === 'rest') return 'This field is resting in oats and clover.'
   if (f.status === 'dug') return 'This field is already dug.'
@@ -305,7 +305,7 @@ export function unitBlock(c: Campaign, kind: JobKind, unit: number): string {
   const skill = jobSkill(kind)
   if (u.prio[skill] <= 0) {
     const as = u.kind === 'hand' && skill === 'machine' ? 'is a field hand and is' : u.kind === 'operator' && skill === 'field' ? 'drives the second tractor and is' : ''
-    return `${subject(u, as || 'is', 'You are')} set to never do ${SKILL_LABEL[skill]}.`
+    return `${subject(u, as || 'is', 'You\'re')} set to never do ${SKILL_LABEL[skill]}.`
   }
   return ''
 }
@@ -476,7 +476,7 @@ function completeJob(world: World, c: Campaign, s: Season, job: Job, d: Day, out
       f.deadDay = s.day
       f.status = 'dead'
       for (let i = 0; i < P.HILLS; i++) f.hC[i] *= 0.08
-      push(s, out, 'killed', job.field, 'info', `The vines in ${name} are killed. The skins will set in about two weeks.`)
+      push(s, out, 'killed', job.field, 'info', `The vines in ${name} have been killed. The skins will set in about two weeks.`)
       break
     case 'fell':
       push(s, out, 'felled', job.field, 'good', `${name} is felled. The stumps are still there, and a contractor can pull them.${sheltering(c, job.field)}`, { logs: Math.round(c.logs) })
@@ -486,7 +486,7 @@ function completeJob(world: World, c: Campaign, s: Season, job: Job, d: Day, out
       const take = Math.min(fp.stones, P.ROCKS_TAKE)
       fp.stones -= take
       c.stone += P.ROCKS_LOADS * take
-      push(s, out, 'rocks', job.field, 'info', `The rocks are picked off ${name}, and ${Math.round(P.ROCKS_LOADS * take * 10) / 10} loads of fieldstone went to the yard.`, { stones: Math.round(fp.stones * 100) / 100 })
+      push(s, out, 'rocks', job.field, 'info', `The rocks have been picked off ${name}, and ${Math.round(P.ROCKS_LOADS * take * 10) / 10} loads of fieldstone went to the yard.`, { stones: Math.round(fp.stones * 100) / 100 })
       break
     }
     case 'brush':
@@ -987,12 +987,12 @@ function peopleDay(c: Campaign, s: Season, turns: Turn[], out: GameEvent[]): voi
     u.tired = Math.max(0, Math.min(1, u.tired + tire * used - P.REST_PER_DAY * (1 - used)))
     if (wasTired < P.HURT_TIRED && u.tired >= P.HURT_TIRED) {
       push(s, out, 'wornOut', -1, 'warn', (u.rest ?? 'auto') === 'push'
-        ? `${subject(u, 'is', 'You are')} worn out but still working, which is slower and risks an injury on a machine or in the woods.`
+        ? `${subject(u, 'is', 'You are')} worn out but still working, which means slower work and a risk of injury on a machine or in the woods.`
         : `${subject(u, 'is', 'You are')} worn out and will rest tomorrow before anyone gets hurt.`, { unit: u.id })
     }
     if (u.rest === 'now' && u.tired < P.REST_UNTIL) {
       u.rest = 'auto'
-      push(s, out, 'rested', -1, 'info', `${subject(u, 'is', 'You are')} rested and will be back at work tomorrow.`, { unit: u.id })
+      push(s, out, 'rested', -1, 'info', `${subject(u, 'is', 'You\'re')} rested and will be back at work tomorrow.`, { unit: u.id })
     }
     const target = moodTarget(c, u, fieldsIn)
     let pull = P.MOOD_PULL
@@ -1365,7 +1365,7 @@ export function stepDay(world: World, c: Campaign): GameEvent[] {
     s.sv += sevRegion
     if (s.watchDay < 0 && s.sv >= P.SV_THRESHOLD) {
       s.watchDay = s.day
-      push(s, out, 'watch', -1, 'warn', `The blight watch is on. The wet weather has reached ${P.SV_THRESHOLD} severity values, so expect spores from now on.`)
+      push(s, out, 'watch', -1, 'warn', `The blight watch is on. Wet weather has added up to ${P.SV_THRESHOLD} severity values, so expect spores from now on.`)
     }
   }
   s.svToday = sevRegion

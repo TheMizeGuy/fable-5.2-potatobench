@@ -310,7 +310,7 @@ export function goalCosts(c: Campaign): GoalCost[] {
   const out: GoalCost[] = []
   const cash = (cost: number) => c.cash - cost >= 0 ? '' : `It costs $${withCommas(cost)}, and you have $${withCommas(Math.max(0, c.cash))} on hand.`
   const tract = TRACTS.find(i => c.fields[i].tenure !== 'none' && c.fields[i].cover === 'stumps') ?? -1
-  out.push({ id: 'stump', label: 'Pull the stumps', cost: P.STUMP_FEE, can: tract >= 0 && !stumpBlock(c, tract), why: tract < 0 ? 'None of your tracts has been felled yet.' : stumpBlock(c, tract) })
+  out.push({ id: 'stump', label: 'Pull the stumps', cost: P.STUMP_FEE, can: tract >= 0 && !stumpBlock(c, tract), why: tract < 0 ? 'You have no felled tract with stumps to pull.' : stumpBlock(c, tract) })
   const bottom = c.fields.findIndex((f, i) => f.tenure === 'owned' && f.cover === 'open' && f.elev === 0 && !f.tiled && i >= 0)
   out.push({ id: 'tile', label: 'Lay tile drains', cost: P.TILE_FEE, can: bottom >= 0 && !tileBlock(c, bottom), why: bottom < 0 ? 'You don\'t own any bottom land that still needs tile.' : tileBlock(c, bottom) })
   for (const kind of P.BUILDING_KINDS as BuildingKind[]) {

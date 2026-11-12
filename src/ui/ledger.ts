@@ -82,7 +82,7 @@ function cashBook(y: S.YearSummary, lost: boolean): HTMLElement {
 }
 
 const SKILL_UP = /^(.*) (?:is|are) better at (.*): level (\d+)\.$/
-const SOMEONE = /^(.*?) (is|has|takes) (.*)$/
+const SOMEONE = /^(.*?) (is|are|has|takes) (.*)$/
 
 interface Deed { who: string | null; text: string; icon?: string }
 

@@ -388,7 +388,7 @@ describe('logs', () => {
     const ledger = structuredClone(c)
     ledger.phase = 'ledger'
     ledger.logs = 10
-    refused(ledger, { t: 'sellLogs', loads: 1 }, /spring, in the season or in winter/)
+    refused(ledger, { t: 'sellLogs', loads: 1 }, /spring, during the season, or in winter/)
     c.logs = 10
     ok(c, { t: 'sellLogs', loads: 4 })
     expect([c.logs, c.yearLogs, c.yearRevenue]).toEqual([6, 4 * S.LOG_PRICE, 4 * S.LOG_PRICE])

@@ -294,7 +294,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
   station: { name: 'Weather station', cash: 1000, logs: 0, stone: 0, days: 1, dufour: false,
     does: 'Forecast errors are 40% smaller, and each field shows today\'s blight risk based on how long its own leaves stay wet.', catch: 'The forecast can still be wrong, and knowing the risk doesn\'t spray the field for you.' },
   road: { name: 'Gravel road', cash: 1500, logs: 0, stone: 40, days: 12, dufour: false,
-    does: 'Travel and hauling are 30% faster.', catch: 'It takes forty loads of stone, or $1,600 to buy that much from the quarry.' },
+    does: 'Travel and hauling are 30% faster.', catch: 'It takes 40 loads of stone, or $1,600 to buy that much from the quarry.' },
 }
 export const BUILDING_KINDS: BuildingKind[] = ['house', 'shed', 'bunk', 'packing', 'pond', 'stand', 'station', 'road']
 export const HOUSE_CWT = 3600                  // a built potato house; at home with ventilation it holds CELLAR_CWT_VENT
