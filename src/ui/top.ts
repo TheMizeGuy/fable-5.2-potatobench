@@ -195,7 +195,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     const model = {
       p: c.phase, d: dateText(c, form), y: yearText(c), cash: Math.round(c.cash), sp: app.speed, at: app.resumeSpeed, done: season && S.seasonDone(c) && !ctx.awaiting, layout,
       day: c.season?.day, w: c.season?.watchDay, f: c.season?.log.filter(e => e.type === 'frost').length, u: app.settings.units, t: ctx.touch(), withClock, snug,
-      g: g ? [g.id, progressText(g), g.now] : 0, gone: gone?.id ?? '', fresh, pop, wait: season && g?.id === 'plant' ? plantingIn(app.world, c) : -1, mats: mats ? [Math.round(c.logs * 10), Math.round(c.stone * 10)] : 0,
+      g: g ? [g.id, progressText(g), g.now] : 0, spd: app.speed, gone: gone?.id ?? '', fresh, pop, wait: season && g?.id === 'plant' ? plantingIn(app.world, c) : -1, mats: mats ? [Math.round(c.logs * 10), Math.round(c.stone * 10)] : 0,
       ladder: pop === 'goals' ? goals(c).map(x => [x.id, x.done, progressText(x)]) : 0, show: pop === 'goals' && g ? !!o.canShow?.(g) : false,
     }
     const line = gone ?? g
@@ -215,7 +215,9 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
           onclick: () => { pop = pop === 'goals' ? '' : 'goals'; ctx.dirty() },
         }, icon(gone ? 'check' : wait > 0 ? 'stale' : 'goal', 'ic s'), h('span', { class: 'sr' }, gone ? 'Done: ' : 'Next goal: '), h('span', { class: 'goal-t' }, lineTitle),
         lineN && !gone ? h('span', { class: 'goal-n num', testid: wait > 0 ? 'goal-wait' : undefined }, lineN) : null,
-        !line.now && !gone ? h('span', { class: 'goal-when' }, line.when.toLowerCase()) : c.phase === 'plan' && CROP_STEPS.has(line.id) && !gone ? h('span', { class: 'goal-when' }, 'once the season starts') : null,
+        !line.now && !gone ? h('span', { class: 'goal-when' }, line.when.toLowerCase()) : c.phase === 'plan' && CROP_STEPS.has(line.id) && !gone ? h('span', { class: 'goal-when' }, 'once the season starts')
+          // While the soil warms there is nothing to do but wait: a quiet word that the days can go faster.
+          : wait > 0 && app.speed > 0 && app.speed < 3 ? h('span', { class: 'goal-when', testid: 'goal-faster' }, ctx.touch() ? '· tap 1× to go faster' : '· F goes faster') : null,
         h('span', { class: 'sr' }, `. ${line.why} Open the goals.`)) : null,
         pop === 'goals' ? ladder(c, g) : null),
       season ? h('button', { class: 'forecast', type: 'button', testid: 'forecast', onclick: () => o.onAlmanac?.() },

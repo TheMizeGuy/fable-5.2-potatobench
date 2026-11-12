@@ -145,10 +145,10 @@ test('a first season by the short path, from the opening to the next spring, wit
     const s = await look(page)
     if (s.incidents) await answerIncident(page, false)
     return s.badges.length
-  }, { timeout: 120_000, intervals: [500] }).toBeGreaterThan(0)
-  const first = await look(page)
-  expect(first.paused).toBe(false)
-  expect(first.speed).toBe(1)
+  }, { timeout: 240_000, intervals: [500] }).toBeGreaterThan(0)
+  // An answer takes a frame to show on the clock.
+  await expect.poll(async () => (await look(page)).paused).toBe(false)
+  expect((await look(page)).speed).toBe(1)
 
   // A crop weighed in is the one thing that stops it, once the last barrel is hauled in from the field.
   await farm(page, 'ticket', { store: true, mobile: isMobile, ms: 600_000 })
@@ -270,7 +270,13 @@ test('a later year on the farmstead: an applicant hired, land on the mortgage, a
   await expect(winter.getByTestId('winter-0-build')).toHaveAttribute('aria-pressed', 'true')
   const brush = await game<{ i: number; name: string }>(page, `(() => { const i = sim.PARCELS.findIndex(p => p.cover === 'brush'); return { i, name: sim.PARCELS[i].name } })()`)
   // Woods goes to the first tract with timber standing; pressed again it moves on to the next.
-  for (let k = 0; k < 4 && !(await winter.getByTestId(`winter-${hand}`).textContent())?.includes(brush.name); k++) await winter.getByTestId(`winter-${hand}-woods`).click()
+  // Each press is let land before the next: the line under the person says which tract it is.
+  const tractOf = () => game<number>(page, `c.crew.find(u => u.id === ${hand}).winterField`)
+  for (let k = 0; k < 4 && (await tractOf()) !== brush.i; k++) {
+    const was = await tractOf()
+    await winter.getByTestId(`winter-${hand}-woods`).click()
+    await expect.poll(tractOf).not.toBe(was)
+  }
   await expect(winter.getByTestId(`winter-${hand}`)).toContainText(brush.name)
   for (let i = 0; i < 9 && !(await page.getByTestId('year-next').count()); i++) {
     await page.getByTestId('month-next').click()

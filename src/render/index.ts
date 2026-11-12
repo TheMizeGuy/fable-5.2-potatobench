@@ -95,7 +95,11 @@ interface SampleInfo { hill: number; weights: number[]; marks: number[] }
 interface Waiter { kind: 'sample' | 'dig'; field: number; resolve: () => void; born: number; until: number; seen: boolean; settle: number }
 
 function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void): FieldView {
-  const renderer = new WebGLRenderer({ canvas, antialias: false, alpha: false, depth: false, stencil: false, powerPreference: 'high-performance' })
+  // The context is asked for here and checked before three sees it: a context handed back already lost makes three's
+  // constructor log an error and throw, where this throws quietly and the caller draws the farm flat.
+  const gl = canvas.getContext('webgl2', { antialias: false, alpha: false, depth: false, stencil: false, premultipliedAlpha: true, preserveDrawingBuffer: false, powerPreference: 'high-performance' })
+  if (!gl || gl.isContextLost()) throw new Error('no WebGL context')
+  const renderer = new WebGLRenderer({ canvas, context: gl, antialias: false, alpha: false, depth: false, stencil: false, powerPreference: 'high-performance' })
   if (!renderer.getContext()) throw new Error('no WebGL context')
   canvas.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;outline:none'
   renderer.shadowMap.enabled = true

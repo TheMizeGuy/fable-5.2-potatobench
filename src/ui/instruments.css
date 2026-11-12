@@ -584,7 +584,7 @@
 .season[data-layout='short'] .order.more { flex: 0 0 40px; }
 .season[data-layout='narrow'] .estimate .gauge, .season[data-layout='short'] .estimate .gauge { width: 64px; }
 .season[data-layout='narrow'] .estimate, .season[data-layout='short'] .estimate { flex-wrap: wrap; row-gap: 0; }
-.season[data-layout='narrow'] .paused, .season[data-layout='short'] .paused { display: none; }
+.season[data-layout='narrow'] .paused, .season[data-layout='short'] .paused { right: var(--sp-2); top: calc(var(--top, 56px) + var(--sp-1)); }
 
 /* Upright phones and tablets: two rows on top, and the clock by the thumb with the crew. */
 .season[data-layout='narrow'] .topbar { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'date right' 'fc fc'; gap: 0 var(--sp-2); padding-left: max(var(--sp-3), env(safe-area-inset-left, 0px)); padding-right: max(var(--sp-1), env(safe-area-inset-right, 0px)); }
