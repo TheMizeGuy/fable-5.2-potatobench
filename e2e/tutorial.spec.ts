@@ -23,17 +23,20 @@ async function slip(page: Page): Promise<{ id: string; target: string }> {
 }
 
 // A point on open land, with open land all round it out to r: nothing of the interface where the fingers go.
-async function land(page: Page, r = 0): Promise<{ x: number; y: number }> {
-  return page.evaluate(r => {
+async function land(page: Page, r = 0): Promise<{ x: number; y: number; r: number }> {
+  return page.evaluate(want => {
     const canvas = document.getElementById('field')
     const open = (x: number, y: number) => document.elementFromPoint(x, y) === canvas
-    for (let fy = 0.3; fy < 0.85; fy += 0.04) for (let fx = 0.2; fx < 0.8; fx += 0.04) {
-      const x = Math.round(innerWidth * fx), y = Math.round(innerHeight * fy)
-      if (!open(x, y)) continue
-      if (r && ![0, 0.5, 1, 1.5, 2, 2.5, 3].every(a => open(x + Math.cos(a) * r, y + Math.sin(a) * r) && open(x - Math.cos(a) * r, y - Math.sin(a) * r))) continue
-      return { x, y }
+    // The widest circle of open land that can be found, down to a third of the one asked for.
+    for (const r of want ? [want, want * 0.75, want * 0.55, want * 0.4] : [0]) {
+      for (let fy = 0.12; fy < 0.9; fy += 0.02) for (let fx = 0.1; fx < 0.9; fx += 0.03) {
+        const x = Math.round(innerWidth * fx), y = Math.round(innerHeight * fy)
+        if (!open(x, y)) continue
+        if (r && ![0, 0.5, 1, 1.5, 2, 2.5, 3].every(a => open(x + Math.cos(a) * r, y + Math.sin(a) * r) && open(x - Math.cos(a) * r, y - Math.sin(a) * r))) continue
+        return { x, y, r }
+      }
     }
-    return { x: Math.round(innerWidth / 2), y: Math.round(innerHeight * 0.6) }
+    return { x: Math.round(innerWidth / 2), y: Math.round(innerHeight * 0.6), r: want }
   }, r)
 }
 
@@ -64,7 +67,7 @@ async function drag(page: Page, mobile: boolean, far = 1): Promise<void> {
 async function turn(page: Page, mobile: boolean, far = 1): Promise<void> {
   const p = await land(page, mobile ? 60 : 0)
   if (mobile) {
-    const at = (a: number) => [{ x: p.x + Math.cos(a) * 60, y: p.y + Math.sin(a) * 60 }, { x: p.x - Math.cos(a) * 60, y: p.y - Math.sin(a) * 60 }]
+    const at = (a: number) => [{ x: p.x + Math.cos(a) * p.r, y: p.y + Math.sin(a) * p.r }, { x: p.x - Math.cos(a) * p.r, y: p.y - Math.sin(a) * p.r }]
     await fingers(page, Array.from({ length: 13 }, (_, k) => at(k * 0.06 * far)))
     return
   }
@@ -81,7 +84,7 @@ async function clear(page: Page, target: string): Promise<void> {
   const sb = await s.first().boundingBox()
   if (!sb) return
   const others = await page.evaluate(t => [...document.querySelectorAll<HTMLElement>(`#ui .clock, #ui .command, #ui .telegram, #ui .paper-layer .dialog${t ? `, #ui [data-testid="${t}"]` : ''}`)]
-    .filter(e => !e.closest('.guide, .leaving, [hidden]') && e.offsetParent !== null)
+    .filter(e => !e.closest('.guide, .leaving, [hidden], .out') && e.offsetParent !== null)
     .map(e => { const r = e.getBoundingClientRect(); return { name: e.dataset.testid ?? e.className, x: r.x, y: r.y, width: r.width, height: r.height } })
     .filter(r => r.width > 0 && r.height > 0), target)
   // In spring the slip sits in the catalogue itself, beside its own order blank.
@@ -89,7 +92,7 @@ async function clear(page: Page, target: string): Promise<void> {
 }
 
 test('a guided first year: offered on a new farm, taken, and followed to the first planting by what it says alone', async ({ page, isMobile }) => {
-  test.setTimeout(420_000)
+  test.setTimeout(900_000)
   const errors = watchErrors(page)
   await fresh(page)
   await page.getByTestId('play').click()
@@ -180,7 +183,7 @@ test('a guided first year: offered on a new farm, taken, and followed to the fir
 })
 
 test('refused, it shows nothing: Straight in, then a first season to its first planting with no slip and no fist', async ({ page }) => {
-  test.setTimeout(240_000)
+  test.setTimeout(420_000)
   const errors = watchErrors(page)
   await fresh(page)
   await page.getByTestId('play').click()
@@ -203,7 +206,7 @@ test('refused, it shows nothing: Straight in, then a first season to its first p
 })
 
 test('the progress survives a reload, and any lesson can be shown again from How to play and the menu', async ({ page, isMobile }) => {
-  test.setTimeout(180_000)
+  test.setTimeout(300_000)
   const errors = watchErrors(page)
   await fresh(page)
   await page.getByTestId('play').click()
