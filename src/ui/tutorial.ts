@@ -222,7 +222,8 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
   let input: Input = ctx.touch() ? 'touch' : 'mouse'
   let stale = true
   const onKey = (e: KeyboardEvent) => { if (!['Shift', 'Control', 'Alt', 'Meta'].includes(e.key) && !(e.target as HTMLElement).closest?.('input')) setInput('keys') }
-  const onPointer = (e: PointerEvent) => setInput(e.pointerType === 'touch' ? 'touch' : 'mouse')
+  // A coarse pointer is a finger, whatever the event calls itself.
+  const onPointer = (e: PointerEvent) => setInput(e.pointerType === 'touch' || ctx.touch() ? 'touch' : 'mouse')
   function setInput(i: Input): void { if (input !== i) { input = i; stale = true } }
   document.addEventListener('keydown', onKey, true)
   document.addEventListener('pointerdown', onPointer, true)
@@ -358,14 +359,17 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     let fistBox: Box | null = null
     if (t.at) {
       const cx = (t.at.left + t.at.right) / 2, cy = (t.at.top + t.at.bottom) / 2, s = 44, g = 6
-      const tries: [number, number, string][] = [
-        [t.at.left - s - g, cy - s / 2, 'r'], [t.at.right + g, cy - s / 2, 'l'], [cx - s / 2, t.at.top - s - g, 'd'], [cx - s / 2, t.at.bottom + g, 'u'],
-      ]
+      const up: [number, number, string] = [cx - s / 2, t.at.top - s - g, 'd'], down: [number, number, string] = [cx - s / 2, t.at.bottom + g, 'u']
+      // Beside it, else toward the middle of the screen from it.
+      const tries: [number, number, string][] = [[t.at.left - s - g, cy - s / 2, 'r'], [t.at.right + g, cy - s / 2, 'l'], ...(cy < innerHeight / 2 ? [down, up] : [up, down])]
       // In spring the slip is in the catalogue: the fist keeps off it.
       const docked = slot?.isConnected ? slot.querySelector('.guide')?.getBoundingClientRect() : undefined
       const inside = ([x, y]: [number, number, string]) => x >= 4 && y >= 4 && x + s <= innerWidth - 4 && y + s <= innerHeight - 4
       const free = ([x, y]: [number, number, string]) => !docked || !meets({ left: x, top: y, right: x + s, bottom: y + s }, box(docked))
-      const fit = tries.find(f => inside(f) && free(f)) ?? tries.find(inside) ?? null
+      // Never over another control it would hide: a clock, a command bar, a paper.
+      const hard = hardOnes(root)
+      const clear = ([x, y]: [number, number, string]) => !hard.some(a => meets({ left: x, top: y, right: x + s, bottom: y + s }, a))
+      const fit = tries.find(f => inside(f) && free(f) && clear(f)) ?? tries.find(f => inside(f) && free(f)) ?? tries.find(inside) ?? null
       if (fit) {
         fistBox = { left: fit[0], top: fit[1], right: fit[0] + s, bottom: fit[1] + s }
         hand.style.transform = `translate3d(${fit[0].toFixed(1)}px, ${fit[1].toFixed(1)}px, 0)`
