@@ -24,7 +24,7 @@ import { planScreen } from './plan.ts'
 import { alertShort, countYearsFrom } from './rules.ts'
 import { seasonScreen } from './season.ts'
 import { titleScreen } from './title.ts'
-import { mountGuide, openGuide } from './tutorial.ts'
+import { guidedYear, HOLD, mountGuide, openGuide } from './tutorial.ts'
 import { whois } from './whois.ts'
 
 export const mountHud: MountHud = (root, app, view, sound) => {
@@ -171,6 +171,8 @@ export const mountHud: MountHud = (root, app, view, sound) => {
         const a = e.alert
         // The tray and the ticket speak for themselves, and a clean walk shows on the field's own card.
         if (app.screen !== 'season' || a.type === 'sample' || a.type === 'weighed' || (a.type === 'scout' && a.level !== 'bad')) break
+        // In the guided first year the guide speaks: news that asks nothing goes to the almanac's diary alone.
+        if (guidedYear(app.campaign) && a.level !== 'bad') break
         const short = alertShort(a)
         // Frost over barrels names no one field: the note goes to the biggest haul, where the barrels and the hauler show.
         const field = a.type === 'frostBarrels' && app.campaign ? S.haulInfo(app.world, app.campaign).sort((x, y) => y.cwt - x.cwt)[0]?.field ?? -1 : a.field
@@ -199,7 +201,7 @@ export const mountHud: MountHud = (root, app, view, sound) => {
       case 'speed': {
         // The clock stopped itself for something nothing on screen has said: say what.
         const c = app.campaign
-        if (e.speed === 0 && app.pauseReason && app.screen === 'season' && c && !S.seasonDone(c) && !papers.isOpen() && !notes.has(app.pauseReason)) {
+        if (e.speed === 0 && app.pauseReason && app.pauseReason !== HOLD && !guidedYear(c) && app.screen === 'season' && c && !S.seasonDone(c) && !papers.isOpen() && !notes.has(app.pauseReason)) {
           notes.push({ text: app.holding ? app.pauseReason : `Stopped: ${app.pauseReason}`, level: 'info', ttl: 9000 })
         }
         dirty = true
@@ -277,6 +279,8 @@ export const mountHud: MountHud = (root, app, view, sound) => {
         root.classList.toggle('touch', touchQuery.matches)
         screen.update()
         who.update()
+        // One voice: no toast under a card that wants an answer.
+        root.classList.toggle('voice', !!root.querySelector('.screen-layer .telegram:not([hidden]), .paper-layer > .dialog:not(.out)'))
         const [t, r, b, l] = screen.insets().map(x => Math.max(0, Math.round(x)))
         app.setInsets(t, r, b, l)
         root.style.setProperty('--top', `${t}px`)

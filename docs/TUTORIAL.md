@@ -1,196 +1,171 @@
 # The County: the guided first year
 
-The owner, after playing the live build: "we need a full tutorial", and "UX needs to be much more intuitive". This file
-is the tutorial's design: who speaks, how it behaves, every lesson with what starts it and what ends it, and why they
-come in this order. The code is `src/game/tutorial.ts` (the lessons and their state, no DOM), `src/ui/tutorial.ts`
-(the slip, the fist, the guide's own paper) and `src/ui/system/tutorial.css`; the tests are `tests/tutorial.test.ts`
-and `e2e/tutorial.spec.ts`.
+The owner, after playing the live build with the first guide in it: "it just needs to pause when the things pop up so
+you can see it and be more obvious to start the tutorial", and then: "The game is just too fast and too much at once
+theres all these things happening and even with the tutorial you have no idea why theres all this text on thes creen
+you dont know why your doing what your doing ever". This file is the guide's design after that: a calm first year
+that says why. The code is `src/game/tutorial.ts` (the lessons and their state, no DOM), `src/ui/tutorial.ts` (the
+cards, the note, the pointing hand, the clock's hold, the guide's own paper) and `src/ui/system/tutorial.css`; the
+tests are `tests/tutorial.test.ts` and `e2e/tutorial.spec.ts`.
 
-## What it is
+## The rules
 
-The **county agent's notes**: a printed slip, one of the farm's own papers, that says one thing at a time in the real
-game on the player's own first farm. Each note asks for one thing in under 20 words and gives its reason in under 20
-more. The printer's fist sits beside the one control the note means (the code's mark for "the one next thing"), on a
-paper disc with a keyline so it reads over any land. There is no slideshow, no sandbox and no wall of text.
+**A. Offered where it cannot be missed.** Play on a new farm, in a browser that never answered, puts a card in the
+middle of the screen: "First time on the farm?", one line, and two numbered replies as on a telegram: 1 "Guide my
+first year" (filled, the pointing hand, marked the usual choice, under the keyboard) and 2 "Straight in". The plan
+behind it cannot be reached until it is answered. Keys 1 and 2 answer; Escape is Straight in. It is asked once in a
+browser. The title's contents carry "Guided first year" under Play, which starts a guided farm outright; the menu and
+How to play keep the guide's paper.
 
-- **Teach by doing.** A note ends when the farm or the app shows the thing done: a field picked (`app.selection`), a
-  person picked (`app.unit`), the clock running (`app.speed`), an order on the list or carried out (the campaign), the
-  camera moved (measured from the scene's anchors, `fieldAnchor`). Only notes that ask the player to read something
-  carry a button, "Noted". A note whose thing is already done is passed over without being shown, so a player who runs
-  ahead is never held behind it. A note to read is never passed by the days running: it waits for Noted. The slip
-  carries no "n of m" count (round three saw it jump as lessons were passed over); it names the part of the year.
-- **When it first matters.** The opening is only what a player needs to watch the first planting: the money and
-  Start the season in spring, the clock, then planting day itself. Everything else (the forecast, the almanac, the
-  list, the camera's turn, a field's card) comes the first time it is wanted, and every later note the first time its
-  moment does in year one (a telegram, blight weather, a frost, the dig, the weigh ticket, the cellar, the account
-  book), then the second spring and the farm it opens up. Round two of first-time players had the first real order at
-  request 29 of 90 behind a tour of the camera, boards, almanac, card and face; that tour is gone.
-- **Refusable.** A new farm started from the title carries the offer once, tucked into the seed catalogue above Start
-  the season: "Guide my first year" or "Straight in". It never blocks: pressing Start the season without answering is
-  straight in. Every note has Skip and "Stop the guide". The guide's own paper (from the menu, and from How to play)
-  lists every lesson with a pencil tick for those behind the player, turns the guide on and off, and shows any lesson
-  again ("Again": it comes back the next time its moment does, guide on or off). Progress is kept in the browser under
-  its own key, `the-county/tutorial`, apart from the save, and survives a reload.
-- **Holds the clock for a click, and says so.** In the guided first season Start the season leaves the clock stopped
-  until the note that starts it. Only a note that asks for a click on something the days would carry away (a need's
-  stamp, whose moment passes) or to watch something happen (the first planting) stops the clock while it shows; a note
-  that is only information (meeting your people, a hand's face, what the crew does) lets the days run until Noted. A
-  holding note says "Clock held", and
-  lets the clock go on at the speed it had once it passes. While it holds, a line under the clock itself says "Held
-  for the agent's note. Any speed goes on." Any speed key starts the clock at once, and a player who starts it is not
-  stopped again for that note. Only the player's own press counts: the game
-  setting the clock going again (a paper closing, a telegram answered) while a note holds it is held again. The line
-  goes under the clock, else over it, else under the "Go on" key, and never over a face, the list or a panel. The clock's own stops (a telegram, a weigh ticket, frost on barrels, the season's end) are
-  explained the first time, under the clock's tag. A paper puts the notes away until it closes; the weigh ticket's own
-  note is the one shown over its paper, set beside it. A telegram's note comes first and lies beside it, never over it.
-- **One at a time, never a step ahead.** The note on show keeps its place until it passes; only an urgent one (a
-  telegram, a weigh ticket, the clock stopping) comes in front, and the one it interrupted comes back after it. After a
-  note passes the next waits a moment (a note that stops the clock does not wait: it shows as it stops it), and waits while a panel its click opened (a catalogue fold, a paper, a person's
-  card, the grid) is still open, so People is not left half read for Land, for eight seconds at most: a card left open
-  never silences the guide. A note that cuts in (urgent, or one that holds the clock) is the only kind that takes over
-  from a note on show.
-- **Placed where it covers nothing it is about.** In spring the slip floats beside the sheet, on the land, and lies
-  over no row of the catalogue and no applicant. On a phone, where the sheet takes the whole width, it sits in the
-  sheet above the order blank, and while a fold it is not about is open (Equipment, say) it is set aside, fist and all,
-  until the fold closes. The browser test and the spring captures at all eight sizes check that no row is covered.
-- **A press meant for it never falls through.** For half a second after a note goes (passed, Noted, set aside), a
-  press where it lay is taken by nothing, so a click on Noted just as it left never opens what was under it. Elsewhere it floats at
-  the first clear place nearest the top middle of the land, keeping off the boards, the time book and every panel; it
-  never lies over what it points at, the list or panel holding that, the fist, the clock, a command bar, a telegram,
-  a paper, a test-dig tray or a person's card. Where it must lie over a panel it goes short (its reason line folded)
-  and over the top boards before a sheet of words; with no room even then (a person's card over half a phone) it goes
-  short over that card or the list, never over a clock, a command bar, a question, a paper or what it points at.
-  It stays put until something comes over it, and moves the frame a card, a clock or a telegram slides over it.
-- **The fist only where it is clear.** It sits beside what it means (left, right, then toward the middle of the
-  screen), on bare land or a sheet's empty ground only: never on words, a figure, a face, a key, a tag or a control.
-  Where no such place exists (a reply inside a telegram, Start the season under the order blank on a phone) it is
-  left out and the slip's words do alone. When a field it points at is out of view, the slip adds how to bring the
-  farm back (Home, or a double-click or double-tap on open ground).
-- **Something over its target.** When a field's tag or stamp it points at is out of view, or something that is not a
-  card lies over it (the "Go on" key), the fist is left out and the slip offers "Show me", which brings that field
-  into frame.
-- **A card in the way.** When what a note points at lies under a card (a person's card, a field's card, the grid),
-  or on a phone a card covers half the land during a note about the land itself, the fist goes to the card's cross
-  and the slip says "A card is in the way: its cross puts it away."
-- **Points only at what is there.** A note that names a control another part of the game may not show (a foreman's
-  button, the seed choice) completes from the farm's state and keeps its words when the control is missing; no note
-  sends the player to a long goal the farm cannot do now (`S.goalCosts`).
-- **For everyone.** Words differ for a mouse, a touch screen and the keyboard, chosen by what the player last used:
-  keys are taught only to someone stepping through the screen with Tab or Enter (Space, a speed key or a letter
-  is not enough). Each note is read out once to a screen reader, politely. Reduced motion
-  stills the slip's arrival and the fist's nudge. The slip's buttons are 44 px tall.
-- **Quiet beside the old tips.** While the guide is on, the one-line first-time tips for each order keep quiet: the
-  notes say the same thing at the same moment.
+**B. What the game is, before the first season.** The guide's first card says it as a picture: the year's five
+phases in a row (plant in May, tend, kill the vines in September, dig and weigh, sell or store), the year-end bills
+as their real figure ($19,000: the bank's note and the household), and the deal: "Your crew does the field work. You
+make the calls. I stop the clock and say why each time." The date board carries the same five phases all year, for
+every player, the present one marked, each with a sentence on hover or tap (on a phone the present phase and the
+next stand at the ends of the season's rule, to keep the top board to a fifth of the height).
 
-## The lessons
+**C. Every note stops the clock.** The moment a note appears in a season the days stop, and they stay stopped until
+the note is dealt with: its control pressed, Noted, a "Skip to", Skip, or Stop the guide. The note says "Clock held".
+The days then go on at the speed they had. The clock's keys are the player's: Space or a speed key pressed in the
+second and a half after a key or click of theirs puts a note away and lets the days go; the game starting the clock
+by itself (a paper closing, a telegram answered) is held again at once. A note never appears, changes or moves under
+a running clock: nothing is shown while the days run except what has stopped them.
 
-"Starts" is the moment it can be shown; "ends" is what passes it. All of them are passed over, unshown, once what
-ends them is already true. "Holds" marks a note that stops the clock while it shows.
+**D. One voice.** At most one thing asks for attention: the guide's note, or a card that needs an answer (a
+telegram, the spraying question, a weigh ticket, the offer). While a card is up the guide says nothing beside it;
+the first telegram and the first weigh ticket carry one line from the agent inside the card. In the guided first
+year: no hint toasts, no toast for news that is not bad (the crew starting work, the kill dates), no test-dig tray
+laid on the land unasked, no goal slip in the season (the notes say what is next; it contradicted them: "Spray
+before the blight" under a note saying there was nothing to do), and no "Needs your order" chip for a vine kill the
+crew will do by itself. For every player: toasts and the "Go on" and "Days running" keys are hidden while a note or
+a card is up, the spraying question is three short replies, and the first-time tip for an order is five words
+("Spray: click the ringed stamp.").
 
-### The opening: what the first planting needs
+**E. Each note says what, why and what to do.** What the thing is, why it matters as a consequence, and what to do
+now (often: nothing). 35 words at most, in plain words: no term is used before a note has said what it is (blight is
+"a disease that can take a whole field in one wet week" the first time it is named).
 
-| # | Lesson | Starts | Ends | Points at |
+**F. The screen grows with the year.** In the guided first year the season opens on the land, the date and the
+cash. Each other piece appears when it first matters, introduced by the one note that holds the clock for it:
+
+| Piece | Hidden until | Introduced by |
+| --- | --- | --- |
+| The fields' tags | the first day | "Your fields" |
+| The people (faces on the land, the time book) | planting begins | "Planting day" |
+| The forecast | blight weather | "Blight weather" |
+| The list of work | the crew's first spray, or the first call | "The list of work" / "A call on a field" |
+| The stamps on fields | the first call that is the player's | "A call on a field" / "Kill the vines" |
+| The figure after the year-end bills | the first crop weighed | "What the year end takes" |
+
+A hidden piece keeps its place in the layout (`visibility: hidden` on a class of the root, `st-hide-<piece>`), so
+nothing moves when it arrives. A skipped or passed note still brings its pieces. Stopping the guide, or any year
+after the first, shows everything.
+
+What has arrived says less than it does in a later year (the root's class `guided`): the forecast gives its figures
+for today and tomorrow and only the day, the sky and the blight leaf after that; an order on a field's tag is its
+mark without the words "On the list"; the list of work is the next two orders and a count; the line saying what the
+money just did is left out. The year's phases on the date board are, for every player, the year card's five marks
+with only the present one named in a word (Plant, Tend, Kill, Dig, Sell): an ordinary season screen is held under
+80 words by `e2e/interface.spec.ts`, and five names did not fit in it.
+
+**G. Few decisions, no dead time.** The crew plants, hills, walks, digs and hauls by itself. The first year asks for
+the spraying question (with "Keep the fields sprayed" marked the usual choice), the telegrams the year sends, and
+each weigh ticket. A note with a wait after it carries "Skip to <the next thing>": the days run at the fastest speed
+to the next note, then go back to the speed they had. A telegram on the way stops them, and answered, they run on to
+the note the skip was for; a weigh ticket ends the skip, and so does the player's own hand on the clock. A stop the
+guide has explained once (frost on the barrels) is not made again that year: the crew sees to it and the days go
+on, so the clock never stands with nothing on the screen saying why. No telegram comes in a farm's first year before its
+first planting is finished (before mid-June; `QUIET_UNTIL`, `drawIncidents` in `src/sim/season.ts`), so nothing asks
+a question before the player has seen a field planted.
+
+**H. About a dozen notes.** The guided first year to the first sale is the list below. Later lessons (the cellar,
+the account book, the second spring) are as they were, held to 40 words.
+
+## Budgets, and where they are held
+
+| Budget | Limit | Held by |
+| --- | --- | --- |
+| A note's words (what it asks and why) | 35 | `tests/tutorial.test.ts` (every first-year note, three ways of playing, real seasons), `e2e/tutorial.spec.ts` (as shown) |
+| A later lesson's words | 40 | `tests/tutorial.test.ts` |
+| A card's words (the offer, what a year is) | 80 | `e2e/tutorial.spec.ts` |
+| Words in view on the season screen with a note up (boards, land, list, people and the note with its keys; field names aside): the first guided day | 80 | `e2e/tutorial.spec.ts` |
+| The same, any moment of the guided first year | 100 | `e2e/tutorial.spec.ts` |
+| The same with a telegram or the spraying question up instead of a note | 120 | `e2e/tutorial.spec.ts` |
+| Things asking for attention at once (note, offer, telegram or spraying card, weigh ticket or other paper, toast, test-dig tray, pressing-work pop) | 1 | `e2e/tutorial.spec.ts`, at every step |
+| The clock's speed while a note or a card is up | 0 | `e2e/tutorial.spec.ts`, at every step |
+| Notes from Play to the first sale | 16 kinds | `e2e/tutorial.spec.ts`; `tests/tutorial.test.ts` holds a whole simulated first year to 18 |
+
+The budgets are held by cutting the screen, not by raising the number. The weigh ticket is the one paper allowed to
+be rich (a field's whole account: about 215 words); it is laid over the screen and is not counted in the screen's
+words.
+
+## The guided first year, note by note
+
+Words are for a mouse; a touch screen says "Tap" and "Pinch", the keyboard its keys.
+
+| # | Note | When | It says | Then |
 | --- | --- | --- | --- | --- |
-| 1 | The money | The first spring's plan | Noted, The money opened, or the season begun | The plan's money lines |
-| 2 | Start the first season | The first spring's plan | The season begins | Start the season; says a first year usually ends $4,000 to $24,000 down, as the spring sheet does, and why |
-| 3 | Start the clock | The season, the clock held | The clock running | Let the weeks go: 3× (or 3×) |
-| 4 | Watch the first planting (holds) | Planting on the list by the one planting rule, or just begun | The camera brought closer or moved, or three days run | You, on the land; says the routine began it with no order |
-| 5 | Meet your people | After 4 | You picked, or Noted | Your face |
-| 6 | Give the first order (holds) | A planting stamp ("ask me" only) | A planting order on the list | That field's stamp |
-| 7 | Routine work and your calls | A job the routine listed, after 5 | Noted | The list |
-| 8 | Plant the rest (holds) | One field planted, more stamps ("ask me" only) | Every field planted, or several picked at once | The next stamp |
-| 9 | The list of orders | After 5, with orders waiting | Noted | The list |
-| 10 | Turn and tip the view | After 5 | The camera turned or tipped (or turned out of view) | (the land) |
-| 11 | Pick a field | After 5 | A field picked | Whichever potato field's tag is on screen |
-| 12 | Read a field's card | After 11, with a field picked | Noted, or the card put away | The card |
+| 0 | The offer (card) | Play, a new farm | "First time on the farm? I can walk you through your first year, one thing at a time, stopping the clock each time." 1 Guide my first year / 2 Straight in | |
+| 1 | What a year is (card) | the first plan | The five phases as a picture; "At each year's end the bank and the household take $19,000. The crop has to pay it. Your crew does the field work. You make the calls. I stop the clock and say why each time." | Begin |
+| 2 | Start the first season | the first plan | "The plan is ready: 4 fields of potatoes. Press Start the season. The bank's spring loan pays for it, and the crop pays the loan back." | the key itself |
+| 3 | Your fields (brings the tags) | the first day | "These tags are your fields: 4 in potatoes, 2 resting. Nothing is planted yet: the soil is too cold. Your crew plants the potatoes by itself when the soil warms." | Noted |
+| 4 | Look round | after 3 | "Drag the land to move over it. Roll the wheel to come closer. Planting waits for warm soil, about 9 days away." | Skip to planting day |
+| 5 | Planting day (brings the people) | planting begun | "Planting has begun, with no order from you. You are one of the crew: your face at the foot says what you are doing. The same face on the land is you, at work." | Skip to the end of planting |
+| 6 | The summer | every field planted | "The fields are planted. All summer the crew hills the rows and walks them for disease, by itself. Nothing for you to do until blight weather comes: that is your first call." | Skip to the first call |
+| 7 | Blight weather (brings the forecast) | the blight watch begins | "Blight weather is coming. Blight is a disease that can take a whole field in one wet week. The forecast marks it with a red leaf. A spray protects a field for about a week." | Noted, then the spraying question, the usual choice marked |
+| 8 | The list of work (brings the list) | the crew's first spray on the list | "The crew now sprays by itself. Its work shows on the list at the foot, in the order it is done. Each spray costs about $X a field. Nothing more for you to do." | Skip to the next call |
+| 8b | A call on a field (brings the stamps and the list) | a call that is the player's ("ask me", or water) | "A ringed stamp on a field is a call for you. This one: <the need>. Click the stamp to order it. The work joins the list at the foot." | the stamp, or Noted |
+| 9 | Kill the vines (brings the stamps) | the kill in sight | "The crop is nearly made. Killing the vines stops the growth, so the skins toughen for digging. The crew does it by itself on <day>. Nothing for you to do." | Skip to the dig |
+| 10 | Frost on the barrels (only if it comes) | the clock stopped for frost | "Frost tonight would spoil the crop still in barrels in the field. The crew hauls it in first. Nothing for you to do." | Noted |
+| 11 | The dig | digging begun | "Digging has begun. The crew lifts the crop into barrels and hauls it to the potato house. Nothing for you to do. Each field is weighed when its last barrel is in." | Skip to the weigh ticket |
+| 12 | The first weigh ticket (the agent's line inside it) | the first field weighed | "Your first weigh ticket: what the field grew, and what it lost. Sell now is the safe choice." | Sell or store |
+| 13 | What the year end takes (brings the figure) | the ticket answered | "Your first crop is weighed. Under your cash is what would be left after the year-end bills of $19,000. It counts the crop still in the ground, so it moves until every field is in." | Skip to the next ticket |
+| 14 | Close out the season | the season done | "The crop is in and the season is over. Press Close out the season. Winter is next: what you stored can be sold then." | the key itself |
 
-Why: the money is said before the first Start the season because round two's players never understood it. The clock
-is held until 3 so that nothing runs past a newcomer; 3 points at the goal's own "Let the weeks go" key. Planting day
-holds the clock so the planting can be watched rather than missed at 3×, and "Meet your people" asks for the click on
-your own face while it is held. 7 to 12 come after the planting is under way, when there is something to see on the
-list, a reason to turn the view and a crop to read on a card.
+The first telegram carries, inside it: "Pick a reply: the clock waits for you."
 
-### The first year (each the first time it comes)
+After the season: Winter in the cellar, Fell woods in winter, Raise a building, The account book; then the second
+spring (a variety, People, a hand, Land, the money, Start the second season) and its season (the calls, Meet a hand,
+Who does what, Name a foreman), as before.
 
-| Lesson | Starts | Ends | Points at |
-| --- | --- | --- | --- |
-| How spraying is done (urgent) | Blight weather's spraying question on the telegram card (`spray-ask`) | Answered or put away | Its first reply (`spray-way-auto`) |
-| Answer a telegram (urgent) | A question waiting (it stops the clock) | That question answered or lapsed | The first reply |
-| Why the clock stopped (urgent) | The clock stopped by itself, not by the guide | Noted, or the clock going on | (the note at the foot) |
-| Read the forecast | After the opening's planting, when the forecast first shows rain, frost or blight risk | Noted | The forecast |
-| Open the almanac | After the forecast | The almanac opened | The forecast |
-| Work that cannot wait | `S.pressing` lists work nobody will take | Noted, or nothing pressing | (the note at the foot) |
-| Walk, hill, test dig, pull blighted plants, dig (holds) | Their stamp ("ask me" only; the routine does them) | Ordered or done | Its stamp |
-| Spray before the blight (holds) | The first spraying stamp | Spraying ordered or done | Its stamp |
-| Leave spraying to the crew | After the first spray, spraying not by itself | It is set to by itself, or Noted | (words: `S.sprayOutlook`'s passes and dollars) |
-| Frost in the forecast | Frost likely within two days, with plants up or barrels out | Noted, or the frost days past | The forecast |
-| Water a dry field (holds) | The first watering stamp | Watering ordered | Its stamp |
-| Kill the vines (holds) | The first vine-kill stamp | Vines ordered killed or killed | Its stamp; says the trade (small tubers stay small, skins set, safe from frost) and the day the crew kills them by itself, as `S.pressing` words it |
-| What the year end takes | Digging begins, before the first weigh ticket | Noted, or the season closed | The pass book; says what the farm would end with (`S.moneyNow().after`) |
-| Bring the crop in | Barrels in a field | Noted, or the crop weighed | The field |
-| Sell or store the crop (urgent) | The first weigh ticket open | The ticket answered (closed), or a sale | (the ticket's own fist) |
-| Close out the season (urgent) | The season done | The season closed | Close out the season |
-| Winter in the cellar | The cellar | A month gone by | On to the next month; with the cellar empty it says Close the year instead |
-| Fell woods in winter | The cellar, after its note, woods or brush held | Someone set to Woods, or Noted | Your Woods key in the winter's work |
-| Raise a building | The cellar, after its note, a building the farm can raise (`S.goalCosts`) | Raise a building opened, or a building ordered | Raise a building |
-| The account book | The year end | The next spring planned | Plan year 2 |
+## How it behaves
 
-### The second spring, and the farm it opens up
-
-| Lesson | Starts | Ends | Points at |
-| --- | --- | --- | --- |
-| Choose a variety for a field | A later spring | A field picked in the plan | A potato field's tag; speaks of seed only when there is saved seed |
-| Hire a hand | A later spring | People opened, or someone hired | People |
-| Choose a hand (follows at once) | People open, after Hire a hand, nobody hired | Noted, someone hired, or People closed | The first Hire |
-| Rent or buy land | A later spring, once People is closed | Land opened, or land beyond the home six taken | Land |
-| The money and the loan | A later spring | The money opened | The money |
-| Start the second season | A later spring | The season begins | Start the season |
-| The season's calls | The second season | Noted | The forecast |
-| Meet a hand | The season, with someone hired, after the calls | A hand picked | Their face |
-| Who does what | The season, three or more on the farm | The work grid opened | The grid at the foot |
-| Name a foreman | After a hand was picked, with land beyond the home six and a hand to name | Noted, or a foreman named | Foreman on their card, where it shows |
-
-Why: year two teaches the season's real work first (the calls), then people. Long projects come when the farm can
-pay for them and the season has room: felling and building are taught in the winter, when the woodlot's own card says
-felling is best done, never in May.
-
-## Words
-
-The words are the county agent's: plain, second person, the game's own terms, no real place and no calendar year.
-`tests/tutorial.test.ts` holds every lesson to 20 words for the ask and 40 with its reason, in all three ways of
-playing, in every state a guided year shows it in.
+- **Refusable at every step.** Every note has "Stop the guide"; a note that asks for a press has Skip. The guide's
+  paper (the menu, How to play) lists every lesson, turns the guide on and off, and shows any lesson again. Progress
+  is kept in the browser under `the-county/tutorial`, apart from the save, and survives a reload.
+- **The cards take the keyboard.** While the offer or the year card is up, the layers behind are inert and keys
+  other than the card's own are taken by nothing.
+- **Placed where it covers nothing it is about.** The note floats at the first clear place nearest the top middle of
+  the land, off the boards, the list and every panel, and never over what it points at. In spring it lies over no
+  row of the catalogue; on a phone it sits in the sheet above the order blank.
+- **The pointing hand only where it is clear.** Beside what it means, on bare land or a sheet's empty ground; left
+  out where there is none.
+- **A press meant for it never falls through.** A note's keys take no press for 450 ms after it appears (a click
+  meant for the land under it does not answer it), and for half a second after it goes a press where it lay is
+  taken by nothing.
+- **For everyone.** Words differ for a mouse, a touch screen and the keyboard. Each note is read out once to a
+  screen reader. Reduced motion stills its arrival. Its keys are 44 px tall.
 
 ## How it is checked
 
-- `tests/tutorial.test.ts`: the opening of only money, start, clock and planting day, with the planting and the first
-  click held; every year lesson starting and passing from real simulated seasons (several seeds, the routine on and
-  every kind on "ask me"); the money said before the first sale; the kill's trade; why the clock stopped; the second
-  spring with the calls before people and blocks, and felling kept out of the season; a player who runs ahead passed
-  over every step already done; papers and telegrams; skipping, stopping, replaying; storage; the word limits.
-- `e2e/tutorial.spec.ts` (Chromium and the phone): a new farm from the title, the guide taken, followed through the
-  whole opening by doing only what each note says at the control its fist marks. For every lesson reached it checks
-  that the slip never lies over what it points at, the list or panel holding it, the clock, a command bar, a telegram
-  or a paper; that the pointing hand lies on no words, figure, face, key, tag or control; and that a lesson asking for
-  a click on something the days move holds the clock and says so. Refused, a season to its first planting with
-  nothing shown; a reload, a skip, the guide stopped and a lesson shown again from the menu and from How to play; axe
-  with the offer, a note and the guide's paper showing.
-- `tools/quality/capture.ts`: the states `guide-*` (the offer, the money, the clock, planting day, you, the list, a
-  field and its card, the first call, a telegram, the weigh ticket, the cellar, felling in winter, the account book,
-  the second spring, the guide's paper) at all eight sizes.
+- `tests/tutorial.test.ts`: the offer made once; the opening's order on three farms; every piece of the screen held
+  back and brought by its note, and never held back off the guide or past the first year; "ask me" and "by itself"
+  each explained; the word limits in every way of playing; storage, skipping, replaying; and the simulation's rule
+  that no telegram comes before the first planting is finished.
+- `e2e/tutorial.spec.ts` (Chromium and the phone): a guided first year played from Play to the first sale by
+  pressing only what the notes ask (their "Skip to", Noted, the control they point at, a card's usual reply),
+  holding every budget above at every step; the offer centred, under the keyboard, answered by click and by keys 1
+  and 2; Straight in showing the whole interface and no note; a guided farm started from the title; a reload keeping
+  its place; axe with the offer, the year card and a note showing.
+- `tools/quality/capture.ts`: the states `guide-*` (the offer, the year card, the plan's note, the first guided
+  day, each note of the year, the spraying question, the first telegram and weigh ticket, the cellar, the account
+  book, the second spring, the guide's paper) at all eight sizes.
 
 ## Known limits
 
-- The camera lessons end on the scene's anchors moving, so a camera moved by something else (an alert clicked that
-  brings a field into frame) can pass them; a gesture that turns the farm out of view counts as the gesture asked for.
-- The weigh ticket's note sits over the boards beside the scale; on a phone it covers the date board while the ticket
-  is up.
-- On the cellar and the account book at a desk there is no clear land above the sheet, so the slip lies short over
-  the top edge of the sheet.
-- A telegram can arrive in the first days; once it is answered the game goes on with the clock by itself (main's
-  rule since the routine), so the held opening clock can start then, and "Start the clock" is passed over.
-- Later telegrams of the same year have no note: the first one taught them.
-- A two-finger twist that starts on a field tag does not turn the view (the tag takes the touch).
-- "How spraying is done" keys on the question's test ids (`spray-ask`, `spray-way-*`); if the interface's question
-  changes them, the note keeps its words and loses its fist.
+- The frost note keys on the clock's own stop saying "frost"; if that wording changes the note does not come.
 - The vine-kill note reads the crew's kill day out of `S.pressing`'s words ("kills the vines on <day>"); if that
   wording changes, the note drops the day and keeps the trade.
+- A farm that plants nothing before mid-June gets its telegrams from then on.
+- Later telegrams and tickets of the first year carry no line from the agent: the first one taught them.
+- In the guided first year the test-dig tray is not laid on the land by itself; it is on the field's card.

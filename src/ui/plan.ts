@@ -15,7 +15,7 @@ import { fold } from './system/parts.ts'
 import { topBar } from './top.ts'
 import { usualFirstYear } from './usual-year.ts'
 import { nextGoal } from '../game/goals.ts'
-import { holdsClock, springSlot } from './tutorial.ts'
+import { springSlot } from './tutorial.ts'
 
 function varietyTraits(v: S.Variety, c: S.Campaign, world: S.World): string[] {
   return [
@@ -208,11 +208,9 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
   }
 
   function begin(): void {
-    const held = holdsClock(app.campaign)
     const r = ctx.run({ t: 'begin' })
     if (!r.ok) return
-    // The guided first season waits for its lesson on the clock.
-    if (!held) app.setSpeed(1)
+    app.setSpeed(1)
   }
 
   // A fold opened or closed stays where it was under the pointer: the sheet scrolls by what moved above it, and when

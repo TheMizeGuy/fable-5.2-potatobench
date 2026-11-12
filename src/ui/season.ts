@@ -21,7 +21,7 @@ import { plates, type PlateModel } from './plates.ts'
 import { hint as hintText, isJob, isStale, jobText, JOB_VERB, KEY_JOB, stageGlyph } from './rules.ts'
 import type { Ink } from './system/parts.ts'
 import { clock, topBar } from './top.ts'
-import { quietTips } from './tutorial.ts'
+import { guidedYear, mayAsk, quietTips } from './tutorial.ts'
 import './season.css'
 
 const HINTS_KEY = 'the-county/hints'
@@ -232,7 +232,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   const startedSaid = new Set<string>()
   function sayCrewStarts(c: S.Campaign): void {
     const s0 = c.season
-    if (!s0) return
+    if (!s0 || guidedYear(c)) return
     for (const kind of ['plant', 'dig'] as const) {
       const key = `${c.seed}.${c.year}.${kind}`
       if (startedSaid.has(key)) continue
@@ -252,7 +252,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   const killSaid = new Set<string>()
   function sayKillDates(c: S.Campaign): void {
     const s0 = c.season
-    if (!s0) return
+    if (!s0 || guidedYear(c)) return
     const tomorrow = S.formatDay(s0.year, s0.day + 1)
     for (const p of fates(app.world, c).pressing) {
       if (p.kind !== 'kill' || p.job >= 0) continue
@@ -278,6 +278,8 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     const s0 = c.season
     const key = `${c.seed}.${c.year}`
     if (!s0 || s0.watchDay < 0 || sprayAsked === key || sprayWay(c) || S.seasonDone(c) || sprayAsking() || !s0.fields.some(f => f.status === 'growing')) return
+    // In the guided first year the question waits for the note that says what blight is.
+    if (!mayAsk(c, 'blight')) return
     sprayAsked = key
     if (S.routineInfo(c).some(r => r.kind === 'spray' && r.auto)) return
     askSpray(ctx)
@@ -286,7 +288,8 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   const off = app.on(ev => {
     if (ev.type === 'yard' || ev.type === 'unit' || ev.type === 'select') ctx.dirty()
     else if (ev.type === 'events') {
-      for (const e of ev.events) if (e.type === 'sample') { const staged = app.speed < 3; void ctx.view.whenShown('sample', e.field).then(() => { if (app.screen === 'season') openTray(e, staged) }) }
+      // In the guided first year the test dig is on the field's card, not laid on the land unasked.
+      for (const e of ev.events) if (e.type === 'sample' && !guidedYear(app.campaign)) { const staged = app.speed < 3; void ctx.view.whenShown('sample', e.field).then(() => { if (app.screen === 'season') openTray(e, staged) }) }
       const c0 = app.campaign
       if (c0) { sayCrewStarts(c0); sayKillDates(c0) }
     }
@@ -316,8 +319,8 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     // The tip is a slip with the alerts, wearing its stamp's cut, so it never covers a field.
     if (hint) {
       const kind = hint.kind
-      const how = hint.first ? ` ${ctx.touch() ? 'Tap' : 'Click'} the ringed stamp.` : ''
-      ctx.notes.pin({ key: `tip-${kind}`, glyph: kind, text: `${hintText(kind)}${how}`, onClose: () => { hint = null; ctx.dirty() } })
+      // Five words at the foot; the field's card has the rest.
+      ctx.notes.pin({ key: `tip-${kind}`, glyph: kind, text: `${JOB_VERB[kind]}: ${ctx.touch() ? 'tap' : 'click'} the ringed stamp.`, onClose: () => { hint = null; ctx.dirty() } })
     } else ctx.notes.unpin()
   }
 

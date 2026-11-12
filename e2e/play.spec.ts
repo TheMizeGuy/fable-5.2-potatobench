@@ -5,7 +5,7 @@
 // the test hook if not. Play gives a farm of its own with seasons made from a random seed, so nothing here may count
 // on one year's weather, and money is read from the game rather than written into the test.
 import { test, type Page } from '@playwright/test'
-import { expect, look, noSidewaysScroll, pause, reach, watchErrors } from './helpers.ts'
+import { expect, look, noSidewaysScroll, pause, reach, straightIn, watchErrors } from './helpers.ts'
 
 const BADGE = '#ui [data-testid^="badge-"]'
 
@@ -127,9 +127,11 @@ test('a first season by the short path, from the opening to the next spring, wit
   await page.evaluate(() => localStorage.clear())
   await page.reload()
 
-  // The opening asks nothing: Play, then Start. Two clicks from the landing page to a running season.
+  // The opening asks one thing, once in a browser: the guided first year or straight in. Then Start: three clicks
+  // from the landing page to a running season, two ever after.
   let clicks = 0
   await page.getByTestId('play').click(); clicks++
+  await straightIn(page); clicks++
   await expect(page.getByTestId('begin-season')).toBeVisible()
   const held = await game<number>(page, 'c.fields.filter(f => f.tenure !== "none").length')
   await expect(page.locator('#ui [data-testid^="field-"].plate')).toHaveCount(held)
@@ -143,7 +145,7 @@ test('a first season by the short path, from the opening to the next spring, wit
   await expect(page.getByTestId('forecast')).toBeVisible()
   await expect.poll(async () => (await look(page)).running).toBe(true)
   console.log(`clicks from the landing page to a running season: ${clicks}`)
-  expect(clicks).toBe(2)
+  expect(clicks).toBe(3)
 
   // Start goes straight into a running game at 1x: no chip to dismiss, nothing more to press.
   expect((await look(page)).speed).toBe(1)
@@ -223,6 +225,7 @@ test('a later year on the farmstead: an applicant hired, land on the mortgage, a
   await page.evaluate(() => localStorage.clear())
   await page.reload()
   await page.getByTestId('play').click()
+  await straightIn(page)
   await expect(page.getByTestId('begin-season')).toBeVisible()
   // The first year is not what this is about: it is run by the reference practice, and the cash topped up before the
   // year closes so that a hard first year cannot end the farm before the second begins.
@@ -345,6 +348,10 @@ test('the same start by keyboard alone', async ({ page, isMobile }) => {
   // The focus is put on Play once the land is up, which a slow engine takes a while over.
   await expect(page.getByTestId('play')).toBeFocused({ timeout: 20_000 })
   await page.keyboard.press('Enter')
+  // The offer takes the keyboard: 2 is Straight in, and the focus goes on to Start the season.
+  await expect(page.getByTestId('guide-accept')).toBeFocused()
+  await page.keyboard.press('Digit2')
+  await expect(page.getByTestId('guide-offer')).toHaveCount(0)
   await expect(page.getByTestId('begin-season')).toBeFocused()
   // Fields are chosen with the number keys; Escape lets them go.
   await page.keyboard.press('Digit2')
