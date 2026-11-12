@@ -217,21 +217,34 @@ function offerBody(ctx: Ctx): HTMLElement[] {
 
 // ---------------------------------------------------------------- the camera, read from the scene's anchors
 
-interface Sig { cx: number; cy: number; spread: number; angle: number; ratio: number }
+// Where each parcel's anchor is on the screen, by parcel: two of these, taken a gesture apart, say how the view moved.
+type Sig = Map<number, { x: number; y: number }>
 
-function signature(ctx: Ctx): Sig | null {
-  const pts: { x: number; y: number }[] = []
-  for (let i = 0; i < S.HOME_FIELDS; i++) {
+function signature(ctx: Ctx): Sig {
+  const pts: Sig = new Map()
+  for (let i = 0; i < S.FIELD_COUNT; i++) {
     const a = ctx.view.fieldAnchor(i)
-    if (a.visible && Number.isFinite(a.x) && Number.isFinite(a.y) && Math.abs(a.x) < innerWidth * 6 && Math.abs(a.y) < innerHeight * 6) pts.push(a)
+    if (a.visible && Number.isFinite(a.x) && Number.isFinite(a.y) && Math.abs(a.x) < innerWidth * 20 && Math.abs(a.y) < innerHeight * 20) pts.set(i, { x: a.x, y: a.y })
   }
-  if (pts.length < 3) return null
-  const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length
-  const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length
-  const sx = Math.sqrt(pts.reduce((s, p) => s + (p.x - cx) ** 2, 0) / pts.length)
-  const sy = Math.sqrt(pts.reduce((s, p) => s + (p.y - cy) ** 2, 0) / pts.length)
-  const a = pts[0], b = pts[pts.length - 1]
-  return { cx, cy, spread: Math.hypot(sx, sy), angle: Math.atan2(b.y - a.y, b.x - a.x), ratio: sy / Math.max(1, sx) }
+  return pts
+}
+
+// Pan, zoom, turn and tip between two signatures, over the parcels seen in both; null with fewer than two.
+function moved(b: Sig, s: Sig): { pan: number; zoom: number; turn: number; tip: number } | null {
+  const ids = [...b.keys()].filter(i => s.has(i))
+  if (ids.length < 2) return null
+  const stat = (m: Sig) => {
+    const ps = ids.map(i => m.get(i)!)
+    const cx = ps.reduce((t, p) => t + p.x, 0) / ps.length, cy = ps.reduce((t, p) => t + p.y, 0) / ps.length
+    const sx = Math.sqrt(ps.reduce((t, p) => t + (p.x - cx) ** 2, 0) / ps.length), sy = Math.sqrt(ps.reduce((t, p) => t + (p.y - cy) ** 2, 0) / ps.length)
+    const a = ps[0], z = ps[ps.length - 1]
+    return { cx, cy, spread: Math.max(1, Math.hypot(sx, sy)), angle: Math.atan2(z.y - a.y, z.x - a.x), ratio: sy / Math.max(1, sx) }
+  }
+  const p = stat(b), q = stat(s)
+  return {
+    pan: Math.hypot(q.cx - p.cx, q.cy - p.cy), zoom: Math.abs(q.spread / p.spread - 1),
+    turn: Math.abs(Math.atan2(Math.sin(q.angle - p.angle), Math.cos(q.angle - p.angle))), tip: Math.abs(q.ratio / Math.max(0.01, p.ratio) - 1),
+  }
 }
 
 // ---------------------------------------------------------------- mounting
@@ -263,7 +276,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
   // 0: clear of every panel; 1: clear only of what it must never cover.
   let tier = 0
   let checked = 0
-  const cam: { base: Sig | null; until: number; kind: 'pan' | 'zoom' | 'turn' | 'two' } = { base: null, until: 0, kind: 'pan' }
+  const cam: { base: Sig | null; until: number; kind: 'pan' | 'zoom' | 'turn' | 'two'; travel: number } = { base: null, until: 0, kind: 'pan', travel: 0 }
 
   function papers(): string[] {
     return [...root.querySelectorAll<HTMLElement>('.paper-layer > .dialog:not(.out)')].map(d => d.dataset.testid ?? 'paper')
@@ -285,22 +298,22 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
   // Q, E and the page keys turn or tip), and whether the land on screen really moved that way.
   function camMoved(): void {
     const b = cam.base
-    const s = signature(ctx)
     if (!b) return
-    if (!s) { guide.note(cam.kind === 'two' ? 'turn' : cam.kind); return }
-    const turn = Math.atan2(Math.sin(s.angle - b.angle), Math.cos(s.angle - b.angle))
+    const m = moved(b, signature(ctx))
     const k = cam.kind
-    if (k === 'pan' && Math.hypot(s.cx - b.cx, s.cy - b.cy) > 40) guide.note('pan')
-    if ((k === 'zoom' || k === 'two') && Math.abs(s.spread / b.spread - 1) > 0.1) guide.note('zoom')
-    if ((k === 'turn' || k === 'two') && Math.abs(turn) > 0.1) guide.note('turn')
-    if (k === 'turn' && Math.abs(s.ratio / b.ratio - 1) > 0.08) guide.note('tip')
+    // The farm all but out of view, before or after: the gesture's own travel says it moved the view.
+    if (!m) { if (cam.travel >= 40) guide.note(k === 'two' ? 'turn' : k); return }
+    if (k === 'pan' && m.pan > 40) guide.note('pan')
+    if ((k === 'zoom' || k === 'two') && m.zoom > 0.1) guide.note('zoom')
+    if ((k === 'turn' || k === 'two') && m.turn > 0.1) guide.note('turn')
+    if (k === 'turn' && m.tip > 0.08) guide.note('tip')
   }
   const CAM_KEYS: Record<string, 'pan' | 'turn'> = { ArrowLeft: 'pan', ArrowRight: 'pan', ArrowUp: 'pan', ArrowDown: 'pan', q: 'turn', Q: 'turn', e: 'turn', E: 'turn', PageUp: 'turn', PageDown: 'turn' }
   const touches = new Set<number>()
   function gesture(on: boolean, kind: 'pan' | 'zoom' | 'turn' | 'two'): void {
     if (app.screen !== 'season' || !(now?.id === 'watch' || now?.id === 'turn')) { cam.base = null; return }
     if (on) {
-      if (!cam.base || (kind !== cam.kind && kind !== 'pan')) { cam.base = signature(ctx); cam.kind = kind }
+      if (!cam.base || (kind !== cam.kind && kind !== 'pan')) { cam.base = signature(ctx); cam.kind = kind; cam.travel = 0 }
       cam.until = performance.now() + 900
     } else cam.until = performance.now() + 400
   }
@@ -311,10 +324,11 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     if (p.pointerType === 'touch') { if (e.type === 'pointerdown') touches.add(p.pointerId); else if (e.type === 'pointerup') touches.delete(p.pointerId) }
     if (e.type === 'pointermove' && !p.buttons) return
     const kind = touches.size >= 2 ? 'two' : p.buttons & 2 || p.button === 2 ? 'turn' : 'pan'
+    if (e.type === 'pointermove') cam.travel += Math.hypot(p.movementX || 0, p.movementY || 0)
     gesture(e.type !== 'pointerup', kind)
   }
   const onLift = (e: PointerEvent) => touches.delete(e.pointerId)
-  const onCamKey = (e: KeyboardEvent) => { const k = CAM_KEYS[e.key]; if (k) gesture(e.type === 'keydown', k) }
+  const onCamKey = (e: KeyboardEvent) => { const k = CAM_KEYS[e.key]; if (k) { if (e.type === 'keydown') cam.travel += 20; gesture(e.type === 'keydown', k) } }
   for (const t of ['pointerdown', 'pointermove', 'pointerup', 'wheel']) document.addEventListener(t, onCanvas, { capture: true, passive: true })
   document.addEventListener('pointercancel', onLift, true)
   document.addEventListener('keydown', onCamKey, true)
