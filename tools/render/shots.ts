@@ -171,6 +171,58 @@ const winter = async (page: Page, months: number) => {
   }, months)
 }
 
+// The land: a test-only edit of the campaign (its parcels, buildings, pond), then a redraw.
+async function land(page: Page, edit: string): Promise<void> {
+  await page.evaluate(edit => {
+    const { app, sim } = (window as any).__county
+    new Function('app', 'sim', 'c', edit)(app, sim, app.campaign)
+    app.emit({ type: 'change' })
+  }, edit)
+}
+// A clear day about a day of the year, the land edited, seen from a view (or from the playing view).
+const landShot = (name: string, day: number, edit: string, v?: View, sky = 'clear'): Shot => ({
+  name, size: [1920, 1080], setup: async page => {
+    await playTo(page, 1977, 5, day)
+    await playUntil(page, [], SKY(sky))
+    if (edit) await land(page, edit)
+    await settle(page)
+    if (v) { await view(page, v); await frames(page, 8) }
+  },
+})
+const WOODLOT: View = { x: -8.4, z: -22.5, dist: 40, yaw: 0.16, pitch: 0.5 }
+const SWALE: View = { x: 24, z: 12.6, dist: 36, yaw: 0.3, pitch: 0.52 }
+const POND_VIEW: View = { x: 8.7, z: 20.5, dist: 24, yaw: 0.2, pitch: 0.48 }
+// Each stage of clearing a tract (@ is the parcel).
+const CLEARING: [string, string][] = [
+  ['1-standing', ''],
+  ['2-half-felled', `const f = c.fields[@]; f.felled = sim.FELL_DAYS[f.cover] * 0.5`],
+  ['3-stumps', `const f = c.fields[@]; f.felled = sim.FELL_DAYS[f.cover]; f.cover = 'stumps'`],
+  ['4-stumping', `const f = c.fields[@]; f.felled = sim.FELL_DAYS[f.cover]; f.cover = 'stumps'; f.works = { kind: 'stump', left: 5 }`],
+  ['5-rocks', `const f = c.fields[@]; f.cover = 'open'; f.stones = 0.75; f.raw = true`],
+  ['6-picked', `const f = c.fields[@]; f.cover = 'open'; f.stones = 0.35; f.raw = true`],
+]
+const POND_BUILT = `c.buildings.push({ id: 99, kind: 'pond', yard: -1, done: 20, need: 20, built: true })`
+const landShots: Shot[] = [
+  ...CLEARING.map(([stage, edit]) => landShot(`c1-woodlot-${stage}`, 190, edit.replaceAll('@', '14'), WOODLOT)),
+  ...CLEARING.map(([stage, edit]) => landShot(`c2-swale-${stage}`, 190, edit.replaceAll('@', '15'), SWALE)),
+  landShot('c3-half-felled-playing', 190, CLEARING[1][1].replaceAll('@', '14') + '; c.fields[15].felled = 8; c.fields[16].tenure = "owned"; c.fields[16].felled = 30'),
+  landShot('c4-hedgerows-0-to-4', 190, `[2, 3, 4, 5].forEach((i, k) => { c.fields[i].brushed = c.year - k })`, { x: 0, z: 6, dist: 62, yaw: 0.16, pitch: 0.56 }),
+  landShot('c5-tiled-after-rain', 150, `c.fields[4].tiled = true`, { x: -0.3, z: 12.2, dist: 44, yaw: 0.16, pitch: 0.55 }, 'rain'),
+  landShot('c5b-tile-laying', 135, `c.fields[5].works = { kind: 'tile', left: 4 }`, { x: 7.8, z: 12.2, dist: 30, yaw: 0.16, pitch: 0.5 }),
+  landShot('c6-pond-full', 190, `${POND_BUILT}; c.pond = 6`, POND_VIEW),
+  landShot('c6b-pond-low', 190, `${POND_BUILT}; c.pond = 1`, POND_VIEW),
+  landShot('c6c-pond-digging', 190, `c.buildings.push({ id: 99, kind: 'pond', yard: -1, done: 9, need: 20, built: false })`, POND_VIEW),
+  landShot('c7-gravel-road', 190, `c.buildings.push({ id: 98, kind: 'road', yard: -1, done: 12, need: 12, built: true })`, { x: 20, z: 2, dist: 40, yaw: 0.3, pitch: 0.5 }),
+  landShot('c8-october-colour', 274, ''),
+  landShot('c8b-october-ridge', 274, '', { x: -8, z: -18, dist: 30, yaw: 0.1, pitch: 0.2 }),
+  landShot('m05-may', 135, ''), landShot('m06-june', 166, ''), landShot('m07-july', 196, ''),
+  landShot('m08-august', 227, ''), landShot('m09-september', 258, ''), landShot('m10-october', 288, ''),
+  landShot('v1-wood-edge', 190, '', { x: -24, z: -16, dist: 22, yaw: 0.5, pitch: 0.16 }),
+  landShot('v2-brook', 190, '', { x: 4, z: 23.5, dist: 16, yaw: -0.7, pitch: 0.3 }),
+  landShot('v3-meadow', 190, '', { x: 38, z: 6, dist: 20, yaw: -0.4, pitch: 0.2 }),
+  landShot('v4-ridge-from-brook', 190, '', { x: 2, z: 4, dist: 48, yaw: 0.0, pitch: 0.12 }),
+]
+
 const shots: Shot[] = [
   { name: '01-opening-1920', size: [1920, 1080], insets: NONE, setup: title },
   { name: '01-opening-1440', insets: NONE, setup: title },
@@ -258,6 +310,7 @@ const shots: Shot[] = [
   { name: 'f07-strategic-july', size: [1920, 1080], setup: async page => { await july(page); await playUntil(page, [], SKY('clear')); await settle(page) } },
   { name: 'f08-close-rows', size: [1920, 1080], setup: async page => { await july(page); await playUntil(page, [], SKY('clear')); await settle(page); await view(page, ROWS); await frames(page, 30) } },
   { name: 'f09-fog', size: [1920, 1080], setup: async page => { await bigFarm(page, { rent: [6, 7], until: 165 }); console.log('  ', await playUntil(page, [], SKY('fog'))); await settle(page); await frames(page, 4) } },
+  ...landShots,
   // Sizes: the farm kept whole inside what the interface leaves free.
   ...([
     ['30-size-390x844', [390, 844], { top: 52, bottom: 190 }],

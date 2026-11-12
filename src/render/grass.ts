@@ -8,8 +8,8 @@ import {
 } from 'three'
 import { grassGeometry } from './geometry.ts'
 import {
-  BARN, DUFOUR_BARN, DUFOUR_HOUSE, DUFOUR_POTATO_HOUSE, HOME_WOODS, HOUSE, LAND, POTATO_HOUSE, WALLS, brookHalf, brookZ, fieldMask, groundY, oursAt,
-  roadDist,
+  BARN, DUFOUR_BARN, DUFOUR_HOUSE, DUFOUR_POTATO_HOUSE, HOUSE, LAND, POND, POTATO_HOUSE, WALLS, brookHalf, brookZ, fieldMask, groundY, oursAt,
+  ridgeWoodAt, roadDist, tractAt,
 } from './layout.ts'
 import { hash2, rng } from './noise.ts'
 import { SNOW_RIME, patch, sway } from './shaders.ts'
@@ -37,7 +37,8 @@ export class Grass {
     const clear = (x: number, z: number): boolean => {
       if (fieldMask(x, z, 0.9) > 0 || roadDist(x, z) < 0.95) return false
       if (Math.abs(z - brookZ(x)) < brookHalf(x) + 0.12) return false
-      if (z < HOME_WOODS.z1 + 0.6) return false
+      if (ridgeWoodAt(x, z) > 0.55 || tractAt(x, z, 0.2) >= 0) return false
+      if (Math.hypot((x - POND.x) / (POND.rx * 1.2), (z - POND.z) / (POND.rz * 1.2)) < 1) return false
       for (const y of yards) if (Math.hypot(x - y.x, (z - y.z) * 0.7) < 3.6) return false
       return true
     }

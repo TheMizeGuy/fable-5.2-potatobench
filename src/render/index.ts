@@ -5,6 +5,7 @@ import type { App } from '../game/app.ts'
 import type { CreateFieldView, FieldView } from '../game/contracts.ts'
 import { FIELD_COUNT, HILLS } from '../sim/index.ts'
 import { CameraRig, type Pose, type Viewport } from './camera.ts'
+import { Clearing } from './clearing.ts'
 import { Kit } from './crew.ts'
 import { copyEnv, easeEnv, envTarget, light, makeEnv, makeLight } from './env.ts'
 import { createFallbackView } from './fallback.ts'
@@ -16,6 +17,7 @@ import { attachInput } from './input.ts'
 import { FD, FIELDS, fieldBaseY, groundY, YARD_AT, yardAt } from './layout.ts'
 import { clamp, smooth } from './noise.ts'
 import { Particles } from './particles.ts'
+import { Pond } from './pond.ts'
 import { Post } from './post.ts'
 import { LAMP, Props } from './props.ts'
 import { U } from './shaders.ts'
@@ -23,7 +25,7 @@ import { SunShadows } from './shadows.ts'
 import { Sky } from './sky.ts'
 import { snapshot, type Mode, type Snapshot } from './state.ts'
 import { buildTerrain } from './terrain.ts'
-import { flowerTexture, leafTexture, noiseTexture, puffTexture, roadTexture, sprayTexture } from './textures.ts'
+import { flowerTexture, leafTexture, noiseTexture, puffTexture } from './textures.ts'
 import { Birds } from './birds.ts'
 import { Crews, type PendingReveal } from './units.ts'
 import { Weather } from './weather.ts'
@@ -104,9 +106,11 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   const sky = new Sky()
   const shadows = new SunShadows(scene)
   const post = new Post(renderer)
-  const roadTex = roadTexture(), leafTex = leafTexture(), flowerTex = flowerTexture(), sprayTex = sprayTexture(), puffTex = puffTexture()
-  const terrain = buildTerrain(roadTex)
-  const flora = new Flora(sprayTex)
+  const leafTex = leafTexture(), flowerTex = flowerTexture(), puffTex = puffTexture()
+  const terrain = buildTerrain()
+  const flora = new Flora()
+  const clearing = new Clearing(flora)
+  const pond = new Pond()
   const grass = new Grass()
   const props = new Props()
   const fields = new Fields(leafTex, flowerTex)
@@ -116,7 +120,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   const particles = new Particles(puffTex)
   const weather = new Weather()
   const birds = new Birds()
-  scene.add(sky.dome, terrain.group, flora.group, grass.group, props.group, fields.group, harvest.group, crews.group, particles.mesh, weather.group, birds.mesh)
+  scene.add(sky.dome, terrain.group, flora.group, clearing.group, pond.group, grass.group, props.group, fields.group, harvest.group, crews.group, particles.mesh, weather.group, birds.mesh)
   // Whatever throws a shadow near at hand throws it into the fine cascade; the far trees and farmsteads only into the wide one.
   scene.traverse(o => { if (o.castShadow && !o.userData.far) o.layers.enable(3) })
 
@@ -322,6 +326,10 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     const barrels = next.fields.map((f, i) => next.mode === 'season' && (f.status === 'digging' || (f.status === 'dug' && next.seasonDay - (dugSince.get(i) ?? next.seasonDay) < 4)))
     harvest.setBarrelFields(barrels, (f, h) => shown[f][h].look.kind === 'dug' && next.fields[f].hills[h].kind === 'dug')
     fields.setTargets(next.fields, shown)
+    clearing.set(next.fields)
+    pond.set(next.farm)
+    const gravelled = next.farm.buildings.find(b => b.kind === 'road')
+    terrain.gravel.value = gravelled ? (gravelled.built ? 1 : gravelled.progress) : 0
     envTarget(next, envT)
     samples.clear()
     dayPassed = false
@@ -470,7 +478,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     U.uCloud.value.z = windAt.x * 0.0009
     U.uCloud.value.w = windAt.y * 0.0009
     terrain.water.ice.value = env.ice
-    for (let i = 0; i < FIELD_COUNT; i++) terrain.held.value[i] = fields.held[i]
+    for (let i = 0; i < FIELD_COUNT; i++) { terrain.held.value[i] = fields.held[i]; terrain.off.value[i] = fields.off[i]; terrain.avail.value[i] = fields.avail[i] }
     input.frame(dt)
     if (rig.idle < 0.2 && framing !== 'free') framing = 'free'
     rig.update(dt, vp, reduced, snap.mode === 'title' && framing === 'title' && !reduced ? Math.sin(time * 0.05) : 0)
@@ -601,7 +609,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
 
   // For measuring what each part of the scene costs: the parts by name, which the tools can switch off.
   const parts: Record<string, Object3D> = {
-    terrain: terrain.group, flora: flora.group, grass: grass.group, props: props.group, fields: fields.group, harvest: harvest.group,
+    terrain: terrain.group, flora: flora.group, clearing: clearing.group, pond: pond.group, grass: grass.group, props: props.group, fields: fields.group, harvest: harvest.group,
     crews: crews.group, particles: particles.mesh, weather: weather.group, birds: birds.mesh, sky: sky.dome,
   }
 
@@ -696,6 +704,8 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       canvas.removeEventListener('webglcontextrestored', onRestored)
       terrain.dispose()
       flora.dispose()
+      clearing.dispose()
+      pond.dispose()
       grass.dispose()
       props.dispose()
       fields.dispose()
@@ -708,7 +718,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       sky.dispose()
       shadows.dispose()
       post.dispose()
-      for (const t of [noise, roadTex, leafTex, flowerTex, sprayTex, puffTex]) t.dispose()
+      for (const t of [noise, leafTex, flowerTex, puffTex]) t.dispose()
       renderer.dispose()
     },
   }
