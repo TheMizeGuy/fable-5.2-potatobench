@@ -405,6 +405,10 @@ export interface Tuning {
   rocksSpring: number       // in spring before planting only at this
   brushElev: number[]       // positions on the slope whose hedgerows it cuts
   rushFrom: number          // a rush part when this many days of machine work wait on the list
+  pickerBacklog: number     // pickers while this many days of digging wait
+  haulDays: number          // days of hauling a field's crop takes, for planning
+  peakHire: number          // a tractor operator from the hall when machine work due within a month is more than this a driver
+  peakKeep: number          // and kept another month while it is more than this a driver
   buildFloor: number        // cash kept after a building, beyond what the year end will take
   houseOver: number         // a potato house once the crop overflowed the cellar by this much
   packStock: number         // a packing shed once this much is stored over the winter
@@ -430,8 +434,8 @@ export const TUNING: Tuning = {
   landValue: { ridge: 10000, brook: 6000, dufour: 7500 }, landMargin: 0,
   loanFloor: -75000, buyLand: -60000, buyLeft: 4, fieldCash: 15000, yearEndSafety: 10000, potatoShare: 0.5, flipLoss: 4000,
   walkFrom: 5, walkPer: 5, tractor: { fields: 7, left: 2 }, truckFields: 5, tractor3Fields: 12, hallValue: 1000,
-  rocksAt: 0.45, rocksSpring: 0.6, brushElev: [0], rushFrom: 2,
-  buildFloor: 5000, houseOver: 1500, packStock: 4000, pondWaterings: 3, sundayTired: 0.5,
+  rocksAt: 0.45, rocksSpring: 0.6, brushElev: [0], rushFrom: 2, pickerBacklog: 4, haulDays: 1.7, peakHire: 18, peakKeep: 12,
+  buildFloor: 5000, houseOver: 1500, packStock: 3000, pondWaterings: 3, sundayTired: 0.5,
   contractGain: 0, no1Share: 0.8, contractSafety: 0.85,
   yieldAcre: { norland: 251, superior: 287, katahdin: 325, kennebec: 337, burbank: 337, atlantic: 350, gold: 290, caribou: 371 },
   realized: { norland: 1.05, superior: 0.95, katahdin: 0.95, kennebec: 0.95, burbank: 0.97, atlantic: S.PROCESSING_PRICE, gold: 0.95, caribou: 0.92 },
@@ -876,7 +880,7 @@ export function expert(cfg: ExpertCfg = EXPERT): BotFactory {
     function rolesFor(c: Campaign, n: number): { driver: number; walker: number } {
       if (!cfg.hire) return { driver: 0, walker: 0 }
       const tractors = Math.min(tractorsFor(c, n), S.tractorsOwned(c))
-      const driver = Math.max(0, tractors - 1 + (c.upgrades.truck ? 1 : 0))
+      const driver = Math.max(0, tractors - 1)
       const walker = n > k.walkFrom ? 1 + Math.floor((n - k.walkFrom - 1) / k.walkPer) : 0
       return { driver, walker }
     }
@@ -937,7 +941,7 @@ export function expert(cfg: ExpertCfg = EXPERT): BotFactory {
         for (const s of S.SKILLS) if (farmer.prio[s] !== want[s]) S.apply(world, c, { t: 'priority', unit: 0, work: s, level: want[s] })
       }
       for (const r of ['driver', 'walker'] as Role[]) {
-        const have = hired(c).filter(p => (roles.get(p.id) ?? roleOf(p)) === r && !p.foreman)
+        const have = hired(c).filter(p => (roles.get(p.id) ?? roleOf(p)) === r && !p.foreman && !peakPaid.has(p.id))
           .sort((a, b) => roleSpeed(b.skills, b.trait, r) / b.wage - roleSpeed(a.skills, a.trait, r) / a.wage)
         for (let j = wantRoles[r]; j < have.length; j++) { S.apply(world, c, { t: 'dismiss', unit: have[j].id }); roles.delete(have[j].id) }
         for (let j = have.length; j < wantRoles[r]; j++) if (!hireFor(world, c, r)) break
@@ -973,11 +977,11 @@ export function expert(cfg: ExpertCfg = EXPERT): BotFactory {
         case 'stand': return left >= 2
         case 'station': return left >= 2
         case 'shed': return left >= 3 && (n >= k.tractor.fields - 2 || wantRoles.driver > 0)
-        case 'bunk': return left >= 2 && wantRoles.driver + wantRoles.walker + (F.foreman ? 1 : 0) >= S.HOUSED_OUT
+        case 'bunk': return left >= 2 && wantRoles.driver + wantRoles.walker + (F.foreman ? 1 : 0) + (peakPaid.size ? 1 : 0) > S.HOUSED_OUT
         case 'house': return left >= 3 && lastOverflow >= k.houseOver
         case 'road': return left >= 3 && (S.materialsInfo(c).stone >= S.BUILDINGS.road.stone * 0.8 || S.holdsDufour(c))
         case 'pond': return left >= 3 && !c.upgrades.reel && handWaterings >= k.pondWaterings
-        case 'packing': return left >= 3 && S.storageInfo(c).stored >= k.packStock && hired(c).length > 0
+        case 'packing': return left >= 3 && S.storageInfo(c).stored >= k.packStock
       }
     }
 
@@ -1141,12 +1145,57 @@ export function expert(cfg: ExpertCfg = EXPERT): BotFactory {
       if (c.sundaysOff !== off) S.apply(world, c, { t: 'sundays', off })
     }
 
-    function pickers(world: World, c: Campaign, info: FieldInfo[]): void {
+    // Pickers are paid by the day worked: on while there is a backlog of digging and the day is fit to dig.
+    function pickers(world: World, c: Campaign, info: FieldInfo[], wet: boolean): void {
       if (!F.pickers) return
       const on = S.labourInfo(c).pickers.on
-      const digging = info.some(f => f.status === 'digging' || (f.status === 'dead' && f.skin >= 1) || queued(c, 'dig', f.index))
-      if (!on && digging && S.pickersWindow(c)) S.apply(world, c, { t: 'pickers', on: true })
-      else if (on && !digging) S.apply(world, c, { t: 'pickers', on: false })
+      let backlog = 0
+      for (const f of info) {
+        if (f.status === 'digging') backlog += 1
+        else if ((f.status === 'dead' && (f.skin >= 1 || queued(c, 'dig', f.index))) || queued(c, 'dig', f.index)) backlog += 2
+      }
+      const want = backlog >= k.pickerBacklog && !wet
+      if (!on && want && S.pickersWindow(c)) S.apply(world, c, { t: 'pickers', on: true })
+      else if (on && !want) S.apply(world, c, { t: 'pickers', on: false })
+    }
+
+    // Days of machine work due on the farm within about a month: planting, hilling, the kill, the dig and its haul,
+    // and the spraying and watering on the list.
+    function machineAhead(c: Campaign, info: FieldInfo[], d: number): number {
+      let w = 0
+      for (const f of info) {
+        const m = fm[f.index]
+        if (f.status === 'idle') w += 1
+        else if (f.status === 'planted' || f.status === 'growing') {
+          if (f.canopy < S.CLOSURE) w += (2 - f.hillPasses) * 0.5
+          if (m.ti >= 0 && (isEarly(c, f.index) || killDue(c, f, m) - d <= 30)) w += 0.25 + 2 + k.haulDays
+        } else if (f.status === 'dead') w += 2 + k.haulDays
+        else if (f.status === 'digging') w += 1 + k.haulDays
+        else if (f.status === 'dug' && !f.weighed) w += f.inField / S.HAUL_CWT_DAY
+      }
+      for (const j of c.season!.jobs) if (j.kind === 'spray' || j.kind === 'water') w += j.need - j.done
+      return w
+    }
+
+    // At a peak of machine work a tractor operator from the hiring hall drives what would stand idle (a tractor or the
+    // truck), and goes when the month he is paid for is up and the work has fallen off.
+    const peakPaid = new Map<number, number>()
+    function peakCrew(world: World, c: Campaign, info: FieldInfo[], d: number): void {
+      if (!cfg.hire) return
+      const ahead = machineAhead(c, info, d)
+      const seats = S.tractorsOwned(c) + (c.upgrades.truck ? 1 : 0)
+      const drivers = S.peopleInfo(c).filter(p => !p.foreman && p.prio.machine > 0).length
+      for (const [id, to] of [...peakPaid]) {
+        if (!c.crew.some(u => u.id === id)) { peakPaid.delete(id); continue }
+        if (d < to) continue
+        if (ahead > k.peakKeep * (drivers - 1)) peakPaid.set(id, to + S.WAGE_DAYS)
+        else { S.apply(world, c, { t: 'dismiss', unit: id }); peakPaid.delete(id) }
+      }
+      if (drivers < seats && ahead > k.peakHire * drivers && !S.hireRoom(c) && S.apply(world, c, { t: 'hire', kind: 'operator' }).ok) {
+        const u = c.crew[c.crew.length - 1]
+        peakPaid.set(u.id, d + S.WAGE_DAYS)
+        roles.set(u.id, 'driver')
+      }
     }
 
     // ------------------------------------------------------------ winter
@@ -1315,7 +1364,8 @@ export function expert(cfg: ExpertCfg = EXPERT): BotFactory {
         answerIncidents(world, c)
         minPay(world, c)
         sundays(world, c, d, info)
-        pickers(world, c, info)
+        pickers(world, c, info, t.day.prcp >= 6 || !info.some(f => (f.status === 'dead' || f.status === 'digging') && !f.tooWet))
+        peakCrew(world, c, info, d)
 
         for (const f of info) {
           const i = f.index

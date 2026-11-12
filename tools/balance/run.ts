@@ -170,7 +170,7 @@ async function main(): Promise<void> {
   const varietyWins = winners(byKey, varietyBots, seeds)
   const allP = paired(byKey, 'all-contracts', 'expert', seeds)
   const calP = paired(byKey, 'calendar', 'expert', seeds)
-  const g3 = !dominant(orderWins).filter(b => b !== 'expert').length && !dominant(hireWins).filter(b => b !== 'expert').length && blocksOk && always.length === 0
+  const g3 = !dominant(orderWins).length && !dominant(hireWins).filter(b => b !== 'expert').length && blocksOk && always.length === 0
 
   // G4: the expert's farm keeps growing to year ten, and its cash does not pile up unused.
   const ew = sum('expert').worth
@@ -187,8 +187,9 @@ async function main(): Promise<void> {
     'investment (land down, buildings, equipment, contractors)': invest,
   }
   for (const sp of SPEND) lines[sp] = byYear((o, y) => o.spend[sp][y])
-  lines['fields held'] = byYear((o, y) => o.held[y] * 1000)
-  lines['hired people'] = byYear((o, y) => o.hands[y] * 1000)
+  lines['fields held'] = byYear((o, y) => o.held[y])
+  lines['potato fields'] = byYear((o, y) => o.potatoFields[y] ?? 0)
+  lines['hired people'] = byYear((o, y) => o.hands[y])
 
   // The record's years: the main bots over every start year, five seasons.
   const recSum = ['naive', 'reference', 'expert'].map(b => {
@@ -289,7 +290,8 @@ function report(r: ReportIn): string {
   L.push('## G4: the expert\'s farm by year', '')
   L.push('Mean over the farms still going, per year: what the expert spends and earns on the farmstead.', '')
   L.push(`| Line | ${Array.from({ length: YEARS }, (_, y) => `Y${y + 1}`).join(' | ')} |`, `|---|${'---|'.repeat(YEARS)}`)
-  for (const [name, xs] of Object.entries(r.lines)) L.push(`| ${name} | ${xs.map(x => k1(x)).join(' | ')} |`)
+  const count = new Set(['fields held', 'potato fields', 'hired people'])
+  for (const [name, xs] of Object.entries(r.lines)) L.push(`| ${name} | ${xs.map(x => count.has(name) ? x.toFixed(1) : k1(x)).join(' | ')} |`)
   L.push('')
   L.push('## The record\'s years', '')
   L.push('| Bot | Campaigns | Kept 5 yr | Median net worth | Mean net worth |', '|---|---|---|---|---|')
