@@ -291,6 +291,13 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   const turned = () => (framing === 'field' || framing === 'yard' ? rig.goal.yaw : undefined)
 
   // After the window or the interface's edges change: hold whatever was framed.
+  // Whether a field's tag point lies under what the interface covers (or off the screen).
+  function covered(i: number): boolean {
+    if (i < 0 || i >= FIELD_COUNT) return false
+    const vp = viewport(), at = fieldAnchor(i)
+    return !at.visible || at.x < vp.left || at.x > vp.w - vp.right || at.y < vp.top || at.y > vp.h - vp.bottom
+  }
+
   function reframe(still: boolean): void {
     if (framing === 'free') return
     const to = framedPose(viewport(), turned())
@@ -356,7 +363,10 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
         framing = 'farm'
         rig.moveTo(rig.farm(viewport()), reduced)
       }
-    } else if (e.type === 'insets' && snap.mode !== 'season') reframe(reduced) // in a season a card opening or closing never moves the camera
+    } else if (e.type === 'insets') {
+      // In a season a card opening or closing moves the camera only when it would cover the field in hand.
+      if (snap.mode !== 'season' || covered(app.selected)) reframe(reduced)
+    }
   })
 
   function display(f: number, h: number, s: Snapshot): HillDisplay {

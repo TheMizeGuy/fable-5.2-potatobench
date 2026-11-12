@@ -31,3 +31,6 @@ export {
   type ClearStage, type FieldEnv,
 } from './land.ts'
 export { advise, fieldNeeds, frostOnBarrels, type Advice } from './advice.ts'
+export { goalCosts, jobOutlook, killTiming, plantReady, moneyNow, pressing, sprayOutlook, yearStory, type GoalCost, type JobOutlook, type KillTiming, type MoneyNow, type MoneyPart, type PlantReady, type Pressing, type SprayOutlook, type YearStory } from './outlook.ts'
+export { pressingWhy, waitable } from './season.ts'
+export { resting } from './people.ts'
