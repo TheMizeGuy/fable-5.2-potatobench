@@ -181,7 +181,7 @@ export function personCard(ctx: Ctx): PersonCard {
             class: 'order', type: 'button', testid: 'person-foreman', 'aria-expanded': String(foreman),
             title: ctx.touch() ? undefined : 'A foreman puts on the list what the fields of one block need, every working morning, and does no field work. Paid 40% more.',
             onclick: () => { foreman = !foreman; ctx.dirty() },
-          }, icon('foreman'), h('span', { class: 'order-name' }, 'Foreman'), h('span', { class: 'order-meta' }, p.foreman ? BLOCK_NAME[p.foreman].replace(/^The /, '').split(',')[0] : '+40% pay')) : null,
+          }, icon('foreman'), h('span', { class: 'order-name' }, 'Foreman'), h('span', { class: 'order-meta' }, p.foreman ? BLOCK_NAME[p.foreman].replace(/^The /, '').split(',')[0] : '+40%')) : null,
           h('button', {
             class: 'order', type: 'button', testid: 'person-dismiss',
             onclick: async () => {
@@ -288,14 +288,20 @@ export function workGrid(ctx: Ctx): WorkGrid {
         h('button', {
           class: 'nbtn s', type: 'button', testid: 'rule-sundays', 'aria-pressed': String(l.sundaysOff),
           onclick: () => { const r = ctx.run({ t: 'sundays', off: !l.sundaysOff }); if (r.ok) ctx.announce(F.localize(r.events[0]?.text ?? '')) },
-        }, icon('sunday', 'ic s'), 'Sundays off'),
+        }, icon('sunday', 'ic s'), l.sundaysOff ? 'Sundays: rest' : 'Sundays: work'),
         h('p', { class: 'rule-why' }, l.sundaysOff ? 'Everyone rests a day a week. Working Sundays gains a day, and tires everyone.' : 'Sundays are worked: a day more each week, and everyone tires.')),
-      h('div', { class: 'rule-row' },
+      // Pickers come forward a few weeks before the harvest break, when they can be thought about.
+      l.pickers.ok || l.pickers.on || pickersNear(c) ? h('div', { class: 'rule-row' },
         l.pickers.ok || l.pickers.on ? h('button', {
           class: 'nbtn s', type: 'button', testid: 'rule-pickers', 'aria-pressed': String(l.pickers.on),
           onclick: () => { const r = ctx.run({ t: 'pickers', on: !l.pickers.on }); if (r.ok) ctx.announce(F.localize(r.events[0]?.text ?? '')) },
         }, icon('pickers', 'ic s'), 'Pickers') : h('span', { class: 'rule-off' }, icon('pickers', 'ic s'), 'Pickers'),
-        h('p', { class: 'rule-why' }, `${F.money(l.pickers.perDay)} a day worked: every dig ${F.pct(l.pickers.digFaster - 1)} faster. ${pickFrom} to ${pickTo}, while the schools close.`)))
+        h('p', { class: 'rule-why' }, `${F.money(l.pickers.perDay)} a day worked: every dig ${F.pct(l.pickers.digFaster - 1)} faster. ${pickFrom} to ${pickTo}, while the schools close.`)) : null)
+  }
+
+  function pickersNear(c: S.Campaign): boolean {
+    const s0 = c.season
+    return !!s0 && c.phase === 'season' && s0.day >= S.dayIndex(s0.year, S.PICKERS_FROM.month, 1) && s0.day <= S.dayIndex(s0.year, S.PICKERS_TO.month, S.PICKERS_TO.dom)
   }
 
   function body(c: S.Campaign): Child {
@@ -309,7 +315,7 @@ export function workGrid(ctx: Ctx): WorkGrid {
       h('div', { class: 'grid-scroll', 'data-scroll': 'grid' },
         h('table', { class: 'work', role: 'grid', 'aria-labelledby': 'grid-title' },
           h('thead', null, h('tr', null, h('th', { scope: 'col' }, h('span', { class: 'sr' }, 'Person')),
-            S.SKILLS.map(k => h('th', { scope: 'col', title: ctx.touch() ? undefined : R.skillCovers(k) }, icon(R.SKILL_GLYPH[k], 'ic s'), h('span', { class: 'w-k' }, R.SKILL_NAME[k]))))),
+            S.SKILLS.map(k => h('th', { scope: 'col', title: ctx.touch() ? undefined : R.skillCovers(k) }, icon(R.SKILL_GLYPH[k], 'ic s'), h('span', { class: 'w-k' }, SKILL_SHORT[k]))))),
           h('tbody', null, people.map((p, row) => h('tr', { class: p.foreman ? 'foreman' : '', k: `row-${p.id}` },
             h('th', { scope: 'row' },
               h('button', { class: 'w-who', type: 'button', testid: `grid-person-${p.id}`, tabindex: '-1', onclick: () => { app.selectUnit(p.id) } },

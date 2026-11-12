@@ -8,7 +8,7 @@ import { deals, deliver, versusMarket } from './contracts.ts'
 import { culledAtDig } from './dig.ts'
 import { isTract } from './map.ts'
 import { portrait } from './people.ts'
-import { CLEAR_STEPS, firstName, hillWord, isJob, isStale, JOB_KEY, JOB_VERB, jobWhat, stonesText, stonesWord } from './rules.ts'
+import { CLEAR_STEPS, firstName, hillWord, isJob, isStale, JOB_KEY, JOB_VERB, jobText, jobWhat, stonesText, stonesWord } from './rules.ts'
 
 const MAX_ORDERS = 5
 const HOLD_MS = 1400
@@ -243,9 +243,17 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
       h('div', { class: 'card-main' },
         h('p', { class: 'card-line note' }, next, left > 0 && c.phase === 'season' ? ' In the season it goes at half speed.' : ''),
         yields || shelters ? h('p', { class: 'card-line' }, [yields, shelters].filter(Boolean).join(' ')) : null,
-        t.tenure === 'none' ? line(`It can be bought in spring, ${F.money(t.price)}.`) : !rows ? adviceLine(c, [i], false) : line('')),
+        t.tenure === 'none' ? line(`It can be bought in spring, ${F.money(t.price)}.`) : !rows ? line(queuedHere(c, i)) : line('')),
       rows,
     ]
+  }
+
+  // What is on the list for a tract, in words, when nothing more can be ordered there.
+  function queuedHere(c: S.Campaign, i: number): string {
+    const jobs = c.season?.jobs.filter(j => j.field === i) ?? []
+    if (!jobs.length) return c.phase === 'season' ? 'Nothing more can be done here now.' : ''
+    const who = jobs.map(j => c.crew.find(u => u.job === j.id)).find(Boolean)
+    return `${jobText(jobs[0])} is on the list${who ? `: ${firstName(who.name)} is on it` : ''}.`
   }
 
   function line(text: Child, cls = ''): HTMLElement {

@@ -161,8 +161,8 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
         reached.slice(-3).map(x => row(x, 'done')),
         g && !g.long ? row(g, 'now') : null,
         ahead.map(x => row(x, 'later'))),
-      h('p', { class: 't-label' }, 'Long goals'),
-      h('ol', { class: 'gls' }, all.filter(x => x.long).map(x => row(x, x.done ? 'done' : x.id === g?.id ? 'now' : 'long'))))
+      c.history.length ? [h('p', { class: 't-label' }, 'Long goals'),
+        h('ol', { class: 'gls' }, all.filter(x => x.long).map(x => row(x, x.done ? 'done' : x.id === g?.id ? 'now' : 'long')))] : null)
   }
 
   function materials(c: S.Campaign): Child {
@@ -235,8 +235,8 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
         }, h('span', { class: 'sr' }, 'Logs '), c.logs >= 0.05 ? [icon('logs', 'ic s'), h('span', null, F.num(Math.floor(c.logs)))] : null,
         h('span', { class: 'sr' }, ' loads, stone '), c.stone >= 0.05 ? [icon('stone', 'ic s'), h('span', null, F.num(Math.floor(c.stone)))] : null, h('span', { class: 'sr' }, ' loads. Sell logs')) : null,
         pop === 'materials' && mats ? materials(c) : null,
-        h('span', { class: 'cash num', testid: 'cash' },
-          h('span', { class: 'sr' }, c.cash < 0 ? 'Owed on the spring loan: ' : 'Cash: '),
+        h('span', { class: 'cash num', testid: 'cash', title: ctx.touch() || c.cash >= 0 ? undefined : 'Owed on the spring operating loan: the crop pays it back. The bank calls the note if the year closes too far under.' },
+          h('span', { class: c.cash < 0 ? 'cash-k' : 'sr' }, c.cash < 0 ? 'loan ' : 'Cash: '),
           h('span', { class: 'cash-v' }, F.money(c.cash))),
         withClock ? clock(ctx, snug) : null,
         h('button', { class: 'nicon', type: 'button', testid: 'menu-open', 'aria-label': `Menu${ctx.touch() ? '' : ' (M)'}`, title: ctx.touch() ? undefined : 'Menu (M)', onclick: () => o.onMenu() }, icon('menu'))),

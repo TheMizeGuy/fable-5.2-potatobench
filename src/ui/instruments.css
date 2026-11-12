@@ -125,6 +125,7 @@
 
 .tb-right { display: flex; align-items: center; justify-content: flex-end; gap: var(--sp-3); min-width: 0; }
 .cash { font-size: var(--t-head); line-height: 24px; font-weight: 700; white-space: nowrap; }
+.cash-k { margin-right: var(--sp-1); font-size: var(--t-label); font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--cream-2); vertical-align: 2px; }
 .clock { display: flex; gap: var(--sp-h); }
 
 .paused {

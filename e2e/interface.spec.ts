@@ -575,7 +575,8 @@ test('the work grid: G opens it, a click or a key sets a cell, and the farm rule
   await page.keyboard.press('Delete')
   expect(await prio(3, 'build')).toBe(0)
   await expect(grid).toContainText('Working Sundays gains a day')
-  await expect(grid).toContainText('every dig')
+  // Pickers come forward only near the harvest break; in June there is nothing to decide about them.
+  await expect(grid.getByTestId('rule-pickers')).toHaveCount(0)
   await grid.getByTestId('rule-sundays').click()
   expect(await game<boolean>(page, 'app.campaign.sundaysOff')).toBe(false)
   await expect(grid.getByTestId('rule-sundays')).toHaveAttribute('aria-pressed', 'false')
