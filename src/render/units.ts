@@ -970,7 +970,7 @@ export class Crews {
     const want = snap.farm.pickers ? 9 : 2
     while (g.pickers.length < want) {
       // they come on in a line behind the digger, each to a stretch of the row it has opened
-      const k = g.pickers.length, back = 7 + 3.4 * k
+      const k = g.pickers.length, back = 6 + 2.3 * k
       const x = g.lead.x - g.lead.dx * back, z = g.lead.z - g.lead.dz * back + (k % 2 ? 1.2 : -1.2)
       g.pickers.push({ dress: this.extras[(k + seg.field * 3) % this.extras.length], x, z, tx: x, tz: z, wait: 0.3 * k, heading: 1.6, gait: k, bent: 0 })
     }
@@ -1052,7 +1052,7 @@ export class Crews {
           stoop(pose, p.bent * (0.82 + 0.18 * Math.sin(f.time * 3 + k)), f.time * 6 + k)
           if (p.wait <= 0) {
             // in a line along the freshly dug rows behind the digger, each to their own stretch of it
-            const back = 7 + 3.4 * k + (Math.random() - 0.5) * 1.6, across = (Math.random() - 0.5) * 3.6
+            const back = 6 + 2.3 * k + (Math.random() - 0.5) * 1.2, across = (Math.random() - 0.5) * 3.6
             p.tx = g.lead.x - g.lead.dx * back - g.lead.dz * across
             p.tz = g.lead.z - g.lead.dz * back + g.lead.dx * across
             p.wait = 1.2 + Math.random() * 2.2

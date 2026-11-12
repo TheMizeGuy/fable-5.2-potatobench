@@ -425,7 +425,8 @@ export class Stage {
 
   private brush(st: Site, ws: Worker[], f: StageFrame): void {
     const pr = f.pr, s = f.s
-    const burning = f.wind < 0.5 && !f.cold
+    // the brush is burnt as it is cut, except in a high wind, in the wet or on snow: the smoke shows where the work is
+    const burning = f.wind < 0.85 && !f.cold && f.snap.weather.prcp < 1
     // the hedge is ahead of the spot, along the wall; the pile and the fire a little way down the headland
     const fx = -0.1, fz = 3.0
     this.P(st, s, fx, 0, fz, a)
