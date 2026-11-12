@@ -40,6 +40,16 @@ export function tuberWeights(seed: number, year: number, field: number, hill: nu
 
 const MARK: Record<Cause, number> = { green: 1, scab: 2, hollow: 3, knob: 4, skin: 5, bruise: 6, blight: 7, frost: 8, rot: 9, small: 10, stone: 11 }
 
+// The odds a tuber from this field goes to No. 2 for scab, and for knobs: what the season at tuber set and the soil
+// have done to it, which a grower reads from the weather and the field.
+export function markOdds(f: FieldSeason, soil: number): { scab: number; knob: number } {
+  const v = variety(f.variety)
+  return {
+    scab: Math.min(0.6, (f.scab / 35) * 0.2 * v.scab * (1 + P.SOIL_SCAB * (1 - soil)) + P.SOIL_SCURF * (1 - soil)),
+    knob: Math.min(0.45, f.knob * 0.04 * v.rough),
+  }
+}
+
 // Grades the tubers under one hill into the lot and returns them for showing. stones is the share of tubers the
 // digger bruises on stones (none for a hill lifted by hand).
 export function gradeHill(c: Campaign, s: Season, f: FieldSeason, field: number, i: number, lot: Lot, _d: Day, stones = 0): Tuber[] {
@@ -55,8 +65,7 @@ export function gradeHill(c: Campaign, s: Season, f: FieldSeason, field: number,
   const pBlight = Math.min(0.75, f.hTb[i] * v.blightTuber * 0.6 + liveVine * v.blightTuber)
   const pFrost = f.frostT
   const pRot = Math.min(0.3, f.logDays * 0.006) + (f.wet > P.WORKABLE_WET_MM * 0.8 ? 0.01 : 0)
-  const pScab = Math.min(0.6, (f.scab / 35) * 0.2 * v.scab * (1 + P.SOIL_SCAB * (1 - soil)) + P.SOIL_SCURF * (1 - soil))
-  const pKnob = Math.min(0.45, f.knob * 0.04 * v.rough)
+  const { scab: pScab, knob: pKnob } = markOdds(f, soil)
   const pBruise = s.soilT < P.BRUISE_SOIL_T ? Math.min(0.4, (P.BRUISE_SOIL_T - s.soilT) * P.BRUISE_PER_C) : 0
   const k0 = (s.year * 8 + field) * 131 + 17
   for (let k = 0; k < n; k++) {
@@ -112,12 +121,23 @@ export function lotCwt(lot: Lot): number {
   return lot.grades.no1 + lot.grades.chef + lot.grades.b + lot.grades.no2 + lot.skinned
 }
 
+// How set the skins of a crop dug from this day are: two weeks after the vines die, sooner on a crop that was made.
+export function skinAt(f: FieldSeason, dugDay: number): number {
+  let skin = f.deadDay < 0 ? 0 : clamp((dugDay - f.deadDay) / P.SKIN_DAYS, 0, 1)
+  if (f.matureDay >= 0 && dugDay - f.matureDay >= 10) skin = Math.min(1, skin + 0.35)
+  return skin
+}
+
+// The share of the No. 1 that skins in the digger when the skins are this set.
+export function skinnedShare(skin: number): number {
+  return (1 - skin) * 0.4
+}
+
 export function finishLot(c: Campaign, f: FieldSeason, lot: Lot): void {
   const total = lotCwt(lot)
-  let skin = f.deadDay < 0 ? 0 : clamp((lot.dugDay - f.deadDay) / P.SKIN_DAYS, 0, 1)
-  if (f.matureDay >= 0 && lot.dugDay - f.matureDay >= 10) skin = Math.min(1, skin + 0.35)
+  const skin = skinAt(f, lot.dugDay)
   lot.skin = skin
-  const skinned = (1 - skin) * 0.4 * lot.grades.no1
+  const skinned = skinnedShare(skin) * lot.grades.no1
   lot.grades.no1 -= skinned
   lot.skinned = skinned
   lot.loss.skin = skinned

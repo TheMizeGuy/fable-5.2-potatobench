@@ -421,8 +421,12 @@ export const PLANT_FROM = { month: 4, dom: 8 }   // May 8: the earliest planting
 export const DIG_CWT_GUESS = 750
 // A lone hauler holds the dig back when tonight's forecast low at the field is within this of freezing the barrels.
 export const DIG_FROST_MARGIN = 1
-// Share of the estimated crop that sells at the No. 1 price, for the farm's standing with a crop still in the ground.
-export const MARKETABLE_SHARE = 0.85
+// What a cwt of the crop still in the ground brings at the weigh-in, as a share of the No. 1 price: the mix of No. 1,
+// B size and culls of a crop clear of scab and knobs, less this much for each share of tubers the field's season and
+// soil send to No. 2 (harvest.ts, markOdds), and how far a field strays from that (fitted over 192 coach-tended fields).
+export const MARKETABLE_SHARE = 0.86
+export const MARKETABLE_NO2 = 0.38
+export const MARKETABLE_SPREAD = 0.042
 // Reference practice digs a crop whose vines are still up from this date, so it is in before the freeze-up.
 export const DIG_GREEN = { month: 9, dom: 5 }   // October 5
 // Where the dig is the routine's and the kill the player's call, the crew kills the vines by itself this many days

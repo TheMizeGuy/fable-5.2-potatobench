@@ -13,7 +13,7 @@ export {
   scoutChance, SKILL_LABEL, speed, sprayCover, tiredWord, upgradePerson, willDo, xpNeed,
 } from './people.ts'
 export { hashCampaign } from './hash.ts'
-export { lotCwt, tuberWeights, type Tuber } from './harvest.ts'
+export { lotCwt, markOdds, tuberWeights, type Tuber } from './harvest.ts'
 export { basePrice, gradePrice, levelNow, lotValue, newPotatoWindow, storeOutlook, type StoreMonth } from './market.ts'
 export {
   FIELD_NAMES, JOB_LABEL, haulDistance, haulFactor, haulRate, holdsDufour, jobBlock, jobCost, jobDays, jobWait, knownHills, placeName, seasonDone, standingBy,
