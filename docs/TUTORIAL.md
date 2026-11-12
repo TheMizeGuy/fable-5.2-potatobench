@@ -154,7 +154,7 @@ Who does what, Name a foreman), as before.
   that no telegram comes before the first planting is finished.
 - `e2e/tutorial.spec.ts` (Chromium and the phone): a guided first year played from Play to the first sale by
   pressing only what the notes ask (their "Skip to", Noted, the control they point at, a card's usual reply),
-  holding every budget above at every step; the offer centred, under the keyboard, answered by click and by keys 1
+  holding every budget above at every step; Space putting a note away, the next note holding the days again; the offer centred, under the keyboard, answered by click and by keys 1
   and 2; Straight in showing the whole interface and no note; a guided farm started from the title; a reload keeping
   its place; axe with the offer, the year card and a note showing.
 - `tools/quality/capture.ts`: the states `guide-*` (the offer, the year card, the plan's note, the first guided
