@@ -339,17 +339,16 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
   const overridden = new Set<string>()
   function hold(): void {
     const want = now && now.holds && app.screen === 'season' && !overridden.has(now.id) ? now.id : ''
-    if (holding && holding.id && app.speed > 0 && app.pauseReason !== HOLD) { overridden.add(holding.id); holding = null }
-    if (want && !holding && app.speed > 0) {
+    if (holding && app.speed > 0) { overridden.add(holding.id); holding = null }
+    if (want && !holding) {
+      // Already stopped (by the player, or a question): it stays so, and the player starting it again is their call.
       holding = { id: want, speed: app.speed }
-      app.setSpeed(0)
-      app.pauseReason = HOLD
-      ctx.dirty()
+      if (app.speed > 0) { app.setSpeed(0); app.pauseReason = HOLD; ctx.dirty() }
     } else if (want && holding) holding.id = want
     else if (!want && holding && !resting) {
       const back = holding.speed
       holding = null
-      if (app.speed === 0 && app.pauseReason === HOLD) app.setSpeed(back as 0 | 1 | 2 | 3)
+      if (back > 0 && app.speed === 0 && app.pauseReason === HOLD) app.setSpeed(back as 1 | 2 | 3)
     }
   }
 
@@ -387,7 +386,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     now = offer ? null : paced(guide.showing(l))
     hold()
     const docked = app.screen === 'plan'
-    const held = !!now && app.screen === 'season' && app.speed === 0 && (guide.holdsClock(c) || app.pauseReason === HOLD)
+    const held = !!now && app.screen === 'season' && app.speed === 0 && (guide.holdsClock(c) || app.pauseReason === HOLD || !!now?.holds)
     const p = now?.point?.(l) ?? null
     const t = resolve(ctx, root, p)
     target = t.id
