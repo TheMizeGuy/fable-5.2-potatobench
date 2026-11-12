@@ -106,6 +106,9 @@ function potatoField(c: S.Campaign | null): number {
 }
 const farmer = (l: Look) => l.c?.crew[0]?.id ?? 0
 const hand = (l: Look) => l.c?.crew.find(u => u.kind !== 'farmer') ?? null
+// A job the routine put on the list by itself (Campaign.routine, where the simulation has it).
+const routineJob = (l: Look) => !!l.c?.season?.jobs.some(j => (j as { by?: string }).by === 'routine')
+const owed = () => `$${(S.NOTE_PAYMENT + S.LIVING).toLocaleString('en-US')}`
 const tract = (l: Look) => S.TRACTS.find(i => l.c && l.c.fields[i].tenure !== 'none' && (l.c.fields[i].cover === 'woods' || l.c.fields[i].cover === 'brush')) ?? -1
 
 // A lesson that asks for the order a field's stamp gives, the first time reference practice calls for it.
@@ -151,7 +154,15 @@ export const LESSONS: Lesson[] = [
     when: inSeason,
     done: (l, g, since) => g.has('noted:boards') || (!!since && !!l.c?.season && l.c.season.day >= since.d + 3),
     ask: () => 'Top left: today, and the weather five days ahead. The yellow slip under it is your next goal.',
-    why: () => 'Top right is your money, on the bank\'s spring loan, and the clock.',
+    why: () => 'Top right: your money. At the year end the bank\'s note and the household come out of it.',
+    point: () => ({ testid: ['forecast'] }),
+  },
+  {
+    id: 'almanac', part: 'opening', name: 'Open the almanac', uses: ['paper:almanac'],
+    when: inSeason,
+    done: (_l, g) => g.has('paper:almanac'),
+    ask: l => by(l, 'Click the forecast to open the almanac: the weather ahead, the soil and every field.', 'Tap the forecast to open the almanac: the weather ahead, the soil and every field.', 'Press I to open the almanac: the weather ahead, the soil and every field.'),
+    why: l => by(l, 'It is there whenever you want more than the boards show. The cross closes it.', 'It is there whenever you want more than the boards show. The cross closes it.', 'It is there whenever you want more than the boards show. Escape closes it.'),
     point: () => ({ testid: ['forecast'] }),
   },
   {
@@ -217,12 +228,29 @@ export const LESSONS: Lesson[] = [
     point: l => ({ unit: farmer(l) }),
   },
   {
+    id: 'routine', part: 'opening', moment: true, name: 'Routine work and your calls', read: true,
+    when: l => inSeason(l) && routineJob(l),
+    done: (l, g, since) => g.has('noted:routine') || (!!since && !!l.c?.season && l.c.season.day >= since.d + 5),
+    ask: () => 'Routine work goes on the list by itself: planting, hilling, walking the rows, digging.',
+    why: () => 'Your calls come as stamps on the fields: spray, water, kill the vines. Anything can still be ordered by hand.',
+    point: () => ({ testid: ['queue-*'] }),
+  },
+  {
     id: 'rest', part: 'opening', moment: true, name: 'Plant the rest', uses: ['many'],
     when: l => inSeason(l) && anyField(l, f => f.plantDay >= 0) && needFor(l, 'plant') >= 0,
     done: (l, g) => g.has('many') || (anyField(l, f => f.plantDay >= 0) && needFor(l, 'plant') < 0),
     ask: l => by(l, 'Plant the rest the same way. A double-click picks every field like it.', 'Plant the rest: tap each ringed stamp.', 'Plant the rest: Tab to each, then Enter.'),
     why: l => by(l, 'An order goes to every field picked. Shift-click adds a field.', 'Each order joins the list, and you work them in turn.', 'Shift with a number adds a field to those picked.'),
     point: l => { const i = needFor(l, 'plant'); return i >= 0 ? { badge: i } : null },
+  },
+
+  {
+    id: 'list', part: 'opening', name: 'The list of orders', read: true,
+    when: (l, g) => inSeason(l) && g.passed('watch') && !!l.c?.season?.jobs.length,
+    done: (l, g, since) => g.has('noted:list') || (!!since && !!l.c?.season && l.c.season.day >= since.d + 4),
+    ask: l => by(l, 'Orders wait on the list at the foot, in turn. Each can be put first or taken off there.', 'Orders wait on the list at the foot, in turn. Tap one to put it first or take it off.', 'Orders wait on the list at the foot. Backspace takes the last one off.'),
+    why: () => 'People work the list in turn, nearest first. A field\'s card shows what is on it for that field.',
+    point: () => ({ testid: ['queue-*'] }),
   },
 
   // The first year: each the first time it comes.
@@ -297,6 +325,14 @@ export const LESSONS: Lesson[] = [
     done: (l, _g, since) => (!!since && !l.papers.includes('weighin')) || !!l.c?.lots.some(x => x.sold > 0),
     ask: () => 'The weigh ticket. Tear off one way: sell now, or store the crop to sell over the winter.',
     why: () => 'Brings most marks the better way today. Stored potatoes can be sold any day after.',
+  },
+  {
+    id: 'owed', part: 'year', name: 'What the year end takes', read: true,
+    when: (l, g) => inSeason(l) && g.passed('ticket') && !l.paper,
+    done: (l, g, since) => g.has('noted:owed') || (!!since && !!l.c && (l.c.phase !== 'season' || (!!l.c.season && l.c.season.day >= since.d + 5))),
+    ask: () => `At the year end ${owed()} comes due: the bank's note, and the household's keep for the year.`,
+    why: () => 'Sell or store with that in mind. The pass book at the top right shows where you stand.',
+    point: () => ({ testid: ['cash'] }),
   },
   {
     id: 'close', part: 'year', name: 'Close out the season', urgent: true,
@@ -378,6 +414,21 @@ export const LESSONS: Lesson[] = [
     },
     why: () => 'Orders given while someone is picked go to them alone.',
     point: l => { const u = hand(l); return u ? { unit: u.id } : null },
+  },
+  {
+    id: 'grid', part: 'spring', name: 'Who does what', uses: ['open:work-grid'],
+    when: l => inSeason(l) && !!l.c && l.c.crew.length >= 3,
+    done: (l, g) => g.has('open:work-grid') || !!l.c?.crew.some(u => u.foreman !== ''),
+    ask: l => by(l, 'Click the grid at the foot: who does what, and which jobs each person takes first.', 'Tap the grid at the foot: who does what, and which jobs each person takes first.', 'Press G for the grid: who does what, and which jobs each person takes first.'),
+    why: () => 'Skills grow with the work. Someone good with machines belongs on the tractor.',
+    point: () => ({ testid: ['grid-open'] }),
+  },
+  {
+    id: 'foreman', part: 'spring', name: 'Name a foreman', read: true,
+    when: (l, g) => inSeason(l) && !!hand(l) && g.passed('hand'),
+    done: (l, g) => g.has('noted:foreman') || !!l.c?.crew.some(u => u.foreman !== ''),
+    ask: () => 'A hand can be named foreman of a block on their card. Each morning they list its work.',
+    why: () => 'On that block they make the calls too, so a far block runs itself.',
   },
   {
     id: 'fell', part: 'spring', name: 'Clear woods into a field',

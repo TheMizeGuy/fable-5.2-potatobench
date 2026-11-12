@@ -229,7 +229,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
   // 0: clear of every panel; 1: clear only of what it must never cover.
   let tier = 0
   let checked = 0
-  let cam: { base: Sig | null; last: Sig | null; still: number; screen: string } = { base: null, last: null, still: 0, screen: '' }
+  const cam: { base: Sig | null; until: number } = { base: null, until: 0 }
 
   function papers(): string[] {
     return [...root.querySelectorAll<HTMLElement>('.paper-layer > .dialog:not(.out)')].map(d => d.dataset.testid ?? 'paper')
@@ -244,30 +244,44 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
   }
 
   // The camera moved by the player: drag or keys (pan), wheel or pinch (zoom), right-drag, twist or Q and E (turn), and
-  // the tip. Measured from where the land settled once the lesson came up.
-  function watchCamera(): void {
-    const s = signature(ctx)
-    if (cam.screen !== app.screen) cam = { base: null, last: null, still: 0, screen: app.screen }
-    if (!s) return
-    if (!cam.base) {
-      const l = cam.last
-      cam.still = l && Math.abs(l.cx - s.cx) < 0.5 && Math.abs(l.cy - s.cy) < 0.5 && Math.abs(l.spread - s.spread) < 0.5 ? cam.still + 1 : 0
-      cam.last = s
-      if (cam.still >= 12) cam.base = s
-      return
-    }
+  // the tip. Read from the scene's anchors as each gesture on the land starts and while it goes on, so the camera's own
+  // settling is never taken for the player's.
+  function camMoved(): void {
     const b = cam.base
-    let turn = s.angle - b.angle
-    turn = Math.atan2(Math.sin(turn), Math.cos(turn))
-    const zoom = Math.abs(s.spread / b.spread - 1)
-    if (Math.hypot(s.cx - b.cx, s.cy - b.cy) > 60) guide.note('pan')
-    if (zoom > 0.15) guide.note('zoom')
-    if (Math.abs(turn) > 0.17) guide.note('turn')
-    if (Math.abs(turn) < 0.1 && Math.abs(s.ratio / b.ratio - 1) > 0.15) guide.note('tip')
+    const s = signature(ctx)
+    if (!b || !s) return
+    const turn = Math.atan2(Math.sin(s.angle - b.angle), Math.cos(s.angle - b.angle))
+    if (Math.hypot(s.cx - b.cx, s.cy - b.cy) > 40) guide.note('pan')
+    if (Math.abs(s.spread / b.spread - 1) > 0.1) guide.note('zoom')
+    if (Math.abs(turn) > 0.12) guide.note('turn')
+    if (Math.abs(turn) < 0.08 && Math.abs(s.ratio / b.ratio - 1) > 0.1) guide.note('tip')
+  }
+  const CAM_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'q', 'Q', 'e', 'E', 'PageUp', 'PageDown'])
+  function gesture(on: boolean): void {
+    if (app.screen !== 'season' || !(now?.id === 'look' || now?.id === 'turn')) { cam.base = null; return }
+    if (on) { if (!cam.base) cam.base = signature(ctx); cam.until = performance.now() + 900 }
+    else cam.until = performance.now() + 400
+  }
+  const onCanvas = (e: Event) => {
+    if ((e.target as Element)?.id !== 'field' || (e.type === 'pointermove' && !(e as PointerEvent).buttons)) return
+    gesture(e.type !== 'pointerup')
+  }
+  const onCamKey = (e: KeyboardEvent) => { if (CAM_KEYS.has(e.key)) gesture(e.type === 'keydown') }
+  for (const t of ['pointerdown', 'pointermove', 'pointerup', 'wheel']) document.addEventListener(t, onCanvas, { capture: true, passive: true })
+  document.addEventListener('keydown', onCamKey, true)
+  document.addEventListener('keyup', onCamKey, true)
+  function watchCamera(): void {
+    if (!cam.base) return
+    camMoved()
+    if (performance.now() > cam.until) cam.base = null
   }
 
   function notePlan(): void {
     for (const id of ['crew', 'land']) if (root.querySelector(`.catalogue [data-testid="${id}"]`)) guide.note(`fold:${id}`)
+  }
+
+  function noteOpen(): void {
+    if (shown(root.querySelector('[data-testid="work-grid"]'))) guide.note('open:work-grid')
   }
 
   function render(): void {
@@ -275,6 +289,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     // Started with the offer unanswered: straight in.
     if (c && app.screen === 'season' && !guide.p.offered && guide.p.offerSeed === c.seed) guide.refuse()
     if (app.screen === 'plan') notePlan()
+    if (app.screen === 'season') noteOpen()
     const l = lookNow()
     offer = guide.offerFor(c, app.screen)
     now = offer ? null : guide.showing(l)
@@ -373,6 +388,9 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
       off()
       document.removeEventListener('keydown', onKey, true)
       document.removeEventListener('pointerdown', onPointer, true)
+      for (const t of ['pointerdown', 'pointermove', 'pointerup', 'wheel']) document.removeEventListener(t, onCanvas, true)
+      document.removeEventListener('keydown', onCamKey, true)
+      document.removeEventListener('keyup', onCamKey, true)
       slip.remove()
       hand.remove()
     },

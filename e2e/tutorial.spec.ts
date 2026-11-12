@@ -34,9 +34,13 @@ async function land(page: Page): Promise<{ x: number; y: number }> {
   })
 }
 
-async function touch(page: Page, type: 'touchStart' | 'touchMove' | 'touchEnd', points: { x: number; y: number }[]): Promise<void> {
+// One touch gesture, finger by finger, frame by frame: each entry of steps is where the fingers are.
+async function fingers(page: Page, steps: { x: number; y: number }[][]): Promise<void> {
   const cdp = await page.context().newCDPSession(page)
-  await cdp.send('Input.dispatchTouchEvent', { type, touchPoints: points.map((p, id) => ({ x: p.x, y: p.y, id })) })
+  const send = (type: string, points: { x: number; y: number }[]) => cdp.send('Input.dispatchTouchEvent', { type: type as 'touchStart', touchPoints: points.map((p, id) => ({ x: p.x, y: p.y, id })) })
+  await send('touchStart', steps[0])
+  for (const s of steps.slice(1)) { await send('touchMove', s); await page.waitForTimeout(16) }
+  await send('touchEnd', [])
   await cdp.detach()
 }
 
@@ -44,9 +48,7 @@ async function touch(page: Page, type: 'touchStart' | 'touchMove' | 'touchEnd', 
 async function drag(page: Page, mobile: boolean): Promise<void> {
   const p = await land(page)
   if (mobile) {
-    await touch(page, 'touchStart', [p])
-    for (let k = 1; k <= 12; k++) await touch(page, 'touchMove', [{ x: p.x - k * 12, y: p.y - k * 6 }])
-    await touch(page, 'touchEnd', [])
+    await fingers(page, Array.from({ length: 13 }, (_, k) => [{ x: p.x - k * 12, y: p.y - k * 6 }]))
     return
   }
   await page.mouse.move(p.x, p.y)
@@ -60,9 +62,7 @@ async function turn(page: Page, mobile: boolean): Promise<void> {
   const p = await land(page)
   if (mobile) {
     const at = (a: number) => [{ x: p.x + Math.cos(a) * 70, y: p.y + Math.sin(a) * 70 }, { x: p.x - Math.cos(a) * 70, y: p.y - Math.sin(a) * 70 }]
-    await touch(page, 'touchStart', at(0))
-    for (let k = 1; k <= 12; k++) await touch(page, 'touchMove', at(k * 0.07))
-    await touch(page, 'touchEnd', [])
+    await fingers(page, Array.from({ length: 13 }, (_, k) => at(k * 0.07)))
     return
   }
   await page.mouse.move(p.x, p.y)
@@ -120,8 +120,15 @@ test('a guided first year: offered on a new farm, taken, and followed to the fir
         break
       case 'look': await drag(page, isMobile); break
       case 'turn': await turn(page, isMobile); break
-      case 'boards': case 'card': case 'person': case 'frost': case 'haul':
+      case 'boards': case 'card': case 'person': case 'frost': case 'haul': case 'routine': case 'list':
         await page.getByTestId('guide-noted').click(); break
+      case 'almanac':
+        // It says the cross closes it: the almanac is opened and put away again.
+        await page.locator(`#ui [data-testid="${target}"]`).first().click()
+        await expect(page.getByTestId('almanac')).toBeVisible()
+        await page.getByTestId('almanac-close').click()
+        await expect(page.getByTestId('almanac')).toHaveCount(0)
+        break
       case 'field': case 'clock': case 'fast': case 'plant': case 'rest':
         await page.locator(`#ui [data-testid="${target}"]`).first().click(); break
       case 'telegram':

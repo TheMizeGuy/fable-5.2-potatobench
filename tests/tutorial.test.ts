@@ -56,6 +56,8 @@ function guidedYear(seed: number, o: { offer?: boolean } = {}): { shown: string[
   g.note('turn'); see(look(w, c))
   if (see(look(w, c)) === 'boards') g.noted('boards')
   see(look(w, c))
+  see(look(w, c, { paper: 'almanac', papers: ['almanac'] }))
+  see(look(w, c))
   see(look(w, c, { selection: [0] }))
   see(look(w, c))
   if (see(look(w, c)) === 'person') g.noted('person')
@@ -121,6 +123,8 @@ describe('the guided first year', () => {
     g.note('tip')
     expect(g.current(look(w, c))?.id).toBe('boards')
     g.noted('boards')
+    expect(g.current(look(w, c))?.id).toBe('almanac')
+    expect(g.showing(look(w, c, { paper: 'almanac', papers: ['almanac'] }))).toBeNull()
     expect(g.current(look(w, c))?.id).toBe('field')
     expect(g.current(look(w, c, { selection: [2] }))?.id).toBe('card')
     expect(g.current(look(w, c))?.id).toBe('person')
@@ -159,6 +163,7 @@ describe('the guided first year', () => {
       expect(run.shown[run.shown.length - 1]).toBe('seed')
       if (met.has('water') && met.has('rogue') && met.has('telegram') && met.has('frost')) break
     }
+    for (const id of ['almanac', 'list', 'owed']) expect(met.has(id), id).toBe(true)
     const year = ['telegram', 'scout', 'hill', 'spray', 'frost', 'sample', 'water', 'rogue', 'kill', 'dig', 'haul', 'ticket', 'close', 'cellar', 'book']
     for (const id of year) {
       expect(met.has(id), `${id} was never shown`).toBe(true)
@@ -185,7 +190,9 @@ describe('the guided first year', () => {
     expect(g.current(l)?.id).toBe('hand')
     const u = c.crew.find(x => x.kind !== 'farmer')!
     expect(g.current(l)?.point?.(l)).toEqual({ unit: u.id })
-    expect(g.current(look(w, c, { unit: u.id }))?.id).toBe('fell')
+    expect(g.current(look(w, c, { unit: u.id }))?.id).toBe('foreman')
+    g.noted('foreman')
+    expect(g.current(look(w, c))?.id).toBe('fell')
     const t = S.TRACTS.find(i => c.fields[i].tenure !== 'none' && (c.fields[i].cover === 'woods' || c.fields[i].cover === 'brush'))!
     S.apply(w, c, { t: 'job', kind: 'fell', field: t })
     c.cash += 60000
@@ -214,10 +221,33 @@ describe('the guided first year', () => {
     for (let n = 0; n < 5; n++) S.apply(w, c, { t: 'day' })
     const shown = g.current(look(w, c, { speed: 3 }))?.id ?? ''
     // Only what still needs saying is left: the boards, which are read rather than done.
-    expect(['boards']).toContain(shown)
+    expect(shown).toBe('boards')
     for (const id of ['begin', 'look', 'turn', 'field', 'person', 'clock', 'fast', 'plant', 'watch', 'rest']) expect(g.passed(id), id).toBe(true)
     g.noted('boards')
+    g.current(look(w, c, { paper: 'almanac', papers: ['almanac'] }))
+    g.noted('list')
     expect(g.current(look(w, c, { speed: 3 }))?.part ?? 'year').not.toBe('opening')
+  })
+
+  it('with the routine putting work on the list by itself, says so, and teaches the calls instead of the orders', () => {
+    const { w, c } = farm(99)
+    const g = new Guide(memory())
+    g.skipTo('plant')
+    S.apply(w, c, { t: 'begin' })
+    while (!S.fieldNeeds(w, c).some(n => n.need?.act === 'plant')) S.apply(w, c, { t: 'day' })
+    // The routine's planting order, as the simulation will put it on the list: the stamp lesson is passed over.
+    const i = S.fieldNeeds(w, c).findIndex(n => n.need?.act === 'plant')
+    S.apply(w, c, { t: 'job', kind: 'plant', field: i })
+    for (const j of c.season!.jobs) (j as { by?: string }).by = 'routine'
+    expect(g.current(look(w, c, { speed: 1 }))?.id).toBe('watch')
+    for (let n = 0; n < 10 && !c.season!.fields.some(f => f.plantDay >= 0); n++) S.apply(w, c, { t: 'day' })
+    S.apply(w, c, { t: 'job', kind: 'plant', field: S.fieldNeeds(w, c).findIndex(n => n.need?.act === 'plant') })
+    for (const j of c.season!.jobs) (j as { by?: string }).by = 'routine'
+    expect(g.passed('plant')).toBe(true)
+    const x = g.current(look(w, c, { speed: 1 }))
+    expect(x?.id).toBe('routine')
+    expect(x?.ask(look(w, c))).toMatch(/by itself/)
+    expect(x?.why(look(w, c))).toMatch(/spray, water, kill the vines/)
   })
 
   it('gets out of the way of any paper but its own, and puts a telegram first', () => {
