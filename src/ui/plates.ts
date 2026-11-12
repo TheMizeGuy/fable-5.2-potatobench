@@ -147,8 +147,8 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
       const seen = inView(a)
       const first = !!m.land && !seen && !pointed.has(block)
       if (first) pointed.add(block)
-      // Land to be had that the camera has on the screen, though under a sheet, is moved clear rather than dropped.
-      const wanted = app.selection.includes(i) || !!m.badge || first || (!!m.land && a.visible)
+      // A field the camera has on the screen, though under a sheet or the boards, is moved clear rather than dropped.
+      const wanted = app.selection.includes(i) || !!m.badge || first || a.visible
       if (!seen && !wanted) { want.push({ x: a.x, y: a.y, place: 'gone' }); continue }
       const { w, h: hh, extra } = sz[i]
       const x0 = ins.left + GAP + w / 2, x1 = innerWidth - ins.right - GAP - w / 2 - extra
