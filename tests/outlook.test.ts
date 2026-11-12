@@ -174,6 +174,25 @@ describe('what goals cost, the money and the year', () => {
 })
 
 describe('the calls, judged fairly', () => {
+  it('a field where a blighted hill was found says blight is there, and that the crew will pull it', () => {
+    let found = false
+    for (const [year, seed] of [[1994, 1], [2008, 2], [2001, 3], [1990, 7]] as const) {
+      const c = S.createCampaign(world, { seed, startYear: year })
+      ok(c, { t: 'begin' })
+      until(c, x => S.FIELD_NAMES.some((_, i) => S.fieldInfo(x, i).blightHills > 0))
+      const i = S.FIELD_NAMES.findIndex((_, k) => S.fieldInfo(c, k).blightHills > 0)
+      if (i < 0) continue
+      const f = S.fieldInfo(c, i)
+      expect(f.blightSeen).toBe(true)
+      expect(f.pullBy).toBe('routine')
+      ok(c, { t: 'routine', kind: 'rogue', auto: false })
+      expect(S.fieldInfo(c, i).pullBy).toBe('you')
+      found = true
+      break
+    }
+    expect(found).toBe(true)
+  })
+
   it('the spray question: about how many passes and dollars keep the fields sprayed', () => {
     const c = summer()
     const o = S.sprayOutlook(world, c)
