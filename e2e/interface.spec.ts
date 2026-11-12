@@ -883,10 +883,28 @@ test('blight weather asks once how to spray this season, and a worn-out hand can
   const ask = page.getByTestId('spray-ask')
   await expect(ask).toBeVisible()
   expect((await look(page)).paused).toBe(true)
+  // Decide later: the days go on, and the card does not come straight back.
+  await page.keyboard.press('Escape')
+  await expect(ask).toBeHidden()
+  await page.keyboard.press('Space')
+  const day0 = await game<number>(page, 'app.campaign.season.day')
+  await expect.poll(() => game<number>(page, 'app.campaign.season.day'), { timeout: 15_000 }).toBeGreaterThan(day0)
+  await expect(ask).toBeHidden()
+  await reach(page, `q.g().app.setSpeed(0)`)
+  // Asked again from a field's card or Who does what.
+  await page.keyboard.press('g')
+  await page.getByTestId('spray-ask-open').click()
+  await expect(ask).toBeVisible()
   await expect(ask).toContainText('Keep the fields sprayed')
   await ask.getByTestId('spray-way-auto').click()
   await expect(ask).toBeHidden()
   expect(await game<boolean>(page, `sim.routineInfo(app.campaign).find(r => r.kind === 'spray').auto`)).toBe(true)
+  await page.keyboard.press('Escape')
+  // The crew then sprays by itself, and no stamp or chip asks for spraying.
+  await reach(page, `const { app } = q.g(); const c = app.campaign; for (let k = 0; k < 4; k++) { c.incidents = []; app.do({ t: 'day' }) } app.setSpeed(0)`)
+  expect(await game<number>(page, `app.campaign.season.jobs.filter(j => j.kind === 'spray' && j.by === 'routine').length + app.campaign.season.fields.reduce((t, f) => t + (f.sprays ?? 0), 0)`)).toBeGreaterThan(0)
+  expect(await page.evaluate(() => [...document.querySelectorAll('#ui [data-testid^="badge-"]')].filter(b => /spray/i.test(b.getAttribute('title') ?? b.textContent ?? '')).length)).toBe(0)
+  expect(await page.evaluate(() => /spray/i.test(document.querySelector('#ui [data-testid="pressing"]')?.textContent ?? ''))).toBe(false)
   // Asked once: it does not come back by itself; Who does what asks it again.
   await page.waitForTimeout(400)
   await expect(page.getByTestId('spray-ask')).toBeHidden()

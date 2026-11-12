@@ -42,6 +42,13 @@ async function answerTicket(page: Page, store: boolean): Promise<void> {
 // Answers the first open incident: on its card where the instruments show one (a button named for the choice), and
 // through the test hook where they do not. take: the first choice rather than the default. Returns how it was answered.
 async function answerIncident(page: Page, take: boolean): Promise<'card' | 'hook' | ''> {
+  // The spraying question comes on the telegram card once a season: answered as most players would, ask me each time.
+  const spray = page.getByTestId('spray-way-ask')
+  if (await spray.isVisible().catch(() => false)) {
+    await spray.click()
+    await expect(page.getByTestId('spray-ask')).toBeHidden()
+    return 'card'
+  }
   const inc = await game<{ id: number; choice: string; label: string } | null>(page, `(() => { const i = c.incidents[0]; if (!i) return null
     const ch = ${take} && !(i.choices[0] === 'hire' && sim.hireRoom(c)) ? i.choices[0] : i.choices[i.choices.length - 1]
     return { id: i.id, choice: ch, label: sim.CHOICE_LABEL[ch] } })()`)
@@ -80,7 +87,7 @@ async function farm(page: Page, until: 'ticket' | 'done', o: { store: boolean; m
       throw new Error('the season ended before a crop was dug')
     }
     if (s.incidents) { const how = await answerIncident(page, false); if (how) o.answered?.push(how); continue }
-    if (s.spray) { await page.getByTestId('spray-way-auto').click({ timeout: 3000 }).catch(() => {}); continue }
+    if (s.spray) { await answerIncident(page, false); continue }
     if (s.paper) { await page.keyboard.press('Escape'); continue }
     if (s.hint) { await page.getByTestId('hint-close').click({ timeout: 3000 }).catch(() => {}); continue }
     if (s.tray) { await page.getByTestId('sample-close').click({ timeout: 3000 }).catch(() => {}); continue }
