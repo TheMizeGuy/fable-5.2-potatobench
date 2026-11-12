@@ -484,70 +484,60 @@ export class Stage {
   // ---- hauling: barrels onto the truck or the trailer at the field, the drive to the potato house, and off again
 
   private haul(st: Site, ws: Worker[], f: StageFrame): void {
-    const pr = f.pr, s = f.s
-    const drv = ws[0]
-    if (!drv) return
     if (!st.trip) {
       const door = houseDoor(houseFor(st.field, f.snap.farm.dufour))
       st.trip = new Poly(route({ x: st.spot.x, z: st.spot.z }, { x: door.x, z: door.z + 0.9 }))
     }
-    const trip = st.trip
-    const TRIPS = 2, CAP = 8
-    const u = Math.min(0.9999, drv.w) * TRIPS, lap = u - Math.floor(u)
-    const loading = lap < 0.36, out = lap >= 0.36 && lap < 0.52, unloading = lap >= 0.52 && lap < 0.86
-    const done = drv.w >= 1
-    let along = 0
-    if (out) along = ease((lap - 0.36) / 0.16)
-    else if (unloading) along = 1
-    else if (!loading) along = 1 - ease((lap - 0.86) / 0.14)
-    const p = trip.at(along * trip.length)
-    const back = !loading && !out && !unloading
-    let heading = Math.atan2(p.dz, p.dx) + (back ? Math.PI : 0)
-    if (loading || done) heading = st.spot.heading
-    const load = done ? 0 : loading ? Math.floor(CAP * span(0.03, 0.34, lap)) : out ? CAP : unloading ? Math.ceil(CAP * (1 - span(0.54, 0.84, lap))) : 0
-    if (drv.rig) { drv.rig.x = p.x; drv.rig.z = p.z; drv.rig.heading = heading; drv.rig.load = load }
+    // Each hauler has a machine and works its own load.
+    ws.forEach((w, r) => this.load(st, w, r, f))
+  }
+
+  // One load a day: on at the field, the drive in, off at the potato house door, and the day ends there.
+  private load(st: Site, w: Worker, r: number, f: StageFrame): void {
+    const pr = f.pr, s = f.s
+    const trip = st.trip!
+    const CAP = 8
+    const lap = w.w
+    const loading = lap < 0.42, out = lap >= 0.42 && lap < 0.6, unloading = lap >= 0.6 && lap < 0.97
+    const done = lap >= 0.97
+    const along = loading ? 0 : out ? ease((lap - 0.42) / 0.18) : 1
+    // the second machine stands a length behind the first
+    const p = trip.at(Math.max(0, Math.min(trip.length, along * trip.length + (loading ? 0 : -r * 3.4 * s * along))))
+    const heading = loading ? st.spot.heading : Math.atan2(p.dz, p.dx)
+    const px = p.x + (loading ? Math.cos(st.spot.heading) * r * 3.6 * s : 0), pz = p.z + (loading ? Math.sin(st.spot.heading) * r * 3.6 * s : 0)
+    const load = done ? 0 : loading ? Math.floor(CAP * span(0.03, 0.4, lap)) : out ? CAP : Math.ceil(CAP * (1 - span(0.62, 0.95, lap)))
+    if (w.rig) { w.rig.x = px; w.rig.z = pz; w.rig.heading = heading; w.rig.load = load }
     const ch = Math.cos(heading), sh = Math.sin(heading)
     // beside the bed, on the side away from the crop
-    const flank = (lx: number, lz: number, out2: Pt) => { out2.x = p.x + (ch * lx - sh * lz) * s; out2.z = p.z + (sh * lx + ch * lz) * s; return out2 }
-    ws.forEach((w, r) => {
-      if (r > 0) w.rig = null
-      const moving = !done && (out || back)
-      w.aboard = r === 0 && moving
-      if (w.aboard) return
-      if (done) { flank(-0.9, 0.95 + 0.5 * r, PT); w.x = PT.x; w.z = PT.z; w.heading = heading; w.lift = 0; stand(w.pose, st.t, w.tired, r % 3); return }
-      if (r > 0 && moving) { stand(w.pose, st.t, w.tired, 1); return }
-      // a barrel at a time: up from the ground and onto the bed, or down off it and rolled to the door
-      flank(-1.0 - 0.45 * (r % 2), 0.92 + 0.1 * r, PT)
-      w.x = PT.x
-      w.z = PT.z
-      w.lift = 0
-      w.heading = heading - Math.PI / 2 + (loading ? Math.PI : 0)
-      const cyc = frac((loading ? span(0.03, 0.34, lap) : span(0.54, 0.84, lap)) * CAP / Math.max(1, ws.length) + r * 0.5)
-      if (loading) {
-        lifting(w.pose, cyc, 0, 0.16)
-        w.pose.twist = 0
-        w.heading = heading - Math.PI / 2 + Math.PI * (1 - ease(span(0.4, 0.66, cyc)))
-        w.pose.held = cyc > 0.24 && cyc < 0.78 ? 'barrel' : ''
-      } else {
-        lifting(w.pose, 1 - cyc, 0, 0.16)
-        w.pose.twist = 0
-        w.heading = heading - Math.PI / 2 + Math.PI * ease(span(0.3, 0.6, cyc))
-        w.pose.held = cyc > 0.2 && cyc < 0.74 ? 'barrel' : ''
-      }
-    })
-    if (loading && !done) {
+    const flank = (lx: number, lz: number, out2: Pt) => { out2.x = px + (ch * lx - sh * lz) * s; out2.z = pz + (sh * lx + ch * lz) * s; return out2 }
+    w.aboard = out
+    if (out) return
+    w.lift = 0
+    if (done) { flank(-0.9, 1.0, PT); w.x = PT.x; w.z = PT.z; w.heading = heading + 0.6; stand(w.pose, st.t, w.tired, 1); return }
+    // a barrel at a time: up from the ground and round onto the bed, or down off it and round to the door
+    flank(-1.05, 0.98, PT)
+    w.x = PT.x
+    w.z = PT.z
+    const cyc = frac(st.t / 1.5 + r * 0.5)
+    if (loading) {
+      lifting(w.pose, cyc, 0, 0.16)
+      w.heading = heading - Math.PI / 2 + Math.PI * (1 - ease(span(0.4, 0.66, cyc)))
+      w.pose.held = cyc > 0.24 && cyc < 0.78 ? 'barrel' : ''
       // barrels brought to the headland, waiting to go
       const left = CAP - load
       for (let n = 0; n < Math.min(left, 6); n++) {
-        flank(-0.5 - 0.42 * n, 1.75 + 0.1 * (n % 2), PT)
+        flank(-0.6 - 0.44 * n, 1.8 + 0.1 * (n % 2), PT)
         a.set(PT.x, heightAt(PT.x, PT.z), PT.z)
         pr.put('barrel', a, Y, X, 0.42 * s, 0.42 * s, 0.42 * s, WHITE)
       }
     } else if (unloading) {
-      // rolled on their sides to the big door
+      lifting(w.pose, 1 - cyc, 0, 0.16)
+      w.heading = heading - Math.PI / 2 + Math.PI * ease(span(0.3, 0.6, cyc))
+      w.pose.held = cyc > 0.2 && cyc < 0.74 ? 'barrel' : ''
+      // set down, and rolled on its side to the big door
       const door = houseDoor(houseFor(st.field, f.snap.farm.dufour))
-      const rolling = frac(span(0.54, 0.84, lap) * CAP)
-      flank(-1.0, 1.6, PT)
+      const rolling = frac(st.t / 1.5 + r * 0.5 + 0.3)
+      flank(-1.05, 1.7, PT)
       a.set(PT.x, heightAt(PT.x, PT.z) + 0.17 * s, PT.z)
       b.set(door.x, heightAt(door.x, door.z) + 0.17 * s, door.z - 0.6)
       c.copy(a).lerp(b, rolling)

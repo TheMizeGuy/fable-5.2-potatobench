@@ -7,7 +7,7 @@ import {
 } from 'three'
 import type { UnitKind } from '../sim/index.ts'
 import { COWS, DEER, drawBeast, drawCrow } from './animals.ts'
-import { Pose, dressFor, dressOf, drawFigure, drawn, figureMatrix, forking, sit, stand, stoop, swing, walk, type Dress } from './crew.ts'
+import { Pose, dressFor, dressOf, drawFigure, drawn, figureMatrix, forking, hammering, sit, stand, stoop, swing, walk, type Dress } from './crew.ts'
 import type { Env } from './env.ts'
 import { UI_GAIN, type HillDisplay } from './fields.ts'
 import { HOUSE, ROAD, hillPos, route, type Pt } from './layout.ts'
@@ -61,9 +61,10 @@ interface Actor {
   shown: number
   gait: number
   goal: (Spot & { seat?: number }) | null
-  state: 'work' | 'idle' | 'sunday' | 'hurt'
+  state: 'work' | 'idle' | 'sunday' | 'hurt' | 'mend'
   post: string             // the work stood at outside the season (winter), or ''
-  tired: number
+  tired: number            // bearing: how bowed they go, from tiredness and low spirits
+  worn: number             // tiredness alone
   style: number
   pose: Pose
   worker: Worker
@@ -186,7 +187,7 @@ export class Crews {
     return {
       id: u.id, kind: u.kind, slot, dress: dressFor(u.id), coat: dressFor(u.id, true), segs: [], clockSeg: -2, segClock: 0,
       x: rest.x, z: rest.z, heading: rest.heading, rig: null, aboard: false, shown: 0, gait: u.id * 1.3, goal: null, state: 'idle', post: '',
-      tired: u.tired, style: (u.id * 7) % 5, pose: new Pose().reset(), head: new Vector3(rest.x, 1, rest.z), scale: 1, next: [],
+      tired: u.tired, worn: u.tired, style: (u.id * 7) % 5, pose: new Pose().reset(), head: new Vector3(rest.x, 1, rest.z), scale: 1, next: [],
       worker: { id: u.id, dress: dressFor(u.id), tired: 0, w: 0, x: rest.x, z: rest.z, heading: 0, lift: 0, pose: new Pose().reset(), aboard: false, rig: null },
     }
   }
@@ -220,7 +221,12 @@ export class Crews {
       this.actors.push(a)
     }
     this.actors.sort((a, b) => want.findIndex(w => w.id === a.id) - want.findIndex(w => w.id === b.id))
-    for (const a of this.actors) { const u = want.find(w => w.id === a.id)!; a.tired = u.tired }
+    for (const a of this.actors) {
+      const u = want.find(w => w.id === a.id)!
+      a.worn = u.tired
+      // worn out or unhappy, it shows in how they carry themselves
+      a.tired = clamp(Math.max(u.tired, 1.5 * (0.5 - u.mood)), 0, 1)
+    }
     // machines
     const tractors = this.rigs.filter(r => r.kind === 'tractor')
     for (let k = tractors.length; k < Math.min(3, Math.max(1, snap.farm.tractors)); k++) this.rigs.push(this.makeRig('tractor', k))
@@ -247,6 +253,7 @@ export class Crews {
   rest(snap: Snapshot): void {
     this.mode = snap.mode
     this.sync(snap)
+    this.pondWas = snap.farm.pond
     this.leavers = []
     this.gangs.clear()
     this.stage.clear()
@@ -296,10 +303,20 @@ export class Crews {
     let sunday = 0, sick = 0
     for (const a of this.actors) {
       const u = snap.units.find(w => w.id === a.id)!
-      if (u.hurt) { a.state = 'hurt'; a.goal = { ...sickSpot(sick++), seat: 0.2 } }
-      else if (u.resting) { a.state = 'sunday'; const s = sundaySpot(sunday++); a.goal = { ...s, seat: s.seat } }
-      else if (!u.worked.length && u.to === u.at && u.at < 0) { a.state = 'idle'; a.goal = idleSpot(u.at, a.slot, a.kind === 'farmer') }
-      else { a.state = u.worked.length || u.to !== u.at ? 'work' : 'idle'; a.goal = null }
+      if (u.worked.length || u.to !== u.at) { a.state = 'work'; a.goal = null }
+      else if (u.hurt) { a.state = 'hurt'; a.goal = { ...sickSpot(sick++), seat: 0.2 } }
+      else if (snap.restDay) { a.state = 'sunday'; const s = sundaySpot(sunday++); a.goal = { ...s, seat: s.seat } }
+      else { a.state = 'idle'; a.goal = u.at < 0 ? idleSpot(u.at, a.slot, a.kind === 'farmer') : null }
+    }
+    // A tractor broken down: whoever was driving it (or else whoever has nothing to do) is at its engine.
+    for (const r of this.rigs) {
+      if (!r.broken) continue
+      const free = (a: Actor) => a.state === 'idle' || a.state === 'sunday'
+      const inc = snap.farm.incidents.find(i => i.kind === 'breakdown')
+      const who = this.actors.find(a => free(a) && inc && a.id === inc.unit) ?? this.actors.find(a => free(a) && a.kind === 'farmer') ?? this.actors.find(free)
+      if (!who) continue
+      who.state = 'mend'
+      who.goal = { x: r.x + Math.cos(r.heading) * 0.3 - Math.sin(r.heading) * 0.62, z: r.z + Math.sin(r.heading) * 0.3 + Math.cos(r.heading) * 0.62, heading: r.heading - Math.PI / 2 }
     }
   }
 
@@ -311,7 +328,7 @@ export class Crews {
     for (const a of this.actors) {
       const u = snap.units.find(w => w.id === a.id)!
       const machine = u.worked.some(w => MACHINE_JOBS.has(w.kind)) || (u.to !== u.at && !!u.job && MACHINE_JOBS.has(u.job.kind)) || u.rig !== ''
-      let ride: Ride = !machine || u.hurt || u.resting ? '' : u.rig || 'tractor'
+      let ride: Ride = !machine ? '' : u.rig || 'tractor'
       if (ride === 'tractor' && !u.rig && truck && hauls(u) && (truck.holder < 0 || truck.holder === a.id) && !snap.units.some(o => o.id !== u.id && o.rig === 'truck')) ride = 'truck'
       rides.set(a.id, ride)
       if (a.rig && a.rig.kind !== ride) {
@@ -345,7 +362,8 @@ export class Crews {
       id: a.id, slot: a.slot, farmer: a.kind === 'farmer', ride: rides.get(a.id)!, goal: a.goal,
       at: a.aboard && a.rig ? { x: a.rig.x, z: a.rig.z } : { x: a.x, z: a.z }, machine: a.rig ? { x: a.rig.x, z: a.rig.z } : null,
     }))
-    const plans = planDay(snap, shown, from, samples)
+    const plans = planDay(snap, shown, from, samples, snap.farm.pond < this.pondWas - 0.02)
+    this.pondWas = snap.farm.pond
     const out: PendingReveal[] = []
     this.actors.forEach((a, k) => {
       a.segs = plans[k]
@@ -425,7 +443,7 @@ export class Crews {
     this.ringMat.uniforms.uTime.value = f.time
     const snap = f.snap, env = f.env
     const grown = smooth(24, 115, f.dist)
-    const big = 1 + 1.25 * grown, bigMachine = 1 + 1.0 * grown
+    const bigMachine = 1 + 1.0 * grown, big = bigMachine * FIGURE
     const cold = env.snow > 0.3
     this.cold = cold
     const going = snap.mode === 'season' ? f.advancing || f.dayT < 1 : snap.mode !== 'title'
@@ -534,10 +552,11 @@ export class Crews {
     a.scale = scale
   }
   private cold = false
+  private pondWas = 0
 
   // Between jobs and at the day's end: standing easy, or sitting down when worn out.
   private idle(a: Actor, f: CrewFrame, pose: Pose): void {
-    if (a.tired > 0.72) sit(pose, f.time + a.id, 0, a.tired)
+    if (a.worn > 0.72) sit(pose, f.time + a.id, 0, a.tired)
     else stand(pose, f.time + a.id * 3.1, a.tired, a.style)
   }
 
@@ -683,6 +702,12 @@ export class Crews {
       a.x = g.x; a.z = g.z
       a.heading = g.heading
       if (a.state === 'hurt') { sit(pose, f.time + a.id, 0.2, 0.5); pose.held = 'sling'; pose.gripL = true; pose.handL.set(0.1, 0.36, 0.0) }
+      else if (a.state === 'mend') {
+        // leaning in over the engine with a wrench, straightening now and then to look at it
+        const u = (f.time * 0.21 + a.id * 0.3) % 1
+        if (u < 0.78) hammering(pose, u < 0.5 ? 1.2 : f.time * 7, 0.52)
+        else stand(pose, f.time, a.tired, 1)
+      }
       else if (g.seat !== undefined && g.seat >= 0 && a.state === 'sunday') sit(pose, f.time + a.id * 2, g.seat, a.tired * 0.5)
       else stand(pose, f.time + a.id * 3.1, a.tired, a.state === 'sunday' ? 1 + (a.id % 2) : a.style)
     } else if (f.snap.mode === 'cellar' && a.kind === 'farmer') {
@@ -879,6 +904,8 @@ export class Crews {
   }
 }
 
+// People are drawn a little larger than the machines' scale, so a man at the wheel is not lost in the tractor.
+const FIGURE = 1.14
 const POSE = new Pose()
 const WHITE = new Color(1, 1, 1)
 const IDLE: MachineState = { moved: 0, turn: 0, working: 0, kind: 'travel', driver: null, load: 0 }

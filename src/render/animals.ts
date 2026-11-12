@@ -55,8 +55,8 @@ export function drawBeast(pr: Prims, k: Beast, x: number, y: number, z: number, 
   at(-k.long / 2, mid + 0.01, 0, a)
   pr.put('ball', a, U, F, k.deep * 0.58 * s, k.deep * 0.56 * s, k.wide * 0.54 * s, k.coat)
   for (let n = 0; n < k.patches; n++) {
-    at((n - 1) * k.long * 0.3, mid + 0.04 * (n % 2 ? 1 : -0.4), (n % 2 ? 1 : -1) * k.wide * 0.2, a)
-    pr.put('ball', a, U, F, k.long * 0.19 * s, k.deep * 0.4 * s, k.wide * 0.43 * s, k.point)
+    at((n - 1) * k.long * 0.34, mid + 0.02 * (n % 2 ? 1 : -1), (n % 2 ? 1 : -1) * k.wide * 0.1, a)
+    pr.put('ball', a, U, F, k.long * 0.2 * s, k.deep * 0.5 * s, k.wide * 0.56 * s, k.point)
   }
   // neck and head: up and looking about, or down to graze
   const lift = (1 - graze) * (0.95 + 0.06 * Math.sin(phase)) + graze * -0.75

@@ -134,15 +134,16 @@ export const OFF_FARM: Pt = { x: 19.2, z: 38 }
 // A building's site: where the work stands (the site's edge, toward the yard), and which way the building lies.
 export function buildSite(kind: BuildingKind, yard: number): Spot {
   if (yard === -2) return kind === 'bunk' ? { x: 96.6, z: -11.6, heading: 0 } : { x: 86.6, z: -13.2, heading: -Math.PI / 2 }
+  // behind the farmstead, clear of what stands there: the work comes at each from the yard side
   const home: Record<BuildingKind, Spot> = {
-    house: { x: 28.2, z: -15.6, heading: -Math.PI / 2 },
-    shed: { x: 27.8, z: -8.6, heading: 0 },
-    bunk: { x: 27.9, z: -2.2, heading: 0 },
-    packing: { x: 19.9, z: -15.6, heading: -Math.PI / 2 },
-    pond: { x: 28.6, z: 9.6, heading: 0 },
-    stand: { x: 19.3, z: 19.2, heading: 0 },
-    station: { x: 27.2, z: 7.6, heading: 0 },
-    road: { x: 17.6, z: 0.4, heading: Math.PI / 2 },
+    house: { x: 28.4, z: -16.4, heading: 0 },
+    shed: { x: 28.6, z: -9.4, heading: 0 },
+    bunk: { x: 28.4, z: -3.2, heading: 0 },
+    packing: { x: 33.2, z: -16.8, heading: 0 },
+    pond: { x: 31.4, z: 2.6, heading: 0 },
+    stand: { x: 19.9, z: 19.4, heading: 0 },
+    station: { x: 27.6, z: 7.9, heading: 0 },
+    road: { x: 18.4, z: 0.4, heading: Math.PI / 2 },
   }
   return home[kind]
 }
@@ -165,10 +166,11 @@ export function siteAt(kind: JobKind, field: number): Spot {
   return { x: f.cx, z: f.cz, heading: 0 }
 }
 
-// How a field is watered: from the pond through a line of pipe, with the reel and its gun, or from a tank wagon.
-export function waterWay(snap: Snapshot, field: number): 'tank' | 'reel' | 'pipe' {
+// How a field is watered: from the pond through a line of pipe (when the pond was drawn on), with the reel and its
+// gun, or from a tank wagon.
+export function waterWay(snap: Snapshot, field: number, pondDrawn: boolean): 'tank' | 'reel' | 'pipe' {
   const block = FIELDS[field]?.block
-  if (snap.farm.pond > 0.01 && (block === 'home' || block === 'brook')) return 'pipe'
+  if (pondDrawn && (block === 'home' || block === 'brook')) return 'pipe'
   return snap.farm.equipment.includes('reel') ? 'reel' : 'tank'
 }
 
@@ -221,7 +223,7 @@ export interface CrewFrom { id: number; at: Pt; slot: number; ride: Ride; machin
 
 // Plan the day that just passed for every person. `shown` is what is on screen now, `snap` the new state; each starts
 // where they stand on screen. Returns each one's segments, in the order of `crews`.
-export function planDay(snap: Snapshot, shown: HillDisplay[][], crews: CrewFrom[], sampleHills: Map<number, number>): Seg[][] {
+export function planDay(snap: Snapshot, shown: HillDisplay[][], crews: CrewFrom[], sampleHills: Map<number, number>, pondDrawn = false): Seg[][] {
   const units = new Map<number, UnitVis>(snap.units.map(u => [u.id, u]))
   // Who worked each field at each job today, in order: they share out the hills that changed.
   const sharers = new Map<string, number[]>()
@@ -272,21 +274,27 @@ export function planDay(snap: Snapshot, shown: HillDisplay[][], crews: CrewFrom[
       const walkTo = Math.hypot(m.x - at.x, m.z - at.z) > 1.2 ? route(at, m) : []
       return { walkTo, travel: route(m, to) }
     }
-    if (u && !u.hurt && !u.resting) {
+    if (u) {
       const order = u.worked.slice().sort((a, b) => first(`${b.field}|${b.kind}`) - first(`${a.field}|${a.kind}`))
       for (const w of order) {
         const key = `${w.field}|${w.kind}`
         const ride: Ride = MACHINE_JOBS.has(w.kind) ? crew.ride : ''
-        const way = w.kind === 'water' ? waterWay(snap, w.field) : 'tank'
+        const way = w.kind === 'water' ? waterWay(snap, w.field, pondDrawn) : 'tank'
         if (SITE_JOBS.has(w.kind) || way !== 'tank') {
           // Staged at one place: the stage puts each worker where the work wants them.
           const yard = w.kind === 'build'
           const going = snap.farm.buildings.find(x => !x.built && x.yard === w.field)
           const spot = yard ? buildSite(going ? going.kind : 'shed', w.field) : siteAt(way !== 'tank' ? 'haul' : w.kind, w.field)
-          const { walkTo, travel } = go(spot, ride)
+          // already at it since yesterday: carry on where they stand
+          const there = !ride && Math.hypot(spot.x - at.x, spot.z - at.z) < 9
+          const { walkTo, travel } = there ? { walkTo: [], travel: [at] } : go(spot, ride)
           segs.push({ kind: w.kind, field: w.field, walker: !ride, ride, walkTo, travel, path: [{ x: spot.x, z: spot.z }], reveals: [], start: 0, end: 0, site: way !== 'tank' ? `${w.field}|${way}` : key })
-          at = { x: spot.x, z: spot.z }
-          if (ride) machine = at
+          if (!there) at = { x: spot.x, z: spot.z }
+          if (ride) {
+            // a day's hauling ends at the potato house door
+            const door = houseDoor(houseFor(w.field, snap.farm.dufour))
+            at = machine = w.kind === 'haul' ? { x: door.x, z: door.z + 0.9 } : at
+          }
           continue
         }
         const f = snap.fields[w.field]

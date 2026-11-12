@@ -440,7 +440,7 @@ abstract class Machine {
   protected seated(pr: Prims, f: MachineFrame, st: MachineState, x: number, y: number, z: number): void {
     if (!st.driver) return
     this.at(x, y, z, p0)
-    SEAT.copy(V).setPosition(p0)
+    SEAT.copy(V).scale(E.set(1.1, 1.1, 1.1)).setPosition(p0)
     const bounce = st.moved > 0 && !f.still ? Math.sin(this.travelled * 9) * 0.006 : 0
     drawFigure(pr, SEAT, st.driver, drive(pose, f.time, st.turn, bounce))
   }
