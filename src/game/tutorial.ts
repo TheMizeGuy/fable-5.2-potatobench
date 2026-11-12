@@ -214,7 +214,7 @@ export const LESSONS: Lesson[] = [
     done: (l, g) => g.has('fast') || needFor(l, 'plant') >= 0 || anyField(l, f => f.plantDay >= 0) || jobOn(l, 'plant'),
     ask: l => by(l, 'Nothing to do until the soil warms. Press 3× to hurry the wait.', 'Nothing to do until the soil warms. Tap 3× to hurry the wait.', 'Nothing to do until the soil warms. F steps the clock up to 3×.'),
     why: l => auto(l, 'plant') ? 'When the soil is warm the crew plants by itself. The clock keeps the speed you set.' : 'When the soil is warm enough a field gets a ringed stamp. The clock keeps the speed you set.',
-    point: () => ({ testid: ['speed-3', 'speed-cycle'] }),
+    point: () => ({ testid: ['goal-faster', 'speed-3', 'speed-cycle'] }),
   },
   {
     id: 'plant', part: 'opening', moment: true, name: 'Give the first order',
