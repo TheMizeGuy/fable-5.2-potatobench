@@ -8,7 +8,7 @@ import {
 import { BARE_SHIFT, CARD_FRAGMENT, CARD_SHADOW, CARD_SHADOW_HEAD, CARD_VERTEX, bakeCards, cardGeometry, cardMaps } from './cards.ts'
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { PARCELS, TRACTS } from '../sim/index.ts'
-import { DUFOUR, DUFOUR_BARN, DUFOUR_HOUSE, DUFOUR_POTATO_HOUSE, FARM, FARM_CENTER, FD, FIELDS, FW, HOME, HOME_WOODS, KEEP_CLEAR, LAND, POND, POTATO_HOUSE, WIDE, YARD_TREES, brookHalf, brookZ, fieldMask, groundY, hillRoadZ, oursAt, regionAt, ridgeWoodAt, roadDist, townRoadZ, tractAt, woodFront, woodsAt, WALLS, GATEWAYS, YARD_AT, ROAD, BRIDGE_X, PASTURE, VILLAGE, SIDING } from './layout.ts'
+import { DUFOUR, DUFOUR_BARN, DUFOUR_HOUSE, DUFOUR_POTATO_HOUSE, FARM, FARM_CENTER, FD, FIELDS, FW, HOME, HOME_WOODS, KEEP_CLEAR, LAND, POND, POTATO_HOUSE, WIDE, YARD_TREES, brookHalf, brookZ, fieldMask, groundY, hillRoadZ, oursAt, regionAt, ridgeWoodAt, roadDist, townRoadZ, tractAt, woodFront, woodsAt, WALLS, GATEWAYS, YARD_AT, ROAD, BRIDGE_X, PASTURE, VILLAGE, SIDING, WOOD_GATE } from './layout.ts'
 import { fbm2, hash2, rng, smooth } from './noise.ts'
 import { K, KV, S, toWorld } from './scale.ts'
 import { SNOW_RIME_TREE, depthFor, linear, patch, sway, type Patch } from './shaders.ts'
@@ -316,6 +316,8 @@ const LEAF_LOOK = /* glsl */ `
 
 export class Flora {
   readonly group = new Group()
+  // The woods seen only from far off, apart, so a tool can hide them to see what they cost.
+  readonly farWoods = new Group()
   private disposables: { dispose(): void }[] = []
   private chunks = new Map<string, Chunk>()
   private stands = new Map<number, Stand>()
@@ -333,6 +335,7 @@ export class Flora {
 
   constructor() {
     const r = rng(2024)
+    this.group.add(this.farWoods)
     const trees: Record<Cls, Tree[]> = { spruce: [], maple: [], birch: [], bush: [], apple: [], conBack: [], broadBack: [], conFar: [], conDistant: [], broadFar: [], broadDistant: [] }
     const built = [POTATO_HOUSE, DUFOUR_POTATO_HOUSE, DUFOUR_HOUSE, DUFOUR_BARN]
     const open = (x: number, z: number) =>
@@ -506,7 +509,7 @@ export class Flora {
       for (let d = 2; d < len; d += 3.2 + r() * 3) {
         const x = x0 + ((x1 - x0) * d) / len + (r() - 0.5) * 1.6, z = z0 + ((z1 - z0) * d) / len + (r() - 0.5) * 1.6
         if (hash2(Math.floor(x / 46) + 3, Math.floor(z / 46) + 11) < 0.42) continue
-        if (fieldMask(x, z, 16) > 0.01 || !free(x, z, 2) || GATEWAYS.some(g => Math.hypot(x - g.x, z - g.z) < 9)) continue
+        if (fieldMask(x, z, 16) > 0.01 || !free(x, z, 2) || [...GATEWAYS, WOOD_GATE].some(g => Math.hypot(x - g.x, z - g.z) < 9)) continue
         const q = r()
         if (q < 0.62) trees.bush.push({ x, z, s: (1.0 + r() * 1.2) * T, r: r(), hue: r(), kind: 3 })
         else if (q < 0.9) hard({ x, z, s: (3.4 + r() * 3.4) * T, r: r(), hue: r() }, 0.3)
@@ -673,6 +676,8 @@ export class Flora {
     this.disposables.push(this.cardGeo, this.conCard, this.leafCard, ...this.cardDepth)
     // Lay each class out by patch. On and round the farm a patch has whole trees for when the camera is close, simpler
     // ones for the middle distance and cards beyond; the far woods are cards alone.
+    // A patch's cards are two meshes whatever stands in it: its conifers and its hardwoods.
+    const cards = new Map<string, { con: Tree[]; leaf: Tree[]; both: boolean }>()
     for (const cls of Object.keys(trees) as Cls[]) {
       const byCell = new Map<string, Tree[]>()
       const both = cls in this.near
@@ -687,14 +692,23 @@ export class Flora {
       for (const [key, list] of byCell) {
         let ch = this.chunks.get(key)
         if (!ch) this.chunks.set(key, (ch = { near: [], far: [], cards: [], sphere: new Sphere(), fixed: !both, level: -1 }))
+        let c = cards.get(key)
+        if (!c) cards.set(key, (c = { con: [], leaf: [], both }))
+        ;(conifer ? c.con : c.leaf).push(...list)
+        if (both) { ch.far.push(this.place(this.far[cls], list)); ch.near.push(this.place(this.near[cls], list)) }
+      }
+    }
+    for (const [key, c] of cards) {
+      const ch = this.chunks.get(key)!
+      for (const list of [c.con, c.leaf]) {
+        if (!list.length) continue
         // Drawn from the side of the farm first, so the trees in front hide those behind before they are shaded.
         list.sort((a, b) => b.z - a.z)
         // The far woods can be drawn with every other tree: the first half of each list is an even thinning of it.
-        const ordered = both ? list : [...list.filter((_, n) => n % 2 === 0), ...list.filter((_, n) => n % 2 === 1)]
-        const card = this.placeCards(conifer, ordered)
-        if (!both) { card.userData.all = ordered.length; this.thin.push(card) }
+        const ordered = c.both ? list : [...list.filter((_, n) => n % 2 === 0), ...list.filter((_, n) => n % 2 === 1)]
+        const card = this.placeCards(list === c.con, ordered)
+        if (!c.both) { card.userData.all = ordered.length; this.thin.push(card); this.farWoods.add(card) }
         ch.cards.push(card)
-        if (both) { ch.far.push(this.place(this.far[cls], list)); ch.near.push(this.place(this.near[cls], list)) }
       }
     }
     for (const i of TRACTS) if (PARCELS[i].cover !== 'open') this.plantStand(i)
@@ -752,7 +766,7 @@ export class Flora {
     // In patches of its own, so that only the part of the stand near the camera is whole trees.
     const patches = new Map<string, number[]>()
     for (let n = trees.length - 1; n >= 0; n--) {
-      const key = `${cls(trees[n])}|${Math.floor((trees[n].x - f.x0) / 62)}|${Math.floor((trees[n].z - f.z0) / 68)}`
+      const key = `${cls(trees[n])}|${Math.floor((trees[n].x - f.x0) / 90)}|${Math.floor((trees[n].z - f.z0) / 68)}`
       let ranks = patches.get(key)
       if (!ranks) patches.set(key, (ranks = []))
       ranks.push(n)
@@ -763,11 +777,24 @@ export class Flora {
       let ch = this.chunks.get(at)
       if (!ch) this.chunks.set(at, (ch = { near: [], far: [], cards: [], sphere: new Sphere(), fixed: false, level: -1 }))
       const sub = ranks.map(n => trees[n])
-      const near = this.place(this.near[c], sub), far = this.place(this.far[c], sub), card = this.placeCards(c === 'spruce', sub)
+      const near = this.place(this.near[c], sub), far = this.place(this.far[c], sub)
       ch.near.push(near)
       ch.far.push(far)
-      ch.cards.push(card)
-      stand.sets.push({ mesh: near, ranks }, { mesh: far, ranks }, { mesh: card, ranks })
+      stand.sets.push({ mesh: near, ranks }, { mesh: far, ranks })
+    }
+    // and each patch's cards in two meshes, its conifers and its hardwoods, last to fall first
+    const cardRanks = new Map<string, number[]>()
+    for (let n = trees.length - 1; n >= 0; n--) {
+      const key = `${trees[n].conifer ? 'c' : 'h'}|${Math.floor((trees[n].x - f.x0) / 90)}|${Math.floor((trees[n].z - f.z0) / 68)}`
+      let ranks = cardRanks.get(key)
+      if (!ranks) cardRanks.set(key, (ranks = []))
+      ranks.push(n)
+    }
+    for (const [key, ranks] of cardRanks) {
+      const [c, px, pz] = key.split('|')
+      const card = this.placeCards(c === 'c', ranks.map(n => trees[n]))
+      this.chunks.get(`t|${i}|${px}|${pz}`)!.cards.push(card)
+      stand.sets.push({ mesh: card, ranks })
     }
     this.stands.set(i, stand)
   }
@@ -863,8 +890,8 @@ export class Flora {
   setTier(tier: 'high' | 'medium' | 'low'): void {
     this.nearAt = NEAR_AT[tier]
     this.midAt = MID_AT[tier]
-    // The low setting draws half the far woods.
-    for (const m of this.thin) m.count = tier === 'low' ? Math.ceil((m.userData.all as number) / 2) : (m.userData.all as number)
+    // The low setting draws half the far woods, the middle one three quarters.
+    for (const m of this.thin) m.count = Math.ceil((m.userData.all as number) * (tier === 'low' ? 0.5 : tier === 'medium' ? 0.75 : 1))
   }
 
   // Whole trees in the patches near the camera, simpler ones beyond them, cards in the rest. A patch's cards are in the
@@ -877,7 +904,9 @@ export class Flora {
         const d = Math.max(0, this.v.copy(ch.sphere.center).distanceTo(c) - ch.sphere.radius * 0.6)
         level = d < this.nearAt ? 0 : d < this.midAt ? 1 : 2
       }
-      const order = -4000 + Math.min(3900, Math.round(this.v.copy(ch.sphere.center).distanceTo(c) / 8))
+      // in a few bands of distance, and by material within each: every change of material is paid for
+      const far = this.v.copy(ch.sphere.center).distanceTo(c)
+      const order = -8 + (far < 250 ? 0 : far < 600 ? 1 : far < 1400 ? 2 : 3)
       for (const m of ch.cards) m.renderOrder = order
       if (level === ch.level) continue
       ch.level = level
