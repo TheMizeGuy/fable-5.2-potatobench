@@ -6,6 +6,7 @@ import records from './data/records.json'
 import { createSound } from './audio/index.ts'
 import { App } from './game/app.ts'
 import { createFieldView } from './render/index.ts'
+import { laps } from './render/laps.ts'
 import * as sim from './sim/index.ts'
 import { mountHud } from './ui/index.ts'
 
@@ -57,10 +58,15 @@ function start(): void {
   function loop(now: number): void {
     const dt = Math.min(100, now - last)
     last = now
+    laps.begin()
     app.tick(dt)
+    laps.end('days')
     view.frame(dt)
+    laps.end('land')
     hud.frame(dt)
+    laps.end('interface')
     sound.frame(dt)
+    laps.end('sound')
     requestAnimationFrame(loop)
   }
   requestAnimationFrame(loop)

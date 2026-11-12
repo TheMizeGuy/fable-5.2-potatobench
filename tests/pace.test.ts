@@ -1,7 +1,7 @@
 // How often the picture is drawn and how large (src/render/pace.ts): a fast display is not drawn on every beat, a
 // land where nothing moves comes to rest, and the picture's size settles instead of swinging.
 import { describe, expect, it } from 'vitest'
-import { HELD_MS, HOLD_AFTER_S, Pace, SIZES, Sizer, UNWATCHED_S, startOn } from '../src/render/pace.ts'
+import { Climb, HELD_MS, HOLD_AFTER_S, Pace, SIZES, Sizer, UNWATCHED_S, startOn } from '../src/render/pace.ts'
 
 // Frames drawn over `seconds` of a display beating every `beat` ms.
 function run(p: Pace, beat: number, seconds: number, busy: boolean, alone = false): number {
@@ -51,6 +51,78 @@ describe('the pace of drawing', () => {
     const q = new Pace()
     for (let k = 0; k < 120; k++) q.tick(1000 / 120, true)
     expect(q.frameMs).toBeCloseTo(1000 / 60, 3)
+  })
+
+  // A display beating `hz` times a second and a page whose drawn frame takes `cost(t)` ms of its thread: the page is
+  // called on the next beat after its work is done, so work that runs past a beat misses it. Gives the gaps between
+  // the frames drawn after the first three seconds, and every number of beats to a frame the pace took up.
+  function play(hz: number, cost: (t: number) => number, seconds = 20, hold = false): { gaps: number[]; every: number[] } {
+    const beat = 1000 / hz, p = new Pace()
+    const gaps: number[] = [], every = new Set<number>()
+    for (let t = 0, last = 0, drawn = 0; t < seconds * 1000;) {
+      const ms = t > last ? p.tick(t - last, true, false, hold && t > 3000) : 0
+      last = t
+      let work = 0.3
+      if (ms > 0) { if (t > 3000) { gaps.push(t - drawn); every.add(p.every) } drawn = t; work = cost(t) }
+      t = Math.max(Math.floor((t + 1e-6) / beat) + 1, Math.ceil((t + work) / beat)) * beat
+    }
+    return { gaps, every: [...every] }
+  }
+  const spread = (gaps: number[]) => Math.max(...gaps) - Math.min(...gaps)
+
+  it('keeps an even sixtieth of a second on a fast display when a frame runs past one beat of it', () => {
+    // counted in beats, a frame of 8.5 ms on a 120-a-second display came 8, 17 and 25 ms after the last by turns
+    for (const cost of [3, 6, 7.5, 8, 8.5, 9, 10, 12, 15]) {
+      const r = play(120, () => cost)
+      expect(spread(r.gaps), `${cost} ms a frame`).toBeLessThan(0.01)
+      expect(r.gaps[0], `${cost} ms a frame`).toBeCloseTo(1000 / 60, 3)
+    }
+    for (const cost of [3, 6, 7.5, 9, 12]) {
+      const r = play(144, () => cost)
+      expect(spread(r.gaps), `${cost} ms a frame at 144`).toBeLessThan(0.01)
+      expect(r.gaps[0]).toBeCloseTo(2000 / 144, 3)
+    }
+  })
+
+  it('does not swing between paces as the cost of a frame swings about one beat', () => {
+    for (const hz of [120, 144]) {
+      const r = play(hz, t => 8.5 + 2.5 * Math.sin((t / 2000) * Math.PI * 2))
+      expect(r.every, `${hz} a second`).toEqual([2])
+      expect(spread(r.gaps), `${hz} a second`).toBeLessThan(0.01)
+    }
+    // a dear frame among cheap ones is late by itself, and the frames after it are not
+    let n = 0
+    const r = play(120, () => (n++ % 12 === 0 ? 20 : 6))
+    expect(r.gaps.filter(g => g > 17).length).toBeLessThanOrEqual(Math.ceil(r.gaps.length / 12) + 1)
+    expect(r.gaps.filter(g => g < 16).length).toBe(0)
+  })
+
+  it('is not taken for a slower display by frames that are late for a while', () => {
+    // twelve seconds of frames too dear for a 120-a-second display, then cheap ones again
+    const r = play(120, t => (t < 15000 ? 19 : 5), 24)
+    const after = r.gaps.slice(-300)
+    expect(spread(after)).toBeLessThan(0.01)
+    expect(after[0]).toBeCloseTo(1000 / 60, 3)
+  })
+
+  it('keeps its pace through a long move in which every frame runs past a beat', () => {
+    // three seconds of cheap frames on a 120-a-second display, then the camera moves and every frame costs 12 ms
+    for (const hold of [true, false]) {
+      const r = play(120, t => (t < 3000 ? 5 : 12), 20, hold)
+      expect(spread(r.gaps), hold ? 'camera moving' : 'camera still').toBeLessThan(0.01)
+      expect(r.gaps[0]).toBeCloseTo(1000 / 60, 3)
+    }
+  })
+
+  it('changes the beats to a frame only when the camera is at rest', () => {
+    // a window carried from a 60-a-second display to a 120-a-second one while the camera moves
+    const p = new Pace()
+    run(p, 1000 / 60, 2, true)
+    expect(p.every).toBe(1)
+    for (let k = 0; k < 480; k++) p.tick(1000 / 120, true, false, true)
+    expect(p.every).toBe(1)
+    p.tick(1000 / 120, true, false, false)
+    expect(p.every).toBe(2)
   })
 
   it('comes to rest when nothing moves, and then draws a small share of the frames', () => {
@@ -114,6 +186,20 @@ describe('the size of the picture', () => {
     for (let k = 0; k < 50; k++) expect(t.feed(k % 2 === 1, 1.5)).toBe('')
   })
 
+  it('comes down by as much as the frames are late, not a size at a time', () => {
+    // frames taking twice their time: half the pixels in one go
+    const s = new Sizer()
+    s.feed(true, 1.5, 2)
+    expect(s.feed(true, 1.5, 2)).toBe('smaller')
+    expect(s.size).toBe(SIZES[SIZES.length - 1])
+    // half as late again: about two thirds of the pixels
+    const t = new Sizer()
+    t.feed(true, 1.5, 1.5)
+    t.feed(true, 1.5, 1.5)
+    expect(t.size ** 2).toBeLessThanOrEqual(1.15 / 1.5)
+    expect(t.size ** 2).toBeGreaterThan(0.6)
+  })
+
   it('says so when at its smallest frames are still missed', () => {
     const s = new Sizer()
     const said: string[] = []
@@ -145,6 +231,34 @@ describe('the size of the picture', () => {
     // an hour of play: a handful of changes in all, and next to none by the end
     expect(changes).toBeLessThan(16)
     expect(late).toBeLessThanOrEqual(2)
+  })
+})
+
+describe('a setting that came down by itself', () => {
+  it('goes up again only after a minute at the full size and in time', () => {
+    const c = new Climb()
+    let at = -1
+    for (let k = 0; k < 60 && at < 0; k++) if (c.feed(true, 1.5)) at = k
+    expect((at + 1) * 1.5).toBeGreaterThanOrEqual(60)
+    expect((at + 1) * 1.5).toBeLessThan(70)
+    // a slow stretch, or a picture not at its full size, starts the wait again
+    const d = new Climb()
+    for (let k = 0; k < 200; k++) expect(d.feed(k % 30 !== 29, 1.5)).toBe(false)
+  })
+
+  it('waits twice as long each time going up did not hold', () => {
+    const c = new Climb()
+    const waits: number[] = []
+    for (let n = 0; n < 5; n++) {
+      let t = 0
+      while (!c.feed(true, 1.5)) t += 1.5
+      waits.push(t)
+      // down again within a few seconds
+      c.feed(false, 6)
+      c.fell()
+    }
+    for (let n = 1; n < waits.length; n++) expect(waits[n]).toBeGreaterThanOrEqual(waits[n - 1] * 1.9)
+    expect(waits[4]).toBeGreaterThan(900)
   })
 })
 

@@ -1,6 +1,9 @@
 // The field view: the farm in its country, drawn with three.js, played like a strategy map.
 // Falls back to a flat drawing without WebGL.
-import { Color, Group, PCFShadowMap, Raycaster, Scene, Triangle, Vector2, Vector3, WebGLRenderer, type Material, type Mesh, type Object3D } from 'three'
+import {
+  BackSide, Color, DoubleSide, FrontSide, Group, PCFShadowMap, Raycaster, Scene, Triangle, Vector2, Vector3, WebGLRenderer,
+  type Material, type Mesh, type MeshDepthMaterial, type MeshStandardMaterial, type Object3D, type Side,
+} from 'three'
 import { DAYS_PER_SECOND, type App } from '../game/app.ts'
 import type { CreateFieldView, FieldView, Thing } from '../game/contracts.ts'
 import { FIELD_COUNT, HILLS } from '../sim/index.ts'
@@ -17,7 +20,8 @@ import { attachInput } from './input.ts'
 import { DUFOUR, FD, FIELDS, FW, HOME, LAND, POTATO_HOUSE, ROAD, WATER_Y, brookZ, fieldBaseY, groundY, YARD_AT, yardAt } from './layout.ts'
 import { clamp, hash2, smooth } from './noise.ts'
 import { K, KV, S } from './scale.ts'
-import { Pace, Sizer, startOn } from './pace.ts'
+import { laps } from './laps.ts'
+import { Climb, Pace, SIZES, Sizer, startOn } from './pace.ts'
 import { Particles } from './particles.ts'
 import { Pond } from './pond.ts'
 import { Post } from './post.ts'
@@ -72,6 +76,7 @@ const TIERS: Record<Tier, { scale: number; pixels: number; ratio: number; msaa: 
 const GPU_KEY = 'the-county/gpu', GPU_MEASURE = 1
 type TierDef = (typeof TIERS)[Tier]
 const DOWN: Record<Tier, Tier> = { high: 'medium', medium: 'low', low: 'low' }
+const UP: Record<Tier, Tier> = { low: 'medium', medium: 'high', high: 'high' }
 
 // The view the rest of the game holds. It starts in 3D and turns to the flat drawing if WebGL fails or never comes back.
 export const createFieldView: CreateFieldView = (canvas, app) => {
@@ -254,10 +259,13 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       return t === 'high' || t === 'medium' || t === 'low' ? t : null
     } catch { return null }
   }
-  function remember(ms: number): void {
-    try { localStorage.setItem(GPU_KEY, JSON.stringify({ tier, ms: Math.round(ms * 10) / 10, measure: GPU_MEASURE })) } catch { /* storage blocked: measured again next time */ }
+  // fell: the setting kept is one it came down to by itself, and may go up from again.
+  function remember(ms: number, fell = false): void {
+    try { localStorage.setItem(GPU_KEY, JSON.stringify({ tier, ms: Math.round(ms * 10) / 10, measure: GPU_MEASURE, fell })) } catch { /* storage blocked: measured again next time */ }
   }
   const known = adaptive ? remembered() : null
+  let fellBefore = false
+  try { fellBefore = known !== null && (JSON.parse(localStorage.getItem(GPU_KEY) ?? 'null') as { fell?: boolean } | null)?.fell === true } catch { /* nothing kept */ }
   const startedAt = app.settings.quality === 'auto' ? known ?? startTier() : app.settings.quality
   let tier: Tier = startedAt
   let cur: TierDef = TIERS[tier]
@@ -661,34 +669,75 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   let gustHeading = 0.4, gustRun = 0, mistAt = 0
   const cloudAt = new Vector2()
 
-  // A stretch of ninety frames drawn while things move: what they cost, and whether the picture should change size.
+  // A second and a half of frames drawn while things move: what they cost, and whether the picture should change
+  // size or the setting change. Slow is when more than a quarter of the frames miss their beat by a margin: that is
+  // felt as a stutter long before the middle frame is late.
+  //   two slow stretches running: the picture is drawn smaller, at once, by as much as the frames are late;
+  //   at its smallest (seven tenths of the side) and slow for six seconds more: the setting comes down a step, if it
+  //     was left to choose for itself (a setting the player chose is kept);
+  //   in time for a while: the picture a size larger, and when it has been at its full size and in time for a minute
+  //     or more, the setting a step up again (beginning at its smallest picture). Going up is never urgent and makes
+  //     every buffer again, so it waits until the camera has stopped.
+  let timesFor = 0
   function measure(dtMs: number): void {
     if (warm < 150) { warm++; return }
     if (dtMs > 250) return
     times.push(dtMs)
-    if (times.length < 90) return
-    const sorted = times.slice().sort((a, b) => a - b)
+    timesFor += dtMs
+    if (timesFor < 1500 || times.length < 12) return
+    const sorted = times.slice().sort((a, b) => a - b), seconds = timesFor / 1000
     times.length = 0
-    fps = Math.round(1000 / Math.max(1, sorted[45]))
+    timesFor = 0
+    fps = Math.round(1000 / Math.max(1, sorted[sorted.length >> 1]))
     if (!adaptive || probe.on) return
-    // Slow is when more than a quarter of the frames miss their beat by a margin: that is felt as a stutter long before
-    // the middle frame is late. Two slow stretches running, and the picture is drawn a size smaller; at its smallest,
-    // the setting comes down a step (left to itself: a setting the player chose is kept).
-    const late = sorted[66] / pacing.frameMs
-    const auto = app.settings.quality === 'auto' && tier !== 'low'
-    // Plainly too slow (under 37 frames a second where 60 are asked for) is not walked down a size at a time.
-    const plainly = late > 1.6 && auto
-    const say = plainly ? 'floor' : sizer.feed(late > 1.23, 1.5)
-    if (say === 'floor' && auto) {
+    const late = sorted[Math.floor(sorted.length * 0.73)] / pacing.frameMs, slow = late > 1.23
+    const auto = app.settings.quality === 'auto'
+    // Too slow for any size of the picture to mend (under 26 frames a second where 60 are asked for), two stretches
+    // running, is not walked down a size at a time. (One such stretch is as often something else on the machine.)
+    tooSlow = late > 2.3 ? tooSlow + 1 : 0
+    const plainly = tooSlow >= 2 && auto && tier !== 'low'
+    if (plainly) tooSlow = 0
+    if (upDue && !slow) return
+    const say = plainly ? 'floor' : sizer.feed(slow, seconds, late)
+    if (!slow || say === 'smaller') atFloor = 0
+    if (say === 'floor') {
+      // (the picture at its smallest and slow for six seconds, not three: a setting is dearer to change than a size,
+      // and a few seconds of something else on the machine should not cost one)
+      if (!auto || tier === 'low' || (!plainly && ++atFloor < 2)) return
+      atFloor = 0
       tier = DOWN[tier]
-      sizer.reset()
+      lowered = true
+      // (the lower setting begins at its smallest picture too, and grows from there if it holds: at its full size it
+      // may be no cheaper than the one given up)
+      sizer.reset(true)
+      climb.fell()
       // A setting the machine could not hold at any size is not tried again another day; one given up in a single
       // bad stretch (something else at work on the machine) is.
-      if (!plainly) remember(sorted[45])
-    } else if (say !== 'smaller' && say !== 'larger') return
+      if (!plainly) remember(sorted[sorted.length >> 1], true)
+      resizeNow()
+    } else if (say === 'smaller') resizeNow()
+    else if (say === 'larger') upDue = true
+    else if (auto && lowered && tier !== 'high' && climb.feed(!slow && sizer.step === 0, seconds)) {
+      tier = UP[tier]
+      lowered = tier !== 'high'
+      sizer.reset(true)
+      remember(sorted[sorted.length >> 1], lowered)
+      upDue = true
+    }
+  }
+  function resizeNow(): void {
+    upDue = false
     warm = 60
     resize()
   }
+  // The picture or the setting is to go up when the camera has stopped. lowered: the setting has come down by itself
+  // from where it began.
+  let upDue = false
+  let tooSlow = 0
+  let atFloor = 0
+  let lowered = fellBefore
+  let camMoving = false
+  const climb = new Climb()
 
   // Whether anything in the picture moves by itself or is being moved: then every frame is drawn. Otherwise, after a
   // few seconds, the land comes to rest (its water, wind, smoke and weather ease to a stop) and is drawn only a couple
@@ -699,6 +748,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     const pose = c.x + c.z * 1.37 + c.dist * 2.11 + c.yaw * 331 + c.pitch * 577 + c.fov * 13 + g.x * 0.71 + g.z * 0.53 + g.dist * 1.9 + g.yaw * 211
     const moved = pose !== poseWas
     poseWas = pose
+    camMoving = moved || rig.moving() || rig.idle < 0.6
     return moved || app.speed > 0 || (snap.mode === 'title' && !reduced) || dayT < 1 || rig.moving() || rig.idle < 1 || pending.length > 0 || waiters.length > 0
       || dirty || frameNo < 90 || trial !== null
   }
@@ -707,6 +757,21 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   const TOUCHES = ['pointermove', 'pointerdown', 'wheel', 'touchstart', 'keydown'] as const
   for (const name of TOUCHES) addEventListener(name, wake, { passive: true })
   const downward = new Vector3()
+
+  // Grass is laid out in the time the browser has to spare between frames, a few milliseconds at a go; asked for
+  // again after a quarter of a second where it has had none (a machine at full stretch), and then for a moment only.
+  const spare = typeof requestIdleCallback === 'function' ? requestIdleCallback : null
+  let laying = false
+  function layGrass(): void {
+    if (!spare || laying || !grass.wants) return
+    laying = true
+    spare(idle => {
+      laying = false
+      const began = performance.now()
+      grass.lay(() => { const took = performance.now() - began; return took < (idle.didTimeout ? 1.5 : 6) && (idle.didTimeout || idle.timeRemaining() > 1) })
+      layGrass()
+    }, { timeout: 250 })
+  }
 
   // beatMs: the time since the display's last beat (or next to none: a still picture asked for, always drawn).
   function frame(beatMs: number): void {
@@ -718,11 +783,13 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     }
     const timed = beatMs > 0.5
     // Not every beat is drawn: a fast display's every second or third, and few when nothing moves.
-    const dtMs = timed ? (capped ? pacing.tick(beatMs, busy(), snap.mode === 'title') : beatMs) : beatMs
+    // (the opening's camera never stops: there the beats to a frame may change as it goes)
+    const dtMs = timed ? (capped ? pacing.tick(beatMs, busy(), snap.mode === 'title', camMoving && snap.mode !== 'title') : beatMs) : beatMs
     if (timed && dtMs === 0) return
     const vp = viewport()
     // A move to a screen of another density changes the pixel ratio without any resize event.
-    if (vp.w !== size.w || vp.h !== size.h || pixelRatio() !== size.pr) resize()
+    if (vp.w !== size.w || vp.h !== size.h || pixelRatio() !== size.pr) { upDue = false; resize() }
+    else if (upDue && !(camMoving && snap.mode !== 'title')) resizeNow()
     const dt = Math.min(0.1, dtMs / 1000)
     // The land's own clocks ease to a stop as it comes to rest.
     const live = timed && capped ? pacing.live : 1
@@ -784,6 +851,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     const cam = rig.camera
     crews.shudder(cam, wdt, reduced)
     sky.dome.position.copy(cam.position)
+    laps.end('land: clocks, light, camera')
     const t0 = performance.now()
     crews.place({
       dt: wdt, dayT, advancing: app.speed > 0, pace: replayPace, time, reduced, idle: snap.mode !== 'season' && snap.mode !== 'title',
@@ -809,6 +877,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       particles.emit(x, WATER_Y + 0.8, brookZ(x) + (Math.random() - 0.5) * 9, (Math.random() - 0.5) * 0.5, 0.25 + Math.random() * 0.3, (Math.random() - 0.5) * 0.5, 3.2 * big, 1.1 * big, 11, 0.9, 0.92, 0.95, 0.11 * breath, 0.5)
     }
     const t1 = performance.now()
+    laps.end('land: people, yard')
     particles.update(wdt * (reduced ? 0.3 : 1), wx * env.wind * 4, wz * env.wind * 4)
     // Where the picture is looking: the ground in the middle of what the interface leaves free.
     const eyes = rig.looksAt(vp)
@@ -826,12 +895,18 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     beacons.update(post.target.width, post.target.height, smooth(0.1, 0.8, (LAMP.value * lit.exposure) / 0.6), lit.exposure)
     rig.camera.getWorldDirection(ahead)
     const flat = Math.hypot(ahead.x, ahead.z) || 1
+    laps.end('land: air')
     shadows.update(lit.sunDir, lit.sun, focus, eyeDist, dtMs <= 0.5, ahead.x / flat, ahead.z / flat, app.speed === 0 && dayT >= 1 && snap.mode !== 'title')
     fields.setFarShadows(!shadows.holdsFarm)
     MARK_WIDE.value = clamp(rig.cur.dist / (42 * S), 1, 4.5 * K / S)
+    laps.end('land: shadows placed')
     fields.update(wdt, cam, { selection: app.selection, hover: app.hover, oats: env.oats, oatsRipe: env.oatsRipe, reduced })
-    grass.update(cam, fields.off, dtMs <= 0.5)
+    laps.end('land: crop')
+    grass.update(cam, fields.off, dtMs <= 0.5, spare !== null)
+    layGrass()
+    laps.end('land: grass')
     flora.update(cam, shadows.wide && !without.cards)
+    laps.end('land: trees')
     harvest.update(wdt, app.speed === 0, clamp(rig.cur.dist / (30 * S), 1, 2.3), reduced)
     PIXEL.value = (cur.msaa ? 1.7 : 1.4) / ((post.target.height) / (2 * Math.tan((cam.fov * Math.PI) / 360)))
     // A landscape seen whole is sharp from front to back: a soft focus would make a model of it. Only close in, among
@@ -842,6 +917,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     renderer.info.reset()
     probe.sect('skymap')
     if (frameNo % 2 === 0 || frameNo < 4 || dtMs <= 0.5) sky.renderMap(renderer)
+    laps.end('land: sky map')
     const skyDrew = renderer.info.render.triangles
     const sharp = rig.focus()
     // Where the sun stands on the picture, and how much of its light the air shows: most when it is low, the air is
@@ -878,6 +954,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       contact: without.contact || nearest * 0.9 - 50 < 900,
     }, Math.round(size.w * size.pr), Math.round(size.h * size.pr))
     probe.endFrame()
+    laps.end('land: drawn')
     if (trial && timed && frameNo > 8) {
       // The frame is drawn twice more and the GPU waited for, so the time is the whole of three frames' work and not
       // only the page's share of it: a graphics card left idle between frames slows itself down and would read slow.
@@ -1057,6 +1134,31 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     }
     return names
   }
+  // The shadow passes' own shaders (a thing that sways or stands in rows is drawn into the shadow maps by a shader of
+  // its own) are no part of the scene's, and nor are the lens's: left to themselves each is made in the middle of the
+  // first frame that wants it, and that frame waits for it (a quarter of a second, the first time the camera came
+  // down to a crop). They are handed to the compiler with the rest, each set up as the shadow pass will set it up.
+  const SHADOW_SIDE: Record<number, Side> = { [FrontSide]: BackSide, [BackSide]: FrontSide, [DoubleSide]: DoubleSide }
+  function shadowShaders(): Material[] {
+    const made: Material[] = []
+    const seen = new Set<string>()
+    scene.traverse(o => {
+      const mesh = o as Mesh, own = mesh.material as MeshStandardMaterial, depth = mesh.customDepthMaterial as MeshDepthMaterial | undefined
+      if (!depth || !own || Array.isArray(own)) return
+      const key = `${depth.uuid}|${(o as { isInstancedMesh?: boolean }).isInstancedMesh === true}|${own.shadowSide ?? own.side}|${own.alphaTest}|${own.map ? 1 : 0}`
+      if (seen.has(key)) return
+      seen.add(key)
+      depth.side = own.shadowSide ?? SHADOW_SIDE[own.side]
+      depth.alphaTest = own.alphaToCoverage ? 0.5 : own.alphaTest
+      depth.map = own.map ?? null
+      depth.alphaMap = own.alphaMap ?? null
+      mesh.material = depth
+      renderer.compile(mesh, rig.camera, scene)
+      mesh.material = own
+      made.push(depth)
+    })
+    return made
+  }
   async function compileScene(): Promise<void> {
     const names = namesOf()
     const program = (m: unknown) => (renderer.properties.get(m as object) as { currentProgram?: { isReady(): boolean; program: WebGLProgram } }).currentProgram
@@ -1079,6 +1181,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       return
     }
     const waiting = renderer.compile(scene, rig.camera)
+    for (const m of [...shadowShaders(), ...post.compile()]) { waiting.add(m); if (!names.has(m)) names.set(m, `${m.type} of a shadow or lens pass`) }
     // The land is laid out by now, and its shaders are with the graphics system's compiler: the splash is told how
     // many of them are through (the scene's building, before this, holds the page still and cannot be shown moving).
     // The land's own shader is waited for longer than all the rest together, so it is given the rule's last stretch
@@ -1303,7 +1406,24 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       },
       // Draw on every beat of the display, whatever its rate and whether anything moves (for timing a frame).
       uncap(on: boolean) { capped = !on },
-      pace: () => ({ beat: pacing.beat, every: pacing.every, still: pacing.still, halved: pacing.halved, size: sizer.size, tier, adaptive, timing: trial !== null }),
+      // For the tool that looks for late frames: the parts of each frame named on the browser's timeline; and what the
+      // last frame drawn did that not every frame does (frames drawn so far, the picture's width, the display's beats
+      // to a frame, shader programs made, which shadow maps were drawn again, squares of grass laid, patches of trees
+      // that changed how they are drawn, geometries held).
+      laps: (on: boolean) => laps.watch(on),
+      // The shader programs made so far, and which of the scene's materials (or their shadows) use each.
+      shaders() {
+        const names = namesOf()
+        for (const [part, root] of Object.entries(parts)) root.traverse(o => { const d = (o as Mesh).customDepthMaterial; if (d && !names.has(d)) names.set(d, `${part}${o.userData.part ? ` (${o.userData.part as string})` : ''}: its shadow`) })
+        const by = new Map<number, string[]>()
+        for (const [m, label] of names) {
+          const made = (renderer.properties.get(m as object) as { programs?: Map<string, { id: number }> }).programs
+          for (const p of made?.values() ?? []) by.set(p.id, [...(by.get(p.id) ?? []), label])
+        }
+        return (renderer.info.programs ?? []).map(p => ({ id: p.id, kind: (p as unknown as { type: string }).type, by: by.get(p.id) ?? [] }))
+      },
+      drew: () => [frameNo, post.target.width, pacing.every, renderer.info.programs?.length ?? 0, shadows.redrawn, grass.laid, flora.swaps, renderer.info.memory.geometries],
+      pace: () => ({ beat: pacing.beat, every: pacing.every, still: pacing.still, halved: pacing.halved, size: sizer.size, tier, adaptive, timing: trial !== null, fps, lowered, drawn: [post.target.width, post.target.height] }),
       // Stop (or go on) redrawing one shadow cascade, to measure what it costs.
       cascade(k: number, on: boolean) { shadows.held[k] = !on },
       // Draw a cascade with nothing in it, to see what of the picture's shade is its own.
@@ -1330,7 +1450,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
 
   return {
     ready,
-    quality: () => ({ tier, fps }),
+    quality: () => ({ tier, fps, size: sizer.size, least: SIZES[SIZES.length - 1], lowered }),
     resize,
     frame,
     fieldAnchor,

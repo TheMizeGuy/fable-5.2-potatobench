@@ -431,6 +431,19 @@ export class Post {
     this.renderer.render(this.scene2, this.cam2)
   }
 
+  // The lens's own shaders handed to the compiler, each against the kind of target it draws into, so that a pass not
+  // used until the camera is close (the soft focus) is not made in the frame that first uses it.
+  compile(): ShaderMaterial[] {
+    const r = this.renderer, was = r.getRenderTarget()
+    for (const [name, m] of Object.entries(this.mats)) {
+      this.quad.material = m
+      r.setRenderTarget(name === 'out' ? null : this.ldr)
+      r.compile(this.scene2, this.cam2)
+    }
+    r.setRenderTarget(was)
+    return Object.values(this.mats)
+  }
+
   // The target the scene itself is drawn into; shaders are compiled against it.
   get target(): WebGLRenderTarget {
     return this.sceneRT

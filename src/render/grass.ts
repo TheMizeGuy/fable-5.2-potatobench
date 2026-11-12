@@ -2,8 +2,13 @@
 // under the edge of the woods. And the sward itself, through the farm's meadow and over the hay and pasture of land the
 // farm does not hold. All of it takes the low sun from behind and moves with the wind.
 // It is drawn only round the camera: the land is cut into squares, a square's grass is laid out the first time the
-// camera comes near it and let go when it has gone far off, so the cost does not grow with the land. Within a square the
-// clumps are shuffled so that any first share of them is an even thinning; far squares draw fewer, larger clumps.
+// camera comes near it and let go when many others have been laid since, so the cost does not grow with the land.
+// Within a square the clumps are shuffled so that any first share of them is an even thinning; far squares draw
+// fewer, larger clumps.
+// Laying a square out is some thousands of questions asked of the land, a sixtieth of a second's work or more: it is
+// done a few rows of the square at a time, in the time the browser has to spare between frames (or, where it tells
+// of none, to a small budget of each frame's time), never a whole square in a frame, and is begun while the camera
+// is still on its way down. A square once laid is kept: coming back to it costs nothing.
 import {
   DoubleSide, Frustum, Group, InstancedBufferAttribute, InstancedBufferGeometry, Matrix4, Mesh, MeshStandardMaterial, Sphere, Vector2, Vector3,
   type BufferGeometry, type PerspectiveCamera,
@@ -23,12 +28,19 @@ const STEP = 0.46
 // How far off a square keeps all its clumps; how far off rank grass is no longer drawn; and how far off the sward has
 // sunk out of sight. By tier.
 const REACH = { high: { full: 24, gone: 120, sward: 66 }, medium: { full: 16, gone: 90, sward: 40 }, low: { full: 14, gone: 60, sward: 0 } }
-// The most squares laid out in one frame while the camera moves.
-const PER_FRAME = 2
+// How long a frame may spend laying grass out while the camera moves, in milliseconds (where the browser gives the
+// time between frames to it, the frame spends none).
+const BUDGET_MS = 2
+// Squares are laid out from this many times the height at which grass is first drawn, so that most of them are there
+// by the time the camera is low enough to show them.
+const EARLY = 1.5
+// How many squares are kept once laid (the squares within reach at the high setting are some sixty).
+const KEEP = 160
 
 // field: the parcel a patch of sward lies on (drawn while that parcel is somebody else's), or -1.
 interface Patch { mesh: Mesh; geo: InstancedBufferGeometry; mat: MeshStandardMaterial; all: number; thin: { value: number }; fade: { value: Vector2 }; sphere: Sphere; sward: boolean; field: number }
 interface Cell { patches: Patch[]; x: number; z: number }
+interface Job { key: string; x: number; z: number; steps: Generator<void, Cell> }
 
 export class Grass {
   readonly group = new Group()
@@ -38,11 +50,26 @@ export class Grass {
   private pm = new Matrix4()
   private near = new Vector3()
   private reach = REACH.high
+  // Squares laid so far, for the tools.
+  laid = 0
+  // Squares held now.
+  get held(): number { return this.cells.size }
   private share = 1
   private yards = [HOUSE, BARN, POTATO_HOUSE, DUFOUR_HOUSE, DUFOUR_BARN, DUFOUR_POTATO_HOUSE]
+  // The square being laid out now; where the camera last was, and how far round it squares are laid out.
+  private job: Job | null = null
+  private ball = new Sphere()
+  private view = { x: 0, z: 0, ground: 0, reach: -1 }
+  // True while there is grass still to lay out round the camera.
+  wants = false
 
   constructor() {
     this.src = grassGeometry()
+    // One patch with nothing in it, never drawn and never let go: the grass's shader is compiled with the rest of the
+    // land's before the first frame, and is still there when every square has been let go.
+    const none = this.patch(new Float32Array(4), 1, 0, 0, 1, 's', -1)
+    none.geo.instanceCount = 0
+    none.mesh.visible = false
   }
 
   private clear(x: number, z: number, onField: boolean): boolean {
@@ -55,8 +82,9 @@ export class Grass {
     return true
   }
 
-  // A square of the land: its clumps by kind, each kind a patch.
-  private build(cx: number, cz: number): Cell {
+  // A square of the land: its clumps by kind, each kind a patch. It stops after each row of the square and each patch
+  // made, to be gone on with in the next frame.
+  private *build(cx: number, cz: number): Generator<void, Cell> {
     const lists = new Map<string, number[]>()
     const put = (x: number, z: number, size: number, k: number, kind: string, field = -1) => {
       const key = `${kind}|${field}`
@@ -95,6 +123,7 @@ export class Grass {
         if (hash2(k, 11) < Math.min(0.9, rank * 1.5)) put(x, z, bank < 2.4 * S ? 0.5 - bank * 0.05 : 0.08 + 0.3 * hash2(k, 17), k, 'r')
         else if (hash2(k, 19) < (0.26 + 1.1 * Math.max(0, fbm2(x * 0.19 + 3.3, z * 0.19 + 8.1) - 0.3)) * ours) put(x, z, 0.02 + 0.3 * hash2(k, 17) * hash2(k, 23) * hash2(k, 29) * 1.6, k, 's')
       }
+      yield
     }
     const cell: Cell = { patches: [], x: cx, z: cz }
     const r = rng(9 + cx * 31 + cz * 17)
@@ -106,54 +135,64 @@ export class Grass {
       for (let i = count - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [order[i], order[j]] = [order[j], order[i]] }
       const at = new Float32Array(count * 4)
       let mx = 0, mz = 0
-      order.forEach((o, i) => { at.set(list.slice(o * 4, o * 4 + 4), i * 4); mx += list[o * 4]; mz += list[o * 4 + 2] })
+      for (let i = 0; i < count; i++) {
+        const o = order[i] * 4
+        at[i * 4] = list[o]; at[i * 4 + 1] = list[o + 1]; at[i * 4 + 2] = list[o + 2]; at[i * 4 + 3] = list[o + 3]
+        mx += list[o]; mz += list[o + 2]
+      }
       mx /= count; mz /= count
       let rad = 0
       for (let i = 0; i < count; i++) rad = Math.max(rad, Math.hypot(at[i * 4] - mx, at[i * 4 + 2] - mz))
-      const geo = new InstancedBufferGeometry()
-      geo.index = this.src.index
-      for (const name of Object.keys(this.src.attributes)) geo.setAttribute(name, this.src.attributes[name])
-      geo.setAttribute('aAt', new InstancedBufferAttribute(at, 4))
-      geo.instanceCount = count
-      const sphere = new Sphere(new Vector3(mx, groundY(mx, mz) + 0.3, mz), rad + 1)
-      geo.boundingSphere = sphere
-      const thin = { value: 1 }, fade = { value: new Vector2(1e5, 2e5) }
-      const mat = patch(new MeshStandardMaterial({ color: 0xffffff, side: DoubleSide, roughness: 0.8, metalness: 0 }), {
-        key: 'county-grass',
-        uniforms: { uThin: thin, uFade: fade },
-        translucent: 0.5,
-        shine: 0.3,
-        blade: true,
-        vertexHead: 'attribute vec4 aAt;\nattribute vec3 aBlade;\nuniform float uThin;\nuniform vec2 uFade;\nvarying vec3 vTint;',
-        vertexNormal: /* glsl */ `
-          float ga = floor(aAt.w) * 0.0437, gc = cos(ga), gs = sin(ga);
-          objectNormal = vec3(gc * objectNormal.x + gs * objectNormal.z, objectNormal.y, -gs * objectNormal.x + gc * objectNormal.z);
-        `,
-        // Short and bleached in spring, tall and in seed by July, flattened under snow. Thinned far off, each clump
-        // wider; and the sward sinks into the ground as it nears the distance where it is no longer drawn.
-        vertexBegin: /* glsl */ `
-          float gb = floor(aAt.w) * 0.0437, gbc = cos(gb), gbs = sin(gb);
-          float season = mix(0.4, 1.0, uLeaf) * (1.0 - 0.7 * smoothstep(0.2, 0.6, uSnow)) * (1.0 - smoothstep(0.6, 0.95, uSnow) * step(fract(aAt.w), 0.7));
-          float sink = 1.0 - smoothstep(uFade.x, uFade.y, distance(aAt.xyz, cameraPosition));
-          float tall = (0.2 + 0.75 * fract(aAt.w)) * (0.8 + 0.4 * fract(aAt.w * 0.0531)) * season * sink * 0.72;
-          float seed = mix(1.0, smoothstep(0.5, 1.0, uLeaf), aBlade.z);
-          vec3 gl = position * vec3(0.62 * seed, 1.0, 0.62 * seed) * vec3(0.7 + 0.6 * fract(aAt.w), 1.0, 0.7 + 0.6 * fract(aAt.w)) * vec3(uThin, 1.0, uThin);
-          transformed = aAt.xyz + vec3(gbc * gl.x + gbs * gl.z, gl.y * tall, -gbs * gl.x + gbc * gl.z);
-          vec3 gcol = uGrass * mix(vec3(0.7, 0.9, 0.56), vec3(1.2, 1.25, 0.78), aBlade.y) * (0.82 + 0.4 * fract(aAt.w * 0.173));
-          gcol = mix(gcol, uGrass * vec3(1.5, 1.3, 0.8), aBlade.z * 0.7);
-          vTint = gcol;
-        `,
-        vertexWorld: sway('aAt.xz', 'max(cWorld.y - aAt.y, 0.0)', '1.1'),
-        fragmentHead: 'varying vec3 vTint;',
-        fragmentColor: `diffuseColor.rgb *= vTint; ${SNOW_RIME}`,
-      })
-      const mesh = new Mesh(geo, mat)
-      mesh.receiveShadow = true
-      mesh.frustumCulled = false
-      this.group.add(mesh)
-      cell.patches.push({ mesh, geo, mat, all: count, thin, fade, sphere, sward: kind === 's', field: Number(field) })
+      cell.patches.push(this.patch(at, count, mx, mz, rad, kind, Number(field)))
+      yield
     }
     return cell
+  }
+
+  // One patch of a square: `count` clumps of one kind, each `at` its place with its size and number.
+  private patch(at: Float32Array, count: number, mx: number, mz: number, rad: number, kind: string, field: number): Patch {
+    const geo = new InstancedBufferGeometry()
+    geo.index = this.src.index
+    for (const name of Object.keys(this.src.attributes)) geo.setAttribute(name, this.src.attributes[name])
+    geo.setAttribute('aAt', new InstancedBufferAttribute(at, 4))
+    geo.instanceCount = count
+    const sphere = new Sphere(new Vector3(mx, groundY(mx, mz) + 0.3, mz), rad + 1)
+    geo.boundingSphere = sphere
+    const thin = { value: 1 }, fade = { value: new Vector2(1e5, 2e5) }
+    const mat = patch(new MeshStandardMaterial({ color: 0xffffff, side: DoubleSide, roughness: 0.8, metalness: 0 }), {
+      key: 'county-grass',
+      uniforms: { uThin: thin, uFade: fade },
+      translucent: 0.5,
+      shine: 0.3,
+      blade: true,
+      vertexHead: 'attribute vec4 aAt;\nattribute vec3 aBlade;\nuniform float uThin;\nuniform vec2 uFade;\nvarying vec3 vTint;',
+      vertexNormal: /* glsl */ `
+        float ga = floor(aAt.w) * 0.0437, gc = cos(ga), gs = sin(ga);
+        objectNormal = vec3(gc * objectNormal.x + gs * objectNormal.z, objectNormal.y, -gs * objectNormal.x + gc * objectNormal.z);
+      `,
+      // Short and bleached in spring, tall and in seed by July, flattened under snow. Thinned far off, each clump
+      // wider; and the sward sinks into the ground as it nears the distance where it is no longer drawn.
+      vertexBegin: /* glsl */ `
+        float gb = floor(aAt.w) * 0.0437, gbc = cos(gb), gbs = sin(gb);
+        float season = mix(0.4, 1.0, uLeaf) * (1.0 - 0.7 * smoothstep(0.2, 0.6, uSnow)) * (1.0 - smoothstep(0.6, 0.95, uSnow) * step(fract(aAt.w), 0.7));
+        float sink = 1.0 - smoothstep(uFade.x, uFade.y, distance(aAt.xyz, cameraPosition));
+        float tall = (0.2 + 0.75 * fract(aAt.w)) * (0.8 + 0.4 * fract(aAt.w * 0.0531)) * season * sink * 0.72;
+        float seed = mix(1.0, smoothstep(0.5, 1.0, uLeaf), aBlade.z);
+        vec3 gl = position * vec3(0.62 * seed, 1.0, 0.62 * seed) * vec3(0.7 + 0.6 * fract(aAt.w), 1.0, 0.7 + 0.6 * fract(aAt.w)) * vec3(uThin, 1.0, uThin);
+        transformed = aAt.xyz + vec3(gbc * gl.x + gbs * gl.z, gl.y * tall, -gbs * gl.x + gbc * gl.z);
+        vec3 gcol = uGrass * mix(vec3(0.7, 0.9, 0.56), vec3(1.2, 1.25, 0.78), aBlade.y) * (0.82 + 0.4 * fract(aAt.w * 0.173));
+        gcol = mix(gcol, uGrass * vec3(1.5, 1.3, 0.8), aBlade.z * 0.7);
+        vTint = gcol;
+      `,
+      vertexWorld: sway('aAt.xz', 'max(cWorld.y - aAt.y, 0.0)', '1.1'),
+      fragmentHead: 'varying vec3 vTint;',
+      fragmentColor: `diffuseColor.rgb *= vTint; ${SNOW_RIME}`,
+    })
+    const mesh = new Mesh(geo, mat)
+    mesh.receiveShadow = true
+    mesh.frustumCulled = false
+    this.group.add(mesh)
+    return { mesh, geo, mat, all: count, thin, fade, sphere, sward: kind === 's', field }
   }
 
   private drop(cell: Cell): void {
@@ -169,33 +208,76 @@ export class Grass {
     this.share = tier === 'low' ? 0.5 : 1
   }
 
-  // Lay out the squares the camera is near (all of them when `all`, for a still picture; otherwise a couple a frame,
-  // nearest first), let go those it has left, and thin each patch by its distance.
+  // The square to lay out next: the nearest one within reach not yet laid, those the camera looks at before those
+  // behind it. False when there is none.
+  private pick(all: boolean): boolean {
+    const { x, z, ground, reach } = this.view
+    if (reach <= 0) return false
+    let best = Infinity, bi = 0, bj = 0
+    const i0 = Math.floor((x - reach) / CELL), i1 = Math.floor((x + reach) / CELL), j0 = Math.floor((z - reach) / CELL), j1 = Math.floor((z + reach) / CELL)
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+      const mx = (i + 0.5) * CELL, mz = (j + 0.5) * CELL
+      let d = Math.hypot(mx - x, mz - z)
+      if (d > reach + CELL * 0.7 || d >= best || this.cells.has(`${i}|${j}`)) continue
+      if (!all && !this.frustum.intersectsSphere(this.ball.set(this.near.set(mx, ground, mz), CELL))) d += reach * 2
+      if (d < best) { best = d; bi = i; bj = j }
+    }
+    if (best === Infinity) return false
+    this.job = { key: `${bi}|${bj}`, x: bi, z: bj, steps: this.build(bi, bj) }
+    return true
+  }
+
+  // Go on laying grass out round where the camera last was, for as long as `more` says (it is asked after each row
+  // of a square). The frame does a little of it; the time between frames, where the browser gives any, does the rest.
+  lay(more: () => boolean, all = false): void {
+    for (;;) {
+      if (!this.job && !this.pick(all)) { this.wants = false; return }
+      let done: IteratorResult<void, Cell>
+      do done = this.job!.steps.next()
+      while (!done.done && more())
+      if (!done.done) return
+      this.cells.set(this.job!.key, done.value)
+      // (not drawn until the next frame has thinned it for its distance)
+      for (const p of done.value.patches) p.mesh.visible = false
+      this.job = null
+      this.laid++
+      if (!more()) return
+    }
+  }
+
+  // Lay out the squares the camera is near (all of them when `all`, for a still picture; otherwise a little of one,
+  // nearest first, unless `between` says the time between frames is doing it), let go the furthest when too many
+  // are kept, and thin each patch by its distance.
   // off: for each parcel, 1 while it is somebody else's ground.
-  update(camera: PerspectiveCamera, off: number[], all = false): void {
+  update(camera: PerspectiveCamera, off: number[], all = false, between = false): void {
+    const began = performance.now()
     this.frustum.setFromProjectionMatrix(this.pm.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse))
     const c = camera.position
     const height = Math.max(0, c.y - groundY(c.x, c.z))
     const gone = this.reach.gone
     const flat = height < gone ? Math.sqrt(gone * gone - height * height) : -1
-    const want: [number, number, number][] = []
-    if (flat > 0) {
-      const i0 = Math.floor((c.x - flat) / CELL), i1 = Math.floor((c.x + flat) / CELL), j0 = Math.floor((c.z - flat) / CELL), j1 = Math.floor((c.z + flat) / CELL)
-      for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
-        if (this.cells.has(`${i}|${j}`)) continue
-        const mx = (i + 0.5) * CELL, mz = (j + 0.5) * CELL, d = Math.hypot(mx - c.x, mz - c.z)
-        if (d > flat + CELL * 0.7) continue
-        // squares behind the camera wait until it turns
-        if (!all && !this.frustum.intersectsSphere(new Sphere(this.near.set(mx, c.y - height, mz), CELL))) continue
-        want.push([d, i, j])
+    // What is laid out reaches as far as what is drawn would from lower down: the camera is on its way there.
+    const early = height < gone * EARLY ? Math.min(gone, Math.sqrt(gone * gone * EARLY * EARLY - height * height)) : -1
+    this.view.x = c.x; this.view.z = c.z; this.view.ground = c.y - height
+    this.view.reach = all ? flat : early
+    this.wants = true
+    if (all) this.lay(() => true, true)
+    else if (!between) this.lay(() => performance.now() - began < BUDGET_MS)
+    else if (!this.job && !this.pick(false)) this.wants = false
+    if (this.cells.size > KEEP) {
+      let far = -1, at = ''
+      for (const [key, cell] of this.cells) {
+        const d = Math.hypot((cell.x + 0.5) * CELL - c.x, (cell.z + 0.5) * CELL - c.z)
+        if (d > far) { far = d; at = key }
       }
-      want.sort((a, b) => a[0] - b[0])
-      for (const [, i, j] of all ? want : want.slice(0, PER_FRAME)) this.cells.set(`${i}|${j}`, this.build(i, j))
+      const cell = this.cells.get(at)
+      if (cell) { this.drop(cell); this.cells.delete(at) }
     }
-    for (const [key, cell] of this.cells) {
+    for (const cell of this.cells.values()) {
       const d = Math.hypot((cell.x + 0.5) * CELL - c.x, (cell.z + 0.5) * CELL - c.z)
-      if (flat < 0 || d > flat + CELL * 3) { this.drop(cell); this.cells.delete(key); continue }
+      const out = flat < 0 || d > flat + CELL * 3
       for (const p of cell.patches) {
+        if (out) { p.mesh.visible = false; continue }
         const pd = Math.max(0, this.near.copy(p.sphere.center).distanceTo(c) - p.sphere.radius)
         const far = p.sward ? this.reach.sward : gone
         if (pd > far || (p.field >= 0 && off[p.field] < 0.5) || !this.frustum.intersectsSphere(p.sphere)) { p.mesh.visible = false; continue }
