@@ -887,6 +887,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
         frame(0.2)
       },
       anchor: (i: number) => fieldAnchor(i),
+      corners: (i: number) => fieldCorners(i),
       // pace: how fast a paused day's work then plays on, 1 as in play.
       seek(t: number, pace = 1) {
         if (dirty) rebuild()
