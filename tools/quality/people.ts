@@ -105,7 +105,10 @@ for (const [phase, setup] of Object.entries(PHASES)) {
         let card = await cardNow(page)
         while (!card && Date.now() - t0 < 300) { await page.waitForTimeout(25); card = await cardNow(page) }
         const ms = Date.now() - t0
-        if (!card) { row.result = `nothing opened (${ms} ms)`; row.ok = false; continue }
+        if (!card) {
+          const why = await page.evaluate(([x, y]) => { const f = (globalThis as any).__countyField; const { app } = (globalThis as any).__county; const p = f.pickAt(x, y); return `view picks unit ${p.unit}, field ${p.field}, yard ${p.yard}; app.unit ${app.unit} from ${app.unitFrom}` }, [at.x, at.y])
+          row.result = `nothing opened (${ms} ms): ${why}`; row.ok = false; continue
+        }
         const dx = Math.max(card.x - at.x, 0, at.x - (card.x + card.w)), dy = Math.max(card.y - at.y, 0, at.y - (card.y + card.h))
         const far = Math.round(Math.hypot(dx, dy))
         const right = card.text.includes(person.name.split(' ')[0])

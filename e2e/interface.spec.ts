@@ -599,14 +599,14 @@ test('a person clicked on the land: their card opens beside them, says who and w
   // On their body: the scene's own pick, where the check tool clicks it.
   const body = await page.evaluate(() => (globalThis as unknown as { __countyField: { unitAt(id: number): { x: number; y: number } | null } }).__countyField.unitAt(1))
   const pin = page.getByTestId('pin-1')
-  if (await pin.isVisible().catch(() => false)) {
-    await pin.click()
-    // a pin standing for several people opens to them
-    const pick = page.getByTestId('pin-pick-1')
-    if (await pick.isVisible().catch(() => false)) await pick.click()
-  }
+  const head = await page.evaluate(() => (globalThis as unknown as { __countyField: { unitPin(id: number): { x: number; y: number; visible: boolean } } }).__countyField.unitPin(1))
+  if (await pin.isVisible().catch(() => false)) await pin.click()
+  // standing with others, their pin is the group's: a click on it opens to the people in it
+  else if (head.visible) await page.mouse.click(head.x, head.y - 30)
   else if (body) await page.mouse.click(body.x, body.y)
-  else await page.evaluate(() => (globalThis as unknown as { __county: { app: { selectUnit(id: number, from: string): void } } }).__county.app.selectUnit(1, 'land'))
+  await page.waitForTimeout(200)
+  const pick = page.getByTestId('pin-pick-1')
+  if (await pick.isVisible().catch(() => false)) await pick.click()
   const card = page.getByTestId('whois')
   await expect(card).toBeVisible()
   await expect(card.getByTestId('whois-name')).toHaveText(name)
