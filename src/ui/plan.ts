@@ -152,8 +152,8 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
   const sheet = h('section', { class: 'catalogue sheet sys', 'aria-label': 'The spring plan', testid: 'spring' }, mast, body, foot)
   const notesSlot = h('div', { class: 'notes-slot' })
   const el = h('main', { class: 'spring-screen sys' }, top.el, notesSlot, card, sheet)
-  // The people asking for work are the frame's open fold: the one offer most worth a look before the season.
-  let open: Fold | null = app.campaign?.applicants.length ? 'people' : null
+  // Every fold starts shut: a newcomer's first spring is a short sheet (e2e/play.spec.ts), each fold one click away.
+  let open: Fold | null = null
   let note = ''
   let focused = false
 

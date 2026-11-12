@@ -149,6 +149,7 @@ const STATES: State[] = [
   // The bigger farm.
   { name: 'plan-land', what: 'Spring: land to rent or buy, found from the land fold, its card open', sizes: ALL, run: async page => { await q(page, `q.g().app.newGame(1987, 3)`); await page.getByTestId('land-open').click(); await page.getByTestId('fold-land-10').click() } },
   { name: 'plan-contracts', what: 'Spring: the contracts offered', sizes: [...MAIN, 'small'], run: async page => { await q(page, `q.g().app.newGame(1987, 3)`); await page.getByTestId('contracts-open').click() } },
+  { name: 'plan-people', what: 'Spring: the people fold opened, three asking for work (design/spring.html)', sizes: [...MAIN, 'small', 'tiny'], run: async page => { await q(page, `q.g().app.newGame(1987, 3)`); await page.getByTestId('crew-open').click() } },
   { name: 'plan-crew', what: 'Spring: hiring and letting go', sizes: MAIN, run: async page => { await q(page, `q.g().app.newGame(1987, 3); q.g().app.do({ t: 'hire', kind: 'hand' })`); await page.getByTestId('crew-open').click() } },
   { name: 'plan-bigger', what: 'Spring on the bigger farm: rented land, crews, a contract signed', sizes: ALL, run: async page => { await q(page, BIGGER) } },
   { name: 'plan-bigger-field', what: 'Spring on the bigger farm: a rented field\'s card, picked by its number', sizes: MAIN, run: async page => { await q(page, BIGGER); await page.keyboard.press('7') } },
