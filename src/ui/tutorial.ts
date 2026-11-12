@@ -127,7 +127,8 @@ function obstacles(root: HTMLElement): { hard: Box[]; soft: Box[] } {
   const main = root.querySelector<HTMLElement>('.screen-layer > main:not(.leaving)')
   const walk = (el: Element, depth: number) => {
     for (const k of el.children) {
-      if (!shown(k)) continue
+      // A veil dims the land behind a telegram; it is not a panel.
+      if (!shown(k) || k.classList.contains('veil')) continue
       const r = k.getBoundingClientRect()
       const cs = getComputedStyle(k)
       const clear = cs.backgroundColor === 'rgba(0, 0, 0, 0)' && cs.backgroundImage === 'none' && cs.boxShadow === 'none'
@@ -369,7 +370,12 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
       // Never over another control it would hide: a clock, a command bar, a paper.
       const hard = hardOnes(root)
       const clear = ([x, y]: [number, number, string]) => !hard.some(a => meets({ left: x, top: y, right: x + s, bottom: y + s }, a))
-      const fit = tries.find(f => inside(f) && free(f) && clear(f)) ?? tries.find(f => inside(f) && free(f)) ?? tries.find(inside) ?? null
+      // And off the field tags where it can be, so the name of what it points at stays readable.
+      const tags = [...root.querySelectorAll('.plate-layer .tag')].filter(shown).map(e => box(e.getBoundingClientRect()))
+      const bare = ([x, y]: [number, number, string]) => !tags.some(a => meets({ left: x, top: y, right: x + s, bottom: y + s }, a))
+      // With no clear place beside it (inside a telegram, under the order blank on a phone) the slip's words do alone.
+      const small = ctx.layout() === 'narrow' || ctx.layout() === 'short'
+      const fit = docked && small ? null : tries.find(f => inside(f) && free(f) && clear(f) && bare(f)) ?? tries.find(f => inside(f) && free(f) && clear(f)) ?? null
       if (fit) {
         fistBox = { left: fit[0], top: fit[1], right: fit[0] + s, bottom: fit[1] + s }
         hand.style.transform = `translate3d(${fit[0].toFixed(1)}px, ${fit[1].toFixed(1)}px, 0)`
@@ -393,9 +399,11 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     // Stay put while the place is still clear; move only when something comes over it.
     if (here && placedFor === key && !(tier === 0 ? [...hard, ...soft] : hard).some(a => meets(here, pad(a, 6)))) return
     let found: { x: number; y: number } | null = null
-    for (const [k, compact] of [[0, false], [0, true], [1, false], [1, true]] as const) {
+    // First off every panel and every field tag; then off the panels; then off only what it must never cover.
+    const tags = [...root.querySelectorAll('.plate-layer .tag')].filter(shown).map(e => box(e.getBoundingClientRect()))
+    for (const [k, compact, also] of [[0, false, tags], [0, false, []], [0, true, []], [1, false, []], [1, true, []]] as const) {
       slip.classList.toggle('compact', compact)
-      found = findPlace(slip.offsetWidth, slip.offsetHeight, (k === 0 ? [...hard, ...soft] : hard).map(a => pad(a, 8)))
+      found = findPlace(slip.offsetWidth, slip.offsetHeight, [...(k === 0 ? [...hard, ...soft] : hard), ...also].map(a => pad(a, 8)))
       if (found) { tier = k; break }
     }
     slip.classList.toggle('gone', !found)

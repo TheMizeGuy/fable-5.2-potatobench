@@ -127,8 +127,9 @@ test('a guided first year: offered on a new farm, taken, and followed to the fir
     if (!id) continue
     if (did[did.length - 1] !== id) did.push(id)
     await clear(page, target)
-    // Where what it points at is on the screen, the fist is beside it.
-    const there = target ? await page.locator(`#ui [data-testid="${target}"]`).first().isVisible().catch(() => false) : false
+    // Where a field it points at is on the screen, the fist is beside it (beside a control inside a telegram or the
+    // catalogue on a phone there may be no clear place for it, and the slip's words do alone).
+    const there = /^(field|badge)-/.test(target) && await page.locator(`#ui [data-testid="${target}"]`).first().isVisible().catch(() => false)
     if (there) await expect(page.getByTestId('guide-fist'), `${id}: the fist is on ${target}`).toBeVisible()
     switch (id) {
       case 'begin':

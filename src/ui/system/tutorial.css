@@ -5,9 +5,10 @@
 
 .guide { display: grid; gap: 6px; padding: 10px 14px 4px 16px; color: var(--ink); background: var(--paper) url(./grain.png); background-blend-mode: multiply;
   box-shadow: var(--lifted); border-top: 3px double var(--ink); }
-.guide.floating { position: absolute; left: 0; top: 0; width: 304px; pointer-events: auto; will-change: transform;
+.guide.floating { position: absolute; left: 0; top: 0; width: min(304px, calc(100vw - 24px)); pointer-events: auto; will-change: transform;
   animation: guide-in var(--t-slip) var(--ease-out); }
 .guide.floating.gone { visibility: hidden; }
+#ui[data-layout='narrow'] .guide.floating { width: min(380px, calc(100vw - 24px)); }
 .guide-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding-bottom: 5px; border-bottom: 1px solid var(--hair); }
 .guide-head .t-label:first-child { color: var(--ink); }
 .guide-held { display: inline-flex; align-items: center; gap: 4px; color: var(--ink); }
@@ -34,6 +35,7 @@
 .spring-screen[data-layout='narrow'] .guide-slot, .spring-screen[data-layout='short'] .guide-slot { padding: 0 16px 8px; }
 .spring-screen[data-layout='narrow'].selected .guide-slot { display: none; }
 .spring-screen[data-layout='short'] .guide.docked .guide-why { display: none; }
+@media (max-height: 760px) { .spring-screen[data-layout='narrow'] .guide.docked .guide-why { display: none; } }
 
 /* The fist: a printed hand on a paper disc with its keyline, so it reads over any land, nudging toward what it means. */
 .guide-fist { position: absolute; left: 0; top: 0; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%;
