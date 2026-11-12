@@ -298,7 +298,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
   const CAM_KEYS: Record<string, 'pan' | 'turn'> = { ArrowLeft: 'pan', ArrowRight: 'pan', ArrowUp: 'pan', ArrowDown: 'pan', q: 'turn', Q: 'turn', e: 'turn', E: 'turn', PageUp: 'turn', PageDown: 'turn' }
   const touches = new Set<number>()
   function gesture(on: boolean, kind: 'pan' | 'zoom' | 'turn' | 'two'): void {
-    if (app.screen !== 'season' || !(now?.id === 'look' || now?.id === 'turn')) { cam.base = null; return }
+    if (app.screen !== 'season' || !(now?.id === 'watch' || now?.id === 'turn')) { cam.base = null; return }
     if (on) {
       if (!cam.base || (kind !== cam.kind && kind !== 'pan')) { cam.base = signature(ctx); cam.kind = kind }
       cam.until = performance.now() + 900
@@ -490,7 +490,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
         since = 0
         render()
       }
-      if (now && (now.id === 'look' || now.id === 'turn') && app.screen === 'season') watchCamera()
+      if (now && (now.id === 'watch' || now.id === 'turn') && app.screen === 'season') watchCamera()
       placeAll()
     },
     dispose() {
