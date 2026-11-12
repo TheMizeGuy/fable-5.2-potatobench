@@ -120,6 +120,10 @@ export const H_SEEDBLIGHT = 64
 export const H_DECAYED = 128
 export const H_WILT = 256      // carries Verticillium: dies early
 
+// Why reference practice asks for the vines to be killed: blight winning, frost coming, the crop made, or the date
+// past which skins would not set before the freeze-up.
+export type KillWhy = 'blight' | 'frost' | 'made' | 'late'
+
 export interface FieldSeason {
   status: FieldStatus
   variety: VarietyId
@@ -139,6 +143,7 @@ export interface FieldSeason {
   weeded: boolean
   residue: number           // protectant on the leaves, 0..1
   lastSpray: number
+  sprays?: number           // passes this season
   scab: number; hollow: number; knob: number; logDays: number; dryRun: number; frostT: number
   sev: number               // true mean blight lesion share over living hills
   sevPeak: number
@@ -157,6 +162,7 @@ export interface FieldSeason {
   lotId: number
   flags: number             // one-time announcements
   killAsked?: number        // the first day reference practice asked for the vines to be killed
+  killWhy?: KillWhy          // and why it asked
   // Hills, struct of arrays, ROWS * COLS long.
   hState: number[]
   hEmergeAt: number[]
@@ -337,6 +343,7 @@ export interface YearSummary {
   yieldCwtAcre: number      // marketable, over potato acres
   potatoFields: number
   blightPeak: number
+  sprays?: number           // spray passes over the farm's fields this year
   lots: Lot[]
 }
 

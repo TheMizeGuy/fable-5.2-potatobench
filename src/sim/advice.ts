@@ -4,7 +4,7 @@
 import { dayIndex, withCommas } from './calendar.ts'
 import * as P from './params.ts'
 import { willDo } from './people.ts'
-import type { Campaign, GameEvent, JobKind, World } from './types.ts'
+import type { Campaign, GameEvent, JobKind, KillWhy, World } from './types.ts'
 import { fieldInfo, forecast, today } from './view.ts'
 import { openLots } from './campaign.ts'
 import { newPotatoWindow } from './market.ts'
@@ -21,11 +21,29 @@ export interface Advice {
   text: string                     // what to do
   why: string                      // the reason, in the grower's terms
   urgent: boolean
+  kill?: KillWhy                   // for 'kill': why the vines should come off now
 }
 
 
 export function advise(world: World, c: Campaign): Advice[] {
   return withinReach(c, everything(world, c))
+}
+
+// Everything reference practice asks for now, before the cap on how much goes on the list at once.
+export function asks(world: World, c: Campaign): Advice[] {
+  return everything(world, c)
+}
+
+// The first day reference practice asks for each field's vines to be killed, and why, kept on the field so the
+// weigh ticket can tell a kill the season asked for from one ahead of it (outlook.ts, killTiming).
+export function noteKillAsks(world: World, c: Campaign, all: Advice[] = everything(world, c)): void {
+  const s = c.season
+  if (!s) return
+  for (const a of all) {
+    if (a.act !== 'kill' || s.fields[a.field].killAsked !== undefined) continue
+    s.fields[a.field].killAsked = s.day
+    s.fields[a.field].killWhy = a.kill
+  }
 }
 
 // Everything reference practice would do now, before the cap on what the crews can get round to.
@@ -37,9 +55,9 @@ function everything(world: World, c: Campaign): Advice[] {
   const fc = forecast(world, c, 5)
   const year = s.year
   const queued = (kind: JobKind, field: number) => s.jobs.some(j => j.kind === kind && j.field === field)
-  const add = (field: number, act: Advice['act'], text: string, why: string, urgent = false, lot = -1) => {
+  const add = (field: number, act: Advice['act'], text: string, why: string, urgent = false, lot = -1, kill?: KillWhy) => {
     if (act !== 'wait' && act !== 'sell' && act !== 'close' && queued(act, field)) return
-    out.push({ id: `${act}:${field}:${lot}`, field, act, lot, text, why, urgent })
+    out.push({ id: `${act}:${field}:${lot}`, field, act, lot, text, why, urgent, ...(kill ? { kill } : {}) })
   }
   const rainSoon = fc.slice(0, 3).some(d => d.rainChance >= 60 && d.rainMm >= 8)
   const blightSoon = fc.slice(0, 3).some(d => d.blight >= 2)
@@ -67,7 +85,9 @@ function everything(world: World, c: Campaign): Advice[] {
       const s0 = s.fields[i]
       const up = s0.emergeDay >= 0
       const blightWinning = f.blightKnown >= 0.2
-      const killDue = s0.tiDay >= 0 && (s.day >= killBy || (s0.matureDay >= 0 && s.day - s0.matureDay >= 4) || blightWinning || (frostSoon && s.day >= dayIndex(year, 8, 1)))
+      const made = s0.matureDay >= 0 && s.day - s0.matureDay >= 4
+      const frostKill = frostSoon && s.day >= dayIndex(year, 8, 1)
+      const killDue = s0.tiDay >= 0 && (s.day >= killBy || made || blightWinning || frostKill)
       // Once the vines are coming off there is nothing left to tend.
       const tending = !killDue && !queued('kill', i) && !queued('dig', i)
       if (tending && up && f.hillPasses === 0 && f.canopy >= 0.08 && f.canopy < P.CLOSURE) {
@@ -102,10 +122,12 @@ function everything(world: World, c: Campaign): Advice[] {
         add(i, 'sample', `Test dig in ${n} again.`, 'A second hill narrows the guess before you decide when to kill the vines.')
       }
       if (killDue) {
-        const why = blightWinning ? 'Blight is winning. Killing the vines gives up the growth still to come, but dead vines stop feeding spores down to the tubers.'
-          : s.day >= killBy ? 'Skins need two weeks to set after the vines die, and October is short.'
-            : 'The crop is made. Kill the vines so the skins set.'
-        add(i, 'kill', `Kill the vines in ${n}.`, why, blightWinning)
+        const kill: KillWhy = blightWinning ? 'blight' : s.day >= killBy ? 'late' : made ? 'made' : 'frost'
+        const why = kill === 'blight' ? 'Blight is winning. Killing the vines gives up the growth still to come, but dead vines stop feeding spores down to the tubers.'
+          : kill === 'late' ? 'Skins need two weeks to set after the vines die, and October is short.'
+            : kill === 'made' ? 'The crop is made. Kill the vines so the skins set.'
+              : 'Frost is forecast. Killing the vines now gives up a little growth so the skins start to set ahead of it.'
+        add(i, 'kill', `Kill the vines in ${n}.`, why, blightWinning, -1, kill)
       }
       // Vines still up this late will not leave time for the skins to set before the ground freezes: dig them green.
       if (s0.tiDay >= 0 && s.day >= dayIndex(year, P.DIG_GREEN.month, P.DIG_GREEN.dom) && !queued('kill', i)) {
@@ -184,12 +206,13 @@ export function standingOrders(world: World, c: Campaign): GameEvent[] {
   const threatened = s.fields.some((f, i) => f.inField >= 0.5 && !f.weighed && frostOnBarrels(world, c, i))
   const first = threatened && s.frostHaul !== s.day - 1
   if (threatened) s.frostHaul = s.day
+  const all = everything(world, c)
+  noteKillAsks(world, c, all)
   if (!workday(c, s)) return out
   // A frost forecast for tonight: a lone hauler digs no more than the rest of the day can haul in (season.ts, work).
   s.frostLow = forecastFor(world, c.seed, s.year, s.day, 1, hasBuilt(c, 'station') ? P.STATION_ERROR : 1).lo
-  for (const a of advise(world, c)) {
+  for (const a of withinReach(c, all)) {
     if (a.field < 0 || a.act === 'wait' || a.act === 'sell' || a.act === 'close') continue
-    if (a.act === 'kill' && s.fields[a.field].killAsked === undefined) s.fields[a.field].killAsked = s.day
     const by = standingBy(c, a.act, a.field)
     if (by) addJob(c, a.act, a.field, -1, by)
   }
