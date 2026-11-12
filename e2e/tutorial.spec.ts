@@ -163,8 +163,13 @@ test('a guided first year: offered on a new farm, taken, and followed to the fir
         await expect.poll(sown, { timeout: 120_000 }).toBe(true)
         planted = true
         break
-      default:
-        throw new Error(`no step written for the lesson ${id}`)
+      default: {
+        // Any other lesson the year brings first (a hand hired by telegram, a call): what its fist marks, or Noted.
+        const marked = target ? page.locator(`#ui [data-testid="${target}"]`).first() : null
+        if (marked && await marked.isVisible()) await marked.click()
+        else if (await page.getByTestId('guide-noted').count()) await page.getByTestId('guide-noted').click()
+        else throw new Error(`no step written for the lesson ${id}`)
+      }
     }
     if (await sown()) { planted = true; break }
     await expect.poll(async () => (await sown()) ? '' : (await slip(page)).id, { timeout: 120_000, message: `${id} did not pass` }).not.toBe(id)
