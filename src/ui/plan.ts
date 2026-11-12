@@ -164,7 +164,8 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
       if (t >= 0) { app.select(t); return true }
       const f = goalFold[g.id]
       if (!f) return false
-      if (open !== f) toggle(f)
+      // Opened outright: the control it leads to is then scrolled into view (light, in top.ts), not held in place.
+      if (open !== f) { open = f; ctx.dirty() }
       return true
     },
   })

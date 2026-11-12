@@ -190,7 +190,7 @@ const GOAL_ROUTINE: Record<string, S.JobKind> = { plant: 'plant', walk: 'scout',
 // The season's calls that are the player's to make (the routine sees to the rest), first to last.
 const CALLS: Partial<Record<string, number>> = { rogue: 0, spray: 1, kill: 2, water: 3 }
 // A call on the slip: what it is, where, why it cannot wait, and the one command that sees to it when there is one.
-interface Call { id: string; act: string; field: number; text: string; why: string; fix: S.Cmd | null; fixLabel: string }
+interface Call { id: string; act: string; field: number; text: string; why: string; fix: S.Cmd | null; fixLabel: string; line?: string }
 
 // Brings a control forward once the screen has drawn it: in view, ringed, under the keyboard.
 export function light(selector: string): void {
@@ -312,6 +312,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
   function callsNow(c: S.Campaign): Call[] {
     const urgent: Call[] = S.pressing(app.world, c).map(p => ({
       id: `p-${p.kind}-${p.field}`, act: p.kind, field: p.field, text: `${JOB_VERB[p.kind]} ${S.FIELD_NAMES[p.field]}`, why: `${F.upper(p.why)}. ${p.inWay}`,
+      line: p.kind === 'kill' ? p.inWay.replace(/, so .*$/, '').replace(/\.$/, '') : undefined,
       fix: p.fix, fixLabel: p.fix?.t === 'job' ? 'Order it' : p.fix?.t === 'priority' ? `${firstName(c.crew.find(u => u.id === (p.fix as { unit: number }).unit)?.name ?? 'Someone')} first` : 'Show me',
     }))
     const calls: Call[] = app.needs().map((n, field) => ({ need: n.need!, field }))
@@ -376,7 +377,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
         onclick: () => { pop = pop === 'goals' ? '' : 'goals'; ctx.dirty() },
       }, callFirst ? fist() : null, h('span', { class: 'goal-body' }, h('span', { class: 'sr' }, callFirst ? 'Now: ' : 'Next goal: '),
         h('b', { class: 'goal-t' }, callFirst ? F.localize(call!.text) : g!.title),
-        callFirst ? (g ? h('span', { class: 'goal-when' }, `then: ${g.title.toLowerCase()}${reach ? '' : `, ${notYet(c, g)}`}`) : null) : h('span', { class: 'goal-when' }, notYet(c, g!))),
+        callFirst ? (call!.line ? h('span', { class: 'goal-when' }, call!.line) : g ? h('span', { class: 'goal-when' }, `then: ${g.title.toLowerCase()}${reach ? '' : `, ${notYet(c, g)}`}`) : null) : h('span', { class: 'goal-when' }, notYet(c, g!))),
       h('span', { class: 'sr' }, `. ${callFirst ? F.localize(call!.why) : g!.why} Open the goals.`))
       const go = callFirst ? h('button', { class: 'btn goal-go', type: 'button', testid: 'goal-do', onclick: () => takeCall(call!) }, icon(call!.fix ? 'check' : 'arrow', 'i'), call!.fixLabel) : null
       return go ? h('div', { class: 'goal-row' }, quiet, go) : quiet

@@ -165,7 +165,7 @@ function crop(ctx: Ctx, y: S.YearSummary): HTMLElement {
     rows.map(([label, v, cls]) => h('p', null, h('span', null, label),
       h('span', { class: `cbar${cls}`, role: 'img', 'aria-label': `${label}: ${F.perArea(v)}` }, h('i', { style: `width:${(v / max * 100).toFixed(1)}%` })),
       h('b', { class: 'num' }, F.num(F.perAreaValue(v), F.metric() ? 1 : 0)))),
-    h('p', { class: 't-caption' }, `${F.mass(y.cwtCulled)} culled.${nb ? ` The neighbor grew ${varietyName(nb.variety)}: planted ${F.date(y.year, nb.plant)}, sprayed ${F.plural(nb.sprays, 'time')}, dug from ${F.date(y.year, nb.dig)}.` : ''}`))
+    h('p', { class: 't-caption', testid: 'crop-sprays' }, `${F.mass(y.cwtCulled)} culled. ${y.sprays !== undefined ? `You sprayed ${F.plural(y.sprays, 'time')}${nb ? `; the neighbor ${F.plural(nb.sprays, 'time')}` : ''}. ` : ''}${nb ? `The neighbor grew ${varietyName(nb.variety)}: planted ${F.date(y.year, nb.plant)}, dug from ${F.date(y.year, nb.dig)}.` : ''}`))
 }
 
 const kilo = (v: number) => v === 0 ? '0' : `${v < 0 ? '−' : ''}${Math.abs(v / 1000)}k`
