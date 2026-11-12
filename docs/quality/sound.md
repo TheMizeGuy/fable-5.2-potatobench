@@ -80,8 +80,8 @@ each season's bed is made of, and what work can be heard from where
    the birds, crickets, wind, rain and tractor to the references; round 4 made
    every fade even to the ear and gave each layer noise of its own; round 5 put
    the birds in bouts and slowed the weather's crossfades; round 6 took out the
-   compressor (see "One soundscape"); rounds 7 and 8 re-centred levels. Rounds
-   9 onward are the farmstead: cues for people, land, buildings and paper, work
+   compressor (see "One soundscape"); rounds 7 and 8 re-centred levels. After
+   them came the farmstead: cues for people, land, buildings and paper, work
    that can be heard, picks, and the seasons (see "The farmstead rounds").
 
 The limits are in `src/audio/dev/plan.ts`. They are choices, not standards,
@@ -175,6 +175,135 @@ Chromium, at the default volume, from the last full run of
 case in `src/audio/dev/cases.ts`.
 
 <!-- table:start -->
+| render | LUFS | mom | dBTP | pk@max | clicks | DC dB | <80% | 2-5k% | >8k% | L/R | loop | rhythm | att ms | dec ms | own bed dB | >500 Hz | storm dB |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| bed: title screen | -40.0 | -31.4 | -26.3 | -17.5 | 0 | -144.5 | 0 | 62 | 0.7 | 0.67 | 0.01@8.7s | 0.12@8.6s |  |  |  |  |  |
+| bed: spring plan | -36.0 | -31.6 | -21.8 | -13.0 | 0 | -128.1 | 0 | 47 | 0.9 | 0.68 | 0.01@7.3s | 0.01@1.0s |  |  |  |  |  |
+| bed: June, fair | -36.7 | -30.0 | -23.9 | -15.0 | 0 | -145.2 | 0 | 58 | 0.2 | 0.56 | 0.01@13.6s | 0.04@1.1s |  |  |  |  |  |
+| bed: June, fair, tractor working | -33.7 | -29.1 | -20.9 | -12.0 | 0 | -110.6 | 16 | 20 | 0.1 | 0.84 | 0.06@1.0s | 0.02@1.1s |  |  |  |  |  |
+| bed: August, steady rain, 9 mm | -34.9 | -32.6 | -23.2 | -14.5 | 0 | -76.5 | 0.1 | 31 | 2.4 | 0.15 | 0.01@6.9s | 0.01@1.0s |  |  |  |  |  |
+| bed: August, drizzle, tractor working | -35.2 | -33.6 | -21.5 | -12.7 | 0 | -83.3 | 20 | 8.1 | 0.1 | 0.83 | 0.04@5.2s | 0.10@1.0s |  |  |  |  |  |
+| bed: August, fair and warm, crickets | -40.4 | -37.3 | -26.9 | -18.1 | 0 | -137.8 | 0.1 | 41 | 0 | 0.50 | 0.02@8.4s | 0.06@1.4s |  |  |  |  |  |
+| bed: late September, fair | -35.0 | -29.6 | -14.9 | -6.1 | 0 | -137.1 | 0 | 18 | 0.1 | 0.30 | 0.02@1.4s | 0.12@1.0s |  |  |  |  |  |
+| bed: late September, digging | -32.9 | -28.8 | -14.7 | -5.8 | 0 | -113.1 | 13 | 8.4 | 0 | 0.63 | 0.07@10.0s | 0.10@1.0s |  |  |  |  |  |
+| bed: October gale, 11 m/s | -28.9 | -23.6 | -12.7 | -4.0 | 0 | -134.1 | 0 | 34 | 0.6 | 0.23 | 0.00@24.0s | 0.01@1.0s |  |  |  |  |  |
+| bed: storm, 45 mm, tractor working (the loudest bed) | -24.8 | -21.7 | -13.6 | -4.8 | 0 | -79.0 | 3.3 | 29 | 3.7 | 0.25 | 0.01@19.9s | 0.02@1.0s |  |  |  |  |  |
+| bed: cellar, November | -39.6 | -29.7 | -16.0 | -7.1 | 2 (x8 @2.85s/4) | -137.7 | 0 | 20 | 2.2 | 0.50 | 0.05@1.3s | 0.06@1.4s |  |  |  |  |  |
+| bed: cellar, January | -40.3 | -32.4 | -17.8 | -8.9 | 0 | -124.8 | 0.1 | 12 | 0 | 0.32 | 0.01@1.4s | 0.07@1.0s |  |  |  |  |  |
+| bed: ledger and year end | -38.1 | -31.4 | -23.0 | -14.2 | 0 | -130.2 | 0 | 52 | 0.9 | 0.69 | 0.01@8.6s | 0.09@8.6s |  |  |  |  |  |
+| bed: mild wet May day, the peepers at their height | -34.1 | -31.8 | -21.8 | -12.9 | 0 | -77.7 | 0 | 66 | 1.5 | 0.58 | 0.02@14.9s | 0.12@1.3s |  |  |  |  |  |
+| bed: July, fair, the potatoes in blossom | -41.3 | -31.4 | -27.7 | -18.8 | 0 | -143.5 | 0 | 53 | 0.2 | 0.55 | 0.01@8.9s | 0.09@8.7s |  |  |  |  |  |
+| bed: November, snow on the dug fields | -37.2 | -29.8 | -16.4 | -7.5 | 0 | -114.5 | 0.1 | 13 | 0 | 0.37 | 0.03@1.4s | 0.01@1.4s |  |  |  |  |  |
+| bed: June, fair, every kind of work going on somewhere, none picked | -36.5 | -29.1 | -21.5 | -12.7 | 0 | -92.0 | 0.6 | 46 | 0.2 | 0.69 | 0.03@10.8s | 0.05@1.1s |  |  |  |  |  |
+| season: spring, a fair morning in late May | -36.0 | -29.0 | -22.9 | -14.1 | 0 | -138.6 | 0 | 58 | 0.5 | 0.66 | 0.01@10.8s | 0.08@1.2s |  |  |  |  |  |
+| season: high summer, a warm day in early August | -40.8 | -37.2 | -25.9 | -17.0 | 0 | -154.7 | 0.1 | 50 | 0.1 | 0.55 | 0.01@32.8s | 0.04@1.3s |  |  |  |  |  |
+| season: harvest, a grey day in early October | -36.5 | -29.1 | -14.9 | -6.1 | 0 | -146.0 | 0 | 20 | 1.4 | 0.33 | 0.01@45.0s | 0.05@1.0s |  |  |  |  |  |
+| season: deep winter, January | -41.5 | -32.4 | -17.3 | -8.4 | 0 | -119.9 | 0.1 | 9.5 | 0 | 0.31 | 0.05@35.1s | 0.07@1.0s |  |  |  |  |  |
+| wind: breeze, 3.2 m/s, 90 s | -40.7 | -36.6 | -27.8 | -18.9 | 0 | -157.6 | 0.1 | 11 | 0 | 0.21 | 0.01@32.0s | 0.03@1.0s |  |  |  |  |  |
+| wind: gale, 11 m/s, October | -28.4 | -23.7 | -13.5 | -4.6 | 0 | -130.9 | 0 | 34 | 0.4 | 0.23 | 0.01@24.0s | 0.04@1.0s |  |  |  |  |  |
+| wind: the spruce ridge alone, 3.2 m/s | -41.5 | -37.8 | -29.1 | -20.2 | 0 | -167.1 | 0 | 15 | 0 | 0.22 | 0.01@19.3s | 0.03@1.0s |  |  |  |  |  |
+| wind: the spruce ridge alone, 7.5 m/s and over | -27.6 | -24.1 | -16.6 | -7.8 | 0 | -148.1 | 0 | 48 | 0 | 0.22 | 0.01@25.7s | 0.02@1.0s |  |  |  |  |  |
+| wind: cold whistle alone | -46.5 | -42.1 | -34.0 | -25.2 | 0 | -173.2 | 0 | 0.8 | 0 | 0.21 | 0.01@23.5s | 0.03@1.0s |  |  |  |  |  |
+| rain: light, 3 mm | -40.5 | -39.5 | -23.8 | -15.0 | 0 | -78.5 | 0.1 | 56 | 4.4 | 0.01 | 0.00@5.9s | 0.01@1.0s |  |  |  |  |  |
+| rain: heavy, 18 mm | -32.0 | -31.2 | -22.9 | -14.0 | 0 | -76.6 | 0 | 37 | 8.6 | -0.00 | 0.01@11.0s | 0.01@1.0s |  |  |  |  |  |
+| rain: storm, 45 mm | -29.1 | -28.3 | -20.4 | -11.6 | 0 | -79.6 | 0 | 29 | 11 | -0.00 | 0.01@11.2s | 0.01@1.0s |  |  |  |  |  |
+| birds: May morning, 60 s | -37.2 | -31.3 | -29.8 | -21.0 | 0 | -152.5 | 0 | 96 | 0 | 0.50 | 0.06@14.3s | 0.04@1.0s |  |  |  |  |  |
+| bird: white-throated sparrow, rising form | -32.7 | -30.3 | -32.4 | -23.5 | 0 | -147.7 | 0 | 100 | 0 | 0.99 |  |  |  |  |  |  |  |
+| bird: white-throated sparrow, falling form | -32.3 | -30.0 | -32.5 | -23.6 | 0 | -152.2 | 0 | 100 | 0 | 1.00 |  |  |  |  |  |  |  |
+| bird: black-capped chickadee, the spring whistle | -34.1 | -31.9 | -32.6 | -23.8 | 0 | -154.7 | 0 | 100 | 0 | 0.99 |  |  |  |  |  |  |  |
+| bird: American robin, one group of phrases | -37.2 | -35.3 | -33.4 | -24.6 | 0 | -150.2 | 0 | 77 | 0 | 0.99 |  |  |  |  |  |  |  |
+| bird: dark-eyed junco | -36.6 | -35.0 | -33.9 | -25.1 | 0 | -131.3 | 0 | 44 | 0 | 1.00 |  |  |  |  |  |  |  |
+| bird: black-capped chickadee, the call it keeps all year | -37.3 | -35.4 | -25.9 | -17.1 | 0 | -144.5 | 0 | 68 | 0.3 | 0.99 |  |  |  |  |  |  |  |
+| crickets: August, 20 C | -43.8 | -39.7 | -29.3 | -20.4 | 0 | -171.5 | 0 | 99 | 0 | 0.92 | 0.08@10.7s | 0.04@10.1s |  |  |  |  |  |
+| crickets: one cricket, 20 C | -44.9 | -41.7 | -32.2 | -23.3 | 0 | -169.3 | 0 | 100 | 0 | 1.00 | 0.11@2.8s | 0.04@2.4s |  |  |  |  |  |
+| spring: the brook in flood | -37.7 | -35.3 | -21.7 | -12.9 | 0 | -148.0 | 0.1 | 22 | 1.5 | 0.99 | 0.01@12.0s | 0.04@1.1s |  |  |  |  |  |
+| spring: the peepers, 12 C | -37.3 | -34.1 | -26.4 | -17.6 | 0 | -166.7 | 0 | 100 | 0 | 0.87 | 0.03@9.9s | 0.11@2.7s |  |  |  |  |  |
+| spring: one peeper, 12 C | -41.4 | -38.5 | -32.9 | -24.0 | 0 | -167.3 | 0 | 100 | 0 | 0.98 | 0.12@3.8s | 0.05@1.0s |  |  |  |  |  |
+| summer: bumblebees in the blossom, 60 s | -46.3 | -43.1 | -34.6 | -25.7 | 0 | -188.9 | 0 | 0.4 | 0 | 0.92 | 0.01@25.7s | 0.01@26.7s |  |  |  |  |  |
+| harvest: a skein of geese going over | -39.3 | -34.8 | -23.9 | -15.0 | 0 | -153.1 | 0 | 21 | 0 | 0.91 | 0.08@1.6s | 0.03@1.5s |  |  |  |  |  |
+| harvest: a crow, one series of caws | -37.5 | -35.5 | -22.5 | -13.6 | 0 | -155.2 | 0 | 10 | 0 | 0.96 |  |  |  |  |  |  |  |
+| harvest: dry leaves blowing, wind 5 m/s | -42.1 | -35.3 | -18.9 | -10.2 | 4 (x9 @8.78s/64) | -188.3 | 0 | 48 | 11 | 0.48 | 0.03@13.9s | 0.10@13.9s |  |  |  |  |  |
+| winter: a tree cracking in the frost | -40.5 | -37.6 | -20.9 | -12.1 | 0 | -107.7 | 0.7 | 2.5 | 0 | 0.73 |  |  |  |  |  |  |  |
+| tractor: working | -37.2 | -36.6 | -24.8 | -15.9 | 0 | -117.8 | 24 | 0.1 | 0 | 0.99 | 0.10@1.0s | 0.07@1.0s |  |  |  |  |  |
+| tractor: idling (work on foot) | -40.5 | -39.9 | -24.3 | -15.4 | 0 | -117.2 | 24 | 0 | 0 | 0.99 | 0.13@6.4s | 0.05@1.0s |  |  |  |  |  |
+| truck: hauling, picked | -39.9 | -39.4 | -29.9 | -21.1 | 0 | -115.5 | 5.5 | 0.1 | 0 | 1.00 | 0.03@1.7s | 0.05@1.0s |  |  |  |  |  |
+| work: felling, picked (axe, crosscut, and a tree down) | -36.7 | -27.1 | -10.0 | -1.3 | 0 | -91.9 | 12 | 5.0 | 0.3 | 0.99 | 0.04@1.7s | 0.07@1.8s |  |  |  |  |  |
+| work: felling, somewhere on the farm | -48.8 | -41.7 | -22.7 | -13.8 | 0 | -102.4 | 1.2 | 1.5 | 0 | 0.99 | 0.10@19.3s | 0.10@13.9s |  |  |  |  |  |
+| work: picking rocks, picked | -36.9 | -31.7 | -13.5 | -4.6 | 0 | -95.2 | 9.5 | 4.4 | 0.4 | 0.98 | 0.14@11.5s | 0.08@8.5s |  |  |  |  |  |
+| work: cutting brush and burning it, picked | -36.3 | -29.8 | -12.4 | -3.7 | 12 (x10 @13.29s/4) | -106.3 | 1.0 | 27 | 1.5 | 0.99 | 0.01@10.7s | 0.05@1.7s |  |  |  |  |  |
+| work: building, picked (nails, a hand saw, boards) | -34.1 | -29.0 | -11.4 | -2.8 | 5 (x8 @23.90s/1) | -85.2 | 1.5 | 4.9 | 0.3 | 0.99 | 0.03@18.9s | 0.06@3.2s |  |  |  |  |  |
+| work: barrels down the potato-house ramp, picked | -39.2 | -34.4 | -18.9 | -10.0 | 0 | -106.0 | 1.4 | 4.2 | 0.3 | 0.99 | 0.12@13.9s | 0.03@4.2s |  |  |  |  |  |
+| work: every kind at once, all picked | -31.7 | -25.6 | -10.0 | -1.3 | 5 (x17 @28.39s/1) | -81.0 | 2.0 | 9.0 | 0.6 | 0.80 | 0.03@14.7s | 0.04@9.6s |  |  |  |  |  |
+| cue: planted | -27.0 | -26.0 | -12.5 | -3.6 | 0 | -105.6 | 0 | 0 | 0 | 1.00 |  |  | 5 | 219 | 21 @198 (7) | 11 @500 | 20 @198 (5) |
+| cue: hilled | -29.4 | -27.7 | -15.0 | -6.1 | 0 | -125.0 | 0 | 4.0 | 0 | 1.00 |  |  | 66 | 239 | 22 @1260 (10) | 22 @1260 | 12 @500 (8) |
+| cue: sprayed | -27.8 | -26.1 | -12.7 | -3.8 | 0 | -164.4 | 0 | 64 | 3.8 | 1.00 |  |  | 13 | 230 | 29 @8000 (10) | 29 @8000 | 12 @5040 (5) |
+| cue: watered | -28.8 | -27.9 | -13.5 | -4.6 | 0 | -111.0 | 0 | 0 | 0 | 0.99 |  |  | 3 | 187 | 27 @500 (6) | 27 @500 | 20 @500 (5) |
+| cue: test dig (6 tubers on the tray) | -27.7 | -25.8 | -11.1 | -2.3 | 0 | -96.2 | 0.1 | 0.1 | 0 | 1.00 |  |  | 304 | 297 | 37 @125 (12) | 26 @500 | 21 @250 (9) |
+| cue: dug (a basket into the barrel) | -28.1 | -23.2 | -15.0 | -6.1 | 0 | -82.2 | 2.5 | 0 | 0 | 1.00 |  |  | 15 | 1559 | 22 @79 (11) | 13 @500 | 21 @79 (9) |
+| cue: sold | -27.7 | -26.0 | -12.3 | -3.5 | 0 | -101.4 | 0 | 58 | 0 | 0.99 |  |  | 3 | 233 | 32 @315 (8) | 28 @2520 | 18 @315 (5) |
+| cue: warning, frost (C4) | -29.3 | -23.7 | -18.4 | -9.6 | 0 | -136.4 | 0 | 0 | 0 | 0.97 |  |  | 12 | 2951 | 31 @250 (5) | 18 @500 | 20 @250 (2) |
+| cue: warning, blight watch (A3) | -30.4 | -24.4 | -18.6 | -9.7 | 0 | -133.2 | 0 | 0 | 0 | 0.98 |  |  | 14 | 2468 | 33 @198 (6) | 16 @500 | 19 @198 (4) |
+| cue: warning, blight seen (G3) | -29.1 | -23.6 | -18.7 | -9.8 | 0 | -124.7 | 0 | 0 | 0 | 0.98 |  |  | 11 | 2909 | 34 @198 (5) | 13 @630 | 20 @198 (2) |
+| cue: warning, dry (E3) | -29.8 | -24.1 | -18.7 | -9.8 | 0 | -128.9 | 0 | 0 | 0 | 0.99 |  |  | 12 | 2840 | 19 @157 (5) | 14 @500 | 18 @157 (4) |
+| cue: warning, a field lost (D3) | -30.2 | -24.3 | -18.7 | -9.8 | 0 | -129.0 | 0 | 0 | 0 | 0.98 |  |  | 14 | 2718 | 34 @157 (6) | 10 @630 | 18 @157 (4) |
+| cue: year-end ledger | -26.8 | -22.8 | -15.1 | -6.3 | 0 | -156.1 | 0 | 0 | 0 | 0.99 |  |  | 232 | 3310 | 46 @79 (11) | 14 @500 | 23 @79 (8) |
+| cue: five seasons kept | -25.5 | -22.1 | -12.3 | -3.4 | 0 | -158.5 | 0 | 0 | 0 | 0.99 |  |  | 3374 | 4388 | 46 @79 (12) | 15 @630 | 23 @79 (8) |
+| cue: the farm lost | -30.1 | -24.9 | -17.0 | -8.1 | 0 | -153.7 | 18 | 0 | 0 | 0.99 |  |  | 215 | 7146 | 45 @63 (11) | 12 @500 | 22 @79 (9) |
+| cue: pickField (a field picked) | -34.2 | -34.2 | -17.8 | -8.9 | 0 | -108.5 | 0.1 | 0.1 | 0 | 1.00 |  |  | 5 | 61 | 33 @157 (6) | 6 @500 | 13 @157 (3) |
+| cue: pickTract (a tract of woods, brush or stumps picked) | -35.1 | -35.1 | -17.1 | -8.3 | 0 | -101.0 | 0.2 | 31 | 6.7 | 1.00 |  |  | 1 | 94 | 25 @6350 (9) | 25 @6350 | 3 @5040 (0) |
+| cue: pickPerson (a person picked) | -33.5 | -32.5 | -16.7 | -7.9 | 0 | -103.2 | 0 | 0.8 | 0.1 | 1.00 |  |  | 4 | 150 | 22 @397 (7) | 21 @500 | 17 @397 (4) |
+| cue: pickYard (a yard picked) | -37.5 | -36.5 | -17.5 | -8.9 | 0 | -101.1 | 0.1 | 20 | 10 | 1.00 |  |  | 122 | 41 | 25 @12699 (7) | 25 @12699 | 5 @12699 (0) |
+| cue: heard (any order taken; pickers hired or sent home; winter work set) | -33.1 | -33.1 | -17.0 | -8.1 | 0 | -114.5 | 0 | 2.8 | 0 | 1.00 |  |  | 2 | 64 | 23 @397 (5) | 19 @500 | 18 @397 (3) |
+| cue: rocks (rocks picked off a field) | -29.2 | -26.8 | -11.2 | -2.4 | 0 | -89.4 | 7.4 | 3.5 | 0.5 | 1.00 |  |  | 2 | 560 | 46 @79 (15) | 23 @12699 | 24 @79 (8) |
+| cue: brushed (hedgerows cut back) | -29.4 | -26.8 | -12.2 | -3.3 | 0 | -95.7 | 0 | 43 | 4.9 | 1.00 |  |  | 96 | 326 | 35 @12699 (13) | 35 @12699 | 9 @12699 (5) |
+| cue: ticket (weighed: the crop is in and the weigh ticket cut) | -26.7 | -24.4 | -12.8 | -4.0 | 0 | -93.0 | 0 | 31 | 8.7 | 1.00 |  |  | 301 | 613 | 40 @12699 (10) | 40 @12699 | 15 @12699 (8) |
+| cue: felled (a tract felled) | -30.6 | -24.1 | -12.1 | -3.2 | 0 | -105.6 | 64 | 3.8 | 0.8 | 0.98 |  |  | 1143 | 459 | 57 @50 (8) | 28 @10079 | 33 @79 (6) |
+| cue: stumped (the stumps pulled: a tract is a field) | -28.4 | -24.2 | -11.7 | -2.9 | 0 | -91.7 | 70 | 6.1 | 1.0 | 0.99 |  |  | 569 | 305 | 59 @50 (9) | 28 @12699 | 33 @79 (5) |
+| cue: tiled (tile drains laid) | -28.7 | -25.3 | -13.2 | -4.3 | 0 | -106.0 | 0 | 0.2 | 0 | 0.99 |  |  | 383 | 408 | 29 @630 (6) | 29 @630 | 20 @630 (3) |
+| cue: logs (logs sold) | -27.2 | -25.2 | -12.6 | -3.8 | 0 | -89.8 | 4.7 | 14 | 0 | 0.99 |  |  | 12 | 756 | 46 @63 (13) | 28 @2520 | 24 @79 (10) |
+| cue: begun (a building started) | -29.7 | -26.9 | -13.2 | -4.3 | 0 | -91.7 | 0.9 | 2.8 | 0 | 0.99 |  |  | 7 | 483 | 41 @125 (14) | 22 @500 | 19 @125 (6) |
+| cue: built (a building standing) | -29.7 | -25.6 | -10.1 | -1.4 | 0 | -91.6 | 1.2 | 3.4 | 0.6 | 0.99 |  |  | 846 | 515 | 24 @6350 (16) | 24 @6350 | 21 @79 (11) |
+| cue: hired (someone hired) | -29.3 | -26.9 | -10.5 | -1.7 | 0 | -98.2 | 3.2 | 3.0 | 1.0 | 0.99 |  |  | 563 | 143 | 45 @99 (13) | 19 @12699 | 23 @79 (7) |
+| cue: left (someone quits or is hired away) | -29.9 | -26.5 | -10.3 | -1.6 | 0 | -85.7 | 21 | 0.5 | 0.2 | 0.99 |  |  | 730 | 129 | 49 @63 (15) | 16 @500 | 28 @79 (10) |
+| cue: better (someone a level better at their work) | -28.5 | -25.3 | -13.5 | -4.6 | 0 | -98.5 | 0.1 | 11 | 1.1 | 1.00 |  |  | 2 | 612 | 28 @1260 (7) | 28 @12699 | 16 @1260 (3) |
+| cue: wornOut (someone worn out) | -31.7 | -26.8 | -18.3 | -10.5 | 0 | -120.6 | 0 | 1.2 | 0.5 | 0.99 |  |  | 1 | 1529 | 25 @630 (3) | 25 @630 | 17 @630 (1) |
+| cue: unhappy (someone unhappy enough to quit) | -31.9 | -27.1 | -17.0 | -8.1 | 0 | -124.6 | 0 | 1.3 | 0.5 | 0.99 |  |  | 2 | 1530 | 25 @500 (3) | 25 @500 | 18 @500 (2) |
+| cue: hurt (someone hurt) | -29.8 | -25.9 | -18.1 | -9.6 | 0 | -123.9 | 0 | 1.4 | 0.5 | 0.99 |  |  | 2 | 1360 | 26 @397 (4) | 24 @12699 | 21 @397 (3) |
+| cue: signed (a contract signed, land rented, a raise, a foreman named, a contractor ordered) | -28.8 | -26.8 | -16.9 | -8.2 | 0 | -113.0 | 0 | 28 | 15 | 1.00 |  |  | 755 | 62 | 27 @6350 (14) | 27 @6350 | 13 @250 (8) |
+| cue: deed (land bought) | -26.4 | -24.1 | -10.0 | -1.3 | 0 | -96.1 | 2.3 | 5.7 | 3.1 | 1.00 |  |  | 329 | 77 | 47 @99 (19) | 26 @8000 | 27 @79 (13) |
+| cue: paidOff (the mortgage paid, at the year end or early) | -27.2 | -24.8 | -12.0 | -3.2 | 0 | -102.3 | 1.5 | 26 | 3.2 | 1.00 |  |  | 329 | 407 | 48 @99 (22) | 28 @8000 | 25 @79 (15) |
+| cue: brokeDown (a tractor broken down) | -29.5 | -24.9 | -11.2 | -2.3 | 0 | -80.2 | 9.6 | 1.1 | 0.2 | 1.00 |  |  | 126 | 1054 | 25 @79 (9) | 21 @10079 | 24 @79 (7) |
+| cue: repaired (a tractor going again) | -29.0 | -24.9 | -13.8 | -4.9 | 0 | -82.1 | 8.9 | 0.9 | 0.6 | 1.00 |  |  | 817 | 77 | 46 @99 (6) | 22 @12699 | 24 @79 (5) |
+| cue: door (an incident: a decision is asked for) | -24.8 | -23.2 | -9.3 | -1.0 | 0 | -90.6 | 0.7 | 0.3 | 0 | 0.99 |  |  | 2 | 590 | 22 @198 (10) | 21 @500 | 21 @198 (8) |
+| cue: settled (an incident answered or let lapse) | -28.3 | -27.3 | -12.6 | -3.7 | 0 | -97.7 | 0.4 | 1.1 | 0.6 | 1.00 |  |  | 11 | 144 | 39 @125 (13) | 25 @12699 | 18 @198 (8) |
+| cue: goal (a goal on the ladder met) | -25.7 | -21.7 | -13.3 | -4.4 | 0 | -126.0 | 0 | 0.6 | 0 | 0.97 |  |  | 484 | 1735 | 26 @794 (12) | 26 @794 | 17 @315 (9) |
+| change: fair, then storm, then fair again | -30.2 | -26.2 | -17.7 | -9.1 | 0 | -89.1 | 0 | 31 | 3.8 | 0.19 |  |  |  |  |  |  |  |
+| change: tractor starts, works, idles, stops | -38.9 | -36.7 | -25.0 | -16.1 | 0 | -163.0 | 23 | 0 | 0 | 1.00 |  |  |  |  |  |  |  |
+| change: sound off and on again, tab hidden and shown | -33.2 | -29.2 | -20.9 | -12.0 | 0 | -117.7 | 13 | 32 | 0 | 0.83 |  |  |  |  |  |  |  |
+| change: title, plan, season, cellar, ledger with its close | -33.6 | -22.8 | -15.0 | -6.1 | 0 | -144.1 | 0 | 10 | 0.2 | 0.92 |  |  |  |  |  |  |  |
+| change: every cue of the crop once, in the order of a year | -28.3 | -21.1 | -7.4 | -0.4 | 0 | -91.0 | 0.2 | 7.1 | 0.1 | 0.96 |  |  |  |  |  |  |  |
+| change: every cue of the farmstead once, in the order of a year | -30.7 | -21.8 | -8.4 | -0.6 | 0 | -87.4 | 9.9 | 17 | 1.0 | 0.91 |  |  |  |  |  |  |  |
+| change: one day brings a tract felled, a building up, a level gained, a weigh ticket and a knock at the door; then a goal | -28.1 | -21.6 | -8.3 | -0.6 | 0 | -93.7 | 7.7 | 10 | 0.6 | 0.75 |  |  |  |  |  |  |  |
+| change: felling far, picked, far again and stopped; then building picked and stopped | -33.6 | -28.0 | -10.6 | -1.8 | 0 | -96.4 | 0.4 | 16 | 1.2 | 0.50 |  |  |  |  |  |  |  |
+| change: the year in a minute, May, August, October, January | -37.2 | -29.5 | -14.4 | -5.9 | 0 | -128.2 | 0 | 41 | 0.5 | 0.47 |  |  |  |  |  |  |  |
+| seam: every looped buffer wrapping round | -33.9 | -30.5 | -20.5 | -11.6 | 0 | -109.3 | 5.5 | 11 | 2.0 | 0.34 |  |  |  |  |  |  |  |
+| scene: fair June morning, the farmer planting | -33.9 | -24.9 | -11.2 | -2.3 | 0 | -119.2 | 12 | 19 | 0.1 | 0.82 | 0.03@1.1s | 0.02@1.0s |  |  |  |  |  |
+| scene: wet August day, blight warning, spraying | -33.7 | -23.7 | -12.0 | -3.1 | 0 | -79.1 | 6.4 | 14 | 0.7 | 0.69 | 0.12@1.0s | 0.07@1.0s |  |  |  |  |  |
+| scene: dig day in late September, then a sale | -33.2 | -21.7 | -11.7 | -2.8 | 0 | -90.5 | 7.2 | 8.5 | 0.1 | 0.69 | 0.04@20.0s | 0.03@1.0s |  |  |  |  |  |
+| scene: October, a hand felling the woodlot: far, then picked, the last tree, a level gained | -33.9 | -23.7 | -11.0 | -2.2 | 0 | -100.9 | 10 | 17 | 1.7 | 0.55 | 0.01@1.5s | 0.08@1.4s |  |  |  |  |  |
+| scene: the crop coming in: digging, the truck hauling, the yard picked, the weigh ticket, a goal met | -30.5 | -21.2 | -10.2 | -1.5 | 0 | -93.5 | 5.6 | 9.0 | 0.3 | 0.70 | 0.03@1.2s | 0.05@1.0s |  |  |  |  |  |
+| scene: June, a potato house going up in the yard: picked, the last nail, a goal met, someone hired | -33.2 | -21.8 | -9.2 | -0.9 | 0 | -88.4 | 1.2 | 15 | 0.3 | 0.86 | 0.03@23.5s | 0.03@1.1s |  |  |  |  |  |
+| stress: storm, gale, engines, every kind of work and every cue at once | -13.8 | -9.0 | -0.2 | -0.3 | 0 | -67.3 | 4.5 | 3.9 | 0.5 | 0.94 |  |  |  |  |  |  |  |
+
+LUFS: integrated loudness (ITU-R BS.1770-4, gated) at the default volume. mom: loudest 400 ms. dBTP: true peak
+(4x oversampled) at the default volume. pk@max: sample peak with the volume slider at its top. clicks: discontinuities found
+(worst one: how many times the largest neighbouring break, when, and the spacing in samples at which it shows).
+DC dB: mean offset. <80%, 2-5k%, >8k%: share of the energy in those bands. L/R: stereo correlation.
+loop, rhythm: how far the strongest repeat of the waveform, and of the pattern of events, stands above the rest of
+the autocorrelation, and its period. att, dec: 10-90% rise, and peak to the last moment within 20 dB of it.
+own bed, storm: the cue's loudest 170 ms against the mean of the bed, in the third-octave band where it stands
+clearest, with that band, and (in brackets) how many bands it tops the bed by 6 dB or more. >500 Hz: the same
+against its own bed, in the clearest band a phone's speaker can play.
 <!-- table:end -->
 
 ### The instruments
@@ -184,6 +313,13 @@ finds in three kinds of sound, what a gale costs to render, and the loudness
 meter against a known tone.
 
 <!-- instruments:start -->
+```
+click test in cue: warning, blight watch (A3): finds a one-sample step from -56 dBFS, a step 1 ms wide from -34 dBFS
+click test in tractor: working: finds a one-sample step from -56 dBFS, a step 1 ms wide from -22 dBFS
+click test in bed: June, fair: finds a one-sample step from -34 dBFS, a step 1 ms wide not at all up to -20 dBFS
+cost: 48 s of a gale, every continuous voice running, renders in 5.5 s, building the engine included
+loudness meter: a -6.0 dBFS 997 Hz stereo sine reads -6.02 LUFS
+```
 <!-- instruments:end -->
 
 The peak with the slider at its top, and the level on the bus before the
@@ -308,6 +444,30 @@ be at least 6 dB apart and at least twice as far apart as a season is from
 itself rendered again with different luck (other birds, other gusts):
 
 <!-- compared:start -->
+| one | other | spectrum dB | movement dB | together dB |
+| --- | --- | ---: | ---: | ---: |
+| spring | high summer | 6.7 | 2.1 | 7.0 |
+| spring | harvest | 5.6 | 2.4 | 6.1 |
+| spring | deep winter | 9.5 | 1.6 | 9.6 |
+| high summer | harvest | 10.1 | 2.6 | 10.4 |
+| high summer | deep winter | 9.3 | 2.1 | 9.6 |
+| harvest | deep winter | 9.9 | 1.5 | 10.0 |
+| spring | itself, another day | 1.8 | 0.6 | 1.9 |
+| high summer | itself, another day | 2.7 | 1.0 | 2.9 |
+| harvest | itself, another day | 2.3 | 0.5 | 2.3 |
+| deep winter | itself, another day | 2.1 | 0.8 | 2.3 |
+
+
+| key moment | most covered by | still clear by dB | at Hz |
+| --- | --- | ---: | ---: |
+| sample | planted | 11.7 | 500 |
+| dug | paidOff | 11.9 | 198 |
+| ledger | paidOff | 10.0 | 250 |
+| kept | rocks | 13.1 | 198 |
+| lost | paidOff | 8.9 | 63 |
+| ticket | brushed | 9.3 | 2000 |
+| door | settled | 6.5 | 315 |
+| goal | hilled | 16.6 | 198 |
 <!-- compared:end -->
 
 The second table there is a different question: each moment that must not be
@@ -321,6 +481,57 @@ Every cue the director can sound (`CUES` in `src/audio/director.ts`), made by
 `tools/audio/render.ts` and put here by `tools/audio/sheet.ts`:
 
 <!-- cues:start -->
+| cue | answers | what is heard | weight | least gap s | long ms | loudest 400 ms LUFS | clear of its bed dB | nearest other cue |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
+| pickField | a field picked | One step onto worked ground | a pick | 0.07 | 150 | -34.2 | 33 @157 Hz | planted: 4.9 dB apart, rhythm 0.80 |
+| pickTract | a tract of woods, brush or stumps picked | A twig underfoot and the leaves it stirs | a pick | 0.07 | 208 | -35.1 | 25 @6350 Hz | brushed: 3.9 dB apart, rhythm 0.53 |
+| pickPerson | a person picked | Two taps of a tool handle, the second higher; each person has a pitch of their own | a pick | 0.07 | 343 | -32.5 | 22 @397 Hz | heard: 8.7 dB apart, rhythm 0.77 |
+| pickYard | a yard picked | The gate: its hinge, then its latch (the Dufour gate lower) | a pick | 0.07 | 433 | -36.5 | 25 @12699 Hz | brushed: 8.3 dB apart, rhythm 0.55 |
+| heard | any order taken; pickers hired or sent home; winter work set | One knuckle on the tractor fender | routine | 0.09 | 150 | -33.1 | 23 @397 Hz | pickPerson: 8.7 dB apart, rhythm 0.77 |
+| planted | planted | Two pats on earth | routine | 1 | 450 | -26.0 | 21 @198 Hz | pickField: 4.9 dB apart, rhythm 0.80 |
+| hilled | hilled | Two sweeps of soil | routine | 1 | 495 | -27.7 | 22 @1260 Hz | settled: 13.4 dB apart, rhythm 0.88 |
+| sprayed | sprayed | Two breaths of a nozzle | routine | 1 | 376 | -26.1 | 29 @8000 Hz | pickTract: 14.8 dB apart, rhythm 0.88 |
+| watered | watered | Two drops into standing water | routine | 1 | 858 | -27.9 | 27 @500 Hz | pickPerson: 9.5 dB apart, rhythm 0.69 |
+| rocks | rocks picked off a field | Three stones thrown on the stone boat: one on its planks, two on stone, and one that settles | routine | 1 | 689 | -26.8 | 46 @79 Hz | settled: 8.0 dB apart, rhythm 0.87 |
+| brushed | hedgerows cut back | Two swings of a brush hook, a stem parting after each | routine | 1 | 638 | -26.8 | 35 @12699 Hz | pickTract: 3.9 dB apart, rhythm 0.53 |
+| sample | a test dig | The hill's tubers laid on a wooden tray one at a time | must not be missed | 0.5 | 1712 | -25.8 | 37 @125 Hz | kept: 9.0 dB apart, rhythm 0.57 |
+| dug | a field dug | A basket tipped into the barrel, slowing as the last tubers settle | must not be missed | 0.5 | 1867 | -23.2 | 22 @79 Hz | door: 6.1 dB apart, rhythm 0.67 |
+| ticket | weighed: the crop is in and the weigh ticket cut | The poise run out along the scale beam, the beam tapping its stop twice, and the ticket torn off the pad | must not be missed | 1 | 1359 | -24.4 | 40 @12699 Hz | pickYard: 6.2 dB apart, rhythm 0.23 |
+| sold | sold, delivered, a contract filled, the cellar overflowing to the buyer | Two coins on a wooden counter | routine | 0.4 | 618 | -26.0 | 32 @315 Hz | pickPerson: 13.4 dB apart, rhythm 0.97 |
+| felled | a tract felled | The last tree down: the hinge cracking faster and faster, the rush, the ground, branches settling | notable | 4 | 2662 | -24.1 | 57 @50 Hz | stumped: 3.5 dB apart, rhythm 0.14 |
+| stumped | the stumps pulled: a tract is a field | A chain taking up, roots parting, the stump free and soil falling off it | notable | 2 | 1430 | -24.2 | 59 @50 Hz | felled: 3.5 dB apart, rhythm 0.14 |
+| tiled | tile drains laid | Two lengths of clay pipe set end to end, and water finding them | notable | 2 | 1396 | -25.3 | 29 @630 Hz | watered: 10.4 dB apart, rhythm 0.23 |
+| logs | logs sold | Two logs rolled onto the mill's truck, then the two coins | notable | 0.6 | 1140 | -25.2 | 46 @63 Hz | rocks: 9.2 dB apart, rhythm 0.83 |
+| begun | a building started | Two boards dropped on the stack | routine | 0.5 | 719 | -26.9 | 41 @125 Hz | rocks: 8.2 dB apart, rhythm 0.83 |
+| built | a building standing | The last nail driven home in four blows, each higher than the last, and a board set down | notable | 2 | 1725 | -25.6 | 24 @6350 Hz | hired: 6.6 dB apart, rhythm 0.57 |
+| hired | someone hired | The gate latch, and two steps up onto the porch | notable | 0.5 | 1339 | -26.9 | 45 @99 Hz | rocks: 4.6 dB apart, rhythm 0.35 |
+| left | someone quits or is hired away | Two steps down off the porch and the door pulled to | notable | 1.5 | 1465 | -26.5 | 49 @63 Hz | rocks: 6.8 dB apart, rhythm 0.44 |
+| better | someone a level better at their work | A tap on hot iron and a ring off the anvil a fourth above | notable | 3 | 1317 | -25.3 | 28 @1260 Hz | unhappy: 11.8 dB apart, rhythm 0.78 |
+| wornOut | someone worn out | The porch triangle, an iron bar struck once (D5) | notable | 4 | 3138 | -26.8 | 25 @630 Hz | warnDry: 18.2 dB apart, rhythm 0.97 |
+| unhappy | someone unhappy enough to quit | The porch triangle struck once, lower (B4) | notable | 4 | 3127 | -27.1 | 25 @500 Hz | better: 11.8 dB apart, rhythm 0.78 |
+| hurt | someone hurt | The porch triangle struck twice, lower still (A4) | notable | 4 | 3570 | -25.9 | 26 @397 Hz | warnWatch: 17.9 dB apart, rhythm 0.96 |
+| signed | a contract signed, land rented, a raise, a foreman named, a contractor ordered | A steel nib on ledger paper: five strokes and a full stop | routine | 0.3 | 890 | -26.8 | 27 @6350 Hz | ticket: 12.4 dB apart, rhythm 0.59 |
+| deed | land bought | Two strokes of the nib and a rubber stamp | notable | 0.5 | 714 | -24.1 | 47 @99 Hz | hired: 7.1 dB apart, rhythm 0.56 |
+| paidOff | the mortgage paid, at the year end or early | Two strokes of the nib, the stamp, and the two coins | routine | 0.5 | 996 | -24.8 | 48 @99 Hz | hired: 9.1 dB apart, rhythm 0.71 |
+| brokeDown | a tractor broken down | A rod letting go, and the engine running down in six slowing beats | notable | 3 | 1305 | -24.9 | 25 @79 Hz | hired: 5.8 dB apart, rhythm 0.51 |
+| repaired | a tractor going again | Five clicks of a ratchet, then the engine catching and picking up | notable | 3 | 1598 | -24.9 | 46 @99 Hz | brokeDown: 5.6 dB apart, rhythm 0.35 |
+| door | an incident: a decision is asked for | Three knocks at the door | must not be missed | 1.5 | 1211 | -23.2 | 22 @198 Hz | dug: 6.1 dB apart, rhythm 0.67 |
+| settled | an incident answered or let lapse | The door eased shut and its latch dropping | routine | 0.5 | 578 | -27.3 | 39 @125 Hz | rocks: 8.0 dB apart, rhythm 0.87 |
+| goal | a goal on the ladder met | The year-end amen in small on the parlour organ (IV to I in F) under four struck bars climbing C, F, A, C | must not be missed | 3 | 4082 | -21.7 | 26 @794 Hz | warnWatch: 18.6 dB apart, rhythm 0.94 |
+| warnFrost | frost, the freeze-up | The warning chime, one low struck note, at C4 | notable | 2.5 | 5911 | -23.7 | 31 @250 Hz | unhappy: 18.7 dB apart, rhythm 0.96 |
+| warnWatch | blight weather | The warning chime, one low struck note, at A3 | notable | 2.5 | 5334 | -24.4 | 33 @198 Hz | unhappy: 18.5 dB apart, rhythm 0.98 |
+| warnSeen | blight seen; any other bad news | The warning chime, one low struck note, at G3 | notable | 2.5 | 5895 | -23.6 | 34 @198 Hz | wornOut: 18.1 dB apart, rhythm 0.96 |
+| warnDry | a field dry; the pond dry | The warning chime, one low struck note, at E3 | notable | 2.5 | 5797 | -24.1 | 19 @157 Hz | wornOut: 18.2 dB apart, rhythm 0.97 |
+| warnLost | a field lost, a crop frozen in its barrels, rot through a pile | The warning chime, one low struck note, at D3 | notable | 2.5 | 5636 | -24.3 | 34 @157 Hz | ledger: 14.2 dB apart, rhythm 0.91 |
+| ledger | the year closed | Parlour organ: IV to I in F, the plain amen | must not be missed | 4 | 6837 | -22.8 | 46 @79 Hz | dug: 8.0 dB apart, rhythm 0.72 |
+| kept | five seasons kept | Parlour organ: IV, I over its fifth, a suspension on V resolving, and home | must not be missed | 4 | 10658 | -22.1 | 46 @79 Hz | dug: 8.3 dB apart, rhythm 0.71 |
+| lost | the farm lost | Parlour organ: the same first chord, then down to D with no third, left to die | must not be missed | 4 | 10981 | -24.9 | 45 @63 Hz | dug: 6.9 dB apart, rhythm 0.72 |
+
+least gap: the cue is not sounded again sooner than this. long: from the first to the last moment within 40 dB of
+its peak. clear of its bed: the cue's loudest 170 ms over the bed it is most often heard on, in the third-octave band
+where it stands clearest. nearest other cue: the cue of another family closest to it in spectrum among those with
+something of its rhythm, with how far apart their spectra are (root mean square across third-octave bands) and how
+alike their rhythms (1 is the same pattern of blows). Two are counted as confusable under 6 dB with rhythm over 0.85.
 <!-- cues:end -->
 
 Three families share a sound on purpose, so that the family is learned once.
@@ -833,11 +1044,13 @@ The year in a minute, sixteen seconds each of May, August, October and January:
   measured -30.6 LUFS there against -26.0 in Chromium and WebKit, alone or
   four seconds into a render. Without it the three engines agree on every cue
   to 0.2 LU. At the default volume the chain is a plain gain of 5.8 dB: it
-  changes no peak in any render, and the highest true peak anywhere is
-  -7.4 dBTP. With the slider at its top, a minute of ordinary play peaks at
-  0.67 to 0.80 of full scale, at or just over the knee; every cue of the year
-  inside 40 seconds reaches 0.96, about 2 dB into the ceiling; everything at
-  once sits on it at 0.97.
+  changes no peak in any render but the stress case, and the highest true peak
+  anywhere else is -7.4 dBTP. With the slider at its top, a minute of play
+  peaks at 0.70 to 0.90 of full scale, at or over the knee: the hammer, the
+  axe and the knock are the peaks. Every cue of the crop year inside 40
+  seconds reaches 0.96, about 2 dB into the ceiling; every cue of the
+  farmstead in a row 0.93; everything at once sits on it at 0.97, and with the
+  farmstead's cues and work added reaches it at the default volume too.
 - **Cost.** The first rebuild's continuous voices run whatever the weather;
   the farmstead's (the brook, the frogs, the truck, the fire, the leaves) are
   built the first time they are wanted, so a farm that never reaches October
@@ -851,12 +1064,12 @@ The year in a minute, sixteen seconds each of May, August, October and January:
 What was done after the first rebuild, in the order it was done, by an agent
 that could not hear and had one loaded Windows box to render on.
 
-- **Round 9, written.** Cues for every event of the farmstead; the single
+- **Written.** Cues for every event of the farmstead; the single
   blows they are made of (an axe, a saw stroke, a stone, a hammer, a board);
   work voices made of the same blows in the bouts and rests of a person
   working; picks; the seasons' voices and a calendar for them; a director with
   a list of cues, least gaps, and a line for the longer ones.
-- **Round 10, read.** A second agent read the Web Audio code for anything that
+- **Read.** A second agent read the Web Audio code for anything that
   would throw or misbehave before a render was spent on it. It found no
   exception and six defects, all fixed: every frost struck the wrong note (the
   simulation marks frost as bad news, and bad news fell through to the blight
@@ -865,12 +1078,25 @@ that could not hear and had one loaded Windows box to render on.
   sounded a pick; honks could pile up after a stall; a cue dropped from the
   line still used up its gap, and a dropped reward was lost; the truck was
   heard for a tractor's haul.
-- **Round 11, cost.** The first renders ran at about real time where the old
+- **Cost.** The first renders ran at about real time where the old
   ones ran five times faster. Dry leaves, the brook's bubbles and the fire's
   sparks had been a node for each tick; they became looped textures.
-- **Rounds 12 on, levels.** Each render measured, each level moved to its place
-  in the plan, the cues compared with each other and the seasons with each
-  other. The tables in this file are the last of these.
+- **Levels, over eight renders.** Each render measured and each level moved to its
+  place in the plan: the first guesses had the wooden cues 4 to 8 LU hot, the
+  crow and the geese 6 LU faint, and work with its person picked louder than a
+  working tractor. Three windows of the plan were widened and say so where
+  they stand (the gale, the cellar, snow), each because a voice was added or a
+  render drew different gusts, not to pass a sound that was too loud.
+- **The seasons against each other.** Spring and harvest came out
+  5.1 dB apart, under the limit: both were a breeze with something
+  intermittent over it. Three changes, each of which is also true of the
+  place: dry leaves moved up to 4 to 8 kHz, above where birds sing, and were
+  brought forward; the brook was kept low in the fall; the peepers were
+  brought forward 3 dB. They are now 6.1 dB apart against a limit of 6 and
+  remain the closest pair. What a listener has to tell them by is tonal (frogs
+  and song against rattle, geese and crows), and the print under-weights
+  exactly that.
+- **The last render.** The tables in this file.
 
 ## What is still not known
 
