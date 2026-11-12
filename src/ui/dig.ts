@@ -5,6 +5,7 @@ import { deals, deliver, versusMarket } from './contracts.ts'
 import { count, type Ctx, type PaperSpec } from './core.ts'
 import { h, s, type Child } from './dom.ts'
 import * as F from './fmt.ts'
+import { term } from './glossary.ts'
 import { icon } from './icons.ts'
 import * as R from './rules.ts'
 import { coupon, range } from './system/parts.ts'
@@ -267,7 +268,7 @@ function narrowing(before: S.Estimate | null, after: S.Estimate, hill: number, s
   }
   return h('div', { class: 'narrowing' },
     before ? h('div', { class: 'nrow was' },
-      h('span', { class: 't-label' }, 'Before'),
+      h('span', { class: 't-label' }, term('Before', 'estimate before')),
       range({ lo: before.lo, hi: before.hi, max, label: `Before: ${F.perAreaSpan(before.lo, before.hi)}` }),
       h('span', { class: 'num' }, F.perAreaSpan(before.lo, before.hi).replace(` ${F.perAreaUnit()}`, ''))) : null,
     h('div', { class: 'nrow' },
@@ -348,7 +349,14 @@ function phrase(ctx: Ctx, c: S.Campaign, lot: S.Lot, cause: S.Cause): string {
     }
     case 'rot': return 'sat in waterlogged soil'
     case 'small':
-      if (x.killed && (!x.died || x.killed.day <= x.died.day)) return `the vines were killed on ${F.date(c.year, x.killed.day, true)}, before these sized`
+      if (x.killed && (!x.died || x.killed.day <= x.died.day)) {
+        // Whether the kill came before the coach asked for it (the player's early kill) or when asked (the trade it asked for).
+        const kt = S.killTiming(c, lot.field)
+        const on = F.date(c.year, x.killed.day, true)
+        if (kt.killed >= 0 && kt.early > 0) return `the vines were killed on ${on}, ${F.plural(kt.early, 'day')} before they were due: these had not sized`
+        if (kt.killed >= 0 && kt.asked >= 0) return `the vines were killed on ${on} as asked: small ones traded for set skins`
+        return `the vines were killed on ${on}, before these sized`
+      }
       if (x.died) return x.died.text.startsWith('Frost') ? 'frost finished the vines before these sized' : x.died.text.startsWith('Blight') ? 'blight took the vines before these sized' : 'the vines went down before these sized'
       return 'dug green, before they sized'
     case 'stone': return `${x.name} is ${stonesWord(x.f.stones)}: tubers knocked on stones in the digger`
@@ -417,7 +425,12 @@ function why(ctx: Ctx, c: S.Campaign, lot: S.Lot, cause: S.Cause): string {
     case 'small': {
       const blight = facts(c, lot).blight
       let end = ` In ${name} they were dug green on ${date(lot.dugDay)}.`
-      if (killed && (!died || killed.day <= died.day)) {
+      const kt = S.killTiming(c, lot.field)
+      if (killed && (!died || killed.day <= died.day) && kt.killed >= 0 && kt.early > 0) {
+        end = ` In ${name} the vines were killed on ${date(killed.day)}, ${F.plural(kt.early, 'day')} before they were due: the tubers had not finished sizing.`
+      } else if (killed && (!died || killed.day <= died.day) && kt.killed >= 0 && kt.asked >= 0) {
+        end = ` In ${name} the vines were killed on ${date(killed.day)}, when the season asked for it: a share of small tubers is the price of skins set before the frost.`
+      } else if (killed && (!died || killed.day <= died.day)) {
         end = blight && blight.day <= killed.day
           ? ` In ${name} the vines were killed on ${date(killed.day)} with blight in the field: the kill gave up size to save the tubers from blight.`
           : ` In ${name} the vines were killed on ${date(killed.day)}: each week they stand adds size, and each week risks blight and frost.`
@@ -559,7 +572,7 @@ function reckoning(ctx: Ctx, lotId: number): PaperSpec {
         head(losses.length ? `What lost grade: ${F.mass(lost)}` : 'Nothing lost grade'),
         losses.length ? h('table', { class: 'losses reck-causes' },
           h('tbody', null, losses.map(x => h('tr', null,
-            h('th', { scope: 'row' }, CAUSE_LABEL[x.k]),
+            h('th', { scope: 'row' }, term(CAUSE_LABEL[x.k])),
             h('td', { class: 'num' }, `−${F.mass(x.cwt)}`),
             h('td', null, h('span', { class: 't-label' }, x.k === 'skin' ? 'Downgraded' : CULLED.includes(x.k) ? 'Culled' : 'Down to No. 2'), h('p', null, why(ctx, c, lot, x.k))))))) : h('p', null, 'Every tuber made a grade. A clean dig.')),
       never.length ? h('section', { class: 'reck-part' },
@@ -881,7 +894,7 @@ export function ticket(ctx: Ctx, lotId: number, o: { fresh: boolean; staged?: bo
           h('table', { class: 'losses' },
             h('caption', { class: 't-label' }, losses.length ? 'The largest losses' : 'Losses'),
             h('tbody', null, losses.length ? losses.slice(0, 3).map(x => h('tr', null,
-              h('th', { scope: 'row' }, CAUSE_LABEL[x.k]), h('td', { class: 'num' }, `−${F.mass(x.cwt)}`), h('td', null, phrase(ctx, c, lot, x.k))))
+              h('th', { scope: 'row' }, term(CAUSE_LABEL[x.k])), h('td', { class: 'num' }, `−${F.mass(x.cwt)}`), h('td', null, phrase(ctx, c, lot, x.k))))
               : h('tr', null, h('td', { colspan: 3 }, 'Every tuber made a grade. A clean dig.')))),
           box))
 

@@ -8,8 +8,7 @@ import { count, patch, type Ctx } from './core.ts'
 import { h, type Child } from './dom.ts'
 import * as F from './fmt.ts'
 import { icon } from './icons.ts'
-import { BLIGHT_RISK, forecastSky, plantingIn, SKY_WORD, yearName } from './rules.ts'
-import { term } from './glossary.ts'
+import { BLIGHT_RISK, firstName, forecastSky, JOB_VERB, plantingIn, SKY_WORD, yearName } from './rules.ts'
 import { fist } from './system/parts.ts'
 
 export const PHASE_LABEL: Record<S.Phase, string> = {
@@ -120,9 +119,58 @@ function progressText(g: Goal): string {
   return g.progress ? (g.progress.of === 100 ? `${g.progress.n}%` : `${g.progress.n}/${g.progress.of}`) : ''
 }
 
+// The one figure that answers "am I all right?" through a season: what the farm would have after the year-end bills
+// if every lot and the crop in the ground sold today (S.moneyNow), with how it is made up.
+// Before the tubers set there is no crop to count: the figure is then what the year end takes before the crop pays,
+// said as that, not as a verdict.
+export function outlook(ctx: Ctx, c: S.Campaign): { figure: number; why: string; label: string; before: boolean } {
+  const m = S.moneyNow(ctx.app.world, c)
+  const figure = Math.round(m.after / 100) * 100
+  const s = c.season
+  const unset = s ? s.fields.filter((f, i) => S.isField(c, i) && (f.status === 'growing' || f.status === 'planted' || f.status === 'idle') && !S.estimateYield(c, i)).length : 0
+  const before = m.growing <= 0 && m.stored <= 0 && unset > 0
+  const parts = m.parts.map(p => `${p.label} ${F.money(Math.round(p.amount))}`)
+  const verdict = before ? 'The crop has not set yet, so nothing is counted for it: this is what the crop has to make up by the year end.'
+    : figure >= 0 ? 'The year would end in the black.'
+      : figure >= S.CREDIT_LIMIT ? `The year would end in debt, inside the bank's limit of ${F.money(S.CREDIT_LIMIT)}: it carries the debt at interest.`
+        : `The year would end past the bank's limit of ${F.money(S.CREDIT_LIMIT)}: it would call the note.`
+  const early = unset && !before ? ` ${F.upper(F.plural(unset, 'field'))} not yet setting tubers ${unset === 1 ? 'counts' : 'count'} for nothing yet.` : ''
+  return { figure, before, label: before ? 'Year end before the crop: ' : 'Year end, sold today: ', why: `${before ? 'As things stand' : 'If everything sold today'}: ${parts.join('; ')}. ${verdict}${early}` }
+}
+
+// Said before logs are sold: the buildings not yet up that would take them, and what buying them back costs.
+export function logsWanted(c: S.Campaign): string {
+  const want = S.BUILDING_KINDS.filter(k => S.BUILDINGS[k].logs > 0 && !S.buildingAt(c, k, S.HOME_YARD))
+    .map(k => ({ name: S.BUILDINGS[k].name.toLowerCase(), logs: S.BUILDINGS[k].logs })).sort((a, b) => b.logs - a.logs).slice(0, 2)
+  if (!want.length) return ''
+  return `Keep some for building: ${F.list(want.map(w => `${S.article(w.name)} ${w.name} takes ${w.logs} loads`))}. Bought back, logs cost ${F.money(S.MILL_PRICE)} a load.`
+}
+
+// A goal's when, run into a line: its first word lower-cased, a month's name left as it is.
+const lowerFirst = (t: string) => t ? t[0].toLowerCase() + t.slice(1) : t
+
 const MOMENT_MS = 1600
-// The goals that are a job the crew's routine can put on the list by itself.
+// The goals that are a field's job: put on the list by the player, or by the crew's routine.
 const GOAL_ROUTINE: Record<string, S.JobKind> = { plant: 'plant', walk: 'scout', hill: 'hill', sample: 'sample', dig: 'dig', haul: 'haul', spray: 'spray', kill: 'kill' }
+// The season's calls that are the player's to make (the routine sees to the rest), first to last.
+const CALLS: Partial<Record<string, number>> = { rogue: 0, spray: 1, kill: 2, water: 3 }
+// A call on the slip: what it is, where, why it cannot wait, and the one command that sees to it when there is one.
+interface Call { id: string; act: string; field: number; text: string; why: string; fix: S.Cmd | null; fixLabel: string }
+
+// Brings a control forward once the screen has drawn it: in view, ringed, under the keyboard.
+export function light(selector: string): void {
+  let tries = 0
+  const go = () => {
+    const el = document.querySelector<HTMLElement>(`#ui ${selector.split(', ').join(', #ui ')}`)
+    if (!el) { if (++tries < 20) requestAnimationFrame(go); return }
+    if (el.getAttribute('aria-expanded') === 'false') el.click()
+    el.classList.add('goal-ring')
+    el.scrollIntoView({ block: 'nearest' })
+    el.focus({ preventScroll: true })
+    setTimeout(() => el.classList.remove('goal-ring'), 4000)
+  }
+  requestAnimationFrame(go)
+}
 // The crop's own steps: in spring they wait for the season to start.
 const CROP_STEPS = new Set(['plant', 'walk', 'hill', 'spray', 'sample', 'kill', 'dig', 'haul'])
 
@@ -144,6 +192,11 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
   let met: { goal: Goal; until: number } | null = null
   let fresh = ''
   let pop: '' | 'goals' | 'materials' = ''
+  let callShown = ''
+  let callsFor: unknown = null
+  let callList: Call[] = []
+  let viewFor: unknown = null
+  let viewNow: ReturnType<typeof outlook> | null = null
   const closePop = (e: Event) => { if (pop && !(e.target as HTMLElement).closest?.('.tb-pop, .goal, .materials')) { pop = ''; ctx.dirty() } }
   document.addEventListener('pointerdown', closePop, true)
 
@@ -167,12 +220,15 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     const steps = all.filter(x => !x.long)
     const reached = steps.filter(x => x.done)
     const ahead = steps.filter(x => !x.done && x.id !== g?.id).slice(0, 4)
+    // Every step that can be taken now leads to its control; one the farm cannot pay for says what it costs.
     const row = (x: Goal, cls: string) => h('li', { class: `gl ${cls}`, k: `gl-${x.id}` },
       x.done ? h('i', { class: 'tick on', 'aria-hidden': 'true' }) : cls === 'now' ? fist() : h('i', { class: 'tick', 'aria-hidden': 'true' }),
       h('span', { class: `gl-t${x.done ? ' struck' : ''}` }, x.title),
       x.progress ? h('span', { class: 'gl-n num' }, progressText(x)) : null,
-      cls === 'now' ? h('span', { class: 'gl-why' }, x.why, !x.now ? ` ${x.when}.` : '') : cls === 'later' ? h('span', { class: 'gl-when' }, x.when) : null,
-      cls === 'now' && o.show && o.canShow?.(x) ? h('button', { class: 'btn', type: 'button', testid: 'goal-show', onclick: () => { pop = ''; o.show!(x); ctx.dirty() } }, icon('arrow', 'i'), 'Show me') : null)
+      cls === 'now' ? h('span', { class: 'gl-why' }, x.why, !x.now ? ` ${x.when}.` : '') : cls === 'later' ? h('span', { class: 'gl-when' }, x.block && x.now ? notYet(c, x) : x.when) : null,
+      cls === 'now' && x.block ? h('span', { class: 'gl-when c-red' }, F.localize(x.block)) : null,
+      !x.done && x.now && !x.block && o.show && o.canShow?.(x)
+        ? h('button', { class: 'btn', type: 'button', testid: cls === 'now' ? 'goal-show' : `goal-show-${x.id}`, onclick: () => showGoal(x) }, icon('arrow', 'i'), 'Show me') : null)
     return h('div', { class: 'tb-pop goals-pop sheet', testid: 'goals', role: 'dialog', 'aria-label': 'Goals' },
       h('p', { class: 't-label' }, 'The way ahead'),
       h('ol', { class: 'gls' },
@@ -190,7 +246,8 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     const sell = (loads: number) => { const r = ctx.run({ t: 'sellLogs', loads }); if (r.ok) ctx.announce(F.localize(r.events[0]?.text ?? '')) }
     return h('div', { class: 'tb-pop mat-pop sheet', testid: 'materials-pop', role: 'dialog', 'aria-label': 'Logs and stone' },
       h('p', { class: 'mat-row' }, icon('logs', 'i'), h('b', { class: 'num' }, `${F.num(m.logs, m.logs % 1 && m.logs < 10 ? 1 : 0)} loads of logs`)),
-      h('p', { class: 't-caption' }, `The mill pays ${F.money(m.logPrice)} a load. A building that lacks them buys them back at ${F.money(m.millPrice)}.`),
+      h('p', { class: 't-caption' }, `The mill pays ${F.money(m.logPrice)} a load.`),
+      logsWanted(c) ? h('p', { class: 't-caption c-red', testid: 'logs-wanted' }, logsWanted(c)) : null,
       m.sellWhy ? h('p', { class: 't-caption' }, m.sellWhy) : h('div', { class: 'mat-sell' },
         some >= 1 && some < m.logs - 0.05 ? h('button', { class: 'btn', type: 'button', testid: 'sell-logs-some', onclick: () => sell(some) }, `Sell ${some}`, h('span', { class: 'sub num' }, F.money(some * m.logPrice))) : null,
         h('button', { class: 'btn', type: 'button', testid: 'sell-logs-all', onclick: () => sell(m.logs) }, 'Sell all', h('span', { class: 'sub num' }, F.money(m.logs * m.logPrice)))),
@@ -198,48 +255,105 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
       h('p', { class: 't-caption' }, `For building. Bought at the quarry it costs ${F.money(m.quarryPrice)} a load.`))
   }
 
-  // The canary slip: the one next thing, with the fist; a goal just met is struck through above it.
+  // The season's call that cannot wait for a goal: a field's spray, water, roguing or vine kill, or any work marked
+  // urgent. The one shown stays while it is still wanted, so the slip never swaps between two.
+  // First the simulation's pressing work (not ordered, or nobody will take it), with its one-click fix; then a field's
+  // own call from the advice.
+  function pressing(c: S.Campaign): Call | null {
+    if (c.phase !== 'season' || !c.season) { callShown = ''; return null }
+    // Worked out again only when the farm has changed (the advice is cached on the same revision).
+    const needs = app.needs()
+    if (needs !== callsFor) { callsFor = needs; callList = callsNow(c) }
+    const list = callList
+    if (!list.length) { callShown = ''; return null }
+    const pick = list.find(x => x.id === callShown) ?? list[0]
+    callShown = pick.id
+    return pick
+  }
+
+  function callsNow(c: S.Campaign): Call[] {
+    const urgent: Call[] = S.pressing(app.world, c).map(p => ({
+      id: `p-${p.kind}-${p.field}`, act: p.kind, field: p.field, text: `${JOB_VERB[p.kind]} ${S.FIELD_NAMES[p.field]}`, why: `${F.upper(p.why)}. ${p.inWay}`,
+      fix: p.fix, fixLabel: p.fix?.t === 'job' ? 'Order it' : p.fix?.t === 'priority' ? `${firstName(c.crew.find(u => u.id === (p.fix as { unit: number }).unit)?.name ?? 'Someone')} first` : 'Show me',
+    }))
+    const calls: Call[] = app.needs().map((n, field) => ({ need: n.need!, field }))
+      .filter(x => x.need && x.need.act !== 'close' && x.need.act !== 'wait' && x.need.act !== 'sell' && (CALLS[x.need.act] !== undefined || x.need.urgent))
+      .sort((a, b) => (CALLS[a.need.act] ?? 9) - (CALLS[b.need.act] ?? 9) || Number(b.need.urgent) - Number(a.need.urgent))
+      .map(x => ({ id: x.need.id, act: x.need.act, field: x.field, text: F.localize(x.need.text), why: F.localize(x.need.why), fix: null, fixLabel: 'Show me' }))
+    return [...urgent, ...calls.filter(x => !urgent.some(u => u.act === x.act && u.field === x.field))]
+  }
+
+  function takeCall(call: Call): void {
+    if (call.fix) { const r = ctx.run(call.fix); if (r.ok) ctx.announce(F.localize(r.events[0]?.text ?? `${call.text}: done.`)) }
+    if (call.field >= 0) { app.select(call.field); app.focus(call.field) }
+    ctx.dirty()
+  }
+
+  // Why a goal is not the fist's to point at now, in a few words.
+  function notYet(c: S.Campaign, g: Goal): string {
+    const act = GOAL_ROUTINE[g.id]
+    if (!g.now) return lowerFirst(g.when)
+    if (g.block) return F.localize(g.block).replace(/\.$/, '')
+    if (act && c.season?.jobs.some(j => j.kind === act)) return 'on the list'
+    if (act && S.routineInfo(c).some(r => r.kind === act && r.auto)) return 'the crew sees to it by itself'
+    if (g.id === 'hire') { const why = S.hireRoom(c); if (why) return F.localize(why).replace(/\.$/, '').toLowerCase() }
+    return lowerFirst(g.when)
+  }
+
+  // A goal's "Show me": to the control where it is reached. A foreman is named on the person's card, its key lit.
+  function showGoal(g: Goal): void {
+    pop = ''
+    o.show?.(g)
+    ctx.dirty()
+    if (g.id === 'foreman') light('[data-testid="person-foreman"], .cat-foreman .btn')
+  }
+
+  // The fist's slip: the one next thing, with the fist; a goal just met is struck through above it.
   function goalSlip(c: S.Campaign, g: Goal | null, gone: Goal | null, season: boolean): Child {
     const line = g ?? gone
     if (!line) return null
     // Before the ground is fit, the planting goal says plainly how long it will be, counting down by the day.
     const wait = g && g.id === 'plant' && season && !app.needs().some(n => n.need?.act === 'plant') ? plantingIn(app.world, c) : -1
-    const title = wait > 0 ? `Plant when the soil reaches ${F.temp(10)}` : g?.title ?? ''
+    // The one planting rule (S.plantReady) gives the temperature and the reason, as the field's card and the guide do.
+    const first = season ? c.plans.findIndex((p, i) => S.isField(c, i) && p.crop === 'potato') : -1
+    const ready = wait > 0 && first >= 0 ? S.plantReady(app.world, c, first) : null
+    const title = ready ? `Plant when the soil reaches ${F.temp(ready.need)}` : g?.title ?? ''
     const n = wait > 1 ? `about ${F.plural(wait, 'day')}` : wait === 1 ? 'any day' : g ? progressText(g) : ''
-    const when = !g ? null : !g.now ? h('span', { class: 'goal-when' }, g.when.toLowerCase())
+    const when = !g ? null : !g.now ? h('span', { class: 'goal-when' }, lowerFirst(g.when))
       : c.phase === 'plan' && CROP_STEPS.has(g.id) ? h('span', { class: 'goal-when' }, 'once the season starts')
         : null
     // While the soil warms there is nothing to do but wait: a key beside the slip lets the weeks go by at 3x.
     const faster = wait > 0 && app.speed < 3 && !S.seasonDone(c)
       ? h('button', { class: 'btn goal-go', type: 'button', testid: 'goal-faster', title: ctx.touch() ? undefined : 'The clock stops by itself when there is work (F steps the speed)', onclick: () => app.setSpeed(3) },
         icon('fast', 'i'), 'Let the weeks go: 3×') : null
-    // In the season the fist points only at what can be done now: the goal when it can be reached, or else the field
-    // that wants the player most; a goal out of reach is said quietly, without the fist.
-    const reach = season && g && wait <= 0 ? (o.canShow?.(g) ?? false) : true
-    const call = season && !reach ? app.needs().map((n, i) => ({ n: n.need, i })).find(x => x.n && x.n.act !== 'close' && x.n.act !== 'wait') : undefined
-    if (season && g && !reach) {
-      const act = GOAL_ROUTINE[g.id]
-      const later = !g.now ? g.when.toLowerCase() : act && S.routineInfo(c).some(r => r.kind === act && r.auto) ? 'the crew sees to it by itself' : 'not yet in reach'
+    // The fist points only at what can be done now and paid for: the season's pressing call first (a long goal waits
+    // in the quiet line under it), then the goal when its control can be reached; anything else is said quietly.
+    const reach = !!g && wait <= 0 && g.now && !g.block && (o.canShow?.(g) ?? false)
+    const call = season ? pressing(c) : null
+    const callFirst = call && !(g && reach && GOAL_ROUTINE[g.id] === call.act)
+    if (callFirst || (season && g && !reach && wait <= 0)) {
       const quiet = h('button', {
-        class: 'goal later', type: 'button', testid: 'goal', k: `goal-later-${g.id}`, 'aria-expanded': String(pop === 'goals'), title: ctx.touch() ? undefined : g.why,
+        class: `goal${callFirst ? '' : ' later'}`, type: 'button', testid: 'goal', k: callFirst ? `goal-call-${call!.id}` : `goal-later-${g!.id}`, 'aria-expanded': String(pop === 'goals'),
+        title: ctx.touch() ? undefined : callFirst ? F.localize(call!.why) : g!.why,
         onclick: () => { pop = pop === 'goals' ? '' : 'goals'; ctx.dirty() },
-      }, h('span', { class: 'goal-body' }, h('span', { class: 'sr' }, 'Next goal: '), h('b', { class: 'goal-t' }, call ? F.localize(call.n!.text) : g.title),
-        h('span', { class: 'goal-when' }, call ? `then: ${g.title.toLowerCase()}` : later)),
-      h('span', { class: 'sr' }, `. ${g.why} Open the goals.`))
-      const go = call ? h('button', { class: 'btn goal-go', type: 'button', testid: 'goal-do', onclick: () => { app.select(call.i); app.focus(call.i) } }, icon('arrow', 'i'), 'Show me') : null
-      if (call) quiet.classList.remove('later')
-      if (call) quiet.prepend(fist())
+      }, callFirst ? fist() : null, h('span', { class: 'goal-body' }, h('span', { class: 'sr' }, callFirst ? 'Now: ' : 'Next goal: '),
+        h('b', { class: 'goal-t' }, callFirst ? F.localize(call!.text) : g!.title),
+        callFirst ? (g ? h('span', { class: 'goal-when' }, `then: ${g.title.toLowerCase()}${reach ? '' : `, ${notYet(c, g)}`}`) : null) : h('span', { class: 'goal-when' }, notYet(c, g!))),
+      h('span', { class: 'sr' }, `. ${callFirst ? F.localize(call!.why) : g!.why} Open the goals.`))
+      const go = callFirst ? h('button', { class: 'btn goal-go', type: 'button', testid: 'goal-do', onclick: () => takeCall(call!) }, icon(call!.fix ? 'check' : 'arrow', 'i'), call!.fixLabel) : null
       return go ? h('div', { class: 'goal-row' }, quiet, go) : quiet
     }
-    const doIt = season && g && g.now && wait <= 0 && o.show ? h('button', { class: 'btn goal-go', type: 'button', testid: 'goal-do', onclick: () => { o.show!(g); ctx.dirty() } }, icon('arrow', 'i'), 'Show me') : null
+    const doIt = g && reach && o.show ? h('button', { class: 'btn goal-go', type: 'button', testid: 'goal-do', onclick: () => showGoal(g) }, icon('arrow', 'i'), 'Show me') : null
+    // A goal that waits for another part of the year, or for money the farm has not got, is said without the fist.
+    const quiet = !!g && (!g.now || !!g.block)
     const slip = h('button', {
-      class: `goal${gone ? ' met' : g && g.id === fresh ? ' fresh' : ''}`, type: 'button', testid: 'goal', k: `goal-${g?.id ?? ''}${gone ? `-was-${gone.id}` : ''}`,
-      'aria-expanded': String(pop === 'goals'), title: ctx.touch() || !g ? undefined : g.why,
+      class: `goal${gone ? ' met' : g && g.id === fresh ? ' fresh' : ''}${quiet && !gone ? ' later' : ''}`, type: 'button', testid: 'goal', k: `goal-${g?.id ?? ''}${gone ? `-was-${gone.id}` : ''}`,
+      'aria-expanded': String(pop === 'goals'), title: ctx.touch() || !g ? undefined : ready ? F.localize(ready.why) : g.why,
       onclick: () => { pop = pop === 'goals' ? '' : 'goals'; ctx.dirty() },
     },
     gone ? h('span', { class: 'was struck' }, h('span', { class: 'sr' }, 'Done: '), gone.title) : null,
-    g ? [fist(), h('span', { class: 'goal-body' },
-      h('span', { class: 'sr' }, 'Next goal: '), h('b', { class: 'goal-t' }, title), when),
+    g ? [quiet ? null : fist(), h('span', { class: 'goal-body' },
+      h('span', { class: 'sr' }, 'Next goal: '), h('b', { class: 'goal-t' }, title), quiet ? h('span', { class: 'goal-when' }, notYet(c, g)) : when),
     n ? h('span', { class: 'count goal-n num', testid: wait > 0 ? 'goal-wait' : undefined }, n) : null,
     h('span', { class: 'sr' }, `. ${g.why} Open the goals.`)] : null)
     return faster || doIt ? h('div', { class: 'goal-row' }, slip, faster ?? doIt) : slip
@@ -257,6 +371,8 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     const withClock = season && !low
     const withMenu = !(season && low)
     const { g, met: gone } = goalNow(c)
+    if (season && app.needs() !== viewFor) { viewFor = app.needs(); viewNow = outlook(ctx, c) }
+    const view = season && layout !== 'narrow' ? viewNow : null
     const mats = c.logs >= 0.05 || c.stone >= 0.05
     if (pop === 'materials' && !mats) pop = ''
     const stopped = season && app.speed === 0 && (c.incidents.length > 0 || ctx.awaiting > 0)
@@ -264,7 +380,9 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
       p: c.phase, y: c.year, day: c.season?.day, m: c.month, cash: Math.round(c.cash), sp: app.speed, at: app.resumeSpeed, done: season && S.seasonDone(c) && !ctx.awaiting, layout,
       w: c.season?.watchDay, f: c.season?.log.filter(e => e.type === 'frost').length, u: app.settings.units, t: ctx.touch(), days, withClock, withMenu, stopped,
       g: g ? [g.id, progressText(g), g.now] : 0, gone: gone?.id ?? '', fresh, pop, wait: season && g?.id === 'plant' ? plantingIn(app.world, c) : -1, mats: mats ? [Math.round(c.logs * 10), Math.round(c.stone * 10)] : 0,
-      ladder: pop === 'goals' ? goals(c).map(x => [x.id, x.done, progressText(x)]) : 0, show: pop === 'goals' && g ? !!o.canShow?.(g) : false,
+      ladder: pop === 'goals' ? goals(c).map(x => [x.id, x.done, progressText(x), x.block, x.now && !x.done && !!o.canShow?.(x)]) : 0, reach: g ? !!o.canShow?.(g) : false,
+      call: season ? pressing(c)?.id ?? '' : '', block: g?.block ?? '', view: view?.why ?? '',
+      jobs: season ? [...new Set(c.season!.jobs.map(j => j.kind))].sort().join() : '', auto: season ? S.routineInfo(c).filter(r => r.auto).map(r => r.kind).join() : '',
       k: season || c.phase === 'cellar' ? contracts.key() : 0,
     }
     el.dataset.phase = c.phase
@@ -278,8 +396,9 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
           class: `t-figure cash${c.cash < 0 ? ' neg' : ''}`, testid: 'cash',
           title: ctx.touch() || c.cash >= 0 ? undefined : 'Owed on the spring operating loan: the crop pays it back. The bank calls the note if the year closes too far under.',
         }, h('span', { class: 'sr' }, 'Cash: '), h('span', { class: 'cash-v num' }, F.money(c.cash))),
-        season && !phone ? h('span', { class: 'due num', testid: 'due' },
-          `${F.money(S.NOTE_PAYMENT + S.LIVING + Math.round(S.mortgageInfo(c).principal + S.mortgageInfo(c).interest))} `, term('due', 'due at the year end')) : null)
+        season && !phone && view ? h('span', {
+          class: `due outlook term num${view.before ? '' : view.figure < S.CREDIT_LIMIT ? ' c-red' : view.figure < 0 ? ' c-ochre' : ' c-green'}`, testid: 'outlook', tabindex: '0', 'data-tip': view.why,
+        }, view.label, h('b', null, F.money(view.figure)), h('span', { class: 'sr' }, `. ${view.why}`)) : null)
       return [
         h('section', { class: 'almanac', 'aria-label': 'Date, weather and the next goal' },
           h('div', { class: 'mount' },
