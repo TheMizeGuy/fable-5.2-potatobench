@@ -59,15 +59,15 @@ build 4, pack 3.
 | Slow and sure | 10% slower; never injured |
 | Homebody | Will not work winters |
 
-**Tiredness.** A full day's work adds 0.07 (less for part days). A day with no
-work takes off 0.3. Above 0.6, speed falls in a straight line to 30% less at 1.
+**Tiredness.** A full day's work adds 0.08 (less for part days). A day with no
+work takes off 0.15. Above 0.6, speed falls in a straight line to 60% less at 1.
 Above 0.85, woods and machine work risk an injury (section 6). **Sundays off** is
 a farm rule, on by default: nobody works Sundays. Turning it off gains a day a
 week and tires everyone.
 
 **Mood.** Starts at 0.7 and moves each day 5% of the way to a target: 0.7, plus
-0.1 for a bed in the bunkhouse (hired people), plus or minus 0.1 for each 10% the
-wage is above or below what they asked, minus 0.6 × (tiredness above 0.5), plus
+0.2 for a bed in the bunkhouse (hired people), plus or minus 0.1 for each 10% the
+wage is above or below what they asked, minus 1 × (tiredness above 0.5), plus
 0.02 for each field brought in this season. Work goes at 0.85 + 0.25 × mood of
 its speed. Seven days running below 0.25 and a hired person quits. `{ t: 'raise',
 unit, wage }` changes a wage.
@@ -99,7 +99,7 @@ foreman.
 
 **Harvest-break pickers.** From September 20 to October 10, while the schools
 are closed for the harvest, `{ t: 'pickers', on }` hires a picking crew by the
-day (about $160 a day). While they are on, every dig goes 40% faster.
+day (about $90 a day). While they are on, every dig goes 50% faster.
 
 **Winter.** `{ t: 'winter', unit, work, field? }` sets what a person does from
 November to May: `off` (laid off, unpaid, back in spring), `woods` (felling a
@@ -112,7 +112,7 @@ keep their skills over a layoff; people who are dismissed or quit are gone.
 
 **Buying and renting** is as `docs/DIRECTION.md` describes, with one change:
 buying takes a quarter down and the rest goes on a **land mortgage**. Each year
-end the bank takes, on top of the note, a tenth of each purchase's loan and 8%
+end the bank takes, on top of the note, 7% of each purchase's loan and 6%
 interest on what is still owed. `{ t: 'payMortgage', amount }` pays extra in
 spring. Expansion on credit can lose the farm.
 
@@ -154,7 +154,7 @@ wet hours and half its frost offset, and loses 3% more water to the wind. It
 grows back after four years.
 
 **Tile drainage** (`{ t: 'tile', field }`, bottom land only, a contractor, a fee,
-about eight season days): the field drains like mid-slope ground and holds 6%
+about eight season days): the field drains like mid-slope ground and holds 3%
 less water in a drought.
 
 ## 3. Materials
@@ -177,14 +177,14 @@ Dufour land is held.
 
 | Building | Cash | Logs | Stone | Crew-days | What it does, and its catch |
 | --- | --- | --- | --- | --- | --- |
-| Potato house | $9,000 | 30 | 25 | 30 | Storage for 3,600 cwt at that yard. Replaces the old `house2`. |
-| Machine shed | $4,500 | 20 | 10 | 16 | Machine work 10% faster; needed before a second or third tractor; halves breakdowns. |
+| Potato house | $7,000 | 30 | 25 | 30 | Storage for 3,600 cwt at that yard. Replaces the old `house2`. |
+| Machine shed | $4,500 | 20 | 10 | 16 | Machine work 15% faster; needed before a second or third tractor; halves breakdowns. |
 | Bunkhouse | $3,500 | 16 | 8 | 12 | Houses six hired people (two live out without it) and lifts their mood. |
-| Packing shed | $12,000 | 24 | 15 | 24 | In winter, people set to `pack` each pack up to 600 cwt a month from store. Packed No. 1 brings 8% more and B size 0.75 of the No. 1 price, less a charge a hundredweight. Unpacked stock sells as before. |
+| Packing shed | $8,000 | 24 | 15 | 24 | In winter, people set to `pack` each pack up to 800 cwt a month from store. Packed No. 1 brings 15% more and B size 0.75 of the No. 1 price, less a charge a hundredweight. Unpacked stock sells as before. |
 | Irrigation pond | $6,000 | 0 | 30 | 20 | Home yard. Holds six field-waterings; a home or intervale field waters in a third of a day for little. It fills from rain and the brook; when the last 30 days brought under 40 mm the brook runs low and it empties. |
-| Farm stand | $600 | 4 | 0 | 4 | From August 1 it sells about 4 cwt a day from the newest lot at twice the market price, 2.4 times for red and yellow varieties and for thin-skinned new potatoes before September 5. |
-| Weather station | $1,800 | 0 | 0 | 1 | The forecast's errors are 40% smaller, and each field shows today's blight risk from its own wet hours. |
-| Gravelled road | $1,500 | 0 | 60 | 12 | Travel and hauling 20% quicker. |
+| Farm stand | $600 | 4 | 0 | 4 | From August 1 it sells about 6 cwt a day from the newest lot at twice the market price, 2.4 times for red and yellow varieties and for thin-skinned new potatoes before September 5. |
+| Weather station | $1,000 | 0 | 0 | 1 | The forecast's errors are 40% smaller, and each field shows today's blight risk from its own wet hours. |
+| Gravelled road | $1,500 | 0 | 40 | 12 | Travel and hauling 30% quicker. |
 
 Equipment (bought, not built): a second and a third tractor (each needs the
 machine shed), a truck (hauls at twice a tractor's rate and frees the tractor),
@@ -211,7 +211,7 @@ default.
 | Incident | Choices |
 | --- | --- |
 | Someone asks for work (name, skills, trait, wage) | Hire, or not |
-| A neighbour offers your best hand more money | Match it (wage up 15%), or lose them if their mood is under 0.6 |
+| A neighbour offers your best hand more money | Match it (wage up 15%), or lose them if their mood is under 0.7 |
 | A tractor breaks down (likelier with long hours and no machine shed) | Three days out, or pay for a rush part; someone with machine 7 has it going in a day |
 | Someone is hurt (only when working tired in the woods or on a machine) | Out five to ten days; no choice, but rest prevents it |
 | A buyer stops in with an offer for a lot at 10% over the market, this week only | Take it, or not |
@@ -229,8 +229,8 @@ text above was silent, or two of its rules collided, the build chose as follows.
 
 **People.**
 
-- *Part days of tiredness.* A part day moves tiredness by 0.07 x the share of the
-  day worked minus 0.3 x the share not worked, so the two ends the text gives are
+- *Part days of tiredness.* A part day moves tiredness by 0.08 x the share of the
+  day worked minus 0.15 x the share not worked, so the two ends the text gives are
   one rule, and a short job does not stop someone resting.
 - *Hiring by kind stays.* `{ t: 'hire', kind: 'hand' | 'operator' }` takes
   someone from the hiring hall: average at that work (level 5), at the old wage,
@@ -270,7 +270,7 @@ text above was silent, or two of its rules collided, the build chose as follows.
 - *"Ruinous in the growing season".* Felling is allowed in the season, at half
   speed; in winter it goes at full speed. The text's wish that it be winter work
   is kept by the price, not a ban.
-- *Stumping fee* $3,000; *tile* $4,000. Both are paid when ordered (spring or
+- *Stumping fee* $6,000; *tile* $1,000. Both are paid when ordered (spring or
   season) and count season days; tile goes only under the farm's own bottom land
   with no crop in the ground.
 - *Stones slow work relative to the home farm's 0.25*, so the old job times hold
@@ -297,7 +297,7 @@ text above was silent, or two of its rules collided, the build chose as follows.
 - *Buildings are paid from cash*, like equipment and land's down payment; the bank
   does not lend for them.
 - *The old second potato house.* `{ t: 'buy', upgrade: 'house2' }` still works: a
-  contractor puts up the home house at once for $18,000, against about $9,000 and
+  contractor puts up the home house at once for $18,000, against about $7,000 and
   materials and 30 crew-days of the farm's own work. Either way `upgrades.house2`
   is true once a second house stands at home.
 - *The stand's catch.* The text gives none; as built, someone minds it for a fifth
@@ -318,9 +318,9 @@ text above was silent, or two of its rules collided, the build chose as follows.
 
 **Incidents.**
 
-- *Rates.* Someone asking for work 1.2% a day, a neighbour's offer 0.6%, a buyer
+- *Rates.* Someone asking for work 1.2% a day, a neighbour's offer 1%, a buyer
   1% (from August, with a weighed lot of 100 cwt or more), a breakdown 0.4% a
-  tractor-day times (1 + 2 x the driver's tiredness), an injury 5% a day of
+  tractor-day times (1 + 3 x the driver's tiredness), an injury 5% a day of
   woods or machine work while worn out (above 0.85). In play that is a handful
   a season, more on a farm worked hard with Sundays on.
 - *Who answers what.* The last choice of each is its default (not hired, not
