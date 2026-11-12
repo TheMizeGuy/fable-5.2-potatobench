@@ -339,7 +339,7 @@ describe('random command sequences', () => {
           expect(close(left + soldNow, before.have) || (left === 0 && before.have - soldNow < 0.5), `kept ${left} of ${before.have} after selling ${soldNow}`).toBe(true)
         }
       }
-    }), { numRuns: Number(process.env.PROPERTY_RUNS ?? 150) })
+    }), { numRuns: Number(process.env.PROPERTY_RUNS ?? 400) })
   }, 600_000)
 
   it('reached the harvest, the cellar and the ledger along the way', () => {
