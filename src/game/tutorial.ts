@@ -23,6 +23,8 @@ export interface Look {
   stopped?: string
   // A question on the screen that is not a telegram: 'spray' while the season's spraying question is up.
   asking?: string
+  // The spring catalogue's fold open now ('crew', 'land', ...), or ''.
+  fold?: string
 }
 
 // Where a lesson points: a control by its test id (the first of several that is on screen), a field's tag, a field's
@@ -67,6 +69,8 @@ export interface Lesson {
   paper?: string
   // The facts it is done by, forgotten when it is replayed so that doing it again is what passes it.
   uses?: string[]
+  // Follows at once the click that opened what it is about, without the pause between lessons.
+  follows?: boolean
 }
 
 export const KEY = 'the-county/tutorial'
@@ -136,13 +140,13 @@ const owed = () => `$${(S.NOTE_PAYMENT + S.LIVING).toLocaleString('en-US')}`
 const tract = (l: Look) => S.TRACTS.find(i => l.c && l.c.fields[i].tenure !== 'none' && (l.c.fields[i].cover === 'woods' || l.c.fields[i].cover === 'brush')) ?? -1
 
 // A lesson that asks for the order a field's stamp gives, the first time reference practice calls for it.
-function order(o: { id: string; act: S.JobKind; name: string; did: (l: Look) => boolean; ask: (l: Look, f: string) => string; why: string }): Lesson {
+function order(o: { id: string; act: S.JobKind; name: string; did: (l: Look) => boolean; ask: (l: Look, f: string) => string; why: string | ((l: Look, i: number) => string) }): Lesson {
   return {
     id: o.id, part: 'year', name: o.name, holds: true,
     when: l => inSeason(l) && needFor(l, o.act) >= 0,
     done: l => jobOn(l, o.act) || o.did(l),
     ask: l => o.ask(l, name(Math.max(0, needFor(l, o.act)))),
-    why: () => o.why,
+    why: l => typeof o.why === 'string' ? o.why : o.why(l, needFor(l, o.act)),
     point: l => { const i = needFor(l, o.act); return i >= 0 ? { badge: i } : null },
   }
 }
@@ -164,8 +168,9 @@ export const LESSONS: Lesson[] = [
     id: 'begin', part: 'opening', name: 'Start the first season',
     when: l => l.screen === 'plan' && !!l.c && l.c.history.length === 0,
     done: l => !!l.c && (l.c.phase !== 'plan' || l.c.history.length > 0),
-    ask: l => by(l, 'The plan is already a sound one. Press Start the season.', 'The plan is already a sound one. Tap Start the season.', 'The plan is already a sound one. Enter starts the season.'),
-    why: () => 'Seed, people and land can wait for next spring. This year is for learning the crop.',
+    ask: l => by(l, 'This is a usual first year\'s plan. Press Start the season.', 'This is a usual first year\'s plan. Tap Start the season.', 'This is a usual first year\'s plan. Enter starts the season.'),
+    // The spring sheet's range (src/ui/usual-year.ts): 80 farms played by the coach's advice.
+    why: () => `A first year usually ends $4,000 to $24,000 down: the note and the household take ${owed()} whatever the crop.`,
     point: () => ({ testid: ['begin-season'] }),
   },
   {
@@ -178,8 +183,8 @@ export const LESSONS: Lesson[] = [
   },
   {
     id: 'watch', part: 'opening', moment: true, holds: true, name: 'Watch the first planting', uses: ['pan', 'zoom'],
-    // The routine lists planting by the one planting rule; a planting already begun counts too, for a quick crew.
-    when: l => inSeason(l) && !anyField(l, f => f.emergeDay >= 0) && (jobOn(l, 'plant') || anyField(l, f => f.plantDay >= 0 && (l.c?.season?.day ?? 0) - f.plantDay <= 3)),
+    // Planting under way, not an order waiting for warm soil.
+    when: l => inSeason(l) && !anyField(l, f => f.emergeDay >= 0) && (!!l.c?.season?.jobs.some(j => j.kind === 'plant' && j.done > 0) || anyField(l, f => f.plantDay >= 0 && (l.c?.season?.day ?? 0) - f.plantDay <= 3)),
     done: (l, g, since) => g.has('pan') || g.has('zoom') || (!!since && !!l.c?.season && l.c.season.day >= since.d + 3),
     ask: l => {
       const a = auto(l, 'plant') ? 'Planting has begun with no order: routine work starts by itself.' : 'Planting has begun.'
@@ -347,7 +352,12 @@ export const LESSONS: Lesson[] = [
   order({
     id: 'kill', act: 'kill', name: 'Kill the vines', did: l => anyField(l, f => f.killDay >= 0),
     ask: (l, f) => `The crop in ${f} is made. ${click(l)} its stamp to kill the vines.`,
-    why: 'It is a trade: small tubers stay small, but the skins set in two weeks and frost cannot reach the crop.',
+    why: (l, i) => {
+      // The day the crew kills them by itself, as the list's "cannot wait" words it (S.pressing).
+      const p = l.c && i >= 0 ? S.pressing(l.world, l.c).find(x => x.kind === 'kill' && x.field === i) : undefined
+      const day = p?.inWay.match(/kills the vines on ([A-Z][a-z]+ \d+)/)?.[1]
+      return `A trade: small tubers stay small, but skins set in two weeks and frost cannot reach them.${day ? ` Left alone, the crew kills them on ${day}.` : ''}`
+    },
   }),
   {
     id: 'owed', part: 'year', name: 'What the year end takes', read: true,
@@ -389,8 +399,12 @@ export const LESSONS: Lesson[] = [
     id: 'cellar', part: 'year', name: 'Winter in the cellar',
     when: l => l.screen === 'cellar' && !!l.c,
     done: (l, _g, since) => !!since && !!l.c && (l.c.phase !== 'cellar' || l.c.month > since.m),
-    ask: () => 'Winter. Sell stored potatoes when the price suits you, then go on a month.',
-    why: () => 'Each month the price moves, storage costs a little and the piles shrink. Spring sprouting ends it.',
+    ask: l => !l.c || S.openLots(l.c).length > 0
+      ? 'Winter. Sell stored potatoes when the price suits you, then go on a month.'
+      : 'Winter. The cellar is empty, so the year can close: press Close the year.',
+    why: l => !l.c || S.openLots(l.c).length > 0
+      ? 'Each month the price moves, storage costs a little and the piles shrink. Spring sprouting ends it.'
+      : 'With a crop in store, each winter month would be a chance to sell at a better price.',
     point: () => ({ testid: ['month-next'] }),
   },
   {
@@ -437,6 +451,14 @@ export const LESSONS: Lesson[] = [
     ask: l => `${l.input === 'touch' ? 'Tap' : 'Open'} People: who is asking for work, and what each is best at.`,
     why: () => 'A hand works the list beside you. Wages are paid every month of the season.',
     point: () => ({ testid: ['crew-open'] }),
+  },
+  {
+    id: 'hire', part: 'spring', name: 'Choose a hand', read: true, follows: true,
+    when: (l, g) => l.screen === 'plan' && l.fold === 'crew' && g.passed('people') && !!l.c && l.c.crew.length === 1,
+    done: (l, g, since) => g.has('noted:hire') || (!!l.c && l.c.crew.length > 1) || (!!since && l.fold !== 'crew'),
+    ask: l => `Each asks a wage a month. ${by(l, 'Press Hire beside the one you want.', 'Tap Hire beside the one you want.', 'Tab to Hire beside the one you want.')}`,
+    why: () => 'Their best work is marked. Nobody is needed: you can farm alone another year.',
+    point: () => ({ testid: ['applicant-hire-*', 'hire-*'] }),
   },
   {
     id: 'land', part: 'spring', name: 'Rent or buy land', uses: ['fold:land'],

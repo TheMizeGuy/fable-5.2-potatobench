@@ -223,6 +223,52 @@ describe('the guided first year', () => {
     expect(k.why(look(w, c))).toMatch(/frost/)
   })
 
+  it('says what to do in People as soon as it is open, words winter from what the cellar holds, and promises no good year', () => {
+    expect(lesson('begin')!.ask(look(farm(3).w, farm(3).c))).not.toMatch(/sound/)
+    expect(lesson('begin')!.why(look(farm(3).w, farm(3).c))).toMatch(/usually ends \$4,000 to \$24,000 down: the note and the household take \$19,000/)
+    const hire = lesson('hire')!
+    expect(hire.follows).toBe(true)
+    const run = guidedYear(99)
+    const { w, c, g } = run
+    expect(c.phase).toBe('plan')
+    g.skipTo('people')
+    expect(g.current(look(w, c, { fold: '' }))?.id).toBe('people')
+    g.note('fold:crew')
+    const open = g.current(look(w, c, { fold: 'crew' }))
+    expect(open?.id).toBe('hire')
+    expect(open?.point?.(look(w, c))).toEqual({ testid: ['applicant-hire-*', 'hire-*'] })
+    expect(g.current(look(w, c, { fold: '' }))?.id).not.toBe('hire')
+    const cellar = lesson('cellar')!
+    const { w: w2, c: c2 } = farm(7)
+    S.apply(w2, c2, { t: 'begin' })
+    until(w2, c2, () => false, () => stamps(w2, c2))
+    for (const lot of S.openLots(c2)) S.apply(w2, c2, { t: 'sell', lot: lot.id, frac: 1 })
+    expect(cellar.ask(look(w2, c2))).toMatch(/Close the year/)
+  })
+
+  it('says the day the crew kills the vines by itself, when the stamp asks for the kill', () => {
+    const k = lesson('kill')!
+    let found = 0
+    for (const seed of [3, 7, 12, 41, 99]) {
+      const { w, c } = farm(seed)
+      S.apply(w, c, { t: 'begin' })
+      const killing = () => S.fieldNeeds(w, c).findIndex(n => n.need?.act === 'kill')
+      until(w, c, () => killing() >= 0, () => S.fieldNeeds(w, c).forEach((n, field) => {
+        if (n.need && n.need.act !== 'kill' && n.need.act !== 'wait' && n.need.act !== 'close' && n.need.act !== 'sell') S.apply(w, c, { t: 'job', kind: n.need.act, field })
+      }))
+      const i = killing()
+      if (i < 0) continue
+      const p = S.pressing(w, c).find(x => x.kind === 'kill' && x.field === i)
+      const why = k.why(look(w, c))
+      expect(why).toMatch(/small tubers stay small/)
+      if (!p) continue
+      const day = p.inWay.match(/on ([A-Z][a-z]+ \d+)/)![1]
+      expect(why).toContain(`the crew kills them on ${day}`)
+      found++
+    }
+    expect(found).toBeGreaterThan(0)
+  })
+
   it('explains the spraying question when it is asked, ahead of why the clock stopped, and lets it go once answered', () => {
     const { w, c } = farm(99)
     const g = new Guide(memory())
