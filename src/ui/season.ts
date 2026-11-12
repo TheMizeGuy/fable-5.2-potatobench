@@ -313,7 +313,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   }
 
   // What floats over the land: nothing on the land is left under it.
-  const floating = () => [card.el, yard.el, person.el, grid.el, incident.el, trayHost.firstElementChild as HTMLElement | null]
+  const floating = () => [card.el, yard.el, person.el, grid.el, incident.el, trayHost.firstElementChild as HTMLElement | null, paused]
   // Read once a frame, before anything on the land is moved, so the frame never forces a second layout.
   let coverCache: DOMRect[] | null = null
   const covers = (): DOMRect[] => coverCache ?? floating().filter((x): x is HTMLElement => !!x && !x.hidden && x.offsetParent !== null).map(x => x.getBoundingClientRect())
@@ -570,18 +570,9 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       // The time book, its list and the alerts at the foot; the clock with them on a phone.
       const low = [...(crew.children as HTMLCollectionOf<HTMLElement>), clockSlot, notesSlot].filter(vis).map(x => box(x).top)
       const bottom = innerHeight - Math.min(...low, innerHeight) + 6
-      // The bar docked at its edge; on a phone it is a sheet over the foot.
-      const bar = [card.el, yard.el].find(vis)
-      let right = 0, left = 0
-      if (bar && layout !== 'narrow') {
-        const r = box(bar)
-        if (side === 'left') left = r.right + 8
-        else right = innerWidth - r.left + 8
-      }
-      if (bar && layout === 'narrow') return [t, 0, innerHeight - box(bar).top + 6, 0]
-      // A person's page and the work grid stand at the left on a desk: the land is framed beside them.
-      if (layout === 'wide' || layout === 'mid') for (const x of [person.el, grid.el]) if (vis(x)) left = Math.max(left, box(x).right + 8)
-      return [t, right, bottom, left]
+      // Only what always stands frames the land: a bar, a page or the grid opening on a click never moves the camera
+      // (the bar steps to the other side of what it belongs to instead; tags under a card stand aside).
+      return [t, 0, bottom, 0]
     },
     frame: () => { coverCache = null; coverCache = covers(); placeBar(); P.frame(); placeYards(); people.frame(); drawSelection(); coverCache = null },
     dispose() {

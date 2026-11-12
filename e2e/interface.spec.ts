@@ -112,9 +112,18 @@ test('only the orders that can be given are offered, and one that cannot says wh
   await expect(items.first()).toContainText('Planting North Ridge')
   await items.nth(1).click({ modifiers: ['Control'] })
   await expect(items.first()).toContainText('Planting Upper Middle')
+  // A click on an order only opens its choices; its cross takes it off, says so, and the slip puts it back.
   await items.first().click()
+  expect((await look(page)).queue).toBe(2)
+  await page.locator('#ui .queue [data-testid^="list-x-"]').first().click()
   await expect.poll(async () => (await look(page)).queue).toBe(1)
   await expect(items.first()).toContainText('Planting North Ridge')
+  const undo = page.locator('#ui [data-testid="alert"]', { hasText: 'taken off the list' })
+  await expect(undo).toBeVisible()
+  await undo.click()
+  await expect.poll(async () => (await look(page)).queue).toBe(2)
+  await page.locator('#ui .queue [data-testid^="list-x-"]').last().click()
+  await expect.poll(async () => (await look(page)).queue).toBe(1)
   // A resting field offers nothing and says so in one line.
   await page.getByTestId('field-1').click()
   await expect(orders).toHaveCount(0)

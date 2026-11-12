@@ -193,7 +193,7 @@ export const mountHud: MountHud = (root, app, view, sound) => {
         // The clock stopped itself for something nothing on screen has said: say what.
         const c = app.campaign
         if (e.speed === 0 && app.pauseReason && app.screen === 'season' && c && !S.seasonDone(c) && !papers.isOpen() && !notes.has(app.pauseReason)) {
-          notes.push({ text: `Stopped: ${app.pauseReason}`, level: 'info', ttl: 9000 })
+          notes.push({ text: app.holding ? app.pauseReason : `Stopped: ${app.pauseReason}`, level: 'info', ttl: 9000 })
         }
         dirty = true
         break

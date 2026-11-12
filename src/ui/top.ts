@@ -202,7 +202,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     // Before the ground is fit, the planting goal says plainly how long it will be, counting down by the day.
     const wait = g && g.id === 'plant' && season && !app.needs().some(n => n.need?.act === 'plant') ? plantingIn(app.world, c) : -1
     const title = wait > 0 ? `Plant when the soil reaches ${F.temp(10)}` : g?.title ?? ''
-    const n = wait > 0 ? `about ${F.plural(wait, 'day')}` : g ? progressText(g) : ''
+    const n = wait > 1 ? `about ${F.plural(wait, 'day')}` : wait === 1 ? 'any day' : g ? progressText(g) : ''
     const when = !g ? null : !g.now ? h('span', { class: 'goal-when' }, g.when.toLowerCase())
       : c.phase === 'plan' && CROP_STEPS.has(g.id) ? h('span', { class: 'goal-when' }, 'once the season starts')
         : null
@@ -210,6 +210,24 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     const faster = wait > 0 && app.speed < 3 && !S.seasonDone(c)
       ? h('button', { class: 'btn goal-go', type: 'button', testid: 'goal-faster', title: ctx.touch() ? undefined : 'The clock stops by itself when there is work (F steps the speed)', onclick: () => app.setSpeed(3) },
         icon('fast', 'i'), 'Let the weeks go: 3×') : null
+    // In the season the fist points only at what can be done now: the goal when it can be reached, or else the field
+    // that wants the player most; a goal out of reach is said quietly, without the fist.
+    const reach = season && g && wait <= 0 ? (o.canShow?.(g) ?? false) : true
+    const call = season && !reach ? app.needs().map((n, i) => ({ n: n.need, i })).find(x => x.n && x.n.act !== 'close' && x.n.act !== 'wait') : undefined
+    if (season && g && !reach) {
+      const later = !g.now ? g.when.toLowerCase() : 'not yet in reach'
+      const quiet = h('button', {
+        class: 'goal later', type: 'button', testid: 'goal', k: `goal-later-${g.id}`, 'aria-expanded': String(pop === 'goals'), title: ctx.touch() ? undefined : g.why,
+        onclick: () => { pop = pop === 'goals' ? '' : 'goals'; ctx.dirty() },
+      }, h('span', { class: 'goal-body' }, h('span', { class: 'sr' }, 'Next goal: '), h('b', { class: 'goal-t' }, call ? F.localize(call.n!.text) : g.title),
+        h('span', { class: 'goal-when' }, call ? `then: ${g.title.toLowerCase()}, ${later}` : later)),
+      h('span', { class: 'sr' }, `. ${g.why} Open the goals.`))
+      const go = call ? h('button', { class: 'btn goal-go', type: 'button', testid: 'goal-do', onclick: () => { app.select(call.i); app.focus(call.i) } }, icon('arrow', 'i'), 'Show me') : null
+      if (call) quiet.classList.remove('later')
+      if (call) quiet.prepend(fist())
+      return go ? h('div', { class: 'goal-row' }, quiet, go) : quiet
+    }
+    const doIt = season && g && g.now && wait <= 0 && o.show ? h('button', { class: 'btn goal-go', type: 'button', testid: 'goal-do', onclick: () => { o.show!(g); ctx.dirty() } }, icon('arrow', 'i'), 'Show me') : null
     const slip = h('button', {
       class: `goal${gone ? ' met' : g && g.id === fresh ? ' fresh' : ''}`, type: 'button', testid: 'goal', k: `goal-${g?.id ?? ''}${gone ? `-was-${gone.id}` : ''}`,
       'aria-expanded': String(pop === 'goals'), title: ctx.touch() || !g ? undefined : g.why,
@@ -220,7 +238,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
       h('span', { class: 'sr' }, 'Next goal: '), h('b', { class: 'goal-t' }, title), when),
     n ? h('span', { class: 'count goal-n num', testid: wait > 0 ? 'goal-wait' : undefined }, n) : null,
     h('span', { class: 'sr' }, `. ${g.why} Open the goals.`)] : null)
-    return faster ? h('div', { class: 'goal-row' }, slip, faster) : slip
+    return faster || doIt ? h('div', { class: 'goal-row' }, slip, faster ?? doIt) : slip
   }
 
   function update(): void {
@@ -255,7 +273,9 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
         h('span', {
           class: `t-figure cash${c.cash < 0 ? ' neg' : ''}`, testid: 'cash',
           title: ctx.touch() || c.cash >= 0 ? undefined : 'Owed on the spring operating loan: the crop pays it back. The bank calls the note if the year closes too far under.',
-        }, h('span', { class: 'sr' }, 'Cash: '), h('span', { class: 'cash-v num' }, F.money(c.cash))))
+        }, h('span', { class: 'sr' }, 'Cash: '), h('span', { class: 'cash-v num' }, F.money(c.cash))),
+        season && !phone ? h('span', { class: 'due num', testid: 'due', title: ctx.touch() ? undefined : 'The note on the farm and the household\'s share, taken at the year end' },
+          `${F.money(S.NOTE_PAYMENT + S.LIVING + Math.round(S.mortgageInfo(c).principal + S.mortgageInfo(c).interest))} due at the year end`) : null)
       return [
         h('section', { class: 'almanac', 'aria-label': 'Date, weather and the next goal' },
           h('div', { class: 'mount' },

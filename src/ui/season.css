@@ -46,11 +46,18 @@
 .season-screen .q .i { --i: 18px; }
 .season-screen .q.active { box-shadow: inset 0 0 0 1px var(--ink), inset 0 -3px 0 var(--ink); }
 .season-screen .q.waiting { color: var(--pencil); }
+.season-screen .q .q-by { display: grid; place-items: center; color: var(--ink-2); }
+.season-screen .q .q-by .i { --i: 12px; }
+.season-screen .q.by-you { box-shadow: inset 0 0 0 1px var(--hair), inset 0 -2px 0 var(--pencil); }
 .season-screen .q.more { font: 400 16px/1 var(--f-gothic); letter-spacing: .04em; }
 @media (hover: hover) { .season-screen .q:hover { box-shadow: inset 0 0 0 1px var(--ink), inset 0 0 0 3px var(--paper), inset 0 0 0 4px var(--ink); } }
 .season-screen .q-tag { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; font: 400 13px/1 var(--f-gothic); color: var(--ink);
   background: var(--paper); box-shadow: 0 0 0 1px var(--hair); }
 .season-screen .q-tag.pinned { box-shadow: 0 0 0 2.5px var(--c, var(--ink)), 0 0 0 3.5px #1e1c19; }
+.season-screen .q-x { display: grid; place-items: center; width: 22px; height: 36px; margin-left: -2px; color: var(--ink-2); background: var(--paper); box-shadow: inset 0 0 0 1px var(--hair); }
+.season-screen .q-x .i { --i: 13px; }
+@media (hover: hover) { .season-screen .q-x:hover { color: var(--red); box-shadow: inset 0 0 0 1px var(--red); } }
+.touch .season-screen .q-x { width: 32px; min-height: 40px; }
 .season-screen .q-tools { display: none; position: absolute; left: 50%; bottom: calc(100% + 4px); transform: translateX(-50%); gap: 2px; z-index: 3; }
 .season-screen .q-item:hover .q-tools, .season-screen .q-item:focus-within .q-tools { display: flex; }
 .season-screen .q-first { display: grid; place-items: center; width: 32px; height: 32px; background: var(--paper); box-shadow: var(--laid); }
@@ -127,10 +134,9 @@
 .plate-layer .tag-wrap { z-index: 2; }
 
 /* ---------------------------------------------------------------- the command bar, docked at the edge of the land */
-.season-screen .command { top: calc(var(--top, 220px) + 12px); right: max(var(--gutter), env(safe-area-inset-right, 0px)); max-height: calc(100% - var(--top, 220px) - 28px); }
-.season-screen.is-paused .command { top: calc(var(--top, 220px) + 64px); max-height: calc(100% - var(--top, 220px) - 80px); }
-.season-screen.docked-left .command { right: auto; left: max(var(--gutter), env(safe-area-inset-left, 0px)); max-height: calc(100% - var(--top, 220px) - var(--bottom, 140px) - 24px); }
-.season-screen.docked-left.is-paused .command { max-height: calc(100% - var(--top, 220px) - var(--bottom, 140px) - 76px); }
+/* The bar stands below the paused chip's place whether the clock runs or not: nothing moves when the clock does. */
+.season-screen .command { top: calc(var(--top, 220px) + 64px); right: max(var(--gutter), env(safe-area-inset-right, 0px)); max-height: calc(100% - var(--top, 220px) - 80px); }
+.season-screen.docked-left .command { right: auto; left: max(var(--gutter), env(safe-area-inset-left, 0px)); max-height: calc(100% - var(--top, 220px) - var(--bottom, 140px) - 76px); }
 .season-screen .command.compact { overflow-y: auto; overscroll-behavior: contain; }
 .season-screen .command.compact .order.is-suggested .fist { display: none; }
 /* Docked at the left, the fist points in from the land on its right. */
@@ -190,7 +196,7 @@
 .season-screen[data-layout='mid'].selected .foot { flex-direction: column-reverse; align-items: flex-start; gap: var(--s2); }
 
 /* ---------------------------------------------------------------- people: a page of the time book, the work grid */
-.season-screen .person-card, .season-screen .work { bottom: calc(var(--bottom, 140px) + 8px); max-height: calc(100% - var(--top, 220px) - var(--bottom, 140px) - 24px); overflow-y: auto; overscroll-behavior: contain; }
+.season-screen .person-card, .season-screen .work { bottom: calc(var(--bottom, 140px) + 8px); max-height: calc(100% - var(--top, 220px) - var(--bottom, 140px) - 24px); overflow-y: auto; overscroll-behavior: contain; scroll-padding-bottom: 12px; }
 .season-screen .person-card { left: max(var(--gutter), env(safe-area-inset-left, 0px)); }
 .season-screen .work { left: max(var(--gutter), env(safe-area-inset-left, 0px)); }
 .season-screen .person-card:not([hidden]) ~ .work { left: calc(max(var(--gutter), env(safe-area-inset-left, 0px)) + 468px); }
@@ -221,6 +227,12 @@
 .work .w-foreman { padding: 0 10px; font: italic 400 14px/1.25 var(--f-text); color: var(--ink-2); }
 @media (hover: hover) { .work .cell:hover { background: var(--paper-2); } }
 .work .farm-rules { display: grid; gap: 2px; }
+.work .routine { padding: 4px 0 8px; border-bottom: 1px solid var(--hair); }
+.work .routine-keys { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 6px; }
+.work .routine-keys .btn { min-height: 40px; padding: 0 10px; font-size: 14px; }
+.work .routine-keys .btn .sub { margin-left: 4px; }
+.work .routine-keys .btn.is-on { color: var(--paper); background: var(--ink); box-shadow: none; }
+.work .routine-keys .btn.is-on .sub { color: var(--board-ink); }
 .work .check.rule { width: 100%; text-align: left; }
 .work .check.rule[disabled] { color: var(--ink-2); cursor: default; }
 
@@ -283,7 +295,6 @@
 /* With something selected, its bar is a sheet over the foot and the clock stays at the thumb. */
 .season-screen[data-layout='narrow'].selected .queue, .season-screen[data-layout='narrow'].selected .timebook, .season-screen[data-layout='narrow'].selected .notes-slot { display: none; }
 .season-screen[data-layout='narrow'] .command { left: var(--gutter); right: var(--gutter); width: auto; top: auto; bottom: calc(var(--gutter) + 62px); max-height: min(46%, calc(100% - var(--top, 180px) - 140px)); overflow-y: auto; overscroll-behavior: contain; }
-.season-screen[data-layout='narrow'].is-paused .command { top: auto; max-height: min(46%, calc(100% - var(--top, 180px) - 140px)); }
 .season-screen[data-layout='narrow'].selected .paused { display: none; }
 .season-screen[data-layout='narrow'] .command .gauges .meter { height: 6px; }
 .season-screen[data-layout='narrow'] .command .orders { padding: 8px 10px 10px; }
@@ -350,8 +361,7 @@
 .season-screen[data-layout='short'] .clock-slot.dock .clock { width: 300px; }
 .season-screen[data-layout='short'] .clock-slot.dock .clock .k, .season-screen[data-layout='short'] .clock-slot.dock .clock .menu { height: 46px; }
 .season-screen[data-layout='short'] .notes-slot { position: absolute; left: 0; bottom: calc(100% + 6px); max-width: 50%; }
-.season-screen[data-layout='short'] .command { top: calc(var(--top, 100px) + 6px); bottom: var(--gutter); max-height: none; width: 360px; overflow-y: auto; }
-.season-screen[data-layout='short'].is-paused .command { top: calc(var(--top, 100px) + 54px); max-height: none; }
+.season-screen[data-layout='short'] .command { top: calc(var(--top, 100px) + 54px); bottom: var(--gutter); max-height: none; width: 360px; overflow-y: auto; }
 .season-screen[data-layout='short'] .command .order.is-suggested .fist { display: none; }
 .season-screen[data-layout='short'] .command.compact .orders { grid-template-columns: 1fr; }
 .season-screen[data-layout='short'].selected .queue, .season-screen[data-layout='short'].selected .timebook, .season-screen[data-layout='short'].selected .notes-slot,

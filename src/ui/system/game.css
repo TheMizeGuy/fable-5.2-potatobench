@@ -75,6 +75,9 @@
 .topbar .season-track .bar > u.watch { background: var(--red); opacity: .55; }
 /* the goal slip, a button: open it for the goals; beside it while the soil warms, the key that lets the weeks go */
 .topbar .goal-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+/* a goal not yet in reach: said on plain paper, without the fist */
+.topbar .goal.later { grid-template-columns: 1fr auto; background-color: var(--paper); }
+.topbar .goal.later .goal-t { font-weight: 400; font-style: italic; }
 .topbar .goal-row .goal { flex: 0 1 auto; }
 .topbar .goal-go { min-height: 40px; padding: 0 12px; margin-top: 6px; font-size: 15px; gap: 6px; box-shadow: var(--laid), inset 0 0 0 1px var(--ink); }
 .topbar[data-layout='narrow'] .goal-go, .topbar[data-layout='short'] .goal-go { min-height: var(--touch); margin: 4px 0 0 12px; }
@@ -88,6 +91,8 @@
 @keyframes write { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
 /* the bank board */
 .topbar .balance .cash { white-space: nowrap; }
+.topbar .balance { flex-wrap: wrap; row-gap: 0; }
+.topbar .balance .due { flex-basis: 100%; text-align: right; font: italic 400 14px/1.2 var(--f-text); color: var(--ink-2); }
 .topbar .clock.compact { grid-template-columns: 1fr 1fr 52px; }
 .topbar .clock .k.armed { box-shadow: inset 0 -4px 0 var(--ink); }
 .topbar .clock .k.stopped { color: var(--paper); background: var(--red); }

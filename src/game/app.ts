@@ -24,7 +24,7 @@ export interface Settings {
   quality: Quality
 }
 
-const DEFAULT_SETTINGS: Settings = { units: 'us', sound: true, volume: 0.6, reducedMotion: false, hints: true, pauseOnAlerts: false, quality: 'auto' }
+const DEFAULT_SETTINGS: Settings = { units: 'us', sound: true, volume: 0.6, reducedMotion: false, hints: true, pauseOnAlerts: true, quality: 'auto' }
 
 export type Screen = 'title' | Phase
 
@@ -439,7 +439,15 @@ export class App {
 
   // ---------------------------------------------------------------- the clock
 
+  // Why the clock may not run now (a card that wants an answer), or ''. Set by the interface.
+  holding = ''
+
   setSpeed(speed: Speed): void {
+    if (speed > 0 && this.holding) {
+      this.pauseReason = this.holding
+      this.emit({ type: 'speed', speed: this.speed })
+      return
+    }
     this.pauseReason = ''
     if (this.speed === speed) return
     this.speed = speed
