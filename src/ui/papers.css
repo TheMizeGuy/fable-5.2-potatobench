@@ -396,11 +396,8 @@
 .how-more { margin-top: var(--sp-3); border-top: 1px dotted var(--rule-strong); border-bottom: 1px dotted var(--rule-strong); border-radius: 0; }
 .how-more-box .help-cols { margin-top: var(--sp-3); }
 @media (max-width: 799px) {
-  .how-steps { grid-template-columns: minmax(0, 1fr); gap: var(--sp-3); }
-  .how-steps li { grid-template-columns: 112px minmax(0, 1fr); grid-template-rows: auto 1fr; column-gap: var(--sp-3); }
-  .how-pic { grid-row: span 2; height: 72px; }
-  .how-pic .plate-in { padding: 0 var(--sp-1); }
-  .how-pic .plate-name { font-size: var(--t-small); }
+  .how-steps { grid-template-columns: minmax(0, 1fr); gap: var(--sp-4); }
+  .how-pic { height: 72px; }
   .how-year { grid-template-columns: minmax(0, 1fr); gap: var(--sp-1); }
 }
 

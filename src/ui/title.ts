@@ -1,6 +1,7 @@
 // The opening: the land, the name, one line, Play. The benchmark's credit sits quietly in the corner.
 import { confirmPaper, patch, type Ctx, type Screen } from './core.ts'
 import { h } from './dom.ts'
+import { icon } from './icons.ts'
 import { seasonCount } from './rules.ts'
 import { PHASE_LABEL } from './top.ts'
 
@@ -39,7 +40,7 @@ export function titleScreen(ctx: Ctx, o: { onMenu: () => void; onHelp: () => voi
         h('div', { class: 'title-actions' },
           c ? h('button', { class: 'nbtn primary big', type: 'button', testid: 'continue', onclick: () => { if (!app.continueGame()) ctx.say('The save could not be read.', 'warn') } },
             'Continue', h('span', { class: 'sub num' }, `${seasonCount(c)}, ${PHASE_LABEL[c.phase].toLowerCase()}`)) : null,
-          h('button', { class: `nbtn big${c ? '' : ' primary'}`, type: 'button', testid: 'play', onclick: () => { void startNewFarm(ctx) } }, c ? 'New farm' : 'Play')),
+          h('button', { class: `nbtn big${c ? '' : ' primary'}`, type: 'button', testid: 'play', onclick: () => { void startNewFarm(ctx) } }, c ? 'New farm' : ['Play', icon('play', 'ic s')])),
         h('p', { class: 'title-links' },
           h('button', { class: 'tlink', type: 'button', testid: 'how-open', onclick: () => o.onHelp() }, 'How to play'),
           h('button', { class: 'tlink', type: 'button', testid: 'menu-open', onclick: () => o.onMenu() }, 'Settings')),

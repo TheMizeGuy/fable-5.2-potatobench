@@ -4,6 +4,8 @@
 .title-screen { background: linear-gradient(to top, rgb(16 22 19 / 0.88), rgb(16 22 19 / 0.52) 30%, rgb(16 22 19 / 0) 58%); }
 .title-screen .premise { max-width: 30em; }
 .title-actions .nbtn.big .sub { font-size: var(--t-small); }
+.title-actions .nbtn.big.primary { min-width: 220px; }
+@media (max-width: 519px) { .title-actions .nbtn.big.primary { min-width: 0; } }
 /* The benchmark's credit: quiet, in the corner the name leaves free. */
 .title-credit {
   position: absolute;
@@ -73,7 +75,7 @@
 }
 .fold-ic { color: var(--ink-2); }
 .fold-name { font-weight: 600; white-space: nowrap; }
-.fold-state { min-width: 0; font-size: var(--t-small); line-height: 18px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fold-state { min-width: 0; font-size: var(--t-small); line-height: 18px; color: var(--ink-2); }
 .fold-fig { font-size: var(--t-small); line-height: 18px; font-weight: 600; color: var(--ink-2); white-space: nowrap; }
 .fold-chev { color: var(--ink-3); }
 .fold.open > .fold-row { background: var(--paper-2); }

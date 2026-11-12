@@ -31,7 +31,7 @@ const YEAR: [string, string, string][] = [
   ['bloom', 'Season', 'Plant, hill, spray, dig.'],
   ['ticket', 'Dig day', 'The weigh ticket: sell or store.'],
   ['sprout', 'Winter', 'Sell from the cellar; fell and build.'],
-  ['ticket', 'Year end', 'The bank wants its note.'],
+  ['bank', 'Year end', 'The bank wants its note.'],
 ]
 
 export function openHelp(ctx: Ctx): void {

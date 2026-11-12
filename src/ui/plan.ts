@@ -285,7 +285,7 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
       h('span', { class: 't-label' }, R.seasonCount(c)),
       h('h2', { class: 't-title' }, first ? 'Your first spring' : 'Spring'),
       h('p', { class: 'spring-lede' }, first
-        ? `${said} Click a field on the land to change it, or start.`
+        ? `${said} Click a field to change it.`
         : `${y ? `Last year ended with ${F.money(Math.abs(y.cashEnd))}${y.cashEnd < 0 ? ' owed' : ' in hand'}. ` : ''}${said}`),
     ]
   }
@@ -321,7 +321,7 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
         h('p', { class: `plan-money${over ? ' over' : ''}`, testid: 'plan-money' },
           h('span', { class: 'pm-main' }, 'This plan ', h('strong', { class: 'num' }, F.money(pc.total))),
           pc.rent || pc.wages ? h('span', { testid: 'plan-rent' }, `with ${F.list([pc.rent ? `rent ${F.money(pc.rent)}` : '', pc.wages ? `wages ${F.money(pc.wages)}` : ''].filter(Boolean))}`) : null,
-          h('span', null, over ? 'more than the bank will lend' : after < 0 ? 'on the bank\'s spring loan ' : 'from cash, leaving ', over ? null : h('strong', { class: 'num' }, F.money(Math.abs(after)))),
+          h('span', null, over ? 'more than the bank will lend' : after < 0 ? 'on the spring loan ' : 'from cash, leaving ', over ? null : h('strong', { class: 'num' }, F.money(Math.abs(after)))),
           h('span', null, `due at year end ${F.money(due)}`)),
         h('button', { class: 'tlink', type: 'button', testid: 'money-open', onclick: () => openMoney(ctx) }, 'The money')),
       over ? h('p', { class: 'spring-warn', role: 'alert' }, 'Rest a field or plant saved seed: the bank will not lend more for the spring.') : null,
