@@ -2,8 +2,8 @@
 // with: the models' own sizes times the factor each is drawn at. tests/scale.test.ts holds them to the standard.
 import { S } from './scale.ts'
 
-// People and machines are modelled small (a figure 0.82 tall, the tractor 1.61 long) and drawn at this size close to,
-// which is true size; nothing is ever drawn smaller. People against the machines' scale: FIGURE.
+// People and machines are modelled small (a figure 0.82 tall, the tractor 1.61 long) and drawn at this size, which is
+// true size, whatever the distance. People against the machines' scale: FIGURE.
 export const TRUE_SIZE = 2.1
 export const FIGURE = 1.05
 export const PERSON = { tall: 0.82 * TRUE_SIZE * FIGURE }

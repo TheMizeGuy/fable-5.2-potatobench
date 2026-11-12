@@ -124,6 +124,7 @@ export class Crews {
   private rInfo: InstancedBufferAttribute
   private rCol: InstancedBufferAttribute
   private rings = 0
+  private mark = 1
   private v = new Vector3()
   private frameNo = 0
   private mode = ''
@@ -481,11 +482,12 @@ export class Crews {
     this.rings = 0
     this.ringMat.uniforms.uTime.value = f.time
     const snap = f.snap, env = f.env
-    // People and machines are drawn larger than life as the camera draws back, so that a person never falls below
-    // about fifty pixels on the screen and a tractor about sixty.
+    // People and machines are drawn at true size whatever the distance. What keeps them findable from far off is the
+    // ring at their feet, which never falls below about thirty pixels across.
     const perUnit = this.screenH / (2 * Math.tan((f.camera.fov * Math.PI) / 360)) / Math.max(1, f.dist)
-    const bigMachine = clamp(64 / (1.27 * perUnit), TRUE_SIZE, Math.max(2.9, TRUE_SIZE))
-    const big = clamp(50 / (0.78 * FIGURE * perUnit), TRUE_SIZE, bigMachine * 1.3) * FIGURE
+    const bigMachine = TRUE_SIZE
+    const big = TRUE_SIZE * FIGURE
+    this.mark = Math.max(0.56 * big, 15 / perUnit)
     const cold = env.snow > 0.3
     this.cold = cold
     const going = snap.mode === 'season' ? f.advancing || f.dayT < 1 : snap.mode !== 'title'
@@ -541,7 +543,7 @@ export class Crews {
         if (a.aboard) return
         if (!going) this.idle(a, f, w.pose)
         this.figure(a, w.pose, big, w.lift)
-        this.ring(a.x, heightAt(a.x, a.z), a.z, 0.56 * big, a, f, far)
+        this.ring(a.x, heightAt(a.x, a.z), a.z, this.mark, a, f, far)
       })
     }
 
@@ -565,7 +567,7 @@ export class Crews {
       if (holder && holder.aboard) {
         holder.head.copy(drawn.head)
         holder.scale = s
-        this.ring(r.x, y, r.z, 1.2 * s, holder, f, far)
+        this.ring(r.x, y, r.z, Math.max(1.2 * s, 1.5 * this.mark), holder, f, far)
       }
       if (r.broken && !f.reduced && Math.random() < 0.12) {
         r.machine.point(0.3, 0.95, 0, V)
@@ -677,7 +679,7 @@ export class Crews {
       this.atEase(a, f, pose, big)
       if (a.aboard && rig) { a.x = rig.x; a.z = rig.z; a.heading = rig.heading; return null }
       this.figure(a, pose, big)
-      this.ring(a.x, heightAt(a.x, a.z), a.z, 0.56 * big, a, f, this.far)
+      this.ring(a.x, heightAt(a.x, a.z), a.z, this.mark, a, f, this.far)
       return null
     }
     const span = Math.max(1e-6, seg.end - seg.start)
@@ -784,7 +786,7 @@ export class Crews {
     a.x = px
     a.z = pz
     this.figure(a, pose, big)
-    this.ring(a.x, heightAt(a.x, a.z), a.z, 0.56 * big, a, f, this.far)
+    this.ring(a.x, heightAt(a.x, a.z), a.z, this.mark, a, f, this.far)
     return null
   }
 

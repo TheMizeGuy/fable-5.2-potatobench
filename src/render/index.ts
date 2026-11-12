@@ -103,6 +103,10 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   renderer.setClearColor(0x000000, 1)
   renderer.info.autoReset = false
 
+  // How long each part of the scene took to build, in milliseconds since the view was asked for (for the budget tool).
+  const began = performance.now()
+  const built: [string, number][] = []
+  const lap = (name: string) => built.push([name, Math.round(performance.now() - began)])
   const scene = new Scene()
   const rig = new CameraRig()
   const noise = noiseTexture()
@@ -111,15 +115,22 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   const shadows = new SunShadows(scene)
   const post = new Post(renderer)
   const leafTex = leafTexture(), flowerTex = flowerTexture(), puffTex = puffTexture()
+  lap('textures')
   const terrain = buildTerrain()
+  lap('terrain')
   const flora = new Flora()
+  lap('trees')
   const clearing = new Clearing(flora)
   const pond = new Pond()
   const grass = new Grass()
+  lap('clearing')
   const props = new Props()
+  lap('yards')
   const fields = new Fields(leafTex, flowerTex)
+  lap('fields')
   const harvest = new Harvest()
   const crews = new Crews()
+  lap('crews')
   const particles = new Particles(puffTex)
   const weather = new Weather()
   const birds = new Birds()
@@ -726,10 +737,12 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
 
   rebuild()
   resize()
+  lap('first state')
   const ready = (async () => {
     try {
       renderer.setRenderTarget(post.target)
       await renderer.compileAsync(scene, rig.camera)
+      lap('shaders')
     } catch (err) {
       console.warn('The County: shaders could not be compiled ahead of the first frame.', err)
     }
@@ -826,7 +839,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
         const r = renderer.info.render
         return {
           triangles: r.triangles, calls: r.calls, pixelRatio: renderer.getPixelRatio(), width: canvas.width, height: canvas.height,
-          camera: rig.where(), time, ambient, fall, exposure: lit.exposure, tier, startedAt, fps, drawn: [post.target.width, post.target.height], firstFrame,
+          camera: rig.where(), time, ambient, fall, exposure: lit.exposure, tier, startedAt, fps, drawn: [post.target.width, post.target.height], firstFrame, built,
           spent: { crews: +spent.crews.toFixed(2), update: +spent.update.toFixed(2), draw: +spent.draw.toFixed(2) }, objects: scene.children.reduce((n, c) => { let k = 0; c.traverse(() => k++); return n + k }, 0),
         }
       },
