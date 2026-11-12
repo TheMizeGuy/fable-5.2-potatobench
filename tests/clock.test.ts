@@ -7,8 +7,10 @@ import { loadWorld } from '../tools/balance/world.ts'
 // runs at, and only a card that needs an answer stops it.
 function c0(app: App): S.Campaign { return app.campaign! }
 
+// The clock as a new player has it: "Pause on alerts" off, so only a card stops it.
 function farm(): App {
   const app = new App(loadWorld())
+  app.settings.pauseOnAlerts = false
   app.newGame(undefined, 11)
   app.do({ t: 'begin' })
   return app
@@ -28,6 +30,33 @@ function play(app: App, seconds: number, stop: () => boolean = () => false, answ
 }
 
 describe('the clock', () => {
+  it('runs at the speed set for a new player, and stands while a card says it must', () => {
+    const app = new App(loadWorld())
+    expect(app.settings.pauseOnAlerts).toBe(false)
+    app.newGame(undefined, 11)
+    app.do({ t: 'begin' })
+    app.setSpeed(0)
+    app.holding = 'A telegram wants an answer.'
+    app.setSpeed(2)
+    expect(app.speed).toBe(0)
+    expect(app.pauseReason).toBe('A telegram wants an answer.')
+    app.holding = ''
+    app.setSpeed(2)
+    expect(app.speed).toBe(2)
+  })
+
+  it('goes on by itself once the last telegram is answered, though the interface was holding the clock for it', () => {
+    const app = farm()
+    const c = c0(app)
+    app.setSpeed(2)
+    play(app, 120, () => app.speed === 0 && c.incidents.length > 0, false)
+    expect(c.incidents.length).toBeGreaterThan(0)
+    app.holding = 'A telegram wants an answer.'
+    for (const inc of [...c.incidents]) app.do({ t: 'answer', incident: inc.id, choice: S.defaultChoice(inc) })
+    expect(app.holding).toBe('')
+    expect(app.speed).toBe(2)
+  })
+
   it('has pause and three speeds in step, the fastest still a season in about a minute and a half', () => {
     expect(DAYS_PER_SECOND.length).toBe(4)
     expect(DAYS_PER_SECOND[0]).toBe(0)

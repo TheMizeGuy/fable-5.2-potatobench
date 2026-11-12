@@ -45,7 +45,7 @@ const PIN_CLASS: Record<PinState, string> = { rest: '', picked: ' is-picked', ne
 // label: what a screen reader hears, such as 'Verna, worn out: needs you'. name: show the name tag (when picked).
 // ring: the person's ring colour (ringOf); their shirt when not given. onclick: the pin is a button that picks them.
 // count: a pin standing for several people together, with how many on its badge.
-export function pin(who: { name: string } | string, state: PinState = 'rest', o: { label?: string; name?: boolean; testid?: string; ring?: string; onclick?: (e: Event) => void; count?: number; pressed?: boolean } = {}): HTMLElement {
+export function pin(who: { name: string } | string, state: PinState = 'rest', o: { label?: string; name?: boolean; testid?: string; ring?: string; onclick?: (e: Event) => void; count?: number; pressed?: boolean; onenter?: (e: Event) => void; onleave?: (e: Event) => void } = {}): HTMLElement {
   const look = lookOf(who)
   const name = typeof who === 'string' ? who : who.name
   const kids = [
@@ -59,6 +59,6 @@ export function pin(who: { name: string } | string, state: PinState = 'rest', o:
   const style = `--c:${o.ring ?? look.shirt}`
   // A pin that is a button is named by what it shows, its words for a screen reader after them.
   return o.onclick
-    ? h('button', { class: cls, type: 'button', style, 'aria-pressed': o.pressed === undefined ? null : String(o.pressed), testid: o.testid, onclick: o.onclick }, kids, h('span', { class: 'sr' }, o.label ?? name))
+    ? h('button', { class: cls, type: 'button', style, 'aria-pressed': o.pressed === undefined ? null : String(o.pressed), testid: o.testid, onclick: o.onclick, onpointerenter: o.onenter, onpointerleave: o.onleave }, kids, h('span', { class: 'sr' }, o.label ?? name))
     : h('span', { class: cls, style, role: 'img', 'aria-label': o.label ?? name, testid: o.testid }, kids)
 }

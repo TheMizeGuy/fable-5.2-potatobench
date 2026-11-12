@@ -18,8 +18,9 @@ import { brushedNow, COVER_WORD, fell, isField, standing } from './land.ts'
 import type { Campaign, Cmd, Contract, Due, FieldPlan, GameEvent, Incident, JobKind, Lot, Result, RoutineKind, Season, Unit, UpgradeId, WinterWork, World, YearSummary } from './types.ts'
 import { variety } from './varieties.ts'
 import { dayIndex, withCommas } from './calendar.ts'
-import { finishLot } from './harvest.ts'
+import { ageLot, finishLot } from './harvest.ts'
 import { hasYear } from './weather.ts'
+import { yearLabel } from './climate.ts'
 
 const REST_PLAN: FieldPlan = { crop: 'rest', variety: 'katahdin', seed: 'certified' }
 
@@ -157,9 +158,37 @@ function cost(c: Campaign, amount: number): void {
 }
 
 // Contracts that fall due now: what was not delivered costs CONTRACT_PENALTY of its contract value.
+// Puts US No. 1 and large tubers of a lot against a contract, up to what it still needs. Returns the cwt and the money.
+function deliverLot(c: Campaign, lot: Lot, k: Contract): { take: number; money: number } {
+  if (c.phase === 'season' && c.season) ageLot(c, lot, c.season.day)
+  const have = lot.grades.no1 + lot.grades.chef
+  const take = Math.min(have, Math.max(0, k.cwt - k.delivered))
+  if (take <= 1e-6) return { take: 0, money: 0 }
+  const keep = 1 - take / have
+  lot.grades.no1 *= keep
+  lot.grades.chef *= keep
+  const money = take * k.price
+  k.delivered += take
+  k.paid += money
+  lot.sold += take
+  lot.revenue += money
+  c.cash += money
+  c.yearRevenue += money
+  c.yearContracts += money
+  if (lotCwt(lot) < 0.5) lot.open = false
+  return { take, money }
+}
+
 function settleContracts(c: Campaign, due: Due | 'all', out: GameEvent[]): void {
   for (const k of c.contracts) {
     if (k.settled || (due !== 'all' && k.due !== due)) continue
+    // On the due date the buyer takes what is still owed from the crop in the potato houses, before any shortfall.
+    for (const lot of openLots(c)) {
+      if (k.cwt - k.delivered <= 1e-6) break
+      if (lot.variety !== k.variety || (c.season && c.phase === 'season' && !c.season.fields[lot.field]?.weighed)) continue
+      const d = deliverLot(c, lot, k)
+      if (d.take > 1e-6) out.push(note(c, 'delivered', 'good', `${k.buyer} took ${withCommas(d.take)} cwt of ${variety(k.variety).name} owed on the contract from the potato house, for $${withCommas(d.money)}.`, lot.field))
+    }
     k.settled = true
     const short = k.cwt - k.delivered
     const name = variety(k.variety).name
@@ -234,19 +263,6 @@ function endSeason(world: World, c: Campaign): GameEvent[] {
   return out
 }
 
-// Charges storage and shrinks the pile for the time a lot has sat since it was last accounted for.
-function ageLot(c: Campaign, lot: Lot, toDay: number): number {
-  const months = (toDay - lot.aged) / 30
-  if (months <= 0) return 0
-  const rent = Math.round(lotCwt(lot) * P.STORE_COST * months)
-  const keep = 1 - (c.upgrades.vent ? P.SHRINK_VENT : P.SHRINK) * months
-  lot.grades.no1 *= keep; lot.grades.chef *= keep; lot.grades.b *= keep; lot.grades.no2 *= keep; lot.skinned *= keep
-  lot.aged = toDay
-  c.cash -= rent
-  c.yearCosts += rent
-  c.yearStorage += rent
-  return rent
-}
 
 function storeMonth(c: Campaign, out: GameEvent[]): void {
   const vent = c.upgrades.vent
@@ -588,6 +604,17 @@ function openRoutine(c: Campaign): GameEvent | null {
   if (c.routine) return null
   c.routine = { ...P.ROUTINE_DEFAULT }
   return note(c, 'routine', 'info', 'The crew now works to a routine: planting, hilling, walking the fields, test digs, digging and hauling go on the list by themselves. Spraying, watering and killing the vines are your calls. Each can be switched under Who does what.')
+}
+
+// The year the date falls in now: from January the winter's cellar months, and the ledger closed in spring, are
+// in the year after the season's. The ledger itself is the season's year.
+export function yearNow(c: Campaign): number {
+  return c.year + ((c.phase === 'cellar' && c.month >= 2) || c.phase === 'ledger' ? 1 : 0)
+}
+
+// "Year 2" (or the record's year) for the date now.
+export function yearNowLabel(c: Campaign): string {
+  return yearLabel(yearNow(c))
 }
 
 // Whether this kind of work goes on the list by itself.
@@ -949,21 +976,7 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
       if (c.phase === 'season' && c.season && c.season.fields[lot.field].status === 'digging') return fail('Still being dug.')
       if (c.phase === 'season' && c.season && !c.season.fields[lot.field].weighed) return fail('Still in barrels in the field: it can be delivered once it is hauled in and weighed.')
       if (lot.grades.no1 + lot.grades.chef <= 1e-6) return fail('There is no US No. 1 or large stock left in that lot.')
-      if (c.phase === 'season' && c.season) ageLot(c, lot, c.season.day)
-      const have = lot.grades.no1 + lot.grades.chef
-      const take = Math.min(have, need)
-      const keep = 1 - take / have
-      lot.grades.no1 *= keep
-      lot.grades.chef *= keep
-      const money = take * k.price
-      k.delivered += take
-      k.paid += money
-      lot.sold += take
-      lot.revenue += money
-      c.cash += money
-      c.yearRevenue += money
-      c.yearContracts += money
-      if (lotCwt(lot) < 0.5) lot.open = false
+      const { take, money } = deliverLot(c, lot, k)
       return ok([note(c, 'delivered', 'good', `Delivered ${withCommas(take)} cwt of ${name} from ${FIELD_NAMES[lot.field]} to ${k.buyer.toLowerCase()} for $${withCommas(money)}.`, lot.field)])
     }
     case 'seed': {

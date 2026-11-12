@@ -161,6 +161,11 @@ export function createFallbackView(original: HTMLCanvasElement, app: App): Field
       return r ? [[r.x, r.y], [r.x + r.w, r.y], [r.x + r.w, r.y + r.h], [r.x, r.y + r.h]].map(([x, y]) => ({ x, y, visible: true })) : []
     },
     unitAnchor: () => ({ x: 0, y: 0, visible: false }),
+    unitFoot: () => ({ x: 0, y: 0, visible: false }),
+    thingAnchor: () => ({ x: 0, y: 0, visible: false }),
+    thingAt: () => null,
+    follow() {},
+    home() {},
     yardAnchor: () => ({ x: 0, y: 0, visible: false }),
     dispose() {
       off()

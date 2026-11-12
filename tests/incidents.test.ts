@@ -306,7 +306,10 @@ describe('a buyer', () => {
     const have = S.lotCwt(lot)
     while (c.incidents.some(i => i.id === inc.id)) ok(c, { t: 'day' })
     expect(c.season!.day === inc.until + 1 || c.season!.frozen).toBe(true)
-    expect(S.lotCwt(lot)).toBeCloseTo(have, 6)
+    // The lot stays as it was, but for the potato house's shrink, a night at a time.
+    expect(lot.open).toBe(true)
+    expect(S.lotCwt(lot)).toBeLessThanOrEqual(have)
+    expect(S.lotCwt(lot)).toBeGreaterThan(have * (1 - S.SHRINK * (S.BUYER_DAYS + 2) / 30))
     const d = structuredClone(base)
     ok(d, { t: 'sell', lot: inc.lot!, frac: 1 })
     refused(d, { t: 'answer', incident: inc.id, choice: 'take' }, /gone/)

@@ -160,6 +160,10 @@ export function alertShort(a: Alert): { text: string; glyph: string } {
     case 'brushed': return { text: `${name}brush cut back`, glyph: 'brush' }
     case 'brushBack': return { text: a.text.replace(/\.$/, ''), glyph: 'brush' }
     case 'pondDry': return { text: 'The pond is dry', glyph: 'pond' }
+    case 'frostBarrels': {
+      const cwt = [...a.text.matchAll(/([\d,]+) cwt in /g)].reduce((t, m) => t + Number(m[1].replace(/,/g, '')), 0)
+      return { text: `Frost tonight on ${cwt ? F.localize(`${cwt} cwt`) : 'the crop'} in barrels: hauling it first`, glyph: 'frost' }
+    }
     case 'frozenInField': return { text: `${name}barrels froze${n ? `, ${F.localize(`${n} cwt`)}` : ''}`, glyph: 'frost' }
     case 'weighed': return { text: `${name}weighed in`, glyph: 'ticket' }
     case 'pickers': return { text: a.text.startsWith('A picking') ? 'Pickers hired' : 'Pickers sent home', glyph: 'pickers' }
@@ -327,12 +331,14 @@ export function outlookText(c: S.Campaign): string {
   return `${base} Against today's price that puts November ${F.versus(nov / now)} and April ${F.versus(apr / now)}.`
 }
 
-// Where the price usually stands by April against today, in a phrase, for the weigh ticket.
-export function aprilPhrase(c: S.Campaign, v: S.Variety): string {
-  if (v.contract) return 'off contract it fetches a processing price, which barely moves through the winter'
-  const s = c.season
-  const now = c.phase === 'season' && s ? usualFactor(s.day) : S.MONTH_CURVE[Math.min(c.month, S.MONTH_CURVE.length - 1)]
-  return `by April it is usually ${F.versus(S.MONTH_CURVE[5] / now, 'above today', 'below today').replace('level with', 'level with today')}`
+// What keeping a lot would really bring, in a phrase, from the storage outlook: the best month ahead at the usual
+// prices, after the cellar's charge, shrink and sprouting, against what selling pays today.
+export function storePhrase(o: { now: number; best: S.StoreMonth | null }): string {
+  const b = o.best
+  if (!b) return 'there is no month left to keep it to'
+  const d = b.net - o.now
+  if (d < 0.5) return `after the cellar's charge and shrink no month pays more than today; ${b.name}, the best, about ${F.money(b.net)}`
+  return `kept to ${b.name}, about ${F.money(b.net)} after the cellar's charge and shrink: ${F.money(d)} more than today${b.sprouted ? ', though sprouted' : ''}`
 }
 
 export function storageText(c: S.Campaign, cwt: number): string {

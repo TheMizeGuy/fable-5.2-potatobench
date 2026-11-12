@@ -11,6 +11,7 @@ import { culledAtDig } from './dig.ts'
 import { ringFor } from './crew.ts'
 import { isTract } from './map.ts'
 import { firstName, hillWord, isJob, isStale, JOB_KEY, JOB_VERB, jobText, jobWhat, stonesText, stonesWord } from './rules.ts'
+import { term } from './glossary.ts'
 import { meter, order, range } from './system/parts.ts'
 import { ringed } from './system/people.ts'
 
@@ -107,7 +108,8 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
     // What is already on the list for the selection stays in its place, stamped, so the answer to an order is seen.
     for (const j of s.jobs) {
       if (!sel.includes(j.field) || by.has(j.kind) || j.kind === 'build' || j.kind === 'haul') continue
-      by.set(j.kind, { kind: j.kind, fields: [j.field], days: 0, cost: 0, score: 5, given: true })
+      const f = sel.length === 1 ? S.fieldInfo(c, sel[0]) : null
+      by.set(j.kind, { kind: j.kind, fields: [j.field], days: 0, cost: 0, score: f ? score(j.kind, f, s, needs[sel[0]]?.need?.act === j.kind) : 5, given: true })
     }
     return S.JOBS.filter(k => by.has(k)).map(k => by.get(k)!)
   }
@@ -179,7 +181,7 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
     if (suggestedWhy) return suggestedWhy
     if (!f) return jobWhat(kind)
     switch (kind) {
-      case 'plant': { const t = S.today(app.world, c); return `Soil ${F.temp((t ? t.soilT : 0) + S.SOIL_T_OFFSET[f.elev])} here; seed wants ${F.temp(10)}.` }
+      case 'plant': { const hold = app.needs()[f.index]?.hold; if (hold) return F.localize(hold.why); const t = S.today(app.world, c); return `Soil ${F.temp((t ? t.soilT : 0) + S.SOIL_T_OFFSET[f.elev])} here; seed wants ${F.temp(10)}.` }
       case 'hill': return `Hilled ${hillWord(f.hillPasses)}.`
       case 'scout': return f.scoutAge < 0 ? 'Not walked yet.' : `Last walked ${F.ago(f.scoutAge)}.`
       case 'spray': return f.protect > 0.02 ? `${F.pct(f.protect)} protection left on the leaf.` : 'No protectant on the leaf.'
@@ -233,9 +235,11 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
   // A contractor's job, ordered and paid for at once: stumps pulled, tile laid.
   function contractor(c: S.Campaign, i: number, kind: 'stump' | 'tile'): HTMLElement | null {
     const why = kind === 'stump' ? S.stumpBlock(c, i) : S.tileBlock(c, i)
-    if (why) return null
     const fee = kind === 'stump' ? S.STUMP_FEE : S.TILE_FEE
     const days = kind === 'stump' ? S.STUMP_DAYS : S.TILE_DAYS
+    // Stumps the tract is ready for are always on its bar: ordered, or with why not, never missing.
+    if (why) return kind === 'stump' && S.tractInfo(c).find(t => t.field === i)?.stage === 'stump'
+      ? order({ key: '', icon: kind, name: 'Pull stumps', cost: `${F.money(fee)} · ${days} days`, catch: F.localize(why), refused: true, disabled: true, testid: 'order-stump' }) : null
     return order({
       key: '', icon: kind, name: kind === 'stump' ? 'Pull stumps' : 'Tile drains', cost: `${F.money(fee)} · ${days} days`,
       catch: kind === 'stump' ? 'A contractor with a bulldozer pulls them.' : 'Drains like the slope; holds a little less in a drought.', testid: `order-${kind}`,
@@ -258,6 +262,12 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
     if (f.brushed > 0) parts.push(h('p', { class: 'quiet' }, icon('brush', 'i'), h('span', null, `Hedgerows cut: back in ${F.plural(f.brushed, 'year')}`)))
     if (f.raw && f.status !== 'off') parts.push(h('p', { class: 'quiet' }, icon('idle', 'i'), h('span', null, 'New ground: a first potato crop grows less')))
     return parts
+  }
+
+  function headWith(label: string, title: string, sub: Child): HTMLElement {
+    return h('header', { class: 'command-head' },
+      h('div', null, h('p', { class: 't-label' }, label), h('h2', { class: 't-title', testid: 'card-title' }, title), h('p', { class: 't-caption' }, sub)),
+      h('button', { class: 'close', type: 'button', testid: 'card-close', 'data-k': 'close', 'aria-label': `Deselect${ctx.touch() ? '' : ' (Escape)'}`, onclick: () => app.select(-1) }, icon('close', 'i')))
   }
 
   function head(label: string, title: string, sub: string): HTMLElement {
@@ -306,7 +316,7 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
     const waterKind = f.moistureLabel === 'wilting' ? 'bad' : f.moistureLabel === 'dry' ? 'warn' : f.tooWet ? 'wet' : undefined
     const waterWord = f.moistureLabel === 'standing water' ? 'flooded' : f.moistureLabel
     const bare = watch && f.protect < 0.35 && f.status === 'growing'
-    const cell = (label: string, value: string, m: HTMLElement, cls = '') => h('div', { class: `gauge${cls ? ` ${cls}` : ''}` }, h('span', { class: 't-label' }, label), h('b', null, value), m)
+    const cell = (label: string, value: string, m: HTMLElement, cls = '') => h('div', { class: `gauge${cls ? ` ${cls}` : ''}` }, h('span', { class: 't-label' }, term(label, label === 'Hill' ? 'hilled' : label.toLowerCase())), h('b', null, value), m)
     return h('div', { class: 'gauges' },
       cell('Leaf', F.pct(f.canopy), meter(f.canopy, { label: 'Leaf cover' })),
       cell('Water', waterWord, meter(Math.min(1, f.moisture), { label: 'Soil water', text: `${f.moistureLabel}, ${F.pct(f.moisture)} of what plants can use`, kind: waterKind }), waterKind === 'wet' ? '' : waterKind ?? ''),
@@ -317,6 +327,8 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
   // Blight as last seen, and how old that is; before the rows are up, the soil; once the vines are dead, the skins.
   function known(c: S.Campaign, f: S.FieldInfo): HTMLElement[] {
     const s = c.season!
+    const coach = app.needs()[f.index]?.hold ?? (app.needs()[f.index]?.need?.act === 'plant' ? app.needs()[f.index]?.need : null)
+    if (f.status === 'idle' && coach && /°/.test(F.localize(`${coach.text} ${coach.why}`))) return []
     if (f.status === 'idle' || f.status === 'planted') {
       const t = S.today(app.world, c)
       const soil = (t ? t.soilT : 0) + S.SOIL_T_OFFSET[f.elev]
@@ -418,7 +430,7 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
       return [head('Field record', f.name, f.status === 'rest' ? 'Oats and clover, resting' : `${f.variety}, lost`), land.length ? h('div', { class: 'readings' }, land) : null, adviceLine(c, [i], !!rows), rows]
     }
     return [
-      head('Field record', f.name, `${f.variety}, ${(SHORT_STAGE[f.stage] ?? f.stage).toLowerCase()}`),
+      headWith('Field record', f.name, [`${f.variety}, `, term((SHORT_STAGE[f.stage] ?? f.stage).toLowerCase())]),
       gauges(c, f),
       h('div', { class: 'readings' }, known(c, f), land),
       adviceLine(c, [i], !!rows),

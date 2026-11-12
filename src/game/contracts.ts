@@ -1,13 +1,24 @@
 // The seams between the app, the field view and the interface. Each side depends only on these.
 import type { App } from './app.ts'
 
+// Something on the land that is not a field, a yard or one of the farm's own people, but looks like someone or is
+// worth a name: a machine, someone at the gate or by a car, a picker, an animal. k: which of its kind; holder: the
+// person who has a machine in hand, or -1.
+export type ThingKind = 'tractor' | 'truck' | 'asking' | 'neighbour' | 'buyer' | 'picker' | 'cow' | 'deer'
+export interface Thing { kind: ThingKind; k: number; holder: number }
+// What the pointer is over on the land, in CSS pixels: a person (-1 none), a thing, a field (-1), a yard (0 none).
+// group: the people a pin stands for when several stand together.
+export interface Pointing { x: number; y: number; unit: number; thing: Thing | null; field: number; yard: number; group?: number[] }
+
 // The field view draws the land and owns the pointer on the canvas and the camera keys:
 //   click a field or a tract: app.select(i); with Shift held: app.select(i, true); on empty ground: app.select(-1)
 //   click a yard or one of its buildings: app.selectYard(yard) (-1 home, -2 Dufour); the selected yard (app.yard) is marked
 //   double-click a field: app.selectLike(i) and bring it into frame; on empty ground: as Home
 //   right-click or long-press a field: app.smartOrder(i)
 //   pointer over a field: app.setHover(i)
-//   click a person, or the tractor or truck they are on: app.selectUnit(id); the picked person (app.unit) is marked
+//   click a person, or the tractor or truck they are on: app.selectUnit(id, 'land'); the picked person (app.unit) is marked
+//   click anything else that looks like someone or is worth a name: app.inspect(thing); elsewhere: app.inspect(null)
+//   pointer over the land: app.point(what is under it), and the hand cursor over anything a click answers
 //   drag: pan; wheel or pinch: zoom toward the pointer; right-drag, two-finger twist, Q and E: turn; arrow keys: pan;
 //   right-drag up and down, Page Up and Page Down: tip the view toward straight down and back (Home levels it);
 //   Home: out a tier (the field in hand, the home farm, the whole map, and round again)
@@ -26,6 +37,15 @@ export interface FieldView {
   fieldCorners(field: number): { x: number; y: number; visible: boolean }[]
   // Where a person is on the screen (a point just above them), and where a yard's marker should sit.
   unitAnchor(unit: number): { x: number; y: number; visible: boolean }
+  // The ground under a person, for a mark there.
+  unitFoot(unit: number): { x: number; y: number; visible: boolean }
+  // A thing on the land: where it stands on the screen (its top), and what is under a point of the screen.
+  thingAnchor(thing: Thing): { x: number; y: number; visible: boolean }
+  thingAt(x: number, y: number): Thing | null
+  // Brings a person into the middle of the picture and keeps them there until the player moves the view; -1 lets go.
+  follow(unit: number): void
+  // What the Home key does: back out to the farm, and in again.
+  home(): void
   yardAnchor(yard: number): { x: number; y: number; visible: boolean }
   // Settles once the land has shown a test dig's hill lifted, or the last row of a day's digging come out
   // (at once when there is nothing to show), so the paper result can arrive after the land has shown it.

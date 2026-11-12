@@ -95,6 +95,42 @@ const STATES: State[] = [
     await q(page, `const { app } = q.g(); const c = app.campaign; c.incidents.push({ id: c.nextIncident++, kind: 'breakdown', day: c.season.day, until: c.season.day + 2, choices: ['rush', 'wait'], unit: 0, back: c.season.day + 3 }); app.setSpeed(1); app.setSpeed(0)`)
   } },
   { name: 'frame-yard', what: 'design/yard.html: the home yard selected, its buildings as orders', sizes: MAIN, run: async (page, size) => { await frameJuly(page, size); await q(page, `const { app } = q.g(); const c = app.campaign; c.cash += 40000; c.logs = 18; c.stone = 25; app.do({ t: 'build', kind: 'shed', yard: -1 }); app.selectYard(-1)`) } },
+  // Who is that: a person clicked on the land, in the season, spring and winter; a machine; the pointer over someone.
+  { name: 'whois-season', what: 'July: a hired man clicked on the land, his card beside him', sizes: ALL, run: async (page, size) => {
+    await frameJuly(page, size)
+    await q(page, `const { app } = q.g(); app.selectUnit(1, 'land')`)
+    await page.waitForTimeout(400)
+  } },
+  { name: 'whois-spring', what: 'Spring, the plan up: a hired man clicked in the yard', sizes: MAIN, run: async page => {
+    await q(page, `const { app } = q.g(); app.newGame(1987, 3); const c = app.campaign; c.cash += 30000
+      c.buildings.push({ id: c.nextBuilding++, kind: 'bunk', yard: -1, done: 12, need: 12, built: true })
+      for (const a of [...c.applicants]) app.do({ t: 'hire', applicant: a.id })`)
+    await page.evaluate(() => (globalThis as unknown as { __countyField: { tier(t: string): void } }).__countyField.tier('yard'))
+    await q(page, `q.g().app.selectUnit(1, 'land')`)
+    await page.waitForTimeout(400)
+  } },
+  { name: 'whois-winter', what: 'Winter: a man kept on to build, clicked in the yard', sizes: MAIN, run: async page => {
+    await q(page, `const { app } = q.g(); app.newGame(1987, 3); const c = app.campaign; c.cash += 30000
+      c.buildings.push({ id: c.nextBuilding++, kind: 'bunk', yard: -1, done: 12, need: 12, built: true })
+      for (const a of [...c.applicants]) app.do({ t: 'hire', applicant: a.id })
+      app.do({ t: 'begin' }); q.run(999, ['sell']); app.do({ t: 'endSeason' }); for (const u of c.crew) if (u.kind !== 'farmer') app.do({ t: 'winter', unit: u.id, work: 'build' })`)
+    await closeAll(page)
+    await page.evaluate(() => (globalThis as unknown as { __countyField: { tier(t: string): void } }).__countyField.tier('yard'))
+    await q(page, `q.g().app.selectUnit(1, 'land')`)
+    await page.waitForTimeout(400)
+  } },
+  { name: 'whois-thing', what: 'July: the tractor in the yard clicked, its name card', sizes: MAIN, run: async (page, size) => {
+    await frameJuly(page, size)
+    await page.evaluate(() => (globalThis as unknown as { __countyField: { tier(t: string): void } }).__countyField.tier('yard'))
+    await q(page, `const { app } = q.g(); app.inspect({ kind: 'tractor', k: 0, holder: -1 }, innerWidth / 2, innerHeight / 2)`)
+    await page.waitForTimeout(400)
+  } },
+  { name: 'whois-hover', what: 'July: the pointer over a hired man: his name and a mark on the ground', sizes: ['desk'], run: async (page, size) => {
+    await frameJuly(page, size)
+    const at = await page.evaluate(() => (globalThis as unknown as { __countyField: { unitAt(id: number): { x: number; y: number } | null } }).__countyField.unitAt(2))
+    if (at) await page.mouse.move(at.x, at.y)
+    await page.waitForTimeout(300)
+  } },
   { name: 'frame-tract', what: 'design/tract.html: the Home Woodlot selected while it is felled', sizes: MAIN, run: async (page, size) => { await frameJuly(page, size); await q(page, `const { app } = q.g(); app.campaign.fields[14].felled = 12; app.select(14); app.focus(14)`); await page.waitForTimeout(800) } },
   { name: 'title', what: 'Title screen, first visit', sizes: ALL, run: async () => {} },
   // The living kit of the interface (src/ui/system/kit.ts), the whole page, to set beside design/kit.sheet.html.
