@@ -26,8 +26,8 @@ function varietyTraits(v: S.Variety, c: S.Campaign, world: S.World): string[] {
     R.blightWord(v), R.scabWord(v), R.droughtWord(v),
     `keeps until ${R.keepsUntil(c.year, v.id, c.upgrades.vent)}`,
     R.seedWord(v),
-    v.contract ? `${F.price(v.price)} on a chip plant's contract; off contract it sells ${R.offContract()} that` : `${F.price(v.price)} in a usual year`,
-    `large tubers ${R.largeRule(world, c, v.id)}`,
+    v.contract ? `${F.price(v.price)} on a chip plant's contract and ${R.offContract()} that without one` : `${F.price(v.price)} in a usual year`,
+    `large potatoes ${R.largeRule(world, c, v.id)}`,
   ]
 }
 
@@ -39,14 +39,14 @@ function openCompare(ctx: Ctx): void {
   const vs = S.availableVarieties(c.year)
   const cols: [string, (v: S.Variety) => string][] = [
     ['Matures', v => F.upper(v.maturity)],
-    ['Yield', v => `${F.upper(R.yieldWord(v))}${R.setWord(v) ? `; ${R.setWord(v)}` : ''}`],
+    ['Yield', v => `${F.upper(R.yieldWord(v))}${R.setWord(v) ? `. ${F.upper(R.setWord(v))}` : ''}`],
     ['Leaf blight', v => F.upper(R.blightWord(v, true))],
     ['Scab', v => F.upper(R.scabWord(v, true))],
     ['Dry spell', v => F.upper(R.droughtWord(v, true))],
     ['Keeps until', v => R.keepsUntil(c.year, v.id, c.upgrades.vent)],
     ['Saved seed', v => F.upper(R.seedWord(v, true))],
-    ['Price', v => v.contract ? `${F.price(v.price)} on contract. Off contract ${F.price(v.price * S.PROCESSING_PRICE)}: much less` : F.price(v.price)],
-    ['Large tubers', v => F.upper(R.largeRule(app.world, c, v.id, true))],
+    ['Price', v => v.contract ? `${F.price(v.price)} on contract, but only ${F.price(v.price * S.PROCESSING_PRICE)} without one` : F.price(v.price)],
+    ['Large potatoes', v => F.upper(R.largeRule(app.world, c, v.id, true))],
   ]
   ctx.papers.open({
     title: `Varieties for ${R.yearWord(c.year)}`,
@@ -54,13 +54,13 @@ function openCompare(ctx: Ctx): void {
     testid: 'compare',
     size: 'wide',
     body: () => [
-      h('p', { class: 'dlg-lead' }, 'What each variety is like, from the same facts the fields are grown by. No one of them wins every year.'),
+      h('p', { class: 'dlg-lead' }, 'Here\'s how each variety behaves, using the same numbers the game grows your fields with. No single variety wins every year.'),
       h('div', { class: 'table-scroll', tabindex: '0', role: 'group', 'aria-label': 'Varieties side by side' }, h('table', { class: 'compare-t' },
         h('thead', null, h('tr', null, h('th', { scope: 'col', class: 't-label' }, 'Variety'), cols.map(([label]) => h('th', { scope: 'col', class: 't-label' }, label)))),
         h('tbody', null, vs.map(v => h('tr', null,
           h('th', { scope: 'row' }, h('b', null, v.name), h('span', { class: 't-caption' }, v.market)),
           cols.map(([label, text]) => h('td', { 'data-label': label, class: label === 'Price' && v.contract ? 'c-ochre' : null }, text(v)))))))),
-      h('p', { class: 't-caption' }, `Price is for US No. 1 in a usual year, averaged over the season; harvest prices run below it and spring prices above. A contract price does not move with the season. The chipping variety finds only a processing price off contract, ${R.offContract()} its usual price. Large tubers, over ${F.grams(S.SIZE_CHEF)}, sell over or under that price. Keeps until is the last cellar month before sprouting, for a crop dug around September 25${c.upgrades.vent ? ', with the ventilation' : ''}. Yield is what a full season can make, before weather, blight and the kill date take their share.`),
+      h('p', { class: 't-caption' }, `Price is for US No. 1 in a usual year, averaged over the season.${F.cwtNote()} Harvest prices run lower and spring prices higher, but a contract price stays the same all season. Without a contract the chipping variety only gets a processing price, ${R.offContract()} its usual price. Large potatoes, over ${F.grams(S.SIZE_CHEF)}, sell for more or less than the No. 1 price, depending on the variety. "Keeps until" is the last cellar month before a crop dug around September 25 starts to sprout${c.upgrades.vent ? ', with the ventilation' : ''}. Yield is what a full season can produce before weather, blight and the kill date cut into it.`),
     ],
     foot: close => h('button', { class: 'btn go', type: 'button', testid: 'compare-close', autofocus: true, onclick: close }, 'Back to the plan', icon('arrow', 'i')),
   })
@@ -91,50 +91,50 @@ function openMoney(ctx: Ctx): void {
   const growing = y ? y.costs - y.wages - y.rent - y.land - y.penalties - y.storage - y.mortgage - y.works - y.building - y.packing : 0
   ctx.papers.open({
     title: `The money, ${R.yearName(c.year)}`,
-    kicker: 'The order blank in full',
+    kicker: 'Your spring plan in full',
     testid: 'money',
     size: 'medium',
     body: () => [
       h('div', { class: 'ledger-lines' },
         line(c.cash < 0 ? 'Owed from last year' : 'Cash on hand', c.cash),
         line(`${F.upper(F.plural(potato, 'potato field'))} at ${F.money(S.FIELD_COST)}`, -potato * S.FIELD_COST),
-        cert ? line(`Certified seed for ${cert}`, -cert * S.SEED_CWT_PER_FIELD * S.CERT_SEED_PER_CWT) : null,
-        rest ? line(`${rest} resting at ${F.money(S.REST_COST)}`, -rest * S.REST_COST) : null,
+        cert ? line(`Certified seed for ${F.plural(cert, 'field')}`, -cert * S.SEED_CWT_PER_FIELD * S.CERT_SEED_PER_CWT) : null,
+        rest ? line(`${F.upper(F.plural(rest, 'resting field'))} at ${F.money(S.REST_COST)}`, -rest * S.REST_COST) : null,
         pc.rent ? line(`Rent for ${F.plural(rented, 'field')}`, -pc.rent) : null,
-        pc.wages ? line(`The first month's wages, ${F.plural(paid, 'person', 'people')}`, -pc.wages) : null,
+        pc.wages ? line(`First month's wages for ${F.plural(paid, 'person', 'people')}`, -pc.wages) : null,
         line(h('b', null, 'This plan'), -pc.total, { testid: 'plan-cost', cls: 'sub-total' }),
         line(h('b', null, 'After planting'), after, { testid: 'plan-after', cls: 'total' })),
       h('p', { class: 't-caption' }, after < S.OPERATING_LIMIT
-        ? `The bank lends up to ${F.money(-S.OPERATING_LIMIT)} for the spring. Rest a field, or plant saved seed: it is free, but it carries virus.`
-        : after < 0 ? `The bank's spring loan covers ${F.money(-after)}, repaid from the crop. The spring loan itself is free.` : 'No spring borrowing is needed.',
-      pc.wages ? ` Then ${F.money(pc.wages)} in wages every month until the season closes, and for anyone kept on over the winter.` : ''),
-      h('p', { class: 't-label dlg-sub' }, 'Due at the year end'),
+        ? `The bank only lends up to ${F.money(-S.OPERATING_LIMIT)} for the spring, so rest a field or plant saved seed. Saved seed is free, but it carries virus.`
+        : after < 0 ? `The bank's spring loan covers ${F.money(-after)} at no interest, and you repay it from the crop.` : 'You don\'t need to borrow this spring.',
+      pc.wages ? ` After that, wages are ${F.money(pc.wages)} every month until the season ends, and you keep paying anyone you keep on over the winter.` : ''),
+      h('p', { class: 't-label dlg-sub' }, 'Due at the end of the year'),
       h('div', { class: 'ledger-lines' },
-        after < 0 && after >= S.OPERATING_LIMIT ? line('The spring loan back', -after) : null,
-        line(term('The note on the farm', 'the note'), S.NOTE_PAYMENT),
-        line(term('The household', 'the household'), S.LIVING),
+        after < 0 && after >= S.OPERATING_LIMIT ? line('The spring loan, repaid', -after) : null,
+        line(term('The yearly bank payment', 'the note'), S.NOTE_PAYMENT),
+        line(term('Your family\'s living costs', 'the household'), S.LIVING),
         m.owed > 0 ? line(`The land mortgage, ${F.money(m.owed)} owed`, Math.round(m.principal + m.interest)) : null,
         line(h('b', null, 'Due'), (after < 0 && after >= S.OPERATING_LIMIT ? -after : 0) + S.NOTE_PAYMENT + S.LIVING + Math.round(m.principal + m.interest), { cls: 'total' })),
-      h('p', { class: 't-caption' }, `Debt left after those is carried into next year at ${F.pct(S.CREDIT_RATE)} interest, and the bank calls the note if it is more than ${F.money(-S.CREDIT_LIMIT)}. Land, buildings and equipment are bought from cash.`),
+      h('p', { class: 't-caption' }, `Any debt left after that carries into next year at ${F.pct(S.CREDIT_RATE)} interest, and if it's more than ${F.money(-S.CREDIT_LIMIT)} the bank calls in the loan and you lose the farm. Land, buildings and equipment have to be paid for in cash.`),
       y ? [
         h('p', { class: 't-label dlg-sub' }, `Last year, ${R.yearWord(y.year)}`),
         h('div', { class: 'ledger-lines' },
           line('Potato sales', y.revenue - y.restIncome - y.contracts - y.logs - y.stand),
           y.contracts ? line('Delivered on contract', y.contracts) : null,
           y.stand ? line('The farm stand', y.stand) : null,
-          y.logs ? line('Logs to the mill', y.logs) : null,
+          y.logs ? line('Logs sold to the mill', y.logs) : null,
           y.restIncome ? line('Oats and clover', y.restIncome) : null,
           line('Growing and storage', -(growing + y.storage + y.packing)),
           y.wages ? line('Wages', -y.wages) : null,
           y.rent ? line('Rent', -y.rent) : null,
-          y.land ? line('Land, the quarter down', -y.land) : null,
+          y.land ? line('Land, down payments', -y.land) : null,
           y.mortgage ? line('The land mortgage', -y.mortgage) : null,
           y.building ? line('Buildings', -y.building) : null,
           y.works ? line('Contractors', -y.works) : null,
           y.penalties ? line('Contract penalties', -y.penalties) : null,
-          line('Note, household and interest', -(y.note + y.living + y.interest)),
-          line(h('b', null, 'Cash at the year end'), y.cashEnd, { cls: 'total' })),
-        h('p', { class: 't-caption' }, `${y.potatoFields ? `Your yield sold: ${F.perArea(y.yieldCwtAcre)}.` : 'No potatoes were grown.'}${nb ? ` The neighbour sold ${F.perArea(nb.yieldCwtAcre)}.` : ''}`),
+          line('Bank payment, living costs and interest', -(y.note + y.living + y.interest)),
+          line(h('b', null, 'Cash at the end of the year'), y.cashEnd, { cls: 'total' })),
+        h('p', { class: 't-caption' }, `${y.potatoFields ? `You sold ${F.perArea(y.yieldCwtAcre)}.` : 'You didn\'t grow potatoes.'}${nb ? ` Your neighbor sold ${F.perArea(nb.yieldCwtAcre)}.` : ''}`),
       ] : null,
     ],
     foot: close => h('button', { class: 'btn go', type: 'button', testid: 'money-close', autofocus: true, onclick: close }, 'Back to the plan', icon('arrow', 'i')),
@@ -236,14 +236,14 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
     const c = app.campaign!
     if (!S.held(c, i)) {
       const l = S.landInfo(c).find(x => x.field === i)
-      return l ? { name: l.name, glyph: S.standing(l.cover) ? 'woods' : 'land', marks: [], queue: [], badge: null, land: true, said: `${l.name}, ${l.block === 'home' ? 'by the home farm' : 'beyond the home farm'}: ${l.rentable ? `to rent at ${F.money(l.rent)} a year or ` : ''}to buy for ${F.money(l.price)}.` } : null
+      return l ? { name: l.name, glyph: S.standing(l.cover) ? 'woods' : 'land', marks: [], queue: [], badge: null, land: true, said: `${l.name}, ${l.block === 'home' ? 'by the home farm' : 'beyond the home farm'}. You can ${l.rentable ? `rent it for ${F.money(l.rent)} a year or ` : ''}buy it for ${F.money(l.price)}.` } : null
     }
     const key = digitFor(c, i)
     const fp = c.fields[i]
     if (fp.cover !== 'open') {
       return {
         name: S.FIELD_NAMES[i], glyph: TRACT_GLYPH[fp.cover], sub: F.upper(fp.cover === 'stumps' ? 'stumps' : fp.cover), marks: [], queue: [], badge: null, key,
-        said: `${S.FIELD_NAMES[i]}: ${S.COVER_WORD[fp.cover]}, a tract to clear into a field.`,
+        said: `${S.FIELD_NAMES[i]}, ${S.COVER_WORD[fp.cover]}. A tract you can clear into a field.`,
       }
     }
     const p = c.plans[i]
@@ -256,7 +256,7 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
       sub: potato ? v.name : 'Resting',
       marks: [...(potato && p.seed === 'saved' ? [{ glyph: 'sprout', cls: 'warn' }] : []), ...(rented ? [{ glyph: 'land', cls: '' }] : [])],
       queue: [], badge: null, key,
-      said: `${S.FIELD_NAMES[i]} ${potato ? v.name : 'Rest year'}: ${key ? `key ${key}, ` : ''}${rented ? 'rented, ' : ''}${potato ? `on ${p.seed} seed` : 'in oats and clover'}, ${F.money(fieldCost(p))}.`,
+      said: `${S.FIELD_NAMES[i]}, ${potato ? `${v.name} on ${p.seed} seed` : 'Rest year in oats and clover'}${rented ? ', rented' : ''}, ${F.money(fieldCost(p))}.${key ? ` Press ${key} to select it.` : ''}`,
     }
   }
   const P = plates(ctx, plateLayer, { model: plateModel, onBadge: () => {}, covers: () => card.hidden ? [] : [card.getBoundingClientRect()] })
@@ -296,14 +296,14 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
     const cost = sel.reduce((a, j) => a + fieldCost(c.plans[j]), 0)
     return [
       cardHead(ctx, one ? 'Field record' : 'Fields', one ? info.name : `${sel.length} fields`, one
-        ? [`${R.POSITION_NOTE[info.elev]} ${F.upper(F.plural(info.streak, 'year'))} in potatoes, soil ${R.soilWord(info.soil)}, `, term('early dying'), ` in ${F.pct(info.vert)}.${info.raw ? ' New ground: a first crop grows less unless it rests a year.' : ''}`]
+        ? [`${R.POSITION_NOTE[info.elev]} ${info.streak ? `${F.upper(F.plural(info.streak, 'year'))} of potatoes in a row` : 'No potatoes last year'}, the soil is ${R.soilWord(info.soil)} and `, term('early dying'), ` hits ${F.pct(info.vert)} of plants.${info.raw ? ' It\'s new ground, so a first crop will be smaller unless it rests a year.' : ''}`]
         : F.list(sel.map(j => S.FIELD_NAMES[j]))),
       h('div', { class: 'card-crop' },
         choice('crop', 'Crop', [['potato', 'Potatoes', same('crop') && potato, () => setPlan({ crop: 'potato' })], ['rest', 'Rest year', same('crop') && !potato, () => setPlan({ crop: 'rest' })]]),
         h('p', { class: 'card-cost' }, h('span', { class: 't-label' }, sel.length > 1 ? 'Together' : 'Costs'), h('b', { class: 'num', testid: 'field-cost' }, F.money(cost)))),
       potato ? [
         h('div', { class: 'vgrid', role: 'radiogroup', 'aria-label': 'Variety' }, vs.map(x => varietyBox(c, x, same('variety') && x.id === p.variety))),
-        h('p', { class: 'note card-note' }, same('variety') ? `${v.blurb}${v.contract ? ` Off contract it sells ${R.offContract()} its usual price.` : ''}` : 'These fields are in different varieties.',
+        h('p', { class: 'note card-note' }, same('variety') ? `${v.blurb}${v.contract ? ` Without a contract it sells for ${R.offContract()} its usual price.` : ''}` : 'These fields are planted with different varieties.',
           ' ', h('button', { class: 'btn quiet', type: 'button', testid: 'compare-open', onclick: () => openCompare(ctx) }, 'Compare them all')),
         // Where the seed comes from is always on the card: saved seed is free once some is held back in the cellar.
         h('div', { class: 'card-seed' },
@@ -311,10 +311,10 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
           choice('seed', 'Seed', [
             ['certified', `Certified, ${F.money(S.SEED_CWT_PER_FIELD * S.CERT_SEED_PER_CWT)}`, same('seed') && p.seed === 'certified', () => setPlan({ seed: 'certified' })],
             ['saved', saved > 0 ? `Saved, free (enough for ${saved})` : 'Saved, free', same('seed') && p.seed === 'saved', () => setPlan({ seed: 'saved' }),
-              saved > 0 || p.seed === 'saved' ? '' : `No saved ${v.name} seed in the cellar`]]),
+              saved > 0 || p.seed === 'saved' ? '' : `You have no saved ${v.name} seed in the cellar`]]),
           h('p', { class: `t-caption${p.seed === 'saved' ? ' c-ochre' : ''}`, testid: 'seed-note' }, saved > 0 || p.seed === 'saved' ? R.savedSeedText(stock)
-            : [`No saved ${v.name} seed in the cellar. Seed is saved by `, term('holding some back', 'hold back seed'), ' from a lot in store, at the weigh ticket or over the winter: it is free next spring, but it carries virus.'])),
-      ] : h('p', { class: 'note card-note' }, `Oats and clover: costs ${F.money(S.REST_COST)}, earns ${F.money(S.REST_INCOME)} in the fall. A rest year puts the soil back at once and wears early dying down slowly.`),
+            : [`You have no saved ${v.name} seed in the cellar. To save some, `, term('hold some back', 'hold back seed'), ' from a stored crop over the winter. It\'s free to plant next spring, but it carries virus.'])),
+      ] : h('p', { class: 'note card-note' }, `Oats and clover cost ${F.money(S.REST_COST)} and earn ${F.money(S.REST_INCOME)} in the fall. A rest year restores the soil right away and slowly reduces early dying.`),
       one ? tenureRow(ctx, c, i, onTry) : null,
       note ? h('p', { class: 'card-refused c-red', role: 'alert' }, note) : null,
     ]
@@ -340,7 +340,7 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
         return h('div', { class: 'cat-fold', k: `fold-${f.id}` }, el,
           on ? h('div', { class: 'cat-open', id: `fold-${f.id}`, testid: f.testid }, f.body()) : null)
       }),
-      later.length ? h('div', { class: 'fold more', role: 'group', 'aria-label': 'The other folds', k: 'fold-more' },
+      later.length ? h('div', { class: 'fold more', role: 'group', 'aria-label': 'More sections', k: 'fold-more' },
         later.map(f => h('button', { class: `btn${goalAt === f.id ? ' goal-ring' : ''}`, type: 'button', testid: f.open, 'aria-expanded': 'false', onclick: () => toggle(f.id) }, icon(f.glyph, 'i'), f.name))) : null,
     ]
   }
@@ -355,20 +355,20 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
     const loan = over ? 0 : mn.loan
     const due = over ? mn.due.total - mn.due.loan : mn.due.total
     const what = pc.rent || pc.wages ? `with ${F.list([pc.rent ? `rent ${F.money(pc.rent)}` : '', pc.wages ? `wages ${F.money(pc.wages)}` : ''].filter(Boolean))}` : ''
-    const parts = F.list([loan ? 'the loan back' : '', `the note ${F.money(mn.due.note)}`, `the household ${F.money(mn.due.household)}`, mn.due.mortgage > 0 ? `the land mortgage ${F.money(Math.round(mn.due.mortgage))}` : ''].filter(Boolean))
+    const parts = F.list([loan ? 'the spring loan' : '', `the yearly bank payment ${F.money(mn.due.note)}`, `your family's living costs ${F.money(mn.due.household)}`, mn.due.mortgage > 0 ? `the land mortgage ${F.money(Math.round(mn.due.mortgage))}` : ''].filter(Boolean))
     return [
       h('div', { class: `plan-money${over ? ' over' : ''}`, testid: 'plan-money' },
-        h('p', { class: 'lead quiet pm-cash' }, h('span', { class: 'it' }, c.cash < 0 ? 'Owed from last year' : 'The farm has'), h('span', { class: 'dots' }),
+        h('p', { class: 'lead quiet pm-cash' }, h('span', { class: 'it' }, c.cash < 0 ? 'Owed from last year' : 'You have'), h('span', { class: 'dots' }),
           h('span', { class: `num${c.cash < 0 ? ' c-red' : ''}`, testid: 'plan-cash' }, F.money(c.cash))),
         h('p', { class: 'lead' }, h('span', null, 'This plan', what ? h('span', { class: 'it quiet', testid: 'plan-rent' }, ` ${what}`) : null), h('span', { class: 'dots' }),
           h('b', { class: 'num big' }, F.money(pc.total))),
         h('p', { class: 'lead quiet pm-loan' }, h('span', { class: 'it' }, over ? 'More than the bank will lend' : after < 0 ? term('The bank\'s spring loan', 'spring loan') : 'Left in cash'), h('span', { class: 'dots' }),
           over ? null : h('span', { class: 'num', testid: 'plan-loan' }, F.money(Math.abs(after)))),
-        h('p', { class: 'lead quiet' }, h('span', { class: 'it' }, term('Due at the year end', 'due at the year end'), ', from the crop'), h('span', { class: 'dots' }),
+        h('p', { class: 'lead quiet' }, h('span', { class: 'it' }, term('Due at the end of the year', 'due at the year end'), ', from your crop'), h('span', { class: 'dots' }),
           h('span', { class: 'num c-red', testid: 'plan-due' }, F.money(due))),
-        h('p', { class: 't-caption pm-parts' }, `${F.upper(parts)}: the crop pays them, and what is left is the farm's.`),
+        h('p', { class: 't-caption pm-parts' }, `That's ${parts}. You keep whatever's left.`),
         c.history.length ? null : h('p', { class: 't-caption pm-usual', testid: 'plan-usual', title: ctx.touch() ? undefined : usualFirstYear(mn.due.note + mn.due.household).full }, usualFirstYear(mn.due.note + mn.due.household).short)),
-      over ? h('p', { class: 't-caption c-red', role: 'alert' }, 'Rest a field or plant saved seed: the bank will not lend more for the spring.') : null,
+      over ? h('p', { class: 't-caption c-red', role: 'alert' }, 'Rest a field or plant saved seed, because the bank won\'t lend any more this spring.') : null,
       h('div', { class: 'blank-go' },
         h('button', { class: 'btn go wide', type: 'button', testid: 'begin-season', onclick: begin }, 'Start the season', icon('arrow', 'i')),
         h('button', { class: 'btn quiet', type: 'button', testid: 'money-open', onclick: () => openMoney(ctx) }, 'The money')),

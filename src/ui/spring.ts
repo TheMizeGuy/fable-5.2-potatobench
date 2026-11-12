@@ -68,12 +68,12 @@ function fieldsBody(ctx: Ctx, c: S.Campaign): Child {
       const t = tracts.find(x => x.field === i)
       return catRow({
         icon: TRACT_GLYPH[fp.cover], name: S.FIELD_NAMES[i], testid: `fold-field-${i}`, onclick: () => look(ctx, i),
-        what: `${F.upper(fp.cover === 'stumps' ? 'stumps to pull' : S.COVER_WORD[fp.cover])}: ${t?.stage === 'fell' ? `${Math.ceil(t.fellLeft)} crew-days to fell` : t?.stage === 'stump' ? 'a contractor pulls them' : 'rocks to pick'}`,
+        what: `${F.upper(S.COVER_WORD[fp.cover])}, ${t?.stage === 'fell' ? `${Math.ceil(t.fellLeft)} crew-days to fell` : t?.stage === 'stump' ? 'ready for a contractor to pull' : 'rocks to pick'}`,
       })
     }
     return catRow({
       icon: p.crop === 'potato' ? 'planted' : 'rest', name: S.FIELD_NAMES[i], testid: `fold-field-${i}`, onclick: () => look(ctx, i),
-      what: p.crop === 'potato' ? `${S.variety(p.variety).name}${p.seed === 'saved' ? ', saved seed' : ''}` : fp.raw ? 'Rest year: new ground' : 'Rest year',
+      what: p.crop === 'potato' ? `${S.variety(p.variety).name}${p.seed === 'saved' ? ', saved seed' : ''}` : fp.raw ? 'Rest year, new ground' : 'Rest year',
       figure: F.money(fieldCost(p)),
     })
   }))
@@ -86,7 +86,7 @@ const SKILL_WORD: [S.Skill, string][] = [['machine', 'Machine'], ['field', 'Fiel
 function bedText(c: S.Campaign): string {
   const L = S.labourInfo(c)
   if (L.hireWhy) return L.hireWhy
-  return L.hired < S.HOUSED_OUT ? 'Two hired people can live out.' : `A bunk is free: ${L.housing - L.hired} of ${L.beds}.`
+  return L.hired < S.HOUSED_OUT ? 'Two hired people can live off the farm.' : `Free bunks: ${L.housing - L.hired} of ${L.beds}.`
 }
 
 // An applicant as the catalogue lists them: portrait, trait in a word, five skill boxes (on a phone the best one, as
@@ -98,12 +98,12 @@ function applicant(ctx: Ctx, a: S.ApplicantInfo, one: boolean, onTry: (err: stri
     portrait(a, 52),
     h('div', { class: 'who' }, h('h3', null, a.name), h('p', null, h('b', null, a.traitName), one ? null : h('span', { class: 'desc' }, `: ${text[0].toLowerCase()}${text.slice(1)}.`))),
     one
-      ? h('p', { class: 'skill-one', 'aria-label': `Best at ${best.toLowerCase()}, ${a.skills[a.best]} of ten` }, h('b', null, `${best} ${a.skills[a.best]}`), tens(a.skills[a.best], 0, { best: true }))
-      : h('ul', { class: 'skill-row', 'aria-label': `Skills, out of ten: ${SKILL_WORD.map(([k, w]) => `${w} ${a.skills[k]}`).join(', ')}` },
+      ? h('p', { class: 'skill-one', 'aria-label': `Best at ${best.toLowerCase()}, ${a.skills[a.best]} out of 10` }, h('b', null, `${best} ${a.skills[a.best]}`), tens(a.skills[a.best], 0, { best: true }))
+      : h('ul', { class: 'skill-row', 'aria-label': `Skills out of 10: ${SKILL_WORD.map(([k, w]) => `${w} ${a.skills[k]}`).join(', ')}` },
         SKILL_WORD.map(([k, w]) => h('li', { class: k === a.best ? 'best' : null, 'aria-hidden': 'true' }, h('span', null, w), h('b', null, String(a.skills[k]))))),
     h('p', { class: 'price' }, h('b', { class: 'num' }, F.money(a.ask)), h('span', null, 'a month')),
     h('button', {
-      class: 'btn', type: 'button', testid: `applicant-hire-${a.id}`, disabled: !!a.why, title: a.why || undefined, 'aria-label': `Hire ${a.name}, ${F.money(a.ask)} a month`,
+      class: 'btn', type: 'button', testid: `applicant-hire-${a.id}`, disabled: !!a.why, title: a.why || undefined, 'aria-label': `Hire ${a.name} for ${F.money(a.ask)} a month`,
       onclick: () => tryRun(ctx, { t: 'hire', applicant: a.id }, onTry),
     }, 'Hire'))
 }
@@ -111,14 +111,15 @@ function applicant(ctx: Ctx, a: S.ApplicantInfo, one: boolean, onTry: (err: stri
 // A hired person made foreman of a block the farm holds, or put back to field work: the same choice as their card.
 export function foremanRow(ctx: Ctx, c: S.Campaign, p: S.PersonInfo, onTry: (err: string) => void): HTMLElement {
   const blocks = S.BLOCKS.filter(b => S.PARCELS.some((x, i) => x.block === b && S.held(c, i)))
-  const name = (b: S.BlockId) => F.upper(BLOCK_NAME[b].replace(/^The /, '').split(',')[0])
-  return h('p', { class: 'cat-foreman', role: 'group', 'aria-label': `${p.name}: foreman of`, testid: `spring-foreman-${p.id}` },
+  const place = (b: S.BlockId) => BLOCK_NAME[b].replace(/^The /, '').split(',')[0]
+  const name = (b: S.BlockId) => F.upper(place(b))
+  return h('p', { class: 'cat-foreman', role: 'group', 'aria-label': `Make ${p.name} foreman of`, testid: `spring-foreman-${p.id}` },
     h('span', { class: 't-label' }, icon('foreman', 'i'), term('Foreman', 'foreman'), ' of'),
     blocks.map(b => {
       const other = c.crew.find(u => u.foreman === b && u.id !== p.id)
       return h('button', {
         class: 'btn', type: 'button', testid: `spring-foreman-${p.id}-${b}`, 'aria-pressed': String(p.foreman === b), disabled: !!other,
-        title: other ? `${other.name} is foreman there` : `${p.name} puts on the list what ${BLOCK_NAME[b]} needs each working morning, and does no field work. Paid ${F.pct(S.FOREMAN_PAY - 1)} more.`,
+        title: other ? `${other.name} is already foreman there` : `Each working morning ${p.name} adds whatever needs doing on the ${place(b)} to the work list. A foreman does no field work and is paid ${F.pct(S.FOREMAN_PAY - 1)} more.`,
         onclick: () => tryRun(ctx, p.foreman === b ? { t: 'foreman', unit: p.id, block: null } : { t: 'foreman', unit: p.id, block: b }, onTry),
       }, name(b))
     }))
@@ -140,10 +141,10 @@ export function openForeman(ctx: Ctx): void {
         if (!c) return
         const hired = S.peopleInfo(c).filter(p => p.kind !== 'farmer')
         box.replaceChildren(h('div', null,
-          h('p', { class: 'dlg-lead' }, 'A ', term('foreman'), ' puts on the list what the fields of one ', term('block'), ` need, every working morning, and does no field work. Paid ${F.pct(S.FOREMAN_PAY - 1)} more.`),
+          h('p', { class: 'dlg-lead' }, 'Each working morning a ', term('foreman'), ' adds what the fields in one ', term('block'), ` need to the work list. A foreman does no field work and is paid ${F.pct(S.FOREMAN_PAY - 1)} more.`),
           hired.map(p => h('div', { class: 'cat-hired' }, portrait(p, 32), h('b', null, p.name), h('span', { class: 'it quiet' }, `${F.money(p.pay)} a month`),
             foremanRow(ctx, c, p, err => { note = err; draw() }))),
-          hired.length ? null : h('p', { class: 't-caption' }, 'Nobody is hired: hire someone in spring first.'),
+          hired.length ? null : h('p', { class: 't-caption' }, 'You haven\'t hired anyone yet. Hire someone in spring first.'),
           note ? h('p', { class: 'card-refused c-red', role: 'alert' }, note) : null))
       }
       draw()
@@ -165,10 +166,10 @@ function peopleBody(ctx: Ctx, c: S.Campaign, onTry: (err: string) => void, onClo
   }
   return [
     ...S.applicantInfo(c).map(a => applicant(ctx, a, one, onTry)),
-    h('div', { class: 'cat-hall hall-row' }, h('p', { class: 't-label', title: 'Average at their work' }, 'Or the hiring hall'), hall('hand'), hall('operator'),
+    h('div', { class: 'cat-hall hall-row' }, h('p', { class: 't-label', title: 'Workers from the hiring hall are average at every job.' }, 'Or the hiring hall'), hall('hand'), hall('operator'),
       L.hireWhy ? h('p', { class: 't-caption' }, L.hireWhy) : null),
     hired.length ? [
-      h('p', { class: 't-label cat-sub' }, `On the farm, ${L.hired} of ${L.housing} places`, L.hireWhy ? null : h('span', { class: 't-caption' }, ` ${bedText(c)}`)),
+      h('p', { class: 't-label cat-sub' }, `Your crew: ${L.hired} of ${L.housing} places filled`, L.hireWhy ? null : h('span', { class: 't-caption' }, ` ${bedText(c)}`)),
       h('ul', { class: 'cat-list' }, hired.map(p => h('li', { class: 'cat-hired' },
         portrait(p, 32),
         h('b', null, p.name),
@@ -186,7 +187,7 @@ function landBody(ctx: Ctx, c: S.Campaign, onClose: () => void): Child {
   const land = S.landInfo(c).filter(l => l.tenure === 'none')
   const blocks = [...new Set(land.map(l => l.block))]
   return [
-    h('p', { class: 't-caption' }, 'Pick a lot here or on the land: its card says what it costs and what it brings.'),
+    h('p', { class: 't-caption' }, 'Pick a lot here or on the map, and its card will show what it costs and what comes with it.'),
     blocks.map(b => [
       h('p', { class: 't-label cat-sub' }, BLOCK_NAME[b]),
       h('ul', { class: 'cat-list' }, land.filter(l => l.block === b).map(l => catRow({
@@ -200,14 +201,14 @@ function landBody(ctx: Ctx, c: S.Campaign, onClose: () => void): Child {
 }
 
 export function stoneWord(stones: number): string {
-  return stones >= 0.6 ? 'heavy' : stones >= 0.35 ? 'middling' : 'light'
+  return stones >= 0.6 ? 'very stony' : stones >= 0.35 ? 'fairly stony' : 'only a little stony'
 }
 
 // The head of a card on the land: what kind of record, the name, a line under it, and the way to let it go.
 export function cardHead(ctx: Ctx, kind: string, name: string, caption: Child): HTMLElement {
   return h('header', { class: 'command-head' },
     h('div', null, h('p', { class: 't-label' }, kind), h('h2', { class: 't-title', testid: 'card-title' }, name), h('p', { class: 't-caption' }, caption)),
-    h('button', { class: 'close', type: 'button', testid: 'card-close', 'aria-label': 'Deselect (Escape)', onclick: () => ctx.app.select(-1) }, icon('close', 'i')))
+    h('button', { class: 'close', type: 'button', testid: 'card-close', 'aria-label': 'Close this card (Escape)', onclick: () => ctx.app.select(-1) }, icon('close', 'i')))
 }
 
 function noteLine(note: string): Child {
@@ -220,25 +221,25 @@ export function landCard(ctx: Ctx, c: S.Campaign, field: number, note: string, o
   if (!l) return null
   const m = S.mortgageInfo(c)
   const first = l.loan * (m.rate + S.MORTGAGE_PRINCIPAL)
-  const haul = l.haul > 0.005 ? ` The haul adds ${F.pct(l.haul)} to its harvest.` : ''
+  const haul = l.haul > 0.005 ? ` Hauling the crop in adds ${F.pct(l.haul)} to its digging time.` : ''
   const tract = S.standing(l.cover)
   return [
-    cardHead(ctx, l.rentable ? 'For rent or sale' : 'For sale', l.name, `${BLOCK_NAME[l.block]}. ${tract ? 'A tract to clear into a field.' : POSITION_NOTE[l.elev]}`),
+    cardHead(ctx, l.rentable ? 'For rent or sale' : 'For sale', l.name, `${BLOCK_NAME[l.block]}. ${tract ? 'A tract you can clear into a field.' : POSITION_NOTE[l.elev]}`),
     h('div', { class: 'readings' },
       h('p', { class: 'wrap' }, icon('land', 'i'), h('span', null, `${tract ? '' : `${BLOCK_NOTE[l.block]} `}${l.brings}`.trim())),
       h('p', { class: 'wrap', testid: 'land-facts' }, icon('field', 'i'), h('span', null, tract
-        ? 'Cleared, it is stony new ground: its first potato crop grows less unless it rests a year.'
-        : `Soil ${soilWord(l.soil)}, early dying in ${F.pct(l.vert)} of plants, stones ${stoneWord(l.stones)}. ${F.upper(roadTime(l.travel))} on the road from home.${haul}`))),
-    h('div', { class: 'orders', role: 'group', 'aria-label': 'Ways to take it' },
+        ? 'Once it\'s cleared it\'s stony new ground, so its first potato crop will be smaller unless you rest it for a year first.'
+        : `The soil is ${soilWord(l.soil)}, early dying hits ${F.pct(l.vert)} of plants and the ground is ${stoneWord(l.stones)}. It's ${roadTime(l.travel)} by road from home.${haul}`))),
+    h('div', { class: 'orders', role: 'group', 'aria-label': 'Ways to get this land' },
       l.rentable ? h('button', { class: 'order is-suggested', type: 'button', testid: 'land-rent', disabled: !!l.rentWhy, onclick: () => tryRun(ctx, { t: 'rent', field }, onTry) },
         icon('fist', 'i fist'), h('span', { class: 'key', 'aria-hidden': 'true' }, 'R'), icon('land', 'i'), h('span', { class: 'name' }, 'Rent'), h('span', { class: 'cost num' }, `${F.money(l.rent)} a year`),
-        h('span', { class: 'catch' }, 'Paid when the season begins; yours for the year.')) : null,
+        h('span', { class: 'catch' }, 'You pay when the season starts, and it\'s yours for the year.')) : null,
       h('button', { class: `order${l.rentable ? '' : ' is-suggested'}`, type: 'button', testid: 'land-buy', onclick: () => tryRun(ctx, { t: 'buyLand', field }, onTry) },
         l.rentable ? null : icon('fist', 'i fist'), h('span', { class: 'key', 'aria-hidden': 'true' }, 'B'), icon('bank', 'i'), h('span', { class: 'name' }, 'Buy'), h('span', { class: 'cost num' }, `${F.money(l.down)} down`),
-        h('span', { class: 'catch' }, `${F.money(l.loan)} on the land mortgage: about ${F.money(first)} at the year end, less each year after.`)),
+        h('span', { class: 'catch' }, `The other ${F.money(l.loan)} goes on the land mortgage, about ${F.money(first)} at the end of the year and less each year after.`)),
       c.cash >= l.price ? h('button', { class: 'order', type: 'button', testid: 'land-buy-cash', onclick: () => { if (tryRun(ctx, { t: 'buyLand', field }, onTry)) tryRun(ctx, { t: 'payMortgage', amount: l.loan }, onTry) } },
         h('span', { class: 'key', 'aria-hidden': 'true' }, 'O'), icon('money', 'i'), h('span', { class: 'name' }, 'Buy outright'), h('span', { class: 'cost num' }, F.money(l.price)),
-        h('span', { class: 'catch' }, 'All from cash: nothing owed.')) : null),
+        h('span', { class: 'catch' }, 'Paid in full from cash, so you owe nothing.')) : null),
     noteLine(note),
   ]
 }
@@ -250,11 +251,11 @@ export function tenureRow(ctx: Ctx, c: S.Campaign, field: number, onTry: (err: s
   const p = S.PARCELS[field]
   if (fp.tenure === 'owned') {
     const loan = S.mortgageInfo(c).loans.find(x => x.field === field)
-    return h('p', { class: 'card-tenure', testid: 'tenure' }, `${BLOCK_NAME[p.block]}. The farm owns it${loan ? `, ${F.money(loan.owed)} still owed on it` : ''}.`)
+    return h('p', { class: 'card-tenure', testid: 'tenure' }, `${BLOCK_NAME[p.block]}. You own it${loan ? ` and still owe ${F.money(loan.owed)} on it` : ''}.`)
   }
   return h('div', { class: 'card-tenure', testid: 'tenure' },
-    h('p', null, `${BLOCK_NAME[p.block]}. Rented, ${F.money(p.rent)} this year.`),
-    h('button', { class: 'btn', type: 'button', testid: 'land-release', onclick: () => tryRun(ctx, { t: 'release', field }, onTry) }, 'Release'),
+    h('p', null, `${BLOCK_NAME[p.block]}. You rent it for ${F.money(p.rent)} this year.`),
+    h('button', { class: 'btn', type: 'button', testid: 'land-release', onclick: () => tryRun(ctx, { t: 'release', field }, onTry) }, 'Stop renting'),
     h('button', { class: 'btn', type: 'button', testid: 'land-buy', onclick: () => tryRun(ctx, { t: 'buyLand', field }, onTry) }, 'Buy', h('span', { class: 'sub num' }, `${F.money(Math.round(p.price * S.MORTGAGE_DOWN))} down`)))
 }
 
@@ -273,14 +274,14 @@ export function tractCard(ctx: Ctx, c: S.Campaign, field: number, note: string, 
       h('li', { class: n < at ? 'done' : n === at ? 'now' : null, 'aria-current': n === at ? 'step' : undefined, 'data-k': k }, label))),
     h('div', { class: 'readings' },
       t.stage === 'fell' ? h('p', null, icon('woods', 'i'), `${F.pct(t.felled)} felled`, h('span', { class: 'meter', style: 'flex:1', 'aria-hidden': 'true' }, h('i', { style: `width:${(t.felled * 100).toFixed(1)}%` }))) : null,
-      t.stage === 'fell' ? h('p', { class: 'wrap' }, icon('logs', 'i'), h('span', null, 'About ', h('b', null, `${logs} loads`), ` of logs: ${F.money(logs * S.LOG_PRICE)} at the mill, or wood for buildings.`)) : null,
-      t.shelters.length ? h('p', { class: 'wrap' }, icon('leaf', 'i'), h('span', null, `It shelters ${F.list(t.shelters.map(i => S.FIELD_NAMES[i]))}: less water lost, but an hour more blight weather and a colder frost.`)) : null),
+      t.stage === 'fell' ? h('p', { class: 'wrap' }, icon('logs', 'i'), h('span', null, 'About ', h('b', null, `${logs} loads`), ` of logs, worth ${F.money(logs * S.LOG_PRICE)} at the mill or useful as wood for buildings.`)) : null,
+      t.shelters.length ? h('p', { class: 'wrap' }, icon('leaf', 'i'), h('span', null, `It shelters ${F.list(t.shelters.map(i => S.FIELD_NAMES[i]))}, which saves water there but adds an hour of blight weather and makes frosts colder.`)) : null),
     t.stage === 'stump' && !t.works ? h('div', { class: 'orders', role: 'group', 'aria-label': 'Orders' },
       h('button', { class: 'order is-suggested', type: 'button', testid: 'tract-stump', disabled: !!t.stumpWhy, title: t.stumpWhy || undefined, onclick: () => tryRun(ctx, { t: 'stump', field }, onTry) },
         icon('fist', 'i fist'), h('span', { class: 'key', 'aria-hidden': 'true' }, 'U'), icon('stump', 'i'), h('span', { class: 'name' }, 'Pull the stumps'), h('span', { class: 'cost num' }, F.money(t.stumpFee)),
-        h('span', { class: 'catch' }, `A contractor with a bulldozer, about ${S.STUMP_DAYS} season days.`))) : null,
-    h('p', { class: 'note' }, t.next || 'Cleared: a field from next spring.',
-      t.stage === 'fell' ? ' Felling goes at half speed in the season; someone kept on this winter fells it at full speed.' : ''),
+        h('span', { class: 'catch' }, `A contractor's bulldozer takes about ${S.STUMP_DAYS} days during the season.`))) : null,
+    h('p', { class: 'note' }, t.next || 'It\'s cleared and will be a field from next spring.',
+      t.stage === 'fell' ? ' Felling runs at half speed during the season, so keep someone on over the winter to fell it at full speed.' : ''),
     noteLine(note),
   ]
 }
@@ -289,10 +290,10 @@ export function tractCard(ctx: Ctx, c: S.Campaign, field: number, note: string, 
 
 function equipNeeds(c: S.Campaign, id: S.UpgradeId): string {
   const u = S.UPGRADES[id]
-  if ((id === 'tractor2' || id === 'tractor3') && !S.hasBuilt(c, 'shed')) return 'Needs the machine shed built first.'
-  if (id === 'tractor3' && !c.upgrades.tractor2) return 'Needs the second tractor first.'
-  if (id === 'house2' && S.buildingAt(c, 'house', S.HOME_YARD)) return 'A second potato house is standing or going up.'
-  if (c.cash < u.cost) return `Needs ${F.money(u.cost)} in hand; the bank does not lend for it.`
+  if ((id === 'tractor2' || id === 'tractor3') && !S.hasBuilt(c, 'shed')) return 'Build the machine shed first.'
+  if (id === 'tractor3' && !c.upgrades.tractor2) return 'Buy the second tractor first.'
+  if (id === 'house2' && S.buildingAt(c, 'house', S.HOME_YARD)) return 'You already have a second potato house, or one is being built.'
+  if (c.cash < u.cost) return `You need ${F.money(u.cost)} in cash, because the bank won't lend for equipment.`
   return ''
 }
 
@@ -302,7 +303,7 @@ function equipmentBody(ctx: Ctx, c: S.Campaign, onTry: (err: string) => void, on
   const plan = S.planCost(c)
   const loanAdds = (cost: number) => Math.max(0, plan - (c.cash - cost)) - Math.max(0, plan - c.cash)
   return [
-    h('p', { class: 't-caption', testid: 'equip-cash' }, `Paid from the cash in hand, ${F.money(Math.max(0, c.cash))} now. The plan still costs what it did, so what a machine takes out of cash the spring loan lends instead: its price goes on the loan and on what is due at the year end.`),
+    h('p', { class: 't-caption', testid: 'equip-cash' }, `Equipment is paid from your cash, ${F.money(Math.max(0, c.cash))} right now. Your plan still costs the same, so the spring loan covers whatever cash a machine uses up, and its price is added to what you owe at the end of the year.`),
     h('ul', { class: 'cat-list cat-equip' }, ids.map(id => {
       const u = S.UPGRADES[id]
       const why = c.upgrades[id] ? '' : equipNeeds(c, id)
@@ -329,7 +330,7 @@ function bankBody(ctx: Ctx, c: S.Campaign, onTry: (err: string) => void, onClose
   return [
     h('ul', { class: 'cat-list' }, m.loans.map(x => h('li', null, h('p', { class: 'lead cat-loan' },
       icon('bank', 'i'), h('b', null, x.name), h('span', { class: 'it quiet' }, `of ${F.money(x.loan)}`), h('span', { class: 'dots' }), h('span', { class: 'num' }, F.money(x.owed)))))),
-    h('p', { class: 't-caption' }, `At the year end the bank takes ${F.money(m.principal)} off the loans and ${F.money(m.interest)} interest, ${F.pct(m.rate)} on what is owed. Extra paid now saves that interest every year after; it is cash the season may want.`),
+    h('p', { class: 't-caption' }, `At the end of the year the bank takes ${F.money(m.principal)} off the loans plus ${F.money(m.interest)} in interest, which is ${F.pct(m.rate)} of what you owe. Paying extra now saves interest every year after, but it's cash you might need this season.`),
     h('div', { class: 'cat-hall' }, m.owed > 5000 ? pay(5000, 'Pay') : null, m.owed > 20000 ? pay(20000, 'Pay') : null, pay(Math.round(m.owed), 'Pay it all')),
     done('bank-close', onClose),
   ]
@@ -343,7 +344,7 @@ function rulesBody(ctx: Ctx, c: S.Campaign, onTry: (err: string) => void, onClos
       ([true, false] as const).map(off => h('label', null,
         h('input', { type: 'radio', name: 'sundays', checked: c.sundaysOff === off, testid: `rule-sundays-${off ? 'off' : 'on'}`, onchange: () => tryRun(ctx, { t: 'sundays', off }, onTry) }),
         h('span', null, off ? 'Sundays off' : 'Work Sundays')))),
-    h('p', { class: 't-caption' }, c.sundaysOff ? 'Everyone rests one day in seven and comes back fresh.' : 'A day more each week, and everyone tires: tired people slow down, sour, and get hurt.'),
+    h('p', { class: 't-caption' }, c.sundaysOff ? 'Everyone gets one day off a week and comes back fresh.' : 'You get an extra day of work each week, but everyone gets tired, and tired people slow down, lose heart and get hurt.'),
     done('rules-close', onClose),
   ]
 }
@@ -376,7 +377,7 @@ export function springFolds(ctx: Ctx, c: S.Campaign, onTry: (err: string) => voi
     figure: pc.wages ? `${F.money(pc.wages)} a month` : undefined, body: () => peopleBody(ctx, c, onTry, onClose),
   }, {
     id: 'land', open: 'land-open', testid: 'land', glyph: 'land', name: 'Land',
-    state: land.length ? `${forRent} to rent, ${land.length} for sale` : 'The farm holds it all', body: () => landBody(ctx, c, onClose),
+    state: land.length ? `${forRent} to rent, ${land.length} for sale` : 'You hold all of it', body: () => landBody(ctx, c, onClose),
   }, {
     id: 'contracts', open: 'contracts-open', testid: 'contracts', glyph: 'contract', name: 'Contracts',
     state: [offers ? `${offers} offered` : 'No more offers', signed ? `${signed} signed` : ''].filter(Boolean).join(', '),

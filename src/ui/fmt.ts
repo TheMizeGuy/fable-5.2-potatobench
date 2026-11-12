@@ -81,6 +81,9 @@ export function storeRate(usdPerCwtMonth: number): string {
 
 export function hundredweight(): string { return metric() ? 'tonne' : 'hundredweight' }
 
+// What cwt means, said once on a screen that counts in it; nothing in metric.
+export function cwtNote(): string { return metric() ? '' : ' A cwt is a hundredweight (100 lb).' }
+
 export function massValue(cwt: number): number { return metric() ? cwt * T_PER_CWT : cwt }
 
 export function perArea(cwtPerAcre: number): string {
