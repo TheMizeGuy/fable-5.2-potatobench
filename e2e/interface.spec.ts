@@ -821,8 +821,11 @@ test('tags and stamps hold still when a card opens or closes and when an order i
     await page.waitForTimeout(500)
     expect(moved(was, await where()), `a card opening moves nothing on the land (settled: ${await page.evaluate(() => document.querySelector<HTMLElement>('#ui .plate-layer')?.dataset.settled)})`).toEqual([])
     // An order by its letter key: the tags stay put though North Ridge's tag now says "on the list".
+    const cam0 = await page.evaluate(() => JSON.stringify((globalThis as any).__countyField.stats().camera))
     await page.keyboard.press('s')
     await page.waitForTimeout(300)
+    const cam1 = await page.evaluate(() => JSON.stringify((globalThis as any).__countyField.stats().camera))
+    expect(cam1, 'an order leaves the camera where it was').toBe(cam0)
     expect(moved(was, await where()), `an order moves nothing on the land (settled: ${await page.evaluate(() => document.querySelector<HTMLElement>('#ui .plate-layer')?.dataset.settled)})`).toEqual([])
     // The card's cross is in view and nothing lies over it.
     const x = (await page.getByTestId('card-close').boundingBox())!
@@ -837,8 +840,10 @@ test('tags and stamps hold still when a card opens or closes and when an order i
     const b = was[`badge-${n}`]
     const box = (await page.getByTestId(`badge-${n}`).boundingBox())!
     const at0 = await selects()
+    const over = await page.evaluate(([x, y]) => { const e = document.elementFromPoint(x, y) as HTMLElement | null; return `${e?.tagName}.${e?.className} ${e?.closest('[data-testid]')?.getAttribute('data-testid')}` }, [b[0] + box.width / 2, b[1] + box.height / 2])
+    expect(over, 'the stamp is what lies at the point').toContain(`badge-${n}`)
     await page.mouse.click(b[0] + box.width / 2, b[1] + box.height / 2)
-    await expect.poll(() => game<boolean>(page, `app.campaign.season.jobs.some(j => j.field === ${n} && j.kind === '${kind}')`), { timeout: 2000 }).toBe(true)
+    await expect.poll(() => game<string>(page, `app.campaign.season.jobs.filter(j => j.field === ${n}).map(j => j.kind).join(',') + ' | ' + (document.querySelector('#ui .notes')?.textContent ?? '')`), { timeout: 2000 }).toContain(kind)
     expect(await selects() - at0, 'the stamp click selected nothing').toBe(0)
     expect(await game<number[]>(page, 'app.selection')).toEqual([])
   }
@@ -871,15 +876,19 @@ test('blight weather asks once how to spray this season, and a worn-out hand can
     while (c.season.watchDay < 0 && n++ < 120) { q.run(c.season.day + 1, ['spray']); c.incidents = [] }
     app.setSpeed(0)`)
   test.skip(await game<number>(page, 'app.campaign.season.watchDay') < 0, 'no blight weather this year')
-  await page.keyboard.press('g')
-  await page.getByTestId('spray-ask-open').click()
+  // Asked by itself, on the telegram card, with the clock stopped.
+  await reach(page, `q.g().app.setSpeed(1)`)
   const ask = page.getByTestId('spray-ask')
   await expect(ask).toBeVisible()
+  expect((await look(page)).paused).toBe(true)
   await expect(ask).toContainText('Keep the fields sprayed')
   await ask.getByTestId('spray-way-auto').click()
   await expect(ask).toBeHidden()
   expect(await game<boolean>(page, `sim.routineInfo(app.campaign).find(r => r.kind === 'spray').auto`)).toBe(true)
-  // Who does what asks it again.
+  // Asked once: it does not come back by itself; Who does what asks it again.
+  await page.waitForTimeout(400)
+  await expect(page.getByTestId('spray-ask')).toBeHidden()
+  await page.keyboard.press('g')
   await page.getByTestId('spray-ask-open').click()
   await page.getByTestId('spray-ask').getByTestId('spray-way-ask').click()
   expect(await game<boolean>(page, `sim.routineInfo(app.campaign).find(r => r.kind === 'spray').auto`)).toBe(false)

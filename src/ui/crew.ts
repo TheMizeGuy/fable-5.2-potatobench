@@ -62,6 +62,8 @@ export interface BarHooks {
 }
 
 const NEXT_MS = 2600
+// The pop of the work that cannot wait, among the orders' pops.
+const PRESS_POP = -2
 
 // Each order's fate (who takes it and when, or why nobody will) and the work the season cannot wait for, worked out
 // once for each state of the list and the people: it plays the next day on a copy of the farm.
@@ -158,25 +160,37 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
 
   // Work the season cannot wait for that nobody will take, or that is not ordered: what it is, what is in its way,
   // and the one press that clears it.
-  function pressingRow(c: S.Campaign, list: S.Pressing[]): Child {
+  // A red chip in the list's own row, so nothing comes over the land: work the season cannot wait for, and a press
+  // opens what is in its way and the one press that clears it.
+  function pressingChip(c: S.Campaign, list: S.Pressing[]): Child {
     if (!list.length) return null
-    return h('div', { class: 'pressing sys', role: 'group', 'aria-label': 'Work that cannot wait', testid: 'pressing' }, list.slice(0, 1).map(p =>
-      h('p', { class: 'press' }, icon(p.kind, 'i'),
-        h('span', { class: 'press-text' }, h('b', null, `${JOB_VERB[p.kind]} ${S.FIELD_NAMES[p.field] ?? ''}`.trim()), `: ${p.why}. ${F.localize(p.inWay)}`),
-        p.fix ? h('button', {
-          class: 'btn', type: 'button', testid: `pressing-fix-${p.kind}-${p.field}`,
-          onclick: () => { const r = ctx.run(p.fix!); if (r.ok) ctx.announce(`${fixWord(c, p)}: done.`) },
-        }, fixWord(c, p)) : null)))
+    const p = list[0]
+    const what = `${JOB_VERB[p.kind]} ${S.FIELD_NAMES[p.field] ?? ''}`.trim()
+    const said = `${what}: ${p.why}. ${F.localize(p.inWay)}`
+    return h('li', { class: 'q-item press-item' },
+      h('button', {
+        class: 'q press-chip', type: 'button', testid: 'pressing', 'aria-expanded': String(pop === PRESS_POP), title: ctx.touch() ? undefined : said,
+        onclick: () => { pop = pop === PRESS_POP ? -1 : PRESS_POP; popWho = false; ctx.dirty() },
+      }, icon(p.kind, 'i'), h('span', { class: 'press-word' }, 'Cannot wait'), list.length > 1 ? h('span', { class: 'num' }, ` ${list.length}`) : null,
+      h('span', { class: 'sr' }, `. ${list.map(x => `${JOB_VERB[x.kind]} ${S.FIELD_NAMES[x.field] ?? ''}: ${x.why}`).join('; ')}. Press for the fix.`)),
+      pop === PRESS_POP ? h('div', { class: 'q-pop sheet press-pop', role: 'group', 'aria-label': 'Work that cannot wait' },
+        list.slice(0, 3).map(x => h('p', { class: 'press' }, icon(x.kind, 'i'),
+          h('span', { class: 'press-text' }, h('b', null, `${JOB_VERB[x.kind]} ${S.FIELD_NAMES[x.field] ?? ''}`.trim()), `: ${x.why}. ${F.localize(x.inWay)}`),
+          x.fix ? h('button', {
+            class: 'btn', type: 'button', testid: `pressing-fix-${x.kind}-${x.field}`,
+            onclick: () => { pop = -1; const r = ctx.run(x.fix!); if (r.ok) ctx.announce(`${fixWord(c, x)}: done.`) },
+          }, fixWord(c, x)) : null))) : null)
   }
 
-  function queue(c: S.Campaign, jobs: S.Job[], crews: S.CrewInfo[], people: S.PersonInfo[], waits: Record<number, string>, many: boolean, room: number, of: Map<number, S.JobOutlook>): Child {
-    if (!jobs.length) return null
+  function queue(c: S.Campaign, jobs: S.Job[], crews: S.CrewInfo[], people: S.PersonInfo[], waits: Record<number, string>, many: boolean, room: number, of: Map<number, S.JobOutlook>, press: Child): Child {
+    if (!jobs.length) return press ? h('ol', { class: 'queue', 'aria-label': 'Orders' }, h('li', { class: 'q-label t-label', 'aria-hidden': 'true' }, 'On the list'), press) : null
     const touch = ctx.touch()
     const head = jobs.find(j => !waits[j.id]) ?? null
     const all = expanded || jobs.length <= room
     const list = all ? jobs : jobs.slice(0, room - 1)
     return h('ol', { class: `queue${expanded ? ' all' : ''}`, 'aria-label': 'Orders, in the order the crews take them' },
       h('li', { class: 'q-label t-label', 'aria-hidden': 'true' }, 'On the list'),
+      press,
       list.map((j, k) => {
         const what = jobText(j, c, j.building)
         const lockDig = (j.kind === 'dig' && j.done > 0) || j.kind === 'haul' || j.kind === 'build'
@@ -261,8 +275,7 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
     el.classList.toggle('busy', jobs.length > 0)
     el.classList.toggle('many', many)
     patch(el, JSON.stringify(model), () => [
-      pressingRow(c, f.pressing.filter(p => !(p.kind === 'spray' && sprayWay(c) === 'none'))),
-      queue(c, jobs, crews, people, waits, many, room, f.of),
+      queue(c, jobs, crews, people, waits, many, room, f.of, pressingChip(c, f.pressing.filter(p => !(p.kind === 'spray' && sprayWay(c) === 'none')))),
       h('section', { class: 'timebook mount sys', 'aria-label': 'People' },
         h('div', { class: `page units${many ? ' many' : ''}${people.length > 5 ? ' crowded' : ''}`, role: 'group', 'aria-label': 'People' },
           people.map((p, k) => cell(c, p, now[k], signs[k], many, goal === 'person' && k === 1, stopped.has(p.id))),

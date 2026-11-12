@@ -12,6 +12,7 @@ import { ringFor } from './crew.ts'
 import { isTract } from './map.ts'
 import { firstName, hillWord, isJob, isStale, JOB_KEY, JOB_VERB, jobText, jobWhat, stonesText, stonesWord } from './rules.ts'
 import { term } from './glossary.ts'
+import { askSpray, sprayWay } from './people.ts'
 import { meter, order, range } from './system/parts.ts'
 import { ringed } from './system/people.ts'
 
@@ -523,11 +524,16 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
     const g = slots(c, [i], sugg, need && sugg ? F.localize(need.why) : '')
     const say = sayLine(c, [i], g.canAny, sugg)
     g.wire(say)
+    // How spraying is done this season, and the way to change it, beside the spray order once blight weather has come.
+    const way = sprayWay(c)
+    const spray = c.season!.watchDay >= 0 && f.status === 'growing' ? h('button', { class: 'btn quiet spray-way', type: 'button', testid: 'card-spray-way', onclick: () => askSpray(ctx) },
+      icon('spray', 'i'), 'Spraying this season: ', h('b', null, way === 'auto' ? 'kept sprayed' : way === 'none' ? 'not this year' : 'ask me'), h('span', { class: 'quiet' }, ' · change')) : null
     return [
       headWith('Field record', f.name, [`${f.variety}, `, term((SHORT_STAGE[f.stage] ?? f.stage).toLowerCase())]),
       gauges(c, f),
       g.el,
       say,
+      spray,
       h('div', { class: 'readings' }, known(c, f), land),
       landRow(c, i),
     ]
