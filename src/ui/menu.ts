@@ -100,7 +100,7 @@ export function openMenu(ctx: Ctx, o: { onHelp: () => void; onAlmanac: () => voi
         })
         if (ok) { close(); app.deleteSave(); ctx.say('Save deleted.', 'info') }
       }
-      const when = c && c.season && c.phase === 'season' ? ` · ${F.date(c.year, c.season.day, true)}` : c ? ` · ${PHASE_LABEL[c.phase].toLowerCase()}` : ''
+      const when = c && c.season && c.phase === 'season' ? ` · ${F.date(c.year, c.season.day)}` : c ? ` · ${PHASE_LABEL[c.phase].toLowerCase()}` : ''
       const menuPage = h('section', { 'aria-label': 'Menu' },
         h('p', { class: 't-label' }, c ? `${seasonCount(c)}${when}` : 'The farm'),
         h('h1', { class: 'mini-mark' }, h('span', { class: 'the' }, 'The'), h('span', { class: 'county' }, 'County')),

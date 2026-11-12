@@ -5,7 +5,7 @@ import type { Ctx } from './core.ts'
 import { h } from './dom.ts'
 import { icon } from './icons.ts'
 import { JOB_KEY, JOB_VERB, orderHelp } from './rules.ts'
-import { key, need, tag } from './system/parts.ts'
+import { key, tag } from './system/parts.ts'
 
 const REPO = 'https://github.com/TheMizeGuy/fable-5.2-potatobench'
 
@@ -15,10 +15,10 @@ function figs(touch: boolean): HTMLElement {
     h('div', { class: 'plate-area', 'aria-hidden': 'true', inert: true }, pic),
     h('h3', null, h('span', { class: 'n' }, String(n)), title),
     h('p', null, text))
-  const spray = need({ ink: 'ochre', icon: 'spray', label: 'Spray', next: true })
+  const spray = h('span', { class: 'need ochre is-next' }, icon('spray'))
   return h('div', { class: 'figs' },
-    fig(1, tag({ name: 'North Ridge', icon: 'bloom', selected: true }), 'Pick a field', touch ? 'Tap its tag, or the field. Its card opens with what it needs.' : 'Click its tag, or the field. Its card opens at the right with what it needs.'),
-    fig(2, tag({ name: 'Upper Middle', icon: 'bloom', need: spray }), 'Give the order', touch ? 'Tap the stamp: it gives the order the field needs.' : 'Click the stamp, or right-click the field: it gives the order the field needs.'),
+    fig(1, tag({ name: 'North Ridge', icon: 'bloom', selected: true, still: true }), 'Pick a field', touch ? 'Tap its tag, or the field. Its card opens with what it needs.' : 'Click its tag, or the field. Its card opens at the right with what it needs.'),
+    fig(2, tag({ name: 'Upper Middle', icon: 'bloom', need: spray, still: true }), 'Give the order', touch ? 'Tap the stamp: it gives the order the field needs.' : 'Click the stamp, or right-click the field: it gives the order the field needs.'),
     fig(3, h('div', { class: 'clock' }, h('span', { class: 'k' }, icon('pause', 'i')), h('span', { class: 'k', 'aria-pressed': 'true' }, '1×'), h('span', { class: 'k' }, '2×'), h('span', { class: 'k' }, '3×')),
       'Let the days run', touch ? 'The days run at the speed you set, and stop when a card needs you.' : 'The days run at the speed you set, and stop when a card needs you. Space pauses.'))
 }
@@ -55,7 +55,7 @@ export function openHelp(ctx: Ctx): void {
         icon('key', 'i'), h('b', null, touch ? 'Every order' : 'Every key and order'), h('span', { class: 'quiet' }, 'for when you want them'), chev)
       const draw = () => {
         toggle.setAttribute('aria-expanded', String(more))
-        chev.textContent = more ? '⌄' : '›'
+        chev.textContent = '›'
         box.replaceChildren(...(more ? [h('div', { class: 'keys-cols' },
           touch ? null : h('section', null,
             h('p', { class: 't-label' }, 'Keys'),

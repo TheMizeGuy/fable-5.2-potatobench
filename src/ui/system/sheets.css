@@ -35,6 +35,7 @@
 @media (max-width: 699px) {
   .dialog.sys, .dialog.sys.small, .dialog.sys.wide { left: 0; right: 0; top: auto; bottom: 0; transform: none; width: auto; max-height: calc(100dvh - 24px); animation-name: sh-up; }
   .dialog.sys.out { animation-name: sh-down; }
+  .dialog.sys.plain { max-width: none; }
   .dlg-head { margin: 0 var(--s4); padding-top: var(--s3); }
   .dlg-body { padding: var(--s3) var(--s4) var(--s4); }
   .dlg-foot { margin: 0 var(--s4); padding-bottom: max(var(--s3), env(safe-area-inset-bottom, 0px)); }
@@ -44,6 +45,8 @@
 /* ---------------------------------------------------------------- the menu: the office file (design/menu.html) */
 .dialog.sys.menu-dialog { left: max(40px, env(safe-area-inset-left, 0px)); top: 40px; transform: none; max-height: none; animation-name: sh-file; }
 .dialog.sys.menu-dialog.out { animation-name: sh-file-out; }
+/* The file lies on the live land as the frame draws it: the veil keeps its clicks but not its shade. */
+.paper-layer:has(> .menu-dialog:not(.out)) > .veil { background: transparent; }
 @keyframes sh-file { from { transform: translateX(-28px); } }
 @keyframes sh-file-out { to { opacity: 0; transform: translateX(-20px); } }
 .menu-dialog .file { position: relative; left: auto; top: auto; width: min(820px, calc(100vw - 80px)); }
@@ -56,7 +59,7 @@
 .menu-dialog .form-status:empty { display: none; }
 @media (max-height: 760px) { .menu-dialog .mini-mark .county { font-size: 64px; } .dialog.sys.menu-dialog { top: 30px; } }
 @media (max-width: 899px) {
-  .dialog.sys.menu-dialog { left: 0; right: 0; top: auto; bottom: 0; animation-name: sh-up; }
+  .dialog.sys.menu-dialog { left: 0; right: 0; top: auto; bottom: 0; max-width: none; animation-name: sh-up; }
   .dialog.sys.menu-dialog.out { animation-name: sh-down; }
   .menu-dialog .file { width: auto; padding: 30px 8px 8px; border-radius: 3px 3px 0 0; }
   .menu-dialog .file-pages { grid-template-columns: minmax(0, 1fr); max-height: calc(100dvh - 60px); }
@@ -75,8 +78,11 @@
 .how-dialog .howto { position: relative; left: auto; top: auto; transform: none; width: min(900px, calc(100vw - 2 * var(--gutter)));
   max-height: calc(100vh - 2 * var(--gutter)); max-height: calc(100dvh - 2 * var(--gutter)); overflow-y: auto; overscroll-behavior: contain; }
 .howto-lead { font-size: 18px; padding-top: 12px; }
-.howto .keys-fold { width: 100%; text-align: left; }
-.howto .keys-fold .chev { margin-left: auto; font-size: 22px; }
+.howto .keys-fold { text-align: left; }
+/* The frame shows the land itself behind each picture; the game draws rows of crop in its place. */
+.how-dialog .fig .plate-area { background: radial-gradient(circle at 50% 50%, rgb(118 156 70 / .85) 0 3px, transparent 3.5px) 0 0 / 11px 14px, repeating-linear-gradient(172deg, #3f6429 0 5px, #4f7a34 5px 14px); }
+.howto .keys-fold .chev { margin-left: auto; font-size: 22px; transition: transform var(--t-tap) var(--ease-out); }
+.howto .keys-fold[aria-expanded="true"] .chev { transform: rotate(90deg); }
 .keys-box:empty { display: none; }
 .keys-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--s5); padding: var(--s2) 0 var(--s3); }
 .keys-t { width: 100%; border-collapse: collapse; font-size: var(--t-caption); }
@@ -87,23 +93,29 @@
 .howto-foot { padding-top: var(--s2); }
 .howto-foot .btn.quiet { display: inline-flex; min-height: var(--touch); padding: 0 4px; }
 @media (max-width: 899px) {
-  .figs { grid-template-columns: minmax(0, 1fr); gap: var(--s3); }
-  .fig { grid-template-columns: 200px minmax(0, 1fr); grid-template-rows: auto 1fr; column-gap: var(--s3); }
-  .fig .plate-area { grid-row: 1 / 3; min-height: 92px; }
-  .fig .plate-area .clock { width: 180px; }
-  .fig h3 { align-self: end; }
-  .code-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .year-row { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+  .how-dialog .figs { grid-template-columns: minmax(0, 1fr); gap: var(--s3); }
+  .how-dialog .fig { grid-template-columns: 200px minmax(0, 1fr); grid-template-rows: auto 1fr; column-gap: var(--s3); row-gap: 6px; }
+  .how-dialog .fig .plate-area { grid-row: 1 / 3; min-height: 92px; }
+  .how-dialog .fig .plate-area .clock { width: 180px; }
+  .how-dialog .fig h3 { align-self: end; }
+  .how-dialog .code-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .how-dialog .year-row { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 }
 @media (max-width: 699px) {
   .how-dialog .howto { width: auto; max-height: calc(100dvh - 24px); padding: 14px var(--s4) max(var(--s3), env(safe-area-inset-bottom, 0px)); border-radius: 3px 3px 0 0; }
-  .fig { grid-template-columns: 132px minmax(0, 1fr); }
-  .fig .plate-area { overflow: hidden; }
-  .fig .plate-area .tag-at { transform: scale(.8); }
-  .fig .plate-area .clock { width: 124px; }
-  .fig .plate-area .clock .k { font-size: 17px; }
-  .code-row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
-  .keys-cols { grid-template-columns: minmax(0, 1fr); }
+  .how-dialog .howto-head .t-title { font-size: 26px; }
+  .how-dialog .howto-lead { font-size: 16px; }
+  .how-dialog .fig { grid-template-columns: 128px minmax(0, 1fr); column-gap: var(--s2); }
+  .how-dialog .fig h3 { font-size: 18px; }
+  .how-dialog .fig p { font-size: 14px; }
+  .how-dialog .fig .plate-area { min-height: 76px; overflow: hidden; }
+  .how-dialog .fig .plate-area .tag-at { transform: scale(.62); }
+  .how-dialog .fig .plate-area .clock { width: 116px; grid-template-columns: repeat(4, 1fr); }
+  .how-dialog .fig .plate-area .clock .k { height: 34px; font-size: 15px; }
+  .how-dialog .code-row { grid-template-columns: minmax(0, 1fr); gap: 2px; padding: 8px 0; }
+  .how-dialog .year-row { gap: 10px; }
+  .how-dialog .keys-fold .quiet { display: none; }
+  .how-dialog .keys-cols { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* ---------------------------------------------------------------- the almanac: printed pages with a thumb index */
@@ -138,6 +150,8 @@
 .alm-t thead th { height: auto; padding-bottom: 6px; font: 400 var(--t-label)/1.1 var(--f-gothic); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-2); border-bottom: 1px solid var(--ink); white-space: nowrap; }
 .alm-t tbody th { white-space: nowrap; }
 .alm-people tbody th { white-space: normal; }
+.alm-people .alm-face { width: 52px; padding-right: 10px; }
+.alm-people .bust { display: block; }
 .alm-book td:first-child { padding: 4px 8px 4px 0; height: 32px; }
 .alm-book .m { width: 128px; white-space: nowrap; }
 .alm-rules { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: var(--s5); }
@@ -225,6 +239,11 @@
 .spring-screen .topbar .bank { width: 290px; }
 .spring-screen .notes-slot { position: absolute; left: var(--gutter); bottom: max(var(--gutter), env(safe-area-inset-bottom, 0px)); width: 300px; display: grid; gap: 6px; pointer-events: none; }
 .spring-screen .notes-slot > * { pointer-events: auto; }
+.notes:is(.sys *) { display: grid; gap: 8px; justify-items: start; }
+.alert:is(.sys *) { text-align: left; }
+.alert.lv-warn .i:is(.sys *) { color: var(--ochre); }
+.alert.lv-good .i:is(.sys *) { color: var(--green); }
+.alert .nicon:is(.sys *) { display: grid; place-items: center; flex: none; width: 40px; height: 40px; margin: -8px -10px -8px auto; }
 .spring-screen .catalogue { top: max(var(--gutter), env(safe-area-inset-top, 0px)); right: max(var(--gutter), env(safe-area-inset-right, 0px)); bottom: max(var(--gutter), env(safe-area-inset-bottom, 0px));
   max-width: calc(100vw - 2 * var(--gutter)); animation: sh-left var(--t-sheet) var(--ease-paper); }
 .spring-screen .cat-body { overflow-y: auto; overscroll-behavior: contain; }
@@ -241,6 +260,15 @@
 @media (hover: hover) { .cat-row:hover { background: var(--paper-2); } }
 .cat-hall { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 0; }
 .cat-hall > .t-caption { flex: 1 1 100%; padding: 0; }
+.hall-row { flex-wrap: nowrap; padding: 8px 0; border-bottom: 1px solid var(--hair); }
+.hall-row > .t-label { flex: 1 1 auto; }
+.hall-row > .t-caption { order: 9; }
+.hall-row:has(> .t-caption) { flex-wrap: wrap; }
+.hall-row .btn { min-height: 40px; padding: 0 12px; }
+.cat-sub .t-caption { text-transform: none; letter-spacing: 0; }
+.spring-screen[data-layout='narrow'] .hall-row { flex-wrap: wrap; }
+.spring-screen[data-layout='narrow'] .hall-row > .t-label { flex-basis: 100%; }
+.spring-screen[data-layout='narrow'] .hall-row .btn { flex: 1 1 0; min-height: 44px; }
 .cat-hired { display: grid; grid-template-columns: 32px auto minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--hair); font-size: 15px; }
 .cat-hired .it { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cat-done { display: flex; justify-content: flex-end; }

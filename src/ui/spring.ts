@@ -119,9 +119,10 @@ function peopleBody(ctx: Ctx, c: S.Campaign, onTry: (err: string) => void, onClo
   }
   return [
     ...S.applicantInfo(c).map(a => applicant(ctx, a, one, onTry)),
-    h('div', { class: 'cat-hall' }, h('p', { class: 't-caption' }, `Or the hiring hall, average at their work. ${bedText(c)}`), hall('hand'), hall('operator')),
+    h('div', { class: 'cat-hall hall-row' }, h('p', { class: 't-label', title: 'Average at their work' }, 'Or the hiring hall'), hall('hand'), hall('operator'),
+      L.hireWhy ? h('p', { class: 't-caption' }, L.hireWhy) : null),
     hired.length ? [
-      h('p', { class: 't-label cat-sub' }, `On the farm, ${L.hired} of ${L.housing} places`),
+      h('p', { class: 't-label cat-sub' }, `On the farm, ${L.hired} of ${L.housing} places`, L.hireWhy ? null : h('span', { class: 't-caption' }, ` ${bedText(c)}`)),
       h('ul', { class: 'cat-list' }, hired.map(p => h('li', { class: 'cat-hired' },
         portrait(p, 32),
         h('b', null, p.name),

@@ -8,6 +8,7 @@ import { icon } from './icons.ts'
 import { BLOCK_NAME, heldFields, roadTime } from './map.ts'
 import * as R from './rules.ts'
 import { meter, need } from './system/parts.ts'
+import { portrait } from './system/people.ts'
 
 type Page = 'forecast' | 'blight' | 'fields' | 'farm' | 'people' | 'buildings' | 'incidents' | 'diary' | 'prices'
 const PAGES: [Page, string, string][] = [
@@ -156,8 +157,10 @@ function peoplePage(c: S.Campaign): Child {
   return [
     h('table', { class: 'alm-t alm-people' }, h('tbody', null, people.map(p => {
       const best = S.bestSkill(p.skills)
+      const who = p.kind === 'farmer' ? 'You' : p.name
       return h('tr', null,
-        h('th', { scope: 'row' }, h('b', null, p.kind === 'farmer' ? 'You' : p.name),
+        h('td', { class: 'alm-face' }, portrait(who, 40)),
+        h('th', { scope: 'row' }, h('b', null, who),
           sub(` ${p.traitName ? `${p.traitName.toLowerCase()}, ` : ''}best at ${S.SKILL_LABEL[best]} (${p.skills[best]}); ${p.tiredWord}, ${p.moodWord}${p.pay ? `; ${F.money(p.pay)} a month` : ''}`)),
         h('td', null, p.doing))
     }))),

@@ -34,10 +34,12 @@ export function need(o: { ink: Ink; icon: string; label: string; next?: boolean;
 // returned element with a transform; it is centred on its own 0,0.
 export function tag(o: {
   name: string; icon: string; selected?: boolean; listed?: { icon: string }; variety?: string; need?: HTMLElement | null
-  testid?: string; label?: string; onclick?: Click
+  testid?: string; label?: string; onclick?: Click; still?: boolean
 }): HTMLElement {
+  // still: a picture of a tag (how to play), not a control.
+  const face = o.still ? { class: 'tag' } : { class: 'tag', type: 'button', testid: o.testid, 'aria-pressed': String(!!o.selected), 'aria-label': o.label ?? o.name, onclick: o.onclick }
   return h('div', { class: `tag-at sys${o.selected ? ' is-sel' : ''}` },
-    h('button', { class: 'tag', type: 'button', testid: o.testid, 'aria-pressed': String(!!o.selected), 'aria-label': o.label ?? o.name, onclick: o.onclick },
+    h(o.still ? 'span' : 'button', face,
       h('i', { class: 'eyelet' }), icon(o.icon, 'i'), h('span', { class: 'nm' }, o.name),
       o.variety ? h('span', { class: 'var' }, o.variety) : null,
       o.listed ? h('span', { class: 'listed' }, icon(o.listed.icon, 'i'), stamp('On the list', { small: true })) : null),

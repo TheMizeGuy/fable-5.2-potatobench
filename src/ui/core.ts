@@ -382,8 +382,8 @@ export class Notes {
   pin(o: { key: string; glyph: string; text: string; tile?: boolean; onClose?: () => void }): void {
     if (this.pinned?.key === o.key) return
     const el = h('div', { class: `alert${o.onClose ? ' tip' : ''}${o.tile ? ' tiled' : ''}`, role: 'note', testid: o.onClose ? 'hint' : 'idle-note' },
-      icon(o.glyph, 'ic s'), h('span', null, o.text),
-      o.onClose ? h('button', { class: 'nicon s', type: 'button', 'aria-label': 'Put this tip away', testid: 'hint-close', onclick: o.onClose }, icon('close', 'ic s')) : null)
+      icon(o.glyph, 'ic s i'), h('span', null, o.text),
+      o.onClose ? h('button', { class: 'nicon s', type: 'button', 'aria-label': 'Put this tip away', testid: 'hint-close', onclick: o.onClose }, icon('close', 'ic s i')) : null)
     this.pinned = { key: o.key, el }
     this.draw()
   }
@@ -435,10 +435,12 @@ export class Notes {
   }
 
   private row(n: Note): HTMLElement {
-    const inner = [icon(n.glyph, 'ic s'), h('span', null, n.text)]
+    // 'ic s' sizes the icon on the screens not yet in the system, 'i' on those that are; 'bad' is the kit's red rule.
+    const inner = [icon(n.glyph, 'ic s i'), h('span', null, n.text)]
+    const cls = `alert lv-${n.level}${n.level === 'bad' ? ' bad' : ''}`
     const row = n.go || n.field >= 0
-      ? h('button', { class: `alert lv-${n.level}`, type: 'button', testid: 'alert', onclick: () => (n.go ? n.go() : this.onGo(n.field)) }, inner, h('span', { class: 'sr' }, '. Go there.'))
-      : h('div', { class: `alert lv-${n.level}`, testid: 'notice' }, inner)
+      ? h('button', { class: cls, type: 'button', testid: 'alert', onclick: () => (n.go ? n.go() : this.onGo(n.field)) }, inner, h('span', { class: 'sr' }, '. Go there.'))
+      : h('div', { class: cls, testid: 'notice' }, inner)
     row.dataset.id = n.id
     return row
   }
