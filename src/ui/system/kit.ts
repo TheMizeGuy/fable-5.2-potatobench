@@ -172,7 +172,7 @@ export function mountKit(root: HTMLElement): void {
           h('tr', null, h('td', null, h('span', { class: 'stamped', style: 'font-size:28px' }, '1,374')), h('td', null, h('b', null, 'Violet'), ': what a machine or a clerk stamped.')))))),
 
     sec('7', 'Portraits', 'portrait(person, size): one engraver’s hand, tinted in the colours each person wears on the land',
-      h('div', { class: 'k-busts' }, CUTS.map(([cut, name]) => h('figure', null, portrait(name, 72), h('span', null, `bust-${cut}`), lab(name)))),
+      h('div', { class: 'k-busts' }, CUTS.map(([cut, name]) => h('figure', null, portrait({ ...personLook(name), cut }, 72), h('span', null, `bust-${cut}`), lab(name)))),
       h('div', { class: 'k-busts small', style: 'margin-top:12px' }, ['Lucien', 'Marie', 'Gerald', 'Theresa', 'Roland', 'Dot', 'Wendell', 'Aurele', 'Hazel Cyr', 'Leon Daigle', 'Rita Sirois', 'Carl Haines'].map(n => h('figure', null, portrait(n, 44), h('span', null, `${n.split(' ')[0]} · ${personLook(n).cut}`))))),
 
     sec('8', 'The cuts', `icon(name): ${ICON_NAMES.length} drawings on one 24 unit grid, a 1.7 unit square-ended line`,
