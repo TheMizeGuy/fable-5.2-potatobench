@@ -95,7 +95,7 @@ export function attachInput(
       if (app.hover !== -1) app.setHover(-1)
     }
     if (dragged && downAt && !consumed) {
-      if (downAt.button === 2) rig.turnBy((p.x - was.x) * 0.0062, vp)
+      if (downAt.button === 2) { rig.turnBy((p.x - was.x) * 0.0062, vp); rig.leanBy((was.y - p.y) * 0.0035) }
       else rig.pan(was.x, was.y, p.x, p.y, vp)
     }
     pointers.set(e.pointerId, p)
@@ -157,6 +157,7 @@ export function attachInput(
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Home') return e.key
     if (e.key === 'q' || e.key === 'Q') return 'q'
     if (e.key === 'e' || e.key === 'E') return 'e'
+    if (e.key === 'PageDown' || e.key === 'PageUp') return e.key
     return ''
   }
   const onKeyDown = (e: KeyboardEvent) => {
@@ -166,7 +167,7 @@ export function attachInput(
     if (k === 'Home') { if (!e.repeat) home() } else held.add(k)
   }
   const onKeyUp = (e: KeyboardEvent) => {
-    for (const k of ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown']) if (e.key === k) held.delete(k)
+    for (const k of ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'PageDown', 'PageUp']) if (e.key === k) held.delete(k)
     if (e.key === 'q' || e.key === 'Q') held.delete('q')
     if (e.key === 'e' || e.key === 'E') held.delete('e')
   }
@@ -193,6 +194,8 @@ export function attachInput(
       if (x || y) rig.slide(x * dt, y * dt, vp)
       const turn = (held.has('e') ? 1 : 0) - (held.has('q') ? 1 : 0)
       if (turn) rig.turnBy(turn * 1.5 * dt, vp)
+      const lean = (held.has('PageDown') ? 1 : 0) - (held.has('PageUp') ? 1 : 0)
+      if (lean) rig.leanBy(lean * 0.9 * dt)
     },
     dispose() {
       clearTimeout(pressTimer)

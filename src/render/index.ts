@@ -318,6 +318,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   // player's own it goes to the field tier, on the field they were looking at, and puts the view square again.
   function goHome(): void {
     const vp = viewport()
+    rig.level()
     if (snap.mode === 'title') { framing = 'title'; rig.moveTo(rig.titlePose(vp, titleU()), reduced); return }
     const at = framing !== 'free' && framing !== 'title' && rig.isAt(framedPose(vp, turned())) ? framing : 'free'
     if (at === 'free' || at === 'county') { frameField(at === 'county' ? framed : fieldInView(), reduced, true); return }
@@ -662,6 +663,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     input.frame(dt)
     if (rig.idle < 0.2 && framing !== 'free') framing = 'free'
     if (snap.mode === 'title' && framing === 'title') {
+      rig.level()
       if (!reduced && titleFixed < 0) titleClock += dt
       const to = rig.titlePose(vp, titleU())
       if (rig.moving()) rig.retarget(to)

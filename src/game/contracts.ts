@@ -9,6 +9,7 @@ import type { App } from './app.ts'
 //   pointer over a field: app.setHover(i)
 //   click a person, or the tractor or truck they are on: app.selectUnit(id); the picked person (app.unit) is marked
 //   drag: pan; wheel or pinch: zoom toward the pointer; right-drag, two-finger twist, Q and E: turn; arrow keys: pan;
+//   right-drag up and down, Page Up and Page Down: tip the view toward straight down and back (Home levels it);
 //   Home: out a tier (the field in hand, the home farm, the whole map, and round again)
 // It draws the selection (app.selection), the hover (app.hover) and a ring on the fields of an 'order' app event,
 // and moves the camera to a field on a 'focus' app event. Every other key belongs to the interface.

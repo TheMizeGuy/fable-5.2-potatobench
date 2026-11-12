@@ -15,6 +15,8 @@ export interface Pose { x: number; z: number; dist: number; yaw: number; pitch: 
 export type TierName = 'yard' | 'field' | 'farm' | 'county'
 
 export const MIN_DIST = 7.5
+// The steepest the player can tip the view: a little short of straight down, so north stays up.
+const STEEP = 1.46
 // How far the picture reaches: past the last range of hills (src/render/far.ts).
 export const FAR = FAR_REACH + 3200
 // The land is seen from the brook side, turned toward the low sun: three-quarter back light.
@@ -143,10 +145,14 @@ export class CameraRig {
   private probe = new PerspectiveCamera(42, 1, 0.5, FAR)
   // Seconds since the player last moved the camera by hand.
   idle = 99
+  // How far the player has tipped the view over toward straight down, 0 (as each distance sets it) to 1.
+  private lean = 0
+  private leanGoal = 0
 
   private place(c: PerspectiveCamera, p: Pose, vp: Viewport, sx: number, sy: number): void {
     const ty = profile(clamp(p.z, ROAM.z0, ROAM.z1)) + 0.8
-    const cp = Math.cos(p.pitch), sp = Math.sin(p.pitch)
+    const pitch = p.pitch + (STEEP - p.pitch) * this.lean, tilt = p.tilt * (1 - this.lean)
+    const cp = Math.cos(pitch), sp = Math.sin(pitch)
     c.fov = p.fov
     c.aspect = vp.w / vp.h
     // The nearer the nearest thing drawn, the less depth there is to tell a road from the ground under it a
@@ -159,7 +165,7 @@ export class CameraRig {
     if (y < floor) y = floor
     c.position.set(x, y, z)
     c.lookAt(p.x, ty, p.z)
-    if (p.tilt) c.rotateX(p.tilt)
+    if (tilt) c.rotateX(tilt)
     if (sx || sy) c.setViewOffset(vp.w, vp.h, -sx, -sy, vp.w, vp.h)
     else c.clearViewOffset()
     c.updateProjectionMatrix()
@@ -379,6 +385,17 @@ export class CameraRig {
     this.bound(vp)
   }
 
+  // Tips the view over toward straight down (positive) or back toward the horizon.
+  leanBy(amount: number): void {
+    this.idle = 0
+    this.leanGoal = clamp(this.leanGoal + amount, 0, 1)
+  }
+
+  // Back to the tilt each distance sets.
+  level(): void {
+    this.leanGoal = 0
+  }
+
   // Keys: along the screen's own right and up.
   slide(right: number, up: number, vp: Viewport): void {
     this.byHand()
@@ -418,6 +435,7 @@ export class CameraRig {
       const k = still ? 1 : 1 - Math.exp(-dt / 0.085)
       blend(this.cur, this.goal, k, this.cur)
     }
+    this.lean += (this.leanGoal - this.lean) * (still ? 1 : 1 - Math.exp(-dt / 0.12))
     const ks = still ? 1 : 1 - Math.exp(-dt / 0.16)
     this.shift.x += (this.shiftGoal.x - this.shift.x) * ks
     this.shift.y += (this.shiftGoal.y - this.shift.y) * ks
