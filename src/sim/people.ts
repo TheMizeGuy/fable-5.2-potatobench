@@ -118,6 +118,12 @@ export function upgradePerson(u: Record<string, unknown>, seed: number, year: nu
   u.rest ??= 'auto'
 }
 
+// A person as the subject of a sentence: the name and what is said of them ("Ada is hurt"), or, for the farmer, the
+// same thing said to the player ("You are hurt").
+export function subject(u: Unit, one: string, you: string): string {
+  return u.kind === 'farmer' ? you : `${u.name} ${one}`
+}
+
 // Whether a person takes today off: rests by themselves once worn out (unless told to work on), or was told to rest
 // until fresh.
 export function resting(u: Unit): boolean {

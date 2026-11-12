@@ -89,8 +89,8 @@ describe('building', () => {
   it('cannot be paid for on credit', () => {
     const c = S.createCampaign(world, { seed: 1, startYear: 1990 })
     c.cash = 1000
-    refused(c, { t: 'build', kind: 'shed', yard: HOME }, /Not enough cash/)
-    expect(S.buildingInfo(c).find(b => b.kind === 'shed')!.why).toMatch(/Not enough cash/)
+    refused(c, { t: 'build', kind: 'shed', yard: HOME }, /can't afford it yet/)
+    expect(S.buildingInfo(c).find(b => b.kind === 'shed')!.why).toMatch(/can't afford it yet/)
   })
 
   it('goes on through the winter with someone kept on to build', () => {
@@ -354,7 +354,7 @@ describe('hauling', () => {
   it('the digger lifts the crop into barrels and an order to haul it goes on top of the list by itself', () => {
     const c = structuredClone(base)
     ok(c, { t: 'job', kind: 'dig', field })
-    refused(c, { t: 'job', kind: 'haul', field }, /by itself/)
+    refused(c, { t: 'job', kind: 'haul', field }, /automatically/)
     for (let k = 0; k < 10 && c.season!.fields[field].inField === 0; k++) days(c, 1)
     const f = c.season!.fields[field]
     expect(f.inField).toBeGreaterThan(0)

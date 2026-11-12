@@ -91,7 +91,7 @@ describe('the tracts', () => {
     ok(x, { t: 'begin' })
     refused(x, { t: 'job', kind: 'plant', field: WOODLOT }, /woods/)
     refused(x, { t: 'job', kind: 'rocks', field: WOODLOT }, /stumps/)
-    refused(x, { t: 'job', kind: 'fell', field: BURNT }, /not the farm/)
+    refused(x, { t: 'job', kind: 'fell', field: BURNT }, /isn't yours/)
     ok(x, { t: 'job', kind: 'fell', field: WOODLOT })
     expect(order(x, 'fell', WOODLOT)!.need).toBe(S.FELL_DAYS.woods)
     refused(x, { t: 'job', kind: 'fell', field: 0 }, /nothing to fell/)
@@ -388,7 +388,7 @@ describe('logs', () => {
     const ledger = structuredClone(c)
     ledger.phase = 'ledger'
     ledger.logs = 10
-    refused(ledger, { t: 'sellLogs', loads: 1 }, /spring, in the season or in winter/)
+    refused(ledger, { t: 'sellLogs', loads: 1 }, /spring, during the season, or in winter/)
     c.logs = 10
     ok(c, { t: 'sellLogs', loads: 4 })
     expect([c.logs, c.yearLogs, c.yearRevenue]).toEqual([6, 4 * S.LOG_PRICE, 4 * S.LOG_PRICE])
@@ -415,8 +415,8 @@ describe('the winter woods', () => {
       if (ev.some(e => e.type === 'felled' && e.field === WOODLOT)) {
         felled = true
         expect(ev.filter(e => e.type === 'winterIdle').map(e => e.text)).toEqual([
-          expect.stringMatching(/^You stop work for the rest of the winter: There is nothing left to fell on/),
-          expect.stringMatching(new RegExp(`^${hand.name} is laid off for the rest of the winter: There is nothing left to fell on`)),
+          expect.stringMatching(/^You're done working for the rest of the winter\. There's nothing left to fell on/),
+          expect.stringMatching(new RegExp(`^${hand.name} is laid off for the rest of the winter\\. There's nothing left to fell on`)),
         ])
       }
       for (const p of S.winterInfo(c).people) if (p.work === 'woods') expect(S.fellLeft(c, p.field)).toBeGreaterThan(0)
