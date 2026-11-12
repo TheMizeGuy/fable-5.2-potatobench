@@ -456,6 +456,82 @@ to 0.84 of the side, in one of them while the playing view held its full size.
 is slowed more by what each pixel works out than this card is, so lighting at the corners should count for more
 there than the 9% here; it cannot be read from this box.
 
+### What a level view is made of
+
+`budget.ts --close --level` takes each view whole and then with one part at a time not drawn, and counts the
+fragments of the trees' cards, the far woods, the whole trees, the grass and the crop to a pixel of the picture
+(`work()`, the counting hook made general: a cut-out counts for as much of a pixel as it covers; nothing is counted
+that the picture's own camera does not draw). Triangles, draw calls and fragments do not depend on how busy the box
+is; the times of this round's runs did (a part's cost read between -6 and +4 ms), and none is given.
+
+**Triangles of a frame, by part** (millions, every pass counted; 1512 by 982 at two to one, high setting; before
+this round's change):
+
+| part | playing view | yard tier | level from 160 m | closest, level over a crop | closest, level in the yard |
+| --- | --- | --- | --- | --- | --- |
+| the whole frame | 1.35 (236 calls) | 3.36 (271) | 2.25 (226) | 2.65 (158) | 2.29 (193) |
+| whole and simpler trees | 0 | 1.65 | 0.65 | 0.42 | 0.20 |
+| tree cards | 0.13 | 0.07 | 0.06 | 0.05 | 0.06 |
+| far woods | 0.09 | 0.05 | 0.04 | 0.05 | 0.05 |
+| terrain and land | 0.72 | 0.69 | 0.74 | 0.73 | 0.73 |
+| clearing | 0.36 | 0.45 | 0.43 | 0.42 | 0.43 |
+| fields and crop | 0 | 0.05 | 0.19 | 0.87 | 0.06 |
+| grass | 0 | 0.20 | 0.04 | 0.04 | 0.61 |
+| buildings and yard | 0.08 | 0.12 | 0.08 | 0.05 | 0.09 |
+| far country, people, sky | 0.14 | 0.10 | 0.10 | 0.10 | 0.11 |
+| (of all these, drawn into the fine shadow map) | 0.11 | 0.82 | 0.88 | 0.33 | 0.29 |
+
+**The 0.9M triangles a level view from 160 m has over the playing view**: 0.65M are simpler trees drawn into the
+fine shadow map and nowhere else (a patch of wood drawn as cards kept its simpler trees standing in that map, and
+from 160 m the map is still narrow enough to want them); 0.19M are the field's rows drawn as shapes in the ground;
+the rest is a little more of the clearing and the terrain. The yard tier's are its whole trees (1.65M with what they
+throw into the fine map) and its grass; the closest view's are the crop's plants (0.6M of the fields' 0.87M), whole
+trees at the field's edge and their shadows.
+
+**Fragments to a pixel of the picture** (drawn, and of those the ones in front of what was drawn before):
+
+| | playing view | yard tier | level from 160 m | closest, over a crop | closest, in the yard |
+| --- | --- | --- | --- | --- | --- |
+| whole and simpler trees | 0 | 0.20 (0.11) | 0.04 (0.02) | 9.96 (1.87) | 1.05 (0.44) |
+| tree cards | 0.61 (0.26) | 0.73 (0.20) | 1.73 (0.54) | 0.26 (0.08) | 0.68 (0.10) |
+| far woods (cards alone) | 1.25 (0.29) | 1.75 (0.19) | 2.20 (0.28) | 2.83 (0.20) | 2.04 (0.13) |
+| the crop's leaves | 0 | 0 | 0 | 1.23 (0.93) | 0 |
+| grass | 0 | 0.01 | 0.01 | 0.01 | 0.41 (0.29) |
+
+**This is what a level view costs a chip that is slowed by shading.** The woods are a strip across the horizon, a
+fifth of the picture or less, and in that strip trees stand behind trees. Level across a crop from the closest, the
+whole and simpler trees at the field's edge (a hundred to two hundred metres off, the front seventy metres of the
+wood) are **ten fragments to every pixel of the whole picture**, four in five of them behind a leaf already drawn;
+the far woods behind them are 2.8, of which 0.2 are in front. With the crop's leaves that view draws 14.3 fragments
+of leaf and card to a pixel where the playing view draws 1.9. From 160 m it is the cards (1.7) and the far woods
+(2.2); in the yard the far woods (2.0), the trees (1.1) and the grass (0.4). A leaf of a whole tree is lit at every
+pixel and a card is the dearest fragment in the game (three readings of its atlas and the whole of the light), and
+a cut-out cannot be hidden before it is shaded. The crop's leaves, which the last two rounds went after, are 1.2.
+
+**What was changed.** A far patch's cards now throw its shadow into the fine map from the yard tier's distance out
+(the map 55 m in radius or more), where they did so only from the farm tier's (160 m): the simpler trees that stood
+in that map for a patch two hundred metres off and more are not drawn. A frame's triangles: level from 160 m, 2.25M to 1.67M (the playing view has 1.34M, so 1.25 times
+it); the yard tier, 3.36M to 2.83M; the closest views as they were (2.65M and 2.29M). The one way against the other
+in the one page, in a quiet stretch (ms from one frame to the next, the quietest of three and the middle): the
+playing view 4.30 either way; level from 160 m 5.53 (5.75) with it and 5.44 (5.55) without; the closest 6.21 and
+6.25. So on this card the 0.6M triangles are worth nothing to time, and the level views stand at 1.3 and 1.45 times
+the playing view (2.85, 3.89, 5.17 and 5.73 ms for the playing view, the yard tier, 160 m and the closest in
+another quiet stretch of the same run: 1.4, 1.8 and 2.0 times). The picture pairs are the same to the eye: what
+changes is the shadow a wood two hundred metres off throws on its own floor.
+
+**Not done, and why.** The done line (each level view within 1.15 times the playing view, triangles within a fifth
+more) is not met and this round's change does not meet it. What would: (0) for a low camera, whole and simpler
+trees only in the front of a wood (a patch with trees between it and the camera drawn as cards, and within a patch
+the rows behind the first two left out or drawn as cards): that is the ten fragments. (1) Not shading the cards
+behind the front of a wood for a low camera. Thinning the far woods by distance when the camera is level would halve them, but the trees
+that make the skyline are the far ones on the ridge and they would thin first; it wants the cards ordered so that
+the crest is kept, or a first pass that writes the cards' depth and a second that lights only what is left in front
+(the depth test set to equal: cards are flat and placed alike in both passes, and a check at start-up could put the
+one pass back on a machine where the two do not agree to the last bit). (2) The yard tier's 1.65M triangles of whole
+trees cannot come within a fifth of the playing view's frame without taking whole trees out of the yard's own view.
+(3) The closest view's plant window sends 0.6M triangles of which half are behind the camera or past the reach:
+its slots want ordering from the middle out so that a level camera draws the inner part of them.
+
 ## Wave three: bugs and UX, checked by players who see only pictures
 
 After live-5 the owner asked for a camera that tips down, lighter rendering, a card for anyone clicked, a far more

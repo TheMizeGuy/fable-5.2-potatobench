@@ -390,6 +390,54 @@ if (flag('close')) {
     await field('f.force({ pixels: 1e9 })'); await field("f.show('fields', false)"); await part('no fields at all')
     await field("f.show('fields', true)")
   }
+  // --level: what a level view is made of. The playing view, the yard tier, level over the crop from 160 m, level
+  // across it from the closest and level in the yard from the closest: each whole, then with one part at a time not
+  // drawn (the two turn about, the quietest kept): what the part costs, its triangles and its draw calls; and the
+  // fragments of the trees' cards, the far woods, the whole trees, the grass and the crop to a pixel of the picture.
+  if (flag('level')) {
+    await turn(sides, now)
+    const lens = flag('lift') ? '{ pixels: 1e9, ao: false, focus: false, bloom: false, shafts: 0 }' : '{ ao: false, focus: false, bloom: false, shafts: 0 }'
+    const back = flag('lift') ? '{ pixels: 1e9 }' : '{}'
+    const show = (name: string): [string, string, string] => [name, `f.show('${name}', false)`, `f.show('${name}', true)`]
+    const parts: [string, string, string][] = [
+      ['whole trees', `f.trees('whole', false)`, `f.trees('whole', true)`], ['tree cards', `f.trees('cards', false)`, `f.trees('cards', true)`], ['far woods', ...show('farwoods').slice(1)] as [string, string, string],
+      ['fine shadow map redrawn', 'f.cascade(0, false)', 'f.cascade(0, true)'], ['middle shadow map redrawn', 'f.cascade(1, false)', 'f.cascade(1, true)'], ['wide shadow map redrawn', 'f.cascade(2, false)', 'f.cascade(2, true)'],
+      ['terrain and land', ...show('terrain').slice(1)] as [string, string, string], ['clearing', ...show('clearing').slice(1)] as [string, string, string], show('grass'), ['buildings and yard', ...show('props').slice(1)] as [string, string, string],
+      ['fields and crop', ...show('fields').slice(1)] as [string, string, string], ['people and machines', ...show('crews').slice(1)] as [string, string, string], show('sky'), ['far country', ...show('far').slice(1)] as [string, string, string],
+      ['lens passes', `f.force(${lens})`, `f.force(${back})`],
+    ]
+    console.log(`  what each view is made of (ms from one frame to the next${free ? ', drawing as fast as it can' : ''}, the quietest of ${ROUNDS}; a part's cost is the view with it less the view without):`)
+    for (const [key, label, set] of [near[0], near[1], near[2], near[4], near[6]]) {
+      if (opt('views') && !opt('views')!.split(',').includes(key)) continue
+      await set(page)
+      await page.waitForTimeout(1500)
+      const whole: M[] = []
+      const rows: string[] = []
+      for (const [name, off, on] of parts) {
+        let a = 1e9, b = 1e9, mb: M | null = null
+        for (let k = 0; k < ROUNDS; k++) {
+          const w = await window1(now, 0.6)
+          whole.push(w)
+          a = Math.min(a, w.gap)
+          await field(off)
+          await page.waitForTimeout(350)
+          const m = await window1(now, 0.6)
+          if (m.gap < b) { b = m.gap; mb = m }
+          await field(on)
+          await page.waitForTimeout(350)
+        }
+        const w0 = whole[whole.length - 1]
+        rows.push(`      ${name.padEnd(26)} ${ms(a - b)} ms   ${mega(w0.triangles - mb!.triangles)}M triangles   ${String(w0.calls - mb!.calls).padStart(4)} calls`)
+      }
+      const base = whole.reduce((x, y) => (y.gap < x.gap ? y : x))
+      const work = await page.evaluate(() => { const f = (window as any).__countyField; return f.work ? { cards: f.work('cards'), far: f.work('farwoods'), whole: f.work('whole'), grass: f.work('grass'), crop: f.cropWork() } : null })
+      console.log(`   ${label}: ${ms(base.gap)} ms, ${mega(base.triangles)}M triangles, ${base.calls} calls`)
+      for (const r of rows) console.log(r)
+      const w2 = (x: number[]) => `${x[0].toFixed(2)} (${x[1].toFixed(2)} in front)`
+      if (work) console.log(`      fragments to a pixel of the picture: tree cards ${w2(work.cards)}, far woods ${w2(work.far)}, whole trees ${w2(work.whole)}, grass ${w2(work.grass)}, the crop's leaves ${w2(work.crop)}`)
+      if (shots) await page.screenshot({ path: `${shots}/${key}-${W}x${H}.png` })
+    }
+  }
   // --crop=<switches>: the crop's whole plants as they are drawn now against as they are without each thing that
   // makes them cheaper (the renderer's tryWithout), the two turn about in the one page, three times each and the
   // quietest kept: the playing view, then level across the crop from 160 m and from the closest.

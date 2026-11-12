@@ -360,6 +360,13 @@ export class Flora {
   private low = false
   // Patches that have changed how they are drawn so far, for the tools.
   swaps = 0
+  // For the tools: nothing drawn of the trees as trees (whole and simpler), or of their cards.
+  private without = { whole: false, cards: false }
+  tryWithout(kind: 'whole' | 'cards', on: boolean): void {
+    this.without[kind] = on
+    for (const ch of this.chunks.values()) ch.level = -1
+    for (const b of this.blocks) b.state = -1
+  }
   private v = new Vector3()
 
   constructor() {
@@ -1048,7 +1055,7 @@ export class Flora {
       if (state === b.state) continue
       b.state = state
       for (const m of b.cards) {
-        m.visible = b.whole
+        m.visible = b.whole && !this.without.cards
         if (wide) m.layers.enable(3); else m.layers.disable(3)
       }
     }
@@ -1059,16 +1066,16 @@ export class Flora {
       if (state === ch.level) continue
       ch.level = state
       this.swaps++
-      for (const m of ch.near) m.visible = level === 0
+      for (const m of ch.near) m.visible = level === 0 && !this.without.whole
       // A card in the fine shadow would be a great sheet of the map to fill: where a patch is drawn as cards, its
       // simpler trees still stand in the fine shadow, out of the picture.
       for (const m of ch.far) {
-        m.visible = level === 1 || (level === 2 && !this.low && !wide)
+        m.visible = (level === 1 || (level === 2 && !this.low && !wide)) && !this.without.whole
         m.layers.set(3)
         if (level === 1) m.layers.enable(0)
       }
       for (const m of ch.cards) {
-        m.visible = !whole
+        m.visible = !whole && !this.without.cards
         if (level === 2) m.layers.enable(0); else m.layers.disable(0)
         if (level === 2 && wide) m.layers.enable(3); else m.layers.disable(3)
       }
