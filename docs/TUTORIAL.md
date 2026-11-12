@@ -57,7 +57,7 @@ ends them is already true.
 | 3 | Turn and tip the view | The season screen | The camera turned or tipped | (the land) |
 | 4 | Read the boards | The season screen | Noted, or three days run | The forecast |
 | 4a | Open the almanac | The season screen | The almanac opened | The forecast |
-| 5 | Pick a field | The season screen | A field picked | The first potato field's tag |
+| 5 | Pick a field | The season screen | A field picked | Whichever potato field's tag is on screen (keys: the first field's number) |
 | 6 | Read a field's card | A field picked before planting is possible | Noted, the card put away, or planting begun | The card |
 | 7 | Meet your people | The season screen | Noted, a person picked, or four days run | Your face pin |
 | 8 | Start the clock | The season screen | The clock running | 1× (or the play key) |
@@ -76,15 +76,17 @@ Only then do the days run, faster through the wait, until the ringed stamp of pl
 (10), seen taken (11) and repeated with the shortcut that gives one order to many fields (12). Lessons 10 to 12 come
 ahead of any of 2 to 9 not yet passed, because planting day matters more than the camera.
 
-The routine. After three blind first-time players (`scratchpad/wave3/findings.md`), the crew is being changed to take
-up routine work by itself (plant what the plan chose once the ground is fit, hill, walk the rows, pull blighted hills,
-test dig, dig, haul) while the player makes the calls (spray, water, kill the vines, sell or store). The lessons are
-written to hold either way, from state both sides have: a planting order on the list passes "Give the first order"
-whoever put it there, so with the routine on the player is never asked to order planting and goes straight to "See
-the order taken"; "Routine work and your calls" (11a) appears only when a job carries `by: 'routine'`; the order
-lessons for hilling, walking, test digs, roguing and digging appear only when their stamp does (the routine switched
-to "ask me", or no routine), and are passed over when the routine lists the job. 4a and 13 come from what the
-players never found unasked: the almanac's forecast, and how an order is put first or taken off.
+The routine. After three blind first-time players (`scratchpad/wave3/findings.md`), the crew takes up routine work by
+itself (`Campaign.routine`: plant what the plan chose once the ground is fit, hill, walk the rows, pull blighted
+hills, test dig, dig, haul), and the player makes the calls (spray, water, kill the vines, sell or store). So in the
+game as it plays, the opening does not ask for planting orders: a planting order on the list passes "Give the first
+order" whoever put it there, the player sees the crew take up the plan ("See the order taken", worded for the
+routine when the job's `by` is `'routine'`), then "Routine work and your calls" (11a) says what runs by itself, what
+the stamps are now for, and that Who does what switches any kind. The order lessons for hilling, walking, test digs,
+roguing and digging appear only when their stamp does (a kind switched to "ask me"), and are passed over when the
+routine lists the job; the first real decisions taught are spraying when blight weather comes, killing the vines,
+and selling or storing at the weigh ticket. 4a and 13 come from what the players never found unasked: the almanac's
+forecast, and how an order is put first or taken off.
 
 ### The first year (each the first time it comes)
 
