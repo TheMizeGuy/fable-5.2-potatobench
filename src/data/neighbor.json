@@ -6,9 +6,9 @@
   "firstSpray": 170,
   "sprays": 13,
   "kill": 250,
-  "dig": 274,
-  "yieldCwtAcre": 206,
-  "blightPct": 43.8,
+  "dig": 269,
+  "yieldCwtAcre": 215,
+  "blightPct": 53,
   "variety": "katahdin"
  },
  "1974": {
@@ -18,9 +18,9 @@
   "firstSpray": 184,
   "sprays": 12,
   "kill": 251,
-  "dig": 270,
-  "yieldCwtAcre": 266,
-  "blightPct": 21.5,
+  "dig": 269,
+  "yieldCwtAcre": 283,
+  "blightPct": 20.5,
   "variety": "katahdin"
  },
  "1975": {
@@ -31,7 +31,7 @@
   "sprays": 14,
   "kill": 250,
   "dig": 271,
-  "yieldCwtAcre": 266,
+  "yieldCwtAcre": 273,
   "blightPct": 2,
   "variety": "katahdin"
  },
@@ -43,7 +43,7 @@
   "sprays": 10,
   "kill": 242,
   "dig": 258,
-  "yieldCwtAcre": 220,
+  "yieldCwtAcre": 226,
   "blightPct": 36.9,
   "variety": "katahdin"
  },
@@ -54,8 +54,8 @@
   "firstSpray": 160,
   "sprays": 17,
   "kill": 250,
-  "dig": 265,
-  "yieldCwtAcre": 231,
+  "dig": 266,
+  "yieldCwtAcre": 240,
   "blightPct": 20.1,
   "variety": "katahdin"
  },
@@ -78,8 +78,8 @@
   "firstSpray": 157,
   "sprays": 17,
   "kill": 250,
-  "dig": 270,
-  "yieldCwtAcre": 311,
+  "dig": 269,
+  "yieldCwtAcre": 312,
   "blightPct": 21.1,
   "variety": "katahdin"
  },
@@ -90,9 +90,9 @@
   "firstSpray": 191,
   "sprays": 11,
   "kill": 252,
-  "dig": 275,
-  "yieldCwtAcre": 246,
-  "blightPct": 12.2,
+  "dig": 276,
+  "yieldCwtAcre": 266,
+  "blightPct": 11.8,
   "variety": "katahdin"
  },
  "1981": {
@@ -103,7 +103,7 @@
   "sprays": 16,
   "kill": 250,
   "dig": 270,
-  "yieldCwtAcre": 247,
+  "yieldCwtAcre": 257,
   "blightPct": 2.1,
   "variety": "katahdin"
  },
@@ -115,7 +115,7 @@
   "sprays": 8,
   "kill": 249,
   "dig": 272,
-  "yieldCwtAcre": 292,
+  "yieldCwtAcre": 294,
   "blightPct": 0.2,
   "variety": "katahdin"
  },
@@ -126,8 +126,8 @@
   "firstSpray": 199,
   "sprays": 9,
   "kill": 250,
-  "dig": 273,
-  "yieldCwtAcre": 267,
+  "dig": 283,
+  "yieldCwtAcre": 276,
   "blightPct": 0.2,
   "variety": "katahdin"
  },
@@ -138,8 +138,8 @@
   "firstSpray": 187,
   "sprays": 10,
   "kill": 250,
-  "dig": 272,
-  "yieldCwtAcre": 214,
+  "dig": 274,
+  "yieldCwtAcre": 216,
   "blightPct": 26.9,
   "variety": "katahdin"
  },
@@ -151,7 +151,7 @@
   "sprays": 12,
   "kill": 251,
   "dig": 273,
-  "yieldCwtAcre": 276,
+  "yieldCwtAcre": 284,
   "blightPct": 0.5,
   "variety": "katahdin"
  },
@@ -163,7 +163,7 @@
   "sprays": 7,
   "kill": 248,
   "dig": 275,
-  "yieldCwtAcre": 244,
+  "yieldCwtAcre": 253,
   "blightPct": 2.1,
   "variety": "katahdin"
  },
@@ -175,7 +175,7 @@
   "sprays": 9,
   "kill": 250,
   "dig": 274,
-  "yieldCwtAcre": 262,
+  "yieldCwtAcre": 263,
   "blightPct": 0,
   "variety": "katahdin"
  },
@@ -187,7 +187,7 @@
   "sprays": 10,
   "kill": 251,
   "dig": 271,
-  "yieldCwtAcre": 264,
+  "yieldCwtAcre": 259,
   "blightPct": 4.2,
   "variety": "katahdin"
  },
@@ -199,7 +199,7 @@
   "sprays": 6,
   "kill": 246,
   "dig": 265,
-  "yieldCwtAcre": 295,
+  "yieldCwtAcre": 296,
   "blightPct": 0.3,
   "variety": "katahdin"
  },
@@ -223,7 +223,7 @@
   "sprays": 9,
   "kill": 251,
   "dig": 276,
-  "yieldCwtAcre": 273,
+  "yieldCwtAcre": 275,
   "blightPct": 0.3,
   "variety": "katahdin"
  },
@@ -234,8 +234,8 @@
   "firstSpray": 177,
   "sprays": 11,
   "kill": 251,
-  "dig": 275,
-  "yieldCwtAcre": 287,
+  "dig": 277,
+  "yieldCwtAcre": 304,
   "blightPct": 0.9,
   "variety": "katahdin"
  },
@@ -246,8 +246,8 @@
   "firstSpray": 181,
   "sprays": 11,
   "kill": 251,
-  "dig": 278,
-  "yieldCwtAcre": 251,
+  "dig": 279,
+  "yieldCwtAcre": 263,
   "blightPct": 0,
   "variety": "katahdin"
  },
@@ -271,7 +271,7 @@
   "sprays": 10,
   "kill": 244,
   "dig": 265,
-  "yieldCwtAcre": 242,
+  "yieldCwtAcre": 243,
   "blightPct": 0,
   "variety": "katahdin"
  },
@@ -295,7 +295,7 @@
   "sprays": 12,
   "kill": 252,
   "dig": 272,
-  "yieldCwtAcre": 271,
+  "yieldCwtAcre": 272,
   "blightPct": 32.8,
   "variety": "katahdin"
  },
@@ -306,8 +306,8 @@
   "firstSpray": 180,
   "sprays": 12,
   "kill": 255,
-  "dig": 276,
-  "yieldCwtAcre": 308,
+  "dig": 275,
+  "yieldCwtAcre": 320,
   "blightPct": 0.5,
   "variety": "katahdin"
  },
@@ -318,8 +318,8 @@
   "firstSpray": 198,
   "sprays": 10,
   "kill": 251,
-  "dig": 272,
-  "yieldCwtAcre": 287,
+  "dig": 278,
+  "yieldCwtAcre": 292,
   "blightPct": 0,
   "variety": "katahdin"
  },
@@ -331,7 +331,7 @@
   "sprays": 12,
   "kill": 250,
   "dig": 274,
-  "yieldCwtAcre": 326,
+  "yieldCwtAcre": 336,
   "blightPct": 1.1,
   "variety": "katahdin"
  },
@@ -343,7 +343,7 @@
   "sprays": 11,
   "kill": 251,
   "dig": 269,
-  "yieldCwtAcre": 229,
+  "yieldCwtAcre": 245,
   "blightPct": 0,
   "variety": "katahdin"
  },
@@ -355,7 +355,7 @@
   "sprays": 8,
   "kill": 250,
   "dig": 269,
-  "yieldCwtAcre": 294,
+  "yieldCwtAcre": 295,
   "blightPct": 0.2,
   "variety": "katahdin"
  },
@@ -391,7 +391,7 @@
   "sprays": 11,
   "kill": 250,
   "dig": 270,
-  "yieldCwtAcre": 336,
+  "yieldCwtAcre": 349,
   "blightPct": 0,
   "variety": "katahdin"
  },
@@ -403,7 +403,7 @@
   "sprays": 5,
   "kill": 246,
   "dig": 264,
-  "yieldCwtAcre": 262,
+  "yieldCwtAcre": 263,
   "blightPct": 0,
   "variety": "katahdin"
  },
@@ -414,8 +414,8 @@
   "firstSpray": 182,
   "sprays": 12,
   "kill": 251,
-  "dig": 279,
-  "yieldCwtAcre": 276,
+  "dig": 280,
+  "yieldCwtAcre": 277,
   "blightPct": 1.1,
   "variety": "katahdin"
  },
@@ -427,7 +427,7 @@
   "sprays": 13,
   "kill": 251,
   "dig": 284,
-  "yieldCwtAcre": 260,
+  "yieldCwtAcre": 294,
   "blightPct": 0.4,
   "variety": "katahdin"
  },
@@ -439,7 +439,7 @@
   "sprays": 12,
   "kill": 252,
   "dig": 285,
-  "yieldCwtAcre": 284,
+  "yieldCwtAcre": 301,
   "blightPct": 0,
   "variety": "katahdin"
  },
@@ -462,8 +462,8 @@
   "firstSpray": 179,
   "sprays": 12,
   "kill": 253,
-  "dig": 272,
-  "yieldCwtAcre": 315,
+  "dig": 276,
+  "yieldCwtAcre": 332,
   "blightPct": 0.2,
   "variety": "katahdin"
  },
@@ -475,8 +475,8 @@
   "sprays": 16,
   "kill": 251,
   "dig": 274,
-  "yieldCwtAcre": 297,
-  "blightPct": 4.4,
+  "yieldCwtAcre": 298,
+  "blightPct": 4.1,
   "variety": "katahdin"
  },
  "2014": {
@@ -523,7 +523,7 @@
   "sprays": 10,
   "kill": 251,
   "dig": 271,
-  "yieldCwtAcre": 330,
+  "yieldCwtAcre": 338,
   "blightPct": 0.4,
   "variety": "katahdin"
  },
@@ -535,7 +535,7 @@
   "sprays": 7,
   "kill": 250,
   "dig": 273,
-  "yieldCwtAcre": 298,
+  "yieldCwtAcre": 301,
   "blightPct": 0,
   "variety": "katahdin"
  },
@@ -547,7 +547,7 @@
   "sprays": 13,
   "kill": 251,
   "dig": 277,
-  "yieldCwtAcre": 230,
+  "yieldCwtAcre": 231,
   "blightPct": 27.1,
   "variety": "katahdin"
  },
@@ -583,7 +583,7 @@
   "sprays": 15,
   "kill": 250,
   "dig": 269,
-  "yieldCwtAcre": 330,
+  "yieldCwtAcre": 345,
   "blightPct": 0.5,
   "variety": "katahdin"
  },
