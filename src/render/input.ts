@@ -3,6 +3,7 @@
 // the farm; a click on a crew picks it, a click on a field selects it, Shift-click adds, a double-click selects alike, a
 // click on empty ground lets both go; a right-click or long press gives the field its order. A drag never selects.
 import type { App } from '../game/app.ts'
+import type { Thing } from '../game/contracts.ts'
 import type { CameraRig, Viewport } from './camera.ts'
 
 const LONG_PRESS_MS = 520
@@ -19,6 +20,7 @@ export function attachInput(
   pick: (x: number, y: number) => number, pickUnit: (x: number, y: number) => number, home: () => void,
   pickYard: (x: number, y: number) => number = () => 0,
   frameField: (field: number) => void = () => {},
+  thingAt: (x: number, y: number) => Thing | null = () => null,
 ): Input {
   const pointers = new Map<number, { x: number; y: number }>()
   let downAt: { x: number; y: number; button: number; touch: boolean } | null = null
@@ -38,10 +40,18 @@ export function attachInput(
     const [a, b] = [...pointers.values()]
     return { dist: Math.hypot(a.x - b.x, a.y - b.y), angle: Math.atan2(b.y - a.y, b.x - a.x), x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
   }
-  const hover = (i: number, unit = -1) => {
-    app.setHover(unit >= 0 ? -1 : i)
-    if (!downAt) canvas.style.cursor = i >= 0 || unit >= 0 ? 'pointer' : 'grab'
+  // What the pointer is over: a person first (the nearest within reach), then a thing, a field, a yard. Each says so
+  // before the click: the hand cursor, and the interface's name and mark from app.point.
+  const hover = (x: number, y: number) => {
+    const unit = pickUnit(x, y)
+    const thing = unit < 0 ? thingAt(x, y) : null
+    const field = unit < 0 && !thing ? pick(x, y) : -1
+    const yard = unit < 0 && !thing && field < 0 ? pickYard(x, y) : 0
+    app.setHover(field)
+    app.point({ x, y, unit, thing, field, yard })
+    if (!downAt) canvas.style.cursor = unit >= 0 || thing || field >= 0 || yard ? 'pointer' : 'grab'
   }
+  const away = () => { app.setHover(-1); app.point(null); if (!downAt) canvas.style.cursor = 'grab' }
 
   const onDown = (e: PointerEvent) => {
     const p = local(e)
@@ -59,7 +69,7 @@ export function attachInput(
           if (!downAt || dragged || pointers.size !== 1) return
           consumed = true
           const i = pick(downAt.x, downAt.y)
-          if (i >= 0) app.smartOrder(i)
+          if (i >= 0) { const r = app.smartOrder(i); if (!r.ok) app.notice(r.err) }
         }, LONG_PRESS_MS)
       }
     } else if (pointers.size === 2) {
@@ -72,7 +82,7 @@ export function attachInput(
     const p = local(e)
     const was = pointers.get(e.pointerId)
     if (!was) {
-      if (e.pointerType === 'mouse') { const u = pickUnit(p.x, p.y); hover(u >= 0 ? -1 : pick(p.x, p.y), u) }
+      if (e.pointerType === 'mouse') hover(p.x, p.y)
       return
     }
     const vp = viewport()
@@ -93,6 +103,7 @@ export function attachInput(
       clearTimeout(pressTimer)
       canvas.style.cursor = 'grabbing'
       if (app.hover !== -1) app.setHover(-1)
+      app.point(null)
     }
     if (dragged && downAt && !consumed) {
       if (downAt.button === 2) { rig.turnBy((p.x - was.x) * 0.0062, vp); rig.leanBy((was.y - p.y) * 0.0035) }
@@ -111,13 +122,20 @@ export function attachInput(
     if (tap && had && pointers.size === 0 && downAt && !dragged && !consumed) {
       const p = local(e)
       const unit = downAt.button === 0 ? pickUnit(p.x, p.y) : -1
+      const thing = downAt.button === 0 && unit < 0 ? thingAt(p.x, p.y) : null
       const i = pick(p.x, p.y)
       if (downAt.button === 2) {
-        if (i >= 0) app.smartOrder(i)
+        // a right-click always answers: the order given, or why not
+        if (i >= 0) { const r = app.smartOrder(i); if (!r.ok) app.notice(r.err) } else if (app.unit >= 0) app.notice('Right-click a field to send them there.')
       } else if (unit >= 0) {
-        app.selectUnit(unit)
+        app.selectUnit(unit, 'land')
+        lastClick = { t: 0, x: p.x, y: p.y, field: -2 }
+      } else if (thing) {
+        app.selectUnit(-1)
+        app.inspect(thing, p.x, p.y)
         lastClick = { t: 0, x: p.x, y: p.y, field: -2 }
       } else if (downAt.button === 0) {
+        app.inspect(null)
         const now = performance.now()
         const again = now - lastClick.t < DOUBLE_MS && Math.hypot(p.x - lastClick.x, p.y - lastClick.y) < 12 && lastClick.field === i
         if (again) {
@@ -140,7 +158,7 @@ export function attachInput(
   }
   const onUp = (e: PointerEvent) => release(e, true)
   const onCancel = (e: PointerEvent) => release(e, false)
-  const onLeave = () => { if (!downAt) hover(-1) }
+  const onLeave = () => { if (!downAt) away() }
   const onMenu = (e: Event) => e.preventDefault()
   const onWheel = (e: WheelEvent) => {
     e.preventDefault()

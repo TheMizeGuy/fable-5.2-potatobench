@@ -73,7 +73,14 @@
 @media (hover: hover) { .topbar .forecast:hover .d { background: var(--paper-2); } }
 .topbar .season-track .bar > u { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--blue); }
 .topbar .season-track .bar > u.watch { background: var(--red); opacity: .55; }
-/* the goal slip, a button: open it for the goals */
+/* the goal slip, a button: open it for the goals; beside it while the soil warms, the key that lets the weeks go */
+.topbar .goal-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+/* a goal not yet in reach: said on plain paper, without the fist */
+.topbar .goal.later { grid-template-columns: 1fr auto; background-color: var(--paper); }
+.topbar .goal.later .goal-t { font-weight: 400; font-style: italic; }
+.topbar .goal-row .goal { flex: 0 1 auto; }
+.topbar .goal-go { min-height: 40px; padding: 0 12px; margin-top: 6px; font-size: 15px; gap: 6px; box-shadow: var(--laid), inset 0 0 0 1px var(--ink); }
+.topbar[data-layout='narrow'] .goal-go, .topbar[data-layout='short'] .goal-go { min-height: var(--touch); margin: 4px 0 0 12px; }
 .topbar .goal { text-align: left; min-height: var(--touch); max-width: 100%; }
 .topbar .goal .goal-body { display: grid; min-width: 0; }
 .topbar .goal .goal-t { font: 700 19px/1.1 var(--f-text); white-space: normal; }
@@ -84,6 +91,8 @@
 @keyframes write { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
 /* the bank board */
 .topbar .balance .cash { white-space: nowrap; }
+.topbar .balance { flex-wrap: wrap; row-gap: 0; }
+.topbar .balance .due { flex-basis: 100%; text-align: right; font: italic 400 14px/1.2 var(--f-text); color: var(--ink-2); }
 .topbar .clock.compact { grid-template-columns: 1fr 1fr 52px; }
 .topbar .clock .k.armed { box-shadow: inset 0 -4px 0 var(--ink); }
 .topbar .clock .k.stopped { color: var(--paper); background: var(--red); }
@@ -224,3 +233,11 @@
 .screen-layer > .arriving { animation: screen-arrive var(--t-slip) var(--ease-out) var(--t-leave) backwards; }
 @keyframes screen-leave { to { opacity: 0; } }
 @keyframes screen-arrive { from { opacity: 0; } }
+
+/* ---------------------------------------------------------------- a farm word in plain words, in place (glossary.ts) */
+.term { position: relative; text-decoration: underline dotted; text-decoration-thickness: 1px; text-underline-offset: 3px; cursor: help; }
+.term:hover::after, .term:focus-visible::after, .term:focus::after { content: attr(data-tip); position: absolute; z-index: 20; left: 0; top: calc(100% + 6px); width: max-content; max-width: 260px;
+  padding: 8px 12px; font: italic 400 14px/1.3 var(--f-text); letter-spacing: 0; text-transform: none; color: var(--ink); white-space: normal; text-align: left;
+  background: var(--paper); box-shadow: var(--laid); pointer-events: none; }
+.term:focus { outline: none; }
+.term:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }

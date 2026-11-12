@@ -206,13 +206,22 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
       if (want[i].y < ceiling + sz[i].h + 5) over = true
       want[i].y = Math.max(want[i].y, ceiling + sz[i].h + 6)
     }
-    // A tag that would sit under a floating card is put away until the card goes, rather than left there unclickable.
+    // A tag that would sit under a floating card stands aside, beside the card on the side its field is; with no room
+    // there it is put away until the card goes, rather than left there unclickable.
     const covers = o.covers?.() ?? []
     if (covers.length) {
+      const under = (x: number, y: number, i: number) => {
+        const l = x - sz[i].w / 2, r = x + sz[i].w / 2 + sz[i].extra, t = y - sz[i].h - 6
+        return covers.find(cv => l < cv.right && r > cv.left && t < cv.bottom && y + 6 > cv.top)
+      }
       for (const i of shown) {
         const b = want[i]
-        const l = b.x - sz[i].w / 2, r = b.x + sz[i].w / 2 + sz[i].extra, t = b.y - sz[i].h - 6
-        if (covers.some(cv => l < cv.right && r > cv.left && t < cv.bottom && b.y + 6 > cv.top)) want[i] = { x: b.x, y: b.y, place: 'gone' }
+        const cv = under(b.x, b.y, i)
+        if (!cv) continue
+        const right = cv.right + GAP + sz[i].w / 2, left = cv.left - GAP - sz[i].w / 2 - sz[i].extra
+        const fits = (x: number) => x - sz[i].w / 2 >= ins.left + GAP && x + sz[i].w / 2 + sz[i].extra <= innerWidth - ins.right - GAP && !under(x, b.y, i)
+        const x = b.x - cv.left < cv.right - b.x ? (fits(left) ? left : fits(right) ? right : NaN) : (fits(right) ? right : fits(left) ? left : NaN)
+        want[i] = Number.isNaN(x) ? { x: b.x, y: b.y, place: 'gone' } : { x, y: b.y, place: 'docked' }
       }
     }
     return { want, over }

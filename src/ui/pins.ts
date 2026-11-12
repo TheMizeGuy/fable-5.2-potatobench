@@ -30,10 +30,10 @@ export function pins(ctx: Ctx, layer: HTMLElement, o: { tags: () => DOMRect[]; c
   function pick(id: number): void {
     open = -1
     list.hidden = true
-    if (app.unit === id) { app.selectUnit(-1); return }
+    if (app.unit === id && app.unitFrom === 'land') { app.selectUnit(-1); return }
     app.select(-1)
     app.selectYard(0)
-    app.selectUnit(id)
+    app.selectUnit(id, 'land')
   }
 
   function update(c: S.Campaign): void {
@@ -64,6 +64,9 @@ export function pins(ctx: Ctx, layer: HTMLElement, o: { tags: () => DOMRect[]; c
       ring: m.ring, name: picked, testid: `pin-${m.id}`, count,
       label: count > 1 ? `${count} people here: ${members.map(x => x.label).join('; ')}. Press to choose one.` : `${m.label}${many ? `. ${picked ? 'Press to put their card away.' : 'Press for their card.'}` : ''}`,
       pressed: many && count === 1 ? picked : undefined,
+      // the pointer over a pin names them, as it does over their body
+      onenter: (e: Event) => { if ((e as PointerEvent).pointerType === 'mouse') app.point({ x: 0, y: 0, unit: m.id, thing: null, field: -1, yard: 0, group: count > 1 ? members.map(x => x.id) : undefined }) },
+      onleave: () => { if (app.pointing?.unit === m.id) app.point(null) },
       onclick: many ? () => {
         if (count > 1) { open = open === m.id ? -1 : m.id; listFor = ''; list.style.visibility = 'hidden'; drawList(members); return }
         pick(m.id)

@@ -112,9 +112,18 @@ test('only the orders that can be given are offered, and one that cannot says wh
   await expect(items.first()).toContainText('Planting North Ridge')
   await items.nth(1).click({ modifiers: ['Control'] })
   await expect(items.first()).toContainText('Planting Upper Middle')
+  // A click on an order only opens its choices; its cross takes it off, says so, and the slip puts it back.
   await items.first().click()
+  expect((await look(page)).queue).toBe(2)
+  await page.locator('#ui .queue [data-testid^="list-x-"]').first().click()
   await expect.poll(async () => (await look(page)).queue).toBe(1)
   await expect(items.first()).toContainText('Planting North Ridge')
+  const undo = page.locator('#ui [data-testid="alert"]', { hasText: 'taken off the list' })
+  await expect(undo).toBeVisible()
+  await undo.click()
+  await expect.poll(async () => (await look(page)).queue).toBe(2)
+  await page.locator('#ui .queue [data-testid^="list-x-"]').last().click()
+  await expect.poll(async () => (await look(page)).queue).toBe(1)
   // A resting field offers nothing and says so in one line.
   await page.getByTestId('field-1').click()
   await expect(orders).toHaveCount(0)
@@ -142,8 +151,9 @@ test('never more than five orders, and under 80 words with nothing selected', as
     expect(rest.length).toBeGreaterThan(0)
     expect(rest.some(x => first.includes(x))).toBe(false)
   }
-  // A reading a week old is marked as old.
-  await reach(page, `const { app } = q.g(); for (let k = 0; k < 9; k++) app.do({ t: 'day' })`)
+  // A reading a week old is marked as old (with the walks switched to "ask me", so nobody walks it by themselves).
+  await reach(page, `const { app } = q.g(); app.do({ t: 'routine', kind: 'scout', auto: false }); for (const j of [...app.campaign.season.jobs]) if (j.kind === 'scout') app.do({ t: 'cancel', id: j.id })
+    for (let k = 0; k < 9; k++) app.do({ t: 'day' })`)
   await putAway(page)
   await expect(page.getByTestId('blight-reading')).toHaveClass(/stale/)
   await expect(page.getByTestId('estimate')).toContainText('–')
@@ -470,7 +480,7 @@ test('the menu: settings take effect, ending early says what is lost, and the sa
   await expect(page.getByTestId('forecast')).toBeVisible()
   // Metric reaches the instruments.
   await page.getByTestId('field-0').click()
-  await expect(page.locator('#ui [data-testid="card"] .readings')).toContainText('°C')
+  await expect(page.getByTestId('card')).toContainText('°C')
   await page.keyboard.press('Escape')
   await page.keyboard.press('m')
   await page.getByTestId('save-delete').click()
@@ -520,6 +530,8 @@ test('winter: each stored crop is a card, seed can be held back, and the year cl
 test('the goal line says the one next thing, opens the ladder, and moves on when the goal is met', async ({ page }) => {
   const errors = watchErrors(page)
   await startSeason(page)
+  // Planting asked of the player (switched to "ask me"), so the goal can point at a field to plant.
+  await reach(page, `q.g().app.do({ t: 'routine', kind: 'plant', auto: false })`)
   const goal = page.getByTestId('goal')
   await expect(goal).toContainText('Plant')
   const of = await game<number>(page, 'app.campaign.season.fields.filter((f, i) => sim.isField(app.campaign, i) && f.status === "idle").length')
@@ -586,6 +598,47 @@ test('people: a chip opens the card, priorities set by click and key, a raise, a
   await expect(card).toBeHidden()
   // Escape puts a person's card away.
   await page.getByTestId('unit-2').click()
+  await expect(card).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(card).toBeHidden()
+  expect(errors, errors.join('\n')).toEqual([])
+})
+
+test('a person clicked on the land: their card opens beside them, says who and what, takes an order, and goes on Escape', async ({ page, isMobile }) => {
+  const errors = watchErrors(page)
+  await farmWithPeople(page)
+  const name = await game<string>(page, 'app.campaign.crew.find(u => u.id === 1).name')
+  const pin = page.getByTestId('pin-1')
+  // Their own pin when it stands alone; standing with others, what a click on the land does (tools/quality/people.ts
+  // clicks every body and pin at every tier).
+  if (await pin.isVisible().catch(() => false)) await pin.click()
+  else await page.evaluate(() => (globalThis as unknown as { __county: { app: { selectUnit(id: number, from: string): void } } }).__county.app.selectUnit(1, 'land'))
+  const card = page.getByTestId('whois')
+  await expect(card).toBeVisible()
+  await expect(card.getByTestId('whois-name')).toHaveText(name)
+  await expect(card.getByTestId('whois-now')).not.toBeEmpty()
+  // The page at the foot stays shut: this card is the one beside them.
+  await expect(page.getByTestId('person-card')).toBeHidden()
+  if (!isMobile) {
+    const a = await page.evaluate(() => (globalThis as unknown as { __countyField: { unitPin(id: number): { x: number; y: number; visible: boolean } } }).__countyField.unitPin(1))
+    const r = (await card.boundingBox())!
+    if (a.visible) {
+      const dx = Math.max(r.x - a.x, 0, a.x - (r.x + r.width)), dy = Math.max(r.y - a.y, 0, a.y - (r.y + r.height))
+      expect(Math.hypot(dx, dy)).toBeLessThan(240)
+    }
+  }
+  // One press puts a kind of work first for them.
+  await card.getByTestId('whois-first-field').click()
+  expect(await game<number>(page, 'app.campaign.crew.find(u => u.id === 1).prio.field')).toBe(1)
+  await expect(card.getByTestId('whois-first-field')).toHaveAttribute('aria-pressed', 'true')
+  // Their page opens from it.
+  await card.getByTestId('whois-more').click()
+  await expect(page.getByTestId('person-card')).toBeVisible()
+  await expect(card).toBeHidden()
+  await page.keyboard.press('Escape')
+  await expect(page.getByTestId('person-card')).toBeHidden()
+  // And back on the land, Escape puts it away.
+  await page.evaluate(() => (globalThis as unknown as { __county: { app: { selectUnit(id: number, from: string): void } } }).__county.app.selectUnit(1, 'land'))
   await expect(card).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(card).toBeHidden()

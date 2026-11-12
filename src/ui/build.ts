@@ -19,9 +19,9 @@ export interface YardCard {
   pick(n: number): boolean
 }
 
+// Whole loads, as the top bar and a building's cost count them.
 function loads(n: number): string {
-  const r = Math.round(n * 10) / 10
-  return `${F.num(r, r % 1 ? 1 : 0)}`
+  return F.num(S.wholeLoads(n))
 }
 
 export function yardCard(ctx: Ctx): YardCard {
