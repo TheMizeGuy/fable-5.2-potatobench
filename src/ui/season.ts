@@ -447,10 +447,16 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       const from = at >= 0 ? at : app.selected >= 0 ? app.selected : e.shiftKey ? S.FIELD_COUNT : -1
       return nextNeed(from, onPlate, e.shiftKey)
     }
-    if (k === 'Enter' || k === ' ') {
+    if (k === ' ') {
+      // Space is the clock wherever the focus rests on this screen, so a button left focused never takes it instead.
+      if (e.ctrlKey || t.closest?.('input, textarea, select, [role="slider"], .dialog')) return false
+      if (onControl) (t.closest?.('button, a') as HTMLElement | null)?.blur()
+      app.togglePause()
+      return true
+    }
+    if (k === 'Enter') {
       if (onControl || e.ctrlKey) return false
-      if (k === ' ') app.togglePause()
-      else card.suggested()
+      card.suggested()
       return true
     }
     const digit = /^(?:Digit|Numpad)([0-9])$/.exec(e.code)
