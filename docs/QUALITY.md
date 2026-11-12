@@ -254,6 +254,10 @@ captured the states they touched); the GPU budget; anything on a MacBook or inte
 - A sheet that grows moves its Back button; a telegram arriving can take a click aimed elsewhere; the "Takes first"
   icons have no labels.
 - One pin click in eighteen misses a person walking out from under their pin.
+- The guide's opening is not steady when repeated: in the guide writer's last run of its browser test three times on
+  each project, three of six guided openings failed (on a phone the boards note's slip lay over the forecast, and a
+  field tag the test fell back to was covered; in Chromium one click on a note's target hung). They came once notes
+  that are only read stopped holding the clock. The single run in the final gate passed on both projects.
 - Start-up: about 6 s to the first frame on a quiet test box, nearly all of it one shader's compile; the splash
   says what it is waiting for but stands still for the first 3 s. A plan is in the start-up writer's report.
 - Balance gates G2 and G3 still fail (traps: foreman, bunkhouse, second and third tractor; one build order best).
