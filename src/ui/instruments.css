@@ -1046,6 +1046,12 @@
 .season[data-layout='narrow'] .p-orders { justify-content: stretch; }
 .season[data-layout='narrow'] .p-orders .order { flex: 1 1 0; }
 .season[data-layout='narrow'] .yard-card, .season[data-layout='short'] .yard-card { max-height: calc(100vh - var(--top, 56px) - 140px); overflow-y: auto; }
+/* A phone on its side keeps the yard's card in one column, and the orders on these cards at their own width. */
+.season[data-layout='short'] .yard-card { grid-template-columns: minmax(0, 1fr); grid-template-areas: none; max-height: calc(100vh - var(--top, 44px) - 16px); }
+.season[data-layout='short'] .yard-card > *, .season[data-layout='short'] .yard-card .card-head { grid-area: auto; }
+.season[data-layout='short'] .yard-card .card-head .nicon, .season[data-layout='short'] .person-card .card-head .nicon { position: absolute; top: var(--sp-1); right: var(--sp-1); margin: 0; }
+.season[data-layout='short'] .build-detail .order, .season[data-layout='short'] .p-orders .order { flex: 1 1 auto; min-height: 44px; }
+.season[data-layout='short'] .yard-stands { display: none; }
 .season[data-layout='narrow'] .build-pick, .season[data-layout='short'] .build-pick { flex-wrap: nowrap; overflow-x: auto; padding-bottom: var(--sp-1); }
 .season[data-layout='narrow'] .bp, .season[data-layout='short'] .bp { flex: none; }
 .season[data-layout='narrow'] .build-detail { grid-template-columns: minmax(0, 1fr); }

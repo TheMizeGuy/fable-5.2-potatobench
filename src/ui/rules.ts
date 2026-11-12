@@ -151,7 +151,7 @@ export function alertShort(a: Alert): { text: string; glyph: string } {
     case 'skillUp': return { text: a.text.replace(/ is better at /, ': ').replace(/: level (\d+)\.$/, ' $1'), glyph: 'rise' }
     case 'breakdown': return { text: 'A tractor broke down', glyph: 'tractor' }
     case 'repaired': return { text: 'The tractor is going again', glyph: 'tractor' }
-    case 'building': return { text: a.text.replace(/ is started in .*/, ' started').replace(/^An? /, ''), glyph: 'build' }
+    case 'building': return { text: F.upper(a.text.replace(/ is started in .*/, ' started').replace(/^An? /, '')), glyph: 'build' }
     case 'built': return { text: a.text.replace(/^The (.+?) in .*$/, (_, b: string) => `${F.upper(b)} built`), glyph: 'build' }
     case 'felled': return { text: `${name}felled`, glyph: 'fell' }
     case 'stumped': return { text: `${name}stumps out`, glyph: 'stump' }
