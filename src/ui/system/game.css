@@ -210,3 +210,4 @@
 .topbar[data-layout='mid'] .goal { padding: 6px 12px 6px 10px; }
 .topbar[data-layout='mid'] .goal .fist { --i: 28px; }
 .topbar[data-layout='mid'] .balance { padding: 5px 12px 5px 16px; }
+.topbar[data-layout='short'] .goal { min-height: var(--touch); }

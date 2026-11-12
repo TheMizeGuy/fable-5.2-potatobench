@@ -20,7 +20,7 @@
   --scrim: rgb(16 14 10 / 0.34);
   /* the dark instrument material is gone: every old instrument is paper and ink */
   --night: var(--paper);
-  --night-solid: var(--ink);
+  --night-solid: var(--paper);
   --night-2: var(--paper-2);
   --night-line: var(--hair);
   --night-edge: var(--edge);
