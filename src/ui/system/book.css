@@ -213,3 +213,13 @@
 
 /* reduced motion: the sheets simply arrive */
 .reduce-motion .book.ledger-sheet, .reduce-motion .cellar-sheet.winter { animation-name: sh-fade; }
+
+/* a short desk: the winter sheet's heading and foot as low as they go */
+@media (max-height: 760px) {
+  .cellar-sheet.winter:not([data-layout='narrow']):not([data-layout='short']) { padding-top: var(--s3); }
+  .cellar-sheet:not([data-layout='narrow']):not([data-layout='short']) .winter-head .t-title { font-size: 26px; }
+  .cellar-sheet:not([data-layout='narrow']):not([data-layout='short']) .winter-next { padding: var(--s2) 0 var(--s3); }
+  .cellar-sheet:not([data-layout='narrow']):not([data-layout='short']) .winter-next .btn.go { min-height: var(--touch); font-size: 20px; }
+}
+.cellar-sheet .lot { align-content: start; }
+.book .chart svg { max-width: 560px; }
