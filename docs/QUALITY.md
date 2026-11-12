@@ -86,4 +86,38 @@ to listen to. Whether it is pleasant is for a person with ears.
 
 ## Results
 
-Not yet run.
+The build tagged `live-5` (the land at true scale, twelve times larger each way; the interface rebuilt as the farm's
+own papers; the farmstead game; the clock as pause and three speeds), checked on the Windows box with an RTX 2080 Ti.
+
+**Browser suite** (interface, accessibility, play-throughs, determinism; Chromium, Firefox, WebKit and a phone
+profile; 114 tests). The full run on the merged build: 90 passed, 16 skipped, 8 failed. The eight were four tests:
+in spring the new sheet's root took the clicks meant for the field tags (a real fault from joining two rebuilds:
+fixed); the almanac page could not be scrolled from the keyboard (fixed); and two tests read a money line whose
+wording the rebuild changed (the tests now read it as it is). After the fixes those four were rerun, not the whole
+suite: in Chromium and WebKit, 8 runs passed; one of them failed once in Firefox under load and passed three times
+out of three alone. The play-throughs were rerun on the phone profile and WebKit with two late fixes in (a test-dig
+tray that grew past a phone's window; a tract's tag dropped when under a sheet): 5 passed, 1 skipped.
+
+**Captures**: 75 frames of the key screens at eight sizes, no layout faults and no page errors; the live page's
+title, first day and telegram, 16 frames, the same.
+
+**Saves**: a save written by the build live before this one, and by the two before that, each opened in a browser
+with the new build: Continue offered, the game played on, no errors.
+
+**The live page**: comes up without page errors; a new farm hires a hand, fells a tract and plays ninety days.
+
+**Frame time** on the live page at 1920 by 1080, with the GPU still shared at the start of the run (so these read
+high): the playing view (field tier) 11.9 ms at the high setting, 12.7 at medium, 5.5 at low; the yard tier 8.6,
+9.0 and 4.7; the opening's last pose 5.8, 5.8 and 3.7; the farm tier 14.8, 15.0 and 13.0; the county tier 15.7,
+15.9 and 15.5; the opening from far off 16.1, 15.9 and 15.5. The target of 12 ms is met in the playing view, the
+yard and the opening's end, and missed in the far views, where the lower settings save almost nothing. Medium saves
+nothing anywhere.
+
+**Not checked**: anything on integrated graphics or a MacBook; motion (the opening's move, the tiers, trees changing
+level, the scale's needle), seen only as stills; the sound, which nobody has heard; the blind pairs of old against
+new, the five-second test and first-time players, which have not been run on this build.
+
+**Known faults**: a small dark bar hangs in the sky in some yard-tier views (one of the yard's own drawings; not
+found); bare hardwood twigs are scribble close up in winter; tags crowd the lower left in spring and a few are cut
+by the sheet's edge; a field off screen has no tag and is picked by its number; the balance gates for the farmstead
+are partly unmet (`docs/balance/README.md`).
