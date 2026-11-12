@@ -266,8 +266,8 @@ export const LESSONS: Lesson[] = [
     id: 'stopped', part: 'year', name: 'Why the clock stopped', read: true, urgent: true,
     when: l => inSeason(l) && l.speed === 0 && !!l.stopped,
     done: (l, g, since) => g.has('noted:stopped') || (!!since && l.speed > 0),
-    ask: l => by(l, 'The clock stopped by itself. The note at the foot says why; Space goes on.', 'The clock stopped by itself. The note at the foot says why; the play key goes on.', 'The clock stopped by itself. The note at the foot says why; Space goes on.'),
-    why: () => 'It stops only for a question, a weigh ticket, frost on barrels in a field, and the season\'s end.',
+    ask: () => 'The clock stopped by itself. The note at the foot says why.',
+    why: () => 'It stops only for a question, a weigh ticket, frost on barrels in a field, and the season\'s end. Answer it and the days go on.',
   },
   {
     id: 'boards', part: 'year', name: 'Read the forecast', read: true,

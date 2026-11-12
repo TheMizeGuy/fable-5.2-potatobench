@@ -128,7 +128,8 @@ test('a first season by the short path, from the opening to the next spring, wit
   // The first spring as a newcomer sees it: a short sheet, the offers folded.
   const words = await page.getByTestId('spring').evaluate(el => (el as HTMLElement).innerText.split(/\s+/).filter(Boolean).length)
   console.log(`the first spring paper: ${words} words`)
-  expect(words).toBeLessThan(80)
+  // Short, and it says where the money stands before the first Start: what the farm has, the loan, what comes due.
+  expect(words).toBeLessThan(115)
   await expect(page.getByTestId('crew')).toHaveCount(0)
   await page.getByTestId('begin-season').click(); clicks++
   await expect(page.getByTestId('forecast')).toBeVisible()
