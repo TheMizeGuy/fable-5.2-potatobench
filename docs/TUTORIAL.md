@@ -36,7 +36,13 @@ paper disc with a keyline so it reads over any land. There is no slideshow, no s
   the first clear place nearest the top middle of the land, keeping off the boards, the time book and every panel; if
   there is no such place it keeps at least off what it points at, the fist, the clock, a command bar, a telegram, a
   paper, a test-dig tray and a person's card, giving up its reason line (compact) if it must; with no room even then
-  it stays hidden and its words are still read out. It stays put until something comes over it.
+  it stays hidden and its words are still read out. It stays put until something comes over it; if a card, a clock
+  or a telegram slides over it, it moves that frame. It prefers land with no field tags on it.
+- **The fist only where it is clear.** It sits beside what it means (left, right, then toward the middle of the
+  screen), never over a clock, a command bar, a telegram or a paper, and off field tags where it can be. Where no
+  such place exists (a reply inside a telegram, Start the season under the order blank on a phone) it is left out
+  and the slip's words do alone. When a field it points at is out of view, the slip adds how to bring the farm back
+  (Home, or a double-click or double-tap on open ground).
 - **For everyone.** Words differ for a mouse, a touch screen and the keyboard, chosen by what the player last used:
   keys are taught only to someone using them. Each note is read out once to a screen reader, politely. Reduced motion
   stills the slip's arrival and the fist's nudge. The slip's buttons are 44 px tall.
@@ -148,7 +154,7 @@ playing, in every state a guided year shows it in.
   target, the clock, a command bar, a telegram or a paper; refused, a season to its first planting with nothing shown;
   a reload, a skip, the guide stopped and a lesson shown again from the menu and from How to play; axe with the offer,
   a note and the guide's paper showing.
-- `tools/quality/capture.ts`: the states `guide-*` at all eight sizes.
+- `tools/quality/capture.ts`: the states `guide-*` (the offer, the spring lesson, the camera, a field and its card, you, the clock, planting under the routine, the first call, a telegram, the weigh ticket, the cellar, the account book, the second spring, the guide's paper) at all eight sizes.
 
 ## Known limits
 
@@ -156,4 +162,9 @@ playing, in every state a guided year shows it in.
   brings a field into frame) can pass them.
 - With one person on the farm, a click on your own face does nothing yet; "Meet your people" is therefore read and
   noted, and passes by itself if a person is picked once that click does something.
-- The weigh ticket's note shows only where the ticket leaves room beside it; on a phone it is read out instead.
+- The weigh ticket's note sits over the boards beside the scale; on a phone it covers the date board while the ticket
+  is up.
+- On the cellar and the account book at a desk there is no clear land above the sheet, so the slip lies over the top
+  edge of the sheet.
+- A two-finger twist that starts on a field tag does not turn the view (the tag takes the touch); the camera lesson
+  passes once one starts on open land.
