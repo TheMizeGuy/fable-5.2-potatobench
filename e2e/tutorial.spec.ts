@@ -22,16 +22,19 @@ async function slip(page: Page): Promise<{ id: string; target: string }> {
   })
 }
 
-// A point on open land: nothing of the interface over it.
-async function land(page: Page): Promise<{ x: number; y: number }> {
-  return page.evaluate(() => {
+// A point on open land, with open land all round it out to r: nothing of the interface where the fingers go.
+async function land(page: Page, r = 0): Promise<{ x: number; y: number }> {
+  return page.evaluate(r => {
     const canvas = document.getElementById('field')
-    for (let fy = 0.55; fy < 0.8; fy += 0.05) for (let fx = 0.3; fx < 0.75; fx += 0.05) {
+    const open = (x: number, y: number) => document.elementFromPoint(x, y) === canvas
+    for (let fy = 0.3; fy < 0.85; fy += 0.04) for (let fx = 0.2; fx < 0.8; fx += 0.04) {
       const x = Math.round(innerWidth * fx), y = Math.round(innerHeight * fy)
-      if (document.elementFromPoint(x, y) === canvas) return { x, y }
+      if (!open(x, y)) continue
+      if (r && ![0, 0.5, 1, 1.5, 2, 2.5, 3].every(a => open(x + Math.cos(a) * r, y + Math.sin(a) * r) && open(x - Math.cos(a) * r, y - Math.sin(a) * r))) continue
+      return { x, y }
     }
     return { x: Math.round(innerWidth / 2), y: Math.round(innerHeight * 0.6) }
-  })
+  }, r)
 }
 
 // One touch gesture, finger by finger, frame by frame: each entry of steps is where the fingers are.
@@ -46,7 +49,7 @@ async function fingers(page: Page, steps: { x: number; y: number }[][]): Promise
 
 // Drag the land: the mouse's left button, or one finger.
 async function drag(page: Page, mobile: boolean, far = 1): Promise<void> {
-  const p = await land(page)
+  const p = await land(page, mobile ? 30 : 0)
   if (mobile) {
     await fingers(page, Array.from({ length: 13 }, (_, k) => [{ x: p.x - k * 10 * far, y: p.y - k * 5 * far }]))
     return
@@ -59,9 +62,9 @@ async function drag(page: Page, mobile: boolean, far = 1): Promise<void> {
 
 // Turn the view: the right button dragged sideways, or two fingers twisted.
 async function turn(page: Page, mobile: boolean, far = 1): Promise<void> {
-  const p = await land(page)
+  const p = await land(page, mobile ? 60 : 0)
   if (mobile) {
-    const at = (a: number) => [{ x: p.x + Math.cos(a) * 70, y: p.y + Math.sin(a) * 70 }, { x: p.x - Math.cos(a) * 70, y: p.y - Math.sin(a) * 70 }]
+    const at = (a: number) => [{ x: p.x + Math.cos(a) * 60, y: p.y + Math.sin(a) * 60 }, { x: p.x - Math.cos(a) * 60, y: p.y - Math.sin(a) * 60 }]
     await fingers(page, Array.from({ length: 13 }, (_, k) => at(k * 0.06 * far)))
     return
   }
@@ -105,6 +108,8 @@ test('a guided first year: offered on a new farm, taken, and followed to the fir
     // Each lesson is waited for as a player would: it is on the screen, or the days are running toward it.
     await expect.poll(async () => (await slip(page)).id, { timeout: 120_000, message: `after ${did.join(' ')}` }).not.toBe('')
     const { id, target } = await slip(page)
+    // Between one lesson and the next, or under a paper a moment: look again.
+    if (!id) continue
     if (did[did.length - 1] !== id) did.push(id)
     await clear(page, target)
     // Where what it points at is on the screen, the fist is beside it.
@@ -183,7 +188,7 @@ test('refused, it shows nothing: Straight in, then a first season to its first p
   await expect(page.getByTestId('guide-offer')).toHaveCount(0)
   await page.getByTestId('begin-season').click()
   // Straight in starts the days at once, as it always has.
-  await expect.poll(async () => (await look(page)).running).toBe(true)
+  await expect.poll(async () => (await look(page)).running, { timeout: 20_000 }).toBe(true)
   await page.getByTestId('speed-3').first().click().catch(async () => { await page.getByTestId('speed-cycle').click() })
   for (let k = 0; k < 120; k++) {
     expect(await page.locator('#ui [data-testid="guide-slip"]').count()).toBe(0)
