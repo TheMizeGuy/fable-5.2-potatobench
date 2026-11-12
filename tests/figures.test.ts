@@ -40,10 +40,12 @@ describe('figures that agree', () => {
     expect(o.months.map(m => m.name)).toEqual(S.CELLAR_MONTHS)
     const v = S.variety(lot.variety)
     const sprouts = lot.dugDay + v.dormancy + S.COOL_CELLAR_DAYS + (c.upgrades.vent ? S.VENT_DAYS : 0)
+    // In season the year's price level is still coming in: the cellar sells at the level it settles at.
+    const settle = (world.priceLevel[String(lot.year)] ?? 1) / S.levelNow(world, c)
     for (const m of o.months) {
       expect(m.sprouted).toBe(S.dayIndex(lot.year, 10, 1) + m.month * 30 > sprouts)
-      // Never more than the price curve alone would give.
-      expect(m.net).toBeLessThan(o.now * S.MONTH_CURVE[m.month] / S.SEASON_CURVE.reduce((a, [d, f]) => (d <= c.season!.day ? f : a), S.SEASON_CURVE[0][1]) + 1e-6)
+      // Never more than the price curve and the settled level alone would give.
+      expect(m.net).toBeLessThan(o.now * settle * S.MONTH_CURVE[m.month] / S.SEASON_CURVE.reduce((a, [d, f]) => (d <= c.season!.day ? f : a), S.SEASON_CURVE[0][1]) + 1e-6)
     }
     expect(o.best).toEqual(o.months.reduce((a, b) => (b.net > a.net ? b : a)))
   })
@@ -92,5 +94,44 @@ describe('figures that agree', () => {
     expect(k.delivered).toBeCloseTo(Math.min(k.cwt, stock), 6)
     expect(events.some(e => e.type === 'delivered')).toBe(true)
     expect(k.penalty).toBeCloseTo(Math.max(0, k.cwt - k.delivered) * k.price * S.CONTRACT_PENALTY, 6)
+  })
+
+  it('the storage outlook is right in the middle: over many winters what a kept lot came to centres on what it said', () => {
+    // Sixteen coach-tended first years, each lot's outlook at the season's end against each cellar month it was kept to.
+    const errs: number[][] = []
+    for (let seed = 1; seed <= 16; seed++) {
+      const w = S.climateWorld(world, seed)
+      const c = S.createCampaign(w, { seed, startYear: S.FARM_YEAR0 + 1 })
+      S.apply(w, c, { t: 'begin' })
+      for (let n = 0; n < 400 && c.phase === 'season' && !S.seasonDone(c); n++) {
+        for (const a of S.advise(w, c)) if (a.act !== 'wait' && a.act !== 'close' && a.act !== 'sell') S.apply(w, c, { t: 'job', kind: a.act, field: a.field })
+        S.apply(w, c, { t: 'day' })
+      }
+      const lots = S.openLots(c).filter(l => !S.variety(l.variety).contract)
+      const said = new Map(lots.map(l => [l.id, S.storeOutlook(w, c, l)]))
+      const sold = new Map(lots.map(l => [l.id, l.sold]))
+      const cwt = new Map(lots.map(l => [l.id, S.lotCwt(l)]))
+      const today = c.season!.day
+      S.apply(w, c, { t: 'endSeason' })
+      while (c.phase === 'cellar') {
+        for (const l of lots) {
+          const o = said.get(l.id)!
+          const k = o.months.findIndex(x => x.month === c.month)
+          if (k < 0 || !l.open || l.sold > sold.get(l.id)! + 0.5) continue
+          const span = (S.dayIndex(l.year, 10, 1) + c.month * 30 - today) / 30
+          const got = S.lotValue(w, c, l) - S.STORE_COST * cwt.get(l.id)! * span
+          ;(errs[k] ??= []).push(got / o.months[k].net - 1)
+        }
+        S.apply(w, c, { t: 'month' })
+      }
+    }
+    const all = errs.flat()
+    expect(all.length).toBeGreaterThan(200)
+    const mean = all.reduce((a, b) => a + b, 0) / all.length
+    expect(Math.abs(mean), `mean ${mean}`).toBeLessThan(0.02)
+    for (const [k, e] of errs.entries()) {
+      const mid = [...e].sort((a, b) => a - b)[e.length >> 1]
+      expect(Math.abs(mid), `${k + 1} months ahead: median ${mid}`).toBeLessThan(0.025)
+    }
   })
 })

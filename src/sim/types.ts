@@ -321,6 +321,7 @@ export interface Season {
   frostHaul?: number        // the last day a frost was forecast on crop still in barrels
   pressed?: number[]        // people moved today from work that can wait to work that cannot
   frostLow?: number         // tonight's forecast low at the station, C
+  telegram?: number         // the day the last telegram came
   digStop?: number[]        // fields whose digging stopped for today so that what was dug can be hauled before a frost
   fields: FieldSeason[]
   jobs: Job[]

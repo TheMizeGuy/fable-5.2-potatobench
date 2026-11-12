@@ -85,12 +85,31 @@ export function sellLot(world: World, c: Campaign, lot: Lot, frac: number): numb
   return money
 }
 
+// The share of a lot that will rot, as the weigh ticket lets a grower judge it: blight gone into the pile looking sound
+// in proportion to the blight culled at the table, and the skins not set (harvest.ts, gradeHill and finishLot).
+function expectedRot(lot: Lot): number {
+  const pile = lot.grades.no1 + lot.grades.chef + lot.grades.b + lot.grades.no2 + lot.skinned + lot.loss.rot
+  const hidden = pile > 0 ? P.ROT_HIDDEN * lot.loss.blight / pile : 0
+  return Math.min(0.6, hidden + 0.012 * (1 - lot.skin))
+}
+
+// One cellar month of rot (campaign.ts, storeMonth): the share lost, the rot grown, and the pile breaking down once.
+function rotMonth(r: { rot: number; broke: boolean }, vent: boolean): number {
+  if (r.rot <= 0) return 0
+  const grow = r.rot * (vent ? P.ROT_GROW_VENT : P.ROT_GROW)
+  let loss = Math.min(0.5, grow)
+  r.rot = Math.min(0.9, r.rot + grow)
+  if (!r.broke && r.rot >= P.ROT_BREAK) { r.broke = true; loss = 0.55; r.rot = 0.06 }
+  return loss
+}
+
 export interface StoreMonth { month: number; name: string; net: number; sprouted: boolean }
 
 // What keeping a lot to each cellar month would usually bring, against selling it now: the usual price curve from
-// today's quote (the chipping variety's processing price is one price all winter), the shrink, sprouting once the lot
-// has been out of the ground longer than its dormancy in a cool cellar, and the storage charge from now. Rot that has
-// not shown is not counted. net is dollars for the whole lot then, less the storage charge paid till then.
+// today's quote (the chipping variety's processing price is one price all winter), and the pile month by month as the
+// cellar keeps it: the shrink, the first month's for thin skins, sprouting once the lot has been out of the ground
+// longer than its dormancy in a cool cellar, and the rot to be expected from what the weigh ticket showed. net is
+// dollars for the whole lot then, less the storage charged till then.
 export function storeOutlook(world: World, c: Campaign, lot: Lot): { now: number; months: StoreMonth[]; best: StoreMonth | null } {
   const now = lotValue(world, c, lot)
   const months: StoreMonth[] = []
@@ -103,18 +122,33 @@ export function storeOutlook(world: World, c: Campaign, lot: Lot): { now: number
   const nov1 = dayIndex(lot.year, 10, 1)
   const today = inSeason ? c.season!.day : nov1 + c.month * 30
   const curveNow = inSeason ? seasonFactor(c.season!.day) : P.MONTH_CURVE[Math.min(c.month, P.MONTH_CURVE.length - 1)]
+  // In season the year's price level is still coming in with the harvest; the cellar sells at the level it settles at.
+  const level = world.priceLevel[String(lot.year)] ?? 1
+  const share = v.contract ? 0.25 : 1
+  const settle = inSeason ? (1 + (level - 1) * share) / (1 + (levelNow(world, c) - 1) * share) : 1
   const cwt = lot.grades.no1 + lot.grades.chef + lot.grades.b + lot.grades.no2 + lot.skinned
+  // The rot to be expected now: the weigh-in's share, carried through the cellar months already passed.
+  const r = { rot: expectedRot(lot), broke: lot.broke }
+  for (let k = 1; k <= lot.months; k++) rotMonth(r, vent)
+  const first = inSeason ? Math.max(0, nov1 - today) / 30 : 0
+  let keep = Math.max(0, 1 - shrink * first)
+  let rent = first
+  let sprouted = lot.sprouted
+  let done = lot.months
   for (let m = inSeason ? 0 : c.month + 1; m < P.MONTH_CURVE.length; m++) {
-    const at = nov1 + m * 30
-    const span = (at - today) / 30
-    if (span <= 0) continue
-    const sproutsAt = lot.dugDay + dormancy
-    const sprouted = lot.sprouted || at > sproutsAt
-    const sproutMonths = sprouted ? Math.min(span, (at - Math.max(today, lot.sprouted ? today : sproutsAt)) / 30) : 0
-    const keep = Math.max(0, 1 - shrink * span - P.SPROUT_SHRINK * sproutMonths)
-    const price = v.contract ? 1 : P.MONTH_CURVE[m] / curveNow
+    // Each cellar month between now and then, as the cellar takes it (campaign.ts, storeMonth).
+    while (done < m) {
+      done++
+      rent += keep
+      let s = shrink + (done === 1 ? 0.03 * (1 - lot.skin) : 0)
+      if (!sprouted && nov1 - lot.dugDay + done * 30 > dormancy) sprouted = true
+      if (sprouted) s += P.SPROUT_SHRINK
+      keep *= (1 - s) * (1 - rotMonth(r, vent))
+    }
+    if (nov1 + m * 30 <= today) continue
+    const price = (v.contract ? 1 : P.MONTH_CURVE[m] / curveNow) * settle
     const factor = sprouted && !lot.sprouted ? 0.85 : 1
-    months.push({ month: m, name: P.CELLAR_MONTHS[m], net: now * price * factor * keep - P.STORE_COST * cwt * keep * span, sprouted })
+    months.push({ month: m, name: P.CELLAR_MONTHS[m], net: now * price * factor * Math.max(0, keep) - P.STORE_COST * cwt * rent, sprouted })
   }
   let best: StoreMonth | null = null
   for (const x of months) if (!best || x.net > best.net) best = x
