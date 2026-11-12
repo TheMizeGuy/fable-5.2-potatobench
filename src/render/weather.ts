@@ -54,7 +54,7 @@ export class Weather {
       ${WRAP}
       void main() {
         vec3 dir = normalize(vec3(uWind.x * 0.24, -1.0, uWind.y * 0.24));
-        vec3 head = wrap(aSeed.xyz, dir * uFall * (21.0 + 9.0 * aSeed.w), vec3(70.0, 44.0, 70.0) * uSpan);
+        vec3 head = wrap(aSeed.xyz, dir * uFall * (21.0 + 9.0 * aSeed.w), vec3(70.0, 34.0, 70.0) * uSpan);
         vec4 a = projectionMatrix * viewMatrix * vec4(head, 1.0);
         vec4 b = projectionMatrix * viewMatrix * vec4(head - dir * (0.34 + 0.4 * aSeed.w) * pow(uSpan, 0.6), 1.0);
         vec2 along = (b.xy / max(b.w, 1e-3) - a.xy / max(a.w, 1e-3)) / uPx;
@@ -92,15 +92,15 @@ export class Weather {
       ${WRAP}
       void main() {
         // Leaves fall from the height of a tree, not out of the sky.
-        vec3 box = vec3(90.0 * max(1.0, uSpan * 0.8), 11.0, 70.0 * max(1.0, uSpan * 0.8));
+        vec3 box = vec3(90.0 * max(1.0, uSpan * 0.8), 20.0, 70.0 * max(1.0, uSpan * 0.8));
         vec3 p = wrap(aSeed.xyz, vec3(uWind.x * 1.6 + 0.3, -1.0, uWind.y * 1.6) * uFall * (0.7 + 0.5 * aSeed.w), box);
-        p.y += uFloor + 5.5 - uCentre.y;
+        p.y += uFloor + 9.0 - uCentre.y;
         float t = uFall * (1.6 + 2.0 * aSeed.w) + aSeed.x * 40.0;
         p.x += sin(t * 0.7) * 0.5;
         p.z += cos(t * 0.6) * 0.5;
         p.y += sin(t * 1.3) * 0.15;
         vec4 clip = projectionMatrix * viewMatrix * vec4(p, 1.0);
-        float size = (0.07 + 0.06 * aSeed.w) * projectionMatrix[1][1] / uPx.y / max(clip.w, 0.1);
+        float size = (0.07 + 0.06 * aSeed.w) * (1.0 + 0.22 * uSpan) * projectionMatrix[1][1] / uPx.y / max(clip.w, 0.1);
         float tiny = smoothstep(0.5, 1.3, size);
         size = clamp(size, 1.2, 9.0);
         vec2 c = vec2(position.x, position.y * 2.0 - 1.0);
@@ -110,7 +110,7 @@ export class Weather {
         c = vec2(c.x * k - c.y * s, c.x * s + c.y * k) * vec2(1.0, 0.25 + 0.75 * abs(sin(t * 1.9)));
         clip.xy += c * size * uPx * clip.w;
         // Thick under the trees along the ridge, a few carried everywhere.
-        float near = mix(0.12, 1.0, smoothstep(-8.0, -22.0, p.z));
+        float near = mix(0.12, 1.0, smoothstep(-90.0, -270.0, p.z));
         vA = step(aSeed.z, uAmount * near * tiny) * step(0.3, clip.w);
         vCol = mix(mix(vec3(0.52, 0.13, 0.03), vec3(0.62, 0.36, 0.05), smoothstep(0.2, 0.6, aSeed.y)), vec3(0.34, 0.07, 0.03), step(0.82, aSeed.y)) * uLight * 0.36;
         gl_Position = clip;

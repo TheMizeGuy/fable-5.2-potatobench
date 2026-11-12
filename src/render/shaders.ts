@@ -3,8 +3,9 @@
 import {
   Color, MeshDepthMaterial, ShaderChunk, Vector2, Vector3, Vector4, type IUniform, type Material, type Texture,
 } from 'three'
+import { FARM_CENTER, REACH } from './layout.ts'
 import { GLSL_NOISE } from './noise.ts'
-import { KV, S } from './scale.ts'
+import { KV } from './scale.ts'
 
 export const U = {
   uTime: { value: 0 },
@@ -105,25 +106,33 @@ float rimeAt(float yTrue) {
 // to be followed over a field from the playing height.
 float gustAt(vec2 xz) {
   vec2 q = vec2(dot(xz, uGust.xy) - uGust.z, dot(xz, vec2(-uGust.y, uGust.x)));
-  float broad = textureLod(uNoise, q * vec2(${(0.021 / KV).toFixed(5)}, ${(0.0078 / KV).toFixed(5)}), 0.0).b;
-  float fine = textureLod(uNoise, q * vec2(${(0.067 / S).toFixed(5)}, ${(0.029 / S).toFixed(5)}) + 0.37, 0.0).b;
+  // A front is some 70 m from the next along the wind and a couple of hundred long: three or so are on a field at once.
+  float broad = textureLod(uNoise, q * vec2(0.0046, 0.0017), 0.0).b;
+  float fine = textureLod(uNoise, q * vec2(0.021, 0.0093) + 0.37, 0.0).b;
   return smoothstep(0.36, 0.74, broad * 0.72 + fine * 0.28);
 }
 `
 
-// Shared by the sky's picture of the clouds and the shadow they throw on the land.
-// The scene's haze was tuned as so much per unit of a land a tenth the size: per metre it is this share of that.
-export const HAZE_PER_M = 0.36
+// The day's haze is given as a density (env.haze); a metre of air at the brook holds this share of it.
+export const HAZE_PER_M = 0.3
+// How fast the haze thins with height, per metre: it lies in the lowest kilometre, so a camera that climbs to see the
+// county still looks through it.
+export const HAZE_FALL = 0.0011
+// The scale of the cloud field: one turn of its pattern, in metres. A cloud is about a third of that across, a field
+// or two wide, so its shadow is seen to cross them.
+export const CLOUD_TURN = 1150
 
+// Shared by the sky's picture of the clouds and the shadow they throw on the land.
 export const CLOUD_GLSL = /* glsl */ `
-// How high the cumulus stands. Low, so a cloud's shadow is of a size to be seen crossing a field.
-const float CLOUD_H = 420.0;
+// How high the bases of the cumulus stand, and how tall the tallest is.
+const float CLOUD_H = 780.0;
+const float CLOUD_T = 520.0;
 float cloudField(vec2 p) {
-  vec2 q = p * 0.0015 + uCloud.zw;
-  float crowd = texture2D(uNoise, q * 0.23 + 0.17).b;
+  vec2 q = p * ${(1 / CLOUD_TURN).toFixed(6)} + uCloud.zw;
+  float crowd = texture2D(uNoise, q * 0.19 + 0.17).b;
   float body = texture2D(uNoise, q).b;
-  float lump = texture2D(uNoise, q * 3.1 + vec2(0.43, 0.11) + uCloud.zw * 0.6).b;
-  return clamp((crowd * 0.3 + body * 0.44 + lump * 0.26 - 0.5) * 1.75 + 0.5, 0.0, 1.0);
+  float lump = texture2D(uNoise, q * 2.7 + vec2(0.43, 0.11) + uCloud.zw * 0.6).b;
+  return clamp((crowd * 0.34 + body * 0.42 + lump * 0.24 - 0.5) * 1.75 + 0.5, 0.0, 1.0);
 }
 // Where in the field a cloud begins, for the share of the sky that is cloud; a closed sky has no gaps.
 float cloudEdge() {
@@ -151,17 +160,23 @@ float airBetween(float density, float falloff, float base, float ya, float yb, f
 // mistShare: how much of the air in the way is ground mist, which has its own colour.
 float hazeAmount(float ya, float yb, float t, vec2 xz, out float mistShare) {
   mistShare = 0.0;
-  // A fair day's haze belongs to distance: the farm itself stands in clear air.
-  float air = airBetween(uHaze.x * ${HAZE_PER_M.toFixed(3)}, uHaze.y, 0.0, ya, yb, t) * mix(smoothstep(${(60 * S).toFixed(1)}, ${(320 * S).toFixed(1)}, t), 1.0, smoothstep(0.0014, 0.003, uHaze.x));
+  // A fair day's haze belongs to distance: what is within a field's length stands in clear air, and every hundred
+  // metres beyond takes a little more of the sky's colour, so the far field, the woods on the ridge and the country
+  // behind them each stand a step paler than the last.
+  float air = airBetween(uHaze.x * ${HAZE_PER_M.toFixed(3)}, uHaze.y, 0.0, ya, yb, t) * mix(smoothstep(50.0, 420.0, t), 1.0, smoothstep(0.0014, 0.003, uHaze.x));
   if (uMist.x > 1e-5) {
     // Mist lies in banks with clear air between, drifting; and however deep, what stands in it still shows through.
-    float bank = texture2D(uNoise, xz * ${(0.0071 / KV).toFixed(5)} + uCloud.zw * 6.0).b * 0.65 + texture2D(uNoise, xz * ${(0.031 / S).toFixed(5)} - uCloud.zw * 11.0).b * 0.35;
+    float bank = texture2D(uNoise, xz * 0.0021 + uCloud.zw * 6.0).b * 0.65 + texture2D(uNoise, xz * 0.011 - uCloud.zw * 11.0).b * 0.35;
     float wisp = 1.0 - uMist.w + uMist.w * 2.6 * smoothstep(0.32, 0.78, bank);
-    float low = min(airBetween(uMist.x * wisp, uMist.y, uMist.z, ya, yb, min(t, ${(400 * S).toFixed(1)})), 0.85);
+    float low = min(airBetween(uMist.x * wisp, uMist.y, uMist.z, ya, yb, min(t, 1500.0)), 0.9);
     mistShare = low / max(air + low, 1e-5);
     air += low;
   }
   return 1.0 - exp(-air);
+}
+// The land that is drawn ends: well before it does, it has gone into the air, so no edge is ever seen.
+float landsEnd(vec2 xz) {
+  return smoothstep(${(REACH * 0.56).toFixed(1)}, ${(REACH * 0.93).toFixed(1)}, distance(xz, vec2(${FARM_CENTER.x.toFixed(1)}, ${FARM_CENTER.z.toFixed(1)})));
 }
 // Mist is lit from within when the sun is beyond it.
 vec3 mistTint(vec3 dir) {
@@ -287,6 +302,9 @@ export const HAZE = /* glsl */ `
     float hd = length( hv );
     float hm;
     float ha = hazeAmount( cameraPosition.y, vWorld.y, hd, vWorld.xz, hm );
+    float gone = landsEnd( vWorld.xz );
+    ha = ha + ( 1.0 - ha ) * gone;
+    hm *= 1.0 - gone;
     vec3 hdir = hv / max( hd, 1e-4 );
     gl_FragColor.rgb = mix( gl_FragColor.rgb, mix( hazeTint( hdir ), mistTint( hdir ), hm ), ha );
   }

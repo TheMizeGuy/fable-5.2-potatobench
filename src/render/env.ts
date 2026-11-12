@@ -160,9 +160,9 @@ export function envTarget(snap: Snapshot, out: Env): Env {
     out.high = 0.7
     out.turbidity = 3
     out.mie = 0.006
-    out.haze = 0.00065
+    out.haze = 0.0013
     out.mist = 1
-    out.mistDeep = 0.12
+    out.mistDeep = 0.16
     out.key = 0.96
     out.dry = 1
     out.smoke = 0.7
