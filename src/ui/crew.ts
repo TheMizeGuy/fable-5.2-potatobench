@@ -188,8 +188,8 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
   function keepButton(field: number, testid: string): HTMLElement {
     return h('button', {
       class: 'btn', type: 'button', testid,
-      onclick: () => { pop = -1; const r = ctx.run({ t: 'keepVines', field, keep: true }); if (r.ok) ctx.announce(`${S.FIELD_NAMES[field]}: the crew will leave the vines growing.`) },
-    }, 'Keep them growing')
+      onclick: () => { pop = -1; const r = ctx.run({ t: 'keepVines', field, keep: true }); if (r.ok) ctx.announce(`${S.FIELD_NAMES[field]}: the crew will leave the vines up.`) },
+    }, 'Keep them up')
   }
 
   // Felling, rock picking, clearing brush or building with one person on it while someone stands idle who is set never

@@ -131,7 +131,7 @@ export function alertShort(a: Alert): { text: string; glyph: string } {
     case 'dry': return { text: `${name}drying out`, glyph: 'dry' }
     case 'logged': return { text: `${name}standing water`, glyph: 'water' }
     case 'blightSeen': return { text: `${name}blight spotted from the road`, glyph: 'blight' }
-    case 'scout': return { text: a.level === 'bad' ? `${name}blight on ${n === '1' ? '1 plant' : `${n} plants`}` : `${name}scouted, no blight`, glyph: a.level === 'bad' ? 'blight' : 'scout' }
+    case 'scout': return { text: a.level === 'bad' ? `${name}blight on ${F.plural(typeof a.data?.found === 'number' ? a.data.found : Number(n), 'plant')}` : `${name}scouted, no blight`, glyph: a.level === 'bad' ? 'blight' : 'scout' }
     case 'watch': return { text: 'Blight watch is on', glyph: 'blight' }
     case 'sample': return { text: `${name}test dig found ${n} potatoes`, glyph: 'sample' }
     case 'dug': return { text: `${name}${a.level === 'bad' ? 'froze before it was all dug' : 'harvested'}`, glyph: 'dig' }
@@ -148,9 +148,9 @@ export function alertShort(a: Alert): { text: string; glyph: string } {
     case 'hired': return { text: a.text.replace(/ is hired as .*/, ' hired'), glyph: 'hire' }
     case 'dismissed': return { text: a.text.replace(/\.$/, ''), glyph: 'crew' }
     case 'quit': return { text: `${who(a.text)} quit`, glyph: 'unhappy' }
-    case 'unhappy': return { text: `${who(a.text)} is unhappy`, glyph: 'unhappy' }
-    case 'wornOut': return { text: `${who(a.text)} is worn out`, glyph: 'tired' }
-    case 'hurt': return { text: `${who(a.text)} is hurt${/back on (.+)\.$/.exec(a.text) ? `, back ${/back on (.+)\.$/.exec(a.text)![1]}` : ''}`, glyph: 'hurt' }
+    case 'unhappy': return { text: `${whoIs(a.text)} unhappy`, glyph: 'unhappy' }
+    case 'wornOut': return { text: `${whoIs(a.text)} worn out`, glyph: 'tired' }
+    case 'hurt': return { text: `${whoIs(a.text)} hurt${/back on (.+)\.$/.exec(a.text) ? `, back ${/back on (.+)\.$/.exec(a.text)![1]}` : ''}`, glyph: 'hurt' }
     case 'poached': return { text: `${who(a.text)} left to work for the neighbor`, glyph: 'unhappy' }
     case 'skillUp': return { text: a.text.replace(/ (?:is|are) better at /, ': ').replace(/: level (\d+)\.$/, ' $1'), glyph: 'rise' }
     case 'breakdown': return { text: 'A tractor broke down', glyph: 'tractor' }
@@ -168,7 +168,7 @@ export function alertShort(a: Alert): { text: string; glyph: string } {
       const cwt = [...a.text.matchAll(/([\d,]+) cwt in /g)].reduce((t, m) => t + Number(m[1].replace(/,/g, '')), 0)
       return { text: `Frost tonight. Hauling the ${cwt ? F.localize(`${cwt} cwt`) : 'crop'} in barrels first`, glyph: 'frost' }
     }
-    case 'frozenInField': return { text: `${name}barrels froze${n ? `, ${F.localize(`${n} cwt`)}` : ''}`, glyph: 'frost' }
+    case 'frozenInField': return { text: `${name}barrels froze${typeof a.data?.cwt === 'number' && a.data.cwt > 0 ? `, ${F.localize(`${a.data.cwt} cwt`)}` : ''}`, glyph: 'frost' }
     case 'weighed': return { text: `${name}weighed in`, glyph: 'ticket' }
     case 'pickers': return { text: a.text.startsWith('A picking') ? 'Pickers hired' : 'Pickers sent home', glyph: 'pickers' }
     case 'logsSold': return { text: a.text.replace(/^Sold (.+?) loads of logs to the mill for (.+)\.$/, 'Logs sold for $2'), glyph: 'logs' }
@@ -185,7 +185,12 @@ export function alertShort(a: Alert): { text: string; glyph: string } {
 
 // The person an alert is about: the name it starts with.
 function who(text: string): string {
-  return /^(.+?)(?: is | has | takes | quits)/.exec(text)?.[1] ?? text.split(' ')[0]
+  return /^(.+?)(?: is | are | has | takes | quits)/.exec(text)?.[1] ?? text.split(' ')[0]
+}
+
+function whoIs(text: string): string {
+  const w = who(text)
+  return w === 'You' ? 'You\'re' : `${w} is`
 }
 
 // Days until the ground is fit to plant, as a grower would reckon it: the soil drawn toward each day's mean, from the

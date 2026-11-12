@@ -266,7 +266,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       ctx.notes.push({
         level: soon ? 'warn' : 'info', glyph: 'kill', ttl: 14000, field: p.field, day: s0.day,
         text: `${name}: ${due && date && !soon ? `vine kill due around ${S.formatDay(s0.year, due.day, true)}. Your crew does it on ${date}` : `your crew will kill the vines ${soon ? 'tomorrow' : date ? `on ${date}` : 'soon'}`}. Show me`,
-        full: `${F.localize(p.inWay)} Press to see the field, where you can tell the crew to keep the vines growing.`,
+        full: `${F.localize(p.inWay)} Press to see the field, where you can tell the crew to keep the vines up.`,
         go: () => { app.select(p.field); app.focus(p.field) },
       })
     }

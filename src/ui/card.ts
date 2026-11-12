@@ -586,8 +586,8 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
     return h('div', { class: 'whose-box' },
       h('p', { class: 'whose', testid: 'card-whose' }, parts),
       kill ? h('p', { class: 'whose kill-date', testid: 'card-kill-date' }, icon('kill', 'i'), F.localize(kill.inWay), ' ',
-        h('button', { class: 'btn quiet', type: 'button', testid: 'card-keep-vines', onclick: () => { const r = ctx.run({ t: 'keepVines', field: i, keep: true }); if (r.ok) ctx.announce(`${S.FIELD_NAMES[i]}: the crew will leave the vines growing.`) } }, 'Keep them growing')) : null,
-      kept && f.status === 'growing' ? h('p', { class: 'whose', testid: 'card-vines-kept' }, icon('kill', 'i'), 'You\'re keeping these vines growing, so killing them is your decision. ',
+        h('button', { class: 'btn quiet', type: 'button', testid: 'card-keep-vines', onclick: () => { const r = ctx.run({ t: 'keepVines', field: i, keep: true }); if (r.ok) ctx.announce(`${S.FIELD_NAMES[i]}: the crew will leave the vines up.`) } }, 'Keep them up')) : null,
+      kept && f.status === 'growing' ? h('p', { class: 'whose', testid: 'card-vines-kept' }, icon('kill', 'i'), 'You\'re keeping these vines up, so killing them is your decision. ',
         h('button', { class: 'btn quiet', type: 'button', testid: 'card-let-vines', onclick: () => { ctx.run({ t: 'keepVines', field: i, keep: false }) } }, 'Let the crew kill them')) : null)
   }
 
