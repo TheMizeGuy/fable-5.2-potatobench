@@ -145,10 +145,10 @@ export function buildSite(kind: BuildingKind, yard: number): Spot {
   if (yard === -2) return kind === 'bunk' ? { x: 96.6, z: -11.6, heading: 0 } : { x: 86.6, z: -13.2, heading: -Math.PI / 2 }
   // behind the farmstead, clear of what stands there: the work comes at each from the yard side
   const home: Record<BuildingKind, Spot> = {
-    house: { x: 28.4, z: -16.4, heading: 0 },
+    house: { x: 32.6, z: -13.4, heading: 0 },
     shed: { x: 28.6, z: -9.4, heading: 0 },
     bunk: { x: 28.4, z: -3.2, heading: 0 },
-    packing: { x: 33.2, z: -16.8, heading: 0 },
+    packing: { x: 33.4, z: -19.4, heading: 0 },
     pond: { x: 31.4, z: 2.6, heading: 0 },
     stand: { x: 19.9, z: 19.4, heading: 0 },
     station: { x: 27.6, z: 7.9, heading: 0 },
@@ -192,11 +192,11 @@ function hedgeSpot(f: FieldRect): Spot {
     if (upright) {
       if (f.cz < Math.min(z0, z1) - 3 || f.cz > Math.max(z0, z1) + 3) continue
       const side = x0 > f.cx ? 1 : -1, edge = side > 0 ? f.x1 : f.x0, d = Math.abs(x0 - edge)
-      if (d < bd) { bd = d; best = { x: edge + side * Math.min(0.9, d * 0.6), z: f.cz, heading: side > 0 ? 0 : Math.PI } }
+      if (d < bd) { bd = d; best = { x: edge + side * Math.max(0.15, d - 1.25), z: f.cz, heading: side > 0 ? 0 : Math.PI } }
     } else {
       if (f.cx < Math.min(x0, x1) - 3 || f.cx > Math.max(x0, x1) + 3) continue
       const side = z0 > f.cz ? 1 : -1, edge = side > 0 ? f.z1 : f.z0, d = Math.abs(z0 - edge)
-      if (d < bd) { bd = d; best = { x: f.cx, z: edge + side * Math.min(0.9, d * 0.6), heading: side > 0 ? Math.PI / 2 : -Math.PI / 2 } }
+      if (d < bd) { bd = d; best = { x: f.cx, z: edge + side * Math.max(0.15, d - 1.25), heading: side > 0 ? Math.PI / 2 : -Math.PI / 2 } }
     }
   }
   return best

@@ -59,6 +59,8 @@ interface Actor {
   rig: Rig | null          // the machine in hand
   aboard: boolean
   shown: number
+  away: boolean            // laid off for the winter: not on the farm
+  home: Spot | null        // their place in the dooryard when there is nothing to do
   gait: number
   goal: (Spot & { seat?: number }) | null
   state: 'work' | 'idle' | 'sunday' | 'hurt' | 'mend'
@@ -159,9 +161,9 @@ export class Crews {
         varying vec2 vUv; varying vec2 vInfo; varying vec3 vCol;
         void main() {
           float r = length(vUv), aa = fwidth(r) * 1.3;
-          float band = smoothstep(0.68 - aa, 0.68 + aa, r) * (1.0 - smoothstep(0.94 - aa, 0.94 + aa, r));
-          float inner = smoothstep(0.44 - aa, 0.44 + aa, r) * (1.0 - smoothstep(0.54 - aa, 0.54 + aa, r)) * vInfo.y;
-          float wash = (1.0 - smoothstep(0.2, 0.7, r)) * (0.26 + 0.14 * vInfo.y);
+          float band = smoothstep(0.8 - aa, 0.8 + aa, r) * (1.0 - smoothstep(0.94 - aa, 0.94 + aa, r));
+          float inner = smoothstep(0.56 - aa, 0.56 + aa, r) * (1.0 - smoothstep(0.64 - aa, 0.64 + aa, r)) * vInfo.y;
+          float wash = (1.0 - smoothstep(0.1, 0.8, r)) * (0.2 + 0.16 * vInfo.y);
           float a = max(max(band, inner * (0.7 + 0.3 * sin(uTime * 4.0))), wash) * vInfo.x;
           if (a < 0.01) discard;
           vec3 col = mix(vCol, vec3(1.0, 0.84, 0.42), 0.55 * vInfo.y) + 0.25 * vInfo.y;
@@ -186,7 +188,7 @@ export class Crews {
     const rest = idleSpot(-1, slot, u.kind === 'farmer')
     return {
       id: u.id, kind: u.kind, slot, dress: dressFor(u.id), coat: dressFor(u.id, true), segs: [], clockSeg: -2, segClock: 0,
-      x: rest.x, z: rest.z, heading: rest.heading, rig: null, aboard: false, shown: 0, gait: u.id * 1.3, goal: null, state: 'idle', post: '',
+      x: rest.x, z: rest.z, heading: rest.heading, rig: null, aboard: false, shown: 0, away: false, home: null, gait: u.id * 1.3, goal: null, state: 'idle', post: '',
       tired: u.tired, worn: u.tired, style: (u.id * 7) % 5, pose: new Pose().reset(), head: new Vector3(rest.x, 1, rest.z), scale: 1, next: [],
       worker: { id: u.id, dress: dressFor(u.id), tired: 0, w: 0, x: rest.x, z: rest.z, heading: 0, lift: 0, pose: new Pose().reset(), aboard: false, rig: null },
     }
@@ -271,6 +273,7 @@ export class Crews {
       a.post = ''
       a.state = 'idle'
       a.goal = null
+      a.away = false
       let r: Spot = snap.mode === 'season' ? (u.at < 0 ? idleSpot(u.at, a.slot, a.kind === 'farmer') : restAt(u.at, a.slot, true)) : idleSpot(-1, a.slot, a.kind === 'farmer')
       if (snap.mode === 'cellar') {
         // the cellar months: at the winter's work, or by the door with the wood to split
@@ -278,7 +281,7 @@ export class Crews {
         if (u.winter === 'woods' && tract && (tract.cover === 'woods' || tract.cover === 'brush')) a.post = `${u.winterField}|fell`
         else if (u.winter === 'pack' && snap.farm.buildings.some(b => b.kind === 'packing' && b.built)) a.post = '-1|pack'
         else if (u.winter === 'build') { const b = snap.farm.buildings.find(x => !x.built); if (b) a.post = `${b.yard}|build` }
-        if (a.kind !== 'farmer' && !a.post) a.shown = 0
+        if (a.kind !== 'farmer' && !a.post) a.away = true
         if (a.kind === 'farmer' && !a.post) r = { x: HOUSE.x - 2.9, z: HOUSE.z - 5.6, heading: 0.2 }
         // already out at the work
         if (a.post.endsWith('|fell')) r = siteAt('fell', u.winterField)
@@ -286,6 +289,7 @@ export class Crews {
         else if (a.post) { const b = snap.farm.buildings.find(x => !x.built); if (b) r = buildSite(b.kind, b.yard) }
       }
       a.x = r.x; a.z = r.z; a.heading = r.heading
+      a.home = a.kind !== 'farmer' && !a.post && (snap.mode !== 'season' || u.at === -1) ? r : null
       a.worker.x = a.x; a.worker.z = a.z
       // part way through work with a machine: it stands where they are
       if (snap.mode === 'season' && u.rig && u.at >= 0) {
@@ -321,6 +325,7 @@ export class Crews {
       else if (u.hurt) { a.state = 'hurt'; a.goal = { ...sickSpot(sick++), seat: 0.2 } }
       else if (snap.restDay) { a.state = 'sunday'; const s = sundaySpot(sunday++); a.goal = { ...s, seat: s.seat } }
       else { a.state = 'idle'; a.goal = u.at < 0 ? idleSpot(u.at, a.slot, a.kind === 'farmer') : null }
+      a.home = a.state === 'idle' && a.goal && u.at === -1 && a.kind !== 'farmer' ? a.goal : null
     }
     // A tractor broken down: whoever was driving it (or else whoever has nothing to do) is at its engine.
     for (const r of this.rigs) {
@@ -492,8 +497,9 @@ export class Crews {
       s.who.push(a)
     }
     this.actors.forEach((a, k) => {
-      a.shown = Math.min(1, a.shown + f.dt * 2)
+      a.shown = a.away ? 0 : Math.min(1, a.shown + f.dt * 2)
       a.scale = big
+      if (a.away) return
       if (a.post && snap.mode !== 'season') { const [fs, kind] = a.post.split('|'); enlist(a.post, kind, Number(fs), a, 0.5); return }
       const site = this.step(a, k, f, going, big)
       if (site) enlist(site.key, site.kind, site.field, a, site.w)
@@ -523,7 +529,9 @@ export class Crews {
     for (const r of this.rigs) {
       const holder = r.holder >= 0 ? this.actors.find(a => a.id === r.holder) : undefined
       const y = heightAt(r.x, r.z)
-      const s = bigMachine
+      // a machine standing idle in the yard is not drawn as large as one at work, or the yard is all machines
+      const parked = !holder && Math.hypot(r.x - r.home.x, r.z - r.home.z) < 0.5
+      const s = parked ? Math.min(bigMachine, 1.5) : bigMachine
       const ahead = heightAt(r.x + Math.cos(r.heading) * 0.6 * s, r.z + Math.sin(r.heading) * 0.6 * s)
       const behind = heightAt(r.x - Math.cos(r.heading) * 0.6 * s, r.z - Math.sin(r.heading) * 0.6 * s)
       r.machine.place(r.x, y + 0.01, r.z, r.heading, Math.atan2(ahead - behind, 1.2 * s), s)
@@ -535,7 +543,7 @@ export class Crews {
       if (holder && holder.aboard) {
         holder.head.copy(drawn.head)
         holder.scale = s
-        this.ring(r.x, y, r.z, 1.55 * s, holder, f, far)
+        this.ring(r.x, y, r.z, 1.2 * s, holder, f, far)
       }
       if (r.broken && !f.reduced && Math.random() < 0.12) {
         r.machine.point(0.3, 0.95, 0, V)
@@ -686,7 +694,18 @@ export class Crews {
           a.aboard = false
           const dig = clamp((w - 0.5) / 0.26, 0, 1)
           if (dig < 1) forking(pose, dig)
-          else { stand(pose, f.time, a.tired, 0); stoop(pose, 0.32, 0, false) }
+          else {
+            // the fork stood in the ground at his side, and the hill's tubers on a tray to be looked at
+            stand(pose, f.time, a.tired, 0)
+            stoop(pose, 0.32, 0, false)
+            pose.gripL = true
+            pose.handL.set(0.14, 0.45, -0.17)
+            pose.tool = 'fork'
+            pose.toolA.set(0.13, 0.64, -0.17)
+            pose.toolB.set(0.16, 0.12, -0.17)
+            const hill = seg.reveals[0] ? hillPos(seg.field, seg.reveals[0].hill) : null
+            if (hill) this.prims.put('box', V.set(hill.x - 0.02, heightAt(hill.x, hill.z + 0.34) + 0.0, hill.z + 0.34), V2.set(0, 1, 0), AXIS_X, 1.08, 0.035, 0.3, TRAY)
+          }
         }
         passed(w >= 0.64 ? Infinity : -1)
       } else {
@@ -721,11 +740,13 @@ export class Crews {
   // Not at work: a Sunday on the porch, laid up in a chair, waiting in the yard, or stood where the last job ended.
   private atEase(a: Actor, f: CrewFrame, pose: Pose, big: number): void {
     const g = a.goal
-    const there = g && Math.hypot(g.x - a.x, g.z - a.z) < 1.2
+    const k = a.home ? Math.max(1, big * 0.72) : 1
+    const there = g && (Math.hypot(g.x - a.x, g.z - a.z) < 1.2 || (a.home === g && Math.hypot(DOOR.x + (g.x - DOOR.x) * k - a.x, DOOR.z + (g.z - DOOR.z) * k - a.z) < 1.2))
     if (a.aboard && a.rig) return
     if (g && there) {
       a.x = g.x; a.z = g.z
       a.heading = g.heading
+      this.spread(a, big)
       if (a.state === 'hurt') { sit(pose, f.time + a.id, 0.2, 0.5); pose.held = 'sling'; pose.gripL = true; pose.handL.set(0.1, 0.36, 0.0) }
       else if (a.state === 'mend') {
         // leaning in over the engine with a wrench, straightening now and then to look at it
@@ -742,7 +763,18 @@ export class Crews {
       pose.tool = 'axe'
       V.set(a.x + Math.cos(a.heading) * 0.42 * big, heightAt(a.x, a.z), a.z + Math.sin(a.heading) * 0.42 * big)
       this.prims.put('log', V, V2.set(0, 1, 0), V2, 0.24 * big, 0.2 * big, 0.24 * big, WHITE)
-    } else this.idle(a, f, pose)
+    } else {
+      if (!a.segs.length) this.spread(a, big)
+      this.idle(a, f, pose)
+    }
+  }
+
+  // Drawn large from far off, people standing about in the dooryard stand further apart, so each can be told from the rest.
+  private spread(a: Actor, big: number): void {
+    if (!a.home) return
+    const k = Math.max(1, big * 0.72)
+    a.x = DOOR.x + (a.home.x - DOOR.x) * k
+    a.z = DOOR.z + (a.home.z - DOOR.z) * k
   }
 
   // The digger has passed these hills: the pickers and the crows go to them.
@@ -937,7 +969,9 @@ export class Crews {
 
 // People are drawn a little larger than the machines' scale, so a man at the wheel is not lost in the tractor.
 const FIGURE = 1.14
+const DOOR = { x: 20.6, z: -6.9 }
 const POSE = new Pose()
+const AXIS_X = new Vector3(1, 0, 0), TRAY = new Color('#cbb98e')
 const WHITE = new Color(1, 1, 1)
 const IDLE: MachineState = { moved: 0, turn: 0, working: 0, kind: 'travel', driver: null, load: 0 }
 const ASKING: Dress[] = [

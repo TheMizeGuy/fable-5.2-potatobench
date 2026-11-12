@@ -168,7 +168,9 @@ export class Stage {
     const spots: [number, number][] = [[0.95, 0.2], [1.3, -1.5], [0.9, 1.7]]
     const [tx, tz] = spots[n % 3]
     const sideways = n % 2 ? 1 : -1
-    const H = brushy ? 1.25 : 2.7 + 0.5 * hash(n), r = brushy ? 0.035 : 0.08
+    // the tree is no bigger than the woods it stands in, however large the people are drawn
+    const ts = Math.min(s, 1.7) / s
+    const H = (brushy ? 1.25 : 2.7 + 0.5 * hash(n)) * (brushy ? 1 : ts), r = brushy ? 0.035 : 0.08 * ts
     // the tree: standing and shivering under the axe, going over, lying to be limbed
     const fall = t < tCut ? 0 : Math.pow(span(tCut, tDown, t), 2.4)
     const struck = t < tCut ? 0.012 * Math.sin(st.t * 23) * Math.max(0, Math.sin(st.t * 5)) : 0
@@ -187,7 +189,7 @@ export class Stage {
       }
     } else {
       for (let k = 0; k < 5; k++) {
-        const wide = (1.25 - 0.2 * k) * (1 - limbed * (0.4 + 0.12 * k)) * (1 - gone)
+        const wide = (1.25 - 0.2 * k) * (1 - limbed * (0.4 + 0.12 * k)) * (1 - gone) * ts
         if (wide <= 0.02) continue
         c.copy(a).addScaledVector(b, (0.24 + 0.155 * k) * H * s)
         pr.put('bough', c, b, X, wide * s, 0.34 * H * s, wide * s, SPRUCE)
@@ -273,7 +275,7 @@ export class Stage {
     const moving = (going || hauling) && f.going ? 1 : 0
     for (const sd of [-1, 1]) {
       const ox = -Math.sin(hh) * sd * 0.15 * s, oz = Math.cos(hh) * sd * 0.15 * s
-      drawBeast(pr, sd < 0 ? HORSE : GREY_HORSE, PT.x + ox, heightAt(PT.x + ox, PT.z + oz), PT.z + oz, hh, s, st.t * 7 + sd, moving, 0)
+      drawBeast(pr, sd < 0 ? HORSE : GREY_HORSE, PT.x + ox, heightAt(PT.x + ox, PT.z + oz), PT.z + oz, hh, s * 0.86, st.t * 7 + sd, moving, 0)
       if (hauling) {
         c.copy(withers)
         e.set(PT.x - Math.cos(hh) * 0.95 * s, heightAt(PT.x, PT.z) + 0.1 * s, PT.z - Math.sin(hh) * 0.95 * s)
@@ -310,7 +312,7 @@ export class Stage {
     if (unloading) st.load = Math.max(0, st.load - f.dt * 3)
     const hh = st.spot.heading + (dir > 0 ? 0 : Math.PI)
     this.local(st, s, bx + dir * 1.15, bz, PT)
-    drawBeast(pr, HORSE, PT.x, heightAt(PT.x, PT.z), PT.z, hh, s, st.t * 6, moving ? 0.8 : 0, moving ? 0 : 0.6 * span(1, 3, u - (leg - 5)))
+    drawBeast(pr, HORSE, PT.x, heightAt(PT.x, PT.z), PT.z, hh, s * 0.86, st.t * 6, moving ? 0.8 : 0, moving ? 0 : 0.6 * span(1, 3, u - (leg - 5)))
     c.copy(withers)
     // the boat: two runners and a deck of planks, low to the ground
     this.P(st, s, bx, 0.05, bz, a)
@@ -359,8 +361,8 @@ export class Stage {
   private brush(st: Site, ws: Worker[], f: StageFrame): void {
     const pr = f.pr, s = f.s
     const burning = f.wind < 0.5 && !f.cold
-    // the hedge is ahead of the spot; the pile and the fire behind, on the headland
-    const fx = -0.9, fz = 0
+    // the hedge is ahead of the spot, along the wall; the pile and the fire a little way down the headland
+    const fx = -0.1, fz = 4.4
     this.P(st, s, fx, 0, fz, a)
     // the pile, and on a still day the fire in it
     for (let n = 0; n < 6; n++) {
@@ -382,21 +384,21 @@ export class Stage {
     ws.forEach((w, r) => {
       w.rig = null
       w.aboard = false
-      const lz = (r % 2 ? 1 : -1) * (1.3 + 1.5 * Math.floor(r / 2))
+      const lz = r % 2 ? 1.6 + 1.2 * Math.floor(r / 2) : -0.6 - 1.4 * Math.floor(r / 2)
       const T = 8, t = frac(st.t / T + r * 0.37 + w.id * 0.21) * T
       if (t < 3.6) {
-        if (this.go(st, w, f, 0.1, lz, 0)) {
+        if (this.go(st, w, f, -0.12, lz, 0)) {
           const u = frac(t / 1.2)
           swing(w.pose, u < 0.5 ? 1 - ease(u / 0.5) : u < 0.64 ? (u - 0.5) / 0.14 : 1, false, 0.3)
           w.pose.tool = 'hook'
         }
       } else if (t < 4.6) {
-        if (this.go(st, w, f, 0.25, lz, 0)) stoop(w.pose.reset(), Math.sin((t - 3.6) * Math.PI), st.t * 4)
+        if (this.go(st, w, f, -0.05, lz, 0)) stoop(w.pose.reset(), Math.sin((t - 3.6) * Math.PI), st.t * 4)
       } else if (t < 6.6) {
-        const there = this.go(st, w, f, fx + 0.7, fz + Math.sign(lz) * 0.45, Math.PI - Math.sign(lz) * 0.5, 1)
+        const there = this.go(st, w, f, fx - 0.1, fz - 0.75, Math.PI / 2, 1)
         w.pose.held = 'brush'
         if (there) { lifting(w.pose, 0.7, Math.sign(lz)); w.pose.held = t < 6.2 ? 'brush' : '' }
-      } else if (this.go(st, w, f, 0.1, lz, 0)) stand(w.pose, st.t, w.tired)
+      } else if (this.go(st, w, f, -0.12, lz, 0)) stand(w.pose, st.t, w.tired)
     })
   }
 

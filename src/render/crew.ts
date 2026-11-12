@@ -1,6 +1,6 @@
 // The people of the farm as figures: a body with joints (hips, knees, shoulders, elbows, a neck), dressed from the
 // person's own look, posed for walking, driving and every kind of work, and drawn from the shared shapes (prims.ts).
-// A figure stands with its feet at the origin, about 0.78 tall, facing +x; its right hand is on the +z side.
+// A figure stands with its feet at the origin, about 0.82 tall, facing +x; its right hand is on the +z side.
 import { Color, Matrix4, Quaternion, Vector3 } from 'three'
 import { personLook } from '../game/looks.ts'
 import type { Prims } from './prims.ts'
@@ -67,7 +67,7 @@ export type Tool = '' | 'axe' | 'fork' | 'hammer' | 'hook' | 'pipe' | 'plank' | 
 export type Held = '' | 'sack' | 'basket' | 'barrel' | 'stone' | 'bag' | 'tray' | 'sling' | 'brush'
 
 const THIGH = 0.19, SHIN = 0.19, UPPER = 0.135, FORE = 0.135, TORSO = 0.225, SHOULDER = 0.105, HIPW = 0.05, ANKLE = 0.035
-export const STAND_HIP = 0.395
+export const STAND_HIP = 0.428
 
 // How a figure holds itself, in its own space. Feet and hands are places to reach; knees and elbows follow.
 export class Pose {
