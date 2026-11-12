@@ -261,15 +261,15 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       if (killSaid.has(key)) continue
       killSaid.add(key)
       const name = S.FIELD_NAMES[p.field]
+      const due = S.killOutlook(c, p.field)
       ctx.notes.push({
         level: soon ? 'warn' : 'info', glyph: 'kill', ttl: 14000, field: p.field, day: s0.day,
-        text: `${name}: the crew kills the vines ${soon ? 'tomorrow' : `on ${date}`}. Show me`,
+        text: `${name}: ${due && !soon ? `kill due about ${S.formatDay(s0.year, due.day, true)}; ` : ''}the crew kills the vines ${soon ? 'tomorrow' : `on ${date}`}. Show me`,
         full: `${F.localize(p.inWay)} Press to see the field, where they can be kept up.`,
         go: () => { app.select(p.field); app.focus(p.field) },
       })
     }
   }
-  let frostWarned = -1
   // The spraying question, once a season, when blight weather first comes over leaves that are up: the clock stops
   // for it as for a telegram. Put away unanswered, it is not asked again by itself.
   let sprayAsked = ''
@@ -286,22 +286,10 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     if (ev.type === 'yard' || ev.type === 'unit' || ev.type === 'select') ctx.dirty()
     else if (ev.type === 'events') {
       for (const e of ev.events) if (e.type === 'sample') { const staged = app.speed < 3; void ctx.view.whenShown('sample', e.field).then(() => { if (app.screen === 'season') openTray(e, staged) }) }
-      if (ev.dayPassed) warnFrost()
       const c0 = app.campaign
       if (c0) { sayCrewStarts(c0); sayKillDates(c0) }
     }
   })
-
-  // A frost forecast over barrels still in the field is worth saying, once a day, where the player is looking.
-  function warnFrost(): void {
-    const c = app.campaign
-    const s0 = c?.season
-    if (!c || !s0 || frostWarned === s0.day || s0.log.some(e => e.type === 'frostBarrels' && e.day === s0.day)) return
-    const worst = S.haulInfo(app.world, c).filter(x => x.frostChance >= 40).sort((a, b) => b.cwt - a.cwt)[0]
-    if (!worst) return
-    frostWarned = s0.day
-    ctx.notes.push({ level: 'warn', glyph: 'frost', text: `${worst.name}: frost tonight, ${F.mass(worst.cwt)} in barrels`, full: `A ${worst.frostChance}% chance of frost tonight, with ${F.mass(worst.cwt)} still in barrels in ${worst.name}. A hard frost takes a fifth of it.`, field: worst.field, day: s0.day })
-  }
 
   // ------------------------------------------------------------ tags, stamps and the tips
 

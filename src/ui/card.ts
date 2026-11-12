@@ -572,7 +572,10 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
     if (crew.length) parts.push(h('span', null, icon('sprout', 'i'), h('b', null, 'The crew: '), `${crew.join('; ')}.`))
     else parts.push(h('span', { class: 'quiet' }, icon('sprout', 'i'), 'The crew puts this field\'s routine work on the list by itself.'))
     if (yours.length) parts.push(h('span', null, ' ', h('b', null, 'Yours: '), `${F.list(yours)}.`))
-    // The vine kill the crew does by itself, with its date, and the way to refuse it.
+    // When the kill is due by the coach's reckoning; the vine kill the crew does by itself, with its date, and the way
+    // to refuse it.
+    const due = f.status === 'growing' ? S.killOutlook(c, i) : null
+    if (due) parts.push(h('span', { testid: 'card-kill-due' }, ' ', h('b', null, 'Kill due: '), `about ${F.date(c.year, due.day, true)}${due.why === 'blight' ? ', blight is winning' : due.why === 'frost' ? ', a frost is coming' : ''}.`))
     const kill = fates(app.world, c).pressing.find(p => p.kind === 'kill' && p.field === i && p.job < 0)
     const kept = c.season!.fields[i].keepVines
     return h('div', { class: 'whose-box' },
