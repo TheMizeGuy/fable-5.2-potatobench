@@ -7,7 +7,7 @@ import { loadWorld } from '../tools/balance/world.ts'
 // runs at, and only a card that needs an answer stops it.
 function c0(app: App): S.Campaign { return app.campaign! }
 
-// The clock with "Pause on alerts" off, so only a card stops it (the setting is on for a new player; its own case below).
+// The clock as a new player has it: "Pause on alerts" off, so only a card stops it.
 function farm(): App {
   const app = new App(loadWorld())
   app.settings.pauseOnAlerts = false
@@ -30,9 +30,9 @@ function play(app: App, seconds: number, stop: () => boolean = () => false, answ
 }
 
 describe('the clock', () => {
-  it('pauses on alerts for a new player, and stands while a card says it must', () => {
+  it('runs at the speed set for a new player, and stands while a card says it must', () => {
     const app = new App(loadWorld())
-    expect(app.settings.pauseOnAlerts).toBe(true)
+    expect(app.settings.pauseOnAlerts).toBe(false)
     app.newGame(undefined, 11)
     app.do({ t: 'begin' })
     app.setSpeed(0)

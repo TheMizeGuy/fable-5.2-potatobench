@@ -421,7 +421,8 @@ test('a crop a contract wants: the weigh ticket delivers it and the tracker coun
   await expect(ticket.locator('.choice')).toContainText(/market/)
   await expect(ticket.getByTestId('store-houses')).toContainText('The potato house holds')
   await deliver.click()
-  await expect(ticket.locator('[data-testid^="lot-keep-"]')).toContainText('Store')
+  // Once the delivery slip has torn off, what is left can be sold or stored.
+  await expect(ticket.locator('[data-testid^="lot-keep-"]')).toContainText('Store the rest')
   await ticket.locator('[data-testid^="lot-keep-"]').click()
   await expect(ticket).toHaveCount(0)
   await expect(page.locator('#ui .track-n')).not.toHaveText(/^0\//)

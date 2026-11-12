@@ -24,7 +24,7 @@ export interface Settings {
   quality: Quality
 }
 
-const DEFAULT_SETTINGS: Settings = { units: 'us', sound: true, volume: 0.6, reducedMotion: false, hints: true, pauseOnAlerts: true, quality: 'auto' }
+const DEFAULT_SETTINGS: Settings = { units: 'us', sound: true, volume: 0.6, reducedMotion: false, hints: true, pauseOnAlerts: false, quality: 'auto' }
 
 export type Screen = 'title' | Phase
 
