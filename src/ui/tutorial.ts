@@ -185,7 +185,7 @@ function slipBody(ctx: Ctx, x: Lesson, l: Look, held: boolean, lost = false): (H
 function offerBody(ctx: Ctx): HTMLElement[] {
   return [
     h('p', { class: 't-label' }, 'The county agent'),
-    h('p', { class: 'guide-ask' }, 'First year here? I will show you each thing as the year brings it.'),
+    h('p', { class: 'guide-ask' }, 'New here? I will show you each thing as it comes.'),
     h('footer', { class: 'guide-foot' },
       h('button', { class: 'btn guide-yes', type: 'button', testid: 'guide-accept', onclick: () => { guide.accept(); ctx.dirty() } }, fist(), 'Guide my first year'),
       h('button', { class: 'btn quiet', type: 'button', testid: 'guide-refuse', onclick: () => { guide.refuse(); ctx.dirty() } }, 'Straight in')),
