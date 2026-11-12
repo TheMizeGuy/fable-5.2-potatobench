@@ -1,6 +1,6 @@
 // The field view: the farm in its country, drawn with three.js, played like a strategy map.
 // Falls back to a flat drawing without WebGL.
-import { Color, PCFShadowMap, Raycaster, Scene, Triangle, Vector2, Vector3, WebGLRenderer, type Object3D } from 'three'
+import { Color, Group, PCFShadowMap, Raycaster, Scene, Triangle, Vector2, Vector3, WebGLRenderer, type Object3D } from 'three'
 import { DAYS_PER_SECOND, type App } from '../game/app.ts'
 import type { CreateFieldView, FieldView, Thing } from '../game/contracts.ts'
 import { FIELD_COUNT, HILLS } from '../sim/index.ts'
@@ -17,9 +17,11 @@ import { attachInput } from './input.ts'
 import { DUFOUR, FD, FIELDS, FW, HOME, LAND, POTATO_HOUSE, ROAD, WATER_Y, brookZ, fieldBaseY, groundY, YARD_AT, yardAt } from './layout.ts'
 import { clamp, hash2, smooth } from './noise.ts'
 import { K, KV, S } from './scale.ts'
+import { Pace, Sizer, startOn } from './pace.ts'
 import { Particles } from './particles.ts'
 import { Pond } from './pond.ts'
 import { Post } from './post.ts'
+import { Probe } from './probe.ts'
 import { LAMP, Props } from './props.ts'
 import { CLOUD_TURN, HAZE_FALL, U } from './shaders.ts'
 import { SunShadows } from './shadows.ts'
@@ -48,21 +50,27 @@ const SHOWN_CAP_S = 2.5         // the longest whenShown() keeps the interface w
 type Tier = 'high' | 'medium' | 'low'
 // What each setting keeps. A frame costs in two ways: the pixels it fills, and the things it draws (most of them
 // trees, drawn once into the picture and again into each shadow map). Each step down takes from both.
-//   high: everything; the fine shadow redrawn every other frame, the second every fourth, the widest every twelfth
-//     (most of what a frame draws is trees, and more than half of those were being drawn into shadow maps).
-//   medium: the picture at 2.3 million pixels with lighter smoothing of edges; no contact shade or soft focus; shadow
+//   high: everything, the picture at no more than a 1920 by 1080 screen's pixels however dense the display (a window
+//     of 1512 by 982 at two device pixels to one is drawn at 1786 by 1160 and stretched, with its edges given back);
+//     the fine shadow redrawn every other frame, the second every fourth, the widest every twelfth.
+//   medium: the picture at 1.45 million pixels with lighter smoothing of edges; no contact shade or soft focus; shadow
 //     maps at half the detail, the wider two redrawn less often; shorter shafts; clouds followed in fewer steps;
 //     and what the other parts drop at this setting (whole trees, plants and grass nearer the camera only).
-//   low: the picture at 1.1 million pixels with no multisampling; the fine shadow redrawn every third frame, the
+//   low: the picture at 0.9 million pixels with no multisampling; the fine shadow redrawn every third frame, the
 //     second every twelfth, the widest (the back country's woods) once a second; no shafts or bloom; flat-bottomed
 //     clouds; and the other parts' low setting (fewer whole plants, trees as simple shapes, sparse grass, people
 //     without shadows).
-// `every`: how often each shadow cascade is redrawn, in frames.
-const TIERS: Record<Tier, { scale: number; pixels: number; msaa: number; ao: boolean; focus: boolean; bloom: boolean; shafts: number; clouds: number; shadow: [number, number, number]; every: [number, number, number]; density: number }> = {
-  high: { scale: 1, pixels: 3.7e6, msaa: 4, ao: true, focus: true, bloom: true, shafts: 40, clouds: 7, shadow: [3072, 2048, 2048], every: [2, 4, 12], density: 1 },
-  medium: { scale: 1, pixels: 2.3e6, msaa: 2, ao: false, focus: false, bloom: true, shafts: 20, clouds: 4, shadow: [2048, 1024, 1024], every: [2, 6, 24], density: 1 },
-  low: { scale: 0.7, pixels: 1.1e6, msaa: 0, ao: false, focus: false, bloom: false, shafts: 0, clouds: 2, shadow: [1024, 1024, 512], every: [3, 12, 60], density: 0.5 },
+// `pixels`: the most the picture is drawn at; `ratio`: the most device pixels to one of the page's that the canvas
+// itself is given (the browser stretches it over the window); `every`: how often each shadow cascade is redrawn, in frames.
+const TIERS: Record<Tier, { scale: number; pixels: number; ratio: number; msaa: number; ao: boolean; focus: boolean; bloom: boolean; shafts: number; clouds: number; shadow: [number, number, number]; every: [number, number, number]; density: number }> = {
+  high: { scale: 1, pixels: 1920 * 1080, ratio: 2, msaa: 4, ao: true, focus: true, bloom: true, shafts: 40, clouds: 7, shadow: [3072, 2048, 2048], every: [2, 4, 12], density: 1 },
+  medium: { scale: 1, pixels: 1.45e6, ratio: 1.5, msaa: 2, ao: false, focus: false, bloom: true, shafts: 20, clouds: 4, shadow: [2048, 1024, 1024], every: [2, 6, 24], density: 1 },
+  low: { scale: 0.75, pixels: 0.9e6, ratio: 1, msaa: 0, ao: false, focus: false, bloom: false, shafts: 0, clouds: 2, shadow: [1024, 1024, 512], every: [3, 12, 60], density: 0.5 },
 }
+// Where the setting a machine was measured for is remembered, and which measure it was: a build that draws at another
+// cost counts on, and every machine is measured again.
+const GPU_KEY = 'the-county/gpu', GPU_MEASURE = 1
+type TierDef = (typeof TIERS)[Tier]
 const DOWN: Record<Tier, Tier> = { high: 'medium', medium: 'low', low: 'low' }
 
 // The view the rest of the game holds. It starts in 3D and turns to the flat drawing if WebGL fails or never comes back.
@@ -138,6 +146,9 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   const sky = new Sky()
   const shadows = new SunShadows(scene)
   const post = new Post(renderer)
+  const probe = new Probe(renderer)
+  post.probe = probe
+  probe.setCascades(shadows.lights.map(l => l.shadow.camera))
   const leafTex = leafTexture(), flowerTex = flowerTexture(), puffTex = puffTexture()
   lap('textures')
   const terrain = buildTerrain()
@@ -172,7 +183,11 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   const farHills = new FarHills()
   const beacons = new Beacons()
   scene.add(farHills.mesh, beacons.group)
-  scene.add(sky.dome, terrain.group, flora.group, clearing.group, pond.group, grass.group, props.group, fields.group, harvest.group, crews.group, particles.mesh, weather.group, birds.mesh)
+  // The sky is drawn last of all, where the land (itself drawn after what stands on it) has left it showing.
+  const above = new Group()
+  above.renderOrder = 60
+  above.add(sky.dome)
+  scene.add(above, terrain.group, flora.group, clearing.group, pond.group, grass.group, props.group, fields.group, harvest.group, crews.group, particles.mesh, weather.group, birds.mesh)
   // Whatever throws a shadow near at hand throws it into the fine cascade; the far trees and farmsteads only into the wide one.
   scene.traverse(o => { if (o.castShadow && !o.userData.far) o.layers.enable(3) })
 
@@ -210,8 +225,11 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   let pending: PendingReveal[] = []
 
   // ---- quality
-  // Left to itself the view starts where the graphics chip suggests and comes down if frames run slow: a chip built
-  // into the processor starts at the middle setting (the low one on a small machine), a graphics card at the high one.
+  // Left to itself the view starts where the graphics chip suggests, a chip built into the processor at the middle
+  // setting (the low one on a small machine) and a graphics card at the high one, and then times its first frames
+  // whole: the setting is the highest those leave room for, and it is remembered, so it is measured once. After that
+  // the picture's size follows whether frames keep their beat, and the setting comes down a step if at its smallest
+  // they still do not (or at once, if they are plainly too slow); it does not go back up by itself.
   function startTier(): Tier {
     const gl = renderer.getContext()
     const ext = gl.getExtension('WEBGL_debug_renderer_info')
@@ -223,10 +241,33 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     if (/apple/.test(chip) && !/ (pro|max|ultra)\b/.test(chip)) return 'medium'
     return small ? 'medium' : 'high'
   }
-  const startedAt = app.settings.quality === 'auto' ? startTier() : app.settings.quality
+  // Under a test driver the picture is kept as the setting gives it, so that a tool's pictures do not depend on what
+  // else the machine was doing; a tool may ask for the measuring by name.
+  let adaptive = !navigator.webdriver || new URLSearchParams(location.search).has('adapt')
+  function remembered(): Tier | null {
+    try {
+      const kept = JSON.parse(localStorage.getItem(GPU_KEY) ?? 'null') as { tier?: string; measure?: number } | null
+      const t = kept?.measure === GPU_MEASURE ? kept.tier : null
+      return t === 'high' || t === 'medium' || t === 'low' ? t : null
+    } catch { return null }
+  }
+  function remember(ms: number): void {
+    try { localStorage.setItem(GPU_KEY, JSON.stringify({ tier, ms: Math.round(ms * 10) / 10, measure: GPU_MEASURE })) } catch { /* storage blocked: measured again next time */ }
+  }
+  const known = adaptive ? remembered() : null
+  const startedAt = app.settings.quality === 'auto' ? known ?? startTier() : app.settings.quality
   let tier: Tier = startedAt
+  let cur: TierDef = TIERS[tier]
+  // The first run's frames, timed whole (null once the choice is made).
+  let trial: number[] | null = adaptive && app.settings.quality === 'auto' && !known ? [] : null
+  const onePixel = new Uint8Array(4)
   const times: number[] = []
-  let slow = 0, fps = 60, warm = 0
+  let fps = 60, warm = 0
+  const pacing = new Pace(), sizer = new Sizer()
+  // A tool may ask for every beat of the display to be drawn, and for the frame to be drawn without one or another of
+  // the things that make it cheaper, to measure what each saves.
+  let capped = true
+  const without = { order: false, cards: false, contact: false }
 
   function viewport(): Viewport {
     const w = canvas.clientWidth || innerWidth, h = canvas.clientHeight || innerHeight
@@ -234,26 +275,34 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     return { w, h, top: i.top, right: i.right, bottom: i.bottom, left: i.left }
   }
 
-  const pixelRatio = () => Math.min(2, devicePixelRatio || 1)
+  const pixelRatio = () => Math.min(cur.ratio, devicePixelRatio || 1)
+  // A tool's hand on the setting's parts, to try one against another.
+  let over: Partial<TierDef> = {}
   let size = { w: 0, h: 0, pr: 0 }
+  // The setting the parts were last told of: a change of size alone leaves them as they are.
+  let told: Tier | '' = ''
   function resize(): void {
-    const vp = viewport(), pr = pixelRatio(), t = TIERS[tier]
+    cur = { ...TIERS[tier], ...over }
+    const vp = viewport(), pr = pixelRatio(), t = cur
     renderer.setPixelRatio(pr)
     renderer.setSize(vp.w, vp.h, false)
     size = { w: vp.w, h: vp.h, pr }
-    const scale = Math.min(t.scale, Math.sqrt(t.pixels / Math.max(1, vp.w * vp.h * pr * pr)))
-    post.setSize(Math.max(2, Math.round(vp.w * pr * scale)), Math.max(2, Math.round(vp.h * pr * scale)), { msaa: t.msaa, ao: t.ao, focus: t.focus, bloom: t.bloom, shafts: t.shafts })
+    const scale = Math.min(t.scale, Math.sqrt(t.pixels / Math.max(1, vp.w * vp.h * pr * pr))) * sizer.size
+    post.setSize(Math.max(2, Math.floor(vp.w * pr * scale + 1e-6)), Math.max(2, Math.floor(vp.h * pr * scale + 1e-6)), { msaa: t.msaa, ao: t.ao, focus: t.focus, bloom: t.bloom, shafts: t.shafts })
     sky.setSteps(t.clouds)
-    weather.setTier(tier)
-    particles.setTier(tier)
     shadows.every = t.every
     shadows.setSizes(t.shadow)
-    fields.setTier(tier, t.density)
-    grass.setTier(tier)
-    flora.setTier(tier)
-    props.setTier(tier)
     crews.setScreen(vp.w, vp.h)
-    crews.setTier(tier)
+    if (told !== tier) {
+      told = tier
+      weather.setTier(tier)
+      particles.setTier(tier)
+      fields.setTier(tier, t.density)
+      grass.setTier(tier)
+      flora.setTier(tier)
+      props.setTier(tier)
+      crews.setTier(tier)
+    }
     reframe(reduced)
   }
 
@@ -340,6 +389,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   }
 
   const off = app.on(e => {
+    pacing.wake()
     if (e.type === 'change' || e.type === 'screen') dirty = true
     else if (e.type === 'events') {
       dirty = true
@@ -607,45 +657,76 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   let gustHeading = 0.4, gustRun = 0, mistAt = 0
   const cloudAt = new Vector2()
 
+  // A stretch of ninety frames drawn while things move: what they cost, and whether the picture should change size.
   function measure(dtMs: number): void {
     if (warm < 150) { warm++; return }
     if (dtMs > 250) return
     times.push(dtMs)
     if (times.length < 90) return
     const sorted = times.slice().sort((a, b) => a - b)
-    const median = sorted[45]
     times.length = 0
-    fps = Math.round(1000 / Math.max(1, median))
-    if (app.settings.quality !== 'auto') return
-    // Two slow stretches running, and the setting comes down a step; it does not go back up by itself. Slow is when
-    // more than a quarter of the frames miss a sixtieth of a second by a margin: that is felt as a stutter long before
-    // the middle frame is late.
-    slow = sorted[66] > 20.5 ? slow + 1 : 0
-    // Plainly too slow (under 35 frames a second) is not given a second stretch to prove it.
-    if (sorted[66] > 28) slow = 2
-    if (slow >= 2 && tier !== 'low') {
+    fps = Math.round(1000 / Math.max(1, sorted[45]))
+    if (!adaptive || probe.on) return
+    // Slow is when more than a quarter of the frames miss their beat by a margin: that is felt as a stutter long before
+    // the middle frame is late. Two slow stretches running, and the picture is drawn a size smaller; at its smallest,
+    // the setting comes down a step (left to itself: a setting the player chose is kept).
+    const late = sorted[66] / pacing.frameMs
+    const auto = app.settings.quality === 'auto' && tier !== 'low'
+    // Plainly too slow (under 37 frames a second where 60 are asked for) is not walked down a size at a time.
+    const plainly = late > 1.6 && auto
+    const say = plainly ? 'floor' : sizer.feed(late > 1.23, 1.5)
+    if (say === 'floor' && auto) {
       tier = DOWN[tier]
-      slow = 0
-      warm = 60
-      resize()
-    }
+      sizer.reset()
+      // A setting the machine could not hold at any size is not tried again another day; one given up in a single
+      // bad stretch (something else at work on the machine) is.
+      if (!plainly) remember(sorted[45])
+    } else if (say !== 'smaller' && say !== 'larger') return
+    warm = 60
+    resize()
   }
 
-  function frame(dtMs: number): void {
+  // Whether anything in the picture moves by itself or is being moved: then every frame is drawn. Otherwise, after a
+  // few seconds, the land comes to rest (its water, wind, smoke and weather ease to a stop) and is drawn only a couple
+  // of times a second until something is touched.
+  let poseWas = 0
+  function busy(): boolean {
+    const c = rig.cur, g = rig.goal
+    const pose = c.x + c.z * 1.37 + c.dist * 2.11 + c.yaw * 331 + c.pitch * 577 + c.fov * 13 + g.x * 0.71 + g.z * 0.53 + g.dist * 1.9 + g.yaw * 211
+    const moved = pose !== poseWas
+    poseWas = pose
+    return moved || app.speed > 0 || (snap.mode === 'title' && !reduced) || dayT < 1 || rig.moving() || rig.idle < 1 || pending.length > 0 || waiters.length > 0
+      || dirty || frameNo < 90 || trial !== null
+  }
+  // A hand on anything, the interface's panels too, is somebody there.
+  const wake = () => pacing.wake()
+  const TOUCHES = ['pointermove', 'pointerdown', 'wheel', 'touchstart', 'keydown'] as const
+  for (const name of TOUCHES) addEventListener(name, wake, { passive: true })
+  const downward = new Vector3()
+
+  // beatMs: the time since the display's last beat (or next to none: a still picture asked for, always drawn).
+  function frame(beatMs: number): void {
     if (document.hidden || !compiled) return
     if (lost) {
-      lostFor += dtMs
+      lostFor += beatMs
       if (lostFor > LOST_MS) giveUp()
       return
     }
+    const timed = beatMs > 0.5
+    // Not every beat is drawn: a fast display's every second or third, and few when nothing moves.
+    const dtMs = timed ? (capped ? pacing.tick(beatMs, busy(), snap.mode === 'title') : beatMs) : beatMs
+    if (timed && dtMs === 0) return
     const vp = viewport()
     // A move to a screen of another density changes the pixel ratio without any resize event.
     if (vp.w !== size.w || vp.h !== size.h || pixelRatio() !== size.pr) resize()
     const dt = Math.min(0.1, dtMs / 1000)
-    if (dtMs > 0.5) measure(dtMs)
-    time += dt
-    ambient += dt * (reduced ? STILL : 1)
-    fall += reduced ? 0 : dt
+    // The land's own clocks ease to a stop as it comes to rest.
+    const live = timed && capped ? pacing.live : 1
+    const wdt = dt * live
+    if (timed && live === 1 && !pacing.halved) measure(dtMs)
+    time += wdt
+    ambient += wdt * (reduced ? STILL : 1)
+    fall += reduced ? 0 : wdt
     frameNo++
     if (dirty) rebuild()
     // Day clock: follows the game clock when it runs, plays the day out by itself when paused.
@@ -654,7 +735,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     if (crews.stageHold >= 0 && snap.mode === 'season') dayT = Math.min(dayT, crews.stageHold)
     aimHour(false)
     easeEnv(env, envT, 1 - Math.exp(-dt / 1.1), reduced ? dt * 4 : dt)
-    const pace = reduced ? STILL : 1
+    const pace = (reduced ? STILL : 1) * live
     const wx = Math.cos(env.windDir), wz = Math.sin(env.windDir)
     U.uTime.value = ambient
     U.uSway.value = reduced ? 0 : env.wind
@@ -696,13 +777,13 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     rig.update(dt, vp, reduced)
     applyLight(dt)
     const cam = rig.camera
-    crews.shudder(cam, dt, reduced)
+    crews.shudder(cam, wdt, reduced)
     sky.dome.position.copy(cam.position)
     const t0 = performance.now()
     crews.place({
-      dt, dayT, advancing: app.speed > 0, pace: replayPace, time, reduced, idle: snap.mode !== 'season' && snap.mode !== 'title',
+      dt: wdt, dayT, advancing: app.speed > 0, pace: replayPace, time, reduced, idle: snap.mode !== 'season' && snap.mode !== 'title',
       season: snap.mode === 'season', dist: rig.cur.dist, dust: env.dry, dark: clamp((LAMP.value * lit.exposure) / 5, 0, 1), picked: app.unit, particles, passed, snap, env, camera: cam,
-      speed: app.speed, daySec: 1 / DAYS_PER_SECOND[Math.max(1, app.speed)], clock: Math.min(0.25, dtMs / 1000),
+      speed: app.speed, daySec: 1 / DAYS_PER_SECOND[Math.max(1, app.speed)], clock: Math.min(0.25, dtMs / 1000) * live,
     })
     // Smoke from the kitchen chimney: all day in the cold, a thread of it at supper time. It goes on rising and leans
     // away downwind, a plume a few roofs high: from two fields off it says where the house is and which way the wind sets.
@@ -723,7 +804,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       particles.emit(x, WATER_Y + 0.8, brookZ(x) + (Math.random() - 0.5) * 9, (Math.random() - 0.5) * 0.5, 0.25 + Math.random() * 0.3, (Math.random() - 0.5) * 0.5, 3.2 * big, 1.1 * big, 11, 0.9, 0.92, 0.95, 0.11 * breath, 0.5)
     }
     const t1 = performance.now()
-    particles.update(dt * (reduced ? 0.3 : 1), wx * env.wind * 4, wz * env.wind * 4)
+    particles.update(wdt * (reduced ? 0.3 : 1), wx * env.wind * 4, wz * env.wind * 4)
     // Where the picture is looking: the ground in the middle of what the interface leaves free.
     const eyes = rig.looksAt(vp)
     focus.set(eyes.x, fieldBaseY(eyes.z), eyes.z)
@@ -740,20 +821,21 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     beacons.update(post.target.width, post.target.height, smooth(0.1, 0.8, (LAMP.value * lit.exposure) / 0.6), lit.exposure)
     rig.camera.getWorldDirection(ahead)
     const flat = Math.hypot(ahead.x, ahead.z) || 1
-    shadows.update(lit.sunDir, lit.sun, focus, eyeDist, dtMs <= 0.5, ahead.x / flat, ahead.z / flat)
+    shadows.update(lit.sunDir, lit.sun, focus, eyeDist, dtMs <= 0.5, ahead.x / flat, ahead.z / flat, app.speed === 0 && dayT >= 1 && snap.mode !== 'title')
     fields.setFarShadows(!shadows.holdsFarm)
     MARK_WIDE.value = clamp(rig.cur.dist / (42 * S), 1, 4.5 * K / S)
-    fields.update(dt, cam, { selection: app.selection, hover: app.hover, oats: env.oats, oatsRipe: env.oatsRipe, reduced })
+    fields.update(wdt, cam, { selection: app.selection, hover: app.hover, oats: env.oats, oatsRipe: env.oatsRipe, reduced })
     grass.update(cam, fields.off, dtMs <= 0.5)
-    flora.update(cam)
-    harvest.update(dt, app.speed === 0, clamp(rig.cur.dist / (30 * S), 1, 2.3), reduced)
-    PIXEL.value = (TIERS[tier].msaa ? 1.7 : 1.4) / ((post.target.height) / (2 * Math.tan((cam.fov * Math.PI) / 360)))
+    flora.update(cam, shadows.wide && !without.cards)
+    harvest.update(wdt, app.speed === 0, clamp(rig.cur.dist / (30 * S), 1, 2.3), reduced)
+    PIXEL.value = (cur.msaa ? 1.7 : 1.4) / ((post.target.height) / (2 * Math.tan((cam.fov * Math.PI) / 360)))
     // A landscape seen whole is sharp from front to back: a soft focus would make a model of it. Only close in, among
     // things a few metres off, does the lens go a little soft behind them; it opens up while the player moves the camera.
     const want = env.lens * (rig.idle < 0.6 ? 0.2 : 1) * smooth(90, 14, rig.cur.dist) * (snap.mode === 'title' ? 0.7 : 1.2)
     lens += (want - lens) * (1 - Math.exp(-dt / 0.35))
     const t2 = performance.now()
     renderer.info.reset()
+    probe.sect('skymap')
     if (frameNo % 2 === 0 || frameNo < 4 || dtMs <= 0.5) sky.renderMap(renderer)
     const skyDrew = renderer.info.render.triangles
     const sharp = rig.focus()
@@ -775,6 +857,10 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     veilTint.copy(lit.hazeAway).multiplyScalar(lit.exposure)
     const veilPeak = Math.max(veilTint.r, veilTint.g, veilTint.b, 0.7)
     veilTint.multiplyScalar(0.7 / veilPeak)
+    // Contact shade lets go with distance: with nothing in the picture as near as that (the nearest ground is along
+    // its bottom edge; trees and slopes are allowed for), its passes are not run.
+    downward.set(0, -1, 0.5).unproject(cam).sub(cam.position).normalize()
+    const nearest = downward.y < -1e-3 ? (cam.position.y - focus.y) / -downward.y : 1e9
     post.render(scene, cam, {
       exposure: lit.exposure, focus: sharp, aperture: 0.3 * lens, time, grain: 0.018,
       sunX: sunAt.x * 0.5 + 0.5, sunY: sunAt.y * 0.5 + 0.5, shafts: sunAt.z < 1 ? shafts : 0, shaftTint,
@@ -784,7 +870,28 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       contrast: 0.1 + 0.09 * open * lit.day + 0.06 * env.storm + 0.16 * env.rain,
       veil: 0.08 * env.mist + 0.05 * env.snowfall, veilTint,
       vignette: snap.mode === 'title' ? 0.3 : 0.2 + 0.1 * lit.night + 0.06 * env.storm,
+      contact: without.contact || nearest * 0.9 - 50 < 900,
     }, Math.round(size.w * size.pr), Math.round(size.h * size.pr))
+    probe.endFrame()
+    if (trial && timed && frameNo > 8) {
+      // The frame is drawn twice more and the GPU waited for, so the time is the whole of three frames' work and not
+      // only the page's share of it: a graphics card left idle between frames slows itself down and would read slow.
+      for (let k = 0; k < 2; k++) post.render(scene, cam, { exposure: lit.exposure, focus: sharp, aperture: 0.3 * lens, time, grain: 0.018, sunX: 0.5, sunY: 0.5, shafts: 0, shaftTint, warm: 0, rich: 0, contrast: 0, veil: 0, veilTint, vignette: 0.2 }, Math.round(size.w * size.pr), Math.round(size.h * size.pr))
+      const g = renderer.getContext()
+      g.readPixels(0, 0, 1, 1, g.RGBA, g.UNSIGNED_BYTE, onePixel)
+      trial.push((performance.now() - t2) / 3)
+      if (trial.length >= 5 || trial[trial.length - 1] > 150) {
+        const ms = trial.sort((a, b) => a - b)[trial.length >> 1]
+        trial = null
+        // What the high setting would cost, from what this one did.
+        const want = startOn(ms / (tier === 'high' ? 1 : tier === 'medium' ? 0.67 : 0.45))
+        const changed = want !== tier
+        tier = want
+        remember(ms)
+        warm = 0
+        if (changed) resize()
+      }
+    }
     const t3 = performance.now()
     // What the frames draw, summed, so a tool can take the mean over many: the shadow maps are redrawn on different
     // frames, and one frame's count says little.
@@ -911,7 +1018,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     renderer.setRenderTarget(null)
     compiled = true
     // Test hook: settle every transition at once, so a screenshot shows the state rather than a blend.
-    ;(globalThis as Record<string, unknown>).__countyField = {
+    const hooks = {
       settle() {
         if (dirty) rebuild()
         flush(false)
@@ -1017,19 +1124,59 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       // One child of a part, by its place in it (to find which mesh draws something).
       showChild(name: string, k: number, on: boolean) { const c = parts[name]?.children[k]; if (c) c.scale.setScalar(on ? 1 : 0); return parts[name]?.children.length ?? 0 },
       shadowsOn(on: boolean) { for (const l of shadows.lights) l.castShadow = on },
+      // Time the frame's passes on the GPU (and, with `byPart`, each part of the scene in each of them); cost() gives
+      // what was measured since the last call.
+      probe(on: boolean, byPart = false) {
+        if (!on) { probe.stop(); return probe.timed }
+        probe.tag('farwoods', flora.farWoods)
+        for (const [name, o] of Object.entries(parts)) probe.tag(name, o, m => (m.userData.part as string | undefined) ?? (name === 'flora' && m.userData.far ? 'cards' : undefined))
+        probe.start(byPart)
+        return probe.timed
+      },
+      cost: () => probe.take(),
+      // Try a setting's parts by hand ({} gives the setting back).
+      force(o: Partial<TierDef>) { over = o; resize() },
+      // Follow frame time as a player's browser does (a test driver's does not, unless asked), and forget or set what
+      // was remembered of this machine.
+      adapt(on: boolean, known?: Tier | null) {
+        adaptive = on
+        if (known === null) { try { localStorage.removeItem(GPU_KEY) } catch { /* nothing kept */ } } else if (known) { tier = known; remember(0); resize() }
+        if (on && known === null) trial = []
+      },
+      // Draw the frame without one of the things that make it cheaper: 'order' (the land and the sky drawn last),
+      // 'cards' (cards in the fine shadow when it is wide), 'lazy' (the fine shadow redrawn only when it has
+      // moved, where nothing in it moves to be seen), 'contact' (no contact shade where nothing is near enough to show it).
+      tryWithout(name: 'order' | 'cards' | 'lazy' | 'contact', on: boolean) {
+        if (name === 'lazy') shadows.eager = on
+        else without[name] = on
+        terrain.under.renderOrder = without.order ? 0 : 50
+        above.renderOrder = without.order ? 0 : 60
+      },
+      // Draw on every beat of the display, whatever its rate and whether anything moves (for timing a frame).
+      uncap(on: boolean) { capped = !on },
+      pace: () => ({ beat: pacing.beat, every: pacing.every, still: pacing.still, halved: pacing.halved, size: sizer.size, tier, adaptive, timing: trial !== null }),
       // Stop (or go on) redrawing one shadow cascade, to measure what it costs.
       cascade(k: number, on: boolean) { shadows.held[k] = !on },
+      // Draw a cascade with nothing in it, to see what of the picture's shade is its own.
+      emptyCascade(k: number, on: boolean) { shadows.empty(k, on) },
       env, lit, rig,
       // What the last frame drew, where the camera stood, and the clocks.
       stats() {
         const r = renderer.info.render
         return {
           triangles: r.triangles, calls: r.calls, pixelRatio: renderer.getPixelRatio(), width: canvas.width, height: canvas.height,
-          camera: rig.where(), time, ambient, fall, exposure: lit.exposure, tier, startedAt, fps, drawn: [post.target.width, post.target.height], firstFrame, built,
+          camera: rig.where(), time, ambient, fall, exposure: lit.exposure, tier, startedAt, fps, drawn: [post.target.width, post.target.height], samples: post.target.samples, firstFrame, built,
           spent: { crews: +spent.crews.toFixed(2), update: +spent.update.toFixed(2), draw: +spent.draw.toFixed(2) }, objects: scene.children.reduce((n, c) => { let k = 0; c.traverse(() => k++); return n + k }, 0),
         }
       },
     }
+    // Whatever a tool changes is drawn at once, as what a player changes is.
+    const changing = hooks as unknown as Record<string, (...a: unknown[]) => unknown>
+    for (const name of ['settle', 'seek', 'view', 'titleAt', 'tune', 'home', 'tier', 'show', 'showChild', 'shadowsOn', 'force', 'cascade', 'emptyCascade', 'adapt', 'uncap', 'tryWithout']) {
+      const call = changing[name]
+      changing[name] = (...a) => { pacing.wake(); return call(...a) }
+    }
+    ;(globalThis as Record<string, unknown>).__countyField = hooks
   })()
 
   return {
@@ -1052,6 +1199,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       off()
       input.dispose()
       for (const w of waiters) w.resolve()
+      for (const name of TOUCHES) removeEventListener(name, wake)
       canvas.removeEventListener('webglcontextlost', onLost)
       canvas.removeEventListener('webglcontextrestored', onRestored)
       terrain.dispose()

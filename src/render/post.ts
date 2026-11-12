@@ -18,6 +18,8 @@ export interface Shot {
   warm: number; rich: number; contrast: number; veil: number; veilTint: { r: number; g: number; b: number }
   // How dark the corners are held.
   vignette: number
+  // Whether anything in the picture is near enough for contact shade to show (it lets go with distance).
+  contact?: boolean
 }
 
 const VERT = 'void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }'
@@ -275,21 +277,48 @@ uniform sampler2D tSrc;
 uniform vec2 uRes;       // the picture's own size
 uniform vec2 uOut;       // the screen's
 uniform vec2 uGrain;     // amount, time
+uniform float uSharp;
+uniform float uSmooth;
 float lum(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
 float hash(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
+// The picture stretched over a larger screen along curves through four of its points each way, read as five blended
+// reads: sharper than a straight blend of the nearest four and as smooth, and held between the least and the most of
+// what it read so that no edge rings.
+vec3 stretched(vec2 uv) {
+  vec2 at = uv * uRes, base = floor(at - 0.5) + 0.5, f = at - base;
+  vec2 w0 = f * (-0.5 + f * (1.0 - 0.5 * f)), w1 = 1.0 + f * f * (-2.5 + 1.5 * f), w2 = f * (0.5 + f * (2.0 - 1.5 * f)), w3 = f * f * (-0.5 + 0.5 * f);
+  vec2 w12 = w1 + w2, p0 = (base - 1.0) / uRes, p3 = (base + 2.0) / uRes, p12 = (base + w2 / w12) / uRes;
+  vec3 c = texture2D(tSrc, p12).rgb, n = texture2D(tSrc, vec2(p12.x, p0.y)).rgb, s = texture2D(tSrc, vec2(p12.x, p3.y)).rgb;
+  vec3 w = texture2D(tSrc, vec2(p0.x, p12.y)).rgb, e = texture2D(tSrc, vec2(p3.x, p12.y)).rgb;
+  float kc = w12.x * w12.y, kn = w12.x * w0.y, ks = w12.x * w3.y, kw = w0.x * w12.y, ke = w3.x * w12.y;
+  vec3 col = (c * kc + n * kn + s * ks + w * kw + e * ke) / (kc + kn + ks + kw + ke);
+  return clamp(col, min(c, min(min(n, s), min(w, e))), max(c, max(max(n, s), max(w, e))));
+}
 void main() {
   vec2 uv = gl_FragCoord.xy / uOut, px = 1.0 / uRes;
-  vec3 m = texture2D(tSrc, uv).rgb;
-  float lNW = lum(texture2D(tSrc, uv + px * vec2(-1.0, -1.0)).rgb), lNE = lum(texture2D(tSrc, uv + px * vec2(1.0, -1.0)).rgb);
-  float lSW = lum(texture2D(tSrc, uv + px * vec2(-1.0, 1.0)).rgb), lSE = lum(texture2D(tSrc, uv + px * vec2(1.0, 1.0)).rgb), lM = lum(m);
-  float lMin = min(lM, min(min(lNW, lNE), min(lSW, lSE))), lMax = max(lM, max(max(lNW, lNE), max(lSW, lSE)));
-  vec2 dir = vec2(-((lNW + lNE) - (lSW + lSE)), (lNW + lSW) - (lNE + lSE));
-  float reduce = max((lNW + lNE + lSW + lSE) * 0.03125, 0.0078125);
-  dir = clamp(dir / (min(abs(dir.x), abs(dir.y)) + reduce), vec2(-8.0), vec2(8.0)) * px;
-  vec3 a = 0.5 * (texture2D(tSrc, uv + dir * (1.0 / 3.0 - 0.5)).rgb + texture2D(tSrc, uv + dir * (2.0 / 3.0 - 0.5)).rgb);
-  vec3 b = a * 0.5 + 0.25 * (texture2D(tSrc, uv - dir * 0.5).rgb + texture2D(tSrc, uv + dir * 0.5).rgb);
-  float lB = lum(b);
-  vec3 col = (lB < lMin || lB > lMax) ? a : b;
+  vec3 col;
+  // Edges are smoothed along their own direction; not where the scene was already smoothed sample by sample and is
+  // being stretched over a denser screen, which this would only soften again.
+  if (uSmooth > 0.5) {
+    vec3 m = texture2D(tSrc, uv).rgb;
+    vec3 cNW = texture2D(tSrc, uv + px * vec2(-1.0, -1.0)).rgb, cNE = texture2D(tSrc, uv + px * vec2(1.0, -1.0)).rgb;
+    vec3 cSW = texture2D(tSrc, uv + px * vec2(-1.0, 1.0)).rgb, cSE = texture2D(tSrc, uv + px * vec2(1.0, 1.0)).rgb;
+    float lNW = lum(cNW), lNE = lum(cNE), lSW = lum(cSW), lSE = lum(cSE), lM = lum(m);
+    float lMin = min(lM, min(min(lNW, lNE), min(lSW, lSE))), lMax = max(lM, max(max(lNW, lNE), max(lSW, lSE)));
+    vec2 dir = vec2(-((lNW + lNE) - (lSW + lSE)), (lNW + lSW) - (lNE + lSE));
+    float reduce = max((lNW + lNE + lSW + lSE) * 0.03125, 0.0078125);
+    dir = clamp(dir / (min(abs(dir.x), abs(dir.y)) + reduce), vec2(-8.0), vec2(8.0)) * px;
+    vec3 a = 0.5 * (texture2D(tSrc, uv + dir * (1.0 / 3.0 - 0.5)).rgb + texture2D(tSrc, uv + dir * (2.0 / 3.0 - 0.5)).rgb);
+    vec3 b = a * 0.5 + 0.25 * (texture2D(tSrc, uv - dir * 0.5).rgb + texture2D(tSrc, uv + dir * 0.5).rgb);
+    float lB = lum(b);
+    col = (lB < lMin || lB > lMax) ? a : b;
+    // Drawn smaller than the screen and stretched over it, the picture is given back a little of its edges: what a
+    // point differs by from its surroundings is added to it again, never past the brightest or the darkest of them.
+    if (uSharp > 0.0) {
+      vec3 lo = min(m, min(min(cNW, cNE), min(cSW, cSE))), hi = max(m, max(max(cNW, cNE), max(cSW, cSE)));
+      col = clamp(col + (col - 0.25 * (cNW + cNE + cSW + cSE)) * uSharp, lo, hi);
+    }
+  } else col = stretched(uv);
   float g = hash(gl_FragCoord.xy + fract(uGrain.y) * 91.7) - 0.5;
   col += g * uGrain.x * (1.0 - 0.6 * lum(col));
   gl_FragColor = vec4(col, 1.0);
@@ -320,6 +349,8 @@ export class Post {
   private key = ''
   private float: boolean
   private white: Texture | null = null
+  // A tool's timer: each pass is a section of it.
+  probe: { sect(name: string): void } | null = null
 
   constructor(renderer: WebGLRenderer) {
     this.renderer = renderer
@@ -345,7 +376,7 @@ export class Post {
       uUse: { value: new Vector4(1, 1, 1, 0.16) }, uExposure: { value: 1 }, uLens: lens,
       tShaft: { value: null }, uShaft: { value: 0 }, uGrade: { value: this.gradeV }, uVeil: { value: this.veilV },
     })
-    make('out', OUT_FRAG, { tSrc: { value: null }, uRes: res(), uOut: res(), uGrain: { value: new Vector2(0.02, 0) } })
+    make('out', OUT_FRAG, { tSrc: { value: null }, uRes: res(), uOut: res(), uGrain: { value: new Vector2(0.02, 0) }, uSharp: { value: 0 }, uSmooth: { value: 1 } })
     this.quad = new Mesh(this.tri, this.mats.out)
     this.quad.frustumCulled = false
     this.scene2.add(this.quad)
@@ -392,6 +423,7 @@ export class Post {
 
   private pass(name: string, target: WebGLRenderTarget | null, set: Record<string, unknown>): void {
     const m = this.mats[name]
+    this.probe?.sect(`post:${name}`)
     for (const k of Object.keys(set)) m.uniforms[k].value = set[k]
     if (m.uniforms.uRes) (m.uniforms.uRes.value as Vector2).set(target ? target.width : this.w, target ? target.height : this.h)
     this.quad.material = m
@@ -406,12 +438,14 @@ export class Post {
 
   render(scene: Scene, camera: PerspectiveCamera, shot: Shot, outW: number, outH: number): void {
     const r = this.renderer, o = this.opts
+    this.probe?.sect('scene')
     r.setRenderTarget(this.sceneRT)
     r.render(scene, camera)
     this.invProj.copy(camera.projectionMatrixInverse)
     const color = this.sceneRT.texture, depth = this.sceneRT.depthTexture
     const [ao, aoBlur, focusSrc, focus] = this.half
-    if (o.ao) {
+    const contact = o.ao && shot.contact !== false
+    if (contact) {
       const projScale = (ao.height / 2) / Math.tan((camera.fov * Math.PI) / 360)
       this.pass('ao', ao, { tDepth: depth, uProjScale: projScale })
       this.pass('aoBlur', aoBlur, { tDepth: depth, tAO: ao.texture, uDir: this.dirX })
@@ -443,14 +477,17 @@ export class Post {
     this.gradeV.set(shot.warm, shot.rich, shot.contrast)
     this.veilV.set(shot.veilTint.r, shot.veilTint.g, shot.veilTint.b, shot.veil)
     const use = this.mats.finish.uniforms.uUse.value as Vector4
-    use.set(o.ao ? 1 : 0, lensOn ? 1 : 0, o.bloom && this.bloom.length ? 0.2 : 0, shot.vignette)
+    use.set(contact ? 1 : 0, lensOn ? 1 : 0, o.bloom && this.bloom.length ? 0.2 : 0, shot.vignette)
     this.pass('finish', this.ldr, { tDepth: depth, tScene: color, tAO: ao.texture, tBloom: this.glow.length ? this.glow[0].texture : color, tFocus: focus.texture, uExposure: shot.exposure, tShaft: this.shaft.texture, uShaft: shafts ? 1 : 0 })
     ;(this.mats.out.uniforms.uOut.value as Vector2).set(outW, outH)
     ;(this.mats.out.uniforms.uGrain.value as Vector2).set(shot.grain, shot.time)
+    this.mats.out.uniforms.uSharp.value = Math.min(0.3, Math.max(0, (outW / this.w - 1) * 0.6))
+    this.mats.out.uniforms.uSmooth.value = o.msaa > 0 && outW > this.w * 1.05 ? 0 : 1
     const m = this.mats.out
     m.uniforms.tSrc.value = this.ldr.texture
     ;(m.uniforms.uRes.value as Vector2).set(this.ldr.width, this.ldr.height)
     this.quad.material = m
+    this.probe?.sect('post:out')
     r.setRenderTarget(null)
     r.render(this.scene2, this.cam2)
   }

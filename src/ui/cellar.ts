@@ -5,6 +5,7 @@ import { deals, deliver, versusMarket } from './contracts.ts'
 import { count, patch, type Ctx, type Screen } from './core.ts'
 import { h, type Child } from './dom.ts'
 import * as F from './fmt.ts'
+import { GLOSSARY, term } from './glossary.ts'
 import { icon } from './icons.ts'
 import * as R from './rules.ts'
 import { meter } from './system/parts.ts'
@@ -110,7 +111,7 @@ export function cellarScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
         h('button', { class: 'btn', type: 'button', testid: `lot-sell-${lot.id}`, onclick: () => sell(1) }, icon('sell', 'i'), 'Sell', h('span', { class: 'sub num' }, F.money(value))),
         h('button', { class: 'btn', type: 'button', testid: `lot-sell-half-${lot.id}`, onclick: () => sell(0.5) }, 'Sell half'),
         canSeed ? h('button', {
-          class: 'btn', type: 'button', testid: `lot-seed-open-${lot.id}`, 'aria-expanded': String(!!seedOpen[lot.id]), 'aria-controls': seedOpen[lot.id] ? `seed-${lot.id}` : undefined,
+          class: 'btn', type: 'button', testid: `lot-seed-open-${lot.id}`, title: ctx.touch() ? undefined : GLOSSARY['hold back seed'], 'aria-expanded': String(!!seedOpen[lot.id]), 'aria-controls': seedOpen[lot.id] ? `seed-${lot.id}` : undefined,
           onclick: () => { seedOpen[lot.id] = !seedOpen[lot.id]; ctx.dirty() },
         }, 'Hold back seed') : null),
       seedOpen[lot.id] && canSeed ? h('div', { class: 'seed-box', id: `seed-${lot.id}` },
@@ -159,7 +160,7 @@ export function cellarScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
       patch(sheet, JSON.stringify(model), () => [
         h('header', { class: 'winter-head' },
           h('div', null,
-            h('p', { class: 't-label' }, `${month} · ${R.yearName(S.yearNow(c))} · The cellar months`),
+            h('p', { class: 't-label' }, `${month} · ${R.yearName(S.yearNow(c))} · `, term('The cellar months', 'the cellar months')),
             h('h2', { class: 't-title', id: 'winter-h' }, 'The winter\'s work')),
           h('p', { class: 'num w-wages' }, wages ? [h('b', null, F.money(wages)), ' a month in wages'] : 'Nobody paid this winter')),
         h('div', { class: `w-body${c.crew.length <= 1 ? ' few' : ''}`, 'data-scroll': 'winter' },

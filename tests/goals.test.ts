@@ -171,6 +171,39 @@ describe('the ladder of goals', () => {
     expect(goal(c, 'five').done).toBe(true)
   })
 
+  it('a step the farm cannot pay for says what it costs and is passed over for the next one', () => {
+    const c = farm()
+    pastYear(c)
+    S.apply(w, c, { t: 'begin' })
+    // The farmstead's first steps behind the farm, a woodlot felled to its stumps, and the cash run low.
+    c.upgrades.boom = true
+    c.crew.push({ ...c.crew[0], id: 77, kind: 'hand', name: 'A hand' })
+    c.history[0].contracts = 1
+    c.history[0].rent = 1
+    c.fields[14].cover = 'stumps'
+    c.cash = 1000
+    const stump = goal(c, 'stump')
+    expect(stump.cost).toBe(S.STUMP_FEE)
+    expect(stump.short).toBe(S.STUMP_FEE - 1000)
+    expect(nextGoal(c)?.id).not.toBe('stump')
+    c.cash = S.STUMP_FEE + 1
+    expect(goal(c, 'stump').short).toBe(0)
+    expect(nextGoal(c)?.id).toBe('stump')
+  })
+
+  it('felling waits until the crop is planted; equipment says what the cheapest piece costs', () => {
+    const c = farm()
+    pastYear(c)
+    S.apply(w, c, { t: 'begin' })
+    expect(goal(c, 'fell').now).toBe(false)
+    for (const f of c.season!.fields) f.plantDay = c.season!.day
+    expect(goal(c, 'fell').now).toBe(true)
+    const d = farm()
+    expect(goal(d, 'tool').cost).toBe(Math.min(...(['boom', 'harvester', 'vent', 'reel', 'house2', 'truck'] as S.UpgradeId[]).map(id => S.UPGRADES[id].cost)))
+    d.cash = 100
+    expect(goal(d, 'tool').short).toBe(goal(d, 'tool').cost - 100)
+  })
+
   it('the long goals count toward their ends: every tract, the whole map, a crew of ten, every building', () => {
     const c = farm()
     expect(goals(c).filter(g => g.long).map(g => g.id)).toEqual(['cleared', 'map', 'crew', 'every'])

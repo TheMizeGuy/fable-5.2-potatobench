@@ -35,11 +35,27 @@ export const GLOSSARY: Record<string, string> = {
   'fry plant': 'A buyer that makes fries: it wants big, sound potatoes and pays on a contract.',
   packer: 'A buyer that washes and bags potatoes for stores.',
   lapse: 'The day a question is decided for you if you have not answered it.',
+  'spring loan': 'The bank lends what the spring plan costs beyond the farm\'s cash, free of interest, and takes it back at the year end out of what the crop brought.',
+  'the household\'s keep': 'What the family lives on for a year, taken at the year end.',
+  block: 'Fields that lie together and are worked as one: the home farm, the intervale across the brook, the ridge lots, the Dufour place. A foreman looks after one block.',
+  skill: 'How good someone is at a kind of work, from 0 to 10: machine 6 is a good tractor hand. It grows with the work they do.',
+  'contract only': 'This variety pays well only to a buyer on a contract; off contract it fetches a low processing price.',
+  'estimate before': 'What the field was thought to make before this test dig, in hundredweight an acre; the range under it is what the dig says now.',
+  'hold back seed': 'Keeping some of a lot in the cellar as next spring\'s seed: free to plant, but it carries the virus of the crop it came from.',
+  'the cellar months': 'November to April, the crop in store: sell it as prices move, and keep people on to fell, pack or build.',
+  stamp: 'The round stamp by a field\'s tag gives the order it needs in one click. Red: blight or a loss, act now. Ochre: the next thing to do. Blue: the field is drying out. Black: work that is due.',
+  'early dying': 'A soil-borne wilt that kills plants before their time. It builds up when potatoes follow potatoes; a rest year wears it down.',
+  lesions: 'The brown, spreading spots late blight makes on the leaves.',
+  'hollow heart': 'A hollow in the middle of a big tuber, from growing too fast after dry weather: it costs the potato its grade.',
 }
 
-// A word or phrase with its meaning in place. key: the glossary's entry, when it differs from the words shown.
+let seq = 0
+
+// A word or phrase with its meaning in place. key: the glossary's entry, when it differs from the words shown. A screen
+// reader hears the meaning as the word's description; it is not part of the sheet's text.
 export function term(text: string, key = text.toLowerCase()): Child {
   const tip = GLOSSARY[key] ?? GLOSSARY[text]
   if (!tip) return text
-  return h('span', { class: 'term', tabindex: '0', 'data-tip': tip }, text, h('span', { class: 'sr' }, ` (${tip})`))
+  const id = `term-${++seq}`
+  return h('span', { class: 'term', tabindex: '0', 'data-tip': tip, 'aria-describedby': id }, text, h('span', { id, hidden: true }, tip))
 }

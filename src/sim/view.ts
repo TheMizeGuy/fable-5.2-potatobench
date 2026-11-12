@@ -15,12 +15,12 @@ import { CHOICE_LABEL, choiceDoes, defaultChoice, INCIDENT_TITLE, incidentText }
 import { brushedNow, clearing, COVER_WORD, fellLeft, fieldEnv, sheltered, standing, type ClearStage } from './land.ts'
 import {
   FIELD_NAMES, haulFactor, haulRate, holdsDufour, jobBlock, jobCost, jobDays, jobWait, JOB_LABEL, knownHills, standOpen, tractorsOwned, tractorsRunning,
-  waitFor, workday,
+  standingBy, waitFor, workday,
 } from './season.ts'
 import { buildBlock, buildCost, buildingAt, hasBuilt, rain30, roadFactor, wholeLoads, YARD_NAME } from './buildings.ts'
 import {
   H_DECAYED, H_DUG, H_EMERGED, H_KNOWN, H_ROGUED, H_SAMPLED, H_VIRUS, H_WILT,
-  type BuildingKind, type Campaign, type Cover, type Day, type Due, type FieldSeason, type IncidentKind, type JobKind, type Skill, type Tenure, type Trait,
+  type BuildingKind, type Campaign, type Cover, type Day, type Due, type FieldSeason, type IncidentKind, type JobBy, type JobKind, type Skill, type Tenure, type Trait,
   type UnitKind, type VarietyId,
   type WinterWork, type World,
 } from './types.ts'
@@ -95,6 +95,8 @@ export interface FieldInfo {
   protect: number           // protectant left on the leaf, 0..1
   blightKnown: number       // share of leaf lost to blight on the hills the grower has seen
   blightHills: number
+  blightSeen: boolean       // blight has been found here: a blighted hill on a walk, or brown patches from the road
+  pullBy: JobBy | null      // who will pull the blighted hills found: the routine or a foreman by themselves, or the player
   scoutAge: number          // days since the field was walked, -1 if never
   stunted: number           // share of plants visibly stunted by virus
   estimate: Estimate | null
@@ -138,7 +140,7 @@ export function fieldInfo(c: Campaign, fi: number, world?: World): FieldInfo {
     elev: fp.elev, position: POSITION[fp.elev], soil: fp.soil, vert: fp.vert, streak: fp.streak,
     crop: plan.crop, status: plan.crop === 'rest' ? 'rest' : 'idle', variety: plan.crop === 'rest' ? 'Oats and clover' : variety(plan.variety).name,
     stage: plan.crop === 'rest' ? 'Resting' : 'Not planted', daysIn: 0, canopy: 0, moisture: 1, moistureLabel: 'good', tooWet: false,
-    hillPasses: 0, protect: 0, blightKnown: 0, blightHills: 0, scoutAge: -1, stunted: 0, estimate: null, tubers: null, skin: 0, bloom: 0, stand: 1, frosted: 0, rime: false, wilt: 0, deadDays: -1, lot: -1,
+    hillPasses: 0, protect: 0, blightKnown: 0, blightHills: 0, blightSeen: false, pullBy: null, scoutAge: -1, stunted: 0, estimate: null, tubers: null, skin: 0, bloom: 0, stand: 1, frosted: 0, rime: false, wilt: 0, deadDays: -1, lot: -1,
     cover: fp.cover, coverWord: COVER_WORD[fp.cover], stones: fp.stones, raw: fp.raw, tiled: fp.tiled,
     brushed: brushedNow(c, fi) ? P.BRUSH_YEARS - (c.year - fp.brushed) : 0, sheltered: false, shelteredBy: '',
     clearing: null, works: fp.works ? { ...fp.works } : null,
@@ -194,6 +196,8 @@ export function fieldInfo(c: Campaign, fi: number, world?: World): FieldInfo {
       base.stand = 1 - rotted / P.HILLS
     }
     base.blightHills = knownHills(f)
+    base.blightSeen = base.blightHills > 0 || f.seenFromRoad || f.knownSev > 0
+    if (base.blightHills > 0 && f.deadDay < 0) base.pullBy = standingBy(c, 'rogue', fi) ?? 'you'
   }
   base.blightKnown = f.knownSev
   if (f.status === 'growing') {

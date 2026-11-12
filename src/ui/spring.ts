@@ -6,6 +6,7 @@ import { springContracts } from './contracts.ts'
 import type { Ctx } from './core.ts'
 import { h, type Child } from './dom.ts'
 import * as F from './fmt.ts'
+import { term } from './glossary.ts'
 import { icon } from './icons.ts'
 import { BLOCK_NAME, BLOCK_NOTE, heldFields, roadTime } from './map.ts'
 import { POSITION_NOTE, soilWord } from './rules.ts'
@@ -107,6 +108,51 @@ function applicant(ctx: Ctx, a: S.ApplicantInfo, one: boolean, onTry: (err: stri
     }, 'Hire'))
 }
 
+// A hired person made foreman of a block the farm holds, or put back to field work: the same choice as their card.
+export function foremanRow(ctx: Ctx, c: S.Campaign, p: S.PersonInfo, onTry: (err: string) => void): HTMLElement {
+  const blocks = S.BLOCKS.filter(b => S.PARCELS.some((x, i) => x.block === b && S.held(c, i)))
+  const name = (b: S.BlockId) => F.upper(BLOCK_NAME[b].replace(/^The /, '').split(',')[0])
+  return h('p', { class: 'cat-foreman', role: 'group', 'aria-label': `${p.name}: foreman of`, testid: `spring-foreman-${p.id}` },
+    h('span', { class: 't-label' }, icon('foreman', 'i'), term('Foreman', 'foreman'), ' of'),
+    blocks.map(b => {
+      const other = c.crew.find(u => u.foreman === b && u.id !== p.id)
+      return h('button', {
+        class: 'btn', type: 'button', testid: `spring-foreman-${p.id}-${b}`, 'aria-pressed': String(p.foreman === b), disabled: !!other,
+        title: other ? `${other.name} is foreman there` : `${p.name} puts on the list what ${BLOCK_NAME[b]} needs each working morning, and does no field work. Paid ${F.pct(S.FOREMAN_PAY - 1)} more.`,
+        onclick: () => tryRun(ctx, p.foreman === b ? { t: 'foreman', unit: p.id, block: null } : { t: 'foreman', unit: p.id, block: b }, onTry),
+      }, name(b))
+    }))
+}
+
+// Naming a foreman from wherever the goal is shown outside spring and the season (the year end): a small paper with
+// each hired person and the blocks.
+export function openForeman(ctx: Ctx): void {
+  let note = ''
+  ctx.papers.open({
+    title: 'Name a foreman',
+    kicker: 'The way ahead',
+    testid: 'foreman-paper',
+    size: 'small',
+    body: () => {
+      const box = h('div', { class: 'cat-list' })
+      const draw = () => {
+        const c = ctx.app.campaign
+        if (!c) return
+        const hired = S.peopleInfo(c).filter(p => p.kind !== 'farmer')
+        box.replaceChildren(h('div', null,
+          h('p', { class: 'dlg-lead' }, 'A ', term('foreman'), ' puts on the list what the fields of one ', term('block'), ` need, every working morning, and does no field work. Paid ${F.pct(S.FOREMAN_PAY - 1)} more.`),
+          hired.map(p => h('div', { class: 'cat-hired' }, portrait(p, 32), h('b', null, p.name), h('span', { class: 'it quiet' }, `${F.money(p.pay)} a month`),
+            foremanRow(ctx, c, p, err => { note = err; draw() }))),
+          hired.length ? null : h('p', { class: 't-caption' }, 'Nobody is hired: hire someone in spring first.'),
+          note ? h('p', { class: 'card-refused c-red', role: 'alert' }, note) : null))
+      }
+      draw()
+      return box
+    },
+    foot: close => h('button', { class: 'btn go', type: 'button', testid: 'foreman-close', autofocus: true, onclick: close }, 'Done'),
+  })
+}
+
 function peopleBody(ctx: Ctx, c: S.Campaign, onTry: (err: string) => void, onClose: () => void): Child {
   const L = S.labourInfo(c)
   const one = ctx.layout() === 'narrow'
@@ -127,7 +173,8 @@ function peopleBody(ctx: Ctx, c: S.Campaign, onTry: (err: string) => void, onClo
         portrait(p, 32),
         h('b', null, p.name),
         h('span', { class: 'it quiet' }, `${p.traitName}, ${F.money(p.pay)} a month`),
-        h('button', { class: 'btn hazard', type: 'button', testid: `dismiss-${p.id}`, onclick: () => { if (tryRun(ctx, { t: 'dismiss', unit: p.id }, onTry) && ctx.app.unit === p.id) ctx.app.selectUnit(-1) } }, 'Let go')))),
+        h('button', { class: 'btn hazard', type: 'button', testid: `dismiss-${p.id}`, onclick: () => { if (tryRun(ctx, { t: 'dismiss', unit: p.id }, onTry) && ctx.app.unit === p.id) ctx.app.selectUnit(-1) } }, 'Let go'),
+        foremanRow(ctx, c, p, onTry)))),
     ] : null,
     done('crew-close', onClose),
   ]
@@ -157,7 +204,7 @@ export function stoneWord(stones: number): string {
 }
 
 // The head of a card on the land: what kind of record, the name, a line under it, and the way to let it go.
-export function cardHead(ctx: Ctx, kind: string, name: string, caption: string): HTMLElement {
+export function cardHead(ctx: Ctx, kind: string, name: string, caption: Child): HTMLElement {
   return h('header', { class: 'command-head' },
     h('div', null, h('p', { class: 't-label' }, kind), h('h2', { class: 't-title', testid: 'card-title' }, name), h('p', { class: 't-caption' }, caption)),
     h('button', { class: 'close', type: 'button', testid: 'card-close', 'aria-label': 'Deselect (Escape)', onclick: () => ctx.app.select(-1) }, icon('close', 'i')))
