@@ -1,23 +1,37 @@
 // The almanac: the depth nobody needs to play. The forecast in full, the blight watch, every reading, the diary, the prices.
+// A printed almanac's pages, with a thumb index down the fore-edge; no frame draws it, so it is made of the kit's parts.
 import * as S from '../sim/index.ts'
-import { gauge, type Ctx } from './core.ts'
+import type { Ctx } from './core.ts'
 import { h, type Child } from './dom.ts'
 import * as F from './fmt.ts'
 import { icon } from './icons.ts'
 import { BLOCK_NAME, heldFields, roadTime } from './map.ts'
 import * as R from './rules.ts'
+import { meter, need } from './system/parts.ts'
 
 type Page = 'forecast' | 'blight' | 'fields' | 'farm' | 'people' | 'buildings' | 'incidents' | 'diary' | 'prices'
-const PAGES: [Page, string][] = [
-  ['forecast', 'Forecast'], ['blight', 'Blight watch'], ['fields', 'Fields'], ['farm', 'Land'], ['people', 'People'], ['buildings', 'Buildings'],
-  ['incidents', 'Incidents'], ['diary', 'Diary'], ['prices', 'Prices'],
+const PAGES: [Page, string, string][] = [
+  ['forecast', 'Forecast', 'sun'], ['blight', 'Blight watch', 'blight'], ['fields', 'Fields', 'field'], ['farm', 'Land', 'land'],
+  ['people', 'People', 'people'], ['buildings', 'Buildings', 'build'], ['incidents', 'Incidents', 'alert'], ['diary', 'Diary', 'calendar'],
+  ['prices', 'Prices', 'money'],
 ]
+
+const sec = (title: string) => h('h4', { class: 'alm-sec t-label' }, title)
 
 // A mechanic in two lines: what it gives, and its catch.
 function rules(list: [string, string, string][]): HTMLElement {
-  return h('dl', { class: 'rules' }, list.map(([name, gives, catches]) => h('div', null,
+  return h('dl', { class: 'alm-rules' }, list.map(([name, gives, catches]) => h('div', null,
     h('dt', null, name), h('dd', null, gives), h('dd', { class: 'catch' }, catches))))
 }
+
+// A cash-book table: words on the left, the money column ruled in red on the right.
+function book(rows: [Child, Child, string?][], head?: [string, string]): HTMLElement {
+  return h('table', { class: 'cashbook alm-book' },
+    head ? h('thead', null, h('tr', null, h('th', { scope: 'col' }, head[0]), h('th', { scope: 'col', class: 'm' }, head[1]))) : null,
+    h('tbody', null, rows.map(([what, m, cls]) => h('tr', null, h('td', null, what), h('td', { class: `m${cls ? ` ${cls}` : ''}` }, m)))))
+}
+
+const sub = (text: string) => h('span', { class: 'alm-note' }, text)
 
 function forecastPage(ctx: Ctx, c: S.Campaign): Child {
   const t = S.today(ctx.app.world, c)
@@ -28,23 +42,23 @@ function forecastPage(ctx: Ctx, c: S.Campaign): Child {
   // A forecast amount is a guess: it is shown rounded and labelled as about.
   const about = (mm: number) => mm <= 0 ? 'none' : F.metric() ? `about ${Math.round(mm)} mm` : mm / 25.4 < 0.05 ? 'a trace' : `about ${F.num(mm / 25.4, 1)} in`
   return [
-    h('div', { class: 'almanac-today' },
-      icon(t.sky, 'ic l'),
+    h('div', { class: 'alm-today' },
+      icon(t.sky, 'i'),
       h('div', null,
         h('p', { class: 't-head' }, `${R.SKY_WORD[t.sky]} today`),
-        h('p', { class: 'num' }, `High ${F.temp(d.tmax)}, low ${F.temp(d.tmin)}. Rain ${F.rain(d.prcp)}. Soil ${F.temp(t.soilT)} on the mid slope, a degree colder on the bottom land and warmer on the ridge.`))),
-    h('div', { class: 'table-wrap', tabindex: '0', role: 'group', 'aria-label': 'The next five days' }, h('table', { class: 'money forecast-table' },
+        h('p', null, `High ${F.temp(d.tmax)}, low ${F.temp(d.tmin)}. Rain ${F.rain(d.prcp)}. Soil ${F.temp(t.soilT)} on the mid slope, a degree colder on the bottom land and warmer on the ridge.`))),
+    h('div', { class: 'alm-scroll', tabindex: '0', role: 'group', 'aria-label': 'The next five days' }, h('table', { class: 'alm-t' },
       h('caption', { class: 'sr' }, 'The next five days'),
       h('thead', null, h('tr', null, ['Day', `High, ${F.tempUnit()}`, `Low, ${F.tempUnit()}`, 'Rain', 'How much', 'Blight weather', 'Frost'].map(x => h('th', { scope: 'col' }, x)))),
       h('tbody', null, fc.map(x => h('tr', null,
         h('th', { scope: 'row' }, `${F.weekday(c.year, x.day, true)} ${F.dayOfMonth(c.year, x.day)}`),
         h('td', null, range(x.hi, x.spread)),
         h('td', null, range(x.lo, x.spread)),
-        h('td', { class: x.rainChance >= 60 ? 'cold-text' : '' }, `${x.rainChance}%`),
+        h('td', { class: x.rainChance >= 60 ? 'c-blue' : '' }, `${x.rainChance}%`),
         h('td', null, about(x.rainMm)),
-        h('td', { class: x.blight >= 2 ? 'bad-text' : '' }, R.BLIGHT_RISK[x.blight]),
-        h('td', { class: x.frostChance >= 30 ? 'cold-text' : '' }, `${x.frostChance}%`)))))),
-    h('p', { class: 'sub' }, 'Highs and lows are ranges, and they widen with each day ahead. Rain is a chance, and the forecast can be wrong both ways. The frost chance is for the coldest field, down on the bottom land.'),
+        h('td', { class: x.blight >= 2 ? 'c-red' : '' }, R.BLIGHT_RISK[x.blight]),
+        h('td', { class: x.frostChance >= 30 ? 'c-blue' : '' }, `${x.frostChance}%`)))))),
+    h('p', { class: 't-caption' }, 'Highs and lows are ranges, and they widen with each day ahead. Rain is a chance, and the forecast can be wrong both ways. The frost chance is for the coldest field, down on the bottom land.'),
   ]
 }
 
@@ -56,11 +70,13 @@ function blightPage(ctx: Ctx, c: S.Campaign): Child {
   const leaf = s0.fields.some(f => f.status === 'growing')
   return [
     s0.day < start
-      ? h('p', { class: 't-lede' }, `Severity values start counting on ${F.date(c.year, start)}.`)
-      : on ? h('p', { class: 't-lede bad-text' }, `The watch has been on since ${F.date(c.year, s0.watchDay)}: ${s0.sv} severity values so far.`)
-        : h('div', { class: 'watch-meter' },
-          h('p', { class: 't-lede num' }, `${s0.sv} of ${S.SV_THRESHOLD} severity values`),
-          gauge(Math.min(1, s0.sv / S.SV_THRESHOLD), { label: 'Severity values toward the blight watch', text: `${s0.sv} of ${S.SV_THRESHOLD}`, cls: 'warn' }),
+      ? h('p', { class: 'alm-lead' }, `Severity values start counting on ${F.date(c.year, start)}.`)
+      : on ? h('div', { class: 'alm-watch on' },
+        need({ ink: 'red', icon: 'blight', label: 'The blight watch is on' }),
+        h('p', { class: 'alm-lead c-red' }, `The watch has been on since ${F.date(c.year, s0.watchDay)}: ${s0.sv} severity values so far.`))
+        : h('div', { class: 'alm-watch' },
+          h('p', { class: 'alm-lead' }, h('b', { class: 't-figure' }, String(s0.sv)), ` of ${S.SV_THRESHOLD} severity values`),
+          meter(Math.min(1, s0.sv / S.SV_THRESHOLD), { label: 'Severity values toward the blight watch', text: `${s0.sv} of ${S.SV_THRESHOLD}`, kind: 'warn' }),
           h('p', null, `${S.SV_THRESHOLD - s0.sv} more and the watch goes on.${t && t.severity > 0 ? ` Today's weather adds ${t.severity}.` : ''}`)),
     h('p', null, `Late blight needs long, damp, mild spells. From ${F.date(c.year, start)} each day of that weather adds severity values. Once the total reaches ${S.SV_THRESHOLD} the watch is on, and spores can land on any day of blight weather.`),
     h('p', null, 'Protectant stops spores taking hold; it does not cure a blighted plant, so it has to be on the leaf first. It wears off day by day, faster as new leaf grows, and rain washes it off.'),
@@ -71,7 +87,7 @@ function blightPage(ctx: Ctx, c: S.Campaign): Child {
 function fieldsPage(ctx: Ctx, c: S.Campaign): Child {
   const s0 = c.season!
   const t = S.today(ctx.app.world, c)
-  return h('div', { class: 'field-cards' }, heldFields(c).map(i => {
+  return h('div', { class: 'alm-fields' }, heldFields(c).map(i => {
     const f = S.fieldInfo(c, i)
     const rows: [string, string][] = []
     const add = (k: string, v: string) => rows.push([k, v])
@@ -99,9 +115,9 @@ function fieldsPage(ctx: Ctx, c: S.Campaign): Child {
       const jobs = s0.jobs.filter(j => j.field === i)
       if (jobs.length) add('On the list', F.list(jobs.map(j => R.JOB_VERB[j.kind].toLowerCase())))
     }
-    return h('article', { class: 'field-card' },
-      h('h3', { class: 't-head' }, icon(R.stageGlyph(f)), f.name, h('span', { class: 'sub' }, f.status === 'rest' ? 'resting' : f.variety)),
-      h('dl', null, rows.map(([k, v]) => [h('dt', { class: 't-label' }, k), h('dd', null, v)])))
+    return h('article', { class: 'alm-field' },
+      h('h4', null, icon(R.stageGlyph(f), 'i'), h('span', { class: 'nm' }, f.name), h('span', { class: 't-caption' }, f.status === 'rest' ? 'resting' : f.variety)),
+      h('dl', null, rows.map(([k, v]) => h('div', null, h('dt', { class: 't-label' }, k), h('dd', null, v)))))
   }))
 }
 
@@ -113,15 +129,15 @@ function farmPage(ctx: Ctx, c: S.Campaign): Child {
   const m = S.mortgageInfo(c)
   const tracts = S.tractInfo(c).filter(t => t.tenure !== 'none' && t.stage !== 'done')
   return [
-    h('table', { class: 'money' }, h('tbody', null, blocks.map(b => {
+    book(blocks.map(b => {
       const here = mine.filter(i => S.PARCELS[i].block === b)
       const rent = here.filter(i => c.fields[i].tenure === 'rented').reduce((a, i) => a + S.PARCELS[i].rent, 0)
       const far = Math.max(...here.map(i => S.travelDays(S.HOME_YARD, i)))
-      return h('tr', null, h('th', { scope: 'row' }, BLOCK_NAME[b], h('span', { class: 'sub' }, ` ${F.list(here.map(i => S.FIELD_NAMES[i]))}${b === 'home' ? '' : `; ${roadTime(far)} from the home yard`}`)), h('td', null, rent ? `${F.money(rent)} rent` : 'owned'))
-    }))),
-    tracts.length ? h('ul', { class: 'deeds' }, tracts.map(t => h('li', null, `${t.name}, ${t.coverWord}: ${t.next}`))) : null,
-    h('p', { class: 'sub' }, `${m.owed > 0 ? `${F.money(m.owed)} is owed on the land; this year end the bank takes ${F.money(m.principal + m.interest)}. ` : ''}Storage: ${F.list(st.houses.map(x => `${x.name.replace(/^(Home|Second)/, w => w.toLowerCase())} ${F.mass(x.cwt)}`))}.`),
-    h('h3', { class: 'block-head' }, 'How land works'),
+      return [[h('b', null, BLOCK_NAME[b]), sub(` ${F.list(here.map(i => S.FIELD_NAMES[i]))}${b === 'home' ? '' : `; ${roadTime(far)} from the home yard`}`)], rent ? `${F.money(rent)} rent` : 'owned']
+    }), ['The land', 'A year']),
+    tracts.length ? h('ul', { class: 'alm-list' }, tracts.map(t => h('li', null, h('b', null, `${t.name}, ${t.coverWord}`), `: ${t.next}`))) : null,
+    h('p', { class: 't-caption' }, `${m.owed > 0 ? `${F.money(m.owed)} is owed on the land; this year end the bank takes ${F.money(m.principal + m.interest)}. ` : ''}Storage: ${F.list(st.houses.map(x => `${x.name.replace(/^(Home|Second)/, w => w.toLowerCase())} ${F.mass(x.cwt)}`))}.`),
+    sec('How land works'),
     rules([
       ['Renting', 'A field for the year, paid when the season begins.', 'The rent comes every year it is kept.'],
       ['Buying', `${F.pct(S.MORTGAGE_DOWN)} down and the rest on the land mortgage: the field is the farm's for good.`, `Each year end the bank takes a tenth of the loan and ${F.pct(S.MORTGAGE_RATE)} interest, besides the note.`],
@@ -138,14 +154,14 @@ function farmPage(ctx: Ctx, c: S.Campaign): Child {
 function peoplePage(c: S.Campaign): Child {
   const people = S.peopleInfo(c)
   return [
-    h('table', { class: 'money' }, h('tbody', null, people.map(p => {
+    h('table', { class: 'alm-t alm-people' }, h('tbody', null, people.map(p => {
       const best = S.bestSkill(p.skills)
       return h('tr', null,
-        h('th', { scope: 'row' }, p.kind === 'farmer' ? 'You' : p.name,
-          h('span', { class: 'sub' }, ` ${p.traitName ? `${p.traitName.toLowerCase()}, ` : ''}best at ${S.SKILL_LABEL[best]} (${p.skills[best]}); ${p.tiredWord}, ${p.moodWord}${p.pay ? `; ${F.money(p.pay)} a month` : ''}`)),
+        h('th', { scope: 'row' }, h('b', null, p.kind === 'farmer' ? 'You' : p.name),
+          sub(` ${p.traitName ? `${p.traitName.toLowerCase()}, ` : ''}best at ${S.SKILL_LABEL[best]} (${p.skills[best]}); ${p.tiredWord}, ${p.moodWord}${p.pay ? `; ${F.money(p.pay)} a month` : ''}`)),
         h('td', null, p.doing))
     }))),
-    h('h3', { class: 'block-head' }, 'How people work'),
+    sec('How people work'),
     rules([
       ['Skills', 'Five, from 0 to 10: machines, field, woods, building, packing. Skill makes work faster and better.', `It comes from doing: level L to L + 1 takes ${S.XP_BASE} + ${S.XP_PER_LEVEL}L days of that work.`],
       ['Traits', 'Everyone hired has one: a strong back, an early riser, sharp eyes.', 'Read it before hiring: careless people bruise the crop, a homebody will not work winters.'],
@@ -164,10 +180,11 @@ function buildingsPage(c: S.Campaign): Child {
   const all = S.buildingInfo(c).filter(b => b.yard === S.HOME_YARD || S.holdsDufour(c))
   const up = all.filter(b => b.state !== 'none')
   return [
-    up.length ? h('table', { class: 'money' }, h('tbody', null, up.map(b => h('tr', null,
-      h('th', { scope: 'row' }, b.name, h('span', { class: 'sub' }, `, ${b.yardName}`)),
-      h('td', null, b.state === 'built' ? 'standing' : `${F.pct(b.progress)} built`))))) : h('p', null, 'No buildings yet beyond the home place. Select a yard on the land to raise one.'),
-    h('h3', { class: 'block-head' }, 'What each building does'),
+    up.length ? h('ul', { class: 'alm-built' }, up.map(b => h('li', null,
+      h('span', { class: 'lead' }, h('b', null, b.name), sub(b.yardName), h('span', { class: 'dots' }), h('span', null, b.state === 'built' ? 'standing' : `${F.pct(b.progress)} built`)),
+      b.state === 'built' ? null : meter(b.progress, { label: `${b.name} built`, text: `${F.pct(b.progress)} built` }))))
+      : h('p', { class: 'alm-empty' }, icon('build', 'i'), 'No buildings yet beyond the home place. Select a yard on the land to raise one.'),
+    sec('What each building does'),
     rules(S.BUILDING_KINDS.map(k => {
       const spec = S.BUILDINGS[k]
       return [spec.name, `${spec.does} ${F.money(spec.cash)}, ${spec.logs} logs, ${spec.stone} stone, ${spec.days} days of building.`, spec.catch]
@@ -178,9 +195,10 @@ function buildingsPage(c: S.Campaign): Child {
 function incidentsPage(c: S.Campaign): Child {
   const open = S.incidentInfo(c)
   return [
-    open.length ? h('ul', { class: 'deeds' }, open.map(i => h('li', null, `${i.title}: ${F.localize(i.text)} ${i.daysLeft ? `${F.plural(i.daysLeft, 'day')} left to answer.` : ''}`)))
-      : h('p', null, 'Nothing is waiting for an answer.'),
-    h('h3', { class: 'block-head' }, 'What can happen'),
+    open.length ? h('ul', { class: 'alm-list' }, open.map(i => h('li', null, h('b', null, i.title), `: ${F.localize(i.text)} `,
+      i.daysLeft ? h('span', { class: 'c-red' }, `${F.plural(i.daysLeft, 'day')} left to answer.`) : null)))
+      : h('p', { class: 'alm-empty' }, icon('check', 'i'), 'Nothing is waiting for an answer.'),
+    sec('What can happen'),
     rules([
       ['Someone asks for work', 'Take them on with their own skills and trait, or let them look elsewhere.', `They wait ${S.INCIDENT_DAYS} days for an answer.`],
       ['A neighbour wants one of your people', `Match the offer, ${F.pct(S.POACH_RAISE)} more, or let them choose.`, 'Unhappy people take it and go.'],
@@ -193,9 +211,10 @@ function incidentsPage(c: S.Campaign): Child {
 
 function diaryPage(c: S.Campaign): Child {
   const log = c.season?.log ?? []
-  if (!log.length) return h('p', null, 'Nothing has happened yet.')
-  return h('ol', { class: 'diary' }, [...log].reverse().map(e => h('li', { class: `lv-${e.level}` },
-    h('span', { class: 'diary-date num' }, F.date(c.year, e.day, true)),
+  if (!log.length) return h('p', { class: 'alm-empty' }, icon('calendar', 'i'), 'Nothing has happened yet.')
+  const ink: Record<S.GameEvent['level'], string> = { info: '', good: 'c-green', warn: 'c-ochre', bad: 'c-red' }
+  return h('ol', { class: 'alm-diary' }, [...log].reverse().map(e => h('li', { class: ink[e.level] },
+    h('span', { class: 'when' }, F.date(c.year, e.day, true)),
     h('span', null, F.localize(e.text)))))
 }
 
@@ -205,27 +224,24 @@ function pricesPage(ctx: Ctx, c: S.Campaign): Child {
   const lots = S.openLots(c)
   const ks = S.contractInfo(c)
   return [
-    h('p', { class: 't-lede' }, R.moodText(world, c)),
-    h('table', { class: 'money' },
-      h('thead', null, h('tr', null, h('th', { scope: 'col' }, 'Variety'), h('th', { scope: 'col' }, 'US No. 1 today'), h('th', { scope: 'col' }, 'A usual year'))),
+    h('p', { class: 'alm-lead' }, R.moodText(world, c)),
+    h('table', { class: 'cashbook alm-book' },
+      h('thead', null, h('tr', null, h('th', { scope: 'col' }, 'Variety'), h('th', { scope: 'col', class: 'm' }, 'US No. 1 today'), h('th', { scope: 'col', class: 'm' }, 'A usual year'))),
       h('tbody', null, ids.map(id => {
         const v = S.variety(id)
-        return h('tr', null, h('th', { scope: 'row' }, v.name, v.contract ? h('span', { class: 'sub' }, ' off contract, a processing price') : null), h('td', null, F.price(S.basePrice(world, c, id))), h('td', null, F.price(v.price)))
+        return h('tr', null, h('td', null, h('b', null, v.name), v.contract ? sub(' off contract, a processing price') : null), h('td', { class: 'm' }, F.price(S.basePrice(world, c, id))), h('td', { class: 'm' }, F.price(v.price)))
       }))),
     h('p', null, R.outlookText(c)),
-    h('p', { class: 'sub' }, `The cellar charges ${F.storeRate(S.STORE_COST)} from the day of the dig, and the potato houses hold ${F.mass(S.cellarCapacity(c))}.`),
+    h('p', { class: 't-caption' }, `The cellar charges ${F.storeRate(S.STORE_COST)} from the day of the dig, and the potato houses hold ${F.mass(S.cellarCapacity(c))}.`),
     lots.length ? [
-      h('h3', { class: 'block-head' }, 'In the cellar'),
-      h('table', { class: 'money' }, h('tbody', null, lots.map(l => h('tr', null,
-        h('th', { scope: 'row' }, `${S.variety(l.variety).name} from ${S.FIELD_NAMES[l.field]}, ${F.mass(S.lotCwt(l))}`),
-        h('td', null, F.money(S.lotValue(world, c, l))))))),
-      h('p', { class: 'sub' }, 'Worth today. Select a dug field to sell its crop or see its weigh ticket.'),
+      sec('In the cellar'),
+      book(lots.map(l => [`${S.variety(l.variety).name} from ${S.FIELD_NAMES[l.field]}, ${F.mass(S.lotCwt(l))}`, F.money(S.lotValue(world, c, l))])),
+      h('p', { class: 't-caption' }, 'Worth today. Select a dug field to sell its crop or see its weigh ticket.'),
     ] : null,
     ks.length ? [
-      h('h3', { class: 'block-head' }, 'Contracts'),
-      h('table', { class: 'money' }, h('tbody', null, ks.map(k => h('tr', null,
-        h('th', { scope: 'row' }, `${k.buyer}, ${k.varietyName}`, h('span', { class: 'sub' }, ` ${F.mass(k.delivered)} of ${F.mass(k.cwt)} at ${F.price(k.price)}, ${k.dueBy}`)),
-        h('td', { class: k.penalty > 0 ? 'neg' : '' }, k.penalty > 0 ? `short ${F.money(-k.penalty)}` : 'filled'))))),
+      sec('Contracts'),
+      book(ks.map(k => [[h('b', null, `${k.buyer}, ${k.varietyName}`), sub(` ${F.mass(k.delivered)} of ${F.mass(k.cwt)} at ${F.price(k.price)}, ${k.dueBy}`)],
+        k.penalty > 0 ? `short ${F.money(-k.penalty)}` : 'filled', k.penalty > 0 ? 'out' : undefined])),
     ] : null,
   ]
 }
@@ -238,25 +254,33 @@ export function openAlmanac(ctx: Ctx, first: Page = 'forecast'): void {
   ctx.papers.open({
     title: `The almanac, ${F.date(c.year, c.season.day)}`,
     testid: 'almanac',
-    size: 'wide',
-    cls: 'almanac',
-    body: () => {
-      const tabs = h('nav', { class: 'tabs', 'aria-label': 'Pages of the almanac' })
-      const body = h('div', { class: 'almanac-page' })
+    plain: true,
+    cls: 'almanac-dialog',
+    body: close => {
+      const index = h('nav', { class: 'alm-index', 'aria-label': 'Pages of the almanac' })
+      const leaf = h('article', { class: 'alm-page', 'data-scroll': '' })
       const draw = (focus = false) => {
-        tabs.replaceChildren(...PAGES.map(([k, label]) => h('button', {
-          class: 'tab', type: 'button', testid: `almanac-${k}`, 'aria-current': page === k ? 'page' : null, autofocus: page === k,
+        index.replaceChildren(...PAGES.map(([k, label, glyph]) => h('button', {
+          class: `alm-tab${page === k ? ' on' : ''}`, type: 'button', testid: `almanac-${k}`, 'aria-current': page === k ? 'page' : null, autofocus: page === k,
           onclick: () => { page = k; draw(true) },
-        }, label)))
-        if (focus) tabs.querySelector<HTMLElement>('[aria-current]')?.focus()
+        }, icon(glyph, 'i'), h('span', null, label))))
+        if (focus) index.querySelector<HTMLElement>('[aria-current]')?.focus()
         const pages: Record<Page, () => Child> = {
           forecast: () => forecastPage(ctx, c), blight: () => blightPage(ctx, c), fields: () => fieldsPage(ctx, c), farm: () => farmPage(ctx, c),
           people: () => peoplePage(c), buildings: () => buildingsPage(c), incidents: () => incidentsPage(c), diary: () => diaryPage(c), prices: () => pricesPage(ctx, c),
         }
-        body.replaceChildren(h('div', null, pages[page]()))
+        const name = PAGES.find(p => p[0] === page)![1]
+        leaf.replaceChildren(h('h3', { class: 'alm-title' }, name), h('div', { class: 'alm-text' }, pages[page]()))
+        leaf.scrollTop = 0
       }
       draw()
-      return [tabs, body]
+      return h('section', { class: 'alm sheet sys', 'data-layout': ctx.layout() },
+        h('header', { class: 'alm-head' },
+          h('div', null,
+            h('p', { class: 't-label' }, `${R.seasonCount(c)} · ${F.date(c.year, c.season!.day)}`),
+            h('p', { class: 'alm-mark', 'aria-hidden': 'true' }, h('span', { class: 'the' }, 'The'), 'Almanac')),
+          h('button', { class: 'close', type: 'button', testid: 'almanac-close', 'aria-label': 'Back to the farm (Escape)', onclick: close }, icon('close', 'i'))),
+        leaf, index)
     },
   })
 }

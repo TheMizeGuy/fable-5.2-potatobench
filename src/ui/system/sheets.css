@@ -106,6 +106,97 @@
   .keys-cols { grid-template-columns: minmax(0, 1fr); }
 }
 
+/* ---------------------------------------------------------------- the almanac: printed pages with a thumb index */
+.alm { position: relative; display: grid; grid-template: 'head index' auto 'page index' minmax(0, 1fr) / minmax(0, 1fr) 172px; width: min(1000px, calc(100vw - 2 * var(--gutter)));
+  height: min(740px, calc(100vh - 2 * var(--gutter))); height: min(740px, calc(100dvh - 2 * var(--gutter))); overflow: hidden; }
+.alm-head { display: flex; justify-content: space-between; align-items: flex-end; gap: var(--s3); grid-area: head; margin: 0 var(--s5); padding: var(--s4) 0 var(--s2); border-bottom: 3px double var(--ink); }
+.alm-head .t-label { color: var(--green); margin-bottom: 4px; }
+.alm-head .close { position: absolute; z-index: 2; right: 6px; top: 6px; margin: 0; }
+.alm-mark { font: 400 46px/.85 var(--f-gothic); letter-spacing: .02em; text-transform: uppercase; color: var(--green); }
+.alm-mark .the { margin-right: 8px; font: italic 400 24px/1 var(--f-text); text-transform: none; color: var(--red); }
+.alm-page { grid-area: page; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--s3) var(--s5) var(--s5); }
+.alm-page:focus-visible { outline: 3px solid var(--blue); outline-offset: -3px; }
+.alm-index { grid-area: index; display: flex; flex-direction: column; padding-top: 56px; overflow-y: auto; background: var(--manila) url(./grain.png); background-blend-mode: multiply; box-shadow: inset 1px 0 0 var(--edge); }
+.alm-tab { display: flex; align-items: center; gap: 9px; flex: none; min-height: 48px; padding: 0 12px 0 16px; text-align: left; font: 400 17px/1 var(--f-gothic); letter-spacing: .08em; text-transform: uppercase; color: var(--ink); border-bottom: 1px solid var(--edge); box-shadow: inset 1px 0 0 var(--edge); }
+.alm-tab .i { --i: 18px; flex: none; }
+.alm-tab.on { background: var(--paper) url(./grain.png); background-blend-mode: multiply; box-shadow: inset 4px 0 0 var(--ink); }
+.alm-tab:focus-visible { outline: 3px solid var(--blue); outline-offset: -3px; }
+@media (hover: hover) { .alm-tab:not(.on):hover { background-color: #e3cf9f; } }
+.alm-title { margin-bottom: var(--s3); padding-bottom: 6px; font: 400 28px/1 var(--f-gothic); letter-spacing: .08em; text-transform: uppercase; border-bottom: 1px solid var(--ink); }
+.alm-text { display: grid; gap: var(--s3); font-size: 16px; line-height: 1.4; }
+.alm-text > p { max-width: 70ch; }
+.alm-lead { font-size: 19px; line-height: 1.35; }
+.alm-lead .t-figure { margin-right: 4px; }
+.alm-note { font-style: italic; color: var(--ink-2); font-size: 14px; }
+.alm-sec { margin-top: var(--s2); padding-bottom: 5px; border-bottom: 1px solid var(--ink); color: var(--ink); }
+.alm-today { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: var(--s3); align-items: start; padding-bottom: var(--s3); border-bottom: 1px solid var(--hair); }
+.alm-today > .i { --i: 48px; }
+.alm-scroll { overflow-x: auto; max-width: 100%; }
+.alm-scroll:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+.alm-t { width: 100%; border-collapse: collapse; font-size: 15px; }
+.alm-t th, .alm-t td { height: 36px; padding: 4px 14px 4px 0; border-bottom: 1px solid var(--hair); text-align: left; font-weight: 400; vertical-align: middle; }
+.alm-t thead th { height: auto; padding-bottom: 6px; font: 400 var(--t-label)/1.1 var(--f-gothic); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-2); border-bottom: 1px solid var(--ink); white-space: nowrap; }
+.alm-t tbody th { white-space: nowrap; }
+.alm-people tbody th { white-space: normal; }
+.alm-book td:first-child { padding: 4px 8px 4px 0; height: 32px; }
+.alm-book .m { width: 128px; white-space: nowrap; }
+.alm-rules { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: var(--s5); }
+.alm-rules > div { display: grid; gap: 2px; align-content: start; padding: 9px 0; border-bottom: 1px solid var(--hair); }
+.alm-rules dt { font: 400 18px/1.1 var(--f-gothic); letter-spacing: .06em; text-transform: uppercase; }
+.alm-rules dd { font-size: 15px; }
+.alm-rules dd.catch { font-style: italic; color: var(--ink-2); }
+.alm-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--s4) var(--s5); }
+.alm-field h4 { display: flex; align-items: center; gap: 8px; padding-bottom: 6px; border-bottom: 2px solid var(--ink); }
+.alm-field h4 .i { --i: 20px; flex: none; }
+.alm-field h4 .nm { font: 400 19px/1 var(--f-stencil); letter-spacing: .07em; text-transform: uppercase; }
+.alm-field h4 .t-caption { margin-left: auto; }
+.alm-field dl > div { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 10px; padding: 5px 0; border-bottom: 1px solid var(--rule); }
+.alm-field dt { padding-top: 2px; }
+.alm-field dd { font-size: 15px; }
+.alm-watch { display: grid; gap: var(--s2); max-width: 560px; }
+.alm-watch.on { grid-template-columns: 52px minmax(0, 1fr); align-items: center; }
+.alm-watch .need { position: static; transform: none; }
+.alm-list li, .alm-built li { padding: 7px 0; border-bottom: 1px solid var(--hair); }
+.alm-built .meter { margin-top: 6px; }
+.alm-built .alm-note { margin-left: 6px; }
+.alm-diary li { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: var(--s3); padding: 6px 0; border-bottom: 1px solid var(--rule); }
+.alm-diary .when { font: 400 15px/1.35 var(--f-gothic); letter-spacing: .05em; text-transform: uppercase; color: var(--ink-2); }
+.alm-empty { display: flex; align-items: center; gap: 10px; padding: var(--s3) 0; font-style: italic; color: var(--ink-2); }
+.alm-empty .i { --i: 22px; flex: none; }
+@media (max-width: 899px) {
+  .alm-rules { grid-template-columns: minmax(0, 1fr); }
+}
+/* A phone: the index runs along the head of the page as tabs, and the paper comes up from the foot. */
+@media (max-width: 699px) {
+  .alm { width: auto; height: calc(100dvh - 48px); border-radius: 3px 3px 0 0; }
+  .alm { grid-template: 'head' auto 'index' auto 'page' minmax(0, 1fr) / minmax(0, 1fr); }
+  .alm-head { margin: 0 52px 0 var(--s4); padding-top: var(--s3); }
+  .alm-mark { font-size: 34px; }
+  .alm-mark .the { font-size: 20px; }
+  .alm-index { flex-direction: row; padding: 8px var(--s4) 0; overflow-x: auto; overflow-y: hidden; background: none; box-shadow: inset 0 -1px 0 var(--ink); scrollbar-width: none; }
+  .alm-tab { min-height: 44px; padding: 0 12px; gap: 7px; font-size: 16px; border: 0; border-radius: 4px 4px 0 0; background: var(--manila) url(./grain.png); background-blend-mode: multiply; box-shadow: inset 0 0 0 1px var(--edge); margin-right: 3px; }
+  .alm-tab.on { box-shadow: inset 1px 1px 0 var(--ink), inset -1px 0 0 var(--ink), inset 0 4px 0 var(--ink); }
+  .alm-page { padding: var(--s3) var(--s4) max(var(--s4), env(safe-area-inset-bottom, 0px)); }
+  .alm-title { font-size: 24px; }
+  .alm-fields { grid-template-columns: minmax(0, 1fr); }
+  .alm-field dl > div { grid-template-columns: 84px minmax(0, 1fr); }
+  .alm-diary li { grid-template-columns: 62px minmax(0, 1fr); gap: var(--s2); }
+  .alm-book .m { width: 96px; }
+}
+/* A phone on its side: the head shrinks to a line and the index scrolls down the fore-edge. */
+@media (max-height: 500px) and (orientation: landscape) {
+  .alm { height: calc(100dvh - 16px); }
+  .alm { grid-template-columns: minmax(0, 1fr) 156px; }
+  .alm-head { padding: 8px 0 4px; }
+  .alm-head .t-label { display: none; }
+  .alm-mark { font-size: 28px; }
+  .alm-mark .the { font-size: 17px; }
+  .alm-index { padding-top: 50px; }
+  .alm-tab { min-height: 44px; font-size: 15px; }
+  .alm-page { padding: var(--s2) var(--s4) var(--s4); }
+  .alm-title { font-size: 22px; margin-bottom: var(--s2); }
+}
+
 /* ---------------------------------------------------------------- papers' insides: accounts, tables, a lead line */
 .dlg-lead { font-size: var(--t-lead); line-height: 1.4; margin-bottom: var(--s3); }
 .dlg-sub { margin: var(--s4) 0 var(--s1); }

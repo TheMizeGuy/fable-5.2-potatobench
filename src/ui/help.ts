@@ -78,7 +78,7 @@ export function openHelp(ctx: Ctx): void {
       draw()
       return h('section', { class: 'howto sheet sys' },
         h('header', { class: 'howto-head' },
-          h('div', null, h('p', { class: 't-label' }, 'From the almanac'), h('h2', { class: 't-title' }, 'How to play')),
+          h('div', null, h('p', { class: 't-label' }, 'From the almanac'), h('p', { class: 't-title', 'aria-hidden': 'true' }, 'How to play')),
           h('button', { class: 'close', type: 'button', testid: 'how-close', autofocus: true, 'aria-label': ctx.app.screen === 'title' ? 'Back (Escape)' : 'Back to the farm (Escape)', onclick: close }, icon('close', 'i'))),
         h('p', { class: 'howto-lead' }, 'The crop grows where you cannot see it. Give the orders, let the days run, and dig day tells the truth. Keep the farm five seasons and it is yours.'),
         figs(touch),
