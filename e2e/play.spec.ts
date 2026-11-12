@@ -139,8 +139,13 @@ test('a first season by the short path, from the opening to the next spring, wit
   // Start goes straight into a running game at 1x: no chip to dismiss, nothing more to press.
   expect((await look(page)).speed).toBe(1)
   await expect(page.getByTestId('paused')).toBeHidden()
-  // The first thing that needs doing arrives on the land. The clock keeps the speed it was given.
-  await expect(page.locator(BADGE).first()).toBeVisible({ timeout: 120_000 })
+  // The first thing that needs doing arrives on the land. The clock keeps the speed it was given; a question that comes
+  // meanwhile is answered on its card, as a player would, and the clock goes on at 1x.
+  await expect.poll(async () => {
+    const s = await look(page)
+    if (s.incidents) await answerIncident(page, false)
+    return s.badges.length
+  }, { timeout: 120_000, intervals: [500] }).toBeGreaterThan(0)
   const first = await look(page)
   expect(first.paused).toBe(false)
   expect(first.speed).toBe(1)
@@ -340,7 +345,7 @@ test('the same start by keyboard alone', async ({ page, isMobile }) => {
   // Running at 1x by itself. The weeks until the soil is warm are passed through the test hook: the keys are what
   // this is about.
   expect((await look(page)).speed).toBe(1)
-  await reach(page, `const { app } = q.g(); for (let k = 0; k < 90 && !app.needs().some(n => n.need && n.need.act === 'plant'); k++) { app.campaign.incidents = []; app.do({ t: 'day' }) } app.campaign.incidents = []`)
+  await reach(page, `const { app } = q.g(); for (let k = 0; k < 90 && !app.needs().some(n => n.need && n.need.act === 'plant'); k++) { app.campaign.incidents = []; app.do({ t: 'day' }) } app.campaign.incidents = []; app.resumeAfterCard()`)
   // Tab finds the field that needs something; Enter gives it the order.
   await expect(page.locator(BADGE).first()).toBeVisible({ timeout: 30_000 })
   await page.keyboard.press('Tab')
