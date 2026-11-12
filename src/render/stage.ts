@@ -268,7 +268,7 @@ export class Stage {
         for (let k = 0; k < 5; k++) {
           c.copy(a).addScaledVector(d, (0.25 + 0.17 * k) * t.h)
           if (f.cold) this.puff(f, c, 4, 2.4, 0.9, 0.93, 0.97, 0.5, 2.6, 1.2, 1.6)
-          else this.puff(f, c, 3, 2.4, 0.5, 0.44, 0.33, 0.34, 2.4, 1.2, 1.6)
+          else this.puff(f, c, 3, 2.4, 0.5, 0.44, 0.33, 0.2, 2.4, 1.2, 1.1)
         }
         if (!t.bush) { this.thud = 1; this.thudAt.copy(a) }
       }

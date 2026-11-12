@@ -763,17 +763,17 @@ const running = (name: string, n: number, gap: number, scenario: string, then: s
   },
 })
 strips.push(
-  running('r2-way-field', 14, 120, SPRING, '', async page => { await tierAt(page, 'field', 2) }),
-  running('r2-way-yard', 14, 120, SPRING, '', async page => { await tierAt(page, 'yard') }),
-  running('r2-way-farm', 14, 120, SPRING, '', async page => { await tierAt(page, 'farm') }),
-  running('r2-liveout-gate', 18, 90, LIVE_OUT, `app.do({ t: 'day' }); app.do({ t: 'day' })`, async page => { await nearPlace(page, 'roadIn', { dist: 13, yaw: 0.6, pitch: 0.6 }) }),
-  running('r2-liveout-field', 14, 120, LIVE_OUT, `app.do({ t: 'day' }); app.do({ t: 'day' })`, async page => { await tierAt(page, 'field', 1) }),
-  running('r2-rocks-field', 12, 450, SPRING, '', async page => { await tierAt(page, 'field', 1) }),
-  running('r2-brush-field', 12, 450, SPRING, '', async page => { await tierAt(page, 'field', 5) }),
-  running('r2-haul-lane', 14, 420, HARVEST, `job('dig', 0, 0); until(['dig'])`, async page => { await tierAt(page, 'field', 0) }),
+  running('r2-way-field', 8, 210, SPRING, '', async page => { await tierAt(page, 'field', 2) }),
+  running('r2-way-yard', 8, 210, SPRING, '', async page => { await tierAt(page, 'yard') }),
+  running('r2-way-farm', 8, 210, SPRING, '', async page => { await tierAt(page, 'farm') }),
+  running('r2-liveout-gate', 8, 200, LIVE_OUT, `app.do({ t: 'day' }); app.do({ t: 'day' })`, async page => { await nearPlace(page, 'roadIn', { dist: 13, yaw: 0.6, pitch: 0.6 }) }),
+  running('r2-liveout-field', 8, 210, LIVE_OUT, `app.do({ t: 'day' }); app.do({ t: 'day' })`, async page => { await tierAt(page, 'field', 1) }),
+  running('r2-rocks-field', 4, 1300, SPRING, '', async page => { await tierAt(page, 'field', 1) }),
+  running('r2-brush-field', 4, 1300, SPRING, '', async page => { await tierAt(page, 'field', 5) }),
+  running('r2-haul-lane', 8, 600, HARVEST, `job('dig', 0, 0); until(['dig'])`, async page => { await tierAt(page, 'field', 0) }),
   // The clock stopped and a day's digging ordered: the way in, then the day's band out, inside what the interface waits.
-  { name: 'r2-dig-stopped', n: 12, gap: 200, size: [1920, 1080], setup: async page => { await farm(page, HARVEST); await settle(page); await tierAt(page, 'field', 0); await frames(page, 20); console.log('  ', await farm(page, `job('dig', 0, 0); app.do({ t: 'day' })`)) } },
-  { name: 'r2-fell-near', n: 10, gap: 500, setup: async page => { await farm(page, FELLING.replace('= 18', '= 12')); await settle(page); await farm(page, `until(['fell'])`); await hold(page, 0.75, 500); await onUnit(page, await worker(page, 'fell'), { dist: 15, yaw: 0.5, pitch: 0.3 }, 0.5, -1); await farm(page, `app.do({ t: 'day' })`) } },
+  { name: 'r2-dig-stopped', n: 6, gap: 400, size: [1920, 1080], setup: async page => { await farm(page, HARVEST); await settle(page); await tierAt(page, 'field', 0); await frames(page, 20); console.log('  ', await farm(page, `job('dig', 0, 0); app.do({ t: 'day' })`)) } },
+  { name: 'r2-fell-near', n: 6, gap: 700, setup: async page => { await farm(page, FELLING.replace('= 18', '= 12')); await settle(page); await farm(page, `until(['fell'])`); await hold(page, 0.75, 500); await onUnit(page, await worker(page, 'fell'), { dist: 15, yaw: 0.5, pitch: 0.3 }, 0.5, -1); await farm(page, `app.do({ t: 'day' })`) } },
 )
 
 
