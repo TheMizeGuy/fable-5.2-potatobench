@@ -730,27 +730,32 @@ function weighedStamp(date: string, year: string): SVGElement {
     s('text', { x: 80, y: 99, 'font-family': 'Gothic', 'font-size': 18, 'letter-spacing': 2, 'text-anchor': 'middle', fill: 'currentColor' }, date.toUpperCase()))
 }
 
-// The violet net weight arriving like a numbering machine: digit by digit, left to right, in at most 600 ms.
-function numbering(el: HTMLElement, text: string, ms: number): () => void {
+// The violet net weight arriving like a numbering machine: digit by digit, left to right, in at most 600 ms. The
+// figure is set out blank at once, so nothing moves when it is struck.
+function numbering(el: HTMLElement, text: string): { run(ms: number): void; done(): void } {
   const chars = [...text]
-  const cells = chars.map(ch => h('span', { class: 'nm-cell' }, ch))
+  const cells = chars.map(ch => h('span', { class: 'nm-cell nm-wait' }, ch))
   el.replaceChildren(...cells)
   const digits = cells.filter((_, k) => /\d/.test(chars[k]))
-  const each = ms / Math.max(1, digits.length)
   const timers: number[] = []
-  cells.forEach(x => x.classList.add('nm-wait'))
-  let shown = 0
-  const strike = () => {
-    // A digit and whatever stands before it up to the last one struck: "1," then "3", "7", "4".
-    const upTo = cells.indexOf(digits[shown])
-    for (let k = 0; k <= upTo; k++) cells[k].classList.remove('nm-wait')
-    digits[shown].animate([{ transform: 'translateY(-6px)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: Math.min(90, each), easing: 'ease-out' })
-    if (++shown < digits.length) timers.push(window.setTimeout(strike, each))
-    else done()
-  }
   const done = () => { timers.forEach(clearTimeout); el.textContent = text }
-  timers.push(window.setTimeout(strike, 0))
-  return done
+  return {
+    done,
+    run(ms) {
+      const each = ms / Math.max(1, digits.length)
+      let shown = 0
+      const strike = () => {
+        // A digit and whatever stands before it since the last one struck: "1," then "3", "7", "4".
+        const upTo = cells.indexOf(digits[shown])
+        for (let k = 0; k <= upTo; k++) cells[k].classList.remove('nm-wait')
+        digits[shown].animate([{ transform: 'translateY(-6px)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: Math.min(90, each), easing: 'ease-out' })
+        if (++shown < digits.length) timers.push(window.setTimeout(strike, each))
+        else timers.push(window.setTimeout(done, 100))
+      }
+      if (digits.length) strike()
+      else done()
+    },
+  }
 }
 
 interface Way { el: HTMLElement; key: string }
@@ -963,17 +968,15 @@ export function ticket(ctx: Ctx, lotId: number, o: { fresh: boolean; staged?: bo
       root.prepend(face.el)
       revealing = true
       stamp.classList.add('is-up')
-      net.textContent = ''
+      const numbers = numbering(net, bare(d.market))
       const timers: number[] = []
       let raf = 0
-      let stopNumbers: (() => void) | null = null
       const at = (ms: number, fn: () => void) => { timers.push(window.setTimeout(() => { if (root.isConnected) fn() }, ms)) }
       const end = () => {
         revealing = false
         timers.forEach(clearTimeout)
         cancelAnimationFrame(raf)
-        stopNumbers?.()
-        net.textContent = bare(d.market)
+        numbers.done()
         face.el.remove()
         root.classList.remove('revealing')
         tk.classList.remove('is-waiting')
@@ -1010,7 +1013,7 @@ export function ticket(ctx: Ctx, lotId: number, o: { fresh: boolean; staged?: bo
           tk.animate([{ transform: 'translateY(14px)' }, { transform: 'none' }], { duration: 320, easing: EASE_PAPER })
         })
         at(760, () => { face.el.remove(); root.classList.remove('revealing') })
-        at(900, () => { stopNumbers = numbering(net, bare(d.market), 500) })
+        at(900, () => numbers.run(500))
         at(1550, () => {
           stamp.classList.remove('is-up')
           stamp.animate([{ transform: 'rotate(10deg) scale(1.2)', opacity: 0 }, { transform: 'rotate(10deg) scale(1)', opacity: 1 }], { duration: 140, easing: 'cubic-bezier(.2, .7, .2, 1)' })
