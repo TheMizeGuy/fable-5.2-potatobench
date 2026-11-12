@@ -1,5 +1,5 @@
-// Spring, on the map: each plate shows the plan, a selected field or lot opens a small card, and the spring sheet
-// beside the land holds the one button that matters, Start the season, under the offers that grow the farm.
+// Spring (design/spring.html): the land with its tags, and the seed and supply catalogue at the right with its folds
+// and its order blank, where Start the season always is. A field, a lot or a tract picked on the land opens its card.
 import * as S from '../sim/index.ts'
 import { tracker } from './contracts.ts'
 import { patch, type Ctx, type Screen } from './core.ts'
@@ -9,7 +9,8 @@ import { icon } from './icons.ts'
 import { digitFor, fieldForDigit, heldFields, step } from './map.ts'
 import { plates, type PlateModel } from './plates.ts'
 import * as R from './rules.ts'
-import { fieldCost, landCard, springFolds, tenureRow, tractCard, type Fold } from './spring.ts'
+import { cardHead, fieldCost, landCard, springFolds, tenureRow, tractCard, type Fold } from './spring.ts'
+import { fold } from './system/parts.ts'
 import { topBar } from './top.ts'
 
 function varietyTraits(v: S.Variety, c: S.Campaign, world: S.World): string[] {
@@ -45,26 +46,29 @@ function openCompare(ctx: Ctx): void {
   ]
   ctx.papers.open({
     title: `Varieties for ${R.yearWord(c.year)}`,
+    kicker: 'From the seed catalogue',
     testid: 'compare',
     size: 'wide',
     body: () => [
-      h('p', { class: 't-lede' }, 'What each variety is like, from the same facts the fields are grown by. No one of them wins every year.'),
-      h('div', { class: 'table-wrap', tabindex: '0', role: 'group', 'aria-label': 'Varieties side by side' }, h('table', { class: 'compare' },
-        h('thead', null, h('tr', null, h('th', { scope: 'col' }, 'Variety'), cols.map(([label]) => h('th', { scope: 'col' }, label)))),
+      h('p', { class: 'dlg-lead' }, 'What each variety is like, from the same facts the fields are grown by. No one of them wins every year.'),
+      h('div', { class: 'table-scroll', tabindex: '0', role: 'group', 'aria-label': 'Varieties side by side' }, h('table', { class: 'compare-t' },
+        h('thead', null, h('tr', null, h('th', { scope: 'col', class: 't-label' }, 'Variety'), cols.map(([label]) => h('th', { scope: 'col', class: 't-label' }, label)))),
         h('tbody', null, vs.map(v => h('tr', null,
-          h('th', { scope: 'row' }, h('span', { class: 'v-name' }, v.name), h('span', { class: 'sub' }, v.market)),
-          cols.map(([label, text]) => h('td', { 'data-label': label, class: label === 'Price' && v.contract ? 'warn-text' : null }, text(v)))))))),
-      h('p', { class: 'sub' }, `Price is for US No. 1 in a usual year, averaged over the season; harvest prices run below it and spring prices above. A contract price does not move with the season. The chipping variety finds only a processing price off contract, ${R.offContract()} its usual price. Large tubers, over ${F.grams(S.SIZE_CHEF)}, sell over or under that price. Keeps until is the last cellar month before sprouting, for a crop dug around September 25${c.upgrades.vent ? ', with the ventilation' : ''}. Yield is what a full season can make, before weather, blight and the kill date take their share.`),
+          h('th', { scope: 'row' }, h('b', null, v.name), h('span', { class: 't-caption' }, v.market)),
+          cols.map(([label, text]) => h('td', { 'data-label': label, class: label === 'Price' && v.contract ? 'c-ochre' : null }, text(v)))))))),
+      h('p', { class: 't-caption' }, `Price is for US No. 1 in a usual year, averaged over the season; harvest prices run below it and spring prices above. A contract price does not move with the season. The chipping variety finds only a processing price off contract, ${R.offContract()} its usual price. Large tubers, over ${F.grams(S.SIZE_CHEF)}, sell over or under that price. Keeps until is the last cellar month before sprouting, for a crop dug around September 25${c.upgrades.vent ? ', with the ventilation' : ''}. Yield is what a full season can make, before weather, blight and the kill date take their share.`),
     ],
-    foot: close => h('button', { class: 'btn primary', type: 'button', testid: 'compare-close', autofocus: true, onclick: close }, 'Back to the plan'),
+    foot: close => h('button', { class: 'btn go', type: 'button', testid: 'compare-close', autofocus: true, onclick: close }, 'Back to the plan', icon('arrow', 'i')),
   })
 }
 
-function row(label: string, value: number, o: { testid?: string; cls?: string } = {}): HTMLElement {
-  return h('tr', { class: o.cls ?? null }, h('th', { scope: 'row' }, label), h('td', { testid: o.testid, class: value < 0 && o.cls === 'total' ? 'neg' : null }, F.money(value)))
+// A line of an account: the label, a dot leader, the figure right; a negative figure carries its minus sign in red.
+function line(label: Child, value: number, o: { testid?: string; cls?: string } = {}): HTMLElement {
+  return h('p', { class: `lead${o.cls ? ` ${o.cls}` : ''}` }, h('span', null, label), h('span', { class: 'dots' }),
+    h('span', { class: `num${value < 0 ? ' c-red' : ''}`, testid: o.testid }, F.money(value)))
 }
 
-// The money behind the one line: what the plan costs, what the bank lends, what comes due.
+// The money behind the order blank: what the plan costs, what the bank lends, what comes due.
 function openMoney(ctx: Ctx): void {
   const app = ctx.app
   const c = app.campaign
@@ -82,73 +86,73 @@ function openMoney(ctx: Ctx): void {
   const nb = y ? app.world.neighbor[String(y.year)] : undefined
   const growing = y ? y.costs - y.wages - y.rent - y.land - y.penalties - y.storage - y.mortgage - y.works - y.building - y.packing : 0
   ctx.papers.open({
-    title: `The money: ${R.yearName(c.year)}, spring`,
+    title: `The money, ${R.yearName(c.year)}`,
+    kicker: 'The order blank in full',
     testid: 'money',
     size: 'medium',
     body: () => [
-      h('table', { class: 'money' },
-        h('tbody', null,
-          row(c.cash < 0 ? 'Owed from last year' : 'Cash on hand', c.cash),
-          row(`${F.plural(potato, 'potato field')} at ${F.money(S.FIELD_COST)}`, -potato * S.FIELD_COST),
-          cert ? row(`Certified seed for ${cert}`, -cert * S.SEED_CWT_PER_FIELD * S.CERT_SEED_PER_CWT) : null,
-          rest ? row(`${rest} resting at ${F.money(S.REST_COST)}`, -rest * S.REST_COST) : null,
-          pc.rent ? row(`Rent for ${F.plural(rented, 'field')}`, -pc.rent) : null,
-          pc.wages ? row(`The first month's wages, ${F.plural(paid, 'person', 'people')}`, -pc.wages) : null,
-          row('This plan', -pc.total, { testid: 'plan-cost', cls: 'subtotal' }),
-          row('After planting', after, { testid: 'plan-after', cls: 'total' }))),
-      h('p', null, after < S.OPERATING_LIMIT
+      h('div', { class: 'ledger-lines' },
+        line(c.cash < 0 ? 'Owed from last year' : 'Cash on hand', c.cash),
+        line(`${F.upper(F.plural(potato, 'potato field'))} at ${F.money(S.FIELD_COST)}`, -potato * S.FIELD_COST),
+        cert ? line(`Certified seed for ${cert}`, -cert * S.SEED_CWT_PER_FIELD * S.CERT_SEED_PER_CWT) : null,
+        rest ? line(`${rest} resting at ${F.money(S.REST_COST)}`, -rest * S.REST_COST) : null,
+        pc.rent ? line(`Rent for ${F.plural(rented, 'field')}`, -pc.rent) : null,
+        pc.wages ? line(`The first month's wages, ${F.plural(paid, 'person', 'people')}`, -pc.wages) : null,
+        line(h('b', null, 'This plan'), -pc.total, { testid: 'plan-cost', cls: 'sub-total' }),
+        line(h('b', null, 'After planting'), after, { testid: 'plan-after', cls: 'total' })),
+      h('p', { class: 't-caption' }, after < S.OPERATING_LIMIT
         ? `The bank lends up to ${F.money(-S.OPERATING_LIMIT)} for the spring. Rest a field, or plant saved seed: it is free, but it carries virus.`
-        : after < 0 ? `The bank's spring loan covers ${F.money(-after)}, repaid from the crop. The spring loan itself is free.` : 'No spring borrowing is needed.'),
-      pc.wages ? h('p', { class: 'sub' }, `Then ${F.money(pc.wages)} in wages every month until the season closes, and for anyone kept on over the winter.`) : null,
-      h('h3', { class: 'block-head' }, 'Due at year end'),
-      h('table', { class: 'money' },
-        h('tbody', null,
-          row('The note on the farm', S.NOTE_PAYMENT),
-          row('The household', S.LIVING),
-          m.owed > 0 ? row(`The land mortgage, ${F.money(m.owed)} owed`, Math.round(m.principal + m.interest)) : null,
-          row('Due', S.NOTE_PAYMENT + S.LIVING + Math.round(m.principal + m.interest), { cls: 'total' }))),
-      h('p', { class: 'sub' }, `Debt left after those is carried into next year at ${F.pct(S.CREDIT_RATE)} interest, and the bank calls the note if it is more than ${F.money(-S.CREDIT_LIMIT)}. Each job in the field is charged as it is done, wages by the month, and the cellar by the month. Land, buildings and equipment are bought from cash.`),
+        : after < 0 ? `The bank's spring loan covers ${F.money(-after)}, repaid from the crop. The spring loan itself is free.` : 'No spring borrowing is needed.',
+      pc.wages ? ` Then ${F.money(pc.wages)} in wages every month until the season closes, and for anyone kept on over the winter.` : ''),
+      h('p', { class: 't-label dlg-sub' }, 'Due at the year end'),
+      h('div', { class: 'ledger-lines' },
+        line('The note on the farm', S.NOTE_PAYMENT),
+        line('The household', S.LIVING),
+        m.owed > 0 ? line(`The land mortgage, ${F.money(m.owed)} owed`, Math.round(m.principal + m.interest)) : null,
+        line(h('b', null, 'Due'), S.NOTE_PAYMENT + S.LIVING + Math.round(m.principal + m.interest), { cls: 'total' })),
+      h('p', { class: 't-caption' }, `Debt left after those is carried into next year at ${F.pct(S.CREDIT_RATE)} interest, and the bank calls the note if it is more than ${F.money(-S.CREDIT_LIMIT)}. Land, buildings and equipment are bought from cash.`),
       y ? [
-        h('h3', { class: 'block-head' }, `Last year, ${R.yearWord(y.year)}`),
-        h('table', { class: 'money' },
-          h('tbody', null,
-            row('Potato sales', y.revenue - y.restIncome - y.contracts - y.logs - y.stand),
-            y.contracts ? row('Delivered on contract', y.contracts) : null,
-            y.stand ? row('The farm stand', y.stand) : null,
-            y.logs ? row('Logs to the mill', y.logs) : null,
-            y.restIncome ? row('Oats and clover', y.restIncome) : null,
-            row('Growing and storage', -(growing + y.storage + y.packing)),
-            y.wages ? row('Wages', -y.wages) : null,
-            y.rent ? row('Rent', -y.rent) : null,
-            y.land ? row('Land, the quarter down', -y.land) : null,
-            y.mortgage ? row('The land mortgage', -y.mortgage) : null,
-            y.building ? row('Buildings', -y.building) : null,
-            y.works ? row('Contractors', -y.works) : null,
-            y.penalties ? row('Contract penalties', -y.penalties) : null,
-            row('Note, household and interest', -(y.note + y.living + y.interest)),
-            row('Cash at year end', y.cashEnd, { cls: 'total' }))),
-        h('p', { class: 'sub' }, `${y.potatoFields ? `Your yield sold: ${F.perArea(y.yieldCwtAcre)}.` : 'No potatoes were grown.'}${nb ? ` The neighbor sold ${F.perArea(nb.yieldCwtAcre)}.` : ''}`),
+        h('p', { class: 't-label dlg-sub' }, `Last year, ${R.yearWord(y.year)}`),
+        h('div', { class: 'ledger-lines' },
+          line('Potato sales', y.revenue - y.restIncome - y.contracts - y.logs - y.stand),
+          y.contracts ? line('Delivered on contract', y.contracts) : null,
+          y.stand ? line('The farm stand', y.stand) : null,
+          y.logs ? line('Logs to the mill', y.logs) : null,
+          y.restIncome ? line('Oats and clover', y.restIncome) : null,
+          line('Growing and storage', -(growing + y.storage + y.packing)),
+          y.wages ? line('Wages', -y.wages) : null,
+          y.rent ? line('Rent', -y.rent) : null,
+          y.land ? line('Land, the quarter down', -y.land) : null,
+          y.mortgage ? line('The land mortgage', -y.mortgage) : null,
+          y.building ? line('Buildings', -y.building) : null,
+          y.works ? line('Contractors', -y.works) : null,
+          y.penalties ? line('Contract penalties', -y.penalties) : null,
+          line('Note, household and interest', -(y.note + y.living + y.interest)),
+          line(h('b', null, 'Cash at the year end'), y.cashEnd, { cls: 'total' })),
+        h('p', { class: 't-caption' }, `${y.potatoFields ? `Your yield sold: ${F.perArea(y.yieldCwtAcre)}.` : 'No potatoes were grown.'}${nb ? ` The neighbour sold ${F.perArea(nb.yieldCwtAcre)}.` : ''}`),
       ] : null,
     ],
-    foot: close => h('button', { class: 'btn primary', type: 'button', testid: 'money-close', autofocus: true, onclick: close }, 'Back to the plan'),
+    foot: close => h('button', { class: 'btn go', type: 'button', testid: 'money-close', autofocus: true, onclick: close }, 'Back to the plan', icon('arrow', 'i')),
   })
 }
 
-const TRACT_GLYPH: Record<S.Cover, string> = { open: 'idle', woods: 'tree', brush: 'tree', stumps: 'stump' }
+const TRACT_GLYPH: Record<S.Cover, string> = { open: 'idle', woods: 'woods', brush: 'woods', stumps: 'stump' }
 
 export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () => void }): Screen {
   const app = ctx.app
   const top = topBar(ctx, o)
-  const card = h('section', { class: 'card plan-card instrument', 'aria-label': 'The selected field', testid: 'plan-card', hidden: true })
+  // A field, a lot or a tract picked on the land: its card, docked left, since the catalogue holds the right.
+  const card = h('section', { class: 'command docked-left spring-card sheet sys', 'aria-label': 'The selected field', testid: 'plan-card', hidden: true })
   // The contracts signed stand under the folds: they are money promised.
   const track = tracker(ctx)
-  const head = h('header', { class: 'spring-head' })
-  const rows = h('div', { class: 'spring-rows' })
-  const foot = h('footer', { class: 'spring-foot' })
-  const body = h('div', { class: 'spring-body', 'data-scroll': 'spring' }, head, rows, track.el)
-  const sheet = h('section', { class: 'paper spring-sheet', 'aria-label': 'The spring plan', testid: 'spring' }, body, foot)
+  const mast = h('header', { class: 'masthead' })
+  const rows = h('div', { class: 'cat-folds' })
+  const foot = h('footer', { class: 'order-blank' })
+  const body = h('div', { class: 'cat-body', 'data-scroll': 'spring' }, rows, track.el)
+  const sheet = h('section', { class: 'catalogue sheet sys', 'aria-label': 'The spring plan', testid: 'spring' }, mast, body, foot)
   const notesSlot = h('div', { class: 'notes-slot' })
-  const el = h('main', { class: 'season plan spring' }, top.el, notesSlot, h('div', { class: 'bottom' }, card), sheet)
+  const el = h('main', { class: 'spring-screen sys' }, top.el, notesSlot, card, sheet)
+  // Every fold starts shut: a newcomer's first spring is a short sheet (e2e/play.spec.ts), each fold one click away.
   let open: Fold | null = null
   let note = ''
   let focused = false
@@ -190,7 +194,7 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
     const c = app.campaign!
     if (!S.held(c, i)) {
       const l = S.landInfo(c).find(x => x.field === i)
-      return l ? { name: l.name, glyph: S.standing(l.cover) ? 'tree' : 'land', marks: [], queue: [], badge: null, land: true, said: `${l.name}, ${l.block === 'home' ? 'by the home farm' : 'beyond the home farm'}: ${l.rentable ? `to rent at ${F.money(l.rent)} a year or ` : ''}to buy for ${F.money(l.price)}.` } : null
+      return l ? { name: l.name, glyph: S.standing(l.cover) ? 'woods' : 'land', marks: [], queue: [], badge: null, land: true, said: `${l.name}, ${l.block === 'home' ? 'by the home farm' : 'beyond the home farm'}: ${l.rentable ? `to rent at ${F.money(l.rent)} a year or ` : ''}to buy for ${F.money(l.price)}.` } : null
     }
     const key = digitFor(c, i)
     const fp = c.fields[i]
@@ -207,7 +211,7 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
     return {
       name: S.FIELD_NAMES[i],
       glyph: potato ? 'planted' : 'rest',
-      sub: potato ? v.name : 'Rest year',
+      sub: potato ? v.name : 'Resting',
       marks: [...(potato && p.seed === 'saved' ? [{ glyph: 'sprout', cls: 'warn' }] : []), ...(rented ? [{ glyph: 'land', cls: '' }] : [])],
       queue: [], badge: null, key,
       said: `${S.FIELD_NAMES[i]} ${potato ? v.name : 'Rest year'}: ${key ? `key ${key}, ` : ''}${rented ? 'rented, ' : ''}${potato ? `on ${p.seed} seed` : 'in oats and clover'}, ${F.money(fieldCost(p))}.`,
@@ -215,17 +219,23 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
   }
   const P = plates(ctx, plateLayer, { model: plateModel, onBadge: () => {} })
 
-  function varietyCard(c: S.Campaign, v: S.Variety, on: boolean): HTMLElement {
-    return h('label', { class: 'vcard' },
+  // A variety as a printed box to tick: its name, how it matures and yields, its price; what else it is like is said
+  // to a screen reader, and in full on the comparison sheet.
+  function varietyBox(c: S.Campaign, v: S.Variety, on: boolean): HTMLElement {
+    return h('label', { class: 'vbox' },
       h('input', { type: 'radio', name: 'variety', value: v.id, checked: on, testid: `plan-variety-${v.id}`, k: `v-${v.id}`, 'aria-describedby': `v-more-${v.id}`, onchange: () => setPlan({ variety: v.id }) }),
-      h('span', { class: 'vcard-in' },
-        h('span', { class: 'v-name' }, v.name),
-        h('span', { class: 'v-marks' },
-          h('span', null, icon('stale', 'ic s'), v.maturity),
-          h('span', null, icon('bulk', 'ic s'), R.yieldWord(v).split(',')[0]),
-          v.contract ? h('span', { class: 'v-contract' }, icon('contract', 'ic s'), 'contract only') : h('span', null, icon('blight-old', 'ic s'), R.blightWord(v, true))),
-        h('span', { class: 'v-price num' }, F.price(v.price))),
+      h('span', { class: 'vbox-in' },
+        h('b', null, v.name),
+        h('span', { class: 'it' }, `${v.maturity}, ${R.yieldWord(v).split(',')[0]}`),
+        h('span', { class: v.contract ? 'c-ochre' : null }, v.contract ? 'contract only' : R.blightWord(v, true)),
+        h('span', { class: 'num' }, F.price(v.price))),
       h('span', { class: 'sr', id: `v-more-${v.id}` }, varietyTraits(v, c, app.world).join(', ')))
+  }
+
+  function choice(name: string, label: string, opts: [string, string, boolean, () => void][]): HTMLElement {
+    return h('div', { class: 'seg-in', role: 'radiogroup', 'aria-label': label }, opts.map(([value, text, on, set]) => h('label', null,
+      h('input', { type: 'radio', name, value, checked: on, testid: `plan-${name}-${value}`, k: `${name}-${value}`, onchange: set }),
+      h('span', null, text))))
   }
 
   function drawCard(c: S.Campaign, sel: number[]): Child {
@@ -243,70 +253,46 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
     const saved = stock.reduce((a, x) => a + x.fields, 0)
     const cost = sel.reduce((a, j) => a + fieldCost(c.plans[j]), 0)
     return [
-      h('header', { class: 'card-head plan-head' },
-        h('div', null,
-          h('h2', { class: 't-head', testid: 'card-title' }, one ? info.name : `${sel.length} fields`),
-          h('p', { class: 'card-sub' }, one
-            ? `${R.POSITION_NOTE[info.elev]} ${F.plural(info.streak, 'year')} in potatoes, soil ${R.soilWord(info.soil)}, early dying in ${F.pct(info.vert)} of plants.${info.raw ? ' New ground: a first potato crop grows less unless it rests a year.' : ''}`
-            : F.list(sel.map(j => S.FIELD_NAMES[j])))),
-        h('div', { class: 'plan-row' },
-          h('div', { class: 'nseg', role: 'radiogroup', 'aria-label': 'Crop' },
-            (['potato', 'rest'] as const).map(crop => h('label', { class: 'nseg-opt' },
-              h('input', { type: 'radio', name: 'crop', value: crop, checked: same('crop') && p.crop === crop, testid: `plan-crop-${crop}`, k: `crop-${crop}`, onchange: () => setPlan({ crop }) }),
-              h('span', null, crop === 'potato' ? 'Potatoes' : 'Rest year')))),
-          h('span', { class: 'plan-cost num', testid: 'field-cost' }, F.money(cost)),
-          potato ? h('button', { class: 'nbtn', type: 'button', testid: 'compare-open', onclick: () => openCompare(ctx) }, 'Compare') : null),
-        h('button', { class: 'nicon', type: 'button', testid: 'card-close', 'aria-label': 'Deselect', onclick: () => app.select(-1) }, icon('close'))),
+      cardHead(ctx, one ? 'Field record' : 'Fields', one ? info.name : `${sel.length} fields`, one
+        ? `${R.POSITION_NOTE[info.elev]} ${F.upper(F.plural(info.streak, 'year'))} in potatoes, soil ${R.soilWord(info.soil)}, early dying in ${F.pct(info.vert)}.${info.raw ? ' New ground: a first crop grows less unless it rests a year.' : ''}`
+        : F.list(sel.map(j => S.FIELD_NAMES[j]))),
+      h('div', { class: 'card-crop' },
+        choice('crop', 'Crop', [['potato', 'Potatoes', same('crop') && potato, () => setPlan({ crop: 'potato' })], ['rest', 'Rest year', same('crop') && !potato, () => setPlan({ crop: 'rest' })]]),
+        h('p', { class: 'card-cost' }, h('span', { class: 't-label' }, sel.length > 1 ? 'Together' : 'Costs'), h('b', { class: 'num', testid: 'field-cost' }, F.money(cost)))),
       potato ? [
-        h('div', { class: 'vcards', role: 'radiogroup', 'aria-label': 'Variety' }, vs.map(x => varietyCard(c, x, same('variety') && x.id === p.variety))),
-        h('p', { class: 'card-line note' }, same('variety') ? `${v.blurb}${v.contract ? ` Off contract it sells ${R.offContract()} its usual price.` : ''}` : 'These fields are in different varieties.'),
-        saved > 0 || p.seed === 'saved' ? h('div', { class: 'plan-row' },
-          h('div', { class: 'nseg', role: 'radiogroup', 'aria-label': 'Seed' },
-            (['certified', 'saved'] as const).map(seed => h('label', { class: 'nseg-opt' },
-              h('input', { type: 'radio', name: 'seed', value: seed, checked: same('seed') && p.seed === seed, testid: `plan-seed-${seed}`, k: `seed-${seed}`, onchange: () => setPlan({ seed }) }),
-              h('span', null, seed === 'certified' ? `Certified seed, ${F.money(S.SEED_CWT_PER_FIELD * S.CERT_SEED_PER_CWT)}` : `Saved seed, free (enough for ${saved})`)))),
-          h('p', { class: `card-line${p.seed === 'saved' ? ' urgent' : ''}`, testid: 'seed-note' }, R.savedSeedText(stock))) : null,
-      ] : h('p', { class: 'card-line' }, `Oats and clover: costs ${F.money(S.REST_COST)}, earns ${F.money(S.REST_INCOME)} in the fall. A rest year puts the soil back at once and wears early dying down slowly.`),
+        h('div', { class: 'vgrid', role: 'radiogroup', 'aria-label': 'Variety' }, vs.map(x => varietyBox(c, x, same('variety') && x.id === p.variety))),
+        h('p', { class: 'note card-note' }, same('variety') ? `${v.blurb}${v.contract ? ` Off contract it sells ${R.offContract()} its usual price.` : ''}` : 'These fields are in different varieties.',
+          ' ', h('button', { class: 'btn quiet', type: 'button', testid: 'compare-open', onclick: () => openCompare(ctx) }, 'Compare them all')),
+        saved > 0 || p.seed === 'saved' ? h('div', { class: 'card-seed' },
+          choice('seed', 'Seed', [
+            ['certified', `Certified, ${F.money(S.SEED_CWT_PER_FIELD * S.CERT_SEED_PER_CWT)}`, same('seed') && p.seed === 'certified', () => setPlan({ seed: 'certified' })],
+            ['saved', `Saved, free (enough for ${saved})`, same('seed') && p.seed === 'saved', () => setPlan({ seed: 'saved' })]]),
+          h('p', { class: `t-caption${p.seed === 'saved' ? ' c-ochre' : ''}`, testid: 'seed-note' }, R.savedSeedText(stock))) : null,
+      ] : h('p', { class: 'note card-note' }, `Oats and clover: costs ${F.money(S.REST_COST)}, earns ${F.money(S.REST_INCOME)} in the fall. A rest year puts the soil back at once and wears early dying down slowly.`),
       one ? tenureRow(ctx, c, i, onTry) : null,
-      note ? h('p', { class: 'card-line flash lv-warn', role: 'alert' }, note) : null,
+      note ? h('p', { class: 'card-refused c-red', role: 'alert' }, note) : null,
     ]
   }
 
-  // The sheet's heading: where the farm stands, in a line.
-  function drawHead(c: S.Campaign): Child {
-    const first = c.history.length === 0
-    const y = c.history[c.history.length - 1]
-    const open = heldFields(c).filter(i => c.fields[i].cover === 'open')
-    const potato = open.filter(i => c.plans[i].crop === 'potato')
-    const kinds = [...new Set(potato.map(i => c.plans[i].variety))]
-    const said = `${F.upper(F.plural(potato.length, 'field'))} ${kinds.length === 1 ? `of ${S.variety(kinds[0]).name}` : 'of potatoes'}${open.length > potato.length ? ` and ${open.length - potato.length} resting` : ''}.`
-    return [
-      h('span', { class: 't-label' }, R.seasonCount(c)),
-      h('h2', { class: 't-title' }, first ? 'Your first spring' : 'Spring'),
-      h('p', { class: 'spring-lede' }, first
-        ? `${said} Click a field to change it.`
-        : `${y ? `Last year ended with ${F.money(Math.abs(y.cashEnd))}${y.cashEnd < 0 ? ' owed' : ' in hand'}. ` : ''}${said}`),
-    ]
+  function drawMast(c: S.Campaign): Child {
+    return [h('h1', null, 'Spring'), h('span', { class: 't-label' }, R.seasonCount(c))]
   }
 
   function drawRows(c: S.Campaign): Child {
     const folds = springFolds(ctx, c, onTry, () => { open = null; ctx.dirty() })
-    const first = c.history.length === 0
-    return folds.map((f, k) => {
-      const on = open === f.id
-      return [
-        // In the first spring the ways to grow the farm wait under one quiet line.
-        first && k === 1 ? h('p', { class: 'fold-group', k: 'fold-group' }, 'When you want more') : null,
-        h('div', { class: `fold${on ? ' open' : ''}`, k: `fold-${f.id}` },
-          h('button', { class: 'fold-row', type: 'button', testid: f.open, 'aria-expanded': String(on), 'aria-controls': on ? `fold-${f.id}` : null, onclick: () => toggle(f.id) },
-            icon(f.glyph, 'ic fold-ic'),
-            h('span', { class: 'fold-name' }, f.name),
-            h('span', { class: 'fold-state' }, f.state),
-            h('span', { class: 'fold-fig num' }, f.figure ?? ''),
-            icon(on ? 'up' : 'next', 'ic s fold-chev')),
-          on ? h('div', { class: 'fold-body', id: `fold-${f.id}`, testid: f.testid }, f.body()) : null),
-      ]
-    })
+    const phone = ctx.layout() === 'narrow'
+    // On a phone the folds after the people stand as one row of buttons until one is opened (design/spring.phone.html).
+    const later = phone ? folds.filter(f => f.id !== 'fields' && f.id !== 'people' && f.id !== open) : []
+    return [
+      folds.filter(f => !later.includes(f)).map(f => {
+        const on = open === f.id
+        return h('div', { class: 'cat-fold', k: `fold-${f.id}` },
+          fold({ icon: f.glyph, name: f.name, state: phone ? f.short ?? f.state : f.state, figure: f.figure, open: on, controls: on ? `fold-${f.id}` : undefined, testid: f.open, onclick: () => toggle(f.id) }),
+          on ? h('div', { class: 'cat-open', id: `fold-${f.id}`, testid: f.testid }, f.body()) : null)
+      }),
+      later.length ? h('div', { class: 'fold more', role: 'group', 'aria-label': 'The other folds', k: 'fold-more' },
+        later.map(f => h('button', { class: 'btn', type: 'button', testid: f.open, 'aria-expanded': 'false', onclick: () => toggle(f.id) }, icon(f.glyph, 'i'), f.name))) : null,
+    ]
   }
 
   function drawFoot(c: S.Campaign): Child {
@@ -315,16 +301,18 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
     const over = after < S.OPERATING_LIMIT
     const m = S.mortgageInfo(c)
     const due = S.NOTE_PAYMENT + S.LIVING + Math.round(m.principal + m.interest)
+    const what = pc.rent || pc.wages ? `with ${F.list([pc.rent ? `rent ${F.money(pc.rent)}` : '', pc.wages ? `wages ${F.money(pc.wages)}` : ''].filter(Boolean))}` : ''
     return [
-      h('div', { class: 'spring-money' },
-        h('p', { class: `plan-money${over ? ' over' : ''}`, testid: 'plan-money' },
-          h('span', { class: 'pm-main' }, 'This plan ', h('strong', { class: 'num' }, F.money(pc.total))),
-          pc.rent || pc.wages ? h('span', { testid: 'plan-rent' }, `with ${F.list([pc.rent ? `rent ${F.money(pc.rent)}` : '', pc.wages ? `wages ${F.money(pc.wages)}` : ''].filter(Boolean))}`) : null,
-          h('span', null, over ? 'more than the bank will lend' : after < 0 ? 'on the spring loan ' : 'from cash, leaving ', over ? null : h('strong', { class: 'num' }, F.money(Math.abs(after)))),
-          h('span', null, `due at year end ${F.money(due)}`)),
-        h('button', { class: 'tlink', type: 'button', testid: 'money-open', onclick: () => openMoney(ctx) }, 'The money')),
-      over ? h('p', { class: 'spring-warn', role: 'alert' }, 'Rest a field or plant saved seed: the bank will not lend more for the spring.') : null,
-      h('button', { class: 'btn primary big spring-start', type: 'button', testid: 'begin-season', onclick: begin }, 'Start the season', icon('play', 'ic s')),
+      h('div', { class: `plan-money${over ? ' over' : ''}`, testid: 'plan-money' },
+        h('p', { class: 'lead' }, h('span', null, 'This plan', what ? h('span', { class: 'it quiet', testid: 'plan-rent' }, ` ${what}`) : null), h('span', { class: 'dots' }),
+          h('b', { class: 'num big' }, F.money(pc.total))),
+        h('p', { class: 'lead quiet pm-loan' }, h('span', { class: 'it' }, over ? 'More than the bank will lend' : after < 0 ? 'On the spring loan' : 'From cash, leaving'), h('span', { class: 'dots' }),
+          over ? null : h('span', { class: 'num' }, F.money(Math.abs(after)))),
+        h('p', { class: 'lead quiet' }, h('span', { class: 'it' }, 'Due at the year end'), h('span', { class: 'dots' }), h('span', { class: 'num c-red' }, F.money(due)))),
+      over ? h('p', { class: 't-caption c-red', role: 'alert' }, 'Rest a field or plant saved seed: the bank will not lend more for the spring.') : null,
+      h('div', { class: 'blank-go' },
+        h('button', { class: 'btn go wide', type: 'button', testid: 'begin-season', onclick: begin }, 'Start the season', icon('arrow', 'i')),
+        h('button', { class: 'btn quiet', type: 'button', testid: 'money-open', onclick: () => openMoney(ctx) }, 'The money')),
     ]
   }
 
@@ -336,14 +324,14 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
       const c = app.campaign
       if (!c) return false
       const t = e.target as HTMLElement
-      const onPlate = !!t.closest?.('.plate')
+      const onTag = !!t.closest?.('.plate, .tag')
       const onControl = !!t.closest?.('button, input, a')
       if (e.key === 'Escape') {
         if (app.selection.length) { app.select(-1); return true }
         if (open) { open = null; ctx.dirty(); return true }
         return false
       }
-      if (e.key === 'Tab' && (!onControl || onPlate) && app.selection.length) {
+      if (e.key === 'Tab' && (!onControl || onTag) && app.selection.length) {
         app.select(step(heldFields(c), app.selected, e.shiftKey))
         ;(document.activeElement as HTMLElement | null)?.blur?.()
         return true
@@ -376,13 +364,11 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
         if (was && !ctx.reduced()) { card.classList.remove('in'); void card.offsetWidth; card.classList.add('in') }
       } else note = ''
       const state = [c.year, c.history.length, c.plans, c.fields.map(f => [f.tenure, f.cover]), c.seedStock.length, app.settings.units, layout]
-      patch(head, JSON.stringify(state), () => drawHead(c))
-      // On a phone the folds stand as a row of chips until one is opened, so the land keeps its room.
-      rows.classList.toggle('chips', layout === 'narrow' && !open)
+      patch(mast, JSON.stringify([c.year, c.yearIdx]), () => drawMast(c))
       patch(rows, JSON.stringify([...state, open, c.applicants.map(a => a.id), c.crew.map(u => [u.id, u.wage]), c.offers.map(x => x.id), c.contracts.map(k => k.id),
         c.upgrades, c.mortgages.map(m => Math.round(m.owed)), c.sundaysOff, Math.round(c.cash), c.buildings.length]), () => drawRows(c))
       patch(foot, JSON.stringify([S.planCosts(c), Math.round(c.cash), c.mortgages.map(m => Math.round(m.owed)), app.settings.units]), () => drawFoot(c))
-      el.style.setProperty('--sheet-h', `${Math.round(sheet.offsetHeight)}px`)
+      el.style.setProperty('--foot-h', `${Math.round(foot.offsetHeight)}px`)
       // The one thing to do here is under the keyboard from the start.
       if (!focused && !ctx.papers.isOpen()) {
         const start = foot.querySelector<HTMLElement>('[data-k="begin-season"]')
@@ -396,9 +382,11 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
     insets() {
       const t = top.el.getBoundingClientRect().bottom
       const s = sheet.getBoundingClientRect()
-      const low = card.hidden ? innerHeight : card.getBoundingClientRect().top
-      if (ctx.layout() === 'narrow') return [t, 0, innerHeight - Math.min(s.top, low) + 8, 0]
-      return [t, innerWidth - s.left + 8, innerHeight - low + (card.hidden ? 0 : 8), 0]
+      if (ctx.layout() === 'narrow') {
+        const low = card.hidden ? s.top : Math.min(s.top, card.getBoundingClientRect().top)
+        return [t, 0, innerHeight - low + 8, 0]
+      }
+      return [t, innerWidth - s.left + 8, 0, card.hidden ? 0 : card.getBoundingClientRect().right + 8]
     },
     frame: () => P.frame(),
     dispose() { P.dispose() },

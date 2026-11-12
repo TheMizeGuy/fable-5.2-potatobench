@@ -51,7 +51,7 @@ export const CUES: CueSpec[] = [
   { id: 'brushed', on: 'hedgerows cut back', what: 'Two swings of a brush hook, a stem parting after each', rank: 1, gap: JOB_GAP, play: farm.brushed },
   { id: 'sample', on: 'a test dig', what: 'The hill\'s tubers laid on a wooden tray one at a time', rank: 3, gap: 0.5, share: 'barrel', play: (r, t, n) => cue.barrel(r, t, 'sample', n || 5) },
   { id: 'dug', on: 'a field dug', what: 'A basket tipped into the barrel, slowing as the last tubers settle', rank: 3, gap: 0.5, share: 'barrel', play: (r, t) => cue.barrel(r, t, 'dig', 0) },
-  { id: 'ticket', on: 'weighed: the crop is in and the weigh ticket cut', what: 'The scale: the grader clacking five times as the needle comes round, the ticket fed out, the numbering machine, and the Weighed stamp, the one heavy stamp of the season', rank: 3, gap: 1, play: farm.ticket },
+  { id: 'ticket', on: 'the scale\'s face laid down for a weighed crop (sounded by the interface, in time with the reveal)', what: 'The scale: the grader clacking five times as the needle comes round, the ticket fed out, the numbering machine, and the Weighed stamp, the one heavy stamp of the season', rank: 3, gap: 1, play: farm.ticket },
   { id: 'tearOff', on: 'a coupon torn off the weigh ticket (sounded by the interface: no event of the game marks it)', what: 'Paper torn along its perforation', rank: 1, gap: 0.3, play: farm.tearOff },
   { id: 'sold', on: 'sold, delivered, a contract filled, the cellar overflowing to the buyer', what: 'Two coins on a wooden counter', rank: 1, gap: 0.4, play: (r, t) => (cue.sold(r, t), t + 0.35) },
 
@@ -96,7 +96,7 @@ export interface Play { id: string; arg: number }
 
 const SAME: Record<string, string> = {
   planted: 'planted', hilled: 'hilled', sprayed: 'sprayed', watered: 'watered', rocks: 'rocks', brushed: 'brushed',
-  dug: 'dug', weighed: 'ticket', sold: 'sold', overflow: 'sold', delivered: 'sold', contractFilled: 'sold',
+  dug: 'dug', sold: 'sold', overflow: 'sold', delivered: 'sold', contractFilled: 'sold',
   felled: 'felled', stumped: 'stumped', tiled: 'tiled', logsSold: 'logs', building: 'begun', built: 'built',
   hired: 'hired', quit: 'left', poached: 'left', skillUp: 'better', wornOut: 'wornOut', unhappy: 'unhappy', hurt: 'hurt',
   accepted: 'signed', rented: 'signed', raise: 'signed', foreman: 'signed', stumping: 'signed', tiling: 'signed',

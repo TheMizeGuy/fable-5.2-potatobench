@@ -1,149 +1,22 @@
-/* The opening and the spring: the two screens that are mostly land, with a little paper on them. *//* ---------------------------------------------------------------- the opening */
-
-/* The benchmark's credit: quiet, in the corner the name leaves free. */
-
-/* ---------------------------------------------------------------- spring: the sheet beside the land */
-
-.spring:not(.sys, .sys *){ --sheet-w: clamp(344px, 28vw, 412px); }
-.spring[data-layout='mid']:not(.sys, .sys *){ --sheet-w: 360px; }
-.spring[data-layout='short']:not(.sys, .sys *){ --sheet-w: min(360px, 46vw); }/* The selected field's card keeps to the land the sheet leaves free. */
-
-.season.spring .bottom:not(.sys, .sys *){ right: calc(var(--sheet-w) + 2 * var(--sp-3)); grid-template-areas: 'card'; }
-.spring-sheet:not(.sys, .sys *){
-  position: absolute;
-  right: max(var(--sp-3), env(safe-area-inset-right, 0px));
-  bottom: max(var(--sp-3), env(safe-area-inset-bottom, 0px));
-  width: var(--sheet-w);
-  max-height: calc(100% - var(--top, 56px) - 2 * var(--sp-3));
-  display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
-  animation: sheet-side var(--t-move) var(--ease-out) var(--t-exit) backwards;
-}
-.spring-body:not(.sys, .sys *){ min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--sp-4) var(--sp-4) var(--sp-2); }
-.spring-head:not(.sys, .sys *){ display: grid; gap: var(--sp-h); padding-bottom: var(--sp-3); border-bottom: 3px double var(--rule-strong); }
-.spring-head .t-label:not(.sys, .sys *){ color: var(--ink-3); }
-.spring-lede:not(.sys, .sys *){ margin-top: var(--sp-1); font-family: var(--serif); font-size: var(--t-body); line-height: 22px; color: var(--ink-2); }
-
-.spring-rows:not(.sys, .sys *){ display: grid; }
-.fold:not(.sys, .sys *){ border-bottom: 1px dotted var(--rule-strong); }
-.fold-row:not(.sys, .sys *){
-  display: grid;
-  grid-template-columns: 20px auto minmax(0, 1fr) auto 16px;
-  align-items: center;
-  gap: var(--sp-2);
-  width: 100%;
-  min-height: 44px;
-  padding: var(--sp-1) var(--sp-1);
-  margin: 0 calc(-1 * var(--sp-1));
-  width: calc(100% + 2 * var(--sp-1));
-  border-radius: var(--radius);
-  text-align: left;
-  transition: background-color var(--t-quick) var(--ease-out);
-}
-.fold-ic:not(.sys, .sys *){ color: var(--ink-2); }
-.fold-name:not(.sys, .sys *){ font-weight: 600; white-space: nowrap; }
-.fold-state:not(.sys, .sys *){ min-width: 0; font-size: var(--t-small); line-height: 18px; color: var(--ink-2); }
-.fold-fig:not(.sys, .sys *){ font-size: var(--t-small); line-height: 18px; font-weight: 600; color: var(--ink-2); white-space: nowrap; }
-.fold-chev:not(.sys, .sys *){ color: var(--ink-3); }
-.fold.open > .fold-row:not(.sys, .sys *){ background: var(--paper-2); }
-.fold-group:not(.sys, .sys *){ margin-top: var(--sp-4); font-size: var(--t-label); line-height: 16px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
-.fold-body:not(.sys, .sys *){ display: grid; gap: var(--sp-2); padding: var(--sp-2) 0 var(--sp-3); animation: fade var(--t-base) var(--ease-out); }
-.fold-lede:not(.sys, .sys *){ font-size: var(--t-small); line-height: 18px; color: var(--ink-2); }
-.fold-sub:not(.sys, .sys *){ margin-top: var(--sp-2); font-family: var(--serif); font-size: var(--t-body); line-height: 20px; font-weight: 600; }
-.fold-list:not(.sys, .sys *){ display: grid; }
-.fold-item:not(.sys, .sys *), .fold-list > li:not(:has(.fold-item)):not(.sys, .sys *){
-  display: grid;
-  grid-template-columns: 16px auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--sp-2);
-  width: 100%;
-  min-height: var(--hit-s);
-  padding: 0 var(--sp-1);
-  border-radius: var(--radius);
-  font-size: var(--t-small);
-  line-height: 18px;
-  text-align: left;
-}
-.fold-list > li.hired:not(.sys, .sys *){ grid-template-columns: 28px auto minmax(0, 1fr) auto; padding: var(--sp-1) 0; border-bottom: 1px dotted var(--rule); }
-.fi-name:not(.sys, .sys *){ font-weight: 600; white-space: nowrap; }
-.fi-what:not(.sys, .sys *){ min-width: 0; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.fi-fig:not(.sys, .sys *){ color: var(--ink-2); white-space: nowrap; }
-.fold-end:not(.sys, .sys *){ display: flex; justify-content: flex-end; }
-.hall:not(.sys, .sys *){ display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
-.hall > .sub:not(.sys, .sys *){ flex: 1 1 100%; }
-.fold-body .equip li:not(.sys, .sys *){ padding: var(--sp-2) 0; }
-.eq-name:not(.sys, .sys *){ font-family: var(--serif); font-size: var(--t-body); line-height: 20px; }
-.fold-body .offers:not(.sys, .sys *){ grid-template-columns: minmax(0, 1fr); gap: var(--sp-2); }
-.fold-body .offer:not(.sys, .sys *){ padding: var(--sp-2) var(--sp-3); }
-.fold-body .seg:not(.sys, .sys *){ display: flex; }
-@media (hover: hover) {
-  .fold-row:hover:not(.sys, .sys *), .fold-item:hover:not(.sys, .sys *){ background: var(--paper-2); }
-}/* The signed contracts, on the paper. */
-
-.spring-foot:not(.sys, .sys *){ display: grid; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4) var(--sp-4); border-top: 1px solid var(--rule-strong); background: var(--paper); border-radius: 0 0 var(--radius) var(--radius); }
-.spring-money:not(.sys, .sys *){ display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sp-3); }
-.spring-sheet .plan-money:not(.sys, .sys *){ display: grid; gap: 0; font-size: var(--t-small); line-height: 18px; color: var(--ink-2); }
-.spring-sheet .plan-money strong:not(.sys, .sys *){ color: var(--ink); font-size: var(--t-small); font-weight: 700; }
-.spring-sheet .plan-money .pm-main:not(.sys, .sys *){ font-size: var(--t-body); line-height: 24px; color: var(--ink); }
-.spring-sheet .plan-money .pm-main strong:not(.sys, .sys *){ font-size: var(--t-head); }
-.spring-sheet .plan-money.over .pm-main strong:not(.sys, .sys *){ color: var(--bad); }
-
-.spring-warn:not(.sys, .sys *){ font-size: var(--t-small); line-height: 18px; color: var(--bad); }
-.spring-start:not(.sys, .sys *){ width: 100%; font-size: var(--t-lede); }/* A tract's clearing as a short track: fell, stumps, rocks, field. */
-
-.clear-track:not(.sys, .sys *){ display: flex; gap: var(--sp-h); font-size: var(--t-label); line-height: 16px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
-.clear-track li:not(.sys, .sys *){ flex: 1 1 0; padding: var(--sp-1) var(--sp-2); border-top: 3px solid var(--night-line); color: var(--cream-2); }
-.clear-track li.done:not(.sys, .sys *){ border-color: var(--sage); color: var(--cream-2); }
-.clear-track li.now:not(.sys, .sys *){ border-color: var(--gold); color: var(--cream); }/* People asking for work: a card each, in their own colours. */
-
-.person-cards:not(.sys, .sys *){ display: grid; gap: var(--sp-2); }
-.person-card:not(.sys, .sys *){ display: grid; gap: var(--sp-2); padding: var(--sp-3); background: var(--paper-hi); border: 1px solid var(--rule); border-radius: var(--radius); }
-.pc-head:not(.sys, .sys *){ display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: var(--sp-3); align-items: center; }
-.pc-name:not(.sys, .sys *){ font-family: var(--serif); font-size: var(--t-lede); line-height: 22px; font-weight: 600; }
-.pc-trait:not(.sys, .sys *){ font-size: var(--t-small); line-height: 18px; color: var(--ink-2); }
-.pc-trait strong:not(.sys, .sys *){ color: var(--ink); }
-.pc-text:not(.sys, .sys *){ font-size: var(--t-small); line-height: 18px; color: var(--ink-2); }
-.pc-foot:not(.sys, .sys *){ display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); }
-.pc-foot strong:not(.sys, .sys *){ font-size: var(--t-head); line-height: 24px; }
-.face:not(.sys, .sys *){ flex: none; }
-.face-ground:not(.sys, .sys *){ fill: var(--paper-2); stroke: var(--rule-strong); stroke-width: 0.6; }
-.instrument .face-ground:not(.sys, .sys *){ fill: var(--night-2); stroke: var(--night-line); }
-.skills:not(.sys, .sys *){ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-h) var(--sp-4); font-size: var(--t-label); line-height: 16px; }
-.skills li:not(.sys, .sys *){ display: grid; grid-template-columns: 64px minmax(0, 1fr) 16px; gap: var(--sp-2); align-items: center; color: var(--ink-2); }
-.skills li.best:not(.sys, .sys *){ color: var(--ink); font-weight: 700; }
-.sk-bar:not(.sys, .sys *){ position: relative; height: 6px; background: var(--paper-2); box-shadow: inset 0 0 0 1px var(--rule-strong); }
-.sk-bar i:not(.sys, .sys *){ position: absolute; inset: 0 auto 0 0; background: var(--ink-3); }
-.skills li.best .sk-bar i:not(.sys, .sys *){ background: var(--good); }
-.sk-n:not(.sys, .sys *){ text-align: right; }/* ---------------------------------------------------------------- spring on a phone: the sheet along the bottom */
-
-.spring[data-layout='narrow'] .spring-sheet:not(.sys, .sys *){
-  left: 0;
-  right: 0;
-  bottom: 0;
-  width: auto;
-  max-height: 60vh;
-  max-height: 60dvh;
-  border-width: 1px 0 0;
-  border-radius: var(--radius) var(--radius) 0 0;
-  animation-name: sheet-in;
-}
-.spring[data-layout='narrow'] .spring-body:not(.sys, .sys *){ padding: var(--sp-3) var(--sp-4) var(--sp-1); }
-.spring[data-layout='narrow'] .spring-foot:not(.sys, .sys *){ padding: var(--sp-2) var(--sp-4) max(var(--sp-3), env(safe-area-inset-bottom, 0px)); border-radius: 0; }
-.spring[data-layout='narrow'] .spring-head:not(.sys, .sys *){ grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; padding-bottom: var(--sp-2); }
-.spring[data-layout='narrow'] .spring-head .t-title:not(.sys, .sys *){ grid-row: 1; font-size: var(--t-head); line-height: 24px; }
-.spring[data-layout='narrow'] .spring-head .t-label:not(.sys, .sys *){ grid-row: 1; grid-column: 2; }
-.spring[data-layout='narrow'] .spring-lede:not(.sys, .sys *){ display: none; }
-.spring-rows.chips:not(.sys, .sys *){ display: flex; flex-wrap: wrap; gap: var(--sp-2); padding: var(--sp-3) 0 var(--sp-1); }
-.spring-rows.chips .fold:not(.sys, .sys *){ border: 0; }
-.spring-rows.chips .fold-group:not(.sys, .sys *){ display: none; }
-.spring-rows.chips .fold-row:not(.sys, .sys *){ grid-template-columns: 20px auto; width: auto; margin: 0; padding: 0 var(--sp-3) 0 var(--sp-2); min-height: var(--hit); border: 1px solid var(--rule-strong); background: var(--paper-hi); }
-.spring-rows.chips .fold-state:not(.sys, .sys *), .spring-rows.chips .fold-fig:not(.sys, .sys *), .spring-rows.chips .fold-chev:not(.sys, .sys *){ display: none; }/* With a field picked, the sheet keeps only its money line and the start, so the card has the room. */
-
-.spring[data-layout='narrow'].selected .spring-body:not(.sys, .sys *){ display: none; }
-.season.spring[data-layout='narrow'] .bottom:not(.sys, .sys *){ left: var(--sp-2); right: var(--sp-2); bottom: calc(var(--sheet-h, 120px) + var(--sp-2)); }
-.season.spring[data-layout='narrow'] .plan-card:not(.sys, .sys *){ max-height: calc(100vh - var(--top, 56px) - var(--sheet-h, 120px) - 24px); max-height: calc(100dvh - var(--top, 56px) - var(--sheet-h, 120px) - 24px); }
-.spring[data-layout='short'] .spring-sheet:not(.sys, .sys *){ bottom: var(--sp-2); max-height: calc(100% - var(--top, 44px) - 2 * var(--sp-2)); }
-.spring[data-layout='short'] .spring-body:not(.sys, .sys *){ padding: var(--sp-2) var(--sp-3) var(--sp-1); }
-.spring[data-layout='short'] .spring-foot:not(.sys, .sys *){ padding: var(--sp-2) var(--sp-3); }
-.spring[data-layout='short'] .spring-lede:not(.sys, .sys *), .spring[data-layout='short'] .fold-group:not(.sys, .sys *){ display: none; }
-.season.spring[data-layout='short'] .plan-card:not(.sys, .sys *){ max-height: calc(100vh - var(--top, 44px) - 24px); }
+/* What is left of the old papers for the screens not yet in the system; it stops at .sys. */
+.spring:not(.sys, .sys *) { --sheet-w: clamp(344px, 28vw, 412px); }
+.spring[data-layout='mid']:not(.sys, .sys *) { --sheet-w: 360px; }
+.spring[data-layout='short']:not(.sys, .sys *) { --sheet-w: min(360px, 46vw); }
+.season.spring .bottom:not(.sys, .sys *) { right: calc(var(--sheet-w) + 2 * var(--sp-3)); grid-template-areas: 'card'; }
+.fold:not(.sys, .sys *) { border-bottom: 1px dotted var(--rule-strong); }
+.hall:not(.sys, .sys *) { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.hall > .sub:not(.sys, .sys *) { flex: 1 1 100%; }
+.clear-track:not(.sys, .sys *) { display: flex; gap: var(--sp-h); font-size: var(--t-label); line-height: 16px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.clear-track li:not(.sys, .sys *) { flex: 1 1 0; padding: var(--sp-1) var(--sp-2); border-top: 3px solid var(--night-line); color: var(--cream-2); }
+.clear-track li.done:not(.sys, .sys *) { border-color: var(--sage); color: var(--cream-2); }
+.clear-track li.now:not(.sys, .sys *) { border-color: var(--gold); color: var(--cream); }
+.person-card:not(.sys, .sys *) { display: grid; gap: var(--sp-2); padding: var(--sp-3); background: var(--paper-hi); border: 1px solid var(--rule); border-radius: var(--radius); }
+.face:not(.sys, .sys *) { flex: none; }
+.skills:not(.sys, .sys *) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-h) var(--sp-4); font-size: var(--t-label); line-height: 16px; }
+.skills li:not(.sys, .sys *) { display: grid; grid-template-columns: 64px minmax(0, 1fr) 16px; gap: var(--sp-2); align-items: center; color: var(--ink-2); }
+.skills li.best:not(.sys, .sys *) { color: var(--ink); font-weight: 700; }
+.sk-bar:not(.sys, .sys *) { position: relative; height: 6px; background: var(--paper-2); box-shadow: inset 0 0 0 1px var(--rule-strong); }
+.sk-bar i:not(.sys, .sys *) { position: absolute; inset: 0 auto 0 0; background: var(--ink-3); }
+.skills li.best .sk-bar i:not(.sys, .sys *) { background: var(--good); }
+.sk-n:not(.sys, .sys *) { text-align: right; }
+.season.spring[data-layout='narrow'] .bottom:not(.sys, .sys *) { left: var(--sp-2); right: var(--sp-2); bottom: calc(var(--sheet-h, 120px) + var(--sp-2)); }

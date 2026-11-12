@@ -42,8 +42,10 @@ export interface Hud {
 export interface Sound {
   frame(dtMs: number): void
   dispose(): void
+  // A cue by its name in the director's list, for a moment only the interface sees (the scale landing, a coupon torn).
+  cue?(id: string, arg?: number): void
 }
 
 export type CreateFieldView = (canvas: HTMLCanvasElement, app: App) => FieldView
-export type MountHud = (root: HTMLElement, app: App, view: FieldView) => Hud
+export type MountHud = (root: HTMLElement, app: App, view: FieldView, sound?: Sound) => Hud
 export type CreateSound = (app: App) => Sound

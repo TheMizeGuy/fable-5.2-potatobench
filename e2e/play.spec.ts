@@ -224,7 +224,7 @@ test('a later year on the farmstead: an applicant hired, land on the mortgage, a
   const crew = page.getByTestId('crew')
   const pick = await game<{ id: number; name: string; ask: number }>(page, `(() => { const a = c.applicants.find(x => x.trait !== 'homebody') ?? c.applicants[0]; return { id: a.id, name: a.name, ask: a.ask } })()`)
   await crew.getByTestId(`applicant-hire-${pick.id}`).click()
-  await expect(crew.locator('li.hired')).toContainText(pick.name)
+  await expect(crew.locator('li.cat-hired')).toContainText(pick.name)
   await expect(page.getByTestId('plan-money')).toContainText(`wages ${money(pick.ask)}`)
   await page.getByTestId('crew-close').click()
   const hand = await game<number>(page, `c.crew.find(u => u.name === ${JSON.stringify(pick.name)}).id`)

@@ -66,6 +66,22 @@ const frameJuly: Step = async page => {
   await closeAll(page)
 }
 
+// Dig day: the first crop dug, hauled in and weighed, so its ticket comes as a player sees it, on the scale, once the
+// land has shown the dig. hold: what the reveal holds still on for the frame ('sweep', 'tear'; src/ui/dig.ts).
+const REVEAL_MS = 3800
+const DELIVER = `${BIGGER}; for (let i = 0; i < 14; i++) if (c.plans[i].crop === 'potato' && c.fields[i].tenure !== 'none') app.do({ t: 'plan', field: i, plan: { crop: 'potato', variety: 'kennebec', seed: 'certified' } }); app.do({ t: 'begin' })`
+async function toTicket(page: Page, setup: string, hold = ''): Promise<void> {
+  if (hold) await page.evaluate(h => { document.documentElement.dataset.hold = h }, hold)
+  await q(page, `${setup}; q.run(999, ['sell'], 'lot'); { const a = q.g().app; const s = a.campaign.season; for (let k = 0; k < 12 && !s.fields.some(f => f.weighed); k++) a.do({ t: 'day' }); a.setSpeed(0) }`)
+  // Whatever else the run raised is put away (a paper the ticket waits behind, a test-dig tray left open); never the ticket.
+  for (let i = 0; i < 60 && !(await page.getByTestId('weighin').count()); i++) {
+    if (await page.locator('.dialog').count()) await page.keyboard.press('Escape')
+    await page.waitForTimeout(500)
+  }
+  await page.evaluate(() => document.querySelector<HTMLElement>('[data-testid="sample-close"]')?.click())
+  await page.getByTestId('weighin').waitFor({ timeout: 10_000 })
+}
+
 const STATES: State[] = [
   // Each season frame in design/, in the game, to set beside the frame's picture.
   { name: 'frame-season', what: 'design/season.html: July, five people, nothing selected', sizes: [...MAIN, 'land'], run: frameJuly },
@@ -118,13 +134,17 @@ const STATES: State[] = [
     await page.waitForTimeout(2600)
     void size
   } },
-  { name: 'weigh-in', what: 'Dig day: the weigh-in', sizes: ALL, run: async (page, size) => {
-    await q(page, `q.start(1987, 3); q.run(999, ['sell'], 'lot')`)
-    await closeAll(page)
-    const lot = await q(page, `const c = q.g().app.campaign; const l = c.lots.find(l => l.open); return { id: l.id, field: l.field }`) as { id: number; field: number }
-    await selectField(page, size, lot.field)
-    await page.getByTestId(`weighin-${lot.id}`).click()
-    await page.getByTestId('weighin').waitFor({ timeout: 5000 }).catch(() => {})
+  { name: 'weigh-in', what: 'Dig day: the weigh ticket laid down after the scale', sizes: ALL, run: async page => { await toTicket(page, `q.start(1987, 3)`); await page.waitForTimeout(REVEAL_MS) } },
+  { name: 'weigh-in-reveal', what: 'Dig day: the platform scale, the needle held mid-sweep', sizes: [...MAIN, 'laptop', 'land'], run: async page => {
+    await toTicket(page, `q.start(1987, 3)`, 'sweep')
+    await page.locator('.scale-face').waitFor({ timeout: 5000 }).catch(() => {})
+    await page.waitForTimeout(1600)
+  } },
+  { name: 'weigh-in-reckoning', what: 'Dig day: the full reckoning behind the ticket', sizes: MAIN, run: async page => {
+    await toTicket(page, `q.start(1987, 3)`)
+    await page.waitForTimeout(REVEAL_MS)
+    await page.getByTestId('reckoning-open').click()
+    await page.getByTestId('reckoning').waitFor({ timeout: 5000 }).catch(() => {})
   } },
   { name: 'season-done', what: 'Everything dug: closing out the season', sizes: MAIN, run: async page => { await q(page, `q.start(1987, 3); q.run(999, ['sell'])`); await closeAll(page) } },
   { name: 'end-early', what: 'Ending the season early: the confirmation', sizes: MAIN, run: async (page, size) => {
@@ -154,6 +174,7 @@ const STATES: State[] = [
   // The bigger farm.
   { name: 'plan-land', what: 'Spring: land to rent or buy, found from the land fold, its card open', sizes: ALL, run: async page => { await q(page, `q.g().app.newGame(1987, 3)`); await page.getByTestId('land-open').click(); await page.getByTestId('fold-land-10').click() } },
   { name: 'plan-contracts', what: 'Spring: the contracts offered', sizes: [...MAIN, 'small'], run: async page => { await q(page, `q.g().app.newGame(1987, 3)`); await page.getByTestId('contracts-open').click() } },
+  { name: 'plan-people', what: 'Spring: the people fold opened, three asking for work (design/spring.html)', sizes: [...MAIN, 'small', 'tiny'], run: async page => { await q(page, `q.g().app.newGame(1987, 3)`); await page.getByTestId('crew-open').click() } },
   { name: 'plan-crew', what: 'Spring: hiring and letting go', sizes: MAIN, run: async page => { await q(page, `q.g().app.newGame(1987, 3); q.g().app.do({ t: 'hire', kind: 'hand' })`); await page.getByTestId('crew-open').click() } },
   { name: 'plan-bigger', what: 'Spring on the bigger farm: rented land, crews, a contract signed', sizes: ALL, run: async page => { await q(page, BIGGER) } },
   { name: 'plan-bigger-field', what: 'Spring on the bigger farm: a rented field\'s card, picked by its number', sizes: MAIN, run: async page => { await q(page, BIGGER); await page.keyboard.press('7') } },
@@ -170,13 +191,13 @@ const STATES: State[] = [
     const who = page.getByTestId(`queue-who-${id}`)
     if (await who.count()) { await page.getByTestId(`queue-${id}`).focus(); await who.click() } else await page.getByTestId(`queue-${id}`).click()
   } },
-  { name: 'weigh-in-deliver', what: 'Dig day on contract: the weigh ticket offers the delivery', sizes: ALL, run: async (page, size) => {
-    await q(page, `${BIGGER}; for (let i = 0; i < 14; i++) if (c.plans[i].crop === 'potato' && c.fields[i].tenure !== 'none') app.do({ t: 'plan', field: i, plan: { crop: 'potato', variety: 'kennebec', seed: 'certified' } }); app.do({ t: 'begin' }); q.run(999, ['sell'], 'lot')`)
-    await closeAll(page)
-    const lot = await q(page, `const c = q.g().app.campaign; const l = c.lots.find(l => l.open); return { id: l.id, field: l.field }`) as { id: number; field: number }
-    await q(page, `q.g().app.select(${lot.field})`)
-    await page.getByTestId(`weighin-${lot.id}`).click()
-    await page.getByTestId('weighin').waitFor({ timeout: 5000 }).catch(() => {})
+  { name: 'weigh-in-deliver', what: 'Dig day on contract: the weigh ticket offers the delivery', sizes: ALL, run: async page => { await toTicket(page, DELIVER); await page.waitForTimeout(REVEAL_MS) } },
+  { name: 'weigh-in-torn', what: 'Dig day on contract: the delivery coupon torn off, held', sizes: MAIN, run: async page => {
+    await toTicket(page, DELIVER)
+    await page.waitForTimeout(REVEAL_MS)
+    await page.evaluate(() => { document.documentElement.dataset.hold = 'tear' })
+    await page.locator('#ui [data-testid^="lot-deliver-"]').click()
+    await page.waitForTimeout(400)
   } },
   { name: 'cellar-houses', what: 'Winter with the Dufour potato house and a second one at home, a winter contract open', sizes: [...MAIN, 'small', 'land'], run: async page => {
     await q(page, `const { app } = q.g(); app.newGame(1987, 3); const c = app.campaign; app.do({ t: 'rent', field: 10 }); c.cash += 30000; app.do({ t: 'buy', upgrade: 'house2' })
@@ -189,7 +210,7 @@ const STATES: State[] = [
   { name: 'how-keys', what: 'How to play, with every key and order unfolded', sizes: MAIN, run: async page => { await page.getByTestId('how-open').first().click(); await page.getByTestId('how-keys').click() } },
 
   // The farmstead's papers.
-  { name: 'plan-tract', what: 'Spring: the farm\'s own woodlot, its clearing and what it yields', sizes: MAIN, run: async page => { await q(page, `q.g().app.newGame(1987, 3)`); await page.getByTestId('field-14').click() } },
+  { name: 'plan-tract', what: 'Spring: the farm\'s own woodlot, its clearing and what it yields', sizes: MAIN, run: async page => { await q(page, `q.g().app.newGame(1987, 3)`); await page.getByTestId('fields-open').click(); await page.getByTestId('fold-field-14').click() } },
   { name: 'plan-equipment', what: 'Spring: the equipment fold, with what each needs first', sizes: MAIN, run: async page => { await q(page, `q.g().app.newGame(1987, 3)`); await page.getByTestId('equipment-open').click() } },
   { name: 'plan-mortgage', what: 'A later spring with land bought on the mortgage: the bank fold', sizes: MAIN, run: async page => {
     await q(page, `q.start(1987, 3); q.year(3); const { app } = q.g(); app.do({ t: 'next' }); app.campaign.cash += 40000; app.do({ t: 'buyLand', field: 6 })`)

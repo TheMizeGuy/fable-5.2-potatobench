@@ -22,6 +22,8 @@ export interface Ctx {
   say(text: string, level?: Level): void
   // Read out to screen readers only: what a sighted player can already see happen.
   announce(text: string): void
+  // A sound only the interface knows the moment of (src/audio/director.ts names them): 'ticket', 'tearOff'.
+  cue(id: string): void
   run(cmd: Cmd): Result
   layout(): Layout
   touch(): boolean
@@ -122,6 +124,10 @@ export interface PaperSpec {
   sticky?: boolean
   // The paper draws its own heading; the title is still its accessible name.
   bare?: boolean
+  // The body is a whole object of its own (the weigh ticket, the office file): no sheet round it, no heading drawn.
+  plain?: boolean
+  // A gothic line over the heading: where the paper comes from ('From the almanac', 'Cannot be undone').
+  kicker?: string
   body: (close: () => void) => Child
   // Actions that stay in view below the scrolling body.
   foot?: (close: () => void) => Child
@@ -134,8 +140,8 @@ export interface PaperSpec {
 interface Open { el: HTMLElement; back: HTMLElement | null; spec: PaperSpec; at: number }
 
 let paperSeq = 0
-// How long anything takes to leave: the same figure as --t-exit in the stylesheet.
-export const EXIT_MS = 160
+// How long anything takes to leave: the same figure as --t-leave in the stylesheet.
+export const EXIT_MS = 200
 
 // A paper opened from the keyboard hands the focus back when it closes; one opened by hand does not, so that
 // Space stays the clock's.
@@ -157,7 +163,7 @@ export class Papers {
     this.layer = layer
     this.covered = covered
     this.app = app
-    this.shade = h('div', { class: 'shade', hidden: true })
+    this.shade = h('div', { class: 'veil shade sys', hidden: true })
     // A tap meant for what was under the paper a moment ago must not close it unseen.
     this.shade.addEventListener('click', () => {
       const top = this.stack[this.stack.length - 1]
@@ -180,15 +186,18 @@ export class Papers {
       closed = true
       this.remove(entry)
     }
+    const plain = !!spec.plain
     const el = h('section', {
-      class: `paper dialog ${spec.size ?? 'medium'}${spec.cls ? ` ${spec.cls}` : ''}`,
+      class: `dialog sys ${spec.size ?? 'medium'}${plain ? ' plain' : ' sheet'}${spec.cls ? ` ${spec.cls}` : ''}`,
       role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': `${id}-t`, testid: spec.testid, tabindex: '-1',
     },
-    h('header', { class: `paper-head${spec.bare ? ' bare' : ''}` },
-      h('h2', { id: `${id}-t`, class: spec.bare ? 'sr' : 't-title' }, spec.title),
-      h('button', { class: 'icon-btn', type: 'button', 'aria-label': spec.closeLabel ?? 'Close', testid: 'paper-close', onclick: close }, icon('close'))),
-    h('div', { class: 'paper-body', 'data-scroll': 'paper' }, spec.body(close)),
-    spec.foot ? h('div', { class: 'paper-foot' }, spec.foot(close)) : null)
+    h('header', { class: `dlg-head${spec.bare || plain ? ' bare' : ''}` },
+      h('div', null,
+        spec.kicker && !spec.bare && !plain ? h('p', { class: 't-label' }, spec.kicker) : null,
+        h('h2', { id: `${id}-t`, class: spec.bare || plain ? 'sr' : 't-title' }, spec.title)),
+      plain ? null : h('button', { class: 'close', type: 'button', 'aria-label': spec.closeLabel ?? 'Close', testid: 'paper-close', onclick: close }, icon('close', 'i'))),
+    h('div', { class: 'dlg-body', 'data-scroll': 'paper' }, spec.body(close)),
+    spec.foot ? h('div', { class: 'dlg-foot' }, spec.foot(close)) : null)
     const entry: Open = { el, back, spec, at: performance.now() }
     if (this.stack.length === 0 && this.app.screen === 'season' && !this.resume) {
       this.resume = { speed: this.app.speed }
@@ -198,7 +207,7 @@ export class Papers {
     this.layer.append(el)
     this.sync()
     // A body long enough to scroll has to be reachable from the keyboard.
-    const body = el.querySelector<HTMLElement>('.paper-body')!
+    const body = el.querySelector<HTMLElement>('.dlg-body')!
     const reach = () => { if (body.isConnected && body.scrollHeight > body.clientHeight + 1) { body.tabIndex = 0; body.setAttribute('role', 'group'); body.setAttribute('aria-label', spec.title) } }
     reach()
     setTimeout(reach, 700)
@@ -292,17 +301,20 @@ export class Papers {
   }
 }
 
+// A question before a step: the kit's confirmation. danger: it cannot be undone, and the step wears the hazard border.
 export function confirmPaper(ctx: Ctx, o: { title: string; text: Child; yes: string; no?: string; danger?: boolean }): Promise<boolean> {
   return new Promise(resolve => {
     let answered = false
     ctx.papers.open({
       title: o.title,
+      kicker: o.danger ? 'Cannot be undone' : undefined,
       testid: 'confirm',
       size: 'small',
-      body: () => h('div', { class: 'stack' }, o.text),
+      cls: 'confirm',
+      body: () => h('div', { class: 'dlg-text' }, o.text),
       foot: close => [
-        h('button', { class: `btn ${o.danger ? 'danger solid' : ''}`, type: 'button', testid: 'confirm-ok', onclick: () => { answered = true; resolve(true); close() } }, o.yes),
-        h('button', { class: 'btn primary', type: 'button', testid: 'confirm-cancel', autofocus: true, onclick: () => { answered = true; resolve(false); close() } }, o.no ?? 'Cancel'),
+        h('button', { class: `btn${o.danger ? ' hazard' : ''}`, type: 'button', testid: 'confirm-ok', onclick: () => { answered = true; resolve(true); close() } }, o.yes),
+        h('button', { class: 'btn', type: 'button', testid: 'confirm-cancel', autofocus: true, onclick: () => { answered = true; resolve(false); close() } }, o.no ?? 'Cancel'),
       ],
       onClose: () => { if (!answered) resolve(false) },
     })

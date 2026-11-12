@@ -27,8 +27,8 @@ function start(): void {
   const app = new App(world)
   const canvas = document.getElementById('field') as HTMLCanvasElement
   const view = createFieldView(canvas, app)
-  const hud = mountHud(document.getElementById('ui') as HTMLElement, app, view)
   const sound = createSound(app)
+  const hud = mountHud(document.getElementById('ui') as HTMLElement, app, view, sound)
 
   // A fixed seed and year from the address bar make a run repeatable: ?year=1987&seed=42
   const q = new URLSearchParams(location.search)

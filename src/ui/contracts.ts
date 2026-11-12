@@ -4,6 +4,7 @@ import { patch, type Ctx } from './core.ts'
 import { h, type Child } from './dom.ts'
 import * as F from './fmt.ts'
 import { icon } from './icons.ts'
+import { range } from './system/parts.ts'
 import { offContract, yearWord } from './rules.ts'
 
 const DUE_SHORT: Record<S.Due, string> = { harvest: 'by fall', winter: 'by March' }
@@ -65,54 +66,74 @@ function farmHas(c: S.Campaign, id: S.VarietyId): string {
   return `${F.mass(have)} of No. 1 ${name} in hand${out ? `, and ${F.plural(out, 'field')} still to dig` : ''}.`
 }
 
-function facts(rows: [string, Child][]): HTMLElement {
-  return h('dl', { class: 'offer-facts' }, rows.map(([k, v]) => h('div', null, h('dt', { class: 't-label' }, k), h('dd', null, v))))
+// What the fields of a contract's variety look like giving: in spring, the plan's fields at a usual crop and either
+// side of it; in the season, what is delivered plus the estimates still in the ground.
+function giving(c: S.Campaign, id: S.VarietyId, delivered = 0): { lo: number; hi: number; n: number } | null {
+  if (c.phase === 'plan') {
+    const n = plannedFields(c, id)
+    return n ? { lo: n * S.CONTRACT_CWT_MIN * 0.7, hi: n * S.CONTRACT_CWT_MIN * 1.3, n } : null
+  }
+  if (c.phase !== 'season' || !c.season) return null
+  let lo = 0, hi = 0, n = 0
+  for (let i = 0; i < S.FIELD_COUNT; i++) {
+    if (!S.held(c, i)) continue
+    const f = S.fieldInfo(c, i)
+    if (f.variety !== S.variety(id).name || !f.estimate) continue
+    lo += f.estimate.lo * S.FIELD_ACRES
+    hi += f.estimate.hi * S.FIELD_ACRES
+    n++
+  }
+  return n ? { lo: delivered + lo, hi: delivered + hi, n } : null
+}
+
+// A contract as a range: what is promised (the rule) against what the fields look like giving (the hatching), and
+// what is delivered (the violet mark).
+function contractRange(c: S.Campaign, id: S.VarietyId, cwt: number, delivered: number): { el: HTMLElement; said: string } {
+  const g = giving(c, id, delivered)
+  const max = Math.max(cwt, g?.hi ?? 0, delivered) * 1.15
+  const said = g ? `the fields look like giving ${F.mass(g.lo)} to ${F.mass(g.hi)} against the ${F.mass(cwt)} promised` : `nothing planted to it against the ${F.mass(cwt)} promised`
+  return { el: range({ lo: g?.lo ?? 0, hi: g?.hi ?? 0, max, mark: delivered > 0 ? delivered : undefined, promise: cwt, label: said }), said }
 }
 
 function signedCard(c: S.Campaign, k: S.ContractInfo): HTMLElement {
-  const short = !k.settled && k.needed > 1e-6
-  return h('article', { class: 'offer signed', testid: `contract-${k.id}` },
-    h('header', { class: 'offer-head' }, h('h3', { class: 't-head' }, k.buyer), h('span', { class: 'sub' }, `${k.varietyName} · ${k.settled ? 'closed' : 'signed'}`)),
-    facts([
-      ['Delivered', h('span', { class: 'num' }, `${F.mass(k.delivered)} of ${F.mass(k.cwt)}`)],
-      ['Price', h('span', { class: 'num' }, F.price(k.price))],
-      ['Due', k.dueBy],
-      [k.settled ? 'Penalty' : 'Short today', h('span', { class: `num${k.penalty > 0 ? ' bad-text' : ''}` }, k.penalty > 0 ? F.money(-k.penalty) : 'none')],
-    ]),
-    short ? h('p', { class: 'sub' }, farmHas(c, k.variety)) : null)
+  const r = contractRange(c, k.variety, k.cwt, k.delivered)
+  return h('article', { class: 'offer signed cat-offer', testid: `contract-${k.id}` },
+    h('p', { class: 'lead' }, icon(k.needed <= 1e-6 ? 'check' : 'contract', 'i'), h('b', null, k.buyer), h('span', { class: 'it quiet' }, k.varietyName), h('span', { class: 'dots' }),
+      h('span', { class: 'num' }, F.price(k.price))),
+    r.el,
+    h('p', { class: 't-caption' }, `${F.mass(k.delivered)} of ${F.mass(k.cwt)} delivered, due ${k.dueBy}. ${F.upper(r.said)}.`,
+      k.penalty > 0 ? h('span', { class: 'c-red' }, ` ${k.settled ? 'Penalty' : 'Short today'}: ${F.money(-k.penalty)}.`) : null))
 }
 
 function offerCard(ctx: Ctx, c: S.Campaign, o: S.OfferInfo, after: () => void): HTMLElement {
   const v = S.variety(o.variety)
   const vs = o.price / o.usual - 1
-  return h('article', { class: 'offer', testid: `offer-${o.id}` },
-    h('header', { class: 'offer-head' }, h('h3', { class: 't-head' }, o.buyer), h('span', { class: 'sub' }, o.varietyName)),
-    facts([
-      ['Wants', h('span', { class: 'num' }, `${F.mass(o.cwt)} of No. 1`)],
-      ['Pays', h('span', { class: 'num' }, `${F.price(o.price)}, ${F.money(o.value)} in all`)],
-      ['Due', o.dueBy],
-      ['Against', h('span', { class: `num${vs < -0.015 ? ' warn-text' : ''}` }, `${F.versus(o.price / o.usual)} ${v.contract ? 'the processing price' : 'a usual year'}`)],
-    ]),
-    h('p', { class: 'sub' }, farmHas(c, o.variety)),
-    v.contract ? h('p', { class: 'sub warn-text' }, `Off contract ${v.name} sells ${offContract()} its usual price.`) : null,
+  const r = contractRange(c, o.variety, o.cwt, 0)
+  return h('article', { class: 'offer cat-offer', testid: `offer-${o.id}` },
+    h('p', { class: 'lead' }, icon('contract', 'i'), h('b', null, o.buyer), h('span', { class: 'it quiet' }, o.varietyName), h('span', { class: 'dots' }),
+      h('span', { class: 'num' }, F.price(o.price))),
+    r.el,
+    h('p', { class: 't-caption' }, `${F.mass(o.cwt)} of No. 1 ${o.dueBy}: ${F.money(o.value)} in all, `,
+      h('span', { class: vs < -0.015 ? 'c-ochre' : null }, `${F.versus(o.price / o.usual)} ${v.contract ? 'the processing price' : 'a usual year'}`), '. ', farmHas(c, o.variety)),
+    v.contract ? h('p', { class: 't-caption c-ochre' }, `Off contract ${v.name} sells ${offContract()} its usual price.`) : null,
     h('button', {
       class: 'btn', type: 'button', testid: `accept-${o.id}`,
       onclick: () => { if (ctx.run({ t: 'accept', offer: o.id }).ok) { ctx.announce(`Signed with ${o.buyer.toLowerCase()}.`); after() } },
     }, 'Accept'))
 }
 
-// What is signed, and in spring what is offered, as cards. after: redraws whatever holds them.
+// What is signed, and in spring what is offered. after: redraws whatever holds them.
 function contractCards(ctx: Ctx, c: S.Campaign, after: () => void): Child {
   const offers = S.offerInfo(c)
   const signed = S.contractInfo(c)
   return [
-    h('p', { class: 'fold-lede' }, `A fixed price for No. 1 delivered by a date. Short on the day costs ${F.pct(S.CONTRACT_PENALTY)} of what is missing.`),
-    signed.length ? [h('h4', { class: 'fold-sub' }, 'Signed'), h('div', { class: 'offers' }, signed.map(k => signedCard(c, k)))] : null,
+    h('p', { class: 't-caption' }, `A fixed price for No. 1 delivered by a date. The hatching is what your fields look like giving; the rule, what is promised. Short on the day costs ${F.pct(S.CONTRACT_PENALTY)} of what is missing.`),
+    signed.length ? [h('p', { class: 't-label cat-sub' }, 'Signed'), h('div', { class: 'offers' }, signed.map(k => signedCard(c, k)))] : null,
     c.phase === 'plan' ? [
-      h('h4', { class: 'fold-sub' }, offers.length ? 'Offered this spring' : 'No more offers this spring'),
+      h('p', { class: 't-label cat-sub' }, offers.length ? 'Offered this spring' : 'No more offers this spring'),
       offers.length ? h('div', { class: 'offers' }, offers.map(o => offerCard(ctx, c, o, after))) : null,
-      h('p', { class: 'sub' }, 'Offers lapse when the season begins.'),
-    ] : h('p', { class: 'sub' }, 'Deliver from the weigh ticket, a dug field\'s card, or the cellar. Harvest contracts close with the season; winter ones at the end of February.'),
+      h('p', { class: 't-caption' }, 'Offers lapse when the season begins.'),
+    ] : h('p', { class: 't-caption' }, 'Deliver from the weigh ticket, a dug field\'s card, or the cellar. Harvest contracts close with the season; winter ones at the end of February.'),
   ]
 }
 
@@ -140,30 +161,18 @@ export function openContracts(ctx: Ctx): void {
       draw()
       return box
     },
-    foot: close => h('button', { class: 'btn primary', type: 'button', testid: 'contracts-close', autofocus: true, onclick: close }, 'Back'),
+    foot: close => h('button', { class: 'btn go', type: 'button', testid: 'contracts-close', autofocus: true, onclick: close }, 'Back'),
   })
 }
 
 // The contracts on the bank board (top.ts): each as a range, what is promised marked against what the fields of its
 // variety look like giving (delivered so far plus the yield estimates still in the ground), with the date it is due.
 export function contractRows(ctx: Ctx): { key(): unknown; part(c: S.Campaign): Child } {
-  function growing(c: S.Campaign, k: S.ContractInfo): { lo: number; hi: number } | null {
-    if (c.phase !== 'season' || !c.season) return null
-    let lo = 0, hi = 0, any = false
-    for (let i = 0; i < S.FIELD_COUNT; i++) {
-      if (!S.held(c, i)) continue
-      const f = S.fieldInfo(c, i)
-      if (f.variety !== k.varietyName || !f.estimate) continue
-      lo += f.estimate.lo * S.FIELD_ACRES
-      hi += f.estimate.hi * S.FIELD_ACRES
-      any = true
-    }
-    return any ? { lo: k.delivered + lo, hi: k.delivered + hi } : null
-  }
+  const growing = (c: S.Campaign, k: S.ContractInfo) => giving(c, k.variety, k.delivered)
   return {
     key() {
       const c = ctx.app.campaign
-      return c ? [S.contractInfo(c).map(k => [k.id, Math.round(k.delivered), Math.round(k.penalty), k.settled]), c.season?.day, ctx.app.settings.units] : 0
+      return c ? [S.contractInfo(c).map(k => [k.id, Math.round(k.delivered), Math.round(k.penalty), k.settled]), c.season?.day, c.phase === 'plan' ? c.plans : 0, ctx.app.settings.units] : 0
     },
     part(c) {
       const ks = S.contractInfo(c)
