@@ -229,7 +229,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
   // 0: clear of every panel; 1: clear only of what it must never cover.
   let tier = 0
   let checked = 0
-  const cam: { base: Sig | null; until: number } = { base: null, until: 0 }
+  const cam: { base: Sig | null; until: number; kind: 'pan' | 'zoom' | 'turn' | 'two' } = { base: null, until: 0, kind: 'pan' }
 
   function papers(): string[] {
     return [...root.querySelectorAll<HTMLElement>('.paper-layer > .dialog:not(.out)')].map(d => d.dataset.testid ?? 'paper')
@@ -246,28 +246,41 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
   // The camera moved by the player: drag or keys (pan), wheel or pinch (zoom), right-drag, twist or Q and E (turn), and
   // the tip. Read from the scene's anchors as each gesture on the land starts and while it goes on, so the camera's own
   // settling is never taken for the player's.
+  // What the gesture was by its input (a left drag or the arrows pans, the wheel zooms, the right button, two fingers,
+  // Q, E and the page keys turn or tip), and whether the land on screen really moved that way.
   function camMoved(): void {
     const b = cam.base
     const s = signature(ctx)
     if (!b || !s) return
     const turn = Math.atan2(Math.sin(s.angle - b.angle), Math.cos(s.angle - b.angle))
-    if (Math.hypot(s.cx - b.cx, s.cy - b.cy) > 40) guide.note('pan')
-    if (Math.abs(s.spread / b.spread - 1) > 0.1) guide.note('zoom')
-    if (Math.abs(turn) > 0.12) guide.note('turn')
-    if (Math.abs(turn) < 0.08 && Math.abs(s.ratio / b.ratio - 1) > 0.1) guide.note('tip')
+    const k = cam.kind
+    if (k === 'pan' && Math.hypot(s.cx - b.cx, s.cy - b.cy) > 40) guide.note('pan')
+    if ((k === 'zoom' || k === 'two') && Math.abs(s.spread / b.spread - 1) > 0.1) guide.note('zoom')
+    if ((k === 'turn' || k === 'two') && Math.abs(turn) > 0.1) guide.note('turn')
+    if (k === 'turn' && Math.abs(s.ratio / b.ratio - 1) > 0.08) guide.note('tip')
   }
-  const CAM_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'q', 'Q', 'e', 'E', 'PageUp', 'PageDown'])
-  function gesture(on: boolean): void {
+  const CAM_KEYS: Record<string, 'pan' | 'turn'> = { ArrowLeft: 'pan', ArrowRight: 'pan', ArrowUp: 'pan', ArrowDown: 'pan', q: 'turn', Q: 'turn', e: 'turn', E: 'turn', PageUp: 'turn', PageDown: 'turn' }
+  const touches = new Set<number>()
+  function gesture(on: boolean, kind: 'pan' | 'zoom' | 'turn' | 'two'): void {
     if (app.screen !== 'season' || !(now?.id === 'look' || now?.id === 'turn')) { cam.base = null; return }
-    if (on) { if (!cam.base) cam.base = signature(ctx); cam.until = performance.now() + 900 }
-    else cam.until = performance.now() + 400
+    if (on) {
+      if (!cam.base || (kind !== cam.kind && kind !== 'pan')) { cam.base = signature(ctx); cam.kind = kind }
+      cam.until = performance.now() + 900
+    } else cam.until = performance.now() + 400
   }
   const onCanvas = (e: Event) => {
-    if ((e.target as Element)?.id !== 'field' || (e.type === 'pointermove' && !(e as PointerEvent).buttons)) return
-    gesture(e.type !== 'pointerup')
+    if ((e.target as Element)?.id !== 'field') return
+    if (e.type === 'wheel') { gesture(true, 'zoom'); return }
+    const p = e as PointerEvent
+    if (p.pointerType === 'touch') { if (e.type === 'pointerdown') touches.add(p.pointerId); else if (e.type === 'pointerup') touches.delete(p.pointerId) }
+    if (e.type === 'pointermove' && !p.buttons) return
+    const kind = touches.size >= 2 ? 'two' : p.buttons & 2 || p.button === 2 ? 'turn' : 'pan'
+    gesture(e.type !== 'pointerup', kind)
   }
-  const onCamKey = (e: KeyboardEvent) => { if (CAM_KEYS.has(e.key)) gesture(e.type === 'keydown') }
+  const onLift = (e: PointerEvent) => touches.delete(e.pointerId)
+  const onCamKey = (e: KeyboardEvent) => { const k = CAM_KEYS[e.key]; if (k) gesture(e.type === 'keydown', k) }
   for (const t of ['pointerdown', 'pointermove', 'pointerup', 'wheel']) document.addEventListener(t, onCanvas, { capture: true, passive: true })
+  document.addEventListener('pointercancel', onLift, true)
   document.addEventListener('keydown', onCamKey, true)
   document.addEventListener('keyup', onCamKey, true)
   function watchCamera(): void {
@@ -389,6 +402,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
       document.removeEventListener('keydown', onKey, true)
       document.removeEventListener('pointerdown', onPointer, true)
       for (const t of ['pointerdown', 'pointermove', 'pointerup', 'wheel']) document.removeEventListener(t, onCanvas, true)
+      document.removeEventListener('pointercancel', onLift, true)
       document.removeEventListener('keydown', onCamKey, true)
       document.removeEventListener('keyup', onCamKey, true)
       slip.remove()
