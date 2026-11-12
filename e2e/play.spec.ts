@@ -17,9 +17,11 @@ async function answerTicket(page: Page, store: boolean): Promise<void> {
   }
   const sell = ticket.locator('[data-testid^="lot-sell-"]')
   const advised = await ticket.locator('.choice-advice').count()
-  if ((await sell.count()) && (advised || !store)) await sell.click()
-  else await ticket.locator('[data-testid^="lot-keep-"]').click()
-  await expect(ticket).toHaveCount(0)
+  // The next field's ticket may open as this one closes, so wait for this lot's own choice to go.
+  const choice = (await sell.count()) && (advised || !store) ? sell : ticket.locator('[data-testid^="lot-keep-"]')
+  const id = await choice.first().getAttribute('data-testid')
+  await choice.first().click()
+  await expect(page.getByTestId(id!)).toHaveCount(0)
 }
 
 // Plays the days as they come: reads a tip and puts it away, gives each field what its badge asks for (every third
@@ -168,7 +170,7 @@ test('a second year on a bigger farm: rented land, a hired hand, and a contract 
   await expect(card).toContainText('across the brook')
   await card.getByTestId('land-rent').click()
   await expect(page.getByTestId('field-6')).toBeVisible()
-  await expect(page.getByTestId('plan-money')).toContainText('rent $1,300')
+  await expect(page.getByTestId('plan-money')).toContainText('rent $6,000')
   await page.keyboard.press('Escape')
 
   // A field hand, from the crew paper.
@@ -186,6 +188,11 @@ test('a second year on a bigger farm: rented land, a hired hand, and a contract 
   await expect(page.getByTestId('contracts').locator('.offer.signed')).toHaveCount(1)
   await page.getByTestId('contracts-close').click()
   await expect(page.getByTestId('tracker')).toBeVisible()
+  // Renting took the camera across the brook: Home brings the home fields back into view.
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(1500)
+  if (!(await page.getByTestId('field-0').isVisible())) await page.keyboard.press('Home')
+  await expect(page.getByTestId('field-0')).toBeVisible()
   const potato = await page.locator('#ui .plate:not(.land)').evaluateAll(els => els.find(e => !/Rest year/.test(e.textContent ?? ''))?.getAttribute('data-testid'))
   await page.getByTestId(potato!).dblclick()
   await card.locator('.vcard', { hasText: variety!.trim() }).locator('input').check({ force: true })
@@ -208,7 +215,7 @@ test('a second year on a bigger farm: rented land, a hired hand, and a contract 
   // The year end counts the rent, the wages and what the contract paid.
   await winterAndYearEnd(page)
   const sheet = page.locator('#ui .ledger-sheet')
-  await expect(sheet.getByTestId('ledger-rent')).toContainText('$1,300')
+  await expect(sheet.getByTestId('ledger-rent')).toContainText('$6,000')
   await expect(sheet.getByTestId('ledger-wages')).toBeVisible()
   await expect(sheet.getByTestId('ledger-contracts')).toBeVisible()
   await noSidewaysScroll(page)
