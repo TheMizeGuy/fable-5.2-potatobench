@@ -95,6 +95,49 @@ describe('spraying', () => {
   })
 })
 
+describe('spraying this season', () => {
+  it('not this year: nothing asks for a spray, the routine orders none, the player may still order one, and next year asks again', () => {
+    const { w, c } = farm(1)
+    expect(S.sprayWayNow(c)).toBeNull()
+    ok(w, c, { t: 'routine', kind: 'spray', auto: true })
+    expect(S.sprayWayNow(c)).toBe('auto')
+    for (let g = 0; g < 300 && playing(c) && !c.season!.jobs.some(j => j.kind === 'spray'); g++) ok(w, c, { t: 'day' })
+    expect(c.season!.jobs.some(j => j.kind === 'spray' && j.by === 'routine')).toBe(true)
+    ok(w, c, { t: 'sprayWay', way: 'none' })
+    expect(S.apply(w, c, { t: 'sprayWay', way: 'none' }).ok).toBe(false)
+    expect([S.sprayWayNow(c), c.routine.spray]).toEqual(['none', false])
+    expect(c.season!.jobs.some(j => j.kind === 'spray')).toBe(false)
+    let mine = false
+    for (let g = 0; g < 300 && playing(c); g++) {
+      expect(S.advise(w, c).some(a => a.act === 'spray')).toBe(false)
+      expect(S.fieldNeeds(w, c).some(n => n.need?.act === 'spray')).toBe(false)
+      expect(S.pressing(w, c).some(p => p.kind === 'spray')).toBe(false)
+      expect(c.season!.jobs.some(j => j.kind === 'spray' && j.by !== 'you')).toBe(false)
+      const f = c.season!.fields.findIndex(x => x.status === 'growing' && x.emergeDay >= 0 && x.deadDay < 0)
+      if (!mine && f >= 0) { ok(w, c, { t: 'job', kind: 'spray', field: f }); mine = true }
+      ok(w, c, { t: 'day' })
+    }
+    expect(mine).toBe(true)
+    if (c.phase === 'season') ok(w, c, { t: 'endSeason' })
+    while (c.phase === 'cellar') ok(w, c, { t: 'month' })
+    ok(w, c, { t: 'next' })
+    expect(S.sprayWayNow(c)).toBeNull()
+  })
+
+  it('ask me each time leaves the stamps and the orders to the player', () => {
+    const { w, c } = farm(2)
+    ok(w, c, { t: 'sprayWay', way: 'ask' })
+    expect([S.sprayWayNow(c), c.routine.spray]).toEqual(['ask', false])
+    let asked = false
+    for (let g = 0; g < 300 && playing(c); g++) {
+      asked ||= S.fieldNeeds(w, c).some(n => n.need?.act === 'spray')
+      expect(c.season!.jobs.some(j => j.kind === 'spray')).toBe(false)
+      ok(w, c, { t: 'day' })
+    }
+    expect(asked).toBe(true)
+  })
+})
+
 describe('the vine kill', () => {
   // The player kills the vines the evening the coach first asks, as the guide's stamp has them do.
   function killWhenAsked(w: World, c: Campaign, set?: (c: Campaign, field: number) => void): number {

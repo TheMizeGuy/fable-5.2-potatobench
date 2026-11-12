@@ -6,7 +6,7 @@ import * as P from './params.ts'
 import { willDo } from './people.ts'
 import type { Campaign, GameEvent, JobKind, KillWhy, World } from './types.ts'
 import { fieldInfo, forecast, today } from './view.ts'
-import { openLots } from './campaign.ts'
+import { openLots, sprayWayNow } from './campaign.ts'
 import { newPotatoWindow } from './market.ts'
 import { addJob, FIELD_NAMES, JOB_LABEL, letGo, seasonDone, standingBy, workday } from './season.ts'
 import { hasBuilt } from './buildings.ts'
@@ -78,6 +78,7 @@ function everything(world: World, c: Campaign): Advice[] {
   const digNow = s.day >= dayIndex(year, P.DIG_GREEN.month, P.DIG_GREEN.dom)
   const anyBlight = s.fields.some((_, i) => fieldInfo(c, i).blightHills > 0)
   const killBy = dayIndex(year, 8, 8)
+  const noSpray = sprayWayNow(c) === 'none'
 
   const spring = s.day < dayIndex(year, 5, 15)
   for (let i = 0; i < P.FIELD_COUNT; i++) {
@@ -115,7 +116,7 @@ function everything(world: World, c: Campaign): Advice[] {
       if (tending && up && f.blightHills > 0 && f.blightHills <= 8 && f.blightKnown < 0.04) {
         add(i, 'rogue', `Pull the blighted ${f.blightHills === 1 ? 'hill' : 'hills'} in ${n}.`, `${f.blightHills === 1 ? 'One hill is' : `${f.blightHills} hills are`} throwing spores. Out of the field, they cannot.`, true)
       }
-      if (tending && up && f.protect < 0.35 && (t.watch || (blightSoon && t.sv >= 12) || anyBlight)) {
+      if (tending && up && f.protect < 0.35 && !noSpray && (t.watch || (blightSoon && t.sv >= 12) || anyBlight)) {
         const why = anyBlight ? 'There is blight on the farm. Protectant only works if it is on the leaf before the spores.'
           : !t.watch ? 'Blight weather is forecast and the watch is close. Protectant has to be on the leaf before the spores.'
             : f.protect > 0.02 ? 'The blight watch is on and the protectant is wearing thin.' : 'The blight watch is on and the leaves are unprotected.'
