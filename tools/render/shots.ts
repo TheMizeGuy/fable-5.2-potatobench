@@ -596,6 +596,46 @@ shots.push(
   { name: 'k7-plan', size: K_SIZE, insets: NONE, setup: async page => { await working(page); await view(page, { frame: 'land', x: 9, z: 1, dist: 66, yaw: 0, pitch: 1.5, tilt: 0, fov: 40 }); await frames(page, 10); await scaleBar(page) } },
 )
 
+// ---- The land at its true size: the crop through its stages from the field tier and from close to, the months,
+// blight, the dig, the stages of clearing a tract, the whole farm, the whole map, and a lane at eye level.
+const FIELD_TIER: View = { frame: 'land', x: 8, z: -1, dist: 27, yaw: -0.44 }
+const tierOn = (field: number): View => ({ frame: 'field', field, x: 0.5, z: 0.5, dist: 320, yaw: -0.44 })
+const nearOn = (field: number): View => ({ frame: 'field', field, x: 0.72, z: 0.62, dist: 30, yaw: -0.95, pitch: 0.3 })
+const midOn = (field: number): View => ({ frame: 'field', field, x: 0.72, z: 0.62, dist: 95, yaw: -0.95, pitch: 0.36 })
+const G_SIZE: [number, number] = [1920, 1080]
+const cropShot = (name: string, year: number, day: number, skip: string[], v: View, after = ''): Shot => ({
+  name, size: G_SIZE, setup: async page => {
+    await playTo(page, year, 5, day, skip)
+    console.log('  ', await playUntil(page, skip, name.includes('bloom') ? `return sim.fieldInfo(c, 5).bloom > 0.9 && sim.today(app.world, c).sky === 'clear' ? 'bloom' : ''` : SKY('clear')))
+    if (after) console.log('  ', await page.evaluate(after))
+    await settle(page)
+    await view(page, v)
+    await frames(page, 12)
+  },
+})
+const STAGES: [string, number, string[]][] = [
+  ['1-bare', 128, []], ['2-planted', 147, []], ['3-emerged', 163, []], ['4-closed', 186, []], ['5-bloom', 190, []],
+  ['6-dying', 248, ['dig']], ['7-dead', 260, ['dig']],
+]
+const BLIGHT_STATES = `(() => { const { app, sim } = window.__county; return [0, 2, 4, 5].map(i => { const f = sim.fieldInfo(app.campaign, i); return i + ':' + f.status + ' blight hills ' + f.blightHills + ' canopy ' + f.canopy }).join(' | ') })()`
+const FIELD_STATES = `(() => { const { app, sim } = window.__county; return [0, 1, 2, 3, 4, 5].map(i => { const f = sim.fieldInfo(app.campaign, i); return i + ':' + f.status }).join(' | ') })()`
+shots.push(
+  ...STAGES.map(([stage, day, skip]) => cropShot(`g1-${stage}-field`, 1977, day, skip, FIELD_TIER, FIELD_STATES)),
+  ...STAGES.map(([stage, day, skip]) => cropShot(`g2-${stage}-near`, 1977, day, skip, nearOn(5))),
+  cropShot('g1-8-dug-field', 1977, 268, [], FIELD_TIER, FIELD_STATES),
+  cropShot('g2-8-dug-near', 1977, 268, [], nearOn(2)),
+  cropShot('g3-oats-mid', 1977, 196, [], midOn(3)),
+  cropShot('g3-closed-mid', 1977, 186, [], midOn(5)),
+  cropShot('g3-emerged-mid', 1977, 163, [], midOn(5)),
+  cropShot('g4-blight-field', 1979, 205, ['spray', 'rogue'], tierOn(4), BLIGHT_STATES),
+  cropShot('g4-blight-near', 1979, 205, ['spray', 'rogue'], nearOn(4)),
+  ...([['m05', 135], ['m06', 166], ['m07', 196], ['m08', 227], ['m09', 258], ['m10', 288]] as [string, number][]).map(([m, day]) => cropShot(`g5-${m}-field`, 1977, day, [], FIELD_TIER)),
+  ...CLEARING.map(([stage, edit]) => landShot(`g6-tract-${stage}`, 190, edit.replaceAll('@', '14'), tierOn(14))),
+  cropShot('g7-whole-farm', 1977, 196, [], { frame: 'land', x: 9, z: 1, dist: 96 }),
+  { name: 'g8-whole-map', size: G_SIZE, setup: async page => { await bigFarm(page, { rent: ALL_LAND, hands: 2, operator: true, until: 196 }); await playUntil(page, [], SKY('clear')); await settle(page); await page.evaluate(() => (window as any).__countyField.home()); await settle(page); await page.evaluate(() => (window as any).__countyField.home()); await settle(page); await frames(page, 20) } },
+  cropShot('g9-lane-eye', 1977, 196, [], { frame: 'land', x: 10, z: 5.6, dist: 1.5, yaw: -1.5708, pitch: 0.07, tilt: 0 }),
+)
+
 const browser = await chromium.launch({
   args: flat ? ['--disable-webgl', '--disable-3d-apis'] : soft ? ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] : [process.platform === 'win32' ? '--use-angle=d3d11' : '--use-angle=metal', '--ignore-gpu-blocklist', '--enable-gpu'],
 })

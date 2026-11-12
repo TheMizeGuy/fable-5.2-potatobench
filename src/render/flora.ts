@@ -7,10 +7,7 @@ import {
 } from 'three'
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { PARCELS, TRACTS } from '../sim/index.ts'
-import {
-  DUFOUR, DUFOUR_BARN, DUFOUR_HOUSE, DUFOUR_POTATO_HOUSE, FARM, FARM_CENTER, FD, FIELDS, FW, HOME, HOME_WOODS, KEEP_CLEAR, LAND, POND, POTATO_HOUSE, WIDE, brookHalf,
-  brookZ, fieldMask, groundY, hillRoadZ, oursAt, regionAt, ridgeWoodAt, roadDist, townRoadZ, tractAt, woodFront, woodsAt,
-} from './layout.ts'
+import { DUFOUR, DUFOUR_BARN, DUFOUR_HOUSE, DUFOUR_POTATO_HOUSE, FARM, FARM_CENTER, FD, FIELDS, FW, HOME, HOME_WOODS, KEEP_CLEAR, LAND, POND, POTATO_HOUSE, WIDE, brookHalf, brookZ, fieldMask, groundY, hillRoadZ, oursAt, regionAt, ridgeWoodAt, roadDist, townRoadZ, tractAt, woodFront, woodsAt, WALLS, GATEWAYS, YARD_AT, ROAD, BRIDGE_X } from './layout.ts'
 import { fbm2, hash2, rng, smooth } from './noise.ts'
 import { K, KV, S, toWorld } from './scale.ts'
 import { SNOW_RIME_TREE, depthFor, linear, patch, sway, type Patch } from './shaders.ts'
@@ -248,6 +245,7 @@ export class Flora {
   private near: Record<string, Kind>
   private far: Record<string, Kind>
   private nearAt = NEAR_AT.high
+  private thin: InstancedMesh[] = []
   private v = new Vector3()
 
   constructor() {
@@ -377,6 +375,55 @@ export class Flora {
         if (r() < (low ? 0.94 : 0.7)) trees.bush.push({ x: jx, z: jz, s: (0.8 + r() * 0.9) * T, r: r(), hue: r(), kind: 3 })
         else hard({ x: jx, z: jz, s: ((low ? 2.4 : 3.6) + r() * 2.6) * T, r: r(), hue: r() }, 0.25)
       }
+    }
+    // The farm's own open ground is not empty: old maples left standing in the pasture, alone and in twos and threes,
+    // thorn and wild apple, a spruce clump on a knoll; a row of maples down the lane; trees grown up along the walls;
+    // alder all along the brook.
+    const yards = Object.values(YARD_AT)
+    const free = (x: number, z: number, pad: number) => open(x, z) && fieldMask(x, z, pad) < 0.01 && tractAt(x, z, pad) < 0 && roadDist(x, z) > WIDE.road / 2 + 2.6
+      && ridgeWoodAt(x, z) < 0.02 && yards.every(y => x < y.x0 - 5 || x > y.x1 + 5 || z < y.z0 - 5 || z > y.z1 + 5)
+    for (let n = 0, put = 0; n < 5200 && put < 250; n++) {
+      const x = LAND.x0 + r() * (LAND.x1 - LAND.x0), z = FARM.z0 + r() * (brookZ(x) - 14 - FARM.z0)
+      if (oursAt(x, z, 2 * S) < 0.9) continue
+      const clump = fbm2(x / 70 + 9.1, z / 70 + 2.3), knoll = fbm2(x / 110 + 31.7, z / 110 + 5.9)
+      if (!(clump > 0.66 || r() < 0.035) || !free(x, z, 16)) continue
+      put++
+      const t = { x, z, s: 0, r: r(), hue: r() }
+      if (knoll > 0.68) soft({ ...t, s: (5.4 + r() * 3.6) * T })
+      else if (r() < 0.22) trees.bush.push({ ...t, s: (1.5 + r() * 1.3) * T, kind: 3 })
+      else hard({ ...t, s: (6.2 + r() * 3.4) * T }, 0.08)
+    }
+    // Down the lane from the dooryard to the town road, a maple every few rods on the side away from the fields.
+    for (let k = 5; k < ROAD.length - 1; k++) {
+      const [ax, az] = ROAD[k], [bx, bz] = ROAD[k + 1]
+      const len = Math.hypot(bx - ax, bz - az), nx = -(bz - az) / len, nz = (bx - ax) / len
+      for (let d = (k * 7) % 11; d < len; d += 15 + r() * 5) {
+        const side = nx > 0 ? 1 : -1, off = WIDE.road / 2 + 4.2 + r() * 1.2
+        const x = ax + ((bx - ax) * d) / len + nx * side * off, z = az + ((bz - az) * d) / len + nz * side * off
+        if (!free(x, z, 3) || Math.abs(z - brookZ(x)) < brookHalf(x) + 6) continue
+        trees.maple.push({ x, z, s: (7.2 + r() * 2.4) * T, r: r(), hue: r(), kind: 0 })
+      }
+    }
+    // Along the farm's walls, where no mower reaches and no field's hedgerow is kept down: brush, and a tree now and then.
+    for (const [x0, z0, x1, z1] of WALLS) {
+      const len = Math.hypot(x1 - x0, z1 - z0)
+      for (let d = 2; d < len; d += 3.2 + r() * 3) {
+        const x = x0 + ((x1 - x0) * d) / len + (r() - 0.5) * 1.6, z = z0 + ((z1 - z0) * d) / len + (r() - 0.5) * 1.6
+        if (hash2(Math.floor(x / 46) + 3, Math.floor(z / 46) + 11) < 0.42) continue
+        if (fieldMask(x, z, 16) > 0.01 || !free(x, z, 2) || GATEWAYS.some(g => Math.hypot(x - g.x, z - g.z) < 9)) continue
+        const q = r()
+        if (q < 0.62) trees.bush.push({ x, z, s: (1.0 + r() * 1.2) * T, r: r(), hue: r(), kind: 3 })
+        else if (q < 0.9) hard({ x, z, s: (3.4 + r() * 3.4) * T, r: r(), hue: r() }, 0.3)
+        else soft({ x, z, s: (4 + r() * 3) * T, r: r(), hue: r() })
+      }
+    }
+    for (let x = LAND.x0 - 60 * K; x < LAND.x1 + 60 * K; x += 3 + r() * 4.5) {
+      if (hash2(Math.floor(x / 34), 77) < 0.3 || Math.abs(x - BRIDGE_X.home) < 14 || Math.abs(x - BRIDGE_X.dufour) < 14) continue
+      const side = r() < 0.6 ? 1 : -1, home = side < 0 && x > FARM.x0 - 4 * K && x < FARM.x1
+      if (home && r() < 0.7) continue
+      const z = brookZ(x) + side * (brookHalf(x) + 0.8 + r() * 3.2)
+      if (tractAt(x, z, 0.8 * T) >= 0 || !open(x, z)) continue
+      trees.bush.push({ x, z, s: (1.3 + r() * (home ? 0.5 : 1.1)) * T, r: r(), hue: 0.2 + 0.3 * r(), kind: 3 })
     }
     // Trees round the neighbours' farmsteads.
     for (const [fx, fz] of FARMSTEADS) {
@@ -522,7 +569,11 @@ export class Flora {
         if (!ch) this.chunks.set(key, (ch = { near: [], far: [], sphere: new Sphere(), fixed: !both }))
         // Drawn from the side of the farm first, so the trees in front hide those behind before they are shaded.
         list.sort((a, b) => b.z - a.z)
-        ch.far.push(this.place(this.far[cls], list, !both))
+        // The far woods can be drawn with every other tree: the first half of each list is an even thinning of it.
+        const ordered = both ? list : [...list.filter((_, n) => n % 2 === 0), ...list.filter((_, n) => n % 2 === 1)]
+        const far = this.place(this.far[cls], ordered, !both)
+        if (!both) { far.userData.all = ordered.length; far.userData.shadow = far.castShadow; this.thin.push(far) }
+        ch.far.push(far)
         if (both) ch.near.push(this.place(this.near[cls], list, false))
       }
     }
@@ -639,6 +690,12 @@ export class Flora {
 
   setTier(tier: 'high' | 'medium' | 'low'): void {
     this.nearAt = NEAR_AT[tier]
+    // The low setting draws half the far woods and none of their shadows; the middle one two thirds.
+    for (const m of this.thin) {
+      const all = m.userData.all as number
+      m.count = tier === 'low' ? Math.ceil(all / 2) : all
+      m.castShadow = tier === 'low' ? false : (m.userData.shadow as boolean)
+    }
   }
 
   // Whole trees in the patches near the camera, simple ones in the rest.
