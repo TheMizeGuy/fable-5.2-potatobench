@@ -558,6 +558,7 @@ export class Fields {
       key: 'county-blossom',
       uniforms: { ...shared, uKeep: { value: new Vector2(0, 1.01) }, uTint: tint, uPix: PIXEL, uShare: bloomShare },
       translucent: 1.4,
+      through: [1, 0.97, 0.9],
       ambient: 0.95,
       blade: true,
       vertexHead: `${PLANT_FN}\nattribute vec4 aFlower;\nuniform float uTint;\nuniform float uPix;\nuniform float uShare;\nvarying vec3 vTint;\nfloat showF;`,

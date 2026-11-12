@@ -59,6 +59,7 @@ export interface Patch {
   fragmentEmissive?: string  // after emissivemap_fragment: edit `totalEmissiveRadiance`
   fragmentEnd?: string       // after the haze: edit `gl_FragColor`
   translucent?: number       // share of the sun that comes through from behind (leaves)
+  through?: [number, number, number]   // the colour light takes coming through (a leaf's yellow-green unless given; a petal's is near white)
   ambient?: number           // share of the sky's light this material takes (inside a canopy takes less)
   rim?: number               // how much a low sun behind it lights its edge (0.3 unless given)
   shine?: number             // share of the sky's reflection it shows (a leaf's bloom of fine hair shows little)
@@ -248,7 +249,7 @@ const SUN_BLOCK = /* glsl */ `
       #else
         float backLit = saturate( dot( - geometryNormal, directLight.direction ) );
       #endif
-      reflectedLight.directDiffuse += sunFull * ( 0.3 + 0.7 * shade ) * backLit * COUNTY_TRANSLUCENT * material.diffuseContribution * vec3( 1.0, 1.16, 0.5 ) * RECIPROCAL_PI;
+      reflectedLight.directDiffuse += sunFull * ( 0.3 + 0.7 * shade ) * backLit * COUNTY_TRANSLUCENT * material.diffuseContribution * COUNTY_THROUGH * RECIPROCAL_PI;
     #endif
   }
 #endif
@@ -317,6 +318,8 @@ export function patch<M extends Material>(mat: M, p: Patch = {}): M {
   const key = p.key ?? `county-${serial++}`
   mat.defines = { ...(mat.defines ?? {}), COUNTY_AMBIENT: (p.ambient ?? 1).toFixed(3), COUNTY_SHINE: (p.shine ?? 1).toFixed(3), COUNTY_RIM: (p.rim ?? 0.3).toFixed(3), ...(p.defines ?? {}) }
   if (p.translucent) mat.defines.COUNTY_TRANSLUCENT = p.translucent.toFixed(3)
+  const through = p.through ?? [1, 1.16, 0.5]
+  mat.defines.COUNTY_THROUGH = `vec3( ${through.map(v => v.toFixed(3)).join(', ')} )`
   if (p.blade) mat.defines.COUNTY_BLADE = 1
   mat.onBeforeCompile = shader => {
     Object.assign(shader.uniforms, U, p.uniforms ?? {})
