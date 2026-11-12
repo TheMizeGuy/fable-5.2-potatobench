@@ -191,6 +191,22 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
     }, 'Keep them up')
   }
 
+  // Felling, rock picking, clearing brush or building with one person on it while someone stands idle who is set never
+  // to do that work: a press lets them help (that work second for them).
+  function helper(c: S.Campaign, j: S.Job, crews: S.CrewInfo[]): Child {
+    if (!(['fell', 'rocks', 'brush', 'build'] as S.JobKind[]).includes(j.kind) || !crews.some(u => u.job?.id === j.id)) return null
+    const skill = S.jobSkill(j.kind)
+    const day = c.season?.day ?? 0
+    const idle = c.crew.find(u => !u.foreman && u.job < 0 && u.prio[skill] === 0 && !S.hurt(u, day) && !S.resting(u) && u.kind !== 'farmer')
+    if (!idle) return null
+    const name = firstName(idle.name)
+    return h('button', {
+      class: 'q-help', type: 'button', testid: `help-${j.id}`, 'aria-label': `${name} stands idle and never does ${SKILL_NAME[skill].toLowerCase()} work: let them help`,
+      title: ctx.touch() ? undefined : `${name} stands idle and never does ${SKILL_NAME[skill].toLowerCase()} work. Press to let them help.`,
+      onclick: () => { const r = ctx.run({ t: 'priority', unit: idle.id, work: skill, level: 2 }); if (r.ok) ctx.announce(`${name} helps with the ${SKILL_NAME[skill].toLowerCase()} work.`) },
+    }, icon('people', 'i'), h('span', { class: 'num' }, '+1'))
+  }
+
   function queue(c: S.Campaign, jobs: S.Job[], crews: S.CrewInfo[], people: S.PersonInfo[], waits: Record<number, string>, many: boolean, room: number, of: Map<number, S.JobOutlook>, press: Child): Child {
     if (!jobs.length) return press ? h('ol', { class: 'queue', 'aria-label': 'Orders' }, h('li', { class: 'q-label t-label', 'aria-hidden': 'true' }, 'On the list'), press) : null
     const touch = ctx.touch()
@@ -235,6 +251,7 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
           o && o.when === 'waiting' && o.unit >= 0 ? h('span', { class: 'q-wait', 'aria-hidden': 'true' }, icon('stale', 'i')) : null,
           by !== 'you' ? h('span', { class: 'q-by', title: touch ? undefined : by === 'routine' ? 'Put on the list by the crew\'s routine' : 'Put on the list by the foreman' }, icon(by === 'routine' ? 'sprout' : 'foreman', 'i')) : null,
           h('span', { class: 'sr' }, `${what}, ${by === 'routine' ? 'put on the list by the routine, ' : by === 'foreman' ? 'put on the list by the foreman, ' : ''}${whoSaid}${j.done > 0 && j.need > 0 ? `, ${F.pct(j.done / j.need)} done` : ''}. ${fateSaid} ${touch ? 'Tap' : 'Click'} for its choices.`)),
+          helper(c, j, crews),
           !lockDig ? h('button', { class: 'q-x', type: 'button', testid: `list-x-${j.id}`, 'aria-label': `${what}: take it off the list`, title: touch ? undefined : 'Take it off the list', onclick: () => cancel(j.id) }, icon('close', 'i')) : null,
           !touch ? h('span', { class: 'q-tools' },
             k > 0 ? h('button', { class: 'q-first', type: 'button', testid: `queue-first-${j.id}`, 'aria-label': `${what}: do it first`, title: 'Do it first', onclick: () => bump(j.id) }, icon('first', 'i')) : null,
@@ -279,6 +296,7 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
       u: crews.map((u, k) => [u.id, u.name, now[k].text, now[k].place, Math.round(now[k].progress * 20), signs[k]?.glyph, signs[k]?.cls, doingGlyph(c, people[k]), doingWord(c, people[k])]),
       pick: app.unit, expanded, pop, popWho, layout, room, touch, h: c.fields.map(f => f.tenure), w: waiting.map(x => x.id), grid: hooks.gridOpen(), hire: hooks.hireShown(), goal,
       next: next ? [next.unit, next.kind, next.field] : 0, stopped: [...stopped],
+      pr: c.crew.map(u => [u.id, u.prio, u.job, u.rest]),
       fate: [...f.of.values()].map(o => [o.id, o.unit, o.when, o.why]), press: f.pressing.map(p => [p.kind, p.field, p.why, p.inWay]),
     }
     el.classList.toggle('busy', jobs.length > 0)

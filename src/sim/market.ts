@@ -25,6 +25,15 @@ export function levelNow(world: World, c: Campaign): number {
   return 1 + (level - 1) * clamp((c.season.day - 212) / 92, 0, 1)
 }
 
+// How far a variety's price still has to move while the year's level comes in with the harvest: 1 once it has.
+// Crop that cannot be sold today (still in the ground, or kept in the cellar) sells at the level the year settles at.
+export function levelToCome(world: World, c: Campaign, id: VarietyId): number {
+  if (c.phase !== 'season' || !c.season) return 1
+  const share = variety(id).contract ? 0.25 : 1
+  const level = world.priceLevel[String(c.year)] ?? 1
+  return (1 + (level - 1) * share) / (1 + (levelNow(world, c) - 1) * share)
+}
+
 function drift(c: Campaign): number {
   let w = 0
   for (let m = 1; m <= c.month; m++) w += hashNormal(c.seed, c.year, m, 991) * 0.035
@@ -123,9 +132,7 @@ export function storeOutlook(world: World, c: Campaign, lot: Lot): { now: number
   const today = inSeason ? c.season!.day : nov1 + c.month * 30
   const curveNow = inSeason ? seasonFactor(c.season!.day) : P.MONTH_CURVE[Math.min(c.month, P.MONTH_CURVE.length - 1)]
   // In season the year's price level is still coming in with the harvest; the cellar sells at the level it settles at.
-  const level = world.priceLevel[String(lot.year)] ?? 1
-  const share = v.contract ? 0.25 : 1
-  const settle = inSeason ? (1 + (level - 1) * share) / (1 + (levelNow(world, c) - 1) * share) : 1
+  const settle = levelToCome(world, c, lot.variety)
   const cwt = lot.grades.no1 + lot.grades.chef + lot.grades.b + lot.grades.no2 + lot.skinned
   // The rot to be expected now: the weigh-in's share, carried through the cellar months already passed.
   const r = { rot: expectedRot(lot), broke: lot.broke }

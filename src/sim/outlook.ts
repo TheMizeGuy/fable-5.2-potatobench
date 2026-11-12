@@ -5,7 +5,8 @@ import { dayIndex, formatDay, withCommas } from './calendar.ts'
 import { buildBlock, buildCost } from './buildings.ts'
 import { apply, held, mortgageDue, openLots, planCosts, stumpBlock, tileBlock } from './campaign.ts'
 import { HOME_YARD, PARCELS, TRACTS } from './farm.ts'
-import { lotValue, basePrice } from './market.ts'
+import { basePrice, gradePrice, levelToCome, lotValue } from './market.ts'
+import { lotCwt, markOdds, skinAt, skinnedShare } from './harvest.ts'
 import * as P from './params.ts'
 import { housingLimit, hiredCount, hurt, jobSkill, resting, SKILL_LABEL, willDo } from './people.ts'
 import { jobCost, pressingWhy, standingBy, tractorsRunning, waitFor, workday } from './season.ts'
@@ -143,6 +144,7 @@ export interface MoneyNow {
   loan: number                     // owed on the spring loan now (in spring: what beginning the season will borrow)
   stored: number                   // the crop in the potato houses and the cellar, at today's price
   growing: number                  // the crop still in the ground, by the estimate, at today's price
+  range: { lo: number; hi: number }   // after, give or take what the crop in the ground may come to
   due: { note: number; household: number; mortgage: number; loan: number; total: number }   // what the year end takes, the loan included
   after: number                    // what the farm would have after the year-end bills if every lot sold today
   parts: MoneyPart[]               // the why of after, largest first
@@ -156,19 +158,35 @@ export function moneyNow(world: World, c: Campaign): MoneyNow {
   const loan = Math.max(0, -cash)
   let stored = 0
   for (const l of openLots(c)) stored += lotValue(world, c, l)
-  let growing = 0
+  let growing = 0, lo = 0, hi = 0
   const s = c.season
   if (c.phase === 'season' && s) {
     for (let i = 0; i < P.FIELD_COUNT; i++) {
       const f = s.fields[i]
-      // What the digger has lifted, in barrels or hauled in, counts at today's price until its lot is made up.
+      // What the digger has lifted, in barrels or hauled in, counts at today's price until its lot is made up, less
+      // the No. 1 the skins will cost it at the weigh-in (harvest.ts, finishLot).
       const lifting = f.lotId >= 0 ? c.lots.find(l => l.id === f.lotId) : undefined
-      if (lifting && !lifting.open && !f.weighed) growing += lotValue(world, c, lifting)
+      const lifted = lifting && !lifting.open && !f.weighed
+        ? lotValue(world, c, lifting) - skinnedShare(skinAt(f, lifting.dugDay)) * lifting.grades.no1 * (gradePrice(world, c, lifting, 'no1') - gradePrice(world, c, lifting, 'no2'))
+        : 0
+      growing += lifted
       if (f.status !== 'growing' && f.status !== 'dead' && f.status !== 'digging') continue
       const e = estimateYield(c, i)
       if (!e) continue
       const left = f.status === 'digging' ? 1 - f.digDone / P.HILLS : 1
-      growing += e.mean * P.FIELD_ACRES * left * P.MARKETABLE_SHARE * basePrice(world, c, f.variety) - (f.status === 'digging' ? 0 : jobCost(c, 'dig'))
+      // The rest at what a cwt of the usual crop brings, leaning on what this field's own has brought as the digger
+      // gets further in; it cannot be sold before it is lifted, by when the year's price level has come further in.
+      const dug = lifting ? lotCwt(lifting) + lifting.grades.cull : 0
+      const odds = markOdds(f, c.fields[i].soil)
+      const usual = (P.MARKETABLE_SHARE - P.MARKETABLE_NO2 * (odds.scab + (1 - odds.scab) * odds.knob)) * basePrice(world, c, f.variety)
+      const own = dug >= 1 ? 1 - left : 0
+      const perCwt = (usual * (1 - own) + (own > 0 ? lifted / dug : 0) * own) * levelToCome(world, c, f.variety)
+      const spread = (1 - own) * P.MARKETABLE_SPREAD / P.MARKETABLE_SHARE
+      const cwt = P.FIELD_ACRES * left
+      const dig = f.status === 'digging' ? 0 : jobCost(c, 'dig')
+      growing += e.mean * cwt * perCwt - dig
+      lo += e.mean * cwt * perCwt - e.lo * cwt * perCwt * (1 - 1.5 * spread)
+      hi += e.hi * cwt * perCwt * (1 + 1.5 * spread) - e.mean * cwt * perCwt
     }
   }
   const m = mortgageDue(c)
@@ -184,7 +202,7 @@ export function moneyNow(world: World, c: Campaign): MoneyNow {
     { label: 'The household', amount: -P.LIVING },
     { label: 'The land mortgage', amount: -mortgage },
   ].filter(p => Math.abs(p.amount) >= 0.5).sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
-  return { cash, loan, stored, growing, due, after, parts }
+  return { cash, loan, stored, growing, range: { lo: after - lo, hi: after + hi }, due, after, parts }
 }
 
 export interface YearStory { year: number; began: number; ended: number; reasons: MoneyPart[] }

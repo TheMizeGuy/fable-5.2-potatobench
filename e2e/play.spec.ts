@@ -368,6 +368,8 @@ test('the same start by keyboard alone', async ({ page, isMobile }) => {
   if (await page.getByTestId('spray-ask').isVisible().catch(() => false)) {
     await page.keyboard.press('Digit2')
     await expect(page.getByTestId('spray-ask')).toBeHidden()
+    // (a Space within a second of an answer is taken as "go on", so the clock keys below wait that second out)
+    await page.waitForTimeout(1100)
   }
   await page.keyboard.press('Tab')
   await expect(page.getByTestId('card')).toBeVisible()

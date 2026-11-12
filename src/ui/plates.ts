@@ -94,6 +94,15 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
     land.dispatchEvent(new WheelEvent('wheel', { deltaX: e.deltaX, deltaY: e.deltaY, deltaMode: e.deltaMode, clientX: e.clientX, clientY: e.clientY, ctrlKey: e.ctrlKey, bubbles: true, cancelable: true }))
   }
   layer.addEventListener('wheel', wheel, { passive: false })
+  const down = () => { app.pressing = true }
+  const up = () => { app.pressing = false }
+  layer.addEventListener('pointerdown', down)
+  document.addEventListener('pointerup', up, true)
+  document.addEventListener('pointercancel', up, true)
+  // A stamp whose order was just given (or whose need went) stays a moment where it was, faded and inert, so the next
+  // press of a run of stamp clicks lands on nothing rather than on the tag beside it.
+  const lastBadge: ({ b: NonNullable<PlateModel['badge']>; until: number } | null)[] = []
+  const FADE_MS = 1500
 
   // A stamp or "on the list" already there is drawn again without stamping it down a second time.
   const was: string[] = []
@@ -115,8 +124,12 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
       if (!m) continue
       const on = app.selection.includes(i)
       const head = m.queue.find(q => q.active) ?? m.queue[0]
-      const b = m.badge
-      patch(wrap, JSON.stringify([m, on, ctx.touch()]), () => tag({
+      const now = performance.now()
+      if (m.badge) lastBadge[i] = { b: m.badge, until: 0 }
+      else if (lastBadge[i] && !lastBadge[i]!.until) { lastBadge[i]!.until = now + FADE_MS; setTimeout(() => ctx.dirty(), FADE_MS + 30) }
+      const fading = !m.badge && lastBadge[i] && now < lastBadge[i]!.until ? lastBadge[i]!.b : null
+      const b = m.badge ?? fading
+      patch(wrap, JSON.stringify([m, on, ctx.touch(), !!fading]), () => tag({
         name: m.name, icon: m.glyph, selected: on, variety: m.sub, listed: head && !m.land ? { icon: head.glyph } : undefined,
         testid: m.land ? `land-${i}` : `field-${i}`, said: m.said, cls: `${m.land ? 'is-land' : ''}${m.cls ? ` ${m.cls}` : ''}${b ? ' has-need' : ''}`.trim() || undefined,
         attrs: {
@@ -128,14 +141,14 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
         },
         onclick: (e: Event) => pick(i, (e as MouseEvent).shiftKey),
         need: b ? need({
-          ink: m.taught ? 'ochre' : b.ink ?? 'ink', next: !!m.taught, icon: b.glyph, label: b.label, testid: `badge-${i}`,
-          attrs: { class: `badge${b.urgent ? ' urgent' : ''}${m.taught ? ' taught' : ''}`, title: ctx.touch() ? undefined : `${b.label} (${INK_SAYS[m.taught ? 'ochre' : b.ink ?? 'ink']})` },
-          onclick: () => o.onBadge(i),
+          ink: m.taught ? 'ochre' : b.ink ?? 'ink', next: !!m.taught, icon: b.glyph, label: b.label, testid: fading ? `fading-${i}` : `badge-${i}`,
+          attrs: { class: `badge${b.urgent ? ' urgent' : ''}${m.taught ? ' taught' : ''}${fading ? ' fading' : ''}`, title: ctx.touch() || fading ? undefined : `${b.label} (${INK_SAYS[m.taught ? 'ochre' : b.ink ?? 'ink']})`, 'aria-hidden': fading ? 'true' : null, tabindex: fading ? '-1' : null },
+          onclick: () => { if (!fading) o.onBadge(i) },
         }) : null,
       }))
-      const now = `${b?.glyph ?? ''}|${head?.glyph ?? ''}`
-      wrap.classList.toggle('still', was[i] === now)
-      was[i] = now
+      const look = `${b?.glyph ?? ''}|${head?.glyph ?? ''}`
+      wrap.classList.toggle('still', was[i] === look)
+      was[i] = look
       wrap.style.zIndex = on ? '5' : m.taught ? '4' : b ? '3' : m.land ? '1' : '2'
     }
     measure()
@@ -423,6 +436,9 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
     dispose() {
       layer.classList.remove('compact', 'far')
       layer.removeEventListener('wheel', wheel)
+      layer.removeEventListener('pointerdown', down)
+      document.removeEventListener('pointerup', up, true)
+      document.removeEventListener('pointercancel', up, true)
       for (const w of wraps) w.remove()
       if (app.hover >= 0) app.setHover(-1)
     },

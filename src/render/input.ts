@@ -54,6 +54,9 @@ export function attachInput(
   const away = () => { app.setHover(-1); app.point(null); if (!downAt) canvas.style.cursor = 'grab' }
 
   const onDown = (e: PointerEvent) => {
+    app.pressing = true
+    // The player's first press on the land ends a Follow: the camera is theirs again.
+    rig.idle = 0
     const p = local(e)
     pointers.set(e.pointerId, p)
     try { canvas.setPointerCapture?.(e.pointerId) } catch { /* the pointer is already gone */ }
@@ -154,6 +157,7 @@ export function attachInput(
       }
     }
     if (pointers.size === 0) {
+      app.pressing = false
       downAt = null
       canvas.style.cursor = app.hover >= 0 ? 'pointer' : 'grab'
     }
