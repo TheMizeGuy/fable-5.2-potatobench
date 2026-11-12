@@ -211,6 +211,198 @@ million), draw two fifths of the triangles in the far views, and on a 120-a-seco
 which setting its first frames choose, and what a frame costs there, has to be read on the machine itself (the menu
 says which setting is drawing and at how many frames a second).
 
+### Frames that come late (after `live-14`)
+
+`tools/render/hitch.ts` keeps the series and not the mean: a July farm with the crop full and people at work is
+zoomed from the field tier to the closest the camera goes, a wheel step at a time, then panned, turned and tipped
+there for twenty seconds, with the clock at 1x and paused, and again with the page's thread slowed four times. Every
+frame's interval, the page's work in it (part by part, from User Timing marks: `src/render/laps.ts`) and the GPU's
+time are kept, and each late frame is laid to what the frame before it held, with the browser's own trace of the
+same seconds (layout, style, garbage collection, tasks, the functions the page's thread was in).
+
+**What made frames late**, largest first:
+
+- Shaders made the first time something close was seen: 250 to 320 ms and 67 to 83 ms, the page's thread waiting on
+  the compiler (`getProgramInfoLog`). Three programs: the crop's own shadow shader and one of the lens passes, once
+  for each load; and the grass's, every time the camera came down again, because every square of grass was let go on
+  the way up and its program with it (100 to 180 ms each time, some of it in the GPU's own process).
+- Grass laid out as the camera came down: 43 to 50 squares a zoom, two a frame, 6 to 25 ms of the page's thread in
+  each such frame (50 to 93 ms with the thread slowed four times).
+- The pace on a display faster than sixty a second (simulated, `tests/pace.test.ts`: no such display is on the test
+  box). A frame was drawn on every second beat by count, so one whose work ran past a single beat (8.3 ms at 120 a
+  second) waited a whole beat more and came 25 ms after the last; and the count itself swung between one and two
+  beats as the cost of a frame swung about one beat. At 120 a second: 8 ms a frame, 276 of 882 frames off their
+  time; 8.5 ms, 481 of 898 with five changes of pace; a cost swinging between 6 and 11 ms, 348 of 1045 with nineteen
+  changes; one frame in twelve at 14 ms, every one of those late.
+- Thrown out, by measurement: the interface (0.2 to 0.6 ms a frame, no layout forced in a frame, 0.15 ms of style);
+  the crop's window of whole plants (uniforms only, 0.05 ms); trees changing level (450 patches a zoom, 0.1 ms; their
+  buffers go to the GPU once); the shadow maps (never two in a frame at the high and middle settings; a frame with
+  the wide one costs 0.3 ms more of the page and 2 to 3 ms more of the GPU, the fine one 0.5 and 0.6).
+- Not the land's, and left for their owners: the game's sound starts at the first key or click and holds the page's
+  thread 130 to 190 ms then (at the opening, in a player's hands); its textures are built the first time each is
+  wanted (`texture()` in `src/audio/synth.ts`, from `seasons.ts` and `work.ts`: 14 ms, 38 ms slowed four times); and
+  with the thread slowed four times a day's turn that brings an alert is one task of 100 to 150 ms (the day's own
+  step 26 to 49 ms, the interface's redrawing 37 to 60 ms and 7 to 18 ms of layout, the land's 15 to 19 ms).
+
+**What was changed.** The shadow passes' shaders and the lens's are compiled with the scene's before the first
+frame (which itself now draws in 0.2 s where it took 0.5 to 0.7), and the grass's with them: a patch of grass with
+nothing in it is kept, so the program is never let go. Grass is laid out a few rows of a square at a time in the
+time the browser has to spare between frames (2 ms of a frame where it tells of none), from half as high again as
+grass is first drawn, and a square once laid is kept (the furthest are let go past 160). A frame is due by the time
+gone since the last and not by a count of beats, and the pace and the picture's size are not put up while the camera
+moves. At the low setting the fine and the middle shadow maps could fall in one frame; no two now do at any setting.
+
+**Before and after** (mizepc2, RTX 2080 Ti, the page's thread at full speed; `before` is `live-14`, the two builds
+turn about in one run; the 99th of a hundred frame intervals, the longest, and the frames over one and a half times
+the middle interval; the middle is 16.7 ms in every row):
+
+| 1512 by 982 at 2 | before: 99th, longest, late | after: 99th, longest, late |
+| --- | --- | --- |
+| zooming in, clock at 1x | 16.8, 317 ms, 3 of 382 | 16.8, 16.8 ms, 0 of 382 |
+| zooming in, paused | 33.4, 183 ms, 10 of 384 | 16.8, 16.8 ms, 0 of 382 |
+| moving at the closest, 1x | 16.8, 200 ms, 1 of 1268 | 16.8, 200 ms, 1 of 1264 |
+| moving at the closest, paused | 16.8, 16.8 ms, 0 of 1263 | 16.8, 16.8 ms, 0 of 1265 |
+
+| 1920 by 1080 at 1 | before | after |
+| --- | --- | --- |
+| zooming in, clock at 1x | 33.2, 250 ms, 2 of 198 | 16.8, 16.8 ms, 0 of 203 |
+| zooming in, paused | 16.8, 16.8 ms, 0 of 202 | 16.8, 16.8 ms, 0 of 201 |
+| moving at the closest, 1x | 16.8, 167 ms, 1 of 1261 | 16.8, 133 ms, 1 of 1262 |
+| moving at the closest, paused | 16.8, 16.8 ms, 0 of 1259 | 16.8, 50 ms, 1 of 1261 |
+
+The one late frame of each "moving, 1x" row is the sound starting at the tool's first key (the tool now starts it
+before it times anything). The 50 ms frame had 11.7 ms of the page's work in it and 6.6 of the GPU's: the box was
+shared with other checks all day. With the page's thread slowed four times the longest task while zooming in fell
+from 274 and 199 ms to 39 and 42 ms (1512 by 982); a frame's own work there is 15 to 20 ms, so a third of the frames
+miss a beat in either build, and a day's turn with an alert is still a task of 100 ms and more.
+
+**The pace, simulated at 120 a second** (twenty seconds; frames whose interval is not a sixtieth of a second):
+
+| a frame's work | before | after |
+| --- | --- | --- |
+| 3, 6 ms | 0 | 0 |
+| 7.5 ms | 93 of 973 | 0 |
+| 8 ms | 276 of 882 | 0 |
+| 8.5 ms | 481 of 898, 5 changes of pace | 0 |
+| 9 ms | 187 of 1113 | 0 |
+| 10, 12, 15 ms | 0 | 0 |
+| swinging 6 to 11 ms | 348 of 1045, 19 changes | 0 |
+| one in twelve at 14 ms | 81 of 978 | 0 |
+
+### The close view: a low frame rate near the ground (after `live-14`)
+
+The owner's fault, in their words: a low frame rate once the camera is close to the ground and the land is drawn in
+its close detail, on a MacBook at two device pixels to one. `tools/render/budget.ts --close` measures the close views
+against the playing view at the high setting: the field and yard tiers as the game frames them, then over a field
+in full crop from the yard tier's distance and from the closest the camera goes (7.5 m), each level across the crop
+and tipped straight down. With `--lift --size=3840x2160` the picture is four times a 1920 by 1080 one (8.3 million
+pixels against the 2.07 million the high setting draws on any screen), to stand in for a graphics chip a quarter as
+quick: the 2080 Ti hides the fault at the laptop's own size.
+
+**What each view costs** (ms from one frame to the next, drawing as fast as it can, and against the playing view;
+one run for each size; triangles and draw calls of a frame, every pass counted):
+
+| view | 2.07 M pixels | 8.3 M pixels | triangles | calls |
+| --- | --- | --- | --- | --- |
+| field tier (the playing view) | 4.4 | 16.5 | 1.56M | 262 |
+| yard tier | 5.6 (1.27x) | 16.0 (0.97x) | 3.15M | 259 |
+| over the crop from 160 m, level | 5.5 (1.25x) | 25.6 (1.55x) | 2.26M | 238 |
+| over the crop from 160 m, tipped down | 2.6 (0.59x) | 12.5 (0.75x) | 2.03M | 121 |
+| closest, level across the crop | 7.0 (1.59x) | 18.8 (1.14x) | 2.95M | 158 |
+| closest, tipped down | 2.6 (0.60x) | 9.1 (0.55x) | 2.50M | 70 |
+
+The box was shared with other checks all day and whole-frame figures moved by half from run to run (the playing
+view at 8.3 M pixels read 10.7, 16.5, 16.8 and 23.9 ms in four runs; at 1512 by 982 and two to one, which is the same
+2.07 M pixel picture, it read 8.1 and 15.6). The renderer's own timer for each part moved less, and says where the
+close view's cost is. Level across the crop from the closest, at 8.3 M pixels, in four runs: the picture 18.7 to
+24 ms, of which **the crop's whole plants 10.1 to 13.7 ms** (0.85M triangles in five draws), trees 5 to 7 (whole
+trees 2.4, cards 1.5 to 2.6, far woods 1.2), the land 0.04; shadow maps 0.1; the lens 2.5 (its soft focus is on only
+this close). The playing view at the same size: the picture 8.8 to 12.3 ms (land 2.3, far woods 2.3, cards 1.5 to
+2.5, sky 0.8, the fields painted 0.8), shadow maps 0.4 to 0.9, the lens 1.7. So the close view is the playing view
+with the crop's whole plants laid over it: 2.6 ms of GPU time at the laptop's picture size on this card, where the
+painted crop of the playing view is 0.3. The view level over the crop from 160 m is dear for another reason: woods
+fill a third of it (far woods 4.3 ms, the crop painted across the foreground 4.4, cards 2.2, whole trees thrown into
+the fine shadow map 2.0 to 2.6).
+
+**Pixels against geometry.** The playing view costs 3.7 times as much for four times the pixels: all of it is
+shading. The crop's plants, by the part timer, go from 2.6 to 10 to 13 ms: shading too. A whole plant is leaves on
+cut-out cards, each lit in full (sun and its shadow, sky, haze, light through the leaf), and level across a crop a
+pixel has many behind one another. Taking one thing at a time from that frame (8.3 M pixels, the crop's ms): as it
+is 13.1; no shadows 11.1; no lens passes 11.8; no multisampling 11.8; two samples to a pixel 8.6 (with the trees
+falling from 7.0 to 4.1 in the same reading). No one of them is the cost: it is the number of leaf fragments lit.
+
+**Tried, measured and taken out.** The plants drawn nearest first for the way the camera looks (so a leaf in front
+would hide the ones behind before they were lit): 12.0 ms against 13.7, inside the spread between runs. The leaves
+drawn into the picture's depth first, then lit: 10.9 ms against 10.1, with half a million more triangles. Neither
+pays because a cut-out leaf has to be shaded before the graphics card knows where it is: it cannot be hidden early.
+The way that would work is to light, in a second pass, only what the first pass left in front (the depth test set to
+"equal", no cut-out in the lit pass); that needs the two passes to place every leaf to the last bit alike, which
+could be tried here but not on the laptop's own graphics system, where a mismatch would be holes in every plant. It
+is left for a round with that machine to hand, with a cheaper light for leaves (most of it worked out at the leaf's
+corners and not at every pixel) and the window's slots culled to the picture in blocks.
+
+**What was changed in the close view's drawing.**
+
+- Whole plants threw no shadow of their own and were drawn into the fine shadow map all the same: the sun's pass
+  measured each plant's distance from the sun's side, far past where plants are drawn, and gave every one no size,
+  0.26M triangles each time the map was drawn again for nothing on the map. That pass is not run. The picture is
+  as it was. A frame's triangles, closest and level across the crop: 2.95M to 2.65M; tipped down, 2.50M to 2.23M;
+  closest in the yard, 2.3M to 1.9M. In a quieter stretch at the laptop's size the new build's playing view read
+  3.9 ms and the closest level view 5.8 (1.47 times).
+- A slot of the plant window with nothing to draw (outside its field, past the window's edge, or more than a step
+  behind the camera: the window lies round the camera's nearest ground and a quarter to a third of it is behind the
+  eye) is done with before its hill is read, where every vertex of it read three textures. No change to the picture;
+  on this card too small to time.
+
+**The game protects its own frame rate.** Frame time is followed whenever frames are drawn at full pace, camera
+still or moving (under a test driver it is off; `budget.ts --hold` turns it on). A second and a half of frames is a
+stretch, and slow is the 73rd frame of a hundred taking more than 1.23 times its time.
+
+- Two slow stretches running: the picture is drawn smaller at once, by as many sizes as the frames are late (the
+  pixels in proportion: a picture twice too dear is at its smallest in one step, where it was walked down in four,
+  twelve seconds). The sizes are 1, 0.92, 0.84, 0.77 and 0.7 of the side; **the floor is 0.7, half the pixels**.
+- At the floor and slow for six seconds more, or frames taking over 2.3 times their time for two stretches: the
+  setting comes down a step (high, medium, low) and begins at its floor. Only where the setting was left to choose for itself: one the
+  player chose is kept, and its picture still shrinks.
+- In time for a while: a size larger, after a wait that doubles each time going up did not hold; and once back at
+  its full size and in time for a minute, a setting that came down by itself goes up a step again, beginning at its
+  floor, with a wait that doubles (to an hour) each time that did not hold. Going up waits until the camera has
+  stopped; coming down does not.
+- The menu can say so: `quality()` now gives the picture's size as a share of the setting's, the floor, and whether
+  the setting came down by itself (the line in `src/ui/menu.ts` is for the interface's owner to write).
+
+**It engages** (2080 Ti, 3840 by 2160 with the pixel limit lifted, clock running, 60 beats a second; three runs
+of `budget.ts --hold`, forty seconds in each view, on a box that was quiet in one and shared in the others; where it
+settled, and every row then held 16.7 ms at the middle frame and 16.7 to 16.8 at the 95th of a hundred):
+
+| view | quiet run | shared run | busiest run |
+| --- | --- | --- | --- |
+| the playing view | high at its full size (it kept its beat untouched) | high at 0.77 of the side, 2956 by 1663 (from 30 frames a second to 60 in 8 s) | medium at 0.7, 2688 by 1512 (33 to 83 ms a frame at the start) |
+| level across the crop from 7.5 m | high at 0.77 (to the floor in one step within 8 s, then up a size) | high at 0.84, 3225 by 1814 | medium at 0.84 |
+| level across the crop from 160 m | high at 0.84 | high between 0.92 and 0.7 (up a size after 28 s, beats missed, down again in one step) | medium at 0.7 |
+
+So at four times the laptop's pixels the close views hold sixty a second at the high setting with the picture at
+0.77 to 0.84 of its side, and the playing view at 0.77 to 1. In the quiet run something else took the machine for a
+quarter of a minute after the last view (33 to 50 ms a frame at any size) and the setting fell from high to low in
+twelve seconds; a setting now has to be slow at its floor for six seconds, not three, before it comes down, and
+goes up again as above. A fourth run, with that in: high throughout; the playing view at 0.77, the close view at
+0.84, the view from 160 m at 0.92, and back in the playing view at its full size within twelve seconds and for the
+minute it was watched, 16.7 ms at the middle and at the 95th. At 1512 by 982 and two to one, the laptop's own size, the 2080 Ti is never slow and the
+setting stays high at its full picture (1786 by 1160) in every view.
+
+**Not measured, and what to expect on an Apple-silicon MacBook.** Nothing here ran on one. Its picture at the high
+setting is the 2.07 M pixel one, so the 8.3 M pixel runs stand for a chip a quarter as quick as the 2080 Ti at
+shading: there the playing view is at the edge of sixty a second and the close level views are not, by a fifth to a
+half. A chip about a third to a half as quick would hold the playing view and miss beats close in, which is what
+was reported. With this build the picture should shrink within three or four seconds of coming close (to 0.84 or
+0.77 of its side by these runs, softer but whole) and hold sixty; if the setting was left on automatic and that is
+not enough it comes down to medium, whose window of whole plants is three fifths the size, with two samples to a
+pixel and no contact shade. On a 120-a-second display a frame that runs past one beat is no longer late by a beat
+and a half. What has to be read on the machine itself: the frame rate and size the menu's line would show close in;
+whether its graphics chip is short of shading (then the size is the cure) or of vertex work (2.95M triangles close
+in against 1.56M, which a smaller picture does not help and only the setting or the cuts left for later do); and
+whether the first seconds close in, before the picture has shrunk, are still felt.
+
 ## Wave three: bugs and UX, checked by players who see only pictures
 
 After live-5 the owner asked for a camera that tips down, lighter rendering, a card for anyone clicked, a far more

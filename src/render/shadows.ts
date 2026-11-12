@@ -12,8 +12,9 @@ const UP = new Vector3(0, 1, 0), ORIGIN = new Vector3()
 // How far ahead of the point looked at each cascade is centred, as a share of its radius: the picture shows far more
 // ground beyond that point than before it.
 const LEAD = [0.25, 0.42, 0.5]
-// Which frame of its turn each cascade is redrawn on: never two on the same frame.
-const TURN = [0, 3, 5]
+// Which frame of its turn each cascade is redrawn on: never two on the same frame, at any setting's turns (the fine
+// one every 2 or 3 frames, the middle one every 4, 6 or 12, the wide one every 12, 24 or 60).
+const TURN = [0, 1, 11]
 
 export class SunShadows {
   readonly lights: DirectionalLight[] = []
@@ -42,6 +43,8 @@ export class SunShadows {
   // on every turn of its own, however wide it is.
   held = [false, false, false]
   eager = false
+  // Which cascades the last update had drawn again (bit k for cascade k), for the tools.
+  redrawn = 0
 
   constructor(scene: Scene) {
     for (let k = 0; k < 3; k++) {
@@ -79,6 +82,7 @@ export class SunShadows {
   update(sunDir: Vector3, color: Color, focus: Vector3, dist: number, all: boolean, aheadX = 0, aheadZ = 0, calm = false): void {
     this.lights[0].color.copy(color)
     this.frame++
+    this.redrawn = 0
     // Steps of radius, so zooming does not make every shadow crawl.
     const r0 = clamp(12 * Math.pow(1.3, Math.round(Math.log(Math.max(dist, 1) * 0.34 / 12) / Math.log(1.3))), 12, 420)
     this.radius[0] = r0
@@ -108,6 +112,7 @@ export class SunShadows {
       }
       if (k === 0) sh.autoUpdate = n <= 1 && !this.held[0] && !lazy
       if (!due) continue
+      this.redrawn |= 1 << k
       if (!sh.autoUpdate) sh.needsUpdate = true
       const was = this.drawn[k]
       was.sun.copy(sunDir); was.c.copy(this.c); was.r = r

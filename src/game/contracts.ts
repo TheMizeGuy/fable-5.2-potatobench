@@ -54,8 +54,10 @@ export interface FieldView {
   // Settles once the land has shown a test dig's hill lifted, or the last row of a day's digging come out
   // (at once when there is nothing to show), so the paper result can arrive after the land has shown it.
   whenShown(kind: 'sample' | 'dig', field: number): Promise<void>
-  // The quality tier in use and the frame rate measured, for the settings screen.
-  quality(): { tier: 'high' | 'medium' | 'low' | 'flat'; fps: number }
+  // The quality tier in use and the frame rate measured, for the settings screen; and, where the land says so, the
+  // picture's size as a share of the setting's own along a side (1 when it is drawn whole), the least it goes to, and
+  // whether the setting has come down by itself to keep the frame rate.
+  quality(): { tier: 'high' | 'medium' | 'low' | 'flat'; fps: number; size?: number; least?: number; lowered?: boolean }
   dispose(): void
 }
 

@@ -19,14 +19,26 @@
 //   --spring the first spring of a new farm with the days running at 1x and the interface on, as a player first has
 //            it: the display's beats that reach the page in a second, the frames drawn, and the days that pass (0.7 a
 //            second if the page keeps its beat), with tree cards in the fine shadow and without.
+//   --close  the close views against the playing view, at the high setting: the field tier and the yard tier as the
+//            game frames them, then over a field in full crop from the yard tier's distance and from the closest the
+//            camera goes, each looking level across the crop (the most drawn over itself) and tipped straight down;
+//            pass by pass and part by part for each build. With --lift the picture is drawn at the window's own size
+//            (no limit on its pixels), so that --size=3840x2160 is four times a 1920 by 1080 picture's shading and
+//            stands in for a graphics chip a quarter as quick. --shots=<dir> keeps a picture of each view.
+//   --hold   the game left to follow frame time, as in a player's browser, in the playing view and then level across
+//            a crop from the closest the camera goes: the setting and the picture's size it settles at in each, and
+//            the frames it then draws in a second (with --lift and --size=3840x2160, on a picture four times too
+//            dear). Not with --free: the display's beat is what it holds to.
 //   --adapt  the game left to choose for itself, as in a player's browser: the setting it starts on from its first
 //            frames timed, then the picture made nine times too dear to draw and what it does about it, then made
 //            cheap again and how long it takes to come back.
 // Usage: node tools/render/budget.ts <base-url> [--against=<url>] [--free] [--parts [--hide]] [--idle] [--land] [--adapt]
 //          [--size=1920x1080] [--dpr=1] [--only=field,county] [--rounds=5]
 import { execFileSync } from 'node:child_process'
+import { mkdirSync } from 'node:fs'
 import { chromium, type Page } from '@playwright/test'
 import { GPU } from '../quality/shared.ts'
+import { bigFarm } from './farm.ts'
 
 const base = process.argv[2] ?? 'http://localhost:5317/'
 const flag = (name: string) => process.argv.includes(`--${name}`)
@@ -171,37 +183,6 @@ function breakdown(m: M): void {
   console.log(`      (each at its middle cost: ${ms(whole)} ms in all)`)
 }
 
-// Ten fields in crop: the home six (two of them in their rest year) and six more taken on, with a second tractor and two hands.
-async function bigFarm(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    const { app, sim } = (window as any).__county
-    app.newGame(1977, 5)
-    const c = app.campaign
-    c.cash = Math.max(c.cash, 400000)
-    const kinds = ['katahdin', 'superior', 'kennebec', 'norland', 'atlantic']
-    for (const f of [6, 7, 10, 11, 12, 13]) {
-      app.do({ t: 'rent', field: f })
-      app.do({ t: 'plan', field: f, plan: { crop: 'potato', variety: kinds[f % kinds.length], seed: 'certified' } })
-    }
-    app.do({ t: 'buy', upgrade: 'tractor2' }); app.do({ t: 'hire', kind: 'operator' })
-    app.do({ t: 'hire', kind: 'hand' }); app.do({ t: 'hire', kind: 'hand' })
-    app.do({ t: 'begin' })
-    while (c.phase === 'season' && c.season.day < 196) {
-      for (const a of sim.advise(app.world, c)) {
-        if (a.act === 'wait' || a.act === 'close' || a.act === 'sell') continue
-        app.do({ t: 'job', kind: a.act, field: a.field })
-      }
-      if (!app.do({ t: 'day' }).ok) break
-    }
-    for (let n = 0; n < 30 && sim.today(app.world, c).sky !== 'clear'; n++) app.do({ t: 'day' })
-    // A day's work for everyone, left part way through: people and machines out on the land.
-    for (const a of sim.advise(app.world, c)) if (a.act !== 'wait' && a.act !== 'close' && a.act !== 'sell') app.do({ t: 'job', kind: a.act, field: a.field })
-    app.do({ t: 'day' })
-  })
-  await page.evaluate(() => (window as any).__countyField.settle())
-  await page.evaluate(() => (window as any).__countyField.seek(0.5, 0.003))
-}
-
 // Other browsers on the GPU (other checks running on the same machine) make every number here high: wait them out.
 function browsersOnGpu(): number {
   try {
@@ -218,7 +199,8 @@ async function quiet(label: string, tries = 6): Promise<boolean> {
   console.log(`  (the GPU was still shared at ${label}: these numbers are high)`)
   return false
 }
-await quiet('start', 12)
+// (--nowait: the machine is shared all day and the builds are measured one after the other in the one run)
+if (!flag('nowait')) await quiet('start', 12)
 const browser = await chromium.launch({ args: free ? [...GPU, '--disable-gpu-vsync', '--disable-frame-rate-limit'] : GPU })
 const errors: string[] = []
 const sides: Side[] = []
@@ -314,7 +296,7 @@ async function oneAtATime(): Promise<void> {
 }
 
 const table: Record<string, Record<string, M[]>> = {}
-if (!flag('idle') && !flag('land') && !flag('adapt') && !flag('spring')) {
+if (!flag('idle') && !flag('land') && !flag('adapt') && !flag('spring') && !flag('close') && !flag('hold')) {
   for (const [key, label, set] of views) {
     for (const t of ['high', 'medium', 'low']) {
       await tier(t)
@@ -340,6 +322,125 @@ if (!flag('idle') && !flag('land') && !flag('adapt') && !flag('spring')) {
       console.log(`    ${label.padEnd(34)} high ${ms(of(h))}  medium ${ms(of(m))} (${(of(m) / of(h) * 100).toFixed(0)}%)  low ${ms(of(l))} (${(of(l) / of(h) * 100).toFixed(0)}%)   ${mega(h.triangles)}M ${h.calls} calls | ${mega(m.triangles)}M ${m.calls} | ${mega(l.triangles)}M ${l.calls}`)
     }
   })
+}
+
+// --close: what coming close costs.
+if (flag('close')) {
+  const shots = opt('shots')
+  if (shots) mkdirSync(shots, { recursive: true })
+  await tier('high')
+  await each(async p => { await field('f.titleAt(-1)', p); await bigFarm(p); if (flag('lift')) await field('f.force({ pixels: 1e9 })', p) })
+  const spot = await page.evaluate(() => {
+    const f = (window as any).__countyField, st = f.info().fields as string[]
+    return { field: [3, 0, 1, 2, 4, 5].find(i => st[i] === 'growing') ?? 3, yard: f.tiers().yard as number, least: 7.5 }
+  })
+  const framed = (name: string) => async (p: Page) => { await field('f.rig.level()', p); await at(name)(p); await p.waitForTimeout(900) }
+  const over = (dist: number, lean: number) => async (p: Page) => {
+    await p.evaluate(([i, dist, lean]) => {
+      const f = (window as any).__countyField
+      f.rig.level()
+      f.view({ frame: 'field', field: i, x: 0.5, z: 0.7, dist })
+      f.rig.leanBy(lean)
+    }, [spot.field, dist, lean])
+    await p.waitForTimeout(1600)
+  }
+  const near: [string, string, (p: Page) => Promise<void>][] = [
+    ['field', 'field tier (the playing view)', framed('field')],
+    ['yard', 'yard tier', framed('yard')],
+    ['yard-level', `over the crop from ${spot.yard.toFixed(0)} m, level`, over(spot.yard, 0)],
+    ['yard-down', `over the crop from ${spot.yard.toFixed(0)} m, tipped down`, over(spot.yard, 1)],
+    ['close-level', 'closest (7.5 m), level across the crop', over(spot.least, 0)],
+    ['close-down', 'closest (7.5 m), tipped down', over(spot.least, 1)],
+    ['yard-close', 'closest (7.5 m) in the yard, level (grass, trees, buildings)', async p => { await framed('yard')(p); await field('f.view({ dist: 7.5 })', p); await p.waitForTimeout(1200) }],
+  ]
+  const got: Record<string, M[]> = {}
+  for (const [key, label, set] of near) {
+    if (only && !only.includes(key)) continue
+    await each(set)
+    const m = await measure(sides)
+    got[label] = m
+    m.forEach((x, i) => line(`${label}${sides.length > 1 ? `, ${sides[i].name}` : ''}`, x))
+    for (const s of sides) {
+      if (shots) { await turn(sides, s); await s.page.waitForTimeout(300); await s.page.screenshot({ path: `${shots}/${s.name.replace(/\W+/g, '-')}-${key}-${W}x${H}.png` }) }
+      if (!s.probe) continue
+      await turn(sides, s)
+      console.log(`    ${s.name}, pass by pass:`)
+      // (the window is long enough for a slow frame's timings to come back; one with none is not kept)
+      const a = await window1(s, 2.2, 'parts'), b = await window1(s, 2.2, 'parts')
+      breakdown(!a.rows.length ? b : !b.rows.length ? a : least(a, b))
+    }
+  }
+  // --try: what of the frame level across the crop is the crop's, with one thing at a time taken from the picture.
+  if (flag('try') && now.probe) {
+    await turn(sides, now)
+    await over(spot.least, 0)(page)
+    const part = async (label: string) => {
+      await page.waitForTimeout(2500)
+      const a = await window1(now, 2.2, 'parts'), b = await window1(now, 2.2, 'parts')
+      const m = !a.rows.length ? b : !b.rows.length ? a : least(a, b)
+      const sum = (pick: (r: Row) => boolean) => m.rows.filter(pick).reduce((x, r) => x + r.gpu * r.share, 0)
+      console.log(`    ${label.padEnd(46)} the picture ${ms(sum(r => r.name === 'scene'))} ms, of which the crop ${ms(sum(r => r.name === 'scene/fields'))}, trees ${ms(sum(r => r.name === 'scene/flora' || r.name === 'scene/cards' || r.name === 'scene/farwoods'))};  shadow maps ${ms(sum(r => /^shadow\d$/.test(r.name)))};  lens ${ms(sum(r => r.name.startsWith('post:')))}`)
+    }
+    console.log('  level across the crop from the closest, one thing at a time taken out (GPU ms):')
+    await part('as it is')
+    await field('f.force({ pixels: 1e9, msaa: 0 })'); await part('no multisampling')
+    await field('f.force({ pixels: 1e9, msaa: 2 })'); await part('two samples to a pixel, not four')
+    await field('f.force({ pixels: 1e9 })'); await field('f.shadowsOn(false)'); await part('no shadows')
+    await field('f.shadowsOn(true)'); await field('f.force({ pixels: 1e9, ao: false, focus: false, bloom: false, shafts: 0 })'); await part('no lens passes')
+    await field('f.force({ pixels: 1e9 })'); await field("f.show('fields', false)"); await part('no fields at all')
+    await field("f.show('fields', true)")
+  }
+  const base = Object.keys(got)[0]
+  console.log(`  each view against the playing view (${free ? 'ms from one frame to the next, drawing as fast as it can' : 'GPU ms a frame'}; triangles and draw calls of a frame, every pass counted):`)
+  sides.forEach((s, i) => {
+    console.log(`   ${s.name}`)
+    for (const [label, row] of Object.entries(got)) {
+      const m = row[i], b = got[base][i]
+      console.log(`    ${label.padEnd(44)} ${ms(of(m))} ms (${(of(m) / of(b)).toFixed(2)}x)   GPU ${ms(m.gpu)}   ${mega(m.triangles)}M triangles (${(m.triangles / b.triangles).toFixed(2)}x)  ${String(m.calls).padStart(4)} calls   picture ${m.drawn[0]}x${m.drawn[1]}`)
+    }
+  })
+}
+
+// --hold: the game protecting its own frame rate.
+if (flag('hold')) {
+  await turn(sides, now)
+  await page.evaluate(() => (window as any).__county.app.setSetting('quality', 'auto'))
+  await field('f.titleAt(-1)')
+  await bigFarm(page)
+  if (flag('lift')) await field('f.force({ pixels: 1e9 })')
+  // people at work and the clock running: frames are drawn all the while
+  await page.evaluate(() => { const w = window as any; w.__county.app.setSpeed(1) })
+  const spot = await page.evaluate(() => { const st = (window as any).__countyField.info().fields as string[]; return [3, 0, 1, 2, 4, 5].find(i => st[i] === 'growing') ?? 3 })
+  // the gaps between the display's beats the page was called on, over two seconds
+  const beats = () => page.evaluate(() => new Promise<number[]>(done => {
+    const gaps: number[] = []
+    let last = 0
+    const until = performance.now() + 2000
+    const step = (t: number) => { if (last) gaps.push(t - last); last = t; if (performance.now() < until) requestAnimationFrame(step); else done(gaps) }
+    requestAnimationFrame(step)
+  }))
+  const watch = async (label: string, seconds: number) => {
+    let was = ''
+    for (let t = 0; t < seconds; t += 2) {
+      const gaps = (await beats()).sort((a, b) => a - b)
+      const p = await field<{ tier: string; size: number; fps: number; drawn: number[]; lowered: boolean }>('f.pace()')
+      const say = `${p.tier} at ${p.size} of its side, picture ${p.drawn.join('x')}`
+      if (say !== was || t + 2 >= seconds) console.log(`    ${label} ${String(t + 2).padStart(3)} s: ${say};  a frame every ${ms(gaps[gaps.length >> 1])} ms at the middle, ${ms(gaps[Math.floor(gaps.length * 0.95)])} at the 95th of a hundred;  the game reads ${p.fps} frames a second${p.lowered ? ';  the setting has come down by itself' : ''}`)
+      was = say
+    }
+  }
+  await field("f.tier('field')")
+  await page.waitForTimeout(1500)
+  await watch('as a test driver has it, the playing view', 4)
+  await field("f.adapt(true, 'high')")
+  await watch('following frame time, the playing view ', 40)
+  await page.evaluate(i => { const f = (window as any).__countyField; f.rig.level(); f.view({ frame: 'field', field: i, x: 0.5, z: 0.7, dist: 7.5 }) }, spot)
+  await watch('level across the crop from 7.5 m        ', 40)
+  await page.evaluate(i => { const f = (window as any).__countyField; f.view({ frame: 'field', field: i, x: 0.5, z: 0.7, dist: 160 }) }, spot)
+  await watch('level across the crop from 160 m        ', 40)
+  await field("f.tier('field')")
+  await watch('back in the playing view                ', Number(opt('back') ?? 150))
+  await field("f.adapt(false, 'high')")
 }
 
 // --idle: what a second costs when nothing is asked of the picture, and when something is.

@@ -358,6 +358,8 @@ export class Flora {
   private thin: InstancedMesh[] = []
   private cardMeshes: InstancedMesh[] = []
   private low = false
+  // Patches that have changed how they are drawn so far, for the tools.
+  swaps = 0
   private v = new Vector3()
 
   constructor() {
@@ -1056,6 +1058,7 @@ export class Flora {
       const state = level + (wide ? 4 : 0) + (whole ? 8 : 0)
       if (state === ch.level) continue
       ch.level = state
+      this.swaps++
       for (const m of ch.near) m.visible = level === 0
       // A card in the fine shadow would be a great sheet of the map to fill: where a patch is drawn as cards, its
       // simpler trees still stand in the fine shadow, out of the picture.

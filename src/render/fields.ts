@@ -116,6 +116,9 @@ void slot() {
   aAt.y = slopeY(aAt.z);
   vec2 d = abs(aAt.xz - uWin.zw) / uPool;
   slotIn = step(0.0, c) * step(c, ${(cols - 1).toFixed(1)}) * step(0.0, r) * step(r, ${(rows - 1).toFixed(1)}) * (1.0 - smoothstep(0.7, 1.0, max(d.x, d.y))) * (1.0 - smoothstep(uFadeR.x, uFadeR.y, distance(aAt.xyz, cameraPosition)));
+  // The window lies round the camera's nearest ground, a third of it behind the camera: what stands more than a
+  // step behind the eye is in no picture.
+  slotIn *= step(-1.5, dot(aAt.xyz - cameraPosition, -vec3(viewMatrix[0][2], viewMatrix[1][2], viewMatrix[2][2])));
 }
 `
 const PLANT_FN = /* glsl */ `
@@ -131,6 +134,13 @@ Plant gp;
 Plant plantAt() {
   Plant p;
   slot();
+  // A slot with no plant to draw (outside the field, past the window's edge, behind the camera) is done with here:
+  // its hill is not read. Level across a crop that is half the slots.
+  if (slotIn <= 0.0) {
+    p.at = aAt.xyz; p.w = 0.0; p.h = 0.0; p.cs = 1.0; p.sn = 0.0; p.droop = 0.0; p.dead = 0.0; p.frost = 0.0;
+    p.h0 = vec4(0.0); p.h1 = vec4(0.0); p.r = vec3(0.0);
+    return p;
+  }
   hillAt((aAt.xz - uRect.xy) * uRect.zw, aAt.xz, p.h0, p.h1);
   p.r = fract(aAt.w * vec3(61.7, 127.3, 331.9));
   p.dead = p.h0.a;
@@ -858,15 +868,14 @@ export class Fields {
     })
     const nearShape = leafShape(shared)
     const plantMat = leafMat(nearShape)
+    // (They throw no shadow of their own: the sun's pass took its distances from the sun's side and drew every plant
+    // at no size, a quarter of a million triangles into the fine map each time for nothing. It is not run.)
     const plants = new Mesh(this.plantPool, plantMat)
-    plants.castShadow = true
     plants.receiveShadow = true
     plants.frustumCulled = false
     plants.visible = false
-    plants.customDepthMaterial = depthFor({ ...nearShape, vertexBegin: `gp = plantAt();\n${LEAF_SHAPE}` })
-    plants.layers.enable(1)
     this.group.add(plants)
-    this.disposables.push(plantMat, plants.customDepthMaterial)
+    this.disposables.push(plantMat)
 
     // ---- blossom
     const bloomMat = patch(new MeshStandardMaterial({ map: this.flowerTex, alphaTest: 0.5, alphaToCoverage: true, side: DoubleSide, roughness: 0.7, metalness: 0 }), {
