@@ -82,7 +82,7 @@ export function clock(ctx: Ctx, compact: boolean, onMenu?: () => void): HTMLElem
   const app = ctx.app
   const c = app.campaign!
   if (S.seasonDone(c) && !ctx.awaiting) {
-    return h('div', { class: 'clock done' }, h('button', { class: 'btn go wide', type: 'button', testid: 'end-season', onclick: () => ctx.run({ t: 'endSeason' }) }, 'Close out the season', icon('arrow', 'i')),
+    return h('div', { class: 'clock sys done' }, h('button', { class: 'btn go wide', type: 'button', testid: 'end-season', onclick: () => ctx.run({ t: 'endSeason' }) }, 'Close out the season', icon('arrow', 'i')),
       onMenu ? menuKey(ctx, onMenu) : null)
   }
   const keys = !ctx.touch()
@@ -96,12 +96,12 @@ export function clock(ctx: Ctx, compact: boolean, onMenu?: () => void): HTMLElem
   }, icon(paused ? 'play' : 'pause'))
   if (compact) {
     const next = (at % 3 + 1) as 1 | 2 | 3
-    return h('div', { class: 'clock compact', role: 'group', 'aria-label': 'Clock' }, pause,
+    return h('div', { class: 'clock sys compact', role: 'group', 'aria-label': 'Clock' }, pause,
       h('button', { class: 'k speed-x num', type: 'button', testid: 'speed-cycle', 'aria-pressed': String(!paused), onclick: () => app.setSpeed(next) },
         `${at}×`, h('span', { class: 'sr' }, ` speed${paused ? ', paused' : ''}. Change to ${SPEED_NAME[next]}`)),
       onMenu ? menuKey(ctx, onMenu) : null)
   }
-  return h('div', { class: 'clock', role: 'group', 'aria-label': 'Clock' }, pause,
+  return h('div', { class: 'clock sys', role: 'group', 'aria-label': 'Clock' }, pause,
     ([1, 2, 3] as const).map(k => h('button', {
       class: `k speed-x num${paused && k === at ? ' armed' : ''}`, type: 'button', testid: `speed-${k}`, 'aria-pressed': String(app.speed === k),
       title: keys ? `${SPEED_NAME[k]} (F steps through the speeds; + and − too)` : undefined,

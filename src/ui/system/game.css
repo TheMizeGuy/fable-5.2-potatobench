@@ -203,3 +203,10 @@
 }
 .title-screen[data-layout='narrow'] .cover, .title-screen[data-layout='short'] .cover { padding-bottom: 24px; }
 .title-screen[data-layout='short'] .cv-name .county { text-align: left; }
+/* a desk of middling height: the boards a little lower */
+.topbar[data-layout='mid'] .leaf { padding: 8px 10px 7px; }
+.topbar[data-layout='mid'] .leaf .day { font-size: 52px; }
+.topbar[data-layout='mid'] .forecast .d { padding: 4px 2px; gap: 2px; }
+.topbar[data-layout='mid'] .goal { padding: 6px 12px 6px 10px; }
+.topbar[data-layout='mid'] .goal .fist { --i: 28px; }
+.topbar[data-layout='mid'] .balance { padding: 5px 12px 5px 16px; }
