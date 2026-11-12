@@ -17,7 +17,7 @@ export type BotFactory = () => Bot
 export const SPEND = ['wages', 'winterWages', 'pickers', 'rent', 'land', 'mortgage', 'interest', 'works', 'building', 'equipment', 'packing', 'logs', 'stand', 'rush'] as const
 export type SpendKey = typeof SPEND[number]
 export const TALLY = ['frozenCwt', 'hurt', 'breakdowns', 'quits', 'poached', 'pondDry', 'stumped', 'tiled', 'felled', 'rocks', 'brushed', 'built',
-  'standDays', 'sundaysWorked', 'pickerDays', 'hires', 'rushParts', 'matched', 'midHires', 'buyerTaken'] as const
+  'standDays', 'sundaysWorked', 'pickerDays', 'hires', 'applicants', 'rushParts', 'matched', 'midHires', 'buyerTaken'] as const
 export type TallyKey = typeof TALLY[number]
 
 export interface Outcome {
@@ -76,7 +76,16 @@ export function play(world: World, name: string, make: BotFactory, startYear: nu
   let guard = 0
   let kept5 = false
   const seen = new Set<number>([0])
-  const newHires = () => { for (const u of c.crew) if (!seen.has(u.id)) { seen.add(u.id); tally.hires++ } }
+  // Someone who asked for work has a first and a last name; the hiring hall sends a Lucien or a Wendell.
+  const newHires = () => {
+    for (const u of c.crew) {
+      if (seen.has(u.id)) continue
+      seen.add(u.id)
+      tally.hires++
+      const [first, last] = u.name.split(' ')
+      if (S.FIRST_NAMES.includes(first) && S.LAST_NAMES.includes(last)) tally.applicants++
+    }
+  }
   while (guard++ < 40000) {
     if (c.phase === 'plan') {
       year()
@@ -131,7 +140,7 @@ export function play(world: World, name: string, make: BotFactory, startYear: nu
         tallyEvents(r.events, tally)
       } else {
         const work = S.workday(c, s)
-        if (s.pickers && work) { add('pickers', S.PICKER_DAY); tally.pickerDays++ }
+        if (s.pickers && work && s.day <= S.dayIndex(s.year, S.PICKERS_TO.month, S.PICKERS_TO.dom)) { add('pickers', S.PICKER_DAY); tally.pickerDays++ }
         if (work && S.weekday(s.year, s.day) === S.SUNDAY) tally.sundaysWorked++
         if (S.standOpen(c, s)) tally.standDays++
         const r = S.apply(world, c, { t: 'day' })

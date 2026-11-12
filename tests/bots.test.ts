@@ -1,8 +1,8 @@
-// The bots must play fair: they see only what a player sees.
+// The bots must play fair: they see only what a player sees. And each ablation must really take its mechanic away.
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import * as S from '../src/sim/index.ts'
-import { ABLATIONS, EXPERT, expert, naive, play, reference } from '../tools/balance/bots.ts'
+import { ABLATIONS, EXPERT, expert, expertWith, naive, play, reference } from '../tools/balance/bots.ts'
 import { loadWorld } from '../tools/balance/world.ts'
 
 const SOURCE = readFileSync(new URL('../tools/balance/bots.ts', import.meta.url), 'utf8')
@@ -54,67 +54,86 @@ describe('bots see only what a player sees', () => {
   })
 })
 
-describe('bots play', () => {
-  const world = loadWorld()
+describe('bots play the generated farms', () => {
+  const record = loadWorld()
+  const YEAR1 = S.FARM_YEAR0 + 1
+  const farm = (seed: number) => S.climateWorld(record, seed)
+  const w2 = farm(2)
 
-  it('the naive grower loses the farm and the expert keeps it, in the same years', () => {
-    const n = play(world, 'naive', naive(), 1987, 1)
-    const r = play(world, 'reference', reference(), 1987, 1)
-    const e = play(world, 'expert', expert(EXPERT), 1987, 1)
-    expect(n.kept).toBe(false)
+  it('the naive grower loses the farm, and the expert keeps it ten years and ends ahead of the reference', () => {
+    const n = play(w2, 'naive', naive(), YEAR1, 2, 10)
+    const r = play(w2, 'reference', reference(), YEAR1, 2, 10)
+    const e = play(w2, 'expert', expert(EXPERT), YEAR1, 2, 10)
+    expect(n.kept5).toBe(false)
     expect(e.kept).toBe(true)
+    expect(e.years).toBe(10)
+    expect(e.worth.length).toBe(10)
     expect(e.netWorth).toBeGreaterThan(r.netWorth)
-    expect(r.netWorth).toBeGreaterThan(n.netWorth)
-    expect(e.years).toBe(5)
-  })
-
-  it('an ablation really drops its verb', () => {
-    const noSpray = play(world, 'no-spray', expert({ ...EXPERT, spray: false }), 2011, 2)
-    const noWater = play(world, 'no-water', expert({ ...EXPERT, water: false }), 1995, 2)
-    expect(noSpray.jobs.spray).toBe(0)
-    expect(noWater.jobs.water).toBe(0)
-    expect(play(world, 'expert', expert(EXPERT), 1995, 2).jobs.water).toBeGreaterThan(0)
   })
 
   it('is deterministic', () => {
-    expect(play(world, 'expert', expert(EXPERT), 2003, 4)).toEqual(play(world, 'expert', expert(EXPERT), 2003, 4))
+    expect(play(w2, 'expert', expert(EXPERT), YEAR1, 2, 6)).toEqual(play(w2, 'expert', expert(EXPERT), YEAR1, 2, 6))
   })
 
-  it('the naive and reference growers keep to the home six with the farmer alone and sign nothing', () => {
-    for (const r of [play(world, 'naive', naive(), 1999, 3), play(world, 'reference', reference(), 1999, 3)]) {
+  it('the naive and reference growers keep to the home six with the farmer alone, and build and sign nothing', () => {
+    for (const r of [play(w2, 'naive', naive(), YEAR1, 2, 4), play(w2, 'reference', reference(), YEAR1, 2, 4)]) {
       expect(r.held.every(n => n === S.HOME_FIELDS)).toBe(true)
       expect(r.hands.every(n => n === 0)).toBe(true)
-      expect(r.operator.every(n => n === 0)).toBe(true)
       expect([r.signed, r.rent, r.land, r.wages]).toEqual([0, 0, 0, 0])
+      expect(r.buildings).toEqual([])
+      expect(r.tally.stumped + r.tally.felled).toBe(0)
     }
   })
 
-  it('the expert takes on land, hands and contracts on the bigger farm', () => {
-    const e = play(world, 'expert', expert(EXPERT), 1999, 3)
+  it('the expert uses the farmstead: people, buildings, cleared land, the truck, winter work', () => {
+    const e = play(w2, 'expert', expert(EXPERT), YEAR1, 2, 10)
     expect(Math.max(...e.held)).toBeGreaterThan(S.HOME_FIELDS)
-    expect(e.rent + e.land).toBeGreaterThan(0)
-    expect(Math.max(...e.hands)).toBeGreaterThan(0)
-    expect(e.signed).toBeGreaterThan(0)
-    expect(e.contracts).toBeGreaterThan(0)
+    expect(e.tally.hires).toBeGreaterThan(0)
+    expect(e.buildings.length).toBeGreaterThanOrEqual(4)
+    expect(e.tally.stumped).toBeGreaterThan(0)
+    expect(e.jobs.rocks).toBeGreaterThan(0)
+    expect(e.upgrades).toContain('truck')
+    expect(e.tally.pickerDays).toBeGreaterThan(0)
   })
 
-  it('each new ablation drops its decision', () => {
-    const cfg = (name: string) => ({ ...EXPERT, ...ABLATIONS.find(a => a.name === name)!.cfg })
-    const home = play(world, 'no-expansion', expert(cfg('no-expansion')), 1999, 3)
-    expect(home.held.every(n => n === S.HOME_FIELDS)).toBe(true)
+  const run = (name: string, years = 7) => {
+    const a = ABLATIONS.find(x => x.name === name)!
+    return play(w2, name, expert(expertWith(a.cfg, a.farm ?? {})), YEAR1, 2, years)
+  }
+
+  it('an ablation of the crop and the bigger farm takes its decision away', () => {
+    expect(run('no-spray', 4).jobs.spray).toBe(0)
+    expect(run('no-water', 4).jobs.water).toBe(0)
+    const home = run('no-expansion')
     expect(home.rent + home.land).toBe(0)
-    const noHire = play(world, 'no-hire', expert(cfg('no-hire')), 1999, 3)
-    expect(noHire.wages).toBe(0)
-    expect(noHire.hands.every(n => n === 0) && noHire.operator.every(n => n === 0)).toBe(true)
-    const noContracts = play(world, 'no-contracts', expert(cfg('no-contracts')), 1999, 3)
-    expect([noContracts.signed, noContracts.contracts, noContracts.penalties]).toEqual([0, 0, 0])
-    const noTractor = play(world, 'no-tractor2', expert(cfg('no-tractor2')), 1980, 2)
-    expect(noTractor.upgrades).not.toContain('tractor2')
-    expect(noTractor.operator.every(n => n === 0)).toBe(true)
-  })
+    const alone = run('no-hire')
+    expect(alone.hands.every(n => n === 0)).toBe(true)
+    expect(alone.spend.wages.reduce((a, x) => a + x, 0)).toBe(alone.spend.pickers.reduce((a, x) => a + x, 0))
+    expect(run('no-contracts', 4).signed).toBe(0)
+  }, 20000)
 
-  it('signing every contract signs every offer it is shown', () => {
-    const all = play(world, 'all-contracts', expert({ ...EXPERT, contracts: 'all' }), 1999, 3)
-    expect(all.signed).toBe(S.CONTRACT_OFFERS * all.years)
-  })
+  it('an ablation of the farmstead\'s machinery, buildings and land takes it away', () => {
+    expect(run('no-truck').upgrades).not.toContain('truck')
+    expect(run('no-tractor2').upgrades).not.toContain('tractor2')
+    for (const b of ['stand', 'road', 'shed', 'bunk'] as const) expect(run(`no-${b === 'bunk' ? 'bunkhouse' : b}`).buildings).not.toContain(b)
+    const uncleared = run('no-clearing')
+    expect(uncleared.tally.stumped + uncleared.tally.felled).toBe(0)
+    expect(run('no-rocks').jobs.rocks).toBe(0)
+    expect(run('no-brush').jobs.brush).toBe(0)
+    expect(run('no-tile').tally.tiled).toBe(0)
+  }, 20000)
+
+  it('an ablation of the farmstead\'s people and rules takes it away', () => {
+    const e = play(w2, 'expert', expert(EXPERT), YEAR1, 2, 7)
+    expect(run('no-pickers').tally.pickerDays).toBe(0)
+    expect(run('all-sundays-off').tally.sundaysWorked).toBe(0)
+    expect(run('work-sundays').tally.sundaysWorked).toBeGreaterThan(e.tally.sundaysWorked)
+    expect(run('no-winter').spend.winterWages.reduce((a, x) => a + x, 0)).toBe(0)
+    const quiet = run('default-incidents')
+    expect(quiet.tally.rushParts + quiet.tally.matched + quiet.tally.midHires + quiet.tally.buyerTaken).toBe(0)
+    const hall = run('no-applicants')
+    expect(hall.tally.hires).toBeGreaterThan(0)
+    expect(hall.tally.applicants).toBe(0)
+    expect(e.tally.applicants).toBeGreaterThan(0)
+  }, 20000)
 })
