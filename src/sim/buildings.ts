@@ -40,10 +40,15 @@ export interface BuildCost {
   total: number             // dollars in all: the cash part and what is bought
 }
 
+// Whole loads in the yard: a load still being cut or picked counts once it is whole.
+export function wholeLoads(x: number): number {
+  return Math.floor(x + 1e-9)
+}
+
 export function buildCost(c: Campaign, kind: BuildingKind): BuildCost {
   const spec = P.BUILDINGS[kind]
-  const buyLogs = Math.max(0, spec.logs - c.logs)
-  const buyStone = Math.max(0, spec.stone - c.stone)
+  const buyLogs = Math.max(0, spec.logs - wholeLoads(c.logs))
+  const buyStone = Math.max(0, spec.stone - wholeLoads(c.stone))
   return {
     cash: spec.cash, logs: spec.logs, stone: spec.stone, buyLogs, buyStone,
     total: spec.cash + buyLogs * P.MILL_PRICE + buyStone * P.QUARRY_PRICE,

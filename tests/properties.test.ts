@@ -303,9 +303,11 @@ describe('random command sequences', () => {
         } else if (r.ok && s.t === 'build') {
           seen.buildOk++
           const spec = S.BUILDINGS[s.kind]
-          expect(close(logsBefore - c.logs, Math.min(logsBefore, spec.logs)), 'took its logs').toBe(true)
-          expect(close(stoneBefore - c.stone, Math.min(stoneBefore, spec.stone)), 'took its stone').toBe(true)
-          const bought = Math.max(0, spec.logs - logsBefore) * S.MILL_PRICE + Math.max(0, spec.stone - stoneBefore) * S.QUARRY_PRICE
+          // Whole loads only: a load still being cut stays in the yard.
+          const logsWhole = S.wholeLoads(logsBefore), stoneWhole = S.wholeLoads(stoneBefore)
+          expect(close(logsBefore - c.logs, Math.min(logsWhole, spec.logs)), 'took its logs').toBe(true)
+          expect(close(stoneBefore - c.stone, Math.min(stoneWhole, spec.stone)), 'took its stone').toBe(true)
+          const bought = Math.max(0, spec.logs - logsWhole) * S.MILL_PRICE + Math.max(0, spec.stone - stoneWhole) * S.QUARRY_PRICE
           expect(close(c.yearBuilding - buildMoney, spec.cash + bought), 'paid its cash and the bought materials').toBe(true)
         } else {
           expect(c.logs, `${JSON.stringify(s)} took logs`).toBeGreaterThanOrEqual(logsBefore - 1e-9)

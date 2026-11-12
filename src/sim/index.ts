@@ -20,7 +20,7 @@ export {
   standLot, standOpen, tractorsOwned, tractorsRunning, unitBlock, waitFor, workday,
 } from './season.ts'
 export {
-  article, buildBlock, buildCost, buildingAt, bunkhouses, hasBuilt, pondServes, rain30, roadFactor, travel, YARD_NAME, type BuildCost,
+  article, buildBlock, buildCost, buildingAt, bunkhouses, hasBuilt, pondServes, rain30, roadFactor, travel, wholeLoads, YARD_NAME, type BuildCost,
 } from './buildings.ts'
 export { breakdownChance, CHOICE_LABEL, choiceDoes, defaultChoice, hurtChance, INCIDENT_TITLE, incidentText } from './incidents.ts'
 export { makeWorld } from './world.ts'

@@ -597,11 +597,17 @@ describe('contracts', () => {
     // Nothing went to the seed house or the packer: each owes 30% of its whole contract.
     for (const i of [1, 2]) expect(pen[i]).toBeCloseTo(offers[i].cwt * offers[i].price * 0.3, 9)
     const costs = c.yearCosts
+    const before = c.contracts.map(k => k.delivered)
     const events = ok(c, { t: 'endSeason' }).events
-    const harvest = c.contracts.map((k, i) => k.due === 'harvest' ? pen[i] : 0)
+    // On the due date the buyer takes what the potato houses still hold of the variety, then charges for the rest.
+    const took = c.contracts.map((k, i) => k.delivered - before[i])
+    for (const [i, k] of c.contracts.entries()) if (k.due === 'winter') expect(took[i]).toBe(0)
+    expect(events.filter(e => e.type === 'delivered').length > 0).toBe(took.some(x => x > 1e-6))
+    const harvest = c.contracts.map((k, i) => k.due === 'harvest' ? Math.max(0, short[i] - took[i]) * k.price * S.CONTRACT_PENALTY : 0)
+    void pen
     expect(c.contracts.map(k => k.settled)).toEqual(c.contracts.map(k => k.due === 'harvest'))
     expect(c.yearPenalties).toBeCloseTo(harvest.reduce((a, x) => a + x, 0), 9)
-    expect(events.filter(e => e.type === 'contractShort').length).toBe(harvest.filter(x => x > 0).length)
+    expect(events.filter(e => e.type === 'contractShort').length).toBe(harvest.filter(x => x > 1e-6).length)
     expect(c.yearCosts - costs).toBeGreaterThanOrEqual(c.yearPenalties - 1e-9)
     refused(c, { t: 'deliver', lot: S.openLots(c)[0]?.id ?? 1, contract: c.contracts.find(k => k.settled)?.id ?? -1 })
     // Winter contracts are settled when the cellar reaches March (or when it closes, if that is sooner).
@@ -610,8 +616,10 @@ describe('contracts', () => {
       ok(c, { t: 'month' })
     }
     expect(c.contracts.every(k => k.settled)).toBe(true)
-    expect(c.yearPenalties).toBeCloseTo(pen.reduce((a, x) => a + x, 0), 9)
-    for (const [i, k] of c.contracts.entries()) expect(k.penalty).toBeCloseTo(pen[i], 9)
+    // Each owes 30% of what was still short when it fell due, after the buyer took what the potato houses held.
+    const owed = c.contracts.map(k => Math.max(0, k.cwt - k.delivered) * k.price * S.CONTRACT_PENALTY)
+    expect(c.yearPenalties).toBeCloseTo(owed.reduce((a, x) => a + x, 0), 9)
+    for (const [i, k] of c.contracts.entries()) expect(k.penalty).toBeCloseTo(owed[i], 9)
     while (c.phase === 'cellar') ok(c, { t: 'month' })
     const h = c.history[0]
     expect(h.penalties).toBeCloseTo(c.yearPenalties, 9)
