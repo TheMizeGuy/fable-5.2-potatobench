@@ -59,6 +59,13 @@ export class SunShadows {
     }
   }
 
+  // For a tool: draw a cascade with nothing in it (it still covers its ground, and says all of it is lit), or as it is.
+  empty(k: number, on: boolean): void {
+    const sh = this.lights[k].shadow
+    sh.camera.layers.set(on ? 31 : k === 0 ? 3 : k)
+    sh.needsUpdate = true
+  }
+
   setSizes(sizes: [number, number, number]): void {
     this.lights.forEach((l, k) => {
       if (l.shadow.mapSize.x === sizes[k]) return

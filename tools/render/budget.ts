@@ -339,7 +339,9 @@ if (flag('idle')) {
   await tier('high')
   const second = async (label: string) => {
     const got = await measure(sides, 2, 3)
-    got.forEach((m, i) => console.log(`  ${`${label}${sides.length > 1 ? `, ${sides[i].name}` : ''}`.padEnd(52)} ${m.fps.toFixed(1).padStart(5)} frames a second, ${m.perSec.toFixed(0).padStart(4)} ms of GPU time a second (${ms(m.gpu, 5)} ms a frame)`))
+    const paces: ({ every: number; halved: boolean } | null)[] = []
+    for (const s of sides) paces.push(await field('f.pace ? f.pace() : null', s.page))
+    got.forEach((m, i) => console.log(`  ${`${label}${sides.length > 1 ? `, ${sides[i].name}` : ''}`.padEnd(52)} ${m.fps.toFixed(1).padStart(5)} frames a second, ${m.perSec.toFixed(0).padStart(4)} ms of GPU time a second (${ms(m.gpu, 5)} ms a frame)${paces[i] ? `   one beat in ${paces[i]!.every * (paces[i]!.halved ? 2 : 1)} drawn` : ''}`))
   }
   await each(async p => { await p.evaluate(() => { (window as any).__county.app.quitToTitle(); (window as any).__countyField.titleAt(-1) }); await p.waitForTimeout(1500) })
   await second('the opening, playing')

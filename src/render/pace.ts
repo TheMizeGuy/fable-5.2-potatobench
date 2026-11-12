@@ -16,6 +16,7 @@ export class Pace {
   // 0 while things move .. 1 at rest
   still = 0
   private gaps: number[] = []
+  private gapWas = 0
   private owed = 0
   private count = 0
   private quiet = 0
@@ -35,7 +36,10 @@ export class Pace {
     this.untouched += dt / 1000
     this.halved = alone && this.untouched > UNWATCHED_S
     if (dtMs > 2 && dtMs < 70) {
-      this.gaps.push(dtMs)
+      // Gaps are taken two at a time: on a busy machine a late frame is followed by an early one, and the two together
+      // are two beats.
+      if (this.gapWas) this.gaps.push((dtMs + this.gapWas) / 2)
+      this.gapWas = dtMs
       if (this.gaps.length >= 30) {
         // The display's own beat is the shortest gap that keeps coming: a late frame only ever makes a gap longer.
         this.gaps.sort((a, b) => a - b)

@@ -35,6 +35,14 @@ describe('the pace of drawing', () => {
     expect(p.every).toBe(2)
   })
 
+  it('does not take a busy machine, late with one frame and early with the next, for a fast display', () => {
+    const p = new Pace()
+    let drawn = 0
+    for (let k = 0; k < 240; k++) if (p.tick(k % 2 ? 8.3 : 25, true) > 0) drawn++
+    expect(p.every).toBe(1)
+    expect(drawn).toBe(240)
+  })
+
   it('does not take a machine that is late with every frame for a slow display', () => {
     const p = new Pace()
     for (let k = 0; k < 120; k++) p.tick(33.3, true)

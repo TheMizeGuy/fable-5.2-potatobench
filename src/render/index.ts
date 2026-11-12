@@ -222,8 +222,8 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   // Left to itself the view starts where the graphics chip suggests, a chip built into the processor at the middle
   // setting (the low one on a small machine) and a graphics card at the high one, and then times its first frames
   // whole: the setting is the highest those leave room for, and it is remembered, so it is measured once. After that
-  // the picture's size follows what frames cost, and the setting comes down a step if at its smallest they still run
-  // slow; it does not go back up by itself.
+  // the picture's size follows whether frames keep their beat, and the setting comes down a step if at its smallest
+  // they still do not (or at once, if they are plainly too slow); it does not go back up by itself.
   function startTier(): Tier {
     const gl = renderer.getContext()
     const ext = gl.getExtension('WEBGL_debug_renderer_info')
@@ -657,11 +657,14 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     const late = sorted[66] / pacing.frameMs
     const auto = app.settings.quality === 'auto' && tier !== 'low'
     // Plainly too slow (under 37 frames a second where 60 are asked for) is not walked down a size at a time.
-    const say = late > 1.6 && auto ? 'floor' : sizer.feed(late > 1.23, 1.5)
+    const plainly = late > 1.6 && auto
+    const say = plainly ? 'floor' : sizer.feed(late > 1.23, 1.5)
     if (say === 'floor' && auto) {
       tier = DOWN[tier]
       sizer.reset()
-      remember(sorted[45])
+      // A setting the machine could not hold at any size is not tried again another day; one given up in a single
+      // bad stretch (something else at work on the machine) is.
+      if (!plainly) remember(sorted[45])
     } else if (say !== 'smaller' && say !== 'larger') return
     warm = 60
     resize()
@@ -1116,6 +1119,8 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       pace: () => ({ beat: pacing.beat, every: pacing.every, still: pacing.still, halved: pacing.halved, size: sizer.size, tier, adaptive, timing: trial !== null }),
       // Stop (or go on) redrawing one shadow cascade, to measure what it costs.
       cascade(k: number, on: boolean) { shadows.held[k] = !on },
+      // Draw a cascade with nothing in it, to see what of the picture's shade is its own.
+      emptyCascade(k: number, on: boolean) { shadows.empty(k, on) },
       env, lit, rig,
       // What the last frame drew, where the camera stood, and the clocks.
       stats() {
@@ -1129,7 +1134,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     }
     // Whatever a tool changes is drawn at once, as what a player changes is.
     const changing = hooks as unknown as Record<string, (...a: unknown[]) => unknown>
-    for (const name of ['settle', 'seek', 'view', 'titleAt', 'tune', 'home', 'tier', 'show', 'showChild', 'shadowsOn', 'force', 'cascade', 'adapt', 'uncap', 'tryWithout']) {
+    for (const name of ['settle', 'seek', 'view', 'titleAt', 'tune', 'home', 'tier', 'show', 'showChild', 'shadowsOn', 'force', 'cascade', 'emptyCascade', 'adapt', 'uncap', 'tryWithout']) {
       const call = changing[name]
       changing[name] = (...a) => { pacing.wake(); return call(...a) }
     }
