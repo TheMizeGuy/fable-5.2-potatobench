@@ -390,6 +390,43 @@ if (flag('close')) {
     await field('f.force({ pixels: 1e9 })'); await field("f.show('fields', false)"); await part('no fields at all')
     await field("f.show('fields', true)")
   }
+  // --crop=<switches>: the crop's whole plants as they are drawn now against as they are without each thing that
+  // makes them cheaper (the renderer's tryWithout), the two turn about in the one page, three times each and the
+  // quietest kept: the playing view, then level across the crop from 160 m and from the closest.
+  if (opt('crop') && now.probe) {
+    await turn(sides, now)
+    const switches = opt('crop')!.split(',')
+    const states: [string, string[]][] = [['as it is now', []], ...switches.map(x => [`without ${x}`, [x]] as [string, string[]]), ...(switches.length > 1 ? [['without any of them', switches] as [string, string[]]] : [])]
+    console.log(`  the crop's whole plants, one way against the other in the one page (ms from one frame to the next${free ? ', drawing as fast as it can' : ''}: the quietest of ${ROUNDS} turns each, and the middle one):`)
+    const frames: Record<string, number[]> = {}
+    for (const [key, label, set] of [near[0], near[2], near[4]]) {
+      if (opt('views') && !opt('views')!.split(',').includes(key)) continue
+      await set(page)
+      const gaps: number[][] = states.map(() => [])
+      const tris = states.map(() => 0), work: number[][] = states.map(() => [NaN, NaN])
+      for (let k = 0; k < ROUNDS; k++) {
+        for (let i = 0; i < states.length; i++) {
+          await page.evaluate(([all, off]) => { const f = (window as any).__countyField; for (const x of all) f.tryWithout(x, off.includes(x)) }, [switches, states[i][1]])
+          await page.waitForTimeout(k === 0 ? 2500 : 500)
+          const whole = await window1(now, 1.0)
+          gaps[i].push(whole.gap)
+          tris[i] = whole.triangles
+          if (k > 0) continue
+          if (shots) await page.screenshot({ path: `${shots}/${key}-${states[i][0].replace(/\W+/g, '-')}-${W}x${H}.png` })
+          // (a count, not a time: the same on any machine and however busy this one is)
+          work[i] = await field<number[]>('f.cropWork ? f.cropWork() : [NaN, NaN]')
+        }
+      }
+      console.log(`   ${label}`)
+      states.forEach(([name], i) => {
+        const g = gaps[i].sort((x, y) => x - y)
+        ;(frames[name] ??= []).push(g[0])
+        console.log(`    ${name.padEnd(28)} ${ms(g[0])} ms (middle ${ms(g[g.length >> 1])});  ${mega(tris[i])}M triangles;  leaf fragments to a pixel of the picture: ${work[i][0].toFixed(2)} drawn, ${work[i][1].toFixed(2)} in front when drawn`)
+      })
+    }
+    await page.evaluate(all => { const f = (window as any).__countyField; for (const x of all) f.tryWithout(x, false) }, switches)
+    if (!opt('views')) for (const [name, g] of Object.entries(frames)) console.log(`   ${name.padEnd(28)} against the playing view: level from 160 m ${(g[1] / g[0]).toFixed(2)}x, level from the closest ${(g[2] / g[0]).toFixed(2)}x`)
+  }
   const base = Object.keys(got)[0]
   console.log(`  each view against the playing view (${free ? 'ms from one frame to the next, drawing as fast as it can' : 'GPU ms a frame'}; triangles and draw calls of a frame, every pass counted):`)
   sides.forEach((s, i) => {

@@ -1,7 +1,7 @@
 // The field view: the farm in its country, drawn with three.js, played like a strategy map.
 // Falls back to a flat drawing without WebGL.
 import {
-  BackSide, Color, DoubleSide, FrontSide, Group, PCFShadowMap, Raycaster, Scene, Triangle, Vector2, Vector3, WebGLRenderer,
+  BackSide, Color, DoubleSide, FloatType, FrontSide, Group, PCFShadowMap, Raycaster, Scene, Triangle, Vector2, Vector3, WebGLRenderer, WebGLRenderTarget,
   type Material, type Mesh, type MeshDepthMaterial, type MeshStandardMaterial, type Object3D, type Side,
 } from 'three'
 import { DAYS_PER_SECOND, type App } from '../game/app.ts'
@@ -1354,11 +1354,43 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       // Draw the frame without one of the things that make it cheaper: 'order' (the land and the sky drawn last),
       // 'cards' (cards in the fine shadow when it is wide), 'lazy' (the fine shadow redrawn only when it has
       // moved, where nothing in it moves to be seen), 'contact' (no contact shade where nothing is near enough to show it).
-      tryWithout(name: 'order' | 'cards' | 'lazy' | 'contact', on: boolean) {
+      tryWithout(name: 'order' | 'cards' | 'lazy' | 'contact' | 'corners' | 'thin' | 'half' | 'reach' | 'plants' | 'near' | 'a2c', on: boolean) {
+        if (name !== 'order' && name !== 'cards' && name !== 'lazy' && name !== 'contact') { fields.tryWithout(name, on); return }
         if (name === 'lazy') shadows.eager = on
         else without[name] = on
         terrain.under.renderOrder = without.order ? 0 : 50
         above.renderOrder = without.order ? 0 : 60
+      },
+      // How much drawing the crop's whole plants are, whatever the machine: their fragments as a multiple of the
+      // picture's pixels, first all that pass the leaf's cut-out, then those that are also in front of what was drawn
+      // before them (what the picture keeps as it goes). Counted in a small picture of the same shape.
+      cropWork(): [number, number] {
+        const w = 960, h = Math.round(960 * post.target.height / Math.max(1, post.target.width))
+        const rt = new WebGLRenderTarget(w, h, { type: FloatType, depthBuffer: true })
+        const px = new Float32Array(w * h * 4)
+        const others = scene.children.filter(o => o.visible && o !== fields.group && !(o as { isLight?: boolean }).isLight)
+        for (const o of others) o.visible = false
+        const was = renderer.getRenderTarget(), colour = new Color()
+        renderer.getClearColor(colour)
+        const alpha = renderer.getClearAlpha()
+        const out: number[] = []
+        for (const depth of [false, true]) {
+          const hidden = fields.counting(true, depth)
+          renderer.setRenderTarget(rt)
+          renderer.setClearColor(0x000000, 0)
+          renderer.clear()
+          renderer.render(scene, rig.camera)
+          renderer.readRenderTargetPixels(rt, 0, 0, w, h, px)
+          fields.counting(false, depth, hidden)
+          let sum = 0
+          for (let k = 0; k < px.length; k += 4) sum += px[k]
+          out.push((sum * 64) / (w * h))
+        }
+        for (const o of others) o.visible = true
+        renderer.setClearColor(colour, alpha)
+        renderer.setRenderTarget(was)
+        rt.dispose()
+        return [out[0], out[1]]
       },
       // How long a material's shader takes to compile by itself, as it is or with pieces of its fragment shader
       // cut out (each cut: a pattern and what takes its place), to find what in it is dear to compile.

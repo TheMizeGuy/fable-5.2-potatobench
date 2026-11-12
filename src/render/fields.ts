@@ -6,7 +6,7 @@
 import {
   BufferAttribute, BufferGeometry, Color, DataTexture, DoubleSide, Frustum, Group, InstancedBufferAttribute, InstancedBufferGeometry,
   InstancedMesh, Matrix4, Mesh, MeshStandardMaterial, FloatType, LinearFilter, NearestFilter, Quaternion, RedFormat, RGBAFormat, ShaderMaterial, Sphere, Vector2, Vector3,
-  Vector4, type PerspectiveCamera, type Texture,
+  Vector4, CustomBlending, OneFactor, type Material, type Object3D, type PerspectiveCamera, type Texture,
 } from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { COLS, FIELD_COUNT, HILLS, PARCELS, ROWS, STUMP_DAYS, TILE_DAYS, type HillLook } from '../sim/index.ts'
@@ -29,6 +29,8 @@ const PLANT_STEP = PLANT * 2, PLANT_COLS = Math.floor(PLANTS_PER_ROW / 2)
 const OAT_STEP = 0.6, OAT_COLS = Math.floor(FW / OAT_STEP), OAT_ROWS = Math.floor(FD / OAT_STEP)
 // The sprayer's wheelings: every this many rows.
 const TRAM = 20
+// How far from the eye whole plants are drawn one in two and one in four along the row, and with half their leaves.
+const THIN_AT = [18, 30], HALF_AT = 24
 // Half the window along the rows and across them, in metres, by quality tier; and how far off its nearest ground may
 // be before nothing of it would show.
 // How far off a field keeps its rows as shapes in the ground, by tier.
@@ -129,16 +131,27 @@ uniform vec4 uCrop;        // wilt, share of leaf blackened by frost, rime this 
 uniform float uOpen;       // how the wind reaches this field: less in the lee of standing woods
 ${HILL_FN}
 ${slotGlsl(PLANT_STEP, ROW, PLANT_COLS, PLANTED_ROWS, 0)}
-struct Plant { vec3 at; float w; float h; float cs; float sn; float droop; float dead; float frost; vec4 h0; vec4 h1; vec3 r; };
+uniform vec3 uSpare;       // 1 where a saving is on: plants thinned with distance, half the leaves far off
+uniform vec2 uTrial;       // for the tools: the plants' size (0: none is drawn), and 1 to draw one plant in two everywhere
+struct Plant { vec3 at; float w; float h; float cs; float sn; float droop; float dead; float frost; vec4 h0; vec4 h1; vec3 r; float wide; float far; float stands; };
 Plant gp;
 Plant plantAt() {
   Plant p;
   slot();
+  // Further off, every second plant along the row is drawn and then every fourth, each as wide as those it stands
+  // for: level across a crop the far plants lie a dozen deep in a pixel and none of them is seen whole. (Where the
+  // change comes differs a little from plant to plant, so it is no line across the field.)
+  p.far = distance(aAt.xyz, cameraPosition) + (aAt.w - 0.5) * 4.0;
+  float every = exp2(max(uTrial.y, uSpare.x * (step(${THIN_AT[0].toFixed(1)}, p.far) + step(${THIN_AT[1].toFixed(1)}, p.far))));
+  slotIn *= uTrial.x;
+  if (mod(uWin.x + aSlot.x, every) > 0.5) slotIn = 0.0;
+  p.wide = 1.0 + 0.36 * (every - 1.0) - 0.04 * (every - 1.0) * (every - 1.0);
+  p.stands = every;
   // A slot with no plant to draw (outside the field, past the window's edge, behind the camera) is done with here:
   // its hill is not read. Level across a crop that is half the slots.
   if (slotIn <= 0.0) {
     p.at = aAt.xyz; p.w = 0.0; p.h = 0.0; p.cs = 1.0; p.sn = 0.0; p.droop = 0.0; p.dead = 0.0; p.frost = 0.0;
-    p.h0 = vec4(0.0); p.h1 = vec4(0.0); p.r = vec3(0.0);
+    p.h0 = vec4(0.0); p.h1 = vec4(0.0); p.r = vec3(0.0); p.wide = 1.0;
     return p;
   }
   hillAt((aAt.xz - uRect.xy) * uRect.zw, aAt.xz, p.h0, p.h1);
@@ -162,18 +175,23 @@ Plant plantAt() {
   float tram = step(tr, 0.5) + step(${(TRAM - 1.5).toFixed(1)}, tr);
   p.w *= 1.0 - 0.22 * tram;
   jit.y += (tr < 0.5 ? 0.12 : -0.12) * tram;
+  jit.x += (every - 1.0) * ${(PLANT_STEP * 0.5).toFixed(3)};
   p.at = vec3(aAt.x + jit.x, aAt.y + ${RIDGE_AMP.toFixed(3)} * smoothstep(0.0, 0.05, p.h1.b) * (0.4 + 0.6 * p.h1.b) * (1.0 - p.h1.r) - 0.012, aAt.z + jit.y);
   return p;
 }
 vec3 plantPlace(vec3 pl) {
   // Wider along the row than across it: the rows close first, the furrows between them last.
   // Where only every other plant is drawn, each stands for its neighbour along the row, and keeps to its own row.
-  return gp.at + vec3((gp.cs * pl.x + gp.sn * pl.z) * gp.w * 1.5, pl.y * gp.h, (-gp.sn * pl.x + gp.cs * pl.z) * gp.w * 0.94);
+  return gp.at + vec3((gp.cs * pl.x + gp.sn * pl.z) * gp.w * 1.5 * gp.wide, pl.y * gp.h, (-gp.sn * pl.x + gp.cs * pl.z) * gp.w * 0.94);
 }
 `
 
 const LEAF_SHAPE = /* glsl */ `
   vec3 pl = position;
+  // Far off a plant is drawn with every other leaf, each a little larger.
+  float fewer = uSpare.y * step(${HALF_AT.toFixed(1)}, gp.far);
+  pl *= 1.0 - fewer * aLeaf.z * step(0.5, aLeaf.x);
+  pl.xz *= 1.0 + 0.22 * fewer * aLeaf.z;
   pl.y -= aLeaf.y * aLeaf.y * 0.42 * gp.droop * aLeaf.z;
   pl.xz *= 1.0 + 0.18 * gp.droop * aLeaf.y * aLeaf.z;
   pl.y = max(pl.y, 0.02);
@@ -433,6 +451,11 @@ interface FieldGfx {
   bounds: Sphere
   soil: Mesh
   plants: Mesh
+  plantMat: Material
+  plantWhole: Material | null
+  wholeMat: () => Material
+  plantCount: Material | null
+  countMat: () => Material
   blossoms: Mesh
   oatMesh: Mesh | null
   ring: Mark
@@ -480,6 +503,10 @@ export class Fields {
   private ahead = new Vector3()
   private windowOn = false
   private camAt = new Vector3()
+  // The savings in the whole plants a tool may switch off (1 on): thinned with distance, half the leaves far off, the
+  // window drawn in sooner in a level view.
+  private spare = { value: new Vector3(1, 1, 1) }
+  private trial = { value: new Vector2(1, 0) }
   private flatAt = FLAT_AT.high
   private flags: InstancedMesh
   private flagged = ''
@@ -545,7 +572,7 @@ export class Fields {
     const fell = { value: PARCELS[i].cover === 'brush' ? new Vector3(1, 0, 0) : new Vector3(0, -1, 1) }
     const oats = { value: new Vector3(0, 0, 0) }
     const rect = { value: new Vector4(f.x0, f.z0, 1 / FW, 1 / FD) }
-    const shared = { uT0: { value: t0 }, uT1: { value: t1 }, uRect: rect, uCrop: { value: crop }, uOpen: open, uWin: win, uPool: this.pool, uFadeR: this.fadeR, uSlope: { value: this.slope }, uSeed: { value: i * 17.3 } }
+    const shared = { uSpare: this.spare, uTrial: this.trial, uT0: { value: t0 }, uT1: { value: t1 }, uRect: rect, uCrop: { value: crop }, uOpen: open, uWin: win, uPool: this.pool, uFadeR: this.fadeR, uSlope: { value: this.slope }, uSeed: { value: i * 17.3 } }
     const bounds = new Sphere(new Vector3(f.cx, fieldBaseY(f.cz) + 0.3, f.cz), Math.hypot(FW, FD) / 2 + 2)
 
     // ---- soil
@@ -858,8 +885,13 @@ export class Fields {
       vertexWorld: `${sway('aAt.xz', 'max(cWorld.y - aAt.y, 0.0)', '0.55 * uOpen * (1.0 - 0.6 * uCrop.x) * (1.0 - 0.8 * gp.dead)')}
         cWorld.y += sin(uTime * 6.3 + aLeaf.x * 40.0 + aAt.w * 23.0) * 0.012 * aLeaf.y * aLeaf.z * min(uSway, 1.0) * (1.0 - gp.dead);`,
     })
-    const leafMat = (shape: Patch) => patch(new MeshStandardMaterial({ map: this.leafTex, alphaTest: 0.5, alphaToCoverage: true, side: DoubleSide, roughness: 0.82, metalness: 0 }), {
+    // A leaf is lit at its corners (see the patch): level across a crop a pixel has a dozen leaves behind one
+    // another, every one of them lit before the nearest is known, and lit in full they were the whole cost of
+    // coming close. (`whole`: lit at every pixel as before, for the tool that measures the one against the other.)
+    const leafMat = (shape: Patch, whole = false) => patch(new MeshStandardMaterial({ map: this.leafTex, alphaTest: 0.5, alphaToCoverage: true, side: DoubleSide, roughness: 0.82, metalness: 0 }), {
       ...shape,
+      corners: !whole,
+      cornersIf: 'slotIn > 0.0',
       translucent: 1.25,
       ambient: 1.0,
       shine: 0.2,
@@ -895,7 +927,8 @@ export class Fields {
         float open = uCrop.w * smoothstep(0.3, 0.55, gp.h0.r) * (1.0 - gp.h0.g) * (1.0 - gp.h0.b) * (1.0 - gp.dead)
           * (1.0 - min(1.0, uCrop.y * 1.5)) * (1.0 - 0.7 * gp.h1.a) * (1.0 - 0.6 * uCrop.x);
         // Not every plant is in flower at once: more of them at the height of the bloom.
-        showF = step(aFlower.z, open) * step(gp.r.x, 0.4 + 0.5 * uCrop.w) * step(0.3, slotIn) * step(${HEAD[1].toFixed(1)}, min(aAt.x - uRect.x, uRect.x + ${FW.toFixed(2)} - aAt.x));
+        // (a plant that stands for its neighbours carries their flowers too)
+        showF = step(aFlower.z, open * gp.stands) * step(gp.r.x, (0.4 + 0.5 * uCrop.w) * gp.stands) * step(0.3, slotIn) * step(${HEAD[1].toFixed(1)}, min(aAt.x - uRect.x, uRect.x + ${FW.toFixed(2)} - aAt.x));
         vTint = mix(${linear('#f8f5fa')}, ${linear('#d3c2e6')}, uTint * (0.4 + 0.6 * aFlower.w)) * 0.92;
       `,
       vertexWorld: /* glsl */ `
@@ -931,7 +964,9 @@ export class Fields {
 
     this.gfx.push({
       d0, d1, t0, t1, crop, soilColor, water, damp, cover, tint, oats, win, oatWin, off, avail, paint, under, nearU, coarse, ranges, rimeHere, tract, ground, open, bounds,
-      soil, plants, blossoms, oatMesh: null, ring, pulse, stake, pulseT: 9, selT: 9, near: false, any: false,
+      soil, plants, plantMat, plantWhole: null, wholeMat: () => leafMat(nearShape, true), blossoms, oatMesh: null,
+      // (for the tool that counts the leaves' fragments: each adds a sixty-fourth to the pixel it is drawn on)
+      plantCount: null, countMat: () => Object.assign(leafMat({ ...nearShape, key: 'county-plant-count', fragmentEnd: 'gl_FragColor = vec4( 1.0 / 64.0 );' }), { alphaToCoverage: false, blending: CustomBlending, blendSrc: OneFactor, blendDst: OneFactor }), ring, pulse, stake, pulseT: 9, selT: 9, near: false, any: false,
     })
     this.soilTarget.push(new Color(SOIL.good))
     this.cropTarget.push(new Vector4())
@@ -1231,7 +1266,10 @@ export class Fields {
     const pm = Math.min(this.pool.value.x, this.pool.value.y)
     const on = out + pm * 0.42
     const far = Math.hypot(on, height)
-    this.fadeR.value.set(far + pm * 0.05, far + pm * 0.9)
+    // Looked at level, the far part of the window is seen edge-on, a strip a few pixels deep with every plant in it
+    // behind another: the painted rows take over sooner there. Looked down on, the whole window shows and is kept.
+    const level = this.spare.value.z * Math.min(1, Math.max(0, (0.62 + d.y) / 0.37))
+    this.fadeR.value.set(far + pm * 0.05, far + pm * (0.9 - 0.4 * level))
     this.centre.set(c.x + (d.x / flat) * on, 0, c.z + (d.z / flat) * on)
   }
 
@@ -1406,6 +1444,35 @@ export class Fields {
   setTier(tier: 'high' | 'medium' | 'low', _density: number): void {
     this.sizePools(tier)
     this.flatAt = FLAT_AT[tier]
+  }
+
+  // For the tool that counts fragments: nothing of the fields drawn but the whole plants, each fragment of them
+  // adding to its pixel (`depth`: only those in front of what was drawn before them, as the picture keeps them); or
+  // (`on` false) everything as it was. Gives what was hidden, to be handed back.
+  counting(on: boolean, depth = true, hidden: Object3D[] = []): Object3D[] {
+    if (!on) { for (const o of hidden) o.visible = true }
+    else for (const o of this.group.children) if (o.visible && !this.gfx.some(g => g.plants === o)) { o.visible = false; hidden.push(o) }
+    for (const g of this.gfx) {
+      if (on && !g.plantCount) { g.plantCount = g.countMat(); this.disposables.push(g.plantCount) }
+      if (on && g.plantCount) { g.plantCount.depthTest = depth; g.plants.material = g.plantCount } else g.plants.material = g.plantMat
+    }
+    return hidden
+  }
+
+  // For the tools: draw the crop's whole plants without one of the things that make them cheaper, to measure it.
+  // 'corners': every leaf lit at every pixel, as it was.
+  // 'thin': every plant drawn however far; 'half': every leaf; 'reach': the window as deep in a level view as in any.
+  // And to find where the plants' cost lies: 'plants' (none drawn, their triangles still sent), 'near' (one plant in
+  // two everywhere, near ones too), 'a2c' (the cut-out with no coverage by samples).
+  tryWithout(name: 'corners' | 'thin' | 'half' | 'reach' | 'plants' | 'near' | 'a2c', on: boolean): void {
+    if (name === 'plants') { this.trial.value.x = on ? 0 : 1; return }
+    if (name === 'near') { this.trial.value.y = on ? 1 : 0; return }
+    if (name === 'a2c') { for (const g of this.gfx) for (const m of [g.plantMat, g.plantWhole]) if (m) { m.alphaToCoverage = !on; m.needsUpdate = true } return }
+    if (name !== 'corners') { this.spare.value[name === 'thin' ? 'x' : name === 'half' ? 'y' : 'z'] = on ? 0 : 1; return }
+    for (const g of this.gfx) {
+      if (on && !g.plantWhole) { g.plantWhole = g.wholeMat(); this.disposables.push(g.plantWhole) }
+      g.plants.material = on && g.plantWhole ? g.plantWhole : g.plantMat
+    }
   }
 
   // Shadows from plants reach the second cascade only when the first is too small to hold the fields.
