@@ -156,6 +156,7 @@ export interface CrewFrame {
   // the hills of this crew's segment `seg` (and all before it) up to arc length `arc` along its path have been passed
   passed: (unit: number, seg: number, arc: number, gen: number) => void
   speed: number           // the game clock's setting, 0..3
+  clock: number           // seconds since the last frame as the game's clock counts them (dt is capped shorter)
   daySec: number          // how long a day lasts on the clock, seconds (as at 1x when it is stopped)
 }
 
@@ -569,6 +570,11 @@ export class Crews {
     return this.actors.flatMap(a => a.segs.map(s => `${a.kind}${a.id}:${s.kind}@${s.field}`))
   }
 
+  // Where each one is in the day they are seen at (for tools).
+  clocks(): string[] {
+    return this.actors.map(a => `${a.id}:${a.segs.map(s => s.kind).join('+') || '-'} u${a.u.toFixed(2)}${a.way ? ` way${(a.way.t / a.way.T).toFixed(2)}${a.way.cut ? 'c' : ''}` : ''}${a.queue ? ' q' : ''}${a.line ? ` row${a.line.arc.toFixed(0)}/${a.line.poly.length.toFixed(0)}` : ''} g${a.gen} @${a.x.toFixed(0)},${a.z.toFixed(0)}`)
+  }
+
   // Where the farmer's machine is, and the person on foot if anyone is walking (for the look tools).
   where(): { tractor: Pt; farmer: { x: number; z: number; turn: number } | null; units: { id: number; kind: UnitKind; x: number; z: number; foot: boolean }[]; rigs: { kind: string; x: number; z: number; holder: number; broken: boolean }[] } {
     const f = this.actors.find(a => a.kind === 'farmer')
@@ -654,7 +660,7 @@ export class Crews {
     GRIME.value.set(0.52, 0.42, 0.31).lerp(V.set(0.2, 0.15, 0.11), clamp(env.wet * 1.4 - 0.3, 0, 1))
     const sf: StageFrame = {
       pr, particles: f.particles, dt: f.dt, time: f.time, s: big, snap, wind: env.wind, cold, still: f.reduced, going, stand: this.standOf,
-      pace: this.pace, lane: this.literal ? PACE.truck : clamp(f.dist / 16, 6, 30), literal: this.literal, dry: f.dust > 0.3 && !cold,
+      pace: this.pace, lane: this.literal ? PACE.truck : clamp(f.dist / 16, 6, 30), literal: this.literal, dry: f.dust > 0.3 && !cold, day: f.daySec,
     }
     const mf: MachineFrame = {
       dt: f.dt, time: f.time, particles: f.particles, dust: f.dust, mud: clamp(env.wet * 1.5 - 0.5, 0, 1), still: f.reduced || f.idle, cold: snap.weather.tmin < 4,
@@ -840,7 +846,7 @@ export class Crews {
     if (a.queue && (held || this.literal || a.u >= 1 || !a.segs.length)) this.take(a, a.queue, !held && !this.literal)
     if (held) { a.u = f.dayT; a.way = null }
     // (behind the clock after a way to go: the work is seen through a little quicker than the day runs, never jumped)
-    else if (f.advancing && !a.way) a.u = Math.min(a.queue ? 1 : f.dayT, a.u + (f.dt / f.daySec) * CATCH_UP)
+    else if (f.advancing && !a.way) a.u = Math.min(a.queue ? 1 : f.dayT, a.u + (f.clock / f.daySec) * CATCH_UP)
     a.lastT = f.dayT
     let segIdx = -1
     for (let s = 0; s < a.segs.length; s++) if (a.u >= a.segs[s].start) segIdx = s
@@ -923,7 +929,7 @@ export class Crews {
     }
     if (a.way) {
       const wy = a.way, was = wy.t
-      if (going) wy.t += f.dt
+      if (going) wy.t += f.clock
       // (where the way is cut they come into sight a little small, and grow to themselves)
       if (wy.cut && was < WAY_LEAD * wy.T && wy.t >= WAY_LEAD * wy.T) a.shown = 0.5
       const s = wayAt(wy)

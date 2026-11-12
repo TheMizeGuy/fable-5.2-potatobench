@@ -187,7 +187,8 @@ export function buildSite(kind: BuildingKind, yard: number): Spot {
 export function packSite(): Spot {
   const s = siteOf('packing', -1)!
   const dx = s.x - s.door.x, dz = s.z - s.door.z, l = Math.hypot(dx, dz) || 1
-  return { x: s.door.x - (dx / l) * 0.5 * S, z: s.door.z - (dz / l) * 0.5 * S, heading: Math.atan2(dz, dx) + Math.PI / 2 }
+  // (under the porch roof: the table and those on both sides of it stand on the porch's floor)
+  return { x: s.door.x + (dx / l) * 0.09 * S, z: s.door.z + (dz / l) * 0.09 * S, heading: Math.atan2(dz, dx) + Math.PI / 2 }
 }
 
 // Where a crew stands when it is at a place and not working: a field's corner, or its spot at a yard.

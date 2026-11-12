@@ -674,7 +674,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     crews.place({
       dt, dayT, advancing: app.speed > 0, pace: replayPace, time, reduced, idle: snap.mode !== 'season' && snap.mode !== 'title',
       season: snap.mode === 'season', dist: rig.cur.dist, dust: env.dry, dark: clamp((LAMP.value * lit.exposure) / 5, 0, 1), picked: app.unit, particles, passed, snap, env, camera: cam,
-      speed: app.speed, daySec: 1 / DAYS_PER_SECOND[Math.max(1, app.speed)],
+      speed: app.speed, daySec: 1 / DAYS_PER_SECOND[Math.max(1, app.speed)], clock: Math.min(0.25, dtMs / 1000),
     })
     // Smoke from the kitchen chimney: all day in the cold, a thread of it at supper time. It goes on rising and leans
     // away downwind, a plume a few roofs high: from two fields off it says where the house is and which way the wind sets.
@@ -956,6 +956,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       unitPin: (id: number) => unitAnchor(id),
       // Where people are to be looked for in the yard, in metres (for tools that point the camera at them).
       places: () => crews.places(),
+      clocks: () => crews.clocks(),
       // What a click at a point on the screen would pick.
       pickAt: (x: number, y: number) => ({ field: pick(x, y), unit: pickUnit(x, y), yard: pickYard(x, y), mode: snap.mode, held: snap.fields.map(f => f.held), available: snap.fields.map(f => f.available) }),
       parts: () => Object.keys(parts),

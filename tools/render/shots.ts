@@ -672,7 +672,8 @@ const nearPlace = async (page: Page, name: string, v: View) => {
 const settled = async (page: Page) => { await page.waitForTimeout(2500); await page.evaluate(() => (window as any).__countyField.settle()) }
 const CALLERS = `start(); hire(2); say(app.do({ t: 'begin' })); run(186); const c = app.campaign, d = c.season.day; c.incidents.push({ id: c.nextIncident++, kind: 'poach', day: d, until: d + 4, choices: ['match', 'refuse'], unit: 1, wage: 900 }, { id: c.nextIncident++, kind: 'buyer', day: d, until: d + 7, choices: ['take', 'refuse'], lot: 0 }, { id: c.nextIncident++, kind: 'applicant', day: d, until: d + 4, choices: ['hire', 'refuse'], applicant: { id: 99, name: 'Test', skills: { machine: 3, field: 3, woods: 3, build: 3, pack: 3 }, trait: 'strong', ask: 700 } }); app.emit({ type: 'change' })`
 const BROKEN = `start(); hire(1); say(app.do({ t: 'begin' })); run(186); clear(); const c = app.campaign; c.broken.push(c.season.day + 3); c.incidents.push({ id: c.nextIncident++, kind: 'breakdown', day: c.season.day, until: c.season.day + 4, choices: ['rush', 'wait'], unit: 0, back: c.season.day + 3 }); app.emit({ type: 'change' })`
-const IDLE = `start(); put('bunk'); hire(4); say(app.do({ t: 'begin' })); run(186); clear()`
+// (hands taken on that morning, with no orders yet: they wait in the dooryard)
+const IDLE = `start(); put('bunk'); hire(2); say(app.do({ t: 'begin' })); run(186); clear(); hire(3)`
 const WINTER = `start(); put('bunk'); put('packing'); hire(4); say(app.do({ t: 'begin' })); run(400); if (app.campaign.phase === 'season') app.do({ t: 'endSeason' }); for (const u of [3, 4]) say(app.do({ t: 'winter', unit: u, work: 'pack' })); app.do({ t: 'month' })`
 const REEL = `start(); say(app.do({ t: 'buy', upgrade: 'reel' })); hire(1); say(app.do({ t: 'begin' })); run(196); clear(); job('water', 5, 0); job('water', 5, 1)`
 const PIPE = `start(); put('pond'); app.campaign.pond = 6; hire(1); say(app.do({ t: 'begin' })); run(196); app.campaign.pond = 6; clear(); job('water', 5, 0); job('water', 5, 1)`
@@ -682,19 +683,19 @@ const BUILDS = ['house', 'shed', 'bunk', 'packing', 'pond', 'stand', 'station', 
 const round2: Shot[] = [
   ...BUILDS.map((kind): Shot => ({
     name: `r2-build-${kind}`, setup: async page => {
-      console.log('  ', await farm(page, `start(); put('bunk'); hire(4); say(app.do({ t: 'begin' })); run(139, ['plant']); clear(); say(app.do({ t: 'build', kind: '${kind}', yard: -1 })); until(['build'], 3); errs.push(sim.buildingInfo(app.campaign).filter(b => b.state === 'building').map(b => b.kind + ' ' + b.progress.toFixed(2)).join(','))`))
-      await seek(page, 0.6, 5200, 1)
-      await onUnit(page, await worker(page, 'build'), { dist: 12, yaw: -2.2, pitch: 0.45 })
+      await reach(page, `start(); ${kind === 'bunk' ? 'hire(2)' : `put('bunk'); hire(4)`}; say(app.do({ t: 'begin' })); run(139, ['plant']); clear(); only([1, 2, 3, 4], 'build'); say(app.do({ t: 'build', kind: '${kind}', yard: -1 }))`,
+        `until(['build'], 3); errs.push(sim.buildingInfo(app.campaign).filter(b => b.state === 'building').map(b => b.kind + ' ' + b.progress.toFixed(2)).join(','))`, 0.6, 6000)
+      await onUnit(page, await worker(page, 'build'), kind === 'stand' || kind === 'station' ? { dist: 13, yaw: 0.6, pitch: 1.1 } : { dist: 15, yaw: -2.2, pitch: 0.6 })
     },
   })),
   { name: 'r2-build-yard', size: [1920, 1080], setup: async page => { await reach(page, SPRING, `until(['build'])`, 0.6, 5200); await tierAt(page, 'yard'); await frames(page, 20); await pinPeople(page) } },
   { name: 'r2-sunday-yard', size: [1920, 1080], setup: async page => { await farm(page, SUNDAY); await settle(page); await farm(page, `app.do({ t: 'day' })`); await settled(page); await tierAt(page, 'yard'); await frames(page, 20); await pinPeople(page) } },
   { name: 'r2-sunday-near', setup: async page => { await farm(page, SUNDAY); await settle(page); await farm(page, `app.do({ t: 'day' })`); await settled(page); await nearPlace(page, 'porch', { dist: 7, yaw: 1.0, pitch: 0.3 }) } },
   { name: 'r2-idle-yard', size: [1920, 1080], setup: async page => { await farm(page, IDLE); await settle(page); await farm(page, `app.do({ t: 'day' })`); await settled(page); await tierAt(page, 'yard'); await frames(page, 20); await pinPeople(page) } },
-  { name: 'r2-idle-near', setup: async page => { await farm(page, IDLE); await settle(page); await farm(page, `app.do({ t: 'day' })`); await settled(page); await nearPlace(page, 'dooryard', { dist: 8, yaw: 0.9, pitch: 0.3 }) } },
+  { name: 'r2-idle-near', setup: async page => { await farm(page, IDLE); await settle(page); await farm(page, `app.do({ t: 'day' })`); await settled(page); await nearPlace(page, 'dooryard', { dist: 9, yaw: 0.9, pitch: 0.45 }) } },
   { name: 'r2-callers-yard', size: [1920, 1080], setup: async page => { await farm(page, CALLERS); await settle(page); await tierAt(page, 'yard'); await frames(page, 20); await pinPeople(page) } },
   { name: 'r2-callers-gate', setup: async page => { await farm(page, CALLERS); await settle(page); await nearPlace(page, 'gate', { dist: 7, yaw: 0.6, pitch: 0.34 }) } },
-  { name: 'r2-buyer-door', setup: async page => { await farm(page, CALLERS); await settle(page); await nearPlace(page, 'buyer', { dist: 8, yaw: 2.4, pitch: 0.32 }) } },
+  { name: 'r2-buyer-door', setup: async page => { await farm(page, CALLERS); await settle(page); await nearPlace(page, 'buyer', { dist: 8, yaw: 0.5, pitch: 0.5 }) } },
   { name: 'r2-mender-yard', size: [1920, 1080], setup: async page => { await farm(page, BROKEN); await settle(page); await farm(page, `app.do({ t: 'day' })`); await settled(page); await tierAt(page, 'yard'); await frames(page, 20); await pinPeople(page) } },
   { name: 'r2-mender-near', setup: async page => { await farm(page, BROKEN); await settle(page); await farm(page, `app.do({ t: 'day' })`); await settled(page); await onTractor(page, { dist: 6, yaw: 0.9, pitch: 0.3 }, 0.4, 0.2) } },
   { name: 'r2-applicants-yard', size: [1920, 1080], setup: async page => { await farm(page, `start()`); await settle(page); await tierAt(page, 'yard'); await frames(page, 20); await pinPeople(page) } },
@@ -710,6 +711,18 @@ const round2: Shot[] = [
   { name: 'r2-brush-near', setup: async page => { await reach(page, SPRING, `until(['brush'])`, 0.5, 9000); const w = await did(page, 'brush'); await onUnit(page, w.unit, { dist: 13, yaw: 0.7, pitch: 0.4 }) } },
 ]
 shots.push(...round2)
+// The clock running, in words: where each one is in the day they are seen at, every third of a second.
+shots.push({ name: 'r2-clock-log', setup: async page => {
+  await farm(page, SPRING)
+  await settle(page)
+  await settled(page)
+  await tierAt(page, 'field', 2)
+  await page.evaluate(() => (window as any).__county.app.setSpeed(1))
+  for (let k = 0; k < 24; k++) {
+    await page.waitForTimeout(330)
+    console.log('  ', k, await page.evaluate(() => { const f = (window as any).__countyField, a = (window as any).__county.app; return `day ${a.campaign.season.day} t${f.info().dayT.toFixed(2)} pend ${f.info().pending} | ` + f.clocks().slice(0, 4).join(' | ') }))
+  }
+} })
 // The clock running at 1x: the way out to the day's work from the field tier and from the yard; people who live out
 // coming in by the road; the stone boat, the brush fires and the loads on the lane as they go on from day to day.
 const running = (name: string, n: number, gap: number, scenario: string, then: string, look: (page: Page) => Promise<void>, speed = 1): Strip => ({
@@ -732,7 +745,7 @@ strips.push(
   running('r2-liveout-field', 14, 120, LIVE_OUT, `app.do({ t: 'day' }); app.do({ t: 'day' })`, async page => { await tierAt(page, 'field', 1) }),
   running('r2-rocks-field', 12, 450, SPRING, '', async page => { await tierAt(page, 'field', 1) }),
   running('r2-brush-field', 12, 450, SPRING, '', async page => { await tierAt(page, 'field', 5) }),
-  running('r2-haul-lane', 10, 1800, HARVEST, `job('dig', 0, 0); until(['dig']); until(['haul'], 4)`, async page => { await tierAt(page, 'farm') }),
+  running('r2-haul-lane', 10, 1800, HARVEST, `job('dig', 0, 0); until(['dig']); until(['haul'], 4)`, async page => { await tierAt(page, 'field', 0) }),
   // The clock stopped and a day's digging ordered: the way in, then the day's band out, inside what the interface waits.
   { name: 'r2-dig-stopped', n: 12, gap: 200, size: [1920, 1080], setup: async page => { await farm(page, HARVEST); await settle(page); await tierAt(page, 'field', 0); await frames(page, 20); console.log('  ', await farm(page, `job('dig', 0, 0); app.do({ t: 'day' })`)) } },
   { name: 'r2-fell-near', n: 10, gap: 500, setup: async page => { await farm(page, FELLING.replace('= 18', '= 12')); await settle(page); await farm(page, `until(['fell'])`); await hold(page, 0.75, 500); await onUnit(page, await worker(page, 'fell'), { dist: 15, yaw: 0.5, pitch: 0.3 }, 0.5, -1); await farm(page, `app.do({ t: 'day' })`) } },

@@ -44,6 +44,7 @@ export interface StageFrame {
   lane: number             // and a machine on the lane
   literal: boolean         // the clock is stopped and the day's work goes at its own pace
   dry: boolean             // dry ground: what is dragged over it raises dust
+  day: number              // how long a day lasts on the clock, seconds
 }
 
 interface Site {
@@ -451,7 +452,7 @@ export class Stage {
       pr.put('ball', b, Y, d, (0.075 + 0.03 * hash(n + 3)) * s, 0.06 * s, (0.07 + 0.02 * hash(n + 7)) * s, GRAVEL)
     }
     // dry ground: the runners raise a little dust
-    if (moving && f.dry && !f.still && Math.random() < 0.35) f.particles.emit(st.bx - st.dir * 1.6, a.y + 0.3, st.bz + (Math.random() - 0.5), -st.dir * 0.3, 0.25, 0, 1.2, 2.2, 2.4, 0.56, 0.47, 0.36, 0.2, 0.5)
+    if (moving && f.dry && !f.still && Math.random() < 0.5) f.particles.emit(st.bx - st.dir * 1.6, a.y + 0.5, st.bz + (Math.random() - 0.5), -st.dir * 0.3, 0.3, 0, 2.2, 3.4, 3.2, 0.56, 0.47, 0.36, 0.22, 0.5)
     ws.forEach((w, r) => {
       w.rig = null
       w.aboard = false
@@ -605,7 +606,8 @@ export class Stage {
       }
     } else {
       // a heap of what is being moved
-      this.P(st, s, -1.2, 0, 0.9, a)
+      // (in on the ground being dug or spread, clear of what is stacked at the site's corner)
+      this.P(st, s, 1.0, 0, 0.9, a)
       pr.put('dome', a, Y, X, 0.7 * s, 0.34 * s, 0.6 * s, kind === 'road' ? GRAVEL : EARTH)
     }
     ws.forEach((w, r) => {
@@ -614,10 +616,10 @@ export class Stage {
       if (earth) {
         const role = r % 4
         if (role % 2 === 0) {
-          if (this.go(st, w, f, 0.2 + 0.5 * r, -0.4 + 0.5 * (r % 3), 0.3)) forking(w.pose, frac(st.t / 2.2 + r * 0.4))
+          if (this.go(st, w, f, 2.4 + 0.5 * r, -0.4 + 0.5 * (r % 3), 0.3)) forking(w.pose, frac(st.t / 2.2 + r * 0.4))
         } else {
           const u = frac(st.t / 6 + r * 0.3)
-          const there = this.go(st, w, f, u < 0.5 ? 0.6 : -0.9, u < 0.5 ? 0.4 : 0.8, 0, u < 0.5 ? 1 : 0)
+          const there = this.go(st, w, f, u < 0.5 ? 2.8 : 1.3, u < 0.5 ? 0.4 : 0.8, 0, u < 0.5 ? 1 : 0)
           if (u < 0.5) { w.pose.held = 'stone'; w.pose.size = 1.2 }
           if (there) stoop(w.pose.reset(), 0.8, st.t * 3)
         }
@@ -677,15 +679,23 @@ export class Stage {
     const CAP = LOAD
     let j = st.job.get(w.id)
     if (!j) { j = { ph: 0, t: (r * 0.37) % 1, x: 0, z: 0, n: 0 }; st.job.set(w.id, j) }
-    // the lap: loading, the drive in, unloading, the drive back, as shares of it
-    const drive = trip.length / Math.max(1, f.lane), stand = f.literal ? 0.22 * (2 * drive) / 0.56 : 5
-    const total = 2 * drive + 2 * stand
-    const q0 = stand / total, q1 = q0 + drive / total, q2 = q1 + q0
+    // The lap: loading, the drive in, unloading, the drive back, as shares of it. With the clock running a lap is
+    // two days long (a job of a day or two would otherwise never be seen to leave the field), and a drive too long
+    // to make in its share of that at a pace that reads is cut, as the way to any work is: away from one end, in to
+    // the other.
+    const q0 = f.literal ? 0.22 : 0.18, q1 = 0.5, q2 = q1 + q0
+    const lapS = Math.min(3.4, Math.max(2.4, 2 * f.day)), legS = lapS * (q1 - q0), reach = f.lane * legS
     if (f.literal) j.t = frac(Math.min(0.99999, w.w) * Math.max(1, w.loads))
-    else if (f.going) j.t = frac(j.t + f.dt / total)
+    else if (f.going) j.t = frac(j.t + f.dt / lapS)
     const lap = j.t
     const loading = lap < q0, out = lap >= q0 && lap < q1, unloading = lap >= q1 && lap < q2, back = lap >= q2
-    const along = loading ? 0 : out ? ease((lap - q0) / (q1 - q0)) : unloading ? 1 : 1 - ease((lap - q2) / (1 - q2))
+    const leg = (u: number): number => {
+      if (f.literal || trip.length <= reach * 1.25) return ease(u)
+      if (u < 0.4) return ((reach * 0.4) / trip.length) * (u / 0.4) * (u / 0.4)
+      const r = (u - 0.4) / 0.6
+      return 1 - ((reach * 0.6) / trip.length) * (1 - r) * (1 - r)
+    }
+    const along = loading ? 0 : out ? leg((lap - q0) / (q1 - q0)) : unloading ? 1 : 1 - leg((lap - q2) / (1 - q2))
     // the second machine stands a length behind the first
     const stood = loading || unloading
     const p = trip.at(Math.max(0, Math.min(trip.length, along * trip.length - (unloading ? r * 3.4 * s : 0))))
@@ -809,7 +819,7 @@ export class Stage {
       const sweep = Math.PI + 2.3 * Math.sin(st.t * 0.33)
       b.copy(c).add(d.set(Math.cos(sweep) * 0.5 * s, 0.26 * s, Math.sin(sweep) * 0.5 * s))
       pr.rod('cyl', c, b, 0.03 * s, COLORS.ALU)
-      if (f.going) jet(b, sweep, 38 + 2 * Math.sin(st.t * 7), 5.5, 0.05, 14, 1)
+      if (f.going) jet(g.copy(b), sweep, 38 + 2 * Math.sin(st.t * 7), 5.5, 0.05, 14, 1)
       tendZ = laneZ + 1.2
     } else {
       // The main comes up the headland from the pond's side; the line across the rows is moved down the field a set at
