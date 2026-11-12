@@ -14,7 +14,7 @@ import { icon } from './icons.ts'
 import { incidentCard } from './incident.ts'
 import { ticket, trayPaper } from './dig.ts'
 import { digitFor, fieldForDigit, isTract } from './map.ts'
-import { personCard, workGrid } from './people.ts'
+import { askSpray, personCard, sprayWay, workGrid } from './people.ts'
 import { pins } from './pins.ts'
 import { plates, type PlateModel } from './plates.ts'
 import { hint as hintText, isJob, isStale, jobText, JOB_VERB, KEY_JOB, stageGlyph } from './rules.ts'
@@ -79,6 +79,10 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   const notesSlot = h('div', { class: 'notes-slot sys' })
   const trayHost = h('div', { class: 'tray-host sys' })
   const paused = h('p', { class: 'paused sys', testid: 'paused', hidden: true })
+  // In the same place while the days run: the clock's state is said at a glance either way, and after a sheet's Back
+  // or a telegram's answer sets the days going, the chip that says so is lit for a moment.
+  const running = h('p', { class: 'paused running sys', testid: 'running', hidden: true })
+  let ranAt = 0
   const veil = h('div', { class: 'veil sys', hidden: true })
   // The way back from a zoom, a pan or a tilt, always in the same place: what the Home key does.
   const homeKey = h('button', { class: 'iconbtn view-home sys', type: 'button', testid: 'view-home', 'aria-label': 'Back to the whole farm (Home)', title: 'Back to the whole farm (Home)', onclick: () => ctx.view.home() }, icon('land', 'i'))
@@ -90,7 +94,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   const yard = yardCard(ctx)
   const grid = workGrid(ctx)
   const incident = incidentCard(ctx)
-  const el = h('main', { class: 'season-screen' }, veil, top.el, paused, homeKey, card.el, yard.el, person.el, grid.el, trayHost,
+  const el = h('main', { class: 'season-screen' }, veil, top.el, paused, running, homeKey, card.el, yard.el, person.el, grid.el, trayHost,
     h('div', { class: 'foot' }, h('div', { class: 'foot-book' }, crew, clockSlot), notesSlot), incident.el)
 
   // The selection drawn on the land: a dashed line round each selected field laid on its corners, a registration mark
@@ -196,6 +200,17 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   }
 
   let frostWarned = -1
+  // Spraying is asked about once a season, the first time blight weather comes; put away unanswered, it is not asked
+  // again (Who does what asks it again).
+  let sprayAsked = ''
+  function askSprayOnce(c: S.Campaign): void {
+    const s0 = c.season
+    const key = `${c.seed}.${c.year}`
+    if (!s0 || s0.watchDay < 0 || sprayAsked === key || sprayWay(c) || S.seasonDone(c)) return
+    sprayAsked = key
+    if (S.routineInfo(c).some(r => r.kind === 'spray' && r.auto)) return
+    askSpray(ctx)
+  }
   const off = app.on(ev => {
     if (ev.type === 'yard' || ev.type === 'unit' || ev.type === 'select') ctx.dirty()
     else if (ev.type === 'events') {
@@ -289,7 +304,8 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     const queue = queued.map(j => ({ glyph: j.kind as string, active: j === head }))
     if (queue.length) said.push(`on the list: ${F.list(queued.map(j => JOB_VERB[j.kind].toLowerCase()))}`)
     const lot = f.lot >= 0 ? c.lots.find(l => l.id === f.lot) : undefined
-    const badge = need && isJob(need.act)
+    // Spraying the player said not to do this year carries no stamp.
+    const badge = need && isJob(need.act) && !(need.act === 'spray' && sprayWay(c) === 'none')
       ? { glyph: need.act as string, label: `${F.localize(need.text)} ${F.localize(need.why)}`, urgent: need.urgent, ink: inkFor(need.act, need.urgent, f) }
       : need && need.act === 'sell' && lot ? { glyph: 'ticket', label: `${F.localize(need.text)} ${F.localize(need.why)}`, urgent: need.urgent, ink: 'ink' as Ink } : null
     const key = digitFor(c, i)
@@ -314,7 +330,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   }
 
   // What floats over the land: nothing on the land is left under it.
-  const floating = () => [card.el, yard.el, person.el, grid.el, incident.el, trayHost.firstElementChild as HTMLElement | null, paused]
+  const floating = () => [card.el, yard.el, person.el, grid.el, incident.el, trayHost.firstElementChild as HTMLElement | null, paused, running]
   // Read once a frame, before anything on the land is moved, so the frame never forces a second layout.
   let coverCache: DOMRect[] | null = null
   const covers = (): DOMRect[] => coverCache ?? floating().filter((x): x is HTMLElement => !!x && !x.hidden && x.offsetParent !== null).map(x => x.getBoundingClientRect())
@@ -545,7 +561,17 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       el.classList.toggle('is-paused', !paused.hidden)
       if (!paused.hidden) patch(paused, JSON.stringify([ctx.touch(), app.resumeSpeed]), () => h('button', { class: 'paused-go btn', type: 'button', testid: 'paused-go', onclick: () => app.togglePause() },
         icon('play', 'i'), h('span', { class: 'sr' }, 'Paused. '), `Go on at ${app.resumeSpeed || 1}×`, ctx.touch() ? null : h('span', { class: 'key' }, 'Space')))
+      const wasRunning = !running.hidden
+      running.hidden = app.speed === 0 || S.seasonDone(c) || (stoppedFor && layout !== 'narrow') || (layout === 'narrow' && app.selection.length > 0)
+      if (!running.hidden && !wasRunning) ranAt = performance.now()
+      if (!running.hidden) {
+        patch(running, JSON.stringify([ctx.touch(), app.speed]), () => h('button', { class: 'paused-go btn', type: 'button', testid: 'running-stop', onclick: () => app.togglePause() },
+          icon('pause', 'i'), `Days running at ${app.speed}×`, ctx.touch() ? null : h('span', { class: 'key' }, 'Space')))
+        running.classList.toggle('lit', performance.now() - ranAt < 2400)
+        if (performance.now() - ranAt < 2400) setTimeout(() => ctx.dirty(), 2450)
+      }
       updateHint()
+      askSprayOnce(c)
       P.update()
       updateYards(c, tgt && 'yard' in tgt ? tgt.yard : 0)
       units.update(c)
@@ -574,11 +600,12 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       }
       const t = Math.max(top.el.getBoundingClientRect().bottom, ...[...top.el.querySelectorAll<HTMLElement>('.almanac > .mount, .bank > .mount')].map(x => x.getBoundingClientRect().bottom))
       const vis = (x: HTMLElement) => !x.hidden && x.offsetParent !== null && x.offsetHeight > 0
-      // The time book, its list and the alerts at the foot; the clock with them on a phone.
-      const low = [...(crew.children as HTMLCollectionOf<HTMLElement>), clockSlot, notesSlot].filter(vis).map(x => box(x).top)
+      // The time book and its list at the foot; the clock with them on a phone. The alerts come and go over the land
+      // and do not frame it.
+      const low = [...(crew.children as HTMLCollectionOf<HTMLElement>), clockSlot].filter(x => vis(x) && !x.classList.contains('pressing')).map(x => box(x).top)
       const bottom = innerHeight - Math.min(...low, innerHeight) + 6
       // Only what always stands frames the land: a bar, a page or the grid opening on a click never moves the camera
-      // (the bar steps to the other side of what it belongs to instead; tags under a card stand aside). On a phone
+      // (the bar steps to the other side of what it belongs to instead; a card lies over the tags). On a phone
       // the bar is a sheet over half the land, so there the land is framed above it.
       const sheet = layout === 'narrow' ? [card.el, yard.el].find(vis) : undefined
       return [t, 0, sheet ? innerHeight - box(sheet).top + 6 : bottom, 0]

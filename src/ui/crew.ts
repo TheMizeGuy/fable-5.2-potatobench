@@ -6,8 +6,8 @@ import { h, type Child } from './dom.ts'
 import * as F from './fmt.ts'
 import { icon } from './icons.ts'
 import { placeName, where } from './map.ts'
-import { doingGlyph, idleWithWork } from './people.ts'
-import { firstName, initial, JOB_DOING, jobText, KIND_GLYPH, KIND_NAME, kindDoes, personSign, SKILL_NAME, type Sign } from './rules.ts'
+import { doingGlyph, idleWithWork, sprayWay } from './people.ts'
+import { firstName, initial, JOB_DOING, JOB_VERB, jobText, KIND_GLYPH, KIND_NAME, kindDoes, personSign, SKILL_NAME, type Sign } from './rules.ts'
 import { portrait, ringed, ringOf } from './system/people.ts'
 
 // What a crew is doing now, in a few words, and the glyph and place that go with it.
@@ -62,6 +62,26 @@ export interface BarHooks {
 }
 
 const NEXT_MS = 2600
+
+// Each order's fate (who takes it and when, or why nobody will) and the work the season cannot wait for, worked out
+// once for each state of the list and the people: it plays the next day on a copy of the farm.
+let fate: { key: string; of: Map<number, S.JobOutlook>; pressing: S.Pressing[] } = { key: '', of: new Map(), pressing: [] }
+export function fates(world: S.World, c: S.Campaign): { of: Map<number, S.JobOutlook>; pressing: S.Pressing[] } {
+  const s = c.season
+  if (!s) return { of: new Map(), pressing: [] }
+  const key = JSON.stringify([c.seed, c.year, s.day, s.watchDay, s.jobs.map(j => [j.id, j.unit, j.kind, j.field, j.done > 0]), c.crew.map(u => [u.id, u.prio, u.rest, u.foreman, u.out, u.job, Math.round(u.tired * 20)]), c.routine])
+  if (key !== fate.key) fate = { key, of: new Map(S.jobOutlook(world, c).map(o => [o.id, o])), pressing: S.pressing(world, c) }
+  return fate
+}
+
+// The one press that clears the way for pressing work, in words.
+function fixWord(c: S.Campaign, p: S.Pressing): string {
+  const f = p.fix
+  if (!f) return ''
+  if (f.t === 'job') return `${JOB_VERB[p.kind]} ${S.FIELD_NAMES[p.field] ?? ''}`.trim()
+  if (f.t === 'priority') { const u = c.crew.find(x => x.id === f.unit); return u ? `${firstName(u.name)}: ${SKILL_NAME[f.work].toLowerCase()} work first` : 'Put it first' }
+  return 'Clear the way'
+}
 
 export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c: S.Campaign): void; escape(): boolean; dispose(): void } {
   const app = ctx.app
@@ -135,7 +155,20 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
     }, kids, h('span', { class: 'sr' }, `. ${said} ${on ? 'Their card is open. Press again to close it.' : 'Press for their card; orders given now go to them.'}`))
   }
 
-  function queue(c: S.Campaign, jobs: S.Job[], crews: S.CrewInfo[], people: S.PersonInfo[], waits: Record<number, string>, many: boolean, room: number): Child {
+  // Work the season cannot wait for that nobody will take, or that is not ordered: what it is, what is in its way,
+  // and the one press that clears it.
+  function pressingRow(c: S.Campaign, list: S.Pressing[]): Child {
+    if (!list.length) return null
+    return h('div', { class: 'pressing sys', role: 'group', 'aria-label': 'Work that cannot wait', testid: 'pressing' }, list.slice(0, 2).map(p =>
+      h('p', { class: 'press' }, icon(p.kind, 'i'),
+        h('span', { class: 'press-text' }, h('b', null, `${JOB_VERB[p.kind]} ${S.FIELD_NAMES[p.field] ?? ''}`.trim()), `: ${p.why}. ${F.localize(p.inWay)}`),
+        p.fix ? h('button', {
+          class: 'btn', type: 'button', testid: `pressing-fix-${p.kind}-${p.field}`,
+          onclick: () => { const r = ctx.run(p.fix!); if (r.ok) ctx.announce(`${fixWord(c, p)}: done.`) },
+        }, fixWord(c, p)) : null)))
+  }
+
+  function queue(c: S.Campaign, jobs: S.Job[], crews: S.CrewInfo[], people: S.PersonInfo[], waits: Record<number, string>, many: boolean, room: number, of: Map<number, S.JobOutlook>): Child {
     if (!jobs.length) return null
     const touch = ctx.touch()
     const head = jobs.find(j => !waits[j.id]) ?? null
@@ -148,6 +181,10 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
         const lockDig = (j.kind === 'dig' && j.done > 0) || j.kind === 'haul' || j.kind === 'build'
         const by = j.by ?? 'you'
         const who = holder(crews, j)
+        // Who will take it and when, or why nobody will.
+        const o = of.get(j.id)
+        const taker = o && o.unit >= 0 ? c.crew.find(u => u.id === o.unit) : undefined
+        const fateSaid = o ? F.localize(o.why) : ''
         const able = people.filter(p => S.unitBlock(c, j.kind, p.id) === '')
         const whoSaid = who ? `${who.pinned ? 'given to' : 'taken by'} ${who.u.name === S.FARMER_NAME ? 'you' : who.u.name}` : 'for anyone'
         const choices = many && able.length > 1 ? h('div', { class: 'q-who', role: 'group', 'aria-label': `Who does ${what.toLowerCase()}` },
@@ -157,8 +194,8 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
           }, x.id >= 0 ? ringed(x, ringFor(c, x.id), 22) : null, x.name))) : null
         return h('li', { class: 'q-item', k: `q-${j.id}` },
           h('button', {
-            class: `q${j === head ? ' active' : ''}${waits[j.id] ? ' waiting' : ''} by-${by}`, type: 'button', testid: `queue-${j.id}`, 'aria-expanded': String(pop === j.id),
-            title: touch ? undefined : `${what}, ${whoSaid}${waits[j.id] ? ` (waiting: ${waits[j.id]})` : ''}. Click for its choices${k > 0 ? '; Ctrl-click to do it first' : ''}`,
+            class: `q${j === head ? ' active' : ''}${waits[j.id] || o?.when === 'waiting' ? ' waiting' : ''}${o && o.unit < 0 ? ' nobody' : ''} by-${by}`, type: 'button', testid: `queue-${j.id}`, 'aria-expanded': String(pop === j.id),
+            title: touch ? undefined : `${what}. ${fateSaid || whoSaid} Click for its choices${k > 0 ? '; Ctrl-click to do it first' : ''}`,
             onclick: (e: Event) => {
               const m = e as MouseEvent
               if (m.ctrlKey || m.metaKey) bump(j.id)
@@ -168,9 +205,12 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
             onpointerenter: (e: Event) => { if ((e as PointerEvent).pointerType === 'mouse' && j.field >= 0) app.setHover(j.field) },
             onpointerleave: () => { if (app.hover === j.field) app.setHover(-1) },
           }, icon(j.kind, 'i'), where(c, j.field),
-          many && who ? h('span', { class: `q-tag${who.pinned ? ' pinned' : ''}`, style: `--c:${ringFor(c, who.u.id)}`, 'aria-hidden': 'true' }, initial(who.u.name)) : null,
+          o && o.unit < 0 ? h('span', { class: 'q-tag q-nobody', testid: `queue-nobody-${j.id}`, 'aria-hidden': 'true' }, '!')
+            : taker && many ? h('span', { class: `q-tag${who?.pinned ? ' pinned' : ''} q-${o!.when}`, style: `--c:${ringFor(c, taker.id)}`, 'aria-hidden': 'true' }, initial(taker.name))
+              : many && who ? h('span', { class: `q-tag${who.pinned ? ' pinned' : ''}`, style: `--c:${ringFor(c, who.u.id)}`, 'aria-hidden': 'true' }, initial(who.u.name)) : null,
+          o && o.when === 'waiting' && o.unit >= 0 ? h('span', { class: 'q-wait', 'aria-hidden': 'true' }, icon('stale', 'i')) : null,
           by !== 'you' ? h('span', { class: 'q-by', title: touch ? undefined : by === 'routine' ? 'Put on the list by the crew\'s routine' : 'Put on the list by the foreman' }, icon(by === 'routine' ? 'sprout' : 'foreman', 'i')) : null,
-          h('span', { class: 'sr' }, `${what}, ${by === 'routine' ? 'put on the list by the routine, ' : by === 'foreman' ? 'put on the list by the foreman, ' : ''}${whoSaid}${waits[j.id] ? `, waiting: ${waits[j.id]}` : j.done > 0 && j.need > 0 ? `, ${F.pct(j.done / j.need)} done` : ''}. ${touch ? 'Tap' : 'Click'} for its choices.`)),
+          h('span', { class: 'sr' }, `${what}, ${by === 'routine' ? 'put on the list by the routine, ' : by === 'foreman' ? 'put on the list by the foreman, ' : ''}${whoSaid}${j.done > 0 && j.need > 0 ? `, ${F.pct(j.done / j.need)} done` : ''}. ${fateSaid} ${touch ? 'Tap' : 'Click'} for its choices.`)),
           !lockDig ? h('button', { class: 'q-x', type: 'button', testid: `list-x-${j.id}`, 'aria-label': `${what}: take it off the list`, title: touch ? undefined : 'Take it off the list', onclick: () => cancel(j.id) }, icon('close', 'i')) : null,
           !touch ? h('span', { class: 'q-tools' },
             k > 0 ? h('button', { class: 'q-first', type: 'button', testid: `queue-first-${j.id}`, 'aria-label': `${what}: do it first`, title: 'Do it first', onclick: () => bump(j.id) }, icon('first', 'i')) : null,
@@ -180,6 +220,7 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
             }, icon('people', 'i')) : null) : null,
           pop === j.id ? h('div', { class: 'q-pop sheet', role: 'group', 'aria-label': what },
             h('span', { class: 't-label q-pop-title' }, what),
+            fateSaid ? h('span', { class: `q-fate${o && o.unit < 0 ? ' c-red' : ''}`, testid: `queue-fate-${j.id}` }, fateSaid) : null,
             !popWho && k > 0 ? h('button', { class: 'btn', type: 'button', testid: `queue-first-${j.id}`, onclick: () => bump(j.id) }, icon('first', 'i'), 'First') : null,
             !popWho && !lockDig ? h('button', { class: 'btn', type: 'button', testid: `queue-cancel-${j.id}`, onclick: () => cancel(j.id) }, icon('close', 'i'), 'Cancel') : null,
             choices) : null)
@@ -195,6 +236,7 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
     const s0 = c.season!
     const waits = S.jobWaits(app.world, c)
     const jobs = s0.jobs
+    const f = fates(app.world, c)
     const crews = S.crewInfo(c)
     const people = S.peopleInfo(c)
     const many = people.length > 1
@@ -213,11 +255,13 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
       u: crews.map((u, k) => [u.id, u.name, now[k].text, now[k].place, Math.round(now[k].progress * 20), signs[k]?.glyph, signs[k]?.cls, doingGlyph(c, people[k]), doingWord(c, people[k])]),
       pick: app.unit, expanded, pop, popWho, layout, room, touch, h: c.fields.map(f => f.tenure), w: waiting.map(x => x.id), grid: hooks.gridOpen(), hire: hooks.hireShown(), goal,
       next: next ? [next.unit, next.kind, next.field] : 0, stopped: [...stopped],
+      fate: [...f.of.values()].map(o => [o.id, o.unit, o.when, o.why]), press: f.pressing.map(p => [p.kind, p.field, p.why, p.inWay]),
     }
     el.classList.toggle('busy', jobs.length > 0)
     el.classList.toggle('many', many)
     patch(el, JSON.stringify(model), () => [
-      queue(c, jobs, crews, people, waits, many, room),
+      pressingRow(c, f.pressing.filter(p => !(p.kind === 'spray' && sprayWay(c) === 'none'))),
+      queue(c, jobs, crews, people, waits, many, room, f.of),
       h('section', { class: 'timebook mount sys', 'aria-label': 'People' },
         h('div', { class: `page units${many ? ' many' : ''}${people.length > 5 ? ' crowded' : ''}`, role: 'group', 'aria-label': 'People' },
           people.map((p, k) => cell(c, p, now[k], signs[k], many, goal === 'person' && k === 1, stopped.has(p.id))),

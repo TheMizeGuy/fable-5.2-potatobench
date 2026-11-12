@@ -103,6 +103,7 @@ export const createFieldView: CreateFieldView = (canvas, app) => {
     thingAnchor: t => inner.thingAnchor(t),
     thingAt: (x, y) => inner.thingAt(x, y),
     follow: u => inner.follow(u),
+    followed: () => inner.followed(),
     home: () => inner.home(),
     yardAnchor: y => inner.yardAnchor(y),
     whenShown: (kind, field) => inner.whenShown(kind, field),
@@ -866,6 +867,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   }
 
   function thingAnchor(t: Thing): { x: number; y: number; visible: boolean } {
+    if (t.kind === 'yard') return yardAnchor(t.k)
     return crews.thingAt(t, far) ? screenAt(far.x, far.y, far.z) : { x: 0, y: 0, visible: false }
   }
 
@@ -1042,6 +1044,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     thingAnchor,
     thingAt,
     follow,
+    followed: () => following,
     home: goHome,
     yardAnchor,
     whenShown,

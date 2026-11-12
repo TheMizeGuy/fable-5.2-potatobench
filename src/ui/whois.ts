@@ -9,7 +9,7 @@ import { doing, doingWord, openCrew, ringFor } from './crew.ts'
 import { h, type Child } from './dom.ts'
 import * as F from './fmt.ts'
 import { icon } from './icons.ts'
-import { doingGlyph, doingText } from './people.ts'
+import { doingGlyph, doingText, restControl, restWords } from './people.ts'
 import { firstName, jobText, KIND_NAME, moodWhy, personSign, SKILL_NAME } from './rules.ts'
 import { ringed } from './system/people.ts'
 import './whois.css'
@@ -47,6 +47,14 @@ function thingWords(c: S.Campaign, t: Thing): { name: string; line: string; glyp
     case 'picker': return { name: 'A picker', glyph: 'pickers', line: 'Hired by the day while the crop comes out of the ground.' }
     case 'cow': return { name: 'The neighbour\'s cows', glyph: 'rest', line: 'On his pasture by the home yard. They graze; they are not yours.' }
     case 'deer': return { name: 'A deer', glyph: 'woods', line: 'At the wood\'s edge. It goes into the trees when anyone comes near.' }
+    case 'yard': {
+      const built = c.buildings.filter(b => b.yard === t.k && b.built).map(b => S.BUILDINGS[b.kind].name.toLowerCase())
+      const stands = t.k === S.HOME_YARD ? ['the farmhouse', 'the potato house', ...built] : built
+      return {
+        name: t.k === S.HOME_YARD ? 'The home yard' : 'The Dufour yard', glyph: 'house',
+        line: `${stands.length ? `${F.upper(F.list(stands))}.` : 'Nothing built here yet.'} Buildings go up here in the season: press Y, or click the yard then.`,
+      }
+    }
   }
 }
 
@@ -104,7 +112,7 @@ export function whois(ctx: Ctx, layer: HTMLElement): Whois {
         h('span', null, h('b', null, season ? doingWord(c, p) : c.phase === 'cellar' ? 'This winter' : 'Spring'), ' ', h('span', { class: busy ? '' : 'quiet' }, detail))),
       h('dl', { class: 'whois-state' },
         h('div', null, h('dt', { class: p.tired >= S.HURT_TIRED ? 'c-red' : p.tired >= S.TIRED_SLOW_FROM ? 'c-ochre' : '' }, F.upper(p.tiredWord)),
-          h('dd', null, sign?.glyph === 'hurt' ? `hurt, back on ${F.date(c.year, p.hurtUntil, true)}` : p.tired >= S.TIRED_SLOW_FROM ? 'slower for it; Sundays rest them' : 'fit for work')),
+          h('dd', null, sign?.glyph === 'hurt' ? `hurt, back on ${F.date(c.year, p.hurtUntil, true)}` : restWords(c, p))),
         h('div', null, h('dt', { class: p.quitIn >= 0 ? 'c-red' : p.mood < 0.45 ? 'c-ochre' : '' }, F.upper(p.moodWord)),
           h('dd', null, p.quitIn >= 0 ? `quits in ${F.plural(p.quitIn, 'day')} unless it lifts` : pulls.length ? pulls.slice(0, 2).map(x => x.text).join('; ') : 'nothing pulling either way')),
         h('div', null, h('dt', null, 'Best at'), h('dd', null, `${SKILL_NAME[best].toLowerCase()}, ${p.skills[best]} of 10`)),
@@ -122,8 +130,13 @@ export function whois(ctx: Ctx, layer: HTMLElement): Whois {
           title: keys ? `${SKILL_SHORT[k]} work first` : undefined,
           onclick: () => run({ t: 'priority', unit: p.id, work: k, level: 1 }, `${name}: ${SKILL_NAME[k].toLowerCase()} first.`),
         }, icon(SKILL_CUT[k], 'i'), h('span', { class: 'sr' }, `${SKILL_SHORT[k]} first`)))),
+      restControl(ctx, c, p.id, 'whois-rest'),
       h('div', { class: 'whois-acts' },
-        h('button', { class: 'btn', type: 'button', testid: 'whois-follow', onclick: () => ctx.view.follow(p.id) }, icon('scout', 'i'), 'Follow'),
+        h('button', {
+          class: `btn${ctx.view.followed() === p.id ? ' is-on' : ''}`, type: 'button', testid: 'whois-follow', 'aria-pressed': String(ctx.view.followed() === p.id),
+          title: keys ? 'The camera keeps them in the middle until you move it' : undefined,
+          onclick: () => { const on = ctx.view.followed() === p.id; ctx.view.follow(on ? -1 : p.id); ctx.announce(on ? 'Not following.' : `Following ${name}: the camera keeps them in the middle until you move it.`); ctx.dirty() },
+        }, icon('scout', 'i'), ctx.view.followed() === p.id ? 'Following' : 'Follow'),
         c.phase === 'season' && c.crew.length > 1 ? h('button', { class: 'btn', type: 'button', testid: 'whois-more', onclick: () => app.selectUnit(p.id, 'list') }, icon('people', 'i'), 'Their page') : null,
         c.phase === 'plan' ? h('button', { class: 'btn', type: 'button', testid: 'whois-more', onclick: () => openCrew(ctx) }, icon('people', 'i'), 'Hiring') : null,
         farmer ? null : h('button', {
@@ -149,7 +162,7 @@ export function whois(ctx: Ctx, layer: HTMLElement): Whois {
       const was = card.hidden
       card.hidden = false
       el.classList.toggle('phone', phone())
-      patch(card, JSON.stringify([p, c.phase, c.season?.day, c.season?.jobs.map(j => [j.id, j.kind, j.field]), ctx.touch(), phone(), c.sundaysOff]), () => body(c, p))
+      patch(card, JSON.stringify([p, c.phase, c.season?.day, c.season?.jobs.map(j => [j.id, j.kind, j.field]), ctx.touch(), phone(), c.sundaysOff, ctx.view.followed(), c.crew.find(u => u.id === p.id)?.rest]), () => body(c, p))
       card.setAttribute('aria-label', p.kind === 'farmer' ? 'You' : p.name)
       if (was || shownFor !== p.id) {
         shownFor = p.id

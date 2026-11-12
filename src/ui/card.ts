@@ -16,6 +16,8 @@ import { meter, order, range } from './system/parts.ts'
 import { ringed } from './system/people.ts'
 
 const MAX_ORDERS = 5
+// The crop's orders, each in its own place on the card whatever the field's state.
+const CROP: S.JobKind[] = ['plant', 'hill', 'scout', 'spray', 'water', 'rogue', 'sample', 'kill', 'dig']
 const HOLD_MS = 1400
 const FLASH_MS = 5000
 
@@ -232,6 +234,93 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
     return cells.length || more || room.length || who ? h('div', { class: 'orders', role: 'group', 'aria-label': u ? `Orders for ${u.name === S.FARMER_NAME ? 'you' : u.name}` : 'Orders' }, who, cells, room, more) : null
   }
 
+  // The crop's nine orders in fixed places: one that can be given, one on the list (stamped), or one that cannot be
+  // given now, greyed, its reason said under the pointer, on focus, and on a press. say: the line under them, which
+  // shows the catch of the order under the pointer and goes back to what it said.
+  function slots(c: S.Campaign, sel: number[], suggestedKind: S.JobKind | null, why: string): { el: HTMLElement; canAny: boolean; wire(say: HTMLElement): void } {
+    const s = c.season!
+    const now = performance.now()
+    if (refused && now >= refused.until) refused = null
+    const touch = ctx.touch()
+    const u = picked(c)
+    const f = sel.length === 1 ? S.fieldInfo(c, sel[0]) : null
+    const acts = sel.map(i => S.fieldActions(app.world, c, i))
+    const tell: { el: HTMLElement; text: string }[] = []
+    let canAny = false
+    const cells = CROP.map(kind => {
+      const mine = acts.map(a => a.find(x => x.kind === kind)!)
+      const busy = u ? S.unitBlock(c, kind, u.id) : ''
+      const can = sel.filter((_, k) => mine[k].ok && !busy)
+      const listed = sel.filter(i => s.jobs.some(j => j.field === i && j.kind === kind))
+      const key = touch ? '' : JOB_KEY[kind]
+      const attrs = (cls = '') => ({ 'data-k': `order-${kind}`, class: `slot${cls}` })
+      let el: HTMLElement
+      let text: string
+      if (!can.length && listed.length) {
+        text = catchFor(c, kind, f, '')
+        el = order({ key, icon: kind, name: JOB_VERB[kind], given: true, catch: text, testid: `order-${kind}-given`, attrs: { ...attrs(), 'aria-disabled': 'true' } })
+      } else if (!can.length) {
+        text = busy || F.localize(mine.find(x => !x.ok)?.why ?? '') || jobWhat(kind)
+        el = order({
+          key, icon: kind, name: JOB_VERB[kind], catch: text, testid: `order-${kind}-off`, title: touch ? undefined : text,
+          attrs: { ...attrs(' is-off'), 'aria-disabled': 'true' }, onclick: () => refuse(kind, text),
+        })
+      } else {
+        canAny = true
+        const days = can.reduce((t, i) => t + mine[sel.indexOf(i)].days, 0)
+        const cost = can.reduce((t, i) => t + mine[sel.indexOf(i)].cost, 0)
+        const part = can.length < sel.length ? ` ${can.length} of ${sel.length}` : ''
+        const no = refused?.kind === kind
+        text = no ? refused!.why : catchFor(c, kind, f, kind === suggestedKind ? why : '')
+        el = order({
+          key, icon: kind, name: [JOB_VERB[kind], part ? h('span', { class: 'order-part num' }, part) : null], cost: costText(days, cost), catch: text,
+          suggested: kind === suggestedKind, refused: no, testid: `order-${kind}`, title: touch ? undefined : jobWhat(kind), said: jobWhat(kind),
+          onclick: (e: Event) => give(kind, (e as MouseEvent).ctrlKey || (e as MouseEvent).metaKey),
+          attrs: { ...attrs(), oncontextmenu: (e: Event) => { e.preventDefault(); give(kind, true) } },
+        })
+      }
+      tell.push({ el, text })
+      return el
+    })
+    const who = u ? h('p', { class: 'order-who' }, ringed(u, ringFor(c, u.id), 26), h('span', null, 'Orders go to ', h('b', null, firstName(u.name)))) : null
+    const el = h('div', { class: 'orders slots', role: 'group', 'aria-label': u ? `Orders for ${u.name === S.FARMER_NAME ? 'you' : u.name}` : 'Orders' }, who, cells)
+    return {
+      el, canAny,
+      wire(say: HTMLElement) {
+        const base = [...say.childNodes]
+        const back = () => say.replaceChildren(...base)
+        for (const t of tell) {
+          const show = () => say.replaceChildren(t.text)
+          t.el.addEventListener('pointerenter', e => { if ((e as PointerEvent).pointerType === 'mouse') show() })
+          t.el.addEventListener('pointerleave', back)
+          t.el.addEventListener('focus', show)
+          t.el.addEventListener('blur', back)
+        }
+      },
+    }
+  }
+
+  // Care of the land beside the crop's orders, when it is wanted: rocks, hedgerows, tile drains.
+  function landRow(c: S.Campaign, i: number): HTMLElement | null {
+    const f = S.fieldInfo(c, i)
+    const kinds = (['rocks', 'brush'] as S.JobKind[]).filter(k => landCare(c, f, k))
+    const acts = S.fieldActions(app.world, c, i)
+    const u = picked(c)
+    const touch = ctx.touch()
+    const cells: HTMLElement[] = kinds.map(kind => {
+      const a = acts.find(x => x.kind === kind)!
+      const ok = a.ok && !(u && S.unitBlock(c, kind, u.id))
+      return order({
+        key: touch ? '' : JOB_KEY[kind], icon: kind, name: JOB_VERB[kind], cost: ok ? `${F.num(Math.ceil(a.days))} crew-days${a.cost ? ` · ${F.money(a.cost)}` : ''}` : undefined,
+        catch: ok ? catchFor(c, kind, f, '') : F.localize(a.why), testid: ok ? `order-${kind}` : `order-${kind}-off`,
+        attrs: { 'data-k': `order-${kind}`, class: ok ? '' : 'is-off', 'aria-disabled': ok ? null : 'true' },
+        onclick: () => (ok ? give(kind, false) : refuse(kind, F.localize(a.why))),
+      })
+    })
+    if (c.history.length > 0) { const t = contractor(c, i, 'tile'); if (t) cells.push(t) }
+    return cells.length ? h('div', { class: 'orders land-orders', role: 'group', 'aria-label': 'The land' }, cells) : null
+  }
+
   // A contractor's job, ordered and paid for at once: stumps pulled, tile laid.
   function contractor(c: S.Campaign, i: number, kind: 'stump' | 'tile'): HTMLElement | null {
     const why = kind === 'stump' ? S.stumpBlock(c, i) : S.tileBlock(c, i)
@@ -423,28 +512,52 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
           order({ key: '', icon: 'ticket', name: 'Ticket', catch: 'The weigh-in: grades, losses and the ways to take it.', testid: `weighin-${lot.id}`, onclick: () => o.onTicket(lot.id) })),
       ]
     }
-    const extra = c.history.length > 0 ? [contractor(c, i, 'tile')].filter((x): x is HTMLElement => !!x) : []
     const sugg = need && isJob(need.act) ? need.act : null
-    const rows = orderRow(c, [i], sugg, need && sugg ? F.localize(need.why) : '', extra)
     if (f.status === 'rest' || f.status === 'lost') {
+      const extra = c.history.length > 0 ? [contractor(c, i, 'tile')].filter((x): x is HTMLElement => !!x) : []
+      const rows = orderRow(c, [i], sugg, need && sugg ? F.localize(need.why) : '', extra)
       return [head('Field record', f.name, f.status === 'rest' ? 'Oats and clover, resting' : `${f.variety}, lost`), land.length ? h('div', { class: 'readings' }, land) : null, adviceLine(c, [i], !!rows), rows]
     }
+    // The orders stand right under the gauges, so nothing above them comes or goes: a paragraph appearing never moves one.
+    const g = slots(c, [i], sugg, need && sugg ? F.localize(need.why) : '')
+    const say = sayLine(c, [i], g.canAny, sugg)
+    g.wire(say)
     return [
       headWith('Field record', f.name, [`${f.variety}, `, term((SHORT_STAGE[f.stage] ?? f.stage).toLowerCase())]),
       gauges(c, f),
+      g.el,
+      say,
       h('div', { class: 'readings' }, known(c, f), land),
-      adviceLine(c, [i], !!rows),
-      rows,
+      landRow(c, i),
     ]
   }
 
   function many(c: S.Campaign, sel: number[]): Child {
-    const rows = orderRow(c, sel, null, '')
+    const g = slots(c, sel, null, '')
+    const say = sayLine(c, sel, g.canAny, null)
+    g.wire(say)
     return [
       head('Field records', `${sel.length} fields`, F.list(sel.map(i => S.FIELD_NAMES[i]))),
-      adviceLine(c, sel, !!rows),
-      rows,
+      g.el,
+      say,
     ]
+  }
+
+  // The line under the orders: a refusal, why the field waits, or why the suggested order is suggested.
+  function sayLine(c: S.Campaign, sel: number[], canAny: boolean, sugg: S.JobKind | null): HTMLElement {
+    const line = adviceLine(c, sel, canAny)
+    line.classList.add('order-say')
+    if (!line.textContent && sugg && sel.length === 1) {
+      const n = app.needs()[sel[0]]?.need
+      if (n) line.replaceChildren(`${JOB_VERB[sugg]}: ${F.localize(n.why)}`)
+    }
+    return line
+  }
+
+  // The head with its cross stays put; what is under it scrolls when the window is short.
+  function framed(parts: Child): Child {
+    const list = (Array.isArray(parts) ? parts : [parts]) as Child[]
+    return [list[0], h('div', { class: 'card-body', 'data-scroll': 'card' }, list.slice(1))]
   }
 
   function update(c: S.Campaign): void {
@@ -476,7 +589,7 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
       frozen: s.frozen, w: s.watchDay >= 0, soil: Math.round(s.soilT * 2), unit: app.unit,
       k: c.contracts.map(k => [k.id, Math.round(k.delivered), k.settled]),
     }
-    patch(el, JSON.stringify(model), () => sel.length === 1 ? one(c, sel[0]) : many(c, sel))
+    patch(el, JSON.stringify(model), () => framed(sel.length === 1 ? one(c, sel[0]) : many(c, sel)))
     el.setAttribute('aria-label', sel.length === 1 ? `Selected: ${S.FIELD_NAMES[sel[0]]}` : `Selected: ${sel.length} fields`)
     if (was && !ctx.reduced()) { el.classList.remove('in'); void el.offsetWidth; el.classList.add('in') }
   }

@@ -147,6 +147,8 @@ export function attachInput(
           app.select(i, i >= 0 && e.shiftKey)
           app.selectYard(yard)
           if (i < 0 && yard === 0) app.selectUnit(-1)
+          // Outside the season a yard has no building bar: its name card says what stands there.
+          if (yard && app.screen !== 'season') app.inspect({ kind: 'yard', k: yard, holder: -1 }, p.x, p.y)
           lastClick = { t: now, x: p.x, y: p.y, field: i }
         }
       }

@@ -4,7 +4,7 @@ import type { App } from './app.ts'
 // Something on the land that is not a field, a yard or one of the farm's own people, but looks like someone or is
 // worth a name: a machine, someone at the gate or by a car, a picker, an animal. k: which of its kind; holder: the
 // person who has a machine in hand, or -1.
-export type ThingKind = 'tractor' | 'truck' | 'asking' | 'neighbour' | 'buyer' | 'picker' | 'cow' | 'deer'
+export type ThingKind = 'tractor' | 'truck' | 'asking' | 'neighbour' | 'buyer' | 'picker' | 'cow' | 'deer' | 'yard'
 export interface Thing { kind: ThingKind; k: number; holder: number }
 // What the pointer is over on the land, in CSS pixels: a person (-1 none), a thing, a field (-1), a yard (0 none).
 // group: the people a pin stands for when several stand together.
@@ -44,6 +44,8 @@ export interface FieldView {
   thingAt(x: number, y: number): Thing | null
   // Brings a person into the middle of the picture and keeps them there until the player moves the view; -1 lets go.
   follow(unit: number): void
+  // The person the camera is following, or -1.
+  followed(): number
   // What the Home key does: back out to the farm, and in again.
   home(): void
   yardAnchor(yard: number): { x: number; y: number; visible: boolean }

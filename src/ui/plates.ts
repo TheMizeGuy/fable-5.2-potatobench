@@ -4,6 +4,7 @@
 import * as S from '../sim/index.ts'
 import { patch, type Ctx } from './core.ts'
 import { h } from './dom.ts'
+import { CODE } from './help.ts'
 import { need, tag, type Ink } from './system/parts.ts'
 
 export interface PlateModel {
@@ -31,6 +32,8 @@ export interface PlateModel {
 }
 
 const GAP = 6
+// What a stamp's ink says, as How to play has it.
+const INK_SAYS = Object.fromEntries(CODE.map(([ink, , name, says]) => [ink || 'ink', `${name}: ${says}`])) as Record<Ink, string>
 // With more fields in view than the home six, tags keep only their names once a field (14.4 plan units along its
 // rows) is narrower on screen than a tag: below FAR_IN pixels a plan unit, and back above FAR_OUT.
 const FAR_IN = 10, FAR_OUT = 12
@@ -76,6 +79,18 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
     layer.append(wrap)
   }
 
+  // The wheel over a tag, a stamp or a face zooms the land as it would anywhere else on it.
+  const wheel = (e: WheelEvent) => {
+    const land = document.getElementById('field')
+    if (!land || !(e.target as HTMLElement).closest?.('.tag-wrap, .pin-at, .pin-list-at, .yard-at')) return
+    e.preventDefault()
+    land.dispatchEvent(new WheelEvent('wheel', { deltaX: e.deltaX, deltaY: e.deltaY, deltaMode: e.deltaMode, clientX: e.clientX, clientY: e.clientY, ctrlKey: e.ctrlKey, bubbles: true, cancelable: true }))
+  }
+  layer.addEventListener('wheel', wheel, { passive: false })
+
+  // A stamp or "on the list" already there is drawn again without stamping it down a second time.
+  const was: string[] = []
+
   function pick(i: number, add: boolean): void {
     const m = models[i]
     if (!m) return
@@ -107,10 +122,13 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
         onclick: (e: Event) => pick(i, (e as MouseEvent).shiftKey),
         need: b ? need({
           ink: m.taught ? 'ochre' : b.ink ?? 'ink', next: !!m.taught, icon: b.glyph, label: b.label, testid: `badge-${i}`,
-          attrs: { class: `badge${b.urgent ? ' urgent' : ''}${m.taught ? ' taught' : ''}`, title: ctx.touch() ? undefined : b.label },
+          attrs: { class: `badge${b.urgent ? ' urgent' : ''}${m.taught ? ' taught' : ''}`, title: ctx.touch() ? undefined : `${b.label} (${INK_SAYS[m.taught ? 'ochre' : b.ink ?? 'ink']})` },
           onclick: () => o.onBadge(i),
         }) : null,
       }))
+      const now = `${b?.glyph ?? ''}|${head?.glyph ?? ''}`
+      wrap.classList.toggle('still', was[i] === now)
+      was[i] = now
       wrap.style.zIndex = on ? '5' : m.taught ? '4' : b ? '3' : m.land ? '1' : '2'
     }
     measure()
@@ -319,10 +337,10 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
   }
 
   function frame(): void {
-    const ins = app.insets
     const anchors: { x: number; y: number }[] = []
     for (let i = 0; i < S.FIELD_COUNT; i++) { const a = ctx.view.fieldAnchor(i); anchors.push(a.visible ? { x: a.x, y: a.y } : { x: NaN, y: NaN }) }
-    const key = `${innerWidth}x${innerHeight} ${ins.top} ${ins.right} ${ins.bottom} ${ins.left} ${ctx.touch()}`
+    // The boards' edges changing (the list filling, a sheet on a phone) moves no tag until the camera moves.
+    const key = `${innerWidth}x${innerHeight} ${ctx.touch()}`
     const moved = !laid || laid.key !== key || anchors.some((a, i) => {
       const b = laid!.anchors[i]
       return finite(a) !== finite(b) || (finite(a) && Math.hypot(a.x - b.x, a.y - b.y) > 0.5)
@@ -347,6 +365,7 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
     boxes,
     dispose() {
       layer.classList.remove('compact', 'far')
+      layer.removeEventListener('wheel', wheel)
       for (const w of wraps) w.remove()
       if (app.hover >= 0) app.setHover(-1)
     },

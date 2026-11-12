@@ -46,6 +46,18 @@
 .season-screen .q .i { --i: 18px; }
 .season-screen .q.active { box-shadow: inset 0 0 0 1px var(--ink), inset 0 -3px 0 var(--ink); }
 .season-screen .q.waiting { color: var(--pencil); }
+.season-screen .q.nobody { box-shadow: inset 0 0 0 2px var(--red); }
+.season-screen .q-tag.q-nobody { color: var(--paper); background: var(--red); font-family: var(--f-text); font-weight: 700; }
+.season-screen .q-tag.q-now { box-shadow: 0 0 0 2px var(--ink); }
+.season-screen .q-wait .i { --i: 12px; color: var(--pencil); }
+.season-screen .q-fate { max-width: 260px; font-size: 14px; line-height: 1.25; color: var(--ink-2); }
+/* Work that cannot wait, over the list: it floats above the foot and does not frame the land. */
+.season-screen .crew { position: relative; }
+.season-screen .pressing { position: absolute; left: 0; bottom: calc(100% + 6px); z-index: 3; display: grid; gap: 4px; max-width: min(560px, calc(100vw - 2 * var(--gutter, 16px))); }
+.season-screen .pressing .press { display: flex; align-items: center; gap: 8px; margin: 0; padding: 6px 8px 6px 10px; font-size: 15px; line-height: 1.25; background: var(--paper) url(./system/grain.png); background-blend-mode: multiply; box-shadow: var(--laid), inset 0 0 0 2px var(--red); }
+.season-screen .pressing .press > .i { --i: 18px; color: var(--red); flex: none; }
+.season-screen .pressing .press-text { flex: 1; min-width: 0; }
+.season-screen .pressing .btn { flex: none; min-height: 36px; padding: 0 10px; font-size: 14px; }
 .season-screen .q .q-by { display: grid; place-items: center; color: var(--ink-2); }
 .season-screen .q .q-by .i { --i: 12px; }
 .season-screen .q.by-you { box-shadow: inset 0 0 0 1px var(--hair), inset 0 -2px 0 var(--pencil); }
@@ -98,6 +110,7 @@
 @media (hover: hover) { .tag-wrap .tag:hover { background-color: var(--paper); } .tag-wrap .need:hover { box-shadow: 0 0 0 3px var(--paper), 0 0 0 5px var(--ink), inset 0 0 0 2px rgb(246 241 228 / 0.55); } }
 .tag-wrap .need { animation: stamp-in var(--t-stamp) var(--ease-out); }
 .tag-wrap .tag .listed .stamp { animation: stamp-down var(--t-stamp) var(--ease-out); }
+.tag-wrap.still .need, .tag-wrap.still .tag .listed .stamp { animation: none; }
 @keyframes stamp-in { from { transform: rotate(-2deg) scale(1.15); } }
 @keyframes stamp-down { from { transform: rotate(2deg) scale(1.15); } }
 /* Crowded, the tags keep their cut and stamp; far out, their names and stamps. */
@@ -138,6 +151,24 @@
 .season-screen .command { top: calc(var(--top, 220px) + 64px); right: max(var(--gutter), env(safe-area-inset-right, 0px)); max-height: calc(100% - var(--top, 220px) - 80px); }
 .season-screen.docked-left .command { right: auto; left: max(var(--gutter), env(safe-area-inset-left, 0px)); max-height: calc(100% - var(--top, 220px) - var(--bottom, 140px) - 76px); }
 .season-screen .command.compact { overflow-y: auto; overscroll-behavior: contain; }
+/* The field card: its head and cross stay in view, and what is under them scrolls inside the window. */
+.season-screen .command.card { display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; }
+.season-screen .command.card > .card-body { display: grid; align-content: start; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+/* The crop's nine orders, each in its own place whatever the field's state; one that cannot be given is greyed. */
+.season-screen .command .orders.slots { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 10px 12px 4px; }
+.season-screen .command .orders.slots .order-who { grid-column: 1 / -1; }
+.season-screen .command .orders.slots .order { grid-template-columns: auto 1fr; grid-template-rows: auto auto auto; align-content: start; align-items: center; min-height: 64px; padding: 6px 8px 7px; gap: 3px 6px; }
+.season-screen .command .orders.slots .order .key { grid-row: 1; grid-column: 1; }
+.season-screen .command .orders.slots .order > .i { grid-row: 1; grid-column: 2; justify-self: end; --i: 18px; }
+.season-screen .command .orders.slots .order .name { grid-row: 2; grid-column: 1 / -1; font-size: 17px; line-height: 1.05; overflow-wrap: anywhere; }
+.season-screen .command .orders.slots .order .cost, .season-screen .command .orders.slots .order > .stamp { grid-row: 3; grid-column: 1 / -1; justify-self: start; font-size: 13px; white-space: normal; text-align: left; }
+.season-screen .command .orders.slots .order > span:empty { display: none; }
+.season-screen .command .orders.slots .order .catch { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.season-screen .command .orders.slots .order.is-suggested .fist { display: none; }
+.season-screen .command .orders.slots .order.is-off { background: transparent; box-shadow: inset 0 0 0 1px var(--hair); cursor: help; }
+.season-screen .command .orders.slots .order.is-off > :not(.catch) { opacity: .45; }
+.season-screen .command .order-say { min-height: calc(2.6em + 8px); padding: 4px 18px 6px; font-size: 15px; }
+.season-screen .command .land-orders { padding-top: 0; }
 .season-screen .command.compact .order.is-suggested .fist { display: none; }
 /* Docked at the left, the fist points in from the land on its right. */
 .season-screen.docked-left .command .order.is-suggested .fist { left: auto; right: -46px; transform: translateY(-50%) scaleX(-1); }
@@ -183,7 +214,7 @@
 .command .builds > .quiet { font-size: 15px; }
 /* A short window: the bar scrolls rather than run off it, and the fist that would hang outside it stays home. */
 @media (max-height: 820px) {
-  .season-screen .command { overflow-y: auto; overscroll-behavior: contain; }
+  .season-screen .command:not(.card) { overflow-y: auto; overscroll-behavior: contain; }
   .season-screen .command .order.is-suggested .fist { display: none; }
   .season-screen .command .order { min-height: 50px; padding-top: 5px; padding-bottom: 5px; }
   .season-screen .command .gauge { padding: 6px 12px 8px; }
@@ -265,6 +296,8 @@
 .season-screen .paused { position: absolute; right: max(var(--gutter), env(safe-area-inset-right, 0px)); top: calc(var(--top, 220px) + 8px); z-index: 2; }
 .season-screen .paused-go { gap: 10px; background: var(--paper) url(./system/grain.png); background-blend-mode: multiply; box-shadow: var(--laid), inset 0 0 0 1px var(--ink); font-size: 16px; }
 .season-screen .paused-go .i { --i: 16px; }
+.season-screen .running .paused-go { color: var(--ink-2); box-shadow: var(--laid), inset 0 0 0 1px var(--hair); }
+.season-screen .running.lit .paused-go { color: var(--ink); box-shadow: var(--laid), inset 0 0 0 2px var(--ink), 0 0 0 4px var(--st-ochre); }
 .season-screen .tray-host { position: absolute; left: max(var(--gutter), env(safe-area-inset-left, 0px)); bottom: calc(var(--bottom, 140px) + 8px); z-index: 2;
   max-height: calc(100% - var(--top, 180px) - var(--bottom, 140px) - 16px); overflow-y: auto; overscroll-behavior: contain; }
 .season-screen .clock-slot.dock { position: static; display: block; }
@@ -295,6 +328,7 @@
 /* With something selected, its bar is a sheet over the foot and the clock stays at the thumb. */
 .season-screen[data-layout='narrow'].selected .queue, .season-screen[data-layout='narrow'].selected .timebook, .season-screen[data-layout='narrow'].selected .notes-slot { display: none; }
 .season-screen[data-layout='narrow'] .command { left: var(--gutter); right: var(--gutter); width: auto; top: auto; bottom: calc(var(--gutter) + 62px); max-height: min(46%, calc(100% - var(--top, 180px) - 140px)); overflow-y: auto; overscroll-behavior: contain; }
+.season-screen[data-layout='narrow'] .command.card { overflow: hidden; }
 .season-screen[data-layout='narrow'].selected .paused { display: none; }
 .season-screen[data-layout='narrow'] .command .gauges .meter { height: 6px; }
 .season-screen[data-layout='narrow'] .command .orders { padding: 8px 10px 10px; }
@@ -362,6 +396,7 @@
 .season-screen[data-layout='short'] .clock-slot.dock .clock .k, .season-screen[data-layout='short'] .clock-slot.dock .clock .menu { height: 46px; }
 .season-screen[data-layout='short'] .notes-slot { position: absolute; left: 0; bottom: calc(100% + 6px); max-width: 50%; }
 .season-screen[data-layout='short'] .command { top: calc(var(--top, 100px) + 54px); bottom: var(--gutter); max-height: none; width: 360px; overflow-y: auto; }
+.season-screen[data-layout='short'] .command.card { overflow: hidden; }
 .season-screen[data-layout='short'] .command .order.is-suggested .fist { display: none; }
 .season-screen[data-layout='short'] .command.compact .orders { grid-template-columns: 1fr; }
 .season-screen[data-layout='short'].selected .queue, .season-screen[data-layout='short'].selected .timebook, .season-screen[data-layout='short'].selected .notes-slot,
@@ -386,3 +421,18 @@
 .season-screen[data-layout='short'] .paused { top: calc(var(--top, 100px) + 6px); }
 .pc-tools { display: flex; align-items: flex-start; gap: 2px; margin: -10px -12px 0 0; }
 .pc-tools .close { margin: 0; }
+
+/* A person worn out or resting: a small "z" on their pin's head. */
+.pin-at.tired .pin .head::after { content: 'z'; position: absolute; right: -6px; top: -8px; display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; font: 700 13px/1 var(--f-text); color: var(--ink); background: var(--st-ochre); box-shadow: 0 0 0 1.5px var(--ink); }
+.pin-at .pin .head { position: relative; }
+/* Spraying this season, asked once: three ways, each a full row. */
+.spray-ask { display: grid; gap: 10px; }
+.spray-ask p { margin: 0; }
+.spray-ask .way-rows { display: grid; gap: 6px; }
+.spray-ask .way-row { display: grid; grid-template-columns: 24px 1fr; align-items: start; gap: 10px; min-height: 48px; padding: 8px 12px; text-align: left; font: inherit; color: var(--ink); background: var(--paper); box-shadow: inset 0 0 0 1px var(--ink); cursor: pointer; }
+.spray-ask .way-row .i { --i: 20px; margin-top: 2px; }
+.spray-ask .way-row > span { display: grid; gap: 2px; }
+.spray-ask .way-row .quiet { font-size: 14px; }
+.spray-ask .way-row.is-on { box-shadow: inset 0 0 0 2px var(--ink), 0 2px 0 var(--ink); background: var(--paper-2); }
+@media (hover: hover) { .spray-ask .way-row:hover { box-shadow: inset 0 0 0 2px var(--ink); } }
+.work .spray-again { justify-self: start; min-height: 36px; margin-top: 6px; font-size: 14px; }
