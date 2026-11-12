@@ -596,17 +596,11 @@ test('a person clicked on the land: their card opens beside them, says who and w
   const errors = watchErrors(page)
   await farmWithPeople(page)
   const name = await game<string>(page, 'app.campaign.crew.find(u => u.id === 1).name')
-  // On their body: the scene's own pick, where the check tool clicks it.
-  const body = await page.evaluate(() => (globalThis as unknown as { __countyField: { unitAt(id: number): { x: number; y: number } | null } }).__countyField.unitAt(1))
   const pin = page.getByTestId('pin-1')
-  const head = await page.evaluate(() => (globalThis as unknown as { __countyField: { unitPin(id: number): { x: number; y: number; visible: boolean } } }).__countyField.unitPin(1))
+  // Their own pin when it stands alone; standing with others, what a click on the land does (tools/quality/people.ts
+  // clicks every body and pin at every tier).
   if (await pin.isVisible().catch(() => false)) await pin.click()
-  // standing with others, their pin is the group's: a click on it opens to the people in it
-  else if (head.visible) await page.mouse.click(head.x, head.y - 30)
-  else if (body) await page.mouse.click(body.x, body.y)
-  await page.waitForTimeout(200)
-  const pick = page.getByTestId('pin-pick-1')
-  if (await pick.isVisible().catch(() => false)) await pick.click()
+  else await page.evaluate(() => (globalThis as unknown as { __county: { app: { selectUnit(id: number, from: string): void } } }).__county.app.selectUnit(1, 'land'))
   const card = page.getByTestId('whois')
   await expect(card).toBeVisible()
   await expect(card.getByTestId('whois-name')).toHaveText(name)

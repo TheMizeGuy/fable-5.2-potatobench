@@ -92,8 +92,14 @@ for (const [phase, setup] of Object.entries(PHASES)) {
         // The pointer over them first: their name.
         let named = true
         if (how === 'body') {
+          // people at work move: the point is taken again just before the pointer goes there
+          const now = await page.evaluate(id => (globalThis as any).__countyField.unitAt(id), person.id) as { x: number; y: number } | null
+          if (now) { at.x = now.x; at.y = now.y }
           await page.mouse.move(at.x, at.y)
-          await page.waitForTimeout(120)
+          await page.waitForTimeout(60)
+          const again = await page.evaluate(id => (globalThis as any).__countyField.unitAt(id), person.id) as { x: number; y: number } | null
+          if (again) { at.x = again.x; at.y = again.y; await page.mouse.move(at.x, at.y) }
+          await page.waitForTimeout(60)
           named = await page.evaluate(n => { const l = document.querySelector<HTMLElement>('#ui .hover-name'); return !!l && !l.hidden && (l.textContent ?? '').includes(n.split(' ')[0]) }, person.name)
         }
         const t0 = Date.now()
