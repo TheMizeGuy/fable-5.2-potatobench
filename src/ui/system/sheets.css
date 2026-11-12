@@ -153,7 +153,7 @@
 .alm-people .alm-face { width: 52px; padding-right: 10px; }
 .alm-people .bust { display: block; }
 .alm-book td:first-child { padding: 4px 8px 4px 0; height: 32px; }
-.alm-book .m { width: 128px; white-space: nowrap; }
+.alm .alm-book .m { width: 128px; white-space: nowrap; }
 .alm-rules { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: var(--s5); }
 .alm-rules > div { display: grid; gap: 2px; align-content: start; padding: 9px 0; border-bottom: 1px solid var(--hair); }
 .alm-rules dt { font: 400 18px/1.1 var(--f-gothic); letter-spacing: .06em; text-transform: uppercase; }
@@ -195,7 +195,7 @@
   .alm-fields { grid-template-columns: minmax(0, 1fr); }
   .alm-field dl > div { grid-template-columns: 84px minmax(0, 1fr); }
   .alm-diary li { grid-template-columns: 62px minmax(0, 1fr); gap: var(--s2); }
-  .alm-book .m { width: 96px; }
+  .alm .alm-book .m { width: 96px; }
 }
 /* A phone on its side: the head shrinks to a line and the index scrolls down the fore-edge. */
 @media (max-height: 500px) and (orientation: landscape) {
