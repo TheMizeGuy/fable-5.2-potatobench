@@ -98,6 +98,15 @@ export function houseFor(field: number, dufour: boolean): number {
   return d(-2) < d(-1) ? -2 : -1
 }
 
+// The door a field's crop goes in by, and where a load stops before it: the yard's old potato house, or (for every
+// other field) the second one once the farm has built it there.
+export function cropDoor(snap: Snapshot, field: number): { door: Spot; stop: Pt } {
+  const yard = houseFor(field, snap.farm.dufour)
+  const second = field % 2 === 1 && snap.farm.buildings.some(b => b.kind === 'house' && b.built && b.yard === yard) ? siteOf('house', yard) : undefined
+  const door = second ? { x: second.door.x, z: second.door.z, heading: Math.atan2(second.z - second.door.z, second.x - second.door.x) } : houseDoor(yard)
+  return { door, stop: { x: door.x - Math.cos(door.heading) * 0.9 * S, z: door.z - Math.sin(door.heading) * 0.9 * S } }
+}
+
 // Where each machine is kept: in the machine shed's bays once it stands (the truck in the third while there are no
 // more than two tractors); before that the one tractor on the potato house apron and the truck on the back lane.
 export function machineHome(kind: 'tractor' | 'truck', k: number, shed: boolean, tractors: number): Spot {
@@ -394,8 +403,7 @@ export function planDay(snap: Snapshot, shown: HillDisplay[][], crews: CrewFrom[
           if (!there) at = { x: spot.x, z: spot.z }
           if (ride) {
             // a day's hauling ends at the potato house door
-            const door = houseDoor(houseFor(w.field, snap.farm.dufour))
-            at = machine = w.kind === 'haul' ? { x: door.x, z: door.z + 0.9 * S } : at
+            at = machine = w.kind === 'haul' ? cropDoor(snap, w.field).stop : at
           }
           continue
         }

@@ -610,7 +610,7 @@ const big: Shot[] = [
   { name: 'b03-spring-field-bare', size: [1920, 1080], setup: async page => { await reach(page, SPRING, `until(['plant', 'rocks', 'fell', 'build'])`); await fieldTier(page, 3, 0.2, 0.1); await frames(page, 12) } },
   ...KINDS.flatMap(([kind, scenario, then]): Shot[] => [
     { name: `b1-${kind}-field`, size: [1920, 1080], setup: async page => { await reach(page, scenario, then); const w = await did(page, kind); if (w.field >= 0) await fieldTier(page, w.field); else await view(page, { frame: 'home', x: 30, z: -6, dist: 120 }); await frames(page, 12) } },
-    { name: `b2-${kind}-yard`, setup: async page => { await reach(page, scenario, then); const w = await did(page, kind); await onUnit(page, w.unit, kind === 'fell' ? { dist: 11, yaw: 0, pitch: 0.72 } : { dist: 8, yaw: 0.7, pitch: 0.32 }, 0, kind === 'fell' ? -1 : 0); await frames(page, 8) } },
+    { name: `b2-${kind}-yard`, setup: async page => { await reach(page, scenario, then); const w = await did(page, kind); await onUnit(page, w.unit, kind === 'fell' ? { dist: 15, yaw: 0, pitch: 1.05 } : { dist: 8, yaw: 0.7, pitch: 0.32 }, 0, kind === 'fell' ? 1.5 : 0); await frames(page, 8) } },
   ]),
   { name: 'b30-harvest-field', size: [1920, 1080], setup: async page => { await reach(page, HARVEST, `job('dig', 0, 0); job('dig', 2, 1); until(['dig']); until(['haul'], 3)`, 0.5, 3000); await fieldTier(page, 0, 0.5, 0.9); await frames(page, 12); await pinPeople(page) } },
   { name: 'b31-harvest-yard', setup: async page => { await reach(page, HARVEST, `job('dig', 0, 0); until(['dig']); until(['haul'], 4)`, 0.3, 3000); const w = await did(page, 'haul'); await onUnit(page, w.unit, { dist: 11, yaw: 2.2, pitch: 0.3 }); await frames(page, 8) } },
@@ -634,7 +634,7 @@ const dayStrip = (speed: number, n: number, gap: number): Strip => ({
 })
 strips.push(dayStrip(1, 9, 170), dayStrip(2, 9, 85), dayStrip(3, 9, 55), dayStrip(0, 8, 2500))
 strips.push({ name: 't0-plant-close', n: 6, gap: 1500, setup: async page => { await farm(page, SPRING); await settle(page); await farm(page, `app.do({ t: 'day' })`); await page.waitForTimeout(9000); await onTractor(page, { dist: 8, yaw: 0.9, pitch: 0.28 }, 1.2, 0.3) } })
-strips.push({ name: 't0-fell-close', n: 8, gap: 900, setup: async page => { await farm(page, `start(); hire(2); say(app.do({ t: 'begin' })); run(139, ['plant']); clear(); app.campaign.fields[14].felled = 12; app.emit({ type: 'change' }); job('fell', 14, 1)`); await settle(page); await farm(page, `until(['fell'])`); await hold(page, 0.8, 2500); await onUnit(page, await worker(page, 'fell'), { dist: 13, yaw: 0, pitch: 0.5 }, 0, -3); await farm(page, `app.do({ t: 'day' })`); await page.waitForTimeout(1200) } })
+strips.push({ name: 't0-fell-close', n: 8, gap: 900, setup: async page => { await farm(page, `start(); hire(2); say(app.do({ t: 'begin' })); run(139, ['plant']); clear(); app.campaign.fields[14].felled = 12; app.emit({ type: 'change' }); job('fell', 14, 1)`); await settle(page); await farm(page, `until(['fell'])`); await hold(page, 0.8, 2500); await onUnit(page, await worker(page, 'fell'), { dist: 17, yaw: 0, pitch: 1.05 }, 0, 0); await farm(page, `app.do({ t: 'day' })`); await page.waitForTimeout(1200) } })
 
 
 // ---- The blockout for choosing the size of the land: the same seven views whatever K is.

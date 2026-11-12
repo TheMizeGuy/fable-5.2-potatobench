@@ -509,8 +509,10 @@ abstract class Machine {
       // where the back wheels were that far back along the way it came
       const bx = this.x - fwd.x * (this.trail + 1.5), bz = this.z - fwd.z * (this.trail + 1.5)
       const soil = st.working > 0
-      pt.emit(bx + (r() - 0.5) * 1.6, this.y + 0.9, bz + (r() - 0.5) * 1.6, (r() - 0.5) * 0.5, 0.6 + r() * 0.6, (r() - 0.5) * 0.5, 1.6 + r() * 0.9, 1.3 + r() * 0.5, 7 + r() * 5,
-        soil ? 0.72 : 0.78, soil ? 0.62 : 0.7, soil ? 0.5 : 0.58, 0.62 * Math.min(1, dust * 1.4), 0.55)
+      // (hurrying, the puffs are far apart: each is wider and thinner, so they run together into a haze along the way)
+      const fast = speed >= 12 ? 1 : 0
+      pt.emit(bx + (r() - 0.5) * 1.6, this.y + 0.9 + fast, bz + (r() - 0.5) * 1.6, (r() - 0.5) * 0.5, 0.6 + r() * 0.6, (r() - 0.5) * 0.5, 1.6 + r() * 0.9 + 2.6 * fast, 1.3 + r() * 0.5, 7 + r() * 5,
+        soil ? 0.72 : 0.78, soil ? 0.62 : 0.7, soil ? 0.5 : 0.58, (0.62 - 0.34 * fast) * Math.min(1, dust * 1.4), 0.55)
     }
   }
 

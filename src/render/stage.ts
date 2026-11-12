@@ -10,7 +10,7 @@ import type { Particles } from './particles.ts'
 import type { Prims } from './prims.ts'
 import type { StandTree } from './flora.ts'
 import type { Snapshot } from './state.ts'
-import { Poly, buildSite, heightAt, houseDoor, houseFor, packSite, siteAt, type Pt, type Spot } from './work.ts'
+import { Poly, buildSite, cropDoor, heightAt, packSite, siteAt, type Pt, type Spot } from './work.ts'
 
 export interface Worker {
   id: number
@@ -555,8 +555,7 @@ export class Stage {
 
   private haul(st: Site, ws: Worker[], f: StageFrame): void {
     if (!st.trip) {
-      const door = houseDoor(houseFor(st.field, f.snap.farm.dufour))
-      st.trip = new Poly(route({ x: st.spot.x, z: st.spot.z }, { x: door.x, z: door.z + 0.9 }))
+      st.trip = new Poly(route({ x: st.spot.x, z: st.spot.z }, cropDoor(f.snap, st.field).stop))
     }
     // Each hauler has a machine and works its own load.
     ws.forEach((w, r) => this.load(st, w, r, f))
@@ -616,11 +615,11 @@ export class Stage {
       w.heading = heading + Math.PI / 2 - Math.PI * ease(span(0.3, 0.6, cyc))
       w.pose.held = cyc > 0.2 && cyc < 0.74 ? 'barrel' : ''
       // set down, and rolled on its side to the big door
-      const door = houseDoor(houseFor(st.field, f.snap.farm.dufour))
+      const door = cropDoor(f.snap, st.field).door
       const rolling = frac(st.t / 1.5 + r * 0.5 + 0.3)
       flank(-1.05, -1.7, PT)
       a.set(PT.x, heightAt(PT.x, PT.z) + 0.17 * s, PT.z)
-      b.set(door.x, heightAt(door.x, door.z) + 0.17 * s, door.z - 0.6)
+      b.set(door.x + Math.cos(door.heading) * 0.6 * s, heightAt(door.x, door.z) + 0.17 * s, door.z + Math.sin(door.heading) * 0.6 * s)
       c.copy(a).lerp(b, rolling)
       d.subVectors(b, a).normalize()
       e.set(-d.z, 0, d.x)
