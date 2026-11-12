@@ -881,7 +881,7 @@ test('every order on the list says who takes it and when, or why nobody will', a
   // Put back to the work, someone takes it, and the list says who.
   await reach(page, `const { app } = q.g(); app.do({ t: 'priority', unit: app.campaign.crew[0].id, work: 'machine', level: 1 })`)
   await expect(page.getByTestId(`nobody-${id}`)).toHaveCount(0)
-  await expect(page.getByTestId(`queue-${id}`)).toHaveAttribute('title', /takes it|is on it|Waiting|Sunday/)
+  await expect(page.getByTestId(`queue-${id}`)).toHaveAttribute('title', /takes? it|(is|are) on it|Waiting|Sunday/)
   expect(errors, errors.join('\n')).toEqual([])
 })
 
