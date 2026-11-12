@@ -45,7 +45,9 @@ describe('the routine', () => {
     for (const type of ['planted', 'hilled', 'scout', 'dug', 'weighed']) {
       for (const i of potato) expect(seen.some(e => e.type === type && e.field === i), `${type} ${i}`).toBe(true)
     }
-    expect(seen.some(e => e.type === 'sprayed' || e.type === 'watered' || e.type === 'killed')).toBe(false)
+    expect(seen.some(e => e.type === 'sprayed' || e.type === 'watered')).toBe(false)
+    // The kill stays a call, but vines left up past the date the crew gave come off rather than be dug green.
+    for (const e of seen.filter(x => x.type === 'killed')) expect(c.season!.fields[e.field].killAsked!).toBeLessThan(e.day)
     expect(callsAsked.size).toBeGreaterThan(0)
     expect(S.seasonDone(c)).toBe(true)
   })

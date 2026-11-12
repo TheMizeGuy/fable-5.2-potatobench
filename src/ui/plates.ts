@@ -71,6 +71,7 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
   // The camera and the window the tags were last settled for; and for each tag, where its field was when it was put.
   let laid: { key: string; anchors: { x: number; y: number }[] } | null = null
   const ref: { x: number; y: number }[] = []
+  let lastAnchors: { x: number; y: number }[] | null = null
   for (let i = 0; i < S.FIELD_COUNT; i++) {
     const wrap = h('div', { class: 'tag-wrap gone', hidden: true })
     wraps.push(wrap)
@@ -143,7 +144,10 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
       const t = wraps[i].querySelector<HTMLElement>('.tag')
       const n = wraps[i].querySelector<HTMLElement>('.need')
       listed[i] = !!t?.querySelector('.listed')
-      if (t && t.offsetWidth) size[i] = { w: t.offsetWidth, h: t.offsetHeight, extra: n ? n.offsetWidth + 7 : 0 }
+      // h: the row the tag stands in (as tall as a stamp, whether or not one is there), so a stamp coming or going
+      // leaves the tag where it is.
+      const row = t?.parentElement
+      if (t && t.offsetWidth) size[i] = { w: t.offsetWidth, h: row?.offsetHeight || t.offsetHeight, extra: n ? n.offsetWidth + 7 : 0 }
       if (!compact) full[i] = size[i]
     }
   }
@@ -347,10 +351,13 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
     const key = `${innerWidth}x${innerHeight} ${ctx.touch()}`
     // A field coming into view or leaving it, or the camera carrying the tags far, settles the crowding again; a small
     // move (the camera easing to rest, a turn begun) carries each tag with its field and leaves them as they were.
-    const far0 = !laid || laid.key !== key || anchors.some((a, i) => {
+    // Only while the camera is moving: with it still, nothing is put again, whatever has gathered since.
+    const moving = !lastAnchors || anchors.some((a, i) => { const b = lastAnchors![i]; return finite(a) !== finite(b) || (finite(a) && Math.hypot(a.x - b.x, a.y - b.y) > 0.25) })
+    lastAnchors = anchors
+    const far0 = !laid || laid.key !== key || (moving && anchors.some((a, i) => {
       const b = laid!.anchors[i]
       return finite(a) !== finite(b) || (finite(a) && Math.hypot(a.x - b.x, a.y - b.y) > RESETTLE_PX)
-    })
+    }))
     if (far0) {
       // Why the tags were put again, for the checks that hold them to it.
       const why = !laid ? 'first' : laid.key !== key ? 'window' : `camera ${anchors.map((a, i) => { const b = laid!.anchors[i]; return finite(a) !== finite(b) ? `${i}:seen` : finite(a) && Math.hypot(a.x - b.x, a.y - b.y) > RESETTLE_PX ? `${i}:${Math.round(a.x - b.x)},${Math.round(a.y - b.y)}` : '' }).filter(Boolean).join(' ')}`
