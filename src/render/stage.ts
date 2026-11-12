@@ -10,7 +10,7 @@ import type { Particles } from './particles.ts'
 import type { Prims } from './prims.ts'
 import type { StandTree } from './flora.ts'
 import type { Snapshot } from './state.ts'
-import { Poly, buildSite, cropDoor, heightAt, packSite, siteAt, type Pt, type Spot } from './work.ts'
+import { LOAD, Poly, buildSite, cropDoor, heightAt, packSite, siteAt, type Pt, type Spot } from './work.ts'
 
 export interface Worker {
   id: number
@@ -25,6 +25,7 @@ export interface Worker {
   pose: Pose
   aboard: boolean          // in the seat of its machine
   rig: { x: number; z: number; heading: number; load: number } | null
+  loads: number            // hauling: how many loads the day's part of it comes to
 }
 
 export interface StageFrame {
@@ -39,6 +40,10 @@ export interface StageFrame {
   still: boolean           // reduced motion
   going: boolean           // the work is going on (the clock runs, or the day is being played out)
   stand: (field: number) => StandTree[]   // a tract's trees in the order they are felled (the land's own)
+  pace: number             // metres a second a machine at work is seen to go (its own pace when the day is literal)
+  lane: number             // and a machine on the lane
+  literal: boolean         // the clock is stopped and the day's work goes at its own pace
+  dry: boolean             // dry ground: what is dragged over it raises dust
 }
 
 interface Site {
@@ -49,12 +54,33 @@ interface Site {
   seen: number
   load: number
   n: number
-  at: Map<number, { x: number; z: number; walking: boolean }>
+  at: Map<number, { x: number; z: number; walking: boolean; seen: number }>
   trip: Poly | null
   ph: number
   piles: [number, number]  // stones put off at each end of the field
   falls: Fall[]            // trees coming down and lying to be limbed
+  held: number             // of them, how many the land is asked to leave standing a moment longer
+  job: Map<number, Doing>  // what each one is at, where the work is more than a place to stand
+  // the stone boat: where it is, which way it is going, the line it is making for; 0 going on, 1 standing, 2 unloading
+  bx: number
+  bz: number
+  tz: number
+  dir: number
+  mode: number
+  pt: number
 }
+
+interface Doing { ph: number; t: number; x: number; z: number; n: number }
+
+// How far a job on a field had got by the day's end, 0..1 (below zero when nobody's day says).
+function shareOf(snap: Snapshot, kind: string, field: number): number {
+  let p = -1
+  for (const u of snap.units) for (const w of u.worked) if (w.kind === kind && w.field === field && w.share !== undefined) p = Math.max(p, w.share)
+  return p
+}
+
+// How far past a field's end the stones are put off: beyond where the tractors turn.
+const HEAP_OUT = 13
 
 interface Fall { x: number; z: number; h: number; conifer: boolean; bush: boolean; t: number; side: number; down: boolean }
 
@@ -77,13 +103,21 @@ export class Stage {
   thud = 0
   readonly thudAt = new Vector3()
 
+  // The land's hold on trees counted as felled: how many of a tract's last ones to leave standing.
+  hold: (field: number, n: number) => void = () => {}
+
   begin(): void {
     this.frame++
     this.thud = 0
-    for (const [key, s] of this.sites) if (this.frame - s.seen > 600) this.sites.delete(key)
+    for (const [key, s] of this.sites) {
+      // (nobody at the felling any more: the land has its trees back)
+      if (s.held && this.frame - s.seen > 1) { s.held = 0; this.hold(s.field, 0) }
+      if (this.frame - s.seen > 600) this.sites.delete(key)
+    }
   }
 
   clear(): void {
+    for (const s of this.sites.values()) if (s.held) this.hold(s.field, 0)
     this.sites.clear()
   }
 
@@ -92,7 +126,7 @@ export class Stage {
     let st = this.sites.get(key)
     if (!st) {
       const spot = kind === 'build' || kind === 'pack' ? this.yardSpot(kind, field, f.snap) : siteAt((kind === 'reel' || kind === 'pipe' ? 'haul' : kind) as JobKind, field)
-      st = { kind, field, spot, t: hash(field + kind.length) * 20, seen: this.frame, load: 0, n: kind === 'fell' ? -1 : 0, at: new Map(), trip: null, ph: 0, piles: [3, 0], falls: [] }
+      st = { kind, field, spot, t: hash(field + kind.length) * 20, seen: this.frame, load: 0, n: kind === 'fell' ? -1 : 0, at: new Map(), trip: null, ph: 0, piles: [3, 0], falls: [], held: 0, job: new Map(), bx: 0, bz: 0, tz: 0, dir: 1, mode: 0, pt: 0 }
       this.sites.set(key, st)
     }
     st.seen = this.frame
@@ -139,12 +173,16 @@ export class Stage {
     PT.x = x
     PT.z = z
     let m = st.at.get(w.id)
-    if (!m) { m = { x: w.x, z: w.z, walking: false }; st.at.set(w.id, m) }
+    if (!m) { m = { x: w.x, z: w.z, walking: false, seen: 0 }; st.at.set(w.id, m) }
+    // (back at the work after being away from it: from where they now are)
+    if (m.seen < this.frame - 1) { m.x = w.x; m.z = w.z }
+    m.seen = this.frame
     const dx = PT.x - m.x, dz = PT.z - m.z, dist = Math.hypot(dx, dz)
-    if (dist > 30) { m.x = PT.x; m.z = PT.z }
+    if (dist > 150) { m.x = PT.x; m.z = PT.z }
     m.walking = dist > (m.walking ? 0.06 : 0.4) * f.s
     if (m.walking) {
-      const step = Math.min(dist, (f.going ? 1.5 : 0) * f.s * (1 - 0.4 * w.tired) * f.dt)
+      // (a long way to their own part of the work is hurried over)
+      const step = Math.min(dist, (f.going ? Math.max(1.5 * f.s * (1 - 0.4 * w.tired), dist > 14 ? dist * 0.9 : 0) : 0) * f.dt)
       m.x += (dx / dist) * step
       m.z += (dz / dist) * step
       w.heading = Math.atan2(dz, dx)
@@ -190,6 +228,9 @@ export class Stage {
       for (let k = Math.max(st.n, cut - 3); k < cut; k++) st.falls.push({ x: trees[k].x, z: trees[k].z, h: this.tall(trees[k]), conifer: trees[k].conifer, bush: trees[k].bush, t: -0.7 * (k - Math.max(st.n, cut - 3)), side: k % 2 ? 1 : -1, down: false })
       st.n = cut
     }
+    // The land leaves its own tree standing until the one drawn here begins to go.
+    const waiting = st.falls.reduce((k, t) => k + (t.t < 0 ? 1 : 0), 0)
+    if (waiting !== st.held) { st.held = waiting; this.hold(st.field, waiting) }
     // The work stands before the next tree to come down, facing into the stand.
     const next = n ? trees[Math.min(cut, n - 1)] : null
     const h = brushy ? 0 : -Math.PI / 2
@@ -340,136 +381,201 @@ export class Stage {
     }
   }
 
-  // ---- picking rocks: a horse and a stone boat down the field, and people throwing stones on
+  // ---- picking rocks: a horse and a stone boat working down the field, the people ranging out round it for stones
 
   private rocks(st: Site, ws: Worker[], f: StageFrame): void {
     const pr = f.pr, s = f.s
     const fd = FIELDS[st.field]
-    const half = (fd.x1 - fd.x0) / 2 - 1.6
-    // back and forth across the field, a row further down each time
-    // the boat goes a little way and stands while the stones round it are thrown on, then on again
-    const stops = Math.max(2, Math.ceil((2 * half) / (1.5 * Math.max(1, s * 0.7)))), TS = 6, GO = 1.8
-    const leg = stops * TS + 5
-    const k = Math.floor(st.t / leg), u = st.t - k * leg
-    const stop = Math.floor(u / TS), v = u - stop * TS
-    const unloading = stop >= stops
-    const along = unloading ? 1 : (stop + ease(Math.min(1, v / GO))) / stops, dir = k % 2 ? -1 : 1
-    const bx = dir * (-half + 2 * half * along) / s, bz = (-3 + (k % 4) * 2) / s
-    const moving = !unloading && v < GO && f.going
-    const picking = unloading ? 0 : clamp01((v - GO) / (TS - GO))
-    if (unloading && f.going) {
-      const off = Math.min(st.load, f.dt * 3)
-      st.load -= off
-      st.piles[dir > 0 ? 1 : 0] += off
+    // The boat crosses the field on a line as far down it as the job has got, standing every dozen metres while the
+    // stones round it are brought in. Past the field's end the load goes off in a heap by the wall, and the boat
+    // comes back on the next line.
+    const sh = shareOf(f.snap, 'rocks', st.field)
+    const line = fd.z0 + 6 + (fd.z1 - fd.z0 - 12) * (sh < 0 ? 0.5 : sh)
+    const out0 = fd.x0 - HEAP_OUT + 2.5, out1 = fd.x1 + HEAP_OUT - 2.5
+    if (!st.n) {
+      st.n = 1
+      st.dir = hash(st.field + 2) < 0.5 ? 1 : -1
+      st.bx = fd.x0 + (fd.x1 - fd.x0) * (0.25 + 0.5 * hash(st.field * 3 + 1))
+      st.bz = st.tz = line
+      st.load = 5
     }
-    // the piles at the field's ends, growing as the boat is emptied
-    for (const end of [0, 1]) {
-      const n = Math.min(22, Math.floor(st.piles[end]))
-      for (let q = 0; q < n; q++) {
-        const ring = q < 9 ? 0 : q < 17 ? 1 : 2, ang = q * 2.4, rad = (0.42 - 0.15 * ring) * (0.5 + 0.5 * hash(q + end * 31))
-        // in the field's own corners, off the headland where the tractors turn
-        this.P(st, s, ((end ? 1 : -1) * (half + 0.8)) / s + Math.cos(ang) * rad, 0.03 + 0.085 * ring, -((fd.z1 - fd.z0) / 2 - 0.8) / s + Math.sin(ang) * rad, b)
-        pr.put('ball', b, Y, X, (0.085 + 0.04 * hash(q + 5)) * s, 0.065 * s, (0.08 + 0.03 * hash(q + 9)) * s, GRAVEL)
+    const v = Math.min(3.2, Math.max(1, f.pace * 0.4))
+    const inField = st.bx > fd.x0 + 3 && st.bx < fd.x1 - 3
+    if (f.going) {
+      st.pt += f.dt
+      if (st.mode === 0) {
+        st.bx += st.dir * v * f.dt
+        const dz = st.tz - st.bz
+        st.bz += Math.sign(dz) * Math.min(Math.abs(dz), 0.7 * v * f.dt)
+        if (st.dir > 0 ? st.bx >= out1 : st.bx <= out0) { st.bx = st.dir > 0 ? out1 : out0; st.mode = 2; st.pt = 0 }
+        else if (inField && st.pt * v >= 11) { st.mode = 1; st.pt = 0 }
+      } else if (st.mode === 1) {
+        if (st.pt > 5.5) { st.mode = 0; st.pt = 0 }
+      } else {
+        st.load = Math.max(0, st.load - f.dt * 2.6)
+        if (st.pt > 6) { st.dir = -st.dir; st.tz = line; st.mode = 0; st.pt = 0 }
       }
     }
-    const hh = st.spot.heading + (dir > 0 ? 0 : Math.PI)
-    this.local(st, s, bx + dir * 1.75, bz, PT)
-    drawBeast(pr, HORSE, PT.x, heightAt(PT.x, PT.z), PT.z, hh, s * DRAUGHT, st.t * 6, moving ? 0.8 : 0, unloading ? 0.6 * span(1, 3, u - stops * TS) : 0)
-    c.copy(withers)
-    // the boat: two runners and a deck of planks, low to the ground
-    this.P(st, s, bx, 0.05, bz, a)
+    const moving = st.mode === 0 && f.going, unloading = st.mode === 2
+    // the heaps by the walls at the ends of the lines already picked, and the one going up now
+    const lines = Math.max(1, Math.round((line - fd.z0 - 6) / 9))
+    for (let q = Math.max(0, lines - 5); q <= lines; q++) {
+      for (const end of [0, 1]) {
+        const now = q === lines
+        if (now && !(unloading && (st.dir > 0 ? 1 : 0) === end)) continue
+        const hz = now ? st.bz : fd.z0 + 6 + q * 9 - 4 * hash(q * 5 + end), hx = end ? fd.x1 + HEAP_OUT : fd.x0 - HEAP_OUT
+        const n = now ? Math.round(14 * clamp01(st.pt / 5)) : 9 + Math.floor(8 * hash(q * 3 + end * 17 + st.field))
+        for (let k = 0; k < n; k++) {
+          const ring = k < 7 ? 0 : k < 12 ? 1 : 2, ang = k * 2.4 + q, rad = (1.1 - 0.4 * ring) * (0.45 + 0.55 * hash(k + q * 31 + end * 7))
+          b.set(hx + Math.cos(ang) * rad, 0, hz + Math.sin(ang) * rad)
+          b.y = heightAt(b.x, b.z) + 0.1 + 0.24 * ring
+          pr.put('ball', b, Y, X, 0.2 + 0.1 * hash(k + 5 + q), 0.16, 0.19 + 0.07 * hash(k + 9 + q), GRAVEL)
+        }
+      }
+    }
+    const hh = st.dir > 0 ? 0 : Math.PI
     d.set(Math.cos(hh), 0, Math.sin(hh))
     e.set(-d.z, 0, d.x)
+    const hx = st.bx + st.dir * 1.75 * s
+    drawBeast(pr, HORSE, hx, heightAt(hx, st.bz), st.bz, hh, s * DRAUGHT, st.t * 6, moving ? 0.8 : 0, unloading ? 0.6 * span(1, 3, st.pt) : 0)
+    c.copy(withers)
+    // the boat: two runners and a deck of planks, low to the ground
+    a.set(st.bx, heightAt(st.bx, st.bz) + 0.05 * s, st.bz)
     pr.put('box', b.copy(a).addScaledVector(d, -0.5 * s), d, Y, 0.045 * s, 1.0 * s, 0.62 * s, SLED)
     for (const sd of [-1, 1]) pr.put('box', b.copy(a).addScaledVector(d, -0.55 * s).addScaledVector(e, sd * 0.27 * s).addScaledVector(Y, -0.04 * s), d, Y, 0.06 * s, 1.15 * s, 0.07 * s, SLED)
     b.copy(a).addScaledVector(d, 0.5 * s)
     pr.rod('cyl', c, b, 0.008 * s, CHAIN)
-    const heap = Math.min(12, Math.floor(st.load))
+    const heap = Math.min(13, Math.floor(st.load))
     for (let n = 0; n < heap; n++) {
       b.copy(a).addScaledVector(d, (-0.3 + 0.2 * (n % 4) + 0.05 * hash(n)) * s).addScaledVector(e, (-0.17 + 0.17 * (Math.floor(n / 4) % 3)) * s).addScaledVector(Y, (0.07 + (n >= 8 ? 0.08 : 0)) * s)
       pr.put('ball', b, Y, d, (0.075 + 0.03 * hash(n + 3)) * s, 0.06 * s, (0.07 + 0.02 * hash(n + 7)) * s, GRAVEL)
     }
+    // dry ground: the runners raise a little dust
+    if (moving && f.dry && !f.still && Math.random() < 0.35) f.particles.emit(st.bx - st.dir * 1.6, a.y + 0.3, st.bz + (Math.random() - 0.5), -st.dir * 0.3, 0.25, 0, 1.2, 2.2, 2.4, 0.56, 0.47, 0.36, 0.2, 0.5)
     ws.forEach((w, r) => {
       w.rig = null
       w.aboard = false
+      let j = st.job.get(w.id)
       const sd = r % 2 ? 1 : -1
-      const ox = (-0.15 + 0.55 * (r % 3)) * (dir > 0 ? 1 : -1) - dir * 0.2, oz = sd * (0.72 + 0.16 * Math.floor(r / 2))
-      if (!this.go(st, w, f, bx + ox, bz + oz, dir > 0 ? 0 : Math.PI)) return
-      // two stones each at every stand, a little out of step with one another
-      const beat = picking * 2 - 0.12 * (r % 3)
-      const cyc = unloading ? frac(st.t / 2.6 + r * 0.43) : beat <= 0 || beat >= 2 ? 0 : frac(beat)
-      if (unloading) {
-        // at the field's edge: off the boat and onto the pile
-        lifting(w.pose, cyc, sd, 0.1)
+      const next = (q: Doing) => {
+        // the next stone: somewhere ahead of the boat and out to either side of its line
+        q.n++
+        q.ph = 0
+        q.t = 0
+        q.x = Math.min(fd.x1 - 1, Math.max(fd.x0 + 1, st.bx + st.dir * (2 + 11 * hash(q.n * 1.7 + w.id))))
+        q.z = Math.min(fd.z1 - 1, Math.max(fd.z0 + 1, st.bz + (hash(q.n * 3.1 + w.id * 5) - 0.5) * 26))
+      }
+      if (!j) { j = { ph: 0, t: 0, x: 0, z: 0, n: r * 7 }; st.job.set(w.id, j); next(j) }
+      const bx = st.bx - st.dir * (0.9 - 0.5 * (r % 3)), bz = st.bz + sd * 1.25, face = sd > 0 ? -Math.PI / 2 : Math.PI / 2
+      if (unloading || !inField) {
+        // past the field's edge: off the boat and onto the heap
+        if (j.ph !== 0) next(j)
+        if (!this.goTo(st, w, f, bx, bz, face)) return
+        if (!unloading) { stand(w.pose, st.t + r, w.tired); return }
+        const cyc = frac(st.t / 2.6 + r * 0.43)
+        lifting(w.pose, cyc, sd * st.dir, 0.1)
         w.pose.held = cyc > 0.24 && cyc < 0.78 ? 'stone' : ''
         return
       }
-      if (cyc <= 0) { stand(w.pose, st.t + r, w.tired); return }
-      const thrown = lifting(w.pose, cyc, -sd * (dir > 0 ? 1 : -1), 0.12)
-      w.pose.held = cyc > 0.24 && cyc < 0.78 ? 'stone' : ''
-      w.pose.size = 0.8 + 0.5 * hash(stop * 2 + Math.floor(Math.max(0, beat)) + r * 7)
-      if (thrown > 0 && thrown < 0.55) {
-        // the stone in the air between the hands and the boat
-        const q = thrown / 0.55
-        this.P(st, s, bx + ox, STAND_HIP * 0.9, bz + oz * 0.8, c)
-        b.copy(c).lerp(a, q)
-        b.y += Math.sin(q * Math.PI) * 0.22 * s
-        pr.put('ball', b, Y, d, 0.07 * s, 0.055 * s, 0.062 * s, GRAVEL)
+      if (j.ph === 0) {
+        if (this.goTo(st, w, f, j.x, j.z, Math.atan2(st.bz - j.z, st.bx - j.x))) j.ph = 1
+      } else if (j.ph === 1) {
+        this.goTo(st, w, f, j.x, j.z, w.heading)
+        if (f.going) j.t += f.dt
+        const k = Math.min(0.5, (j.t / 1.3) * 0.5)
+        lifting(w.pose, k, 0, 0)
+        w.pose.held = k > 0.24 ? 'stone' : ''
+        w.pose.size = 0.8 + 0.5 * hash(j.n)
+        if (j.t >= 1.3) { j.ph = 2; j.t = 0 }
+      } else if (j.ph === 2) {
+        const there = this.goTo(st, w, f, bx, bz, face, 1)
+        w.pose.held = 'stone'
+        w.pose.size = 0.8 + 0.5 * hash(j.n)
+        if (there) { j.ph = 3; j.t = 0 }
+      } else {
+        this.goTo(st, w, f, bx, bz, face)
+        if (f.going) j.t += f.dt
+        const k = 0.5 + Math.min(0.5, (j.t / 0.9) * 0.5)
+        const thrown = lifting(w.pose, k, -sd, 0.12)
+        w.pose.held = k < 0.78 ? 'stone' : ''
+        w.pose.size = 0.8 + 0.5 * hash(j.n)
+        if (thrown > 0 && thrown < 0.55) {
+          // the stone in the air between the hands and the boat
+          const q = thrown / 0.55
+          c.set(w.x, heightAt(w.x, w.z) + STAND_HIP * 0.9 * s, w.z)
+          b.copy(c).lerp(a, q)
+          b.y += Math.sin(q * Math.PI) * 0.22 * s
+          pr.put('ball', b, Y, d, 0.07 * s, 0.055 * s, 0.062 * s, GRAVEL)
+        }
+        if (j.t >= 0.9) { st.load = Math.min(13, st.load + 1); next(j) }
       }
-      const mark = (k * 100 + stop) * 2 + Math.floor(Math.max(0, beat)) + r * 100000
-      if (thrown > 0.55 && st.ph !== mark && f.going) { st.ph = mark; st.load = Math.min(13, st.load + 1) }
     })
   }
 
-  // ---- cutting back the hedgerow: brush hooks along the edge, armfuls to the fire
+  // ---- cutting back the hedgerow: brush hooks along the whole of the wall, armfuls to a fire where each one is working
 
   private brush(st: Site, ws: Worker[], f: StageFrame): void {
     const pr = f.pr, s = f.s
+    const fd = FIELDS[st.field]
     // the brush is burnt as it is cut, except in a high wind, in the wet or on snow: the smoke shows where the work is
     const burning = f.wind < 0.85 && !f.cold && f.snap.weather.prcp < 1
-    // the hedge is ahead of the spot, along the wall; the pile and the fire a little way down the headland
-    const fx = -0.1, fz = 3.0
-    this.P(st, s, fx, 0, fz, a)
-    // the pile, and on a still day the fire in it
-    for (let n = 0; n < 6; n++) {
-      b.copy(a).add(c.set((hash(n) - 0.5) * 0.6 * s, (0.08 + 0.12 * hash(n + 9)) * s, (hash(n + 4) - 0.5) * 0.6 * s))
-      pr.put('ball', b, Y, X, 0.2 * s, 0.11 * s, 0.19 * s, burning && n < 3 ? EMBER : COLORS.BRUSH)
-    }
-    if (burning) {
-      for (let n = 0; n < 5; n++) {
-        const fl = 0.6 + 0.4 * Math.sin(st.t * (9 + n * 2.3) + n * 2)
-        b.copy(a).add(c.set((hash(n + 20) - 0.5) * 0.36 * s, 0.14 * s, (hash(n + 30) - 0.5) * 0.36 * s))
-        pr.put('glow', b, Y, X, 0.09 * s * fl, (0.2 + 0.2 * fl) * s, 0.09 * s * fl, FLAME[n % 3])
-      }
-      if (!f.still && f.going) {
-        const q = Math.random
-        // (the air does not carry a puff far up: the column is laid in along its length)
-        if (q() < 0.7) {
-          const up = Math.pow(q(), 1.4) * 34
-          f.particles.emit(a.x + (q() - 0.5) * (0.6 + 0.12 * up), a.y + 0.8 + up, a.z + (q() - 0.5) * (0.6 + 0.12 * up), 0, 0.9, 0, 0.7 + 0.16 * up, 0.5 + 0.03 * up, 5 + q() * 4, 0.6, 0.59, 0.58, 0.5 * (1 - up / 46), 0.35 + up / 60)
-        }
-        if (q() < 0.2) f.particles.emit(a.x, a.y + 0.3 * s, a.z, (q() - 0.5) * 0.8, 1.6 + q(), (q() - 0.5) * 0.8, 0.018 * s, 0, 0.9, 6, 2.2, 0.5, 0.9, 0.5)
-      }
-    }
+    // The wall runs across the way the spot faces. Over the job the whole of the field's side along it is cut back:
+    // each one has a stretch of it and works along that from one end to the other.
+    const upright = Math.abs(Math.cos(st.spot.heading)) > 0.5
+    const L = ((upright ? fd.z1 - fd.z0 : fd.x1 - fd.x0) - 8) / s
+    const sh = shareOf(f.snap, 'brush', st.field)
+    const p = sh < 0 ? 0.5 : clamp01(sh), n = Math.max(1, ws.length)
+    const fires: number[] = []
     ws.forEach((w, r) => {
       w.rig = null
       w.aboard = false
-      const lz = r % 2 ? 1.6 + 1.2 * Math.floor(r / 2) : -0.6 - 1.4 * Math.floor(r / 2)
-      const T = 8, t = frac(st.t / T + r * 0.37 + w.id * 0.21) * T
-      if (t < 3.6) {
-        if (this.go(st, w, f, -0.12, lz, 0)) {
+      const base = -L / 2 + (L * (r + p)) / n
+      // their fire: on the headland behind them, moved on every fifteen metres or so
+      const fz = (Math.round((base * s) / 15) * 15 + 4) / s, fx = -1.5
+      if (fires.length < 3 && !fires.some(z => Math.abs(z - fz) < 1)) {
+        fires.push(fz)
+        this.fire(st, f, fx, fz, burning)
+      }
+      const T = 12, t = frac(st.t / T + r * 0.37 + w.id * 0.21) * T
+      if (t < 5) {
+        // along the hedge a step at a time, the hook swinging
+        if (this.go(st, w, f, -0.12, base + 0.25 * Math.floor(t / 1.2), 0)) {
           const u = frac(t / 1.2)
           swing(w.pose, u < 0.5 ? 1 - ease(u / 0.5) : u < 0.64 ? (u - 0.5) / 0.14 : 1, false, 0.3)
           w.pose.tool = 'hook'
         }
-      } else if (t < 4.6) {
-        if (this.go(st, w, f, -0.05, lz, 0)) stoop(w.pose.reset(), Math.sin((t - 3.6) * Math.PI), st.t * 4)
-      } else if (t < 6.6) {
-        const there = this.go(st, w, f, fx - 0.1, fz - 0.75, Math.PI / 2, 1)
+      } else if (t < 6) {
+        if (this.go(st, w, f, -0.05, base + 1, 0)) stoop(w.pose.reset(), Math.sin((t - 5) * Math.PI), st.t * 4)
+      } else if (t < 9.6) {
+        const there = this.go(st, w, f, fx + 0.75, fz, Math.PI, 1)
         w.pose.held = 'brush'
-        if (there) { lifting(w.pose, 0.7, Math.sign(lz)); w.pose.held = t < 6.2 ? 'brush' : '' }
-      } else if (this.go(st, w, f, -0.12, lz, 0)) stand(w.pose, st.t, w.tired)
+        if (there) { lifting(w.pose, 0.7, 1); w.pose.held = t < 9.2 ? 'brush' : '' }
+      } else if (this.go(st, w, f, -0.12, base, 0)) stand(w.pose, st.t, w.tired)
     })
+  }
+
+  // A pile of cut brush and, in burning weather, the fire in it and its smoke going up.
+  private fire(st: Site, f: StageFrame, fx: number, fz: number, burning: boolean): void {
+    const pr = f.pr, s = f.s
+    this.P(st, s, fx, 0, fz, a)
+    for (let n = 0; n < 6; n++) {
+      b.copy(a).add(c.set((hash(n) - 0.5) * 0.6 * s, (0.08 + 0.12 * hash(n + 9)) * s, (hash(n + 4) - 0.5) * 0.6 * s))
+      pr.put('ball', b, Y, X, 0.2 * s, 0.11 * s, 0.19 * s, burning && n < 3 ? EMBER : COLORS.BRUSH)
+    }
+    if (!burning) return
+    for (let n = 0; n < 5; n++) {
+      const fl = 0.6 + 0.4 * Math.sin(st.t * (9 + n * 2.3) + n * 2 + fz)
+      b.copy(a).add(c.set((hash(n + 20) - 0.5) * 0.36 * s, 0.14 * s, (hash(n + 30) - 0.5) * 0.36 * s))
+      pr.put('glow', b, Y, X, 0.09 * s * fl, (0.2 + 0.2 * fl) * s, 0.09 * s * fl, FLAME[n % 3])
+    }
+    if (f.still || !f.going) return
+    const q = Math.random
+    // (the air does not carry a puff far up: the column is laid in along its length)
+    if (q() < 0.7) {
+      const up = Math.pow(q(), 1.4) * 34
+      f.particles.emit(a.x + (q() - 0.5) * (0.6 + 0.12 * up), a.y + 0.8 + up, a.z + (q() - 0.5) * (0.6 + 0.12 * up), 0, 0.9, 0, 0.7 + 0.16 * up, 0.5 + 0.03 * up, 5 + q() * 4, 0.6, 0.59, 0.58, 0.5 * (1 - up / 46), 0.35 + up / 60)
+    }
+    if (q() < 0.2) f.particles.emit(a.x, a.y + 0.3 * s, a.z, (q() - 0.5) * 0.8, 1.6 + q(), (q() - 0.5) * 0.8, 0.018 * s, 0, 0.9, 6, 2.2, 0.5, 0.9, 0.5)
   }
 
   // ---- building: sawing, carrying, nailing at the site's edge
@@ -552,30 +658,40 @@ export class Stage {
     })
   }
 
-  // ---- hauling: barrels onto the truck or the trailer at the field, the drive to the potato house, and off again
+  // ---- hauling: barrels onto the truck or the trailer at the field, the drive to the potato house, off again, and back
 
   private haul(st: Site, ws: Worker[], f: StageFrame): void {
     if (!st.trip) {
       st.trip = new Poly(route({ x: st.spot.x, z: st.spot.z }, cropDoor(f.snap, st.field).stop))
     }
-    // Each hauler has a machine and works its own load.
+    // Each hauler has a machine and works its own loads.
     ws.forEach((w, r) => this.load(st, w, r, f))
   }
 
-  // One load a day: on at the field, the drive in, off at the potato house door, and the day ends there.
+  // Load after load of as many barrels as the bed holds: on at the field, in along the lane, off at the potato house
+  // door, and out again light. With the clock stopped the day's loads are counted out, each at a truck's own pace;
+  // with it running the trips go on from one day into the next at a pace the eye can follow on the lane.
   private load(st: Site, w: Worker, r: number, f: StageFrame): void {
     const pr = f.pr, s = f.s
     const trip = st.trip!
-    const CAP = 8
-    const lap = w.w
-    const loading = lap < 0.42, out = lap >= 0.42 && lap < 0.6, unloading = lap >= 0.6 && lap < 0.97
-    const done = lap >= 0.97
-    const along = loading ? 0 : out ? ease((lap - 0.42) / 0.18) : 1
+    const CAP = LOAD
+    let j = st.job.get(w.id)
+    if (!j) { j = { ph: 0, t: (r * 0.37) % 1, x: 0, z: 0, n: 0 }; st.job.set(w.id, j) }
+    // the lap: loading, the drive in, unloading, the drive back, as shares of it
+    const drive = trip.length / Math.max(1, f.lane), stand = f.literal ? 0.22 * (2 * drive) / 0.56 : 5
+    const total = 2 * drive + 2 * stand
+    const q0 = stand / total, q1 = q0 + drive / total, q2 = q1 + q0
+    if (f.literal) j.t = frac(Math.min(0.99999, w.w) * Math.max(1, w.loads))
+    else if (f.going) j.t = frac(j.t + f.dt / total)
+    const lap = j.t
+    const loading = lap < q0, out = lap >= q0 && lap < q1, unloading = lap >= q1 && lap < q2, back = lap >= q2
+    const along = loading ? 0 : out ? ease((lap - q0) / (q1 - q0)) : unloading ? 1 : 1 - ease((lap - q2) / (1 - q2))
     // the second machine stands a length behind the first
-    const p = trip.at(Math.max(0, Math.min(trip.length, along * trip.length + (loading ? 0 : -r * 3.4 * s * along))))
-    const heading = loading ? st.spot.heading : Math.atan2(p.dz, p.dx)
+    const stood = loading || unloading
+    const p = trip.at(Math.max(0, Math.min(trip.length, along * trip.length - (unloading ? r * 3.4 * s : 0))))
+    const heading = loading ? st.spot.heading : back ? Math.atan2(-p.dz, -p.dx) : Math.atan2(p.dz, p.dx)
     const px = p.x + (loading ? Math.cos(st.spot.heading) * r * 3.6 * s : 0), pz = p.z + (loading ? Math.sin(st.spot.heading) * r * 3.6 * s : 0)
-    const load = done ? 0 : loading ? Math.floor(CAP * span(0.03, 0.4, lap)) : out ? CAP : Math.ceil(CAP * (1 - span(0.62, 0.95, lap)))
+    const load = loading ? Math.floor(CAP * span(0.04, 0.96, lap / q0)) : out ? CAP : unloading ? Math.ceil(CAP * (1 - span(0.04, 0.96, (lap - q1) / q0))) : 0
     if (w.rig) { w.rig.x = px; w.rig.z = pz; w.rig.heading = heading; w.rig.load = load }
     const ch = Math.cos(heading), sh = Math.sin(heading)
     // beside the bed, on the side away from the crop
@@ -588,13 +704,13 @@ export class Stage {
       w.z = PT.z
       w.heading = st.spot.heading - Math.PI / 2
       w.aboard = false
-      if (loading) { lifting(w.pose, frac(st.t / 1.7 + r * 0.4), 1, 0.1); w.pose.held = frac(st.t / 1.7 + r * 0.4) > 0.24 && frac(st.t / 1.7 + r * 0.4) < 0.78 ? 'barrel' : '' }
-      else stand(w.pose, st.t, w.tired, 1)
+      const cyc = frac(st.t / 1.7 + r * 0.4)
+      lifting(w.pose, cyc, 1, 0.1)
+      w.pose.held = cyc > 0.24 && cyc < 0.78 ? 'barrel' : ''
       return
     }
-    w.aboard = out
-    if (out) return
-    if (done) { flank(-0.9, -1.0, PT); w.x = PT.x; w.z = PT.z; w.heading = heading - 0.6; stand(w.pose, st.t, w.tired, 1); return }
+    w.aboard = !stood
+    if (!stood) return
     // a barrel at a time: up from the ground and round onto the bed, or down off it and round to the door
     flank(-1.05, -0.98, PT)
     w.x = PT.x
@@ -606,12 +722,12 @@ export class Stage {
       w.pose.held = cyc > 0.24 && cyc < 0.78 ? 'barrel' : ''
       // barrels brought to the headland, waiting to go
       const left = CAP - load
-      for (let n = 0; n < Math.min(left, 6); n++) {
-        flank(-0.6 - 0.44 * n, -1.8 - 0.1 * (n % 2), PT)
+      for (let n = 0; n < Math.min(left, 8); n++) {
+        flank(-0.6 - 0.44 * (n % 4), -1.8 - 0.44 * Math.floor(n / 4), PT)
         a.set(PT.x, heightAt(PT.x, PT.z), PT.z)
         pr.put('barrel', a, Y, X, 0.42 * s, 0.42 * s, 0.42 * s, WHITE)
       }
-    } else if (unloading) {
+    } else {
       lifting(w.pose, 1 - cyc, 0, 0.16)
       w.heading = heading + Math.PI / 2 - Math.PI * ease(span(0.3, 0.6, cyc))
       w.pose.held = cyc > 0.2 && cyc < 0.74 ? 'barrel' : ''
@@ -629,90 +745,114 @@ export class Stage {
     }
   }
 
-  // ---- watering from the reel (a gun on a sled, drawn in on its hose) or from the pond (a line of pipe and sprinklers)
+  // ---- watering from the reel (a big gun on a cart, drawn in on its hose the length of the field) or from the pond
+  // (a main along the lane and a line of pipe across the rows, a sprinkler at every joint)
 
   private water(st: Site, ws: Worker[], f: StageFrame): void {
     const pr = f.pr, s = f.s
     const fd = FIELDS[st.field]
     const reel = st.kind === 'reel'
-    const span0 = fd.x1 - fd.x0
-    // st.spot is on the headland at the field's side, facing up the slope: the field lies to its left
-    const hx = st.spot.x, hz = st.spot.z
-    const jet = (from: Vector3, dirA: number, reachU: number, high: number, thick: number) => {
-      const n = 9
+    const day = f.snap.seasonDay
+    // st.spot is on the headland at the field's side, half way down it
+    const hx = st.spot.x
+    // a throw of water from a nozzle: fine rods close to, and a drift of spray that shows from across the farm
+    const jet = (from: Vector3, dirA: number, reachM: number, high: number, thick: number, n: number, mist: number) => {
       let px = from.x, py = from.y, pz = from.z
       for (let k = 1; k <= n; k++) {
         const q = k / n
-        const x = from.x + Math.cos(dirA) * reachU * q, z = from.z + Math.sin(dirA) * reachU * q
+        const x = from.x + Math.cos(dirA) * reachM * q, z = from.z + Math.sin(dirA) * reachM * q
         const y = from.y + (high * 4 * q * (1 - q)) - q * (from.y - heightAt(x, z))
         a.set(px, py, pz)
         b.set(x, y, z)
         pr.rod('cyl', a, b, thick * (0.6 + 0.7 * q), WATER)
         px = x; py = y; pz = z
       }
-      if (!f.still && f.going && Math.random() < 0.1 * reachU) {
-        // spray falling out of the far half of the throw, and going a little way with the wind
-        const q = 0.55 + Math.random() * 0.45
-        f.particles.emit(from.x + Math.cos(dirA) * reachU * q, from.y + high * 4 * q * (1 - q) * 0.8, from.z + Math.sin(dirA) * reachU * q, 0, -0.3, 0, 0.08 * s, 0.26 * s, 0.8 + Math.random() * 0.6, 0.85, 0.9, 0.94, 0.17, 0.8)
+      if (!f.still && f.going && Math.random() < mist) {
+        const q = 0.35 + Math.random() * 0.65, size = 0.06 * reachM * (0.5 + q)
+        f.particles.emit(from.x + Math.cos(dirA) * reachM * q, from.y + high * 4 * q * (1 - q) * 0.8, from.z + Math.sin(dirA) * reachM * q, 0, -0.4, 0, size, size * 1.6, 0.9 + Math.random() * 0.7, 0.86, 0.91, 0.95, 0.16, 0.8)
       }
     }
+    let tendX = hx + 2, tendZ = st.spot.z
     if (reel) {
-      // the drum on its cart, the hose out along the rows, the gun sweeping
-      a.set(hx, heightAt(hx, hz), hz)
-      d.set(-1, 0, 0)
+      // Two pulls water the field: the gun throws about forty metres to either side of its lane. Each day's pull is
+      // down one lane, the gun coming in from the far end to the drum as the hose is wound on.
+      const laneZ = fd.cz + (day % 2 ? 1 : -1) * (fd.z1 - fd.z0) * 0.25
+      const far = fd.x0 + 14, near = fd.x1 - 16
+      if (f.literal) st.pt = clamp01(ws[0]?.w ?? 0.5)
+      else if (f.going) st.pt = frac(st.pt + f.dt / 70)
+      const gx = far + (near - far) * st.pt
+      // the drum on its cart
+      a.set(hx, heightAt(hx, laneZ), laneZ)
       e.set(0, 0, 1)
-      for (const sd of [-1, 1]) pr.put('cyl', b.copy(a).addScaledVector(Y, 0.78 * s).addScaledVector(e, sd * 0.27 * s), e, X, 0.6 * s, 0.05 * s, 0.6 * s, ORANGE)
-      pr.put('cyl', b.copy(a).addScaledVector(Y, 0.78 * s).addScaledVector(e, -0.22 * s), e, X, 0.47 * s, 0.44 * s, 0.47 * s, DRUM)
+      const turn = st.t * 0.3
+      for (const sd of [-1, 1]) pr.put('cyl', b.copy(a).addScaledVector(Y, 0.78 * s).addScaledVector(e, sd * 0.27 * s), e, c.set(Math.cos(turn), Math.sin(turn), 0), 0.6 * s, 0.05 * s, 0.6 * s, ORANGE)
+      pr.put('cyl', b.copy(a).addScaledVector(Y, 0.78 * s).addScaledVector(e, -0.22 * s), e, X, (0.3 + 0.17 * st.pt) * s, 0.44 * s, (0.3 + 0.17 * st.pt) * s, DRUM)
       pr.put('box', b.copy(a).addScaledVector(Y, 0.14 * s), Y, X, 1.2 * s, 0.07 * s, 0.7 * s, CHAIN)
       for (const sd of [-1, 1]) { b.copy(a).addScaledVector(e, sd * 0.3 * s).addScaledVector(Y, 0.14 * s); c.copy(a).addScaledVector(e, sd * 0.3 * s).addScaledVector(Y, 0.78 * s); pr.rod('cyl', b, c, 0.035 * s, CHAIN) }
-      const gx = fd.x0 + span0 * (0.25 + 0.45 * frac(st.t / 90))
-      b.set(hx - 0.5 * s, heightAt(hx, hz) + 0.05, hz)
-      c.set(gx, heightAt(gx, hz) + 0.05, hz)
-      pr.rod('cyl', b, c, 0.03 * s, DRUM)
-      a.set(gx, heightAt(gx, hz), hz)
-      for (const sd of [-1, 1]) { b.copy(a).addScaledVector(e, sd * 0.25 * s); c.copy(a).addScaledVector(Y, 0.5 * s); pr.rod('cyl', b, c, 0.02 * s, CHAIN) }
-      c.copy(a).addScaledVector(Y, 0.52 * s)
-      const sweep = Math.PI + 1.25 * Math.sin(st.t * 0.5)
-      if (f.going) jet(c, sweep, 6.2 + 0.3 * Math.sin(st.t * 7), 1.5, 0.022 * s)
+      // the hose out along the rows, lying to the lie of the ground
+      const parts = 8
+      for (let k = 0; k < parts; k++) {
+        const xa = hx - 0.5 * s + (gx - (hx - 0.5 * s)) * (k / parts), xb = hx - 0.5 * s + (gx - (hx - 0.5 * s)) * ((k + 1) / parts)
+        b.set(xa, heightAt(xa, laneZ) + 0.06, laneZ)
+        c.set(xb, heightAt(xb, laneZ) + 0.06, laneZ)
+        pr.rod('cyl', b, c, 0.045 * s, DRUM)
+      }
+      // the gun on its cart: two wheels, a riser and the barrel, swinging its sector
+      a.set(gx, heightAt(gx, laneZ), laneZ)
+      for (const sd of [-1, 1]) {
+        b.copy(a).addScaledVector(e, sd * 0.42 * s).addScaledVector(Y, 0.2 * s)
+        pr.put('tyre', b, e, X, 0.2 * s, 0.07 * s, 0.2 * s, CHAIN)
+        c.copy(a).addScaledVector(Y, 0.62 * s)
+        pr.rod('cyl', b, c, 0.02 * s, ORANGE)
+      }
+      c.copy(a).addScaledVector(Y, 0.62 * s)
+      const sweep = Math.PI + 2.3 * Math.sin(st.t * 0.33)
+      b.copy(c).add(d.set(Math.cos(sweep) * 0.5 * s, 0.26 * s, Math.sin(sweep) * 0.5 * s))
+      pr.rod('cyl', c, b, 0.03 * s, COLORS.ALU)
+      if (f.going) jet(b, sweep, 38 + 2 * Math.sin(st.t * 7), 5.5, 0.05, 14, 1)
+      tendZ = laneZ + 1.2
     } else {
-      // pipe laid across the rows from the headland, a sprinkler at every joint
-      b.set(hx - 0.4 * s, heightAt(hx, hz) + 0.07, hz)
-      c.set(fd.x0 + 1.2, heightAt(fd.x0 + 1.2, hz) + 0.07, hz)
-      pr.rod('cyl', b, c, 0.022 * s, COLORS.ALU)
-      for (let n = 0; n < 5; n++) {
-        const x = fd.x0 + 1.6 + (span0 - 3) * n / 4
-        a.set(x, heightAt(x, hz) + 0.07, hz)
-        c.copy(a).addScaledVector(Y, 0.3 * s)
+      // The main comes up the headland from the pond's side; the line across the rows is moved down the field a set at
+      // a time, and every joint has its sprinkler turning.
+      const lineZ = fd.z0 + 12 + ((day * 37) % Math.max(1, Math.round(fd.z1 - fd.z0 - 24)))
+      const pond = siteOf('pond', -1)
+      if (!st.trip) st.trip = new Poly(pond ? route({ x: pond.door.x, z: pond.door.z }, { x: hx, z: st.spot.z }) : [{ x: hx, z: st.spot.z }, { x: hx, z: st.spot.z }])
+      const main = st.trip.pts
+      for (let k = 1; k < main.length; k++) {
+        b.set(main[k - 1].x, heightAt(main[k - 1].x, main[k - 1].z) + 0.08, main[k - 1].z)
+        c.set(main[k].x, heightAt(main[k].x, main[k].z) + 0.08, main[k].z)
+        pr.rod('cyl', b, c, 0.03 * s, COLORS.ALU)
+      }
+      b.set(hx, heightAt(hx, st.spot.z) + 0.08, st.spot.z)
+      c.set(hx, heightAt(hx, lineZ) + 0.08, lineZ)
+      pr.rod('cyl', b, c, 0.03 * s, COLORS.ALU)
+      const joints = Math.max(2, Math.floor((fd.x1 - fd.x0 - 6) / 12))
+      let lx = hx, ly = c.y
+      for (let n = 0; n < joints; n++) {
+        const x = fd.x1 - 3 - 12 * n
+        a.set(x, heightAt(x, lineZ) + 0.08, lineZ)
+        b.set(lx, ly, lineZ)
+        pr.rod('cyl', b, a, 0.022 * s, COLORS.ALU)
+        lx = x; ly = a.y
+        c.copy(a).addScaledVector(Y, 0.36 * s)
         pr.rod('cyl', a, c, 0.012 * s, COLORS.ALU)
         const turn = st.t * 1.6 + n * 1.3
-        if (f.going) for (const sd of [0, Math.PI]) jet(c, turn + sd, 2.6, 0.38, 0.009 * s)
+        if (f.going) for (const sd of [0, Math.PI]) jet(c, turn + sd, 11, 1.2, 0.02, 5, 0.12)
       }
+      tendZ = lineZ + 1.5
     }
     ws.forEach((w, r) => {
       w.rig = null
       w.aboard = false
-      const m = st.at.get(w.id) ?? { x: w.x, z: w.z, walking: false }
-      st.at.set(w.id, m)
-      // tending it: by the reel, or walking the pipe with a length on the shoulder
-      const T = 9, t = frac(st.t / T + r * 0.5) * T
-      const tx = hx + (0.9 + 0.4 * r) * s, tz = hz + (reel ? 0.5 : -2 + 4 * ease(span(0, T, t))) * s
-      const dx = tx - m.x, dz = tz - m.z, dist = Math.hypot(dx, dz)
-      if (dist > 30) { m.x = tx; m.z = tz }
-      m.walking = dist > (m.walking ? 0.06 : 0.45) * s
-      if (m.walking) {
-        const step = Math.min(dist, (f.going ? 1.3 : 0) * s * f.dt)
-        m.x += (dx / dist) * step
-        m.z += (dz / dist) * step
-        w.heading = Math.atan2(dz, dx)
-        walk(w.pose, st.t * 9 + w.id, 1, w.tired, reel ? 0 : 2)
-        if (!reel) { w.pose.tool = 'pipe'; w.pose.toolA.set(-0.5, STAND_HIP + 0.25, 0.115); w.pose.toolB.set(0.6, STAND_HIP + 0.29, 0.115) }
-      } else {
-        w.heading = Math.PI
-        stand(w.pose, st.t, w.tired, reel ? 1 : 3)
-      }
-      w.x = m.x
-      w.z = m.z
-      w.lift = 0
+      // tending it: the first by the drum (or the main's valve), the rest walking the line, a length of pipe on the
+      // shoulder where there is pipe to move
+      const walking = r > 0 || !reel
+      const T = 40, t = frac(st.t / T + r * 0.37)
+      const reach = Math.min(fd.x1 - fd.x0 - 20, 30 + 40 * r)
+      const tx = walking ? fd.x1 - 4 - reach * (t < 0.5 ? ease(t * 2) : 1 - ease(t * 2 - 1)) : tendX
+      const there = this.goTo(st, w, f, tx, tendZ + (walking ? 0 : 0.6 * r), Math.PI, reel ? 0 : 2)
+      if (there) stand(w.pose, st.t, w.tired, reel ? 1 : 3)
+      else if (!reel) { w.pose.tool = 'pipe'; w.pose.toolA.set(-1.3, STAND_HIP + 0.25, 0.115); w.pose.toolB.set(1.5, STAND_HIP + 0.29, 0.115) }
     })
   }
 

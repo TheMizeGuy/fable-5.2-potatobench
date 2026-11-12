@@ -572,7 +572,7 @@ const people: Shot[] = [
   { name: 'w24-spring-yard', size: [1920, 1080], setup: async page => { await farm(page, `start(); put('bunk'); fleet(); hire(6)`); await settle(page) } },
 ]
 // Strips of frames, for motion: the day's work held while the people move.
-interface Strip { name: string; n: number; gap: number; setup: (page: Page) => Promise<void> }
+interface Strip { name: string; n: number; gap: number; size?: [number, number]; setup: (page: Page) => Promise<void> }
 const strips: Strip[] = [
   { name: 's1-fell', n: 12, gap: 450, setup: async page => { await farm(page, SPRING); await settle(page); await farm(page, `until(['fell'])`); await hold(page, 0.75, 3000); await onUnit(page, await worker(page, 'fell'), { dist: 15, yaw: 0.5, pitch: 0.3 }, 0.5, -1) } },
   { name: 's2-walk', n: 8, gap: 160, setup: async page => { await farm(page, SUMMER); await settle(page); await farm(page, `until(['scout'])`); await seek(page, 0.5, 60, 0.05); await onUnit(page, 3, { dist: 7, yaw: 0.8, pitch: 0.3 }) } },
@@ -602,7 +602,8 @@ async function pinPeople(page: Page): Promise<void> {
     }
   })
 }
-const fieldTier = (page: Page, field: number, x = 0.5, z = 0.5) => view(page, { frame: 'field', field, x, z, dist: PEOPLE_FIELD_DIST })
+// (the camera's own field tier)
+const fieldTier = (page: Page, field: number, _x = 0.5, _z = 0.5) => page.evaluate(n => (window as any).__countyField.tier('field', n), field)
 // The field a kind of work was done in today, and who did it.
 const did = (page: Page, kind: string): Promise<{ field: number; unit: number }> => page.evaluate(kind => {
   const w = (window as any).__county.app.campaign.season.worked.find((x: any) => x.kind === kind)
@@ -659,6 +660,83 @@ const dayStrip = (speed: number, n: number, gap: number): Strip => ({
 strips.push(dayStrip(1, 9, 170), dayStrip(2, 9, 85), dayStrip(3, 9, 55), dayStrip(0, 8, 5000))
 strips.push({ name: 't0-plant-close', n: 6, gap: 1500, setup: async page => { await farm(page, SPRING); await settle(page); await farm(page, `app.do({ t: 'day' })`); await page.waitForTimeout(9000); await onTractor(page, { dist: 8, yaw: 0.9, pitch: 0.28 }, 1.2, 0.3) } })
 strips.push({ name: 't0-fell-close', n: 8, gap: 900, setup: async page => { await farm(page, `start(); hire(2); say(app.do({ t: 'begin' })); run(139, ['plant']); clear(); app.campaign.fields[14].felled = 12; app.emit({ type: 'change' }); job('fell', 14, 1)`); await settle(page); await farm(page, `until(['fell'])`); await hold(page, 0.8, 2500); await onUnit(page, await worker(page, 'fell'), { dist: 17, yaw: 0, pitch: 1.05 }, 0, 0); await farm(page, `app.do({ t: 'day' })`); await page.waitForTimeout(1200) } })
+
+// ---- Phase B, second round: the camera's own tiers, the way to work with the clock running, the work that ranges
+// over a field or along a wall, and people at their places in the yard after it was laid out again.
+const tierAt = (page: Page, name: 'yard' | 'field' | 'farm' | 'county', n?: number) => page.evaluate(([name, n]) => (window as any).__countyField.tier(name, n), [name, n] as [string, number | undefined])
+const nearPlace = async (page: Page, name: string, v: View) => {
+  const p = await page.evaluate(name => (window as any).__countyField.places()[name], name)
+  await view(page, { ...v, frame: 'near', x: p.x, z: p.z })
+  await frames(page, 10)
+}
+const settled = async (page: Page) => { await page.waitForTimeout(2500); await page.evaluate(() => (window as any).__countyField.settle()) }
+const CALLERS = `start(); hire(2); say(app.do({ t: 'begin' })); run(186); const c = app.campaign, d = c.season.day; c.incidents.push({ id: c.nextIncident++, kind: 'poach', day: d, until: d + 4, choices: ['match', 'refuse'], unit: 1, wage: 900 }, { id: c.nextIncident++, kind: 'buyer', day: d, until: d + 7, choices: ['take', 'refuse'], lot: 0 }, { id: c.nextIncident++, kind: 'applicant', day: d, until: d + 4, choices: ['hire', 'refuse'], applicant: { id: 99, name: 'Test', skills: { machine: 3, field: 3, woods: 3, build: 3, pack: 3 }, trait: 'strong', ask: 700 } }); app.emit({ type: 'change' })`
+const BROKEN = `start(); hire(1); say(app.do({ t: 'begin' })); run(186); clear(); const c = app.campaign; c.broken.push(c.season.day + 3); c.incidents.push({ id: c.nextIncident++, kind: 'breakdown', day: c.season.day, until: c.season.day + 4, choices: ['rush', 'wait'], unit: 0, back: c.season.day + 3 }); app.emit({ type: 'change' })`
+const IDLE = `start(); put('bunk'); hire(4); say(app.do({ t: 'begin' })); run(186); clear()`
+const WINTER = `start(); put('bunk'); put('packing'); hire(4); say(app.do({ t: 'begin' })); run(400); if (app.campaign.phase === 'season') app.do({ t: 'endSeason' }); for (const u of [3, 4]) say(app.do({ t: 'winter', unit: u, work: 'pack' })); app.do({ t: 'month' })`
+const REEL = `start(); say(app.do({ t: 'buy', upgrade: 'reel' })); hire(1); say(app.do({ t: 'begin' })); run(196); clear(); job('water', 5, 0); job('water', 5, 1)`
+const PIPE = `start(); put('pond'); app.campaign.pond = 6; hire(1); say(app.do({ t: 'begin' })); run(196); app.campaign.pond = 6; clear(); job('water', 5, 0); job('water', 5, 1)`
+// hands taken on with no bunkhouse: they live out
+const LIVE_OUT = `start(); hire(3); say(app.do({ t: 'begin' })); run(139, ['plant']); clear(); job('plant', 0, 0); job('rocks', 1, 1); job('brush', 5, 2); job('rocks', 1, 3); errs.push(app.campaign.crew.map(u => u.id + (u.bed ? ' in' : ' out')).join(','))`
+const BUILDS = ['house', 'shed', 'bunk', 'packing', 'pond', 'stand', 'station', 'road']
+const round2: Shot[] = [
+  ...BUILDS.map((kind): Shot => ({
+    name: `r2-build-${kind}`, setup: async page => {
+      console.log('  ', await farm(page, `start(); put('bunk'); hire(4); say(app.do({ t: 'begin' })); run(139, ['plant']); clear(); say(app.do({ t: 'build', kind: '${kind}', yard: -1 })); until(['build'], 3); errs.push(sim.buildingInfo(app.campaign).filter(b => b.state === 'building').map(b => b.kind + ' ' + b.progress.toFixed(2)).join(','))`))
+      await seek(page, 0.6, 5200, 1)
+      await onUnit(page, await worker(page, 'build'), { dist: 12, yaw: -2.2, pitch: 0.45 })
+    },
+  })),
+  { name: 'r2-build-yard', size: [1920, 1080], setup: async page => { await reach(page, SPRING, `until(['build'])`, 0.6, 5200); await tierAt(page, 'yard'); await frames(page, 20); await pinPeople(page) } },
+  { name: 'r2-sunday-yard', size: [1920, 1080], setup: async page => { await farm(page, SUNDAY); await settle(page); await farm(page, `app.do({ t: 'day' })`); await settled(page); await tierAt(page, 'yard'); await frames(page, 20); await pinPeople(page) } },
+  { name: 'r2-sunday-near', setup: async page => { await farm(page, SUNDAY); await settle(page); await farm(page, `app.do({ t: 'day' })`); await settled(page); await nearPlace(page, 'porch', { dist: 7, yaw: 1.0, pitch: 0.3 }) } },
+  { name: 'r2-idle-yard', size: [1920, 1080], setup: async page => { await farm(page, IDLE); await settle(page); await farm(page, `app.do({ t: 'day' })`); await settled(page); await tierAt(page, 'yard'); await frames(page, 20); await pinPeople(page) } },
+  { name: 'r2-idle-near', setup: async page => { await farm(page, IDLE); await settle(page); await farm(page, `app.do({ t: 'day' })`); await settled(page); await nearPlace(page, 'dooryard', { dist: 8, yaw: 0.9, pitch: 0.3 }) } },
+  { name: 'r2-callers-yard', size: [1920, 1080], setup: async page => { await farm(page, CALLERS); await settle(page); await tierAt(page, 'yard'); await frames(page, 20); await pinPeople(page) } },
+  { name: 'r2-callers-gate', setup: async page => { await farm(page, CALLERS); await settle(page); await nearPlace(page, 'gate', { dist: 7, yaw: 0.6, pitch: 0.34 }) } },
+  { name: 'r2-buyer-door', setup: async page => { await farm(page, CALLERS); await settle(page); await nearPlace(page, 'buyer', { dist: 8, yaw: 2.4, pitch: 0.32 }) } },
+  { name: 'r2-mender-yard', size: [1920, 1080], setup: async page => { await farm(page, BROKEN); await settle(page); await farm(page, `app.do({ t: 'day' })`); await settled(page); await tierAt(page, 'yard'); await frames(page, 20); await pinPeople(page) } },
+  { name: 'r2-mender-near', setup: async page => { await farm(page, BROKEN); await settle(page); await farm(page, `app.do({ t: 'day' })`); await settled(page); await onTractor(page, { dist: 6, yaw: 0.9, pitch: 0.3 }, 0.4, 0.2) } },
+  { name: 'r2-applicants-yard', size: [1920, 1080], setup: async page => { await farm(page, `start()`); await settle(page); await tierAt(page, 'yard'); await frames(page, 20); await pinPeople(page) } },
+  { name: 'r2-applicants-gate', setup: async page => { await farm(page, `start()`); await settle(page); await nearPlace(page, 'gate', { dist: 7, yaw: 0.6, pitch: 0.34 }) } },
+  { name: 'r2-pack-yard', size: [1920, 1080], setup: async page => { console.log('  ', await farm(page, WINTER)); await settle(page); await page.waitForTimeout(4000); await tierAt(page, 'yard'); await frames(page, 20); await pinPeople(page) } },
+  { name: 'r2-pack-near', setup: async page => { await farm(page, WINTER); await settle(page); await page.waitForTimeout(4000); await nearPlace(page, 'pack', { dist: 6, yaw: 0.8, pitch: 0.34 }) } },
+  { name: 'r2-reel-field', size: [1920, 1080], setup: async page => { await reach(page, REEL, `until(['water'])`, 0.5, 3000); await tierAt(page, 'field', 5); await frames(page, 20) } },
+  { name: 'r2-reel-near', setup: async page => { await reach(page, REEL, `until(['water'])`, 0.5, 3000); await onUnit(page, 0, { dist: 9, yaw: 0.6, pitch: 0.3 }) } },
+  { name: 'r2-pipe-field', size: [1920, 1080], setup: async page => { await reach(page, PIPE, `until(['water'])`, 0.5, 3000); await tierAt(page, 'field', 5); await frames(page, 20) } },
+  { name: 'r2-pipe-near', setup: async page => { await reach(page, PIPE, `until(['water'])`, 0.5, 3000); await onUnit(page, 1, { dist: 9, yaw: 0.6, pitch: 0.3 }) } },
+  { name: 'r2-haul-farm', size: [1920, 1080], setup: async page => { await reach(page, HARVEST, `job('dig', 0, 0); until(['dig']); until(['haul'], 4)`, 0.3, 3000); await tierAt(page, 'farm'); await frames(page, 20); await pinPeople(page) } },
+  { name: 'r2-rocks-near', setup: async page => { await reach(page, SPRING, `until(['rocks'])`, 0.5, 6000); const w = await did(page, 'rocks'); await onUnit(page, w.unit, { dist: 13, yaw: 0.7, pitch: 0.4 }) } },
+  { name: 'r2-brush-near', setup: async page => { await reach(page, SPRING, `until(['brush'])`, 0.5, 9000); const w = await did(page, 'brush'); await onUnit(page, w.unit, { dist: 13, yaw: 0.7, pitch: 0.4 }) } },
+]
+shots.push(...round2)
+// The clock running at 1x: the way out to the day's work from the field tier and from the yard; people who live out
+// coming in by the road; the stone boat, the brush fires and the loads on the lane as they go on from day to day.
+const running = (name: string, n: number, gap: number, scenario: string, then: string, look: (page: Page) => Promise<void>, speed = 1): Strip => ({
+  name, n, gap, size: [1920, 1080], setup: async page => {
+    console.log('  ', await farm(page, scenario))
+    await settle(page)
+    if (then) console.log('  ', await farm(page, then))
+    await settled(page)
+    await look(page)
+    await frames(page, 20)
+    console.log('  tiers', JSON.stringify(await page.evaluate(() => (window as any).__countyField.tiers())))
+    if (speed > 0) await page.evaluate(sp => (window as any).__county.app.setSpeed(sp), speed)
+  },
+})
+strips.push(
+  running('r2-way-field', 14, 120, SPRING, '', async page => { await tierAt(page, 'field', 2) }),
+  running('r2-way-yard', 14, 120, SPRING, '', async page => { await tierAt(page, 'yard') }),
+  running('r2-way-farm', 14, 120, SPRING, '', async page => { await tierAt(page, 'farm') }),
+  running('r2-liveout-gate', 14, 120, LIVE_OUT, `app.do({ t: 'day' }); app.do({ t: 'day' })`, async page => { await nearPlace(page, 'gate', { dist: 16, yaw: 0.6, pitch: 0.5 }) }),
+  running('r2-liveout-field', 14, 120, LIVE_OUT, `app.do({ t: 'day' }); app.do({ t: 'day' })`, async page => { await tierAt(page, 'field', 1) }),
+  running('r2-rocks-field', 12, 450, SPRING, '', async page => { await tierAt(page, 'field', 1) }),
+  running('r2-brush-field', 12, 450, SPRING, '', async page => { await tierAt(page, 'field', 5) }),
+  running('r2-haul-lane', 10, 1800, HARVEST, `job('dig', 0, 0); until(['dig']); until(['haul'], 4)`, async page => { await tierAt(page, 'farm') }),
+  // The clock stopped and a day's digging ordered: the way in, then the day's band out, inside what the interface waits.
+  { name: 'r2-dig-stopped', n: 12, gap: 200, size: [1920, 1080], setup: async page => { await farm(page, HARVEST); await settle(page); await tierAt(page, 'field', 0); await frames(page, 20); console.log('  ', await farm(page, `job('dig', 0, 0); app.do({ t: 'day' })`)) } },
+  { name: 'r2-fell-near', n: 10, gap: 500, setup: async page => { await farm(page, FELLING.replace('= 18', '= 12')); await settle(page); await farm(page, `until(['fell'])`); await hold(page, 0.75, 500); await onUnit(page, await worker(page, 'fell'), { dist: 15, yaw: 0.5, pitch: 0.3 }, 0.5, -1); await farm(page, `app.do({ t: 'day' })`) } },
+)
 
 
 // ---- The blockout for choosing the size of the land: the same seven views whatever K is.
@@ -824,7 +902,7 @@ for (const shot of shots) {
 }
 for (const strip of strips) {
   if (!only.size || (!only.has(strip.name) && ![...only].some(o => o.endsWith('*') && strip.name.startsWith(o.slice(0, -1))))) continue
-  const page = await browser.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 })
+  const page = await browser.newPage({ viewport: { width: strip.size?.[0] ?? 1280, height: strip.size?.[1] ?? 720 }, deviceScaleFactor: 1 })
   page.on('pageerror', e => errors.push(`${strip.name}: ${e.message}`))
   await page.goto(base)
   await page.waitForFunction(() => (window as any).__countyField !== undefined)

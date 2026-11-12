@@ -148,6 +148,15 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   const harvest = new Harvest()
   const crews = new Crews()
   crews.setStand(i => flora.stand(i))
+  // The land's hold on trees counted as felled until they are seen to go over (asked for by name: it comes with the
+  // land's own next change, and until then nothing is held).
+  const holdTrees = (flora as unknown as { holdStanding?: (i: number, n: number) => void }).holdStanding?.bind(flora)
+  crews.setHold((i, n) => {
+    const fv = snap.fields[i]
+    if (!holdTrees || !fv) return
+    holdTrees(i, n)
+    flora.setFelled(i, fv.cover === 'woods' || fv.cover === 'brush' ? fv.felled : 1)
+  })
   lap('crews')
   const particles = new Particles(puffTex)
   const weather = new Weather()
@@ -364,19 +373,22 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   // Which way the digger is going over each field being dug, for where the tubers land.
   const digDir = new Map<number, { dx: number; dz: number }>()
 
-  // (late: what someone still on the way to their work has yet to do stays as it is; if the job goes on, the next
-  // day's plan takes those hills up again)
+  // (late: what someone has yet to be seen doing, being behind the clock on the way to it, goes on waiting for them)
   function flush(animate: boolean, late = false): void {
-    for (const r of pending) if (!late || !crews.late(r.unit)) reveal(r, animate && pending.length < 200)
-    pending = []
+    const keep: PendingReveal[] = []
+    for (const r of pending) {
+      if (late && crews.owes(r.unit, r.gen)) keep.push(r)
+      else reveal(r, animate && pending.length < 200)
+    }
+    pending = keep
   }
 
   // A crew has gone this far along its day: reveal the hills it has passed.
-  function passed(unit: number, seg: number, arc: number): void {
+  function passed(unit: number, seg: number, arc: number, gen: number): void {
     if (!pending.length) return
     const keep: PendingReveal[] = []
     for (const r of pending) {
-      if (r.unit === unit && (r.seg < seg || (r.seg === seg && r.at <= arc))) reveal(r, true)
+      if (r.unit === unit && (r.gen < gen || (r.gen === gen && (r.seg < seg || (r.seg === seg && r.at <= arc))))) reveal(r, true)
       else keep.push(r)
     }
     pending = keep
@@ -395,7 +407,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     const sameDay = !dayPassed && !first && prev.mode === next.mode && prev.year === next.year && prev.seasonDay === next.seasonDay
     if (sameSeason) {
       for (const [f, s] of samples) lastSample.set(f, s)
-      pending = crews.plan(next, shown, new Map([...samples].map(([f, s]) => [f, s.hill])))
+      pending = pending.concat(crews.plan(next, shown, new Map([...samples].map(([f, s]) => [f, s.hill]))))
       const wait = new Set(pending.map(r => r.field * HILLS + r.hill))
       shown = next.fields.map((f, i) => f.hills.map((_, h) => (wait.has(i * HILLS + h) ? shown[i][h] : display(i, h, next))))
       dayT = 0
@@ -942,6 +954,8 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       },
       // Where the interface pins a person's face.
       unitPin: (id: number) => unitAnchor(id),
+      // Where people are to be looked for in the yard, in metres (for tools that point the camera at them).
+      places: () => crews.places(),
       // What a click at a point on the screen would pick.
       pickAt: (x: number, y: number) => ({ field: pick(x, y), unit: pickUnit(x, y), yard: pickYard(x, y), mode: snap.mode, held: snap.fields.map(f => f.held), available: snap.fields.map(f => f.available) }),
       parts: () => Object.keys(parts),
