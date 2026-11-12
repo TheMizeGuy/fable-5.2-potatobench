@@ -4,12 +4,20 @@ import { gauge, type Ctx } from './core.ts'
 import { h, type Child } from './dom.ts'
 import * as F from './fmt.ts'
 import { icon } from './icons.ts'
-import { doing } from './crew.ts'
 import { BLOCK_NAME, heldFields, roadTime } from './map.ts'
 import * as R from './rules.ts'
 
-type Page = 'forecast' | 'blight' | 'fields' | 'farm' | 'diary' | 'prices'
-const PAGES: [Page, string][] = [['forecast', 'Forecast'], ['blight', 'Blight watch'], ['fields', 'Fields'], ['farm', 'Land and crews'], ['diary', 'Diary'], ['prices', 'Prices']]
+type Page = 'forecast' | 'blight' | 'fields' | 'farm' | 'people' | 'buildings' | 'incidents' | 'diary' | 'prices'
+const PAGES: [Page, string][] = [
+  ['forecast', 'Forecast'], ['blight', 'Blight watch'], ['fields', 'Fields'], ['farm', 'Land'], ['people', 'People'], ['buildings', 'Buildings'],
+  ['incidents', 'Incidents'], ['diary', 'Diary'], ['prices', 'Prices'],
+]
+
+// A mechanic in two lines: what it gives, and its catch.
+function rules(list: [string, string, string][]): HTMLElement {
+  return h('dl', { class: 'rules' }, list.map(([name, gives, catches]) => h('div', null,
+    h('dt', null, name), h('dd', null, gives), h('dd', { class: 'catch' }, catches))))
+}
 
 function forecastPage(ctx: Ctx, c: S.Campaign): Child {
   const t = S.today(ctx.app.world, c)
@@ -54,7 +62,7 @@ function blightPage(ctx: Ctx, c: S.Campaign): Child {
           h('p', { class: 't-lede num' }, `${s0.sv} of ${S.SV_THRESHOLD} severity values`),
           gauge(Math.min(1, s0.sv / S.SV_THRESHOLD), { label: 'Severity values toward the blight watch', text: `${s0.sv} of ${S.SV_THRESHOLD}`, cls: 'warn' }),
           h('p', null, `${S.SV_THRESHOLD - s0.sv} more and the watch goes on.${t && t.severity > 0 ? ` Today's weather adds ${t.severity}.` : ''}`)),
-    h('p', null, `Late blight needs long, damp, mild spells. The game adds up severity values for that weather from ${F.date(c.year, start)}, as the Blitecast system does. Once the total reaches ${S.SV_THRESHOLD} the watch is on, and spores can land on any day of blight weather.`),
+    h('p', null, `Late blight needs long, damp, mild spells. From ${F.date(c.year, start)} each day of that weather adds severity values. Once the total reaches ${S.SV_THRESHOLD} the watch is on, and spores can land on any day of blight weather.`),
     h('p', null, 'Protectant stops spores taking hold; it does not cure a blighted plant, so it has to be on the leaf first. It wears off day by day, faster as new leaf grows, and rain washes it off.'),
     h('p', null, on && !leaf ? 'No field has leaf up, so there is nothing to protect yet.' : 'Blight shows only up close. A field that has not been walked for a week is a guess: it can be clean, or it can be a week into an outbreak.'),
   ]
@@ -97,33 +105,89 @@ function fieldsPage(ctx: Ctx, c: S.Campaign): Child {
   }))
 }
 
-// The land the farm holds by block, who works it, and what is promised to whom.
+// The land the farm holds by block, its tracts, what is owed on it, and how land works.
 function farmPage(ctx: Ctx, c: S.Campaign): Child {
   const mine = heldFields(c)
   const blocks = [...new Set(mine.map(i => S.PARCELS[i].block))]
-  const waits = S.jobWaits(ctx.app.world, c)
-  const crews = S.crewInfo(c)
-  const ks = S.contractInfo(c)
   const st = S.storageInfo(c)
+  const m = S.mortgageInfo(c)
+  const tracts = S.tractInfo(c).filter(t => t.tenure !== 'none' && t.stage !== 'done')
   return [
-    h('h3', { class: 'block-head' }, 'Land'),
     h('table', { class: 'money' }, h('tbody', null, blocks.map(b => {
       const here = mine.filter(i => S.PARCELS[i].block === b)
       const rent = here.filter(i => c.fields[i].tenure === 'rented').reduce((a, i) => a + S.PARCELS[i].rent, 0)
       const far = Math.max(...here.map(i => S.travelDays(S.HOME_YARD, i)))
       return h('tr', null, h('th', { scope: 'row' }, BLOCK_NAME[b], h('span', { class: 'sub' }, ` ${F.list(here.map(i => S.FIELD_NAMES[i]))}${b === 'home' ? '' : `; ${roadTime(far)} from the home yard`}`)), h('td', null, rent ? `${F.money(rent)} rent` : 'owned'))
     }))),
-    h('p', { class: 'sub' }, `Rented land is paid for the year when the season begins and stays rented until it is released in spring. A dig far from a potato house takes longer for the haul. Storage: ${F.list(st.houses.map(x => `${x.name.replace(/^(Home|Second)/, w => w.toLowerCase())} ${F.mass(x.cwt)}`))}.`),
-    h('h3', { class: 'block-head' }, 'Crews'),
-    h('table', { class: 'money' }, h('tbody', null, crews.map(u => h('tr', null,
-      h('th', { scope: 'row' }, u.name, h('span', { class: 'sub' }, ` ${R.KIND_NAME[u.kind].toLowerCase()}: ${R.kindDoes(u.kind).toLowerCase().replace(/\.$/, '')}`)),
-      h('td', null, doing(c, u, waits, crews).text))))),
-    h('p', { class: 'sub' }, `Each day every crew takes the earliest order it can do, nearest first, unless an order is given to one crew. The drive between fields comes out of the working day. Hands are ${F.money(S.HAND_WAGE)} a month, the operator ${F.money(S.OPERATOR_WAGE)}.`),
-    h('h3', { class: 'block-head' }, 'Contracts'),
-    ks.length ? h('table', { class: 'money' }, h('tbody', null, ks.map(k => h('tr', null,
-      h('th', { scope: 'row' }, `${k.buyer}, ${k.varietyName}`, h('span', { class: 'sub' }, ` ${F.mass(k.delivered)} of ${F.mass(k.cwt)} at ${F.price(k.price)}, ${k.dueBy}`)),
-      h('td', { class: k.penalty > 0 ? 'neg' : '' }, k.penalty > 0 ? `short ${F.money(-k.penalty)}` : 'filled'))))) : h('p', null, 'None signed this year.'),
-    h('p', { class: 'sub' }, `Contracts are signed in spring. What is short on the due date costs ${F.pct(S.CONTRACT_PENALTY)} of its contract value.`),
+    tracts.length ? h('ul', { class: 'deeds' }, tracts.map(t => h('li', null, `${t.name}, ${t.coverWord}: ${t.next}`))) : null,
+    h('p', { class: 'sub' }, `${m.owed > 0 ? `${F.money(m.owed)} is owed on the land; this year end the bank takes ${F.money(m.principal + m.interest)}. ` : ''}Storage: ${F.list(st.houses.map(x => `${x.name.replace(/^(Home|Second)/, w => w.toLowerCase())} ${F.mass(x.cwt)}`))}.`),
+    h('h3', { class: 'block-head' }, 'How land works'),
+    rules([
+      ['Renting', 'A field for the year, paid when the season begins.', 'The rent comes every year it is kept.'],
+      ['Buying', `${F.pct(S.MORTGAGE_DOWN)} down and the rest on the land mortgage: the field is the farm's for good.`, `Each year end the bank takes a tenth of the loan and ${F.pct(S.MORTGAGE_RATE)} interest, besides the note.`],
+      ['Clearing a tract', `Fell it, have the stumps pulled (${F.money(S.STUMP_FEE)}), pick the rocks: woods and brush become a field.`, 'New ground is stony, and its first potato crop grows less unless it rests a year.'],
+      ['Shelter', 'Standing woods shelter the field beside them: less water lost, sprays in more wind.', 'And an hour more blight weather, and colder frosts.'],
+      ['Stones', 'Picking the rocks speeds the planter and the digger and saves the crop from bruising.', 'Frost heaves more up every winter, and picking takes people and time with no crop in.'],
+      ['Brush', 'Cutting the hedgerows lets damp and frost drain off a bottom or mid-slope field.', `The wind dries it more, and they grow back in ${S.BRUSH_YEARS} years.`],
+      ['Tile drains', 'Bottom land drains like the slope.', `${F.money(S.TILE_FEE)} for a contractor, only under the farm's own land, with no crop in.`],
+      ['Logs and stone', `Felling brings logs and picking rocks brings fieldstone: both build, and logs sell at ${F.money(S.LOG_PRICE)} a load.`, `What a building lacks is bought at ${F.money(S.MILL_PRICE)} a load of logs and ${F.money(S.QUARRY_PRICE)} of stone.`],
+    ]),
+  ]
+}
+
+function peoplePage(c: S.Campaign): Child {
+  const people = S.peopleInfo(c)
+  return [
+    h('table', { class: 'money' }, h('tbody', null, people.map(p => {
+      const best = S.bestSkill(p.skills)
+      return h('tr', null,
+        h('th', { scope: 'row' }, p.kind === 'farmer' ? 'You' : p.name,
+          h('span', { class: 'sub' }, ` ${p.traitName ? `${p.traitName.toLowerCase()}, ` : ''}best at ${S.SKILL_LABEL[best]} (${p.skills[best]}); ${p.tiredWord}, ${p.moodWord}${p.pay ? `; ${F.money(p.pay)} a month` : ''}`)),
+        h('td', null, p.doing))
+    }))),
+    h('h3', { class: 'block-head' }, 'How people work'),
+    rules([
+      ['Skills', 'Five, from 0 to 10: machines, field, woods, building, packing. Skill makes work faster and better.', `It comes from doing: level L to L + 1 takes ${S.XP_BASE} + ${S.XP_PER_LEVEL}L days of that work.`],
+      ['Traits', 'Everyone hired has one: a strong back, an early riser, sharp eyes.', 'Read it before hiring: careless people bruise the crop, a homebody will not work winters.'],
+      ['Priorities', 'Each person takes work in their own order: 1 first to 4 last, or never.', 'An order can still be given to one person, who does it whatever their order.'],
+      ['Tiredness', 'A day off rests. Fresh people work at full speed.', 'Worn out, they slow down, sour, and get hurt in the woods or on a machine.'],
+      ['Mood', 'Pay over what they asked, a bunk, rest and a good harvest lift it; content people work faster.', `A week near the bottom and a hired person quits.`],
+      ['Sundays off', 'Everyone rests one day in seven.', 'Working Sundays gains a day a week and tires everyone.'],
+      ['A foreman', 'Puts on the list what a block\'s fields need, every working day.', `Paid ${F.pct(S.FOREMAN_PAY - 1)} more, does no field work, and is careful rather than clever.`],
+      ['Pickers', `In the harvest break a picking crew makes every dig ${F.pct(S.PICKER_DIG - 1)} faster.`, `${F.money(S.PICKER_DAY)} for each day worked.`],
+      ['Winter', `Kept on, people fell, pack or build, ${S.WINTER_DAYS} days a month.`, 'They are paid every month; laid off, they cost nothing and come back in spring.'],
+    ]),
+  ]
+}
+
+function buildingsPage(c: S.Campaign): Child {
+  const all = S.buildingInfo(c).filter(b => b.yard === S.HOME_YARD || S.holdsDufour(c))
+  const up = all.filter(b => b.state !== 'none')
+  return [
+    up.length ? h('table', { class: 'money' }, h('tbody', null, up.map(b => h('tr', null,
+      h('th', { scope: 'row' }, b.name, h('span', { class: 'sub' }, `, ${b.yardName}`)),
+      h('td', null, b.state === 'built' ? 'standing' : `${F.pct(b.progress)} built`))))) : h('p', null, 'No buildings yet beyond the home place. Select a yard on the land to raise one.'),
+    h('h3', { class: 'block-head' }, 'What each building does'),
+    rules(S.BUILDING_KINDS.map(k => {
+      const spec = S.BUILDINGS[k]
+      return [spec.name, `${spec.does} ${F.money(spec.cash)}, ${spec.logs} logs, ${spec.stone} stone, ${spec.days} days of building.`, spec.catch]
+    })),
+  ]
+}
+
+function incidentsPage(c: S.Campaign): Child {
+  const open = S.incidentInfo(c)
+  return [
+    open.length ? h('ul', { class: 'deeds' }, open.map(i => h('li', null, `${i.title}: ${F.localize(i.text)} ${i.daysLeft ? `${F.plural(i.daysLeft, 'day')} left to answer.` : ''}`)))
+      : h('p', null, 'Nothing is waiting for an answer.'),
+    h('h3', { class: 'block-head' }, 'What can happen'),
+    rules([
+      ['Someone asks for work', 'Take them on with their own skills and trait, or let them look elsewhere.', `They wait ${S.INCIDENT_DAYS} days for an answer.`],
+      ['A neighbour wants one of your people', `Match the offer, ${F.pct(S.POACH_RAISE)} more, or let them choose.`, 'Unhappy people take it and go.'],
+      ['A tractor breaks down', `${S.BREAK_DAYS} days out, or a rush part for ${F.money(S.RUSH_PART)}; someone at machines ${S.MECHANIC} has it going in a day.`, 'Long, tired hours make it likelier; a machine shed halves it.'],
+      ['Someone is hurt', `Out ${S.HURT_DAYS[0]} to ${S.HURT_DAYS[1]} days.`, 'Only when working worn out in the woods or on a machine: rest prevents it.'],
+      ['A buyer stops in', `${F.pct(S.BUYER_PREMIUM)} over the market for a whole lot, this week only.`, 'Sold, the lot is gone: nothing held for the spring price.'],
+    ]),
   ]
 }
 
@@ -137,8 +201,9 @@ function diaryPage(c: S.Campaign): Child {
 
 function pricesPage(ctx: Ctx, c: S.Campaign): Child {
   const world = ctx.app.world
-  const ids = [...new Set(c.plans.filter(p => p.crop === 'potato').map(p => p.variety))]
+  const ids = [...new Set(c.plans.filter((p, i) => p.crop === 'potato' && S.isField(c, i)).map(p => p.variety))]
   const lots = S.openLots(c)
+  const ks = S.contractInfo(c)
   return [
     h('p', { class: 't-lede' }, R.moodText(world, c)),
     h('table', { class: 'money' },
@@ -155,6 +220,12 @@ function pricesPage(ctx: Ctx, c: S.Campaign): Child {
         h('th', { scope: 'row' }, `${S.variety(l.variety).name} from ${S.FIELD_NAMES[l.field]}, ${F.mass(S.lotCwt(l))}`),
         h('td', null, F.money(S.lotValue(world, c, l))))))),
       h('p', { class: 'sub' }, 'Worth today. Select a dug field to sell its crop or see its weigh ticket.'),
+    ] : null,
+    ks.length ? [
+      h('h3', { class: 'block-head' }, 'Contracts'),
+      h('table', { class: 'money' }, h('tbody', null, ks.map(k => h('tr', null,
+        h('th', { scope: 'row' }, `${k.buyer}, ${k.varietyName}`, h('span', { class: 'sub' }, ` ${F.mass(k.delivered)} of ${F.mass(k.cwt)} at ${F.price(k.price)}, ${k.dueBy}`)),
+        h('td', { class: k.penalty > 0 ? 'neg' : '' }, k.penalty > 0 ? `short ${F.money(-k.penalty)}` : 'filled'))))),
     ] : null,
   ]
 }
@@ -178,7 +249,11 @@ export function openAlmanac(ctx: Ctx, first: Page = 'forecast'): void {
           onclick: () => { page = k; draw(true) },
         }, label)))
         if (focus) tabs.querySelector<HTMLElement>('[aria-current]')?.focus()
-        body.replaceChildren(h('div', null, page === 'forecast' ? forecastPage(ctx, c) : page === 'blight' ? blightPage(ctx, c) : page === 'fields' ? fieldsPage(ctx, c) : page === 'farm' ? farmPage(ctx, c) : page === 'diary' ? diaryPage(c) : pricesPage(ctx, c)))
+        const pages: Record<Page, () => Child> = {
+          forecast: () => forecastPage(ctx, c), blight: () => blightPage(ctx, c), fields: () => fieldsPage(ctx, c), farm: () => farmPage(ctx, c),
+          people: () => peoplePage(c), buildings: () => buildingsPage(c), incidents: () => incidentsPage(c), diary: () => diaryPage(c), prices: () => pricesPage(ctx, c),
+        }
+        body.replaceChildren(h('div', null, pages[page]()))
       }
       draw()
       return [tabs, body]

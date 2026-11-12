@@ -82,8 +82,47 @@ function signedCard(c: S.Campaign, k: S.ContractInfo): HTMLElement {
     short ? h('p', { class: 'sub' }, farmHas(c, k.variety)) : null)
 }
 
-// The offers in spring, and in season and winter what is signed. Signed contracts are delivered against from a weigh
-// ticket, a dug field's card or a cellar card.
+function offerCard(ctx: Ctx, c: S.Campaign, o: S.OfferInfo, after: () => void): HTMLElement {
+  const v = S.variety(o.variety)
+  const vs = o.price / o.usual - 1
+  return h('article', { class: 'offer', testid: `offer-${o.id}` },
+    h('header', { class: 'offer-head' }, h('h3', { class: 't-head' }, o.buyer), h('span', { class: 'sub' }, o.varietyName)),
+    facts([
+      ['Wants', h('span', { class: 'num' }, `${F.mass(o.cwt)} of No. 1`)],
+      ['Pays', h('span', { class: 'num' }, `${F.price(o.price)}, ${F.money(o.value)} in all`)],
+      ['Due', o.dueBy],
+      ['Against', h('span', { class: `num${vs < -0.015 ? ' warn-text' : ''}` }, `${F.versus(o.price / o.usual)} ${v.contract ? 'the processing price' : 'a usual year'}`)],
+    ]),
+    h('p', { class: 'sub' }, farmHas(c, o.variety)),
+    v.contract ? h('p', { class: 'sub warn-text' }, `Off contract ${v.name} sells ${offContract()} its usual price.`) : null,
+    h('button', {
+      class: 'btn', type: 'button', testid: `accept-${o.id}`,
+      onclick: () => { if (ctx.run({ t: 'accept', offer: o.id }).ok) { ctx.announce(`Signed with ${o.buyer.toLowerCase()}.`); after() } },
+    }, 'Accept'))
+}
+
+// What is signed, and in spring what is offered, as cards. after: redraws whatever holds them.
+function contractCards(ctx: Ctx, c: S.Campaign, after: () => void): Child {
+  const offers = S.offerInfo(c)
+  const signed = S.contractInfo(c)
+  return [
+    h('p', { class: 'fold-lede' }, `A fixed price for No. 1 delivered by a date. Short on the day costs ${F.pct(S.CONTRACT_PENALTY)} of what is missing.`),
+    signed.length ? [h('h4', { class: 'fold-sub' }, 'Signed'), h('div', { class: 'offers' }, signed.map(k => signedCard(c, k)))] : null,
+    c.phase === 'plan' ? [
+      h('h4', { class: 'fold-sub' }, offers.length ? 'Offered this spring' : 'No more offers this spring'),
+      offers.length ? h('div', { class: 'offers' }, offers.map(o => offerCard(ctx, c, o, after))) : null,
+      h('p', { class: 'sub' }, 'Offers lapse when the season begins.'),
+    ] : h('p', { class: 'sub' }, 'Deliver from the weigh ticket, a dug field\'s card, or the cellar. Harvest contracts close with the season; winter ones at the end of February.'),
+  ]
+}
+
+// The contracts as the spring plan shows them, in place.
+export function springContracts(ctx: Ctx, c: S.Campaign): Child {
+  return contractCards(ctx, c, () => ctx.dirty())
+}
+
+// In the season and the winter: what is signed. Signed contracts are delivered against from a weigh ticket, a dug
+// field's card or a cellar card.
 export function openContracts(ctx: Ctx): void {
   const app = ctx.app
   if (!app.campaign) return
@@ -96,33 +135,7 @@ export function openContracts(ctx: Ctx): void {
       const draw = () => {
         const c = app.campaign
         if (!c) return
-        const offers = S.offerInfo(c)
-        const signed = S.contractInfo(c)
-        box.replaceChildren(...h('div', null,
-          h('p', { class: 't-lede' }, `A buyer pays a fixed price for US No. 1 and large tubers delivered by a date. What is short on the day costs ${F.pct(S.CONTRACT_PENALTY)} of its contract value.`),
-          signed.length ? [h('h3', { class: 'block-head' }, 'Signed'), h('div', { class: 'offers' }, signed.map(k => signedCard(c, k)))] : null,
-          c.phase === 'plan' ? [
-            h('h3', { class: 'block-head' }, offers.length ? 'Offered this spring' : 'No more offers this spring'),
-            offers.length ? h('div', { class: 'offers' }, offers.map(o => {
-              const v = S.variety(o.variety)
-              return h('article', { class: 'offer', testid: `offer-${o.id}` },
-                h('header', { class: 'offer-head' }, h('h3', { class: 't-head' }, o.buyer), h('span', { class: 'sub' }, o.varietyName)),
-                facts([
-                  ['Wants', h('span', { class: 'num' }, F.mass(o.cwt))],
-                  ['Pays', h('span', { class: 'num' }, `${F.price(o.price)}, ${F.money(o.value)} in all`)],
-                  ['Due', o.dueBy],
-                  ['Usual market', h('span', { class: 'num' }, `${F.price(o.usual)}${v.contract ? ', off contract' : ''}`)],
-                ]),
-                h('p', { class: 'sub' }, farmHas(c, o.variety)),
-                v.contract ? h('p', { class: 'sub warn-text' }, `Off contract ${v.name} sells ${offContract()} its usual price.`) : null,
-                h('button', {
-                  class: 'btn', type: 'button', testid: `accept-${o.id}`,
-                  onclick: () => { if (ctx.run({ t: 'accept', offer: o.id }).ok) { ctx.announce(`Signed with ${o.buyer.toLowerCase()}.`); draw() } },
-                }, 'Accept'))
-            })) : null,
-            h('p', { class: 'sub' }, 'Offers lapse when the season begins.'),
-          ] : h('p', { class: 'sub' }, 'Deliver from the weigh ticket when a field is dug, from a dug field\'s card, or from the cellar. Harvest contracts close with the season; winter ones at the end of February.'),
-        ).childNodes)
+        box.replaceChildren(...h('div', null, contractCards(ctx, c, draw)).childNodes)
       }
       draw()
       return box
