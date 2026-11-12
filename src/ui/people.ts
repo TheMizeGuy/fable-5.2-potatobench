@@ -5,7 +5,7 @@ import { confirmPaper, EXIT_MS, patch, type Ctx } from './core.ts'
 import { h, s, type Child } from './dom.ts'
 import * as F from './fmt.ts'
 import { icon } from './icons.ts'
-import { BLOCK_NAME } from './map.ts'
+import { BLOCK_NAME, where } from './map.ts'
 import * as R from './rules.ts'
 
 // A head and shoulders in the shirt, hat and skin the figure on the land wears.
@@ -137,6 +137,7 @@ export function personCard(ctx: Ctx): PersonCard {
         h('div', null,
           h('h2', { class: 't-head', testid: 'person-name' }, farmer ? 'You, the farmer' : p.name),
           h('p', { class: 'card-sub' }, farmer ? 'Every job; no wage' : `${p.traitName}: ${p.traitText.replace(/\.$/, '').replace(/^./, x => x.toLowerCase())}`)),
+        h('span', { class: 'p-map' }, where(c, p.travelling ? p.to : p.at, 40, c.crew.map(u => ({ at: u.road > 0 ? u.to : u.at, colour: personLook(u.id).shirt, ring: u.id === p.id })))),
         h('button', { class: 'nicon', type: 'button', testid: 'person-close', 'aria-label': `Close${ctx.touch() ? '' : ' (Escape)'}`, onclick: () => app.selectUnit(-1) }, icon('close'))),
       h('div', { class: 'p-now' },
         h('p', { class: 'reading p-doing', testid: 'person-doing' }, icon(doingGlyph(c, p), 'ic s'), h('span', null, doing),

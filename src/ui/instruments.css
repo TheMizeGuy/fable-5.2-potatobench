@@ -297,6 +297,7 @@
 .q .ic { width: 18px; height: 18px; }
 .where { flex: none; fill: var(--night-edge); }
 .where .here { fill: var(--cream); }
+.where .tract { fill: rgb(156 203 143 / 0.3); }
 .q-tag { min-width: 12px; font-size: var(--t-label); line-height: 14px; font-weight: 700; color: var(--cream-2); text-align: center; }
 .q-tag.pinned { color: var(--night-solid); background: var(--cream); border-radius: 2px; padding: 0 2px; }
 .q-who { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
@@ -807,6 +808,13 @@
 .person-card.out, .yard-card.out { animation: sink var(--t-exit) var(--ease-in) forwards; pointer-events: none; }
 .p-head { grid-area: head; display: flex; align-items: center; gap: var(--sp-3); padding-right: var(--sp-7); }
 .p-head > div { min-width: 0; }
+.p-map { margin-left: auto; flex: none; }
+.p-map .where { fill: var(--night-line); }
+.p-map .where .tract { fill: rgb(156 203 143 / 0.25); }
+.p-map .where .yard { fill: var(--cream-2); }
+.p-map .where .who { stroke: var(--night-solid); stroke-width: 1.2; }
+.p-map .where .who.ring { stroke: var(--cream); stroke-width: 2; }
+.season[data-layout='narrow'] .p-map { display: none; }
 .p-head .card-sub { white-space: normal; }
 .p-now { grid-area: now; display: grid; gap: var(--sp-2); min-width: 0; }
 .p-doing { flex-wrap: wrap; font-weight: 600; }
