@@ -235,7 +235,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     sprayAsked = key
     if (S.routineInfo(c).some(r => r.kind === 'spray' && r.auto)) return
     askSpray(ctx)
-    app.setSpeed(0)
+    app.stopFor('Spraying this season wants an answer.')
   }
   const off = app.on(ev => {
     if (ev.type === 'yard' || ev.type === 'unit' || ev.type === 'select') ctx.dirty()

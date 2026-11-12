@@ -290,6 +290,11 @@ export class App {
 
   // Once the card the clock stopped for is answered, the days go on at the speed they had. A clock the player stopped
   // stays stopped.
+  // Stops the clock for a question the interface asks (the season's spraying): answered or put away, it goes on.
+  stopFor(why: string): void {
+    if (this.speed > 0) this.halt(why)
+  }
+
   resumeAfterCard(): void {
     if (this.screen !== 'season' || this.speed !== 0 || this.pauseReason === '') return
     const c = this.campaign
