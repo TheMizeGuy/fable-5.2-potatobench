@@ -280,11 +280,11 @@ export function naive(plantDate: [number, number] = [4, 20], digDate: [number, n
 // by giving every field its smart order), the advice's sales are made, every question takes its default, and the crop
 // is kept in the cellar and sold in one month. The default plans, no land, crew, contracts, buildings or equipment.
 // For validation runs, skip leaves some advice undone and waterBelow adds watering at a soil-moisture trigger.
-export function reference(sellMonth = 4, skip: JobKind[] = [], waterBelow = 0): BotFactory {
+export function reference(sellMonth = 4, skip: JobKind[] = [], waterBelow = 0, routine = true): BotFactory {
   return () => ({
     plan(world, c) {
       // The routine on, as a new game has it, but for what the bot is told to leave undone.
-      setRoutine(world, c, kind => S.ROUTINE_DEFAULT[kind as S.RoutineKind] && !skip.includes(kind))
+      setRoutine(world, c, kind => routine && S.ROUTINE_DEFAULT[kind as S.RoutineKind] && !skip.includes(kind))
     },
     day(world, c) {
       const all = S.advise(world, c)
@@ -311,18 +311,20 @@ export function reference(sellMonth = 4, skip: JobKind[] = [], waterBelow = 0): 
 
 // A new game left to itself: the routine does what it does, nobody gives an order, answers a question or sells; the
 // cellar is sold off when it closes.
-export function untended(): BotFactory {
-  return () => ({ plan() { /* nothing */ }, day() { /* nothing */ }, cellar() { /* nothing */ } })
+export function untended(routine = true): BotFactory {
+  return () => ({ plan(world, c) { if (!routine) setRoutine(world, c, () => false) }, day() { /* nothing */ }, cellar() { /* nothing */ } })
 }
+
+const CALLS: JobKind[] = ['spray', 'water', 'kill']
 
 // A player who leaves the routine to itself and answers only the calls the game puts to them: each field's need
 // (spraying, watering, killing the vines), the advice's sales, and the crop sold from the cellar in March.
-export function callsOnly(sellMonth = 4): BotFactory {
+export function callsOnly(sellMonth = 4, routine = true): BotFactory {
   return () => ({
-    plan() { /* the default plans */ },
+    plan(world, c) { if (!routine) setRoutine(world, c, () => false) },
     day(world, c) {
       const needs = S.fieldNeeds(world, c)
-      needs.forEach((n, i) => { if (n.need && n.need.act !== 'sell' && n.need.act !== 'close' && n.need.act !== 'wait') job(world, c, n.need.act, i) })
+      needs.forEach((n, i) => { if (n.need && CALLS.includes(n.need.act as JobKind)) job(world, c, n.need.act as JobKind, i) })
       for (const a of S.advise(world, c)) if (a.act === 'sell') S.apply(world, c, { t: 'sell', lot: a.lot, frac: 1 })
     },
     cellar(world, c) {
@@ -1587,7 +1589,7 @@ export const HIRES: { name: string; hire: Farmstead['hire'] }[] = [
 
 export interface Entry {
   name: string; make: BotFactory
-  group: 'main' | 'ablation' | 'variety' | 'block' | 'order' | 'hire' | 'contracts' | 'calendar'
+  group: 'main' | 'ablation' | 'variety' | 'block' | 'order' | 'hire' | 'contracts' | 'calendar' | 'routine'
   variety?: VarietyId
 }
 
@@ -1601,6 +1603,10 @@ export function lineup(years = EXPERT.years): Entry[] {
     { name: 'reference', make: reference(), group: 'main' },
     { name: 'untended', make: untended(), group: 'main' },
     { name: 'calls-only', make: callsOnly(), group: 'main' },
+    // The same three players in the game before the routine: nothing is ordered by itself.
+    { name: 'untended-before', make: untended(false), group: 'routine' },
+    { name: 'calls-before', make: callsOnly(4, false), group: 'routine' },
+    { name: 'reference-before', make: reference(4, [], 0, false), group: 'routine' },
     { name: 'expert', make: expert(expertWith({}, {}, years)), group: 'main' },
   ]
   for (const a of ABLATIONS) out.push({ name: a.name, make: expert(expertWith(a.cfg, a.farm ?? {}, years)), group: 'ablation' })

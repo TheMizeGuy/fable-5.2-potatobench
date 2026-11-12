@@ -84,3 +84,39 @@ export function sellLot(world: World, c: Campaign, lot: Lot, frac: number): numb
   }
   return money
 }
+
+export interface StoreMonth { month: number; name: string; net: number; sprouted: boolean }
+
+// What keeping a lot to each cellar month would usually bring, against selling it now: the usual price curve from
+// today's quote (the chipping variety's processing price is one price all winter), the shrink, sprouting once the lot
+// has been out of the ground longer than its dormancy in a cool cellar, and the storage charge from now. Rot that has
+// not shown is not counted. net is dollars for the whole lot then, less the storage charge paid till then.
+export function storeOutlook(world: World, c: Campaign, lot: Lot): { now: number; months: StoreMonth[]; best: StoreMonth | null } {
+  const now = lotValue(world, c, lot)
+  const months: StoreMonth[] = []
+  if (c.phase !== 'season' && c.phase !== 'cellar') return { now, months, best: null }
+  const v = variety(lot.variety)
+  const vent = c.upgrades.vent
+  const dormancy = v.dormancy + P.COOL_CELLAR_DAYS + (vent ? P.VENT_DAYS : 0)
+  const shrink = vent ? P.SHRINK_VENT : P.SHRINK
+  const inSeason = c.phase === 'season' && !!c.season
+  const nov1 = dayIndex(lot.year, 10, 1)
+  const today = inSeason ? c.season!.day : nov1 + c.month * 30
+  const curveNow = inSeason ? seasonFactor(c.season!.day) : P.MONTH_CURVE[Math.min(c.month, P.MONTH_CURVE.length - 1)]
+  const cwt = lot.grades.no1 + lot.grades.chef + lot.grades.b + lot.grades.no2 + lot.skinned
+  for (let m = inSeason ? 0 : c.month + 1; m < P.MONTH_CURVE.length; m++) {
+    const at = nov1 + m * 30
+    const span = (at - today) / 30
+    if (span <= 0) continue
+    const sproutsAt = lot.dugDay + dormancy
+    const sprouted = lot.sprouted || at > sproutsAt
+    const sproutMonths = sprouted ? Math.min(span, (at - Math.max(today, lot.sprouted ? today : sproutsAt)) / 30) : 0
+    const keep = Math.max(0, 1 - shrink * span - P.SPROUT_SHRINK * sproutMonths)
+    const price = v.contract ? 1 : P.MONTH_CURVE[m] / curveNow
+    const factor = sprouted && !lot.sprouted ? 0.85 : 1
+    months.push({ month: m, name: P.CELLAR_MONTHS[m], net: now * price * factor * keep - P.STORE_COST * cwt * keep * span, sprouted })
+  }
+  let best: StoreMonth | null = null
+  for (const x of months) if (!best || x.net > best.net) best = x
+  return { now, months, best }
+}

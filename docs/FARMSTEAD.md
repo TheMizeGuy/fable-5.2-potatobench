@@ -333,3 +333,31 @@ text above was silent, or two of its rules collided, the build chose as follows.
   nothing, so a rush part would buy nothing.
 - *An injury* is not a question: it is an event, and the person shows as hurt,
   with the day they are back, in `peopleInfo`.
+
+**The routine (wave 3).** First-time players found people standing idle with work due unless every job on every
+field was ordered by hand. The crew now works to a routine; the player makes the calls.
+
+- *Standing orders.* `Campaign.routine` says which kinds of work go on the list by themselves. Each working morning
+  every such kind that reference practice wants on a held field is ordered, marked `by: 'routine'`. A new game has
+  planting, hilling, walking the fields, pulling blighted hills, test digs, digging and hauling by themselves, and
+  spraying, watering and killing the vines as the player's calls. `{ t: 'routine', kind, auto }` switches a kind;
+  `routineInfo(c)` lists them. Work on tracts, rocks and hedgerows stays the player's.
+- *A foreman* orders every kind on their block, the calls included (`by: 'foreman'`). Orders the player gives are
+  `by: 'you'`.
+- *What the player is asked.* `fieldNeeds` returns only what still wants the player: the calls, kinds switched to
+  "ask me", and routine work nobody on the farm is willing to do (its reason says so). Where the crew is seeing to a
+  field, its hold says so.
+- *The cap and the people.* The advice's cap of six fields a willing crew still bounds what goes on the list, and
+  priorities still decide who takes what; a "never" is respected.
+- *Old saves* open with the routine on (no version change), and the first command says so once.
+- *Frost on the barrels.* When the forecast the farm had for today reaches barrels in a field, the morning says so
+  (`frostBarrels`, which stops the clock) and, with hauling in the routine, the haul goes first and drivers on other
+  machine work leave it for the barrels.
+- *Telegrams.* One stranger asks for work at most once a season; a neighbour's offer for a given person comes at most
+  once a year; a buyer asks once for a lot. `Campaign.heard` keeps the year's offers and is cleared each spring.
+- *Figures that agree.* A weighed lot in the potato house is charged and shrinks every night, so its value today is
+  what selling it pays; the yard counts logs and stone in whole loads, as buildings take them; `yearNow(c)` gives the
+  year the date falls in (from January the winter belongs to the next year); `storeOutlook(world, c, lot)` gives what
+  keeping a lot to each cellar month would usually net, sprouting, shrink and the charge included; on a contract's
+  due date the buyer takes what is owed from the potato houses before any penalty.
+- *Late vines.* Reference practice, and so the routine, digs a crop whose vines are still up from October 5.
