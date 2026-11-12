@@ -1,5 +1,5 @@
 // The campaign: planning, the season, the cellar and the year-end ledger, all driven through apply().
-import { asks, noteKillAsks, standingOrders } from './advice.ts'
+import { asks, frostAhead, noteKillAsks, standingOrders } from './advice.ts'
 import { contractOffers } from './buyers.ts'
 import { hireBlock, hireRoom, newFarmer, newUnit } from './crew.ts'
 import { BLOCK_NAME, BLOCKS, DUFOUR_YARD, HOME_FIELDS, HOME_YARD, PARCELS, YARDS, type BlockId } from './farm.ts'
@@ -580,7 +580,8 @@ function nextYear(world: World, c: Campaign): Result {
   c.contracts = []
   c.offers = contractOffers(c.seed, c.year)
   c.applicants = springApplicants(c)
-  c.heard = []
+  // A neighbour's offer for someone is made once while they work here; the rest may come again next year.
+  c.heard = c.heard.filter(k => k.startsWith('poach:'))
   c.phase = 'plan'
   // Carry the plan forward with the rotation flipped where the soil asks for it, and drop seed that is not there.
   // Rented land and the hired crew carry forward too, until they are released or dismissed.
@@ -1009,7 +1010,8 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
       if (c.phase !== 'season' || !c.season) return fail('The season is not under way.')
       if (c.season.frozen) return fail('The ground has frozen. Close out the season.')
       const orders = standingOrders(world, c)
-      return ok([...orders, ...stepDay(world, c)])
+      const day = stepDay(world, c)
+      return ok([...orders, ...day, ...frostAhead(world, c)])
     }
     case 'endSeason': {
       if (c.phase !== 'season' || !c.season) return fail('The season is not under way.')

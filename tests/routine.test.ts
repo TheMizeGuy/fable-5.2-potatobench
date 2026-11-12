@@ -134,7 +134,7 @@ describe('telegrams', () => {
     expect(asked.length).toBeGreaterThan(0)
     expect(new Set(asked).size).toBe(asked.length)
     expect(opened.filter(e => e.data!.kind === 'applicant').length).toBeLessThanOrEqual(1)
-    // The next spring the slate is clean.
+    // The next spring the slate is clean but for the neighbour's offers, made once while a person works here.
     const d = S.createCampaign(world, { seed: 7, startYear: 1990 })
     ok(d, { t: 'hire', kind: 'hand' })
     ok(d, { t: 'begin' })
@@ -144,39 +144,37 @@ describe('telegrams', () => {
     d.outcome = ''
     ok(d, { t: 'next' })
     expect(d.phase).toBe('plan')
-    expect(d.heard).toEqual([])
+    expect(d.heard.length).toBeGreaterThan(0)
+    expect(d.heard.filter(k => !k.startsWith('poach:'))).toEqual([])
   })
 })
 
 describe('barrels and frost', () => {
-  it('ahead of a frost the crop in barrels is hauled first, and the morning says so', () => {
+  it('ahead of a frost the crop in barrels is hauled first, and the evening before says so, once', () => {
     // 1990, seed 7: dig on a frost-prone day with the haul behind a pile of other work.
     const base = S.createCampaign(world, { seed: 7, startYear: 1990 })
     ok(base, { t: 'begin' })
     leave(base, x => x.season!.fields.some(f => f.inField >= 0.5))
-    let found = false
+    let found = false, before: S.GameEvent[] = []
     for (let g = 0; g < 120 && base.phase === 'season' && !S.seasonDone(base); g++) {
       const s = base.season!
       const cold = s.fields.findIndex((f, i) => f.inField >= 0.5 && !f.weighed && S.frostOnBarrels(world, base, i))
       const haul = s.jobs.find(j => j.kind === 'haul' && j.field === cold)
-      if (cold >= 0 && haul && S.workday(base, s) && S.jobWaits(world, base)[haul.id] === '') {
+      if (cold >= 0 && haul && S.workday(base, s) && S.jobWaits(world, base)[haul.id] === '' && s.frostHaul !== s.day - 1) {
+        // The warning came with the day before, dated this one: one stop, while there is a day to act.
+        expect(before.filter(e => e.type === 'frostBarrels').map(e => e.day)).toEqual([s.day])
         const c = structuredClone(base)
         // Put other work ahead of the haul.
         for (const j of c.season!.jobs.filter(x => x.kind !== 'haul')) ok(c, { t: 'bump', id: j.id })
         expect(c.season!.jobs[0].kind).not.toBe('haul')
-        // The first cold morning of a spell says so; the next does not stop the farm again.
-        c.season!.frostHaul = undefined
-        const again = structuredClone(c)
-        again.season!.frostHaul = again.season!.day - 1
+        // The cold day itself does not stop the farm again.
         const r = ok(c, { t: 'day' })
-        expect(r.events.some(e => e.type === 'frostBarrels')).toBe(true)
+        expect(r.events.some(e => e.type === 'frostBarrels')).toBe(false)
         expect(c.season!.worked.find(w => w.unit === 0)?.kind).toBe('haul')
-        expect(ok(again, { t: 'day' }).events.some(e => e.type === 'frostBarrels')).toBe(false)
-        expect(again.season!.worked.find(w => w.unit === 0)?.kind).toBe('haul')
         found = true
         break
       }
-      ok(base, { t: 'day' })
+      before = ok(base, { t: 'day' }).events
     }
     expect(found).toBe(true)
   })

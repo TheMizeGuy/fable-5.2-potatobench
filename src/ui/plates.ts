@@ -72,6 +72,9 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
   let laid: { key: string; anchors: { x: number; y: number }[] } | null = null
   const ref: { x: number; y: number }[] = []
   let lastAnchors: { x: number; y: number }[] | null = null
+  let wasMoving = false
+  // Tags that gave way to others on a phone, until the next settling.
+  const yielded: boolean[] = new Array(S.FIELD_COUNT).fill(false)
   for (let i = 0; i < S.FIELD_COUNT; i++) {
     const wrap = h('div', { class: 'tag-wrap gone', hidden: true })
     wraps.push(wrap)
@@ -155,7 +158,10 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
   // The room a tag is settled for: as drawn, with room kept for "on the list" and a stamp (far out, names only).
   function room(i: number, sz: Size[]): Size {
     const z = sz[i]
-    if (far || models[i]?.land) return z
+    // On a phone the tags settle again whenever anything changes (no pointer rests on them), and there is no width
+    // to keep in reserve.
+    const small = ctx.layout() === 'narrow' || ctx.layout() === 'short'
+    if (far || small || models[i]?.land) return z
     return { w: z.w + (listed[i] ? 0 : LIST_W), h: z.h, extra: Math.max(z.extra, STAMP_W) }
   }
 
@@ -192,6 +198,9 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
       const { w, h: hh, extra } = sz[i]
       const x0 = ins.left + GAP + w / 2, x1 = innerWidth - ins.right - GAP - w / 2 - extra
       const y0 = ins.top + GAP + hh + 6, y1 = innerHeight - ins.bottom - GAP - 5
+      // No land left between the boards (a phone with a pop open over it): the tags wait until there is, all but the
+      // field in hand's.
+      if (y1 < y0 && !app.selection.includes(i)) { want.push({ x: a.x, y: a.y, place: 'gone' }); continue }
       const x = Math.max(x0, Math.min(Math.max(x0, x1), a.x)), y = Math.max(y0, Math.min(Math.max(y0, y1), a.y))
       want.push({ x, y, place: !seen || Math.abs(x - a.x) > 1 || Math.abs(y - a.y) > 1 ? 'docked' : 'on' })
     }
@@ -310,6 +319,21 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
       measure()
     }
     const want = compact ? place(size).want : named.want
+    yielded.fill(false)
+    // On a phone, where even folded tags cannot all be kept apart, a tag that stands in for a field out of view gives
+    // way to the ones over their fields rather than lie on them.
+    if (ctx.layout() === 'narrow' || ctx.layout() === 'short') {
+      const box = (i: number) => ({ l: want[i].x - size[i].w / 2, r: want[i].x + size[i].w / 2 + size[i].extra, t: want[i].y - size[i].h, b: want[i].y })
+      const kept: number[] = []
+      const order = [...Array(S.FIELD_COUNT).keys()].filter(i => want[i].place !== 'gone')
+        .sort((p, q) => Number(app.selection.includes(q)) - Number(app.selection.includes(p)) || Number(want[q].place === 'on') - Number(want[p].place === 'on') || p - q)
+      for (const i of order) {
+        const a = box(i)
+        const hit = kept.some(j => { const b = box(j); return a.l < b.r && a.r > b.l && a.t < b.b && a.b > b.t })
+        if (hit && !app.selection.includes(i)) { want[i] = { ...want[i], place: 'gone' }; yielded[i] = true }
+        else kept.push(i)
+      }
+    }
     for (let i = 0; i < S.FIELD_COUNT; i++) show(i, want[i])
   }
 
@@ -320,7 +344,7 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
     const floor = innerHeight - app.insets.bottom - GAP - 5
     for (let i = 0; i < S.FIELD_COUNT; i++) {
       if (at[i].place !== 'gone') { if (want[i].place === 'gone') show(i, want[i]); continue }
-      if (want[i].place === 'gone' || want[i].place === 'shelf' || wraps[i].hidden) continue
+      if (want[i].place === 'gone' || want[i].place === 'shelf' || wraps[i].hidden || (yielded[i] && !app.selection.includes(i))) continue
       wraps[i].classList.remove('gone')
       at[i] = { x: NaN, y: NaN, place: 'docked' }
       measure()
@@ -348,15 +372,20 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
     const anchors: { x: number; y: number }[] = []
     for (let i = 0; i < S.FIELD_COUNT; i++) { const a = ctx.view.fieldAnchor(i); anchors.push(a.visible ? { x: a.x, y: a.y } : { x: NaN, y: NaN }) }
     // The boards' edges changing (the list filling, a sheet on a phone) moves no tag until the camera moves.
-    const key = `${innerWidth}x${innerHeight} ${ctx.touch()}`
+    const small = ctx.layout() === 'narrow' || ctx.layout() === 'short'
+    const key = `${innerWidth}x${innerHeight} ${ctx.touch()}${small ? ` ${app.insets.bottom} ${app.insets.top} ${models.map(m => m ? `${m.badge?.glyph ?? ''}${m.queue.length}` : '').join(',')}` : ''}`
     // A field coming into view or leaving it, or the camera carrying the tags far, settles the crowding again; a small
     // move (the camera easing to rest, a turn begun) carries each tag with its field and leaves them as they were.
     // Only while the camera is moving: with it still, nothing is put again, whatever has gathered since.
     const moving = !lastAnchors || anchors.some((a, i) => { const b = lastAnchors![i]; return finite(a) !== finite(b) || (finite(a) && Math.hypot(a.x - b.x, a.y - b.y) > 0.25) })
     lastAnchors = anchors
-    const far0 = !laid || laid.key !== key || (moving && anchors.some((a, i) => {
+    // On a phone, once the camera comes to rest the crowding is settled for where it stopped (riding the last small
+    // moves can bring tags together); there is no pointer resting on a tag to keep still.
+    const rested = small && wasMoving && !moving
+    wasMoving = moving
+    const far0 = !laid || laid.key !== key || ((moving || rested) && anchors.some((a, i) => {
       const b = laid!.anchors[i]
-      return finite(a) !== finite(b) || (finite(a) && Math.hypot(a.x - b.x, a.y - b.y) > RESETTLE_PX)
+      return finite(a) !== finite(b) || (finite(a) && Math.hypot(a.x - b.x, a.y - b.y) > (rested ? 0.5 : RESETTLE_PX))
     }))
     if (far0) {
       // Why the tags were put again, for the checks that hold them to it.

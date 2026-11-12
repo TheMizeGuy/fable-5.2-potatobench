@@ -13,6 +13,7 @@ import { asks, killByItself } from './advice.ts'
 import type { BuildingKind, Campaign, Cmd, Job, JobKind, KillWhy, UpgradeId, World, YearSummary } from './types.ts'
 import { estimateYield, fieldInfo } from './view.ts'
 import { getDay } from './weather.ts'
+import { variety } from './varieties.ts'
 
 // ---------------------------------------------------------------- each order's fate
 
@@ -160,6 +161,9 @@ export function moneyNow(world: World, c: Campaign): MoneyNow {
   if (c.phase === 'season' && s) {
     for (let i = 0; i < P.FIELD_COUNT; i++) {
       const f = s.fields[i]
+      // What the digger has lifted, in barrels or hauled in, counts at today's price until its lot is made up.
+      const lifting = f.lotId >= 0 ? c.lots.find(l => l.id === f.lotId) : undefined
+      if (lifting && !lifting.open && !f.weighed) growing += lotValue(world, c, lifting)
       if (f.status !== 'growing' && f.status !== 'dead' && f.status !== 'digging') continue
       const e = estimateYield(c, i)
       if (!e) continue
@@ -280,16 +284,46 @@ export function sprayOutlook(world: World, c: Campaign): SprayOutlook {
 export interface KillTiming { asked: number; killed: number; early: number; why: KillWhy | '' }
 
 // When reference practice first asked for this field's vines to be killed and why (blight winning, frost coming, the
-// crop made, the late date), when they were killed, and how many days early that was: 0 on or after the asking, and
-// counted to the coach's late date only for a kill nobody had asked for.
+// crop made, the late date), when they were killed, and how many days early that was. For a kill nobody had asked for
+// the due day is the one the coach was coming to (the crop made, else the late date). A kill within KILL_GRACE days
+// of it counts as asked, on the day it was due.
 export function killTiming(c: Campaign, field: number): KillTiming {
   const f = c.season?.fields[field]
-  const asked = f?.killAsked ?? -1
-  const why = asked >= 0 ? f?.killWhy ?? '' : ''
+  let asked = f?.killAsked ?? -1
+  let why: KillWhy | '' = asked >= 0 ? f?.killWhy ?? '' : ''
   const killed = f?.killDay ?? -1
   if (!f || killed < 0) return { asked, killed, early: 0, why }
-  const by = asked >= 0 ? asked : dayIndex(c.year, 8, 8)
-  return { asked, killed, early: Math.max(0, by - killed), why }
+  const late = dayIndex(c.year, P.KILL_BY.month, P.KILL_BY.dom)
+  const made = f.matureDay >= 0 && f.matureDay <= killed ? f.matureDay + P.KILL_MADE_DAYS : -1
+  const by = asked >= 0 ? asked : made >= 0 && made < late ? made : late
+  const early = Math.max(0, by - killed)
+  if (early > P.KILL_GRACE) return { asked, killed, early, why }
+  if (asked < 0) { asked = by; why = made >= 0 && made < late ? 'made' : 'late' }
+  return { asked, killed, early: 0, why }
+}
+
+export interface KillOutlook { day: number; why: KillWhy; asked: boolean }
+
+// The day the coach expects to ask for this field's vines to be killed, from what is known now: the day it asked, if
+// it has; else the crop made (KILL_MADE_DAYS after the vines start to die back, reckoned from the warmth so far at the
+// pace since the plants came up), or the late date, whichever is first. Blight winning or a frost coming can bring it
+// sooner. null for a field with no vines up.
+export function killOutlook(c: Campaign, field: number): KillOutlook | null {
+  const s = c.season
+  const f = s?.fields[field]
+  if (!s || !f || f.status !== 'growing' || f.deadDay >= 0) return null
+  if (f.killSince !== undefined || (f.killAsked !== undefined && s.jobs.some(j => j.kind === 'kill' && j.field === field))) {
+    return { day: f.killSince ?? f.killAsked!, why: f.killWhy ?? 'made', asked: true }
+  }
+  const late = dayIndex(s.year, P.KILL_BY.month, P.KILL_BY.dom)
+  let made = -1
+  if (f.matureDay >= 0) made = f.matureDay + P.KILL_MADE_DAYS
+  else if (f.emergeDay >= 0 && s.day > f.emergeDay) {
+    const age = f.pdAir - f.pdEmerge
+    const pace = age / (s.day - f.emergeDay)
+    if (pace > 0) made = s.day + Math.ceil(Math.max(0, variety(f.variety).matPd - age) / pace) + P.KILL_MADE_DAYS
+  }
+  return made >= 0 && made < late ? { day: Math.max(made, s.day), why: 'made', asked: false } : { day: Math.max(late, s.day), why: 'late', asked: false }
 }
 
 // ---------------------------------------------------------------- planting: one rule
@@ -305,7 +339,7 @@ export function plantReady(world: World, c: Campaign, field: number): PlantReady
   if (!s) return { ok: false, soilT: 0, need, rots, why: 'Planting is in the season.' }
   const soilT = s.soilT
   const f = (x: number) => Math.round(x * 9 / 5 + 32)
-  if (s.day < dayIndex(s.year, 4, 8)) return { ok: false, soilT, need, rots, why: 'It is early. Seed sits and rots in cold ground.' }
+  if (s.day < dayIndex(s.year, P.PLANT_FROM.month, P.PLANT_FROM.dom)) return { ok: false, soilT, need, rots, why: 'It is early. Seed sits and rots in cold ground.' }
   if (soilT < need) return { ok: false, soilT, need, rots, why: `The soil here is ${f(soilT)}°F. Seed wants ${f(need)}°F; below ${f(rots)}°F it rots.` }
   if (fieldInfo(c, field).tooWet) return { ok: false, soilT, need, rots, why: 'Too wet to work: it will dry in a day or two.' }
   return { ok: true, soilT, need, rots, why: `The soil here is ${f(soilT)}°F and fit to work.` }

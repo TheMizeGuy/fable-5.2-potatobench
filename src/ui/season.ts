@@ -640,12 +640,26 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
         const low = [...(book && vis(book) ? [box(book).top - LIST_ROOM] : []), ...[clockSlot].filter(vis).map(x => box(x).top)]
         foot = { key: footKey, bottom: innerHeight - Math.min(...low, innerHeight) + 6 }
       }
-      const bottom = foot.bottom
+      let bottom = foot.bottom
+      // On a phone the clock's chip under the top board frames the land as the board does.
+      el.style.setProperty('--board', `${Math.round(t)}px`)
+      const chip = [paused, running].find(x => !x.hidden && x.offsetParent !== null)
+      const tAll = (layout === 'narrow' || layout === 'short') && chip ? Math.max(t, chip.getBoundingClientRect().bottom + 4) : t
+      // On a phone or a short window there is no pointer to keep still, and little land: everything standing over the
+      // foot frames it at its real height (the list however many rows it takes, its pop, the alerts and hint, the
+      // Home key), so no tag is left under them.
+      if (layout === 'narrow' || layout === 'short') {
+        const over = [...crew.querySelectorAll<HTMLElement>('.queue, .timebook, .q-pop'), clockSlot, ...notesSlot.querySelectorAll<HTMLElement>('.alert')]
+          .filter(x => x.offsetParent !== null && x.offsetHeight > 0).map(x => x.getBoundingClientRect().top)
+        const raw = innerHeight - Math.min(...over, innerHeight) + 6
+        el.style.setProperty('--foot', `${Math.round(raw)}px`)
+        bottom = raw + (vis(homeKey) ? homeKey.offsetHeight + 10 : 0)
+      }
       // Only what always stands frames the land: a bar, a page or the grid opening on a click never moves the camera
       // (the bar steps to the other side of what it belongs to instead; a card lies over the tags). On a phone
       // the bar is a sheet over half the land, so there the land is framed above it.
       const sheet = layout === 'narrow' ? [card.el, yard.el].find(vis) : undefined
-      return [t, 0, sheet ? innerHeight - box(sheet).top + 6 : bottom, 0]
+      return [tAll, 0, sheet ? innerHeight - box(sheet).top + 6 : bottom, 0]
     },
     frame: () => { coverCache = null; coverCache = covers(); placeBar(); P.frame(); placeYards(); people.frame(); drawSelection(); coverCache = null },
     dispose() {
