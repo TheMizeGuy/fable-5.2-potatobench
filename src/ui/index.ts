@@ -186,6 +186,9 @@ export const mountHud: MountHud = (root, app, view, sound) => {
       case 'inspect':
         dirty = true
         break
+      case 'notice':
+        notes.push({ text: e.text, level: 'info', ttl: 7000 })
+        break
       case 'saved':
         if (!e.ok) notes.push({ text: 'This browser would not store the save. Export it from the menu to keep it.', level: 'warn', ttl: 12000 })
         break

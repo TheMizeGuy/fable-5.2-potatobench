@@ -69,7 +69,7 @@ export function attachInput(
           if (!downAt || dragged || pointers.size !== 1) return
           consumed = true
           const i = pick(downAt.x, downAt.y)
-          if (i >= 0) app.smartOrder(i)
+          if (i >= 0) { const r = app.smartOrder(i); if (!r.ok) app.notice(r.err) }
         }, LONG_PRESS_MS)
       }
     } else if (pointers.size === 2) {
@@ -125,7 +125,8 @@ export function attachInput(
       const thing = downAt.button === 0 && unit < 0 ? thingAt(p.x, p.y) : null
       const i = pick(p.x, p.y)
       if (downAt.button === 2) {
-        if (i >= 0) app.smartOrder(i)
+        // a right-click always answers: the order given, or why not
+        if (i >= 0) { const r = app.smartOrder(i); if (!r.ok) app.notice(r.err) } else if (app.unit >= 0) app.notice('Right-click a field to send them there.')
       } else if (unit >= 0) {
         app.selectUnit(unit, 'land')
         lastClick = { t: 0, x: p.x, y: p.y, field: -2 }

@@ -49,6 +49,7 @@ export type AppEvent =
   | { type: 'hover'; field: number }
   | { type: 'unit'; unit: number }
   | { type: 'point' }
+  | { type: 'notice'; text: string }
   | { type: 'inspect' }
   | { type: 'yard'; yard: number }
   | { type: 'focus'; field: number }
@@ -375,6 +376,11 @@ export class App {
     this.emit({ type: 'point' })
   }
 
+  // Something said back to the player about what they just did on the land (an order refused, and why).
+  notice(text: string): void {
+    this.emit({ type: 'notice', text })
+  }
+
   // A thing on the land clicked (its name card opens beside it), or null to put that card away.
   inspect(thing: Thing | null, x = 0, y = 0): void {
     if (!thing && !this.thing) return
@@ -432,6 +438,13 @@ export class App {
   // Gives a field the order reference practice has for it now, if it has one.
   smartOrder(field: number): OrderResult {
     const need = this.needs()[field]?.need
+    // With someone picked, a field the routine is seeing to is theirs to go and do: its order on the list goes to them.
+    const c = this.campaign
+    const mine = !need && this.unit >= 0 && c?.season ? c.season.jobs.find(j => j.field === field && j.unit < 0 && j.by !== 'you') : undefined
+    if (mine && c) {
+      const r = this.do({ t: 'assign', id: mine.id, unit: this.unit })
+      return r.ok ? { field, ok: true, err: '' } : { field, ok: false, err: r.err }
+    }
     if (!need) return { field, ok: false, err: this.needs()[field]?.hold?.why ?? 'Nothing needs doing here now.' }
     if (need.act === 'sell' || need.act === 'close' || need.act === 'wait') return { field, ok: false, err: need.text }
     return this.order(need.act, { fields: [field] })[0]
