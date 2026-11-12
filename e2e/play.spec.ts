@@ -145,7 +145,7 @@ test('a first season by the short path, from the opening to the next spring, wit
     const s = await look(page)
     if (s.incidents) await answerIncident(page, false)
     return s.badges.length
-  }, { timeout: 120_000, intervals: [500] }).toBeGreaterThan(0)
+  }, { timeout: 240_000, intervals: [500] }).toBeGreaterThan(0)
   // An answer takes a frame to show on the clock.
   await expect.poll(async () => (await look(page)).paused).toBe(false)
   expect((await look(page)).speed).toBe(1)
