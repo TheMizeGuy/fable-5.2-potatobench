@@ -275,6 +275,8 @@ const shots: Shot[] = [
   { name: 'L12-frost-morning', size: [1920, 1080], setup: async page => { await playTo(page, 2020, 5, 255, ['kill', 'dig']); console.log('  ', await playUntil(page, ['kill', 'dig'], FROST)); await settle(page); await frames(page, 20) } },
   { name: 'L13-walk-in', size: [1920, 1080], setup: async page => { await july(page); await playUntil(page, [], SKY('clear')); await settle(page); await view(page, { x: 4, z: 13, dist: 7.5, yaw: -0.5 }); await frames(page, 30) } },
   { name: 'L14-mid-zoom', size: [1920, 1080], setup: async page => { await july(page); await playUntil(page, [], SKY('clear')); await settle(page); await view(page, { x: 6, z: 2, dist: 28, yaw: -0.44 }); await frames(page, 30) } },
+  // Wind and cloud shadow: the same breezy day three seconds apart, to see the gusts and the shade move.
+  ...[0, 3000].map((wait, k) => ({ name: `L15-wind-${'ab'[k]}`, size: [1920, 1080] as [number, number], setup: async (page: Page) => { await july(page); await playUntil(page, [], SKY('clear')); await settle(page); await page.evaluate(() => (window as any).__countyField.tune({ wind: 0.9, cloud: 0.5 })); await frames(page, 20); await page.waitForTimeout(wait) } })),
   // Sizes: the farm kept whole inside what the interface leaves free.
   ...([
     ['30-size-390x844', [390, 844], { top: 52, bottom: 190 }],

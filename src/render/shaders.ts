@@ -125,7 +125,7 @@ float cloudEdge() {
 }
 float cloudCover(float field) {
   float edge = cloudEdge();
-  return smoothstep(edge, edge + 0.11, field);
+  return smoothstep(edge, edge + 0.15, field);
 }
 `
 
@@ -138,7 +138,7 @@ vec3 hazeTint(vec3 dir) {
 }
 // Air whose density falls off with height, integrated along the sight line from height ya to height yb over length t.
 float airBetween(float density, float falloff, float base, float ya, float yb, float t) {
-  float ea = exp(-falloff * max(ya - base, -1.5)), eb = exp(-falloff * max(yb - base, -1.5));
+  float ea = exp(-falloff * max(ya - base, -0.5)), eb = exp(-falloff * max(yb - base, -0.5));
   float dy = yb - ya;
   return density * t * (abs(dy) > 1e-3 ? (ea - eb) / (falloff * dy) : ea);
 }
@@ -151,7 +151,7 @@ float hazeAmount(float ya, float yb, float t, vec2 xz, out float mistShare) {
     // Mist lies in banks with clear air between, drifting; and however deep, what stands in it still shows through.
     float bank = texture2D(uNoise, xz * 0.0071 + uCloud.zw * 6.0).b * 0.65 + texture2D(uNoise, xz * 0.031 - uCloud.zw * 11.0).b * 0.35;
     float wisp = 1.0 - uMist.w + uMist.w * 2.6 * smoothstep(0.32, 0.78, bank);
-    float low = min(airBetween(uMist.x * wisp, uMist.y, uMist.z, ya, yb, min(t, 400.0)), 1.3);
+    float low = min(airBetween(uMist.x * wisp, uMist.y, uMist.z, ya, yb, min(t, 400.0)), 0.85);
     mistShare = low / max(air + low, 1e-5);
     air += low;
   }

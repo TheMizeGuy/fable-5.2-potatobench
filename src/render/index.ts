@@ -437,7 +437,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     U.uNight.value = lit.night
     // Mist lies in the low ground: on the brook and the bottom land, thinning fast above it; on a fog day it fills the
     // valley to the mid slope and the ridge stands out of it.
-    U.uMist.value.set((0.26 - 0.17 * env.mistDeep) * env.mist, 2.6 - 1.5 * env.mistDeep, 0.2 + 1.9 * env.mistDeep, 0.8)
+    U.uMist.value.set((0.36 - 0.24 * env.mistDeep) * env.mist, 2.6 - 1.5 * env.mistDeep, 0.2 + 1.9 * env.mistDeep, 0.8)
     U.uCloud.value.x = env.cloudShadow
     U.uCloud.value.y = env.cloud
     U.uSnow.value = env.snow
@@ -482,6 +482,8 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     // more than a quarter of the frames miss a sixtieth of a second by a margin: that is felt as a stutter long before
     // the middle frame is late.
     slow = sorted[66] > 20.5 ? slow + 1 : 0
+    // Plainly too slow (under 35 frames a second) is not given a second stretch to prove it.
+    if (sorted[66] > 28) slow = 2
     if (slow >= 2 && tier !== 'low') {
       tier = DOWN[tier]
       slow = 0

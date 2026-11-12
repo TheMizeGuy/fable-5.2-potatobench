@@ -164,28 +164,44 @@ export class CameraRig {
     let cx0 = 0, cz0 = 0
     for (const m of marks) { cx0 += m.x; cz0 += m.z }
     const p = this.at({ x: cx0 / marks.length, z: cz0 / marks.length, dist: start, yaw })
-    for (let k = 0; k < 16; k++) {
+    // What the marks cover on the picture from the view as it stands, and the ground they are to be kept in.
+    const box = { x0: 0, x1: 0, y0: 0, y1: 0, top: 0, fh: 0, margin: 0 }
+    const look = () => {
       Object.assign(p, this.at(p))
       this.place(this.probe, p, vp, off.x, off.y)
       // Where the crest of the far hills stands on the picture: the farm is kept below it, with room for the woods between.
       const focal = vp.h / 2 / Math.tan((p.fov * Math.PI) / 360)
       const crest = vp.h / 2 + off.y - focal * Math.tan(p.pitch - p.tilt + CREST)
-      const top = Math.max(vp.top, Math.min(crest + vp.h * 0.06, vp.h * 0.42)), fh = Math.max(140, vp.h - vp.bottom - top)
-      const margin = Math.min(fw, fh) * 0.04
-      let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity
+      box.top = Math.max(vp.top, Math.min(crest + vp.h * 0.06, vp.h * 0.42))
+      box.fh = Math.max(140, vp.h - vp.bottom - box.top)
+      box.margin = Math.min(fw, box.fh) * 0.04
+      box.x0 = box.y0 = Infinity
+      box.x1 = box.y1 = -Infinity
       for (const m of marks) {
         this.v.copy(m).project(this.probe)
         const x = (this.v.x + 1) / 2 * vp.w, y = (1 - this.v.y) / 2 * vp.h
-        x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y)
+        box.x0 = Math.min(box.x0, x); box.x1 = Math.max(box.x1, x); box.y0 = Math.min(box.y0, y); box.y1 = Math.max(box.y1, y)
       }
-      // a step at a time, so marks that start behind the camera cannot throw the fit out
-      p.dist = clamp(p.dist * clamp(Math.max((x1 - x0) / (fw - margin * 2), (y1 - y0) / (fh - margin * 2)), 0.7, 1.4), 16, 420)
-      // Centre what is to be seen in the free ground.
-      const cx = vp.left + fw / 2, cy = top + fh / 2
-      const g0 = this.ground(this.probe, (x0 + x1) / 2, (y0 + y1) / 2, vp, p), g1 = this.ground(this.probe, cx, cy, vp, p)
-      p.x += (g0.x - g1.x) * 0.8
-      p.z += (g0.z - g1.z) * 0.8
     }
+    // Put the marks in the middle from side to side and low in the free ground: what room there is to spare goes to
+    // the hills and the sky, not to whatever lies in front of the farm.
+    const centre = () => {
+      for (let j = 0; j < 6; j++) {
+        look()
+        const cx = vp.left + fw / 2, cy = Math.max(box.top + box.fh / 2, vp.h - vp.bottom - box.margin - (box.y1 - box.y0) / 2)
+        const g0 = this.ground(this.probe, (box.x0 + box.x1) / 2, (box.y0 + box.y1) / 2, vp, p), g1 = this.ground(this.probe, cx, cy, vp, p)
+        p.x += (g0.x - g1.x) * 0.85
+        p.z += (g0.z - g1.z) * 0.85
+      }
+    }
+    // The distance comes in a part of the way at a time, the marks centred again at each, so the two cannot chase each other.
+    for (let k = 0; k < 22; k++) {
+      centre()
+      look()
+      const over = Math.max((box.x1 - box.x0) / (fw - box.margin * 2), (box.y1 - box.y0) / (box.fh - box.margin * 2))
+      p.dist = clamp(p.dist * clamp(Math.pow(over, 0.6), 0.8, 1.25), 16, 420)
+    }
+    centre()
     return this.at(p)
   }
 

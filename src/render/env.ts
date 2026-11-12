@@ -64,12 +64,12 @@ const SEASON: [number, number, string][] = [
 
 interface Sky { sun: number; cover: number; shadow: number; high: number; deck: number; haze: number; key: number; turbidity: number; mie: number; storm: number }
 const SKY: Record<string, Sky> = {
-  clear: { sun: 1, cover: 0.37, shadow: 0.8, high: 0.42, deck: 1, haze: 0.0006, key: 1, turbidity: 2.8, mie: 0.0045, storm: 0 },
-  cloud: { sun: 0.97, cover: 0.55, shadow: 0.84, high: 0.3, deck: 1, haze: 0.0007, key: 0.98, turbidity: 3.1, mie: 0.005, storm: 0.12 },
+  clear: { sun: 1, cover: 0.31, shadow: 0.8, high: 0.42, deck: 1, haze: 0.0008, key: 1, turbidity: 2.8, mie: 0.0045, storm: 0 },
+  cloud: { sun: 0.97, cover: 0.52, shadow: 0.84, high: 0.3, deck: 1, haze: 0.0009, key: 0.98, turbidity: 3.1, mie: 0.005, storm: 0.12 },
   overcast: { sun: 0.06, cover: 1, shadow: 0, high: 0, deck: 0.96, haze: 0.001, key: 0.8, turbidity: 4, mie: 0.006, storm: 0.4 },
   rain: { sun: 0.025, cover: 1, shadow: 0, high: 0, deck: 0.6, haze: 0.0015, key: 0.66, turbidity: 6, mie: 0.006, storm: 0.8 },
   storm: { sun: 0.015, cover: 1, shadow: 0, high: 0, deck: 0.4, haze: 0.002, key: 0.56, turbidity: 8, mie: 0.006, storm: 1 },
-  fog: { sun: 0.34, cover: 0.62, shadow: 0, high: 0.3, deck: 1.3, haze: 0.0016, key: 0.98, turbidity: 6, mie: 0.007, storm: 0 },
+  fog: { sun: 0.6, cover: 0.48, shadow: 0, high: 0.3, deck: 1.3, haze: 0.0016, key: 0.98, turbidity: 6, mie: 0.007, storm: 0 },
   snow: { sun: 0.05, cover: 1, shadow: 0, high: 0, deck: 1.05, haze: 0.0026, key: 0.92, turbidity: 4, mie: 0.006, storm: 0.15 },
 }
 
@@ -286,7 +286,8 @@ export function light(env: Env, toSun: number, out: Light): Light {
   const overcast = smooth(0.62, 0.97, env.cloud)
   const full = sunLight(lit, air, c1).multiplyScalar(day)
   moonlight.setRGB(0.46, 0.6, 0.92).multiplyScalar(0.17 * smooth(-0.03, -0.13, elTrue) * (1 - 0.8 * overcast))
-  out.sun.copy(full).multiplyScalar(env.sunScale).add(moonlight)
+  // A low sun through the model's air comes out nearer orange than a white flower can stand: keep a share of white in it.
+  out.sun.copy(full).lerp(c3.setScalar(lum(full)), 0.2).multiplyScalar(env.sunScale).add(moonlight)
   // The clear sky toward and away from the sun, low down, and overhead.
   const sx = lit.x, sz = lit.z, sl = Math.hypot(sx, sz) || 1
   const toward = clearSky(sx / sl, 0.09, sz / sl, out.skySun, air, c2).clone()
@@ -346,7 +347,7 @@ export function light(env: Env, toSun: number, out: Light): Light {
   const cap = lum(out.hazeAway) * 1.9
   out.hazeSun.copy(toward).multiplyScalar(Math.min(1, cap / Math.max(lum(toward), 1e-4))).add(dark).add(c3.copy(out.glow).multiplyScalar(0.5)).lerp(c3.copy(grey).multiplyScalar(0.9), veil)
   // Mist is lit: it takes the low sun's colour where the sun reaches it.
-  out.mist.copy(out.hazeAway).lerp(out.hazeSun, 0.35).multiplyScalar(0.9).add(c3.copy(out.sun).multiplyScalar(0.014))
+  out.mist.copy(out.hazeAway).lerp(out.hazeSun, 0.35).multiplyScalar(0.9).add(c3.copy(out.sun).multiplyScalar(0.03))
   out.ground.copy(env.grass).multiplyScalar(flat / Math.PI * 0.55)
   if (env.snow > 0.02) out.ground.lerp(c3.setRGB(0.8, 0.85, 0.92).multiplyScalar(flat / Math.PI * 0.8), Math.min(1, env.snow * 1.4))
   return out

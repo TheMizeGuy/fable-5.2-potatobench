@@ -219,7 +219,7 @@ vec3 grade(vec3 c) {
   c = clamp(c, 0.0, 1.0);
   // Paint greens go a little toward olive, as film takes them, so the colour that is left belongs to the light.
   float green = clamp((c.g - max(c.r, c.b)) * 4.0, 0.0, 1.0);
-  c = mix(c, vec3(dot(c, vec3(0.2126, 0.7152, 0.0722))) + vec3(0.025, 0.0, -0.012), 0.3 * green);
+  c = mix(c, vec3(dot(c, vec3(0.2126, 0.7152, 0.0722))) + vec3(0.025, 0.0, -0.012), 0.4 * green);
   c = mix(c, c * c * (3.0 - 2.0 * c), uGrade.z);
   return c + uVeil.rgb * uVeil.a * (1.0 - c) * (1.0 - c);
 }
@@ -230,7 +230,7 @@ vec3 film(vec3 c) {
   float x = (m - 0.52) / 0.48;
   float t = m <= 0.52 ? m : 0.52 + 0.48 * x / (x + 1.0);
   vec3 r = c * (t / max(m, 1e-5));
-  return mix(r, vec3(t), 0.55 * smoothstep(2.5, 16.0, m));
+  return mix(r, vec3(t), 0.92 * smoothstep(2.5, 14.0, m));
 }
 void main() {
   vec2 uv = gl_FragCoord.xy / uRes;

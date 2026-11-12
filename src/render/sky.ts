@@ -145,8 +145,10 @@ vec3 skyColor(vec3 dir, vec3 eye, float disc) {
   vec2 p = eye.xz + d.xz / (d.y + 0.05) * CLOUD_H;
   float wisp = texture2D(uNoise, p * 0.0047 + uCloud.zw * 2.3).a;
   float curl = texture2D(uNoise, p * 0.0125 + uCloud.zw * 4.0).b;
-  float shape = cloudField(p) + (wisp - 0.5) * 0.1 + (curl - 0.5) * 0.07;
-  float dens = cloudCover(shape) * smoothstep(0.0, 0.05, dir.y);
+  float fray = texture2D(uNoise, p * 0.034 + uCloud.zw * 7.0).a;
+  float shape = cloudField(p) + (wisp - 0.5) * 0.1 + (curl - 0.5) * 0.07 + (fray - 0.5) * 0.05;
+  // Before the sun itself the cloud is thin, so the sun is a disc in a glow and never a smear.
+  float dens = cloudCover(shape) * smoothstep(0.0, 0.05, dir.y) * (1.0 - 0.85 * pow(max(cosT, 0.0), 900.0));
   vec2 toSun = uSunDir.xz / max(length(uSunDir.xz), 1e-3);
   float ahead = cloudField(p + toSun * 110.0);
   // A cloud has a side toward the light and a side away, and a base that is darkest seen from below. With the sun
@@ -161,7 +163,7 @@ vec3 skyColor(vec3 dir, vec3 eye, float disc) {
   float fold = texture2D(uNoise, p * 0.00034 + uCloud.zw * 0.5).b * 0.62 + texture2D(uNoise, p * 0.0012 + 0.3 + uCloud.zw * 0.9).b * 0.38;
   float torn = fold * 0.6 + wisp * 0.4;
   float closed = smoothstep(0.75, 1.0, uCloud.y);
-  cloud *= mix(1.0, 0.66 + 0.62 * fold, closed) * (1.0 - uSkyMore.y * 0.5 * smoothstep(0.3, 0.75, torn));
+  cloud *= mix(1.0, 0.52 + 0.86 * fold, closed) * (1.0 - uSkyMore.y * 0.5 * smoothstep(0.3, 0.75, torn));
   // Thin cloud before the sun lets it through: a bright edge.
   cloud += uRim * pow(max(cosT, 0.0), 14.0) * (1.0 - 0.8 * thick) * 1.4;
 
@@ -237,7 +239,7 @@ export class Sky {
           // sun itself is let through.
           vec3 v = c * uExposure;
           float m = max(v.r, max(v.g, v.b));
-          float held = m <= 0.62 ? m : 0.62 + 1.5 * (1.0 - exp(-(m - 0.62) / 1.5));
+          float held = m <= 0.55 ? m : 0.55 + 0.6 * (1.0 - exp(-(m - 0.55) / 1.0));
           float through = smoothstep(0.99972, 0.99994, dot(d, uSkySun));
           gl_FragColor = vec4(c * mix(held / max(m, 1e-5), 1.0, through), 1.0);
         }`,

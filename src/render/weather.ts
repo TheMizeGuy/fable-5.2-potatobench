@@ -102,7 +102,7 @@ export class Weather {
         vec4 clip = projectionMatrix * viewMatrix * vec4(p, 1.0);
         float size = (0.07 + 0.06 * aSeed.w) * projectionMatrix[1][1] / uPx.y / max(clip.w, 0.1);
         float tiny = smoothstep(0.5, 1.3, size);
-        size = clamp(size, 1.2, 14.0);
+        size = clamp(size, 1.2, 9.0);
         vec2 c = vec2(position.x, position.y * 2.0 - 1.0);
         vUv = c;
         // a leaf seen turning: it thins to an edge and broadens again
@@ -112,7 +112,7 @@ export class Weather {
         // Thick under the trees along the ridge, a few carried everywhere.
         float near = mix(0.12, 1.0, smoothstep(-8.0, -22.0, p.z));
         vA = step(aSeed.z, uAmount * near * tiny) * step(0.3, clip.w);
-        vCol = mix(mix(vec3(0.52, 0.13, 0.03), vec3(0.62, 0.36, 0.05), smoothstep(0.2, 0.6, aSeed.y)), vec3(0.34, 0.07, 0.03), step(0.82, aSeed.y)) * uLight * 0.6;
+        vCol = mix(mix(vec3(0.52, 0.13, 0.03), vec3(0.62, 0.36, 0.05), smoothstep(0.2, 0.6, aSeed.y)), vec3(0.34, 0.07, 0.03), step(0.82, aSeed.y)) * uLight * 0.36;
         gl_Position = clip;
       }`, 'varying float vA; varying vec2 vUv; varying vec3 vCol;\nvoid main() {\n  if (vA * step(length(vUv * vec2(1.0, 0.7)), 0.9) < 0.5) discard;\n  gl_FragColor = vec4(vCol, 1.0);\n}', { uLight: { value: new Color() }, uFloor: { value: 0 } })
     this.leaves.mat.transparent = false
