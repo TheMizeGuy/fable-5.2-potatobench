@@ -2,7 +2,7 @@
 import './system/system.css'
 import './system/game.css'
 import './style.css'
-import './instruments.css'
+import './legacy.css'
 import './papers.css'
 import './screens.css'
 import type { MountHud } from '../game/contracts.ts'

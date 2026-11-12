@@ -319,7 +319,7 @@
 .season-screen[data-layout='short'] .timebook .tools { grid-auto-flow: column; }
 .season-screen[data-layout='short'] .clock-slot.dock .clock { width: 300px; }
 .season-screen[data-layout='short'] .clock-slot.dock .clock .k, .season-screen[data-layout='short'] .clock-slot.dock .clock .menu { height: 46px; }
-.season-screen[data-layout='short'] .notes-slot { position: absolute; left: var(--gutter); bottom: auto; top: calc(var(--top, 100px) + 6px); max-width: 50%; }
+.season-screen[data-layout='short'] .notes-slot { position: absolute; left: 0; bottom: calc(100% + 6px); max-width: 50%; }
 .season-screen[data-layout='short'] .command { top: calc(var(--top, 100px) + 6px); bottom: var(--gutter); max-height: none; width: 360px; overflow-y: auto; }
 .season-screen[data-layout='short'].is-paused .command { top: calc(var(--top, 100px) + 54px); max-height: none; }
 .season-screen[data-layout='short'] .command .order.is-suggested .fist { display: none; }

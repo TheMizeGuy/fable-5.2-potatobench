@@ -304,10 +304,12 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
 
   // What floats over the land: nothing on the land is left under it.
   const floating = () => [card.el, yard.el, person.el, grid.el, incident.el, trayHost.firstElementChild as HTMLElement | null]
-  const covers = (): DOMRect[] => floating().filter((x): x is HTMLElement => !!x && !x.hidden && x.offsetParent !== null).map(x => x.getBoundingClientRect())
+  // Read once a frame, before anything on the land is moved, so the frame never forces a second layout.
+  let coverCache: DOMRect[] | null = null
+  const covers = (): DOMRect[] => coverCache ?? floating().filter((x): x is HTMLElement => !!x && !x.hidden && x.offsetParent !== null).map(x => x.getBoundingClientRect())
   const P = plates(ctx, plateLayer, { model: plateModel, onBadge, covers })
   const people = pins(ctx, plateLayer, {
-    tags: () => [...P.boxes(), ...yardMarks.filter(m => !m.wrap.hidden && !m.wrap.classList.contains('gone')).map(m => m.wrap.firstElementChild!.getBoundingClientRect())], covers,
+    tags: () => [...P.boxes(), ...yardMarks.filter(m => !m.wrap.hidden && m.at).map(m => new DOMRect(m.at!.x - m.w / 2, m.at!.y - 22, m.w, 44))], covers,
     stopped: () => stoppedBy(app.campaign),
   })
 
@@ -316,7 +318,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   const yardMarks = [S.HOME_YARD, S.DUFOUR_YARD].map(y => {
     const wrap = h('div', { class: 'yard-at gone', hidden: true })
     plateLayer.append(wrap)
-    return { y, wrap }
+    return { y, wrap, w: 150, at: null as { x: number; y: number } | null }
   })
 
   function updateYards(c: S.Campaign, goalYard: number): void {
@@ -333,6 +335,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
         'aria-label': `${YARD_TITLE[m.y]}${up ? `: ${S.BUILDINGS[up.kind].name.toLowerCase()} going up, ${F.pct(up.done / up.need)} built` : ''}. Build here${ctx.touch() ? '' : ' (Y)'}.`,
         onclick: () => app.selectYard(sel ? 0 : m.y),
       }, icon('yard', 'i'), name, up ? h('span', { class: 'yard-pct num' }, F.pct(up.done / up.need)) : null))
+      m.w = (m.wrap.firstElementChild as HTMLElement | null)?.offsetWidth || m.w
     }
   }
 
@@ -345,6 +348,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       const ok = a.visible && Number.isFinite(a.x) && Number.isFinite(a.y) && a.y > ins.top + 40 && a.y < innerHeight - ins.bottom && a.x > ins.left + 60 && a.x < innerWidth - ins.right - 60 &&
         !cv.some(r => a.x > r.left - 80 && a.x < r.right + 80 && a.y > r.top - 20 && a.y < r.bottom + 20)
       m.wrap.classList.toggle('gone', !ok)
+      m.at = ok ? { x: a.x, y: a.y } : null
       if (ok) m.wrap.style.transform = `translate3d(${a.x.toFixed(1)}px, ${a.y.toFixed(1)}px, 0)`
     }
   }
@@ -557,9 +561,11 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
         else right = innerWidth - r.left + 8
       }
       if (bar && layout === 'narrow') return [t, 0, innerHeight - bar.getBoundingClientRect().top + 6, 0]
+      // A person's page and the work grid stand at the left on a desk: the land is framed beside them.
+      if (layout === 'wide' || layout === 'mid') for (const x of [person.el, grid.el]) if (vis(x)) left = Math.max(left, x.getBoundingClientRect().right + 8)
       return [t, right, bottom, left]
     },
-    frame: () => { P.frame(); people.frame(); placeYards(); drawSelection(); placeBar() },
+    frame: () => { coverCache = null; coverCache = covers(); P.frame(); placeYards(); people.frame(); drawSelection(); placeBar(); coverCache = null },
     dispose() {
       off()
       P.dispose()

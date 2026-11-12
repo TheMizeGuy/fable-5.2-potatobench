@@ -210,8 +210,9 @@ for (const [w, h] of [[320, 640], [390, 844], [844, 390], [820, 1180], [1024, 70
     await reach(page, `q.run(q.day(6, 12))`)
     await putAway(page)
     for (const selected of [false, true]) {
-      if (selected) await page.getByTestId('field-2').click()
-      await page.waitForTimeout(900)
+      // Picked by its number, as a field the camera may not have in frame is: the land is brought round to it.
+      if (selected) await page.keyboard.press('Digit3')
+      await page.waitForTimeout(1500)
       const found = await page.evaluate(sel => {
         const out: string[] = []
         const shown = (e: Element | null): e is HTMLElement => !!e && (e as HTMLElement).offsetParent !== null && (e as HTMLElement).offsetHeight > 0
@@ -221,8 +222,11 @@ for (const [w, h] of [[320, 640], [390, 844], [844, 390], [820, 1180], [1024, 70
         const parts = ['.topbar .almanac > .mount', '.topbar .goal', '.topbar .bank > .mount', '.command', '.timebook', '.queue', '.notes .alert', '.clock-slot', '.paused']
         const boxes = parts.flatMap(rect)
         const desk = innerWidth >= 900 && innerHeight > 500
-        // At least half the window is land on a desk, and on a phone with nothing selected; a phone's bar is a sheet.
-        if (desk || !sel) {
+        // On a phone held upright the top is one board, no more than a fifth of the height (design/season.phone.html).
+        const board = rect('.topbar .almanac > .mount')[0]
+        if (innerWidth < 900 && innerHeight > 500 && board && board.bottom > innerHeight / 5 + 2) out.push(`the top board takes ${Math.round(board.bottom)} of ${innerHeight} px`)
+        // At least half the window is land on a desk, whatever is selected.
+        if (desk) {
           let free = 0, all = 0
           for (let y = 5; y < innerHeight; y += 10) for (let x = 5; x < innerWidth; x += 10) {
             all++
@@ -296,7 +300,7 @@ test('spring land: a marker opens a card, renting puts a plate and the rent on t
   const hand = money(await game<number>(page, 'sim.HAND_WAGE'))
   const plan = async () => money(await game<number>(page, 'sim.planCosts(app.campaign).total'))
   const before = await plan()
-  await expect(page.locator('#ui .plate.land').first()).toBeVisible()
+  await expect(page.locator('#ui .tag-at.is-land .plate').first()).toBeVisible()
   await page.getByTestId('land-10').click()
   const card = page.getByTestId('plan-card')
   await expect(card).toContainText('Dufour Upper')
@@ -463,7 +467,7 @@ test('the menu: settings take effect, ending early says what is lost, and the sa
   await expect(page.getByTestId('forecast')).toBeVisible()
   // Metric reaches the instruments.
   await page.getByTestId('field-0').click()
-  await expect(page.locator('#ui [data-testid="card"] .card-known')).toContainText('°C')
+  await expect(page.locator('#ui [data-testid="card"] .readings')).toContainText('°C')
   await page.keyboard.press('Escape')
   await page.keyboard.press('m')
   await page.getByTestId('save-delete').click()
