@@ -23,9 +23,11 @@ await page.waitForFunction(() => !document.getElementById('splash'), null, { tim
 await q(page, `const { app } = q.g(); app.newGame(1987, 3); const c = app.campaign; c.cash += 30000
   c.buildings.push({ id: c.nextBuilding++, kind: 'bunk', yard: -1, done: 12, need: 12, built: true })
   for (const a of [...c.applicants]) app.do({ t: 'hire', applicant: a.id })
-  app.do({ t: 'begin' }); q.run(q.day(6, 20)); app.campaign.incidents = []; app.setSpeed(1)`)
+  app.do({ t: 'begin' }); app.do({ t: 'sprayWay', way: 'auto' }); q.run(q.day(6, 20)); app.campaign.incidents = []; app.setSpeed(1)`)
 await closeAll(page)
-await page.waitForTimeout(3000)
+await q(page, `const { app } = q.g(); app.settings.pauseOnAlerts = false; app.campaign.incidents = []; app.setSpeed(1)`)
+// the day's work under way: everyone out of the yard and at it
+await page.waitForTimeout(6000)
 const people = await q(page, `return q.g().app.campaign.crew.map(u => ({ id: u.id, name: u.name }))`) as { id: number; name: string }[]
 const rows: string[] = []
 for (const p of people) {
@@ -39,8 +41,9 @@ for (const p of people) {
   for (let step = 0; step < 6; step++) {
     const at = await page.evaluate(id => { const f = (globalThis as any).__countyField; return { pin: f.unitPin(id), body: f.unitAt(id) } }, p.id) as { pin: { x: number; y: number; visible: boolean }; body: { x: number; y: number } | null }
     const name = `${p.name.split(' ')[0].toLowerCase()}-${step}`
+    const doing = await page.evaluate(id => { const { app } = (globalThis as any).__county; const u = app.campaign.crew.find((x: any) => x.id === id); const j = app.campaign.season.jobs.find((x: any) => x.id === u.job); return `${j ? `${j.kind}@${j.field}` : 'idle'} speed ${app.speed}` }, p.id)
     await page.screenshot({ path: join(out, `${name}.png`) })
-    rows.push(`${name}: pin ${at.pin.visible ? `${Math.round(at.pin.x)},${Math.round(at.pin.y)}` : 'off'}; body ${at.body ? `${Math.round(at.body.x)},${Math.round(at.body.y)}` : 'none'}`)
+    rows.push(`${name} (${doing}): pin ${at.pin.visible ? `${Math.round(at.pin.x)},${Math.round(at.pin.y)}` : 'off'}; body ${at.body ? `${Math.round(at.body.x)},${Math.round(at.body.y)}` : 'none'}`)
     const x = at.body?.x ?? at.pin.x, y = at.body?.y ?? at.pin.y
     if (Number.isFinite(x) && Number.isFinite(y)) { await page.mouse.move(x, y); await page.mouse.wheel(0, -500); await page.waitForTimeout(700) }
   }
