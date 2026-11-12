@@ -141,7 +141,10 @@
 @keyframes lay-right { from { transform: translateX(16px); } }
 @keyframes lay-left { from { transform: translateX(-16px); } }
 @keyframes leave-right { to { transform: translateX(16px); opacity: 0; } }
+.season-screen .command { grid-template-columns: minmax(0, 1fr); }
 .command .t-title { overflow-wrap: anywhere; }
+.command .readings p { white-space: normal; }
+.command .readings p.estimate { white-space: nowrap; }
 .command .readings p.wrap { white-space: normal; align-items: flex-start; }
 .command .readings p > span { min-width: 0; }
 .command .readings .meter { flex: 1; min-width: 60px; }

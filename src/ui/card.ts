@@ -208,7 +208,7 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
       const x = all.find(y => y.kind === kind)
       const given = !!x?.given || !!held?.given.includes(kind)
       if (!x || given) {
-        return order({ key: touch ? '' : JOB_KEY[kind], icon: kind, name: JOB_VERB[kind], given: true, catch: x?.given ? 'On the list.' : catchFor(c, kind, f, ''), testid: `order-${kind}-given`, attrs: { 'data-k': `order-${kind}`, tabindex: '-1', 'aria-disabled': 'true' } })
+        return order({ key: touch ? '' : JOB_KEY[kind], icon: kind, name: JOB_VERB[kind], given: true, catch: catchFor(c, kind, f, ''), testid: `order-${kind}-given`, attrs: { 'data-k': `order-${kind}`, tabindex: '-1', 'aria-disabled': 'true' } })
       }
       const part = x.fields.length < sel.length ? ` ${x.fields.length} of ${sel.length}` : ''
       const no = refused?.kind === kind
