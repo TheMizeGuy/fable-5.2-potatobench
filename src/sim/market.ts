@@ -58,7 +58,7 @@ export function newPotatoWindow(c: Campaign, lot: Lot): boolean {
 }
 
 // What a lot would fetch on the open market now. Of its No. 1 and B size, the share packed in the packing shed sells
-// at 8% more and at three quarters of the No. 1 price.
+// at a premium (PACK_NO1) and at three quarters of the No. 1 price.
 export function lotValue(world: World, c: Campaign, lot: Lot): number {
   const g = lot.grades
   const skinnedAs: Grade = newPotatoWindow(c, lot) ? 'no1' : 'no2'
