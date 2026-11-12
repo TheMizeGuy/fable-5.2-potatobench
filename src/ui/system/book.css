@@ -1,0 +1,203 @@
+/* Winter (design/winter.html) and the year end (design/ledger.html) placed in the game, at every size. Placement and
+   live states only; the look of every component is design/system.css. Both sheets sit under the top boards (--top is
+   their foot, set by the HUD) and slide up into place. */
+
+/* ---------------------------------------------------------------- winter: one sheet, the work and the cellar */
+.cellar-sheet.winter { left: 0; right: 0; top: calc(var(--top, 150px) + var(--s3)); margin: 0 auto; transform: none;
+  width: min(1240px, calc(100% - 2 * var(--gutter))); max-height: calc(100% - var(--top, 150px) - var(--s3) - var(--gutter));
+  display: grid; grid-template-rows: auto minmax(0, 1fr) auto; padding: var(--s4) 26px 0; animation: sh-up var(--t-sheet) var(--ease-paper); }
+.cellar-sheet .winter-head { gap: var(--s4); }
+.cellar-sheet .winter-head .t-label { margin-bottom: 2px; }
+.cellar-sheet .w-wages { font-size: 16px; text-align: right; }
+.cellar-sheet .w-body { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); min-height: 0; }
+.cellar-sheet .w-work, .cellar-sheet .w-cellar { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; padding-bottom: var(--s3); }
+.cellar-sheet .w-work { container: work / inline-size; padding-right: var(--s5); }
+.cellar-sheet .w-cellar { padding: var(--s3) 0 var(--s3) var(--s5); border-left: 1px solid var(--rule-red); }
+.cellar-sheet .w-rows { display: grid; }
+/* a line of the time book: one row on a wide page, the words under the choice on a narrower one */
+.cellar-sheet .wrow { grid-template-columns: 46px minmax(90px, 120px) minmax(0, 280px) minmax(0, 1fr); grid-template-areas: 'bust who seg gets'; gap: 4px var(--s3); }
+.cellar-sheet .wrow > .bust { grid-area: bust; }
+.cellar-sheet .wrow > .who { grid-area: who; min-width: 0; }
+.cellar-sheet .wrow > .seg { grid-area: seg; }
+.cellar-sheet .wrow > .gets { grid-area: gets; }
+.cellar-sheet .wrow .seg .btn { padding: 0 4px; }
+@container work (max-width: 700px) {
+  .cellar-sheet .wrow { grid-template-columns: 46px minmax(0, 1fr) minmax(0, 264px); grid-template-areas: 'bust who seg' 'bust gets gets'; align-items: start; }
+  .cellar-sheet .wrow > .who { align-self: center; }
+}
+@container work (max-width: 440px) {
+  .cellar-sheet .wrow { grid-template-columns: 40px minmax(0, 1fr); grid-template-areas: 'bust who' 'seg seg' 'gets gets'; gap: 6px var(--s3); }
+  .cellar-sheet .wrow > .bust { width: 40px; height: 40px; }
+}
+@container work (max-width: 620px) { .cellar-sheet .winter-foot { grid-template-columns: minmax(0, 1fr); gap: var(--s3); } }
+.cellar-sheet .winter-foot { padding-top: var(--s4); }
+.cellar-sheet .w-yard > .btn { margin-top: 2px; }
+.cellar-sheet .w-mortgage { margin-top: 10px; }
+.cellar-sheet .w-raise .fold { min-height: var(--touch); }
+.cellar-sheet .raise li > div { min-width: 0; }
+.cellar-sheet .raise .meter { width: 120px; }
+.cellar-sheet .raise .btn { flex-direction: column; gap: 0; padding: 4px 14px; line-height: 1.1; }
+/* the crop in store */
+.cellar-sheet .w-cellar .sec-h { justify-content: space-between; flex-wrap: wrap; }
+.cellar-sheet .c-houses { display: grid; gap: 6px; padding: var(--s2) 0 var(--s3); }
+.cellar-sheet .c-houses .lead { font-size: var(--t-body); }
+.cellar-sheet .c-houses .lead .t-label { color: var(--ink); }
+.cellar-sheet .c-house-list { display: flex; flex-wrap: wrap; gap: 2px var(--s4); font-size: var(--t-caption); }
+.cellar-sheet .c-house-list li { display: flex; align-items: center; gap: 6px; }
+.cellar-sheet .c-house-list .i, .cellar-sheet .lot-facts .i { --i: 16px; color: var(--ink-2); }
+.cellar-sheet .lots { display: grid; border-top: 1px solid var(--ink); margin-bottom: var(--s4); }
+.cellar-sheet .lot { display: grid; gap: 4px; padding: 10px 0 12px; border-bottom: 1px solid var(--rule); }
+.cellar-sheet .lot-head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s3); }
+.cellar-sheet .lot-head h3 { font: 700 var(--t-lead)/1.15 var(--f-text); }
+.cellar-sheet .lot-value { font: 700 var(--t-head)/1 var(--f-text); white-space: nowrap; }
+.cellar-sheet .lot-sub { font-size: var(--t-caption); }
+.cellar-sheet .lot-facts { display: grid; gap: 2px; font-size: var(--t-caption); color: var(--ink-2); }
+.cellar-sheet .lot-facts li { display: flex; align-items: flex-start; gap: var(--s2); }
+.cellar-sheet .lot-facts li.c-ochre, .cellar-sheet .lot-facts li.c-red { color: inherit; }
+.cellar-sheet .lot-facts li.c-ochre span { color: var(--ochre); } .cellar-sheet .lot-facts li.c-red span { color: var(--red); }
+.cellar-sheet .lot-facts .i { margin-top: 1px; }
+.cellar-sheet .lot-deal { font-size: var(--t-caption); }
+.cellar-sheet .lot-actions { display: flex; flex-wrap: wrap; gap: var(--s2); padding-top: 6px; }
+.cellar-sheet .lot-actions .btn { padding: 0 12px; }
+.cellar-sheet .seed-box { display: grid; gap: var(--s2); margin-top: 6px; padding: 10px 12px; background: var(--paper-2); box-shadow: inset 0 0 0 1px var(--hair); }
+.cellar-sheet .seed-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); }
+.cellar-sheet .stepper { display: flex; align-items: center; gap: var(--s2); }
+.cellar-sheet .stepper .btn { width: var(--touch); padding: 0; }
+.cellar-sheet .stepper .num { min-width: 64px; text-align: center; }
+.cellar-sheet .c-month { display: grid; margin-bottom: var(--s2); }
+.cellar-sheet .c-month li { padding: 4px 0; font-size: var(--t-caption); border-bottom: 1px dotted var(--hair); }
+.cellar-sheet .c-empty { padding: var(--s3) 0; }
+.cellar-sheet .winter-next { display: flex; justify-content: space-between; align-items: center; gap: var(--s4); padding: var(--s3) 0 var(--s4); border-top: 1px solid var(--ink); }
+.cellar-sheet .winter-next .t-caption { max-width: 560px; }
+.cellar-sheet .winter-next .btn.go { flex: none; gap: var(--s4); }
+
+/* a phone held upright: the sheet is the lower part of the screen, the land shows above it, one column that scrolls */
+.cellar-sheet.winter[data-layout='narrow'] { left: 10px; right: 10px; width: auto; margin: 0; top: max(calc(var(--top, 240px) + 10px), 36%); bottom: 10px; max-height: none;
+  padding: var(--s3) var(--s4) 0; }
+.cellar-sheet[data-layout='narrow'] .w-body, .cellar-sheet[data-layout='short'] .w-body { display: block; overflow-y: auto; overscroll-behavior: contain; }
+.cellar-sheet[data-layout='narrow'] .w-work, .cellar-sheet[data-layout='narrow'] .w-cellar,
+.cellar-sheet[data-layout='short'] .w-work, .cellar-sheet[data-layout='short'] .w-cellar { overflow: visible; padding-right: 0; }
+.cellar-sheet[data-layout='narrow'] .w-cellar, .cellar-sheet[data-layout='short'] .w-cellar { padding-left: 0; border-left: 0; border-top: 3px double var(--ink); }
+.cellar-sheet[data-layout='narrow'] .winter-head { align-items: start; }
+.cellar-sheet[data-layout='narrow'] .winter-head .t-title { font-size: 26px; }
+.cellar-sheet[data-layout='narrow'] .w-wages { font-size: var(--t-caption); }
+.cellar-sheet[data-layout='narrow'] .winter-next { padding-bottom: max(var(--s3), env(safe-area-inset-bottom, 0px)); }
+.cellar-sheet[data-layout='narrow'] .winter-next .t-caption { display: none; }
+.cellar-sheet[data-layout='narrow'] .winter-next .btn.go { flex: 1; }
+.cellar-sheet[data-layout='narrow'] .lot-actions .btn { flex: 1 1 auto; }
+/* a phone on its side: the heading and the way on share one row over the scrolling page */
+.cellar-sheet.winter[data-layout='short'] { left: max(10px, env(safe-area-inset-left, 0px)); right: max(10px, env(safe-area-inset-right, 0px)); width: auto; margin: 0;
+  top: calc(var(--top, 110px) + 8px); bottom: 8px; max-height: none; padding: 6px var(--s4) 0; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto minmax(0, 1fr); }
+.cellar-sheet[data-layout='short'] .winter-head { grid-column: 1; grid-row: 1; padding-bottom: 6px; }
+.cellar-sheet[data-layout='short'] .winter-head .t-label { display: none; }
+.cellar-sheet[data-layout='short'] .winter-head .t-title { font-size: 22px; }
+.cellar-sheet[data-layout='short'] .w-body { grid-column: 1 / -1; grid-row: 2; }
+.cellar-sheet[data-layout='short'] .winter-next { grid-column: 2; grid-row: 1; padding: 0 0 6px var(--s3); border-top: 0; border-bottom: 3px double var(--ink); }
+.cellar-sheet[data-layout='short'] .winter-next .t-caption { display: none; }
+.cellar-sheet[data-layout='short'] .winter-next .btn.go { min-height: var(--touch); font-size: 20px; }
+
+/* ---------------------------------------------------------------- the year end: the account book, open */
+.book.ledger-sheet { left: 0; right: 0; top: calc(var(--top, 140px) + var(--s3)); margin: 0 auto; transform: none; width: min(1080px, calc(100% - 2 * var(--gutter)));
+  max-height: calc(100% - var(--top, 140px) - var(--s3) - var(--gutter)); grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr);
+  animation: sh-up var(--t-sheet) var(--ease-paper); }
+.book .book-tabs { display: none; }
+.book .book-leaves { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); min-height: 0; }
+.book .page-l { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.book .page-r { min-height: 0; }
+.book .page-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 14px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
+  margin-right: -14px; padding-right: 14px; }
+.book .book-head { padding-bottom: var(--s3); }
+.book .book-title { font-size: 34px; margin: 4px 0; }
+.book .b-verdict { font-size: 18px; }
+.book .b-title-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px var(--s4); }
+.book .b-title-row .stamp { font-size: 22px; padding: 4px 10px 3px; border-width: 3px; }
+/* the cash book: a label in each row's head cell, the In and Out columns ruled in red */
+.book .cashbook tbody th { height: 28px; padding: 0 var(--s2) 0 0; border-bottom: 1px solid var(--rule); font-weight: 400; }
+.book .cashbook tfoot td { white-space: nowrap; }
+.book .cashbook tfoot tr.call td { height: 34px; font-weight: 400; font-size: var(--t-body); border-top: 0; border-bottom: 1px solid var(--rule); }
+.book .b-debt { font-size: var(--t-body); padding-top: 10px; }
+.book .nowrap { white-space: nowrap; }
+.book .b-people { margin-top: 14px; }
+.book .ppl > span { min-width: 0; }
+.book .ppl > .bust { flex: none; }
+.book .ppl > .i { --i: 22px; margin: 0 4px; color: var(--ink-2); }
+/* the right page */
+.book .worth .t-display { white-space: nowrap; }
+.book .b-worth-note { font-size: var(--t-body); text-align: right; }
+.book .compare .t-caption { margin-top: 4px; }
+.book .chart .t-caption { margin-top: 2px; }
+.book .b-goals p { font-size: var(--t-body); }
+.book .b-plain { font-size: var(--t-body); }
+.book .b-lines { display: grid; gap: 3px; font-size: var(--t-body); }
+.book .b-soil-h { margin: 10px 0 4px; }
+.book .b-soil { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0 var(--s5); font-size: var(--t-caption); }
+.book .b-soil li { padding: 2px 0; }
+.book .b-ahead > .t-caption { margin-top: 6px; }
+.book .book-next { flex-wrap: wrap; row-gap: var(--s2); }
+.book .book-next .btn.go { gap: var(--s4); margin-left: auto; }
+.book .next-goal { display: flex; align-items: center; gap: 10px; flex: 1 1 200px; min-width: 0; padding: 8px 14px 8px 10px; font-size: var(--t-body); }
+.book .next-goal .fist { --i: 28px; }
+.book .next-goal .b-how { display: block; margin-top: 1px; }
+/* the closing books: the years as rows, what was built */
+.book .b-years-wrap { overflow-x: auto; }
+.book .cashbook.years { font-size: var(--t-caption); }
+.book .cashbook.years .m { width: auto; white-space: nowrap; padding-left: 6px; }
+.book .cashbook.years tbody th { width: 40px; }
+.book .b-years .t-caption, .book .b-plain { margin-top: 6px; }
+.book .b-built dl { display: grid; }
+.book .b-built dl > div { display: grid; grid-template-columns: 118px minmax(0, 1fr); gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--hair); font-size: var(--t-body); }
+.book .b-built dt { display: flex; align-items: center; gap: 6px; }
+.book .b-built dt .i { --i: 18px; color: var(--ink-2); }
+.book .b-built dt .t-label { color: var(--ink); }
+.book.occasion .page-body > .sec-h { margin-top: var(--s2); }
+
+/* a desk of middling height: the book a little tighter */
+@media (max-height: 820px) {
+  .book .page-l, .book .page-r { padding-top: 14px; padding-bottom: 14px; }
+  .book .book-title { font-size: 30px; }
+  .book .worth .t-display { font-size: 56px; }
+  .book .cashbook tbody th, .book .cashbook td { height: 26px; }
+  .book .page-body { gap: 10px; }
+}
+
+/* a phone held upright: one page at a time, the page names above to turn it, the way on always at the foot */
+.book.ledger-sheet[data-layout='narrow'], .book.ledger-sheet[data-layout='short'] { left: 10px; right: 10px; width: auto; margin: 0; bottom: 10px; max-height: none; padding: 6px 6px 76px; }
+.book.ledger-sheet[data-layout='narrow'] { top: max(calc(var(--top, 240px) + 10px), 30%); }
+.book[data-layout='narrow'] .book-tabs, .book[data-layout='short'] .book-tabs { display: grid; margin-bottom: 6px; }
+.book[data-layout='narrow'] .book-tabs .btn, .book[data-layout='short'] .book-tabs .btn { min-height: var(--touch); font-size: var(--t-caption); }
+.book[data-layout='narrow'] .book-leaves, .book[data-layout='short'] .book-leaves { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 100%;
+  overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: none; }
+.book[data-layout='narrow'] .book-leaves::-webkit-scrollbar, .book[data-layout='short'] .book-leaves::-webkit-scrollbar { display: none; }
+.book[data-layout='narrow'] .page-l, .book[data-layout='narrow'] .page-r,
+.book[data-layout='short'] .page-l, .book[data-layout='short'] .page-r { scroll-snap-align: start; scroll-snap-stop: always; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 14px 16px 16px; }
+.book[data-layout='narrow'] .page-r, .book[data-layout='short'] .page-r { display: block; }
+.book[data-layout='narrow'] .page-body, .book[data-layout='short'] .page-body { overflow: visible; margin: 0; padding: 0; gap: var(--s4); }
+.book[data-layout='narrow'] .book-next, .book[data-layout='short'] .book-next { position: absolute; left: 6px; right: 6px; bottom: 6px; margin: 0; padding: var(--s2) 10px;
+  flex-wrap: nowrap; gap: var(--s2); background: var(--paper) url(./grain.png); background-blend-mode: multiply; box-shadow: 0 0 0 1px var(--edge); border-top: 0; }
+.book[data-layout='narrow'] .next-goal, .book[data-layout='short'] .next-goal { flex: 1 1 auto; padding: 6px 10px 6px 8px; font-size: var(--t-caption); line-height: 1.2; }
+.book[data-layout='narrow'] .next-goal .fist, .book[data-layout='short'] .next-goal .fist { --i: 22px; }
+.book[data-layout='narrow'] .next-goal .b-how, .book[data-layout='short'] .next-goal .b-how { display: none; }
+.book[data-layout='narrow'] .book-next:has([data-testid='new-farm']) .next-goal { display: none; }
+.book[data-layout='narrow'] .book-next .btn, .book[data-layout='short'] .book-next .btn { flex: 1 1 auto; }
+.book[data-layout='narrow'] .book-next .btn.go, .book[data-layout='short'] .book-next .btn.go { flex: 0 1 auto; font-size: 20px; padding: 0 14px; gap: var(--s2); }
+.book[data-layout='narrow'] .book-title { font-size: 28px; }
+.book[data-layout='narrow'] .b-verdict { font-size: var(--t-lead); }
+.book[data-layout='narrow'] .worth .t-display { font-size: 52px; }
+.book[data-layout='narrow'] .worth { grid-template-columns: minmax(0, 1fr); }
+.book[data-layout='narrow'] .b-worth-note { text-align: left; }
+.book[data-layout='narrow'] .compare p { grid-template-columns: 96px minmax(0, 1fr) 44px; }
+.book[data-layout='narrow'] .b-built dl > div { grid-template-columns: 100px minmax(0, 1fr); }
+@media (max-width: 359px) {
+  .book[data-layout='narrow'] .cashbook .m { width: 76px; }
+  .book[data-layout='narrow'] .page-l, .book[data-layout='narrow'] .page-r { padding: 12px 12px 14px; }
+  .book[data-layout='narrow'] .next-goal { display: none; }
+}
+/* a phone on its side: the page names and the way on share the row over the page */
+.book.ledger-sheet[data-layout='short'] { top: calc(var(--top, 110px) + 8px); bottom: 8px; padding: 6px; left: max(10px, env(safe-area-inset-left, 0px)); right: max(10px, env(safe-area-inset-right, 0px)); }
+.book[data-layout='short'] .book-tabs { margin-right: 50%; }
+.book[data-layout='short'] .book-next { top: 6px; bottom: auto; left: auto; width: calc(50% - 12px); padding: 0; background: none; box-shadow: none; }
+.book[data-layout='short'] .next-goal { display: none; }
+.book[data-layout='short'] .book-next .btn { min-height: var(--touch); }
+
+/* reduced motion: the sheets simply arrive */
+.reduce-motion .book.ledger-sheet, .reduce-motion .cellar-sheet.winter { animation-name: sh-fade; }
