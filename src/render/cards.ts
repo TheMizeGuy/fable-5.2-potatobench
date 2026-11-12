@@ -10,7 +10,7 @@ import type { Patch } from './shaders.ts'
 
 // A cell of the atlas in pixels and its margin; the half width and half height of what it holds, in tree heights, about
 // a point this far up the tree; and the heights of eye, in radians above the level.
-export const CARD = { cols: 7, rows: 3, w: 192, h: 240, pad: 10, halfW: 0.7, halfH: 0.88, centre: 0.56, elev: [0.17, 0.56, 0.96] }
+export const CARD = { cols: 7, rows: 3, w: 192, h: 240, pad: 10, halfW: [0.34, 0.52, 0.42, 0.7], halfH: 0.66, centre: 0.56, elev: [0.17, 0.56, 0.96] }
 const AW = CARD.cols * CARD.w, AH = CARD.rows * CARD.h
 // How many columns on from a hardwood in leaf the same tree stands bare.
 export const BARE = 3
@@ -61,7 +61,7 @@ export function bakeCards(renderer: WebGLRenderer, cells: CardCell[]): WebGLRend
   const scene = new Scene(), mesh = new Mesh(cells[0].geo, mats.con)
   mesh.frustumCulled = false
   scene.add(mesh)
-  const cam = new OrthographicCamera(-CARD.halfW, CARD.halfW, CARD.halfH, -CARD.halfH, 0.1, 12)
+  const cam = new OrthographicCamera(-1, 1, CARD.halfH, -CARD.halfH, 0.1, 12)
   const was = renderer.getRenderTarget(), auto = renderer.autoClear
   renderer.autoClear = true
   renderer.setClearColor(0x000000, 0)
@@ -74,6 +74,11 @@ export function bakeCards(renderer: WebGLRenderer, cells: CardCell[]): WebGLRend
       mesh.material = cell.conifer ? mats.con : mats.hard
       mesh.material.uniforms.uMode.value = mode
       mesh.material.uniforms.uBare.value = cell.bare ? 1 : 0
+      // each kind in a cell as wide as it is: a spruce's card is half the width of a maple's
+      const half = CARD.halfW[col === 0 ? 0 : ((col - 1) % 3) + 1]
+      cam.left = -half
+      cam.right = half
+      cam.updateProjectionMatrix()
       CARD.elev.forEach((e, row) => {
         const x = col * CARD.w + CARD.pad, y = row * CARD.h + CARD.pad, w = CARD.w - 2 * CARD.pad, h = CARD.h - 2 * CARD.pad
         rt.viewport.set(x, y, w, h)
@@ -113,7 +118,7 @@ const f = (v: number) => v.toFixed(4)
 // The card's place and its cell of the atlas, for the picture and for the shadow pass alike. The tree's foot, width and
 // height come from its instance; it turns to the eye about the upright, and leans as the eye that drew its cell did.
 export const CARD_VERTEX: Pick<Patch, 'vertexHead' | 'vertexBegin' | 'vertexWorld'> = {
-  vertexHead: 'attribute vec4 aTree; varying vec4 vTree; varying vec2 vCard; varying vec3 vCell;',
+  vertexHead: 'attribute vec4 aTree; varying vec4 vTree; varying vec2 vCard; varying vec3 vCell; float gCardHalf;',
   vertexBegin: /* glsl */ `
     vTree = aTree;
     {
@@ -122,9 +127,11 @@ export const CARD_VERTEX: Pick<Patch, 'vertexHead' | 'vertexBegin' | 'vertexWorl
       float cRow = cE < 0.36 ? 0.0 : cE < 0.76 ? 1.0 : 2.0;
       #ifdef CARD_CONIFER
         float cCol = 0.0;
+        gCardHalf = ${f(CARD.halfW[0])};
       #else
         float cSp = floor(aTree.x + 0.001);
         float cCol = cSp < 0.5 ? 1.0 : cSp < 2.5 ? 2.0 : 3.0;
+        gCardHalf = cSp < 0.5 ? ${f(CARD.halfW[1])} : cSp < 2.5 ? ${f(CARD.halfW[2])} : ${f(CARD.halfW[3])};
       #endif
       float cFlip = fract(aTree.x * 3.71) < 0.5 ? -1.0 : 1.0;
       vCard = (vec2(cCol, cRow) * vec2(${f(CARD.w)}, ${f(CARD.h)}) + ${f(CARD.pad)} + (vec2(position.x * cFlip, position.y) * 0.5 + 0.5) * vec2(${f(CARD.w - 2 * CARD.pad)}, ${f(CARD.h - 2 * CARD.pad)})) / vec2(${f(AW)}, ${f(AH)});
@@ -141,7 +148,7 @@ export const CARD_VERTEX: Pick<Patch, 'vertexHead' | 'vertexBegin' | 'vertexWorl
       vec2 cH = normalize(cZ.xz + vec2(1e-5, 0.0));
       vec3 cR = normalize(vec3(viewMatrix[0][0], 0.0, viewMatrix[2][0]) + vec3(1e-5, 0.0, 0.0));
       float cw = length(instanceMatrix[0].xyz), cs = length(instanceMatrix[1].xyz);
-      cWorld.xyz += vec3(0.0, ${f(CARD.centre)} * cs, 0.0) + cR * (position.x * ${f(CARD.halfW)} * cw)
+      cWorld.xyz += vec3(0.0, ${f(CARD.centre)} * cs, 0.0) + cR * (position.x * gCardHalf * cw)
         + position.y * ${f(CARD.halfH)} * (cos(vCell.x) * cs * vec3(0.0, 1.0, 0.0) - sin(vCell.x) * cw * vec3(cH.x, 0.0, cH.y));
     }
   `,

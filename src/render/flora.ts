@@ -868,7 +868,7 @@ export class Flora {
   }
 
   // Whole trees in the patches near the camera, simpler ones beyond them, cards in the rest. A patch's cards are in the
-  // two wider shadows always, and in the picture and the fine shadow only when they are what is drawn of it.
+  // two wider shadows always, and in the picture only when they are what is drawn of it.
   update(camera: PerspectiveCamera): void {
     const c = camera.position
     for (const ch of this.chunks.values()) {
@@ -882,8 +882,14 @@ export class Flora {
       if (level === ch.level) continue
       ch.level = level
       for (const m of ch.near) m.visible = level === 0
-      for (const m of ch.far) m.visible = level === 1
-      for (const m of ch.cards) for (const l of [0, 3]) { if (level === 2) m.layers.enable(l); else m.layers.disable(l) }
+      // A card in the fine shadow would be a great sheet of the map to fill: where a patch is drawn as cards, its
+      // simpler trees still stand in the fine shadow, out of the picture.
+      for (const m of ch.far) {
+        m.visible = level > 0
+        m.layers.set(3)
+        if (level === 1) m.layers.enable(0)
+      }
+      for (const m of ch.cards) { if (level === 2) m.layers.enable(0); else m.layers.disable(0) }
     }
   }
 

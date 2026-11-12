@@ -71,7 +71,7 @@ void hillAt(vec2 f, vec2 xz, out vec4 h0, out vec4 h1) {
   h0.b = smoothstep(0.0, 0.3, sick - (0.1 + 0.9 * lump));
   // round a focus the leaf yellows before it goes
   h0.g = max(h0.g, 0.8 * smoothstep(0.0, 0.3, sick * 1.5 - (0.1 + 0.9 * lump)) * (1.0 - h0.b));
-  h0.a = smoothstep(0.42, 0.58, h0.a + (lump - 0.5) * 0.4);
+  h0.a = smoothstep(0.42, 0.58, h0.a + (lump - 0.5) * 0.8 + (nb.a - 0.5) * 0.3);
   h0.g = clamp(h0.g * (0.72 + 0.56 * na.b), 0.0, 1.0);
   float strip = floor(f.y * ${(PLANTED_ROWS / 2).toFixed(1)});
   float ahead = fract(sin(strip * 12.9898) * 43758.5453) - 0.5;
@@ -370,7 +370,7 @@ vec4 paintCrop(vec2 f, vec4 h0, vec4 h1, float fine, float rowsPx, float rowFade
   float fleck = step(1.0 - 0.5 * open, fract(sin(dot(floor(fc), vec2(12.9898, 78.233))) * 43758.5453)) * (1.0 - smoothstep(0.2, 0.34, length(fract(fc) - 0.5)));
   // from above a field in flower is paler than one that is not, and paler in drifts
   fleck *= mix(1.0 - smoothstep(0.2, 0.5, fr), 1.0, rowFade);
-  fleck = mix(fleck, 0.3 * open * (0.4 + 1.2 * fine), smoothstep(0.35, 1.0, max(fwidth(fc.x), fwidth(fc.y))));
+  fleck = mix(fleck, 0.11 * open * (0.4 + 1.2 * fine), smoothstep(0.35, 1.0, max(fwidth(fc.x), fwidth(fc.y))));
   col = mix(col, mix(${linear('#f8f5fa')}, ${linear('#d3c2e6')}, uTint) * 1.25, fleck * cover);
   lift = cover;
   return vec4(col, cover);
@@ -712,6 +712,8 @@ export class Fields {
             // rank and dark in the low places, thin and pale on the knolls; held back where the woods shade it
             crop.rgb *= (1.0 - 0.3 * lowK) * (1.0 + 0.3 * knollK) * mix(1.0, 1.4, smoothstep(0.3, 0.9, rowsPx));
             crop.rgb = mix(crop.rgb, crop.rgb * vec3(1.1, 1.06, 0.72), 0.5 * knollK);
+            // from far off a crop is its green: the shade between its leaves is not seen
+            crop.rgb = mix(crop.rgb, crop.rgb * vec3(0.86, 1.14, 0.8), smoothstep(0.3, 0.9, rowsPx) * (1.0 - over.a) * (1.0 - over.g));
             crop.a *= 1.0 - 0.3 * knollK * (1.0 - smoothstep(0.5, 0.9, over.r));
             float shy = uShy * (1.0 - smoothstep(0.03, 0.2, vF.y + (broad - 0.5) * 0.08));
             crop.rgb = mix(crop.rgb, crop.rgb * vec3(1.12, 1.1, 0.8), 0.6 * shy);
