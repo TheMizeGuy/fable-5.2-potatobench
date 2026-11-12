@@ -71,6 +71,9 @@ function quadMatrix(p: { x: number; y: number }[]): string {
   return `matrix3d(${[a * k, b * k, 0, g * k, c * k, d * k, 0, hh * k, 0, 0, 1, 0, p0.x, p0.y, 0, 1].map(v => +v.toFixed(7)).join(',')})`
 }
 
+// The height of the list of orders over the time book, with its gap: the land is framed as if it were always there.
+const LIST_ROOM = 52
+
 export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () => void; onAlmanac: () => void }): Screen {
   const app = ctx.app
   const top = topBar(ctx, { ...o, show: g => show(target(g)), canShow: g => !!target(g) })
@@ -607,7 +610,9 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       const vis = (x: HTMLElement) => !x.hidden && x.offsetParent !== null && x.offsetHeight > 0
       // The time book and its list at the foot; the clock with them on a phone. The alerts come and go over the land
       // and do not frame it.
-      const low = [...(crew.children as HTMLCollectionOf<HTMLElement>), clockSlot].filter(x => vis(x) && !x.classList.contains('pressing')).map(x => box(x).top)
+      // The list's row is kept whether or not it holds an order, so the first order given moves nothing on the land.
+      const book = crew.querySelector<HTMLElement>('.timebook')
+      const low = [...(book && vis(book) ? [box(book).top - LIST_ROOM] : []), ...(vis(clockSlot) ? [box(clockSlot).top] : [])]
       const bottom = innerHeight - Math.min(...low, innerHeight) + 6
       // Only what always stands frames the land: a bar, a page or the grid opening on a click never moves the camera
       // (the bar steps to the other side of what it belongs to instead; a card lies over the tags). On a phone

@@ -58,6 +58,7 @@
 .season-screen .pressing .press > .i { --i: 18px; color: var(--red); flex: none; }
 .season-screen .pressing .press-text { flex: 1; min-width: 0; }
 .season-screen .pressing .btn { flex: none; min-height: 36px; padding: 0 10px; font-size: 14px; }
+.touch .season-screen .pressing .btn { min-height: 44px; }
 .season-screen .q .q-by { display: grid; place-items: center; color: var(--ink-2); }
 .season-screen .q .q-by .i { --i: 12px; }
 .season-screen .q.by-you { box-shadow: inset 0 0 0 1px var(--hair), inset 0 -2px 0 var(--pencil); }
@@ -165,7 +166,7 @@
 .season-screen .command .orders.slots .order .cost, .season-screen .command .orders.slots .order > .stamp { grid-row: 3; grid-column: 1 / -1; justify-self: start; font-size: 13px; white-space: nowrap; text-align: left; max-height: 18px; }
 .season-screen .command .orders.slots .order > .stamp { transform: scale(.85); transform-origin: left center; }
 .season-screen .command .orders.slots .order > span:empty { display: none; }
-.season-screen .command .orders.slots .order .catch { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.season-screen .command .orders.slots .order .catch:empty { display: none; }
 .season-screen .command .orders.slots .order.is-suggested .fist { display: none; }
 .season-screen .command .orders.slots .order.is-off { background: transparent; box-shadow: inset 0 0 0 1px var(--hair); cursor: help; }
 .season-screen .command .orders.slots .order.is-off > :not(.catch) { opacity: .45; }
@@ -440,3 +441,7 @@
 .spray-ask .way-row.is-on { box-shadow: inset 0 0 0 2px var(--ink), 0 2px 0 var(--ink); background: var(--paper-2); }
 @media (hover: hover) { .spray-ask .way-row:hover { box-shadow: inset 0 0 0 2px var(--ink); } }
 .work .spray-again { justify-self: start; min-height: 36px; margin-top: 6px; font-size: 14px; }
+/* On a phone or a short window, work that cannot wait is one line, and gives way to a card or a page. */
+.season-screen[data-layout='narrow'] .pressing .press:nth-child(n+2), .season-screen[data-layout='short'] .pressing .press:nth-child(n+2) { display: none; }
+.season-screen[data-layout='narrow'].selected .pressing, .season-screen[data-layout='short'].selected .pressing, .season-screen[data-layout='narrow'].person-up .pressing { display: none; }
+.season-screen[data-layout='narrow'] .pressing .press { font-size: 14px; }

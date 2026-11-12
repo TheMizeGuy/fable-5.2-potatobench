@@ -258,11 +258,11 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
       let text: string
       if (!can.length && listed.length) {
         text = catchFor(c, kind, f, '')
-        el = order({ key, icon: kind, name: JOB_VERB[kind], given: true, catch: text, testid: `order-${kind}-given`, attrs: { ...attrs(), 'aria-disabled': 'true' } })
+        el = order({ key, icon: kind, name: JOB_VERB[kind], given: true, catch: '', said: `on the list. ${text}`, testid: `order-${kind}-given`, attrs: { ...attrs(), 'aria-disabled': 'true' } })
       } else if (!can.length) {
         text = busy || F.localize(mine.find(x => !x.ok)?.why ?? '') || jobWhat(kind)
         el = order({
-          key, icon: kind, name: JOB_VERB[kind], catch: text, testid: `order-${kind}-off`, title: touch ? undefined : text,
+          key, icon: kind, name: JOB_VERB[kind], catch: '', said: `cannot be given now: ${text}`, testid: `order-${kind}-off`, title: touch ? undefined : text,
           attrs: attrs(' is-off'), onclick: () => refuse(kind, text),
         })
       } else {
@@ -273,8 +273,8 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
         const no = refused?.kind === kind
         text = no ? refused!.why : catchFor(c, kind, f, kind === suggestedKind ? why : '')
         el = order({
-          key, icon: kind, name: [JOB_VERB[kind], part ? h('span', { class: 'order-part num' }, part) : null], cost: costText(days, cost), catch: text,
-          suggested: kind === suggestedKind, refused: no, testid: `order-${kind}`, title: touch ? undefined : jobWhat(kind), said: jobWhat(kind),
+          key, icon: kind, name: [JOB_VERB[kind], part ? h('span', { class: 'order-part num' }, part) : null], cost: costText(days, cost), catch: '',
+          suggested: kind === suggestedKind, refused: no, testid: `order-${kind}`, title: touch ? undefined : jobWhat(kind), said: `${jobWhat(kind)} ${text}`,
           onclick: (e: Event) => give(kind, (e as MouseEvent).ctrlKey || (e as MouseEvent).metaKey),
           attrs: { ...attrs(), oncontextmenu: (e: Event) => { e.preventDefault(); give(kind, true) } },
         })

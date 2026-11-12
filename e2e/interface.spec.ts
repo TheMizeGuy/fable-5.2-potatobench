@@ -254,7 +254,8 @@ for (const [w, h] of [[320, 640], [390, 844], [844, 390], [820, 1180], [1024, 70
           if (!r) out.push('the tag of the field in hand is not on the land')
           else if (boxes.some(b => r.left < b.right - 1 && r.right > b.left + 1 && r.top < b.bottom - 1 && r.bottom > b.top + 1)) out.push('the tag of the field in hand is under the interface')
           const a = (globalThis as unknown as { __countyField?: { anchor?: (i: number) => { x: number; y: number; visible: boolean } } }).__countyField?.anchor?.(2)
-          if (a?.visible && boxes.some(b => a.x > b.left && a.x < b.right && a.y > b.top && a.y < b.bottom)) out.push('the field in hand is under the interface')
+          const over = a?.visible ? parts.find(q => rect(q).some(b => a.x > b.left && a.x < b.right && a.y > b.top && a.y < b.bottom)) : undefined
+          if (over) out.push(`the field in hand is under the interface (${over})`)
         }
         if (document.documentElement.scrollWidth > innerWidth) out.push('the page scrolls sideways')
         for (const q of ['.topbar', '.command', '.timebook', '.queue', '.clock-slot', '.notes']) {
@@ -262,8 +263,7 @@ for (const [w, h] of [[320, 640], [390, 844], [844, 390], [820, 1180], [1024, 70
         }
         for (const el of document.querySelectorAll<HTMLElement>('#ui .topbar *, #ui .command *, #ui .timebook *, #ui .queue *')) {
           const text = [...el.childNodes].some(n => n.nodeType === 3 && (n.nodeValue ?? '').trim())
-          // (an order's catch on the card is said under the orders, not in its place: it is out of sight by design)
-          if (text && el.scrollWidth > el.clientWidth + 1 && getComputedStyle(el).overflow !== 'visible' && !el.matches('.sr, .slots .catch')) out.push(`clipped: ${el.className}`)
+          if (text && el.scrollWidth > el.clientWidth + 1 && getComputedStyle(el).overflow !== 'visible' && !el.matches('.sr')) out.push(`clipped: ${el.className}`)
         }
         const spans = [...document.querySelectorAll<HTMLElement>('#ui .topbar > *')].map(e => e.getBoundingClientRect()).filter(r => r.width > 0)
         for (let a = 0; a < spans.length; a++) for (let b = a + 1; b < spans.length; b++) {
