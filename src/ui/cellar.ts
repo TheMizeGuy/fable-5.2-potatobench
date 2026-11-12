@@ -108,7 +108,7 @@ export function cellarScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
         h('button', { class: 'btn', type: 'button', testid: `lot-sell-${lot.id}`, onclick: () => sell(1) }, icon('sell', 'i'), 'Sell', h('span', { class: 'sub num' }, F.money(value))),
         h('button', { class: 'btn', type: 'button', testid: `lot-sell-half-${lot.id}`, onclick: () => sell(0.5) }, 'Sell half'),
         canSeed ? h('button', {
-          class: 'btn', type: 'button', testid: `lot-seed-open-${lot.id}`, 'aria-expanded': String(!!seedOpen[lot.id]), 'aria-controls': `seed-${lot.id}`,
+          class: 'btn', type: 'button', testid: `lot-seed-open-${lot.id}`, 'aria-expanded': String(!!seedOpen[lot.id]), 'aria-controls': seedOpen[lot.id] ? `seed-${lot.id}` : undefined,
           onclick: () => { seedOpen[lot.id] = !seedOpen[lot.id]; ctx.dirty() },
         }, 'Hold back seed') : null),
       seedOpen[lot.id] && canSeed ? h('div', { class: 'seed-box', id: `seed-${lot.id}` },
@@ -160,7 +160,7 @@ export function cellarScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
             h('p', { class: 't-label' }, `${month} · ${R.yearName(c.year)} · The cellar months`),
             h('h2', { class: 't-title', id: 'winter-h' }, 'The winter\'s work')),
           h('p', { class: 'num w-wages' }, wages ? [h('b', null, F.money(wages)), ' a month in wages'] : 'Nobody paid this winter')),
-        h('div', { class: 'w-body', 'data-scroll': 'winter' },
+        h('div', { class: `w-body${c.crew.length <= 1 ? ' few' : ''}`, 'data-scroll': 'winter' },
           winterWork(ctx, c, raise, () => { raise = !raise; ctx.dirty() }, [
             lines.length ? h('div', { class: 'sec-h' }, h('h2', null, c.month === 0 && !did.length ? 'At the close of the season' : `What ${S.CELLAR_MONTHS[Math.max(0, c.month - 1)]} did`)) : null,
             h('ul', { class: 'c-month', testid: 'this-month' }, lines.slice(0, 6).map(t => h('li', null, t)))]),

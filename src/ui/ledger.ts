@@ -192,8 +192,8 @@ function goalsMet(c: S.Campaign): HTMLElement | null {
   const shown = met.slice(-4)
   return h('section', { class: 'b-goals' },
     h('div', { class: 'sec-h' }, h('h2', null, 'Goals met')),
-    h('p', null, met.length > shown.length ? h('span', { class: 'quiet' }, `${met.length - shown.length} more, then `) : null,
-      h('span', { class: 'struck' }, shown.map(g => g.title).join(' · '))))
+    h('p', null, h('span', { class: 'struck' }, shown.map(g => g.title).join(' · ')),
+      met.length > shown.length ? h('span', { class: 'quiet' }, `, and ${met.length - shown.length} before them`) : null))
 }
 
 // What next spring brings, in a few lines, and the soil it starts from.
@@ -212,10 +212,9 @@ function yearAhead(c: S.Campaign, y: S.YearSummary): HTMLElement {
     h('div', { class: 'sec-h' }, h('h2', null, 'The year ahead')),
     h('ul', { class: 'b-lines' }, lines.map(t => h('li', null, t))),
     h('p', { class: 't-label b-soil-h' }, `The soil going into ${yearWord(y.year + 1)}`),
-    h('ul', { class: 'b-soil' }, fields.map(f => h('li', { class: 'lead' },
-      h('span', null, f.name), h('span', { class: 'dots' }),
-      h('span', { class: f.soil < 0.4 ? 'c-ochre' : '' }, soilWord(f.soil)),
-      h('span', { class: `num${f.vert >= 0.15 ? ' c-ochre' : ' quiet'}` }, `early dying ${F.pct(f.vert)}`)))),
+    h('ul', { class: 'b-soil' }, fields.map(f => h('li', null,
+      h('b', null, f.name), ' ', h('span', { class: f.soil < 0.4 ? 'c-ochre' : '' }, `soil ${soilWord(f.soil)}`),
+      h('span', { class: `num${f.vert >= 0.15 ? ' c-ochre' : ' quiet'}` }, `, early dying ${F.pct(f.vert)}`)))),
     h('p', { class: 't-caption' }, 'Potatoes after potatoes wear the soil and build up early dying. A rest year puts the soil back at once and wears early dying down slowly.'))
 }
 

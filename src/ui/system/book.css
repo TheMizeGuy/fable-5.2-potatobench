@@ -12,7 +12,10 @@
 .cellar-sheet .w-body { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); min-height: 0; }
 .cellar-sheet .w-work, .cellar-sheet .w-cellar { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; padding-bottom: var(--s3); }
 .cellar-sheet .w-work { container: work / inline-size; padding-right: var(--s5); }
-.cellar-sheet .w-cellar { padding: var(--s3) 0 var(--s3) var(--s5); border-left: 1px solid var(--rule-red); }
+.cellar-sheet .w-cellar { container: crop / inline-size; padding: var(--s3) 0 var(--s3) var(--s5); border-left: 1px solid var(--rule-red); }
+/* the farmer alone: the work takes less of the page, and the piles in store lie two by two */
+.cellar-sheet .w-body.few { grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr); }
+@container crop (min-width: 600px) { .cellar-sheet .lots { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--s5); } }
 .cellar-sheet .w-rows { display: grid; }
 /* a line of the time book: one row on a wide page, the words under the choice on a narrower one */
 .cellar-sheet .wrow { grid-template-columns: 46px minmax(90px, 120px) minmax(0, 280px) minmax(0, 1fr); grid-template-areas: 'bust who seg gets'; gap: 4px var(--s3); }
@@ -33,7 +36,7 @@
 .cellar-sheet .winter-foot { padding-top: var(--s4); }
 .cellar-sheet .w-yard > .btn { margin-top: 2px; }
 .cellar-sheet .yard-stock { flex-wrap: wrap; gap: 6px 10px; }
-.cellar-sheet .yard-stock > span { white-space: nowrap; margin-right: 6px; }
+.cellar-sheet .yard-stock > span { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; margin-right: 10px; }
 .cellar-sheet .sec-h { flex-wrap: wrap; row-gap: 2px; }
 .cellar-sheet .sec-h h2 { white-space: nowrap; }
 .cellar-sheet .w-why { padding: 6px 0 2px; }
@@ -136,8 +139,10 @@
 .book .b-plain { font-size: var(--t-body); }
 .book .b-lines { display: grid; gap: 3px; font-size: var(--t-body); }
 .book .b-soil-h { margin: 10px 0 4px; }
-.book .b-soil { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0 var(--s5); font-size: var(--t-caption); }
-.book .b-soil li { padding: 2px 0; }
+.book .b-soil { font-size: var(--t-caption); line-height: 1.4; }
+.book .b-soil li { display: inline; }
+.book .b-soil li + li::before { content: ' · '; color: var(--ink-2); }
+.book .b-soil li b { font-weight: 400; color: var(--ink); }
 .book .b-ahead > .t-caption { margin-top: 6px; }
 .book .book-next { flex-wrap: wrap; row-gap: var(--s2); }
 .book .book-next .btn.go { gap: var(--s4); margin-left: auto; }
@@ -183,7 +188,7 @@
 .book[data-layout='narrow'] .next-goal, .book[data-layout='short'] .next-goal { flex: 1 1 auto; padding: 6px 10px 6px 8px; font-size: var(--t-caption); line-height: 1.2; }
 .book[data-layout='narrow'] .next-goal .fist, .book[data-layout='short'] .next-goal .fist { --i: 22px; }
 .book[data-layout='narrow'] .next-goal .b-how, .book[data-layout='short'] .next-goal .b-how, .book[data-layout='narrow'] .next-goal .b-next-w { display: none; }
-.book[data-layout='narrow'] .book-next .btn { white-space: nowrap; }
+.book[data-layout='narrow'] .book-next .btn, .book[data-layout='short'] .book-next .btn { min-width: 0; }
 .book[data-layout='narrow'] .book-next:has([data-testid='new-farm']) .next-goal { display: none; }
 .book[data-layout='narrow'] .book-next .btn, .book[data-layout='short'] .book-next .btn { flex: 1 1 auto; }
 .book[data-layout='narrow'] .book-next .btn.go, .book[data-layout='short'] .book-next .btn.go { flex: 0 1 auto; font-size: 20px; padding: 0 14px; gap: var(--s2); }

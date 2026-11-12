@@ -94,8 +94,8 @@ function yardPart(ctx: Ctx, c: S.Campaign): Child {
   return h('section', { class: 'w-yard' },
     h('div', { class: 'sec-h' }, h('h2', null, 'The yard')),
     m.logs >= 0.5 || m.stone >= 0.5 ? h('p', { class: 'yard-stock', testid: 'yard-materials' },
-      icon('logs', 'i'), h('span', null, h('b', { class: 'num' }, F.num(Math.round(m.logs))), ` ${Math.round(m.logs) === 1 ? 'load' : 'loads'} of logs`),
-      icon('stone', 'i'), h('span', null, h('b', { class: 'num' }, F.num(Math.round(m.stone))), ` ${Math.round(m.stone) === 1 ? 'load' : 'loads'} of fieldstone`))
+      h('span', null, icon('logs', 'i'), h('b', { class: 'num' }, F.num(Math.round(m.logs))), ` ${Math.round(m.logs) === 1 ? 'load' : 'loads'} of logs`),
+      h('span', null, icon('stone', 'i'), h('b', { class: 'num' }, F.num(Math.round(m.stone))), ` ${Math.round(m.stone) === 1 ? 'load' : 'loads'} of fieldstone`))
       : h('p', { class: 'yard-stock quiet' }, 'No logs or fieldstone in the yard.'),
     loads >= 1 && !m.sellWhy ? h('button', { class: 'btn', type: 'button', testid: 'sell-logs', onclick: () => { if (ctx.run({ t: 'sellLogs', loads }).ok) ctx.dirty() } },
       icon('sell', 'i'), `Sell ${F.plural(loads, 'load')}`, h('span', { class: 'sub num' }, F.money(loads * m.logPrice))) : null,
@@ -119,7 +119,7 @@ function raisePart(ctx: Ctx, c: S.Campaign, raise: boolean, onRaise: () => void)
       meter(b.progress, { label: `${b.name} built`, text: `${F.pct(b.progress)}, ${Math.ceil(b.daysLeft)} crew-days left` })))) : null,
     rows.length ? fold({
       icon: 'raise', name: `${rows.length} to choose from`,
-      open: raise, controls: 'raise-list', testid: 'raise-open', onclick: onRaise,
+      open: raise, controls: raise ? 'raise-list' : undefined, testid: 'raise-open', onclick: onRaise,
     }) : null,
     raise && rows.length ? h('ul', { class: 'raise', id: 'raise-list' }, rows.map(b => {
       const bought = [b.buyLogs > 0 ? `${Math.ceil(b.buyLogs)} logs` : '', b.buyStone > 0 ? `${Math.ceil(b.buyStone)} stone` : ''].filter(Boolean)
