@@ -40,3 +40,137 @@
   .dlg-foot { margin: 0 var(--s4); padding-bottom: max(var(--s3), env(safe-area-inset-bottom, 0px)); }
   .dlg-foot .btn { flex: 1 1 auto; }
 }
+
+/* ---------------------------------------------------------------- papers' insides: accounts, tables, a lead line */
+.dlg-lead { font-size: var(--t-lead); line-height: 1.4; margin-bottom: var(--s3); }
+.dlg-sub { margin: var(--s4) 0 var(--s1); }
+.ledger-lines { display: grid; gap: 2px; margin-bottom: var(--s2); }
+.ledger-lines .lead { font-size: var(--t-body); padding: 2px 0; }
+.ledger-lines .sub-total { border-top: 1px solid var(--ink); padding-top: 4px; }
+.ledger-lines .total { border-top: 1px solid var(--ink); border-bottom: 3px double var(--ink); padding: 4px 0; font-weight: 700; }
+.table-scroll { overflow-x: auto; max-width: 100%; margin-bottom: var(--s3); }
+.compare-t { width: 100%; border-collapse: collapse; font-size: var(--t-caption); }
+.compare-t th, .compare-t td { padding: 6px 10px 6px 0; border-bottom: 1px solid var(--rule); text-align: left; vertical-align: top; }
+.compare-t thead th { border-bottom: 1px solid var(--ink); white-space: nowrap; }
+.compare-t tbody th b { display: block; font-size: var(--t-body); }
+@media (max-width: 799px) {
+  .compare-t thead { display: none; }
+  .compare-t tr { display: grid; padding: 8px 0; border-bottom: 1px solid var(--ink); }
+  .compare-t th, .compare-t td { display: grid; grid-template-columns: 104px minmax(0, 1fr); gap: 10px; padding: 2px 0; border: 0; }
+  .compare-t tbody th { display: block; }
+  .compare-t td::before { content: attr(data-label); font: 400 var(--t-label)/1.3 var(--f-gothic); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-2); }
+}
+
+/* ---------------------------------------------------------------- spring (design/spring.html, spring.phone.html) */
+.spring-screen { position: absolute; inset: 0; pointer-events: none; }
+/* In spring the top holds only the bank's board, at the left: the catalogue has the right edge. */
+.spring-screen .topbar { justify-content: flex-start; }
+.spring-screen .topbar .almanac { display: none; }
+.spring-screen .topbar .bank { width: 290px; }
+.spring-screen .notes-slot { position: absolute; left: var(--gutter); bottom: max(var(--gutter), env(safe-area-inset-bottom, 0px)); width: 300px; display: grid; gap: 6px; pointer-events: none; }
+.spring-screen .notes-slot > * { pointer-events: auto; }
+.spring-screen .catalogue { top: max(var(--gutter), env(safe-area-inset-top, 0px)); right: max(var(--gutter), env(safe-area-inset-right, 0px)); bottom: max(var(--gutter), env(safe-area-inset-bottom, 0px));
+  max-width: calc(100vw - 2 * var(--gutter)); animation: sh-left var(--t-sheet) var(--ease-paper); }
+.spring-screen .cat-body { overflow-y: auto; overscroll-behavior: contain; }
+.cat-fold .fold { padding: 0 2px; }
+.cat-open { padding: 2px 0 8px; display: grid; gap: 6px; border-bottom: 1px solid var(--hair); }
+.cat-open .t-caption { padding: 4px 0 0; }
+.cat-sub { padding-top: 8px; }
+.cat-list { display: grid; }
+.cat-row { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 40px; padding: 2px 4px; text-align: left; font-size: 15px; border-bottom: 1px solid var(--hair); }
+.cat-row .i { --i: 18px; color: var(--ink-2); }
+.cat-row b { white-space: nowrap; }
+.cat-row .it { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.cat-row .dots { flex: 1; min-width: 12px; height: 1em; background: radial-gradient(circle, var(--ink-2) .8px, transparent 1.1px) left bottom 3px / 5px 4px repeat-x; opacity: .7; }
+@media (hover: hover) { .cat-row:hover { background: var(--paper-2); } }
+.cat-hall { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 0; }
+.cat-hall > .t-caption { flex: 1 1 100%; padding: 0; }
+.cat-hired { display: grid; grid-template-columns: 32px auto minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--hair); font-size: 15px; }
+.cat-hired .it { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cat-done { display: flex; justify-content: flex-end; }
+.cat-equip li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--hair); }
+.cat-equip b { font-size: 16px; }
+.cat-offer { display: grid; gap: 6px; padding: 8px 0 10px; border-bottom: 1px solid var(--hair); }
+.cat-offer .lead .i { --i: 18px; }
+.cat-offer .range { margin: 6px 0 2px; }
+.cat-offer .btn { justify-self: start; }
+.cat-loan { padding: 4px 0; font-size: 15px; }
+.cat-loan .i { --i: 18px; }
+.spring-screen .tracker { padding: 8px 0; }
+.order-blank .plan-money { display: grid; }
+.order-blank .plan-money.over .big { color: var(--red); }
+.blank-go { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; margin-top: 12px; }
+.blank-go .btn.go { margin-top: 0; }
+
+/* The card of a field, a lot or a tract picked in spring: docked left, under the bank's board. */
+.spring-screen .spring-card { top: calc(var(--top, 120px) + 12px); left: max(var(--gutter), env(safe-area-inset-left, 0px)); width: min(444px, calc(100vw - 478px - 4 * var(--gutter)));
+  max-height: calc(100% - var(--top, 120px) - 12px - var(--gutter)); overflow-y: auto; overscroll-behavior: contain; grid-template-rows: none; }
+.spring-card.in { animation: sh-left var(--t-sheet) var(--ease-paper); }
+.spring-card .orders { padding: 10px 12px 12px; }
+.spring-card .order.is-suggested .fist { display: none; }
+.spring-card .readings p.wrap { white-space: normal; align-items: flex-start; }
+.spring-card .readings p.wrap .i { margin-top: 1px; }
+.card-crop { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 10px 18px; border-bottom: 1px solid var(--ink); }
+.card-cost { display: grid; justify-items: end; }
+.card-cost b { font: 700 var(--t-head)/1 var(--f-text); }
+.vgrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; padding: 10px 18px 4px; }
+.vbox { position: relative; display: flex; }
+.vbox input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.vbox-in { display: grid; align-content: start; gap: 2px; width: 100%; padding: 7px 8px 8px; background: var(--paper); box-shadow: inset 0 0 0 1px var(--ink); font-size: 13px; line-height: 1.2; }
+.vbox-in b { font-size: 15px; line-height: 1.1; }
+.vbox-in .num { font: 700 14px/1.2 var(--f-text); margin-top: 2px; }
+.vbox input:checked + .vbox-in { color: var(--paper); background: var(--ink); }
+.vbox input:checked + .vbox-in .c-ochre { color: var(--canary); }
+.vbox input:focus-visible + .vbox-in { outline: 3px solid var(--blue); outline-offset: 2px; }
+@media (hover: hover) { .vbox:hover input:not(:checked) + .vbox-in { box-shadow: inset 0 0 0 1px var(--ink), inset 0 0 0 3px var(--paper), inset 0 0 0 4px var(--ink); } }
+.card-note { padding: 8px 18px; font-size: 14px; color: var(--ink-2); }
+.card-note .btn.quiet { min-height: 32px; font-style: normal; color: var(--ink); }
+.card-seed { display: grid; gap: 6px; padding: 8px 18px; border-top: 1px solid var(--hair); }
+.card-tenure { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 10px 18px 14px; border-top: 1px solid var(--ink); font-size: 15px; }
+.card-tenure p { flex: 1 1 200px; }
+.card-refused { padding: 6px 18px 12px; font-size: 15px; }
+
+/* a desk of middling width: a narrower catalogue */
+.spring-screen[data-layout='mid'] .catalogue { width: 430px; }
+.spring-screen[data-layout='mid'] .spring-card { width: min(444px, calc(100vw - 430px - 4 * var(--gutter))); }
+@media (max-width: 1180px) { .spring-screen[data-layout='mid'] .vgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* A phone held upright: the catalogue under the bank's board, the land a strip above; with a field picked, its card
+   takes the catalogue's place over the order blank. */
+.spring-screen[data-layout='narrow'] .topbar .bank { width: 100%; margin-top: 0; }
+.spring-screen[data-layout='narrow'] .catalogue { left: 10px; right: 10px; top: calc(var(--top, 80px) + 64px); bottom: max(10px, env(safe-area-inset-bottom, 0px)); width: auto; animation-name: sh-up; }
+.spring-screen[data-layout='narrow'] .masthead { padding: 10px 16px 6px; }
+.spring-screen[data-layout='narrow'] .masthead h1 { font-size: 38px; }
+.spring-screen[data-layout='narrow'] .cat-body { padding: 0 16px; }
+.spring-screen[data-layout='narrow'] .order-blank { padding: 10px 16px 12px; }
+.spring-screen[data-layout='narrow'] .order-blank .pm-loan { display: none; }
+.spring-screen[data-layout='narrow'] .applicant { grid-template-columns: 46px 1fr 96px; gap: 4px 10px; }
+.spring-screen[data-layout='narrow'] .applicant > .bust { width: 46px; height: 46px; }
+.spring-screen[data-layout='narrow'] .applicant .price { display: flex; gap: 3px; align-items: baseline; white-space: nowrap; font-size: 13px; }
+.spring-screen[data-layout='narrow'] .applicant .price b { font-size: 20px; }
+.spring-screen[data-layout='narrow'] .fold.more { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 8px 0; border-bottom: 0; }
+.spring-screen[data-layout='narrow'] .fold.more .btn { padding: 0 6px; font-size: 14px; gap: 5px; }
+.spring-screen[data-layout='narrow'] .fold.more .btn .i { --i: 15px; }
+.spring-screen[data-layout='narrow'].selected .masthead, .spring-screen[data-layout='narrow'].selected .cat-body { display: none; }
+.spring-screen[data-layout='narrow'].selected .catalogue { top: auto; }
+.spring-screen[data-layout='narrow'] .spring-card { left: 10px; right: 10px; width: auto; top: calc(var(--top, 80px) + 8px); bottom: calc(var(--foot-h, 170px) + 18px); max-height: none; }
+.spring-screen[data-layout='narrow'] .vgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 8px 14px 4px; }
+.spring-screen[data-layout='narrow'] .card-crop, .spring-screen[data-layout='narrow'] .card-note, .spring-screen[data-layout='narrow'] .card-seed { padding-left: 14px; padding-right: 14px; }
+.spring-screen[data-layout='narrow'] .blank-go { grid-template-columns: 1fr; gap: 2px; }
+.spring-screen[data-layout='narrow'] .blank-go .btn.quiet { order: 2; justify-self: center; }
+.spring-screen[data-layout='narrow'] .notes-slot { left: 10px; right: 10px; width: auto; top: calc(var(--top, 80px) + 8px); bottom: auto; }
+@media (max-width: 359px) {
+  .spring-screen[data-layout='narrow'] .applicant { grid-template-columns: 40px 1fr 84px; }
+  .spring-screen[data-layout='narrow'] .fold.more { grid-template-columns: 1fr 1fr; }
+}
+
+/* A phone on its side: the catalogue on the right half, the card on the left. */
+.spring-screen[data-layout='short'] .catalogue { top: 6px; bottom: 6px; right: max(8px, env(safe-area-inset-right, 0px)); width: min(400px, 48vw); }
+.spring-screen[data-layout='short'] .masthead { padding: 6px 16px 4px; }
+.spring-screen[data-layout='short'] .masthead h1 { font-size: 32px; }
+.spring-screen[data-layout='short'] .cat-body { padding: 0 16px; }
+.spring-screen[data-layout='short'] .order-blank { padding: 6px 16px 8px; }
+.spring-screen[data-layout='short'] .order-blank .lead.quiet { display: none; }
+.spring-screen[data-layout='short'] .order-blank .btn.go { min-height: 44px; font-size: 20px; }
+.spring-screen[data-layout='short'] .spring-card { top: calc(var(--top, 60px) + 6px); width: calc(52vw - 32px); max-height: calc(100% - var(--top, 60px) - 12px); }
+.spring-screen[data-layout='short'] .vgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
