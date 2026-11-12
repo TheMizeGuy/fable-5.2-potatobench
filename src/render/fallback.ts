@@ -156,6 +156,10 @@ export function createFallbackView(original: HTMLCanvasElement, app: App): Field
       const r = rects[i]
       return r ? { x: r.x + r.w / 2, y: r.y + r.h - 6, visible: true } : { x: 0, y: 0, visible: false }
     },
+    fieldCorners(i) {
+      const r = rects[i]
+      return r ? [[r.x, r.y], [r.x + r.w, r.y], [r.x + r.w, r.y + r.h], [r.x, r.y + r.h]].map(([x, y]) => ({ x, y, visible: true })) : []
+    },
     unitAnchor: () => ({ x: 0, y: 0, visible: false }),
     yardAnchor: () => ({ x: 0, y: 0, visible: false }),
     dispose() {

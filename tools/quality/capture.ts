@@ -199,10 +199,9 @@ const STATES: State[] = [
   { name: 'farm-people', what: 'June, four people on the farm, nothing selected', sizes: ALL, run: farmPeople },
   { name: 'farm-person', what: 'June: a hired person\'s card', sizes: ALL, run: async (page, size) => { await farmPeople(page, size); await page.getByTestId('unit-1').click() } },
   { name: 'farm-grid', what: 'June: the work grid', sizes: ALL, run: async (page, size) => { await farmPeople(page, size); await page.getByTestId('grid-open').click() } },
-  { name: 'farm-yard', what: 'June: the home yard\'s card, a machine shed chosen', sizes: ALL, run: async (page, size) => {
+  { name: 'farm-yard', what: 'June: the home yard\'s bar, its buildings numbered as orders', sizes: ALL, run: async (page, size) => {
     await farmPeople(page, size)
     await q(page, `const { app } = q.g(); app.campaign.cash += 60000; app.campaign.logs = 12; app.campaign.stone = 8; app.selectYard(-1)`)
-    await page.getByTestId('build-pick-shed').click()
   } },
   { name: 'farm-building', what: 'July: a machine shed going up, people on it', sizes: ALL, run: async (page, size) => {
     await farmPeople(page, size)

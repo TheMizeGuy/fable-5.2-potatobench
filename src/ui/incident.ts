@@ -1,49 +1,81 @@
-// Something has happened that asks for a decision: one card, with the clock stopped, saying what happened and to whom,
-// each choice with what it does, and the day it lapses to its default. Put away, it waits as a marker on the people bar.
+// A decision from outside the farm (design/incident.html): a telegram, with the clock stopped. Who it is from, what
+// happened and to whom, the days left to answer, and the replies numbered with their keys, each with what it does and
+// what it costs set against the other. Put away, it waits as a mark on the time book.
 import * as S from '../sim/index.ts'
 import { EXIT_MS, patch, type Ctx } from './core.ts'
 import { h, type Child } from './dom.ts'
 import * as F from './fmt.ts'
 import { icon } from './icons.ts'
-import { portrait } from './people.ts'
+import { ringFor } from './crew.ts'
 import { firstName, SKILL_NAME } from './rules.ts'
+import { key, stamp } from './system/parts.ts'
+import { portrait, ringed } from './system/people.ts'
 
 export interface IncidentCard {
   el: HTMLElement
   update(c: S.Campaign): void
   // Opens the first incident waiting, or the one named.
   open(id?: number): void
-  // Puts the card away; it stays waiting. False when none was up.
+  // Puts the telegram away; it stays waiting. False when none was up.
   putAway(): boolean
-  // Incidents waiting for an answer whose card is not up.
+  // Incidents waiting for an answer whose telegram is not up.
   waiting(c: S.Campaign): S.IncidentInfo[]
   isUp(): boolean
+  // Answers the telegram that is up with its reply numbered n (1, 2, ...). False when none is up or n is not a reply.
+  reply(n: number): boolean
 }
 
-const GLYPH: Record<S.IncidentKind, string> = { applicant: 'hire', poach: 'unhappy', breakdown: 'tractor', buyer: 'sell' }
+// Who sends each kind of telegram.
+const FROM: Record<S.IncidentKind, [string, string]> = {
+  applicant: ['The hiring hall', 'hands and operators, by the season'],
+  poach: ['A neighbouring farm', 'an offer for one of your people'],
+  breakdown: ['Grange Supply', 'implements, parts and repairs'],
+  buyer: ['A produce buyer', 'cash for a whole lot, this week only'],
+}
 
 export function incidentCard(ctx: Ctx): IncidentCard {
   const app = ctx.app
-  const el = h('section', { class: 'incident instrument', testid: 'incident', role: 'dialog', 'aria-modal': 'false', 'aria-labelledby': 'incident-title', hidden: true })
+  const el = h('section', { class: 'telegram sheet sys incident', testid: 'incident', role: 'dialog', 'aria-modal': 'false', 'aria-labelledby': 'incident-title', hidden: true })
   const away = new Set<number>()
   let shown = -1
   let seen = new Set<number>()
   let err = ''
 
+  // What each reply costs against the other, in plain words: the figure that differs, or that it costs nothing.
+  function cost(c: S.Campaign, inc: S.Incident | undefined, ch: S.IncidentChoice): Child {
+    const red = (t: string) => h('span', { class: 'c-red num' }, t)
+    if (!inc) return null
+    const u = inc.unit !== undefined ? c.crew.find(x => x.id === inc.unit) : undefined
+    switch (ch.id) {
+      case 'rush': return [red(F.money(S.RUSH_PART)), ' more than waiting']
+      case 'hire': return inc.applicant ? [red(F.money(inc.applicant.ask)), ' a month in wages'] : null
+      case 'match': return u && inc.wage ? [red(F.money(inc.wage - u.wage)), ' a month more'] : null
+      case 'take': {
+        const lot = c.lots.find(l => l.id === inc.lot)
+        const v = lot ? S.lotValue(app.world, c, lot) : 0
+        return v ? [h('span', { class: 'c-green num' }, F.money(v * S.BUYER_PREMIUM)), ' more than the market today'] : null
+      }
+      case 'let': return u ? (u.mood < S.POACH_MOOD ? [h('span', { class: 'c-red' }, `${firstName(u.name)} goes`)] : 'Costs nothing, if they stay') : 'Costs nothing'
+      default: return 'Costs nothing'
+    }
+  }
+
   // Who it is about: the person a neighbour wants or who was driving, or the one asking for work.
   function about(c: S.Campaign, inc: S.Incident | undefined): Child {
-    if (!inc) return null
-    if (inc.applicant) {
-      const a = inc.applicant
-      const top = [...S.SKILLS].sort((x, y) => a.skills[y] - a.skills[x]).slice(0, 3)
-      return h('p', { class: 'inc-who' }, icon('hire', 'ic s'), h('strong', null, a.name),
-        h('span', { class: 'inc-skills num' }, top.map(k => h('span', null, `${SKILL_NAME[k]} ${a.skills[k]}`))),
-        h('span', { class: 'sub' }, S.TRAITS[a.trait].name))
-    }
+    if (!inc) return icon('help', 'i')
+    if (inc.applicant) return portrait(inc.applicant, 52)
     const u = inc.unit !== undefined ? c.crew.find(x => x.id === inc.unit) : undefined
-    if (!u) return null
-    return h('p', { class: 'inc-who' }, portrait(u, 'portrait s'), h('strong', null, u.name === S.FARMER_NAME ? 'You' : u.name),
-      h('span', { class: 'sub' }, inc.kind === 'breakdown' ? 'was driving' : `${F.money(u.wage)} a month here, ${S.moodWord(u.mood)}`))
+    return u ? ringed(u, ringFor(c, u.id), 52) : icon('ask', 'i tg-ic')
+  }
+
+  // The line under the title: who, doing what, and what follows.
+  function who(c: S.Campaign, inc: S.Incident | undefined, info: S.IncidentInfo): Child {
+    if (inc?.applicant) {
+      const a = inc.applicant
+      const best = [...S.SKILLS].sort((x, y) => a.skills[y] - a.skills[x])[0]
+      return [h('b', null, a.name), `, best at ${SKILL_NAME[best].toLowerCase()} (${a.skills[best]}), ${S.TRAITS[a.trait].name.toLowerCase()}.`]
+    }
+    return F.localize(info.text)
   }
 
   function answer(c: S.Campaign, info: S.IncidentInfo, ch: S.IncidentChoice): void {
@@ -68,21 +100,23 @@ export function incidentCard(ctx: Ctx): IncidentCard {
   function body(c: S.Campaign, info: S.IncidentInfo): Child {
     const inc = c.incidents.find(x => x.id === info.id)
     const fallback = info.choices.find(x => x.id === info.fallback)
+    const [from, trade] = FROM[info.kind]
+    const keys = !ctx.touch()
     return [
-      h('header', { class: 'inc-head' },
-        h('span', { class: 'inc-glyph' }, icon(GLYPH[info.kind])),
-        h('div', null,
-          h('h2', { class: 't-head', id: 'incident-title' }, F.localize(info.title)),
-          h('p', { class: 'card-sub' }, info.daysLeft <= 1 ? 'Answer today' : `${info.daysLeft} days to answer`)),
-        h('button', { class: 'nicon', type: 'button', testid: 'incident-later', 'aria-label': `Decide later${ctx.touch() ? '' : ' (Escape)'}`, title: ctx.touch() ? undefined : 'Decide later', onclick: () => putAway() }, icon('close'))),
-      h('p', { class: 'inc-text' }, F.localize(info.text)),
-      about(c, inc),
-      h('div', { class: 'inc-choices' }, info.choices.map(ch => ch.ok
-        ? h('button', { class: `inc-choice${ch.id === info.fallback ? '' : ' first'}`, type: 'button', testid: `answer-${ch.id}`, onclick: () => answer(c, info, ch) },
-          h('strong', null, ch.label), h('span', { class: 'inc-does' }, does(c, inc, ch)))
-        : h('div', { class: 'inc-choice off', testid: `answer-${ch.id}-off` }, h('strong', null, ch.label), h('span', { class: 'inc-does' }, F.localize(ch.why))))),
-      err ? h('p', { class: 'card-line flash lv-warn', role: 'status' }, err) : null,
-      fallback ? h('p', { class: 'inc-lapse' }, `Left unanswered, on ${F.date(c.year, info.until + 1, true)}: ${fallback.label.toLowerCase()}.`) : null,
+      h('header', { class: 'tg-head' },
+        h('p', { class: 'tg-name', 'aria-hidden': 'true' }, 'Telegram'),
+        h('p', { class: 'tg-from' }, h('span', { class: 't-label' }, 'From'), ' ', h('b', null, from), ' ', h('span', { class: 't-caption' }, trade)),
+        h('p', { class: 'days', 'aria-label': info.daysLeft <= 1 ? 'Answer today' : `${info.daysLeft} days to answer` }, h('b', { class: 'num' }, String(Math.max(1, info.daysLeft))), h('span', { class: 't-label' }, info.daysLeft <= 1 ? 'today' : 'days')),
+        h('button', { class: 'close tg-later', type: 'button', testid: 'incident-later', 'aria-label': `Decide later${keys ? ' (Escape)' : ''}`, title: keys ? 'Decide later (Escape)' : undefined, onclick: () => putAway() }, icon('close', 'i'))),
+      h('div', { class: 'tg-body' },
+        about(c, inc),
+        h('div', null, h('h2', { id: 'incident-title' }, F.localize(info.title)), h('p', null, who(c, inc, info)))),
+      h('div', { class: `replies${info.choices.length > 2 ? ' three' : ''}` }, info.choices.map((ch, k) => ch.ok
+        ? h('button', { class: `reply${ch.id === info.fallback ? '' : ' first'}`, type: 'button', testid: `answer-${ch.id}`, 'aria-keyshortcuts': keys ? String(k + 1) : null, onclick: () => answer(c, info, ch) },
+          key(String(k + 1)), h('b', { class: 'c-title' }, ch.label), h('span', { class: 'c-does' }, does(c, inc, ch)), h('span', { class: 'c-cost' }, cost(c, inc, ch)))
+        : h('div', { class: 'reply off', testid: `answer-${ch.id}-off` }, key(String(k + 1)), h('b', { class: 'c-title' }, ch.label), h('span', { class: 'c-does' }, F.localize(ch.why))))),
+      err ? h('p', { class: 'tg-err c-red', role: 'status' }, err) : null,
+      fallback ? h('p', { class: 'lapse' }, stamp(`Lapses ${F.date(c.year, info.until + 1, true)}`, { small: true, ink: 'violet' }), ` Unanswered: ${fallback.label.toLowerCase()}.`) : null,
     ]
   }
 
@@ -110,7 +144,7 @@ export function incidentCard(ctx: Ctx): IncidentCard {
     patch(el, JSON.stringify([info, err, ctx.touch(), c.crew.map(u => [u.id, u.wage, Math.round(u.mood * 20)])]), () => body(c, info))
     if (was) {
       if (!ctx.reduced()) { el.classList.remove('in'); void el.offsetWidth; el.classList.add('in') }
-      ctx.announce(`${F.localize(info.title)}. ${F.localize(info.text)}`)
+      ctx.announce(`Telegram. ${F.localize(info.title)}. ${F.localize(info.text)}`)
     }
   }
 
@@ -124,7 +158,7 @@ export function incidentCard(ctx: Ctx): IncidentCard {
     shown = pick.id
     err = ''
     ctx.dirty()
-    requestAnimationFrame(() => el.querySelector<HTMLElement>('.inc-choice.first, button.inc-choice')?.focus({ preventScroll: true }))
+    requestAnimationFrame(() => el.querySelector<HTMLElement>('.reply.first, button.reply')?.focus({ preventScroll: true }))
   }
 
   function putAway(): boolean {
@@ -137,10 +171,20 @@ export function incidentCard(ctx: Ctx): IncidentCard {
     return true
   }
 
+  function reply(n: number): boolean {
+    const c = app.campaign
+    if (!c || shown < 0) return false
+    const info = S.incidentInfo(c).find(x => x.id === shown)
+    const ch = info?.choices[n - 1]
+    if (!info || !ch) return false
+    if (ch.ok) answer(c, info, ch)
+    else { err = F.localize(ch.why); ctx.dirty() }
+    return true
+  }
+
   return {
-    el, update, open, putAway,
+    el, update, open, putAway, reply,
     waiting: c => (c.phase === 'season' ? S.incidentInfo(c) : []).filter(x => x.id !== shown),
     isUp: () => shown >= 0,
   }
 }
-

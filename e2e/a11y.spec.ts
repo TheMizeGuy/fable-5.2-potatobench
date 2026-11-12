@@ -140,7 +140,7 @@ test('the farmstead: the goals, a person, the work grid, the yard, an incident, 
   expect(await serious(page), 'the work grid').toEqual([])
   await page.keyboard.press('Escape')
   await page.keyboard.press('y')
-  await page.getByTestId('build-pick-shed').click()
+  await expect(page.getByTestId('yard-card')).toBeVisible()
   expect(await serious(page), 'the yard').toEqual([])
   await page.keyboard.press('Escape')
   await page.getByTestId('materials').click()

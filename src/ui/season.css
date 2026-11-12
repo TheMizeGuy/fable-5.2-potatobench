@@ -1,0 +1,337 @@
+/* The season screen in the farm's papers (design/season.html and its sister frames): where each piece sits at every
+   size, and the live states a frame does not show. Every look comes from the tokens and components in system.css. */
+
+.season-screen { position: absolute; inset: 0; pointer-events: none; }
+.season-screen .veil.sys { position: absolute; inset: 0; pointer-events: none; animation: veil-in var(--t-sheet) var(--ease-out); }
+@keyframes veil-in { from { opacity: 0; } }
+
+/* ---------------------------------------------------------------- the foot: the time book, its list, the alerts */
+.season-screen .foot { position: absolute; left: max(var(--gutter), env(safe-area-inset-left, 0px)); right: max(var(--gutter), env(safe-area-inset-right, 0px));
+  bottom: max(var(--gutter), env(safe-area-inset-bottom, 0px)); display: flex; align-items: flex-end; gap: var(--s4); pointer-events: none; }
+.season-screen .foot-book { display: grid; gap: var(--s2); justify-items: start; min-width: 0; }
+.season-screen .crew { display: grid; gap: var(--s2); justify-items: start; }
+.season-screen .timebook { position: relative; left: auto; bottom: auto; max-width: 100%; }
+.season-screen .timebook .page { max-width: 100%; }
+.season-screen .person { text-align: center; }
+.season-screen button.person:hover { background: var(--paper-2); }
+.season-screen .person .ringed { margin-bottom: 1px; }
+.season-screen .person .doing { white-space: nowrap; }
+.season-screen .person .doing.bad { color: var(--red); }
+.season-screen .person .flag { position: absolute; top: 3px; right: 12px; }
+.season-screen .person .meter { width: 64px; margin-top: 2px; }
+.season-screen .person.solo { width: 112px; }
+.season-screen .person.goal-ring { box-shadow: inset 0 0 0 3px var(--st-ochre); }
+.season-screen .person .next { z-index: 2; animation: slip-in var(--t-slip) var(--ease-paper); }
+.badge-dot { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; color: var(--paper); background: var(--st-red);
+  box-shadow: 0 0 0 2px var(--paper), 0 0 0 3px var(--edge); font: 400 15px/1 var(--f-gothic); }
+.season-screen .timebook .tools { align-content: center; }
+.season-screen .timebook .tools .iconbtn { position: relative; }
+.season-screen .timebook .tools .goal-ring { box-shadow: inset 0 0 0 3px var(--st-ochre); }
+.season-screen .inc-mark { color: var(--red); }
+.season-screen .inc-n { position: absolute; right: 2px; top: 2px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; display: grid; place-items: center;
+  font: 400 13px/1 var(--f-gothic); color: var(--paper); background: var(--st-red); }
+@keyframes slip-in { from { transform: translateY(8px) rotate(-1.5deg); } }
+
+/* A person in their ring: the colour that tells them apart on this farm, the same on their pin. */
+.ringed { position: relative; display: inline-grid; place-items: center; flex: none; border-radius: 50%; background: var(--paper);
+  box-shadow: 0 0 0 2.5px var(--c, var(--ink-2)), 0 0 0 3.5px #1e1c19; }
+.ringed .bust { display: block; border-radius: 50%; }
+
+/* The list: an order-book strip over the time book, each order its cut and a little map of where. */
+.season-screen .queue { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; max-width: 100%; padding: 4px 6px;
+  background: var(--paper) url(./system/grain.png); background-blend-mode: multiply; box-shadow: var(--laid); }
+.season-screen .q-label { padding: 0 6px 0 2px; color: var(--ink-2); }
+.season-screen .q-item { position: relative; display: flex; align-items: center; }
+.season-screen .q { display: flex; align-items: center; gap: 5px; height: 36px; padding: 0 7px; box-shadow: inset 0 0 0 1px var(--hair); background: var(--paper); }
+.season-screen .q .i { --i: 18px; }
+.season-screen .q.active { box-shadow: inset 0 0 0 1px var(--ink), inset 0 -3px 0 var(--ink); }
+.season-screen .q.waiting { color: var(--pencil); }
+.season-screen .q.more { font: 400 16px/1 var(--f-gothic); letter-spacing: .04em; }
+@media (hover: hover) { .season-screen .q:hover { box-shadow: inset 0 0 0 1px var(--ink), inset 0 0 0 3px var(--paper), inset 0 0 0 4px var(--ink); } }
+.season-screen .q-tag { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; font: 400 13px/1 var(--f-gothic); color: var(--ink);
+  background: var(--paper); box-shadow: 0 0 0 1px var(--hair); }
+.season-screen .q-tag.pinned { box-shadow: 0 0 0 2.5px var(--c, var(--ink)), 0 0 0 3.5px #1e1c19; }
+.season-screen .q-tools { display: none; position: absolute; left: 50%; bottom: calc(100% + 4px); transform: translateX(-50%); gap: 2px; z-index: 3; }
+.season-screen .q-item:hover .q-tools, .season-screen .q-item:focus-within .q-tools { display: flex; }
+.season-screen .q-first { display: grid; place-items: center; width: 32px; height: 32px; background: var(--paper); box-shadow: var(--laid); }
+.season-screen .q-first .i { --i: 16px; }
+.season-screen .q-pop { position: absolute; left: 0; bottom: calc(100% + 8px); z-index: 4; display: grid; gap: 6px; min-width: 220px; padding: 10px 12px; }
+.season-screen .q-who { display: flex; flex-wrap: wrap; gap: 6px; }
+.season-screen .q-who .btn { padding: 0 10px; gap: 6px; }
+.where { display: block; flex: none; }
+.where rect { fill: rgb(30 28 25 / 0.2); }
+.where rect.tract { fill: rgb(43 86 55 / 0.35); }
+.where rect.here { fill: var(--ink); }
+.where circle.yard { fill: var(--ink-2); }
+.where circle.yard.here { fill: var(--red); }
+.where .who { stroke: #1e1c19; stroke-width: 1.5; }
+
+/* Alerts: slips from the order book, one at a time, beside the time book. */
+.season-screen .notes-slot { min-width: 0; }
+.notes.alerts { position: static; display: grid; gap: var(--s2); justify-items: start; }
+.notes.alerts .alert { animation: slip-up var(--t-slip) var(--ease-out); text-align: left; }
+.notes.alerts .alert.warn .i { color: var(--ochre); }
+.notes.alerts .alert.good .i { color: var(--green); }
+.notes.alerts .alert.hint { max-width: 420px; }
+.notes.alerts .alert.hint .i { color: var(--ink); }
+.notes.alerts .alert .close { margin: -8px -12px -8px 2px; }
+@media (hover: hover) { .notes.alerts button.alert:hover { box-shadow: var(--laid), inset 0 0 0 1px var(--ink); } .notes.alerts button.alert.bad:hover { box-shadow: var(--laid), inset 5px 0 0 var(--red), inset 0 0 0 1px var(--ink); } }
+@keyframes slip-up { from { transform: translateY(14px); } }
+
+/* ---------------------------------------------------------------- the land: tags, stamps, the yard, pins, selection */
+.tag-wrap, .yard-at, .pin-at, .pin-list-at, .reg-at { position: absolute; left: 0; top: 0; will-change: transform; }
+.tag-wrap.gone, .yard-at.gone, .pin-at.gone { display: none; }
+.tag-wrap .tag-at { position: relative; transform: none; }
+/* Quiet when nothing is needed; a tag with a need, or in hand, stands up a size. */
+.tag-wrap .tag-at:not(.has-need):not(.is-sel) .tag { height: 30px; padding: 0 10px 0 8px; }
+.tag-wrap .tag-at:not(.has-need):not(.is-sel) .tag .nm { font-size: 16px; }
+.tag-wrap .tag-at:not(.has-need):not(.is-sel) .tag::after { height: 30px; }
+.tag-wrap .tag-at.is-land .tag { color: var(--ink-2); background-color: var(--paper-2); }
+.tag-wrap .tag-at.is-land .tag::before { box-shadow: inset 0 0 0 1px var(--edge), inset 0 0 0 3px var(--paper-2), inset 0 0 0 4px rgb(74 63 46 / 0.4); }
+@media (hover: hover) { .tag-wrap .tag:hover { background-color: var(--paper); } .tag-wrap .need:hover { box-shadow: 0 0 0 3px var(--paper), 0 0 0 5px var(--ink), inset 0 0 0 2px rgb(246 241 228 / 0.55); } }
+.tag-wrap .need { animation: stamp-in var(--t-stamp) var(--ease-out); }
+.tag-wrap .tag .listed .stamp { animation: stamp-down var(--t-stamp) var(--ease-out); }
+@keyframes stamp-in { from { transform: rotate(-2deg) scale(1.15); } }
+@keyframes stamp-down { from { transform: rotate(2deg) scale(1.15); } }
+/* Crowded, the tags keep their cut and stamp; far out, their names and stamps. */
+.plate-layer.compact .tag-at:not(.is-sel) .nm, .plate-layer.compact .tag-at:not(.is-sel) .var { display: none; }
+.plate-layer.far .tag-at:not(.is-sel) .var, .plate-layer.far .tag-at:not(.is-sel) .listed { display: none; }
+.yard-at .yard-tag { white-space: nowrap; }
+.yard-at .yard-tag .yard-pct { margin-left: 4px; font: 400 15px/1 var(--f-gothic); letter-spacing: .06em; color: var(--board-ink); }
+.yard-at .yard-tag.goal-ring { box-shadow: 0 0 0 1px #17120c, 0 0 0 4px var(--st-ochre), 0 0 0 5px #17120c; }
+@media (hover: hover) { .yard-at .yard-tag:hover { background-color: #4c4134; } }
+/* Face pins: a pin at rest under the tags, one that needs the player or is picked over them. */
+.pin-at .pin { display: block; }
+.pin-at button.pin { cursor: pointer; }
+.pin-at .pin .head { transition: box-shadow var(--t-slip) var(--ease-out); }
+.pin-at .pin.needs .badge, .pin-at .pin.is-hurt .badge { animation: stamp-in var(--t-stamp) var(--ease-out); }
+.pin-at .pin.is-hurt .head { transition: transform var(--t-sheet) var(--ease-paper); }
+.pin-at .pin .name { animation: slip-in var(--t-slip) var(--ease-out); }
+.pin .badge.count { left: 12px; width: auto; min-width: 20px; padding: 0 5px; border-radius: 10px; background: var(--ink); font-size: 14px; }
+@media (hover: hover) { .pin-at button.pin:hover .head { box-shadow: 0 0 0 3px var(--c), 0 0 0 4.5px #1e1c19, 0 0 0 6px var(--paper), 0 3px 5px rgb(0 0 0 / 0.45); } }
+.touch .pin-at button.pin .head::after { content: ''; position: absolute; inset: -6px; border-radius: 50%; }
+.pin-list-at { z-index: 30; }
+.pin-list { display: grid; min-width: 230px; padding: 6px; }
+.pin-list .pl-row { display: grid; grid-template-columns: 36px auto 1fr; align-items: center; gap: 10px; min-height: var(--touch); padding: 4px 8px; text-align: left; }
+.pin-list .pl-row + .pl-row { border-top: 1px solid var(--hair); }
+.pin-list .pl-row.is-picked { box-shadow: inset 4px 0 0 var(--ink); }
+.pin-list .pl-name { font: 700 15px/1 var(--f-text); }
+@media (hover: hover) { .pin-list .pl-row:hover { background: var(--paper-2); } }
+/* The selection on the land: a dashed line laid on the field's corners, a registration mark at each. */
+.sel-layer { position: absolute; left: 0; top: 0; width: 0; height: 0; z-index: 0; }
+.sel-layer .sel-quad { position: absolute; left: 0; top: 0; width: 1000px; height: 1000px; transform-origin: 0 0; overflow: visible; }
+.sel-layer .sel-quad .under { stroke-width: 14; }
+.sel-layer .sel-quad .line { stroke-width: 7; stroke-dasharray: 28 17; animation: draw-line 180ms var(--ease-out); }
+@keyframes draw-line { from { stroke-dashoffset: 90; } }
+.sel-layer .reg-at .reg { position: absolute; left: -15px; top: -15px; width: 30px; height: 30px; overflow: visible; }
+.plate-layer .tag-wrap { z-index: 2; }
+
+/* ---------------------------------------------------------------- the command bar, docked at the edge of the land */
+.season-screen .command { top: calc(var(--top, 220px) + 12px); right: max(var(--gutter), env(safe-area-inset-right, 0px)); max-height: calc(100% - var(--top, 220px) - 28px); }
+.season-screen.is-paused .command { top: calc(var(--top, 220px) + 64px); max-height: calc(100% - var(--top, 220px) - 80px); }
+.season-screen.docked-left .command { right: auto; left: max(var(--gutter), env(safe-area-inset-left, 0px)); max-height: calc(100% - var(--top, 220px) - var(--bottom, 140px) - 24px); }
+.season-screen.docked-left.is-paused .command { max-height: calc(100% - var(--top, 220px) - var(--bottom, 140px) - 76px); }
+.season-screen .command.compact { overflow-y: auto; overscroll-behavior: contain; }
+.season-screen .command.compact .order.is-suggested .fist, .season-screen.docked-left .command .order.is-suggested .fist { display: none; }
+.season-screen .command.in { animation: lay-right var(--t-sheet) var(--ease-paper); }
+.season-screen.docked-left .command.in { animation-name: lay-left; }
+.season-screen .command.out { animation: leave-right var(--t-leave) var(--ease-in) forwards; }
+@keyframes lay-right { from { transform: translateX(16px); } }
+@keyframes lay-left { from { transform: translateX(-16px); } }
+@keyframes leave-right { to { transform: translateX(16px); opacity: 0; } }
+.command .t-title { overflow-wrap: anywhere; }
+.command .readings p.wrap { white-space: normal; align-items: flex-start; }
+.command .readings p > span { min-width: 0; }
+.command .readings .meter { flex: 1; min-width: 60px; }
+.command .readings .c-red .i { color: var(--red); }
+.command .readings .est-by { min-height: 28px; padding: 0 2px; gap: 4px; font-size: 14px; }
+.command .note:empty { display: none; }
+.command .note { padding: 10px 18px 0; font-size: 15px; color: var(--ink-2); }
+.command .note.flash { color: var(--red); }
+.command .note + .orders { padding-top: 8px; }
+.command .orders > .note, .command .orders + .note { padding: 0 6px 12px; }
+.command .order-who { display: flex; align-items: center; gap: 10px; padding: 0 2px 4px; font-size: 15px; }
+.command .order .order-part { font-size: 17px; letter-spacing: .02em; color: var(--ink-2); }
+.command .order.no-icon { grid-template-columns: 30px 1fr auto; }
+.command .order.no-icon .catch { grid-column: 2 / -1; }
+.command .order .key.blank { visibility: hidden; }
+.command .order.is-refused .catch { color: var(--red); }
+.command .order.is-given { cursor: default; }
+.command .order.is-given .stamp { animation: stamp-down var(--t-stamp) var(--ease-out); }
+.command .order-more { justify-self: start; min-height: 36px; font-size: 15px; }
+.command .order .cost { text-align: right; }
+.command.compact { width: 520px; }
+.command.compact .orders { grid-template-columns: 1fr 1fr; }
+.command.compact .order { align-content: start; grid-template-rows: auto auto 1fr; }
+.command.compact .order .cost { grid-column: 2 / -1; justify-self: start; white-space: normal; text-align: left; font-size: 15px; }
+.command.compact .order .catch { grid-row: 3; }
+.command.compact .order .name { font-size: 20px; }
+.command .builds .build-row > span:nth-child(2) { min-width: 0; }
+.command .build-row .who .ringed + span { margin-right: 4px; }
+.command .builds > .quiet { font-size: 15px; }
+/* A short window: the bar scrolls rather than run off it, and the fist that would hang outside it stays home. */
+@media (max-height: 820px) {
+  .season-screen .command { overflow-y: auto; overscroll-behavior: contain; }
+  .season-screen .command .order.is-suggested .fist { display: none; }
+  .season-screen .command .order { min-height: 50px; padding-top: 5px; padding-bottom: 5px; }
+  .season-screen .command .gauge { padding: 6px 12px 8px; }
+  .season-screen .command .command-head { padding: 10px 18px 8px; }
+}
+.season-screen[data-layout='mid'] .command:not(.compact) { width: 400px; }
+.season-screen[data-layout='mid'] .command.compact { width: 440px; }
+.season-screen[data-layout='mid'] .command.compact .orders { grid-template-columns: 1fr; }
+/* Under 1400 a bar and the alerts would meet at the foot: with something selected the alerts go above the list. */
+.season-screen[data-layout='mid'].selected .foot { flex-direction: column-reverse; align-items: flex-start; gap: var(--s2); }
+
+/* ---------------------------------------------------------------- people: a page of the time book, the work grid */
+.season-screen .person-card, .season-screen .work { bottom: calc(var(--bottom, 140px) + 8px); max-height: calc(100% - var(--top, 220px) - var(--bottom, 140px) - 24px); overflow-y: auto; overscroll-behavior: contain; }
+.season-screen .person-card { left: max(var(--gutter), env(safe-area-inset-left, 0px)); }
+.season-screen .work { left: max(var(--gutter), env(safe-area-inset-left, 0px)); }
+.season-screen .person-card:not([hidden]) ~ .work { left: calc(max(var(--gutter), env(safe-area-inset-left, 0px)) + 468px); }
+.season-screen .person-card.in, .season-screen .work.in { animation: lay-up var(--t-sheet) var(--ease-paper); }
+.season-screen .person-card.out, .season-screen .work.out { animation: leave-down var(--t-leave) var(--ease-in) forwards; }
+@keyframes lay-up { from { transform: translateY(14px); } }
+@keyframes leave-down { to { transform: translateY(14px); opacity: 0; } }
+.person-card .pc-name { font-size: 26px; }
+.person-card .pc-trait { margin-top: 3px; font-size: 15px; }
+.person-card .pc-doing { display: flex; align-items: center; gap: 8px; padding: 8px 0 2px; font-size: 15px; }
+.person-card .pc-doing .i { --i: 17px; color: var(--ink-2); }
+.person-card .skills td:last-child { width: 44px; padding-left: 10px; text-align: right; }
+.person-card .skills td:nth-child(3) { width: 56%; }
+.person-card .prio.key { position: relative; min-width: 34px; height: 30px; font-size: 18px; cursor: pointer; }
+.person-card .prio.key.never { color: var(--ink-2); }
+.person-card .prio.key.first::before { content: ''; position: absolute; left: 50%; top: 50%; width: 30px; height: 30px; transform: translate(-50%, -54%) rotate(-8deg); border: 2px solid var(--pencil); border-radius: 50% 46% 52% 44%; }
+@media (hover: hover) { .person-card .prio.key:hover { box-shadow: inset 0 0 0 1px var(--ink), inset 0 0 0 3px var(--paper), inset 0 0 0 4px var(--ink); } }
+.person-card .pc-flash, .work .pc-flash { padding: 6px 0; font-size: 15px; }
+.person-card .pc-blocks { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 10px; }
+.person-card .pc-actions .btn.is-on { color: var(--paper); background: var(--ink); }
+.person-card .pc-actions .btn.is-on .sub { color: var(--board-ink); }
+.work .work-head { padding: 0 0 8px; }
+.work .grid-scroll { overflow-x: auto; }
+.work .w-who { display: flex; align-items: center; gap: 10px; font: 700 15px/1 var(--f-text); text-align: left; }
+.work .grid thead th .t-label { display: block; }
+.work .grid tbody th { padding-right: 12px; }
+.work .cell .num { font: inherit; }
+.work .w-foreman { padding: 0 10px; font: italic 400 14px/1.25 var(--f-text); color: var(--ink-2); }
+@media (hover: hover) { .work .cell:hover { background: var(--paper-2); } }
+.work .farm-rules { display: grid; gap: 2px; }
+.work .check.rule { width: 100%; text-align: left; }
+.work .check.rule[disabled] { color: var(--ink-2); cursor: default; }
+
+/* ---------------------------------------------------------------- a decision: the telegram, over the veiled land */
+.season-screen .telegram { top: calc(var(--top, 220px) + 12px); max-width: calc(100% - 32px); max-height: calc(100% - var(--top, 220px) - 28px); overflow-y: auto; z-index: 5; }
+@media (min-width: 1400px) and (min-height: 820px) { .season-screen .telegram { top: 150px; max-height: calc(100% - 166px); } }
+.season-screen .telegram.in { animation: wire-in var(--t-sheet) var(--ease-paper); }
+.season-screen .telegram.out { animation: wire-out var(--t-leave) var(--ease-in) forwards; }
+@keyframes wire-in { from { transform: translate(-50%, -30px) rotate(-1.5deg); } }
+@keyframes wire-out { to { transform: translate(-50%, -20px); opacity: 0; } }
+.telegram .tg-head { grid-template-columns: auto 1fr auto auto; }
+.telegram .tg-later { align-self: start; margin: -6px -14px 0 0; }
+.telegram .tg-body .ringed .bust { width: 52px; height: 52px; }
+.telegram .tg-body > .i { --i: 40px; }
+.telegram .replies.three { grid-template-columns: repeat(3, 1fr); }
+.telegram .reply.off { color: var(--ink-2); background: var(--paper) repeating-linear-gradient(135deg, transparent 0 5px, rgb(30 28 25 / 0.08) 5px 6px); box-shadow: inset 0 0 0 1px rgb(30 28 25 / 0.35); }
+.telegram .reply .c-cost .c-green, .telegram .reply .c-cost .c-red { font-weight: 700; }
+.telegram .tg-err { padding: 0 0 10px; font-size: 15px; }
+.telegram .lapse .stamp { flex: none; }
+
+/* ---------------------------------------------------------------- paused, the tray, the clock at the thumb */
+.season-screen .paused { position: absolute; right: max(var(--gutter), env(safe-area-inset-right, 0px)); top: calc(var(--top, 220px) + 8px); z-index: 2; }
+.season-screen .paused-go { gap: 10px; background: var(--paper) url(./system/grain.png); background-blend-mode: multiply; box-shadow: var(--laid), inset 0 0 0 1px var(--ink); font-size: 16px; }
+.season-screen .paused-go .i { --i: 16px; }
+.season-screen .tray-host { position: absolute; left: max(var(--gutter), env(safe-area-inset-left, 0px)); bottom: calc(var(--bottom, 140px) + 8px); z-index: 2; }
+.season-screen .clock-slot.dock { position: static; display: block; }
+.season-screen .clock-slot.dock .clock { grid-template-columns: repeat(4, 1fr) 56px; border-bottom: 0; min-width: 0; }
+.season-screen .clock-slot.dock .clock.done { grid-template-columns: 1fr 56px; }
+.season-screen .clock-slot.dock .clock .k, .season-screen .clock-slot.dock .clock .menu { height: 52px; font-size: 24px; }
+
+/* ---------------------------------------------------------------- a phone held upright (design/season.phone.html) */
+.season-screen[data-layout='narrow'] { --gutter: 10px; }
+.season-screen[data-layout='narrow'] .foot { flex-direction: column-reverse; align-items: stretch; gap: var(--s2); }
+.season-screen[data-layout='narrow'] .foot-book { display: flex; flex-direction: column; align-items: stretch; }
+.season-screen[data-layout='narrow'] .crew { display: contents; }
+.season-screen[data-layout='narrow'] .queue { order: 0; align-self: flex-start; }
+.season-screen[data-layout='narrow'] .clock-slot { order: 1; }
+.season-screen[data-layout='narrow'] .timebook { order: 2; padding: 5px; }
+.season-screen[data-layout='narrow'] .timebook .page { width: 100%; }
+.season-screen[data-layout='narrow'] .person { flex: 1; width: auto; min-width: 0; padding: 6px 2px; }
+.season-screen[data-layout='narrow'] .person .bust { width: 40px; height: 40px; }
+.season-screen[data-layout='narrow'] .person .nm { font-size: 13px; }
+.season-screen[data-layout='narrow'] .person .doing { white-space: normal; justify-content: center; text-align: center; line-height: 1.05; }
+.season-screen[data-layout='narrow'] .person.solo { flex: 0 1 220px; }
+.season-screen[data-layout='narrow'] .timebook .tools { flex: none; }
+.season-screen[data-layout='narrow'] .notes.alerts { justify-items: stretch; }
+.season-screen[data-layout='narrow'] .notes.alerts .alert { max-width: none; }
+/* With something selected, its bar is a sheet over the foot and the clock stays at the thumb. */
+.season-screen[data-layout='narrow'].selected .queue, .season-screen[data-layout='narrow'].selected .timebook, .season-screen[data-layout='narrow'].selected .notes-slot { display: none; }
+.season-screen[data-layout='narrow'] .command { left: var(--gutter); right: var(--gutter); width: auto; top: auto; bottom: calc(var(--gutter) + 62px); max-height: min(46%, calc(100% - var(--top, 180px) - 140px)); overflow-y: auto; overscroll-behavior: contain; }
+.season-screen[data-layout='narrow'].is-paused .command { top: auto; max-height: min(46%, calc(100% - var(--top, 180px) - 140px)); }
+.season-screen[data-layout='narrow'].selected .paused { display: none; }
+.season-screen[data-layout='narrow'] .command .gauges .meter { height: 6px; }
+.season-screen[data-layout='narrow'] .command .orders { padding: 8px 10px 10px; }
+.season-screen[data-layout='narrow'] .command .order.is-suggested .fist { display: none; }
+.season-screen[data-layout='narrow'] .command.compact .orders { grid-template-columns: 1fr; }
+.season-screen[data-layout='narrow'] .command .command-head { padding: 10px 14px 8px; }
+.season-screen[data-layout='narrow'] .command .gauge { padding: 6px 8px 8px; }
+.season-screen[data-layout='narrow'] .command .readings { padding: 8px 14px; }
+.season-screen[data-layout='narrow'] .command .readings p { white-space: normal; flex-wrap: wrap; }
+.season-screen[data-layout='narrow'] .command .order { min-height: 52px; }
+.season-screen[data-layout='narrow'] .command.in { animation-name: lay-up; }
+.season-screen[data-layout='narrow'] .person-card, .season-screen[data-layout='narrow'] .work { left: var(--gutter); right: var(--gutter); width: auto; }
+.season-screen[data-layout='narrow'].person-up .queue, .season-screen[data-layout='narrow'].person-up .notes-slot { display: none; }
+.season-screen[data-layout='narrow'] .person-card .pc-actions { grid-template-columns: 1fr 1fr; }
+.season-screen[data-layout='narrow'] .person-card .pc-actions .hazard { grid-column: 1 / -1; }
+.season-screen[data-layout='narrow'] .telegram { left: var(--gutter); right: var(--gutter); width: auto; transform: none; top: calc(var(--top, 180px) + 8px); padding: 12px 14px; }
+.season-screen[data-layout='narrow'] .telegram.in { animation-name: lay-up; }
+.season-screen[data-layout='narrow'] .telegram.out { animation-name: leave-down; }
+.season-screen[data-layout='narrow'] .telegram .tg-name { font-size: 34px; }
+.season-screen[data-layout='narrow'] .telegram .tg-from .t-caption { display: none; }
+.season-screen[data-layout='narrow'] .telegram .replies, .season-screen[data-layout='narrow'] .telegram .replies.three { grid-template-columns: 1fr; }
+.season-screen[data-layout='narrow'] .telegram .reply { min-height: 0; }
+.season-screen[data-layout='narrow'] .telegram .tg-body { grid-template-columns: 44px 1fr; }
+.season-screen[data-layout='narrow'] .telegram .tg-body .bust { width: 44px; height: 44px; }
+.season-screen[data-layout='narrow'] .telegram .tg-body h2 { font-size: 21px; }
+.season-screen[data-layout='narrow'] .telegram .tg-body p { font-size: 15px; }
+.season-screen[data-layout='narrow'].incident-up .notes-slot, .season-screen[data-layout='narrow'].incident-up .queue { display: none; }
+.season-screen[data-layout='narrow'] .paused { right: var(--gutter); top: calc(var(--top, 180px) + 6px); }
+.season-screen[data-layout='narrow'] .tray-host { left: var(--gutter); right: var(--gutter); }
+.tag-wrap .tag { touch-action: manipulation; }
+.touch .tag-wrap .tag-at .tag, .touch .tag-wrap .tag-at:not(.has-need):not(.is-sel) .tag { height: 40px; }
+.touch .tag-wrap .tag-at .tag::after, .touch .tag-wrap .tag-at:not(.has-need):not(.is-sel) .tag::after { height: 40px; background-position: 0 0, 0 100%; }
+.touch .season-screen .q, .touch .season-screen .q-first { min-height: 40px; min-width: 40px; }
+.touch .season-screen .command .readings .est-by { min-height: 40px; }
+.touch .person-card .prio.key { min-width: 40px; height: 40px; }
+.touch .season-screen .command .order-more { min-height: 44px; }
+.touch .command .order:not(.no-icon) { grid-template-columns: 26px 1fr auto; }
+.touch .command .order.no-icon { grid-template-columns: 1fr auto; }
+.touch .command .order .key.blank { display: none; }
+.touch .command .order.no-icon .catch { grid-column: 1 / -1; }
+
+/* ---------------------------------------------------------------- a phone on its side */
+.season-screen[data-layout='short'] { --gutter: 8px; }
+.season-screen[data-layout='short'] .foot { gap: var(--s2); }
+.season-screen[data-layout='short'] .foot-book { display: flex; align-items: flex-end; gap: var(--s2); }
+.season-screen[data-layout='short'] .crew { display: flex; flex-direction: column; align-items: flex-start; }
+.season-screen[data-layout='short'] .person { width: 66px; padding: 4px 2px; gap: 2px; }
+.season-screen[data-layout='short'] .person .bust { width: 32px; height: 32px; }
+.season-screen[data-layout='short'] .person .doing { display: none; }
+.season-screen[data-layout='short'] .timebook { padding: 4px; }
+.season-screen[data-layout='short'] .timebook .tools { grid-auto-flow: column; }
+.season-screen[data-layout='short'] .clock-slot.dock .clock { width: 300px; }
+.season-screen[data-layout='short'] .clock-slot.dock .clock .k, .season-screen[data-layout='short'] .clock-slot.dock .clock .menu { height: 46px; }
+.season-screen[data-layout='short'] .notes-slot { position: absolute; left: var(--gutter); bottom: auto; top: calc(var(--top, 100px) + 6px); max-width: 50%; }
+.season-screen[data-layout='short'] .command { top: calc(var(--top, 100px) + 6px); bottom: var(--gutter); max-height: none; width: 360px; overflow-y: auto; }
+.season-screen[data-layout='short'].is-paused .command { top: calc(var(--top, 100px) + 54px); max-height: none; }
+.season-screen[data-layout='short'] .command .order.is-suggested .fist { display: none; }
+.season-screen[data-layout='short'] .command.compact .orders { grid-template-columns: 1fr; }
+.season-screen[data-layout='short'].selected .queue, .season-screen[data-layout='short'].selected .timebook, .season-screen[data-layout='short'].selected .notes-slot,
+.season-screen[data-layout='short'].person-up .queue, .season-screen[data-layout='short'].person-up .notes-slot { display: none; }
+.season-screen[data-layout='short'] .person-card, .season-screen[data-layout='short'] .work { top: calc(var(--top, 100px) + 6px); bottom: auto; max-height: calc(100% - var(--top, 100px) - var(--bottom, 70px) - 16px); }
+.season-screen[data-layout='short'] .person-card { width: 400px; padding: 10px 14px; }
+.season-screen[data-layout='short'] .work { left: auto; right: var(--gutter); width: auto; max-width: calc(100% - 16px); }
+.season-screen[data-layout='short'] .person-card:not([hidden]) ~ .work { left: auto; }
+.season-screen[data-layout='short'] .telegram { top: calc(var(--top, 100px) + 4px); max-height: calc(100% - var(--top, 100px) - 10px); padding: 10px 16px; width: min(620px, calc(100% - 16px)); }
+.season-screen[data-layout='short'] .telegram .tg-name { font-size: 34px; }
+.season-screen[data-layout='short'] .telegram .reply { min-height: 0; }
+.season-screen[data-layout='short'] .telegram .tg-body { padding: 8px 4px; }
+.season-screen[data-layout='short'] .paused { top: calc(var(--top, 100px) + 6px); }

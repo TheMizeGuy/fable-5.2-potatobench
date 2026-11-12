@@ -330,7 +330,7 @@ export class Notes {
   onGo: (field: number) => void = () => {}
 
   constructor() {
-    this.el = h('div', { class: 'notes' })
+    this.el = h('div', { class: 'notes alerts sys' })
     this.live = h('div', { class: 'sr', 'aria-live': 'polite', role: 'status' })
     this.el.addEventListener('pointerenter', () => { this.hovered = true })
     this.el.addEventListener('pointerleave', () => { this.hovered = false })
@@ -369,9 +369,9 @@ export class Notes {
 
   pin(o: { key: string; glyph: string; text: string; tile?: boolean; onClose?: () => void }): void {
     if (this.pinned?.key === o.key) return
-    const el = h('div', { class: `alert${o.onClose ? ' tip' : ''}${o.tile ? ' tiled' : ''}`, role: 'note', testid: o.onClose ? 'hint' : 'idle-note' },
-      icon(o.glyph, 'ic s'), h('span', null, o.text),
-      o.onClose ? h('button', { class: 'nicon s', type: 'button', 'aria-label': 'Put this tip away', testid: 'hint-close', onclick: o.onClose }, icon('close', 'ic s')) : null)
+    const el = h('div', { class: `alert hint${o.onClose ? ' closable' : ''}`, role: 'note', testid: o.onClose ? 'hint' : 'idle-note' },
+      icon(o.glyph, 'i'), h('span', null, o.text),
+      o.onClose ? h('button', { class: 'close', type: 'button', 'aria-label': 'Put this tip away', testid: 'hint-close', onclick: o.onClose }, icon('close', 'i')) : null)
     this.pinned = { key: o.key, el }
     this.draw()
   }
@@ -422,11 +422,13 @@ export class Notes {
     }
   }
 
+  // A slip from the order book: bad news with its red rule, water with its blue cut.
   private row(n: Note): HTMLElement {
-    const inner = [icon(n.glyph, 'ic s'), h('span', null, n.text)]
+    const inner = [icon(n.glyph, 'i'), h('span', null, n.text)]
+    const kind = n.level === 'bad' ? ' bad' : n.glyph === 'water' || n.glyph === 'dry' || n.glyph === 'rain' ? ' water' : n.level === 'warn' ? ' warn' : n.level === 'good' ? ' good' : ''
     const row = n.go || n.field >= 0
-      ? h('button', { class: `alert lv-${n.level}`, type: 'button', testid: 'alert', onclick: () => (n.go ? n.go() : this.onGo(n.field)) }, inner, h('span', { class: 'sr' }, '. Go there.'))
-      : h('div', { class: `alert lv-${n.level}`, testid: 'notice' }, inner)
+      ? h('button', { class: `alert${kind} lv-${n.level}`, type: 'button', testid: 'alert', onclick: () => (n.go ? n.go() : this.onGo(n.field)) }, inner, h('span', { class: 'sr' }, '. Go there.'))
+      : h('div', { class: `alert${kind} lv-${n.level}`, testid: 'notice' }, inner)
     row.dataset.id = n.id
     return row
   }
