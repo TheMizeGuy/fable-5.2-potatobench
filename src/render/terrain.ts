@@ -1,15 +1,14 @@
 // The land: one surface from the farm out to the far ridges, the farm's own meadow round its blocks of fields, the
 // neighbours' quilt of strips and woodlots beyond, the brook and its ford, the roads and tracks and the stone walls.
 import {
-  BufferAttribute, BufferGeometry, Color, DoubleSide, DynamicDrawUsage, Group, IcosahedronGeometry, InstancedMesh, Matrix4, Mesh,
+  BufferAttribute, BufferGeometry, Color, DoubleSide, DynamicDrawUsage, Group, InstancedMesh, OctahedronGeometry, Matrix4, Mesh,
   MeshStandardMaterial, Quaternion, Vector3,
 } from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { FIELD_COUNT, PARCELS } from '../sim/index.ts'
 import { OFF_GLSL, OFF_KIND } from './fields.ts'
 import {
-  BLOCKS, FIELDS, FORD, HOME, LAND, OPEN, QUILT, REACH, ROAD, WALLS, WATER_Y, WAYS, WIDE, YARD_AT, brookHalf, brookZ, fordAt, gravelDist, groundY, hillRoadZ,
-  TRACT_LINE, ridgeWoodAt, roadDist, townRoadZ, tractAt, wallDist,
+  BLOCKS, FIELDS, FORD, HOME, LAND, OPEN, QUILT, REACH, ROAD, WALLS, WATER_Y, WAYS, WIDE, YARD_AT, brookHalf, brookZ, fordAt, gravelDist, groundY, hillRoadZ, TRACT_LINE, ridgeWoodAt, roadDist, townRoadZ, tractAt, wallDist, FARM, WOOD_GATE, oursAt, fieldMask,
 } from './layout.ts'
 import { K, KV, S, toWorld } from './scale.ts'
 import { hash2, rng, smooth } from './noise.ts'
@@ -128,8 +127,9 @@ export function buildTerrain(): Terrain {
 
   const yards = [-1, -2].map(y => YARD_AT[y])
   const brookBand = 3.4 * K + 9 * S
-  const xs = axis(LAND.x0 - 4.2 * K, LAND.x1 + 4.2 * K, 4, yards.map(y => [y.x0 - 8, y.x1 + 8, 1.3] as [number, number, number]), 1.065, REACH)
-  const zs = axis(-64.2 * K, 64.2 * K, 4, [...yards.map(y => [y.z0 - 8, y.z1 + 8, 1.3] as [number, number, number]), [22.6 * K - brookBand, 22.6 * K + brookBand, 1.1]], 1.065, REACH)
+  // Ten metres to a square over the country, five over the home farm, finer over the yards and along the brook.
+  const xs = axis(LAND.x0 - 4.2 * K, LAND.x1 + 4.2 * K, 10, [[FARM.x0 - 10, FARM.x1 + 10, 5], ...yards.map(y => [y.x0 - 8, y.x1 + 8, 1.6] as [number, number, number])], 1.07, REACH)
+  const zs = axis(-64.2 * K, 64.2 * K, 10, [[FARM.z0 - 10, 20 * K, 5], ...yards.map(y => [y.z0 - 8, y.z1 + 8, 1.6] as [number, number, number]), [22.6 * K - brookBand, 22.6 * K + brookBand, 1.6]], 1.07, REACH)
   const nx = xs.length, nz = zs.length
   const pos = new Float32Array(nx * nz * 3)
   const surf = new Float32Array(nx * nz * 4), near = new Float32Array(nx * nz * 2)
@@ -271,6 +271,17 @@ export function buildTerrain(): Terrain {
           float hedged = step(ihash(ivec2(int(hside) * 7 + l.cell.x * 13, l.cell.y * 29 + 91)), 0.4) * (1.0 - l.woods);
           float hrow = hedged * (1.0 - smoothstep(0.25, 1.25, min(hfx, 1.0 - hfx) * l.width + (fine - 0.5) * 1.1));
           outland = mix(outland, broadleaf * 0.55, hrow * 0.8);
+          {
+            // The neighbours' ground is worked too: a farm track down the side of one strip, a stone wall along another.
+            float sideH = ihash(ivec2(int(hside) * 7 + l.cell.x * 13, l.cell.y * 29 + 91));
+            float sdm = min(hfx, 1.0 - hfx) * l.width * ${S.toFixed(2)}, pxm = length(fwidth(pw));
+            float track = step(0.4, sideH) * step(sideH, 0.64) * (1.0 - l.woods) * (1.0 - open);
+            float ruts = (1.0 - smoothstep(0.25, 0.6, abs(sdm - 1.6))) + (1.0 - smoothstep(0.25, 0.6, abs(sdm - 3.2)));
+            outland = mix(outland, soil * 1.2, track * min(1.0, ruts) * 0.6 * (1.0 - smoothstep(0.6, 2.0, pxm)));
+            outland = mix(outland, soil * 1.15, track * (1.0 - smoothstep(1.0, 4.4, sdm)) * 0.3 * smoothstep(0.6, 2.0, pxm) * (1.0 - smoothstep(4.0, 12.0, pxm)));
+            float wall = step(0.64, sideH) * step(sideH, 0.84) * (1.0 - l.woods) * (1.0 - open) * (1.0 - smoothstep(0.5, 1.1 + pxm, sdm));
+            outland = mix(outland, vec3(0.5, 0.49, 0.45) * (0.75 + 0.5 * fine), wall * 0.85 * (1.0 - smoothstep(2.5, 8.0, pxm)));
+          }
           landRough = mix(0.96, 1.0, inWoods);
           landBump = mix(landBump, (crown.rg - 0.5) * 11.0, max(inWoods, hedge * 0.8) * (1.0 - ours));
           col = mix(outland, col, ours);
@@ -325,10 +336,16 @@ export function buildTerrain(): Terrain {
         // The woods' floor on the ridge, needle duff and moss, its edge as uneven as the trees'.
         float floorK = smoothstep(0.25, 0.75, vSurf.x + (mid - 0.5) * 0.7);
         vec3 duff = mix(${linear('#43372a')}, ${linear('#2d3b22')}, smoothstep(0.4, 0.7, patchy + (fine - 0.5) * 0.4)) * (0.7 + 0.6 * fine);
+        // Along the wood's edge and in its bays, where light gets in under the trees: fern in beds, rusty by September.
+        {
+          float edgeW = smoothstep(0.03, 0.22, vSurf.x) * (1.0 - smoothstep(0.35, 0.8, vSurf.x + (mid - 0.5) * 0.5));
+          vec3 fern = mix(uGrass * vec3(0.7, 1.0, 0.5), ${linear('#8f6a38')}, smoothstep(236.0, 262.0, uDay)) * (0.6 + 0.8 * texture2D(uNoise, p * 0.9).a);
+          col = mix(col, fern, edgeW * smoothstep(0.35, 0.6, texture2D(uNoise, p * 0.06 + 0.4).b) * 0.8 * uLeaf);
+        }
         col = mix(col, duff, floorK * 0.94);
         // From far off a wood is its canopy: what shows between the trees drawn there is crowns, not floor.
         {
-          float cfar = smoothstep(140.0, 380.0, distance(vWorld, cameraPosition));
+          float cfar = smoothstep(140.0, 380.0, distance(vWorld, cameraPosition)) * (0.25 + 0.75 * uLeaf) * (1.0 - smoothstep(0.15, 0.5, uSnow));
           vec4 cr = texture2D(uNoise, p * 0.071);
           vec3 canopy = mix(${linear('#14261c')}, ${linear('#2f4c2b')}, cr.a * cr.a) * (0.5 + 0.7 * cr.a);
           col = mix(col, canopy, floorK * 0.94 * cfar);
@@ -575,7 +592,7 @@ function stoneWalls(): InstancedMesh {
     for (let k = 0; k <= count; k++) {
       const t = k / count
       const x = x0 + (x1 - x0) * t + (r() - 0.5) * 0.4, z = z0 + (z1 - z0) * t + (r() - 0.5) * 0.4
-      if (roadDist(x, z) < WIDE.track / 2 + 1.3) continue
+      if (roadDist(x, z) < WIDE.track / 2 + 1.3 || Math.hypot(x - WOOD_GATE.x, z - WOOD_GATE.z) < 2.6) continue
       const s = 0.26 + r() * 0.18
       spots.push([x, z, s, 0])
       if (r() < 0.85) spots.push([x + (r() - 0.5) * 0.3, z + (r() - 0.5) * 0.3, 0.2 + r() * 0.14, s * 0.85])
@@ -610,7 +627,18 @@ function stoneWalls(): InstancedMesh {
     spots.push([x, z, s, -s * 0.25])
     if (r() < 0.5) spots.push([x + (r() - 0.5) * 2.6, z + (r() - 0.5) * 2.6, s * 0.5, -s * 0.1])
   }
-  const geo = new IcosahedronGeometry(1, 0)
+  // Ledge breaking through on the pasture's knolls, and the big stones nobody ever moved.
+  for (let k = 0; k < 90; k++) {
+    const x = LAND.x0 + r() * (LAND.x1 - LAND.x0), z = FARM.z0 + r() * 42 * K
+    if (oursAt(x, z) < 0.9 || fieldMask(x, z, 10) > 0.01 || roadDist(x, z) < 6 || tractAt(x, z, 6) >= 0) continue
+    if (Object.values(YARD_AT).some(y => x > y.x0 - 8 && x < y.x1 + 8 && z > y.z0 - 8 && z < y.z1 + 8) || Math.abs(z - brookZ(x)) < 12) continue
+    const n = 2 + Math.floor(r() * 5), turn = r() * 3.14
+    for (let q = 0; q < n; q++) {
+      const a = r() * 6.283, dd = r() * 3.6, s = 0.5 + 1.3 * r() * r()
+      spots.push([x + Math.cos(a + turn) * dd * 1.7, z + Math.sin(a) * dd, s, -s * 0.38])
+    }
+  }
+  const geo = new OctahedronGeometry(1, 0)
   const gp = geo.getAttribute('position') as BufferAttribute
   for (let i = 0; i < gp.count; i++) {
     const k = 1 + (hash2(Math.round(gp.getX(i) * 50), Math.round(gp.getY(i) * 50 + gp.getZ(i) * 31)) - 0.5) * 0.3

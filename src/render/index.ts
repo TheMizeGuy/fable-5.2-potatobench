@@ -136,6 +136,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   const terrain = buildTerrain()
   lap('terrain')
   const flora = new Flora()
+  flora.bake(renderer)
   lap('trees')
   const clearing = new Clearing(flora)
   const pond = new Pond()
@@ -824,7 +825,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   // For measuring what each part of the scene costs: the parts by name, which the tools can switch off.
   const parts: Record<string, Object3D> = {
     terrain: terrain.group, flora: flora.group, clearing: clearing.group, pond: pond.group, grass: grass.group, props: props.group, fields: fields.group, harvest: harvest.group,
-    crews: crews.group, particles: particles.mesh, weather: weather.group, birds: birds.mesh, sky: sky.dome, far: farHills.mesh, beacons: beacons.group,
+    crews: crews.group, particles: particles.mesh, weather: weather.group, birds: birds.mesh, sky: sky.dome, far: farHills.mesh, beacons: beacons.group, farwoods: flora.farWoods,
   }
 
   rebuild()
