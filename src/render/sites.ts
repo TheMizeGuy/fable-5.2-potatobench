@@ -6,7 +6,9 @@ import {
 } from './arch.ts'
 import { FIN, type Builder, type V3 } from './builder.ts'
 import { bankEarth, potatoHouse } from './farmstead.ts'
-import { POND_AT, ROAD, brookHalf, brookZ, groundY, type Site } from './layout.ts'
+import { SMALL as M } from './measures.ts'
+import type { Frame } from './scale.ts'
+import { POND_AT, ROAD_TRUE, TRUE, brookHalf, brookZ, groundY, useFrame, type Site } from './small.ts'
 import { clamp, mix } from './noise.ts'
 
 const RED = '#8f3626', NEW_TIN = '#a9adab', CEDAR = '#93846a', CONCRETE = '#aaa497', EARTH = '#86694f', GRAVEL = '#8d8674'
@@ -177,7 +179,7 @@ function seat(b: Builder, s: Site): number {
 }
 
 // ---- The machine shed: a pole shed open to the yard, three bays, tin over boards.
-const SHED: Plan = { w: 3.1, l: 6.4, wall: 1.5, rise: 0.72, open: true, wallColor: RED, wallFin: FIN.boards, roofColor: NEW_TIN, roofFin: FIN.metal, eave: 0.24 }
+const SHED: Plan = { w: M.shed.w, l: M.shed.l, wall: M.shed.wall, rise: 0.72, open: true, wallColor: RED, wallFin: FIN.boards, roofColor: NEW_TIN, roofFin: FIN.metal, eave: 0.24 }
 function shed(b: Builder, s: Site, look: SiteLook): void {
   const depth = seat(b, s)
   if (!look.built) supplies(b, -s.w / 2 - 1.9, s.d / 2 + 0.6, look.progress, true)
@@ -484,9 +486,11 @@ function station(b: Builder, s: Site, look: SiteLook, marks: SiteMarks): void {
 
 // ---- Gravelling the farm road: loads of gravel tipped along it ahead of the work, the drag where the work has got to.
 function road(b: Builder, s: Site, look: SiteLook): void {
-  b.at(0, 0, 0, 0, groundY(s.x, s.z))
+  // the road runs from the yard out over the land: drawn in the plain frame
+  useFrame(TRUE)
+  const pts = ROAD_TRUE.slice(0, 11)
+  b.at(0, 0, 0, 0, groundY(pts[0][0], pts[0][1]))
   const p = look.built ? 1 : look.progress
-  const pts = ROAD.slice(0, 11)
   const seg: number[] = [0]
   for (let k = 1; k < pts.length; k++) seg.push(seg[k - 1] + Math.hypot(pts[k][0] - pts[k - 1][0], pts[k][1] - pts[k - 1][1]))
   const total = seg[seg.length - 1]
@@ -533,8 +537,9 @@ function road(b: Builder, s: Site, look: SiteLook): void {
 }
 
 // Draw one site of the plan as the game has it.
-export function drawSite(b: Builder, s: Site, look: SiteLook): SiteMarks {
+export function drawSite(b: Builder, s: Site & { frame: Frame }, look: SiteLook): SiteMarks {
   const marks: SiteMarks = { smoke: [], vane: null, cups: null }
+  useFrame(s.frame)
   switch (s.kind) {
     case 'house': house(b, s, look); break
     case 'shed': shed(b, s, look); break
@@ -549,13 +554,14 @@ export function drawSite(b: Builder, s: Site, look: SiteLook): SiteMarks {
 }
 
 // The corners of a site not yet built on, staked, for when the yard is being planned.
-export function drawPlot(b: Builder, s: Site): void {
+export function drawPlot(b: Builder, s: Site & { frame: Frame }): void {
   if (s.kind === 'road') return
+  useFrame(s.frame)
   const g = level(s.x, s.z, s.w, s.d, s.ry)
   b.at(s.x, g.low, s.z, s.ry, g.low)
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
     const x = sx * s.w / 2, z = sz * s.d / 2
-    const at = b.world([x, 0, z])
+    const at = b.local([x, 0, z])
     const y = groundY(at[0], at[2]) - g.low
     b.box(x, y + 0.16, z, 0.05, 0.42, 0.05, LUMBER, FIN.wood)
     b.box(x, y + 0.36, z, 0.06, 0.07, 0.06, '#d8c9a0', FIN.plain)

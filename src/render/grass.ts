@@ -1,139 +1,121 @@
 // Grass. Rank grass where no machine goes: along the walls, the brook's banks, the field margins, the road's verge and
-// under the edge of the woods; it shows from far off. And the sward itself, through the farm's meadow and over the hay
-// and pasture of land the farm does not hold: that is drawn only near the camera, and sinks into the painted ground
-// with distance. All of it takes the low sun from behind and moves with the wind.
-// It is laid in patches of ground, each shuffled so that any first share of it is an even thinning; far patches draw
-// fewer, larger clumps, and patches out of sight none.
+// under the edge of the woods. And the sward itself, through the farm's meadow and over the hay and pasture of land the
+// farm does not hold. All of it takes the low sun from behind and moves with the wind.
+// It is drawn only round the camera: the land is cut into squares, a square's grass is laid out the first time the
+// camera comes near it and let go when it has gone far off, so the cost does not grow with the land. Within a square the
+// clumps are shuffled so that any first share of them is an even thinning; far squares draw fewer, larger clumps.
 import {
   DoubleSide, Frustum, Group, InstancedBufferAttribute, InstancedBufferGeometry, Matrix4, Mesh, MeshStandardMaterial, Sphere, Vector2, Vector3,
-  type PerspectiveCamera,
+  type BufferGeometry, type PerspectiveCamera,
 } from 'three'
 import { OFF_KIND } from './fields.ts'
 import { grassGeometry } from './geometry.ts'
 import {
-  BARN, DUFOUR_BARN, DUFOUR_HOUSE, DUFOUR_POTATO_HOUSE, HOME_WOODS, HOUSE, KEEP_CLEAR, LAND, POND, POTATO_HOUSE, WALLS, brookHalf, brookZ, fieldAt, fieldMask, groundY,
-  oursAt, ridgeWoodAt, roadDist, tractAt, woodFront,
+  BARN, DUFOUR_BARN, DUFOUR_HOUSE, DUFOUR_POTATO_HOUSE, HOME_WOODS, HOUSE, KEEP_CLEAR, LAND, POND, POTATO_HOUSE, WIDE, brookHalf, brookZ, fieldAt, fieldMask,
+  groundY, oursAt, ridgeWoodAt, roadDist, tractAt, wallDist, woodFront,
 } from './layout.ts'
 import { hash2, rng } from './noise.ts'
+import { K, S } from './scale.ts'
 import { SNOW_RIME, patch, sway } from './shaders.ts'
 
-const CELL = 22
-// How far off a patch keeps all its clumps; how far off rank grass is no longer drawn; and how far off the sward has
+const CELL = 36
+const STEP = 0.46
+// How far off a square keeps all its clumps; how far off rank grass is no longer drawn; and how far off the sward has
 // sunk out of sight. By tier.
-const REACH = { high: { full: 26, gone: 170, sward: 84 }, medium: { full: 20, gone: 130, sward: 62 }, low: { full: 14, gone: 90, sward: 0 } }
+const REACH = { high: { full: 26, gone: 120, sward: 64 }, medium: { full: 20, gone: 90, sward: 46 }, low: { full: 14, gone: 60, sward: 0 } }
+// The most squares laid out in one frame while the camera moves.
+const PER_FRAME = 2
 
 // field: the parcel a patch of sward lies on (drawn while that parcel is somebody else's), or -1.
-interface Patch { mesh: Mesh; geo: InstancedBufferGeometry; all: number; thin: { value: number }; fade: { value: Vector2 }; sphere: Sphere; sward: boolean; field: number }
+interface Patch { mesh: Mesh; geo: InstancedBufferGeometry; mat: MeshStandardMaterial; all: number; thin: { value: number }; fade: { value: Vector2 }; sphere: Sphere; sward: boolean; field: number }
+interface Cell { patches: Patch[]; x: number; z: number }
 
 export class Grass {
   readonly group = new Group()
-  private patches: Patch[] = []
-  private disposables: { dispose(): void }[] = []
+  private cells = new Map<string, Cell>()
+  private src: BufferGeometry
   private frustum = new Frustum()
   private pm = new Matrix4()
   private near = new Vector3()
   private reach = REACH.high
   private share = 1
+  private yards = [HOUSE, BARN, POTATO_HOUSE, DUFOUR_HOUSE, DUFOUR_BARN, DUFOUR_POTATO_HOUSE]
 
   constructor() {
-    const cells = new Map<string, number[]>()
-    let k = 0
-    const yards = [HOUSE, BARN, POTATO_HOUSE, DUFOUR_HOUSE, DUFOUR_BARN, DUFOUR_POTATO_HOUSE]
-    const clear = (x: number, z: number, onField: boolean): boolean => {
-      if ((!onField && fieldMask(x, z, 0.9) > 0) || roadDist(x, z) < 0.95) return false
-      if (Math.abs(z - brookZ(x)) < brookHalf(x) + 0.12) return false
-      if (ridgeWoodAt(x, z) > 0.55 || tractAt(x, z, 0.2) >= 0) return false
-      if (Math.hypot((x - POND.x) / (POND.rx * 1.2), (z - POND.z) / (POND.rz * 1.2)) < 1) return false
-      for (const y of yards) if (Math.hypot(x - y.x, (z - y.z) * 0.7) < 3.6) return false
-      for (const c of KEEP_CLEAR) if (Math.hypot(x - c.x, z - c.z) < c.r) return false
-      for (const c of KEEP_CLEAR) if (Math.hypot(x - c.x, z - c.z) < c.r) return false
-      return true
+    this.src = grassGeometry()
+  }
+
+  private clear(x: number, z: number, onField: boolean): boolean {
+    if ((!onField && fieldMask(x, z, 0.9 * S) > 0) || roadDist(x, z) < WIDE.track / 2 + 0.5) return false
+    if (Math.abs(z - brookZ(x)) < brookHalf(x) + 0.25) return false
+    if (z < HOME_WOODS.z1 + 2 * K && (ridgeWoodAt(x, z) > 0.55 || tractAt(x, z, 0.4) >= 0)) return false
+    if (Math.hypot((x - POND.x) / (POND.rx * 1.2), (z - POND.z) / (POND.rz * 1.2)) < 1) return false
+    for (const y of this.yards) if (Math.hypot(x - y.x, (z - y.z) * 0.7) < 3.6 * S) return false
+    for (const c of KEEP_CLEAR) if (Math.hypot(x - c.x, z - c.z) < c.r) return false
+    return true
+  }
+
+  // A square of the land: its clumps by kind, each kind a patch.
+  private build(cx: number, cz: number): Cell {
+    const lists = new Map<string, number[]>()
+    const put = (x: number, z: number, size: number, k: number, kind: string, field = -1) => {
+      const key = `${kind}|${field}`
+      let list = lists.get(key)
+      if (!list) lists.set(key, (list = []))
+      // size: 0..1, how tall this clump stands among its kind. Packed with its own number.
+      list.push(x, groundY(x, z) - 0.05, z, Math.floor(hash2(k, 13) * 1000) + Math.min(0.99, Math.max(0.01, size)))
     }
-    // size: 0..1, how tall this clump stands among its kind. Packed with its own number.
-    const put = (x: number, z: number, size: number, kind = 'r', field = -1) => {
-      k++
-      if (!clear(x, z, field >= 0)) return
-      const key = `${kind}|${field}|${Math.floor(x / CELL)}|${Math.floor(z / CELL)}`
-      let list = cells.get(key)
-      if (!list) cells.set(key, (list = []))
-      list.push(x, groundY(x, z) - 0.03, z, Math.floor(hash2(k, 13) * 1000) + Math.min(0.99, Math.max(0.01, size)))
-    }
-    // Rushes and long grass crowd both banks of the brook.
-    for (let x = LAND.x0 - 4; x < LAND.x1 + 4; x += 0.2) {
-      for (const side of [-1, 1]) {
-        for (let n = 0; n < 2; n++) {
-          k++
-          // The far bank is left more open, so the water shows from across the brook.
-          if (side > 0 && hash2(k, 21) < 0.55) continue
-          const off = brookHalf(x) + 0.14 + hash2(k, 5) * hash2(k, 6) * 2.2
-          put(x + (hash2(k, 7) - 0.5) * 0.3, brookZ(x) + side * off, 0.5 - off * 0.12)
-        }
-      }
-    }
-    // Along the walls, where the mower does not reach.
-    for (const [x0, z0, x1, z1] of WALLS) {
-      const len = Math.hypot(x1 - x0, z1 - z0)
-      for (let d = 0; d < len; d += 0.18) {
-        k++
-        const t = d / len, side = hash2(k, 3) < 0.5 ? -1 : 1, off = 0.15 + hash2(k, 4) * 0.55
-        const nx = (z1 - z0) / len, nz = -(x1 - x0) / len
-        put(x0 + (x1 - x0) * t + nx * side * off, z0 + (z1 - z0) * t + nz * side * off, 0.3 + 0.4 * hash2(k, 9))
-      }
-    }
-    // Fern and long grass under the edge of the woods.
-    for (let x = HOME_WOODS.x0; x < HOME_WOODS.x1; x += 0.16) {
-      k++
-      const z = Math.min(-22.3, woodFront(x) + 2.6 - hash2(k, 5) * 4.2)
-      if (hash2(k, 8) < 0.6) put(x + (hash2(k, 7) - 0.5) * 0.3, z, 0.45 + 0.5 * hash2(k, 9))
-    }
-    // Field margins, the road's verge, and clumps through the farm's meadow; and the sward between them.
-    const step = 0.38
-    for (let z = LAND.z0 - 3; z < LAND.z1; z += step) {
-      for (let x = LAND.x0; x < LAND.x1; x += step) {
-        k++
-        const jx = x + (hash2(k, 3) - 0.5) * step, jz = z + (hash2(k, 7) - 0.5) * step
-        const on = fieldAt(jx, jz)
+    const x0 = cx * CELL, z0 = cz * CELL, n = Math.round(CELL / STEP)
+    const inLand = x0 > LAND.x0 - 2 * CELL && x0 < LAND.x1 + CELL && z0 > LAND.z0 - 12 * K && z0 < LAND.z1 + CELL
+    for (let j = 0; inLand && j < n; j++) {
+      for (let i = 0; i < n; i++) {
+        const gx = Math.round(x0 / STEP) + i, gz = Math.round(z0 / STEP) + j, k = gx * 7919 + gz * 104729
+        const x = (gx + hash2(k, 3)) * STEP, z = (gz + hash2(k, 7)) * STEP
+        const on = fieldAt(x, z)
         if (on >= 0) {
           // Somebody else's hay stands tall, pasture is grazed short, stubble grows a few weeds.
           const sort = OFF_KIND[on] ?? 0
-          if (on >= 6 && on < 14 && hash2(k, 11) < (sort === 0 ? 0.9 : sort === 1 ? 0.6 : 0.14)) put(jx, jz, sort === 0 ? 0.42 + 0.4 * hash2(k, 17) : 0.1 + 0.26 * hash2(k, 17), 's', on)
+          if (on >= 6 && on < 14 && hash2(k, 11) < (sort === 0 ? 0.22 : sort === 1 ? 0.13 : 0.03) && this.clear(x, z, true)) put(x, z, sort === 0 ? 0.42 + 0.4 * hash2(k, 17) : 0.1 + 0.26 * hash2(k, 17), k, 's', on)
           continue
         }
-        const ours = oursAt(jx, jz, 2)
-        if (ours <= 0.01) continue
-        const clump = hash2(Math.floor(jx / 3.1), Math.floor(jz / 3.1)) < 0.34 ? hash2(Math.floor(jx / 1.1) + 7, Math.floor(jz / 1.1)) : 0
-        const want = (0.02 + 0.5 * fieldMask(jx, jz, 2.1) + 0.4 * Math.max(0, 1 - Math.abs(roadDist(jx, jz) - 1.3) / 0.5) + 0.7 * clump * clump) * ours
-        if (hash2(k, 11) < want) put(jx, jz, 0.15 + 0.4 * hash2(k, 17))
-        else {
-          // the sward: thick, low, uneven
-          for (let n = 0; n < 2; n++) {
-            if (hash2(k, 19 + n) > 0.8 * ours) continue
-            put(x + (hash2(k, 29 + n) - 0.5) * step * 1.6, z + (hash2(k, 31 + n) - 0.5) * step * 1.6, 0.06 + 0.3 * hash2(k, 17 + n) * hash2(k, 23), 's')
-          }
+        const ours = oursAt(x, z, 2 * S)
+        const bank = Math.abs(z - brookZ(x)) - brookHalf(x)
+        // Rank where the mower does not reach: the brook's banks (the far bank more open, so the water shows from
+        // across it), along the walls, under the wood's edge, the field margins and the road's verge.
+        let rank = 0
+        if (bank < 2.4 * S) rank = Math.max(rank, (z < brookZ(x) ? 0.8 : 0.4) * (1 - bank / (2.4 * S)))
+        if (rank < 0.6) rank = Math.max(rank, 0.7 * Math.max(0, 1 - wallDist(x, z) / (0.8 * S)))
+        if (z < HOME_WOODS.z1 + 4 * S) { const e = z - woodFront(x); if (e > -1.6 * S && e < 2.6 * S) rank = Math.max(rank, 0.5) }
+        if (ours > 0.01) {
+          const clump = hash2(Math.floor(x / (3.1 * S)), Math.floor(z / (3.1 * S))) < 0.34 ? hash2(Math.floor(x / (1.1 * S)) + 7, Math.floor(z / (1.1 * S))) : 0
+          rank = Math.max(rank, (0.02 + 0.5 * fieldMask(x, z, 2.1 * S) + 0.4 * Math.max(0, 1 - Math.abs(roadDist(x, z) - (WIDE.track / 2 + 1.4)) / 1.1) + 0.7 * clump * clump) * ours)
         }
+        if (rank <= 0.01 && ours <= 0.01) continue
+        if (!this.clear(x, z, false)) continue
+        if (hash2(k, 11) < rank) put(x, z, bank < 2.4 * S ? 0.5 - bank * 0.05 : 0.2 + 0.45 * hash2(k, 17), k, 'r')
+        else if (hash2(k, 19) < 0.17 * ours) put(x, z, 0.06 + 0.3 * hash2(k, 17) * hash2(k, 23), k, 's')
       }
     }
-    const src = grassGeometry()
-    this.disposables.push(src)
-    const r = rng(9)
-    for (const [key, list] of cells) {
-      const n = list.length / 4
+    const cell: Cell = { patches: [], x: cx, z: cz }
+    const r = rng(9 + cx * 31 + cz * 17)
+    for (const [key, list] of lists) {
+      const count = list.length / 4
       const [kind, field] = key.split('|')
       // shuffle, so that the first part of the patch is an even thinning of it
-      const order = Array.from({ length: n }, (_, i) => i)
-      for (let i = n - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [order[i], order[j]] = [order[j], order[i]] }
-      const at = new Float32Array(n * 4)
-      let cx = 0, cz = 0
-      order.forEach((o, i) => { at.set(list.slice(o * 4, o * 4 + 4), i * 4); cx += list[o * 4]; cz += list[o * 4 + 2] })
-      cx /= n; cz /= n
+      const order = Array.from({ length: count }, (_, i) => i)
+      for (let i = count - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [order[i], order[j]] = [order[j], order[i]] }
+      const at = new Float32Array(count * 4)
+      let mx = 0, mz = 0
+      order.forEach((o, i) => { at.set(list.slice(o * 4, o * 4 + 4), i * 4); mx += list[o * 4]; mz += list[o * 4 + 2] })
+      mx /= count; mz /= count
       let rad = 0
-      for (let i = 0; i < n; i++) rad = Math.max(rad, Math.hypot(at[i * 4] - cx, at[i * 4 + 2] - cz))
+      for (let i = 0; i < count; i++) rad = Math.max(rad, Math.hypot(at[i * 4] - mx, at[i * 4 + 2] - mz))
       const geo = new InstancedBufferGeometry()
-      geo.index = src.index
-      for (const name of Object.keys(src.attributes)) geo.setAttribute(name, src.attributes[name])
+      geo.index = this.src.index
+      for (const name of Object.keys(this.src.attributes)) geo.setAttribute(name, this.src.attributes[name])
       geo.setAttribute('aAt', new InstancedBufferAttribute(at, 4))
-      geo.instanceCount = n
-      const sphere = new Sphere(new Vector3(cx, groundY(cx, cz) + 0.3, cz), rad + 1)
+      geo.instanceCount = count
+      const sphere = new Sphere(new Vector3(mx, groundY(mx, mz) + 0.3, mz), rad + 1)
       geo.boundingSphere = sphere
       const thin = { value: 1 }, fade = { value: new Vector2(1e5, 2e5) }
       const mat = patch(new MeshStandardMaterial({ color: 0xffffff, side: DoubleSide, roughness: 0.8, metalness: 0 }), {
@@ -167,9 +149,18 @@ export class Grass {
       })
       const mesh = new Mesh(geo, mat)
       mesh.receiveShadow = true
+      mesh.frustumCulled = false
       this.group.add(mesh)
-      this.patches.push({ mesh, geo, all: n, thin, fade, sphere, sward: kind === 's', field: Number(field) })
-      this.disposables.push(geo, mat)
+      cell.patches.push({ mesh, geo, mat, all: count, thin, fade, sphere, sward: kind === 's', field: Number(field) })
+    }
+    return cell
+  }
+
+  private drop(cell: Cell): void {
+    for (const p of cell.patches) {
+      this.group.remove(p.mesh)
+      p.geo.dispose()
+      p.mat.dispose()
     }
   }
 
@@ -178,24 +169,50 @@ export class Grass {
     this.share = tier === 'low' ? 0.5 : 1
   }
 
-  // Thin each patch by its distance from the camera. off: for each parcel, 1 while it is somebody else's ground.
-  update(camera: PerspectiveCamera, off: number[]): void {
+  // Lay out the squares the camera is near (all of them when `all`, for a still picture; otherwise a couple a frame,
+  // nearest first), let go those it has left, and thin each patch by its distance.
+  // off: for each parcel, 1 while it is somebody else's ground.
+  update(camera: PerspectiveCamera, off: number[], all = false): void {
     this.frustum.setFromProjectionMatrix(this.pm.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse))
     const c = camera.position
-    for (const p of this.patches) {
-      const d = Math.max(0, this.near.copy(p.sphere.center).distanceTo(c) - p.sphere.radius)
-      const gone = p.sward ? this.reach.sward : this.reach.gone
-      if (d > gone || (p.field >= 0 && off[p.field] < 0.5) || !this.frustum.intersectsSphere(p.sphere)) { p.mesh.visible = false; continue }
-      const keep = Math.min(1, Math.pow(this.reach.full / Math.max(d, 1), p.sward ? 1.0 : 1.4)) * this.share
-      const k = Math.max(0.06, keep)
-      p.mesh.visible = true
-      p.geo.instanceCount = Math.max(1, Math.round(p.all * k))
-      p.thin.value = Math.min(2.4, 1 / Math.sqrt(k))
-      if (p.sward) p.fade.value.set(gone * 0.3, gone * 0.8)
+    const height = Math.max(0, c.y - groundY(c.x, c.z))
+    const gone = this.reach.gone
+    const flat = height < gone ? Math.sqrt(gone * gone - height * height) : -1
+    const want: [number, number, number][] = []
+    if (flat > 0) {
+      const i0 = Math.floor((c.x - flat) / CELL), i1 = Math.floor((c.x + flat) / CELL), j0 = Math.floor((c.z - flat) / CELL), j1 = Math.floor((c.z + flat) / CELL)
+      for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+        if (this.cells.has(`${i}|${j}`)) continue
+        const mx = (i + 0.5) * CELL, mz = (j + 0.5) * CELL, d = Math.hypot(mx - c.x, mz - c.z)
+        if (d > flat + CELL * 0.7) continue
+        // squares behind the camera wait until it turns
+        if (!all && !this.frustum.intersectsSphere(new Sphere(this.near.set(mx, c.y - height, mz), CELL))) continue
+        want.push([d, i, j])
+      }
+      want.sort((a, b) => a[0] - b[0])
+      for (const [, i, j] of all ? want : want.slice(0, PER_FRAME)) this.cells.set(`${i}|${j}`, this.build(i, j))
+    }
+    for (const [key, cell] of this.cells) {
+      const d = Math.hypot((cell.x + 0.5) * CELL - c.x, (cell.z + 0.5) * CELL - c.z)
+      if (flat < 0 || d > flat + CELL * 3) { this.drop(cell); this.cells.delete(key); continue }
+      for (const p of cell.patches) {
+        const pd = Math.max(0, this.near.copy(p.sphere.center).distanceTo(c) - p.sphere.radius)
+        const far = p.sward ? this.reach.sward : gone
+        if (pd > far || (p.field >= 0 && off[p.field] < 0.5) || !this.frustum.intersectsSphere(p.sphere)) { p.mesh.visible = false; continue }
+        const keep = Math.min(1, Math.pow(this.reach.full / Math.max(pd, 1), p.sward ? 1.0 : 1.4)) * this.share
+        const k = Math.max(0.06, keep)
+        p.mesh.visible = true
+        p.geo.instanceCount = Math.max(1, Math.round(p.all * k))
+        // the sward's clumps are few and broad: each stands for the grass round it
+        p.thin.value = Math.min(2.4, 1 / Math.sqrt(k)) * (p.sward ? 1.7 : 1)
+        if (p.sward) p.fade.value.set(far * 0.3, far * 0.8)
+      }
     }
   }
 
   dispose(): void {
-    for (const d of this.disposables) d.dispose()
+    for (const cell of this.cells.values()) this.drop(cell)
+    this.cells.clear()
+    this.src.dispose()
   }
 }

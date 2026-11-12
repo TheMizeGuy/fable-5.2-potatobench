@@ -6,7 +6,9 @@ import { Builder, DUSK, LAMP_LUM, builtDepth, builtMaterial, type V3 } from './b
 import type { Env, Light } from './env.ts'
 import { farmstead, type Marks } from './farmstead.ts'
 import { UI_GAIN } from './fields.ts'
-import { SITES, YARD_AT, groundY, townRoadZ, type Site } from './layout.ts'
+import { LAND, WIDE, YARD_AT, groundY, townRoadZ } from './layout.ts'
+import { S, TRUE, useFrame } from './scale.ts'
+import { SITES, type Site } from './small.ts'
 import { smooth } from './noise.ts'
 import type { Particles } from './particles.ts'
 import { drawPlot, drawSite, type SiteLook, type SiteMarks } from './sites.ts'
@@ -70,6 +72,7 @@ export class Props {
     this.chimney.set(c[0], c[1], c[2])
 
     const small = (draw: () => void): Mesh => {
+      useFrame(TRUE)
       draw()
       const m = b.mesh(this.mat, this.depth)
       m.layers.disable(1)
@@ -94,7 +97,7 @@ export class Props {
     })
     for (const yard of [-1, -2]) {
       const y = YARD_AT[yard]
-      const m = new Mesh(ribbon([[y.x0, y.z0], [y.x1, y.z0], [y.x1, y.z1], [y.x0, y.z1], [y.x0, y.z0]], 0.16), this.outlineMat)
+      const m = new Mesh(ribbon([[y.x0, y.z0], [y.x1, y.z0], [y.x1, y.z1], [y.x0, y.z1], [y.x0, y.z0]], 0.16 * S), this.outlineMat)
       m.renderOrder = 5
       m.visible = false
       this.outline[yard] = m
@@ -173,7 +176,7 @@ export class Props {
     DUSK.value = smooth(0.1, 0.8, want)
     LAMP_LUM.value = 1.0 / Math.max(0.05, f.lit.exposure)
     // Small things go when the camera is far off or the machine is a slow one.
-    this.life.visible = this.tier !== 'low' || f.dist < 60
+    this.life.visible = this.tier !== 'low' || f.dist < 60 * S
     for (const yard of [-1, -2]) {
       this.outline[yard].visible = f.yard === yard
       const p = this.plots[yard].mesh
@@ -195,9 +198,9 @@ export class Props {
       this.smokeAt = 0
       const cold = f.env.smoke
       // the cookstove, on days too warm for a fire to show much
-      if (cold <= 0.2 && Math.random() < 0.6) f.particles.emit(this.chimney.x, this.chimney.y, this.chimney.z, (Math.random() - 0.5) * 0.06, 0.34, (Math.random() - 0.5) * 0.06, 0.07, 0.2, 3.2, 0.74, 0.74, 0.76, 0.1, 0.8)
-      for (const p of this.smokes) f.particles.emit(p[0], p[1], p[2], (Math.random() - 0.5) * 0.08, 0.42, (Math.random() - 0.5) * 0.08, 0.09, 0.24, 3.6, 0.72, 0.72, 0.75, 0.16 + 0.2 * cold, 0.8)
-      if (this.dufourSmoke && cold > 0.2) { const p = this.marks.smoke[1]; f.particles.emit(p[0], p[1], p[2], (Math.random() - 0.5) * 0.1, 0.5, (Math.random() - 0.5) * 0.1, 0.12, 0.3, 4.5, 0.74, 0.74, 0.76, 0.34 * cold, 0.8) }
+      if (cold <= 0.2 && Math.random() < 0.6) f.particles.emit(this.chimney.x, this.chimney.y, this.chimney.z, (Math.random() - 0.5) * 0.13, 0.75, (Math.random() - 0.5) * 0.13, 0.15, 0.44, 3.2, 0.74, 0.74, 0.76, 0.1, 0.8)
+      for (const p of this.smokes) f.particles.emit(p[0], p[1], p[2], (Math.random() - 0.5) * 0.18, 0.92, (Math.random() - 0.5) * 0.18, 0.2, 0.53, 3.6, 0.72, 0.72, 0.75, 0.16 + 0.2 * cold, 0.8)
+      if (this.dufourSmoke && cold > 0.2) { const p = this.marks.smoke[1]; f.particles.emit(p[0], p[1], p[2], (Math.random() - 0.5) * 0.22, 1.1, (Math.random() - 0.5) * 0.22, 0.26, 0.66, 4.5, 0.74, 0.74, 0.76, 0.34 * cold, 0.8) }
     }
   }
 
@@ -206,14 +209,14 @@ export class Props {
     const on = t >= from && t <= to
     m.visible = on
     if (!on) return
-    const u = (t - from) / (to - from), x = dir > 0 ? -230 + 500 * u : 270 - 500 * u
-    const z = townRoadZ(x) - dir * 0.5, ahead = townRoadZ(x + dir * 2) - dir * 0.5
-    m.position.set(x, groundY(x, z) + 0.07, z)
-    m.rotation.y = Math.atan2(-(ahead - z), dir * 2)
+    const x0 = LAND.x0 - 500, x1 = LAND.x1 + 500, u = (t - from) / (to - from), x = dir > 0 ? x0 + (x1 - x0) * u : x1 - (x1 - x0) * u
+    const z = townRoadZ(x) - dir * WIDE.town * 0.22, ahead = townRoadZ(x + dir * 4) - dir * WIDE.town * 0.22
+    m.position.set(x, groundY(x, z) + 0.15, z)
+    m.rotation.y = Math.atan2(-(ahead - z), dir * 4)
     this.dustAt += f.dt
     if (f.env.dry > 0.3 && this.dustAt > 0.12) {
       this.dustAt = 0
-      f.particles.emit(x - dir * 1.2, m.position.y + 0.15, z, 0, 0.3, 0, 0.3, 0.9, 3.4, 0.62, 0.52, 0.4, 0.22 * f.env.dry, 0.5)
+      f.particles.emit(x - dir * 2.6, m.position.y + 0.3, z, 0, 0.6, 0, 0.7, 2, 3.4, 0.62, 0.52, 0.4, 0.22 * f.env.dry, 0.5)
     }
   }
 
@@ -232,10 +235,10 @@ function ribbon(pts: [number, number][], width: number): BufferGeometry {
   let run = 0
   for (let k = 0; k < pts.length - 1; k++) {
     const [ax, az] = pts[k], [bx, bz] = pts[k + 1]
-    const len = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.ceil(len / 0.7))
+    const len = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.ceil(len / 1.5))
     const nx = -(bz - az) / len, nz = (bx - ax) / len
     for (let s = 0; s <= n; s++) {
-      const x = ax + ((bx - ax) * s) / n, z = az + ((bz - az) * s) / n, y = groundY(x, z) + 0.09
+      const x = ax + ((bx - ax) * s) / n, z = az + ((bz - az) * s) / n, y = groundY(x, z) + 0.2
       const o = pos.length / 3
       pos.push(x - nx * width / 2, y, z - nz * width / 2, x + nx * width / 2, y, z + nz * width / 2)
       along.push(run + (len * s) / n, run + (len * s) / n)

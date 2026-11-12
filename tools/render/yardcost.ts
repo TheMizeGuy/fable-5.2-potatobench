@@ -99,9 +99,9 @@ const YARD = { x: 28, z: -5, dist: 34, yaw: 0.55, pitch: 0.36 }
 const views: [string, () => Promise<void>][] = [
   ['opening', async () => { await page.evaluate(() => (window as any).__county.app.quitToTitle()); await settle() }],
   ['home view, nothing built', async () => { await farm(page, false); await settle() }],
-  ['yard close, nothing built', async () => { await page.evaluate(v => (window as any).__countyField.view(v), YARD); await settle() }],
+  ['yard close, nothing built', async () => { await page.evaluate(v => (window as any).__countyField.view({ frame: 'home', ...v }), YARD); await settle() }],
   ['home view, everything built', async () => { await farm(page, true); await settle() }],
-  ['yard close, everything built', async () => { await page.evaluate(v => (window as any).__countyField.view(v), YARD); await settle() }],
+  ['yard close, everything built', async () => { await page.evaluate(v => (window as any).__countyField.view({ frame: 'home', ...v }), YARD); await settle() }],
 ]
 for (const tier of ['high', 'medium', 'low']) {
   await page.evaluate(t => (window as any).__county.app.setSetting('quality', t), tier)

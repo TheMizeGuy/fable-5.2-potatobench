@@ -141,7 +141,7 @@ const views: [string, () => Promise<void>][] = [
   ['opening', async () => { await page.evaluate(() => (window as any).__county.app.quitToTitle()); await settle() }],
   ['home view, ten fields in crop', async () => { await bigFarm(page); await settle() }],
   ['whole map, ten fields in crop', async () => { await page.evaluate(() => (window as any).__countyField.home()); await settle() }],
-  ['close along the rows', async () => { await page.evaluate(() => (window as any).__countyField.view({ x: 5, z: 12.4, dist: 9, yaw: -1.32, pitch: 0.13 })); await settle() }],
+  ['close along the rows', async () => { await page.evaluate(() => (window as any).__countyField.view({ frame: 'field', field: 5, x: 0.3, z: 0.52, dist: 12, yaw: -1.32, pitch: 0.13 })); await settle() }],
 ]
 for (const [label, set] of views) {
   for (const t of ['high', 'medium', 'low']) {

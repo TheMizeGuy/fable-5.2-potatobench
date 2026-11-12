@@ -47,11 +47,11 @@ export class SunShadows {
     this.lights[0].color.copy(color)
     this.frame++
     // Steps of radius, so zooming does not make every shadow crawl.
-    const r0 = Math.min(66, Math.max(10, 10 * Math.pow(1.3, Math.round(Math.log(dist * 0.64 / 10) / Math.log(1.3)))))
+    const r0 = Math.min(260, Math.max(12, 12 * Math.pow(1.3, Math.round(Math.log(dist * 0.6 / 12) / Math.log(1.3)))))
     this.radius[0] = r0
-    this.radius[1] = Math.min(230, r0 * 3.4)
-    this.radius[2] = Math.min(820, this.radius[1] * 3.6)
-    this.holdsFarm = r0 > 44
+    this.radius[1] = Math.min(900, r0 * 3.4)
+    this.radius[2] = Math.min(3000, this.radius[1] * 3.6)
+    this.holdsFarm = r0 > 200
     this.basis.lookAt(sunDir, ORIGIN, UP)
     this.right.setFromMatrixColumn(this.basis, 0)
     this.up.setFromMatrixColumn(this.basis, 1)
@@ -65,7 +65,7 @@ export class SunShadows {
       // Snap to the map's own grid, so shadows hold still as the camera pans.
       const cx = Math.round(focus.dot(this.right) / texel) * texel, cy = Math.round(focus.dot(this.up) / texel) * texel
       this.c.copy(focus).addScaledVector(this.right, cx - focus.dot(this.right)).addScaledVector(this.up, cy - focus.dot(this.up))
-      const back = k === 0 ? 160 : k === 1 ? 320 : 700
+      const back = r * 1.2 + (k === 0 ? 200 : k === 1 ? 400 : 900)
       l.target.position.copy(this.c)
       l.position.copy(this.c).addScaledVector(sunDir, back)
       l.target.updateMatrixWorld()

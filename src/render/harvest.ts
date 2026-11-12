@@ -6,7 +6,7 @@ import {
 import { COLS, FIELD_COUNT, HILLS, variety, type VarietyId } from '../sim/index.ts'
 import { RIDGE_AMP } from './fields.ts'
 import { tuberGeometry } from './geometry.ts'
-import { SZ, fieldBaseY, hillPos } from './layout.ts'
+import { fieldBaseY, hillPos } from './layout.ts'
 import { hash2, rng } from './noise.ts'
 import { patch } from './shaders.ts'
 
@@ -119,7 +119,7 @@ export class Harvest {
     this.trim(3)
     for (let k = 0; k < 3; k++) {
       const s = 0.05 + this.r() * 0.06
-      const back = 0.2 + this.r() * 0.7, side = (this.r() - 0.5) * SZ * 0.8
+      const back = 0.2 + this.r() * 0.7, side = (this.r() - 0.5) * 1.6
       this.tubers.push({
         field, hill, t: -this.r() * 0.15, life: 0.8 + this.r() * 1.2, clod: true,
         fx: p.x, fy: base + 0.05, fz: p.z,
@@ -159,7 +159,7 @@ export class Harvest {
         tz = p.z + 0.34
       } else {
         const back = 0.3 + this.r() * 0.5
-        const side = (this.r() - 0.5) * SZ * 0.72
+        const side = (this.r() - 0.5) * 1.5
         tx = p.x - along.dx * back - along.dz * side
         tz = p.z - along.dz * back + along.dx * side
       }

@@ -721,5 +721,5 @@ export class Stage {
 
 const PT: Pt = { x: 0, z: 0 }
 // The scale at which the felled spruce (2.7 to 3.2 tall as built) matches the trees of the woods as they stand now.
-const TREE_MOST = 1.7
+const TREE_MOST = 5.5
 const EARTH = new Color('#5b4030')

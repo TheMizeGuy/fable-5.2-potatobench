@@ -4,9 +4,10 @@ import {
   FIELDSTONE, IRON, TRIM, barrel, chimney, door, fbox, foundation, fp, lantern, leanRoof, level, rod, roof, shell, trims, win, type Face,
 } from './arch.ts'
 import { FIN, type Builder, type V3 } from './builder.ts'
+import { SMALL as M } from './measures.ts'
 import {
-  BARN, DUFOUR_BARN, DUFOUR_HOUSE, DUFOUR_POTATO_HOUSE, HOUSE, POTATO_HOUSE, WATER_Y, brookZ, groundY,
-} from './layout.ts'
+  BARN, BRIDGE_X, DUFOUR, DUFOUR_BARN, DUFOUR_HOUSE, DUFOUR_POTATO_HOUSE, HOME, HOUSE, POTATO_HOUSE, TRUE, WATER_Y, brookZ, groundY, useFrame,
+} from './small.ts'
 
 const WHITE = '#e4ded0', OLD_WHITE = '#cfc9b9', SLATE = '#46484c', GREEN = '#26402f', RED = '#8a3324', DARK_RED = '#742c20'
 const TIN = '#8d908c', CONCRETE = '#aaa497', GREY_SHINGLE = '#8a857a', OLD_BOARDS = '#877f72', PORCH = '#8a7d6b'
@@ -31,9 +32,9 @@ function house(b: Builder, m: Marks): void {
   const hx = HOUSE.x, hz = HOUSE.z
   // The big house: gable to the brook, two storeys, shutters, the front door under its hood.
   {
-    const d = seat(b, hx, hz, 3.0, 3.6)
-    foundation(b, 3.0, 3.6, d)
-    const sh = shell(b, 3.0, 3.6, 2.05, 1.15, WHITE, FIN.clapboard)
+    const d = seat(b, hx, hz, M.house.w, M.house.l)
+    foundation(b, M.house.w, M.house.l, d)
+    const sh = shell(b, M.house.w, M.house.l, M.house.wall, M.house.rise, WHITE, FIN.clapboard)
     trims(b, sh)
     roof(b, 3.0, 3.6, 2.05, 1.15, { color: SLATE, fin: FIN.shingle, eave: 0.2, rake: 0.18, trim: TRIM })
     // cornice returns
@@ -48,7 +49,7 @@ function house(b: Builder, m: Marks): void {
     win(b, sh.S, 1.5, 2.56, 0.26, 0.4, { cols: 2, rows: 3, seed: 1.4 })
     win(b, sh.N, 1.5, 2.56, 0.26, 0.4, { cols: 2, rows: 3, seed: 1.4 })
     // the front door: panelled, a light over it, a hood on brackets, two granite steps
-    door(b, sh.S, 1.5, 0.02, 0.44, 0.9, GREEN, { kind: 'panel' })
+    door(b, sh.S, 1.5, 0.02, M.houseDoor.w, M.houseDoor.h, GREEN, { kind: 'panel' })
     win(b, sh.S, 1.5, 1.03, 0.44, 0.1, { cols: 4, rows: 1, seed: 0.5, plain: true })
     b.box(0, 1.2, 2.0, 0.92, 0.05, 0.42, TRIM, FIN.plain)
     leanRoof(b, -0.46, 0.46, 1.8, 2.22, 1.23, 1.23, SLATE, FIN.shingle, { over: 0.02, thick: 0.02 })
@@ -132,7 +133,7 @@ function house(b: Builder, m: Marks): void {
 
 function barn(b: Builder, m: Marks): void {
   const bx = BARN.x, bz = BARN.z - 0.8
-  const w = 4.3, l = 6.0, wall = 2.5, rise = 1.9, top = wall + rise
+  const { w, l, wall, rise } = M.barn, top = wall + rise
   const d = seat(b, bx, bz, w, l)
   foundation(b, w, l, d)
   const sh = shell(b, w, l, wall, rise, RED, FIN.boards)
@@ -140,7 +141,7 @@ function barn(b: Builder, m: Marks): void {
   roof(b, w, l, wall, rise, { color: TIN, fin: FIN.metal, rust: 0.3, eave: 0.26, rake: 0.24, trim: TRIM })
   // The great door on its track, slid part way back: the dark of the bay behind it.
   b.quad(fp(sh.W, 2.45, 0.02, 0.012), fp(sh.W, 4.35, 0.02, 0.012), fp(sh.W, 4.35, 1.94, 0.012), fp(sh.W, 2.45, 1.94, 0.012), '#1a1410', FIN.dark)
-  door(b, sh.W, 2.72, 0.04, 1.9, 1.88, DARK_RED, { kind: 'x', trim: null })
+  door(b, sh.W, 2.72, 0.04, M.barn.door.w, M.barn.door.h, DARK_RED, { kind: 'x', trim: null })
   fbox(b, sh.W, 2.9, 2.0, 4.1, 0.08, 0.07, TRIM, FIN.plain)
   for (const s of [2.42, 4.38]) fbox(b, sh.W, s, 0.98, 0.07, 1.96, 0.03, TRIM, FIN.plain)
   lantern(b, sh.W, 4.62, 1.7)
@@ -350,11 +351,14 @@ function bridge(b: Builder, x: number): void {
 // Everything that stands from the start, into one builder.
 export function farmstead(b: Builder): Marks {
   const m: Marks = { smoke: [], vanes: [] }
+  useFrame(HOME)
   house(b, m)
   barn(b, m)
   potatoHouse(b, POTATO_HOUSE.x, POTATO_HOUSE.z, 4.2, 6.2, 1.15, 1.25, { barrels: 14 })
-  bridge(b, 17.8)
+  useFrame(DUFOUR)
   dufour(b, m)
-  bridge(b, 92.6)
+  useFrame(TRUE)
+  bridge(b, BRIDGE_X.home)
+  bridge(b, BRIDGE_X.dufour)
   return m
 }

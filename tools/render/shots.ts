@@ -17,7 +17,7 @@ const only = new Set(args.slice(2))
 mkdirSync(out, { recursive: true })
 
 interface Insets { top?: number; right?: number; bottom?: number; left?: number }
-interface View { x?: number; z?: number; dist?: number; yaw?: number; pitch?: number; fov?: number }
+interface View { x?: number; z?: number; dist?: number; yaw?: number; pitch?: number; fov?: number; tilt?: number; frame?: 'land' | 'home' | 'dufour' | 'field' | 'near' | 'auto'; field?: number }
 
 interface Shot {
   name: string
@@ -146,11 +146,13 @@ async function seek(page: Page, t: number, waitMs: number, pace = 1): Promise<vo
 // Close on the tractor while the day's work creeps on, so dust and wheels are in the picture and it stays in the frame.
 async function onTractor(page: Page, v: View, dx = 0, dz = 0): Promise<void> {
   const t = await page.evaluate(() => (window as any).__countyField.info().tractor)
-  await view(page, { ...v, x: t.x + dx, z: t.z + dz })
+  await view(page, { ...v, frame: 'near', x: t.x + dx * 2.2, z: t.z + dz * 2.2 })
   await frames(page, 4)
 }
 
-const view = (page: Page, v: View) => page.evaluate(v => (window as any).__countyField.view(v), v)
+// Views are written in the units they were first made in: near ones in a yard's, far ones on the land (see `view` in
+// src/render/index.ts); a view with a `frame` says which.
+const view = (page: Page, v: View) => page.evaluate(v => (window as any).__countyField.view({ frame: 'auto', ...v }), v)
 const select = (page: Page, i: number, add = false) => page.evaluate(([i, add]) => (window as any).__county.app.select(i, add), [i, add] as [number, boolean])
 const july = (page: Page) => playTo(page, 1977, 5, 190)
 const title = async (page: Page) => {
@@ -161,7 +163,7 @@ const title = async (page: Page) => {
 }
 const NONE: Insets = {}
 // Low over the rows, looking along them to the north-west.
-const ROWS: View = { x: 5, z: 12.4, dist: 9, yaw: -1.32, pitch: 0.13 }
+const ROWS: View = { frame: 'field', field: 5, x: 0.3, z: 0.52, dist: 12, yaw: -1.32, pitch: 0.13 }
 const winter = async (page: Page, months: number) => {
   await playTo(page, 1977, 5, 400)
   await page.evaluate(months => {
@@ -232,7 +234,7 @@ const landShots: Shot[] = [
     name: 'c9-pick-tracts', size: [1920, 1080], setup: async page => {
       await page.evaluate(() => (window as any).__county.app.newGame(1977, 5))
       await settle(page)
-      await page.evaluate(() => (window as any).__countyField.view({ x: 10, z: -8, dist: 150 }))
+      await page.evaluate(() => (window as any).__countyField.view({ frame: 'land', x: 10, z: -8, dist: 150 }))
       await settle(page)
       console.log('  ', await page.evaluate(() => {
         const f = (window as any).__countyField
@@ -332,7 +334,7 @@ const shots: Shot[] = [
       console.log('  ', `the hill was up ${waited} ms after the order`)
       const t = await page.evaluate(() => { const i = (window as any).__countyField.info(); return i.farmer ?? i.tractor })
       // He stands in the furrow below the hill, facing up the slope: look back at him across it.
-      await view(page, { x: t.x - 0.1, z: t.z - 0.7, dist: 6.5, yaw: 2.5, pitch: 0.62 })
+      await view(page, { frame: 'near', x: t.x - 0.2, z: t.z - 1.5, dist: 6.5, yaw: 2.5, pitch: 0.62 })
       await frames(page, 20)
     },
   },
@@ -366,7 +368,7 @@ const shots: Shot[] = [
   { name: 'f02-whole-farm', size: [1920, 1080], setup: async page => { console.log('  ', await bigFarm(page, { rent: ALL_LAND, hands: 2, operator: true, until: 196 })); await settle(page); await page.evaluate(() => (window as any).__countyField.home()); await settle(page) } },
   { name: 'f02b-whole-farm-home', size: [1920, 1080], setup: async page => { await bigFarm(page, { rent: ALL_LAND, hands: 2, operator: true, until: 196 }); await settle(page) } },
   { name: 'f03-spring-land', size: [1920, 1080], setup: async page => { await bigFarm(page, {}); await settle(page) } },
-  { name: 'f03b-spring-whole', size: [1920, 1080], setup: async page => { await bigFarm(page, { rent: [7] }); await settle(page); await page.evaluate(() => (window as any).__county.app.select(10)); await page.evaluate(() => (window as any).__countyField.view({ x: 30, z: 4, dist: 170 })); await settle(page) } },
+  { name: 'f03b-spring-whole', size: [1920, 1080], setup: async page => { await bigFarm(page, { rent: [7] }); await settle(page); await page.evaluate(() => (window as any).__county.app.select(10)); await page.evaluate(() => (window as any).__countyField.view({ frame: 'land', x: 30, z: 4, dist: 170 })); await settle(page) } },
   { name: 'f04-dufour', size: [1920, 1080], setup: async page => { await bigFarm(page, { rent: [10, 11, 12, 13], hands: 1, operator: true, until: 198 }); await settle(page); await view(page, { x: 72, z: -6, dist: 48, yaw: 0.35 }); await frames(page, 8) } },
   { name: 'f05-intervale-mist', size: [1920, 1080], setup: async page => { await bigFarm(page, { rent: [6, 7], until: 186 }); console.log('  ', await playUntil(page, [], `const t = sim.today(app.world, c); return t.sky === 'fog' || (t.day.wetH >= 12 && t.day.tmin > 4) ? t.sky + ' wetH ' + t.day.wetH : ''`)); await settle(page); await view(page, { x: 2, z: 30, dist: 46, yaw: 0.1 }); await frames(page, 8) } },
   {

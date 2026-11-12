@@ -2,6 +2,7 @@
 // in the evening. They sit out rain, snow and the night.
 import { BufferAttribute, Color, DoubleSide, InstancedBufferAttribute, InstancedBufferGeometry, Mesh, ShaderMaterial } from 'three'
 import { FARM_CENTER } from './layout.ts'
+import { K, S } from './scale.ts'
 import { rng } from './noise.ts'
 
 export class Birds {
@@ -24,12 +25,12 @@ export class Birds {
     const bird = new Float32Array(count * 4), home = new Float32Array(count * 4)
     for (let k = 0; k < count; k++) {
       if (k < crows) {
-        bird.set([16 + r() * 44, 11 + r() * 9, r() * 6.283, (3.2 + r() * 2.2) * (r() < 0.5 ? -1 : 1)], k * 4)
-        home.set([FARM_CENTER.x, FARM_CENTER.z - 4, 1, 0.8], k * 4)
+        bird.set([(16 + r() * 44) * S * 2, (11 + r() * 9) * S, r() * 6.283, (3.2 + r() * 2.2) * (r() < 0.5 ? -1 : 1)], k * 4)
+        home.set([FARM_CENTER.x, FARM_CENTER.z - 4 * K, 1, 0.8], k * 4)
       } else {
         // Over the bottom fields and along the water, where the insects rise at the end of the day.
-        bird.set([5 + r() * 9, 1.4 + r() * 2.6, r() * 6.283, (8 + r() * 4) * (r() < 0.5 ? -1 : 1)], k * 4)
-        home.set([-14 + r() * 34, 9 + r() * 15, 0.5, 1.1], k * 4)
+        bird.set([(5 + r() * 9) * S * 2, (1.4 + r() * 2.6) * S, r() * 6.283, (8 + r() * 4) * (r() < 0.5 ? -1 : 1)], k * 4)
+        home.set([(-14 + r() * 34) * K, (9 + r() * 15) * K, 0.5, 1.1], k * 4)
       }
     }
     geo.setAttribute('aBird', new InstancedBufferAttribute(bird, 4))

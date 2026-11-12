@@ -6,6 +6,7 @@ import {
   BufferAttribute, BufferGeometry, Color, IcosahedronGeometry, Matrix4, Mesh, MeshStandardMaterial, Vector3, type MeshDepthMaterial,
 } from 'three'
 import { hash2 } from './noise.ts'
+import { NOW, S } from './scale.ts'
 import { depthFor, patch, snowRimeAt } from './shaders.ts'
 
 export type V3 = [number, number, number]
@@ -83,15 +84,21 @@ export class Builder {
     return this
   }
 
-  // A point of the current frame in the world.
+  // A point of the current drawing in the world, in metres.
   world(p: V3): V3 {
+    const w = this.v.set(p[0], p[1], p[2]).applyMatrix4(this.m)
+    return [NOW.x + S * w.x, S * w.y, NOW.z + S * w.z]
+  }
+
+  // The same point in the small units of the frame being drawn in.
+  local(p: V3): V3 {
     const w = this.v.set(p[0], p[1], p[2]).applyMatrix4(this.m)
     return [w.x, w.y, w.z]
   }
 
   vert(p: V3, n: V3, c: readonly number[], u: number, v: number, fin: number, ex = 1, flex = 0): number {
     const w = this.v.set(p[0], p[1], p[2]).applyMatrix4(this.m)
-    this.pos.push(w.x, w.y, w.z)
+    this.pos.push(NOW.x + S * w.x, S * w.y, NOW.z + S * w.z)
     this.uvh.push(u, v, w.y - this.ground)
     const d = this.n.set(n[0], n[1], n[2]).transformDirection(this.m)
     this.nrm.push(d.x, d.y, d.z)

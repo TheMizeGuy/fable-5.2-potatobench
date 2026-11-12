@@ -7,12 +7,13 @@ import {
 } from 'three'
 import { FIELD_COUNT, PARCELS, STUMP_DAYS, TRACTS } from '../sim/index.ts'
 import type { Flora } from './flora.ts'
-import { FD, FIELDS, FW, WALLS, fieldBaseY, groundY, roadDist } from './layout.ts'
+import { FD, FIELDS, FW, WALLS, WIDE, fieldBaseY, groundY, roadDist } from './layout.ts'
 import { fbm2, hash2, rng } from './noise.ts'
+import { K, S } from './scale.ts'
 import { SNOW_RIME, patch } from './shaders.ts'
 import type { FieldVis } from './state.ts'
 
-const STONES_FULL = 230        // stones drawn on a field as stony as ground can be
+const STONES_FULL = 620        // stones drawn on a field as stony as ground can be
 const UP = new Vector3(0, 1, 0)
 
 // A cylinder whose side is bark and whose ends are fresh-cut wood.
@@ -96,26 +97,26 @@ export class Clearing {
     }
     this.stumps = mesh(stumpGeo, woodMat, trees + 4, true)
     this.logs = mesh(logGeo, woodMat, TRACTS.length * 70, true)
-    this.heaps = mesh(heapGeo, heapMat, trees + TRACTS.length * 60, true)
-    this.rocks = mesh(rockGeo, rockMat, FIELD_COUNT * (STONES_FULL + 50) + TRACTS.length * 160, false)
+    this.heaps = mesh(heapGeo, heapMat, trees + TRACTS.length * 60 * K, true)
+    this.rocks = mesh(rockGeo, rockMat, FIELD_COUNT * (STONES_FULL + 60) + TRACTS.length * 80 * K, false)
     for (const im of [this.heaps, this.rocks]) im.setColorAt(0, this.c.set('#ffffff'))
 
     // Hedgerow brush along the walls, in runs with gaps; each bush belongs to the field it stands beside.
     const r = rng(41)
     // Along the walls, along what is left of the old wall above the brook, and between Lower Middle and the road.
-    const lines: [number, number, number, number][] = [...WALLS, [-17, 19.5, 15.6, 19.5], [16.75, -6.6, 16.75, 4.4]]
+    const lines: [number, number, number, number][] = [...WALLS, [-17 * K, 19.5 * K, 15.6 * K, 19.5 * K]]
     for (const [x0, z0, x1, z1] of lines) {
       const len = Math.hypot(x1 - x0, z1 - z0), nx = -(z1 - z0) / len, nz = (x1 - x0) / len
-      for (let d = 0.5; d < len - 0.3; d += 0.6 + r() * 0.8) {
-        const t = d / len, off = (r() - 0.5) * 0.7
+      for (let d = 1; d < len - 0.6; d += (0.8 + r() * 1.1) * S) {
+        const t = d / len, off = (r() - 0.5) * 0.7 * S
         const x = x0 + (x1 - x0) * t + nx * off, z = z0 + (z1 - z0) * t + nz * off
-        if (fbm2(x * 0.16 + 5.3, z * 0.16 + 1.7) < 0.41 || roadDist(x, z) < 0.95) continue
-        let field = -1, best = 3.6
+        if (fbm2((x / K) * 0.5 + 5.3, (z / K) * 0.5 + 1.7) < 0.41 || roadDist(x, z) < WIDE.track / 2 + 1.2) continue
+        let field = -1, best = 3.6 * K
         for (const f of FIELDS) {
           const fd = Math.hypot(Math.max(f.x0 - x, x - f.x1, 0), Math.max(f.z0 - z, z - f.z1, 0))
           if (fd < best) { best = fd; field = f.i }
         }
-        this.hedges.push({ x, z, field, s: (1.0 + r() * 1.0) * (r() < 0.12 ? 1.5 : 1), r: r() })
+        this.hedges.push({ x, z, field, s: (1.0 + r() * 1.0) * S * (r() < 0.12 ? 1.5 : 1), r: r() })
       }
     }
     const kind = flora.bush(true)
@@ -159,7 +160,7 @@ export class Clearing {
       const k = 0.1 + 0.9 * grown
       this.q.setFromAxisAngle(UP, h.r * 6.283)
       const w = h.s * 1.05 * (0.84 + 0.32 * h.r) * (0.4 + 0.6 * k)
-      this.brush.setMatrixAt(n, this.m.compose(this.p.set(h.x, groundY(h.x, h.z) - 0.04, h.z), this.q, this.s.set(w, h.s * k, w)))
+      this.brush.setMatrixAt(n, this.m.compose(this.p.set(h.x, groundY(h.x, h.z) - 0.08, h.z), this.q, this.s.set(w, h.s * k, w)))
     })
     for (const m of [this.stumps, this.logs, this.heaps, this.rocks, this.brush]) {
       m.instanceMatrix.needsUpdate = true
@@ -178,11 +179,11 @@ export class Clearing {
     const pulled = Math.round(share * n)
     for (let k = pulled; k < cut; k++) {
       const t = trees[k], y = groundY(t.x, t.z)
-      const rad = t.bush ? 0.05 + 0.03 * t.r : (t.conifer ? 0.026 : 0.03) * t.s + 0.03
-      this.put(this.stumps, t.x, y - 0.03, t.z, rad, t.bush ? 0.1 : 0.15 + 0.12 * t.r, rad, t.r * 6.283)
+      const rad = t.bush ? (0.05 + 0.03 * t.r) * S : (t.conifer ? 0.02 : 0.024) * t.s + 0.05
+      this.put(this.stumps, t.x, y - 0.06, t.z, rad, t.bush ? 0.2 : 0.3 + 0.25 * t.r, rad, t.r * 6.283)
       // the tops and limbs left where it fell: grey-brown, a conifer's still rusty with needles
       if (hash2(k * 7 + i, 3) < (t.bush ? 0.45 : 0.72)) {
-        const a = hash2(k, i + 11) * 6.283, d = 0.45 + 0.5 * hash2(k, i + 5), size = t.bush ? 0.26 + 0.18 * t.r : 0.24 + 0.035 * t.s
+        const a = hash2(k, i + 11) * 6.283, d = (0.45 + 0.5 * hash2(k, i + 5)) * S, size = t.bush ? (0.26 + 0.18 * t.r) * S : 0.5 + 0.035 * t.s
         this.put(this.heaps, t.x + Math.cos(a) * d, y + size * 0.12, t.z + Math.sin(a) * d, size * 1.25, size * 0.62, size, a, 0, t.conifer ? '#5e4a38' : t.bush ? '#57543f' : '#62574a')
       }
     }
@@ -191,7 +192,7 @@ export class Clearing {
       for (let k = Math.max(pulled, cut - 6); k < cut; k++) {
         const t = trees[k], len = t.s * 0.74, a = -1.5708 + (hash2(k, 23) - 0.5) * 1.1
         const cx = t.x + Math.cos(a) * len * 0.5, cz = t.z - Math.sin(a) * len * 0.5
-        this.put(this.logs, cx, groundY(cx, cz) + 0.02 * t.s + 0.04, cz, len, 0.022 * t.s, 0.022 * t.s, a)
+        this.put(this.logs, cx, groundY(cx, cz) + 0.016 * t.s + 0.06, cz, len, 0.016 * t.s, 0.016 * t.s, a)
       }
     }
     // Logs piled along the side the stand was opened from, more of them as more comes down.
@@ -199,11 +200,11 @@ export class Clearing {
     for (let k = 0; k < logs; k++) {
       const pile = k % piles, at = Math.floor(k / piles)
       const row = at < 4 ? 0 : at < 7 ? 1 : 2, col = at < 4 ? at : at < 7 ? at - 4 : at - 7
-      const rad = brushy ? 0.07 : 0.14 + 0.03 * hash2(k, i)
-      const len = brushy ? 1.2 : 1.5 + 0.2 * hash2(k, i + 3)
+      const rad = brushy ? 0.1 : 0.2 + 0.05 * hash2(k, i)
+      const len = brushy ? 2.6 : 4.6 + 0.6 * hash2(k, i + 3)
       let x: number, z: number, yaw: number
       const across = (col - (row === 0 ? 1.5 : row === 1 ? 1 : 0.5)) * rad * 2.05
-      if (brushy) { x = f.x0 + 0.9 + across; z = f.z1 - 1.3; yaw = 1.5708 } else { x = f.x0 + 1.7 + pile * ((FW - 3.4) / (piles - 1)) + (hash2(k, 31) - 0.5) * 0.12; z = f.z1 - 0.95 + across; yaw = 0 }
+      if (brushy) { x = f.x0 + 2 + across; z = f.z1 - 3; yaw = 1.5708 } else { x = f.x0 + 4 + pile * ((FW - 8) / (piles - 1)) + (hash2(k, 31) - 0.5) * 0.3; z = f.z1 - 2 + across; yaw = 0 }
       this.put(this.logs, x, groundY(x, z) + rad * (1 + row * 1.74), z, len, rad, rad, yaw)
     }
     // Where the bulldozer has been, the stumps lie pushed up in rows with the earth still on their roots.
@@ -211,10 +212,10 @@ export class Clearing {
       for (const u of [0.22, 0.5, 0.78]) {
         if (u > share) continue
         const span = brushy ? FD : FW
-        for (let d = 0.7; d < span - 0.5; d += 0.8 + 0.5 * hash2(Math.round(d * 10), i + Math.round(u * 100))) {
-          const jig = (hash2(Math.round(d * 13), i + 7) - 0.5) * 0.7
+        for (let d = 1.5; d < span - 1; d += (0.8 + 0.5 * hash2(Math.round(d * 10), i + Math.round(u * 100))) * S) {
+          const jig = (hash2(Math.round(d * 13), i + 7) - 0.5) * 0.7 * S
           const x = brushy ? f.x0 + u * FW + jig : f.x0 + d, z = brushy ? f.z0 + d : f.z1 - u * FD + jig
-          const size = 0.34 + 0.3 * hash2(Math.round(d * 17), i)
+          const size = (0.34 + 0.3 * hash2(Math.round(d * 17), i)) * S
           this.put(this.heaps, x, groundY(x, z) + size * 0.2, z, size * 1.2, size * 0.95, size, hash2(Math.round(d * 5), 3) * 6.283, 0, hash2(Math.round(d * 3), 9) < 0.5 ? '#3d2c21' : '#57402e')
         }
       }
@@ -230,25 +231,25 @@ export class Clearing {
     const greys = ['#9a968c', '#aaa59a', '#827e76', '#a39c8e', '#8d867a', '#b3aea0']
     const n = Math.round(fv.stones * STONES_FULL)
     for (let k = 0; k < n; k++) {
-      const x = f.x0 + 0.3 + hash2(i * 131 + k, 1) * (FW - 0.6), z = f.z0 + 0.3 + hash2(i * 131 + k, 2) * (FD - 0.6)
-      const big = hash2(i * 131 + k, 3), size = 0.045 + 0.12 * big * big
-      this.put(this.rocks, x, fieldBaseY(z) + 0.05 + size * 0.2, z, size * (1 + 0.5 * hash2(k, 4)), size * 0.7, size, hash2(k, 5) * 6.283, hash2(k, 6) - 0.5, greys[k % greys.length])
+      const x = f.x0 + 0.6 + hash2(i * 131 + k, 1) * (FW - 1.2), z = f.z0 + 0.6 + hash2(i * 131 + k, 2) * (FD - 1.2)
+      const big = hash2(i * 131 + k, 3), size = (0.045 + 0.12 * big * big) * S
+      this.put(this.rocks, x, fieldBaseY(z) + 0.1 + size * 0.2, z, size * (1 + 0.5 * hash2(k, 4)), size * 0.7, size, hash2(k, 5) * 6.283, hash2(k, 6) - 0.5, greys[k % greys.length])
     }
     const pile = Math.round(Math.max(0, Math.min(0.7, 0.85 - fv.stones)) * 56)
-    const px = f.x0 + 0.55, pz = f.z1 - 0.5
+    const px = f.x0 + 0.55 * S, pz = f.z1 - 0.5 * S
     for (let k = 0; k < pile; k++) {
-      const a = hash2(i * 17 + k, 7) * 6.283, d = Math.sqrt(hash2(i * 17 + k, 8)) * (0.28 + 0.012 * pile), size = 0.08 + 0.09 * hash2(i * 17 + k, 9)
+      const a = hash2(i * 17 + k, 7) * 6.283, d = Math.sqrt(hash2(i * 17 + k, 8)) * (0.28 + 0.012 * pile) * S, size = (0.08 + 0.09 * hash2(i * 17 + k, 9)) * S
       const x = px + Math.cos(a) * d * 1.3, z = pz + Math.sin(a) * d
-      this.put(this.rocks, x, fieldBaseY(z) + size * 0.4 + Math.max(0, 0.3 - d) * 0.9, z, size * 1.3, size * 0.8, size, a, hash2(k, 10) - 0.5, greys[(k + i) % greys.length])
+      this.put(this.rocks, x, fieldBaseY(z) + size * 0.4 + Math.max(0, 0.3 * S - d) * 0.9, z, size * 1.3, size * 0.8, size, a, hash2(k, 10) - 0.5, greys[(k + i) % greys.length])
     }
     if (TRACTS.includes(i) && PARCELS[i].cover === 'woods') {
       const built = Math.max(0, Math.min(1, (PARCELS[i].stones - fv.stones) / 0.4))
       const len = built * FW
-      for (let d = 0; d < len; d += 0.19) {
+      for (let d = 0; d < len; d += 0.5) {
         const k = Math.round(d * 100)
-        const x = f.x0 + d + (hash2(k, i) - 0.5) * 0.2, z = f.z0 + 0.3 + (hash2(k, i + 1) - 0.5) * 0.2, size = 0.1 + 0.09 * hash2(k, i + 2)
+        const x = f.x0 + d + (hash2(k, i) - 0.5) * 0.4, z = f.z0 + 0.3 * S + (hash2(k, i + 1) - 0.5) * 0.4, size = (0.1 + 0.09 * hash2(k, i + 2)) * S
         this.put(this.rocks, x, fieldBaseY(z) + size * 0.4, z, size * 1.3, size * 0.75, size * 1.1, hash2(k, 3) * 6.283, hash2(k, 4) - 0.5, greys[k % greys.length])
-        if (hash2(k, i + 5) < 0.75) this.put(this.rocks, x + 0.05, fieldBaseY(z) + size * 1.15, z, size, size * 0.6, size, hash2(k, 6) * 6.283, 0, greys[(k + 2) % greys.length])
+        if (hash2(k, i + 5) < 0.75) this.put(this.rocks, x + 0.1, fieldBaseY(z) + size * 1.15, z, size, size * 0.6, size, hash2(k, 6) * 6.283, 0, greys[(k + 2) % greys.length])
       }
     }
   }
