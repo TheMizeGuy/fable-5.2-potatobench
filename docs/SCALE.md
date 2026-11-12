@@ -98,5 +98,31 @@ wilt and digging are drawn as ragged patches and worked strips inside it, never 
 
 ## As built
 
-(Filled in by the rescale: the K chosen and the frames it was chosen from, the measured ratios, the budgets, the
-viewers' estimates, and what remains compressed.)
+### Phase A: one metre for everything, and the blockout K is chosen from
+
+`src/render/scale.ts` holds `K` (10 until one is chosen; `VITE_K` builds another), `KV` (its square root, for the
+farm's own relief) and `S` (2.2). `layout.ts` is written in metres through them: the simulation's parcels times K;
+each yard a true-size island (its plan times S about a frame that moves with K); every width true (farm lane 3 m,
+farm road 3.6 m, town road 5.8 m, walls about a metre); rows at 0.9 m and plants at 0.3 m whatever the field's size.
+People and machines are drawn at true size and nothing is drawn larger from far off.
+
+Measured by `tests/scale.test.ts` (the same at every K unless said): a person 1.81 m; the house door 0.97 by
+1.98 m; the tractor 3.38 m long, 1.95 m wide; the farm lane 1.54 tractor widths; a machine-shed bay 4.69 m wide,
+6.82 m deep, 3.30 m to the eave; the barn 9.5 by 13.2 m and 9.7 m to the ridge; the house 6.6 by 7.9 m, 120 m2 with
+its ells.
+
+| K | field | acres (the ticket says 5) | rows | barn lengths wide | houses with ells in area | land |
+|---|---|---|---|---|---|---|
+| 8 | 115 by 87 m | 2.48 | 97 at 0.897 m | 8.7 | 84 | 1.25 by 0.57 km |
+| 10 | 144 by 109 m | 3.87 | 121 at 0.899 m | 10.9 | 131 | 1.56 by 0.71 km |
+| 12 | 173 by 131 m | 5.57 | 145 at 0.900 m | 13.1 | 189 | 1.87 by 0.85 km |
+
+Whole plants are drawn from one pool in a window round the foot of the picture (72 by 54 m at the high tier), with
+painted rows everywhere else; grass is laid in 36 m squares as the camera nears them; whole trees stand along the
+front of each wood and thinner ones behind, under a cap. On the RTX 2080 Ti at 1920 by 1080, high tier, home view
+with ten fields in crop: 10.8 ms of GPU at K 8, 15.2 ms at K 10, 10.0 to 15.7 ms at K 12 (the machine was shared
+for some runs), with 5.2, 8.9 and 11.9 million triangles over all passes; the scene builds in 1.6 s at K 12 and the
+first frame comes 4.7 to 7.9 s after the page is asked for, most of it shaders compiling.
+
+Not yet done (phase B): the barn and the house are still shorter than the standard's (13.2 m and 7.9 m), markers for
+people, the camera's tiers, far trees as impostors, the hill squares' edges, and the viewers' estimates.

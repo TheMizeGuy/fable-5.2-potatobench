@@ -11,7 +11,11 @@ import { Pose, dressFor, dressOf, drawFigure, drawn, figureMatrix, forking, hamm
 import type { Env } from './env.ts'
 import { UI_GAIN, type HillDisplay } from './fields.ts'
 import { level } from './arch.ts'
-import { BAYS, HOUSE, IMPLEMENT_SPOTS, ROAD, hillPos, route, siteOf, type Pt } from './layout.ts'
+import { BAYS, HOUSE, IMPLEMENT_SPOTS, POTATO_HOUSE, ROAD, hillPos, route, siteOf, woodFront, type Pt } from './layout.ts'
+import { FIGURE, TRUE_SIZE } from './measures.ts'
+import { K, S } from './scale.ts'
+
+export { TRUE_SIZE }
 import { clamp, hash2, smooth } from './noise.ts'
 import type { Particles } from './particles.ts'
 import { Prims } from './prims.ts'
@@ -120,13 +124,14 @@ export class Crews {
   private rInfo: InstancedBufferAttribute
   private rCol: InstancedBufferAttribute
   private rings = 0
+  private mark = 1
   private v = new Vector3()
   private frameNo = 0
   private mode = ''
   private shake = 0
   private shakeT = 9
-  private deer = { x: 6.5, z: -22.3, away: 0, t: 0 }
-  private cows = COWS.flatMap((_, k) => [0, 1, 2].map(n => ({ kind: k, x: 37 + 9 * (hash2(k * 3 + n, 5) - 0.5), z: 10 + 9 * (hash2(k * 3 + n, 9) - 0.5), h: hash2(k, n) * 6.28, t: hash2(n, k + 3) * 20, tx: 0, tz: 0, walking: false })))
+  private deer = { x: 6.5 * K, z: woodFront(6.5 * K) + 4, away: 0, t: 0 }
+  private cows = COWS.flatMap((_, k) => [0, 1, 2].map(n => ({ kind: k, x: COW_AT.x + 30 * (hash2(k * 3 + n, 5) - 0.5), z: COW_AT.z + 30 * (hash2(k * 3 + n, 9) - 0.5), h: hash2(k, n) * 6.28, t: hash2(n, k + 3) * 20, tx: 0, tz: 0, walking: false })))
   private extras: Dress[] = []
   // The latest a staged dig still needs the day clock to wait at, or -1.
   stageHold = -1
@@ -296,7 +301,7 @@ export class Crews {
         else if (u.winter === 'pack' && snap.farm.buildings.some(b => b.kind === 'packing' && b.built)) a.post = '-1|pack'
         else if (u.winter === 'build') { const b = snap.farm.buildings.find(x => !x.built); if (b) a.post = `${b.yard}|build` }
         if (a.kind !== 'farmer' && !a.post) a.away = true
-        if (a.kind === 'farmer' && !a.post) r = { x: HOUSE.x - 2.9, z: HOUSE.z - 5.6, heading: 0.2 }
+        if (a.kind === 'farmer' && !a.post) r = { x: HOUSE.x - 2.9 * S, z: HOUSE.z - 5.6 * S, heading: 0.2 }
         // already out at the work
         if (a.post.endsWith('|fell')) r = siteAt('fell', u.winterField, snap.fields[u.winterField]?.felled ?? 0)
         else if (a.post.endsWith('|pack')) r = packSite()
@@ -324,7 +329,7 @@ export class Crews {
   title(): void {
     const a = this.actors.find(x => x.kind === 'farmer'), rig = this.rigs.find(r => r.kind === 'tractor')
     if (!a || !rig) return
-    const travel: Pt[] = [{ x: 23.4, z: -15.6 }, ...ROAD.map(([x, z]) => ({ x, z }))]
+    const travel: Pt[] = [{ x: POTATO_HOUSE.x, z: POTATO_HOUSE.z + 2 * S }, ...ROAD.map(([x, z]) => ({ x, z }))]
     a.rig = rig
     rig.holder = a.id
     a.segs = [{ kind: 'travel', field: -1, walker: false, ride: 'tractor', walkTo: [], travel, path: [travel[travel.length - 1]], reveals: [], start: 0, end: 0.8, site: '' }]
@@ -477,15 +482,16 @@ export class Crews {
     this.rings = 0
     this.ringMat.uniforms.uTime.value = f.time
     const snap = f.snap, env = f.env
-    // People and machines are drawn larger than life as the camera draws back, so that a person never falls below
-    // about fifty pixels on the screen and a tractor about sixty.
+    // People and machines are drawn at true size whatever the distance. What keeps them findable from far off is the
+    // ring at their feet, which never falls below about thirty pixels across.
     const perUnit = this.screenH / (2 * Math.tan((f.camera.fov * Math.PI) / 360)) / Math.max(1, f.dist)
-    const bigMachine = clamp(64 / (1.27 * perUnit), TRUE_SIZE, Math.max(2.9, TRUE_SIZE))
-    const big = clamp(50 / (0.78 * FIGURE * perUnit), TRUE_SIZE, bigMachine * 1.3) * FIGURE
+    const bigMachine = TRUE_SIZE
+    const big = TRUE_SIZE * FIGURE
+    this.mark = Math.max(0.56 * big, 15 / perUnit)
     const cold = env.snow > 0.3
     this.cold = cold
     const going = snap.mode === 'season' ? f.advancing || f.dayT < 1 : snap.mode !== 'title'
-    const far = smooth(22, 55, f.dist) * (f.season ? 1 : 0.6)
+    const far = smooth(22 * S, 55 * S, f.dist) * (f.season ? 1 : 0.6)
     this.far = far
     GRIME.value.set(0.52, 0.42, 0.31).lerp(V.set(0.2, 0.15, 0.11), clamp(env.wet * 1.4 - 0.3, 0, 1))
     const sf: StageFrame = { pr, particles: f.particles, dt: f.dt, time: f.time, s: big, snap, wind: env.wind, cold, still: f.reduced, going }
@@ -537,7 +543,7 @@ export class Crews {
         if (a.aboard) return
         if (!going) this.idle(a, f, w.pose)
         this.figure(a, w.pose, big, w.lift)
-        this.ring(a.x, heightAt(a.x, a.z), a.z, 0.56 * big, a, f, far)
+        this.ring(a.x, heightAt(a.x, a.z), a.z, this.mark, a, f, far)
       })
     }
 
@@ -546,8 +552,8 @@ export class Crews {
       const holder = r.holder >= 0 ? this.actors.find(a => a.id === r.holder) : undefined
       // a machine standing idle in the yard is not drawn as large as one at work, or the yard is all machines; under
       // the shed's roof it is its own size, on the shed's floor
-      const parked = !holder && Math.hypot(r.x - r.home.x, r.z - r.home.z) < 0.5
-      const inBay = parked && this.shed && Math.abs(r.home.z - BAYS[0].z) < 0.5
+      const parked = !holder && Math.hypot(r.x - r.home.x, r.z - r.home.z) < 0.5 * S
+      const inBay = parked && this.shed && Math.abs(r.home.z - BAYS[0].z) < 0.5 * S
       const s = inBay ? TRUE_SIZE : parked ? Math.max(TRUE_SIZE, bigMachine * 0.74) : bigMachine
       const y = inBay ? this.shedFloor : heightAt(r.x, r.z)
       const ahead = heightAt(r.x + Math.cos(r.heading) * 0.6 * s, r.z + Math.sin(r.heading) * 0.6 * s)
@@ -561,7 +567,7 @@ export class Crews {
       if (holder && holder.aboard) {
         holder.head.copy(drawn.head)
         holder.scale = s
-        this.ring(r.x, y, r.z, 1.2 * s, holder, f, far)
+        this.ring(r.x, y, r.z, Math.max(1.2 * s, 1.5 * this.mark), holder, f, far)
       }
       if (r.broken && !f.reduced && Math.random() < 0.12) {
         r.machine.point(0.3, 0.95, 0, V)
@@ -673,7 +679,7 @@ export class Crews {
       this.atEase(a, f, pose, big)
       if (a.aboard && rig) { a.x = rig.x; a.z = rig.z; a.heading = rig.heading; return null }
       this.figure(a, pose, big)
-      this.ring(a.x, heightAt(a.x, a.z), a.z, 0.56 * big, a, f, this.far)
+      this.ring(a.x, heightAt(a.x, a.z), a.z, this.mark, a, f, this.far)
       return null
     }
     const span = Math.max(1e-6, seg.end - seg.start)
@@ -681,7 +687,7 @@ export class Crews {
     seg.polys ??= { walkTo: new Poly(seg.walkTo), travel: new Poly(seg.travel), path: new Poly(seg.path) }
     const { walkTo, travel, path } = seg.polys
     const lw = seg.walkTo.length ? walkTo.length : 0, lt = travel.length
-    let tShare = seg.kind === 'travel' ? 1 : lw + lt > 0.3 ? Math.min(0.4, 0.12 + (lw + lt) / 150) : 0
+    let tShare = seg.kind === 'travel' ? 1 : lw + lt > 0.3 ? Math.min(0.4, 0.12 + (lw + lt) / (150 * K)) : 0
     if (seg.kind === 'sample' || seg.kind === 'dig') {
       // However long the day is, the hill is up or the last row out inside two and a half seconds, and the day waits for it.
       const drive = lw + lt > 0.3 ? STAGE_DRIVE_S : 0, work = STAGE_S[seg.kind]
@@ -709,8 +715,8 @@ export class Crews {
       if (seg.site) {
         // the way there went by unseen (the clock ran fast): they are there
         const spot = seg.path[0]
-        if (Math.hypot(spot.x - a.x, spot.z - a.z) > 9 && !rig) { a.x = spot.x; a.z = spot.z }
-        if (rig && seg.ride && Math.hypot(spot.x - rig.x, spot.z - rig.z) > 9 && w < 0.4) { rig.x = spot.x; rig.z = spot.z; rig.moved = 0 }
+        if (Math.hypot(spot.x - a.x, spot.z - a.z) > 9 * S && !rig) { a.x = spot.x; a.z = spot.z }
+        if (rig && seg.ride && Math.hypot(spot.x - rig.x, spot.z - rig.z) > 9 * S && w < 0.4) { rig.x = spot.x; rig.z = spot.z; rig.moved = 0 }
         site = { key: seg.site, kind: seg.site.split('|')[1], field: seg.field, w }
       } else if (!seg.walker && rig) {
         // Dig day is staged: the digger is lowered at the row's end, the rows come out, and the tractor stands at the finish.
@@ -780,7 +786,7 @@ export class Crews {
     a.x = px
     a.z = pz
     this.figure(a, pose, big)
-    this.ring(a.x, heightAt(a.x, a.z), a.z, 0.56 * big, a, f, this.far)
+    this.ring(a.x, heightAt(a.x, a.z), a.z, this.mark, a, f, this.far)
     return null
   }
 
@@ -839,7 +845,7 @@ export class Crews {
     if (!g) {
       const corner = restAt(seg.field, 1, true)
       g = { field: seg.field, pickers: [], recent: [], crows: [], idle: 0 }
-      for (let k = 0; k < 5; k++) g.crows.push({ x: corner.x - 3 - k, z: corner.z + 2, fx: 0, fz: 0, tx: corner.x - 3 - k, tz: corner.z + 2, t: 1, wait: 1 + k, h: k })
+      for (let k = 0; k < 5; k++) g.crows.push({ x: corner.x - (3 + k) * S, z: corner.z + 2 * S, fx: 0, fz: 0, tx: corner.x - (3 + k) * S, tz: corner.z + 2 * S, t: 1, wait: 1 + k, h: k })
       this.gangs.set(seg.field, g)
     }
     g.idle = 0
@@ -925,8 +931,8 @@ export class Crews {
           stoop(pose, p.bent * (0.82 + 0.18 * Math.sin(f.time * 3 + k)), f.time * 6 + k)
           if (p.wait <= 0 && g.recent.length) {
             const t = g.recent[Math.max(0, g.recent.length - 1 - Math.floor(Math.random() * Math.min(14, g.recent.length)))]
-            p.tx = t.x + (Math.random() - 0.5) * 0.9
-            p.tz = t.z + (Math.random() - 0.5) * 0.9
+            p.tx = t.x + (Math.random() - 0.5) * 0.9 * S
+            p.tz = t.z + (Math.random() - 0.5) * 0.9 * S
             p.wait = 1.2 + Math.random() * 2.2
           }
         }
@@ -941,8 +947,8 @@ export class Crews {
           if (c.wait <= 0 && g.recent.length > 6) {
             const t = g.recent[Math.floor(Math.random() * Math.max(1, g.recent.length - 6))]
             c.fx = c.x; c.fz = c.z
-            c.tx = t.x + (Math.random() - 0.5) * 1.5
-            c.tz = t.z + (Math.random() - 0.5) * 1.5
+            c.tx = t.x + (Math.random() - 0.5) * 1.5 * S
+            c.tz = t.z + (Math.random() - 0.5) * 1.5 * S
             c.t = 0
             c.wait = 2 + Math.random() * 5
             c.h = Math.atan2(c.tz - c.fz, c.tx - c.fx)
@@ -963,8 +969,8 @@ export class Crews {
           if (c.walking) c.h += (Math.random() - 0.5) * 2
         }
         if (c.walking) {
-          const nx = c.x + Math.cos(c.h) * 0.25 * f.dt, nz = c.z + Math.sin(c.h) * 0.25 * f.dt
-          if (Math.abs(nx - 37) < 6 && Math.abs(nz - 10) < 6) { c.x = nx; c.z = nz } else c.h += Math.PI * 0.6
+          const nx = c.x + Math.cos(c.h) * 0.25 * S * f.dt, nz = c.z + Math.sin(c.h) * 0.25 * S * f.dt
+          if (Math.abs(nx - COW_AT.x) < 22 && Math.abs(nz - COW_AT.z) < 22) { c.x = nx; c.z = nz } else c.h += Math.PI * 0.6
         }
         // the neighbour's stock is scenery: never drawn as large as the farm's own people are from far off
         drawBeast(pr, COWS[c.kind], c.x, heightAt(c.x, c.z), c.z, c.h, Math.min(big, 1.5 * TRUE_SIZE) * 0.9, f.time * 3 + c.kind, c.walking ? 0.7 : 0, c.walking ? 0 : 1)
@@ -973,12 +979,12 @@ export class Crews {
     // A deer at the wood's edge, gone into the trees when anyone comes near.
     const d = this.deer
     let near = false
-    for (const a of this.actors) if (Math.hypot(a.x - d.x, a.z - d.z) < 11) near = true
+    for (const a of this.actors) if (Math.hypot(a.x - d.x, a.z - d.z) < 11 * S) near = true
     d.away = clamp(d.away + (near ? f.dt * 0.9 : -f.dt * 0.06), 0, 1)
     d.t += f.dt
     if (this.lively && d.away < 0.99 && snap.mode !== 'title') {
-      const z = d.z - d.away * 5
-      drawBeast(pr, DEER, d.x - d.away * 2, heightAt(d.x, z), z, near ? -1.9 : 0.4, Math.min(big, 1.5 * TRUE_SIZE) * 0.9 * (1 - 0.5 * d.away), d.away > 0.02 ? f.time * 14 : 0, d.away > 0.02 && d.away < 0.99 ? 1 : 0, near ? 0 : (Math.sin(d.t * 0.4) > 0.2 ? 1 : 0))
+      const z = d.z - d.away * 5 * S
+      drawBeast(pr, DEER, d.x - d.away * 2 * S, heightAt(d.x, z), z, near ? -1.9 : 0.4, Math.min(big, 1.5 * TRUE_SIZE) * 0.9 * (1 - 0.5 * d.away), d.away > 0.02 ? f.time * 14 : 0, d.away > 0.02 && d.away < 0.99 ? 1 : 0, near ? 0 : (Math.sin(d.t * 0.4) > 0.2 ? 1 : 0))
     }
   }
 
@@ -1024,10 +1030,8 @@ export class Crews {
   }
 }
 
-// The size people and machines are drawn at close to; nothing is ever drawn smaller. The rescale (docs/SCALE.md) sets it true: at 2.1, with FIGURE 1.05, a person stands 1.8 units.
-export const TRUE_SIZE = 1
-// People against the machines' scale.
-const FIGURE = 1.14
+// The neighbour's cows graze the pasture east of the home yard.
+const COW_AT = { x: 37 * K, z: 2 * K }
 const YARD_KINDS: YardKind[] = ['harvester', 'sprayer', 'reel']
 const POSE = new Pose()
 const AXIS_X = new Vector3(1, 0, 0), TRAY = new Color('#cbb98e'), CHAIR = new Color('#6f5a41')

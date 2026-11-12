@@ -6,7 +6,7 @@ import {
   RepeatWrapping, Scene, ShaderMaterial, SphereGeometry, Vector2, Vector3, Vector4, WebGLRenderTarget, type WebGLRenderer,
 } from 'three'
 import { clamp } from './noise.ts'
-import { CLOUD_GLSL, HAZE_GLSL, U } from './shaders.ts'
+import { CLOUD_GLSL, HAZE_GLSL, U, HAZE_PER_M } from './shaders.ts'
 
 const RAYLEIGH = [5.804542996261093e-6, 1.3562911419845635e-5, 3.0265902468824876e-5]
 const MIE = [1.8399918514433978e14, 2.7798023919660528e14, 4.0790479543861094e14]
@@ -172,7 +172,7 @@ vec3 skyColor(vec3 dir, vec3 eye, float disc) {
   col += sunCol * (sun * 16.0 + aureole * (1.0 - 0.8 * dens));
   col = mix(col, cloud, dens);
   float low = max(dir.y, 0.0015);
-  float air = uHaze.x * exp(-uHaze.y * max(eye.y, 0.0)) / (uHaze.y * low);
+  float air = uHaze.x * ${HAZE_PER_M.toFixed(3)} * exp(-uHaze.y * max(eye.y, 0.0)) / (uHaze.y * low);
   air += min(uMist.x * exp(-uMist.y * max(eye.y - uMist.z, -1.5)) / (uMist.y * low), uMist.x * 160.0);
   col = mix(col, hazeTint(d), 1.0 - exp(-air));
   return mix(col, uGroundRad, smoothstep(0.0, -0.35, dir.y));

@@ -1,7 +1,7 @@
 // The carpenter's kit: a gabled body with its foundation, roof and trim, windows, doors, chimneys and the small parts
 // every building here is put together from. All drawn through a Builder, in the frame it is set to.
 import { FIN, type Builder, type Q, type V3 } from './builder.ts'
-import { groundY } from './layout.ts'
+import { groundY } from './small.ts'
 
 export const TRIM = '#e6e0d0'
 export const FIELDSTONE = '#8f8a80'

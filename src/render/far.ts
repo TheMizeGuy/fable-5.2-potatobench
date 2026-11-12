@@ -2,7 +2,7 @@
 // stops at an edge. Each is a wall of hills with its own skyline, paler the further off and pale at its foot where the
 // air lies in the valleys. They are too far for detail: a dark cool shape, a little of the day's light, and the air.
 import { BufferAttribute, BufferGeometry, DoubleSide, Mesh, ShaderMaterial } from 'three'
-import { FARM_CENTER } from './layout.ts'
+import { FARM_CENTER, REACH } from './layout.ts'
 import { rng } from './noise.ts'
 import { FRAG_LIB, SHARED, U, linear } from './shaders.ts'
 
@@ -13,6 +13,8 @@ const RINGS = [
   { radius: 7900, base: 380, rise: 280, air: 0.72 },
 ]
 const STEPS = 512
+// The ridges stand beyond the land that is drawn, however far that reaches.
+const OUT = Math.max(0, REACH * 1.45 - 4400)
 const FOOT = -160
 
 export class FarHills {
@@ -41,7 +43,7 @@ export class FarHills {
           h += t.tall * Math.exp(-(d * d) / (t.wide * t.wide))
         }
         const top = ring.base + ring.rise * Math.max(0.04, h)
-        const x = FARM_CENTER.x + Math.cos(th) * ring.radius, z = FARM_CENTER.z + Math.sin(th) * ring.radius
+        const x = FARM_CENTER.x + Math.cos(th) * (ring.radius + OUT), z = FARM_CENTER.z + Math.sin(th) * (ring.radius + OUT)
         pos.push(x, FOOT, z, x, top, z)
         look.push(ring.air, 0, ring.air, 1)
         if (s > 0) {

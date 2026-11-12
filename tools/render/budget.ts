@@ -126,7 +126,9 @@ const gpuName = await page.evaluate(() => {
   const e = gl.getExtension('WEBGL_debug_renderer_info')
   return e ? gl.getParameter(e.UNMASKED_RENDERER_WEBGL) : 'unknown'
 })
+const loaded = await page.evaluate(() => { const f = (window as any).__countyField; return { first: f.stats().firstFrame, built: f.stats().built as [string, number][], K: f.scale?.K } })
 console.log(`${W}x${H}  ${gpuName}`)
+console.log(`  K ${loaded.K}: the first frame ${(loaded.first / 1000).toFixed(2)} s after the page was asked for; the scene built by (ms) ${(loaded.built ?? []).map(([n, t]) => `${n} ${t}`).join(', ')}`)
 await page.evaluate(() => {
   const { app } = (window as any).__county
   for (const el of [...document.body.children]) if (el.id !== 'field' && el.tagName !== 'CANVAS' && el.tagName !== 'SCRIPT') (el as HTMLElement).style.display = 'none'
@@ -141,7 +143,7 @@ const views: [string, () => Promise<void>][] = [
   ['opening', async () => { await page.evaluate(() => (window as any).__county.app.quitToTitle()); await settle() }],
   ['home view, ten fields in crop', async () => { await bigFarm(page); await settle() }],
   ['whole map, ten fields in crop', async () => { await page.evaluate(() => (window as any).__countyField.home()); await settle() }],
-  ['close along the rows', async () => { await page.evaluate(() => (window as any).__countyField.view({ x: 5, z: 12.4, dist: 9, yaw: -1.32, pitch: 0.13 })); await settle() }],
+  ['close along the rows', async () => { await page.evaluate(() => (window as any).__countyField.view({ frame: 'field', field: 5, x: 0.3, z: 0.52, dist: 12, yaw: -1.32, pitch: 0.13 })); await settle() }],
 ]
 for (const [label, set] of views) {
   for (const t of ['high', 'medium', 'low']) {

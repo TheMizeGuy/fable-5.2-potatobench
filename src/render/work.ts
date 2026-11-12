@@ -6,6 +6,7 @@ import {
   BARN, BAYS, DUFOUR_POTATO_HOUSE, FD, FIELDS, FW, HOUSE, POTATO_HOUSE, ROAD, SPURS, SZ, TRUCK_SPOT, WALLS, fieldAt, fieldBaseY, groundY, hillPos, parkSpot, route,
   siteOf, yardSpot, type FieldRect, type Pt, type Spot,
 } from './layout.ts'
+import { K, S } from './scale.ts'
 import type { Snapshot, UnitVis } from './state.ts'
 
 export type { Pt }
@@ -84,7 +85,7 @@ export type { Spot }
 
 // The big doors of the old potato houses, facing down the slope: where barrels come in.
 export function houseDoor(yard: number): Spot {
-  return yard === -2 ? { x: DUFOUR_POTATO_HOUSE.x, z: DUFOUR_POTATO_HOUSE.z + 3.5, heading: -Math.PI / 2 } : { x: POTATO_HOUSE.x, z: POTATO_HOUSE.z + 4.3, heading: -Math.PI / 2 }
+  return yard === -2 ? { x: DUFOUR_POTATO_HOUSE.x, z: DUFOUR_POTATO_HOUSE.z + 3.5 * S, heading: -Math.PI / 2 } : { x: POTATO_HOUSE.x, z: POTATO_HOUSE.z + 4.3 * S, heading: -Math.PI / 2 }
 }
 
 // The potato house a field's crop goes to: the nearer of the farm's.
@@ -98,12 +99,12 @@ export function houseFor(field: number, dufour: boolean): number {
 // Where each machine is kept: in the machine shed's bays once it stands (the truck in the third while there are no
 // more than two tractors); before that the one tractor on the potato house apron and the truck on the back lane.
 export function machineHome(kind: 'tractor' | 'truck', k: number, shed: boolean, tractors: number): Spot {
-  if (kind === 'truck') return shed && tractors <= 2 ? { ...BAYS[2], z: BAYS[2].z - 0.25 } : TRUCK_SPOT
+  if (kind === 'truck') return shed && tractors <= 2 ? { ...BAYS[2], z: BAYS[2].z - 0.25 * S } : TRUCK_SPOT
   return shed ? BAYS[Math.min(k, BAYS.length - 1)] : yardSpot(-1, k, false)
 }
 
 // The house's kitchen porch, on the dooryard side: its edge, where people sit on a day off.
-const PORCH = { x: HOUSE.x - 2.02, z: HOUSE.z - 3.2 }
+const PORCH = { x: HOUSE.x - 2.02 * S, z: HOUSE.z - 3.2 * S }
 
 // A day off: the porch and the dooryard. Each: where, which way they face, and whether they sit (the seat's height).
 export function sundaySpot(k: number): Spot & { seat: number } {
@@ -114,43 +115,44 @@ export function sundaySpot(k: number): Spot & { seat: number } {
     [px - 1.0, pz + 2.3, 2.4, 0], [px - 0.5, pz - 1.7, 0.9, -1], [px - 2.0, pz - 0.4, 0.5, 0], [px - 1.7, pz - 1.4, -0.6, -1],
     [px - 0.7, pz + 3.8, 1.9, 0], [px - 2.4, pz + 1.0, 0.1, -1], [px - 1.3, pz + 4.6, -2.2, 0], [px - 2.6, pz + 2.6, 0.9, -1],
   ]
+  // (written in the small units the porch was drawn in)
   const [x, z, heading, seat] = spots[k % spots.length]
-  return { x, z, heading, seat }
+  return { x: px + (x - px) * S, z: pz + (z - pz) * S, heading, seat: seat > 0 ? seat * S : seat }
 }
 
 // Laid up: a chair on the porch.
 export function sickSpot(k: number): Spot {
-  return { x: PORCH.x + 0.27, z: PORCH.z + 0.9 - (k % 3) * 0.55, heading: Math.PI }
+  return { x: PORCH.x + 0.27 * S, z: PORCH.z + (0.9 - (k % 3) * 0.55) * S, heading: Math.PI }
 }
 
 // Where people stand about before the season and between jobs at home: the farmer by the kitchen door, the rest in the
 // dooryard between the barn and the road, in loose knots, turned to one another.
 export function idleSpot(yard: number, slot: number, farmer: boolean): Spot {
-  if (yard === -1 && farmer) return { x: PORCH.x - 0.9, z: PORCH.z + 1.2, heading: 2.6 }
+  if (yard === -1 && farmer) return { x: PORCH.x - 0.9 * S, z: PORCH.z + 1.2 * S, heading: 2.6 }
   if (yard !== -1) return yardSpot(yard, slot, true)
   const [x, z] = DOORYARD[slot % DOORYARD.length]
   const knot = DOORYARD_KNOTS[Math.floor((slot % DOORYARD.length) / 3) % DOORYARD_KNOTS.length]
   return { x, z, heading: Math.atan2(knot[1] - z, knot[0] - x) }
 }
 // Offsets from the ground before the barn's great door, which opens on the dooryard.
-const YARD_DOOR = { x: BARN.x - 3.9, z: BARN.z - 0.3 }
+const YARD_DOOR = { x: BARN.x - 3.9 * S, z: BARN.z - 0.3 * S }
 const DOORYARD: [number, number][] = ([
   [0.7, -0.7], [0, -0.1], [0.8, 0.3], [-0.3, -1.6], [0.3, -1.3], [-0.5, -2.3],
   [0.6, 2.2], [-0.2, 2.7], [-0.4, 1.7], [-0.9, -0.5], [-1.1, 0.4], [-0.4, 0.8],
-] as [number, number][]).map(([x, z]) => [YARD_DOOR.x + x, YARD_DOOR.z + z])
-const DOORYARD_KNOTS: [number, number][] = ([[0.5, -0.2], [-0.15, -1.75], [0, 2.2], [-0.8, 0.2]] as [number, number][]).map(([x, z]) => [YARD_DOOR.x + x, YARD_DOOR.z + z])
+] as [number, number][]).map(([x, z]) => [YARD_DOOR.x + x * S, YARD_DOOR.z + z * S])
+const DOORYARD_KNOTS: [number, number][] = ([[0.5, -0.2], [-0.15, -1.75], [0, 2.2], [-0.8, 0.2]] as [number, number][]).map(([x, z]) => [YARD_DOOR.x + x * S, YARD_DOOR.z + z * S])
 // What the dooryard and the porch are spread out from when people are drawn large.
-export const DOORYARD_AT: Pt = { x: YARD_DOOR.x + 0.6, z: YARD_DOOR.z - 0.1 }
-export const PORCH_AT: Pt = { x: PORCH.x, z: PORCH.z + 0.2 }
+export const DOORYARD_AT: Pt = { x: YARD_DOOR.x + 0.6 * S, z: YARD_DOOR.z - 0.1 * S }
+export const PORCH_AT: Pt = { x: PORCH.x, z: PORCH.z + 0.2 * S }
 
 // Callers. Someone asking for work waits where the house's spur leaves the farm road; a neighbour pulls in on the spur;
 // a buyer leaves his car on the potato house apron.
 const SPUR = SPURS[0]
-export const GATE: Spot = { x: SPUR[0][0] + 0.9, z: SPUR[0][1] + 1.3, heading: 0.5 }
+export const GATE: Spot = { x: SPUR[0][0] + 0.9 * S, z: SPUR[0][1] + 1.3 * S, heading: 0.5 }
 export const CALLER: { truck: Spot; man: Spot } = {
-  truck: { x: SPUR[0][0] + 1.9, z: SPUR[0][1] + 0.05, heading: 0.06 }, man: { x: SPUR[0][0] + 2.8, z: SPUR[0][1] - 0.8, heading: 0.9 },
+  truck: { x: SPUR[0][0] + 1.9 * S, z: SPUR[0][1] + 0.05 * S, heading: 0.06 }, man: { x: SPUR[0][0] + 2.8 * S, z: SPUR[0][1] - 0.8 * S, heading: 0.9 },
 }
-export const BUYER: { car: Spot; man: Spot } = { car: { x: POTATO_HOUSE.x - 3.4, z: POTATO_HOUSE.z + 6.7, heading: -0.88 }, man: { x: POTATO_HOUSE.x - 0.9, z: POTATO_HOUSE.z + 4.9, heading: -1.2 } }
+export const BUYER: { car: Spot; man: Spot } = { car: { x: POTATO_HOUSE.x - 3.4 * S, z: POTATO_HOUSE.z + 6.7 * S, heading: -0.88 }, man: { x: POTATO_HOUSE.x - 0.9 * S, z: POTATO_HOUSE.z + 4.9 * S, heading: -1.2 } }
 // Where the road leaves the picture, for people coming to the farm and leaving it: beyond the bridge.
 export const OFF_FARM: Pt = { x: ROAD[13][0], z: ROAD[13][1] }
 
@@ -161,7 +163,7 @@ export function buildSite(kind: BuildingKind, yard: number): Spot {
   const earth = kind === 'pond' || kind === 'road'
   const w = earth ? s.work[0] : s.work[2]
   const dx = s.x - w.x, dz = s.z - w.z, l = Math.hypot(dx, dz) || 1
-  const out = earth ? 0 : 1.3
+  const out = earth ? 0 : 1.3 * S
   return { x: w.x - (dx / l) * out, z: w.z - (dz / l) * out, heading: Math.atan2(dz, dx) }
 }
 
@@ -169,7 +171,7 @@ export function buildSite(kind: BuildingKind, yard: number): Spot {
 export function packSite(): Spot {
   const s = siteOf('packing', -1)!
   const dx = s.x - s.door.x, dz = s.z - s.door.z, l = Math.hypot(dx, dz) || 1
-  return { x: s.door.x - (dx / l) * 0.5, z: s.door.z - (dz / l) * 0.5, heading: Math.atan2(dz, dx) + Math.PI / 2 }
+  return { x: s.door.x - (dx / l) * 0.5 * S, z: s.door.z - (dz / l) * 0.5 * S, heading: Math.atan2(dz, dx) + Math.PI / 2 }
 }
 
 // Where a crew stands when it is at a place and not working: a field's corner, or its spot at a yard.
@@ -190,10 +192,10 @@ export function siteAt(kind: JobKind, field: number, felled = 0): Spot {
     // (back from the line by about the reach of the work, so the tree being cut is the stand's outermost and the
     // people are out from under the canopy)
     const k = Math.min(0.9, Math.max(0, felled))
-    return PARCELS[f.i].cover === 'brush' ? { x: f.x0 - 1.1 + k * FW, z: f.cz, heading: 0 } : { x: f.cx, z: f.z1 + 1.4 - k * FD, heading: -Math.PI / 2 }
+    return PARCELS[f.i].cover === 'brush' ? { x: f.x0 - 1.1 * S + k * FW, z: f.cz, heading: 0 } : { x: f.cx, z: f.z1 + 1.4 * S - k * FD, heading: -Math.PI / 2 }
   }
   if (kind === 'brush') return hedgeSpot(f)
-  if (kind === 'haul') return { x: f.x1 + 0.9, z: f.cz, heading: -Math.PI / 2 }
+  if (kind === 'haul') return { x: f.x1 + 0.9 * S, z: f.cz, heading: -Math.PI / 2 }
   return { x: f.cx, z: f.cz, heading: 0 }
 }
 
@@ -207,17 +209,17 @@ export function waterWay(snap: Snapshot, field: number, pondDrawn: boolean): 'ta
 
 // Where a field's hedgerow is cut back: on the headland by its nearest wall, facing the wall.
 function hedgeSpot(f: FieldRect): Spot {
-  let best: Spot = { x: f.cx, z: f.z1 + 0.6, heading: Math.PI / 2 }, bd = Infinity
+  let best: Spot = { x: f.cx, z: f.z1 + 0.6 * S, heading: Math.PI / 2 }, bd = Infinity
   for (const [x0, z0, x1, z1] of WALLS) {
     const upright = Math.abs(x1 - x0) < Math.abs(z1 - z0)
     if (upright) {
-      if (f.cz < Math.min(z0, z1) - 3 || f.cz > Math.max(z0, z1) + 3) continue
+      if (f.cz < Math.min(z0, z1) - 3 * K || f.cz > Math.max(z0, z1) + 3 * K) continue
       const side = x0 > f.cx ? 1 : -1, edge = side > 0 ? f.x1 : f.x0, d = Math.abs(x0 - edge)
-      if (d < bd) { bd = d; best = { x: edge + side * Math.max(0.15, d - 1.25), z: f.cz, heading: side > 0 ? 0 : Math.PI } }
+      if (d < bd) { bd = d; best = { x: edge + side * Math.max(0.15 * S, d - 1.25 * S), z: f.cz, heading: side > 0 ? 0 : Math.PI } }
     } else {
-      if (f.cx < Math.min(x0, x1) - 3 || f.cx > Math.max(x0, x1) + 3) continue
+      if (f.cx < Math.min(x0, x1) - 3 * K || f.cx > Math.max(x0, x1) + 3 * K) continue
       const side = z0 > f.cz ? 1 : -1, edge = side > 0 ? f.z1 : f.z0, d = Math.abs(z0 - edge)
-      if (d < bd) { bd = d; best = { x: f.cx, z: edge + side * Math.max(0.15, d - 1.25), heading: side > 0 ? Math.PI / 2 : -Math.PI / 2 } }
+      if (d < bd) { bd = d; best = { x: f.cx, z: edge + side * Math.max(0.15 * S, d - 1.25 * S), heading: side > 0 ? Math.PI / 2 : -Math.PI / 2 } }
     }
   }
   return best
@@ -229,7 +231,7 @@ export function serpentine(field: number, rows: number[]): Pt[] {
   const pts: Pt[] = []
   rows.forEach((r, k) => {
     const z = f.z0 + (r + 0.5) * SZ
-    const a = { x: f.x1 + 0.5, z }, b = { x: f.x0 - 0.5, z }
+    const a = { x: f.x1 + 2, z }, b = { x: f.x0 - 2, z }
     const from = k % 2 === 0 ? a : b, to = k % 2 === 0 ? b : a
     if (k > 0) {
       // swing round on the headland from the last row's end to this one's start
@@ -237,7 +239,7 @@ export function serpentine(field: number, rows: number[]): Pt[] {
       const mid = (prev.z + from.z) / 2, half = (from.z - prev.z) / 2
       for (let n = 1; n < 6; n++) {
         const t = (n / 6) * Math.PI
-        pts.push({ x: prev.x + out * Math.sin(t) * Math.min(1.1, Math.abs(half) * 1.4 + 0.25), z: mid - half * Math.cos(t) })
+        pts.push({ x: prev.x + out * Math.sin(t) * Math.min(6, Math.abs(half) * 0.9 + 0.5), z: mid - half * Math.cos(t) })
       }
     }
     pts.push(from, to)
@@ -249,8 +251,8 @@ function scoutWalk(field: number, flip: boolean): Pt[] {
   const f = FIELDS[field]
   const pts: Pt[] = []
   for (let k = 0; k <= 6; k++) {
-    const x = f.x1 - 0.5 - (k / 6) * (f.x1 - f.x0 - 1)
-    pts.push({ x, z: (k % 2 ? 1 : 0) !== (flip ? 1 : 0) ? f.z1 - 1.2 : f.z0 + 1.2 })
+    const x = f.x1 - 1 - (k / 6) * (f.x1 - f.x0 - 2)
+    pts.push({ x, z: (k % 2 ? 1 : 0) !== (flip ? 1 : 0) ? f.z1 - 1.2 * S : f.z0 + 1.2 * S })
   }
   return pts
 }
@@ -320,7 +322,7 @@ export function planDay(snap: Snapshot, shown: HillDisplay[][], crews: CrewFrom[
     const go = (to: Pt, ride: Ride): { walkTo: Pt[]; travel: Pt[] } => {
       if (!ride) return { walkTo: [], travel: route(at, to) }
       const m = machine ?? at
-      const walkTo = Math.hypot(m.x - at.x, m.z - at.z) > 1.2 ? route(at, m) : []
+      const walkTo = Math.hypot(m.x - at.x, m.z - at.z) > 1.2 * S ? route(at, m) : []
       return { walkTo, travel: route(m, to) }
     }
     if (u) {
@@ -342,7 +344,7 @@ export function planDay(snap: Snapshot, shown: HillDisplay[][], crews: CrewFrom[
           if (ride) {
             // a day's hauling ends at the potato house door
             const door = houseDoor(houseFor(w.field, snap.farm.dufour))
-            at = machine = w.kind === 'haul' ? { x: door.x, z: door.z + 0.9 } : at
+            at = machine = w.kind === 'haul' ? { x: door.x, z: door.z + 0.9 * S } : at
           }
           continue
         }
@@ -362,25 +364,25 @@ export function planDay(snap: Snapshot, shown: HillDisplay[][], crews: CrewFrom[
         } else if (w.kind === 'scout') {
           path = scoutWalk(w.field, crew.slot % 2 === 1)
         } else {
-          path = [{ x: start.x - 0.5, z: start.z + 0.6 }]
+          path = [{ x: start.x - 0.5 * S, z: start.z + 0.6 * S }]
           const byRow = hills.slice().sort((a, b) => (Math.floor(a / COLS) - Math.floor(b / COLS)) || ((a % COLS) - (b % COLS)) * (Math.floor(a / COLS) % 2 ? 1 : -1))
           for (const h of byRow) {
             const p = hillPos(w.field, h)
             // The walker stands in the furrow below the hill, facing it.
-            path.push({ x: p.x + 0.1, z: p.z + SZ * 0.62 })
+            path.push({ x: p.x + 0.2, z: p.z + 1.1 })
           }
           if (byRow.length === 0) path.push(hillPos(w.field, Math.floor(HILLS / 2)))
           // A test dig ends at the hill: whoever dug it stays to look at what came up.
-          if (w.kind !== 'sample' || byRow.length === 0) path.push({ x: start.x - 0.5, z: start.z + 0.6 })
+          if (w.kind !== 'sample' || byRow.length === 0) path.push({ x: start.x - 0.5 * S, z: start.z + 0.6 * S })
         }
         // worn out, they come off the field at the day's end and sit down at its edge
         if (!tractor && w.kind !== 'sample' && u.tired > 0.72) {
           const last = path[path.length - 1], fr = FIELDS[w.field]
           const up = last.z - fr.z0 < fr.z1 - last.z
-          path.push({ x: last.x, z: up ? fr.z0 - 0.7 : fr.z1 + 0.7 })
+          path.push({ x: last.x, z: up ? fr.z0 - 0.7 * S : fr.z1 + 0.7 * S })
         }
         const poly = new Poly(path)
-        const lag = tractor ? (w.kind === 'dig' ? 1.7 : w.kind === 'plant' ? 1.1 : 1.0) : 0.05
+        const lag = tractor ? (w.kind === 'dig' ? 1.7 : w.kind === 'plant' ? 1.1 : 1.0) * S : 0.05
         const reveals: Reveal[] = hills.map(h => {
           const p = hillPos(w.field, h)
           return {
@@ -407,7 +409,7 @@ export function planDay(snap: Snapshot, shown: HillDisplay[][], crews: CrewFrom[
       } else if (!u.worked.length && crew.goal === null && u.at >= 0) {
         // nothing done today and nowhere to go: at the field they were left at
         const dest = restAt(u.at, crew.slot, true)
-        if (Math.hypot(dest.x - at.x, dest.z - at.z) > 3) segs.push({ kind: 'travel', field: -1, walker: true, ride: '', walkTo: [], travel: route(at, dest), path: [dest], reveals: [], start: 0, end: 0, site: '' })
+        if (Math.hypot(dest.x - at.x, dest.z - at.z) > 3 * S) segs.push({ kind: 'travel', field: -1, walker: true, ride: '', walkTo: [], travel: route(at, dest), path: [dest], reveals: [], start: 0, end: 0, site: '' })
       }
     }
     // A day off, a day laid up, or nothing to do in the yard: to where that is spent.

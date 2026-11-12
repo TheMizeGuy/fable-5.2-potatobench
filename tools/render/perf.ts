@@ -104,7 +104,7 @@ for (const [w, h] of [[1440, 900], [1920, 1080]]) {
   }, { year, seed, rain })
   await measure(page, `July, strategic view (${await state(false)})`)
   await measure(page, `rain (${await state(true)})`)
-  await page.evaluate(() => (window as any).__countyField.view({ x: 5, z: 12.4, dist: 9, yaw: -1.32, pitch: 0.13 }))
+  await page.evaluate(() => (window as any).__countyField.view({ frame: 'field', field: 5, x: 0.3, z: 0.52, dist: 12, yaw: -1.32, pitch: 0.13 }))
   await measure(page, 'rain, close along the rows', 3)
   console.log(errors.length ? `  page errors: ${errors.join(' | ')}` : '  no page errors')
   await page.close()

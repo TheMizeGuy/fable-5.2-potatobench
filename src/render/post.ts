@@ -46,7 +46,7 @@ const AO_FRAG = /* glsl */ `
 ${DEPTH_GLSL}
 uniform vec2 uRes;
 uniform float uProjScale;
-const float RADIUS = 0.85;
+const float RADIUS = 1.6;
 const int TAPS = 10;
 float ign(vec2 p) { return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }
 void main() {
@@ -68,7 +68,7 @@ void main() {
   }
   float ao = max(0.0, 1.0 - sum * 5.0 / (float(TAPS) * pow(RADIUS, 6.0)));
   // Contact shade belongs to what is near: let it go where the air takes over.
-  gl_FragColor = vec4(mix(ao, 1.0, smoothstep(140.0, 420.0, -c.z)));
+  gl_FragColor = vec4(mix(ao, 1.0, smoothstep(300.0, 900.0, -c.z)));
 }
 `
 

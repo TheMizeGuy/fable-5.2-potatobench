@@ -8,10 +8,11 @@ import {
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { PARCELS, TRACTS } from '../sim/index.ts'
 import {
-  DUFOUR_BARN, DUFOUR_HOUSE, DUFOUR_POTATO_HOUSE, FARM, FARM_CENTER, FD, FIELDS, FW, HOME_WOODS, KEEP_CLEAR, POND, POTATO_HOUSE, brookHalf, brookZ, fieldMask,
-  groundY, hillRoadZ, oursAt, ridgeWoodAt, roadDist, stripEdge, townRoadZ, tractAt, woodFront, woodsAt,
+  DUFOUR, DUFOUR_BARN, DUFOUR_HOUSE, DUFOUR_POTATO_HOUSE, FARM, FARM_CENTER, FD, FIELDS, FW, HOME, HOME_WOODS, KEEP_CLEAR, LAND, POND, POTATO_HOUSE, WIDE, brookHalf,
+  brookZ, fieldMask, groundY, hillRoadZ, oursAt, regionAt, ridgeWoodAt, roadDist, townRoadZ, tractAt, woodFront, woodsAt,
 } from './layout.ts'
 import { fbm2, hash2, rng, smooth } from './noise.ts'
+import { K, KV, S, toWorld } from './scale.ts'
 import { SNOW_RIME_TREE, depthFor, linear, patch, sway, type Patch } from './shaders.ts'
 
 // kind: 0 maple, 1 birch, 2 poplar, 3 alder and brush (for a hardwood); 0 spruce, 1 fir (for a conifer).
@@ -231,8 +232,13 @@ type Cls = 'spruce' | 'maple' | 'birch' | 'bush' | 'conBack' | 'broadBack' | 'co
 // Trees are laid out in patches of ground, each its own set of meshes so what is out of sight is not drawn, nor drawn
 // into a shadow it cannot reach. On and near the farm a patch has whole trees for when the camera is close and simpler
 // ones for when it is not.
-const CELL = 64
-const NEAR_AT = { high: 70, medium: 50, low: 30 }
+const CELL = 140
+const NEAR_AT = { high: 150, medium: 110, low: 60 }
+// Trees at true size: spruce and fir 15 to 25 m, maple and birch a little under, brush head-high and more.
+const T = S
+// Whole trees stand this far back from the front of the ridge woods; behind them, fewer and simpler ones, each standing
+// for several, never more than about this many in all.
+const FRONT = 70, BACK_MOST = 11000, HEDGE_MOST = 7000
 
 export class Flora {
   readonly group = new Group()
@@ -249,9 +255,10 @@ export class Flora {
     const trees: Record<Cls, Tree[]> = { spruce: [], maple: [], birch: [], bush: [], conBack: [], broadBack: [], conFar: [], conDistant: [], broadFar: [], broadDistant: [] }
     const built = [POTATO_HOUSE, DUFOUR_POTATO_HOUSE, DUFOUR_HOUSE, DUFOUR_BARN]
     const open = (x: number, z: number) =>
-      Math.hypot((x - POND.x) / (POND.rx * 2 + 1), (z - POND.z - 2) / (POND.rz * 2 + 4)) > 1 && roadDist(x, z) > 1.8 && Math.abs(z - townRoadZ(x)) > 3.2 && Math.abs(z - hillRoadZ(x)) > 3.2 && Math.abs(z - brookZ(x)) > brookHalf(x) + 0.7
-      && built.every(b => Math.hypot(x - b.x, z - b.z) > 5.2) && fieldMask(x, z, 1.2) < 0.01
-      && KEEP_CLEAR.every(c => Math.hypot(x - c.x, z - c.z) > c.r + 1.2)
+      Math.hypot((x - POND.x) / (POND.rx * 2 + 1), (z - POND.z - 2) / (POND.rz * 2 + 4)) > 1 && roadDist(x, z) > WIDE.road / 2 + 2.2
+      && Math.abs(z - townRoadZ(x)) > WIDE.town / 2 + 4 && Math.abs(z - hillRoadZ(x)) > WIDE.town / 2 + 4 && Math.abs(z - brookZ(x)) > brookHalf(x) + 0.7 * S
+      && built.every(b => Math.hypot(x - b.x, z - b.z) > 5.2 * S) && fieldMask(x, z, 1.2 * S) < 0.01
+      && KEEP_CLEAR.every(c => Math.hypot(x - c.x, z - c.z) > c.r + 1.2 * S)
     // maple, birch or poplar
     const hard = (t: Omit<Tree, 'kind'>, poplar = 0.12) => {
       const q = r()
@@ -262,107 +269,121 @@ export class Flora {
     // a fir is a slimmer spruce
     const soft = (t: Omit<Tree, 'kind'>) => trees.spruce.push(r() < 0.36 ? { ...t, kind: 1, w: 0.7 } : { ...t, kind: 0 })
     // The canopy rolls: stands of taller and of lower trees.
-    const tall = (x: number, z: number) => 0.74 + 0.56 * fbm2(x * 0.055 + 3.7, z * 0.07 + 1.1)
+    const tall = (x: number, z: number) => 0.74 + 0.56 * fbm2((x / K) * 0.11 + 3.7, (z / K) * 0.14 + 1.1)
 
     // The front of the woods on the ridge, where the camera can come close: whole trees, smaller toward the ragged edge.
-    const h = HOME_WOODS
-    for (let z = -44; z < h.z1 + 1.5; z += 1.9) {
-      for (let x = h.x0 - 6; x < h.x1 + 6; x += 1.9) {
-        const jx = x + (r() - 0.5) * 1.8, jz = z + (r() - 0.5) * 1.8
+    const h = HOME_WOODS, gap = 1.9 * T
+    for (let z = h.z1 - 9 * KV - 3 * S - FRONT; z < h.z1 + 1.5 * T; z += gap) {
+      for (let x = h.x0 - 6 * K; x < h.x1 + 6 * K; x += gap) {
+        const jx = x + (r() - 0.5) * gap * 0.95, jz = z + (r() - 0.5) * gap * 0.95
+        const depth = woodFront(jx) - jz
+        if (depth > FRONT || depth < -3 * S) continue
         const w = woodsAt(jx, jz)
         if (r() > w.woods * 0.93 || !open(jx, jz)) continue
-        const depth = woodFront(jx) - jz
-        const size = (0.58 + 0.42 * smooth(0, 7, depth)) * tall(jx, jz)
+        const size = (0.58 + 0.42 * smooth(0, 7 * T, depth)) * tall(jx, jz)
         const t = { x: jx, z: jz, s: 0, r: r(), hue: r() }
-        if (r() < w.hard) hard({ ...t, s: (3.9 + r() * 2.8) * size })
-        else soft({ ...t, s: (5.4 + r() * 3.8) * size * (r() < 0.04 ? 1.35 : 1) })
+        if (r() < w.hard) hard({ ...t, s: (4.6 + r() * 3.0) * T * size })
+        else soft({ ...t, s: (6.2 + r() * 3.8) * T * size * (r() < 0.04 ? 1.25 : 1) })
       }
     }
     // Under its edge: saplings, young birch and brush, in and out along the front.
-    for (let x = h.x0 - 2; x < h.x1 + 2; x += 0.55 + r() * 0.7) {
-      const z = Math.min(-22.5, woodFront(x) + 2.1 - r() * 3.4)
-      if (ridgeWoodAt(x, z - 2.5) < 0.3 || tractAt(x, z, 1.4) >= 0 || !open(x, z)) continue
+    for (let x = h.x0 - 2 * K; x < h.x1 + 2 * K; x += (0.55 + r() * 0.7) * T) {
+      const z = Math.min(h.z1 + 0.9 * S, woodFront(x) + (2.1 - r() * 3.4) * T)
+      if (ridgeWoodAt(x, z - 2.5 * T) < 0.3 || tractAt(x, z, 1.4 * T) >= 0 || !open(x, z)) continue
       const q = r(), t = { x, z, s: 0, r: r(), hue: r() }
-      if (q < 0.5) trees.bush.push({ ...t, s: 0.7 + r() * 0.9, kind: 3 })
-      else if (q < 0.78) trees.spruce.push({ ...t, s: 1.2 + r() * 1.9, kind: 0, w: 1.25 })
-      else trees.birch.push({ ...t, s: 2.2 + r() * 1.6, kind: r() < 0.3 ? 2 : 1 })
+      if (q < 0.5) trees.bush.push({ ...t, s: (0.7 + r() * 0.9) * T, kind: 3 })
+      else if (q < 0.78) trees.spruce.push({ ...t, s: (1.2 + r() * 1.9) * T, kind: 0, w: 1.25 })
+      else trees.birch.push({ ...t, s: (2.2 + r() * 1.6) * T, kind: r() < 0.3 ? 2 : 1 })
     }
-    // Back up the ridge and over its crest, where nobody walks: simpler trees, each standing for a little more.
-    for (let z = h.z0 - 10; z < -44; z += 2.7) {
-      for (let x = h.x0 - 8; x < h.x1 + 8; x += 2.7) {
-        const jx = x + (r() - 0.5) * 2.6, jz = z + (r() - 0.5) * 2.6
+    // Back up the ridge and over its crest, where nobody walks: simpler trees, each standing for several.
+    const backGap = Math.max(8.5, Math.sqrt(((h.x1 - h.x0 + 16 * K) * (h.z1 - h.z0 + 10 * K)) / BACK_MOST))
+    const stout = Math.min(2, backGap / 6.5)
+    for (let z = h.z0 - 10 * K; z < h.z1; z += backGap) {
+      for (let x = h.x0 - 8 * K; x < h.x1 + 8 * K; x += backGap) {
+        const jx = x + (r() - 0.5) * backGap * 0.95, jz = z + (r() - 0.5) * backGap * 0.95
+        if (woodFront(jx) - jz <= FRONT) continue
         const w = woodsAt(jx, jz)
         if (r() > w.woods * 0.95 || !open(jx, jz)) continue
-        const size = tall(jx, jz) * 1.12
+        const size = tall(jx, jz) * 1.1
         const t = { x: jx, z: jz, s: 0, r: r(), hue: r() }
-        if (r() < w.hard) trees.broadBack.push({ ...t, s: (4.4 + r() * 2.8) * size, kind: r() < 0.4 ? 1 : 0 })
-        else trees.conBack.push({ ...t, s: (5.8 + r() * 3.8) * size, kind: r() < 0.36 ? 1 : 0, w: 1.12 })
+        if (r() < w.hard) trees.broadBack.push({ ...t, s: (5.2 + r() * 2.8) * T * size, kind: r() < 0.4 ? 1 : 0, w: stout })
+        else trees.conBack.push({ ...t, s: (6.4 + r() * 3.8) * T * size, kind: r() < 0.36 ? 1 : 0, w: 1.12 * stout })
       }
     }
     // By the house, along the lane and on the brook; the Dufour dooryard's maple, and a few along the road between.
-    trees.maple.push({ x: 27.3, z: 5.2, s: 6.6, r: 0.3, hue: 0.12, kind: 0 }, { x: 27.6, z: -2.4, s: 4.6, r: 0.5, hue: 0.8, kind: 0 })
+    const home = (x: number, z: number) => toWorld(HOME, x, z), dufour = (x: number, z: number) => toWorld(DUFOUR, x, z)
+    trees.maple.push({ ...home(27.3, 5.2), s: 8.6 * T, r: 0.3, hue: 0.12, kind: 0 }, { ...home(27.6, -2.4), s: 6.4 * T, r: 0.5, hue: 0.8, kind: 0 })
     for (let k = 0; k < 4; k++) {
-      const t = { x: 28.2 + r() * 1.4, z: -8.6 + k * 2.3 + r(), s: 4.2 + r() * 2.4, r: r(), hue: r(), kind: 0 }
-      if (roadDist(t.x, t.z) > 1.8) trees.spruce.push(t)
+      const t = { ...home(28.2 + r() * 1.4, -8.6 + k * 2.3 + r()), s: (5 + r() * 2.4) * T, r: r(), hue: r(), kind: 0 }
+      if (roadDist(t.x, t.z) > WIDE.road / 2 + 2.2) trees.spruce.push(t)
     }
-    trees.maple.push({ x: 97.4, z: 6.6, s: 6.8, r: 0.22, hue: 0.2, kind: 0 })
-    trees.birch.push({ x: 89.0, z: 4.6, s: 4.4, r: 0.62, hue: 0.7, kind: 1 })
-    for (let k = 0; k < 3; k++) trees.spruce.push({ x: 98.6 + r() * 1.6, z: -10 + k * 2.6, s: 4.4 + r() * 2.2, r: r(), hue: r(), kind: 0 })
-    for (let x = 33; x < 48; x += 2.2 + r() * 3) {
-      const side = r() < 0.5 ? -1 : 1, z = -8.4 + side * (2.4 + r() * 1.2) - (x < 40 ? (40 - x) * 0.35 : 0)
+    trees.maple.push({ ...dufour(97.4, 6.6), s: 8.8 * T, r: 0.22, hue: 0.2, kind: 0 })
+    trees.birch.push({ ...dufour(89.0, 4.6), s: 5.6 * T, r: 0.62, hue: 0.7, kind: 1 })
+    for (let k = 0; k < 3; k++) trees.spruce.push({ ...dufour(98.6 + r() * 1.6, -10 + k * 2.6), s: (5 + r() * 2.2) * T, r: r(), hue: r(), kind: 0 })
+    for (let x = home(46, 0).x; x < 48 * K; x += (4 + r() * 7) * T) {
+      const side = r() < 0.5 ? -1 : 1, z = -7.6 * K + side * (WIDE.road / 2 + (2.4 + r() * 1.2) * T)
       if (!open(x, z)) continue
-      if (r() < 0.55) trees.bush.push({ x, z, s: 1.2 + r(), r: r(), hue: r(), kind: 3 })
-      else hard({ x, z, s: 3.6 + r() * 2.6, r: r(), hue: r() })
+      if (r() < 0.55) trees.bush.push({ x, z, s: (1.2 + r()) * T, r: r(), hue: r(), kind: 3 })
+      else hard({ x, z, s: (4.4 + r() * 2.6) * T, r: r(), hue: r() })
     }
-    for (let x = -150; x < 170; x += 1.5 + r() * 2.6) {
-      if (Math.abs(x - 17.8) < 3.2 || Math.abs(x - 92.6) < 3.2 || (x > -26 && x < 13.5)) continue
-      const side = r() < 0.5 ? -1 : 1, bz = brookZ(x), off = brookHalf(x) + 0.9 + r() * 1.6
+    for (let x = -150 * K; x < 170 * K; x += (1.5 + r() * 2.6) * T * 1.6) {
+      if (Math.abs(x - 17.8 * K) < 3.2 * T || (x > -26 * K && x < 13.5 * K)) continue
+      const side = r() < 0.5 ? -1 : 1, bz = brookZ(x), off = brookHalf(x) + (0.9 + r() * 1.6) * T
       // Fewer on the farm's own bank, so the view across the brook stays open.
-      if (side < 0 && x > FARM.x0 - 4 && x < FARM.x1 && r() < 0.62) continue
+      if (side < 0 && x > FARM.x0 - 4 * K && x < FARM.x1 && r() < 0.62) continue
       const z = bz + side * off
-      if (tractAt(x, z, 0.8) >= 0 || !open(x, z)) continue
-      if (r() < 0.72) trees.bush.push({ x, z, s: 0.9 + r() * 0.9, r: r(), hue: r(), kind: 3 })
-      else hard({ x, z: bz + side * (off + 1), s: 3.2 + r() * 2.6, r: r(), hue: r() }, 0.3)
+      if (tractAt(x, z, 0.8 * T) >= 0 || !open(x, z)) continue
+      if (r() < 0.72) trees.bush.push({ x, z, s: (0.9 + r() * 0.9) * T, r: r(), hue: r(), kind: 3 })
+      else hard({ x, z: bz + side * (off + T), s: (4 + r() * 2.6) * T, r: r(), hue: r() }, 0.3)
     }
     // The country: woodlots thinning with distance, each tree standing for more as they go, and hedgerow trees.
-    const reach = 1500
-    for (let tries = 0; tries < 160000; tries++) {
-      const a = r() * Math.PI * 2, d = 40 + Math.pow(r(), 1.7) * reach
+    const reach = 1500 + 250 * K
+    for (let tries = 0; tries < 220000; tries++) {
+      const a = r() * Math.PI * 2, d = 40 * K + Math.pow(r(), 1.7) * reach
       const x = FARM_CENTER.x + Math.cos(a) * d, z = FARM_CENTER.z + Math.sin(a) * d
       if (trees.conFar.length + trees.broadFar.length + trees.conDistant.length + trees.broadDistant.length > 11000) break
-      if (ridgeWoodAt(x, z) > 0.02 || tractAt(x, z, 1.4) >= 0) continue
+      if (ridgeWoodAt(x, z) > 0.02 || tractAt(x, z, 1.4 * T) >= 0) continue
       const w = woodsAt(x, z)
       if (w.woods <= 0 || !open(x, z)) continue
-      const sparse = 1 / (1 + d / 260)
+      const sparse = 1 / (1 + d / (260 * KV))
       if (r() > w.woods * (0.3 + 0.7 * sparse)) continue
-      const grow = 1 + d / 520
-      const t = { x, z, s: (4.2 + r() * 3.6) * grow, r: r(), hue: r(), kind: 0 }
-      const near = d < 95
+      const grow = 1 + d / 2600
+      const t = { x, z, s: (6 + r() * 3.6) * T * grow, r: r(), hue: r(), kind: 0 }
+      const near = d < 95 * T
       if (r() < w.hard) {
-        if (near) hard({ ...t, s: (3.4 + r() * 2.6) * grow })
-        else (d < 330 ? trees.broadFar : trees.broadDistant).push({ ...t, s: (3.6 + r() * 2.6) * grow, kind: r() < 0.35 ? 1 : 0 })
+        if (near) hard({ ...t, s: (4.4 + r() * 2.6) * T * grow })
+        else (d < 330 * T ? trees.broadFar : trees.broadDistant).push({ ...t, s: (4.6 + r() * 2.6) * T * grow, kind: r() < 0.35 ? 1 : 0, w: 1 + d / 2600 })
       } else if (near) soft(t)
-      else (d < 340 ? trees.conFar : trees.conDistant).push({ ...t, w: 1.1 })
+      else (d < 340 * T ? trees.conFar : trees.conDistant).push({ ...t, w: 1.1 + d / 2600 })
     }
     // Hedgerows between the neighbours' strips round the farm: brush, with a tree here and there. Low to the north-west,
-    // where the evening sun comes from.
-    for (let z = -18; z < 150; z += 1.05) {
-      for (let x = -150; x < 200; x += 1.05) {
-        const jx = x + (r() - 0.5), jz = z + (r() - 0.5)
-        const e = stripEdge(jx, jz)
-        if (!e.hedged || e.d > 0.75 || r() < 0.3) continue
-        if (oursAt(jx, jz, 2) > 0.01 || woodsAt(jx, jz).woods > 0 || !open(jx, jz) || tractAt(jx, jz, 1.4) >= 0) continue
-        const low = jx < -18 && jz < 34
-        if (r() < (low ? 0.94 : 0.7)) trees.bush.push({ x: jx, z: jz, s: 0.8 + r() * 0.9, r: r(), hue: r(), kind: 3 })
-        else hard({ x: jx, z: jz, s: (low ? 2.4 : 3.2) + r() * 2.4, r: r(), hue: r() }, 0.25)
+    // where the evening sun comes from. Found by stepping over the country and going to the nearest side of the strip.
+    const step = 9
+    let hedged = 0
+    for (let z = -18 * K; z < 150 * K && hedged < HEDGE_MOST; z += step) {
+      for (let x = -150 * K; x < 200 * K; x += step) {
+        if (oursAt(x, z, 2 * S) > 0.01) continue
+        const g = regionAt(x, z)
+        if (g.woods) continue
+        const u = g.qx / g.width, side = Math.round(u), off = (u - side) * g.width
+        if (Math.abs(off) > step / 2 || hash2(side * 7 + g.bx * 13, g.bz * 29 + 91) >= 0.4 || r() < 0.35) continue
+        // onto the strip's side, and along it a little
+        const along = (r() - 0.5) * step
+        const jx = x - Math.cos(g.angle) * off - Math.sin(g.angle) * along + (r() - 0.5) * 1.4, jz = z - Math.sin(g.angle) * off + Math.cos(g.angle) * along + (r() - 0.5) * 1.4
+        if (woodsAt(jx, jz).woods > 0 && regionAt(jx, jz).woods) continue
+        if (oursAt(jx, jz, 2 * S) > 0.01 || !open(jx, jz) || tractAt(jx, jz, 1.4 * T) >= 0) continue
+        const low = jx < -18 * K && jz < 34 * K
+        hedged++
+        if (r() < (low ? 0.94 : 0.7)) trees.bush.push({ x: jx, z: jz, s: (0.8 + r() * 0.9) * T, r: r(), hue: r(), kind: 3 })
+        else hard({ x: jx, z: jz, s: ((low ? 2.4 : 3.6) + r() * 2.6) * T, r: r(), hue: r() }, 0.25)
       }
     }
     // Trees round the neighbours' farmsteads.
     for (const [fx, fz] of FARMSTEADS) {
       for (let k = 0; k < 5; k++) {
-        const x = fx + (r() - 0.5) * 16, z = fz + (r() - 0.5) * 14
-        if (Math.hypot(x - fx, z - fz) < 5 || !open(x, z)) continue
-        ;(r() < 0.6 ? trees.broadFar : trees.conFar).push({ x, z, s: 4.5 + r() * 3, r: r(), hue: r(), kind: 0 })
+        const x = fx + (r() - 0.5) * 16 * T, z = fz + (r() - 0.5) * 14 * T
+        if (Math.hypot(x - fx, z - fz) < 6 * T || !open(x, z)) continue
+        ;(r() < 0.6 ? trees.broadFar : trees.conFar).push({ x, z, s: (5.5 + r() * 3) * T, r: r(), hue: r(), kind: 0 })
       }
     }
 
@@ -403,7 +424,7 @@ export class Flora {
         #endif
       `,
       vertexWorld: `${sway('vec2(instanceMatrix[3].x, instanceMatrix[3].z)', 'max(cWorld.y - instanceMatrix[3].y, 0.0)', '0.034')}
-        cWorld.xyz += sin(uTime * 2.7 + position.x * 23.0 + position.y * 17.0 + aTree.x * 20.0) * 0.016 * min(aTree.w, 6.0) * 0.2 * min(uSway, 1.0) * step(0.5, aPart);`,
+        cWorld.xyz += sin(uTime * 2.7 + position.x * 23.0 + position.y * 17.0 + aTree.x * 20.0) * 0.035 * min(aTree.w / ${S.toFixed(2)}, 6.0) * 0.2 * min(uSway, 1.0) * step(0.5, aPart);`,
     }
     const leafMat = patch(new MeshStandardMaterial({ color: 0xffffff, alphaTest: 0.5, alphaToCoverage: true, side: DoubleSide, roughness: 0.9, metalness: 0 }), {
       ...leafPatch,
@@ -416,7 +437,7 @@ export class Flora {
           float sp = floor(vTree.x + 0.001), own = fract(vTree.x);
           leafBump = vec2(0.0);
           // the tree's own space, in the world's units, so its leaves hold still on it in the wind
-          vec3 q = vObj * vTree.w;
+          vec3 q = vObj * vTree.w / ${S.toFixed(2)};
           if (vPart < 0.5) {
             // Bark: birch pale with dark marks and a dark foot, poplar green-grey, the rest grey-brown. Kept dark, since
             // the light that comes through leaves is counted on the bark too.
@@ -489,9 +510,9 @@ export class Flora {
     for (const cls of Object.keys(trees) as Cls[]) {
       const byCell = new Map<string, Tree[]>()
       const both = cls in this.near
-      const cell = both ? CELL : cls === 'conBack' || cls === 'broadBack' ? CELL : 720
+      const cell = both ? CELL : cls === 'conBack' || cls === 'broadBack' ? CELL * 2 : 1600
       for (const t of trees[cls]) {
-        const key = `${both ? 'n' : cell === CELL ? 'b' : 'f'}|${Math.floor(t.x / cell)}|${Math.floor(t.z / cell)}`
+        const key = `${both ? 'n' : cell < 1000 ? 'b' : 'f'}|${Math.floor(t.x / cell)}|${Math.floor(t.z / cell)}`
         let list = byCell.get(key)
         if (!list) byCell.set(key, (list = []))
         list.push(t)
@@ -518,28 +539,28 @@ export class Flora {
   private plantStand(i: number): void {
     const f = FIELDS[i], brush = PARCELS[i].cover === 'brush'
     const r = rng(900 + i * 31)
-    const step = brush ? 0.98 : 1.5
+    const step = (brush ? 0.98 : 1.5) * T
     const list: StandTree[] = []
     const order: number[] = []
     // Burnt Hill went to poplar and birch; the home woodlot is spruce; the back lot is mixed.
     const hardShare = i === 16 ? 0.82 : i === 14 ? 0.14 : 0.5
-    for (let z = f.z0 + 0.8; z < f.z1 - 0.5; z += step) {
-      for (let x = f.x0 + 0.8; x < f.x1 - 0.6; x += step) {
-        const jx = Math.min(f.x1 - 0.7, Math.max(f.x0 + 0.7, x + (r() - 0.5) * step * 1.7)), jz = Math.min(f.z1 - 0.45, Math.max(f.z0 + 0.7, z + (r() - 0.5) * step * 1.7))
+    for (let z = f.z0 + 0.8 * T; z < f.z1 - 0.5 * T; z += step) {
+      for (let x = f.x0 + 0.8 * T; x < f.x1 - 0.6 * T; x += step) {
+        const jx = Math.min(f.x1 - 0.7 * T, Math.max(f.x0 + 0.7 * T, x + (r() - 0.5) * step * 1.7)), jz = Math.min(f.z1 - 0.45 * T, Math.max(f.z0 + 0.7 * T, z + (r() - 0.5) * step * 1.7))
         // thickets and openings
-        if (r() > 0.42 + 1.1 * fbm2(jx * 0.31 + i * 3.1, jz * 0.31 + 5.7)) continue
+        if (r() > 0.42 + 1.1 * fbm2((jx / T) * 0.31 + i * 3.1, (jz / T) * 0.31 + 5.7)) continue
         const t = { x: jx, z: jz, r: r(), hue: r() }
-        const tall = 0.8 + 0.44 * fbm2(jx * 0.055 + 3.7, jz * 0.07 + 1.1)
+        const tall = 0.8 + 0.44 * fbm2((jx / K) * 0.11 + 3.7, (jz / K) * 0.14 + 1.1)
         let tree: StandTree
         if (brush) {
           const q = r()
-          tree = q < 0.84 ? { ...t, s: 0.9 + r() * 0.8, kind: 3, conifer: false, bush: true }
-            : q < 0.94 ? { ...t, s: 2.2 + r() * 1.3, kind: r() < 0.5 ? 2 : 1, conifer: false, bush: false }
-              : { ...t, s: 1.3 + r() * 1.2, kind: 0, conifer: true, bush: false, w: 1.2 }
+          tree = q < 0.84 ? { ...t, s: (0.9 + r() * 0.8) * T, kind: 3, conifer: false, bush: true }
+            : q < 0.94 ? { ...t, s: (2.2 + r() * 1.3) * T, kind: r() < 0.5 ? 2 : 1, conifer: false, bush: false }
+              : { ...t, s: (1.3 + r() * 1.2) * T, kind: 0, conifer: true, bush: false, w: 1.2 }
         } else if (r() < hardShare) {
           const q = r(), poplar = i === 16 ? 0.55 : 0.15
-          tree = { ...t, s: (3.8 + r() * 2.6) * tall * (q < poplar ? 1.12 : 1), kind: q < poplar ? 2 : q < poplar + 0.35 ? 1 : 0, conifer: false, bush: false }
-        } else tree = { ...t, s: (5.2 + r() * 3.4) * tall, kind: r() < 0.36 ? 1 : 0, conifer: true, bush: false, w: r() < 0.36 ? 0.72 : 1 }
+          tree = { ...t, s: (4.6 + r() * 2.8) * T * tall * (q < poplar ? 1.12 : 1), kind: q < poplar ? 2 : q < poplar + 0.35 ? 1 : 0, conifer: false, bush: false }
+        } else tree = { ...t, s: (6.2 + r() * 3.6) * T * tall, kind: r() < 0.36 ? 1 : 0, conifer: true, bush: false, w: r() < 0.36 ? 0.72 : 1 }
         list.push(tree)
         order.push((brush ? (jx - f.x0) / FW : (f.z1 - jz) / FD) + (r() - 0.5) * 0.1)
       }
@@ -639,8 +660,9 @@ export class Flora {
 }
 
 // Where the neighbours' houses and barns stand: along the town road and the road over the hill.
-export const FARMSTEADS: [number, number, number][] = [
-  [-92, townRoadZ(-92) + 9, 0.3], [118, townRoadZ(118) - 10, 2.9], [262, townRoadZ(262) + 10, 0.1], [-246, townRoadZ(-246) - 9, 3.3],
-  [-58, hillRoadZ(-58) + 9, 0.2], [96, hillRoadZ(96) - 9, 3.0], [-212, hillRoadZ(-212) + 10, 0.4], [248, hillRoadZ(248) + 9, 0.1],
-  [-380, hillRoadZ(-380) - 9, 3.2], [404, hillRoadZ(404) - 10, 2.8], [30, -420, 0.6], [-160, -540, 2.4], [210, -610, 1.2],
-]
+export const FARMSTEADS: [number, number, number][] = ([
+  [-92, 0, 22, 0.3], [118, 0, -24, 2.9], [262, 0, 24, 0.1], [-246, 0, -22, 3.3],
+  [-58, 1, 22, 0.2], [96, 1, -22, 3.0], [-212, 1, 24, 0.4], [248, 1, 22, 0.1],
+  [-380, 1, -22, 3.2], [404, 1, -24, 2.8],
+] as [number, number, number, number][]).map(([x, hill, off, ry]) => [x * K, (hill ? hillRoadZ(x * K) : townRoadZ(x * K)) + off, ry] as [number, number, number])
+  .concat([[30 * K, -300 * K, 0.6], [-160 * K, -330 * K, 2.4], [210 * K, -340 * K, 1.2]])

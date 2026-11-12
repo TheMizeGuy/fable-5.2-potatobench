@@ -3,12 +3,13 @@
 import { BufferAttribute, BufferGeometry, Group, Mesh, MeshStandardMaterial } from 'three'
 import { POND, groundY } from './layout.ts'
 import { fbm2 } from './noise.ts'
+import { S } from './scale.ts'
 import { SNOW_RIME, linear, patch } from './shaders.ts'
 import type { FarmVis } from './state.ts'
 
 const RINGS = [0, 0.3, 0.55, 0.74, 0.86, 0.96, 1.04, 1.1, 1.3, 1.55, 1.8]
 const SEGS = 44
-const BANK = 0.42
+const BANK = 0.42 * S
 
 export class Pond {
   readonly group = new Group()
@@ -29,11 +30,11 @@ export class Pond {
     // The bed is level, at the height of the highest ground it is cut into, and dished a little toward its middle.
     let top = -1e9
     for (let r = 0; r <= 3; r++) for (let s = 0; s < SEGS; s++) { const [x, z] = at(r, s); top = Math.max(top, groundY(x, z)) }
-    top += 0.04
+    top += 0.04 * S
     const crest = top + BANK
-    const bed = (k: number, g: number) => Math.max(g + 0.03, top - 0.17 * (1 - (k / 0.74) ** 2))
+    const bed = (k: number, g: number) => Math.max(g + 0.03 * S, top - 0.17 * S * (1 - (k / 0.74) ** 2))
     this.bedY = bed(0, groundY(POND.x, POND.z))
-    this.fullY = crest - 0.1
+    this.fullY = crest - 0.1 * S
     const pos: number[] = [], rise: number[] = [], part: number[] = [], idx: number[] = []
     for (let r = 0; r < RINGS.length; r++) {
       for (let s = 0; s <= SEGS; s++) {
@@ -41,7 +42,7 @@ export class Pond {
         const k = RINGS[r]
         // the bed, the inner slope up to a level crest, the outer slope down into the meadow
         const up = k <= 0.74 ? bed(k, g) - g : k <= 1.1 ? top + (crest - top) * Math.min(1, (k - 0.74) / 0.22) ** 1.4 - g
-          : (crest - g) * Math.max(0, 1 - (k - 1.1) / 0.7) ** 1.4 - 0.07 * Math.min(1, (k - 1.1) / 0.7)
+          : (crest - g) * Math.max(0, 1 - (k - 1.1) / 0.7) ** 1.4 - 0.07 * S * Math.min(1, (k - 1.1) / 0.7)
         pos.push(x, g + up, z)
         rise.push(up)
         part.push(k <= 0.74 ? 0 : k < 1.0 ? 0.5 : 1)
@@ -71,17 +72,18 @@ export class Pond {
       fragmentHead: 'uniform float uDug; uniform float uLevel; uniform float uFull; varying float vPart; float pondWet;',
       fragmentColor: /* glsl */ `
         {
-          vec4 n = texture2D(uNoise, vWorld.xz * 0.43);
-          float fine = n.a, broad = texture2D(uNoise, vWorld.xz * 0.06).b;
+          vec2 pp = vWorld.xz / ${S.toFixed(2)};
+          vec4 n = texture2D(uNoise, pp * 0.43);
+          float fine = n.a, broad = texture2D(uNoise, pp * 0.06).b;
           vec3 clay = mix(${linear('#7b5f48')}, ${linear('#9c8062')}, fine) * (0.82 + 0.3 * broad);
-          vec3 turf = uGrass * (0.62 + 0.62 * broad) * (0.78 + 0.44 * fine) * mix(vec3(1.2, 1.07, 0.78), vec3(0.86, 0.95, 0.84), smoothstep(0.3, 0.7, texture2D(uNoise, vWorld.xz * 0.19).a));
+          vec3 turf = uGrass * (0.62 + 0.62 * broad) * (0.78 + 0.44 * fine) * mix(vec3(1.2, 1.07, 0.78), vec3(0.86, 0.95, 0.84), smoothstep(0.3, 0.7, texture2D(uNoise, pp * 0.19).a));
           // Grass takes the bank once the digging is done; the inside stays clay down to the water.
           float grown = smoothstep(0.92, 1.0, uDug) * smoothstep(0.55, 0.95, vPart + (fine - 0.5) * 0.4);
           vec3 col = mix(clay, turf, grown);
           // Below the full mark the bed is mud: wet and dark by the water, drying pale and cracked above it.
-          float below = (1.0 - smoothstep(uFull - 0.03, uFull + 0.02, vWorld.y)) * step(0.999, uDug) * (1.0 - step(0.75, vPart));
-          float dryness = smoothstep(uLevel, uLevel + 0.22, vWorld.y);
-          vec3 mud = mix(${linear('#33271d')}, ${linear('#8d7a60')} * (0.88 + 0.2 * smoothstep(0.3, 0.7, fine)) * (1.0 - 0.34 * (1.0 - smoothstep(0.012, 0.05, abs(texture2D(uNoise, vWorld.xz * 0.9).b - 0.5)))), dryness);
+          float below = (1.0 - smoothstep(uFull - 0.06, uFull + 0.04, vWorld.y)) * step(0.999, uDug) * (1.0 - step(0.75, vPart));
+          float dryness = smoothstep(uLevel, uLevel + 0.5, vWorld.y);
+          vec3 mud = mix(${linear('#33271d')}, ${linear('#8d7a60')} * (0.88 + 0.2 * smoothstep(0.3, 0.7, fine)) * (1.0 - 0.34 * (1.0 - smoothstep(0.012, 0.05, abs(texture2D(uNoise, pp * 0.9).b - 0.5)))), dryness);
           col = mix(col, mud, below);
           pondWet = below * (1.0 - dryness);
           diffuseColor.rgb = col;
@@ -137,7 +139,7 @@ export class Pond {
     this.group.visible = !!b
     if (!b) return
     this.dug.value = b.built ? 1 : Math.max(0.05, b.progress)
-    const y = this.bedY + 0.05 + Math.max(0, Math.min(1, farm.pond)) * (this.fullY - this.bedY - 0.05)
+    const y = this.bedY + 0.05 * S + Math.max(0, Math.min(1, farm.pond)) * (this.fullY - this.bedY - 0.05 * S)
     this.level.value = y
     this.water.position.y = y
     this.water.visible = b.built

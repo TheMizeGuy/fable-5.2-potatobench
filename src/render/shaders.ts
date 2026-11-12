@@ -4,6 +4,7 @@ import {
   Color, MeshDepthMaterial, ShaderChunk, Vector2, Vector3, Vector4, type IUniform, type Material, type Texture,
 } from 'three'
 import { GLSL_NOISE } from './noise.ts'
+import { KV, S } from './scale.ts'
 
 export const U = {
   uTime: { value: 0 },
@@ -96,20 +97,24 @@ uniform float uSunlit;
 varying vec3 vWorld;
 varying vec3 vWNormal;
 ${GLSL_NOISE}
-float rimeAt(float y) {
+float rimeAt(float yTrue) {
+  float y = yTrue / ${KV.toFixed(3)};
   return mix(mix(uRime.z, uRime.y, smoothstep(2.0, 3.0, y)), uRime.x, smoothstep(3.6, 4.7, y));
 }
 // A gust front passing over a place: 0 calm, 1 in the gust. Fronts lie across the wind and run down it, broad enough
 // to be followed over a field from the playing height.
 float gustAt(vec2 xz) {
   vec2 q = vec2(dot(xz, uGust.xy) - uGust.z, dot(xz, vec2(-uGust.y, uGust.x)));
-  float broad = textureLod(uNoise, q * vec2(0.021, 0.0078), 0.0).b;
-  float fine = textureLod(uNoise, q * vec2(0.067, 0.029) + 0.37, 0.0).b;
+  float broad = textureLod(uNoise, q * vec2(${(0.021 / KV).toFixed(5)}, ${(0.0078 / KV).toFixed(5)}), 0.0).b;
+  float fine = textureLod(uNoise, q * vec2(${(0.067 / S).toFixed(5)}, ${(0.029 / S).toFixed(5)}) + 0.37, 0.0).b;
   return smoothstep(0.36, 0.74, broad * 0.72 + fine * 0.28);
 }
 `
 
 // Shared by the sky's picture of the clouds and the shadow they throw on the land.
+// The scene's haze was tuned as so much per unit of a land a tenth the size: per metre it is this share of that.
+export const HAZE_PER_M = 0.36
+
 export const CLOUD_GLSL = /* glsl */ `
 // How high the cumulus stands. Low, so a cloud's shadow is of a size to be seen crossing a field.
 const float CLOUD_H = 420.0;
@@ -147,12 +152,12 @@ float airBetween(float density, float falloff, float base, float ya, float yb, f
 float hazeAmount(float ya, float yb, float t, vec2 xz, out float mistShare) {
   mistShare = 0.0;
   // A fair day's haze belongs to distance: the farm itself stands in clear air.
-  float air = airBetween(uHaze.x, uHaze.y, 0.0, ya, yb, t) * mix(smoothstep(60.0, 320.0, t), 1.0, smoothstep(0.0014, 0.003, uHaze.x));
+  float air = airBetween(uHaze.x * ${HAZE_PER_M.toFixed(3)}, uHaze.y, 0.0, ya, yb, t) * mix(smoothstep(${(60 * S).toFixed(1)}, ${(320 * S).toFixed(1)}, t), 1.0, smoothstep(0.0014, 0.003, uHaze.x));
   if (uMist.x > 1e-5) {
     // Mist lies in banks with clear air between, drifting; and however deep, what stands in it still shows through.
-    float bank = texture2D(uNoise, xz * 0.0071 + uCloud.zw * 6.0).b * 0.65 + texture2D(uNoise, xz * 0.031 - uCloud.zw * 11.0).b * 0.35;
+    float bank = texture2D(uNoise, xz * ${(0.0071 / KV).toFixed(5)} + uCloud.zw * 6.0).b * 0.65 + texture2D(uNoise, xz * ${(0.031 / S).toFixed(5)} - uCloud.zw * 11.0).b * 0.35;
     float wisp = 1.0 - uMist.w + uMist.w * 2.6 * smoothstep(0.32, 0.78, bank);
-    float low = min(airBetween(uMist.x * wisp, uMist.y, uMist.z, ya, yb, min(t, 400.0)), 0.85);
+    float low = min(airBetween(uMist.x * wisp, uMist.y, uMist.z, ya, yb, min(t, ${(400 * S).toFixed(1)})), 0.85);
     mistShare = low / max(air + low, 1e-5);
     air += low;
   }

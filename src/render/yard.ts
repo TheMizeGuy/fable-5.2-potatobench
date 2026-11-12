@@ -5,7 +5,11 @@ import { IRON, TRIM, barrel, chimney, door, foundation, leanRoof, level, roof, s
 import { FIN, type Builder, type V3 } from './builder.ts'
 import { cordwood } from './farmstead.ts'
 import { FARMSTEADS } from './flora.ts'
-import { DUFOUR_BARN, HOUSE, LOG_DECKS, SITES, STONE_PILE, groundY, townRoadZ, type Spot } from './layout.ts'
+import { ROAD, WIDE } from './layout.ts'
+import { S } from './scale.ts'
+import {
+  BRIDGE, DUFOUR, DUFOUR_BARN, GATEWAYS_TRUE, HOME, HOUSE, LOG_DECKS, ROADSIDE, SITES, STONE_PILE, TRUE, from, groundY, townRoadZ, useFrame, type Spot,
+} from './small.ts'
 import { hash2 } from './noise.ts'
 
 const BARK = '#5f4d3d', CUT = '#d0ae78'
@@ -13,6 +17,7 @@ const BARK = '#5f4d3d', CUT = '#d0ae78'
 // ---- What comes off the land: logs decked, one for each load, and a heap of field stone that grows with the loads.
 export const DECK_HOLDS = 21
 export function materials(b: Builder, logs: number, stone: number): void {
+  useFrame(HOME)
   let left = Math.min(Math.round(logs), DECK_HOLDS * LOG_DECKS.length)
   LOG_DECKS.forEach((d, n) => {
     const here = Math.min(left, DECK_HOLDS)
@@ -100,6 +105,7 @@ function wagon(b: Builder): void {
 // or parked, by units.ts.)
 export function standCar(b: Builder): void {
   const s = SITES.find(q => q.kind === 'stand' && q.yard === -1)!
+  useFrame(BRIDGE)
   const at: Spot = { x: s.x - 1.9, z: s.z + 0.5, heading: 0.12 - Math.PI / 2 }
   const y = groundY(at.x, at.z) + 0.02
   b.at(at.x, y, at.z, -at.heading, y)
@@ -204,6 +210,7 @@ function posts(b: Builder, x0: number, z0: number, x1: number, z1: number, every
 
 export function yardLife(b: Builder): void {
   const hx = HOUSE.x, hz = HOUSE.z
+  useFrame(HOME)
   // The front of the big house: a picket fence with its gate, flowers under the windows.
   picket(b, 19.35, 4.5, 19.35, 6.6)
   picket(b, 19.35, 6.6, 25.4, 6.6, 4.25)
@@ -340,6 +347,7 @@ export function yardLife(b: Builder): void {
     b.lathe([0, 0.42, 0], [[0.1, 0], [0.19, 0.04], [0.21, 0.09], [0.19, 0.14], [0.1, 0.18]], 10, '#1f1f1d', FIN.plain, {})
   }
   // The mailbox where the farm's road meets the town road.
+  useFrame(ROADSIDE)
   {
     const x = 22.3, z = townRoadZ(22.3) - 1.5, y = groundY(x, z)
     b.at(x, y, z, 0.2, y)
@@ -357,9 +365,11 @@ export function yardLife(b: Builder): void {
     }
   }
   // Along the yard's east side, where the farm's ground meets the neighbour's pasture: cedar posts and wire.
+  useFrame(HOME)
   posts(b, 42.6, -7.2, 42.6, 6.4, 1.5, true)
   posts(b, 42.6, 6.4, 31.6, 6.6, 1.5, true)
   // The Dufour place: an old hay rake rusting behind the barn, barrels, a rail fence gone grey.
+  useFrame(DUFOUR)
   {
     const x = DUFOUR_BARN.x + 3.2, z = DUFOUR_BARN.z + 1.6, y = groundY(x, z)
     b.at(x, y, z, 0.5, y)
@@ -416,18 +426,35 @@ function neighbour(b: Builder, x: number, z: number, ry: number, k: number): voi
 }
 
 export function country(b: Builder): void {
-  FARMSTEADS.forEach(([x, z, ry], k) => neighbour(b, x, z, ry, k))
+  useFrame(TRUE)
+  FARMSTEADS.forEach(([x, z, ry], k) => neighbour(b, x / S, z / S, ry, k))
 }
 
 // Poles and their wire: along the town road, and up the farm's road to the house.
 export function poles(b: Builder): void {
+  // everything here is on the land: drawn in the plain frame, a pole about every fifty metres
+  useFrame(TRUE)
   const line: V3[] = []
-  for (let x = -150; x <= 210; x += 22) {
-    const z = townRoadZ(x) + 2.4
+  const end = ROAD[ROAD.length - 1], gap = 50 / S, beside = (WIDE.town / 2 + 2.6) / S
+  for (let x = end[0] / S - 16 * gap; x <= end[0] / S + 18.5 * gap; x += gap) {
+    const z = townRoadZ(x) + beside
     line.push([x, groundY(x, z), z])
   }
-  const lane: V3[] = [[26, 0, townRoadZ(26) + 2.4], [21.9, 0, 47.6], [20.6, 0, 39.0], [19.9, 0, 31.2], [19.6, 0, 24.6], [17.2, 0, 18.5], [16.75, 0, 12.0], [20.9, 0, 6.9]]
+  // up the farm's road from the town road to the dooryard, on its east side
+  const lane: V3[] = [[end[0] / S + 0.5 * gap, 0, townRoadZ(end[0] / S + 0.5 * gap) + beside]]
+  let run = 0
+  for (let k = ROAD.length - 1; k > 5; k--) {
+    const [ax, az] = ROAD[k], [cx, cz] = ROAD[k - 1], len = Math.hypot(cx - ax, cz - az) / S
+    for (let d = gap - run; d < len; d += gap) {
+      const t = d / len, nx = -(cz - az) / (len * S), nz = (cx - ax) / (len * S)
+      lane.push([(ax + (cx - ax) * t) / S - nx * 1.6, 0, (az + (cz - az) * t) / S - nz * 1.6])
+    }
+    run = (run + len) % gap
+  }
+  const last = from(HOME, 20.9, 6.9)
+  lane.push([last.x, 0, last.z])
   for (const p of lane) p[1] = groundY(p[0], p[2])
+  const gable = from(HOME, HOUSE.x - 0.4, HOUSE.z + 1.86), house = from(HOME, HOUSE.x, HOUSE.z)
   b.at(0, 0, 0, 0, 0)
   const pole = (p: V3, arm: boolean, k: number) => {
     const lean = (hash2(k, 71) - 0.5) * 0.12
@@ -454,9 +481,9 @@ export function poles(b: Builder): void {
     if (k > 0) wire([lane[k - 1][0], lane[k - 1][1] + 2.8, lane[k - 1][2]], [p[0], p[1] + 2.85, p[2]], 0.28)
   })
   // the drop to the house's gable
-  wire([lane[lane.length - 1][0], lane[lane.length - 1][1] + 2.85, lane[lane.length - 1][2]], [HOUSE.x - 0.4, groundY(HOUSE.x, HOUSE.z) + 2.75, HOUSE.z + 1.86], 0.16)
+  wire([lane[lane.length - 1][0], lane[lane.length - 1][1] + 2.85, lane[lane.length - 1][2]], [gable.x, groundY(house.x, house.z) + 2.75, gable.z], 0.16)
   // Bars in the walls where the tracks pass through: two posts each side, the bars slid back.
-  for (const [x, z] of [[16.5, -20.8], [-17.45, -20.8], [49, -7.6], [83.6, -7.5], [16.4, 31.4]]) {
+  for (const { x, z } of GATEWAYS_TRUE) {
     for (const sg of [-1, 1]) {
       const pz = z + sg * 1.05, y = groundY(x, pz)
       for (const dx of [-0.07, 0.07]) b.box(x + dx, y + 0.34, pz, 0.06, 0.7, 0.07, '#77695a', FIN.wood)

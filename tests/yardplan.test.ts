@@ -4,8 +4,9 @@ import { describe, expect, it } from 'vitest'
 import { BUILDINGS, BUILDING_KINDS } from '../src/sim/index.ts'
 import {
   BARN, BAYS, DUFOUR_BARN, DUFOUR_HOUSE, DUFOUR_POTATO_HOUSE, FIELDS, HOUSE, LOG_DECKS, POTATO_HOUSE, SITES, STONE_PILE, gravelDist, route, siteOf,
-  yardAt,
+  yardAt, yardSpot,
 } from '../src/render/layout.ts'
+import { S } from '../src/render/scale.ts'
 
 const corners = (s: (typeof SITES)[number]) => {
   const c = Math.cos(s.ry), n = Math.sin(s.ry)
@@ -33,13 +34,13 @@ describe('the yards\' plan', () => {
       for (const t of built) {
         if (t === s) continue
         const b = box(t)
-        const apart = a.x1 + 0.5 < b.x0 || b.x1 + 0.5 < a.x0 || a.z1 + 0.5 < b.z0 || b.z1 + 0.5 < a.z0
+        const apart = a.x1 + 0.5 * S < b.x0 || b.x1 + 0.5 * S < a.x0 || a.z1 + 0.5 * S < b.z0 || b.z1 + 0.5 * S < a.z0
         expect(apart, `${s.kind} ${s.yard} and ${t.kind} ${t.yard}`).toBe(true)
       }
       for (const f of FIELDS) expect(a.x1 < f.x0 || a.x0 > f.x1 || a.z1 < f.z0 || a.z0 > f.z1, `${s.kind} ${s.yard} on field ${f.i}`).toBe(true)
-      for (const o of old) expect(Math.hypot(s.x - o.x, s.z - o.z), `${s.kind} ${s.yard} by an old building`).toBeGreaterThan(5)
+      for (const o of old) expect(Math.hypot(s.x - o.x, s.z - o.z), `${s.kind} ${s.yard} by an old building`).toBeGreaterThan(5 * S)
       // no building stands on a road, and each has one near enough to reach
-      expect(gravelDist(s.x, s.z), `${s.kind} ${s.yard} on a road`).toBeGreaterThan(0.6)
+      expect(gravelDist(s.x, s.z), `${s.kind} ${s.yard} on a road`).toBeGreaterThan(0.6 * S)
     }
   })
 
@@ -50,7 +51,7 @@ describe('the yards\' plan', () => {
       expect(outside(s.door), `${s.kind} ${s.yard} door`).toBe(true)
       expect(s.work.length).toBeGreaterThanOrEqual(3)
       for (const w of s.work) expect(outside(w), `${s.kind} ${s.yard} work`).toBe(true)
-      const from = s.yard === -1 ? { x: 21.2, z: -12.6 } : { x: 88.6, z: -9 }
+      const from = yardSpot(s.yard, 0, false)
       const way = route(from, s.door)
       expect(way.length).toBeGreaterThanOrEqual(2)
       const last = way[way.length - 1]
@@ -71,7 +72,7 @@ describe('the yards\' plan', () => {
     for (const b of BAYS) expect(Math.abs(b.x - shed.x) < shed.w / 2 && Math.abs(b.z - shed.z) < shed.d / 2).toBe(true)
     for (const p of [...LOG_DECKS, STONE_PILE]) {
       expect(yardAt(p.x, p.z)).toBe(-1)
-      for (const s of SITES.filter(q => q.kind !== 'road')) { const a = box(s); expect(p.x < a.x0 - 0.3 || p.x > a.x1 + 0.3 || p.z < a.z0 - 0.3 || p.z > a.z1 + 0.3, `pile by ${s.kind}`).toBe(true) }
+      for (const s of SITES.filter(q => q.kind !== 'road')) { const a = box(s); expect(p.x < a.x0 - 0.3 * S || p.x > a.x1 + 0.3 * S || p.z < a.z0 - 0.3 * S || p.z > a.z1 + 0.3 * S, `pile by ${s.kind}`).toBe(true) }
     }
   })
 })

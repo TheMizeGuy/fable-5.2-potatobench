@@ -14,8 +14,9 @@ import { Flora } from './flora.ts'
 import { Grass } from './grass.ts'
 import { Harvest } from './harvest.ts'
 import { attachInput } from './input.ts'
-import { FD, FIELDS, WATER_Y, brookZ, fieldBaseY, groundY, YARD_AT, yardAt } from './layout.ts'
+import { DUFOUR, FD, FIELDS, FW, HOME, LAND, WATER_Y, brookZ, fieldBaseY, groundY, YARD_AT, yardAt } from './layout.ts'
 import { clamp, hash2, smooth } from './noise.ts'
+import { K, KV, S } from './scale.ts'
 import { Particles } from './particles.ts'
 import { Pond } from './pond.ts'
 import { Post } from './post.ts'
@@ -102,6 +103,10 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   renderer.setClearColor(0x000000, 1)
   renderer.info.autoReset = false
 
+  // How long each part of the scene took to build, in milliseconds since the view was asked for (for the budget tool).
+  const began = performance.now()
+  const built: [string, number][] = []
+  const lap = (name: string) => built.push([name, Math.round(performance.now() - began)])
   const scene = new Scene()
   const rig = new CameraRig()
   const noise = noiseTexture()
@@ -110,15 +115,22 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   const shadows = new SunShadows(scene)
   const post = new Post(renderer)
   const leafTex = leafTexture(), flowerTex = flowerTexture(), puffTex = puffTexture()
+  lap('textures')
   const terrain = buildTerrain()
+  lap('terrain')
   const flora = new Flora()
+  lap('trees')
   const clearing = new Clearing(flora)
   const pond = new Pond()
   const grass = new Grass()
+  lap('clearing')
   const props = new Props()
+  lap('yards')
   const fields = new Fields(leafTex, flowerTex)
+  lap('fields')
   const harvest = new Harvest()
   const crews = new Crews()
+  lap('crews')
   const particles = new Particles(puffTex)
   const weather = new Weather()
   const birds = new Birds()
@@ -382,12 +394,12 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   const ray = new Raycaster()
   const ndc = new Vector2(), hit = new Vector3()
   const quads = FIELDS.map(f => {
-    const a = new Vector3(f.x0, fieldBaseY(f.z0) + 0.25, f.z0), b = new Vector3(f.x1, fieldBaseY(f.z0) + 0.25, f.z0)
-    const c = new Vector3(f.x1, fieldBaseY(f.z1) + 0.25, f.z1), d = new Vector3(f.x0, fieldBaseY(f.z1) + 0.25, f.z1)
+    const a = new Vector3(f.x0, fieldBaseY(f.z0) + 0.5, f.z0), b = new Vector3(f.x1, fieldBaseY(f.z0) + 0.5, f.z0)
+    const c = new Vector3(f.x1, fieldBaseY(f.z1) + 0.5, f.z1), d = new Vector3(f.x0, fieldBaseY(f.z1) + 0.5, f.z1)
     return [new Triangle(a, b, c), new Triangle(a, c, d)]
   })
   // A tract under trees is picked by its canopy too: the same quad at the height of the crowns.
-  const crowns = quads.map(tris => tris.map(t => new Triangle(t.a.clone().setY(t.a.y + 4.5), t.b.clone().setY(t.b.y + 4.5), t.c.clone().setY(t.c.y + 4.5))))
+  const crowns = quads.map(tris => tris.map(t => new Triangle(t.a.clone().setY(t.a.y + 10), t.b.clone().setY(t.b.y + 10), t.c.clone().setY(t.c.y + 10))))
   function pick(x: number, y: number): number {
     const vp = viewport()
     ray.setFromCamera(ndc.set((x / vp.w) * 2 - 1, -(y / vp.h) * 2 + 1), rig.camera)
@@ -454,11 +466,11 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     U.uHazeSun.value.copy(lit.hazeSun)
     U.uHazeAway.value.copy(lit.hazeAway)
     U.uMistCol.value.copy(lit.mist)
-    U.uHaze.value.set(env.haze, 0.0085)
+    U.uHaze.value.set(env.haze, 0.0085 / S)
     U.uNight.value = lit.night
     // Mist lies in the low ground: on the brook and the bottom land, thinning fast above it; on a fog day it fills the
     // valley to the mid slope and the ridge stands out of it.
-    U.uMist.value.set((0.36 - 0.24 * env.mistDeep) * env.mist, 2.6 - 1.5 * env.mistDeep, 0.2 + 1.9 * env.mistDeep, 0.8)
+    U.uMist.value.set(((0.36 - 0.24 * env.mistDeep) * env.mist) / S, (2.6 - 1.5 * env.mistDeep) / S, (0.2 + 1.9 * env.mistDeep) * KV, 0.8)
     U.uCloud.value.x = env.cloudShadow
     U.uCloud.value.y = env.cloud
     U.uSnow.value = env.snow
@@ -468,7 +480,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     U.uGold.value = env.gold
     U.uLeaf.value = env.leaf
     U.uDay.value = snap.day
-    U.uSunlit.value += ((snap.mode === 'title' ? 120 : 0) - U.uSunlit.value) * Math.min(1, dt * 1.2)
+    U.uSunlit.value += ((snap.mode === 'title' ? 120 * K : 0) - U.uSunlit.value) * Math.min(1, dt * 1.2)
     sky.setAir(lit.air, lit.skySun, lit.moon, lit.skyCap, lit.skyGain / lit.skyShow, lit.exposure)
     sky.tune.set(lit.skyShow, lit.skySat, 0.25)
     sky.more.set(env.high, env.storm, lit.night, ambient)
@@ -578,7 +590,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     smokeAt += dt * pace
     if (env.smoke > 0.2 && smokeAt > 0.16) {
       smokeAt = 0
-      particles.emit(props.chimney.x, props.chimney.y, props.chimney.z, (Math.random() - 0.5) * 0.1, 0.5, (Math.random() - 0.5) * 0.1, 0.12, 0.3, 4.5, 0.74, 0.74, 0.76, 0.36 * env.smoke, 0.8)
+      particles.emit(props.chimney.x, props.chimney.y, props.chimney.z, (Math.random() - 0.5) * 0.2, 1.1, (Math.random() - 0.5) * 0.2, 0.26, 0.66, 4.5, 0.74, 0.74, 0.76, 0.36 * env.smoke, 0.8)
     }
     props.update({ dt: dt * pace, time: ambient, env, lit, dist: rig.cur.dist, yard: app.yard, particles })
     // The brook breathes on a still damp morning: wisps that lift off the water and thin away.
@@ -586,14 +598,14 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     const breath = Math.max(env.mist, 0.5 * Math.max(env.rime0, env.rime2)) * (1 - Math.max(env.rain, env.snowfall)) * (1 - 0.6 * Math.min(1, env.wind))
     if (breath > 0.12 && mistAt > 0.2) {
       mistAt = 0
-      const x = clamp(rig.cur.x + (Math.random() - 0.5) * 120, -150, 190)
-      particles.emit(x, WATER_Y + 0.3, brookZ(x) + (Math.random() - 0.5) * 3.4, (Math.random() - 0.5) * 0.2, 0.1 + Math.random() * 0.1, (Math.random() - 0.5) * 0.2, 1.3, 0.45, 9, 0.9, 0.92, 0.95, 0.11 * breath, 0.5)
+      const x = clamp(rig.cur.x + (Math.random() - 0.5) * 120 * S, LAND.x0 - 100 * S, LAND.x1 + 100 * S)
+      particles.emit(x, WATER_Y + 0.7, brookZ(x) + (Math.random() - 0.5) * 3.4 * S, (Math.random() - 0.5) * 0.4, 0.2 + Math.random() * 0.2, (Math.random() - 0.5) * 0.4, 2.9, 1, 9, 0.9, 0.92, 0.95, 0.11 * breath, 0.5)
     }
     const t1 = performance.now()
     particles.update(dt * (reduced ? 0.3 : 1), wx * env.wind * 1.6, wz * env.wind * 1.6)
     focus.set(rig.cur.x, fieldBaseY(rig.cur.z), rig.cur.z)
     // The air that rain, snow and leaves fall through reaches from the camera past what it looks at.
-    const span = clamp(rig.cur.dist / 26, 1, 5)
+    const span = clamp(rig.cur.dist / 26, 1, 24)
     leafLight.copy(lit.sun).multiplyScalar(0.3).add(lit.hazeAway)
     weather.update({
       fall, rain: env.rain, snowfall: env.snowfall, leaves: env.fall * (0.35 + 0.65 * Math.min(1, env.wind * 2)), windX: wx * env.wind, windZ: wz * env.wind,
@@ -603,14 +615,14 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     birds.update(ambient, Math.max(env.rain, env.snowfall, lit.night), lit.hazeAway)
     shadows.update(lit.sunDir, lit.sun, focus, rig.focus(), dtMs <= 0.5)
     fields.setFarShadows(!shadows.holdsFarm)
-    MARK_WIDE.value = clamp(rig.cur.dist / 42, 1, 4.5)
+    MARK_WIDE.value = clamp(rig.cur.dist / (42 * S), 1, 4.5 * K / S)
     fields.update(dt, cam, { selection: app.selection, hover: app.hover, oats: env.oats, oatsRipe: env.oatsRipe, reduced })
-    grass.update(cam, fields.off)
+    grass.update(cam, fields.off, dtMs <= 0.5)
     flora.update(cam)
-    harvest.update(dt, app.speed === 0, clamp(rig.cur.dist / 30, 1, 2.3), reduced)
+    harvest.update(dt, app.speed === 0, clamp(rig.cur.dist / (30 * S), 1, 2.3), reduced)
     PIXEL.value = (TIERS[tier].msaa ? 1.7 : 1.4) / ((post.target.height) / (2 * Math.tan((cam.fov * Math.PI) / 360)))
     // The focus is shallow in the opening shot, slight in play, and opens up while the player moves the camera.
-    const want = env.lens * (rig.idle < 0.6 ? 0.2 : 1) * (snap.mode === 'title' ? 0.8 : smooth(40, 12, rig.cur.dist) * 1.3 + 0.1)
+    const want = env.lens * (rig.idle < 0.6 ? 0.2 : 1) * (snap.mode === 'title' ? 0.5 : smooth(40 * S, 12 * S, rig.cur.dist) * 1.3 + 0.1)
     lens += (want - lens) * (1 - Math.exp(-dt / 0.35))
     const t2 = performance.now()
     renderer.info.reset()
@@ -618,7 +630,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     const sharp = rig.focus()
     // Where the sun stands on the picture, and how much of its light the air shows: most when it is low, the air is
     // hazy or misty, the sky is open, and the camera looks its way.
-    sunAt.copy(lit.skySun).multiplyScalar(4000).add(cam.position).project(cam)
+    sunAt.copy(lit.skySun).multiplyScalar(8000).add(cam.position).project(cam)
     const facing = cam.getWorldDirection(ahead).dot(lit.skySun)
     const falling = Math.max(env.rain, env.snowfall)
     const open = clamp(1 - env.cloud, 0, 1) * (1 - falling)
@@ -684,7 +696,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     let x = 0, y = 0, inFront = false
     for (let k = 0; k <= 6; k++) {
       anchor.copy(near).lerp(far, k / 12)
-      anchor.y = fieldBaseY(anchor.z) + 0.35
+      anchor.y = fieldBaseY(anchor.z) + 0.7
       anchor.project(rig.camera)
       x = (anchor.x + 1) / 2 * vp.w
       y = (1 - anchor.y) / 2 * vp.h
@@ -707,7 +719,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
 
   function yardAnchor(yard: number): { x: number; y: number; visible: boolean } {
     const p = YARD_AT[yard]
-    return p ? screenAt(p.x, groundY(p.x, p.z) + 6.5, p.z) : { x: 0, y: 0, visible: false }
+    return p ? screenAt(p.x, groundY(p.x, p.z) + 6.5 * S, p.z) : { x: 0, y: 0, visible: false }
   }
 
   // Settles when the land has shown the test dig's hill lifted, or the last row of the day's digging come out.
@@ -725,10 +737,12 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
 
   rebuild()
   resize()
+  lap('first state')
   const ready = (async () => {
     try {
       renderer.setRenderTarget(post.target)
       await renderer.compileAsync(scene, rig.camera)
+      lap('shaders')
     } catch (err) {
       console.warn('The County: shaders could not be compiled ahead of the first frame.', err)
     }
@@ -768,10 +782,37 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       },
       whenShown,
       // For working on the look: put the camera somewhere.
-      view(p: Partial<Pose>) {
+      // A view may be given in metres, or in the units the tools' views were first written in: `frame` 'land' (plan
+      // units: places and distance times K), 'home' or 'dufour' (a yard's small units: places through the yard, distance
+      // times S), 'field' (x, z as shares of field `field`'s length and depth; distance in metres), or 'auto' (a near
+      // view is a yard's, a far one the land's).
+      view(p: Partial<Pose> & { frame?: 'land' | 'home' | 'dufour' | 'field' | 'near' | 'auto'; field?: number }) {
         framing = 'free'
-        rig.moveTo(rig.complete(p), true)
+        const q: Partial<Pose> = { ...p }
+        let frame = p.frame
+        if (frame === 'auto') frame = (p.dist ?? 99) <= 30 && p.x !== undefined ? ((p.x ?? 0) > 60 ? 'dufour' : 'home') : 'land'
+        if (frame === 'land') {
+          if (p.x !== undefined) q.x = p.x * K
+          if (p.z !== undefined) q.z = p.z * K
+          if (p.dist !== undefined) q.dist = p.dist * K
+        } else if (frame === 'home' || frame === 'dufour') {
+          const f = frame === 'home' ? HOME : DUFOUR
+          if (p.x !== undefined) q.x = f.x + S * p.x
+          if (p.z !== undefined) q.z = f.z + S * p.z
+          if (p.dist !== undefined) q.dist = p.dist * S
+        } else if (frame === 'near') {
+          // a place given in metres (where a person or a machine is), seen from as near as it was first written
+          if (p.dist !== undefined) q.dist = p.dist * S
+        } else if (frame === 'field') {
+          const f = FIELDS[p.field ?? 0]
+          q.x = f.x0 + (p.x ?? 0.5) * FW
+          q.z = f.z0 + (p.z ?? 0.5) * FD
+        }
+        rig.moveTo(rig.complete(q), true)
       },
+      scale: { K, S, KV },
+      // Where a point of the ground is on the screen (for tools that draw over the picture).
+      screenOf: (x: number, z: number, up = 0) => screenAt(x, groundY(x, z) + up, z),
       // Hold the opening shot at a point of its move (0 the wide view, 1 the low one); below 0 lets it run.
       titleAt(u: number) { titleFixed = u },
       // For working on the light: set parts of the day's air by hand; they hold until the game next changes the day.
@@ -782,7 +823,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
         const u = crews.where().units.find(x => x.id === id)
         if (!u) return null
         const at = unitAnchor(id)
-        const v = new Vector3(u.x, fieldBaseY(u.z) + 0.5, u.z).project(rig.camera)
+        const v = new Vector3(u.x, fieldBaseY(u.z) + 0.9, u.z).project(rig.camera)
         const vp = viewport()
         // on the body: half way between the ground under them and the point over their head
         return { x: ((v.x + 1) / 2 * vp.w + at.x) / 2, y: ((1 - v.y) / 2 * vp.h + at.y) / 2 }
@@ -798,7 +839,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
         const r = renderer.info.render
         return {
           triangles: r.triangles, calls: r.calls, pixelRatio: renderer.getPixelRatio(), width: canvas.width, height: canvas.height,
-          camera: rig.where(), time, ambient, fall, exposure: lit.exposure, tier, startedAt, fps, drawn: [post.target.width, post.target.height], firstFrame,
+          camera: rig.where(), time, ambient, fall, exposure: lit.exposure, tier, startedAt, fps, drawn: [post.target.width, post.target.height], firstFrame, built,
           spent: { crews: +spent.crews.toFixed(2), update: +spent.update.toFixed(2), draw: +spent.draw.toFixed(2) }, objects: scene.children.reduce((n, c) => { let k = 0; c.traverse(() => k++); return n + k }, 0),
         }
       },
