@@ -1,6 +1,6 @@
 // The field view: the farm in its country, drawn with three.js, played like a strategy map.
 // Falls back to a flat drawing without WebGL.
-import { Color, Group, PCFShadowMap, Raycaster, Scene, Triangle, Vector2, Vector3, WebGLRenderer, type Object3D } from 'three'
+import { Color, Group, PCFShadowMap, Raycaster, Scene, Triangle, Vector2, Vector3, WebGLRenderer, type Material, type Mesh, type Object3D } from 'three'
 import { DAYS_PER_SECOND, type App } from '../game/app.ts'
 import type { CreateFieldView, FieldView, Thing } from '../game/contracts.ts'
 import { FIELD_COUNT, HILLS } from '../sim/index.ts'
@@ -208,6 +208,8 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   let reduced = app.settings.reducedMotion
   let lens = 0.2
   let firstFrame = 0
+  // How long the first frame's own drawing took, and how many shaders there were by its end.
+  let firstDraw = [0, 0]
   let smokeAt = 0
   // What the camera was last asked to frame (the opening shot, or one of its four tiers); the player's own hand on it
   // makes it 'free'. `framed`: the field of the field tier; `framedYard`: the yard of the yard tier.
@@ -901,7 +903,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     spent.crews += (t1 - t0 - spent.crews) * 0.05
     spent.update += (t2 - t1 - spent.update) * 0.05
     spent.draw += (t3 - t2 - spent.draw) * 0.05
-    if (!firstFrame) firstFrame = performance.now()
+    if (!firstFrame) { firstFrame = performance.now(); firstDraw = [Math.round(t3 - t2), renderer.info.programs?.length ?? 0] }
     // Tell whoever is waiting that the land has shown what it had to show.
     for (let k = waiters.length - 1; k >= 0; k--) {
       const w = waiters[k]
@@ -1005,10 +1007,75 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   rebuild()
   resize()
   lap('first state')
+  // When each material's shader was ready, in milliseconds since the view was asked for (for the start-up tool); with
+  // ?compile=serial they are compiled one at a time and each is given its own time instead.
+  const shadersAt: [string, number][] = []
+  const namesOf = (): Map<unknown, string> => {
+    const names = new Map<unknown, string>()
+    for (const [part, root] of Object.entries(parts)) {
+      root.traverse(o => {
+        const m = (o as Mesh).material
+        if (!m) return
+        for (const x of Array.isArray(m) ? m : [m]) if (!names.has(x)) names.set(x, `${part}${o.userData.part ? ` (${o.userData.part as string})` : ''} ${names.size}: ${x.type}${(x as { transparent?: boolean }).transparent ? ', see-through' : ''}`)
+      })
+    }
+    return names
+  }
+  async function compileScene(): Promise<void> {
+    const names = namesOf()
+    const program = (m: unknown) => (renderer.properties.get(m as object) as { currentProgram?: { isReady(): boolean; program: WebGLProgram } }).currentProgram
+    if (new URLSearchParams(location.search).get('compile') === 'serial') {
+      const ctx = renderer.getContext()
+      const seen = new Set<unknown>()
+      const drawn: Object3D[] = []
+      scene.traverse(o => { if ((o as Mesh).material && ((o as Mesh).isMesh || (o as { isPoints?: boolean }).isPoints)) drawn.push(o) })
+      // (&reverse compiles them in the other order, to tell a shader that is dear from one that only came first)
+      if (new URLSearchParams(location.search).has('reverse')) drawn.reverse()
+      for (const o of drawn) {
+        const t0 = performance.now()
+        const made = renderer.compile(o, rig.camera, scene), t1 = performance.now()
+        for (const x of made) {
+          const p = program(x)
+          if (p) ctx.getProgramParameter(p.program, ctx.LINK_STATUS)
+          if (!seen.has(x)) { seen.add(x); shadersAt.push([`${names.get(x) ?? x.type} (the page's own part ${Math.round(t1 - t0)} ms)`, Math.round(performance.now() - t0)]) }
+        }
+      }
+      return
+    }
+    const waiting = renderer.compile(scene, rig.camera)
+    // The land is laid out by now, and its shaders are with the graphics system's compiler: the splash is told how
+    // many of them are through (the scene's building, before this, holds the page still and cannot be shown moving).
+    // The land's own shader is waited for longer than all the rest together, so it is given the rule's last stretch
+    // and named while it is the one thing left.
+    const land = [...waiting].filter(m => names.get(m)?.startsWith('terrain (land)'))
+    const rest = Math.max(1, waiting.size - land.length)
+    // (told four times a second at most: the page is kept as still as it can be while the compiler has the machine)
+    let told = -1e9
+    const tell = (now = false) => {
+      if (!now && performance.now() - told < 250) return
+      told = performance.now()
+      const left = land.filter(m => waiting.has(m)).length
+      const share = land.length ? 0.3 + 0.3 * (1 - (waiting.size - left) / rest) + 0.4 * (1 - left / land.length) : 0.3 + 0.7 * (1 - waiting.size / rest)
+      dispatchEvent(new CustomEvent('county:stage', { detail: { what: left && left === waiting.size ? 'Colouring the land' : 'Mixing the light', share } }))
+    }
+    await new Promise<void>(done => {
+      const check = () => {
+        tell()
+        for (const m of waiting) {
+          const p = program(m)
+          if (p && !p.isReady()) continue
+          waiting.delete(m)
+          shadersAt.push([names.get(m) ?? m.type, Math.round(performance.now() - began)])
+        }
+        if (waiting.size) setTimeout(check, 10); else { tell(true); done() }
+      }
+      check()
+    })
+  }
   const ready = (async () => {
     try {
       renderer.setRenderTarget(post.target)
-      await renderer.compileAsync(scene, rig.camera)
+      await compileScene()
       lap('shaders')
     } catch (err) {
       console.warn('The County: shaders could not be compiled ahead of the first frame.', err)
@@ -1150,6 +1217,50 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
         terrain.under.renderOrder = without.order ? 0 : 50
         above.renderOrder = without.order ? 0 : 60
       },
+      // How long a material's shader takes to compile by itself, as it is or with pieces of its fragment shader
+      // cut out (each cut: a pattern and what takes its place), to find what in it is dear to compile.
+      timeShader(label: string, cuts: [string, string][] = [], nudge = false) {
+        let found: Mesh | null = null
+        const names = namesOf()
+        scene.traverse(o => {
+          const m = (o as Mesh).material
+          if (found || !m || Array.isArray(m) || !(names.get(m) ?? '').startsWith(label)) return
+          found = o as Mesh
+        })
+        if (!found) return { ms: -1, page: 0, ok: false, missed: [] as string[], name: '' }
+        const from = (found as Mesh).material as Material, twin = (found as Mesh).clone(), mat = from.clone()
+        const missed: string[] = []
+        mat.defines = { ...(from.defines ?? {}) }
+        mat.onBeforeCompile = (shader, r) => {
+          from.onBeforeCompile(shader, r)
+          // (a vertex shader no compiler has seen, so nothing of this program can have been kept from before)
+          if (nudge) shader.vertexShader = shader.vertexShader.replace('void main() {', `void main() {\n  float nudged${Math.round(performance.now())} = 0.0;`)
+          for (const [pattern, to] of cuts) {
+            const re = new RegExp(pattern)
+            if (!re.test(shader.fragmentShader)) missed.push(pattern)
+            shader.fragmentShader = shader.fragmentShader.replace(re, to)
+          }
+        }
+        mat.customProgramCacheKey = () => `timed-${performance.now()}`
+        twin.material = mat
+        const ctx = renderer.getContext(), t0 = performance.now()
+        renderer.compile(twin, rig.camera, scene)
+        const t1 = performance.now()
+        const p = (renderer.properties.get(mat) as { currentProgram?: { program: WebGLProgram } }).currentProgram
+        // (the browser may say a program is linked before its shaders are through the graphics system's own
+        // compiler: only its word that the work is complete is waited for)
+        const name = names.get(from) ?? ''
+        return new Promise<{ ms: number; page: number; ok: boolean; missed: string[]; name: string }>(done => {
+          const check = () => {
+            if (p && !ctx.getProgramParameter(p.program, 0x91b1)) { setTimeout(check, 4); return }
+            const ms = Math.round(performance.now() - t0)
+            const ok = p ? ctx.getProgramParameter(p.program, ctx.LINK_STATUS) as boolean : false
+            mat.dispose()
+            done({ ms, page: Math.round(t1 - t0), ok, missed, name })
+          }
+          check()
+        })
+      },
       // Draw on every beat of the display, whatever its rate and whether anything moves (for timing a frame).
       uncap(on: boolean) { capped = !on },
       pace: () => ({ beat: pacing.beat, every: pacing.every, still: pacing.still, halved: pacing.halved, size: sizer.size, tier, adaptive, timing: trial !== null }),
@@ -1163,7 +1274,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
         const r = renderer.info.render
         return {
           triangles: r.triangles, calls: r.calls, pixelRatio: renderer.getPixelRatio(), width: canvas.width, height: canvas.height,
-          camera: rig.where(), time, ambient, fall, exposure: lit.exposure, tier, startedAt, fps, drawn: [post.target.width, post.target.height], samples: post.target.samples, firstFrame, built,
+          camera: rig.where(), time, ambient, fall, exposure: lit.exposure, tier, startedAt, fps, drawn: [post.target.width, post.target.height], samples: post.target.samples, firstFrame, built, began, shadersAt, firstDraw,
           spent: { crews: +spent.crews.toFixed(2), update: +spent.update.toFixed(2), draw: +spent.draw.toFixed(2) }, objects: scene.children.reduce((n, c) => { let k = 0; c.traverse(() => k++); return n + k }, 0),
         }
       },
