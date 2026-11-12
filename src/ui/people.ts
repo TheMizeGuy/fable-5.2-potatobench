@@ -56,7 +56,8 @@ export function idleWithWork(c: S.Campaign, p: S.PersonInfo, waits: Record<numbe
   const u = c.crew.find(x => x.id === p.id)
   // An order someone else worked on the last day is theirs: one person holds an order at a time.
   const others = new Set(s0.worked.filter(w => w.unit !== p.id).map(w => `${w.kind}|${w.field}`))
-  return !!u && s0.jobs.some(j => !waits[j.id] && (j.unit < 0 || j.unit === p.id) && S.willDo(u, j.kind) && !others.has(`${j.kind}|${j.field}`))
+  const held = new Set(c.crew.filter(x => x.id !== p.id).map(x => x.job))
+  return !!u && s0.jobs.some(j => !waits[j.id] && !held.has(j.id) && (j.unit < 0 || j.unit === p.id) && S.willDo(u, j.kind) && !others.has(`${j.kind}|${j.field}`))
 }
 
 // The next order a person would take from the list by their own priorities, or null.
