@@ -1,8 +1,9 @@
-// The sky: sunlight scattered by air and haze (the analytic model three's Sky uses, after Preetham), a layer of cloud,
-// and the sun. Drawn as the backdrop, and into a small map every material reads for the light the sky gives.
+// The sky: sunlight scattered by air and haze (the analytic model three's Sky uses, after Preetham), low cumulus with
+// lit edges and dark bases under streaks of high ice cloud, the sun and its glow, and by night a moon and stars.
+// Drawn as the backdrop, and into a small map every material reads for the light the sky gives.
 import {
   BackSide, BufferAttribute, BufferGeometry, Color, HalfFloatType, LinearFilter, LinearMipmapLinearFilter, Mesh, OrthographicCamera,
-  RepeatWrapping, Scene, ShaderMaterial, SphereGeometry, Vector2, Vector3, WebGLRenderTarget, type WebGLRenderer,
+  RepeatWrapping, Scene, ShaderMaterial, SphereGeometry, Vector2, Vector3, Vector4, WebGLRenderTarget, type WebGLRenderer,
 } from 'three'
 import { clamp } from './noise.ts'
 import { CLOUD_GLSL, HAZE_GLSL, U } from './shaders.ts'
@@ -10,6 +11,10 @@ import { CLOUD_GLSL, HAZE_GLSL, U } from './shaders.ts'
 const RAYLEIGH = [5.804542996261093e-6, 1.3562911419845635e-5, 3.0265902468824876e-5]
 const MIE = [1.8399918514433978e14, 2.7798023919660528e14, 4.0790479543861094e14]
 const SCALE = 0.04
+
+// The sky once the sun is well down, in the same units as the day's.
+export const NIGHT_ZENITH = new Color(0.0032, 0.0062, 0.017)
+export const NIGHT_HORIZON = new Color(0.0085, 0.0135, 0.027)
 
 export interface Air { turbidity: number; rayleigh: number; mie: number; g: number }
 
@@ -50,24 +55,34 @@ export function clearSky(dx: number, dy: number, dz: number, sun: Vector3, air: 
     lin *= 1 + (Math.pow(e * scat * fex[k], 0.5) - 1) * low
     return (lin + 0.1 * fex[k]) * SCALE
   })
-  return out.setRGB(c[0], c[1] + 0.0003, c[2] + 0.00075)
+  // The model keeps a floor of light after the sun has gone; it goes with the sun.
+  const lit = clamp(e / 20, 0, 1)
+  return out.setRGB(c[0] * lit, (c[1] + 0.0003) * lit, (c[2] + 0.00075) * lit)
 }
 
 const SKY_GLSL = /* glsl */ `
 uniform vec3 uSunDir;
+uniform vec3 uSkySun;       // where the sun itself is, which may be below the horizon
+uniform vec3 uMoon;
 uniform vec4 uCloud;
 uniform sampler2D uNoise;
 uniform vec2 uHaze;
 uniform vec3 uHazeSun;
 uniform vec3 uHazeAway;
 uniform vec4 uMist;
+uniform vec3 uMistCol;
+uniform vec3 uSunCol;
 uniform vec3 uBetaR;
 uniform vec3 uBetaM;
 uniform float uSunE;
 uniform float uMieG;
 uniform vec3 uSkyTune;      // x: gain, y: saturation, z: how much of the sun gets through the cloud
+uniform vec4 uSkyMore;      // x: high cloud, y: how torn and dark the cloud is, z: night, w: a clock for the stars
 uniform vec3 uDeck;
 uniform vec3 uDeckDark;
+uniform vec3 uRim;
+uniform vec3 uHighCol;
+uniform vec3 uGlow;
 uniform vec3 uGroundRad;
 ${CLOUD_GLSL}
 ${HAZE_GLSL}
@@ -75,31 +90,79 @@ vec3 clearSky(vec3 dir, out vec3 fex) {
   float zen = acos(max(0.0, dir.y));
   float inv = 1.0 / (cos(zen) + 0.15 * pow(93.885 - zen * 57.29578, -1.253));
   fex = exp(-(uBetaR * 8400.0 * inv + uBetaM * 1250.0 * inv));
-  float cosT = dot(dir, uSunDir);
+  float cosT = dot(dir, uSkySun);
   float rPhase = 0.0596831 * (1.0 + pow(cosT * 0.5 + 0.5, 2.0));
   float g2 = uMieG * uMieG;
   float mPhase = 0.07957747 * (1.0 - g2) / pow(1.0 - 2.0 * uMieG * cosT + g2, 1.5);
   vec3 scat = (uBetaR * rPhase + uBetaM * mPhase) / (uBetaR + uBetaM);
   vec3 lin = pow(uSunE * scat * (1.0 - fex), vec3(1.5));
-  lin *= mix(vec3(1.0), pow(uSunE * scat * fex, vec3(0.5)), clamp(pow(1.0 - uSunDir.y, 5.0), 0.0, 1.0));
-  return (lin + 0.1 * fex) * 0.04 + vec3(0.0, 0.0003, 0.00075);
+  lin *= mix(vec3(1.0), pow(uSunE * scat * fex, vec3(0.5)), clamp(pow(1.0 - uSkySun.y, 5.0), 0.0, 1.0));
+  return ((lin + 0.1 * fex) * 0.04 + vec3(0.0, 0.0003, 0.00075)) * clamp(uSunE / 20.0, 0.0, 1.0);
+}
+vec3 hash32(vec2 p) {
+  vec3 q = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
+  q += dot(q, q.yxz + 33.33);
+  return fract((q.xxy + q.yzz) * q.zyx);
+}
+// The night: a deep sky paler toward the land, the last colour where the sun went down, stars, and the moon.
+vec3 nightSky(vec3 d, float disc, float night) {
+  vec3 col = mix(${glsl(NIGHT_HORIZON)}, ${glsl(NIGHT_ZENITH)}, pow(d.y, 0.55)) * night;
+  vec2 a = d.xz / max(length(d.xz), 1e-4), b = uSkySun.xz / max(length(uSkySun.xz), 1e-4);
+  float toward = max(dot(a, b), 0.0);
+  col += uGlow * (pow(toward, 3.0) * exp(-d.y * 7.0) + 0.08 * exp(-d.y * 4.0));
+  if (night < 0.01) return col;
+  float cm = max(dot(d, uMoon), 0.0);
+  if (disc > 0.5) {
+    vec2 uv = d.xz / (1.0 + d.y) * 64.0;
+    vec3 h = hash32(floor(uv));
+    float r = length(fract(uv) - 0.2 - 0.6 * h.xy);
+    float twinkle = 0.75 + 0.25 * sin(uSkyMore.w * (1.5 + 3.0 * h.y) + h.x * 40.0);
+    float bright = fract(h.z * 37.0);
+    col += vec3(0.9, 0.95, 1.1) * night * step(0.8, h.z) * smoothstep(0.1, 0.0, r) * (0.015 + 0.2 * bright * bright) * twinkle * smoothstep(0.02, 0.2, d.y);
+    float seas = texture2D(uNoise, (d.xz - uMoon.xz) * 9.0 + 0.4).b;
+    col += vec3(0.86, 0.87, 0.82) * night * smoothstep(0.99975, 0.99984, cm) * (0.7 + 0.5 * seas) * 0.3;
+  }
+  return col + vec3(0.22, 0.3, 0.46) * night * (pow(cm, 700.0) * 0.05 + pow(cm, 30.0) * 0.006);
 }
 vec3 skyColor(vec3 dir, vec3 eye, float disc) {
   vec3 d = normalize(vec3(dir.x, max(dir.y, 0.001), dir.z));
   vec3 fex;
   vec3 col = clearSky(d, fex);
   col = mix(vec3(dot(col, vec3(0.2126, 0.7152, 0.0722))), col, uSkyTune.y) * uSkyTune.x;
-  float cosT = dot(d, uSunDir);
-  vec2 p = eye.xz + d.xz / max(d.y, 0.02) * 260.0;
-  float shape = cloudField(p) + (texture2D(uNoise, p * 0.0034 + uCloud.zw * 2.0).a - 0.5) * 0.17;
-  float dens = cloudCover(shape) * smoothstep(0.004, 0.06, dir.y);
+  float night = uSkyMore.z;
+  col += nightSky(d, disc, night);
+  float cosT = dot(d, uSkySun);
+  vec3 sunCol = uSunE * fex * 0.04;
+
+  // High cloud: streaks of ice far above, which take the colour of the sun long after the land has lost it.
+  vec2 ph = d.xz / (d.y + 0.2);
+  float streak = texture2D(uNoise, vec2(ph.x * 0.16 + ph.y * 0.05, ph.y * 0.62 - ph.x * 0.04) + uCloud.zw * 0.2).a;
+  float bank = texture2D(uNoise, ph * 0.07 + 0.31 + uCloud.zw * 0.2).b;
+  float high = uSkyMore.x * smoothstep(0.5, 0.95, streak * 0.5 + bank * 0.62) * smoothstep(0.0, 0.14, dir.y);
+  col = mix(col, uHighCol * (0.8 + 0.4 * streak) + sunCol * 0.012 * pow(max(cosT, 0.0), 6.0), high * 0.75);
+
+  // Cumulus: a layer that curves down to the horizon, so far cloud stands in ranks. Shared with its shadow on the land.
+  vec2 p = eye.xz + d.xz / (d.y + 0.05) * CLOUD_H;
+  float wisp = texture2D(uNoise, p * 0.0047 + uCloud.zw * 2.3).a;
+  float shape = cloudField(p) + (wisp - 0.5) * 0.11;
+  float dens = cloudCover(shape) * smoothstep(0.0, 0.05, dir.y);
   vec2 toSun = uSunDir.xz / max(length(uSunDir.xz), 1e-3);
-  float lit = clamp(0.56 + (shape - cloudField(p + toSun * 80.0)) * 3.4, 0.0, 1.0);
-  float thick = smoothstep(0.0, 0.42, shape - (0.95 - uCloud.y * 0.62));
-  vec3 cloud = mix(uDeckDark, uDeck, lit * (1.0 - 0.5 * thick));
-  cloud += uDeck * pow(max(cosT, 0.0), 14.0) * (1.0 - dens) * 2.2;
-  float sun = smoothstep(0.99992, 0.99997, cosT) * disc * mix(1.0, uSkyTune.z, dens);
-  col += uSunE * fex * 0.04 * 9.0 * sun;
+  float ahead = cloudField(p + toSun * 70.0);
+  // A cloud is bright where it thins toward the light and grey in its body; its base, seen from below, is darkest.
+  float edge = clamp(0.5 + (shape - ahead) * 4.5, 0.0, 1.0);
+  float thick = smoothstep(0.0, 0.3, shape - cloudEdge());
+  float lit = clamp(edge * (1.0 - 0.55 * thick) + 0.28 * (1.0 - thick), 0.0, 1.0);
+  vec3 cloud = mix(uDeckDark, uDeck, lit);
+  // A closed sky is not one grey: it lies in long soft folds, and hangs darker where rain is in it.
+  float fold = texture2D(uNoise, p * 0.00034 + uCloud.zw * 0.5).b;
+  float torn = fold * 0.6 + wisp * 0.4;
+  cloud *= (0.84 + 0.3 * fold) * (1.0 - uSkyMore.y * 0.55 * smoothstep(0.3, 0.75, torn));
+  // Thin cloud before the sun lets it through: a bright edge.
+  cloud += uRim * pow(max(cosT, 0.0), 14.0) * (1.0 - 0.8 * thick) * 1.4;
+
+  float sun = smoothstep(0.999962, 0.999985, cosT) * disc * mix(1.0, uSkyTune.z, dens);
+  float aureole = pow(max(cosT, 0.0), 2600.0) * 0.7 + pow(max(cosT, 0.0), 220.0) * 0.05;
+  col += sunCol * (sun * 14.0 + aureole * (1.0 - 0.8 * dens));
   col = mix(col, cloud, dens);
   float low = max(dir.y, 0.0015);
   float air = uHaze.x * exp(-uHaze.y * max(eye.y, 0.0)) / (uHaze.y * low);
@@ -109,6 +172,10 @@ vec3 skyColor(vec3 dir, vec3 eye, float disc) {
 }
 `
 
+function glsl(c: Color): string {
+  return `vec3(${c.r.toFixed(5)}, ${c.g.toFixed(5)}, ${c.b.toFixed(5)})`
+}
+
 const MAP_W = 256, MAP_H = 128
 
 export class Sky {
@@ -116,14 +183,24 @@ export class Sky {
   readonly map: WebGLRenderTarget
   // How far the light of the sky is scaled, how much colour it keeps, how much sun a cloud lets through.
   readonly tune = new Vector3(1, 1, 0.2)
+  // High cloud, how torn the cloud is, night, and the stars' clock.
+  readonly more = new Vector4(0.3, 0, 0, 0)
+  readonly sun = new Vector3(0, 1, 0)
+  readonly moon = new Vector3(0, 1, 0)
   readonly deck = new Color()
   readonly deckDark = new Color()
+  readonly rim = new Color()
+  readonly high = new Color()
+  readonly glow = new Color()
   readonly ground = new Color()
   private uniforms = {
     uSunDir: U.uSunDir, uCloud: U.uCloud, uNoise: U.uNoise, uHaze: U.uHaze, uHazeSun: U.uHazeSun, uHazeAway: U.uHazeAway, uMist: U.uMist,
+    uMistCol: U.uMistCol, uSunCol: U.uSunCol,
+    uSkySun: { value: this.sun }, uMoon: { value: this.moon },
     uBetaR: { value: new Vector3() }, uBetaM: { value: new Vector3() }, uSunE: { value: 0 }, uMieG: { value: 0.8 },
-    uSkyTune: { value: this.tune }, uDeck: { value: this.deck }, uDeckDark: { value: this.deckDark }, uGroundRad: { value: this.ground },
-    uRes: { value: new Vector2(MAP_W, MAP_H) }, uCap: { value: 4 }, uLight: { value: 1 },
+    uSkyTune: { value: this.tune }, uSkyMore: { value: this.more }, uDeck: { value: this.deck }, uDeckDark: { value: this.deckDark },
+    uRim: { value: this.rim }, uHighCol: { value: this.high }, uGlow: { value: this.glow }, uGroundRad: { value: this.ground },
+    uRes: { value: new Vector2(MAP_W, MAP_H) }, uCap: { value: 4 }, uLight: { value: 1 }, uExposure: { value: 1 },
   }
   private domeMat: ShaderMaterial
   private mapMat: ShaderMaterial
@@ -146,15 +223,25 @@ export class Sky {
         }`,
       fragmentShader: /* glsl */ `
         varying vec3 vDir;
+        uniform float uExposure;
         ${SKY_GLSL}
         void main() {
-          gl_FragColor = vec4(skyColor(normalize(vDir), cameraPosition, 1.0), 1.0);
+          vec3 d = normalize(vDir);
+          vec3 c = skyColor(d, cameraPosition, 1.0);
+          // The sky is held under white as the lens will show it, so it keeps its colour right up to the sun; only the
+          // sun itself is let through.
+          vec3 v = c * uExposure;
+          float m = max(v.r, max(v.g, v.b));
+          float held = m <= 0.62 ? m : 0.62 + 1.5 * (1.0 - exp(-(m - 0.62) / 1.5));
+          float through = smoothstep(0.99994, 0.999985, dot(d, uSkySun));
+          gl_FragColor = vec4(c * mix(held / max(m, 1e-5), 1.0, through), 1.0);
         }`,
     })
     const sphere = new SphereGeometry(4200, 48, 24)
     this.dome = new Mesh(sphere, this.domeMat)
     this.dome.frustumCulled = false
-    this.dome.renderOrder = -100
+    // Drawn after the land, where the land has left the sky showing.
+    this.dome.renderOrder = 100
     this.dome.matrixAutoUpdate = true
 
     this.map = new WebGLRenderTarget(MAP_W, MAP_H, { type: HalfFloatType, depthBuffer: false, generateMipmaps: true, minFilter: LinearMipmapLinearFilter, magFilter: LinearFilter })
@@ -187,10 +274,13 @@ export class Sky {
     this.disposables.push(sphere, this.domeMat, this.mapMat, tri, this.map)
   }
 
-  // light: how much of the sky that is seen also lights the scene.
-  setAir(air: Air, sun: Vector3, cap: number, light: number): void {
+  // sun: where the sun itself is. light: how much of the sky that is seen also lights the scene.
+  setAir(air: Air, sun: Vector3, moon: Vector3, cap: number, light: number, exposure: number): void {
     this.uniforms.uCap.value = cap
     this.uniforms.uLight.value = light
+    this.uniforms.uExposure.value = exposure
+    this.sun.copy(sun)
+    this.moon.copy(moon)
     const b = betas(air)
     this.uniforms.uBetaR.value.set(b.r[0], b.r[1], b.r[2])
     this.uniforms.uBetaM.value.set(b.m[0], b.m[1], b.m[2])
