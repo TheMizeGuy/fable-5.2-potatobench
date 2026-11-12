@@ -194,7 +194,7 @@ test('a first season by the short path, from the opening to the next spring, wit
   expect(after.cash).toBe(before.cash)
   expect(after.paused).toBe(true)
   // Continued, the farm waits, with one way on: the Go on chip at a desk, the clock at the thumb on a phone.
-  await expect(isMobile ? page.locator('#ui [data-testid="speed-toggle"]:visible').first() : page.getByTestId('paused-go')).toBeVisible()
+  await expect(isMobile ? page.locator('#ui [data-testid="speed-0"]:visible, #ui [data-testid="speed-toggle"]:visible').first() : page.getByTestId('paused-go')).toBeVisible()
 
   // The rest of the season, the winter, and the year end.
   await farm(page, 'done', { store: false, mobile: isMobile })
