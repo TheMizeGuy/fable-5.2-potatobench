@@ -52,7 +52,7 @@ function seasonTrack(c: S.Campaign): HTMLElement | null {
     ends(F.monthName(S.SEASON_START.month, true), PHASES[at]?.short ?? ''),
     h('span', {
       class: 'bar', role: 'img',
-      'aria-label': `The season runs from ${F.date(y, a)} to ${F.date(y, b)}, and it's ${Math.round(((now - a) / (b - a)) * 100)}% over.${ss.watchDay >= 0 ? ` The blight watch started on ${F.date(y, ss.watchDay)}.` : ''}`,
+      'aria-label': `The season runs from ${F.date(y, a)} to ${F.date(y, b)}, and it's ${Math.round(((now - a) / (b - a)) * 100)}% done.${ss.watchDay >= 0 ? ` The blight watch started on ${F.date(y, ss.watchDay)}.` : ''}`,
     },
     h('i', { style: `width:${x(now)}` }),
     frosts.map(d => h('u', { class: 'frost', style: `left:${x(d)}` })),
@@ -169,8 +169,9 @@ export function outlook(ctx: Ctx, c: S.Campaign): { figure: number; why: string;
   const figure = Math.round(m.after / 100) * 100
   const parts = m.parts.map(p => `${p.label} ${F.money(Math.round(p.amount))}`)
   // The crop is counted from the season's first day (S.moneyNow), so the only warning is the bank's own: callRisk.
-  const verdict = m.callRisk === 'likely' ? ' Even a good crop would leave you under the bank\'s limit, and the bank would foreclose.'
-    : m.callRisk === 'possible' ? ' With an average crop you\'d end up under the bank\'s limit.' : ''
+  const limit = F.money(-S.CREDIT_LIMIT)
+  const verdict = m.callRisk === 'likely' ? ` Even a good crop would leave you more than ${limit} in the red, so the bank would foreclose.`
+    : m.callRisk === 'possible' ? ` With an average crop you'd end the year more than ${limit} in the red, which is the bank's limit.` : ''
   // While some crop is not yet weighed, how far the figure may go either way (S.moneyNow's range); none once all is in.
   const unweighed = c.phase === 'season' && !!s && s.fields.some((f, i) => S.isField(c, i) && f.status !== 'rest' && f.status !== 'off' && f.status !== 'lost' && !f.weighed)
   const spread = unweighed ? Math.round((m.range.hi - m.range.lo) / 2 / 100) * 100 : 0
@@ -440,7 +441,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
         onclick: () => { pop = pop === 'goals' ? '' : 'goals'; ctx.dirty() },
       }, callFirst ? fist() : null, h('span', { class: 'goal-body' }, h('span', { class: 'sr' }, callFirst ? 'Now: ' : 'Next goal: '),
         h('b', { class: 'goal-t' }, callFirst ? F.localize(call!.text) : g!.title),
-        callFirst ? (call!.line ? h('span', { class: 'goal-when' }, call!.line) : g ? h('span', { class: 'goal-when' }, `then ${g.title.toLowerCase()}${reach ? '' : ` (${notYet(c, g)})`}`) : null) : h('span', { class: 'goal-when' }, `${notYet(c, g!)}${then ? `, ${then}` : ''}`)),
+        callFirst ? (call!.line ? h('span', { class: 'goal-when' }, call!.line) : g ? h('span', { class: 'goal-when' }, `then ${g.title.toLowerCase()}${reach ? '' : ` (${notYet(c, g)})`}`) : null) : h('span', { class: 'goal-when' }, `${notYet(c, g!)}${then ? ` · ${then}` : ''}`)),
       h('span', { class: 'sr' }, `. ${callFirst ? F.localize(call!.why) : g!.why} Press to open your goals.`))
       const go = callFirst ? h('button', { class: 'btn goal-go', type: 'button', testid: 'goal-do', onclick: () => takeCall(call!) }, icon(call!.fix ? 'check' : 'arrow', 'i'), call!.fixLabel) : null
       return go ? h('div', { class: 'goal-row' }, quiet, go) : quiet
@@ -455,7 +456,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     },
     gone ? h('span', { class: 'was struck' }, h('span', { class: 'sr' }, 'Done: '), gone.title) : null,
     g ? [quiet ? null : fist(), h('span', { class: 'goal-body' },
-      h('span', { class: 'sr' }, 'Next goal: '), h('b', { class: 'goal-t' }, title), quiet ? h('span', { class: 'goal-when' }, `${notYet(c, g)}${then ? `, ${then}` : ''}`) : when ?? (then ? h('span', { class: 'goal-when' }, then) : null)),
+      h('span', { class: 'sr' }, 'Next goal: '), h('b', { class: 'goal-t' }, title), quiet ? h('span', { class: 'goal-when' }, `${notYet(c, g)}${then ? ` · ${then}` : ''}`) : when ?? (then ? h('span', { class: 'goal-when' }, then) : null)),
     n ? h('span', { class: 'count goal-n num', testid: wait > 0 ? 'goal-wait' : undefined }, n) : null,
     h('span', { class: 'sr' }, `. ${g.why} Press to open your goals.`)] : null)
     return faster || doIt ? h('div', { class: 'goal-row' }, slip, faster ?? doIt) : slip
@@ -550,7 +551,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
               h('span', { class: 'sr' }, ' in the yard, counted in loads. Press to see them or sell logs.')) : null,
               season || c.phase === 'cellar' ? contracts.part(c) : null)),
           pop === 'materials' && mats ? materials(c) : null,
-          stopped ? h('p', { class: 'stopped-tag', role: 'status' }, icon('pause', 'i'), 'Paused for you') : null),
+          stopped ? h('p', { class: 'stopped-tag', role: 'status' }, icon('pause', 'i'), 'Waiting for you') : null),
       ]
     })
     // Out of season the cash moves in a few large steps: each one counts, so it is seen to move.

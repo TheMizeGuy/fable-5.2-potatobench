@@ -226,7 +226,7 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
       })
     })
     const u = picked(c)
-    const who = u ? h('p', { class: 'order-who' }, ringed(u, ringFor(c, u.id), 26), h('span', null, 'Orders go to ', h('b', null, firstName(u.name)))) : null
+    const who = u ? h('p', { class: 'order-who' }, ringed(u, ringFor(c, u.id), 26), h('span', null, 'Orders go to ', h('b', null, u.kind === 'farmer' ? 'you' : firstName(u.name)))) : null
     const more = all.length > MAX_ORDERS && !held ? h('button', {
       class: 'btn quiet order-more', type: 'button', testid: 'order-more', 'aria-pressed': String(page === 1),
       onclick: () => { page = page === 0 ? 1 : 0; ctx.dirty() },
@@ -259,11 +259,11 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
       let text: string
       if (!can.length && listed.length) {
         text = catchFor(c, kind, f, '')
-        el = order({ key, icon: kind, name: JOB_VERB[kind], given: true, catch: '', said: `on the work list. ${text}`, testid: `order-${kind}-given`, attrs: { ...attrs(), 'aria-disabled': 'true' } })
+        el = order({ key, icon: kind, name: JOB_VERB[kind], given: true, catch: '', said: text, testid: `order-${kind}-given`, attrs: { ...attrs(), 'aria-disabled': 'true' } })
       } else if (!can.length) {
         text = busy || F.localize(mine.find(x => !x.ok)?.why ?? '') || jobWhat(kind)
         el = order({
-          key, icon: kind, name: JOB_VERB[kind], catch: '', said: `can't be given right now. ${text}`, testid: `order-${kind}-off`, title: touch ? undefined : text,
+          key, icon: kind, name: JOB_VERB[kind], catch: '', said: `Can't be given right now. ${text}`, testid: `order-${kind}-off`, title: touch ? undefined : text,
           attrs: attrs(' is-off'), onclick: () => refuse(kind, text),
         })
       } else {
@@ -283,7 +283,7 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
       tell.push({ el, text })
       return el
     })
-    const who = u ? h('p', { class: 'order-who' }, ringed(u, ringFor(c, u.id), 26), h('span', null, 'Orders go to ', h('b', null, firstName(u.name)))) : null
+    const who = u ? h('p', { class: 'order-who' }, ringed(u, ringFor(c, u.id), 26), h('span', null, 'Orders go to ', h('b', null, u.kind === 'farmer' ? 'you' : firstName(u.name)))) : null
     const el = h('div', { class: 'orders slots', role: 'group', 'aria-label': u ? `Orders for ${u.name === S.FARMER_NAME ? 'you' : u.name}` : 'Orders' }, who, cells)
     return {
       el, canAny,
@@ -344,7 +344,7 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
     if (haul) {
       const who = haul.hauler >= 0 ? c.crew.find(u => u.id === haul.hauler) : undefined
       parts.push(h('p', { class: haul.frostChance >= 30 ? 'c-red' : '', testid: 'barrels' }, icon('haul', 'i'),
-        h('span', null, `${F.mass(haul.cwt)} in barrels${who ? `, and ${who.kind === 'farmer' ? 'you\'re' : `${firstName(who.name)} is`} hauling them in` : haul.digging ? '' : ', waiting to be hauled in'}${haul.frostChance >= 30 ? `. ${haul.frostChance}% chance of frost tonight` : ''}`)))
+        h('span', null, F.metric() ? F.mass(haul.cwt) : term(F.mass(haul.cwt), 'cwt'), ` in barrels${who ? `, and ${who.kind === 'farmer' ? 'you\'re' : `${firstName(who.name)} is`} hauling them in` : haul.digging ? '' : ', waiting to be hauled in'}${haul.frostChance >= 30 ? `. ${haul.frostChance}% chance of frost tonight` : ''}`)))
     }
     if (f.works) parts.push(h('p', null, icon(f.works.kind, 'i'), h('span', null, `${f.works.kind === 'stump' ? 'Pulling stumps' : 'Laying tile drains'}, ${F.plural(f.works.left, 'day')} to go`)))
     if (f.stones >= 0.4 || (c.history.length > 0 && f.stones >= 0.3)) parts.push(h('p', { class: 'quiet', testid: 'stones' }, icon('rocks', 'i'), h('span', null, `${F.upper(stonesWord(f.stones))}: ${stonesText(f.stones)}`)))
@@ -387,7 +387,7 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
         return note(s.frozen ? 'The ground has frozen, so nothing more can be done in the field.'
           : f.status === 'rest' ? `Resting in oats and clover. It earns ${F.money(S.REST_INCOME)} in the fall and restores the soil.`
             : f.status === 'planted' ? 'Planted. There\'s nothing to do here until the plants come up.'
-              : f.status === 'digging' ? `Being dug, with ${job ? F.pct(job.done / job.need) : 'part'} of the rows out so far. You'll get the weigh ticket when the last row is out.`
+              : f.status === 'digging' ? `Being dug, with ${job ? F.pct(job.done / job.need) : 'part'} of the rows out so far. You'll get the weigh ticket once it's all hauled in.`
                 : f.status === 'lost' ? 'This crop is lost.'
                   : picked(c) ? nothingFor(picked(c)!)
                     : 'Everything this field needs is already on the work list.')
@@ -427,7 +427,7 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
     if (f.status === 'idle' || f.status === 'planted') {
       const pr = S.plantReady(app.world, c, f.index)
       const why = F.localize(pr.why)
-      return [h('p', null, icon('planted', 'i'), h('span', null, f.status === 'idle' && why.includes('°') ? why : `Soil ${F.temp(pr.soilT)} here.${f.status === 'idle' ? ` ${why}` : ''}`))]
+      return [h('p', null, icon('planted', 'i'), h('span', null, f.status === 'idle' && why.includes('°') ? why : `The soil here is ${F.temp(pr.soilT)}.${f.status === 'idle' ? ` ${why}` : ''}`))]
     }
     if (f.status === 'dead') {
       const left = Math.ceil((1 - f.skin) * S.SKIN_DAYS)
@@ -449,7 +449,7 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
     if (!e) return [blight, h('p', { class: 'quiet' }, icon('bulk', 'i'), h('span', null, 'No yield estimate until potatoes form.'))]
     const max = Math.max(500, Math.ceil(e.hi / 100) * 100)
     const sample = [...(c.season?.log ?? [])].reverse().find(x => x.type === 'sample' && x.field === f.index)
-    return [blight, h('p', { class: 'estimate', testid: 'estimate' }, icon('bloom', 'i'), h('b', { class: 'num' }, F.perAreaSpan(e.lo, e.hi)),
+    return [blight, h('p', { class: 'estimate', testid: 'estimate' }, icon('bloom', 'i'), h('b', { class: 'num' }, F.metric() ? F.perAreaSpan(e.lo, e.hi) : term(F.perAreaSpan(e.lo, e.hi), 'cwt/acre')),
       range({ lo: e.lo, hi: e.hi, max, label: `Yield estimate ${F.perAreaSpan(e.lo, e.hi)}, ${e.digs ? `from ${F.plural(e.digs, 'test dig')}` : 'by eye'}` }),
       sample ? h('button', {
         class: 'btn quiet est-by', type: 'button', testid: 'sample-again', 'aria-label': `See the test dig from ${F.date(c.year, sample.day)}`, title: ctx.touch() ? undefined : `See the test dig from ${F.date(c.year, sample.day)}`,
@@ -532,7 +532,7 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
     // How spraying is done this season, and the way to change it, beside the spray order once blight weather has come.
     const way = sprayWay(c)
     const spray = c.season!.watchDay >= 0 && f.status === 'growing' ? h('button', { class: 'btn quiet spray-way', type: 'button', testid: 'card-spray-way', onclick: () => askSpray(ctx) },
-      icon('spray', 'i'), 'Spraying this season: ', h('b', null, way === 'auto' ? 'automatic' : way === 'none' ? 'not this year' : 'ask me'), h('span', { class: 'quiet' }, ' · change')) : null
+      icon('spray', 'i'), 'Spraying this season: ', h('b', null, way === 'auto' ? 'kept sprayed' : way === 'none' ? 'not this year' : 'ask me'), h('span', { class: 'quiet' }, ' · change')) : null
     return [
       headWith('Field record', f.name, [`${f.variety}, `, term((SHORT_STAGE[f.stage] ?? f.stage).toLowerCase())]),
       gauges(c, f),

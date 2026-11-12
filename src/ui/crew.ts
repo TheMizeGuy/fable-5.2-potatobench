@@ -82,7 +82,7 @@ function fixWord(c: S.Campaign, p: S.Pressing): string {
   const f = p.fix
   if (!f) return ''
   if (f.t === 'job') return `${JOB_VERB[p.kind]} ${S.FIELD_NAMES[p.field] ?? ''}`.trim()
-  if (f.t === 'priority') { const u = c.crew.find(x => x.id === f.unit); return u ? `Put ${SKILL_NAME[f.work].toLowerCase()} work first for ${u.kind === 'farmer' ? 'you' : firstName(u.name)}` : 'Put it first' }
+  if (f.t === 'priority') { const u = c.crew.find(x => x.id === f.unit); return u ? (u.kind === 'farmer' ? `Put your ${SKILL_NAME[f.work].toLowerCase()} work first` : `Put ${SKILL_NAME[f.work].toLowerCase()} work first for ${firstName(u.name)}`) : 'Put it first' }
   return 'Clear the way'
 }
 
@@ -179,7 +179,7 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
           h('span', { class: 'press-text' }, h('b', null, `${JOB_VERB[x.kind]} ${S.FIELD_NAMES[x.field] ?? ''}`.trim()), `: ${x.why}. ${F.localize(x.inWay)}`),
           x.fix ? h('button', {
             class: 'btn', type: 'button', testid: `pressing-fix-${x.kind}-${x.field}`,
-            onclick: () => { pop = -1; const r = ctx.run(x.fix!); if (r.ok) ctx.announce(`Done: ${fixWord(c, x)}.`) },
+            onclick: () => { pop = -1; const r = ctx.run(x.fix!); if (r.ok) ctx.announce(`${fixWord(c, x)}. Done.`) },
           }, x.kind === 'kill' && x.job < 0 ? 'Kill them now' : fixWord(c, x)) : null,
           x.kind === 'kill' && x.job < 0 ? keepButton(x.field, `keep-vines-${x.field}`) : null))) : null)
   }
@@ -228,7 +228,7 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
         const fateSaid = o ? F.localize(o.why) : ''
         const able = people.filter(p => S.unitBlock(c, j.kind, p.id) === '')
         const whoSaid = who ? `${who.pinned ? 'assigned to' : 'being done by'} ${who.u.name === S.FARMER_NAME ? 'you' : who.u.name}` : 'open to anyone'
-        const choices = many && able.length > 1 ? h('div', { class: 'q-who', role: 'group', 'aria-label': `Who does ${what.toLowerCase()}` },
+        const choices = many && able.length > 1 ? h('div', { class: 'q-who', role: 'group', 'aria-label': `${what}: choose who does it` },
           [{ id: -1, name: 'Anyone' }, ...able.map(u => ({ id: u.id, name: firstName(u.name) }))].map(x => h('button', {
             class: 'btn', type: 'button', testid: `assign-${j.id}-${x.id}`, 'aria-pressed': String(j.unit === x.id),
             onclick: () => assign(j.id, x.id, what, x.name),
@@ -364,7 +364,7 @@ export function openCrew(ctx: Ctx): void {
           const wage = kind === 'hand' ? S.HAND_WAGE : S.OPERATOR_WAGE
           return h('article', { class: 'applicant hall' },
             h('span', { class: 'hall-ic' }, icon(KIND_GLYPH[kind], 'i')),
-            h('div', { class: 'who' }, h('h3', null, KIND_NAME[kind]), h('p', null, kind === 'hand' ? `${kindDoes('hand')} Won't drive unless you change their priorities.` : `${kindDoes('operator')} Won't do field work on foot unless you change their priorities.`)),
+            h('div', { class: 'who' }, h('h3', null, KIND_NAME[kind]), h('p', null, `${kindDoes(kind).replace(/\.$/, '')}, but won't ${kind === 'hand' ? 'drive' : 'do field work on foot'} unless you change their priorities.`)),
             skillRow(kind === 'hand' ? S.HAND_SKILLS : S.OPERATOR_SKILLS),
             h('p', { class: 'price' }, h('b', { class: 'num' }, F.money(wage)), h('span', null, 'a month')),
             room ? null : h('button', { class: 'btn', type: 'button', testid: `hire-${kind}`, onclick: () => hired(ctx.run({ t: 'hire', kind })) }, 'Hire', h('span', { class: 'sr' }, `, ${F.money(wage)} a month`)))
@@ -404,7 +404,7 @@ export function openCrew(ctx: Ctx): void {
               }, icon('letgo', 'i'), 'Let go'))),
           ] : null,
           h('p', { class: 't-caption crew-foot' }, season
-            ? 'If you hire now, you pay the first month right away and then a month at a time until the season ends. You don\'t get a paid month back.'
+            ? 'If you hire now, you pay the first month right away and then a month at a time until the season ends. You don\'t get back a month you\'ve already paid.'
             : 'If you hire in spring, you pay the first month when the season starts. People stay on from year to year until you let them go.'),
         ))
       }

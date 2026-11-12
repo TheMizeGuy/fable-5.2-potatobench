@@ -30,13 +30,13 @@ export interface Whois {
 
 // What a thing is, in a name and a line.
 function thingWords(c: S.Campaign, t: Thing, touch = false): { name: string; line: string; glyph: string } {
-  const who = (id: number) => { const u = c.crew.find(x => x.id === id); return u ? (u.kind === 'farmer' ? 'You have' : `${firstName(u.name)} has`) : '' }
+  const who = (id: number) => { const u = c.crew.find(x => x.id === id); return u ? (u.kind === 'farmer' ? 'You\'re' : `${firstName(u.name)} is`) : '' }
   switch (t.kind) {
     case 'tractor': case 'truck': {
       const name = t.kind === 'tractor' ? (t.k ? `Your ${t.k === 1 ? 'second' : 'third'} tractor` : 'Your tractor') : 'Your truck'
       const holder = t.holder >= 0 ? who(t.holder) : ''
       const job = holder && c.season ? c.season.jobs.find(j => c.crew.find(u => u.id === t.holder)?.job === j.id) : undefined
-      return { name, glyph: t.kind === 'tractor' ? 'machine' : 'haul', line: holder ? `${holder} it${job ? ` for ${jobText(job, c, job.building).replace(/^./, x => x.toLowerCase())}` : ''}.` : c.phase === 'season' ? 'Nobody is using it. It\'s parked where it was left, free for whoever needs it next.' : 'In the shed until the season starts.' }
+      return { name, glyph: t.kind === 'tractor' ? 'machine' : 'haul', line: holder ? `${holder} using it${job ? `, ${jobText(job, c, job.building).replace(/^./, x => x.toLowerCase())}` : ''}.` : c.phase === 'season' ? 'Nobody is using it. It\'s parked where it was left, free for whoever needs it next.' : 'In the shed until the season starts.' }
     }
     case 'asking': {
       const a = c.applicants[t.k]
@@ -120,7 +120,7 @@ export function whois(ctx: Ctx, layer: HTMLElement): Whois {
         h('div', null, h('dt', { class: p.quitIn >= 0 ? 'c-red' : p.mood < 0.45 ? 'c-ochre' : '' }, F.upper(p.moodWord)),
           h('dd', null, p.quitIn >= 0 ? `will quit in ${F.plural(p.quitIn, 'day')} unless their mood improves` : pulls.length ? moodSaid(pulls.slice(0, 2)) : 'no strong reasons either way')),
         h('div', null, h('dt', null, 'Best at'), h('dd', null, `${SKILL_NAME[best].toLowerCase()}, ${p.skills[best]} out of 10`)),
-        h('div', null, h('dt', null, 'Pay'), h('dd', { class: 'num' }, farmer ? 'none, living costs come out at the end of the year' : `${F.money(p.pay)} a month${p.foreman ? ' as foreman' : ''}`))),
+        h('div', null, h('dt', null, 'Pay'), h('dd', { class: 'num' }, farmer ? 'none. Your family\'s living costs come out at the end of the year.' : `${F.money(p.pay)} a month${p.foreman ? ' as foreman' : ''}`))),
       // The work they take first: one press puts a kind of work first for them.
       c.phase === 'cellar' ? h('div', { class: 'whois-first', role: 'group', 'aria-label': `${name} this winter` },
         h('span', { class: 't-label' }, 'This winter'),

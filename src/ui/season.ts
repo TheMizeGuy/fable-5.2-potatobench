@@ -265,7 +265,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       const due = S.killOutlook(c, p.field)
       ctx.notes.push({
         level: soon ? 'warn' : 'info', glyph: 'kill', ttl: 14000, field: p.field, day: s0.day,
-        text: `${name}: ${due && date && !soon ? `vine kill is due around ${S.formatDay(s0.year, due.day, true)}, and your crew will do it on ${date}` : `your crew will kill the vines ${soon ? 'tomorrow' : date ? `on ${date}` : 'soon'}`}. Show me`,
+        text: `${name}: ${due && date && !soon ? `vine kill due around ${S.formatDay(s0.year, due.day, true)}. Your crew does it on ${date}` : `your crew will kill the vines ${soon ? 'tomorrow' : date ? `on ${date}` : 'soon'}`}. Show me`,
         full: `${F.localize(p.inWay)} Press to see the field, where you can tell the crew to keep the vines growing.`,
         go: () => { app.select(p.field); app.focus(p.field) },
       })
@@ -379,7 +379,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       name: f.name,
       glyph: tract ? COVER_GLYPH[f.cover] : stageGlyph(f),
       sub, marks, queue, badge, key, cls: tract ? 'tract' : undefined,
-      said: `${key ? `key ${key}` : f.block === 'home' ? 'the home farm' : 'beyond the home farm'}: ${what}${said.length ? `, ${said.join(', ')}` : ''}${badge ? `. Needs: ${F.localize(need!.text)}` : '.'}`,
+      said: `${key ? `Key ${key}` : f.block === 'home' ? 'The home farm' : 'Beyond the home farm'}: ${what}${said.length ? `, ${said.join(', ')}` : ''}${badge ? `. Needs: ${F.localize(need!.text)}` : '.'}`,
       taught: !!badge && ((!!hint && need?.act === hint.kind) || goalField === i),
     }
   }

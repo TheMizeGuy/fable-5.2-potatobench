@@ -47,7 +47,7 @@ export function pins(ctx: Ctx, layer: HTMLElement, o: { tags: () => DOMRect[]; c
       const u = c.crew.find(x => x.id === p.id)
       const resting = !!u && S.resting(u) && !!c.season
       const word = resting ? 'resting, worn out' : sign?.cls === 'bad' ? sign.text : doingWord(c, p).toLowerCase()
-      const label = `${p.kind === 'farmer' ? 'You' : firstName(p.name)}, ${word}${state === 'needs' ? ', needs you' : ''}`
+      const label = `${p.kind === 'farmer' ? 'You' : firstName(p.name)}, ${word}${state === 'needs' && p.kind !== 'farmer' ? ', needs you' : ''}`
       return { id: p.id, name: p.kind === 'farmer' ? 'You' : p.name, ring: ringFor(c, p.id), state: app.unit === p.id && state !== 'needs' && state !== 'hurt' ? 'picked' : state, label, rank: app.unit === p.id ? 0 : state === 'needs' ? 1 : state === 'hurt' ? 2 : 3, tired: resting || p.tired >= S.HURT_TIRED }
     })
     for (const [id, w] of wraps) if (!models.some(m => m.id === id)) { w.remove(); wraps.delete(id) }

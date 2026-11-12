@@ -98,8 +98,8 @@ export interface PersonCard {
 // How rested a person is, in words, with what follows from it: resting today, or slower, or a fall likelier.
 export function restWords(c: S.Campaign, p: S.PersonInfo): string {
   const u = c.crew.find(x => x.id === p.id)
-  if (u && S.resting(u) && c.phase === 'season') return u.rest === 'now' ? 'resting until fully rested' : 'worn out, so resting today and back once rested'
-  if (p.tired >= S.HURT_TIRED) return u?.rest === 'push' ? 'worn out but still working, so slower and more likely to get hurt' : 'worn out, so resting tomorrow'
+  if (u && S.resting(u) && c.phase === 'season') return u.rest === 'now' ? 'resting until recovered' : 'worn out, so resting today'
+  if (p.tired >= S.HURT_TIRED) return u?.rest === 'push' ? 'worn out but still working' : 'worn out, so resting tomorrow'
   return p.tired >= S.TIRED_SLOW_FROM ? (p.kind === 'farmer' ? 'you need a rest day' : 'needs a rest day') : 'fit for work'
 }
 
@@ -115,15 +115,16 @@ export function restControl(ctx: Ctx, c: S.Campaign, id: number, testid: string)
   if (!u || c.phase !== 'season') return null
   const mode = u.rest ?? 'auto'
   const name = u.kind === 'farmer' ? 'You' : R.firstName(u.name)
-  const opt = (m: S.RestMode, word: string, tip: string) => h('button', {
+  const will = name === 'You' ? 'You\'ll' : `${name} will`
+  const opt = (m: S.RestMode, word: string, tip: string, said: string) => h('button', {
     class: `btn${mode === m ? ' is-on' : ''}`, type: 'button', testid: `${testid}-${m}`, 'aria-pressed': String(mode === m), title: ctx.touch() ? undefined : tip,
-    onclick: () => { const r = ctx.run({ t: 'rest', unit: id, mode: m }); if (r.ok) ctx.announce(`${name}: ${word.toLowerCase()}.`) },
+    onclick: () => { const r = ctx.run({ t: 'rest', unit: id, mode: m }); if (r.ok) ctx.announce(`${will} ${said}.`) },
   }, word)
   return h('div', { class: 'rest-keys', role: 'group', 'aria-label': name === 'You' ? 'When you rest' : `When ${name} rests`, testid },
     h('span', { class: 't-label' }, 'Rest'),
-    opt('auto', 'When worn out', 'Takes a rest day automatically when worn out, then goes back to work.'),
-    opt('now', 'Rest now', 'Takes days off until fully rested.'),
-    opt('push', 'Push on', 'Keeps working even when worn out, which is slower and makes an injury more likely.'))
+    opt('auto', 'When worn out', 'Takes a rest day automatically when worn out, then goes back to work.', 'rest when worn out'),
+    opt('now', 'Rest now', 'Takes days off until recovered.', 'rest now until recovered'),
+    opt('push', 'Push on', 'Keeps working even when worn out, which is slower and makes an injury more likely.', 'keep working when worn out'))
 }
 
 // ---------------------------------------------------------------- spraying this season, asked once
@@ -213,7 +214,7 @@ export function personCard(ctx: Ctx): PersonCard {
           h('button', { class: 'iconbtn', type: 'button', testid: 'person-show', 'aria-label': 'Find them on the farm', title: ctx.touch() ? undefined : 'Find them on the farm', onclick: () => { app.selectUnit(p.id, 'land'); ctx.view.follow(p.id) } }, icon('scout', 'i')),
           h('button', { class: 'close', type: 'button', testid: 'person-close', 'aria-label': `Close${ctx.touch() ? '' : ' (Escape)'}`, onclick: () => app.selectUnit(-1) }, icon('close', 'i')))),
       h('p', { class: 'pc-doing', testid: 'person-doing' }, icon(doingGlyph(c, p), 'i'), h('span', null, doing),
-        next && doing === 'Nothing to do' ? h('span', { class: 'quiet it' }, ` Up next: ${R.jobText(next, c, next.building).replace(/^./, x => x.toLowerCase())}`) : null),
+        next && doing === 'Nothing to do' ? h('span', { class: 'quiet it' }, `. Up next: ${R.jobText(next, c, next.building).replace(/^./, x => x.toLowerCase())}`) : null),
       h('table', { class: 'skills' },
         h('caption', { class: 'sr' }, 'Skills out of ten, and the priority of each kind of work. 1 gets done first, and a dash means never.'),
         h('tbody', null, S.SKILLS.map(k => {
@@ -243,7 +244,7 @@ export function personCard(ctx: Ctx): PersonCard {
         h('p', { class: 'pay lead' }, h('span', null, h('b', { class: 'num' }, F.money(p.pay)), ` a month${p.foreman ? ' as foreman' : ''}`), h('span', { class: 'dots' }), p.ask ? h('span', { class: 'quiet num' }, `asked for ${F.money(p.ask)}`) : null),
         h('div', { class: 'pc-actions' },
           h('button', {
-            class: 'btn', type: 'button', testid: 'person-raise', title: ctx.touch() ? undefined : 'A raise improves their mood, by about a tenth for every 10% over what they asked for.',
+            class: 'btn', type: 'button', testid: 'person-raise', title: ctx.touch() ? undefined : 'Every 10% over what they asked for moves their mood about a tenth of the way up.',
             onclick: () => run({ t: 'raise', unit: p.id, wage: raiseTo(p) }, `${R.firstName(p.name)} now earns ${F.money(raiseTo(p))} a month.`),
           }, icon('raise', 'i'), h('span', null, 'Raise', h('span', { class: 'sub num' }, `to ${F.money(raiseTo(p))}`))),
           blocks.length ? h('button', {
@@ -361,7 +362,7 @@ export function workGrid(ctx: Ctx): WorkGrid {
       routine.length ? h('div', { class: 'routine', role: 'group', 'aria-label': 'Work your crew does without asking' },
         h('p', { class: 't-label' }, 'Automatic, or ask me'),
         c.season && c.season.watchDay >= 0 ? h('button', { class: 'btn quiet spray-again', type: 'button', testid: 'spray-ask-open', onclick: () => askSpray(ctx) },
-          icon('spray', 'i'), 'Spraying this season: ', h('b', null, sprayWay(c) === 'auto' ? 'automatic' : sprayWay(c) === 'none' ? 'not this year' : 'ask me'), h('span', { class: 'quiet' }, ' · change')) : null,
+          icon('spray', 'i'), 'Spraying this season: ', h('b', null, sprayWay(c) === 'auto' ? 'kept sprayed' : sprayWay(c) === 'none' ? 'not this year' : 'ask me'), h('span', { class: 'quiet' }, ' · change')) : null,
         h('div', { class: 'routine-keys' }, routine.map(r => h('button', {
           class: `btn${r.auto ? ' is-on' : ''}`, type: 'button', testid: `routine-${r.kind}`, 'aria-pressed': String(r.auto),
           title: ctx.touch() ? undefined : r.auto ? `${R.JOB_VERB[r.kind]}: your crew adds it to the work list automatically. Click to be asked instead.` : `${R.JOB_VERB[r.kind]}: waits for your order. Click to let your crew handle it automatically.`,

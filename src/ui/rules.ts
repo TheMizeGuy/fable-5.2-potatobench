@@ -58,7 +58,7 @@ export function orderHelp(kind: S.JobKind): string {
     case 'kill': return `Kills the vines, so the potatoes stop growing and their skins set in ${S.SKIN_DAYS} days. Do it in early September, or sooner if blight is winning.`
     case 'dig': return 'Digs up the crop and puts it in barrels. Do it once the skins have set, and before the ground freezes.'
     case 'fell': return 'Clears a tract of woods or brush, which is the first step to a new field. It\'s slow during the season and cheap in winter.'
-    case 'rocks': return 'Picks stones off the field, because stony ground slows planting and digging and bruises the crop. Only when no crop is in the ground.'
+    case 'rocks': return 'Picks stones off the field, because stony ground slows planting and digging and bruises the crop. Do it only when no crop is in the ground.'
     case 'brush': return 'Cuts the hedgerow back, which means less blight weather and frost but a little more drying wind. It grows back.'
     case 'build': return 'Your own crew puts up a building. Order it from the yard.'
     case 'haul': return 'Brings the harvested crop in. Barrels left in the field can freeze or turn green.'
@@ -71,7 +71,7 @@ export function hint(kind: S.JobKind): string {
     case 'plant': return `The soil has reached ${F.temp(10)}, which is warm enough to plant. In colder ground the seed just sits and rots.`
     case 'hill': return 'Hilling piles soil over the row to cover the potatoes that are about to form and bury the weeds. Do it twice, before the rows close.'
     case 'scout': return 'Scouting means walking the rows. You can only see blight up close, and a week-old reading is just a guess.'
-    case 'spray': return 'Spray before blight weather. Spray keeps blight from taking hold but can\'t cure it, and it wears off as it rains and new leaves grow.'
+    case 'spray': return 'Spray before blight weather. It keeps blight from taking hold but can\'t cure it, and it wears off as it rains and new leaves grow.'
     case 'water': return `Dry soil while the potatoes are filling out costs you yield and brings scab. Watering adds ${inch()}.`
     case 'rogue': return 'Roguing means pulling up and bagging the blighted plants you\'ve found, so they stop spreading spores to the rest.'
     case 'sample': return 'A test dig pulls up one plant so you can see its potatoes. It\'s your only look before harvest.'
@@ -99,7 +99,7 @@ export function isStale(f: S.FieldInfo): boolean {
 }
 
 export function hillWord(passes: number): string {
-  return passes >= 2 ? 'twice' : passes === 1 ? 'once so far' : 'not yet'
+  return passes >= 2 ? 'twice' : passes === 1 ? 'once, one to go' : 'not yet'
 }
 
 // The glyph for where a field is in its year.
@@ -134,7 +134,7 @@ export function alertShort(a: Alert): { text: string; glyph: string } {
     case 'scout': return { text: a.level === 'bad' ? `${name}blight on ${n === '1' ? '1 plant' : `${n} plants`}` : `${name}scouted, no blight`, glyph: a.level === 'bad' ? 'blight' : 'scout' }
     case 'watch': return { text: 'Blight watch is on', glyph: 'blight' }
     case 'sample': return { text: `${name}test dig found ${n} potatoes`, glyph: 'sample' }
-    case 'dug': return { text: `${name}${a.level === 'bad' ? 'froze half harvested' : 'harvested'}`, glyph: 'dig' }
+    case 'dug': return { text: `${name}${a.level === 'bad' ? 'froze before it was all dug' : 'harvested'}`, glyph: 'dig' }
     case 'lost': return { text: a.field >= 0 ? `${name}crop lost` : a.text, glyph: 'close' }
     case 'freeze': return { text: 'The ground has frozen', glyph: 'frost' }
     case 'dropped': {
@@ -166,7 +166,7 @@ export function alertShort(a: Alert): { text: string; glyph: string } {
     case 'pondDry': return { text: 'The pond is dry', glyph: 'pond' }
     case 'frostBarrels': {
       const cwt = [...a.text.matchAll(/([\d,]+) cwt in /g)].reduce((t, m) => t + Number(m[1].replace(/,/g, '')), 0)
-      return { text: `Frost tonight with ${cwt ? F.localize(`${cwt} cwt`) : 'the crop'} still in barrels, so hauling comes first`, glyph: 'frost' }
+      return { text: `Frost tonight. Hauling the ${cwt ? F.localize(`${cwt} cwt`) : 'crop'} in barrels first`, glyph: 'frost' }
     }
     case 'frozenInField': return { text: `${name}barrels froze${n ? `, ${F.localize(`${n} cwt`)}` : ''}`, glyph: 'frost' }
     case 'weighed': return { text: `${name}weighed in`, glyph: 'ticket' }
@@ -445,8 +445,9 @@ export function moodHeading(c: S.Campaign, p: S.PersonInfo): 'rising' | 'falling
 export function tiredWhy(c: S.Campaign, p: S.PersonInfo): string {
   const slow = p.tired > S.TIRED_SLOW_FROM ? S.TIRED_SLOW * (p.tired - S.TIRED_SLOW_FROM) / (1 - S.TIRED_SLOW_FROM) : 0
   const rest = c.sundaysOff ? 'Sunday off will help.' : 'There\'s no day off while Sundays are worked.'
-  if (p.tired >= S.HURT_TIRED) return `Working ${F.pct(slow)} slower, and could get hurt on a machine or in the woods. ${rest}`
-  if (slow > 0.005) return `Working ${F.pct(slow)} slower. ${rest}`
+  const are = p.kind === 'farmer' ? 'You\'re' : 'They\'re'
+  if (p.tired >= S.HURT_TIRED) return `${are} ${F.pct(slow)} slower and could get hurt on a machine or in the woods. ${rest}`
+  if (slow > 0.005) return `${are} ${F.pct(slow)} slower. ${rest}`
   return p.tired >= 0.3 ? `A week of work adds up. ${rest}` : ''
 }
 
@@ -494,7 +495,7 @@ export function savedSeedText(stock: S.SeedStock[]): string {
   const fields = stock.reduce((a, x) => a + x.fields, 0)
   const virus = fields > 0 ? stock.reduce((a, x) => a + x.virus * x.fields, 0) / fields : 0
   const blight = stock.some(x => x.blight > 0.01)
-  return `Saved seed is free, but it carries more virus every year you save it. About ${F.pct(virus)} of plants from this stock will come up stunted (with certified seed it's about ${F.pct(S.VIRUS_CERTIFIED)}), and a stunted plant yields about ${F.pct(1 - S.VIRUS_VIGOR)} less.${blight ? ' Blight also went into the cellar with these potatoes, and some of it will come back in the field.' : ''}`
+  return `Saved seed is free, but it carries more virus every year you save it. From this stock, about ${F.pct(virus)} of plants will come up stunted (with certified seed it's about ${F.pct(S.VIRUS_CERTIFIED)}), and a stunted plant yields about ${F.pct(1 - S.VIRUS_VIGOR)} less.${blight ? ' Blight also went into the cellar with these potatoes, and some of it will come back in the field.' : ''}`
 }
 
 // How a season is counted on the way to keeping the farm: "Year 2 of 5".

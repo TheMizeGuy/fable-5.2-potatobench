@@ -15,5 +15,5 @@ export function keepSprayedLine(world: S.World, c: S.Campaign): string {
   const each = Math.round(o.passes / o.fields)
   const usual = Math.round(neighbourSprays(world))
   const more = usual > 0 && each > usual * 1.25
-  return `Your crew sprays each field whenever the protection wears off. That's about ${F.plural(each, 'spray')} on each of ${F.plural(o.fields, 'field')}, or ${F.money(o.dollars)} this season.${usual ? ` The neighbor does about ${usual} per field in a season${more ? ', and if you choose to be asked each time, you can spray only when blight weather comes' : ''}.` : ''}`
+  return `Your crew sprays each field whenever the protection wears off. That's about ${F.plural(each, 'spray')} on each of ${F.plural(o.fields, 'field')}, or ${F.money(o.dollars)} this season.${usual ? ` The neighbor sprays each field about ${usual} times a season${more ? ', and if you choose to be asked each time, you can spray only when blight weather comes' : ''}.` : ''}`
 }

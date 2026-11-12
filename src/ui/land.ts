@@ -44,7 +44,7 @@ export function landCard(ctx: Ctx, c: S.Campaign, field: number, note: string, o
     h('div', { class: 'plan-row land-row' },
       h('button', { class: 'nbtn primary', type: 'button', testid: 'land-rent', onclick: () => tryCmd({ t: 'rent', field }) }, 'Rent', h('span', { class: 'sub num' }, `${F.money(l.rent)} a year`)),
       h('button', { class: 'nbtn', type: 'button', testid: 'land-buy', onclick: () => tryCmd({ t: 'buyLand', field }) }, 'Buy', h('span', { class: 'sub num' }, F.money(l.price))),
-      h('p', { class: 'card-line' }, `You pay rent when the season starts. Growing a crop on it costs ${F.money(GROW)} more, or ${F.money(S.REST_COST)} if you rest it. Land is bought with cash, and you have ${F.money(Math.max(0, c.cash))} now.`)),
+      h('p', { class: 'card-line' }, `You pay rent when the season starts. Growing a crop on it costs ${F.money(GROW)} more, or ${F.money(S.REST_COST)} if you rest it. You buy land with cash, and you have ${F.money(Math.max(0, c.cash))} now.`)),
     note ? h('p', { class: 'card-line flash lv-warn', role: 'alert' }, note) : null,
   ]
 }
