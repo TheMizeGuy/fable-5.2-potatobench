@@ -90,7 +90,7 @@ The build tagged `live-5` (the land at true scale, twelve times larger each way;
 own papers; the farmstead game; the clock as pause and three speeds), checked on the Windows box with an RTX 2080 Ti.
 
 **Browser suite** (interface, accessibility, play-throughs, determinism; Chromium, Firefox, WebKit and a phone
-profile; 114 tests). The full run on the merged build: 90 passed, 16 skipped, 8 failed. The eight were four tests:
+profile; 114 tests). The full run on the merged build had reached 113 of its 114 tests, with eight failures, when the reruns were started in its folder and cut it off, so it printed no totals. The eight were four tests:
 in spring the new sheet's root took the clicks meant for the field tags (a real fault from joining two rebuilds:
 fixed); the almanac page could not be scrolled from the keyboard (fixed); and two tests read a money line whose
 wording the rebuild changed (the tests now read it as it is). After the fixes those four were rerun, not the whole
