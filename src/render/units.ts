@@ -50,6 +50,8 @@ const WAY_LEAD = 0.3
 const WAY_LEAD_IN = 0.5
 // How much quicker than the clock the day's work is seen through by someone behind it.
 const CATCH_UP = 1.6
+// The fastest anyone is seen to go, catching up with where the day's script has them: on foot, and driving (m/s).
+const FOOT_MOST = 9, RIG_MOST = 28
 // Hauling with the clock stopped: seconds to a load, there and back.
 const HAUL_LAP_S = 130
 const MAX_RINGS = 2
@@ -64,6 +66,8 @@ interface Rig {
   x: number
   z: number
   heading: number
+  sx: number               // where it is seen: x, z go where the day's script puts it; sx, sz follow, never jumping
+  sz: number
   holder: number           // the person who has it, or -1
   home: Spot
   broken: boolean
@@ -83,6 +87,8 @@ interface Actor {
   segClock: number
   x: number
   z: number
+  sx: number               // where they are seen: x, z go where the day's script puts them; sx, sz follow, never jumping
+  sz: number
   heading: number
   rig: Rig | null          // the machine in hand
   aboard: boolean
@@ -269,7 +275,7 @@ export class Crews {
     const rest = idleSpot(-1, slot, u.kind === 'farmer')
     return {
       id: u.id, kind: u.kind, slot, dress: dressFor(u.id, false, u.name), coat: dressFor(u.id, true, u.name), segs: [], clockSeg: -2, segClock: 0,
-      x: rest.x, z: rest.z, heading: rest.heading, rig: null, aboard: false, shown: 0, away: false, home: null, about: DOORYARD_AT, gait: u.id * 1.3, goal: null, state: 'idle', post: '',
+      x: rest.x, z: rest.z, sx: NaN, sz: NaN, heading: rest.heading, rig: null, aboard: false, shown: 0, away: false, home: null, about: DOORYARD_AT, gait: u.id * 1.3, goal: null, state: 'idle', post: '',
       tired: u.tired, worn: u.tired, style: (u.id * 7) % 5, pose: new Pose().reset(), head: new Vector3(rest.x, 1, rest.z), scale: 1, next: [], u: 1, lastT: 1, ay: 2.2, arc: 0, arcSeg: null, beat: 0, line: null,
       way: null, waySeg: null, came: null, ways: 1, brief: false, hadWay: false, worked: 0, siteKey: '', gen: 0, queue: null, arrived: false, rate: 1.6, hold: false,
       worker: { id: u.id, dress: dressFor(u.id, false, u.name), tired: 0, w: 0, x: rest.x, z: rest.z, heading: 0, lift: 0, pose: new Pose().reset(), aboard: false, rig: null, loads: 1, lit: false },
@@ -281,7 +287,7 @@ export class Crews {
     const home = machineHome(kind, k, this.shed, this.tractors)
     this.group.add(machine.group)
     return {
-      kind, k, machine, x: home.x, z: home.z, heading: home.heading, holder: -1, home, broken: false, moved: 0, turn: 0,
+      kind, k, machine, x: home.x, z: home.z, sx: NaN, sz: NaN, heading: home.heading, holder: -1, home, broken: false, moved: 0, turn: 0,
       state: { moved: 0, turn: 0, working: 0, kind: 'travel', driver: null, load: 0 },
     }
   }
@@ -347,6 +353,7 @@ export class Crews {
   // Put everyone and everything where the farm says it is, at once (a new screen, a loaded game).
   rest(snap: Snapshot): void {
     this.mode = snap.mode
+    this.snapSeen = true
     this.sync(snap)
     this.pondWas = snap.farm.pond
     this.progress.clear()
@@ -585,6 +592,7 @@ export class Crews {
 
   // Finish any staged work at once (for screenshots).
   settle(): void {
+    this.snapSeen = true
     for (const a of this.actors) {
       if (a.queue) this.take(a, a.queue, false)
       a.clockSeg = a.segs.length - 1; a.segClock = 1e6; a.u = a.lastT = 1; a.way = null; a.waySeg = a.came = a.segs[a.segs.length - 1] ?? null
@@ -619,8 +627,8 @@ export class Crews {
     return {
       tractor: rig ? { x: rig.x, z: rig.z } : { x: 0, z: 0 },
       farmer: walker ? { x: walker.x, z: walker.z, turn: -walker.heading } : null,
-      units: this.actors.map(a => ({ id: a.id, kind: a.kind, x: a.x, z: a.z, foot: !a.aboard })),
-      rigs: this.rigs.map(r => ({ kind: r.kind, x: r.x, z: r.z, holder: r.holder, broken: r.broken })),
+      units: this.actors.map(a => ({ id: a.id, kind: a.kind, x: a.sx, z: a.sz, foot: !a.aboard })),
+      rigs: this.rigs.map(r => ({ kind: r.kind, x: r.sx, z: r.sz, holder: r.holder, broken: r.broken })),
     }
   }
 
@@ -641,10 +649,11 @@ export class Crews {
   }
 
   private over(a: Actor, out: Vector3): Vector3 {
-    const r = a.aboard ? a.rig : null
+    // (a driver still walking to the machine is where they are seen, not in its seat)
+    const r = a.aboard && a.rig && !(Number.isFinite(a.sx) && Math.hypot(a.sx - a.rig.sx, a.sz - a.rig.sz) > 1) ? a.rig : null
     // the tractor's seat is a little behind its middle
     const back = r && r.kind === 'tractor' ? 0.44 * TRUE_SIZE : 0
-    const x = r ? r.x - Math.cos(r.heading) * back : a.x, z = r ? r.z - Math.sin(r.heading) * back : a.z
+    const x = r ? r.sx - Math.cos(r.heading) * back : a.sx, z = r ? r.sz - Math.sin(r.heading) * back : a.sz
     return out.set(x, heightAt(x, z) + a.ay, z)
   }
 
@@ -698,6 +707,13 @@ export class Crews {
     this.arriving = f.advancing && f.speed === 1
     this.daySec = f.daySec
     this.pace = this.literal ? PACE.work : clamp(f.dist / 40, 2.6, 14)
+    // How fast the seen places may go: a walker's and a driver's pace at this clock and from this far off (the
+    // script's own ways go at up to these), quicker at the faster clocks.
+    const quick = [1, 1, 1.5, 2.4][f.speed] ?? 1
+    this.dtNow = f.dt
+    this.vFoot = Math.max(this.pace, clamp(f.dist / 40, 2.8, 9)) * 1.3 * quick
+    this.vRig = Math.max(this.literal ? PACE.truck : clamp(f.dist / 16, 6, 30), clamp(f.dist / 12, 8, 45)) * 1.3 * quick
+    this.frozen = snap.mode === 'season' && !f.advancing && f.pace === 1
     // the work goes on while the clock runs, while the day is being played out, and (literal) until everyone is done
     const going = snap.mode === 'season' ? f.advancing || f.dayT < 1 || (this.literal && this.actors.some(a => a.u < 1)) : snap.mode !== 'title'
     GRIME.value.set(0.52, 0.42, 0.31).lerp(V.set(0.2, 0.15, 0.11), clamp(env.wet * 1.4 - 0.3, 0, 1))
@@ -757,32 +773,48 @@ export class Crews {
         if (a.aboard) return
         if (!going) this.idle(a, f, w.pose)
         this.figure(a, w.pose, big, w.lift)
-        this.ring(a.x, heightAt(a.x, a.z), a.z, this.mark, a, f, far)
+        this.ring(a.sx, heightAt(a.sx, a.sz), a.sz, this.mark, a, f, far)
       })
     }
 
     // Machines: where their drivers took them, or where they were left.
     for (const r of this.rigs) {
       const holder = r.holder >= 0 ? this.actors.find(a => a.id === r.holder) : undefined
+      // A driver seen still walking to the machine (it stood elsewhere when they took it): the machine waits for them,
+      // and they are seen on foot until they are at it.
+      const walking = !!holder && holder.aboard && Number.isFinite(holder.sx) && Math.hypot(holder.sx - r.sx, holder.sz - r.sz) > 1
+      if (walking) {
+        this.follow(holder!, this.vFoot, FOOT_MOST, { x: r.sx, z: r.sz })
+        holder!.heading = Math.atan2(r.sz - holder!.sz, r.sx - holder!.sx)
+        const pose = holder!.pose.reset()
+        walk(pose, f.time * 7, 1, holder!.tired, 0)
+        const y0 = heightAt(holder!.sx, holder!.sz) + 0.02
+        figureMatrix(M, holder!.sx, y0, holder!.sz, holder!.heading, big * (0.3 + 0.7 * holder!.shown))
+        drawFigure(this.prims, M, cold ? holder!.coat : holder!.dress, pose)
+        holder!.head.copy(drawn.head)
+      } else {
+        this.follow(r, this.vRig, RIG_MOST)
+        if (holder && holder.aboard) { holder.sx = r.sx; holder.sz = r.sz }
+      }
       // a machine standing idle in the yard is not drawn as large as one at work, or the yard is all machines; under
       // the shed's roof it is its own size, on the shed's floor
-      const parked = !holder && Math.hypot(r.x - r.home.x, r.z - r.home.z) < 0.5 * S
+      const parked = !holder && Math.hypot(r.sx - r.home.x, r.sz - r.home.z) < 0.5 * S
       const inBay = parked && this.shed && Math.abs(r.home.z - BAYS[0].z) < 0.5 * S
       const s = inBay ? TRUE_SIZE : parked ? Math.max(TRUE_SIZE, bigMachine * 0.74) : bigMachine
-      const y = inBay ? this.shedFloor : heightAt(r.x, r.z)
-      const ahead = heightAt(r.x + Math.cos(r.heading) * 0.6 * s, r.z + Math.sin(r.heading) * 0.6 * s)
-      const behind = heightAt(r.x - Math.cos(r.heading) * 0.6 * s, r.z - Math.sin(r.heading) * 0.6 * s)
-      r.machine.place(r.x, y + 0.01, r.z, r.heading, inBay ? 0 : Math.atan2(ahead - behind, 1.2 * s), s)
+      const y = inBay ? this.shedFloor : heightAt(r.sx, r.sz)
+      const ahead = heightAt(r.sx + Math.cos(r.heading) * 0.6 * s, r.sz + Math.sin(r.heading) * 0.6 * s)
+      const behind = heightAt(r.sx - Math.cos(r.heading) * 0.6 * s, r.sz - Math.sin(r.heading) * 0.6 * s)
+      r.machine.place(r.sx, y + 0.01, r.sz, r.heading, inBay ? 0 : Math.atan2(ahead - behind, 1.2 * s), s)
       r.state.moved = r.moved
       r.state.turn = r.turn
-      r.state.driver = holder && holder.aboard ? (cold ? holder.coat : holder.dress) : null
-      LOD.fine = Math.hypot(r.x - EYE.x, r.z - EYE.z) < FINE_WITHIN
+      r.state.driver = holder && holder.aboard && !walking ? (cold ? holder.coat : holder.dress) : null
+      LOD.fine = Math.hypot(r.sx - EYE.x, r.sz - EYE.z) < FINE_WITHIN
       if (r.kind === 'tractor') (r.machine as Tractor).draw(pr, mf, r.state)
       else (r.machine as Car).draw(pr, mf, r.state)
-      if (holder && holder.aboard) {
+      if (holder && holder.aboard && !walking) {
         holder.head.copy(drawn.head)
         holder.scale = s
-        this.ring(r.x, y, r.z, Math.max(1.2 * s, 1.5 * this.mark), holder, f, far)
+        this.ring(r.sx, y, r.sz, Math.max(1.2 * s, 1.5 * this.mark), holder, f, far)
       }
       if (r.broken && !f.reduced && Math.random() < 0.12) {
         r.machine.point(0.3, 0.95, 0, V)
@@ -813,6 +845,7 @@ export class Crews {
       a.ay += (want - a.ay) * Math.min(1, f.dt * 8)
     }
     this.callersAndLife(f, mf, big, bigMachine, going)
+    this.snapSeen = false
     this.ringGeo.instanceCount = this.rings
     this.rAt.needsUpdate = true
     this.rInfo.needsUpdate = true
@@ -831,14 +864,38 @@ export class Crews {
     this.rCol.setXYZ(k, c.r * 1.7 + 0.1, c.g * 1.7 + 0.1, c.b * 1.7 + 0.1)
   }
 
+  // Where someone or something is seen moves toward where the day's script puts them no faster than a person or a
+  // machine goes at this clock (quicker the further behind, so it is soon there): whatever the script does at a day's
+  // turn, a change of job, a seat taken or left, nobody is seen to jump. With the clock stopped by the player, nobody
+  // moves at all.
+  private follow(p: { x: number; z: number; sx: number; sz: number }, v: number, most: number, to?: { x: number; z: number }): void {
+    const tx = to ? to.x : p.x, tz = to ? to.z : p.z
+    if (!Number.isFinite(p.sx) || this.snapSeen) { p.sx = tx; p.sz = tz; return }
+    if (this.frozen) return
+    const dx = tx - p.sx, dz = tz - p.sz, gap = Math.hypot(dx, dz)
+    if (gap < 1e-6) return
+    const reach = Math.min(most, v * (1 + gap / 30)) * this.dtNow
+    if (gap <= reach) { p.sx = tx; p.sz = tz; return }
+    p.sx += (dx / gap) * reach
+    p.sz += (dz / gap) * reach
+  }
+
   private figure(a: Actor, pose: Pose, scale: number, lift = 0): void {
-    const y = heightAt(a.x, a.z) + 0.02 + lift * scale
-    figureMatrix(M, a.x, y, a.z, a.heading, scale * (0.3 + 0.7 * a.shown))
+    this.follow(a, this.vFoot, FOOT_MOST)
+    const y = heightAt(a.sx, a.sz) + 0.02 + lift * scale
+    figureMatrix(M, a.sx, y, a.sz, a.heading, scale * (0.3 + 0.7 * a.shown))
     drawFigure(this.prims, M, this.cold ? a.coat : a.dress, pose)
     a.head.copy(drawn.head)
     a.scale = scale
   }
   private cold = false
+  // The seen places: how far they may go this frame, and whether they hold still (the clock stopped by the player) or
+  // are set at once (a new screen, a loaded game, a tool holding the day at a point).
+  private dtNow = 0
+  private vFoot = 4
+  private vRig = 12
+  private frozen = false
+  private snapSeen = true
   private shed = false
   private tractors = 1
   private equipment: string[] = []
@@ -926,7 +983,7 @@ export class Crews {
       this.atEase(a, f, pose, big)
       if (a.aboard && rig) { a.x = rig.x; a.z = rig.z; a.heading = rig.heading; return null }
       this.figure(a, pose, big)
-      this.ring(a.x, heightAt(a.x, a.z), a.z, this.mark, a, f, this.far)
+      this.ring(a.sx, heightAt(a.sx, a.sz), a.sz, this.mark, a, f, this.far)
       return null
     }
     const span = Math.max(1e-6, seg.end - seg.start)
@@ -1122,7 +1179,7 @@ export class Crews {
     a.x = px
     a.z = pz
     this.figure(a, pose, big)
-    this.ring(a.x, heightAt(a.x, a.z), a.z, this.mark, a, f, this.far)
+    this.ring(a.sx, heightAt(a.sx, a.sz), a.sz, this.mark, a, f, this.far)
     return null
   }
 
@@ -1233,7 +1290,7 @@ export class Crews {
     const seen = (kind: ThingKind, k: number, x: number, z: number, tall: number, holder = -1) => { things.push({ kind, k, holder, x, y: heightAt(x, z), z, tall }) }
     if (snap.mode !== 'title') {
       const each = { tractor: 0, truck: 0 }
-      for (const r of this.rigs) seen(r.kind, each[r.kind]++, r.x, r.z, 2.6 * bigMachine, r.holder)
+      for (const r of this.rigs) seen(r.kind, each[r.kind]++, r.sx, r.sz, 2.6 * bigMachine, r.holder)
     }
     // People leaving the farm: down the road with a bag, and gone.
     this.leavers = this.leavers.filter(l => l.at < l.path.length)
