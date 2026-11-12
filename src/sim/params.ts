@@ -271,8 +271,8 @@ export const LOG_PRICE = 55                    // dollars a load, sold
 export const MILL_PRICE = 95                   // dollars a load of logs bought for a building
 export const QUARRY_PRICE = 40                 // dollars a load of stone bought for a building
 export const MORTGAGE_DOWN = 0.25              // land is bought a quarter down, the rest on the mortgage
-export const MORTGAGE_PRINCIPAL = 0.07          // each year end: a tenth of each purchase's loan
-export const MORTGAGE_RATE = 0.06              // and 8% interest on what is still owed
+export const MORTGAGE_PRINCIPAL = 0.07          // each year end: 7% of each purchase's loan
+export const MORTGAGE_RATE = 0.06              // and 6% interest on what is still owed
 
 // ---------------------------------------------------------------- the farmstead: buildings and hauling (docs/MODEL.md section 12)
 
@@ -300,7 +300,7 @@ export const BUILDING_KINDS: BuildingKind[] = ['house', 'shed', 'bunk', 'packing
 export const HOUSE_CWT = 3600                  // a built potato house; at home with ventilation it holds CELLAR_CWT_VENT
 export const SHED_SPEED = 1.15
 export const BUNK_BEDS = 6
-export const PACK_PER_DAY = 40                 // cwt packed in a crew-day: 600 in a winter month's 20
+export const PACK_PER_DAY = 40                 // cwt packed in a crew-day: 800 in a winter month's 20
 export const PACK_CHARGE = 0.4                 // dollars a hundredweight packed: cartons, bags and labels
 export const PACK_NO1 = 0.15                   // packed No. 1 brings this much more
 export const PACK_B = 0.75                     // packed B size sells at this share of the No. 1 price
