@@ -2,6 +2,9 @@
 import { test, type Page } from '@playwright/test'
 import { expect, look, noSidewaysScroll, open, putAway, reach, startSeason, watchErrors } from './helpers.ts'
 
+// A label and its amount on a money line, however the sheet sets the space between them.
+const line = (label: string, amount: string): RegExp => new RegExp(`${label}\\s*${amount.replace(/[$.]/g, '\\$&')}`)
+
 const PRESSED = '#ui .plate[aria-pressed="true"]'
 
 // A figure read from the running game: an expression over app and sim.
@@ -308,8 +311,8 @@ test('spring land: a marker opens a card, renting puts a plate and the rent on t
   await expect(card.getByTestId('land-rent')).toContainText(`${rent} a year`)
   await card.getByTestId('land-rent').click()
   await expect(page.getByTestId('field-10')).toHaveCount(1)
-  await expect(page.getByTestId('plan-money')).toContainText(`rent ${rent}`)
-  await expect(page.getByTestId('plan-money')).toContainText(`This plan ${await plan()}`)
+  await expect(page.getByTestId('plan-money')).toContainText(line('rent', rent))
+  await expect(page.getByTestId('plan-money')).toContainText(line('This plan', await plan()))
   // The rented field is the seventh the farm holds, so the 7 key picks it.
   await page.keyboard.press('Escape')
   await page.keyboard.press('Digit7')
@@ -317,7 +320,7 @@ test('spring land: a marker opens a card, renting puts a plate and the rent on t
   await expect(card.getByTestId('tenure')).toContainText(`Rented, ${rent} this year`)
   await card.getByTestId('land-release').click()
   await expect(page.getByTestId('field-10')).toHaveCount(0)
-  await expect(page.getByTestId('plan-money')).toContainText(`This plan ${before}`)
+  await expect(page.getByTestId('plan-money')).toContainText(line('This plan', before))
   await expect(card.getByTestId('land-rent')).toBeVisible()
   // The crew and the contracts are a press away; neither is needed to start.
   await page.keyboard.press('Escape')
@@ -329,7 +332,7 @@ test('spring land: a marker opens a card, renting puts a plate and the rent on t
   await crew.getByTestId('hire-hand').click()
   await expect(crew).toContainText('Lucien')
   await page.getByTestId('crew-close').click()
-  await expect(page.getByTestId('plan-money')).toContainText(`wages ${hand}`)
+  await expect(page.getByTestId('plan-money')).toContainText(line('wages', hand))
   await page.getByTestId('contracts-open').click()
   const contracts = page.getByTestId('contracts')
   await expect(contracts.getByTestId('offer-19903')).toContainText('Off contract Atlantic sells 20% under')
@@ -420,7 +423,7 @@ test('spring: the plan is on the plates, a card changes it, and saved seed says 
   await open(page, '?year=1990&seed=7')
   await expect(page.getByTestId('field-0')).toContainText('Katahdin')
   await expect(page.getByTestId('field-1')).toContainText('Rest year')
-  await expect(page.getByTestId('plan-money')).toContainText('This plan $39,300')
+  await expect(page.getByTestId('plan-money')).toContainText(line('This plan', '$39,300'))
   await page.getByTestId('field-0').click()
   const card = page.getByTestId('plan-card')
   await expect(card).toContainText('North Ridge')
@@ -428,13 +431,13 @@ test('spring: the plan is on the plates, a card changes it, and saved seed says 
   await expect(page.getByTestId('field-0')).toContainText('Kennebec')
   await card.getByTestId('plan-crop-rest').check({ force: true })
   await expect(page.getByTestId('field-0')).toContainText('Rest year')
-  await expect(page.getByTestId('plan-money')).toContainText('This plan $29,850')
+  await expect(page.getByTestId('plan-money')).toContainText(line('This plan', '$29,850'))
   await card.getByTestId('plan-crop-potato').check({ force: true })
   // With seed in the cellar the choice appears, and says what it carries.
   await reach(page, `const a = q.g().app; a.campaign.seedStock = [{ variety: 'kennebec', fields: 1, virus: 0.3, blight: 0 }]; a.do({ t: 'plan', field: 0, plan: { crop: 'potato', variety: 'kennebec', seed: 'certified' } })`)
   await expect(card.getByTestId('seed-note')).toContainText('about 30% of plants')
   await card.getByTestId('plan-seed-saved').check({ force: true })
-  await expect(page.getByTestId('plan-money')).toContainText('This plan $37,600')
+  await expect(page.getByTestId('plan-money')).toContainText(line('This plan', '$37,600'))
   // The detail is one press further.
   await card.getByTestId('compare-open').click()
   await expect(page.getByTestId('compare')).toContainText('Leaf blight')

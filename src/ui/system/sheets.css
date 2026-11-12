@@ -233,6 +233,8 @@
 
 /* ---------------------------------------------------------------- spring (design/spring.html, spring.phone.html) */
 .spring-screen { position: absolute; inset: 0; pointer-events: none; }
+/* The screen's root spans the land and must let clicks through to the tags, though it carries the system's class. */
+.hud .screen-layer > main.spring-screen { pointer-events: none; }
 /* In spring the top holds only the bank's board, at the left: the catalogue has the right edge. */
 .spring-screen .topbar { justify-content: flex-start; }
 .spring-screen .topbar .almanac { display: none; }

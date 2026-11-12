@@ -261,7 +261,7 @@ export function openAlmanac(ctx: Ctx, first: Page = 'forecast'): void {
     cls: 'almanac-dialog',
     body: close => {
       const index = h('nav', { class: 'alm-index', 'aria-label': 'Pages of the almanac' })
-      const leaf = h('article', { class: 'alm-page', 'data-scroll': '' })
+      const leaf = h('article', { class: 'alm-page', 'data-scroll': '', tabindex: '0', role: 'region', 'aria-label': 'The almanac page' })
       const draw = (focus = false) => {
         index.replaceChildren(...PAGES.map(([k, label, glyph]) => h('button', {
           class: `alm-tab${page === k ? ' on' : ''}`, type: 'button', testid: `almanac-${k}`, 'aria-current': page === k ? 'page' : null, autofocus: page === k,
