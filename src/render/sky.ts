@@ -270,7 +270,8 @@ export class Sky {
           float m = max(v.r, max(v.g, v.b));
           float held = m <= 0.55 ? m : 0.55 + 0.6 * (1.0 - exp(-(m - 0.55) / 1.0));
           float through = smoothstep(0.99972, 0.99994, dot(d, uSkySun));
-          gl_FragColor = vec4(c * mix(held / max(m, 1e-5), 1.0, through), 1.0);
+          // (A closed sky has no sun to hold back, and must stay the brightness of the air the far land goes into.)
+          gl_FragColor = vec4(c * mix(held / max(m, 1e-5), 1.0, max(through, smoothstep(0.75, 1.0, uCloud.y))), 1.0);
         }`,
     })
     const sphere = new SphereGeometry(9000, 48, 24)

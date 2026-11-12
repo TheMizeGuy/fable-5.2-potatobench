@@ -397,9 +397,10 @@ function snowRime(amount: string, rimeShare: string, rime = 'rimeAt( vWorld.y )'
       up = max( up, 0.75 );
     #endif
     if ( snowAmt > 0.001 ) {
-      vec4 sn = texture2D( uNoise, vWorld.xz * 0.011 );
-      float lie = sn.b * 0.56 + texture2D( uNoise, vWorld.xz * 0.07 ).a * 0.2 + texture2D( uNoise, vWorld.xz * 0.37 ).a * 0.1 + texture2D( uNoise, vWorld.xz * 1.6 ).a * 0.05 + up * 0.18;
-      float cover = smoothstep( 1.0 - snowAmt * 1.25, 1.3 - snowAmt * 1.25, lie ) * smoothstep( 0.2, 0.55, up );
+      // Drifts the length of a field, ragged at their edges; a first snow already whitens most of the open ground.
+      vec4 sn = texture2D( uNoise, vWorld.xz * 0.0031 );
+      float lie = sn.b * 0.5 + texture2D( uNoise, vWorld.xz * 0.019 ).a * 0.22 + texture2D( uNoise, vWorld.xz * 0.11 ).a * 0.12 + texture2D( uNoise, vWorld.xz * 0.7 ).a * 0.06 + up * 0.18;
+      float cover = smoothstep( 1.0 - snowAmt * 1.6, 1.3 - snowAmt * 1.6, lie ) * smoothstep( 0.2, 0.55, up );
       vec3 snow = vec3( 0.84, 0.88, 0.93 ) * ( 0.94 + 0.08 * sn.a );
       diffuseColor.rgb = mix( diffuseColor.rgb * ( 1.0 - 0.3 * smoothstep( 0.0, 0.3, cover ) ), snow, smoothstep( 0.12, 0.7, cover ) );
     }
