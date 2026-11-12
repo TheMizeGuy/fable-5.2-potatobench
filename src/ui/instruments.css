@@ -141,6 +141,14 @@
   font-weight: 600;
   pointer-events: none;
 }
+.paused { padding: 0; }
+.paused-go { display: flex; align-items: center; gap: var(--sp-2); min-height: var(--hit-s); padding: 0 var(--sp-3); pointer-events: auto; color: var(--cream); font-weight: 600; border-radius: var(--radius); }
+@media (hover: hover) { .paused-go:hover { background: var(--night-2); } }
+.nicon.stopped { box-shadow: inset 0 0 0 1px var(--gold); color: var(--gold); }
+.clock .speed-x { font-size: var(--t-small); font-weight: 700; }
+/* A need that has just appeared arrives with a small motion, so it is seen at any speed. */
+.badge { animation: badge-in 420ms var(--ease-out); }
+@keyframes badge-in { 0% { transform: translateY(-8px) scale(0.6); opacity: 0; } 60% { transform: translateY(1px) scale(1.12); opacity: 1; } 100% { transform: none; } }
 .key { min-width: 20px; padding: 0 var(--sp-1); border: 1px solid var(--night-line); border-radius: var(--radius); font-size: var(--t-label); line-height: 16px; font-weight: 700; text-align: center; color: var(--cream-2); }
 
 /* ---------------------------------------------------------------- plates */

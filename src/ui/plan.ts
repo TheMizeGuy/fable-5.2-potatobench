@@ -177,8 +177,7 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
   function begin(): void {
     const r = ctx.run({ t: 'begin' })
     if (!r.ok) return
-    ctx.clock.auto = true
-    app.runUntilNeeded()
+    app.setSpeed(1)
   }
 
   function toggle(id: Fold): void {

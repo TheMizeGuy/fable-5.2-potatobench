@@ -5,14 +5,13 @@ import { count, patch, type Ctx } from './core.ts'
 import { h, type Child } from './dom.ts'
 import * as F from './fmt.ts'
 import { icon } from './icons.ts'
-import { BLIGHT_RISK, forecastSky, SKY_WORD, yearName } from './rules.ts'
+import { BLIGHT_RISK, forecastSky, plantingIn, SKY_WORD, yearName } from './rules.ts'
 
 export const PHASE_LABEL: Record<S.Phase, string> = {
   plan: 'Spring plan', season: 'Growing season', cellar: 'In the cellar', ledger: 'Year end', over: 'The end',
 }
 
-const SPEED_NAME = ['Pause', 'Normal speed', 'Fast', 'Fastest']
-const SPEED_ICON = ['pause', 'play', 'fast', 'fastest']
+const SPEED_NAME = ['Paused', '1× speed', '2× speed', '3× speed']
 
 function dateText(c: S.Campaign, form: 'long' | 'mid' | 'short' = 'long'): string {
   if (c.phase === 'season' && c.season) {
@@ -70,7 +69,8 @@ function cells(ctx: Ctx, c: S.Campaign): Cell[] {
   return out
 }
 
-// The clock: every speed as its own button where there is room, three buttons where there is not.
+// The clock, as a strategy game has it: pause, and three speeds. Where there is room each speed is its own button;
+// on a phone, pause and one button that steps through the three.
 export function clock(ctx: Ctx, compact: boolean): HTMLElement {
   const app = ctx.app
   const c = app.campaign!
@@ -78,32 +78,27 @@ export function clock(ctx: Ctx, compact: boolean): HTMLElement {
     return h('button', { class: 'nbtn primary', type: 'button', testid: 'end-season', onclick: () => ctx.run({ t: 'endSeason' }) }, 'Close out the season')
   }
   const keys = !ctx.touch()
-  // Pressed while the days are racing; armed while they wait on the player and will race again by themselves.
-  const armed = ctx.clock.auto && !app.running && app.speed > 0
-  const run = h('button', {
-    class: `nicon${armed ? ' armed' : ''}`, type: 'button', testid: 'run', 'aria-pressed': String(app.running),
-    'aria-label': `Run until something needs you${armed ? ': on, and waiting for you' : ''}${keys ? ' (F)' : ''}`, title: keys ? 'Run until something needs you (F)' : undefined,
-    onclick: () => { ctx.clock.auto = true; app.runUntilNeeded() },
-  }, icon('run'))
+  const paused = app.speed === 0
+  // While paused, the speed the clock will go on at is marked, so Space is never a surprise.
+  const at = paused ? app.resumeSpeed || 1 : app.speed
+  const pause = h('button', {
+    class: `nicon${paused ? ' stopped' : ''}`, type: 'button', testid: compact ? 'speed-toggle' : 'speed-0', 'aria-pressed': String(paused),
+    'aria-label': paused ? `Paused. Go on at ${at}×${keys ? ' (Space)' : ''}` : `Pause${keys ? ' (Space)' : ''}`,
+    title: keys ? (paused ? `Go on at ${at}× (Space)` : 'Pause (Space)') : undefined, onclick: () => app.togglePause(),
+  }, icon(paused ? 'play' : 'pause'))
   if (compact) {
-    const next = (app.speed === 0 ? 1 : app.speed % 3 + 1) as 1 | 2 | 3
-    return h('div', { class: 'clock', role: 'group', 'aria-label': 'Clock' },
-      h('button', {
-        class: 'nicon', type: 'button', testid: 'speed-toggle', 'aria-pressed': String(app.speed === 0),
-        'aria-label': app.speed === 0 ? 'Paused. Run the clock' : 'Pause the clock', onclick: () => app.togglePause(),
-      }, icon(app.speed === 0 ? 'play' : 'pause')),
-      h('button', { class: 'nicon speed-x num', type: 'button', testid: 'speed-cycle', onclick: () => { ctx.clock.auto = false; app.setSpeed(next) } },
-        h('span', { 'aria-hidden': 'true' }, `${app.speed === 0 ? 1 : app.speed}×`),
-        h('span', { class: 'sr' }, `${SPEED_NAME[app.speed === 0 ? 1 : app.speed]}. Change to ${SPEED_NAME[next].toLowerCase()}`)),
-      run)
+    const next = (at % 3 + 1) as 1 | 2 | 3
+    return h('div', { class: 'clock', role: 'group', 'aria-label': 'Clock' }, pause,
+      h('button', { class: 'nicon speed-x num', type: 'button', testid: 'speed-cycle', onclick: () => app.setSpeed(next) },
+        h('span', { 'aria-hidden': 'true' }, `${at}×`),
+        h('span', { class: 'sr' }, `${SPEED_NAME[at]}${paused ? ', paused' : ''}. Change to ${SPEED_NAME[next]}`)))
   }
-  return h('div', { class: 'clock', role: 'group', 'aria-label': 'Clock' },
-    ([0, 1, 2, 3] as const).map(k => h('button', {
-      class: 'nicon', type: 'button', testid: `speed-${k}`, 'aria-pressed': String(app.speed === k && !(k === 3 && app.running)),
-      'aria-label': `${SPEED_NAME[k]}${keys && k === 0 ? ' (Space)' : ''}`, title: keys ? (k === 0 ? 'Pause (Space)' : `${SPEED_NAME[k]} (+ and −)`) : undefined,
-      onclick: () => { if (k > 0) ctx.clock.auto = false; app.setSpeed(k) },
-    }, icon(SPEED_ICON[k]))),
-    run)
+  return h('div', { class: 'clock', role: 'group', 'aria-label': 'Clock' }, pause,
+    ([1, 2, 3] as const).map(k => h('button', {
+      class: `nicon speed-x num${paused && k === at ? ' armed' : ''}`, type: 'button', testid: `speed-${k}`, 'aria-pressed': String(app.speed === k),
+      title: keys ? `${SPEED_NAME[k]} (F steps through the speeds; + and − too)` : undefined,
+      onclick: () => app.setSpeed(k),
+    }, h('span', { 'aria-hidden': 'true' }, `${k}×`), h('span', { class: 'sr' }, `${SPEED_NAME[k]}${paused && k === at ? ', the speed it goes on at' : ''}`))))
 }
 
 // How far along a goal is, in a figure: "2/4", or "40%".
@@ -199,12 +194,16 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     const mats = c.logs >= 0.05 || c.stone >= 0.05
     if (pop === 'materials' && !mats) pop = ''
     const model = {
-      p: c.phase, d: dateText(c, form), y: yearText(c), cash: Math.round(c.cash), sp: app.speed, run: app.running, auto: ctx.clock.auto, done: season && S.seasonDone(c) && !ctx.awaiting, layout,
+      p: c.phase, d: dateText(c, form), y: yearText(c), cash: Math.round(c.cash), sp: app.speed, at: app.resumeSpeed, done: season && S.seasonDone(c) && !ctx.awaiting, layout,
       day: c.season?.day, w: c.season?.watchDay, f: c.season?.log.filter(e => e.type === 'frost').length, u: app.settings.units, t: ctx.touch(), withClock, snug,
-      g: g ? [g.id, progressText(g), g.now] : 0, gone: gone?.id ?? '', fresh, pop, mats: mats ? [Math.round(c.logs * 10), Math.round(c.stone * 10)] : 0,
+      g: g ? [g.id, progressText(g), g.now] : 0, gone: gone?.id ?? '', fresh, pop, wait: season && g?.id === 'plant' ? plantingIn(app.world, c) : -1, mats: mats ? [Math.round(c.logs * 10), Math.round(c.stone * 10)] : 0,
       ladder: pop === 'goals' ? goals(c).map(x => [x.id, x.done, progressText(x)]) : 0, show: pop === 'goals' && g ? !!o.canShow?.(g) : false,
     }
     const line = gone ?? g
+    // Before the ground is fit, the planting goal says plainly how long it will be, counting down by the day.
+    const wait = line && !gone && line.id === 'plant' && season && !app.needs().some(n => n.need?.act === 'plant') ? plantingIn(app.world, c) : -1
+    const lineTitle = wait > 0 ? `Plant when the soil reaches ${F.temp(10)}` : line?.title ?? ''
+    const lineN = wait > 0 ? `about ${F.plural(wait, 'day')}` : line ? progressText(line) : ''
     el.dataset.phase = c.phase
     patch(el, JSON.stringify(model), () => [
       h('div', { class: 'tb-date' },
@@ -215,8 +214,8 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
           class: `tb-goal${gone ? ' met' : line.id === fresh ? ' fresh' : ''}`, type: 'button', testid: 'goal', k: `goal-${line.id}${gone ? '-met' : ''}`, 'aria-expanded': String(pop === 'goals'),
           title: ctx.touch() ? undefined : line.why,
           onclick: () => { pop = pop === 'goals' ? '' : 'goals'; ctx.dirty() },
-        }, icon(gone ? 'check' : 'goal', 'ic s'), h('span', { class: 'sr' }, gone ? 'Done: ' : 'Next goal: '), h('span', { class: 'goal-t' }, line.title),
-        progressText(line) && !gone ? h('span', { class: 'goal-n num' }, progressText(line)) : null,
+        }, icon(gone ? 'check' : wait > 0 ? 'stale' : 'goal', 'ic s'), h('span', { class: 'sr' }, gone ? 'Done: ' : 'Next goal: '), h('span', { class: 'goal-t' }, lineTitle),
+        lineN && !gone ? h('span', { class: 'goal-n num', testid: wait > 0 ? 'goal-wait' : undefined }, lineN) : null,
         !line.now && !gone ? h('span', { class: 'goal-when' }, line.when.toLowerCase()) : c.phase === 'plan' && CROP_STEPS.has(line.id) && !gone ? h('span', { class: 'goal-when' }, 'once the season starts') : null,
         h('span', { class: 'sr' }, `. ${line.why} Open the goals.`)) : null,
         pop === 'goals' ? ladder(c, g) : null),

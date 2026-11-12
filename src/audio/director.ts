@@ -8,6 +8,8 @@ const WARN_HZ: [string, number][] = [
   ['lost', 146.8], ['breakdown', 146.8], ['blightSeen', 196], ['frost', 261.6], ['freeze', 261.6], ['watch', 220], ['dry', 164.8],
 ]
 const BAD_HZ = 196
+// A new need: higher and lighter than a warning, a call to look rather than an alarm.
+const NEED_HZ = 523
 const JOB_GAP = 1
 
 export class Director {
@@ -56,6 +58,11 @@ export class Director {
     if (hz && this.ready('warn', 2.5, now)) cue.chime(rig, slot(), hz)
 
     if (has.has('kept') && this.ready('cadence', 4, now)) cue.cadence(rig, slot() + 0.25, 'kept')
+  }
+
+  // Something new needs the player: a soft chime, not more than one every few seconds.
+  need(now: number): void {
+    if (this.ready('need', 3, now)) cue.chime(this.rig, now + 0.02, NEED_HZ)
   }
 
   // The player gave an order and it was taken.

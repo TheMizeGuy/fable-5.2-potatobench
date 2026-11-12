@@ -56,9 +56,15 @@ async function answerIncident(page: Page, take: boolean): Promise<'card' | 'hook
   return 'hook'
 }
 
+// The fastest of the three speeds, from its own button, or on a phone by stepping the one speed button round.
+async function fastest(page: Page): Promise<void> {
+  const three = page.getByTestId('speed-3')
+  await ((await three.count()) ? three : page.getByTestId('speed-cycle')).click({ timeout: 3000 }).catch(() => {})
+}
+
 // The short path through a season: what glows is given (by its badge, or by a right-click on the field), Space sets the
-// days going again, run hurries the quiet weeks, tickets and incidents are answered. Stops at the first ticket or when
-// the season is done.
+// days going again after a card, the clock is set to 3x for the quiet weeks, tickets and incidents are answered. Stops
+// at the first ticket or when the season is done.
 async function farm(page: Page, until: 'ticket' | 'done', o: { store: boolean; mobile: boolean; ms?: number; answered?: string[] }): Promise<void> {
   let given = 0
   const deadline = Date.now() + (o.ms ?? 300_000)
@@ -85,7 +91,7 @@ async function farm(page: Page, until: 'ticket' | 'done', o: { store: boolean; m
       continue
     }
     if (s.paused) { await page.keyboard.press('Space'); await page.waitForTimeout(150); continue }
-    if (!s.running) await page.getByTestId('run').click({ timeout: 3000 }).catch(() => {})
+    if (s.speed < 3) await fastest(page)
     await page.waitForTimeout(120)
   }
   throw new Error('the season did not finish in time')
@@ -130,11 +136,13 @@ test('a first season by the short path, from the opening to the next spring, wit
   console.log(`clicks from the landing page to a running season: ${clicks}`)
   expect(clicks).toBe(2)
 
-  // The first thing that needs doing slows the clock to normal speed. It does not stop it.
+  // Start goes straight into a running game at 1x: no chip to dismiss, nothing more to press.
+  expect((await look(page)).speed).toBe(1)
+  await expect(page.getByTestId('paused')).toBeHidden()
+  // The first thing that needs doing arrives on the land. The clock keeps the speed it was given.
   await expect(page.locator(BADGE).first()).toBeVisible({ timeout: 120_000 })
   const first = await look(page)
   expect(first.paused).toBe(false)
-  expect(first.running).toBe(false)
   expect(first.speed).toBe(1)
 
   // A crop weighed in is the one thing that stops it, once the last barrel is hauled in from the field.
@@ -154,8 +162,9 @@ test('a first season by the short path, from the opening to the next spring, wit
   await expect(page.getByTestId('reckoning')).toContainText('Grade by grade')
   await page.getByTestId('reckoning-close').click()
   await expect(page.getByTestId('reckoning')).toHaveCount(0)
+  // Answered, the days go on at the speed they had: the short path had set 3x.
   await answerTicket(page, true)
-  await expect.poll(async () => (await look(page)).paused).toBe(false)
+  await expect.poll(async () => (await look(page)).speed).toBe(3)
 
   // Stop, reload, continue: the same day and the same cash.
   await pause(page)
@@ -168,6 +177,8 @@ test('a first season by the short path, from the opening to the next spring, wit
   expect(after.date).toBe(before.date)
   expect(after.cash).toBe(before.cash)
   expect(after.paused).toBe(true)
+  // Continued, the farm waits, with one way on.
+  await expect(page.getByTestId('paused-go')).toBeVisible()
 
   // The rest of the season, the winter, and the year end.
   await farm(page, 'done', { store: false, mobile: isMobile })
@@ -334,7 +345,8 @@ test('the same start by keyboard alone', async ({ page, isMobile }) => {
   await page.keyboard.press('Enter')
   await expect.poll(async () => (await look(page)).queue).toBeGreaterThan(0)
 
-  // The clock: Space, plus and minus, F.
+  // The clock: Space, plus and minus, F stepping through the three speeds.
+  expect((await look(page)).speed).toBe(1)
   await page.keyboard.press('Space')
   await expect(page.getByTestId('paused')).toBeVisible()
   await page.keyboard.press('Space')
@@ -356,6 +368,12 @@ test('the same start by keyboard alone', async ({ page, isMobile }) => {
   await page.keyboard.press('Escape')
   await expect(page.locator('#ui .dialog')).toHaveCount(0)
   await page.keyboard.press('f')
-  await expect.poll(async () => (await look(page)).running).toBe(true)
+  await expect.poll(async () => (await look(page)).speed).toBe(1)
+  await page.keyboard.press('f')
+  await expect.poll(async () => (await look(page)).speed).toBe(2)
+  await page.keyboard.press('f')
+  await expect.poll(async () => (await look(page)).speed).toBe(3)
+  await page.keyboard.press('f')
+  await expect.poll(async () => (await look(page)).speed).toBe(1)
   expect(errors, errors.join('\n')).toEqual([])
 })

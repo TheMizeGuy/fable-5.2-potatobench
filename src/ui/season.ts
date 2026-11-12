@@ -152,8 +152,6 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
         const act = needs[i].need?.act
         if (!isJob(act) || seen.has(act)) continue
         hint = { kind: act, field: i, at: performance.now(), first: seen.size === 0 }
-        // A sentence nobody has time to read teaches nothing.
-        if (app.speed > 1) app.setSpeed(1)
         seen.add(act)
         try { localStorage.setItem(HINTS_KEY, JSON.stringify([...seen])) } catch { /* storage blocked: the tip may show again */ }
         ctx.announce(hintText(act))
@@ -166,10 +164,8 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       const kind = hint.kind
       const how = hint.first ? ` ${ctx.touch() ? 'Tap' : 'Click'} the lit badge, or right-click the field.` : ''
       ctx.notes.pin({ key: `tip-${kind}`, glyph: kind, text: `${hintText(kind)}${how}`, tile: true, onClose: () => { hint = null; ctx.dirty() } })
-    } else if (app.speed === 0 && !S.seasonDone(c) && !c.season!.jobs.length && !needs.some(n => n.need)) {
-      // Stopped with nothing to do: the one thing to say is that the days have to run.
-      ctx.notes.pin({ key: 'idle', glyph: 'play', text: `Nothing needs doing now. ${ctx.touch() ? 'Run the clock.' : 'Press Space to let the days run.'}` })
     } else ctx.notes.unpin()
+    void c
   }
 
   // Woods and brush to clear come forward once the farm has a year behind it, or as soon as the player starts on them.
@@ -349,8 +345,8 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       return true
     }
     if (e.ctrlKey && !KEY_JOB[k.toLowerCase()]) return false
-    if (k === '+' || k === '=') { if (!S.seasonDone(c)) { ctx.clock.auto = false; app.setSpeed(Math.min(3, app.speed + 1) as 1 | 2 | 3) } return true }
-    if (k === '-' || k === '_') { if (app.speed > 1) { ctx.clock.auto = false; app.setSpeed((app.speed - 1) as 1 | 2) } return true }
+    if (k === '+' || k === '=') { if (!S.seasonDone(c)) app.setSpeed(Math.min(3, (app.speed || app.resumeSpeed) + 1) as 1 | 2 | 3); return true }
+    if (k === '-' || k === '_') { if (app.speed > 1) app.setSpeed((app.speed - 1) as 1 | 2); return true }
     if (k === 'Backspace' || k === 'Delete') {
       const jobs = c.season.jobs.filter(j => j.kind !== 'haul' && j.kind !== 'build')
       const mine = app.selection.length ? jobs.filter(j => app.selection.includes(j.field)) : jobs
@@ -360,7 +356,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       return true
     }
     const low = k.toLowerCase()
-    if (low === 'f' && !e.ctrlKey) { if (!S.seasonDone(c)) { ctx.clock.auto = true; app.runUntilNeeded() } return true }
+    if (low === 'f' && !e.ctrlKey) { if (!S.seasonDone(c)) app.cycleSpeed(); return true }
     if (low === 'g' && !e.ctrlKey) { if (c.crew.length >= 3) grid.toggle(); else ctx.say('The work grid opens once three people are on the farm.'); return true }
     if (low === 'y' && !e.ctrlKey) {
       if (yardShown(c)) app.selectYard(app.yard === S.HOME_YARD ? 0 : S.HOME_YARD)
@@ -413,14 +409,13 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       const low = layout === 'narrow' || layout === 'short'
       el.classList.toggle('tight', layout === 'narrow' && innerHeight < 720 && (app.selection.length > 0 || !!tray || personUp || app.yard !== 0))
       clockSlot.hidden = !low
-      if (low) patch(clockSlot, JSON.stringify([app.speed, app.running, ctx.clock.auto, S.seasonDone(c), ctx.awaiting, ctx.touch()]), () => clock(ctx, true))
-      const now = performance.now()
-      const quiet = !app.needs().some(n => n.need && n.need.act !== 'close') && c.season.jobs.length === 0
-      if (ctx.clock.auto && app.speed === 1 && quiet && !tray && !incident.isUp() && !S.seasonDone(c) && !ctx.papers.isOpen() && now - pacedAt > 4000 && now - orderedAt > 2500) app.runUntilNeeded()
+      if (low) patch(clockSlot, JSON.stringify([app.speed, app.resumeSpeed, S.seasonDone(c), ctx.awaiting, ctx.touch()]), () => clock(ctx, true))
+      // Stopped, the one obvious way on: a press goes on at the speed the clock had.
       const stopped = app.speed === 0 && !S.seasonDone(c)
       paused.hidden = !stopped
       el.classList.toggle('is-paused', stopped)
-      if (stopped) patch(paused, String(ctx.touch()), () => [icon('pause', 'ic s'), 'Paused', ctx.touch() ? null : h('span', { class: 'key' }, 'Space')])
+      if (stopped) patch(paused, JSON.stringify([ctx.touch(), app.resumeSpeed]), () => h('button', { class: 'paused-go', type: 'button', testid: 'paused-go', onclick: () => app.togglePause() },
+        icon('play', 'ic s'), `Paused: go on at ${app.resumeSpeed || 1}×`, ctx.touch() ? null : h('span', { class: 'key' }, 'Space')))
       updateHint(c)
       track.update()
       P.update()

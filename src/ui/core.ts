@@ -34,9 +34,6 @@ export interface Ctx {
     seen: (Seen | null)[]; digEst: Record<string, Estimate | null>; digSeen: Record<string, Seen | null>
     sampleBefore: Record<string, Estimate | null>
   }
-  // "Run until needed" is a way of playing, not one press: while it is on, the days run on again by themselves
-  // once nothing is asked for. Choosing a speed by hand turns it off.
-  clock: { auto: boolean }
   dirty(): void
 }
 
@@ -154,7 +151,7 @@ export class Papers {
   private shade: HTMLElement
   private covered: HTMLElement[]
   private app: App
-  private resume: { speed: 0 | 1 | 2 | 3; running: boolean } | null = null
+  private resume: { speed: 0 | 1 | 2 | 3 } | null = null
 
   constructor(layer: HTMLElement, covered: HTMLElement[], app: App) {
     this.layer = layer
@@ -194,7 +191,7 @@ export class Papers {
     spec.foot ? h('div', { class: 'paper-foot' }, spec.foot(close)) : null)
     const entry: Open = { el, back, spec, at: performance.now() }
     if (this.stack.length === 0 && this.app.screen === 'season' && !this.resume) {
-      this.resume = { speed: this.app.speed, running: this.app.running }
+      this.resume = { speed: this.app.speed }
       if (this.app.speed > 0) this.app.setSpeed(0)
     }
     this.stack.push(entry)
@@ -253,9 +250,9 @@ export class Papers {
       const r = this.resume
       this.resume = null
       // The clock goes back to what it was doing, unless something else has set it since.
-      if (this.app.screen === 'season' && this.app.speed === 0 && this.app.pauseReason === '' && r.speed > 0) {
-        if (r.running) this.app.runUntilNeeded()
-        else this.app.setSpeed(r.speed)
+      if (this.app.screen === 'season' && this.app.speed === 0) {
+        if (this.app.pauseReason === '' && r.speed > 0) this.app.setSpeed(r.speed)
+        else this.app.resumeAfterCard()
       }
     }
     if (now || reducedNow()) gone()

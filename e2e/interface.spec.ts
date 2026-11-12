@@ -657,3 +657,31 @@ test('a tract cleared through the interface: felled, the stumps pulled, the rock
   await expect(card.getByTestId('clear-track')).toHaveAttribute('aria-label', /picked/)
   expect(errors, errors.join('\n')).toEqual([])
 })
+
+test('Start the season runs the clock at 1x with no click; a weigh ticket stops it and answering goes on at the speed set', async ({ page }) => {
+  const errors = watchErrors(page)
+  await open(page, '?year=1990&seed=7')
+  await page.getByTestId('begin-season').click()
+  await expect(page.getByTestId('forecast')).toBeVisible()
+  // Running, at 1x, with nothing to dismiss and the days going by.
+  const start = await look(page)
+  expect(start.paused).toBe(false)
+  expect(start.speed).toBe(1)
+  await expect(page.getByTestId('paused')).toBeHidden()
+  await expect(page.getByTestId('idle-note')).toHaveCount(0)
+  const day0 = await game<number>(page, 'app.campaign.season.day')
+  await expect.poll(() => game<number>(page, 'app.campaign.season.day'), { timeout: 10_000 }).toBeGreaterThan(day0)
+  // The goal line says what comes next: planting, or how long until the soil is warm enough.
+  await expect(page.getByTestId('goal')).toContainText(/Plant/)
+  // Brought to the first dig, set to 2x by its button, the clock runs the dig and the haul until the ticket stops it.
+  await reach(page, `const { app } = q.g(); app.setSpeed(0); q.run('digging', ['sell'], 'status'); app.campaign.incidents = []`)
+  await putAway(page)
+  await page.getByTestId('speed-2').click()
+  const ticket = page.getByTestId('weighin')
+  await expect(ticket).toBeVisible({ timeout: 60_000 })
+  expect((await look(page)).paused).toBe(true)
+  await ticket.locator('[data-testid^="lot-sell-"]').first().click()
+  await expect(ticket).toHaveCount(0)
+  await expect.poll(async () => (await look(page)).speed).toBe(2)
+  expect(errors, errors.join('\n')).toEqual([])
+})

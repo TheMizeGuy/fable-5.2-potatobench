@@ -7,7 +7,9 @@ import { neighborYear } from './neighbor.ts'
 import { clearSave, parseSave, readSave, readSettings, serialize, writeSave, writeSettings, type SaveFile } from './save.ts'
 
 export type Speed = 0 | 1 | 2 | 3
-export const DAYS_PER_SECOND = [0, 0.6, 1.8, 6]
+// Pause and three speeds in step, as a strategy game has them: at 1x a day takes about a second and a half, time to
+// watch the people work and give the next order; at 3x a season goes by in about a minute and a half.
+export const DAYS_PER_SECOND = [0, 0.7, 1.4, 2.1]
 
 export type Quality = 'auto' | 'high' | 'medium' | 'low'
 
@@ -17,7 +19,7 @@ export interface Settings {
   volume: number
   reducedMotion: boolean
   hints: boolean            // the one-line tips that come with a badge the first time
-  pauseOnAlerts: boolean    // stop the clock, not just slow it, when something needs the player
+  pauseOnAlerts: boolean    // stop the clock when something new needs the player (off: the speed set is the speed it runs)
   quality: Quality
 }
 
@@ -54,8 +56,8 @@ export type AppEvent =
   | { type: 'insets' }
   | { type: 'saved'; ok: boolean }
 
-// A decision that cannot wait stops the clock whatever the settings say: a crop weighed in (sell or store), an
-// incident that asks for an answer, the freeze.
+// A card that needs an answer stops the clock whatever the settings say: a crop weighed in (sell or store), an
+// incident that asks for an answer, the freeze. Nothing else changes the speed the player set.
 const STOP_FOR = new Set(['weighed', 'incident', 'freeze'])
 // Events worth an alert even though they are not warnings.
 const NOTABLE = new Set([
@@ -86,12 +88,12 @@ export class App {
   screen: Screen = 'title'
   // Screen edges covered by the interface, in CSS pixels. The field view keeps the farm inside what is left.
   insets = { top: 0, right: 0, bottom: 0, left: 0 }
-  // Why the clock last stopped or slowed itself, in the game's words ('' when the player set it).
+  // Why the clock last stopped itself, in the game's words ('' when the player set it).
   pauseReason = ''
+  // The speed the clock was at when it stopped itself, to go back to once the card is answered.
+  resumeSpeed: Speed = 1
   // The most recent alerts, newest last.
   alerts: Alert[] = []
-  // True while fast-forwarding to the next thing that needs the player.
-  running = false
   private nextAlert = 1
   private advised = new Set<string>()
   private listeners = new Set<(e: AppEvent) => void>()
@@ -184,7 +186,7 @@ export class App {
 
   private afterLoad(): void {
     this.speed = 0
-    this.running = false
+    this.resumeSpeed = 1
     this.pauseReason = ''
     this.advised = new Set()
     this.alerts = []
@@ -202,7 +204,6 @@ export class App {
   quitToTitle(): void {
     this.save()
     this.speed = 0
-    this.running = false
     this.setScreen('title')
   }
 
@@ -210,7 +211,6 @@ export class App {
     clearSave()
     this.campaign = null
     this.speed = 0
-    this.running = false
     this.selection = []
     this.setScreen('title')
     this.emit({ type: 'change' })
@@ -253,44 +253,53 @@ export class App {
     this.emit({ type: 'alert', alert: a })
   }
 
-  // After a day: stop for a decision, and otherwise slow to normal speed (or stop, if the player asked for that)
-  // when something new needs them.
+  // After a day: a card that needs an answer stops the clock, and so does the season's end. Anything new that needs
+  // doing is said where the player looks, and stops the clock only for a player who asked for that.
   private paceAfterDay(c: Campaign, events: GameEvent[]): void {
-    const fresh = this.freshNeed()
+    const fresh = this.freshNeeds(c)
     if (this.speed === 0) return
     const decision = events.find(e => STOP_FOR.has(e.type))
-    const trouble = events.find(e => e.level === 'bad' || e.level === 'warn')
     if (seasonDone(c)) this.halt('The season is done.')
     else if (decision) this.halt(decision.text)
-    else if (trouble || fresh) {
-      const why = trouble ? trouble.text : fresh
-      if (this.settings.pauseOnAlerts) this.halt(why)
-      else if (this.speed > 1 || this.running) {
-        this.running = false
-        this.speed = 1
-        this.pauseReason = why
-        this.emit({ type: 'speed', speed: 1 })
-      }
+    else if (this.settings.pauseOnAlerts) {
+      const trouble = events.find(e => e.level === 'bad' || e.level === 'warn')
+      const why = trouble ? trouble.text : fresh[0]?.text ?? ''
+      if (why) this.halt(why)
     }
   }
 
   private halt(why: string): void {
-    this.running = false
     this.dayProgress = 0
     if (this.speed === 0) return
+    this.resumeSpeed = this.speed
     this.speed = 0
     this.pauseReason = why
     this.emit({ type: 'speed', speed: 0 })
   }
 
-  // The text of the first thing the reference practice now wants that it did not want yesterday.
-  private freshNeed(): string {
+  // Once the card the clock stopped for is answered, the days go on at the speed they had. A clock the player stopped
+  // stays stopped.
+  resumeAfterCard(): void {
+    if (this.screen !== 'season' || this.speed !== 0 || this.pauseReason === '') return
     const c = this.campaign
-    if (!c || c.phase !== 'season') return ''
-    const now = this.needs().map(n => n.need).filter((a): a is Advice => !!a && a.act !== 'scout' && a.act !== 'sample')
-    const first = now.find(a => !this.advised.has(a.id))
+    if (!c || seasonDone(c)) return
+    this.setSpeed(this.resumeSpeed || 1)
+  }
+
+  // What reference practice now wants that it did not want yesterday: each kind of order said once, as an alert that
+  // takes the player to the first field it is for. Scouting and test digs come round too often to be news.
+  private freshNeeds(c: Campaign): Advice[] {
+    if (c.phase !== 'season') return []
+    const now = this.needs().map(n => n.need).filter((a): a is Advice => !!a && a.act !== 'scout' && a.act !== 'sample' && a.act !== 'close')
+    const fresh = now.filter(a => !this.advised.has(a.id))
     this.advised = new Set(now.map(a => a.id))
-    return first ? first.text : ''
+    const byAct = new Map<string, Advice[]>()
+    for (const a of fresh) byAct.set(a.act, [...(byAct.get(a.act) ?? []), a])
+    for (const [act, list] of byAct) {
+      const a = list[0]
+      this.alert(c, { day: c.season?.day ?? 0, type: 'need', field: a.field, level: a.urgent ? 'warn' : 'info', text: a.text, data: { act, fields: list.map(x => x.field) } })
+    }
+    return fresh
   }
 
   // What each field needs now under reference practice (need), or why it is being left alone (hold).
@@ -404,7 +413,6 @@ export class App {
   // ---------------------------------------------------------------- the clock
 
   setSpeed(speed: Speed): void {
-    this.running = false
     this.pauseReason = ''
     if (this.speed === speed) return
     this.speed = speed
@@ -412,14 +420,14 @@ export class App {
     this.emit({ type: 'speed', speed })
   }
 
+  // Space: stop, or go on at the speed the clock last ran at.
   togglePause(): void {
-    this.setSpeed(this.speed === 0 ? 1 : 0)
+    if (this.speed > 0) { this.resumeSpeed = this.speed; this.setSpeed(0) } else this.setSpeed(this.resumeSpeed || 1)
   }
 
-  // Fast-forwards until something needs the player, then drops to normal speed.
-  runUntilNeeded(): void {
-    this.setSpeed(3)
-    this.running = true
+  // The next speed up, coming round from 3x to 1x.
+  cycleSpeed(): void {
+    this.setSpeed((this.speed === 0 ? this.resumeSpeed || 1 : this.speed % 3 + 1) as Speed)
   }
 
   setSetting<K extends keyof Settings>(key: K, value: Settings[K]): void {

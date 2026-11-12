@@ -52,8 +52,8 @@ export function incidentCard(ctx: Ctx): IncidentCard {
     err = ''
     shown = -1
     ctx.announce(F.localize(r.events[0]?.text ?? `${ch.label}.`))
-    // The game stopped the clock for this; with nothing else asking, the days go on at the pace of play.
-    if (app.speed === 0 && app.pauseReason && !S.incidentInfo(c).some(x => !away.has(x.id)) && !ctx.papers.isOpen()) app.setSpeed(1)
+    // The game stopped the clock for this; with nothing else asking, the days go on at the speed they had.
+    if (!S.incidentInfo(c).some(x => !away.has(x.id)) && !ctx.papers.isOpen()) app.resumeAfterCard()
   }
 
   // What a choice does, in the grower's words: whether someone stays is told by how they feel, not by a figure.
@@ -132,6 +132,8 @@ export function incidentCard(ctx: Ctx): IncidentCard {
     away.add(shown)
     shown = -1
     ctx.dirty()
+    const c = app.campaign
+    if (c && !S.incidentInfo(c).some(x => !away.has(x.id)) && !ctx.papers.isOpen()) app.resumeAfterCard()
     return true
   }
 

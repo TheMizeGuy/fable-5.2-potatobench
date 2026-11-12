@@ -44,10 +44,13 @@ export async function look(page: Page): Promise<Seen> {
     const pressed = (id: string) => el(id)?.getAttribute('aria-pressed') === 'true'
     const cycle = el('speed-cycle')?.textContent ?? ''
     const done = !!el('end-season')
+    const paused = !done && (el('speed-0') ? pressed('speed-0') : pressed('speed-toggle'))
+    // The clock: pause and three speeds. Running is any of the three.
+    const speed = paused || done ? 0 : el('speed-0') ? [1, 2, 3].find(k => pressed(`speed-${k}`)) ?? 0 : Number(cycle[0] ?? 0)
     return {
-      paused: !done && (el('speed-0') ? pressed('speed-0') : pressed('speed-toggle')),
-      running: pressed('run'),
-      speed: el('speed-0') ? [1, 2, 3].find(k => pressed(`speed-${k}`)) ?? (pressed('run') ? 3 : 0) : Number(cycle[0] ?? 0),
+      paused,
+      running: speed > 0,
+      speed,
       date: el('date')?.textContent ?? '',
       cash: el('cash')?.textContent ?? '',
       badges: [...document.querySelectorAll<HTMLElement>('#ui [data-testid^="badge-"]')].map(b => b.dataset.testid!),

@@ -53,7 +53,6 @@ export const mountHud: MountHud = (root, app, view) => {
     reduced: () => app.settings.reducedMotion,
     awaiting: 0,
     memo: { estimates: [], soilT: 10, digSoilT: {}, lots: {}, seen: [], digEst: {}, digSeen: {}, sampleBefore: {} },
-    clock: { auto: true },
     dirty: () => { dirty = true },
   }
 

@@ -3,7 +3,7 @@ import type { Alert } from '../game/app.ts'
 import * as S from '../sim/index.ts'
 import * as F from './fmt.ts'
 
-// F runs the clock, so felling is X, for the axe.
+// F steps the clock's speed, so felling is X, for the axe.
 export const JOB_KEY: Record<S.JobKind, string> = { plant: 'P', hill: 'H', scout: 'C', spray: 'S', water: 'W', rogue: 'R', sample: 'T', kill: 'K', dig: 'D', fell: 'X', rocks: 'O', brush: 'B', build: '', haul: '' }
 export const KEY_JOB: Record<string, S.JobKind> = { p: 'plant', h: 'hill', c: 'scout', s: 'spray', w: 'water', r: 'rogue', t: 'sample', k: 'kill', d: 'dig', x: 'fell', o: 'rocks', b: 'brush' }
 export const JOB_VERB: Record<S.JobKind, string> = {
@@ -165,6 +165,10 @@ export function alertShort(a: Alert): { text: string; glyph: string } {
     case 'pickers': return { text: a.text.startsWith('A picking') ? 'Pickers hired' : 'Pickers sent home', glyph: 'pickers' }
     case 'logsSold': return { text: a.text.replace(/^Sold (.+?) loads of logs to the mill for (.+)\.$/, 'Logs sold for $2'), glyph: 'logs' }
     case 'incident': return { text: F.localize(a.text.split('. ')[0]), glyph: 'ask' }
+    case 'need': {
+      const more = Array.isArray(a.data?.fields) ? a.data.fields.length - 1 : 0
+      return { text: `${a.text.replace(/\.$/, '')}${more > 0 ? ` and ${F.plural(more, 'more field')}` : ''}`, glyph: typeof a.data?.act === 'string' ? a.data.act : 'warn' }
+    }
     case 'incidentDone': return { text: a.text.replace(/\.$/, ''), glyph: 'ask' }
     case 'foreman': return { text: a.text.replace(/:.*$/, '').replace(/\.$/, ''), glyph: 'foreman' }
     default: return { text: a.text, glyph: a.level === 'bad' ? 'blight' : a.level === 'warn' ? 'warn' : a.level === 'good' ? 'check' : 'flat' }
@@ -174,6 +178,28 @@ export function alertShort(a: Alert): { text: string; glyph: string } {
 // The person an alert is about: the name it starts with.
 function who(text: string): string {
   return /^(.+?)(?: is | has | takes | quits)/.exec(text)?.[1] ?? text.split(' ')[0]
+}
+
+// Days until the ground is fit to plant, as a grower would reckon it: the soil drawn toward each day's mean, from the
+// forecast for five days and the usual weather after, and never before the date the coach calls too early. -1 when
+// it cannot be told within three months.
+export function plantingIn(world: S.World, c: S.Campaign): number {
+  const s = c.season
+  const t = S.today(world, c)
+  if (!s || !t) return -1
+  const earliest = S.dayIndex(s.year, 4, 8)
+  const fc = S.forecast(world, c, 5)
+  const nm = world.weather.normals
+  let soil = t.soilT
+  for (let k = 1; k <= 90; k++) {
+    const day = s.day + k
+    const f = fc[k - 1]
+    const slot = !S.isLeap(s.year) && day >= 59 ? day + 1 : day
+    const mean = f ? (f.hi + f.lo) / 2 : (nm.tmax[slot] + nm.tmin[slot]) / 20
+    soil += S.SOIL_T_GAIN * (mean - soil)
+    if (day >= earliest && soil >= 10) return k
+  }
+  return -1
 }
 
 // What the five-day forecast says the sky will do, from its own chance of rain.
