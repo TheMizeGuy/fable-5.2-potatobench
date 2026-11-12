@@ -166,5 +166,8 @@ playing, in every state a guided year shows it in.
   is up.
 - On the cellar and the account book at a desk there is no clear land above the sheet, so the slip lies over the top
   edge of the sheet.
+- A telegram can arrive in the first days; once it is answered the game goes on with the clock by itself (main's
+  rule since the routine), so the held opening clock can start then, and "Start the clock" is passed over.
+- Later telegrams of the same year have no note: the first one taught them.
 - A two-finger twist that starts on a field tag does not turn the view (the tag takes the touch); the camera lesson
   passes once one starts on open land.
