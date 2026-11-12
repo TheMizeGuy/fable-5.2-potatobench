@@ -571,7 +571,15 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
     if (crew.length) parts.push(h('span', null, icon('sprout', 'i'), h('b', null, 'The crew: '), `${crew.join('; ')}.`))
     else parts.push(h('span', { class: 'quiet' }, icon('sprout', 'i'), 'The crew puts this field\'s routine work on the list by itself.'))
     if (yours.length) parts.push(h('span', null, ' ', h('b', null, 'Yours: '), `${F.list(yours)}.`))
-    return h('p', { class: 'whose', testid: 'card-whose' }, parts)
+    // The vine kill the crew does by itself, with its date, and the way to refuse it.
+    const kill = fates(app.world, c).pressing.find(p => p.kind === 'kill' && p.field === i && p.job < 0)
+    const kept = c.season!.fields[i].keepVines
+    return h('div', { class: 'whose-box' },
+      h('p', { class: 'whose', testid: 'card-whose' }, parts),
+      kill ? h('p', { class: 'whose kill-date', testid: 'card-kill-date' }, icon('kill', 'i'), F.localize(kill.inWay), ' ',
+        h('button', { class: 'btn quiet', type: 'button', testid: 'card-keep-vines', onclick: () => { const r = ctx.run({ t: 'keepVines', field: i, keep: true }); if (r.ok) ctx.announce(`${S.FIELD_NAMES[i]}: the vines are kept up.`) } }, 'Keep them up')) : null,
+      kept && f.status === 'growing' ? h('p', { class: 'whose', testid: 'card-vines-kept' }, icon('kill', 'i'), 'The vines are kept up: killing them is your order. ',
+        h('button', { class: 'btn quiet', type: 'button', testid: 'card-let-vines', onclick: () => { ctx.run({ t: 'keepVines', field: i, keep: false }) } }, 'Let the crew kill them')) : null)
   }
 
   // The line under the orders: a refusal, why the field waits, or why the suggested order is suggested.
@@ -619,6 +627,8 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
       lots: c.lots.filter(l => sel.includes(l.field)).map(l => [l.id, l.open, Math.round(S.lotCwt(l)), Math.round(l.sold), l.open ? Math.round(S.lotValue(app.world, c, l)) : 0]),
       frozen: s.frozen, w: s.watchDay >= 0, soil: Math.round(s.soilT * 2), unit: app.unit,
       k: c.contracts.map(k => [k.id, Math.round(k.delivered), k.settled]),
+      kv: s.fields.map(x => x.keepVines ? 1 : 0), sw: c.sprayWay, r: c.routine, kill: fates(app.world, c).pressing.filter(p => p.kind === 'kill').map(p => [p.field, p.inWay]),
+      fate: sel.flatMap(i => s.jobs.filter(j => j.field === i).map(j => [j.id, fates(app.world, c).of.get(j.id)?.why])),
     }
     patch(el, JSON.stringify(model), () => framed(sel.length === 1 ? one(c, sel[0]) : many(c, sel)))
     el.setAttribute('aria-label', sel.length === 1 ? `Selected: ${S.FIELD_NAMES[sel[0]]}` : `Selected: ${sel.length} fields`)

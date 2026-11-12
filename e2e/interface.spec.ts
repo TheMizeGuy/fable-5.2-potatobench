@@ -163,6 +163,8 @@ test('a test dig is a tray beside the land, does not stop the clock, and can be 
   await startSeason(page)
   await reach(page, `q.run(q.day(6, 28), ['sample'])`)
   await putAway(page)
+  // Spraying settled for the season, as a player would when the question comes, so the days can run.
+  await reach(page, `const { app } = q.g(); if (!app.do({ t: 'sprayWay', way: 'auto' }).ok) {}`)
   await page.getByTestId('field-2').click()
   await page.keyboard.press('Shift+t')
   await expect.poll(async () => (await look(page)).queue).toBeGreaterThan(0)
@@ -786,7 +788,7 @@ test('Start the season runs the clock at 1x with no click; a weigh ticket stops 
   // The goal line says what comes next: planting, or how long until the soil is warm enough.
   await expect(page.getByTestId('goal')).toContainText(/Plant/)
   // Brought to the first dig, set to 2x by its button, the clock runs the dig and the haul until the ticket stops it.
-  await reach(page, `const { app } = q.g(); app.setSpeed(0); q.run('digging', ['sell'], 'status'); app.campaign.incidents = []`)
+  await reach(page, `const { app } = q.g(); app.setSpeed(0); q.run('digging', ['sell'], 'status'); app.campaign.incidents = []; app.do({ t: 'sprayWay', way: 'ask' })`)
   await putAway(page)
   await page.getByTestId('speed-2').click()
   const ticket = page.getByTestId('weighin')

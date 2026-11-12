@@ -71,7 +71,7 @@ let fate: { key: string; of: Map<number, S.JobOutlook>; pressing: S.Pressing[] }
 export function fates(world: S.World, c: S.Campaign): { of: Map<number, S.JobOutlook>; pressing: S.Pressing[] } {
   const s = c.season
   if (!s) return { of: new Map(), pressing: [] }
-  const key = JSON.stringify([c.seed, c.year, s.day, s.watchDay, s.jobs.map(j => [j.id, j.unit, j.kind, j.field, j.done > 0]), c.crew.map(u => [u.id, u.prio, u.rest, u.foreman, u.out, u.job, Math.round(u.tired * 20)]), c.routine])
+  const key = JSON.stringify([c.seed, c.year, s.day, s.watchDay, s.jobs.map(j => [j.id, j.unit, j.kind, j.field, j.done > 0]), c.crew.map(u => [u.id, u.prio, u.rest, u.foreman, u.out, u.job, Math.round(u.tired * 20)]), c.routine, c.sprayWay, s.fields.map(f => f.keepVines ? 1 : 0)])
   if (key !== fate.key) fate = { key, of: new Map(S.jobOutlook(world, c).map(o => [o.id, o])), pressing: S.pressing(world, c) }
   return fate
 }
@@ -179,7 +179,16 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
           x.fix ? h('button', {
             class: 'btn', type: 'button', testid: `pressing-fix-${x.kind}-${x.field}`,
             onclick: () => { pop = -1; const r = ctx.run(x.fix!); if (r.ok) ctx.announce(`${fixWord(c, x)}: done.`) },
-          }, fixWord(c, x)) : null))) : null)
+          }, x.kind === 'kill' && x.job < 0 ? 'Kill them now' : fixWord(c, x)) : null,
+          x.kind === 'kill' && x.job < 0 ? keepButton(x.field, `keep-vines-${x.field}`) : null))) : null)
+  }
+
+  // Refuses the vine kill the crew would do by itself on a field.
+  function keepButton(field: number, testid: string): HTMLElement {
+    return h('button', {
+      class: 'btn', type: 'button', testid,
+      onclick: () => { pop = -1; const r = ctx.run({ t: 'keepVines', field, keep: true }); if (r.ok) ctx.announce(`${S.FIELD_NAMES[field]}: the vines are kept up.`) },
+    }, 'Keep them up')
   }
 
   function queue(c: S.Campaign, jobs: S.Job[], crews: S.CrewInfo[], people: S.PersonInfo[], waits: Record<number, string>, many: boolean, room: number, of: Map<number, S.JobOutlook>, press: Child): Child {

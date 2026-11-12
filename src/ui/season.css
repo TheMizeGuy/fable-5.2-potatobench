@@ -443,3 +443,5 @@
 /* Whose work is whose on a field: what the crew does by itself, and what waits for the player. */
 .command .whose { margin: 0; padding: 2px 18px 8px; font-size: 14px; line-height: 1.35; color: var(--ink-2); }
 .command .whose .i { --i: 14px; margin-right: 4px; vertical-align: -2px; }
+.command .whose .btn { min-height: 30px; padding: 0 8px; font-size: 13px; }
+.touch .command .whose .btn { min-height: 40px; }

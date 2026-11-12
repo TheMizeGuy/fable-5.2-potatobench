@@ -80,6 +80,7 @@ async function farm(page: Page, until: 'ticket' | 'done', o: { store: boolean; m
       throw new Error('the season ended before a crop was dug')
     }
     if (s.incidents) { const how = await answerIncident(page, false); if (how) o.answered?.push(how); continue }
+    if (s.spray) { await page.getByTestId('spray-way-auto').click({ timeout: 3000 }).catch(() => {}); continue }
     if (s.paper) { await page.keyboard.press('Escape'); continue }
     if (s.hint) { await page.getByTestId('hint-close').click({ timeout: 3000 }).catch(() => {}); continue }
     if (s.tray) { await page.getByTestId('sample-close').click({ timeout: 3000 }).catch(() => {}); continue }

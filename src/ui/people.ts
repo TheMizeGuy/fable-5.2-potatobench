@@ -122,16 +122,14 @@ export function restControl(ctx: Ctx, c: S.Campaign, id: number, testid: string)
 // ---------------------------------------------------------------- spraying this season, asked once
 
 export type SprayWay = 'auto' | 'ask' | 'none'
-const sprayKey = (c: S.Campaign) => `county.spray.${c.seed}.${c.year}`
-// What the player chose for spraying this season, if asked yet (kept beside the save, by farm and year).
+// What the player chose for spraying this season, if asked yet (the simulation keeps it).
 export function sprayWay(c: S.Campaign): SprayWay | null {
-  try { const v = localStorage.getItem(sprayKey(c)); return v === 'auto' || v === 'ask' || v === 'none' ? v : null } catch { return null }
+  return S.sprayWayNow(c)
 }
 
 // When blight weather first comes the player is asked once how spraying is to be done this season, on the telegram
 // card with its three numbered replies (incident.ts), the clock stopped: kept up by the crew by itself (with about
 // what it costs), asked each time, or not this year. It is asked again from Who does what and from a field's card.
-// The routine has no "not this year" yet: that choice is kept here, and the stamps for spraying are left off.
 let sprayOpen = false
 export function askSpray(ctx: Ctx): void { sprayOpen = true; ctx.dirty() }
 export function sprayAsking(): boolean { return sprayOpen }
@@ -151,8 +149,7 @@ export function sprayDoes(ctx: Ctx, c: S.Campaign, way: SprayWay): string {
 }
 
 export function answerSpray(ctx: Ctx, c: S.Campaign, way: SprayWay): void {
-  try { localStorage.setItem(sprayKey(c), way) } catch { /* the routine still takes the choice */ }
-  const r = ctx.run({ t: 'routine', kind: 'spray', auto: way === 'auto' })
+  const r = sprayWay(c) === way ? { ok: true } : ctx.run({ t: 'sprayWay', way })
   if (r.ok) ctx.announce(way === 'auto' ? 'Spraying: the crew keeps the fields sprayed by itself.' : way === 'ask' ? 'Spraying: you are asked each time.' : 'No spraying this year.')
   putSprayAway(ctx)
 }
@@ -363,7 +360,7 @@ export function workGrid(ctx: Ctx): WorkGrid {
           class: `btn${r.auto ? ' is-on' : ''}`, type: 'button', testid: `routine-${r.kind}`, 'aria-pressed': String(r.auto),
           title: ctx.touch() ? undefined : r.auto ? `${R.JOB_VERB[r.kind]}: the crew puts it on the list by itself. Press to be asked instead.` : `${R.JOB_VERB[r.kind]}: waits for you. Press to let the crew do it by itself.`,
           onclick: () => { const res = ctx.run({ t: 'routine', kind: r.kind as S.RoutineKind, auto: !r.auto }); if (res.ok) ctx.announce(`${R.JOB_VERB[r.kind]}: ${r.auto ? 'ask me' : 'by itself'}.`) },
-        }, icon(r.kind, 'i'), R.JOB_VERB[r.kind], h('span', { class: 'sub' }, r.auto ? 'by itself' : 'ask me'))))) : null,
+        }, icon(r.kind, 'i'), R.JOB_VERB[r.kind], h('span', { class: 'sub' }, r.auto ? 'by itself' : r.kind === 'kill' ? 'your call; the crew does it a week after it is due' : 'ask me'))))) : null,
       rule('rule-sundays', l.sundaysOff, 'Sundays off', l.sundaysOff ? 'Everyone rests a day a week. Working Sundays gains a day, and tires everyone.' : 'Sundays are worked: a day more each week, and everyone tires.'),
       // Pickers come forward a few weeks before the harvest break, when they can be thought about.
       l.pickers.ok || l.pickers.on || pickersNear(c)
