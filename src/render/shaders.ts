@@ -72,6 +72,12 @@ export interface Patch {
   // (It has no shine of its own.)
   corners?: boolean
   cornersIf?: string         // with corners: a GLSL test; a vertex that fails it (one of a thing not drawn) is not lit
+  // A cut-out drawn in two passes, so that what a nearer one hides is never lit (a cut-out has to be shaded before
+  // the graphics chip knows where it is, and cannot be hidden early): 'first' writes its depth with the cut-out and
+  // no light; 'second' lights it, the depth test set to equal and no depth written by whoever makes the material, so
+  // only what the first pass left in front is shaded. Both run the same vertex shader, text for text. The second
+  // keeps its cut-out: where two cut-outs cross at one depth, the one that is clear there must still draw nothing.
+  pass?: 'first' | 'second'
   noHaze?: boolean
 }
 
@@ -398,19 +404,23 @@ const CORNER_LIGHT = /* glsl */ `
   }
 `
 
+// For the check that the two passes place a thing alike: the first pass's depth pushed off by this much (0 always,
+// but when the check is itself being tested).
+export const FIRST_NUDGE = { value: 0 }
+
 function patchVertex(vs: string, p: Patch, lit: boolean): string {
-  vs = vs.replace('#include <common>', `#include <common>\n${SHARED}\n${lit && p.corners ? `${LIGHT_LIB}\n${CORNER_HEAD}` : ''}\n${p.vertexHead ?? ''}`)
+  vs = vs.replace('#include <common>', `#include <common>\n${p.pass ? 'invariant gl_Position;\nuniform float uPassNudge;' : ''}\n${SHARED}\n${lit && p.corners ? `${LIGHT_LIB}\n${CORNER_HEAD}` : ''}\n${p.vertexHead ?? ''}`)
   if (lit) {
     if (p.vertexNormal) vs = vs.replace('#include <beginnormal_vertex>', `#include <beginnormal_vertex>\n${p.vertexNormal}`)
     vs = vs.replace('#include <defaultnormal_vertex>', '#include <defaultnormal_vertex>\nvWNormal = inverseTransformDirection( transformedNormal, viewMatrix );')
   }
   if (p.vertexBegin) vs = vs.replace('#include <begin_vertex>', `#include <begin_vertex>\n${p.vertexBegin}`)
-  vs = vs.replace('#include <project_vertex>', project(p.vertexWorld) + (lit && p.corners ? (p.cornersIf ? `if ( ${p.cornersIf} )${CORNER_LIGHT}` : CORNER_LIGHT) : ''))
+  vs = vs.replace('#include <project_vertex>', project(p.vertexWorld) + (p.pass ? 'gl_Position.z += uPassNudge * gl_Position.w;\n' : '') + (lit && p.corners ? (p.cornersIf ? `if ( ${p.cornersIf} )${CORNER_LIGHT}` : CORNER_LIGHT) : ''))
   return vs.replace('#include <worldpos_vertex>', 'vec4 worldPosition = cWorld;')
 }
 
 export function patch<M extends Material>(mat: M, p: Patch = {}): M {
-  const key = p.key ?? `county-${serial++}`
+  const key = `${p.key ?? `county-${serial++}`}${p.pass ? `-${p.pass}` : ''}`
   mat.defines = { ...(mat.defines ?? {}), COUNTY_AMBIENT: (p.ambient ?? 1).toFixed(3), COUNTY_SHINE: (p.shine ?? 1).toFixed(3), COUNTY_RIM: (p.rim ?? 0.3).toFixed(3), ...(p.defines ?? {}) }
   if (p.translucent) mat.defines.COUNTY_TRANSLUCENT = p.translucent.toFixed(3)
   const through = p.through ?? [1, 1.16, 0.5]
@@ -418,7 +428,7 @@ export function patch<M extends Material>(mat: M, p: Patch = {}): M {
   if (p.blade) mat.defines.COUNTY_BLADE = 1
   if (p.corners) mat.defines.COUNTY_CORNERS = 1
   mat.onBeforeCompile = shader => {
-    Object.assign(shader.uniforms, U, p.uniforms ?? {})
+    Object.assign(shader.uniforms, U, p.uniforms ?? {}, p.pass ? { uPassNudge: p.pass === 'first' ? FIRST_NUDGE : { value: 0 } } : {})
     shader.vertexShader = patchVertex(shader.vertexShader, p, true)
     let fs = shader.fragmentShader
     fs = fs.replace('#include <common>', `#include <common>\n${SHARED}\n${FRAG_LIB}\n${p.fragmentHead ?? ''}`)
@@ -429,7 +439,9 @@ export function patch<M extends Material>(mat: M, p: Patch = {}): M {
     const blade = p.blade ? '#ifdef DOUBLE_SIDED\n  normal *= faceDirection;\n#endif\n' : ''
     if (p.fragmentNormal || blade) fs = fs.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>\n${blade}${p.fragmentNormal ?? ''}`)
     if (p.fragmentEmissive) fs = fs.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>\n${p.fragmentEmissive}`)
-    if (p.corners) {
+    if (p.pass === 'first') {
+      for (const chunk of ['lights_physical_fragment', 'lights_fragment_begin', 'lights_fragment_maps', 'lights_fragment_end', 'fog_fragment']) fs = fs.replace(`#include <${chunk}>`, '')
+    } else if (p.corners) {
       fs = fs.replace('#include <common>', '#include <common>\nvarying vec3 vLitA;\nvarying vec3 vLitB;\nvarying vec3 vBackA;\nvarying vec3 vBackB;\nvarying vec4 vHazed;')
       for (const chunk of ['lights_physical_fragment', 'lights_fragment_maps', 'lights_fragment_end']) fs = fs.replace(`#include <${chunk}>`, '')
       fs = fs.replace('#include <lights_fragment_begin>', CORNER_LIT)

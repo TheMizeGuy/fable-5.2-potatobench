@@ -532,6 +532,73 @@ trees cannot come within a fifth of the playing view's frame without taking whol
 (3) The closest view's plant window sends 0.6M triangles of which half are behind the camera or past the reach:
 its slots want ordering from the middle out so that a level camera draws the inner part of them.
 
+### Level views: what was cut
+
+Four changes, each of which a tool can switch off (`tryWithout`), so the old way and the new are timed turn about
+in one page (`budget.ts --close --crop=twopass,cardshadow,treereach,corners,thin,half,reach --pair`).
+
+- **Cut-outs in two passes** (`pass` in the shared material patch; the trees' cards, the far woods and, from low
+  down, a hardwood's leaves). The first pass draws them into the picture's depth with the cut-out and no light; the
+  second lights them with the depth test set to equal and no depth written, so only what the first left in front
+  is shaded. Both passes run the same vertex shader text for text. (The second keeps its cut-out. Without it, where
+  two cards crossed at one depth the one that was clear there drew its nothing as a speck too bright to look at:
+  seen in the first pictures of this round and gone in the last.) At start-up a patch of each kind is drawn into a
+  small picture in one pass and in two and the pixels counted (`checkTwoPass`): where they do not agree to within
+  half a hundredth the cards and leaves go back to one pass. `tools/render/twopass.ts` tests the check in a
+  browser: on the test box conifer cards leave 14321 pixels either way, hardwood cards 12803, leaves 26090 and
+  26162; with the first pass pushed off by two parts in ten thousand of the depth they leave 0, 2 and 6 and the
+  check says no; with the push taken away it says yes again. No skyline is thinned: every card is still drawn.
+- **Trees whole beside the camera, not a hundred metres off.** Whole within 60 m and simpler to 150 m of a camera
+  that is down among them (it was 100 and 200), less as it climbs, none whole under a camera 70 m up; and whole
+  beside what a higher camera looks at where that is a yard, so the yard tier keeps the yard's own trees.
+- **The plant window's slots go from the middle out**, and a level camera is sent the inner square of them (22 m to
+  a side from the middle, where whole plants end at 27 m from the eye).
+- (From the round before: far patches' cards in the fine shadow map from the yard tier's distance.)
+
+**Before and after** (1512 by 982 at two to one, 2.07 M pixels, high setting, frame time not followed, the box
+quiet; ms from one frame to the next drawing as fast as it can, the quietest of six turns and the middle one;
+triangles of a frame, every pass):
+
+| view | time before | time after | against the playing view after | triangles before | after |
+| --- | --- | --- | --- | --- | --- |
+| the playing view | 4.18 (4.25) | 3.38 (3.46) | | 1.34M | 1.43M |
+| yard tier | 4.23 (4.24) | 3.07 (3.57) | 0.91 (1.03) | 3.35M | 2.58M |
+| level over a crop from 160 m | 4.84 (4.87) | 3.70 (4.02) | 1.10 (1.16) | 2.25M | 1.71M |
+| closest, level over a crop | 5.37 (5.69) | 4.53 (4.64) | 1.34 (1.34) | 2.66M | 2.21M |
+| closest, level in the yard | 3.14 (3.26) | 3.41 (3.63) | 1.01 (1.05) | 2.29M | 2.29M |
+| level down the lane at dusk | 3.42 (3.80) | 3.07 (3.35) | 0.91 (0.97) | 2.40M | 2.54M |
+
+(The playing view reads about 3.4 or about 4.0 ms from one run to the next, old way or new: in the run before this
+one it read 3.69 (3.95) and the same views stood at 0.98, 1.09, 1.27 and 0.79 times it.)
+
+**Fragments to a pixel of the picture** (trees, their cards and the far woods together):
+
+| view | lit, before | lit, after | drawn into depth alone, after |
+| --- | --- | --- | --- |
+| the playing view | 1.86 | 0.33 | 1.86 |
+| yard tier | 2.72 | 0.31 | 2.52 |
+| level over a crop from 160 m | 3.97 | 0.31 | 3.95 |
+| closest, level over a crop | 14.3 with the crop's leaves, 13.1 without | 1.34 | 5.13 |
+| closest, level in the yard | 3.81 | 0.44 | 3.44 |
+
+(The crop's leaves are 1.23 beside these, lit at their corners. A fragment of the first pass reads the card's atlas
+and writes a depth: no sun, shadow, sky or haze.)
+
+**Against the lines set.** Lit fragments: under 4 from the closest (1.3) and under 3 from 160 m (0.3). Time: the
+yard tier, the closest view in the yard and the lane are within the line and the view from 160 m at it (1.02 to
+1.16 times over two runs); **the closest level view over a crop is 1.22 to 1.34 times the playing view, where 1.15
+was asked** (it was 1.45 to 1.65; in milliseconds 5.4 to 5.8 before and 4.5 to 4.8 after). Triangles:
+the view from 160 m is within a fifth of the playing view's (1.71M to 1.43M); **the closest over a crop is 1.55
+times (2.21M), the closest in the yard 1.6 times (2.29M), the yard tier 1.8 times (2.58M) where 1.5 was allowed**.
+What is left in them is the land and terrain (0.73M in every view), the clearing (0.43M), the crop's plants and
+rows (0.5M close over a crop), the grass (0.6M close in the yard) and the yard's own whole trees with their shadows:
+to go lower is to take whole plants, grass or the yard's trees out of the picture they are the subject of, and
+that was not done. The playing view itself has 0.09M more than it had (the cards' first pass) and its time is the
+same to within the spread.
+
+**Not done**: within a patch, the rows of trees behind the first two are still drawn (into depth only, from low
+down); a patch behind another is cards by distance, not by what stands before it.
+
 ## Wave three: bugs and UX, checked by players who see only pictures
 
 After live-5 the owner asked for a camera that tips down, lighter rendering, a card for anyone clicked, a far more

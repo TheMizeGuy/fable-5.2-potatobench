@@ -101,6 +101,7 @@ uniform sampler2D uSlope;
 uniform vec4 uWin;         // the window in this field's lattice: first column, first row, and its centre on the ground
 uniform vec2 uPool;        // half the window, along the rows and across them
 uniform vec2 uFadeR;       // how far from the eye whole plants begin to give way, and where they are gone
+uniform vec2 uInner;       // where the square of slots sent fades out and ends, in metres from the window's middle
 uniform float uSeed;
 vec4 aAt;
 float slotIn;
@@ -121,6 +122,8 @@ void slot() {
   // The window lies round the camera's nearest ground, a third of it behind the camera: what stands more than a
   // step behind the eye is in no picture.
   slotIn *= step(-1.5, dot(aAt.xyz - cameraPosition, -vec3(viewMatrix[0][2], viewMatrix[1][2], viewMatrix[2][2])));
+  vec2 from = abs(aAt.xz - uWin.zw);
+  slotIn *= 1.0 - smoothstep(uInner.x, uInner.y, max(from.x, from.y));
 }
 `
 const PLANT_FN = /* glsl */ `
@@ -506,6 +509,10 @@ export class Fields {
   // The savings in the whole plants a tool may switch off (1 on): thinned with distance, half the leaves far off, the
   // window drawn in sooner in a level view.
   private spare = { value: new Vector3(1, 1, 1) }
+  private plantOut: Float32Array<ArrayBuffer> = new Float32Array(0)
+  private oatOut: Float32Array<ArrayBuffer> = new Float32Array(0)
+  // Where the square of slots sent to a level camera fades out and ends, in metres from the window's middle.
+  private inner = { value: new Vector2(1e5, 2e5) }
   private trial = { value: new Vector2(1, 0) }
   private flatAt = FLAT_AT.high
   private flags: InstancedMesh
@@ -572,7 +579,7 @@ export class Fields {
     const fell = { value: PARCELS[i].cover === 'brush' ? new Vector3(1, 0, 0) : new Vector3(0, -1, 1) }
     const oats = { value: new Vector3(0, 0, 0) }
     const rect = { value: new Vector4(f.x0, f.z0, 1 / FW, 1 / FD) }
-    const shared = { uSpare: this.spare, uTrial: this.trial, uT0: { value: t0 }, uT1: { value: t1 }, uRect: rect, uCrop: { value: crop }, uOpen: open, uWin: win, uPool: this.pool, uFadeR: this.fadeR, uSlope: { value: this.slope }, uSeed: { value: i * 17.3 } }
+    const shared = { uSpare: this.spare, uTrial: this.trial, uInner: this.inner, uT0: { value: t0 }, uT1: { value: t1 }, uRect: rect, uCrop: { value: crop }, uOpen: open, uWin: win, uPool: this.pool, uFadeR: this.fadeR, uSlope: { value: this.slope }, uSeed: { value: i * 17.3 } }
     const bounds = new Sphere(new Vector3(f.cx, fieldBaseY(f.cz) + 0.3, f.cz), Math.hypot(FW, FD) / 2 + 2)
 
     // ---- soil
@@ -1125,7 +1132,7 @@ export class Fields {
     const shape: Patch = {
       key: 'county-oats',
       uniforms: {
-        uOats: g.oats, uRect: { value: new Vector4(f.x0, f.z0, 1 / FW, 1 / FD) }, uWin: g.oatWin, uPool: this.pool, uFadeR: this.fadeR, uSlope: { value: this.slope }, uSeed: { value: i * 31.7 },
+        uOats: g.oats, uRect: { value: new Vector4(f.x0, f.z0, 1 / FW, 1 / FD) }, uWin: g.oatWin, uPool: this.pool, uFadeR: this.fadeR, uInner: this.inner, uSlope: { value: this.slope }, uSeed: { value: i * 31.7 },
       },
       vertexHead: `uniform vec4 uRect;\n${slotGlsl(OAT_STEP, OAT_STEP, OAT_COLS, OAT_ROWS, 0.8)}\nattribute vec3 aBlade;\nuniform vec3 uOats;\nvarying vec3 vTint;\nfloat oatGust;`,
       vertexNormal: /* glsl */ `
@@ -1238,17 +1245,33 @@ export class Fields {
     const w = POOL[tier]
     this.pool.value.set(w.x, w.z)
     this.reach = w.reach
-    const fill = (geo: InstancedBufferGeometry, stepX: number, stepZ: number) => {
+    // The slots go from the middle of the window out (by how far along either side they lie from it), so that the
+    // first so many of them are a square round the middle: a level camera, which sees whole plants no further than
+    // some 27 m, is sent that square and not the window (the rest of which would be sent, placed and thrown away).
+    const fill = (geo: InstancedBufferGeometry, stepX: number, stepZ: number): Float32Array<ArrayBuffer> => {
       const nx = Math.ceil((2 * w.x) / stepX), nz = Math.ceil((2 * w.z) / stepZ)
+      const out = (n: number) => Math.max(Math.abs((n % nx) + 0.5 - nx / 2) * stepX, Math.abs(Math.floor(n / nx) + 0.5 - nz / 2) * stepZ)
+      const order = Array.from({ length: nx * nz }, (_, n) => n).sort((a, b) => out(a) - out(b) || a - b)
       const slots = new Float32Array(nx * nz * 2)
-      for (let j = 0; j < nz; j++) for (let k = 0; k < nx; k++) slots.set([k, j], (j * nx + k) * 2)
+      order.forEach((n, i) => { slots[i * 2] = n % nx; slots[i * 2 + 1] = Math.floor(n / nx) })
       geo.setAttribute('aSlot', new InstancedBufferAttribute(slots, 2))
       geo.instanceCount = nx * nz
+      const far = new Float32Array(order.length)
+      order.forEach((n, i) => { far[i] = out(n) })
+      return far
     }
-    fill(this.plantPool, PLANT_STEP, ROW)
+    this.plantOut = fill(this.plantPool, PLANT_STEP, ROW)
     this.bloomPool.setAttribute('aSlot', this.plantPool.getAttribute('aSlot'))
     this.bloomPool.instanceCount = this.plantPool.instanceCount
-    fill(this.oatPool, OAT_STEP, OAT_STEP)
+    this.oatOut = fill(this.oatPool, OAT_STEP, OAT_STEP)
+  }
+
+  // Send the pools' slots within `half` metres of the window's middle, along either side.
+  private sendWithin(half: number): void {
+    const upTo = (out: Float32Array<ArrayBuffer>) => { let lo = 0, hi = out.length; while (lo < hi) { const mid = (lo + hi) >> 1; if (out[mid] <= half) lo = mid + 1; else hi = mid } return lo }
+    this.plantPool.instanceCount = this.bloomPool.instanceCount = upTo(this.plantOut)
+    this.oatPool.instanceCount = upTo(this.oatOut)
+    this.inner.value.set(half >= Math.max(this.pool.value.x, this.pool.value.y) ? 1e5 : half * 0.9, half >= Math.max(this.pool.value.x, this.pool.value.y) ? 2e5 : half)
   }
 
   // Where the window of whole plants lies: round the nearest ground the camera sees, a little way on into the picture.
@@ -1270,6 +1293,8 @@ export class Fields {
     // behind another: the painted rows take over sooner there. Looked down on, the whole window shows and is kept.
     const level = this.spare.value.z * Math.min(1, Math.max(0, (0.62 + d.y) / 0.37))
     this.fadeR.value.set(far + pm * 0.05, far + pm * (0.9 - 0.4 * level))
+    const whole = Math.max(this.pool.value.x, this.pool.value.y)
+    this.sendWithin(this.spare.value.z > 0.5 ? whole + (Math.min(whole, 22.5) - whole) * level : whole)
     this.centre.set(c.x + (d.x / flat) * on, 0, c.z + (d.z / flat) * on)
   }
 

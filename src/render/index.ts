@@ -27,7 +27,7 @@ import { Pond } from './pond.ts'
 import { Post } from './post.ts'
 import { Probe } from './probe.ts'
 import { LAMP, Props } from './props.ts'
-import { CLOUD_TURN, HAZE_FALL, U } from './shaders.ts'
+import { CLOUD_TURN, FIRST_NUDGE, HAZE_FALL, U } from './shaders.ts'
 import { SunShadows } from './shadows.ts'
 import { Sky } from './sky.ts'
 import { snapshot, type Mode, type Snapshot } from './state.ts'
@@ -905,7 +905,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     grass.update(cam, fields.off, dtMs <= 0.5, spare !== null)
     layGrass()
     laps.end('land: grass')
-    flora.update(cam, shadows.wide && !without.cards)
+    flora.update(cam, shadows.wide && !without.cards, focus)
     laps.end('land: trees')
     harvest.update(wdt, app.speed === 0, clamp(rig.cur.dist / (30 * S), 1, 2.3), reduced)
     PIXEL.value = (cur.msaa ? 1.7 : 1.4) / ((post.target.height) / (2 * Math.tan((cam.fov * Math.PI) / 360)))
@@ -1160,6 +1160,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     })
     return made
   }
+  let twoPass = { ok: false, pixels: [] as number[] }
   async function compileScene(): Promise<void> {
     const names = namesOf()
     const program = (m: unknown) => (renderer.properties.get(m as object) as { currentProgram?: { isReady(): boolean; program: WebGLProgram } }).currentProgram
@@ -1183,6 +1184,13 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     }
     const waiting = renderer.compile(scene, rig.camera)
     for (const m of [...shadowShaders(), ...post.compile()]) { waiting.add(m); if (!names.has(m)) names.set(m, `${m.type} of a shadow or lens pass`) }
+    // (and the cards as they are drawn in one pass, for the check below and for a machine that fails it)
+    for (const [mesh, mat] of flora.onePass()) {
+      const own = mesh.material
+      mesh.material = mat
+      for (const m of renderer.compile(mesh, rig.camera, scene)) waiting.add(m)
+      mesh.material = own
+    }
     // The land is laid out by now, and its shaders are with the graphics system's compiler: the splash is told how
     // many of them are through (the scene's building, before this, holds the page still and cannot be shown moving).
     // The land's own shader is waited for longer than all the rest together, so it is given the rule's last stretch
@@ -1217,6 +1225,10 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       renderer.setRenderTarget(post.target)
       await compileScene()
       lap('shaders')
+      // The cards are drawn in two passes only where the two place them alike to the last bit.
+      twoPass = flora.checkTwoPass(renderer, scene)
+      if (!twoPass.ok) flora.twoPass(false)
+      lap('cards checked')
     } catch (err) {
       console.warn('The County: shaders could not be compiled ahead of the first frame.', err)
     }
@@ -1356,14 +1368,22 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       // 'cardshadow' (far patches' cards in the fine shadow map from the yard tier's distance, not only the farm tier's),
       // 'cards' (cards in the fine shadow when it is wide), 'lazy' (the fine shadow redrawn only when it has
       // moved, where nothing in it moves to be seen), 'contact' (no contact shade where nothing is near enough to show it).
-      tryWithout(name: 'order' | 'cards' | 'lazy' | 'contact' | 'corners' | 'thin' | 'half' | 'reach' | 'plants' | 'near' | 'a2c' | 'cardshadow', on: boolean) {
+      tryWithout(name: 'order' | 'cards' | 'lazy' | 'contact' | 'corners' | 'thin' | 'half' | 'reach' | 'plants' | 'near' | 'a2c' | 'cardshadow' | 'twopass' | 'treereach', on: boolean) {
         if (name === 'cardshadow') { shadows.early = !on; return }
+        if (name === 'twopass') { flora.twoPass(!on && twoPass.ok); return }
+        if (name === 'treereach') { flora.tryWithout('reach', on); return }
         if (name !== 'order' && name !== 'cards' && name !== 'lazy' && name !== 'contact') { fields.tryWithout(name, on); return }
         if (name === 'lazy') shadows.eager = on
         else without[name] = on
         terrain.under.renderOrder = without.order ? 0 : 50
         above.renderOrder = without.order ? 0 : 60
       },
+      // The cards' two passes: what the start-up check found and whether they are on; the check run again, with the
+      // first pass pushed off by `nudge` to see that it catches a machine on which the two do not agree; on or off.
+      twoPass: () => ({ ...twoPass, on: flora.twoPassOn }),
+      twoPassCheck(nudge = 0) { FIRST_NUDGE.value = nudge; const r = flora.checkTwoPass(renderer, scene); FIRST_NUDGE.value = 0; return r },
+      // The farm road's first points, in metres (for a tool's picture down the lane).
+      lane: () => ROAD.slice(0, 4),
       // Nothing drawn of the trees as trees, or of their cards (for the tool that lays a view's cost to its parts).
       trees(kind: 'whole' | 'cards', on: boolean) { flora.tryWithout(kind, !on) },
       // How much drawing a part is, whatever the machine: the fragments of it that are drawn, as a multiple of the
@@ -1378,11 +1398,12 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
           if (kind !== 'farwoods' && root === flora.group && flora.farWoods && under(m, flora.farWoods)) return
           meshes.push(m)
         })
+        const firsts = meshes.map(m => m.userData.first as Mesh | undefined).filter((f): f is Mesh => !!f && f.visible)
         const mats = new Set<Material>()
-        for (const m of meshes) { m.layers.enable(7); for (const x of Array.isArray(m.material) ? m.material : [m.material]) mats.add(x) }
+        for (const m of [...meshes, ...firsts]) for (const x of Array.isArray(m.material) ? m.material : [m.material]) mats.add(x)
         scene.traverse(o => { if ((o as { isLight?: boolean }).isLight) o.layers.enable(7) })
-        const kept = [...mats].map(x => [x, x.blending, x.blendSrc, x.blendDst, x.blendSrcAlpha, x.blendDstAlpha, x.depthTest] as const)
-        for (const x of mats) { x.blending = CustomBlending; x.blendSrc = ZeroFactor; x.blendDst = OneFactor; x.blendSrcAlpha = OneFactor; x.blendDstAlpha = OneFactor }
+        const kept = [...mats].map(x => [x, x.blending, x.blendSrc, x.blendDst, x.blendSrcAlpha, x.blendDstAlpha, x.depthTest, x.colorWrite] as const)
+        const counted = (x: Material) => { x.blending = CustomBlending; x.blendSrc = ZeroFactor; x.blendDst = OneFactor; x.blendSrcAlpha = OneFactor; x.blendDstAlpha = OneFactor }
         const w = 960, h = Math.round(960 * post.target.height / Math.max(1, post.target.width))
         const rt = new WebGLRenderTarget(w, h, { type: FloatType, depthBuffer: true })
         const px = new Float32Array(w * h * 4), was = renderer.getRenderTarget(), colour = new Color(), mask = rig.camera.layers.mask
@@ -1391,7 +1412,13 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
         rig.camera.layers.set(7)
         const out: number[] = []
         for (const depth of [false, true]) {
-          for (const x of mats) x.depthTest = depth
+          // Drawn: every fragment that passes the cut-out (of the first pass, where there are two). Lit: those in
+          // front when drawn (or, in two passes, those the second pass keeps).
+          const first = firsts.length > 0
+          for (const m of meshes) { if (!first || depth) m.layers.enable(7); else m.layers.disable(7) }
+          for (const f of firsts) f.layers.enable(7)
+          for (const m of meshes) for (const x of Array.isArray(m.material) ? m.material : [m.material]) { counted(x); x.depthTest = depth }
+          for (const f of firsts) { const x = f.material as Material; if (!depth) { counted(x); x.colorWrite = true; x.depthTest = false } }
           renderer.setRenderTarget(rt)
           renderer.setClearColor(0x000000, 0)
           renderer.clear()
@@ -1400,10 +1427,10 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
           let sum = 0
           for (let k = 3; k < px.length; k += 4) sum += px[k]
           out.push(sum / (w * h))
+          for (const [x, blending, src, dst, srcA, dstA, depthTest, colorWrite] of kept) Object.assign(x, { blending, blendSrc: src, blendDst: dst, blendSrcAlpha: srcA, blendDstAlpha: dstA, depthTest, colorWrite })
         }
         rig.camera.layers.mask = mask
-        for (const [x, blending, src, dst, srcA, dstA, depthTest] of kept) Object.assign(x, { blending, blendSrc: src, blendDst: dst, blendSrcAlpha: srcA, blendDstAlpha: dstA, depthTest })
-        for (const m of meshes) m.layers.disable(7)
+        for (const m of [...meshes, ...firsts]) m.layers.disable(7)
         renderer.setClearColor(colour, alpha)
         renderer.setRenderTarget(was)
         rt.dispose()

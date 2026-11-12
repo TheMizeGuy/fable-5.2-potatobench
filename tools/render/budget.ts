@@ -444,10 +444,21 @@ if (flag('close')) {
   if (opt('crop') && now.probe) {
     await turn(sides, now)
     const switches = opt('crop')!.split(',')
-    const states: [string, string[]][] = [['as it is now', []], ...switches.map(x => [`without ${x}`, [x]] as [string, string[]]), ...(switches.length > 1 ? [['without any of them', switches] as [string, string[]]] : [])]
+    // (--pair: only the two ends, as it is now and without any of them)
+    const states: [string, string[]][] = [['as it is now', []], ...(flag('pair') ? [] : switches.map(x => [`without ${x}`, [x]] as [string, string[]])), ...(switches.length > 1 ? [['without any of them', switches] as [string, string[]]] : [])]
     console.log(`  the crop's whole plants, one way against the other in the one page (ms from one frame to the next${free ? ', drawing as fast as it can' : ''}: the quietest of ${ROUNDS} turns each, and the middle one):`)
     const frames: Record<string, number[]> = {}
-    for (const [key, label, set] of [near[0], near[2], near[4]]) {
+    // (and, for its picture, level down the farm road at dusk)
+    const lane: [string, string, (p: Page) => Promise<void>] = ['lane-dusk', 'level down the lane at dusk', async p => {
+      await p.evaluate(() => {
+        const f = (window as any).__countyField, r = f.lane() as number[][]
+        f.rig.level()
+        f.tune({ hour: 19.4 })
+        f.view({ x: (r[1][0] + r[2][0]) / 2, z: (r[1][1] + r[2][1]) / 2, dist: 9, yaw: Math.atan2(r[2][0] - r[1][0], r[2][1] - r[1][1]) })
+      })
+      await p.waitForTimeout(2500)
+    }]
+    for (const [key, label, set] of [near[0], near[1], near[2], near[4], near[6], ...(shots ? [lane] : [])]) {
       if (opt('views') && !opt('views')!.split(',').includes(key)) continue
       await set(page)
       const gaps: number[][] = states.map(() => [])
@@ -473,7 +484,7 @@ if (flag('close')) {
       })
     }
     await page.evaluate(all => { const f = (window as any).__countyField; for (const x of all) f.tryWithout(x, false) }, switches)
-    if (!opt('views')) for (const [name, g] of Object.entries(frames)) console.log(`   ${name.padEnd(28)} against the playing view: level from 160 m ${(g[1] / g[0]).toFixed(2)}x, level from the closest ${(g[2] / g[0]).toFixed(2)}x`)
+    if (!opt('views')) for (const [name, g] of Object.entries(frames)) console.log(`   ${name.padEnd(28)} against the playing view: the yard tier ${(g[1] / g[0]).toFixed(2)}x, level from 160 m ${(g[2] / g[0]).toFixed(2)}x, closest over the crop ${(g[3] / g[0]).toFixed(2)}x, closest in the yard ${(g[4] / g[0]).toFixed(2)}x`)
   }
   const base = Object.keys(got)[0]
   console.log(`  each view against the playing view (${free ? 'ms from one frame to the next, drawing as fast as it can' : 'GPU ms a frame'}; triangles and draw calls of a frame, every pass counted):`)
