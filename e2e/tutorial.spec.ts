@@ -89,7 +89,9 @@ async function turn(page: Page, mobile: boolean, far = 1): Promise<void> {
 
 // The slip never lies over what it points at, the clock, a command bar, a telegram or a paper.
 async function clear(page: Page, target: string): Promise<void> {
-  const s = page.locator('#ui [data-testid="guide-slip"]:not([hidden])')
+  // What slides in (a card, a telegram) is given the moment it takes to arrive; a slip with no room is hidden.
+  await page.waitForTimeout(400)
+  const s = page.locator('#ui [data-testid="guide-slip"]:not([hidden]):not(.gone)')
   if (!(await s.count())) return
   const sb = await s.first().boundingBox()
   if (!sb) return

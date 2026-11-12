@@ -113,12 +113,17 @@ function resolve(ctx: Ctx, root: HTMLElement, p: Point | null): { el: HTMLElemen
 
 // Everything on the current screen the slip should not lie over: the panels themselves, not the clear boxes that hold
 // them. hard: what it must never cover (a clock, a command bar, a telegram, a paper, a test-dig tray, a person's card).
-function obstacles(root: HTMLElement): { hard: Box[]; soft: Box[] } {
+function hardOnes(root: HTMLElement): Box[] {
   const hard: Box[] = []
-  const soft: Box[] = []
   for (const el of root.querySelectorAll('.clock, .command, .telegram, .dialog, [data-testid="paused"], .tray-paper, .person-card, .work, .pin-list-at, .tb-pop')) {
     if (shown(el)) hard.push(box(el.getBoundingClientRect()))
   }
+  return hard
+}
+
+function obstacles(root: HTMLElement): { hard: Box[]; soft: Box[] } {
+  const hard = hardOnes(root)
+  const soft: Box[] = []
   const main = root.querySelector<HTMLElement>('.screen-layer > main:not(.leaving)')
   const walk = (el: Element, depth: number) => {
     for (const k of el.children) {
@@ -371,7 +376,10 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     if (slip.hidden) return
     const key = `${l.id}|${innerWidth}x${innerHeight}|${slip.offsetWidth}x${slip.offsetHeight}`
     const t0 = performance.now()
-    if (placedFor === key && t0 - checked < 250) return
+    // Every frame: nothing it must never cover has come over it (a card sliding in, a telegram).
+    const must = [...hardOnes(root), ...(t.at ? [pad(t.at, 10)] : []), ...(fistBox ? [pad(fistBox, 4)] : [])]
+    const at = place ? { left: place.x, top: place.y, right: place.x + slip.offsetWidth, bottom: place.y + slip.offsetHeight } : null
+    if (placedFor === key && t0 - checked < 250 && (!at || !must.some(a => meets(at, a)))) return
     checked = t0
     const { hard, soft } = obstacles(root)
     if (t.at) hard.push(pad(t.at, 10))
