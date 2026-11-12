@@ -29,9 +29,21 @@ import {
   type CrewFrom, type Reveal, type Ride, type Seg, type Spot,
 } from './work.ts'
 
-// A test dig and a day's digging keep their own time: the drive to the field, then the work.
+// A test dig and a day's digging keep their own time, because the interface waits for them: the hill lifted, the
+// day's band of rows out. (With a tool holding the day at a point a test dig is the drive in and the work, as it was.)
 const STAGE_DRIVE_S = 0.5
-const STAGE_S = { sample: 2, dig: 1.7 }
+const STAGE_S = { sample: 2, dig: 0.8 }
+const SAMPLE_S = 1
+// The way to a part of the day's work is seen on a clock of its own, whatever the game's clock is doing. How long, as
+// shares of a day's length on that clock: at least, at most, and when yesterday went mostly on the way (or it is the
+// walk in from the road of someone who lives out). The day is not held for it; the work at the far end is seen from
+// when they get there.
+const WAY_DAY = { least: 0.84, most: 0.94, brief: 0.35 }
+// The same before what the interface waits for, in seconds.
+const WAY_STAGED: Record<string, [number, number]> = { sample: [0.6, 0.75], dig: [0.7, 0.9] }
+// A way too long to go at a pace the eye can follow is cut: they pull away for this share of the time, and are next
+// seen coming in over the last stretch.
+const WAY_LEAD = 0.3
 const MAX_RINGS = 2
 
 export type PendingReveal = Reveal & { unit: number; seg: number }
@@ -88,7 +100,27 @@ interface Actor {
   arcSeg: Seg | null       // and which part of the day that is
   beat: number             // a clock for stopping and bending on a walk through the crop
   line: { key: string; poly: Poly; arc: number; seg: Seg } | null   // the row a machine is working with the clock running
+  way: Way | null          // on the way to a part of the day's work
+  waySeg: Seg | null       // the part of the day whose way was last settled
+  came: Seg | null         // the part of the day they came to by such a way: all of its time is work
+  ways: number             // how many parts of today begin with a way to go
+  brief: boolean           // today's ways are short ones
+  hadWay: boolean
+  worked: number           // seconds seen at work today
 }
+
+// t of T seconds gone over L metres; cut: `lead` metres from the start are seen, then the last `reach` of them.
+interface Way { t: number; T: number; L: number; reach: number; lead: number; cut: boolean }
+
+function wayAt(w: Way): number {
+  const q = clamp(w.t / w.T, 0, 1)
+  if (!w.cut) return w.L * q * q * (3 - 2 * q)
+  if (q < WAY_LEAD) { const r = q / WAY_LEAD; return w.lead * r * r }
+  const r = (q - WAY_LEAD) / (1 - WAY_LEAD)
+  return w.L - w.reach * (1 - WAY_LEAD) * (1 - r) * (1 - r)
+}
+
+const lengthOf = (pts: Pt[]): number => { let d = 0; for (let i = 1; i < pts.length; i++) d += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z); return d }
 
 interface Leaver { dress: Dress; path: Poly; at: number; gait: number }
 interface Picker { dress: Dress; x: number; z: number; tx: number; tz: number; wait: number; heading: number; gait: number; bent: number }
@@ -113,6 +145,8 @@ export interface CrewFrame {
   camera: PerspectiveCamera
   // the hills of this crew's segment `seg` (and all before it) up to arc length `arc` along its path have been passed
   passed: (unit: number, seg: number, arc: number) => void
+  speed: number           // the game clock's setting, 0..3
+  daySec: number          // how long a day lasts on the clock, seconds (as at 1x when it is stopped)
 }
 
 const M = new Matrix4(), V = new Vector3(), V2 = new Vector3()
@@ -215,6 +249,7 @@ export class Crews {
       id: u.id, kind: u.kind, slot, dress: dressFor(u.id, false, u.name), coat: dressFor(u.id, true, u.name), segs: [], clockSeg: -2, segClock: 0,
       x: rest.x, z: rest.z, heading: rest.heading, rig: null, aboard: false, shown: 0, away: false, home: null, about: DOORYARD_AT, gait: u.id * 1.3, goal: null, state: 'idle', post: '',
       tired: u.tired, worn: u.tired, style: (u.id * 7) % 5, pose: new Pose().reset(), head: new Vector3(rest.x, 1, rest.z), scale: 1, next: [], u: 1, lastT: 1, ay: 2.2, arc: 0, arcSeg: null, beat: 0, line: null,
+      way: null, waySeg: null, came: null, ways: 1, brief: false, hadWay: false, worked: 0,
       worker: { id: u.id, dress: dressFor(u.id, false, u.name), tired: 0, w: 0, x: rest.x, z: rest.z, heading: 0, lift: 0, pose: new Pose().reset(), aboard: false, rig: null },
     }
   }
@@ -423,11 +458,18 @@ export class Crews {
     this.sync(snap)
     this.goals(snap)
     const rides = this.assign(snap)
-    const from: CrewFrom[] = this.actors.map(a => ({
-      id: a.id, slot: a.slot, farmer: a.kind === 'farmer', ride: rides.get(a.id)!, goal: a.goal,
-      at: a.aboard && a.rig ? { x: a.rig.x, z: a.rig.z } : { x: a.x, z: a.z }, machine: a.rig ? { x: a.rig.x, z: a.rig.z } : null,
-      working: a.line && a.aboard ? a.line.key : '',
-    }))
+    const from: CrewFrom[] = this.actors.map(a => {
+      const working = a.line && a.aboard ? a.line.key : ''
+      // Someone who lives out comes in by the road each morning, when the days go slowly enough for it to be seen.
+      const u = snap.units.find(w => w.id === a.id)!
+      const arrives = this.arriving && u.livesOut && (u.worked.length > 0 || u.to !== u.at)
+      if (arrives) { a.aboard = false; a.x = GATE.x; a.z = GATE.z }
+      return {
+        id: a.id, slot: a.slot, farmer: a.kind === 'farmer', ride: rides.get(a.id)!, goal: a.goal,
+        at: a.aboard && a.rig ? { x: a.rig.x, z: a.rig.z } : { x: a.x, z: a.z }, machine: a.rig ? { x: a.rig.x, z: a.rig.z } : null,
+        working, arrives,
+      }
+    })
     const was = new Map(this.progress)
     const plans = planDay(snap, shown, from, samples, snap.farm.pond < this.pondWas - 0.02, key => was.get(key), this.stopped)
     this.pondWas = snap.farm.pond
@@ -442,6 +484,11 @@ export class Crews {
       a.segs = plans[k]
       a.clockSeg = -2
       a.u = a.lastT = 0
+      a.brief = (a.hadWay && a.worked < 0.45 * this.daySec) || (from[k].arrives === true && a.worked > 0)
+      a.hadWay = false
+      a.worked = 0
+      a.way = a.waySeg = a.came = null
+      a.ways = Math.max(1, a.segs.filter(s => lengthOf(s.walkTo) + lengthOf(s.travel) > 3).length)
       a.next = a.segs.map(() => 0)
       a.segs.forEach((s, j) => { for (const r of s.reveals) out.push({ ...r, unit: k, seg: j }) })
     })
@@ -461,8 +508,13 @@ export class Crews {
 
   // Finish any staged work at once (for screenshots).
   settle(): void {
-    for (const a of this.actors) { a.clockSeg = a.segs.length - 1; a.segClock = 1e6; a.u = a.lastT = 1 }
+    for (const a of this.actors) { a.clockSeg = a.segs.length - 1; a.segClock = 1e6; a.u = a.lastT = 1; a.way = null; a.waySeg = a.came = a.segs[a.segs.length - 1] ?? null }
     this.stageHold = -1
+  }
+
+  // Still on the way to the day's work: what that work changed on the land waits for them.
+  late(unit: number): boolean {
+    return !!this.actors[unit]?.way
   }
 
   segsInfo(): string[] {
@@ -541,7 +593,9 @@ export class Crews {
     const far = 0
     this.literal = snap.mode === 'season' && !f.advancing && f.pace > 0.5
     this.stopped = !f.advancing
-    this.pace = clamp(f.dist / 40, 2.6, 14)
+    this.arriving = f.advancing && f.speed === 1
+    this.daySec = f.daySec
+    this.pace = this.literal ? PACE.work : clamp(f.dist / 40, 2.6, 14)
     // the work goes on while the clock runs, while the day is being played out, and (literal) until everyone is done
     const going = snap.mode === 'season' ? f.advancing || f.dayT < 1 || (this.literal && this.actors.some(a => a.u < 1)) : snap.mode !== 'title'
     GRIME.value.set(0.52, 0.42, 0.31).lerp(V.set(0.2, 0.15, 0.11), clamp(env.wet * 1.4 - 0.3, 0, 1))
@@ -686,6 +740,8 @@ export class Crews {
   private far = 0
   private perUnit = 1000
   private literal = false
+  private arriving = false
+  private daySec = 1.4
   private stopped = false
   private pace = 6
   private progress = new Map<string, number>()
@@ -700,7 +756,7 @@ export class Crews {
 
   private driveTo(r: Rig, x: number, z: number, heading: number, moved: number, dt: number, exact = false): void {
     // (a real jump: a new screen, a day held at another point by a tool)
-    const jump = moved > 60
+    const jump = moved > 15
     let d = heading - r.heading
     while (d > Math.PI) d -= Math.PI * 2
     while (d < -Math.PI) d += Math.PI * 2
@@ -717,12 +773,13 @@ export class Crews {
     // never jumping, when the clock starts again); with it stopped it goes on at a person's or a machine's own pace,
     // unless a tool holds the day at a point.
     const jumped = f.dayT < a.lastT - 1e-6 || f.dayT > a.lastT + 0.2
-    if (!this.literal || jumped) a.u = jumped || !f.advancing ? f.dayT : Math.min(f.dayT, a.u + f.dt * 3)
+    const held = jumped || (!f.advancing && !this.literal)
+    if (held) { a.u = f.dayT; a.way = null }
+    else if (f.advancing && !a.way) a.u = Math.min(f.dayT, a.u + f.dt * 3)
     a.lastT = f.dayT
     let segIdx = -1
     for (let s = 0; s < a.segs.length; s++) if (a.u >= a.segs[s].start) segIdx = s
     const seg: Seg | null = segIdx >= 0 ? a.segs[segIdx] : null
-    if (segIdx !== a.clockSeg) { a.clockSeg = segIdx; a.segClock = 0 } else a.segClock += f.dt * (f.advancing ? 1 : f.pace)
     const pose = a.pose.reset()
     const rig = a.rig
     const passed = (arc: number) => f.passed(k, segIdx, arc)
@@ -756,12 +813,30 @@ export class Crews {
     seg.polys ??= { walkTo: new Poly(seg.walkTo), travel: new Poly(seg.travel), path: new Poly(seg.path) }
     const { walkTo, travel, path } = seg.polys
     const lw = seg.walkTo.length ? walkTo.length : 0, lt = travel.length
-    let tShare = seg.kind === 'travel' ? 1 : lw + lt > 0.3 ? Math.min(0.4, 0.12 + (lw + lt) / (150 * K)) : 0
-    if (this.literal && a.u < 1) {
+    // Coming to a part of the day with the clock running (or, stopped, to what the interface waits for): the way
+    // there is seen first, on its own clock, and the work begins when they are there.
+    const staged = seg.kind === 'sample' || seg.kind === 'dig'
+    if (a.waySeg !== seg) {
+      a.waySeg = seg
+      a.way = a.came = null
+      if (!held && (f.advancing || (this.literal && staged)) && a.u < seg.start + span * 0.5) {
+        a.way = this.wayTo(a, seg, f, lw, lt + (seg.kind === 'sample' ? path.length : 0))
+        a.came = seg
+        a.u = seg.start
+        if (a.way) a.hadWay = true
+      }
+    }
+    if (segIdx !== a.clockSeg) { a.clockSeg = segIdx; a.segClock = 0 } else if (!a.way) a.segClock += f.dt * (f.advancing ? 1 : f.pace)
+    if (!a.way) a.worked += f.dt
+    const direct = a.came === seg
+    let tShare = direct ? 0 : seg.kind === 'travel' ? 1 : lw + lt > 0.3 ? Math.min(0.4, 0.12 + (lw + lt) / (150 * K)) : 0
+    if (this.literal && a.u < 1 && !a.way) {
       // metres a second into a share of this part of the day
       const p0 = Math.min(1, (a.u - seg.start) / span)
       let dp: number
-      if (seg.kind === 'travel' || p0 < tShare) {
+      if (direct && staged) dp = seg.kind === 'dig' ? f.dt / STAGE_S.dig : 0
+      else if (direct && seg.kind === 'travel') dp = 1
+      else if (seg.kind === 'travel' || p0 < tShare) {
         const q = seg.kind === 'travel' ? p0 : p0 / tShare, e = q * q * (3 - 2 * q)
         const wShare = lw > 0 ? lw / (lw + lt * 0.5) : 0
         const driving = e >= wShare && !!seg.ride && !!rig
@@ -773,15 +848,28 @@ export class Crews {
       else dp = ((PACE.walk * 0.7 * f.dt) / Math.max(1, path.length)) * (1 - tShare)
       a.u = Math.min(1, a.u + dp * span)
     }
-    let p = Math.min(1, (a.u - seg.start) / span)
+    let p = direct && seg.kind === 'travel' ? 1 : Math.min(1, (a.u - seg.start) / span)
     if (seg.kind === 'sample') {
-      // However long the day is, the hill is up or the last row out inside two and a half seconds, and the day waits for it.
-      const drive = lw + lt > 0.3 ? STAGE_DRIVE_S : 0, work = STAGE_S[seg.kind]
+      // However long the day is, the hill is up inside two and a half seconds, and the day waits for it.
+      const drive = direct ? 0 : lw + lt > 0.3 ? STAGE_DRIVE_S : 0, work = direct ? SAMPLE_S : STAGE_S.sample
       p = Math.min(1, a.segClock / (drive + work))
       tShare = drive / (drive + work)
       if (p < 0.92 && f.season) this.stageHold = this.stageHold < 0 ? seg.end - 1e-3 : Math.min(this.stageHold, seg.end - 1e-3)
     }
-    if (p < tShare || seg.kind === 'travel') {
+    if (a.way) {
+      const wy = a.way
+      if (going) wy.t += f.dt
+      const s = wayAt(wy)
+      if (s < lw) foot(walkTo.at(s))
+      else if (s <= lw + lt || seg.kind !== 'sample') {
+        const e = travel.at(Math.min(lt, s - lw))
+        if (seg.ride && rig) ride(e)
+        else foot(e)
+      } else foot(path.at(s - lw - lt))
+      passed(-1)
+      if (tractor && seg.ride === 'tractor' && seg.kind !== 'travel') tractor.setImplement(seg.site ? (seg.kind === 'haul' ? 'trailer' : 'none') : implementFor(seg.kind, f.snap.farm.equipment.includes('harvester')))
+      if (wy.t >= wy.T) a.way = null
+    } else if (p < tShare || seg.kind === 'travel') {
       // on the way: on foot to the machine if it stands elsewhere, then the drive; or on foot all the way
       const q = seg.kind === 'travel' ? p : p / tShare
       const e = q * q * (3 - 2 * q)
@@ -832,7 +920,8 @@ export class Crews {
             line.arc = 0
             line.seg = seg
           }
-          const on = w < 1 && line.arc < line.poly.length - 0.5
+          // (a day's digging seen with the clock stopped: the band is out in a moment, and the digger works on along its row)
+          const on = (w < 1 || (this.literal && seg.kind === 'dig')) && line.arc < line.poly.length - 0.5
           if (on && going) line.arc = Math.min(line.poly.length, line.arc + this.pace * f.dt)
           ride(line.poly.at(line.arc))
           rig.state.working = on ? 1 : 0
@@ -842,14 +931,14 @@ export class Crews {
         if (seg.kind === 'dig') this.dug(a, segIdx, seg, arc, f.snap)
       } else if (seg.kind === 'sample') {
         // The test dig is staged: the walk in, the fork set and the hill lifted, then a moment to look.
-        const go = Math.min(1, w / 0.5)
+        const go = direct ? 1 : Math.min(1, w / 0.5)
         const e = path.at(go * path.length)
         if (go < 1) foot(e)
         else {
           px = e.x; pz = e.z
           a.heading = -Math.PI / 2
           a.aboard = false
-          const dig = clamp((w - 0.5) / 0.26, 0, 1)
+          const dig = direct ? clamp(w / 0.5, 0, 1) : clamp((w - 0.5) / 0.26, 0, 1)
           if (dig < 1) forking(pose, dig)
           else {
             // the fork stood in the ground at his side, and the hill's tubers on a tray to be looked at
@@ -871,7 +960,7 @@ export class Crews {
             }
           }
         }
-        passed(w >= 0.64 ? Infinity : -1)
+        passed(w >= (direct ? 0.5 : 0.64) ? Infinity : -1)
       } else {
         // Walking the rows at a walker's pace, stopping every few steps: the scout bends to a plant; pulling blighted
         // plants, a stoop at each and a sack filling. What they find or pull shows over the day (or, literally, as
@@ -904,6 +993,23 @@ export class Crews {
     this.figure(a, pose, big)
     this.ring(a.x, heightAt(a.x, a.z), a.z, this.mark, a, f, this.far)
     return null
+  }
+
+  // The way to a part of the day's work: how long it is seen for, and how much of it.
+  private wayTo(a: Actor, seg: Seg, f: CrewFrame, lw: number, rest: number): Way | null {
+    const L = lw + rest
+    if (L < 3) return null
+    // a pace that reads from where the camera is, as the work's does
+    const afoot = clamp(f.dist / 40, 2.8, 9)
+    const v = seg.ride && a.rig ? clamp(f.dist / 16, 6, 30) : afoot
+    let lo = WAY_DAY.least * f.daySec, hi = WAY_DAY.most * f.daySec
+    if (a.brief) lo = hi = WAY_DAY.brief * f.daySec
+    const st = WAY_STAGED[seg.kind]
+    if (st) { lo = Math.min(lo, st[0]); hi = Math.min(hi, st[1]) }
+    lo /= a.ways
+    hi /= a.ways
+    const T = clamp(L / v, lo, hi), reach = v * T
+    return { t: 0, T, L, reach, cut: L > reach * 1.25, lead: lw > 0.3 ? Math.min(lw, afoot * T * WAY_LEAD) : reach * WAY_LEAD }
   }
 
   // Not at work: a Sunday on the porch, laid up in a chair, waiting in the yard, or stood where the last job ended.

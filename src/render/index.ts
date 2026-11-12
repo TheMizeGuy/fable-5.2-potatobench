@@ -1,7 +1,7 @@
 // The field view: the farm in its country, drawn with three.js, played like a strategy map.
 // Falls back to a flat drawing without WebGL.
 import { Color, PCFShadowMap, Raycaster, Scene, Triangle, Vector2, Vector3, WebGLRenderer, type Object3D } from 'three'
-import type { App } from '../game/app.ts'
+import { DAYS_PER_SECOND, type App } from '../game/app.ts'
 import type { CreateFieldView, FieldView } from '../game/contracts.ts'
 import { FIELD_COUNT, HILLS } from '../sim/index.ts'
 import { CameraRig, HOME_FIELD, MOVE_MS, type Pose, type TierName, type Viewport } from './camera.ts'
@@ -364,8 +364,10 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   // Which way the digger is going over each field being dug, for where the tubers land.
   const digDir = new Map<number, { dx: number; dz: number }>()
 
-  function flush(animate: boolean): void {
-    for (const r of pending) reveal(r, animate && pending.length < 200)
+  // (late: what someone still on the way to their work has yet to do stays as it is; if the job goes on, the next
+  // day's plan takes those hills up again)
+  function flush(animate: boolean, late = false): void {
+    for (const r of pending) if (!late || !crews.late(r.unit)) reveal(r, animate && pending.length < 200)
     pending = []
   }
 
@@ -384,7 +386,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     const next = snapshot(app)
     const prev = snap
     const sameSeason = dayPassed && !first && prev.mode === 'season' && next.mode === 'season' && prev.year === next.year
-    if (sameSeason) flush(app.speed < 3 && !reduced)
+    if (sameSeason) flush(app.speed < 3 && !reduced, true)
     snap = next
     if (next.mode !== 'season') {
       harvest.clear()
@@ -660,6 +662,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     crews.place({
       dt, dayT, advancing: app.speed > 0, pace: replayPace, time, reduced, idle: snap.mode !== 'season' && snap.mode !== 'title',
       season: snap.mode === 'season', dist: rig.cur.dist, dust: env.dry, dark: clamp((LAMP.value * lit.exposure) / 5, 0, 1), picked: app.unit, particles, passed, snap, env, camera: cam,
+      speed: app.speed, daySec: 1 / DAYS_PER_SECOND[Math.max(1, app.speed)],
     })
     // Smoke from the kitchen chimney: all day in the cold, a thread of it at supper time. It goes on rising and leans
     // away downwind, a plume a few roofs high: from two fields off it says where the house is and which way the wind sets.

@@ -311,7 +311,7 @@ function changed(a: HillDisplay, look: HillLook, ridge: number, kind: JobKind): 
 
 // A person as the day begins: where they stand, what they will be on today, and where that machine stands now.
 // working: the row work their machine was at when the day began ('field|kind'), or ''.
-export interface CrewFrom { id: number; at: Pt; slot: number; ride: Ride; machine: Pt | null; farmer: boolean; goal: Spot | null; working: string }
+export interface CrewFrom { id: number; at: Pt; slot: number; ride: Ride; machine: Pt | null; farmer: boolean; goal: Spot | null; working: string; arrives?: boolean }
 
 // How far each job had got when the day began: by field and kind, 0..1 (undefined when it was not seen before).
 export type Before = (key: string) => number | undefined
@@ -419,6 +419,10 @@ export function planDay(snap: Snapshot, shown: HillDisplay[][], crews: CrewFrom[
         const tractor = ROW_JOBS.has(w.kind) && ride === 'tractor'
         let path: Pt[]
         const start = parkSpot(w.field, crew.slot)
+        // A day's digging is never literal: the interface waits to see the day's band out, so it plays as a running day does.
+        const lit = (literal && w.kind !== 'dig') || w.kind === 'sample'
+        // on foot in this field since yesterday: carry on from where they stand
+        const afoot = !tractor && !lit && w.kind !== 'scout' && !crew.arrives && inField(w.field, at)
         if (tractor) {
           // the dug ground is the band the dug hills lie in (the simulation digs in rows from the top)
           let [p0, p1] = band
@@ -428,11 +432,11 @@ export function planDay(snap: Snapshot, shown: HillDisplay[][], crews: CrewFrom[
             p1 = (Math.max(...rows) + 1) / deep
           }
           // literally: a pass through each stretch of the band; with the clock running: the band's leading row
-          path = literal ? crossings(w.field, p0, p1, Math.max(1, Math.round((p1 - p0) * (HILLS / COLS))), (machine ?? at).x) : crossings(w.field, Math.max(p0, p1 - 0.004), p1, 1, (machine ?? at).x)
+          path = lit ? crossings(w.field, p0, p1, Math.max(1, Math.round((p1 - p0) * (HILLS / COLS))), (machine ?? at).x) : crossings(w.field, Math.max(p0, p1 - 0.004), p1, 1, (machine ?? at).x)
         } else if (w.kind === 'scout') {
           path = scoutWalk(w.field, crew.slot % 2 === 1)
         } else {
-          path = [{ x: start.x - 0.5 * S, z: start.z + 0.6 * S }]
+          path = [afoot ? { x: at.x, z: at.z } : { x: start.x - 0.5 * S, z: start.z + 0.6 * S }]
           const byRow = hills.slice().sort((a, b) => (Math.floor(a / COLS) - Math.floor(b / COLS)) || ((a % COLS) - (b % COLS)) * (Math.floor(a / COLS) % 2 ? 1 : -1))
           for (const h of byRow) {
             const p = hillPos(w.field, h)
@@ -450,7 +454,6 @@ export function planDay(snap: Snapshot, shown: HillDisplay[][], crews: CrewFrom[
           path.push({ x: last.x, z: up ? fr.z0 - 0.7 * S : fr.z1 + 0.7 * S })
         }
         const poly = new Poly(path)
-        const lit = literal || w.kind === 'sample'
         // the ground changes once the machine and what it draws are clear of it
         const lag = tractor ? (w.kind === 'dig' ? 1.7 : w.kind === 'plant' ? 1.1 : 1.0) * S + SX / 2 : 0.05
         // With the clock running the band fills in over the day, from its top down, a stretch of a row at a time.
@@ -466,8 +469,9 @@ export function planDay(snap: Snapshot, shown: HillDisplay[][], crews: CrewFrom[
         // With the clock running the work is taken up some way along the row, not always at its end; and a machine
         // already at work in this field carries on from where it is (`from` below zero), with no drive to it.
         const here = tractor && !lit && !!machine && inField(w.field, machine) && crew.working === key
-        const from = lit ? 0 : here ? -1 : (0.08 + 0.55 * some(segs.length)) * poly.length
-        const { walkTo, travel } = here ? { walkTo: [], travel: [machine!] } : go(path[0], tractor ? 'tractor' : '')
+        const from = lit || afoot ? 0 : here ? -1 : (0.08 + 0.55 * some(segs.length)) * poly.length
+        // (someone who lives out comes in by the road to the machine where it was left)
+        const { walkTo, travel } = here ? { walkTo: crew.arrives ? way(at, machine!) : [], travel: [machine!] } : afoot ? { walkTo: [], travel: [at] } : go(path[0], tractor ? 'tractor' : '')
         if (from > 0) { const e = poly.at(from); travel.push({ x: e.x, z: e.z }) }
         segs.push({ kind: w.kind, field: w.field, walker: !tractor, ride: tractor ? 'tractor' : '', walkTo, travel, path, reveals, start: 0, end: 0, site: '', lit, from })
         at = lit ? path[path.length - 1] : travel[travel.length - 1]
