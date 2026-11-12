@@ -251,7 +251,9 @@ test('a guided first year: offered on a new farm, taken, and followed through th
         break
       case 'field': {
         // It asks for a field's tag: the one its fist marks, or any on the screen.
-        const marked = page.locator(`#ui [data-testid="${target}"]`).first()
+        let marked = page.locator(`#ui [data-testid="${target}"]`).first()
+        // The tags settle again when the view moves: the slip names the field it means now.
+        if (!(await marked.isVisible())) { await page.waitForTimeout(800); marked = page.locator(`#ui [data-testid="${(await slip(page)).target}"]`).first() }
         if (!(await marked.isVisible())) {
           // Out of view, the slip says how to bring the farm back.
           await expect(page.getByTestId('guide-lost')).toBeVisible()
