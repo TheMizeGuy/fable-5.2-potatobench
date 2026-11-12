@@ -127,7 +127,7 @@ export function cellarScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
           grewWith !== undefined ? ` This crop grew from seed with about ${F.pct(grewWith)} virus; ${v.name} ${R.seedWord(v)}.` : '')) : null)
   }
 
-  return {
+  const screen: Screen = {
     el,
     notes: notesSlot,
     update() {
@@ -196,4 +196,7 @@ export function cellarScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
       return [t, 0, Math.max(0, innerHeight - sheet.getBoundingClientRect().top), 0]
     },
   }
+  // Drawn at once, so the way on is there the moment the last screen's is gone.
+  screen.update()
+  return screen
 }

@@ -327,7 +327,7 @@ export function ledgerScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
   const book = h('section', { class: 'book ledger-sheet sys', 'aria-label': 'The year end' })
   const el = h('main', { class: 'ledger-screen' }, top.el, book)
   let counted = ''
-  return {
+  const screen: Screen = {
     el,
     update() {
       const c = app.campaign
@@ -399,7 +399,7 @@ export function ledgerScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
       })
       // The year-end figure counts up once, when the book first opens.
       const year = `${c.year}:${c.history.length}`
-      if (counted !== year) {
+      if (counted !== year && book.isConnected) {
         counted = year
         const total = book.querySelector<HTMLElement>('[data-cash]')
         if (total && !occasion) count(total, y.cashStart, y.cashEnd, n => F.money(n))
@@ -407,6 +407,9 @@ export function ledgerScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
     },
     insets: () => bookInsets(ctx, top.el, book),
   }
+  // Drawn at once, so the way on is there the moment the last screen's is gone.
+  screen.update()
+  return screen
 }
 
 export function overScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
@@ -414,7 +417,7 @@ export function overScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
   const top = topBar(ctx, o)
   const book = h('section', { class: 'book ledger-sheet occasion sys', 'aria-label': 'The end' })
   const el = h('main', { class: 'ledger-screen' }, top.el, book)
-  return {
+  const screen: Screen = {
     el,
     update() {
       const c = app.campaign
@@ -450,4 +453,7 @@ export function overScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
     },
     insets: () => bookInsets(ctx, top.el, book),
   }
+  // Drawn at once, so the way on is there the moment the last screen's is gone.
+  screen.update()
+  return screen
 }
