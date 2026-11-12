@@ -90,15 +90,14 @@ export function clock(ctx: Ctx, compact: boolean): HTMLElement {
     const next = (at % 3 + 1) as 1 | 2 | 3
     return h('div', { class: 'clock', role: 'group', 'aria-label': 'Clock' }, pause,
       h('button', { class: 'nicon speed-x num', type: 'button', testid: 'speed-cycle', onclick: () => app.setSpeed(next) },
-        h('span', { 'aria-hidden': 'true' }, `${at}×`),
-        h('span', { class: 'sr' }, `${SPEED_NAME[at]}${paused ? ', paused' : ''}. Change to ${SPEED_NAME[next]}`)))
+        `${at}×`, h('span', { class: 'sr' }, ` speed${paused ? ', paused' : ''}. Change to ${SPEED_NAME[next]}`)))
   }
   return h('div', { class: 'clock', role: 'group', 'aria-label': 'Clock' }, pause,
     ([1, 2, 3] as const).map(k => h('button', {
       class: `nicon speed-x num${paused && k === at ? ' armed' : ''}`, type: 'button', testid: `speed-${k}`, 'aria-pressed': String(app.speed === k),
       title: keys ? `${SPEED_NAME[k]} (F steps through the speeds; + and − too)` : undefined,
       onclick: () => app.setSpeed(k),
-    }, h('span', { 'aria-hidden': 'true' }, `${k}×`), h('span', { class: 'sr' }, `${SPEED_NAME[k]}${paused && k === at ? ', the speed it goes on at' : ''}`))))
+    }, `${k}×`, h('span', { class: 'sr' }, ` speed${paused && k === at ? ', the speed it goes on at' : ''}`))))
 }
 
 // How far along a goal is, in a figure: "2/4", or "40%".
