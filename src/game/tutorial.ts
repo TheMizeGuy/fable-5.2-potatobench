@@ -21,6 +21,8 @@ export interface Look {
   input: Input
   // Why the clock stopped itself, when it did ('' when the player stopped it, or it runs).
   stopped?: string
+  // A question on the screen that is not a telegram: 'spray' while the season's spraying question is up.
+  asking?: string
 }
 
 // Where a lesson points: a control by its test id (the first of several that is on screen), a field's tag, a field's
@@ -179,14 +181,17 @@ export const LESSONS: Lesson[] = [
     // The routine lists planting by the one planting rule; a planting already begun counts too, for a quick crew.
     when: l => inSeason(l) && !anyField(l, f => f.emergeDay >= 0) && (jobOn(l, 'plant') || anyField(l, f => f.plantDay >= 0 && (l.c?.season?.day ?? 0) - f.plantDay <= 3)),
     done: (l, g, since) => g.has('pan') || g.has('zoom') || (!!since && !!l.c?.season && l.c.season.day >= since.d + 3),
-    ask: l => by(l, 'Planting has begun. Roll the wheel over the fields to come closer and watch.', 'Planting has begun. Pinch the fields to come closer and watch.', 'Planting has begun. The arrow keys bring you over the fields to watch.'),
+    ask: l => {
+      const a = auto(l, 'plant') ? 'Planting has begun with no order: routine work starts by itself.' : 'Planting has begun.'
+      return `${a} ${by(l, 'Roll the wheel over the fields to watch.', 'Pinch the fields to come closer and watch.', 'The arrow keys bring you over the fields.')}`
+    },
     why: () => 'The clock is held for this note, and goes on once you have looked.',
     point: l => ({ unit: farmer(l) }),
   },
   {
     id: 'person', part: 'opening', moment: true, holds: true, name: 'Meet your people', read: true, uses: ['unit'],
     when: (l, g) => inSeason(l) && g.passed('watch'),
-    done: (l, g, since) => g.has('noted:person') || g.has('unit') || (!!since && !!l.c?.season && l.c.season.day >= since.d + 4),
+    done: (l, g, since) => g.has('noted:person') || g.has('unit'),
     ask: l => by(l, 'Click this face: it is you. In the first year you do every job yourself.', 'Tap this face: it is you. In the first year you do every job yourself.', 'This face is you. In the first year you do every job yourself.'),
     why: () => 'Hands come later. A click on anyone on the land shows who they are and what they are doing.',
     point: l => ({ unit: farmer(l) }),
@@ -205,7 +210,7 @@ export const LESSONS: Lesson[] = [
   {
     id: 'routine', part: 'opening', moment: true, name: 'Routine work and your calls', read: true,
     when: (l, g) => inSeason(l) && routineJob(l) && g.passed('person'),
-    done: (l, g, since) => g.has('noted:routine') || (!!since && !!l.c?.season && l.c.season.day >= since.d + 5),
+    done: (l, g, since) => g.has('noted:routine'),
     ask: () => 'Routine work goes on the list by itself: planting, hilling, walking the rows, digging.',
     why: () => 'Your calls come as stamps on the fields: spray, water, kill the vines. Who does what switches any of them.',
     point: () => ({ testid: ['queue-*'] }),
@@ -221,7 +226,7 @@ export const LESSONS: Lesson[] = [
   {
     id: 'list', part: 'opening', name: 'The list of orders', read: true,
     when: (l, g) => inSeason(l) && g.passed('person') && !!l.c?.season?.jobs.length,
-    done: (l, g, since) => g.has('noted:list') || (!!since && !!l.c?.season && l.c.season.day >= since.d + 4),
+    done: (l, g, since) => g.has('noted:list'),
     ask: l => by(l, 'Orders wait on the list at the foot. Point at one: who takes it, or what it waits for.', 'Orders wait on the list at the foot. Tap one: who takes it, or what it waits for.', 'Orders wait on the list at the foot. Backspace takes the last one off.'),
     why: () => 'Its cross takes it off the list; another can be put first.',
     point: () => ({ testid: ['queue-*'] }),
@@ -255,6 +260,14 @@ export const LESSONS: Lesson[] = [
 
   // The first year: each the first time it comes.
   {
+    id: 'sprayask', part: 'year', name: 'How spraying is done', urgent: true,
+    when: l => inSeason(l) && l.asking === 'spray',
+    done: (l, _g, since) => !!since && l.asking !== 'spray',
+    ask: l => `Blight weather: the crew asks how spraying is to be done. ${by(l, 'Click one reply.', 'Tap one reply.', 'Tab to a reply, then Enter.')}`,
+    why: () => 'Who does what, or a field\'s spray order, changes the answer later.',
+    point: () => ({ testid: ['spray-way-auto', 'spray-ask'] }),
+  },
+  {
     id: 'telegram', part: 'year', name: 'Answer a telegram', urgent: true,
     when: l => inSeason(l) && !!l.c && l.c.incidents.length > 0,
     done: (l, _g, since) => !!since && !!l.c && !l.c.incidents.some(i => i.id === since.inc),
@@ -272,7 +285,7 @@ export const LESSONS: Lesson[] = [
   {
     id: 'boards', part: 'year', name: 'Read the forecast', read: true,
     when: (l, g) => inSeason(l) && g.passed('person') && !!l.c && S.forecast(l.world, l.c, 5).some(d => d.rainChance >= 60 || d.blight >= 2 || d.frostChance >= 40),
-    done: (l, g, since) => g.has('noted:boards') || (!!since && !!l.c?.season && l.c.season.day >= since.d + 3),
+    done: (l, g, since) => g.has('noted:boards'),
     ask: () => 'Top left, the forecast: rain, frost and blight risk, five days ahead.',
     why: () => 'The yellow slip under it is your next goal, and Show me finds where it is done.',
     point: () => ({ testid: ['forecast'] }),
@@ -303,7 +316,7 @@ export const LESSONS: Lesson[] = [
   {
     id: 'sprayauto', part: 'year', name: 'Leave spraying to the crew', read: true,
     when: (l, g) => inSeason(l) && g.passed('spray') && !auto(l, 'spray'),
-    done: (l, g, since) => auto(l, 'spray') || g.has('noted:sprayauto') || (!!since && !!l.c?.season && l.c.season.day >= since.d + 6),
+    done: (l, g, since) => auto(l, 'spray') || g.has('noted:sprayauto'),
     ask: l => { const o = l.c ? S.sprayOutlook(l.world, l.c) : null; return o && o.passes ? `Spraying can be left to the crew for the season: about ${o.passes} passes, about ${usd(o.dollars)}.` : 'Spraying can be left to the crew for the season, paying for each spray as it is done.' },
     why: () => 'Who does what switches any kind of work between by itself and asking you.',
   },
@@ -339,7 +352,7 @@ export const LESSONS: Lesson[] = [
   {
     id: 'owed', part: 'year', name: 'What the year end takes', read: true,
     when: l => inSeason(l) && (jobOn(l, 'dig') || anyField(l, f => f.status === 'digging' || f.status === 'dug' || f.inField >= 0.5)),
-    done: (l, g, since) => g.has('noted:owed') || (!!since && !!l.c && (l.c.phase !== 'season' || (!!l.c.season && l.c.season.day >= since.d + 5))),
+    done: (l, g, since) => g.has('noted:owed') || (!!since && !!l.c && l.c.phase !== 'season'),
     ask: () => `The crop pays for the year. At the year end ${owed()} comes due: the bank's note and the household's keep.`,
     why: l => l.c ? `Sold today, everything would leave the farm ${usd(S.moneyNow(l.world, l.c).after)} after those bills.` : 'Sell or store with that in mind.',
     point: () => ({ testid: ['cash'] }),
@@ -452,7 +465,7 @@ export const LESSONS: Lesson[] = [
   {
     id: 'calls2', part: 'spring', name: 'The season\'s calls', read: true,
     when: l => inSeason(l) && !!l.c && l.c.history.length > 0,
-    done: (l, g, since) => g.has('noted:calls2') || (!!since && !!l.c?.season && l.c.season.day >= since.d + 5),
+    done: (l, g, since) => g.has('noted:calls2'),
     ask: () => 'A new season. The crew plants and tends by itself; the calls are yours: spray, water, kill the vines.',
     why: () => 'Blight weather shows in the forecast first, and a stamp comes when each call is due.',
     point: () => ({ testid: ['forecast'] }),
@@ -658,11 +671,12 @@ export class Guide {
       if (r < rank) { best = x; rank = r }
     }
     // One lesson at a time: the one on show keeps its place until it passes, unless something urgent comes.
-    if (kept && best && !best.urgent) best = kept
-    // A lesson an urgent one stood in front of comes back after it.
-    if (best?.urgent && this.onShow && this.onShow !== best.id && !lesson(this.onShow)?.urgent) this.waiting = this.onShow
-    else if (best && !best.urgent) this.waiting = ''
-    this.onShow = best && !best.urgent ? best.id : ''
+    // A question, or a moment that holds the clock for a click, may come in front; the note it interrupted comes back.
+    const cuts = (x: Lesson | null) => !!x && (!!x.urgent || !!x.holds)
+    if (kept && best && !cuts(best)) best = kept
+    if (cuts(best) && this.onShow && this.onShow !== best!.id && !cuts(lesson(this.onShow) ?? null)) this.waiting = this.onShow
+    else if (best && !cuts(best)) this.waiting = ''
+    this.onShow = best && !cuts(best) ? best.id : ''
     if (best && !this.p.since[best.id]) {
       const c = l.c
       const since = { y: c?.year ?? 0, d: c?.season?.day ?? -1, m: c?.month ?? 0, inc: c?.incidents[0]?.id ?? -1 }

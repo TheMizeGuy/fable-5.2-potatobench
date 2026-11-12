@@ -32,7 +32,10 @@
 .guide.docked { box-shadow: var(--laid); animation: guide-in var(--t-slip) var(--ease-out); }
 .guide.offer .guide-yes { min-height: var(--touch); gap: 8px; padding: 0 14px 0 10px; }
 .guide.offer .guide-yes .fist { --i: 26px; }
-.spring-screen[data-layout='narrow'] .guide-slot, .spring-screen[data-layout='short'] .guide-slot { padding: 0 16px 8px; }
+.guide-slot.folded .guide.docked { gap: 2px; padding-top: 6px; }
+.guide-slot.folded .guide-head, .guide-slot.folded .guide-why { display: none; }
+.guide-slot.folded .guide-ask { font-size: var(--t-body, 15px); }
+.spring-screen[data-layout='narrow'] .guide-slot,.spring-screen[data-layout='short'] .guide-slot { padding: 0 16px 8px; }
 .spring-screen[data-layout='narrow'].selected .guide-slot { display: none; }
 .spring-screen[data-layout='short'] .guide.docked .guide-why { display: none; }
 @media (max-height: 760px) { .spring-screen[data-layout='narrow'] .guide.docked .guide-why { display: none; } }
@@ -44,6 +47,11 @@
 .guide-fist[data-to='l'] .fist { scale: -1 1; --nx: -3px; }
 .guide-fist[data-to='d'] .fist { rotate: 90deg; --nx: 0px; --ny: 3px; }
 .guide-fist[data-to='u'] .fist { rotate: -90deg; --nx: 0px; --ny: -3px; }
+
+/* Under the clock while the guide holds it: what stopped it, and that any speed goes on. */
+.guide-clocknote { position: absolute; left: 0; top: 0; display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; max-width: calc(100vw - 16px);
+  font: 400 var(--t-caption)/1.25 var(--f-text); color: var(--ink); background: var(--paper); box-shadow: var(--laid); border-left: 3px solid var(--ink); }
+.guide-clocknote .i { --i: 12px; flex: none; }
 
 /* The guide's own paper: every lesson, with the pencil tick for those behind the player. */
 .guide-list { display: grid; gap: var(--s3); }
