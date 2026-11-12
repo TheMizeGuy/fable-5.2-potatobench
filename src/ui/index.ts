@@ -5,6 +5,7 @@ import '@fontsource-variable/public-sans'
 import './style.css'
 import './instruments.css'
 import './papers.css'
+import './screens.css'
 import type { MountHud } from '../game/contracts.ts'
 import * as S from '../sim/index.ts'
 import { openAlmanac } from './almanac.ts'
@@ -122,14 +123,17 @@ export const mountHud: MountHud = (root, app, view) => {
       if (e.type === 'sample') {
         ctx.memo.sampleBefore[`${c.seed}:${c.year}:${e.field}:${e.day}`] = ctx.memo.estimates[e.field] ?? null
       } else if (e.type === 'dug') {
+        // What was known before the digger went in; the ticket itself waits for the last barrel to be weighed.
+        const key = lotKey(c, Number(e.data?.lot))
+        ctx.memo.digSoilT[key] = ctx.memo.soilT
+        ctx.memo.digEst[key] = ctx.memo.estimates[e.field] ?? null
+        ctx.memo.digSeen[key] = ctx.memo.seen[e.field] ?? null
+      } else if (e.type === 'weighed') {
         const lot = Number(e.data?.lot)
         const found = c.lots.find(l => l.id === lot)
         if (!found) continue
         const key = lotKey(c, lot)
-        ctx.memo.digSoilT[key] = ctx.memo.soilT
         ctx.memo.lots[key] = structuredClone(found)
-        ctx.memo.digEst[key] = ctx.memo.estimates[e.field] ?? null
-        ctx.memo.digSeen[key] = ctx.memo.seen[e.field] ?? null
         const staged = app.speed < 3
         ctx.awaiting++
         void view.whenShown('dig', e.field).then(() => {
@@ -156,7 +160,7 @@ export const mountHud: MountHud = (root, app, view) => {
       case 'alert': {
         const a = e.alert
         // The tray and the ticket speak for themselves, and a clean walk shows on the field's own card.
-        if (app.screen !== 'season' || a.type === 'sample' || a.type === 'dug' || (a.type === 'scout' && a.level !== 'bad')) break
+        if (app.screen !== 'season' || a.type === 'sample' || a.type === 'weighed' || (a.type === 'scout' && a.level !== 'bad')) break
         const short = alertShort(a)
         notes.push({ level: a.level, glyph: short.glyph, text: short.text, full: a.text, field: a.field, day: a.day })
         break

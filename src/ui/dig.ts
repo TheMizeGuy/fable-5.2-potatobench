@@ -36,6 +36,20 @@ function digDays(c: S.Campaign, lot: S.Lot): { start: number; end: number } {
   return { start: lot.dugDay, end: done >= lot.dugDay ? done : lot.dugDay }
 }
 
+// The day the last barrel came in and the ticket was cut, or -1.
+function weighDay(c: S.Campaign, lot: S.Lot): number {
+  return fieldLog(c, lot.field, 'weighed').pop()?.day ?? -1
+}
+
+// The nights the barrels in the field froze before they were hauled in.
+function barrelFrosts(c: S.Campaign, lot: S.Lot): number[] {
+  return fieldLog(c, lot.field, 'frozenInField').map(e => e.day).filter(d => d >= lot.dugDay)
+}
+
+function stonesWord(stones: number): string {
+  return stones >= 0.6 ? 'very stony' : stones >= 0.35 ? 'stony' : 'a little stony'
+}
+
 function digDatesText(c: S.Campaign, lot: S.Lot): string {
   const { start, end } = digDays(c, lot)
   return end > start ? `dug ${F.date(lot.year, start)} to ${F.date(lot.year, end)}` : `dug ${F.date(lot.year, start)}`
@@ -263,8 +277,10 @@ function facts(c: S.Campaign, lot: S.Lot): Facts {
 // Each cause in a phrase, for the ticket.
 function phrase(ctx: Ctx, c: S.Campaign, lot: S.Lot, cause: S.Cause): string {
   const x = facts(c, lot)
+  const inDay = weighDay(c, lot)
   switch (cause) {
-    case 'green': return x.f.hillPasses === 0 ? 'never hilled, so the tubers saw light' : x.f.hillPasses === 1 ? 'hilled once: a thin hill let the light in' : 'rain washed soil off the hills'
+    case 'green': return x.f.hillPasses === 0 ? 'never hilled, so the tubers saw light' : x.f.hillPasses === 1 ? 'hilled once: a thin hill let the light in'
+      : inDay - lot.dugDay > 2 ? `${inDay - lot.dugDay} days in the barrels in the sun` : 'rain washed soil off the hills'
     case 'scab': return 'dry soil in the weeks after the tubers set'
     case 'hollow': return 'growth stalled, then surged'
     case 'knob': return 'a dry spell broken by rain'
@@ -277,13 +293,16 @@ function phrase(ctx: Ctx, c: S.Campaign, lot: S.Lot, cause: S.Cause): string {
       return t !== undefined ? `dug with the soil at ${F.temp(t)}` : 'dug from cold ground'
     }
     case 'blight': return 'spores washed down from blighted leaf'
-    case 'frost': return 'froze in the ground before the dig'
+    case 'frost': {
+      const nights = barrelFrosts(c, lot)
+      return nights.length ? `froze in the barrels on ${F.list(nights.map(d => F.date(c.year, d, true)))}, before the haul` : 'froze in the ground before the dig'
+    }
     case 'rot': return 'sat in waterlogged soil'
     case 'small':
       if (x.killed && (!x.died || x.killed.day <= x.died.day)) return `the vines were killed on ${F.date(c.year, x.killed.day, true)}, before these sized`
       if (x.died) return x.died.text.startsWith('Frost') ? 'frost finished the vines before these sized' : x.died.text.startsWith('Blight') ? 'blight took the vines before these sized' : 'the vines went down before these sized'
       return 'dug green, before they sized'
-    case 'stone': return 'knocked on stones coming out of the ground'
+    case 'stone': return `${x.name} is ${stonesWord(x.f.stones)}: tubers knocked on stones in the digger`
   }
 }
 
@@ -299,8 +318,10 @@ function why(ctx: Ctx, c: S.Campaign, lot: S.Lot, cause: S.Cause): string {
       const p = f.hillPasses
       const storms: number[] = []
       if (planted) for (let d = planted.day; d < lot.dugDay && d < (c.season?.day ?? 0); d++) if (S.getDay(ctx.app.world, c.year, d).prcp >= S.STORM_MM) storms.push(d)
+      const barrels = weighDay(c, lot) - lot.dugDay
       return `Tubers that grew up into the light turn green and bitter. ${name} was ${p === 0 ? 'never hilled' : p === 1 ? 'hilled once' : 'hilled twice'}${p < 2 ? '; a second hilling before the rows close keeps them covered' : ''}.`
         + (storms.length ? ` Heavy rain on ${F.list(storms.map(date))} washed soil off the hills.` : '')
+        + (barrels > 2 ? ` The crop sat ${barrels} days in barrels in the field, and every bright day greens some of it.` : '')
         + (v.green >= 1.3 ? ` ${v.name} sets its tubers high in the hill.` : '')
     }
     case 'scab': {
@@ -335,6 +356,8 @@ function why(ctx: Ctx, c: S.Campaign, lot: S.Lot, cause: S.Cause): string {
       return `Rain washed spores off blighted leaves down into the hill. ${seen ? `Blight was first found in ${name} on ${date(seen.day)}` : 'Blight was never found on the leaves here, so it got in unseen'}${sprays ? `; the field was sprayed ${F.plural(sprays, 'time')}` : '; the field was not sprayed'}. A full hill and an early vine kill keep spores off the tubers.`
     }
     case 'frost': {
+      const nights = barrelFrosts(c, lot)
+      if (nights.length) return `A hard frost on ${F.list(nights.map(date))} caught the crop in barrels in ${name} before it was hauled in, and a fifth of what lay there froze. Another pair of hands on the haul, a second tractor or the truck brings it in as the digger goes.`
       const frosts = fieldLog(c, lot.field, 'frost').map(e => e.day)
       return `${frosts.length ? `Frost came on ${F.list(frosts.slice(-3).map(date))}` : 'Hard frost came before the dig'}, and tubers under a thin hill froze in the ground.${f.elev === 0 ? ' Cold air pools on the bottom land.' : ''} Dig before the hard frosts.`
     }
@@ -356,7 +379,7 @@ function why(ctx: Ctx, c: S.Campaign, lot: S.Lot, cause: S.Cause): string {
       }
       return `Under ${F.metric() ? '4 cm' : '1½ inches'} across: too small to grade, so they go to the starch factory with the culls. Tubers keep sizing until the vines die.${end}${v.maturity === 'late' || v.maturity === 'very late' ? ` ${v.name} needs a long season.` : ''}`
     }
-    case 'stone': return `Knocked on stones coming out of the ground. ${name} is stony, and stones bruise more under an unpractised hand on the digger. Picking the rocks off the field, with no crop in it, is the cure.`
+    case 'stone': return `${name} is ${stonesWord(f.stones)}, and tubers knocked on the stones as the digger lifted them went down to No. 2. Frost heaves more up every winter. Picking the rocks with no crop in takes most of them off, and a practised hand on the digger bruises fewer.`
   }
 }
 
@@ -496,6 +519,7 @@ export function ticket(ctx: Ctx, lotId: number, o: { fresh: boolean; staged?: bo
   const advice = S.advise(app.world, c).find(a => a.act === 'sell' && a.lot === lotId)
   const m = R.sproutMonth(lot.year, lot.dugDay, lot.variety, c.upgrades.vent)
   const dug = digDays(c, lot)
+  const inDay = weighDay(c, lot)
   let answered = false
   let worthEl: HTMLElement | null = null
 
@@ -529,7 +553,9 @@ export function ticket(ctx: Ctx, lotId: number, o: { fresh: boolean; staged?: bo
           h('dl', { class: 'ticket-form' },
             h('div', null, h('dt', { class: 't-label' }, 'Variety'), h('dd', null, v.name)),
             h('div', null, h('dt', { class: 't-label' }, 'Dug'), h('dd', { class: 'num' }, dug.end > dug.start ? `${F.date(lot.year, dug.start, true)} to ${F.date(lot.year, dug.end, true)}` : F.date(lot.year, dug.start, true))),
-            h('div', null, h('dt', { class: 't-label' }, 'Off'), h('dd', { class: 'num' }, F.area(S.FIELD_ACRES))),
+            inDay >= 0 && inDay > dug.end
+              ? h('div', null, h('dt', { class: 't-label' }, 'Hauled in'), h('dd', { class: 'num' }, F.date(lot.year, inDay, true)))
+              : h('div', null, h('dt', { class: 't-label' }, 'Off'), h('dd', { class: 'num' }, F.area(S.FIELD_ACRES))),
             h('div', null, h('dt', { class: 't-label' }, 'Ticket'), h('dd', { class: 'num' }, `${R.yearShort(c.year)}-${lot.id}`)))),
         est ? h('div', { class: 'carried' },
           h('span', { class: 't-label' }, 'You expected'),
@@ -576,6 +602,12 @@ export function ticket(ctx: Ctx, lotId: number, o: { fresh: boolean; staged?: bo
         if (worthEl) worthEl.textContent = F.money(now)
         const month = Math.round(S.lotCwt(lot) * S.STORE_COST)
         const st = S.storageInfo(c)
+        // The farm stand sells from the newest crop weighed, whatever is chosen here.
+        const s = c.season
+        const newest = s ? S.standLot(c, s) : undefined
+        const stand = S.hasBuilt(c, 'stand') && newest?.id === lot.id
+          ? `The farm stand sells about ${F.mass(S.STAND_CWT)} a day of this crop at twice the market price${s && s.day < S.dayIndex(c.year, S.STAND_FROM.month, S.STAND_FROM.dom) ? ', from August 1' : ''}, while it is the newest in.`
+          : ''
         box.replaceChildren(h('div', { class: `choice${deal ? ' three' : ''}` },
           advice && !delivered ? h('p', { class: 'choice-advice' }, F.localize(advice.why)) : null,
           deal ? h('div', { class: 'choice-opt' },
@@ -589,7 +621,9 @@ export function ticket(ctx: Ctx, lotId: number, o: { fresh: boolean; staged?: bo
           h('div', { class: 'choice-opt' },
             h('button', { class: 'btn big', type: 'button', testid: `lot-keep-${lot.id}`, onclick: () => { answered = true; if (fresh) ctx.say(`${F.mass(S.lotCwt(lot))} from ${name} went into the cellar.`, 'info'); close() } }, delivered ? 'Store the rest' : fresh ? 'Store it' : 'Keep it stored'),
             h('p', { class: 'sub' }, `${F.upper(R.aprilPhrase(c, v))}. Storing costs ${F.money(month)} a month, and it ${R.sproutText(m)}.`),
-            h('p', { class: `sub${st.stored > st.capacity + 0.5 ? ' warn-text' : ''}`, testid: 'store-houses' }, storageLine(c)))))
+            S.hasBuilt(c, 'packing') ? h('p', { class: 'sub good-text', testid: 'store-packing' }, `Packed over the winter, its No. 1 brings ${F.pct(S.PACK_NO1)} more and B size ${F.pct(S.PACK_B)} of the No. 1 price, less ${F.money(S.PACK_CHARGE)} a hundredweight.`) : null,
+            h('p', { class: `sub${st.stored > st.capacity + 0.5 ? ' warn-text' : ''}`, testid: 'store-houses' }, storageLine(c))),
+          stand ? h('p', { class: 'choice-stand sub', testid: 'ticket-stand' }, icon('house', 'ic s'), stand) : null))
       }
       draw()
       return box

@@ -1,12 +1,12 @@
-// The irrigation pond: a level bed cut into the foot of the slope and a dam banked up round it, highest on the brook's
-// side; raw while it is being dug and grassed over once it stands; its water at the level the farm has left in it, and wet mud between that and the full mark.
+// The irrigation pond: a level bed cut into the slope below the back yard and a dam banked up round it, highest on
+// the brook's side; raw while it is being dug and grassed over once it stands; its water at the level the farm has left in it, and wet mud between that and the full mark.
 import { BufferAttribute, BufferGeometry, Group, Mesh, MeshStandardMaterial } from 'three'
 import { POND, groundY } from './layout.ts'
 import { fbm2 } from './noise.ts'
 import { SNOW_RIME, linear, patch } from './shaders.ts'
 import type { FarmVis } from './state.ts'
 
-const RINGS = [0, 0.3, 0.55, 0.74, 0.86, 0.96, 1.04, 1.1, 1.28, 1.5, 1.72]
+const RINGS = [0, 0.3, 0.55, 0.74, 0.86, 0.96, 1.04, 1.1, 1.3, 1.55, 1.8]
 const SEGS = 44
 const BANK = 0.42
 
@@ -41,7 +41,7 @@ export class Pond {
         const k = RINGS[r]
         // the bed, the inner slope up to a level crest, the outer slope down into the meadow
         const up = k <= 0.74 ? bed(k, g) - g : k <= 1.1 ? top + (crest - top) * Math.min(1, (k - 0.74) / 0.22) ** 1.4 - g
-          : (crest - g) * Math.max(0, 1 - (k - 1.1) / 0.62) ** 1.4 - 0.07 * Math.min(1, (k - 1.1) / 0.62)
+          : (crest - g) * Math.max(0, 1 - (k - 1.1) / 0.7) ** 1.4 - 0.07 * Math.min(1, (k - 1.1) / 0.7)
         pos.push(x, g + up, z)
         rise.push(up)
         part.push(k <= 0.74 ? 0 : k < 1.0 ? 0.5 : 1)

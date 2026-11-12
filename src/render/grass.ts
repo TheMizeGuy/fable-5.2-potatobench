@@ -11,7 +11,7 @@ import {
 import { OFF_KIND } from './fields.ts'
 import { grassGeometry } from './geometry.ts'
 import {
-  BARN, DUFOUR_BARN, DUFOUR_HOUSE, DUFOUR_POTATO_HOUSE, HOME_WOODS, HOUSE, LAND, POND, POTATO_HOUSE, WALLS, brookHalf, brookZ, fieldAt, fieldMask, groundY,
+  BARN, DUFOUR_BARN, DUFOUR_HOUSE, DUFOUR_POTATO_HOUSE, HOME_WOODS, HOUSE, KEEP_CLEAR, LAND, POND, POTATO_HOUSE, WALLS, brookHalf, brookZ, fieldAt, fieldMask, groundY,
   oursAt, ridgeWoodAt, roadDist, tractAt, woodFront,
 } from './layout.ts'
 import { hash2, rng } from './noise.ts'
@@ -45,6 +45,8 @@ export class Grass {
       if (ridgeWoodAt(x, z) > 0.55 || tractAt(x, z, 0.2) >= 0) return false
       if (Math.hypot((x - POND.x) / (POND.rx * 1.2), (z - POND.z) / (POND.rz * 1.2)) < 1) return false
       for (const y of yards) if (Math.hypot(x - y.x, (z - y.z) * 0.7) < 3.6) return false
+      for (const c of KEEP_CLEAR) if (Math.hypot(x - c.x, z - c.z) < c.r) return false
+      for (const c of KEEP_CLEAR) if (Math.hypot(x - c.x, z - c.z) < c.r) return false
       return true
     }
     // size: 0..1, how tall this clump stands among its kind. Packed with its own number.
@@ -189,7 +191,7 @@ export class Grass {
       p.mesh.visible = true
       p.geo.instanceCount = Math.max(1, Math.round(p.all * k))
       p.thin.value = Math.min(2.4, 1 / Math.sqrt(k))
-      if (p.sward) p.fade.value.set(gone * 0.5, gone * 0.96)
+      if (p.sward) p.fade.value.set(gone * 0.3, gone * 0.8)
     }
   }
 

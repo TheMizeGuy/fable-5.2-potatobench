@@ -8,7 +8,7 @@ import {
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { PARCELS, TRACTS } from '../sim/index.ts'
 import {
-  DUFOUR_BARN, DUFOUR_HOUSE, DUFOUR_POTATO_HOUSE, FARM, FARM_CENTER, FD, FIELDS, FW, HOME_WOODS, POND, POTATO_HOUSE, brookHalf, brookZ, fieldMask,
+  DUFOUR_BARN, DUFOUR_HOUSE, DUFOUR_POTATO_HOUSE, FARM, FARM_CENTER, FD, FIELDS, FW, HOME_WOODS, KEEP_CLEAR, POND, POTATO_HOUSE, brookHalf, brookZ, fieldMask,
   groundY, hillRoadZ, oursAt, ridgeWoodAt, roadDist, stripEdge, townRoadZ, tractAt, woodFront, woodsAt,
 } from './layout.ts'
 import { fbm2, hash2, rng, smooth } from './noise.ts'
@@ -249,8 +249,9 @@ export class Flora {
     const trees: Record<Cls, Tree[]> = { spruce: [], maple: [], birch: [], bush: [], conBack: [], broadBack: [], conFar: [], conDistant: [], broadFar: [], broadDistant: [] }
     const built = [POTATO_HOUSE, DUFOUR_POTATO_HOUSE, DUFOUR_HOUSE, DUFOUR_BARN]
     const open = (x: number, z: number) =>
-      roadDist(x, z) > 1.8 && Math.abs(z - townRoadZ(x)) > 3.2 && Math.abs(z - hillRoadZ(x)) > 3.2 && Math.abs(z - brookZ(x)) > brookHalf(x) + 0.7
+      Math.hypot((x - POND.x) / (POND.rx * 2 + 1), (z - POND.z - 2) / (POND.rz * 2 + 4)) > 1 && roadDist(x, z) > 1.8 && Math.abs(z - townRoadZ(x)) > 3.2 && Math.abs(z - hillRoadZ(x)) > 3.2 && Math.abs(z - brookZ(x)) > brookHalf(x) + 0.7
       && built.every(b => Math.hypot(x - b.x, z - b.z) > 5.2) && fieldMask(x, z, 1.2) < 0.01
+      && KEEP_CLEAR.every(c => Math.hypot(x - c.x, z - c.z) > c.r + 1.2)
     // maple, birch or poplar
     const hard = (t: Omit<Tree, 'kind'>, poplar = 0.12) => {
       const q = r()
@@ -299,7 +300,7 @@ export class Flora {
       }
     }
     // By the house, along the lane and on the brook; the Dufour dooryard's maple, and a few along the road between.
-    trees.maple.push({ x: 28.3, z: 4.6, s: 6.6, r: 0.3, hue: 0.12, kind: 0 }, { x: 27.6, z: -2.4, s: 4.6, r: 0.5, hue: 0.8, kind: 0 })
+    trees.maple.push({ x: 27.3, z: 5.2, s: 6.6, r: 0.3, hue: 0.12, kind: 0 }, { x: 27.6, z: -2.4, s: 4.6, r: 0.5, hue: 0.8, kind: 0 })
     for (let k = 0; k < 4; k++) {
       const t = { x: 28.2 + r() * 1.4, z: -8.6 + k * 2.3 + r(), s: 4.2 + r() * 2.4, r: r(), hue: r(), kind: 0 }
       if (roadDist(t.x, t.z) > 1.8) trees.spruce.push(t)
@@ -319,7 +320,7 @@ export class Flora {
       // Fewer on the farm's own bank, so the view across the brook stays open.
       if (side < 0 && x > FARM.x0 - 4 && x < FARM.x1 && r() < 0.62) continue
       const z = bz + side * off
-      if (tractAt(x, z, 0.8) >= 0 || Math.hypot((x - POND.x) / (POND.rx + 1.5), (z - POND.z) / (POND.rz + 1.5)) < 1) continue
+      if (tractAt(x, z, 0.8) >= 0 || !open(x, z)) continue
       if (r() < 0.72) trees.bush.push({ x, z, s: 0.9 + r() * 0.9, r: r(), hue: r(), kind: 3 })
       else hard({ x, z: bz + side * (off + 1), s: 3.2 + r() * 2.6, r: r(), hue: r() }, 0.3)
     }

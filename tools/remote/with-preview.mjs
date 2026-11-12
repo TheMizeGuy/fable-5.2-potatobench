@@ -9,7 +9,7 @@ const port = await new Promise(resolve => { const s = createServer(); s.listen(0
 const url = `http://localhost:${port}/`
 const shell = process.platform === 'win32'
 const server = spawn('npx', ['vite', 'preview', '--port', String(port), '--strictPort'], { stdio: 'ignore', shell })
-const up = async () => { for (let i = 0; i < 80; i++) { try { if ((await fetch(url)).ok) return true } catch { /* not yet */ } await new Promise(r => setTimeout(r, 250)) } return false }
+const up = async () => { for (let i = 0; i < 360; i++) { try { if ((await fetch(url)).ok) return true } catch { /* not yet */ } await new Promise(r => setTimeout(r, 250)) } return false }
 let code = 1
 try {
   if (!(await up())) throw new Error('the preview server did not start')

@@ -16,6 +16,8 @@ export class SunShadows {
   private frame = 0
   // True while the first cascade is wide enough to hold the whole farm.
   holdsFarm = false
+  // The fine cascade is redrawn every frame, or every other on a slow machine.
+  nearEvery = 1
 
   constructor(scene: Scene) {
     for (let k = 0; k < 3; k++) {
@@ -55,9 +57,10 @@ export class SunShadows {
     this.up.setFromMatrixColumn(this.basis, 1)
     for (let k = 0; k < 3; k++) {
       const l = this.lights[k], sh = l.shadow
-      const due = all || k === 0 || (k === 1 && this.frame % 2 === 0) || (k === 2 && this.frame % 6 === 3)
+      const due = all || (k === 0 && this.frame % this.nearEvery === 0) || (k === 1 && this.frame % 2 === 0) || (k === 2 && this.frame % 6 === 3)
+      if (k === 0) sh.autoUpdate = this.nearEvery <= 1
       if (!due) continue
-      if (k > 0) sh.needsUpdate = true
+      if (!sh.autoUpdate) sh.needsUpdate = true
       const r = this.radius[k], texel = (2 * r) / sh.mapSize.x
       // Snap to the map's own grid, so shadows hold still as the camera pans.
       const cx = Math.round(focus.dot(this.right) / texel) * texel, cy = Math.round(focus.dot(this.up) / texel) * texel

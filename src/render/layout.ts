@@ -1,6 +1,6 @@
 // Where everything on the farm and in the country round it sits. Pure numbers, shared by the 3D view, picking and the 2D fallback.
 // x runs along the rows (north on the left), z down the slope from the spruce ridge (west) to the brook (east), y up.
-import { COLS, FIELD_COUNT, PARCELS, ROWS, TRACTS, type BlockId } from '../sim/index.ts'
+import { COLS, FIELD_COUNT, PARCELS, ROWS, TRACTS, type BlockId, type BuildingKind } from '../sim/index.ts'
 import { clamp, fbm2, hash2, mix, smooth } from './noise.ts'
 
 export const SUB = 4                  // plants drawn per simulated hill, each way
@@ -23,8 +23,9 @@ export const FIELDS: FieldRect[] = Array.from({ length: FIELD_COUNT }, (_, i) =>
 
 export interface Rect { x0: number; x1: number; z0: number; z1: number }
 
-// The home farm inside its walls.
-export const FARM: Rect = { x0: -18.4, x1: 32.6, z0: -22.6, z1: 25.5 }
+// The home farm inside its walls; east of the farmstead the back yard where its new buildings go, and below that the
+// swale and the pond.
+export const FARM: Rect = { x0: -18.4, x1: 44.6, z0: -22.6, z1: 25.5 }
 export const FARM_CENTER = { x: 4.6, z: 0.4 }
 // Each block of land with its headlands and walls, and the Dufour farmstead. Inside them the ground is the farm's.
 export const BLOCKS: Record<BlockId, Rect> = {
@@ -123,18 +124,74 @@ export const DUFOUR_HOUSE = { x: 93.6, z: 2.4 }
 export const DUFOUR_BARN = { x: 95.2, z: -6.2 }
 export const DUFOUR_POTATO_HOUSE = { x: 89.8, z: -14.0 }
 // The middle of each yard (-1 home, -2 Dufour), and how far from it a click still means the yard.
-export const YARD_AT: Record<number, { x: number; z: number; reach: number }> = {
-  [-1]: { x: 23.7, z: -6.6, reach: 13 },
-  [-2]: { x: 93, z: -6, reach: 11 },
+// `x`, `z`: where the yard's marker stands, over its old buildings; `x0`..`z1`: the ground a click on means the yard,
+// which takes in every site of the plan below.
+export const YARD_AT: Record<number, { x: number; z: number; reach: number; x0: number; x1: number; z0: number; z1: number }> = {
+  [-1]: { x: 24.4, z: -7.4, reach: 13, x0: 18.4, x1: 42.3, z0: -22.4, z1: 6.7 },
+  [-2]: { x: 92.6, z: -6.2, reach: 11, x0: 83.9, x1: 100, z0: -18.2, z1: 6.4 },
 }
 // The yard at a point on the ground, or 0.
 export function yardAt(x: number, z: number): number {
   for (const yard of [-1, -2]) {
     const p = YARD_AT[yard]
-    if (Math.abs(x - p.x) <= p.reach * 0.55 && Math.abs(z - p.z) <= p.reach) return yard
+    if (x >= p.x0 && x <= p.x1 && z >= p.z0 && z <= p.z1) return yard
   }
   return 0
 }
+
+// ---- The yards' plan: where each building the farm can raise stands, laid out before any is built. A site looks
+// toward its `ry` (0: down the slope, +z; -PI/2: toward the fields, -x); `w` is its width across that front and `d` its
+// depth. `door` is the ground in front of its door and `work` where people stand to build it; both in the world.
+export interface Site { kind: BuildingKind; yard: number; x: number; z: number; ry: number; w: number; d: number; door: Pt; work: Pt[] }
+function site(kind: BuildingKind, yard: number, x: number, z: number, ry: number, w: number, d: number, doorAt = 0): Site {
+  const c = Math.cos(ry), s = Math.sin(ry)
+  const at = (lx: number, lz: number): Pt => ({ x: x + lx * c + lz * s, z: z - lx * s + lz * c })
+  return {
+    kind, yard, x, z, ry, w, d, door: at(doorAt, d / 2 + 0.7),
+    work: [at(-w / 2 - 0.5, d / 2 + 0.4), at(w / 2 + 0.5, d / 2 + 0.4), at(doorAt + 0.6, d / 2 + 1.3), at(-w / 2 - 0.6, -d * 0.2), at(w / 2 + 0.6, -d * 0.2)],
+  }
+}
+export const SITES: Site[] = [
+  // Home: a second potato house banked into the slope beside the first, the bunkhouse beyond it up the Dufour road;
+  // behind the barn, down the back lane, the machine shed and the packing shed; the pond's pump house in the low
+  // ground, the stand by the bridge, the weather station in the open behind the house.
+  site('house', -1, 31.6, -18.0, 0, 4.0, 6.0),
+  site('bunk', -1, 39.2, -13.4, 0, 5.0, 3.2, -0.9),
+  site('shed', -1, 33.6, -6.0, 0, 6.4, 3.1),
+  site('packing', -1, 33.6, 1.1, 0, 6.0, 4.0, -1.2),
+  site('pond', -1, 34.6, 7.4, 0, 1.3, 1.6),
+  site('stand', -1, 19.9, 19.2, -Math.PI / 2, 2.2, 1.3),
+  site('station', -1, 30.6, 5.4, 0, 1.7, 1.7),
+  site('road', -1, 20.4, -11.4, 0, 1.5, 1.5),
+  // Dufour: a second potato house beside the old one, and a bunkhouse below the yard road.
+  site('house', -2, 95.8, -15.2, 0, 3.4, 5.0),
+  site('bunk', -2, 86.6, -2.2, 0, 4.6, 3.0, -0.8),
+]
+export function siteOf(kind: BuildingKind, yard: number): Site | undefined {
+  return SITES.find(s => s.kind === kind && s.yard === yard)
+}
+// Where the pond's basin lies: dug into the slope east of the swale, clear of the pump house on its upper bank and of
+// the intake pipe that runs down past its west side to the brook.
+export const POND = { x: 39.6, z: 11.0, rx: 2.6, rz: 2.2 }
+export const POND_AT = POND
+// Where the yard keeps what comes off the land: logs decked by the dooryard and across the back lane, fieldstone
+// tipped at the barn's corner.
+export const LOG_DECKS: Spot[] = [{ x: 20.05, z: -2.8, heading: 0 }, { x: 31.5, z: -9.7, heading: 0 }, { x: 33.6, z: -9.7, heading: 0 }]
+export const STONE_PILE: Pt = { x: 20.75, z: -9.35 }
+// Where machines the farm owns stand when nobody is on them (a heading is the way it faces: cos, sin in x, z): the
+// machine shed's three bays, where the truck waits before there is a shed, and the grass past the shed for implements.
+export const BAYS: Spot[] = [-1, 0, 1].map(k => ({ x: 33.6 + k * (6.4 / 3), z: -5.9, heading: Math.PI / 2 }))
+export const TRUCK_SPOT: Spot = { x: 36.6, z: -9.2, heading: -0.3 }
+export const IMPLEMENT_SPOTS: Record<'harvester' | 'sprayer' | 'reel', Spot> = {
+  harvester: { x: 38.5, z: -5.9, heading: -0.12 }, sprayer: { x: 40.9, z: -6.1, heading: 0.2 }, reel: { x: 41.3, z: -2.4, heading: -1.2 },
+}
+// Ground kept clear of trees and long grass: each site, whether or not anything stands there yet.
+export const KEEP_CLEAR: { x: number; z: number; r: number }[] = [
+  ...SITES.filter(s => s.kind !== 'road').map(s => ({ x: s.x, z: s.z, r: Math.hypot(s.w, s.d) / 2 + 1.4 })),
+  ...LOG_DECKS.map(p => ({ x: p.x, z: p.z, r: 1.8 })), { ...STONE_PILE, r: 1.6 },
+  // where the implements stand in the grass past the machine shed, and the orchard
+  { x: 39.7, z: -5.8, r: 3.0 }, { x: 40, z: 1.6, r: 3.4 }, { x: TRUCK_SPOT.x, z: TRUCK_SPOT.z, r: 1.8 },
+]
 
 // Ground levelled for the buildings: each sits a step higher up the slope than the last.
 const PADS = [
@@ -162,9 +219,10 @@ const LANE_RIDGE = -20.8, LANE_MID = -7.6, LANE_LOW = 5.6, LANE_BROOK = 31.4, LA
 
 // The farm road: from the potato house down past the dooryard, over the brook and out to the town road.
 // Below the dooryard it keeps to the foot of the bottom field's headland, clear of the swale.
+// Its first eleven points run from the potato house to the bridge (the gravelling's marks follow them).
 export const ROAD: [number, number][] = [
-  [23.4, -13.2], [20.9, -12.0], [18.9, -9.6], [18.508, LANE_MID], [17.9, -4.5], [17.75, 1.4], [17.5, 3.4], [16.5, LANE_LOW], [15.95, 7.1],
-  [15.9, 10], [15.9, 15.6], [16.1, 18], [16.9, 20.4], [17.8, 22.4], [18.3, 30], [18.458, LANE_BROOK], [19.2, 38], [20.2, 47.5], [20.6, townRoadZ(20.6)],
+  [23.4, -13.2], [20.9, -12.0], [18.9, -9.6], [18.508, LANE_MID], [17.9, -4.5], [17.5, 3.4], [16.5, LANE_LOW], [15.95, 7.1], [15.9, 15.6],
+  [16.2, 18.4], [17.8, 22.4], [18.3, 30], [18.458, LANE_BROOK], [19.2, 38], [20.2, 47.5], [20.6, townRoadZ(20.6)],
 ]
 export const SPURS: [number, number][][] = [
   [[17.5, 3.4], [21.3, 3.6]],
@@ -179,9 +237,20 @@ const DUFOUR_DRIVE: [number, number][] = [[89.8, -6.8], [91.2, 1.0], [92.0, 12.0
 function lane(z: number, xs: number[]): [number, number][] { return xs.map(x => [x, z]) }
 function down(x: number, zs: number[]): [number, number][] { return zs.map(z => [x, z]) }
 
+// The back lane behind the barn and the aprons and paths of the yards' sites. Each starts on a road already there.
+const YARD_WAYS: [number, number][][] = [
+  [[29.0, -12.6636], [29.0, -9.0], [29.2, -4.0], [29.6, 0.9]],
+  [[29.2, -4.0], [31.0, -3.6], [36.6, -3.6], [40.6, -4.0]],
+  [[31.6, -11.9545], [31.6, -14.6]],
+  [[39.2, -8.3091], [39.2, -10.9]],
+  [[89.8, -6.8], [92.6, -10.2], [95.8, -12.3]],
+  [[90.985, -0.2], [87.0, 0.3]],
+]
+
 export const WAYS: Way[] = [
   { kind: 'road', pts: ROAD },
   ...SPURS.map(pts => ({ kind: 'road' as const, pts })),
+  ...YARD_WAYS.map(pts => ({ kind: 'road' as const, pts })),
   { kind: 'road', pts: DUFOUR_ROAD },
   { kind: 'road', pts: DUFOUR_YARD_ROAD },
   { kind: 'road', pts: DUFOUR_DRIVE },
@@ -407,8 +476,13 @@ export function groundY(x: number, z: number): number {
   const road = 1 - smooth(0.6, 1.6, roadDist(x, z))
   const field = home ? fieldMask(x, z, 0.7) : 0
   const bank = smooth(0.6, 3, db)
-  // Between the blocks the meadow lies in long swells and hollows, which the roads ride over.
-  const swell = home ? (1 - fieldMask(x, z, 7)) * (0.5 + 0.9 * (1 - fieldMask(x, z, 15))) * (fbm2(x * 0.045 + 11.3, z * 0.06 - 4.1) - 0.5) * 2 : 0
+  // Between the blocks the meadow lies in long swells and hollows, which the roads ride over; the yards lie quieter.
+  let calm = 0
+  if (home) for (const yard of [-1, -2]) {
+    const p = YARD_AT[yard]
+    calm = Math.max(calm, 1 - smooth(1, 9, Math.max(p.x0 - x, x - p.x1, p.z0 - z, z - p.z1 - 4)))
+  }
+  const swell = home ? mix((1 - fieldMask(x, z, 7)) * (0.5 + 0.9 * (1 - fieldMask(x, z, 15))), 0.32 * (1 - fieldMask(x, z, 5)), calm) * (fbm2(x * 0.045 + 11.3, z * 0.06 - 4.1) - 0.5) * 2 : 0
   const amp = 0.11 * (1 - field) * (1 - flat) * (1 - 0.85 * road) * bank
   return y + amp * (fbm2(x * 0.23 + 4.2, z * 0.23) - 0.5) * 2 + swell * (1 - flat) * smooth(1.2, 7, db)
 }
@@ -432,7 +506,7 @@ export function fieldAt(x: number, z: number): number {
 // Stone walls round each block, where field stone was cleared by hand and piled; tracks pass through gateways.
 export const WALLS: [number, number, number, number][] = [
   // home: the north boundary, the wall under the woodlot, and the wall along the road with the dooryard's opening
-  [-17.5, -21.6, -17.4, 20.4], [-17.5, -21.7, 16.4, -21.7], [16.5, -21.7, 16.5, -8.2], [31.9, 6.4, 31.9, 18.2],
+  [-17.5, -21.6, -17.4, 20.4], [-17.5, -21.7, 16.4, -21.7], [16.5, -21.7, 16.5, -8.2], [31.6, 7.6, 31.6, 18.2],
   // the ridge lots
   [-53.4, -21.7, -17.5, -21.7], [-53.4, -21.7, -53.4, -7.2], [-53.4, -7.2, -17.5, -7.2],
   // the intervale: open to the brook, walled on the other three sides
@@ -575,5 +649,3 @@ export function woodsAt(x: number, z: number): { woods: number; hard: number } {
   return { woods: r.edge < 1.6 ? 0.45 : 0, hard: 0.75 }
 }
 
-// The irrigation pond, when the farm digs one: banked up on the flat between the bottom fields and the brook.
-export const POND = { x: 8.7, z: 21.1, rx: 3.3, rz: 1.75 }
