@@ -62,12 +62,12 @@ function seasonTrack(c: S.Campaign): HTMLElement | null {
 }
 
 // What the year asks, in order: where the farm is in it, and what comes next. For every player.
-const PHASES: { id: string; name: string; short: string; from: [number, number]; says: string }[] = [
-  { id: 'plant', name: 'Plant', short: 'Plant', from: [S.SEASON_START.month, S.SEASON_START.dom], says: 'Plant: the crew plants each field once the soil is warm enough, in May.' },
-  { id: 'tend', name: 'Tend', short: 'Tend', from: [6, 1], says: 'Tend: the crew hills and walks the rows. Your call is the spraying, when blight weather comes.' },
-  { id: 'kill', name: 'Kill the vines', short: 'Kill vines', from: [9, 1], says: 'Kill the vines: in September, so the skins toughen for digging.' },
-  { id: 'dig', name: 'Dig and weigh', short: 'Dig', from: [9, 20], says: 'Dig and weigh: the crew digs and hauls each field, and it is weighed at the potato house.' },
-  { id: 'sell', name: 'Sell or store', short: 'Sell', from: [10, 20], says: 'Sell or store: each weighed crop is sold at once, or stored to sell over the winter.' },
+const PHASES: { id: string; glyph: string; name: string; short: string; from: [number, number]; says: string }[] = [
+  { id: 'plant', glyph: 'plant', name: 'Plant', short: 'Plant', from: [S.SEASON_START.month, S.SEASON_START.dom], says: 'Plant: the crew plants each field once the soil is warm enough, in May.' },
+  { id: 'tend', glyph: 'hill', name: 'Tend', short: 'Tend', from: [6, 1], says: 'Tend: the crew hills and walks the rows. Your call is the spraying, when blight weather comes.' },
+  { id: 'kill', glyph: 'kill', name: 'Kill the vines', short: 'Kill', from: [9, 1], says: 'Kill the vines: in September, so the skins toughen for digging.' },
+  { id: 'dig', glyph: 'dig', name: 'Dig and weigh', short: 'Dig', from: [9, 20], says: 'Dig and weigh: the crew digs and hauls each field, and it is weighed at the potato house.' },
+  { id: 'sell', glyph: 'ticket', name: 'Sell or store', short: 'Sell', from: [10, 20], says: 'Sell or store: each weighed crop is sold at once, or stored to sell over the winter.' },
 ]
 
 // The phase the farm is in, by what the fields show, not by the date alone.
@@ -92,8 +92,8 @@ function phaseRow(c: S.Campaign): HTMLElement | null {
   const start = (k: number) => (k < PHASES.length ? S.dayIndex(y, PHASES[k].from[0], PHASES[k].from[1]) : end)
   return h('ol', { class: 'phases', testid: 'phases', 'aria-label': `The year, in order. Now: ${PHASES[at]?.name ?? ''}${PHASES[at + 1] ? `; next: ${PHASES[at + 1].name}` : ''}` },
     PHASES.map((p, k) => h('li', {
-      class: `term${k === at ? ' now' : k < at ? ' past' : ''}`, style: `flex:${start(k + 1) - start(k)}`, tabindex: '0', 'data-tip': p.says, 'aria-current': k === at ? 'step' : null,
-    }, h('span', { class: 'sr' }, p.name), h('span', { 'aria-hidden': 'true' }, p.short))))
+      class: `term${k === at ? ' now' : k < at ? ' past' : ''}`, style: `flex:${start(k + 1) - start(k)} 0 auto`, tabindex: '0', 'data-tip': p.says, 'aria-current': k === at ? 'step' : null,
+    }, icon(p.glyph, 'i'), k === at ? p.short : h('span', { class: 'sr' }, p.name))))
 }
 
 interface Cell { day: string; sky: string; hi: number; rain: number; blight: number; frost: number; said: string }

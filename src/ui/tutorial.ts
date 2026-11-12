@@ -36,7 +36,7 @@ export function mayAsk(c: S.Campaign | null, id: string): boolean { return !guid
 // The agent's one line inside a card the first time its kind comes (a telegram, a weigh ticket): the card is the one
 // voice, so the guide speaks in it.
 const LINES: Record<string, string> = {
-  telegram: 'A telegram asks you a question. Pick a reply: the clock waits for you.',
+  telegram: 'Pick a reply: the clock waits for you.',
   ticket: 'Your first weigh ticket: what the field grew, and what it lost. Sell now is the safe choice.',
 }
 export function agentLine(kind: 'telegram' | 'ticket', key: string | number): HTMLElement | null {

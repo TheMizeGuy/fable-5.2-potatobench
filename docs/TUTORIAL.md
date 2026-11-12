@@ -64,8 +64,9 @@ after the first, shows everything.
 What has arrived says less than it does in a later year (the root's class `guided`): the forecast gives its figures
 for today and tomorrow and only the day, the sky and the blight leaf after that; an order on a field's tag is its
 mark without the words "On the list"; the list of work is the next two orders and a count; the line saying what the
-money just did is left out. The year's phases on the date board are one short word each for every player (Plant,
-Tend, Kill vines, Dig, Sell).
+money just did is left out. The year's phases on the date board are, for every player, the year card's five marks
+with only the present one named in a word (Plant, Tend, Kill, Dig, Sell): an ordinary season screen is held under
+80 words by `e2e/interface.spec.ts`, and five names did not fit in it.
 
 **G. Few decisions, no dead time.** The crew plants, hills, walks, digs and hauls by itself. The first year asks for
 the spraying question (with "Keep the fields sprayed" marked the usual choice), the telegrams the year sends, and
@@ -119,7 +120,7 @@ Words are for a mouse; a touch screen says "Tap" and "Pinch", the keyboard its k
 | 13 | What the year end takes (brings the figure) | the ticket answered | "Your first crop is weighed. Under your cash is what would be left after the year-end bills of $19,000. It counts the crop still in the ground, so it moves until every field is in." | Skip to the next ticket |
 | 14 | Close out the season | the season done | "The crop is in and the season is over. Press Close out the season. Winter is next: what you stored can be sold then." | the key itself |
 
-The first telegram carries, inside it: "A telegram asks you a question. Pick a reply: the clock waits for you."
+The first telegram carries, inside it: "Pick a reply: the clock waits for you."
 
 After the season: Winter in the cellar, Fell woods in winter, Raise a building, The account book; then the second
 spring (a variety, People, a hand, Land, the money, Start the second season) and its season (the calls, Meet a hand,
