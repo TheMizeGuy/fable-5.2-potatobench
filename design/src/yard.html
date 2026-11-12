@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The County - a yard selected</title>
+<link rel="stylesheet" href="system.css">
+</head>
+<body>
+<!--SPRITES-->
+<main class="stage july" aria-label="The farm, July: the home yard selected">
+  <!--@sel-yard-->
+  <!--@almanac-->
+  <!--@bank-->
+
+  <!--@tag x="660" y="352" nm="North Ridge" need="need-rogue"-->
+  <!--@tag x="660" y="452" nm="Upper Middle" need="need-spray-next"-->
+  <!--@tag x="300" y="578" nm="Brook Field" need="need-water"-->
+  <!--@tag x="700" y="608" nm="Bottom Field" need="need-hill"-->
+  <div class="yard-tag is-sel" style="left:1140px;top:318px"><i class="i i-yard"></i>Home yard</div>
+  <!--@pin-you x="560" y="420"-->
+  <!--@pin-alcide x="1100" y="470" cls=" is-picked" label="Alcide, building the bunkhouse"-->
+
+  <!-- the yard's card: what stands, what is going up, what can be raised -->
+  <section class="command sheet docked-left compact" aria-label="Selected: the home yard">
+    <header class="command-head">
+      <div><p class="t-label">The home farm · 18 logs, 25 stone in the yard</p><h2 class="t-title">Home yard</h2></div>
+      <button class="close" aria-label="Deselect (Escape)"><i class="i i-close"></i></button>
+    </header>
+    <div class="builds">
+      <div class="build-row"><i class="i i-store"></i><span><span class="t-label">Standing</span> <b>Potato house</b> <span class="quiet">holds 3,600 cwt</span></span><span></span></div>
+      <div class="build-row"><i class="i i-build"></i><span><span class="t-label">Going up</span> <b>Bunkhouse</b> <span class="quiet num">40% · 7 crew-days</span></span>
+        <span class="who"><svg class="bust" style="--shirt:#d9a441;--hat:#8c5a2b;--skin:#c48a62;--hair:#8a6a3c"><use href="#bust-felt-beard"/></svg>Alcide</span>
+        <span class="meter"><i style="width:40%"></i></span></div>
+    </div>
+    <div class="orders" role="group" aria-label="Raise a building">
+      <button class="order is-suggested"><i class="i i-fist fist"></i><span class="key">1</span><span class="name">Farm stand</span><span class="cost">$600 · 4 logs · 4 days</span><span class="catch">Twice the market from August; someone must mind it.</span></button>
+      <button class="order"><span class="key">2</span><span class="name">Machine shed</span><span class="cost">$4,500 · 20 logs · 10 stone</span><span class="catch">16 crew-days. Grows no potatoes.</span></button>
+      <button class="order"><span class="key">3</span><span class="name">Packing shed</span><span class="cost">$12,000 · 24 logs · 15 stone</span><span class="catch">24 crew-days. A hand kept all winter.</span></button>
+      <button class="order"><span class="key">4</span><span class="name">Weather station</span><span class="cost">$1,800 · 1 crew-day</span><span class="catch">The forecast still errs.</span></button>
+    </div>
+  </section>
+  <!--@timebook c2=" is-picked"-->
+</main>
+</body>
+</html>

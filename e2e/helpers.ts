@@ -34,7 +34,9 @@ export async function startSeason(page: Page): Promise<void> {
 }
 
 // What the instruments show, read from the page as a player would read it.
-export interface Seen { paused: boolean; running: boolean; speed: number; date: string; cash: string; badges: string[]; ticket: boolean; done: boolean; hint: boolean; tray: boolean; queue: number }
+// incidents: questions open in the game, read through the test hook, since the card that asks them belongs to the
+// instruments and can change under these tests.
+export interface Seen { paused: boolean; running: boolean; speed: number; date: string; cash: string; badges: string[]; ticket: boolean; done: boolean; hint: boolean; tray: boolean; queue: number; incidents: number; paper: boolean }
 
 export async function look(page: Page): Promise<Seen> {
   return page.evaluate(() => {
@@ -42,10 +44,13 @@ export async function look(page: Page): Promise<Seen> {
     const pressed = (id: string) => el(id)?.getAttribute('aria-pressed') === 'true'
     const cycle = el('speed-cycle')?.textContent ?? ''
     const done = !!el('end-season')
+    const paused = !done && (el('speed-0') ? pressed('speed-0') : pressed('speed-toggle'))
+    // The clock: pause and three speeds. Running is any of the three.
+    const speed = paused || done ? 0 : el('speed-0') ? [1, 2, 3].find(k => pressed(`speed-${k}`)) ?? 0 : Number(cycle[0] ?? 0)
     return {
-      paused: !done && (el('speed-0') ? pressed('speed-0') : pressed('speed-toggle')),
-      running: pressed('run'),
-      speed: el('speed-0') ? [1, 2, 3].find(k => pressed(`speed-${k}`)) ?? (pressed('run') ? 3 : 0) : Number(cycle[0] ?? 0),
+      paused,
+      running: speed > 0,
+      speed,
       date: el('date')?.textContent ?? '',
       cash: el('cash')?.textContent ?? '',
       badges: [...document.querySelectorAll<HTMLElement>('#ui [data-testid^="badge-"]')].map(b => b.dataset.testid!),
@@ -54,6 +59,8 @@ export async function look(page: Page): Promise<Seen> {
       hint: !!el('hint'),
       tray: !!el('sample-dialog'),
       queue: document.querySelectorAll('#ui [data-testid^="queue-"]:not([data-testid^="queue-first"]):not([data-testid="queue-more"]):not([data-testid^="queue-cancel"]):not([data-testid^="queue-who"])').length,
+      incidents: (globalThis as unknown as { __county: { app: { campaign: { incidents: unknown[] } | null } } }).__county.app.campaign?.incidents.length ?? 0,
+      paper: !!document.querySelector('#ui .dialog:not(.out)'),
     }
   })
 }

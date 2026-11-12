@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The County - winter</title>
+<link rel="stylesheet" href="system.css">
+</head>
+<body>
+<!--SPRITES-->
+<main class="stage snow" aria-label="Winter, Year 1: the cellar months">
+  <div class="veil"></div>
+  <!-- the winter's work: a page of the time book, a line for each person -->
+  <section class="winter sheet" aria-labelledby="w-h">
+    <header class="winter-head">
+      <div><p class="t-label">November · Year 1 · the cellar months</p><h2 class="t-title" id="w-h">The winter’s work</h2></div>
+      <p class="num" style="font-size:16px"><b>$1,080</b> a month in wages</p>
+    </header>
+    <ul>
+      <li class="wrow">
+        <svg class="bust" style="--shirt:#b8402e;--hat:#d8c48a;--skin:#e8b996;--hair:#5a3d24"><use href="#bust-farmer"/></svg>
+        <p class="who"><b>You</b><span>woods 4</span></p>
+        <div class="seg" role="group" aria-label="You this winter"><button class="btn">Off</button><button class="btn" aria-pressed="true">Woods</button><button class="btn">Pack</button><button class="btn">Build</button></div>
+        <p class="gets"><b>Home Woodlot:</b> felled by the end of February, 38 loads of logs. Unpaid.</p>
+      </li>
+      <li class="wrow">
+        <svg class="bust" style="--shirt:#2f6f9f;--hat:#3b3f45;--skin:#d9a47c;--hair:#2b211a"><use href="#bust-cap-moustache"/></svg>
+        <p class="who"><b>Normand</b><span>build 5</span></p>
+        <div class="seg" role="group" aria-label="Normand this winter"><button class="btn">Off</button><button class="btn">Woods</button><button class="btn">Pack</button><button class="btn" aria-pressed="true">Build</button></div>
+        <p class="gets"><b>The bunkhouse:</b> up by the end of November. $630 a month.</p>
+      </li>
+      <li class="wrow">
+        <svg class="bust" style="--shirt:#d9a441;--hat:#8c5a2b;--skin:#c48a62;--hair:#8a6a3c"><use href="#bust-felt-beard"/></svg>
+        <p class="who"><b>Alcide</b><span>homebody</span></p>
+        <div class="seg" role="group" aria-label="Alcide this winter"><button class="btn" aria-pressed="true">Off</button><button class="btn" disabled>Woods</button><button class="btn" disabled>Pack</button><button class="btn" disabled>Build</button></div>
+        <p class="gets quiet">Will not work winters. Laid off: unpaid, back in spring.</p>
+      </li>
+      <li class="wrow">
+        <svg class="bust" style="--shirt:#6b4c8a;--hat:#9c3226;--skin:#f0c8a8;--hair:#7a3b1f"><use href="#bust-kerchief"/></svg>
+        <p class="who"><b>Verna</b><span>field 7</span></p>
+        <div class="seg" role="group" aria-label="Verna this winter"><button class="btn" aria-pressed="true">Off</button><button class="btn">Woods</button><button class="btn" disabled title="Needs the packing shed">Pack</button><button class="btn">Build</button></div>
+        <p class="gets">Laid off: unpaid, back in spring. <span class="quiet">Packing needs the packing shed.</span></p>
+      </li>
+      <li class="wrow">
+        <svg class="bust" style="--shirt:#e7e0cf;--hat:#27425c;--skin:#a8704c;--hair:#1c1c1c"><use href="#bust-curls"/></svg>
+        <p class="who"><b>Lucien</b><span>woods 4</span></p>
+        <div class="seg" role="group" aria-label="Lucien this winter"><button class="btn">Off</button><button class="btn" aria-pressed="true">Woods</button><button class="btn">Pack</button><button class="btn">Build</button></div>
+        <p class="gets"><b>Alder Swale:</b> felled by the end of December, 5 loads of logs. $450 a month.</p>
+      </li>
+    </ul>
+    <div class="winter-foot">
+      <section>
+        <div class="sec-h"><h2>The yard</h2></div>
+        <p class="yard-stock"><i class="i i-logs"></i><span><b>18</b> loads of logs</span><i class="i i-stone"></i><span><b>25</b> loads of fieldstone</span></p>
+        <button class="btn"><i class="i i-sell"></i>Sell 18 loads<span class="sub num">$990</span></button>
+        <p class="t-caption" style="margin-top:10px">$48,600 owed on the land. At the year end the bank takes $9,288; extra can be paid in spring.</p>
+      </section>
+      <section>
+        <div class="sec-h"><h2>Raise a building</h2><span class="t-caption">built by whoever you set to Build</span></div>
+        <ul class="raise">
+          <li><div><b>Bunkhouse, home yard</b><p class="num">75% · 4 crew-days left · Normand</p></div><span class="meter" style="width:120px"><i style="width:75%"></i></span></li>
+          <li><div><b>Machine shed</b><p class="num">$4,500, 20 logs, 10 stone; 16 crew-days. Machine work 10% faster.</p></div><button class="btn">Build<span class="sub num">$4,500</span></button></li>
+        </ul>
+      </section>
+    </div>
+    <div style="display:flex;justify-content:flex-end;padding-top:14px"><button class="btn go">On to December <i class="i i-arrow"></i></button></div>
+  </section>
+</main>
+</body>
+</html>

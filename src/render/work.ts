@@ -1,11 +1,15 @@
-// The crews' day, replayed: where each tractor and each person on foot goes, by the farm's roads, the path each works,
+// The farm's day, replayed: where each person goes, on foot or on a machine, by the farm's roads, the path each works,
 // and which hills change as they pass (planted, hilled, killed, dug, pulled, blight found).
-import { COLS, HILLS, ROWS, type HillLook, type JobKind, type UnitKind } from '../sim/index.ts'
+import { COLS, HILLS, PARCELS, ROWS, type BuildingKind, type HillLook, type JobKind } from '../sim/index.ts'
 import type { HillDisplay } from './fields.ts'
-import { FIELDS, SZ, fieldAt, fieldBaseY, groundY, hillPos, parkSpot, route, yardSpot, type Pt } from './layout.ts'
+import {
+  BARN, BAYS, DUFOUR_POTATO_HOUSE, FD, FIELDS, FW, HOUSE, POTATO_HOUSE, ROAD, SPURS, SZ, TRUCK_SPOT, WALLS, fieldAt, fieldBaseY, groundY, hillPos, parkSpot, route,
+  siteOf, yardSpot, type FieldRect, type Pt, type Spot,
+} from './layout.ts'
 import type { Snapshot, UnitVis } from './state.ts'
 
 export type { Pt }
+export type Ride = '' | 'tractor' | 'truck'
 
 export interface Reveal { field: number; hill: number; at: number; look: HillLook; ridge: number; tubers: 'dig' | 'sample' | '' }
 
@@ -13,15 +17,23 @@ export interface Seg {
   kind: JobKind | 'travel'
   field: number
   walker: boolean        // worked on foot
+  ride: Ride             // what the person is on for this part of the day
+  walkTo: Pt[]           // on foot to where the machine stands, before the drive
   travel: Pt[]           // how the crew gets there
   path: Pt[]             // the working pass
   reveals: Reveal[]      // `at` is arc length along `path`
   start: number          // share of the day
   end: number
-  polys?: { travel: Poly; path: Poly }
+  site: string           // the work's own staging, shared by everyone at it ('' for work along a path)
+  polys?: { walkTo: Poly; travel: Poly; path: Poly }
 }
 
-export const TRACTOR_JOBS = new Set<string>(['plant', 'hill', 'spray', 'kill', 'water', 'dig'])
+// Work done from a tractor's seat along the rows.
+export const ROW_JOBS = new Set<string>(['plant', 'hill', 'spray', 'kill', 'water', 'dig'])
+// Work that takes a machine.
+export const MACHINE_JOBS = new Set<string>([...ROW_JOBS, 'haul'])
+// Work staged at one place, by everyone who is at it.
+export const SITE_JOBS = new Set<string>(['fell', 'rocks', 'brush', 'build', 'haul'])
 
 export class Poly {
   pts: Pt[]
@@ -66,6 +78,100 @@ export class Poly {
   }
 }
 
+// ---- Places. The yards' plan is layout.ts's (sites, doors, bays); these say who stands where on it.
+
+export type { Spot }
+
+// The big doors of the old potato houses, facing down the slope: where barrels come in.
+export function houseDoor(yard: number): Spot {
+  return yard === -2 ? { x: DUFOUR_POTATO_HOUSE.x, z: DUFOUR_POTATO_HOUSE.z + 3.5, heading: -Math.PI / 2 } : { x: POTATO_HOUSE.x, z: POTATO_HOUSE.z + 4.3, heading: -Math.PI / 2 }
+}
+
+// The potato house a field's crop goes to: the nearer of the farm's.
+export function houseFor(field: number, dufour: boolean): number {
+  if (!dufour) return -1
+  const f = FIELDS[field]
+  const d = (yard: number) => { const h = houseDoor(yard); return Math.abs(f.cx - h.x) + Math.abs(f.cz - h.z) }
+  return d(-2) < d(-1) ? -2 : -1
+}
+
+// Where each machine is kept: in the machine shed's bays once it stands (the truck in the third while there are no
+// more than two tractors); before that the one tractor on the potato house apron and the truck on the back lane.
+export function machineHome(kind: 'tractor' | 'truck', k: number, shed: boolean, tractors: number): Spot {
+  if (kind === 'truck') return shed && tractors <= 2 ? { ...BAYS[2], z: BAYS[2].z - 0.25 } : TRUCK_SPOT
+  return shed ? BAYS[Math.min(k, BAYS.length - 1)] : yardSpot(-1, k, false)
+}
+
+// The house's kitchen porch, on the dooryard side: its edge, where people sit on a day off.
+const PORCH = { x: HOUSE.x - 2.02, z: HOUSE.z - 3.2 }
+
+// A day off: the porch and the dooryard. Each: where, which way they face, and whether they sit (the seat's height).
+export function sundaySpot(k: number): Spot & { seat: number } {
+  const px = PORCH.x, pz = PORCH.z
+  const spots: [number, number, number, number][] = [
+    // the porch is railed along its upper half: people sit on the edge of the open half, by the steps
+    [px, pz + 0.4, Math.PI, 0.1], [px, pz + 1.05, Math.PI, 0.1], [px - 1.2, pz + 0.3, 0.2, -1], [px - 1.5, pz + 1.6, -0.9, -1],
+    [px - 1.0, pz + 2.3, 2.4, 0], [px - 0.5, pz - 1.7, 0.9, -1], [px - 2.0, pz - 0.4, 0.5, 0], [px - 1.7, pz - 1.4, -0.6, -1],
+    [px - 0.7, pz + 3.8, 1.9, 0], [px - 2.4, pz + 1.0, 0.1, -1], [px - 1.3, pz + 4.6, -2.2, 0], [px - 2.6, pz + 2.6, 0.9, -1],
+  ]
+  const [x, z, heading, seat] = spots[k % spots.length]
+  return { x, z, heading, seat }
+}
+
+// Laid up: a chair on the porch.
+export function sickSpot(k: number): Spot {
+  return { x: PORCH.x + 0.27, z: PORCH.z + 0.9 - (k % 3) * 0.55, heading: Math.PI }
+}
+
+// Where people stand about before the season and between jobs at home: the farmer by the kitchen door, the rest in the
+// dooryard between the barn and the road, in loose knots, turned to one another.
+export function idleSpot(yard: number, slot: number, farmer: boolean): Spot {
+  if (yard === -1 && farmer) return { x: PORCH.x - 0.9, z: PORCH.z + 1.2, heading: 2.6 }
+  if (yard !== -1) return yardSpot(yard, slot, true)
+  const [x, z] = DOORYARD[slot % DOORYARD.length]
+  const knot = DOORYARD_KNOTS[Math.floor((slot % DOORYARD.length) / 3) % DOORYARD_KNOTS.length]
+  return { x, z, heading: Math.atan2(knot[1] - z, knot[0] - x) }
+}
+// Offsets from the ground before the barn's great door, which opens on the dooryard.
+const YARD_DOOR = { x: BARN.x - 3.9, z: BARN.z - 0.3 }
+const DOORYARD: [number, number][] = ([
+  [0.7, -0.7], [0, -0.1], [0.8, 0.3], [-0.3, -1.6], [0.3, -1.3], [-0.5, -2.3],
+  [0.6, 2.2], [-0.2, 2.7], [-0.4, 1.7], [-0.9, -0.5], [-1.1, 0.4], [-0.4, 0.8],
+] as [number, number][]).map(([x, z]) => [YARD_DOOR.x + x, YARD_DOOR.z + z])
+const DOORYARD_KNOTS: [number, number][] = ([[0.5, -0.2], [-0.15, -1.75], [0, 2.2], [-0.8, 0.2]] as [number, number][]).map(([x, z]) => [YARD_DOOR.x + x, YARD_DOOR.z + z])
+// What the dooryard and the porch are spread out from when people are drawn large.
+export const DOORYARD_AT: Pt = { x: YARD_DOOR.x + 0.6, z: YARD_DOOR.z - 0.1 }
+export const PORCH_AT: Pt = { x: PORCH.x, z: PORCH.z + 0.2 }
+
+// Callers. Someone asking for work waits where the house's spur leaves the farm road; a neighbour pulls in on the spur;
+// a buyer leaves his car on the potato house apron.
+const SPUR = SPURS[0]
+export const GATE: Spot = { x: SPUR[0][0] + 0.9, z: SPUR[0][1] + 1.3, heading: 0.5 }
+export const CALLER: { truck: Spot; man: Spot } = {
+  truck: { x: SPUR[0][0] + 1.9, z: SPUR[0][1] + 0.05, heading: 0.06 }, man: { x: SPUR[0][0] + 2.8, z: SPUR[0][1] - 0.8, heading: 0.9 },
+}
+export const BUYER: { car: Spot; man: Spot } = { car: { x: POTATO_HOUSE.x - 3.4, z: POTATO_HOUSE.z + 6.7, heading: -0.88 }, man: { x: POTATO_HOUSE.x - 0.9, z: POTATO_HOUSE.z + 4.9, heading: -1.2 } }
+// Where the road leaves the picture, for people coming to the farm and leaving it: beyond the bridge.
+export const OFF_FARM: Pt = { x: ROAD[13][0], z: ROAD[13][1] }
+
+// A building's site as the work sees it: where the carpenters' bench stands, out in front of its door and facing the
+// building (for the pond and the road, which are dug and spread, the first of its work points).
+export function buildSite(kind: BuildingKind, yard: number): Spot {
+  const s = siteOf(kind, yard) ?? siteOf('shed', -1)!
+  const earth = kind === 'pond' || kind === 'road'
+  const w = earth ? s.work[0] : s.work[2]
+  const dx = s.x - w.x, dz = s.z - w.z, l = Math.hypot(dx, dz) || 1
+  const out = earth ? 0 : 1.3
+  return { x: w.x - (dx / l) * out, z: w.z - (dz / l) * out, heading: Math.atan2(dz, dx) }
+}
+
+// Where the winter's grading is done: at the packing shed's door, the table along its front.
+export function packSite(): Spot {
+  const s = siteOf('packing', -1)!
+  const dx = s.x - s.door.x, dz = s.z - s.door.z, l = Math.hypot(dx, dz) || 1
+  return { x: s.door.x - (dx / l) * 0.5, z: s.door.z - (dz / l) * 0.5, heading: Math.atan2(dz, dx) + Math.PI / 2 }
+}
+
 // Where a crew stands when it is at a place and not working: a field's corner, or its spot at a yard.
 export function restAt(place: number, slot: number, walker: boolean): Pt & { heading: number } {
   if (place < 0) return yardSpot(place, slot, walker)
@@ -73,15 +179,68 @@ export function restAt(place: number, slot: number, walker: boolean): Pt & { hea
   return { ...p, heading: Math.PI }
 }
 
-// Up one simulated row and back down the next: four planted rows to a pass.
+// Where the work on a parcel is staged for those who do it at one place: felling at the line the stand has been cut
+// back to, rocks and brush along the field. `felled`: the share of a tract's felling done.
+export function siteAt(kind: JobKind, field: number, felled = 0): Spot {
+  const f = FIELDS[field]
+  if (!f) return { x: 0, z: 0, heading: 0 }
+  // The land fells a tract's woods from the farm's side (z1) and its brush from the road's (x0): the work stands on
+  // the cut ground just short of the trees still up, facing them.
+  if (kind === 'fell') {
+    // (back from the line by about the reach of the work, so the tree being cut is the stand's outermost and the
+    // people are out from under the canopy)
+    const k = Math.min(0.9, Math.max(0, felled))
+    return PARCELS[f.i].cover === 'brush' ? { x: f.x0 - 1.1 + k * FW, z: f.cz, heading: 0 } : { x: f.cx, z: f.z1 + 1.4 - k * FD, heading: -Math.PI / 2 }
+  }
+  if (kind === 'brush') return hedgeSpot(f)
+  if (kind === 'haul') return { x: f.x1 + 0.9, z: f.cz, heading: -Math.PI / 2 }
+  return { x: f.cx, z: f.cz, heading: 0 }
+}
+
+// How a field is watered: from the pond through a line of pipe (when the pond was drawn on), with the reel and its
+// gun, or from a tank wagon.
+export function waterWay(snap: Snapshot, field: number, pondDrawn: boolean): 'tank' | 'reel' | 'pipe' {
+  const block = FIELDS[field]?.block
+  if (pondDrawn && (block === 'home' || block === 'brook')) return 'pipe'
+  return snap.farm.equipment.includes('reel') ? 'reel' : 'tank'
+}
+
+// Where a field's hedgerow is cut back: on the headland by its nearest wall, facing the wall.
+function hedgeSpot(f: FieldRect): Spot {
+  let best: Spot = { x: f.cx, z: f.z1 + 0.6, heading: Math.PI / 2 }, bd = Infinity
+  for (const [x0, z0, x1, z1] of WALLS) {
+    const upright = Math.abs(x1 - x0) < Math.abs(z1 - z0)
+    if (upright) {
+      if (f.cz < Math.min(z0, z1) - 3 || f.cz > Math.max(z0, z1) + 3) continue
+      const side = x0 > f.cx ? 1 : -1, edge = side > 0 ? f.x1 : f.x0, d = Math.abs(x0 - edge)
+      if (d < bd) { bd = d; best = { x: edge + side * Math.max(0.15, d - 1.25), z: f.cz, heading: side > 0 ? 0 : Math.PI } }
+    } else {
+      if (f.cx < Math.min(x0, x1) - 3 || f.cx > Math.max(x0, x1) + 3) continue
+      const side = z0 > f.cz ? 1 : -1, edge = side > 0 ? f.z1 : f.z0, d = Math.abs(z0 - edge)
+      if (d < bd) { bd = d; best = { x: f.cx, z: edge + side * Math.max(0.15, d - 1.25), heading: side > 0 ? Math.PI / 2 : -Math.PI / 2 } }
+    }
+  }
+  return best
+}
+
+// Up one simulated row and back down the next: four planted rows to a pass, with a turn out on the headland between.
 export function serpentine(field: number, rows: number[]): Pt[] {
   const f = FIELDS[field]
   const pts: Pt[] = []
   rows.forEach((r, k) => {
     const z = f.z0 + (r + 0.5) * SZ
-    const a = { x: f.x1 + 0.8, z }, b = { x: f.x0 - 0.8, z }
-    if (k % 2 === 0) pts.push(a, b)
-    else pts.push(b, a)
+    const a = { x: f.x1 + 0.5, z }, b = { x: f.x0 - 0.5, z }
+    const from = k % 2 === 0 ? a : b, to = k % 2 === 0 ? b : a
+    if (k > 0) {
+      // swing round on the headland from the last row's end to this one's start
+      const prev = pts[pts.length - 1], out = k % 2 === 0 ? 1 : -1
+      const mid = (prev.z + from.z) / 2, half = (from.z - prev.z) / 2
+      for (let n = 1; n < 6; n++) {
+        const t = (n / 6) * Math.PI
+        pts.push({ x: prev.x + out * Math.sin(t) * Math.min(1.1, Math.abs(half) * 1.4 + 0.25), z: mid - half * Math.cos(t) })
+      }
+    }
+    pts.push(from, to)
   })
   return pts
 }
@@ -108,11 +267,12 @@ function changed(a: HillDisplay, look: HillLook, ridge: number, kind: JobKind): 
   }
 }
 
-export interface CrewFrom { id: number; kind: UnitKind; at: Pt; slot: number }
+// A person as the day begins: where they stand, what they will be on today, and where that machine stands now.
+export interface CrewFrom { id: number; at: Pt; slot: number; ride: Ride; machine: Pt | null; farmer: boolean; goal: Spot | null }
 
-// Plan the day that just passed for every crew. `shown` is what is on screen now, `snap` the new state; each crew starts
-// where it stands on screen. Returns each crew's segments, in the order of `crews`.
-export function planDay(snap: Snapshot, shown: HillDisplay[][], crews: CrewFrom[], sampleHills: Map<number, number>): Seg[][] {
+// Plan the day that just passed for every person. `shown` is what is on screen now, `snap` the new state; each starts
+// where they stand on screen. Returns each one's segments, in the order of `crews`.
+export function planDay(snap: Snapshot, shown: HillDisplay[][], crews: CrewFrom[], sampleHills: Map<number, number>, pondDrawn = false): Seg[][] {
   const units = new Map<number, UnitVis>(snap.units.map(u => [u.id, u]))
   // Who worked each field at each job today, in order: they share out the hills that changed.
   const sharers = new Map<string, number[]>()
@@ -130,12 +290,14 @@ export function planDay(snap: Snapshot, shown: HillDisplay[][], crews: CrewFrom[
     const [fs, kind] = key.split('|') as [string, JobKind]
     const field = Number(fs), f = snap.fields[field]
     const hills: number[] = []
-    for (let h = 0; h < HILLS; h++) {
-      const k = field * HILLS + h
-      if (claimed.has(k) || !changed(shown[field][h], f.hills[h], f.ridge, kind)) continue
-      if (kind === 'sample' && sampleHills.has(field) && sampleHills.get(field) !== h) continue
-      hills.push(h)
-      claimed.add(k)
+    if (field >= 0 && f) {
+      for (let h = 0; h < HILLS; h++) {
+        const k = field * HILLS + h
+        if (claimed.has(k) || !changed(shown[field][h], f.hills[h], f.ridge, kind)) continue
+        if (kind === 'sample' && sampleHills.has(field) && sampleHills.get(field) !== h) continue
+        hills.push(h)
+        claimed.add(k)
+      }
     }
     hillsFor.set(key, hills)
   }
@@ -153,14 +315,40 @@ export function planDay(snap: Snapshot, shown: HillDisplay[][], crews: CrewFrom[
     const u = units.get(crew.id)
     const segs: Seg[] = []
     let at = crew.at
-    const onFoot = crew.kind === 'hand'
+    let machine = crew.machine
+    // To a place: on the machine when today's work has one (walking to it first if it stands elsewhere), else on foot.
+    const go = (to: Pt, ride: Ride): { walkTo: Pt[]; travel: Pt[] } => {
+      if (!ride) return { walkTo: [], travel: route(at, to) }
+      const m = machine ?? at
+      const walkTo = Math.hypot(m.x - at.x, m.z - at.z) > 1.2 ? route(at, m) : []
+      return { walkTo, travel: route(m, to) }
+    }
     if (u) {
       const order = u.worked.slice().sort((a, b) => first(`${b.field}|${b.kind}`) - first(`${a.field}|${a.kind}`))
       for (const w of order) {
         const key = `${w.field}|${w.kind}`
+        const ride: Ride = MACHINE_JOBS.has(w.kind) ? crew.ride : ''
+        const way = w.kind === 'water' ? waterWay(snap, w.field, pondDrawn) : 'tank'
+        if (SITE_JOBS.has(w.kind) || way !== 'tank') {
+          // Staged at one place: the stage puts each worker where the work wants them.
+          const yard = w.kind === 'build'
+          const going = snap.farm.buildings.find(x => !x.built && x.yard === w.field)
+          const spot = yard ? buildSite(going ? going.kind : 'shed', w.field) : siteAt(way !== 'tank' ? 'haul' : w.kind, w.field, snap.fields[w.field]?.felled ?? 0)
+          // already at it since yesterday: carry on where they stand
+          const there = !ride && Math.hypot(spot.x - at.x, spot.z - at.z) < 9
+          const { walkTo, travel } = there ? { walkTo: [], travel: [at] } : go(spot, ride)
+          segs.push({ kind: w.kind, field: w.field, walker: !ride, ride, walkTo, travel, path: [{ x: spot.x, z: spot.z }], reveals: [], start: 0, end: 0, site: way !== 'tank' ? `${w.field}|${way}` : key })
+          if (!there) at = { x: spot.x, z: spot.z }
+          if (ride) {
+            // a day's hauling ends at the potato house door
+            const door = houseDoor(houseFor(w.field, snap.farm.dufour))
+            at = machine = w.kind === 'haul' ? { x: door.x, z: door.z + 0.9 } : at
+          }
+          continue
+        }
         const f = snap.fields[w.field]
         const { hills, rows } = share(key, crew.id)
-        const tractor = TRACTOR_JOBS.has(w.kind) && !onFoot
+        const tractor = ROW_JOBS.has(w.kind) && ride === 'tractor'
         let path: Pt[]
         const start = parkSpot(w.field, crew.slot)
         if (tractor) {
@@ -185,6 +373,12 @@ export function planDay(snap: Snapshot, shown: HillDisplay[][], crews: CrewFrom[
           // A test dig ends at the hill: whoever dug it stays to look at what came up.
           if (w.kind !== 'sample' || byRow.length === 0) path.push({ x: start.x - 0.5, z: start.z + 0.6 })
         }
+        // worn out, they come off the field at the day's end and sit down at its edge
+        if (!tractor && w.kind !== 'sample' && u.tired > 0.72) {
+          const last = path[path.length - 1], fr = FIELDS[w.field]
+          const up = last.z - fr.z0 < fr.z1 - last.z
+          path.push({ x: last.x, z: up ? fr.z0 - 0.7 : fr.z1 + 0.7 })
+        }
         const poly = new Poly(path)
         const lag = tractor ? (w.kind === 'dig' ? 1.7 : w.kind === 'plant' ? 1.1 : 1.0) : 0.05
         const reveals: Reveal[] = hills.map(h => {
@@ -195,22 +389,32 @@ export function planDay(snap: Snapshot, shown: HillDisplay[][], crews: CrewFrom[
           }
         })
         reveals.sort((a, b) => a.at - b.at)
-        // A hand walks to where the job starts; the farmer drives the tractor to the field's corner and walks from it.
-        const target = tractor ? path[0] : onFoot ? path[0] : start
-        segs.push({ kind: w.kind, field: w.field, walker: !tractor, travel: route(at, target), path, reveals, start: 0, end: 0 })
-        at = tractor ? path[path.length - 1] : onFoot ? path[path.length - 1] : target
+        const { walkTo, travel } = go(path[0], tractor ? 'tractor' : '')
+        segs.push({ kind: w.kind, field: w.field, walker: !tractor, ride: tractor ? 'tractor' : '', walkTo, travel, path, reveals, start: 0, end: 0, site: '' })
+        at = path[path.length - 1]
+        if (tractor) machine = at
       }
-      // Still on the road at the end of the day: as far along the drive as the farm's day took it.
-      const goal = u.to !== u.at ? u.to : u.worked.length ? -99 : u.at
-      if (goal !== -99) {
-        const dest = restAt(goal, crew.slot, onFoot)
-        const trip = new Poly(route(at, dest))
-        const along = u.to !== u.at ? u.along : 1
+      // Still on the road at the end of the day: as far along the way as the farm's day took them.
+      if (u.to !== u.at) {
+        const ride: Ride = u.job && MACHINE_JOBS.has(u.job.kind) ? crew.ride : ''
+        const dest = restAt(u.to, crew.slot, !ride)
+        const { walkTo, travel } = go(dest, ride)
+        const trip = new Poly(travel)
         if (trip.length > 0.3) {
-          const travel = along >= 1 ? trip.pts : trip.upTo(trip.length * along)
-          segs.push({ kind: 'travel', field: -1, walker: onFoot, travel, path: [travel[travel.length - 1]], reveals: [], start: 0, end: 0 })
+          const part = u.along >= 1 ? trip.pts : trip.upTo(trip.length * u.along)
+          segs.push({ kind: 'travel', field: -1, walker: !ride, ride, walkTo, travel: part, path: [part[part.length - 1]], reveals: [], start: 0, end: 0, site: '' })
         }
+      } else if (!u.worked.length && crew.goal === null && u.at >= 0) {
+        // nothing done today and nowhere to go: at the field they were left at
+        const dest = restAt(u.at, crew.slot, true)
+        if (Math.hypot(dest.x - at.x, dest.z - at.z) > 3) segs.push({ kind: 'travel', field: -1, walker: true, ride: '', walkTo: [], travel: route(at, dest), path: [dest], reveals: [], start: 0, end: 0, site: '' })
       }
+    }
+    // A day off, a day laid up, or nothing to do in the yard: to where that is spent.
+    if (crew.goal && !segs.length && Math.hypot(crew.goal.x - at.x, crew.goal.z - at.z) > 0.4) {
+      const travel = route(at, crew.goal)
+      segs.push({ kind: 'travel', field: -1, walker: true, ride: '', walkTo: [], travel, path: [{ x: crew.goal.x, z: crew.goal.z }], reveals: [], start: 0, end: 0.5, site: '' })
+      return segs
     }
     // Share the day: travel is quick, real work takes most of it.
     const weight = (s: Seg) => (s.kind === 'travel' ? 0.6 : 1)

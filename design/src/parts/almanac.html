@@ -1,0 +1,11 @@
+<!--defaults day="12" month="July" weekday="Sunday" done="46" fc="jul12" goal="goal-spray"-->
+  <section class="almanac" aria-label="Date, forecast and goal">
+    <div class="mount">
+      <div class="face">
+        <div class="leaf"><span class="day">{{day}}</span><span class="month">{{month}}</span><span class="weekday">{{weekday}}</span><span class="year t-label">Year 1</span></div>
+        <!--@forecast-{{fc}}-->
+      </div>
+      <div class="season-track"><span class="t-label">Apr</span><span class="bar" role="img" aria-label="The season, April to the freeze: {{done}}% through"><i style="width:{{done}}%"></i><b style="left:{{done}}%"></b></span><span class="t-label">Oct</span></div>
+    </div>
+    <!--@{{goal}}-->
+  </section>

@@ -79,7 +79,7 @@ export function openMenu(ctx: Ctx, o: { onHelp: () => void; onAlmanac: () => voi
         h('fieldset', { class: 'group' },
           h('legend', { class: 'block-head' }, 'Play'),
           toggle('hints', 'Tips', 'One sentence the first time each order is called for.'),
-          toggle('pauseOnAlerts', 'Pause on alerts', 'Stop the clock, instead of slowing it, when something new needs you.'),
+          toggle('pauseOnAlerts', 'Pause on alerts', 'Stop the clock when something new needs you. Off, the days run at the speed you set.'),
           toggle('reducedMotion', 'Reduce motion', 'Papers and figures change at once, and the land holds still.')),
         h('fieldset', { class: 'group' },
           h('legend', { class: 'block-head' }, 'Sound'),

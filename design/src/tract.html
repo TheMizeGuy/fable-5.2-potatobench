@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The County - a tract selected</title>
+<link rel="stylesheet" href="system.css">
+</head>
+<body>
+<!--SPRITES-->
+<main class="stage july" aria-label="The farm, July: the Home Woodlot selected">
+  <!--@sel-woodlot-->
+  <!--@almanac-->
+  <!--@bank-->
+
+  <!--@tag x="512" y="276" nm="Home Woodlot" icon="woods" cls=" is-sel" need="need-fell"-->
+  <!--@tag x="492" y="366" nm="North Ridge" need="need-rogue"-->
+  <!--@tag x="440" y="448" nm="Upper Middle" need="need-spray-next"-->
+  <!--@tag x="300" y="578" nm="Brook Field" need="need-water"-->
+  <div class="yard-tag" style="left:1150px;top:330px"><i class="i i-yard"></i>Home yard</div>
+  <!--@pin-normand x="252" y="300" label="Normand, felling"-->
+  <!--@pin-you x="655" y="414"-->
+
+  <!-- the tract's card: where its clearing stands, what the next step takes and yields -->
+  <section class="command sheet short" aria-label="Selected: the Home Woodlot">
+    <header class="command-head">
+      <div><p class="t-label">Tract record</p><h2 class="t-title">Home Woodlot</h2><p class="t-caption">Standing woods. The home farm.</p></div>
+      <button class="close" aria-label="Deselect (Escape)"><i class="i i-close"></i></button>
+    </header>
+    <ol class="steps" aria-label="Clearing: felling now">
+      <li class="now">Fell</li><li>Stumps</li><li>Rocks</li><li>Field</li>
+    </ol>
+    <div class="readings">
+      <p><i class="i i-woods"></i>30% felled <span class="meter" style="flex:1"><i style="width:30%"></i></span></p>
+      <p><i class="i i-logs"></i>About <b>40 loads</b> of logs: $2,200 at the mill</p>
+      <p style="white-space:normal;align-items:flex-start"><i class="i i-leaf"></i><span>It shelters North Ridge: less water lost, but an hour more blight weather.</span></p>
+    </div>
+    <div class="orders" role="group" aria-label="Orders">
+      <button class="order is-suggested"><i class="i i-fist fist"></i><span class="key">F</span><i class="i i-fell"></i><span class="name">Fell</span><span class="cost">28 crew-days</span><span class="catch">Half speed in the season; full speed for someone kept on this winter.</span></button>
+    </div>
+    <p class="note">Next: have the stumps pulled, a contractor at $3,000, about 10 season days. Then pick the rocks.</p>
+  </section>
+
+  <!--@timebook-->
+</main>
+</body>
+</html>

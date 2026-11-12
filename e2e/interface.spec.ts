@@ -4,6 +4,27 @@ import { expect, look, noSidewaysScroll, open, putAway, reach, startSeason, watc
 
 const PRESSED = '#ui .plate[aria-pressed="true"]'
 
+// A figure read from the running game: an expression over app and sim.
+async function game<T>(page: Page, expr: string): Promise<T> {
+  return page.evaluate(`(() => { const { app, sim } = window.__county; return ${expr} })()`) as Promise<T>
+}
+
+function money(usd: number): string {
+  return `$${Math.round(usd).toLocaleString('en-US')}`
+}
+
+// A first year with the three who asked for work in spring taken on (a bunkhouse given, so all three have a bed),
+// into the season and stopped in June.
+async function farmWithPeople(page: Page): Promise<void> {
+  await open(page, '?year=1990&seed=7')
+  await reach(page, `const { app } = q.g(); const c = app.campaign; c.cash += 30000
+    c.buildings.push({ id: c.nextBuilding++, kind: 'bunk', yard: -1, done: 12, need: 12, built: true })
+    for (const a of [...c.applicants]) app.do({ t: 'hire', applicant: a.id })`)
+  await page.getByTestId('begin-season').click()
+  await reach(page, `const { app } = q.g(); app.setSpeed(0); q.run(q.day(5, 12)); app.setSpeed(0); app.campaign.incidents = []; app.select(-1)`)
+  await putAway(page)
+}
+
 // Words a sighted player is given to read, counted the way tools/quality/capture.ts counts them.
 async function wordsOnScreen(page: Page): Promise<number> {
   return page.evaluate(() => {
@@ -33,7 +54,7 @@ test('fields are selected with a click, Shift, a double-click and the number key
   await page.getByTestId('field-2').click({ modifiers: ['Shift'] })
   await expect(page.locator(PRESSED)).toHaveCount(1)
   // A double-click takes every field in the same state: here, every potato field not yet planted.
-  const potato = await page.locator('#ui .plate').evaluateAll(els => els.filter(e => !/resting/.test(e.getAttribute('aria-label') ?? '')).length)
+  const potato = await page.locator('#ui .plate').evaluateAll(els => els.filter(e => !/resting/.test(e.textContent ?? '')).length)
   expect(potato).toBeGreaterThan(1)
   await page.getByTestId('field-0').dblclick()
   await expect(page.locator(PRESSED)).toHaveCount(potato)
@@ -63,7 +84,9 @@ test('only the orders that can be given are offered, and one that cannot says wh
   // The coach still says why it would wait.
   await page.keyboard.press('Escape')
   await page.getByTestId('field-0').click()
-  await expect(page.getByTestId('card-line')).toContainText('Hold off planting')
+  // The coach says why it would wait, or why now: whichever the soil on this day calls for.
+  const holding = await game<boolean>(page, '!!app.needs()[0].hold')
+  await expect(page.getByTestId('card-line')).toContainText(holding ? 'Hold off planting' : 'Plant.')
   // Given, the order joins the crew's list, and its place on the card holds still for a moment.
   await page.getByTestId('order-plant').click()
   await expect.poll(async () => (await look(page)).queue).toBe(1)
@@ -142,7 +165,8 @@ test('a test dig is a tray beside the land, does not stop the clock, and can be 
 test('a weigh ticket wants an answer: it cannot be tapped away, and closing it stores the crop', async ({ page }) => {
   const errors = watchErrors(page)
   await startSeason(page)
-  await reach(page, `q.run(999, ['sell'], 'lot')`)
+  // The ticket comes once the crop is hauled in and weighed.
+  await reach(page, `const { app } = q.g(); q.run(999, ['sell'], 'lot'); const s = app.campaign.season; for (let k = 0; k < 10 && !s.fields.some(f => f.weighed); k++) app.do({ t: 'day' })`)
   const ticket = page.getByTestId('weighin')
   // The ticket waits for the land to finish showing the dig, which a slow engine takes a while over.
   await expect(ticket).toBeVisible({ timeout: 30_000 })
@@ -157,9 +181,11 @@ test('a weigh ticket wants an answer: it cannot be tapped away, and closing it s
   await page.keyboard.press('Escape')
   await expect(ticket).toHaveCount(0)
   await expect(page.locator('#ui [data-testid="notice"]')).toContainText('went into the cellar')
-  // The stored crop is on its field's card, with the ticket and the sale.
+  // The stored crop is on its field's card, with the ticket and the sale, once the last barrel is in.
   await putAway(page)
-  const field = await page.locator('#ui .plate[aria-label*=", dug"]').first().getAttribute('data-testid')
+  await reach(page, `const { app } = q.g(); const s = app.campaign.season; for (let k = 0; k < 10 && s.fields.some(f => f.status === 'dug' && !f.weighed); k++) app.do({ t: 'day' }); app.setSpeed(0)`)
+  await putAway(page)
+  const field = await page.locator('#ui .plate', { hasText: ', dug' }).first().getAttribute('data-testid')
   await page.getByTestId(field!).click()
   await expect(page.locator('#ui [data-testid^="field-sell-"]')).toContainText('$')
   await page.locator('#ui [data-testid^="weighin-"]').click()
@@ -222,7 +248,9 @@ test('Play starts a farm of its own, counted in years of its own, and a new farm
   await page.getByTestId('play').click()
   await expect(page.getByTestId('begin-season')).toBeVisible()
   await expect(page.locator('#ui main:not(.leaving) .tb-year')).toHaveText('Year 1')
-  await expect(page.locator('#ui [data-testid^="field-"].plate')).toHaveCount(6)
+  // The home six, and none of the land beyond them.
+  for (let i = 0; i < 6; i++) await expect(page.getByTestId(`field-${i}`)).toHaveCount(1)
+  for (let i = 6; i < 14; i++) await expect(page.getByTestId(`field-${i}`)).toHaveCount(0)
   await page.getByTestId('menu-open').click()
   await page.getByTestId('quit-title').click()
   await page.getByTestId('play').click()
@@ -235,34 +263,41 @@ test('Play starts a farm of its own, counted in years of its own, and a new farm
 test('spring land: a marker opens a card, renting puts a plate and the rent on the money line, and it can be released', async ({ page }) => {
   const errors = watchErrors(page)
   await open(page, '?year=1990&seed=7')
+  // The figures come from the game, so a retuned price does not break the test.
+  const rent = money(await game<number>(page, 'sim.PARCELS[10].rent'))
+  const hand = money(await game<number>(page, 'sim.HAND_WAGE'))
+  const plan = async () => money(await game<number>(page, 'sim.planCosts(app.campaign).total'))
+  const before = await plan()
   await expect(page.locator('#ui .plate.land').first()).toBeVisible()
   await page.getByTestId('land-10').click()
   const card = page.getByTestId('plan-card')
   await expect(card).toContainText('Dufour Upper')
   await expect(card).toContainText('Dufour potato house comes with it')
-  await expect(card.getByTestId('land-rent')).toContainText('$1,100 a year')
+  await expect(card.getByTestId('land-rent')).toContainText(`${rent} a year`)
   await card.getByTestId('land-rent').click()
   await expect(page.getByTestId('field-10')).toHaveCount(1)
-  await expect(page.getByTestId('plan-money')).toContainText('rent $1,100')
-  await expect(page.getByTestId('plan-money')).toContainText('This plan $50,100')
+  await expect(page.getByTestId('plan-money')).toContainText(`rent ${rent}`)
+  await expect(page.getByTestId('plan-money')).toContainText(`This plan ${await plan()}`)
   // The rented field is the seventh the farm holds, so the 7 key picks it.
   await page.keyboard.press('Escape')
   await page.keyboard.press('Digit7')
   await expect(card.getByTestId('card-title')).toHaveText('Dufour Upper')
-  await expect(card.getByTestId('tenure')).toContainText('Rented, $1,100 this year')
+  await expect(card.getByTestId('tenure')).toContainText(`Rented, ${rent} this year`)
   await card.getByTestId('land-release').click()
   await expect(page.getByTestId('field-10')).toHaveCount(0)
-  await expect(page.getByTestId('plan-money')).toContainText('This plan $39,300')
+  await expect(page.getByTestId('plan-money')).toContainText(`This plan ${before}`)
   await expect(card.getByTestId('land-rent')).toBeVisible()
   // The crew and the contracts are a press away; neither is needed to start.
   await page.keyboard.press('Escape')
   await page.getByTestId('crew-open').click()
   const crew = page.getByTestId('crew')
-  await expect(crew).toContainText('An operator needs a second tractor')
+  // The spring's people come with their skills and asking wage; the hall has hands at the standard wage.
+  await expect(crew).toContainText('hiring hall')
+  await expect(crew.getByTestId('hire-hand')).toContainText(hand)
   await crew.getByTestId('hire-hand').click()
   await expect(crew).toContainText('Lucien')
   await page.getByTestId('crew-close').click()
-  await expect(page.getByTestId('plan-money')).toContainText('wages $450')
+  await expect(page.getByTestId('plan-money')).toContainText(`wages ${hand}`)
   await page.getByTestId('contracts-open').click()
   const contracts = page.getByTestId('contracts')
   await expect(contracts.getByTestId('offer-19903')).toContainText('Off contract Atlantic sells 20% under')
@@ -287,6 +322,7 @@ test('crews: a picked crew takes the next orders, an order it cannot do says why
   await expect(page.locator('#ui .unit')).toHaveCount(2)
   await page.getByTestId('unit-1').click()
   await expect(page.getByTestId('unit-1')).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.getByTestId('person-card')).toBeVisible()
   await page.getByTestId('field-2').click()
   const orders = page.locator('#ui [data-testid="card"] button.order:not(.more)')
   const kinds = await orders.evaluateAll(els => els.map(e => (e as HTMLElement).dataset.testid))
@@ -330,7 +366,9 @@ test('a crop a contract wants: the weigh ticket delivers it and the tracker coun
   await open(page, '?year=1990&seed=7')
   await reach(page, `const { app } = q.g(); const c = app.campaign; app.do({ t: 'accept', offer: 19901 })
     for (let i = 0; i < 6; i++) if (c.plans[i].crop === 'potato') app.do({ t: 'plan', field: i, plan: { crop: 'potato', variety: 'kennebec', seed: 'certified' } })
-    app.do({ t: 'begin' }); app.setSpeed(0); q.run(999, ['sell'], 'lot')`)
+    app.do({ t: 'begin' }); app.setSpeed(0); q.run(999, ['sell'], 'lot')
+    // A crop is delivered once it is hauled in and weighed.
+    for (let k = 0; k < 10 && c.season.fields.some(f => f.status === 'dug' && !f.weighed); k++) app.do({ t: 'day' }); app.setSpeed(0)`)
   const ticket = page.getByTestId('weighin')
   await expect(ticket).toBeVisible({ timeout: 30_000 })
   const deliver = ticket.locator('[data-testid^="lot-deliver-"]')
@@ -338,7 +376,7 @@ test('a crop a contract wants: the weigh ticket delivers it and the tracker coun
   await expect(ticket.locator('.choice')).toContainText(/market/)
   await expect(ticket.getByTestId('store-houses')).toContainText('The potato house holds')
   await deliver.click()
-  await expect(ticket.locator('[data-testid^="lot-keep-"]')).toContainText('Store the rest')
+  await expect(ticket.locator('[data-testid^="lot-keep-"]')).toContainText('Store')
   await ticket.locator('[data-testid^="lot-keep-"]').click()
   await expect(ticket).toHaveCount(0)
   await expect(page.locator('#ui .track-n')).not.toHaveText(/^0\//)
@@ -387,12 +425,12 @@ test('the menu: settings take effect, ending early says what is lost, and the sa
   await expect(menu.getByTestId('quality-now')).toContainText('Drawing')
   await menu.getByTestId('units-metric').check({ force: true })
   await menu.getByTestId('how-open').click()
-  await expect(page.getByTestId('how')).toContainText('The nine orders')
+  await expect(page.getByTestId('how')).toContainText('Every key and order')
   await page.getByTestId('how-close').click()
   await menu.getByTestId('end-season-early').click()
   const confirm = page.getByTestId('confirm')
   await expect(confirm).toContainText('never planted')
-  await expect(confirm).toContainText('$20,500')
+  await expect(confirm).toContainText(money(await game<number>(page, 'sim.NOTE_PAYMENT + sim.LIVING')))
   await page.getByTestId('confirm-cancel').click()
   await expect(page.getByTestId('forecast')).toBeVisible()
   // Metric reaches the instruments.
@@ -441,5 +479,214 @@ test('winter: each stored crop is a card, seed can be held back, and the year cl
   await expect(sheet).toContainText('The soil going into year 2')
   await page.getByTestId('year-next').click()
   await expect(page.getByTestId('begin-season')).toBeVisible()
+  expect(errors, errors.join('\n')).toEqual([])
+})
+
+test('the goal line says the one next thing, opens the ladder, and moves on when the goal is met', async ({ page }) => {
+  const errors = watchErrors(page)
+  await startSeason(page)
+  const goal = page.getByTestId('goal')
+  await expect(goal).toContainText('Plant')
+  const of = await game<number>(page, 'app.campaign.season.fields.filter((f, i) => sim.isField(app.campaign, i) && f.status === "idle").length')
+  // Before the ground is fit the line says how long until it is; once it is, how many fields are planted.
+  if (await page.getByTestId('goal-wait').count()) await expect(page.getByTestId('goal-wait')).toContainText('day')
+  else await expect(goal).toContainText(`0/${of}`)
+  await goal.click()
+  const ladder = page.getByTestId('goals')
+  await expect(ladder).toContainText('The way ahead')
+  await expect(ladder).toContainText('Seed goes in once the soil has warmed')
+  // The long goals wait until a year is behind the farm.
+  await expect(ladder).not.toContainText('Long goals')
+  await page.keyboard.press('Escape')
+  await expect(ladder).toHaveCount(0)
+  // Once the soil is warm the goal points at a field that can be planted.
+  await reach(page, `const { app } = q.g(); for (let k = 0; k < 40 && !app.needs().some(n => n.need && n.need.act === 'plant'); k++) app.do({ t: 'day' }); app.setSpeed(0)`)
+  await putAway(page)
+  await expect(goal).toContainText(`Plant the fields0/${of}`)
+  await goal.click()
+  await page.getByTestId('goal-show').click()
+  expect(await game<string>(page, 'app.needs()[app.selected]?.need?.act')).toBe('plant')
+  // Every field planted: the line strikes through and the next goal writes itself in.
+  await reach(page, `const { app, sim } = q.g(); const c = app.campaign
+    for (let k = 0; k < 60 && c.season.fields.some((f, i) => sim.isField(c, i) && f.status === 'idle'); k++) { for (const a of sim.advise(app.world, c)) if (a.act === 'plant') app.order('plant', { fields: [a.field] }); app.do({ t: 'day' }) }
+    app.setSpeed(0)`)
+  await expect(page.getByTestId('goal')).toContainText('Walk a field for blight', { timeout: 5000 })
+  expect(errors, errors.join('\n')).toEqual([])
+})
+
+test('people: a chip opens the card, priorities set by click and key, a raise, a foreman, and letting go', async ({ page }) => {
+  const errors = watchErrors(page)
+  await farmWithPeople(page)
+  await expect(page.locator('#ui .unit.person')).toHaveCount(4)
+  await page.getByTestId('unit-1').click()
+  const card = page.getByTestId('person-card')
+  await expect(card).toBeVisible()
+  const name = await game<string>(page, 'app.campaign.crew.find(u => u.id === 1).name')
+  await expect(card.getByTestId('person-name')).toHaveText(name)
+  await expect(card.getByTestId('person-mood')).toContainText(/happy|content|fed up|unhappy|quit/i)
+  await expect(card.getByTestId('person-tired')).toBeVisible()
+  // A click moves a priority on one step; a digit sets it; nought is never.
+  const prio = (k: string) => game<number>(page, `app.campaign.crew.find(u => u.id === 1).prio.${k}`)
+  const was = await prio('machine')
+  await card.getByTestId('prio-machine').click()
+  expect(await prio('machine')).toBe(was === 4 ? 0 : was === 0 ? 1 : was + 1)
+  await card.getByTestId('prio-field').focus()
+  await page.keyboard.press('0')
+  expect(await prio('field')).toBe(0)
+  await expect(card.getByTestId('prio-field')).toContainText('priority –')
+  await page.keyboard.press('1')
+  expect(await prio('field')).toBe(1)
+  // A raise goes to what they asked, or a tenth more.
+  const wage = await game<number>(page, 'app.campaign.crew.find(u => u.id === 1).wage')
+  await card.getByTestId('person-raise').click()
+  expect(await game<number>(page, 'app.campaign.crew.find(u => u.id === 1).wage')).toBeGreaterThan(wage)
+  await card.getByTestId('person-foreman').click()
+  await card.getByTestId('foreman-home').click()
+  expect(await game<string>(page, 'app.campaign.crew.find(u => u.id === 1).foreman')).toBe('home')
+  await expect(card.getByTestId('person-doing')).toContainText('Foreman')
+  await card.getByTestId('person-dismiss').click()
+  await page.getByTestId('confirm-ok').click()
+  await expect.poll(() => game<number>(page, 'app.campaign.crew.length')).toBe(3)
+  expect(await game<number>(page, 'app.unit')).toBe(-1)
+  await expect(card).toBeHidden()
+  // Escape puts a person's card away.
+  await page.getByTestId('unit-2').click()
+  await expect(card).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(card).toBeHidden()
+  expect(errors, errors.join('\n')).toEqual([])
+})
+
+test('the work grid: G opens it, a click or a key sets a cell, and the farm rules say their cost and catch', async ({ page }) => {
+  const errors = watchErrors(page)
+  await farmWithPeople(page)
+  await page.keyboard.press('g')
+  const grid = page.getByTestId('work-grid')
+  await expect(grid).toBeVisible()
+  await expect(grid.locator('tbody tr')).toHaveCount(4)
+  const prio = (id: number, k: string) => game<number>(page, `app.campaign.crew.find(u => u.id === ${id}).prio.${k}`)
+  const was = await prio(2, 'woods')
+  await grid.getByTestId('cell-2-woods').click()
+  expect(await prio(2, 'woods')).toBe(was === 4 ? 0 : was === 0 ? 1 : was + 1)
+  // The arrow keys walk the grid and a digit sets the cell under the focus.
+  await grid.getByTestId('cell-2-woods').focus()
+  await page.keyboard.press('ArrowRight')
+  await expect(grid.getByTestId('cell-2-build')).toBeFocused()
+  await page.keyboard.press('4')
+  expect(await prio(2, 'build')).toBe(4)
+  await page.keyboard.press('ArrowDown')
+  await expect(grid.getByTestId('cell-3-build')).toBeFocused()
+  await page.keyboard.press('Delete')
+  expect(await prio(3, 'build')).toBe(0)
+  await expect(grid).toContainText('Working Sundays gains a day')
+  // Pickers come forward only near the harvest break; in June there is nothing to decide about them.
+  await expect(grid.getByTestId('rule-pickers')).toHaveCount(0)
+  await grid.getByTestId('rule-sundays').click()
+  expect(await game<boolean>(page, 'app.campaign.sundaysOff')).toBe(false)
+  await expect(grid.getByTestId('rule-sundays')).toHaveAttribute('aria-pressed', 'false')
+  await page.keyboard.press('Escape')
+  await expect(grid).toBeHidden()
+  expect(errors, errors.join('\n')).toEqual([])
+})
+
+test('building: Y opens the yard, a building is chosen and ordered, and it goes up with people on it', async ({ page }) => {
+  const errors = watchErrors(page)
+  await farmWithPeople(page)
+  await reach(page, `const { app } = q.g(); app.campaign.cash += 40000; app.select(-1)`)
+  await page.keyboard.press('y')
+  const yard = page.getByTestId('yard-card')
+  await expect(yard).toBeVisible()
+  await expect(yard.getByTestId('yard-title')).toHaveText('The home yard')
+  await yard.getByTestId('build-pick-stand').click()
+  const detail = yard.getByTestId('build-detail')
+  await expect(detail).toContainText('Catch:')
+  await expect(detail).toContainText('crew-days of building')
+  await yard.getByTestId('build-stand').click()
+  expect(await game<number>(page, 'app.campaign.buildings.filter(b => b.kind === "stand").length')).toBe(1)
+  await expect(yard.getByTestId('going-stand')).toBeVisible()
+  // The order is on the list, and it cannot be cancelled: it is paid for.
+  await expect(page.locator('#ui .queue [data-testid^="queue-"]').first()).toBeVisible()
+  await reach(page, `const { app } = q.g(); for (let k = 0; k < 12 && !app.campaign.buildings.find(b => b.kind === 'stand').built; k++) app.do({ t: 'day' }); app.setSpeed(0)`)
+  await expect(yard.getByTestId('built-stand')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(yard).toBeHidden()
+  expect(errors, errors.join('\n')).toEqual([])
+})
+
+test('an incident is one card with its choices and what each does; put away, it waits on the people bar', async ({ page }) => {
+  const errors = watchErrors(page)
+  await farmWithPeople(page)
+  await reach(page, `const { app, sim } = q.g(); const c = app.campaign; c.buildings.push({ id: c.nextBuilding++, kind: 'bunk', yard: -1, done: 12, need: 12, built: true })
+    const a = sim.applicantsFor(c.seed, c.year, new Set(c.crew.map(u => u.name)), 1, c.season.day)[0]
+    c.incidents.push({ id: c.nextIncident++, kind: 'applicant', day: c.season.day, until: c.season.day + 4, choices: ['hire', 'pass'], applicant: a })
+    app.setSpeed(1); app.setSpeed(0)`)
+  const card = page.getByTestId('incident')
+  await expect(card).toBeVisible()
+  await expect(card).toContainText('Someone asks for work')
+  await expect(card.getByTestId('answer-hire')).toContainText('starts at')
+  await expect(card.getByTestId('answer-pass')).toContainText('elsewhere')
+  await expect(card).toContainText('Left unanswered')
+  await page.keyboard.press('Escape')
+  await expect(card).toBeHidden()
+  await page.getByTestId('incident-open').click()
+  await expect(card).toBeVisible()
+  const before = await game<number>(page, 'app.campaign.crew.length')
+  await card.getByTestId('answer-hire').click()
+  await expect(card).toBeHidden()
+  expect(await game<number>(page, 'app.campaign.crew.length')).toBe(before + 1)
+  await expect(page.getByTestId('incident-open')).toHaveCount(0)
+  expect(errors, errors.join('\n')).toEqual([])
+})
+
+test('a tract cleared through the interface: felled, the stumps pulled, the rocks picked', async ({ page }) => {
+  const errors = watchErrors(page)
+  await farmWithPeople(page)
+  await reach(page, `const { app } = q.g(); app.campaign.cash += 20000; app.select(14)`)
+  const card = page.getByTestId('card')
+  await expect(card.getByTestId('card-title')).toHaveText('Home Woodlot')
+  await expect(card.getByTestId('clear-track')).toContainText('Standing')
+  await expect(card).toContainText('loads of logs')
+  // X fells, for the axe.
+  await page.keyboard.press('x')
+  expect(await game<number>(page, 'app.campaign.season.jobs.filter(j => j.kind === "fell" && j.field === 14).length')).toBe(1)
+  await reach(page, `const { app } = q.g(); const c = app.campaign; c.fields[14].felled = 39.8
+    for (let k = 0; k < 10 && c.fields[14].cover === 'woods'; k++) app.do({ t: 'day' }); app.setSpeed(0)`)
+  await expect(card.getByTestId('clear-track')).toHaveAttribute('aria-label', /felled/)
+  await expect(page.getByTestId('materials')).toBeVisible()
+  await card.getByTestId('order-stump').click()
+  expect(await game<string>(page, 'app.campaign.fields[14].works?.kind')).toBe('stump')
+  await reach(page, `const { app } = q.g(); const c = app.campaign; for (let k = 0; k < 14 && c.fields[14].cover !== 'open'; k++) app.do({ t: 'day' }); app.setSpeed(0)`)
+  await expect(card.getByTestId('clear-track')).toHaveAttribute('aria-label', /stumped/)
+  await page.keyboard.press('o')
+  await reach(page, `const { app, sim } = q.g(); const c = app.campaign; for (let k = 0; k < 14 && c.fields[14].stones >= sim.ROCKS_ADVISE; k++) app.do({ t: 'day' }); app.setSpeed(0)`)
+  await expect(card.getByTestId('clear-track')).toHaveAttribute('aria-label', /picked/)
+  expect(errors, errors.join('\n')).toEqual([])
+})
+
+test('Start the season runs the clock at 1x with no click; a weigh ticket stops it and answering goes on at the speed set', async ({ page }) => {
+  const errors = watchErrors(page)
+  await open(page, '?year=1990&seed=7')
+  await page.getByTestId('begin-season').click()
+  await expect(page.getByTestId('forecast')).toBeVisible()
+  // Running, at 1x, with nothing to dismiss and the days going by.
+  const start = await look(page)
+  expect(start.paused).toBe(false)
+  expect(start.speed).toBe(1)
+  await expect(page.getByTestId('paused')).toBeHidden()
+  await expect(page.getByTestId('idle-note')).toHaveCount(0)
+  const day0 = await game<number>(page, 'app.campaign.season.day')
+  await expect.poll(() => game<number>(page, 'app.campaign.season.day'), { timeout: 10_000 }).toBeGreaterThan(day0)
+  // The goal line says what comes next: planting, or how long until the soil is warm enough.
+  await expect(page.getByTestId('goal')).toContainText(/Plant/)
+  // Brought to the first dig, set to 2x by its button, the clock runs the dig and the haul until the ticket stops it.
+  await reach(page, `const { app } = q.g(); app.setSpeed(0); q.run('digging', ['sell'], 'status'); app.campaign.incidents = []`)
+  await putAway(page)
+  await page.getByTestId('speed-2').click()
+  const ticket = page.getByTestId('weighin')
+  await expect(ticket).toBeVisible({ timeout: 60_000 })
+  expect((await look(page)).paused).toBe(true)
+  await ticket.locator('[data-testid^="lot-sell-"]').first().click()
+  await expect(ticket).toHaveCount(0)
+  await expect.poll(async () => (await look(page)).speed).toBe(2)
   expect(errors, errors.join('\n')).toEqual([])
 })

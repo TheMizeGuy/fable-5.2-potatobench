@@ -6,7 +6,9 @@ import * as F from './fmt.ts'
 import { icon } from './icons.ts'
 import { deals, deliver, versusMarket } from './contracts.ts'
 import { culledAtDig } from './dig.ts'
-import { hillWord, isJob, isStale, JOB_KEY, JOB_VERB, jobWhat, KIND_GLYPH } from './rules.ts'
+import { isTract } from './map.ts'
+import { portrait } from './people.ts'
+import { CLEAR_STEPS, firstName, hillWord, isJob, isStale, JOB_KEY, JOB_VERB, jobText, jobWhat, stonesText, stonesWord } from './rules.ts'
 
 const MAX_ORDERS = 5
 const HOLD_MS = 1400
@@ -47,6 +49,20 @@ function score(kind: S.JobKind, f: S.FieldInfo, s: S.Season, suggested: boolean)
   }
 }
 
+// Care of the land beyond the crop is offered once the farm has a year behind it, or where it is badly wanted: stones
+// a careful grower would pick, hedgerows that hold frost on bottom land. Felling belongs to the tracts.
+function landCare(c: S.Campaign, f: S.FieldInfo, kind: S.JobKind): boolean {
+  if (kind === 'fell') return isTract(f.index)
+  if (kind === 'rocks') return isTract(f.index) || f.stones >= S.ROCKS_ADVISE || (c.history.length > 0 && f.stones >= 0.3)
+  if (kind === 'brush') return c.history.length > 0 && f.elev === 0
+  return true
+}
+
+// What the crop in barrels faces until it is hauled in.
+function barrels(world: S.World, c: S.Campaign, i: number): S.HaulInfo | undefined {
+  return S.haulInfo(world, c).find(x => x.field === i)
+}
+
 export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTicket: (lot: number) => void }): Card {
   const app = ctx.app
   const el = h('section', { class: 'card instrument', 'aria-label': 'Selected', testid: 'card', hidden: true })
@@ -70,7 +86,7 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
       const f = S.fieldInfo(c, i)
       const need = needs[i]?.need?.act
       for (const a of S.fieldActions(app.world, c, i)) {
-        if (!a.ok || (u && !S.canDo(u.kind, a.kind))) continue
+        if (!a.ok || (u && S.unitBlock(c, a.kind, u.id)) || !landCare(c, f, a.kind)) continue
         const sc = score(a.kind, f, s, need === a.kind)
         const x = by.get(a.kind)
         if (x) { x.fields.push(i); x.days += a.days; x.cost += a.cost; x.score = Math.max(x.score, sc) }
@@ -92,7 +108,8 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
     if (!c || !c.season) return
     if (!app.selection.length) { ctx.say(ctx.touch() ? 'Tap a field first, then give it an order.' : 'Select a field first: click it, or press its number.'); return }
     const u = picked(c)
-    if (u && !S.canDo(u.kind, kind)) { flash(`${JOB_VERB[kind]}: ${S.unitBlock(c, kind, u.id)} Press its chip again to let any crew take orders.`); return }
+    const busy = u ? S.unitBlock(c, kind, u.id) : ''
+    if (u && busy) { flash(`${JOB_VERB[kind]}: ${busy} Close their card to let anyone take orders.`); return }
     const before = shown(offers(c, app.selection)).map(x => x.kind)
     const res = app.order(kind, { first })
     const took = res.filter(r => r.ok)
@@ -128,7 +145,7 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
     return all.filter(x => page === 0 ? top.includes(x.kind) : !top.includes(x.kind))
   }
 
-  function orderRow(c: S.Campaign, sel: number[], suggestedKind: S.JobKind | null): Child {
+  function orderRow(c: S.Campaign, sel: number[], suggestedKind: S.JobKind | null, extra: HTMLElement[] = []): Child {
     const all = offers(c, sel)
     const now = performance.now()
     if (held && now >= held.until) held = null
@@ -159,12 +176,84 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
     })
     const u = picked(c)
     const who = u ? h('span', { class: 'order-who', title: touch ? undefined : `Orders go to ${u.name === S.FARMER_NAME ? 'you' : u.name}` },
-      icon(KIND_GLYPH[u.kind], 'ic s'), h('span', { class: 'order-who-name' }, u.name), h('span', { class: 'sr' }, `: these orders go to ${u.name === S.FARMER_NAME ? 'you' : u.name}`)) : null
+      portrait(u.id, 'portrait s'), h('span', { class: 'order-who-name' }, firstName(u.name)), h('span', { class: 'sr' }, `: these orders go to ${u.name === S.FARMER_NAME ? 'you' : u.name}`)) : null
     const more = all.length > MAX_ORDERS && !held ? h('button', {
       class: 'order more', type: 'button', testid: 'order-more', 'aria-label': page === 0 ? 'More orders' : 'Back to the first orders', 'aria-pressed': String(page === 1),
       onclick: () => { page = page === 0 ? 1 : 0; ctx.dirty() },
     }, icon(page === 0 ? 'more' : 'back')) : null
-    return cells.length || more ? h('div', { class: 'orders', role: 'group', 'aria-label': u ? `Orders for ${u.name === S.FARMER_NAME ? 'you' : u.name}` : 'Orders' }, who, cells, more) : null
+    const room = extra.slice(0, Math.max(0, MAX_ORDERS - cells.length))
+    return cells.length || more || room.length ? h('div', { class: 'orders', role: 'group', 'aria-label': u ? `Orders for ${u.name === S.FARMER_NAME ? 'you' : u.name}` : 'Orders' }, who, cells, room, more) : null
+  }
+
+  // A contractor's job, ordered and paid for at once: stumps pulled, tile laid.
+  function contractor(c: S.Campaign, i: number, kind: 'stump' | 'tile'): HTMLElement | null {
+    const why = kind === 'stump' ? S.stumpBlock(c, i) : S.tileBlock(c, i)
+    if (why) return null
+    const fee = kind === 'stump' ? S.STUMP_FEE : S.TILE_FEE
+    const days = kind === 'stump' ? S.STUMP_DAYS : S.TILE_DAYS
+    return h('button', {
+      class: 'order', type: 'button', testid: `order-${kind}`,
+      title: ctx.touch() ? undefined : kind === 'stump' ? 'A contractor with a bulldozer pulls the stumps.' : 'A contractor lays tile under the field: it drains like the slope, and holds a little less water in a drought.',
+      onclick: () => {
+        const r = ctx.run({ t: kind, field: i })
+        if (r.ok) ctx.announce(F.localize(r.events[0]?.text ?? ''))
+      },
+    }, icon(kind), h('span', { class: 'order-name' }, kind === 'stump' ? 'Pull stumps' : 'Tile drains'), h('span', { class: 'order-meta num' }, ` ${F.money(fee)} · ${days}d`),
+    h('span', { class: 'sr' }, `. A contractor, ${days} season days.`))
+  }
+
+  // The land under the crop, where it matters: stones, shelter, barrels waiting to be hauled.
+  function landLine(c: S.Campaign, f: S.FieldInfo): HTMLElement | null {
+    const parts: HTMLElement[] = []
+    const haul = barrels(app.world, c, f.index)
+    if (haul) {
+      const who = haul.hauler >= 0 ? c.crew.find(u => u.id === haul.hauler) : undefined
+      parts.push(h('span', { class: `reading${haul.frostChance >= 30 ? ' blight' : ''}`, testid: 'barrels' }, icon('haul', 'ic s'),
+        h('span', null, `${F.mass(haul.cwt)} in barrels${who ? `, ${firstName(who.name)} hauling` : haul.digging ? '' : ', waiting to be hauled'}${haul.frostChance >= 30 ? `; ${haul.frostChance}% frost tonight` : ''}`)))
+    }
+    if (f.works) parts.push(h('span', { class: 'reading' }, icon(f.works.kind, 'ic s'), h('span', null, `${f.works.kind === 'stump' ? 'Stumps coming out' : 'Tile going in'}: ${F.plural(f.works.left, 'day')} more`)))
+    if (f.stones >= 0.4 || (c.history.length > 0 && f.stones >= 0.3)) parts.push(h('span', { class: 'reading quiet', testid: 'stones' }, icon('rocks', 'ic s'), h('span', null, `${F.upper(stonesWord(f.stones))}: ${stonesText(f.stones)}`)))
+    if (f.sheltered && f.status !== 'dug') parts.push(h('span', { class: 'reading quiet', testid: 'shelter' }, icon('woods', 'ic s'), h('span', null, `Sheltered by ${f.shelteredBy}: less wind, more blight weather`)))
+    if (f.brushed > 0) parts.push(h('span', { class: 'reading quiet' }, icon('brush', 'ic s'), h('span', null, `Hedgerows cut: back in ${F.plural(f.brushed, 'year')}`)))
+    if (f.raw && f.status !== 'off') parts.push(h('span', { class: 'reading quiet' }, icon('idle', 'ic s'), h('span', null, 'New ground: a first potato crop grows less')))
+    return parts.length ? h('div', { class: 'card-land' }, parts) : null
+  }
+
+  // A tract: where its clearing stands, what the next step costs and yields, and the orders that move it on.
+  function tractBody(c: S.Campaign, i: number): Child {
+    const t = S.tractInfo(c).find(x => x.field === i)!
+    const f = S.fieldInfo(c, i)
+    const cropped = t.stage === 'done' && f.status !== 'off'
+    const at = t.stage === 'fell' ? 0 : t.stage === 'stump' ? 1 : t.stage === 'rocks' ? 2 : cropped ? 4 : 3
+    const steps = [...CLEAR_STEPS.slice(0, 3), { stage: 'done' as S.ClearStage, word: 'Picked', glyph: 'rocks' }, CLEAR_STEPS[3]]
+    const left = t.stage === 'fell' ? t.fellLeft : 0
+    const logs = t.timber * (1 - t.felled) * (S.FELL_YIELD_BASE + S.FELL_YIELD_PER * 5)
+    const stone = S.ROCKS_LOADS * Math.min(t.stones, S.ROCKS_TAKE)
+    const yields = t.stage === 'fell' ? `Yields about ${Math.round(logs)} loads of logs.` : t.stage === 'rocks' ? `Yields about ${Math.round(stone)} loads of fieldstone.` : ''
+    const shelters = t.shelters.length ? `It shelters ${F.list(t.shelters.map(x => S.FIELD_NAMES[x]))}.` : ''
+    const extra = [contractor(c, i, 'stump')].filter((x): x is HTMLElement => !!x)
+    const rows = orderRow(c, [i], t.stage === 'fell' ? 'fell' : t.stage === 'rocks' ? 'rocks' : null, extra)
+    const next = t.works ? `The bulldozer is pulling stumps: ${F.plural(t.works.left, 'season day')} more.` : t.next ? F.localize(t.next) : f.status === 'off' ? 'Cleared. It can be cropped next spring: a year in oats and clover first lifts the raw ground.' : ''
+    return [
+      head(t.name, `${F.upper(t.coverWord)} · ${t.tenure === 'none' ? `for sale, ${F.money(t.price)}` : 'the farm\'s'}`, 'close'),
+      h('ol', { class: 'tract-track', testid: 'clear-track', 'aria-label': `Clearing: ${steps[at].word.toLowerCase()}, step ${at + 1} of ${steps.length}` },
+        steps.map((st, k) => h('li', { class: k < at ? 'done' : k === at ? 'now' : '' },
+          icon(k < at ? 'check' : st.glyph, 'ic s'), h('span', null, st.word),
+          k === 0 && at === 0 && t.felled > 0 ? gauge(t.felled, { label: 'Felled', text: `${F.pct(t.felled)} felled` }) : null))),
+      h('div', { class: 'card-main' },
+        h('p', { class: 'card-line note' }, next, left > 0 && c.phase === 'season' ? ' In the season it goes at half speed.' : ''),
+        yields || shelters ? h('p', { class: 'card-line' }, [yields, shelters].filter(Boolean).join(' ')) : null,
+        t.tenure === 'none' ? line(`It can be bought in spring, ${F.money(t.price)}.`) : !rows ? line(queuedHere(c, i)) : line('')),
+      rows,
+    ]
+  }
+
+  // What is on the list for a tract, in words, when nothing more can be ordered there.
+  function queuedHere(c: S.Campaign, i: number): string {
+    const jobs = c.season?.jobs.filter(j => j.field === i) ?? []
+    if (!jobs.length) return c.phase === 'season' ? 'Nothing more can be done here now.' : ''
+    const who = jobs.map(j => c.crew.find(u => u.job === j.id)).find(Boolean)
+    return `${jobText(jobs[0])} is on the list${who ? `: ${firstName(who.name)} is on it` : ''}.`
   }
 
   function line(text: Child, cls = ''): HTMLElement {
@@ -265,8 +354,15 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
 
   function one(c: S.Campaign, i: number): Child {
     const f = S.fieldInfo(c, i)
+    if (isTract(i) && (f.cover !== 'open' || f.status === 'off')) return tractBody(c, i)
     const need = app.needs()[i]?.need
     const lot = f.lot >= 0 ? c.lots.find(l => l.id === f.lot) : undefined
+    if (f.status === 'dug' && lot && !f.weighed) {
+      return [
+        head(f.name, `${f.variety} · dug, coming in`, 'close'),
+        h('div', { class: 'card-main' }, landLine(c, f), line('The weigh ticket comes when the last barrel is in the potato house.')),
+      ]
+    }
     if (f.status === 'dug' && lot) {
       const value = lot.open ? S.lotValue(app.world, c, lot) : 0
       const cull = culledAtDig(lot)
@@ -288,14 +384,15 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
             icon('ticket'), h('span', { class: 'order-name' }, 'Ticket'), h('span', { class: 'order-meta' }, 'the weigh-in'))),
       ]
     }
-    const rows = orderRow(c, [i], need && isJob(need.act) ? need.act : null)
+    const extra = c.history.length > 0 ? [contractor(c, i, 'tile')].filter((x): x is HTMLElement => !!x) : []
+    const rows = orderRow(c, [i], need && isJob(need.act) ? need.act : null, extra)
     if (f.status === 'rest' || f.status === 'lost') {
-      return [head(f.name, f.status === 'rest' ? 'Oats and clover · resting' : `${f.variety} · lost`, 'close'), h('div', { class: 'card-main' }, adviceLine(c, [i], false))]
+      return [head(f.name, f.status === 'rest' ? 'Oats and clover · resting' : `${f.variety} · lost`, 'close'), h('div', { class: 'card-main' }, landLine(c, f), adviceLine(c, [i], !!rows)), rows]
     }
     return [
       head(f.name, `${f.variety} · ${(SHORT_STAGE[f.stage] ?? f.stage).toLowerCase()}`, 'close'),
       gauges(c, f),
-      h('div', { class: 'card-main' }, h('div', { class: 'card-known' }, reading(c, f), estimate(c, f)), adviceLine(c, [i], !!rows)),
+      h('div', { class: 'card-main' }, h('div', { class: 'card-known' }, reading(c, f), estimate(c, f)), landLine(c, f), adviceLine(c, [i], !!rows)),
       rows,
     ]
   }
@@ -330,7 +427,8 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
     const model = {
       sel, layout: ctx.layout(), day: s.day, jobs: s.jobs.map(j => [j.id, j.kind, j.field, Math.round(j.done * 20)]), u: app.settings.units, t: ctx.touch(), page,
       held: held && performance.now() < held.until ? [held.kinds, held.given] : 0, flash: flashed && performance.now() < flashed.until ? flashed.text : '',
-      f: sel.map(i => { const f = S.fieldInfo(c, i); return [f.status, f.stage, Math.round(f.canopy * 100), Math.round(f.moisture * 50), f.moistureLabel, Math.round(f.protect * 100), f.hillPasses, f.blightHills, f.scoutAge, f.estimate ? [Math.round(f.estimate.lo), Math.round(f.estimate.hi), f.estimate.digs] : 0, Math.round(f.skin * 100), f.lot] }),
+      f: sel.map(i => { const f = S.fieldInfo(c, i); return [f.status, f.stage, Math.round(f.canopy * 100), Math.round(f.moisture * 50), f.moistureLabel, Math.round(f.protect * 100), f.hillPasses, f.blightHills, f.scoutAge, f.estimate ? [Math.round(f.estimate.lo), Math.round(f.estimate.hi), f.estimate.digs] : 0, Math.round(f.skin * 100), f.lot, f.cover, Math.round(f.stones * 100), f.works, Math.round(f.inField), f.weighed, f.sheltered, f.brushed, c.fields[i].felled] }),
+      cash: Math.round(c.cash / 100), crew: c.crew.map(u => [u.id, u.job, u.prio]), fc: S.haulInfo(app.world, c).map(x => [x.field, x.frostChance, x.hauler]),
       n: app.needs().filter((_, i) => sel.includes(i)).map(x => [x.need?.id, x.need?.why, x.hold?.id, x.hold?.why]),
       lots: c.lots.filter(l => sel.includes(l.field)).map(l => [l.id, l.open, Math.round(S.lotCwt(l)), Math.round(l.sold), l.open ? Math.round(S.lotValue(app.world, c, l)) : 0]),
       frozen: s.frozen, w: s.watchDay >= 0, soil: Math.round(s.soilT * 2), unit: app.unit,

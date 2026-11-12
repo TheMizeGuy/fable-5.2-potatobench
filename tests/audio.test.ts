@@ -37,6 +37,16 @@ describe('which cue answers which event', () => {
     expect(heard.size).toBeGreaterThan(18)
   })
 
+  it('has the cues the interface\'s motion names, and one whistle for a day\'s new needs', () => {
+    const byId = new Map(CUES.map(c => [c.id, c]))
+    for (const id of ['heard', 'need', 'ticket', 'tearOff', 'door', 'settled', 'deed', 'paidOff', 'goal']) expect(byId.has(id), id).toBe(true)
+    // Four fields wanting planting on one day are one call: the gap is longer than a day at the fastest clock.
+    expect(byId.get('need')!.gap).toBeGreaterThanOrEqual(1 / 2.1)
+    expect(byId.get('need')!.rank).toBe(1)
+    // The year's close is a moment that waits for nothing and is never a warning.
+    expect(byId.get('ledger')!.share).toBe('close')
+  })
+
   it('keeps the people who leave, and the hurt, off the crop warning', () => {
     expect(ids([ev('quit', 'bad')])).toEqual(['left'])
     expect(ids([ev('poached', 'bad')])).toEqual(['left'])

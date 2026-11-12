@@ -70,6 +70,7 @@ interface Moment {
   ledger?: boolean
   goal?: boolean
   order?: boolean
+  need?: number               // a new need: 1 when it cannot wait
   pick?: ['field' | 'tract' | 'person' | 'yard', number]
   run?: (rig: Rig, t: number, amb: Ambience) => void
 }
@@ -98,6 +99,7 @@ function drive(rig: Rig, seconds: number, script: [number, Moment][]): void {
       if (m.ledger) director.ledger(now)
       if (m.goal) director.goal(now)
       if (m.order) director.order(now)
+      if (m.need !== undefined) director.need(now, m.need > 0)
       if (m.pick) director.pick(m.pick[0], m.pick[1], now)
       m.run?.(rig, now, amb)
     }
@@ -203,9 +205,11 @@ const FARMSTEAD: [string, number, string, Feature[], number][] = [
   ['pickPerson', 2, 'bed-june-work', ['lines'], 1],
   ['pickYard', 2, 'bed-june', [], -1],
   ['heard', 2, 'bed-june-work', [], 0],
+  ['need', 3, 'bed-june-work', ['notes'], 0],
+  ['tearOff', 2.5, 'bed-september-work', [], 0],
   ['rocks', 3, 'bed-june', ['blows'], 0],
   ['brushed', 3, 'bed-september', [], 0],
-  ['ticket', 4, 'bed-september-work', ['blows'], 0],
+  ['ticket', 6, 'bed-september-work', ['blows'], 0],
   ['felled', 7.5, 'bed-september', ['blows', 'low'], 0],
   ['stumped', 5, 'bed-june', ['blows', 'low'], 0],
   ['tiled', 4.5, 'bed-june', ['lines'], 0],
@@ -231,9 +235,11 @@ const FARMSTEAD: [string, number, string, Feature[], number][] = [
 const farmstead: Case[] = FARMSTEAD.map(([id, seconds, over, features, arg]) => {
   const spec = CUES.find(c => c.id === id)!
   // The knock that answers every order is the one routine cue kept under the rest: it sounds more often than any.
-  const plan = id === 'heard' ? { momentary: [-38, -27] as [number, number] } : RANK_PLAN[spec.rank]
+  // The whistle for a new need is the one routine cue that has to carry: the clock does not stop for it.
+  const plan: Plan = id === 'heard' ? { momentary: [-38, -27] } : id === 'need' ? { momentary: [-29, -23], carries: true } : RANK_PLAN[spec.rank]
   return oneShot(`cue-${id}`, `cue: ${id} (${spec.on})`, seconds, plan.momentary!, over, r => { spec.play(r, START, arg) }, {
-    features, plan, family: spec.share, rank: spec.rank, win: seconds > 6 ? 4096 : 2048,
+    features, plan, family: spec.share ?? (id === 'need' ? 'need' : undefined), rank: spec.rank, win: seconds > 6 ? 4096 : 2048,
+    band: id === 'need' ? [800, 2400] : undefined,
   })
 })
 
@@ -241,7 +247,7 @@ const farmstead: Case[] = FARMSTEAD.map(([id, seconds, over, features, arg]) => 
 const FARM_YEAR: [number, Moment][] = [
   [1, { events: [ev('hired')] }], [3, { events: [ev('accepted')] }], [4.5, { events: [ev('landBought', 'good')] }],
   [6.5, { events: [ev('building')] }], [8.5, { pick: ['person', 1] }], [9.5, { pick: ['yard', -1] }], [10.5, { pick: ['tract', 14] }],
-  [11.5, { pick: ['field', 2] }], [12, { order: true }], [13.5, { events: [ev('rocks')] }], [15.5, { events: [ev('brushed')] }],
+  [11.5, { pick: ['field', 2] }], [12, { order: true }], [12.8, { need: 0 }], [13.5, { events: [ev('rocks')] }], [15.5, { events: [ev('brushed')] }],
   [17.5, { events: [ev('skillUp', 'good', -1)] }], [19.5, { events: [ev('wornOut', 'warn', -1)] }], [22, { events: [ev('breakdown', 'warn', -1)] }],
   [25, { events: [ev('repaired', 'good', -1)] }], [28, { events: [ev('incident', 'warn', -1, { kind: 'applicant' })] }],
   [31, { events: [ev('incidentDone', 'info', -1)] }], [33, { events: [ev('built', 'good', -1)] }], [36, { goal: true }],
@@ -387,6 +393,9 @@ export const CASES: Case[] = [
   oneShot('cue-kept', 'cue: five seasons kept', 14, [-26, -20], 'bed-year-end', r => { cue.cadence(r, START, 'kept') }, { win: 4096, features: ['lines'], family: 'close', rank: 3 }),
   oneShot('cue-lost', 'cue: the farm lost', 16, [-30, -23], 'bed-year-end', r => { cue.cadence(r, START, 'lost') }, { win: 4096, features: ['lines'], family: 'close', rank: 3 }),
   ...farmstead,
+  oneShot('cue-need-urgent', 'cue: need, called twice (a new need that cannot wait)', 3.5, [-29, -23], 'bed-may-rain', r => { CUES.find(c => c.id === 'need')!.play(r, START, 1) }, {
+    features: ['notes'], plan: { momentary: [-29, -23], carries: true }, cue: 'needUrgent', family: 'need', rank: 1, band: [800, 2400],
+  }),
 
   {
     id: 'change-weather', name: 'change: fair, then storm, then fair again', seconds: 40, kind: 'change', solo: false, ticks: true, plan: {},
@@ -534,6 +543,18 @@ export const CASES: Case[] = [
     },
   },
 
+  {
+    id: 'scene-needs', name: 'scene: a May morning at 3x: four fields want planting (one call), a pick and an order, a hilling need, an urgent one', seconds: 40, kind: 'scene', solo: false, fadeIn: true, ticks: true, song: true, plan: { lufs: [-38, -27] },
+    play(rig, secs) {
+      drive(rig, secs, [
+        [0, { input: SPRING }],
+        [6, { need: 0 }], [6.05, { need: 0 }], [6.1, { need: 0 }], [6.15, { need: 0 }],
+        [9, { pick: ['field', 2] }], [9.6, { order: true }], [10.4, { engine: [1, 1] }],
+        [16, { events: [ev('planted')] }], [20, { need: 0 }], [27, { engine: [0, 0] }], [30, { need: 1 }],
+        [34, { pick: ['field', 4] }], [34.5, { order: true }],
+      ])
+    },
+  },
   {
     id: 'stress', name: 'stress: storm, gale, engines, every kind of work and every cue at once', seconds: 9, kind: 'stress', solo: false, ticks: true, plan: {},
     play(rig, secs) {

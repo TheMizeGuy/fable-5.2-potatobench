@@ -1,0 +1,59 @@
+<svg class="cut" viewBox="0 0 300 330" role="img" aria-label="An engraving of a potato plant in flower, lifted to show its tubers">
+  <defs>
+    <pattern id="c-h" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(-38)"><path d="M0 0v4" stroke="currentColor" stroke-width="1.15"/></pattern>
+    <pattern id="c-h2" width="3" height="3" patternUnits="userSpaceOnUse" patternTransform="rotate(52)"><path d="M0 0v3" stroke="currentColor" stroke-width=".9"/></pattern>
+    <pattern id="c-soil" width="9" height="5" patternUnits="userSpaceOnUse"><path d="M0 2.5h7" stroke="currentColor" stroke-width="1.1"/></pattern>
+    <clipPath id="c-low"><rect x="-40" y="0" width="80" height="40"/></clipPath>
+    <!-- one leaflet: outline, midrib, and the engraver's shading laid on its lower half -->
+    <g id="c-lf">
+      <path d="M0 0C8-10 30-12 44 0 30 12 8 10 0 0z" fill="#f6f1e4" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"/>
+      <path d="M2 0C10 6 30 9 42 1 30 9 10 9 2 0z" fill="url(#c-h)"/>
+      <path d="M2 0h38" stroke="currentColor" stroke-width="1.5"/>
+    </g>
+    <!-- a compound leaf: rachis, two pairs and a tip -->
+    <g id="c-leaf">
+      <path d="M0 0C20-4 46-6 74-2" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/>
+      <use href="#c-lf" transform="translate(22 -2) rotate(-58) scale(.62)"/>
+      <use href="#c-lf" transform="translate(22 -2) rotate(52) scale(.62)"/>
+      <use href="#c-lf" transform="translate(46 -4) rotate(-50) scale(.72)"/>
+      <use href="#c-lf" transform="translate(46 -4) rotate(48) scale(.72)"/>
+      <use href="#c-lf" transform="translate(72 -2) rotate(-4) scale(.9)"/>
+    </g>
+    <g id="c-fl">
+      <path d="M0-10L2.6-3.6 9.5-3.1 4.2 1.4 5.9 8.1 0 4.4-5.9 8.1-4.2 1.4-9.5-3.1-2.6-3.6z" fill="#f6f1e4" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/>
+      <path d="M0-3.4L1.8 0 0 3.4-1.8 0z" fill="currentColor"/>
+    </g>
+    <g id="c-tb">
+      <path d="M-25 2C-26-9-14-17 0-16S27-10 26 1 13 17-1 16-24 12-25 2z" fill="#f6f1e4" stroke="currentColor" stroke-width="2.8" stroke-linejoin="round"/>
+      <path d="M-25 2C-26-9-14-17 0-16S27-10 26 1 13 17-1 16-24 12-25 2z" fill="url(#c-h2)" clip-path="url(#c-low)"/>
+      <circle cx="-13" cy="-6" r="1.6" fill="currentColor"/><circle cx="9" cy="-10" r="1.4" fill="currentColor"/><circle cx="18" cy="2" r="1.5" fill="currentColor"/>
+    </g>
+  </defs>
+  <!-- the ground, cut away in section -->
+  <path d="M10 214C70 212 110 196 150 194s84 18 140 20v116H10z" fill="url(#c-soil)" opacity=".85"/>
+  <path d="M10 214C70 212 110 196 150 194s84 18 140 20" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/>
+  <path d="M122 198l-6 9M132 196l-6 9M142 195l-6 9M152 195l-6 9M162 195l-6 9M172 196l-6 9M182 198l-6 9" stroke="currentColor" stroke-width="1.2"/>
+  <!-- stolons, and the soil kept back from each tuber -->
+  <path d="M150 200C130 228 96 236 74 262M150 200C152 236 136 268 128 292M150 200C174 230 206 236 226 254M150 200c18 34 36 50 40 72" fill="none" stroke="currentColor" stroke-width="2.4"/>
+  <g fill="#f6f1e4"><ellipse cx="66" cy="270" rx="32" ry="23"/><ellipse cx="128" cy="300" rx="28" ry="20"/><ellipse cx="232" cy="262" rx="31" ry="22"/><ellipse cx="192" cy="294" rx="22" ry="16"/></g>
+  <use href="#c-tb" transform="translate(66 270) rotate(-12)"/>
+  <use href="#c-tb" transform="translate(128 300) rotate(8) scale(.86)"/>
+  <use href="#c-tb" transform="translate(232 262) rotate(10)"/>
+  <use href="#c-tb" transform="translate(192 294) rotate(-6) scale(.68)"/>
+  <!-- stems -->
+  <path d="M148 196C144 150 120 116 92 88M152 196c4-48 26-84 58-110M150 196c-2-60 2-110 0-150" fill="none" stroke="currentColor" stroke-width="4.4" stroke-linecap="round"/>
+  <!-- leaves -->
+  <use href="#c-leaf" transform="translate(146 172) rotate(196)"/>
+  <use href="#c-leaf" transform="translate(154 168) rotate(-16) scale(1 -1)"/>
+  <use href="#c-leaf" transform="translate(144 128) rotate(214) scale(.9)"/>
+  <use href="#c-leaf" transform="translate(156 124) rotate(-36) scale(.9 -.9)"/>
+  <use href="#c-leaf" transform="translate(148 84) rotate(236) scale(.7)"/>
+  <use href="#c-leaf" transform="translate(152 80) rotate(-58) scale(.7 -.7)"/>
+  <!-- the flowers -->
+  <path d="M150 48l-14-18M150 48l14-18M150 48V22" stroke="currentColor" stroke-width="1.6"/>
+  <use href="#c-fl" transform="translate(136 28) scale(1.15)"/>
+  <use href="#c-fl" transform="translate(164 28) scale(1.15) rotate(20)"/>
+  <use href="#c-fl" transform="translate(150 16) scale(1.3) rotate(8)"/>
+  <use href="#c-fl" transform="translate(92 84) scale(.95) rotate(30)"/>
+  <use href="#c-fl" transform="translate(210 74) scale(.95) rotate(-12)"/>
+</svg>

@@ -1,0 +1,11 @@
+<!--defaults c0="" c1="" c2="" c3="" c4="" d0="Spraying" d1="Felling" d2="Building" d3="Scouting" d4="Idle" i0="spray" i1="woods" i2="hammer" i3="scout" i4="pause" next="" grid=""-->
+  <section class="timebook mount" aria-label="People">
+    <div class="page">
+      <button class="person{{c0}}" aria-label="You: {{d0}}"><svg class="bust" style="--shirt:#b8402e;--hat:#d8c48a;--skin:#e8b996;--hair:#5a3d24"><use href="#bust-farmer"/></svg><span class="nm">You</span><span class="doing"><i class="i i-{{i0}}"></i>{{d0}}</span><!--@{{next}}--></button>
+      <button class="person{{c1}}" aria-label="Normand: {{d1}}"><svg class="bust" style="--shirt:#2f6f9f;--hat:#3b3f45;--skin:#d9a47c;--hair:#2b211a"><use href="#bust-cap-moustache"/></svg><span class="nm">Normand</span><span class="doing"><i class="i i-{{i1}}"></i>{{d1}}</span></button>
+      <button class="person{{c2}}" aria-label="Alcide: {{d2}}"><svg class="bust" style="--shirt:#d9a441;--hat:#8c5a2b;--skin:#c48a62;--hair:#8a6a3c"><use href="#bust-felt-beard"/></svg><span class="nm">Alcide</span><span class="doing"><i class="i i-{{i2}}"></i>{{d2}}</span></button>
+      <button class="person{{c3}}" aria-label="Verna: {{d3}}"><svg class="bust" style="--shirt:#6b4c8a;--hat:#9c3226;--skin:#f0c8a8;--hair:#7a3b1f"><use href="#bust-kerchief"/></svg><span class="nm">Verna</span><span class="doing"><i class="i i-{{i3}}"></i>{{d3}}</span></button>
+      <button class="person{{c4}}" aria-label="Lucien: {{d4}}"><svg class="bust" style="--shirt:#e7e0cf;--hat:#27425c;--skin:#a8704c;--hair:#1c1c1c"><use href="#bust-curls"/></svg><span class="nm">Lucien</span><span class="doing"><i class="i i-{{i4}}"></i>{{d4}}</span></button>
+      <div class="tools"><button class="iconbtn{{grid}}" aria-label="Who does what"><i class="i i-grid"></i></button><button class="iconbtn" aria-label="Hire"><i class="i i-hire"></i></button></div>
+    </div>
+  </section>

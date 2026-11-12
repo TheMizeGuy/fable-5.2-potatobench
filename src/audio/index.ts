@@ -2,7 +2,7 @@
 // the truck, people at work when the player looks their way, and cues for what happens. Silent until the first
 // user gesture. It reads the game as the grower could: public campaign fields, the simulation's views and the app.
 import type { App, AppEvent, Screen } from '../game/app.ts'
-import type { CreateSound } from '../game/contracts.ts'
+import type { CreateSound, Sound } from '../game/contracts.ts'
 import { goals } from '../game/goals.ts'
 import { monthDay, today, type Campaign, type JobKind } from '../sim/index.ts'
 import { Ambience } from './ambience.ts'
@@ -75,9 +75,15 @@ export function workFor(app: App): { work: WorkScene; truck: number; tractor: [n
   return { work, truck, tractor }
 }
 
-export const createSound: CreateSound = (app: App) => {
+// The sound, with one thing more than the seam asks: any cue by its name in the director's list, for the interface
+// to sound at the moment its own motion lands (a stamp coming down, a coupon torn off).
+export interface SoundWithCues extends Sound {
+  cue(id: string, arg?: number): void
+}
+
+export const createSound: CreateSound = (app: App): SoundWithCues => {
   const AC = audioContextClass()
-  if (!AC || typeof document === 'undefined') return { frame() {}, dispose() {} }
+  if (!AC || typeof document === 'undefined') return { frame() {}, dispose() {}, cue() {} }
 
   let ctx: AudioContext | null = null
   let rig: Rig | null = null
@@ -201,6 +207,7 @@ export const createSound: CreateSound = (app: App) => {
     else if (e.type === 'events') { if (live() && director && ctx) director.events(e.events, ctx.currentTime) }
     else if (e.type === 'order') { if (live() && director && ctx) director.order(ctx.currentTime) }
     else if (e.type === 'select' || e.type === 'unit' || e.type === 'yard') onPick(e)
+    else if (e.type === 'alert' && e.alert.type === 'need') { if (live() && director && ctx) director.need(ctx.currentTime, e.alert.level !== 'info') }
     else if (e.type === 'screen') onScreen(e.screen)
     else if (e.type === 'change') checkGoals()
   })
@@ -208,6 +215,9 @@ export const createSound: CreateSound = (app: App) => {
   document.addEventListener('visibilitychange', apply)
 
   return {
+    cue(id: string, arg = 0) {
+      if (live() && director && ctx) director.cue(id, ctx.currentTime, arg)
+    },
     frame(dtMs: number) {
       if (!ctx || !amb || ctx.state !== 'running') return
       const now = ctx.currentTime

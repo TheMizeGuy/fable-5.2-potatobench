@@ -244,6 +244,40 @@ function write(rig: Rig, out: AudioNode, t: number, strokes: number[], amp: numb
   return at
 }
 
+// A sheet of paper put down flat: a breath of air and the slap of it landing.
+function slip(rig: Rig, out: AudioNode, t: number, amp: number): void {
+  const ctx = rig.ctx
+  burst(rig, out, t, amp * 0.6, 0.03, 0.03, filter(ctx, 'bandpass', 2600, 0.7), filter(ctx, 'highpass', 1200))
+  burst(rig, out, t + 0.07, amp, 0.002, 0.012, filter(ctx, 'bandpass', 1500, 0.8))
+}
+
+// Paper drawn over a roller: a soft hiss with the roller's ratchet in it.
+function feed(rig: Rig, out: AudioNode, t: number, dur: number, amp: number): void {
+  const ctx = rig.ctx
+  const n = noiseSource(rig, t)
+  const env = ctx.createGain()
+  swell(env.gain, t, dur, amp, 0.06, 0.1)
+  const teeth = gain(ctx, 0.6)
+  const o = ctx.createOscillator()
+  o.type = 'square'
+  o.frequency.value = 46
+  o.connect(gain(ctx, 0.4)).connect(teeth.gain)
+  n.connect(filter(ctx, 'bandpass', 3200, 0.8)).connect(filter(ctx, 'highpass', 1500)).connect(teeth).connect(env).connect(out)
+  o.start(t)
+  o.stop(t + dur + 0.02)
+  n.stop(t + dur + 0.02)
+}
+
+// A soft pencil drawn across paper: duller and lower than the steel nib.
+function pencil(rig: Rig, out: AudioNode, t: number, dur: number, amp: number): void {
+  const ctx = rig.ctx
+  const n = noiseSource(rig, t)
+  const env = ctx.createGain()
+  swell(env.gain, t, dur, amp, dur * 0.2, dur * 0.3)
+  n.connect(filter(ctx, 'bandpass', 2300, 0.9)).connect(filter(ctx, 'lowpass', 4500)).connect(env).connect(out)
+  n.stop(t + dur + 0.02)
+}
+
 // Paper torn along a perforation: fibres giving way in fits.
 function tear(rig: Rig, out: AudioNode, t: number, dur: number, amp: number): void {
   const ctx = rig.ctx
@@ -396,18 +430,69 @@ export function stamped(rig: Rig, t: number, coins: boolean): number {
   return at + (coins ? 0.75 : 0.35)
 }
 
-// The weigh ticket: the poise run out along the beam, the beam lifting to tap its stop and settling, and the ticket
-// torn off the pad.
+// When the scale's needle passes each grade's band on its way round: it starts fast and slows to the weight
+// (the interface sweeps it in 1.4 s).
+const BANDS = [0.1, 0.24, 0.42, 0.68, 1.05]
+
+// The weigh ticket, in the order the scale shows it: the grader's clack as the needle passes each grade's band,
+// the ticket fed out of the slot, the numbering machine stepping through the net weight, and the Weighed stamp
+// coming down, the one heavy stamp of the season.
 export function ticket(rig: Rig, t: number): number {
-  const out = voiceOut(rig, vary(rig, 0.05, 0.6), 0.22)
-  for (let k = 0; k < 4; k++) click(rig, out, t + 0.05 * k, vary(rig, 3200, 0.04), 0.06, 0.006)
-  const beam: Mode[] = [[1, 1, 0.14], [1.74, 0.55, 0.08], [2.71, 0.3, 0.045]]
-  const hz = vary(rig, 1880, 0.03)
-  ring(rig, out, t + 0.3, 0.12, beam, hz, 0.001)
-  burst(rig, out, t + 0.3, 0.2, 0.0005, 0.003, filter(rig.ctx, 'highpass', 3000))
-  ring(rig, out, t + 0.3 + vary(rig, 0.17, 0.1), 0.06, beam, hz * 1.01, 0.001)
-  tear(rig, out, t + 0.68, 0.24, 0.26)
-  return t + 1.1
+  const out = voiceOut(rig, vary(rig, 0.05, 0.6), 0.2)
+  const hz = vary(rig, 1500, 0.04)
+  for (const [k, dt] of BANDS.entries()) {
+    ring(rig, out, t + dt, 0.1, [[1, 1, 0.022], [1.74, 0.5, 0.014], [2.71, 0.25, 0.009]], hz * (1 + 0.03 * k), 0.001)
+    burst(rig, out, t + dt, 0.13, 0.001, 0.004, filter(rig.ctx, 'highpass', 2800))
+  }
+  // The ticket coming out of the slot: half a second of paper over a roller.
+  feed(rig, out, t + 1.45, 0.5, 0.16)
+  for (let k = 0; k < 5; k++) ring(rig, out, t + 2.3 + 0.1 * k, 0.05, [[1, 1, 0.01], [1.83, 0.6, 0.007]], vary(rig, 2500, 0.03), 0.002)
+  const stamp = t + 2.95
+  stampDown(rig, out, stamp, 0.85)
+  return stamp + 0.45
+}
+
+// A coupon torn off the ticket along its perforation.
+export function tearOff(rig: Rig, t: number): number {
+  tear(rig, voiceOut(rig, vary(rig, 0.05, 0.4), 0.1), t, 0.26, 0.24)
+  return t + 0.35
+}
+
+// The rubber stamp on an order's line: small, and under a tenth of a second after the knock.
+export function orderStamp(rig: Rig, t: number): number {
+  stampDown(rig, voiceOut(rig, vary(rig, 0, 0.3), 0.04), t, 0.2)
+  return t + 0.12
+}
+
+// A new need on a field: someone out there whistles to be looked at. Two notes through the teeth, the second a
+// fourth above the first, lower and breathier than any bird in the bed; `twice` when it cannot wait.
+export function need(rig: Rig, t: number, twice: number): number {
+  const ctx = rig.ctx
+  const out = voiceOut(rig, vary(rig, 0.15, 0.6), 0.22)
+  const base = vary(rig, 1245, 0.03)
+  let at = t
+  for (let n = 0; n <= (twice ? 1 : 0); n++) {
+    for (const [dt, dur, up, amp] of [[0, 0.1, 1, 0.07], [0.13, 0.19, 1.335, 0.085]]) {
+      const o = ctx.createOscillator()
+      // Each note is scooped up into, as a whistle is.
+      o.frequency.setValueAtTime(base * up * 0.94, at + dt)
+      o.frequency.linearRampToValueAtTime(base * up, at + dt + 0.035)
+      o.frequency.linearRampToValueAtTime(base * up * 1.01, at + dt + dur)
+      const g = ctx.createGain()
+      swell(g.gain, at + dt, dur, amp, 0.022, 0.05)
+      o.connect(g).connect(out)
+      o.start(at + dt)
+      o.stop(at + dt + dur + 0.02)
+      // The breath round the note.
+      const breath = noiseSource(rig, at + dt)
+      const air = ctx.createGain()
+      swell(air.gain, at + dt, dur, amp * 2.2, 0.02, 0.05)
+      breath.connect(filter(ctx, 'bandpass', base * up, 9)).connect(air).connect(out)
+      breath.stop(at + dt + dur + 0.02)
+    }
+    at += 0.46
+  }
+  return at
 }
 
 // ---------------------------------------------------------------- land
@@ -554,22 +639,26 @@ export function atTheDoor(rig: Rig, t: number): number {
     rap(rig, out, at, amp)
     at += vary(rig, 0.23, 0.06)
   }
+  // The telegram put down on the table.
+  slip(rig, out, at + 0.12, 0.2)
   return at + 0.35
 }
 
-// The matter closed: the door eased shut and its latch dropping.
+// The matter closed, answered or let lapse: a stamp on the telegram, and the door's latch dropping.
 export function settled(rig: Rig, t: number): number {
   const out = voiceOut(rig, vary(rig, 0, 0.3), 0.2)
-  ring(rig, out, t, 0.15, DOOR, 1.03, 0.004)
-  burst(rig, out, t, 0.2, 0.004, 0.015, filter(rig.ctx, 'lowpass', 1200))
-  click(rig, out, t + 0.07, 1650, 0.07, 0.02)
-  return t + 0.4
+  stampDown(rig, out, t, 0.42)
+  click(rig, out, t + 0.16, 1650, 0.07, 0.02)
+  return t + 0.45
 }
 
 // A goal met: the year-end amen in small (IV to I in F on the parlour organ) under four struck bars climbing the
 // chord of F to its fifth. The one sound in the game written to be wanted again.
-export function goalMet(rig: Rig, t: number): number {
+export function goalMet(rig: Rig, at: number): number {
   const ctx = rig.ctx
+  // The line on the slip struck through in pencil, as the interface draws it; then the music.
+  pencil(rig, voiceOut(rig, -0.1, 0.05), at, 0.2, 0.22)
+  const t = at + 0.16
   const lp = filter(ctx, 'lowpass', 1500, 0.5)
   lp.connect(voiceOut(rig, 0, 0.3))
   for (const m of [58, 62, 65]) pad(rig, lp, t, midiHz(m), 0.34, 0.2, 0.04)

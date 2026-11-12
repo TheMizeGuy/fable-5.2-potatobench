@@ -1,0 +1,1783 @@
+{
+ "sets": {
+  "A": "instrument",
+  "B": "as-it-stood",
+  "C": "papers",
+  "D": "print"
+ },
+ "judges": [
+  {
+   "ranking": [
+    "C",
+    "D",
+    "A",
+    "B"
+   ],
+   "firstRead": [
+    {
+     "set": "B",
+     "whatIsIt": "A farm-management sim over a 3D map of named potato fields, though the dark bars and plain type make it look more like a web dashboard than a game.",
+     "nextThing": "The bottom-right note says 'Nothing needs doing now. Let the days run.' I would click Play (the triangle at top right). The unlabeled -$34,980 at top worries me, and nothing tells me why."
+    },
+    {
+     "set": "D",
+     "whatIsIt": "A chunky, poster-styled farming strategy game. It reads as a game at once: field signs, round order badges, portraits and a forecast strip.",
+     "nextThing": "The yellow banner says 'Spray before the blight'. I would click the red spray badge on Bottom Field, which is the badge that matches the banner. I don't know what the '0/1,500' chip means."
+    },
+    {
+     "set": "A",
+     "whatIsIt": "A farm game dressed as a tractor instrument panel, with an odometer cash counter, LEDs, brass plates and a packer gauge.",
+     "nextThing": "'NEXT Spray before the blight 2/4', but three fields have identical yellow badges for different orders, so I'm not sure which to click. I'd try North Ridge. The letter pins N, Y, V, A and B mean nothing to me."
+    },
+    {
+     "set": "C",
+     "whatIsIt": "A farming game in the style of an almanac: tear-off calendar, yellow sticky note, paper field tags and red rubber-stamp order badges.",
+     "nextThing": "The sticky note says 'Spray before the blight' and crosses off 'Plant a field'. I would click the ringed red spray stamp on Upper Middle, the only badge with a ring. Verna's red '!' tells me she also needs me."
+    }
+   ],
+   "scores": [
+    {
+     "set": "C",
+     "overall": 8,
+     "identity": 8,
+     "clarity": 8.5,
+     "fitsTheScene": 8,
+     "moments": 8,
+     "phone": 8.5,
+     "note": "The quickest set to read on the season screen: one goal on a sticky note, one ringed target, and a contract labeled 'Kennebec, by fall'. The paper style belongs to a farm and sits lightly on the land. It is let down by small marks it never explains: letter flags, tally marks and the three checkboxes."
+    },
+    {
+     "set": "D",
+     "overall": 7.5,
+     "identity": 9,
+     "clarity": 8,
+     "fitsTheScene": 6.5,
+     "moments": 9,
+     "phone": 7,
+     "note": "The most game-like and the strongest at the big moments. The incident card, the ticket's 'Brings most' flag and the ledger are best in class. But the heavy framed panels and all-caps condensed type cover a lot of the land and slow the reading, especially on the phone, where the top stack takes over a quarter of the screen."
+    },
+    {
+     "set": "A",
+     "overall": 6,
+     "identity": 7.5,
+     "clarity": 6,
+     "fitsTheScene": 5,
+     "moments": 7,
+     "phone": 5,
+     "note": "A memorable instrument-panel look that costs too much: the chrome crowds the land, all the order badges glow the same yellow so the next action isn't tied to one field, the ledger's polar cash chart can't be read cold, and the phone season screen shows no money and no names."
+    },
+    {
+     "set": "B",
+     "overall": 5,
+     "identity": 3,
+     "clarity": 7,
+     "fitsTheScene": 8.5,
+     "moments": 4.5,
+     "phone": 7,
+     "note": "Clear and polite, and it leaves the most land visible, but it reads as a web form laid over a game. The ticket and ledger are walls of small text with no sense of reward, and the contract chip is cut off at the screen edge."
+    }
+   ],
+   "bestScreens": [
+    {
+     "screen": "title",
+     "set": "D",
+     "why": "A bold poster wordmark and a cutaway of the potato plant showing tubers underground explain the game's hook in one picture. Play and Continue (with the save's date) are the obvious two choices."
+    },
+    {
+     "screen": "season (nothing selected)",
+     "set": "C",
+     "why": "One sticky-note goal with the previous goal crossed off, one ringed stamp on the field to click, a '!' on the person who needs you, and the contract labeled in words ('Kennebec, by fall, 0 / 1,500 cwt'). A newcomer knows where to click within seconds."
+    },
+    {
+     "screen": "season-card (field orders)",
+     "set": "C",
+     "why": "Each order shows its time and cost plus a plain reason line ('Before Wednesday's rain', 'Rain may do it Wednesday', 'Your only look at the crop'), and the queued order reads 'on the list' both on the card and on the map tag."
+    },
+    {
+     "screen": "people (card and work grid)",
+     "set": "C",
+     "why": "A light card and grid with circled 1s for 'first', mood written as short prose ('nine days without a Sunday'), and clear Raise / Foreman / Let go buttons. Both panels leave the land visible, where D and A bury it."
+    },
+    {
+     "screen": "incident",
+     "set": "D",
+     "why": "A big red header, a '5 DAYS' countdown, the portrait, two choices with numbered keys, the cost difference spelled out ('$95 more a month' against 'Nothing'), and a 'STOPPED FOR YOU' tag on the clock. It is the fastest decision of the four."
+    },
+    {
+     "screen": "spring",
+     "set": "D",
+     "why": "Sections fold away, a hired hand is clearly marked HIRED, and the plan total and START THE SEASON are always visible. The phone version cuts each hand down to the single skill that matters."
+    },
+    {
+     "screen": "ticket",
+     "set": "D",
+     "why": "A huge yield figure, a 'Weighed' stamp, a red ticket stub, and a 'BRINGS MOST' flag that tells the player which of the three sale options pays best. It feels like a payoff, not a report."
+    },
+    {
+     "screen": "ledger",
+     "set": "D",
+     "why": "The money column on the left, and on the right a big 'worth' figure, your crop set against the neighbor and the county, and what each person did this year, closed by a SATISFIED stamp. The year reads as a story."
+    },
+    {
+     "screen": "menu",
+     "set": "D",
+     "why": "Continue, settings and a complete How to play with every order, its key and a one-line reason, all in one calm three-panel spread. A's figure strip is the one piece worth taking from the others."
+    },
+    {
+     "screen": "season.phone",
+     "set": "C",
+     "why": "Balance, date, four days of weather, the goal note, one ringed target, speed controls within thumb reach, and named people with their status. Nothing is missing and the land still fills the middle."
+    },
+    {
+     "screen": "spring.phone",
+     "set": "D",
+     "why": "Each hand reduced to portrait, trait, top skill bar, wage and Hire, so three fit on one screen above a fixed plan total and START button."
+    }
+   ],
+   "graft": [
+    {
+     "from": "D",
+     "idea": "Incident choices that state the cost difference in plain words ('$95 more a month' / 'Nothing'), numbered key hints on each choice, and a visible 'Stopped for you' tag on the clock while a decision is waiting."
+    },
+    {
+     "from": "D",
+     "idea": "A 'Brings most' flag on the best-paying sale option of the weigh ticket, so the payoff screen also tells you what to do next."
+    },
+    {
+     "from": "D",
+     "idea": "Add the county average to the ledger's crop comparison next to the neighbor, and a large 'worth' figure as the headline of the farm side."
+    },
+    {
+     "from": "D",
+     "idea": "On the phone spring sheet, show only each hand's top skill bar instead of all five, so three applicants fit on one screen."
+    },
+    {
+     "from": "A",
+     "idea": "The packer gauge: one strip showing 'promised 1,200' against 'growing 1,150-1,600' with the deadline. It answers 'am I on track for the contract' at a glance, better than a bare 0/1,500."
+    },
+    {
+     "from": "A",
+     "idea": "Give the Store option a concrete estimated figure ('~$17,260 by April') instead of a percentage or a question mark."
+    },
+    {
+     "from": "A",
+     "idea": "The How to play figure strip (1 Select, 2 Order, 3 Let time run), drawn with the game's real field tag, order badge and speed control, followed by the season-by-season line."
+    },
+    {
+     "from": "B",
+     "idea": "An explicit empty-state line when nothing needs you: 'Nothing needs doing now. Let the days run.', paired with a highlight on the play control."
+    },
+    {
+     "from": "B",
+     "idea": "On the phone, put play / speed / skip in one bottom thumb bar beside the selected person's status."
+    }
+   ],
+   "faults": [
+    {
+     "set": "C",
+     "screen": "ticket",
+     "fault": "The hand-drawn circle around $12,846 runs through the line below ('1,028 cwt at the contract's'), so that text looks struck out.",
+     "serious": true
+    },
+    {
+     "set": "C",
+     "screen": "season",
+     "fault": "People are shown on the map as single-letter flags (N, V, Y, A, L) that a newcomer cannot connect to the portraits. Use small face pins as D does.",
+     "serious": true
+    },
+    {
+     "set": "C",
+     "screen": "season",
+     "fault": "The three checkboxes beside the goal, and the tally marks under each person in the people bar, are never explained.",
+     "serious": false
+    },
+    {
+     "set": "C",
+     "screen": "incident",
+     "fault": "The all-caps typewriter telegram lines ('HILLING BOTTOM FIELD STOP') are charming but slower to read than plain prose. Only the italic line below says the actual effect.",
+     "serious": false
+    },
+    {
+     "set": "C",
+     "screen": "ledger",
+     "fault": "A 'NOTE PAID' stamp next to 'In debt. The bank calls the note below -$20,000' sends mixed signals about whether you are safe.",
+     "serious": false
+    },
+    {
+     "set": "C",
+     "screen": "ticket",
+     "fault": "The grade legend leaves out culls, although the header says 56 were culled.",
+     "serious": false
+    },
+    {
+     "set": "D",
+     "screen": "season",
+     "fault": "The '0/1,500' chip at top right has no label for variety or deadline, so a newcomer cannot tell what it counts.",
+     "serious": true
+    },
+    {
+     "set": "D",
+     "screen": "season.phone",
+     "fault": "The top stack (date, speed, six-day weather, banner) takes about 28% of the screen height, and the unexplained 0/1,500 chip floats over the map.",
+     "serious": true
+    },
+    {
+     "set": "D",
+     "screen": "people",
+     "fault": "The work-grid cells carry tiny unexplained subscript numbers, and the grid plus the person card cover about 70% of the land.",
+     "serious": false
+    },
+    {
+     "set": "D",
+     "screen": "season-card",
+     "fault": "The banner says 'Spray before the blight', but the card's NEXT order is Scout and the Spray order reads 'Cures nothing'. The three messages conflict.",
+     "serious": false
+    },
+    {
+     "set": "D",
+     "screen": "ticket",
+     "fault": "Store shows '+25%?' with a question mark instead of an estimated dollar figure, so it can't be compared with the other two options.",
+     "serious": false
+    },
+    {
+     "set": "D",
+     "screen": "all",
+     "fault": "All-caps condensed type on every label and button slows reading of anything longer than two words.",
+     "serious": false
+    },
+    {
+     "set": "A",
+     "screen": "season",
+     "fault": "Every order badge glows the same yellow (spray, scout, water) and none is tied to the 'Spray before the blight' goal, so the next click is ambiguous.",
+     "serious": true
+    },
+    {
+     "set": "A",
+     "screen": "season.phone",
+     "fault": "The phone season screen shows no money, and the people bar has portraits but no names or status text.",
+     "serious": true
+    },
+    {
+     "set": "A",
+     "screen": "ledger",
+     "fault": "Cash through the year is drawn as a polar chart with a dashed 'bank line' ring, which can't be read without studying it. A simple line chart would read at once.",
+     "serious": true
+    },
+    {
+     "set": "A",
+     "screen": "season",
+     "fault": "Riveted chrome panels plus the packer gauge fill the top band and compete with the land. Letter pins (N, Y, V, A, B) are cryptic.",
+     "serious": false
+    },
+    {
+     "set": "A",
+     "screen": "people",
+     "fault": "Two large dark panels cover nearly the whole screen over a blurred map. It feels like a form, not the land.",
+     "serious": false
+    },
+    {
+     "set": "A",
+     "screen": "spring",
+     "fault": "The skill labels in the plan sheet are about 8px and hard to read.",
+     "serious": false
+    },
+    {
+     "set": "A",
+     "screen": "ticket",
+     "fault": "The quantity appears three times (dial, odometer, receipt), and the dial needs 'cwt x 100' decoded.",
+     "serious": false
+    },
+    {
+     "set": "A",
+     "screen": "menu",
+     "fault": "A rotary knob for picture quality and US/METRIC toggle switches are fiddly and unclear compared with plain segmented buttons.",
+     "serious": false
+    },
+    {
+     "set": "B",
+     "screen": "season",
+     "fault": "The contract chip at bottom right is cut off at the screen edge ('-$5,62' runs off the edge).",
+     "serious": true
+    },
+    {
+     "set": "B",
+     "screen": "all",
+     "fault": "Generic dark bars and system-style type give no game identity. It reads as an admin dashboard over a 3D scene.",
+     "serious": true
+    },
+    {
+     "set": "B",
+     "screen": "ticket",
+     "fault": "The payoff screen is a dense document with small text and three equally weighted options, with long paragraphs under 'Keep it stored'. There is no sense of reward and no recommendation.",
+     "serious": false
+    },
+    {
+     "set": "B",
+     "screen": "ledger",
+     "fault": "A single long column with the crop section cut off below the fold and no headline figure for what the farm is worth.",
+     "serious": false
+    },
+    {
+     "set": "B",
+     "screen": "season",
+     "fault": "Person chips show unreadable tiny glyphs for status, the weather row has no day names, and the negative money figure has no label.",
+     "serious": false
+    }
+   ],
+   "verdict": "Build on C. Its almanac-and-paper look is the only one that is both instantly readable and clearly a farm game, and it covers the least of the land. The season screen tells a newcomer what to do and where to click within seconds, and the phone layout already works. Before it ships: replace the letter flags with face pins, label or remove the tally marks and the three checkboxes, and redraw the ticket circle so it stops crossing out text. Then take D's best moments: the incident's stated cost difference and 'stopped for you' tag, the ticket's 'Brings most' flag, and the ledger's comparison with the neighbor and county and its worth headline. Add A's packer gauge and its concrete Store estimate. D is a close second and the boldest, but its heavy frames and all-caps type crowd the land, especially on the phone. A's instrument-panel chrome hurts clarity and the phone, and B is functional but has no identity. Against shipped colony and management games (Against the Storm, Farthest Frontier, Frostpunk), C and D are near shipping quality on desktop, A would not pass on the phone, and B would not pass as a game's identity.",
+   "judge": "first-time-player"
+  },
+  {
+   "ranking": [
+    "C",
+    "D",
+    "A",
+    "B"
+   ],
+   "scores": [
+    {
+     "set": "C",
+     "overall": 8,
+     "identity": 9,
+     "clarity": 7,
+     "fitsTheScene": 7,
+     "moments": 9,
+     "phone": 7,
+     "note": "The most specific idea of the four: the farm's own paperwork (seed-catalog cover, tear-off calendar, sticky goal note, telegram, ledger book, stamped weigh ticket). Every payoff becomes its own object, and it would sit beside Papers Please or Cultist Simulator on craft. Holding it back: a collage HUD with no home for the eye, and one real collision on the ticket."
+    },
+    {
+     "set": "D",
+     "overall": 7.5,
+     "identity": 8,
+     "clarity": 8,
+     "fitsTheScene": 7,
+     "moments": 8,
+     "phone": 8,
+     "note": "A confident letterpress-poster system: one material (cream card with hard black shadows), one palette (red, mustard, black) and one bold icon family. It is the most legible and the most game-like of the four, and has the best ticket and phone spring. The offset-shadow display type tips into costume on the big numbers."
+    },
+    {
+     "set": "A",
+     "overall": 6.5,
+     "identity": 7,
+     "clarity": 6,
+     "fitsTheScene": 5,
+     "moments": 7,
+     "phone": 7,
+     "note": "A coherent tractor-dashboard idea, carried out with real care: odometer cash, indicator lamps, toggles, a gauge on the ticket. But the enamel-and-rivet chrome is heavy, covers too much of the land, and reads as AA simulator rather than premium strategy."
+    },
+    {
+     "set": "B",
+     "overall": 4.5,
+     "identity": 3,
+     "clarity": 7,
+     "fitsTheScene": 8,
+     "moments": 4,
+     "phone": 7,
+     "note": "Clean, restrained and readable, and it leaves the most land visible. But it is a web-app settings aesthetic with a serif headline. Nothing about it says this game, and its payoffs are plain modals, so it would not pass beside shipped games in the genre."
+    }
+   ],
+   "firstRead": [
+    {
+     "set": "A",
+     "whatIsIt": "A farm-machinery sim seen through a tractor's instrument panel: brass, green enamel, odometer counters",
+     "nextThing": "The lit order badges beside the field capsules, then the NEXT strip 'Spray before the blight'"
+    },
+    {
+     "set": "B",
+     "whatIsIt": "A tidy web app laid over a 3D farm; could be any genre",
+     "nextThing": "Unclear: the field labels are the only invitation, and the tiny people bar does not read as interactive"
+    },
+    {
+     "set": "C",
+     "whatIsIt": "A farm-almanac paperwork game set in a mid-century potato county: catalog cover, ledger, telegrams",
+     "nextThing": "The yellow sticky note 'Spray before the blight' and the red rubber-stamp order badges on the fields"
+    },
+    {
+     "set": "D",
+     "whatIsIt": "A bold poster-art farm strategy game, letterpress red, mustard and black",
+     "nextThing": "The mustard pennant 'Spray before the blight' and the coloured order medallions on the fields"
+    }
+   ],
+   "bestScreens": [
+    {
+     "screen": "title",
+     "set": "C",
+     "why": "A seed-catalog cover with an engraved potato plant whose tubers sit hidden below the soil line. The game's premise becomes the cover illustration, and the contents-style menu with dotted leaders is part of the joke."
+    },
+    {
+     "screen": "season",
+     "set": "D",
+     "why": "The tightest HUD: compact plaques, one icon family in coloured medallions, short corner chrome, and the most land left open for its information density."
+    },
+    {
+     "screen": "season-card",
+     "set": "D",
+     "why": "The dashed selection outline with crosshair corners ties the card to the land, and the NEXT order is lifted out in mustard, so the recommended action reads first."
+    },
+    {
+     "screen": "people",
+     "set": "D",
+     "why": "The work grid carries skill as a subscript inside each priority cell, and the person card pairs bars with a FIRST? column, so you can decide without cross-referencing. A's flip-number grid is a close second."
+    },
+    {
+     "screen": "incident",
+     "set": "C",
+     "why": "A telegram typed in strips, with REPLY cards and a JUL 14 postmark: the decision arrives as an event in the world, not a dialog. It is the best single moment in all four sets."
+    },
+    {
+     "screen": "spring",
+     "set": "C",
+     "why": "The spring sheet as an order blank with vertical index tabs and dotted leaders; hires show five skill boxes at a glance and the total sits like a form footer."
+    },
+    {
+     "screen": "ticket",
+     "set": "D",
+     "why": "One clear hierarchy: a red spine reading TICKET 1-1, a huge 1,374 cwt, the green dollar figure, the expected-range bar, the grade bar, then a BRINGS MOST tab on Deliver. It lands as a payoff and still tells you what to do."
+    },
+    {
+     "screen": "ledger",
+     "set": "C",
+     "why": "An open account book with IN and OUT columns, red ink for outgoings, a PAID stamp, and goals struck through by hand. The year closing feels like an object you keep."
+    },
+    {
+     "screen": "menu",
+     "set": "D",
+     "why": "The nine orders shown as an illustrated, key-labelled grid make How to Play genuinely useful, and the three-column spread reads as one composed sheet."
+    },
+    {
+     "screen": "season.phone",
+     "set": "A",
+     "why": "One compact top bar plus the NEXT strip leaves the most land of the four; speed lamps and large field capsules are thumb-sized."
+    },
+    {
+     "screen": "spring.phone",
+     "set": "D",
+     "why": "Each hire is reduced to its best skill as one big bar, with a HIRE or HIRED block and an accordion for the other sections: the most scannable phone sheet."
+    }
+   ],
+   "graft": [
+    {
+     "from": "D",
+     "idea": "Weigh ticket structure: a coloured spine carrying the ticket number, and a 'BRINGS MOST' tab flagging the best of Deliver / Sell / Store."
+    },
+    {
+     "from": "D",
+     "idea": "Map selection as a dashed outline with crosshair corner marks, instead of C's hand-drawn ellipse, which loses the field's shape."
+    },
+    {
+     "from": "D",
+     "idea": "A 'STOPPED FOR YOU' tag hung under the clock when a decision pauses time, and a large day count boxed in the header of the decision."
+    },
+    {
+     "from": "D",
+     "idea": "Work-grid cells that carry the skill level as a subscript next to the priority number."
+    },
+    {
+     "from": "D",
+     "idea": "Phone spring sheet that shows each applicant only by their best skill, as one bar."
+    },
+    {
+     "from": "D",
+     "idea": "How to Play as an illustrated nine-orders grid with key caps."
+    },
+    {
+     "from": "A",
+     "idea": "The cash figure as a rolling odometer (C could render it as a rubber-stamp numberer or adding-machine tape)."
+    },
+    {
+     "from": "A",
+     "idea": "The contract strip showing the promised amount as a red marker against the growing yield range: the clearest picture of contract risk in any set."
+    },
+    {
+     "from": "A",
+     "idea": "An analog yield gauge on the weigh ticket as the animated reveal before the numbers settle."
+    },
+    {
+     "from": "A",
+     "idea": "Indicator lamps above the speed buttons, which make the running speed readable at a glance."
+    },
+    {
+     "from": "B",
+     "idea": "Restraint: one thin top bar for date, weather and cash, and the 'Paused \u00b7 Space' keycap hint. Use these to calm C's four-corner HUD collage."
+    }
+   ],
+   "faults": [
+    {
+     "set": "C",
+     "screen": "ticket",
+     "fault": "The hand-drawn ink circle around $12,846 collides with the caption below, so '1,028 cwt at the contract's' reads as struck through: a legibility bug on the payoff screen.",
+     "serious": true
+    },
+    {
+     "set": "C",
+     "screen": "season",
+     "fault": "The HUD is a collage spread over all four corners (calendar pad, sticky note, weather strip, banknote balance, contract card, two toasts, people strip) in five different paper materials. The eye has no home, and the season screen is the one players live on.",
+     "serious": true
+    },
+    {
+     "set": "C",
+     "screen": "ticket",
+     "fault": "The WEIGHED stamp overhangs the ticket's top-right edge, clipping its own ring text and crowding 'No. 0001'.",
+     "serious": false
+    },
+    {
+     "set": "C",
+     "screen": "season-card",
+     "fault": "Secondary text set in small italic serif on cream (order captions, people status lines) is near the edge of legibility at desktop size.",
+     "serious": false
+    },
+    {
+     "set": "C",
+     "screen": "menu",
+     "fault": "The three panels have different heights and widths with uneven gaps; they float as separate cards instead of composing as one spread.",
+     "serious": false
+    },
+    {
+     "set": "C",
+     "screen": "season.phone",
+     "fault": "Balance and weather are crammed into one block and the forecast is cut to four days. Together with the date pad and sticky note, the top chrome takes about 25% of the screen.",
+     "serious": false
+    },
+    {
+     "set": "C",
+     "screen": "season",
+     "fault": "The distressed condensed face on the luggage-tag field labels has irregular letterforms (M, W) that read as rough rather than vintage at small sizes.",
+     "serious": false
+    },
+    {
+     "set": "D",
+     "screen": "season",
+     "fault": "Hatching over the past months on the month strip makes APR\u2013JUN unreadable.",
+     "serious": true
+    },
+    {
+     "set": "D",
+     "screen": "ledger",
+     "fault": "$36,349 in green with a mustard offset shadow is garish. Offset-shadow display type on figures (also 1,374 on the ticket and the title logo) is used often enough to become costume.",
+     "serious": false
+    },
+    {
+     "set": "D",
+     "screen": "season.phone",
+     "fault": "Four stacked chrome rows (date, speed, weather, goal) take roughly 28% of the phone's height before the land begins.",
+     "serious": false
+    },
+    {
+     "set": "D",
+     "screen": "season",
+     "fault": "At desktop the field-label plaques are small, about 11px caps, and get lost against the order medallions beside them.",
+     "serious": false
+    },
+    {
+     "set": "D",
+     "screen": "spring",
+     "fault": "The five per-skill micro bars under each applicant are too small and dense to compare at a glance.",
+     "serious": false
+    },
+    {
+     "set": "D",
+     "screen": "ticket",
+     "fault": "The ticket runs edge to edge at full height with no margin, so it feels pasted on rather than presented.",
+     "serious": false
+    },
+    {
+     "set": "A",
+     "screen": "season",
+     "fault": "The chrome is too heavy: four riveted enamel panels plus the packer card take the top quarter, and dark capsule labels with stacked badges sit over the fields and compete with the land.",
+     "serious": true
+    },
+    {
+     "set": "A",
+     "screen": "ledger",
+     "fault": "Cash through the year drawn as a polar/radar chart is decorative and hard to read, and its purple line is off-palette.",
+     "serious": true
+    },
+    {
+     "set": "A",
+     "screen": "title",
+     "fault": "The title plate reads as a brass nameplate set in a generic condensed sans; it is not memorable. The grey credit box sits outside the system and overlaps the green band.",
+     "serious": false
+    },
+    {
+     "set": "A",
+     "screen": "incident",
+     "fault": "The decision arrives in the same dark panel as every other card, and 'THE CLOCK IS STOPPED' is tiny: the moment does not register as an event.",
+     "serious": false
+    },
+    {
+     "set": "A",
+     "screen": "season-card",
+     "fault": "The field card takes the right half of the screen, and the order captions ('blight weather Tue') are small, low-contrast text.",
+     "serious": false
+    },
+    {
+     "set": "A",
+     "screen": "people",
+     "fault": "The two panels cover nearly the whole screen, and the mood reasons are set at caption size.",
+     "serious": false
+    },
+    {
+     "set": "A",
+     "screen": "season",
+     "fault": "The flat avatar portraits on wooden tags are generic and do not match the machined material around them.",
+     "serious": false
+    },
+    {
+     "set": "B",
+     "screen": "title",
+     "fault": "The title is laid out like a landing page: serif headline, a plain rectangular Play button and underlined text links. Nothing says game.",
+     "serious": true
+    },
+    {
+     "set": "B",
+     "screen": "ticket",
+     "fault": "Other panels show behind the modal (a 'North R\u2026' card at the bottom, a map card at the left). Button labels wrap ('Deliver to the packer' over three lines), and a long paragraph hangs under 'Keep it stored'.",
+     "serious": true
+    },
+    {
+     "set": "B",
+     "screen": "season",
+     "fault": "The people bar is tiny, with illegible micro-glyph status marks, and does not read as interactive.",
+     "serious": true
+    },
+    {
+     "set": "B",
+     "screen": "menu",
+     "fault": "A generic web settings dialog (checkboxes, outlined buttons) with no material or identity.",
+     "serious": false
+    },
+    {
+     "set": "B",
+     "screen": "incident",
+     "fault": "The decision is a small dark modal with a yellow border and outlined choices; there is no payoff.",
+     "serious": false
+    }
+   ],
+   "verdict": "C has the idea worth building the game on: the interface is the farm's own paperwork. Its title, telegram and ledger book are the three best moments across all four sets, and its illustration family (an engraved plant, hatched portraits, stamps) is the only one that feels authored. Before it ships, though, C needs D's discipline. Collapse the season HUD into one or two anchored strips instead of six paper objects in four corners. Fix the ink-circle collision on the weigh ticket. Raise the size of the small italic secondary text. Then graft in D's ticket spine and BRINGS MOST tab, its dashed crosshair selection on the map, and its one-skill phone hire rows. D is a close and safer second: the most legible and most game-like set, held back by offset-shadow type used as costume and a hatched month strip that cannot be read. A is competent AA-simulator chrome that buries the land. B is not a game interface yet. Measured against shipped games in the genre, only C (with the fixes above) and D would sit beside them without embarrassment.",
+   "judge": "art-director"
+  },
+  {
+   "ranking": [
+    "C",
+    "D",
+    "A",
+    "B"
+   ],
+   "scores": [
+    {
+     "set": "C",
+     "overall": 8,
+     "identity": 9,
+     "clarity": 7,
+     "fitsTheScene": 7,
+     "moments": 9,
+     "phone": 7,
+     "note": "The only set where nearly every screen carries a decision a template would never make: the title as a seed-catalogue contents page with an engraved Fig. 1, a loop drawn on the land around the selected field, a pencil circle around the best sale, and a real two-column ledger book. It stands with good shipped indies; what holds it back is a rubber stamp on nearly every screen and small italic captions."
+    },
+    {
+     "set": "D",
+     "overall": 7,
+     "identity": 7,
+     "clarity": 8,
+     "fitsTheScene": 7,
+     "moments": 8,
+     "phone": 8,
+     "note": "The clearest and most decisive set, with the best phone layouts and the smartest grid (skill level tucked into each priority cell). Its signature, a Cooper-style slab with a red or mustard offset shadow and hard offset shadows on every panel, is the retro craft-beer-label look that any model reaches for when asked for 'vintage Americana'."
+    },
+    {
+     "set": "A",
+     "overall": 5.5,
+     "identity": 7,
+     "clarity": 6,
+     "fitsTheScene": 5,
+     "moments": 7,
+     "phone": 5,
+     "note": "Consistent and carefully rendered, with a real idea in the weigh-day gauge, the receipt printout and the operator's manual figures. But it is theme-park skeuomorphism: rivets on every corner, LED lamps over every button and portrait, flip counters, hazard tape, a rotary knob and a radar chart. It shows the most chrome over the scene, and the phone drops the money."
+    },
+    {
+     "set": "B",
+     "overall": 5,
+     "identity": 3,
+     "clarity": 7,
+     "fitsTheScene": 8,
+     "moments": 4,
+     "phone": 7,
+     "note": "Restrained and the kindest to the land, but it reads as a web app: an Inter-style sans paired with a display serif, outline icons that look stock, a landing-page hero for a title, a stock settings modal, and a weigh ticket and ledger that are plain forms. A stranger would guess a model made it."
+    }
+   ],
+   "bestScreens": [
+    {
+     "screen": "title",
+     "set": "C",
+     "why": "The menu is set as the contents of a seed catalogue, with dot leaders, and the engraved potato plant has a caption that sets the game's premise ('Fig. 1. The crop you cannot see until you dig it'). It is a decision, not a hero layout."
+    },
+    {
+     "screen": "season",
+     "set": "C",
+     "why": "Pale tag labels with red order stamps read cleanly over busy foliage. The struck-through finished goal above the current one shows progress, and the dated calendar with its tick ruler and the contract tracker carry the farm's real stakes without clutter."
+    },
+    {
+     "screen": "season-card",
+     "set": "C",
+     "why": "A hand-drawn loop around the field on the land, with 'on the list' written beside it, ties the card to the place. The field record lists each order with its key, time and cost, plus a one-line reason ('Before Wednesday's rain')."
+    },
+    {
+     "screen": "people",
+     "set": "D",
+     "why": "Each priority cell carries the hand's skill level as a small subscript, so whether a priority suits the hand reads at a glance. The person card's 'FIRST?' column links skill to priority in one row."
+    },
+    {
+     "screen": "incident",
+     "set": "C",
+     "why": "The telegram, with typewritten strips, two reply slips and a 'lapses Jul 16' stamp, makes a decision arriving feel like an event in the world while keeping both choices and their costs plain."
+    },
+    {
+     "screen": "spring",
+     "set": "C",
+     "why": "Vertical index tabs on the sheet edge, skill boxes under each hand, and an 'order blank' footer that totals the plan against the loan. It is the most purposeful planning sheet of the four."
+    },
+    {
+     "screen": "ticket",
+     "set": "C",
+     "why": "A huge purple net figure, the 'WEIGHED' stamp, the expected-range bar, the losses with their causes, and a pencil circle on the best sale give the year's biggest moment real weight. D's version is a close second and clearer."
+    },
+    {
+     "screen": "ledger",
+     "set": "C",
+     "why": "An actual ledger book, with IN and OUT columns, red rules and a 'PAID' stamp beside the note, faces a page that compares your crop with the neighbour's on the same weather."
+    },
+    {
+     "screen": "menu",
+     "set": "D",
+     "why": "The nine-orders grid says what each order does and when to use it, beside the keyboard controls. It is the clearest teaching page, and its settings column is plain and fast."
+    },
+    {
+     "screen": "season.phone",
+     "set": "C",
+     "why": "It keeps balance, date, four days of weather, the current goal, speed and named people on screen while still leaving most of the height to the land. The order stamps are thumb-sized."
+    },
+    {
+     "screen": "spring.phone",
+     "set": "D",
+     "why": "An accordion bottom sheet shows each hand's one best skill instead of all five, so three applicants and the start button fit on one screen without scrolling."
+    }
+   ],
+   "graft": [
+    {
+     "from": "D",
+     "idea": "Show each hand's skill level as a small subscript inside their priority cell in the who-does-what grid."
+    },
+    {
+     "from": "D",
+     "idea": "Put a 'BRINGS MOST' flag on the best-paying sale option on the weigh ticket, instead of C's pencil circle, which collides with the text."
+    },
+    {
+     "from": "D",
+     "idea": "Give decisions a block that counts down the days left to answer, and number each choice with its key (1 and 2)."
+    },
+    {
+     "from": "D",
+     "idea": "On the phone spring sheet, show only each applicant's best skill with its bar, and keep the full grid for desktop."
+    },
+    {
+     "from": "D",
+     "idea": "Add a month strip with past months hatched beside the date, but keep the marker off the current month's name."
+    },
+    {
+     "from": "A",
+     "idea": "Fill the how-to-play page with figures that show the real interface pieces (a field tag, an order stamp, the speed buttons), not prose alone."
+    },
+    {
+     "from": "A",
+     "idea": "Show the contract tracker as a range bar: the promised amount as a mark against the field's estimated range, so uncertainty is visible before harvest."
+    },
+    {
+     "from": "A",
+     "idea": "On the ledger, add a 'year on the farm' list of events, with the bad one (a hand who quit, worn out) marked in red."
+    },
+    {
+     "from": "A",
+     "idea": "Head decisions with an eyebrow line, 'The clock is stopped', so the player knows time is held."
+    },
+    {
+     "from": "B",
+     "idea": "Show the pause state with its key in a small chip ('Paused \u00b7 Space') that teaches the shortcut without a tutorial."
+    },
+    {
+     "from": "B",
+     "idea": "On the phone, show the field card's five orders as one row of equal tiles, each with its time and cost."
+    },
+    {
+     "from": "B",
+     "idea": "Keep the scene clear: one slim top band for date, weather, money and speed, leaving the most land of any set."
+    }
+   ],
+   "faults": [
+    {
+     "set": "C",
+     "screen": "ticket",
+     "fault": "The hand-drawn circle around $12,846 runs through the line below it, so '1,028 cwt at the contract's' reads as struck out, on the very option the circle recommends.",
+     "serious": true
+    },
+    {
+     "set": "C",
+     "screen": "all",
+     "fault": "Rubber stamps are overused (WALKED JUL 3, SAVED JUL 12, LAPSES JUL 16, PAID, NOTE PAID, WEIGHED, STOPPED), so a motif that should mark rare moments becomes wallpaper.",
+     "serious": false
+    },
+    {
+     "set": "C",
+     "screen": "title",
+     "fault": "Speckled print-wear texture inside the COUNTY letterforms is fake distress that adds nothing to the strong layout.",
+     "serious": false
+    },
+    {
+     "set": "C",
+     "screen": "incident",
+     "fault": "The diegetic conceit strains: a supply house telegraphs 'TRACTOR BROKEN DOWN UNDER YOU', and the typewriter strips verge on theme-park.",
+     "serious": false
+    },
+    {
+     "set": "C",
+     "screen": "season.phone",
+     "fault": "The alert toast has a torn-paper zigzag edge, a stock fake-texture flourish.",
+     "serious": false
+    },
+    {
+     "set": "C",
+     "screen": "season-card",
+     "fault": "Captions are small italic serif on light paper ('Before Wednesday's rain', 'Last walked 9 days ago') and will be hard to read at playing distance.",
+     "serious": false
+    },
+    {
+     "set": "C",
+     "screen": "season",
+     "fault": "With nothing selected, the people bar shows tally marks and tiny icons but no task words, which appear only once a field is selected, so the bar's state is inconsistent.",
+     "serious": false
+    },
+    {
+     "set": "C",
+     "screen": "ledger",
+     "fault": "The yellow 'Buy a piece of equipment' note, with its pointing hand, competes with PLAN YEAR 2 as the primary action, and the right page goes thin at the bottom.",
+     "serious": false
+    },
+    {
+     "set": "D",
+     "screen": "title / ticket / ledger",
+     "fault": "A Cooper-style black slab with a red or mustard offset shadow (the title, '1,374 cwt', '$36,349') is the retro craft-beer-label cliche, the most recognisable template tell in any set.",
+     "serious": true
+    },
+    {
+     "set": "D",
+     "screen": "all",
+     "fault": "Hard black offset drop shadows on every panel and button are a current trend applied everywhere, not chosen per element.",
+     "serious": false
+    },
+    {
+     "set": "D",
+     "screen": "season",
+     "fault": "The month-strip marker sits on 'JUL', so the current month is the one label you cannot read.",
+     "serious": false
+    },
+    {
+     "set": "D",
+     "screen": "incident / menu",
+     "fault": "An off-palette browser-blue focus outline on the selected option and the checkbox breaks the red, mustard and black palette.",
+     "serious": false
+    },
+    {
+     "set": "D",
+     "screen": "people",
+     "fault": "The skill subscripts in the grid cells are tiny, about 9px, and nearly unreadable.",
+     "serious": false
+    },
+    {
+     "set": "D",
+     "screen": "season.phone",
+     "fault": "Date, speed, weather and the goal stack into the top quarter of the screen, and the people dock gives no task words.",
+     "serious": false
+    },
+    {
+     "set": "B",
+     "screen": "title",
+     "fault": "A landing-page hero: a serif headline, a paragraph, one rounded Play button and underlined text links. Nothing says game or farm.",
+     "serious": true
+    },
+    {
+     "set": "B",
+     "screen": "ticket",
+     "fault": "The harvest payoff is a plain form. The sale options are outlined buttons with labels wrapping onto three lines ('Deliver to / the / packer'), and the field card underneath shows around the ticket's lower edge.",
+     "serious": true
+    },
+    {
+     "set": "B",
+     "screen": "ledger",
+     "fault": "A narrow side panel cuts off at 'The crop', so the year's verdict needs scrolling while most of the screen shows empty snow.",
+     "serious": true
+    },
+    {
+     "set": "B",
+     "screen": "menu",
+     "fault": "A stock web-app settings modal: checkbox rows, segmented controls and outline buttons, with no identity.",
+     "serious": false
+    },
+    {
+     "set": "B",
+     "screen": "incident",
+     "fault": "A smiley face icon in a yellow square is a stock emoji-like glyph on a generic dark modal.",
+     "serious": false
+    },
+    {
+     "set": "B",
+     "screen": "season",
+     "fault": "The contract line at bottom right is clipped at the screen edge ('-$5,62$'), and the people chips use pixel-dot glyphs too small to read.",
+     "serious": false
+    },
+    {
+     "set": "B",
+     "screen": "spring.phone",
+     "fault": "The pins on the land are icon-only with no field names, so the map half of the screen tells the player little.",
+     "serious": false
+    },
+    {
+     "set": "A",
+     "screen": "all",
+     "fault": "Theme-park skeuomorphism on every panel: corner rivets, LED lamps over buttons and portraits, glossy keycap buttons, flip-counter money, and hazard tape on 'End the season early' and 'Let go'.",
+     "serious": true
+    },
+    {
+     "set": "A",
+     "screen": "season.phone",
+     "fault": "The balance is missing entirely, the portraits have no names, and the weather is hidden behind a button.",
+     "serious": true
+    },
+    {
+     "set": "A",
+     "screen": "ledger",
+     "fault": "A polar 'cash through the year' radar chart is decoration without reason, harder to read than a plain line, on the screen that should be most legible.",
+     "serious": false
+    },
+    {
+     "set": "A",
+     "screen": "menu",
+     "fault": "Toggle switches and a rotary knob for a four-option picture setting are slower to read than the segmented controls they imitate.",
+     "serious": false
+    },
+    {
+     "set": "A",
+     "screen": "season",
+     "fault": "Three heavy top housings, the packer gauge and a tall people dock take more of the scene than any other set.",
+     "serious": false
+    },
+    {
+     "set": "A",
+     "screen": "ticket",
+     "fault": "The gauge panel and the receipt repeat the same figures (1,330 cwt, $13,809) side by side.",
+     "serious": false
+    },
+    {
+     "set": "A",
+     "screen": "title",
+     "fault": "A brass nameplate with screws and a glossy PLAY key with an LED lamp read as a toy control panel, not a farm.",
+     "serious": false
+    }
+   ],
+   "firstRead": [
+    {
+     "set": "C",
+     "whatIsIt": "A farm-almanac and seed-catalogue game where the interface is the farm's own paperwork: field records, telegrams, a weigh ticket and a ledger book.",
+     "nextThing": "The PLAY row in the contents list."
+    },
+    {
+     "set": "D",
+     "whatIsIt": "A loud retro-Americana poster game in black, red and mustard, with heavy offset shadows.",
+     "nextThing": "The red PLAY button."
+    },
+    {
+     "set": "B",
+     "whatIsIt": "A quiet, modern sim that reads like a polished web app laid over a 3D farm.",
+     "nextThing": "The single Play button under the headline."
+    },
+    {
+     "set": "A",
+     "whatIsIt": "A tractor dashboard and control-panel game: brass plates, gauges, LED lamps and switches.",
+     "nextThing": "The glossy PLAY key with its lamp."
+    }
+   ],
+   "verdict": "Build on C. It is the only set where a stranger would say someone with taste made it. The contents-page title, the engraved Fig. 1, the loop drawn around the field on the land, the telegram and the IN/OUT ledger book are decisions no template makes, and they hold up next to well-art-directed shipped indies. Before it ships: cut the stamps to the three moments that earn them (weighed, paid, lapses), drop the speckle and torn-paper textures, move the pencil circle off the ticket's text, and raise the italic caption size. Take D's working ideas: skill levels inside the priority cells, a 'brings most' flag, the decision countdown and its phone spring sheet. Leave D's Cooper-with-offset type and its blanket hard shadows, which are a cliche. A is a committed concept carried out with care, but it is theme-park chrome that buries the land and drops the money on the phone; keep only its manual figures and the promised-versus-range contract bar. B is the cleanest and gives the scene the most room, but it reads as a stock web app; borrow its slim top band and nothing of its look. None of the four passes yet against the best shipped strategy games. C is one disciplined pass away.",
+   "judge": "originality"
+  },
+  {
+   "ranking": [
+    "D",
+    "C",
+    "A",
+    "B"
+   ],
+   "scores": [
+    {
+     "set": "D",
+     "overall": 7.5,
+     "identity": 8,
+     "clarity": 8,
+     "fitsTheScene": 6.5,
+     "moments": 8.5,
+     "phone": 8,
+     "note": "D is the most legible set over every backdrop. Its opaque plaques, heavy borders and large condensed type read the same over sunlit foliage, snow and dusk. State is almost never carried by colour alone. The cost is that its cards are big and heavy, and the field card takes the middle of the farm."
+    },
+    {
+     "set": "C",
+     "overall": 7,
+     "identity": 8.5,
+     "clarity": 6.5,
+     "fitsTheScene": 7.5,
+     "moments": 7.5,
+     "phone": 7.5,
+     "note": "C has the most charming and coherent paper and almanac identity, and it leaves the land visible. Its light serif and italic body text, tan-on-foliage tags, tiny letter flags and weak button affordances will cost players on a small laptop."
+    },
+    {
+     "set": "A",
+     "overall": 6,
+     "identity": 7.5,
+     "clarity": 5,
+     "fitsTheScene": 5,
+     "moments": 6.5,
+     "phone": 6,
+     "note": "A's machined dashboard has character and some fine touches (hazard-striped destructive buttons, the how-to-play figures). Its instruments are set in 8-10px type, it leans on colour lamps for state, the money odometer can be misread, and the chrome covers the most scene."
+    },
+    {
+     "set": "B",
+     "overall": 5,
+     "identity": 3.5,
+     "clarity": 6.5,
+     "fitsTheScene": 8.5,
+     "moments": 4,
+     "phone": 7,
+     "note": "B is clean and generic, and it leaves the most landscape. The menu and the phone bottom sheet are very readable, but the roster is illegible, a toast is clipped off-screen, the people screen has no person card, and the payoff screens (ticket, ledger) are flat forms."
+    }
+   ],
+   "bestScreens": [
+    {
+     "screen": "title",
+     "set": "D",
+     "why": "Real bordered buttons with a dominant red PLAY. The save date sits on CONTINUE. The card is opaque, so it reads over the bright sunset. C's text-link menu items are smaller targets."
+    },
+    {
+     "screen": "season (nothing selected)",
+     "set": "D",
+     "why": "Opaque two-tone field plaques and round order badges hold contrast over busy foliage. The HUD keeps to the four corners at consistent sizes, the objective ribbon is readable, and toasts pair an icon with a coloured tab and text."
+    },
+    {
+     "screen": "season-card (field orders)",
+     "set": "D",
+     "why": "Each order shows its hotkey, time, cost and a one-line reason. The recommended order is flagged NEXT with fill and a label, not colour alone, and the status bars pair a word (Full, Fair, Worn off) with the bar. C's right-docked card covers less land and is the better placement."
+    },
+    {
+     "screen": "people (card and grid)",
+     "set": "D",
+     "why": "The person card is the most readable: big name, skill bars with numbers and an editable priority box per row, and a red LET GO with an X icon. A's hazard-striped LET GO and C's circled-1 grid are the parts worth borrowing."
+    },
+    {
+     "screen": "incident",
+     "set": "D",
+     "why": "The scene is dimmed, a red header gives the deadline in a box (5 DAYS), choices carry 1 and 2 hotkeys with consequences, the default outcome is stated, and 'STOPPED FOR YOU' sits at the clock in words. C's telegram is more delightful but hides the paused state."
+    },
+    {
+     "screen": "spring (desk)",
+     "set": "D",
+     "why": "The accordion is clear and HIRED is shown by inversion plus a checkmark. Opaque plaques stay legible on snow, and the totals and START are unmissable. Its tiny skill strips are its one weakness."
+    },
+    {
+     "screen": "ticket",
+     "set": "D",
+     "why": "It has the clearest hierarchy in any set: a huge cwt number, worth in green with the price, an expected-range bar, grade bar with a legend, and largest losses. The three sale options are large panels, with BRINGS MOST flagged by a label as well as fill."
+    },
+    {
+     "screen": "ledger",
+     "set": "C",
+     "why": "A true ruled ledger with IN and OUT columns, so sign is carried by column, not only by red. The type is large and well spaced, the comparison bar uses hatching plus a number, and the goals checklist closes the year."
+    },
+    {
+     "screen": "menu",
+     "set": "D",
+     "why": "All three panels are legible at once: big bordered buttons, checkbox and segmented controls with plain labels, and a nine-order grid with hotkeys. B's menu is equally accessible but has no how-to-play page."
+    },
+    {
+     "screen": "season (phone)",
+     "set": "C",
+     "why": "Speed controls and the roster sit in the bottom thumb zone with names under the portraits. The objective strip is large and the top cluster is compact. D's phone season is close, but it puts speed at the top and its field labels crowd the land."
+    },
+    {
+     "screen": "spring (phone)",
+     "set": "D",
+     "why": "Each hand card is cut to name, trait, one key skill and a huge HIRE or HIRED button. The accordion headers are large and the full-width START sits at the bottom, giving the best density and touch targets of the four."
+    }
+   ],
+   "graft": [
+    {
+     "from": "C",
+     "idea": "Dock the field card on the right edge as C does, so the fields stay visible. D's bottom-centre card hides Bottom Field and its badge."
+    },
+    {
+     "from": "C",
+     "idea": "On phone, put the speed controls beside the roster at the bottom, inside thumb reach, instead of at the top."
+    },
+    {
+     "from": "C",
+     "idea": "Use C's ledger layout with ruled IN and OUT columns, so money direction is carried by position as well as red. Keep C's goals checklist as the year's closing beat."
+    },
+    {
+     "from": "C",
+     "idea": "Use a circled or outlined '1' in the who-does-what grid instead of D's solid-black cell plus tiny subscript numbers."
+    },
+    {
+     "from": "C",
+     "idea": "Attach an 'on the list' tag to the field's map label once an order is queued, so queued work reads on the land without opening the card."
+    },
+    {
+     "from": "A",
+     "idea": "Hazard-stripe destructive actions (Let go, End the season early) so danger is shown by pattern, not only red."
+    },
+    {
+     "from": "A",
+     "idea": "Phone spring tabs with text labels (FIELDS, EQUIPMENT, PEOPLE, LAND, CONTRACTS) rather than icon-only tabs."
+    },
+    {
+     "from": "A",
+     "idea": "Put a small 'THE CLOCK IS STOPPED' line and a LAPSES date on the incident card itself. Add the 2/4 progress count on the objective strip."
+    },
+    {
+     "from": "A",
+     "idea": "Illustrate how-to-play with figures of the actual UI pieces: the label, the lit badge and the speed block."
+    },
+    {
+     "from": "B",
+     "idea": "Show B's idle prompt ('Nothing needs doing now. Let the days run.') whenever no order is due, so the player knows that running time is the right move."
+    },
+    {
+     "from": "B",
+     "idea": "On phone, show the selected field as a bottom sheet with full-width order buttons about 70px tall, with cost under each."
+    }
+   ],
+   "faults": [
+    {
+     "set": "D",
+     "screen": "season-card",
+     "fault": "The orders card is about 660x320 at bottom centre and covers Bottom Field and its badge. On a 1366x768 laptop it would cover over half the farm while the player is choosing an order for the land.",
+     "serious": true
+    },
+    {
+     "set": "D",
+     "screen": "people",
+     "fault": "Each grid cell carries a tiny subscript skill number of about 8px that is unreadable. The cell tints (black, gold, cream, hatched) add meaning nobody is told.",
+     "serious": false
+    },
+    {
+     "set": "D",
+     "screen": "season",
+     "fault": "The month strip is set at about 10px, and the playhead sits on top of 'JUL', so the current month is the hardest one to read.",
+     "serious": false
+    },
+    {
+     "set": "D",
+     "screen": "season",
+     "fault": "Rain chances (60%, 30%) are small blue type on near-black in the forecast strip, which gives low contrast.",
+     "serious": false
+    },
+    {
+     "set": "D",
+     "screen": "spring",
+     "fault": "The skill strips on hand cards use labels of about 7px (MACH, FIELD, WOODS) with 6px squares, which are unreadable at laptop distance.",
+     "serious": false
+    },
+    {
+     "set": "D",
+     "screen": "season.phone",
+     "fault": "Field plaques scale up so far they overlap each other and the fields. Brook Field's label and badge are missing, and the yard is off screen.",
+     "serious": false
+    },
+    {
+     "set": "D",
+     "screen": "people",
+     "fault": "The two panels cover about 65% of the screen, so the land Normand is working cannot be seen while you set his work.",
+     "serious": false
+    },
+    {
+     "set": "D",
+     "screen": "incident",
+     "fault": "The consequence word 'Nothing' is set in the same condensed caps as button labels and reads like a third control.",
+     "serious": false
+    },
+    {
+     "set": "C",
+     "screen": "ticket",
+     "fault": "The hand-drawn ellipse around the Deliver amount cuts through '1,028 cwt at the contract's', which reads as struck-through text.",
+     "serious": true
+    },
+    {
+     "set": "C",
+     "screen": "ticket",
+     "fault": "The three sale options (Deliver, Sell now, Keep it stored) have no button border or fill and look like information columns. Nothing shows where to click.",
+     "serious": true
+    },
+    {
+     "set": "C",
+     "screen": "incident",
+     "fault": "The paused state shows only as a tiny rotated 'STOPPED' stamp tucked under the speed panel, and the scene is not dimmed. Players will not notice that time stopped.",
+     "serious": false
+    },
+    {
+     "set": "C",
+     "screen": "season",
+     "fault": "People on the map are single-letter flags of about 10px (V, Y, N, A, L) told apart mainly by colour. The blue N flag is lost against the dark woods.",
+     "serious": false
+    },
+    {
+     "set": "C",
+     "screen": "season",
+     "fault": "Roster status is italic at about 11px (Spraying, Felling), and the tick-mark mood bars (IIIII) have no legend.",
+     "serious": false
+    },
+    {
+     "set": "C",
+     "screen": "season-card",
+     "fault": "The selection ring loops around the label rather than the plot outline, so it is ambiguous which field is selected. Grey italic reasons in the card ('Rain may do it Wednesday') are low contrast on cream.",
+     "serious": false
+    },
+    {
+     "set": "C",
+     "screen": "people",
+     "fault": "'Let go' is styled with a dashed border, which reads as a disabled or placeholder button rather than a destructive one.",
+     "serious": false
+    },
+    {
+     "set": "C",
+     "screen": "spring",
+     "fault": "The section tabs on the desk are rotated 90 degrees and slow to read. On phone they are icon-only for four of the five sections.",
+     "serious": false
+    },
+    {
+     "set": "B",
+     "screen": "season",
+     "fault": "The right-hand toast is clipped at the screen edge: 'Kennebec 0/1,500 cwt by fall -$5,62'.",
+     "serious": true
+    },
+    {
+     "set": "B",
+     "screen": "season",
+     "fault": "Roster chips show each worker's state with glyphs and dots of about 8px, which are illegible, so you cannot tell who is idle or busy.",
+     "serious": true
+    },
+    {
+     "set": "B",
+     "screen": "people",
+     "fault": "No person card is shown, only the grid. The '1' is marked by a thin outline, and the other priorities differ by subtle green shading.",
+     "serious": true
+    },
+    {
+     "set": "B",
+     "screen": "ticket",
+     "fault": "The ticket modal is stacked over an open field card and queued-order chips that peek out on both sides. 'Deliver to the packer $12,846' wraps into three lines in a narrow box, and the best option is not flagged.",
+     "serious": false
+    },
+    {
+     "set": "B",
+     "screen": "spring",
+     "fault": "Ghosted labels ('Spruce Lot', 'Intervale North') at low opacity are nearly invisible on snow.",
+     "serious": false
+    },
+    {
+     "set": "B",
+     "screen": "ledger",
+     "fault": "'The crop' comparison is cut off at the panel fold and needs a scroll inside the panel to see.",
+     "serious": false
+    },
+    {
+     "set": "B",
+     "screen": "spring.phone",
+     "fault": "Map labels collapse to unnamed icons, so you cannot tell which field is which.",
+     "serious": false
+    },
+    {
+     "set": "B",
+     "screen": "season.phone",
+     "fault": "The order label 'Kill' is truncated, and only a 1x toggle shows, so 2x and 3x are hidden.",
+     "serious": false
+    },
+    {
+     "set": "A",
+     "screen": "season",
+     "fault": "The money odometer uses a period as the thousands separator ('-$22.820'). That reads as $22.82 and conflicts with '$13,809' elsewhere.",
+     "serious": true
+    },
+    {
+     "set": "A",
+     "screen": "season",
+     "fault": "The weather graph labels (60%, 68%) and the packer gauge (PROMISED 1,200, GROWING 1,150-1,600) are set at about 8px and are unreadable on a laptop.",
+     "serious": true
+    },
+    {
+     "set": "A",
+     "screen": "season",
+     "fault": "Worker state and active speed are shown only by small green, orange or red lamps, a colour-only signal that fails red-green colour blindness.",
+     "serious": true
+    },
+    {
+     "set": "A",
+     "screen": "season.phone",
+     "fault": "Roster portraits have no names. Identity rests on a colour dot and state on a lamp colour.",
+     "serious": true
+    },
+    {
+     "set": "A",
+     "screen": "season",
+     "fault": "Four top panels plus the roster and toasts take about 30% of a 1440 screen and more on a small laptop. A has the heaviest coverage of the four sets.",
+     "serious": false
+    },
+    {
+     "set": "A",
+     "screen": "menu",
+     "fault": "Picture quality is a rotary knob with labels of about 8px. Toggle state is carried by lever position, with small ON and OFF text.",
+     "serious": false
+    },
+    {
+     "set": "A",
+     "screen": "ledger",
+     "fault": "A polar chart of cash through the year is hard to read as a time series. The bank's line as a dashed ring is unclear.",
+     "serious": false
+    },
+    {
+     "set": "A",
+     "screen": "ticket",
+     "fault": "The gauge (CWT x 100) repeats the 1,330 readout and asks for mental maths. The receipt is set in 11px monospace.",
+     "serious": false
+    },
+    {
+     "set": "A",
+     "screen": "spring",
+     "fault": "Skill labels in the hand cards are about 8px caps, and Verna's card is cut mid-sentence.",
+     "serious": false
+    },
+    {
+     "set": "A",
+     "screen": "season.phone",
+     "fault": "Speed controls are at the top of the phone, out of thumb reach.",
+     "serious": false
+    }
+   ],
+   "firstRead": [
+    {
+     "set": "D",
+     "whatIsIt": "A bold poster and cardstock farm game: dark plaques, condensed caps, red and gold accents.",
+     "nextThing": "The gold objective ribbon ('Spray before the blight') and the round order badges on the fields."
+    },
+    {
+     "set": "C",
+     "whatIsIt": "An almanac or field-notebook farm game: cream paper, serif text, rubber stamps, a telegram.",
+     "nextThing": "The yellow sticky-note objective and the red order stamps beside the field tags."
+    },
+    {
+     "set": "B",
+     "whatIsIt": "A minimal modern sim: dark top bar, small sans-serif labels, mostly landscape.",
+     "nextThing": "Hard to say. The eye goes to the money and speed controls top right, and there is no clear call to action besides the bottom-right toast."
+    },
+    {
+     "set": "A",
+     "whatIsIt": "A machined dashboard of brass, odometers, lamps and toggles over the farm.",
+     "nextThing": "The red and white money odometer and the lamp row above the speed buttons, which are instruments rather than the land."
+    }
+   ],
+   "verdict": "Build on D. It is the only set whose text and controls stay legible over sunlit foliage, snow and night. It carries state with words, icons and fill, not colour alone, and it already gives the ticket and the incident a real sense of occasion. As shipped, none of the four would pass against the best colony and strategy games. D comes closest, and these fixes would get it there:\n- Dock the field card to the right edge at about two-thirds of its current width.\n- Delete the subscript numbers in the work grid and use C's circled 1.\n- Lift the month strip and the rain chances to at least 12px with real contrast.\n- Move phone speed controls into the bottom thumb zone, as C does.\n- Take C's ruled IN and OUT ledger, and A's hazard stripes on Let go and End the season early.\nDo not carry over A's instrument-panel type sizes, colour-only lamps or period-separated odometer. Do not carry over B's clipped toasts or icon-only roster.",
+   "judge": "usability-access"
+  },
+  {
+   "ranking": [
+    "D",
+    "C",
+    "A",
+    "B"
+   ],
+   "scores": [
+    {
+     "set": "D",
+     "overall": 7.6,
+     "identity": 8,
+     "clarity": 8,
+     "fitsTheScene": 7,
+     "moments": 8,
+     "phone": 6.5,
+     "note": "The only set that reads as a game you command at first glance: colour-coded order badges on the land, a selection frame on the field, a bottom command card with the recommended order lit, hotkeys and a red alert band; it is loud and proud, but the black blocks are heavy, the work grid is over-encoded and the phone and menu take too much of the screen."
+    },
+    {
+     "set": "C",
+     "overall": 7.4,
+     "identity": 8.5,
+     "clarity": 7,
+     "fitsTheScene": 7.5,
+     "moments": 8.5,
+     "phone": 8,
+     "note": "The most beautiful and most art-directed set (tear-off calendar, telegram, weigh ticket, open ledger book) and the best phone, but it reads as lovely stationery more than a strategy game: orders are a text list in small italics, every order stamp is the same red, and the weigh-ticket decision does not look pressable."
+    },
+    {
+     "set": "A",
+     "overall": 6,
+     "identity": 7,
+     "clarity": 5.5,
+     "fitsTheScene": 5.5,
+     "moments": 7.5,
+     "phone": 6.5,
+     "note": "A committed machine-console idea with one real showpiece (the weigh gauge) and the best how-to-play page, but it is the busiest and heaviest set: wall-to-wall top consoles, bulbs, rivets, unexplained dots and a forecast you cannot read, which is exactly the 'complex and hard to understand' complaint."
+    },
+    {
+     "set": "B",
+     "overall": 4.3,
+     "identity": 3.5,
+     "clarity": 6.5,
+     "fitsTheScene": 6.5,
+     "moments": 3,
+     "phone": 5.5,
+     "note": "Tidy and unobtrusive but it looks like a web dashboard laid over a game: no wow anywhere, the weigh ticket and ledger are text dialogs, and nothing on the land tells you what to do; this is the 'massive quality upgrade' case."
+    }
+   ],
+   "verdict": "None of the four would pass yet next to the best shipped strategy games (Against the Storm, Frostpunk, Pentiment-level craft); D and C are each one focused polish round away, A needs a redesign of its HUD, and B is not a candidate. Build on D: it is the one that answers 'play more like an RTS' and 'intuitive' on first open, because the land itself carries colour-coded orders, selection is drawn on the field, and the field card is a command bar with the next order lit. Then lift C's paper craft into D for the payoff documents and the phone: the telegram for messages from outside the farm, the open ledger book with In/Out columns and stamps, the tear-off calendar, and C's phone layout with speed controls at the thumb. Take A's weigh-gauge needle sweep as the reveal before the ticket prints, and A's contract gauge and illustrated how-to-play. Before showing D: simplify the work grid to C's circled-1 version, lighten the solid black tiles in the forecast and date bar, make the menu a floating panel instead of a full-screen wall, cut the phone's top chrome from four rows to two, and label the contract chip. D and C are close enough that this is a judgment call on the lens (RTS and at-a-glance beat prettiness); a director who weights craft over command feel would pick C and should then fix its orders list and ticket buttons first.",
+   "bestScreens": [
+    {
+     "screen": "title",
+     "set": "D",
+     "why": "Leaves the whole sunrise scene as the hero with a bold wordmark and one compact card with a red Play; C's catalogue cover is the finer piece of design but hides nearly half the picture."
+    },
+    {
+     "screen": "season (nothing selected)",
+     "set": "D",
+     "why": "One clean top line (date, forecast, money, speed), and order badges on the fields are colour-coded by kind (yellow scout, blue water, red spray), so the map itself says what to do."
+    },
+    {
+     "screen": "field selected with orders",
+     "set": "D",
+     "why": "Selection is drawn on the field, four plain-word gauges (Full, Fair, Worn off, Twice), and a five-button command row with costs, hotkeys and the recommended order highlighted as NEXT; closest thing to an RTS command card."
+    },
+    {
+     "screen": "person card and work grid",
+     "set": "C",
+     "why": "Cleanest grid of the four: plain numbers with the first job circled, one sentence of rule, and a person card with skill bars, mood reasons and three clear actions; D's and A's grids pile on extra encodings."
+    },
+    {
+     "screen": "incident",
+     "set": "D",
+     "why": "Red header band, a 5-days countdown, portrait, two big options with cost in colour and 1/2 hotkeys, and the default stated; fastest to understand. C's telegram is the most memorable object and should be kept for outside messages."
+    },
+    {
+     "screen": "spring sheet",
+     "set": "D",
+     "why": "Clear accordion, hire cards with a visible HIRED state, plan total and a single red Start the Season; C is nearly as good, its vertical tabs are the weak spot."
+    },
+    {
+     "screen": "weigh ticket",
+     "set": "D",
+     "why": "Giant 1,374 cwt, worth in green, expected-range bar, coloured grade bar, losses with causes, and the best-paying choice filled in mustard and flagged BRINGS MOST; the only ticket where the decision is as strong as the number."
+    },
+    {
+     "screen": "year-end ledger",
+     "set": "C",
+     "why": "An actual open ledger book with In and Out columns, PAID and NOTE PAID stamps, crossed-off goals, a you-versus-neighbor bar and a sticky-note next goal; it feels like closing the year."
+    },
+    {
+     "screen": "menu and settings",
+     "set": "C",
+     "why": "Three floating sheets that keep the land visible, clear segmented controls and checkboxes, and a full key list; D's is equally clear but walls off the whole screen, A's rocker switches are hard to read."
+    },
+    {
+     "screen": "season on phone",
+     "set": "C",
+     "why": "Date, balance and a four-day forecast in two compact rows, big readable field tags and order stamps, speed controls and crew at the thumb, most of the screen left to the land."
+    },
+    {
+     "screen": "spring on phone",
+     "set": "D",
+     "why": "Each applicant reduced to name, trait, best skill and price with a big Hire, sections as accordions, red Start the Season pinned at the bottom; A's tabbed clipboard is a close second."
+    }
+   ],
+   "graft": [
+    {
+     "from": "C",
+     "idea": "Telegram form for anything arriving from outside the farm (supplier, bank, packer, neighbor), with the plain-language line and priced reply cards; keep D's countdown and hotkeys on it."
+    },
+    {
+     "from": "C",
+     "idea": "Year-end ledger as an open book: In/Out ruled columns, PAID and NOTE PAID stamps, goals crossed off, next goal on a yellow note beside Plan Year 2."
+    },
+    {
+     "from": "C",
+     "idea": "Work grid with plain numbers and the first-priority job circled, nothing else in the cell."
+    },
+    {
+     "from": "C",
+     "idea": "Phone season layout: date and balance side by side, four-day forecast beneath, speed controls and crew strip at the bottom by the thumb."
+    },
+    {
+     "from": "C",
+     "idea": "Tear-off calendar for the date with the season ruler under it, and the objective as a sticky note showing the last goal struck through and progress as tick boxes."
+    },
+    {
+     "from": "C",
+     "idea": "Title's botanical cut-away plate ('the crop you cannot see until you dig it') as the title card art, at D's card size so the scene stays open."
+    },
+    {
+     "from": "C",
+     "idea": "Menu as floating sheets over the live land rather than a full-screen page."
+    },
+    {
+     "from": "A",
+     "idea": "Weigh-scale dial with a needle that sweeps to the result before the ticket prints; use it as the reveal animation, then show D's ticket."
+    },
+    {
+     "from": "A",
+     "idea": "Contract gauge showing the promised amount against the range now growing (PROMISED 1,200 vs GROWING 1,150-1,600) in place of D's unlabeled 0/1,500 chip."
+    },
+    {
+     "from": "A",
+     "idea": "How-to-play page built from real interface specimens (a field tag, a lit badge, the speed keys) plus the five-phase year strip, with the full key list folded away."
+    },
+    {
+     "from": "A",
+     "idea": "Season ruler with the harvest window hatched, and a single status light per crew member (green working, amber idle, red stopped)."
+    },
+    {
+     "from": "A",
+     "idea": "Incident header that states 'The clock is stopped' with the lapse date, and circles the affected unit on the map."
+    },
+    {
+     "from": "B",
+     "idea": "Selection drawn as a solid frame on the ground along the field's own edges, and a skip-to-next-event button beside the speed controls."
+    },
+    {
+     "from": "B",
+     "idea": "Single-line order bar with cost under each order name; a good compact fallback for small windows."
+    }
+   ],
+   "faults": [
+    {
+     "set": "D",
+     "screen": "people.desk",
+     "fault": "Work-grid cells carry too many codes at once: tiny subscript skill numbers, green corner ticks, coloured underlines and three fill states; hard to decode and reads as complex.",
+     "serious": true
+    },
+    {
+     "set": "D",
+     "screen": "season.phone",
+     "fault": "Four stacked rows of chrome (date/money, speed, forecast, objective) take roughly the top 29% of the screen, and the contract chip floats over the field mid-right.",
+     "serious": true
+    },
+    {
+     "set": "D",
+     "screen": "menu.desk",
+     "fault": "Menu, settings and how-to-play are one opaque full-screen wall that hides the land completely; Delete sits right beside Export and Import.",
+     "serious": true
+    },
+    {
+     "set": "D",
+     "screen": "season.desk",
+     "fault": "Forecast is mostly solid black tiles with very small low temperatures and unexplained red squares; the contract chip '0/1,500' has no label; worker pins are half-filled teardrops with tiny corner badges that are hard to read.",
+     "serious": false
+    },
+    {
+     "set": "D",
+     "screen": "season-card.desk",
+     "fault": "The dashed selection line runs on to the tractor and a red dashed ellipse sits under the field label with no explanation; the card butts against the right-hand notices.",
+     "serious": false
+    },
+    {
+     "set": "D",
+     "screen": "spring.desk",
+     "fault": "The five skill labels and pips along the bottom of each hire card are very small and cramped; Land and Contracts are off the visible sheet.",
+     "serious": false
+    },
+    {
+     "set": "D",
+     "screen": "ticket.desk",
+     "fault": "Ticket fills almost the full height of the screen; the Store option's headline '+25%?' is vague next to two dollar figures; the red spine is dead space.",
+     "serious": false
+    },
+    {
+     "set": "D",
+     "screen": "title.desk",
+     "fault": "Heavy slab wordmark with red offset sits hard against the top-right edge and over the brightest sky; slightly crude beside the refinement of the card below.",
+     "serious": false
+    },
+    {
+     "set": "C",
+     "screen": "ticket.desk",
+     "fault": "The three choices (deliver, sell, store) have no button affordance, and the hand-drawn circle on the Deliver price cuts through the line beneath so it looks struck out; the WEIGHED stamp runs off the top of the card and is clipped.",
+     "serious": true
+    },
+    {
+     "set": "C",
+     "screen": "season-card.desk",
+     "fault": "Orders are a text list with small italic notes rather than buttons, and the selection is a thin loop round the label instead of the field; weakest RTS feel at the moment the player gives an order.",
+     "serious": true
+    },
+    {
+     "set": "C",
+     "screen": "season.desk",
+     "fault": "Every order stamp on the map is the same red whatever the order or urgency, so nothing ranks; crew tiles show only tiny icons and unexplained tick marks until something is selected.",
+     "serious": false
+    },
+    {
+     "set": "C",
+     "screen": "title.desk",
+     "fault": "The catalogue cover hides close to half of the scene and reads as a book cover rather than a game's front door.",
+     "serious": false
+    },
+    {
+     "set": "C",
+     "screen": "spring.desk",
+     "fault": "Rotated vertical tabs on the sheet's left edge are hard to read and repeat the rows already inside the sheet.",
+     "serious": false
+    },
+    {
+     "set": "C",
+     "screen": "incident.desk",
+     "fault": "Three typewriter strips in capitals with STOP are slower to parse than a headline; the plain sentence that explains it is the smallest text on the card.",
+     "serious": false
+    },
+    {
+     "set": "C",
+     "screen": "ledger.desk",
+     "fault": "Cash at year end shows 6,351 in the Out column without a sign while the facing page says -$6,351; the bank warning is small red italic.",
+     "serious": false
+    },
+    {
+     "set": "C",
+     "screen": "menu.desk",
+     "fault": "Three sheets of different heights and tops look unaligned.",
+     "serious": false
+    },
+    {
+     "set": "A",
+     "screen": "season.desk",
+     "fault": "Wall-to-wall band of three consoles across the top; the forecast is a tiny chart with unlabeled round marks and no readable conditions; money is flip digits reading '22.820' with a period and a detached red minus; an unexplained slider, redundant bulbs, coloured dots on crew plates and lettered map pins all compete.",
+     "serious": true
+    },
+    {
+     "set": "A",
+     "screen": "season.phone",
+     "fault": "No money shown anywhere, forecast collapsed to an icon, and crew plates have no names.",
+     "serious": true
+    },
+    {
+     "set": "A",
+     "screen": "menu.desk",
+     "fault": "Settings are tiny vertical rocker switches with 9px ON/OFF labels and a rotary knob for picture quality; state is hard to read and fiddly to set.",
+     "serious": true
+    },
+    {
+     "set": "A",
+     "screen": "people.desk",
+     "fault": "Two large dark panels plus a blur cover most of the land, priorities are shown twice (grid and card), and most labels are very small.",
+     "serious": true
+    },
+    {
+     "set": "A",
+     "screen": "ticket.desk",
+     "fault": "The gauge panel and the paper tape repeat the same figures side by side; the dial needs arithmetic (13.3 x 100), the counter reads '1.330', and the tape tucks under the top bar.",
+     "serious": false
+    },
+    {
+     "set": "A",
+     "screen": "season-card.desk",
+     "fault": "An 'On the list' slot replaces one order's own button, so the queued order loses its name; all orders share one amber.",
+     "serious": false
+    },
+    {
+     "set": "A",
+     "screen": "ledger.desk",
+     "fault": "Polar 'cash through the year' dial is hard to read and takes the place a headline result should hold.",
+     "serious": false
+    },
+    {
+     "set": "A",
+     "screen": "title.desk",
+     "fault": "Bottom third is a dark dashboard slab with a brass plate and bulbs that reads as kitsch; the credit chip overlaps the Settings button.",
+     "serious": false
+    },
+    {
+     "set": "A",
+     "screen": "spring.desk",
+     "fault": "Third applicant is cut off at the fold with half a button showing; skill pips are tiny.",
+     "serious": false
+    },
+    {
+     "set": "A",
+     "screen": "incident.desk",
+     "fault": "Card is pinned to the right and overlaps the contract panel; the two options look identical in weight.",
+     "serious": false
+    },
+    {
+     "set": "B",
+     "screen": "ticket.desk",
+     "fault": "A plain text dialog with paragraphs under uneven buttons (Deliver wraps to three lines), and HUD notices and a second card show through behind it; no sense of occasion at the game's main payoff.",
+     "serious": true
+    },
+    {
+     "set": "B",
+     "screen": "ledger.desk",
+     "fault": "A long scrolling text column cut off at the fold, with no verdict, stamp or headline figure.",
+     "serious": true
+    },
+    {
+     "set": "B",
+     "screen": "season.desk",
+     "fault": "Reads as a web toolbar; crew chips are tiny with illegible micro-bars, nothing on the fields signals an order, and the contract strip is clipped at the right edge ('-$5,62').",
+     "serious": true
+    },
+    {
+     "set": "B",
+     "screen": "title.desk",
+     "fault": "Small pale Play button and underlined text links look like a website, not a game.",
+     "serious": true
+    },
+    {
+     "set": "B",
+     "screen": "incident.desk",
+     "fault": "Generic small dialog with a smiley icon; no urgency or character.",
+     "serious": false
+    },
+    {
+     "set": "B",
+     "screen": "spring.phone",
+     "fault": "Field labels collapse to icon-only tags that cannot be told apart.",
+     "serious": false
+    },
+    {
+     "set": "B",
+     "screen": "spring.desk",
+     "fault": "Applicant portraits are generic blobs and the cards are plain form boxes.",
+     "serious": false
+    }
+   ],
+   "firstRead": [
+    {
+     "set": "C",
+     "whatIsIt": "A farm run from paper: an almanac, a tear-off calendar, telegrams and a ledger laid over the land; handsome and literary.",
+     "nextThing": "Click the pulsing red stamp beside Upper Middle, because the yellow note says spray before the blight."
+    },
+    {
+     "set": "A",
+     "whatIsIt": "A tractor-dashboard control console wrapped around the farm; clearly a game, but a lot of dials and bulbs to take in.",
+     "nextThing": "Look for what the amber badges mean, then press one; the eye goes to the lights before the land."
+    },
+    {
+     "set": "D",
+     "whatIsIt": "A bold poster-style strategy game: a map with coloured orders on it and a crew along the bottom.",
+     "nextThing": "Click the red spray badge on Bottom Field, the one the yellow banner is pointing at, then press 2x."
+    },
+    {
+     "set": "B",
+     "whatIsIt": "A quiet management dashboard over a 3D farm; looks like a web app.",
+     "nextThing": "Press play in the top bar, since nothing on the land asks for anything."
+    }
+   ],
+   "judge": "owner-eye"
+  }
+ ]
+}

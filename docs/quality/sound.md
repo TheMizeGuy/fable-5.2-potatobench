@@ -106,7 +106,8 @@ slider's top is 8.9 dB above that.
 | Work, picked (felling, building, brush, rocks, barrels) | -46 to -29 integrated, by kind | Present, and under a working tractor's bed with the cue that crowns it still to come. |
 | Work, going on somewhere | -56 to -41 | Quiet by default: 11 dB down and dulled, as if across the farm. |
 | A pick (field, tract, person, yard) | -42 to -31, loudest 400 ms | Heard many times a minute: barely there. |
-| The order knock | -38 to -27 | Answers every order. |
+| The order knock and its stamp | -38 to -27 | Answers every order. |
+| The whistle for a new need | -29 to -23, and clear of the loudest bed | The clock does not stop for a need: this and the badge are how a player at the fastest speed learns of it. |
 | Routine cues: planted, hilled, sprayed, watered, sold, rocks, brush, a paper signed, a building begun, a matter closed | -31 to -24 | About 10 LU over a fair bed. |
 | Notable cues: a tract felled, stumps out, tile in, logs sold, a building up, hired, gone, a level gained, the people's bar, a breakdown and its repair, land bought | -29 to -22 | |
 | Warnings | -28 to -22 | Distinct, never the loudest thing. |
@@ -151,30 +152,39 @@ A ten-hour game cannot have a sound that fires as often as the simulation
 does. Each cue has a least gap (the table below), and the director
 (`src/audio/director.ts`) adds three rules:
 
-- At the fastest clock six days go by in a second: a job is heard once a
-  second, not once a field; a warning once in 2.5 s, and of several on one day
-  only the gravest; the people's iron bar once in 4 s.
+- At the fastest clock two days go by in a second (the clock is Pause and
+  three speeds, 0.7, 1.4 and 2.1 days a second, and never changes speed by
+  itself): a job is heard once a second, not once a field; a warning once in
+  2.5 s, and of several on one day only the gravest; the people's iron bar
+  once in 4 s; the whistle for a new need once in 2 s, so four fields wanting
+  planting on one day are one call, and so are the needs of the four days
+  after it at the fastest clock.
 - The longer cues take turns. When a day brings a weigh ticket, a knock at the
   door and a tree down, they sound one after another, the most pressing first,
   each beginning over the tail of the one before. A cue that would come more
   than 7 s late (10 s for the three that must not be missed) is dropped.
-- A goal's reward waits for everything else, a close included, and then has
-  the air to itself. When the farm is kept or lost the close is the reward and
-  no goal sounds over it.
+- A goal's reward waits for everything else and then has the air to itself.
+  When a year closes, or the farm is kept or lost, the close is the reward and
+  no goal sounds for twelve seconds after it: the ladder's "Get through the
+  year" is met at the same moment as the amen, and the amen is its sound.
 
 Work is quiet by default: 11 dB down and low-passed at 1.8 kHz while it is only
 going on somewhere, at full level only when the player has picked the person
-doing it or the place it is done, silent when the clock is stopped, on a
+doing it or the place it is done, silent when the clock is stopped (by the
+player, or by a weigh ticket, a telegram, the freeze or the season's end), on a
 Sunday the farm keeps, and when the weather stops the work. Reduced motion
 changes nothing here: the setting is for the eye.
 
 ## Final measurements
 
 Chromium, at the default volume, from the last full run of
-`tools/audio/render.ts`: 117 cases, none outside the plan. Rows from
+`tools/audio/render.ts`: 121 cases, none outside the plan. Rows from
 `bed: title screen` to `stress` are every case in `src/audio/dev/cases.ts`.
 
-Firefox agrees with it on every one of the 117 rows to within 0.5 LU, both
+Firefox was compared with it one run earlier, before the last four cases
+(the whistle, the tear-off, the scene of needs) were added and before the
+weigh ticket, the knock and the order's answer were changed to go with the
+interface's motion. It agreed on every one of the 117 rows to within 0.5 LU, both
 integrated and at the loudest 400 ms (the rain and the dry leaves differ
 most); sample peaks differ by up to 2.2 dB, on the rain and the chimes, whose
 partials meet at different phases. That comparison measured loudness and
@@ -189,7 +199,8 @@ firefox --live`): no audio before a gesture; the title bed and a season with
 the farmer planting audible and under the ceiling; volume, mute and the hidden
 tab obeyed; then, with reduced motion switched on, a person, a yard, a tract
 and a field picked in turn and the woodlot felled with the feller picked,
-audible, peaking at -12 and -14 dBFS, with no page errors.
+audible and under the ceiling, with no page errors. That run was made again
+on the merged game, with its new clock: the same, in both.
 
 <!-- table:start -->
 | render | LUFS | mom | dBTP | pk@max | clicks | DC dB | <80% | 2-5k% | >8k% | L/R | loop | rhythm | att ms | dec ms | own bed dB | >500 Hz | storm dB |
@@ -239,7 +250,7 @@ audible, peaking at -12 and -14 dBFS, with no page errors.
 | summer: bumblebees in the blossom, 60 s | -46.3 | -43.1 | -34.6 | -25.7 | 0 | -188.9 | 0 | 0.4 | 0 | 0.92 | 0.01@25.7s | 0.01@26.7s |  |  |  |  |  |
 | harvest: a skein of geese going over | -39.3 | -34.8 | -23.9 | -15.0 | 0 | -153.1 | 0 | 21 | 0 | 0.91 | 0.08@1.6s | 0.03@1.5s |  |  |  |  |  |
 | harvest: a crow, one series of caws | -37.5 | -35.5 | -22.5 | -13.6 | 0 | -155.2 | 0 | 10 | 0 | 0.96 |  |  |  |  |  |  |  |
-| harvest: dry leaves blowing, wind 5 m/s | -42.1 | -35.3 | -18.9 | -10.2 | 4 (x9 @8.78s/64) | -188.3 | 0 | 48 | 11 | 0.48 | 0.03@13.9s | 0.10@13.9s |  |  |  |  |  |
+| harvest: dry leaves blowing, wind 5 m/s | -42.1 | -35.3 | -18.9 | -10.2 | 4 (x9 @8.78s/64) | -188.4 | 0 | 48 | 11 | 0.48 | 0.03@13.9s | 0.10@13.9s |  |  |  |  |  |
 | winter: a tree cracking in the frost | -40.5 | -37.6 | -20.9 | -12.1 | 0 | -107.7 | 0.7 | 2.5 | 0 | 0.73 |  |  |  |  |  |  |  |
 | tractor: working | -37.2 | -36.6 | -24.8 | -15.9 | 0 | -117.8 | 24 | 0.1 | 0 | 0.99 | 0.10@1.0s | 0.07@1.0s |  |  |  |  |  |
 | tractor: idling (work on foot) | -40.5 | -39.9 | -24.3 | -15.4 | 0 | -117.2 | 24 | 0 | 0 | 0.99 | 0.13@6.4s | 0.05@1.0s |  |  |  |  |  |
@@ -270,10 +281,12 @@ audible, peaking at -12 and -14 dBFS, with no page errors.
 | cue: pickTract (a tract of woods, brush or stumps picked) | -35.1 | -35.1 | -17.1 | -8.3 | 0 | -101.0 | 0.2 | 31 | 6.7 | 1.00 |  |  | 1 | 94 | 25 @6350 (9) | 25 @6350 | 3 @5040 (0) |
 | cue: pickPerson (a person picked) | -33.5 | -32.5 | -16.7 | -7.9 | 0 | -103.2 | 0 | 0.8 | 0.1 | 1.00 |  |  | 4 | 150 | 22 @397 (7) | 21 @500 | 17 @397 (4) |
 | cue: pickYard (a yard picked) | -37.5 | -36.5 | -17.5 | -8.9 | 0 | -101.1 | 0.1 | 20 | 10 | 1.00 |  |  | 122 | 41 | 25 @12699 (7) | 25 @12699 | 5 @12699 (0) |
-| cue: heard (any order taken; pickers hired or sent home; winter work set) | -33.1 | -33.1 | -17.0 | -8.1 | 0 | -114.5 | 0 | 2.8 | 0 | 1.00 |  |  | 2 | 64 | 23 @397 (5) | 19 @500 | 18 @397 (3) |
+| cue: heard (any order taken; pickers hired or sent home; winter work set) | -31.7 | -31.6 | -17.0 | -8.1 | 0 | -86.2 | 1.7 | 1.9 | 0 | 1.00 |  |  | 2 | 145 | 23 @397 (8) | 19 @500 | 18 @397 (6) |
+| cue: need (a new need on a field (the clock does not stop for it)) | -27.4 | -25.7 | -20.6 | -11.8 | 0 | -170.9 | 0 | 0.3 | 0 | 0.99 |  |  | 145 | 125 | 28 @1587 (2) | 28 @1587 | 15 @1587 (2) |
+| cue: tearOff (a coupon torn off the weigh ticket (sounded by the interface: no event of the game marks it)) | -27.5 | -25.7 | -14.8 | -5.9 | 0 | -157.1 | 0 | 48 | 14 | 1.00 |  |  | 149 | 70 | 39 @12699 (10) | 39 @12699 | 14 @12699 (6) |
 | cue: rocks (rocks picked off a field) | -29.2 | -26.8 | -11.2 | -2.4 | 0 | -89.4 | 7.4 | 3.5 | 0.5 | 1.00 |  |  | 2 | 560 | 46 @79 (15) | 23 @12699 | 24 @79 (8) |
 | cue: brushed (hedgerows cut back) | -29.4 | -26.8 | -12.2 | -3.3 | 0 | -95.7 | 0 | 43 | 4.9 | 1.00 |  |  | 96 | 326 | 35 @12699 (13) | 35 @12699 | 9 @12699 (5) |
-| cue: ticket (weighed: the crop is in and the weigh ticket cut) | -26.7 | -24.4 | -12.8 | -4.0 | 0 | -93.0 | 0 | 31 | 8.7 | 1.00 |  |  | 301 | 613 | 40 @12699 (10) | 40 @12699 | 15 @12699 (8) |
+| cue: ticket (weighed: the crop is in and the weigh ticket cut) | -29.9 | -24.4 | -7.4 | -0.4 | 0 | -113.5 | 2.4 | 14 | 4.1 | 1.00 |  |  | 2861 | 73 | 29 @79 (18) | 35 @12699 | 28 @79 (11) |
 | cue: felled (a tract felled) | -30.6 | -24.1 | -12.1 | -3.2 | 0 | -105.6 | 64 | 3.8 | 0.8 | 0.98 |  |  | 1143 | 459 | 57 @50 (8) | 28 @10079 | 33 @79 (6) |
 | cue: stumped (the stumps pulled: a tract is a field) | -28.4 | -24.2 | -11.7 | -2.9 | 0 | -91.7 | 70 | 6.1 | 1.0 | 0.99 |  |  | 569 | 305 | 59 @50 (9) | 28 @12699 | 33 @79 (5) |
 | cue: tiled (tile drains laid) | -28.7 | -25.3 | -13.2 | -4.3 | 0 | -106.0 | 0 | 0.2 | 0 | 0.99 |  |  | 383 | 408 | 29 @630 (6) | 29 @630 | 20 @630 (3) |
@@ -291,16 +304,17 @@ audible, peaking at -12 and -14 dBFS, with no page errors.
 | cue: paidOff (the mortgage paid, at the year end or early) | -27.2 | -24.8 | -12.0 | -3.2 | 0 | -102.3 | 1.5 | 26 | 3.2 | 1.00 |  |  | 329 | 407 | 48 @99 (22) | 28 @8000 | 25 @79 (15) |
 | cue: brokeDown (a tractor broken down) | -29.5 | -24.9 | -11.2 | -2.3 | 0 | -80.2 | 9.6 | 1.1 | 0.2 | 1.00 |  |  | 126 | 1054 | 25 @79 (9) | 21 @10079 | 24 @79 (7) |
 | cue: repaired (a tractor going again) | -29.0 | -24.9 | -13.8 | -4.9 | 0 | -82.1 | 8.9 | 0.9 | 0.6 | 1.00 |  |  | 817 | 77 | 46 @99 (6) | 22 @12699 | 24 @79 (5) |
-| cue: door (an incident: a decision is asked for) | -24.8 | -23.2 | -9.3 | -1.0 | 0 | -90.6 | 0.7 | 0.3 | 0 | 0.99 |  |  | 2 | 590 | 22 @198 (10) | 21 @500 | 21 @198 (8) |
-| cue: settled (an incident answered or let lapse) | -28.3 | -27.3 | -12.6 | -3.7 | 0 | -97.7 | 0.4 | 1.1 | 0.6 | 1.00 |  |  | 11 | 144 | 39 @125 (13) | 25 @12699 | 18 @198 (8) |
-| cue: goal (a goal on the ladder met) | -25.7 | -21.7 | -13.3 | -4.4 | 0 | -126.0 | 0 | 0.6 | 0 | 0.97 |  |  | 484 | 1735 | 26 @794 (12) | 26 @794 | 17 @315 (9) |
+| cue: door (an incident: a decision is asked for) | -26.0 | -23.2 | -9.3 | -1.0 | 0 | -90.7 | 0.7 | 0.7 | 0.1 | 0.99 |  |  | 2 | 884 | 22 @198 (10) | 21 @10079 | 21 @198 (8) |
+| cue: settled (an incident answered or let lapse) | -30.8 | -29.8 | -14.6 | -5.7 | 0 | -95.1 | 2.9 | 1.6 | 1.0 | 1.00 |  |  | 9 | 174 | 44 @79 (15) | 25 @12699 | 22 @79 (5) |
+| cue: goal (a goal on the ladder met) | -25.4 | -21.6 | -13.2 | -4.4 | 0 | -126.6 | 0 | 4.3 | 0 | 0.97 |  |  | 607 | 1735 | 26 @5040 (17) | 26 @5040 | 17 @315 (13) |
+| cue: need, called twice (a new need that cannot wait) | -27.2 | -25.7 | -20.6 | -11.8 | 0 | -149.1 | 0 | 0.3 | 0 | 0.99 |  |  | 145 | 584 | 27 @1587 (2) | 27 @1587 | 15 @1587 (2) |
 | change: fair, then storm, then fair again | -30.2 | -26.2 | -17.7 | -9.1 | 0 | -89.1 | 0 | 31 | 3.8 | 0.19 |  |  |  |  |  |  |  |
 | change: tractor starts, works, idles, stops | -38.9 | -36.7 | -25.0 | -16.1 | 0 | -163.0 | 23 | 0 | 0 | 1.00 |  |  |  |  |  |  |  |
 | change: sound off and on again, tab hidden and shown | -33.2 | -29.2 | -20.9 | -12.0 | 0 | -117.7 | 13 | 32 | 0 | 0.83 |  |  |  |  |  |  |  |
 | change: title, plan, season, cellar, ledger with its close | -33.6 | -22.8 | -15.0 | -6.1 | 0 | -144.1 | 0 | 10 | 0.2 | 0.92 |  |  |  |  |  |  |  |
 | change: every cue of the crop once, in the order of a year | -28.3 | -21.1 | -7.4 | -0.4 | 0 | -91.0 | 0.2 | 7.1 | 0.1 | 0.96 |  |  |  |  |  |  |  |
-| change: every cue of the farmstead once, in the order of a year | -30.7 | -21.8 | -8.4 | -0.6 | 0 | -87.4 | 9.9 | 17 | 1.0 | 0.91 |  |  |  |  |  |  |  |
-| change: one day brings a tract felled, a building up, a level gained, a weigh ticket and a knock at the door; then a goal | -28.1 | -21.6 | -8.3 | -0.6 | 0 | -93.7 | 7.7 | 10 | 0.6 | 0.75 |  |  |  |  |  |  |  |
+| change: every cue of the farmstead once, in the order of a year | -30.5 | -21.9 | -9.1 | -0.9 | 0 | -86.3 | 9.3 | 17 | 0.9 | 0.91 |  |  |  |  |  |  |  |
+| change: one day brings a tract felled, a building up, a level gained, a weigh ticket and a knock at the door; then a goal | -29.1 | -21.8 | -7.5 | -0.4 | 0 | -88.6 | 8.9 | 7.2 | 0.6 | 0.86 |  |  |  |  |  |  |  |
 | change: felling far, picked, far again and stopped; then building picked and stopped | -33.6 | -28.0 | -10.6 | -1.8 | 0 | -96.4 | 0.4 | 16 | 1.2 | 0.50 |  |  |  |  |  |  |  |
 | change: the year in a minute, May, August, October, January | -37.2 | -29.5 | -14.4 | -5.9 | 0 | -128.2 | 0 | 41 | 0.5 | 0.47 |  |  |  |  |  |  |  |
 | seam: every looped buffer wrapping round | -33.9 | -30.5 | -20.5 | -11.6 | 0 | -109.3 | 5.5 | 11 | 2.0 | 0.34 |  |  |  |  |  |  |  |
@@ -308,9 +322,10 @@ audible, peaking at -12 and -14 dBFS, with no page errors.
 | scene: wet August day, blight warning, spraying | -33.7 | -23.7 | -12.0 | -3.1 | 0 | -79.1 | 6.4 | 14 | 0.7 | 0.69 | 0.12@1.0s | 0.07@1.0s |  |  |  |  |  |
 | scene: dig day in late September, then a sale | -33.2 | -21.7 | -11.7 | -2.8 | 0 | -90.5 | 7.2 | 8.5 | 0.1 | 0.69 | 0.04@20.0s | 0.03@1.0s |  |  |  |  |  |
 | scene: October, a hand felling the woodlot: far, then picked, the last tree, a level gained | -33.9 | -23.7 | -11.0 | -2.2 | 0 | -100.9 | 10 | 17 | 1.7 | 0.55 | 0.01@1.5s | 0.08@1.4s |  |  |  |  |  |
-| scene: the crop coming in: digging, the truck hauling, the yard picked, the weigh ticket, a goal met | -30.5 | -21.2 | -10.2 | -1.5 | 0 | -93.5 | 5.6 | 9.0 | 0.3 | 0.70 | 0.03@1.2s | 0.05@1.0s |  |  |  |  |  |
-| scene: June, a potato house going up in the yard: picked, the last nail, a goal met, someone hired | -33.2 | -21.8 | -9.2 | -0.9 | 0 | -88.4 | 1.2 | 15 | 0.3 | 0.86 | 0.03@23.5s | 0.03@1.1s |  |  |  |  |  |
-| stress: storm, gale, engines, every kind of work and every cue at once | -13.8 | -9.0 | -0.2 | -0.3 | 0 | -67.3 | 4.5 | 3.9 | 0.5 | 0.94 |  |  |  |  |  |  |  |
+| scene: the crop coming in: digging, the truck hauling, the yard picked, the weigh ticket, a goal met | -30.5 | -21.2 | -9.8 | -1.2 | 0 | -96.6 | 5.7 | 8.6 | 0.3 | 0.73 | 0.02@1.2s | 0.01@4.6s |  |  |  |  |  |
+| scene: June, a potato house going up in the yard: picked, the last nail, a goal met, someone hired | -33.1 | -21.8 | -9.4 | -1.0 | 0 | -88.8 | 1.2 | 16 | 0.3 | 0.86 | 0.02@1.1s | 0.02@1.1s |  |  |  |  |  |
+| scene: a May morning at 3x: four fields want planting (one call), a pick and an order, a hilling need, an urgent one | -33.0 | -25.0 | -11.0 | -2.2 | 0 | -112.7 | 6.7 | 22 | 0.2 | 0.83 | 0.02@3.8s | 0.02@4.0s |  |  |  |  |  |
+| stress: storm, gale, engines, every kind of work and every cue at once | -13.8 | -8.8 | -0.1 | -0.3 | 0 | -63.8 | 4.5 | 4.3 | 0.5 | 0.94 |  |  |  |  |  |  |  |
 
 LUFS: integrated loudness (ITU-R BS.1770-4, gated) at the default volume. mom: loudest 400 ms. dBTP: true peak
 (4x oversampled) at the default volume. pk@max: sample peak with the volume slider at its top. clicks: discontinuities found
@@ -334,7 +349,7 @@ meter against a known tone.
 click test in cue: warning, blight watch (A3): finds a one-sample step from -56 dBFS, a step 1 ms wide from -34 dBFS
 click test in tractor: working: finds a one-sample step from -56 dBFS, a step 1 ms wide from -22 dBFS
 click test in bed: June, fair: finds a one-sample step from -34 dBFS, a step 1 ms wide not at all up to -20 dBFS
-cost: 48 s of a gale, every continuous voice running, renders in 5.5 s, building the engine included
+cost: 48 s of a gale, every continuous voice running, renders in 6.7 s, building the engine included
 loudness meter: a -6.0 dBFS 997 Hz stereo sine reads -6.02 LUFS
 ```
 <!-- instruments:end -->
@@ -482,15 +497,58 @@ itself rendered again with different luck (other birds, other gusts):
 | ledger | paidOff | 10.0 | 250 |
 | kept | rocks | 13.1 | 198 |
 | lost | paidOff | 8.9 | 63 |
-| ticket | brushed | 9.3 | 2000 |
-| door | settled | 6.5 | 315 |
-| goal | hilled | 16.6 | 198 |
+| ticket | rocks | 11.2 | 99 |
+| door | paidOff | 13.7 | 397 |
+| goal | paidOff | 17.5 | 1000 |
 <!-- compared:end -->
 
 The second table there is a different question: each moment that must not be
 missed, sounding at the same instant as each short cue that can sound over it
 (the longer ones take turns), and how far it still stands clear in the band
 where it stands clearest.
+
+## What the interface's motion asks for
+
+The interface is the farm's own papers (`docs/UI.md`, `design/MOTION.md`):
+stamps, pencil, a telegram for a decision, a scale's needle before the weigh
+ticket prints. `design/MOTION.md` names the sounds that go with its motion.
+Each is here under the name in the cue table:
+
+| The motion | Its sound there | Here | Sounded by |
+| --- | --- | --- | --- |
+| An order given: the button presses, the "On the list" stamp comes down | "the game's knock for 'order', then a rubber stamp's thump under 100 ms" | `heard`: the knock, and the stamp 70 ms after it | the app's `order` event |
+| A new need: the red badge comes down on a field or a face | (none named; the clock no longer stops for it) | `need`: a whistle from the field, twice when it cannot wait | the app's alert of type `need` |
+| A telegram arrives; the clock stops | (none named) | `door`: three knocks and the telegram put down | the `incident` event |
+| A decision answered, or lapsing under its stamp | a stamp | `settled`: a stamp, then the latch | the `incidentDone` event |
+| The scale: the needle sweeps in 1.4 s, each grade's band inking in | "a soft clack of the grader per band" | `ticket`: five clacks at 0.10, 0.24, 0.42, 0.68 and 1.05 s, slowing as the needle does | the `weighed` event |
+| The ticket feeds out of the slot (0.5 s); the net weight arrives digit by digit | (none named) | `ticket`: paper over a roller from 1.45 s, five steps of the numbering machine from 2.3 s | the same |
+| The "Weighed" stamp, "the one heavy stamp of the season, with its sound" | a heavy stamp | `ticket`: the stamp at 2.95 s, the loudest single blow of any cue | the same |
+| The chosen way torn off the ticket along its perforation (260 ms) | a tear | `tearOff`, 260 ms | **nothing yet**: see below |
+| A paid stamp | a stamp | `deed` and `paidOff` (pen, stamp; with coins when the mortgage is paid) | `landBought`, `mortgage`, `mortgagePaid` |
+| A goal's slip struck through in pencil, lifted away | (none named) | `goal`: the pencil's stroke, then the reward | the ladder in `src/game/goals.ts`, compared on each change |
+| A bad alert arrives "with the game's alert sound" | the alert sound | the warning chime, at the pitch for its kind | the day's events |
+| The calendar leaf torn off at midnight at 1x | (none named) | nothing, on purpose: a sound every day and a half is the definition of one that tires | |
+
+Two things the interface's motion wants that the sound cannot give by
+itself, because the sound hears the game's events and not the interface's
+animation:
+
+- **The scale is not locked to the needle.** `ticket` starts on the `weighed`
+  event. The interface lays the scale down after the land has shown the last
+  row dug (`view.whenShown`) and after any paper already up, so its needle may
+  start later than the clacks. The sequence is right and the offsets are the
+  motion's own; the start is not.
+- **The tear-off has no event.** Storing a crop from the ticket changes
+  nothing in the game, so nothing tells the sound that a coupon was torn.
+
+Both are one call each from the interface. The object `createSound` returns
+has `cue(id)` beyond what the seam in `src/game/contracts.ts` asks, which
+sounds any cue in the table by its name: `cue('tearOff')` when the coupon
+tears, and `cue('ticket')` when the scale's face is laid down (with the
+`weighed` line taken out of the director's list when that is wired, or it
+sounds twice). The interface is not given the sound today (`mountHud` gets
+the app and the view), so that wiring is three lines in files this work does
+not own.
 
 ## The cues
 
@@ -502,39 +560,41 @@ Every cue the director can sound (`CUES` in `src/audio/director.ts`), made by
 | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
 | pickField | a field picked | One step onto worked ground | a pick | 0.07 | 150 | -34.2 | 33 @157 Hz | planted: 4.9 dB apart, rhythm 0.80 |
 | pickTract | a tract of woods, brush or stumps picked | A twig underfoot and the leaves it stirs | a pick | 0.07 | 208 | -35.1 | 25 @6350 Hz | brushed: 3.9 dB apart, rhythm 0.53 |
-| pickPerson | a person picked | Two taps of a tool handle, the second higher; each person has a pitch of their own | a pick | 0.07 | 343 | -32.5 | 22 @397 Hz | heard: 8.7 dB apart, rhythm 0.77 |
+| pickPerson | a person picked | Two taps of a tool handle, the second higher; each person has a pitch of their own | a pick | 0.07 | 343 | -32.5 | 22 @397 Hz | sold: 13.4 dB apart, rhythm 0.97 |
 | pickYard | a yard picked | The gate: its hinge, then its latch (the Dufour gate lower) | a pick | 0.07 | 433 | -36.5 | 25 @12699 Hz | brushed: 8.3 dB apart, rhythm 0.55 |
-| heard | any order taken; pickers hired or sent home; winter work set | One knuckle on the tractor fender | routine | 0.09 | 150 | -33.1 | 23 @397 Hz | pickPerson: 8.7 dB apart, rhythm 0.77 |
+| heard | any order taken; pickers hired or sent home; winter work set | One knuckle on the tractor fender, and the rubber stamp coming down on the order line | routine | 0.09 | 248 | -31.6 | 23 @397 Hz | begun: 7.1 dB apart, rhythm 0.67 |
+| need | a new need on a field (the clock does not stop for it) | Someone whistles from the field: two notes, the second a fourth higher; twice when it cannot wait | routine | 2 | 948 | -25.7 | 28 @1587 Hz | better: 16.6 dB apart, rhythm 0.81 |
 | planted | planted | Two pats on earth | routine | 1 | 450 | -26.0 | 21 @198 Hz | pickField: 4.9 dB apart, rhythm 0.80 |
-| hilled | hilled | Two sweeps of soil | routine | 1 | 495 | -27.7 | 22 @1260 Hz | settled: 13.4 dB apart, rhythm 0.88 |
-| sprayed | sprayed | Two breaths of a nozzle | routine | 1 | 376 | -26.1 | 29 @8000 Hz | pickTract: 14.8 dB apart, rhythm 0.88 |
+| hilled | hilled | Two sweeps of soil | routine | 1 | 495 | -27.7 | 22 @1260 Hz | pickPerson: 10.6 dB apart, rhythm 0.73 |
+| sprayed | sprayed | Two breaths of a nozzle | routine | 1 | 376 | -26.1 | 29 @8000 Hz | tearOff: 8.5 dB apart, rhythm 0.77 |
 | watered | watered | Two drops into standing water | routine | 1 | 858 | -27.9 | 27 @500 Hz | pickPerson: 9.5 dB apart, rhythm 0.69 |
-| rocks | rocks picked off a field | Three stones thrown on the stone boat: one on its planks, two on stone, and one that settles | routine | 1 | 689 | -26.8 | 46 @79 Hz | settled: 8.0 dB apart, rhythm 0.87 |
+| rocks | rocks picked off a field | Three stones thrown on the stone boat: one on its planks, two on stone, and one that settles | routine | 1 | 689 | -26.8 | 46 @79 Hz | settled: 5.3 dB apart, rhythm 0.84 |
 | brushed | hedgerows cut back | Two swings of a brush hook, a stem parting after each | routine | 1 | 638 | -26.8 | 35 @12699 Hz | pickTract: 3.9 dB apart, rhythm 0.53 |
 | sample | a test dig | The hill's tubers laid on a wooden tray one at a time | must not be missed | 0.5 | 1712 | -25.8 | 37 @125 Hz | kept: 9.0 dB apart, rhythm 0.57 |
-| dug | a field dug | A basket tipped into the barrel, slowing as the last tubers settle | must not be missed | 0.5 | 1867 | -23.2 | 22 @79 Hz | door: 6.1 dB apart, rhythm 0.67 |
-| ticket | weighed: the crop is in and the weigh ticket cut | The poise run out along the scale beam, the beam tapping its stop twice, and the ticket torn off the pad | must not be missed | 1 | 1359 | -24.4 | 40 @12699 Hz | pickYard: 6.2 dB apart, rhythm 0.23 |
+| dug | a field dug | A basket tipped into the barrel, slowing as the last tubers settle | must not be missed | 0.5 | 1867 | -23.2 | 22 @79 Hz | lost: 6.9 dB apart, rhythm 0.72 |
+| ticket | weighed: the crop is in and the weigh ticket cut | The scale: the grader clacking five times as the needle comes round, the ticket fed out, the numbering machine, and the Weighed stamp, the one heavy stamp of the season | must not be missed | 1 | 3319 | -24.4 | 29 @79 Hz | settled: 3.9 dB apart, rhythm 0.34 |
+| tearOff | a coupon torn off the weigh ticket (sounded by the interface: no event of the game marks it) | Paper torn along its perforation | routine | 0.3 | 474 | -25.7 | 39 @12699 Hz | sprayed: 8.5 dB apart, rhythm 0.77 |
 | sold | sold, delivered, a contract filled, the cellar overflowing to the buyer | Two coins on a wooden counter | routine | 0.4 | 618 | -26.0 | 32 @315 Hz | pickPerson: 13.4 dB apart, rhythm 0.97 |
 | felled | a tract felled | The last tree down: the hinge cracking faster and faster, the rush, the ground, branches settling | notable | 4 | 2662 | -24.1 | 57 @50 Hz | stumped: 3.5 dB apart, rhythm 0.14 |
 | stumped | the stumps pulled: a tract is a field | A chain taking up, roots parting, the stump free and soil falling off it | notable | 2 | 1430 | -24.2 | 59 @50 Hz | felled: 3.5 dB apart, rhythm 0.14 |
 | tiled | tile drains laid | Two lengths of clay pipe set end to end, and water finding them | notable | 2 | 1396 | -25.3 | 29 @630 Hz | watered: 10.4 dB apart, rhythm 0.23 |
 | logs | logs sold | Two logs rolled onto the mill's truck, then the two coins | notable | 0.6 | 1140 | -25.2 | 46 @63 Hz | rocks: 9.2 dB apart, rhythm 0.83 |
 | begun | a building started | Two boards dropped on the stack | routine | 0.5 | 719 | -26.9 | 41 @125 Hz | rocks: 8.2 dB apart, rhythm 0.83 |
-| built | a building standing | The last nail driven home in four blows, each higher than the last, and a board set down | notable | 2 | 1725 | -25.6 | 24 @6350 Hz | hired: 6.6 dB apart, rhythm 0.57 |
-| hired | someone hired | The gate latch, and two steps up onto the porch | notable | 0.5 | 1339 | -26.9 | 45 @99 Hz | rocks: 4.6 dB apart, rhythm 0.35 |
+| built | a building standing | The last nail driven home in four blows, each higher than the last, and a board set down | notable | 2 | 1725 | -25.6 | 24 @6350 Hz | door: 4.9 dB apart, rhythm 0.34 |
+| hired | someone hired | The gate latch, and two steps up onto the porch | notable | 0.5 | 1339 | -26.9 | 45 @99 Hz | ticket: 4.4 dB apart, rhythm 0.35 |
 | left | someone quits or is hired away | Two steps down off the porch and the door pulled to | notable | 1.5 | 1465 | -26.5 | 49 @63 Hz | rocks: 6.8 dB apart, rhythm 0.44 |
 | better | someone a level better at their work | A tap on hot iron and a ring off the anvil a fourth above | notable | 3 | 1317 | -25.3 | 28 @1260 Hz | unhappy: 11.8 dB apart, rhythm 0.78 |
 | wornOut | someone worn out | The porch triangle, an iron bar struck once (D5) | notable | 4 | 3138 | -26.8 | 25 @630 Hz | warnDry: 18.2 dB apart, rhythm 0.97 |
 | unhappy | someone unhappy enough to quit | The porch triangle struck once, lower (B4) | notable | 4 | 3127 | -27.1 | 25 @500 Hz | better: 11.8 dB apart, rhythm 0.78 |
 | hurt | someone hurt | The porch triangle struck twice, lower still (A4) | notable | 4 | 3570 | -25.9 | 26 @397 Hz | warnWatch: 17.9 dB apart, rhythm 0.96 |
-| signed | a contract signed, land rented, a raise, a foreman named, a contractor ordered | A steel nib on ledger paper: five strokes and a full stop | routine | 0.3 | 890 | -26.8 | 27 @6350 Hz | ticket: 12.4 dB apart, rhythm 0.59 |
-| deed | land bought | Two strokes of the nib and a rubber stamp | notable | 0.5 | 714 | -24.1 | 47 @99 Hz | hired: 7.1 dB apart, rhythm 0.56 |
+| signed | a contract signed, land rented, a raise, a foreman named, a contractor ordered | A steel nib on ledger paper: five strokes and a full stop | routine | 0.3 | 890 | -26.8 | 27 @6350 Hz | door: 13.6 dB apart, rhythm 0.64 |
+| deed | land bought | Two strokes of the nib and a rubber stamp | notable | 0.5 | 714 | -24.1 | 47 @99 Hz | ticket: 4.7 dB apart, rhythm 0.42 |
 | paidOff | the mortgage paid, at the year end or early | Two strokes of the nib, the stamp, and the two coins | routine | 0.5 | 996 | -24.8 | 48 @99 Hz | hired: 9.1 dB apart, rhythm 0.71 |
 | brokeDown | a tractor broken down | A rod letting go, and the engine running down in six slowing beats | notable | 3 | 1305 | -24.9 | 25 @79 Hz | hired: 5.8 dB apart, rhythm 0.51 |
 | repaired | a tractor going again | Five clicks of a ratchet, then the engine catching and picking up | notable | 3 | 1598 | -24.9 | 46 @99 Hz | brokeDown: 5.6 dB apart, rhythm 0.35 |
-| door | an incident: a decision is asked for | Three knocks at the door | must not be missed | 1.5 | 1211 | -23.2 | 22 @198 Hz | dug: 6.1 dB apart, rhythm 0.67 |
-| settled | an incident answered or let lapse | The door eased shut and its latch dropping | routine | 0.5 | 578 | -27.3 | 39 @125 Hz | rocks: 8.0 dB apart, rhythm 0.87 |
-| goal | a goal on the ladder met | The year-end amen in small on the parlour organ (IV to I in F) under four struck bars climbing C, F, A, C | must not be missed | 3 | 4082 | -21.7 | 26 @794 Hz | warnWatch: 18.6 dB apart, rhythm 0.94 |
+| door | an incident: a decision is asked for | Three knocks at the door, and the telegram put down | must not be missed | 1.5 | 1211 | -23.2 | 22 @198 Hz | rocks: 7.3 dB apart, rhythm 0.80 |
+| settled | an incident answered or let lapse | A stamp on the telegram, and the door's latch dropping | routine | 0.5 | 666 | -29.8 | 44 @79 Hz | rocks: 5.3 dB apart, rhythm 0.84 |
+| goal | a goal on the ladder met | A pencil struck through the line, then the year-end amen in small on the parlour organ (IV to I in F) under four struck bars climbing C, F, A, C | must not be missed | 3 | 4237 | -21.6 | 26 @5040 Hz | kept: 22.0 dB apart, rhythm 0.91 |
 | warnFrost | frost, the freeze-up | The warning chime, one low struck note, at C4 | notable | 2.5 | 5911 | -23.7 | 31 @250 Hz | unhappy: 18.7 dB apart, rhythm 0.96 |
 | warnWatch | blight weather | The warning chime, one low struck note, at A3 | notable | 2.5 | 5334 | -24.4 | 33 @198 Hz | unhappy: 18.5 dB apart, rhythm 0.98 |
 | warnSeen | blight seen; any other bad news | The warning chime, one low struck note, at G3 | notable | 2.5 | 5895 | -23.6 | 34 @198 Hz | wornOut: 18.1 dB apart, rhythm 0.96 |
@@ -956,14 +1016,18 @@ measured.
 People knock at 4 to 5 knocks a second (Houel et al. 2020, on a fibreboard
 door). The knock here is three at 4.3 a second, the last the hardest, on a
 panel with modes from 118 to 890 Hz: a door is bigger and deader than a
-barrel. It is the one cue that means "this needs an answer", and it is used
-for nothing else.
+barrel. Then a sheet of paper is put down: the interface shows a decision as
+a telegram, and a telegram comes to the door. It is the one cue that means
+"this needs an answer", and it is used for nothing else.
 
 A goal met is the only music in the game outside the three closes, and it is
 made of them: the year-end amen (IV to I in F on the parlour organ) in a third
 of a second and a second, under four struck bars climbing the chord of F from
-C5 to C6. It says "the year will close like this" each time something on the
-ladder is reached. Whether that is a reward or a jingle is the first question
+C5 to C6, after the stroke of the pencil that strikes the goal's line through
+on its slip. It says "the year will close like this" each time something on
+the ladder is reached. The ladder is long now (ten steps in the first season
+alone), so this is heard often: once for each step, never at a load or a new
+farm, and one sounding when a later step carries earlier ones with it. Whether that is a reward or a jingle is the first question
 on the listening sheet.
 
 ### The rest of the farmstead
@@ -979,11 +1043,12 @@ the cues that were there before, so that they belong together.
   ring a fourth above it), the porch triangle for the people (struck once or
   twice, with the overtones of a free bar at 2.76 and 5.4 times the note,
   which is what says metal and not a chime), a rod letting go in the tractor,
-  the ratchet before it starts again, the scale's beam tapping its stop.
+  the ratchet before it starts again, the grader's clack on the scale.
 - **Stone and clay**: rocks on the stone boat, tile laid end to end and water
   finding it.
 - **Paper**: a steel nib (hiss around 5.4 kHz, catching on the grain 38 times
-  a second), a rubber stamp, a ticket torn off the pad.
+  a second), a soft pencil, a rubber stamp, a ticket fed out of the scale, a
+  coupon torn off it, a telegram put down.
 
 ![](sound/cue-ticket.png)
 ![](sound/cue-felled.png)
@@ -991,6 +1056,29 @@ the cues that were there before, so that they belong together.
 ![](sound/cue-hired.png)
 ![](sound/cue-better.png)
 ![](sound/cue-signed.png)
+
+### The whistle for a new need
+
+![](sound/cue-need.png)
+
+The clock no longer slows or stops when a field starts to want something. A
+badge comes down on the field, and someone whistles from it: two notes
+through the teeth, the second a fourth above the first (about 1245 and 1660
+Hz), each scooped up into, with breath round them. It is the only whistled
+cue, and it replaces a chime an octave over the frost warning, which was one
+more note of the warning family.
+
+It has to be found without being an alarm. Found: it is held to the rule for
+moments that must not be missed (3 dB clear of the loudest bed in the game, 6
+dB clear of its own bed above 500 Hz), though it is as short as a job cue and
+never waits its turn. Not an alarm: two rising notes, 0.3 s in all, at the
+level of a job cue. Not tiring: once in two seconds at most, so a day that
+brings four fields to plant, or four days at the fastest clock, is one call.
+A need that cannot wait is called twice.
+
+No reference: nobody has published what a farmhand's whistle across a field
+measures. A whistled note is nearly a pure tone between 0.5 and 4 kHz; this
+one is put under the birds on purpose.
 
 ### Picks
 
@@ -1123,6 +1211,14 @@ that could not hear and had one loaded Windows box to render on.
   remain the closest pair. What a listener has to tell them by is tonal (frogs
   and song against rattle, geese and crows), and the print under-weights
   exactly that.
+- **The merge with the rest of the wave.** The clock became Pause and three
+  speeds and stopped slowing for a new need, so a need got a sound of its own
+  (a whistle from the field, in place of a chime an octave over the frost
+  warning); the interface became the farm's papers, so the order's knock
+  gained its stamp, the weigh ticket was rebuilt on the scale's own timeline,
+  the knock at the door gained its telegram, a decision closed gained its
+  stamp and the goal its pencil; the ladder grew, so the reward was checked
+  against it and kept off the year's close.
 - **The last render.** The tables in this file.
 
 ## What is still not known
@@ -1135,8 +1231,12 @@ that could not hear and had one loaded Windows box to render on.
   the hardest thing here to make from oscillators and filters.
 - Whether the reward for a goal lands, whether the cadence for keeping the farm
   does, and whether the loss is sober or merely dull.
-- Whether three knocks read as a door, and a door as "someone wants an
-  answer".
+- Whether three knocks read as a door, and a door as "a telegram: someone
+  wants an answer".
+- Whether the whistle for a new need is heard as a person and not as one more
+  bird. It sits at 1.2 and 1.7 kHz, under the sparrows and the peepers and
+  beside the lowest of the robin's phrases, and it has breath in it; whether
+  that is enough is for an ear.
 - The balance on real loudspeakers. Masking was estimated band by band from
   levels, not with a model of hearing, and small-speaker behaviour was
   inferred from published roll-offs, not measured on a device.
@@ -1200,7 +1300,9 @@ there.
 | --- | ---: | --- |
 | `change-seasons` | 64 | Start here, eyes shut. Sixteen seconds each of late May (birdsong, the brook, peepers behind it), early August (crickets, a bumblebee going by, leaves), early October (wind in dry leaves, a crow, geese going over if the luck of this render has them) and January (a thin cold wind, a tree cracking, a chickadee). Could you name each? Do the changes between them bump? |
 | `cue-goal` | 9 | The reward. Organ, then four struck bars climbing. Want it again? |
-| `cue-door` | 5 | Three knocks. A door? |
+| `cue-door` | 5 | Three knocks, and a telegram put down. A door? |
+| `scene-needs` | 40 | A May morning at the fastest clock, birds and peepers going. At 6 s four fields want planting: one whistle from the field, two notes rising. Did you look up? Was it a person or a bird? A field picked and an order at 9 s (knock, then a small stamp). The whistle again at 20 s, and at 30 s twice: a need that cannot wait. Alarming? Tiresome the third time? |
+| `cue-ticket`, `cue-tearOff` | 9 | The scale: five clacks slowing as the needle comes round, the ticket fed out, the numbering machine, and at 3 s the heavy stamp. Then a coupon torn off. Does the stamp land like the one stamp of the season? |
 | `change-farmstead` | 68 | Every farmstead cue, about two seconds apart: hired (latch, steps), a contract signed (pen), land bought (pen, stamp), a building begun (boards), then picks of a person, a yard, a tract and a field and the order knock, rocks, brush, a level gained (anvil), someone worn out (iron bar), a breakdown, the repair, a knock at the door, the matter closed (latch), a building up (four rising blows), a goal met, someone hurt (the bar twice), the weigh ticket (scale beam, paper tearing), a tract felled (the tree), stumps out, tile drains, logs sold, the mortgage paid, someone leaving (steps, the door). Which could you not place? |
 | `change-pileup` | 20 | Everything on one day: does anything trample anything? The order should be the weigh ticket, the knock, the tree, the building, the anvil, and last the goal. |
 | `scene-clearing` | 60 | October. An axe and saw far off in the woodlot; at 14 s the feller is picked and it comes close; the last tree at 44 s, then the anvil; a tract picked and a contractor signed for. Is far too quiet to notice, or near too loud to leave on? |

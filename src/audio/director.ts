@@ -21,7 +21,7 @@ export interface CueSpec {
 
 // Warning pitches, low: more serious is lower.
 const C4 = 261.6, A3 = 220, G3 = 196, E3 = 164.8, D3 = 146.8
-// At the fastest clock eight days go by in a second: a job is heard once, not once a field.
+// At the fastest clock two days go by in a second: a job is heard once a second, not once a field.
 const JOB_GAP = 1
 
 const chime = (id: string, on: string, note: string, hz: number): CueSpec => ({
@@ -40,7 +40,8 @@ export const CUES: CueSpec[] = [
   pick('pickTract', 'a tract of woods, brush or stumps picked', 'A twig underfoot and the leaves it stirs', farm.pickTract),
   pick('pickPerson', 'a person picked', 'Two taps of a tool handle, the second higher; each person has a pitch of their own', farm.pickPerson),
   pick('pickYard', 'a yard picked', 'The gate: its hinge, then its latch (the Dufour gate lower)', farm.pickYard),
-  { id: 'heard', on: 'any order taken; pickers hired or sent home; winter work set', what: 'One knuckle on the tractor fender', rank: 1, gap: 0.09, play: (r, t) => (cue.heard(r, t), t + 0.15) },
+  { id: 'heard', on: 'any order taken; pickers hired or sent home; winter work set', what: 'One knuckle on the tractor fender, and the rubber stamp coming down on the order line', rank: 1, gap: 0.09, play: (r, t) => (cue.heard(r, t), farm.orderStamp(r, t + 0.07)) },
+  { id: 'need', on: 'a new need on a field (the clock does not stop for it)', what: 'Someone whistles from the field: two notes, the second a fourth higher; twice when it cannot wait', rank: 1, gap: 2, play: farm.need },
 
   { id: 'planted', on: 'planted', what: 'Two pats on earth', rank: 1, gap: JOB_GAP, play: (r, t) => (cue.planted(r, t), t + 0.4) },
   { id: 'hilled', on: 'hilled', what: 'Two sweeps of soil', rank: 1, gap: JOB_GAP, play: (r, t) => (cue.hilled(r, t), t + 0.5) },
@@ -50,7 +51,8 @@ export const CUES: CueSpec[] = [
   { id: 'brushed', on: 'hedgerows cut back', what: 'Two swings of a brush hook, a stem parting after each', rank: 1, gap: JOB_GAP, play: farm.brushed },
   { id: 'sample', on: 'a test dig', what: 'The hill\'s tubers laid on a wooden tray one at a time', rank: 3, gap: 0.5, share: 'barrel', play: (r, t, n) => cue.barrel(r, t, 'sample', n || 5) },
   { id: 'dug', on: 'a field dug', what: 'A basket tipped into the barrel, slowing as the last tubers settle', rank: 3, gap: 0.5, share: 'barrel', play: (r, t) => cue.barrel(r, t, 'dig', 0) },
-  { id: 'ticket', on: 'weighed: the crop is in and the weigh ticket cut', what: 'The poise run out along the scale beam, the beam tapping its stop twice, and the ticket torn off the pad', rank: 3, gap: 1, play: farm.ticket },
+  { id: 'ticket', on: 'weighed: the crop is in and the weigh ticket cut', what: 'The scale: the grader clacking five times as the needle comes round, the ticket fed out, the numbering machine, and the Weighed stamp, the one heavy stamp of the season', rank: 3, gap: 1, play: farm.ticket },
+  { id: 'tearOff', on: 'a coupon torn off the weigh ticket (sounded by the interface: no event of the game marks it)', what: 'Paper torn along its perforation', rank: 1, gap: 0.3, play: farm.tearOff },
   { id: 'sold', on: 'sold, delivered, a contract filled, the cellar overflowing to the buyer', what: 'Two coins on a wooden counter', rank: 1, gap: 0.4, play: (r, t) => (cue.sold(r, t), t + 0.35) },
 
   { id: 'felled', on: 'a tract felled', what: 'The last tree down: the hinge cracking faster and faster, the rush, the ground, branches settling', rank: 2, gap: 4, play: farm.felled },
@@ -73,9 +75,9 @@ export const CUES: CueSpec[] = [
 
   { id: 'brokeDown', on: 'a tractor broken down', what: 'A rod letting go, and the engine running down in six slowing beats', rank: 2, gap: 3, play: farm.brokeDown },
   { id: 'repaired', on: 'a tractor going again', what: 'Five clicks of a ratchet, then the engine catching and picking up', rank: 2, gap: 3, play: farm.repaired },
-  { id: 'door', on: 'an incident: a decision is asked for', what: 'Three knocks at the door', rank: 3, gap: 1.5, play: farm.atTheDoor },
-  { id: 'settled', on: 'an incident answered or let lapse', what: 'The door eased shut and its latch dropping', rank: 1, gap: 0.5, play: farm.settled },
-  { id: 'goal', on: 'a goal on the ladder met', what: 'The year-end amen in small on the parlour organ (IV to I in F) under four struck bars climbing C, F, A, C', rank: 3, gap: 3, play: farm.goalMet },
+  { id: 'door', on: 'an incident: a decision is asked for', what: 'Three knocks at the door, and the telegram put down', rank: 3, gap: 1.5, play: farm.atTheDoor },
+  { id: 'settled', on: 'an incident answered or let lapse', what: 'A stamp on the telegram, and the door\'s latch dropping', rank: 1, gap: 0.5, play: farm.settled },
+  { id: 'goal', on: 'a goal on the ladder met', what: 'A pencil struck through the line, then the year-end amen in small on the parlour organ (IV to I in F) under four struck bars climbing C, F, A, C', rank: 3, gap: 3, play: farm.goalMet },
 
   chime('warnFrost', 'frost, the freeze-up', 'C4', C4),
   chime('warnWatch', 'blight weather', 'A3', A3),
@@ -153,7 +155,7 @@ export class Director {
   // The longer cues take turns: when the last of them will be done.
   private lineUntil = 0
   private barrelUntil = 0
-  // When the farm was last kept or lost: the close is the reward then, and a goal's is not added to it.
+  // When a year last closed, or the farm was kept or lost: the close is the reward then, and a goal's is not added.
   private finalAt = -Infinity
 
   constructor(rig: Rig) {
@@ -177,6 +179,7 @@ export class Director {
       this.lineUntil = Math.max(turn + 0.3, end - 0.3)
     }
     this.last[key] = now
+    if (c.share === 'close') this.finalAt = now
     return end
   }
 
@@ -190,13 +193,23 @@ export class Director {
       if (!end) continue
       if (c.rank <= 1) k++
       if (c.share === 'barrel') this.barrelUntil = end
-      if (c.id === 'kept' || c.id === 'lost') this.finalAt = now
     }
   }
 
   private one(id: string, now: number, arg = 0): void {
     const c = BY_ID.get(id)!
     this.sound(c, arg, now, now + (c.rank <= 1 ? 0.01 : 0.03))
+  }
+
+  // Something new needs doing on a field, and the clock does not stop for it: someone whistles from the field.
+  // One call for however many fields a day brings; called twice when it cannot wait.
+  need(now: number, urgent = false): void {
+    this.one('need', now, urgent ? 1 : 0)
+  }
+
+  // Any cue by its name, for the interface to sound at the moment its own motion lands.
+  cue(id: string, now: number, arg = 0): void {
+    if (BY_ID.has(id)) this.one(id, now, arg)
   }
 
   // The player gave an order and it was taken.

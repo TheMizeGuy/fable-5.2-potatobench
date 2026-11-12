@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The County - a decision</title>
+<link rel="stylesheet" href="system.css">
+</head>
+<body>
+<!--SPRITES-->
+<main class="stage july" aria-label="The farm, July: the clock is stopped for a decision">
+  <!--@tag x="300" y="578" nm="Brook Field"-->
+  <!--@tag x="760" y="668" nm="Bottom Field"-->
+  <div class="veil"></div>
+  <!--@pin-you x="640" y="690" cls=" needs" badge="badge-needs" label="You: the tractor has broken down"-->
+  <!--@almanac day="14" weekday="Tuesday" done="47" fc="jul14"-->
+  <!--@bank cash="−$23,150" p0="true" p1="false" extra="stopped"-->
+
+  <!-- a decision from outside the farm: a telegram, two reply forms numbered with their keys -->
+  <section class="telegram sheet" role="dialog" aria-modal="true" aria-labelledby="tg-title">
+    <header class="tg-head">
+      <p class="tg-name">Telegram</p>
+      <p class="tg-from"><span class="t-label">From</span> <b>Grange Supply</b> <span class="t-caption">implements, parts and repairs</span></p>
+      <p class="days" aria-label="2 days to answer"><b>2</b><span class="t-label">days</span></p>
+    </header>
+    <div class="tg-body">
+      <svg class="bust" style="--shirt:#b8402e;--hat:#d8c48a;--skin:#e8b996;--hair:#5a3d24"><use href="#bust-farmer"/></svg>
+      <div>
+        <h2 id="tg-title">A tractor has broken down</h2>
+        <p>Under <b>you</b>, hilling Bottom Field. Waiting for the part, it is back on <b>Jul 17</b>.</p>
+      </div>
+    </div>
+    <div class="replies">
+      <button class="reply"><span class="key">1</span><b class="c-title">Pay for a rush part</b><span class="c-does">The tractor is back tomorrow, and the hilling goes on.</span><span class="c-cost"><span class="c-red">$450</span> more than waiting</span></button>
+      <button class="reply"><span class="key">2</span><b class="c-title">Wait for the part</b><span class="c-does">Back on Jul 17. The hilling waits three days.</span><span class="c-cost">Costs nothing</span></button>
+    </div>
+    <p class="lapse"><span class="stamp sm violet">Lapses Jul 16</span> Unanswered, we wait for the part.</p>
+  </section>
+
+  <!--@timebook c0=" needs" d0="Stopped" i0="machine"-->
+</main>
+</body>
+</html>

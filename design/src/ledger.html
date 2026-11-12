@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The County - year end</title>
+<link rel="stylesheet" href="system.css">
+</head>
+<body>
+<!--SPRITES-->
+<main class="stage night" aria-label="Year end, Year 1">
+  <section class="book" aria-label="The ledger, year 1">
+    <div class="page-l">
+      <header style="padding-bottom:12px">
+        <p class="t-label">Year 1 of 5</p>
+        <h1 class="t-title" style="font-size:34px;margin:4px 0">The ledger, year 1</h1>
+        <p style="font-size:18px" class="it">The bank is satisfied. 4 seasons to go.</p>
+      </header>
+      <table class="cashbook">
+        <thead><tr><th><span class="t-label">The money</span></th><th class="m"><span class="t-label">In</span></th><th class="m"><span class="t-label">Out</span></th></tr></thead>
+        <tbody>
+          <tr><td>Cash at the start</td><td class="m">18,000</td><td class="m"></td></tr>
+          <tr><td>Potato sales, 8,232 cwt</td><td class="m">82,396</td><td class="m"></td></tr>
+          <tr><td>The farm stand</td><td class="m">1,775</td><td class="m"></td></tr>
+          <tr><td>Oats and clover</td><td class="m">1,800</td><td class="m"></td></tr>
+          <tr><td>Growing: seed, fields, work</td><td class="m"></td><td class="m out">81,120</td></tr>
+          <tr><td>Wages</td><td class="m"></td><td class="m out">7,500</td></tr>
+          <tr><td>Rent</td><td class="m"></td><td class="m out">12,250</td></tr>
+          <tr><td>Land, the quarter down</td><td class="m"></td><td class="m out">18,000</td></tr>
+          <tr><td>The land mortgage</td><td class="m"></td><td class="m out">9,720</td></tr>
+          <tr><td>Buildings</td><td class="m"></td><td class="m out">980</td></tr>
+          <tr><td>Contract penalties</td><td class="m"></td><td class="m out">5,625</td></tr>
+          <tr><td>Storage</td><td class="m"></td><td class="m out">3,550</td></tr>
+          <tr><td>The note <span class="stamp sm violet">Paid</span></td><td class="m"></td><td class="m out">10,000</td></tr>
+          <tr><td>The household</td><td class="m"></td><td class="m out">11,000</td></tr>
+          <tr><td>Interest on debt carried</td><td class="m"></td><td class="m out">577</td></tr>
+        </tbody>
+        <tfoot><tr><td>Cash at the year end</td><td class="m c-red" colspan="2">−$6,351</td></tr></tfoot>
+      </table>
+      <p style="font-size:15px;padding-top:10px"><b class="c-red">In debt,</b> inside the bank’s limit: it calls the note only below <span style="white-space:nowrap">−$20,000</span>.</p>
+      <div class="sec-h" style="margin-top:14px"><h2>The people</h2></div>
+      <p class="ppl"><svg class="bust" style="--shirt:#e7e0cf;--hat:#27425c;--skin:#a8704c;--hair:#1c1c1c;width:30px;height:30px;vertical-align:middle"><use href="#bust-curls"/></svg> <b>Lucien</b> came on in June, at $450 a month.</p>
+      <p class="ppl"><svg class="bust" style="--shirt:#2e7d6b;--hat:#27425c;--skin:#d9a47c;--hair:#b9b4a8;width:30px;height:30px;vertical-align:middle"><use href="#bust-cap-glasses"/></svg> <b>Wendell</b> came on in May, at $800. Laid off for the winter.</p>
+    </div>
+    <div class="page-r">
+      <section class="worth">
+        <div><p class="t-label">The farm is worth</p><p class="t-display">$18,029</p></div>
+        <p class="it quiet" style="font-size:15px;text-align:right">land and buildings,<br>less what is owed</p>
+        <div class="lines">
+          <p class="lead"><span>Land bought, the Dufour place</span><span class="dots"></span><span class="num">$72,000</span></p>
+          <p class="lead"><span>Buildings</span><span class="dots"></span><span class="num">$980</span></p>
+          <p class="lead"><span>Owed on the land</span><span class="dots"></span><span class="num c-red">−$48,600</span></p>
+          <p class="lead"><span>Cash</span><span class="dots"></span><span class="num c-red">−$6,351</span></p>
+        </div>
+      </section>
+      <section class="compare">
+        <div class="sec-h"><h2>The crop</h2><span class="t-caption">cwt an acre sold, on the same weather</span></div>
+        <p><span>Your farm</span><span class="cbar"><i style="width:59%"></i></span><b class="num">235</b></p>
+        <p><span>The neighbour</span><span class="cbar n"><i style="width:82%"></i></span><b class="num">330</b></p>
+        <p><span>The county</span><span class="cbar c"><i style="width:57%"></i></span><b class="num">228</b></p>
+      </section>
+      <section class="chart">
+        <div class="sec-h"><h2>Cash through the year</h2></div>
+        <!--@cash-chart-->
+      </section>
+      <section>
+        <div class="sec-h"><h2>Goals met</h2></div>
+        <p class="struck" style="font-size:15px">Plant a field · Bring in a crop · See the spring</p>
+      </section>
+      <footer class="book-next">
+        <p style="font-size:15px"><i class="i i-fist" style="--i:26px"></i> Next: <b>buy a piece of equipment</b></p>
+        <button class="btn go">Plan year 2 <i class="i i-arrow"></i></button>
+      </footer>
+    </div>
+  </section>
+  <button class="iconbtn sheet laid" style="position:absolute;right:16px;top:16px" aria-label="Menu"><i class="i i-menu"></i></button>
+</main>
+</body>
+</html>

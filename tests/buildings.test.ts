@@ -63,7 +63,7 @@ describe('building', () => {
     c.logs = 10
     c.stone = 30
     const cost = S.buildCost(c, 'house')
-    expect(cost).toEqual({ cash: 9000, logs: 30, stone: 25, buyLogs: 20, buyStone: 0, total: 9000 + 20 * S.MILL_PRICE })
+    expect(cost).toEqual({ cash: S.BUILDINGS.house.cash, logs: 30, stone: 25, buyLogs: 20, buyStone: 0, total: S.BUILDINGS.house.cash + 20 * S.MILL_PRICE })
     const cash = c.cash
     ok(c, { t: 'build', kind: 'house', yard: HOME })
     expect([cash - c.cash, c.yearBuilding, c.logs, c.stone]).toEqual([cost.total, cost.total, 0, 5])

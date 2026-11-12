@@ -1,7 +1,9 @@
 // One picture of the field view for working on the look: runs a snippet in the page, then takes a screenshot.
 // Usage: node tools/render/look.ts <base-url> <out.png> [WxH] [snippet.js] [--ui] [--soft] [--browser=firefox|webkit]
-// The snippet is the body of an async function with `app`, `sim`, `field` (window.__countyField) and `frames(n)` in scope.
-import { readFileSync } from 'node:fs'
+// The snippet is the body of an async function with `app`, `sim`, `field` (window.__countyField), `frames(n)` and
+// `snap(name)` in scope; snap saves a further picture beside <out.png> under that name.
+import { mkdirSync, readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { chromium, firefox, webkit } from '@playwright/test'
 
 const args = process.argv.slice(2).filter(a => !a.startsWith('--'))
@@ -35,13 +37,16 @@ if (!process.argv.includes('--ui')) {
     set(t, r, b, l)
   }, insets)
 }
+mkdirSync(dirname(out), { recursive: true })
+await page.exposeFunction('__snap', async (name: string) => { await page.screenshot({ path: join(dirname(out), `${name}.png`) }) })
 const body = snippet ? readFileSync(snippet, 'utf8') : 'field.settle(); await frames(4)'
 const result = await page.evaluate(async body => {
   const { app, sim } = (window as any).__county
   const field = (window as any).__countyField
   const frames = (n: number) => new Promise<void>(res => { let k = 0; const t = () => (++k >= n ? res() : requestAnimationFrame(t)); requestAnimationFrame(t) })
-  const fn = new (Object.getPrototypeOf(async function () {}).constructor)('app', 'sim', 'field', 'frames', body)
-  try { return await fn(app, sim, field, frames) } catch (e) { return `snippet failed: ${String(e)}` }
+  const snap = async (name: string) => { await frames(3); await (window as any).__snap(name) }
+  const fn = new (Object.getPrototypeOf(async function () {}).constructor)('app', 'sim', 'field', 'frames', 'snap', body)
+  try { return await fn(app, sim, field, frames, snap) } catch (e) { return `snippet failed: ${String(e)}` }
 }, body)
 if (result !== undefined) console.log(typeof result === 'string' ? result : JSON.stringify(result))
 await page.screenshot({ path: out })
