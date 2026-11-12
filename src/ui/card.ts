@@ -421,7 +421,8 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
     // The one planting rule (S.plantReady), the same the coach and the routine go by.
     if (f.status === 'idle' || f.status === 'planted') {
       const pr = S.plantReady(app.world, c, f.index)
-      return [h('p', null, icon('planted', 'i'), h('span', null, f.status === 'idle' ? F.localize(pr.why) : `Soil ${F.temp(pr.soilT)} here.`))]
+      const why = F.localize(pr.why)
+      return [h('p', null, icon('planted', 'i'), h('span', null, f.status === 'idle' && why.includes('°') ? why : `Soil ${F.temp(pr.soilT)} here.${f.status === 'idle' ? ` ${why}` : ''}`))]
     }
     if (f.status === 'dead') {
       const left = Math.ceil((1 - f.skin) * S.SKIN_DAYS)

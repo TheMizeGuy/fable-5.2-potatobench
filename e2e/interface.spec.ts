@@ -262,7 +262,8 @@ for (const [w, h] of [[320, 640], [390, 844], [844, 390], [820, 1180], [1024, 70
         }
         for (const el of document.querySelectorAll<HTMLElement>('#ui .topbar *, #ui .command *, #ui .timebook *, #ui .queue *')) {
           const text = [...el.childNodes].some(n => n.nodeType === 3 && (n.nodeValue ?? '').trim())
-          if (text && el.scrollWidth > el.clientWidth + 1 && getComputedStyle(el).overflow !== 'visible' && !el.matches('.sr')) out.push(`clipped: ${el.className}`)
+          // (an order's catch on the card is said under the orders, not in its place: it is out of sight by design)
+          if (text && el.scrollWidth > el.clientWidth + 1 && getComputedStyle(el).overflow !== 'visible' && !el.matches('.sr, .slots .catch')) out.push(`clipped: ${el.className}`)
         }
         const spans = [...document.querySelectorAll<HTMLElement>('#ui .topbar > *')].map(e => e.getBoundingClientRect()).filter(r => r.width > 0)
         for (let a = 0; a < spans.length; a++) for (let b = a + 1; b < spans.length; b++) {
@@ -276,7 +277,14 @@ for (const [w, h] of [[320, 640], [390, 844], [844, 390], [820, 1180], [1024, 70
             if (r.width && r.height && (r.width < 39.5 || r.height < 39.5)) out.push(`small target: ${el.dataset.testid ?? el.className}`)
           }
         }
-        if (sel && document.querySelectorAll('#ui .command button.order').length > 5) out.push('more than five orders')
+        // The crop's nine orders each in its place, and the card's cross in the window with nothing over it.
+        if (sel && document.querySelectorAll('#ui .command .orders.slots > .order').length !== 9) out.push('the crop orders are not all in their places')
+        const x = sel ? document.querySelector<HTMLElement>('#ui [data-testid="card-close"]') : null
+        if (sel) {
+          const r = x && shown(x) ? x.getBoundingClientRect() : null
+          if (!r || r.top < 0 || r.bottom > innerHeight || r.left < 0 || r.right > innerWidth) out.push('the card\'s cross is out of the window')
+          else if (!document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)?.closest('[data-testid="card-close"]')) out.push('something lies over the card\'s cross')
+        }
         return out
       }, selected)
       expect(found, found.join('; ')).toEqual([])
@@ -625,7 +633,7 @@ test('a person clicked on the land: their card opens beside them, says who and w
   if (!isMobile) {
     const a = await page.evaluate(() => (globalThis as unknown as { __countyField: { unitPin(id: number): { x: number; y: number; visible: boolean } } }).__countyField.unitPin(1))
     const r = (await card.boundingBox())!
-    if (a.visible) {
+    if (a.visible && a.x >= 0 && a.x <= page.viewportSize()!.width && a.y >= 0 && a.y <= page.viewportSize()!.height) {
       const dx = Math.max(r.x - a.x, 0, a.x - (r.x + r.width)), dy = Math.max(r.y - a.y, 0, a.y - (r.y + r.height))
       expect(Math.hypot(dx, dy)).toBeLessThan(240)
     }
@@ -811,11 +819,11 @@ test('tags and stamps hold still when a card opens or closes and when an order i
     await page.getByTestId('field-0').click()
     await expect(page.getByTestId('card-title')).toHaveText('North Ridge')
     await page.waitForTimeout(500)
-    expect(moved(was, await where()), 'a card opening moves nothing on the land').toEqual([])
+    expect(moved(was, await where()), `a card opening moves nothing on the land (settled: ${await page.evaluate(() => document.querySelector<HTMLElement>('#ui .plate-layer')?.dataset.settled)})`).toEqual([])
     // An order by its letter key: the tags stay put though North Ridge's tag now says "on the list".
     await page.keyboard.press('s')
     await page.waitForTimeout(300)
-    expect(moved(was, await where()), 'an order moves nothing on the land').toEqual([])
+    expect(moved(was, await where()), `an order moves nothing on the land (settled: ${await page.evaluate(() => document.querySelector<HTMLElement>('#ui .plate-layer')?.dataset.settled)})`).toEqual([])
     // The card's cross is in view and nothing lies over it.
     const x = (await page.getByTestId('card-close').boundingBox())!
     expect(await page.evaluate(([cx, cy]) => !!document.elementFromPoint(cx, cy)?.closest('[data-testid="card-close"]'), [x.x + x.width / 2, x.y + x.height / 2])).toBe(true)
@@ -867,11 +875,11 @@ test('blight weather asks once how to spray this season, and a worn-out hand can
   await expect(ask).toBeVisible()
   await expect(ask).toContainText('Keep the fields sprayed')
   await ask.getByTestId('spray-way-auto').click()
-  await expect(ask).toHaveCount(0)
+  await expect(ask).toBeHidden()
   expect(await game<boolean>(page, `sim.routineInfo(app.campaign).find(r => r.kind === 'spray').auto`)).toBe(true)
   // Asked once: it does not come back; Who does what asks it again.
   await page.waitForTimeout(400)
-  await expect(page.getByTestId('spray-ask')).toHaveCount(0)
+  await expect(page.getByTestId('spray-ask')).toBeHidden()
   await page.keyboard.press('g')
   await page.getByTestId('spray-ask-open').click()
   await page.getByTestId('spray-ask').getByTestId('spray-way-ask').click()

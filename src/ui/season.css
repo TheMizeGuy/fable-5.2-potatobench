@@ -427,7 +427,9 @@
 /* A person worn out or resting: a small "z" on their pin's head. */
 .pin-at.tired .pin .head::after { content: 'z'; position: absolute; right: -6px; top: -8px; display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; font: 700 13px/1 var(--f-text); color: var(--ink); background: var(--st-ochre); box-shadow: 0 0 0 1.5px var(--ink); }
 .pin-at .pin .head { position: relative; }
-/* Spraying this season, asked once: three ways, each a full row. */
+/* Spraying this season, asked once: a card at the left under the top that stops nothing; three ways, each a row. */
+.season-screen .spray-card { position: absolute; left: max(var(--gutter), env(safe-area-inset-left, 0px)); top: calc(var(--top, 220px) + 12px); z-index: 3; width: min(380px, calc(100% - 2 * var(--gutter, 16px))); max-height: calc(100% - var(--top, 220px) - var(--bottom, 140px) - 24px); overflow-y: auto; }
+.season-screen .spray-card .spray-ask { padding: 10px 18px 16px; }
 .spray-ask { display: grid; gap: 10px; }
 .spray-ask p { margin: 0; }
 .spray-ask .way-rows { display: grid; gap: 6px; }

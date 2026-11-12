@@ -129,34 +129,37 @@ export function sprayWay(c: S.Campaign): SprayWay | null {
 }
 
 // When blight weather first comes the player is asked once how spraying is to be done this season: kept up by the
-// crew by itself (with about what it costs), asked each time, or not this year. It can be asked again from Who does
-// what. The routine has no "not this year": that choice is kept here, and the stamps for spraying are left off.
-export function askSpray(ctx: Ctx): void {
-  const app = ctx.app
-  const c = app.campaign
-  if (!c || !c.season) return
-  const o = S.sprayOutlook(app.world, c)
+// crew by itself (with about what it costs), asked each time, or not this year. The question is a card on the season
+// screen that stops nothing; Who does what asks it again. The routine has no "not this year": that choice is kept
+// here, and the stamps for spraying are left off.
+let sprayOpen = false
+export function askSpray(ctx: Ctx): void { sprayOpen = true; ctx.dirty() }
+export function sprayAsking(): boolean { return sprayOpen }
+export function putSprayAway(ctx: Ctx): boolean { if (!sprayOpen) return false; sprayOpen = false; ctx.dirty(); return true }
+
+export function sprayQuestion(ctx: Ctx, c: S.Campaign): Child {
+  const o = S.sprayOutlook(ctx.app.world, c)
   const now = sprayWay(c)
-  const choose = (way: SprayWay, close: () => void) => {
+  const choose = (way: SprayWay) => {
     try { localStorage.setItem(sprayKey(c), way) } catch { /* the routine still takes the choice */ }
     const r = ctx.run({ t: 'routine', kind: 'spray', auto: way === 'auto' })
     if (r.ok) ctx.announce(way === 'auto' ? 'Spraying: the crew keeps the fields sprayed by itself.' : way === 'ask' ? 'Spraying: you are asked each time.' : 'No spraying this year.')
-    close()
-    ctx.dirty()
+    putSprayAway(ctx)
   }
-  const way = (id: SprayWay, glyph: string, name: string, does: string, close: () => void) => h('button', {
-    class: `way-row${now === id ? ' is-on' : ''}`, type: 'button', testid: `spray-way-${id}`, 'aria-pressed': now ? String(now === id) : null, onclick: () => choose(id, close),
+  const way = (id: SprayWay, glyph: string, name: string, does: string) => h('button', {
+    class: `way-row${now === id ? ' is-on' : ''}`, type: 'button', testid: `spray-way-${id}`, 'aria-pressed': now ? String(now === id) : null, onclick: () => choose(id),
   }, icon(glyph, 'i'), h('span', null, h('b', null, name), ' ', h('span', { class: 'quiet' }, does)))
-  ctx.papers.enqueue({
-    title: 'Spraying this season', testid: 'spray-ask', size: 'small', kicker: 'Blight weather',
-    stale: () => app.campaign !== c || !c.season,
-    body: close => h('div', { class: 'spray-ask' },
-      h('p', null, 'Blight weather has come. Protectant has to be on the leaf before the spores land, and rain and new leaf wear it off. How is spraying to be done?'),
+  return [
+    h('header', { class: 'command-head' },
+      h('div', null, h('p', { class: 't-label' }, 'Blight weather'), h('h2', { class: 't-title', id: 'spray-ask-t' }, 'Spraying this season')),
+      h('button', { class: 'close', type: 'button', testid: 'spray-ask-close', 'aria-label': `Put it away${ctx.touch() ? '' : ' (Escape)'}`, onclick: () => putSprayAway(ctx) }, icon('close', 'i'))),
+    h('div', { class: 'spray-ask' },
+      h('p', null, 'Protectant has to be on the leaf before the spores land; rain and new leaf wear it off. How is spraying to be done?'),
       h('div', { class: 'way-rows' },
-        way('auto', 'spray', 'Keep the fields sprayed', o.passes ? `The crew sprays when it wears thin: about ${o.passes} passes, ${F.money(o.dollars)} this season.` : 'The crew sprays when it wears thin.', close),
-        way('ask', 'ask', 'Ask me each time', 'A stamp on a field when it wants spraying; the order is yours.', close),
-        way('none', 'close', 'Not this year', 'No spraying and no stamps for it. Blight, if it comes, goes unchecked.', close))),
-  })
+        way('auto', 'spray', 'Keep the fields sprayed', o.passes ? `The crew sprays when it wears thin: about ${o.passes} passes, ${F.money(o.dollars)} this season.` : 'The crew sprays when it wears thin.'),
+        way('ask', 'ask', 'Ask me each time', 'A stamp on a field when it wants spraying; the order is yours.'),
+        way('none', 'close', 'Not this year', 'No spraying and no stamps for it. Blight, if it comes, goes unchecked.'))),
+  ]
 }
 
 export function personCard(ctx: Ctx): PersonCard {

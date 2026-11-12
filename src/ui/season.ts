@@ -14,7 +14,7 @@ import { icon } from './icons.ts'
 import { incidentCard } from './incident.ts'
 import { ticket, trayPaper } from './dig.ts'
 import { digitFor, fieldForDigit, isTract } from './map.ts'
-import { askSpray, personCard, sprayWay, workGrid } from './people.ts'
+import { askSpray, personCard, putSprayAway, sprayAsking, sprayQuestion, sprayWay, workGrid } from './people.ts'
 import { pins } from './pins.ts'
 import { plates, type PlateModel } from './plates.ts'
 import { hint as hintText, isJob, isStale, jobText, JOB_VERB, KEY_JOB, stageGlyph } from './rules.ts'
@@ -82,6 +82,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   // In the same place while the days run: the clock's state is said at a glance either way, and after a sheet's Back
   // or a telegram's answer sets the days going, the chip that says so is lit for a moment.
   const running = h('p', { class: 'paused running sys', testid: 'running', hidden: true })
+  const sprayCard = h('section', { class: 'spray-card sheet sys', testid: 'spray-ask', role: 'dialog', 'aria-modal': 'false', 'aria-labelledby': 'spray-ask-t', hidden: true })
   let ranAt = 0
   const veil = h('div', { class: 'veil sys', hidden: true })
   // The way back from a zoom, a pan or a tilt, always in the same place: what the Home key does.
@@ -94,7 +95,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   const yard = yardCard(ctx)
   const grid = workGrid(ctx)
   const incident = incidentCard(ctx)
-  const el = h('main', { class: 'season-screen' }, veil, top.el, paused, running, homeKey, card.el, yard.el, person.el, grid.el, trayHost,
+  const el = h('main', { class: 'season-screen' }, veil, top.el, paused, running, sprayCard, homeKey, card.el, yard.el, person.el, grid.el, trayHost,
     h('div', { class: 'foot' }, h('div', { class: 'foot-book' }, crew, clockSlot), notesSlot), incident.el)
 
   // The selection drawn on the land: a dashed line round each selected field laid on its corners, a registration mark
@@ -206,7 +207,8 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   function askSprayOnce(c: S.Campaign): void {
     const s0 = c.season
     const key = `${c.seed}.${c.year}`
-    if (!s0 || s0.watchDay < 0 || sprayAsked === key || sprayWay(c) || S.seasonDone(c)) return
+    if (S.seasonDone(c)) putSprayAway(ctx)
+    if (!s0 || s0.watchDay < 0 || sprayAsked === key || sprayWay(c) || S.seasonDone(c) || !s0.fields.some(f => f.status === 'growing')) return
     sprayAsked = key
     if (S.routineInfo(c).some(r => r.kind === 'spray' && r.auto)) return
     askSpray(ctx)
@@ -330,7 +332,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   }
 
   // What floats over the land: nothing on the land is left under it.
-  const floating = () => [card.el, yard.el, person.el, grid.el, incident.el, trayHost.firstElementChild as HTMLElement | null, paused, running]
+  const floating = () => [card.el, yard.el, person.el, grid.el, incident.el, trayHost.firstElementChild as HTMLElement | null, paused, running, sprayCard]
   // Read once a frame, before anything on the land is moved, so the frame never forces a second layout.
   let coverCache: DOMRect[] | null = null
   const covers = (): DOMRect[] => coverCache ?? floating().filter((x): x is HTMLElement => !!x && !x.hidden && x.offsetParent !== null).map(x => x.getBoundingClientRect())
@@ -453,6 +455,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       if (units.escape()) return true
       if (grid.isOpen()) { grid.toggle(false); return true }
       if (incident.putAway()) return true
+      if (putSprayAway(ctx)) return true
       if (tray) { closeTray(); return true }
       if (app.selection.length) { app.select(-1); (document.activeElement as HTMLElement | null)?.blur?.(); return true }
       if (app.yard !== 0) { app.selectYard(0); return true }
@@ -572,6 +575,8 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       }
       updateHint()
       askSprayOnce(c)
+      sprayCard.hidden = !sprayAsking()
+      if (!sprayCard.hidden) patch(sprayCard, JSON.stringify([sprayWay(c), ctx.touch(), Math.round(S.sprayOutlook(app.world, c).dollars / 50)]), () => sprayQuestion(ctx, c))
       P.update()
       updateYards(c, tgt && 'yard' in tgt ? tgt.yard : 0)
       units.update(c)

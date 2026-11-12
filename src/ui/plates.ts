@@ -353,7 +353,8 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
     })
     if (far0) {
       // Why the tags were put again, for the checks that hold them to it.
-      layer.dataset.settled = `${(parseInt(layer.dataset.settled ?? '0', 10) || 0) + 1} ${!laid ? 'first' : laid.key !== key ? 'window' : 'camera'}`
+      const why = !laid ? 'first' : laid.key !== key ? 'window' : `camera ${anchors.map((a, i) => { const b = laid!.anchors[i]; return finite(a) !== finite(b) ? `${i}:seen` : finite(a) && Math.hypot(a.x - b.x, a.y - b.y) > RESETTLE_PX ? `${i}:${Math.round(a.x - b.x)},${Math.round(a.y - b.y)}` : '' }).filter(Boolean).join(' ')}`
+      layer.dataset.settled = `${(parseInt(layer.dataset.settled ?? '0', 10) || 0) + 1} ${why}`
       settle()
       laid = { key, anchors }
       for (let i = 0; i < S.FIELD_COUNT; i++) ref[i] = anchors[i]
