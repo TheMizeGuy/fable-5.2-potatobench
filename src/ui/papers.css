@@ -181,6 +181,9 @@
   .figure { font-size: var(--t-title); line-height: 28px; }
 }
 
+.choice-stand { grid-column: 1 / -1; display: flex; align-items: flex-start; gap: var(--sp-2); }
+.choice-stand .ic { margin-top: 1px; }
+
 /* ---------------------------------------------------------------- the reckoning */
 .grades th .sub { display: block; }
 .causes li { padding: var(--sp-2) 0; border-bottom: 1px dotted var(--rule-strong); }
@@ -262,6 +265,30 @@
   .lot-facts { grid-template-columns: minmax(0, 1fr); gap: var(--sp-2); }
   .cellar-sum strong { font-size: var(--t-lede); }
 }
+
+/* Winter's work: a line for each person, changed with a click. */
+.winter { display: grid; gap: var(--sp-2); margin: var(--sp-4) 0 var(--sp-2); }
+.winter-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--sp-1) var(--sp-3); }
+.winter-head .block-head { margin: 0; }
+.wrows { display: grid; }
+.wrow { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: var(--sp-3); align-items: start; padding: var(--sp-2) 0; border-bottom: 1px dotted var(--rule-strong); }
+.wrow-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-1) var(--sp-3); }
+.wrow-name { font-weight: 600; }
+.wrow-out { margin-top: var(--sp-h); font-size: var(--t-small); line-height: 18px; color: var(--ink-2); }
+.wseg { display: inline-flex; border: 1px solid var(--ink-3); border-radius: var(--radius); overflow: hidden; }
+.wseg-b { min-height: var(--hit-s); padding: 0 var(--sp-3); background: var(--paper-hi); font-size: var(--t-small); line-height: 18px; font-weight: 600; transition: background-color var(--t-quick) var(--ease-out); }
+.wseg-b + .wseg-b { border-left: 1px solid var(--ink-3); }
+.wseg-b.on { background: var(--ink); color: var(--paper-hi); }
+.wseg-b:disabled { color: var(--ink-3); background: var(--paper); cursor: default; text-decoration: line-through; text-decoration-color: var(--rule-strong); }
+@media (hover: hover) { .wseg-b:hover:not(.on):not(:disabled) { background: var(--paper-2); } }
+.wyard, .wbank { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); font-size: var(--t-small); line-height: 18px; color: var(--ink-2); }
+.wyard > span { flex: 1 1 200px; }
+.wbuild { display: grid; gap: var(--sp-1); }
+.wbuild li { display: grid; grid-template-columns: 16px auto minmax(48px, 1fr) auto; gap: var(--sp-2); align-items: center; font-size: var(--t-small); line-height: 18px; }
+.wbuild .gauge { display: block; height: 6px; }
+.wbuild .gauge > i { background: var(--good); }
+.wraise { border-top: 1px dotted var(--rule-strong); border-radius: 0; }
+.build-list .eq-name .sub { font-family: var(--sans); font-weight: 400; }
 
 .ledger-cols { display: grid; gap: var(--sp-5); }
 .yield-bars th { width: 1%; white-space: nowrap; padding: var(--sp-1) var(--sp-3) var(--sp-1) 0; }

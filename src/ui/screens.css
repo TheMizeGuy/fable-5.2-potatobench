@@ -173,7 +173,15 @@
 }
 .spring[data-layout='narrow'] .spring-body { padding: var(--sp-3) var(--sp-4) var(--sp-1); }
 .spring[data-layout='narrow'] .spring-foot { padding: var(--sp-2) var(--sp-4) max(var(--sp-3), env(safe-area-inset-bottom, 0px)); border-radius: 0; }
-.spring[data-layout='narrow'] .spring-head .t-title { font-size: var(--t-head); line-height: 24px; }
+.spring[data-layout='narrow'] .spring-head { grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; padding-bottom: var(--sp-2); }
+.spring[data-layout='narrow'] .spring-head .t-title { grid-row: 1; font-size: var(--t-head); line-height: 24px; }
+.spring[data-layout='narrow'] .spring-head .t-label { grid-row: 1; grid-column: 2; }
+.spring[data-layout='narrow'] .spring-lede { display: none; }
+.spring-rows.chips { display: flex; flex-wrap: wrap; gap: var(--sp-2); padding: var(--sp-3) 0 var(--sp-1); }
+.spring-rows.chips .fold { border: 0; }
+.spring-rows.chips .fold-group { display: none; }
+.spring-rows.chips .fold-row { grid-template-columns: 20px auto; width: auto; margin: 0; padding: 0 var(--sp-3) 0 var(--sp-2); min-height: var(--hit); border: 1px solid var(--rule-strong); background: var(--paper-hi); }
+.spring-rows.chips .fold-state, .spring-rows.chips .fold-fig, .spring-rows.chips .fold-chev { display: none; }
 /* With a field picked, the sheet keeps only its money line and the start, so the card has the room. */
 .spring[data-layout='narrow'].selected .spring-body { display: none; }
 .season.spring[data-layout='narrow'] .bottom { left: var(--sp-2); right: var(--sp-2); bottom: calc(var(--sheet-h, 120px) + var(--sp-2)); }

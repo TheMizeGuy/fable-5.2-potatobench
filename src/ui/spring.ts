@@ -295,7 +295,6 @@ export function springFolds(ctx: Ctx, c: S.Campaign, onTry: (err: string) => voi
   const signed = c.contracts.length
   const ids = Object.keys(S.UPGRADES) as S.UpgradeId[]
   const owned = ids.filter(id => c.upgrades[id]).length
-  const reach = ids.filter(id => !c.upgrades[id] && !equipNeeds(c, id)).length
   const m = S.mortgageInfo(c)
   const rows: FoldRow[] = [{
     id: 'fields', open: 'fields-open', testid: 'fields', glyph: 'planted', name: 'Fields',
@@ -315,7 +314,7 @@ export function springFolds(ctx: Ctx, c: S.Campaign, onTry: (err: string) => voi
     body: () => [springContracts(ctx, c), closer('contracts-close', onClose)],
   }, {
     id: 'equipment', open: 'equipment-open', testid: 'equipment', glyph: 'tractor', name: 'Equipment',
-    state: [owned ? `${owned} owned` : '', `${reach} within reach`].filter(Boolean).join(' · '),
+    state: [owned ? `${owned} owned` : '', owned < ids.length ? `${ids.length - owned} to buy` : ''].filter(Boolean).join(' · '),
     body: () => equipmentBody(ctx, c, onTry, onClose),
   })
   if (m.owed > 0) rows.push({

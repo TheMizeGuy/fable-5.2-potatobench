@@ -303,7 +303,7 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
             icon(f.glyph, 'ic fold-ic'),
             h('span', { class: 'fold-name' }, f.name),
             h('span', { class: 'fold-state' }, f.state),
-            f.figure ? h('span', { class: 'fold-fig num' }, f.figure) : null,
+            h('span', { class: 'fold-fig num' }, f.figure ?? ''),
             icon(on ? 'up' : 'next', 'ic s fold-chev')),
           on ? h('div', { class: 'fold-body', id: `fold-${f.id}`, testid: f.testid }, f.body()) : null),
       ]
@@ -378,6 +378,8 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
       } else note = ''
       const state = [c.year, c.history.length, c.plans, c.fields.map(f => [f.tenure, f.cover]), c.seedStock.length, app.settings.units, layout]
       patch(head, JSON.stringify(state), () => drawHead(c))
+      // On a phone the folds stand as a row of chips until one is opened, so the land keeps its room.
+      rows.classList.toggle('chips', layout === 'narrow' && !open)
       patch(rows, JSON.stringify([...state, open, c.applicants.map(a => a.id), c.crew.map(u => [u.id, u.wage]), c.offers.map(x => x.id), c.contracts.map(k => k.id),
         c.upgrades, c.mortgages.map(m => Math.round(m.owed)), c.sundaysOff, Math.round(c.cash), c.buildings.length]), () => drawRows(c))
       patch(foot, JSON.stringify([S.planCosts(c), Math.round(c.cash), c.mortgages.map(m => Math.round(m.owed)), app.settings.units]), () => drawFoot(c))
