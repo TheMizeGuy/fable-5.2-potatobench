@@ -1036,9 +1036,9 @@ export class Crews {
       g.pickers.forEach((p, k) => {
         let dx = p.tx - p.x, dz = p.tz - p.z, dist = Math.hypot(dx, dz)
         // (they have been behind the digger all along, wherever the day is taken up)
-        if (dist > 45) { p.x = p.tx; p.z = p.tz; dx = dz = dist = 0 }
+        if (dist > 28) { p.x = p.tx; p.z = p.tz; dx = dz = dist = 0 }
         if (dist > 0.25 * big) {
-          const step = Math.min(dist, (!going ? 0 : this.literal ? PACE.walk * 1.5 : Math.max(this.pace * 1.2, dist > 40 ? dist * 2.5 : 0)) * f.dt)
+          const step = Math.min(dist, (!going ? 0 : this.literal ? PACE.walk * 1.9 : this.pace * 1.2) * f.dt)
           p.x += (dx / dist) * step
           p.z += (dz / dist) * step
           p.heading = Math.atan2(dz, dx)
