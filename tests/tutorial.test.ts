@@ -223,6 +223,18 @@ describe('the guided first year', () => {
     expect(k.why(look(w, c))).toMatch(/frost/)
   })
 
+  it('explains the spraying question when it is asked, ahead of why the clock stopped, and lets it go once answered', () => {
+    const { w, c } = farm(99)
+    const g = new Guide(memory())
+    g.skipTo('sprayask')
+    S.apply(w, c, { t: 'begin' })
+    const asked = g.current(look(w, c, { speed: 0, stopped: 'The crew asks how spraying is to be done.', asking: 'spray' }))
+    expect(asked?.id).toBe('sprayask')
+    expect(asked?.ask(look(w, c))).toMatch(/one reply/)
+    expect(g.current(look(w, c, { speed: 1 }))?.id).not.toBe('sprayask')
+    expect(g.passed('sprayask')).toBe(true)
+  })
+
   it('says why the clock stopped by itself, once, and not when the guide held it', () => {
     const { w, c } = farm(99)
     const g = new Guide(memory())
