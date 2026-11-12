@@ -930,15 +930,22 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   // the crop and on the ground, so a plate standing on it sits on its own field. When that edge is under the interface
   // at the bottom of the screen, the pin moves up the field's middle just far enough to be in the clear.
   const anchor = new Vector3(), far = new Vector3()
+  // The foot the anchors keep above: the interface's foot as it first stood at this window size on this screen, so a
+  // list, an alert or a card coming and going never moves a field's tag point while the camera stands still.
+  let anchorFoot = { w: 0, h: 0, mode: '', bottom: 0 }
   function fieldAnchor(i: number): { x: number; y: number; visible: boolean } {
     const f = FIELDS[i]
     if (!f) return { x: 0, y: 0, visible: false }
     const vp = viewport()
+    if (anchorFoot.w !== vp.w || anchorFoot.h !== vp.h || anchorFoot.mode !== snap.mode || (!anchorFoot.bottom && vp.bottom)) anchorFoot = { w: vp.w, h: vp.h, mode: snap.mode, bottom: vp.bottom }
     const cam = rig.camera.position
     const near = fields.nearEdge(i, cam.x, cam.z)
     far.set(2 * f.cx - near.x, near.y, 2 * f.cz - near.z)
-    const floor = vp.h - vp.bottom - 10
+    const floor = vp.h - anchorFoot.bottom - 10
     let x = 0, y = 0, inFront = false
+    // Walked in from the near edge until above the foot; the step that crosses it is met at the foot exactly, so the
+    // point moves smoothly with the camera rather than in steps.
+    let px = NaN, py = NaN
     for (let k = 0; k <= 6; k++) {
       anchor.copy(near).lerp(far, k / 12)
       anchor.y = fieldBaseY(anchor.z) + 0.7
@@ -946,7 +953,9 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       x = (anchor.x + 1) / 2 * vp.w
       y = (1 - anchor.y) / 2 * vp.h
       inFront = anchor.z < 1
+      if (inFront && y <= floor && k > 0 && py > floor) { const t = (py - floor) / (py - y); x = px + (x - px) * t; y = floor }
       if (!inFront || y <= floor) break
+      px = x; py = y
     }
     return { x, y, visible: inFront && x >= 0 && x <= vp.w && y >= 0 && y <= vp.h }
   }
