@@ -137,7 +137,8 @@ export const mountHud: MountHud = (root, app, view) => {
         ctx.awaiting++
         void view.whenShown('dig', e.field).then(() => {
           ctx.awaiting--
-          if (app.campaign === c && app.screen === 'season') papers.enqueue(ticket(ctx, lot, { fresh: true, staged }))
+          const spec = app.campaign === c && app.screen === 'season' ? ticket(ctx, lot, { fresh: true, staged }) : null
+          if (spec) papers.enqueue(spec)
           dirty = true
         })
       }

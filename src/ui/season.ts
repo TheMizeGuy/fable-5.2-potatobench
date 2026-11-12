@@ -42,7 +42,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   const paused = h('p', { class: 'paused instrument', testid: 'paused', hidden: true })
   let tray: { el: HTMLElement; field: number; day: number } | null = null
 
-  const openTicket = (lot: number) => ctx.papers.open(ticket(ctx, lot, { fresh: false }))
+  const openTicket = (lot: number) => { const spec = ticket(ctx, lot, { fresh: false }); if (spec) ctx.papers.open(spec) }
   const card = commandCard(ctx, { onTray: field => showTray(field), onTicket: openTicket })
   const person = personCard(ctx)
   const yard = yardCard(ctx)
@@ -236,7 +236,9 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     else ctx.say(`${S.FIELD_NAMES[i]}: ${r.err}`, 'info')
   }
 
-  const P = plates(ctx, plateLayer, { model: plateModel, onBadge })
+  // The cards that float over the land: nothing on the land is left under them.
+  const covers = (): DOMRect[] => [incident.el, grid.el].filter(x => !x.hidden && x.offsetParent !== null).map(x => x.getBoundingClientRect())
+  const P = plates(ctx, plateLayer, { model: plateModel, onBadge, covers })
 
   // ------------------------------------------------------------ the yards on the land
 
@@ -268,7 +270,9 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     for (const m of yardMarks) {
       if (m.wrap.hidden) continue
       const a = ctx.view.yardAnchor(m.y)
-      const ok = a.visible && Number.isFinite(a.x) && Number.isFinite(a.y) && a.y > app.insets.top + 40 && a.y < innerHeight - app.insets.bottom
+      const ins = app.insets
+      const ok = a.visible && Number.isFinite(a.x) && Number.isFinite(a.y) && a.y > ins.top + 40 && a.y < innerHeight - ins.bottom && a.x > ins.left + 40 && a.x < innerWidth - ins.right - 40 &&
+        !covers().some(cv => a.x > cv.left - 60 && a.x < cv.right + 60 && a.y > cv.top && a.y < cv.bottom + 34)
       m.wrap.classList.toggle('gone', !ok)
       if (ok) m.wrap.style.transform = `translate(${a.x.toFixed(1)}px, ${a.y.toFixed(1)}px) translate(-50%, -100%)`
     }
@@ -428,7 +432,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       grid.update(c)
       incident.update(c)
       el.classList.toggle('incident-up', incident.isUp())
-      ctx.notes.limit(low ? 1 : 3)
+      ctx.notes.limit(1)
       ctx.notes.maxAge = layout === 'short' ? 9000 : 0
       ctx.notes.prune(c.season.day)
     },

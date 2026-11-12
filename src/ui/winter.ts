@@ -66,7 +66,7 @@ function personRow(ctx: Ctx, c: S.Campaign, u: S.Unit, people: S.PersonInfo[], c
           const on = u.winter === ch.work
           return h('button', {
             class: `wseg-b${on ? ' on' : ''}`, type: 'button', testid: `winter-${u.id}-${ch.work}`, 'aria-pressed': String(on), disabled: !ch.ok && !on, title: ch.why || undefined,
-            onclick: () => set(ch.work, ch.work === 'woods' ? (on ? tracts[(tracts.indexOf(u.winterField) + 1) % tracts.length] : tracts[0]) : undefined),
+            onclick: () => set(ch.work, ch.work === 'woods' ? (u.winter === 'woods' ? tracts[(tracts.indexOf(u.winterField) + 1) % tracts.length] : tracts[0]) : undefined),
           }, WORK_LABEL[ch.work])
         }))),
       h('p', { class: 'wrow-out' }, outcome(c, u, people))))

@@ -107,4 +107,15 @@ describe('the clock', () => {
     expect(app.speed).toBe(0)
     expect(app.pauseReason).not.toBe('')
   })
+
+  it('answering the last question, from anywhere, lets the days go on at the speed they had', () => {
+    const app = farm()
+    const c = c0(app)
+    app.setSpeed(3)
+    play(app, 120, () => app.speed === 0 && c.incidents.length > 0, false)
+    expect(c.incidents.length).toBeGreaterThan(0)
+    expect(app.speed).toBe(0)
+    for (const inc of [...c.incidents]) expect(app.do({ t: 'answer', incident: inc.id, choice: S.defaultChoice(inc) }).ok).toBe(true)
+    expect(app.speed).toBe(3)
+  })
 })
