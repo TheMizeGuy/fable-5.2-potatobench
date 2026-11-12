@@ -28,7 +28,7 @@ export class Beacons {
   constructor() {
     // ---- Lamps: the kitchen window of every farmhouse, and a few along the village street.
     const lamps: number[] = []
-    const lamp = (x: number, z: number, k: number) => lamps.push(x, groundY(x, z) + 2.4, z, hash2(k, 71))
+    const lamp = (x: number, z: number, k: number) => lamps.push(x, groundY(x, z) + 3, z, k < 3 ? 0.1 : hash2(k, 71))
     lamp(HOUSE.x, HOUSE.z, 1)
     lamp(DUFOUR_HOUSE.x, DUFOUR_HOUSE.z, 2)
     FARMSTEADS.forEach(([x, z], k) => lamp(x, z, 10 + k))
@@ -51,12 +51,12 @@ export class Beacons {
             // own walls do not hide it and whatever stands in front of the house still does.
             vec3 eye = aAt.xyz - cameraPosition;
             float far = length(eye);
-            vec3 at = aAt.xyz - eye / far * min(11.0, far * 0.5);
+            vec3 at = aAt.xyz - eye / far * min(17.0, far * 0.5);
             vWorld = at;
             vec4 clip = projectionMatrix * viewMatrix * vec4(at, 1.0);
             // Never smaller than a couple of pixels; near at hand the real window takes over.
             float px = 0.9 * projectionMatrix[1][1] / uPx.y / max(clip.w, 0.1);
-            float size = max(px, 2.6);
+            float size = max(px, 5.0);
             clip.xy += vUv * size * uPx * clip.w;
             // They are lit one house after another as the light goes; a few keep early hours.
             vOn = smoothstep(aAt.w * 0.85, aAt.w * 0.85 + 0.12, uDusk) * smoothstep(70.0, 260.0, far) * step(0.3, clip.w);
@@ -69,7 +69,7 @@ export class Beacons {
           varying vec2 vUv; varying float vOn;
           void main() {
             float r = length(vUv);
-            float glow = exp(-r * r * 5.0) * vOn;
+            float glow = (exp(-r * r * 9.0) + 0.22 * exp(-r * r * 2.2)) * vOn;
             if (glow < 0.004) discard;
             // Bright enough for the lens to bloom, whatever the exposure; the air between takes some of it.
             vec3 hv = vWorld - cameraPosition;
@@ -117,15 +117,18 @@ export class Beacons {
           void main() {
             float pinch = floor(aShape.w / 100.0 + 0.5) / 100.0, half0 = aShape.w - pinch * 10000.0;
             vCol = aShape.rgb;
-            vec3 foot = aAt.xyz, top = aAt.xyz + vec3(0.0, aAt.w, 0.0);
+            // Drawn a little nearer the eye than the thing itself, so its own walls and the trees at its foot do not hide it.
+            vec3 toEye = cameraPosition - aAt.xyz;
+            float off = length(toEye);
+            vec3 foot = aAt.xyz + toEye / off * min(45.0, off * 0.2), top = foot + vec3(0.0, aAt.w, 0.0);
             vec4 a = projectionMatrix * viewMatrix * vec4(foot, 1.0), b = projectionMatrix * viewMatrix * vec4(top, 1.0);
             vec4 clip = mix(a, b, position.y);
             // Its true width on the screen, and the least it is drawn at: a needle the eye can find.
             float px = half0 * projectionMatrix[0][0] / uPx.x / max(clip.w, 0.1);
-            float wide = max(px, 1.5) * (1.0 - pinch * position.y);
+            float wide = max(px, 2.0) * (1.0 - pinch * position.y);
             clip.x += position.x * wide * uPx.x * clip.w;
             // The sunward side is lit and the other is in shade: which is which depends on where the sun stands.
-            vec3 eye = normalize(foot - cameraPosition);
+            vec3 eye = normalize(aAt.xyz - cameraPosition);
             vSide = position.x * sign(eye.x * uSunDir.z - eye.z * uSunDir.x);
             // Once the real thing is wide enough on the screen this gives way to it.
             vShow = (1.0 - smoothstep(2.2, 4.0, px)) * step(0.3, min(a.w, b.w));
@@ -139,11 +142,13 @@ export class Beacons {
           void main() {
             if (vShow < 0.01) discard;
             float lit = smoothstep(-0.25, 0.25, vSide);
-            vec3 col = vCol * (uSunCol * (0.08 + 0.92 * lit) * 0.7 * cloudShade(vWorld) + skyIrradiance(vec3(0.0, 1.0, 0.0)) * 0.5) * 0.3183;
+            // (A white tower in a low sun is still seen as white: the light on it keeps half its colour.)
+            vec3 sun = mix(vec3(dot(uSunCol, vec3(0.2126, 0.7152, 0.0722))), uSunCol, 0.5);
+            vec3 col = vCol * (sun * (0.08 + 0.92 * lit) * 1.1 + skyIrradiance(vec3(0.0, 1.0, 0.0)) * 0.5) * 0.3183;
             // It stands in the same air as the land round it, but a bright thing against a dull one carries further.
             vec3 hv = vWorld - cameraPosition;
             float hd = length(hv), hm;
-            float ha = hazeAmount(cameraPosition.y, vWorld.y, hd, vWorld.xz, hm) * 0.6;
+            float ha = hazeAmount(cameraPosition.y, vWorld.y, hd, vWorld.xz, hm) * 0.45;
             col = mix(col, hazeTint(hv / hd), ha);
             gl_FragColor = vec4(col, vShow);
           }`,

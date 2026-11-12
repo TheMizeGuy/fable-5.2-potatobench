@@ -39,7 +39,7 @@ const DAY_ANIM_S = 3.4          // how long a paused day's work takes to play ou
 const TITLE_DOWN_S = 38, TITLE_STAY_S = 20, TITLE_UP_S = 30, TITLE_TOP_S = 8
 const TITLE_LOOP_S = TITLE_DOWN_S + TITLE_STAY_S + TITLE_UP_S + TITLE_TOP_S
 // The tractor in the opening: how far down the road it is as the camera comes to rest (metres), and its pace.
-const TITLE_MEET_M = 50, TITLE_PACE = 1.7
+const TITLE_MEET_M = 66, TITLE_PACE = 1.2
 const HOUR_HOLD_S = 6           // the least time between a morning's light and an evening's
 const LOST_MS = 3000            // how long a lost WebGL context may stay away before the farm is drawn flat
 const STILL = 0.02              // the pace of water, cloud, mist and smoke under reduced motion
@@ -443,6 +443,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     terrain.gravel.value = gravelled ? (gravelled.built ? 1 : gravelled.progress) : 0
     props.sync(next)
     envTarget(next, envT)
+    heldHour = null
     dayHour = envT.hour
     aimHour(first)
     samples.clear()
@@ -509,6 +510,8 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   // by quickly are never shown as mornings and stand in the plainer light of mid afternoon, and the light turns from
   // morning to evening or back no oftener than every few seconds, so it never chases the days.
   let dayHour = EVENING
+  // An hour set by a tool, held until the game next changes the day.
+  let heldHour: number | null = null
   let morning = false
   let hourSince = -99
   function aimHour(now: boolean): void {
@@ -516,7 +519,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     const want = dayHour < 0 && (!season || app.speed <= 1)
     if (want !== morning && (now || !season || app.speed === 0 || time - hourSince > HOUR_HOLD_S)) { morning = want; hourSince = time }
     // Between changes the sun holds still: a sun that crept would make every fine shadow on the land crawl.
-    envT.hour = !season ? dayHour : morning ? MORNING : app.speed >= 3 ? 0.72 : app.speed === 2 ? 0.87 : EVENING
+    envT.hour = heldHour !== null ? heldHour : !season ? dayHour : morning ? MORNING : app.speed >= 3 ? 0.72 : app.speed === 2 ? 0.87 : EVENING
   }
 
   const shaftTint = new Color(), veilTint = new Color(), leafLight = new Color()
@@ -900,7 +903,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       // Hold the opening shot at a point of its move (0 the wide view, 1 the low one); below 0 lets it run.
       titleAt(u: number) { titleFixed = u },
       // For working on the light: set parts of the day's air by hand; they hold until the game next changes the day.
-      tune(o: Record<string, number>) { Object.assign(envT, o); Object.assign(env, o); if (typeof o.hour === 'number') dayHour = o.hour },
+      tune(o: Record<string, number>) { Object.assign(envT, o); Object.assign(env, o); if (typeof o.hour === 'number') { dayHour = o.hour; heldHour = o.hour } },
       home() { goHome() },
       // Put the camera at a tier ('yard', 'field', 'farm', 'county'); n: the field or the yard.
       tier(name: TierName, n?: number) {

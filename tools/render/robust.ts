@@ -157,6 +157,10 @@ async function changed(page: Page, a: Buffer, b: Buffer): Promise<number> {
     return [0, 1, 2, 3, 4, 5].filter(i => key(i) === key(2))
   })
   check(like.length === expectLike.length && like[like.length - 1] === 2 && expectLike.every((i: number) => like.includes(i)), `a double-click selects every field in the same state (${JSON.stringify(like)})`)
+  // The double-click brought the field into frame as well: back to the farm tier for the checks that follow.
+  const brought = await page.evaluate(() => (window as any).__countyField.info().framing)
+  check(brought === 'field', `a double-click on a field brings it into frame at the field tier (${brought})`)
+  await farmTier(page)
   await page.waitForTimeout(400)
 
   await page.mouse.click(inside(1).x, inside(1).y, { button: 'right' })
