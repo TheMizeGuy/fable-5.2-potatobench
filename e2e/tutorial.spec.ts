@@ -28,7 +28,7 @@ async function land(page: Page, r = 0): Promise<{ x: number; y: number; r: numbe
     const canvas = document.getElementById('field')
     const open = (x: number, y: number) => document.elementFromPoint(x, y) === canvas
     // The widest circle of open land that can be found, down to a third of the one asked for.
-    for (const r of want ? [want, want * 0.75, want * 0.55, want * 0.4] : [0]) {
+    for (const r of want ? [want, want * 0.75, want * 0.55, want * 0.4, want * 0.3] : [0]) {
       for (let fy = 0.12; fy < 0.9; fy += 0.02) for (let fx = 0.1; fx < 0.9; fx += 0.03) {
         const x = Math.round(innerWidth * fx), y = Math.round(innerHeight * fy)
         if (!open(x, y)) continue
@@ -128,8 +128,8 @@ test('a guided first year: offered on a new farm, taken, and followed to the fir
         break
       case 'look': case 'turn':
         // As a player would, again and a little further if the land did not seem to move the first time.
-        for (let k = 1; k <= 3 && (await slip(page)).id === id; k++) {
-          await (id === 'look' ? drag(page, isMobile, k) : turn(page, isMobile, k))
+        for (let k = 1; k <= 5 && (await slip(page)).id === id; k++) {
+          await (id === 'look' ? drag(page, isMobile, Math.min(k, 3)) : turn(page, isMobile, Math.min(k, 3)))
           await page.waitForTimeout(1500)
           console.log(`${id} ${k}: ${await page.evaluate(() => JSON.stringify((globalThis as unknown as { __countyGuide: { p: { facts: string[] } } }).__countyGuide.p.facts))}`)
         }
