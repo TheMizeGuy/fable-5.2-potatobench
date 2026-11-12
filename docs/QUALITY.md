@@ -403,6 +403,59 @@ whether its graphics chip is short of shading (then the size is the cure) or of 
 in against 1.56M, which a smaller picture does not help and only the setting or the cuts left for later do); and
 whether the first seconds close in, before the picture has shrunk, are still felt.
 
+### The crop's whole plants, counted, and lit at their corners
+
+The section above laid the close view's cost to the crop's whole plants, "many behind one another", from the
+renderer's part timer. Counted, that is not so. `cropWork()` (a tool's hook; `budget.ts --crop` prints it) draws
+the leaves alone, each fragment adding to its pixel, and reads the sum back: a count, the same on any machine
+however busy. Level across a full crop in flower from the closest distance, **1.40 leaf fragments are drawn to each
+pixel of the picture** (1.05 of them in front of what was drawn before), about two and a half deep where the crop
+is and not a dozen. And with every plant drawn at no size (its triangles still sent) that frame took 4.98 ms where
+it took 5.34 with them: on the 2080 Ti the leaves' fragments are a third of a millisecond at the laptop's picture
+size. What the part timer called the crop was mostly the sending and placing of 0.6M triangles of plant.
+
+**What a level view costs, in a quiet stretch** (1512 by 982 at two to one, a 2.07 M pixel picture, high setting,
+frame time not followed; ms from one frame to the next drawing as fast as it can, the old way and the new turn
+about in the one page, the quietest of four turns and the middle one):
+
+| view | as it was | as it is | triangles | leaf fragments to a pixel |
+| --- | --- | --- | --- | --- |
+| the playing view | 3.3 (4.3) | 3.3 (3.3) | 1.34M | none |
+| level over the crop from 160 m | 5.3 (5.4) | 5.3 (5.3) | 2.25M | none: the crop is painted there |
+| closest, level across the crop | 6.7 (6.7) | 5.8 (6.2) | 2.65M | 1.40 before, 1.23 after |
+
+One at a time, in the closest view: leaves lit at every pixel again, 6.4 ms (the corners save 0.6); every plant
+drawn however far, 6.05; every leaf, 6.2; the window as deep in a level view as in any, 6.3.
+
+**So the done line is not met**: level views cost 1.6 and 1.8 times the playing view at this size, and it is not
+the crop that makes them dear. The view from 160 m has no whole plant in it and costs 1.6 times the playing view:
+a level camera has the woods across a third of the picture (cards and far woods), 0.9M more triangles (whole trees
+and what they throw into the fine shadow map), and the sky. That is the next thing to cut, and it was not this
+round's brief. At 8.3 M pixels the one way could not be read against the other: the box was too busy all afternoon
+(the playing view between 11 and 24 ms from turn to turn). What can be said there is from `budget.ts --hold` in a
+quiet stretch at the end, with this build, frame time followed, forty seconds in each view at 60 beats a second:
+the playing view, the view level across the crop from the closest and the one from 160 m each kept its beat at the
+high setting with the picture at its full 3840 by 2160 (16.7 ms at the middle frame, 16.7 to 16.8 at the 95th of a
+hundred), and the picture's size was never touched. In the runs before this round the close views had needed 0.77
+to 0.84 of the side, in one of them while the playing view held its full size.
+
+**What was changed in the plants.**
+
+- A leaf is lit at its corners (`corners` in the shared material patch): the sun, the cloud's shadow, the sky's
+  light, the light through the leaf and the haze are worked out in the vertex shader for each face of the card and
+  carried across it; a pixel reads the cut-out, the colour and the sun's shadow. A leaf has no shine of its own
+  now: the faint sheen on the nearest leaves under a clear sky is gone, and nothing else in the pair differs.
+- Past 18 m from the eye one plant in two along the row is drawn and past 30 m one in four, each as wide as those
+  it stands for and carrying their flowers; past 24 m a plant has every other leaf, each a little larger; and in a
+  level view the painted rows take over at 27 m from the eye and not 38 (looked down on, the window is as it was).
+  The first settings tried (10 and 20 m, 14 m) thinned the middle of the field to the eye, the flowers most of
+  all; with these the far band of whole plants is a little coarser and there is less of it.
+- A plant not drawn is not lit either.
+
+**Not known.** What a leaf fragment and a plant vertex cost on the MacBook's graphics chip. A chip of that kind
+is slowed more by what each pixel works out than this card is, so lighting at the corners should count for more
+there than the 9% here; it cannot be read from this box.
+
 ## Wave three: bugs and UX, checked by players who see only pictures
 
 After live-5 the owner asked for a camera that tips down, lighter rendering, a card for anyone clicked, a far more

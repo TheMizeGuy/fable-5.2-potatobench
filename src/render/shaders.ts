@@ -66,6 +66,12 @@ export interface Patch {
   rim?: number               // how much a low sun behind it lights its edge (0.3 unless given)
   shine?: number             // share of the sky's reflection it shows (a leaf's bloom of fine hair shows little)
   blade?: boolean            // grass and grain: lit as if every blade faced up, and aglow when the sun is behind it
+  // A small leaf among thousands: lit at its corners and the light carried across it, where everything else is lit
+  // at every pixel. The sun, the cloud's shadow, the sky, the light through the leaf and the haze are worked out in
+  // the vertex shader for each face of the card; a pixel reads the leaf's cut-out and colour and the sun's shadow.
+  // (It has no shine of its own.)
+  corners?: boolean
+  cornersIf?: string         // with corners: a GLSL test; a vertex that fails it (one of a thing not drawn) is not lit
   noHaze?: boolean
 }
 
@@ -188,18 +194,14 @@ vec3 mistTint(vec3 dir) {
 }
 `
 
-export const FRAG_LIB = /* glsl */ `
+// The air and the sky, for whoever lights something: the cloud's shadow, the haze, the light of the whole sky.
+const LIGHT_LIB = /* glsl */ `
 ${CLOUD_GLSL}
 ${HAZE_GLSL}
 float cloudShade(vec3 p) {
   if (uCloud.x < 0.002) return 1.0;
   vec2 q = p.xz + uSunDir.xz / max(uSunDir.y, 0.12) * CLOUD_H;
   return 1.0 - uCloud.x * cloudCover(cloudField(q)) * smoothstep(uSunlit, uSunlit * 1.8 + 1.0, length(p.xz));
-}
-// A cut-out texture loses its cover as it shrinks on screen; this gives it back. size: the texture's width in texels.
-float coverGain(vec2 uv, float size) {
-  vec2 dx = dFdx(uv * size), dy = dFdy(uv * size);
-  return 1.0 + 0.45 * max(0.5 * log2(max(dot(dx, dx), dot(dy, dy)) + 1e-8), 0.0);
 }
 vec2 skyUv(vec3 d) {
   return vec2(atan(d.z, d.x) * 0.15915494 + 0.5, acos(clamp(d.y, -1.0, 1.0)) * 0.31830989);
@@ -210,6 +212,16 @@ vec3 skyIrradiance(vec3 n) {
 }
 vec3 skyRadiance(vec3 r, float roughness) {
   return textureLod(uSkyTex, skyUv(r), roughness * 5.5).rgb;
+}
+`
+
+
+export const FRAG_LIB = /* glsl */ `
+${LIGHT_LIB}
+// A cut-out texture loses its cover as it shrinks on screen; this gives it back. size: the texture's width in texels.
+float coverGain(vec2 uv, float size) {
+  vec2 dx = dFdx(uv * size), dy = dFdy(uv * size);
+  return 1.0 + 0.45 * max(0.5 * log2(max(dot(dx, dx), dot(dy, dy)) + 1e-8), 0.0);
 }
 `
 
@@ -299,6 +311,17 @@ const LIGHTS = (() => {
   return chunk.slice(0, a) + SUN_BLOCK + chunk.slice(b) + SKY_LIGHT
 })()
 
+// What a pixel of a card lit at its corners does with the light carried to it.
+const CORNER_LIT = /* glsl */ `
+  {
+    float shade = 1.0;
+    #if defined( USE_SHADOWMAP ) && NUM_DIR_LIGHT_SHADOWS > 0
+      if ( receiveShadow ) shade = countyShadow();
+    #endif
+    reflectedLight.directDiffuse = diffuseColor.rgb * ( gl_FrontFacing ? vLitA * shade + vLitB : vBackA * shade + vBackB );
+  }
+`
+
 export const HAZE = /* glsl */ `
   {
     vec3 hv = vWorld - cameraPosition;
@@ -329,14 +352,60 @@ function project(world: string | undefined): string {
 
 let serial = 0
 
+// The light on each face of a card lit at its corners: `a` is what the sun's shadow takes away, `b` what it leaves.
+const CORNER_HEAD = /* glsl */ `
+varying vec3 vLitA;
+varying vec3 vLitB;
+varying vec3 vBackA;
+varying vec3 vBackB;
+varying vec4 vHazed;
+void cornerLight(vec3 n, vec3 up, vec3 toEye, vec3 sunFull, out vec3 a, out vec3 b) {
+  float rimEdge = 1.0 - saturate( dot( n, toEye ) );
+  float rimSun = saturate( dot( - toEye, uSunDir ) * 1.5 - 0.3 );
+  float rimSide = 1.0 - 0.8 * saturate( up.y );
+  a = sunFull * ( saturate( dot( n, uSunDir ) ) * RECIPROCAL_PI + COUNTY_RIM * rimEdge * rimEdge * rimEdge * rimSun * rimSide );
+  b = skyIrradiance( n ) * ( COUNTY_AMBIENT * RECIPROCAL_PI );
+  #ifdef COUNTY_TRANSLUCENT
+    #ifdef COUNTY_BLADE
+      float backLit = 0.12 + 0.88 * pow( saturate( dot( - toEye, uSunDir ) ), 2.0 );
+    #else
+      float backLit = saturate( dot( - n, uSunDir ) );
+    #endif
+    vec3 through = sunFull * ( backLit * COUNTY_TRANSLUCENT * RECIPROCAL_PI ) * COUNTY_THROUGH;
+    a += 0.7 * through;
+    b += 0.3 * through;
+  #endif
+}
+`
+const CORNER_LIGHT = /* glsl */ `
+  {
+    vec3 cn = normalize( vWNormal ), ce = cameraPosition - cWorld.xyz;
+    float cd = length( ce );
+    vec3 toEye = ce / max( cd, 1e-4 ), sunFull = uSunCol * cloudShade( cWorld.xyz );
+    cornerLight( cn, cn, toEye, sunFull, vLitA, vLitB );
+    #if defined( DOUBLE_SIDED ) && ! defined( COUNTY_BLADE )
+      cornerLight( - cn, cn, toEye, sunFull, vBackA, vBackB );
+    #else
+      vBackA = vLitA;
+      vBackB = vLitB;
+    #endif
+    float hm;
+    float ha = hazeAmount( cameraPosition.y, cWorld.y, cd, cWorld.xz, hm );
+    float gone = landsEnd( cWorld.xz );
+    ha = ha + ( 1.0 - ha ) * gone;
+    hm *= 1.0 - gone;
+    vHazed = vec4( mix( hazeTint( - toEye ), mistTint( - toEye ), hm ), ha );
+  }
+`
+
 function patchVertex(vs: string, p: Patch, lit: boolean): string {
-  vs = vs.replace('#include <common>', `#include <common>\n${SHARED}\n${p.vertexHead ?? ''}`)
+  vs = vs.replace('#include <common>', `#include <common>\n${SHARED}\n${lit && p.corners ? `${LIGHT_LIB}\n${CORNER_HEAD}` : ''}\n${p.vertexHead ?? ''}`)
   if (lit) {
     if (p.vertexNormal) vs = vs.replace('#include <beginnormal_vertex>', `#include <beginnormal_vertex>\n${p.vertexNormal}`)
     vs = vs.replace('#include <defaultnormal_vertex>', '#include <defaultnormal_vertex>\nvWNormal = inverseTransformDirection( transformedNormal, viewMatrix );')
   }
   if (p.vertexBegin) vs = vs.replace('#include <begin_vertex>', `#include <begin_vertex>\n${p.vertexBegin}`)
-  vs = vs.replace('#include <project_vertex>', project(p.vertexWorld))
+  vs = vs.replace('#include <project_vertex>', project(p.vertexWorld) + (lit && p.corners ? (p.cornersIf ? `if ( ${p.cornersIf} )${CORNER_LIGHT}` : CORNER_LIGHT) : ''))
   return vs.replace('#include <worldpos_vertex>', 'vec4 worldPosition = cWorld;')
 }
 
@@ -347,6 +416,7 @@ export function patch<M extends Material>(mat: M, p: Patch = {}): M {
   const through = p.through ?? [1, 1.16, 0.5]
   mat.defines.COUNTY_THROUGH = `vec3( ${through.map(v => v.toFixed(3)).join(', ')} )`
   if (p.blade) mat.defines.COUNTY_BLADE = 1
+  if (p.corners) mat.defines.COUNTY_CORNERS = 1
   mat.onBeforeCompile = shader => {
     Object.assign(shader.uniforms, U, p.uniforms ?? {})
     shader.vertexShader = patchVertex(shader.vertexShader, p, true)
@@ -359,8 +429,15 @@ export function patch<M extends Material>(mat: M, p: Patch = {}): M {
     const blade = p.blade ? '#ifdef DOUBLE_SIDED\n  normal *= faceDirection;\n#endif\n' : ''
     if (p.fragmentNormal || blade) fs = fs.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>\n${blade}${p.fragmentNormal ?? ''}`)
     if (p.fragmentEmissive) fs = fs.replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>\n${p.fragmentEmissive}`)
-    fs = fs.replace('#include <lights_fragment_begin>', LIGHTS)
-    fs = fs.replace('#include <fog_fragment>', `${p.noHaze ? '' : HAZE}\n${p.fragmentEnd ?? ''}`)
+    if (p.corners) {
+      fs = fs.replace('#include <common>', '#include <common>\nvarying vec3 vLitA;\nvarying vec3 vLitB;\nvarying vec3 vBackA;\nvarying vec3 vBackB;\nvarying vec4 vHazed;')
+      for (const chunk of ['lights_physical_fragment', 'lights_fragment_maps', 'lights_fragment_end']) fs = fs.replace(`#include <${chunk}>`, '')
+      fs = fs.replace('#include <lights_fragment_begin>', CORNER_LIT)
+      fs = fs.replace('#include <fog_fragment>', `gl_FragColor.rgb = mix( gl_FragColor.rgb, vHazed.rgb, vHazed.a );\n${p.fragmentEnd ?? ''}`)
+    } else {
+      fs = fs.replace('#include <lights_fragment_begin>', LIGHTS)
+      fs = fs.replace('#include <fog_fragment>', `${p.noHaze ? '' : HAZE}\n${p.fragmentEnd ?? ''}`)
+    }
     shader.fragmentShader = fs
   }
   mat.customProgramCacheKey = () => key
