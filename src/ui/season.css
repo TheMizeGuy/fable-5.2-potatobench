@@ -245,7 +245,8 @@
 .season-screen .paused { position: absolute; right: max(var(--gutter), env(safe-area-inset-right, 0px)); top: calc(var(--top, 220px) + 8px); z-index: 2; }
 .season-screen .paused-go { gap: 10px; background: var(--paper) url(./system/grain.png); background-blend-mode: multiply; box-shadow: var(--laid), inset 0 0 0 1px var(--ink); font-size: 16px; }
 .season-screen .paused-go .i { --i: 16px; }
-.season-screen .tray-host { position: absolute; left: max(var(--gutter), env(safe-area-inset-left, 0px)); bottom: calc(var(--bottom, 140px) + 8px); z-index: 2; }
+.season-screen .tray-host { position: absolute; left: max(var(--gutter), env(safe-area-inset-left, 0px)); bottom: calc(var(--bottom, 140px) + 8px); z-index: 2;
+  max-height: calc(100% - var(--top, 180px) - var(--bottom, 140px) - 16px); overflow-y: auto; overscroll-behavior: contain; }
 .season-screen .clock-slot.dock { position: static; display: block; }
 .season-screen .clock-slot.dock .clock { grid-template-columns: repeat(4, 1fr) 56px; border-bottom: 0; min-width: 0; }
 .season-screen .clock-slot.dock .clock.done { grid-template-columns: 1fr 56px; }

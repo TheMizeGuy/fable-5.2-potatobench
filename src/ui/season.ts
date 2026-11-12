@@ -565,7 +565,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       const t = Math.max(top.el.getBoundingClientRect().bottom, ...[...top.el.querySelectorAll<HTMLElement>('.almanac > .mount, .bank > .mount')].map(x => x.getBoundingClientRect().bottom))
       const vis = (x: HTMLElement) => !x.hidden && x.offsetParent !== null && x.offsetHeight > 0
       // The time book, its list and the alerts at the foot; the clock with them on a phone.
-      const low = [...(crew.children as HTMLCollectionOf<HTMLElement>), clockSlot, notesSlot, ...(layout === 'narrow' && tray ? [trayHost] : [])].filter(vis).map(x => box(x).top)
+      const low = [...(crew.children as HTMLCollectionOf<HTMLElement>), clockSlot, notesSlot].filter(vis).map(x => box(x).top)
       const bottom = innerHeight - Math.min(...low, innerHeight) + 6
       // The bar docked at its edge; on a phone it is a sheet over the foot.
       const bar = [card.el, yard.el].find(vis)
