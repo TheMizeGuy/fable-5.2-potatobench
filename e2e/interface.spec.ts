@@ -945,3 +945,31 @@ test('a field says which work the crew does by itself and which waits for the pl
   await expect(page.getByTestId('card-whose')).toContainText(/Yours: .*spray/i)
   expect(errors, errors.join('\n')).toEqual([])
 })
+
+test('the clock and the keys as a player meets them: Space just after an answer keeps the days going, a press on the land holds them, Escape after a ticket opens no menu', async ({ page }) => {
+  const errors = watchErrors(page)
+  await startSeason(page)
+  await reach(page, `const { app } = q.g(); app.setSpeed(0); app.do({ t: 'sprayWay', way: 'ask' }); q.run('digging', ['sell'], 'status'); app.campaign.incidents = []`)
+  await putAway(page)
+  await page.getByTestId('speed-2').click()
+  const ticket = page.getByTestId('weighin')
+  await expect(ticket).toBeVisible({ timeout: 60_000 })
+  // Answered, the days go on by themselves; a Space a moment later is not taken back as a pause.
+  await ticket.locator('[data-testid^="lot-sell-"]').first().click()
+  await expect(ticket).toHaveCount(0)
+  await page.keyboard.press('Space')
+  expect((await look(page)).speed).toBe(2)
+  // Escape just after the ticket went opens no menu.
+  await page.keyboard.press('Escape')
+  await expect(page.getByTestId('menu')).toHaveCount(0)
+  // A press held on the land holds the days.
+  const box = (await page.locator('#field').boundingBox())!
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height * 0.55)
+  await page.mouse.down()
+  const d0 = await game<number>(page, 'app.campaign.season.day')
+  await page.waitForTimeout(2500)
+  expect(await game<number>(page, 'app.campaign.season.day')).toBe(d0)
+  await page.mouse.up()
+  await expect.poll(() => game<number>(page, 'app.campaign.season.day'), { timeout: 15_000 }).toBeGreaterThan(d0)
+  expect(errors, errors.join('\n')).toEqual([])
+})
