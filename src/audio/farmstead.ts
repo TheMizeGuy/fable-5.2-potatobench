@@ -97,7 +97,7 @@ export function treeFall(rig: Rig, out: AudioNode, t: number, amp: number): numb
   sweep.frequency.setValueAtTime(2200, t + 0.45)
   sweep.frequency.exponentialRampToValueAtTime(700, t + 1.55)
   const airLevel = ctx.createGain()
-  swell(airLevel.gain, t + 0.45, 1.15, 0.45 * amp, 0.85, 0.25)
+  swell(airLevel.gain, t + 0.45, 1.15, 0.3 * amp, 0.85, 0.25)
   air.connect(sweep).connect(airLevel).connect(out)
   air.stop(t + 1.65)
 
@@ -207,8 +207,8 @@ function latch(rig: Rig, out: AudioNode, t: number, amp: number): void {
 }
 
 function rap(rig: Rig, out: AudioNode, t: number, amp: number): void {
-  ring(rig, out, t, 0.3 * amp, DOOR, vary(rig, 1, 0.02))
-  burst(rig, out, t, 0.5 * amp, 0.001, 0.006, filter(rig.ctx, 'bandpass', 1700, 1), filter(rig.ctx, 'lowpass', 4000))
+  ring(rig, out, t, 0.36 * amp, DOOR, vary(rig, 1, 0.02))
+  burst(rig, out, t, 0.55 * amp, 0.001, 0.006, filter(rig.ctx, 'bandpass', 1700, 1), filter(rig.ctx, 'lowpass', 4000))
 }
 
 function stampDown(rig: Rig, out: AudioNode, t: number, amp: number): void {
@@ -260,7 +260,7 @@ function tear(rig: Rig, out: AudioNode, t: number, dur: number, amp: number): vo
   }
   pts[0] = 0
   pts[pts.length - 1] = 0
-  env.gain.value = 0
+  env.gain.setValueAtTime(0, 0)
   env.gain.setValueCurveAtTime(pts, t, dur)
   n.connect(filter(ctx, 'highpass', 1200)).connect(bp).connect(env).connect(out)
   n.stop(t + dur + 0.02)
@@ -282,8 +282,8 @@ function puff(rig: Rig, out: AudioNode, t: number, amp: number, hz: number): voi
 export function pickField(rig: Rig, t: number): void {
   const out = voiceOut(rig, vary(rig, 0, 0.3), 0.05)
   const hz = vary(rig, 135, 0.06)
-  tone(rig, out, t, hz * 1.6, 0.2, 0.004, 0.028, hz, 0.035)
-  burst(rig, out, t, 0.3, 0.004, 0.018, filter(rig.ctx, 'bandpass', vary(rig, 520, 0.1), 1.1), filter(rig.ctx, 'lowpass', 1600))
+  tone(rig, out, t, hz * 1.6, 0.15, 0.004, 0.028, hz, 0.035)
+  burst(rig, out, t, 0.22, 0.004, 0.018, filter(rig.ctx, 'bandpass', vary(rig, 520, 0.1), 1.1), filter(rig.ctx, 'lowpass', 1600))
 }
 
 // A tract of woods or brush picked: a twig underfoot and the leaves it stirs.
@@ -299,7 +299,7 @@ const PERSON_PITCH = [1, 1.122, 1.26, 1.498, 1.682, 0.891]
 export function pickPerson(rig: Rig, t: number, id: number): void {
   const out = voiceOut(rig, vary(rig, 0, 0.2), 0.08)
   const tune = PERSON_PITCH[Math.abs(Math.floor(id)) % PERSON_PITCH.length]
-  for (const [dt, up, amp] of [[0, 1, 0.16], [vary(rig, 0.1, 0.1), 1.26, 0.13]]) {
+  for (const [dt, up, amp] of [[0, 1, 0.13], [vary(rig, 0.1, 0.1), 1.26, 0.11]]) {
     ring(rig, out, t + dt, amp, HANDLE, tune * up)
     burst(rig, out, t + dt, amp * 1.2, 0.001, 0.004, filter(rig.ctx, 'bandpass', 2100, 1.2))
   }
@@ -340,9 +340,9 @@ export function left(rig: Rig, t: number): number {
   step(rig, out, t, 0.9)
   step(rig, out, t + vary(rig, 0.32, 0.1), 0.65)
   const d = t + 0.72
-  tone(rig, out, d, 110, 0.6, 0.005, 0.07, 60, 0.06)
-  ring(rig, out, d, 0.4, DOOR, 0.97, 0.003)
-  burst(rig, out, d, 0.8, 0.003, 0.02, filter(ctx, 'lowpass', 1500))
+  tone(rig, out, d, 110, 0.45, 0.005, 0.07, 60, 0.06)
+  ring(rig, out, d, 0.3, DOOR, 0.97, 0.003)
+  burst(rig, out, d, 0.55, 0.003, 0.02, filter(ctx, 'lowpass', 1500))
   click(rig, out, d + 0.03, 1650, 0.08, 0.02)
   click(rig, out, d + 0.075, 1900, 0.04, 0.015)
   return d + 0.5
@@ -377,7 +377,7 @@ export function iron(rig: Rig, t: number, hz: number, strikes: number): number {
 // A deal put on paper: a signature and its full stop.
 export function signed(rig: Rig, t: number): number {
   const out = voiceOut(rig, vary(rig, -0.1, 0.5), 0.05)
-  const at = write(rig, out, t, [0.09, 0.07, 0.13, 0.06, 0.17], 0.3)
+  const at = write(rig, out, t, [0.09, 0.07, 0.13, 0.06, 0.17], 0.24)
   ring(rig, out, at + 0.05, 0.1, [[250, 1, 0.03], [440, 0.5, 0.02], [760, 0.3, 0.012]])
   burst(rig, out, at + 0.05, 0.12, 0.001, 0.004, filter(rig.ctx, 'bandpass', 2400, 1))
   return at + 0.3
@@ -406,7 +406,7 @@ export function ticket(rig: Rig, t: number): number {
   ring(rig, out, t + 0.3, 0.12, beam, hz, 0.001)
   burst(rig, out, t + 0.3, 0.2, 0.0005, 0.003, filter(rig.ctx, 'highpass', 3000))
   ring(rig, out, t + 0.3 + vary(rig, 0.17, 0.1), 0.06, beam, hz * 1.01, 0.001)
-  tear(rig, out, t + 0.68, 0.24, 0.5)
+  tear(rig, out, t + 0.68, 0.24, 0.26)
   return t + 1.1
 }
 
@@ -414,7 +414,7 @@ export function ticket(rig: Rig, t: number): number {
 
 // A tract felled: the last tree down.
 export function felled(rig: Rig, t: number): number {
-  return treeFall(rig, voiceOut(rig, vary(rig, -0.2, 0.5), 0.35), t, 0.85)
+  return treeFall(rig, voiceOut(rig, vary(rig, -0.2, 0.5), 0.35), t, 0.7)
 }
 
 // Rocks picked: three thrown on the stone boat, and one that settles.
@@ -432,10 +432,10 @@ export function rocks(rig: Rig, t: number): number {
 // Hedgerows cut back: two swings of the brush hook.
 export function brushed(rig: Rig, t: number): number {
   const out = voiceOut(rig, vary(rig, 0.2, 0.5), 0.12)
-  swish(rig, out, t, 0.6)
+  swish(rig, out, t, 0.3)
   snap(rig, out, t + 0.13, 0.5)
   const b = t + vary(rig, 0.3, 0.1)
-  swish(rig, out, b, 0.5)
+  swish(rig, out, b, 0.25)
   snap(rig, out, b + 0.12, 0.42)
   snap(rig, out, b + 0.17, 0.25)
   return b + 0.4
@@ -500,8 +500,8 @@ export function logs(rig: Rig, t: number): number {
 // A building begun: the first two boards on the stack.
 export function begun(rig: Rig, t: number): number {
   const out = voiceOut(rig, vary(rig, 0.1, 0.5), 0.18)
-  plank(rig, out, t, 1)
-  plank(rig, out, t + vary(rig, 0.3, 0.1), 0.7)
+  plank(rig, out, t, 0.75)
+  plank(rig, out, t + vary(rig, 0.3, 0.1), 0.5)
   return t + 0.75
 }
 
@@ -546,13 +546,13 @@ export function repaired(rig: Rig, t: number): number {
 
 // ---------------------------------------------------------------- the two that must not be missed
 
-// A decision at the door: three knocks.
+// A decision at the door: three knocks, unhurried.
 export function atTheDoor(rig: Rig, t: number): number {
   const out = voiceOut(rig, 0, 0.3)
   let at = t
   for (const amp of [0.92, 0.85, 1]) {
     rap(rig, out, at, amp)
-    at += vary(rig, 0.2, 0.06)
+    at += vary(rig, 0.23, 0.06)
   }
   return at + 0.35
 }
@@ -560,9 +560,9 @@ export function atTheDoor(rig: Rig, t: number): number {
 // The matter closed: the door eased shut and its latch dropping.
 export function settled(rig: Rig, t: number): number {
   const out = voiceOut(rig, vary(rig, 0, 0.3), 0.2)
-  ring(rig, out, t, 0.14, DOOR, 1.03, 0.004)
-  burst(rig, out, t, 0.2, 0.004, 0.015, filter(rig.ctx, 'lowpass', 1200))
-  click(rig, out, t + 0.07, 1650, 0.07, 0.02)
+  ring(rig, out, t, 0.22, DOOR, 1.03, 0.004)
+  burst(rig, out, t, 0.3, 0.004, 0.015, filter(rig.ctx, 'lowpass', 1200))
+  click(rig, out, t + 0.07, 1650, 0.09, 0.02)
   return t + 0.4
 }
 
@@ -576,7 +576,7 @@ export function goalMet(rig: Rig, t: number): number {
   for (const [j, m] of [53, 57, 60, 65].entries()) pad(rig, lp, t + 0.34 + 0.02 * j, midiHz(m), 0.95, 0.45, 0.042)
   const bars = filter(ctx, 'lowpass', 6000)
   bars.connect(voiceOut(rig, 0.1, 0.4))
-  for (const [dt, m, amp] of [[0, 72, 0.07], [0.16, 77, 0.075], [0.34, 81, 0.085], [0.62, 84, 0.05]]) {
+  for (const [dt, m, amp] of [[0, 72, 0.06], [0.16, 77, 0.065], [0.34, 81, 0.075], [0.62, 84, 0.045]]) {
     ring(rig, bars, t + dt, amp, BAR, midiHz(m), 0.004)
   }
   return t + 2.6

@@ -41,7 +41,7 @@ class Site {
   }
 
   set(amount: number, t: number): void {
-    this.level.to(amount <= 0 ? 0 : amount >= 0.9 ? 1 : 0.22, t, 0.7)
+    this.level.to(amount <= 0 ? 0 : amount >= 0.9 ? 1 : 0.3, t, 0.7)
     if (amount > 0.02) {
       this.top.to(amount >= 0.9 ? 9000 : 1800, t, 0.6, 1)
       this.amount = amount
@@ -121,10 +121,10 @@ export class Work {
         // The crosscut: about sixty strokes each way a minute, the pull a little lower and softer than the push.
         const push = this.fellLeft % 2 === 0
         const dur = vary(rig, 0.42, 0.08)
-        sawStroke(rig, s.out, s.next, dur, push ? 0.5 : 0.38, push ? 1150 : 950, 50)
+        sawStroke(rig, s.out, s.next, dur, push ? 0.28 : 0.2, push ? 1150 : 950, 50)
         s.next += dur + 0.07
       } else {
-        s.next = treeFall(rig, s.out, s.next + 0.6, 0.85) + 1.5
+        s.next = treeFall(rig, s.out, s.next + 0.6, 0.6) + 1.5
       }
     }
   }
@@ -222,7 +222,7 @@ export class Work {
         // A hand saw: short and quick, cutting on the push.
         const push = this.raiseLeft % 2 === 0
         const dur = push ? vary(rig, 0.24, 0.08) : vary(rig, 0.18, 0.08)
-        sawStroke(rig, s.out, s.next, dur, push ? 0.42 : 0.16, push ? 2300 : 1900, 260)
+        sawStroke(rig, s.out, s.next, dur, push ? 0.22 : 0.09, push ? 2300 : 1900, 400)
         s.next += dur + 0.03
       } else {
         plank(rig, s.out, s.next, vary(rig, 0.8, 0.2))

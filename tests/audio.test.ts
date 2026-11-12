@@ -50,7 +50,10 @@ describe('which cue answers which event', () => {
   })
 
   it('strikes only the gravest warning of a day, and nothing over the bank calling the note', () => {
-    expect(ids([ev('frost', 'warn'), ev('watch', 'warn'), ev('lost', 'bad', 2)])).toEqual(['warnLost'])
+    expect(ids([ev('frost', 'bad', 1)])).toEqual(['warnFrost'])
+    expect(ids([ev('frozenInField', 'bad', 1)])).toEqual(['warnLost'])
+    expect(ids([ev('frost', 'bad', 1), ev('blightSeen', 'bad', 2)])).toEqual(['warnSeen'])
+    expect(ids([ev('frost', 'bad'), ev('watch', 'warn'), ev('lost', 'bad', 2)])).toEqual(['warnLost'])
     expect(ids([ev('dry', 'warn', 1), ev('watch', 'warn')])).toEqual(['warnWatch'])
     expect(ids([ev('contractShort', 'bad')])).toEqual(['warnSeen'])
     expect(ids([ev('lost', 'bad', -1), ev('frost', 'warn'), ev('sold', 'good')])).toEqual(['lost'])

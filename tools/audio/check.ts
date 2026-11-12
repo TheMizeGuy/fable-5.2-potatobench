@@ -5,7 +5,9 @@
 // 2. loads the game, taps the live output, and checks the autoplay gate, settings, mute and hidden-tab fade.
 // Usage: node tools/audio/check.ts [chromium] [firefox] [webkit] [--only=<case id prefix>[,<prefix>...]] [--offline] [--features]
 // With --only, just the matching offline cases are rendered and judged (for work on one voice). --offline leaves
-// out the live game; --features prints what was measured off each render for comparison with the real sound.
+// out the live game; --features prints what was measured off each render for comparison with the real sound;
+// --quick measures loudness and masking only, at the default volume, and skips the comparisons (for setting levels:
+// it is not a pass).
 import { fileURLToPath } from 'node:url'
 import { chromium, firefox, webkit, type Page } from '@playwright/test'
 import { createServer } from 'vite'
@@ -29,13 +31,14 @@ async function offline(page: Page): Promise<void> {
   const results: VoiceResult[] = []
   for (let i = 0; i < cases.length; i++) {
     if (only.length && !only.some(p => cases[i].id.startsWith(p))) continue
-    results.push((await page.evaluate(k => (window as unknown as { __lab: Lab }).__lab.run(k, false), i)).result)
+    results.push((await page.evaluate(([k, q]) => (window as unknown as { __lab: Lab }).__lab.run(k as number, false, q as boolean), [i, quick])).result)
+    console.log(`${results.length} ${cases[i].id}`)
   }
   console.log(`\n${engine}\n\nThe instruments:\n${self.report.map(l => `  ${l}`).join('\n')}\n\nOffline renders, 48 kHz stereo, at the default volume:\n\n${text(results)}`)
   if (only.length) for (const r of results) console.log(`${r.name}: raw peak ${db(r.rawPeak)} dB, chain gain ${r.m.chain.gain.toFixed(1)} dB, peak ${r.m.chain.squash.toFixed(1)} dB against it, ${(r.cost * 100).toFixed(1)}% of real time to render`)
   if (showFeatures) for (const r of results) if (r.features.length) console.log(`\n${r.name}\n${r.features.map(l => `  ${l}`).join('\n')}`)
   for (const f of results.flatMap(judge)) fail(f)
-  if (!only.length) {
+  if (!only.length && !quick) {
     const compared = await page.evaluate(() => (window as unknown as { __lab: Lab }).__lab.compare())
     console.log(`\n${comparedText(compared, false)}`)
     for (const f of judgeCompared(compared)) fail(f)
@@ -106,8 +109,7 @@ async function liveSmoke(page: Page): Promise<void> {
   await run(`(() => {
     const { app } = window.__county
     app.setSetting('pauseOnAlerts', false)
-    const years = app.startYears()
-    app.newGame(years[Math.floor(years.length / 2)], 7)
+    app.newGame(undefined, 7)
     app.do({ t: 'begin' })
     for (let i = 0; i < 6; i++) app.do({ t: 'job', kind: 'plant', field: i })
     for (let i = 0; i < 6; i++) app.do({ t: 'job', kind: 'hill', field: i })
@@ -143,6 +145,26 @@ async function liveSmoke(page: Page): Promise<void> {
   l = await level(1000)
   expect('visible again resumes and fades in', s === 'running' && l.peak > SILENT_PEAK, `contexts [${s}], peak ${db(l.peak)} dB`)
 
+  // The farmstead: a person, a yard, a tract and a field picked in turn, then the woodlot felled with the feller
+  // picked, with reduced motion on throughout. It must stay audible, under the ceiling and free of errors.
+  await run(`window.__county.app.setSetting('reducedMotion', true)`)
+  for (const pick of ['selectUnit(0)', 'selectYard(-1)', 'select(14)', 'select(0)']) {
+    await run(`window.__county.app.${pick}`)
+    await page.waitForTimeout(250)
+  }
+  const fell = await run(`(() => {
+    const { app } = window.__county
+    const r = app.order('fell', { fields: [14], first: true, unit: 0 })
+    app.selectUnit(0)
+    app.setSpeed(1)
+    return r.map(x => x.ok + ' ' + x.err).join('; ')
+  })()`)
+  l = await level(4000)
+  const did = await run(`(() => { const { app } = window.__county; app.setSpeed(0); const s = app.campaign.season
+    return 'day ' + s.day + ', worked today: ' + (s.worked.map(w => w.kind).join(' ') || 'nothing') + ', woodlot felled ' + app.campaign.fields[14].felled.toFixed(2) + ' crew-days' })()`)
+  expect('reduced motion leaves the sound on; picks and felling with the feller picked play under the ceiling', l.peak > SILENT_PEAK && l.peak <= PEAK_LIMIT, `peak ${db(l.peak)} dB, rms ${db(l.rms)} dB; order: ${fell}; ${did}`)
+  await run(`window.__county.app.setSetting('reducedMotion', false)`)
+
   expect('no page errors', errors.length === 0, errors.length ? errors.join(' | ') : 'none')
 }
 
@@ -154,6 +176,7 @@ const args = process.argv.slice(2)
 const only = (args.find(a => a.startsWith('--only='))?.slice(7) ?? '').split(',').filter(Boolean)
 const offlineOnly = args.includes('--offline')
 const showFeatures = args.includes('--features')
+const quick = args.includes('--quick')
 const names = args.filter(a => !a.startsWith('--'))
 
 try {
@@ -173,6 +196,7 @@ try {
   await server.close()
 }
 
+if (quick) console.log('\nA quick run: peaks at the volume\'s top, raw levels and the comparisons were not measured.')
 if (failures.length) {
   console.log(`\nFAIL (${failures.length})`)
   for (const f of failures) console.log(`  ${f}`)

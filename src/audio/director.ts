@@ -129,7 +129,7 @@ export function cuesFor(events: GameEvent[]): Play[] {
     } else if (SAME[e.type]) {
       add(SAME[e.type])
     }
-    if (e.level === 'bad' && !OWN_BAD.has(e.type)) add('warnSeen')
+    if (e.level === 'bad' && !OWN_BAD.has(e.type) && !SAME[e.type]?.startsWith('warn')) add('warnSeen')
   }
   // A basket into the barrel covers a test dig on the same day.
   if (want.has('dug')) want.delete('sample')
@@ -143,8 +143,9 @@ export function cuesFor(events: GameEvent[]): Play[] {
   return [...quick, ...slow]
 }
 
-// How long a cue of each rank will wait its turn before it is dropped as stale.
-const PATIENCE = [0, 0, 2.5, 8]
+// How long a cue of each rank will wait its turn before it is dropped as stale. A winter month can bring a tract
+// felled, a building up and a level gained all at once, and each should still be heard.
+const PATIENCE = [0, 0, 7, 10]
 
 export class Director {
   rig: Rig
@@ -159,21 +160,23 @@ export class Director {
     this.rig = rig
   }
 
-  private ready(c: CueSpec, now: number): boolean {
+  // Sounds a cue if it has been quiet long enough: a short one at `at`, a longer one when the line is free.
+  // Returns when it will be done, or 0 if it was not sounded: too soon after the last, or the line so long that it
+  // would have come too late to mean anything. Only a cue that sounds uses up its gap.
+  private sound(c: CueSpec, arg: number, now: number, at: number): number {
     const key = c.share ?? c.id
-    if (now - (this.last[key] ?? -Infinity) < c.gap) return false
+    if (now - (this.last[key] ?? -Infinity) < c.gap) return 0
+    let end: number
+    if (c.rank <= 1) {
+      end = c.play(this.rig, at, arg)
+    } else {
+      const turn = Math.max(at, this.lineUntil)
+      if (turn - now > PATIENCE[c.rank]) return 0
+      end = c.play(this.rig, turn, arg)
+      // The next may begin over the tail of this one.
+      this.lineUntil = Math.max(turn + 0.3, end - 0.3)
+    }
     this.last[key] = now
-    return true
-  }
-
-  // Sounds a cue of rank 2 or 3 when the line is free, and returns when it will be done: 0 if it would have come
-  // too late to mean anything, and was dropped.
-  private queue(c: CueSpec, arg: number, now: number, earliest: number): number {
-    const at = Math.max(earliest, this.lineUntil)
-    if (at - now > PATIENCE[c.rank]) return 0
-    const end = c.play(this.rig, at, arg)
-    // The next may begin over the tail of this one.
-    this.lineUntil = Math.max(at + 0.3, end - 0.3)
     return end
   }
 
@@ -183,24 +186,17 @@ export class Director {
       const c = BY_ID.get(p.id)!
       // A tumble of tubers is never cut across by another.
       if (c.share === 'barrel' && now < this.barrelUntil) continue
-      if (!this.ready(c, now)) continue
+      const end = this.sound(c, p.arg, now, now + 0.03 + 0.11 * k)
+      if (!end) continue
+      if (c.rank <= 1) k++
+      if (c.share === 'barrel') this.barrelUntil = end
       if (c.id === 'kept' || c.id === 'lost') this.finalAt = now
-      const slot = now + 0.03 + 0.11 * k
-      if (c.rank <= 1) {
-        c.play(this.rig, slot, p.arg)
-        k++
-      } else {
-        const end = this.queue(c, p.arg, now, slot)
-        if (c.share === 'barrel') this.barrelUntil = end
-      }
     }
   }
 
   private one(id: string, now: number, arg = 0): void {
     const c = BY_ID.get(id)!
-    if (!this.ready(c, now)) return
-    if (c.rank <= 1) c.play(this.rig, now + 0.01, arg)
-    else this.queue(c, arg, now, now + 0.03)
+    this.sound(c, arg, now, now + (c.rank <= 1 ? 0.01 : 0.03))
   }
 
   // The player gave an order and it was taken.
@@ -219,9 +215,9 @@ export class Director {
   }
 
   // A goal on the ladder met. It waits for whatever is sounding, a close included, and then has the air to itself.
-  goal(now: number): void {
-    const c = BY_ID.get('goal')!
-    if (now - this.finalAt < 12 || !this.ready(c, now)) return
-    this.queue(c, 0, now, now + 0.35)
+  // False when it could not be sounded yet and should be asked for again.
+  goal(now: number): boolean {
+    if (now - this.finalAt < 12) return true
+    return this.sound(BY_ID.get('goal')!, 0, now, now + 0.35) > 0
   }
 }

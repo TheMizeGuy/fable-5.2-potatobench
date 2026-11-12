@@ -183,7 +183,8 @@ export function noiseBed(rig: Rig, t: number, width: number): AudioNode {
 
 // A gain envelope with no corners: a raised-cosine rise to `peak`, a hold, and a raised-cosine fall, over `dur`.
 export function swell(g: AudioParam, t: number, dur: number, peak: number, rise: number, fall: number): void {
-  g.value = 0
+  // Silent from the start of time: a value set "now" could land inside the curve if the clock has moved on.
+  g.setValueAtTime(0, 0)
   g.setValueCurveAtTime(curve(peak, true), t, rise)
   g.setValueCurveAtTime(curve(peak, false), t + dur - fall, fall)
 }

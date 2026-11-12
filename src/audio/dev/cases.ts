@@ -230,8 +230,10 @@ const FARMSTEAD: [string, number, string, Feature[], number][] = [
 
 const farmstead: Case[] = FARMSTEAD.map(([id, seconds, over, features, arg]) => {
   const spec = CUES.find(c => c.id === id)!
-  return oneShot(`cue-${id}`, `cue: ${id} (${spec.on})`, seconds, RANK_PLAN[spec.rank].momentary!, over, r => { spec.play(r, START, arg) }, {
-    features, plan: RANK_PLAN[spec.rank], family: spec.share, rank: spec.rank, win: seconds > 6 ? 4096 : 2048,
+  // The knock that answers every order is the one routine cue kept under the rest: it sounds more often than any.
+  const plan = id === 'heard' ? { momentary: [-38, -27] as [number, number] } : RANK_PLAN[spec.rank]
+  return oneShot(`cue-${id}`, `cue: ${id} (${spec.on})`, seconds, plan.momentary!, over, r => { spec.play(r, START, arg) }, {
+    features, plan, family: spec.share, rank: spec.rank, win: seconds > 6 ? 4096 : 2048,
   })
 })
 
@@ -274,10 +276,10 @@ export const CASES: Case[] = [
     play(rig, secs) { drive(rig, secs, [[0, { input: JUNE, work: ALL_FAR }]]) },
   },
 
-  bed('season-spring', 'season: spring, a fair morning in late May', 75, [-43, -33], SPRING, null, [0, 0], { season: 'spring' }),
-  bed('season-summer', 'season: high summer, a warm day in early August', 75, [-45, -35], HIGH_SUMMER, null, [0, 0], { season: 'high summer' }),
-  bed('season-harvest', 'season: harvest, a grey day in early October', 75, [-43, -33], HARVEST, null, [0, 0], { season: 'harvest', ticks: true }),
-  bed('season-winter', 'season: deep winter, January', 75, [-50, -40], DEEP_WINTER, null, [0, 0], { season: 'deep winter', ticks: true }),
+  bed('season-spring', 'season: spring, a fair morning in late May', 60, [-43, -33], SPRING, null, [0, 0], { season: 'spring' }),
+  bed('season-summer', 'season: high summer, a warm day in early August', 60, [-45, -35], HIGH_SUMMER, null, [0, 0], { season: 'high summer' }),
+  bed('season-harvest', 'season: harvest, a grey day in early October', 60, [-43, -33], HARVEST, null, [0, 0], { season: 'harvest', ticks: true }),
+  bed('season-winter', 'season: deep winter, January', 60, [-50, -40], DEEP_WINTER, null, [0, 0], { season: 'deep winter', ticks: true }),
 
   bed('wind-breeze', 'wind: breeze, 3.2 m/s, 90 s', 90, [-48, -38], season(5, 3.2, 0, 'overcast', 15), ['wind'], [0, 0], { features: ['gusts'] }),
   bed('wind-gale', 'wind: gale, 11 m/s, October', 48, [-32, -26], season(9, 11, 0, 'overcast', 6), ['wind'], [0, 0], { features: ['gusts'] }),
@@ -328,13 +330,13 @@ export const CASES: Case[] = [
   voice('geese', 'harvest: a skein of geese going over', 22, { momentary: [-40, -28] }, (rig, secs) => {
     const g = new Geese(rig)
     g.set(1)
-    g.next = 0.5
+    g.pace.first = [0.5, 0]
     steps(secs, (from, to) => g.schedule(from, to))
   }, { band: [300, 3200], features: ['lines'] }),
   voice('crow', 'harvest: a crow, one series of caws', 5, { momentary: [-42, -29] }, (rig, secs) => {
     const c = new Crows(rig)
     c.set(1)
-    c.next = 0.5
+    c.pace.first = [0.5, 0]
     c.schedule(0, 1)
     void secs
   }, { band: [300, 4000], features: ['blows'] }),
@@ -346,7 +348,7 @@ export const CASES: Case[] = [
   voice('frost', 'winter: a tree cracking in the frost', 6, { momentary: [-40, -27] }, (rig, secs) => {
     const f = new Frost(rig)
     f.set(1)
-    f.next = 0.5
+    f.pace.first = [0.5, 0]
     f.schedule(0, 1)
     void secs
   }, { ticks: true, features: ['blows'] }),

@@ -69,7 +69,7 @@ export interface CaseInfo { id: string; name: string; kind: Kind; seconds: numbe
 export interface Lab {
   cases: CaseInfo[]
   defaultVolume: number
-  run(i: number, files: boolean): Promise<Rendered>
+  run(i: number, files: boolean, quick?: boolean): Promise<Rendered>
   compare(): Promise<Compared>
   selfTest(): Promise<{ fails: string[]; report: string[] }>
 }

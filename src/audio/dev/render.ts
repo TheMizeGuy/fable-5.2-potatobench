@@ -104,7 +104,9 @@ function features(c: Case, chans: Float32Array[]): string[] {
   return out
 }
 
-async function run(i: number, files: boolean): Promise<Rendered> {
+// `quick` leaves out the two extra renders (the volume at its top, and the raw bus): for rounds of level-setting,
+// where only loudness and masking are wanted. The peaks it reports are then those at the default volume.
+async function run(i: number, files: boolean, quick = false): Promise<Rendered> {
   const c = CASES[i]
   const began = performance.now()
   const chans = await render(c, true, DEFAULT_VOLUME)
@@ -129,8 +131,8 @@ async function run(i: number, files: boolean): Promise<Rendered> {
     if (c.over) m.mask = { ...A.masking(cp, await profileOf(c.over)), bed: c.over }
     m.worst = A.masking(cp, await profileOf(WORST_BED))
   }
-  const peakMax = samplePeak(await render(c, true, 1))
-  const raw = await render(c, false, 1)
+  const peakMax = quick ? samplePeak(chans) : samplePeak(await render(c, true, 1))
+  const raw = quick ? [] : await render(c, false, 1)
   const rawPeak = samplePeak(raw)
   const rms = (ch: Float32Array[]) => Math.sqrt(ch.reduce((sum, d) => sum + d.reduce((q, v) => q + v * v, 0), 0))
   if (!c.fadeIn && rawPeak > 0) {

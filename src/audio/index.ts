@@ -38,7 +38,7 @@ export function workFor(app: App): { work: WorkScene; truck: number; tractor: [n
   const felling = (field: number): WorkKind => (c.fields[field]?.cover === 'brush' ? 'brush' : 'fell')
   const s = c.season
   if (app.screen === 'season' && s && !s.frozen && app.speed > 0) {
-    let seat = false, foot = false
+    let seat = false, foot = false, truckOut = false
     for (const w of s.worked) {
       const near = w.unit === app.unit || (w.field >= 0 ? app.selection.includes(w.field) : w.field === app.yard)
       if (w.kind === 'fell') hear(felling(w.field), near)
@@ -50,9 +50,14 @@ export function workFor(app: App): { work: WorkScene; truck: number; tractor: [n
         // The barrels come down the ramp at the potato house: picking a yard brings them close too.
         const close = near || app.yard !== 0
         hear('barrels', close)
+        // The day's work does not say what was driven. The farm's one truck goes to the first to haul; anyone
+        // still holding a tractor for the haul is on a tractor.
         const u = c.crew.find(x => x.id === w.unit)
-        byTruck = c.upgrades.truck && (!u || u.rig !== 'tractor')
-        if (byTruck) truck = Math.max(truck, close ? 1 : TRUCK_FAR)
+        byTruck = c.upgrades.truck && !truckOut && u?.rig !== 'tractor'
+        if (byTruck) {
+          truckOut = true
+          truck = Math.max(truck, close ? 1 : TRUCK_FAR)
+        }
       }
       if (MACHINE_JOBS.has(w.kind) && !byTruck) seat = true
       if (HAND_JOBS.has(w.kind)) foot = true
@@ -85,6 +90,8 @@ export const createSound: CreateSound = (app: App) => {
   // The goals already met on the farm being played, so that only one newly met is rewarded.
   let goalsOf: Campaign | null = null
   let met = new Set<string>()
+  let rewardDue = false
+  let picked: number[] = []
 
   const wanted = () => gestured && app.settings.sound && !document.hidden
   const live = () => ctx !== null && ctx.state === 'running' && wanted()
@@ -154,19 +161,34 @@ export const createSound: CreateSound = (app: App) => {
     if (goalsOf !== c) {
       goalsOf = c
       met = new Set(done)
+      rewardDue = false
       return
     }
-    const fresh = done.some(id => !met.has(id))
+    if (done.some(id => !met.has(id))) rewardDue = true
     for (const id of done) met.add(id)
-    if (fresh && live() && director && ctx) director.goal(ctx.currentTime)
+    reward()
+  }
+
+  // Sounds a reward that is owed. With the sound off it is let go; with the line full it is tried again.
+  function reward(): void {
+    if (!rewardDue) return
+    if (!live() || !director || !ctx) rewardDue = false
+    else if (director.goal(ctx.currentTime)) rewardDue = false
   }
 
   function onPick(e: AppEvent): void {
+    // Only what was added to the selection answers: taking a field out of it is not a pick.
+    let added = -1
+    if (e.type === 'select') {
+      for (const f of e.fields) if (!picked.includes(f)) added = f
+      picked = e.fields
+    }
     if (!live() || !director || !ctx) return
     const now = ctx.currentTime
-    if (e.type === 'select' && e.field >= 0) {
-      const cover = app.campaign?.fields[e.field]?.cover ?? 'open'
-      director.pick(cover === 'open' ? 'field' : 'tract', e.field, now)
+    if (e.type === 'select') {
+      if (added < 0) return
+      const cover = app.campaign?.fields[added]?.cover ?? 'open'
+      director.pick(cover === 'open' ? 'field' : 'tract', added, now)
     } else if (e.type === 'unit' && e.unit >= 0) {
       director.pick('person', e.unit, now)
     } else if (e.type === 'yard' && e.yard !== 0) {
@@ -196,6 +218,7 @@ export const createSound: CreateSound = (app: App) => {
         const w = workFor(app)
         amb.setEngine(w.tractor[0], w.tractor[1], now)
         amb.setWork(w.work, w.truck, now)
+        reward()
       }
       amb.schedule(now, now + 0.4)
     },

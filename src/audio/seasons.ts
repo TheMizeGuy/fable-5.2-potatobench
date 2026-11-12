@@ -3,7 +3,36 @@
 // and trees cracking in the frost in deep winter. Each is built the first time it is wanted, so a year that never
 // reaches it never pays for it.
 import type { Scene } from './scene.ts'
-import { Fader, Glide, filter, gain, noiseSource, panner, strike, swell, wanderingLoop, type Rig } from './synth.ts'
+import { Fader, Glide, filter, gain, noiseSource, panner, strike, swell, wanderingLoop, type Rand, type Rig } from './synth.ts'
+
+// When the next of a sound that comes now and then is due. The wait is drawn for the sound at its fullest and
+// stretched by how much of it there is at the moment, so a season coming in thins it out without fixing a wait
+// drawn while it was faint; while there is none of it the wait stands still.
+export class Sparse {
+  first: [number, number]    // seconds before the first, and between later ones: least, and how much more by chance
+  later: [number, number]
+  since = -1
+  wait = 0
+
+  constructor(first: [number, number], later: [number, number]) {
+    this.first = first
+    this.later = later
+  }
+
+  // The time of the next one if it falls before `to`, else -1.
+  due(amount: number, from: number, to: number, r: Rand): number {
+    if (amount <= 0.02) return -1
+    if (this.since < 0) { this.since = from; this.wait = this.first[0] + this.first[1] * r() }
+    const at = this.since + this.wait / amount
+    return at < to ? Math.max(at, from) : -1
+  }
+
+  // Begins the wait for the one after, counted from `t`.
+  after(t: number, r: Rand): void {
+    this.since = t
+    this.wait = this.later[0] + this.later[1] * r()
+  }
+}
 
 // Water over stones: a steady wash, a narrower band above it that moves about, and bubbles.
 export class Brook {
@@ -34,7 +63,7 @@ export class Brook {
   set(amount: number, t: number): void {
     if (amount > 0.01 && !this.level) this.build(t)
     if (!this.level) return
-    this.level.to(0.026 * amount, t, 3)
+    this.level.to(0.05 * amount, t, 3)
     this.amount = amount
   }
 
@@ -54,11 +83,12 @@ export class Brook {
     }
   }
 
-  // Air caught under the water rings as it rises: a short note sliding up.
+  // Air caught under the water rings as it rises: a short note sliding up. A bubble a millimetre across rings
+  // near 3 kHz and one of five near 650 Hz.
   private bubble(t: number): void {
     const ctx = this.rig.ctx
     const r = this.rig.rand
-    const f = 480 * Math.pow(2, 1.6 * r())
+    const f = 600 * Math.pow(2, 2.2 * r())
     const o = ctx.createOscillator()
     o.frequency.setValueAtTime(f, t)
     o.frequency.exponentialRampToValueAtTime(f * (1.2 + 0.3 * r()), t + 0.03)
@@ -106,7 +136,7 @@ export class Peepers {
       this.gates.push(g)
       this.hz.push(hz)
       this.pace.push(0.75 + 0.6 * r())
-      this.next.push(0)
+      this.next.push(-1)
     }
   }
 
@@ -153,12 +183,12 @@ export class Peepers {
   }
 }
 
-// A bumblebee going by: a buzz at its wingbeat that swells, slides down in pitch as it passes, and is gone.
+// A bumblebee going by: a buzz at its wingbeat that swells, sags a little in pitch as it passes, and is gone.
 export class Bees {
   rig: Rig
   out: GainNode | null = null
   amount = 0
-  next = 0
+  pace = new Sparse([2, 8], [10, 22])
 
   constructor(rig: Rig) {
     this.rig = rig
@@ -169,13 +199,10 @@ export class Bees {
   }
 
   schedule(from: number, to: number): void {
-    const r = this.rig.rand
-    if (this.amount <= 0.02) { this.next = from + 2 + 6 * r(); return }
-    if (this.next < from) this.next = from + 2 + 8 * r()
-    while (this.next < to) {
-      this.pass(this.next)
-      this.next += (10 + 22 * r()) / this.amount
-    }
+    const at = this.pace.due(this.amount, from, to, this.rig.rand)
+    if (at < 0) return
+    this.pass(at)
+    this.pace.after(at, this.rig.rand)
   }
 
   private pass(t: number): void {
@@ -189,8 +216,8 @@ export class Bees {
     const hz = 155 + 75 * r()
     const o = ctx.createOscillator()
     o.type = 'sawtooth'
-    o.frequency.setValueAtTime(hz * 1.035, t)
-    o.frequency.exponentialRampToValueAtTime(hz * 0.965, t + dur)
+    o.frequency.setValueAtTime(hz * 1.015, t)
+    o.frequency.exponentialRampToValueAtTime(hz * 0.985, t + dur)
     // The wings never beat quite evenly.
     const waver = ctx.createOscillator()
     waver.frequency.value = 9 + 5 * r()
@@ -218,7 +245,7 @@ export class Geese {
   rig: Rig
   reed: PeriodicWave | null = null
   amount = 0
-  next = 0
+  pace = new Sparse([6, 14], [40, 70])
   skein: { out: GainNode; until: number; birds: Goose[] } | null = null
 
   constructor(rig: Rig) {
@@ -234,6 +261,7 @@ export class Geese {
     if (this.skein) {
       const s = this.skein
       for (const b of s.birds) {
+        if (b.next < from) b.next = from + 0.1 * r()
         while (b.next < to && b.next < s.until) {
           this.honk(s.out, b.next, b.hz * (1 + 0.02 * (2 * r() - 1)), b.lead ? 1 : 0.45 + 0.4 * r(), b.goose)
           b.next += b.lead ? 0.5 + 0.5 * r() : 0.9 + 2.2 * r()
@@ -242,12 +270,10 @@ export class Geese {
       if (from > s.until) this.skein = null
       return
     }
-    if (this.amount <= 0.02) { this.next = from + 4 + 10 * r(); return }
-    if (this.next < from) this.next = from + 6 + 14 * r()
-    if (this.next < to) {
-      this.skein = this.start(this.next)
-      this.next = this.skein.until + (40 + 70 * r()) / this.amount
-    }
+    const at = this.pace.due(this.amount, from, to, r)
+    if (at < 0) return
+    this.skein = this.start(at)
+    this.pace.after(this.skein.until, r)
   }
 
   private start(t: number): { out: GainNode; until: number; birds: Goose[] } {
@@ -316,7 +342,7 @@ export class Geese {
 export class Crows {
   rig: Rig
   amount = 0
-  next = 0
+  pace = new Sparse([4, 12], [22, 40])
 
   constructor(rig: Rig) {
     this.rig = rig
@@ -327,13 +353,10 @@ export class Crows {
   }
 
   schedule(from: number, to: number): void {
-    const r = this.rig.rand
-    if (this.amount <= 0.02) { this.next = from + 3 + 8 * r(); return }
-    if (this.next < from) this.next = from + 4 + 12 * r()
-    while (this.next < to) {
-      this.call(this.next)
-      this.next += (22 + 40 * r()) / this.amount
-    }
+    const at = this.pace.due(this.amount, from, to, this.rig.rand)
+    if (at < 0) return
+    this.call(at)
+    this.pace.after(at, this.rig.rand)
   }
 
   private call(t: number): void {
@@ -365,7 +388,7 @@ export class Crows {
     rasp.frequency.value = hz / 2.03
     rasp.connect(gain(ctx, 0.45)).connect(rough.gain)
     const env = ctx.createGain()
-    swell(env.gain, t, dur, 0.05, 0.03, dur * 0.4)
+    swell(env.gain, t, dur, 0.08, 0.03, dur * 0.4)
     const breath = noiseSource(rig, t)
     o.connect(rough)
     breath.connect(gain(ctx, 0.7)).connect(rough)
@@ -385,7 +408,7 @@ export class Crows {
 export class Frost {
   rig: Rig
   amount = 0
-  next = 0
+  pace = new Sparse([5, 14], [18, 34])
 
   constructor(rig: Rig) {
     this.rig = rig
@@ -396,13 +419,10 @@ export class Frost {
   }
 
   schedule(from: number, to: number): void {
-    const r = this.rig.rand
-    if (this.amount <= 0.02) { this.next = from + 3 + 8 * r(); return }
-    if (this.next < from) this.next = from + 5 + 14 * r()
-    while (this.next < to) {
-      this.report(this.next)
-      this.next += (18 + 34 * r()) / this.amount
-    }
+    const at = this.pace.due(this.amount, from, to, this.rig.rand)
+    if (at < 0) return
+    this.report(at)
+    this.pace.after(at, this.rig.rand)
   }
 
   private report(t: number): void {
@@ -432,7 +452,7 @@ export class Leaves {
   rig: Rig
   out: GainNode | null = null
   amount = 0
-  next = 0
+  next = -1
 
   constructor(rig: Rig) {
     this.rig = rig
@@ -462,7 +482,7 @@ export class Leaves {
     }
     const pan = panner(ctx, 1.8 * r() - 0.9)
     pan.connect(this.out)
-    const level = 0.012 + 0.03 * r() * r()
+    const level = 0.025 + 0.06 * r() * r()
     const n = 3 + Math.floor(6 * r())
     let at = t
     for (let k = 0; k < n; k++) {

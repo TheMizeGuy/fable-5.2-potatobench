@@ -4,7 +4,7 @@
 import type { Scene } from './scene.ts'
 import { Seasons } from './seasons.ts'
 import { Fader, Glide, Smooth, filter, gain, noiseBed, panner, swell, wanderingLoop, type Rig } from './synth.ts'
-import { NO_WORK, Work, type WorkScene } from './work.ts'
+import { Work, type WorkScene } from './work.ts'
 
 // How strong the wind sounds for a wind setting of 0..1 (1 m/s to 7.5 m/s and over). With the ridge's note
 // climbing as it blows harder, a gale comes out some 12 dB over a breeze.
@@ -615,7 +615,7 @@ export function song(rig: Rig, out: AudioNode, t: number, s: Singer): number {
   switch (s.species) {
     case 'sparrow': {
       // White-throated sparrow: two or three long, steady whistles with one step in pitch between them, then
-      // triplets ("Old Sam Peabody, Peabody"). Rising in most Maine birds; falling in a few.
+      // triplets ("Old Sam Peabody, Peabody"). Rising in most birds of the north-east; falling in a few.
       const high = p * s.step
       const leads = s.rising ? [p, high] : [high * 1.06, high]
       if (s.third) leads.push(s.rising ? high : p)
@@ -686,7 +686,7 @@ export function song(rig: Rig, out: AudioNode, t: number, s: Singer): number {
       for (let k = 0; k < n; k++) {
         const d = about(0.17, 0.08)
         const g = ctx.createGain()
-        swell(g.gain, at, d, 0.2, 0.018, 0.03)
+        swell(g.gain, at, d, 0.3, 0.018, 0.03)
         const stack = ctx.createOscillator()
         stack.type = 'sawtooth'
         stack.frequency.value = p / 8.5
@@ -749,7 +749,7 @@ export class Ambience {
   }
 
   // People at work, and the truck: 0 when it is not hauling, else how near it sounds.
-  setWork(w: WorkScene = NO_WORK, truck: number, t: number): void {
+  setWork(w: WorkScene, truck: number, t: number): void {
     this.work.set(w, t)
     if (truck > 0 && !this.truck) this.truck = new Engine(this.rig, t, TRUCK)
     this.truck?.set(truck, truck > 0 ? 1 : 0, t)
