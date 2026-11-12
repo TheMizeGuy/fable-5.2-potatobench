@@ -51,7 +51,29 @@ const farmPeople: Step = async page => {
   await closeAll(page)
 }
 
+// The season frames' day (design/season.html and its sisters), a working day: July 13 of a first year on the farm, the packer's
+// Kennebec contract signed, the three who asked for work taken on and a hand from the hall, the clock running at 1x.
+const frameJuly: Step = async page => {
+  await q(page, `const { app } = q.g(); app.newGame(1987, 3); const c = app.campaign; c.cash += 20000
+    c.buildings.push({ id: c.nextBuilding++, kind: 'bunk', yard: -1, done: 12, need: 12, built: true })
+    for (const a of [...c.applicants]) app.do({ t: 'hire', applicant: a.id })
+    app.do({ t: 'hire', kind: 'hand' }); app.do({ t: 'accept', offer: 19873 })
+    app.do({ t: 'begin' }); q.run(q.day(6, 13)); c.incidents = []`)
+  await closeAll(page)
+  await q(page, `q.g().app.setSpeed(1)`)
+}
+
 const STATES: State[] = [
+  // Each season frame in design/, in the game, to set beside the frame's picture.
+  { name: 'frame-season', what: 'design/season.html: July, five people, nothing selected', sizes: [...MAIN, 'land'], run: frameJuly },
+  { name: 'frame-card', what: 'design/season-card.html: a field selected, its command bar', sizes: [...MAIN, 'land'], run: async (page, size) => { await frameJuly(page, size); await q(page, `q.g().app.select(2); q.g().app.focus(2)`); await page.waitForTimeout(800) } },
+  { name: 'frame-people', what: 'design/people.html: a person picked and the work grid open', sizes: MAIN, run: async (page, size) => { await frameJuly(page, size); await page.getByTestId('unit-1').click(); await page.getByTestId('grid-open').click() } },
+  { name: 'frame-incident', what: 'design/incident.html: a tractor broken down, the telegram', sizes: [...MAIN, 'land'], run: async (page, size) => {
+    await frameJuly(page, size)
+    await q(page, `const { app } = q.g(); const c = app.campaign; c.incidents.push({ id: c.nextIncident++, kind: 'breakdown', day: c.season.day, until: c.season.day + 2, choices: ['rush', 'wait'], unit: 0, back: c.season.day + 3 }); app.setSpeed(1); app.setSpeed(0)`)
+  } },
+  { name: 'frame-yard', what: 'design/yard.html: the home yard selected, its buildings as orders', sizes: MAIN, run: async (page, size) => { await frameJuly(page, size); await q(page, `const { app } = q.g(); const c = app.campaign; c.cash += 40000; c.logs = 18; c.stone = 25; app.do({ t: 'build', kind: 'shed', yard: -1 }); app.selectYard(-1)`) } },
+  { name: 'frame-tract', what: 'design/tract.html: the Home Woodlot selected while it is felled', sizes: MAIN, run: async (page, size) => { await frameJuly(page, size); await q(page, `const { app } = q.g(); app.campaign.fields[14].felled = 12; app.select(14); app.focus(14)`); await page.waitForTimeout(800) } },
   { name: 'title', what: 'Title screen, first visit', sizes: ALL, run: async () => {} },
   // The living kit of the interface (src/ui/system/kit.ts), the whole page, to set beside design/kit.sheet.html.
   { name: 'kit', what: 'The interface system: every component in every state', sizes: ['desk', 'phone'], full: true, run: async page => { await page.goto(`${base}${base.includes('?') ? '&' : '?'}kit`); await page.waitForSelector('.kit .k-icons'); await page.evaluate(() => document.fonts.ready) } },

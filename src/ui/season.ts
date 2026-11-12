@@ -103,8 +103,8 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       if (!d) {
         const quad = s('svg', { class: 'select sel-quad sys', width: SQ, height: SQ, viewBox: `0 0 ${SQ} ${SQ}` },
           s('rect', { class: 'under', x: 0, y: 0, width: SQ, height: SQ }), s('rect', { class: 'line', x: 0, y: 0, width: SQ, height: SQ }))
-        const marks = [0, 1, 2, 3].map(() => h('span', { class: 'reg-at' }, s('svg', { class: 'select reg sys', width: 30, height: 30, viewBox: '-15 -15 30 30' },
-          s('path', { class: 'u', d: 'M-13 0h26M0 -13v26' }), s('circle', { class: 'u', r: 7 }), s('circle', { r: 7 }), s('path', { d: 'M-13 0h26M0 -13v26' }))))
+        const marks = [0, 1, 2, 3].map(() => h('span', { class: 'reg-at' }, s('svg', { class: 'select sel-mark sys', width: 30, height: 30, viewBox: '-15 -15 30 30' }, s('g', { class: 'reg' },
+          s('path', { class: 'u', d: 'M-13 0h26M0 -13v26' }), s('circle', { class: 'u', r: 7 }), s('circle', { r: 7 }), s('path', { d: 'M-13 0h26M0 -13v26' })))))
         selLayer.append(quad, ...marks)
         d = { quad, marks }
         selDrawn.set(i, d)
@@ -547,22 +547,28 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     },
     insets() {
       const layout = ctx.layout()
+      // Where things rest, not where a card being laid down happens to be this frame: offsets ignore transforms.
+      const box = (x: HTMLElement) => {
+        let l = 0, t0 = 0
+        for (let e: HTMLElement | null = x; e && e !== el; e = e.offsetParent as HTMLElement | null) { l += e.offsetLeft; t0 += e.offsetTop }
+        return { left: l, top: t0, right: l + x.offsetWidth, bottom: t0 + x.offsetHeight }
+      }
       const t = Math.max(top.el.getBoundingClientRect().bottom, ...[...top.el.querySelectorAll<HTMLElement>('.almanac > .mount, .bank > .mount')].map(x => x.getBoundingClientRect().bottom))
       const vis = (x: HTMLElement) => !x.hidden && x.offsetParent !== null && x.offsetHeight > 0
       // The time book, its list and the alerts at the foot; the clock with them on a phone.
-      const low = [crew, clockSlot, notesSlot, ...(layout === 'narrow' && tray ? [trayHost] : [])].filter(vis).filter(x => x.offsetHeight > 0).map(x => x.getBoundingClientRect().top)
+      const low = [crew, clockSlot, notesSlot, ...(layout === 'narrow' && tray ? [trayHost] : [])].filter(vis).map(x => box(x).top)
       const bottom = innerHeight - Math.min(...low, innerHeight) + 6
       // The bar docked at its edge; on a phone it is a sheet over the foot.
       const bar = [card.el, yard.el].find(vis)
       let right = 0, left = 0
       if (bar && layout !== 'narrow') {
-        const r = bar.getBoundingClientRect()
+        const r = box(bar)
         if (side === 'left') left = r.right + 8
         else right = innerWidth - r.left + 8
       }
-      if (bar && layout === 'narrow') return [t, 0, innerHeight - bar.getBoundingClientRect().top + 6, 0]
+      if (bar && layout === 'narrow') return [t, 0, innerHeight - box(bar).top + 6, 0]
       // A person's page and the work grid stand at the left on a desk: the land is framed beside them.
-      if (layout === 'wide' || layout === 'mid') for (const x of [person.el, grid.el]) if (vis(x)) left = Math.max(left, x.getBoundingClientRect().right + 8)
+      if (layout === 'wide' || layout === 'mid') for (const x of [person.el, grid.el]) if (vis(x)) left = Math.max(left, box(x).right + 8)
       return [t, right, bottom, left]
     },
     frame: () => { coverCache = null; coverCache = covers(); P.frame(); placeYards(); people.frame(); drawSelection(); placeBar(); coverCache = null },

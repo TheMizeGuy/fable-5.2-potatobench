@@ -7,7 +7,7 @@ import { h, type Child } from './dom.ts'
 import * as F from './fmt.ts'
 import { icon } from './icons.ts'
 import { ringFor } from './crew.ts'
-import { firstName, SKILL_NAME } from './rules.ts'
+import { firstName, jobText, SKILL_NAME } from './rules.ts'
 import { key, stamp } from './system/parts.ts'
 import { portrait, ringed } from './system/people.ts'
 
@@ -74,6 +74,13 @@ export function incidentCard(ctx: Ctx): IncidentCard {
       const a = inc.applicant
       const best = [...S.SKILLS].sort((x, y) => a.skills[y] - a.skills[x])[0]
       return [h('b', null, a.name), `, best at ${SKILL_NAME[best].toLowerCase()} (${a.skills[best]}), ${S.TRAITS[a.trait].name.toLowerCase()}.`]
+    }
+    // A breakdown says whose tractor and what it was at, as a telegram would.
+    if (inc?.kind === 'breakdown' && inc.back !== undefined) {
+      const u = c.crew.find(x => x.id === inc.unit)
+      const j = u && c.season ? c.season.jobs.find(x => x.id === u.job) : undefined
+      return [u ? ['Under ', h('b', null, u.kind === 'farmer' ? 'you' : firstName(u.name)), j ? `, ${jobText(j, c, j.building).replace(/^./, x => x.toLowerCase())}` : '', '. '] : '',
+        'Waiting for the part, it is back on ', h('b', null, F.date(c.year, inc.back, true)), '.']
     }
     return F.localize(info.text)
   }

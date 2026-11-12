@@ -214,7 +214,7 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
       const no = refused?.kind === kind
       return order({
         key: touch ? '' : JOB_KEY[kind], icon: kind, name: [JOB_VERB[kind], part ? h('span', { class: 'order-part num' }, part) : null],
-        cost: costText(x.days, x.cost), catch: no ? refused!.why : catchFor(c, kind, f, kind === suggestedKind ? why : ''), suggested: kind === suggestedKind, refused: no,
+        cost: kind === 'fell' || kind === 'rocks' || kind === 'brush' ? `${F.num(Math.ceil(x.days))} crew-days${x.cost ? ` · ${F.money(x.cost)}` : ''}` : costText(x.days, x.cost), catch: no ? refused!.why : catchFor(c, kind, f, kind === suggestedKind ? why : ''), suggested: kind === suggestedKind, refused: no,
         testid: `order-${kind}`, title: touch ? undefined : jobWhat(kind), said: jobWhat(kind),
         onclick: (e: Event) => give(kind, (e as MouseEvent).ctrlKey || (e as MouseEvent).metaKey),
         attrs: { 'data-k': `order-${kind}`, oncontextmenu: (e: Event) => { e.preventDefault(); give(kind, true) } },

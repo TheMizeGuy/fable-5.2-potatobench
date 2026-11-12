@@ -57,7 +57,8 @@ export function pin(who: { name: string } | string, state: PinState = 'rest', o:
   ]
   const cls = `pin sys${PIN_CLASS[state]}${o.count && o.count > 1 ? ' is-many' : ''}`
   const style = `--c:${o.ring ?? look.shirt}`
+  // A pin that is a button is named by what it shows, its words for a screen reader after them.
   return o.onclick
-    ? h('button', { class: cls, type: 'button', style, 'aria-label': o.label ?? name, 'aria-pressed': o.pressed === undefined ? null : String(o.pressed), testid: o.testid, onclick: o.onclick }, kids)
+    ? h('button', { class: cls, type: 'button', style, 'aria-pressed': o.pressed === undefined ? null : String(o.pressed), testid: o.testid, onclick: o.onclick }, kids, h('span', { class: 'sr' }, o.label ?? name))
     : h('span', { class: cls, style, role: 'img', 'aria-label': o.label ?? name, testid: o.testid }, kids)
 }

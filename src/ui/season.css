@@ -123,7 +123,7 @@
 .sel-layer .sel-quad .under { stroke-width: 14; }
 .sel-layer .sel-quad .line { stroke-width: 7; stroke-dasharray: 28 17; animation: draw-line 180ms var(--ease-out); }
 @keyframes draw-line { from { stroke-dashoffset: 90; } }
-.sel-layer .reg-at .reg { position: absolute; left: -15px; top: -15px; width: 30px; height: 30px; overflow: visible; }
+.sel-layer .reg-at .sel-mark { position: absolute; left: -15px; top: -15px; width: 30px; height: 30px; overflow: visible; }
 .plate-layer .tag-wrap { z-index: 2; }
 
 /* ---------------------------------------------------------------- the command bar, docked at the edge of the land */
@@ -132,7 +132,9 @@
 .season-screen.docked-left .command { right: auto; left: max(var(--gutter), env(safe-area-inset-left, 0px)); max-height: calc(100% - var(--top, 220px) - var(--bottom, 140px) - 24px); }
 .season-screen.docked-left.is-paused .command { max-height: calc(100% - var(--top, 220px) - var(--bottom, 140px) - 76px); }
 .season-screen .command.compact { overflow-y: auto; overscroll-behavior: contain; }
-.season-screen .command.compact .order.is-suggested .fist, .season-screen.docked-left .command .order.is-suggested .fist { display: none; }
+.season-screen .command.compact .order.is-suggested .fist { display: none; }
+/* Docked at the left, the fist points in from the land on its right. */
+.season-screen.docked-left .command .order.is-suggested .fist { left: auto; right: -46px; transform: translateY(-50%) scaleX(-1); }
 .season-screen .command.in { animation: lay-right var(--t-sheet) var(--ease-paper); }
 .season-screen.docked-left .command.in { animation-name: lay-left; }
 .season-screen .command.out { animation: leave-right var(--t-leave) var(--ease-in) forwards; }
@@ -281,7 +283,10 @@
 .season-screen[data-layout='narrow'].person-up .queue, .season-screen[data-layout='narrow'].person-up .notes-slot { display: none; }
 .season-screen[data-layout='narrow'] .person-card .pc-actions { grid-template-columns: 1fr 1fr; }
 .season-screen[data-layout='narrow'] .person-card .pc-actions .hazard { grid-column: 1 / -1; }
-.season-screen[data-layout='narrow'] .telegram { left: var(--gutter); right: var(--gutter); width: auto; transform: none; top: calc(var(--top, 180px) + 8px); padding: 12px 14px; }
+.season-screen[data-layout='narrow'] .telegram { left: var(--gutter); right: var(--gutter); width: auto; max-width: none; transform: none; top: calc(var(--top, 180px) + 8px); max-height: calc(100% - var(--top, 180px) - 82px); padding: 12px 14px; }
+.season-screen[data-layout='narrow'] .telegram .tg-head { grid-template-columns: 1fr auto auto; gap: 4px 12px; }
+.season-screen[data-layout='narrow'] .telegram .tg-from { grid-column: 1 / -1; grid-row: 2; }
+.season-screen[data-layout='narrow'].incident-up .paused { display: none; }
 .season-screen[data-layout='narrow'] .telegram.in { animation-name: lay-up; }
 .season-screen[data-layout='narrow'] .telegram.out { animation-name: leave-down; }
 .season-screen[data-layout='narrow'] .telegram .tg-name { font-size: 34px; }
@@ -306,13 +311,20 @@
 .touch .command .order.no-icon { grid-template-columns: 1fr auto; }
 .touch .command .order .key.blank { display: none; }
 .touch .command .order.no-icon .catch { grid-column: 1 / -1; }
+.touch .command .order:not(.no-icon) .catch { grid-column: 2 / -1; }
+.touch .tag-wrap .tag-at .tag, .touch .tag-wrap .tag-at:not(.has-need):not(.is-sel) .tag { height: 44px; }
+.touch .tag-wrap .tag-at .tag::after, .touch .tag-wrap .tag-at:not(.has-need):not(.is-sel) .tag::after { height: 44px; }
+.touch .yard-at .yard-tag { height: 44px; }
+.touch .work .cell { min-width: 44px; }
+.pin.is-many.needs .badge.count { background: var(--st-red); }
 
 /* ---------------------------------------------------------------- a phone on its side */
 .season-screen[data-layout='short'] { --gutter: 8px; }
 .season-screen[data-layout='short'] .foot { gap: var(--s2); }
 .season-screen[data-layout='short'] .foot-book { display: flex; align-items: flex-end; gap: var(--s2); }
 .season-screen[data-layout='short'] .crew { display: flex; flex-direction: column; align-items: flex-start; }
-.season-screen[data-layout='short'] .person { width: 66px; padding: 4px 2px; gap: 2px; }
+.season-screen[data-layout='short'] .person { width: 74px; padding: 4px 2px; gap: 2px; }
+.season-screen[data-layout='short'] .person .nm { font-size: 13px; }
 .season-screen[data-layout='short'] .person .bust { width: 32px; height: 32px; }
 .season-screen[data-layout='short'] .person .doing { display: none; }
 .season-screen[data-layout='short'] .timebook { padding: 4px; }
