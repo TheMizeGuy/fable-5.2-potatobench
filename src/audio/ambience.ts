@@ -1,7 +1,10 @@
-// The continuous voices: wind, rain, the tractor, crickets and birds. Each runs for the life of the context;
-// levels move only by smoothed targets, and timed sounds are scheduled a little ahead by schedule(from, to).
+// The continuous voices: wind, rain, the tractor and the truck, crickets and birds, with the voices of the seasons
+// (seasons.ts) and of people at work (work.ts) beside them. Each runs for the life of the context; levels move
+// only by smoothed targets, and timed sounds are scheduled a little ahead by schedule(from, to).
 import type { Scene } from './scene.ts'
+import { Seasons } from './seasons.ts'
 import { Fader, Glide, Smooth, filter, gain, noiseBed, panner, swell, wanderingLoop, type Rig } from './synth.ts'
+import { NO_WORK, Work, type WorkScene } from './work.ts'
 
 // How strong the wind sounds for a wind setting of 0..1 (1 m/s to 7.5 m/s and over). With the ridge's note
 // climbing as it blows harder, a gale comes out some 12 dB over a breeze.
@@ -65,12 +68,14 @@ export class Wind {
     this.whistlePitch = new Glide(bp.frequency, 900)
   }
 
-  set(wind: number, cold: number, t: number): void {
+  // `leaf` is how much leaf the hardwoods carry and `dry` how much of it has turned: bare woods hardly rustle,
+  // June's hush, and October's rattle most of all.
+  set(wind: number, cold: number, leaf: number, dry: number, t: number): void {
     this.amount = wind
     const v = windLevel(wind)
     this.level.to(0.7 * v, t, 2)
     this.sighLevel.to(v, t, 2)
-    this.leafLevel.to(0.12 * v * wind, t, 2)
+    this.leafLevel.to(0.12 * v * wind * (0.35 + 0.75 * leaf + 2 * dry), t, 2)
     this.cold.to(0.04 * cold, t, 2.5)
   }
 
@@ -223,16 +228,31 @@ export class Rain {
   }
 }
 
-// Low idle and governed working speed of a Farmall H, in turns a minute.
-const IDLE_RPM = 450
-const WORK_RPM = 1650
+export interface EngineSpec {
+  idle: number       // turns a minute at low idle, and at working speed
+  work: number
+  cylinders: number
+  odd: number        // how strong the harmonics between the firings are: what gives an engine its lope
+  half: number
+  pipe: number       // Hz above which the exhaust note falls away
+  clatter: number    // the casing's flatter noise up to 1.5 kHz
+  level: number
+  pan: number
+}
 
-// A four-cylinder, four-stroke row-crop tractor heard across the field. One cycle of the engine is two turns of
-// the crank and four firings, so the exhaust note is the fourth harmonic of the cycle and its multiples (55 Hz and
-// up at work, a 15-a-second putter at idle); the harmonics between them, from cylinders that never fire quite
-// alike, give the lope.
+// Low idle and governed working speed of a Farmall H.
+export const TRACTOR: EngineSpec = { idle: 450, work: 1650, cylinders: 4, odd: 0.3, half: 0.2, pipe: 210, clatter: 0.1, level: 0.2, pan: 0.2 }
+// A farm truck of the same years: a straight six behind a muffler, smoother and higher than the tractor, hauling
+// in a low gear.
+export const TRUCK: EngineSpec = { idle: 500, work: 1700, cylinders: 6, odd: 0.1, half: 0.12, pipe: 170, clatter: 0.2, level: 0.14, pan: -0.3 }
+
+// A four-stroke engine heard across the field. One cycle of the engine is two turns of the crank and one firing
+// for each cylinder, so the exhaust note of the tractor's four is the fourth harmonic of the cycle and its
+// multiples (55 Hz and up at work, a 15-a-second putter at idle); the harmonics between them, from cylinders that
+// never fire quite alike, give the lope.
 export class Engine {
   rig: Rig
+  spec: EngineSpec
   level: Fader
   cycle: Smooth
   firing: Smooth
@@ -242,24 +262,26 @@ export class Engine {
   next = 0
   nextPan = 0
 
-  constructor(rig: Rig, t: number) {
+  constructor(rig: Rig, t: number, spec: EngineSpec = TRACTOR) {
     const ctx = rig.ctx
     const r = rig.rand
     this.rig = rig
+    this.spec = spec
+    const n = spec.cylinders
     const K = 160
     const re = new Float32Array(K + 1), im = new Float32Array(K + 1)
     for (let k = 1; k <= K; k++) {
-      const share = k % 4 === 0 ? 1 : k % 2 === 0 ? 0.2 : 0.3
+      const share = k % n === 0 ? 1 : k % 2 === 0 ? spec.half : spec.odd
       const a = share * (1 - (k / (K + 1)) ** 2)
-      const ph = (k % 4 === 0 ? 0.8 : 2 * Math.PI) * r()
+      const ph = (k % n === 0 ? 0.8 : 2 * Math.PI) * r()
       re[k] = a * Math.cos(ph)
       im[k] = a * Math.sin(ph)
     }
     const o = ctx.createOscillator()
     o.setPeriodicWave(ctx.createPeriodicWave(re, im))
     const fire = ctx.createOscillator()
-    this.cycle = new Smooth(o.frequency, IDLE_RPM / 120)
-    this.firing = new Smooth(fire.frequency, IDLE_RPM / 30)
+    this.cycle = new Smooth(o.frequency, spec.idle / 120)
+    this.firing = new Smooth(fire.frequency, (spec.idle / 120) * n)
     // The governor holds the revs within a few percent; they hunt, in cents, on both oscillators together.
     this.drift = ctx.createConstantSource()
     this.drift.offset.value = 0
@@ -272,15 +294,15 @@ export class Engine {
     o.connect(pipe)
     // An open exhaust is strongest around 125 Hz and falls away above; the engine's casing adds a flatter clatter
     // up to 2 kHz, some 16 dB under it.
-    pipe.connect(filter(ctx, 'lowpass', 210, 0.6)).connect(far)
-    pipe.connect(filter(ctx, 'lowpass', 1500, 0.5)).connect(gain(ctx, 0.1)).connect(far)
+    pipe.connect(filter(ctx, 'lowpass', spec.pipe, 0.6)).connect(far)
+    pipe.connect(filter(ctx, 'lowpass', 1500, 0.5)).connect(gain(ctx, spec.clatter)).connect(far)
 
     // A breath of noise at each firing.
     const chuff = gain(ctx, 0.5)
     fire.connect(gain(ctx, 0.5)).connect(chuff.gain)
     wanderingLoop(rig, rig.noise, t, 1).connect(filter(ctx, 'bandpass', 420, 0.7)).connect(chuff).connect(gain(ctx, 0.08)).connect(far)
 
-    this.pan = panner(ctx, 0.2)
+    this.pan = panner(ctx, spec.pan)
     far.connect(this.level.input)
     this.level.output.connect(this.pan).connect(rig.bus)
     o.start(t)
@@ -290,11 +312,11 @@ export class Engine {
 
   // level 0..1; load 0 is idling, 1 is pulling an implement.
   set(level: number, load: number, t: number): void {
-    const v = 0.2 * level
+    const v = this.spec.level * level
     this.level.to(v, t, v > this.level.value ? 1.2 : 0.9)
-    const rpm = IDLE_RPM + (WORK_RPM - IDLE_RPM) * load
+    const rpm = this.spec.idle + (this.spec.work - this.spec.idle) * load
     this.cycle.to(rpm / 120, t, 1.2, 0.01)
-    this.firing.to(rpm / 30, t, 1.2, 0.01)
+    this.firing.to((rpm / 120) * this.spec.cylinders, t, 1.2, 0.01)
     this.load = load
   }
 
@@ -307,7 +329,7 @@ export class Engine {
     }
     if (this.nextPan < from) this.nextPan = from
     while (this.nextPan < to) {
-      this.pan.pan.setTargetAtTime(0.9 * r() - 0.4, this.nextPan, 5)
+      this.pan.pan.setTargetAtTime(0.9 * r() - 0.6 + this.spec.pan, this.nextPan, 5)
       this.nextPan += 7 + 9 * r()
     }
   }
@@ -413,18 +435,24 @@ export class Crickets {
   }
 }
 
-export type Species = 'sparrow' | 'chickadee' | 'robin' | 'junco'
+// 'dee' is the chickadee's call, chick-a-dee-dee-dee, which it keeps up all year; 'chickadee' is its spring whistle.
+export type Species = 'sparrow' | 'chickadee' | 'robin' | 'junco' | 'dee'
 
-// Who sings, by month, as weights. The white-throated sparrow is back by May; the chickadee whistles most in spring.
+// Who sings, by month, as weights. The white-throated sparrow is back by May; the chickadee whistles most in
+// spring. From August the singing is over, and until March there is only the chickadees' call.
+const CALLS: [Species, number][] = [['dee', 1]]
 const SONGS: Record<number, [Species, number][]> = {
+  0: CALLS, 1: CALLS,
+  2: [['dee', 0.7], ['chickadee', 0.3]],
   3: [['chickadee', 0.5], ['robin', 0.35], ['junco', 0.15]],
   4: [['sparrow', 0.4], ['robin', 0.25], ['junco', 0.2], ['chickadee', 0.15]],
   5: [['sparrow', 0.4], ['robin', 0.25], ['junco', 0.25], ['chickadee', 0.1]],
   6: [['sparrow', 0.4], ['robin', 0.25], ['junco', 0.25], ['chickadee', 0.1]],
+  7: CALLS, 8: CALLS, 9: CALLS, 10: CALLS, 11: CALLS,
 }
 
 // Seconds from the end of one song to the start of the next while a bird keeps singing.
-const REST: Record<Species, [number, number]> = { sparrow: [5, 10], chickadee: [4, 7], robin: [0.8, 1.5], junco: [4, 9] }
+const REST: Record<Species, [number, number]> = { sparrow: [5, 10], chickadee: [4, 7], robin: [0.8, 1.5], junco: [4, 9], dee: [2.5, 7] }
 
 // One whistled note of a robin's phrase: [seconds, gap after it, Hz at the start, Hz at the end].
 type Slur = [number, number, number, number]
@@ -466,6 +494,11 @@ export function singer(rig: Rig, species: Species): Singer {
     case 'chickadee':
       s.pitch = 3550 + 530 * r()
       s.left = 3 + Math.floor(3 * r())
+      break
+    case 'dee':
+      s.pitch = 3550 + 250 * r()
+      s.count = 3 + Math.floor(2.6 * r())
+      s.left = 2 + Math.floor(3 * r())
       break
     case 'junco':
       s.pitch = 4300 + 800 * r()
@@ -640,6 +673,30 @@ export function song(rig: Rig, out: AudioNode, t: number, s: Singer): number {
       }
       return at - t
     }
+    case 'dee': {
+      // The chickadee's call: two short high notes falling fast, then a run of harsh, level dees. A dee is not a
+      // whistle but a stack of overtones a few hundred hertz apart, strongest around 3.5 to 4 kHz.
+      let at = t
+      for (let k = 0; k < 2; k++) {
+        const top = (k === 0 ? 7700 : 7200) * (p / 3675)
+        note(rig, o, at, 0.045, [[0, top], [0.045, top * 0.78]], 0.034, 0.008)
+        at += 0.045 + about(0.051, 0.1)
+      }
+      const n = Math.max(2, s.count + (r() < 0.25 ? 1 : 0) - (r() < 0.25 ? 1 : 0))
+      for (let k = 0; k < n; k++) {
+        const d = about(0.17, 0.08)
+        const g = ctx.createGain()
+        swell(g.gain, at, d, 0.2, 0.018, 0.03)
+        const stack = ctx.createOscillator()
+        stack.type = 'sawtooth'
+        stack.frequency.value = p / 8.5
+        stack.connect(filter(ctx, 'bandpass', p, 2.4)).connect(g).connect(o)
+        stack.start(at)
+        stack.stop(at + d + 0.02)
+        at += d + about(0.062, 0.15)
+      }
+      return at - t
+    }
     case 'junco': {
       // Dark-eyed junco: an even, ringing trill of one two-part note repeated for a second and a half.
       const step = 1 / s.rate
@@ -657,36 +714,55 @@ export function song(rig: Rig, out: AudioNode, t: number, s: Singer): number {
 }
 
 export class Ambience {
+  rig: Rig
   wind: Wind
   rain: Rain
   engine: Engine
+  // Built the first time the farm's truck hauls.
+  truck: Engine | null = null
   crickets: Crickets
   birds: Birds
+  seasons: Seasons
+  work: Work
 
   constructor(rig: Rig, t: number) {
+    this.rig = rig
     this.wind = new Wind(rig, t)
     this.rain = new Rain(rig, t)
     this.engine = new Engine(rig, t)
     this.crickets = new Crickets(rig, t)
     this.birds = new Birds(rig)
+    this.seasons = new Seasons(rig)
+    this.work = new Work(rig)
   }
 
   setScene(s: Scene, t: number): void {
-    this.wind.set(s.wind, s.cold, t)
+    this.wind.set(s.wind, s.cold, s.leaf, s.dry, t)
     this.rain.set(s.rain, s.heavy, t)
     this.crickets.set(s.crickets, s.chirps, s.pulse, t)
     this.birds.set(s.birds, s.month)
+    this.seasons.set(s, t)
   }
 
   setEngine(level: number, load: number, t: number): void {
     this.engine.set(level, load, t)
   }
 
+  // People at work, and the truck: 0 when it is not hauling, else how near it sounds.
+  setWork(w: WorkScene = NO_WORK, truck: number, t: number): void {
+    this.work.set(w, t)
+    if (truck > 0 && !this.truck) this.truck = new Engine(this.rig, t, TRUCK)
+    this.truck?.set(truck, truck > 0 ? 1 : 0, t)
+  }
+
   schedule(from: number, to: number): void {
     this.wind.schedule(from, to)
     this.rain.schedule(from, to)
     this.engine.schedule(from, to)
+    this.truck?.schedule(from, to)
     this.crickets.schedule(from, to)
     this.birds.schedule(from, to)
+    this.seasons.schedule(from, to)
+    this.work.schedule(from, to)
   }
 }

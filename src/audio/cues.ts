@@ -2,9 +2,9 @@
 // Nothing here sounds twice quite the same: pitch, timing and weight are drawn from the session's generator.
 import { filter, gain, midiHz, noiseSource, panner, strike, type Rig } from './synth.ts'
 
-const vary = (rig: Rig, x: number, by: number) => x * (1 + by * (2 * rig.rand() - 1))
+export const vary = (rig: Rig, x: number, by: number) => x * (1 + by * (2 * rig.rand() - 1))
 
-function tone(rig: Rig, out: AudioNode, t: number, hz: number, amp: number, attack: number, decay: number, toHz = 0, glide = 0.05): void {
+export function tone(rig: Rig, out: AudioNode, t: number, hz: number, amp: number, attack: number, decay: number, toHz = 0, glide = 0.05): void {
   const o = rig.ctx.createOscillator()
   o.frequency.setValueAtTime(hz, t)
   if (toHz > 0) o.frequency.exponentialRampToValueAtTime(toHz, t + glide)
@@ -14,7 +14,7 @@ function tone(rig: Rig, out: AudioNode, t: number, hz: number, amp: number, atta
   o.stop(s.end)
 }
 
-function burst(rig: Rig, out: AudioNode, t: number, amp: number, attack: number, decay: number, ...chain: BiquadFilterNode[]): void {
+export function burst(rig: Rig, out: AudioNode, t: number, amp: number, attack: number, decay: number, ...chain: BiquadFilterNode[]): void {
   const n = noiseSource(rig, t)
   const s = strike(rig.ctx, t, amp, attack, decay)
   let node: AudioNode = n
@@ -23,7 +23,7 @@ function burst(rig: Rig, out: AudioNode, t: number, amp: number, attack: number,
   n.stop(s.end)
 }
 
-function voiceOut(rig: Rig, pan: number, send: number): AudioNode {
+export function voiceOut(rig: Rig, pan: number, send: number): AudioNode {
   const o = panner(rig.ctx, pan)
   o.connect(rig.bus)
   if (send > 0) o.connect(gain(rig.ctx, send)).connect(rig.verb)
@@ -77,13 +77,13 @@ export function watered(rig: Rig, t: number): void {
 
 // What a tuber lands on. Modes are [Hz, level, seconds to fall to 1/e]: wood loses its high modes first, at a
 // near-constant number of cycles, which is what makes it read as wood and not metal.
-interface Wood { thump: number; modes: [number, number, number][] }
-const BARREL: Wood = { thump: 82, modes: [[196, 1, 0.05], [338, 0.62, 0.03], [527, 0.36, 0.019], [806, 0.16, 0.012]] }
+export interface Wood { thump: number; modes: [number, number, number][] }
+export const BARREL: Wood = { thump: 82, modes: [[196, 1, 0.05], [338, 0.62, 0.03], [527, 0.36, 0.019], [806, 0.16, 0.012]] }
 const TRAY: Wood = { thump: 118, modes: [[262, 1, 0.036], [471, 0.66, 0.021], [742, 0.4, 0.013], [1130, 0.16, 0.009]] }
 
 // One tuber landing: weight (a low thud), the wood it lands on, the hollow it lands in, and skin against the grain.
 // `bare` is how much wood it meets (1) rather than other tubers (0); `hollow` is the air resonance in Hz, 0 for none.
-function knock(rig: Rig, out: AudioNode, t: number, amp: number, wood: Wood, bare: number, hollow: number): void {
+export function knock(rig: Rig, out: AudioNode, t: number, amp: number, wood: Wood, bare: number, hollow: number): void {
   const ctx = rig.ctx
   const tune = vary(rig, 1, 0.05)
   tone(rig, out, t, wood.thump * 1.6, 0.2 * amp, 0.005, 0.04, wood.thump, 0.035)
@@ -124,7 +124,7 @@ export function barrel(rig: Rig, t: number, kind: 'sample' | 'dig', tubers: numb
 }
 
 // Coins counted onto a wooden counter: two small clinks.
-function clink(rig: Rig, out: AudioNode, t: number, hz: number, amp: number): void {
+export function clink(rig: Rig, out: AudioNode, t: number, hz: number, amp: number): void {
   for (const [ratio, rel, tc] of [[1, 1, 0.09], [2.27, 0.5, 0.055], [3.1, 0.22, 0.03]]) {
     tone(rig, out, t, hz * ratio, amp * rel, 0.0015, tc)
   }
@@ -166,7 +166,7 @@ const CADENCE: Record<Close, { chords: number[][]; durs: number[]; amp: number; 
 }
 
 // One voice of a reed organ: two reeds a few cents apart and a soft octave, swelling in.
-function pad(rig: Rig, out: AudioNode, t: number, hz: number, dur: number, release: number, amp: number): void {
+export function pad(rig: Rig, out: AudioNode, t: number, hz: number, dur: number, release: number, amp: number): void {
   const ctx = rig.ctx
   const g = ctx.createGain()
   g.gain.value = 0

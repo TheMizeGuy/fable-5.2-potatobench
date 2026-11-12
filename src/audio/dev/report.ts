@@ -39,6 +39,7 @@ export interface VoiceResult {
   periodic: boolean      // repeats by nature (an engine, a cricket, a bird's song), so the repeat tests do not apply
   song: boolean          // has birds or crickets in it, whose whole sound lies between 2 and 5 kHz
   plan: Plan
+  cue: string            // for a cue: its id in the director's list
   m: Metrics
   peakMax: number        // sample peak through the master chain at the loudest volume setting
   rawPeak: number        // before the master volume, trim and ceiling
@@ -48,12 +49,28 @@ export interface VoiceResult {
 
 export interface Rendered { result: VoiceResult; wav: string; png: string; small: string; zoom: string }
 
+// Two beds side by side: how far apart where their energy lies, how far apart how it moves, and the two together (dB).
+export interface BedPair { a: string; b: string; level: number; move: number; both: number }
+// Two cues side by side: how far apart their spectra (dB) and how alike their rhythms (0..1).
+export interface CuePair { a: string; b: string; level: number; rhythm: number }
+// A moment that must not be missed against the short cue that covers it most: how far it still stands clear, in dB.
+export interface Covered { cue: string; by: string; db: number; hz: number }
+
+export interface Compared {
+  seasons: string[]
+  between: BedPair[]     // each pair of the four seasons
+  within: BedPair[]      // each season against itself rendered again with other luck
+  nearest: CuePair[]     // each cue with the cue of another family nearest to it
+  covered: Covered[]     // each key moment against the short cues that can sound over it
+}
+
 export interface CaseInfo { id: string; name: string; kind: Kind; seconds: number }
 
 export interface Lab {
   cases: CaseInfo[]
   defaultVolume: number
   run(i: number, files: boolean): Promise<Rendered>
+  compare(): Promise<Compared>
   selfTest(): Promise<{ fails: string[]; report: string[] }>
 }
 

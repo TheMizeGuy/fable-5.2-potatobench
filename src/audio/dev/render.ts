@@ -4,14 +4,14 @@ import { createRig, volumeGain } from '../synth.ts'
 import * as A from './analyze.ts'
 import { CASES, WORST_BED, type Case } from './cases.ts'
 import { picture, wav } from './picture.ts'
-import { DEFAULT_VOLUME, type Lab, type Metrics, type Rendered, type VoiceResult } from './report.ts'
+import { DEFAULT_VOLUME, type BedPair, type Compared, type Covered, type CuePair, type Lab, type Metrics, type Rendered, type VoiceResult } from './report.ts'
 
 const SR = 48000
 const SEED = 20260611
 
-async function render(c: Case, master: boolean, volume: number): Promise<Float32Array[]> {
+async function render(c: Case, master: boolean, volume: number, seed = SEED): Promise<Float32Array[]> {
   const ctx = new OfflineAudioContext(2, Math.ceil(c.seconds * SR), SR)
-  const rig = createRig(ctx, ctx.destination, { seed: SEED, master })
+  const rig = createRig(ctx, ctx.destination, { seed, master })
   const v = volumeGain(volume)
   if (c.fadeIn) {
     rig.volume.gain.value = 0
@@ -82,6 +82,14 @@ function features(c: Case, chans: Float32Array[]): string[] {
       out.push(`${on.length} knocks at ${on.map(t => t.toFixed(2)).join(' ')} s`)
       out.push(`gaps ${on.slice(1).map((t, i) => f0((t - on[i]) * 1000)).join(' ')} ms; levels ${lv.map(p => f1(A.db(p))).join(' ')} dB`)
       out.push('spectral lines: ' + A.spectralPeaks(m, SR, 8192, 50, 4000, 8).map(p => `${f0(p.hz)} Hz ${f1(p.db)} dB`).join(', '))
+    } else if (f === 'blows') {
+      const on = A.onsets(chans, SR, 0.12, 30)
+      const env = A.envelope(chans, SR)
+      const lv = on.map(t => { let p = 0; for (let i = Math.round(t * 1000); i < Math.min(env.length, Math.round(t * 1000) + 40); i++) p = Math.max(p, env[i]); return p })
+      out.push(`${on.length} blows at ${on.map(t => t.toFixed(2)).join(' ')} s`)
+      out.push(`gaps ${on.slice(1).map((t, i) => f0((t - on[i]) * 1000)).join(' ')} ms; levels ${lv.map(p => f1(A.db(p))).join(' ')} dB`)
+    } else if (f === 'low') {
+      out.push(`level in 40-120 Hz ${f1(A.bandLevel(m, SR, 40, 120))} dB, 120-500 Hz ${f1(A.bandLevel(m, SR, 120, 500))} dB, 0.5-2 kHz ${f1(A.bandLevel(m, SR, 500, 2000))} dB, 2-8 kHz ${f1(A.bandLevel(m, SR, 2000, 8000))} dB`)
     } else if (f === 'rain') {
       const late = m.subarray(8 * SR)
       out.push(`level in 0.6-1.2 kHz ${f1(A.bandLevel(late, SR, 600, 1200))} dB, in 4.4-5.6 kHz ${f1(A.bandLevel(late, SR, 4400, 5600))} dB, in 6-8 kHz ${f1(A.bandLevel(late, SR, 6000, 8000))} dB`)
@@ -131,6 +139,7 @@ async function run(i: number, files: boolean): Promise<Rendered> {
   }
   const result: VoiceResult = {
     id: c.id, name: c.name, kind: c.kind, seconds: c.seconds, solo: c.solo, ticks: c.ticks === true, periodic: c.periodic === true, song: c.song === true, plan: c.plan,
+    cue: c.cue ?? '',
     m, peakMax, rawPeak, cost, features: features(c, chans),
   }
   if (!files) return { result, wav: '', png: '', small: '', zoom: '' }
@@ -147,6 +156,56 @@ async function run(i: number, files: boolean): Promise<Rendered> {
     }),
     zoom: c.band ? picture(chans, SR, { title: `${c.name}, ${c.band[0]} to ${c.band[1]} Hz`, note, win: Math.min(win, 1024), scale: 1, band: c.band }) : '',
   }
+}
+
+// What no single render can show: that the four seasons differ from one another by more than a season differs from
+// itself on another day, that no two cues of different families could be taken for each other, and that no cue,
+// sounding at the same moment, covers one that must not be missed.
+async function compare(): Promise<Compared> {
+  const refs = CASES.filter(c => c.season)
+  const prints: A.Print[] = [], again: A.Print[] = []
+  for (const c of refs) {
+    prints.push(A.fingerprint(await render(c, true, DEFAULT_VOLUME), SR, 6))
+    again.push(A.fingerprint(await render(c, true, DEFAULT_VOLUME, SEED + 977), SR, 6))
+  }
+  const between: BedPair[] = [], within: BedPair[] = []
+  for (let i = 0; i < refs.length; i++) {
+    within.push({ a: refs[i].season!, b: refs[i].season!, ...A.printDistance(prints[i], again[i]) })
+    for (let j = i + 1; j < refs.length; j++) between.push({ a: refs[i].season!, b: refs[j].season!, ...A.printDistance(prints[i], prints[j]) })
+  }
+
+  const cues = CASES.filter(c => c.kind === 'cue')
+  const marks: A.Mark[] = [], profiles: Float64Array[] = []
+  for (const c of cues) {
+    const ch = await render(c, true, DEFAULT_VOLUME)
+    marks.push(A.mark(ch, SR))
+    profiles.push(A.cueProfile(ch, SR))
+  }
+  const name = (c: Case) => c.cue ?? c.id
+  // The nearest is the one closest in spectrum among those with something of the same rhythm.
+  const score = (d: { level: number; rhythm: number }) => d.level * (1.4 - d.rhythm)
+  const nearest: CuePair[] = []
+  const covered: Covered[] = []
+  for (let i = 0; i < cues.length; i++) {
+    let near: CuePair | null = null
+    let cover: Covered | null = null
+    for (let j = 0; j < cues.length; j++) {
+      if (i === j) continue
+      const a = cues[i], b = cues[j]
+      if (!(a.family && a.family === b.family)) {
+        const d = A.markDistance(marks[i], marks[j])
+        if (!near || score(d) < score(near)) near = { a: name(a), b: name(b), ...d }
+      }
+      // Longer cues take turns (the director's line); only the short ones can sound over a key moment.
+      if (a.rank === 3 && (b.rank ?? 0) <= 1) {
+        const k = A.masking(profiles[i], profiles[j])
+        if (!cover || k.snrBest < cover.db) cover = { cue: name(a), by: name(b), db: k.snrBest, hz: k.bestHz }
+      }
+    }
+    if (near) nearest.push(near)
+    if (cover) covered.push(cover)
+  }
+  return { seasons: refs.map(c => c.season!), between, within, nearest, covered }
 }
 
 // The smallest step, in dBFS, that the click test finds when one `len` samples wide is planted in a clean render.
@@ -203,7 +262,7 @@ async function selfTest(): Promise<{ fails: string[]; report: string[] }> {
 const lab: Lab = {
   cases: CASES.map(c => ({ id: c.id, name: c.name, kind: c.kind, seconds: c.seconds })),
   defaultVolume: DEFAULT_VOLUME,
-  run, selfTest,
+  run, selfTest, compare,
 }
 ;(window as unknown as { __lab: Lab }).__lab = lab
 document.getElementById('out')!.textContent = `${CASES.length} cases ready. Run tools/audio/check.ts or tools/audio/render.ts.`

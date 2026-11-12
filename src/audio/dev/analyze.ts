@@ -537,3 +537,97 @@ export function levelWander(x: Float32Array, sr: number, skip: number): { sd: nu
   const mean = lv.reduce((p, q) => p + q, 0) / lv.length
   return { sd: Math.sqrt(lv.reduce((p, q) => p + (q - mean) ** 2, 0) / lv.length), lo: Math.min(...lv) - mean, hi: Math.max(...lv) - mean }
 }
+
+// What a stretch of sound is like in the large: where its energy lies, as third-octave levels in dB under its own
+// strongest band (so loudness alone is no difference), and how much each band comes and goes, as the spread in
+// dB of its level from one 170 ms frame to the next (a steady hiss is near 0; birdsong, a knock, a honk are large).
+export interface Print { level: Float64Array; move: Float64Array }
+
+const PRINT_FLOOR = -45
+
+export function fingerprint(chans: Float32Array[], sr: number, skip: number): Print {
+  const f = bandFrames(mid(chans), sr, skip)
+  const nb = THIRD_OCTAVES.length
+  const mean = new Float64Array(nb)
+  for (const p of f) for (let b = 0; b < nb; b++) mean[b] += p[b] / f.length
+  let top = 0
+  for (let b = 0; b < nb; b++) top = Math.max(top, mean[b])
+  const level = new Float64Array(nb), move = new Float64Array(nb)
+  const quiet = top * Math.pow(10, PRINT_FLOOR / 10)
+  for (let b = 0; b < nb; b++) {
+    level[b] = Math.max(PRINT_FLOOR, pdb(mean[b] / top))
+    // A band that never rises out of the floor does not move.
+    let s = 0, s2 = 0
+    for (const p of f) {
+      const v = pdb(Math.max(p[b], quiet) / top)
+      s += v
+      s2 += v * v
+    }
+    move[b] = Math.sqrt(Math.max(0, s2 / f.length - (s / f.length) ** 2))
+  }
+  return { level, move }
+}
+
+// How far apart two prints are: the root-mean-square difference across the bands, in dB, of where the energy lies
+// and of how much it moves.
+export function printDistance(a: Print, b: Print): { level: number; move: number; both: number } {
+  let l = 0, m = 0
+  const n = a.level.length
+  for (let i = 0; i < n; i++) {
+    l += (a.level[i] - b.level[i]) ** 2
+    m += (a.move[i] - b.move[i]) ** 2
+  }
+  const level = Math.sqrt(l / n), move = Math.sqrt(m / n)
+  return { level, move, both: Math.sqrt(level * level + move * move) }
+}
+
+// A cue's mark: its loudest moment in each band, in dB under its strongest band, and its rhythm, the level in
+// 20 ms steps over the two seconds from its first sound.
+export interface Mark { level: Float64Array; rhythm: Float64Array }
+
+const MARK_FLOOR = -40
+
+export function mark(chans: Float32Array[], sr: number): Mark {
+  const p = cueProfile(chans, sr)
+  let top = 0
+  for (let b = 0; b < p.length; b++) top = Math.max(top, p[b])
+  const level = new Float64Array(p.length)
+  for (let b = 0; b < p.length; b++) level[b] = Math.max(MARK_FLOOR, pdb(p[b] / Math.max(top, 1e-30)))
+  const env = envelope(chans, sr)
+  let peak = 0
+  for (let i = 0; i < env.length; i++) peak = Math.max(peak, env[i])
+  let first = 0
+  while (first < env.length && env[first] < 0.05 * peak) first++
+  const rhythm = new Float64Array(100)
+  let sum = 0
+  for (let k = 0; k < rhythm.length; k++) {
+    let v = 0
+    for (let i = first + k * 20; i < Math.min(env.length, first + (k + 1) * 20); i++) v = Math.max(v, env[i])
+    rhythm[k] = v
+    sum += v * v
+  }
+  const norm = Math.sqrt(sum) || 1
+  for (let k = 0; k < rhythm.length; k++) rhythm[k] /= norm
+  return { level, rhythm }
+}
+
+// Two cues side by side: how far apart their spectra are (dB, root mean square across the bands either sounds
+// in) and how alike their rhythms (1 is the same pattern of blows, allowing 60 ms of slip).
+export function markDistance(a: Mark, b: Mark): { level: number; rhythm: number } {
+  let l = 0, n = 0
+  for (let i = 0; i < a.level.length; i++) {
+    if (a.level[i] <= MARK_FLOOR && b.level[i] <= MARK_FLOOR) continue
+    l += (a.level[i] - b.level[i]) ** 2
+    n++
+  }
+  let best = 0
+  for (let lag = -3; lag <= 3; lag++) {
+    let dot = 0
+    for (let k = 0; k < a.rhythm.length; k++) {
+      const j = k + lag
+      if (j >= 0 && j < b.rhythm.length) dot += a.rhythm[k] * b.rhythm[j]
+    }
+    best = Math.max(best, dot)
+  }
+  return { level: Math.sqrt(l / Math.max(1, n)), rhythm: best }
+}

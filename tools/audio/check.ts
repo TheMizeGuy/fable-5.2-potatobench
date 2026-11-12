@@ -3,14 +3,15 @@
 //    measures each, and fails on anything outside the plan in src/audio/dev/plan.ts: silence, peaks over the
 //    ceiling, clicks, DC, loudness outside its window, an audible loop, a lopsided spectrum, a cue its bed covers;
 // 2. loads the game, taps the live output, and checks the autoplay gate, settings, mute and hidden-tab fade.
-// Usage: node tools/audio/check.ts [chromium] [firefox] [webkit] [--only=<case id prefix>]
-// With --only, just the matching offline cases are rendered and judged (for work on one voice).
+// Usage: node tools/audio/check.ts [chromium] [firefox] [webkit] [--only=<case id prefix>[,<prefix>...]] [--offline] [--features]
+// With --only, just the matching offline cases are rendered and judged (for work on one voice). --offline leaves
+// out the live game; --features prints what was measured off each render for comparison with the real sound.
 import { fileURLToPath } from 'node:url'
 import { chromium, firefox, webkit, type Page } from '@playwright/test'
 import { createServer } from 'vite'
-import { judge } from '../../src/audio/dev/plan.ts'
+import { judge, judgeCompared } from '../../src/audio/dev/plan.ts'
 import { DEFAULT_VOLUME, PEAK_LIMIT, SILENT_PEAK, type Lab, type VoiceResult } from '../../src/audio/dev/report.ts'
-import { text } from './table.ts'
+import { comparedText, text } from './table.ts'
 
 const root = fileURLToPath(new URL('../..', import.meta.url))
 const failures: string[] = []
@@ -22,17 +23,23 @@ async function offline(page: Page): Promise<void> {
   page.on('pageerror', e => fail(`render page error: ${e.message}`))
   await page.goto(`${base}src/audio/dev/render.html`, { timeout: 120_000 })
   await page.waitForFunction(() => '__lab' in window, null, { timeout: 60_000 })
-  const self = only ? { fails: [], report: ['skipped'] } : await page.evaluate(() => (window as unknown as { __lab: Lab }).__lab.selfTest())
+  const self = only.length ? { fails: [], report: ['skipped'] } : await page.evaluate(() => (window as unknown as { __lab: Lab }).__lab.selfTest())
   for (const f of self.fails) fail(`self-test: ${f}`)
   const cases = await page.evaluate(() => (window as unknown as { __lab: Lab }).__lab.cases)
   const results: VoiceResult[] = []
   for (let i = 0; i < cases.length; i++) {
-    if (only && !cases[i].id.startsWith(only)) continue
+    if (only.length && !only.some(p => cases[i].id.startsWith(p))) continue
     results.push((await page.evaluate(k => (window as unknown as { __lab: Lab }).__lab.run(k, false), i)).result)
   }
   console.log(`\n${engine}\n\nThe instruments:\n${self.report.map(l => `  ${l}`).join('\n')}\n\nOffline renders, 48 kHz stereo, at the default volume:\n\n${text(results)}`)
-  if (only) for (const r of results) console.log(`${r.name}: raw peak ${db(r.rawPeak)} dB, chain gain ${r.m.chain.gain.toFixed(1)} dB, peak ${r.m.chain.squash.toFixed(1)} dB against it, ${(r.cost * 100).toFixed(1)}% of real time to render`)
+  if (only.length) for (const r of results) console.log(`${r.name}: raw peak ${db(r.rawPeak)} dB, chain gain ${r.m.chain.gain.toFixed(1)} dB, peak ${r.m.chain.squash.toFixed(1)} dB against it, ${(r.cost * 100).toFixed(1)}% of real time to render`)
+  if (showFeatures) for (const r of results) if (r.features.length) console.log(`\n${r.name}\n${r.features.map(l => `  ${l}`).join('\n')}`)
   for (const f of results.flatMap(judge)) fail(f)
+  if (!only.length) {
+    const compared = await page.evaluate(() => (window as unknown as { __lab: Lab }).__lab.compare())
+    console.log(`\n${comparedText(compared, false)}`)
+    for (const f of judgeCompared(compared)) fail(f)
+  }
 }
 
 // Wraps AudioContext so the test can find the game's context and tap what reaches the speakers.
@@ -144,7 +151,9 @@ await server.listen()
 const base = server.resolvedUrls!.local[0]
 const ENGINES = { chromium, firefox, webkit }
 const args = process.argv.slice(2)
-const only = args.find(a => a.startsWith('--only='))?.slice(7) ?? ''
+const only = (args.find(a => a.startsWith('--only='))?.slice(7) ?? '').split(',').filter(Boolean)
+const offlineOnly = args.includes('--offline')
+const showFeatures = args.includes('--features')
 const names = args.filter(a => !a.startsWith('--'))
 
 try {
@@ -155,7 +164,7 @@ try {
     const browser = await type.launch()
     try {
       await offline(await browser.newPage())
-      if (!only) await liveSmoke(await browser.newPage())
+      if (!only.length && !offlineOnly) await liveSmoke(await browser.newPage())
     } finally {
       await browser.close()
     }
