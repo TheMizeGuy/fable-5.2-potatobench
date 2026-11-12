@@ -83,6 +83,12 @@ export function yardCard(ctx: Ctx): YardCard {
             meter(b.progress, { label: `${b.name} built`, text: `${F.pct(b.progress)} built` }))
         }),
         !houses.length && !built.length && !up.length ? h('div', { class: 'build-row', role: 'listitem' }, h('span', { class: 'quiet it' }, 'Nothing stands here yet.')) : null),
+      m.logs >= 1 && !m.sellWhy ? h('div', { class: 'orders sell-logs', role: 'group', 'aria-label': 'Logs' },
+        order({
+          key: '', icon: 'logs', name: `Sell ${F.plural(Math.floor(m.logs), 'load')} of logs`, cost: F.money(Math.floor(m.logs) * m.logPrice), testid: 'yard-sell-logs',
+          catch: `The mill pays ${F.money(m.logPrice)} a load; a building short of logs buys them back at ${F.money(m.millPrice)}.`,
+          onclick: () => { const r = ctx.run({ t: 'sellLogs', loads: Math.floor(m.logs) }); if (r.ok) ctx.announce(F.localize(r.events[0]?.text ?? '')) },
+        })) : null,
       can.length ? h('div', { class: 'orders', role: 'group', 'aria-label': 'Raise a building' },
         can.map((b, k) => order({
           key: keys && k < 9 ? String(k + 1) : '', icon: '', name: b.name, cost: costOf(b), suggested: b.kind === best, testid: `build-${b.kind}`,

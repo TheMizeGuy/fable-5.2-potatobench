@@ -26,8 +26,11 @@ const ALL = Object.keys(SIZES)
 type Step = (page: Page, size: string) => Promise<void>
 interface State { name: string; what: string; sizes: string[]; run: Step; full?: boolean }
 
+// A field's tag is clicked where the camera has it in frame; otherwise it is picked the way its number key picks it.
 async function selectField(page: Page, _size: string, i: number): Promise<void> {
-  await page.getByTestId(`field-${i}`).first().click()
+  const tag = page.getByTestId(`field-${i}`).first()
+  if (await tag.isVisible()) await tag.click()
+  else { await q(page, `q.g().app.select(${i}); q.g().app.focus(${i})`); await page.waitForTimeout(1200) }
 }
 
 const july: Step = async page => { await q(page, `q.start(1987, 3); q.run(q.day(6, 12))`); await closeAll(page) }
@@ -243,7 +246,10 @@ const STATES: State[] = [
   { name: 'farm-materials', what: 'Logs and fieldstone in the yard: selling logs', sizes: MAIN, run: async (page, size) => {
     await farmPeople(page, size)
     await q(page, `const c = q.g().app.campaign; c.logs = 23.4; c.stone = 9.6; dispatchEvent(new Event('resize'))`)
-    await page.getByTestId('materials').click()
+    // On a phone the bank board gives way to the clock at the thumb: the logs are sold from the yard's bar.
+    const chip = page.getByTestId('materials')
+    if (await chip.isVisible()) await chip.click()
+    else await q(page, `q.g().app.selectYard(-1)`)
   } },
   { name: 'farm-barrels', what: 'Dig day: a field dug, barrels waiting to be hauled', sizes: MAIN, run: async (page, size) => {
     await q(page, `q.start(1987, 3); q.run('digging', ['sell'], 'status'); const { app } = q.g(); for (let k = 0; k < 2; k++) app.do({ t: 'day' }); app.setSpeed(0)

@@ -205,7 +205,7 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
     patch(el, JSON.stringify(model), () => [
       queue(c, jobs, crews, people, waits, many, room),
       h('section', { class: 'timebook mount sys', 'aria-label': 'People' },
-        h('div', { class: `page units${many ? ' many' : ''}`, role: 'group', 'aria-label': 'People' },
+        h('div', { class: `page units${many ? ' many' : ''}${people.length > 5 ? ' crowded' : ''}`, role: 'group', 'aria-label': 'People' },
           people.map((p, k) => cell(c, p, now[k], signs[k], many, goal === 'person' && k === 1, stopped.has(p.id))),
           h('div', { class: 'tools bar-tools' },
             waiting.length ? h('button', {

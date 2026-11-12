@@ -164,6 +164,7 @@
 .command .order .cost { text-align: right; }
 .command.compact { width: 520px; }
 .command.compact .orders { grid-template-columns: 1fr 1fr; }
+.command.compact .orders.sell-logs { grid-template-columns: 1fr; padding-bottom: 0; }
 .command.compact .order { align-content: start; grid-template-rows: auto auto 1fr; }
 .command.compact .order .cost { grid-column: 2 / -1; justify-self: start; white-space: normal; text-align: left; font-size: 15px; }
 .command.compact .order .catch { grid-row: 3; }
@@ -262,6 +263,9 @@
 .season-screen[data-layout='narrow'] .person .doing { white-space: normal; justify-content: center; text-align: center; line-height: 1.05; }
 .season-screen[data-layout='narrow'] .person.solo { flex: 0 1 220px; }
 .season-screen[data-layout='narrow'] .timebook .tools { flex: none; }
+/* More people than the width holds: the book scrolls along, a cell never narrower than a thumb. */
+.season-screen[data-layout='narrow'] .timebook .page.crowded { overflow-x: auto; overscroll-behavior-x: contain; }
+.season-screen[data-layout='narrow'] .page.crowded .person { min-width: 60px; }
 .season-screen[data-layout='narrow'] .notes.alerts { justify-items: stretch; }
 .season-screen[data-layout='narrow'] .notes.alerts .alert { max-width: none; }
 /* With something selected, its bar is a sheet over the foot and the clock stays at the thumb. */
