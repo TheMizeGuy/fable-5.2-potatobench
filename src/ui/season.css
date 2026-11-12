@@ -319,6 +319,8 @@
 .touch .command .order .key.blank { display: none; }
 .touch .command .order.no-icon .catch { grid-column: 1 / -1; }
 .touch .command .order:not(.no-icon) .catch { grid-column: 2 / -1; }
+.touch .command.compact .order.no-icon { grid-template-columns: 1fr; }
+.touch .command.compact .order.no-icon .cost, .touch .command.compact .order.no-icon .catch { grid-column: 1 / -1; grid-row: auto; }
 .touch .tag-wrap .tag-at .tag, .touch .tag-wrap .tag-at:not(.has-need):not(.is-sel) .tag { height: 44px; }
 .touch .tag-wrap .tag-at .tag::after, .touch .tag-wrap .tag-at:not(.has-need):not(.is-sel) .tag::after { height: 44px; }
 .touch .yard-at .yard-tag { height: 44px; }
