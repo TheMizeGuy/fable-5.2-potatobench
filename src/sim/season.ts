@@ -422,6 +422,7 @@ function completeJob(world: World, c: Campaign, s: Season, job: Job, d: Day, out
     case 'spray':
       f.residue = sprayCover(u)
       f.lastSpray = s.day
+      f.sprays = (f.sprays ?? 0) + 1
       push(s, out, 'sprayed', job.field, 'info', `${name} sprayed with protectant.`)
       break
     case 'water':

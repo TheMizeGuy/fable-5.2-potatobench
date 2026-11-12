@@ -96,7 +96,7 @@ export function whois(ctx: Ctx, layer: HTMLElement): Whois {
     const busy = !!p.job || !!p.foreman || p.hurtUntil >= 0 || p.travelling
     const lower = (t: string) => t.replace(/^./, x => x.toLowerCase())
     const detail = c.phase === 'cellar' ? lower(p.winterText) : !season ? 'waiting for the season to start' : busy ? lower(doingText(c, p))
-      : now && now.text.startsWith('Waiting') ? lower(now.text) : `${now && now.text.startsWith('Idle at ') ? `${now.text.slice(5)}: ` : ''}nothing on the list they will take`
+      : now && now.text.startsWith('Waiting') ? lower(now.text) : `${now && now.text.startsWith('Idle at ') ? `${now.text.slice(5)}: ` : ''}${c.season!.jobs.length ? 'nothing on the list they will take' : 'the list is empty'}`
     const sign = personSign(p, false)
     const best = [...S.SKILLS].sort((a, b) => p.skills[b] - p.skills[a])[0]
     const pulls = moodWhy(c, p)

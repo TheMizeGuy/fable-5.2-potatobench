@@ -57,6 +57,9 @@ export type VarietyId = 'norland' | 'superior' | 'katahdin' | 'kennebec' | 'burb
 
 export type JobKind = 'plant' | 'hill' | 'scout' | 'spray' | 'water' | 'rogue' | 'sample' | 'kill' | 'dig' | 'fell' | 'rocks' | 'brush' | 'build' | 'haul'
 // The kinds of work on the crop that can be ordered by themselves each working morning (the farm's standing orders).
+// How spraying is done this season: kept up by the routine, the player's order each time, or not at all this year.
+export type SprayWay = 'auto' | 'ask' | 'none'
+
 export type RoutineKind = 'plant' | 'hill' | 'scout' | 'rogue' | 'sample' | 'dig' | 'haul' | 'spray' | 'water' | 'kill'
 // Who put an order on the list: the player, the farm's routine, or a foreman for their block.
 export type JobBy = 'you' | 'routine' | 'foreman'
@@ -120,6 +123,10 @@ export const H_SEEDBLIGHT = 64
 export const H_DECAYED = 128
 export const H_WILT = 256      // carries Verticillium: dies early
 
+// Why reference practice asks for the vines to be killed: blight winning, frost coming, the crop made, or the date
+// past which skins would not set before the freeze-up.
+export type KillWhy = 'blight' | 'frost' | 'made' | 'late'
+
 export interface FieldSeason {
   status: FieldStatus
   variety: VarietyId
@@ -139,6 +146,7 @@ export interface FieldSeason {
   weeded: boolean
   residue: number           // protectant on the leaves, 0..1
   lastSpray: number
+  sprays?: number           // passes this season
   scab: number; hollow: number; knob: number; logDays: number; dryRun: number; frostT: number
   sev: number               // true mean blight lesion share over living hills
   sevPeak: number
@@ -157,6 +165,9 @@ export interface FieldSeason {
   lotId: number
   flags: number             // one-time announcements
   killAsked?: number        // the first day reference practice asked for the vines to be killed
+  killWhy?: KillWhy          // and why it asked
+  keepVines?: boolean       // the player keeps the vines up here: the crew does not kill them by itself
+  killSince?: number        // the day the coach's present run of asking for the kill began
   // Hills, struct of arrays, ROWS * COLS long.
   hState: number[]
   hEmergeAt: number[]
@@ -337,6 +348,7 @@ export interface YearSummary {
   yieldCwtAcre: number      // marketable, over potato acres
   potatoFields: number
   blightPeak: number
+  sprays?: number           // spray passes over the farm's fields this year
   lots: Lot[]
 }
 
@@ -373,6 +385,7 @@ export interface Campaign {
   incidents: Incident[]     // open, waiting for an answer
   heard: string[]           // this year's offers already made (an applicant, a neighbour's for a person, a buyer's for a lot)
   routine: Record<RoutineKind, boolean>   // which kinds of work are ordered by themselves on every held field
+  sprayWay?: { year: number; way: SprayWay }   // the season's answer to how spraying is done, for that year
   nextIncident: number
   broken: number[]          // for each tractor out of action, the day it is back
   offers: Offer[]           // this spring's contract offers, until the season begins
@@ -422,6 +435,8 @@ export type Cmd =
   | { t: 'answer'; incident: number; choice: string }
   | { t: 'job'; kind: JobKind; field: number; unit?: number }
   | { t: 'routine'; kind: JobKind; auto: boolean }
+  | { t: 'sprayWay'; way: SprayWay }
+  | { t: 'keepVines'; field: number; keep: boolean }
   | { t: 'rest'; unit: number; mode?: RestMode }
   | { t: 'assign'; id: number; unit: number }
   | { t: 'cancel'; id: number }

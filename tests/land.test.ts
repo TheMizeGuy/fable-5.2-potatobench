@@ -395,3 +395,33 @@ describe('logs', () => {
     expect(S.materialsInfo(c)).toMatchObject({ logs: 6, stone: 0, logPrice: S.LOG_PRICE, millPrice: S.MILL_PRICE, quarryPrice: S.QUARRY_PRICE })
   })
 })
+
+describe('the winter woods', () => {
+  it('when the tract is felled, its fellers are laid off that month with the reason, so no line says woods on a felled tract', () => {
+    const c = S.createCampaign(world, { seed: 1, startYear: 1990 })
+    ok(c, { t: 'hire', kind: 'hand' })
+    const hand = c.crew[1]
+    hand.trait = ''
+    c.cash = 100000
+    // A crop in store, so the winter goes month by month (with nothing planted it passes at once).
+    ok(c, { t: 'begin' })
+    for (let g = 0; g < 300 && c.phase === 'season' && !S.seasonDone(c); g++) ok(c, { t: 'day' })
+    if (c.phase === 'season') ok(c, { t: 'endSeason' })
+    ok(c, { t: 'winter', unit: 0, work: 'woods', field: WOODLOT })
+    ok(c, { t: 'winter', unit: hand.id, work: 'woods', field: WOODLOT })
+    let felled = false
+    while (c.phase === 'cellar') {
+      const ev = ok(c, { t: 'month' }).events
+      if (ev.some(e => e.type === 'felled' && e.field === WOODLOT)) {
+        felled = true
+        expect(ev.filter(e => e.type === 'winterIdle').map(e => e.text)).toEqual([
+          expect.stringMatching(/^You stop work for the rest of the winter: There is nothing left to fell on/),
+          expect.stringMatching(new RegExp(`^${hand.name} is laid off for the rest of the winter: There is nothing left to fell on`)),
+        ])
+      }
+      for (const p of S.winterInfo(c).people) if (p.work === 'woods') expect(S.fellLeft(c, p.field)).toBeGreaterThan(0)
+    }
+    expect(felled).toBe(true)
+    expect([c.crew[0].winter, hand.winter]).toEqual(['off', 'off'])
+  })
+})
