@@ -1,6 +1,6 @@
-// Who is that: a click on a person on the land opens their card beside them, with a leader to them, following them
-// as they go (a sheet from the bottom on a phone); a click on anything else that looks like someone (a machine, a
-// caller, a picker, an animal) gives its name. Before any click, the pointer over a person or a thing shows its name
+// Who is that: a click on a person on the land opens their card beside the point clicked, tied to them (tie.ts; a
+// sheet from the bottom on a phone); a click on anything else that looks like someone (a machine, a caller, a picker,
+// an animal) gives its name the same way. Before any click, the pointer over a person or a thing shows its name
 // and a mark on the ground. In every phase where people are on the land.
 import type { Thing } from '../game/contracts.ts'
 import * as S from '../sim/index.ts'
@@ -12,17 +12,19 @@ import { icon } from './icons.ts'
 import { doingGlyph, doingText, restControl, restWords } from './people.ts'
 import { firstName, jobText, KIND_NAME, moodWhy, personSign, SKILL_NAME } from './rules.ts'
 import { ringed } from './system/people.ts'
+import { anchored, ties } from './tie.ts'
 import './whois.css'
 
 const SKILL_CUT: Record<S.Skill, string> = { machine: 'machine', field: 'field', woods: 'woods', build: 'hammer', pack: 'pack' }
 const SKILL_SHORT: Record<S.Skill, string> = { machine: 'Machine', field: 'Field', woods: 'Woods', build: 'Build', pack: 'Pack' }
 const WINTER_WORDS: Record<S.WinterWork, string> = { off: 'Off', woods: 'Woods', pack: 'Pack', build: 'Build' }
-const GAP = 34
 
 export interface Whois {
   el: HTMLElement
   update(): void
   frame(): void
+  // The foot of the window its sheet covers on a phone, in pixels (0 at a desk).
+  inset(): number
   // Puts away whatever is open; false when nothing was.
   escape(): boolean
   dispose(): void
@@ -61,21 +63,20 @@ function thingWords(c: S.Campaign, t: Thing): { name: string; line: string; glyp
 export function whois(ctx: Ctx, layer: HTMLElement): Whois {
   const app = ctx.app
   const card = h('section', { class: 'whois sheet sys', testid: 'whois', role: 'dialog', 'aria-modal': 'false', 'aria-labelledby': 'whois-name', hidden: true })
-  const lead = h('i', { class: 'whois-lead', 'aria-hidden': 'true', hidden: true })
   const tcard = h('section', { class: 'whois thing sheet sys', testid: 'thing-card', role: 'dialog', 'aria-modal': 'false', 'aria-labelledby': 'thing-name', hidden: true })
-  const tlead = h('i', { class: 'whois-lead', 'aria-hidden': 'true', hidden: true })
   const label = h('p', { class: 'hover-name', 'aria-hidden': 'true', hidden: true })
   const mark = h('i', { class: 'hover-mark', 'aria-hidden': 'true', hidden: true })
-  const el = h('div', { class: 'whois-layer' }, mark, lead, tlead, label, card, tcard)
+  const tied = { card: anchored(ctx, card), thing: anchored(ctx, tcard, { mark: true }) }
+  const el = h('div', { class: 'whois-layer' }, mark, tied.card.parts, tied.thing.parts, label, card, tcard)
   layer.append(el)
   let shownFor = -1
-  let sizes = { w: 320, h: 260, tw: 260, th: 90 }
 
   function phone(): boolean { return ctx.layout() === 'narrow' }
 
-  // The person whose card is open: picked on the land, in any phase but the title.
+  // The person whose card is open: picked on the land, in any phase but the title. One card at a time: while a field
+  // or a yard is in hand its card is the one up (orders given there still go to the person picked).
   function open(c: S.Campaign | null): S.PersonInfo | null {
-    if (!c || app.screen === 'title' || app.unit < 0 || app.unitFrom !== 'land') return null
+    if (!c || app.screen === 'title' || app.unit < 0 || app.unitFrom !== 'land' || app.selection.length > 0 || app.yard !== 0) return null
     return S.peopleInfo(c).find(p => p.id === app.unit) ?? null
   }
 
@@ -142,7 +143,6 @@ export function whois(ctx: Ctx, layer: HTMLElement): Whois {
           onclick: () => { const on = ctx.view.followed() === p.id; ctx.view.follow(on ? -1 : p.id); ctx.announce(on ? 'Not following.' : `Following ${name}: the camera keeps them in the middle until you move it.`); ctx.dirty() },
         }, icon('scout', 'i'), ctx.view.followed() === p.id ? 'Following' : 'Follow'),
         c.phase === 'season' && c.crew.length > 1 ? h('button', { class: 'btn', type: 'button', testid: 'whois-more', onclick: () => app.selectUnit(p.id, 'list') }, icon('people', 'i'), 'Their page') : null,
-        c.phase === 'plan' ? h('button', { class: 'btn', type: 'button', testid: 'whois-more', onclick: () => openCrew(ctx) }, icon('people', 'i'), 'Hiring') : null,
         farmer ? null : h('button', {
           class: 'btn hazard', type: 'button', testid: 'whois-letgo',
           onclick: async () => {
@@ -158,23 +158,22 @@ export function whois(ctx: Ctx, layer: HTMLElement): Whois {
   function update(): void {
     const c = app.campaign
     const p = open(c)
+    el.classList.toggle('phone', phone())
     if (!p || !c) {
       card.hidden = true
-      lead.hidden = true
       shownFor = -1
     } else {
       const was = card.hidden
       card.hidden = false
-      el.classList.toggle('phone', phone())
       patch(card, JSON.stringify([p, c.phase, c.season?.day, c.season?.jobs.map(j => [j.id, j.kind, j.field]), ctx.touch(), phone(), c.sundaysOff, ctx.view.followed(), c.crew.find(u => u.id === p.id)?.rest, ctx.view.unitPlace(p.id)]), () => body(c, p))
       card.setAttribute('aria-label', p.kind === 'farmer' ? 'You' : p.name)
       if (was || shownFor !== p.id) {
         shownFor = p.id
-        sizes = { ...sizes, w: card.offsetWidth || sizes.w, h: card.offsetHeight || sizes.h }
         ctx.announce(`${p.kind === 'farmer' ? 'You' : p.name}: ${doingWord(c, p)}.`)
         if (!ctx.reduced()) { card.classList.remove('in'); void card.offsetWidth; card.classList.add('in') }
-      } else sizes = { ...sizes, h: card.offsetHeight || sizes.h }
+      }
     }
+    tied.card.update(card.hidden ? null : ties().unit())
     const t = c && app.screen !== 'title' ? app.thing : null
     tcard.hidden = !t
     if (t && c) {
@@ -187,49 +186,21 @@ export function whois(ctx: Ctx, layer: HTMLElement): Whois {
         t.thing.kind === 'asking' && c.phase === 'plan' ? h('div', { class: 'whois-acts' }, h('button', { class: 'btn', type: 'button', testid: 'thing-hire', onclick: () => { app.inspect(null); openCrew(ctx) } }, icon('hire', 'i'), 'Hiring')) : null,
         t.thing.holder >= 0 ? h('div', { class: 'whois-acts' }, h('button', { class: 'btn', type: 'button', testid: 'thing-holder', onclick: () => app.selectUnit(t.thing.holder, 'land') }, icon('people', 'i'), 'Who has it')) : null,
       ])
-      sizes = { ...sizes, tw: tcard.offsetWidth || sizes.tw, th: tcard.offsetHeight || sizes.th }
     }
+    tied.thing.update(tcard.hidden ? null : ties().thing())
   }
 
-  // Sets a card beside a point, clear of the boards, the bar and the window's edges, with its leader to the point.
-  function place(box: HTMLElement, line: HTMLElement, a: { x: number; y: number; visible: boolean }, w: number, hh: number): void {
-    if (phone()) { box.style.transform = ''; line.hidden = true; return }
-    const ins = app.insets
-    const left0 = ins.left + 8, right0 = innerWidth - ins.right - 8, top0 = Math.max(8, ins.top + 8)
-    // Kept clear of the foot when it fits there; a card taller than the free land may come down over it, beside them.
-    const bottom0 = innerHeight - Math.max(8, hh > innerHeight - ins.bottom - 8 - top0 ? 8 : ins.bottom + 8)
-    const ax = Math.max(0, Math.min(innerWidth, a.x)), ay = Math.max(0, Math.min(innerHeight, a.y))
-    let x = ax + GAP
-    if (x + w > right0) x = ax - GAP - w
-    x = Math.max(left0, Math.min(right0 - w, x))
-    const y = Math.max(top0, Math.min(bottom0 - hh, ay - hh * 0.35))
-    box.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0)`
-    line.hidden = !a.visible
-    if (!a.visible) return
-    // The leader runs from the person to the nearest point of the card's edge.
-    const ex = Math.max(x, Math.min(x + w, ax)), ey = Math.max(y, Math.min(y + hh, ay))
-    const len = Math.hypot(ex - ax, ey - ay)
-    line.hidden = len < 6
-    line.style.transform = `translate3d(${ax.toFixed(1)}px, ${ay.toFixed(1)}px, 0) rotate(${Math.atan2(ey - ay, ex - ax).toFixed(4)}rad) scaleX(${(len / 100).toFixed(3)})`
+  // On a phone the sheet covers the foot of the land: how much of it, so what is in hand is kept in view above it.
+  function inset(): number {
+    if (!phone()) return 0
+    const up = [card, tcard].find(x => !x.hidden)
+    return up ? innerHeight - up.getBoundingClientRect().top + 6 : 0
   }
 
   function frame(): void {
-    // Followed, the person stands in the middle of the picture: the card waits at the side, its leader to them.
-    if (!card.hidden && app.unit >= 0 && ctx.view.followed() === app.unit && !phone()) {
-      const a = ctx.view.unitAnchor(app.unit)
-      const ins = app.insets
-      place(card, lead, { x: innerWidth - ins.right - 8, y: a.y, visible: false }, sizes.w, sizes.h)
-      if (a.visible) {
-        const x = innerWidth - ins.right - 8 - sizes.w
-        const len = Math.max(0, x - a.x - 30)
-        lead.hidden = len < 6
-        lead.style.transform = `translate3d(${(a.x + 30).toFixed(1)}px, ${a.y.toFixed(1)}px, 0) scaleX(${(len / 100).toFixed(3)})`
-      }
-    } else if (!card.hidden && app.unit >= 0) place(card, lead, ctx.view.unitAnchor(app.unit), sizes.w, sizes.h)
-    if (!tcard.hidden && app.thing) {
-      const a = ctx.view.thingAnchor(app.thing.thing)
-      place(tcard, tlead, a.visible ? a : { x: app.thing.x, y: app.thing.y, visible: true }, sizes.tw, sizes.th)
-    } else tlead.hidden = true
+    const mode = phone() ? 'sheet' : 'float'
+    tied.card.frame(mode)
+    tied.thing.frame(mode)
     // Before the click: the name of the person or thing under the pointer, and a mark on the ground under a person.
     const pt = app.pointing
     const c = app.campaign
@@ -255,12 +226,13 @@ export function whois(ctx: Ctx, layer: HTMLElement): Whois {
     if (foot?.visible) mark.style.transform = `translate3d(${foot.x.toFixed(1)}px, ${foot.y.toFixed(1)}px, 0)`
   }
 
-  const off = app.on(e => { if (e.type === 'unit' || e.type === 'inspect' || e.type === 'screen') ctx.dirty() })
+  const off = app.on(e => { if (e.type === 'unit' || e.type === 'inspect' || e.type === 'screen' || e.type === 'select' || e.type === 'yard') ctx.dirty() })
 
   return {
     el,
     update,
     frame,
+    inset,
     escape() {
       if (!tcard.hidden) { app.inspect(null); return true }
       if (!card.hidden) { app.selectUnit(-1); return true }

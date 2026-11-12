@@ -11,6 +11,7 @@ import { digitFor, fieldForDigit, heldFields, step } from './map.ts'
 import { plates, type PlateModel } from './plates.ts'
 import * as R from './rules.ts'
 import { cardHead, fieldCost, landCard, springFolds, tenureRow, tractCard, type Fold } from './spring.ts'
+import { anchored, ties, type Land } from './tie.ts'
 import { fold } from './system/parts.ts'
 import { topBar } from './top.ts'
 import { usualFirstYear } from './usual-year.ts'
@@ -170,7 +171,8 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
       return true
     },
   })
-  // A field, a lot or a tract picked on the land: its card, docked left, since the catalogue holds the right.
+  // A field, a lot or a tract picked on the land: its card, beside the point clicked and tied to it (tie.ts), on the
+  // land the catalogue leaves free. On a phone it fills the land over the order blank.
   const card = h('section', { class: 'command docked-left spring-card sheet sys', 'aria-label': 'The selected field', testid: 'plan-card', hidden: true })
   // The contracts signed stand under the folds: they are money promised.
   const track = tracker(ctx)
@@ -180,7 +182,17 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
   const body = h('div', { class: 'cat-body', 'data-scroll': 'spring' }, rows, track.el)
   const sheet = h('section', { class: 'catalogue sheet sys', 'aria-label': 'The spring plan', testid: 'spring' }, mast, body, springSlot(), foot)
   const notesSlot = h('div', { class: 'notes-slot' })
-  const el = h('main', { class: 'spring-screen sys' }, top.el, notesSlot, card, sheet)
+  const tied = anchored(ctx, card)
+  const el = h('main', { class: 'spring-screen sys' }, top.el, notesSlot, tied.parts, card, sheet)
+  // Where a card may stand: under the boards, left of the catalogue. Read once after each change.
+  let landNow: Land | null = null
+  ties().setLand(() => {
+    if (!landNow) {
+      const ins = app.insets
+      landNow = { win: { left: 8, top: ins.top + 8, right: Math.min(innerWidth, sheet.getBoundingClientRect().left) - 8, bottom: innerHeight - 8 }, blocks: [] }
+    }
+    return landNow
+  })
   // Every fold starts shut: a newcomer's first spring is a short sheet (e2e/play.spec.ts), each fold one click away.
   let open: Fold | null = null
   let note = ''
@@ -422,6 +434,8 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
         patch(card, JSON.stringify([shown, c.plans, c.seedStock, note, app.settings.units, c.year, c.fields.map(f => [f.tenure, f.cover, f.works?.left]), Math.round(c.cash), c.mortgages.length]), () => drawCard(c, shown))
         if (was && !ctx.reduced()) { card.classList.remove('in'); void card.offsetWidth; card.classList.add('in') }
       } else note = ''
+      tied.update(card.hidden ? null : ties().field())
+      landNow = null
       const state = [c.year, c.history.length, c.plans, c.fields.map(f => [f.tenure, f.cover]), c.seedStock.length, app.settings.units, layout]
       patch(mast, JSON.stringify([c.year, c.yearIdx]), () => drawMast(c))
       patch(rows, JSON.stringify([...state, open, nextGoal(c)?.id, c.applicants.map(a => a.id), c.crew.map(u => [u.id, u.wage, u.foreman]), c.offers.map(x => x.id), c.contracts.map(k => k.id),
@@ -448,7 +462,7 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
       // The card opening on a click never moves the camera: only the sheet, which always stands, frames the land.
       return [t, innerWidth - s.left + 8, 0, 0]
     },
-    frame: () => P.frame(),
-    dispose() { P.dispose() },
+    frame: () => { P.frame(); tied.frame(ctx.layout() === 'narrow' || ctx.layout() === 'short' ? 'plain' : 'float') },
+    dispose() { P.dispose(); ties().setLand(null); tied.dispose() },
   }
 }

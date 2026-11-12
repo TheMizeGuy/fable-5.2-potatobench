@@ -1,6 +1,7 @@
-// The command bar (design/season-card.html, design/tract.html): docked at the edge of the land, the field's record
-// above (its meters and what is known), and at most five orders as real buttons, each with its key, its cost, then its
-// catch; the suggested one filled ochre with the fist. An order given is answered at once: "On the list".
+// A field's card (design/season-card.html, design/tract.html): opened beside the field (tie.ts), the field's record
+// above (its meters and what is known), and its orders as real buttons, each with its key, its cost, then its catch;
+// the suggested one filled ochre. An order given is answered at once: "On the list". Everything on it is about the
+// field in hand: what the whole farm does (how spraying is done this season) is at the foot, with the people.
 import * as S from '../sim/index.ts'
 import { EXIT_MS, patch, type Ctx, type Level } from './core.ts'
 import { h, type Child } from './dom.ts'
@@ -12,7 +13,6 @@ import { fates, ringFor } from './crew.ts'
 import { isTract } from './map.ts'
 import { firstName, hillWord, isJob, isStale, JOB_KEY, JOB_VERB, jobText, jobWhat, stonesText, stonesWord } from './rules.ts'
 import { term } from './glossary.ts'
-import { askSpray, sprayWay } from './people.ts'
 import { meter, order, range } from './system/parts.ts'
 import { ringed } from './system/people.ts'
 
@@ -24,6 +24,12 @@ const FLASH_MS = 5000
 
 // The stage as the record's caption says it.
 const SHORT_STAGE: Record<string, string> = { 'Planted, not up': 'planted', 'Vines dead, skins setting': 'vines dead', 'Vines dead, skins set': 'vines dead', 'In bloom': 'in bloom' }
+
+// What a card's head says the thing is, over its name: "Potato field / North Ridge", "Woods to clear / Home Woodlot".
+const TRACT_KIND: Record<S.Cover, string> = { woods: 'Woods to clear', brush: 'Brush to clear', stumps: 'Stumps to pull', open: 'Cleared ground' }
+function fieldKind(f: S.FieldInfo): string {
+  return f.status === 'rest' ? 'Resting field' : 'Potato field'
+}
 
 interface Offer { kind: S.JobKind; fields: number[]; days: number; cost: number; score: number; given?: boolean }
 
@@ -467,7 +473,7 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
     const rows = orderRow(c, [i], sugg, '', extra)
     const next = t.works ? `The bulldozer is pulling stumps: ${F.plural(t.works.left, 'season day')} more.` : t.next ? `Next: ${F.localize(t.next).replace(/^./, x => x.toLowerCase())}` : f.status === 'off' ? 'Cleared. It can be cropped next spring: a year in oats and clover first lifts the raw ground.' : ''
     return [
-      head('Tract record', t.name, `${F.upper(t.coverWord)}. ${t.tenure === 'none' ? `For sale, ${F.money(t.price)}.` : S.PARCELS[i].block === 'home' ? 'The home farm.' : 'The farm\'s.'}`),
+      head(TRACT_KIND[f.cover], t.name, `${F.upper(t.coverWord)}. ${t.tenure === 'none' ? `For sale, ${F.money(t.price)}.` : S.PARCELS[i].block === 'home' ? 'The home farm.' : 'The farm\'s.'}`),
       h('ol', { class: 'steps', testid: 'clear-track', 'aria-label': `Clearing: ${cropped ? 'a field again' : ['standing', 'felled', 'stumped', 'picked'][at]}, step ${at + 1} of ${steps.length}` },
         steps.map((st, k) => h('li', { class: k < at || cropped ? 'done' : k === at ? 'now' : '' }, st))),
       h('div', { class: 'readings' },
@@ -497,14 +503,14 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
     const lot = f.lot >= 0 ? c.lots.find(l => l.id === f.lot) : undefined
     const land = landLines(c, f)
     if (f.status === 'dug' && lot && !f.weighed) {
-      return [head('Field record', f.name, `${f.variety}, dug, coming in`), land.length ? h('div', { class: 'readings' }, land) : null, note('The weigh ticket comes when the last barrel is in the potato house.')]
+      return [head(fieldKind(f), f.name, `${f.variety}, dug, coming in`), land.length ? h('div', { class: 'readings' }, land) : null, note('The weigh ticket comes when the last barrel is in the potato house.')]
     }
     if (f.status === 'dug' && lot) {
       const value = lot.open ? S.lotValue(app.world, c, lot) : 0
       const cull = culledAtDig(lot)
       const deal = deals(app.world, c, lot)[0]
       return [
-        head('Field record', f.name, `${f.variety}, dug ${F.date(c.year, lot.dugDay, true)}`),
+        head(fieldKind(f), f.name, `${f.variety}, dug ${F.date(c.year, lot.dugDay, true)}`),
         h('div', { class: 'readings' },
           h('p', { class: 'wrap' }, icon('dig', 'i'), h('span', null, lot.open
             ? `${F.mass(S.lotCwt(lot))} in the cellar, worth ${F.money(value)} today.${lot.sold > 0 ? ` ${F.mass(lot.sold)} sold for ${F.money(lot.revenue)}.` : ''}`
@@ -519,25 +525,21 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
     if (f.status === 'rest' || f.status === 'lost') {
       const extra = c.history.length > 0 ? [contractor(c, i, 'tile')].filter((x): x is HTMLElement => !!x) : []
       const rows = orderRow(c, [i], sugg, need && sugg ? F.localize(need.why) : '', extra)
-      return [head('Field record', f.name, f.status === 'rest' ? 'Oats and clover, resting' : `${f.variety}, lost`), land.length ? h('div', { class: 'readings' }, land) : null, adviceLine(c, [i], !!rows), rows]
+      return [head(fieldKind(f), f.name, f.status === 'rest' ? 'Oats and clover, resting' : `${f.variety}, lost`), land.length ? h('div', { class: 'readings' }, land) : null, adviceLine(c, [i], !!rows), rows]
     }
     // The orders stand right under the gauges, so nothing above them comes or goes: a paragraph appearing never moves one.
     const g = slots(c, [i], sugg, need && sugg ? F.localize(need.why) : '')
     const say = sayLine(c, [i], g.canAny, sugg)
     g.wire(say)
-    // How spraying is done this season, and the way to change it, beside the spray order once blight weather has come.
-    const way = sprayWay(c)
-    const spray = c.season!.watchDay >= 0 && f.status === 'growing' ? h('button', { class: 'btn quiet spray-way', type: 'button', testid: 'card-spray-way', onclick: () => askSpray(ctx) },
-      icon('spray', 'i'), 'Spraying this season: ', h('b', null, way === 'auto' ? 'kept sprayed' : way === 'none' ? 'not this year' : 'ask me'), h('span', { class: 'quiet' }, ' · change')) : null
     return [
-      headWith('Field record', f.name, [`${f.variety}, `, term((SHORT_STAGE[f.stage] ?? f.stage).toLowerCase())]),
+      headWith(fieldKind(f), f.name, [`${f.variety}, `, term((SHORT_STAGE[f.stage] ?? f.stage).toLowerCase())]),
+      // What is known first, then everything that can be ordered here in one group, then what the orders say back.
       gauges(c, f),
       g.el,
+      landRow(c, i),
       say,
       whoseLine(c, i),
-      spray,
       h('div', { class: 'readings' }, known(c, f), land),
-      landRow(c, i),
     ]
   }
 

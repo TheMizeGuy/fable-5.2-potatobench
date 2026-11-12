@@ -2,8 +2,8 @@
    under the pointer. Built from the system's sheet, buttons and type; placement and live states only. */
 .who-layer { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
 .whois-layer > * { position: absolute; left: 0; top: 0; will-change: transform; }
-.whois-layer .hover-name, .whois-layer .hover-mark, .whois-layer .whois-lead { pointer-events: none; }
-.hud .whois.sys { width: 320px; padding: 12px 14px 12px; pointer-events: auto; z-index: 2; }
+.whois-layer .hover-name, .whois-layer .hover-mark { pointer-events: none; }
+.hud .whois.sys { width: 320px; padding: 12px 14px 12px; pointer-events: auto; z-index: 2; overflow-y: auto; overscroll-behavior: contain; }
 .hud .whois.thing.sys { width: 290px; }
 .whois.in { animation: lay-whois var(--t-sheet) var(--ease-paper); }
 @keyframes lay-whois { from { scale: 0.96; } }
@@ -33,14 +33,13 @@
 @media (hover: hover) { .key-btn:not(.is-on):hover { box-shadow: inset 0 0 0 1px var(--ink), inset 0 0 0 3px var(--paper), inset 0 0 0 4px var(--ink); } }
 .whois-acts { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 8px; }
 .whois-acts .btn { min-height: 40px; padding: 0 12px; font-size: 15px; }
-.whois-lead { width: 100px; height: 2px; margin-top: -1px; background: var(--paper); box-shadow: 0 0 0 1px rgb(20 16 10 / 0.55); transform-origin: 0 50%; }
 .hover-name { padding: 4px 8px 3px; font: 400 14px/1 var(--f-gothic); letter-spacing: .08em; text-transform: uppercase; color: var(--ink); white-space: nowrap;
   background: var(--paper) url(./system/grain.png); background-blend-mode: multiply; box-shadow: var(--laid); }
 .hover-mark { width: 34px; height: 13px; margin: -6px 0 0 -17px; border-radius: 50%; border: 2.5px dashed var(--paper); box-shadow: 0 0 0 1px rgb(20 14 6 / 0.5), inset 0 0 0 1px rgb(20 14 6 / 0.5); }
 .touch .key-btn { width: 44px; height: 44px; }
 .touch .whois-first .btn, .touch .whois-acts .btn { min-height: 44px; }
 /* On a phone the card is a sheet from the bottom, over the foot of the screen. */
-.whois-layer.phone .whois { left: 10px; right: 10px; top: auto; bottom: 10px; width: auto !important; transform: none !important; max-height: 62%; overflow-y: auto; overscroll-behavior: contain; }
+.whois-layer.phone .whois { left: 10px; right: 10px; top: auto; bottom: 10px; width: auto !important; transform: none !important; max-height: 52%; overflow-y: auto; overscroll-behavior: contain; }
 .whois-layer.phone .whois.in { animation: lay-sheet var(--t-sheet) var(--ease-paper); }
 @keyframes lay-sheet { from { translate: 0 18px; } }
 .whois.thing .whois-head:last-child { padding-bottom: 0; border-bottom: 0; }

@@ -6,7 +6,7 @@ import { h, type Child } from './dom.ts'
 import * as F from './fmt.ts'
 import { icon } from './icons.ts'
 import { placeName, where } from './map.ts'
-import { doingGlyph, idleWithWork, sprayWay } from './people.ts'
+import { askSpray, doingGlyph, idleWithWork, sprayWay } from './people.ts'
 import { firstName, initial, JOB_DOING, JOB_VERB, jobText, KIND_GLYPH, KIND_NAME, kindDoes, personSign, SKILL_NAME, type Sign } from './rules.ts'
 import { portrait, ringed, ringOf } from './system/people.ts'
 import { guidedYear } from './tutorial.ts'
@@ -260,7 +260,8 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
               class: 'q-first', type: 'button', testid: `queue-who-${j.id}`, 'aria-label': `${what}: choose who does it`, 'aria-expanded': String(pop === j.id), title: 'Who does it',
               onclick: () => { pop = pop === j.id ? -1 : j.id; popWho = true; ctx.dirty() },
             }, icon('people', 'i')) : null) : null,
-          pop === j.id ? h('div', { class: 'q-pop sheet', role: 'group', 'aria-label': what },
+          // The order's own card, over the order that was clicked: everything on it is about that order.
+          pop === j.id ? h('div', { class: 'q-pop order-card sheet', role: 'group', 'aria-label': what, testid: 'order-card', 'data-thing': `order-${j.id}` },
             h('span', { class: 't-label q-pop-title' }, what),
             fateSaid ? h('span', { class: `q-fate${o && o.unit < 0 ? ' c-red' : ''}`, testid: `fate-${j.id}` }, fateSaid) : null,
             !popWho && k > 0 ? h('button', { class: 'btn', type: 'button', testid: `queue-first-${j.id}`, onclick: () => bump(j.id) }, icon('first', 'i'), 'First') : null,
@@ -294,11 +295,14 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
     const now = crews.map(u => doing(c, u, waits, crews))
     const signs = people.map(p => personSign(p, idleWithWork(c, p, waits)))
     if (next && performance.now() >= next.until) next = null
+    const way = sprayWay(c)
+    // (in the guided first year, not before the question has been asked)
+    const spraying = s0.watchDay >= 0 && !S.seasonDone(c) && (!!way || !guided)
     const model = {
       j: jobs.map(j => [j.id, j.kind, j.field, j.unit, Math.round(j.need > 0 ? j.done / j.need * 20 : 0), waits[j.id]]),
       u: crews.map((u, k) => [u.id, u.name, now[k].text, now[k].place, Math.round(now[k].progress * 20), signs[k]?.glyph, signs[k]?.cls, doingGlyph(c, people[k]), doingWord(c, people[k])]),
       pick: app.unit, expanded, pop, popWho, layout, room, guided, touch, h: c.fields.map(f => f.tenure), w: waiting.map(x => x.id), grid: hooks.gridOpen(), hire: hooks.hireShown(), goal,
-      next: next ? [next.unit, next.kind, next.field] : 0, stopped: [...stopped],
+      next: next ? [next.unit, next.kind, next.field] : 0, stopped: [...stopped], spray: spraying ? way ?? 'ask' : 0,
       pr: c.crew.map(u => [u.id, u.prio, u.job, u.rest]),
       fate: [...f.of.values()].map(o => [o.id, o.unit, o.when, o.why]), press: f.pressing.map(p => [p.kind, p.field, p.why, p.inWay]),
     }
@@ -310,6 +314,12 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
         h('div', { class: `page units${many ? ' many' : ''}${people.length > 5 ? ' crowded' : ''}`, role: 'group', 'aria-label': 'People' },
           people.map((p, k) => cell(c, p, now[k], signs[k], many, goal === 'person' && k === 1, stopped.has(p.id))),
           h('div', { class: 'tools bar-tools' },
+            // How spraying is done this season, and the way to change it, once blight weather has come: the whole
+            // farm's, so it stands with the people and not on any one field's card.
+            spraying ? h('button', {
+              class: 'iconbtn spray-way', type: 'button', testid: 'spray-way-open', 'data-w': 'minor', title: touch ? undefined : `Spraying this season: ${way === 'auto' ? 'kept sprayed' : way === 'none' ? 'not this year' : 'ask me'} · change`,
+              onclick: () => askSpray(ctx),
+            }, icon('spray', 'i'), h('span', { class: 'sr' }, 'Spraying this season: ', h('b', null, way === 'auto' ? 'kept sprayed' : way === 'none' ? 'not this year' : 'ask me'), h('span', { class: 'quiet' }, ' · change'))) : null,
             waiting.length ? h('button', {
               class: 'iconbtn inc-mark', type: 'button', testid: 'incident-open', 'aria-label': `${waiting[0].title}: waiting for an answer`, title: touch ? undefined : waiting[0].title,
               onclick: () => hooks.onIncident(),

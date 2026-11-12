@@ -25,6 +25,7 @@ import { alertShort, countYearsFrom } from './rules.ts'
 import { seasonScreen } from './season.ts'
 import { titleScreen } from './title.ts'
 import { guidedYear, HOLD, mountGuide, openGuide } from './tutorial.ts'
+import { mountTies } from './tie.ts'
 import { whois } from './whois.ts'
 
 export const mountHud: MountHud = (root, app, view, sound) => {
@@ -66,6 +67,7 @@ export const mountHud: MountHud = (root, app, view, sound) => {
   }
 
   notes.onGo = field => { app.select(field); app.focus(field) }
+  const tying = mountTies(ctx, root)
   const who = whois(ctx, whoLayer)
 
   const menu = () => openMenu(ctx, { onHelp: () => openHelp(ctx), onAlmanac: () => openAlmanac(ctx), onGuide: () => openGuide(ctx) })
@@ -281,17 +283,20 @@ export const mountHud: MountHud = (root, app, view, sound) => {
         who.update()
         // One voice: no toast under a card that wants an answer.
         root.classList.toggle('voice', !!root.querySelector('.screen-layer .telegram:not([hidden]), .paper-layer > .dialog:not(.out)'))
-        const [t, r, b, l] = screen.insets().map(x => Math.max(0, Math.round(x)))
+        const [t, r, b0, l] = screen.insets().map(x => Math.max(0, Math.round(x)))
+        const b = Math.max(b0, Math.round(who.inset()))
         app.setInsets(t, r, b, l)
         root.style.setProperty('--top', `${t}px`)
         root.style.setProperty('--bottom', `${b}px`)
         if (waiting) placeSplash()
       }
+      tying.frame()
       screen?.frame?.(dt)
       who.frame()
     },
     dispose() {
       screen?.dispose?.()
+      tying.dispose()
       guided.dispose()
       root.replaceChildren()
     },

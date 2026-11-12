@@ -60,9 +60,19 @@ From the papers direction (the base):
 
 Grafted from the print direction:
 
-- **Orders are buttons, and the next one is lit.** A field's card is a command bar docked at the right edge, not a
-  list of text; the suggested order is filled and carries the pointing hand; each order shows its key, its cost,
-  then its catch.
+- **Orders are buttons, and the next one is lit.** A field's card is a set of orders, not a list of text; the
+  suggested order is filled and carries the pointing hand; each order shows its key, its cost, then its catch.
+- **A card opens beside the thing clicked, tied to it.** The print direction docked the command bar at the right
+  edge; the owner, playing it, found menus opening "out in narnia" with nothing to say which thing they belonged
+  to. The rule since (`src/ui/anchor.ts` for the geometry, `src/ui/tie.ts` for the tie, `e2e/anchored.spec.ts`):
+  click a field, its tag, a tract, the yard, a building, a person, their chip, a machine or an order, and its card
+  opens 14 px from the pointer, to the right and level by preference, flipped to stay in the window, off the bars
+  and off the thing's own middle; a tether runs from the card to the thing, which is marked on the land; the card
+  says which thing it is about (`data-thing`) and holds only that thing's business (what the whole farm does, such
+  as how spraying is done this season, stands with the people at the foot); it goes with the thing as the camera
+  moves, and waits at the nearest edge with a Show key when the thing leaves the picture; one card at a time,
+  closed by Escape, its cross or a click on empty ground. On a phone the card is a sheet at the foot with a notch
+  on its edge toward the thing, which is kept in view above it.
 - **Selection is drawn on the land**: a dashed outline with registration marks at the field's corners.
 - **Colour as signal on the land**: a need's stamp is inked by kind (blight and loss red, the suggested next thing
   ochre, water blue), always with its icon, never colour alone.
@@ -120,7 +130,7 @@ motion, screen readers). The clock is Pause and three speeds and never changes s
 
 The rebuild is in the game: the system as code (`src/ui/system`, with a kit page at `?kit` and a test that fails if
 it drifts from `design/system.css`), the title, the season screen (boards, field tags and need stamps by kind, face
-pins that cluster, the command bar docked beside the land with the selection drawn on the field, the time book, the
+pins that cluster, each thing's card beside the thing with the selection drawn on the field, the time book, the
 person card and work grid, the yard and tract bars, the telegram) and every sheet (the spring catalogue, the weigh
 ticket with the scale's reveal and its sound, winter, the account book at the year's end, the menu, how to play, the
 almanac).

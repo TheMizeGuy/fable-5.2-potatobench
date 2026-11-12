@@ -83,6 +83,9 @@
 .season-screen .q-first .i { --i: 16px; }
 .season-screen .q-pop { position: absolute; left: 0; bottom: calc(100% + 8px); z-index: 4; display: grid; gap: 6px; min-width: 220px; padding: 10px 12px; }
 .season-screen .q-who { display: flex; flex-wrap: wrap; gap: 6px; }
+/* An order's card is tied to its order: a notch down to it, and the order marked while its card is up. */
+.season-screen .order-card::after { content: ''; position: absolute; left: 10px; top: 100%; width: 18px; height: 9px; background: var(--paper); clip-path: polygon(0 0, 100% 0, 50% 100%); }
+.season-screen .q[aria-expanded='true'] { box-shadow: inset 0 0 0 2px var(--ink); }
 .season-screen .q-who .btn { padding: 0 10px; gap: 6px; }
 .where { display: block; flex: none; }
 .where rect { fill: rgb(30 28 25 / 0.2); }
@@ -161,11 +164,15 @@
 .sel-layer .reg-at .sel-mark { position: absolute; left: -15px; top: -15px; width: 30px; height: 30px; overflow: visible; }
 .plate-layer .tag-wrap { z-index: 2; }
 
-/* ---------------------------------------------------------------- the command bar, docked at the edge of the land */
-/* The bar stands below the paused chip's place whether the clock runs or not: nothing moves when the clock does. */
+/* ---------------------------------------------------------------- a thing's card, beside the thing (tie.ts) */
+/* On a phone or a short window the card is docked (further down); these are the docked card's edges. */
 .season-screen .command { top: calc(var(--top, 220px) + 64px); right: max(var(--gutter), env(safe-area-inset-right, 0px)); max-height: calc(100% - var(--top, 220px) - 80px); }
 .season-screen .command.compact.sys { top: calc(var(--top, 220px) + 64px); }
-.season-screen.docked-left .command { right: auto; left: max(var(--gutter), env(safe-area-inset-left, 0px)); max-height: calc(100% - var(--top, 220px) - var(--bottom, 140px) - 76px); }
+/* At a desk a card opens beside what was clicked: laid by its transform (tie.ts), as tall as the land there leaves
+   it, over the alerts and the tags. */
+.season-screen:is([data-layout='mid'], [data-layout='wide']) :is(.command, .command.compact.sys, .person-card) { left: 0; top: 0; right: auto; bottom: auto; max-height: none; z-index: 3; will-change: transform; }
+.season-screen:is([data-layout='mid'], [data-layout='wide']) :is(.command, .person-card).in { animation: lay-card var(--t-sheet) var(--ease-paper); }
+.season-screen:is([data-layout='mid'], [data-layout='wide']) :is(.command, .person-card).out { animation: leave-card var(--t-leave) var(--ease-in) forwards; }
 .season-screen .command.compact { overflow-y: auto; overscroll-behavior: contain; }
 /* The field card: its head and cross stay in view, and what is under them scrolls inside the window. A fixed width,
    so an order given or a longer line under the orders never moves one. */
@@ -188,13 +195,9 @@
 .season-screen .command .order-say { min-height: calc(2.6em + 8px); padding: 4px 18px 6px; font-size: 15px; }
 .season-screen .command .land-orders { padding-top: 0; }
 .season-screen .command.compact .order.is-suggested .fist { display: none; }
-/* Docked at the left, the fist points in from the land on its right. */
-.season-screen.docked-left .command .order.is-suggested .fist { left: auto; right: -46px; transform: translateY(-50%) scaleX(-1); }
 .season-screen .command.in { animation: lay-right var(--t-sheet) var(--ease-paper); }
-.season-screen.docked-left .command.in { animation-name: lay-left; }
 .season-screen .command.out { animation: leave-right var(--t-leave) var(--ease-in) forwards; }
 @keyframes lay-right { from { transform: translateX(16px); } }
-@keyframes lay-left { from { transform: translateX(-16px); } }
 @keyframes leave-right { to { transform: translateX(16px); opacity: 0; } }
 .season-screen .command { grid-template-columns: minmax(0, 1fr); }
 .command .t-title { overflow-wrap: anywhere; }
@@ -248,7 +251,6 @@
 .season-screen .person-card, .season-screen .work { bottom: calc(var(--bottom, 140px) + 8px); max-height: calc(100% - var(--top, 220px) - var(--bottom, 140px) - 24px); overflow-y: auto; overscroll-behavior: contain; scroll-padding-bottom: 12px; }
 .season-screen .person-card { left: max(var(--gutter), env(safe-area-inset-left, 0px)); }
 .season-screen .work { left: max(var(--gutter), env(safe-area-inset-left, 0px)); }
-.season-screen .person-card:not([hidden]) ~ .work { left: calc(max(var(--gutter), env(safe-area-inset-left, 0px)) + 468px); }
 .season-screen .person-card.in, .season-screen .work.in { animation: lay-up var(--t-sheet) var(--ease-paper); }
 .season-screen .person-card.out, .season-screen .work.out { animation: leave-down var(--t-leave) var(--ease-in) forwards; }
 @keyframes lay-up { from { transform: translateY(14px); } }
@@ -424,7 +426,6 @@
 .season-screen[data-layout='short'] .person-card, .season-screen[data-layout='short'] .work { top: calc(var(--top, 100px) + 6px); bottom: auto; max-height: calc(100% - var(--top, 100px) - var(--bottom, 70px) - 16px); }
 .season-screen[data-layout='short'] .person-card { width: 400px; padding: 10px 14px; }
 .season-screen[data-layout='short'] .work { left: auto; right: var(--gutter); width: auto; max-width: calc(100% - 16px); }
-.season-screen[data-layout='short'] .person-card:not([hidden]) ~ .work { left: auto; }
 .season-screen[data-layout='short'] .telegram { top: calc(var(--top, 100px) + 4px); max-height: calc(100% - var(--top, 100px) - 10px); padding: 10px 16px; width: min(620px, calc(100% - 16px)); }
 .season-screen[data-layout='short'] .telegram .tg-name { font-size: 34px; }
 .season-screen[data-layout='short'] .telegram .reply { min-height: 0; }
