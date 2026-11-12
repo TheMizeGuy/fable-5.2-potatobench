@@ -28,6 +28,19 @@ async function farmWithPeople(page: Page): Promise<void> {
   await putAway(page)
 }
 
+// Runs the days on to the weigh ticket as a player would: a stop the game makes on the way (the frost warning over
+// the barrels the evening before a frost) is gone on from with the clock's own Go on.
+async function untilTicket(page: Page): Promise<void> {
+  const ticket = page.getByTestId('weighin')
+  const until = Date.now() + 90_000
+  while (Date.now() < until && !(await ticket.isVisible().catch(() => false))) {
+    const go = page.getByTestId('paused-go')
+    if (await go.isVisible().catch(() => false) && !(await page.locator('#ui .dialog').count())) await go.click().catch(() => {})
+    await page.waitForTimeout(300)
+  }
+  await expect(ticket).toBeVisible()
+}
+
 // Words a sighted player is given to read, counted the way tools/quality/capture.ts counts them, and which elements
 // carry them, so a count over the limit says where the words are.
 async function wordsOnScreen(page: Page): Promise<{ n: number; by: string }> {
@@ -791,7 +804,7 @@ test('Start the season runs the clock at 1x with no click; a weigh ticket stops 
   await putAway(page)
   await page.getByTestId('speed-2').click()
   const ticket = page.getByTestId('weighin')
-  await expect(ticket).toBeVisible({ timeout: 60_000 })
+  await untilTicket(page)
   expect((await look(page)).paused).toBe(true)
   await ticket.locator('[data-testid^="lot-sell-"]').first().click()
   await expect(ticket).toHaveCount(0)
@@ -953,7 +966,7 @@ test('the clock and the keys as a player meets them: Space just after an answer 
   await putAway(page)
   await page.getByTestId('speed-2').click()
   const ticket = page.getByTestId('weighin')
-  await expect(ticket).toBeVisible({ timeout: 60_000 })
+  await untilTicket(page)
   // Answered, the days go on by themselves; a Space a moment later is not taken back as a pause.
   await ticket.locator('[data-testid^="lot-sell-"]').first().click()
   await expect(ticket).toHaveCount(0)
