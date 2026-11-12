@@ -53,7 +53,6 @@ export const mountHud: MountHud = (root, app, view) => {
     reduced: () => app.settings.reducedMotion,
     awaiting: 0,
     memo: { estimates: [], soilT: 10, digSoilT: {}, lots: {}, seen: [], digEst: {}, digSeen: {}, sampleBefore: {} },
-    clock: { auto: true },
     dirty: () => { dirty = true },
   }
 
@@ -162,7 +161,7 @@ export const mountHud: MountHud = (root, app, view) => {
         // The tray and the ticket speak for themselves, and a clean walk shows on the field's own card.
         if (app.screen !== 'season' || a.type === 'sample' || a.type === 'weighed' || (a.type === 'scout' && a.level !== 'bad')) break
         const short = alertShort(a)
-        notes.push({ level: a.level, glyph: short.glyph, text: short.text, full: a.text, field: a.field, day: a.day })
+        notes.push({ level: a.level, glyph: short.glyph, text: short.text, full: a.text, field: a.field, day: a.day, go: screen?.goFor?.(a) })
         break
       }
       case 'change':

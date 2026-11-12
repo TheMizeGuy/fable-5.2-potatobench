@@ -10,7 +10,8 @@ export interface PlateModel {
   glyph: string
   // A second line, for the spring plan.
   sub?: string
-  marks: { glyph: string; cls: string }[]
+  // n: a small figure beside the mark, such as the hundredweight still in barrels.
+  marks: { glyph: string; cls: string; n?: string }[]
   queue: { glyph: string; active: boolean }[]
   badge: { glyph: string; label: string; urgent: boolean } | null
   // What a screen reader hears for the plate.
@@ -21,6 +22,8 @@ export interface PlateModel {
   land?: boolean
   // The number key that picks it.
   key?: string
+  // A kind of plate drawn its own way: 'tract' for woods and brush still to clear.
+  cls?: string
 }
 
 const GAP = 6
@@ -77,7 +80,7 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
       const on = app.selection.includes(i)
       patch(wrap, JSON.stringify([m, on, ctx.touch()]), () => [
         h('button', {
-          class: `plate${on ? ' on' : ''}${m.land ? ' land' : ''}`, type: 'button', testid: m.land ? `land-${i}` : `field-${i}`, 'aria-pressed': String(on), 'aria-label': m.said,
+          class: `plate${on ? ' on' : ''}${m.land ? ' land' : ''}${m.cls ? ` ${m.cls}` : ''}`, type: 'button', testid: m.land ? `land-${i}` : `field-${i}`, 'aria-pressed': String(on),
           'aria-keyshortcuts': m.key || null, title: ctx.touch() ? undefined : m.said,
           onclick: (e: Event) => pick(i, (e as MouseEvent).shiftKey),
           ondblclick: () => { if (!m.land) app.selectLike(i) },
@@ -89,8 +92,9 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
           icon(m.glyph, 'ic s plate-glyph'),
           h('span', { class: 'plate-name' }, m.name),
           m.sub ? [' ', h('span', { class: 'plate-sub' }, m.sub)] : null,
-          m.marks.length ? h('span', { class: 'plate-marks' }, m.marks.map(k => icon(k.glyph, `ic s ${k.cls}`))) : null,
-          m.queue.length ? h('span', { class: 'plate-queue' }, m.queue.map(q => icon(q.glyph, `ic s${q.active ? ' active' : ''}`))) : null)),
+          m.marks.length ? h('span', { class: 'plate-marks' }, m.marks.map(k => k.n ? h('span', { class: `mark-n ${k.cls}` }, icon(k.glyph, 'ic s'), h('span', { class: 'num' }, k.n)) : icon(k.glyph, `ic s ${k.cls}`))) : null,
+          m.queue.length ? h('span', { class: 'plate-queue' }, m.queue.map(q => icon(q.glyph, `ic s${q.active ? ' active' : ''}`))) : null),
+        h('span', { class: 'sr' }, `. ${m.said}`)),
         m.badge ? h('button', {
           class: `badge${m.badge.urgent ? ' urgent' : ''}${m.taught ? ' taught' : ''}`, type: 'button', testid: `badge-${i}`, 'aria-label': m.badge.label,
           title: ctx.touch() ? undefined : m.badge.label,

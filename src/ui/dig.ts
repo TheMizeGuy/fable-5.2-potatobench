@@ -537,7 +537,7 @@ export function ticket(ctx: Ctx, lotId: number, o: { fresh: boolean; staged?: bo
       if (!fresh || app.campaign !== c || c.phase !== 'season') return
       if (lot.open && !answered) ctx.say(`${F.mass(S.lotCwt(lot))} from ${name} went into the cellar.`, 'info')
       // The decision is made: the days run again.
-      if (!ctx.papers.pending() && app.speed === 0 && !S.seasonDone(c)) app.setSpeed(1)
+      if (!ctx.papers.pending()) app.resumeAfterCard()
     },
     body: () => {
       const weight = h('span', { class: 'figure num', testid: 'ticket-weight' }, F.mass(d.market))

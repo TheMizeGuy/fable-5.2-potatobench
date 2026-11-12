@@ -21,9 +21,9 @@ function steps(touch: boolean): HTMLElement {
       h('h3', { class: 't-head' }, h('span', { class: 'how-n' }, '2'), 'Order'),
       h('p', null, touch ? 'Tap the lit badge: it gives the order the field needs. Or pick one on the card.' : 'Click the lit badge, or right-click the field: it gives the order the field needs.')),
     h('li', null,
-      pic(h('span', { class: 'clock' }, h('span', { class: 'nicon', 'aria-pressed': 'true' }, icon('pause')), h('span', { class: 'nicon' }, icon('play')), h('span', { class: 'nicon armed' }, icon('run')))),
-      h('h3', { class: 't-head' }, h('span', { class: 'how-n' }, '3'), 'Let time run'),
-      h('p', null, touch ? 'The days run by themselves and stop when something needs you.' : 'The days run by themselves and stop when something needs you. Space pauses.')))
+      pic(h('span', { class: 'clock' }, h('span', { class: 'nicon' }, icon('pause')), h('span', { class: 'nicon speed-x num', 'aria-pressed': 'true' }, '1×'), h('span', { class: 'nicon speed-x num' }, '2×'), h('span', { class: 'nicon speed-x num' }, '3×'))),
+      h('h3', { class: 't-head' }, h('span', { class: 'how-n' }, '3'), 'Set the pace'),
+      h('p', null, touch ? 'The days run at the speed you set. A card that needs an answer stops them.' : 'The days run at the speed you set. A card that needs an answer stops them. Space pauses.')))
 }
 
 const YEAR: [string, string, string][] = [
@@ -58,7 +58,7 @@ export function openHelp(ctx: Ctx): void {
               row(k('1', '–', '9', '0'), 'Select one of the first ten fields. With Shift, add it.'),
               row(k('Tab'), 'The next field that needs something.'),
               row(k('Enter'), 'Give the selection the order it needs.'),
-              row(k('Space', '+', '−', 'F'), 'Pause; faster; slower; run until needed.'),
+              row(k('Space', 'F', '+', '−'), 'Pause and go on; step through 1×, 2×, 3×; faster; slower.'),
               row(k('Backspace'), 'Take the last order off the list.'),
               row(k('I', 'M', 'Esc'), 'The almanac; the menu; let go.'),
               row(k('Arrows', 'Q', 'E', 'Home'), 'Move, turn, and frame the farm.'),

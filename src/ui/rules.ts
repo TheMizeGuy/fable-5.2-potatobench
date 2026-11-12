@@ -3,8 +3,9 @@ import type { Alert } from '../game/app.ts'
 import * as S from '../sim/index.ts'
 import * as F from './fmt.ts'
 
-export const JOB_KEY: Record<S.JobKind, string> = { plant: 'P', hill: 'H', scout: 'C', spray: 'S', water: 'W', rogue: 'R', sample: 'T', kill: 'K', dig: 'D', fell: 'F', rocks: 'O', brush: 'B', build: '', haul: '' }
-export const KEY_JOB: Record<string, S.JobKind> = { p: 'plant', h: 'hill', c: 'scout', s: 'spray', w: 'water', r: 'rogue', t: 'sample', k: 'kill', d: 'dig', f: 'fell', o: 'rocks', b: 'brush' }
+// F steps the clock's speed, so felling is X, for the axe.
+export const JOB_KEY: Record<S.JobKind, string> = { plant: 'P', hill: 'H', scout: 'C', spray: 'S', water: 'W', rogue: 'R', sample: 'T', kill: 'K', dig: 'D', fell: 'X', rocks: 'O', brush: 'B', build: '', haul: '' }
+export const KEY_JOB: Record<string, S.JobKind> = { p: 'plant', h: 'hill', c: 'scout', s: 'spray', w: 'water', r: 'rogue', t: 'sample', k: 'kill', d: 'dig', x: 'fell', o: 'rocks', b: 'brush' }
 export const JOB_VERB: Record<S.JobKind, string> = {
   plant: 'Plant', hill: 'Hill', scout: 'Scout', spray: 'Spray', water: 'Water', rogue: 'Rogue', sample: 'Test dig', kill: 'Kill vines', dig: 'Dig',
   fell: 'Fell', rocks: 'Pick rocks', brush: 'Cut brush', build: 'Build', haul: 'Haul in',
@@ -12,7 +13,16 @@ export const JOB_VERB: Record<S.JobKind, string> = {
 // What the crew is doing, before the field's name.
 export const JOB_DOING: Record<S.JobKind, string> = {
   plant: 'Planting', hill: 'Hilling', scout: 'Scouting', spray: 'Spraying', water: 'Watering', rogue: 'Roguing', sample: 'Test dig in', kill: 'Killing vines in', dig: 'Digging',
-  fell: 'Felling', rocks: 'Picking rocks in', brush: 'Cutting brush round', build: 'Building at', haul: 'Hauling in',
+  fell: 'Felling', rocks: 'Picking rocks in', brush: 'Cutting brush round', build: 'Building in', haul: 'Hauling from',
+}
+
+// An order in a few words: "Hilling North Ridge", "Building in the home yard". A build order's place is a yard.
+export function jobText(j: { kind: S.JobKind; field: number }, c?: S.Campaign, building?: number): string {
+  if (j.kind === 'build') {
+    const b = c && building !== undefined ? c.buildings.find(x => x.id === building) : undefined
+    return b ? `Building the ${S.BUILDINGS[b.kind].name.toLowerCase()}` : `${JOB_DOING.build} ${S.placeName(j.field)}`
+  }
+  return `${JOB_DOING[j.kind]} ${S.placeName(j.field)}`
 }
 
 // One line each: what the job does.
@@ -131,9 +141,65 @@ export function alertShort(a: Alert): { text: string; glyph: string } {
     case 'sold': return { text: a.text.replace(/^Sold .* for /, `${name}sold for `).replace(/\.$/, ''), glyph: 'check' }
     case 'delivered': return { text: a.text.replace(/^Delivered .* for /, `${name}delivered for `).replace(/\.$/, ''), glyph: 'deliver' }
     case 'contractShort': case 'contractFilled': return { text: a.text.replace(/\.$/, ''), glyph: 'contract' }
-    case 'hired': case 'dismissed': return { text: a.text.replace(/\.$/, ''), glyph: 'crew' }
+    case 'hired': return { text: a.text.replace(/ is hired as .*/, ' hired'), glyph: 'hire' }
+    case 'dismissed': return { text: a.text.replace(/\.$/, ''), glyph: 'crew' }
+    case 'quit': return { text: `${who(a.text)} quit`, glyph: 'unhappy' }
+    case 'unhappy': return { text: `${who(a.text)} is unhappy`, glyph: 'unhappy' }
+    case 'wornOut': return { text: `${who(a.text)} is worn out`, glyph: 'tired' }
+    case 'hurt': return { text: `${who(a.text)} is hurt${/back on (.+)\.$/.exec(a.text) ? `, back ${/back on (.+)\.$/.exec(a.text)![1]}` : ''}`, glyph: 'hurt' }
+    case 'poached': return { text: `${who(a.text)} left for the neighbor`, glyph: 'unhappy' }
+    case 'skillUp': return { text: a.text.replace(/ is better at /, ': ').replace(/: level (\d+)\.$/, ' $1'), glyph: 'rise' }
+    case 'breakdown': return { text: 'A tractor broke down', glyph: 'tractor' }
+    case 'repaired': return { text: 'The tractor is going again', glyph: 'tractor' }
+    case 'building': return { text: F.upper(a.text.replace(/ is started in .*/, ' started').replace(/^An? /, '')), glyph: 'build' }
+    case 'built': return { text: a.text.replace(/^The (.+?) in .*$/, (_, b: string) => `${F.upper(b)} built`), glyph: 'build' }
+    case 'felled': return { text: `${name}felled`, glyph: 'fell' }
+    case 'stumped': return { text: `${name}stumps out`, glyph: 'stump' }
+    case 'tiled': return { text: `${name}tile drains in`, glyph: 'tile' }
+    case 'rocks': return { text: `${name}rocks picked`, glyph: 'rocks' }
+    case 'brushed': return { text: `${name}brush cut back`, glyph: 'brush' }
+    case 'brushBack': return { text: a.text.replace(/\.$/, ''), glyph: 'brush' }
+    case 'pondDry': return { text: 'The pond is dry', glyph: 'pond' }
+    case 'frozenInField': return { text: `${name}barrels froze${n ? `, ${F.localize(`${n} cwt`)}` : ''}`, glyph: 'frost' }
+    case 'weighed': return { text: `${name}weighed in`, glyph: 'ticket' }
+    case 'pickers': return { text: a.text.startsWith('A picking') ? 'Pickers hired' : 'Pickers sent home', glyph: 'pickers' }
+    case 'logsSold': return { text: a.text.replace(/^Sold (.+?) loads of logs to the mill for (.+)\.$/, 'Logs sold for $2'), glyph: 'logs' }
+    case 'incident': return { text: F.localize(a.text.split('. ')[0]), glyph: 'ask' }
+    case 'need': {
+      const more = Array.isArray(a.data?.fields) ? a.data.fields.length - 1 : 0
+      return { text: `${a.text.replace(/\.$/, '')}${more > 0 ? ` and ${F.plural(more, 'more field')}` : ''}`, glyph: typeof a.data?.act === 'string' ? a.data.act : 'warn' }
+    }
+    case 'incidentDone': return { text: a.text.replace(/\.$/, ''), glyph: 'ask' }
+    case 'foreman': return { text: a.text.replace(/:.*$/, '').replace(/\.$/, ''), glyph: 'foreman' }
     default: return { text: a.text, glyph: a.level === 'bad' ? 'blight' : a.level === 'warn' ? 'warn' : a.level === 'good' ? 'check' : 'flat' }
   }
+}
+
+// The person an alert is about: the name it starts with.
+function who(text: string): string {
+  return /^(.+?)(?: is | has | takes | quits)/.exec(text)?.[1] ?? text.split(' ')[0]
+}
+
+// Days until the ground is fit to plant, as a grower would reckon it: the soil drawn toward each day's mean, from the
+// forecast for five days and the usual weather after, and never before the date the coach calls too early. -1 when
+// it cannot be told within three months.
+export function plantingIn(world: S.World, c: S.Campaign): number {
+  const s = c.season
+  const t = S.today(world, c)
+  if (!s || !t) return -1
+  const earliest = S.dayIndex(s.year, 4, 8)
+  const fc = S.forecast(world, c, 5)
+  const nm = world.weather.normals
+  let soil = t.soilT
+  for (let k = 1; k <= 90; k++) {
+    const day = s.day + k
+    const f = fc[k - 1]
+    const slot = !S.isLeap(s.year) && day >= 59 ? day + 1 : day
+    const mean = f ? (f.hi + f.lo) / 2 : (nm.tmax[slot] + nm.tmin[slot]) / 20
+    soil += S.SOIL_T_GAIN * (mean - soil)
+    if (day >= earliest && soil >= 10) return k
+  }
+  return -1
 }
 
 // What the five-day forecast says the sky will do, from its own chance of rain.
@@ -301,6 +367,113 @@ const JOB_NOUN: Record<S.JobKind, string> = {
 
 export function initial(name: string): string {
   return name.slice(0, 1).toUpperCase()
+}
+
+// ---------------------------------------------------------------- people
+
+export const SKILL_NAME: Record<S.Skill, string> = { machine: 'Machine', field: 'Field', woods: 'Woods', build: 'Building', pack: 'Packing' }
+export const SKILL_GLYPH: Record<S.Skill, string> = { machine: 'tractor', field: 'scout', woods: 'fell', build: 'build', pack: 'packing' }
+
+// The orders each kind of work covers, from the simulation's own table.
+export function skillCovers(skill: S.Skill): string {
+  const jobs = (Object.keys(S.JOB_SKILL) as S.JobKind[]).filter(k => S.JOB_SKILL[k] === skill)
+  return jobs.length ? F.upper(F.list(jobs.map(j => JOB_NOUN[j]))) : 'Packing the stored crop in the packing shed, in winter'
+}
+
+// A priority as a cell shows it: 1 first .. 4, and a dash for never.
+export function prioMark(level: number): string {
+  return level <= 0 ? '–' : String(level)
+}
+
+export function prioWord(level: number): string {
+  return level <= 0 ? 'never' : level === 1 ? 'first' : `priority ${level}`
+}
+
+// The next priority a click gives: 1, 2, 3, 4, never, and round again.
+export function prioNext(level: number, back = false): number {
+  const order = [1, 2, 3, 4, 0]
+  const k = order.indexOf(level)
+  return order[(k + (back ? order.length - 1 : 1)) % order.length]
+}
+
+export function firstName(name: string): string {
+  return name === S.FARMER_NAME ? 'You' : name.split(' ')[0]
+}
+
+// Why a person's mood is where it is: the pulls on it the grower can see, the strongest first.
+export function moodWhy(c: S.Campaign, p: S.PersonInfo): { up: boolean; text: string }[] {
+  const out: { up: boolean; text: string; size: number }[] = []
+  if (p.kind !== 'farmer') {
+    if (p.bed) out.push({ up: true, text: 'a bed in the bunkhouse', size: S.MOOD_BED })
+    if (p.ask > 0 && p.wage !== p.ask) {
+      const d = (p.wage - p.ask) / p.ask
+      out.push({ up: d > 0, text: `paid ${F.pct(Math.abs(d))} ${d > 0 ? 'over' : 'under'} what they asked`, size: Math.abs(d) * S.MOOD_PAY })
+    }
+  }
+  if (p.tired > S.MOOD_TIRED_FROM) out.push({ up: false, text: 'worn down by the work', size: S.MOOD_TIRED * (p.tired - S.MOOD_TIRED_FROM) })
+  const s = c.season
+  const fieldsIn = s && c.phase === 'season' ? s.fields.filter(f => f.status === 'dug').length : 0
+  if (fieldsIn > 0) out.push({ up: true, text: `${F.plural(fieldsIn, 'field')} brought in`, size: S.MOOD_PER_FIELD * fieldsIn })
+  const cheer = c.crew.filter(u => u.id !== p.id && u.trait === 'cheerful').length
+  if (cheer > 0) out.push({ up: true, text: 'cheerful company', size: S.CHEERFUL_OTHERS * cheer })
+  return out.filter(x => x.size >= 0.01).sort((a, b) => b.size - a.size).slice(0, 3).map(({ up, text }) => ({ up, text }))
+}
+
+// Where a person's mood is heading: the target it moves toward a little each day, against where it stands.
+export function moodHeading(c: S.Campaign, p: S.PersonInfo): 'rising' | 'falling' | '' {
+  const u = c.crew.find(x => x.id === p.id)
+  if (!u) return ''
+  const fieldsIn = c.season && c.phase === 'season' ? c.season.fields.filter(f => f.status === 'dug').length : 0
+  const t = S.moodTarget(c, u, fieldsIn)
+  return t > p.mood + 0.03 ? 'rising' : t < p.mood - 0.03 ? 'falling' : ''
+}
+
+// What tiredness is doing to a person, and what brings it down.
+export function tiredWhy(c: S.Campaign, p: S.PersonInfo): string {
+  const slow = p.tired > S.TIRED_SLOW_FROM ? S.TIRED_SLOW * (p.tired - S.TIRED_SLOW_FROM) / (1 - S.TIRED_SLOW_FROM) : 0
+  const rest = c.sundaysOff ? 'Sunday rests them' : 'no day off: Sundays are worked'
+  if (p.tired >= S.HURT_TIRED) return `${F.pct(slow)} slower, and can be hurt on a machine or in the woods; ${rest}`
+  if (slow > 0.005) return `${F.pct(slow)} slower; ${rest}`
+  return p.tired >= 0.3 ? `a week's work adds up; ${rest}` : ''
+}
+
+// The quiet sign on a person's chip, the most pressing first: hurt, about to quit, worn out, unhappy, tired, idle.
+export type Sign = { glyph: string; cls: 'bad' | 'warn'; text: string } | null
+
+export function personSign(p: S.PersonInfo, idle: boolean): Sign {
+  if (p.hurtUntil >= 0) return { glyph: 'hurt', cls: 'bad', text: 'hurt' }
+  if (p.quitIn >= 0) return { glyph: 'unhappy', cls: 'bad', text: `quits in ${F.plural(p.quitIn, 'day')}` }
+  if (p.tired >= S.HURT_TIRED) return { glyph: 'tired', cls: 'bad', text: 'worn out' }
+  if (p.mood < 0.45) return { glyph: 'unhappy', cls: 'warn', text: p.moodWord }
+  if (p.tired >= S.TIRED_SLOW_FROM) return { glyph: 'tired', cls: 'warn', text: 'tired' }
+  if (idle) return { glyph: 'stale', cls: 'warn', text: 'idle, with work waiting' }
+  return null
+}
+
+// ---------------------------------------------------------------- buildings and land
+
+export const BUILD_GLYPH: Record<S.BuildingKind, string> = {
+  house: 'house', shed: 'shed', bunk: 'bunk', packing: 'packing', pond: 'pond', stand: 'stand', station: 'station', road: 'road',
+}
+
+// The steps a tract goes through, as its card's track shows them.
+export const CLEAR_STEPS: { stage: S.ClearStage; word: string; glyph: string }[] = [
+  { stage: 'fell', word: 'Standing', glyph: 'woods' },
+  { stage: 'stump', word: 'Felled', glyph: 'stump' },
+  { stage: 'rocks', word: 'Stumped', glyph: 'rocks' },
+  { stage: 'done', word: 'Field', glyph: 'idle' },
+]
+
+// What stones cost a field, in a few words: slower planting and digging, and bruising at the dig.
+export function stonesText(stones: number): string {
+  const slow = 1 - S.stoneSpeed(stones)
+  const bruise = S.stoneBruise(stones, null)
+  const parts = [slow > 0.005 ? `planting and digging ${F.pct(slow)} slower` : slow < -0.005 ? `planting and digging ${F.pct(-slow)} quicker` : '', bruise > 0.002 ? `about ${F.pct(bruise)} bruised at the dig` : '']
+  return parts.filter(Boolean).join(', ')
+}
+
+export function stonesWord(stones: number): string {
+  return stones >= 0.6 ? 'very stony' : stones >= 0.4 ? 'stony' : stones >= 0.2 ? 'a few stones' : 'clean'
 }
 
 // What saved seed carries, for the stock in hand.
