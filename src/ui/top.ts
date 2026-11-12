@@ -123,7 +123,7 @@ function progressText(g: Goal): string {
 // if every lot and the crop in the ground sold today (S.moneyNow), with how it is made up.
 // Before the tubers set there is no crop to count: the figure is then what the year end takes before the crop pays,
 // said as that, not as a verdict.
-export function outlook(ctx: Ctx, c: S.Campaign): { figure: number; why: string; label: string; before: boolean } {
+export function outlook(ctx: Ctx, c: S.Campaign): { figure: number; why: string; label: string; before: boolean; spread: number } {
   const world = ctx.app.world
   const m = S.moneyNow(world, c)
   const s = c.season
@@ -136,7 +136,11 @@ export function outlook(ctx: Ctx, c: S.Campaign): { figure: number; why: string;
       : figure >= S.CREDIT_LIMIT ? `The year would end in debt, inside the bank's limit of ${F.money(S.CREDIT_LIMIT)}: it carries the debt at interest.`
         : `The year would end past the bank's limit of ${F.money(S.CREDIT_LIMIT)}: it would call the note.`
   const early = unset && !before ? ` ${F.upper(F.plural(unset, 'field'))} not yet setting tubers ${unset === 1 ? 'counts' : 'count'} for nothing yet.` : ''
-  return { figure, before, label: before ? 'Year end before the crop' : 'After year-end bills', why: `${before ? 'As things stand' : c.phase === 'cellar' ? 'If what is in store sold today' : 'If everything sold today'}: ${parts.join('; ')}. ${verdict}${early}` }
+  // While some crop is not yet weighed, how far the figure may go either way (S.moneyNow's range); none once all is in.
+  const unweighed = c.phase === 'season' && !!s && s.fields.some((f, i) => S.isField(c, i) && f.status !== 'rest' && f.status !== 'off' && f.status !== 'lost' && !f.weighed)
+  const spread = unweighed && !before ? Math.round((m.range.hi - m.range.lo) / 2 / 100) * 100 : 0
+  const give = spread ? ` Until all of it is weighed it can come out ${F.money(spread)} either way.` : ''
+  return { figure, before, spread, label: before ? 'Year end before the crop' : 'After year-end bills', why: `${before ? 'As things stand' : c.phase === 'cellar' ? 'If what is in store sold today' : 'If everything sold today'}: ${parts.join('; ')}. ${verdict}${early}${give}` }
 }
 
 // Said before logs are sold: the buildings not yet up that would take them, and what buying them back costs.
@@ -454,7 +458,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
       // bills, so the cash is never read as what the farm will keep.
       const after = view ? h('div', {
         class: `after term${view.before ? '' : view.figure < S.CREDIT_LIMIT ? ' bad' : view.figure < 0 ? ' warn' : ''}`, testid: 'outlook', tabindex: '0', 'data-tip': view.why,
-      }, h('span', { class: 't-label' }, h('span', { class: 'long' }, view.label), h('span', { class: 'short', 'aria-hidden': 'true' }, view.before ? 'Before crop' : 'After bills')), h('span', { class: 't-figure num' }, F.money(view.figure)), h('span', { class: 'sr' }, `. ${view.why}`)) : null
+      }, h('span', { class: 't-label' }, h('span', { class: 'long' }, view.label), h('span', { class: 'short', 'aria-hidden': 'true' }, view.before ? 'Before crop' : 'After bills')), h('span', { class: 't-figure num' }, F.money(view.figure)), view.spread ? h('span', { class: 'give num', testid: 'outlook-spread' }, `give or take ${F.money(view.spread)}`) : null, h('span', { class: 'sr' }, `. ${view.why}`)) : null
       const balance = h('div', { class: `balance${after ? ' two' : ''}` },
         h('span', { class: 't-label when' }, c.cash < 0 ? 'On the loan' : after ? 'Cash' : 'Balance'),
         h('span', {
