@@ -101,6 +101,10 @@ for (const [phase, setup] of Object.entries(PHASES)) {
           if (again) { at.x = again.x; at.y = again.y; await page.mouse.move(at.x, at.y) }
           await page.waitForTimeout(60)
           named = await page.evaluate(n => { const l = document.querySelector<HTMLElement>('#ui .hover-name'); return !!l && !l.hidden && (l.textContent ?? '').includes(n.split(' ')[0]) }, person.name)
+        } else {
+          // a pin goes with its person, who may be at work: its place is taken again just before the click
+          const now = await page.evaluate(id => { const p = document.querySelector<HTMLElement>(`#ui [data-testid="pin-${id}"] .head`); if (!p || p.closest('.gone')) return null; const r = p.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 } }, person.id) as { x: number; y: number } | null
+          if (now) { at.x = now.x; at.y = now.y }
         }
         const t0 = Date.now()
         await page.mouse.click(at.x, at.y)

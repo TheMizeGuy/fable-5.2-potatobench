@@ -79,18 +79,21 @@ test('fields are selected with a click, Shift, a double-click and the number key
   expect(errors, errors.join('\n')).toEqual([])
 })
 
-test('only the orders that can be given are offered, and one that cannot says why', async ({ page }) => {
+test('every crop order has its place on the card; one that cannot be given is greyed and says why', async ({ page }) => {
   const errors = watchErrors(page)
   await startSeason(page)
   await page.getByTestId('field-0').click()
-  const orders = page.locator('#ui [data-testid="card"] button.order')
+  const orders = page.locator('#ui [data-testid="card"] button.order:not(.is-off):not(.is-given)')
+  await expect(page.locator('#ui [data-testid="card"] .orders.slots > .order')).toHaveCount(9)
   // An unplanted field can only be planted.
   await expect(orders).toHaveCount(1)
   await expect(page.getByTestId('order-plant')).toContainText('Plant')
   await expect(page.getByTestId('order-plant')).toContainText('$150')
-  // Hilling has no button here; asked for by its key, the card says why not.
+  // Hilling is greyed in its place; asked for by its key or a press, the card says why not.
   await page.keyboard.press('h')
   await expect(page.getByTestId('card-line')).toContainText('Hill: Nothing planted yet.')
+  await page.getByTestId('order-water-off').click()
+  await expect(page.getByTestId('card-line')).toContainText('Water:')
   // The coach still says why it would wait.
   await page.keyboard.press('Escape')
   await page.getByTestId('field-0').click()
@@ -131,7 +134,7 @@ test('only the orders that can be given are offered, and one that cannot says wh
   expect(errors, errors.join('\n')).toEqual([])
 })
 
-test('never more than five orders, and under 80 words with nothing selected', async ({ page }) => {
+test('the crop orders hold their places when one is given, and under 80 words with nothing selected', async ({ page }) => {
   await startSeason(page)
   { const w = await wordsOnScreen(page); expect(w.n, w.by).toBeLessThan(80) }
   await reach(page, `q.run(q.day(6, 12))`)
@@ -139,18 +142,14 @@ test('never more than five orders, and under 80 words with nothing selected', as
   await page.waitForTimeout(300)
   { const w = await wordsOnScreen(page); expect(w.n, w.by).toBeLessThan(80) }
   await page.getByTestId('field-2').click()
-  const orders = page.locator('#ui [data-testid="card"] button.order:not(.more)')
-  await expect(orders.first()).toBeVisible()
-  expect(await orders.count()).toBeLessThanOrEqual(5)
-  // The rest are one press away, and the letter keys reach them all.
-  if (await page.getByTestId('order-more').count()) {
-    const first = await orders.evaluateAll(els => els.map(e => (e as HTMLElement).dataset.testid))
-    await page.getByTestId('order-more').click()
-    await expect(page.getByTestId('order-more')).toHaveAttribute('aria-pressed', 'true')
-    const rest = await orders.evaluateAll(els => els.map(e => (e as HTMLElement).dataset.testid))
-    expect(rest.length).toBeGreaterThan(0)
-    expect(rest.some(x => first.includes(x))).toBe(false)
-  }
+  const slots = page.locator('#ui [data-testid="card"] .orders.slots > .order')
+  await expect(slots).toHaveCount(9)
+  const at = () => slots.evaluateAll(els => els.map(e => { const r = e.getBoundingClientRect(); return `${e.getAttribute('data-k')} ${Math.round(r.left)},${Math.round(r.top)}` }))
+  // (once the card has finished laying itself down)
+  await page.waitForTimeout(700)
+  const before = await at()
+  // An order given, or one refused with its reason, moves no other order.
+  for (const k of ['c', 'w']) { await page.keyboard.press(k); await page.waitForTimeout(250); expect(await at()).toEqual(before) }
   // A reading a week old is marked as old (with the walks switched to "ask me", so nobody walks it by themselves).
   await reach(page, `const { app } = q.g(); app.do({ t: 'routine', kind: 'scout', auto: false }); for (const j of [...app.campaign.season.jobs]) if (j.kind === 'scout') app.do({ t: 'cancel', id: j.id })
     for (let k = 0; k < 9; k++) app.do({ t: 'day' })`)
@@ -255,7 +254,8 @@ for (const [w, h] of [[320, 640], [390, 844], [844, 390], [820, 1180], [1024, 70
           if (!r) out.push('the tag of the field in hand is not on the land')
           else if (boxes.some(b => r.left < b.right - 1 && r.right > b.left + 1 && r.top < b.bottom - 1 && r.bottom > b.top + 1)) out.push('the tag of the field in hand is under the interface')
           const a = (globalThis as unknown as { __countyField?: { anchor?: (i: number) => { x: number; y: number; visible: boolean } } }).__countyField?.anchor?.(2)
-          if (a?.visible && boxes.some(b => a.x > b.left && a.x < b.right && a.y > b.top && a.y < b.bottom)) out.push('the field in hand is under the interface')
+          const over = a?.visible ? parts.find(q => rect(q).some(b => a.x > b.left && a.x < b.right && a.y > b.top && a.y < b.bottom)) : undefined
+          if (over) out.push(`the field in hand is under the interface (${over})`)
         }
         if (document.documentElement.scrollWidth > innerWidth) out.push('the page scrolls sideways')
         for (const q of ['.topbar', '.command', '.timebook', '.queue', '.clock-slot', '.notes']) {
@@ -277,7 +277,14 @@ for (const [w, h] of [[320, 640], [390, 844], [844, 390], [820, 1180], [1024, 70
             if (r.width && r.height && (r.width < 39.5 || r.height < 39.5)) out.push(`small target: ${el.dataset.testid ?? el.className}`)
           }
         }
-        if (sel && document.querySelectorAll('#ui .command button.order').length > 5) out.push('more than five orders')
+        // The crop's nine orders each in its place, and the card's cross in the window with nothing over it.
+        if (sel && document.querySelectorAll('#ui .command .orders.slots > .order').length !== 9) out.push('the crop orders are not all in their places')
+        const x = sel ? document.querySelector<HTMLElement>('#ui [data-testid="card-close"]') : null
+        if (sel) {
+          const r = x && shown(x) ? x.getBoundingClientRect() : null
+          if (!r || r.top < 0 || r.bottom > innerHeight || r.left < 0 || r.right > innerWidth) out.push('the card\'s cross is out of the window')
+          else if (!document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)?.closest('[data-testid="card-close"]')) out.push('something lies over the card\'s cross')
+        }
         return out
       }, selected)
       expect(found, found.join('; ')).toEqual([])
@@ -368,8 +375,11 @@ test('crews: a picked crew takes the next orders, an order it cannot do says why
   await page.getByTestId('unit-1').click()
   await expect(page.getByTestId('unit-1')).toHaveAttribute('aria-pressed', 'true')
   await expect(page.getByTestId('person-card')).toBeVisible()
-  await page.getByTestId('field-2').click()
-  const orders = page.locator('#ui [data-testid="card"] button.order:not(.more)')
+  // The person's page lies over the land, tags and all (a tag never moves aside for a card): the field by its key.
+  await page.keyboard.press('Digit3')
+  await expect(page.getByTestId('card-title')).toHaveText(await game<string>(page, 'sim.FIELD_NAMES[2]'))
+  // Only what Lucien does can be given: the rest are greyed in their places.
+  const orders = page.locator('#ui [data-testid="card"] button.order:not(.is-off):not(.is-given)')
   const kinds = await orders.evaluateAll(els => els.map(e => (e as HTMLElement).dataset.testid))
   expect(kinds.every(k => ['order-scout', 'order-rogue', 'order-sample'].includes(k!))).toBe(true)
   await expect(page.locator('#ui .order-who')).toContainText('Lucien')
@@ -573,11 +583,11 @@ test('people: a chip opens the card, priorities set by click and key, a raise, a
   await expect(card.getByTestId('person-name')).toHaveText(name)
   await expect(card.getByTestId('person-mood')).toContainText(/happy|content|fed up|unhappy|quit/i)
   await expect(card.getByTestId('person-tired')).toBeVisible()
-  // A click moves a priority on one step; a digit sets it; nought is never.
+  // A click makes the work come one step sooner (1 is first; past it, never); a digit sets it; nought is never.
   const prio = (k: string) => game<number>(page, `app.campaign.crew.find(u => u.id === 1).prio.${k}`)
   const was = await prio('machine')
   await card.getByTestId('prio-machine').click()
-  expect(await prio('machine')).toBe(was === 4 ? 0 : was === 0 ? 1 : was + 1)
+  expect(await prio('machine')).toBe(was === 1 ? 0 : was === 0 ? 4 : was - 1)
   await card.getByTestId('prio-field').focus()
   await page.keyboard.press('0')
   expect(await prio('field')).toBe(0)
@@ -623,7 +633,7 @@ test('a person clicked on the land: their card opens beside them, says who and w
   if (!isMobile) {
     const a = await page.evaluate(() => (globalThis as unknown as { __countyField: { unitPin(id: number): { x: number; y: number; visible: boolean } } }).__countyField.unitPin(1))
     const r = (await card.boundingBox())!
-    if (a.visible) {
+    if (a.visible && a.x >= 0 && a.x <= page.viewportSize()!.width && a.y >= 0 && a.y <= page.viewportSize()!.height) {
       const dx = Math.max(r.x - a.x, 0, a.x - (r.x + r.width)), dy = Math.max(r.y - a.y, 0, a.y - (r.y + r.height))
       expect(Math.hypot(dx, dy)).toBeLessThan(240)
     }
@@ -656,7 +666,9 @@ test('the work grid: G opens it, a click or a key sets a cell, and the farm rule
   const prio = (id: number, k: string) => game<number>(page, `app.campaign.crew.find(u => u.id === ${id}).prio.${k}`)
   const was = await prio(2, 'woods')
   await grid.getByTestId('cell-2-woods').click()
-  expect(await prio(2, 'woods')).toBe(was === 4 ? 0 : was === 0 ? 1 : was + 1)
+  expect(await prio(2, 'woods')).toBe(was === 1 ? 0 : was === 0 ? 4 : was - 1)
+  // The grid says which way a click goes.
+  await expect(grid.getByTestId('grid-how')).toContainText('A click makes the work come sooner')
   // The arrow keys walk the grid and a digit sets the cell under the focus.
   await grid.getByTestId('cell-2-woods').focus()
   await page.keyboard.press('ArrowRight')
@@ -766,6 +778,8 @@ test('Start the season runs the clock at 1x with no click; a weigh ticket stops 
   expect(start.paused).toBe(false)
   expect(start.speed).toBe(1)
   await expect(page.getByTestId('paused')).toBeHidden()
+  // The clock's state is said in the same place either way: running, at what speed.
+  await expect(page.getByTestId('running')).toContainText('1×')
   await expect(page.getByTestId('idle-note')).toHaveCount(0)
   const day0 = await game<number>(page, 'app.campaign.season.day')
   await expect.poll(() => game<number>(page, 'app.campaign.season.day'), { timeout: 10_000 }).toBeGreaterThan(day0)
@@ -781,5 +795,103 @@ test('Start the season runs the clock at 1x with no click; a weigh ticket stops 
   await ticket.locator('[data-testid^="lot-sell-"]').first().click()
   await expect(ticket).toHaveCount(0)
   await expect.poll(async () => (await look(page)).speed).toBe(2)
+  expect(errors, errors.join('\n')).toEqual([])
+})
+
+test('tags and stamps hold still when a card opens or closes and when an order is given, so the next click lands where it was aimed', async ({ page }) => {
+  const errors = watchErrors(page)
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await startSeason(page)
+  // Late August, stopped, with the player's calls (spray, the vine kill) left as stamps on the fields.
+  await reach(page, `const { app } = q.g(); app.setSpeed(0); q.run(q.day(7, 28), ['spray', 'kill', 'sell']); app.setSpeed(0); app.campaign.incidents = []; app.select(-1)`)
+  await putAway(page)
+  // Where every tag and stamp on the land is now, by test id.
+  const where = () => page.evaluate(() => Object.fromEntries([...document.querySelectorAll<HTMLElement>('#ui .plate[data-testid^="field-"], #ui [data-testid^="badge-"]')]
+    .filter(e => !e.closest('.gone, [hidden]')).map(e => { const r = e.getBoundingClientRect(); return [e.dataset.testid!, [Math.round(r.left), Math.round(r.top)]] })))
+  const moved = (a: Record<string, number[]>, b: Record<string, number[]>) => Object.keys(a).filter(k => b[k] && Math.hypot(a[k][0] - b[k][0], a[k][1] - b[k][1]) > 2)
+  const before = await where()
+  const stamps = Object.keys(before).filter(k => k.startsWith('badge-') && k !== 'badge-0').map(k => Number(k.slice(6)))
+  expect(stamps.length).toBeGreaterThan(1)
+  const selects = () => game<number>(page, 'window.__selects ?? 0')
+  await page.evaluate(() => { const { app } = (globalThis as any).__county; (globalThis as any).__selects = 0; app.on((e: any) => { if (e.type === 'select') (globalThis as any).__selects++ }) })
+  for (const [n, close] of [[stamps[0], 'Escape'], [stamps[1], 'cross']] as const) {
+    const was = await where()
+    await page.getByTestId('field-0').click()
+    await expect(page.getByTestId('card-title')).toHaveText('North Ridge')
+    await page.waitForTimeout(500)
+    expect(moved(was, await where()), `a card opening moves nothing on the land (settled: ${await page.evaluate(() => document.querySelector<HTMLElement>('#ui .plate-layer')?.dataset.settled)})`).toEqual([])
+    // An order by its letter key: the tags stay put though North Ridge's tag now says "on the list".
+    await page.keyboard.press('s')
+    await page.waitForTimeout(300)
+    expect(moved(was, await where()), `an order moves nothing on the land (settled: ${await page.evaluate(() => document.querySelector<HTMLElement>('#ui .plate-layer')?.dataset.settled)})`).toEqual([])
+    // The card's cross is in view and nothing lies over it.
+    const x = (await page.getByTestId('card-close').boundingBox())!
+    expect(await page.evaluate(([cx, cy]) => !!document.elementFromPoint(cx, cy)?.closest('[data-testid="card-close"]'), [x.x + x.width / 2, x.y + x.height / 2])).toBe(true)
+    if (close === 'Escape') await page.keyboard.press('Escape')
+    else await page.mouse.click(x.x + x.width / 2, x.y + x.height / 2)
+    await expect(page.locator(PRESSED)).toHaveCount(0)
+    await page.waitForTimeout(500)
+    expect(moved(was, await where()), 'a card closing moves nothing on the land').toEqual([])
+    // The stamp is still where it was aimed at, and the click on it gives its order without selecting anything.
+    const kind = await game<string>(page, `app.needs()[${n}].need.act`)
+    const b = was[`badge-${n}`]
+    const box = (await page.getByTestId(`badge-${n}`).boundingBox())!
+    const at0 = await selects()
+    await page.mouse.click(b[0] + box.width / 2, b[1] + box.height / 2)
+    await expect.poll(() => game<boolean>(page, `app.campaign.season.jobs.some(j => j.field === ${n} && j.kind === '${kind}')`), { timeout: 2000 }).toBe(true)
+    expect(await selects() - at0, 'the stamp click selected nothing').toBe(0)
+    expect(await game<number[]>(page, 'app.selection')).toEqual([])
+  }
+  expect(errors, errors.join('\n')).toEqual([])
+})
+
+test('every order on the list says who takes it and when, or why nobody will', async ({ page }) => {
+  const errors = watchErrors(page)
+  await farmWithPeople(page)
+  // Nobody on the farm will do machine work: a spray order has no taker, and the list says so.
+  await reach(page, `const { app } = q.g(); const c = app.campaign; for (const j of [...c.season.jobs]) app.do({ t: 'cancel', id: j.id })
+    for (const u of c.crew) app.do({ t: 'priority', unit: u.id, work: 'machine', level: 0 })
+    app.do({ t: 'job', kind: 'spray', field: 0 })`)
+  const id = await game<number>(page, `app.campaign.season.jobs.find(j => j.kind === 'spray').id`)
+  await expect(page.getByTestId(`nobody-${id}`)).toBeVisible()
+  await page.getByTestId(`queue-${id}`).click()
+  await expect(page.getByTestId(`fate-${id}`)).toContainText(/Nobody|will not/)
+  // Put back to the work, someone takes it, and the list says who.
+  await reach(page, `const { app } = q.g(); app.do({ t: 'priority', unit: app.campaign.crew[0].id, work: 'machine', level: 1 })`)
+  await expect(page.getByTestId(`nobody-${id}`)).toHaveCount(0)
+  await expect(page.getByTestId(`queue-${id}`)).toHaveAttribute('title', /takes it|is on it|Waiting|Sunday/)
+  expect(errors, errors.join('\n')).toEqual([])
+})
+
+test('blight weather asks once how to spray this season, and a worn-out hand can be rested', async ({ page }) => {
+  const errors = watchErrors(page)
+  await farmWithPeople(page)
+  // The first blight weather of the season: one question, with what keeping the fields sprayed would cost.
+  await reach(page, `const { app } = q.g(); const c = app.campaign; let n = 0
+    while (c.season.watchDay < 0 && n++ < 120) { q.run(c.season.day + 1, ['spray']); c.incidents = [] }
+    app.setSpeed(0)`)
+  test.skip(await game<number>(page, 'app.campaign.season.watchDay') < 0, 'no blight weather this year')
+  const ask = page.getByTestId('spray-ask')
+  await expect(ask).toBeVisible()
+  await expect(ask).toContainText('Keep the fields sprayed')
+  await ask.getByTestId('spray-way-auto').click()
+  await expect(ask).toBeHidden()
+  expect(await game<boolean>(page, `sim.routineInfo(app.campaign).find(r => r.kind === 'spray').auto`)).toBe(true)
+  // Asked once: it does not come back; Who does what asks it again.
+  await page.waitForTimeout(400)
+  await expect(page.getByTestId('spray-ask')).toBeHidden()
+  await page.keyboard.press('g')
+  await page.getByTestId('spray-ask-open').click()
+  await page.getByTestId('spray-ask').getByTestId('spray-way-ask').click()
+  expect(await game<boolean>(page, `sim.routineInfo(app.campaign).find(r => r.kind === 'spray').auto`)).toBe(false)
+  await page.keyboard.press('Escape')
+  // A hand worked to the bone: their page says so and rests them on a press.
+  await reach(page, `const { app } = q.g(); app.campaign.crew[1].tired = 0.97`)
+  await page.getByTestId('unit-1').click()
+  const card = page.getByTestId('person-card')
+  await expect(card.getByTestId('person-tired')).toContainText(/worn out|resting/)
+  await card.getByTestId('person-rest-now').click()
+  expect(await game<string>(page, 'app.campaign.crew[1].rest')).toBe('now')
+  await expect(card.getByTestId('person-rest-now')).toHaveAttribute('aria-pressed', 'true')
   expect(errors, errors.join('\n')).toEqual([])
 })

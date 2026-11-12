@@ -41,3 +41,9 @@
 .whois-layer.phone .whois.in { animation: lay-sheet var(--t-sheet) var(--ease-paper); }
 @keyframes lay-sheet { from { translate: 0 18px; } }
 .whois.thing .whois-head:last-child { padding-bottom: 0; border-bottom: 0; }
+
+/* When a person rests: by themselves once worn out, now, or never. */
+.rest-keys { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 8px 0 2px; }
+.rest-keys .t-label { margin-right: 6px; }
+.rest-keys .btn { min-height: 36px; padding: 0 10px; font-size: 14px; }
+.touch .rest-keys .btn { min-height: 44px; }

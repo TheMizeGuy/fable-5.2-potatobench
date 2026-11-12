@@ -165,6 +165,7 @@ export function createFallbackView(original: HTMLCanvasElement, app: App): Field
     thingAnchor: () => ({ x: 0, y: 0, visible: false }),
     thingAt: () => null,
     follow() {},
+    followed: () => -1,
     home() {},
     yardAnchor: () => ({ x: 0, y: 0, visible: false }),
     dispose() {

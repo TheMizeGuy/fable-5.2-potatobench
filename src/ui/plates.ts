@@ -4,6 +4,7 @@
 import * as S from '../sim/index.ts'
 import { patch, type Ctx } from './core.ts'
 import { h } from './dom.ts'
+import { CODE } from './help.ts'
 import { need, tag, type Ink } from './system/parts.ts'
 
 export interface PlateModel {
@@ -31,9 +32,15 @@ export interface PlateModel {
 }
 
 const GAP = 6
+// What a stamp's ink says, as How to play has it.
+const INK_SAYS = Object.fromEntries(CODE.map(([ink, , name, says]) => [ink || 'ink', `${name}: ${says}`])) as Record<Ink, string>
 // With more fields in view than the home six, tags keep only their names once a field (14.4 plan units along its
 // rows) is narrower on screen than a tag: below FAR_IN pixels a plan unit, and back above FAR_OUT.
 const FAR_IN = 10, FAR_OUT = 12
+// How far the camera may carry the tags with their fields before the crowding is settled again, in pixels.
+const RESETTLE_PX = 24
+// The room kept beside every tag for "on the list" and a stamp, so neither coming crowds the next tag.
+const LIST_W = 96, STAMP_W = 52
 
 // on: over its field. docked: pushed inside the free part of the window. shelf: its field has no place on the map
 // yet, so it waits in a row under the top. gone: its field is out of view and nothing calls for it.
@@ -46,8 +53,10 @@ function finite(a: { x: number; y: number }): boolean {
   return Number.isFinite(a.x) && Number.isFinite(a.y)
 }
 
-// covers: what floats over the land (a card, the work grid, a telegram) that a tag must not sit under. clear: the
-// screen positions of things a tag gives way to (face pins), so a person is never hidden by a tag.
+// A tag stays where it was put until the camera moves: a card opening or closing, an order given or a stamp coming
+// never moves a tag the player may be reaching for. Crowding is settled only when the camera moves, against the room a
+// tag takes with "on the list" and a stamp. What floats over the land (a card, the grid) lies over the tags; covers is
+// not read.
 export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => PlateModel | null; onBadge: (i: number) => void; covers?: () => DOMRect[] }): { update(): void; frame(): void; dispose(): void; boxes(): DOMRect[] } {
   const app = ctx.app
   const wraps: HTMLElement[] = []
@@ -55,18 +64,35 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
   // size: the tags as drawn now. full: as drawn with their names, which is what decides whether they fit.
   const size: Size[] = []
   const full: Size[] = []
+  const listed: boolean[] = []
   const at: Box[] = []
   let compact = false
   let far = false
+  // The camera and the window the tags were last settled for; and for each tag, where its field was when it was put.
+  let laid: { key: string; anchors: { x: number; y: number }[] } | null = null
+  const ref: { x: number; y: number }[] = []
   for (let i = 0; i < S.FIELD_COUNT; i++) {
     const wrap = h('div', { class: 'tag-wrap gone', hidden: true })
     wraps.push(wrap)
     models.push(null)
     size.push({ w: 150, h: 34, extra: 0 })
     full.push({ w: 150, h: 34, extra: 0 })
+    listed.push(false)
     at.push({ x: -1, y: -1, place: 'gone' })
     layer.append(wrap)
   }
+
+  // The wheel over a tag, a stamp or a face zooms the land as it would anywhere else on it.
+  const wheel = (e: WheelEvent) => {
+    const land = document.getElementById('field')
+    if (!land || !(e.target as HTMLElement).closest?.('.tag-wrap, .pin-at, .pin-list-at, .yard-at')) return
+    e.preventDefault()
+    land.dispatchEvent(new WheelEvent('wheel', { deltaX: e.deltaX, deltaY: e.deltaY, deltaMode: e.deltaMode, clientX: e.clientX, clientY: e.clientY, ctrlKey: e.ctrlKey, bubbles: true, cancelable: true }))
+  }
+  layer.addEventListener('wheel', wheel, { passive: false })
+
+  // A stamp or "on the list" already there is drawn again without stamping it down a second time.
+  const was: string[] = []
 
   function pick(i: number, add: boolean): void {
     const m = models[i]
@@ -99,10 +125,13 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
         onclick: (e: Event) => pick(i, (e as MouseEvent).shiftKey),
         need: b ? need({
           ink: m.taught ? 'ochre' : b.ink ?? 'ink', next: !!m.taught, icon: b.glyph, label: b.label, testid: `badge-${i}`,
-          attrs: { class: `badge${b.urgent ? ' urgent' : ''}${m.taught ? ' taught' : ''}`, title: ctx.touch() ? undefined : b.label },
+          attrs: { class: `badge${b.urgent ? ' urgent' : ''}${m.taught ? ' taught' : ''}`, title: ctx.touch() ? undefined : `${b.label} (${INK_SAYS[m.taught ? 'ochre' : b.ink ?? 'ink']})` },
           onclick: () => o.onBadge(i),
         }) : null,
       }))
+      const now = `${b?.glyph ?? ''}|${head?.glyph ?? ''}`
+      wrap.classList.toggle('still', was[i] === now)
+      was[i] = now
       wrap.style.zIndex = on ? '5' : m.taught ? '4' : b ? '3' : m.land ? '1' : '2'
     }
     measure()
@@ -113,9 +142,17 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
       if (!models[i] || at[i].place === 'gone') continue
       const t = wraps[i].querySelector<HTMLElement>('.tag')
       const n = wraps[i].querySelector<HTMLElement>('.need')
+      listed[i] = !!t?.querySelector('.listed')
       if (t && t.offsetWidth) size[i] = { w: t.offsetWidth, h: t.offsetHeight, extra: n ? n.offsetWidth + 7 : 0 }
       if (!compact) full[i] = size[i]
     }
+  }
+
+  // The room a tag is settled for: as drawn, with room kept for "on the list" and a stamp (far out, names only).
+  function room(i: number, sz: Size[]): Size {
+    const z = sz[i]
+    if (far || models[i]?.land) return z
+    return { w: z.w + (listed[i] ? 0 : LIST_W), h: z.h, extra: Math.max(z.extra, STAMP_W) }
   }
 
   // How far out the camera is, in screen pixels to a plan unit: the home fields' anchors are 16.2 plan units apart
@@ -126,14 +163,12 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
     return Math.max(Math.hypot(a.x - b.x, a.y - b.y) / 16.2, Math.hypot(a.x - c.x, a.y - c.y) / 26.4)
   }
 
-  // Where each tag goes for tags of these sizes: over its field, clear of the boards, the bar and of each other.
-  // over: there was not the room, and some had to overlap. y is the foot of the tag.
-  function place(sz: Size[]): { want: Box[]; over: boolean } {
+  // Where each field's tag goes before crowding is settled: over its field, held inside the free part of the window,
+  // on the shelf, or gone. x is the middle of the tag as drawn, y its foot.
+  function targets(sz: Size[]): Box[] {
     const ins = app.insets
     const want: Box[] = []
-    const shown: number[] = []
-    const shelf: number[] = []
-    // In view means on the land the interface leaves free: a field under a sheet or a card is as good as out of view.
+    // In view means on the land the interface leaves free: a field under a sheet or the boards is as good as out of view.
     const inView = (a: { x: number; y: number; visible: boolean }) => a.visible && a.x >= ins.left && a.x <= innerWidth - ins.right && a.y >= ins.top && a.y <= innerHeight - ins.bottom
     // Of the land out of view, one tag for each block waits at the edge, so the player knows which way it lies.
     const pointed = new Set<string>()
@@ -142,7 +177,7 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
       const m = models[i]
       if (!m) { want.push({ x: -1, y: -1, place: 'gone' }); continue }
       const a = ctx.view.fieldAnchor(i)
-      if (!finite(a)) { want.push({ x: 0, y: 0, place: 'shelf' }); shelf.push(i); shown.push(i); continue }
+      if (!finite(a)) { want.push({ x: 0, y: 0, place: 'shelf' }); continue }
       const block = S.PARCELS[i].block
       const seen = inView(a)
       const first = !!m.land && !seen && !pointed.has(block)
@@ -155,7 +190,24 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
       const y0 = ins.top + GAP + hh + 6, y1 = innerHeight - ins.bottom - GAP - 5
       const x = Math.max(x0, Math.min(Math.max(x0, x1), a.x)), y = Math.max(y0, Math.min(Math.max(y0, y1), a.y))
       want.push({ x, y, place: !seen || Math.abs(x - a.x) > 1 || Math.abs(y - a.y) > 1 ? 'docked' : 'on' })
+    }
+    return want
+  }
+
+  // Where each tag goes for tags of these sizes: over its field, clear of the boards and of each other.
+  // over: there was not the room, and some had to overlap.
+  function place(sz0: Size[]): { want: Box[]; over: boolean } {
+    const ins = app.insets
+    const sz = sz0.map((_, i) => room(i, sz0))
+    const want = targets(sz)
+    // The tag is drawn from its left edge as the room would put it, whatever it holds now.
+    for (let i = 0; i < S.FIELD_COUNT; i++) if (want[i].place !== 'gone') want[i].x += (sz0[i].w - sz[i].w) / 2
+    const shown: number[] = []
+    const shelf: number[] = []
+    for (let i = 0; i < S.FIELD_COUNT; i++) {
+      if (want[i].place === 'gone') continue
       shown.push(i)
+      if (want[i].place === 'shelf') shelf.push(i)
     }
     if (shelf.length) {
       const rows: number[][] = [[]]
@@ -173,16 +225,17 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
         let x = Math.max(GAP, (innerWidth - total) / 2)
         y += tall + 8
         for (const i of row) {
-          want[i] = { x: x + sz[i].w / 2, y, place: 'shelf' }
+          want[i] = { x: x + sz0[i].w / 2, y, place: 'shelf' }
           x += sz[i].w + sz[i].extra + GAP
         }
       }
     }
     // Lower tags give way downward to the ones above them; then any pushed past the bottom climb back, lifting what
-    // they meet.
-    const apart = (j: number, k: number) => want[j].x < want[k].x
-      ? want[k].x - sz[k].w / 2 - (want[j].x + sz[j].w / 2 + sz[j].extra)
-      : want[j].x - sz[j].w / 2 - (want[k].x + sz[k].w / 2 + sz[k].extra)
+    // they meet. Measured by the room from each tag's left edge.
+    const left = (j: number) => want[j].x - sz0[j].w / 2
+    const apart = (j: number, k: number) => left(j) < left(k)
+      ? left(k) - (left(j) + sz[j].w + sz[j].extra)
+      : left(j) - (left(k) + sz[k].w + sz[k].extra)
     const order = [...shown].sort((p, q) => want[p].y - want[q].y || p - q)
     for (let n = 1; n < order.length; n++) {
       const j = order[n]
@@ -206,30 +259,25 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
       if (want[i].y < ceiling + sz[i].h + 5) over = true
       want[i].y = Math.max(want[i].y, ceiling + sz[i].h + 6)
     }
-    // A tag that would sit under a floating card stands aside, beside the card on the side its field is; with no room
-    // there it is put away until the card goes, rather than left there unclickable.
-    const covers = o.covers?.() ?? []
-    if (covers.length) {
-      const under = (x: number, y: number, i: number) => {
-        const l = x - sz[i].w / 2, r = x + sz[i].w / 2 + sz[i].extra, t = y - sz[i].h - 6
-        return covers.find(cv => l < cv.right && r > cv.left && t < cv.bottom && y + 6 > cv.top)
-      }
-      for (const i of shown) {
-        const b = want[i]
-        const cv = under(b.x, b.y, i)
-        if (!cv) continue
-        const right = cv.right + GAP + sz[i].w / 2, left = cv.left - GAP - sz[i].w / 2 - sz[i].extra
-        const fits = (x: number) => x - sz[i].w / 2 >= ins.left + GAP && x + sz[i].w / 2 + sz[i].extra <= innerWidth - ins.right - GAP && !under(x, b.y, i)
-        const x = b.x - cv.left < cv.right - b.x ? (fits(left) ? left : fits(right) ? right : NaN) : (fits(right) ? right : fits(left) ? left : NaN)
-        want[i] = Number.isNaN(x) ? { x: b.x, y: b.y, place: 'gone' } : { x, y: b.y, place: 'docked' }
-      }
-    }
     return { want, over }
   }
 
-  // Every frame. Far out, the tags keep only their names. Where named tags would still have to overlap, all but the
-  // selected one fold down to their cut; the test is made with the full sizes, so the fold cannot flicker.
-  function frame(): void {
+  // The tag's top left corner is fixed when it is put: a tag that grows afterwards grows to the right and down.
+  const drawn: string[] = []
+  function show(i: number, w: Box): void {
+    at[i] = w
+    const wrap = wraps[i]
+    wrap.classList.toggle('gone', w.place === 'gone')
+    wrap.classList.toggle('docked', w.place === 'docked' || w.place === 'shelf')
+    if (w.place === 'gone') return
+    const t = `translate3d(${(w.x - size[i].w / 2).toFixed(1)}px, ${(w.y - size[i].h).toFixed(1)}px, 0)`
+    if (t !== drawn[i]) { wrap.style.transform = t; drawn[i] = t }
+  }
+
+  // The camera moved (or the window, or the boards): every tag is put again. Far out, the tags keep only their names.
+  // Where named tags would still have to overlap, all but the selected one fold down to their cut; the test is made
+  // with the full sizes, so the fold cannot flicker.
+  function settle(): void {
     const k = scale()
     let inView = 0
     for (let i = 0; i < S.FIELD_COUNT; i++) if (models[i] && ctx.view.fieldAnchor(i).visible) inView++
@@ -241,6 +289,16 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
       layer.classList.remove('compact')
       measure()
     }
+    // Tags coming into view are drawn first, so they are settled at their own size.
+    const first = place(full).want
+    let fresh = false
+    for (let i = 0; i < S.FIELD_COUNT; i++) {
+      if (first[i].place === 'gone' || at[i].place !== 'gone') continue
+      wraps[i].classList.remove('gone')
+      at[i] = { ...first[i] }
+      fresh = true
+    }
+    if (fresh) measure()
     const named = place(full)
     if (named.over !== compact) {
       compact = named.over
@@ -248,16 +306,67 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
       measure()
     }
     const want = compact ? place(size).want : named.want
+    for (let i = 0; i < S.FIELD_COUNT; i++) show(i, want[i])
+  }
+
+  // The camera has not moved: a tag that comes (a stamp on a field out of view, a field selected from the list) is put
+  // where there is room for it, below the tags already there; the rest stay exactly where they are.
+  function arrivals(anchors: { x: number; y: number }[]): void {
+    const want = targets(size)
+    const floor = innerHeight - app.insets.bottom - GAP - 5
     for (let i = 0; i < S.FIELD_COUNT; i++) {
-      const w = want[i], was = at[i]
-      if (w.place === was.place && (w.place === 'gone' || (Math.abs(w.x - was.x) < 0.25 && Math.abs(w.y - was.y) < 0.25))) continue
-      at[i] = w
-      const wrap = wraps[i]
-      wrap.classList.toggle('gone', w.place === 'gone')
-      wrap.classList.toggle('docked', w.place === 'docked' || w.place === 'shelf')
-      if (w.place !== 'gone') wrap.style.transform = `translate3d(${(w.x - size[i].w / 2).toFixed(1)}px, ${(w.y - size[i].h).toFixed(1)}px, 0)`
-      if (was.place === 'gone' && w.place !== 'gone') measure()
+      if (at[i].place !== 'gone') { if (want[i].place === 'gone') show(i, want[i]); continue }
+      if (want[i].place === 'gone' || want[i].place === 'shelf' || wraps[i].hidden) continue
+      wraps[i].classList.remove('gone')
+      at[i] = { x: NaN, y: NaN, place: 'docked' }
+      measure()
+      const z = room(i, size)
+      const w = { ...targets(size.map((_, j) => room(j, size)))[i] }
+      w.x += (size[i].w - z.w) / 2
+      const meets = (j: number) => {
+        const b = at[j], l = w.x - size[i].w / 2, lj = b.x - size[j].w / 2
+        return j !== i && b.place !== 'gone' && !wraps[j].hidden && l < lj + room(j, size).w + room(j, size).extra && l + z.w + z.extra > lj
+          && w.y - z.h - 6 < b.y && w.y > b.y - size[j].h - 6
+      }
+      for (let n = 0; n < S.FIELD_COUNT; n++) {
+        const hit = at.findIndex((_, j) => meets(j))
+        if (hit < 0) break
+        w.y = at[hit].y + z.h + 12
+        w.place = 'docked'
+      }
+      if (w.y > floor) w.y = floor
+      show(i, w)
+      ref[i] = anchors[i]
     }
+  }
+
+  function frame(): void {
+    const anchors: { x: number; y: number }[] = []
+    for (let i = 0; i < S.FIELD_COUNT; i++) { const a = ctx.view.fieldAnchor(i); anchors.push(a.visible ? { x: a.x, y: a.y } : { x: NaN, y: NaN }) }
+    // The boards' edges changing (the list filling, a sheet on a phone) moves no tag until the camera moves.
+    const key = `${innerWidth}x${innerHeight} ${ctx.touch()}`
+    // A field coming into view or leaving it, or the camera carrying the tags far, settles the crowding again; a small
+    // move (the camera easing to rest, a turn begun) carries each tag with its field and leaves them as they were.
+    const far0 = !laid || laid.key !== key || anchors.some((a, i) => {
+      const b = laid!.anchors[i]
+      return finite(a) !== finite(b) || (finite(a) && Math.hypot(a.x - b.x, a.y - b.y) > RESETTLE_PX)
+    })
+    if (far0) {
+      // Why the tags were put again, for the checks that hold them to it.
+      const why = !laid ? 'first' : laid.key !== key ? 'window' : `camera ${anchors.map((a, i) => { const b = laid!.anchors[i]; return finite(a) !== finite(b) ? `${i}:seen` : finite(a) && Math.hypot(a.x - b.x, a.y - b.y) > RESETTLE_PX ? `${i}:${Math.round(a.x - b.x)},${Math.round(a.y - b.y)}` : '' }).filter(Boolean).join(' ')}`
+      layer.dataset.settled = `${(parseInt(layer.dataset.settled ?? '0', 10) || 0) + 1} ${why}`
+      settle()
+      laid = { key, anchors }
+      for (let i = 0; i < S.FIELD_COUNT; i++) ref[i] = anchors[i]
+      return
+    }
+    for (let i = 0; i < S.FIELD_COUNT; i++) {
+      const a = anchors[i], r = ref[i], b = at[i]
+      if (b.place === 'gone' || b.place === 'shelf' || !r || !finite(a) || !finite(r) || Math.hypot(a.x - r.x, a.y - r.y) < 0.25) continue
+      show(i, { x: b.x + a.x - r.x, y: b.y + a.y - r.y, place: b.place })
+      ref[i] = a
+    }
+    arrivals(anchors)
   }
 
   // Where the tags are now, for the pins to keep clear of.
@@ -277,6 +386,7 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
     boxes,
     dispose() {
       layer.classList.remove('compact', 'far')
+      layer.removeEventListener('wheel', wheel)
       for (const w of wraps) w.remove()
       if (app.hover >= 0) app.setHover(-1)
     },

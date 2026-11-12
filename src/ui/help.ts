@@ -24,7 +24,7 @@ function figs(touch: boolean): HTMLElement {
       'Let the days run', touch ? 'The days run at the speed you set, and stop when a card needs you.' : 'The days run at the speed you set, and stop when a card needs you. Space pauses.'))
 }
 
-const CODE: [string, string, string, string][] = [
+export const CODE: [string, string, string, string][] = [
   ['red', 'rogue', 'Red', 'blight or a loss. Act now.'],
   ['ochre', 'spray', 'Ochre', 'the next thing to do.'],
   ['blue', 'water', 'Blue', 'the field is drying out.'],

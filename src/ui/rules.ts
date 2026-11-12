@@ -137,7 +137,11 @@ export function alertShort(a: Alert): { text: string; glyph: string } {
     case 'dug': return { text: `${name}${a.level === 'bad' ? 'froze half dug' : 'dug'}`, glyph: 'dig' }
     case 'lost': return { text: a.field >= 0 ? `${name}crop lost` : a.text, glyph: 'close' }
     case 'freeze': return { text: 'The ground has frozen', glyph: 'frost' }
-    case 'dropped': return { text: `${name}${a.text.split(' in ')[0].toLowerCase()} dropped`, glyph: 'warn' }
+    case 'dropped': {
+      // An order the morning took off the list, and why: the reason is the whole point of saying it.
+      const why = typeof a.data?.why === 'string' && a.data.why ? `: ${a.data.why.replace(/\.$/, '').replace(/^./, x => x.toLowerCase())}` : ''
+      return { text: `${name}${a.text.split(' in ')[0].toLowerCase()} taken off the list${why}`, glyph: 'warn' }
+    }
     case 'sold': return { text: a.text.replace(/^Sold .* for /, `${name}sold for `).replace(/\.$/, ''), glyph: 'check' }
     case 'delivered': return { text: a.text.replace(/^Delivered .* for /, `${name}delivered for `).replace(/\.$/, ''), glyph: 'deliver' }
     case 'contractShort': case 'contractFilled': return { text: a.text.replace(/\.$/, ''), glyph: 'contract' }

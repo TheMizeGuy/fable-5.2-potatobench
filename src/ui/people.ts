@@ -94,6 +94,74 @@ export interface PersonCard {
   update(c: S.Campaign, show: boolean): void
 }
 
+// How rested a person is, in words, with what follows from it: resting today, or slower, or a fall likelier.
+export function restWords(c: S.Campaign, p: S.PersonInfo): string {
+  const u = c.crew.find(x => x.id === p.id)
+  if (u && S.resting(u) && c.phase === 'season') return u.rest === 'now' ? 'resting until fresh' : 'worn out: resting today, back when fresh'
+  if (p.tired >= S.HURT_TIRED) return u?.rest === 'push' ? 'worn out and working on: slower, and a fall is likelier' : 'worn out: rests tomorrow'
+  return p.tired >= S.TIRED_SLOW_FROM ? 'slower for it; a rest day brings them back' : 'fit for work'
+}
+
+// When a person rests: by themselves once worn out (the farm's way unless told), now until fresh, or never.
+export function restControl(ctx: Ctx, c: S.Campaign, id: number, testid: string): HTMLElement | null {
+  const u = c.crew.find(x => x.id === id)
+  if (!u || c.phase !== 'season') return null
+  const mode = u.rest ?? 'auto'
+  const name = u.kind === 'farmer' ? 'You' : R.firstName(u.name)
+  const opt = (m: S.RestMode, word: string, tip: string) => h('button', {
+    class: `btn${mode === m ? ' is-on' : ''}`, type: 'button', testid: `${testid}-${m}`, 'aria-pressed': String(mode === m), title: ctx.touch() ? undefined : tip,
+    onclick: () => { const r = ctx.run({ t: 'rest', unit: id, mode: m }); if (r.ok) ctx.announce(`${name}: ${word.toLowerCase()}.`) },
+  }, word)
+  return h('div', { class: 'rest-keys', role: 'group', 'aria-label': name === 'You' ? 'When you rest' : `When ${name} rests`, testid },
+    h('span', { class: 't-label' }, 'Rest'),
+    opt('auto', 'When worn out', 'Rests by themselves once worn out, then back to work.'),
+    opt('now', 'Rest now', 'Takes days off until fresh.'),
+    opt('push', 'Work on', 'Works on worn out: slower, and a fall is likelier.'))
+}
+
+// ---------------------------------------------------------------- spraying this season, asked once
+
+export type SprayWay = 'auto' | 'ask' | 'none'
+const sprayKey = (c: S.Campaign) => `county.spray.${c.seed}.${c.year}`
+// What the player chose for spraying this season, if asked yet (kept beside the save, by farm and year).
+export function sprayWay(c: S.Campaign): SprayWay | null {
+  try { const v = localStorage.getItem(sprayKey(c)); return v === 'auto' || v === 'ask' || v === 'none' ? v : null } catch { return null }
+}
+
+// When blight weather first comes the player is asked once how spraying is to be done this season: kept up by the
+// crew by itself (with about what it costs), asked each time, or not this year. The question is a card on the season
+// screen that stops nothing; Who does what asks it again. The routine has no "not this year": that choice is kept
+// here, and the stamps for spraying are left off.
+let sprayOpen = false
+export function askSpray(ctx: Ctx): void { sprayOpen = true; ctx.dirty() }
+export function sprayAsking(): boolean { return sprayOpen }
+export function putSprayAway(ctx: Ctx): boolean { if (!sprayOpen) return false; sprayOpen = false; ctx.dirty(); return true }
+
+export function sprayQuestion(ctx: Ctx, c: S.Campaign): Child {
+  const o = S.sprayOutlook(ctx.app.world, c)
+  const now = sprayWay(c)
+  const choose = (way: SprayWay) => {
+    try { localStorage.setItem(sprayKey(c), way) } catch { /* the routine still takes the choice */ }
+    const r = ctx.run({ t: 'routine', kind: 'spray', auto: way === 'auto' })
+    if (r.ok) ctx.announce(way === 'auto' ? 'Spraying: the crew keeps the fields sprayed by itself.' : way === 'ask' ? 'Spraying: you are asked each time.' : 'No spraying this year.')
+    putSprayAway(ctx)
+  }
+  const way = (id: SprayWay, glyph: string, name: string, does: string) => h('button', {
+    class: `way-row${now === id ? ' is-on' : ''}`, type: 'button', testid: `spray-way-${id}`, 'aria-pressed': now ? String(now === id) : null, onclick: () => choose(id),
+  }, icon(glyph, 'i'), h('span', null, h('b', null, name), ' ', h('span', { class: 'quiet' }, does)))
+  return [
+    h('header', { class: 'command-head' },
+      h('div', null, h('p', { class: 't-label' }, 'Blight weather'), h('h2', { class: 't-title', id: 'spray-ask-t' }, 'Spraying this season')),
+      h('button', { class: 'close', type: 'button', testid: 'spray-ask-close', 'aria-label': `Put it away${ctx.touch() ? '' : ' (Escape)'}`, onclick: () => putSprayAway(ctx) }, icon('close', 'i'))),
+    h('div', { class: 'spray-ask' },
+      h('p', null, 'Protectant has to be on the leaf before the spores land; rain and new leaf wear it off. How is spraying to be done?'),
+      h('div', { class: 'way-rows' },
+        way('auto', 'spray', 'Keep the fields sprayed', o.passes ? `The crew sprays when it wears thin: about ${o.passes} passes, ${F.money(o.dollars)} this season.` : 'The crew sprays when it wears thin.'),
+        way('ask', 'ask', 'Ask me each time', 'A stamp on a field when it wants spraying; the order is yours.'),
+        way('none', 'close', 'Not this year', 'No spraying and no stamps for it. Blight, if it comes, goes unchecked.'))),
+  ]
+}
+
 export function personCard(ctx: Ctx): PersonCard {
   const app = ctx.app
   const el = h('section', { class: 'person-card sheet sys', testid: 'person-card', 'aria-label': 'Person', hidden: true })
@@ -159,18 +227,19 @@ export function personCard(ctx: Ctx): PersonCard {
             h('td', null, tens(lvl, lvl < S.SKILL_MAX ? p.progress[k] : 0, { best: lvl === best && best >= 5, label: `${R.SKILL_NAME[k]}: level ${lvl}${lvl < S.SKILL_MAX ? `, ${F.pct(p.progress[k])} of the way to ${lvl + 1}` : ''}` })),
             h('td', { class: 'pr' }, h('button', {
               class: `prio key${pr === 0 ? ' never' : ''}${pr === 1 ? ' first' : ''}`, type: 'button', testid: `prio-${k}`,
-              title: ctx.touch() ? undefined : `${R.skillCovers(k)}. 1 is done first; a dash is never.`,
-              onclick: () => setPrio(p, k, R.prioNext(pr)),
-              oncontextmenu: (e: Event) => { e.preventDefault(); setPrio(p, k, R.prioNext(pr, true)) },
+              title: ctx.touch() ? undefined : `${R.skillCovers(k)}. 1 is done first; a dash is never. A click makes it sooner, a right-click later.`,
+              onclick: () => setPrio(p, k, R.prioNext(pr, true)),
+              oncontextmenu: (e: Event) => { e.preventDefault(); setPrio(p, k, R.prioNext(pr)) },
               onkeydown: (e: Event) => prioKey(e as KeyboardEvent, p, k),
             }, h('span', { class: 'sr' }, `${R.SKILL_NAME[k]} work priority `), R.prioMark(pr),
-            h('span', { class: 'sr' }, `: ${R.prioWord(pr)}. Press for ${R.prioWord(R.prioNext(pr))}. ${R.skillCovers(k)}.`))))
+            h('span', { class: 'sr' }, `: ${R.prioWord(pr)}. Press for ${R.prioWord(R.prioNext(pr, true))}. ${R.skillCovers(k)}.`))))
         }))),
       h('dl', { class: 'state' },
-        h('div', { testid: 'person-tired' }, h('dt', { class: tiredCls }, F.upper(p.tiredWord)), h('dd', null, tiredWhy || 'rested enough')),
+        h('div', { testid: 'person-tired' }, h('dt', { class: tiredCls }, F.upper(p.tiredWord)), h('dd', null, p.tired >= S.TIRED_SLOW_FROM ? `${restWords(c, p)}${tiredWhy ? `; ${tiredWhy}` : ''}` : tiredWhy || 'rested enough')),
         h('div', { testid: 'person-mood' }, h('dt', { class: moodCls }, `${F.upper(p.moodWord)}${heading ? `, ${heading}` : ''}`),
           h('dd', null, p.quitIn >= 0 ? `quits in ${F.plural(p.quitIn, 'day')} unless it lifts` : why.length ? why.map(x => `${x.up ? '' : 'not: '}${x.text}`).join('; ') : 'nothing pulling either way')),
         p.hurtUntil >= 0 ? h('div', null, h('dt', { class: 'c-red' }, 'Hurt'), h('dd', null, `back on ${F.date(c.year, p.hurtUntil)}`)) : null),
+      restControl(ctx, c, p.id, 'person-rest'),
       flashed && performance.now() < flashed.until ? h('p', { class: 'pc-flash c-red', role: 'status' }, flashed.text) : null,
       farmer ? h('p', { class: 'pay quiet it' }, 'You draw no wage: the household takes its share at the year end.') : [
         h('p', { class: 'pay lead' }, h('span', null, h('b', { class: 'num' }, F.money(p.pay)), ` a month${p.foreman ? ' as foreman' : ''}`), h('span', { class: 'dots' }), p.ask ? h('span', { class: 'quiet num' }, `asked ${F.money(p.ask)}`) : null),
@@ -220,7 +289,7 @@ export function personCard(ctx: Ctx): PersonCard {
     const s0 = c.season
     const model = {
       p, day: s0?.day, t: ctx.touch(), foreman, flash: flashed && performance.now() < flashed.until ? flashed.text : '',
-      jobs: s0?.jobs.map(j => [j.id, j.unit]), crew: c.crew.map(u => [u.id, u.at, u.to, u.job, u.foreman]), sun: c.sundaysOff,
+      jobs: s0?.jobs.map(j => [j.id, j.unit]), crew: c.crew.map(u => [u.id, u.at, u.to, u.job, u.foreman, u.rest]), sun: c.sundaysOff,
     }
     patch(el, JSON.stringify(model), () => body(c, p))
     el.setAttribute('aria-label', p.kind === 'farmer' ? 'You, the farmer' : p.name)
@@ -293,6 +362,8 @@ export function workGrid(ctx: Ctx): WorkGrid {
     return h('div', { class: 'farm-rules', role: 'group', 'aria-label': 'Farm rules' },
       routine.length ? h('div', { class: 'routine', role: 'group', 'aria-label': 'Done by the crew without asking' },
         h('p', { class: 't-label' }, 'By itself, or ask me'),
+        c.season && c.season.watchDay >= 0 ? h('button', { class: 'btn quiet spray-again', type: 'button', testid: 'spray-ask-open', onclick: () => askSpray(ctx) },
+          icon('spray', 'i'), 'Spraying this season: ', h('b', null, sprayWay(c) === 'auto' ? 'kept sprayed' : sprayWay(c) === 'none' ? 'not this year' : 'ask me'), h('span', { class: 'quiet' }, ' · change')) : null,
         h('div', { class: 'routine-keys' }, routine.map(r => h('button', {
           class: `btn${r.auto ? ' is-on' : ''}`, type: 'button', testid: `routine-${r.kind}`, 'aria-pressed': String(r.auto),
           title: ctx.touch() ? undefined : r.auto ? `${R.JOB_VERB[r.kind]}: the crew puts it on the list by itself. Press to be asked instead.` : `${R.JOB_VERB[r.kind]}: waits for you. Press to let the crew do it by itself.`,
@@ -314,7 +385,7 @@ export function workGrid(ctx: Ctx): WorkGrid {
     if (at.row >= people.length) at = { row: people.length - 1, col: at.col }
     return [
       h('header', { class: 'command-head work-head' },
-        h('div', null, h('h2', { class: 't-title', id: 'grid-title' }, 'Who does what'), h('p', { class: 't-caption' }, '1 is done first; a dash is never. The bar is the skill.')),
+        h('div', null, h('h2', { class: 't-title', id: 'grid-title' }, 'Who does what'), h('p', { class: 't-caption', testid: 'grid-how' }, `1 is done first; a dash is never. ${ctx.touch() ? 'A tap makes the work come sooner' : 'A click makes the work come sooner, a right-click later'}; a digit sets it. The bar is the skill.`)),
         h('button', { class: 'close', type: 'button', testid: 'grid-close', 'aria-label': `Close the work grid${ctx.touch() ? '' : ' (G)'}`, onclick: () => toggle(false) }, icon('close', 'i'))),
       h('div', { class: 'grid-scroll', 'data-scroll': 'grid' },
         h('table', { class: 'grid', role: 'grid', 'aria-labelledby': 'grid-title' },
@@ -331,8 +402,8 @@ export function workGrid(ctx: Ctx): WorkGrid {
                 const here = at.row === row && at.col === col
                 return h('td', { role: 'gridcell' }, h('button', {
                   class: `cell${pr === 0 ? ' never' : ''}${pr === 1 ? ' first' : ''}`, type: 'button', style: `--sk:${lvl}`, testid: `cell-${p.id}-${k}`, 'data-cell': `${row}-${col}`, tabindex: here ? '0' : '-1',
-                  onclick: () => { at = { row, col }; set(p.id, k, R.prioNext(pr), R.firstName(p.name)) },
-                  oncontextmenu: (e: Event) => { e.preventDefault(); at = { row, col }; set(p.id, k, R.prioNext(pr, true), R.firstName(p.name)) },
+                  onclick: () => { at = { row, col }; set(p.id, k, R.prioNext(pr, true), R.firstName(p.name)) },
+                  oncontextmenu: (e: Event) => { e.preventDefault(); at = { row, col }; set(p.id, k, R.prioNext(pr), R.firstName(p.name)) },
                   onkeydown: (e: Event) => key(e as KeyboardEvent, people, row, col),
                   onfocus: () => { if (at.row !== row || at.col !== col) { at = { row, col }; ctx.dirty() } },
                 }, h('span', { class: 'sr' }, `${R.firstName(p.name)}, ${S.SKILL_LABEL[k]}, skill ${lvl}, priority `), h('span', { class: 'num' }, R.prioMark(pr)),

@@ -9,7 +9,7 @@ import { firstName, personSign } from './rules.ts'
 import { idleWithWork } from './people.ts'
 import { pin, ringed, type PinState } from './system/people.ts'
 
-interface Model { id: number; name: string; ring: string; state: PinState; label: string; rank: number }
+interface Model { id: number; name: string; ring: string; state: PinState; label: string; rank: number; tired?: boolean }
 
 // How close two people stand, in screen pixels, before they share a pin.
 const NEAR = 40
@@ -44,9 +44,11 @@ export function pins(ctx: Ctx, layer: HTMLElement, o: { tags: () => DOMRect[]; c
     models = people.map(p => {
       const sign = personSign(p, idleWithWork(c, p, waits))
       const state: PinState = p.hurtUntil >= 0 ? 'hurt' : sign?.cls === 'bad' || stopped.has(p.id) ? 'needs' : app.unit === p.id ? 'picked' : 'rest'
-      const word = sign?.cls === 'bad' ? sign.text : doingWord(c, p).toLowerCase()
+      const u = c.crew.find(x => x.id === p.id)
+      const resting = !!u && S.resting(u) && !!c.season
+      const word = resting ? 'resting, worn out' : sign?.cls === 'bad' ? sign.text : doingWord(c, p).toLowerCase()
       const label = `${p.kind === 'farmer' ? 'You' : firstName(p.name)}, ${word}${state === 'needs' ? ': needs you' : ''}`
-      return { id: p.id, name: p.kind === 'farmer' ? 'You' : p.name, ring: ringFor(c, p.id), state: app.unit === p.id && state !== 'needs' && state !== 'hurt' ? 'picked' : state, label, rank: app.unit === p.id ? 0 : state === 'needs' ? 1 : state === 'hurt' ? 2 : 3 }
+      return { id: p.id, name: p.kind === 'farmer' ? 'You' : p.name, ring: ringFor(c, p.id), state: app.unit === p.id && state !== 'needs' && state !== 'hurt' ? 'picked' : state, label, rank: app.unit === p.id ? 0 : state === 'needs' ? 1 : state === 'hurt' ? 2 : 3, tired: resting || p.tired >= S.HURT_TIRED }
     })
     for (const [id, w] of wraps) if (!models.some(m => m.id === id)) { w.remove(); wraps.delete(id) }
     for (const m of models) {
@@ -122,6 +124,7 @@ export function pins(ctx: Ctx, layer: HTMLElement, o: { tags: () => DOMRect[]; c
       w.classList.toggle('gone', !s0)
       if (!s0) continue
       draw(w, m, s0.members.length, s0.members)
+      w.classList.toggle('tired', !!m.tired)
       w.style.transform = `translate3d(${s0.x.toFixed(1)}px, ${s0.y.toFixed(1)}px, 0)`
       w.style.zIndex = String(10 - m.rank)
       if (open === m.id) {
