@@ -1,20 +1,12 @@
 // The sizes of the few things the eye reads scale from (docs/SCALE.md), in metres, from the numbers they are drawn
-// with: the models' own sizes times the factor each is drawn at. tests/scale.test.ts holds them to the standard.
-import { COWS, COW_SCALE, DRAUGHT, HORSE } from './animals.ts'
-import { FIGURE_TALL } from './crew.ts'
+// with. tests/scale.test.ts holds them to the standard. This file reads nothing that draws, so the land's plan can
+// read it; the sizes of people, machines and animals, which come from their models, are in living.ts.
 import { S } from './scale.ts'
-import { TRACTOR_SIZE, TRUCK_SIZE } from './tractor.ts'
 
-// People and machines are modelled small (a figure 0.83 tall, the tractor 1.61 long: the models' own numbers, read
-// from crew.ts and tractor.ts) and drawn at this size, which is true size, whatever the distance. People against the machines' scale: FIGURE.
+// People and machines are modelled small (a figure 0.83 tall, the tractor 1.61 long) and drawn at this size, which is
+// true size, whatever the distance. People against the machines' scale: FIGURE.
 export const TRUE_SIZE = 2.1
 export const FIGURE = 1.05
-export const PERSON = { tall: FIGURE_TALL * TRUE_SIZE * FIGURE }
-export const TRACTOR = { long: TRACTOR_SIZE.long * TRUE_SIZE, wide: TRACTOR_SIZE.wide * TRUE_SIZE, tall: TRACTOR_SIZE.tall * TRUE_SIZE }
-export const TRUCK = { long: TRUCK_SIZE.long * TRUE_SIZE, wide: TRUCK_SIZE.wide * TRUE_SIZE }
-// Animals: the shoulder height each is modelled at, times the factor each is drawn at.
-export const DRAUGHT_HORSE = { shoulder: HORSE.high * TRUE_SIZE * FIGURE * DRAUGHT }
-export const COW = { shoulder: COWS[0].high * TRUE_SIZE * FIGURE * COW_SCALE }
 
 // Buildings, in the small units they are drawn in (the Builder brings them up by S). `w` is across the ridge, `l`
 // along it, `wall` the eaves above the floor and `rise` the ridge above the eaves.

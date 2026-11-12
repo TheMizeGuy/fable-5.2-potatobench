@@ -573,7 +573,7 @@ shots.push(...people)
 // ---- The big land (phase B): people, machines and work from the field tier (three to five fields in frame), the farm
 // tier and the yard tier (the walk-in). `pins` stands a plain disc where the interface pins each person's face
 // (unitAnchor), so the frame shows what a player has to find them by.
-const FIELD_TIER = 330, FARM_TIER = 96
+const PEOPLE_FIELD_DIST = 330, FARM_TIER = 96
 async function pinPeople(page: Page): Promise<void> {
   await page.evaluate(() => {
     const f = (window as any).__countyField
@@ -589,7 +589,7 @@ async function pinPeople(page: Page): Promise<void> {
     }
   })
 }
-const fieldTier = (page: Page, field: number, x = 0.5, z = 0.5) => view(page, { frame: 'field', field, x, z, dist: FIELD_TIER })
+const fieldTier = (page: Page, field: number, x = 0.5, z = 0.5) => view(page, { frame: 'field', field, x, z, dist: PEOPLE_FIELD_DIST })
 // The field a kind of work was done in today, and who did it.
 const did = (page: Page, kind: string): Promise<{ field: number; unit: number }> => page.evaluate(kind => {
   const w = (window as any).__county.app.campaign.season.worked.find((x: any) => x.kind === kind)
