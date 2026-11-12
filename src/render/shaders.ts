@@ -11,6 +11,9 @@ export const U = {
   uWindDir: { value: new Vector2(1, 0) },
   // How far the wind has carried things since the start, so gusts travel downwind.
   uWindAt: { value: new Vector2() },
+  // Gusts: xy the heading their fronts travel on (it turns slowly, whatever the day's wind does), z how far they have
+  // run along it, w how hard it blows.
+  uGust: { value: new Vector4(1, 0, 0, 0.3) },
   uSnow: { value: 0 },
   // Rime on the ridge, the mid slope and the bottom land: cold air settles, so the low ground frosts first.
   uRime: { value: new Vector3() },
@@ -37,6 +40,8 @@ export const U = {
   uDay: { value: 196 },
   // Within this distance of the farm no cloud shadow falls (the opening shot keeps the farm in the sun).
   uSunlit: { value: 0 },
+  // 0 by day, 1 when the sun is well down and the light is the moon's.
+  uNight: { value: 0 },
 }
 
 export interface Patch {
@@ -54,7 +59,9 @@ export interface Patch {
   fragmentEmissive?: string  // after emissivemap_fragment: edit `totalEmissiveRadiance`
   fragmentEnd?: string       // after the haze: edit `gl_FragColor`
   translucent?: number       // share of the sun that comes through from behind (leaves)
+  through?: [number, number, number]   // the colour light takes coming through (a leaf's yellow-green unless given; a petal's is near white)
   ambient?: number           // share of the sky's light this material takes (inside a canopy takes less)
+  rim?: number               // how much a low sun behind it lights its edge (0.3 unless given)
   shine?: number             // share of the sky's reflection it shows (a leaf's bloom of fine hair shows little)
   blade?: boolean            // grass and grain: lit as if every blade faced up, and aglow when the sun is behind it
   noHaze?: boolean
@@ -65,6 +72,8 @@ uniform float uTime;
 uniform float uSway;
 uniform vec2 uWindDir;
 uniform vec2 uWindAt;
+uniform vec4 uGust;
+uniform float uNight;
 uniform float uSnow;
 uniform vec3 uRime;
 uniform float uWet;
@@ -90,20 +99,34 @@ ${GLSL_NOISE}
 float rimeAt(float y) {
   return mix(mix(uRime.z, uRime.y, smoothstep(2.0, 3.0, y)), uRime.x, smoothstep(3.6, 4.7, y));
 }
-// A gust front passing over a place: 0 calm, 1 in the gust.
+// A gust front passing over a place: 0 calm, 1 in the gust. Fronts lie across the wind and run down it, broad enough
+// to be followed over a field from the playing height.
 float gustAt(vec2 xz) {
-  return textureLod(uNoise, (xz - uWindAt) * 0.03, 0.0).b;
+  vec2 q = vec2(dot(xz, uGust.xy) - uGust.z, dot(xz, vec2(-uGust.y, uGust.x)));
+  float broad = textureLod(uNoise, q * vec2(0.021, 0.0078), 0.0).b;
+  float fine = textureLod(uNoise, q * vec2(0.067, 0.029) + 0.37, 0.0).b;
+  return smoothstep(0.36, 0.74, broad * 0.72 + fine * 0.28);
 }
 `
 
 // Shared by the sky's picture of the clouds and the shadow they throw on the land.
 export const CLOUD_GLSL = /* glsl */ `
+// How high the cumulus stands. Low, so a cloud's shadow is of a size to be seen crossing a field.
+const float CLOUD_H = 420.0;
 float cloudField(vec2 p) {
-  vec2 q = p * 0.00042 + uCloud.zw;
-  return texture2D(uNoise, q).b * 0.64 + texture2D(uNoise, q * 2.63 + 0.31).b * 0.36;
+  vec2 q = p * 0.0015 + uCloud.zw;
+  float crowd = texture2D(uNoise, q * 0.23 + 0.17).b;
+  float body = texture2D(uNoise, q).b;
+  float lump = texture2D(uNoise, q * 3.1 + vec2(0.43, 0.11) + uCloud.zw * 0.6).b;
+  return clamp((crowd * 0.3 + body * 0.44 + lump * 0.26 - 0.5) * 1.75 + 0.5, 0.0, 1.0);
+}
+// Where in the field a cloud begins, for the share of the sky that is cloud; a closed sky has no gaps.
+float cloudEdge() {
+  return 0.92 - uCloud.y * 0.74 - smoothstep(0.9, 1.0, uCloud.y);
 }
 float cloudCover(float field) {
-  return smoothstep(0.86 - uCloud.y * 0.62, 1.04 - uCloud.y * 0.62, field);
+  float edge = cloudEdge();
+  return smoothstep(edge, edge + 0.15, field);
 }
 `
 
@@ -116,7 +139,7 @@ vec3 hazeTint(vec3 dir) {
 }
 // Air whose density falls off with height, integrated along the sight line from height ya to height yb over length t.
 float airBetween(float density, float falloff, float base, float ya, float yb, float t) {
-  float ea = exp(-falloff * max(ya - base, -1.5)), eb = exp(-falloff * max(yb - base, -1.5));
+  float ea = exp(-falloff * max(ya - base, -0.5)), eb = exp(-falloff * max(yb - base, -0.5));
   float dy = yb - ya;
   return density * t * (abs(dy) > 1e-3 ? (ea - eb) / (falloff * dy) : ea);
 }
@@ -124,14 +147,21 @@ float airBetween(float density, float falloff, float base, float ya, float yb, f
 float hazeAmount(float ya, float yb, float t, vec2 xz, out float mistShare) {
   mistShare = 0.0;
   // A fair day's haze belongs to distance: the farm itself stands in clear air.
-  float air = airBetween(uHaze.x, uHaze.y, 0.0, ya, yb, t) * mix(smoothstep(40.0, 230.0, t), 1.0, smoothstep(0.0012, 0.003, uHaze.x));
+  float air = airBetween(uHaze.x, uHaze.y, 0.0, ya, yb, t) * mix(smoothstep(60.0, 320.0, t), 1.0, smoothstep(0.0014, 0.003, uHaze.x));
   if (uMist.x > 1e-5) {
-    float wisp = 1.0 - uMist.w + uMist.w * 1.7 * texture2D(uNoise, xz * 0.006 + uCloud.zw * 9.0).b;
-    float low = airBetween(uMist.x * wisp, uMist.y, uMist.z, ya, yb, min(t, 400.0));
+    // Mist lies in banks with clear air between, drifting; and however deep, what stands in it still shows through.
+    float bank = texture2D(uNoise, xz * 0.0071 + uCloud.zw * 6.0).b * 0.65 + texture2D(uNoise, xz * 0.031 - uCloud.zw * 11.0).b * 0.35;
+    float wisp = 1.0 - uMist.w + uMist.w * 2.6 * smoothstep(0.32, 0.78, bank);
+    float low = min(airBetween(uMist.x * wisp, uMist.y, uMist.z, ya, yb, min(t, 400.0)), 0.85);
     mistShare = low / max(air + low, 1e-5);
     air += low;
   }
   return 1.0 - exp(-air);
+}
+// Mist is lit from within when the sun is beyond it.
+vec3 mistTint(vec3 dir) {
+  float toSun = max(dot(dir, uSunDir), 0.0);
+  return uMistCol * (1.0 + 0.9 * toSun * toSun * toSun) + uSunCol * (0.02 * pow(toSun, 8.0));
 }
 `
 
@@ -140,7 +170,7 @@ ${CLOUD_GLSL}
 ${HAZE_GLSL}
 float cloudShade(vec3 p) {
   if (uCloud.x < 0.002) return 1.0;
-  vec2 q = p.xz + uSunDir.xz / max(uSunDir.y, 0.14) * 260.0;
+  vec2 q = p.xz + uSunDir.xz / max(uSunDir.y, 0.12) * CLOUD_H;
   return 1.0 - uCloud.x * cloudCover(cloudField(q)) * smoothstep(uSunlit, uSunlit * 1.8 + 1.0, length(p.xz));
 }
 // A cut-out texture loses its cover as it shrinks on screen; this gives it back. size: the texture's width in texels.
@@ -205,6 +235,13 @@ const SUN_BLOCK = /* glsl */ `
     vec3 sunFull = directLight.color * cloudVis;
     directLight.color = sunFull * shade;
     RE_Direct( directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );
+      {
+        // A low sun behind a thing catches its edge: the fuzz of a tree, a crop, a shoulder. Level ground takes little.
+        float rimEdge = 1.0 - saturate( dot( geometryNormal, geometryViewDir ) );
+        float rimSun = saturate( dot( - geometryViewDir, directLight.direction ) * 1.5 - 0.3 );
+        float rimSide = 1.0 - 0.8 * saturate( vWNormal.y );
+        reflectedLight.directDiffuse += directLight.color * ( COUNTY_RIM * rimEdge * rimEdge * rimEdge * rimSun * rimSide ) * material.diffuseContribution;
+      }
     #ifdef COUNTY_TRANSLUCENT
       // Light through a leaf: what its neighbours shade still glows a little, as light scattered about in the canopy.
       #ifdef COUNTY_BLADE
@@ -212,7 +249,7 @@ const SUN_BLOCK = /* glsl */ `
       #else
         float backLit = saturate( dot( - geometryNormal, directLight.direction ) );
       #endif
-      reflectedLight.directDiffuse += sunFull * ( 0.3 + 0.7 * shade ) * backLit * COUNTY_TRANSLUCENT * material.diffuseContribution * vec3( 1.0, 1.16, 0.5 ) * RECIPROCAL_PI;
+      reflectedLight.directDiffuse += sunFull * ( 0.3 + 0.7 * shade ) * backLit * COUNTY_TRANSLUCENT * material.diffuseContribution * COUNTY_THROUGH * RECIPROCAL_PI;
     #endif
   }
 #endif
@@ -245,7 +282,8 @@ export const HAZE = /* glsl */ `
     float hd = length( hv );
     float hm;
     float ha = hazeAmount( cameraPosition.y, vWorld.y, hd, vWorld.xz, hm );
-    gl_FragColor.rgb = mix( gl_FragColor.rgb, mix( hazeTint( hv / max( hd, 1e-4 ) ), uMistCol, hm ), ha );
+    vec3 hdir = hv / max( hd, 1e-4 );
+    gl_FragColor.rgb = mix( gl_FragColor.rgb, mix( hazeTint( hdir ), mistTint( hdir ), hm ), ha );
   }
 `
 
@@ -278,8 +316,10 @@ function patchVertex(vs: string, p: Patch, lit: boolean): string {
 
 export function patch<M extends Material>(mat: M, p: Patch = {}): M {
   const key = p.key ?? `county-${serial++}`
-  mat.defines = { ...(mat.defines ?? {}), COUNTY_AMBIENT: (p.ambient ?? 1).toFixed(3), COUNTY_SHINE: (p.shine ?? 1).toFixed(3), ...(p.defines ?? {}) }
+  mat.defines = { ...(mat.defines ?? {}), COUNTY_AMBIENT: (p.ambient ?? 1).toFixed(3), COUNTY_SHINE: (p.shine ?? 1).toFixed(3), COUNTY_RIM: (p.rim ?? 0.3).toFixed(3), ...(p.defines ?? {}) }
   if (p.translucent) mat.defines.COUNTY_TRANSLUCENT = p.translucent.toFixed(3)
+  const through = p.through ?? [1, 1.16, 0.5]
+  mat.defines.COUNTY_THROUGH = `vec3( ${through.map(v => v.toFixed(3)).join(', ')} )`
   if (p.blade) mat.defines.COUNTY_BLADE = 1
   mat.onBeforeCompile = shader => {
     Object.assign(shader.uniforms, U, p.uniforms ?? {})
@@ -342,6 +382,10 @@ function snowRime(amount: string, rimeShare: string, rime = 'rimeAt( vWorld.y )'
       float rimeHere = ${rimeShare} * ${rime} * smoothstep( 0.0, 0.5, up );
       #ifndef COUNTY_BLADE
         rimeHere *= 1.0 - 0.45 * clamp( dot( vWNormal, uSunDir ) * 2.0 - 0.6, 0.0, 1.0 );
+      #endif
+      // Where the sun has reached it the rime is already going; it stays white in every shadow the low sun throws.
+      #if defined( USE_SHADOWMAP ) && NUM_DIR_LIGHT_SHADOWS > 0
+        rimeHere *= mix( 1.0, 0.66, countyShadow() * ( 1.0 - uNight ) );
       #endif
       float crystals = texture2D( uNoise, vWorld.xz * 0.21 ).a * 0.55 + texture2D( uNoise, vWorld.xz * 0.045 ).b * 0.45;
       diffuseColor.rgb = mix( diffuseColor.rgb, vec3( 0.74, 0.83, 0.9 ), rimeHere * ( 0.7 + 0.3 * smoothstep( 0.3, 0.7, crystals ) ) );

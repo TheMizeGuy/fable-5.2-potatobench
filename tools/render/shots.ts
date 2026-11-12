@@ -362,6 +362,25 @@ const shots: Shot[] = [
       await settle(page); await view(page, v); await frames(page, 8)
     },
   })),
+  // ---- The light: the opening at three points of its move, and the playing view through the year's weather.
+  ...[0, 0.5, 1].map((u, k) => ({ name: `L01-title-${'abc'[k]}`, size: [1920, 1080] as [number, number], insets: NONE, setup: async (page: Page) => { await page.evaluate(u => (window as any).__countyField.titleAt(u), u); await title(page) } })),
+  { name: 'L02-play-july', size: [1920, 1080], setup: async page => { await july(page); await playUntil(page, [], SKY('clear')); await settle(page); await frames(page, 20) } },
+  { name: 'L03-play-overcast', size: [1920, 1080], setup: async page => { await july(page); console.log('  ', await playUntil(page, [], SKY('overcast'))); await settle(page); await frames(page, 20) } },
+  { name: 'L04-play-rain', size: [1920, 1080], setup: async page => { await july(page); console.log('  ', await playUntil(page, [], SKY('rain'))); await settle(page); await frames(page, 20) } },
+  { name: 'L05-play-mist', size: [1920, 1080], setup: async page => { await playTo(page, 1977, 5, 176); console.log('  ', await playUntil(page, [], `const t = sim.today(app.world, c); return t.sky === 'fog' || (t.day.wetH >= 15 && t.day.tmin > 4 && (t.sky === 'clear' || t.sky === 'cloud')) ? t.sky + ' wetH ' + t.day.wetH : ''`)); await settle(page); await frames(page, 20) } },
+  { name: 'L06-play-october', size: [1920, 1080], setup: async page => { await playTo(page, 1977, 5, 279, ['dig']); console.log('  ', await playUntil(page, ['dig'], SKY('clear'))); await settle(page); await frames(page, 20) } },
+  // First snow: where a season has none before it ends, the day's air is set by hand to a snowfall's.
+  { name: 'L07-play-snow', size: [1920, 1080], setup: async page => { await playTo(page, 1977, 5, 268, ['dig']); await settle(page); await page.evaluate(() => (window as any).__countyField.tune({ snow: 0.5, snowfall: 1, rain: 0, cloud: 1, cloudShadow: 0, sunScale: 0.05, deck: 1.05, haze: 0.0026, key: 0.92, storm: 0.15, high: 0, rime0: 0, rime1: 0, rime2: 0, mist: 0, wet: 0.5, dry: 0 })); await frames(page, 30) } },
+  { name: 'L07b-snow-morning', size: [1920, 1080], setup: async page => { await playTo(page, 1977, 5, 268, ['dig']); await settle(page); await page.evaluate(() => (window as any).__countyField.tune({ snow: 0.62, snowfall: 0, rain: 0, cloud: 0.2, cloudShadow: 0.8, sunScale: 1, deck: 1, haze: 0.0006, key: 1, storm: 0, high: 0.5, rime0: 0, rime1: 0, rime2: 0, mist: 0.2, wet: 0.4, dry: 0, hour: -1 })); await frames(page, 30) } },
+  { name: 'L08-winter-night', size: [1920, 1080], setup: async page => { await winter(page, 2); await settle(page); await frames(page, 20) } },
+  { name: 'L09-close-bloom', size: [1920, 1080], setup: async page => { await july(page); await playUntil(page, [], SKY('clear')); await settle(page); await view(page, { x: 6, z: 12.6, dist: 10, yaw: -1.0 }); await frames(page, 30) } },
+  { name: 'L10-whole-map', size: [1920, 1080], setup: async page => { await bigFarm(page, { rent: ALL_LAND, hands: 2, operator: true, until: 196 }); await playUntil(page, [], SKY('clear')); await settle(page); await page.evaluate(() => (window as any).__countyField.home()); await settle(page); await frames(page, 20) } },
+  { name: 'L11-clearing-storm', size: [1920, 1080], setup: async page => { await july(page); console.log('  ', await playUntil(page, [], `const t = sim.today(app.world, c); const wet = [0, 1, 2, 3, 4, 5].filter(i => ['wet', 'standing water'].includes(sim.fieldInfo(c, i).moistureLabel)).length; return wet >= 3 && (t.sky === 'clear' || t.sky === 'cloud') ? t.sky + ', ' + wet + ' fields wet' : ''`)); await settle(page); await frames(page, 20) } },
+  { name: 'L12-frost-morning', size: [1920, 1080], setup: async page => { await playTo(page, 2020, 5, 255, ['kill', 'dig']); console.log('  ', await playUntil(page, ['kill', 'dig'], FROST)); await settle(page); await frames(page, 20) } },
+  { name: 'L13-walk-in', size: [1920, 1080], setup: async page => { await july(page); await playUntil(page, [], SKY('clear')); await settle(page); await view(page, { x: 4, z: 13, dist: 7.5, yaw: -0.5 }); await frames(page, 30) } },
+  { name: 'L14-mid-zoom', size: [1920, 1080], setup: async page => { await july(page); await playUntil(page, [], SKY('clear')); await settle(page); await view(page, { x: 6, z: 2, dist: 28, yaw: -0.44 }); await frames(page, 30) } },
+  // Wind and cloud shadow: the same breezy day three seconds apart, to see the gusts and the shade move.
+  ...[0, 3000].map((wait, k) => ({ name: `L15-wind-${'ab'[k]}`, size: [1920, 1080] as [number, number], setup: async (page: Page) => { await july(page); await playUntil(page, [], SKY('clear')); await settle(page); await page.evaluate(() => (window as any).__countyField.tune({ wind: 0.9, cloud: 0.5 })); await frames(page, 20); await page.waitForTimeout(wait) } })),
   // Sizes: the farm kept whole inside what the interface leaves free.
   ...([
     ['30-size-390x844', [390, 844], { top: 52, bottom: 190 }],

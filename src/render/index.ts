@@ -1,19 +1,20 @@
 // The field view: the farm in its country, drawn with three.js, played like a strategy map.
 // Falls back to a flat drawing without WebGL.
-import { PCFShadowMap, Raycaster, Scene, Triangle, Vector2, Vector3, WebGLRenderer, type Object3D } from 'three'
+import { Color, PCFShadowMap, Raycaster, Scene, Triangle, Vector2, Vector3, WebGLRenderer, type Object3D } from 'three'
 import type { App } from '../game/app.ts'
 import type { CreateFieldView, FieldView } from '../game/contracts.ts'
 import { FIELD_COUNT, HILLS } from '../sim/index.ts'
-import { CameraRig, type Pose, type Viewport } from './camera.ts'
+import { CameraRig, MOVE_MS, type Pose, type Viewport } from './camera.ts'
 import { Kit } from './crew.ts'
-import { copyEnv, easeEnv, envTarget, light, makeEnv, makeLight } from './env.ts'
+import { EVENING, MORNING, copyEnv, easeEnv, envTarget, light, makeEnv, makeLight } from './env.ts'
+import { FarHills } from './far.ts'
 import { createFallbackView } from './fallback.ts'
 import { Fields, MARK_WIDE, PIXEL, UI_GAIN, type HillDisplay } from './fields.ts'
 import { Flora } from './flora.ts'
 import { Grass } from './grass.ts'
 import { Harvest } from './harvest.ts'
 import { attachInput } from './input.ts'
-import { FD, FIELDS, fieldBaseY, groundY, YARD_AT, yardAt } from './layout.ts'
+import { FD, FIELDS, WATER_Y, brookZ, fieldBaseY, groundY, YARD_AT, yardAt } from './layout.ts'
 import { clamp, smooth } from './noise.ts'
 import { Particles } from './particles.ts'
 import { Post } from './post.ts'
@@ -31,18 +32,21 @@ import { Poly, type Reveal } from './work.ts'
 
 const DAY_ANIM_S = 3.4          // how long a paused day's work takes to play out
 const TITLE_LOOP_S = 44
+const TITLE_MOVE_S = 36         // the opening shot's way down from the wide view to the low one, and as long back
+const HOUR_HOLD_S = 6           // the least time between a morning's light and an evening's
 const LOST_MS = 3000            // how long a lost WebGL context may stay away before the farm is drawn flat
 const STILL = 0.02              // the pace of water, cloud, mist and smoke under reduced motion
 const SHOWN_CAP_S = 2.5         // the longest whenShown() keeps the interface waiting
 
 type Tier = 'high' | 'medium' | 'low'
-// What each setting keeps. Going down: the shallow focus and the contact shade go first, then shadow detail, then
-// the size the scene is drawn at and the number of plants; and whole plants give way to clumps, and clumps to rows
-// painted on the ground, nearer the camera.
-const TIERS: Record<Tier, { scale: number; pixels: number; msaa: number; ao: boolean; focus: boolean; shadow: [number, number, number]; density: number }> = {
-  high: { scale: 1, pixels: 3.7e6, msaa: 4, ao: true, focus: true, shadow: [3072, 2048, 2048], density: 1 },
-  medium: { scale: 1, pixels: 2.6e6, msaa: 4, ao: false, focus: false, shadow: [2048, 1024, 1024], density: 1 },
-  low: { scale: 0.72, pixels: 1.4e6, msaa: 0, ao: false, focus: false, shadow: [1024, 1024, 512], density: 0.5 },
+// What each setting keeps. Going down: the shallow focus and the contact shade go first, then shadow detail and the
+// finer shafts of light, then the size the scene is drawn at and the number of plants; and whole plants give way to
+// clumps, and clumps to rows painted on the ground, nearer the camera. `near`: how often the fine shadow round the
+// camera's focus is redrawn (every frame, or every other).
+const TIERS: Record<Tier, { scale: number; pixels: number; msaa: number; ao: boolean; focus: boolean; shafts: number; shadow: [number, number, number]; near: number; density: number }> = {
+  high: { scale: 1, pixels: 3.7e6, msaa: 4, ao: true, focus: true, shafts: 40, shadow: [3072, 2048, 2048], near: 1, density: 1 },
+  medium: { scale: 1, pixels: 2.3e6, msaa: 2, ao: false, focus: false, shafts: 20, shadow: [2048, 1024, 1024], near: 1, density: 1 },
+  low: { scale: 0.72, pixels: 1.2e6, msaa: 0, ao: false, focus: false, shafts: 0, shadow: [1024, 1024, 512], near: 2, density: 0.5 },
 }
 const DOWN: Record<Tier, Tier> = { high: 'medium', medium: 'low', low: 'low' }
 
@@ -116,6 +120,8 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   const particles = new Particles(puffTex)
   const weather = new Weather()
   const birds = new Birds()
+  const farHills = new FarHills()
+  scene.add(farHills.mesh)
   scene.add(sky.dome, terrain.group, flora.group, grass.group, props.group, fields.group, harvest.group, crews.group, particles.mesh, weather.group, birds.mesh)
   // Whatever throws a shadow near at hand throws it into the fine cascade; the far trees and farmsteads only into the wide one.
   scene.traverse(o => { if (o.castShadow && !o.userData.far) o.layers.enable(3) })
@@ -151,7 +157,21 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   let pending: PendingReveal[] = []
 
   // ---- quality
-  let tier: Tier = app.settings.quality === 'auto' ? ((navigator.hardwareConcurrency ?? 8) <= 4 ? 'medium' : 'high') : app.settings.quality
+  // Left to itself the view starts where the graphics chip suggests and comes down if frames run slow: a chip built
+  // into the processor starts at the middle setting (the low one on a small machine), a graphics card at the high one.
+  function startTier(): Tier {
+    const gl = renderer.getContext()
+    const ext = gl.getExtension('WEBGL_debug_renderer_info')
+    const chip = String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : '').toLowerCase()
+    const small = (navigator.hardwareConcurrency ?? 8) <= 4
+    if (/swiftshader|llvmpipe|software|basic render/.test(chip)) return 'low'
+    if (/intel|adreno|mali|powervr|videocore|radeon\(tm\) graphics|radeon graphics|vega \d/.test(chip) && !/arc\(tm\) a\d/.test(chip)) return small ? 'low' : 'medium'
+    // Apple's own chips: the larger ones carry the high setting; the base ones, and a browser that will not say, start in the middle.
+    if (/apple/.test(chip) && !/ (pro|max|ultra)\b/.test(chip)) return 'medium'
+    return small ? 'medium' : 'high'
+  }
+  const startedAt = app.settings.quality === 'auto' ? startTier() : app.settings.quality
+  let tier: Tier = startedAt
   const times: number[] = []
   let slow = 0, fps = 60, warm = 0
 
@@ -169,7 +189,8 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     renderer.setSize(vp.w, vp.h, false)
     size = { w: vp.w, h: vp.h, pr }
     const scale = Math.min(t.scale, Math.sqrt(t.pixels / Math.max(1, vp.w * vp.h * pr * pr)))
-    post.setSize(Math.max(2, Math.round(vp.w * pr * scale)), Math.max(2, Math.round(vp.h * pr * scale)), { msaa: t.msaa, ao: t.ao, focus: t.focus, bloom: true })
+    post.setSize(Math.max(2, Math.round(vp.w * pr * scale)), Math.max(2, Math.round(vp.h * pr * scale)), { msaa: t.msaa, ao: t.ao, focus: t.focus, bloom: true, shafts: t.shafts })
+    shadows.nearEvery = t.near
     shadows.setSizes(t.shadow)
     fields.setTier(tier, t.density)
     grass.setTier(tier)
@@ -179,15 +200,23 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     reframe(reduced)
   }
 
+  // The opening shot goes down from its wide view to its low one and back, without end; a tool can hold it at a point.
+  let titleClock = 0
+  let titleFixed = -1
+  function titleU(): number {
+    if (titleFixed >= 0) return titleFixed
+    return reduced ? 0 : 0.5 - 0.5 * Math.cos((Math.PI * titleClock) / TITLE_MOVE_S)
+  }
+
   function poseFor(mode: Mode, vp: Viewport): Pose {
-    return mode === 'title' ? rig.titlePose(vp) : rig.home(vp)
+    return mode === 'title' ? rig.titlePose(vp, titleU()) : rig.home(vp)
   }
 
   // After the window or the interface's edges change: hold whatever was framed.
   function reframe(still: boolean): void {
     const vp = viewport()
     if (framing === 'free') return
-    const to = framing === 'title' ? rig.titlePose(vp) : framing === 'field' && framed >= 0 ? rig.fieldPose(framed, vp) : framing === 'whole' ? rig.whole(vp) : rig.home(vp)
+    const to = framing === 'title' ? rig.titlePose(vp, titleU()) : framing === 'field' && framed >= 0 ? rig.fieldPose(framed, vp) : framing === 'whole' ? rig.whole(vp) : rig.home(vp)
     if (rig.moving()) rig.retarget(to)
     else rig.moveTo(to, still, 500)
   }
@@ -195,8 +224,8 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   // Home: the home farm, with the other blocks reaching in from the edges. Home again: the whole map.
   function goHome(): void {
     const vp = viewport()
-    if (snap.mode === 'title') { framing = 'title'; rig.moveTo(rig.titlePose(vp), reduced); return }
-    const again = framing === 'home' && rig.at(rig.home(vp))
+    if (snap.mode === 'title') { framing = 'title'; rig.moveTo(rig.titlePose(vp, titleU()), reduced); return }
+    const again = framing === 'home' && rig.isAt(rig.home(vp))
     framing = again ? 'whole' : 'home'
     rig.moveTo(again ? rig.whole(vp) : rig.home(vp), reduced)
   }
@@ -307,11 +336,8 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
         particles.clear()
         // A change of screen is a move of the camera, not a cut.
         framing = next.mode === 'title' ? 'title' : 'home'
-        if (first && next.mode === 'title' && !reduced) {
-          // The opening: up from the brook and its mist to the key frame, slowly.
-          rig.moveTo(rig.titlePose(viewport(), true), true)
-          rig.moveTo(rig.titlePose(viewport()), false, 14000)
-        } else rig.moveTo(poseFor(next.mode, viewport()), first || reduced)
+        // To and from the opening shot the camera swings a long way round: give it time.
+        rig.moveTo(poseFor(next.mode, viewport()), first || reduced, next.mode === 'title' || prev.mode === 'title' ? 2200 : MOVE_MS)
       } else crews.sync(next)
       dayT = next.mode === 'title' ? 0 : 1
     }
@@ -325,6 +351,8 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     fields.setTargets(next.fields, shown)
     props.sync(next)
     envTarget(next, envT)
+    dayHour = envT.hour
+    aimHour(first)
     samples.clear()
     dayPassed = false
     dirty = false
@@ -382,21 +410,38 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   }
   const input = attachInput(canvas, app, rig, viewport, pick, pickUnit, goHome, pickYard)
 
+  // The hour the scene is lit for. The day's own picture may be a morning (fog, a white frost, deep mist); days going
+  // by quickly are never shown as mornings and stand in the plainer light of mid afternoon, and the light turns from
+  // morning to evening or back no oftener than every few seconds, so it never chases the days.
+  let dayHour = EVENING
+  let morning = false
+  let hourSince = -99
+  function aimHour(now: boolean): void {
+    const season = snap.mode === 'season'
+    const want = dayHour < 0 && (!season || app.speed <= 1)
+    if (want !== morning && (now || !season || app.speed === 0 || time - hourSince > HOUR_HOLD_S)) { morning = want; hourSince = time }
+    // The evening is not held still: over a couple of minutes the sun sinks a little and comes back, and every shadow with it.
+    const breathe = reduced ? 0 : 0.045 * (0.5 - 0.5 * Math.cos((time * Math.PI * 2) / 140))
+    envT.hour = !season ? dayHour : morning ? MORNING + breathe : app.speed >= 3 ? 0.72 : app.speed === 2 ? 0.87 : EVENING - breathe
+  }
+
+  const shaftTint = new Color(), veilTint = new Color(), leafLight = new Color()
+  let looking = 0
   function applyLight(dt: number): void {
-    // The sun's small journey through the day, smoothed so that days running fast do not make the light flicker.
-    // The faster the days go by, the less of each the sun shows, or the shadows would sway.
-    const through = snap.mode === 'season' && app.speed > 0 ? Math.sin((app.dayProgress - 0.25) * Math.PI * 2) / app.speed : 0
-    sunDrift += (through - sunDrift) * (1 - Math.exp(-dt / 1.1))
-    light(env, reduced ? 0 : sunDrift, lit)
+    // How far the camera looks toward the sun, taken slowly so that turning the view does not pump the exposure.
+    const toSun = rig.camera.getWorldDirection(ahead).dot(lit.skySun)
+    looking += (toSun - looking) * (dt > 0.01 ? 1 - Math.exp(-dt / 0.7) : 1)
+    light(env, looking, lit)
     U.uSunDir.value.copy(lit.sunDir)
     U.uSunCol.value.copy(lit.sun)
     U.uHazeSun.value.copy(lit.hazeSun)
     U.uHazeAway.value.copy(lit.hazeAway)
     U.uMistCol.value.copy(lit.mist)
-    U.uHaze.value.set(env.haze, 0.011)
+    U.uHaze.value.set(env.haze, 0.0085)
+    U.uNight.value = lit.night
     // Mist lies in the low ground: on the brook and the bottom land, thinning fast above it; on a fog day it fills the
     // valley to the mid slope and the ridge stands out of it.
-    U.uMist.value.set((0.5 - 0.36 * env.mistDeep) * env.mist, 2.6 - 1.5 * env.mistDeep, 0.2 + 1.9 * env.mistDeep, 0.85)
+    U.uMist.value.set((0.36 - 0.24 * env.mistDeep) * env.mist, 2.6 - 1.5 * env.mistDeep, 0.2 + 1.9 * env.mistDeep, 0.8)
     U.uCloud.value.x = env.cloudShadow
     U.uCloud.value.y = env.cloud
     U.uSnow.value = env.snow
@@ -406,20 +451,26 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     U.uGold.value = env.gold
     U.uLeaf.value = env.leaf
     U.uDay.value = snap.day
-    U.uSunlit.value += ((snap.mode === 'title' ? 150 : 0) - U.uSunlit.value) * Math.min(1, dt * 1.2)
-    sky.setAir(lit.air, lit.sunDir, lit.skyCap, lit.skyGain / lit.skyShow)
+    U.uSunlit.value += ((snap.mode === 'title' ? 120 : 0) - U.uSunlit.value) * Math.min(1, dt * 1.2)
+    sky.setAir(lit.air, lit.skySun, lit.moon, lit.skyCap, lit.skyGain / lit.skyShow, lit.exposure)
     sky.tune.set(lit.skyShow, lit.skySat, 0.25)
+    sky.more.set(env.high, env.storm, lit.night, ambient)
     sky.deck.copy(lit.deck)
     sky.deckDark.copy(lit.deckDark)
+    sky.rim.copy(lit.rim)
+    sky.high.copy(lit.high)
+    sky.glow.copy(lit.glow)
     sky.ground.copy(lit.ground)
     UI_GAIN.value = 1.1 / lit.exposure
-    const lamp = snap.mode === 'cellar' ? 0.9 : snap.mode === 'plan' || snap.mode === 'ledger' ? 0.35 : snap.mode === 'title' ? 0.22 : 0
-    LAMP.value += (lamp / lit.exposure * 0.6 - LAMP.value) * Math.min(1, dt * 2)
+    // Lamps are lit when it is dark enough to want one: after sunset, and one or two under a black storm.
+    const lamp = 5 * smooth(0.5, 0.95, 1 - lit.day) + 0.5 * smooth(0.7, 1, env.storm) * smooth(0.9, 1, env.cloud)
+    LAMP.value += (lamp / lit.exposure - LAMP.value) * Math.min(1, dt * 2)
   }
-  let sunDrift = 0
   const spent = { crews: 0, update: 0, draw: 0 }
   let replayPace = 1
   let titleShift = 0.16
+  let gustHeading = 0.4, gustRun = 0, mistAt = 0
+  const cloudAt = new Vector2()
 
   function measure(dtMs: number): void {
     if (warm < 150) { warm++; return }
@@ -431,8 +482,12 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     times.length = 0
     fps = Math.round(1000 / Math.max(1, median))
     if (app.settings.quality !== 'auto') return
-    // Two slow stretches running, and the setting comes down a step; it does not go back up by itself.
-    slow = median > 23 ? slow + 1 : 0
+    // Two slow stretches running, and the setting comes down a step; it does not go back up by itself. Slow is when
+    // more than a quarter of the frames miss a sixtieth of a second by a margin: that is felt as a stutter long before
+    // the middle frame is late.
+    slow = sorted[66] > 20.5 ? slow + 1 : 0
+    // Plainly too slow (under 35 frames a second) is not given a second stretch to prove it.
+    if (sorted[66] > 28) slow = 2
     if (slow >= 2 && tier !== 'low') {
       tier = DOWN[tier]
       slow = 0
@@ -462,8 +517,8 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     if (snap.mode === 'title') dayT = reduced ? 0.36 : (((time / TITLE_LOOP_S + titleShift) % 1) + 1) % 1
     else if (dayT < 1) dayT = Math.min(1, app.speed > 0 ? Math.max(dayT + dt / DAY_ANIM_S * 0.25, app.dayProgress) : dayT + dt / DAY_ANIM_S * replayPace)
     if (crews.stageHold >= 0 && snap.mode === 'season') dayT = Math.min(dayT, crews.stageHold)
-    easeEnv(env, envT, 1 - Math.exp(-dt / 1.1))
-    applyLight(dt)
+    aimHour(false)
+    easeEnv(env, envT, 1 - Math.exp(-dt / 1.1), reduced ? dt * 4 : dt)
     const pace = reduced ? STILL : 1
     const wx = Math.cos(env.windDir), wz = Math.sin(env.windDir)
     U.uTime.value = ambient
@@ -471,13 +526,29 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     U.uWindDir.value.set(wx, wz)
     windAt.x += wx * (0.4 + env.wind) * 2.2 * dt * pace
     windAt.y += wz * (0.4 + env.wind) * 2.2 * dt * pace
-    U.uCloud.value.z = windAt.x * 0.0009
-    U.uCloud.value.w = windAt.y * 0.0009
+    // Gusts run down a heading that follows the day's wind slowly; cloud and its shadow drift with the wind itself.
+    let swing = env.windDir - gustHeading
+    while (swing > Math.PI) swing -= Math.PI * 2
+    while (swing < -Math.PI) swing += Math.PI * 2
+    gustHeading += swing * (1 - Math.exp(-dt / 7))
+    gustRun += (2.6 + 5.5 * env.wind) * dt * pace
+    U.uGust.value.set(Math.cos(gustHeading), Math.sin(gustHeading), gustRun, env.wind)
+    cloudAt.x -= wx * (4 + 8 * env.wind) * 0.0015 * dt * pace
+    cloudAt.y -= wz * (4 + 8 * env.wind) * 0.0015 * dt * pace
+    U.uCloud.value.z = cloudAt.x
+    U.uCloud.value.w = cloudAt.y
     terrain.water.ice.value = env.ice
     for (let i = 0; i < FIELD_COUNT; i++) terrain.held.value[i] = fields.held[i]
     input.frame(dt)
     if (rig.idle < 0.2 && framing !== 'free') framing = 'free'
-    rig.update(dt, vp, reduced, snap.mode === 'title' && framing === 'title' && !reduced ? Math.sin(time * 0.05) : 0)
+    if (snap.mode === 'title' && framing === 'title') {
+      if (!reduced && titleFixed < 0) titleClock += dt
+      const to = rig.titlePose(vp, titleU())
+      if (rig.moving()) rig.retarget(to)
+      else rig.moveTo(to, true)
+    }
+    rig.update(dt, vp, reduced)
+    applyLight(dt)
     const cam = rig.camera
     sky.dome.position.copy(cam.position)
     const t0 = performance.now()
@@ -485,18 +556,33 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       dt, dayT, advancing: app.speed > 0, pace: replayPace, time, reduced, idle: snap.mode !== 'season' && snap.mode !== 'title',
       season: snap.mode === 'season', dist: rig.cur.dist, dust: env.dry, picked: app.unit, particles, passed,
     })
-    // Smoke from the kitchen chimney on cold days.
+    // Smoke from the kitchen chimney: all day in the cold, a thread of it at supper time.
     smokeAt += dt * pace
     if (env.smoke > 0.2 && smokeAt > 0.16) {
       smokeAt = 0
       particles.emit(props.chimney.x, props.chimney.y, props.chimney.z, (Math.random() - 0.5) * 0.1, 0.5, (Math.random() - 0.5) * 0.1, 0.12, 0.3, 4.5, 0.74, 0.74, 0.76, 0.36 * env.smoke, 0.8)
     }
     props.update({ dt: dt * pace, time: ambient, env, lit, dist: rig.cur.dist, yard: app.yard, particles })
+    // The brook breathes on a still damp morning: wisps that lift off the water and thin away.
+    mistAt += dt * pace
+    const breath = Math.max(env.mist, 0.5 * Math.max(env.rime0, env.rime2)) * (1 - Math.max(env.rain, env.snowfall)) * (1 - 0.6 * Math.min(1, env.wind))
+    if (breath > 0.12 && mistAt > 0.2) {
+      mistAt = 0
+      const x = clamp(rig.cur.x + (Math.random() - 0.5) * 120, -150, 190)
+      particles.emit(x, WATER_Y + 0.3, brookZ(x) + (Math.random() - 0.5) * 3.4, (Math.random() - 0.5) * 0.2, 0.1 + Math.random() * 0.1, (Math.random() - 0.5) * 0.2, 1.3, 0.45, 9, 0.9, 0.92, 0.95, 0.11 * breath, 0.5)
+    }
     const t1 = performance.now()
     particles.update(dt * (reduced ? 0.3 : 1), wx * env.wind * 1.6, wz * env.wind * 1.6)
     focus.set(rig.cur.x, fieldBaseY(rig.cur.z), rig.cur.z)
-    weather.update(fall, env.rain, env.snowfall, wx * env.wind, wz * env.wind, cam.getWorldDirection(ahead).multiplyScalar(30).add(cam.position), lit.hazeAway, (size.h * size.pr) / (2 * Math.tan((cam.fov * Math.PI) / 360)))
-    birds.update(ambient, Math.max(env.rain, env.snowfall), lit.hazeAway)
+    // The air that rain, snow and leaves fall through reaches from the camera past what it looks at.
+    const span = clamp(rig.cur.dist / 26, 1, 5)
+    leafLight.copy(lit.sun).multiplyScalar(0.3).add(lit.hazeAway)
+    weather.update({
+      fall, rain: env.rain, snowfall: env.snowfall, leaves: env.fall * (0.35 + 0.65 * Math.min(1, env.wind * 2)), windX: wx * env.wind, windZ: wz * env.wind,
+      centre: ahead.set(rig.cur.x, fieldBaseY(rig.cur.z) + 9 * span, rig.cur.z), span, tint: lit.hazeAway, light: leafLight,
+      resX: post.target.width, resY: post.target.height, floor: fieldBaseY(rig.cur.z),
+    })
+    birds.update(ambient, Math.max(env.rain, env.snowfall, lit.night), lit.hazeAway)
     shadows.update(lit.sunDir, lit.sun, focus, rig.focus(), dtMs <= 0.5)
     fields.setFarShadows(!shadows.holdsFarm)
     MARK_WIDE.value = clamp(rig.cur.dist / 42, 1, 4.5)
@@ -506,28 +592,38 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     harvest.update(dt, app.speed === 0, clamp(rig.cur.dist / 30, 1, 2.3), reduced)
     PIXEL.value = (TIERS[tier].msaa ? 1.7 : 1.4) / ((post.target.height) / (2 * Math.tan((cam.fov * Math.PI) / 360)))
     // The focus is shallow in the opening shot, slight in play, and opens up while the player moves the camera.
-    const want = env.lens * (rig.idle < 0.6 ? 0.2 : 1) * (snap.mode === 'title' ? 1 : smooth(60, 16, rig.cur.dist) * 0.9 + 0.5)
+    const want = env.lens * (rig.idle < 0.6 ? 0.2 : 1) * (snap.mode === 'title' ? 0.8 : smooth(40, 12, rig.cur.dist) * 1.3 + 0.1)
     lens += (want - lens) * (1 - Math.exp(-dt / 0.35))
     const t2 = performance.now()
     renderer.info.reset()
     if (frameNo % 2 === 0 || frameNo < 4 || dtMs <= 0.5) sky.renderMap(renderer)
-    // The opening shot is focused on the bottom fields, half way to what it looks at.
-    const sharp = rig.focus() * (snap.mode === 'title' && framing === 'title' ? 0.5 : 1)
+    const sharp = rig.focus()
     // Where the sun stands on the picture, and how much of its light the air shows: most when it is low, the air is
     // hazy or misty, the sky is open, and the camera looks its way.
-    sunAt.copy(lit.sunDir).multiplyScalar(4000).add(cam.position).project(cam)
-    const facing = cam.getWorldDirection(ahead).dot(lit.sunDir)
-    const low = smooth(0.75, 0.12, lit.sunDir.y)
-    const open = clamp(1 - env.cloud, 0, 1) * (1 - Math.max(env.rain, env.snowfall))
-    const thick = clamp(0.35 + env.haze * 380 + 0.5 * env.mist, 0, 1.3)
-    const shafts = (reduced ? 0.6 : 1) * 0.5 * low * open * thick * smooth(-0.15, 0.55, facing)
-    // The grade follows the light: warm and rich under a low open sun, plainer under cloud, cool on snow.
-    const gold = low * open
+    sunAt.copy(lit.skySun).multiplyScalar(4000).add(cam.position).project(cam)
+    const facing = cam.getWorldDirection(ahead).dot(lit.skySun)
+    const falling = Math.max(env.rain, env.snowfall)
+    const open = clamp(1 - env.cloud, 0, 1) * (1 - falling)
+    const thick = clamp(0.45 + env.haze * 420 + 0.6 * env.mist, 0, 1.4)
+    const shafts = (reduced ? 0.7 : 1) * lit.low * lit.day * Math.min(1, env.sunScale * 1.5) * (0.35 + 0.65 * open) * thick * smooth(0.25, 0.8, facing)
+    const peak = Math.max(lit.sun.r, lit.sun.g, lit.sun.b, 1e-4)
+    shaftTint.copy(lit.sun).multiplyScalar(1 / peak)
+    // The grade follows the light: warm and rich under a low open sun, plainer under cloud, amber in the fall, cool on
+    // snow and blue at night; and what falls or hangs in the air lifts the darks into its own colour.
+    const gold = lit.low * open * lit.day
     const cold = clamp(env.snow, 0, 1)
+    const autumn = env.gold * (1 - cold)
+    veilTint.copy(lit.hazeAway).multiplyScalar(lit.exposure)
+    const veilPeak = Math.max(veilTint.r, veilTint.g, veilTint.b, 0.7)
+    veilTint.multiplyScalar(0.7 / veilPeak)
     post.render(scene, cam, {
       exposure: lit.exposure, focus: sharp, aperture: 0.3 * lens, time, grain: 0.018,
-      sunX: sunAt.x * 0.5 + 0.5, sunY: sunAt.y * 0.5 + 0.5, shafts: sunAt.z < 1 ? shafts : 0,
-      warm: 0.22 + 0.5 * gold - 0.3 * cold, rich: 0.1 + 0.14 * gold, contrast: 0.09 + 0.08 * open,
+      sunX: sunAt.x * 0.5 + 0.5, sunY: sunAt.y * 0.5 + 0.5, shafts: sunAt.z < 1 ? shafts : 0, shaftTint,
+      warm: 0.2 + 0.5 * gold + 0.1 * autumn * open - 0.3 * cold - 0.28 * lit.night,
+      rich: 0.1 + 0.15 * gold + 0.1 * autumn - 0.05 * falling,
+      contrast: 0.1 + 0.09 * open * lit.day + 0.06 * env.storm,
+      veil: 0.1 * env.mist + 0.12 * env.rain + 0.14 * env.snowfall, veilTint,
+      vignette: snap.mode === 'title' ? 0.3 : 0.2 + 0.1 * lit.night + 0.06 * env.storm,
     }, Math.round(size.w * size.pr), Math.round(size.h * size.pr))
     const t3 = performance.now()
     // how long the frame's own work and its drawing take, smoothed, for the tools
@@ -607,7 +703,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   // For measuring what each part of the scene costs: the parts by name, which the tools can switch off.
   const parts: Record<string, Object3D> = {
     terrain: terrain.group, flora: flora.group, grass: grass.group, props: props.group, fields: fields.group, harvest: harvest.group,
-    crews: crews.group, particles: particles.mesh, weather: weather.group, birds: birds.mesh, sky: sky.dome,
+    crews: crews.group, particles: particles.mesh, weather: weather.group, birds: birds.mesh, sky: sky.dome, far: farHills.mesh,
   }
 
   rebuild()
@@ -629,7 +725,9 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
         dayT = snap.mode === 'title' ? dayT : 1
         replayPace = 1
         crews.settle()
+        aimHour(true)
         copyEnv(env, envT)
+        if (snap.mode === 'title' && framing === 'title') rig.moveTo(rig.titlePose(viewport(), titleU()), true)
         rig.snap(viewport())
         fields.snap(env.oats, rig.camera)
         harvest.snap()
@@ -655,8 +753,12 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       // For working on the look: put the camera somewhere.
       view(p: Partial<Pose>) {
         framing = 'free'
-        rig.moveTo({ ...rig.goal, ...p }, true)
+        rig.moveTo(rig.complete(p), true)
       },
+      // Hold the opening shot at a point of its move (0 the wide view, 1 the low one); below 0 lets it run.
+      titleAt(u: number) { titleFixed = u },
+      // For working on the light: set parts of the day's air by hand; they hold until the game next changes the day.
+      tune(o: Record<string, number>) { Object.assign(envT, o); Object.assign(env, o); if (typeof o.hour === 'number') dayHour = o.hour },
       home() { goHome() },
       // Where a crew is on the screen, for clicking it in checks.
       unitAt(id: number) {
@@ -677,7 +779,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
         const r = renderer.info.render
         return {
           triangles: r.triangles, calls: r.calls, pixelRatio: renderer.getPixelRatio(), width: canvas.width, height: canvas.height,
-          camera: rig.where(), time, ambient, fall, exposure: lit.exposure, tier, fps, drawn: [post.target.width, post.target.height], firstFrame,
+          camera: rig.where(), time, ambient, fall, exposure: lit.exposure, tier, startedAt, fps, drawn: [post.target.width, post.target.height], firstFrame,
           spent: { crews: +spent.crews.toFixed(2), update: +spent.update.toFixed(2), draw: +spent.draw.toFixed(2) }, objects: scene.children.reduce((n, c) => { let k = 0; c.traverse(() => k++); return n + k }, 0),
         }
       },
@@ -710,6 +812,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       particles.dispose()
       weather.dispose()
       birds.dispose()
+      farHills.dispose()
       sky.dispose()
       shadows.dispose()
       post.dispose()
