@@ -176,7 +176,7 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
     })
     const u = picked(c)
     const who = u ? h('span', { class: 'order-who', title: touch ? undefined : `Orders go to ${u.name === S.FARMER_NAME ? 'you' : u.name}` },
-      portrait(u.id, 'portrait s'), h('span', { class: 'order-who-name' }, firstName(u.name)), h('span', { class: 'sr' }, `: these orders go to ${u.name === S.FARMER_NAME ? 'you' : u.name}`)) : null
+      portrait(u, 'portrait s'), h('span', { class: 'order-who-name' }, firstName(u.name)), h('span', { class: 'sr' }, `: these orders go to ${u.name === S.FARMER_NAME ? 'you' : u.name}`)) : null
     const more = all.length > MAX_ORDERS && !held ? h('button', {
       class: 'order more', type: 'button', testid: 'order-more', 'aria-label': page === 0 ? 'More orders' : 'Back to the first orders', 'aria-pressed': String(page === 1),
       onclick: () => { page = page === 0 ? 1 : 0; ctx.dirty() },

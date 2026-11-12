@@ -42,7 +42,7 @@ export function incidentCard(ctx: Ctx): IncidentCard {
     }
     const u = inc.unit !== undefined ? c.crew.find(x => x.id === inc.unit) : undefined
     if (!u) return null
-    return h('p', { class: 'inc-who' }, portrait(u.id, 'portrait s'), h('strong', null, u.name === S.FARMER_NAME ? 'You' : u.name),
+    return h('p', { class: 'inc-who' }, portrait(u, 'portrait s'), h('strong', null, u.name === S.FARMER_NAME ? 'You' : u.name),
       h('span', { class: 'sub' }, inc.kind === 'breakdown' ? 'was driving' : `${F.money(u.wage)} a month here, ${S.moodWord(u.mood)}`))
   }
 

@@ -1,0 +1,213 @@
+/* The design system placed in the game: what a live screen needs beyond the frames (every size, the HUD's layers,
+   live states). Values come from the tokens in system.css; nothing here restyles a component. */
+
+/* What the system draws takes the pointer; the space between lets it through to the land. */
+.hud .sys:not(.topbar) { pointer-events: auto; }
+.hud .topbar { pointer-events: none; }
+.hud .topbar > section > * { pointer-events: auto; }
+
+/* ---------------------------------------------------------------- the title (design/title.html) */
+.title-screen .title-shade { position: absolute; inset: 0; background: linear-gradient(90deg, rgb(14 12 8 / 0.4), rgb(14 12 8 / 0) 42%); }
+.title-screen .cover { top: 50%; bottom: auto; max-height: calc(100% - 32px); transform: translateY(-50%) rotate(-.4deg); grid-template-rows: none; }
+.cover .btn.go .sub-go { display: block; margin-top: 3px; font: italic 400 14px/1.1 var(--f-text); letter-spacing: 0; text-transform: none; color: rgb(246 241 228 / 0.8); }
+.cover .btn.go > span { display: grid; text-align: left; }
+.cover .cv-item { width: 100%; }
+.cv-plate { display: block; }
+.cv-plate .cut { width: 200px; height: auto; display: block; }
+/* Below a desk's height the cover gives up the engraving first, then the line under the name. */
+.title-screen[data-layout='mid'] .cover, .title-screen[data-layout='wide'] .cover { left: max(44px, env(safe-area-inset-left, 0px)); }
+@media (max-height: 820px) {
+  .title-screen .cover .cv-name .county { font-size: 140px; }
+  .title-screen .cv-cut { grid-template-columns: 140px 1fr; padding: 6px 0; }
+  .title-screen .cv-plate .cut { width: 140px; }
+  .title-screen .cv-cut figcaption { display: none; }
+}
+@media (max-height: 680px) {
+  .title-screen .cv-plate, .title-screen .cv-cut figcaption { display: none; }
+  .title-screen .cv-cut { grid-template-columns: 1fr; }
+  .title-screen .cover .cv-name .county { font-size: 112px; }
+}
+/* A phone held upright: the cover is the lower part of the screen, the land above it. */
+.title-screen[data-layout='narrow'] .cover {
+  left: 10px; right: 10px; top: auto; bottom: max(10px, env(safe-area-inset-bottom, 0px)); width: auto; transform: none; padding: 18px 22px 14px; max-height: calc(100% - 20px);
+}
+.title-screen[data-layout='narrow'] .cv-name .county { font-size: clamp(88px, 30vw, 150px); }
+.title-screen[data-layout='narrow'] .cv-name .the { font-size: 34px; margin-bottom: -10px; }
+.title-screen[data-layout='narrow'] .cv-cut { grid-template-columns: 96px 1fr; gap: 4px 12px; padding: 8px 0; }
+.title-screen[data-layout='narrow'] .cv-plate .cut { width: 96px; }
+.title-screen[data-layout='narrow'] .cv-cut p { font-size: 15px; }
+.title-screen[data-layout='narrow'] .cv-cut figcaption { display: none; }
+.title-screen[data-layout='narrow'] .cover .btn.go { font-size: 26px; min-height: 56px; }
+.title-screen[data-layout='narrow'] .cv-item { font-size: 17px; }
+.title-screen[data-layout='narrow'] .cv-top { font-size: 12px; }
+@media (max-width: 359px) {
+  .title-screen[data-layout='narrow'] .cv-cut { grid-template-columns: 1fr; }
+  .title-screen[data-layout='narrow'] .cv-plate { display: none; }
+}
+/* A phone on its side: the cover on the left, as short as it can stand. */
+.title-screen[data-layout='short'] .cover { left: 10px; width: min(400px, 50vw); padding: 12px 20px 10px; max-height: calc(100% - 16px); }
+.title-screen[data-layout='short'] .cv-top, .title-screen[data-layout='short'] .cv-cut, .title-screen[data-layout='short'] .cover > .rule, .title-screen[data-layout='short'] .cv-menu > .t-label { display: none; }
+.title-screen[data-layout='short'] .cv-name .county { font-size: 64px; }
+.title-screen[data-layout='short'] .cv-name .the { font-size: 22px; margin: 0 0 -4px; }
+.title-screen[data-layout='short'] .cover .btn.go { min-height: 46px; font-size: 22px; margin-bottom: 2px; }
+.title-screen[data-layout='short'] .cv-item { min-height: 40px; font-size: 16px; }
+.title-screen[data-layout='short'] .imprint { margin-top: 4px; padding-top: 4px; }
+.touch .title-screen[data-layout='short'] .cv-item { min-height: 44px; }
+
+/* ---------------------------------------------------------------- the top: two anchored boards (design/season.html) */
+.topbar { position: absolute; left: 0; right: 0; top: 0; display: flex; justify-content: space-between; align-items: flex-start; gap: var(--s4);
+  padding: max(var(--gutter), env(safe-area-inset-top, 0px)) max(var(--gutter), env(safe-area-inset-right, 0px)) 0 max(var(--gutter), env(safe-area-inset-left, 0px)); }
+.topbar .almanac, .topbar .bank { position: relative; left: auto; right: auto; top: auto; }
+.topbar .almanac { width: auto; max-width: 540px; flex: 0 1 auto; min-width: 0; }
+.topbar .bank { width: 316px; flex: none; }
+.topbar .almanac .face { display: grid; grid-template-columns: 172px minmax(0, 1fr); }
+.topbar .almanac .face.plain { grid-template-columns: auto; }
+.topbar .leaf .date { display: contents; }
+.topbar .leaf.word { grid-template-columns: auto; padding-right: 64px; }
+.topbar .leaf.word .date { display: block; font: 400 34px/.9 var(--f-gothic); letter-spacing: .06em; text-transform: uppercase; color: var(--red); }
+.topbar .forecast { width: 100%; text-align: center; cursor: pointer; }
+.topbar .forecast .d .i { --i: 24px; }
+.topbar .forecast .wet .i { --i: 13px; }
+.topbar .forecast .wet .risk { color: var(--red); }
+.topbar .forecast .wet .cold { color: var(--blue); }
+@media (hover: hover) { .topbar .forecast:hover .d { background: var(--paper-2); } }
+.topbar .season-track .bar > u { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--blue); }
+.topbar .season-track .bar > u.watch { background: var(--red); opacity: .55; }
+/* the goal slip, a button: open it for the goals */
+.topbar .goal { text-align: left; min-height: var(--touch); max-width: 100%; }
+.topbar .goal .goal-body { display: grid; min-width: 0; }
+.topbar .goal .goal-t { font: 700 19px/1.1 var(--f-text); white-space: normal; }
+.topbar .goal .goal-when { font: italic 400 14px/1.2 var(--f-text); color: var(--ink-2); }
+.topbar .goal .was { grid-column: 1 / -1; }
+.topbar .goal.met .goal-t { animation: write var(--t-sheet) var(--ease-out) backwards; }
+.topbar .goal[aria-expanded='true'] { box-shadow: var(--laid), inset 0 0 0 2px var(--ink); }
+@keyframes write { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+/* the bank board */
+.topbar .balance .cash { white-space: nowrap; }
+.topbar .clock.compact { grid-template-columns: 1fr 1fr 52px; }
+.topbar .clock .k.armed { box-shadow: inset 0 -4px 0 var(--ink); }
+.topbar .clock .k.stopped { color: var(--paper); background: var(--red); }
+.topbar .clock.plan { grid-template-columns: 1fr 52px; }
+.topbar .clock.plan .season-word { align-self: center; padding: 0 12px; color: var(--ink); }
+.topbar .clock.plan .menu { height: var(--touch); }
+.topbar .clock.done { display: grid; grid-template-columns: 1fr 52px; padding: 6px; gap: 6px; }
+.topbar .materials { display: flex; align-items: center; gap: 6px; width: 100%; min-height: 40px; padding: 4px 12px; border-bottom: 1px solid var(--ink); font-size: 15px; }
+.topbar .materials .i { --i: 17px; }
+.topbar .materials > .num + .i { margin-left: 8px; }
+.topbar .contracts { display: grid; }
+.topbar .contract, .tracker .contract { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; width: 100%; padding: 8px 12px 10px; text-align: left; border-top: 1px solid var(--hair); }
+.topbar .contract:first-child { border-top: 0; }
+.contract .who { display: flex; align-items: center; gap: 6px; font-size: 15px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.contract .who .i { --i: 16px; flex: none; }
+.contract .due { color: var(--ink); }
+.contract .range { grid-column: 1 / -1; margin: 6px 0 2px; }
+.contract .says { grid-column: 1 / -1; font-size: 14px; }
+.contract.done .range .mark { background: var(--green); }
+@media (hover: hover) { .topbar .contract:hover, .topbar .materials:hover { background: var(--paper-2); } }
+.topbar .stopped-tag { right: 18px; }
+/* the goals and the materials, opened from the boards */
+.topbar .tb-pop { position: absolute; z-index: 3; top: calc(100% + 8px); width: min(380px, calc(100vw - 32px)); max-height: 60vh; overflow: auto; padding: 14px 16px; display: grid; gap: 8px; }
+.topbar .almanac .tb-pop { left: 0; }
+.topbar .bank .tb-pop { right: 0; }
+.tb-pop .gls { display: grid; gap: 2px; }
+.tb-pop .gl { display: grid; grid-template-columns: 26px 1fr auto; align-items: center; gap: 2px 8px; padding: 5px 0; border-bottom: 1px solid var(--hair); font-size: 15px; }
+.tb-pop .gl .tick { width: 18px; height: 18px; }
+.tb-pop .gl .fist { --i: 24px; }
+.tb-pop .gl.now .gl-t { font-weight: 700; }
+.tb-pop .gl-why, .tb-pop .gl-when { grid-column: 2 / -1; font: italic 400 14px/1.25 var(--f-text); color: var(--ink-2); }
+.tb-pop .gl .btn { grid-column: 2 / -1; justify-self: start; min-height: 40px; }
+.tb-pop .mat-row { display: flex; align-items: center; gap: 8px; font-size: 16px; }
+.tb-pop .mat-sell { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* a desk too narrow for six days: four, the date leaf narrower */
+.topbar[data-layout='mid'] .almanac .face { grid-template-columns: 150px minmax(0, 1fr); }
+@media (max-width: 1180px) { .topbar[data-layout='mid'] .forecast .d:nth-child(n+6) { display: none; } .topbar[data-layout='mid'] .forecast { grid-template-columns: repeat(4, 1fr); } }
+
+/* A phone held upright (design/season.phone.html): one board across the top, no more than a fifth of the height;
+   the clock and the menu are at the thumb (the season screen's clock slot). */
+.topbar[data-layout='narrow'] { flex-direction: column; gap: 0; padding: max(10px, env(safe-area-inset-top, 0px)) 10px 0; }
+.topbar[data-layout='narrow'] .almanac { width: 100%; max-width: none; }
+.topbar[data-layout='narrow'] .almanac .face { grid-template-columns: 112px minmax(0, 1fr); }
+.topbar[data-layout='narrow'] .leaf { padding: 8px 8px 7px; gap: 0 7px; }
+.topbar[data-layout='narrow'] .leaf .day { font-size: 44px; }
+.topbar[data-layout='narrow'] .leaf .month { font-size: 16px; }
+.topbar[data-layout='narrow'] .leaf .weekday { font-size: 14px; }
+.topbar[data-layout='narrow'] .leaf .year { display: none; }
+.topbar[data-layout='narrow'] .forecast { grid-template-columns: repeat(3, 1fr); }
+.topbar[data-layout='narrow'] .forecast .d { padding: 4px 1px; gap: 2px; }
+.topbar[data-layout='narrow'] .forecast .d .i { --i: 20px; }
+.topbar[data-layout='narrow'] .season-track { padding: 4px 9px 5px; }
+.topbar[data-layout='narrow'] .goal { min-width: 0; margin-left: 12px; padding: 6px 12px 6px 10px; grid-template-columns: 26px 1fr auto; }
+.topbar[data-layout='narrow'] .goal .fist { --i: 26px; }
+.topbar[data-layout='narrow'] .goal .goal-t { font-size: 16px; }
+/* the balance is the board's third column; outside the season the bank board keeps the menu, under the almanac */
+.topbar[data-layout='narrow'][data-phase='season'] .almanac .face { grid-template-columns: 104px minmax(0, 1fr) 112px; }
+.topbar[data-layout='narrow'] .face .balance { flex-direction: column; justify-content: center; align-items: flex-end; gap: 2px; padding: 0 9px; border: 0; border-left: 1px solid var(--ink); background: none; }
+.topbar[data-layout='narrow'] .face .balance .t-figure { font-size: 20px; }
+.topbar[data-layout='narrow']:not([data-phase='season']) .bank { width: 100%; margin-top: 8px; }
+@media (max-width: 359px) { .topbar[data-layout='narrow'][data-phase='season'] .almanac .face { grid-template-columns: 88px minmax(0, 1fr) 100px; } .topbar[data-layout='narrow'] .leaf .day { font-size: 38px; } .topbar[data-layout='narrow'] .forecast .d:nth-child(n+4) { display: none; } .topbar[data-layout='narrow'] .forecast { grid-template-columns: repeat(2, 1fr); } }
+
+/* A phone on its side: the boards as low as they go. */
+.topbar[data-layout='short'] { padding-top: 6px; gap: 8px; }
+.topbar[data-layout='short'] .mount { padding: 4px; }
+.topbar[data-layout='short'] .almanac .face { grid-template-columns: 112px minmax(0, 1fr); }
+.topbar[data-layout='short'] .leaf { padding: 6px 8px 5px; }
+.topbar[data-layout='short'] .leaf .day { font-size: 40px; }
+.topbar[data-layout='short'] .leaf .year, .topbar[data-layout='short'] .season-track { display: none; }
+.topbar[data-layout='short'] .forecast { grid-template-columns: repeat(4, 1fr); }
+.topbar[data-layout='short'] .forecast .d { padding: 3px 1px; }
+.topbar[data-layout='short'] .forecast .d .wet { display: none; }
+.topbar[data-layout='short'] .goal { padding: 4px 10px 4px 8px; grid-template-columns: 22px 1fr auto; min-height: 36px; }
+.topbar[data-layout='short'] .goal .fist { --i: 22px; }
+.topbar[data-layout='short'] .goal .goal-t { font-size: 15px; }
+.topbar[data-layout='short'] .goal .goal-when { display: none; }
+.topbar[data-layout='short'] .bank { width: 250px; }
+.topbar[data-layout='short'] .balance { padding: 4px 10px; }
+.topbar[data-layout='short'] .balance .t-figure { font-size: 22px; }
+.topbar[data-layout='short'] .contracts { display: none; }
+
+/* the clock at the thumb on a phone (season.ts's clock slot) */
+.clock-slot .clock { display: grid; grid-template-columns: 1fr 1fr 52px; width: 100%; background: var(--paper) url(./grain.png); background-blend-mode: multiply; box-shadow: var(--laid); }
+.clock-slot .clock .k, .clock-slot .clock .menu { display: grid; place-items: center; height: 52px; font: 400 24px/1 var(--f-gothic); border-left: 1px solid var(--hair); }
+.clock-slot .clock .k:first-child { border-left: 0; }
+.clock-slot .clock .k[aria-pressed='true'] { color: var(--paper); background: var(--ink); }
+.clock-slot .clock .k.stopped { color: var(--paper); background: var(--red); }
+.clock-slot .clock .menu { background: var(--manila); border-left: 1px solid var(--ink); }
+.clock-slot .clock.done { grid-template-columns: 1fr 52px; gap: 6px; padding: 4px; }
+.clock-slot { pointer-events: auto; }
+.clock-slot .clock { min-width: 200px; }
+.topbar[data-layout='narrow'] .goal { width: auto; min-width: 0; margin-right: 12px; }
+
+/* ---------------------------------------------------------------- the living kit (?kit) */
+.kit .k-pin { position: relative; display: inline-block; width: 44px; height: 70px; }
+.kit .k-pin .pin { left: 22px; top: 64px; }
+.kit .k-pins figure .k-pin { position: absolute; left: 50%; top: 10px; margin-left: -22px; }
+.kit .k-back { height: 210px; }
+.kit .k-backs { grid-template-columns: 1fr; margin-top: 12px; }
+.kit .k-back .row { margin-bottom: 40px; }
+.kit .seg-in { max-width: 360px; }
+.kit .k-busts.small figure span { font-size: 13px; }
+.kitbody .kit { width: min(1440px, 100%); }
+@media (max-width: 900px) {
+  .kitbody .kit { padding: 16px 10px 32px; gap: 16px; }
+  .kitbody .k-sec { padding: 16px 14px 18px; }
+  .kitbody .k-two { grid-template-columns: 1fr; gap: 20px; }
+  .kitbody .k-swatches { grid-template-columns: repeat(2, 1fr); }
+  .kitbody .k-icons { grid-template-columns: repeat(5, 1fr); }
+  .kitbody .k-pins { grid-template-columns: repeat(2, 1fr); }
+  .kitbody .k-type .spec { grid-template-columns: 1fr; gap: 4px; }
+  .kitbody .k-mast h1 { font-size: 54px; }
+  .kitbody .k-table td:nth-child(3) { display: none; }
+  .kitbody .orders { padding-left: 46px !important; }
+  .kitbody .k-states .clock { width: 100% !important; }
+}
+.title-screen[data-layout='narrow'] .cover, .title-screen[data-layout='short'] .cover { padding-bottom: 24px; }
+.title-screen[data-layout='short'] .cv-name .county { text-align: left; }
+/* a desk of middling height: the boards a little lower */
+.topbar[data-layout='mid'] .leaf { padding: 8px 10px 7px; }
+.topbar[data-layout='mid'] .leaf .day { font-size: 52px; }
+.topbar[data-layout='mid'] .forecast .d { padding: 4px 2px; gap: 2px; }
+.topbar[data-layout='mid'] .goal { padding: 6px 12px 6px 10px; }
+.topbar[data-layout='mid'] .goal .fist { --i: 28px; }
+.topbar[data-layout='mid'] .balance { padding: 5px 12px 5px 16px; }
+.topbar[data-layout='short'] .goal { min-height: var(--touch); }

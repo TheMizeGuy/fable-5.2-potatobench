@@ -212,10 +212,10 @@ export class Crews {
   private makeActor(u: UnitVis, slot: number): Actor {
     const rest = idleSpot(-1, slot, u.kind === 'farmer')
     return {
-      id: u.id, kind: u.kind, slot, dress: dressFor(u.id), coat: dressFor(u.id, true), segs: [], clockSeg: -2, segClock: 0,
+      id: u.id, kind: u.kind, slot, dress: dressFor(u.id, false, u.name), coat: dressFor(u.id, true, u.name), segs: [], clockSeg: -2, segClock: 0,
       x: rest.x, z: rest.z, heading: rest.heading, rig: null, aboard: false, shown: 0, away: false, home: null, about: DOORYARD_AT, gait: u.id * 1.3, goal: null, state: 'idle', post: '',
       tired: u.tired, worn: u.tired, style: (u.id * 7) % 5, pose: new Pose().reset(), head: new Vector3(rest.x, 1, rest.z), scale: 1, next: [], u: 1, lastT: 1, ay: 2.2, arc: 0, arcSeg: null, beat: 0, line: null,
-      worker: { id: u.id, dress: dressFor(u.id), tired: 0, w: 0, x: rest.x, z: rest.z, heading: 0, lift: 0, pose: new Pose().reset(), aboard: false, rig: null },
+      worker: { id: u.id, dress: dressFor(u.id, false, u.name), tired: 0, w: 0, x: rest.x, z: rest.z, heading: 0, lift: 0, pose: new Pose().reset(), aboard: false, rig: null },
     }
   }
 

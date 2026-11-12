@@ -1,6 +1,6 @@
 // Winter: each stored crop is a card, and the months turn one at a time.
 import * as S from '../sim/index.ts'
-import { deals, deliver, tracker, versusMarket } from './contracts.ts'
+import { deals, deliver, versusMarket } from './contracts.ts'
 import { count, gauge, patch, type Ctx, type Screen } from './core.ts'
 import { h, s, type Child } from './dom.ts'
 import * as F from './fmt.ts'
@@ -65,8 +65,7 @@ export function cellarScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
   const app = ctx.app
   const top = topBar(ctx, o)
   const sheet = h('section', { class: 'paper sheet cellar-sheet', 'aria-label': 'The cellar', 'data-scroll': 'sheet' })
-  const track = tracker(ctx)
-  const notesSlot = h('div', { class: 'notes-slot top-left' }, track.el)
+  const notesSlot = h('div', { class: 'notes-slot top-left' })
   const el = h('main', { class: 'sheet-screen cellar' }, top.el, notesSlot, sheet)
   const seedOpen: Record<number, boolean> = {}
   const seedN: Record<number, number> = {}
@@ -169,7 +168,6 @@ export function cellarScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
       const c = app.campaign
       if (!c) return
       top.update()
-      track.update()
       const lots = S.openLots(c)
       const st = S.storageInfo(c)
       const stored = st.stored

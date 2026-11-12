@@ -1,27 +1,18 @@
 // People: a portrait in each person's own colours, the card for one person, and the work grid with the farm's rules.
 import { personLook } from '../game/looks.ts'
+import { portrait as bust } from './system/people.ts'
 import * as S from '../sim/index.ts'
 import { confirmPaper, EXIT_MS, patch, type Ctx } from './core.ts'
-import { h, s, type Child } from './dom.ts'
+import { h, type Child } from './dom.ts'
 import * as F from './fmt.ts'
 import { icon } from './icons.ts'
 import { BLOCK_NAME, where } from './map.ts'
 import * as R from './rules.ts'
 
-// A head and shoulders in the shirt, hat and skin the figure on the land wears.
-export function portrait(id: number, cls = 'portrait'): SVGElement {
-  const look = personLook(id)
-  const fill = (c: string) => `fill:${c}`
-  const top = look.hatKind === 'brim'
-    ? [s('ellipse', { cx: 12, cy: 7.4, rx: 7.2, ry: 1.7, style: fill(look.hat) }), s('path', { d: 'M8.2 7.4c0-2.9 1.6-4.5 3.8-4.5s3.8 1.6 3.8 4.5z', style: fill(look.hat) })]
-    : look.hatKind === 'cap'
-      ? [s('path', { d: 'M7.3 8.6c0-3.4 2-5.3 4.7-5.3s4.7 1.9 4.7 5.3z', style: fill(look.hat) }), s('path', { d: 'M15.2 8.6h4.4c0-1-.7-1.5-1.7-1.5h-2.7z', style: fill(look.hat) })]
-      : [s('path', { d: 'M7.3 9.8c-.2-3.7 2-5.8 4.7-5.8s4.9 2.1 4.7 5.8c-1.2-1.3-2.8-1.9-4.7-1.9s-3.5.6-4.7 1.9z', style: fill(look.hair) })]
-  return s('svg', { class: cls, viewBox: '0 0 24 24', 'aria-hidden': 'true', focusable: 'false' },
-    s('path', { d: 'M2.6 24c0-5.3 4.2-8.6 9.4-8.6s9.4 3.3 9.4 8.6z', style: fill(look.shirt) }),
-    s('path', { d: 'M10.3 14.2h3.4v2.6h-3.4z', style: fill(look.skin) }),
-    s('circle', { cx: 12, cy: 10.6, r: 4.5, style: fill(look.skin) }),
-    top)
+// A head and shoulders in the shirt, hat and skin the figure on the land wears: the system's portrait
+// (src/ui/system/people.ts). Old screens size it with their own class.
+export function portrait(who: { name: string }, cls = 'portrait'): SVGElement {
+  return bust(who, 24, cls)
 }
 
 // What a person did on the last day worked, or null. Between days most hold no order, so this is what they are at.
@@ -136,11 +127,11 @@ export function personCard(ctx: Ctx): PersonCard {
     const tiredWhy = R.tiredWhy(c, p)
     return [
       h('header', { class: 'card-head p-head' },
-        portrait(p.id, 'portrait l'),
+        portrait(p, 'portrait l'),
         h('div', null,
           h('h2', { class: 't-head', testid: 'person-name' }, farmer ? 'You, the farmer' : p.name),
           h('p', { class: 'card-sub' }, farmer ? 'Every job; no wage' : `${p.traitName}: ${p.traitText.replace(/\.$/, '').replace(/^./, x => x.toLowerCase())}`)),
-        h('span', { class: 'p-map' }, where(c, p.travelling ? p.to : p.at, 40, c.crew.map(u => ({ at: u.road > 0 ? u.to : u.at, colour: personLook(u.id).shirt, ring: u.id === p.id })))),
+        h('span', { class: 'p-map' }, where(c, p.travelling ? p.to : p.at, 40, c.crew.map(u => ({ at: u.road > 0 ? u.to : u.at, colour: personLook(u.name).shirt, ring: u.id === p.id })))),
         h('button', { class: 'nicon', type: 'button', testid: 'person-close', 'aria-label': `Close${ctx.touch() ? '' : ' (Escape)'}`, onclick: () => app.selectUnit(-1) }, icon('close'))),
       h('div', { class: 'p-now' },
         h('p', { class: 'reading p-doing', testid: 'person-doing' }, icon(doingGlyph(c, p), 'ic s'), h('span', null, doing),
@@ -320,7 +311,7 @@ export function workGrid(ctx: Ctx): WorkGrid {
           h('tbody', null, people.map((p, row) => h('tr', { class: p.foreman ? 'foreman' : '', k: `row-${p.id}` },
             h('th', { scope: 'row' },
               h('button', { class: 'w-who', type: 'button', testid: `grid-person-${p.id}`, tabindex: '-1', onclick: () => { app.selectUnit(p.id) } },
-                portrait(p.id, 'portrait s'), h('span', null, R.firstName(p.name)))),
+                portrait(p, 'portrait s'), h('span', null, R.firstName(p.name)))),
             p.foreman ? h('td', { colspan: S.SKILLS.length, class: 'w-foreman' }, `Foreman of ${S.BLOCK_NAME[p.foreman]}: no field work`)
               : S.SKILLS.map((k, col) => {
                 const lvl = p.skills[k]

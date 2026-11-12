@@ -69,7 +69,7 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
     const said = `${p.kind === 'farmer' ? 'You, the farmer' : p.name}: ${d.text}${sign ? `; ${sign.text}` : ''}.`
     if (!many) {
       return h('div', { class: 'unit solo', testid: `unit-${p.id}`, title: ctx.touch() ? undefined : said },
-        portrait(p.id, 'portrait'),
+        portrait(p, 'portrait'),
         h('span', { class: 'unit-doing' }, icon(d.glyph, 'ic s'), h('span', { class: 'unit-text' }, d.text)),
         d.progress > 0 ? gauge(d.progress, { label: d.text, text: `${F.pct(d.progress)} done` }) : null)
     }
@@ -78,7 +78,7 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
       'aria-label': `${said} ${on ? 'Their card is open. Press again to close it.' : 'Press for their card; orders given now go to them.'}`,
       title: ctx.touch() ? undefined : said, onclick: () => { if (on) app.selectUnit(-1); else { app.select(-1); app.selectYard(0); app.selectUnit(p.id) } },
     },
-    h('span', { class: 'pp' }, portrait(p.id),
+    h('span', { class: 'pp' }, portrait(p),
       h('span', { class: 'pp-do' }, icon(doingGlyph(c, p), 'ic s')),
       sign ? h('span', { class: `pp-sign ${sign.cls}` }, icon(sign.glyph, 'ic s')) : null),
     h('span', { class: 'unit-name' }, name),
@@ -137,7 +137,7 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
           [{ id: -1, name: 'Anyone' }, ...able.map(u => ({ id: u.id, name: firstName(u.name) }))].map(x => h('button', {
             class: 'nbtn s', type: 'button', testid: `assign-${j.id}-${x.id}`, 'aria-pressed': String(j.unit === x.id),
             onclick: () => assign(j.id, x.id, what, x.name),
-          }, x.id >= 0 ? portrait(x.id, 'portrait xs') : null, x.name))) : null
+          }, x.id >= 0 ? portrait(x, 'portrait xs') : null, x.name))) : null
         return h('li', { class: 'q-item', k: `q-${j.id}` },
           h('button', {
             class: `q${j === head ? ' active' : ''}${waits[j.id] ? ' waiting' : ''}`, type: 'button', testid: `queue-${j.id}`, 'aria-expanded': touch ? String(pop === j.id) : null,

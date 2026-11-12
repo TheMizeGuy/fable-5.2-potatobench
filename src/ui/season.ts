@@ -4,7 +4,6 @@ import { nextGoal } from '../game/goals.ts'
 import * as S from '../sim/index.ts'
 import { yardCard, YARD_TITLE } from './build.ts'
 import { commandCard } from './card.ts'
-import { tracker } from './contracts.ts'
 import { EXIT_MS, patch, unname, type Ctx, type Screen } from './core.ts'
 import { openCrew, unitBar } from './crew.ts'
 import { h } from './dom.ts'
@@ -35,7 +34,6 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   const app = ctx.app
   const top = topBar(ctx, { ...o, show: g => show(target(g)), canShow: g => !!target(g) })
   const crew = h('section', { class: 'crew instrument', 'aria-label': 'People, and the list of orders' })
-  const track = tracker(ctx)
   const clockSlot = h('div', { class: 'clock-slot instrument' })
   const notesSlot = h('div', { class: 'notes-slot' })
   const trayHost = h('div', { class: 'tray-host' })
@@ -48,7 +46,6 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   const yard = yardCard(ctx)
   const grid = workGrid(ctx)
   const incident = incidentCard(ctx)
-  notesSlot.append(track.el)
   const el = h('main', { class: 'season' }, top.el, paused, notesSlot, incident.el, grid.el,
     h('div', { class: 'bottom' }, trayHost, card.el, person.el, yard.el, clockSlot, crew))
 
@@ -413,7 +410,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       const low = layout === 'narrow' || layout === 'short'
       el.classList.toggle('tight', layout === 'narrow' && innerHeight < 720 && (app.selection.length > 0 || !!tray || personUp || app.yard !== 0))
       clockSlot.hidden = !low
-      if (low) patch(clockSlot, JSON.stringify([app.speed, app.resumeSpeed, S.seasonDone(c), ctx.awaiting, ctx.touch()]), () => clock(ctx, true))
+      if (low) patch(clockSlot, JSON.stringify([app.speed, app.resumeSpeed, S.seasonDone(c), ctx.awaiting, ctx.touch()]), () => clock(ctx, true, o.onMenu))
       // Stopped, the one obvious way on: a press goes on at the speed the clock had.
       const stopped = app.speed === 0 && !S.seasonDone(c)
       paused.hidden = !stopped
@@ -421,7 +418,6 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       if (stopped) patch(paused, JSON.stringify([ctx.touch(), app.resumeSpeed]), () => h('button', { class: 'paused-go', type: 'button', testid: 'paused-go', onclick: () => app.togglePause() },
         icon('play', 'ic s'), `Paused: go on at ${app.resumeSpeed || 1}×`, ctx.touch() ? null : h('span', { class: 'key' }, 'Space')))
       updateHint(c)
-      track.update()
       P.update()
       updateYards(c, tgt && 'yard' in tgt ? tgt.yard : 0)
       units.update(c)
@@ -443,7 +439,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       const tops = parts.filter(x => x.offsetParent !== null && x.offsetHeight > 0).map(x => x.getBoundingClientRect().top)
       // On an upright phone a row above the instruments is kept for the latest alert, and the contracts, so the land
       // never shifts for them.
-      const row = narrow ? 48 + (track.el.hidden ? 0 : track.el.offsetHeight + 4) : 8
+      const row = narrow ? 48 : 8
       return [t, 0, innerHeight - Math.min(...tops, innerHeight) + row, 0]
     },
     frame: () => { P.frame(); placeYards() },

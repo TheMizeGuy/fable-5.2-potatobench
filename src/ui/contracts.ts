@@ -144,26 +144,61 @@ export function openContracts(ctx: Ctx): void {
   })
 }
 
-// The standing tracker: one row a contract, delivered of what is wanted, when, and what being short costs today.
-export function tracker(ctx: Ctx): { el: HTMLElement; update(): void } {
-  const el = h('section', { class: 'tracker instrument', 'aria-label': 'Contracts', testid: 'tracker', hidden: true })
-  function update(): void {
-    const c = ctx.app.campaign
-    const ks = c ? S.contractInfo(c) : []
-    el.hidden = ks.length === 0
-    if (!ks.length) return
-    patch(el, JSON.stringify([ks.map(k => [k.id, Math.round(k.delivered), Math.round(k.penalty), k.settled]), ctx.app.settings.units]), () => ks.map(k => {
-      const done = k.needed <= 1e-6
-      const said = `${k.buyer}: ${F.mass(k.delivered)} of ${F.mass(k.cwt)} ${k.varietyName} delivered, due ${k.dueBy}${k.settled ? ', closed' : done ? ', filled' : `. Short today it would cost ${F.money(k.penalty)}`}.`
-      // What a sighted player reads is the start of the button's name; the rest is said after it.
-      return h('button', { class: `track-row${done ? ' done' : ''}`, type: 'button', testid: `track-${k.id}`, title: ctx.touch() ? undefined : said, onclick: () => openContracts(ctx) },
-        icon(done ? 'check' : 'contract', 'ic s'),
-        h('span', { class: 'track-v' }, k.varietyName),
-        h('span', { class: 'track-n num' }, `${F.num(F.massValue(k.delivered))}/${F.mass(k.cwt)}`),
-        h('span', { class: 'track-due' }, k.settled ? 'closed' : DUE_SHORT[k.due]),
-        !done && k.penalty > 0 ? h('span', { class: 'track-pen num' }, F.money(-k.penalty)) : null,
-        h('span', { class: 'sr' }, `. ${said} Open the contracts.`))
-    }))
+// The contracts on the bank board (top.ts): each as a range, what is promised marked against what the fields of its
+// variety look like giving (delivered so far plus the yield estimates still in the ground), with the date it is due.
+export function contractRows(ctx: Ctx): { key(): unknown; part(c: S.Campaign): Child } {
+  function growing(c: S.Campaign, k: S.ContractInfo): { lo: number; hi: number } | null {
+    if (c.phase !== 'season' || !c.season) return null
+    let lo = 0, hi = 0, any = false
+    for (let i = 0; i < S.FIELD_COUNT; i++) {
+      if (!S.held(c, i)) continue
+      const f = S.fieldInfo(c, i)
+      if (f.variety !== k.varietyName || !f.estimate) continue
+      lo += f.estimate.lo * S.FIELD_ACRES
+      hi += f.estimate.hi * S.FIELD_ACRES
+      any = true
+    }
+    return any ? { lo: k.delivered + lo, hi: k.delivered + hi } : null
   }
-  return { el, update }
+  return {
+    key() {
+      const c = ctx.app.campaign
+      return c ? [S.contractInfo(c).map(k => [k.id, Math.round(k.delivered), Math.round(k.penalty), k.settled]), c.season?.day, ctx.app.settings.units] : 0
+    },
+    part(c) {
+      const ks = S.contractInfo(c)
+      if (!ks.length) return null
+      return h('div', { class: 'contracts', testid: 'tracker', role: 'group', 'aria-label': 'Contracts' }, ks.map(k => {
+        const done = k.needed <= 1e-6
+        const g = growing(c, k)
+        const max = Math.max(k.cwt, g?.hi ?? 0, k.delivered) * 1.15
+        const said = `${k.buyer}: ${F.mass(k.delivered)} of ${F.mass(k.cwt)} ${k.varietyName} delivered, due ${k.dueBy}${g ? `; the fields look like giving ${F.mass(g.lo)} to ${F.mass(g.hi)} in all` : ''}${k.settled ? ', closed' : done ? ', filled' : `. Short today it would cost ${F.money(k.penalty)}`}.`
+        return h('button', { class: `contract${done ? ' done' : ''}`, type: 'button', testid: `track-${k.id}`, title: ctx.touch() ? undefined : said, onclick: () => openContracts(ctx) },
+          h('span', { class: 'who' }, icon(done ? 'check' : 'contract', 'i'), h('b', null, k.buyer.replace(/^The /, '')), `: ${k.varietyName}`),
+          h('span', { class: 't-label due' }, k.settled ? 'closed' : DUE_SHORT[k.due]),
+          h('span', { class: 'range', 'aria-hidden': 'true' },
+            g ? h('span', { class: 'band', style: `left:${(g.lo / max * 100).toFixed(1)}%;width:${((g.hi - g.lo) / max * 100).toFixed(1)}%` }) : null,
+            h('span', { class: 'mark', style: `left:${(k.delivered / max * 100).toFixed(1)}%` }),
+            h('span', { class: 'promise', style: `left:${(k.cwt / max * 100).toFixed(1)}%` })),
+          h('span', { class: 'says num' },
+            h('b', { class: 'track-n' }, `${F.num(F.massValue(k.delivered))}/${F.mass(k.cwt)}`),
+            g ? ` · ${F.num(F.massValue(g.lo))}–${F.num(F.massValue(g.hi))} growing` : !done && k.penalty > 0 ? h('span', { class: 'c-red' }, ` · short ${F.money(k.penalty)}`) : null),
+          h('span', { class: 'sr' }, `. ${said} Open the contracts.`))
+      }))
+    },
+  }
+}
+
+// The contracts as a block of their own, for a sheet that lists them (the spring plan).
+export function tracker(ctx: Ctx): { el: HTMLElement; update(): void } {
+  const rows = contractRows(ctx)
+  const el = h('section', { class: 'tracker sys', 'aria-label': 'Contracts signed', hidden: true })
+  return {
+    el,
+    update() {
+      const c = ctx.app.campaign
+      el.hidden = !c || !S.contractInfo(c).length
+      if (c) patch(el, JSON.stringify(rows.key()), () => rows.part(c))
+    },
+  }
 }

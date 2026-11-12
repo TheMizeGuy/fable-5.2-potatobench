@@ -81,7 +81,7 @@ function bedText(c: S.Campaign): string {
 
 function applicantCard(ctx: Ctx, c: S.Campaign, a: S.ApplicantInfo, onTry: (err: string) => void): HTMLElement {
   return h('article', { class: 'person-card', testid: `applicant-${a.id}` },
-    h('header', { class: 'pc-head' }, face(personLook(a.id), 40),
+    h('header', { class: 'pc-head' }, face(personLook(a.name), 40),
       h('div', null,
         h('h4', { class: 'pc-name' }, a.name),
         h('p', { class: 'pc-trait' }, h('strong', null, a.traitName), ` · ${a.suits === 'operator' ? 'drives' : a.best === 'woods' ? 'woods' : a.best === 'build' ? 'builds' : a.best === 'pack' ? 'packs' : 'field work'}`))),
@@ -112,7 +112,7 @@ function peopleBody(ctx: Ctx, c: S.Campaign, onTry: (err: string) => void, onClo
     hired.length ? [
       h('h4', { class: 'fold-sub' }, `On the farm, ${L.hired} of ${L.housing} places`),
       h('ul', { class: 'fold-list' }, hired.map(p => h('li', { class: 'hired' },
-        face(personLook(p.id), 28),
+        face(personLook(p.name), 28),
         h('span', { class: 'fi-name' }, p.name),
         h('span', { class: 'fi-what' }, `${p.traitName}, ${F.money(p.pay)} a month`),
         h('button', { class: 'btn small', type: 'button', testid: `dismiss-${p.id}`, onclick: () => { if (tryRun(ctx, { t: 'dismiss', unit: p.id }, onTry) && ctx.app.unit === p.id) ctx.app.selectUnit(-1) } }, 'Let go')))),

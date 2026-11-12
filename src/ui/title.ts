@@ -1,4 +1,6 @@
-// The opening: the land, the name, one line, Play. The benchmark's credit sits quietly in the corner.
+// The opening (design/title.html): the farm almanac's cover over the land, a third of the frame, with the menu set
+// as its contents and the benchmark's credit printed as its imprint.
+import cut from '../../design/src/cut.svg?raw'
 import { confirmPaper, patch, type Ctx, type Screen } from './core.ts'
 import { h } from './dom.ts'
 import { icon } from './icons.ts'
@@ -21,41 +23,57 @@ export async function startNewFarm(ctx: Ctx): Promise<void> {
   app.newGame()
 }
 
+function engraving(): HTMLElement {
+  const box = h('span', { class: 'cv-plate' })
+  box.innerHTML = cut
+  return box
+}
+
 export function titleScreen(ctx: Ctx, o: { onMenu: () => void; onHelp: () => void }): Screen {
   const app = ctx.app
-  const block = h('div', { class: 'title-block' })
-  const credit = h('p', { class: 'title-credit', testid: 'credit' },
-    h('span', { class: 'credit-top' }, 'Fable 5.2 - PotatoBench'),
-    h('span', { class: 'credit-by' }, 'PotatoBench made by TheMizeGuy'))
-  const el = h('main', { class: 'title-screen' }, block, credit)
+  const menu = h('nav', { class: 'cv-menu', 'aria-label': 'The County' })
+  const cover = h('section', { class: 'cover sheet sys', 'aria-label': 'The County' },
+    h('p', { class: 'cv-top', 'aria-hidden': 'true' }, h('span', null, 'Potatoes'), h('i', { class: 'orn' }), h('span', null, 'Five seasons')),
+    h('h1', { class: 'cv-name title-name' }, h('span', { class: 'the' }, 'The'), h('span', { class: 'county' }, 'County')),
+    h('hr', { class: 'rule oxford' }),
+    h('figure', { class: 'cv-cut' }, engraving(),
+      h('p', null, 'Grow a crop you cannot see until you dig it. Hire the hands, clear the woods, raise the barns, and keep the farm five seasons.'),
+      h('figcaption', { class: 'it' }, 'Fig. 1. The crop you cannot see until you dig it.')),
+    menu,
+    h('footer', { class: 'imprint', testid: 'credit' },
+      h('p', { class: 'a' }, 'Fable 5.2 - PotatoBench'),
+      h('p', { class: 'b' }, 'PotatoBench made by TheMizeGuy')))
+  const el = h('main', { class: 'title-screen sys' }, h('div', { class: 'title-shade' }), cover)
   let focused = false
   return {
     el,
     update() {
-      const saved = app.savedGame()
-      const c = saved?.campaign
-      patch(block, JSON.stringify([c?.year, c?.phase, c?.yearIdx, c?.outcome]), () => [
-        h('h1', { class: 't-display title-name' }, 'The County'),
-        h('p', { class: 't-lede premise' }, 'Grow a crop you cannot see until you dig it. Hire hands, clear the woods, raise the barns, and keep the farm five seasons.'),
-        h('div', { class: 'title-actions' },
-          c ? h('button', { class: 'nbtn primary big', type: 'button', testid: 'continue', onclick: () => { if (!app.continueGame()) ctx.say('The save could not be read.', 'warn') } },
-            'Continue', h('span', { class: 'sub num' }, `${seasonCount(c)}, ${PHASE_LABEL[c.phase].toLowerCase()}`)) : null,
-          h('button', { class: `nbtn big${c ? '' : ' primary'}`, type: 'button', testid: 'play', onclick: () => { void startNewFarm(ctx) } }, c ? 'New farm' : ['Play', icon('play', 'ic s')])),
-        h('p', { class: 'title-links' },
-          h('button', { class: 'tlink', type: 'button', testid: 'how-open', onclick: () => o.onHelp() }, 'How to play'),
-          h('button', { class: 'tlink', type: 'button', testid: 'menu-open', onclick: () => o.onMenu() }, 'Settings')),
+      const c = app.savedGame()?.campaign
+      const layout = ctx.layout()
+      el.dataset.layout = layout
+      patch(menu, JSON.stringify([c?.year, c?.phase, c?.yearIdx, c?.outcome]), () => [
+        h('p', { class: 't-label' }, 'Contents'),
+        // The strong action is the one most players want: go on with the farm they have, or start one.
+        c ? h('button', { class: 'btn go wide', type: 'button', testid: 'continue', onclick: () => { if (!app.continueGame()) ctx.say('The save could not be read.', 'warn') } },
+          h('span', null, 'Continue', h('span', { class: 'sub-go' }, `${seasonCount(c)}, ${PHASE_LABEL[c.phase].toLowerCase()}`)), icon('arrow', 'i'))
+          : h('button', { class: 'btn go wide', type: 'button', testid: 'play', onclick: () => { void startNewFarm(ctx) } }, 'Play', icon('arrow', 'i')),
+        c ? h('button', { class: 'cv-item lead', type: 'button', testid: 'play', onclick: () => { void startNewFarm(ctx) } },
+          h('b', null, 'New farm'), h('span', { class: 'dots' }), h('span', { class: 'it quiet' }, 'from the first spring')) : null,
+        h('button', { class: 'cv-item lead', type: 'button', testid: 'how-open', onclick: () => o.onHelp() }, h('b', null, 'How to play'), h('span', { class: 'dots' }), h('span', { class: 'chev', 'aria-hidden': 'true' }, '›')),
+        h('button', { class: 'cv-item lead', type: 'button', testid: 'menu-open', onclick: () => o.onMenu() }, h('b', null, 'Settings'), h('span', { class: 'dots' }), h('span', { class: 'chev', 'aria-hidden': 'true' }, '›')),
       ])
-      // Play is under the keyboard from the start; the focus is tried again until the land is up and it takes.
+      // The strong action is under the keyboard from the start; the focus is tried again until the land is up and it takes.
       if (!focused && !ctx.papers.isOpen()) {
-        const play = block.querySelector<HTMLElement>('.nbtn.primary')
-        play?.focus({ preventScroll: true })
-        focused = document.activeElement === play
+        const go = menu.querySelector<HTMLElement>('.btn.go')
+        go?.focus({ preventScroll: true })
+        focused = document.activeElement === go
         if (!focused) setTimeout(() => ctx.dirty(), 200)
       }
     },
     insets() {
-      const r = block.getBoundingClientRect()
-      return [0, 0, Math.max(0, innerHeight - r.top), 0]
+      // The cover takes the left of the frame; on a phone, the whole of it but the sky above.
+      const r = cover.getBoundingClientRect()
+      return r.width > innerWidth * 0.7 ? [0, 0, Math.max(0, innerHeight - r.top), 0] : [0, 0, 0, Math.max(0, r.right)]
     },
   }
 }
