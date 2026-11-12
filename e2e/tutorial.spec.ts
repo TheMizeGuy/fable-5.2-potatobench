@@ -122,7 +122,7 @@ async function covers(page: Page, target: string): Promise<string[]> {
       const busy = 'svg, img, button, a, input, label, .tag, .need, .pin, .portrait, .key, .t-figure'
       const range = document.createRange()
       for (const el of document.querySelectorAll<HTMLElement>('#ui *')) {
-        if (el.closest('.guide-layer, .leaving, [hidden], .gone')) continue
+        if (el.closest('.guide-layer, .leaving, [hidden], .gone, .sr')) continue
         const boxes: DOMRect[] = []
         if (el.matches(busy)) { if (!el.parentElement?.closest(busy)) boxes.push(el.getBoundingClientRect()) }
         else for (const n of el.childNodes) if (n.nodeType === 3 && (n.nodeValue ?? '').trim()) { range.selectNodeContents(n); boxes.push(range.getBoundingClientRect()) }

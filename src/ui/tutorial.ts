@@ -173,7 +173,7 @@ export function busyBoxes(root: HTMLElement): Box[] {
   const out: Box[] = []
   const range = document.createRange()
   for (const el of root.querySelectorAll<HTMLElement>('*')) {
-    if (el.closest('.guide-layer, .leaving, [hidden], .gone')) continue
+    if (el.closest('.guide-layer, .leaving, [hidden], .gone, .sr')) continue
     if (el.matches(BUSY)) {
       if (el.parentElement?.closest(BUSY)) continue
       const r = el.getBoundingClientRect()
