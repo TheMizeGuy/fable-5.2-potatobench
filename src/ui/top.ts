@@ -123,26 +123,20 @@ function progressText(g: Goal): string {
 // if every lot and the crop in the ground sold today (S.moneyNow), with how it is made up.
 // Before the tubers set there is no crop to count: the figure is then what the year end takes before the crop pays,
 // said as that, not as a verdict.
-export function outlook(ctx: Ctx, c: S.Campaign): { figure: number; why: string; label: string; before: boolean; spread: number; partial: boolean } {
+export function outlook(ctx: Ctx, c: S.Campaign): { figure: number; why: string; label: string; before: boolean; spread: number; risk: S.MoneyNow['callRisk'] } {
   const world = ctx.app.world
   const m = S.moneyNow(world, c)
   const s = c.season
   const figure = Math.round(m.after / 100) * 100
-  const unset = s && c.phase === 'season' ? s.fields.filter((f, i) => S.isField(c, i) && (f.status === 'growing' || f.status === 'planted' || f.status === 'idle') && !S.estimateYield(c, i)).length : 0
-  const before = m.growing <= 0 && m.stored <= 0 && unset > 0
   const parts = m.parts.map(p => `${p.label} ${F.money(Math.round(p.amount))}`)
-  // With any field not yet counted the figure is low by what that crop will bring: it never warns of the note.
-  const verdict = before ? 'The crop has not set yet, so nothing is counted for it: this is what the crop has to make up by the year end.'
-    : unset > 0 && figure < 0 ? 'Some of the crop is not counted yet, so this is low: it rises as the tubers set.'
-    : figure >= 0 ? 'The year would end in the black.'
-      : figure >= S.CREDIT_LIMIT ? `The year would end in debt, inside the bank's limit of ${F.money(S.CREDIT_LIMIT)}: it carries the debt at interest.`
-        : `The year would end past the bank's limit of ${F.money(S.CREDIT_LIMIT)}: it would call the note.`
-  const early = unset && !before ? ` ${F.upper(F.plural(unset, 'field'))} not yet setting tubers ${unset === 1 ? 'counts' : 'count'} for nothing yet.` : ''
+  // The crop is counted from the season's first day (S.moneyNow), so the only warning is the bank's own: callRisk.
+  const verdict = m.callRisk === 'likely' ? ' Even a good crop would end under the bank\'s limit: the bank would call the note.'
+    : m.callRisk === 'possible' ? ' On a middling crop this would end under the bank\'s limit.' : ''
   // While some crop is not yet weighed, how far the figure may go either way (S.moneyNow's range); none once all is in.
   const unweighed = c.phase === 'season' && !!s && s.fields.some((f, i) => S.isField(c, i) && f.status !== 'rest' && f.status !== 'off' && f.status !== 'lost' && !f.weighed)
-  const spread = unweighed && !before ? Math.round((m.range.hi - m.range.lo) / 2 / 100) * 100 : 0
+  const spread = unweighed ? Math.round((m.range.hi - m.range.lo) / 2 / 100) * 100 : 0
   const give = spread ? ` Until all of it is weighed it can come out ${F.money(spread)} either way.` : ''
-  return { figure, before, spread, partial: unset > 0, label: before ? 'Year end before the crop' : 'After year-end bills', why: `${before ? 'As things stand' : c.phase === 'cellar' ? 'If what is in store sold today' : 'If everything sold today'}: ${parts.join('; ')}. ${verdict}${early}${give}` }
+  return { figure, before: false, spread, risk: m.callRisk, label: 'After year-end bills', why: `${c.phase === 'cellar' ? 'If what is in store sold today' : 'If everything sold today'}: ${parts.join('; ')}.${verdict}${give}` }
 }
 
 // Said before logs are sold: the buildings not yet up that would take them, and what buying them back costs.
@@ -472,7 +466,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
       // Through the season and the winter, beside the cash and at its weight: what the farm has after the year-end
       // bills, so the cash is never read as what the farm will keep.
       const after = view ? h('div', {
-        class: `after term${view.before || view.partial ? '' : view.figure < S.CREDIT_LIMIT ? ' bad' : view.figure < 0 ? ' warn' : ''}`, testid: 'outlook', tabindex: '0', 'data-tip': view.why,
+        class: `after term${view.risk === 'likely' ? ' bad' : view.risk === 'possible' ? ' warn' : ''}`, testid: 'outlook', tabindex: '0', 'data-tip': view.why,
       }, h('span', { class: 't-label' }, h('span', { class: 'long' }, view.label), h('span', { class: 'short', 'aria-hidden': 'true' }, view.before ? 'Before crop' : 'After bills')), h('span', { class: 't-figure num' }, F.money(view.figure)), view.spread ? h('span', { class: 'give num', testid: 'outlook-spread', 'aria-hidden': 'true' }, `±${F.money(view.spread)}`) : null, h('span', { class: 'sr' }, `. ${view.why}`)) : null
       const balance = h('div', { class: `balance${after ? ' two' : ''}` },
         h('span', { class: 't-label when' }, c.cash < 0 ? 'On the loan' : after ? 'Cash' : 'Balance'),
