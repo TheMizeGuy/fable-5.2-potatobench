@@ -417,8 +417,9 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
         rig.moveTo(rig.farm(viewport()), reduced)
       }
     } else if (e.type === 'insets') {
-      // In a season a card opening or closing moves the camera only when it would cover the field in hand.
-      if (snap.mode !== 'season' || covered(app.selected)) reframe(reduced)
+      // In a season the camera is the player's: only on a narrow screen, where a card takes half of it, is the view
+      // moved, and then only when the card would cover the field in hand.
+      if (snap.mode !== 'season' || (viewport().w < 700 && covered(app.selected))) reframe(reduced)
     }
   })
 

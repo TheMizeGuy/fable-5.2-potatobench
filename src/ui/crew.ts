@@ -159,7 +159,7 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
   // and the one press that clears it.
   function pressingRow(c: S.Campaign, list: S.Pressing[]): Child {
     if (!list.length) return null
-    return h('div', { class: 'pressing sys', role: 'group', 'aria-label': 'Work that cannot wait', testid: 'pressing' }, list.slice(0, 2).map(p =>
+    return h('div', { class: 'pressing sys', role: 'group', 'aria-label': 'Work that cannot wait', testid: 'pressing' }, list.slice(0, 1).map(p =>
       h('p', { class: 'press' }, icon(p.kind, 'i'),
         h('span', { class: 'press-text' }, h('b', null, `${JOB_VERB[p.kind]} ${S.FIELD_NAMES[p.field] ?? ''}`.trim()), `: ${p.why}. ${F.localize(p.inWay)}`),
         p.fix ? h('button', {

@@ -461,7 +461,7 @@ export const LESSONS: Lesson[] = [
     id: 'pressing', part: 'year', name: 'Work that cannot wait', read: true,
     when: (l, g) => inSeason(l) && g.passed('person') && !!l.c && S.pressing(l.world, l.c).length > 0,
     done: (l, g, since) => g.has('noted:pressing') || (!!since && !!l.c && S.pressing(l.world, l.c).length === 0),
-    ask: l => `${pressed(l)} cannot wait, and nobody will take it as things stand.`,
+    ask: l => `${pressed(l)} cannot wait.`,
     why: () => 'The note at the foot says what is in its way, and how to clear it.',
   },
   {

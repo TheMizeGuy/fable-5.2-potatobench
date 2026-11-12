@@ -53,7 +53,7 @@
 .season-screen .q-fate { max-width: 260px; font-size: 14px; line-height: 1.25; color: var(--ink-2); }
 /* Work that cannot wait, over the list: it floats above the foot and does not frame the land. */
 .season-screen .crew { position: relative; }
-.season-screen .pressing { position: absolute; left: 0; bottom: calc(100% + 6px); z-index: 3; display: grid; gap: 4px; max-width: min(560px, calc(100vw - 2 * var(--gutter, 16px))); }
+.season-screen .pressing { position: absolute; left: 0; bottom: calc(100% + 6px); z-index: 3; display: grid; gap: 4px; width: max-content; max-width: min(560px, calc(100vw - 2 * var(--gutter, 16px))); }
 .season-screen .pressing .press { display: flex; align-items: center; gap: 8px; margin: 0; padding: 6px 8px 6px 10px; font-size: 15px; line-height: 1.25; background: var(--paper) url(./system/grain.png); background-blend-mode: multiply; box-shadow: var(--laid), inset 0 0 0 2px var(--red); }
 .season-screen .pressing .press > .i { --i: 18px; color: var(--red); flex: none; }
 .season-screen .pressing .press-text { flex: 1; min-width: 0; }
