@@ -268,7 +268,9 @@ test('a later year on the farmstead: an applicant hired, land on the mortgage, a
   await page.getByTestId('year-next').click()
   await expect(page.getByTestId('begin-season')).toBeVisible()
   await expect(page.locator('#ui main:not(.leaving) .tb-year')).toHaveText('Year 3')
-  await page.getByTestId(`field-${brush.i}`).click()
+  // Found from the sheet's list of fields, which shows it on the land and opens its card.
+  await page.getByTestId('fields-open').click()
+  await page.getByTestId(`fold-field-${brush.i}`).click()
   await expect(card.getByTestId('card-title')).toHaveText(brush.name)
   await card.getByTestId('tract-stump').click()
   await expect.poll(() => game<string>(page, `c.fields[${brush.i}].works?.kind ?? ''`)).toBe('stump')
@@ -279,6 +281,8 @@ test('a later year on the farmstead: an applicant hired, land on the mortgage, a
   await reach(page, `const { app } = q.g(); app.setSpeed(0); for (let n = 0; n < 40 && app.campaign.fields[${brush.i}].cover !== 'open'; n++) app.do({ t: 'day' })`)
   expect(await game<string>(page, `c.fields[${brush.i}].cover`)).toBe('open')
   while (await page.getByTestId('weighin').count()) await answerTicket(page, true)
+  // The camera is brought round to it, as a click on its alert would, and then its plate is pressed.
+  await page.evaluate(`window.__county.app.focus(${brush.i})`)
   await page.getByTestId(`field-${brush.i}`).click()
   const rocks = page.locator('#ui [data-testid="card"] [data-testid="order-rocks"]')
   if (await rocks.count()) await rocks.click()
