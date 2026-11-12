@@ -1078,6 +1078,8 @@
 .season.low-h.selected .tb-goal, .season.low-h.selected .goals-pop { display: none; }
 /* On a phone a question waiting for an answer comes first: the card for the selection steps aside until it is answered or put away. */
 .season[data-layout='narrow'].incident-up .bottom > .card { display: none; }
+/* On a phone with a card up, the alerts and tips give the land back; screen readers still hear them. */
+.season[data-layout='narrow'].selected .notes-slot { display: none; }
 .season[data-layout='narrow'] .materials span { display: none; }
 .season[data-layout='narrow'] .materials { padding: 0 var(--sp-1); }
 .season[data-layout='narrow'] .unit.person { min-width: 44px; padding: var(--sp-1) var(--sp-h) 5px; }
