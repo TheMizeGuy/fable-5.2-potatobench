@@ -223,6 +223,29 @@ describe('the guided first year', () => {
     expect(k.why(look(w, c))).toMatch(/frost/)
   })
 
+  it('says the day the crew kills the vines by itself, when the stamp asks for the kill', () => {
+    const k = lesson('kill')!
+    let found = 0
+    for (const seed of [3, 7, 12, 41, 99]) {
+      const { w, c } = farm(seed)
+      S.apply(w, c, { t: 'begin' })
+      const killing = () => S.fieldNeeds(w, c).findIndex(n => n.need?.act === 'kill')
+      until(w, c, () => killing() >= 0, () => S.fieldNeeds(w, c).forEach((n, field) => {
+        if (n.need && n.need.act !== 'kill' && n.need.act !== 'wait' && n.need.act !== 'close' && n.need.act !== 'sell') S.apply(w, c, { t: 'job', kind: n.need.act, field })
+      }))
+      const i = killing()
+      if (i < 0) continue
+      const p = S.pressing(w, c).find(x => x.kind === 'kill' && x.field === i)
+      const why = k.why(look(w, c))
+      expect(why).toMatch(/small tubers stay small/)
+      if (!p) continue
+      const day = p.inWay.match(/on ([A-Z][a-z]+ \d+)/)![1]
+      expect(why).toContain(`the crew kills them on ${day}`)
+      found++
+    }
+    expect(found).toBeGreaterThan(0)
+  })
+
   it('explains the spraying question when it is asked, ahead of why the clock stopped, and lets it go once answered', () => {
     const { w, c } = farm(99)
     const g = new Guide(memory())

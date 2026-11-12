@@ -187,6 +187,13 @@ test('a guided first year: offered on a new farm, taken, and followed through th
     // Where a field it points at is on the screen, the fist is beside it.
     const there = /^(field|badge)-/.test(target) && await page.locator(`#ui [data-testid="${target}"]`).first().isVisible().catch(() => false)
     if (there) await expect(page.getByTestId('guide-fist'), `${id}: the fist is on ${target}`).toBeVisible()
+    // What it asks for lies under a card: the slip says so and marks the card's cross, which is pressed first.
+    if (/-close$/.test(target)) {
+      await expect(page.getByTestId('guide-under')).toBeVisible()
+      await page.getByTestId(target).first().click()
+      await page.waitForTimeout(600)
+      continue
+    }
     switch (id) {
       case 'begin':
         await page.getByTestId(target).click()

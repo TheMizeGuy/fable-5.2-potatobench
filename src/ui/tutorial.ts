@@ -113,6 +113,19 @@ function resolve(ctx: Ctx, root: HTMLElement, p: Point | null): { el: HTMLElemen
   return { el: null, at: null, id: `pin-${p.unit}` }
 }
 
+// What the player would press to see a target a card lies over: that card's close key, or null when nothing does.
+function coverOf(t: { el: HTMLElement | null; at: Box | null }): HTMLElement | null {
+  if (!t.el || !t.at) return null
+  const x = (t.at.left + t.at.right) / 2, y = (t.at.top + t.at.bottom) / 2
+  if (x < 0 || y < 0 || x > innerWidth || y > innerHeight) return null
+  const hit = document.elementFromPoint(x, y)
+  if (!hit || t.el.contains(hit)) return null
+  const panel = hit.closest('.person-card, .work, .sheet')
+  if (!panel || panel.contains(t.el)) return null
+  const close = panel.querySelector<HTMLElement>('button.close')
+  return close && shown(close) ? close : null
+}
+
 // Everything on the current screen the slip should not lie over: the panels themselves, not the clear boxes that hold
 // them. hard: what it must never cover (a clock, a command bar, a telegram, a paper, a test-dig tray, a person's card).
 function hardOnes(root: HTMLElement): Box[] {
@@ -202,7 +215,7 @@ function holdLine(): HTMLElement {
 }
 
 // lost: what it points at is on the land but out of view, so the slip says how to bring the farm back.
-function slipBody(ctx: Ctx, x: Lesson, l: Look, held: boolean, lost = false): (HTMLElement | null)[] {
+function slipBody(ctx: Ctx, x: Lesson, l: Look, held: boolean, lost = false, under = false): (HTMLElement | null)[] {
   const again = guide.replaying(x.id)
   const where = PART_NAME[x.part]
   const done = () => { guide.noted(x.id); ctx.dirty() }
@@ -213,6 +226,7 @@ function slipBody(ctx: Ctx, x: Lesson, l: Look, held: boolean, lost = false): (H
     h('p', { class: 'guide-ask', id: 'guide-ask' }, x.ask(l)),
     h('p', { class: 'guide-why t-caption' }, x.why(l)),
     lost ? h('p', { class: 'guide-lost t-caption', testid: 'guide-lost' }, icon('field', 'i'), by(l.input, 'Out of view: Home, or a double-click on open ground, brings the farm back.', 'Out of view: a double-tap on open ground brings the farm back.', 'Out of view: Home brings the farm back.')) : null,
+    under ? h('p', { class: 'guide-lost t-caption', testid: 'guide-under' }, icon('close', 'i'), 'A card is in the way: its cross puts it away.') : null,
     h('footer', { class: 'guide-foot' },
       x.read || again ? h('button', { class: 'btn', type: 'button', testid: 'guide-noted', onclick: done }, icon('check', 'i'), x.read ? 'Noted' : 'Got it') : null,
       h('button', { class: 'btn quiet', type: 'button', testid: 'guide-skip', onclick: () => { guide.skip(x.id); ctx.dirty() } }, 'Skip'),
@@ -296,6 +310,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
   let offer = false
   let said = ''
   let target = ''
+  let cover: HTMLElement | null = null
   let place: { x: number; y: number } | null = null
   let placedFor = ''
   // 0: clear of every panel; 1: clear only of what it must never cover.
@@ -437,7 +452,14 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     const held = !!now && app.screen === 'season' && app.speed === 0 && (guide.holdsClock(c) || app.pauseReason === HOLD || !!now?.holds)
     const p = now?.point?.(l) ?? null
     const t = resolve(ctx, root, p)
-    target = t.id
+    cover = app.screen === 'season' ? coverOf(t) : null
+    // A note about the land itself (come closer, turn it) on a phone, with a card over half the land: the card's cross.
+    if (!cover && app.screen === 'season' && ctx.layout() === 'narrow' && now?.uses?.some(u => u === 'pan' || u === 'zoom' || u === 'turn')) {
+      const sheet = [...root.querySelectorAll('.person-card, .work, .command.sheet')].find(shown)
+      const close = sheet?.querySelector<HTMLElement>('button.close')
+      cover = close && shown(close) ? close : null
+    }
+    target = cover?.dataset.testid ?? t.id
     // Something on the land to point at, none of it in view.
     const lost = !!p && !('testid' in p) && !t.at && app.screen === 'season'
     // The spring's notes go into the catalogue; everything else floats.
@@ -448,13 +470,13 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
       slot.classList.toggle('folded', !!now && !!fold && !(t.el && fold.contains(t.el)))
       patch(slot, JSON.stringify([inSlot && offer, inSlot && now ? [now.id, now.ask(l), now.why(l), guide.replaying(now.id), lost] : 0, input]), () =>
         inSlot && offer ? h('section', { class: 'guide docked offer', testid: 'guide-offer', 'aria-label': 'A guided first year' }, offerBody(ctx))
-          : inSlot && now ? h('section', { class: 'guide docked', testid: 'guide-slip', 'data-lesson': now.id, 'data-target': target, 'aria-labelledby': 'guide-ask' }, slipBody(ctx, now, l, held, lost)) : null)
+          : inSlot && now ? h('section', { class: 'guide docked', testid: 'guide-slip', 'data-lesson': now.id, 'data-target': target, 'aria-labelledby': 'guide-ask' }, slipBody(ctx, now, l, held, lost, !!cover)) : null)
       if (inSlot && now) slot.querySelector<HTMLElement>('.guide')?.setAttribute('data-target', target)
     }
     const floating = !!now && !docked
     slip.hidden = !floating
     if (floating && now) {
-      patch(slip, JSON.stringify([now.id, now.ask(l), now.why(l), held, guide.replaying(now.id), input, lost]), () => slipBody(ctx, now!, l, held, lost))
+      patch(slip, JSON.stringify([now.id, now.ask(l), now.why(l), held, guide.replaying(now.id), input, lost, !!cover]), () => slipBody(ctx, now!, l, held, lost, !!cover))
       slip.dataset.lesson = now.id
       slip.dataset.target = target
       slip.dataset.testid = 'guide-slip'
@@ -474,7 +496,9 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     const l = now
     if (!l) { hand.hidden = true; place = null; return }
     const lk = lookNow()
-    const t = resolve(ctx, root, l.point?.(lk) ?? null)
+    const t0r = resolve(ctx, root, l.point?.(lk) ?? null)
+    // Under a card: the fist goes to the card's cross.
+    const t = cover && shown(cover) ? { ...t0r, el: cover, at: box(cover.getBoundingClientRect()) } : t0r
     // The fist beside the target, pointing at it: left of it, else right, above, below.
     let fistBox: Box | null = null
     if (t.at) {

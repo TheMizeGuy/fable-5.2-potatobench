@@ -59,6 +59,9 @@ paper disc with a keyline so it reads over any land. There is no slideshow, no s
   Where no such place exists (a reply inside a telegram, Start the season under the order blank on a phone) it is
   left out and the slip's words do alone. When a field it points at is out of view, the slip adds how to bring the
   farm back (Home, or a double-click or double-tap on open ground).
+- **A card in the way.** When what a note points at lies under a card (a person's card, a field's card, the grid),
+  or on a phone a card covers half the land during a note about the land itself, the fist goes to the card's cross
+  and the slip says "A card is in the way: its cross puts it away."
 - **Points only at what is there.** A note that names a control another part of the game may not show (a foreman's
   button, the seed choice) completes from the farm's state and keeps its words when the control is missing; no note
   sends the player to a long goal the farm cannot do now (`S.goalCosts`).
@@ -101,7 +104,7 @@ list, a reason to turn the view and a crop to read on a card.
 
 | Lesson | Starts | Ends | Points at |
 | --- | --- | --- | --- |
-| How spraying is done (urgent) | The season's spraying question on screen (`spray-ask`) | Answered or put away | Its first reply (`spray-way-auto`) |
+| How spraying is done (urgent) | Blight weather's spraying question on the telegram card (`spray-ask`) | Answered or put away | Its first reply (`spray-way-auto`) |
 | Answer a telegram (urgent) | A question waiting (it stops the clock) | That question answered or lapsed | The first reply |
 | Why the clock stopped (urgent) | The clock stopped by itself, not by the guide | Noted, or the clock going on | (the note at the foot) |
 | Read the forecast | After the opening's planting, when the forecast first shows rain, frost or blight risk | Noted | The forecast |
@@ -112,7 +115,7 @@ list, a reason to turn the view and a crop to read on a card.
 | Leave spraying to the crew | After the first spray, spraying not by itself | It is set to by itself, or Noted | (words: `S.sprayOutlook`'s passes and dollars) |
 | Frost in the forecast | Frost likely within two days, with plants up or barrels out | Noted, or the frost days past | The forecast |
 | Water a dry field (holds) | The first watering stamp | Watering ordered | Its stamp |
-| Kill the vines (holds) | The first vine-kill stamp | Vines ordered killed or killed | Its stamp; says the trade: small tubers stay small, skins set, safe from frost |
+| Kill the vines (holds) | The first vine-kill stamp | Vines ordered killed or killed | Its stamp; says the trade (small tubers stay small, skins set, safe from frost) and the day the crew kills them by itself, as `S.pressing` words it |
 | What the year end takes | Digging begins, before the first weigh ticket | Noted, or the season closed | The pass book; says what the farm would end with (`S.moneyNow().after`) |
 | Bring the crop in | Barrels in a field | Noted, or the crop weighed | The field |
 | Sell or store the crop (urgent) | The first weigh ticket open | The ticket answered (closed), or a sale | (the ticket's own fist) |
@@ -178,3 +181,5 @@ playing, in every state a guided year shows it in.
 - A two-finger twist that starts on a field tag does not turn the view (the tag takes the touch).
 - "How spraying is done" keys on the question's test ids (`spray-ask`, `spray-way-*`); if the interface's question
   changes them, the note keeps its words and loses its fist.
+- The vine-kill note reads the crew's kill day out of `S.pressing`'s words ("kills the vines on <day>"); if that
+  wording changes, the note drops the day and keeps the trade.

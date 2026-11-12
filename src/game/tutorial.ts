@@ -136,13 +136,13 @@ const owed = () => `$${(S.NOTE_PAYMENT + S.LIVING).toLocaleString('en-US')}`
 const tract = (l: Look) => S.TRACTS.find(i => l.c && l.c.fields[i].tenure !== 'none' && (l.c.fields[i].cover === 'woods' || l.c.fields[i].cover === 'brush')) ?? -1
 
 // A lesson that asks for the order a field's stamp gives, the first time reference practice calls for it.
-function order(o: { id: string; act: S.JobKind; name: string; did: (l: Look) => boolean; ask: (l: Look, f: string) => string; why: string }): Lesson {
+function order(o: { id: string; act: S.JobKind; name: string; did: (l: Look) => boolean; ask: (l: Look, f: string) => string; why: string | ((l: Look, i: number) => string) }): Lesson {
   return {
     id: o.id, part: 'year', name: o.name, holds: true,
     when: l => inSeason(l) && needFor(l, o.act) >= 0,
     done: l => jobOn(l, o.act) || o.did(l),
     ask: l => o.ask(l, name(Math.max(0, needFor(l, o.act)))),
-    why: () => o.why,
+    why: l => typeof o.why === 'string' ? o.why : o.why(l, needFor(l, o.act)),
     point: l => { const i = needFor(l, o.act); return i >= 0 ? { badge: i } : null },
   }
 }
@@ -347,7 +347,12 @@ export const LESSONS: Lesson[] = [
   order({
     id: 'kill', act: 'kill', name: 'Kill the vines', did: l => anyField(l, f => f.killDay >= 0),
     ask: (l, f) => `The crop in ${f} is made. ${click(l)} its stamp to kill the vines.`,
-    why: 'It is a trade: small tubers stay small, but the skins set in two weeks and frost cannot reach the crop.',
+    why: (l, i) => {
+      // The day the crew kills them by itself, as the list's "cannot wait" words it (S.pressing).
+      const p = l.c && i >= 0 ? S.pressing(l.world, l.c).find(x => x.kind === 'kill' && x.field === i) : undefined
+      const day = p?.inWay.match(/kills the vines on ([A-Z][a-z]+ \d+)/)?.[1]
+      return `A trade: small tubers stay small, but skins set in two weeks and frost cannot reach them.${day ? ` Left alone, the crew kills them on ${day}.` : ''}`
+    },
   }),
   {
     id: 'owed', part: 'year', name: 'What the year end takes', read: true,
