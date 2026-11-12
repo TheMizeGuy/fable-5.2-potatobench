@@ -28,6 +28,8 @@ function days(c: Campaign, n: number): S.GameEvent[] {
 }
 
 function tend(c: Campaign, until: (c: Campaign) => boolean, skip: JobKind[] = []): void {
+  // Work the test leaves undone is not ordered by the routine either.
+  for (const k of skip) if (S.routineInfo(c).some(r => r.kind === k && r.auto)) S.apply(world, c, { t: 'routine', kind: k, auto: false })
   for (let guard = 0; !until(c); guard++) {
     expect(guard < 400 && c.phase === 'season').toBe(true)
     for (const a of S.advise(world, c)) {

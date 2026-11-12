@@ -23,6 +23,8 @@ function refused(c: Campaign, cmd: Cmd, why?: RegExp): void {
 }
 
 function tendDay(c: Campaign, skip: JobKind[] = []): S.GameEvent[] {
+  // Work the test leaves undone is not ordered by the routine either.
+  for (const k of skip) if (S.routineInfo(c).some(r => r.kind === k && r.auto)) S.apply(world, c, { t: 'routine', kind: k, auto: false })
   for (const a of S.advise(world, c)) {
     if (a.act === 'wait' || a.act === 'close') continue
     if (a.act === 'sell') S.apply(world, c, { t: 'sell', lot: a.lot, frac: 1 })
@@ -238,6 +240,8 @@ describe('someone hurt', () => {
     ok(c, { t: 'begin' })
     for (let g = 0; g < 400 && c.season!.day < S.dayIndex(2001, 6, 1); g++) tendDay(c, ['kill', 'dig'])
     ok(c, { t: 'sundays', off: false })
+    // These tests give every order by hand.
+    for (const r of S.routineInfo(c)) if (r.auto) ok(c, { t: 'routine', kind: r.kind, auto: false })
     // Felling the woodlot, worn out, until the day the draw falls under the chance (a day dry enough to work).
     let day = c.season!.day
     do day = drawDay(c, day + 1, 7100 + 0, S.HURT_CHANCE)

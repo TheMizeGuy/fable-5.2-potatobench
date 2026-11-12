@@ -28,6 +28,8 @@ function days(c: Campaign, n: number): S.GameEvent[] {
 }
 
 function tend(c: Campaign, until: (c: Campaign) => boolean, skip: JobKind[] = []): void {
+  // Work the test leaves undone is not ordered by the routine either.
+  for (const k of skip) if (S.routineInfo(c).some(r => r.kind === k && r.auto)) S.apply(world, c, { t: 'routine', kind: k, auto: false })
   for (let guard = 0; !until(c); guard++) {
     expect(guard < 400 && c.phase === 'season').toBe(true)
     for (const a of S.advise(world, c)) {
@@ -418,8 +420,9 @@ describe('hauling', () => {
     const c = structuredClone(base)
     ok(c, { t: 'job', kind: 'dig', field })
     for (let k = 0; k < 10 && c.season!.fields[field].inField === 0; k++) days(c, 1)
-    // Nobody hauls: the hauling order is pinned to someone who is never there.
+    // Nobody hauls: the hauling order is pinned to someone who is never there, and the routine does not haul.
     c.crew[0].prio.machine = 1
+    ok(c, { t: 'routine', kind: 'haul', auto: false })
     const lot = c.lots.find(l => l.id === c.season!.fields[field].lotId)!
     const f = c.season!.fields[field]
     let froze = false
@@ -448,7 +451,7 @@ describe('hauling', () => {
     const f = c.season!.fields[field]
     if (f.weighed) {
       f.weighed = false
-      c.season!.jobs.unshift({ id: c.season!.nextJob++, kind: 'haul', field, done: 0, need: 0, unit: -1 })
+      c.season!.jobs.unshift({ id: c.season!.nextJob++, kind: 'haul', field, done: 0, need: 0, unit: -1, by: 'routine' })
     }
     // A sliver left in the barrels on the eve of a hard frost at the field, and nobody to haul it.
     let frost = c.season!.day
