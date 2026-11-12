@@ -225,7 +225,8 @@ const STATES: State[] = [
   { name: 'ledger-foreman', what: 'Year end with a hand hired: the Next box names a foreman, and pressed opens the foreman sheet', sizes: ['desk', 'laptop', 'tablet'], run: async page => {
     await q(page, `q.start(1987, 3); q.g().app.do({ t: 'hire', kind: 'hand' }); q.year(3)`)
     await closeAll(page)
-    await page.getByTestId('next-goal').click()
+    // On a phone the book's foot keeps only the way on; the box is a desk's.
+    if (await page.getByTestId('next-goal').isVisible()) await page.getByTestId('next-goal').click()
     await page.waitForTimeout(400)
   } },
   { name: 'plan-people', what: 'Spring: the people fold opened, three asking for work (design/spring.html)', sizes: [...MAIN, 'small', 'tiny'], run: async page => { await q(page, `q.g().app.newGame(1987, 3)`); await page.getByTestId('crew-open').click() } },
