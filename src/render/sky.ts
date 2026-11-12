@@ -84,6 +84,7 @@ uniform vec3 uRim;
 uniform vec3 uHighCol;
 uniform vec3 uGlow;
 uniform vec3 uGroundRad;
+uniform float uExposure;
 ${CLOUD_GLSL}
 ${HAZE_GLSL}
 vec3 clearSky(vec3 dir, out vec3 fex) {
@@ -158,6 +159,9 @@ vec3 skyColor(vec3 dir, vec3 eye, float disc) {
   float dens = 0.0, thick = 0.0;
   vec3 cloud = vec3(0.0);
   vec2 p = eye.xz + d.xz * reach * CLOUD_H;
+  // Most cumulus are shallow; here and there, where the air is rising, one towers to three times their height.
+  float tower = smoothstep(0.52, 0.8, texture2D(uNoise, p * 0.00027 + uCloud.zw * 0.31 + 0.61).b) * (1.0 - closed);
+  float taper = mix(0.62, 0.17, tower) - 0.4 * closed;
   for (int i = 0; i < CLOUD_STEPS; i++) {
     float up = (float(i) + 0.5) / float(CLOUD_STEPS);
     vec2 q = p + d.xz * lean * CLOUD_T * up;
@@ -165,17 +169,17 @@ vec3 skyColor(vec3 dir, vec3 eye, float disc) {
     float curl = texture2D(uNoise, q * 0.0061 + uCloud.zw * 4.0).b;
     float shape = cloudField(q) + (wisp - 0.5) * 0.1 + (curl - 0.5) * 0.06 * (0.4 + up);
     // How much cloud there is at this height: all of the footprint at the base, only the heart of it at the top.
-    float a = smoothstep(0.0, 0.07 + 0.05 * up, shape - edge0 - up * (0.26 - 0.2 * closed)) * (1.0 - 0.45 * up);
+    float a = smoothstep(0.0, 0.07 + 0.05 * up, shape - edge0 - up * taper) * (0.82 - 0.3 * up);
     // The shoulder toward the sun is lit, the one away from it is in the cloud's own shade.
     // (No branch and no early way out of this loop: a texture read inside either loses its level of detail on some
     // graphics chips, and the far cloud would turn to grit.)
     float sunward = cloudField(q + toSun * 190.0);
     float side = clamp((shape - sunward) * 4.5, -1.0, 1.0);
-    float body = smoothstep(0.0, 0.34, shape - edge0 - up * 0.26);
-    // Seen with the light: a bright top and sunward side over a grey floor. Seen against it: bright thin edges
-    // round a dark body.
-    float front = clamp(0.66 + 0.26 * up + 0.4 * side - 0.3 * body * (1.0 - up), 0.0, 1.0);
-    float back = clamp(0.2 + 0.8 * (1.0 - body) + 0.3 * side, 0.0, 1.0);
+    float body = smoothstep(0.0, 0.34, shape - edge0 - up * taper);
+    // Seen with the light: a grey base, shoulders that brighten with height, the sunward one brightest. Seen against
+    // it: bright thin edges round a dark body.
+    float front = clamp(0.34 + 0.62 * up + 0.5 * side - 0.3 * body * (1.0 - up), 0.0, 1.0);
+    float back = clamp(0.12 + 0.88 * (1.0 - body) + 0.3 * side, 0.0, 1.0);
     float lit = mix(front, back, into);
     float take = a * (1.0 - dens);
     cloud += mix(uDeckDark, uDeck, lit) * take;
@@ -197,6 +201,18 @@ vec3 skyColor(vec3 dir, vec3 eye, float disc) {
   float aureole = pow(max(cosT, 0.0), 5000.0) * 0.5 + pow(max(cosT, 0.0), 260.0) * 0.045;
   col += sunCol * (sun * 16.0 + aureole * (1.0 - 0.8 * dens));
   col = mix(col, cloud, dens);
+  #ifdef SKY_HOLD
+  {
+    // The sky is held under white as the lens will show it, so it keeps its colour right up to the sun; only the sun
+    // itself is let through, and a closed sky, which has no sun to hold back. This is done before the land's air is
+    // laid over the low sky, so that air is the same brightness against the sky as it is against the far hills.
+    vec3 v = col * uExposure;
+    float m = max(v.r, max(v.g, v.b));
+    float held = m <= 0.55 ? m : 0.55 + 0.6 * (1.0 - exp(-(m - 0.55) / 1.0));
+    float through = max(smoothstep(0.99972, 0.99994, cosT), smoothstep(0.75, 1.0, uCloud.y));
+    col *= mix(held / max(m, 1e-5), 1.0, through);
+  }
+  #endif
   float low = max(dir.y, 0.0015);
   // The sky has its own air in it already: the land's haze is laid over only its lowest few degrees, where the far
   // country goes into it; in thick weather it stands higher, so no skyline shows through rain or snow.
@@ -248,7 +264,7 @@ export class Sky {
       uniforms: this.uniforms,
       side: BackSide,
       depthWrite: false,
-      defines: { CLOUD_STEPS: 6 },
+      defines: { CLOUD_STEPS: 7, SKY_HOLD: 1 },
       vertexShader: /* glsl */ `
         varying vec3 vDir;
         void main() {
@@ -259,19 +275,9 @@ export class Sky {
         }`,
       fragmentShader: /* glsl */ `
         varying vec3 vDir;
-        uniform float uExposure;
         ${SKY_GLSL}
         void main() {
-          vec3 d = normalize(vDir);
-          vec3 c = skyColor(d, cameraPosition, 1.0);
-          // The sky is held under white as the lens will show it, so it keeps its colour right up to the sun; only the
-          // sun itself is let through.
-          vec3 v = c * uExposure;
-          float m = max(v.r, max(v.g, v.b));
-          float held = m <= 0.55 ? m : 0.55 + 0.6 * (1.0 - exp(-(m - 0.55) / 1.0));
-          float through = smoothstep(0.99972, 0.99994, dot(d, uSkySun));
-          // (A closed sky has no sun to hold back, and must stay the brightness of the air the far land goes into.)
-          gl_FragColor = vec4(c * mix(held / max(m, 1e-5), 1.0, max(through, smoothstep(0.75, 1.0, uCloud.y))), 1.0);
+          gl_FragColor = vec4(skyColor(normalize(vDir), cameraPosition, 1.0), 1.0);
         }`,
     })
     const sphere = new SphereGeometry(9000, 48, 24)

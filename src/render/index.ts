@@ -27,6 +27,7 @@ import { Sky } from './sky.ts'
 import { snapshot, type Mode, type Snapshot } from './state.ts'
 import { buildTerrain } from './terrain.ts'
 import { flowerTexture, leafTexture, noiseTexture, puffTexture } from './textures.ts'
+import { Beacons } from './beacons.ts'
 import { Birds } from './birds.ts'
 import { Crews, type PendingReveal } from './units.ts'
 import { Weather } from './weather.ts'
@@ -38,7 +39,7 @@ const DAY_ANIM_S = 3.4          // how long a paused day's work takes to play ou
 const TITLE_DOWN_S = 38, TITLE_STAY_S = 20, TITLE_UP_S = 30, TITLE_TOP_S = 8
 const TITLE_LOOP_S = TITLE_DOWN_S + TITLE_STAY_S + TITLE_UP_S + TITLE_TOP_S
 // The tractor in the opening: how far down the road it is as the camera comes to rest (metres), and its pace.
-const TITLE_MEET_M = 60, TITLE_PACE = 2.8
+const TITLE_MEET_M = 50, TITLE_PACE = 1.7
 const HOUR_HOLD_S = 6           // the least time between a morning's light and an evening's
 const LOST_MS = 3000            // how long a lost WebGL context may stay away before the farm is drawn flat
 const STILL = 0.02              // the pace of water, cloud, mist and smoke under reduced motion
@@ -58,7 +59,7 @@ type Tier = 'high' | 'medium' | 'low'
 //     without shadows).
 // `every`: how often each shadow cascade is redrawn, in frames.
 const TIERS: Record<Tier, { scale: number; pixels: number; msaa: number; ao: boolean; focus: boolean; bloom: boolean; shafts: number; clouds: number; shadow: [number, number, number]; every: [number, number, number]; density: number }> = {
-  high: { scale: 1, pixels: 3.7e6, msaa: 4, ao: true, focus: true, bloom: true, shafts: 40, clouds: 6, shadow: [3072, 2048, 2048], every: [2, 4, 12], density: 1 },
+  high: { scale: 1, pixels: 3.7e6, msaa: 4, ao: true, focus: true, bloom: true, shafts: 40, clouds: 7, shadow: [3072, 2048, 2048], every: [2, 4, 12], density: 1 },
   medium: { scale: 1, pixels: 2.3e6, msaa: 2, ao: false, focus: false, bloom: true, shafts: 20, clouds: 4, shadow: [2048, 1024, 1024], every: [2, 6, 24], density: 1 },
   low: { scale: 0.7, pixels: 1.1e6, msaa: 0, ao: false, focus: false, bloom: false, shafts: 0, clouds: 2, shadow: [1024, 1024, 512], every: [3, 12, 60], density: 0.5 },
 }
@@ -152,7 +153,8 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   const weather = new Weather()
   const birds = new Birds()
   const farHills = new FarHills()
-  scene.add(farHills.mesh)
+  const beacons = new Beacons()
+  scene.add(farHills.mesh, beacons.group)
   scene.add(sky.dome, terrain.group, flora.group, clearing.group, pond.group, grass.group, props.group, fields.group, harvest.group, crews.group, particles.mesh, weather.group, birds.mesh)
   // Whatever throws a shadow near at hand throws it into the fine cascade; the far trees and farmsteads only into the wide one.
   scene.traverse(o => { if (o.castShadow && !o.userData.far) o.layers.enable(3) })
@@ -226,6 +228,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     post.setSize(Math.max(2, Math.round(vp.w * pr * scale)), Math.max(2, Math.round(vp.h * pr * scale)), { msaa: t.msaa, ao: t.ao, focus: t.focus, bloom: t.bloom, shafts: t.shafts })
     sky.setSteps(t.clouds)
     weather.setTier(tier)
+    particles.setTier(tier)
     shadows.every = t.every
     shadows.setSizes(t.shadow)
     fields.setTier(tier, t.density)
@@ -279,11 +282,11 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     else rig.moveTo(to, still, 500)
   }
 
-  // Bring a field into frame at the field tier, the way the view is turned now.
-  function frameField(i: number, still = reduced): void {
+  // Bring a field into frame at the field tier, the way the view is turned now (or, `square`, as the land is first seen).
+  function frameField(i: number, still = reduced, square = false): void {
     framing = 'field'
     framed = i
-    rig.moveTo(rig.field(i, viewport(), rig.goal.yaw), still)
+    rig.moveTo(square ? rig.field(i, viewport()) : rig.field(i, viewport(), rig.goal.yaw), still)
   }
   // The field nearest to where the picture is looking.
   function fieldInView(): number {
@@ -298,12 +301,12 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   }
 
   // Home steps out through the tiers and back: the field, the farm, the county, the field again. From a view of the
-  // player's own it goes to the field tier, on the field they were looking at.
+  // player's own it goes to the field tier, on the field they were looking at, and puts the view square again.
   function goHome(): void {
     const vp = viewport()
     if (snap.mode === 'title') { framing = 'title'; rig.moveTo(rig.titlePose(vp, titleU()), reduced); return }
     const at = framing !== 'free' && framing !== 'title' && rig.isAt(framedPose(vp, turned())) ? framing : 'free'
-    if (at === 'free' || at === 'county') { frameField(at === 'county' ? framed : fieldInView()); return }
+    if (at === 'free' || at === 'county') { frameField(at === 'county' ? framed : fieldInView(), reduced, true); return }
     framing = at === 'farm' ? 'county' : 'farm'
     rig.moveTo(framedPose(vp), reduced, 1100)
   }
@@ -685,6 +688,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       resX: post.target.width, resY: post.target.height, floor: focus.y,
     })
     birds.update(ambient, Math.max(env.rain, env.snowfall, lit.night), lit.hazeAway)
+    beacons.update(post.target.width, post.target.height, smooth(0.1, 0.8, (LAMP.value * lit.exposure) / 0.6), lit.exposure)
     rig.camera.getWorldDirection(ahead)
     const flat = Math.hypot(ahead.x, ahead.z) || 1
     shadows.update(lit.sunDir, lit.sun, focus, eyeDist, dtMs <= 0.5, ahead.x / flat, ahead.z / flat)
@@ -813,7 +817,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   // For measuring what each part of the scene costs: the parts by name, which the tools can switch off.
   const parts: Record<string, Object3D> = {
     terrain: terrain.group, flora: flora.group, clearing: clearing.group, pond: pond.group, grass: grass.group, props: props.group, fields: fields.group, harvest: harvest.group,
-    crews: crews.group, particles: particles.mesh, weather: weather.group, birds: birds.mesh, sky: sky.dome, far: farHills.mesh,
+    crews: crews.group, particles: particles.mesh, weather: weather.group, birds: birds.mesh, sky: sky.dome, far: farHills.mesh, beacons: beacons.group,
   }
 
   rebuild()
@@ -905,6 +909,11 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
         if (name === 'yard') framedYard = n ?? -1
         rig.moveTo(framedPose(viewport()), true)
       },
+      // How far off each tier stands in this window (for checks that zoom).
+      tiers() {
+        const vp = viewport()
+        return { yard: rig.yard(-1, vp).dist, field: rig.field(HOME_FIELD, vp).dist, farm: rig.farm(vp).dist, county: rig.county(vp).dist }
+      },
       // The mean of what each frame drew since the last call (triangles and draw calls over every pass).
       mean() {
         const m = { frames: tally.frames, triangles: tally.frames ? tally.triangles / tally.frames : 0, calls: tally.frames ? tally.calls / tally.frames : 0 }
@@ -971,6 +980,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       weather.dispose()
       birds.dispose()
       farHills.dispose()
+      beacons.dispose()
       sky.dispose()
       shadows.dispose()
       post.dispose()

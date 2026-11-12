@@ -49,24 +49,38 @@ uniform float uProjScale;
 const float RADIUS = 1.6;
 const int TAPS = 10;
 float ign(vec2 p) { return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }
+// The place seen at a point of the picture, read at the middle of one texel of the depth map: this pass is drawn at
+// half the picture's size, and a read that falls between texels puts each sample a little off its own place, which
+// on a wide surface seen at a low angle (a roof) shows as a hatch.
+vec3 placeAt(vec2 uv) {
+  ivec2 size = textureSize(tDepth, 0);
+  ivec2 t = clamp(ivec2(uv * vec2(size)), ivec2(0), size - 1);
+  vec4 p = uInvProj * vec4((vec2(t) + 0.5) / vec2(size) * 2.0 - 1.0, texelFetch(tDepth, t, 0).r * 2.0 - 1.0, 1.0);
+  return p.xyz / p.w;
+}
 void main() {
-  vec2 uv = gl_FragCoord.xy / uRes, px = 1.0 / uRes;
+  vec2 uv = gl_FragCoord.xy / uRes, px = 1.0 / uRes, tx = 1.0 / vec2(textureSize(tDepth, 0));
   if (texture2D(tDepth, uv).r >= 0.99999) { gl_FragColor = vec4(1.0); return; }
-  vec3 c = viewPos(uv);
-  vec3 r = viewPos(uv + vec2(px.x, 0.0)) - c, l = c - viewPos(uv - vec2(px.x, 0.0));
-  vec3 u = viewPos(uv + vec2(0.0, px.y)) - c, d = c - viewPos(uv - vec2(0.0, px.y));
+  vec3 c = placeAt(uv);
+  vec3 r = placeAt(uv + vec2(tx.x, 0.0)) - c, l = c - placeAt(uv - vec2(tx.x, 0.0));
+  vec3 u = placeAt(uv + vec2(0.0, tx.y)) - c, d = c - placeAt(uv - vec2(0.0, tx.y));
   vec3 n = normalize(cross(abs(r.z) < abs(l.z) ? r : l, abs(u.z) < abs(d.z) ? u : d));
+  // How squarely the surface faces the eye. Seen along itself, a surface's own depth changes fast from one pixel to
+  // the next and it would shade itself: the allowance grows as it turns away, and the shade lets go at the last.
+  float facing = clamp(dot(n, normalize(-c)), 0.0, 1.0);
+  float slack = (0.012 + 0.0012 * -c.z) / max(facing, 0.12);
   float reach = min(RADIUS * uProjScale / -c.z, 48.0);
   float turn = 6.2831853 * ign(gl_FragCoord.xy);
   float sum = 0.0;
   for (int i = 0; i < TAPS; i++) {
     float a = (float(i) + 0.5) / float(TAPS);
     float th = a * 43.98 + turn;
-    vec3 v = viewPos(uv + vec2(cos(th), sin(th)) * a * reach * px) - c;
+    vec3 v = placeAt(uv + vec2(cos(th), sin(th)) * a * reach * px) - c;
     float vv = dot(v, v), f = max(RADIUS * RADIUS - vv, 0.0);
-    sum += f * f * f * max((dot(v, n) - 0.012 - 0.0012 * -c.z) / (vv + 0.004), 0.0);
+    sum += f * f * f * max((dot(v, n) - slack) / (vv + 0.004), 0.0);
   }
   float ao = max(0.0, 1.0 - sum * 5.0 / (float(TAPS) * pow(RADIUS, 6.0)));
+  ao = mix(1.0, ao, smoothstep(0.06, 0.3, facing));
   // Contact shade belongs to what is near: let it go where the air takes over.
   gl_FragColor = vec4(mix(ao, 1.0, smoothstep(300.0, 900.0, -c.z)));
 }
@@ -81,9 +95,9 @@ void main() {
   vec2 uv = gl_FragCoord.xy / uRes;
   float z = viewPos(uv).z;
   float sum = 0.0, wsum = 0.0;
-  for (int i = -3; i <= 3; i++) {
-    vec2 o = uv + uDir * float(i) / uRes;
-    float w = exp(-float(i * i) / 6.0) * max(0.0, 1.0 - abs(viewPos(o).z - z) / (0.06 * -z + 0.05));
+  for (int i = -4; i <= 4; i++) {
+    vec2 o = uv + uDir * float(i) * 1.4 / uRes;
+    float w = exp(-float(i * i) / 9.0) * max(0.0, 1.0 - abs(viewPos(o).z - z) / (0.06 * -z + 0.05));
     sum += texture2D(tAO, o).r * w;
     wsum += w;
   }

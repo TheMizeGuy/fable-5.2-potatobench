@@ -160,7 +160,7 @@ export function envTarget(snap: Snapshot, out: Env): Env {
     out.high = 0.7
     out.turbidity = 3
     out.mie = 0.006
-    out.haze = 0.0006
+    out.haze = 0.00045
     out.mist = 0.7
     out.mistDeep = 0
     out.key = 0.96
@@ -326,14 +326,14 @@ export function light(env: Env, toSun: number, out: Light): Light {
   // Snow in the sun is the brightest thing there is: hold it below white. Night is held dark, and blue.
   out.exposure = ((env.key * 2.9) / Math.max(metered, 0.004)) * (1 - 0.3 * Math.min(1, env.snow * 1.5) * (1 - overcast) * day) * (1 - 0.74 * night)
   // Into the sun the lens is stopped down a little, so the sky keeps its colour; away from it, opened.
-  out.exposure *= 1 - 0.16 * out.low * day * (1 - overcast) * clamp(toSun, -0.5, 1)
+  out.exposure *= 1 - 0.2 * out.low * day * (1 - overcast) * clamp(toSun, -0.5, 1)
   // The sky is far brighter than the land a low sun lights, and a picture exposed for the land would show its cloud as
   // one pale mass. As a graduated filter does, hold the cloud to what the lens can show: tops just under white, bodies
   // in the middle, so a cloud has a lit edge and a base.
   const broken = 1 - overcast
   const top = lum(out.deck) * out.exposure, body = lum(out.deckDark) * out.exposure
   if (top > 0.95) out.deck.multiplyScalar(0.95 / top)
-  const want = 0.5 - 0.2 * env.storm
+  const want = 0.36 - 0.1 * env.storm
   if (body > want) out.deckDark.multiplyScalar(1 + (want / body - 1) * broken)
   const edge = lum(out.rim) * out.exposure
   if (edge > 1.5) out.rim.multiplyScalar(1.5 / edge)
@@ -345,7 +345,7 @@ export function light(env: Env, toSun: number, out: Light): Light {
   const dark = c3.copy(NIGHT_HORIZON).multiplyScalar(night).clone()
   // The air between is lit as the low sky is: brighter than the woods it veils, a little under the sky it stands against.
   out.hazeAway.copy(away).lerp(side, 0.35).multiplyScalar(0.78 * out.skyShow).add(dark).lerp(c3.copy(grey).multiplyScalar(0.86), veil)
-  const cap = lum(out.hazeAway) * 1.5
+  const cap = lum(out.hazeAway) * 1.25
   out.hazeSun.copy(toward).multiplyScalar(Math.min(1, cap / Math.max(lum(toward), 1e-4))).add(dark).add(c3.copy(out.glow).multiplyScalar(0.5)).lerp(c3.copy(grey).multiplyScalar(0.9), veil)
   // Mist is lit: it takes the low sun's colour where the sun reaches it.
   out.mist.copy(out.hazeAway).lerp(out.hazeSun, 0.35).multiplyScalar(0.9).add(c3.copy(out.sun).multiplyScalar(0.03))

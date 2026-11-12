@@ -466,6 +466,16 @@ const shots: Shot[] = [
   ...(['yard', 'field', 'farm', 'county'] as const).map((name, k) => ({ name: `T${k + 1}-${name}`, size: [1920, 1080] as [number, number], setup: async (page: Page) => { await atWork(page); await page.evaluate(name => (window as any).__countyField.tier(name), name); await frames(page, 30) } })),
   { name: 'T5-field-season-bar', size: [1920, 1080], insets: { top: 56, right: 480, bottom: 90 }, setup: async page => { await atWork(page); await frames(page, 30) } },
   { name: 'T6-farm-spring-sheet', size: [1920, 1080], insets: { top: 56, right: 640 }, setup: async page => { await page.evaluate(() => (window as any).__county.app.newGame(1977, 5)); await settle(page); await frames(page, 30) } },
+  // An upright phone: the field tier with the horizon in its top fifth, and the farm tier.
+  { name: 'T8-phone-field', size: [390, 844], insets: { top: 52, bottom: 190 }, setup: async page => { await atWork(page); await frames(page, 30) } },
+  { name: 'T9-phone-farm', size: [390, 844], insets: { top: 52, bottom: 190 }, setup: async page => { await atWork(page); await page.evaluate(() => (window as any).__countyField.tier('farm')); await frames(page, 30) } },
+  // Dusk from the field and the farm tiers: lamps in the windows, ours and the neighbours'.
+  ...(['field', 'farm'] as const).map(name => ({ name: `L16-dusk-${name}`, size: [1920, 1080] as [number, number], setup: async (page: Page) => { await july(page); await playUntil(page, [], SKY('clear')); await settle(page); await page.evaluate(name => { const f = (window as any).__countyField; f.tier(name); f.tune({ hour: 1.17, cloud: 0.2, mist: 0.2 }) }, name); await frames(page, 40) } })),
+  // The horizon's landmarks: the village and its church through the saddle, and the water tower down the town road.
+  { name: 'L17-church', size: [1920, 1080], setup: async page => { await july(page); await playUntil(page, [], SKY('clear')); await settle(page); await view(page, { frame: 'land', x: 20, z: -6, dist: 34, yaw: 0.02 }); await frames(page, 30) } },
+  { name: 'L18-water-tower', size: [1920, 1080], setup: async page => { await july(page); await playUntil(page, [], SKY('clear')); await settle(page); await view(page, { frame: 'land', x: 60, z: 10, dist: 40, yaw: 1.2 }); await frames(page, 30) } },
+  // A roof seen at a low angle at the high setting: the contact shade must not hatch it.
+  { name: 'L19-roof', size: [1920, 1080], insets: NONE, setup: async page => { await july(page); await playUntil(page, [], SKY('clear')); await settle(page); await view(page, { frame: 'home', x: 23.6, z: -15.2, dist: 14, yaw: 0.3, pitch: 0.22 }); await frames(page, 30) } },
   { name: 'T7-eye-level', size: [1920, 1080], insets: NONE, setup: async page => { await atWork(page); await view(page, { frame: 'home', x: 18.8, z: -9.7, dist: 7.7, yaw: -2.21, pitch: 0.105, tilt: 0 }); await frames(page, 30) } },
   // Wind and cloud shadow: the same breezy day three seconds apart, to see the gusts and the shade move.
   ...[0, 3000].map((wait, k) => ({ name: `L15-wind-${'ab'[k]}`, size: [1920, 1080] as [number, number], setup: async (page: Page) => { await july(page); await playUntil(page, [], SKY('clear')); await settle(page); await page.evaluate(() => (window as any).__countyField.tune({ wind: 0.9, cloud: 0.5 })); await frames(page, 20); await page.waitForTimeout(wait) } })),

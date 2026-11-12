@@ -47,6 +47,9 @@ const startSeason = (page: Page, day = 0) => page.evaluate(day => {
   ;(window as any).__countyField.settle()
 }, day)
 
+// The farm tier, settled: all six home fields in the picture.
+const farmTier = async (page: Page) => { await page.evaluate(() => { const f = (window as any).__countyField; f.tier('farm'); f.settle() }); await frames(page, 3) }
+
 // Play a year under reference practice up to (not including) a day.
 const playTo = (page: Page, until: number, skip = '') => page.evaluate(([until, skip]) => {
   const { app, sim } = (window as any).__county
@@ -110,11 +113,16 @@ async function changed(page: Page, a: Buffer, b: Buffer): Promise<number> {
   await startSeason(page, 40)
   await panels(page, 56, 0, 150, 0)
   await spy(page)
+  // The season opens on the field tier; these checks want all six home fields in the picture: the farm tier.
+  const opened = await page.evaluate(() => (window as any).__countyField.info().framing)
+  check(opened === 'field', `the season opens on the field tier (${opened})`)
+  await farmTier(page)
   const home = (await stats(page)).camera
+  const tiers = await page.evaluate(() => (window as any).__countyField.tiers()) as { yard: number; field: number; farm: number; county: number }
   let a = await anchors(page)
   check(a.every(p => p.visible && p.x > 0 && p.x < 1440 && p.y > 56 && p.y < 750), `all six field anchors inside the area the interface leaves free: ${JSON.stringify(a.map(p => [Math.round(p.x), Math.round(p.y)]))}`)
   check(a[0].y < a[2].y && a[2].y < a[4].y, 'ridge fields anchor above mid slope, mid slope above bottom land')
-  const inside = (i: number) => ({ x: a[i].x, y: a[i].y + 45 })
+  const inside = (i: number) => ({ x: a[i].x, y: a[i].y - 24 })
   const EMPTY = { x: 24, y: 720 }
 
   await page.mouse.move(inside(0).x, inside(0).y)
@@ -177,11 +185,19 @@ async function changed(page: Page, a: Buffer, b: Buffer): Promise<number> {
   const turned = (await stats(page)).camera
   check(Math.abs(turned.yaw - panned.yaw) > 0.3 && (await smart(page)).length === 1, `a right-drag turns the view (${(turned.yaw - panned.yaw).toFixed(2)} rad) and orders nothing`)
 
-  // Home, then the wheel: zoom toward the pointer.
-  await page.keyboard.press('Home')
-  await page.waitForTimeout(1100)
+  // Home: from a view of the player's own to the field tier, square again; then out a tier at a time, and round.
+  const framing = () => page.evaluate(() => (window as any).__countyField.info().framing) as Promise<string>
+  const press = async () => { await page.keyboard.press('Home'); await page.waitForTimeout(1500); return { at: await framing(), cam: (await stats(page)).camera } }
+  const h1 = await press()
+  check(h1.at === 'field' && Math.abs(h1.cam.yaw - home.yaw) < 0.01 && Math.abs(h1.cam.dist / tiers.field - 1) < 0.05, `Home from a view of the player's own goes to the field tier, square again (${h1.at}, ${h1.cam.dist.toFixed(0)} m off, the tier's ${tiers.field.toFixed(0)})`)
+  const h2 = await press()
+  check(h2.at === 'farm' && moved(h2.cam, home) < 0.5, `Home again: the farm tier (${h2.at}, ${moved(h2.cam, home).toFixed(2)} m from where it was framed before)`)
+  const h3 = await press()
+  check(h3.at === 'county' && Math.abs(h3.cam.dist / tiers.county - 1) < 0.02, `Home again: the county tier (${h3.at}, ${h3.cam.dist.toFixed(0)} m off)`)
+  const h4 = await press()
+  check(h4.at === 'field', `and Home again: back to the field tier (${h4.at})`)
+  await farmTier(page)
   const back = (await stats(page)).camera
-  check(moved(back, home) < 0.5 && Math.abs(back.yaw - home.yaw) < 0.01, `Home frames the whole farm again (${moved(back, home).toFixed(2)} units off)`)
   a = await anchors(page)
   await page.mouse.move(a[5].x, a[5].y)
   for (let k = 0; k < 5; k++) await page.mouse.wheel(0, -240)
@@ -198,10 +214,11 @@ async function changed(page: Page, a: Buffer, b: Buffer): Promise<number> {
   for (let k = 0; k < 40; k++) await page.mouse.wheel(0, 500)
   await frames(page, 60)
   const far = (await stats(page)).camera
-  check(far.dist < back.dist * 1.2 && far.dist > back.dist * 0.9, `zoomed right out, the camera stops with the farm still filling the view (distance ${far.dist.toFixed(0)}, home ${back.dist.toFixed(0)})`)
+  check(far.dist >= tiers.county && far.dist < Math.max(tiers.county * 1.2, tiers.farm * 1.35, 1250), `zoomed right out, the camera stops a little beyond the county tier (${far.dist.toFixed(0)} m off; the county tier ${tiers.county.toFixed(0)})`)
   await page.mouse.dblclick(EMPTY.x, EMPTY.y)
-  await page.waitForTimeout(1100)
-  check(moved((await stats(page)).camera, home) < 0.5, 'a double-click on empty ground frames the whole farm')
+  await page.waitForTimeout(1500)
+  check(await framing() === 'field', `a double-click on empty ground does as Home does: the field tier (${await framing()})`)
+  await farmTier(page)
 
   // Keys: arrows pan, Q and E turn; not while the player is typing. (Up and down here: the interface being replaced
   // still takes left and right for itself.)
@@ -247,7 +264,7 @@ async function changed(page: Page, a: Buffer, b: Buffer): Promise<number> {
   const whole = track.filter(p => Number.isInteger(p.x) && Number.isInteger(p.y)).length
   const settled = (await stats(page)).camera
   const a4 = (await anchors(page))[4]
-  check(settled.dist < home.dist * 0.6 && Math.abs(a4.x - 720) < 260, `app.focus(4) brings the field into frame (distance ${home.dist.toFixed(0)} -> ${settled.dist.toFixed(0)}, anchor at ${Math.round(a4.x)}, ${Math.round(a4.y)})`)
+  check(settled.dist < home.dist * 0.9 && Math.abs(settled.dist / tiers.field - 1) < 0.06 && Math.abs(a4.x - 720) < 260, `app.focus(4) brings the field into frame (distance ${home.dist.toFixed(0)} -> ${settled.dist.toFixed(0)}, anchor at ${Math.round(a4.x)}, ${Math.round(a4.y)})`)
   check(Math.max(...jumps) < 60 && jumps.slice(-8).every(j => j < 0.5) && whole < 8, `the anchor glides while the camera moves and comes to rest (largest step ${Math.max(...jumps).toFixed(1)} px, last ${jumps[jumps.length - 1].toFixed(3)} px)`)
   await page.evaluate(() => (window as any).__county.app.focus(-1))
   await page.waitForTimeout(1100)
@@ -446,14 +463,14 @@ async function changed(page: Page, a: Buffer, b: Buffer): Promise<number> {
   })
   check(flat.flat && flat.twoD, `after 4 s without a restore the field is drawn flat on a 2D canvas (${JSON.stringify(flat)})`)
   const a = await page.evaluate(() => (window as any).__countyField.anchor(2))
-  await page.mouse.click(a.x, a.y + 20)
+  await page.mouse.click(a.x, a.y - 20)
   check(JSON.stringify(await selection(page)) === '[2]', 'flat view: a click selects the field under it')
   const b = await page.evaluate(() => (window as any).__countyField.anchor(4))
   await page.keyboard.down('Shift')
-  await page.mouse.click(b.x, b.y + 20)
+  await page.mouse.click(b.x, b.y - 20)
   await page.keyboard.up('Shift')
   check(JSON.stringify(await selection(page)) === '[2,4]', 'flat view: Shift-click adds a field')
-  await page.mouse.click(b.x, b.y + 20, { button: 'right' })
+  await page.mouse.click(b.x, b.y - 20, { button: 'right' })
   check(JSON.stringify(await smart(page)) === '[4]', 'flat view: a right-click gives the field its order')
   await page.evaluate(() => { const { app } = (window as any).__county; app.do({ t: 'job', kind: 'plant', field: 2 }); app.do({ t: 'day' }) })
   await frames(page, 3)
@@ -468,12 +485,13 @@ async function changed(page: Page, a: Buffer, b: Buffer): Promise<number> {
   await startSeason(page)
   await panels(page, 52, 0, 190, 0)
   await spy(page)
+  await farmTier(page)
   await frames(page, 10)
   const cdp = await page.context().newCDPSession(page)
   const touch = (type: 'touchStart' | 'touchMove' | 'touchEnd', pts: [number, number][]) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: pts.map(([x, y], id) => ({ x, y, id })) })
   let a = await anchors(page)
-  check(a.every(p => p.visible && p.x > 0 && p.x < 390 && p.y > 52 && p.y < 654), `390x844: all six fields in the free area (${JSON.stringify(a.map(p => [Math.round(p.x), Math.round(p.y)]))})`)
-  const p = { x: Math.round(a[2].x), y: Math.round(a[2].y + 16) }
+  check(a.every(p => p.visible && p.x > 0 && p.x < 390 && p.y > 52 && p.y < 654), `390x844, the farm tier: all six fields in the free area (${JSON.stringify(a.map(p => [Math.round(p.x), Math.round(p.y)]))})`)
+  const p = { x: Math.round(a[2].x), y: Math.round(a[2].y - 10) }
   const hitCanvas = await page.evaluate(({ x, y }) => (document.elementFromPoint(x, y) as HTMLElement | null)?.id ?? 'nothing', p)
   check(hitCanvas === 'field', `a point on a field is the canvas (${hitCanvas})`)
   const cam0 = (await stats(page)).camera
@@ -495,14 +513,14 @@ async function changed(page: Page, a: Buffer, b: Buffer): Promise<number> {
   await frames(page, 40)
   const cam3 = (await stats(page)).camera
   check(Math.abs(cam3.yaw - cam2.yaw) > 0.4, `a two-finger twist turns the view (${(cam3.yaw - cam2.yaw).toFixed(2)} rad)`)
-  await page.evaluate(() => { dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true })); (window as any).__countyField.settle() })
+  await farmTier(page)
   a = await anchors(page)
-  await touch('touchStart', [[Math.round(a[2].x), Math.round(a[2].y + 16)]])
-  await touch('touchMove', [[Math.round(a[2].x) + 3, Math.round(a[2].y + 17)]])
+  await touch('touchStart', [[Math.round(a[2].x), Math.round(a[2].y - 10)]])
+  await touch('touchMove', [[Math.round(a[2].x) + 3, Math.round(a[2].y - 9)]])
   await touch('touchEnd', [])
   await frames(page, 3)
   check(JSON.stringify(await selection(page)) === '[2]', 'a tap, even with a slight wobble, selects the field')
-  await touch('touchStart', [[Math.round(a[5].x), Math.round(a[5].y + 16)]])
+  await touch('touchStart', [[Math.round(a[5].x), Math.round(a[5].y - 10)]])
   await page.waitForTimeout(750)
   await touch('touchEnd', [])
   await frames(page, 3)
@@ -522,7 +540,7 @@ async function changed(page: Page, a: Buffer, b: Buffer): Promise<number> {
   await page.evaluate(() => { const { app } = (window as any).__county; app.newGame(1977, 5); app.do({ t: 'begin' }) })
   await page.waitForTimeout(500)
   const a = await page.evaluate(() => (window as any).__countyField.anchor(3))
-  await page.mouse.click(a.x, a.y + 20)
+  await page.mouse.click(a.x, a.y - 20)
   const sel = await page.evaluate(() => (window as any).__county.app.selected)
   const tier = await page.evaluate(() => (window as any).__countyField.flat === true)
   check(sel === 3 && tier, `fallback view: drawn flat, and a click selects the field under it (${sel})`)
