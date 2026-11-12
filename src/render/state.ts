@@ -260,7 +260,7 @@ function phaseWeather(mode: Mode, month: number): { weather: Weather; day: numbe
   // The cellar: November to May.
   const skies: Weather['sky'][] = ['overcast', 'snow', 'clear', 'snow', 'clear', 'overcast', 'cloud']
   const tmins = [-5, -14, -20, -18, -11, -3, 2]
-  const snow = [60, 300, 500, 650, 600, 250, 20]
+  const snow = [60, 300, 500, 650, 600, 90, 20]
   const m = Math.max(0, Math.min(6, month))
   return { weather: w(skies[m], tmins[m], tmins[m] + 9, 4.5, snow[m], 0), day: (318 + m * 30.4) % 365 }
 }

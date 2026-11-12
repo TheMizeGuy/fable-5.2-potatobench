@@ -23,6 +23,9 @@ export class SunShadows {
   private up = new Vector3()
   private c = new Vector3()
   private frame = 0
+  // What each of the two wide cascades was last drawn with: they hold nothing that moves by itself, so they are drawn
+  // again only when the sun or the ground they cover has moved (and now and then regardless).
+  private drawn = [1, 2].map(() => ({ sun: new Vector3(), c: new Vector3(), r: 0 }))
   // True while the first cascade is wide enough to hold a whole field: the plants then need throw no shadow into the second.
   holdsFarm = false
   // How often each cascade is redrawn, in frames (the quality setting's): the fine one every frame or every other, the
@@ -73,15 +76,21 @@ export class SunShadows {
     for (let k = 0; k < 3; k++) {
       const l = this.lights[k], sh = l.shadow
       const n = Math.max(1, this.every[k])
-      const due = !this.held[k] && (all || this.frame % n === TURN[k] % n)
-      if (k === 0) sh.autoUpdate = n <= 1 && !this.held[0]
-      if (!due) continue
-      if (!sh.autoUpdate) sh.needsUpdate = true
       const r = this.radius[k], texel = (2 * r) / sh.mapSize.x
       this.c.set(focus.x + aheadX * r * LEAD[k], focus.y, focus.z + aheadZ * r * LEAD[k])
       // Snap to the map's own grid, so shadows hold still as the camera pans.
       const px = this.c.dot(this.right), py = this.c.dot(this.up)
       this.c.addScaledVector(this.right, Math.round(px / texel) * texel - px).addScaledVector(this.up, Math.round(py / texel) * texel - py)
+      let due = !this.held[k] && (all || this.frame % n === TURN[k] % n)
+      if (k > 0 && due && !all) {
+        const was = this.drawn[k - 1]
+        const moved = was.r !== r || was.c.distanceToSquared(this.c) > texel * texel * 0.25 || 1 - was.sun.dot(sunDir) > 4e-6
+        due = moved || this.frame % (n * 16) === TURN[k] % n
+      }
+      if (k === 0) sh.autoUpdate = n <= 1 && !this.held[0]
+      if (!due) continue
+      if (!sh.autoUpdate) sh.needsUpdate = true
+      if (k > 0) { const was = this.drawn[k - 1]; was.sun.copy(sunDir); was.c.copy(this.c); was.r = r }
       const back = Math.min(r / slope, 6500) + 140
       l.target.position.copy(this.c)
       l.position.copy(this.c).addScaledVector(sunDir, back)
@@ -94,7 +103,7 @@ export class SunShadows {
       cam.updateProjectionMatrix()
       // The ground lies nearly along a low sun's light, so from one texel to the next its depth in the map changes by
       // texel over slope: the bias is a share of that, in metres, whatever the map's own depth.
-      sh.bias = -(0.02 + 0.32 * texel / slope) / (cam.far - cam.near)
+      sh.bias = -(0.02 + (k === 0 ? 0.32 : 0.48) * texel / slope) / (cam.far - cam.near)
       sh.normalBias = texel * (k === 0 ? 1.1 : 1.6)
     }
     U.uShadowFade.value.set(dist + this.radius[2] * 0.7, dist + this.radius[2] * 0.95)

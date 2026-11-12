@@ -14,7 +14,7 @@ import {
   BARN, DUFOUR_BARN, DUFOUR_HOUSE, DUFOUR_POTATO_HOUSE, HOME_WOODS, HOUSE, KEEP_CLEAR, LAND, POND, POTATO_HOUSE, WIDE, brookHalf, brookZ, fieldAt, fieldMask,
   groundY, oursAt, ridgeWoodAt, roadDist, tractAt, wallDist, woodFront,
 } from './layout.ts'
-import { hash2, rng } from './noise.ts'
+import { hash2, rng, fbm2 } from './noise.ts'
 import { K, S } from './scale.ts'
 import { SNOW_RIME, patch, sway } from './shaders.ts'
 
@@ -93,7 +93,7 @@ export class Grass {
         if (rank <= 0.01 && ours <= 0.01) continue
         if (!this.clear(x, z, false)) continue
         if (hash2(k, 11) < Math.min(0.9, rank * 1.5)) put(x, z, bank < 2.4 * S ? 0.5 - bank * 0.05 : 0.08 + 0.3 * hash2(k, 17), k, 'r')
-        else if (hash2(k, 19) < 0.5 * ours) put(x, z, 0.03 + 0.22 * hash2(k, 17) * hash2(k, 23), k, 's')
+        else if (hash2(k, 19) < (0.18 + 1.1 * Math.max(0, fbm2(x * 0.19 + 3.3, z * 0.19 + 8.1) - 0.3)) * ours) put(x, z, 0.02 + 0.3 * hash2(k, 17) * hash2(k, 23) * hash2(k, 29) * 1.6, k, 's')
       }
     }
     const cell: Cell = { patches: [], x: cx, z: cz }
@@ -133,7 +133,7 @@ export class Grass {
         // wider; and the sward sinks into the ground as it nears the distance where it is no longer drawn.
         vertexBegin: /* glsl */ `
           float gb = floor(aAt.w) * 0.0437, gbc = cos(gb), gbs = sin(gb);
-          float season = mix(0.4, 1.0, uLeaf) * (1.0 - 0.7 * smoothstep(0.2, 0.8, uSnow));
+          float season = mix(0.4, 1.0, uLeaf) * (1.0 - 0.7 * smoothstep(0.2, 0.6, uSnow)) * (1.0 - smoothstep(0.6, 0.95, uSnow) * step(fract(aAt.w), 0.7));
           float sink = 1.0 - smoothstep(uFade.x, uFade.y, distance(aAt.xyz, cameraPosition));
           float tall = (0.2 + 0.75 * fract(aAt.w)) * (0.8 + 0.4 * fract(aAt.w * 0.0531)) * season * sink * 0.72;
           float seed = mix(1.0, smoothstep(0.5, 1.0, uLeaf), aBlade.z);

@@ -148,6 +148,11 @@ export const CARD_VERTEX: Pick<Patch, 'vertexHead' | 'vertexBegin' | 'vertexWorl
       vec2 cH = normalize(cZ.xz + vec2(1e-5, 0.0));
       vec3 cR = normalize(vec3(viewMatrix[0][0], 0.0, viewMatrix[2][0]) + vec3(1e-5, 0.0, 0.0));
       float cw = length(instanceMatrix[0].xyz), cs = length(instanceMatrix[1].xyz);
+      #ifdef CARD_THIN
+        // in the wide shadows a wood is drawn with two trees in five, each half as wide again
+        if (fract(aTree.x * 13.7 + aTree.y * 5.1) > 0.4) cw = 0.0, cs = 0.0;
+        cw *= 1.5;
+      #endif
       cWorld.xyz += vec3(0.0, ${f(CARD.centre)} * cs, 0.0) + cR * (position.x * gCardHalf * cw)
         + position.y * ${f(CARD.halfH)} * (cos(vCell.x) * cs * vec3(0.0, 1.0, 0.0) - sin(vCell.x) * cw * vec3(cH.x, 0.0, cH.y));
     }

@@ -414,6 +414,24 @@ function wayDist(x: number, z: number, kinds: number, reach = 12): number {
   return d
 }
 
+// The nearest point of a road or track, within `reach` (null when none is so near).
+function nearestWay(x: number, z: number, reach: number): { x: number; z: number; d: number } | null {
+  let best: { x: number; z: number; d: number } | null = null
+  for (let k = 0; k < WAYS.length; k++) {
+    const w = WAYS[k], b = BOXES[k]
+    if (w.kind === 'headland') continue
+    if (x < b.x0 - reach || x > b.x1 + reach || z < b.z0 - reach || z > b.z1 + reach) continue
+    for (let s = 0; s < w.pts.length - 1; s++) {
+      const a = w.pts[s], c = w.pts[s + 1]
+      const dx = c[0] - a[0], dz = c[1] - a[1]
+      const t = clamp(((x - a[0]) * dx + (z - a[1]) * dz) / (dx * dx + dz * dz || 1), 0, 1)
+      const px = a[0] + dx * t, pz = a[1] + dz * t, d = Math.hypot(x - px, z - pz)
+      if (d < reach && (!best || d < best.d)) best = { x: px, z: pz, d }
+    }
+  }
+  return best
+}
+
 // Distance to the nearest road or track (NO_WAY when far from any).
 export function roadDist(x: number, z: number): number {
   return wayDist(x, z, 3)
@@ -568,6 +586,15 @@ const BANK = 7 * S
 
 // Ground height anywhere.
 export function groundY(x: number, z: number): number {
+  const y = rawY(x, z)
+  // A way is benched into a slope: level across its tread, with the ground cut above it and filled below.
+  const n = nearestWay(x, z, 8.5)
+  if (!n) return y
+  const k = (1 - smooth(2.1, 8.5, n.d)) * (1 - fieldMask(x, z, 7))
+  return k > 0 ? y + (rawY(n.x, n.z) - y) * k : y
+}
+
+function rawY(x: number, z: number): number {
   let y = macroY(x, z)
   const home = outside(x, z) <= 0
   const bz = brookZ(x), db = Math.abs(z - bz)
@@ -577,6 +604,11 @@ export function groundY(x: number, z: number): number {
     const bed = mix(WATER_Y - 0.5 * S, WATER_Y - 0.07 * S, fordAt(x))
     y = mix(WATER_Y + 0.24 * S + 0.05 * db, y, smooth(1.2 * S, BANK, db))
     y = mix(y, bed, 1 - smooth(hw - 0.35 * S, hw + 0.4 * S, db))
+  }
+  if (db < 150) {
+    const side = z < bz ? 0 : 1, u = x / K
+    const wide = S * (7.5 + 6 * (0.5 + 0.5 * Math.sin(u * 0.19 + side * 2.4 + 1.3)) + 5 * (fbm2(u * 0.11 + side * 7.1, 4.4) - 0.5))
+    y += 1.1 * smooth(wide, wide + 5, db) * (1 - smooth(wide + 20, wide + 110, db)) * (1 - fieldMask(x, z, 14)) * smooth(4, 11, roadDist(x, z))
   }
   let flat = 0
   if (home) {

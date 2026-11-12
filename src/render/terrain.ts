@@ -8,11 +8,12 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { FIELD_COUNT, PARCELS } from '../sim/index.ts'
 import { OFF_GLSL, OFF_KIND } from './fields.ts'
 import {
-  BLOCKS, FIELDS, FORD, HOME, LAND, OPEN, QUILT, REACH, ROAD, WALLS, WATER_Y, WAYS, WIDE, YARD_AT, brookHalf, brookZ, fordAt, gravelDist, groundY, hillRoadZ, TRACT_LINE, ridgeWoodAt, roadDist, townRoadZ, tractAt, wallDist, FARM, WOOD_GATE, oursAt, fieldMask,
+  BLOCKS, FIELDS, FORD, HOME, LAND, OPEN, QUILT, REACH, ROAD, WALLS, WATER_Y, WAYS, WIDE, YARD_AT, brookHalf, brookZ, fordAt, gravelDist, groundY, hillRoadZ, TRACT_LINE, ridgeWoodAt, roadDist, townRoadZ, tractAt, wallDist, FARM, WOOD_GATE, oursAt, fieldMask, HOUSE, BARN, POTATO_HOUSE, DUFOUR_HOUSE, DUFOUR_BARN, VILLAGE, SIDING,
 } from './layout.ts'
 import { K, KV, S, toWorld } from './scale.ts'
 import { hash2, rng, smooth } from './noise.ts'
 import { SNOW_RIME, linear, patch, snowRimeAt } from './shaders.ts'
+import { GROUND_SNOW } from './snow.ts'
 
 export interface Terrain {
   group: Group
@@ -185,7 +186,11 @@ export function buildTerrain(): Terrain {
       const vec4 FIELD_RECT[${FIELD_COUNT}] = vec4[${FIELD_COUNT}](${fieldRects});
       const vec4 BLOCK_RECT[${blocks.length}] = vec4[${blocks.length}](${blocks.map(rectGlsl).join(', ')});
       float landRough;
+      float landSnow = 0.0;
       vec2 landBump;
+      ${GROUND_SNOW}
+      float segD(vec2 p, vec2 a, vec2 b) { vec2 pa = p - a, ba = b - a; return length(pa - ba * clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0)); }
+      const vec2 PLACES[2] = vec2[2](vec2(${VILLAGE.x.toFixed(1)}, ${VILLAGE.z.toFixed(1)}), vec2(${SIDING.x.toFixed(1)}, ${SIDING.z.toFixed(1)}));
       float rectDist(vec4 r, vec2 p) { vec2 d = max(r.xy - p, p - r.zw); return max(d.x, d.y); }
     `,
     fragmentColor: /* glsl */ `
@@ -224,6 +229,8 @@ export function buildTerrain(): Terrain {
         float od = max(max(${LAND.x0.toFixed(1)} - pw.x, pw.x - ${LAND.x1.toFixed(1)}), max(${OPEN.z0.toFixed(1)} - pw.y, pw.y - ${OPEN.z1.toFixed(1)}));
         float open = 1.0 - smoothstep(${OPEN.in.toFixed(1)}, ${OPEN.out.toFixed(1)}, od);
         vec3 col = grass;
+        float woodK = 0.0;
+        vec3 winterWood = vec3(0.2);
         {
           Land l = landAt(pw);
           l.q /= ${S.toFixed(2)}; l.width /= ${S.toFixed(2)}; l.edge /= ${S.toFixed(2)};
@@ -270,7 +277,7 @@ export function buildTerrain(): Terrain {
           float hu = l.q.x / l.width, hfx = fract(hu), hside = hfx < 0.5 ? floor(hu) : floor(hu) + 1.0;
           float hedged = step(ihash(ivec2(int(hside) * 7 + l.cell.x * 13, l.cell.y * 29 + 91)), 0.4) * (1.0 - l.woods);
           float hrow = hedged * (1.0 - smoothstep(0.25, 1.25, min(hfx, 1.0 - hfx) * l.width + (fine - 0.5) * 1.1));
-          outland = mix(outland, broadleaf * 0.55, hrow * 0.8);
+          outland = mix(outland, broadleaf * 0.5, hrow * 0.9);
           {
             // The neighbours' ground is worked too: a farm track down the side of one strip, a stone wall along another.
             float sideH = ihash(ivec2(int(hside) * 7 + l.cell.x * 13, l.cell.y * 29 + 91));
@@ -278,11 +285,14 @@ export function buildTerrain(): Terrain {
             float track = step(0.4, sideH) * step(sideH, 0.64) * (1.0 - l.woods) * (1.0 - open);
             float ruts = (1.0 - smoothstep(0.25, 0.6, abs(sdm - 1.6))) + (1.0 - smoothstep(0.25, 0.6, abs(sdm - 3.2)));
             outland = mix(outland, soil * 1.2, track * min(1.0, ruts) * 0.6 * (1.0 - smoothstep(0.6, 2.0, pxm)));
-            outland = mix(outland, soil * 1.15, track * (1.0 - smoothstep(1.0, 4.4, sdm)) * 0.3 * smoothstep(0.6, 2.0, pxm) * (1.0 - smoothstep(4.0, 12.0, pxm)));
+            outland = mix(outland, soil * 1.15, track * (1.0 - smoothstep(1.0, 4.4 + pxm, sdm)) * 0.45 * smoothstep(0.6, 2.0, pxm) * clamp(4.4 / pxm, 0.25, 1.0));
             float wall = step(0.64, sideH) * step(sideH, 0.84) * (1.0 - l.woods) * (1.0 - open) * (1.0 - smoothstep(0.5, 1.1 + pxm, sdm));
-            outland = mix(outland, vec3(0.5, 0.49, 0.45) * (0.75 + 0.5 * fine), wall * 0.85 * (1.0 - smoothstep(2.5, 8.0, pxm)));
+            outland = mix(outland, mix(vec3(0.5, 0.49, 0.45), broadleaf * 0.5, 0.5) * (0.75 + 0.5 * fine), wall * 0.85 * clamp(1.6 / pxm, 0.3, 1.0));
           }
           landRough = mix(0.96, 1.0, inWoods);
+          woodK = max(inWoods, hedge * 0.8) * (1.0 - ours);
+          // a wood in winter from far off: the grey-brown of bare twigs, spruce dark among it, snow showing through
+          winterWood = mix(spruce * 0.8, mix(${linear('#4f463f')}, ${linear('#786c62')}, bough), smoothstep(0.92 - l.hard * 0.7, 1.08 - l.hard * 0.7, texture2D(uNoise, p * 0.021).a + (bough - 0.5) * 0.3));
           landBump = mix(landBump, (crown.rg - 0.5) * 11.0, max(inWoods, hedge * 0.8) * (1.0 - ours));
           col = mix(outland, col, ours);
         }
@@ -291,6 +301,22 @@ export function buildTerrain(): Terrain {
         float lowGround = smoothstep(3.2, 1.1, vWorld.y / ${KV.toFixed(3)});
         float wetHere = hollow * (0.45 + 0.55 * lowGround) + (1.0 - smoothstep(0.12, 0.4, vSurf.y)) * 0.6 * ours;
         col = mix(col, grass * vec3(0.62, 0.82, 0.6) * (0.8 + 0.4 * tuft), wetHere * 0.75);
+        {
+          float nearK = 1.0 - smoothstep(18.0, 70.0, distance(vWorld, cameraPosition));
+          if (nearK > 0.001) {
+            // blades lying every way in tufts, light on some and the thatch dark between them
+            vec2 gq = pw * 2.6;
+            float turnA = texture2D(uNoise, pw * 0.23).b * 6.2831853;
+            vec2 gdir = vec2(cos(turnA), sin(turnA));
+            float blade = texture2D(uNoise, vec2(dot(gq, gdir) * 2.2, dot(gq, vec2(-gdir.y, gdir.x)) * 0.32)).a;
+            float blade2 = texture2D(uNoise, vec2(dot(gq, gdir.yx) * 1.7 + 0.4, dot(gq, vec2(-gdir.x, gdir.y)) * 0.27)).a;
+            float sward = smoothstep(0.25, 0.75, blade * 0.6 + blade2 * 0.4);
+            float meadowN = (1.0 - vSurf.x) * (1.0 - smoothstep(0.1, 0.4, vSurf.z));
+            col *= mix(1.0, mix(0.5, 1.42, sward), nearK * meadowN * 0.85);
+            col = mix(col, col * vec3(1.25, 1.18, 0.7), nearK * meadowN * 0.35 * smoothstep(0.62, 0.9, blade2) * (0.4 + 0.6 * (1.0 - uLeaf * 0.6)));
+            landBump += (vec2(blade, blade2) - 0.5) * 5.0 * nearK * meadowN;
+          }
+        }
         // The farm's meadow moves: a gust lays the grass over and it shows pale.
         float gust = gustAt(p) * min(uSway, 1.2);
         col *= 1.0 + 0.14 * gust * ours * uLeaf * (1.0 - vSurf.x);
@@ -329,6 +355,24 @@ export function buildTerrain(): Terrain {
         float rd = vNear.x * 4.0;
         float ditch = smoothstep(0.8, 1.05, rd) * (1.0 - smoothstep(1.3, 2.0, rd)) + (1.0 - smoothstep(0.15, 0.8, vNear.y * 3.0)) * 0.7;
         col = mix(col, grass * vec3(0.68, 0.9, 0.6) * (0.8 + 0.4 * tuft), min(1.0, ditch) * 0.6 * ours);
+        // Round the village and the siding the ground is worked in small pieces, and the road widens to a yard.
+        for (int k = 0; k < 2; k++) {
+          vec2 pd = pw - PLACES[k];
+          vec2 ad = abs(pd);
+          if (ad.x > 220.0 || ad.y > 150.0) continue;
+          float reachP = 1.0 - smoothstep(0.75, 1.0, max(ad.x / 200.0, ad.y / 130.0) + (mid - 0.5) * 0.3);
+          vec2 cellP = pd / vec2(47.0, 36.0) + 0.5, idP = floor(cellP), inP = fract(cellP);
+          float hP = hash12(idP + float(k) * 31.7), tP = hash12(idP + 9.3 + float(k) * 17.1);
+          vec3 plot = hP < 0.3 ? soil * (0.9 + 0.3 * tP) : hP < 0.62 ? grass * vec3(1.14, 1.06, 0.7) * (0.85 + 0.3 * tP) : grass * (0.78 + 0.4 * tP);
+          float linesP = 0.5 + 0.5 * cos(pd.y * 6.2831853 / 1.1);
+          plot *= hP < 0.3 ? 1.0 - 0.3 * linesP * (1.0 - smoothstep(0.3, 0.9, fwidth(pd.y) / 1.1)) : 1.0;
+          float edgeP = min(min(inP.x, 1.0 - inP.x) * 47.0, min(inP.y, 1.0 - inP.y) * 36.0);
+          plot = mix(grass * vec3(0.55, 0.62, 0.42), plot, smoothstep(0.7, 1.8 + length(fwidth(pw)), edgeP));
+          float offRoad = smoothstep(7.0, 12.0, ad.y);
+          col = mix(col, plot, reachP * offRoad * (1.0 - vSurf.x) * 0.92);
+          float apron = 1.0 - smoothstep(0.8, 1.0, length(pd / vec2(34.0, 13.0)) + (fine - 0.5) * 0.2);
+          col = mix(col, mix(${linear('#8c8676')}, ${linear('#5e5346')}, fine) * mix(1.0, 0.7, uWet), apron * 0.9);
+        }
         // Bare ledge shows through high on the ridge, grey and lichened.
         float ledge = smoothstep(0.64, 0.74, texture2D(uNoise, p * 0.027 + 0.43).b * 0.72 + mid * 0.28) * smoothstep(-31.0, -46.0, pw.y / ${K.toFixed(1)}) * (1.0 - smoothstep(-200.0, -280.0, pw.y / ${K.toFixed(1)}));
         col = mix(col, mix(${linear('#8e8c84')}, ${linear('#6a6e5e')}, smoothstep(0.4, 0.7, fine)) * (0.78 + 0.4 * n2.a), ledge * ours);
@@ -376,12 +420,32 @@ export function buildTerrain(): Terrain {
         col *= mix(1.0, 0.84, uWet * (1.0 - bank));
         landRough = mix(landRough, 0.62, uWet * 0.6);
         landRough = mix(landRough, 0.35, wetHere * uWet);
+        {
+          // Snow. It is held in the hollows, in the ditches, along the walls and under the wood's edge, and goes first
+          // from ground that faces the sun; rank grass and weeds stand out of it along every wall and field edge.
+          float holdS = 0.7 * hollow + 0.5 * lowGround * ours + 0.6 * min(1.0, ditch) + 0.5 * smoothstep(0.05, 0.4, vSurf.x) + 0.4 * woodK - 0.5 * bank;
+          float pokeS = max(max(0.9 * min(1.0, ditch), 0.8 * headland), 0.25 * smoothstep(0.5, 0.78, tuft)) * ours + 0.5 * bank;
+          float snowK;
+          vec2 sb = landBump * 0.22;
+          col = groundSnow(col, vWorld.xz, clamp(vWNormal.y, 0.0, 1.0), uSnow, holdS, pokeS, landRough, sb, snowK);
+          landBump = sb / 0.22;
+          landSnow = snowK;
+          // Under trees the snow lies in their shade, and from far off what is seen is their twigs and boughs.
+          col = mix(col, col * vec3(0.6, 0.66, 0.78), snowK * smoothstep(0.25, 0.75, vSurf.x) * 0.7);
+          col = mix(col, winterWood * (0.7 + 0.5 * fine), snowK * woodK * 0.72);
+          // The paths the household treads: house to barn, barn to potato house, and out to the lane.
+          float pathD = min(min(segD(pw, vec2(${HOUSE.x.toFixed(1)}, ${HOUSE.z.toFixed(1)}), vec2(${BARN.x.toFixed(1)}, ${BARN.z.toFixed(1)})), segD(pw, vec2(${BARN.x.toFixed(1)}, ${BARN.z.toFixed(1)}), vec2(${POTATO_HOUSE.x.toFixed(1)}, ${POTATO_HOUSE.z.toFixed(1)}))),
+            min(segD(pw, vec2(${HOUSE.x.toFixed(1)}, ${HOUSE.z.toFixed(1)}), vec2(${ROAD[2][0].toFixed(1)}, ${ROAD[2][1].toFixed(1)})), segD(pw, vec2(${DUFOUR_HOUSE.x.toFixed(1)}, ${DUFOUR_HOUSE.z.toFixed(1)}), vec2(${DUFOUR_BARN.x.toFixed(1)}, ${DUFOUR_BARN.z.toFixed(1)}))));
+          float path = (1.0 - smoothstep(0.3, 0.75, pathD + (texture2D(uNoise, pw * 0.09).b - 0.5) * 1.6 + (fine - 0.5) * 0.3)) * snowK;
+          col = mix(col, mix(vec3(0.5, 0.56, 0.68), soil * 0.7, 0.35 * (1.0 - smoothstep(0.5, 0.95, uSnow))) * (0.8 + 0.4 * fine), path * 0.85);
+        }
         diffuseColor.rgb = col;
       }
-      ${snowRimeAt('uSnow * (1.0 - 0.7 * smoothstep(-0.03, 0.07, vWNormal.x) * (1.0 - smoothstep(0.42, 0.7, uSnow)))', 'rimeAt( vWorld.y )')}
+      ${snowRimeAt('0.0', 'rimeAt( vWorld.y )')}
     `,
     fragmentRoughness: 'roughnessFactor = landRough;',
-    fragmentNormal: 'normal = normalize(normal + (viewMatrix * vec4(landBump.x, 0.0, landBump.y, 0.0)).xyz * 0.22);',
+    // (under snow the ground's small unevenness is buried: the drifts' own shape is what the light falls on)
+    fragmentNormal: 'normal = normalize(mix(normal, (viewMatrix * vec4(0.0, 1.0, 0.03, 0.0)).xyz, 0.75 * landSnow) + (viewMatrix * vec4(landBump.x, 0.0, landBump.y, 0.0)).xyz * 0.22);',
   })
   const landMesh = new Mesh(land, landMat)
   landMesh.receiveShadow = true
@@ -424,11 +488,12 @@ export function buildTerrain(): Terrain {
       ${SNOW_RIME}
       {
         // Under snow a way shows only where it is trodden: the farm road between the house and the potato house.
-        float snowed = smoothstep(0.4, 0.9, uSnow);
-        float trod = ${kind === 'farm' ? `1.0 - smoothstep(${(16 * S).toFixed(1)}, ${(26 * S).toFixed(1)}, distance(vWorld.xz, vec2(${trodAt.x.toFixed(1)}, ${trodAt.z.toFixed(1)})))` : '0.0'};
+        float snowed = smoothstep(0.25, 0.8, uSnow);
+        float trod = ${kind === 'track' ? '0.0' : '1.0'};
         float ruts = max(exp(-pow((vRoad.x - 0.27) / 0.13, 2.0)), exp(-pow((vRoad.x - 0.73) / 0.13, 2.0)));
-        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.5, 0.55, 0.62) * (0.8 + 0.3 * texture2D(uNoise, vWorld.xz * 0.32).a), snowed * trod);
-        diffuseColor.a = mix(diffuseColor.a, max(ruts * trod, diffuseColor.a * ${kind === 'track' ? '0.1' : '0.4'}), snowed);
+        vec3 packed = mix(vec3(0.62, 0.67, 0.76), vec3(0.3, 0.3, 0.32), ruts * ${kind === 'town' ? '0.75' : '0.5'}) * (0.8 + 0.3 * texture2D(uNoise, vWorld.xz * 0.32).a);
+        diffuseColor.rgb = mix(diffuseColor.rgb, packed, snowed * trod);
+        diffuseColor.a = mix(diffuseColor.a, max(trod * smoothstep(0.02, 0.2, min(vRoad.x, 1.0 - vRoad.x)), diffuseColor.a * 0.1), snowed);
       }`,
     fragmentRoughness: 'roughnessFactor = mix(mix(0.95, 0.6, uWet * 0.7), 0.05, roadPool);',
   })
@@ -527,7 +592,8 @@ export function buildTerrain(): Terrain {
           float shore = abs(vBrook.y), wob = texture2D(uNoise, bw * 0.23).a - 0.5;
           shoreK = shore;
           // Ice makes from the banks: a shelf down each side in the cold months, the current still open in the middle.
-          frozen = uIce * smoothstep(0.66 - 0.52 * uIce, 0.84 - 0.52 * uIce, shore + wob * 0.34);
+          float lead = 0.34 * smoothstep(0.34, 0.7, texture2D(uNoise, vec2(bw.x * 0.012, 0.37)).b);
+          frozen = uIce * smoothstep(0.66 - (0.2 + lead) * uIce, 0.84 - (0.2 + lead) * uIce, shore + wob * 0.34);
           ripple = (f1 + f2 * 0.3) * (1.0 - frozen);
           ford = 1.0 - smoothstep(${(FORD.half * 0.6).toFixed(2)}, ${(FORD.half * 1.6).toFixed(2)}, abs(vWorld.x - ${FORD.x.toFixed(2)}));
           // Pools and runs along its length. Peat-dark in the pools, amber where it runs thin over gravel, clear at the edge.
@@ -646,7 +712,7 @@ function stoneWalls(): InstancedMesh {
   }
   geo.computeVertexNormals()
   const mat = patch(new MeshStandardMaterial({ color: 0xffffff, roughness: 0.92, flatShading: true }), {
-    fragmentColor: `diffuseColor.rgb *= 0.85 + 0.3 * texture2D(uNoise, vWorld.xz * 0.4).a; ${SNOW_RIME}`,
+    fragmentColor: `diffuseColor.rgb *= 0.85 + 0.3 * texture2D(uNoise, vWorld.xz * 0.4).a; diffuseColor.rgb = mix(diffuseColor.rgb * (1.0 - 0.3 * uSnow), vec3(0.86, 0.9, 0.95), uSnow * smoothstep(0.6, 0.9, vWNormal.y)); ${snowRimeAt('0.0', 'rimeAt( vWorld.y )')}`,
   })
   const mesh = new InstancedMesh(geo, mat, spots.length)
   const m = new Matrix4(), q = new Quaternion(), p = new Vector3(), sc = new Vector3(), e = new Vector3()

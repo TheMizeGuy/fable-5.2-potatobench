@@ -11,7 +11,7 @@ import { PARCELS, TRACTS } from '../sim/index.ts'
 import { DUFOUR, DUFOUR_BARN, DUFOUR_HOUSE, DUFOUR_POTATO_HOUSE, FARM, FARM_CENTER, FD, FIELDS, FW, HOME, HOME_WOODS, KEEP_CLEAR, LAND, POND, POTATO_HOUSE, WIDE, YARD_TREES, brookHalf, brookZ, fieldMask, groundY, hillRoadZ, oursAt, regionAt, ridgeWoodAt, roadDist, townRoadZ, tractAt, woodFront, woodsAt, WALLS, GATEWAYS, YARD_AT, ROAD, BRIDGE_X, PASTURE, VILLAGE, SIDING, WOOD_GATE } from './layout.ts'
 import { fbm2, hash2, rng, smooth } from './noise.ts'
 import { K, KV, S, toWorld } from './scale.ts'
-import { SNOW_RIME_TREE, depthFor, linear, patch, sway, type Patch } from './shaders.ts'
+import { depthFor, linear, patch, snowRimeAt, sway, type Patch } from './shaders.ts'
 
 // kind: 0 maple, 1 birch, 2 poplar, 3 alder and brush (for a hardwood); 0 spruce, 1 fir (for a conifer).
 export interface Tree { x: number; z: number; s: number; r: number; hue: number; kind: number; w?: number }
@@ -308,10 +308,26 @@ const LEAF_LOOK = /* glsl */ `
             // The outline of every mass is broken by its leaves, so light comes through its edge; and leaves thin as they fall.
             float rim = 1.0 - abs(dot(normalize(vRound), normalize(cameraPosition - vWorld)));
             float cover = 1.0 - smoothstep(0.58, 0.88, rim + (fine - 0.5) * 0.9 + (cl.b - 0.5) * 0.5);
-            cover *= smoothstep(0.0, 0.3, uLeaf * 1.3 - fine * (1.0 - 0.4 * uLeaf));
-            diffuseColor.a = cover;
+            float leafOn = smoothstep(0.0, 0.3, uLeaf * 1.3 - fine * (1.0 - 0.4 * uLeaf));
+            float tl = abs(cl.a - 0.5);
+            float tw = max(0.006, fwidth(cl.a) * 1.1);
+            float twig = (1.0 - smoothstep(tw * 0.5, tw, tl)) * step(0.3, fine) * (1.0 - smoothstep(0.75, 0.98, rim)) * (1.0 - leafOn);
+            diffuseColor.rgb = mix(diffuseColor.rgb, ${linear('#5a4e44')} * (0.7 + 0.5 * fine) * vTree.z, step(cover * leafOn, twig));
+            diffuseColor.a = max(cover * leafOn, twig);
           }
         }
+`
+
+// Snow on a tree: on what faces the sky, bough by bough, never the whole tree at once. obj: the place on the tree, in
+// its own space. load: how much of an upward face it can take (a spruce's boughs hold a lot, a bare limb a line of it).
+const treeSnow = (obj: string, load: string, rime = true) => /* glsl */ `
+  {
+    float tsUp = clamp(vWNormal.y, 0.0, 1.0);
+    float tsN = texture2D(uNoise, ${obj}.xz * 3.1 + ${obj}.y * 1.3 + fract(vTree.x) * 7.0).a;
+    float tsLoad = min(1.0, uSnow * 1.2) * ${load} * smoothstep(0.35, 0.85, tsUp + (tsN - 0.5) * 0.8);
+    diffuseColor.rgb = mix(diffuseColor.rgb * (1.0 - 0.25 * min(1.0, uSnow)), vec3(0.86, 0.9, 0.95), tsLoad);
+  }
+  ${rime ? snowRimeAt('0.0', '0.35 * rimeAt( vWorld.y )') : ''}
 `
 
 export class Flora {
@@ -331,6 +347,8 @@ export class Flora {
   private cardCells: BufferGeometry[] = []
   private nearAt = NEAR_AT.high
   private thin: InstancedMesh[] = []
+  private cardMeshes: InstancedMesh[] = []
+  private low = false
   private v = new Vector3()
 
   constructor() {
@@ -546,7 +564,7 @@ export class Flora {
       fragmentHead: 'varying vec4 vTree; varying vec3 vObj;',
       fragmentColor: /* glsl */ `
         ${CONIFER_LOOK}
-        ${SNOW_RIME_TREE}`,
+        ${treeSnow('vObj', '0.9')}`,
     })
     // Hardwoods: pale in new leaf, green all summer, turning by the tree and the bough through September, the leaves
     // thinning as they fall until the limbs stand bare.
@@ -572,7 +590,7 @@ export class Flora {
       fragmentHead: 'varying vec4 vTree; varying float vShade; varying float vPart; varying vec3 vObj; varying vec3 vRound; vec2 leafBump;',
       fragmentColor: /* glsl */ `
         ${LEAF_LOOK}
-        ${SNOW_RIME_TREE}`,
+        ${treeSnow('vObj', '0.75 * (1.0 - step(0.5, vPart))')}`,
       fragmentNormal: 'normal = normalize(normal + (viewMatrix * vec4(leafBump.x, 0.0, leafBump.y, 0.0)).xyz * 0.5);',
     })
     // In the shadow pass a crown thins with its leaves.
@@ -616,11 +634,11 @@ export class Flora {
           vec3 vColor = vec3(c2.r, c1.a, c2.g) / c0.a;
           cardWN = cardWorld(c1.xyz / c0.a);
           ${CONIFER_LOOK}
-        }
-        ${SNOW_RIME_TREE}`,
+          ${treeSnow('vObj', '0.6')}
+        }`,
       fragmentNormal: 'normal = normalize((viewMatrix * vec4(cardWN, 0.0)).xyz);',
     })
-    this.leafCard = patch(new MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0, side: DoubleSide }), {
+    this.leafCard = patch(new MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0, side: DoubleSide, alphaToCoverage: true }), {
       key: 'county-hardwood-card',
       translucent: 0.6,
       ambient: 0.92,
@@ -643,7 +661,8 @@ export class Flora {
             vec3 vRound = cardWorld(c1.xyz / c0.a);
             cardWN = vRound;
             ${LEAF_LOOK}
-            done = diffuseColor.a >= 0.5;
+            done = diffuseColor.a >= 0.5 && uLeaf > 0.2;
+            if (done) { ${treeSnow('vObj', '0.2', false)} }
           }
           if (!done) {
             vec2 bare = vCard + vec2(${BARE_SHIFT}, 0.0);
@@ -655,19 +674,28 @@ export class Flora {
               vec3 vRound = cardWorld(c1.xyz / c0.a);
               cardWN = vRound;
               ${LEAF_LOOK}
+              ${treeSnow('vObj', '0.75', false)}
+              diffuseColor.a = 1.0;
             } else {
-              // its twigs, too fine to draw one by one: a thin brown-grey mass where the crown was
-              if (crown < 0.4 || texture2D(uNoise, crownAt.xy * 2.3 + crownAt.z * 1.7 + fract(vTree.x) * 3.0).a > 0.2 + 0.34 * smoothstep(0.5, 2.5, cl)) discard;
-              cardWN = vec3(0.0, 1.0, 0.0);
-              diffuseColor.rgb = ${linear('#5d5248')} * (0.55 + 0.4 * fract(vTree.x * 5.3)) * vTree.z;
+              // Its twigs: fine dark lines close to; from far off, too fine to draw, a thin grey-brown mass where the
+              // crown was, which the picture takes as a share of each pixel.
+              if (crown < 0.4) discard;
+              vec4 tn = texture2D(uNoise, crownAt.xy * 1.9 + crownAt.z * 1.3 + fract(vTree.x) * 3.0);
+              float tl = abs(tn.a - 0.5);
+              float lines = 1.0 - smoothstep(0.006, 0.016, tl);
+              float haze = mix(lines, 0.4, smoothstep(0.3, 1.6, cl)) * smoothstep(0.4, 0.75, crown);
+              if (haze < 0.25) discard;
+              cardWN = normalize(vec3(0.0, 1.0, 0.0) + 0.6 * cardWorld(vec3(0.0, 0.0, 1.0)));
+              diffuseColor.rgb = ${linear('#463c34')} * (0.7 + 0.5 * fract(vTree.x * 5.3)) * vTree.z * (1.0 + 0.5 * min(1.0, uSnow) * tn.a);
+              diffuseColor.a = haze;
             }
-          }
-          diffuseColor.a = 1.0;
+          } else diffuseColor.a = 1.0;
         }
-        ${SNOW_RIME_TREE}`,
+        ${snowRimeAt('0.0', '0.35 * rimeAt( vWorld.y )')}`,
       fragmentNormal: 'normal = normalize((viewMatrix * vec4(cardWN, 0.0)).xyz + (viewMatrix * vec4(leafBump.x, 0.0, leafBump.y, 0.0)).xyz * 0.5);',
     })
-    this.cardDepth = [depthFor({ key: 'county-conifer-card', defines: { CARD_CONIFER: 1 }, uniforms: cardMaps, ...CARD_VERTEX }), depthFor({ key: 'county-hardwood-card', uniforms: cardMaps, ...CARD_VERTEX })]
+    this.cardDepth = [depthFor({ key: 'county-conifer-card', defines: { CARD_CONIFER: 1 }, uniforms: cardMaps, ...CARD_VERTEX }), depthFor({ key: 'county-hardwood-card', uniforms: cardMaps, ...CARD_VERTEX }),
+      depthFor({ key: 'county-conifer-card-thin', defines: { CARD_CONIFER: 1, CARD_THIN: 1 }, uniforms: cardMaps, ...CARD_VERTEX }), depthFor({ key: 'county-hardwood-card-thin', defines: { CARD_THIN: 1 }, uniforms: cardMaps, ...CARD_VERTEX })]
     for (const d of this.cardDepth) {
       const base = d.onBeforeCompile.bind(d)
       d.onBeforeCompile = (shader, renderer) => { base(shader, renderer); shader.fragmentShader = shader.fragmentShader.replace('#include <map_fragment>', CARD_SHADOW).replace('void main() {', `${CARD_SHADOW_HEAD}\nvoid main() {`) }
@@ -859,6 +887,7 @@ export class Flora {
     return mesh
   }
 
+  // In a wood (a patch of many trees) the wide shadows are thrown by a thinned set of its cards.
   private placeCards(conifer: boolean, trees: Tree[]): InstancedMesh {
     const m = new Matrix4(), q = new Quaternion(), p = new Vector3(), sc = new Vector3(), up = new Vector3(0, 1, 0)
     const geo = new BufferGeometry()
@@ -881,7 +910,8 @@ export class Flora {
     mesh.userData.far = true
     mesh.layers.enable(1)
     mesh.layers.enable(2)
-    mesh.customDepthMaterial = this.cardDepth[conifer ? 0 : 1]
+    mesh.customDepthMaterial = this.cardDepth[(conifer ? 0 : 1) + (trees.length > 90 ? 2 : 0)]
+    this.cardMeshes.push(mesh)
     this.group.add(mesh)
     this.disposables.push(geo)
     return mesh
@@ -890,6 +920,10 @@ export class Flora {
   setTier(tier: 'high' | 'medium' | 'low'): void {
     this.nearAt = NEAR_AT[tier]
     this.midAt = MID_AT[tier]
+    // On the low setting no card throws a shadow, and a patch drawn as cards keeps no trees standing for the fine one.
+    this.low = tier === 'low'
+    for (const m of this.cardMeshes) m.castShadow = !this.low
+    for (const ch of this.chunks.values()) ch.level = -1
     // The low setting draws half the far woods, the middle one three quarters.
     for (const m of this.thin) m.count = Math.ceil((m.userData.all as number) * (tier === 'low' ? 0.5 : tier === 'medium' ? 0.75 : 1))
   }
@@ -914,7 +948,7 @@ export class Flora {
       // A card in the fine shadow would be a great sheet of the map to fill: where a patch is drawn as cards, its
       // simpler trees still stand in the fine shadow, out of the picture.
       for (const m of ch.far) {
-        m.visible = level > 0
+        m.visible = level === 1 || (level === 2 && !this.low)
         m.layers.set(3)
         if (level === 1) m.layers.enable(0)
       }

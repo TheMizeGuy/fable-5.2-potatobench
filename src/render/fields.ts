@@ -15,6 +15,7 @@ import { FALL, FD, FIELDS, FW, PLANT, PLANTED_ROWS, PLANTS_PER_ROW, ROW, SLOPE_T
 import { hash2 } from './noise.ts'
 import { K, S } from './scale.ts'
 import { SNOW_RIME, depthFor, linear, patch, snowRimeAt, sway, type Patch } from './shaders.ts'
+import { GROUND_SNOW } from './snow.ts'
 import type { FieldVis } from './state.ts'
 
 export const RIDGE_AMP = 0.22
@@ -60,6 +61,7 @@ export const MARK_WIDE = { value: 1 }
 // h0: growth (none where dug or pulled), yellow, the share of leaf blight has taken, dead. h1: dug, pulled, ridge, stunt.
 const HILL_FN = /* glsl */ `
 float gLump;
+float gSick;
 void hillAt(vec2 f, vec2 xz, out vec4 h0, out vec4 h1) {
   vec4 na = textureLod(uNoise, xz * 0.021, 0.0), nb = textureLod(uNoise, xz * 0.047 + 0.37, 0.0);
   float lump = textureLod(uNoise, xz * 0.083 + 0.11, 0.0).b;
@@ -75,11 +77,16 @@ void hillAt(vec2 f, vec2 xz, out vec4 h0, out vec4 h1) {
   h0.g = clamp(h0.g * (0.72 + 0.56 * na.b), 0.0, 1.0);
   float strip = floor(f.y * ${(PLANTED_ROWS / 2).toFixed(1)});
   float ahead = fract(sin(strip * 12.9898) * 43758.5453) - 0.5;
-  h1.r = smoothstep(0.47, 0.53, textureLod(uT1, vec2(f.x + ahead * ${(0.4 / COLS).toFixed(5)}, (strip + 0.5) / ${(PLANTED_ROWS / 2).toFixed(1)}), 0.0).r);
   vec2 cell = f * vec2(${COLS}.0, ${ROWS}.0);
+  // each hill's strips come open in turn from the top of its band as it is dug
+  float within = (strip + 0.5) / ${(PLANTED_ROWS / 2).toFixed(1)} * ${ROWS}.0;
+  float turn = mix(0.2, 0.8, fract(within));
+  h1.r = smoothstep(turn - 0.06, turn + 0.06, textureLod(uT1, vec2(f.x + ahead * ${(0.4 / COLS).toFixed(5)}, (floor(within) + 0.5) / ${ROWS}.0), 0.0).r);
   float pulled = texelFetch(uT1, ivec2(clamp(floor(cell), vec2(0.0), vec2(${COLS - 1}.0, ${ROWS - 1}.0))), 0).g;
   h1.g = pulled * (1.0 - smoothstep(1.5, 3.9, length((fract(cell) - 0.5) * vec2(${SX.toFixed(2)}, ${SZ.toFixed(2)})) + (lump - 0.5) * 1.4));
   h0.r = min(1.0, h0.r * (0.93 + 0.14 * nb.b)) * (1.0 - h1.r) * (1.0 - h1.g);
+  gSick = smoothstep(0.0, 0.25, sick);
+  h0.r *= mix(1.0, smoothstep(0.1, 0.45, h0.r + (textureLod(uNoise, xz * 0.31, 0.0).a - 0.5) * 0.5), gSick);
 }
 `
 // How far in from each end of the rows nothing is planted: the headland, where the machines turn.
@@ -91,6 +98,7 @@ attribute vec2 aSlot;
 uniform sampler2D uSlope;
 uniform vec4 uWin;         // the window in this field's lattice: first column, first row, and its centre on the ground
 uniform vec2 uPool;        // half the window, along the rows and across them
+uniform vec2 uFadeR;       // how far from the eye whole plants begin to give way, and where they are gone
 uniform float uSeed;
 vec4 aAt;
 float slotIn;
@@ -107,7 +115,7 @@ void slot() {
   aAt.z = uRect.y + (r + 0.5 + j.y) * ${stepZ.toFixed(5)};
   aAt.y = slopeY(aAt.z);
   vec2 d = abs(aAt.xz - uWin.zw) / uPool;
-  slotIn = step(0.0, c) * step(c, ${(cols - 1).toFixed(1)}) * step(0.0, r) * step(r, ${(rows - 1).toFixed(1)}) * (1.0 - smoothstep(0.5, 1.0, max(d.x, d.y)));
+  slotIn = step(0.0, c) * step(c, ${(cols - 1).toFixed(1)}) * step(0.0, r) * step(r, ${(rows - 1).toFixed(1)}) * (1.0 - smoothstep(0.7, 1.0, max(d.x, d.y))) * (1.0 - smoothstep(uFadeR.x, uFadeR.y, distance(aAt.xyz, cameraPosition)));
 }
 `
 const PLANT_FN = /* glsl */ `
@@ -127,6 +135,7 @@ Plant plantAt() {
   p.r = fract(aAt.w * vec3(61.7, 127.3, 331.9));
   p.dead = p.h0.a;
   p.h0.r *= step(p.h1.g, 0.25 + 0.5 * p.r.z);
+  p.h0.r *= mix(1.0, step(0.35 * p.r.x, p.h0.r - 0.12), gSick);
   p.frost = smoothstep(0.0, 0.25, uCrop.y * 1.25 - gLump + 0.2 * (p.r.y - 0.5)) * (1.0 - p.dead);
   p.droop = clamp(max(uCrop.x * 0.9, p.frost * 0.85), 0.0, 1.0) * (1.0 - p.dead);
   float size = (0.22 + 0.78 * pow(p.h0.r, 0.75)) * mix(1.0, 0.6, p.h1.a) * (0.84 + 0.32 * p.r.x) * step(0.004, p.h0.r) * slotIn
@@ -204,6 +213,7 @@ uniform sampler2D uT1;
 uniform vec4 uCrop;
 uniform vec4 uWin;
 uniform vec2 uPool;
+uniform vec2 uFadeR;
 uniform float uNear;
 uniform float uPix;
 uniform float uCoarse;
@@ -254,7 +264,7 @@ vec4 soilShape(vec2 f, vec3 at, out vec4 h0, out vec4 hill) {
   float low = 0.52 * smoothstep(0.85, 1.0, wide) * (1.0 - wheel);
   float shape = q < 0.25 ? 1.0 : q < 0.75 ? clamp(wide * 1.5 - 0.5, low, 0.86) : low;
   vec2 d = abs(at.xz - uWin.zw) / uPool;
-  float away = 1.0 - uNear * (1.0 - smoothstep(0.5, 1.0, max(d.x, d.y)));
+  float away = 1.0 - uNear * (1.0 - smoothstep(0.7, 1.0, max(d.x, d.y))) * (1.0 - smoothstep(uFadeR.x, uFadeR.y, distance(at, cameraPosition)));
   float lift = top * head * show * away * (1.0 - 0.6 * smoothstep(0.3, 1.0, uSnow));
   h += lift * shape;
   h += uOatsHere.x * 0.62 * taper * away * (1.0 - uCoarse) * (0.8 + 0.4 * textureLod(uNoise, at.xz * 0.21, 0.0).a);
@@ -370,7 +380,7 @@ vec4 paintCrop(vec2 f, vec4 h0, vec4 h1, float fine, float rowsPx, float rowFade
   float fleck = step(1.0 - 0.5 * open, fract(sin(dot(floor(fc), vec2(12.9898, 78.233))) * 43758.5453)) * (1.0 - smoothstep(0.2, 0.34, length(fract(fc) - 0.5)));
   // from above a field in flower is paler than one that is not, and paler in drifts
   fleck *= mix(1.0 - smoothstep(0.2, 0.5, fr), 1.0, rowFade);
-  fleck = mix(fleck, 0.11 * open * (0.4 + 1.2 * fine), smoothstep(0.35, 1.0, max(fwidth(fc.x), fwidth(fc.y))));
+  fleck = mix(fleck, 0.24 * open * (0.4 + 1.2 * fine), smoothstep(0.35, 1.0, max(fwidth(fc.x), fwidth(fc.y))));
   col = mix(col, mix(${linear('#f8f5fa')}, ${linear('#d3c2e6')}, uTint) * 1.25, fleck * cover);
   lift = cover;
   return vec4(col, cover);
@@ -448,6 +458,7 @@ export class Fields {
   private oatPool: InstancedBufferGeometry
   private slope: DataTexture
   private pool = { value: new Vector2(POOL.high.x, POOL.high.z) }
+  private fadeR = { value: new Vector2(1e5, 2e5) }
   private reach = POOL.high.reach
   private centre = new Vector3()
   private ahead = new Vector3()
@@ -518,7 +529,7 @@ export class Fields {
     const fell = { value: PARCELS[i].cover === 'brush' ? new Vector3(1, 0, 0) : new Vector3(0, -1, 1) }
     const oats = { value: new Vector3(0, 0, 0) }
     const rect = { value: new Vector4(f.x0, f.z0, 1 / FW, 1 / FD) }
-    const shared = { uT0: { value: t0 }, uT1: { value: t1 }, uRect: rect, uCrop: { value: crop }, uOpen: open, uWin: win, uPool: this.pool, uSlope: { value: this.slope }, uSeed: { value: i * 17.3 } }
+    const shared = { uT0: { value: t0 }, uT1: { value: t1 }, uRect: rect, uCrop: { value: crop }, uOpen: open, uWin: win, uPool: this.pool, uFadeR: this.fadeR, uSlope: { value: this.slope }, uSeed: { value: i * 17.3 } }
     const bounds = new Sphere(new Vector3(f.cx, fieldBaseY(f.cz) + 0.3, f.cz), Math.hypot(FW, FD) / 2 + 2)
 
     // ---- soil
@@ -566,7 +577,7 @@ export class Fields {
       uniforms: {
         uT0: { value: t0 }, uT1: { value: t1 }, uSoil: { value: soilColor }, uWater: water, uDamp: damp, uCover: cover, uOff: off,
         uOffKind: { value: OFF_KIND[i] ?? 0 }, uPaint: paint, uUnder: under, uCrop: { value: crop }, uTint: tint, uOatsHere: oats, uRimeHere: rimeHere, uAvail: avail,
-        uTract: tract, uGround: ground, uFell: fell, uShy: shy, uWin: win, uPool: this.pool, uNear: nearU, uPix: PIXEL, uCoarse: coarse,
+        uTract: tract, uGround: ground, uFell: fell, uShy: shy, uWin: win, uPool: this.pool, uFadeR: this.fadeR, uNear: nearU, uPix: PIXEL, uCoarse: coarse,
       },
       vertexHead: `${ROW_FN}\nuniform float uOff;\nuniform float uPaint;`,
       vertexNormal: `gShape = soilShape(aF, position, gH0, gH1); objectNormal = normalize(vec3(0.0, 1.0, ${SLOPE.toFixed(4)} - gShape.y * (1.0 - uOff)));`,
@@ -614,6 +625,7 @@ export class Fields {
         ${LEAF_TINT}
         ${OFF_GLSL}
         ${PAINT_GLSL}
+        ${GROUND_SNOW}
       `,
       fragmentColor: /* glsl */ `
         {
@@ -648,7 +660,12 @@ export class Fields {
             float ridged = smoothstep(0.01, 0.08, hill.b) * (1.0 - hill.r) * (1.0 - uOff) * step(over.r, 0.3);
             float low = clamp(abs(uSunDir.z) / max(uSunDir.y, 0.08) * 0.22, 0.0, 1.0);
             float crest = mix(pulse(rowP - 0.25, 0.5, rowsPx), 0.5, smoothstep(0.85, 1.25, rowsPx));
-            soil *= 1.0 + ridged * rowFade * ((crest - 0.5) * (0.34 + 0.5 * low) - 0.1 - 0.16 * low);
+            // (drawn wherever the ridges themselves are too fine to stand in the ground)
+            float drawn = smoothstep(0.067, 0.143, rowsPx);
+            soil *= 1.0 + ridged * drawn * ((crest - 0.5) * (0.62 + 0.5 * low) - 0.12 - 0.16 * low);
+            soil *= 1.0 - 0.14 * ridged;
+            // bare ground dries pale and flat
+            soil = mix(soil, soil * 1.22 + vec3(0.02, 0.016, 0.012), bare * (1.0 - dampK) * 0.7);
             float passP = rowP / 4.0, passPx = rowsPx / 4.0;
             soil *= 1.0 + ridged * ((fract(sin(floor(passP) * 78.233) * 43758.5453) - 0.5) * 0.3 - 0.4 * pulse(passP - 0.06, 0.12, passPx)) * (1.0 - smoothstep(0.6, 1.2, passPx));
             soil *= 1.0 + ridged * 0.2 * (texture2D(uNoise, vec2(vF.x * 1.7, rowP * 0.043)).a - 0.5);
@@ -704,7 +721,10 @@ export class Fields {
           soil *= 1.0 + uGround.z * smoothstep(0.3, 0.7, max(uDamp, uWet)) * (0.06 + 0.4 * (1.0 - smoothstep(0.1, 1.0, lat + (fine - 0.5) * 0.5)));
           float lowG = broad * 0.6 + 0.4 * texture2D(uNoise, sw * 0.017).b;
           poolF = uWater * (1.0 - uGround.z) * mix(0.8 * smoothstep(0.74, 0.82, lowG), (1.0 - smoothstep(0.12, 0.5, vProf)) * smoothstep(0.34, 0.5, lowG), vRidged * (1.0 - rowFade));
-          soilRough = mix(mix(0.96, 0.66, uDamp), 0.04, poolF);
+          float rainK = uWet * (1.0 - uOff);
+          poolF = max(poolF, rainK * 0.9 * smoothstep(0.52, 0.66, lowG + 0.12 * lowK) * mix(1.0, 1.0 - smoothstep(0.12, 0.5, vProf), vRidged * (1.0 - rowFade)));
+          soil *= 1.0 - 0.5 * rainK;
+          soilRough = mix(mix(mix(0.96, 0.66, uDamp), 0.3, rainK * 0.8), 0.04, poolF);
           // Far off, the crop and the rest-year oats are painted where plants would stand.
           if (paintK > 0.001) {
             float lift;
@@ -765,10 +785,24 @@ export class Fields {
             soilRough = mix(soilRough, 0.95, uTract.x);
           }
           soil = mix(soil, vec3(0.018, 0.02, 0.018), poolF * 0.92);
-          diffuseColor.rgb = soil;
           soilBump = ((n2.rg - 0.5) * 1.2 + (n3.rg - 0.5)) * (1.0 - poolF) * (1.0 - 0.5 * cov);
+          {
+            // Snow lies first in the furrows, so thin snow draws every ridge; stubble and dead vine stand out of it;
+            // deep snow buries the lot, and keeps only the faintest ribbing where the rows are.
+            float ridgeK = smoothstep(0.02, 0.3, hill.b) * (1.0 - hill.r) * (1.0 - uOff);
+            float crestS = mix(pulse(rowP - 0.25, 0.5, rowsPx), 0.5, smoothstep(0.85, 1.25, rowsPx));
+            float holdS = 0.5 * lowK - 0.3 * knollK + ridgeK * (0.5 - 1.1 * crestS) + 0.3 * uOff;
+            float pokeS = max(max(0.7 * over.a, 0.5 * over.r), max(0.55 * cov, 0.3 * uOff)) + 0.5 * ridgeK * crestS;
+            float snowK;
+            vec2 sb = soilBump * 0.55;
+            soil = groundSnow(soil, vWorld.xz, clamp(vWNormal.y, 0.0, 1.0), uSnow, holdS, pokeS, soilRough, sb, snowK);
+            soilBump = sb / 0.55;
+            soil *= 1.0 + snowK * ridgeK * 0.1 * (crestS - 0.5);
+            poolF *= 1.0 - snowK;
+          }
+          diffuseColor.rgb = soil;
         }
-        ${snowRimeAt('uSnow', 'uRimeHere')}
+        ${snowRimeAt('0.0', 'uRimeHere')}
       `,
       fragmentRoughness: 'roughnessFactor = soilRough;',
       fragmentNormal: /* glsl */ `
@@ -1038,7 +1072,7 @@ export class Fields {
     const shape: Patch = {
       key: 'county-oats',
       uniforms: {
-        uOats: g.oats, uRect: { value: new Vector4(f.x0, f.z0, 1 / FW, 1 / FD) }, uWin: g.oatWin, uPool: this.pool, uSlope: { value: this.slope }, uSeed: { value: i * 31.7 },
+        uOats: g.oats, uRect: { value: new Vector4(f.x0, f.z0, 1 / FW, 1 / FD) }, uWin: g.oatWin, uPool: this.pool, uFadeR: this.fadeR, uSlope: { value: this.slope }, uSeed: { value: i * 31.7 },
       },
       vertexHead: `uniform vec4 uRect;\n${slotGlsl(OAT_STEP, OAT_STEP, OAT_COLS, OAT_ROWS, 0.8)}\nattribute vec3 aBlade;\nuniform vec3 uOats;\nvarying vec3 vTint;\nfloat oatGust;`,
       vertexNormal: /* glsl */ `
@@ -1176,7 +1210,10 @@ export class Fields {
     const dist = Math.hypot(out, height)
     this.windowOn = dist < this.reach
     if (!this.windowOn) return
-    const on = out + Math.min(this.pool.value.x, this.pool.value.y) * 0.42
+    const pm = Math.min(this.pool.value.x, this.pool.value.y)
+    const on = out + pm * 0.42
+    const far = Math.hypot(on, height)
+    this.fadeR.value.set(far + pm * 0.05, far + pm * 0.9)
     this.centre.set(c.x + (d.x / flat) * on, 0, c.z + (d.z / flat) * on)
   }
 

@@ -804,6 +804,28 @@ shots.push(
   cropShot('t-county-october', 1977, 288, [], COUNTY_TIER),
 )
 
+// ---- Winter and its edges, as the game shows them (the cellar months, November to April, and the spring sheet's
+// melting snow) and by a low afternoon sun, from the farm tier and the yard tier.
+const MONTHS = ['nov', 'dec', 'jan', 'feb', 'mar', 'apr']
+const winterShot = (name: string, months: number, tierName: 'farm' | 'yard', hour?: number): Shot => ({
+  name, size: G_SIZE, setup: async page => {
+    if (months < 0) await page.evaluate(() => (window as any).__county.app.newGame(1978, 5))
+    else await winter(page, months)
+    await settle(page)
+    if (hour !== undefined) await page.evaluate(h => (window as any).__countyField.tune({ hour: h, snowfall: 0, cloud: 0.25, cloudShadow: 0.6, sunScale: 1, deck: 1, key: 1, storm: 0, haze: 0.0006 }), hour)
+    await page.evaluate(t => (window as any).__countyField.tier(t), tierName)
+    await frames(page, 30)
+  },
+})
+shots.push(
+  ...MONTHS.map((m, k) => winterShot(`w-farm-${k + 1}-${m}`, k, 'farm')),
+  ...MONTHS.map((m, k) => winterShot(`w-yard-${k + 1}-${m}`, k, 'yard')),
+  ...MONTHS.map((m, k) => winterShot(`w-day-farm-${k + 1}-${m}`, k, 'farm', 0.78)),
+  ...MONTHS.map((m, k) => winterShot(`w-day-yard-${k + 1}-${m}`, k, 'yard', 0.78)),
+  winterShot('w-farm-7-may-thaw', 6, 'farm'), winterShot('w-yard-7-may-thaw', 6, 'yard'),
+  winterShot('w-farm-8-spring-sheet', -1, 'farm'), winterShot('w-yard-8-spring-sheet', -1, 'yard'),
+)
+
 const browser = await chromium.launch({
   args: flat ? ['--disable-webgl', '--disable-3d-apis'] : soft ? ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] : [process.platform === 'win32' ? '--use-angle=d3d11' : '--use-angle=metal', '--ignore-gpu-blocklist', '--enable-gpu'],
 })
