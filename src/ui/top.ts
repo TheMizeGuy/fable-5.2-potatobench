@@ -221,7 +221,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
         class: 'goal later', type: 'button', testid: 'goal', k: `goal-later-${g.id}`, 'aria-expanded': String(pop === 'goals'), title: ctx.touch() ? undefined : g.why,
         onclick: () => { pop = pop === 'goals' ? '' : 'goals'; ctx.dirty() },
       }, h('span', { class: 'goal-body' }, h('span', { class: 'sr' }, 'Next goal: '), h('b', { class: 'goal-t' }, call ? F.localize(call.n!.text) : g.title),
-        h('span', { class: 'goal-when' }, call ? `then: ${g.title.toLowerCase()}, ${later}` : later)),
+        h('span', { class: 'goal-when' }, call ? `then: ${g.title.toLowerCase()}` : later)),
       h('span', { class: 'sr' }, `. ${g.why} Open the goals.`))
       const go = call ? h('button', { class: 'btn goal-go', type: 'button', testid: 'goal-do', onclick: () => { app.select(call.i); app.focus(call.i) } }, icon('arrow', 'i'), 'Show me') : null
       if (call) quiet.classList.remove('later')
@@ -276,7 +276,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
           title: ctx.touch() || c.cash >= 0 ? undefined : 'Owed on the spring operating loan: the crop pays it back. The bank calls the note if the year closes too far under.',
         }, h('span', { class: 'sr' }, 'Cash: '), h('span', { class: 'cash-v num' }, F.money(c.cash))),
         season && !phone ? h('span', { class: 'due num', testid: 'due' },
-          `${F.money(S.NOTE_PAYMENT + S.LIVING + Math.round(S.mortgageInfo(c).principal + S.mortgageInfo(c).interest))} `, term('due at the year end')) : null)
+          `${F.money(S.NOTE_PAYMENT + S.LIVING + Math.round(S.mortgageInfo(c).principal + S.mortgageInfo(c).interest))} `, term('due', 'due at the year end')) : null)
       return [
         h('section', { class: 'almanac', 'aria-label': 'Date, weather and the next goal' },
           h('div', { class: 'mount' },
