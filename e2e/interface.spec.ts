@@ -28,6 +28,19 @@ async function farmWithPeople(page: Page): Promise<void> {
   await putAway(page)
 }
 
+// Runs the days on to the weigh ticket as a player would: a stop the game makes on the way (the frost warning over
+// the barrels the evening before a frost) is gone on from with the clock's own Go on.
+async function untilTicket(page: Page): Promise<void> {
+  const ticket = page.getByTestId('weighin')
+  const until = Date.now() + 90_000
+  while (Date.now() < until && !(await ticket.isVisible().catch(() => false))) {
+    const go = page.getByTestId('paused-go')
+    if (await go.isVisible().catch(() => false) && !(await page.locator('#ui .dialog').count())) await go.click().catch(() => {})
+    await page.waitForTimeout(300)
+  }
+  await expect(ticket).toBeVisible()
+}
+
 // Words a sighted player is given to read, counted the way tools/quality/capture.ts counts them, and which elements
 // carry them, so a count over the limit says where the words are.
 async function wordsOnScreen(page: Page): Promise<{ n: number; by: string }> {
@@ -791,7 +804,7 @@ test('Start the season runs the clock at 1x with no click; a weigh ticket stops 
   await putAway(page)
   await page.getByTestId('speed-2').click()
   const ticket = page.getByTestId('weighin')
-  await expect(ticket).toBeVisible({ timeout: 60_000 })
+  await untilTicket(page)
   expect((await look(page)).paused).toBe(true)
   await ticket.locator('[data-testid^="lot-sell-"]').first().click()
   await expect(ticket).toHaveCount(0)
@@ -815,7 +828,10 @@ test('tags and stamps hold still when a card opens or closes and when an order i
   expect(stamps.length).toBeGreaterThan(1)
   const selects = () => game<number>(page, 'window.__selects ?? 0')
   await page.evaluate(() => { const { app } = (globalThis as any).__county; (globalThis as any).__selects = 0; app.on((e: any) => { if (e.type === 'select') (globalThis as any).__selects++ }) })
+  // The camera at rest first: tags go with their fields while it moves, as they should.
+  const still = async () => { let a = '', b = '-'; while (a !== b) { a = b; await page.waitForTimeout(300); b = JSON.stringify(await page.evaluate(() => [0, 1, 2, 9].map(i => { const p = (globalThis as any).__countyField.anchor(i); return [Math.round(p.x), Math.round(p.y)] }))) } }
   for (const [n, close] of [[stamps[0], 'Escape'], [stamps[1], 'cross']] as const) {
+    await still()
     const was = await where()
     await page.getByTestId('field-0').click()
     await expect(page.getByTestId('card-title')).toHaveText('North Ridge')
@@ -940,5 +956,35 @@ test('a field says which work the crew does by itself and which waits for the pl
   await reach(page, `q.g().app.select(${field})`)
   await expect(page.getByTestId('card-whose')).toContainText('The crew')
   await expect(page.getByTestId('card-whose')).toContainText(/Yours: .*spray/i)
+  expect(errors, errors.join('\n')).toEqual([])
+})
+
+test('the clock and the keys as a player meets them: Space just after an answer keeps the days going, a press on the land holds them, Escape after a ticket opens no menu', async ({ page }) => {
+  const errors = watchErrors(page)
+  await startSeason(page)
+  await reach(page, `const { app } = q.g(); app.setSpeed(0); app.do({ t: 'sprayWay', way: 'ask' }); q.run('digging', ['sell'], 'status'); app.campaign.incidents = []`)
+  await putAway(page)
+  await page.getByTestId('speed-2').click()
+  const ticket = page.getByTestId('weighin')
+  await untilTicket(page)
+  // Answered, the days go on by themselves; a Space a moment later is not taken back as a pause.
+  await ticket.locator('[data-testid^="lot-sell-"]').first().click()
+  await expect(ticket).toHaveCount(0)
+  await page.keyboard.press('Space')
+  expect((await look(page)).speed).toBe(2)
+  // Escape just after the ticket went opens no menu.
+  await page.keyboard.press('Escape')
+  await expect(page.getByTestId('menu')).toHaveCount(0)
+  // A press held on open land holds the days (once the ticket's shade has gone with it).
+  await expect(page.locator('#ui .shade')).toBeHidden()
+  const spot = await page.evaluate(() => { for (let fy = 0.2; fy < 0.9; fy += 0.02) for (let fx = 0.05; fx < 0.95; fx += 0.03) { const x = innerWidth * fx, y = innerHeight * fy; if (document.elementFromPoint(x, y)?.tagName === 'CANVAS') return { x, y } } return null })
+  expect(spot, await page.evaluate(() => { const e = document.elementFromPoint(innerWidth / 2, innerHeight / 2) as HTMLElement | null; return `${e?.tagName}.${e?.className}` })).not.toBeNull()
+  await page.mouse.move(spot!.x, spot!.y)
+  await page.mouse.down()
+  const d0 = await game<number>(page, 'app.campaign.season.day')
+  await page.waitForTimeout(2500)
+  expect(await game<number>(page, 'app.campaign.season.day')).toBe(d0)
+  await page.mouse.up()
+  await expect.poll(() => game<number>(page, 'app.campaign.season.day'), { timeout: 15_000 }).toBeGreaterThan(d0)
   expect(errors, errors.join('\n')).toEqual([])
 })

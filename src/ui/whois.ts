@@ -36,7 +36,7 @@ function thingWords(c: S.Campaign, t: Thing): { name: string; line: string; glyp
       const name = t.kind === 'tractor' ? (t.k ? `Your ${t.k === 1 ? 'second' : 'third'} tractor` : 'Your tractor') : 'Your truck'
       const holder = t.holder >= 0 ? who(t.holder) : ''
       const job = holder && c.season ? c.season.jobs.find(j => c.crew.find(u => u.id === t.holder)?.job === j.id) : undefined
-      return { name, glyph: t.kind === 'tractor' ? 'machine' : 'haul', line: holder ? `With ${holder}${job ? `: ${jobText(job, c, job.building).replace(/^./, x => x.toLowerCase())}` : ''}.` : c.phase === 'season' ? 'In the shed: free for whoever needs it.' : 'In the shed until the season.' }
+      return { name, glyph: t.kind === 'tractor' ? 'machine' : 'haul', line: holder ? `With ${holder}${job ? `: ${jobText(job, c, job.building).replace(/^./, x => x.toLowerCase())}` : ''}.` : c.phase === 'season' ? 'Nobody on it now: free for whoever needs it next, where it was left.' : 'In the shed until the season.' }
     }
     case 'asking': {
       const a = c.applicants[t.k]

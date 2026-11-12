@@ -21,9 +21,30 @@ function farm(seed: number): { w: World; c: Campaign } {
   return { w, c }
 }
 
+function phaseOf(c: Campaign): string {
+  return c.phase
+}
+
 function playing(c: Campaign): boolean {
   return c.phase === 'season' && !S.seasonDone(c)
 }
+
+describe('planting', () => {
+  it('the routine plants only on soil the planting rule passes: what the card and the slip read', () => {
+    let planted = 0
+    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
+      const { w, c } = farm(seed)
+      for (let g = 0; g < 120 && playing(c); g++) {
+        const s = c.season!
+        const soil = S.plantReady(w, c, 0)
+        const ev = ok(w, c, { t: 'day' }).events.filter(e => e.type === 'planted')
+        planted += ev.length
+        for (const e of ev) expect(soil.soilT, `seed ${seed} ${S.formatDay(c.year, s.day - 1)} ${S.FIELD_NAMES[e.field]}`).toBeGreaterThanOrEqual(soil.need)
+      }
+    }
+    expect(planted).toBeGreaterThan(20)
+  })
+})
 
 describe('spraying', () => {
   it('the lone farmer on a first-year farm does every kind of work, and takes every spray ordered', () => {
@@ -288,5 +309,151 @@ describe('the dig and the kill left to the crew', () => {
         ok(w, c, { t: 'day' })
       }
     }
+  })
+})
+
+describe('telegrams', () => {
+  it('a week between telegrams but for a breakdown, and a neighbour asks after each person only once', () => {
+    let poaches = 0
+    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
+      const w = S.climateWorld(base, seed)
+      const c = S.createCampaign(w, { seed, startYear: S.FARM_YEAR0 + 1 })
+      c.cash = 200000
+      ok(w, c, { t: 'hire', kind: 'hand' })
+      ok(w, c, { t: 'hire', kind: 'hand' })
+      const asked = new Set<number>()
+      for (let y = 0; y < 3 && c.phase === 'plan'; y++) {
+        ok(w, c, { t: 'begin' })
+        let last = -99
+        for (let g = 0; g < 300 && playing(c); g++) {
+          for (const e of ok(w, c, { t: 'day' }).events) {
+            if (e.type !== 'incident') continue
+            const inc = c.incidents.find(i => i.id === e.data?.incident)!
+            if (inc.kind === 'breakdown') continue
+            expect(e.day - last, `seed ${seed} ${c.year} ${inc.kind}`).toBeGreaterThanOrEqual(S.TELEGRAM_GAP)
+            last = e.day
+            if (inc.kind === 'poach') {
+              poaches++
+              expect(asked.has(inc.unit!), `seed ${seed} ${c.year}: asked after ${inc.unit} again`).toBe(false)
+              asked.add(inc.unit!)
+              // Kept on at the neighbour's wage, so they are there to be asked after again.
+              ok(w, c, { t: 'answer', incident: inc.id, choice: 'match' })
+            }
+          }
+        }
+        if (phaseOf(c) === 'season') ok(w, c, { t: 'endSeason' })
+        while (phaseOf(c) === 'cellar') ok(w, c, { t: 'month' })
+        if (phaseOf(c) === 'ledger') ok(w, c, { t: 'next' })
+      }
+    }
+    expect(poaches).toBeGreaterThan(2)
+  })
+})
+
+describe('the year-end figure through the harvest', () => {
+  it('neither the dig nor a sale moves what the farm would have: the crop lifted counts until it is weighed', () => {
+    for (const seed of [1, 2, 3]) {
+      const { w, c } = farm(seed)
+      let prev = S.moneyNow(w, c).after, lifting = 0
+      for (let g = 0; g < 300 && playing(c); g++) {
+        ok(w, c, { t: 'day' })
+        const now = S.moneyNow(w, c).after
+        const at = `seed ${seed} ${S.formatDay(c.year, c.season!.day)}`
+        // A day of digging and hauling: the estimate of what is still in the ground may move a little, no more.
+        if (c.season!.fields.some(f => f.status === 'digging' || (f.status === 'dug' && !f.weighed))) {
+          lifting++
+          expect(Math.abs(now - prev), at).toBeLessThan(3000)
+        }
+        prev = now
+        for (const l of S.openLots(c)) {
+          if (!c.season!.fields[l.field].weighed) continue
+          ok(w, c, { t: 'sell', lot: l.id, frac: 1 })
+          const sold = S.moneyNow(w, c).after
+          expect(Math.abs(sold - prev), `${at}: sold`).toBeLessThan(1)
+          prev = sold
+        }
+      }
+      expect(lifting).toBeGreaterThan(5)
+    }
+  })
+
+  it('the crop in the ground is counted at what the weigh-in brings, with the give-or-take that holds it', () => {
+    const slides: number[] = []
+    let held = 0
+    for (let seed = 1; seed <= 12; seed++) {
+      const { w, c } = farm(seed)
+      let before: S.MoneyNow | null = null
+      for (let g = 0; g < 400 && playing(c); g++) {
+        for (const a of S.advise(w, c)) if (a.act !== 'wait' && a.act !== 'close' && a.act !== 'sell') S.apply(w, c, { t: 'job', kind: a.act, field: a.field })
+        // The evening before the digger first goes in: what the farm would have, and give or take how much.
+        if (!before && c.season!.jobs.some(j => j.kind === 'dig')) before = S.moneyNow(w, c)
+        ok(w, c, { t: 'day' })
+      }
+      const end = S.moneyNow(w, c)
+      expect(before, `seed ${seed}`).not.toBeNull()
+      expect(end.growing).toBe(0)
+      slides.push((end.after - before!.after) / before!.growing)
+      if (end.after >= before!.range.lo && end.after <= before!.range.hi) held++
+      expect(before!.range.lo).toBeLessThan(before!.after)
+      expect(before!.range.hi).toBeGreaterThan(before!.after)
+    }
+    const mean = slides.reduce((a, b) => a + b, 0) / slides.length
+    // Across farms the figure neither promises nor holds back: the dig moves it by no more than a few percent on average.
+    expect(Math.abs(mean), `mean ${mean}`).toBeLessThan(0.03)
+    expect(held).toBeGreaterThanOrEqual(11)
+  })
+})
+
+describe('the kill day, ahead and after', () => {
+  it('a kill a day or three before it was due counts as asked; more is early by its days', () => {
+    const { w, c } = farm(1)
+    for (let g = 0; g < 300 && playing(c) && !c.season!.fields.some(f => f.tiDay >= 0 && f.status === 'growing'); g++) ok(w, c, { t: 'day' })
+    const i = c.season!.fields.findIndex(f => f.tiDay >= 0 && f.status === 'growing')
+    const f = c.season!.fields[i]
+    const late = S.dayIndex(c.year, S.KILL_BY.month, S.KILL_BY.dom)
+    f.matureDay = -1
+    delete f.killAsked
+    f.killDay = late - 1
+    expect(S.killTiming(c, i)).toEqual({ asked: late, killed: late - 1, early: 0, why: 'late' })
+    f.killDay = late - S.KILL_GRACE
+    expect(S.killTiming(c, i).early).toBe(0)
+    f.killDay = late - S.KILL_GRACE - 1
+    expect(S.killTiming(c, i)).toEqual({ asked: -1, killed: late - S.KILL_GRACE - 1, early: S.KILL_GRACE + 1, why: '' })
+    // Asked for on a day, killed two days before it: as asked, with the coach's reason.
+    f.killAsked = late - 10
+    f.killWhy = 'made'
+    f.killDay = late - 12
+    expect(S.killTiming(c, i)).toEqual({ asked: late - 10, killed: late - 12, early: 0, why: 'made' })
+  })
+
+  it('each field says ahead of time about when the coach will ask for the kill, and it comes about then', () => {
+    let near = 0, compared = 0
+    for (const seed of [1, 2, 3, 4, 5, 6]) {
+      const { w, c } = farm(seed)
+      const ahead = new Map<number, number>()
+      for (let g = 0; g < 300 && playing(c); g++) {
+        const s = c.season!
+        s.fields.forEach((f, i) => {
+          const o = S.killOutlook(c, i)
+          if (f.status !== 'growing' || f.deadDay >= 0) expect(o).toBeNull()
+          else if (f.killAsked === undefined && f.tiDay >= 0 && !ahead.has(i) && s.day >= S.dayIndex(c.year, 7, 1)) {
+            // From August 1: a day ahead, not passed, and asked: false until the coach asks.
+            expect(o!.asked).toBe(false)
+            expect(o!.day).toBeGreaterThanOrEqual(s.day)
+            ahead.set(i, o!.day)
+          }
+          if (o?.asked) expect(o.day).toBeLessThanOrEqual(s.day)
+        })
+        ok(w, c, { t: 'day' })
+      }
+      for (const [i, day] of ahead) {
+        const f = c.season!.fields[i]
+        if (f.killAsked === undefined || (f.killWhy !== 'made' && f.killWhy !== 'late')) continue
+        compared++
+        if (Math.abs(f.killAsked - day) <= 7) near++
+      }
+    }
+    expect(compared).toBeGreaterThan(5)
+    expect(near / compared).toBeGreaterThanOrEqual(0.8)
   })
 })

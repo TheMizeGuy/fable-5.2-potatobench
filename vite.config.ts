@@ -17,5 +17,6 @@ export default defineConfig({
       },
     },
   },
-  test: { include: ['tests/**/*.test.ts'], environment: 'node' },
+  // The simulation's whole-farm tests take a few seconds each alone and longer when the suite runs in parallel.
+  test: { include: ['tests/**/*.test.ts'], environment: 'node', testTimeout: 20000 },
 })

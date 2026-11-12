@@ -7,7 +7,7 @@ import * as S from '../sim/index.ts'
 import { yardCard, YARD_TITLE } from './build.ts'
 import { commandCard } from './card.ts'
 import { EXIT_MS, patch, unname, type Ctx, type Screen } from './core.ts'
-import { openCrew, unitBar } from './crew.ts'
+import { fates, openCrew, unitBar } from './crew.ts'
 import { h, s } from './dom.ts'
 import * as F from './fmt.ts'
 import { icon } from './icons.ts'
@@ -203,6 +203,30 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   }
 
   let foot = { key: '', bottom: 0 }
+  // An alert that lies over a tag or a stamp lets the press through to it, faded: a press meant for a stamp never
+  // opens what an alert goes to (10).
+  let clearAt = 0
+  function clearLand(): void {
+    const now = performance.now()
+    if (now - clearAt < 120) return
+    clearAt = now
+    const tags = P.boxes()
+    for (const a of notesSlot.querySelectorAll<HTMLElement>('.alert')) {
+      const r = a.getBoundingClientRect()
+      const over = !!r.width && tags.some(t => r.left < t.right && r.right > t.left && r.top < t.bottom && r.bottom > t.top)
+      a.classList.toggle('over-land', over)
+    }
+  }
+  // The wheel over the list and the time book zooms the land, as it does over the land itself; a pop that scrolls
+  // keeps its own wheel.
+  crew.addEventListener('wheel', (e: WheelEvent) => {
+    const t = e.target as HTMLElement
+    if (t.closest?.('.q-pop')) return
+    const land = document.getElementById('field')
+    if (!land) return
+    e.preventDefault()
+    land.dispatchEvent(new WheelEvent('wheel', { deltaX: e.deltaX, deltaY: e.deltaY, deltaMode: e.deltaMode, clientX: e.clientX, clientY: e.clientY, ctrlKey: e.ctrlKey, bubbles: true, cancelable: true }))
+  }, { passive: false })
   // The first planting and the first dig the crew starts by itself this season are said, with a way to see them.
   const startedSaid = new Set<string>()
   function sayCrewStarts(c: S.Campaign): void {
@@ -224,7 +248,28 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       })
     }
   }
-  let frostWarned = -1
+  const killSaid = new Set<string>()
+  function sayKillDates(c: S.Campaign): void {
+    const s0 = c.season
+    if (!s0) return
+    const tomorrow = S.formatDay(s0.year, s0.day + 1)
+    for (const p of fates(app.world, c).pressing) {
+      if (p.kind !== 'kill' || p.job >= 0) continue
+      const date = /on ([A-Z][a-z]+ \d+)/.exec(p.inWay)?.[1] ?? ''
+      const soon = date === tomorrow
+      const key = `${c.seed}.${c.year}.${p.field}.${soon ? 'soon' : 'set'}`
+      if (killSaid.has(key)) continue
+      killSaid.add(key)
+      const name = S.FIELD_NAMES[p.field]
+      const due = S.killOutlook(c, p.field)
+      ctx.notes.push({
+        level: soon ? 'warn' : 'info', glyph: 'kill', ttl: 14000, field: p.field, day: s0.day,
+        text: `${name}: ${due && !soon ? `kill due about ${S.formatDay(s0.year, due.day, true)}; ` : ''}the crew kills the vines ${soon ? 'tomorrow' : `on ${date}`}. Show me`,
+        full: `${F.localize(p.inWay)} Press to see the field, where they can be kept up.`,
+        go: () => { app.select(p.field); app.focus(p.field) },
+      })
+    }
+  }
   // The spraying question, once a season, when blight weather first comes over leaves that are up: the clock stops
   // for it as for a telegram. Put away unanswered, it is not asked again by itself.
   let sprayAsked = ''
@@ -241,22 +286,10 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     if (ev.type === 'yard' || ev.type === 'unit' || ev.type === 'select') ctx.dirty()
     else if (ev.type === 'events') {
       for (const e of ev.events) if (e.type === 'sample') { const staged = app.speed < 3; void ctx.view.whenShown('sample', e.field).then(() => { if (app.screen === 'season') openTray(e, staged) }) }
-      if (ev.dayPassed) warnFrost()
       const c0 = app.campaign
-      if (c0) sayCrewStarts(c0)
+      if (c0) { sayCrewStarts(c0); sayKillDates(c0) }
     }
   })
-
-  // A frost forecast over barrels still in the field is worth saying, once a day, where the player is looking.
-  function warnFrost(): void {
-    const c = app.campaign
-    const s0 = c?.season
-    if (!c || !s0 || frostWarned === s0.day || s0.log.some(e => e.type === 'frostBarrels' && e.day === s0.day)) return
-    const worst = S.haulInfo(app.world, c).filter(x => x.frostChance >= 40).sort((a, b) => b.cwt - a.cwt)[0]
-    if (!worst) return
-    frostWarned = s0.day
-    ctx.notes.push({ level: 'warn', glyph: 'frost', text: `${worst.name}: frost tonight, ${F.mass(worst.cwt)} in barrels`, full: `A ${worst.frostChance}% chance of frost tonight, with ${F.mass(worst.cwt)} still in barrels in ${worst.name}. A hard frost takes a fifth of it.`, field: worst.field, day: s0.day })
-  }
 
   // ------------------------------------------------------------ tags, stamps and the tips
 
@@ -496,6 +529,9 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       // Space is the clock wherever the focus rests on this screen, so a button left focused never takes it instead.
       if (e.ctrlKey || t.closest?.('input, textarea, select, [role="slider"], .dialog')) return false
       if (onControl) (t.closest?.('button, a') as HTMLElement | null)?.blur()
+      // Just after an answer set the days going by themselves, Space is taken as "go on", not as a pause: the chip
+      // that says the days are running is lit again instead.
+      if (app.speed > 0 && performance.now() - app.resumedAt < 1000) { ranAt = performance.now(); ctx.dirty(); ctx.announce(`The days are running at ${app.speed}×.`); return true }
       app.togglePause()
       return true
     }
@@ -640,14 +676,28 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
         const low = [...(book && vis(book) ? [box(book).top - LIST_ROOM] : []), ...[clockSlot].filter(vis).map(x => box(x).top)]
         foot = { key: footKey, bottom: innerHeight - Math.min(...low, innerHeight) + 6 }
       }
-      const bottom = foot.bottom
+      let bottom = foot.bottom
+      // On a phone the clock's chip under the top board frames the land as the board does.
+      el.style.setProperty('--board', `${Math.round(t)}px`)
+      const chip = [paused, running].find(x => !x.hidden && x.offsetParent !== null)
+      const tAll = (layout === 'narrow' || layout === 'short') && chip ? Math.max(t, chip.getBoundingClientRect().bottom + 4) : t
+      // On a phone or a short window there is no pointer to keep still, and little land: everything standing over the
+      // foot frames it at its real height (the list however many rows it takes, its pop, the alerts and hint, the
+      // Home key), so no tag is left under them.
+      if (layout === 'narrow' || layout === 'short') {
+        const over = [...crew.querySelectorAll<HTMLElement>('.queue, .timebook, .q-pop'), clockSlot, ...notesSlot.querySelectorAll<HTMLElement>('.alert')]
+          .filter(x => x.offsetParent !== null && x.offsetHeight > 0).map(x => x.getBoundingClientRect().top)
+        const raw = innerHeight - Math.min(...over, innerHeight) + 6
+        el.style.setProperty('--foot', `${Math.round(raw)}px`)
+        bottom = raw + (vis(homeKey) ? homeKey.offsetHeight + 10 : 0)
+      }
       // Only what always stands frames the land: a bar, a page or the grid opening on a click never moves the camera
       // (the bar steps to the other side of what it belongs to instead; a card lies over the tags). On a phone
       // the bar is a sheet over half the land, so there the land is framed above it.
       const sheet = layout === 'narrow' ? [card.el, yard.el].find(vis) : undefined
-      return [t, 0, sheet ? innerHeight - box(sheet).top + 6 : bottom, 0]
+      return [tAll, 0, sheet ? innerHeight - box(sheet).top + 6 : bottom, 0]
     },
-    frame: () => { coverCache = null; coverCache = covers(); placeBar(); P.frame(); placeYards(); people.frame(); drawSelection(); coverCache = null },
+    frame: () => { coverCache = null; coverCache = covers(); placeBar(); P.frame(); placeYards(); people.frame(); drawSelection(); clearLand(); coverCache = null },
     dispose() {
       off()
       P.dispose()

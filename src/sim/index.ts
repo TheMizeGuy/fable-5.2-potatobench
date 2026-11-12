@@ -13,7 +13,7 @@ export {
   scoutChance, SKILL_LABEL, speed, sprayCover, tiredWord, upgradePerson, willDo, xpNeed,
 } from './people.ts'
 export { hashCampaign } from './hash.ts'
-export { lotCwt, tuberWeights, type Tuber } from './harvest.ts'
+export { lotCwt, markOdds, tuberWeights, type Tuber } from './harvest.ts'
 export { basePrice, gradePrice, levelNow, lotValue, newPotatoWindow, storeOutlook, type StoreMonth } from './market.ts'
 export {
   FIELD_NAMES, JOB_LABEL, haulDistance, haulFactor, haulRate, holdsDufour, jobBlock, jobCost, jobDays, jobWait, knownHills, placeName, seasonDone, standingBy,
@@ -31,6 +31,6 @@ export {
   type ClearStage, type FieldEnv,
 } from './land.ts'
 export { advise, fieldNeeds, frostOnBarrels, type Advice } from './advice.ts'
-export { goalCosts, jobOutlook, killTiming, plantReady, moneyNow, pressing, sprayOutlook, yearStory, type GoalCost, type JobOutlook, type KillTiming, type MoneyNow, type MoneyPart, type PlantReady, type Pressing, type SprayOutlook, type YearStory } from './outlook.ts'
+export { goalCosts, jobOutlook, killOutlook, killTiming, plantReady, moneyNow, pressing, sprayOutlook, yearStory, type GoalCost, type JobOutlook, type KillOutlook, type KillTiming, type MoneyNow, type MoneyPart, type PlantReady, type Pressing, type SprayOutlook, type YearStory } from './outlook.ts'
 export { pressingWhy, waitable } from './season.ts'
 export { resting } from './people.ts'
