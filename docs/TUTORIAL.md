@@ -56,6 +56,7 @@ ends them is already true.
 | 2 | Look round the land | The season screen | The camera panned or zoomed | (the land) |
 | 3 | Turn and tip the view | The season screen | The camera turned or tipped | (the land) |
 | 4 | Read the boards | The season screen | Noted, or three days run | The forecast |
+| 4a | Open the almanac | The season screen | The almanac opened | The forecast |
 | 5 | Pick a field | The season screen | A field picked | The first potato field's tag |
 | 6 | Read a field's card | A field picked before planting is possible | Noted, the card put away, or planting begun | The card |
 | 7 | Meet your people | The season screen | Noted, a person picked, or four days run | Your face pin |
@@ -63,7 +64,9 @@ ends them is already true.
 | 9 | Hurry the quiet weeks | The clock running before the soil is warm | 3× chosen, or planting possible | 3× |
 | 10 | Give the first order | A field can be planted | A planting order on the list | That field's ringed stamp |
 | 11 | See the order taken | A planting order on the list, nothing planted | A field planted | You, on the land |
+| 11a | Routine work and your calls | A job the routine put on the list by itself | Noted, or five days run | The list |
 | 12 | Plant the rest | One field planted, others to plant | Every field planted, or several picked at once | The next stamp |
+| 13 | The list of orders | After the first order was taken, with orders waiting | Noted, or four days run | The list |
 
 Why this order: the clock is held until lesson 8, so that the first things learned are the ones a player needs to
 see anything at all (the camera), then to know where they are and what is coming (the boards and the goal slip), then
@@ -72,6 +75,16 @@ card offers Plant and seed in cold ground rots: the card itself says hold off, a
 Only then do the days run, faster through the wait, until the ringed stamp of planting day, which is the first order
 (10), seen taken (11) and repeated with the shortcut that gives one order to many fields (12). Lessons 10 to 12 come
 ahead of any of 2 to 9 not yet passed, because planting day matters more than the camera.
+
+The routine. After three blind first-time players (`scratchpad/wave3/findings.md`), the crew is being changed to take
+up routine work by itself (plant what the plan chose once the ground is fit, hill, walk the rows, pull blighted hills,
+test dig, dig, haul) while the player makes the calls (spray, water, kill the vines, sell or store). The lessons are
+written to hold either way, from state both sides have: a planting order on the list passes "Give the first order"
+whoever put it there, so with the routine on the player is never asked to order planting and goes straight to "See
+the order taken"; "Routine work and your calls" (11a) appears only when a job carries `by: 'routine'`; the order
+lessons for hilling, walking, test digs, roguing and digging appear only when their stamp does (the routine switched
+to "ask me", or no routine), and are passed over when the routine lists the job. 4a and 13 come from what the
+players never found unasked: the almanac's forecast, and how an order is put first or taken off.
 
 ### The first year (each the first time it comes)
 
@@ -89,6 +102,7 @@ ahead of any of 2 to 9 not yet passed, because planting day matters more than th
 | Dig the crop | The first digging stamp | Digging ordered or begun | Its stamp |
 | Bring the crop in | Barrels in a field | Noted, or the crop weighed | The field |
 | Sell or store the crop | The first weigh ticket open | The ticket answered (closed), or a sale | (the ticket's own fist) |
+| What the year end takes | After the first weigh ticket | Noted, five days run, or the season closed | The pass book |
 | Close out the season | The ground frozen | The season closed | Close out the season |
 | Winter in the cellar | The cellar | A month gone by | On to the next month |
 | The account book | The year end | The next spring planned | Plan year 2 |
@@ -107,6 +121,8 @@ day its stamp first appears on the land and points at that stamp.
 | The money and the loan | A later spring | The money opened | The money |
 | Start the second season | A later spring | The season begins | Start the season |
 | Give a hand an order | The season, with someone hired | A hand picked | Their face |
+| Name a foreman | After a hand was picked | Noted, or a foreman named | (their card) |
+| Who does what | The season, three or more on the farm | The work grid opened | The grid at the foot |
 | Clear woods into a field | A later season, woods or brush held | Felling ordered or under way | The tract's tag |
 | Raise a building | A later season, a building affordable | The yard picked, or a building ordered | The home yard |
 
