@@ -376,6 +376,32 @@ describe('the year-end figure through the harvest', () => {
       expect(lifting).toBeGreaterThan(5)
     }
   })
+
+  it('the crop in the ground is counted at what the weigh-in brings, with the give-or-take that holds it', () => {
+    const slides: number[] = []
+    let held = 0
+    for (let seed = 1; seed <= 12; seed++) {
+      const { w, c } = farm(seed)
+      let before: S.MoneyNow | null = null
+      for (let g = 0; g < 400 && playing(c); g++) {
+        for (const a of S.advise(w, c)) if (a.act !== 'wait' && a.act !== 'close' && a.act !== 'sell') S.apply(w, c, { t: 'job', kind: a.act, field: a.field })
+        // The evening before the digger first goes in: what the farm would have, and give or take how much.
+        if (!before && c.season!.jobs.some(j => j.kind === 'dig')) before = S.moneyNow(w, c)
+        ok(w, c, { t: 'day' })
+      }
+      const end = S.moneyNow(w, c)
+      expect(before, `seed ${seed}`).not.toBeNull()
+      expect(end.growing).toBe(0)
+      slides.push((end.after - before!.after) / before!.growing)
+      if (end.after >= before!.range.lo && end.after <= before!.range.hi) held++
+      expect(before!.range.lo).toBeLessThan(before!.after)
+      expect(before!.range.hi).toBeGreaterThan(before!.after)
+    }
+    const mean = slides.reduce((a, b) => a + b, 0) / slides.length
+    // Across farms the figure neither promises nor holds back: the dig moves it by no more than a few percent on average.
+    expect(Math.abs(mean), `mean ${mean}`).toBeLessThan(0.03)
+    expect(held).toBeGreaterThanOrEqual(11)
+  })
 })
 
 describe('the kill day, ahead and after', () => {
