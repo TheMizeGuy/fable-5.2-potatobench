@@ -1,20 +1,25 @@
 /* Winter (design/winter.html) and the year end (design/ledger.html) placed in the game, at every size. Placement and
    live states only; the look of every component is design/system.css. Both sheets sit under the top boards (--top is
-   their foot, set by the HUD) and slide up into place. */
+   their foot, set by the HUD) and slide up into place. On a desk a sheet is held by max-height alone, so it is a flex
+   box: Firefox does not shrink a grid's rows to a max-height. */
 
 /* ---------------------------------------------------------------- winter: one sheet, the work and the cellar */
 .cellar-sheet.winter { left: 0; right: 0; top: calc(var(--top, 150px) + var(--s3)); margin: 0 auto; transform: none;
   width: min(1240px, calc(100% - 2 * var(--gutter))); max-height: calc(100% - var(--top, 150px) - var(--s3) - var(--gutter));
-  display: grid; grid-template-rows: auto minmax(0, 1fr) auto; padding: var(--s4) 26px 0; animation: sh-up var(--t-sheet) var(--ease-paper); }
+  display: flex; flex-direction: column; padding: var(--s4) 26px 0; animation: sh-up var(--t-sheet) var(--ease-paper); }
+.cellar-sheet .winter-head, .cellar-sheet .winter-next { flex: none; }
 .cellar-sheet .winter-head { gap: var(--s4); }
 .cellar-sheet .winter-head .t-label { margin-bottom: 2px; }
 .cellar-sheet .w-wages { font-size: 16px; text-align: right; }
-.cellar-sheet .w-body { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); min-height: 0; }
+.cellar-sheet .w-body { display: flex; flex: 1 1 auto; min-height: 0; }
+.cellar-sheet .w-work { flex: 1.5 1 0; min-width: 0; }
+.cellar-sheet .w-cellar { flex: 1 1 0; min-width: 0; }
 .cellar-sheet .w-work, .cellar-sheet .w-cellar { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; padding-bottom: var(--s3); }
 .cellar-sheet .w-work { container: work / inline-size; padding-right: var(--s5); }
 .cellar-sheet .w-cellar { container: crop / inline-size; padding: var(--s3) 0 var(--s3) var(--s5); border-left: 1px solid var(--rule-red); }
 /* the farmer alone: the work takes less of the page, and the piles in store lie two by two */
-.cellar-sheet .w-body.few { grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr); }
+.cellar-sheet .w-body.few > .w-work { flex-grow: 1; }
+.cellar-sheet .w-body.few > .w-cellar { flex-grow: 1.45; }
 @container crop (min-width: 600px) { .cellar-sheet .lots { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--s5); } }
 .cellar-sheet .w-rows { display: grid; }
 /* a line of the time book: one row on a wide page, the words under the choice on a narrower one */
@@ -96,7 +101,7 @@
 .cellar-sheet[data-layout='narrow'] .lot-actions .btn { flex: 1 1 auto; }
 /* a phone on its side: the heading and the way on share one row over the scrolling page */
 .cellar-sheet.winter[data-layout='short'] { left: max(10px, env(safe-area-inset-left, 0px)); right: max(10px, env(safe-area-inset-right, 0px)); width: auto; margin: 0;
-  top: calc(var(--top, 110px) + 8px); bottom: 8px; max-height: none; padding: 6px var(--s4) 0; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto minmax(0, 1fr); }
+  top: calc(var(--top, 110px) + 8px); bottom: 8px; max-height: none; padding: 6px var(--s4) 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto minmax(0, 1fr); }
 .cellar-sheet[data-layout='short'] .winter-head { grid-column: 1; grid-row: 1; padding-bottom: 6px; }
 .cellar-sheet[data-layout='short'] .winter-head .t-label { display: none; }
 .cellar-sheet[data-layout='short'] .winter-head .t-title { font-size: 22px; }
@@ -107,10 +112,11 @@
 
 /* ---------------------------------------------------------------- the year end: the account book, open */
 .book.ledger-sheet { left: 0; right: 0; top: calc(var(--top, 140px) + var(--s3)); margin: 0 auto; transform: none; width: min(1080px, calc(100% - 2 * var(--gutter)));
-  max-height: calc(100% - var(--top, 140px) - var(--s3) - var(--gutter)); grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr);
+  max-height: calc(100% - var(--top, 140px) - var(--s3) - var(--gutter)); display: flex; flex-direction: column;
   animation: sh-up var(--t-sheet) var(--ease-paper); }
 .book .book-tabs { display: none; }
-.book .book-leaves { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); min-height: 0; }
+.book .book-leaves { display: flex; flex: 1 1 auto; min-height: 0; }
+.book .book-leaves > .page-l, .book .book-leaves > .page-r { flex: 1 1 0; min-width: 0; }
 .book .page-l { min-height: 0; display: flex; flex-direction: column; gap: var(--s3); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
 .book .page-r { min-height: 0; }
 .book .page-l:focus-visible, .book .page-body:focus-visible { outline-offset: -3px; }
@@ -172,11 +178,12 @@
 }
 
 /* a phone held upright: one page at a time, the page names above to turn it, the way on always at the foot */
-.book.ledger-sheet[data-layout='narrow'], .book.ledger-sheet[data-layout='short'] { left: 10px; right: 10px; width: auto; margin: 0; bottom: 10px; max-height: none; padding: 6px 6px 76px; }
+.book.ledger-sheet[data-layout='narrow'], .book.ledger-sheet[data-layout='short'] { left: 10px; right: 10px; width: auto; margin: 0; bottom: 10px; max-height: none; padding: 6px 6px 76px;
+  display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
 .book.ledger-sheet[data-layout='narrow'] { top: max(calc(var(--top, 240px) + 10px), 30%); }
 .book[data-layout='narrow'] .book-tabs, .book[data-layout='short'] .book-tabs { display: grid; margin-bottom: 6px; }
 .book[data-layout='narrow'] .book-tabs .btn, .book[data-layout='short'] .book-tabs .btn { min-height: var(--touch); font-size: var(--t-caption); }
-.book[data-layout='narrow'] .book-leaves, .book[data-layout='short'] .book-leaves { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 100%;
+.book[data-layout='narrow'] .book-leaves, .book[data-layout='short'] .book-leaves { display: grid; grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 100%;
   overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: none; }
 .book[data-layout='narrow'] .book-leaves::-webkit-scrollbar, .book[data-layout='short'] .book-leaves::-webkit-scrollbar { display: none; }
 .book[data-layout='narrow'] .page-l, .book[data-layout='narrow'] .page-r,
