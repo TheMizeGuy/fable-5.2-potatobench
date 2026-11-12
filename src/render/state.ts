@@ -89,6 +89,7 @@ export interface FarmVis {
   dufour: boolean          // Dufour land is held, so its yard is the farm's
   equipment: sim.UpgradeId[]
   incidents: { kind: sim.IncidentKind; unit: number }[]
+  applicants: number       // people asking for work this spring
 }
 
 export interface Snapshot {
@@ -229,6 +230,7 @@ export function snapshot(app: App): Snapshot {
     dufour: sim.holdsDufour(c),
     equipment: (Object.keys(c.upgrades) as sim.UpgradeId[]).filter(k => c.upgrades[k]),
     incidents: c.incidents.map(i => ({ kind: i.kind, unit: i.unit ?? -1 })),
+    applicants: mode === 'plan' ? c.applicants.length : 0,
   }
   return {
     mode, year: c.year, day, seasonDay: s ? s.day : -1, month: c.month, fields, weather, worked, units, farm,
@@ -282,7 +284,7 @@ function showcase(): Snapshot {
     mode: 'title', year: 1987, day: 196, seasonDay: -1, month: 0, fields,
     weather: { sky: 'clear', tmin: 13, tmax: 25, wind: 2.6, wdir: 250, prcp: 0, wetH: 6, snwd: 0 },
     worked: [], units: [{ id: 0, kind: 'farmer', name: '', at: -1, to: -1, along: 1, job: null, worked: [], rig: '', tired: 0, mood: 1, hurt: false, resting: false, winter: 'off', winterField: -1 }],
-    farm: { buildings: [], logs: 0, stone: 0, pond: 0, standOpen: false, tractors: 1, broken: 0, truck: false, pickers: false, dufour: false, equipment: [], incidents: [] },
+    farm: { buildings: [], logs: 0, stone: 0, pond: 0, standOpen: false, tractors: 1, broken: 0, truck: false, pickers: false, dufour: false, equipment: [], incidents: [], applicants: 0 },
     next: null, frozen: false, rime: null, wetGround: 0.1,
   }
 }

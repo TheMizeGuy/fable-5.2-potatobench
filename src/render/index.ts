@@ -3,9 +3,8 @@
 import { PCFShadowMap, Raycaster, Scene, Triangle, Vector2, Vector3, WebGLRenderer, type Object3D } from 'three'
 import type { App } from '../game/app.ts'
 import type { CreateFieldView, FieldView } from '../game/contracts.ts'
-import { FIELD_COUNT, HILLS } from '../sim/index.ts'
+import { CWT_PER_HILL_GRAM, FIELD_COUNT, HILLS } from '../sim/index.ts'
 import { CameraRig, type Pose, type Viewport } from './camera.ts'
-import { Kit } from './crew.ts'
 import { copyEnv, easeEnv, envTarget, light, makeEnv, makeLight } from './env.ts'
 import { createFallbackView } from './fallback.ts'
 import { Fields, MARK_WIDE, PIXEL, UI_GAIN, type HillDisplay } from './fields.ts'
@@ -111,8 +110,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   const props = new Props()
   const fields = new Fields(leafTex, flowerTex)
   const harvest = new Harvest()
-  const kit = new Kit()
-  const crews = new Crews(kit)
+  const crews = new Crews()
   const particles = new Particles(puffTex)
   const weather = new Weather()
   const birds = new Birds()
@@ -319,8 +317,13 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       if (st === 'dug' && !dugSince.has(i)) dugSince.set(i, next.seasonDay)
       if (st !== 'dug') dugSince.delete(i)
     }
-    const barrels = next.fields.map((f, i) => next.mode === 'season' && (f.status === 'digging' || (f.status === 'dug' && next.seasonDay - (dugSince.get(i) ?? next.seasonDay) < 4)))
-    harvest.setBarrelFields(barrels, (f, h) => shown[f][h].look.kind === 'dug' && next.fields[f].hills[h].kind === 'dug')
+    // Barrels stand in a field until its crop is hauled in, thinning as the loads go.
+    const barrels = next.fields.map(f => next.mode === 'season' && (f.status === 'digging' || f.inField > 0.5))
+    const left = next.fields.map(f => {
+      const dug = f.grams * f.hills.reduce((n, h) => n + (h.kind === 'dug' ? 1 : 0), 0) * CWT_PER_HILL_GRAM
+      return f.status === 'digging' || dug <= 0 ? 1 : clamp(f.inField / dug, 0, 1)
+    })
+    harvest.setBarrelFields(barrels, (f, h) => shown[f][h].look.kind === 'dug' && next.fields[f].hills[h].kind === 'dug', left)
     fields.setTargets(next.fields, shown)
     envTarget(next, envT)
     samples.clear()
@@ -475,11 +478,12 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     if (rig.idle < 0.2 && framing !== 'free') framing = 'free'
     rig.update(dt, vp, reduced, snap.mode === 'title' && framing === 'title' && !reduced ? Math.sin(time * 0.05) : 0)
     const cam = rig.camera
+    crews.shudder(cam, dt, reduced)
     sky.dome.position.copy(cam.position)
     const t0 = performance.now()
     crews.place({
       dt, dayT, advancing: app.speed > 0, pace: replayPace, time, reduced, idle: snap.mode !== 'season' && snap.mode !== 'title',
-      season: snap.mode === 'season', dist: rig.cur.dist, dust: env.dry, picked: app.unit, particles, passed,
+      season: snap.mode === 'season', dist: rig.cur.dist, dust: env.dry, picked: app.unit, particles, passed, snap, env, camera: cam,
     })
     // Smoke from the kitchen chimney on cold days.
     smokeAt += dt * pace
@@ -583,8 +587,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   }
 
   function unitAnchor(id: number): { x: number; y: number; visible: boolean } {
-    const u = crews.where().units.find(x => x.id === id)
-    return u ? screenAt(u.x, groundY(u.x, u.z) + 1.9, u.z) : { x: 0, y: 0, visible: false }
+    return crews.anchor(id, far) ? screenAt(far.x, far.y, far.z) : { x: 0, y: 0, visible: false }
   }
 
   function yardAnchor(yard: number): { x: number; y: number; visible: boolean } {
@@ -642,7 +645,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       info() {
         const w = crews.where()
         return {
-          mode: snap.mode, dayT, pending: pending.length, segs: crews.segsInfo(), tractor: w.tractor, farmer: w.farmer, units: w.units,
+          mode: snap.mode, dayT, pending: pending.length, segs: crews.segsInfo(), tractor: w.tractor, farmer: w.farmer, units: w.units, rigs: w.rigs, parts: crews.prims.count,
           fields: snap.fields.map(f => f.status), held: snap.fields.map(f => f.held), tier, framing, rings: fields.ringing(), lods: fields.lods(),
         }
       },
@@ -657,9 +660,11 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       unitAt(id: number) {
         const u = crews.where().units.find(x => x.id === id)
         if (!u) return null
+        const at = unitAnchor(id)
         const v = new Vector3(u.x, fieldBaseY(u.z) + 0.5, u.z).project(rig.camera)
         const vp = viewport()
-        return { x: (v.x + 1) / 2 * vp.w, y: (1 - v.y) / 2 * vp.h }
+        // on the body: half way between the ground under them and the point over their head
+        return { x: ((v.x + 1) / 2 * vp.w + at.x) / 2, y: ((1 - v.y) / 2 * vp.h + at.y) / 2 }
       },
       // What a click at a point on the screen would pick.
       pickAt: (x: number, y: number) => ({ field: pick(x, y), unit: pickUnit(x, y), yard: pickYard(x, y), mode: snap.mode, held: snap.fields.map(f => f.held), available: snap.fields.map(f => f.available) }),
@@ -701,7 +706,6 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       fields.dispose()
       harvest.dispose()
       crews.dispose()
-      kit.dispose()
       particles.dispose()
       weather.dispose()
       birds.dispose()

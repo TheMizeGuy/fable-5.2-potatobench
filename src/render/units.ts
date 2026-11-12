@@ -1,42 +1,80 @@
-// Every crew on the map: the farmer with the red tractor (and on foot for the walking jobs), the operator on the grey
-// second tractor, the hands on foot. Each plays out its own day along the farm's roads; a marker over it holds it in
-// view from the strategic camera, and a click on it picks it.
+// Everyone and everything that works on the map: each person of the farm, on foot, on a tractor or in the truck,
+// playing out their own day along the farm's roads; the machines, kept where they were left; the work staged at each
+// place; and the callers, pickers and animals that come with it. A ring on the ground marks who is picked, and a click
+// on a person or the machine they are on picks them.
 import {
-  BufferAttribute, Group, InstancedBufferAttribute, InstancedBufferGeometry, Mesh, ShaderMaterial, Vector3, type PerspectiveCamera,
+  BufferAttribute, Color, Group, InstancedBufferAttribute, InstancedBufferGeometry, Matrix4, Mesh, ShaderMaterial, Vector3, type PerspectiveCamera,
 } from 'three'
 import type { UnitKind } from '../sim/index.ts'
-import { FARMER_DRESS, GREY, HAND_DRESS, Kit, RED, Tractor, Walker, implementFor, stoop, stride } from './crew.ts'
+import { COWS, DEER, drawBeast, drawCrow } from './animals.ts'
+import { Pose, dressFor, dressOf, drawFigure, drawn, figureMatrix, forking, sit, stand, stoop, swing, walk, type Dress } from './crew.ts'
+import type { Env } from './env.ts'
 import { UI_GAIN, type HillDisplay } from './fields.ts'
-import { ROAD } from './layout.ts'
-import { clamp, smooth } from './noise.ts'
+import { HOUSE, ROAD, hillPos, route, type Pt } from './layout.ts'
+import { clamp, hash2, smooth } from './noise.ts'
 import type { Particles } from './particles.ts'
-import type { Snapshot } from './state.ts'
-import { Poly, heightAt, planDay, restAt, type Pt, type Reveal, type Seg } from './work.ts'
+import { Prims } from './prims.ts'
+import { Stage, type StageFrame, type Worker } from './stage.ts'
+import type { Snapshot, UnitVis } from './state.ts'
+import { Car, GRIME, PAINTS, Tractor, implementFor, type MachineFrame, type MachineState } from './tractor.ts'
+import {
+  BUYER, CALLER, GATE, MACHINE_JOBS, OFF_FARM, Poly, heightAt, idleSpot, machineHome, planDay, restAt, sickSpot, sundaySpot,
+  type CrewFrom, type Reveal, type Ride, type Seg, type Spot,
+} from './work.ts'
 
 // A test dig and a day's digging keep their own time: the drive to the field, then the work.
 const STAGE_DRIVE_S = 0.5
 const STAGE_S = { sample: 2, dig: 1.7 }
-const MAX_UNITS = 8
+const MAX_RINGS = 48
 
 export type PendingReveal = Reveal & { unit: number; seg: number }
 
-interface Unit {
+interface Rig {
+  kind: 'tractor' | 'truck'
+  machine: Tractor | Car
+  x: number
+  z: number
+  heading: number
+  holder: number           // the person who has it, or -1
+  home: Spot
+  broken: boolean
+  moved: number            // this frame
+  turn: number
+  state: MachineState
+  drawnAt: number          // the frame it was last placed by its driver
+}
+
+interface Actor {
   id: number
   kind: UnitKind
   slot: number
-  tractor: Tractor | null
-  walker: Walker
+  dress: Dress
+  coat: Dress
   segs: Seg[]
   clockSeg: number
   segClock: number
-  pos: Pt                 // the tractor, or the person when there is no tractor
+  x: number
+  z: number
   heading: number
-  travelled: number
-  walk: Pt                // the person when off the tractor
-  walkHeading: number
-  walking: boolean        // the farmer is off the tractor
-  shown: number           // how much of the unit is drawn, 0..1, as it is hired or let go
+  rig: Rig | null          // the machine in hand
+  aboard: boolean
+  shown: number
+  gait: number
+  goal: (Spot & { seat?: number }) | null
+  state: 'work' | 'idle' | 'sunday' | 'hurt'
+  post: string             // the work stood at outside the season (winter), or ''
+  tired: number
+  style: number
+  pose: Pose
+  worker: Worker
+  head: Vector3
+  scale: number
+  next: number[]           // per segment: the next reveal not yet passed
 }
+
+interface Leaver { dress: Dress; path: Poly; at: number; gait: number }
+interface Picker { dress: Dress; x: number; z: number; tx: number; tz: number; wait: number; heading: number; gait: number; bent: number }
+interface Gang { field: number; pickers: Picker[]; recent: Pt[]; crows: { x: number; z: number; fx: number; fz: number; tx: number; tz: number; t: number; wait: number; h: number }[]; idle: number }
 
 export interface CrewFrame {
   dt: number
@@ -51,159 +89,269 @@ export interface CrewFrame {
   dust: number
   picked: number          // app.unit
   particles: Particles
+  snap: Snapshot
+  env: Env
+  camera: PerspectiveCamera
   // the hills of this crew's segment `seg` (and all before it) up to arc length `arc` along its path have been passed
   passed: (unit: number, seg: number, arc: number) => void
 }
 
+const M = new Matrix4(), V = new Vector3(), V2 = new Vector3()
+const PICKER_SHIRTS = ['#b8402e', '#2f6f9f', '#d9a441', '#e7e0cf', '#2e7d6b', '#c96f2c', '#a23b62', '#8a9a3b', '#6b4c8a']
+
 export class Crews {
   readonly group = new Group()
-  private kit: Kit
-  private units: Unit[] = []
-  private markerGeo: InstancedBufferGeometry
-  private markerMat: ShaderMaterial
-  private marker: Mesh
-  private mAt: InstancedBufferAttribute
-  private mInfo: InstancedBufferAttribute
+  readonly prims = new Prims()
+  private stage = new Stage()
+  private actors: Actor[] = []
+  private rigs: Rig[] = []
+  private leavers: Leaver[] = []
+  private gangs = new Map<number, Gang>()
+  private callers: { pickup: Car | null; sedan: Car | null } = { pickup: null, sedan: null }
+  private ringGeo: InstancedBufferGeometry
+  private ringMat: ShaderMaterial
+  private rAt: InstancedBufferAttribute
+  private rInfo: InstancedBufferAttribute
+  private rCol: InstancedBufferAttribute
+  private rings = 0
   private v = new Vector3()
+  private frameNo = 0
+  private mode = ''
+  private shake = 0
+  private shakeT = 9
+  private deer = { x: 6.5, z: -22.3, away: 0, t: 0 }
+  private cows = COWS.flatMap((_, k) => [0, 1, 2].map(n => ({ kind: k, x: 37 + 9 * (hash2(k * 3 + n, 5) - 0.5), z: 10 + 9 * (hash2(k * 3 + n, 9) - 0.5), h: hash2(k, n) * 6.28, t: hash2(n, k + 3) * 20, tx: 0, tz: 0, walking: false })))
+  private extras: Dress[] = []
   // The latest a staged dig still needs the day clock to wait at, or -1.
   stageHold = -1
 
-  constructor(kit: Kit) {
-    this.kit = kit
-    // A pin over each crew: a disc with the crew's sign in it, a fixed size on screen, seen through anything.
+  constructor() {
+    // A ring on the ground under each person, in the colour of their shirt; brighter and doubled on the one picked.
     const g = new InstancedBufferGeometry()
-    g.setAttribute('position', new BufferAttribute(new Float32Array([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0]), 3))
-    g.setIndex([0, 1, 2, 0, 2, 3])
-    this.mAt = new InstancedBufferAttribute(new Float32Array(MAX_UNITS * 3), 3)
-    this.mInfo = new InstancedBufferAttribute(new Float32Array(MAX_UNITS * 3), 3)
-    g.setAttribute('aAt', this.mAt)
-    g.setAttribute('aInfo', this.mInfo)
+    g.setAttribute('position', new BufferAttribute(new Float32Array([-1, 0, -1, 1, 0, -1, 1, 0, 1, -1, 0, 1]), 3))
+    g.setIndex([0, 2, 1, 0, 3, 2])
+    this.rAt = new InstancedBufferAttribute(new Float32Array(MAX_RINGS * 4), 4)
+    this.rInfo = new InstancedBufferAttribute(new Float32Array(MAX_RINGS * 2), 2)
+    this.rCol = new InstancedBufferAttribute(new Float32Array(MAX_RINGS * 3), 3)
+    g.setAttribute('aAt', this.rAt)
+    g.setAttribute('aInfo', this.rInfo)
+    g.setAttribute('aCol', this.rCol)
     g.instanceCount = 0
-    this.markerGeo = g
-    this.markerMat = new ShaderMaterial({
-      uniforms: { uGain: UI_GAIN, uPx: { value: 0.001 }, uAspect: { value: 1 } },
+    this.ringGeo = g
+    this.ringMat = new ShaderMaterial({
+      uniforms: { uGain: UI_GAIN, uTime: { value: 0 } },
       transparent: true,
-      depthTest: false,
       depthWrite: false,
       vertexShader: /* glsl */ `
-        attribute vec3 aAt;
-        attribute vec3 aInfo;      // kind (0 farmer, 1 operator, 2 hand), picked, how strongly shown
-        uniform float uPx; uniform float uAspect;
-        varying vec2 vUv; varying vec3 vInfo;
+        attribute vec4 aAt;        // where, and how wide
+        attribute vec2 aInfo;      // how strongly shown, picked
+        attribute vec3 aCol;
+        varying vec2 vUv; varying vec2 vInfo; varying vec3 vCol;
         void main() {
-          vUv = position.xy;
+          vUv = position.xz;
           vInfo = aInfo;
-          vec4 c = projectionMatrix * viewMatrix * vec4(aAt, 1.0);
-          float size = (11.0 + 3.0 * aInfo.y) * uPx * c.w;
-          c.xy += vec2(position.x * size / uAspect, (position.y + 1.25) * size);
-          gl_Position = c;
+          vCol = aCol;
+          gl_Position = projectionMatrix * viewMatrix * vec4(aAt.xyz + position * aAt.w, 1.0);
         }`,
       fragmentShader: /* glsl */ `
-        uniform float uGain;
-        varying vec2 vUv; varying vec3 vInfo;
-        float box(vec2 p, vec2 b) { vec2 d = abs(p) - b; return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0); }
+        uniform float uGain; uniform float uTime;
+        varying vec2 vUv; varying vec2 vInfo; varying vec3 vCol;
         void main() {
-          vec2 p = vUv;
-          float r = length(p);
-          float aa = fwidth(r) * 1.2;
-          float disc = 1.0 - smoothstep(0.86 - aa, 0.86 + aa, r);
-          float rim = 1.0 - smoothstep(1.0 - aa, 1.0 + aa, r);
-          // the sign: a tractor (a big wheel, a small wheel, a body) or a person (a head and shoulders)
-          float sign;
-          if (vInfo.x < 1.5) {
-            float big = length(p - vec2(-0.2, -0.22)) - 0.3, small = length(p - vec2(0.36, -0.32)) - 0.17;
-            float bodyD = box(p - vec2(0.12, 0.1), vec2(0.34, 0.14)), cab = box(p - vec2(-0.2, 0.24), vec2(0.13, 0.2));
-            sign = min(min(big, small), min(bodyD, cab));
-          } else {
-            float head = length(p - vec2(0.0, 0.26)) - 0.2, chest = box(p - vec2(0.0, -0.3), vec2(0.3, 0.22)) - 0.06;
-            sign = min(head, chest);
-          }
-          float ink = 1.0 - smoothstep(-aa, aa, sign);
-          vec3 paper = mix(vec3(0.95, 0.91, 0.8), vec3(1.0, 0.82, 0.38), vInfo.y);
-          vec3 tint = vInfo.x < 0.5 ? vec3(0.62, 0.16, 0.1) : vInfo.x < 1.5 ? vec3(0.32, 0.33, 0.32) : vec3(0.15, 0.24, 0.33);
-          vec3 col = mix(vec3(0.03, 0.035, 0.03), mix(paper, tint, ink), disc);
-          float a = rim * vInfo.z;
+          float r = length(vUv), aa = fwidth(r) * 1.3;
+          float band = smoothstep(0.74 - aa, 0.74 + aa, r) * (1.0 - smoothstep(0.92 - aa, 0.92 + aa, r));
+          float inner = smoothstep(0.5 - aa, 0.5 + aa, r) * (1.0 - smoothstep(0.58 - aa, 0.58 + aa, r)) * vInfo.y;
+          float wash = (1.0 - smoothstep(0.0, 0.74, r)) * 0.16 * vInfo.y;
+          float a = max(max(band, inner * (0.7 + 0.3 * sin(uTime * 4.0))), wash) * vInfo.x;
           if (a < 0.01) discard;
+          vec3 col = mix(vCol, vec3(1.0, 0.84, 0.42), 0.55 * vInfo.y) + 0.25 * vInfo.y;
           gl_FragColor = vec4(col * uGain, a);
         }`,
     })
-    this.marker = new Mesh(g, this.markerMat)
-    this.marker.frustumCulled = false
-    this.marker.renderOrder = 20
-    this.group.add(this.marker)
-  }
-
-  private make(id: number, kind: UnitKind, slot: number): Unit {
-    const hands = this.units.filter(u => u.kind === 'hand').length
-    const tractor = kind === 'farmer' ? new Tractor(this.kit, RED) : kind === 'operator' ? new Tractor(this.kit, GREY, '#4a5f7a', '#2f3a44') : null
-    const walker = new Walker(this.kit, kind === 'hand' ? HAND_DRESS[hands % HAND_DRESS.length] : FARMER_DRESS)
-    if (tractor) this.group.add(tractor.group)
-    this.group.add(walker.group)
-    walker.group.visible = kind === 'hand'
-    const rest = restAt(-1, slot, kind === 'hand')
-    return {
-      id, kind, slot, tractor, walker, segs: [], clockSeg: -2, segClock: 0,
-      pos: { x: rest.x, z: rest.z }, heading: rest.heading, travelled: 0,
-      walk: { x: rest.x, z: rest.z }, walkHeading: rest.heading, walking: false, shown: 0,
+    const ring = new Mesh(g, this.ringMat)
+    ring.frustumCulled = false
+    ring.renderOrder = 6
+    this.group.add(this.prims.group, ring)
+    for (let k = 0; k < 12; k++) {
+      this.extras.push(dressOf({
+        shirt: PICKER_SHIRTS[k % PICKER_SHIRTS.length], trousers: k % 2 ? '#3f536e' : '#4a4136', hat: k % 3 ? '#c9b98a' : '#3b3f45', hatKind: k % 3 === 0 ? 'cap' : k % 3 === 1 ? 'brim' : 'none',
+        hair: ['#5a3d24', '#2b211a', '#8a6a3c', '#7a3b1f'][k % 4], tall: 0.7 + 0.13 * hash2(k, 71), build: 0.92, rolled: true, skin: ['#e8b996', '#d9a47c', '#f0c8a8'][k % 3],
+      }))
     }
   }
 
-  private drop(u: Unit): void {
-    if (u.tractor) this.group.remove(u.tractor.group)
-    this.group.remove(u.walker.group)
+  // ---- who and what is on the farm
+
+  private makeActor(u: UnitVis, slot: number): Actor {
+    const rest = idleSpot(-1, slot, u.kind === 'farmer')
+    return {
+      id: u.id, kind: u.kind, slot, dress: dressFor(u.id), coat: dressFor(u.id, true), segs: [], clockSeg: -2, segClock: 0,
+      x: rest.x, z: rest.z, heading: rest.heading, rig: null, aboard: false, shown: 0, gait: u.id * 1.3, goal: null, state: 'idle', post: '',
+      tired: u.tired, style: (u.id * 7) % 5, pose: new Pose().reset(), head: new Vector3(rest.x, 1, rest.z), scale: 1, next: [],
+      worker: { id: u.id, dress: dressFor(u.id), tired: 0, w: 0, x: rest.x, z: rest.z, heading: 0, lift: 0, pose: new Pose().reset(), aboard: false, rig: null },
+    }
   }
 
-  // Bring the drawn crews in line with the farm's: new hands appear at the yard, crews let go leave.
+  private makeRig(kind: 'tractor' | 'truck', k: number): Rig {
+    const machine = kind === 'tractor' ? new Tractor(PAINTS[k % PAINTS.length]) : new Car('truck', '#3d5a50')
+    const home = machineHome(kind, k)
+    this.group.add(machine.group)
+    return {
+      kind, machine, x: home.x, z: home.z, heading: home.heading, holder: -1, home, broken: false, moved: 0, turn: 0, drawnAt: -1,
+      state: { moved: 0, turn: 0, working: 0, kind: 'travel', driver: null, load: 0 },
+    }
+  }
+
+  // Bring the drawn people and machines in line with the farm's: new people come up the road, those let go leave by it.
   sync(snap: Snapshot): void {
-    const want = snap.units.slice(0, MAX_UNITS)
-    for (const u of this.units.filter(u => !want.some(w => w.id === u.id))) this.drop(u)
-    this.units = this.units.filter(u => want.some(w => w.id === u.id))
+    const want = snap.units
+    for (const a of this.actors.filter(a => !want.some(w => w.id === a.id))) {
+      if (a.rig) a.rig.holder = -1
+      if (this.mode === 'season' && snap.mode === 'season') this.leavers.push({ dress: a.dress, path: new Poly(route({ x: a.x, z: a.z }, OFF_FARM)), at: 0, gait: 0 })
+    }
+    this.actors = this.actors.filter(a => want.some(w => w.id === a.id))
     for (const w of want) {
-      if (this.units.some(u => u.id === w.id)) continue
-      const taken = new Set(this.units.filter(u => (u.kind === 'hand') === (w.kind === 'hand')).map(u => u.slot))
+      if (this.actors.some(a => a.id === w.id)) continue
+      const taken = new Set(this.actors.filter(a => (a.kind === 'farmer') === (w.kind === 'farmer')).map(a => a.slot))
       let slot = 0
       while (taken.has(slot)) slot++
-      this.units.push(this.make(w.id, w.kind, slot))
+      const a = this.makeActor(w, slot)
+      // hired in the season: in from the road
+      if (this.mode === 'season' && snap.mode === 'season') { a.x = OFF_FARM.x; a.z = OFF_FARM.z - 6 }
+      this.actors.push(a)
     }
-    this.units.sort((a, b) => want.findIndex(w => w.id === a.id) - want.findIndex(w => w.id === b.id))
+    this.actors.sort((a, b) => want.findIndex(w => w.id === a.id) - want.findIndex(w => w.id === b.id))
+    for (const a of this.actors) { const u = want.find(w => w.id === a.id)!; a.tired = u.tired }
+    // machines
+    const tractors = this.rigs.filter(r => r.kind === 'tractor')
+    for (let k = tractors.length; k < Math.min(3, Math.max(1, snap.farm.tractors)); k++) this.rigs.push(this.makeRig('tractor', k))
+    if (snap.farm.truck && !this.rigs.some(r => r.kind === 'truck')) this.rigs.push(this.makeRig('truck', 0))
+    // which tractors stand broken down: the one its driver had when it stopped
+    const all = this.rigs.filter(r => r.kind === 'tractor')
+    let broken = all.filter(r => r.broken).length
+    const want2 = Math.min(all.length, snap.farm.broken)
+    for (const inc of snap.farm.incidents) {
+      if (broken >= want2 || inc.kind !== 'breakdown') continue
+      const r = all.find(x => !x.broken && x.holder === inc.unit)
+      if (r) { r.broken = true; broken++ }
+    }
+    while (broken < want2) { const r = all.find(x => !x.broken && x.holder < 0) ?? all.find(x => !x.broken); if (!r) break; r.broken = true; broken++ }
+    while (broken > want2) { const r = all.find(x => x.broken); if (!r) break; r.broken = false; broken-- }
+    for (const r of all) {
+      (r.machine as Tractor).broken = r.broken
+      if (r.broken && r.holder >= 0) { const a = this.actors.find(x => x.id === r.holder); if (a) { a.rig = null; a.aboard = false } r.holder = -1 }
+    }
+    this.mode = snap.mode
   }
 
-  // Put every crew where the farm says it is, at once (a new screen, a loaded game).
+  // Put everyone and everything where the farm says it is, at once (a new screen, a loaded game).
   rest(snap: Snapshot): void {
+    this.mode = snap.mode
     this.sync(snap)
-    for (const u of this.units) {
-      const v = snap.units.find(w => w.id === u.id)
-      const r = restAt(v ? v.at : -1, u.slot, u.kind === 'hand')
-      u.pos = { x: r.x, z: r.z }
-      u.walk = { ...u.pos }
-      u.heading = u.walkHeading = r.heading
-      u.walking = false
-      u.segs = []
-      u.clockSeg = -2
-      u.shown = 1
-      u.tractor?.setImplement('none')
+    this.leavers = []
+    this.gangs.clear()
+    this.stage.clear()
+    for (const r of this.rigs) {
+      r.x = r.home.x; r.z = r.home.z; r.heading = r.home.heading; r.holder = -1
+      if (r.kind === 'tractor') (r.machine as Tractor).setImplement('none')
     }
+    for (const a of this.actors) {
+      const u = snap.units.find(w => w.id === a.id)!
+      a.rig = null
+      a.aboard = false
+      a.segs = []
+      a.clockSeg = -2
+      a.shown = 1
+      a.post = ''
+      a.state = 'idle'
+      a.goal = null
+      let r: Spot = snap.mode === 'season' ? (u.at < 0 ? idleSpot(u.at, a.slot, a.kind === 'farmer') : restAt(u.at, a.slot, true)) : idleSpot(-1, a.slot, a.kind === 'farmer')
+      if (snap.mode === 'cellar') {
+        // the cellar months: at the winter's work, or by the door with the wood to split
+        const tract = snap.fields[u.winterField]
+        if (u.winter === 'woods' && tract && (tract.cover === 'woods' || tract.cover === 'brush')) a.post = `${u.winterField}|fell`
+        else if (u.winter === 'pack' && snap.farm.buildings.some(b => b.kind === 'packing' && b.built)) a.post = '-1|pack'
+        else if (u.winter === 'build') { const b = snap.farm.buildings.find(x => !x.built); if (b) a.post = `${b.yard}|build` }
+        if (a.kind !== 'farmer' && !a.post) a.shown = 0
+        if (a.kind === 'farmer' && !a.post) r = { x: HOUSE.x - 2.9, z: HOUSE.z - 5.6, heading: 0.2 }
+      }
+      a.x = r.x; a.z = r.z; a.heading = r.heading
+      a.worker.x = a.x; a.worker.z = a.z
+    }
+    if (snap.mode === 'season') this.goals(snap)
   }
 
   // The opening: the tractor comes out of the potato house and down the farm road, over the bridge and away.
   title(): void {
-    const u = this.units.find(x => x.kind === 'farmer')
-    if (!u) return
+    const a = this.actors.find(x => x.kind === 'farmer'), rig = this.rigs.find(r => r.kind === 'tractor')
+    if (!a || !rig) return
     const travel: Pt[] = [{ x: 23.4, z: -15.6 }, ...ROAD.map(([x, z]) => ({ x, z }))]
-    u.segs = [{ kind: 'travel', field: -1, walker: false, travel, path: [travel[travel.length - 1]], reveals: [], start: 0, end: 0.8 }]
-    u.clockSeg = -2
+    a.rig = rig
+    rig.holder = a.id
+    a.segs = [{ kind: 'travel', field: -1, walker: false, ride: 'tractor', walkTo: [], travel, path: [travel[travel.length - 1]], reveals: [], start: 0, end: 0.8, site: '' }]
+    a.clockSeg = -2
   }
 
-  // Plan the day just passed for every crew. Returns the hills to reveal as they pass.
+  // Where each person spends a day with no work in it: the porch on a Sunday, a chair when laid up.
+  private goals(snap: Snapshot): void {
+    let sunday = 0, sick = 0
+    for (const a of this.actors) {
+      const u = snap.units.find(w => w.id === a.id)!
+      if (u.hurt) { a.state = 'hurt'; a.goal = { ...sickSpot(sick++), seat: 0.2 } }
+      else if (u.resting) { a.state = 'sunday'; const s = sundaySpot(sunday++); a.goal = { ...s, seat: s.seat } }
+      else if (!u.worked.length && u.to === u.at && u.at < 0) { a.state = 'idle'; a.goal = idleSpot(u.at, a.slot, a.kind === 'farmer') }
+      else { a.state = u.worked.length || u.to !== u.at ? 'work' : 'idle'; a.goal = null }
+    }
+  }
+
+  // Who has which machine today: those already in a seat keep it; the rest take the nearest that is free and runs.
+  private assign(snap: Snapshot): Map<number, Ride> {
+    const rides = new Map<number, Ride>()
+    const truck = this.rigs.find(r => r.kind === 'truck')
+    const hauls = (u: UnitVis) => u.worked.some(w => w.kind === 'haul') || u.job?.kind === 'haul'
+    for (const a of this.actors) {
+      const u = snap.units.find(w => w.id === a.id)!
+      const machine = u.worked.some(w => MACHINE_JOBS.has(w.kind)) || (u.to !== u.at && !!u.job && MACHINE_JOBS.has(u.job.kind)) || u.rig !== ''
+      let ride: Ride = !machine || u.hurt || u.resting ? '' : u.rig || 'tractor'
+      if (ride === 'tractor' && !u.rig && truck && hauls(u) && (truck.holder < 0 || truck.holder === a.id) && !snap.units.some(o => o.id !== u.id && o.rig === 'truck')) ride = 'truck'
+      rides.set(a.id, ride)
+      if (a.rig && a.rig.kind !== ride) {
+        // down off it, and beside it
+        if (a.aboard) { a.x = a.rig.x - Math.sin(a.rig.heading) * 0.95; a.z = a.rig.z + Math.cos(a.rig.heading) * 0.95 }
+        a.rig.holder = -1
+        a.rig = null
+        a.aboard = false
+      }
+    }
+    for (const a of this.actors) {
+      const ride = rides.get(a.id)!
+      if (!ride || a.rig) continue
+      let best: Rig | null = null, bd = Infinity
+      for (const r of this.rigs) {
+        if (r.kind !== ride || r.holder >= 0 || r.broken) continue
+        const d = Math.hypot(r.x - a.x, r.z - a.z)
+        if (d < bd) { bd = d; best = r }
+      }
+      if (best) { best.holder = a.id; a.rig = best } else rides.set(a.id, '')
+    }
+    return rides
+  }
+
+  // Plan the day just passed for everyone. Returns the hills to reveal as they pass.
   plan(snap: Snapshot, shown: HillDisplay[][], samples: Map<number, number>): PendingReveal[] {
     this.sync(snap)
-    const from = this.units.map(u => ({ id: u.id, kind: u.kind, slot: u.slot, at: u.walking ? u.pos : u.kind === 'hand' ? u.walk : u.pos }))
+    this.goals(snap)
+    const rides = this.assign(snap)
+    const from: CrewFrom[] = this.actors.map(a => ({
+      id: a.id, slot: a.slot, farmer: a.kind === 'farmer', ride: rides.get(a.id)!, goal: a.goal,
+      at: a.aboard && a.rig ? { x: a.rig.x, z: a.rig.z } : { x: a.x, z: a.z }, machine: a.rig ? { x: a.rig.x, z: a.rig.z } : null,
+    }))
     const plans = planDay(snap, shown, from, samples)
     const out: PendingReveal[] = []
-    this.units.forEach((u, k) => {
-      u.segs = plans[k]
-      u.clockSeg = -2
-      u.segs.forEach((s, j) => { for (const r of s.reveals) out.push({ ...r, unit: k, seg: j }) })
+    this.actors.forEach((a, k) => {
+      a.segs = plans[k]
+      a.clockSeg = -2
+      a.next = a.segs.map(() => 0)
+      a.segs.forEach((s, j) => { for (const r of s.reveals) out.push({ ...r, unit: k, seg: j }) })
     })
     this.stageHold = -1
     return out
@@ -211,224 +359,534 @@ export class Crews {
 
   // The staged work that should bring the camera round: a test dig, or the start of a field's digging.
   staged(prev: Snapshot): Seg | null {
-    for (const u of this.units) for (const s of u.segs) if (s.kind === 'sample' || (s.kind === 'dig' && prev.fields[s.field]?.status !== 'digging')) return s
+    for (const a of this.actors) for (const s of a.segs) if (s.kind === 'sample' || (s.kind === 'dig' && prev.fields[s.field]?.status !== 'digging')) return s
     return null
   }
 
   segments(): Seg[] {
-    return this.units.flatMap(u => u.segs)
+    return this.actors.flatMap(a => a.segs)
   }
 
   // Finish any staged work at once (for screenshots).
   settle(): void {
-    for (const u of this.units) { u.clockSeg = u.segs.length - 1; u.segClock = 1e6 }
+    for (const a of this.actors) { a.clockSeg = a.segs.length - 1; a.segClock = 1e6 }
     this.stageHold = -1
   }
 
   segsInfo(): string[] {
-    return this.units.flatMap(u => u.segs.map(s => `${u.kind}${u.id}:${s.kind}@${s.field}`))
+    return this.actors.flatMap(a => a.segs.map(s => `${a.kind}${a.id}:${s.kind}@${s.field}`))
   }
 
-  // Where the farmer's tractor is, and the person on foot if anyone is walking (for the look tools).
-  where(): { tractor: Pt; farmer: { x: number; z: number; turn: number } | null; units: { id: number; kind: UnitKind; x: number; z: number; foot: boolean }[] } {
-    const f = this.units.find(u => u.kind === 'farmer')
-    const walker = this.units.find(u => u.walking) ?? this.units.find(u => u.kind === 'hand' && u.segs.length > 0)
+  // Where the farmer's machine is, and the person on foot if anyone is walking (for the look tools).
+  where(): { tractor: Pt; farmer: { x: number; z: number; turn: number } | null; units: { id: number; kind: UnitKind; x: number; z: number; foot: boolean }[]; rigs: { kind: string; x: number; z: number; holder: number; broken: boolean }[] } {
+    const f = this.actors.find(a => a.kind === 'farmer')
+    const rig = f?.rig ?? this.rigs.find(r => r.kind === 'tractor')
+    const walker = this.actors.find(a => !a.aboard && a.segs.length > 0) ?? this.actors.find(a => !a.aboard)
     return {
-      tractor: f ? { ...f.pos } : { x: 0, z: 0 },
-      farmer: walker ? { x: walker.walk.x, z: walker.walk.z, turn: walker.walker.group.rotation.y } : null,
-      units: this.units.map(u => ({ id: u.id, kind: u.kind, x: u.walking || !u.tractor ? u.walk.x : u.pos.x, z: u.walking || !u.tractor ? u.walk.z : u.pos.z, foot: u.walking || !u.tractor })),
+      tractor: rig ? { x: rig.x, z: rig.z } : { x: 0, z: 0 },
+      farmer: walker ? { x: walker.x, z: walker.z, turn: -walker.heading } : null,
+      units: this.actors.map(a => ({ id: a.id, kind: a.kind, x: a.x, z: a.z, foot: !a.aboard })),
+      rigs: this.rigs.map(r => ({ kind: r.kind, x: r.x, z: r.z, holder: r.holder, broken: r.broken })),
     }
   }
 
-  // Move every crew to where it is at this point of the day.
+  // A point just above a person's head, in the world; false when there is no such person.
+  anchor(id: number, out: Vector3): boolean {
+    const a = this.actors.find(x => x.id === id)
+    if (!a || a.shown < 0.5) return false
+    out.copy(a.head)
+    out.y += 0.16 * a.scale
+    return true
+  }
+
+  // A tree coming down close by shakes the camera a little.
+  shudder(camera: PerspectiveCamera, dt: number, reduced: boolean): void {
+    if (this.stage.thud > 0 && !reduced) {
+      const d = camera.position.distanceTo(this.stage.thudAt)
+      if (d < 34) { this.shake = (1 - d / 34) * 0.07; this.shakeT = 0 }
+    }
+    this.shakeT += dt
+    if (this.shakeT > 0.7 || this.shake <= 0) return
+    const k = this.shake * Math.exp(-this.shakeT * 7)
+    camera.position.y += k * Math.sin(this.shakeT * 46)
+    camera.position.x += k * 0.5 * Math.sin(this.shakeT * 37 + 1)
+    camera.updateMatrixWorld()
+  }
+
+  // ---- the frame
+
   place(f: CrewFrame): void {
+    this.frameNo++
     this.stageHold = -1
-    const presence = 1 + 1.1 * smooth(26, 120, f.dist)
-    let markers = 0
-    const far = smooth(34, 70, f.dist) * (f.season ? 0.75 : 0)
-    this.units.forEach((u, k) => {
-      u.shown = Math.min(1, u.shown + f.dt * 2)
-      this.step(u, k, f)
-      const picked = u.id === f.picked ? 1 : 0
-      const scale = presence * (0.4 + 0.6 * u.shown)
-      if (u.tractor) {
-        u.tractor.group.scale.setScalar(scale)
-        const ring = u.tractor.ring.material as ShaderMaterial
-        ring.uniforms.uLevel.value = Math.max(far * (u.segs.length ? 1 : 0.6), picked * 0.95)
-        ring.uniforms.uPick.value = picked
-      }
-      u.walker.group.scale.setScalar(scale)
-      const wr = u.walker.ring.material as ShaderMaterial
-      wr.uniforms.uLevel.value = u.walker.group.visible ? Math.max(far, picked * 0.95) : 0
-      wr.uniforms.uPick.value = picked
-      // the marker stands over whichever of the two is the crew's body now
-      const foot = u.walking || !u.tractor
-      const at = foot ? u.walk : u.pos
-      const show = f.season || f.picked >= 0 ? Math.max(smooth(40, 85, f.dist), picked) * u.shown : 0
-      if (show > 0.01 && markers < MAX_UNITS) {
-        this.mAt.setXYZ(markers, at.x, heightAt(at.x, at.z) + (foot ? 0.95 : 1.45) * scale, at.z)
-        this.mInfo.setXYZ(markers, u.kind === 'farmer' ? 0 : u.kind === 'operator' ? 1 : 2, picked, show)
-        markers++
-      }
+    const pr = this.prims
+    pr.begin()
+    this.stage.begin()
+    this.rings = 0
+    this.ringMat.uniforms.uTime.value = f.time
+    const snap = f.snap, env = f.env
+    const grown = smooth(24, 115, f.dist)
+    const big = 1 + 1.25 * grown, bigMachine = 1 + 1.0 * grown
+    const cold = env.snow > 0.3
+    this.cold = cold
+    const going = snap.mode === 'season' ? f.advancing || f.dayT < 1 : snap.mode !== 'title'
+    const far = smooth(30, 70, f.dist) * (f.season ? 0.8 : 0.5)
+    GRIME.value.set(0.52, 0.42, 0.31).lerp(V.set(0.2, 0.15, 0.11), clamp(env.wet * 1.4 - 0.3, 0, 1))
+    const sf: StageFrame = { pr, particles: f.particles, dt: f.dt, time: f.time, s: big, snap, wind: env.wind, cold, still: f.reduced, going }
+    const mf: MachineFrame = {
+      dt: f.dt, time: f.time, particles: f.particles, dust: f.dust, mud: clamp(env.wet * 1.5 - 0.5, 0, 1), still: f.reduced || f.idle, cold: snap.weather.tmin < 4,
+      lamps: clamp(Math.max(smooth(0.16, 0.06, Math.sin(env.sunEl)), env.cloud > 0.9 ? 0.5 + 0.5 * Math.max(env.rain, env.mist) : 0), 0, 1),
+    }
+    for (const r of this.rigs) { r.moved = 0; r.turn = 0; r.state.working = 0; r.state.kind = 'travel'; r.state.driver = null; r.state.load = 0 }
+
+    // Each person's day; those at staged work are gathered by site and placed by the stage.
+    const sites = new Map<string, { kind: string; field: number; ws: Worker[]; who: Actor[] }>()
+    const enlist = (key: string, kind: string, field: number, a: Actor, w: number) => {
+      let s = sites.get(key)
+      if (!s) { s = { kind, field, ws: [], who: [] }; sites.set(key, s) }
+      const wk = a.worker
+      wk.dress = cold ? a.coat : a.dress
+      wk.tired = a.tired
+      wk.w = w
+      wk.x = a.x; wk.z = a.z; wk.heading = a.heading
+      wk.lift = 0
+      wk.aboard = false
+      wk.rig = a.rig ? { x: a.rig.x, z: a.rig.z, heading: a.rig.heading, load: 0 } : null
+      wk.pose.reset()
+      s.ws.push(wk)
+      s.who.push(a)
+    }
+    this.actors.forEach((a, k) => {
+      a.shown = Math.min(1, a.shown + f.dt * 2)
+      a.scale = big
+      if (a.post && snap.mode !== 'season') { const [fs, kind] = a.post.split('|'); enlist(a.post, kind, Number(fs), a, 0.5); return }
+      const site = this.step(a, k, f, going, big)
+      if (site) enlist(site.key, site.kind, site.field, a, site.w)
     })
-    this.markerGeo.instanceCount = markers
-    this.mAt.needsUpdate = true
-    this.mInfo.needsUpdate = true
-  }
+    for (const [key, s] of sites) {
+      this.stage.work(key, s.kind, s.field, s.ws, sf)
+      s.who.forEach((a, i) => {
+        const w = s.ws[i]
+        a.x = w.x; a.z = w.z; a.heading = w.heading
+        a.aboard = w.aboard && !!a.rig
+        if (a.rig && w.rig) {
+          const r = a.rig
+          const moved = Math.hypot(w.rig.x - r.x, w.rig.z - r.z)
+          this.driveTo(r, w.rig.x, w.rig.z, w.rig.heading, moved, f.dt, true)
+          r.state.load = w.rig.load
+          r.state.kind = 'haul'
+          if (r.kind === 'tractor') (r.machine as Tractor).setImplement('trailer')
+        }
+        if (a.aboard) return
+        if (!going) this.idle(a, f, w.pose)
+        this.figure(a, w.pose, big, w.lift)
+        this.ring(a.x, heightAt(a.x, a.z), a.z, 0.5 * big, a, f, far)
+      })
+    }
 
-  // The screen's size in CSS pixels, so markers keep their size in pixels.
-  setScreen(w: number, h: number): void {
-    this.markerMat.uniforms.uPx.value = 2 / Math.max(1, h)
-    this.markerMat.uniforms.uAspect.value = w / Math.max(1, h)
-  }
-
-  private step(u: Unit, k: number, f: CrewFrame): void {
-    let segIdx = -1
-    for (let s = 0; s < u.segs.length; s++) if (f.dayT >= u.segs[s].start) segIdx = s
-    const seg: Seg | null = segIdx >= 0 ? u.segs[segIdx] : null
-    if (segIdx !== u.clockSeg) { u.clockSeg = segIdx; u.segClock = 0 } else u.segClock += f.dt * (f.advancing ? 1 : f.pace)
-    let pos: Pt = u.pos, dir = { dx: Math.cos(u.heading), dz: Math.sin(u.heading) }
-    let walkPos: Pt = u.walk, walkDir = { dx: Math.cos(u.walkHeading), dz: Math.sin(u.walkHeading) }
-    let working = 0, walking = 0, bent = 0
-    let footOn = !u.tractor
-    let kind: Seg['kind'] = 'travel'
-    const passed = (arc: number) => f.passed(k, segIdx, arc)
-    if (seg) {
-      kind = seg.kind
-      const span = Math.max(1e-6, seg.end - seg.start)
-      let p = Math.min(1, (f.dayT - seg.start) / span)
-      seg.polys ??= { travel: new Poly(seg.travel), path: new Poly(seg.path) }
-      const travel = seg.polys.travel
-      let tShare = seg.kind === 'travel' ? 1 : travel.length > 0.3 ? Math.min(0.4, 0.12 + travel.length / 150) : 0
-      if (seg.kind === 'sample' || seg.kind === 'dig') {
-        // However long the day is, the hill is up or the last row out inside two and a half seconds, and the day waits for it.
-        const drive = travel.length > 0.3 ? STAGE_DRIVE_S : 0, work = STAGE_S[seg.kind]
-        p = Math.min(1, u.segClock / (drive + work))
-        tShare = drive / (drive + work)
-        if (p < 0.92 && f.season) this.stageHold = this.stageHold < 0 ? seg.end - 1e-3 : Math.min(this.stageHold, seg.end - 1e-3)
+    // Machines: where their drivers took them, or where they were left.
+    for (const r of this.rigs) {
+      const holder = r.holder >= 0 ? this.actors.find(a => a.id === r.holder) : undefined
+      const y = heightAt(r.x, r.z)
+      const s = bigMachine
+      const ahead = heightAt(r.x + Math.cos(r.heading) * 0.6 * s, r.z + Math.sin(r.heading) * 0.6 * s)
+      const behind = heightAt(r.x - Math.cos(r.heading) * 0.6 * s, r.z - Math.sin(r.heading) * 0.6 * s)
+      r.machine.place(r.x, y + 0.01, r.z, r.heading, Math.atan2(ahead - behind, 1.2 * s), s)
+      r.state.moved = r.moved
+      r.state.turn = r.turn
+      r.state.driver = holder && holder.aboard ? (cold ? holder.coat : holder.dress) : null
+      if (r.kind === 'tractor') (r.machine as Tractor).draw(pr, mf, r.state)
+      else (r.machine as Car).draw(pr, mf, r.state)
+      if (holder && holder.aboard) {
+        holder.head.copy(drawn.head)
+        holder.scale = s
+        this.ring(r.x, y, r.z, 1.55 * s, holder, f, far)
       }
-      const path = seg.polys.path
-      // A hand walks the whole way; the farmer drives to the field and gets down for the walking jobs.
-      const handWalks = !u.tractor
-      if (p < tShare || seg.kind === 'travel') {
-        const s = seg.kind === 'travel' ? p : p / tShare
-        const e = travel.at((s * s * (3 - 2 * s)) * travel.length)
-        if (handWalks) { walkPos = e; walkDir = e; walking = 1; footOn = true } else { pos = e; dir = e }
-        passed(-1)
+      if (r.broken && !f.reduced && Math.random() < 0.12) {
+        r.machine.point(0.3, 0.95, 0, V)
+        f.particles.emit(V.x, V.y, V.z, 0, 0.5, 0, 0.1 * s, 0.4 * s, 2.4, 0.75, 0.75, 0.78, 0.3, 0.8)
+      }
+    }
+
+    this.callersAndLife(f, sf, mf, big, bigMachine, going)
+    this.ringGeo.instanceCount = this.rings
+    this.rAt.needsUpdate = true
+    this.rInfo.needsUpdate = true
+    this.rCol.needsUpdate = true
+    pr.end()
+  }
+
+  private ring(x: number, y: number, z: number, radius: number, a: Actor, f: CrewFrame, far: number): void {
+    const picked = a.id === f.picked ? 1 : 0
+    const level = Math.max(far, picked) * a.shown
+    if (level < 0.02 || this.rings >= MAX_RINGS) return
+    const k = this.rings++
+    this.rAt.setXYZW(k, x, y + 0.07, z, radius * (1 + 0.25 * picked))
+    this.rInfo.setXY(k, level * (picked ? 1 : 0.85), picked)
+    const c = a.dress.shirt
+    this.rCol.setXYZ(k, c.r * 1.5 + 0.08, c.g * 1.5 + 0.08, c.b * 1.5 + 0.08)
+  }
+
+  private figure(a: Actor, pose: Pose, scale: number, lift = 0): void {
+    const y = heightAt(a.x, a.z) + 0.02 + lift * scale
+    figureMatrix(M, a.x, y, a.z, a.heading, scale * (0.3 + 0.7 * a.shown))
+    drawFigure(this.prims, M, this.cold ? a.coat : a.dress, pose)
+    a.head.copy(drawn.head)
+    a.scale = scale
+  }
+  private cold = false
+
+  // Between jobs and at the day's end: standing easy, or sitting down when worn out.
+  private idle(a: Actor, f: CrewFrame, pose: Pose): void {
+    if (a.tired > 0.72) sit(pose, f.time + a.id, 0, a.tired)
+    else stand(pose, f.time + a.id * 3.1, a.tired, a.style)
+  }
+
+  private driveTo(r: Rig, x: number, z: number, heading: number, moved: number, dt: number, exact = false): void {
+    const jump = moved > 3
+    let d = heading - r.heading
+    while (d > Math.PI) d -= Math.PI * 2
+    while (d < -Math.PI) d += Math.PI * 2
+    r.turn = clamp(d * 1.5, -1, 1)
+    r.heading += jump || exact && moved < 1e-4 ? d : moved > 1e-4 ? d * Math.min(1, dt * 7 + moved * 2) : 0
+    r.x = x
+    r.z = z
+    r.moved = jump ? 0 : moved
+    r.drawnAt = this.frameNo
+  }
+
+  // One person at this point of their day. Returns the staged work they are at, if any.
+  private step(a: Actor, k: number, f: CrewFrame, going: boolean, big: number): { key: string; kind: string; field: number; w: number } | null {
+    let segIdx = -1
+    for (let s = 0; s < a.segs.length; s++) if (f.dayT >= a.segs[s].start) segIdx = s
+    const seg: Seg | null = segIdx >= 0 ? a.segs[segIdx] : null
+    if (segIdx !== a.clockSeg) { a.clockSeg = segIdx; a.segClock = 0 } else a.segClock += f.dt * (f.advancing ? 1 : f.pace)
+    const pose = a.pose.reset()
+    const rig = a.rig
+    const passed = (arc: number) => f.passed(k, segIdx, arc)
+    const tractor = rig && rig.kind === 'tractor' ? rig.machine as Tractor : null
+    let px = a.x, pz = a.z
+    const foot = (e: { x: number; z: number; dx?: number; dz?: number }, load = 0) => {
+      const step = Math.hypot(e.x - a.x, e.z - a.z)
+      if (step > 1e-4 && step < 3 && e.dx !== undefined) a.heading = Math.atan2(e.dz!, e.dx)
+      a.gait += Math.min(f.dt * 13, (step / (0.46 * big)) * Math.PI * 2)
+      px = e.x; pz = e.z
+      walk(pose, a.gait, step > 1e-4 ? 1 : 0, a.tired, load)
+      a.aboard = false
+    }
+    const ride = (e: { x: number; z: number; dx: number; dz: number }) => {
+      if (!rig) { foot(e); return }
+      const moved = Math.hypot(e.x - rig.x, e.z - rig.z)
+      this.driveTo(rig, e.x, e.z, Math.atan2(e.dz, e.dx), moved, f.dt)
+      px = e.x; pz = e.z
+      a.aboard = true
+    }
+    let site: { key: string; kind: string; field: number; w: number } | null = null
+    if (!seg) {
+      // no part in today's work: where the day off, the sick bed or the yard has them
+      this.atEase(a, f, pose, big)
+      if (a.aboard && rig) { a.x = rig.x; a.z = rig.z; a.heading = rig.heading; return null }
+      this.figure(a, pose, big)
+      this.ring(a.x, heightAt(a.x, a.z), a.z, 0.5 * big, a, f, smooth(30, 70, f.dist) * (f.season ? 0.8 : 0.5))
+      return null
+    }
+    const span = Math.max(1e-6, seg.end - seg.start)
+    let p = Math.min(1, (f.dayT - seg.start) / span)
+    seg.polys ??= { walkTo: new Poly(seg.walkTo), travel: new Poly(seg.travel), path: new Poly(seg.path) }
+    const { walkTo, travel, path } = seg.polys
+    const lw = seg.walkTo.length ? walkTo.length : 0, lt = travel.length
+    let tShare = seg.kind === 'travel' ? 1 : lw + lt > 0.3 ? Math.min(0.4, 0.12 + (lw + lt) / 150) : 0
+    if (seg.kind === 'sample' || seg.kind === 'dig') {
+      // However long the day is, the hill is up or the last row out inside two and a half seconds, and the day waits for it.
+      const drive = lw + lt > 0.3 ? STAGE_DRIVE_S : 0, work = STAGE_S[seg.kind]
+      p = Math.min(1, a.segClock / (drive + work))
+      tShare = drive / (drive + work)
+      if (p < 0.92 && f.season) this.stageHold = this.stageHold < 0 ? seg.end - 1e-3 : Math.min(this.stageHold, seg.end - 1e-3)
+    }
+    if (p < tShare || seg.kind === 'travel') {
+      // on the way: on foot to the machine if it stands elsewhere, then the drive; or on foot all the way
+      const q = seg.kind === 'travel' ? p : p / tShare
+      const e = q * q * (3 - 2 * q)
+      const wShare = lw > 0 ? lw / (lw + lt * 0.5) : 0
+      if (e < wShare) foot(walkTo.at((e / wShare) * lw))
+      else {
+        const along = travel.at(((e - wShare) / Math.max(1e-6, 1 - wShare)) * lt)
+        if (seg.ride && rig) ride(along)
+        else foot(along)
+      }
+      if (seg.kind === 'travel' && p >= 1 && !a.aboard) { a.x = px; a.z = pz; this.atEase(a, f, pose, big); px = a.x; pz = a.z }
+      passed(-1)
+      if (tractor && seg.ride === 'tractor' && seg.kind !== 'travel') tractor.setImplement(implementFor(seg.kind, f.snap.farm.equipment.includes('harvester')))
+    } else {
+      const w = (p - tShare) / (1 - tShare)
+      if (seg.site) {
+        site = { key: seg.site, kind: seg.site.split('|')[1], field: seg.field, w }
+      } else if (!seg.walker && rig) {
+        // Dig day is staged: the digger is lowered at the row's end, the rows come out, and the tractor stands at the finish.
+        const lead = seg.kind === 'dig' ? 0.05 : 0, tail = seg.kind === 'dig' ? 0.08 : 0
+        const run = clamp((w - lead) / (1 - lead - tail), 0, 1)
+        ride(path.at(run * path.length))
+        rig.state.working = run > 0 && run < 1 ? 1 : 0
+        rig.state.kind = seg.kind
+        if (tractor) tractor.setImplement(implementFor(seg.kind, f.snap.farm.equipment.includes('harvester')))
+        const arc = run >= 1 ? Infinity : run * path.length
+        passed(arc)
+        if (seg.kind === 'dig') this.dug(a, segIdx, seg, arc, f.snap)
+      } else if (seg.kind === 'sample') {
+        // The test dig is staged: the walk in, the fork set and the hill lifted, then a moment to look.
+        const go = Math.min(1, w / 0.5)
+        const e = path.at(go * path.length)
+        if (go < 1) foot(e)
+        else {
+          px = e.x; pz = e.z
+          a.heading = -Math.PI / 2
+          a.aboard = false
+          const dig = clamp((w - 0.5) / 0.26, 0, 1)
+          if (dig < 1) forking(pose, dig)
+          else { stand(pose, f.time, a.tired, 0); stoop(pose, 0.32, 0, false) }
+        }
+        passed(w >= 0.64 ? Infinity : -1)
       } else {
-        const w = (p - tShare) / (1 - tShare)
-        if (!seg.walker && !handWalks) {
-          // Dig day is staged: the digger is lowered at the row's end, the rows come out, and the tractor stands at the finish.
-          const lead = seg.kind === 'dig' ? 0.05 : 0, tail = seg.kind === 'dig' ? 0.08 : 0
-          const run = clamp((w - lead) / (1 - lead - tail), 0, 1)
-          const e = path.at(run * path.length)
-          pos = e
-          dir = e
-          working = run > 0 && run < 1 ? 1 : 0
-          passed(run >= 1 ? Infinity : run * path.length)
+        // walking the rows: the scout stops and bends to a plant; pulling blighted plants, a stoop at each and a sack filling
+        const stops = seg.kind === 'scout' ? 7 : Math.min(14, Math.max(3, seg.path.length - 2))
+        const u = w * stops, n = Math.floor(u), q = u - n
+        const moveShare = seg.kind === 'scout' ? 0.62 : 0.5
+        const along = (n + Math.min(1, q / moveShare)) / stops
+        const e = path.at(Math.min(1, along) * path.length)
+        if (q < moveShare || w >= 1) foot(e, 0)
+        else {
+          px = e.x; pz = e.z
+          a.aboard = false
+          const bend = Math.sin(((q - moveShare) / (1 - moveShare)) * Math.PI)
+          pose.reset()
+          stoop(pose, bend, f.time * 5, seg.kind !== 'scout')
+        }
+        if (seg.kind === 'rogue') { pose.held = 'sack'; pose.size = 0.6 + 0.6 * w }
+        if (w >= 1) this.idle(a, f, pose)
+        passed(w * path.length)
+      }
+    }
+    if (site) return site
+    if (a.aboard && rig) { a.x = rig.x; a.z = rig.z; a.heading = rig.heading; return null }
+    a.x = px
+    a.z = pz
+    this.figure(a, pose, big)
+    this.ring(a.x, heightAt(a.x, a.z), a.z, 0.5 * big, a, f, smooth(30, 70, f.dist) * (f.season ? 0.8 : 0.5))
+    return null
+  }
+
+  // Not at work: a Sunday on the porch, laid up in a chair, waiting in the yard, or stood where the last job ended.
+  private atEase(a: Actor, f: CrewFrame, pose: Pose, big: number): void {
+    const g = a.goal
+    const there = g && Math.hypot(g.x - a.x, g.z - a.z) < 1.2
+    if (a.aboard && a.rig) return
+    if (g && there) {
+      a.x = g.x; a.z = g.z
+      a.heading = g.heading
+      if (a.state === 'hurt') { sit(pose, f.time + a.id, 0.2, 0.5); pose.held = 'sling'; pose.gripL = true; pose.handL.set(0.1, 0.36, 0.0) }
+      else if (g.seat !== undefined && g.seat >= 0 && a.state === 'sunday') sit(pose, f.time + a.id * 2, g.seat, a.tired * 0.5)
+      else stand(pose, f.time + a.id * 3.1, a.tired, a.state === 'sunday' ? 1 + (a.id % 2) : a.style)
+    } else if (f.snap.mode === 'cellar' && a.kind === 'farmer') {
+      // the cellar months: splitting stove wood by the back door
+      const u = (f.time / 1.5 + 0.2) % 1
+      swing(pose, u < 0.55 ? 1 - smoothstep(u / 0.55) : u < 0.66 ? (u - 0.55) / 0.11 : 1, true)
+      pose.tool = 'axe'
+      V.set(a.x + Math.cos(a.heading) * 0.42 * big, heightAt(a.x, a.z), a.z + Math.sin(a.heading) * 0.42 * big)
+      this.prims.put('log', V, V2.set(0, 1, 0), V2, 0.24 * big, 0.2 * big, 0.24 * big, WHITE)
+    } else this.idle(a, f, pose)
+  }
+
+  // The digger has passed these hills: the pickers and the crows go to them.
+  private dug(a: Actor, segIdx: number, seg: Seg, arc: number, snap: Snapshot): void {
+    let g = this.gangs.get(seg.field)
+    if (!g) {
+      const corner = restAt(seg.field, 1, true)
+      g = { field: seg.field, pickers: [], recent: [], crows: [], idle: 0 }
+      for (let k = 0; k < 5; k++) g.crows.push({ x: corner.x - 3 - k, z: corner.z + 2, fx: 0, fz: 0, tx: corner.x - 3 - k, tz: corner.z + 2, t: 1, wait: 1 + k, h: k })
+      this.gangs.set(seg.field, g)
+    }
+    g.idle = 0
+    const want = snap.farm.pickers ? 9 : 2
+    while (g.pickers.length < want) {
+      const k = g.pickers.length
+      const corner = restAt(seg.field, 0, true)
+      g.pickers.push({ dress: this.extras[(k + seg.field * 3) % this.extras.length], x: corner.x - 1 - 0.5 * k, z: corner.z + 0.8, tx: corner.x - 1, tz: corner.z + 1, wait: 0.3 * k, heading: 1.6, gait: k, bent: 0 })
+    }
+    g.pickers.length = Math.min(g.pickers.length, want)
+    let n = a.next[segIdx] ?? 0
+    while (n < seg.reveals.length && seg.reveals[n].at <= arc) {
+      const p = hillPos(seg.field, seg.reveals[n].hill)
+      g.recent.push(p)
+      if (g.recent.length > 30) g.recent.shift()
+      n++
+    }
+    a.next[segIdx] = n
+  }
+
+  private callersAndLife(f: CrewFrame, sf: StageFrame, mf: MachineFrame, big: number, bigMachine: number, going: boolean): void {
+    const pr = this.prims, snap = f.snap
+    const pose = POSE
+    // People leaving the farm: down the road with a bag, and gone.
+    this.leavers = this.leavers.filter(l => l.at < l.path.length)
+    for (const l of this.leavers) {
+      const step = (going ? 2.4 : 0) * big * f.dt
+      l.at += step
+      l.gait += f.dt * 9
+      const e = l.path.at(l.at)
+      walk(pose, l.gait, 1, 0.3, 0)
+      pose.held = 'bag'
+      figureMatrix(M, e.x, heightAt(e.x, e.z) + 0.02, e.z, Math.atan2(e.dz, e.dx), big * clamp((l.path.length - l.at) / 3, 0, 1))
+      drawFigure(pr, M, l.dress, pose)
+    }
+    // Callers: people asking for work at the gate, a neighbour after one of ours, a buyer at the potato house.
+    let asking = snap.mode === 'plan' ? snap.farm.applicants : 0
+    let poach = false, buyer = false
+    for (const inc of snap.farm.incidents) {
+      if (inc.kind === 'applicant') asking++
+      else if (inc.kind === 'poach') poach = true
+      else if (inc.kind === 'buyer') buyer = true
+    }
+    for (let k = 0; k < Math.min(4, asking); k++) {
+      stand(pose, f.time + k * 2.3, 0.1, k === 1 ? 4 : 0)
+      pose.held = 'bag'
+      figureMatrix(M, GATE.x + 0.75 * k * big * 0.6, heightAt(GATE.x + 0.75 * k, GATE.z) + 0.02, GATE.z + 0.35 * (k % 2) * big, GATE.heading + 0.3 * k, big)
+      drawFigure(pr, M, ASKING[k % ASKING.length], pose)
+    }
+    const caller = (kind: 'pickup' | 'sedan', on: boolean, spot: Spot, man: Spot, dress: Dress, style: number) => {
+      let car = this.callers[kind]
+      if (!on) { if (car) car.group.visible = false; return }
+      if (!car) { car = new Car(kind, kind === 'pickup' ? '#59664a' : '#1d2023', kind === 'sedan' ? '#b9bcbf' : '#c9c4b4'); this.callers[kind] = car; this.group.add(car.group) }
+      car.group.visible = true
+      car.place(spot.x, heightAt(spot.x, spot.z) + 0.01, spot.z, spot.heading, 0, bigMachine)
+      car.draw(pr, mf, IDLE)
+      stand(pose, f.time * 1.1 + style, 0, style)
+      figureMatrix(M, man.x, heightAt(man.x, man.z) + 0.02, man.z, man.heading, big)
+      drawFigure(pr, M, dress, pose)
+    }
+    caller('pickup', poach, CALLER.truck, CALLER.man, NEIGHBOUR, 1)
+    caller('sedan', buyer, BUYER.car, BUYER.man, BUYER_MAN, 2)
+
+    // Pickers behind the digger, and the crows that follow it.
+    for (const [field, g] of this.gangs) {
+      const digging = snap.mode === 'season' && (snap.fields[field].status === 'digging' || snap.fields[field].status === 'dug') && g.idle < 40
+      if (!digging) { this.gangs.delete(field); continue }
+      if (going) g.idle += f.dt
+      g.pickers.forEach((p, k) => {
+        const dx = p.tx - p.x, dz = p.tz - p.z, dist = Math.hypot(dx, dz)
+        if (dist > 0.25 * big) {
+          const step = Math.min(dist, (going ? 2.6 : 0) * big * f.dt)
+          p.x += (dx / dist) * step
+          p.z += (dz / dist) * step
+          p.heading = Math.atan2(dz, dx)
+          p.gait += f.dt * 10
+          p.bent = Math.max(0, p.bent - f.dt * 4)
+          walk(pose, p.gait, 1, 0, 0)
         } else {
-          if (!handWalks) {
-            const end = travel.at(travel.length)
-            pos = end
-            dir = travel.length > 0.01 ? end : dir
-          }
-          footOn = true
-          if (seg.kind === 'sample') {
-            // The test dig is staged: the walk in, the fork set and the hill lifted, then a moment to look.
-            const walk = Math.min(1, w / 0.5)
-            const e = path.at(walk * path.length)
-            walkPos = e
-            walkDir = walk < 1 ? e : { dx: 0, dz: -1 }
-            walking = walk < 1 ? 1 : 0
-            bent = smooth(0.5, 0.62, w) * (1 - 0.6 * smooth(0.66, 0.8, w))
-            passed(w >= 0.64 ? Infinity : -1)
-          } else {
-            const e = path.at(w * path.length)
-            walkPos = e
-            walkDir = e
-            walking = 1
-            // the farmer is back on the tractor once the walk is done; a hand stays where the walk ended
-            if (w >= 1 && !handWalks) footOn = false
-            passed(w * path.length)
+          if (going) p.wait -= f.dt
+          p.bent = Math.min(1, p.bent + f.dt * 3)
+          pose.reset()
+          stoop(pose, p.bent * (0.82 + 0.18 * Math.sin(f.time * 3 + k)), f.time * 6 + k)
+          if (p.wait <= 0 && g.recent.length) {
+            const t = g.recent[Math.max(0, g.recent.length - 1 - Math.floor(Math.random() * Math.min(14, g.recent.length)))]
+            p.tx = t.x + (Math.random() - 0.5) * 0.9
+            p.tz = t.z + (Math.random() - 0.5) * 0.9
+            p.wait = 1.2 + Math.random() * 2.2
           }
         }
+        pose.held = 'basket'
+        figureMatrix(M, p.x, heightAt(p.x, p.z) + 0.02, p.z, p.heading, big)
+        drawFigure(pr, M, p.dress, pose)
+      })
+      for (const c of g.crows) {
+        if (going) c.t += f.dt / 1.1
+        if (c.t >= 1) {
+          if (going) c.wait -= f.dt
+          if (c.wait <= 0 && g.recent.length > 6) {
+            const t = g.recent[Math.floor(Math.random() * Math.max(1, g.recent.length - 6))]
+            c.fx = c.x; c.fz = c.z
+            c.tx = t.x + (Math.random() - 0.5) * 1.5
+            c.tz = t.z + (Math.random() - 0.5) * 1.5
+            c.t = 0
+            c.wait = 2 + Math.random() * 5
+            c.h = Math.atan2(c.tz - c.fz, c.tx - c.fx)
+          }
+        }
+        const q = clamp(c.t, 0, 1)
+        if (q < 1) { c.x = c.fx + (c.tx - c.fx) * q; c.z = c.fz + (c.tz - c.fz) * q }
+        drawCrow(pr, c.x, heightAt(c.x, c.z) + (q < 1 ? Math.sin(q * Math.PI) * 1.3 * big : 0), c.z, c.h, big * 1.25, q < 1 ? 1 : 0, f.time * 6 + c.wait)
       }
-      if (u.tractor) u.tractor.setImplement(seg.kind === 'travel' ? u.tractor.current : seg.walker ? 'none' : implementFor(seg.kind))
-    } else if (!f.season) {
-      u.tractor?.setImplement('none')
     }
-    // the walker's facing
-    if (footOn) {
-      const step = Math.hypot(walkPos.x - u.walk.x, walkPos.z - u.walk.z)
-      if (step > 1e-4 || walking) u.walkHeading = Math.atan2(walkDir.dz, walkDir.dx)
-      u.walk = { x: walkPos.x, z: walkPos.z }
-      u.walker.group.visible = true
-      u.walker.group.position.set(walkPos.x, heightAt(walkPos.x, walkPos.z) + 0.02, walkPos.z)
-      u.walker.group.rotation.y = -u.walkHeading
-      stride(u.walker.figure, f.time * 9 + k * 1.3, walking)
-      stoop(u.walker.figure, bent)
-      u.walker.fork.visible = kind === 'sample' || kind === 'rogue'
-    } else {
-      u.walker.group.visible = false
-      u.walk = { ...pos }
+    // The neighbour's cows, out from May until the snow.
+    if (f.env.snow < 0.1 && snap.mode !== 'cellar') {
+      for (const c of this.cows) {
+        c.t -= going || snap.mode !== 'season' ? f.dt : 0
+        if (c.t <= 0) {
+          c.walking = !c.walking
+          c.t = c.walking ? 2 + Math.random() * 3 : 8 + Math.random() * 16
+          if (c.walking) c.h += (Math.random() - 0.5) * 2
+        }
+        if (c.walking) {
+          const nx = c.x + Math.cos(c.h) * 0.25 * f.dt, nz = c.z + Math.sin(c.h) * 0.25 * f.dt
+          if (Math.abs(nx - 37) < 6 && Math.abs(nz - 10) < 6) { c.x = nx; c.z = nz } else c.h += Math.PI * 0.6
+        }
+        drawBeast(pr, COWS[c.kind], c.x, heightAt(c.x, c.z), c.z, c.h, big * 0.9, f.time * 3 + c.kind, c.walking ? 0.7 : 0, c.walking ? 0 : 1)
+      }
     }
-    u.walking = footOn && !!u.tractor
-    if (!u.tractor) { u.pos = { ...u.walk }; return }
-    const t = u.tractor
-    // A jump (the opening's loop starting again) is not a drive.
-    const stepLen = Math.hypot(pos.x - u.pos.x, pos.z - u.pos.z)
-    const moved = stepLen > 3 ? 0 : stepLen
-    u.travelled += moved
-    let turn = 0
-    if (moved > 1e-4 || seg) {
-      const target = Math.atan2(dir.dz, dir.dx)
-      let d = target - u.heading
-      while (d > Math.PI) d -= Math.PI * 2
-      while (d < -Math.PI) d += Math.PI * 2
-      turn = clamp(d * 1.5, -1, 1)
-      u.heading += stepLen > 3 ? d : moved > 1e-4 ? d * Math.min(1, f.dt * 7 + moved * 2) : 0
+    // A deer at the wood's edge, gone into the trees when anyone comes near.
+    const d = this.deer
+    let near = false
+    for (const a of this.actors) if (Math.hypot(a.x - d.x, a.z - d.z) < 11) near = true
+    d.away = clamp(d.away + (near ? f.dt * 0.9 : -f.dt * 0.06), 0, 1)
+    d.t += f.dt
+    if (d.away < 0.99 && snap.mode !== 'title') {
+      const z = d.z - d.away * 5
+      drawBeast(pr, DEER, d.x - d.away * 2, heightAt(d.x, z), z, near ? -1.9 : 0.4, big * 0.9 * (1 - 0.5 * d.away), d.away > 0.02 ? f.time * 14 : 0, d.away > 0.02 && d.away < 0.99 ? 1 : 0, near ? 0 : (Math.sin(d.t * 0.4) > 0.2 ? 1 : 0))
     }
-    u.pos = { x: pos.x, z: pos.z }
-    const s = t.group.scale.x
-    const y = heightAt(pos.x, pos.z)
-    const ahead = heightAt(pos.x + Math.cos(u.heading) * 0.6 * s, pos.z + Math.sin(u.heading) * 0.6 * s)
-    const behind = heightAt(pos.x - Math.cos(u.heading) * 0.6 * s, pos.z - Math.sin(u.heading) * 0.6 * s)
-    t.group.position.set(pos.x, y + 0.01, pos.z)
-    t.group.rotation.set(0, -u.heading, Math.atan2(ahead - behind, 1.2 * s), 'YXZ')
-    t.driver.visible = !u.walking
-    t.animate(f.dt, u.travelled, moved, turn, working, kind, f.dust, f.particles, f.reduced || f.idle)
+    void sf
   }
 
-  // The crew under a point on the screen (CSS pixels), or -1: on its body, or on its marker.
-  pick(x: number, y: number, camera: PerspectiveCamera, w: number, h: number, markers: boolean): number {
+  // The screen's size in CSS pixels (kept for the callers of the old pin markers).
+  setScreen(_w: number, _h: number): void {}
+
+  // The person under a point on the screen (CSS pixels), or -1: on their body, or on the machine they are on. The reach
+  // is generous when they are small on the screen.
+  pick(x: number, y: number, camera: PerspectiveCamera, w: number, h: number, _markers = false): number {
     let best = -1, bd = Infinity
     const screen = (px: number, py: number, pz: number): [number, number] | null => {
       this.v.set(px, py, pz).project(camera)
       return this.v.z > 1 ? null : [(this.v.x + 1) / 2 * w, (1 - this.v.y) / 2 * h]
     }
-    for (const u of this.units) {
-      const foot = u.walking || !u.tractor
-      const at = foot ? u.walk : u.pos
-      const s = (foot ? u.walker.group : u.tractor!.group).scale.x
-      const base = heightAt(at.x, at.z)
-      const body = screen(at.x, base + 0.4 * s, at.z)
-      if (body) {
-        const edge = screen(at.x + (foot ? 0.4 : 0.9) * s, base + 0.4 * s, at.z)
-        const r = Math.max(16, edge ? Math.hypot(edge[0] - body[0], edge[1] - body[1]) : 16)
-        const d = Math.hypot(body[0] - x, body[1] - y)
-        if (d < r && d < bd) { bd = d; best = u.id }
-      }
-      const pin = markers ? screen(at.x, base + (foot ? 0.95 : 1.45) * s, at.z) : null
-      if (pin) {
-        const d = Math.hypot(pin[0] - x, pin[1] - 14 - y)
-        if (d < 15 && d < bd) { bd = d; best = u.id }
-      }
+    for (const a of this.actors) {
+      if (a.shown < 0.5) continue
+      const s = a.scale
+      const base = heightAt(a.x, a.z)
+      const body = screen(a.x, base + (a.aboard ? 0.6 : 0.4) * s, a.z)
+      if (!body) continue
+      const edge = screen(a.x, base + (a.aboard ? 1.5 : 0.95) * s, a.z)
+      const r = Math.max(22, edge ? Math.hypot(edge[0] - body[0], edge[1] - body[1]) * (a.aboard ? 1.25 : 1.1) : 22)
+      const d = Math.hypot(body[0] - x, body[1] - y)
+      if (d < r && d < bd) { bd = d; best = a.id }
     }
     return best
   }
 
   dispose(): void {
-    this.markerGeo.dispose()
-    this.markerMat.dispose()
+    this.ringGeo.dispose()
+    this.ringMat.dispose()
+    this.prims.dispose()
+    for (const r of this.rigs) r.machine.dispose()
+    this.callers.pickup?.dispose()
+    this.callers.sedan?.dispose()
   }
 }
+
+const POSE = new Pose()
+const WHITE = new Color(1, 1, 1)
+const IDLE: MachineState = { moved: 0, turn: 0, working: 0, kind: 'travel', driver: null, load: 0 }
+const ASKING: Dress[] = [
+  dressOf({ shirt: '#6f6a5c', trousers: '#3d3a35', hat: '#4a4640', hatKind: 'cap', hair: '#5a3d24' }),
+  dressOf({ shirt: '#7d6a4f', trousers: '#33373d', hat: '#8c7a5a', hatKind: 'brim', hair: '#2b211a', skin: '#c48a62' }),
+  dressOf({ shirt: '#5c6670', trousers: '#4a4136', hat: '#3b3f45', hatKind: 'cap', hair: '#8a6a3c', skin: '#f0c8a8' }),
+]
+const NEIGHBOUR = dressOf({ shirt: '#4d5a46', trousers: '#3d3a35', hat: '#6b5a3c', hatKind: 'brim', hair: '#b9b4a8', build: 1.1 })
+const BUYER_MAN = dressOf({ shirt: '#2f3238', trousers: '#2a2c31', hat: '#3a3836', hatKind: 'fedora', hair: '#2b211a', build: 1.05 })
+const smoothstep = (t: number) => { const c = clamp(t, 0, 1); return c * c * (3 - 2 * c) }
