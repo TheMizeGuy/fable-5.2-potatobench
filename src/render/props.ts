@@ -2,7 +2,7 @@
 // raises (drawn as far along as the work is), what lies and stands about the yards, and the neighbours far off.
 // The shapes are in farmstead.ts, sites.ts and yard.ts; this keeps them in step with the game.
 import { BufferAttribute, BufferGeometry, DoubleSide, Group, Mesh, ShaderMaterial, Vector3 } from 'three'
-import { Builder, DUSK, LAMP_LUM, builtMaterial, type V3 } from './builder.ts'
+import { Builder, DUSK, LAMP_LUM, builtDepth, builtMaterial, type V3 } from './builder.ts'
 import type { Env, Light } from './env.ts'
 import { farmstead, type Marks } from './farmstead.ts'
 import { UI_GAIN } from './fields.ts'
@@ -25,6 +25,7 @@ export class Props {
   // Where smoke leaves the kitchen chimney.
   readonly chimney = new Vector3()
   private mat = builtMaterial()
+  private depth = builtDepth()
   private b = new Builder()
   private marks: Marks
   private fixed: Mesh[] = []
@@ -49,15 +50,15 @@ export class Props {
   constructor() {
     const b = this.b
     this.marks = farmstead(b)
-    this.fixed.push(b.mesh(this.mat))
+    this.fixed.push(b.mesh(this.mat, this.depth))
     yardLife(b)
-    this.life = b.mesh(this.mat)
+    this.life = b.mesh(this.mat, this.depth)
     poles(b)
-    const wires = b.mesh(this.mat)
+    const wires = b.mesh(this.mat, this.depth)
     wires.castShadow = false
     this.fixed.push(wires)
     country(b)
-    const far = b.mesh(this.mat)
+    const far = b.mesh(this.mat, this.depth)
     // seen from a long way off: their shadow is drawn in the wide cascade only
     far.layers.disable(1)
     far.layers.disable(3)
@@ -70,7 +71,7 @@ export class Props {
 
     const small = (draw: () => void): Mesh => {
       draw()
-      const m = b.mesh(this.mat)
+      const m = b.mesh(this.mat, this.depth)
       m.layers.disable(1)
       m.layers.disable(2)
       this.group.add(m)
@@ -111,7 +112,7 @@ export class Props {
     }
     slot.marks = draw ? draw() : null
     if (!this.b.empty) {
-      slot.mesh = this.b.mesh(this.mat)
+      slot.mesh = this.b.mesh(this.mat, this.depth)
       this.group.add(slot.mesh)
     }
     return true
@@ -175,7 +176,7 @@ export class Props {
     // The share of windows lit follows how much lamplight the hour wants; a lit window is as bright whatever the exposure.
     const want = (LAMP.value * f.lit.exposure) / 0.6
     DUSK.value = smooth(0.1, 0.8, want)
-    LAMP_LUM.value = 0.55 / Math.max(0.05, f.lit.exposure)
+    LAMP_LUM.value = 1.0 / Math.max(0.05, f.lit.exposure)
     // Small things go when the camera is far off or the machine is a slow one.
     this.life.visible = this.tier !== 'low' || f.dist < 60
     for (const yard of [-1, -2]) {
@@ -223,6 +224,7 @@ export class Props {
     for (const m of [...this.fixed, this.life, this.barnVane, this.vane, this.cups, this.truck, this.car, ...Object.values(this.outline)]) m.geometry.dispose()
     for (const s of [...this.standing.values(), this.piles, this.parked, ...Object.values(this.plots)]) s.mesh?.geometry.dispose()
     this.mat.dispose()
+    this.depth.dispose()
     this.outlineMat.dispose()
   }
 }

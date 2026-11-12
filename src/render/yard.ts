@@ -5,7 +5,7 @@ import { IRON, TRIM, barrel, chimney, door, foundation, leanRoof, level, roof, s
 import { FIN, type Builder, type V3 } from './builder.ts'
 import { cordwood } from './farmstead.ts'
 import { FARMSTEADS } from './flora.ts'
-import { DUFOUR_BARN, HOUSE, LOG_DECKS, SITES, STONE_PILE, groundY, townRoadZ } from './layout.ts'
+import { BAYS, DUFOUR_BARN, HOUSE, IMPLEMENT_SPOTS, LOG_DECKS, SITES, STONE_PILE, TRUCK_SPOT, groundY, townRoadZ, type Spot } from './layout.ts'
 import { hash2 } from './noise.ts'
 
 const BARK = '#5f4d3d', CUT = '#d0ae78'
@@ -167,27 +167,24 @@ const PAINTS: [string, string][] = [['#8e918b', '#9b3a26'], ['#3f6a4c', '#d8c38a
 // Machines the farm owns and is not using today, parked where it keeps them: tractors and the truck in the machine
 // shed's bays, the sprayer, the harvester and the reel in the grass at its end; a customer's car at the stand.
 export function machines(b: Builder, m: MachineLook): void {
-  const put = (x: number, z: number, ry: number, draw: () => void) => {
-    const y = groundY(x, z)
-    // lean with the ground
-    b.at(x, y + 0.02, z, ry, y)
+  const put = (s: Spot, draw: () => void, y = groundY(s.x, s.z) + 0.02) => {
+    b.at(s.x, y, s.z, -s.heading, y)
     draw()
   }
+  // a second and a third tractor are only ever owned once the shed stands
   const shed = SITES.find(s => s.kind === 'shed' && s.yard === -1)!
-  const bay = (k: number): [number, number] => [shed.x + (k - 1) * (shed.w / 3), shed.z + 0.1]
   const floor = level(shed.x, shed.z, shed.w, shed.d).top + 0.05
-  for (let k = 0; k < Math.min(2, m.tractors); k++) {
-    if (m.shed) { const [x, z] = bay(k); b.at(x, floor, z, -Math.PI / 2, floor); tractor(b, ...PAINTS[k]) } else put(26.4 + k * 1.3, -11.3, Math.PI * 0.9, () => tractor(b, ...PAINTS[k]))
-  }
+  if (m.shed) for (let k = 0; k < Math.min(2, m.tractors); k++) put(BAYS[k], () => tractor(b, ...PAINTS[k]), floor)
   if (m.truck) {
-    if (m.shed) { const [x, z] = bay(2); b.at(x, floor, z - 0.25, -Math.PI / 2, floor); truck(b, '#3d5a6e') } else put(27.4, -14.4, 0.1, () => truck(b, '#3d5a6e'))
+    if (m.shed) put({ ...BAYS[2], z: BAYS[2].z - 0.25 }, () => truck(b, '#3d5a6e'), floor)
+    else put(TRUCK_SPOT, () => truck(b, '#3d5a6e'))
   }
-  if (m.harvester) put(38.5, -5.9, 0.12, () => harvester(b))
-  if (m.sprayer) put(40.9, -6.1, -0.2, () => sprayer(b))
-  if (m.reel) put(41.3, -2.4, 1.2, () => reel(b))
+  if (m.harvester) put(IMPLEMENT_SPOTS.harvester, () => harvester(b))
+  if (m.sprayer) put(IMPLEMENT_SPOTS.sprayer, () => sprayer(b))
+  if (m.reel) put(IMPLEMENT_SPOTS.reel, () => reel(b))
   if (m.car) {
     const s = SITES.find(q => q.kind === 'stand' && q.yard === -1)!
-    put(s.x - 1.9, s.z + 0.5, Math.PI / 2 - 0.12, () => car(b, '#7d9aa8'))
+    put({ x: s.x - 1.9, z: s.z + 0.5, heading: 0.12 - Math.PI / 2 }, () => car(b, '#7d9aa8'))
   }
 }
 
@@ -235,10 +232,40 @@ function appleTree(b: Builder, x: number, z: number, s: number, seed: number): v
     b.cyl([0.05 * s, 0.48 * s, 0.02 * s], tip, 0.04 * s, 0.018 * s, 5, '#4f4338', FIN.wood)
     limbs.push(tip)
   }
-  limbs.push([0.05 * s, 1.08 * s, 0.02 * s])
+  limbs.push([0.05 * s, 1.02 * s, 0.02 * s])
+  // The crown: a dark heart at each limb's end and sprays of leaf standing out all round it, lit together as one low
+  // spreading head, so it has a sunny side and a shaded one and a ragged outline.
+  const heart: V3 = [0.05 * s, 0.6 * s, 0.02 * s]
+  const greens = ['#3f5f33', '#4a6b38', '#587a40', '#4f7436']
+  let n = seed * 977
+  const rnd = () => hash2(n++, seed + 5)
   limbs.forEach((p, k) => {
-    b.blob([p[0], p[1] + 0.08 * s, p[2]], [(0.34 + 0.08 * hash2(seed, k + 9)) * s, 0.26 * s, (0.34 + 0.08 * hash2(seed + 1, k + 9)) * s], seed * 7 + k, k % 2 ? '#4f7a3a' : '#5d8a42', FIN.leaf, { detail: 1, rough: 0.34 })
+    for (let q = 0; q < 4; q++) {
+      const a = rnd() * 6.283, d = (q === 0 ? 0 : 0.2 + 0.16 * rnd()) * s
+      const r = (0.2 + 0.08 * rnd()) * s
+      const c: V3 = [p[0] + Math.cos(a) * d, p[1] + (0.08 - 0.14 * rnd()) * s, p[2] + Math.sin(a) * d]
+      b.blob(c, [r * 0.66, r * 0.5, r * 0.66], seed * 7 + k * 5 + q, '#2c4426', FIN.leaf, { detail: 0, rough: 0.2, round: heart, tint: 0.7 })
+      for (let j = 0; j < 26; j++) {
+        const u = rnd() * 2 - 1, t = rnd() * 6.283, w = Math.sqrt(1 - u * u), out = 0.55 + 0.5 * rnd()
+        const o: V3 = [w * Math.cos(t), u * 0.8 + 0.15, w * Math.sin(t)]
+        const at: V3 = [c[0] + o[0] * r * out, c[1] + o[1] * r * out * 0.8, c[2] + o[2] * r * out]
+        const size = (0.075 + 0.05 * rnd()) * s
+        // across the way out, tipped a little at random
+        const rx = rnd() - 0.5, ry = rnd() - 0.5, rz = rnd() - 0.5
+        let ux = o[1] * rz - o[2] * ry, uy = o[2] * rx - o[0] * rz, uz = o[0] * ry - o[1] * rx
+        const ul = Math.hypot(ux, uy, uz) || 1
+        ux /= ul; uy /= ul; uz /= ul
+        const vx = o[1] * uz - o[2] * uy + o[0] * 0.3, vy = o[2] * ux - o[0] * uz + o[1] * 0.3 - 0.25, vz = o[0] * uy - o[1] * ux + o[2] * 0.3
+        const nrm: V3 = [at[0] - heart[0], (at[1] - heart[1]) * 1.2 + 0.25 * s, at[2] - heart[2]]
+        b.card(at, [ux * size, uy * size, uz * size], [vx * size * 0.75, vy * size * 0.75, vz * size * 0.75], nrm, greens[(j + k) % 4], FIN.leaf, 1, 0.72 + 0.4 * out * rnd() + 0.12 * o[1])
+      }
+    }
   })
+  // apples among the outer leaves
+  for (let k = 0; k < 12; k++) {
+    const a = rnd() * 6.283, d = (0.4 + 0.26 * rnd()) * s
+    b.blob([0.05 * s + Math.cos(a) * d, (0.68 + 0.26 * rnd()) * s, 0.02 * s + Math.sin(a) * d], [0.026 * s, 0.026 * s, 0.026 * s], k, '#9c3328', FIN.leaf, { detail: 0, rough: 0.1, ex: 0.9 })
+  }
 }
 
 // A length of split-rail or post-and-wire fence.
@@ -263,11 +290,20 @@ export function yardLife(b: Builder): void {
   picket(b, 19.35, 4.5, 19.35, 6.6)
   picket(b, 19.35, 6.6, 25.4, 6.6, 4.25)
   b.at(0, 0, 0, 0, groundY(21, 5))
-  for (let k = 0; k < 16; k++) {
-    const z = hz - 1.6 + k * 0.21, x = hx - 1.72 - 0.08 * hash2(k, 5), y = groundY(x, z)
-    const hgt = 0.16 + 0.24 * hash2(k, 7)
-    b.blob([x, y + hgt * 0.5, z], [0.07, hgt * 0.6, 0.07], k, '#4c7a3c', FIN.leaf, { detail: 0, rough: 0.3 })
-    b.blob([x - 0.02, y + hgt + 0.02, z], [0.05, 0.06, 0.05], k + 40, ['#c9567a', '#e3c44a', '#e9e2d6', '#b65fb0'][k % 4], FIN.leaf, { detail: 0, rough: 0.4 })
+  // a bed under the windows: low mounds of leaf, hollyhocks standing against the clapboards, small bloom all through
+  for (let k = 0; k < 12; k++) {
+    const z = hz - 1.62 + k * 0.29, x = hx - 1.74 - 0.06 * hash2(k, 5), y = groundY(x, z)
+    const r = 0.13 + 0.05 * hash2(k, 7)
+    b.blob([x, y + r * 0.5, z], [r, r * 0.8, r * 1.25], k, k % 3 ? '#3f6b35' : '#4f7a3c', FIN.leaf, { detail: 1, rough: 0.4, ex: 0 })
+    for (let q = 0; q < 5; q++) {
+      const a = hash2(k * 7 + q, 3) * 6.283, d = r * 0.8 * hash2(k * 7 + q, 9)
+      b.blob([x - 0.03 + Math.cos(a) * d, y + r * (0.95 - 0.3 * d / r), z + Math.sin(a) * d * 1.2], [0.022, 0.018, 0.022], q, ['#c9567a', '#e3c44a', '#e9e2d6', '#b65fb0'][(k + q) % 4], FIN.plain, { detail: 0, rough: 0.2 })
+    }
+    if (k % 3 === 1) {
+      const sx = hx - 1.6, hgt = 0.5 + 0.22 * hash2(k, 13)
+      b.cyl([sx, y, z + 0.1], [sx - 0.02, y + hgt, z + 0.1], 0.008, 0.006, 4, '#4f7a3c', FIN.plain)
+      for (let q = 0; q < 5; q++) b.blob([sx - 0.02, y + hgt * (0.45 + 0.13 * q), z + 0.1 + (q % 2 ? 0.02 : -0.02)], [0.028, 0.026, 0.028], q + k, k % 2 ? '#c9567a' : '#e6dccb', FIN.plain, { detail: 0, rough: 0.2 })
+    }
   }
   // The well by the kitchen porch: a plank cover and an iron pump, a pail under its spout.
   {
@@ -387,11 +423,20 @@ export function yardLife(b: Builder): void {
   }
   // The mailbox where the farm's road meets the town road.
   {
-    const x = 21.9, z = townRoadZ(21.9) - 1.7, y = groundY(x, z)
+    const x = 22.3, z = townRoadZ(22.3) - 1.5, y = groundY(x, z)
     b.at(x, y, z, 0.2, y)
     b.box(0, 0.32, 0, 0.06, 0.64, 0.06, '#77695a', FIN.wood)
     b.box(0, 0.7, 0.04, 0.16, 0.14, 0.34, '#b9bcb8', FIN.metal)
     b.box(0.09, 0.76, 0.1, 0.012, 0.1, 0.05, '#b8402c', FIN.plain)
+    // The culvert that carries the town road's ditch under the farm's road: a pipe's mouth in a stone headwall each side.
+    const cz = townRoadZ(20.6) - 2.3
+    for (const sg of [-1, 1]) {
+      const cx = 20.55 + sg * 1.25, cy = groundY(cx, cz)
+      b.at(cx, cy, cz, 0, cy)
+      b.box(0, 0.08, 0, 0.3, 0.46, 1.1, '#8f8a80', FIN.stone, { skip: 'b' })
+      b.cyl([sg * 0.16, 0.06, 0], [-sg * 0.3, 0.06, 0], 0.17, 0.17, 10, '#77736b', FIN.concrete, { cap: 'a', capColor: '#0d0c0b', capFin: FIN.dark })
+      b.blob([sg * 0.5, -0.02, 0.1], [0.5, 0.06, 0.4], 3, '#6f6a5c', FIN.gravel, { detail: 1, rough: 0.2 })
+    }
   }
   // Along the yard's east side, where the farm's ground meets the neighbour's pasture: cedar posts and wire.
   posts(b, 42.6, -7.2, 42.6, 6.4, 1.5, true)

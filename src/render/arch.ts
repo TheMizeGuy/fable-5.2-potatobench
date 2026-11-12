@@ -64,6 +64,19 @@ export function shell(b: Builder, w: number, l: number, wall: number, rise: numb
   return sh
 }
 
+// Ground made level for a building on a slope: a bank with its top at the floor and turfed sides easing out to the
+// ground. `ramp`: the side toward +z falls away gently, as trodden earth, for wheels.
+export function pad(b: Builder, w: number, d: number, depth: number, ramp = false, grow = 0.3): void {
+  const hx = w / 2 + grow, hz = d / 2 + grow, y1 = -0.02, y0 = -depth - 0.05
+  const sx = hx + depth * 1.3, zb = -hz - depth * 0.8, zf = hz + (ramp ? Math.max(1.5, depth * 3) : depth * 1.4)
+  const earth = '#8a7158'
+  b.quad([-hx, y1, hz], [hx, y1, hz], [hx, y1, -hz], [-hx, y1, -hz], earth, FIN.earth)
+  b.quad([-sx, y0, zf], [sx, y0, zf], [hx, y1, hz], [-hx, y1, hz], ramp ? earth : '#ffffff', ramp ? FIN.earth : FIN.turf)
+  b.quad([sx, y0, zb], [-sx, y0, zb], [-hx, y1, -hz], [hx, y1, -hz], '#ffffff', FIN.turf)
+  b.quad([sx, y0, zf], [sx, y0, zb], [hx, y1, -hz], [hx, y1, hz], '#ffffff', FIN.turf)
+  b.quad([-sx, y0, zb], [-sx, y0, zf], [-hx, y1, hz], [-hx, y1, -hz], '#ffffff', FIN.turf)
+}
+
 // Stone under the sills, showing more on the downhill side.
 export function foundation(b: Builder, w: number, l: number, depth: number, color = FIELDSTONE, fin: number = FIN.stone, out = 0.05): void {
   b.box(0, -depth / 2 + 0.03, 0, w + out * 2, depth + 0.06, l + out * 2, color, fin, { skip: 'b', ex: [0.8, 1] })
@@ -239,6 +252,16 @@ export function stoneHeap(b: Builder, x: number, y: number, z: number, r: number
   }
 }
 
+// A load tipped from a cart: a low cone of earth or gravel, a little out of round.
+export function tipped(b: Builder, x: number, y: number, z: number, r: number, color: string, fin: number, seed = 0): void {
+  const h = r * 0.52, lean = 0.12 * r
+  const dx = Math.cos(seed * 2.4) * lean, dz = Math.sin(seed * 2.4) * lean
+  b.push(x, y - 0.03, z, seed * 1.3)
+  b.lathe([0, 0, 0], [[r, 0], [r * 0.74, h * 0.34], [r * 0.4, h * 0.76], [r * 0.14, h * 0.96], [0, h]], 9, color, fin, { uo: seed * 3.1 })
+  b.lathe([dx * 4, 0, dz * 4], [[r * 0.5, 0], [r * 0.2, h * 0.4], [0, h * 0.5]], 7, color, fin, { uo: seed * 5.3, tint: 0.94 })
+  b.pop()
+}
+
 // A barrel: staves bulging between hoops, the head let in a little.
 export function barrel(b: Builder, x: number, y: number, z: number, s = 1, tint = 1, full = false): void {
   const r = 0.115 * s, h = 0.3 * s
@@ -251,9 +274,9 @@ export function barrel(b: Builder, x: number, y: number, z: number, s = 1, tint 
 // A wheel on its side axis: a tyre and a hub, standing at (x, z) with its axle along `ax`.
 export function wheel(b: Builder, c: V3, ax: V3, r: number, wide: number, hub: string, sides = 10): void {
   const a: V3 = [c[0] - ax[0] * wide / 2, c[1] - ax[1] * wide / 2, c[2] - ax[2] * wide / 2], e: V3 = [c[0] + ax[0] * wide / 2, c[1] + ax[1] * wide / 2, c[2] + ax[2] * wide / 2]
-  b.cyl(a, e, r, r, sides, '#1e1e1c', FIN.plain, { cap: 'ab', ex: 0.9 })
+  b.cyl(a, e, r, r, Math.max(sides, 14), '#1e1e1c', FIN.plain, { cap: 'ab', ex: 0.9 })
   const a2: V3 = [c[0] - ax[0] * (wide / 2 + 0.006), c[1], c[2] - ax[2] * (wide / 2 + 0.006)], e2: V3 = [c[0] + ax[0] * (wide / 2 + 0.006), c[1], c[2] + ax[2] * (wide / 2 + 0.006)]
-  b.cyl(a2, e2, r * 0.55, r * 0.55, 8, hub, FIN.plain, { cap: 'ab' })
+  b.cyl(a2, e2, r * 0.55, r * 0.55, 14, hub, FIN.plain, { cap: 'ab' })
 }
 
 export { groundY, UP }

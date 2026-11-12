@@ -2,14 +2,14 @@
 // the work is: the site staked out and the materials delivered, the foundation, the frame going up bent by bent, boards
 // and roof, and then the finished building in use.
 import {
-  FIELDSTONE, IRON, LUMBER, TRIM, barrel, door, fbox, foundation, fp, leanRoof, level, lumber, roof, shell, stoneHeap, stovepipe, trims, win,
+  FIELDSTONE, IRON, LUMBER, TRIM, barrel, door, fbox, foundation, fp, leanRoof, level, lumber, pad, roof, shell, stoneHeap, stovepipe, tipped, trims, win,
 } from './arch.ts'
 import { FIN, type Builder, type V3 } from './builder.ts'
 import { bankEarth, potatoHouse } from './farmstead.ts'
 import { POND_AT, ROAD, brookHalf, brookZ, groundY, type Site } from './layout.ts'
 import { clamp, mix } from './noise.ts'
 
-const RED = '#8f3626', NEW_TIN = '#a9adab', CEDAR = '#b3925f', CONCRETE = '#aaa497', EARTH = '#6f4e3a', GRAVEL = '#9b9584'
+const RED = '#8f3626', NEW_TIN = '#a9adab', CEDAR = '#93846a', CONCRETE = '#aaa497', EARTH = '#86694f', GRAVEL = '#8d8674'
 const GREEN = '#2c4a37', STRING = '#ece7da'
 
 // What the game says of a site.
@@ -70,8 +70,6 @@ function raise(b: Builder, pl: Plan, depth: number, p: number): void {
   const cuts = pl.cuts ?? [0.1, 0.28, 0.55, 0.8]
   const t1 = ramp(p, cuts[0], cuts[1]), t2 = ramp(p, cuts[1], cuts[2]), t3 = ramp(p, cuts[2], cuts[3]), t4 = ramp(p, cuts[3], 1)
   const eave = pl.eave ?? 0.2, rake = 0.16
-  // the ground cut level and bare
-  if (!pl.masonry) b.box(0, -depth / 2 - 0.13, 0, w + 0.7, depth, l + 0.7, EARTH, FIN.earth, { skip: 'b' })
   if (t1 < 0.6) {
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
       const x = sx * (w / 2 + 0.3), z = sz * (l / 2 + 0.3)
@@ -182,14 +180,12 @@ function seat(b: Builder, s: Site): number {
 const SHED: Plan = { w: 3.1, l: 6.4, wall: 1.5, rise: 0.72, open: true, wallColor: RED, wallFin: FIN.boards, roofColor: NEW_TIN, roofFin: FIN.metal, eave: 0.24 }
 function shed(b: Builder, s: Site, look: SiteLook): void {
   const depth = seat(b, s)
-  supplies(b, -s.w / 2 - 1.5, s.d / 2 + 0.2, look.built ? 1 : look.progress, true)
+  if (!look.built) supplies(b, -s.w / 2 - 1.9, s.d / 2 + 0.6, look.progress, true)
+  pad(b, s.w, s.d, depth, true)
   b.push(0, 0, 0, Math.PI / 2)
   const pl = SHED
   if (!look.built) { raise(b, pl, depth, look.progress); b.pop(); return }
   const { w, l, wall, rise } = pl
-  b.box(0, -depth / 2 - 0.02, 0, w + 0.3, depth, l + 0.3, EARTH, FIN.earth, { skip: 'b' })
-  // the apron: earth ramped down from the open front
-  b.quad([-w / 2 - 1.5, -depth + 0.25, -l / 2 - 0.15], [-w / 2 - 1.5, -depth + 0.25, l / 2 + 0.15], [-w / 2 - 0.1, -0.02, l / 2 + 0.15], [-w / 2 - 0.1, -0.02, -l / 2 - 0.15], EARTH, FIN.earth)
   shell(b, w, l, wall, rise, RED, FIN.boards, { skip: 'W' })
   // the inside of the walls, in shade
   b.quad([w / 2 - 0.02, 0, -l / 2], [w / 2 - 0.02, 0, l / 2], [w / 2 - 0.02, wall, l / 2], [w / 2 - 0.02, wall, -l / 2], '#7a6a58', FIN.boards, { ex: 0.42 })
@@ -225,7 +221,7 @@ const BUNK: Plan = { w: 3.2, l: 5.0, wall: 1.3, rise: 0.82, wallColor: CEDAR, wa
 function bunk(b: Builder, s: Site, look: SiteLook, marks: SiteMarks): void {
   const depth = seat(b, s)
   const pl: Plan = { ...BUNK, w: s.d, l: s.w }
-  supplies(b, s.w / 2 + 1.4, s.d / 2 + 0.6, look.built ? 1 : look.progress, true)
+  if (!look.built) { supplies(b, s.w / 2 + 1.9, s.d / 2 + 0.6, look.progress, true); pad(b, s.w, s.d, depth) }
   b.push(0, 0, 0, Math.PI / 2)
   if (!look.built) { raise(b, pl, depth, look.progress); b.pop(); return }
   const { w, l, wall, rise } = pl
@@ -266,7 +262,7 @@ function bunk(b: Builder, s: Site, look: SiteLook, marks: SiteMarks): void {
 const PACKING: Plan = { w: 4.0, l: 6.0, wall: 1.75, rise: 1.1, wallColor: RED, wallFin: FIN.boards, roofColor: NEW_TIN, roofFin: FIN.metal, eave: 0.22 }
 function packing(b: Builder, s: Site, look: SiteLook): void {
   const depth = seat(b, s)
-  supplies(b, s.w / 2 + 1.5, -s.d / 2 + 0.4, look.built ? 1 : look.progress, true)
+  if (!look.built) { supplies(b, s.w / 2 + 2.0, -s.d / 2 + 0.4, look.progress, true); pad(b, s.w, s.d, depth) }
   b.push(0, 0, 0, Math.PI / 2)
   const pl = PACKING
   if (!look.built) { raise(b, pl, depth, look.progress); b.pop(); return }
@@ -300,7 +296,9 @@ function packing(b: Builder, s: Site, look: SiteLook): void {
   win(b, sh.N, w / 2, wall + rise * 0.45, 0.34, 0.34, { cols: 2, rows: 2, barn: true })
   {
     const z0 = -l / 2 - 0.5, x = 0.35
-    b.box(x, -0.02 - depth * 0.25, z0 - 0.8, 2.2, depth * 0.5, 2.6, EARTH, FIN.earth, { skip: 'b' })
+    b.push(x, 0, z0 - 1.0)
+    pad(b, 2.0, 2.6, depth, false, 0.1)
+    b.pop()
     // hopper
     b.box(x, 0.72, z0 - 0.05, 0.62, 0.3, 0.5, '#5d7a52', FIN.metal, { ex: 0.9 })
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) b.box(x + sx * 0.27, 0.29, z0 - 0.05 + sz * 0.2, 0.05, 0.58, 0.05, '#4c6444', FIN.plain)
@@ -331,7 +329,7 @@ function house(b: Builder, s: Site, look: SiteLook): void {
   supplies(b, -s.w / 2 - 1.0, s.d / 2 + 1.6, p, true)
   // spoil from the cut, heaped each side until it is banked back against the walls
   if (p < 0.82) for (const sg of [-1, 1]) {
-    b.blob([sg * (s.w / 2 + 1.7), 0.25, -0.6], [0.95, 0.55, 2.0], sg + 3, EARTH, FIN.earth, { detail: 1, rough: 0.22, flat: -0.6 })
+    for (let k = 0; k < 3; k++) { const x = sg * (s.w / 2 + 1.7), z = -2.0 + k * 1.3; tipped(b, x, groundY(s.x + x, s.z + z) - y, z, 0.9 - 0.1 * k, EARTH, FIN.earth, k + sg) }
   }
   raise(b, { w: s.w, l: s.d, wall, rise, masonry: true, wallColor: '#a59b86', wallFin: FIN.shingle, roofColor: '#5a5650', roofFin: FIN.shingle, cuts: [0.06, 0.45, 0.62, 0.8] }, 0.5, p)
   bankEarth(b, s.x, s.z, s.w, s.d, y, wall, ramp(p, 0.8, 1) * 0.92)
@@ -342,7 +340,8 @@ function pond(b: Builder, s: Site, look: SiteLook): void {
   const depth = seat(b, s)
   const p = look.built ? 1 : look.progress
   if (!look.built) {
-    supplies(b, -1.7, 0.4, p, false)
+    supplies(b, -1.9, 0.4, p, false)
+    pad(b, s.w, s.d, depth, false, 0.2)
     raise(b, { w: s.w, l: s.d, wall: 0.95, rise: 0.42, wallColor: '#c9c3b2', wallFin: FIN.clapboard, roofColor: NEW_TIN, roofFin: FIN.metal, eave: 0.12 }, depth, p)
   } else {
     foundation(b, s.w, s.d, depth, CONCRETE, FIN.concrete)
@@ -389,7 +388,7 @@ function stand(b: Builder, s: Site, look: SiteLook): void {
   const w = s.w, d = s.d, hf = 1.25, hb = 1.0
   if (!look.built) {
     lumber(b, -w / 2 - 0.7, -0.05, 0.3, 0.4, 0.3 * (1 - p) + 0.06, 1.6, 0.2)
-    b.box(0, -depth / 2 - 0.05, 0, w + 0.4, depth, d + 0.4, EARTH, FIN.earth, { skip: 'b' })
+    pad(b, w, d, depth, false, 0.2)
     if (p < 0.3) for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
       b.box(sx * (w / 2 + 0.2), 0.1, sz * (d / 2 + 0.2), 0.04, 0.5, 0.04, LUMBER, FIN.wood)
       b.beam([sx * (w / 2 + 0.2), 0.3, sz * (d / 2 + 0.2)], [-sx * (w / 2 + 0.2), 0.3, sz * (d / 2 + 0.2)], 0.014, 0.014, STRING, FIN.plain)
@@ -497,7 +496,7 @@ function road(b: Builder, s: Site, look: SiteLook): void {
     const dx = pts[k][0] - pts[k - 1][0], dz = pts[k][1] - pts[k - 1][1], l = Math.hypot(dx, dz) || 1
     return { x: pts[k - 1][0] + dx * t, z: pts[k - 1][1] + dz * t, nx: -dz / l, nz: dx / l }
   }
-  const heap = (x: number, z: number, r: number, seed: number) => b.blob([x, groundY(x, z) + r * 0.2, z], [r, r * 0.58, r * 0.9], seed, GRAVEL, FIN.gravel, { detail: 1, rough: 0.18, flat: -0.4 })
+  const heap = (x: number, z: number, r: number, seed: number) => tipped(b, x, groundY(x, z), z, r, GRAVEL, FIN.gravel, seed)
   if (look.built) {
     // what was left over, kept at the corner for mending
     heap(s.x, s.z, 0.7, 3)
@@ -508,7 +507,7 @@ function road(b: Builder, s: Site, look: SiteLook): void {
   const done = total * p
   for (let dist = done + 2.5, k = 0; dist < Math.min(total, done + 30); dist += 4.6, k++) {
     const q = at(dist), side = k % 2 ? 1 : -1
-    heap(q.x + q.nx * side * 1.15, q.z + q.nz * side * 1.15, 0.62 + 0.14 * ((k * 7) % 3), k)
+    heap(q.x + q.nx * side * 1.25, q.z + q.nz * side * 1.25, 0.5 + 0.1 * ((k * 7) % 3), k)
   }
   // the drag: a timber frame drawn along to spread and level, and stakes each side where it works
   const q = at(Math.min(total - 0.5, done + 0.6))

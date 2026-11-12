@@ -210,6 +210,8 @@ async function yardFarm(page: Page, o: YardFarm): Promise<void> {
       if (c.phase === 'season') app.do({ t: 'endSeason' })
       for (let k = 0; k < o.winter && c.phase === 'cellar'; k++) app.do({ t: 'month' })
     }
+    // the farm's own people will have worked on them meanwhile: put each back where the picture wants it
+    if (o.progress !== undefined) for (const b of c.buildings) { b.done = b.need * o.progress; b.built = o.progress >= 1 }
     app.emit({ type: 'change' })
   }, o)
 }
@@ -322,7 +324,7 @@ const shots: Shot[] = [
   { name: 'c08-half-built-home', size: [1920, 1080], setup: async page => { await yardFarm(page, { progress: 0.5, logs: 8, stone: 12 }); await settle(page) } },
   { name: 'c09-dufour-built', size: [1920, 1080], insets: NONE, setup: async page => { await yardFarm(page, { progress: 1, dufour: true, hands: 2 }); await settle(page); await view(page, DUFOUR_YARD); await frames(page, 8) } },
   { name: 'c10-dufour-raising', size: [1920, 1080], insets: NONE, setup: async page => { await yardFarm(page, { progress: 0.5, dufour: true }); await settle(page); await view(page, DUFOUR_YARD); await frames(page, 8) } },
-  { name: 'c11-stand-open', size: [1920, 1080], insets: NONE, setup: async page => { await yardFarm(page, { progress: 1, until: 250 }); console.log('  ', await playUntil(page, [], `return sim.standInfo(c).open && sim.today(app.world, c).sky === 'clear' ? 'open' : ''`)); await settle(page); await view(page, { x: 19.2, z: 19.4, dist: 11, yaw: -0.9, pitch: 0.3 }); await frames(page, 8) } },
+  { name: 'c11-stand-open', size: [1920, 1080], insets: NONE, setup: async page => { await yardFarm(page, { progress: 1, until: 250 }); console.log('  ', await playUntil(page, [], `return sim.standInfo(c).open && sim.today(app.world, c).sky === 'clear' ? 'open' : ''`)); await settle(page); await view(page, { x: 19.6, z: 19.2, dist: 9, yaw: 1.35, pitch: 0.26 }); await frames(page, 8) } },
   { name: 'c12-piles-empty', size: [1920, 1080], insets: NONE, setup: async page => { await yardFarm(page, { logs: 0, stone: 0 }); await settle(page); await view(page, DOORYARD); await frames(page, 8) } },
   { name: 'c13-piles-full', size: [1920, 1080], insets: NONE, setup: async page => { await yardFarm(page, { logs: 60, stone: 70 }); await settle(page); await view(page, DOORYARD); await frames(page, 8) } },
   { name: 'c14-yard-dusk-snow', size: [1920, 1080], insets: NONE, setup: async page => { await yardFarm(page, { progress: 1, logs: 20, stone: 10, machines: true, hands: 3, winter: 2 }); await settle(page); await view(page, { x: 27, z: -5, dist: 40, yaw: 0.55, pitch: 0.34 }); await frames(page, 8) } },
@@ -330,7 +332,7 @@ const shots: Shot[] = [
   ...([
     ['c20-shed', { x: 33.6, z: -5.4, dist: 13, yaw: 0.35, pitch: 0.26 }],
     ['c21-bunk', { x: 39.2, z: -12.6, dist: 12, yaw: 0.4, pitch: 0.24 }],
-    ['c22-packing', { x: 32.6, z: 0.8, dist: 15, yaw: 0.75, pitch: 0.28 }],
+    ['c22-packing', { x: 32.4, z: 0.6, dist: 14, yaw: 0.02, pitch: 0.3 }],
     ['c23-station-pump', { x: 32.6, z: 6.4, dist: 13, yaw: 0.2, pitch: 0.3 }],
     ['c24-second-house', { x: 30, z: -15.5, dist: 16, yaw: 0.25, pitch: 0.26 }],
     ['c25-machines', { x: 39.6, z: -4.6, dist: 12, yaw: 0.3, pitch: 0.3 }],

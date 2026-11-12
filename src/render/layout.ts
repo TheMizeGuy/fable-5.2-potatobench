@@ -161,14 +161,21 @@ export function siteOf(kind: BuildingKind, yard: number): Site | undefined {
 // Where the pond's basin is taken to lie (the pump house stands on its bank), and where the yard keeps what comes
 // off the land: logs decked by the dooryard and across the back lane, fieldstone tipped at the barn's corner.
 export const POND_AT = { x: 37.4, z: 10.6, rx: 3.4, rz: 2.4 }
-export const LOG_DECKS: Spot[] = [{ x: 20.05, z: -2.8, heading: 0 }, { x: 30.6, z: -9.9, heading: 0 }, { x: 32.3, z: -9.3, heading: 0 }]
+export const LOG_DECKS: Spot[] = [{ x: 20.05, z: -2.8, heading: 0 }, { x: 31.5, z: -9.7, heading: 0 }, { x: 33.6, z: -9.7, heading: 0 }]
 export const STONE_PILE: Pt = { x: 20.75, z: -9.35 }
+// Where machines the farm owns stand when nobody is on them (a heading is the way it faces: cos, sin in x, z): the
+// machine shed's three bays, where the truck waits before there is a shed, and the grass past the shed for implements.
+export const BAYS: Spot[] = [-1, 0, 1].map(k => ({ x: 33.6 + k * (6.4 / 3), z: -5.9, heading: Math.PI / 2 }))
+export const TRUCK_SPOT: Spot = { x: 36.6, z: -9.2, heading: -0.3 }
+export const IMPLEMENT_SPOTS: Record<'harvester' | 'sprayer' | 'reel', Spot> = {
+  harvester: { x: 38.5, z: -5.9, heading: -0.12 }, sprayer: { x: 40.9, z: -6.1, heading: 0.2 }, reel: { x: 41.3, z: -2.4, heading: -1.2 },
+}
 // Ground kept clear of trees and long grass: each site, whether or not anything stands there yet.
 export const KEEP_CLEAR: { x: number; z: number; r: number }[] = [
   ...SITES.filter(s => s.kind !== 'road').map(s => ({ x: s.x, z: s.z, r: Math.hypot(s.w, s.d) / 2 + 1.4 })),
   ...LOG_DECKS.map(p => ({ x: p.x, z: p.z, r: 1.8 })), { ...STONE_PILE, r: 1.6 },
   // where the implements stand in the grass past the machine shed, and the orchard
-  { x: 39.7, z: -5.8, r: 3.0 }, { x: 40, z: 1.6, r: 3.4 },
+  { x: 39.7, z: -5.8, r: 3.0 }, { x: 40, z: 1.6, r: 3.4 }, { x: TRUCK_SPOT.x, z: TRUCK_SPOT.z, r: 1.8 },
 ]
 
 // Ground levelled for the buildings: each sits a step higher up the slope than the last.

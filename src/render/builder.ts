@@ -3,10 +3,10 @@
 // glass ...) and where it is on its own surface; the material paints the finish from those, so a whole farmstead is a
 // handful of draws and no texture is fetched.
 import {
-  BufferAttribute, BufferGeometry, Color, IcosahedronGeometry, Matrix4, Mesh, MeshStandardMaterial, Vector3,
+  BufferAttribute, BufferGeometry, Color, IcosahedronGeometry, Matrix4, Mesh, MeshStandardMaterial, Vector3, type MeshDepthMaterial,
 } from 'three'
 import { hash2 } from './noise.ts'
-import { patch, snowRimeAt } from './shaders.ts'
+import { depthFor, patch, snowRimeAt } from './shaders.ts'
 
 export type V3 = [number, number, number]
 
@@ -145,6 +145,16 @@ export class Builder {
     }
   }
 
+  // A spray of leaves: a small diamond seen from both sides, lit as if it faced along n (the way out of its crown).
+  card(c: V3, u: V3, v: V3, n: V3, color: string | readonly number[], fin: number, ex = 1, tint = 1): void {
+    const col = rgb(color, tint), nn = unit(n)
+    const i0 = this.vert([c[0] - u[0], c[1] - u[1], c[2] - u[2]], nn, col, -1, 0, fin, ex)
+    const i1 = this.vert([c[0] - v[0], c[1] - v[1], c[2] - v[2]], nn, col, 0, -1, fin, ex)
+    const i2 = this.vert([c[0] + u[0], c[1] + u[1], c[2] + u[2]], nn, col, 1, 0, fin, ex)
+    const i3 = this.vert([c[0] + v[0], c[1] + v[1], c[2] + v[2]], nn, col, 0, 1, fin, ex)
+    this.idx.push(i0, i1, i2, i0, i2, i3, i0, i2, i1, i0, i3, i2)
+  }
+
   // A pane: the same piece laid with its own unit square, and three numbers in place of a colour.
   panel(a: V3, b: V3, c: V3, d: V3, data: readonly number[], fin: number, ex = 1): void {
     const n = unit(cross(sub(b, a), sub(d, a)))
@@ -271,7 +281,7 @@ export class Builder {
   }
 
   // A rounded uneven lump: a stone, a heap, a bush, a hen. `rough`: how far its surface wanders; `facets`: flat faces.
-  blob(c: V3, r: V3, seed: number, color: string | readonly number[], fin: number, o: Q & { detail?: number; rough?: number; facets?: boolean; flat?: number } = {}): void {
+  blob(c: V3, r: V3, seed: number, color: string | readonly number[], fin: number, o: Q & { detail?: number; rough?: number; facets?: boolean; flat?: number; round?: V3 } = {}): void {
     const src = ico(o.detail ?? 1), rough = o.rough ?? 0.3, floor = o.flat ?? -2
     const col = rgb(color, o.tint ?? 1)
     const ex = o.ex ?? 1, e0 = typeof ex === 'number' ? ex : ex[0]
@@ -289,7 +299,8 @@ export class Builder {
       const base = this.pos.length / 3
       for (let q = 0; q < 3; q++) {
         const w = p[i + q]
-        const n: V3 = o.facets ? fn : unit([dirs[i + q][0] * 0.7 + fn[0] * 0.3, dirs[i + q][1] * 0.7 + fn[1] * 0.3, dirs[i + q][2] * 0.7 + fn[2] * 0.3])
+        // `round`: shade as part of one mass about that point (a crown of leaves), not as a lump of its own
+        const n: V3 = o.facets ? fn : o.round ? unit([w[0] - o.round[0], w[1] - o.round[1], w[2] - o.round[2]]) : unit([dirs[i + q][0] * 0.7 + fn[0] * 0.3, dirs[i + q][1] * 0.7 + fn[1] * 0.3, dirs[i + q][2] * 0.7 + fn[2] * 0.3])
         this.vert(w, n, col, w[0] - c[0] + (o.uo ?? 0), w[1] - c[1] + w[2] - c[2], fin, e0)
       }
       this.idx.push(base, base + 1, base + 2)
@@ -310,8 +321,9 @@ export class Builder {
   }
 
   // What has been drawn so far as one mesh that throws and takes shadow in every cascade; the builder is left empty.
-  mesh(mat: MeshStandardMaterial): Mesh {
+  mesh(mat: MeshStandardMaterial, depth?: MeshDepthMaterial): Mesh {
     const mesh = new Mesh(this.geometry(), mat)
+    if (depth) mesh.customDepthMaterial = depth
     mesh.castShadow = true
     mesh.receiveShadow = true
     for (const l of [1, 2, 3]) mesh.layers.enable(l)
@@ -329,6 +341,24 @@ export class Builder {
 export const LAMP_LUM = { value: 0 }
 export const DUSK = { value: 0 }
 
+// Washing on the line, a flag, a swing: what hangs moves with the gusts, by how far it hangs from what holds it.
+// And leaves that fall are gone, from the picture and from the shadow, once the trees are bare.
+const MOVES = /* glsl */ `
+  if (aFin.z > 0.0) {
+    float gust = gustAt(cWorld.xz);
+    float ph = dot(cWorld.xz, vec2(1.7, 1.3));
+    float lean = uSway * (0.3 + 1.2 * gust) * (0.6 + 0.4 * sin(uTime * 2.6 + ph) + 0.2 * sin(uTime * 6.3 + ph * 2.1));
+    cWorld.xz += uWindDir * lean * aFin.z;
+    cWorld.y += 0.35 * lean * lean * aFin.z;
+  }
+  if (aFin.x > 12.5 && aFin.x < 13.5 && aFin.y > 0.5 && uLeaf < 0.12) cWorld.xyz = vec3(0.0, -60.0, 0.0);
+`
+
+// The same shapes in the sun's shadow pass.
+export function builtDepth(): MeshDepthMaterial {
+  return depthFor({ key: 'county-built', vertexHead: 'attribute vec3 aFin;', vertexWorld: MOVES })
+}
+
 // The one material: paint and wear drawn from where each piece is on its own surface.
 export function builtMaterial(): MeshStandardMaterial {
   return patch(new MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.9, metalness: 0 }), {
@@ -336,15 +366,7 @@ export function builtMaterial(): MeshStandardMaterial {
     uniforms: { uLampLum: LAMP_LUM, uDusk: DUSK },
     vertexHead: 'attribute vec3 aUvh; attribute vec3 aFin; varying vec3 vUvh; varying vec3 vFin;',
     vertexBegin: 'vUvh = aUvh; vFin = aFin;',
-    // Washing on the line, a flag, a swing: what hangs moves with the gusts, by how far it hangs from what holds it.
-    vertexWorld: /* glsl */ `
-      if (aFin.z > 0.0) {
-        float gust = gustAt(cWorld.xz);
-        float ph = dot(cWorld.xz, vec2(1.7, 1.3));
-        float lean = uSway * (0.3 + 1.2 * gust) * (0.6 + 0.4 * sin(uTime * 2.6 + ph) + 0.2 * sin(uTime * 6.3 + ph * 2.1));
-        cWorld.xz += uWindDir * lean * aFin.z;
-        cWorld.y += 0.35 * lean * lean * aFin.z;
-      }`,
+    vertexWorld: MOVES,
     fragmentHead: /* glsl */ `
       uniform float uLampLum; uniform float uDusk;
       varying vec3 vUvh; varying vec3 vFin;
@@ -442,15 +464,17 @@ export function builtMaterial(): MeshStandardMaterial {
           base = mix(base, vec3(0.2, 0.23, 0.12), 0.3 * smoothstep(0.6, 0.85, mott) * (1.0 - smoothstep(0.0, 0.5, hgt)));
           bRough = 0.95;
         } else if (fin == ${FIN.glass}) {
-          vec2 pc = uv * max(vColor.xy, vec2(1.0)), pf = abs(fract(pc) - 0.5), aa = fwidth(pc) * 0.75;
-          vec2 bar = smoothstep(vec2(0.5) - vec2(0.055, 0.042) - aa, vec2(0.5) - vec2(0.055, 0.042) * 0.4 + aa, pf);
-          float wood = max(bar.x, bar.y) * (1.0 - smoothstep(0.5, 1.2, max(aa.x, aa.y) * 2.0) * 0.5);
+          vec2 pc = uv * max(vColor.xy, vec2(1.0)), pf = abs(fract(pc) - 0.5), aa = fwidth(pc);
+          vec2 bw = vec2(0.05, 0.038);
+          vec2 bar = smoothstep(vec2(0.5) - bw - aa * 0.5, vec2(0.5) - bw + aa * 0.5, pf);
+          // too far off to draw a bar: the glass keeps the bars' own small share of pale
+          float wood = mix(max(bar.x, bar.y), 0.14, smoothstep(0.3, 0.9, max(aa.x, aa.y)));
           bGlass = 1.0 - wood;
           bLit = step(vColor.z, uDusk - 0.001);
           // by day a window is dark, with a curtain's pale edge in the lower sash of a house
           float curtain = (1.0 - step(0.5, open)) * smoothstep(0.3, 0.5, abs(uv.x - 0.5)) * (1.0 - smoothstep(0.8, 1.0, uv.y)) * smoothstep(0.0, 0.5, uv.y + abs(uv.x - 0.5));
           base = mix(mix(vec3(0.02, 0.025, 0.03), vec3(0.3, 0.29, 0.26), curtain * 0.5), vec3(0.78, 0.76, 0.69), wood);
-          bRough = mix(0.07, 0.6, wood);
+          bRough = mix(0.3, 0.6, wood);
           bSnow = 0.0;
           open = 1.0;
         } else if (fin == ${FIN.concrete}) {
@@ -502,10 +526,10 @@ export function builtMaterial(): MeshStandardMaterial {
           vec2 cell = uv / 0.075;
           cell.x += 0.5 * mod(floor(cell.y), 2.0);
           vec2 ci = floor(cell), cf = fract(cell) - 0.5;
-          float r = length(cf + 0.12 * (vec2(bh2(ci), bh2(ci + 9.1)) - 0.5)), s = seen(cell.y);
-          float tone = 0.72 + 0.5 * bh2(ci + 3.3);
+          float r = length(cf + 0.3 * (vec2(bh2(ci), bh2(ci + 9.1)) - 0.5)) / (0.72 + 0.5 * bh2(ci + 1.7)), s = seen(cell.y);
+          float tone = 0.62 + 0.6 * bh2(ci + 3.3);
           float rings = 0.9 + 0.1 * sin(r * 26.0 + bh2(ci) * 6.0);
-          base = mix(base * 0.8, mix(base * 0.22, base * tone * rings, 1.0 - smoothstep(0.36, 0.48, r)), s);
+          base = mix(base * 0.72, mix(base * 0.16, base * tone * rings, 1.0 - smoothstep(0.38, 0.5, r)), s) * (0.85 + 0.3 * fine);
           bRough = 0.9;
         } else if (fin == ${FIN.dark}) {
           // an open doorway: the dark of the inside, a little of the floor's light at its foot
@@ -540,7 +564,7 @@ export function builtMaterial(): MeshStandardMaterial {
         vec3 wN = normalize(vWNormal + 0.035 * (vec3(bh2(pane), bh2(pane + 3.1), bh2(pane + 7.7)) - 0.5));
         vec3 wV = normalize(cameraPosition - vWorld);
         vec3 wR = reflect(-wV, wN);
-        float fres = 0.07 + 0.93 * pow(1.0 - max(dot(wN, wV), 0.0), 4.0);
+        float fres = 0.02 + 0.5 * pow(1.0 - max(dot(wN, wV), 0.0), 4.0);
         vec3 sky = skyRadiance(vec3(wR.x, max(wR.y, 0.0) + 0.06, wR.z), 0.12) * (0.25 + 0.75 * smoothstep(-0.05, 0.3, wR.y));
         float glint = pow(max(dot(wR, uSunDir), 0.0), 260.0);
         vec3 lamp = vec3(1.0, 0.62, 0.27) * uLampLum * bLit * (0.55 + 0.6 * texture2D(uNoise, vUvh.xy * 0.9 + pane * 0.13).a);

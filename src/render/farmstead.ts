@@ -241,10 +241,11 @@ export function bankEarth(b: Builder, px: number, pz: number, w: number, l: numb
   const yt = y + (wall + 0.03) * bank, out = 2.5 * (0.45 + 0.55 * bank), zf = pz + l / 2 + 0.12, zb = pz - l / 2
   const ease = (t: number) => t * t * (3 - 2 * t)
   // the line of the eaves, from the front of one side round the back to the front of the other, and the way out from it
-  const line: { x: number; z: number; dx: number; dz: number; reach: number }[] = []
+  const line: { x: number; z: number; dx: number; dz: number; reach: number; top?: number }[] = []
   for (const sg of [1, -1]) {
     const part: typeof line = []
-    for (let k = 0; k <= 5; k++) part.push({ x: px + sg * (w / 2 - 0.04), z: zf + ((zb - zf) * k) / 5, dx: sg, dz: 0, reach: k === 0 ? 0.8 : 1 })
+    part.push({ x: px + sg * (w / 2 + 0.18), z: zf + 2.1, dx: sg, dz: 0, reach: 0.5, top: 0 }, { x: px + sg * (w / 2 + 0.18), z: zf + 1.0, dx: sg, dz: 0, reach: 0.7, top: 0.62 })
+    for (let k = 0; k <= 5; k++) part.push({ x: px + sg * (w / 2 - 0.04), z: zf + ((zb - zf) * k) / 5, dx: sg, dz: 0, reach: k === 0 ? 0.85 : 1 })
     for (let k = 1; k <= 3; k++) { const a = (k / 4) * Math.PI / 2; part.push({ x: px + sg * (w / 2 - 0.04), z: zb, dx: sg * Math.cos(a), dz: -Math.sin(a), reach: 1 }) }
     for (let k = 0; k <= 2; k++) part.push({ x: px + sg * (w / 2 - 0.04) * (1 - k / 2), z: zb, dx: 0, dz: -1, reach: 0.9 })
     line.push(...(sg > 0 ? part : part.reverse().slice(1)))
@@ -257,19 +258,11 @@ export function bankEarth(b: Builder, px: number, pz: number, w: number, l: numb
       const x = p.x + p.dx * r, z = p.z + p.dz * r
       const g = groundY(x, z) - 0.04
       const wob = 0.07 * Math.sin(i * 1.9 + j * 2.3) * Math.sin(t * Math.PI)
-      row.push([x, Math.max(g, g + (yt - g) * (1 - ease(t)) + wob), z])
+      row.push([x, Math.max(g, g + (yt - g) * (p.top ?? 1) * (1 - ease(t)) + wob * (p.top ?? 1)), z])
     }
     return row
   })
   b.surface(rows, '#ffffff', FIN.turf)
-  // the cut ends by the wing walls
-  for (const row of [rows[0], rows[rows.length - 1]]) {
-    for (let j = 0; j < J; j++) {
-      const a = row[j], c = row[j + 1], lo = groundY(a[0], a[2]) - 0.4
-      if (c[0] > a[0]) b.quad([a[0], lo, a[2]], [c[0], lo, c[2]], c, a, '#ffffff', FIN.turf)
-      else b.quad([c[0], lo, c[2]], [a[0], lo, a[2]], a, c, '#ffffff', FIN.turf)
-    }
-  }
 }
 
 // The Dufour place: a cape gone grey for want of paint with its ell and woodshed, an old barn of weathered boards with
