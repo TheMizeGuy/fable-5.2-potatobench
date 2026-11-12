@@ -33,6 +33,21 @@ describe('figures that agree', () => {
     expect(c.cash - cash).toBeCloseTo(shown, 6)
   })
 
+  it('the storage outlook counts shrink, the charge and sprouting, not the price curve alone', () => {
+    const c = weighed()
+    const lot = S.openLots(c).find(l => c.season!.fields[l.field].weighed)!
+    const o = S.storeOutlook(world, c, lot)
+    expect(o.months.map(m => m.name)).toEqual(S.CELLAR_MONTHS)
+    const v = S.variety(lot.variety)
+    const sprouts = lot.dugDay + v.dormancy + S.COOL_CELLAR_DAYS + (c.upgrades.vent ? S.VENT_DAYS : 0)
+    for (const m of o.months) {
+      expect(m.sprouted).toBe(S.dayIndex(lot.year, 10, 1) + m.month * 30 > sprouts)
+      // Never more than the price curve alone would give.
+      expect(m.net).toBeLessThan(o.now * S.MONTH_CURVE[m.month] / S.SEASON_CURVE.reduce((a, [d, f]) => (d <= c.season!.day ? f : a), S.SEASON_CURVE[0][1]) + 1e-6)
+    }
+    expect(o.best).toEqual(o.months.reduce((a, b) => (b.net > a.net ? b : a)))
+  })
+
   it('the yard shows whole loads, and a building takes and buys by the loads shown', () => {
     const c = S.createCampaign(world, { seed: 3, startYear: 2001 })
     c.logs = 8.6

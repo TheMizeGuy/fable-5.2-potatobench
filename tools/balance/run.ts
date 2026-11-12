@@ -79,7 +79,7 @@ function winners(byKey: Map<string, Outcome>, bots: string[], seeds: number[]): 
 }
 
 interface BotSummary {
-  bot: string; group: string; campaigns: number; kept: number; kept5: number
+  bot: string; group: string; campaigns: number; kept: number; kept5: number; kept1: number; revenue1: number
   netWorth: { q1: number; median: number; q3: number; mean: number }
   worth: number[]                 // median net worth at each year end, over farms still going
   yield: number; potatoFields: number; held: number; hands: number
@@ -107,6 +107,7 @@ function summarize(e: Entry, rows: Outcome[]): BotSummary {
   return {
     bot: e.name, group: e.group, campaigns: rows.length,
     kept: rows.filter(r => r.kept).length / rows.length, kept5: rows.filter(r => r.kept5).length / rows.length,
+    kept1: rows.filter(r => r.years > 1 || r.kept).length / rows.length, revenue1: mean(rows.map(r => r.revenue[0] ?? 0)),
     netWorth: { q1: quantile(nw, 0.25), median: median(nw), q3: quantile(nw, 0.75), mean: mean(nw) },
     worth,
     yield: mean(rows.flatMap(r => r.yields)), potatoFields: mean(rows.flatMap(r => r.potatoFields)),
@@ -270,6 +271,13 @@ function report(r: ReportIn): string {
   L.push('|---|---|---|---|---|---|---|---|---|---|---|---|---|')
   for (const s of r.summaries) {
     L.push(`| ${s.bot} | ${pct(s.kept5)} | ${pct(s.kept)} | ${k(s.netWorth.median)} (${k(s.netWorth.q1)} to ${k(s.netWorth.q3)}) | ${k(s.netWorth.mean)} | ${s.yield.toFixed(0)} | ${s.potatoFields.toFixed(1)} | ${s.held.toFixed(1)} | ${s.hands.toFixed(1)} | ${k(s.spend.wages)} | ${k(s.spend.building)} | ${k(s.spend.land + s.spend.mortgage)} | ${k(s.spend.equipment)} |`)
+  }
+  L.push('', '### The routine: an untended farm, a player who answers only the calls, and the reference', '')
+  L.push('Each with the routine on (the game as it is) and off (the game before it: nothing is ordered by itself). Year one is the first season\'s revenue and whether the farm saw the second spring.', '')
+  L.push('| Player | Routine | Kept 1 yr | Kept 5 yr | Kept 10 yr | Year-one revenue | Ten-year net worth, median | Mean |', '|---|---|---|---|---|---|---|---|')
+  for (const [name, label, on] of [['untended', 'untended', 'on'], ['untended-before', 'untended', 'off'], ['calls-only', 'calls only', 'on'], ['calls-before', 'calls only', 'off'], ['reference', 'reference', 'on'], ['reference-before', 'reference', 'off']] as const) {
+    const s = r.summaries.find(x => x.bot === name)
+    if (s) L.push(`| ${label} | ${on} | ${pct(s.kept1)} | ${pct(s.kept5)} | ${pct(s.kept)} | ${k(s.revenue1)} | ${k(s.netWorth.median)} | ${k(s.netWorth.mean)} |`)
   }
   L.push('', '### Net worth by year, median over farms still going', '')
   L.push(`| Bot | ${Array.from({ length: YEARS }, (_, y) => `Year ${y + 1}`).join(' | ')} |`, `|---|${'---|'.repeat(YEARS)}`)

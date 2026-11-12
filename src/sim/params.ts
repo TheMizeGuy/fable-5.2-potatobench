@@ -407,5 +407,7 @@ export const ROUTINE_DEFAULT: Record<RoutineKind, boolean> = {
 }
 // Hauling comes first when the night at the field is forecast this cold, or a frost this likely.
 export const FROST_HAUL_C = 0
+// Reference practice digs a crop whose vines are still up from this date, so it is in before the freeze-up.
+export const DIG_GREEN = { month: 9, dom: 5 }   // October 5
 export const FROST_HAUL_CHANCE = 40
 export const JOBS: JobKind[] = ['plant', 'hill', 'scout', 'spray', 'water', 'rogue', 'sample', 'kill', 'dig', 'fell', 'rocks', 'brush']
