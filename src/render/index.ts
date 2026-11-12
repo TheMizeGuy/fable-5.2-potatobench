@@ -995,13 +995,10 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       },
       // Where a crew is on the screen, for clicking it in checks.
       unitAt(id: number) {
-        const u = crews.where().units.find(x => x.id === id)
-        if (!u || !crews.anchor(id, far)) return null
-        const at = unitAnchor(id)
-        const v = new Vector3(u.x, fieldBaseY(u.z) + 0.9, u.z).project(rig.camera)
-        const vp = viewport()
-        // on the body: half way between the ground under them and the point over their head
-        return { x: ((v.x + 1) / 2 * vp.w + at.x) / 2, y: ((1 - v.y) / 2 * vp.h + at.y) / 2 }
+        if (!crews.anchor(id, far)) return null
+        const at = screenAt(far.x, far.y, far.z), foot = screenAt(far.x, groundY(far.x, far.z) + 0.05, far.z)
+        // on the body, where they are drawn: half way between the ground under them and the point over their head
+        return { x: (foot.x + at.x) / 2, y: (foot.y + at.y) / 2 }
       },
       // Where the interface pins a person's face.
       unitPin: (id: number) => unitAnchor(id),

@@ -73,7 +73,11 @@
 @media (hover: hover) { .topbar .forecast:hover .d { background: var(--paper-2); } }
 .topbar .season-track .bar > u { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--blue); }
 .topbar .season-track .bar > u.watch { background: var(--red); opacity: .55; }
-/* the goal slip, a button: open it for the goals */
+/* the goal slip, a button: open it for the goals; beside it while the soil warms, the key that lets the weeks go */
+.topbar .goal-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.topbar .goal-row .goal { flex: 0 1 auto; }
+.topbar .goal-go { min-height: 40px; padding: 0 12px; margin-top: 6px; font-size: 15px; gap: 6px; box-shadow: var(--laid), inset 0 0 0 1px var(--ink); }
+.topbar[data-layout='narrow'] .goal-go, .topbar[data-layout='short'] .goal-go { min-height: var(--touch); margin: 4px 0 0 12px; }
 .topbar .goal { text-align: left; min-height: var(--touch); max-width: 100%; }
 .topbar .goal .goal-body { display: grid; min-width: 0; }
 .topbar .goal .goal-t { font: 700 19px/1.1 var(--f-text); white-space: normal; }

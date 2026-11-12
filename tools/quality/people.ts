@@ -99,7 +99,9 @@ for (const [phase, setup] of Object.entries(PHASES)) {
         const t0 = Date.now()
         await page.mouse.click(at.x, at.y)
         // a group pin opens to the people in it
-        if (how === 'pin') { await page.waitForTimeout(80); const pick = page.getByTestId(`pin-pick-${person.id}`); if (await pick.isVisible().catch(() => false)) await pick.click() }
+        // a group pin, there or over their body, opens to the people in it
+        await page.waitForTimeout(80)
+        { const pick = page.getByTestId(`pin-pick-${person.id}`); if (await pick.isVisible().catch(() => false)) await pick.click() }
         let card = await cardNow(page)
         while (!card && Date.now() - t0 < 300) { await page.waitForTimeout(25); card = await cardNow(page) }
         const ms = Date.now() - t0

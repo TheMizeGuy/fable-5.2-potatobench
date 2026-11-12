@@ -205,9 +205,12 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     const n = wait > 0 ? `about ${F.plural(wait, 'day')}` : g ? progressText(g) : ''
     const when = !g ? null : !g.now ? h('span', { class: 'goal-when' }, g.when.toLowerCase())
       : c.phase === 'plan' && CROP_STEPS.has(g.id) ? h('span', { class: 'goal-when' }, 'once the season starts')
-        // While the soil warms there is nothing to do but wait: a quiet word that the days can go faster.
-        : wait > 0 && app.speed > 0 && app.speed < 3 ? h('span', { class: 'goal-when', testid: 'goal-faster' }, ctx.touch() ? 'tap 1× to go faster' : 'F goes faster') : null
-    return h('button', {
+        : null
+    // While the soil warms there is nothing to do but wait: a key beside the slip lets the weeks go by at 3x.
+    const faster = wait > 0 && app.speed < 3 && !S.seasonDone(c)
+      ? h('button', { class: 'btn goal-go', type: 'button', testid: 'goal-faster', title: ctx.touch() ? undefined : 'The clock stops by itself when there is work (F steps the speed)', onclick: () => app.setSpeed(3) },
+        icon('fast', 'i'), 'Let the weeks go: 3×') : null
+    const slip = h('button', {
       class: `goal${gone ? ' met' : g && g.id === fresh ? ' fresh' : ''}`, type: 'button', testid: 'goal', k: `goal-${g?.id ?? ''}${gone ? `-was-${gone.id}` : ''}`,
       'aria-expanded': String(pop === 'goals'), title: ctx.touch() || !g ? undefined : g.why,
       onclick: () => { pop = pop === 'goals' ? '' : 'goals'; ctx.dirty() },
@@ -217,6 +220,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
       h('span', { class: 'sr' }, 'Next goal: '), h('b', { class: 'goal-t' }, title), when),
     n ? h('span', { class: 'count goal-n num', testid: wait > 0 ? 'goal-wait' : undefined }, n) : null,
     h('span', { class: 'sr' }, `. ${g.why} Open the goals.`)] : null)
+    return faster ? h('div', { class: 'goal-row' }, slip, faster) : slip
   }
 
   function update(): void {

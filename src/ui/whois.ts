@@ -84,8 +84,11 @@ export function whois(ctx: Ctx, layer: HTMLElement): Whois {
     const crews = season ? S.crewInfo(c) : []
     const ci = crews.find(x => x.id === p.id)
     const now = season && ci ? doing(c, ci, S.jobWaits(app.world, c), crews) : null
-    const what = c.phase === 'cellar' ? p.winterText : season ? doingText(c, p) : c.phase === 'plan' ? 'Waiting for the season to start.' : p.doing
-    const why = now && now.text !== what ? now.text : ''
+    // What they are at now, and why when it is not plain: what holds them up, or that nothing on the list is theirs.
+    const busy = !!p.job || !!p.foreman || p.hurtUntil >= 0 || p.travelling
+    const lower = (t: string) => t.replace(/^./, x => x.toLowerCase())
+    const detail = c.phase === 'cellar' ? lower(p.winterText) : !season ? 'waiting for the season to start' : busy ? lower(doingText(c, p))
+      : now && now.text.startsWith('Waiting') ? lower(now.text) : `${now && now.text.startsWith('Idle at ') ? `${now.text.slice(5)}: ` : ''}nothing on the list they will take`
     const sign = personSign(p, false)
     const best = [...S.SKILLS].sort((a, b) => p.skills[b] - p.skills[a])[0]
     const pulls = moodWhy(c, p)
@@ -98,7 +101,7 @@ export function whois(ctx: Ctx, layer: HTMLElement): Whois {
           h('p', { class: 't-caption' }, farmer ? 'The farmer: every job, no wage' : `${KIND_NAME[p.kind]}${p.traitName ? ` · ${p.traitName.toLowerCase()}` : ''}`)),
         h('button', { class: 'close', type: 'button', testid: 'whois-close', 'aria-label': `Close${keys ? ' (Escape)' : ''}`, onclick: () => app.selectUnit(-1) }, icon('close', 'i'))),
       h('p', { class: 'whois-now', testid: 'whois-now' }, icon(season ? doingGlyph(c, p) : c.phase === 'cellar' ? 'winter' : 'idle', 'i'),
-        h('span', null, h('b', null, season ? doingWord(c, p) : c.phase === 'cellar' ? 'This winter' : 'Spring'), ` ${what.replace(/^./, x => x.toLowerCase())}`, why ? h('span', { class: 'quiet' }, ` · ${why.replace(/^./, x => x.toLowerCase())}`) : null)),
+        h('span', null, h('b', null, season ? doingWord(c, p) : c.phase === 'cellar' ? 'This winter' : 'Spring'), ' ', h('span', { class: busy ? '' : 'quiet' }, detail))),
       h('dl', { class: 'whois-state' },
         h('div', null, h('dt', { class: p.tired >= S.HURT_TIRED ? 'c-red' : p.tired >= S.TIRED_SLOW_FROM ? 'c-ochre' : '' }, F.upper(p.tiredWord)),
           h('dd', null, sign?.glyph === 'hurt' ? `hurt, back on ${F.date(c.year, p.hurtUntil, true)}` : p.tired >= S.TIRED_SLOW_FROM ? 'slower for it; Sundays rest them' : 'fit for work')),
@@ -204,8 +207,9 @@ export function whois(ctx: Ctx, layer: HTMLElement): Whois {
     let at: { x: number; y: number; visible: boolean } | null = null
     if (pt && c && app.screen !== 'title' && !ctx.touch()) {
       if (pt.unit >= 0 && !(pt.unit === app.unit && !card.hidden)) {
+        const nm = (id: number) => { const u = c.crew.find(x => x.id === id); return !u ? '' : u.kind === 'farmer' ? 'You' : firstName(u.name) }
         const p = c.crew.find(u => u.id === pt.unit)
-        if (p) { name = p.kind === 'farmer' ? 'You' : p.name; at = ctx.view.unitAnchor(pt.unit) }
+        if (p) { name = pt.group && pt.group.length > 1 ? pt.group.map(nm).filter(Boolean).join(', ') : p.kind === 'farmer' ? 'You' : p.name; at = ctx.view.unitAnchor(pt.unit) }
       } else if (pt.thing && !(app.thing && app.thing.thing.kind === pt.thing.kind && app.thing.thing.k === pt.thing.k)) {
         name = thingWords(c, pt.thing).name
         at = ctx.view.thingAnchor(pt.thing)
@@ -214,7 +218,7 @@ export function whois(ctx: Ctx, layer: HTMLElement): Whois {
     label.hidden = !name || !at?.visible
     if (!label.hidden && at) {
       if (label.textContent !== name) label.textContent = name
-      label.style.transform = `translate3d(${(at.x + 16).toFixed(1)}px, ${(at.y - 30).toFixed(1)}px, 0)`
+      label.style.transform = `translate3d(${(at.x + 24).toFixed(1)}px, ${(at.y - 44).toFixed(1)}px, 0)`
     }
     const foot = pt && pt.unit >= 0 && !label.hidden ? ctx.view.unitFoot(pt.unit) : null
     mark.hidden = !foot?.visible

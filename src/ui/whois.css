@@ -40,3 +40,4 @@
 .whois-layer.phone .whois { left: 10px; right: 10px; top: auto; bottom: 10px; width: auto !important; transform: none !important; max-height: 62%; overflow-y: auto; overscroll-behavior: contain; }
 .whois-layer.phone .whois.in { animation: lay-sheet var(--t-sheet) var(--ease-paper); }
 @keyframes lay-sheet { from { translate: 0 18px; } }
+.whois.thing .whois-head:last-child { padding-bottom: 0; border-bottom: 0; }

@@ -7,7 +7,8 @@ import type { App } from './app.ts'
 export type ThingKind = 'tractor' | 'truck' | 'asking' | 'neighbour' | 'buyer' | 'picker' | 'cow' | 'deer'
 export interface Thing { kind: ThingKind; k: number; holder: number }
 // What the pointer is over on the land, in CSS pixels: a person (-1 none), a thing, a field (-1), a yard (0 none).
-export interface Pointing { x: number; y: number; unit: number; thing: Thing | null; field: number; yard: number }
+// group: the people a pin stands for when several stand together.
+export interface Pointing { x: number; y: number; unit: number; thing: Thing | null; field: number; yard: number; group?: number[] }
 
 // The field view draws the land and owns the pointer on the canvas and the camera keys:
 //   click a field or a tract: app.select(i); with Shift held: app.select(i, true); on empty ground: app.select(-1)
