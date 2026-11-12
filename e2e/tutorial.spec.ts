@@ -156,7 +156,7 @@ test('a guided first year: offered as a card, taken, and followed from Play to t
           await expect(page.getByTestId('guide-held')).toBeVisible()
         }
       }
-      // Only what the note asks: the stamp it says to click, its skip ahead, its Noted, or the control it points at.
+      // Only what the note asks: the stamp it says to click, its skip ahead, its Got it, or the control it points at.
       const key = s.note === 'stamp' && s.target.startsWith('badge-') ? '' : s.keys.includes('guide-ahead') ? 'guide-ahead' : s.keys.includes('guide-noted') ? 'guide-noted' : ''
       if (key) await page.locator(`#ui [data-testid="guide-slip"] [data-testid="${key}"]`).first().click()
       else await page.locator(`#ui [data-testid="${s.target}"]`).first().click()
@@ -191,7 +191,7 @@ test('a guided first year: offered as a card, taken, and followed from Play to t
   expect(errors, errors.join('\n')).toEqual([])
 })
 
-test('the offer is answered by its keys, and Straight in shows no guide', async ({ page, isMobile }) => {
+test('the offer is answered by its keys, and Skip the tutorial shows no guide', async ({ page, isMobile }) => {
   test.setTimeout(240_000)
   const errors = watchErrors(page)
   await fresh(page)

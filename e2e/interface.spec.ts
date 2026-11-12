@@ -567,7 +567,7 @@ test('the goal line says the one next thing, opens the ladder, and moves on when
   await goal.click()
   const ladder = page.getByTestId('goals')
   await expect(ladder).toContainText('The way ahead')
-  await expect(ladder).toContainText('Seed goes in once the soil has warmed')
+  await expect(ladder).toContainText('Planting can start once the soil has warmed up')
   // The long goals wait until a year is behind the farm.
   await expect(ladder).not.toContainText('Long goals')
   await page.keyboard.press('Escape')
