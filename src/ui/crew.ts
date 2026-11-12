@@ -129,7 +129,8 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
   }
 
   function cell(c: S.Campaign, p: S.PersonInfo, d: Doing, sign: Sign, many: boolean, goal: boolean, needsYou: boolean): HTMLElement {
-    const on = app.unit === p.id && app.unitFrom === 'list'
+    // Alone on the farm there is no page of people: the farmer's own card opens beside them, as a click on the land would.
+    const on = app.unit === p.id && (app.unitFrom === 'list' || !many)
     const name = firstName(p.name)
     const ring = ringFor(c, p.id)
     const said = `${p.kind === 'farmer' ? 'You, the farmer' : p.name}: ${d.text}${sign ? `; ${sign.text}` : ''}.`
@@ -151,7 +152,7 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
     // What the cell prints is its name to a screen reader too, with the rest of what is known after it.
     return h('button', {
       class: `person unit${many ? '' : ' solo'}${on ? ' is-picked' : ''}${bad ? ' needs' : ''}${goal ? ' goal-ring' : ''}`, type: 'button', testid: `unit-${p.id}`, 'aria-pressed': String(on), style: `--c:${ring}`,
-      title: ctx.touch() ? undefined : said, onclick: () => { if (on) app.selectUnit(-1); else { app.select(-1); app.selectYard(0); app.selectUnit(p.id) } },
+      title: ctx.touch() ? undefined : said, onclick: () => { if (on) app.selectUnit(-1); else { app.select(-1); app.selectYard(0); app.selectUnit(p.id, many ? 'list' : 'land') } },
     }, kids, h('span', { class: 'sr' }, `. ${said} ${on ? 'Their card is open. Press again to close it.' : 'Press for their card; orders given now go to them.'}`))
   }
 
