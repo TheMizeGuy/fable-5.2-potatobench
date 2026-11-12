@@ -2,8 +2,8 @@
 import { test, type Page } from '@playwright/test'
 import { expect, look, noSidewaysScroll, open, putAway, reach, startSeason, watchErrors } from './helpers.ts'
 
-// A label and its amount on a money line, however the sheet sets the space between them.
-const line = (label: string, amount: string): RegExp => new RegExp(`${label}\\s*${amount.replace(/[$.]/g, '\\$&')}`)
+// A label and its amount on a money line, however the sheet sets what lies between them (a space, "with rent $3,500").
+const line = (label: string, amount: string): RegExp => new RegExp(`${label}.{0,40}?${amount.replace(/[$.]/g, '\\$&')}(?![\\d,])`)
 
 const PRESSED = '#ui .plate[aria-pressed="true"]'
 
