@@ -1,6 +1,6 @@
 // The ladder: what a farm reaches for next, in the order a player can reach it. Worked out from the farm as it stands,
 // so nothing extra is saved.
-import { BUILDING_KINDS, FELL_DAYS, FIELD_COUNT, goalCosts, isField, PARCELS, ROCKS_ADVISE, TRACTS, type Campaign, type GoalCost } from '../sim/index.ts'
+import { BUILDING_KINDS, FELL_DAYS, FIELD_COUNT, goalCosts, isField, NOTE_PAYMENT, PARCELS, ROCKS_ADVISE, TRACTS, type Campaign, type GoalCost } from '../sim/index.ts'
 
 export interface Goal {
   id: string
@@ -32,14 +32,25 @@ function prices(c: Campaign): Record<string, Price> {
     const open = list.filter(g => !/already/i.test(g.why)).sort(by)[0]
     return open ? { cost: open.cost, block: open.why } : { cost: 0, block: '' }
   }
+  // A machine is a goal only while buying it keeps the note's worth in hand: equipment comes out of cash, and a farm
+  // left with less than that at the start of a season goes into its year end short.
+  const tool = cheapest(all.filter(g => g.id.startsWith('buy:')))
+  const left = c.cash - tool.cost
+  const floor = !tool.block && tool.cost > 0 && left < NOTE_PAYMENT
+    ? `It would leave ${money(left)} in hand, under the ${money(NOTE_PAYMENT)} the note takes at the year end.` : ''
   return {
     stump: one('stump'), hire: one('hire'), foreman: one('foreman'), land: one('rent'),
-    tool: cheapest(all.filter(g => g.id.startsWith('buy:'))), build: cheapest(all.filter(g => g.id.startsWith('build:'))),
+    tool: floor ? { cost: tool.cost, block: floor } : tool, build: cheapest(all.filter(g => g.id.startsWith('build:'))),
   }
 }
 
-export function goals(c: Campaign): Goal[] {
-  const past = c.history.length > 0
+function money(n: number): string {
+  return `${n < 0 ? '-' : ''}$${Math.round(Math.abs(n)).toLocaleString('en-US')}`
+}
+
+export function goals(c: Campaign, o: { thisSeason?: boolean } = {}): Goal[] {
+  // thisSeason: the crop steps of this season alone, as if no year were behind the farm.
+  const past = !o.thisSeason && c.history.length > 0
   const s = c.season
   const inSeason = c.phase === 'season' && !!s && !s.frozen
   const spring = c.phase === 'plan'
@@ -78,7 +89,7 @@ export function goals(c: Campaign): Goal[] {
     { id: 'haul', title: 'Bring the crop in', why: 'The crop waits in barrels until it is hauled; a hard frost takes a share. It is weighed once all is in.', when: 'After the dig',
       done: past || any(f => f.weighed), now: crop },
     { id: 'sell', title: 'Sell some potatoes', why: 'Sell off the field now, or store and sell into the winter.', when: 'After the weigh-in',
-      done: c.lots.some(l => l.sold > 0) || c.history.some(y => y.cwtSold > 0), now: c.phase === 'season' || c.phase === 'cellar' },
+      done: o.thisSeason ? c.lots.some(l => l.year === c.year && l.sold > 0) : c.lots.some(l => l.sold > 0) || c.history.some(y => y.cwtSold > 0), now: c.phase === 'season' || c.phase === 'cellar' },
     { id: 'year', title: 'Get through the year', why: 'The bank takes its note at the year end, and spring comes again.', when: 'At the year end',
       done: past && c.outcome !== 'lost', now: true },
   ]
@@ -143,10 +154,21 @@ function chain(steps: Spec[]): Spec[] {
 // The goal to show: the first not yet reached that the farm can take. When that waits for another part of the year, the
 // first step that can be taken now comes forward in its place; the long goals and the five years never jump the queue.
 // A step the farm cannot pay for or cannot take now (no bed free, nobody hired) is passed over; the ladder says why.
+// At the year end it is the coming spring's goal, so the one the book shows is the one the spring opens on.
 export function nextGoal(c: Campaign): Goal | null {
+  if (c.phase === 'ledger' && c.outcome === '') return nextGoal({ ...c, phase: 'plan' })
   const all = goals(c).filter(g => !g.done)
   const open = all.filter(g => !(g.now && g.block))
   const first = open[0] ?? all[0]
   if (!first || first.now) return first ?? null
   return open.find(g => g.now && !g.long && g.id !== 'five') ?? first
+}
+
+const CROP = new Set(['plant', 'walk', 'hill', 'spray', 'sample', 'kill', 'dig', 'haul'])
+
+// In a season after the first, the crop's own next step this season: said ahead of a farmstead goal (fell a woodlot),
+// which waits in the line under it. Null outside a season, or once the crop is in.
+export function seasonStep(c: Campaign): Goal | null {
+  if (c.phase !== 'season' || !c.season || c.season.frozen) return null
+  return goals(c, { thisSeason: true }).find(g => CROP.has(g.id) && !g.done) ?? null
 }
