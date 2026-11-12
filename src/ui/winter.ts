@@ -4,9 +4,11 @@ import * as S from '../sim/index.ts'
 import { type Ctx } from './core.ts'
 import { h, type Child } from './dom.ts'
 import * as F from './fmt.ts'
+import { term } from './glossary.ts'
 import { icon } from './icons.ts'
 import { fold, meter } from './system/parts.ts'
 import { portrait } from './system/people.ts'
+import { logsWanted } from './top.ts'
 
 const WORK_LABEL: Record<S.WinterWork, string> = { off: 'Off', woods: 'Woods', pack: 'Pack', build: 'Build' }
 const WORK_SKILL: Record<Exclude<S.WinterWork, 'off'>, S.Skill> = { woods: 'woods', pack: 'pack', build: 'build' }
@@ -71,7 +73,7 @@ function personRow(ctx: Ctx, c: S.Campaign, u: S.Unit, p: S.PersonInfo, people: 
   const why = homebody ? [S.TRAITS.homebody.text] : voided(u, choices).filter(x => !shared.has(x))
   return h('li', { class: 'wrow', testid: `winter-${u.id}` },
     portrait(u, 46),
-    h('p', { class: 'who' }, h('b', null, name), h('span', null, homebody ? S.TRAITS.homebody.name.toLowerCase() : `${best} ${p.skills[best]}`)),
+    h('p', { class: 'who' }, h('b', null, name), h('span', null, homebody ? S.TRAITS.homebody.name.toLowerCase() : term(`${best} ${p.skills[best]}`, 'skill'))),
     h('div', { class: 'seg', role: 'group', 'aria-label': `${name} this winter` }, choices.map(ch => {
       const on = u.winter === ch.work
       return h('button', {
@@ -99,6 +101,7 @@ function yardPart(ctx: Ctx, c: S.Campaign): Child {
       : h('p', { class: 'yard-stock quiet' }, 'No logs or fieldstone in the yard.'),
     loads >= 1 && !m.sellWhy ? h('button', { class: 'btn', type: 'button', testid: 'sell-logs', onclick: () => { if (ctx.run({ t: 'sellLogs', loads }).ok) ctx.dirty() } },
       icon('sell', 'i'), `Sell ${F.plural(loads, 'load')}`, h('span', { class: 'sub num' }, F.money(loads * m.logPrice))) : null,
+    loads >= 1 && !m.sellWhy && logsWanted(c) ? h('p', { class: 't-caption c-red', testid: 'logs-wanted' }, logsWanted(c)) : null,
     mort.owed > 0 ? h('p', { class: 't-caption w-mortgage', testid: 'winter-mortgage' },
       `${F.money(mort.owed)} owed on the land. At the year end the bank takes ${F.money(mort.principal + mort.interest)}; extra can be paid in spring.`) : null)
 }

@@ -22,6 +22,8 @@ interface View { x?: number; z?: number; dist?: number; yaw?: number; pitch?: nu
 interface Shot {
   name: string
   size?: [number, number]
+  // Device pixels to one of the page's (a laptop's dense screen is 2).
+  ratio?: number
   // Screen edges covered by the interface. Default: the thin top bar and the low command card of the season screen.
   insets?: Insets
   setup: (page: Page) => Promise<void>
@@ -464,7 +466,14 @@ const shots: Shot[] = [
   // The camera's four tiers on a July evening with people and machines at work, and the playing view as the season's
   // command bar leaves it (the right quarter covered).
   ...(['yard', 'field', 'farm', 'county'] as const).map((name, k) => ({ name: `T${k + 1}-${name}`, size: [1920, 1080] as [number, number], setup: async (page: Page) => { await atWork(page); await page.evaluate(name => (window as any).__countyField.tier(name), name); await frames(page, 30) } })),
-  { name: 'T5-field-season-bar', size: [1920, 1080], insets: { top: 56, right: 480, bottom: 90 }, setup: async page => { await atWork(page); await frames(page, 30) } },
+  // The view tipped straight down by the player's hand, from the county tier and from the field tier.
+  ...(['county', 'field'] as const).map((name, k) => ({ name: `T${10 + k}-${name}-down`, size: [1920, 1080] as [number, number], setup: async (page: Page) => { await atWork(page); await page.evaluate(name => { const f = (window as any).__countyField; f.tier(name); f.rig.leanBy(1) }, name); await frames(page, 40) } })),
+  // A laptop's dense screen (a window of 1512 by 982 at two device pixels to one): the picture is drawn smaller than
+  // the screen and stretched over it, and must still be sharp.
+  ...(['yard', 'field', 'county'] as const).map((name, k) => ({ name: `M${k + 1}-dense-${name}`, size: [1512, 982] as [number, number], ratio: 2, setup: async (page: Page) => { await atWork(page); await page.evaluate(name => (window as any).__countyField.tier(name), name); await frames(page, 30) } })),
+  // The middle and the low settings from the field tier and the county tier.
+  ...(['medium', 'low'] as const).flatMap(q => (['field', 'county'] as const).map(name => ({ name: `Q-${name}-${q}`, size: [1920, 1080] as [number, number], setup: async (page: Page) => { await atWork(page); await page.evaluate(([name, q]) => { (window as any).__county.app.setSetting('quality', q); (window as any).__countyField.tier(name) }, [name, q]); await settle(page); await frames(page, 30) } }))),
+  { name: 'T5-field-season-bar',size: [1920, 1080], insets: { top: 56, right: 480, bottom: 90 }, setup: async page => { await atWork(page); await frames(page, 30) } },
   { name: 'T6-farm-spring-sheet', size: [1920, 1080], insets: { top: 56, right: 640 }, setup: async page => { await page.evaluate(() => (window as any).__county.app.newGame(1977, 5)); await settle(page); await frames(page, 30) } },
   // An upright phone: the field tier with the horizon in its top fifth, and the farm tier.
   { name: 'T8-phone-field', size: [390, 844], insets: { top: 52, bottom: 190 }, setup: async page => { await atWork(page); await frames(page, 30) } },
@@ -980,7 +989,7 @@ const errors: string[] = []
 for (const shot of shots) {
   if (only.size && !only.has(shot.name) && ![...only].some(o => o.endsWith('*') && shot.name.startsWith(o.slice(0, -1)))) continue
   const [w, h] = shot.size ?? [1440, 900]
-  const page = await browser.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: 1 })
+  const page = await browser.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: shot.ratio ?? 1 })
   page.on('console', m => { if (m.type() === 'error') errors.push(`${shot.name}: ${m.text()}`); else if (m.text().startsWith('stand')) console.log('  ', m.text()) })
   page.on('pageerror', e => errors.push(`${shot.name}: ${e.message}`))
   await page.goto(base)
@@ -1017,7 +1026,7 @@ for (const shot of shots) {
     const f = (window as any).__countyField
     const anchors = Array.from({ length: (f.info().held ?? []).length || 18 }, (_, i) => f.anchor(i))
     const s = f.stats ? f.stats() : {}
-    return { K: f.scale?.K, ...f.info(), anchors: anchors.map((a: any) => (a.visible ? `${Math.round(a.x)},${Math.round(a.y)}` : 'off')).join(' '), triangles: s.triangles, calls: s.calls, fps: s.fps }
+    return { K: f.scale?.K, ...f.info(), anchors: anchors.map((a: any) => (a.visible ? `${Math.round(a.x)},${Math.round(a.y)}` : 'off')).join(' '), triangles: s.triangles, calls: s.calls, fps: s.fps, drawn: s.drawn, canvas: [s.width, s.height] }
   })
   console.log(path, JSON.stringify(info))
   await page.close()

@@ -361,3 +361,26 @@ field was ordered by hand. The crew now works to a routine; the player makes the
   keeping a lot to each cellar month would usually net, sprouting, shrink and the charge included; on a contract's
   due date the buyer takes what is owed from the potato houses before any penalty.
 - *Late vines.* Reference practice, and so the routine, digs a crop whose vines are still up from October 5.
+
+**Round two of the routine.** What a second round of first-time players found:
+
+- *Pressing work comes first.* Spraying under a blight watch, planting, the haul ahead of a frost and the dig from
+  September 20 are taken ahead of work that can wait (felling, rocks, hedgerows, building), whatever the priorities;
+  a priority of "never" still holds. The day says so (`pressing`). `pressing(world, c)` lists pressing work nobody
+  will take or nobody ordered, with what is in its way and the one command that clears it.
+- *Each order's fate.* `jobOutlook(world, c)` plays the next day on a copy of the farm and says, for each order, who
+  takes it and when (now, next, waiting) or why nobody will.
+- *Orders that no longer make sense* leave the list each morning with a `dropped` event that carries the reason
+  (a walk, a spray or a watering for vines that are dead, and the like).
+- *Rest.* A person worn out (tiredness 0.85, the injury line) rests by themselves the next day and is warned of
+  first; `{ t: 'rest', unit, mode }` rests someone now (until under 0.3), returns them to resting when worn out, or
+  tells them to work on, worn out or not.
+- *One rule for planting* (`plantReady`): the soil at 10 C (50 F), not before April 8, the ground fit to work. The
+  advice, and so the routine, the field's card and the forecast line read the same.
+- *A lone hauler and a freezing night.* With nobody else to haul, on a night forecast to come within 1 C of freezing
+  the barrels at the field, the digger digs only as much of the day as the rest of it can haul in (`digWait`).
+- *What the player is told.* `goalCosts` (what each goal costs and whether the farm can pay now), `moneyNow` (what the
+  farm would have after the year-end bills if everything sold today, the spring loan counted as owed), `yearStory`
+  (began with, ends with, the three largest reasons), `sprayOutlook` (passes and dollars to keep the fields sprayed),
+  `killTiming` (when the coach asked for the kill and how early it came), and on each field `blightSeen` and
+  `pullBy`.

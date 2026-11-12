@@ -232,7 +232,14 @@ function lump(radius: number, detail: number, seed: number, rough = 0.5): Buffer
 }
 
 export interface Kind { geo: BufferGeometry; mat: MeshStandardMaterial; wide: number; sink: number; depth?: MeshDepthMaterial; shadow: boolean }
-interface Chunk { near: InstancedMesh[]; far: InstancedMesh[]; cards: InstancedMesh[]; sphere: Sphere; fixed: boolean; level: number }
+interface Chunk { near: InstancedMesh[]; far: InstancedMesh[]; cards: InstancedMesh[]; sphere: Sphere; fixed: boolean; level: number; want: number; block?: Block }
+// A block of patches, four by four. When every patch of it is drawn as cards the block is drawn in their place, in up
+// to four meshes (its conifers and its hardwoods, those of its woods apart from those that stand singly): from far off
+// the farm's trees are a few dozen draws and not several hundred.
+interface Block { cards: InstancedMesh[]; parts: Chunk[]; centre: Vector3; whole: boolean; state: number }
+const BLOCK = 4
+// A patch of more trees than this is a wood: in the wide shadows it is drawn thinned.
+const WOOD = 90
 // A tract's stand: its trees in felling order, and for each mesh that draws some of them their places in that order,
 // last to fall first, so the trees still standing are always the first of the mesh.
 interface Stand { trees: StandTree[]; sets: { mesh: InstancedMesh; ranks: number[] }[]; cut: number; held: number }
@@ -337,6 +344,7 @@ export class Flora {
   readonly farWoods = new Group()
   private disposables: { dispose(): void }[] = []
   private chunks = new Map<string, Chunk>()
+  private blocks: Block[] = []
   private stands = new Map<number, Stand>()
   private near: Record<string, Kind>
   private far: Record<string, Kind>
@@ -779,7 +787,7 @@ export class Flora {
       }
       for (const [key, list] of byCell) {
         let ch = this.chunks.get(key)
-        if (!ch) this.chunks.set(key, (ch = { near: [], far: [], cards: [], sphere: new Sphere(), fixed: !both, level: -1 }))
+        if (!ch) this.chunks.set(key, (ch = { near: [], far: [], cards: [], sphere: new Sphere(), fixed: !both, level: -1, want: 2 }))
         let c = cards.get(key)
         if (!c) cards.set(key, (c = { con: [], leaf: [], both }))
         ;(conifer ? c.con : c.leaf).push(...list)
@@ -803,6 +811,34 @@ export class Flora {
     for (const ch of this.chunks.values()) {
       ch.cards.forEach((m, i) => { if (i === 0) ch.sphere.copy(m.boundingSphere!); else ch.sphere.union(m.boundingSphere!) })
       for (const m of [...ch.near, ...ch.far]) m.visible = false
+    }
+    // The patches on and round the farm, gathered into blocks (a tract's stand is felled tree by tree and stays its own).
+    const gathered = new Map<string, { lists: Tree[][]; parts: Chunk[] }>()
+    for (const [key, c] of cards) {
+      if (!c.both) continue
+      const [, cx, cz] = key.split('|').map(Number)
+      const at = `${Math.floor(cx / BLOCK)}|${Math.floor(cz / BLOCK)}`
+      let g = gathered.get(at)
+      if (!g) gathered.set(at, (g = { lists: [[], [], [], []], parts: [] }))
+      g.lists[c.con.length > WOOD ? 2 : 0].push(...c.con)
+      g.lists[c.leaf.length > WOOD ? 3 : 1].push(...c.leaf)
+      g.parts.push(this.chunks.get(key)!)
+    }
+    for (const g of gathered.values()) {
+      if (g.parts.length < 2) continue
+      const meshes: InstancedMesh[] = []
+      g.lists.forEach((list, k) => {
+        if (!list.length) return
+        list.sort((a, b) => b.z - a.z)
+        const m = this.placeCards(k % 2 === 0, list, k >= 2)
+        m.visible = false
+        meshes.push(m)
+      })
+      const all = new Sphere()
+      meshes.forEach((m, i) => { if (i === 0) all.copy(m.boundingSphere!); else all.union(m.boundingSphere!) })
+      const block: Block = { cards: meshes, parts: g.parts, centre: all.center.clone(), whole: false, state: -1 }
+      for (const p of g.parts) p.block = block
+      this.blocks.push(block)
     }
   }
 
@@ -863,7 +899,7 @@ export class Flora {
       const [c, px, pz] = key.split('|')
       const at = `t|${i}|${px}|${pz}`
       let ch = this.chunks.get(at)
-      if (!ch) this.chunks.set(at, (ch = { near: [], far: [], cards: [], sphere: new Sphere(), fixed: false, level: -1 }))
+      if (!ch) this.chunks.set(at, (ch = { near: [], far: [], cards: [], sphere: new Sphere(), fixed: false, level: -1, want: 2 }))
       const sub = ranks.map(n => trees[n])
       const near = this.place(this.near[c], sub), far = this.place(this.far[c], sub)
       ch.near.push(near)
@@ -948,7 +984,7 @@ export class Flora {
   }
 
   // In a wood (a patch of many trees) the wide shadows are thrown by a thinned set of its cards.
-  private placeCards(conifer: boolean, trees: Tree[]): InstancedMesh {
+  private placeCards(conifer: boolean, trees: Tree[], wood = trees.length > WOOD): InstancedMesh {
     const m = new Matrix4(), q = new Quaternion(), p = new Vector3(), sc = new Vector3(), up = new Vector3(0, 1, 0)
     const geo = new BufferGeometry()
     geo.index = this.cardGeo.index
@@ -970,7 +1006,7 @@ export class Flora {
     mesh.userData.far = true
     mesh.layers.enable(1)
     mesh.layers.enable(2)
-    mesh.customDepthMaterial = this.cardDepth[(conifer ? 0 : 1) + (trees.length > 90 ? 2 : 0)]
+    mesh.customDepthMaterial = this.cardDepth[(conifer ? 0 : 1) + (wood ? 2 : 0)]
     this.cardMeshes.push(mesh)
     this.group.add(mesh)
     this.disposables.push(geo)
@@ -984,35 +1020,55 @@ export class Flora {
     this.low = tier === 'low'
     for (const m of this.cardMeshes) m.castShadow = !this.low
     for (const ch of this.chunks.values()) ch.level = -1
+    for (const b of this.blocks) b.state = -1
     // The low setting draws half the far woods, the middle one three quarters.
     for (const m of this.thin) m.count = Math.ceil((m.userData.all as number) * (tier === 'low' ? 0.5 : tier === 'medium' ? 0.75 : 1))
   }
 
   // Whole trees in the patches near the camera, simpler ones beyond them, cards in the rest. A patch's cards are in the
   // two wider shadows always, and in the picture only when they are what is drawn of it.
-  update(camera: PerspectiveCamera): void {
+  // wide: the fine shadow covers the farm and more, and a card is small in it: the cards then throw that shadow too,
+  // and the simpler trees kept standing for it are not drawn at all.
+  update(camera: PerspectiveCamera, wide = false): void {
     const c = camera.position
+    // in a few bands of distance, and by material within each: every change of material is paid for
+    const band = (far: number) => -8 + (far < 250 ? 0 : far < 600 ? 1 : far < 1400 ? 2 : 3)
     for (const ch of this.chunks.values()) {
-      let level = 2
-      if (!ch.fixed) {
-        const d = Math.max(0, this.v.copy(ch.sphere.center).distanceTo(c) - ch.sphere.radius * 0.6)
-        level = d < this.nearAt ? 0 : d < this.midAt ? 1 : 2
+      ch.want = 2
+      if (ch.fixed) continue
+      const d = Math.max(0, this.v.copy(ch.sphere.center).distanceTo(c) - ch.sphere.radius * 0.6)
+      ch.want = d < this.nearAt ? 0 : d < this.midAt ? 1 : 2
+    }
+    for (const b of this.blocks) {
+      b.whole = b.parts.every(p => p.want === 2)
+      if (b.whole) { const order = band(b.centre.distanceTo(c)); for (const m of b.cards) m.renderOrder = order }
+      const state = (b.whole ? 1 : 0) + (wide ? 2 : 0)
+      if (state === b.state) continue
+      b.state = state
+      for (const m of b.cards) {
+        m.visible = b.whole
+        if (wide) m.layers.enable(3); else m.layers.disable(3)
       }
-      // in a few bands of distance, and by material within each: every change of material is paid for
-      const far = this.v.copy(ch.sphere.center).distanceTo(c)
-      const order = -8 + (far < 250 ? 0 : far < 600 ? 1 : far < 1400 ? 2 : 3)
-      for (const m of ch.cards) m.renderOrder = order
-      if (level === ch.level) continue
-      ch.level = level
+    }
+    for (const ch of this.chunks.values()) {
+      const level = ch.want, whole = ch.block?.whole ?? false
+      if (!whole) { const order = band(this.v.copy(ch.sphere.center).distanceTo(c)); for (const m of ch.cards) m.renderOrder = order }
+      const state = level + (wide ? 4 : 0) + (whole ? 8 : 0)
+      if (state === ch.level) continue
+      ch.level = state
       for (const m of ch.near) m.visible = level === 0
       // A card in the fine shadow would be a great sheet of the map to fill: where a patch is drawn as cards, its
       // simpler trees still stand in the fine shadow, out of the picture.
       for (const m of ch.far) {
-        m.visible = level === 1 || (level === 2 && !this.low)
+        m.visible = level === 1 || (level === 2 && !this.low && !wide)
         m.layers.set(3)
         if (level === 1) m.layers.enable(0)
       }
-      for (const m of ch.cards) { if (level === 2) m.layers.enable(0); else m.layers.disable(0) }
+      for (const m of ch.cards) {
+        m.visible = !whole
+        if (level === 2) m.layers.enable(0); else m.layers.disable(0)
+        if (level === 2 && wide) m.layers.enable(3); else m.layers.disable(3)
+      }
     }
   }
 

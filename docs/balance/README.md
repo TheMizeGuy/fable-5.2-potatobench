@@ -234,6 +234,33 @@ night instead of at the sale or the close; a contract falling due takes what is 
 a frost drivers leave other machine work for the barrels; the yard's logs count in whole loads; and the year's
 telegrams are bounded. No constant was retuned in this wave.
 
+### Round two of the routine
+
+After the second round of players: pressing work taken ahead of work that can wait, orders that no longer make
+sense swept off the list, people resting when worn out, one planting rule, and a lone hauler digging no more than
+can be hauled before a freezing night (`docs/FARMSTEAD.md`). The same 200 farms, before (the first routine) and
+after:
+
+| Player | Kept 1 yr | Kept 5 yr | Kept 10 yr | Year-one revenue | Ten-year net worth, mean |
+|---|---|---|---|---|---|
+| untended, before | 72% | 0% | 0% | $34k | -$38k |
+| untended, after | 74% | 1% | 0% | $36k | -$38k |
+| calls only, before | 100% | 69% | 5% | $64k | -$30k |
+| calls only, after | 100% | 72% | 6% | $65k | -$28k |
+| reference, before | 100% | 67% | 3% | $63k | -$29k |
+| reference, after | 100% | 74% | 8% | $65k | -$29k |
+
+The calls are still worth making: $29k of year-one revenue, 72% of farms kept five seasons against 1%, and $10k of
+ten-year net worth on the mean. With the routine off the untended and calls-only players plant nothing, as before
+(kept 0%, $2k).
+
+The gates, after: G1 PASS (the reference keeps 74%, the expert 100% through five seasons and 99% through ten; expert
+over reference $459k, $438k to $482k). G2 FAIL, 21 of 29 earn (was 16): traps the foreman, the bunkhouse, the third
+tractor and now the second tractor (-$5k, its interval below zero); unproven never resting on Sundays, pickers, the
+machine shed, the truck. G3 FAIL, as before: the expert's building order is best on 171 of 200 farms, clearing and
+prompt hauling right on 90% or more; blocks in band (intervale 50%, ridge 78%, Dufour 73%). G4 PASS: median net
+worth $32k to $423k, cash at year ten $183k.
+
 ### What storage really nets
 
 `node tools/balance/storage.ts` (200 generated farms, ten years each, a sound lot dug on October 1 into the cool

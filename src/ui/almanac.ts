@@ -87,7 +87,6 @@ function blightPage(ctx: Ctx, c: S.Campaign): Child {
 
 function fieldsPage(ctx: Ctx, c: S.Campaign): Child {
   const s0 = c.season!
-  const t = S.today(ctx.app.world, c)
   return h('div', { class: 'alm-fields' }, heldFields(c).map(i => {
     const f = S.fieldInfo(c, i)
     const rows: [string, string][] = []
@@ -96,7 +95,7 @@ function fieldsPage(ctx: Ctx, c: S.Campaign): Child {
     if (f.status === 'rest') add('This year', `Oats and clover. It earns ${F.money(S.REST_INCOME)} in the fall.`)
     else {
       add('Stage', f.daysIn > 0 && f.status !== 'dug' && f.status !== 'lost' ? `${f.stage}, day ${f.daysIn} since planting` : f.stage)
-      if (f.status === 'idle' || f.status === 'planted') add('Soil here', `${F.temp((t ? t.soilT : 0) + S.SOIL_T_OFFSET[f.elev])}; seed wants about ${F.temp(10)}`)
+      if (f.status === 'idle' || f.status === 'planted') { const pr = S.plantReady(ctx.app.world, c, i); add('Soil here', `${F.temp(pr.soilT)}; seed wants ${F.temp(pr.need)}, and below ${F.temp(pr.rots)} it rots`) }
       if (f.status === 'growing' || f.status === 'planted') {
         add('Leaf', `${F.pct(f.canopy)} of the ground${f.bloom > 0.2 ? ', in flower' : ''}${f.frosted >= 0.05 ? `; ${F.pct(f.frosted)} blackened by frost` : ''}`)
         add('Hilled', R.hillWord(f.hillPasses))
