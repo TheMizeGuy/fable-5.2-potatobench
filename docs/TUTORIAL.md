@@ -36,7 +36,9 @@ paper disc with a keyline so it reads over any land. There is no slideshow, no s
   the land) or to watch something happen (the first planting) stops the clock while it shows, says "Clock held", and
   lets the clock go on at the speed it had once it passes. While it holds, a line under the clock itself says "Held
   for the agent's note. Any speed goes on." Any speed key starts the clock at once, and a player who starts it is not
-  stopped again for that note, nor by the next one for a few seconds. The clock's own stops (a telegram, a weigh ticket, frost on barrels, the season's end) are
+  stopped again for that note. Only the player's own press counts: the game
+  setting the clock going again (a paper closing, a telegram answered) while a note holds it is held again. The line
+  goes under the clock, else over it, else under the "Go on" key, and never over a face, the list or a panel. The clock's own stops (a telegram, a weigh ticket, frost on barrels, the season's end) are
   explained the first time, under the clock's tag. A paper puts the notes away until it closes; the weigh ticket's own
   note is the one shown over its paper, set beside it. A telegram's note comes first and lies beside it, never over it.
 - **One at a time, never a step ahead.** The note on show keeps its place until it passes; only an urgent one (a

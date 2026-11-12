@@ -274,9 +274,18 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
 
   let input: Input = ctx.touch() ? 'touch' : 'mouse'
   let stale = true
-  const onKey = (e: KeyboardEvent) => { if ((e.key === 'Tab' || e.key === 'Enter') && !(e.target as HTMLElement).closest?.('input')) setInput('keys') }
+  // When the player last touched the clock themselves: a clock the game sets going (a paper closing) is held again.
+  let pressedAt = -1e9
+  const CLOCK_KEYS = [' ', 'f', 'F', '+', '=', '-', '_']
+  const onKey = (e: KeyboardEvent) => {
+    if (CLOCK_KEYS.includes(e.key)) pressedAt = performance.now()
+    if ((e.key === 'Tab' || e.key === 'Enter') && !(e.target as HTMLElement).closest?.('input')) setInput('keys')
+  }
   // A coarse pointer is a finger, whatever the event calls itself.
-  const onPointer = (e: PointerEvent) => setInput(e.pointerType === 'touch' || ctx.touch() ? 'touch' : 'mouse')
+  const onPointer = (e: PointerEvent) => {
+    if ((e.target as Element).closest?.('.clock, [data-testid="goal-faster"], [data-testid="paused"], [data-testid="running"]')) pressedAt = performance.now()
+    setInput(e.pointerType === 'touch' || ctx.touch() ? 'touch' : 'mouse')
+  }
   function setInput(i: Input): void { if (input !== i) { input = i; stale = true } }
   document.addEventListener('keydown', onKey, true)
   document.addEventListener('pointerdown', onPointer, true)
@@ -371,12 +380,13 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
   // the speed it had once it passes. A player who starts the clock themselves is not stopped again for that lesson.
   let holding: { id: string; speed: number } | null = null
   const overridden = new Set<string>()
-  let pressedAt = -1e9
   function hold(): void {
-    // The next note does not stop a clock the player has just started again.
-    if (now?.holds && !holding && performance.now() - pressedAt < 8000) overridden.add(now.id)
+    const t = performance.now()
     const want = now && now.holds && app.screen === 'season' && !overridden.has(now.id) ? now.id : ''
-    if (holding && app.speed > 0) { overridden.add(holding.id); holding = null; pressedAt = performance.now(); return }
+    if (holding && app.speed > 0) {
+      if (t - pressedAt < 1500) { overridden.add(holding.id); holding = null; return }
+      if (want) { app.setSpeed(0); app.pauseReason = HOLD; ctx.dirty(); return }
+    }
     if (want && !holding) {
       // Already stopped (by the player, or a question): it stays so, and the player starting it again is their call.
       holding = { id: want, speed: app.speed }
@@ -498,13 +508,22 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     hand.hidden = !fistBox
     // While the guide holds the clock, the clock says so.
     const ck = app.screen === 'season' && app.speed === 0 && app.pauseReason === HOLD ? [...root.querySelectorAll('.clock')].find(shown) : undefined
-    clockNote.hidden = !ck
     let noteBox: Box | null = null
     if (ck) {
-      const r = ck.getBoundingClientRect(), w = clockNote.offsetWidth, x = Math.max(8, Math.min(innerWidth - w - 8, r.right - w))
-      clockNote.style.transform = `translate3d(${x.toFixed(1)}px, ${(r.bottom + 6).toFixed(1)}px, 0)`
-      noteBox = { left: x, top: r.bottom + 6, right: x + w, bottom: r.bottom + 6 + clockNote.offsetHeight }
+      // Under the clock, else over it, else under the "Go on" key: never over a face, the list or a panel.
+      clockNote.hidden = false
+      const w = clockNote.offsetWidth, ht = clockNote.offsetHeight
+      const keep = [...hardOnes(root), ...[...root.querySelectorAll('.timebook, .person, .queue, .pressing, .goal, .plate-layer .tag')].filter(shown).map(e => box(e.getBoundingClientRect()))]
+      const at = (e: Element | undefined | null, under: boolean) => {
+        if (!e || !shown(e)) return null
+        const r = e.getBoundingClientRect(), x = Math.max(8, Math.min(innerWidth - w - 8, r.right - w)), y = under ? r.bottom + 6 : r.top - ht - 6
+        return { left: x, top: y, right: x + w, bottom: y + ht }
+      }
+      const go = root.querySelector('[data-testid="paused"]')
+      noteBox = [at(ck, true), at(ck, false), at(go, true)].find(b => !!b && b.top >= 4 && b.bottom <= innerHeight - 4 && !keep.some(a => meets(b, a))) ?? null
+      if (noteBox) clockNote.style.transform = `translate3d(${noteBox.left.toFixed(1)}px, ${noteBox.top.toFixed(1)}px, 0)`
     }
+    clockNote.hidden = !noteBox
     if (slip.hidden) return
     const key = `${l.id}|${innerWidth}x${innerHeight}|${slip.offsetWidth}x${slip.offsetHeight}`
     const t0 = performance.now()
