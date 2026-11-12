@@ -12,7 +12,7 @@ import { Pose, dressFor, dressOf, drawFigure, drawn, figureMatrix, forking, hamm
 import type { Env } from './env.ts'
 import { UI_GAIN, type HillDisplay } from './fields.ts'
 import { level } from './arch.ts'
-import { BAYS, HOUSE, IMPLEMENT_SPOTS, POTATO_HOUSE, ROAD, hillPos, route, siteOf, woodFront, type Pt } from './layout.ts'
+import { BAYS, HOUSE, IMPLEMENT_SPOTS, POTATO_HOUSE, ROAD, fieldAt, hillPos, route, siteOf, woodFront, type Pt } from './layout.ts'
 import { FIGURE, TRUE_SIZE } from './measures.ts'
 import { K, S } from './scale.ts'
 
@@ -856,7 +856,9 @@ export class Crews {
           px = e.x; pz = e.z
           a.aboard = false
           pose.reset()
-          stoop(pose, Math.sin((((a.beat % cycle) - (cycle - 1.5)) / 1.5) * Math.PI), f.time * 5, seg.kind !== 'scout')
+          // (bending to a plant, so only where there are plants)
+          if (fieldAt(e.x, e.z) >= 0) stoop(pose, Math.sin((((a.beat % cycle) - (cycle - 1.5)) / 1.5) * Math.PI), f.time * 5, seg.kind !== 'scout')
+          else stand(pose, f.time, a.tired, 3)
         }
         if (seg.kind === 'rogue') { pose.held = 'sack'; pose.size = 0.6 + 0.6 * w }
         if (!on) this.idle(a, f, pose)
@@ -935,9 +937,10 @@ export class Crews {
     if (a.rig) g.lead = { x: a.rig.x, z: a.rig.z, dx: Math.cos(a.rig.heading), dz: Math.sin(a.rig.heading) }
     const want = snap.farm.pickers ? 9 : 2
     while (g.pickers.length < want) {
-      const k = g.pickers.length
-      const corner = restAt(seg.field, 0, true)
-      g.pickers.push({ dress: this.extras[(k + seg.field * 3) % this.extras.length], x: corner.x - 1 - 0.5 * k, z: corner.z + 0.8, tx: corner.x - 1, tz: corner.z + 1, wait: 0.3 * k, heading: 1.6, gait: k, bent: 0 })
+      // they come on in a line behind the digger, each to a stretch of the row it has opened
+      const k = g.pickers.length, back = 7 + 3.4 * k
+      const x = g.lead.x - g.lead.dx * back, z = g.lead.z - g.lead.dz * back + (k % 2 ? 1.2 : -1.2)
+      g.pickers.push({ dress: this.extras[(k + seg.field * 3) % this.extras.length], x, z, tx: x, tz: z, wait: 0.3 * k, heading: 1.6, gait: k, bent: 0 })
     }
     g.pickers.length = Math.min(g.pickers.length, want)
     let n = a.next[segIdx] ?? 0

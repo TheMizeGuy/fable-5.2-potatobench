@@ -511,8 +511,8 @@ abstract class Machine {
       const soil = st.working > 0
       // (hurrying, the puffs are far apart: each is wider and thinner, so they run together into a haze along the way)
       const fast = speed >= 12 ? 1 : 0
-      pt.emit(bx + (r() - 0.5) * 1.6, this.y + 0.9 + fast, bz + (r() - 0.5) * 1.6, (r() - 0.5) * 0.5, 0.6 + r() * 0.6, (r() - 0.5) * 0.5, 1.6 + r() * 0.9 + 2.6 * fast, 1.3 + r() * 0.5, 7 + r() * 5,
-        soil ? 0.72 : 0.78, soil ? 0.62 : 0.7, soil ? 0.5 : 0.58, (0.62 - 0.34 * fast) * Math.min(1, dust * 1.4), 0.55)
+      pt.emit(bx + (r() - 0.5) * 1.6, this.y + 0.9 + fast, bz + (r() - 0.5) * 1.6, (r() - 0.5) * 0.5, 0.6 + r() * 0.6, (r() - 0.5) * 0.5, 1.6 + r() * 0.9 + 2.2 * fast, 0.42 + r() * 0.2, 5 + r() * 4,
+        soil ? 0.72 : 0.78, soil ? 0.62 : 0.7, soil ? 0.5 : 0.58, (0.62 - 0.36 * fast) * Math.min(1, dust * 1.4), 0.55)
     }
   }
 
@@ -669,9 +669,9 @@ export class Tractor extends Machine {
     while (this.wake > 4 && guard++ < 16) {
       this.wake -= 4
       const bx = -1.3 - this.wake / this.scale
-      if (st.kind === 'spray') for (const z of [-0.9, 0.9]) emit(bx, 0.7, z + (r() - 0.5) * 0.8, 0, 0.2, 0, 2.0 + r() * 0.8, 1.3, 5 + r() * 4, 0.92, 0.95, 0.97, 0.26, 0.95)
-      else if (st.kind === 'water') emit(bx, 0.9, (r() - 0.5) * 3, 0, 0.3, 0, 1.6, 1.1, 3 + r() * 2, 0.84, 0.89, 0.93, 0.2, 0.7)
-      else if (st.kind === 'kill') emit(bx, 0.6, (r() - 0.5) * 1.3, 0, 0.5, 0, 1.5, 1.0, 4 + r() * 3, 0.58, 0.58, 0.36, 0.34, 0.5)
+      if (st.kind === 'spray') for (const z of [-0.9, 0.9]) emit(bx, 0.7, z + (r() - 0.5) * 0.8, 0, 0.2, 0, 2.0 + r() * 0.8, 0.6, 5 + r() * 4, 0.92, 0.95, 0.97, 0.26, 0.95)
+      else if (st.kind === 'water') emit(bx, 0.9, (r() - 0.5) * 3, 0, 0.3, 0, 1.6, 0.6, 3 + r() * 2, 0.84, 0.89, 0.93, 0.2, 0.7)
+      else if (st.kind === 'kill') emit(bx, 0.6, (r() - 0.5) * 1.3, 0, 0.5, 0, 1.5, 0.5, 4 + r() * 3, 0.58, 0.58, 0.36, 0.34, 0.5)
     }
   }
 }
@@ -744,7 +744,8 @@ export class Car extends Machine {
       this.wheel(pr, 'tyre', front, r, z, r, 0.11, -st.turn * 0.45)
       this.wheel(pr, 'tyre', back, r, z, r, this.kind === 'truck' ? 0.2 : 0.11)
     }
-    if (st.driver) this.seated(pr, f, st, sedan ? -0.14 : 0.0, sedan ? 0.5 : 0.62, -0.17)
+    // (low enough that a hat clears the cab's roof)
+    if (st.driver) this.seated(pr, f, st, sedan ? -0.14 : 0.02, sedan ? 0.3 : 0.4, -0.17)
     if (st.driver) for (const z of [-0.34, 0.34]) this.lamp(pr, f, sedan ? 0.97 : 1.03, sedan ? 0.46 : 0.56, sedan ? z * 0.82 : z, 0.055)
     if (this.kind === 'truck') {
       const s = this.scale
