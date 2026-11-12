@@ -15,7 +15,7 @@ vec3 wrap(vec3 seed, vec3 fallen, vec3 box) {
 }
 `
 
-interface Fall { mesh: Mesh; mat: ShaderMaterial; u: Record<string, IUniform> }
+interface Fall { mesh: Mesh; mat: ShaderMaterial; u: Record<string, IUniform>; geo: InstancedBufferGeometry; count: number }
 
 export class Weather {
   readonly group = new Group()
@@ -44,7 +44,7 @@ export class Weather {
       mesh.renderOrder = 9
       this.group.add(mesh)
       this.disposables.push(g, mat)
-      return { mesh, mat, u }
+      return { mesh, mat, u, geo: g, count }
     }
     // Rain: streaks along the way it falls, never thinner than a pixel and a half.
     this.rain = make(18000, /* glsl */ `
@@ -118,6 +118,12 @@ export class Weather {
     this.leaves.mat.transparent = false
     this.leaves.mat.depthWrite = true
     this.leaves.mesh.renderOrder = 0
+  }
+
+  // The lower settings draw fewer drops and flakes.
+  setTier(tier: 'high' | 'medium' | 'low'): void {
+    const share = tier === 'high' ? 1 : tier === 'medium' ? 0.66 : 0.4
+    for (const f of [this.rain, this.snow, this.leaves]) f.geo.instanceCount = Math.round(f.count * share)
   }
 
   // fall: a clock that stops under reduced motion. span: how far the box of air is stretched (the camera's distance).

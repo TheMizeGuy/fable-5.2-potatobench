@@ -114,7 +114,7 @@ float gustAt(vec2 xz) {
 `
 
 // The day's haze is given as a density (env.haze); a metre of air at the brook holds this share of it.
-export const HAZE_PER_M = 0.3
+export const HAZE_PER_M = 0.44
 // How fast the haze thins with height, per metre: it lies in the lowest kilometre, so a camera that climbs to see the
 // county still looks through it.
 export const HAZE_FALL = 0.0011
@@ -126,7 +126,7 @@ export const CLOUD_TURN = 1150
 export const CLOUD_GLSL = /* glsl */ `
 // How high the bases of the cumulus stand, and how tall the tallest is.
 const float CLOUD_H = 780.0;
-const float CLOUD_T = 520.0;
+const float CLOUD_T = 300.0;
 float cloudField(vec2 p) {
   vec2 q = p * ${(1 / CLOUD_TURN).toFixed(6)} + uCloud.zw;
   float crowd = texture2D(uNoise, q * 0.19 + 0.17).b;
@@ -168,7 +168,9 @@ float hazeAmount(float ya, float yb, float t, vec2 xz, out float mistShare) {
     // Mist lies in banks with clear air between, drifting; and however deep, what stands in it still shows through.
     float bank = texture2D(uNoise, xz * 0.0021 + uCloud.zw * 6.0).b * 0.65 + texture2D(uNoise, xz * 0.011 - uCloud.zw * 11.0).b * 0.35;
     float wisp = 1.0 - uMist.w + uMist.w * 2.6 * smoothstep(0.32, 0.78, bank);
-    float low = min(airBetween(uMist.x * wisp, uMist.y, uMist.z, ya, yb, min(t, 1500.0)), 0.9);
+    // (It is the brook valley's mist: out in the far country there is none, or every hollow to the horizon would be white.)
+    float here = 1.0 - smoothstep(1400.0, 3200.0, distance(xz, vec2(${FARM_CENTER.x.toFixed(1)}, ${FARM_CENTER.z.toFixed(1)})));
+    float low = min(airBetween(uMist.x * wisp * here, uMist.y, uMist.z, ya, yb, min(t, 1500.0)), 1.25);
     mistShare = low / max(air + low, 1e-5);
     air += low;
   }
@@ -176,7 +178,7 @@ float hazeAmount(float ya, float yb, float t, vec2 xz, out float mistShare) {
 }
 // The land that is drawn ends: well before it does, it has gone into the air, so no edge is ever seen.
 float landsEnd(vec2 xz) {
-  return smoothstep(${(REACH * 0.56).toFixed(1)}, ${(REACH * 0.93).toFixed(1)}, distance(xz, vec2(${FARM_CENTER.x.toFixed(1)}, ${FARM_CENTER.z.toFixed(1)})));
+  return smoothstep(${(REACH * 0.42).toFixed(1)}, ${(REACH * 0.9).toFixed(1)}, distance(xz, vec2(${FARM_CENTER.x.toFixed(1)}, ${FARM_CENTER.z.toFixed(1)})));
 }
 // Mist is lit from within when the sun is beyond it.
 vec3 mistTint(vec3 dir) {

@@ -72,7 +72,7 @@ for (const [label, w, h, top, right, bottom, left] of windows) {
       // Fields with their middle in the picture.
       let seen = 0
       for (const f of FIELDS) { v.set(f.cx, fieldBaseY(f.cz), f.cz).project(rig.camera); if (v.z < 1 && Math.abs(v.x) < 1 && Math.abs(v.y) < 1) seen++ }
-      const third = upright ? share > 0.5 && share <= 1 : share >= 0.26 && share <= 0.5
+      const third = upright ? share > 0.5 && share <= 1 : share >= 0.26 && share <= 0.64 && (b.x1 - b.x0) / w >= 0.2
       const enough = upright ? 1 : 3
       ok = inside(b) && third && seen >= enough && (upright || horizon > top + 8)
       what = `field x ${b.x0.toFixed(0)}..${b.x1.toFixed(0)} y ${b.y0.toFixed(0)}..${b.y1.toFixed(0)}, ${(share * 100).toFixed(0)}% of the free width, ${seen} fields in the picture, level line at y ${horizon.toFixed(0)}`

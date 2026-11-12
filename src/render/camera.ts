@@ -23,7 +23,7 @@ export const HOME_FIELD = 3
 const SLOPE = -FALL
 export const MOVE_MS = 800
 // How high the far hills stand above the level line of the eye (radians).
-const CREST = 0.065
+const CREST = 0.05
 
 // By distance in metres: the pitch, how far below level the lens itself points, and the lens (degrees, vertical).
 // Near a yard the eye comes down to a walker's; from the field tier out the level line stays on the picture, so
@@ -99,14 +99,14 @@ const ROAM = (() => {
 
 // The opening shot. It starts high and far beyond the brook, looking into the last of the sun, so the size of the
 // country is the first thing seen: the whole farm small below, the woods, the back country and the hills. It comes down
-// across the brook and the bottom fields, and ends at a walker's height beside the farm road below the dooryard, the
-// tractor going by with the blossom of the middle field behind it and the sun in the tops of the spruce.
+// over the swale and the farm road, and ends at a walker's height beside the road below the dooryard, the tractor
+// coming down it with its driver, the blossom of the middle field beyond and the sun low over the ridge.
 // Each is the place looked at, how far off, and the way of looking.
 const TITLE: Pose[] = [
-  { x: 60, z: 40, dist: 2300, yaw: -0.98, pitch: 0.3, fov: 31, tilt: 0.14 },
-  { x: 150, z: 150, dist: 760, yaw: -1.06, pitch: 0.2, fov: 32, tilt: 0.11 },
-  { x: 150, z: 60, dist: 250, yaw: -1.12, pitch: 0.12, fov: 33, tilt: 0.08 },
-  { x: 199, z: 13, dist: 36, yaw: -1.2, pitch: 0.055, fov: 35, tilt: 0.05 },
+  { x: 40, z: -20, dist: 1650, yaw: -1.02, pitch: 0.27, fov: 31, tilt: 0.152 },
+  { x: 120, z: 30, dist: 640, yaw: -1.0, pitch: 0.19, fov: 32, tilt: 0.1 },
+  { x: 180, z: 20, dist: 170, yaw: -0.95, pitch: 0.11, fov: 33, tilt: 0.07 },
+  { x: 207, z: 2, dist: 24, yaw: -0.72, pitch: 0.04, fov: 36, tilt: 0.045 },
 ]
 // The time of each of those along the move, 0..1: most of it is spent coming down the last of the way.
 const TITLE_AT = [0, 0.4, 0.74, 1]
@@ -148,7 +148,7 @@ export class CameraRig {
     c.aspect = vp.w / vp.h
     // The nearer the nearest thing drawn, the less depth there is to tell a road from the ground under it a
     // kilometre off: the near edge of the picture stands as far out as each distance allows.
-    c.near = clamp(p.dist * 0.045, 0.5, 30)
+    c.near = clamp(p.dist * 0.06, 0.8, 40)
     c.far = FAR
     const x = p.x - Math.sin(p.yaw) * cp * p.dist, z = p.z + Math.cos(p.yaw) * cp * p.dist
     let y = ty + sp * p.dist
@@ -248,7 +248,8 @@ export class CameraRig {
   field(i: number, vp: Viewport, yaw = HOME_YAW): Pose {
     const f = FIELDS[i] ?? FIELDS[HOME_FIELD]
     const fw = Math.max(120, vp.w - vp.left - vp.right)
-    const wide = mix(0.8, 0.36, smooth(420, 1000, fw))
+    // A third of what is free, and never less than three tenths of the window: under a sheet the field does not shrink away.
+    const wide = Math.min(0.62, Math.max(mix(0.8, 0.36, smooth(420, 1000, fw)), (0.3 * vp.w) / fw))
     return this.cached(`field${f.i}@${yaw.toFixed(2)}`, vp, () => this.fit(corners(f), vp, { start: 420, yaw, wide, tall: 0.42, at: 0.7 }))
   }
 

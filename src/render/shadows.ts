@@ -11,7 +11,9 @@ import { U } from './shaders.ts'
 const UP = new Vector3(0, 1, 0), ORIGIN = new Vector3()
 // How far ahead of the point looked at each cascade is centred, as a share of its radius: the picture shows far more
 // ground beyond that point than before it.
-const LEAD = [0.2, 0.42, 0.5]
+const LEAD = [0.25, 0.42, 0.5]
+// Which frame of its turn each cascade is redrawn on: never two on the same frame.
+const TURN = [0, 3, 5]
 
 export class SunShadows {
   readonly lights: DirectionalLight[] = []
@@ -25,7 +27,7 @@ export class SunShadows {
   holdsFarm = false
   // How often each cascade is redrawn, in frames (the quality setting's): the fine one every frame or every other, the
   // wider ones less often. They are redrawn on different frames, so no frame carries all three.
-  every: [number, number, number] = [1, 2, 6]
+  every: [number, number, number] = [2, 4, 12]
   // A tool may hold a cascade as it is (never redrawn), to see what redrawing it costs.
   held = [false, false, false]
 
@@ -58,11 +60,11 @@ export class SunShadows {
     this.lights[0].color.copy(color)
     this.frame++
     // Steps of radius, so zooming does not make every shadow crawl.
-    const r0 = clamp(12 * Math.pow(1.3, Math.round(Math.log(Math.max(dist, 1) * 0.46 / 12) / Math.log(1.3))), 12, 420)
+    const r0 = clamp(12 * Math.pow(1.3, Math.round(Math.log(Math.max(dist, 1) * 0.34 / 12) / Math.log(1.3))), 12, 420)
     this.radius[0] = r0
     this.radius[1] = clamp(r0 * 3.4, 150, 1500)
     this.radius[2] = clamp(this.radius[1] * 3.6, 900, 4500)
-    this.holdsFarm = r0 >= 110
+    this.holdsFarm = r0 >= 100
     this.basis.lookAt(sunDir, ORIGIN, UP)
     this.right.setFromMatrixColumn(this.basis, 0)
     this.up.setFromMatrixColumn(this.basis, 1)
@@ -71,7 +73,7 @@ export class SunShadows {
     for (let k = 0; k < 3; k++) {
       const l = this.lights[k], sh = l.shadow
       const n = Math.max(1, this.every[k])
-      const due = !this.held[k] && (all || this.frame % n === (k * 3) % n)
+      const due = !this.held[k] && (all || this.frame % n === TURN[k] % n)
       if (k === 0) sh.autoUpdate = n <= 1 && !this.held[0]
       if (!due) continue
       if (!sh.autoUpdate) sh.needsUpdate = true
