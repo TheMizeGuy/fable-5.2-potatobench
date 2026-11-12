@@ -1059,4 +1059,7 @@
 .touch .prio { min-width: 40px; height: 40px; }
 .touch .cell { height: 40px; }
 .touch .bp { min-height: 40px; }
-.touch .tb-goal { min-height: 40px; }
+/* On a touch screen the goal line is a full target, its extra height taken back from the row so the bar keeps its size. */
+.touch .season .tb-goal { min-height: 40px; margin-top: -9px; margin-bottom: -9px; }
+.touch .w-who { min-height: 40px; }
+.touch .materials { min-width: 40px; justify-content: center; }

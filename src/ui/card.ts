@@ -229,8 +229,8 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
     const left = t.stage === 'fell' ? t.fellLeft : 0
     const logs = t.timber * (1 - t.felled) * (S.FELL_YIELD_BASE + S.FELL_YIELD_PER * 5)
     const stone = S.ROCKS_LOADS * Math.min(t.stones, S.ROCKS_TAKE)
-    const yields = t.stage === 'fell' ? `About ${Math.round(logs)} loads of logs come to the yard.` : t.stage === 'rocks' ? `About ${Math.round(stone)} loads of fieldstone for building.` : ''
-    const shelters = t.shelters.length ? `Standing, it shelters ${F.list(t.shelters.map(x => S.FIELD_NAMES[x]))}: less wind and water lost, but wetter and colder.` : ''
+    const yields = t.stage === 'fell' ? `Yields about ${Math.round(logs)} loads of logs.` : t.stage === 'rocks' ? `Yields about ${Math.round(stone)} loads of fieldstone.` : ''
+    const shelters = t.shelters.length ? `It shelters ${F.list(t.shelters.map(x => S.FIELD_NAMES[x]))}.` : ''
     const extra = [contractor(c, i, 'stump')].filter((x): x is HTMLElement => !!x)
     const rows = orderRow(c, [i], t.stage === 'fell' ? 'fell' : t.stage === 'rocks' ? 'rocks' : null, extra)
     const next = t.works ? `The bulldozer is pulling stumps: ${F.plural(t.works.left, 'season day')} more.` : t.next ? F.localize(t.next) : f.status === 'off' ? 'Cleared. It can be cropped next spring: a year in oats and clover first lifts the raw ground.' : ''
