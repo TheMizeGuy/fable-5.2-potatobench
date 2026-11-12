@@ -1,5 +1,5 @@
 // The campaign: planning, the season, the cellar and the year-end ledger, all driven through apply().
-import { standingOrders } from './advice.ts'
+import { asks, noteKillAsks, standingOrders } from './advice.ts'
 import { contractOffers } from './buyers.ts'
 import { hireBlock, hireRoom, newFarmer, newUnit } from './crew.ts'
 import { BLOCK_NAME, BLOCKS, DUFOUR_YARD, HOME_FIELDS, HOME_YARD, PARCELS, YARDS, type BlockId } from './farm.ts'
@@ -457,12 +457,13 @@ function closeYear(world: World, c: Campaign, out: GameEvent[]): void {
   settleContracts(c, 'all', out)
   let interest = 0
   const lots = c.lots.filter(l => l.year === c.year)
-  let potatoFields = 0, market = 0, culled = 0, peak = 0
+  let potatoFields = 0, market = 0, culled = 0, peak = 0, sprays = 0
   for (let i = 0; i < P.FIELD_COUNT; i++) {
     const f = s.fields[i]
     if (f.status === 'off') continue
     if (c.plans[i].crop === 'potato' && f.plantDay >= 0) potatoFields++
     if (f.sevPeak > peak) peak = f.sevPeak
+    sprays += f.sprays ?? 0
   }
   for (const lot of lots) {
     market += lot.sold
@@ -493,7 +494,7 @@ function closeYear(world: World, c: Campaign, out: GameEvent[]): void {
     logs: c.yearLogs, mortgage: c.yearMortgage, works: c.yearWorks, building: c.yearBuilding, stand: c.yearStand, packing: c.yearPacking,
     cwtSold: market, cwtCulled: culled,
     yieldCwtAcre: potatoFields ? market / (potatoFields * P.FIELD_ACRES) : 0,
-    potatoFields, blightPeak: peak, lots,
+    potatoFields, blightPeak: peak, sprays, lots,
   }
   c.history.push(sum)
 
@@ -897,8 +898,12 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
       return ok([note(c, 'winterSet', 'info', cmd.work === 'off' ? `${u.name} will be laid off for the winter, unpaid, and back in spring.` : `${u.name} will be kept on this winter: ${WINTER_LABEL[cmd.work]}.`)])
     }
     case 'job': {
+      // The coach's ask is read before the order goes on the list, where it stops asking.
+      const asked = cmd.kind === 'kill' ? asks(world, c) : []
       const why = addJob(c, cmd.kind, cmd.field, cmd.unit ?? -1, 'you')
-      return why ? fail(why) : ok()
+      if (why) return fail(why)
+      noteKillAsks(world, c, asked)
+      return ok()
     }
     case 'rest': {
       if (c.phase === 'over') return fail('The farm is gone.')
