@@ -89,8 +89,9 @@ test('the test-dig tray, the weigh ticket and the reckoning', async ({ page }) =
   await reach(page, `q.g().app.setSpeed(0); q.run(q.day(6, 28), ['sample']); const { app } = q.g(); app.do({ t: 'job', kind: 'sample', field: 2 }); app.do({ t: 'bump', id: app.campaign.season.jobs.at(-1).id }); app.do({ t: 'day' })`)
   await expect(page.getByTestId('sample-dialog')).toBeVisible()
   expect(await serious(page), 'tray').toEqual([])
-  await reach(page, `q.run(999, ['sell'], 'lot')`)
-  await expect(page.getByTestId('weighin')).toBeVisible()
+  // The ticket comes once the crop is hauled in and weighed.
+  await reach(page, `const { app } = q.g(); q.run(999, ['sell'], 'lot'); const s = app.campaign.season; for (let k = 0; k < 10 && !s.fields.some(f => f.weighed); k++) app.do({ t: 'day' })`)
+  await expect(page.getByTestId('weighin')).toBeVisible({ timeout: 30_000 })
   await page.waitForTimeout(2600)
   expect(await serious(page), 'weigh ticket').toEqual([])
   await page.getByTestId('reckoning-open').click()

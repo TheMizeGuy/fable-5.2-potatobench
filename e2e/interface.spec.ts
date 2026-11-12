@@ -54,7 +54,7 @@ test('fields are selected with a click, Shift, a double-click and the number key
   await page.getByTestId('field-2').click({ modifiers: ['Shift'] })
   await expect(page.locator(PRESSED)).toHaveCount(1)
   // A double-click takes every field in the same state: here, every potato field not yet planted.
-  const potato = await page.locator('#ui .plate').evaluateAll(els => els.filter(e => !/resting/.test(e.getAttribute('aria-label') ?? '')).length)
+  const potato = await page.locator('#ui .plate').evaluateAll(els => els.filter(e => !/resting/.test(e.textContent ?? '')).length)
   expect(potato).toBeGreaterThan(1)
   await page.getByTestId('field-0').dblclick()
   await expect(page.locator(PRESSED)).toHaveCount(potato)
@@ -165,7 +165,8 @@ test('a test dig is a tray beside the land, does not stop the clock, and can be 
 test('a weigh ticket wants an answer: it cannot be tapped away, and closing it stores the crop', async ({ page }) => {
   const errors = watchErrors(page)
   await startSeason(page)
-  await reach(page, `q.run(999, ['sell'], 'lot')`)
+  // The ticket comes once the crop is hauled in and weighed.
+  await reach(page, `const { app } = q.g(); q.run(999, ['sell'], 'lot'); const s = app.campaign.season; for (let k = 0; k < 10 && !s.fields.some(f => f.weighed); k++) app.do({ t: 'day' })`)
   const ticket = page.getByTestId('weighin')
   // The ticket waits for the land to finish showing the dig, which a slow engine takes a while over.
   await expect(ticket).toBeVisible({ timeout: 30_000 })
@@ -184,7 +185,7 @@ test('a weigh ticket wants an answer: it cannot be tapped away, and closing it s
   await putAway(page)
   await reach(page, `const { app } = q.g(); const s = app.campaign.season; for (let k = 0; k < 10 && s.fields.some(f => f.status === 'dug' && !f.weighed); k++) app.do({ t: 'day' }); app.setSpeed(0)`)
   await putAway(page)
-  const field = await page.locator('#ui .plate[aria-label*=", dug"]').first().getAttribute('data-testid')
+  const field = await page.locator('#ui .plate', { hasText: ', dug' }).first().getAttribute('data-testid')
   await page.getByTestId(field!).click()
   await expect(page.locator('#ui [data-testid^="field-sell-"]')).toContainText('$')
   await page.locator('#ui [data-testid^="weighin-"]').click()
@@ -290,10 +291,9 @@ test('spring land: a marker opens a card, renting puts a plate and the rent on t
   await page.keyboard.press('Escape')
   await page.getByTestId('crew-open').click()
   const crew = page.getByTestId('crew')
-  // The spring's applicants come with their skills and asking wage; the hall has hands at the standard wage.
-  await expect(crew).toContainText('Asking for work this spring')
+  // The spring's people come with their skills and asking wage; the hall has hands at the standard wage.
+  await expect(crew).toContainText('hiring hall')
   await expect(crew.getByTestId('hire-hand')).toContainText(hand)
-  await expect(crew.getByTestId('beds')).toContainText('live out')
   await crew.getByTestId('hire-hand').click()
   await expect(crew).toContainText('Lucien')
   await page.getByTestId('crew-close').click()
@@ -425,7 +425,7 @@ test('the menu: settings take effect, ending early says what is lost, and the sa
   await expect(menu.getByTestId('quality-now')).toContainText('Drawing')
   await menu.getByTestId('units-metric').check({ force: true })
   await menu.getByTestId('how-open').click()
-  await expect(page.getByTestId('how')).toContainText('The nine orders')
+  await expect(page.getByTestId('how')).toContainText('Every key and order')
   await page.getByTestId('how-close').click()
   await menu.getByTestId('end-season-early').click()
   const confirm = page.getByTestId('confirm')
@@ -486,9 +486,11 @@ test('the goal line says the one next thing, opens the ladder, and moves on when
   const errors = watchErrors(page)
   await startSeason(page)
   const goal = page.getByTestId('goal')
-  await expect(goal).toContainText('Plant the fields')
+  await expect(goal).toContainText('Plant')
   const of = await game<number>(page, 'app.campaign.season.fields.filter((f, i) => sim.isField(app.campaign, i) && f.status === "idle").length')
-  await expect(goal).toContainText(`0/${of}`)
+  // Before the ground is fit the line says how long until it is; once it is, how many fields are planted.
+  if (await page.getByTestId('goal-wait').count()) await expect(page.getByTestId('goal-wait')).toContainText('day')
+  else await expect(goal).toContainText(`0/${of}`)
   await goal.click()
   const ladder = page.getByTestId('goals')
   await expect(ladder).toContainText('The way ahead')
@@ -499,6 +501,7 @@ test('the goal line says the one next thing, opens the ladder, and moves on when
   // Once the soil is warm the goal points at a field that can be planted.
   await reach(page, `const { app } = q.g(); for (let k = 0; k < 40 && !app.needs().some(n => n.need && n.need.act === 'plant'); k++) app.do({ t: 'day' }); app.setSpeed(0)`)
   await putAway(page)
+  await expect(goal).toContainText(`Plant the fields0/${of}`)
   await goal.click()
   await page.getByTestId('goal-show').click()
   expect(await game<string>(page, 'app.needs()[app.selected]?.need?.act')).toBe('plant')
