@@ -624,6 +624,13 @@ export class Crews {
     }
   }
 
+  // Where a person is, as their card says it: on foot, on a machine (its driver), or off the land.
+  placeOf(id: number): 'foot' | 'machine' | 'away' {
+    const a = this.actors.find(x => x.id === id)
+    if (!a || a.away || a.shown < 0.5) return 'away'
+    return a.aboard ? 'machine' : 'foot'
+  }
+
   // Where a person's pin stands: a point over their head at a fixed height above the ground they are on (or the seat
   // they are in), so it does not bob as they walk or dip as they bend; false when there is no such person on the farm.
   anchor(id: number, out: Vector3): boolean {
