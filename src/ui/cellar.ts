@@ -7,6 +7,7 @@ import * as F from './fmt.ts'
 import { icon } from './icons.ts'
 import * as R from './rules.ts'
 import { topBar } from './top.ts'
+import { winterWork } from './winter.ts'
 
 const MONTH_SHORT = ['Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May']
 const LAST = S.MONTH_CURVE.length - 1
@@ -73,6 +74,7 @@ export function cellarScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
   let did: string[] = []
   let before: Before | null = null
   let counted = -1
+  let raise = false
 
   function snapshot(c: S.Campaign): Before {
     const lots = S.openLots(c)
@@ -100,7 +102,7 @@ export function cellarScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
         const d = now / p - 1
         return `${S.variety(id as S.VarietyId).name}: ${Math.abs(d) < 0.005 ? 'no change' : `${d > 0 ? 'up' : 'down'} ${F.num(Math.abs(d) * 100, 1)}%`}, to ${F.price(now)}.`
       }),
-      ...r.events.filter(e => e.type === 'sprout' || e.type === 'breakdown' || e.type === 'contractShort' || e.type === 'contractFilled').map(e => F.localize(e.text)),
+      ...r.events.filter(e => ['sprout', 'breakdown', 'contractShort', 'contractFilled', 'felled', 'built', 'skillUp', 'winterIdle'].includes(e.type)).map(e => F.localize(e.text)),
     ].filter(Boolean)
     ctx.announce(`${S.CELLAR_MONTHS[c.month]}. ${did.join(' ')}`)
   }
@@ -134,6 +136,7 @@ export function cellarScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
           lot.sprouted ? h('li', { class: 'warn-text' }, icon('sprout', 'ic s'), h('span', null, 'Sprouting: worth 15% less, and shrinking faster'))
             : h('li', null, icon('sprout', 'ic s'), h('span', null, m > c.month ? F.upper(R.sproutText(m)) : 'Sprouting soon')),
           lot.broke ? h('li', { class: 'bad-text' }, icon('blight', 'ic s'), h('span', null, 'Rot ran through it')) : null,
+          lot.packed > 0.005 ? h('li', { class: 'good-text', testid: `lot-packed-${lot.id}` }, icon('box', 'ic s'), h('span', null, `${F.pct(lot.packed)} of its No. 1 and B size packed: No. 1 ${F.pct(S.PACK_NO1)} more, B size ${F.pct(S.PACK_B)} of the No. 1 price`)) : null,
           h('li', null, icon('dig', 'ic s'), h('span', null, `Storage ${F.money(rent)} a month; about ${F.money(storageSoFar)} so far`)))),
       deal ? h('p', { class: 'sub lot-deal' }, `${deal.k.buyer} takes ${F.mass(deal.take)} of No. 1 at ${F.price(deal.k.price)}: ${versusMarket(deal)}.`) : null,
       h('div', { class: 'lot-actions' },
@@ -179,7 +182,12 @@ export function cellarScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
       // The year's storage bill shared out by how much each pile has held and for how long, so the cards add up to it.
       const weight = (l: S.Lot) => (S.lotCwt(l) + l.sold) * Math.max(0.2, (S.dayIndex(l.year, 10, 1) - l.dugDay) / 30 + l.months)
       const weights = c.lots.reduce((a, l) => a + weight(l), 0)
-      const model = { m: c.month, lots, cash: c.cash, seedN, seedOpen, u: app.settings.units, lines, st: c.yearStorage, h: st.houses, k: c.contracts.map(k => [k.id, Math.round(k.delivered), k.settled]) }
+      const model = {
+        m: c.month, lots, cash: c.cash, seedN, seedOpen, u: app.settings.units, lines, st: c.yearStorage, h: st.houses, k: c.contracts.map(k => [k.id, Math.round(k.delivered), k.settled]),
+        w: c.crew.map(u => [u.id, u.winter, u.winterField, u.wage]), logs: Math.round(c.logs * 10), stone: Math.round(c.stone * 10), b: c.buildings.map(b => [b.kind, b.yard, Math.round(b.done * 10)]),
+        mo: c.mortgages.map(x => Math.round(x.owed)), f: c.fields.map(f => [f.cover, Math.round(f.felled)]), raise,
+      }
+      const wages = S.winterInfo(c).monthly
       patch(sheet, JSON.stringify(model), () => [
         h('header', { class: 'sheet-head double' },
           h('h2', { class: 't-title' }, 'The cellar'),
@@ -189,13 +197,15 @@ export function cellarScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
           h('p', null, h('span', { class: 't-label' }, 'Sold so far'), h('strong', { class: 'num' }, F.money(sales))),
           h('p', null, h('span', { class: 't-label' }, 'Storage so far'), h('strong', { class: 'num' }, F.money(c.yearStorage)))),
         houses(st),
-        h('ul', { class: 'this-month', 'aria-label': c.month === 0 ? 'At the close of the season' : 'What the month did', testid: 'this-month' }, lines.slice(0, 5).map(t => h('li', null, t))),
+        h('ul', { class: 'this-month', 'aria-label': c.month === 0 ? 'At the close of the season' : 'What the month did', testid: 'this-month' }, lines.slice(0, 6).map(t => h('li', null, t))),
+        winterWork(ctx, c, raise, () => { raise = !raise; ctx.dirty() }),
+        lots.length ? h('h3', { class: 'block-head' }, 'The crop in store') : null,
         lots.length ? h('div', { class: 'lots' }, lots.map(l => lotCard(c, l, weights > 0 ? c.yearStorage * weight(l) / weights : 0)))
           : h('p', { class: 'empty' }, 'The cellar is empty. Nothing is left to sell from this crop.'),
         h('footer', { class: 'sheet-foot' },
           h('p', { class: 'sub' }, last
             ? lots.length ? 'May is the last month. Whatever is left is sold at May prices when the year closes.' : 'With the cellar empty, the year can close.'
-            : 'Each month the storage bill comes, the piles shrink a little, and prices move.'),
+            : `Each month the storage bill comes${wages ? `, ${F.money(wages)} of wages is paid` : ''}, the piles shrink a little, and prices move.`),
           h('button', { class: 'btn primary big', type: 'button', testid: 'month-next', onclick: nextMonth },
             last ? (lots.length ? 'Sell the rest and close the year' : 'Close the year') : `Next month: ${S.CELLAR_MONTHS[c.month + 1]}`)),
       ] as Child)

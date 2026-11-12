@@ -557,7 +557,8 @@ export class Tractor extends Machine {
     for (const z of [-0.36, 0.36]) this.wheel(pr, 'tread', -0.42, 0.37, z, 0.37, 0.21)
     for (const z of [-0.31, 0.31]) this.wheel(pr, 'tyre', 0.62, 0.2, z, 0.2, 0.1, -st.turn * 0.5)
     this.seated(pr, f, st, -0.44, 0.8, 0)
-    for (const z of [-0.2, 0.2]) this.lamp(pr, f, 0.675, 0.8, z, 0.05)
+    // lamps are lit only with someone at the wheel
+    if (st.driver) for (const z of [-0.2, 0.2]) this.lamp(pr, f, 0.675, 0.8, z, 0.05)
     const w = st.working
     switch (this.current) {
       case 'planter':
@@ -645,6 +646,46 @@ export class Tractor extends Machine {
   }
 }
 
+// An implement the farm owns, standing in the yard while no tractor has it on: the harvester, the sprayer with its
+// boom folded up, the irrigation reel.
+export type YardKind = 'harvester' | 'sprayer' | 'reel'
+export class Yarded extends Machine {
+  readonly kind: YardKind
+  // how far the model is carried forward so that it stands over its spot, and how far it is let down onto the grass
+  private dx: number
+
+  constructor(kind: YardKind) {
+    super('#8b8d88')
+    this.kind = kind
+    this.dx = kind === 'harvester' ? 1.8 : kind === 'sprayer' ? 1.0 : 0
+    const mesh = new Mesh(kind === 'reel' ? reelGeometry() : implementGeometry(kind)!, machineMaterial())
+    mesh.position.set(this.dx, kind === 'sprayer' ? -0.3 : 0, 0)
+    mesh.castShadow = true
+    mesh.receiveShadow = true
+    mesh.layers.enable(1)
+    mesh.layers.enable(3)
+    this.group.add(mesh)
+    this.disposables.push(mesh.geometry)
+  }
+
+  draw(pr: Prims): void {
+    this.use()
+    const s = this.scale, dx = this.dx
+    if (this.kind === 'harvester') {
+      for (const z of [-0.56, 0.56]) this.wheel(pr, 'tyre', -1.9 + dx, 0.22, z, 0.22, 0.09, 0, GREY)
+      this.wheel(pr, 'tyre', -2.4 + dx, 0.2, 1.4, 0.2, 0.09, 0, GREY)
+    } else if (this.kind === 'sprayer') {
+      for (const sd of [-1, 1]) {
+        this.at(-1.24 + dx, 0.26, sd * 0.06, p0)
+        this.at(-1.24 + dx, 0.26 + 1.4 * Math.sin(1.25), sd * (0.06 + 1.4 * Math.cos(1.25)), p1)
+        pr.rod('cyl', p0, p1, 0.02 * s, GREY)
+      }
+    } else {
+      for (const z of [-0.4, 0.4]) this.wheel(pr, 'tyre', -0.15, 0.2, z, 0.2, 0.09, 0, GREY)
+    }
+  }
+}
+
 // The farm's truck, a neighbour's pickup or a buyer's car.
 export class Car extends Machine {
   readonly kind: Motor
@@ -674,7 +715,7 @@ export class Car extends Machine {
       this.wheel(pr, 'tyre', back, r, z, r, this.kind === 'truck' ? 0.2 : 0.11)
     }
     if (st.driver) this.seated(pr, f, st, sedan ? -0.14 : 0.0, sedan ? 0.5 : 0.62, -0.17)
-    for (const z of [-0.34, 0.34]) this.lamp(pr, f, sedan ? 0.97 : 1.03, sedan ? 0.46 : 0.56, sedan ? z * 0.82 : z, 0.055)
+    if (st.driver) for (const z of [-0.34, 0.34]) this.lamp(pr, f, sedan ? 0.97 : 1.03, sedan ? 0.46 : 0.56, sedan ? z * 0.82 : z, 0.055)
     if (this.kind === 'truck') {
       const s = this.scale
       for (let k = 0; k < Math.min(st.load, 16); k++) {

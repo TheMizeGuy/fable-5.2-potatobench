@@ -1,345 +1,251 @@
-// The farmstead: the connected farm (big house, little house, back house, barn) stepping up the slope, the potato house
-// banked into the hill, the bridge; the Dufour place up the road, smaller and plainer, with its own banked potato house;
-// and the neighbours' houses and barns far off.
-import {
-  BoxGeometry, BufferAttribute, BufferGeometry, CylinderGeometry, ExtrudeGeometry, Group, InstancedMesh, Matrix4, Mesh,
-  MeshStandardMaterial, Quaternion, Shape, Vector3,
-} from 'three'
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import { FARMSTEADS } from './flora.ts'
-import { BARN, DUFOUR_BARN, DUFOUR_HOUSE, DUFOUR_POTATO_HOUSE, HOUSE, POTATO_HOUSE, WATER_Y, brookZ, groundY, padLevel } from './layout.ts'
-import { SNOW_RIME, linear, patch } from './shaders.ts'
+// Everything made by hand, as the scene holds it: the farmstead that stands from the start, the buildings the farm
+// raises (drawn as far along as the work is), what lies and stands about the yards, and the neighbours far off.
+// The shapes are in farmstead.ts, sites.ts and yard.ts; this keeps them in step with the game.
+import { BufferAttribute, BufferGeometry, DoubleSide, Group, Mesh, ShaderMaterial, Vector3 } from 'three'
+import { Builder, DUSK, LAMP_LUM, builtDepth, builtMaterial, type V3 } from './builder.ts'
+import type { Env, Light } from './env.ts'
+import { farmstead, type Marks } from './farmstead.ts'
+import { UI_GAIN } from './fields.ts'
+import { SITES, YARD_AT, groundY, townRoadZ, type Site } from './layout.ts'
+import { smooth } from './noise.ts'
+import type { Particles } from './particles.ts'
+import { drawPlot, drawSite, type SiteLook, type SiteMarks } from './sites.ts'
+import type { Snapshot } from './state.ts'
+import { country, cupsShape, materials, passingCar, poles, roadTruck, standCar, vaneShape, yardLife } from './yard.ts'
 
-type Finish = 'plain' | 'clapboard' | 'boards' | 'shingle' | 'metal' | 'brick' | 'stone' | 'glass'
-
-// Paint and wear, drawn in the shader from where the surface is in the world: no texture coordinates needed.
-const FINISH: Record<Finish, string> = {
-  plain: 'float tone = 0.94 + 0.12 * texture2D(uNoise, vWorld.xy * 0.6 + vWorld.zz * 0.4).a;',
-  clapboard: /* glsl */ `
-    float lap = fract(vWorld.y / 0.13);
-    float seen = 1.0 - smoothstep(0.3, 0.9, fwidth(vWorld.y) / 0.13);
-    float tone = (1.0 - 0.34 * seen * smoothstep(0.78, 0.98, lap)) * (0.9 + 0.2 * texture2D(uNoise, vec2(dot(vWorld.xz, vec2(0.7, 0.7)) * 0.3, vWorld.y * 2.0)).a);`,
-  boards: /* glsl */ `
-    float run = abs(vWNormal.x) > abs(vWNormal.z) ? vWorld.z : vWorld.x;
-    float seen = 1.0 - smoothstep(0.3, 0.9, fwidth(run) / 0.2);
-    float board = floor(run / 0.2);
-    float tone = (1.0 - 0.4 * seen * smoothstep(0.86, 0.98, fract(run / 0.2))) * (0.84 + 0.3 * fract(sin(board * 12.9898) * 43758.5453) * seen) * (0.9 + 0.2 * texture2D(uNoise, vec2(run * 1.5, vWorld.y * 0.25)).a);`,
-  shingle: /* glsl */ `
-    float run = abs(vWNormal.x) > abs(vWNormal.z) ? vWorld.z : vWorld.x;
-    float course = vWorld.y / 0.085, seen = 1.0 - smoothstep(0.3, 0.9, fwidth(course));
-    float tab = floor(run / 0.17 + 0.5 * floor(course));
-    float tone = (1.0 - 0.3 * seen * smoothstep(0.7, 0.98, fract(course))) * (0.8 + 0.36 * fract(sin(tab * 78.233 + floor(course) * 12.9898) * 43758.5453) * seen) * (0.9 + 0.2 * texture2D(uNoise, vWorld.xz * 0.4).a);`,
-  metal: /* glsl */ `
-    float run = abs(vWNormal.x) > abs(vWNormal.z) ? vWorld.z : vWorld.x;
-    float seen = 1.0 - smoothstep(0.3, 0.9, fwidth(run) / 0.3);
-    float tone = (1.0 - 0.3 * seen * smoothstep(0.9, 0.99, fract(run / 0.3))) * (0.82 + 0.3 * texture2D(uNoise, vWorld.xz * 0.21).b);`,
-  brick: /* glsl */ `
-    float course = vWorld.y / 0.06, run = (abs(vWNormal.x) > abs(vWNormal.z) ? vWorld.z : vWorld.x) / 0.13 + 0.5 * floor(course);
-    float seen = 1.0 - smoothstep(0.3, 0.9, fwidth(course));
-    float tone = mix(1.0, 0.72 + 0.4 * fract(sin(floor(run) * 12.9898 + floor(course) * 78.233) * 43758.5453), seen) * (1.0 - 0.35 * seen * max(smoothstep(0.82, 0.96, fract(course)), smoothstep(0.9, 0.98, fract(run))));`,
-  stone: 'float tone = 0.72 + 0.5 * texture2D(uNoise, vWorld.xz * 0.5 + vWorld.yy * 0.7).a;',
-  glass: 'float tone = 1.0;',
-}
-
+// How much lamplight the hour calls for, set by the light's side of the scene (0 day .. about 1 a winter evening).
 export const LAMP = { value: 0 }
+
+export interface PropsFrame { dt: number; time: number; env: Env; lit: Light; dist: number; yard: number; particles: Particles }
+
+interface Standing { key: string; mesh: Mesh | null; marks: SiteMarks | null }
 
 export class Props {
   readonly group = new Group()
   // Where smoke leaves the kitchen chimney.
   readonly chimney = new Vector3()
-  private parts = new Map<string, { mat: MeshStandardMaterial; geos: BufferGeometry[] }>()
-  private disposables: { dispose(): void }[] = []
-  private m = new Matrix4()
-  private q = new Quaternion()
-  private up = new Vector3(0, 1, 0)
+  private mat = builtMaterial()
+  private depth = builtDepth()
+  private b = new Builder()
+  private marks: Marks
+  private fixed: Mesh[] = []
+  private life: Mesh
+  private sites: Standing = { key: 'none', mesh: null, marks: null }
+  private piles: Standing = { key: '', mesh: null, marks: null }
+  private parked: Standing = { key: '', mesh: null, marks: null }
+  private plots: Record<number, Standing> = { [-1]: { key: '', mesh: null, marks: null }, [-2]: { key: '', mesh: null, marks: null } }
+  private outline: Record<number, Mesh> = {}
+  private outlineMat: ShaderMaterial
+  private barnVane: Mesh
+  private vane: Mesh
+  private cups: Mesh
+  private truck: Mesh
+  private car: Mesh
+  private smokes: V3[] = []
+  private dufourSmoke = false
+  private smokeAt = 0
+  private dustAt = 0
+  private tier: 'high' | 'medium' | 'low' = 'high'
 
   constructor() {
-    this.farmhouse()
-    this.potatoHouse(POTATO_HOUSE.x, POTATO_HOUSE.z, padLevel(3), 4.2, 6.2, 1.15, 1.25)
-    this.bridge(17.8)
-    this.dufour()
-    this.bridge(92.6)
-    for (const { mat, geos } of this.parts.values()) {
-      const merged = mergeGeometries(geos)!
-      for (const g of geos) g.dispose()
-      const mesh = new Mesh(merged, mat)
-      mesh.castShadow = true
-      mesh.receiveShadow = true
-      mesh.layers.enable(1)
-      mesh.layers.enable(2)
-      this.group.add(mesh)
-      this.disposables.push(merged, mat)
-    }
-    this.neighbours()
-  }
+    const b = this.b
+    this.marks = farmstead(b)
+    this.fixed.push(b.mesh(this.mat, this.depth))
+    yardLife(b)
+    this.life = b.mesh(this.mat, this.depth)
+    poles(b)
+    const wires = b.mesh(this.mat, this.depth)
+    wires.castShadow = false
+    this.fixed.push(wires)
+    country(b)
+    const far = b.mesh(this.mat, this.depth)
+    // seen from a long way off: their shadow is drawn in the wide cascade only
+    far.layers.disable(1)
+    far.layers.disable(3)
+    far.userData.far = true
+    far.frustumCulled = false
+    this.fixed.push(far)
+    this.group.add(...this.fixed, this.life)
+    const c = this.marks.smoke[0]
+    this.chimney.set(c[0], c[1], c[2])
 
-  private mat(color: string, finish: Finish, roughness = 0.9): { mat: MeshStandardMaterial; geos: BufferGeometry[] } {
-    const key = `${color}|${finish}`
-    let part = this.parts.get(key)
-    if (!part) {
-      const glass = finish === 'glass'
-      const mat = patch(new MeshStandardMaterial({ color, roughness: glass ? 0.1 : roughness, metalness: finish === 'metal' ? 0.25 : 0 }), {
-        key: `county-built-${finish}`,
-        uniforms: glass ? { uLamp: LAMP } : {},
-        fragmentHead: glass ? 'uniform float uLamp;' : '',
-        fragmentColor: `{ ${FINISH[finish]} diffuseColor.rgb *= tone; } ${glass ? '' : SNOW_RIME}`,
-        // Windows catch the low sun, and show lamplight on a winter evening.
-        fragmentEmissive: glass ? /* glsl */ `
-          {
-            vec3 seen = reflect(normalize(vWorld - cameraPosition), normalize(vWNormal));
-            float low = 1.0 - smoothstep(0.16, 0.5, uSunDir.y);
-            totalEmissiveRadiance += uSunCol * (pow(max(dot(seen, uSunDir), 0.0), 14.0) * 1.3 + 0.16 * low * max(dot(normalize(vWNormal), uSunDir), 0.0)) * cloudShade(vWorld);
-            float lit = step(0.66, fract(sin(floor(vWorld.y * 1.2) * 12.9898 + floor(vWorld.x * 0.97) * 78.233 + floor(vWorld.z * 0.97) * 37.719) * 43758.5453));
-            totalEmissiveRadiance += ${linear('#ffc47a')} * uLamp * lit * 0.9;
-          }` : '',
-      })
-      part = { mat, geos: [] }
-      this.parts.set(key, part)
+    const small = (draw: () => void): Mesh => {
+      draw()
+      const m = b.mesh(this.mat, this.depth)
+      m.layers.disable(1)
+      m.layers.disable(2)
+      this.group.add(m)
+      return m
     }
-    return part
-  }
+    this.barnVane = small(() => vaneShape(b, 1.25))
+    this.barnVane.position.set(...this.marks.vanes[0])
+    this.vane = small(() => vaneShape(b, 0.7))
+    this.cups = small(() => cupsShape(b))
+    this.truck = small(() => roadTruck(b))
+    this.car = small(() => passingCar(b))
+    this.vane.visible = this.cups.visible = false
 
-  private add(g: BufferGeometry, part: { geos: BufferGeometry[] }, x: number, y: number, z: number, ry = 0): void {
-    g.applyMatrix4(this.m.compose(new Vector3(x, y, z), this.q.setFromAxisAngle(this.up, ry), new Vector3(1, 1, 1)))
-    const flat = g.index ? g.toNonIndexed() : g
-    if (flat !== g) g.dispose()
-    for (const name of Object.keys(flat.attributes)) if (name !== 'position' && name !== 'normal') flat.deleteAttribute(name)
-    part.geos.push(flat)
-  }
-
-  private box(w: number, h: number, d: number, color: string, finish: Finish, x: number, y: number, z: number, ry = 0): void {
-    this.add(new BoxGeometry(w, h, d), this.mat(color, finish), x, y, z, ry)
-  }
-
-  // A gabled building: ridge along z, floor centre at (x, y, z). Returns the height of the ridge.
-  private gabled(w: number, l: number, wall: number, rise: number, color: string, finish: Finish, roofColor: string, roofFinish: Finish, x: number, y: number, z: number): number {
-    const shape = new Shape()
-    shape.moveTo(-w / 2, -0.6)
-    shape.lineTo(w / 2, -0.6)
-    shape.lineTo(w / 2, wall)
-    shape.lineTo(0, wall + rise)
-    shape.lineTo(-w / 2, wall)
-    shape.closePath()
-    const body = new ExtrudeGeometry(shape, { depth: l, bevelEnabled: false })
-    body.translate(0, 0, -l / 2)
-    this.add(body, this.mat(color, finish), x, y, z)
-    const oh = 0.16
-    const ang = Math.atan2(rise, w / 2)
-    const slope = Math.hypot(w / 2, rise) + oh
-    for (const side of [-1, 1]) {
-      const roof = new BoxGeometry(slope, 0.07, l + oh * 2)
-      roof.translate(-slope / 2 + (oh > 0 ? 0 : 0), 0.035, 0)
-      roof.rotateZ(side > 0 ? ang : Math.PI - ang)
-      roof.translate(0, wall + rise + 0.01, 0)
-      this.add(roof, this.mat(roofColor, roofFinish, 0.8), x, y, z)
-    }
-    // rake and eave boards
-    for (const end of [-1, 1]) for (const side of [-1, 1]) {
-      const rake = new BoxGeometry(slope, 0.09, 0.05)
-      rake.translate(-slope / 2, -0.03, 0)
-      rake.rotateZ(side > 0 ? ang : Math.PI - ang)
-      rake.translate(0, wall + rise, end * (l / 2 + oh - 0.02))
-      this.add(rake, this.mat('#efe9da', 'plain'), x, y, z)
-    }
-    return y + wall + rise
-  }
-
-  // A window: casing, sash and glass on a wall facing -x (`face` 0) or +z (`face` 1).
-  private window(x: number, y: number, z: number, face: number, w = 0.34, h = 0.52): void {
-    const t = 0.05
-    if (face === 0) {
-      this.box(t, h + 0.1, w + 0.1, '#efe9da', 'plain', x, y, z)
-      this.box(t + 0.01, h, w, '#1c2428', 'glass', x - 0.008, y, z)
-      this.box(t + 0.02, 0.025, w, '#efe9da', 'plain', x - 0.01, y, z)
-      this.box(t + 0.02, h, 0.022, '#efe9da', 'plain', x - 0.01, y, z)
-    } else {
-      this.box(w + 0.1, h + 0.1, t, '#efe9da', 'plain', x, y, z)
-      this.box(w, h, t + 0.01, '#1c2428', 'glass', x, y, z + 0.008)
-      this.box(w, 0.025, t + 0.02, '#efe9da', 'plain', x, y, z + 0.01)
-      this.box(0.022, h, t + 0.02, '#efe9da', 'plain', x, y, z + 0.01)
-    }
-  }
-
-  private farmhouse(): void {
-    const white = '#e9e3d3', red = '#8a3b2d', roof = '#4b4d50', barnRoof = '#8a8c88', brick = '#7c4737', green = '#2f4a3a'
-    const hx = HOUSE.x, hz = HOUSE.z
-    const y0 = padLevel(0), y1 = padLevel(1), y2 = padLevel(2)
-    // The big house: gable to the road below, two storeys.
-    const ridge = this.gabled(3.0, 3.6, 2.05, 1.15, white, 'clapboard', roof, 'shingle', hx, y0, hz)
-    this.box(3.06, 0.14, 3.66, '#8a857c', 'stone', hx, y0 + 0.02, hz)
-    for (const wz of [hz - 1.05, hz, hz + 1.05]) for (const wy of [0.72, 1.62]) this.window(hx - 1.5, y0 + wy, wz, 0)
-    for (const wx of [hx - 0.72, hx + 0.72]) for (const wy of [0.72, 1.62]) this.window(wx, y0 + wy, hz + 1.8, 1)
-    this.window(hx, y0 + 2.5, hz + 1.8, 1, 0.26, 0.36)
-    // front door on the gable end, with a hood
-    this.box(0.42, 0.86, 0.06, green, 'plain', hx, y0 + 0.5, hz + 1.81)
-    this.box(0.7, 0.05, 0.3, '#efe9da', 'plain', hx, y0 + 1.02, hz + 1.94)
-    this.box(0.8, 0.1, 0.4, '#8a857c', 'stone', hx, y0 + 0.04, hz + 2.0)
-    for (const s of [-1, 1]) this.box(0.08, 2.05, 0.08, '#efe9da', 'plain', hx + s * 1.5, y0 + 1.02, hz + 1.8)
-    this.box(0.36, 0.9, 0.36, brick, 'brick', hx + 0.4, ridge + 0.1, hz - 0.5)
-    // The little house (the kitchen ell), a step up the slope, with a porch on the dooryard side.
-    const ell = this.gabled(2.3, 3.0, 1.45, 0.82, white, 'clapboard', roof, 'shingle', hx + 0.1, y1, hz - 3.2)
-    for (const wz of [hz - 2.5, hz - 3.9]) this.window(hx - 1.05, y1 + 0.78, wz, 0, 0.32, 0.48)
-    this.box(0.06, 0.82, 0.4, green, 'plain', hx - 1.06, y1 + 0.46, hz - 3.2)
-    this.box(0.9, 0.06, 2.4, roof, 'shingle', hx - 1.5, y1 + 1.36, hz - 3.2)
-    for (const pz of [hz - 4.3, hz - 2.1]) this.box(0.07, 1.3, 0.07, '#efe9da', 'plain', hx - 1.88, y1 + 0.68, pz)
-    this.box(0.9, 0.08, 2.4, '#8d7f6c', 'boards', hx - 1.5, y1 + 0.06, hz - 3.2)
-    this.box(0.3, 0.8, 0.3, brick, 'brick', hx + 0.3, ell + 0.15, hz - 3.4)
-    this.chimney.set(hx + 0.3, ell + 0.6, hz - 3.4)
-    // The back house (woodshed and workshop), then the barn, each a step higher.
-    this.gabled(2.5, 2.8, 1.5, 0.9, white, 'clapboard', roof, 'shingle', hx + 0.2, y1 + 0.1, hz - 6.0)
-    this.box(0.06, 1.1, 1.3, '#6f6253', 'boards', hx - 1.06, y1 + 0.66, hz - 6.0)
-    const bx = BARN.x, bz = BARN.z
-    const barnTop = this.gabled(4.3, 6.0, 2.5, 1.9, red, 'boards', barnRoof, 'metal', bx, y2, bz - 0.8)
-    this.box(4.36, 0.2, 6.06, '#8a857c', 'stone', bx, y2 + 0.04, bz - 0.8)
-    // the great door on its track, the hay door above it, a row of small sashes, white trim
-    this.box(0.07, 1.9, 1.9, '#7c3528', 'boards', bx - 2.17, y2 + 1.0, bz - 0.4)
-    this.box(0.08, 0.08, 2.9, '#efe9da', 'plain', bx - 2.18, y2 + 2.0, bz - 0.9)
-    for (const s of [-1, 1]) this.box(0.09, 1.9, 0.07, '#efe9da', 'plain', bx - 2.19, y2 + 1.0, bz - 0.4 + s * 0.95)
-    for (const wz of [bz - 2.9, bz + 1.6]) this.window(bx - 2.15, y2 + 1.25, wz, 0, 0.3, 0.3)
-    for (const s of [-1, 1]) this.box(0.1, 2.5, 0.1, '#efe9da', 'plain', bx - 2.15, y2 + 1.25, bz - 0.8 + s * 3.0)
-    this.box(0.7, 0.8, 0.07, '#7c3528', 'boards', bx, y2 + 3.0, bz + 2.21)
-    this.window(bx, y2 + 3.9, bz + 2.2, 1, 0.26, 0.26)
-    for (const s of [-1, 1]) this.box(0.1, 2.5, 0.1, '#efe9da', 'plain', bx + s * 2.15, y2 + 1.25, bz + 2.2)
-    // cupola
-    this.box(0.62, 0.5, 0.62, '#efe9da', 'clapboard', bx, barnTop + 0.2, bz - 0.8)
-    this.gabled(0.8, 0.8, 0.0, 0.34, '#efe9da', 'plain', barnRoof, 'metal', bx, barnTop + 0.45, bz - 0.8)
-    // woodpile against the back house
-    for (let k = 0; k < 3; k++) this.box(0.34, 0.3 - k * 0.02, 1.5 - k * 0.2, '#8a7458', 'boards', hx - 1.36, y1 + 0.2 + k * 0.28, hz - 7.0)
-  }
-
-  // A potato house: a frame house above, shingled and weathered grey; concrete below where the door is; the hill banked
-  // up both sides and round the back. Its door faces down the slope (+z).
-  private potatoHouse(px: number, pz: number, y: number, w: number, l: number, wall: number, rise: number): void {
-    const front = pz + l / 2
-    const top = this.gabled(w, l, wall, rise, '#8f8a80', 'shingle', '#5d5a56', 'shingle', px, y, pz)
-    this.box(w + 0.1, 0.62, 0.16, '#a8a295', 'stone', px, y + 0.3, front + 0.02)
-    for (const s of [-1, 1]) {
-      this.box(0.82, 1.08, 0.08, '#5e5248', 'boards', px + s * 0.43, y + 0.56, front + 0.08)
-      // wing walls hold back the bank each side of the door
-      this.box(0.18, 0.8, 1.8, '#a8a295', 'stone', px + s * (w / 2 + 0.05), y + 0.34, front + 0.8)
-    }
-    this.box(1.9, 0.1, 0.12, '#3b352e', 'plain', px, y + 1.16, front + 0.09)
-    this.window(px, y + wall + 0.55, front, 1, 0.3, 0.3)
-    // ventilators on the ridge
-    for (const vz of l > 5.5 ? [pz - 1.6, pz + 1.3] : [pz]) {
-      this.box(0.36, 0.36, 0.36, '#9aa0a0', 'metal', px, top + 0.14, vz)
-      this.gabled(0.5, 0.5, 0, 0.16, '#9aa0a0', 'metal', '#9aa0a0', 'metal', px, top + 0.32, vz)
-    }
-    // Earth banked to the eaves along both sides and round the back.
-    const berm = patch(new MeshStandardMaterial({ color: 0xffffff, roughness: 0.96 }), {
-      fragmentColor: `diffuseColor.rgb = uGrass * (0.74 + 0.5 * texture2D(uNoise, vWorld.xz * 0.043).b) * (0.88 + 0.24 * texture2D(uNoise, vWorld.xz * 0.31).a); ${SNOW_RIME}`,
+    // The selected yard: a line on the ground round it.
+    this.outlineMat = new ShaderMaterial({
+      uniforms: { uGain: UI_GAIN },
+      transparent: true, depthWrite: false, side: DoubleSide,
+      vertexShader: 'varying float vAlong; attribute float aAlong; void main() { vAlong = aAlong; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      fragmentShader: 'uniform float uGain; varying float vAlong; void main() { float dash = smoothstep(0.0, 0.08, abs(fract(vAlong * 0.5) - 0.5) - 0.12); gl_FragColor = vec4(vec3(0.97, 0.9, 0.72) * uGain, 0.66 * dash); }',
     })
-    const bank = (sx: number, sz: number, bw: number, bl: number, x: number, z: number) => {
-      const sh = new Shape()
-      sh.moveTo(0, -0.7)
-      sh.lineTo(bw, -0.7)
-      sh.lineTo(bw, 0)
-      sh.lineTo(0, wall + 0.05)
-      sh.closePath()
-      const g = new ExtrudeGeometry(sh, { depth: bl, bevelEnabled: false })
-      g.translate(0, 0, -bl / 2)
-      if (sx < 0) g.scale(-1, 1, 1)
-      if (sz) g.rotateY(-Math.PI / 2 * sz)
-      const mesh = new Mesh(g, berm)
-      mesh.position.set(x, y, z)
-      mesh.castShadow = mesh.receiveShadow = true
-      mesh.layers.enable(1)
-      this.group.add(mesh)
-      this.disposables.push(g)
-    }
-    bank(1, 0, 2.2, l - 0.2, px + w / 2 - 0.02, pz - 0.1)
-    bank(-1, 0, 2.2, l - 0.2, px - w / 2 + 0.02, pz - 0.1)
-    bank(1, 1, 2.0, w + 3.4, px, pz - l / 2 + 0.02)
-    this.disposables.push(berm)
-  }
-
-  // The Dufour place: a cape gone grey for want of paint with its ell and woodshed, an old barn of weathered boards,
-  // and a potato house banked into the slope above the yard.
-  private dufour(): void {
-    const white = '#d9d3c2', trim = '#e8e2d2', roof = '#56575a', boards = '#7a7266', rust = '#7d5a46', door = '#4e5a48'
-    const hx = DUFOUR_HOUSE.x, hz = DUFOUR_HOUSE.z, hy = padLevel(4)
-    // a cape: one and a half storeys, the long side to the yard, a chimney in the middle of the ridge
-    const ridge = this.gabled(3.2, 4.4, 1.35, 1.35, white, 'clapboard', roof, 'shingle', hx, hy, hz)
-    this.box(3.26, 0.14, 4.46, '#8a857c', 'stone', hx, hy + 0.02, hz)
-    for (const wz of [hz - 1.3, hz + 1.3]) this.window(hx - 1.6, hy + 0.75, wz, 0)
-    this.box(0.06, 0.86, 0.44, door, 'plain', hx - 1.62, hy + 0.48, hz)
-    this.box(0.5, 0.1, 0.9, '#8a857c', 'stone', hx - 1.85, hy + 0.04, hz)
-    for (const wx of [hx - 0.7, hx + 0.7]) this.window(wx, hy + 0.75, hz + 2.2, 1, 0.32, 0.48)
-    this.window(hx, hy + 1.95, hz + 2.2, 1, 0.26, 0.4)
-    this.box(0.42, 0.9, 0.42, '#7c4737', 'brick', hx, ridge + 0.05, hz)
-    // the ell and the woodshed behind it, each a little lower
-    this.gabled(2.2, 2.8, 1.2, 0.8, white, 'clapboard', roof, 'shingle', hx + 0.2, hy + 0.05, hz - 3.5)
-    this.window(hx - 0.9, hy + 0.7, hz - 3.2, 0, 0.3, 0.44)
-    this.gabled(2.0, 2.4, 1.1, 0.7, boards, 'boards', rust, 'metal', hx + 0.3, hy + 0.1, hz - 6.0)
-    for (let k = 0; k < 3; k++) this.box(0.32, 0.28 - k * 0.02, 1.3 - k * 0.2, '#8a7458', 'boards', hx - 0.95, hy + 0.2 + k * 0.26, hz - 6.0)
-    // the barn: old boards gone silver, a rusted roof, the great door to the yard
-    const bx = DUFOUR_BARN.x, bz = DUFOUR_BARN.z, by = padLevel(5)
-    this.gabled(3.8, 5.0, 2.1, 1.6, boards, 'boards', rust, 'metal', bx, by, bz)
-    this.box(3.86, 0.18, 5.06, '#8a857c', 'stone', bx, by + 0.04, bz)
-    this.box(0.07, 1.6, 1.6, '#5f584e', 'boards', bx - 1.92, by + 0.85, bz + 0.2)
-    this.box(0.08, 0.08, 2.4, trim, 'plain', bx - 1.93, by + 1.7, bz + 0.2)
-    this.window(bx - 1.9, by + 2.6, bz + 0.2, 0, 0.26, 0.26)
-    const ph = DUFOUR_POTATO_HOUSE
-    this.potatoHouse(ph.x, ph.z, padLevel(6), 3.6, 5.0, 1.0, 1.1)
-  }
-
-  private bridge(x: number): void {
-    const z = brookZ(x)
-    const deck = Math.max(groundY(x, z - 2), WATER_Y + 0.42)
-    for (let k = 0; k < 9; k++) this.box(1.9, 0.07, 0.3, k % 2 ? '#7a6753' : '#6d5b48', 'boards', x, deck + 0.02, z - 1.36 + k * 0.34)
-    for (const dx of [-0.82, 0.82]) {
-      const g = new CylinderGeometry(0.09, 0.09, 3.3, 7)
-      g.rotateX(Math.PI / 2)
-      this.add(g, this.mat('#4f4237', 'plain'), x + dx, deck - 0.08, z)
-      // a rail on posts
-      for (const pz of [-1.2, 0, 1.2]) this.box(0.07, 0.5, 0.07, '#6d5b48', 'plain', x + dx * 1.1, deck + 0.28, z + pz)
-      this.box(0.06, 0.06, 2.7, '#6d5b48', 'plain', x + dx * 1.1, deck + 0.5, z)
+    for (const yard of [-1, -2]) {
+      const y = YARD_AT[yard]
+      const m = new Mesh(ribbon([[y.x0, y.z0], [y.x1, y.z0], [y.x1, y.z1], [y.x0, y.z1], [y.x0, y.z0]], 0.16), this.outlineMat)
+      m.renderOrder = 5
+      m.visible = false
+      this.outline[yard] = m
+      this.group.add(m)
     }
   }
 
-  // The neighbours: a house and a barn each, small and plain, seen from a long way off.
-  private neighbours(): void {
-    const one = (w: number, l: number, wall: number, rise: number, x: number, z: number, wallC: number[], roofC: number[]): BufferGeometry => {
-      const hw = w / 2, hl = l / 2, top = wall + rise
-      const v: number[] = [], c: number[] = []
-      const tri = (a: number[], b: number[], d: number[], col: number[]) => { v.push(...a, ...b, ...d); c.push(...col, ...col, ...col) }
-      const quad = (a: number[], b: number[], d: number[], e: number[], col: number[]) => { tri(a, b, d, col); tri(a, d, e, col) }
-      const P = (px: number, py: number, pz: number) => [x + px, py, z + pz]
-      quad(P(-hw, -1, hl), P(hw, -1, hl), P(hw, wall, hl), P(-hw, wall, hl), wallC)
-      quad(P(hw, -1, -hl), P(-hw, -1, -hl), P(-hw, wall, -hl), P(hw, wall, -hl), wallC)
-      quad(P(hw, -1, hl), P(hw, -1, -hl), P(hw, wall, -hl), P(hw, wall, hl), wallC)
-      quad(P(-hw, -1, -hl), P(-hw, -1, hl), P(-hw, wall, hl), P(-hw, wall, -hl), wallC)
-      tri(P(-hw, wall, hl), P(hw, wall, hl), P(0, top, hl), wallC)
-      tri(P(hw, wall, -hl), P(-hw, wall, -hl), P(0, top, -hl), wallC)
-      quad(P(hw + 0.15, wall - 0.1, hl + 0.15), P(hw + 0.15, wall - 0.1, -hl - 0.15), P(0, top, -hl - 0.15), P(0, top, hl + 0.15), roofC)
-      quad(P(-hw - 0.15, wall - 0.1, -hl - 0.15), P(-hw - 0.15, wall - 0.1, hl + 0.15), P(0, top, hl + 0.15), P(0, top, -hl - 0.15), roofC)
-      const g = new BufferGeometry()
-      g.setAttribute('position', new BufferAttribute(new Float32Array(v), 3))
-      g.setAttribute('color', new BufferAttribute(new Float32Array(c), 3))
-      g.computeVertexNormals()
-      return g
+  private swap(slot: Standing, key: string, draw: (() => SiteMarks | null) | null): boolean {
+    if (slot.key === key) return false
+    slot.key = key
+    if (slot.mesh) {
+      this.group.remove(slot.mesh)
+      slot.mesh.geometry.dispose()
+      slot.mesh = null
     }
-    const white = [0.82, 0.79, 0.7], red = [0.26, 0.05, 0.035], grey = [0.09, 0.09, 0.1], tin = [0.3, 0.31, 0.3]
-    const parts = [one(3, 4.2, 2.1, 1.2, 0, 0, white, grey), one(2.4, 3, 1.5, 0.9, 0.2, -3.6, white, grey), one(4.6, 6.4, 2.6, 2, 0.6, -9, red, tin)]
-    const geo = mergeGeometries(parts)!
-    for (const p of parts) p.dispose()
-    const mat = patch(new MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.9 }), { fragmentColor: SNOW_RIME })
-    const mesh = new InstancedMesh(geo, mat, FARMSTEADS.length)
-    const p = new Vector3(), s = new Vector3(1, 1, 1)
-    FARMSTEADS.forEach(([x, z, ry], k) => {
-      const y = Math.min(groundY(x, z), groundY(x + 2, z - 9), groundY(x - 2, z + 2)) + 0.2
-      mesh.setMatrixAt(k, this.m.compose(p.set(x, y, z), this.q.setFromAxisAngle(this.up, ry), s))
+    slot.marks = draw ? draw() : null
+    if (!this.b.empty) {
+      slot.mesh = this.b.mesh(this.mat, this.depth)
+      this.group.add(slot.mesh)
+    }
+    return true
+  }
+
+  // The game has changed: bring what is drawn in step with it.
+  sync(snap: Snapshot): void {
+    const farm = snap.farm, b = this.b
+    const hired = snap.units.length > 1
+    const packing = snap.mode === 'cellar' && snap.units.some(u => u.winter === 'pack')
+    const free: Record<number, Site[]> = { [-1]: [], [-2]: [] }
+    const looks: [Site, SiteLook][] = []
+    let key = ''
+    for (const s of SITES) {
+      const bv = farm.buildings.find(q => q.kind === s.kind && q.yard === s.yard)
+      if (!bv) { free[s.yard].push(s); key += '|'; continue }
+      const look: SiteLook = {
+        progress: bv.progress, built: bv.built, lived: s.kind === 'bunk' ? hired : s.kind === 'packing' ? packing : false,
+        open: farm.standOpen, autumn: snap.day > 244 && snap.day < 320,
+      }
+      looks.push([s, look])
+      key += bv.built ? `b${+look.lived}${s.kind === 'stand' ? `${+look.open}${+look.autumn}` : ''}|` : `p${Math.round(bv.progress * 48)}|`
+    }
+    // Every site in one mesh, drawn again when any of them moves on: a day's building at most.
+    const changed = this.swap(this.sites, key, () => {
+      const all: SiteMarks = { smoke: [], vane: null, cups: null }
+      for (const [s, look] of looks) {
+        const m = drawSite(b, s, look)
+        all.smoke.push(...m.smoke)
+        all.vane = m.vane ?? all.vane
+        all.cups = m.cups ?? all.cups
+      }
+      return all
     })
-    mesh.castShadow = true
-    mesh.layers.enable(2)
-    mesh.userData.far = true
-    mesh.frustumCulled = false
-    this.group.add(mesh)
-    this.disposables.push(geo, mat)
+    if (changed) {
+      const m = this.sites.marks
+      this.smokes = m ? m.smoke : []
+      this.vane.visible = !!m?.vane
+      this.cups.visible = !!m?.cups
+      if (m?.vane) this.vane.position.set(...m.vane)
+      if (m?.cups) this.cups.position.set(...m.cups)
+    }
+    for (const yard of [-1, -2]) {
+      this.swap(this.plots[yard], free[yard].map(s => s.kind).join(), () => { for (const s of free[yard]) drawPlot(b, s); return null })
+    }
+    this.swap(this.piles, `${Math.min(99, Math.round(farm.logs))}|${Math.min(99, Math.round(farm.stone))}`, () => { materials(b, farm.logs, farm.stone); return null })
+    this.swap(this.parked, farm.standOpen ? 'car' : '', () => { if (farm.standOpen) standCar(b); return null })
+    this.dufourSmoke = farm.dufour
+  }
+
+  setTier(tier: 'high' | 'medium' | 'low'): void {
+    this.tier = tier
+  }
+
+  update(f: PropsFrame): void {
+    // The share of windows lit follows how much lamplight the hour wants; a lit window is as bright whatever the exposure.
+    const want = (LAMP.value * f.lit.exposure) / 0.6
+    DUSK.value = smooth(0.1, 0.8, want)
+    LAMP_LUM.value = 1.0 / Math.max(0.05, f.lit.exposure)
+    // Small things go when the camera is far off or the machine is a slow one.
+    this.life.visible = this.tier !== 'low' || f.dist < 60
+    for (const yard of [-1, -2]) {
+      this.outline[yard].visible = f.yard === yard
+      const p = this.plots[yard].mesh
+      if (p) p.visible = f.yard === yard
+    }
+    // Vanes swing to the wind and hunt a little in it; the cups spin with its strength.
+    const into = Math.PI - f.env.windDir
+    const hunt = 0.16 * Math.sin(f.time * 0.9) + 0.07 * Math.sin(f.time * 2.3 + 1)
+    this.barnVane.rotation.y = into + hunt * (0.4 + f.env.wind)
+    this.vane.rotation.y = into + (0.1 * Math.sin(f.time * 1.3 + 2) + 0.05 * Math.sin(f.time * 3.1)) * (0.4 + f.env.wind)
+    this.cups.rotation.y -= f.dt * (1.5 + 14 * f.env.wind)
+    // Now and then something goes by on the town road: a truck with a load of barrels one way, a car the other.
+    const cycle = 170, t = f.time % cycle
+    this.drive(this.truck, t, 6, 96, 1, f)
+    this.drive(this.car, t, 104, 150, -1, f)
+    // Smoke: the bunkhouse stove whenever hands live there, the Dufour chimney on cold days when the place is the farm's.
+    this.smokeAt += f.dt
+    if (this.smokeAt > 0.22) {
+      this.smokeAt = 0
+      const cold = f.env.smoke
+      // the cookstove, on days too warm for a fire to show much
+      if (cold <= 0.2 && Math.random() < 0.6) f.particles.emit(this.chimney.x, this.chimney.y, this.chimney.z, (Math.random() - 0.5) * 0.06, 0.34, (Math.random() - 0.5) * 0.06, 0.07, 0.2, 3.2, 0.74, 0.74, 0.76, 0.1, 0.8)
+      for (const p of this.smokes) f.particles.emit(p[0], p[1], p[2], (Math.random() - 0.5) * 0.08, 0.42, (Math.random() - 0.5) * 0.08, 0.09, 0.24, 3.6, 0.72, 0.72, 0.75, 0.16 + 0.2 * cold, 0.8)
+      if (this.dufourSmoke && cold > 0.2) { const p = this.marks.smoke[1]; f.particles.emit(p[0], p[1], p[2], (Math.random() - 0.5) * 0.1, 0.5, (Math.random() - 0.5) * 0.1, 0.12, 0.3, 4.5, 0.74, 0.74, 0.76, 0.34 * cold, 0.8) }
+    }
+  }
+
+  // One passage along the town road between two moments of the cycle; `dir` 1 goes south (+x).
+  private drive(m: Mesh, t: number, from: number, to: number, dir: number, f: PropsFrame): void {
+    const on = t >= from && t <= to
+    m.visible = on
+    if (!on) return
+    const u = (t - from) / (to - from), x = dir > 0 ? -230 + 500 * u : 270 - 500 * u
+    const z = townRoadZ(x) - dir * 0.5, ahead = townRoadZ(x + dir * 2) - dir * 0.5
+    m.position.set(x, groundY(x, z) + 0.07, z)
+    m.rotation.y = Math.atan2(-(ahead - z), dir * 2)
+    this.dustAt += f.dt
+    if (f.env.dry > 0.3 && this.dustAt > 0.12) {
+      this.dustAt = 0
+      f.particles.emit(x - dir * 1.2, m.position.y + 0.15, z, 0, 0.3, 0, 0.3, 0.9, 3.4, 0.62, 0.52, 0.4, 0.22 * f.env.dry, 0.5)
+    }
   }
 
   dispose(): void {
-    for (const d of this.disposables) d.dispose()
-    this.group.traverse(o => { if (o instanceof InstancedMesh) o.dispose() })
+    for (const m of [...this.fixed, this.life, this.barnVane, this.vane, this.cups, this.truck, this.car, ...Object.values(this.outline)]) m.geometry.dispose()
+    for (const s of [this.sites, this.piles, this.parked, ...Object.values(this.plots)]) s.mesh?.geometry.dispose()
+    this.mat.dispose()
+    this.depth.dispose()
+    this.outlineMat.dispose()
   }
+}
+
+// A flat strip laid on the ground along a line.
+function ribbon(pts: [number, number][], width: number): BufferGeometry {
+  const pos: number[] = [], along: number[] = [], idx: number[] = []
+  let run = 0
+  for (let k = 0; k < pts.length - 1; k++) {
+    const [ax, az] = pts[k], [bx, bz] = pts[k + 1]
+    const len = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.ceil(len / 0.7))
+    const nx = -(bz - az) / len, nz = (bx - ax) / len
+    for (let s = 0; s <= n; s++) {
+      const x = ax + ((bx - ax) * s) / n, z = az + ((bz - az) * s) / n, y = groundY(x, z) + 0.09
+      const o = pos.length / 3
+      pos.push(x - nx * width / 2, y, z - nz * width / 2, x + nx * width / 2, y, z + nz * width / 2)
+      along.push(run + (len * s) / n, run + (len * s) / n)
+      if (s > 0) idx.push(o - 2, o - 1, o, o - 1, o + 1, o)
+    }
+    run += len
+  }
+  const g = new BufferGeometry()
+  g.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3))
+  g.setAttribute('aAlong', new BufferAttribute(new Float32Array(along), 1))
+  g.setIndex(idx)
+  return g
 }

@@ -5,11 +5,11 @@ import { Color, Vector3 } from 'three'
 import type { BuildingKind, JobKind } from '../sim/index.ts'
 import { GREY_HORSE, HORSE, drawBeast, withers } from './animals.ts'
 import { COLORS, Pose, STAND_HIP, forking, hammering, lifting, sawing, stand, stoop, swing, walk, type Dress } from './crew.ts'
-import { FIELDS, route } from './layout.ts'
+import { FIELDS, route, siteOf } from './layout.ts'
 import type { Particles } from './particles.ts'
 import type { Prims } from './prims.ts'
 import type { Snapshot } from './state.ts'
-import { Poly, buildSite, heightAt, houseDoor, houseFor, siteAt, type Pt, type Spot } from './work.ts'
+import { Poly, buildSite, heightAt, houseDoor, houseFor, packSite, siteAt, type Pt, type Spot } from './work.ts'
 
 export interface Worker {
   id: number
@@ -92,6 +92,8 @@ export class Stage {
     }
     st.seen = this.frame
     if (f.going) st.t += f.dt
+    // felling follows the line the stand has been cut back to
+    if (kind === 'fell') st.spot = siteAt('fell', field, f.snap.fields[field]?.felled ?? 0)
     switch (kind) {
       case 'fell': this.fell(st, ws, f); break
       case 'rocks': this.rocks(st, ws, f); break
@@ -104,7 +106,7 @@ export class Stage {
   }
 
   private yardSpot(kind: string, yard: number, snap: Snapshot): Spot {
-    if (kind === 'pack') return buildSite('packing', -1)
+    if (kind === 'pack') return packSite()
     const b = snap.farm.buildings.find(x => !x.built && x.yard === yard)
     return buildSite(b ? b.kind : 'shed', yard)
   }
@@ -126,6 +128,13 @@ export class Stage {
   // Walks a worker to a place on the site and faces them; true once they are there.
   private go(st: Site, w: Worker, f: StageFrame, lx: number, lz: number, facing: number, load = 0): boolean {
     this.local(st, f.s, lx, lz, PT)
+    return this.goTo(st, w, f, PT.x, PT.z, st.spot.heading + facing, load)
+  }
+
+  // The same to a place in the world, to face `heading` there.
+  private goTo(st: Site, w: Worker, f: StageFrame, x: number, z: number, heading: number, load = 0): boolean {
+    PT.x = x
+    PT.z = z
     let m = st.at.get(w.id)
     if (!m) { m = { x: w.x, z: w.z, walking: false }; st.at.set(w.id, m) }
     const dx = PT.x - m.x, dz = PT.z - m.z, dist = Math.hypot(dx, dz)
@@ -137,7 +146,7 @@ export class Stage {
       m.z += (dz / dist) * step
       w.heading = Math.atan2(dz, dx)
       walk(w.pose, st.t * 9 + w.id, 1, w.tired, load)
-    } else w.heading = st.spot.heading + facing
+    } else w.heading = heading
     w.x = m.x
     w.z = m.z
     w.lift = 0
@@ -299,12 +308,6 @@ export class Stage {
       pr.put('log', c, d, Y, 0.16 * s, 1.9 * s, 0.16 * s, WHITE)
       if (!f.still && moving && Math.random() < 0.25) f.particles.emit(c.x, c.y, c.z, 0, 0.2, 0, 0.1 * s, 0.4 * s, 1.2, f.cold ? 0.9 : 0.5, f.cold ? 0.93 : 0.42, f.cold ? 0.97 : 0.32, 0.25, 0.4)
     }
-    // logs at the landing
-    d.set(-Math.sin(h), 0, Math.cos(h))
-    for (let k = 0; k < 3; k++) {
-      this.P(st, s, -0.45 + 0.17 * (k % 2) + (k === 2 ? 0.08 : 0), 0.07 + (k === 2 ? 0.14 : 0), 4.6, c)
-      pr.put('log', c, d, Y, 0.15 * s, 1.9 * s, 0.15 * s, WHITE)
-    }
   }
 
   // ---- picking rocks: a horse and a stone boat down the field, and people throwing stones on
@@ -442,15 +445,9 @@ export class Stage {
     const kind: BuildingKind = b0 ? b0.kind : 'shed'
     const earth = kind === 'pond' || kind === 'road'
     const prog = b0 ? b0.progress : 0.5
-    // batter boards at the corner where the work is, a pair of sawhorses with a plank across, a stack of lumber
+    const plan = siteOf(kind, st.field)
+    // the carpenters' bench out in front of the building: a pair of sawhorses with a plank across, a stack of lumber
     if (!earth) {
-      for (const lz of [-0.55, 0.55]) {
-        this.P(st, s, 0.62, 0, lz, a)
-        pr.put('box', a, Y, X, 0.05 * s, (0.5 + 0.5 * prog) * s, 0.05 * s, COLORS.PALE)
-      }
-      this.P(st, s, 0.62, 0.34, -0.6, a)
-      this.P(st, s, 0.62, 0.34, 0.6, b)
-      pr.put('box', a, c.subVectors(b, a), Y, 0.09 * s, a.distanceTo(b), 0.025 * s, COLORS.PALE)
       for (const lx of [-1.35, -0.75]) {
         for (const lz of [0.66, 1.1]) { this.P(st, s, lx, 0, lz, a); pr.put('box', a, Y, X, 0.04 * s, 0.3 * s, 0.04 * s, COLORS.WOOD) }
         this.P(st, s, lx, 0.3, 0.6, a)
@@ -473,8 +470,8 @@ export class Stage {
     ws.forEach((w, r) => {
       w.rig = null
       w.aboard = false
-      const role = r % 4
       if (earth) {
+        const role = r % 4
         if (role % 2 === 0) {
           if (this.go(st, w, f, 0.2 + 0.5 * r, -0.4 + 0.5 * (r % 3), 0.3)) forking(w.pose, frac(st.t / 2.2 + r * 0.4))
         } else {
@@ -485,10 +482,13 @@ export class Stage {
         }
         return
       }
-      if (role === 0 || role === 3) {
-        const sd = role === 0 ? -1 : 1
-        if (this.go(st, w, f, 0.36, sd * 0.42, 0)) hammering(w.pose, st.t * 9 + r, role === 0 ? 0.36 : 0.3 + 0.36 * prog)
-      } else if (role === 1) {
+      // The first, fourth, fifth and sixth nail at the building's own work points (its front corners, then its sides);
+      // the second saws at the bench; the third and any more carry.
+      const nailer = r === 0 ? 0 : r >= 3 && r <= 5 ? r - 2 : -1
+      if (nailer >= 0 && plan) {
+        const at = plan.work[[0, 1, 3, 4][nailer]]
+        if (this.goTo(st, w, f, at.x, at.z, Math.atan2(plan.z - at.z, plan.x - at.x))) hammering(w.pose, st.t * 9 + r, nailer % 2 ? 0.3 + 0.36 * prog : 0.36)
+      } else if (r === 1) {
         if (this.go(st, w, f, -1.05, 0.5, Math.PI / 2)) {
           const x = Math.sin(st.t * 6)
           sawing(w.pose, x, 0.4)
@@ -502,8 +502,9 @@ export class Stage {
         // carrying planks from the stack to the work
         const T = 7, t = frac(st.t / T + r * 0.2) * T
         const loaded = t >= 1 && t < 4
+        const to = plan ? plan.work[2] : null
         if (t < 1) { if (this.go(st, w, f, -1.3, -0.82, -Math.PI / 2)) stoop(w.pose.reset(), Math.sin(t * Math.PI) * 0.8, 0) }
-        else if (t < 4) { if (this.go(st, w, f, 0.25, 0.05, 0, 2)) stand(w.pose, st.t, w.tired) }
+        else if (t < 4) { if (to ? this.goTo(st, w, f, to.x, to.z, st.spot.heading, 2) : this.go(st, w, f, 0.25, 0.05, 0, 2)) stand(w.pose, st.t, w.tired) }
         else this.go(st, w, f, -1.3, -0.82, -Math.PI / 2)
         if (loaded) {
           w.pose.gripR = true

@@ -10,15 +10,16 @@ import { COWS, DEER, drawBeast, drawCrow } from './animals.ts'
 import { Pose, dressFor, dressOf, drawFigure, drawn, figureMatrix, forking, hammering, sit, stand, stoop, swing, walk, type Dress } from './crew.ts'
 import type { Env } from './env.ts'
 import { UI_GAIN, type HillDisplay } from './fields.ts'
-import { HOUSE, ROAD, hillPos, route, type Pt } from './layout.ts'
+import { level } from './arch.ts'
+import { BAYS, HOUSE, IMPLEMENT_SPOTS, ROAD, hillPos, route, siteOf, type Pt } from './layout.ts'
 import { clamp, hash2, smooth } from './noise.ts'
 import type { Particles } from './particles.ts'
 import { Prims } from './prims.ts'
 import { Stage, type StageFrame, type Worker } from './stage.ts'
 import type { Snapshot, UnitVis } from './state.ts'
-import { Car, GRIME, PAINTS, Tractor, implementFor, type MachineFrame, type MachineState } from './tractor.ts'
+import { Car, GRIME, PAINTS, Tractor, Yarded, implementFor, type MachineFrame, type MachineState, type YardKind } from './tractor.ts'
 import {
-  BUYER, CALLER, GATE, MACHINE_JOBS, OFF_FARM, Poly, buildSite, heightAt, idleSpot, machineHome, planDay, restAt, sickSpot, siteAt, sundaySpot,
+  BUYER, CALLER, DOORYARD_AT, GATE, MACHINE_JOBS, OFF_FARM, PORCH_AT, Poly, buildSite, heightAt, idleSpot, machineHome, packSite, planDay, restAt, sickSpot, siteAt, sundaySpot,
   type CrewFrom, type Reveal, type Ride, type Seg, type Spot,
 } from './work.ts'
 
@@ -31,6 +32,7 @@ export type PendingReveal = Reveal & { unit: number; seg: number }
 
 interface Rig {
   kind: 'tractor' | 'truck'
+  k: number                // which of its kind
   machine: Tractor | Car
   x: number
   z: number
@@ -90,6 +92,7 @@ export interface CrewFrame {
   season: boolean
   dist: number            // the camera's distance, for how large units are drawn
   dust: number
+  dark: number            // how much the hour wants lamps, 0..1
   picked: number          // app.unit
   particles: Particles
   snap: Snapshot
@@ -188,7 +191,7 @@ export class Crews {
     const rest = idleSpot(-1, slot, u.kind === 'farmer')
     return {
       id: u.id, kind: u.kind, slot, dress: dressFor(u.id), coat: dressFor(u.id, true), segs: [], clockSeg: -2, segClock: 0,
-      x: rest.x, z: rest.z, heading: rest.heading, rig: null, aboard: false, shown: 0, away: false, home: null, about: DOOR, gait: u.id * 1.3, goal: null, state: 'idle', post: '',
+      x: rest.x, z: rest.z, heading: rest.heading, rig: null, aboard: false, shown: 0, away: false, home: null, about: DOORYARD_AT, gait: u.id * 1.3, goal: null, state: 'idle', post: '',
       tired: u.tired, worn: u.tired, style: (u.id * 7) % 5, pose: new Pose().reset(), head: new Vector3(rest.x, 1, rest.z), scale: 1, next: [],
       worker: { id: u.id, dress: dressFor(u.id), tired: 0, w: 0, x: rest.x, z: rest.z, heading: 0, lift: 0, pose: new Pose().reset(), aboard: false, rig: null },
     }
@@ -196,10 +199,10 @@ export class Crews {
 
   private makeRig(kind: 'tractor' | 'truck', k: number): Rig {
     const machine = kind === 'tractor' ? new Tractor(PAINTS[k % PAINTS.length]) : new Car('truck', '#3d5a50')
-    const home = machineHome(kind, k)
+    const home = machineHome(kind, k, this.shed, this.tractors)
     this.group.add(machine.group)
     return {
-      kind, machine, x: home.x, z: home.z, heading: home.heading, holder: -1, home, broken: false, moved: 0, turn: 0,
+      kind, k, machine, x: home.x, z: home.z, heading: home.heading, holder: -1, home, broken: false, moved: 0, turn: 0,
       state: { moved: 0, turn: 0, working: 0, kind: 'travel', driver: null, load: 0 },
     }
   }
@@ -229,7 +232,18 @@ export class Crews {
       // worn out or unhappy, it shows in how they carry themselves
       a.tired = clamp(Math.max(u.tired, 1.5 * (0.5 - u.mood)), 0, 1)
     }
-    // machines
+    // machines: kept in the machine shed's bays once it stands
+    const shed = snap.farm.buildings.some(b => b.kind === 'shed' && b.built && b.yard === -1)
+    this.tractors = Math.min(3, Math.max(1, snap.farm.tractors))
+    this.shed = shed
+    for (const r of this.rigs) {
+      const home = machineHome(r.kind, r.k, shed, this.tractors)
+      if (home.x === r.home.x && home.z === r.home.z) continue
+      // standing at its old place with nobody on it: it is moved to the new one
+      if (r.holder < 0 && Math.hypot(r.x - r.home.x, r.z - r.home.z) < 0.5) { r.x = home.x; r.z = home.z; r.heading = home.heading }
+      r.home = home
+    }
+    this.equipment = snap.farm.equipment
     const tractors = this.rigs.filter(r => r.kind === 'tractor')
     for (let k = tractors.length; k < Math.min(3, Math.max(1, snap.farm.tractors)); k++) this.rigs.push(this.makeRig('tractor', k))
     if (snap.farm.truck && !this.rigs.some(r => r.kind === 'truck')) this.rigs.push(this.makeRig('truck', 0))
@@ -284,13 +298,13 @@ export class Crews {
         if (a.kind !== 'farmer' && !a.post) a.away = true
         if (a.kind === 'farmer' && !a.post) r = { x: HOUSE.x - 2.9, z: HOUSE.z - 5.6, heading: 0.2 }
         // already out at the work
-        if (a.post.endsWith('|fell')) r = siteAt('fell', u.winterField)
-        else if (a.post.endsWith('|pack')) r = buildSite('packing', -1)
+        if (a.post.endsWith('|fell')) r = siteAt('fell', u.winterField, snap.fields[u.winterField]?.felled ?? 0)
+        else if (a.post.endsWith('|pack')) r = packSite()
         else if (a.post) { const b = snap.farm.buildings.find(x => !x.built); if (b) r = buildSite(b.kind, b.yard) }
       }
       a.x = r.x; a.z = r.z; a.heading = r.heading
       a.home = a.kind !== 'farmer' && !a.post && (snap.mode !== 'season' || u.at === -1) ? r : null
-      a.about = DOOR
+      a.about = DOORYARD_AT
       a.worker.x = a.x; a.worker.z = a.z
       // part way through work with a machine: it stands where they are
       if (snap.mode === 'season' && u.rig && u.at >= 0) {
@@ -327,7 +341,7 @@ export class Crews {
       else if (snap.restDay) { a.state = 'sunday'; const s = sundaySpot(sunday++); a.goal = { ...s, seat: s.seat } }
       else { a.state = 'idle'; a.goal = u.at < 0 ? idleSpot(u.at, a.slot, a.kind === 'farmer') : null }
       a.home = a.state === 'sunday' || (a.state === 'idle' && a.goal && u.at === -1 && a.kind !== 'farmer') ? a.goal : null
-      a.about = a.state === 'sunday' ? PORCH : DOOR
+      a.about = a.state === 'sunday' ? PORCH_AT : DOORYARD_AT
     }
     // A tractor broken down: whoever was driving it (or else whoever has nothing to do) is at its engine.
     for (const r of this.rigs) {
@@ -477,7 +491,7 @@ export class Crews {
     const sf: StageFrame = { pr, particles: f.particles, dt: f.dt, time: f.time, s: big, snap, wind: env.wind, cold, still: f.reduced, going }
     const mf: MachineFrame = {
       dt: f.dt, time: f.time, particles: f.particles, dust: f.dust, mud: clamp(env.wet * 1.5 - 0.5, 0, 1), still: f.reduced || f.idle, cold: snap.weather.tmin < 4,
-      lamps: clamp(Math.max(smooth(0.16, 0.06, Math.sin(env.sunEl)), env.cloud > 0.9 ? 0.5 + 0.5 * Math.max(env.rain, env.mist) : 0), 0, 1),
+      lamps: clamp(Math.max(f.dark, env.cloud > 0.9 ? 0.5 + 0.5 * Math.max(env.rain, env.mist) : 0), 0, 1),
     }
     for (const r of this.rigs) { r.moved = 0; r.turn = 0; r.state.working = 0; r.state.kind = 'travel'; r.state.driver = null; r.state.load = 0 }
 
@@ -530,13 +544,15 @@ export class Crews {
     // Machines: where their drivers took them, or where they were left.
     for (const r of this.rigs) {
       const holder = r.holder >= 0 ? this.actors.find(a => a.id === r.holder) : undefined
-      const y = heightAt(r.x, r.z)
-      // a machine standing idle in the yard is not drawn as large as one at work, or the yard is all machines
+      // a machine standing idle in the yard is not drawn as large as one at work, or the yard is all machines; under
+      // the shed's roof it is its own size, on the shed's floor
       const parked = !holder && Math.hypot(r.x - r.home.x, r.z - r.home.z) < 0.5
-      const s = parked ? Math.max(TRUE_SIZE, bigMachine * 0.74) : bigMachine
+      const inBay = parked && this.shed && Math.abs(r.home.z - BAYS[0].z) < 0.5
+      const s = inBay ? TRUE_SIZE : parked ? Math.max(TRUE_SIZE, bigMachine * 0.74) : bigMachine
+      const y = inBay ? this.shedFloor : heightAt(r.x, r.z)
       const ahead = heightAt(r.x + Math.cos(r.heading) * 0.6 * s, r.z + Math.sin(r.heading) * 0.6 * s)
       const behind = heightAt(r.x - Math.cos(r.heading) * 0.6 * s, r.z - Math.sin(r.heading) * 0.6 * s)
-      r.machine.place(r.x, y + 0.01, r.z, r.heading, Math.atan2(ahead - behind, 1.2 * s), s)
+      r.machine.place(r.x, y + 0.01, r.z, r.heading, inBay ? 0 : Math.atan2(ahead - behind, 1.2 * s), s)
       r.state.moved = r.moved
       r.state.turn = r.turn
       r.state.driver = holder && holder.aboard ? (cold ? holder.coat : holder.dress) : null
@@ -551,6 +567,23 @@ export class Crews {
         r.machine.point(0.3, 0.95, 0, V)
         f.particles.emit(V.x, V.y, V.z, 0, 0.5, 0, 0.1 * s, 0.4 * s, 2.4, 0.75, 0.75, 0.78, 0.3, 0.8)
       }
+    }
+
+    // Implements the farm owns stand in the grass past the shed while no tractor has them on.
+    const using: Record<YardKind, boolean> = {
+      harvester: this.rigs.some(r => r.kind === 'tractor' && (r.machine as Tractor).current === 'harvester'),
+      sprayer: this.rigs.some(r => r.kind === 'tractor' && (r.machine as Tractor).current === 'sprayer'),
+      reel: [...sites.values()].some(x => x.kind === 'reel'),
+    }
+    for (const kind of YARD_KINDS) {
+      const show = snap.mode !== 'title' && this.equipment.includes(kind === 'sprayer' ? 'boom' : kind) && !using[kind]
+      let y = this.yarded[kind]
+      if (!show) { if (y) y.group.visible = false; continue }
+      if (!y) { y = new Yarded(kind); this.yarded[kind] = y; this.group.add(y.group) }
+      const at = IMPLEMENT_SPOTS[kind]
+      y.group.visible = true
+      y.place(at.x, heightAt(at.x, at.z) + 0.01, at.z, at.heading, 0, Math.max(TRUE_SIZE, Math.min(1.4, bigMachine * 0.74)))
+      y.draw(pr)
     }
 
     this.callersAndLife(f, mf, big, bigMachine, going)
@@ -580,6 +613,11 @@ export class Crews {
     a.scale = scale
   }
   private cold = false
+  private shed = false
+  private tractors = 1
+  private equipment: string[] = []
+  private yarded: Partial<Record<YardKind, Yarded>> = {}
+  private shedFloor = (() => { const s = siteOf('shed', -1)!; return level(s.x, s.z, s.w, s.d).top + 0.05 })()
   private screenH = 900
   private lively = true
   private far = 0
@@ -981,18 +1019,16 @@ export class Crews {
     this.prims.dispose()
     for (const r of this.rigs) r.machine.dispose()
     this.callers.pickup?.dispose()
+    for (const kind of YARD_KINDS) this.yarded[kind]?.dispose()
     this.callers.sedan?.dispose()
   }
 }
 
-// One ground unit is a metre. The models are built small (a figure 0.82 tall, the tractor 1.61 long, the truck 2.94):
-// drawn at this size a person stands 1.8, the tractor is 3.4 long and the truck 6.2. Nothing is ever drawn smaller.
-export const TRUE_SIZE = 2.1
+// The size people and machines are drawn at close to; nothing is ever drawn smaller. The rescale (docs/SCALE.md) sets it true: at 2.1, with FIGURE 1.05, a person stands 1.8 units.
+export const TRUE_SIZE = 1
 // People against the machines' scale.
-const FIGURE = 1.05
-const DOOR: Pt = { x: 20.6, z: -6.9 }
-// the porch's edge: people on it spread along it, those in the dooryard out from it
-const PORCH: Pt = { x: HOUSE.x - 2.02, z: HOUSE.z - 3.0 }
+const FIGURE = 1.14
+const YARD_KINDS: YardKind[] = ['harvester', 'sprayer', 'reel']
 const POSE = new Pose()
 const AXIS_X = new Vector3(1, 0, 0), TRAY = new Color('#cbb98e'), CHAIR = new Color('#6f5a41')
 const WHITE = new Color(1, 1, 1)

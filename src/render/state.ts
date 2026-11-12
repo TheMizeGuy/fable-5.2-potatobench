@@ -7,7 +7,7 @@ export type Mode = 'title' | 'plan' | 'season' | 'cellar' | 'ledger' | 'over'
 
 export interface FieldVis {
   held: boolean            // the farm's this year (owned or rented); otherwise somebody else's ground
-  available: boolean       // spring, and this land is not the farm's: it can be rented or bought
+  available: boolean       // spring, and this land is not the farm's (field or tract): it can be rented or bought
   crop: 'potato' | 'rest'
   status: string
   hills: sim.HillLook[]
@@ -28,6 +28,7 @@ export interface FieldVis {
   clearStage: sim.ClearStage | ''   // for a tract: the next step ('fell', 'stump', 'rocks', 'done'); '' for a field
   felled: number           // share of a tract's felling done, 0..1
   works: 'stump' | 'tile' | ''      // a contractor at work here
+  worksLeft: number        // season days of that work still to do
   stones: number           // 0..1
   raw: boolean             // new ground, not yet cropped or rested
   tiled: boolean
@@ -157,7 +158,7 @@ export function snapshot(app: App): Snapshot {
     }
     fields.push({
       held,
-      available: !held && mode === 'plan',
+      available: !held && mode === 'plan' && info.tenure === 'none',
       crop: held ? plan.crop : 'rest',
       status: info.status,
       hills,
@@ -175,6 +176,7 @@ export function snapshot(app: App): Snapshot {
       clearStage: info.clearing ? info.clearing.stage : '',
       felled: info.clearing ? info.clearing.felled : 0,
       works: info.works ? info.works.kind : '',
+      worksLeft: info.works ? info.works.left : 0,
       stones: info.stones,
       raw: info.raw,
       tiled: info.tiled,
@@ -278,7 +280,7 @@ function showcase(): Snapshot {
       held, available: false,
       crop: potato ? 'potato' : 'rest', status: !held ? 'off' : potato ? 'growing' : 'rest', hills, ridge: potato ? 1 : 0, moisture: 'good', bloom, wilt: 0,
       frosted: 0, rime: 0, variety: v, lot: -1, grams: 0, dark: 0, green: 0,
-      ours: held || sim.PARCELS[i].holding === 'owned', cover: sim.PARCELS[i].cover, clearStage: sim.PARCELS[i].cover === 'open' ? '' : 'fell', felled: 0, works: '',
+      ours: held || sim.PARCELS[i].holding === 'owned', cover: sim.PARCELS[i].cover, clearStage: sim.PARCELS[i].cover === 'open' ? '' : 'fell', felled: 0, works: '', worksLeft: 0,
       stones: sim.PARCELS[i].stones, raw: false, tiled: false, hedge: 1, sheltered: false, inField: 0,
     })
   }

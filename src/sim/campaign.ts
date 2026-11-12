@@ -418,7 +418,7 @@ export function mortgageOwed(c: Campaign): number {
   return owed
 }
 
-// What the bank takes at this year end: a tenth of each purchase's loan, and interest on what is still owed.
+// What the bank takes at this year end: a set share of each purchase's loan, and interest on what is still owed.
 export function mortgageDue(c: Campaign): { principal: number; interest: number } {
   let principal = 0, interest = 0
   for (const m of c.mortgages) {
@@ -452,7 +452,7 @@ function closeYear(world: World, c: Campaign, out: GameEvent[]): void {
     market += lot.sold
     culled += lot.loss.green + lot.loss.blight + lot.loss.frost + lot.loss.rot + lot.loss.small
   }
-  // The land mortgage: a tenth of each loan and the interest on what is still owed, part of the year's costs.
+  // The land mortgage: a share of each loan and the interest on what is still owed, part of the year's costs.
   if (c.mortgages.length) {
     const due = mortgageDue(c)
     const pay = due.principal + due.interest

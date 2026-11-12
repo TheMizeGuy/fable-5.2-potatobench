@@ -61,8 +61,22 @@ export function createFallbackView(original: HTMLCanvasElement, app: App): Field
     rects.forEach((r, i) => {
       const f = snap.fields[i]
       if (!f.held) {
-        ctx.fillStyle = winter ? '#d8dcd8' : '#9aa37a'
+        // Somebody else's hay; a tract under woods or brush, thinning as it is felled, or its stumps; new ground.
+        const standing = f.cover === 'woods' || f.cover === 'brush'
+        ctx.fillStyle = f.cover === 'open' ? (f.ours ? '#8a6248' : winter ? '#d8dcd8' : '#9aa37a') : standing ? (winter ? '#b9c4bd' : '#55683f') : '#7d6a52'
         ctx.fillRect(r.x, r.y, r.w, r.h)
+        if (f.cover !== 'open') {
+          const n = 60
+          for (let k = 0; k < n; k++) {
+            const u = ((k * 37) % n + 0.5) / n, v = ((k * 23) % 9 + 0.5) / 9
+            // woods come down from the side toward the farm, brush from the road
+            const down = !standing || (f.cover === 'brush' ? u : 1 - v) < f.felled
+            ctx.fillStyle = down ? '#c9b48a' : f.cover === 'brush' ? '#6f8a4a' : '#22382f'
+            ctx.beginPath()
+            ctx.arc(r.x + u * r.w, r.y + v * r.h, Math.max(1.2, r.w * (down ? 0.012 : 0.03)), 0, Math.PI * 2)
+            ctx.fill()
+          }
+        }
         if (f.available) {
           ctx.setLineDash([6, 5])
           ctx.strokeStyle = '#f3ecdc'
@@ -111,7 +125,7 @@ export function createFallbackView(original: HTMLCanvasElement, app: App): Field
   const at = (e: MouseEvent): number => {
     const b = canvas.getBoundingClientRect()
     const x = e.clientX - b.left, y = e.clientY - b.top
-    return rects.findIndex((r, i) => (snap.fields[i].held || snap.fields[i].available) && x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h)
+    return rects.findIndex((r, i) => (snap.fields[i].held || snap.fields[i].available || snap.fields[i].ours) && x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h)
   }
   const onClick = (e: MouseEvent) => { const i = at(e); app.select(i, i >= 0 && e.shiftKey) }
   const onDouble = (e: MouseEvent) => { const i = at(e); if (i >= 0) app.selectLike(i) }

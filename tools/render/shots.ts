@@ -171,6 +171,130 @@ const winter = async (page: Page, months: number) => {
   }, months)
 }
 
+// The land: a test-only edit of the campaign (its parcels, buildings, pond), then a redraw.
+async function land(page: Page, edit: string): Promise<void> {
+  await page.evaluate(edit => {
+    const { app, sim } = (window as any).__county
+    new Function('app', 'sim', 'c', edit)(app, sim, app.campaign)
+    app.emit({ type: 'change' })
+  }, edit)
+}
+// A clear day about a day of the year, the land edited, seen from a view (or from the playing view).
+const landShot = (name: string, day: number, edit: string, v?: View, sky = 'clear'): Shot => ({
+  name, size: [1920, 1080], setup: async page => {
+    await playTo(page, 1977, 5, day)
+    await playUntil(page, [], SKY(sky))
+    if (edit) await land(page, edit)
+    await settle(page)
+    if (v) { await view(page, v); await frames(page, 8) }
+  },
+})
+const WOODLOT: View = { x: -8.4, z: -22.5, dist: 40, yaw: 0.16, pitch: 0.5 }
+const SWALE: View = { x: 24, z: 12.6, dist: 36, yaw: 0.3, pitch: 0.52 }
+const POND_VIEW: View = { x: 38.4, z: 10.2, dist: 26, yaw: 0.3, pitch: 0.46 }
+// Each stage of clearing a tract (@ is the parcel).
+const CLEARING: [string, string][] = [
+  ['1-standing', ''],
+  ['2-half-felled', `const f = c.fields[@]; f.felled = sim.FELL_DAYS[f.cover] * 0.5`],
+  ['3-stumps', `const f = c.fields[@]; f.felled = sim.FELL_DAYS[f.cover]; f.cover = 'stumps'`],
+  ['4-stumping', `const f = c.fields[@]; f.felled = sim.FELL_DAYS[f.cover]; f.cover = 'stumps'; f.works = { kind: 'stump', left: 5 }`],
+  ['5-rocks', `const f = c.fields[@]; f.cover = 'open'; f.stones = 0.75; f.raw = true`],
+  ['6-picked', `const f = c.fields[@]; f.cover = 'open'; f.stones = 0.35; f.raw = true`],
+]
+const POND_BUILT = `c.buildings.push({ id: 99, kind: 'pond', yard: -1, done: 20, need: 20, built: true })`
+const landShots: Shot[] = [
+  ...CLEARING.map(([stage, edit]) => landShot(`c1-woodlot-${stage}`, 190, edit.replaceAll('@', '14'), WOODLOT)),
+  ...CLEARING.map(([stage, edit]) => landShot(`c2-swale-${stage}`, 190, edit.replaceAll('@', '15'), SWALE)),
+  landShot('c3-half-felled-playing', 190, CLEARING[1][1].replaceAll('@', '14') + '; c.fields[15].felled = 8; c.fields[16].tenure = "owned"; c.fields[16].felled = 30'),
+  landShot('c4-hedgerows-0-to-4', 190, `[2, 3, 4, 5].forEach((i, k) => { c.fields[i].brushed = c.year - k })`, { x: 0, z: 6, dist: 62, yaw: 0.16, pitch: 0.56 }),
+  // The bottom fields the first clear day after rain: Brook Field (left) tiled before it fell, Bottom Field not.
+  {
+    name: 'c5-tiled-after-rain', size: [1920, 1080], setup: async page => {
+      await playTo(page, 1977, 5, 140)
+      await land(page, `c.fields[4].tiled = true`)
+      console.log('  ', await playUntil(page, [], `const a = sim.fieldInfo(c, 4).moistureLabel, b = sim.fieldInfo(c, 5).moistureLabel, sky = sim.today(app.world, c).sky; return a !== b && (sky === 'clear' || sky === 'cloud') ? 'tiled ' + a + ' / untiled ' + b : ''`))
+      await settle(page)
+      await view(page, { x: -0.3, z: 12.2, dist: 44, yaw: 0.16, pitch: 0.55 })
+      await frames(page, 8)
+    },
+  },
+  landShot('c5b-tile-laying', 135, `c.fields[5].works = { kind: 'tile', left: 4 }`, { x: 7.8, z: 12.2, dist: 30, yaw: 0.16, pitch: 0.5 }),
+  landShot('c6-pond-full', 190, `${POND_BUILT}; c.pond = 6`, POND_VIEW),
+  landShot('c6b-pond-low', 190, `${POND_BUILT}; c.pond = 1`, POND_VIEW),
+  landShot('c6c-pond-digging', 190, `c.buildings.push({ id: 99, kind: 'pond', yard: -1, done: 9, need: 20, built: false })`, POND_VIEW),
+  landShot('c7-gravel-road', 190, `c.buildings.push({ id: 98, kind: 'road', yard: -1, done: 12, need: 12, built: true })`, { x: 20, z: 2, dist: 40, yaw: 0.3, pitch: 0.5 }),
+  landShot('c8-october-colour', 274, ''),
+  landShot('c8b-october-ridge', 274, '', { x: -8, z: -18, dist: 30, yaw: 0.1, pitch: 0.2 }),
+  landShot('m05-may', 135, ''), landShot('m06-june', 166, ''), landShot('m07-july', 196, ''),
+  landShot('m08-august', 227, ''), landShot('m09-september', 258, ''), landShot('m10-october', 288, ''),
+  // Picking on the tracts: what a click at each tract's pin, and a little above it in the crowns, would pick; the woodlot hovered.
+  {
+    name: 'c9-pick-tracts', size: [1920, 1080], setup: async page => {
+      await page.evaluate(() => (window as any).__county.app.newGame(1977, 5))
+      await settle(page)
+      await page.evaluate(() => (window as any).__countyField.view({ x: 10, z: -8, dist: 150 }))
+      await settle(page)
+      console.log('  ', await page.evaluate(() => {
+        const f = (window as any).__countyField
+        return [14, 15, 16, 17].map(i => { const a = f.anchor(i); return `${i}: pin ${a.visible ? f.pickAt(a.x, a.y - 6).field : 'off screen'}, crowns ${a.visible ? f.pickAt(a.x, a.y - 40).field : '-'}` }).join(' | ')
+      }))
+      await page.evaluate(() => (window as any).__county.app.setHover(14))
+      await frames(page, 30)
+    },
+  },
+  landShot('v1-wood-edge', 190, '', { x: -24, z: -16, dist: 22, yaw: 0.5, pitch: 0.16 }),
+  landShot('v2-brook', 190, '', { x: 4, z: 23.5, dist: 16, yaw: -0.7, pitch: 0.3 }),
+  landShot('v3-meadow', 190, '', { x: 38, z: 6, dist: 20, yaw: -0.4, pitch: 0.2 }),
+  landShot('v4-ridge-from-brook', 190, '', { x: 2, z: 4, dist: 48, yaw: 0.0, pitch: 0.12 }),
+]
+// The farmstead with buildings standing or going up (a test-only edit of the campaign): every kind at `progress`
+// (1: built), logs and stone in the yard, the machines bought, hands hired; played to a July day, or on into winter.
+interface YardFarm { progress?: number; logs?: number; stone?: number; machines?: boolean; hands?: number; dufour?: boolean; until?: number; winter?: number; only?: string[] }
+async function yardFarm(page: Page, o: YardFarm): Promise<void> {
+  await page.evaluate(o => {
+    const { app, sim } = (window as any).__county
+    app.newGame(1977, 5)
+    const c = app.campaign
+    c.cash = Math.max(c.cash, 600000)
+    if (o.dufour) for (const f of [10, 11]) { app.do({ t: 'rent', field: f }); app.do({ t: 'plan', field: f, plan: { crop: 'potato', variety: 'katahdin', seed: 'certified' } }) }
+    if (o.progress !== undefined) {
+      for (const kind of sim.BUILDING_KINDS) {
+        if (o.only && !o.only.includes(kind)) continue
+        for (const yard of sim.BUILDINGS[kind].dufour && o.dufour ? [-1, -2] : [-1]) {
+          const need = sim.BUILDINGS[kind].days
+          c.buildings.push({ id: c.nextBuilding++, kind, yard, done: need * o.progress, need, built: o.progress >= 1 })
+        }
+      }
+    }
+    if (o.machines) for (const u of ['boom', 'harvester', 'reel', 'tractor2', 'tractor3', 'truck']) c.upgrades[u] = true
+    for (let k = 0; k < (o.hands ?? 0); k++) app.do({ t: 'hire', kind: 'hand' })
+    c.logs = o.logs ?? 0
+    c.stone = o.stone ?? 0
+    app.do({ t: 'begin' })
+    const until = o.winter ? 400 : o.until ?? 196
+    while (c.phase === 'season' && c.season.day < until) {
+      for (const a of sim.advise(app.world, c)) {
+        if (a.act === 'wait' || a.act === 'close' || a.act === 'build') continue
+        if (a.act === 'sell') app.do({ t: 'sell', lot: a.lot, frac: 1 })
+        else app.do({ t: 'job', kind: a.act, field: a.field })
+      }
+      if (!app.do({ t: 'day' }).ok) break
+      c.logs = o.logs ?? 0
+      c.stone = o.stone ?? 0
+    }
+    if (o.winter) {
+      if (c.phase === 'season') app.do({ t: 'endSeason' })
+      for (let k = 0; k < o.winter && c.phase === 'cellar'; k++) app.do({ t: 'month' })
+    }
+    // the farm's own people will have worked on them meanwhile: put each back where the picture wants it
+    if (o.progress !== undefined) for (const b of c.buildings) { b.done = b.need * o.progress; b.built = o.progress >= 1 }
+    app.emit({ type: 'change' })
+  }, o)
+}
+const BACK_YARD: View = { x: 31.5, z: -6.5, dist: 46, yaw: 0.32, pitch: 0.5 }
+const DOORYARD: View = { x: 21.4, z: -4.2, dist: 17, yaw: 1.0, pitch: 0.36 }
+const DUFOUR_YARD: View = { x: 91.5, z: -6, dist: 34, yaw: 0.5, pitch: 0.4 }
+
 const shots: Shot[] = [
   { name: '01-opening-1920', size: [1920, 1080], insets: NONE, setup: title },
   { name: '01-opening-1440', insets: NONE, setup: title },
@@ -258,6 +382,82 @@ const shots: Shot[] = [
   { name: 'f07-strategic-july', size: [1920, 1080], setup: async page => { await july(page); await playUntil(page, [], SKY('clear')); await settle(page) } },
   { name: 'f08-close-rows', size: [1920, 1080], setup: async page => { await july(page); await playUntil(page, [], SKY('clear')); await settle(page); await view(page, ROWS); await frames(page, 30) } },
   { name: 'f09-fog', size: [1920, 1080], setup: async page => { await bigFarm(page, { rent: [6, 7], until: 165 }); console.log('  ', await playUntil(page, [], SKY('fog'))); await settle(page); await frames(page, 4) } },
+  ...landShots,
+  // ---- Buildings and yards.
+  ...([
+    ['b02-yard', { x: 23.5, z: -5, dist: 34, yaw: 0.7, pitch: 0.36 }],
+    ['b03-house', { x: 22.6, z: 2.6, dist: 13, yaw: 0.95, pitch: 0.2 }],
+    ['b04-barn', { x: 23.2, z: -7, dist: 17, yaw: 0.85, pitch: 0.24 }],
+    ['b05-potato-house', { x: 23.6, z: -15.2, dist: 14, yaw: 0.3, pitch: 0.22 }],
+    ['b06-dufour-yard', { x: 92.4, z: -5, dist: 30, yaw: 0.55, pitch: 0.36 }],
+    ['b07-back-yard', { x: 27, z: 1, dist: 20, yaw: -0.5, pitch: 0.4 }],
+  ] as [string, View][]).map(([name, v]) => ({ name, size: [1920, 1080] as [number, number], insets: NONE, setup: async (page: Page) => { await july(page); await playUntil(page, [], SKY('clear')); await settle(page); await view(page, v); await frames(page, 8) } })),
+  // The farm's own buildings, set as the game would have them (a test-only edit of the campaign), each at a stage.
+  ...([0.04, 0.2, 0.42, 0.68, 0.92, 1] as number[]).map((p, k) => ({
+    name: `c0${k + 1}-raising-${Math.round(p * 100)}`, size: [1920, 1080] as [number, number], insets: NONE,
+    setup: async (page: Page) => { await yardFarm(page, { progress: p, logs: 12 + k * 8, stone: 40 - k * 7 }); await settle(page); await view(page, BACK_YARD); await frames(page, 8) },
+  })),
+  { name: 'c07-all-built-home', size: [1920, 1080], setup: async page => { await yardFarm(page, { progress: 1, logs: 34, stone: 26, machines: true, hands: 3 }); await settle(page) } },
+  { name: 'c08-half-built-home', size: [1920, 1080], setup: async page => { await yardFarm(page, { progress: 0.5, logs: 8, stone: 12 }); await settle(page) } },
+  { name: 'c09-dufour-built', size: [1920, 1080], insets: NONE, setup: async page => { await yardFarm(page, { progress: 1, dufour: true, hands: 2 }); await settle(page); await view(page, DUFOUR_YARD); await frames(page, 8) } },
+  { name: 'c10-dufour-raising', size: [1920, 1080], insets: NONE, setup: async page => { await yardFarm(page, { progress: 0.5, dufour: true }); await settle(page); await view(page, DUFOUR_YARD); await frames(page, 8) } },
+  { name: 'c11-stand-open', size: [1920, 1080], insets: NONE, setup: async page => { await yardFarm(page, { progress: 1, until: 250 }); console.log('  ', await playUntil(page, [], `return sim.standInfo(c).open && sim.today(app.world, c).sky === 'clear' ? 'open' : ''`)); await settle(page); await view(page, { x: 19.6, z: 19.2, dist: 9, yaw: 1.35, pitch: 0.26 }); await frames(page, 8) } },
+  { name: 'c12-piles-empty', size: [1920, 1080], insets: NONE, setup: async page => { await yardFarm(page, { logs: 0, stone: 0 }); await settle(page); await view(page, DOORYARD); await frames(page, 8) } },
+  { name: 'c13-piles-full', size: [1920, 1080], insets: NONE, setup: async page => { await yardFarm(page, { logs: 60, stone: 70 }); await settle(page); await view(page, DOORYARD); await frames(page, 8) } },
+  { name: 'c14-yard-dusk-snow', size: [1920, 1080], insets: NONE, setup: async page => { await yardFarm(page, { progress: 1, logs: 20, stone: 10, machines: true, hands: 3, winter: 2 }); await settle(page); await view(page, { x: 27, z: -5, dist: 40, yaw: 0.55, pitch: 0.34 }); await frames(page, 8) } },
+  { name: 'c15-yard-winter-home', size: [1920, 1080], setup: async page => { await yardFarm(page, { progress: 1, logs: 20, stone: 10, machines: true, hands: 3, winter: 3 }); await settle(page) } },
+  { name: 'c16-dufour-winter', size: [1920, 1080], insets: NONE, setup: async page => { await yardFarm(page, { progress: 1, dufour: true, hands: 2, winter: 3 }); await settle(page); await view(page, DUFOUR_YARD); await frames(page, 8) } },
+  { name: 'c30-neighbour', size: [1920, 1080], insets: NONE, setup: async page => { await july(page); await playUntil(page, [], SKY('clear')); await settle(page); await view(page, { x: 118, z: 46, dist: 34, yaw: 2.4, pitch: 0.42 }); await frames(page, 8) } },
+  {
+    // the truck that goes by on the town road now and then: wait for it, then look where it is
+    name: 'c31-town-road', size: [1920, 1080], insets: NONE, setup: async page => {
+      await july(page); await playUntil(page, [], SKY('clear')); await settle(page)
+      for (let k = 0; k < 200; k++) {
+        const t = await page.evaluate(() => (window as any).__countyField.stats().ambient % 170)
+        if (t > 44 && t < 52) break
+        await page.waitForTimeout(1000)
+      }
+      const t = await page.evaluate(() => (window as any).__countyField.stats().ambient % 170)
+      const x = -230 + 500 * ((t + 1.2 - 6) / 90)
+      await view(page, { x, z: 48 + 9 * Math.sin(x / 170 + 0.6) + 4 * Math.sin(x / 61) - 2, dist: 16, yaw: 0.5, pitch: 0.24 }); await frames(page, 6)
+    },
+  },
+  ...([
+    ['c20-shed', { x: 33.6, z: -5.4, dist: 13, yaw: 0.35, pitch: 0.26 }],
+    ['c21-bunk', { x: 39.2, z: -12.6, dist: 12, yaw: 0.4, pitch: 0.24 }],
+    ['c22-packing', { x: 32.4, z: 0.6, dist: 14, yaw: 0.02, pitch: 0.3 }],
+    ['c23-station-pump', { x: 32.6, z: 6.4, dist: 13, yaw: 0.2, pitch: 0.3 }],
+    ['c24-second-house', { x: 30, z: -15.5, dist: 16, yaw: 0.25, pitch: 0.26 }],
+    ['c25-machines', { x: 39.8, z: -4.9, dist: 11, yaw: -1.25, pitch: 0.32 }],
+    ['c26-dooryard', { x: 21.2, z: 1.2, dist: 12, yaw: 1.25, pitch: 0.2 }],
+    ['c27-yard-selected', { x: 30, z: -7, dist: 62, yaw: 0.16, pitch: 0.58 }],
+  ] as [string, View][]).map(([name, v]) => ({
+    name, size: [1920, 1080] as [number, number], insets: NONE,
+    setup: async (page: Page) => {
+      await yardFarm(page, name === 'c27-yard-selected' ? { progress: 0.5, only: ['shed', 'bunk'] } : { progress: 1, logs: 30, stone: 24, machines: true, hands: 3 })
+      if (name === 'c27-yard-selected') await page.evaluate(() => (window as any).__county.app.selectYard(-1))
+      await settle(page); await view(page, v); await frames(page, 8)
+    },
+  })),
+  // ---- The light: the opening at three points of its move, and the playing view through the year's weather.
+  ...[0, 0.5, 1].map((u, k) => ({ name: `L01-title-${'abc'[k]}`, size: [1920, 1080] as [number, number], insets: NONE, setup: async (page: Page) => { await page.evaluate(u => (window as any).__countyField.titleAt(u), u); await title(page) } })),
+  { name: 'L02-play-july', size: [1920, 1080], setup: async page => { await july(page); await playUntil(page, [], SKY('clear')); await settle(page); await frames(page, 20) } },
+  { name: 'L03-play-overcast', size: [1920, 1080], setup: async page => { await july(page); console.log('  ', await playUntil(page, [], SKY('overcast'))); await settle(page); await frames(page, 20) } },
+  { name: 'L04-play-rain', size: [1920, 1080], setup: async page => { await july(page); console.log('  ', await playUntil(page, [], SKY('rain'))); await settle(page); await frames(page, 20) } },
+  { name: 'L05-play-mist', size: [1920, 1080], setup: async page => { await playTo(page, 1977, 5, 176); console.log('  ', await playUntil(page, [], `const t = sim.today(app.world, c); return t.sky === 'fog' || (t.day.wetH >= 15 && t.day.tmin > 4 && (t.sky === 'clear' || t.sky === 'cloud')) ? t.sky + ' wetH ' + t.day.wetH : ''`)); await settle(page); await frames(page, 20) } },
+  { name: 'L06-play-october', size: [1920, 1080], setup: async page => { await playTo(page, 1977, 5, 279, ['dig']); console.log('  ', await playUntil(page, ['dig'], SKY('clear'))); await settle(page); await frames(page, 20) } },
+  // First snow: where a season has none before it ends, the day's air is set by hand to a snowfall's.
+  { name: 'L07-play-snow', size: [1920, 1080], setup: async page => { await playTo(page, 1977, 5, 268, ['dig']); await settle(page); await page.evaluate(() => (window as any).__countyField.tune({ snow: 0.5, snowfall: 1, rain: 0, cloud: 1, cloudShadow: 0, sunScale: 0.05, deck: 1.05, haze: 0.0026, key: 0.92, storm: 0.15, high: 0, rime0: 0, rime1: 0, rime2: 0, mist: 0, wet: 0.5, dry: 0 })); await frames(page, 30) } },
+  { name: 'L07b-snow-morning', size: [1920, 1080], setup: async page => { await playTo(page, 1977, 5, 268, ['dig']); await settle(page); await page.evaluate(() => (window as any).__countyField.tune({ snow: 0.62, snowfall: 0, rain: 0, cloud: 0.2, cloudShadow: 0.8, sunScale: 1, deck: 1, haze: 0.0006, key: 1, storm: 0, high: 0.5, rime0: 0, rime1: 0, rime2: 0, mist: 0.2, wet: 0.4, dry: 0, hour: -1 })); await frames(page, 30) } },
+  { name: 'L08-winter-night', size: [1920, 1080], setup: async page => { await winter(page, 2); await settle(page); await frames(page, 20) } },
+  { name: 'L09-close-bloom', size: [1920, 1080], setup: async page => { await july(page); await playUntil(page, [], SKY('clear')); await settle(page); await view(page, { x: 6, z: 12.6, dist: 10, yaw: -1.0 }); await frames(page, 30) } },
+  { name: 'L10-whole-map', size: [1920, 1080], setup: async page => { await bigFarm(page, { rent: ALL_LAND, hands: 2, operator: true, until: 196 }); await playUntil(page, [], SKY('clear')); await settle(page); await page.evaluate(() => (window as any).__countyField.home()); await settle(page); await frames(page, 20) } },
+  { name: 'L11-clearing-storm', size: [1920, 1080], setup: async page => { await july(page); console.log('  ', await playUntil(page, [], `const t = sim.today(app.world, c); const wet = [0, 1, 2, 3, 4, 5].filter(i => ['wet', 'standing water'].includes(sim.fieldInfo(c, i).moistureLabel)).length; return wet >= 3 && (t.sky === 'clear' || t.sky === 'cloud') ? t.sky + ', ' + wet + ' fields wet' : ''`)); await settle(page); await frames(page, 20) } },
+  { name: 'L12-frost-morning', size: [1920, 1080], setup: async page => { await playTo(page, 2020, 5, 255, ['kill', 'dig']); console.log('  ', await playUntil(page, ['kill', 'dig'], FROST)); await settle(page); await frames(page, 20) } },
+  { name: 'L13-walk-in', size: [1920, 1080], setup: async page => { await july(page); await playUntil(page, [], SKY('clear')); await settle(page); await view(page, { x: 4, z: 13, dist: 7.5, yaw: -0.5 }); await frames(page, 30) } },
+  { name: 'L14-mid-zoom', size: [1920, 1080], setup: async page => { await july(page); await playUntil(page, [], SKY('clear')); await settle(page); await view(page, { x: 6, z: 2, dist: 28, yaw: -0.44 }); await frames(page, 30) } },
+  // Wind and cloud shadow: the same breezy day three seconds apart, to see the gusts and the shade move.
+  ...[0, 3000].map((wait, k) => ({ name: `L15-wind-${'ab'[k]}`, size: [1920, 1080] as [number, number], setup: async (page: Page) => { await july(page); await playUntil(page, [], SKY('clear')); await settle(page); await page.evaluate(() => (window as any).__countyField.tune({ wind: 0.9, cloud: 0.5 })); await frames(page, 20); await page.waitForTimeout(wait) } })),
   // Sizes: the farm kept whole inside what the interface leaves free.
   ...([
     ['30-size-390x844', [390, 844], { top: 52, bottom: 190 }],
@@ -340,6 +540,11 @@ const people: Shot[] = [
   { name: 'w27-pond-pipe', setup: async page => { await farm(page, `start(); put('pond'); app.campaign.pond = 6; say(app.do({ t: 'begin' })); run(196); app.campaign.pond = 6; clear(); job('water', 5, 0)`); await settle(page); console.log('  ', await farm(page, `until(['water'])`)); await hold(page, 0.6, 3000); await view(page, { x: 9, z: 12.2, dist: 22, yaw: 0.5, pitch: 0.36 }); await frames(page, 8) } },
   { name: 'w28-worn-out', setup: async page => { await farm(page, `start(); put('bunk'); hire(3); say(app.do({ t: 'begin' })); run(186); clear(); const c = app.campaign; c.crew[1].out = c.season.day + 6; c.crew[2].tired = 0.95; c.crew[3].mood = 0.05; job('scout', 2, 2); job('scout', 4, 3)`); await settle(page); console.log('  ', await farm(page, `app.do({ t: 'day' })`)); await page.waitForTimeout(4600); await onUnit(page, 2, { dist: 8, yaw: 0.8, pitch: 0.3 }) } },
   { name: 'w29-laid-up', setup: async page => { await farm(page, `start(); put('bunk'); hire(3); say(app.do({ t: 'begin' })); run(186); clear(); const c = app.campaign; c.crew[1].out = c.season.day + 6; app.emit({ type: 'change' })`); await settle(page); await farm(page, `app.do({ t: 'day' })`); await page.waitForTimeout(4600); await onUnit(page, 1, { dist: 7, yaw: 1.0, pitch: 0.3 }) } },
+  // After the merge with the yards and the land: a building going up at its real site, felling at the line the land's
+  // trees have come down to, and machines at rest in the shed's bays with the implements in the grass beyond.
+  { name: 'w30-build-site', setup: async page => { await farm(page, SPRING); await settle(page); console.log('  ', await farm(page, `until(['build']); errs.push(sim.buildingInfo(app.campaign).filter(b => b.state === 'building').map(b => b.kind + ' ' + b.progress.toFixed(2)).join(','))`)); await hold(page, 0.8, 5200); await onUnit(page, await worker(page, 'build'), { dist: 15, yaw: 0.45, pitch: 0.42 }, 0.4, -1.6) } },
+  { name: 'w31-fell-line', setup: async page => { await farm(page, `start(); hire(2); say(app.do({ t: 'begin' })); run(139, ['plant']); clear(); app.campaign.fields[14].felled = 18; app.emit({ type: 'change' }); job('fell', 14, 1)`); await settle(page); console.log('  ', await farm(page, `until(['fell']); errs.push('felled ' + sim.fieldInfo(app.campaign, 14).clearing.felled.toFixed(2))`)); await hold(page, 0.75, 5200); await onUnit(page, await worker(page, 'fell'), { dist: 13, yaw: 0, pitch: 0.75 }, 0, -0.6) } },
+  { name: 'w32-shed-parked', setup: async page => { console.log('  ', await farm(page, `start(); put('shed'); for (const u of ['tractor2', 'truck', 'boom', 'harvester', 'reel']) say(app.do({ t: 'buy', upgrade: u })); say(app.do({ t: 'begin' })); run(150); clear()`)); await settle(page); await farm(page, `app.do({ t: 'day' })`); await page.waitForTimeout(4200); await view(page, { x: 36.4, z: -5.2, dist: 15, yaw: 0.3, pitch: 0.4 }); await frames(page, 10) } },
   { name: 'w24-spring-yard', size: [1920, 1080], setup: async page => { await farm(page, `start(); put('bunk'); fleet(); hire(6)`); await settle(page) } },
 ]
 // Strips of frames, for motion: the day's work held while the people move.
@@ -381,7 +586,7 @@ for (const shot of shots) {
   if (pins) {
     await page.evaluate(() => {
       const f = (window as any).__countyField, held = f.info().held as boolean[]
-      for (let i = 0; i < 14; i++) {
+      for (let i = 0; i < held.length; i++) {
         const a = f.anchor(i)
         if (!a.visible) continue
         const d = document.createElement('div')
@@ -397,7 +602,7 @@ for (const shot of shots) {
   await page.screenshot({ path })
   const info = await page.evaluate(() => {
     const f = (window as any).__countyField
-    const anchors = Array.from({ length: 14 }, (_, i) => f.anchor(i))
+    const anchors = Array.from({ length: (f.info().held ?? []).length || 18 }, (_, i) => f.anchor(i))
     const s = f.stats ? f.stats() : {}
     return { ...f.info(), anchors: anchors.map((a: any) => (a.visible ? `${Math.round(a.x)},${Math.round(a.y)}` : 'off')).join(' '), triangles: s.triangles, calls: s.calls, fps: s.fps }
   })

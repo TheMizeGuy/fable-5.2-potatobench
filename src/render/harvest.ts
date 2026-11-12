@@ -182,15 +182,12 @@ export class Harvest {
   }
 
   // Barrels stand in ranks where the crop has been picked up, on fields being dug or with the crop still out.
-  // left: the share of each field's dug crop not yet hauled in; the barrels nearest the headland go first.
-  setBarrelFields(active: boolean[], dug: (field: number, hill: number) => boolean, left?: number[]): void {
+  setBarrelFields(active: boolean[], dug: (field: number, hill: number) => boolean): void {
     for (let f = 0; f < FIELD_COUNT; f++) {
-      const gone = 1 - (left ? left[f] : 1)
       for (let h = 0; h < HILLS; h++) {
         const k = f * HILLS + h
         const row = Math.floor(h / COLS), col = h % COLS
-        const stays = (COLS - 1 - col + hash2(k, 9)) / COLS >= gone
-        this.barrelWant[k] = active[f] && col % 3 === 1 && row % 2 === 0 && stays && dug(f, h) ? 1 : 0
+        this.barrelWant[k] = active[f] && col % 3 === 1 && row % 2 === 0 && dug(f, h) ? 1 : 0
       }
     }
   }

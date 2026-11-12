@@ -101,8 +101,8 @@ export const UPGRADES: Record<UpgradeId, { name: string; cost: number; blurb: st
   reel: { name: 'Irrigation reel', cost: 30000, blurb: 'A pump, pipe and a travelling gun. Watering a field takes half a day instead of a whole one, and costs less.' },
   tractor2: { name: 'Second tractor', cost: 6000, blurb: 'A second tractor with its planter and hiller: two people can do machine work at once. It needs the machine shed.' },
   house2: { name: 'Second potato house', cost: 18000, blurb: 'A contractor puts up a potato house at home at once. The farm can store as much again as the first one holds. Built by the farm\'s own people it costs less.' },
-  tractor3: { name: 'Third tractor', cost: 16000, blurb: 'A third tractor: three people on machine work at once. It needs the machine shed and the second tractor.' },
-  truck: { name: 'Truck', cost: 14000, blurb: 'Hauls the crop in at twice a tractor\'s rate, and leaves the tractor free.' },
+  tractor3: { name: 'Third tractor', cost: 8000, blurb: 'A third tractor: three people on machine work at once. It needs the machine shed and the second tractor.' },
+  truck: { name: 'Truck', cost: 6000, blurb: 'Hauls the crop in at twice a tractor\'s rate, and leaves the tractor free.' },
 }
 
 // ---------------------------------------------------------------- the bigger farm (all invented: docs/MODEL.md section 9)
@@ -116,8 +116,8 @@ export const UNIT_JOBS: Record<UnitKind, JobKind[]> = {
 export const TRAVEL_DAYS_PER_UNIT = 0.0016     // a day's work lost per ground unit driven: a neighbouring field about 0.03
 export const PICK_WINDOW = 3                   // a crew chooses among this many of the orders it could take next
 export const PICK_LAG = 0.07                   // days of travel a crew would rather drive than skip one place down the list: more than any two home fields are apart
-export const HAND_WAGE = 450                   // dollars a month
-export const OPERATOR_WAGE = 800
+export const HAND_WAGE = 380                   // dollars a month
+export const OPERATOR_WAGE = 550
 export const WAGE_DAYS = 30                    // wages are paid for this many days at a time, from the day hired
 export const MAX_HANDS = 4
 export const MAX_OPERATORS = 1
@@ -191,16 +191,16 @@ export const HOTHEAD_FALL = 2
 export const CARELESS_SCOUT = 0.1
 export const SLOW_SPEED = 0.9
 
-export const TIRE_PER_DAY = 0.07               // a full day's work; a part day in proportion
-export const REST_PER_DAY = 0.3                // a day without work; a part day in proportion to the time not worked
-export const TIRED_SLOW_FROM = 0.6             // above this, speed falls in a straight line to 30% less at 1
-export const TIRED_SLOW = 0.3
+export const TIRE_PER_DAY = 0.08               // a full day's work; a part day in proportion
+export const REST_PER_DAY = 0.15                // a day without work; a part day in proportion to the time not worked
+export const TIRED_SLOW_FROM = 0.6             // above this, speed falls in a straight line to 60% less at 1
+export const TIRED_SLOW = 0.6
 export const MOOD_START = 0.7
 export const MOOD_BASE = 0.7
-export const MOOD_BED = 0.1                    // a bed in the bunkhouse, for hired people
+export const MOOD_BED = 0.2                    // a bed in the bunkhouse, for hired people
 export const MOOD_PAY = 1                      // 0.1 for each 10% the wage is above or below what they asked
 export const MOOD_TIRED_FROM = 0.5
-export const MOOD_TIRED = 0.6
+export const MOOD_TIRED = 1
 export const MOOD_PER_FIELD = 0.02             // each field brought in this season
 export const MOOD_PULL = 0.05                  // share of the way to the target mood moves each day
 export const MOOD_SPEED_BASE = 0.85            // work goes at 0.85 + 0.25 x mood
@@ -209,7 +209,7 @@ export const QUIT_MOOD = 0.25
 export const QUIT_DAYS = 7
 
 export const APPLICANTS = 3                    // people asking for work each spring
-export const ASK_BASE = 100                    // asking wage: 100 + 40 x best skill + 10 x all skill levels, dollars a month
+export const ASK_BASE = 70                    // asking wage: 70 + 40 x best skill + 10 x all skill levels, dollars a month
 export const ASK_BEST = 40
 export const ASK_LEVEL = 10
 export const WAGE_MIN = 100
@@ -225,8 +225,8 @@ export const LAST_NAMES = ['Ouellette', 'Michaud', 'Thibodeau', 'Cyr', 'Pelletie
 // The harvest break: the schools close and a picking crew can be had by the day.
 export const PICKERS_FROM = { month: 8, dom: 20 }   // September 20
 export const PICKERS_TO = { month: 9, dom: 10 }     // October 10
-export const PICKER_DAY = 160                  // dollars a day worked
-export const PICKER_DIG = 1.4                  // every dig goes this much faster
+export const PICKER_DAY = 90                  // dollars a day worked
+export const PICKER_DIG = 1.5                  // every dig goes this much faster
 
 // Winter, November to April: someone kept on is paid each month and puts in this many crew-days at their skill.
 export const WINTER_MONTHS = 6
@@ -240,9 +240,9 @@ export const TIMBER: Record<'woods' | 'brush', number> = { woods: 40, brush: 5 }
 export const FELL_YIELD_BASE = 0.7             // felling yields 0.7 + 0.06 x woods skill of the tract's timber
 export const FELL_YIELD_PER = 0.06
 export const FELL_SEASON = 0.5                 // in the growing season felling goes at half speed: soft ground and flies
-export const STUMP_FEE = 3000                  // a contractor with a bulldozer
+export const STUMP_FEE = 6000                  // a contractor with a bulldozer
 export const STUMP_DAYS = 10                   // season days
-export const TILE_FEE = 4000
+export const TILE_FEE = 1000
 export const TILE_DAYS = 8
 export const RAW_GROUND = 0.85                 // a first potato crop on raw ground grows this share, unless rested first
 export const NEW_GROUND_VERT = 0.01
@@ -266,43 +266,43 @@ export const ROCKS_ADVISE = 0.6                // reference practice picks rocks
 export const ROCKS_MIN = 0.05                  // below this there is nothing worth picking
 export const BRUSH_YEARS = 4                   // cut hedgerows grow back after this many years
 export const BRUSH_WATER = 1.03                // a field without its hedgerows loses this much more water to the wind
-export const TILE_TAW = 0.94                   // a tiled field holds this share of the water in a drought
+export const TILE_TAW = 0.97                   // a tiled field holds this share of the water in a drought
 export const LOG_PRICE = 55                    // dollars a load, sold
 export const MILL_PRICE = 95                   // dollars a load of logs bought for a building
 export const QUARRY_PRICE = 40                 // dollars a load of stone bought for a building
 export const MORTGAGE_DOWN = 0.25              // land is bought a quarter down, the rest on the mortgage
-export const MORTGAGE_PRINCIPAL = 0.1          // each year end: a tenth of each purchase's loan
-export const MORTGAGE_RATE = 0.08              // and 8% interest on what is still owed
+export const MORTGAGE_PRINCIPAL = 0.07          // each year end: 7% of each purchase's loan
+export const MORTGAGE_RATE = 0.06              // and 6% interest on what is still owed
 
 // ---------------------------------------------------------------- the farmstead: buildings and hauling (docs/MODEL.md section 12)
 
 export interface BuildingSpec { name: string; cash: number; logs: number; stone: number; days: number; dufour: boolean; does: string; catch: string }
 // dufour: whether one can stand at the Dufour yard too (one of each kind per yard).
 export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
-  house: { name: 'Potato house', cash: 9000, logs: 30, stone: 25, days: 30, dufour: true,
+  house: { name: 'Potato house', cash: 7000, logs: 30, stone: 25, days: 30, dufour: true,
     does: 'Stores 3,600 cwt at its yard (6,400 at home with ventilation).', catch: 'It costs as much as a field\'s growing and takes a month of building.' },
   shed: { name: 'Machine shed', cash: 4500, logs: 20, stone: 10, days: 16, dufour: false,
     does: 'Machine work goes 10% faster, breakdowns are half as likely, and a second and third tractor can be kept.', catch: 'Money and materials that grow no potatoes.' },
   bunk: { name: 'Bunkhouse', cash: 3500, logs: 16, stone: 8, days: 12, dufour: true,
     does: 'Beds for six hired people, who are happier for them.', catch: 'Beds are only worth having with people to fill them, and every one is a wage.' },
-  packing: { name: 'Packing shed', cash: 12000, logs: 24, stone: 15, days: 24, dufour: false,
-    does: 'In winter, people set to pack grade the stored crop: packed No. 1 brings 8% more and B size three quarters of the No. 1 price.', catch: 'Packing costs a charge a hundredweight and someone kept on, and paid, all winter.' },
+  packing: { name: 'Packing shed', cash: 8000, logs: 24, stone: 15, days: 24, dufour: false,
+    does: 'In winter, people set to pack grade the stored crop: packed No. 1 brings 15% more and B size three quarters of the No. 1 price.', catch: 'Packing costs a charge a hundredweight and someone kept on, and paid, all winter.' },
   pond: { name: 'Irrigation pond', cash: 6000, logs: 0, stone: 30, days: 20, dufour: false,
     does: 'Holds six waterings: a home or intervale field waters in a third of a day for $60.', catch: 'When a month brings under 40 mm of rain the brook runs low and the pond is dry, just when it is wanted.' },
   stand: { name: 'Farm stand', cash: 600, logs: 4, stone: 0, days: 4, dufour: false,
-    does: 'From August 1 it sells about 4 cwt a day from the newest lot at twice the market price, more for red, yellow and new potatoes.', catch: 'Someone has to mind it: a fifth of a working day, every day it is open.' },
-  station: { name: 'Weather station', cash: 1800, logs: 0, stone: 0, days: 1, dufour: false,
+    does: 'From August 1 it sells about 6 cwt a day from the newest lot at twice the market price, more for red, yellow and new potatoes.', catch: 'Someone has to mind it: a fifth of a working day, every day it is open.' },
+  station: { name: 'Weather station', cash: 1000, logs: 0, stone: 0, days: 1, dufour: false,
     does: 'The forecast\'s errors are 40% smaller, and each field shows today\'s blight risk from its own wet hours.', catch: 'The weather is still the weather: the forecast still errs, and knowing the risk does not spray the field.' },
-  road: { name: 'Gravelled road', cash: 1500, logs: 0, stone: 60, days: 12, dufour: false,
-    does: 'Travel and hauling 20% quicker.', catch: 'Sixty loads of stone, or $2,400 of it from the quarry.' },
+  road: { name: 'Gravelled road', cash: 1500, logs: 0, stone: 40, days: 12, dufour: false,
+    does: 'Travel and hauling 30% quicker.', catch: 'Forty loads of stone, or $1,600 of it from the quarry.' },
 }
 export const BUILDING_KINDS: BuildingKind[] = ['house', 'shed', 'bunk', 'packing', 'pond', 'stand', 'station', 'road']
 export const HOUSE_CWT = 3600                  // a built potato house; at home with ventilation it holds CELLAR_CWT_VENT
-export const SHED_SPEED = 1.1
+export const SHED_SPEED = 1.15
 export const BUNK_BEDS = 6
-export const PACK_PER_DAY = 30                 // cwt packed in a crew-day: 600 in a winter month's 20
-export const PACK_CHARGE = 0.5                 // dollars a hundredweight packed: cartons, bags and labels
-export const PACK_NO1 = 0.08                   // packed No. 1 brings this much more
+export const PACK_PER_DAY = 40                 // cwt packed in a crew-day: 800 in a winter month's 20
+export const PACK_CHARGE = 0.4                 // dollars a hundredweight packed: cartons, bags and labels
+export const PACK_NO1 = 0.15                   // packed No. 1 brings this much more
 export const PACK_B = 0.75                     // packed B size sells at this share of the No. 1 price
 export const POND_CAP = 6                      // field-waterings the pond holds
 export const POND_DAYS = 1 / 3                 // a watering from the pond takes this share of a day
@@ -311,13 +311,13 @@ export const POND_DRY_MM = 40                  // when the last 30 days brought 
 export const POND_FILL = 0.5                   // waterings a day the brook adds otherwise
 export const POND_RAIN_MM = 20                 // and one watering for each this many mm of rain
 export const STAND_FROM = { month: 7, dom: 1 } // August 1
-export const STAND_CWT = 4                     // cwt a day
+export const STAND_CWT = 6                     // cwt a day
 export const STAND_PRICE = 2                   // times the market's No. 1 price
 export const STAND_SPECIAL = 2.4               // for red and yellow varieties, and thin-skinned new potatoes up to September 5
 export const STAND_SPECIAL_VARIETIES: VarietyId[] = ['norland', 'gold']   // red and yellow
 export const STAND_MIND = 0.2                  // share of a working day someone spends minding it
 export const STATION_ERROR = 0.6               // the forecast's errors with a weather station
-export const ROAD_SPEED = 0.8                  // travel and hauling take this share of the time
+export const ROAD_SPEED = 0.7                  // travel and hauling take this share of the time
 export const HAUL_CWT_DAY = 900                // cwt a day one person with a tractor hauls, at machine speed 1
 export const TRUCK_HAUL = 2                    // the truck hauls at twice a tractor's rate
 export const FREEZE_IN_FIELD = -2              // C at the field: a night this cold freezes a share of the crop still in the field
@@ -330,11 +330,11 @@ export const GREEN_IN_FIELD = 0.005            // share of the crop in the field
 // answer before taking its default.
 export const INCIDENT_DAYS = 4                 // days an incident waits for an answer
 export const APPLICANT_CHANCE = 0.012          // a day in season: someone turns up asking for work
-export const POACH_CHANCE = 0.006              // a day in season with someone hired: a neighbour offers them more
+export const POACH_CHANCE = 0.01              // a day in season with someone hired: a neighbour offers them more
 export const POACH_RAISE = 0.15                // to match, their wage goes up this much
-export const POACH_MOOD = 0.6                  // unmatched, they go if their mood is under this
+export const POACH_MOOD = 0.7                  // unmatched, they go if their mood is under this
 export const BREAK_CHANCE = 0.004              // a day a tractor is worked: it breaks down
-export const BREAK_TIRED = 2                   // likelier with long hours: times 1 + 2 x the driver's tiredness
+export const BREAK_TIRED = 3                   // likelier with long hours: times 1 + 3 x the driver's tiredness
 export const BREAK_SHED = 0.5                  // half as likely with a machine shed
 export const BREAK_DAYS = 3                    // days out waiting for the part
 export const MECHANIC = 7                      // with someone this good at machine work on the farm, a day out
@@ -349,9 +349,9 @@ export const BUYER_PREMIUM = 0.1               // over what the lot would fetch 
 export const BUYER_DAYS = 7                    // this week only
 
 // Money, in constant dollars.
-export const START_CASH = 18000
+export const START_CASH = 24000
 export const NOTE_PAYMENT = 10000
-export const LIVING = 11000
+export const LIVING = 9000
 export const CREDIT_LIMIT = -20000            // carried past year end, the bank forecloses below this
 export const OPERATING_LIMIT = -75000         // the spring operating loan, repaid from the crop
 export const CREDIT_RATE = 0.1
