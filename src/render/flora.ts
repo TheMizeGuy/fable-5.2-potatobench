@@ -219,7 +219,7 @@ function lump(radius: number, detail: number, seed: number, rough = 0.5): Buffer
 }
 
 export interface Kind { geo: BufferGeometry; mat: MeshStandardMaterial; wide: number; sink: number; depth?: MeshDepthMaterial; shadow: boolean }
-interface Chunk { near: InstancedMesh[]; far: InstancedMesh[]; sphere: Sphere; fixed: boolean }
+interface Chunk { near: InstancedMesh[]; far: InstancedMesh[]; mid: InstancedMesh[]; sphere: Sphere; fixed: boolean }
 // A tract's stand: its trees in felling order, and for each mesh that draws some of them their places in that order,
 // last to fall first, so the trees still standing are always the first of the mesh.
 interface Stand { trees: StandTree[]; sets: { mesh: InstancedMesh; ranks: number[] }[]; cut: number }
@@ -231,6 +231,8 @@ type Cls = 'spruce' | 'maple' | 'birch' | 'bush' | 'conBack' | 'broadBack' | 'co
 // ones for when it is not.
 const CELL = 140
 const NEAR_AT = { high: 150, medium: 110, low: 60 }
+// Past this a tree is a few pixels: the simplest shape that still has a crown and a shadow.
+const MID_AT = { high: 300, medium: 220, low: 130 }
 // Trees at true size: spruce and fir 15 to 25 m, maple and birch a little under, brush head-high and more.
 const T = S
 // Whole trees stand this far back from the front of the ridge woods; behind them, fewer and simpler ones, each standing
@@ -244,6 +246,8 @@ export class Flora {
   private stands = new Map<number, Stand>()
   private near: Record<string, Kind>
   private far: Record<string, Kind>
+  private mid: Record<string, Kind>
+  private midAt = MID_AT.high
   private nearAt = NEAR_AT.high
   private thin: InstancedMesh[] = []
   private v = new Vector3()
@@ -553,6 +557,10 @@ export class Flora {
       conFar: k(g.conFar, cMat, 1, 0.02), conDistant: k(g.conDistant, cMat, 1, 0.02, false),
       broadFar: k(g.distant, leafMat, 1.1, 0.01, true, leafDepth), broadDistant: k(g.distant, leafMat, 1.1, 0.01, false),
     }
+    this.mid = {
+      spruce: k(g.conFar, cMat, 1.1, 0.02), maple: k(g.distant, leafMat, 1.1, 0.01, true, leafDepth), birch: k(g.distant, leafMat, 0.98, 0.01, true, leafDepth),
+      bush: k(g.distant, leafMat, 1.3, 0.04, true, leafDepth),
+    }
     // Lay each class out by patch: near-and-far patches on and round the farm, far-only patches beyond.
     for (const cls of Object.keys(trees) as Cls[]) {
       const byCell = new Map<string, Tree[]>()
@@ -566,7 +574,7 @@ export class Flora {
       }
       for (const [key, list] of byCell) {
         let ch = this.chunks.get(key)
-        if (!ch) this.chunks.set(key, (ch = { near: [], far: [], sphere: new Sphere(), fixed: !both }))
+        if (!ch) this.chunks.set(key, (ch = { near: [], far: [], mid: [], sphere: new Sphere(), fixed: !both }))
         // Drawn from the side of the farm first, so the trees in front hide those behind before they are shaded.
         list.sort((a, b) => b.z - a.z)
         // The far woods can be drawn with every other tree: the first half of each list is an even thinning of it.
@@ -574,7 +582,7 @@ export class Flora {
         const far = this.place(this.far[cls], ordered, !both)
         if (!both) { far.userData.all = ordered.length; far.userData.shadow = far.castShadow; this.thin.push(far) }
         ch.far.push(far)
-        if (both) ch.near.push(this.place(this.near[cls], list, false))
+        if (both) { ch.near.push(this.place(this.near[cls], list, false)); ch.mid.push(this.place(this.mid[cls], list, true)) }
       }
     }
     for (const i of TRACTS) if (PARCELS[i].cover !== 'open') this.plantStand(i)
@@ -582,6 +590,7 @@ export class Flora {
       const all = [...ch.near, ...ch.far]
       all.forEach((m, i) => { if (i === 0) ch.sphere.copy(m.boundingSphere!); else ch.sphere.union(m.boundingSphere!) })
       for (const m of ch.near) m.visible = false
+      for (const m of ch.mid) m.visible = false
     }
   }
 
@@ -618,7 +627,7 @@ export class Flora {
     }
     const by = list.map((_, n) => n).sort((a, b) => order[a] - order[b])
     const trees = by.map(n => list[n])
-    const ch: Chunk = { near: [], far: [], sphere: new Sphere(), fixed: false }
+    const ch: Chunk = { near: [], far: [], mid: [], sphere: new Sphere(), fixed: false }
     const stand: Stand = { trees, sets: [], cut: 0 }
     const cls = (t: StandTree) => (t.conifer ? 'spruce' : t.bush ? 'bush' : t.kind === 0 ? 'maple' : 'birch')
     for (const c of ['spruce', 'maple', 'birch', 'bush']) {
@@ -626,10 +635,11 @@ export class Flora {
       for (let n = trees.length - 1; n >= 0; n--) if (cls(trees[n]) === c) ranks.push(n)
       if (!ranks.length) continue
       const sub = ranks.map(n => trees[n])
-      const near = this.place(this.near[c], sub, false), far = this.place(this.far[c], sub, false)
+      const near = this.place(this.near[c], sub, false), far = this.place(this.far[c], sub, false), mid = this.place(this.mid[c], sub, true)
       ch.near.push(near)
       ch.far.push(far)
-      stand.sets.push({ mesh: near, ranks }, { mesh: far, ranks })
+      ch.mid.push(mid)
+      stand.sets.push({ mesh: near, ranks }, { mesh: far, ranks }, { mesh: mid, ranks })
     }
     this.chunks.set(`t|${i}`, ch)
     this.stands.set(i, stand)
@@ -690,6 +700,7 @@ export class Flora {
 
   setTier(tier: 'high' | 'medium' | 'low'): void {
     this.nearAt = NEAR_AT[tier]
+    this.midAt = MID_AT[tier]
     // The low setting draws half the far woods and none of their shadows; the middle one two thirds.
     for (const m of this.thin) {
       const all = m.userData.all as number
@@ -704,9 +715,10 @@ export class Flora {
     for (const ch of this.chunks.values()) {
       if (ch.fixed) continue
       const d = Math.max(0, this.v.copy(ch.sphere.center).distanceTo(c) - ch.sphere.radius)
-      const near = d < this.nearAt
-      for (const m of ch.near) m.visible = near
-      for (const m of ch.far) m.visible = !near
+      const level = d < this.nearAt ? 0 : d < this.midAt ? 1 : 2
+      for (const m of ch.near) m.visible = level === 0
+      for (const m of ch.far) m.visible = level === 1
+      for (const m of ch.mid) m.visible = level === 2
     }
   }
 

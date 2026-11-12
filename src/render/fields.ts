@@ -628,6 +628,21 @@ export class Fields {
           soil = mix(soil, mix(soil, ${linear('#9d7856')}, 0.55) * (0.84 + 0.32 * step(0.55, grit)), uGround.w * (1.0 - cov));
           float stone = smoothstep(0.84 - 0.16 * uGround.x, 0.9 - 0.16 * uGround.x, n3.a * 0.7 + fine * 0.3) * min(1.0, uGround.x * 1.6);
           soil = mix(soil, vec3(0.42, 0.41, 0.38) * (0.7 + 0.6 * broad), stone * 0.8 * (1.0 - shaded) * (1.0 - cov));
+          // New ground: the bulldozer's passes in buff subsoil and dark topsoil, and the field stone it turned up lying
+          // on it in drifts, pale enough to be counted from across the farm.
+          if (uGround.w > 0.001) {
+            float pass = 0.5 + 0.5 * cos((vWorld.x + vWorld.z * 0.35) * 6.2831853 / 3.4 + (broad - 0.5) * 5.0);
+            float passK = 1.0 - smoothstep(0.25, 0.7, fwidth(vWorld.x) / 3.4);
+            vec3 sub = mix(${linear('#b08a5c')}, ${linear('#6e4a36')}, smoothstep(0.35, 0.65, texture2D(uNoise, sw * 0.019 + 0.3).b + (pass - 0.5) * 0.3 * passK));
+            soil = mix(soil, sub * (0.84 + 0.3 * fine), uGround.w * 0.7 * (1.0 - cov));
+            vec2 sc = vWorld.xz / 1.3, si = floor(sc);
+            float sh = fract(sin(dot(si, vec2(12.9898, 78.233))) * 43758.5453), sr = 0.16 + 0.22 * fract(sh * 17.3);
+            float drift = smoothstep(0.3, 0.7, texture2D(uNoise, sw * 0.033 + 0.6).b);
+            float share = uGround.x * (0.25 + 0.75 * drift);
+            float rock = step(sh, share) * (1.0 - smoothstep(sr * 0.7, sr, length(fract(sc) - 0.5 - (vec2(fract(sh * 7.1), fract(sh * 3.7)) - 0.5) * 0.3)));
+            rock = mix(rock, share * 0.22, smoothstep(0.3, 0.9, fwidth(sc.x)));
+            soil = mix(soil, vec3(0.6, 0.59, 0.55) * (0.8 + 0.4 * fine), rock * uGround.w * (1.0 - cov));
+          }
           // Tile: the trenches stand open down the fall while they are laid; afterwards the ground over each drain dries first.
           float lat = abs(fract(sw.x / 2.6 + 0.5) - 0.5) * 2.6;
           if (uGround.y > 0.001) {
@@ -647,7 +662,7 @@ export class Fields {
             crop.rgb *= 0.74 * (0.82 + 0.3 * broad) * (0.6 + 0.5 * n3.a) * (1.0 + 0.22 * gustAt(vWorld.xz) * min(uSway, 1.2) * smoothstep(0.4, 0.9, over.r) * (1.0 - over.a));
             soil = mix(soil, crop.rgb, crop.a * paintK);
             float boutP = vF.y * ${(FD / 3.6).toFixed(2)};
-            vec3 oat = mix(${linear('#86ac6c')}, ${linear('#d2b76c')}, uOatsHere.y * (0.75 + 0.5 * broad)) * (0.9 + 0.36 * fine) * (0.8 + 0.4 * n3.a);
+            vec3 oat = mix(${linear('#86ac6c')}, ${linear('#d2b76c')}, uOatsHere.y * (0.75 + 0.5 * broad)) * (1.02 + 0.36 * fine) * (0.8 + 0.4 * n3.a);
             oat *= 1.0 + (fract(sin(floor(boutP) * 91.17) * 43758.5453) - 0.5) * 0.24 * (1.0 - smoothstep(0.25, 0.6, fwidth(boutP)));
             oat *= 1.0 + 0.3 * gustAt(vWorld.xz) * min(uSway, 1.2);
             // lodged where a storm laid it down
@@ -978,7 +993,7 @@ export class Fields {
     }
     const mat = patch(new MeshStandardMaterial({ color: 0xffffff, side: DoubleSide, roughness: 0.72, metalness: 0 }), {
       ...shape,
-      translucent: 0.25,
+      translucent: 0.16,
       blade: true,
       shine: 0.2,
       vertexBegin: shape.vertexBegin + /* glsl */ `
