@@ -203,6 +203,27 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   }
 
   let foot = { key: '', bottom: 0 }
+  // The first planting and the first dig the crew starts by itself this season are said, with a way to see them.
+  const startedSaid = new Set<string>()
+  function sayCrewStarts(c: S.Campaign): void {
+    const s0 = c.season
+    if (!s0) return
+    for (const kind of ['plant', 'dig'] as const) {
+      const key = `${c.seed}.${c.year}.${kind}`
+      if (startedSaid.has(key)) continue
+      const j = s0.jobs.find(x => x.kind === kind && x.by === 'routine' && c.crew.some(u => u.job === x.id))
+      if (!j) continue
+      startedSaid.add(key)
+      const u = c.crew.find(x => x.job === j.id)!
+      const who = u.kind === 'farmer' ? 'You go' : `${u.name.split(' ')[0]} goes`
+      ctx.notes.push({
+        level: 'info', glyph: kind, ttl: 12000, field: j.field, day: s0.day,
+        text: `${kind === 'plant' ? 'Planting' : 'Digging'} by itself: ${who} to ${S.FIELD_NAMES[j.field]}. Show me`,
+        full: `The crew starts ${kind === 'plant' ? 'planting' : 'digging'} by itself: ${who.toLowerCase()} to ${S.FIELD_NAMES[j.field]}. Press to see it.`,
+        go: () => { app.select(-1); app.selectUnit(u.id, 'land'); ctx.view.follow(u.id) },
+      })
+    }
+  }
   let frostWarned = -1
   // The spraying question, once a season, when blight weather first comes over leaves that are up: the clock stops
   // for it as for a telegram. Put away unanswered, it is not asked again by itself.
@@ -214,13 +235,15 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     sprayAsked = key
     if (S.routineInfo(c).some(r => r.kind === 'spray' && r.auto)) return
     askSpray(ctx)
-    app.setSpeed(0)
+    app.stopFor('Spraying this season wants an answer.')
   }
   const off = app.on(ev => {
     if (ev.type === 'yard' || ev.type === 'unit' || ev.type === 'select') ctx.dirty()
     else if (ev.type === 'events') {
       for (const e of ev.events) if (e.type === 'sample') { const staged = app.speed < 3; void ctx.view.whenShown('sample', e.field).then(() => { if (app.screen === 'season') openTray(e, staged) }) }
       if (ev.dayPassed) warnFrost()
+      const c0 = app.campaign
+      if (c0) sayCrewStarts(c0)
     }
   })
 
@@ -391,7 +414,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   function placeBar(): void {
     const layout = ctx.layout()
     const bar = !card.el.hidden ? card.el : !yard.el.hidden ? yard.el : null
-    const leftTaken = grid.isOpen() || !person.el.hidden
+    const leftTaken = grid.isOpen() || !person.el.hidden || !!trayHost.firstElementChild
     if (!bar || layout === 'narrow' || leftTaken) { if (side !== 'right') { side = 'right'; el.classList.remove('docked-left'); ctx.dirty() } return }
     // Where the thing selected lies on the screen.
     let box: { l: number; r: number } | null = null

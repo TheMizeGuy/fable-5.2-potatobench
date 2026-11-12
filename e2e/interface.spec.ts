@@ -161,7 +161,8 @@ test('the crop orders hold their places when one is given, and under 80 words wi
 test('a test dig is a tray beside the land, does not stop the clock, and can be reopened', async ({ page }) => {
   const errors = watchErrors(page)
   await startSeason(page)
-  await reach(page, `q.run(q.day(6, 28), ['sample'])`)
+  // Spraying settled for the season first, as a player would when the question comes, so the days can run.
+  await reach(page, `q.g().app.do({ t: 'sprayWay', way: 'ask' }); q.run(q.day(6, 28), ['sample'])`)
   await putAway(page)
   await page.getByTestId('field-2').click()
   await page.keyboard.press('Shift+t')
@@ -786,7 +787,7 @@ test('Start the season runs the clock at 1x with no click; a weigh ticket stops 
   // The goal line says what comes next: planting, or how long until the soil is warm enough.
   await expect(page.getByTestId('goal')).toContainText(/Plant/)
   // Brought to the first dig, set to 2x by its button, the clock runs the dig and the haul until the ticket stops it.
-  await reach(page, `const { app } = q.g(); app.setSpeed(0); q.run('digging', ['sell'], 'status'); app.campaign.incidents = []`)
+  await reach(page, `const { app } = q.g(); app.setSpeed(0); q.run('digging', ['sell'], 'status'); app.campaign.incidents = []; app.do({ t: 'sprayWay', way: 'ask' })`)
   await putAway(page)
   await page.getByTestId('speed-2').click()
   const ticket = page.getByTestId('weighin')
@@ -881,13 +882,33 @@ test('blight weather asks once how to spray this season, and a worn-out hand can
   const ask = page.getByTestId('spray-ask')
   await expect(ask).toBeVisible()
   expect((await look(page)).paused).toBe(true)
+  // Decide later: the days go on, and the card does not come straight back.
+  const day0 = await game<number>(page, 'app.campaign.season.day')
+  await page.keyboard.press('Escape')
+  await expect(ask).toBeHidden()
+  await expect.poll(() => game<number>(page, 'app.campaign.season.day'), { timeout: 15_000 }).toBeGreaterThan(day0)
+  await expect(ask).toBeHidden()
+  await reach(page, `q.g().app.setSpeed(0)`)
+  // (a test dig the crew made while the days ran is put away first)
+  if (await page.getByTestId('sample-close').isVisible().catch(() => false)) await page.getByTestId('sample-close').click()
+  // Asked again from a field's card or Who does what.
+  await page.keyboard.press('g')
+  await page.getByTestId('spray-ask-open').click()
+  await expect(ask).toBeVisible()
   await expect(ask).toContainText('Keep the fields sprayed')
   await ask.getByTestId('spray-way-auto').click()
   await expect(ask).toBeHidden()
   expect(await game<boolean>(page, `sim.routineInfo(app.campaign).find(r => r.kind === 'spray').auto`)).toBe(true)
+  await page.keyboard.press('Escape')
+  // The crew then sprays by itself, and no stamp or chip asks for spraying.
+  await reach(page, `const { app } = q.g(); const c = app.campaign; for (let k = 0; k < 4; k++) { c.incidents = []; app.do({ t: 'day' }) } app.setSpeed(0)`)
+  expect(await game<number>(page, `app.campaign.season.jobs.filter(j => j.kind === 'spray' && j.by === 'routine').length + app.campaign.season.fields.reduce((t, f) => t + (f.sprays ?? 0), 0)`)).toBeGreaterThan(0)
+  expect(await page.evaluate(() => [...document.querySelectorAll('#ui [data-testid^="badge-"]')].filter(b => /spray/i.test(b.getAttribute('title') ?? b.textContent ?? '')).length)).toBe(0)
+  expect(await page.evaluate(() => /spray/i.test(document.querySelector('#ui [data-testid="pressing"]')?.textContent ?? ''))).toBe(false)
   // Asked once: it does not come back by itself; Who does what asks it again.
   await page.waitForTimeout(400)
   await expect(page.getByTestId('spray-ask')).toBeHidden()
+  if (await page.getByTestId('sample-close').isVisible().catch(() => false)) await page.getByTestId('sample-close').click()
   await page.keyboard.press('g')
   await page.getByTestId('spray-ask-open').click()
   await page.getByTestId('spray-ask').getByTestId('spray-way-ask').click()
@@ -901,5 +922,23 @@ test('blight weather asks once how to spray this season, and a worn-out hand can
   await card.getByTestId('person-rest-now').click()
   expect(await game<string>(page, 'app.campaign.crew[1].rest')).toBe('now')
   await expect(card.getByTestId('person-rest-now')).toHaveAttribute('aria-pressed', 'true')
+  expect(errors, errors.join('\n')).toEqual([])
+})
+
+test('a field says which work the crew does by itself and which waits for the player, and the first planting is said with Show me', async ({ page }) => {
+  const errors = watchErrors(page)
+  await startSeason(page)
+  // Days run until the crew takes up planting by itself: a note says so, and Show me goes to who is planting.
+  await reach(page, `const { app } = q.g(); const c = app.campaign; for (let k = 0; k < 90 && !c.season.jobs.some(j => j.kind === 'plant' && c.crew.some(u => u.job === j.id)); k++) { c.incidents = []; app.do({ t: 'day' }) } app.setSpeed(0)`)
+  const note = page.locator('#ui [data-testid="alert"]', { hasText: 'Planting by itself' })
+  await expect(note).toBeVisible()
+  await note.click()
+  await expect(page.getByTestId('whois')).toBeVisible()
+  await page.keyboard.press('Escape')
+  // A field's card: the crew's work on it and when, and the kinds of work that are the player's.
+  const field = await game<number>(page, `app.campaign.season.jobs.find(j => j.kind === 'plant').field`)
+  await reach(page, `q.g().app.select(${field})`)
+  await expect(page.getByTestId('card-whose')).toContainText('The crew')
+  await expect(page.getByTestId('card-whose')).toContainText(/Yours: .*spray/i)
   expect(errors, errors.join('\n')).toEqual([])
 })

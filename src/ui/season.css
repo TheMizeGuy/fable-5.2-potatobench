@@ -157,6 +157,7 @@
 /* ---------------------------------------------------------------- the command bar, docked at the edge of the land */
 /* The bar stands below the paused chip's place whether the clock runs or not: nothing moves when the clock does. */
 .season-screen .command { top: calc(var(--top, 220px) + 64px); right: max(var(--gutter), env(safe-area-inset-right, 0px)); max-height: calc(100% - var(--top, 220px) - 80px); }
+.season-screen .command.compact.sys { top: calc(var(--top, 220px) + 64px); }
 .season-screen.docked-left .command { right: auto; left: max(var(--gutter), env(safe-area-inset-left, 0px)); max-height: calc(100% - var(--top, 220px) - var(--bottom, 140px) - 76px); }
 .season-screen .command.compact { overflow-y: auto; overscroll-behavior: contain; }
 /* The field card: its head and cross stay in view, and what is under them scrolls inside the window. A fixed width,
@@ -439,3 +440,8 @@
 .touch .command .spray-way { min-height: 44px; }
 .work .spray-again { justify-self: start; min-height: 36px; margin-top: 6px; font-size: 14px; }
 /* On a phone or a short window, work that cannot wait is one line, and gives way to a card or a page. */
+/* Whose work is whose on a field: what the crew does by itself, and what waits for the player. */
+.command .whose { margin: 0; padding: 2px 18px 8px; font-size: 14px; line-height: 1.35; color: var(--ink-2); }
+.command .whose .i { --i: 14px; margin-right: 4px; vertical-align: -2px; }
+.command .whose .btn { min-height: 30px; padding: 0 8px; font-size: 13px; }
+.touch .command .whose .btn { min-height: 40px; }

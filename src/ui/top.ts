@@ -19,7 +19,7 @@ const SPEED_NAME = ['Paused', '1× speed', '2× speed', '3× speed']
 
 // The date leaf: in the season the day, its month and weekday; outside it, one word for where the year is.
 function leaf(c: S.Campaign): HTMLElement {
-  const year = h('span', { class: 'year t-label tb-year num' }, yearName(S.yearNow(c)))
+  const year = h('span', { class: 'year t-label tb-year num' }, yearName(c.year))
   if (c.phase === 'season' && c.season) {
     const d = c.season.day
     const { month, dom } = S.monthDay(c.year, d)
@@ -149,13 +149,48 @@ export function logsWanted(c: S.Campaign): string {
 // A goal's when, run into a line: its first word lower-cased, a month's name left as it is.
 const lowerFirst = (t: string) => t ? t[0].toLowerCase() + t.slice(1) : t
 
+// The year's money, by what it was for, from the campaign's own running totals: what moved between two looks.
+const MONEY_PARTS: [keyof S.Campaign, string, 1 | -1][] = [
+  ['yearWages', 'wages', -1], ['yearStorage', 'storage', -1], ['yearRent', 'rent', -1], ['yearLand', 'land', -1], ['yearMortgage', 'mortgage', -1],
+  ['yearWorks', 'contractor', -1], ['yearBuilding', 'building', -1], ['yearPacking', 'packing', -1], ['yearPenalties', 'penalty', -1],
+  ['yearContracts', 'delivery', 1], ['yearLogs', 'logs', 1], ['yearStand', 'stand', 1], ['yearRest', 'oats', 1],
+]
+type MoneyLook = Record<string, number>
+
+function moneyLook(c: S.Campaign): MoneyLook {
+  const out: MoneyLook = { cash: c.cash, revenue: c.yearRevenue, costs: c.yearCosts }
+  for (const [k] of MONEY_PARTS) out[k] = Number(c[k]) || 0
+  return out
+}
+
+// What the money did between two looks, a word for each part: "wages −$380, orders −$110" (orders: seed, equipment and jobs).
+export function moneyMoved(a: MoneyLook, b: MoneyLook): string {
+  const parts: string[] = []
+  let named = 0, namedIn = 0
+  for (const [k, word, sign] of MONEY_PARTS) {
+    const d = (b[k] ?? 0) - (a[k] ?? 0)
+    if (Math.abs(d) < 0.5) continue
+    if (sign < 0) named += d
+    else namedIn += d
+    parts.push(`${word} ${sign < 0 ? '−' : '+'}${F.money(Math.abs(d))}`)
+  }
+  const otherOut = (b.costs - a.costs) - named
+  const otherIn = (b.revenue - a.revenue) - namedIn
+  if (otherOut >= 0.5) parts.push(`orders −${F.money(otherOut)}`)
+  if (otherIn >= 0.5) parts.push(`sales +${F.money(otherIn)}`)
+  const rest = (b.cash - a.cash) - ((b.revenue - a.revenue) - (b.costs - a.costs))
+  if (Math.abs(rest) >= 0.5) parts.push(`${rest < 0 ? 'bank' : 'other'} ${rest < 0 ? '−' : '+'}${F.money(Math.abs(rest))}`)
+  return parts.join(', ')
+}
+
 const MOMENT_MS = 1600
+const MOVED_MS = 4000
 // The goals that are a field's job: put on the list by the player, or by the crew's routine.
 const GOAL_ROUTINE: Record<string, S.JobKind> = { plant: 'plant', walk: 'scout', hill: 'hill', sample: 'sample', dig: 'dig', haul: 'haul', spray: 'spray', kill: 'kill' }
 // The season's calls that are the player's to make (the routine sees to the rest), first to last.
 const CALLS: Partial<Record<string, number>> = { rogue: 0, spray: 1, kill: 2, water: 3 }
 // A call on the slip: what it is, where, why it cannot wait, and the one command that sees to it when there is one.
-interface Call { id: string; act: string; field: number; text: string; why: string; fix: S.Cmd | null; fixLabel: string }
+interface Call { id: string; act: string; field: number; text: string; why: string; fix: S.Cmd | null; fixLabel: string; line?: string }
 
 // Brings a control forward once the screen has drawn it: in view, ringed, under the keyboard.
 export function light(selector: string): void {
@@ -188,6 +223,9 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
   const app = ctx.app
   const contracts = contractRows(ctx)
   let cashWas: number | null = null
+  let lookWas: MoneyLook | null = null
+  let moved: { text: string; until: number } | null = null
+  let lastMoved = ''
   let shown: Goal | null = null
   let met: { goal: Goal; until: number } | null = null
   let fresh = ''
@@ -274,6 +312,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
   function callsNow(c: S.Campaign): Call[] {
     const urgent: Call[] = S.pressing(app.world, c).map(p => ({
       id: `p-${p.kind}-${p.field}`, act: p.kind, field: p.field, text: `${JOB_VERB[p.kind]} ${S.FIELD_NAMES[p.field]}`, why: `${F.upper(p.why)}. ${p.inWay}`,
+      line: p.kind === 'kill' ? p.inWay.replace(/, so .*$/, '').replace(/\.$/, '') : undefined,
       fix: p.fix, fixLabel: p.fix?.t === 'job' ? 'Order it' : p.fix?.t === 'priority' ? `${firstName(c.crew.find(u => u.id === (p.fix as { unit: number }).unit)?.name ?? 'Someone')} first` : 'Show me',
     }))
     const calls: Call[] = app.needs().map((n, field) => ({ need: n.need!, field }))
@@ -338,7 +377,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
         onclick: () => { pop = pop === 'goals' ? '' : 'goals'; ctx.dirty() },
       }, callFirst ? fist() : null, h('span', { class: 'goal-body' }, h('span', { class: 'sr' }, callFirst ? 'Now: ' : 'Next goal: '),
         h('b', { class: 'goal-t' }, callFirst ? F.localize(call!.text) : g!.title),
-        callFirst ? (g ? h('span', { class: 'goal-when' }, `then: ${g.title.toLowerCase()}${reach ? '' : `, ${notYet(c, g)}`}`) : null) : h('span', { class: 'goal-when' }, notYet(c, g!))),
+        callFirst ? (call!.line ? h('span', { class: 'goal-when' }, call!.line) : g ? h('span', { class: 'goal-when' }, `then: ${g.title.toLowerCase()}${reach ? '' : `, ${notYet(c, g)}`}`) : null) : h('span', { class: 'goal-when' }, notYet(c, g!))),
       h('span', { class: 'sr' }, `. ${callFirst ? F.localize(call!.why) : g!.why} Open the goals.`))
       const go = callFirst ? h('button', { class: 'btn goal-go', type: 'button', testid: 'goal-do', onclick: () => takeCall(call!) }, icon(call!.fix ? 'check' : 'arrow', 'i'), call!.fixLabel) : null
       return go ? h('div', { class: 'goal-row' }, quiet, go) : quiet
@@ -373,6 +412,15 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     const { g, met: gone } = goalNow(c)
     if (season && app.needs() !== viewFor) { viewFor = app.needs(); viewNow = outlook(ctx, c) }
     const view = season && layout !== 'narrow' ? viewNow : null
+    // When the money moves, what moved it shows under the balance for a moment, and stays on the balance's hover.
+    const look = moneyLook(c)
+    const now = performance.now()
+    if (lookWas && lookWas.year === c.year && Math.abs(look.cash - lookWas.cash) >= 0.5) {
+      const text = moneyMoved(lookWas, look)
+      if (text) { lastMoved = text; moved = { text, until: now + MOVED_MS }; setTimeout(() => ctx.dirty(), MOVED_MS + 30) }
+    }
+    lookWas = { ...look, year: c.year }
+    if (moved && now >= moved.until) moved = null
     const mats = c.logs >= 0.05 || c.stone >= 0.05
     if (pop === 'materials' && !mats) pop = ''
     const stopped = season && app.speed === 0 && (c.incidents.length > 0 || ctx.awaiting > 0)
@@ -381,7 +429,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
       w: c.season?.watchDay, f: c.season?.log.filter(e => e.type === 'frost').length, u: app.settings.units, t: ctx.touch(), days, withClock, withMenu, stopped,
       g: g ? [g.id, progressText(g), g.now] : 0, gone: gone?.id ?? '', fresh, pop, wait: season && g?.id === 'plant' ? plantingIn(app.world, c) : -1, mats: mats ? [Math.round(c.logs * 10), Math.round(c.stone * 10)] : 0,
       ladder: pop === 'goals' ? goals(c).map(x => [x.id, x.done, progressText(x), x.block, x.now && !x.done && !!o.canShow?.(x)]) : 0, reach: g ? !!o.canShow?.(g) : false,
-      call: season ? pressing(c)?.id ?? '' : '', block: g?.block ?? '', view: view?.why ?? '',
+      call: season ? pressing(c)?.id ?? '' : '', block: g?.block ?? '', view: view?.why ?? '', moved: moved?.text ?? '', last: lastMoved,
       jobs: season ? [...new Set(c.season!.jobs.map(j => j.kind))].sort().join() : '', auto: season ? S.routineInfo(c).filter(r => r.auto).map(r => r.kind).join() : '',
       k: season || c.phase === 'cellar' ? contracts.key() : 0,
     }
@@ -394,8 +442,9 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
         h('span', { class: 't-label when' }, c.cash < 0 ? 'On the loan' : 'Balance'),
         h('span', {
           class: `t-figure cash${c.cash < 0 ? ' neg' : ''}`, testid: 'cash',
-          title: ctx.touch() || c.cash >= 0 ? undefined : 'Owed on the spring operating loan: the crop pays it back. The bank calls the note if the year closes too far under.',
+          title: ctx.touch() ? undefined : `${c.cash >= 0 ? '' : 'Owed on the spring operating loan: the crop pays it back. The bank calls the note if the year closes too far under.'}${lastMoved ? `${c.cash >= 0 ? '' : ' '}Last moved: ${lastMoved}.` : ''}` || undefined,
         }, h('span', { class: 'sr' }, 'Cash: '), h('span', { class: 'cash-v num' }, F.money(c.cash))),
+        moved && !phone ? h('span', { class: 'cash-moved', testid: 'cash-moved', role: 'status' }, moved.text) : null,
         season && !phone && view ? h('span', {
           class: `due outlook term num${view.before ? '' : view.figure < S.CREDIT_LIMIT ? ' c-red' : view.figure < 0 ? ' c-ochre' : ' c-green'}`, testid: 'outlook', tabindex: '0', 'data-tip': view.why,
         }, view.label, h('b', null, F.money(view.figure)), h('span', { class: 'sr' }, `. ${view.why}`)) : null)

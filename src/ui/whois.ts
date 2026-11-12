@@ -124,7 +124,7 @@ export function whois(ctx: Ctx, layer: HTMLElement): Whois {
           class: `btn${p.winter === ch.work ? ' is-on' : ''}`, type: 'button', testid: `whois-winter-${ch.work}`, 'aria-pressed': String(p.winter === ch.work), disabled: !ch.ok && p.winter !== ch.work, title: ch.why || undefined,
           onclick: () => run({ t: 'winter', unit: p.id, work: ch.work, field: ch.work === 'woods' ? S.timberTracts(c)[0] : undefined }, `${name}: ${WINTER_WORDS[ch.work].toLowerCase()} this winter.`),
         }, WINTER_WORDS[ch.work]))) : p.foreman ? null : h('div', { class: 'whois-first', role: 'group', 'aria-label': `The work ${name} takes first` },
-        h('span', { class: 't-label' }, 'First'),
+        h('span', { class: 't-label', title: keys ? 'The work they take before any other: press one to put it first' : undefined }, 'Takes first'),
         S.SKILLS.map(k => h('button', {
           class: `key-btn${p.prio[k] === 1 ? ' is-on' : ''}${p.prio[k] === 0 ? ' never' : ''}`, type: 'button', testid: `whois-first-${k}`, 'aria-pressed': String(p.prio[k] === 1),
           title: keys ? `${SKILL_SHORT[k]} work first` : undefined,
@@ -191,7 +191,9 @@ export function whois(ctx: Ctx, layer: HTMLElement): Whois {
   function place(box: HTMLElement, line: HTMLElement, a: { x: number; y: number; visible: boolean }, w: number, hh: number): void {
     if (phone()) { box.style.transform = ''; line.hidden = true; return }
     const ins = app.insets
-    const left0 = ins.left + 8, right0 = innerWidth - ins.right - 8, top0 = Math.max(8, ins.top + 8), bottom0 = innerHeight - Math.max(8, ins.bottom + 8)
+    const left0 = ins.left + 8, right0 = innerWidth - ins.right - 8, top0 = Math.max(8, ins.top + 8)
+    // Kept clear of the foot when it fits there; a card taller than the free land may come down over it, beside them.
+    const bottom0 = innerHeight - Math.max(8, hh > innerHeight - ins.bottom - 8 - top0 ? 8 : ins.bottom + 8)
     const ax = Math.max(0, Math.min(innerWidth, a.x)), ay = Math.max(0, Math.min(innerHeight, a.y))
     let x = ax + GAP
     if (x + w > right0) x = ax - GAP - w
@@ -208,7 +210,18 @@ export function whois(ctx: Ctx, layer: HTMLElement): Whois {
   }
 
   function frame(): void {
-    if (!card.hidden && app.unit >= 0) place(card, lead, ctx.view.unitAnchor(app.unit), sizes.w, sizes.h)
+    // Followed, the person stands in the middle of the picture: the card waits at the side, its leader to them.
+    if (!card.hidden && app.unit >= 0 && ctx.view.followed() === app.unit && !phone()) {
+      const a = ctx.view.unitAnchor(app.unit)
+      const ins = app.insets
+      place(card, lead, { x: innerWidth - ins.right - 8, y: a.y, visible: false }, sizes.w, sizes.h)
+      if (a.visible) {
+        const x = innerWidth - ins.right - 8 - sizes.w
+        const len = Math.max(0, x - a.x - 30)
+        lead.hidden = len < 6
+        lead.style.transform = `translate3d(${(a.x + 30).toFixed(1)}px, ${a.y.toFixed(1)}px, 0) scaleX(${(len / 100).toFixed(3)})`
+      }
+    } else if (!card.hidden && app.unit >= 0) place(card, lead, ctx.view.unitAnchor(app.unit), sizes.w, sizes.h)
     if (!tcard.hidden && app.thing) {
       const a = ctx.view.thingAnchor(app.thing.thing)
       place(tcard, tlead, a.visible ? a : { x: app.thing.x, y: app.thing.y, visible: true }, sizes.tw, sizes.th)

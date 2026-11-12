@@ -37,7 +37,7 @@ export async function startSeason(page: Page): Promise<void> {
 // What the instruments show, read from the page as a player would read it.
 // incidents: questions open in the game, read through the test hook, since the card that asks them belongs to the
 // instruments and can change under these tests.
-export interface Seen { paused: boolean; running: boolean; speed: number; date: string; cash: string; badges: string[]; ticket: boolean; done: boolean; hint: boolean; tray: boolean; queue: number; incidents: number; paper: boolean }
+export interface Seen { paused: boolean; running: boolean; speed: number; date: string; cash: string; badges: string[]; ticket: boolean; done: boolean; hint: boolean; tray: boolean; queue: number; incidents: number; paper: boolean; spray: boolean }
 
 export async function look(page: Page): Promise<Seen> {
   return page.evaluate(() => {
@@ -62,6 +62,8 @@ export async function look(page: Page): Promise<Seen> {
       queue: document.querySelectorAll('#ui [data-testid^="queue-"]:not([data-testid^="queue-first"]):not([data-testid="queue-more"]):not([data-testid^="queue-cancel"]):not([data-testid^="queue-who"])').length,
       incidents: (globalThis as unknown as { __county: { app: { campaign: { incidents: unknown[] } | null } } }).__county.app.campaign?.incidents.length ?? 0,
       paper: !!document.querySelector('#ui .dialog:not(.out)'),
+      // the one-time spraying question, on the telegram card
+      spray: !!el('spray-ask') && el('spray-ask')!.offsetParent !== null,
     }
   })
 }
