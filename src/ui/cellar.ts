@@ -85,7 +85,7 @@ export function cellarScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
     const nx = o.months[0]
     const gain = nx ? nx.net - value : 0
     const heading: [string, string] = !nx ? ['flat', 'May is the last month: what is left is sold at its end']
-      : [gain > 0.5 ? 'up' : gain < -0.5 ? 'fall' : 'flat', `Kept to ${nx.name}: about ${F.money(nx.net)}, ${Math.abs(gain) < 0.5 ? 'the same as selling now' : `${F.money(Math.abs(gain))} ${gain > 0 ? 'more' : 'less'} than selling now`}${o.best && o.best !== nx && o.best.net > Math.max(value, nx.net) + 0.5 ? `; ${o.best.name} is the best, about ${F.money(o.best.net)}` : ''}`]
+      : [gain > 0.5 ? 'up' : gain < -0.5 ? 'fall' : 'flat', `Kept to ${nx.name}: about ${F.money(nx.net)}, ${Math.abs(gain) < 0.5 ? 'the same as selling now' : `${F.money(Math.abs(gain))} ${gain > 0 ? 'more' : 'less'} than selling now`}${o.best && o.best !== nx && o.best.net > Math.max(value, nx.net) + Math.max(25, value * 0.01) ? `; ${o.best.name} is the best, about ${F.money(o.best.net)}` : ''}`]
     const grewWith = c.season?.fields[lot.field]?.seedVirus
     const rent = Math.round(S.lotCwt(lot) * S.STORE_COST)
     const deal = deals(app.world, c, lot)[0]

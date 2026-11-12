@@ -128,7 +128,7 @@ function contractCards(ctx: Ctx, c: S.Campaign, after: () => void): Child {
   const offers = S.offerInfo(c)
   const signed = S.contractInfo(c)
   return [
-    h('p', { class: 't-caption' }, `A fixed price for No. 1 delivered by a date. The hatching is what your fields look like giving; the rule, what is promised. Short on the day costs ${F.pct(S.CONTRACT_PENALTY)} of what is missing.`),
+    h('p', { class: 't-caption' }, `A fixed price for No. 1 delivered by a date. The hatching is what your fields look like giving; the rule, what is promised. On the day the buyer takes what is owed from the potato house; only what is still missing then costs ${F.pct(S.CONTRACT_PENALTY)} of its price under the contract.`),
     signed.length ? [h('p', { class: 't-label cat-sub' }, 'Signed'), h('div', { class: 'offers' }, signed.map(k => signedCard(c, k)))] : null,
     c.phase === 'plan' ? [
       h('p', { class: 't-label cat-sub' }, offers.length ? 'Offered this spring' : 'No more offers this spring'),

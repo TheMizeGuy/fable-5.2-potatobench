@@ -57,7 +57,7 @@
 .season-screen .q-x { display: grid; place-items: center; width: 22px; height: 36px; margin-left: -2px; color: var(--ink-2); background: var(--paper); box-shadow: inset 0 0 0 1px var(--hair); }
 .season-screen .q-x .i { --i: 13px; }
 @media (hover: hover) { .season-screen .q-x:hover { color: var(--red); box-shadow: inset 0 0 0 1px var(--red); } }
-.touch .season-screen .q-x { width: 32px; min-height: 40px; }
+.touch .season-screen .q-x { width: 40px; min-height: 40px; }
 .season-screen .q-tools { display: none; position: absolute; left: 50%; bottom: calc(100% + 4px); transform: translateX(-50%); gap: 2px; z-index: 3; }
 .season-screen .q-item:hover .q-tools, .season-screen .q-item:focus-within .q-tools { display: flex; }
 .season-screen .q-first { display: grid; place-items: center; width: 32px; height: 32px; background: var(--paper); box-shadow: var(--laid); }
