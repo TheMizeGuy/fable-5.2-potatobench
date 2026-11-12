@@ -50,6 +50,16 @@ async function fingers(page: Page, steps: { x: number; y: number }[][]): Promise
   await cdp.detach()
 }
 
+// Two quick taps on one spot, as fast as a finger gives them.
+async function doubleTap(page: Page, p: { x: number; y: number }): Promise<void> {
+  const cdp = await page.context().newCDPSession(page)
+  for (let k = 0; k < 2; k++) {
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: p.x, y: p.y, id: 0 }] })
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+  }
+  await cdp.detach()
+}
+
 // Drag the land: the mouse's left button, or one finger.
 async function drag(page: Page, mobile: boolean, far = 1): Promise<void> {
   const p = await land(page, mobile ? 30 : 0)
@@ -149,8 +159,10 @@ test('a guided first year: offered on a new farm, taken, and followed to the fir
         if (!(await marked.isVisible())) {
           // Out of view, the slip says how to bring the farm back.
           await expect(page.getByTestId('guide-lost')).toBeVisible()
-          if (isMobile) { const p = await land(page); await page.touchscreen.tap(p.x, p.y); await page.touchscreen.tap(p.x, p.y) } else await page.keyboard.press('Home')
-          await page.waitForTimeout(1500)
+          for (let k = 0; k < 3 && !(await page.locator('#ui .plate[data-testid^="field-"]:visible').count()); k++) {
+            if (isMobile) await doubleTap(page, await land(page)); else await page.keyboard.press('Home')
+            await page.waitForTimeout(1500)
+          }
         }
         await ((await marked.isVisible()) ? marked : page.locator('#ui .plate[data-testid^="field-"]:visible').first()).click()
         break
