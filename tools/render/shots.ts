@@ -350,6 +350,7 @@ const strips: Strip[] = [
   { name: 's3-rocks', n: 8, gap: 400, setup: async page => { await farm(page, SPRING); await settle(page); await farm(page, `until(['rocks'])`); await hold(page, 0.75, 5200); await onUnit(page, await worker(page, 'rocks'), { ...CLOSE, dist: 12 }) } },
   { name: 's5-brush', n: 8, gap: 700, setup: async page => { await farm(page, SPRING); await settle(page); await farm(page, `until(['brush'])`); await hold(page, 0.75, 4200); await onUnit(page, await worker(page, 'brush'), { dist: 12, yaw: 0.7, pitch: 0.34 }, 0, 1.5) } },
   { name: 's6-build', n: 8, gap: 500, setup: async page => { await farm(page, SPRING); await settle(page); await farm(page, `until(['build'])`); await hold(page, 0.8, 4200); await onUnit(page, await worker(page, 'build'), { dist: 11, yaw: 0.5, pitch: 0.4 }, -0.5, 0.5) } },
+  { name: 's7-alder', n: 8, gap: 500, setup: async page => { await farm(page, SPRING); await settle(page); await farm(page, `until(['fell'])`); await hold(page, 0.75, 4200); const u = await page.evaluate(() => (window as any).__county.app.campaign.season.worked.find((w: any) => w.kind === 'fell' && w.field === 15)?.unit ?? 7); await onUnit(page, u, { dist: 11, yaw: 0.6, pitch: 0.34 }, 0.6, 0) } },
   { name: 's4-clock', n: 10, gap: 340, setup: async page => { await farm(page, SPRING); await settle(page); await page.evaluate(() => (window as any).__county.app.setSpeed(1)) } },
 ]
 shots.push(...people)

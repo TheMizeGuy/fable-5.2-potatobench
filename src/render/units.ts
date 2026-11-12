@@ -466,8 +466,8 @@ export class Crews {
     // People and machines are drawn larger than life as the camera draws back, so that a person never falls below
     // about fifty pixels on the screen and a tractor about sixty.
     const perUnit = this.screenH / (2 * Math.tan((f.camera.fov * Math.PI) / 360)) / Math.max(1, f.dist)
-    const bigMachine = clamp(64 / (1.27 * perUnit), 1, 2.9)
-    const big = clamp(50 / (0.78 * FIGURE * perUnit), 1, bigMachine * 1.3) * FIGURE
+    const bigMachine = clamp(64 / (1.27 * perUnit), TRUE_SIZE, Math.max(2.9, TRUE_SIZE))
+    const big = clamp(50 / (0.78 * FIGURE * perUnit), TRUE_SIZE, bigMachine * 1.3) * FIGURE
     const cold = env.snow > 0.3
     this.cold = cold
     const going = snap.mode === 'season' ? f.advancing || f.dayT < 1 : snap.mode !== 'title'
@@ -533,7 +533,7 @@ export class Crews {
       const y = heightAt(r.x, r.z)
       // a machine standing idle in the yard is not drawn as large as one at work, or the yard is all machines
       const parked = !holder && Math.hypot(r.x - r.home.x, r.z - r.home.z) < 0.5
-      const s = parked ? Math.max(1, bigMachine * 0.74) : bigMachine
+      const s = parked ? Math.max(TRUE_SIZE, bigMachine * 0.74) : bigMachine
       const ahead = heightAt(r.x + Math.cos(r.heading) * 0.6 * s, r.z + Math.sin(r.heading) * 0.6 * s)
       const behind = heightAt(r.x - Math.cos(r.heading) * 0.6 * s, r.z - Math.sin(r.heading) * 0.6 * s)
       r.machine.place(r.x, y + 0.01, r.z, r.heading, Math.atan2(ahead - behind, 1.2 * s), s)
@@ -749,7 +749,7 @@ export class Crews {
   // Not at work: a Sunday on the porch, laid up in a chair, waiting in the yard, or stood where the last job ended.
   private atEase(a: Actor, f: CrewFrame, pose: Pose, big: number): void {
     const g = a.goal
-    const k = a.home ? Math.max(1, big * 0.72) : 1
+    const k = a.home ? Math.max(1, (big / TRUE_SIZE) * 0.72) : 1
     const there = g && (Math.hypot(g.x - a.x, g.z - a.z) < 1.2 || (a.home === g && Math.hypot(a.about.x + (g.x - a.about.x) * k - a.x, a.about.z + (g.z - a.about.z) * k - a.z) < 1.2))
     if (a.aboard && a.rig) return
     if (g && there) {
@@ -790,7 +790,7 @@ export class Crews {
   // Drawn large from far off, people standing about in the dooryard stand further apart, so each can be told from the rest.
   private spread(a: Actor, big: number): void {
     if (!a.home) return
-    const k = Math.max(1, big * 0.72)
+    const k = Math.max(1, (big / TRUE_SIZE) * 0.72)
     a.x = a.about.x + (a.home.x - a.about.x) * k
     a.z = a.about.z + (a.home.z - a.about.z) * k
   }
@@ -912,7 +912,7 @@ export class Crews {
         }
         const q = clamp(c.t, 0, 1)
         if (q < 1) { c.x = c.fx + (c.tx - c.fx) * q; c.z = c.fz + (c.tz - c.fz) * q }
-        drawCrow(pr, c.x, heightAt(c.x, c.z) + (q < 1 ? Math.sin(q * Math.PI) * 1.3 * big : 0), c.z, c.h, big * 1.25, q < 1 ? 1 : 0, f.time * 6 + c.wait)
+        drawCrow(pr, c.x, heightAt(c.x, c.z) + (q < 1 ? Math.sin(q * Math.PI) * 1.3 * big : 0), c.z, c.h, Math.min(big, 1.8 * TRUE_SIZE) * 0.9, q < 1 ? 1 : 0, f.time * 6 + c.wait)
       }
     }
     // The neighbour's cows, out from May until the snow.
@@ -929,7 +929,7 @@ export class Crews {
           if (Math.abs(nx - 37) < 6 && Math.abs(nz - 10) < 6) { c.x = nx; c.z = nz } else c.h += Math.PI * 0.6
         }
         // the neighbour's stock is scenery: never drawn as large as the farm's own people are from far off
-        drawBeast(pr, COWS[c.kind], c.x, heightAt(c.x, c.z), c.z, c.h, Math.min(big, 1.5) * 0.9, f.time * 3 + c.kind, c.walking ? 0.7 : 0, c.walking ? 0 : 1)
+        drawBeast(pr, COWS[c.kind], c.x, heightAt(c.x, c.z), c.z, c.h, Math.min(big, 1.5 * TRUE_SIZE) * 0.9, f.time * 3 + c.kind, c.walking ? 0.7 : 0, c.walking ? 0 : 1)
       }
     }
     // A deer at the wood's edge, gone into the trees when anyone comes near.
@@ -940,7 +940,7 @@ export class Crews {
     d.t += f.dt
     if (this.lively && d.away < 0.99 && snap.mode !== 'title') {
       const z = d.z - d.away * 5
-      drawBeast(pr, DEER, d.x - d.away * 2, heightAt(d.x, z), z, near ? -1.9 : 0.4, Math.min(big, 1.5) * 0.9 * (1 - 0.5 * d.away), d.away > 0.02 ? f.time * 14 : 0, d.away > 0.02 && d.away < 0.99 ? 1 : 0, near ? 0 : (Math.sin(d.t * 0.4) > 0.2 ? 1 : 0))
+      drawBeast(pr, DEER, d.x - d.away * 2, heightAt(d.x, z), z, near ? -1.9 : 0.4, Math.min(big, 1.5 * TRUE_SIZE) * 0.9 * (1 - 0.5 * d.away), d.away > 0.02 ? f.time * 14 : 0, d.away > 0.02 && d.away < 0.99 ? 1 : 0, near ? 0 : (Math.sin(d.t * 0.4) > 0.2 ? 1 : 0))
     }
   }
 
@@ -985,8 +985,11 @@ export class Crews {
   }
 }
 
-// People are drawn a little larger than the machines' scale, so a man at the wheel is not lost in the tractor.
-const FIGURE = 1.14
+// One ground unit is a metre. The models are built small (a figure 0.82 tall, the tractor 1.61 long, the truck 2.94):
+// drawn at this size a person stands 1.8, the tractor is 3.4 long and the truck 6.2. Nothing is ever drawn smaller.
+export const TRUE_SIZE = 2.1
+// People against the machines' scale.
+const FIGURE = 1.05
 const DOOR: Pt = { x: 20.6, z: -6.9 }
 // the porch's edge: people on it spread along it, those in the dooryard out from it
 const PORCH: Pt = { x: HOUSE.x - 2.02, z: HOUSE.z - 3.0 }

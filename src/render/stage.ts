@@ -170,7 +170,7 @@ export class Stage {
     const [tx, tz] = spots[n % 3]
     const sideways = n % 2 ? 1 : -1
     // the tree is no bigger than the woods it stands in, however large the people are drawn
-    const ts = Math.min(s, 1.7) / s
+    const ts = Math.min(s, TREE_MOST) / s
     const H = (brushy ? 1.5 : 2.7 + 0.5 * hash(n)) * (brushy ? 1 : ts), r = 0.08 * ts
     // the tree: standing and shivering under the axe, going over, lying to be limbed
     const fall = t < tCut ? 0 : Math.pow(span(tCut, tDown, t), 2.4)
@@ -719,4 +719,6 @@ export class Stage {
 }
 
 const PT: Pt = { x: 0, z: 0 }
+// The scale at which the felled spruce (2.7 to 3.2 tall as built) matches the trees of the woods as they stand now.
+const TREE_MOST = 1.7
 const EARTH = new Color('#5b4030')
