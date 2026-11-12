@@ -196,8 +196,8 @@ export const LESSONS: Lesson[] = [
     id: 'person', part: 'opening', name: 'Meet your people', read: true, uses: ['unit'],
     when: inSeason,
     done: (l, g, since) => g.has('noted:person') || g.has('unit') || (!!since && !!l.c?.season && l.c.season.day >= since.d + 4),
-    ask: () => 'This face is you. In the first year you do every job yourself.',
-    why: () => 'Hands come later. Each face on the land shows where someone is and what they are doing.',
+    ask: l => by(l, 'Click this face: it is you. In the first year you do every job yourself.', 'Tap this face: it is you. In the first year you do every job yourself.', 'This face is you. In the first year you do every job yourself.'),
+    why: () => 'Hands come later. A click on anyone on the land shows who they are and what they are doing.',
     point: l => ({ unit: farmer(l) }),
   },
   {

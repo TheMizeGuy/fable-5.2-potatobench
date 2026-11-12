@@ -62,15 +62,15 @@ export function pins(ctx: Ctx, layer: HTMLElement, o: { tags: () => DOMRect[]; c
     const picked = app.unit === m.id
     patch(w, JSON.stringify([m, count, picked, many, ctx.touch(), count > 1 ? members.map(x => [x.id, x.label]) : 0]), () => pin(m.name, m.state, {
       ring: m.ring, name: picked, testid: `pin-${m.id}`, count,
-      label: count > 1 ? `${count} people here: ${members.map(x => x.label).join('; ')}. Press to choose one.` : `${m.label}${many ? `. ${picked ? 'Press to put their card away.' : 'Press for their card.'}` : ''}`,
-      pressed: many && count === 1 ? picked : undefined,
+      label: count > 1 ? `${count} people here: ${members.map(x => x.label).join('; ')}. Press to choose one.` : `${m.label}. ${picked ? 'Press to put their card away.' : 'Press for their card.'}`,
+      pressed: count === 1 ? picked : undefined,
       // the pointer over a pin names them, as it does over their body
       onenter: (e: Event) => { if ((e as PointerEvent).pointerType === 'mouse') app.point({ x: 0, y: 0, unit: m.id, thing: null, field: -1, yard: 0, group: count > 1 ? members.map(x => x.id) : undefined }) },
       onleave: () => { if (app.pointing?.unit === m.id) app.point(null) },
-      onclick: many ? () => {
+      onclick: () => {
         if (count > 1) { open = open === m.id ? -1 : m.id; listFor = ''; list.style.visibility = 'hidden'; drawList(members); return }
         pick(m.id)
-      } : undefined,
+      },
     }))
     const b = w.firstElementChild as HTMLElement | null
     if (b && b.tagName === 'BUTTON') b.tabIndex = -1

@@ -128,10 +128,9 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
       d.progress > 0 && !many ? h('span', { class: 'meter', role: 'meter', 'aria-label': d.text, 'aria-valuemin': 0, 'aria-valuemax': 100, 'aria-valuenow': Math.round(d.progress * 100), 'aria-valuetext': `${F.pct(d.progress)} done` }, h('i', { style: `width:${(d.progress * 100).toFixed(1)}%` })) : null,
       slip,
     ]
-    if (!many) return h('div', { class: 'person unit solo', testid: `unit-${p.id}`, title: ctx.touch() ? undefined : said, style: `--c:${ring}` }, kids, h('span', { class: 'sr' }, said))
     // What the cell prints is its name to a screen reader too, with the rest of what is known after it.
     return h('button', {
-      class: `person unit${on ? ' is-picked' : ''}${bad ? ' needs' : ''}${goal ? ' goal-ring' : ''}`, type: 'button', testid: `unit-${p.id}`, 'aria-pressed': String(on), style: `--c:${ring}`,
+      class: `person unit${many ? '' : ' solo'}${on ? ' is-picked' : ''}${bad ? ' needs' : ''}${goal ? ' goal-ring' : ''}`, type: 'button', testid: `unit-${p.id}`, 'aria-pressed': String(on), style: `--c:${ring}`,
       title: ctx.touch() ? undefined : said, onclick: () => { if (on) app.selectUnit(-1); else { app.select(-1); app.selectYard(0); app.selectUnit(p.id) } },
     }, kids, h('span', { class: 'sr' }, `. ${said} ${on ? 'Their card is open. Press again to close it.' : 'Press for their card; orders given now go to them.'}`))
   }
