@@ -8,7 +8,7 @@ import { ageLot, gradeHill, newLot, finishLot, lotCwt } from './harvest.ts'
 import { brushedNow, COVER_WORD, envTmin, fell, fellLeft, fieldEnv, isField, isOpen, standing, stoneBruise, stoneSpeed, stumped } from './land.ts'
 import * as P from './params.ts'
 import { breakdownChance, CHOICE_LABEL, defaultChoice, hurtChance, INCIDENT_TITLE, incidentText } from './incidents.ts'
-import { applicantsFor, gainXp, hurt, jobSkill, moodTarget, payOf, scoutChance, SKILL_LABEL, speed, sprayCover, willDo, zeroSkills } from './people.ts'
+import { applicantsFor, gainXp, hurt, jobSkill, moodTarget, payOf, resting, scoutChance, SKILL_LABEL, speed, sprayCover, willDo, zeroSkills } from './people.ts'
 import { hashUnit, nextInt, nextUnit } from './rng.ts'
 import {
   H_DECAYED, H_DUG, H_EMERGED, H_KNOWN, H_ROGUED, H_SAMPLED, H_SEEDBLIGHT, H_VIRUS, H_WILT,
@@ -659,8 +659,41 @@ function stillWanted(c: Campaign, s: Season, job: Job, out: GameEvent[]): boolea
   const k = s.jobs.indexOf(job)
   if (k >= 0) s.jobs.splice(k, 1)
   releaseJob(c, job.id)
-  push(s, out, 'dropped', job.field, 'warn', `${JOB_LABEL[job.kind]} in ${placeName(job.field)} dropped. ${why}`)
+  push(s, out, 'dropped', job.field, 'warn', `${JOB_LABEL[job.kind]} in ${placeName(job.field)} dropped. ${why}`, { job: job.id, kind: job.kind, why })
   return false
+}
+
+// Each morning orders that no longer make sense for their field leave the list, each with a dropped event and its
+// reason: a walk, a spray or a watering for vines that are dead or dug, and the like. Building and hauling stay.
+function sweep(c: Campaign, s: Season, out: GameEvent[]): void {
+  for (const j of [...s.jobs]) {
+    if (j.kind === 'build' || j.kind === 'haul' || (j.kind === 'dig' && j.done > 0)) continue
+    stillWanted(c, s, j, out)
+  }
+}
+
+// Work that can wait a few days without the season taking anything for it.
+const WAITABLE: JobKind[] = ['fell', 'rocks', 'brush', 'build']
+
+// Why the season cannot wait for this order, or '': spraying under a blight watch, planting, hauling ahead of a
+// frost, and digging late in the season.
+export function pressingWhy(c: Campaign, s: Season, job: Job): string {
+  const f = job.field >= 0 ? s.fields[job.field] : null
+  switch (job.kind) {
+    case 'spray': return s.watchDay >= 0 && f && f.deadDay < 0 ? 'blight weather will not wait' : ''
+    case 'plant': return 'the planting season is short'
+    case 'haul': return s.frostHaul === s.day ? 'a frost is coming on the barrels' : ''
+    case 'dig': return s.day >= dayIndex(s.year, P.PICKERS_FROM.month, P.PICKERS_FROM.dom) ? 'the ground freezes before long' : ''
+  }
+  return ''
+}
+
+function stoppedToday(s: Season, job: Job): boolean {
+  return job.kind === 'dig' && (s.digStop ?? []).includes(job.field)
+}
+
+export function waitable(kind: JobKind): boolean {
+  return WAITABLE.includes(kind)
 }
 
 // Drives toward the crew's destination with what is left of its day. True once it is there.
@@ -693,7 +726,9 @@ function work(world: World, c: Campaign, s: Season, t: Turn, job: Job, d: Day, o
   }
   if (u.rig === 'tractor') t.tractor = true
   const rate = workRate(c, s, u, job)
-  const use = Math.min(t.left * rate, job.need - job.done)
+  const cap = job.kind === 'dig' ? digCap(c, s, t, job, rate) : t.left
+  if (job.kind === 'dig' && cap < 0.05 && cap < t.left) { stopDig(c, s, u, job, out); return }
+  const use = Math.min(cap * rate, job.need - job.done)
   const time = Math.min(t.left, use / rate)
   job.done += use
   t.left -= time
@@ -701,12 +736,36 @@ function work(world: World, c: Campaign, s: Season, t: Turn, job: Job, d: Day, o
   s.worked.push({ kind: job.kind, field: job.field, unit: u.id })
   if (job.kind === 'dig') digProgress(c, s, f, job.field, job, d, u)
   if (job.kind === 'fell' && fell(c, job.field, use, u)) job.done = job.need
+  if (job.kind === 'dig' && cap < t.left + time - EPS && job.done < job.need - 1e-6) { stopDig(c, s, u, job, out); return }
   if (job.done >= job.need - 1e-6) {
     const k = s.jobs.indexOf(job)
     if (k >= 0) s.jobs.splice(k, 1)
     letGo(u)
     completeJob(world, c, s, job, d, out, u)
   }
+}
+
+// With a frost forecast tonight and nobody else to haul, the share of the day left for digging so that the rest of it
+// hauls in everything in the field's barrels: the dug crop comes in before the night.
+function digCap(c: Campaign, s: Season, t: Turn, job: Job, rate: number): number {
+  const f = s.fields[job.field]
+  if (s.frostLow === undefined || s.frostLow + P.FROST_OFFSET[c.fields[job.field].elev] * 0.7 > P.FREEZE_IN_FIELD + P.DIG_FROST_MARGIN) return t.left
+  const u = t.u
+  const haulers = c.crew.filter(o => o !== u && !o.foreman && willDo(o, 'haul') && !hurt(o, s.day) && !resting(o)).length
+  if (haulers > 0 && tractorsRunning(c, s.day) + (c.upgrades.truck ? 1 : 0) >= 2) return t.left
+  const lot = f.lotId >= 0 ? c.lots.find(l => l.id === f.lotId) : undefined
+  const lifted = lot ? lotCwt(lot) + lot.sold + lot.grades.cull : 0
+  const perDay = (job.done > 0 && lifted > 0 ? lifted / job.done : P.DIG_CWT_GUESS) * rate
+  const h = haulRate(c, u, job.field, c.upgrades.truck ? 'truck' : 'tractor')
+  const free = t.left - f.inField / h
+  return Math.max(0, free * h / (perDay + h))
+}
+
+function stopDig(c: Campaign, s: Season, u: Unit, job: Job, out: GameEvent[]): void {
+  letGo(u)
+  if ((s.digStop ?? []).includes(job.field)) return
+  s.digStop = [...(s.digStop ?? []), job.field]
+  push(s, out, 'digWait', job.field, 'info', `${u.name} stops digging ${placeName(job.field)} for today: a frost is forecast tonight, and what is dug has to be hauled in first.`, { unit: u.id, job: job.id })
 }
 
 // A day's hauling: barrels from the field to the nearest potato house, as much as the rest of the day allows. When
@@ -753,6 +812,23 @@ function buildDay(world: World, c: Campaign, s: Season, t: Turn, job: Job, _d: D
 }
 
 function choose(c: Campaign, s: Season, u: Unit, d: Day, out: GameEvent[]): { job: Job; rig: Rig } | null {
+  const pick = byPriority(c, s, u, d, out)
+  if (pick && !waitable(pick.job.kind)) return pick
+  for (const job of [...s.jobs]) {
+    if (waitable(job.kind) || !mayTake(u, job) || heldByOther(c, job, u) || stoppedToday(s, job) || !pressingWhy(c, s, job)) continue
+    if (!stillWanted(c, s, job, out)) continue
+    const rig = rigFor(c, s, u, job)
+    if (waitFor(c, s, job, d) || rig === null) continue
+    if (pick && !(s.pressed ?? []).includes(u.id)) {
+      s.pressed = [...(s.pressed ?? []), u.id]
+      push(s, out, 'pressing', job.field, 'info', `${u.name} leaves ${pick ? JOB_LABEL[pick.job.kind].toLowerCase() : 'what they were set to'} for ${JOB_LABEL[job.kind].toLowerCase()} in ${placeName(job.field)}: ${pressingWhy(c, s, job)}.`, { unit: u.id, job: job.id })
+    }
+    return { job, rig }
+  }
+  return pick
+}
+
+function byPriority(c: Campaign, s: Season, u: Unit, d: Day, out: GameEvent[]): { job: Job; rig: Rig } | null {
   for (let level = 1; level <= P.PRIORITY_MAX; level++) {
     let any = false
     for (const k of P.SKILLS) if (u.prio[k] === level) any = true
@@ -761,7 +837,7 @@ function choose(c: Campaign, s: Season, u: Unit, d: Day, out: GameEvent[]): { jo
     let k = 0
     while (k < s.jobs.length && cands.length < P.PICK_WINDOW) {
       const job = s.jobs[k]
-      if (u.prio[jobSkill(job.kind)] !== level || !mayTake(u, job) || heldByOther(c, job, u)) { k++; continue }
+      if (u.prio[jobSkill(job.kind)] !== level || !mayTake(u, job) || heldByOther(c, job, u) || stoppedToday(s, job)) { k++; continue }
       if (!stillWanted(c, s, job, out)) continue
       const rig = rigFor(c, s, u, job)
       if (!waitFor(c, s, job, d) && rig !== null) cands.push({ job, rig })
@@ -782,7 +858,7 @@ function choose(c: Campaign, s: Season, u: Unit, d: Day, out: GameEvent[]): { jo
 function turnsFor(c: Campaign, s: Season): Turn[] {
   if (!workday(c, s)) return []
   const turns: Turn[] = []
-  for (const u of c.crew) if (!u.foreman && !hurt(u, s.day)) turns.push({ u, left: 1, idle: false, spent: zeroSkills(), tractor: false })
+  for (const u of c.crew) if (!u.foreman && !hurt(u, s.day) && !resting(u)) turns.push({ u, left: 1, idle: false, spent: zeroSkills(), tractor: false })
   turns.sort((a, b) => turnBefore(a.u, b.u) ? -1 : turnBefore(b.u, a.u) ? 1 : 0)
   return turns
 }
@@ -898,7 +974,15 @@ function peopleDay(c: Campaign, s: Season, turns: Turn[], out: GameEvent[]): voi
     const tire = P.TIRE_PER_DAY * (u.trait === 'tireless' ? P.TIRELESS : 1)
     const wasTired = u.tired
     u.tired = Math.max(0, Math.min(1, u.tired + tire * used - P.REST_PER_DAY * (1 - used)))
-    if (wasTired < 0.85 && u.tired >= 0.85) push(s, out, 'wornOut', -1, 'warn', `${u.name} is worn out: slower, and liable to get hurt on a machine or in the woods.`, { unit: u.id })
+    if (wasTired < P.HURT_TIRED && u.tired >= P.HURT_TIRED) {
+      push(s, out, 'wornOut', -1, 'warn', (u.rest ?? 'auto') === 'push'
+        ? `${u.name} is worn out and told to work on: slower, and liable to get hurt on a machine or in the woods.`
+        : `${u.name} is worn out and will rest tomorrow, before anyone gets hurt.`, { unit: u.id })
+    }
+    if (u.rest === 'now' && u.tired < P.REST_UNTIL) {
+      u.rest = 'auto'
+      push(s, out, 'rested', -1, 'info', `${u.name} is rested and back at work tomorrow.`, { unit: u.id })
+    }
     const target = moodTarget(c, u, fieldsIn)
     let pull = P.MOOD_PULL
     if (u.trait === 'hothead' && u.tired > P.MOOD_TIRED_FROM && target < u.mood) pull *= P.HOTHEAD_FALL
@@ -1247,6 +1331,9 @@ export function stepDay(world: World, c: Campaign): GameEvent[] {
   }
 
   morning(c, s, out)
+  sweep(c, s, out)
+  s.pressed = []
+  s.digStop = []
   const { turns, minded } = runCrews(world, c, s, d, out)
   contractors(c, s, out)
   if (minded) standSales(world, c, s)

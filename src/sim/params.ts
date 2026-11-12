@@ -340,6 +340,8 @@ export const BREAK_DAYS = 3                    // days out waiting for the part
 export const MECHANIC = 7                      // with someone this good at machine work on the farm, a day out
 export const RUSH_PART = 450                   // dollars: a rush part, back in a day
 export const HURT_TIRED = 0.85                 // working tired above this in the woods or on a machine risks an injury
+// Someone told to rest is back at work once rested below this.
+export const REST_UNTIL = 0.3
 export const HURT_CHANCE = 0.05                // a day, while that tired
 export const HURT_DAYS = [5, 10]               // days out, at least and at most
 export const BUYER_CHANCE = 0.01               // a day from August on with a weighed lot of 100 cwt or more
@@ -407,6 +409,15 @@ export const ROUTINE_DEFAULT: Record<RoutineKind, boolean> = {
 }
 // Hauling comes first when the night at the field is forecast this cold, or a frost this likely.
 export const FROST_HAUL_C = 0
+// The one planting rule: the field's own soil at this, C (50 F); below the rot line (45 F) seed rots.
+export const PLANT_SOIL_C = 10
+export const PLANT_ROT_C = 7.2
+// Cwt a dig lifts for each day of digging done, before the first barrels show what this field gives.
+export const DIG_CWT_GUESS = 750
+// A lone hauler holds the dig back when tonight's forecast low at the field is within this of freezing the barrels.
+export const DIG_FROST_MARGIN = 1
+// Share of the estimated crop that sells at the No. 1 price, for the farm's standing with a crop still in the ground.
+export const MARKETABLE_SHARE = 0.85
 // Reference practice digs a crop whose vines are still up from this date, so it is in before the freeze-up.
 export const DIG_GREEN = { month: 9, dom: 5 }   // October 5
 export const FROST_HAUL_CHANCE = 40
