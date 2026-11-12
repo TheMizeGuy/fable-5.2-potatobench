@@ -257,11 +257,11 @@ export const LESSONS: Lesson[] = [
     ask: () => 'The crop is nearly made. Killing the vines stops the growth, so the skins toughen for digging.',
     why: l => {
       const day = crewKills(l)
-      if (day) return `The crew does it by itself on ${day}. Nothing for you to do.`
+      if (day) return `The crew does it by itself on ${day}. A stamp only does it sooner.`
       const i = needFor(l, 'kill')
       return i >= 0 ? `${click(l)} the stamp on ${name(i)} to order it.` : 'It is on the list: nothing for you to do.'
     },
-    point: l => { const i = needFor(l, 'kill'); return i >= 0 ? { badge: i } : null },
+    point: l => { const i = needFor(l, 'kill'); return i >= 0 && !crewKills(l) ? { badge: i } : null },
     skip: () => 'Skip to the dig',
   },
   {
