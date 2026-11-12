@@ -21,6 +21,6 @@ export default defineConfig({
     { name: 'chromium', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 }, launchOptions: { args: gl } } },
     { name: 'firefox', use: { ...devices['Desktop Firefox'], viewport: { width: 1440, height: 900 } } },
     { name: 'webkit', use: { ...devices['Desktop Safari'], viewport: { width: 1440, height: 900 } } },
-    { name: 'phone', testMatch: /play\.spec/, use: { ...devices['Pixel 7'], launchOptions: { args: gl } } },
+    { name: 'phone', testMatch: /(play|tutorial)\.spec/, use: { ...devices['Pixel 7'], launchOptions: { args: gl } } },
   ],
 })

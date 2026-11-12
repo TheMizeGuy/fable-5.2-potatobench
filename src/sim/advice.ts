@@ -1,15 +1,16 @@
 // Reference practice: what a careful Aroostook grower would do next, from what the grower can see.
 // The in-game coach shows it, and the reference bot follows it. It tends the fields the farm holds; it has nothing
 // to say about land, hiring or contracts.
-import { dayIndex } from './calendar.ts'
-import { PARCELS } from './farm.ts'
+import { dayIndex, withCommas } from './calendar.ts'
 import * as P from './params.ts'
 import { willDo } from './people.ts'
-import type { Campaign, JobKind, World } from './types.ts'
+import type { Campaign, GameEvent, JobKind, World } from './types.ts'
 import { fieldInfo, forecast, today } from './view.ts'
 import { openLots } from './campaign.ts'
 import { newPotatoWindow } from './market.ts'
-import { addJob, seasonDone, workday } from './season.ts'
+import { addJob, FIELD_NAMES, JOB_LABEL, letGo, seasonDone, standingBy, workday } from './season.ts'
+import { hasBuilt } from './buildings.ts'
+import { forecastFor } from './weather.ts'
 
 export interface Advice {
   id: string
@@ -24,6 +25,11 @@ export interface Advice {
 function f1(c: number): number { return Math.round(c * 9 / 5 + 32) }
 
 export function advise(world: World, c: Campaign): Advice[] {
+  return withinReach(c, everything(world, c))
+}
+
+// Everything reference practice would do now, before the cap on what the crews can get round to.
+function everything(world: World, c: Campaign): Advice[] {
   const s = c.season
   if (c.phase !== 'season' || !s) return []
   const out: Advice[] = []
@@ -101,6 +107,14 @@ export function advise(world: World, c: Campaign): Advice[] {
             : 'The crop is made. Kill the vines so the skins set.'
         add(i, 'kill', `Kill the vines in ${n}.`, why, blightWinning)
       }
+      // Vines still up this late will not leave time for the skins to set before the ground freezes: dig them green.
+      if (s0.tiDay >= 0 && s.day >= dayIndex(year, P.DIG_GREEN.month, P.DIG_GREEN.dom) && !queued('kill', i)) {
+        add(i, 'dig', `Dig ${n} with the vines up.`, 'It is too late for the skins to set before the freeze-up. Thin skins keep badly, but frozen tubers do not keep at all.', true)
+      }
+    }
+    if ((f.status === 'digging' || f.status === 'dug') && f.inField >= 0.5 && !f.weighed) {
+      const frost = frostOnBarrels(world, c, i)
+      add(i, 'haul', `Haul the crop in from ${n}.`, frost ? `A frost is forecast: ${Math.round(f.inField)} cwt in barrels would lose a fifth of itself in the night.` : `${Math.round(f.inField)} cwt is in barrels in the field. Until it is in, frost and sun take some of it.`, frost)
     }
     if (f.status === 'dead') {
       if (f.skin >= 1 || hardFrostNear) {
@@ -123,8 +137,14 @@ export function advise(world: World, c: Campaign): Advice[] {
     add(-1, 'close', 'Close out the season.', 'Everything is in. The cellar is next.', true)
   }
   out.sort((a, b) => Number(b.urgent) - Number(a.urgent))
-  // No more of any job than the crews could get round to: as many fields at once as the home farm has, for each
-  // crew able to do it, counting what is already on the list. The most urgent come first, then the fields in order.
+  return out
+}
+
+// No more of any job than the crews could get round to: as many fields at once as the home farm has, for each
+// crew able to do it, counting what is already on the list. The most urgent come first, then the fields in order.
+function withinReach(c: Campaign, out: Advice[]): Advice[] {
+  const s = c.season
+  if (!s) return out
   const room = new Map<JobKind, number>()
   return out.filter(a => {
     if (a.act === 'wait' || a.act === 'sell' || a.act === 'close') return true
@@ -141,25 +161,75 @@ export function advise(world: World, c: Campaign): Advice[] {
   })
 }
 
-// Each working morning a foreman puts on the list the orders reference practice wants for the held fields of their
-// block. The player can still order and cancel there.
-export function foremanOrders(world: World, c: Campaign): void {
+const MACHINE_WORK: JobKind[] = ['plant', 'hill', 'spray', 'water', 'kill', 'dig']
+
+// Whether a frost is forecast tonight cold enough to reach the barrels in this field: the forecast the farm had
+// yesterday for today, at the field's own frost offset.
+export function frostOnBarrels(world: World, c: Campaign, field: number): boolean {
   const s = c.season
-  if (c.phase !== 'season' || !s || s.frozen || !workday(c, s)) return
-  const blocks = new Set<string>()
-  for (const u of c.crew) if (u.foreman) blocks.add(u.foreman)
-  if (!blocks.size) return
-  for (const a of advise(world, c)) {
-    if (a.field < 0 || a.act === 'wait' || a.act === 'sell' || a.act === 'close') continue
-    if (blocks.has(PARCELS[a.field].block)) addJob(c, a.act, a.field)
-  }
+  if (!s) return false
+  const f = forecastFor(world, c.seed, s.year, s.day, 1, hasBuilt(c, 'station') ? P.STATION_ERROR : 1)
+  return f.frostChance >= P.FROST_HAUL_CHANCE || f.lo + P.FROST_OFFSET[c.fields[field].elev] * 0.7 <= P.FROST_HAUL_C
 }
 
-// For each field: what reference practice wants done there now (need), or why it is leaving the field alone (hold).
+// Each working morning the farm's standing orders put on the list what reference practice wants, for the kinds of work
+// the routine does by itself, on every held field; a foreman does every kind on their block, the calls included. The
+// player can still order, cancel and bump. Ahead of a frost, the crop in the barrels is hauled first, and the morning
+// says so.
+export function standingOrders(world: World, c: Campaign): GameEvent[] {
+  const s = c.season
+  const out: GameEvent[] = []
+  if (c.phase !== 'season' || !s || s.frozen) return out
+  // A frost coming on crop in barrels is hauled ahead of, Sunday or not; the morning says so once for a cold spell.
+  const threatened = s.fields.some((f, i) => f.inField >= 0.5 && !f.weighed && frostOnBarrels(world, c, i))
+  const first = threatened && s.frostHaul !== s.day - 1
+  if (threatened) s.frostHaul = s.day
+  if (!workday(c, s)) return out
+  for (const a of advise(world, c)) {
+    if (a.field < 0 || a.act === 'wait' || a.act === 'sell' || a.act === 'close') continue
+    const by = standingBy(c, a.act, a.field)
+    if (by) addJob(c, a.act, a.field, -1, by)
+  }
+  const cold: string[] = []
+  for (let i = 0; i < P.FIELD_COUNT; i++) {
+    const f = s.fields[i]
+    if (f.inField < 0.5 || f.weighed || !frostOnBarrels(world, c, i)) continue
+    cold.push(`${withCommas(f.inField)} cwt in ${FIELD_NAMES[i]}`)
+    const k = s.jobs.findIndex(j => j.kind === 'haul' && j.field === i)
+    if (k > 0 && standingBy(c, 'haul', i)) s.jobs.unshift(...s.jobs.splice(k, 1))
+  }
+  if (cold.length) {
+    // Whoever is on other machine work leaves it for the barrels; the work done stays with the order.
+    for (const u of c.crew) {
+      const j = u.job >= 0 ? s.jobs.find(x => x.id === u.job) : undefined
+      if (j && j.kind !== 'haul' && MACHINE_WORK.includes(j.kind) && s.jobs.some(x => x.kind === 'haul' && standingBy(c, 'haul', x.field))) letGo(u)
+    }
+    if (first) {
+      const e: GameEvent = { day: s.day, type: 'frostBarrels', field: -1, level: 'warn',
+        text: `Frost is forecast on the crop still in barrels: ${cold.join(', ')}. Hauling it in comes first, Sundays too, until it is in.` }
+      s.log.push(e)
+      out.push(e)
+    }
+  }
+  return out
+}
+
+// For each field: what reference practice wants of the player now (need), or why it is leaving the field alone
+// (hold). Work the routine or a foreman puts on the list by itself is no need, unless nobody on the farm will do it.
 export function fieldNeeds(world: World, c: Campaign): { need: Advice | null; hold: Advice | null }[] {
-  const all = advise(world, c)
-  return c.fields.map((_, i) => ({
-    need: all.find(a => a.field === i && a.act !== 'wait') ?? null,
-    hold: all.find(a => a.field === i && a.act === 'wait') ?? null,
-  }))
+  const raw = everything(world, c)
+  const all = withinReach(c, raw)
+  const job = (a: Advice) => a.field >= 0 && a.act !== 'wait' && a.act !== 'sell' && a.act !== 'close'
+  const nobody = (kind: JobKind) => !c.crew.some(u => willDo(u, kind))
+  return c.fields.map((_, i) => {
+    const mine = all.filter(a => a.field === i)
+    const need = mine.find(a => a.act !== 'wait' && !(job(a) && standingBy(c, a.act as JobKind, i)))
+      ?? raw.filter(a => a.field === i && job(a) && standingBy(c, a.act as JobKind, i) && nobody(a.act as JobKind))
+        .map(a => ({ ...a, why: `${a.why} Nobody on the farm will do ${JOB_LABEL[a.act as JobKind].toLowerCase()}: set someone's priority for it.` }))[0]
+      ?? null
+    const auto = mine.find(a => job(a) && standingBy(c, a.act as JobKind, i))
+    const hold = mine.find(a => a.act === 'wait')
+      ?? (auto ? { ...auto, act: 'wait' as const, text: `${JOB_LABEL[auto.act as JobKind]} goes on the list by itself.`, why: `The crew sees to it: ${auto.why}`, urgent: false } : null)
+    return { need: need ?? null, hold }
+  })
 }

@@ -3,6 +3,7 @@ import {
   apply, climateWorld, createCampaign, fieldInfo, fieldNeeds, isFarmYear, seasonDone, startYears, FARM_YEAR0,
   type Advice, type Campaign, type Cmd, type GameEvent, type JobKind, type Phase, type Result, type World,
 } from '../sim/index.ts'
+import type { Pointing, Thing } from './contracts.ts'
 import { neighborYear } from './neighbor.ts'
 import { clearSave, parseSave, readSave, readSettings, serialize, writeSave, writeSettings, type SaveFile } from './save.ts'
 
@@ -47,6 +48,9 @@ export type AppEvent =
   | { type: 'select'; field: number; fields: number[] }
   | { type: 'hover'; field: number }
   | { type: 'unit'; unit: number }
+  | { type: 'point' }
+  | { type: 'notice'; text: string }
+  | { type: 'inspect' }
   | { type: 'yard'; yard: number }
   | { type: 'focus'; field: number }
   | { type: 'order'; kind: JobKind; fields: number[] }
@@ -58,7 +62,7 @@ export type AppEvent =
 
 // A card that needs an answer stops the clock whatever the settings say: a crop weighed in (sell or store), an
 // incident that asks for an answer, the freeze. Nothing else changes the speed the player set.
-const STOP_FOR = new Set(['weighed', 'incident', 'freeze'])
+const STOP_FOR = new Set(['weighed', 'incident', 'freeze', 'frostBarrels'])
 // Events worth an alert even though they are not warnings.
 const NOTABLE = new Set([
   'dug', 'weighed', 'sample', 'skinSet', 'emerged', 'ti', 'mature', 'watch',
@@ -79,6 +83,11 @@ export class App {
   hover = -1
   // The person the player has picked to give orders to, or -1 for whoever is free.
   unit = -1
+  // Where that person was picked: on the land (their card opens beside them) or from a list (the time book).
+  unitFrom: 'land' | 'list' = 'list'
+  // What the pointer is over on the land, and the thing (not a person, field or yard) last clicked there.
+  pointing: Pointing | null = null
+  thing: { thing: Thing; x: number; y: number } | null = null
   // The yard the player has selected to build in or look over: -1 the home yard, -2 the Dufour yard, 0 none.
   yard = 0
   speed: Speed = 0
@@ -229,7 +238,7 @@ export class App {
     if (!r.ok) return r
     if (cmd.t === 'next') this.meetNeighbor()
     // The last question answered, however it was answered: the days go on at the speed they had.
-    if (cmd.t === 'answer' && !c.incidents.length) this.resumeAfterCard()
+    if (cmd.t === 'answer' && !c.incidents.length) { this.holding = ''; this.resumeAfterCard() }
     this.dirty = true
     this.revision++
     for (const e of r.events) if (e.level !== 'info' || NOTABLE.has(e.type)) this.alert(c, e)
@@ -351,10 +360,32 @@ export class App {
   }
 
   // Picks a crew: orders given while it is picked go to that crew. -1 lets any free crew take them.
-  selectUnit(unit: number): void {
-    if (this.unit === unit) return
+  selectUnit(unit: number, from: 'land' | 'list' = 'list'): void {
+    if (this.unit === unit && (unit < 0 || this.unitFrom === from)) return
     this.unit = unit
+    this.unitFrom = from
+    if (unit >= 0) this.thing = null
     this.emit({ type: 'unit', unit })
+  }
+
+  // The pointer over the land: what is under it, for names and marks before a click.
+  point(p: Pointing | null): void {
+    const a = this.pointing
+    if (a === p || (a && p && a.unit === p.unit && a.field === p.field && a.yard === p.yard && a.thing?.kind === p.thing?.kind && a.thing?.k === p.thing?.k && Math.abs(a.x - p.x) < 1 && Math.abs(a.y - p.y) < 1)) return
+    this.pointing = p
+    this.emit({ type: 'point' })
+  }
+
+  // Something said back to the player about what they just did on the land (an order refused, and why).
+  notice(text: string): void {
+    this.emit({ type: 'notice', text })
+  }
+
+  // A thing on the land clicked (its name card opens beside it), or null to put that card away.
+  inspect(thing: Thing | null, x = 0, y = 0): void {
+    if (!thing && !this.thing) return
+    this.thing = thing ? { thing, x, y } : null
+    this.emit({ type: 'inspect' })
   }
 
   // Selects a yard (-1 home, -2 Dufour), where buildings are ordered; 0 clears. Fields and a yard are not held at once.
@@ -407,6 +438,13 @@ export class App {
   // Gives a field the order reference practice has for it now, if it has one.
   smartOrder(field: number): OrderResult {
     const need = this.needs()[field]?.need
+    // With someone picked, a field the routine is seeing to is theirs to go and do: its order on the list goes to them.
+    const c = this.campaign
+    const mine = !need && this.unit >= 0 && c?.season ? c.season.jobs.find(j => j.field === field && j.unit < 0 && j.by !== 'you') : undefined
+    if (mine && c) {
+      const r = this.do({ t: 'assign', id: mine.id, unit: this.unit })
+      return r.ok ? { field, ok: true, err: '' } : { field, ok: false, err: r.err }
+    }
     if (!need) return { field, ok: false, err: this.needs()[field]?.hold?.why ?? 'Nothing needs doing here now.' }
     if (need.act === 'sell' || need.act === 'close' || need.act === 'wait') return { field, ok: false, err: need.text }
     return this.order(need.act, { fields: [field] })[0]
@@ -414,7 +452,15 @@ export class App {
 
   // ---------------------------------------------------------------- the clock
 
+  // Why the clock may not run now (a card that wants an answer), or ''. Set by the interface.
+  holding = ''
+
   setSpeed(speed: Speed): void {
+    if (speed > 0 && this.holding) {
+      this.pauseReason = this.holding
+      this.emit({ type: 'speed', speed: this.speed })
+      return
+    }
     this.pauseReason = ''
     if (this.speed === speed) return
     this.speed = speed

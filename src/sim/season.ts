@@ -4,7 +4,7 @@ import { buildWork, hasBuilt, pondServes, rain30, travel, YARD_NAME } from './bu
 import { basePrice } from './market.ts'
 import { turnBefore } from './crew.ts'
 import { distance, DUFOUR_YARD, holdsDufourLand, HOME_FIELDS, HOME_YARD, PARCELS } from './farm.ts'
-import { gradeHill, newLot, finishLot, lotCwt } from './harvest.ts'
+import { ageLot, gradeHill, newLot, finishLot, lotCwt } from './harvest.ts'
 import { brushedNow, COVER_WORD, envTmin, fell, fellLeft, fieldEnv, isField, isOpen, standing, stoneBruise, stoneSpeed, stumped } from './land.ts'
 import * as P from './params.ts'
 import { breakdownChance, CHOICE_LABEL, defaultChoice, hurtChance, INCIDENT_TITLE, incidentText } from './incidents.ts'
@@ -13,7 +13,7 @@ import { hashUnit, nextInt, nextUnit } from './rng.ts'
 import {
   H_DECAYED, H_DUG, H_EMERGED, H_KNOWN, H_ROGUED, H_SAMPLED, H_SEEDBLIGHT, H_VIRUS, H_WILT,
   type Building, type Campaign, type Cause, type Day, type FieldSeason, type FieldStatus, type GameEvent, type Incident, type IncidentKind, type Job, type JobKind, type Lot,
-  type Rig, type Season, type Skill, type Unit, type World,
+  type JobBy, type Rig, type RoutineKind, type Season, type Skill, type Unit, type World,
 } from './types.ts'
 import { variety } from './varieties.ts'
 import { clamp, getDay, pDays, pUnit, skyOf, wallin } from './weather.ts'
@@ -93,7 +93,7 @@ export function startSeason(world: World, c: Campaign): void {
 }
 
 export function buildJob(s: Season, b: Building): Job {
-  return { id: s.nextJob++, kind: 'build', field: b.yard, done: b.done, need: b.need, unit: -1, building: b.id }
+  return { id: s.nextJob++, kind: 'build', field: b.yard, done: b.done, need: b.need, unit: -1, by: 'you', building: b.id }
 }
 
 function push(s: Season, out: GameEvent[], type: string, field: number, level: GameEvent['level'], text: string, data?: GameEvent['data']): void {
@@ -180,8 +180,13 @@ function block(c: Campaign, kind: JobKind, field: number, self: Job | null): str
     return b && buildable(c, b) ? '' : 'There is nothing left to build.'
   }
   if (kind === 'haul') {
-    if (!self) return 'Hauling goes on the list by itself as the digger lifts the crop.'
     const h = s.fields[field]
+    const barrels = !!h && !h.weighed && (h.status === 'digging' || h.status === 'dug') && h.inField >= 0.5
+    if (!self) {
+      if (s.jobs.some(j => j.kind === 'haul' && j.field === field)) return 'Already on the list.'
+      if (!barrels) return standingBy(c, 'haul', field) ? 'Hauling goes on the list by itself as the digger lifts the crop.' : 'There is nothing in barrels to haul.'
+      return ''
+    }
     return h && !h.weighed && (h.status === 'digging' || h.status === 'dug') ? '' : 'There is nothing left to haul.'
   }
   const f = s.fields[field]
@@ -305,12 +310,22 @@ export function unitBlock(c: Campaign, kind: JobKind, unit: number): string {
   return ''
 }
 
-export function addJob(c: Campaign, kind: JobKind, field: number, unit = -1): string {
+export function addJob(c: Campaign, kind: JobKind, field: number, unit = -1, by: JobBy = 'you'): string {
   const why = jobBlock(c, kind, field) || unitBlock(c, kind, unit)
   if (why) return why
   const s = c.season!
-  s.jobs.push({ id: s.nextJob++, kind, field, done: 0, need: jobDays(c, kind, s.fields[field], field), unit })
+  const job: Job = { id: s.nextJob++, kind, field, done: 0, need: jobDays(c, kind, s.fields[field], field), unit, by }
+  // The crop in the barrels comes in before anything else.
+  if (kind === 'haul') s.jobs.unshift(job)
+  else s.jobs.push(job)
   return ''
+}
+
+// Whether the routine (or a foreman, on their block) puts this kind of work on the list by itself for this field.
+export function standingBy(c: Campaign, kind: JobKind, field: number): JobBy | null {
+  const block = PARCELS[field]?.block
+  if (block && c.crew.some(u => u.foreman === block)) return 'foreman'
+  return (P.ROUTINE_KINDS as JobKind[]).includes(kind) && (c.routine?.[kind as RoutineKind] ?? P.ROUTINE_DEFAULT[kind as RoutineKind]) ? 'routine' : null
 }
 
 // A person lets go of the order they hold, and of the tractor or truck they were driving for it.
@@ -552,8 +567,9 @@ function digProgress(c: Campaign, s: Season, f: FieldSeason, field: number, job:
   f.digDone = upto
   // What the digger lifts goes into barrels in the field, and an order to haul it in goes to the top of the list.
   f.inField += lotCwt(lot) - before
-  if (f.inField >= 0.5 && !s.jobs.some(j => j.kind === 'haul' && j.field === field)) {
-    s.jobs.unshift({ id: s.nextJob++, kind: 'haul', field, done: 0, need: jobDays(c, 'haul', f, field), unit: -1 })
+  const by = standingBy(c, 'haul', field)
+  if (by && f.inField >= 0.5 && !s.jobs.some(j => j.kind === 'haul' && j.field === field)) {
+    s.jobs.unshift({ id: s.nextJob++, kind: 'haul', field, done: 0, need: jobDays(c, 'haul', f, field), unit: -1, by })
   }
 }
 
@@ -607,9 +623,9 @@ function rigFor(c: Campaign, s: Season, u: Unit, job: Job): Rig | null {
   return busy < tractorsRunning(c, s.day) ? 'tractor' : null
 }
 
-// Whether today is a working day: on a Sunday off nobody works.
+// Whether today is a working day: on a Sunday off nobody works, unless a frost is coming on crop still in barrels.
 export function workday(c: Campaign, s: Season): boolean {
-  return !(c.sundaysOff && weekday(s.year, s.day) === SUNDAY)
+  return s.frostHaul === s.day || !(c.sundaysOff && weekday(s.year, s.day) === SUNDAY)
 }
 
 // Why the weather holds up this order today, on its own field (building in a yard stops only for heavy rain).
@@ -1290,6 +1306,8 @@ export function stepDay(world: World, c: Campaign): GameEvent[] {
   }
   s.day++
   c.steps++
+  // The crop in the potato houses is charged and shrinks a night at a time.
+  for (const l of c.lots) if (l.open && l.year === s.year && s.fields[l.field]?.weighed) ageLot(c, l, s.day)
   return out
 }
 
@@ -1391,7 +1409,9 @@ function drawIncidents(c: Campaign, s: Season, turns: Turn[], out: GameEvent[]):
       }
     }
   }
-  if (!openKind(c, 'applicant') && u01(7300) < P.APPLICANT_CHANCE) {
+  c.heard ??= []
+  if (!openKind(c, 'applicant') && !c.heard.includes('applicant') && u01(7300) < P.APPLICANT_CHANCE) {
+    c.heard.push('applicant')
     const taken = new Set([...c.crew.map(u => u.name), ...c.applicants.map(a => a.name)])
     const a = applicantsFor(c.seed, s.year, taken, 1, s.day)[0]
     openIncident(c, s, out, { kind: 'applicant', until: s.day + P.INCIDENT_DAYS, choices: ['hire', 'pass'], applicant: { ...a, id: c.nextIncident } })
@@ -1399,20 +1419,26 @@ function drawIncidents(c: Campaign, s: Season, turns: Turn[], out: GameEvent[]):
   if (!openKind(c, 'poach') && u01(7400) < P.POACH_CHANCE) {
     let best: Unit | null = null, bestSum = -1
     for (const u of c.crew) {
-      if (u.kind === 'farmer') continue
+      if (u.kind === 'farmer' || c.heard.includes(`poach:${u.id}`)) continue
       let sum = 0
       for (const k of P.SKILLS) sum += u.skills[k]
       if (sum > bestSum) { best = u; bestSum = sum }
     }
-    if (best) openIncident(c, s, out, { kind: 'poach', until: s.day + P.INCIDENT_DAYS, choices: ['match', 'let'], unit: best.id, wage: Math.round(best.wage * (1 + P.POACH_RAISE)) })
+    if (best) {
+      c.heard.push(`poach:${best.id}`)
+      openIncident(c, s, out, { kind: 'poach', until: s.day + P.INCIDENT_DAYS, choices: ['match', 'let'], unit: best.id, wage: Math.round(best.wage * (1 + P.POACH_RAISE)) })
+    }
   }
   if (!openKind(c, 'buyer') && s.day >= dayIndex(s.year, P.BUYER_FROM.month, P.BUYER_FROM.dom) && u01(7500) < P.BUYER_CHANCE) {
     let best: Lot | null = null
     for (const l of c.lots) {
-      if (!l.open || l.year !== s.year || !s.fields[l.field]?.weighed || lotCwt(l) < P.BUYER_MIN_CWT) continue
+      if (!l.open || l.year !== s.year || !s.fields[l.field]?.weighed || lotCwt(l) < P.BUYER_MIN_CWT || c.heard.includes(`buyer:${l.id}`)) continue
       if (!best || lotCwt(l) > lotCwt(best)) best = l
     }
-    if (best) openIncident(c, s, out, { kind: 'buyer', until: s.day + P.BUYER_DAYS, choices: ['take', 'refuse'], lot: best.id })
+    if (best) {
+      c.heard.push(`buyer:${best.id}`)
+      openIncident(c, s, out, { kind: 'buyer', until: s.day + P.BUYER_DAYS, choices: ['take', 'refuse'], lot: best.id })
+    }
   }
 }
 

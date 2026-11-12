@@ -5,7 +5,8 @@ import type { Ctx } from './core.ts'
 import { h } from './dom.ts'
 import { icon } from './icons.ts'
 import { JOB_KEY, JOB_VERB, orderHelp } from './rules.ts'
-import { key, tag } from './system/parts.ts'
+import { fist, key, tag } from './system/parts.ts'
+import { openGuide } from './tutorial.ts'
 
 const REPO = 'https://github.com/TheMizeGuy/fable-5.2-potatobench'
 
@@ -87,6 +88,8 @@ export function openHelp(ctx: Ctx): void {
           h('span', { class: `need${ink ? ` ${ink}` : ''}`, 'aria-hidden': 'true' }, icon(glyph)), h('p', null, h('b', null, word), `: ${what}`)))),
         h('div', { class: 'year-row' }, YEAR.map(([b, t]) => h('div', null, h('b', null, b), t))),
         toggle, box,
+        h('button', { class: 'keys-fold how-guide', type: 'button', testid: 'how-guide', onclick: () => openGuide(ctx) },
+          fist(), h('b', null, 'The guided first year'), h('span', { class: 'quiet' }, 'each lesson, to see again'), h('span', { class: 'chev', 'aria-hidden': 'true' }, '›')),
         h('p', { class: 't-caption howto-foot' }, 'Every farm gets seasons of its own, and the forecast is all you see of them ahead. ',
           h('a', { class: 'btn quiet', href: REPO, target: '_blank', rel: 'noopener' }, 'The County on GitHub'), '.'))
     },

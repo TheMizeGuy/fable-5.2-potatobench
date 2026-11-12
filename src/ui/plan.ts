@@ -12,6 +12,7 @@ import * as R from './rules.ts'
 import { cardHead, fieldCost, landCard, springFolds, tenureRow, tractCard, type Fold } from './spring.ts'
 import { fold } from './system/parts.ts'
 import { topBar } from './top.ts'
+import { holdsClock, springSlot } from './tutorial.ts'
 
 function varietyTraits(v: S.Variety, c: S.Campaign, world: S.World): string[] {
   return [
@@ -86,7 +87,7 @@ function openMoney(ctx: Ctx): void {
   const nb = y ? app.world.neighbor[String(y.year)] : undefined
   const growing = y ? y.costs - y.wages - y.rent - y.land - y.penalties - y.storage - y.mortgage - y.works - y.building - y.packing : 0
   ctx.papers.open({
-    title: `The money, ${R.yearName(c.year)}`,
+    title: `The money, ${R.yearName(S.yearNow(c))}`,
     kicker: 'The order blank in full',
     testid: 'money',
     size: 'medium',
@@ -149,7 +150,7 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
   const rows = h('div', { class: 'cat-folds' })
   const foot = h('footer', { class: 'order-blank' })
   const body = h('div', { class: 'cat-body', 'data-scroll': 'spring' }, rows, track.el)
-  const sheet = h('section', { class: 'catalogue sheet sys', 'aria-label': 'The spring plan', testid: 'spring' }, mast, body, foot)
+  const sheet = h('section', { class: 'catalogue sheet sys', 'aria-label': 'The spring plan', testid: 'spring' }, mast, body, springSlot(), foot)
   const notesSlot = h('div', { class: 'notes-slot' })
   const el = h('main', { class: 'spring-screen sys' }, top.el, notesSlot, card, sheet)
   // Every fold starts shut: a newcomer's first spring is a short sheet (e2e/play.spec.ts), each fold one click away.
@@ -179,9 +180,11 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
   }
 
   function begin(): void {
+    const held = holdsClock(app.campaign)
     const r = ctx.run({ t: 'begin' })
     if (!r.ok) return
-    app.setSpeed(1)
+    // The guided first season waits for its lesson on the clock.
+    if (!held) app.setSpeed(1)
   }
 
   function toggle(id: Fold): void {
@@ -217,7 +220,7 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
       said: `${S.FIELD_NAMES[i]} ${potato ? v.name : 'Rest year'}: ${key ? `key ${key}, ` : ''}${rented ? 'rented, ' : ''}${potato ? `on ${p.seed} seed` : 'in oats and clover'}, ${F.money(fieldCost(p))}.`,
     }
   }
-  const P = plates(ctx, plateLayer, { model: plateModel, onBadge: () => {} })
+  const P = plates(ctx, plateLayer, { model: plateModel, onBadge: () => {}, covers: () => card.hidden ? [] : [card.getBoundingClientRect()] })
 
   // A variety as a printed box to tick: its name, how it matures and yields, its price; what else it is like is said
   // to a screen reader, and in full on the comparison sheet.
@@ -386,7 +389,8 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
         const low = card.hidden ? s.top : Math.min(s.top, card.getBoundingClientRect().top)
         return [t, 0, innerHeight - low + 8, 0]
       }
-      return [t, innerWidth - s.left + 8, 0, card.hidden ? 0 : card.getBoundingClientRect().right + 8]
+      // The card opening on a click never moves the camera: only the sheet, which always stands, frames the land.
+      return [t, innerWidth - s.left + 8, 0, 0]
     },
     frame: () => P.frame(),
     dispose() { P.dispose() },

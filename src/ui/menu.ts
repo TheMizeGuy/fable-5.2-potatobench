@@ -39,7 +39,7 @@ const TIER_WORD = { high: 'full detail', medium: 'medium detail', low: 'low deta
 
 // The menu (design/menu.html): the office file open over the live land, the menu on its left page and the settings on
 // its right. From the title it holds the settings and the save.
-export function openMenu(ctx: Ctx, o: { onHelp: () => void; onAlmanac: () => void }): void {
+export function openMenu(ctx: Ctx, o: { onHelp: () => void; onAlmanac: () => void; onGuide?: () => void }): void {
   const app = ctx.app
   const set = app.settings
   const toggle = (key: 'sound' | 'reducedMotion' | 'hints' | 'pauseOnAlerts', label: string, hint: string) => {
@@ -111,6 +111,7 @@ export function openMenu(ctx: Ctx, o: { onHelp: () => void; onAlmanac: () => voi
           h('button', { class: 'btn wide', type: 'button', testid: 'save-export', disabled: !c, onclick: exportSave }, icon('save', 'i'), 'Save a copy'),
           h('button', { class: 'btn wide', type: 'button', testid: 'save-import', onclick: () => file.click() }, icon('ticket', 'i'), 'Load a saved farm'),
           h('button', { class: 'btn wide', type: 'button', testid: 'how-open', onclick: () => o.onHelp() }, icon('key', 'i'), 'How to play'),
+          o.onGuide ? h('button', { class: 'btn wide', type: 'button', testid: 'guide-open', onclick: () => o.onGuide!() }, icon('fist', 'i'), 'The guided first year') : null,
           season && !S.seasonDone(c!) ? h('button', { class: 'btn wide hazard', type: 'button', testid: 'end-season-early', onclick: () => { close(); endSeasonEarly(ctx) } }, icon('skip', 'i'), 'End the season early') : null,
           inGame ? h('button', { class: 'btn wide', type: 'button', testid: 'quit-title', onclick: () => { close(); app.quitToTitle() } }, icon('letgo', 'i'), 'Quit to the title') : null,
           h('button', { class: 'btn wide quiet menu-delete', type: 'button', testid: 'save-delete', disabled: !app.savedGame() && !c, onclick: deleteSave }, 'Delete the save')),

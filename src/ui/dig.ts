@@ -482,7 +482,7 @@ function sellOrKeep(ctx: Ctx, c: S.Campaign, lot: S.Lot): HTMLElement[] {
   const v = S.variety(lot.variety)
   const m = R.sproutMonth(lot.year, lot.dugDay, lot.variety, c.upgrades.vent)
   return [
-    h('p', null, `Today's price for ${v.name}: ${F.price(S.basePrice(world, c, lot.variety))} for US No. 1. This crop is worth `, h('strong', { class: 'num' }, F.money(S.lotValue(world, c, lot))), ' today.'),
+    h('p', null, `Today's price for ${v.name}: ${F.price(S.basePrice(world, c, lot.variety))} for US No. 1. Selling this crop today pays `, h('strong', { class: 'num' }, F.money(S.lotValue(world, c, lot))), `; ${R.storePhrase(S.storeOutlook(world, c, lot))}.`),
     ...(v.contract ? [h('p', null, R.contractText(v))] : [h('p', null, R.outlookText(c)), h('p', null, R.moodText(world, c))]),
     h('p', null, R.storageText(c, S.lotCwt(lot))),
     h('p', null, `Dug ${F.date(lot.year, lot.dugDay)}, this ${v.name} ${R.sproutText(m)}${m < S.CELLAR_MONTHS.length ? '. Sprouted potatoes sell for 15% less and shrink faster' : ''}.`),
@@ -866,7 +866,7 @@ export function ticket(ctx: Ctx, lotId: number, o: { fresh: boolean; staged?: bo
           h('div', { class: 'tk-net' },
             h('p', { class: 'net' }, net, h('span', { class: 'unit' }, F.massUnit(), h('br'), sold ? 'sold' : 'to sell')),
             h('div', { class: 'net-side' },
-              h('p', null, h('span', { class: 't-label' }, sold ? 'Sold for' : 'Worth today')),
+              h('p', null, h('span', { class: 't-label' }, sold ? 'Sold for' : 'Selling pays today')),
               h('p', null, worth),
               h('p', { class: 'quiet num' }, `${F.perArea(d.market / S.FIELD_ACRES)} · ${F.mass(d.cull)} culled`),
               est ? [
@@ -907,7 +907,8 @@ export function ticket(ctx: Ctx, lotId: number, o: { fresh: boolean; staged?: bo
         const stand = S.hasBuilt(c, 'stand') && newest?.id === lot.id
           ? `The farm stand sells about ${F.mass(S.STAND_CWT)} a day of this crop at twice the market price${s0 && s0.day < S.dayIndex(c.year, S.STAND_FROM.month, S.STAND_FROM.dom) ? ', from August 1' : ''}, while it is the newest in.`
           : ''
-        const best = deal && deal.pays >= deal.market - 0.5 ? 'deliver' : advice || v.contract || !keepGains(c, lot, now) ? 'sell' : 'store'
+        const outlook = S.storeOutlook(app.world, c, lot)
+        const best = deal && deal.pays >= deal.market - 0.5 ? 'deliver' : advice || !outlook.best || outlook.best.net <= now + 0.5 ? 'sell' : 'store'
         let n = 0
         const k = () => String(++n)
         const list: Way[] = []
@@ -927,7 +928,7 @@ export function ticket(ctx: Ctx, lotId: number, o: { fresh: boolean; staged?: bo
         const storeWay = add(coupon({
           icon: 'store', label: delivered ? 'Store the rest' : fresh ? 'Store it' : 'Keep it stored', take: 'Store', key: k(), best: best === 'store',
           amount: [h('span', { 'aria-hidden': 'true' }, `−${F.money(month).replace('−', '')}`, h('small', null, '/mo')), h('span', { class: 'sr' }, `Storing costs ${F.money(month)} a month.`)],
-          does: `${F.upper(R.aprilPhrase(c, v))}; it ${R.sproutText(m)}.`,
+          does: `${F.upper(R.storePhrase(outlook))}. It ${R.sproutText(m)}.`,
           testid: `lot-keep-${lot.id}`,
           onclick: e => { if (busy) return; answered = true; if (fresh) ctx.say(`${F.mass(S.lotCwt(lot))} from ${name} went into the cellar.`, 'info'); tear(e.currentTarget as HTMLElement, close) },
         }))
@@ -1023,20 +1024,4 @@ export function ticket(ctx: Ctx, lotId: number, o: { fresh: boolean; staged?: bo
       return root
     },
   }
-}
-
-// Whether keeping the crop to April usually pays after storage and shrink, by the season's usual price curve.
-function keepGains(c: S.Campaign, lot: S.Lot, now: number): boolean {
-  const day = c.season?.day ?? -1
-  const curve = S.SEASON_CURVE
-  let today = S.MONTH_CURVE[Math.min(c.month, S.MONTH_CURVE.length - 1)]
-  if (c.phase === 'season' && day >= 0) {
-    today = curve[curve.length - 1][1]
-    if (day <= curve[0][0]) today = curve[0][1]
-    else for (let i = 1; i < curve.length; i++) if (day <= curve[i][0]) { today = curve[i - 1][1] + ((day - curve[i - 1][0]) / (curve[i][0] - curve[i - 1][0])) * (curve[i][1] - curve[i - 1][1]); break }
-  }
-  const months = c.phase === 'season' ? 6 : Math.max(0, 5 - c.month)
-  const shrink = c.upgrades.vent ? S.SHRINK_VENT : S.SHRINK
-  const april = now * (S.MONTH_CURVE[5] / today) * (1 - shrink * months) - S.lotCwt(lot) * S.STORE_COST * months
-  return april > now
 }

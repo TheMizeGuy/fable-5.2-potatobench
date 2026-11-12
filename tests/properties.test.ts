@@ -55,6 +55,7 @@ const step: fc.Arbitrary<Step> = fc.oneof(
   { weight: 3, arbitrary: fc.record({ t: fc.constant('priorityPick' as const), k: fc.nat(8), work: fc.constantFrom(...S.SKILLS, 'golf'), level: fc.oneof(fc.integer({ min: -1, max: 5 }), fc.constant(1.5)) }) },
   { weight: 2, arbitrary: fc.record({ t: fc.constant('foremanPick' as const), k: fc.nat(8), block: fc.constantFrom('home', 'brook', 'ridge', 'dufour', 'moon', null) }) },
   { weight: 1, arbitrary: fc.record({ t: fc.constant('sundays' as const), off: fc.boolean() }) },
+  { weight: 2, arbitrary: fc.record({ t: fc.constant('routine' as const), kind: fc.constantFrom(...S.JOBS, 'haul' as const, 'build' as const), auto: fc.boolean() }) },
   { weight: 2, arbitrary: fc.record({ t: fc.constant('pickers' as const), on: fc.boolean() }) },
   { weight: 2, arbitrary: fc.record({ t: fc.constant('winterPick' as const), k: fc.nat(8), work: fc.constantFrom('off', 'woods', 'pack', 'build', 'golf'), field: index }) },
   { weight: 3, arbitrary: fc.record({ t: fc.constant('winterPick' as const), k: fc.nat(8), work: fc.constant('woods'), field: fc.constantFrom(...S.TRACTS) }) },
@@ -302,9 +303,11 @@ describe('random command sequences', () => {
         } else if (r.ok && s.t === 'build') {
           seen.buildOk++
           const spec = S.BUILDINGS[s.kind]
-          expect(close(logsBefore - c.logs, Math.min(logsBefore, spec.logs)), 'took its logs').toBe(true)
-          expect(close(stoneBefore - c.stone, Math.min(stoneBefore, spec.stone)), 'took its stone').toBe(true)
-          const bought = Math.max(0, spec.logs - logsBefore) * S.MILL_PRICE + Math.max(0, spec.stone - stoneBefore) * S.QUARRY_PRICE
+          // Whole loads only: a load still being cut stays in the yard.
+          const logsWhole = S.wholeLoads(logsBefore), stoneWhole = S.wholeLoads(stoneBefore)
+          expect(close(logsBefore - c.logs, Math.min(logsWhole, spec.logs)), 'took its logs').toBe(true)
+          expect(close(stoneBefore - c.stone, Math.min(stoneWhole, spec.stone)), 'took its stone').toBe(true)
+          const bought = Math.max(0, spec.logs - logsWhole) * S.MILL_PRICE + Math.max(0, spec.stone - stoneWhole) * S.QUARRY_PRICE
           expect(close(c.yearBuilding - buildMoney, spec.cash + bought), 'paid its cash and the bought materials').toBe(true)
         } else {
           expect(c.logs, `${JSON.stringify(s)} took logs`).toBeGreaterThanOrEqual(logsBefore - 1e-9)

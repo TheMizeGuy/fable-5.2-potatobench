@@ -1,6 +1,6 @@
 // Every tunable number in the simulation. docs/MODEL.md gives the source of each, or marks it invented.
 import { PARCELS } from './farm.ts'
-import type { BuildingKind, Cause, Due, Grade, JobKind, Skill, Trait, UnitKind, UpgradeId, VarietyId } from './types.ts'
+import type { BuildingKind, Cause, Due, Grade, JobKind, RoutineKind, Skill, Trait, UnitKind, UpgradeId, VarietyId } from './types.ts'
 
 export const SAVE_VERSION = 7
 
@@ -399,4 +399,15 @@ export const CELLAR_MONTHS = ['November', 'December', 'January', 'February', 'Ma
 
 export const CAUSES: Cause[] = ['green', 'scab', 'hollow', 'knob', 'skin', 'bruise', 'blight', 'frost', 'rot', 'small', 'stone']
 export const GRADES: Grade[] = ['no1', 'chef', 'b', 'no2', 'cull']
+// The farm's standing orders, in the order they are listed, and which are on in a new game: the routine work goes on
+// the list by itself; spraying, watering and killing the vines are the player's calls.
+export const ROUTINE_KINDS: RoutineKind[] = ['plant', 'hill', 'scout', 'rogue', 'sample', 'dig', 'haul', 'spray', 'water', 'kill']
+export const ROUTINE_DEFAULT: Record<RoutineKind, boolean> = {
+  plant: true, hill: true, scout: true, rogue: true, sample: true, dig: true, haul: true, spray: false, water: false, kill: false,
+}
+// Hauling comes first when the night at the field is forecast this cold, or a frost this likely.
+export const FROST_HAUL_C = 0
+// Reference practice digs a crop whose vines are still up from this date, so it is in before the freeze-up.
+export const DIG_GREEN = { month: 9, dom: 5 }   // October 5
+export const FROST_HAUL_CHANCE = 40
 export const JOBS: JobKind[] = ['plant', 'hill', 'scout', 'spray', 'water', 'rogue', 'sample', 'kill', 'dig', 'fell', 'rocks', 'brush']

@@ -93,6 +93,21 @@ export function gradeHill(c: Campaign, s: Season, f: FieldSeason, field: number,
   return out
 }
 
+// Charges storage and shrinks the pile for the time a lot has sat since it was last accounted for. In the season this
+// runs every night for the crop in the potato houses, so what a lot is worth today is what selling it today pays.
+export function ageLot(c: Campaign, lot: Lot, toDay: number): number {
+  const months = (toDay - lot.aged) / 30
+  if (months <= 0) return 0
+  const rent = lotCwt(lot) * P.STORE_COST * months
+  const keep = 1 - (c.upgrades.vent ? P.SHRINK_VENT : P.SHRINK) * months
+  lot.grades.no1 *= keep; lot.grades.chef *= keep; lot.grades.b *= keep; lot.grades.no2 *= keep; lot.skinned *= keep
+  lot.aged = toDay
+  c.cash -= rent
+  c.yearCosts += rent
+  c.yearStorage += rent
+  return rent
+}
+
 export function lotCwt(lot: Lot): number {
   return lot.grades.no1 + lot.grades.chef + lot.grades.b + lot.grades.no2 + lot.skinned
 }

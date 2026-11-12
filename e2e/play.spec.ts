@@ -139,13 +139,15 @@ test('a first season by the short path, from the opening to the next spring, wit
   // Start goes straight into a running game at 1x: no chip to dismiss, nothing more to press.
   expect((await look(page)).speed).toBe(1)
   await expect(page.getByTestId('paused')).toBeHidden()
-  // The first thing that needs doing arrives on the land. The clock keeps the speed it was given; a question that comes
-  // meanwhile is answered on its card, as a player would, and the clock goes on at 1x.
+  // Nothing has to be ordered: once the ground is fit the crew puts the planting on the list by itself. The clock keeps
+  // the speed it was given; a question that comes meanwhile is answered on its card, as a player would, and the clock
+  // goes on at 1x.
   await expect.poll(async () => {
     const s = await look(page)
     if (s.incidents) await answerIncident(page, false)
-    return s.badges.length
+    return game<number>(page, `c.season.jobs.filter(j => j.by === 'routine').length + c.season.worked.length`)
   }, { timeout: 240_000, intervals: [500] }).toBeGreaterThan(0)
+  expect(await game<number>(page, `c.season.jobs.filter(j => j.by === 'you').length`)).toBe(0)
   // An answer takes a frame to show on the clock.
   await expect.poll(async () => (await look(page)).paused).toBe(false)
   expect((await look(page)).speed).toBe(1)

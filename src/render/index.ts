@@ -2,7 +2,7 @@
 // Falls back to a flat drawing without WebGL.
 import { Color, Group, PCFShadowMap, Raycaster, Scene, Triangle, Vector2, Vector3, WebGLRenderer, type Object3D } from 'three'
 import { DAYS_PER_SECOND, type App } from '../game/app.ts'
-import type { CreateFieldView, FieldView } from '../game/contracts.ts'
+import type { CreateFieldView, FieldView, Thing } from '../game/contracts.ts'
 import { FIELD_COUNT, HILLS } from '../sim/index.ts'
 import { CameraRig, HOME_FIELD, MOVE_MS, type Pose, type TierName, type Viewport } from './camera.ts'
 import { Clearing } from './clearing.ts'
@@ -107,6 +107,11 @@ export const createFieldView: CreateFieldView = (canvas, app) => {
     fieldAnchor: i => inner.fieldAnchor(i),
     fieldCorners: i => inner.fieldCorners(i),
     unitAnchor: u => inner.unitAnchor(u),
+    unitFoot: u => inner.unitFoot(u),
+    thingAnchor: t => inner.thingAnchor(t),
+    thingAt: (x, y) => inner.thingAt(x, y),
+    follow: u => inner.follow(u),
+    home: () => inner.home(),
     yardAnchor: y => inner.yardAnchor(y),
     whenShown: (kind, field) => inner.whenShown(kind, field),
     dispose: () => inner.dispose(),
@@ -401,7 +406,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
         framing = 'farm'
         rig.moveTo(rig.farm(viewport()), reduced)
       }
-    } else if (e.type === 'insets') reframe(reduced)
+    } else if (e.type === 'insets' && snap.mode !== 'season') reframe(reduced) // in a season a card opening or closing never moves the camera
   })
 
   function display(f: number, h: number, s: Snapshot): HillDisplay {
@@ -466,13 +471,6 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       dayT = 0
       digDir.clear()
       for (const s of crews.segments()) if (s.kind === 'dig' && !digDir.has(s.field)) { const p = new Poly(s.path).at(0); digDir.set(s.field, { dx: p.dx, dz: p.dz }) }
-      // A key moment about to play where the player is not looking: bring the field into frame, unless their hand is on the camera.
-      const staged = crews.staged(prev)
-      if (staged && !reduced && app.speed < 3 && rig.idle > 2.5) {
-        const to = rig.field(staged.field, viewport(), rig.goal.yaw)
-        const far = Math.hypot(rig.cur.x - to.x, rig.cur.z - to.z) > FD * 0.8 || rig.cur.dist > to.dist * 1.3
-        if (far) frameField(staged.field, false)
-      }
     } else if (sameDay) {
       // A command in the middle of the day: keep the day playing, refresh everything not waiting to be revealed.
       crews.sync(next)
@@ -574,7 +572,14 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     const vp = viewport()
     return crews.pick(x, y, rig.camera, vp.w, vp.h, snap.mode === 'season' || app.unit >= 0)
   }
-  const input = attachInput(canvas, app, rig, viewport, pick, pickUnit, goHome, pickYard, i => frameField(i))
+  function thingAt(x: number, y: number): Thing | null {
+    if (snap.mode === 'title') return null
+    const vp = viewport()
+    return crews.pickThing(x, y, rig.camera, vp.w, vp.h)
+  }
+  // The person the camera keeps in the middle of the picture until the player moves it, or -1.
+  let following = -1
+  const input = attachInput(canvas, app, rig, viewport, pick, pickUnit, goHome, pickYard, i => frameField(i), thingAt)
 
   // The hour the scene is lit for. The day's own picture may be a morning (fog, a white frost, deep mist); days going
   // by quickly are never shown as mornings and stand in the plainer light of mid afternoon, and the light turns from
@@ -743,6 +748,14 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     for (let i = 0; i < FIELD_COUNT; i++) { terrain.held.value[i] = fields.held[i]; terrain.off.value[i] = fields.off[i]; terrain.avail.value[i] = fields.avail[i] }
     input.frame(dt)
     if (rig.idle < 0.2 && framing !== 'free') framing = 'free'
+    if (following >= 0) {
+      if (rig.idle < 0.2 || snap.mode === 'title') following = -1
+      else if (crews.anchor(following, far) && Math.hypot(rig.goal.x - far.x, rig.goal.z - far.z) > 1.5) {
+        const to = rig.complete({ x: far.x, z: far.z })
+        if (rig.moving()) rig.retarget(to)
+        else rig.moveTo(to, reduced, 700)
+      }
+    }
     if (snap.mode === 'title' && framing === 'title') {
       rig.level()
       if (!reduced && titleFixed < 0) titleClock += dt
@@ -945,6 +958,22 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     return crews.anchor(id, far) ? screenAt(far.x, far.y, far.z) : { x: 0, y: 0, visible: false }
   }
 
+  function unitFoot(id: number): { x: number; y: number; visible: boolean } {
+    return crews.anchor(id, far) ? screenAt(far.x, groundY(far.x, far.z) + 0.05, far.z) : { x: 0, y: 0, visible: false }
+  }
+
+  function thingAnchor(t: Thing): { x: number; y: number; visible: boolean } {
+    return crews.thingAt(t, far) ? screenAt(far.x, far.y, far.z) : { x: 0, y: 0, visible: false }
+  }
+
+  function follow(id: number): void {
+    following = id
+    if (id < 0) return
+    framing = 'free'
+    rig.idle = 99
+    if (crews.anchor(id, far)) rig.moveTo(rig.complete({ x: far.x, z: far.z, dist: Math.min(rig.goal.dist, rig.field(HOME_FIELD, viewport()).dist) }), reduced, 900)
+  }
+
   function yardAnchor(yard: number): { x: number; y: number; visible: boolean } {
     const p = YARD_AT[yard]
     return p ? screenAt(p.x, groundY(p.x, p.z) + 6.5 * S, p.z) : { x: 0, y: 0, visible: false }
@@ -1066,13 +1095,10 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       },
       // Where a crew is on the screen, for clicking it in checks.
       unitAt(id: number) {
-        const u = crews.where().units.find(x => x.id === id)
-        if (!u) return null
-        const at = unitAnchor(id)
-        const v = new Vector3(u.x, fieldBaseY(u.z) + 0.9, u.z).project(rig.camera)
-        const vp = viewport()
-        // on the body: half way between the ground under them and the point over their head
-        return { x: ((v.x + 1) / 2 * vp.w + at.x) / 2, y: ((1 - v.y) / 2 * vp.h + at.y) / 2 }
+        if (!crews.anchor(id, far)) return null
+        const at = screenAt(far.x, far.y, far.z), foot = screenAt(far.x, groundY(far.x, far.z) + 0.05, far.z)
+        // on the body, where they are drawn: half way between the ground under them and the point over their head
+        return { x: (foot.x + at.x) / 2, y: (foot.y + at.y) / 2 }
       },
       // Where the interface pins a person's face.
       unitPin: (id: number) => unitAnchor(id),
@@ -1149,6 +1175,11 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     fieldAnchor,
     fieldCorners,
     unitAnchor,
+    unitFoot,
+    thingAnchor,
+    thingAt,
+    follow,
+    home: goHome,
     yardAnchor,
     whenShown,
     dispose() {

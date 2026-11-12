@@ -20,6 +20,7 @@ import { plates, type PlateModel } from './plates.ts'
 import { hint as hintText, isJob, isStale, jobText, JOB_VERB, KEY_JOB, stageGlyph } from './rules.ts'
 import type { Ink } from './system/parts.ts'
 import { clock, topBar } from './top.ts'
+import { quietTips } from './tutorial.ts'
 import './season.css'
 
 const HINTS_KEY = 'the-county/hints'
@@ -79,6 +80,8 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   const trayHost = h('div', { class: 'tray-host sys' })
   const paused = h('p', { class: 'paused sys', testid: 'paused', hidden: true })
   const veil = h('div', { class: 'veil sys', hidden: true })
+  // The way back from a zoom, a pan or a tilt, always in the same place: what the Home key does.
+  const homeKey = h('button', { class: 'iconbtn view-home sys', type: 'button', testid: 'view-home', 'aria-label': 'Back to the whole farm (Home)', title: 'Back to the whole farm (Home)', onclick: () => ctx.view.home() }, icon('land', 'i'))
   let tray: { el: HTMLElement; field: number; day: number } | null = null
 
   const openTicket = (lot: number) => { const spec = ticket(ctx, lot, { fresh: false }); if (spec) ctx.papers.open(spec) }
@@ -87,7 +90,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   const yard = yardCard(ctx)
   const grid = workGrid(ctx)
   const incident = incidentCard(ctx)
-  const el = h('main', { class: 'season-screen' }, veil, top.el, paused, card.el, yard.el, person.el, grid.el, trayHost,
+  const el = h('main', { class: 'season-screen' }, veil, top.el, paused, homeKey, card.el, yard.el, person.el, grid.el, trayHost,
     h('div', { class: 'foot' }, h('div', { class: 'foot-book' }, crew, clockSlot), notesSlot), incident.el)
 
   // The selection drawn on the land: a dashed line round each selected field laid on its corners, a registration mark
@@ -205,7 +208,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   function warnFrost(): void {
     const c = app.campaign
     const s0 = c?.season
-    if (!c || !s0 || frostWarned === s0.day) return
+    if (!c || !s0 || frostWarned === s0.day || s0.log.some(e => e.type === 'frostBarrels' && e.day === s0.day)) return
     const worst = S.haulInfo(app.world, c).filter(x => x.frostChance >= 40).sort((a, b) => b.cwt - a.cwt)[0]
     if (!worst) return
     frostWarned = s0.day
@@ -221,7 +224,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   function updateHint(): void {
     const needs = app.needs()
     if (hint && (needs[hint.field]?.need?.act !== hint.kind || performance.now() - hint.at > HINT_MS || !app.settings.hints)) hint = null
-    if (!hint && app.settings.hints) {
+    if (!hint && app.settings.hints && !quietTips()) {
       for (let i = 0; i < needs.length; i++) {
         const act = needs[i].need?.act
         if (!isJob(act) || seen.has(act)) continue
@@ -311,7 +314,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   }
 
   // What floats over the land: nothing on the land is left under it.
-  const floating = () => [card.el, yard.el, person.el, grid.el, incident.el, trayHost.firstElementChild as HTMLElement | null]
+  const floating = () => [card.el, yard.el, person.el, grid.el, incident.el, trayHost.firstElementChild as HTMLElement | null, paused]
   // Read once a frame, before anything on the land is moved, so the frame never forces a second layout.
   let coverCache: DOMRect[] | null = null
   const covers = (): DOMRect[] => coverCache ?? floating().filter((x): x is HTMLElement => !!x && !x.hidden && x.offsetParent !== null).map(x => x.getBoundingClientRect())
@@ -445,10 +448,16 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       const from = at >= 0 ? at : app.selected >= 0 ? app.selected : e.shiftKey ? S.FIELD_COUNT : -1
       return nextNeed(from, onPlate, e.shiftKey)
     }
-    if (k === 'Enter' || k === ' ') {
+    if (k === ' ') {
+      // Space is the clock wherever the focus rests on this screen, so a button left focused never takes it instead.
+      if (e.ctrlKey || t.closest?.('input, textarea, select, [role="slider"], .dialog')) return false
+      if (onControl) (t.closest?.('button, a') as HTMLElement | null)?.blur()
+      app.togglePause()
+      return true
+    }
+    if (k === 'Enter') {
       if (onControl || e.ctrlKey) return false
-      if (k === ' ') app.togglePause()
-      else card.suggested()
+      card.suggested()
       return true
     }
     const digit = /^(?:Digit|Numpad)([0-9])$/.exec(e.code)
@@ -512,7 +521,8 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       const layout = ctx.layout()
       el.dataset.layout = layout
       const many = c.crew.length > 1
-      const personUp = many && app.unit >= 0 && !app.selection.length && app.yard === 0
+      // A person's page opens from the time book; picked on the land, their card opens beside them instead (whois.ts).
+      const personUp = many && app.unit >= 0 && app.unitFrom === 'list' && !app.selection.length && app.yard === 0
       const selected = app.selection.length > 0 || app.yard !== 0
       el.classList.toggle('selected', selected)
       el.classList.toggle('person-up', personUp || grid.isOpen())
@@ -567,18 +577,11 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       // The time book, its list and the alerts at the foot; the clock with them on a phone.
       const low = [...(crew.children as HTMLCollectionOf<HTMLElement>), clockSlot, notesSlot].filter(vis).map(x => box(x).top)
       const bottom = innerHeight - Math.min(...low, innerHeight) + 6
-      // The bar docked at its edge; on a phone it is a sheet over the foot.
-      const bar = [card.el, yard.el].find(vis)
-      let right = 0, left = 0
-      if (bar && layout !== 'narrow') {
-        const r = box(bar)
-        if (side === 'left') left = r.right + 8
-        else right = innerWidth - r.left + 8
-      }
-      if (bar && layout === 'narrow') return [t, 0, innerHeight - box(bar).top + 6, 0]
-      // A person's page and the work grid stand at the left on a desk: the land is framed beside them.
-      if (layout === 'wide' || layout === 'mid') for (const x of [person.el, grid.el]) if (vis(x)) left = Math.max(left, box(x).right + 8)
-      return [t, right, bottom, left]
+      // Only what always stands frames the land: a bar, a page or the grid opening on a click never moves the camera
+      // (the bar steps to the other side of what it belongs to instead; tags under a card stand aside). On a phone
+      // the bar is a sheet over half the land, so there the land is framed above it.
+      const sheet = layout === 'narrow' ? [card.el, yard.el].find(vis) : undefined
+      return [t, 0, sheet ? innerHeight - box(sheet).top + 6 : bottom, 0]
     },
     frame: () => { coverCache = null; coverCache = covers(); placeBar(); P.frame(); placeYards(); people.frame(); drawSelection(); coverCache = null },
     dispose() {

@@ -24,6 +24,8 @@ import { planScreen } from './plan.ts'
 import { alertShort, countYearsFrom } from './rules.ts'
 import { seasonScreen } from './season.ts'
 import { titleScreen } from './title.ts'
+import { mountGuide, openGuide } from './tutorial.ts'
+import { whois } from './whois.ts'
 
 export const mountHud: MountHud = (root, app, view, sound) => {
   mountSprites()
@@ -32,8 +34,10 @@ export const mountHud: MountHud = (root, app, view, sound) => {
   const screenLayer = h('div', { class: 'screen-layer' })
   const floating = h('div', { class: 'notes-slot floating' })
   const paperLayer = h('div', { class: 'paper-layer' })
+  const whoLayer = h('div', { class: 'who-layer' })
+  const guideLayer = h('div', { class: 'guide-layer' })
   const notes = new Notes()
-  root.replaceChildren(plateLayer, screenLayer, floating, notes.liveRegion, paperLayer)
+  root.replaceChildren(plateLayer, screenLayer, floating, whoLayer, notes.liveRegion, paperLayer, guideLayer)
   const papers = new Papers(paperLayer, [screenLayer, plateLayer, floating], app)
   const touchQuery = matchMedia('(pointer: coarse)')
 
@@ -62,8 +66,9 @@ export const mountHud: MountHud = (root, app, view, sound) => {
   }
 
   notes.onGo = field => { app.select(field); app.focus(field) }
+  const who = whois(ctx, whoLayer)
 
-  const menu = () => openMenu(ctx, { onHelp: () => openHelp(ctx), onAlmanac: () => openAlmanac(ctx) })
+  const menu = () => openMenu(ctx, { onHelp: () => openHelp(ctx), onAlmanac: () => openAlmanac(ctx), onGuide: () => openGuide(ctx) })
   const almanac = () => openAlmanac(ctx)
 
   function applySettings(): void {
@@ -167,7 +172,9 @@ export const mountHud: MountHud = (root, app, view, sound) => {
         // The tray and the ticket speak for themselves, and a clean walk shows on the field's own card.
         if (app.screen !== 'season' || a.type === 'sample' || a.type === 'weighed' || (a.type === 'scout' && a.level !== 'bad')) break
         const short = alertShort(a)
-        notes.push({ level: a.level, glyph: short.glyph, text: short.text, full: a.text, field: a.field, day: a.day, go: screen?.goFor?.(a) })
+        // Frost over barrels names no one field: the note goes to the biggest haul, where the barrels and the hauler show.
+        const field = a.type === 'frostBarrels' && app.campaign ? S.haulInfo(app.world, app.campaign).sort((x, y) => y.cwt - x.cwt)[0]?.field ?? -1 : a.field
+        notes.push({ level: a.level, glyph: short.glyph, text: short.text, full: a.text, field, day: a.day, go: screen?.goFor?.(a) })
         break
       }
       case 'change':
@@ -180,7 +187,11 @@ export const mountHud: MountHud = (root, app, view, sound) => {
         break
       case 'select':
       case 'unit':
+      case 'inspect':
         dirty = true
+        break
+      case 'notice':
+        notes.push({ text: e.text, level: 'info', ttl: 7000 })
         break
       case 'saved':
         if (!e.ok) notes.push({ text: 'This browser would not store the save. Export it from the menu to keep it.', level: 'warn', ttl: 12000 })
@@ -189,7 +200,7 @@ export const mountHud: MountHud = (root, app, view, sound) => {
         // The clock stopped itself for something nothing on screen has said: say what.
         const c = app.campaign
         if (e.speed === 0 && app.pauseReason && app.screen === 'season' && c && !S.seasonDone(c) && !papers.isOpen() && !notes.has(app.pauseReason)) {
-          notes.push({ text: `Stopped: ${app.pauseReason}`, level: 'info', ttl: 9000 })
+          notes.push({ text: app.holding ? app.pauseReason : `Stopped: ${app.pauseReason}`, level: 'info', ttl: 9000 })
         }
         dirty = true
         break
@@ -216,6 +227,7 @@ export const mountHud: MountHud = (root, app, view, sound) => {
     const t = e.target as HTMLElement
     if (e.key === 'Escape') {
       if (papers.isOpen()) { e.preventDefault(); papers.closeTop(); return }
+      if (who.escape()) { e.preventDefault(); return }
       if (screen?.key?.(e)) { e.preventDefault(); return }
       if (app.screen !== 'title' && app.campaign) { e.preventDefault(); menu() }
       return
@@ -230,6 +242,7 @@ export const mountHud: MountHud = (root, app, view, sound) => {
   })
 
   build()
+  const guided = mountGuide(ctx, guideLayer)
   // Until the land can be drawn the name stands alone, where the title will set it; then the ground gives way to the land.
   const splash = document.getElementById('splash')
   const splashName = splash?.querySelector<HTMLElement>('.splash-name')
@@ -255,12 +268,14 @@ export const mountHud: MountHud = (root, app, view, sound) => {
     frame(dt: number) {
       if (held && performance.now() - heldAt > 1500) held = false
       sinceTick += dt
+      guided.frame(dt)
       if (sinceTick > 500) { sinceTick = 0; if (notes.count()) notes.prune(app.campaign?.season && app.screen === 'season' ? app.campaign.season.day : -1) }
       if (dirty && !held && screen) {
         dirty = false
         root.dataset.layout = layoutNow()
         root.classList.toggle('touch', touchQuery.matches)
         screen.update()
+        who.update()
         const [t, r, b, l] = screen.insets().map(x => Math.max(0, Math.round(x)))
         app.setInsets(t, r, b, l)
         root.style.setProperty('--top', `${t}px`)
@@ -268,9 +283,11 @@ export const mountHud: MountHud = (root, app, view, sound) => {
         if (waiting) placeSplash()
       }
       screen?.frame?.(dt)
+      who.frame()
     },
     dispose() {
       screen?.dispose?.()
+      guided.dispose()
       root.replaceChildren()
     },
   }

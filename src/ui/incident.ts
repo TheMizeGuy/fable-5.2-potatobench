@@ -90,6 +90,7 @@ export function incidentCard(ctx: Ctx): IncidentCard {
     if (!r.ok) { err = F.localize(r.err); ctx.announce(err); ctx.dirty(); return }
     err = ''
     shown = -1
+    app.holding = ''
     ctx.announce(F.localize(r.events[0]?.text ?? `${ch.label}.`))
     // The game stopped the clock for this; with nothing else asking, the days go on at the speed they had.
     if (!S.incidentInfo(c).some(x => !away.has(x.id)) && !ctx.papers.isOpen()) app.resumeAfterCard()
@@ -138,6 +139,7 @@ export function incidentCard(ctx: Ctx): IncidentCard {
     if (fresh && shown < 0) { shown = fresh.id; err = '' }
     if (shown >= 0 && !ids.has(shown)) shown = -1
     const info = all.find(x => x.id === shown)
+    app.holding = info ? 'A telegram wants an answer. Answer it, or put it away (Escape) to go on.' : ''
     if (!info || ctx.papers.isOpen()) {
       if (!el.hidden && !ctx.reduced()) {
         el.classList.add('out')
@@ -172,6 +174,7 @@ export function incidentCard(ctx: Ctx): IncidentCard {
     if (shown < 0) return false
     away.add(shown)
     shown = -1
+    app.holding = ''
     ctx.dirty()
     const c = app.campaign
     if (c && !S.incidentInfo(c).some(x => !away.has(x.id)) && !ctx.papers.isOpen()) app.resumeAfterCard()

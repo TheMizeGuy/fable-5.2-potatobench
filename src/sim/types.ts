@@ -56,6 +56,10 @@ export interface Day {
 export type VarietyId = 'norland' | 'superior' | 'katahdin' | 'kennebec' | 'burbank' | 'atlantic' | 'gold' | 'caribou'
 
 export type JobKind = 'plant' | 'hill' | 'scout' | 'spray' | 'water' | 'rogue' | 'sample' | 'kill' | 'dig' | 'fell' | 'rocks' | 'brush' | 'build' | 'haul'
+// The kinds of work on the crop that can be ordered by themselves each working morning (the farm's standing orders).
+export type RoutineKind = 'plant' | 'hill' | 'scout' | 'rogue' | 'sample' | 'dig' | 'haul' | 'spray' | 'water' | 'kill'
+// Who put an order on the list: the player, the farm's routine, or a foreman for their block.
+export type JobBy = 'you' | 'routine' | 'foreman'
 export type UpgradeId = 'boom' | 'harvester' | 'vent' | 'reel' | 'tractor2' | 'house2' | 'tractor3' | 'truck'
 export type BuildingKind = 'house' | 'shed' | 'bunk' | 'packing' | 'pond' | 'stand' | 'station' | 'road'
 export type IncidentKind = 'applicant' | 'poach' | 'breakdown' | 'buyer'
@@ -170,6 +174,7 @@ export interface Job {
   done: number
   need: number
   unit: number              // -1: any crew; otherwise the id of the unit it is pinned to
+  by: JobBy
   building?: number         // for building: the building's id
   pond?: boolean            // for watering: drawn from the pond, once begun
 }
@@ -298,6 +303,7 @@ export interface Season {
   svToday: number
   watchDay: number          // day the spray threshold was crossed, or -1
   frozen: boolean
+  frostHaul?: number        // the last day a frost was forecast on crop still in barrels
   fields: FieldSeason[]
   jobs: Job[]
   nextJob: number
@@ -358,6 +364,8 @@ export interface Campaign {
   nextBuilding: number
   pond: number              // field-waterings in the irrigation pond
   incidents: Incident[]     // open, waiting for an answer
+  heard: string[]           // this year's offers already made (an applicant, a neighbour's for a person, a buyer's for a lot)
+  routine: Record<RoutineKind, boolean>   // which kinds of work are ordered by themselves on every held field
   nextIncident: number
   broken: number[]          // for each tractor out of action, the day it is back
   offers: Offer[]           // this spring's contract offers, until the season begins
@@ -406,6 +414,7 @@ export type Cmd =
   | { t: 'build'; kind: BuildingKind; yard: number }
   | { t: 'answer'; incident: number; choice: string }
   | { t: 'job'; kind: JobKind; field: number; unit?: number }
+  | { t: 'routine'; kind: JobKind; auto: boolean }
   | { t: 'assign'; id: number; unit: number }
   | { t: 'cancel'; id: number }
   | { t: 'bump'; id: number }
