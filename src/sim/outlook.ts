@@ -8,10 +8,10 @@ import { HOME_YARD, PARCELS, TRACTS } from './farm.ts'
 import { basePrice, gradePrice, harvestPrice, lotValue } from './market.ts'
 import { lotCwt, markOdds, skinAt, skinnedShare } from './harvest.ts'
 import * as P from './params.ts'
-import { housingLimit, hiredCount, hurt, jobSkill, resting, SKILL_LABEL, willDo } from './people.ts'
+import { housingLimit, hiredCount, hurt, jobSkill, resting, SKILL_LABEL, subject, willDo } from './people.ts'
 import { JOB_LABEL, jobCost, placeName, pressingWhy, standingBy, tractorsRunning, waitFor, workday } from './season.ts'
 import { asks, killByItself } from './advice.ts'
-import type { BuildingKind, Campaign, Cmd, Job, JobKind, KillWhy, UpgradeId, World, YearSummary } from './types.ts'
+import type { BuildingKind, Campaign, Cmd, Job, JobKind, KillWhy, Unit, UpgradeId, World, YearSummary } from './types.ts'
 import { estimateYield, fieldInfo } from './view.ts'
 import { getDay } from './weather.ts'
 import { variety } from './varieties.ts'
@@ -20,7 +20,7 @@ import { variety } from './varieties.ts'
 
 export interface JobOutlook {
   id: number
-  unit: number                     // who will take it: a person's id, or -1 when nobody will
+  unit: number                     // who will do it: a person's id, or -1 when nobody will
   when: 'now' | 'next' | 'waiting' // worked on the next day; taken once the work ahead of it is done; held up
   why: string                      // in plain words
   leaves?: boolean                 // it comes off the list in the morning: nobody takes it because it is not wanted
@@ -40,15 +40,18 @@ export function jobOutlook(world: World, c: Campaign): JobOutlook[] {
   const working = workday(c, s) || copy.season!.frostHaul === s.day
   return s.jobs.map((j, place) => {
     const w = worked.find(x => x.kind === j.kind && x.field === j.field)
-    if (w) return { id: j.id, unit: w.unit, when: 'now', why: `${says(c, w.unit, 'is', 'are')} on it.` }
-    if (dropped.has(j.id)) return { id: j.id, unit: -1, when: 'waiting', why: `It leaves the list in the morning: ${dropped.get(j.id)}`, leaves: true }
+    if (w) return { id: j.id, unit: w.unit, when: 'now', why: says(c, w.unit, 'is working on it.', 'You\'re working on it.') }
+    if (dropped.has(j.id)) return { id: j.id, unit: -1, when: 'waiting', why: `It comes off the work list in the morning. ${dropped.get(j.id)}`, leaves: true }
     const who = takers(c, j)
     if (!who.length) return { id: j.id, unit: -1, when: 'waiting', why: nobody(c, j) }
-    if (!working) return { id: j.id, unit: who[0], when: 'next', why: 'Sunday: nobody works today.' }
+    if (!working) return { id: j.id, unit: who[0], when: 'next', why: 'It\'s Sunday, so nobody works today.' }
     const weather = waitFor(c, s, j, d)
-    if (weather) return { id: j.id, unit: who[0], when: 'waiting', why: `Waiting: ${weather} today. ${says(c, who[0], 'takes', 'take')} it once the weather lets.` }
+    if (weather) {
+      const [held, until] = WAITING[weather] ?? [`Waiting: ${weather} today.`, 'the weather allows']
+      return { id: j.id, unit: who[0], when: 'waiting', why: `${held} ${says(c, who[0], 'will do it', 'You\'ll do it')} once ${until}.` }
+    }
     if (jobSkill(j.kind) === 'machine' && tractorsRunning(c, s.day) === 0 && !(j.kind === 'haul' && c.upgrades.truck)) {
-      return { id: j.id, unit: who[0], when: 'waiting', why: 'Waiting for a tractor: every tractor is broken down.' }
+      return { id: j.id, unit: who[0], when: 'waiting', why: 'Waiting for a tractor, because every tractor is broken down.' }
     }
     // Held by work they are in the middle of: that work by name, how long it has to go, and for work that cannot wait
     // with only one person to do it, what would get it done sooner.
@@ -57,21 +60,44 @@ export function jobOutlook(world: World, c: Campaign): JobOutlook[] {
     if (cur) {
       const days = Math.ceil(Math.max(0, cur.need - cur.done) - 1e-6)
       const alone = takers(c, { ...j, unit: -1 }).length === 1 && !!pressingWhy(c, s, j)
-      const sooner = alone && days >= 2 ? ` Nobody else on the farm does ${SKILL_LABEL[jobSkill(j.kind)]}: a second person would take it sooner.` : ''
-      return { id: j.id, unit: who[0], when: 'next', why: `${says(c, who[0], 'takes', 'take')} it once the ${JOB_LABEL[cur.kind].toLowerCase()} in ${placeName(cur.field)} is done${days >= 2 ? `, in about ${days} days` : ''}.${sooner}` }
+      const sooner = alone && days >= 2 ? ` Nobody else on the farm does ${SKILL_LABEL[jobSkill(j.kind)]}, so a second person would get to it sooner.` : ''
+      const after = `${u.kind === 'farmer' ? 'you\'ve' : 'they\'ve'} finished ${FINISHING[cur.kind]} ${placeName(cur.field)}`
+      return { id: j.id, unit: who[0], when: 'next', why: `${says(c, who[0], 'will', 'You\'ll')} get to this${days >= 2 ? ` in about ${days} days,` : ''} once ${after}.${sooner}` }
     }
     const ahead = place
-    return { id: j.id, unit: who[0], when: 'next', why: ahead ? `${says(c, who[0], 'takes', 'take')} it once the ${ahead === 1 ? 'order' : `${ahead} orders`} ahead of it are done.` : `${says(c, who[0], 'takes', 'take')} it next.` }
+    return { id: j.id, unit: who[0], when: 'next', why: `${says(c, who[0], 'will do it', 'You\'ll do it')} ${ahead ? `after the ${ahead === 1 ? 'order' : `${ahead} orders`} ahead of it` : 'next'}.` }
   })
 }
 
-// A person and the verb that goes with them: "Ada takes", "You take".
+// A person and what is said of them: "Ada will do it", or the farmer's own wording ("You'll do it").
 function says(c: Campaign, id: number, one: string, you: string): string {
   const u = c.crew.find(x => x.id === id)
-  return u?.kind === 'farmer' ? `You ${you}` : `${u?.name ?? 'Someone'} ${one}`
+  return u ? subject(u, one, you) : `Someone ${one}`
 }
 
-// Who could take an order now, best first: those who may take it, are not hurt or resting, by their priority for it.
+// What holds an order up today, and what it waits for, by the word waitFor gives.
+const WAITING: Record<string, [string, string]> = {
+  raining: ['Waiting because it\'s raining today.', 'the rain stops'],
+  'ground too wet': ['Waiting because the ground is too wet today.', 'the ground dries out'],
+  'heavy rain': ['Waiting because it\'s raining hard today.', 'the rain eases'],
+  'too windy': ['Waiting because it\'s too windy today.', 'the wind drops'],
+  'the soil is too cold': ['Waiting because the soil is too cold.', 'the soil warms up'],
+  'waiting for the digger': ['Waiting for the digger to lift more of the crop.', 'there\'s more in barrels'],
+}
+
+// The work someone is in the middle of, before the place's name: "finished digging North Ridge".
+const FINISHING: Record<JobKind, string> = {
+  plant: 'planting', hill: 'hilling', scout: 'walking', spray: 'spraying', water: 'watering', rogue: 'pulling blighted plants in',
+  sample: 'the test dig in', kill: 'killing the vines in', dig: 'digging', fell: 'felling', rocks: 'picking rocks off',
+  brush: 'cutting brush along', build: 'building in', haul: 'hauling from',
+}
+
+// "you, and you're" or "Ada, who is", after "It was given to".
+function givenTo(u: Unit): string {
+  return u.kind === 'farmer' ? 'you, and you\'re' : `${u.name}, who is`
+}
+
+// Who could do an order now, best first: those who may take it, are not hurt or resting, by their priority for it.
 function takers(c: Campaign, j: Job): number[] {
   const day = c.season?.day ?? 0
   const skill = jobSkill(j.kind)
@@ -84,13 +110,13 @@ function nobody(c: Campaign, j: Job): string {
   const label = SKILL_LABEL[jobSkill(j.kind)]
   if (j.unit >= 0) {
     const u = c.crew.find(x => x.id === j.unit)
-    if (!u) return 'Nobody: the person it was given to has gone.'
-    if (hurt(u, day)) return `${u.name}, who it was given to, is hurt.`
-    if (resting(u)) return `${u.name}, who it was given to, is resting.`
-    return `${u.name}, who it was given to, will not do ${label}.`
+    if (!u) return 'Nobody will do it, because the person it was given to has left.'
+    if (hurt(u, day)) return `It was given to ${givenTo(u)} hurt.`
+    if (resting(u)) return `It was given to ${givenTo(u)} resting.`
+    return `It was given to ${givenTo(u)} set to never do ${label}.`
   }
   const willing = c.crew.filter(u => !u.foreman && willDo(u, j.kind))
-  if (!willing.length) return `Nobody on the farm will do ${label}: set someone's priority for it.`
+  if (!willing.length) return `Nobody on the farm will do ${label}, so set someone's priority for it.`
   if (willing.every(u => hurt(u, day))) return `Everyone who does ${label} is hurt.`
   return `Everyone who does ${label} is resting or hurt.`
 }
@@ -133,17 +159,17 @@ export function pressing(world: World, c: Campaign): Pressing[] {
     const queued = (k: JobKind) => s.jobs.some(j => j.kind === k && j.field === i)
     const want = (kind: JobKind, why: string, inWay: string) => out.push({ kind, field: i, job: -1, why, inWay, fix: { t: 'job', kind, field: i } })
     if (sprays.has(i) && !standingBy(c, 'spray', i)) {
-      want('spray', 'blight weather will not wait', f.lastSpray >= 0
-        ? `Sprayed on ${formatDay(s.year, f.lastSpray)}, and that has worn thin. Each order is one pass: spraying waits for your order.`
-        : 'Not sprayed yet this season. Spraying waits for your order.')
+      want('spray', 'blight weather won\'t wait', f.lastSpray >= 0
+        ? `You last sprayed on ${formatDay(s.year, f.lastSpray)} and it's wearing off. Each order is a single spray, so order another.`
+        : 'Not sprayed yet this season. Your crew won\'t spray until you order it.')
     }
     // After the rest: the date the crew kills by itself is days off.
     const kill = killByItself(c, i, all)
     if (kill >= 0 && !queued('kill')) {
-      kills.push({ kind: 'kill', field: i, job: -1, why: 'the vines are due to come off', fix: { t: 'job', kind: 'kill', field: i },
-        inWay: `The crew kills the vines on ${formatDay(s.year, Math.max(kill, s.day))} unless you keep them up, so the skins set before the dig.` })
+      kills.push({ kind: 'kill', field: i, job: -1, why: 'the vines are due to be killed', fix: { t: 'job', kind: 'kill', field: i },
+        inWay: `The crew kills the vines on ${formatDay(s.year, Math.max(kill, s.day))} unless you keep them up, so the skins set before harvest.` })
     }
-    if (f.inField >= 0.5 && !f.weighed && s.frostHaul === s.day && !queued('haul')) want('haul', 'a frost is coming on the barrels', 'Hauling waits for your order.')
+    if (f.inField >= 0.5 && !f.weighed && s.frostHaul === s.day && !queued('haul')) want('haul', 'frost is coming for the crop in barrels', 'Your crew won\'t haul until you order it.')
   }
   return [...out, ...kills]
 }
@@ -211,11 +237,11 @@ export function moneyNow(world: World, c: Campaign): MoneyNow {
   const due = { note: P.NOTE_PAYMENT, household: P.LIVING, mortgage, loan, total: bills + loan }
   const after = cash + stored + growing - bills
   const parts: MoneyPart[] = [
-    { label: cash >= 0 ? 'Cash in hand' : 'Owed on the spring loan', amount: cash },
-    { label: 'The crop in store, at today\'s price', amount: stored },
-    { label: 'The crop in the ground, by the estimate', amount: growing },
-    { label: 'The note', amount: -P.NOTE_PAYMENT },
-    { label: 'The household', amount: -P.LIVING },
+    { label: cash >= 0 ? 'Cash on hand' : 'Owed on the spring loan', amount: cash },
+    { label: 'Stored crop at today\'s price', amount: stored },
+    { label: 'Estimated crop in the ground', amount: growing },
+    { label: 'The yearly bank payment', amount: -P.NOTE_PAYMENT },
+    { label: 'Your family\'s living costs', amount: -P.LIVING },
     { label: 'The land mortgage', amount: -mortgage },
   ].filter(p => Math.abs(p.amount) >= 0.5).sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
   const range = { lo: after - lo, hi: after + hi }
@@ -258,17 +284,17 @@ export function yearStory(y: YearSummary): YearStory {
   const other = y.revenue - y.restIncome - y.contracts - y.logs - y.stand
   const growingCost = y.costs - y.wages - y.rent - y.land - y.storage - y.building - y.works - y.mortgage - y.penalties - y.packing
   const lines: MoneyPart[] = [
-    { label: 'Potatoes sold', amount: other },
+    { label: 'Potato sales', amount: other },
     { label: 'Contract deliveries', amount: y.contracts },
     { label: 'Oats and clover', amount: y.restIncome },
     { label: 'Logs and the farm stand', amount: y.logs + y.stand },
-    { label: 'Growing the fields, equipment and the jobs', amount: -growingCost },
+    { label: 'Growing costs, equipment and field work', amount: -growingCost },
     { label: 'Wages', amount: -y.wages },
     { label: 'Rent and land', amount: -(y.rent + y.land + y.mortgage) },
     { label: 'Buildings and contractors', amount: -(y.building + y.works) },
     { label: 'Storage and packing', amount: -(y.storage + y.packing) },
     { label: 'Contract penalties', amount: -y.penalties },
-    { label: 'The note and the household', amount: -(y.note + y.living) },
+    { label: 'The bank payment and your family\'s living costs', amount: -(y.note + y.living) },
     { label: 'Interest on the loan', amount: -y.interest },
   ]
   const reasons = lines.filter(l => Math.abs(l.amount) >= 0.5).sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount)).slice(0, 3)
@@ -282,11 +308,11 @@ export interface GoalCost { id: string; label: string; cost: number; can: boolea
 // What each thing a goal can ask for costs now, and whether the farm can pay for it now ('' why when it can).
 export function goalCosts(c: Campaign): GoalCost[] {
   const out: GoalCost[] = []
-  const cash = (cost: number) => c.cash - cost >= 0 ? '' : `It costs $${withCommas(cost)}; the farm has $${withCommas(Math.max(0, c.cash))} in hand.`
+  const cash = (cost: number) => c.cash - cost >= 0 ? '' : `It costs $${withCommas(cost)}, and you have $${withCommas(Math.max(0, c.cash))} on hand.`
   const tract = TRACTS.find(i => c.fields[i].tenure !== 'none' && c.fields[i].cover === 'stumps') ?? -1
-  out.push({ id: 'stump', label: 'Pull the stumps', cost: P.STUMP_FEE, can: tract >= 0 && !stumpBlock(c, tract), why: tract < 0 ? 'No tract the farm holds is felled to the stumps.' : stumpBlock(c, tract) })
+  out.push({ id: 'stump', label: 'Pull the stumps', cost: P.STUMP_FEE, can: tract >= 0 && !stumpBlock(c, tract), why: tract < 0 ? 'None of your tracts has been felled yet.' : stumpBlock(c, tract) })
   const bottom = c.fields.findIndex((f, i) => f.tenure === 'owned' && f.cover === 'open' && f.elev === 0 && !f.tiled && i >= 0)
-  out.push({ id: 'tile', label: 'Lay tile drains', cost: P.TILE_FEE, can: bottom >= 0 && !tileBlock(c, bottom), why: bottom < 0 ? 'The farm owns no bottom land without tile.' : tileBlock(c, bottom) })
+  out.push({ id: 'tile', label: 'Lay tile drains', cost: P.TILE_FEE, can: bottom >= 0 && !tileBlock(c, bottom), why: bottom < 0 ? 'You don\'t own any bottom land that still needs tile.' : tileBlock(c, bottom) })
   for (const kind of P.BUILDING_KINDS as BuildingKind[]) {
     const cost = buildCost(c, kind).total
     const why = buildBlock(c, kind, HOME_YARD, holdsAnyDufour(c))
@@ -294,18 +320,18 @@ export function goalCosts(c: Campaign): GoalCost[] {
   }
   for (const id of Object.keys(P.UPGRADES) as UpgradeId[]) {
     const u = P.UPGRADES[id]
-    const why = c.upgrades[id] ? 'Owned already.' : c.phase !== 'plan' ? 'Equipment is bought in spring.' : cash(u.cost)
+    const why = c.upgrades[id] ? 'You already own it.' : c.phase !== 'plan' ? 'You can only buy equipment in spring.' : cash(u.cost)
     out.push({ id: `buy:${id}`, label: u.name, cost: u.cost, can: !why, why })
   }
-  const roomWhy = hiredCount(c) >= housingLimit(c) ? 'Every place to live is taken: a bunkhouse gives six more.' : c.phase !== 'plan' && c.phase !== 'season' ? 'People are hired in spring or during the season.' : ''
+  const roomWhy = hiredCount(c) >= housingLimit(c) ? 'Every place to live is taken, and a bunkhouse adds six more.' : c.phase !== 'plan' && c.phase !== 'season' ? 'You can hire in spring or during the season.' : ''
   out.push({ id: 'hire', label: 'Hire someone', cost: P.HAND_WAGE, can: !roomWhy, why: roomWhy })
   const hand = c.crew.find(u => u.kind !== 'farmer' && !u.foreman)
-  const foremanWhy = !hand ? 'A foreman is someone hired: hire someone first.' : ''
+  const foremanWhy = !hand ? 'A foreman has to be one of your hired people, so hire someone first.' : ''
   out.push({ id: 'foreman', label: 'Name a foreman', cost: hand ? Math.round(hand.wage * (P.FOREMAN_PAY - 1)) : Math.round(P.HAND_WAGE * (P.FOREMAN_PAY - 1)), can: !foremanWhy, why: foremanWhy })
   const field = PARCELS.findIndex((p, i) => p.holding === 'field' && c.fields[i].tenure === 'none')
   if (field >= 0) {
     const rent = PARCELS[field].rent
-    out.push({ id: 'rent', label: 'Rent a field', cost: rent, can: c.phase === 'plan', why: c.phase === 'plan' ? '' : 'Land is rented in spring.' })
+    out.push({ id: 'rent', label: 'Rent a field', cost: rent, can: c.phase === 'plan', why: c.phase === 'plan' ? '' : 'You can only rent land in spring.' })
   }
   return out
 }
@@ -400,12 +426,12 @@ export interface PlantReady { ok: boolean; soilT: number; need: number; rots: nu
 export function plantReady(world: World, c: Campaign, field: number): PlantReady {
   const s = c.season
   const need = P.PLANT_SOIL_C, rots = P.PLANT_ROT_C
-  if (!s) return { ok: false, soilT: 0, need, rots, why: 'Planting is in the season.' }
+  if (!s) return { ok: false, soilT: 0, need, rots, why: 'Planting happens during the season.' }
   const soilT = s.soilT
   const f = (x: number) => Math.round(x * 9 / 5 + 32)
-  if (s.day < dayIndex(s.year, P.PLANT_FROM.month, P.PLANT_FROM.dom)) return { ok: false, soilT, need, rots, why: 'It is early. Seed sits and rots in cold ground.' }
-  if (soilT < need) return { ok: false, soilT, need, rots, why: `The soil here is ${f(soilT)}°F. Seed wants ${f(need)}°F; below ${f(rots)}°F it rots.` }
-  if (fieldInfo(c, field).tooWet) return { ok: false, soilT, need, rots, why: 'Too wet to work: it will dry in a day or two.' }
-  return { ok: true, soilT, need, rots, why: `The soil here is ${f(soilT)}°F and fit to work.` }
+  if (s.day < dayIndex(s.year, P.PLANT_FROM.month, P.PLANT_FROM.dom)) return { ok: false, soilT, need, rots, why: 'It\'s too early. Seed just sits and rots in cold ground.' }
+  if (soilT < need) return { ok: false, soilT, need, rots, why: `The soil here is ${f(soilT)}°F. Seed needs ${f(need)}°F, and below ${f(rots)}°F it rots.` }
+  if (fieldInfo(c, field).tooWet) return { ok: false, soilT, need, rots, why: 'It\'s too wet to work, but it\'ll dry in a day or two.' }
+  return { ok: true, soilT, need, rots, why: `The soil here is ${f(soilT)}°F and dry enough to work.` }
 }
 

@@ -91,7 +91,7 @@ describe('the tracts', () => {
     ok(x, { t: 'begin' })
     refused(x, { t: 'job', kind: 'plant', field: WOODLOT }, /woods/)
     refused(x, { t: 'job', kind: 'rocks', field: WOODLOT }, /stumps/)
-    refused(x, { t: 'job', kind: 'fell', field: BURNT }, /not the farm/)
+    refused(x, { t: 'job', kind: 'fell', field: BURNT }, /isn't yours/)
     ok(x, { t: 'job', kind: 'fell', field: WOODLOT })
     expect(order(x, 'fell', WOODLOT)!.need).toBe(S.FELL_DAYS.woods)
     refused(x, { t: 'job', kind: 'fell', field: 0 }, /nothing to fell/)
@@ -415,8 +415,8 @@ describe('the winter woods', () => {
       if (ev.some(e => e.type === 'felled' && e.field === WOODLOT)) {
         felled = true
         expect(ev.filter(e => e.type === 'winterIdle').map(e => e.text)).toEqual([
-          expect.stringMatching(/^You stop work for the rest of the winter: There is nothing left to fell on/),
-          expect.stringMatching(new RegExp(`^${hand.name} is laid off for the rest of the winter: There is nothing left to fell on`)),
+          expect.stringMatching(/^You're done working for the rest of the winter\. There's nothing left to fell on/),
+          expect.stringMatching(new RegExp(`^${hand.name} is laid off for the rest of the winter\\. There's nothing left to fell on`)),
         ])
       }
       for (const p of S.winterInfo(c).people) if (p.work === 'woods') expect(S.fellLeft(c, p.field)).toBeGreaterThan(0)

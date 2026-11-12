@@ -14,7 +14,7 @@ import { bestSkill, defaultPrio, hasBed, hiredCount, housingLimit, hurt, moodWor
 import { CHOICE_LABEL, choiceDoes, defaultChoice, INCIDENT_TITLE, incidentText } from './incidents.ts'
 import { brushedNow, clearing, COVER_WORD, fellLeft, fieldEnv, sheltered, standing, type ClearStage } from './land.ts'
 import {
-  FIELD_NAMES, haulFactor, haulRate, holdsDufour, jobBlock, jobCost, jobDays, jobWait, JOB_LABEL, knownHills, standOpen, tractorsOwned, tractorsRunning,
+  FIELD_NAMES, haulFactor, haulRate, holdsDufour, jobBlock, jobCost, jobDays, jobWait, JOB_LABEL, knownHills, placeName, standOpen, tractorsOwned, tractorsRunning,
   standingBy, waitFor, workday,
 } from './season.ts'
 import { buildBlock, buildCost, buildingAt, hasBuilt, rain30, roadFactor, wholeLoads, YARD_NAME } from './buildings.ts'
@@ -159,7 +159,7 @@ export function fieldInfo(c: Campaign, fi: number, world?: World): FieldInfo {
     base.status = 'off'
     base.crop = 'rest'
     base.variety = ''
-    base.stage = fp.tenure === 'none' ? 'Not the farm\'s' : fp.cover === 'woods' ? 'Standing woods' : fp.cover === 'brush' ? 'Brush'
+    base.stage = fp.tenure === 'none' ? 'Not yours' : fp.cover === 'woods' ? 'Standing woods' : fp.cover === 'brush' ? 'Brush'
       : fp.cover === 'stumps' ? 'Stumps' : 'New ground, ready next spring'
     return base
   }
@@ -315,6 +315,12 @@ export interface PersonInfo {
   hurtUntil: number                 // hurt: the day they are back at work; -1 when not
 }
 
+// What someone on the road is going to do, after "to".
+const GOING_TO: Record<JobKind, string> = {
+  plant: 'plant', hill: 'hill', scout: 'scout', spray: 'spray', water: 'water', rogue: 'pull blighted plants', sample: 'do a test dig',
+  kill: 'kill the vines', dig: 'dig', fell: 'fell trees', rocks: 'pick rocks', brush: 'cut brush', build: 'build', haul: 'haul the crop',
+}
+
 export function peopleInfo(c: Campaign): PersonInfo[] {
   const s = c.phase === 'season' ? c.season : null
   const rest = !!s && !s.frozen && !workday(c, s)
@@ -332,7 +338,7 @@ export function peopleInfo(c: Campaign): PersonInfo[] {
     else if (s && !s.frozen && hurt(u, s.day)) doing = `Hurt: back on ${formatDay(s.year, u.out)}`
     else if (c.phase === 'season' && s && !s.frozen) {
       if (rest) doing = 'Sunday: resting'
-      else if (j) doing = `${travelling ? 'On the way to' : 'At'} ${JOB_LABEL[j.kind].toLowerCase()}${j.field >= 0 ? ` in ${FIELD_NAMES[j.field]}` : ''}`
+      else if (j) doing = travelling ? `Heading to ${placeName(j.field)} to ${GOING_TO[j.kind]}` : `${JOB_LABEL[j.kind]} in ${placeName(j.field)}`
       else if (travelling) doing = 'On the road'
       else doing = 'Nothing to do'
     } else if (c.phase === 'cellar' || (s && s.frozen)) doing = u.winter === 'off' ? 'Laid off for the winter' : `Kept on: ${WINTER_LABEL[u.winter]}`
@@ -444,7 +450,7 @@ export function labourInfo(c: Campaign): LabourInfo {
   const window = inSeason && pickersWindow(c)
   const from = formatDay(c.year, dayIndex(c.year, P.PICKERS_FROM.month, P.PICKERS_FROM.dom))
   const to = formatDay(c.year, dayIndex(c.year, P.PICKERS_TO.month, P.PICKERS_TO.dom))
-  const pickersWhy = !inSeason ? 'Pickers are hired during the harvest.' : !window ? `The schools close for the harvest only from ${from} to ${to}.` : ''
+  const pickersWhy = !inSeason ? 'You can hire pickers during the harvest.' : !window ? `Schools only close for the harvest from ${from} to ${to}.` : ''
   return {
     weekday: s ? WEEKDAYS[weekday(s.year, s.day)] : '',
     restDay: inSeason && !workday(c, s!),
@@ -492,14 +498,14 @@ export function landInfo(c: Campaign): LandInfo[] {
     let other = false
     for (let j = 0; j < P.FIELD_COUNT; j++) if (j !== i && PARCELS[j].block === 'dufour' && PARCELS[j].holding === 'field' && c.fields[j].tenure !== 'none') other = true
     const house = dufour && !other ? YARDS[1].cellar : 0
-    const timber = standing(fp.cover) ? `${fp.cover === 'woods' ? 'Woods' : 'Brush'} to clear: about ${P.TIMBER[fp.cover]} loads of logs and ${P.FELL_DAYS[fp.cover]} crew-days of felling, then stumps and rocks.` : ''
-    const brings = timber || (!dufour ? '' : house > 0 ? `The Dufour potato house comes with it: ${withCommas(house)} cwt of storage.`
-      : 'It shares the Dufour potato house the farm already has.')
+    const timber = standing(fp.cover) ? `${fp.cover === 'woods' ? 'Woods' : 'Brush'} to clear. Expect about ${P.TIMBER[fp.cover]} loads of logs from ${P.FELL_DAYS[fp.cover]} crew-days of felling, then stumps to pull and rocks to pick.` : ''
+    const brings = timber || (!dufour ? '' : house > 0 ? `The Dufour potato house comes with it, which adds ${withCommas(house)} cwt of storage.`
+      : 'It shares the Dufour potato house you already have.')
     const down = Math.round(p.price * P.MORTGAGE_DOWN)
     const spring = c.phase === 'plan'
-    const rentWhy = !spring ? 'Land is rented in spring.' : p.holding !== 'field' ? `${p.name} is not let; it can only be bought.` : fp.tenure === 'rented' ? 'Rented already.' : ''
-    const buyWhy = !spring ? 'Land is bought in spring.' : p.holding === 'dufour' && !holdsDufour(c) ? `${p.name} goes with the Dufour place: rent or buy a Dufour field first.`
-      : c.cash < down ? `Not enough cash for the quarter down: $${withCommas(down)}.` : ''
+    const rentWhy = !spring ? 'You can only rent land in spring.' : p.holding !== 'field' ? `${p.name} isn't for rent. You can only buy it.` : fp.tenure === 'rented' ? 'You already rent it.' : ''
+    const buyWhy = !spring ? 'You can only buy land in spring.' : p.holding === 'dufour' && !holdsDufour(c) ? `${p.name} comes with the Dufour place, so rent or buy a Dufour field first.`
+      : c.cash < down ? `You can't afford the down payment yet. It's $${withCommas(down)}, a quarter of the price.` : ''
     out.push({
       field: i, name: p.name, block: p.block, elev: fp.elev, position: POSITION[fp.elev], tenure: fp.tenure,
       rent: p.rent, price: p.price, soil: fp.soil, vert: fp.vert, streak: fp.streak, house, brings,
@@ -581,7 +587,7 @@ export function haulInfo(world: World, c: Campaign): HaulInfo[] {
     out.push({
       field: i, name: FIELD_NAMES[i], cwt: f.inField, digging: f.status === 'digging',
       daysToHaul: f.inField / haulRate(c, c.crew[0], i, 'tractor'), frostChance: fc ? fc.frostChance : 0,
-      exposure: `A night at ${P.FREEZE_IN_FIELD} C or colder freezes a fifth of it; each bright day greens half a percent.`,
+      exposure: `A night at ${Math.round(P.FREEZE_IN_FIELD * 9 / 5 + 32)}°F or colder freezes a fifth of it, and each sunny day turns half a percent green.`,
       hauler,
     })
   }
@@ -712,7 +718,7 @@ export function mortgageInfo(c: Campaign): MortgageInfo {
   return {
     loans: c.mortgages.map(m => ({ field: m.field, name: FIELD_NAMES[m.field], loan: m.loan, owed: m.owed })),
     owed, principal: due.principal, interest: due.interest, rate: P.MORTGAGE_RATE, down: P.MORTGAGE_DOWN,
-    payWhy: owed <= 0 ? 'Nothing is owed on the land.' : c.phase !== 'plan' ? 'Extra is paid on the mortgage in spring.' : c.cash <= 0 ? 'Not enough cash.' : '',
+    payWhy: owed <= 0 ? 'Nothing is owed on the land.' : c.phase !== 'plan' ? 'You can only pay extra on the mortgage in spring.' : c.cash <= 0 ? 'You don\'t have enough cash.' : '',
   }
 }
 

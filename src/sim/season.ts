@@ -8,7 +8,7 @@ import { ageLot, gradeHill, newLot, finishLot, lotCwt } from './harvest.ts'
 import { brushedNow, COVER_WORD, envTmin, fell, fellLeft, fieldEnv, isField, isOpen, standing, stoneBruise, stoneSpeed, stumped } from './land.ts'
 import * as P from './params.ts'
 import { breakdownChance, CHOICE_LABEL, defaultChoice, hurtChance, INCIDENT_TITLE, incidentText } from './incidents.ts'
-import { applicantsFor, gainXp, hurt, jobSkill, moodTarget, payOf, resting, scoutChance, SKILL_LABEL, speed, sprayCover, willDo, zeroSkills } from './people.ts'
+import { applicantsFor, gainXp, hurt, jobSkill, moodTarget, payOf, resting, scoutChance, SKILL_LABEL, speed, sprayCover, subject, willDo, zeroSkills } from './people.ts'
 import { hashUnit, nextInt, nextUnit } from './rng.ts'
 import {
   H_DECAYED, H_DUG, H_EMERGED, H_KNOWN, H_ROGUED, H_SAMPLED, H_SEEDBLIGHT, H_VIRUS, H_WILT,
@@ -171,47 +171,47 @@ export function jobBlock(c: Campaign, kind: JobKind, field: number): string {
 // The same, for an order already on the list (self), which does not count as its own duplicate.
 function block(c: Campaign, kind: JobKind, field: number, self: Job | null): string {
   const s = c.season
-  if (!s || c.phase !== 'season') return 'The season is not under way.'
+  if (!s || c.phase !== 'season') return 'The season isn\'t under way.'
   if (s.frozen) return 'The ground has frozen.'
   // Hauling and building go on the list by themselves; the player cannot order them.
   if (kind === 'build') {
-    if (!self) return 'Building goes on the list with the order to build.'
+    if (!self) return 'Building goes on the work list when you order a building.'
     const b = c.buildings.find(x => x.id === self.building)
-    return b && buildable(c, b) ? '' : 'There is nothing left to build.'
+    return b && buildable(c, b) ? '' : 'There\'s nothing left to build.'
   }
   if (kind === 'haul') {
     const h = s.fields[field]
     const barrels = !!h && !h.weighed && (h.status === 'digging' || h.status === 'dug') && h.inField >= 0.5
     if (!self) {
-      if (s.jobs.some(j => j.kind === 'haul' && j.field === field)) return 'Already on the list.'
-      if (!barrels) return standingBy(c, 'haul', field) ? 'Hauling goes on the list by itself as the digger lifts the crop.' : 'There is nothing in barrels to haul.'
+      if (s.jobs.some(j => j.kind === 'haul' && j.field === field)) return 'Already on the work list.'
+      if (!barrels) return standingBy(c, 'haul', field) ? 'Hauling goes on the work list automatically as the digger lifts the crop.' : 'There\'s nothing in barrels to haul.'
       return ''
     }
-    return h && !h.weighed && (h.status === 'digging' || h.status === 'dug') ? '' : 'There is nothing left to haul.'
+    return h && !h.weighed && (h.status === 'digging' || h.status === 'dug') ? '' : 'There\'s nothing left to haul.'
   }
   const f = s.fields[field]
   if (!f) return 'No such field.'
   if (kind === 'fell' || kind === 'rocks' || kind === 'brush') return landBlock(c, s, kind, field, self)
   if (f.status === 'off') {
-    if (c.fields[field].tenure === 'none') return 'This field is not the farm\'s.'
-    return isOpen(c, field) ? 'Cleared this season: it can be planted next spring.' : `${FIELD_NAMES[field]} is ${COVER_WORD[c.fields[field].cover]}. Clear it first.`
+    if (c.fields[field].tenure === 'none') return 'This field isn\'t yours.'
+    return isOpen(c, field) ? 'This was cleared this season, so you can plant it next spring.' : `${FIELD_NAMES[field]} is still ${COVER_WORD[c.fields[field].cover]}. Clear it first.`
   }
   if (f.status === 'rest') return 'This field is resting in oats and clover.'
-  if (f.status === 'dug') return 'This field is dug.'
+  if (f.status === 'dug') return 'This field is already dug.'
   if (f.status === 'lost') return 'This crop is lost.'
-  if (s.jobs.some(j => j !== self && j.kind === kind && j.field === field)) return 'Already on the list.'
+  if (s.jobs.some(j => j !== self && j.kind === kind && j.field === field)) return 'Already on the work list.'
   const up = f.emergeDay >= 0
   const alive = f.deadDay < 0
   switch (kind) {
     case 'plant':
-      if (c.fields[field].works) return `The contractor is at work in ${FIELD_NAMES[field]}.`
+      if (c.fields[field].works) return `The contractor is working in ${FIELD_NAMES[field]}.`
       return f.status === 'idle' ? '' : 'Already planted.'
     case 'hill':
       if (f.status === 'idle') return 'Nothing planted yet.'
       if (!up) return 'Wait until the plants are up.'
       if (!alive) return 'The vines are dead.'
-      if (f.hillPasses >= 2) return 'Hilled twice already.'
-      if (f.canopy >= P.CLOSURE) return 'The rows have closed; hilling now would tear the plants.'
+      if (f.hillPasses >= 2) return 'Already hilled twice.'
+      if (f.canopy >= P.CLOSURE) return 'The rows have closed, so hilling now would tear up the plants.'
       return ''
     case 'scout':
       if (f.status === 'idle') return 'Nothing planted yet.'
@@ -220,7 +220,7 @@ function block(c: Campaign, kind: JobKind, field: number, self: Job | null): str
       return ''
     case 'spray':
       if (f.status === 'idle') return 'Nothing planted yet.'
-      if (!up) return 'Nothing is up to protect yet.'
+      if (!up) return 'Nothing is up yet, so there\'s nothing to protect.'
       if (!alive) return 'The vines are dead.'
       return ''
     case 'water':
@@ -229,17 +229,17 @@ function block(c: Campaign, kind: JobKind, field: number, self: Job | null): str
       if (f.wet >= P.WORKABLE_WET_MM) return 'The ground is already wet.'
       return ''
     case 'rogue':
-      if (!alive || f.status === 'idle') return 'No living plants to pull.'
-      return knownHills(f) > 0 ? '' : 'No blighted plants have been found here. Scout first.'
+      if (!alive || f.status === 'idle') return 'There are no living plants to pull.'
+      return knownHills(f) > 0 ? '' : 'No blighted plants have been found here yet. Scout the field first.'
     case 'sample':
-      if (f.tiDay < 0) return 'No tubers have set yet.'
+      if (f.tiDay < 0) return 'No potatoes have formed yet.'
       if (f.status === 'digging') return 'Already being dug.'
       return ''
     case 'kill':
-      if (f.tiDay < 0) return 'No tubers have set yet.'
+      if (f.tiDay < 0) return 'No potatoes have formed yet.'
       return alive ? '' : 'The vines are already dead.'
     case 'dig':
-      if (f.tiDay < 0) return 'No tubers have set yet.'
+      if (f.tiDay < 0) return 'No potatoes have formed yet.'
       return ''
   }
   return ''
@@ -249,24 +249,24 @@ function block(c: Campaign, kind: JobKind, field: number, self: Job | null): str
 function landBlock(c: Campaign, s: Season, kind: JobKind, field: number, self: Job | null): string {
   const fp = c.fields[field]
   const name = FIELD_NAMES[field]
-  if (fp.tenure === 'none') return 'This field is not the farm\'s.'
-  if (s.jobs.some(j => j !== self && j.kind === kind && j.field === field)) return 'Already on the list.'
+  if (fp.tenure === 'none') return 'This field isn\'t yours.'
+  if (s.jobs.some(j => j !== self && j.kind === kind && j.field === field)) return 'Already on the work list.'
   switch (kind) {
     case 'fell':
-      if (!standing(fp.cover)) return `There is nothing to fell on ${name}.`
+      if (!standing(fp.cover)) return `There's nothing to fell on ${name}.`
       return ''
     case 'rocks': {
-      if (fp.cover !== 'open') return `${name} is ${COVER_WORD[fp.cover]}. Fell it and have the stumps pulled first.`
-      if (fp.works) return `The contractor is at work in ${name}.`
+      if (fp.cover !== 'open') return `${name} is still ${COVER_WORD[fp.cover]}. Fell it and have the stumps pulled first.`
+      if (fp.works) return `The contractor is working in ${name}.`
       const st = s.fields[field].status
-      if (st === 'planted' || st === 'growing' || st === 'dead' || st === 'digging') return 'Rocks are picked when no crop is in the ground: before planting, after the dig, or in a rest year.'
+      if (st === 'planted' || st === 'growing' || st === 'dead' || st === 'digging') return 'You can pick rocks only when no crop is in the ground: before planting, after harvest, or in a rest year.'
       if (fp.stones < P.ROCKS_MIN) return 'There are hardly any stones left to pick.'
       return ''
     }
     case 'brush':
-      if (fp.cover !== 'open') return `${name} is ${COVER_WORD[fp.cover]}. Clear it first.`
-      if (fp.elev === 2) return 'The ridge has no hedgerows holding cold air: only bottom land and the mid slope do.'
-      if (brushedNow(c, field)) return `Cut back already; it grows back ${P.BRUSH_YEARS} years after it was cut.`
+      if (fp.cover !== 'open') return `${name} is still ${COVER_WORD[fp.cover]}. Clear it first.`
+      if (fp.elev === 2) return 'The ridge has no hedgerows trapping cold air. Only bottom land and the mid slope do.'
+      if (brushedNow(c, field)) return `It's already cut back. Brush grows back ${P.BRUSH_YEARS} years after it's cut.`
       return ''
   }
   return ''
@@ -301,11 +301,11 @@ export function unitBlock(c: Campaign, kind: JobKind, unit: number): string {
   if (unit === -1) return ''
   const u = c.crew.find(x => x.id === unit)
   if (!u) return 'No such crew.'
-  if (u.foreman) return `${u.name} is foreman and does no field work.`
+  if (u.foreman) return `${u.name} is a foreman and doesn't do field work.`
   const skill = jobSkill(kind)
   if (u.prio[skill] <= 0) {
-    const as = u.kind === 'hand' && skill === 'machine' ? ' is a field hand and' : u.kind === 'operator' && skill === 'field' ? ' drives the second tractor and' : ''
-    return `${u.name}${as} is set never to do ${SKILL_LABEL[skill]}.`
+    const as = u.kind === 'hand' && skill === 'machine' ? 'is a field hand and is' : u.kind === 'operator' && skill === 'field' ? 'drives the second tractor and is' : ''
+    return `${subject(u, as || 'is', 'You are')} set to never do ${SKILL_LABEL[skill]}.`
   }
   return ''
 }
@@ -392,13 +392,13 @@ function completeJob(world: World, c: Campaign, s: Season, job: Job, d: Day, out
   switch (job.kind) {
     case 'plant':
       plantField(c, s, f, c.fields[job.field].vert)
-      push(s, out, 'planted', job.field, 'info', `${name} is planted to ${variety(f.variety).name}.`)
+      push(s, out, 'planted', job.field, 'info', `${name} is planted with ${variety(f.variety).name}.`)
       break
     case 'hill':
       f.hillPasses++
       f.cover = Math.max(f.cover, P.COVER_BY_PASSES[f.hillPasses])
       f.weeded = true
-      push(s, out, 'hilled', job.field, 'info', `${name} hilled${f.hillPasses === 2 ? ' a second time' : ''}.`)
+      push(s, out, 'hilled', job.field, 'info', `${name} has been hilled${f.hillPasses === 2 ? ' a second time' : ''}.`)
       break
     case 'scout': {
       f.lastScout = s.day
@@ -416,7 +416,7 @@ function completeJob(world: World, c: Campaign, s: Season, job: Job, d: Day, out
       if (found) f.blightFound ??= s.day
       const virus = f.hState.filter(st => (st & H_VIRUS) && (st & H_EMERGED) && !(st & GONE)).length
       push(s, out, 'scout', job.field, found ? 'bad' : 'good',
-        found ? `Walked ${name}: blight lesions on ${found} ${found === 1 ? 'hill' : 'hills'}.` : `Walked ${name}: no blight found.`,
+        found ? `Walked ${name} and found blight on ${found} ${found === 1 ? 'hill' : 'hills'}.` : `Walked ${name} and found no blight.`,
         { found, virus })
       break
     }
@@ -424,12 +424,12 @@ function completeJob(world: World, c: Campaign, s: Season, job: Job, d: Day, out
       f.residue = sprayCover(u)
       f.lastSpray = s.day
       f.sprays = (f.sprays ?? 0) + 1
-      push(s, out, 'sprayed', job.field, 'info', `${name} sprayed with protectant.`)
+      push(s, out, 'sprayed', job.field, 'info', `${name} has been sprayed against blight.`)
       break
     case 'water':
       f.dr = Math.max(0, f.dr - P.IRRIGATION_MM)
       f.wateredDay = s.day
-      push(s, out, 'watered', job.field, 'info', `${name} watered, about an inch${job.pond ? ', from the pond' : ''}.`)
+      push(s, out, 'watered', job.field, 'info', `${name} got about an inch of water${job.pond ? ' from the pond' : ''}.`)
       break
     case 'rogue': {
       let pulled = 0
@@ -467,7 +467,7 @@ function completeJob(world: World, c: Campaign, s: Season, job: Job, d: Day, out
       const grams = Math.round(f.hMass[i])
       f.hC[i] = 0; f.hLes[i] = 0; f.hLat[i] = 0
       push(s, out, 'sample', job.field, 'info',
-        `Test dig in ${name}: ${tubers.length} tubers, ${(grams / 453.6).toFixed(1)} lb under one hill.`,
+        `Test dig in ${name} found ${tubers.length} ${tubers.length === 1 ? 'potato' : 'potatoes'} under one hill, ${(grams / 453.6).toFixed(1)} lb in all.`,
         { hill: i, grams, weights: tubers.map(t => Math.round(t.w)), marks: tubers.map(t => t.mark) })
       break
     }
@@ -476,22 +476,22 @@ function completeJob(world: World, c: Campaign, s: Season, job: Job, d: Day, out
       f.deadDay = s.day
       f.status = 'dead'
       for (let i = 0; i < P.HILLS; i++) f.hC[i] *= 0.08
-      push(s, out, 'killed', job.field, 'info', `Vines killed in ${name}. Skins set in about two weeks.`)
+      push(s, out, 'killed', job.field, 'info', `The vines in ${name} are killed. The skins will set in about two weeks.`)
       break
     case 'fell':
-      push(s, out, 'felled', job.field, 'good', `${name} is felled. The stumps are left; a contractor can pull them.${sheltering(c, job.field)}`, { logs: Math.round(c.logs) })
+      push(s, out, 'felled', job.field, 'good', `${name} is felled. The stumps are still there, and a contractor can pull them.${sheltering(c, job.field)}`, { logs: Math.round(c.logs) })
       break
     case 'rocks': {
       const fp = c.fields[job.field]
       const take = Math.min(fp.stones, P.ROCKS_TAKE)
       fp.stones -= take
       c.stone += P.ROCKS_LOADS * take
-      push(s, out, 'rocks', job.field, 'info', `Rocks picked off ${name}: ${Math.round(P.ROCKS_LOADS * take * 10) / 10} loads of fieldstone to the yard.`, { stones: Math.round(fp.stones * 100) / 100 })
+      push(s, out, 'rocks', job.field, 'info', `The rocks are picked off ${name}, and ${Math.round(P.ROCKS_LOADS * take * 10) / 10} loads of fieldstone went to the yard.`, { stones: Math.round(fp.stones * 100) / 100 })
       break
     }
     case 'brush':
       c.fields[job.field].brushed = c.year
-      push(s, out, 'brushed', job.field, 'info', `The hedgerows along ${name} are cut back: cold air drains away, but the wind dries it more. They grow back in ${P.BRUSH_YEARS} years.`)
+      push(s, out, 'brushed', job.field, 'info', `The hedgerows along ${name} are cut back, so cold air drains away but the wind dries the field more. They'll grow back in ${P.BRUSH_YEARS} years.`)
       break
     case 'dig': {
       const lot = c.lots.find(l => l.id === f.lotId)!
@@ -499,7 +499,7 @@ function completeJob(world: World, c: Campaign, s: Season, job: Job, d: Day, out
       f.dugDay = s.day
       finishLot(c, f, lot)
       const total = lot.grades.no1 + lot.grades.chef + lot.grades.b + lot.grades.no2 + lot.skinned
-      push(s, out, 'dug', job.field, 'good', `${name} is dug: ${withCommas(total)} cwt to sell, ${withCommas(lot.grades.cull)} cwt culled. ${f.inField >= 0.5 ? `${withCommas(f.inField)} cwt is still in barrels in the field.` : 'It is all hauled in.'}`, { lot: lot.id })
+      push(s, out, 'dug', job.field, 'good', `${name} is dug, with ${withCommas(total)} cwt to sell and ${withCommas(lot.grades.cull)} cwt culled. ${f.inField >= 0.5 ? `${withCommas(f.inField)} cwt is still in barrels in the field.` : 'It\'s all hauled in.'}`, { lot: lot.id })
       if (f.inField < 0.5) weigh(s, f, job.field, lot, out)
       break
     }
@@ -511,7 +511,7 @@ function weigh(s: Season, f: FieldSeason, field: number, lot: Lot, out: GameEven
   f.inField = 0
   f.weighed = true
   const total = lotCwt(lot)
-  push(s, out, 'weighed', field, 'good', `The weigh ticket for ${FIELD_NAMES[field]}: ${withCommas(total)} cwt in the potato house, ready to sell or store.`, { lot: lot.id })
+  push(s, out, 'weighed', field, 'good', `The weigh ticket for ${FIELD_NAMES[field]} is in: ${withCommas(total)} cwt in the potato house, ready to sell or store.`, { lot: lot.id })
   const k = s.jobs.findIndex(j => j.kind === 'haul' && j.field === field)
   if (k >= 0) s.jobs.splice(k, 1)
 }
@@ -541,7 +541,7 @@ function exposure(c: Campaign, s: Season, d: Day, out: GameEvent[]): void {
     if (tmin <= P.FREEZE_IN_FIELD) {
       const frozen = f.inField * P.FREEZE_SHARE
       lose(f, lot, frozen, 'frost')
-      push(s, out, 'frozenInField', i, 'bad', `A hard frost on the barrels in ${FIELD_NAMES[i]}: ${withCommas(frozen)} cwt froze before it was hauled in.`, { cwt: Math.round(frozen) })
+      push(s, out, 'frozenInField', i, 'bad', `A hard frost hit the barrels in ${FIELD_NAMES[i]}, and ${withCommas(frozen)} cwt froze before it was hauled in.`, { cwt: Math.round(frozen) })
     }
     if (bright) lose(f, lot, f.inField * P.GREEN_IN_FIELD, 'green')
     if (f.status === 'dug' && f.inField < 0.5) weigh(s, f, i, lot, out)
@@ -670,7 +670,7 @@ function stillWanted(c: Campaign, s: Season, job: Job, out: GameEvent[]): boolea
   const k = s.jobs.indexOf(job)
   if (k >= 0) s.jobs.splice(k, 1)
   releaseJob(c, job.id)
-  push(s, out, 'dropped', job.field, 'warn', `${JOB_LABEL[job.kind]} in ${placeName(job.field)} dropped. ${why}`, { job: job.id, kind: job.kind, why })
+  push(s, out, 'dropped', job.field, 'warn', `${JOB_LABEL[job.kind]} in ${placeName(job.field)} was taken off the work list. ${why}`, { job: job.id, kind: job.kind, why })
   return false
 }
 
@@ -691,10 +691,10 @@ const WAITABLE: JobKind[] = ['fell', 'rocks', 'brush', 'build']
 export function pressingWhy(c: Campaign, s: Season, job: Job): string {
   const f = job.field >= 0 ? s.fields[job.field] : null
   switch (job.kind) {
-    case 'spray': return s.watchDay >= 0 && f && f.deadDay < 0 ? 'blight weather will not wait' : ''
+    case 'spray': return s.watchDay >= 0 && f && f.deadDay < 0 ? 'blight weather won\'t wait' : ''
     case 'plant': return 'the planting season is short'
-    case 'haul': return s.frostHaul === s.day ? 'a frost is coming on the barrels' : ''
-    case 'dig': return s.day >= dayIndex(s.year, P.PICKERS_FROM.month, P.PICKERS_FROM.dom) ? 'the ground freezes before long' : ''
+    case 'haul': return s.frostHaul === s.day ? 'frost is coming for the crop in barrels' : ''
+    case 'dig': return s.day >= dayIndex(s.year, P.PICKERS_FROM.month, P.PICKERS_FROM.dom) ? 'the ground will freeze before long' : ''
   }
   return ''
 }
@@ -776,7 +776,7 @@ function stopDig(c: Campaign, s: Season, u: Unit, job: Job, out: GameEvent[]): v
   letGo(u)
   if ((s.digStop ?? []).includes(job.field)) return
   s.digStop = [...(s.digStop ?? []), job.field]
-  push(s, out, 'digWait', job.field, 'info', `${u.name} stops digging ${placeName(job.field)} for today: a frost is forecast tonight, and what is dug has to be hauled in first.`, { unit: u.id, job: job.id })
+  push(s, out, 'digWait', job.field, 'info', `${subject(u, 'stops', 'You stop')} digging ${placeName(job.field)} for today, because frost is forecast tonight and what's dug has to be hauled in first.`, { unit: u.id, job: job.id })
 }
 
 // A day's hauling: barrels from the field to the nearest potato house, as much as the rest of the day allows. When
@@ -832,7 +832,7 @@ function choose(c: Campaign, s: Season, u: Unit, d: Day, out: GameEvent[]): { jo
     if (waitFor(c, s, job, d) || rig === null) continue
     if (pick && !(s.pressed ?? []).includes(u.id)) {
       s.pressed = [...(s.pressed ?? []), u.id]
-      push(s, out, 'pressing', job.field, 'info', `${u.name} leaves ${pick ? JOB_LABEL[pick.job.kind].toLowerCase() : 'what they were set to'} for ${JOB_LABEL[job.kind].toLowerCase()} in ${placeName(job.field)}: ${pressingWhy(c, s, job)}.`, { unit: u.id, job: job.id })
+      push(s, out, 'pressing', job.field, 'info', `${subject(u, 'leaves', 'You leave')} ${pick ? JOB_LABEL[pick.job.kind].toLowerCase() : 'other work'} to do the ${JOB_LABEL[job.kind].toLowerCase()} in ${placeName(job.field)}, because ${pressingWhy(c, s, job)}.`, { unit: u.id, job: job.id })
     }
     return { job, rig }
   }
@@ -979,7 +979,7 @@ function peopleDay(c: Campaign, s: Season, turns: Turn[], out: GameEvent[]): voi
     const used = t ? Math.max(0, Math.min(1, 1 - t.left)) : 0
     if (t) {
       for (const k of P.SKILLS) {
-        for (const level of gainXp(u, k, t.spent[k])) push(s, out, 'skillUp', -1, 'good', `${u.name} is better at ${SKILL_LABEL[k]}: level ${level}.`, { unit: u.id, level })
+        for (const level of gainXp(u, k, t.spent[k])) push(s, out, 'skillUp', -1, 'good', `${subject(u, 'is', 'You are')} better at ${SKILL_LABEL[k]}: level ${level}.`, { unit: u.id, level })
       }
     }
     const tire = P.TIRE_PER_DAY * (u.trait === 'tireless' ? P.TIRELESS : 1)
@@ -987,12 +987,12 @@ function peopleDay(c: Campaign, s: Season, turns: Turn[], out: GameEvent[]): voi
     u.tired = Math.max(0, Math.min(1, u.tired + tire * used - P.REST_PER_DAY * (1 - used)))
     if (wasTired < P.HURT_TIRED && u.tired >= P.HURT_TIRED) {
       push(s, out, 'wornOut', -1, 'warn', (u.rest ?? 'auto') === 'push'
-        ? `${u.name} is worn out and told to work on: slower, and liable to get hurt on a machine or in the woods.`
-        : `${u.name} is worn out and will rest tomorrow, before anyone gets hurt.`, { unit: u.id })
+        ? `${subject(u, 'is', 'You are')} worn out but still working, which is slower and risks an injury on a machine or in the woods.`
+        : `${subject(u, 'is', 'You are')} worn out and will rest tomorrow before anyone gets hurt.`, { unit: u.id })
     }
     if (u.rest === 'now' && u.tired < P.REST_UNTIL) {
       u.rest = 'auto'
-      push(s, out, 'rested', -1, 'info', `${u.name} is rested and back at work tomorrow.`, { unit: u.id })
+      push(s, out, 'rested', -1, 'info', `${subject(u, 'is', 'You are')} rested and will be back at work tomorrow.`, { unit: u.id })
     }
     const target = moodTarget(c, u, fieldsIn)
     let pull = P.MOOD_PULL
@@ -1003,14 +1003,14 @@ function peopleDay(c: Campaign, s: Season, turns: Turn[], out: GameEvent[]): voi
     if (u.mood > 1) u.mood = 1
     if (u.kind === 'farmer') continue
     if (u.mood < P.QUIT_MOOD) {
-      if (u.low === 0) push(s, out, 'unhappy', -1, 'warn', `${u.name} is unhappy. A week of it and they will quit.`, { unit: u.id })
+      if (u.low === 0) push(s, out, 'unhappy', -1, 'warn', `${u.name} is unhappy and will quit if it lasts a week.`, { unit: u.id })
       u.low++
     } else u.low = 0
     if (u.low >= P.QUIT_DAYS) quit.push(u)
   }
   for (const u of quit) {
     removePerson(c, u)
-    push(s, out, 'quit', -1, 'bad', `${u.name} has had enough and quits.`, { unit: u.id })
+    push(s, out, 'quit', -1, 'bad', `${u.name} has had enough and quit.`, { unit: u.id })
   }
 }
 
@@ -1036,7 +1036,7 @@ export function sheltering(c: Campaign, tract: number): string {
     const dx = p.x - t.x, dz = p.z - t.z
     if (dx * dx + dz * dz <= P.SHELTER_RANGE * P.SHELTER_RANGE && fieldEnv(c, i).shelter < 0) out.push(FIELD_NAMES[i])
   }
-  return out.length ? ` ${out.join(' and ')} ${out.length === 1 ? 'is' : 'are'} out in the open now: drier, windier, and not so frosty.` : ''
+  return out.length ? ` ${out.join(' and ')} ${out.length === 1 ? 'is' : 'are'} out in the open now, which makes ${out.length === 1 ? 'it' : 'them'} drier, windier and less frosty.` : ''
 }
 
 // The contractors' day: stumps pulled and tile laid, a season day at a time.
@@ -1050,10 +1050,10 @@ function contractors(c: Campaign, s: Season, out: GameEvent[]): void {
     fp.works = null
     if (kind === 'stump') {
       stumped(c, i)
-      push(s, out, 'stumped', i, 'good', `The stumps are out of ${FIELD_NAMES[i]}. It is a field now: rested, stony new ground, ready to plant next spring.`)
+      push(s, out, 'stumped', i, 'good', `The stumps are out of ${FIELD_NAMES[i]}. It's a field now, with rested but stony new ground, and you can plant it next spring.`)
     } else {
       fp.tiled = true
-      push(s, out, 'tiled', i, 'good', `Tile drains are in under ${FIELD_NAMES[i]}: it drains like the mid slope now, and holds a little less water in a drought.`)
+      push(s, out, 'tiled', i, 'good', `Tile drains are in under ${FIELD_NAMES[i]}, so it now drains like the mid slope and holds a little less water in a drought.`)
     }
   }
 }
@@ -1115,7 +1115,7 @@ function fieldDay(world: World, c: Campaign, s: Season, fi: number, d: Day, sevR
   }
   if (alive && !(f.flags & F_DRY) && f.emergeDay >= 0 && f.ksAvg < 0.55) {
     f.flags |= F_DRY
-    push(s, out, 'dry', fi, 'warn', `${name} is drying out. The plants are wilting by afternoon.`)
+    push(s, out, 'dry', fi, 'warn', `${name} is drying out, and the plants are wilting by afternoon.`)
   }
   if (!(f.flags & F_LOGGED) && f.logDays >= 3) {
     f.flags |= F_LOGGED
@@ -1262,18 +1262,18 @@ function fieldDay(world: World, c: Campaign, s: Season, fi: number, d: Day, sevR
     f.pdEmerge = f.pdAir
     f.flags |= F_EMERGED
     const gaps = Math.round((1 - planted / P.HILLS) * 100)
-    if (gaps >= 8) push(s, out, 'emerged', fi, 'warn', `${name} is up, but thin: about ${gaps}% of the seed rotted in cold ground.`, { gaps })
-    else push(s, out, 'emerged', fi, 'good', `${name} is up: rows of green from the road.`)
+    if (gaps >= 8) push(s, out, 'emerged', fi, 'warn', `${name} is up but thin, because about ${gaps}% of the seed rotted in the cold ground.`, { gaps })
+    else push(s, out, 'emerged', fi, 'good', `${name} is up, and you can see rows of green from the road.`)
   }
   if (f.status === 'planted' && planted === 0) {
     f.status = 'lost'
-    push(s, out, 'lost', fi, 'bad', `The seed rotted in ${name}. Cold, wet ground.`)
+    push(s, out, 'lost', fi, 'bad', `The seed rotted in ${name} because the ground was cold and wet.`)
     return
   }
   if (alive && f.emergeDay >= 0) {
     if (frostKill >= 0.05) { f.frostDay = s.day; f.frostShare = frostKill }
     if (frostKill >= 0.25) {
-      push(s, out, 'frost', fi, 'bad', `Frost in ${name}: ${Math.round(frostKill * 100)}% of the leaf blackened.`, { kill: Math.round(frostKill * 100) })
+      push(s, out, 'frost', fi, 'bad', `Frost hit ${name} and blackened ${Math.round(frostKill * 100)}% of the leaves.`, { kill: Math.round(frostKill * 100) })
     }
     if (f.tiDay < 0 && f.pdAir - f.pdEmerge >= v.tiPd) {
       f.tiDay = s.day
@@ -1284,22 +1284,22 @@ function fieldDay(world: World, c: Campaign, s: Season, fi: number, d: Day, sevR
         const n = v.set * (0.72 + 0.56 * nextUnit(c)) * water * ((st & H_VIRUS) ? 0.85 : 1)
         f.hN[i] = Math.max(1, Math.round(n))
       }
-      push(s, out, 'ti', fi, 'info', `${name}: tubers are setting. From here the crop is underground.`)
+      push(s, out, 'ti', fi, 'info', `Potatoes are starting to form in ${name}. From here on the crop grows underground.`)
     }
     if (f.closeDay < 0 && f.canopy >= P.CLOSURE) {
       f.closeDay = s.day
-      push(s, out, 'closed', fi, 'info', `${name}: the rows have closed.${f.hillPasses === 0 ? ' It was never hilled.' : ''}`)
+      push(s, out, 'closed', fi, 'info', `The rows have closed in ${name}.${f.hillPasses === 0 ? ' It was never hilled.' : ''}`)
     }
     if (f.matureDay < 0 && up > 0 && sumAge / up >= matAt) {
       f.matureDay = s.day
-      push(s, out, 'mature', fi, 'info', `${name}: the vines are starting to go down.`)
+      push(s, out, 'mature', fi, 'info', `The vines in ${name} are starting to die back.`)
     }
     if (!f.seenFromRoad && f.sev >= P.ROAD_SEV) {
       f.seenFromRoad = true
       f.blightFound ??= s.day
       for (let i = 0; i < P.HILLS; i++) if (f.hLes[i] >= P.LESION_START && !(f.hState[i] & GONE)) f.hState[i] |= H_KNOWN
       f.knownSev = knownSeverity(f)
-      push(s, out, 'blightSeen', fi, 'bad', `Blight in ${name}: brown patches you can see from the road.`)
+      push(s, out, 'blightSeen', fi, 'bad', `There's blight in ${name}. You can see the brown patches from the road.`)
     }
     if (f.seenFromRoad) {
       for (let i = 0; i < P.HILLS; i++) if (f.hLes[i] >= 0.2 && !(f.hState[i] & GONE)) f.hState[i] |= H_KNOWN
@@ -1307,13 +1307,13 @@ function fieldDay(world: World, c: Campaign, s: Season, fi: number, d: Day, sevR
     if (f.tiDay >= 0 && f.green < 0.03) {
       f.deadDay = s.day
       f.status = 'dead'
-      const why = frostKill > 0.5 ? 'Frost finished the vines' : f.sev > 0.5 ? 'Blight has taken the vines' : 'The vines are down'
+      const why = frostKill > 0.5 ? 'Frost killed the vines' : f.sev > 0.5 ? 'Blight has killed the vines' : 'The vines have died back'
       push(s, out, 'vinesDead', fi, f.sev > 0.5 || frostKill > 0.5 ? 'bad' : 'info', `${why} in ${name}.`)
     }
   }
   if (f.deadDay >= 0 && !(f.flags & F_SKIN) && s.day - f.deadDay >= P.SKIN_DAYS && f.status === 'dead') {
     f.flags |= F_SKIN
-    push(s, out, 'skinSet', fi, 'good', `${name}: skins are set. Ready to dig.`)
+    push(s, out, 'skinSet', fi, 'good', `The skins are set in ${name}, so it's ready to dig.`)
   }
 }
 
@@ -1353,9 +1353,9 @@ export function stepDay(world: World, c: Campaign): GameEvent[] {
 
   const nb = world.neighbor[String(s.year)]
   if (nb) {
-    const news = s.day === nb.plant ? 'are planting' : s.day === nb.hill1 ? 'are hilling' : s.day === nb.firstSpray ? 'have the sprayer out'
-      : s.day === nb.kill ? 'are killing their vines' : s.day === nb.dig ? 'have started digging' : ''
-    if (news) push(s, out, 'neighbor', -1, 'info', `From the road: the neighbours ${news}.`)
+    const news = s.day === nb.plant ? 'planting' : s.day === nb.hill1 ? 'hilling' : s.day === nb.firstSpray ? 'out with the sprayer'
+      : s.day === nb.kill ? 'killing the vines' : s.day === nb.dig ? 'starting to dig' : ''
+    if (news) push(s, out, 'neighbor', -1, 'info', `From the road, you can see the neighbor ${news}.`)
   }
 
   s.soilT += P.SOIL_T_GAIN * (d.tmean - s.soilT)
@@ -1365,7 +1365,7 @@ export function stepDay(world: World, c: Campaign): GameEvent[] {
     s.sv += sevRegion
     if (s.watchDay < 0 && s.sv >= P.SV_THRESHOLD) {
       s.watchDay = s.day
-      push(s, out, 'watch', -1, 'warn', `Blight watch: ${P.SV_THRESHOLD} severity values have accumulated. Spores can be expected from here on.`)
+      push(s, out, 'watch', -1, 'warn', `The blight watch is on. The wet weather has reached ${P.SV_THRESHOLD} severity values, so expect spores from now on.`)
     }
   }
   s.svToday = sevRegion
@@ -1391,17 +1391,17 @@ export function stepDay(world: World, c: Campaign): GameEvent[] {
         finishLot(c, f, lot)
         f.status = 'dug'
         f.dugDay = s.day
-        push(s, out, 'dug', i, 'bad', `${FIELD_NAMES[i]} froze before the digging was done. What was hauled in is saved.`, { lot: lot.id })
+        push(s, out, 'dug', i, 'bad', `${FIELD_NAMES[i]} froze before the digging was finished. What was already hauled in is safe.`, { lot: lot.id })
       } else if (f.status === 'planted' || f.status === 'growing' || f.status === 'dead') {
         f.status = 'lost'
-        push(s, out, 'lost', i, 'bad', `${FIELD_NAMES[i]} froze in the ground. The crop is lost.`)
+        push(s, out, 'lost', i, 'bad', `${FIELD_NAMES[i]} froze in the ground, and the crop is lost.`)
       } else if (f.status === 'idle') {
         f.status = 'lost'
       }
     }
     leftInField(c, s, out, 'froze in the barrels')
     closeIncidents(c, s, out)
-    push(s, out, 'freeze', -1, 'info', `${formatDay(s.year, s.day)}: the ground has frozen. The season is over.`)
+    push(s, out, 'freeze', -1, 'info', `The ground froze on ${formatDay(s.year, s.day)}, so the season is over.`)
   }
   s.day++
   c.steps++
@@ -1425,7 +1425,7 @@ function morning(c: Campaign, s: Season, out: GameEvent[]): void {
   const back = c.broken.filter(b => b <= s.day).length
   if (back > 0) {
     c.broken = c.broken.filter(b => b > s.day)
-    push(s, out, 'repaired', -1, 'good', back === 1 ? 'The tractor is going again.' : `${back} tractors are going again.`)
+    push(s, out, 'repaired', -1, 'good', back === 1 ? 'The tractor is running again.' : `${back} tractors are running again.`)
   }
   for (const inc of [...c.incidents]) if (inc.until < s.day) resolveIncident(c, s, inc, defaultChoice(inc), out)
   let running = tractorsRunning(c, s.day)
@@ -1441,7 +1441,7 @@ function openIncident(c: Campaign, s: Season, out: GameEvent[], fields: Omit<Inc
   const inc: Incident = { id: c.nextIncident++, day: s.day, ...fields }
   c.incidents.push(inc)
   s.telegram = s.day
-  const choices = inc.choices.map(ch => CHOICE_LABEL[ch]).join(' or ')
+  const choices = inc.choices.map((ch, k) => k ? CHOICE_LABEL[ch].replace(/^./, x => x.toLowerCase()) : CHOICE_LABEL[ch]).join(' or ')
   push(s, out, 'incident', -1, 'warn', `${INCIDENT_TITLE[inc.kind]}. ${incidentText(c, inc)} ${choices}?`, { incident: inc.id, kind: inc.kind })
   return inc
 }
@@ -1453,23 +1453,23 @@ export function resolveIncident(c: Campaign, s: Season, inc: Incident, choice: s
   if (k >= 0) c.incidents.splice(k, 1)
   switch (choice) {
     case 'pass':
-      push(s, out, 'incidentDone', -1, 'info', `${inc.applicant!.name} looks for work elsewhere.`, { incident: inc.id })
+      push(s, out, 'incidentDone', -1, 'info', `${inc.applicant!.name} has gone to look for work elsewhere.`, { incident: inc.id })
       break
     case 'let': {
       const u = c.crew.find(x => x.id === inc.unit)
       if (u && u.mood < P.POACH_MOOD) {
         removePerson(c, u)
-        push(s, out, 'poached', -1, 'bad', `${u.name} takes the neighbour's offer and goes.`, { incident: inc.id, unit: u.id })
+        push(s, out, 'poached', -1, 'bad', `${u.name} takes the neighbor's offer and leaves.`, { incident: inc.id, unit: u.id })
       } else if (u) {
         push(s, out, 'incidentDone', -1, 'good', `${u.name} is happy enough here and stays.`, { incident: inc.id, unit: u.id })
       }
       break
     }
     case 'wait':
-      push(s, out, 'incidentDone', -1, 'info', `The part is on its way: the tractor is back on ${formatDay(s.year, inc.back!)}.`, { incident: inc.id })
+      push(s, out, 'incidentDone', -1, 'info', `The part is on its way, and the tractor will be back on ${formatDay(s.year, inc.back!)}.`, { incident: inc.id })
       break
     case 'refuse':
-      push(s, out, 'incidentDone', -1, 'info', 'The buyer goes on down the road.', { incident: inc.id })
+      push(s, out, 'incidentDone', -1, 'info', 'The buyer has moved on down the road.', { incident: inc.id })
       break
   }
 }
@@ -1501,14 +1501,14 @@ function drawIncidents(c: Campaign, s: Season, turns: Turn[], out: GameEvent[]):
       const days = P.HURT_DAYS[0] + Math.floor(u01(7150 + u.id) * (P.HURT_DAYS[1] - P.HURT_DAYS[0] + 1))
       u.out = s.day + 1 + days
       letGo(u)
-      push(s, out, 'hurt', -1, 'bad', `${u.name} is hurt, working worn out ${t.spent.woods > 0 ? 'in the woods' : 'on the tractor'}: off for ${days} days, back on ${formatDay(s.year, u.out)}.`, { unit: u.id, days })
+      push(s, out, 'hurt', -1, 'bad', `${subject(u, 'is', 'You are')} hurt after working worn out ${t.spent.woods > 0 ? 'in the woods' : 'on the tractor'}, and will be off for ${days} days, back on ${formatDay(s.year, u.out)}.`, { unit: u.id, days })
     }
     if (t.tractor && c.broken.length < tractorsOwned(c) && !firstPlanting) {
       if (u01(7200 + u.id) < breakdownChance(u, shed)) {
         const mechanic = c.crew.some(x => x.skills.machine >= P.MECHANIC && !hurt(x, s.day + 1))
         const back = s.day + 1 + (mechanic ? 1 : P.BREAK_DAYS)
         c.broken.push(back)
-        if (mechanic) push(s, out, 'breakdown', -1, 'warn', `A tractor broke down under ${u.name}. There is someone on the farm who can fix it: it is back on ${formatDay(s.year, back)}.`, { unit: u.id })
+        if (mechanic) push(s, out, 'breakdown', -1, 'warn', `A tractor broke down while ${subject(u, 'was', 'you were')} driving it. Someone on the farm can fix it, so it'll be back on ${formatDay(s.year, back)}.`, { unit: u.id })
         else openIncident(c, s, out, { kind: 'breakdown', until: back - 2, choices: ['rush', 'wait'], unit: u.id, back })
       }
     }
@@ -1559,7 +1559,7 @@ export function leftInField(c: Campaign, s: Season, out: GameEvent[], how: strin
     if (f.inField >= 0.5) {
       const cwt = f.inField
       lose(f, lot, cwt, 'frost')
-      push(s, out, 'frozenInField', i, 'bad', `${withCommas(cwt)} cwt in ${FIELD_NAMES[i]} ${how}: it never came in.`, { cwt: Math.round(cwt) })
+      push(s, out, 'frozenInField', i, 'bad', `${withCommas(cwt)} cwt in ${FIELD_NAMES[i]} ${how} and never came in.`, { cwt: Math.round(cwt) })
     }
     weigh(s, f, i, lot, out)
   }

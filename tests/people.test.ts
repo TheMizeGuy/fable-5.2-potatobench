@@ -430,7 +430,7 @@ describe('the foreman', () => {
     const hand = c.crew[1]
     refused(c, { t: 'foreman', unit: 0, block: 'home' }, /farmer/)
     refused(c, { t: 'foreman', unit: hand.id, block: 'dufour' }, /no land/)
-    refused(c, { t: 'foreman', unit: hand.id, block: null }, /not a foreman/)
+    refused(c, { t: 'foreman', unit: hand.id, block: null }, /isn't a foreman/)
     expect(S.payOf(hand)).toBe(S.HAND_WAGE)
     ok(c, { t: 'foreman', unit: hand.id, block: 'home' })
     expect(S.payOf(hand)).toBe(Math.round(S.HAND_WAGE * S.FOREMAN_PAY))

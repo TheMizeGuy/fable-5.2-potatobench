@@ -153,11 +153,11 @@ export function clearing(c: Campaign, i: number): { stage: ClearStage; next: str
   const fp = c.fields[i]
   const name = PARCELS[i].name
   if (standing(fp.cover)) {
-    return { stage: 'fell', next: `Fell the ${fp.cover === 'woods' ? 'woods' : 'brush'} on ${name}: about ${Math.ceil(fellLeft(c, i))} crew-days of woods work, best done in winter.` }
+    return { stage: 'fell', next: `Fell the ${fp.cover === 'woods' ? 'woods' : 'brush'} on ${name}. It takes about ${Math.ceil(fellLeft(c, i))} crew-days of woods work and goes fastest in winter.` }
   }
   if (fp.cover === 'stumps') {
-    return { stage: 'stump', next: fp.works?.kind === 'stump' ? `The bulldozer is pulling stumps: ${fp.works.left} more season days.` : `Have the stumps pulled: a contractor, $${withCommas(P.STUMP_FEE)}, about ${P.STUMP_DAYS} season days.` }
+    return { stage: 'stump', next: fp.works?.kind === 'stump' ? `The bulldozer is pulling stumps, with ${fp.works.left} more season ${fp.works.left === 1 ? 'day' : 'days'} to go.` : `Have a contractor pull the stumps. It costs $${withCommas(P.STUMP_FEE)} and takes about ${P.STUMP_DAYS} season days.` }
   }
-  if (fp.stones >= P.ROCKS_ADVISE) return { stage: 'rocks', next: `Pick the rocks off ${name} when no crop is up: it is new ground and stony.` }
+  if (fp.stones >= P.ROCKS_ADVISE) return { stage: 'rocks', next: `Pick the rocks off ${name} when no crop is growing, because new ground is stony.` }
   return { stage: 'done', next: '' }
 }

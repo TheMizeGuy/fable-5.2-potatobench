@@ -9,7 +9,7 @@ import { variety } from './varieties.ts'
 
 export const INCIDENT_TITLE: Record<IncidentKind, string> = {
   applicant: 'Someone asks for work',
-  poach: 'A neighbour wants one of your people',
+  poach: 'A neighbor wants one of your people',
   breakdown: 'A tractor has broken down',
   buyer: 'A buyer stops in',
 }
@@ -28,17 +28,17 @@ export function incidentText(c: Campaign, inc: Incident): string {
     case 'applicant': {
       const a = inc.applicant!
       const best = bestSkill(a.skills)
-      return `${a.name} is looking for work: best at ${SKILL_LABEL[best]} (level ${a.skills[best]}), ${P.TRAITS[a.trait].name.toLowerCase()}, asking $${withCommas(a.ask)} a month.`
+      return `${a.name} is looking for work at $${withCommas(a.ask)} a month. Their best skill is ${SKILL_LABEL[best]} (level ${a.skills[best]}), and their trait is ${P.TRAITS[a.trait].name.toLowerCase()}.`
     }
     case 'poach': {
       const u = c.crew.find(x => x.id === inc.unit)
-      return u ? `A neighbour has offered ${u.name} $${withCommas(inc.wage!)} a month, against the $${withCommas(u.wage)} paid here.` : 'The neighbour\'s offer has lapsed.'
+      return u ? `A neighbor has offered ${u.name} $${withCommas(inc.wage!)} a month. You pay $${withCommas(u.wage)}.` : 'The neighbor\'s offer has expired.'
     }
     case 'breakdown':
-      return `A tractor has broken down. Waiting for the part, it is back on ${day(inc.back!)}.`
+      return `If you wait for the part, the tractor will be back on ${day(inc.back!)}.`
     case 'buyer': {
       const lot = c.lots.find(l => l.id === inc.lot)
-      return lot ? `A buyer offers 10% over the market for all ${withCommas(lotCwt(lot))} cwt of ${variety(lot.variety).name}, this week only.` : 'The buyer has gone.'
+      return lot ? `A buyer is offering 10% over the market price for all ${withCommas(lotCwt(lot))} cwt of your ${variety(lot.variety).name}, this week only.` : 'The buyer has left.'
     }
   }
 }
@@ -47,16 +47,16 @@ export function incidentText(c: Campaign, inc: Incident): string {
 export function choiceDoes(c: Campaign, inc: Incident, choice: string): string {
   switch (choice) {
     case 'hire': return `${inc.applicant!.name} starts at $${withCommas(inc.applicant!.ask)} a month, with their own skills and trait.`
-    case 'pass': return inc.kind === 'buyer' ? 'The lot stays to be sold or stored as before.' : 'They look elsewhere.'
-    case 'match': return `The wage goes up ${Math.round(P.POACH_RAISE * 100)}%, to $${withCommas(inc.wage!)} a month.`
+    case 'pass': return inc.kind === 'buyer' ? 'You keep the lot to sell or store later.' : 'They\'ll look for work elsewhere.'
+    case 'match': return `Their wage goes up ${Math.round(P.POACH_RAISE * 100)}% to $${withCommas(inc.wage!)} a month.`
     case 'let': {
       const u = c.crew.find(x => x.id === inc.unit)
-      return u && u.mood < P.POACH_MOOD ? `${u.name} is not happy here and will go.` : `${u?.name ?? 'They'} may stay if happy enough here: they go if their mood is under ${P.POACH_MOOD}.`
+      return u && u.mood < P.POACH_MOOD ? `${u.name} isn't happy here and will leave.` : `${u?.name ?? 'They'} will stay only if happy enough here, and will leave if their mood is under ${P.POACH_MOOD}.`
     }
-    case 'rush': return `$${withCommas(P.RUSH_PART)}, and the tractor is back tomorrow.`
-    case 'wait': return `The tractor is back on ${formatDay(c.year, inc.back!)}, for nothing.`
-    case 'take': return 'The whole lot is sold now at 10% over what it would fetch on the market today.'
-    case 'refuse': return 'The lot stays to be sold or stored as before.'
+    case 'rush': return `It costs $${withCommas(P.RUSH_PART)}, and the tractor is back tomorrow.`
+    case 'wait': return `It's free, and the tractor is back on ${formatDay(c.year, inc.back!)}.`
+    case 'take': return 'You sell the whole lot now for 10% more than today\'s market price.'
+    case 'refuse': return 'You keep the lot to sell or store later.'
   }
   return ''
 }

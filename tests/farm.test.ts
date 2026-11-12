@@ -75,7 +75,7 @@ describe('the land', () => {
       }
     }
     expect(S.landInfo(c).map(l => l.field)).toEqual([6, 7, 8, 9, 10, 11, 12, 13, 16, 17])
-    refused(c, { t: 'plan', field: 9, plan: { crop: 'potato', variety: 'katahdin', seed: 'certified' } }, /not the farm's/)
+    refused(c, { t: 'plan', field: 9, plan: { crop: 'potato', variety: 'katahdin', seed: 'certified' } }, /isn't yours/)
   })
 
   it('rents by the year: the rent is part of the plan, paid when the season begins, and carried into the next spring until released', () => {
@@ -105,7 +105,7 @@ describe('the land', () => {
     expect(S.planCosts(c).rent).toBe(S.PARCELS[7].rent)
     // Given up, it is not the farm's: no plan, no rent.
     ok(c, { t: 'release', field: 7 })
-    refused(c, { t: 'release', field: 7 }, /not the farm's/)
+    refused(c, { t: 'release', field: 7 }, /isn't yours/)
     expect(c.fields[7].tenure).toBe('none')
     expect(c.plans[7].crop).toBe('rest')
     expect(S.planCosts(c).rent).toBe(0)
@@ -117,7 +117,7 @@ describe('the land', () => {
     ok(c, { t: 'plan', field: 8, plan: { crop: 'rest', variety: 'katahdin', seed: 'certified' } })
     const record = structuredClone(c.fields.slice(9))
     ok(c, { t: 'begin' })
-    for (const kind of S.JOBS) refused(c, { t: 'job', kind, field: 9 }, /not the farm's/)
+    for (const kind of S.JOBS) refused(c, { t: 'job', kind, field: 9 }, /isn't yours/)
     expect(S.fieldActions(world, c, 9).every(a => !a.ok)).toBe(true)
     expect(S.fieldInfo(c, 9).status).toBe('off')
     expect(c.season!.fields[9].hState).toEqual([])
@@ -147,12 +147,12 @@ describe('the land', () => {
     expect(S.netWorth(c)).toBe(worth)
     // Bought land pays no rent and is not given back.
     expect(S.planCosts(c).rent).toBe(0)
-    refused(c, { t: 'release', field: 9 }, /owns/)
-    refused(c, { t: 'buyLand', field: 9 }, /already owns/)
+    refused(c, { t: 'release', field: 9 }, /You own/)
+    refused(c, { t: 'buyLand', field: 9 }, /already own/)
     // Short of cash for the quarter down: refused, whatever the bank would lend for the spring.
     const x = structuredClone(c)
     x.cash = S.PARCELS[6].price * S.MORTGAGE_DOWN - 1
-    refused(x, { t: 'buyLand', field: 6 }, /cash/)
+    refused(x, { t: 'buyLand', field: 6 }, /can't afford the down payment/)
     ok(c, { t: 'begin' })
     refused(c, { t: 'buyLand', field: 6 }, /spring/)
     refused(c, { t: 'rent', field: 6 }, /spring/)

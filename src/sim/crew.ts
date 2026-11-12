@@ -28,18 +28,18 @@ export function crewCount(c: Campaign, kind: UnitKind): number {
 
 // Why nobody more can be hired now, or '' when someone can.
 export function hireRoom(c: Campaign): string {
-  if (c.phase !== 'plan' && c.phase !== 'season') return 'People are hired in spring or during the season.'
+  if (c.phase !== 'plan' && c.phase !== 'season') return 'You can hire in spring or during the season.'
   if (c.phase === 'season' && (!c.season || c.season.frozen)) return 'The season is over.'
   const limit = housingLimit(c)
   if (hiredCount(c) >= limit) {
-    return limit <= P.HOUSED_OUT ? `${P.HOUSED_OUT} hired people can live out; any more need a bed in a bunkhouse.` : `Every bed is taken: the farm houses ${limit} hired people.`
+    return limit <= P.HOUSED_OUT ? `Only ${P.HOUSED_OUT} hired people can live off the farm, and any more need a bed in a bunkhouse.` : `Every bunkhouse bed is taken, and your farm houses only ${limit} hired people.`
   }
   return ''
 }
 
 // Why a unit of this kind cannot be hired now, or '' when it can.
 export function hireBlock(c: Campaign, kind: UnitKind): string {
-  if (kind === 'farmer') return 'There is one farmer, and that is you.'
+  if (kind === 'farmer') return 'There\'s only one farmer, and that\'s you.'
   if (kind !== 'hand' && kind !== 'operator') return 'No such work on this farm.'
   return hireRoom(c)
 }

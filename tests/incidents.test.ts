@@ -99,7 +99,7 @@ describe('someone asking for work', () => {
     expect([u.name, u.skills, u.trait, u.wage]).toEqual([inc.applicant!.name, inc.applicant!.skills, inc.applicant!.trait, inc.applicant!.ask])
     expect(c.yearWages - wages).toBe(inc.applicant!.ask)
     expect(c.incidents.find(i => i.id === inc.id)).toBeUndefined()
-    refused(c, { t: 'answer', incident: inc.id, choice: 'hire' }, /No such question/)
+    refused(c, { t: 'answer', incident: inc.id, choice: 'hire' }, /no longer waiting/)
   })
 })
 
@@ -318,6 +318,6 @@ describe('a buyer', () => {
     ok(d, { t: 'sell', lot: inc.lot!, frac: 1 })
     // Sold meanwhile, the offer goes with the lot: nothing is left to answer.
     expect(d.incidents.some(x => x.id === inc.id)).toBe(false)
-    refused(d, { t: 'answer', incident: inc.id, choice: 'take' }, /No such question/)
+    refused(d, { t: 'answer', incident: inc.id, choice: 'take' }, /no longer waiting/)
   })
 })

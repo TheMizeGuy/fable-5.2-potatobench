@@ -81,7 +81,7 @@ function cashBook(y: S.YearSummary, lost: boolean): HTMLElement {
       lost ? h('tr', { class: 'call' }, h('td', null, 'The bank calls the note below'), h('td', { class: 'm num', colspan: 2 }, F.money(S.CREDIT_LIMIT))) : null))
 }
 
-const SKILL_UP = /^(.*) is better at (.*): level (\d+)\.$/
+const SKILL_UP = /^(.*) (?:is|are) better at (.*): level (\d+)\.$/
 const SOMEONE = /^(.*?) (is|has|takes) (.*)$/
 
 interface Deed { who: string | null; text: string; icon?: string }
