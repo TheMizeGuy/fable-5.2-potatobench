@@ -522,7 +522,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       // decision, the bank board's own tag says so instead.
       const stoppedFor = c.incidents.length > 0 || ctx.awaiting > 0
       const stopped = app.speed === 0 && !S.seasonDone(c)
-      paused.hidden = !stopped || (stoppedFor && !low)
+      paused.hidden = !stopped || (stoppedFor && layout !== 'narrow')
       el.classList.toggle('is-paused', !paused.hidden)
       if (!paused.hidden) patch(paused, JSON.stringify([ctx.touch(), app.resumeSpeed]), () => h('button', { class: 'paused-go btn', type: 'button', testid: 'paused-go', onclick: () => app.togglePause() },
         icon('play', 'i'), h('span', { class: 'sr' }, 'Paused. '), `Go on at ${app.resumeSpeed || 1}×`, ctx.touch() ? null : h('span', { class: 'key' }, 'Space')))

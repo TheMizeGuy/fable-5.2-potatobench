@@ -345,5 +345,14 @@
 .season-screen[data-layout='short'] .telegram { top: calc(var(--top, 100px) + 4px); max-height: calc(100% - var(--top, 100px) - 10px); padding: 10px 16px; width: min(620px, calc(100% - 16px)); }
 .season-screen[data-layout='short'] .telegram .tg-name { font-size: 34px; }
 .season-screen[data-layout='short'] .telegram .reply { min-height: 0; }
-.season-screen[data-layout='short'] .telegram .tg-body { padding: 8px 4px; }
+.season-screen[data-layout='short'] .telegram .tg-body { padding: 8px 4px; grid-template-columns: 40px 1fr; }
+.season-screen[data-layout='short'] .telegram .tg-body .bust { width: 40px; height: 40px; }
+.season-screen[data-layout='short'] .telegram .tg-body h2 { font-size: 20px; }
+.season-screen[data-layout='short'] .telegram .tg-body p { font-size: 15px; }
+.season-screen[data-layout='short'] .telegram .tg-from .t-caption { display: none; }
+.season-screen[data-layout='short'] .telegram .tg-head { padding-bottom: 6px; }
+.season-screen[data-layout='short'] .telegram .days b { font-size: 26px; }
+.season-screen[data-layout='short'] .telegram .reply { padding: 8px 12px; gap: 4px 10px; }
+.season-screen[data-layout='short'] .telegram .reply .c-title { font-size: 19px; }
+.season-screen[data-layout='short'] .telegram .reply .c-does { font-size: 14px; }
 .season-screen[data-layout='short'] .paused { top: calc(var(--top, 100px) + 6px); }
