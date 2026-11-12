@@ -173,6 +173,9 @@ export class Papers {
     document.addEventListener('keydown', e => this.trap(e))
   }
 
+  // When the last paper went, for a key meant for it that comes a moment late.
+  closedAt = 0
+
   // True while a paper is up or on its way out.
   isOpen(): boolean { return this.stack.length > 0 || this.leaving > 0 }
   top(): HTMLElement | null { return this.stack[this.stack.length - 1]?.el ?? null }
@@ -239,6 +242,7 @@ export class Papers {
     const k = this.stack.indexOf(entry)
     if (k < 0) return
     this.stack.splice(k, 1)
+    this.closedAt = performance.now()
     this.queue = this.queue.filter(s => !s.stale?.())
     const gone = () => {
       entry.el.remove()
