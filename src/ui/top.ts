@@ -146,6 +146,9 @@ export function logsWanted(c: S.Campaign): string {
   return `Keep some for building: ${F.list(want.map(w => `${S.article(w.name)} ${w.name} takes ${w.logs} loads`))}. Bought back, logs cost ${F.money(S.MILL_PRICE)} a load.`
 }
 
+// A goal's when, run into a line: its first word lower-cased, a month's name left as it is.
+const lowerFirst = (t: string) => t ? t[0].toLowerCase() + t.slice(1) : t
+
 const MOMENT_MS = 1600
 // The goals that are a field's job: put on the list by the player, or by the crew's routine.
 const GOAL_ROUTINE: Record<string, S.JobKind> = { plant: 'plant', walk: 'scout', hill: 'hill', sample: 'sample', dig: 'dig', haul: 'haul', spray: 'spray', kill: 'kill' }
@@ -289,12 +292,12 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
   // Why a goal is not the fist's to point at now, in a few words.
   function notYet(c: S.Campaign, g: Goal): string {
     const act = GOAL_ROUTINE[g.id]
-    if (!g.now) return g.when.toLowerCase()
+    if (!g.now) return lowerFirst(g.when)
     if (g.block) return F.localize(g.block).replace(/\.$/, '')
     if (act && c.season?.jobs.some(j => j.kind === act)) return 'on the list'
     if (act && S.routineInfo(c).some(r => r.kind === act && r.auto)) return 'the crew sees to it by itself'
     if (g.id === 'hire') { const why = S.hireRoom(c); if (why) return F.localize(why).replace(/\.$/, '').toLowerCase() }
-    return g.when.toLowerCase()
+    return lowerFirst(g.when)
   }
 
   // A goal's "Show me": to the control where it is reached. A foreman is named on the person's card, its key lit.
@@ -316,7 +319,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     const ready = wait > 0 && first >= 0 ? S.plantReady(app.world, c, first) : null
     const title = ready ? `Plant when the soil reaches ${F.temp(ready.need)}` : g?.title ?? ''
     const n = wait > 1 ? `about ${F.plural(wait, 'day')}` : wait === 1 ? 'any day' : g ? progressText(g) : ''
-    const when = !g ? null : !g.now ? h('span', { class: 'goal-when' }, g.when.toLowerCase())
+    const when = !g ? null : !g.now ? h('span', { class: 'goal-when' }, lowerFirst(g.when))
       : c.phase === 'plan' && CROP_STEPS.has(g.id) ? h('span', { class: 'goal-when' }, 'once the season starts')
         : null
     // While the soil warms there is nothing to do but wait: a key beside the slip lets the weeks go by at 3x.
