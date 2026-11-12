@@ -10,6 +10,8 @@ import { fist } from './system/parts.ts'
 import './system/tutorial.css'
 
 export const guide = new Guide(localStore())
+// The pause reason the guide's own hold leaves on the clock.
+const HOLD = 'The county agent has a note for you.'
 // For the browser tests and the capture tool, as window.__county is.
 ;(globalThis as Record<string, unknown>).__countyGuide = guide
 
@@ -115,7 +117,7 @@ function resolve(ctx: Ctx, root: HTMLElement, p: Point | null): { el: HTMLElemen
 // them. hard: what it must never cover (a clock, a command bar, a telegram, a paper, a test-dig tray, a person's card).
 function hardOnes(root: HTMLElement): Box[] {
   const hard: Box[] = []
-  for (const el of root.querySelectorAll('.clock, .command, .telegram, .dialog, [data-testid="paused"], .tray-paper, .person-card, .work, .pin-list-at, .tb-pop')) {
+  for (const el of root.querySelectorAll('.clock, .command, .telegram, .dialog, [data-testid="paused"], .tray-paper, .person-card, .work, .pin-list-at, .tb-pop, .queue, .cat-open')) {
     if (shown(el)) hard.push(box(el.getBoundingClientRect()))
   }
   return hard
@@ -161,6 +163,20 @@ function findPlace(w: number, hgt: number, avoid: Box[], over: { b: Box; cost: n
     }
   }
   return best
+}
+
+// Whether a box on the screen lies over nothing a player reads or presses: the land itself, or the empty ground of a
+// sheet. Sampled at nine points; the guide's own layer is looked through.
+export function bareAt(root: HTMLElement, b: Box): boolean {
+  for (const fx of [0.15, 0.5, 0.85]) for (const fy of [0.15, 0.5, 0.85]) {
+    const x = b.left + (b.right - b.left) * fx, y = b.top + (b.bottom - b.top) * fy
+    const top = document.elementsFromPoint(x, y).find(e => !e.closest('.guide-layer'))
+    if (!top || top.id === 'field') continue
+    if (!root.contains(top)) continue
+    if (top.closest('svg, img, button, a, input, label, .tag, .need, .pin, .portrait, .key, .num, .t-figure, .goal, .date, .leaf')) return false
+    if ([...top.childNodes].some(n => n.nodeType === 3 && (n.nodeValue ?? '').trim())) return false
+  }
+  return true
 }
 
 // ---------------------------------------------------------------- the slip
@@ -258,6 +274,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     return {
       c: app.campaign, world: app.world, screen: app.screen, selection: app.selection, unit: app.unit, yard: app.yard, speed: app.speed,
       needs: app.campaign?.phase === 'season' ? app.needs().map(n => n.need) : [], paper: ps[ps.length - 1] ?? '', papers: ps, input,
+      stopped: app.pauseReason === HOLD ? '' : app.pauseReason,
     }
   }
 
@@ -269,7 +286,8 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
   function camMoved(): void {
     const b = cam.base
     const s = signature(ctx)
-    if (!b || !s) return
+    if (!b) return
+    if (!s) { guide.note(cam.kind === 'two' ? 'turn' : cam.kind); return }
     const turn = Math.atan2(Math.sin(s.angle - b.angle), Math.cos(s.angle - b.angle))
     const k = cam.kind
     if (k === 'pan' && Math.hypot(s.cx - b.cx, s.cy - b.cy) > 40) guide.note('pan')
@@ -315,17 +333,61 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     if (shown(root.querySelector('[data-testid="work-grid"]'))) guide.note('open:work-grid')
   }
 
+  // 20: a lesson that asks for a click on something the days move holds the clock while it shows, and lets it go on at
+  // the speed it had once it passes. A player who starts the clock themselves is not stopped again for that lesson.
+  let holding: { id: string; speed: number } | null = null
+  const overridden = new Set<string>()
+  function hold(): void {
+    const want = now && now.holds && app.screen === 'season' && !overridden.has(now.id) ? now.id : ''
+    if (holding && holding.id && app.speed > 0 && app.pauseReason !== HOLD) { overridden.add(holding.id); holding = null }
+    if (want && !holding && app.speed > 0) {
+      holding = { id: want, speed: app.speed }
+      app.setSpeed(0)
+      app.pauseReason = HOLD
+      ctx.dirty()
+    } else if (want && holding) holding.id = want
+    else if (!want && holding && !resting) {
+      const back = holding.speed
+      holding = null
+      if (app.speed === 0 && app.pauseReason === HOLD) app.setSpeed(back as 0 | 1 | 2 | 3)
+    }
+  }
+
+  // 22: one lesson at a time and never a step ahead of the click. After one passes, the next waits a moment, and waits
+  // while a panel its click opened (a catalogue fold, a paper, a person's card, the grid) is still open.
+  let lastId = ''
+  let restUntil = 0
+  let waitFor: string[] = []
+  let resting = false
+  const PANELS = ['.cat-open', '.paper-layer > .dialog:not(.out)', '.person-card:not([hidden])', '.work:not([hidden])']
+  const panelsOpen = () => PANELS.filter(sel => !!root.querySelector(sel))
+  function paced(x: Lesson | null): Lesson | null {
+    const t = performance.now()
+    resting = false
+    if (x?.id !== lastId) {
+      if (lastId && guide.passed(lastId)) { restUntil = t + 1200; waitFor = panelsOpen() }
+      lastId = x?.id ?? ''
+    }
+    if (!x || x.urgent || x.paper) return x
+    waitFor = waitFor.filter(sel => !!root.querySelector(sel))
+    resting = t < restUntil || waitFor.length > 0
+    if (resting) { stale = true; return null }
+    return x
+  }
+
   function render(): void {
     const c = app.campaign
     // Started with the offer unanswered: straight in.
     if (c && app.screen === 'season' && !guide.p.offered && guide.p.offerSeed === c.seed) guide.refuse()
     if (app.screen === 'plan') notePlan()
     if (app.screen === 'season') noteOpen()
+    if (shown(root.querySelector('#raise-list'))) guide.note('fold:raise')
     const l = lookNow()
     offer = guide.offerFor(c, app.screen)
-    now = offer ? null : guide.showing(l)
+    now = offer ? null : paced(guide.showing(l))
+    hold()
     const docked = app.screen === 'plan'
-    const held = !!now && app.screen === 'season' && guide.holdsClock(c) && app.speed === 0
+    const held = !!now && app.screen === 'season' && app.speed === 0 && (guide.holdsClock(c) || app.pauseReason === HOLD)
     const p = now?.point?.(l) ?? null
     const t = resolve(ctx, root, p)
     target = t.id
@@ -374,9 +436,9 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
       const docked = slot?.isConnected ? slot.querySelector('.guide')?.getBoundingClientRect() : undefined
       const inside = ([x, y]: [number, number, string]) => x >= 4 && y >= 4 && x + s <= innerWidth - 4 && y + s <= innerHeight - 4
       const free = ([x, y]: [number, number, string]) => !docked || !meets({ left: x, top: y, right: x + s, bottom: y + s }, box(docked))
-      // Never over another control it would hide: a clock, a command bar, a paper.
+      // Never over another control it would hide (a clock, a command bar, a paper), nor over anything to be read.
       const hard = [...hardOnes(root), ...[...root.querySelectorAll('.goal')].filter(shown).map(e => box(e.getBoundingClientRect()))]
-      const clear = ([x, y]: [number, number, string]) => !hard.some(a => meets({ left: x, top: y, right: x + s, bottom: y + s }, a))
+      const clear = ([x, y]: [number, number, string]) => !hard.some(a => meets({ left: x, top: y, right: x + s, bottom: y + s }, a)) && bareAt(root, { left: x, top: y, right: x + s, bottom: y + s })
       // And off the field tags where it can be, so the name of what it points at stays readable.
       const tags = [...root.querySelectorAll('.plate-layer .tag')].filter(shown).map(e => box(e.getBoundingClientRect()))
       const bare = ([x, y]: [number, number, string]) => !tags.some(a => meets({ left: x, top: y, right: x + s, bottom: y + s }, a))
