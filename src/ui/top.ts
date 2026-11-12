@@ -151,9 +151,9 @@ const lowerFirst = (t: string) => t ? t[0].toLowerCase() + t.slice(1) : t
 
 // The year's money, by what it was for, from the campaign's own running totals: what moved between two looks.
 const MONEY_PARTS: [keyof S.Campaign, string, 1 | -1][] = [
-  ['yearWages', 'wages', -1], ['yearStorage', 'storage', -1], ['yearRent', 'rent', -1], ['yearLand', 'land', -1], ['yearMortgage', 'the land mortgage', -1],
-  ['yearWorks', 'a contractor', -1], ['yearBuilding', 'building', -1], ['yearPacking', 'packing', -1], ['yearPenalties', 'a contract penalty', -1],
-  ['yearContracts', 'a contract delivery', 1], ['yearLogs', 'logs sold', 1], ['yearStand', 'the farm stand', 1], ['yearRest', 'oats and clover', 1],
+  ['yearWages', 'wages', -1], ['yearStorage', 'storage', -1], ['yearRent', 'rent', -1], ['yearLand', 'land', -1], ['yearMortgage', 'mortgage', -1],
+  ['yearWorks', 'contractor', -1], ['yearBuilding', 'building', -1], ['yearPacking', 'packing', -1], ['yearPenalties', 'penalty', -1],
+  ['yearContracts', 'delivery', 1], ['yearLogs', 'logs', 1], ['yearStand', 'stand', 1], ['yearRest', 'oats', 1],
 ]
 type MoneyLook = Record<string, number>
 
@@ -163,7 +163,7 @@ function moneyLook(c: S.Campaign): MoneyLook {
   return out
 }
 
-// What the money did between two looks, in a few words: "wages $380, an order $110".
+// What the money did between two looks, a word for each part: "wages −$380, orders −$110" (orders: seed, equipment and jobs).
 export function moneyMoved(a: MoneyLook, b: MoneyLook): string {
   const parts: string[] = []
   let named = 0, namedIn = 0
@@ -176,10 +176,10 @@ export function moneyMoved(a: MoneyLook, b: MoneyLook): string {
   }
   const otherOut = (b.costs - a.costs) - named
   const otherIn = (b.revenue - a.revenue) - namedIn
-  if (otherOut >= 0.5) parts.push(`orders, seed and equipment −${F.money(otherOut)}`)
-  if (otherIn >= 0.5) parts.push(`potatoes sold +${F.money(otherIn)}`)
+  if (otherOut >= 0.5) parts.push(`orders −${F.money(otherOut)}`)
+  if (otherIn >= 0.5) parts.push(`sales +${F.money(otherIn)}`)
   const rest = (b.cash - a.cash) - ((b.revenue - a.revenue) - (b.costs - a.costs))
-  if (Math.abs(rest) >= 0.5) parts.push(`${rest < 0 ? 'the bank' : 'other'} ${rest < 0 ? '−' : '+'}${F.money(Math.abs(rest))}`)
+  if (Math.abs(rest) >= 0.5) parts.push(`${rest < 0 ? 'bank' : 'other'} ${rest < 0 ? '−' : '+'}${F.money(Math.abs(rest))}`)
   return parts.join(', ')
 }
 
