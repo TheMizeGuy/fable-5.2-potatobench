@@ -301,7 +301,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     } else {
       delete slip.dataset.testid
       delete slip.dataset.lesson
-      slip.replaceChildren()
+      patch(slip, '', () => null)
     }
     // Each lesson is read out once, politely.
     const words = offer ? 'The county agent offers a guided first year, beside Start the season.' : now ? `${now.ask(l)} ${now.why(l)}` : ''
