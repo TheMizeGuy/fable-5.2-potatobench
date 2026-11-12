@@ -30,7 +30,10 @@
 .topbar .balance .after.bad .t-figure { color: var(--red); }
 .topbar .balance .after.term::after { left: auto; right: 0; text-align: left; font-style: normal; }
 .topbar[data-layout='narrow'] .face .balance.two { display: flex; }
-.topbar[data-layout='narrow'] .face .balance .after { flex-direction: column; align-items: flex-end; gap: 0; padding-top: 1px; }
+.topbar .balance .after .short { display: none; }
+.topbar[data-layout='narrow'] .face .balance .after { flex-direction: row; align-items: baseline; gap: 6px; padding-top: 0; }
+.topbar[data-layout='narrow'] .face .balance .after .long { display: none; }
+.topbar[data-layout='narrow'] .face .balance .after .short { display: inline; }
 .topbar[data-layout='narrow'] .face .balance .after .t-label { font-size: 12px; }
 
 /* ---------------------------------------------------------------- a paper over the land */

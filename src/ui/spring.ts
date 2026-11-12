@@ -310,7 +310,7 @@ function equipmentBody(ctx: Ctx, c: S.Campaign, onTry: (err: string) => void, on
         h('div', null, h('b', null, u.name), h('p', { class: 't-caption' }, F.localize(u.blurb)), why ? h('p', { class: 't-caption c-ochre' }, why) : null),
         c.upgrades[id] ? h('span', { class: 'stamp sm' }, 'Owned')
           : h('button', {
-            class: 'btn cat-buy', type: 'button', testid: `buy-${id}`, disabled: !!why, 'aria-label': `Buy the ${u.name.toLowerCase()}, ${F.money(u.cost)}${loanAdds(u.cost) >= 0.5 ? `: ${F.money(loanAdds(u.cost))} more on the spring loan` : ''}`,
+            class: 'btn cat-buy', type: 'button', testid: `buy-${id}`, disabled: !!why,
             onclick: () => tryRun(ctx, { t: 'buy', upgrade: id }, onTry),
           }, 'Buy', h('span', { class: 'sub num' }, F.money(u.cost)), loanAdds(u.cost) >= 0.5 ? h('span', { class: 'loan-adds num' }, `+${F.money(loanAdds(u.cost))} on the loan`) : null))
     })),
