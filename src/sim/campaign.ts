@@ -6,7 +6,7 @@ import { BLOCK_NAME, BLOCKS, DUFOUR_YARD, HOME_FIELDS, HOME_YARD, PARCELS, YARDS
 import { lotCwt } from './harvest.ts'
 import { sellLot } from './market.ts'
 import * as P from './params.ts'
-import { applicantsFor, fromApplicant, gainXp, jobSkill, payOf, SKILL_LABEL, speed } from './people.ts'
+import { applicantsFor, fromApplicant, gainXp, jobSkill, payOf, SKILL_LABEL, speed, subject } from './people.ts'
 import { hash32 } from './rng.ts'
 import {
   addJob, buildable, buildJob, closeIncidents, FIELD_NAMES, holdsDufour, JOB_LABEL, leftInField, letGo, releaseJob, removePerson, resolveIncident, seasonDone, sheltering,
@@ -113,7 +113,7 @@ function savedSeedShort(c: Campaign): string {
   c.plans.forEach((p, i) => { if (held(c, i) && p.crop === 'potato' && p.seed === 'saved') need[p.variety] = (need[p.variety] ?? 0) + 1 })
   for (const id of Object.keys(need)) {
     const have = c.seedStock.filter(s => s.variety === id).reduce((a, s) => a + s.fields, 0)
-    if (have < need[id]) return `Not enough saved ${variety(id as FieldPlan['variety']).name} seed: ${have} field${have === 1 ? '' : 's'} worth in the cellar.`
+    if (have < need[id]) return `You don't have enough saved ${variety(id as FieldPlan['variety']).name} seed. The cellar holds enough for ${have} ${have === 1 ? 'field' : 'fields'}.`
   }
   return ''
 }
@@ -187,7 +187,7 @@ function settleContracts(c: Campaign, due: Due | 'all', out: GameEvent[]): void 
       if (k.cwt - k.delivered <= 1e-6) break
       if (lot.variety !== k.variety || (c.season && c.phase === 'season' && !c.season.fields[lot.field]?.weighed)) continue
       const d = deliverLot(c, lot, k)
-      if (d.take > 1e-6) out.push(note(c, 'delivered', 'good', `${k.buyer} took ${withCommas(d.take)} cwt of ${variety(k.variety).name} owed on the contract from the potato house, for $${withCommas(d.money)}.`, lot.field))
+      if (d.take > 1e-6) out.push(note(c, 'delivered', 'good', `${k.buyer} collected ${withCommas(d.take)} cwt of ${variety(k.variety).name} from your potato house toward the contract and paid $${withCommas(d.money)}.`, lot.field))
     }
     k.settled = true
     const short = k.cwt - k.delivered
@@ -197,7 +197,7 @@ function settleContracts(c: Campaign, due: Due | 'all', out: GameEvent[]): void 
       k.penalty = pen
       cost(c, pen)
       c.yearPenalties += pen
-      out.push(note(c, 'contractShort', 'bad', `${withCommas(short)} cwt of ${name} short on ${k.buyer.toLowerCase()}'s contract. The penalty is $${withCommas(pen)}.`))
+      out.push(note(c, 'contractShort', 'bad', `You came up ${withCommas(short)} cwt of ${name} short on ${k.buyer.toLowerCase()}'s contract, and the penalty is $${withCommas(pen)}.`))
     } else {
       out.push(note(c, 'contractFilled', 'good', `${k.buyer}'s contract for ${withCommas(k.cwt)} cwt of ${name} is filled.`))
     }
@@ -243,7 +243,7 @@ function endSeason(world: World, c: Campaign): GameEvent[] {
       const frac = Math.min(1, (total - cap) / have)
       const money = sellLot(world, c, lot, frac)
       total -= have * frac
-      out.push(note(c, 'overflow', 'warn', `No room in the cellar: ${withCommas(have * frac)} cwt of ${variety(lot.variety).name} sold off the field for $${withCommas(money)}.`, lot.field))
+      out.push(note(c, 'overflow', 'warn', `The cellar is full, so ${withCommas(have * frac)} cwt of ${variety(lot.variety).name} was sold straight from the field for $${withCommas(money)}.`, lot.field))
     }
   }
   // What was kept has been sitting in the cellar since its dig: that time is charged and shrinks the pile too.
@@ -254,7 +254,7 @@ function endSeason(world: World, c: Campaign): GameEvent[] {
     kept += lotCwt(lot)
   }
   if (rent > 0) {
-    out.push(note(c, 'stored', 'info', `${withCommas(kept)} cwt is in the cellar. Keeping it since the dig has cost $${withCommas(rent)}.`))
+    out.push(note(c, 'stored', 'info', `${withCommas(kept)} cwt is in the cellar. Storing it since harvest has cost $${withCommas(rent)}.`))
   }
   const rest = c.yearRest
   if (rest > 0) out.push(note(c, 'rest', 'info', `The oats and clover brought in $${withCommas(rest)}.`))
@@ -286,9 +286,9 @@ function storeMonth(c: Campaign, out: GameEvent[]): void {
         lot.broke = true
         rotLoss = 0.55
         lot.rot = 0.06
-        const seed = lot.seedHeld > 0 ? ' The seed held back from it is lost with it.' : ''
+        const seed = lot.seedHeld > 0 ? ' The seed you held back from it is lost too.' : ''
         lot.seedHeld = 0
-        out.push(note(c, 'breakdown', 'bad', `Rot has run through the ${v.name} from ${FIELD_NAMES[lot.field]}. More than half the pile is gone.${seed}`, lot.field))
+        out.push(note(c, 'breakdown', 'bad', `Rot has spread through the ${v.name} from ${FIELD_NAMES[lot.field]}, and more than half of it is gone.${seed}`, lot.field))
       }
     }
     const keep = (1 - shrink) * (1 - rotLoss)
@@ -338,19 +338,19 @@ export function timberTracts(c: Campaign): number[] {
 // Why a person cannot be set to this winter work, or '' when they can. Woods work names the tract to fell.
 export function winterBlock(c: Campaign, u: Unit, work: WinterWork, field = -1): string {
   if (work === 'off') return ''
-  if (u.trait === 'homebody') return `${u.name} is a homebody and will not work winters.`
+  if (u.trait === 'homebody') return `${u.name} is a homebody and won't work winters.`
   switch (work) {
     case 'woods': {
       if (!Number.isInteger(field) || field < 0 || field >= P.FIELD_COUNT) {
-        return timberTracts(c).length ? 'Say which tract to fell.' : 'There is no standing timber on the farm to fell.'
+        return timberTracts(c).length ? 'Pick a tract to fell.' : 'There\'s no standing timber on your farm to fell.'
       }
-      if (c.fields[field].tenure === 'none') return `${FIELD_NAMES[field]} is not the farm's.`
-      if (!standing(c.fields[field].cover)) return `There is nothing left to fell on ${FIELD_NAMES[field]}.`
+      if (c.fields[field].tenure === 'none') return `${FIELD_NAMES[field]} isn't yours.`
+      if (!standing(c.fields[field].cover)) return `There's nothing left to fell on ${FIELD_NAMES[field]}.`
       return ''
     }
     case 'pack':
       if (!hasBuilt(c, 'packing')) return 'Packing needs a packing shed.'
-      return unpacked(c) >= 1 ? '' : 'Nothing in store is left to pack.'
+      return unpacked(c) >= 1 ? '' : 'There\'s nothing left in storage to pack.'
     case 'build':
       return c.buildings.some(b => buildable(c, b)) ? '' : 'Nothing is being built.'
   }
@@ -365,7 +365,7 @@ function winterMonth(c: Campaign, out: GameEvent[]): void {
     if (u.winter === 'off') continue
     const why = winterBlock(c, u, u.winter, u.winterField)
     if (why) {
-      out.push(note(c, 'winterIdle', 'info', `${winterOff(u)}: ${why}`))
+      out.push(note(c, 'winterIdle', 'info', `${winterOff(u)}. ${why}`))
       u.winter = 'off'
       u.winterField = -1
       continue
@@ -378,7 +378,7 @@ function winterMonth(c: Campaign, out: GameEvent[]): void {
     const skill = WINTER_SKILL[u.winter]
     const time = u.kind === 'farmer' ? P.FARMER_WINTER_DAYS : P.WINTER_DAYS
     winterWork(c, u, time * speed(u, skill), out)
-    for (const level of gainXp(u, skill, time)) out.push(note(c, 'skillUp', 'good', `${u.name} is better at ${SKILL_LABEL[skill]}: level ${level}.`))
+    for (const level of gainXp(u, skill, time)) out.push(note(c, 'skillUp', 'good', `${subject(u, 'is', 'You are')} better at ${SKILL_LABEL[skill]}: level ${level}.`))
   }
   // Work that ran out this month lays its people off now, not a month on, so the winter's lines say what they do.
   for (const u of c.crew) {
@@ -386,15 +386,15 @@ function winterMonth(c: Campaign, out: GameEvent[]): void {
     const why = winterBlock(c, u, u.winter, u.winterField)
     if (!why) continue
     const other = u.winter === 'woods' ? timberTracts(c).filter(i => i !== u.winterField) : []
-    const more = other.length ? ` ${FIELD_NAMES[other[0]]} still stands, if it is to be felled.` : ''
-    out.push(note(c, 'winterIdle', 'info', `${winterOff(u)}: ${why}${more}`))
+    const more = other.length ? ` ${FIELD_NAMES[other[0]]} is still standing if you want it felled.` : ''
+    out.push(note(c, 'winterIdle', 'info', `${winterOff(u)}. ${why}${more}`))
     u.winter = 'off'
     u.winterField = -1
   }
 }
 
 function winterOff(u: Unit): string {
-  return u.kind === 'farmer' ? 'You stop work for the rest of the winter' : `${u.name} is laid off for the rest of the winter`
+  return subject(u, 'is laid off for the rest of the winter', 'You\'re done working for the rest of the winter')
 }
 
 const WINTER_SKILL: Record<Exclude<WinterWork, 'off'>, 'woods' | 'pack' | 'build'> = { woods: 'woods', pack: 'pack', build: 'build' }
@@ -408,13 +408,13 @@ function winterWork(c: Campaign, u: Unit, days: number, out: GameEvent[]): void 
       if (!buildable(c, b) || left <= 0) continue
       const use = Math.min(left, b.need - b.done)
       left -= use
-      if (buildWork(c, b, use)) out.push(note(c, 'built', 'good', `The ${P.BUILDINGS[b.kind].name.toLowerCase()} in ${YARD_NAME[b.yard]} is built over the winter. ${P.BUILDINGS[b.kind].does}`))
+      if (buildWork(c, b, use)) out.push(note(c, 'built', 'good', `The ${P.BUILDINGS[b.kind].name.toLowerCase()} in ${YARD_NAME[b.yard]} was built over the winter. ${P.BUILDINGS[b.kind].does}`))
     }
   }
   if (u.winter === 'woods') {
     const i = u.winterField
     if (fell(c, i, days, u)) {
-      out.push(note(c, 'felled', 'good', `${FIELD_NAMES[i]} is felled over the winter. The stumps are left; a contractor can pull them.${sheltering(c, i)}`, i))
+      out.push(note(c, 'felled', 'good', `${FIELD_NAMES[i]} was felled over the winter. The stumps are still there, and a contractor can pull them.${sheltering(c, i)}`, i))
     }
   }
 }
@@ -492,7 +492,7 @@ function closeYear(world: World, c: Campaign, out: GameEvent[]): void {
     c.yearMortgage += pay
     for (const m of c.mortgages) m.owed -= Math.min(m.owed, m.loan * P.MORTGAGE_PRINCIPAL)
     c.mortgages = c.mortgages.filter(m => m.owed > 0.005)
-    out.push(note(c, 'mortgage', 'info', `The bank takes $${withCommas(pay)} on the land mortgage: $${withCommas(due.principal)} off the loan and $${withCommas(due.interest)} interest. $${withCommas(mortgageOwed(c))} is still owed.`))
+    out.push(note(c, 'mortgage', 'info', `The bank took $${withCommas(pay)} for the land mortgage, $${withCommas(due.principal)} off the loan and $${withCommas(due.interest)} in interest. You still owe $${withCommas(mortgageOwed(c))}.`))
   }
   c.cash -= P.NOTE_PAYMENT + P.LIVING
   if (c.cash < 0) {
@@ -547,10 +547,10 @@ function closeYear(world: World, c: Campaign, out: GameEvent[]): void {
   c.phase = 'ledger'
   if (c.cash < P.CREDIT_LIMIT) {
     c.outcome = 'lost'
-    out.push(note(c, 'lost', 'bad', 'The bank has called the note. The farm is sold at auction.'))
+    out.push(note(c, 'lost', 'bad', 'The bank has called in your loan, and the farm is being sold at auction.'))
   } else if (c.outcome === '' && c.yearIdx + 1 >= c.goalYears) {
     c.outcome = 'kept'
-    out.push(note(c, 'kept', 'good', `Five seasons, and the farm is still yours.`))
+    out.push(note(c, 'kept', 'good', 'You made it through five seasons, and the farm is still yours.'))
   }
 }
 
@@ -624,7 +624,7 @@ function lapsedBuyers(c: Campaign): GameEvent[] {
     const lot = c.lots.find(l => l.id === inc.lot)
     if (lot && lot.open && lotCwt(lot) >= P.BUYER_MIN_CWT) continue
     c.incidents.splice(c.incidents.indexOf(inc), 1)
-    out.push(note(c, 'incidentDone', 'info', `The buyer goes on down the road: ${lot ? `the ${variety(lot.variety).name} from ${FIELD_NAMES[lot.field]}` : 'that lot'} is no longer there to buy.`))
+    out.push(note(c, 'incidentDone', 'info', `The buyer has moved on, because ${lot ? `the ${variety(lot.variety).name} from ${FIELD_NAMES[lot.field]}` : 'that lot'} is no longer there to buy.`))
   }
   return out
 }
@@ -636,7 +636,7 @@ function openRoutine(c: Campaign): GameEvent | null {
   for (const u of c.crew) u.rest ??= 'auto'
   if (c.routine) return null
   c.routine = { ...P.ROUTINE_DEFAULT }
-  return note(c, 'routine', 'info', 'The crew now works to a routine: planting, hilling, walking the fields, test digs, digging and hauling go on the list by themselves. Spraying, watering and killing the vines are your calls. Each can be switched under Who does what.')
+  return note(c, 'routine', 'info', 'Your crew now follows a routine. Planting, hilling, walking the fields, test digs, digging and hauling go on the work list automatically. Spraying, watering and killing the vines are your decisions. You can change any of these under Who does what.')
 }
 
 // The year the date falls in now: from January the winter's cellar months, and the ledger closed in spring, are
@@ -668,12 +668,12 @@ export function routineInfo(c: Campaign): { kind: JobKind; auto: boolean }[] {
 function command(world: World, c: Campaign, cmd: Cmd): Result {
   switch (cmd.t) {
     case 'plan': {
-      if (c.phase !== 'plan') return fail('Plans are made in spring.')
+      if (c.phase !== 'plan') return fail('You can only change the plan in spring.')
       if (!fieldIndex(cmd.field)) return fail('No such field.')
-      if (!held(c, cmd.field)) return fail(`${FIELD_NAMES[cmd.field]} is not the farm's. Rent or buy it first.`)
-      if (!isField(c, cmd.field)) return fail(`${FIELD_NAMES[cmd.field]} is ${COVER_WORD[c.fields[cmd.field].cover]}. Clear it first.`)
+      if (!held(c, cmd.field)) return fail(`${FIELD_NAMES[cmd.field]} isn't yours. Rent or buy it first.`)
+      if (!isField(c, cmd.field)) return fail(`${FIELD_NAMES[cmd.field]} is still ${COVER_WORD[c.fields[cmd.field].cover]}. Clear it first.`)
       const v = variety(cmd.plan.variety)
-      if (cmd.plan.crop === 'potato' && v.released > c.year) return fail(`${v.name} was not released until ${v.released}.`)
+      if (cmd.plan.crop === 'potato' && v.released > c.year) return fail(`${v.name} wasn't released until ${v.released}.`)
       const before = c.plans[cmd.field]
       c.plans[cmd.field] = { crop: cmd.plan.crop, variety: cmd.plan.variety, seed: cmd.plan.seed }
       const short = savedSeedShort(c)
@@ -681,14 +681,14 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
       return ok()
     }
     case 'buy': {
-      if (c.phase !== 'plan') return fail('Equipment is bought in spring.')
+      if (c.phase !== 'plan') return fail('You can only buy equipment in spring.')
       const u = P.UPGRADES[cmd.upgrade]
       if (!u) return fail('No such equipment.')
-      if (c.upgrades[cmd.upgrade]) return fail('Already owned.')
-      if ((cmd.upgrade === 'tractor2' || cmd.upgrade === 'tractor3') && !hasBuilt(c, 'shed')) return fail('Another tractor needs the machine shed to stand in.')
+      if (c.upgrades[cmd.upgrade]) return fail('You already own it.')
+      if ((cmd.upgrade === 'tractor2' || cmd.upgrade === 'tractor3') && !hasBuilt(c, 'shed')) return fail('You need the machine shed before you can keep another tractor.')
       if (cmd.upgrade === 'tractor3' && !c.upgrades.tractor2) return fail('Buy the second tractor first.')
-      if (cmd.upgrade === 'house2' && buildingAt(c, 'house', HOME_YARD)) return fail('There is a second potato house at home already, standing or going up.')
-      if (c.cash - u.cost < 0) return fail('Not enough cash. The bank will not lend for equipment.')
+      if (cmd.upgrade === 'house2' && buildingAt(c, 'house', HOME_YARD)) return fail('You already have a second potato house at home, built or going up.')
+      if (c.cash - u.cost < 0) return fail('You can\'t afford it yet, and the bank won\'t lend for equipment.')
       c.cash -= u.cost
       c.yearCosts += u.cost
       c.upgrades[cmd.upgrade] = true
@@ -699,7 +699,7 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
     case 'answer': {
       const s = c.season
       const inc = c.incidents.find(i => i.id === cmd.incident)
-      if (!inc || c.phase !== 'season' || !s) return fail('No such question is waiting.')
+      if (!inc || c.phase !== 'season' || !s) return fail('That question is no longer waiting for an answer.')
       if (!inc.choices.includes(cmd.choice)) return fail(`The choices are: ${inc.choices.map(ch => CHOICE_LABEL[ch]).join(', ')}.`)
       const why = answerBlock(c, inc, cmd.choice)
       if (why) return fail(why)
@@ -714,50 +714,50 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
       const b = startBuilding(c, cmd.kind, cmd.yard)
       if (c.phase === 'season' && c.season) c.season.jobs.push(buildJob(c.season, b))
       const spec = P.BUILDINGS[cmd.kind]
-      const bought = cost.buyLogs > 0 || cost.buyStone > 0 ? `, buying ${[cost.buyLogs > 0 ? `${Math.ceil(cost.buyLogs)} loads of logs` : '', cost.buyStone > 0 ? `${Math.ceil(cost.buyStone)} of stone` : ''].filter(Boolean).join(' and ')}` : ''
-      const when = c.phase === 'season' ? 'It is on the list for whoever builds.' : c.phase === 'cellar' ? 'Someone kept on to build can put it up this winter.' : 'It goes on the list when the season begins.'
-      return ok([note(c, 'building', 'info', `${article(spec.name, true)} ${spec.name.toLowerCase()} is started in ${YARD_NAME[cmd.yard]}: $${withCommas(cost.total)}${bought}, and ${spec.days} crew-days of building. ${when}`)])
+      const bought = cost.buyLogs > 0 || cost.buyStone > 0 ? `, including ${[cost.buyLogs > 0 ? `${Math.ceil(cost.buyLogs)} loads of logs` : '', cost.buyStone > 0 ? `${Math.ceil(cost.buyStone)} loads of stone` : ''].filter(Boolean).join(' and ')} you had to buy,` : ''
+      const when = c.phase === 'season' ? 'It\'s on the work list for whoever builds.' : c.phase === 'cellar' ? 'Anyone you keep on to build can put it up this winter.' : 'It goes on the work list when the season starts.'
+      return ok([note(c, 'building', 'info', `${article(spec.name, true)} ${spec.name.toLowerCase()} is started in ${YARD_NAME[cmd.yard]}. It costs $${withCommas(cost.total)}${bought} and takes ${spec.days} crew-days of building. ${when}`)])
     }
     case 'rent': {
-      if (c.phase !== 'plan') return fail('Land is rented in spring.')
+      if (c.phase !== 'plan') return fail('You can only rent land in spring.')
       if (!fieldIndex(cmd.field)) return fail('No such field.')
       const fp = c.fields[cmd.field]
       const name = FIELD_NAMES[cmd.field]
-      if (fp.tenure === 'owned') return fail(`The farm owns ${name}.`)
-      if (fp.tenure === 'rented') return fail(`${name} is already rented for this year.`)
-      if (PARCELS[cmd.field].holding !== 'field') return fail(`${name} is not let; it can only be bought.`)
+      if (fp.tenure === 'owned') return fail(`You already own ${name}.`)
+      if (fp.tenure === 'rented') return fail(`You've already rented ${name} for this year.`)
+      if (PARCELS[cmd.field].holding !== 'field') return fail(`${name} isn't for rent. You can only buy it.`)
       fp.tenure = 'rented'
       c.plans[cmd.field] = defaultPlan(c, cmd.field)
-      return ok([note(c, 'rented', 'info', `${name} is rented for the year: $${withCommas(PARCELS[cmd.field].rent)}, paid when the season begins.`, cmd.field)])
+      return ok([note(c, 'rented', 'info', `You've rented ${name} for the year. The $${withCommas(PARCELS[cmd.field].rent)} rent is due when the season starts.`, cmd.field)])
     }
     case 'release': {
-      if (c.phase !== 'plan') return fail('Rented land is given up in spring.')
+      if (c.phase !== 'plan') return fail('You can only give up rented land in spring.')
       if (!fieldIndex(cmd.field)) return fail('No such field.')
       const fp = c.fields[cmd.field]
       const name = FIELD_NAMES[cmd.field]
-      if (fp.tenure === 'owned') return fail(`The farm owns ${name}. Land is not sold back.`)
-      if (fp.tenure === 'none') return fail(`${name} is not the farm's.`)
+      if (fp.tenure === 'owned') return fail(`You own ${name}, and land can't be sold back.`)
+      if (fp.tenure === 'none') return fail(`${name} isn't yours.`)
       fp.tenure = 'none'
       c.plans[cmd.field] = { ...REST_PLAN }
       return ok([note(c, 'released', 'info', `${name} goes back to its owner.`, cmd.field)])
     }
     case 'buyLand': {
-      if (c.phase !== 'plan') return fail('Land is bought in spring.')
+      if (c.phase !== 'plan') return fail('You can only buy land in spring.')
       if (!fieldIndex(cmd.field)) return fail('No such field.')
       const fp = c.fields[cmd.field]
       const name = FIELD_NAMES[cmd.field]
-      if (fp.tenure === 'owned') return fail(`The farm already owns ${name}.`)
-      if (PARCELS[cmd.field].holding === 'dufour' && !holdsDufour(c)) return fail(`${name} goes with the Dufour place: rent or buy a Dufour field first.`)
+      if (fp.tenure === 'owned') return fail(`You already own ${name}.`)
+      if (PARCELS[cmd.field].holding === 'dufour' && !holdsDufour(c)) return fail(`${name} comes with the Dufour place, so rent or buy a Dufour field first.`)
       const price = PARCELS[cmd.field].price
       const down = Math.round(price * P.MORTGAGE_DOWN)
-      if (c.cash - down < 0) return fail(`Not enough cash for the quarter down: $${withCommas(down)}.`)
+      if (c.cash - down < 0) return fail(`You can't afford the down payment yet. It's $${withCommas(down)}, a quarter of the price.`)
       const was = fp.tenure
       cost(c, down)
       c.yearLand += down
       c.mortgages.push({ field: cmd.field, loan: price - down, owed: price - down })
       fp.tenure = 'owned'
       if (was === 'none') c.plans[cmd.field] = defaultPlan(c, cmd.field)
-      return ok([note(c, 'landBought', 'good', `${name} is the farm's: bought for $${withCommas(price)}, $${withCommas(down)} down and $${withCommas(price - down)} on the land mortgage.`, cmd.field)])
+      return ok([note(c, 'landBought', 'good', `${name} is yours. You bought it for $${withCommas(price)}, with $${withCommas(down)} down and $${withCommas(price - down)} on the land mortgage.`, cmd.field)])
     }
     case 'stump': {
       const why = stumpBlock(c, cmd.field)
@@ -765,7 +765,7 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
       cost(c, P.STUMP_FEE)
       c.yearWorks += P.STUMP_FEE
       c.fields[cmd.field].works = { kind: 'stump', left: P.STUMP_DAYS }
-      return ok([note(c, 'stumping', 'info', `A contractor will pull the stumps on ${FIELD_NAMES[cmd.field]}: $${withCommas(P.STUMP_FEE)}, about ${P.STUMP_DAYS} season days.`, cmd.field)])
+      return ok([note(c, 'stumping', 'info', `A contractor will pull the stumps on ${FIELD_NAMES[cmd.field]}. It costs $${withCommas(P.STUMP_FEE)} and takes about ${P.STUMP_DAYS} season days.`, cmd.field)])
     }
     case 'tile': {
       const why = tileBlock(c, cmd.field)
@@ -773,11 +773,11 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
       cost(c, P.TILE_FEE)
       c.yearWorks += P.TILE_FEE
       c.fields[cmd.field].works = { kind: 'tile', left: P.TILE_DAYS }
-      return ok([note(c, 'tiling', 'info', `A contractor will lay tile drains under ${FIELD_NAMES[cmd.field]}: $${withCommas(P.TILE_FEE)}, about ${P.TILE_DAYS} season days.`, cmd.field)])
+      return ok([note(c, 'tiling', 'info', `A contractor will lay tile drains under ${FIELD_NAMES[cmd.field]}. It costs $${withCommas(P.TILE_FEE)} and takes about ${P.TILE_DAYS} season days.`, cmd.field)])
     }
     case 'sellLogs': {
-      if (c.phase !== 'plan' && c.phase !== 'season' && c.phase !== 'cellar') return fail('Logs are sold in spring, in the season or in winter.')
-      if (!Number.isFinite(cmd.loads) || cmd.loads <= 0) return fail('Say how many loads to sell.')
+      if (c.phase !== 'plan' && c.phase !== 'season' && c.phase !== 'cellar') return fail('You can sell logs in spring, during the season, or in winter.')
+      if (!Number.isFinite(cmd.loads) || cmd.loads <= 0) return fail('Choose how many loads to sell.')
       if (cmd.loads > c.logs + 1e-9) return fail(`There ${c.logs >= 1 && c.logs < 2 ? 'is' : 'are'} only ${Math.floor(c.logs * 10) / 10} loads of logs in the yard.`)
       const loads = Math.min(cmd.loads, c.logs)
       const money = loads * P.LOG_PRICE
@@ -789,12 +789,12 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
       return ok([note(c, 'logsSold', 'good', `Sold ${Math.round(loads * 10) / 10} loads of logs to the mill for $${withCommas(money)}.`)])
     }
     case 'payMortgage': {
-      if (c.phase !== 'plan') return fail('Extra is paid on the mortgage in spring.')
+      if (c.phase !== 'plan') return fail('You can only pay extra on the mortgage in spring.')
       const owed = mortgageOwed(c)
       if (owed <= 0) return fail('Nothing is owed on the land.')
-      if (!Number.isFinite(cmd.amount) || cmd.amount <= 0) return fail('Say how much to pay.')
+      if (!Number.isFinite(cmd.amount) || cmd.amount <= 0) return fail('Choose how much to pay.')
       if (cmd.amount > owed + 1e-6) return fail(`Only $${withCommas(owed)} is owed.`)
-      if (c.cash - cmd.amount < 0) return fail('Not enough cash.')
+      if (c.cash - cmd.amount < 0) return fail('You don\'t have enough cash.')
       let left = Math.min(cmd.amount, owed)
       const paid = left
       for (const m of c.mortgages) {
@@ -805,23 +805,23 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
       c.mortgages = c.mortgages.filter(m => m.owed > 0.005)
       cost(c, paid)
       c.yearMortgage += paid
-      return ok([note(c, 'mortgagePaid', 'good', `$${withCommas(paid)} paid off the land mortgage. $${withCommas(mortgageOwed(c))} is still owed.`)])
+      return ok([note(c, 'mortgagePaid', 'good', `You paid $${withCommas(paid)} off the land mortgage and still owe $${withCommas(mortgageOwed(c))}.`)])
     }
     case 'accept': {
-      if (c.phase !== 'plan') return fail('Contracts are signed in spring.')
+      if (c.phase !== 'plan') return fail('You can only sign contracts in spring.')
       const k = c.offers.findIndex(o => o.id === cmd.offer)
       if (k < 0) return fail('No such offer.')
       const [o] = c.offers.splice(k, 1)
       const signed: Contract = { ...o, delivered: 0, paid: 0, penalty: 0, settled: false }
       c.contracts.push(signed)
-      return ok([note(c, 'accepted', 'info', `Contract signed with ${o.buyer.toLowerCase()}: ${withCommas(o.cwt)} cwt of ${variety(o.variety).name} at $${o.price.toFixed(2)}.`)])
+      return ok([note(c, 'accepted', 'info', `You signed a contract with ${o.buyer.toLowerCase()} for ${withCommas(o.cwt)} cwt of ${variety(o.variety).name} at $${o.price.toFixed(2)} a cwt.`)])
     }
     case 'begin': {
-      if (c.phase !== 'plan') return fail('The season has already begun.')
+      if (c.phase !== 'plan') return fail('The season has already started.')
       const short = savedSeedShort(c)
       if (short) return fail(short)
       const pc = planCosts(c)
-      if (c.cash - pc.total < P.OPERATING_LIMIT) return fail('The bank will not lend that much for the spring. Rest a field, or plant saved seed: it is free, but it carries virus.')
+      if (c.cash - pc.total < P.OPERATING_LIMIT) return fail('The bank won\'t lend that much for spring. Rest a field, or plant saved seed, which is free but carries virus.')
       cost(c, pc.total)
       c.yearRent += pc.rent
       c.yearWages += pc.wages
@@ -845,33 +845,33 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
       return ok([takeOn(c, newUnit(c, cmd.kind as 'hand' | 'operator'))])
     }
     case 'dismiss': {
-      if (c.phase !== 'plan' && c.phase !== 'season') return fail('Hands are let go in spring or during the season.')
+      if (c.phase !== 'plan' && c.phase !== 'season') return fail('You can let people go in spring or during the season.')
       const u = c.crew.find(x => x.id === cmd.unit)
       if (!u) return fail('No such hand.')
-      if (u.kind === 'farmer') return fail('The farmer stays.')
+      if (u.kind === 'farmer') return fail('You\'re the farmer, so you stay.')
       removePerson(c, u)
-      return ok([note(c, 'dismissed', 'info', `${u.name} is let go.`)])
+      return ok([note(c, 'dismissed', 'info', `${u.name} has been let go.`)])
     }
     case 'raise': {
       if (c.phase === 'over') return fail('The farm is gone.')
       const u = c.crew.find(x => x.id === cmd.unit)
       if (!u) return fail('No such person.')
-      if (u.kind === 'farmer') return fail('The farmer is not paid a wage; the household draw comes at the year end.')
-      if (!Number.isFinite(cmd.wage)) return fail('Say what the wage should be.')
+      if (u.kind === 'farmer') return fail('As the farmer you don\'t draw a wage. Your family\'s living costs come out at the end of the year.')
+      if (!Number.isFinite(cmd.wage)) return fail('Choose what the wage should be.')
       const wage = Math.round(cmd.wage)
-      if (wage < P.WAGE_MIN || wage > P.WAGE_MAX) return fail(`A wage is between $${withCommas(P.WAGE_MIN)} and $${withCommas(P.WAGE_MAX)} a month.`)
+      if (wage < P.WAGE_MIN || wage > P.WAGE_MAX) return fail(`A wage has to be between $${withCommas(P.WAGE_MIN)} and $${withCommas(P.WAGE_MAX)} a month.`)
       if (wage === u.wage) return fail(`${u.name} is already paid $${withCommas(wage)} a month.`)
       const was = u.wage
       u.wage = wage
-      return ok([note(c, 'raise', 'info', `${u.name}'s wage goes from $${withCommas(was)} to $${withCommas(wage)} a month (asked $${withCommas(u.ask)}).`)])
+      return ok([note(c, 'raise', 'info', `${u.name}'s wage goes from $${withCommas(was)} to $${withCommas(wage)} a month. They asked for $${withCommas(u.ask)}.`)])
     }
     case 'priority': {
       if (c.phase === 'over') return fail('The farm is gone.')
       const u = c.crew.find(x => x.id === cmd.unit)
       if (!u) return fail('No such person.')
       if (!P.SKILLS.includes(cmd.work)) return fail('No such kind of work.')
-      if (!Number.isInteger(cmd.level) || cmd.level < 0 || cmd.level > P.PRIORITY_MAX) return fail(`A priority is 0 (never) or 1 (first) to ${P.PRIORITY_MAX}.`)
-      if (u.prio[cmd.work] === cmd.level) return fail(`${u.name} already has ${SKILL_LABEL[cmd.work]} at priority ${cmd.level}.`)
+      if (!Number.isInteger(cmd.level) || cmd.level < 0 || cmd.level > P.PRIORITY_MAX) return fail(`A priority runs from 1 (first) to ${P.PRIORITY_MAX}, or 0 for never.`)
+      if (u.prio[cmd.work] === cmd.level) return fail(`${subject(u, 'already has', 'You already have')} ${SKILL_LABEL[cmd.work]} at priority ${cmd.level}.`)
       u.prio[cmd.work] = cmd.level
       if (cmd.level === 0) {
         // Set never to do this work: orders of that kind pinned to them are anyone's, and one held goes back.
@@ -887,38 +887,38 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
       if (c.phase === 'over') return fail('The farm is gone.')
       const u = c.crew.find(x => x.id === cmd.unit)
       if (!u) return fail('No such person.')
-      if (u.kind === 'farmer') return fail('The farmer runs the whole farm; a foreman is someone hired.')
+      if (u.kind === 'farmer') return fail('You\'re the farmer and already run the whole farm. A foreman has to be someone you hired.')
       if (cmd.block === null) {
-        if (!u.foreman) return fail(`${u.name} is not a foreman.`)
+        if (!u.foreman) return fail(`${u.name} isn't a foreman.`)
         u.foreman = ''
         return ok([note(c, 'foreman', 'info', `${u.name} goes back to field work.`)])
       }
       const block = cmd.block as BlockId
       if (!BLOCKS.includes(block)) return fail('No such block.')
       if (u.foreman === block) return fail(`${u.name} is already foreman there.`)
-      if (!PARCELS.some((p, i) => p.block === block && held(c, i))) return fail('The farm holds no land there.')
+      if (!PARCELS.some((p, i) => p.block === block && held(c, i))) return fail('You hold no land there.')
       const other = c.crew.find(x => x.foreman === block)
-      if (other) return fail(`${other.name} is foreman there already.`)
+      if (other) return fail(`${other.name} is already foreman there.`)
       u.foreman = block
       for (const j of c.season?.jobs ?? []) if (j.unit === u.id) j.unit = -1
       letGo(u)
-      return ok([note(c, 'foreman', 'info', `${u.name} is foreman of ${BLOCK_NAME[block]}: they will put on the list what the fields there need, and do no field work.`)])
+      return ok([note(c, 'foreman', 'info', `${u.name} is now foreman of ${BLOCK_NAME[block]}. They'll add whatever its fields need to the work list, and won't do field work themselves.`)])
     }
     case 'sundays': {
       if (c.phase === 'over') return fail('The farm is gone.')
-      if (typeof cmd.off !== 'boolean') return fail('Say whether Sundays are off.')
-      if (c.sundaysOff === cmd.off) return fail(cmd.off ? 'Sundays are already off.' : 'The farm already works Sundays.')
+      if (typeof cmd.off !== 'boolean') return fail('Choose whether Sundays are off.')
+      if (c.sundaysOff === cmd.off) return fail(cmd.off ? 'Sundays are already off.' : 'Your farm already works Sundays.')
       c.sundaysOff = cmd.off
-      return ok([note(c, 'sundays', 'info', cmd.off ? 'Sundays off: nobody works on a Sunday.' : 'The farm works Sundays now: a day more each week, and everyone tires.')])
+      return ok([note(c, 'sundays', 'info', cmd.off ? 'Sundays are off now, so nobody works on a Sunday.' : 'Your farm works Sundays now. That\'s one more day each week, but everyone gets more tired.')])
     }
     case 'pickers': {
       const s = c.season
-      if (c.phase !== 'season' || !s || s.frozen) return fail('Pickers are hired during the harvest.')
-      if (typeof cmd.on !== 'boolean') return fail('Say whether to hire the pickers.')
+      if (c.phase !== 'season' || !s || s.frozen) return fail('You can hire pickers during the harvest.')
+      if (typeof cmd.on !== 'boolean') return fail('Choose whether to hire the pickers.')
       if (s.pickers === cmd.on) return fail(cmd.on ? 'The pickers are already here.' : 'There are no pickers to send home.')
-      if (cmd.on && !pickersWindow(c)) return fail('The schools close for the harvest only from September 20 to October 10.')
+      if (cmd.on && !pickersWindow(c)) return fail('Schools only close for the harvest from September 20 to October 10.')
       s.pickers = cmd.on
-      return ok([note(c, 'pickers', 'info', cmd.on ? `A picking crew is hired by the day, $${withCommas(P.PICKER_DAY)} a day worked: every dig goes faster.` : 'The pickers are sent home.')])
+      return ok([note(c, 'pickers', 'info', cmd.on ? `A picking crew is hired at $${withCommas(P.PICKER_DAY)} for each day worked, and digging goes faster.` : 'The pickers are sent home.')])
     }
     case 'winter': {
       if (c.phase === 'over') return fail('The farm is gone.')
@@ -926,12 +926,13 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
       if (!u) return fail('No such person.')
       if (!WINTER_WORKS.includes(cmd.work)) return fail('No such winter work.')
       const field = cmd.work === 'woods' ? cmd.field ?? -1 : -1
-      if (u.winter === cmd.work && u.winterField === field) return fail(`${u.name} is already set to that for the winter.`)
+      if (u.winter === cmd.work && u.winterField === field) return fail(`${subject(u, 'is', 'You\'re')} already set to that for the winter.`)
       const why = winterBlock(c, u, cmd.work, field)
       if (why) return fail(why)
       u.winter = cmd.work
       u.winterField = field
-      return ok([note(c, 'winterSet', 'info', cmd.work === 'off' ? `${u.name} will be laid off for the winter, unpaid, and back in spring.` : `${u.name} will be kept on this winter: ${WINTER_LABEL[cmd.work]}.`)])
+      return ok([note(c, 'winterSet', 'info', cmd.work === 'off' ? subject(u, 'will be laid off for the winter without pay, and will come back in spring.', 'You\'ll take the winter off.')
+        : `${subject(u, 'will stay on this winter,', 'You\'ll spend this winter')} ${WINTER_LABEL[cmd.work]}.`)])
     }
     case 'job': {
       // The coach's ask is read before the order goes on the list, where it stops asking.
@@ -947,28 +948,28 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
       const u = c.crew.find(x => x.id === cmd.unit)
       if (!u) return fail('No such person.')
       const mode = cmd.mode ?? 'now'
-      if (mode !== 'now' && mode !== 'auto' && mode !== 'push') return fail('Rest now, rest when worn out, or work on.')
-      if (u.rest === mode) return fail(mode === 'now' ? `${u.name} is resting already.` : mode === 'push' ? `${u.name} is already told to work on.` : `${u.name} already rests when worn out.`)
+      if (mode !== 'now' && mode !== 'auto' && mode !== 'push') return fail('Choose one: rest now, rest when worn out, or keep working.')
+      if (u.rest === mode) return fail(mode === 'now' ? `${subject(u, 'is', 'You\'re')} already resting.` : mode === 'push' ? `${subject(u, 'is', 'You\'re')} already told to keep working.` : `${subject(u, 'already rests', 'You already rest')} when worn out.`)
       u.rest = mode
       if (mode === 'now') letGo(u)
-      return ok([note(c, 'rest', 'info', mode === 'now' ? `${u.name} takes time off until rested.` : mode === 'push' ? `${u.name} works on however tired: slower, and liable to get hurt on a machine or in the woods.` : `${u.name} will rest by themselves once worn out.`)])
+      return ok([note(c, 'rest', 'info', mode === 'now' ? `${subject(u, 'takes', 'You take')} time off until rested.` : mode === 'push' ? `${subject(u, 'will', 'You\'ll')} keep working no matter how tired, which is slower and risks an injury on a machine or in the woods.` : `${subject(u, 'will', 'You\'ll')} rest automatically once worn out.`)])
     }
     case 'keepVines': {
-      if (c.phase !== 'season' || !c.season) return fail('The season is not under way.')
+      if (c.phase !== 'season' || !c.season) return fail('The season isn\'t under way.')
       const f = fieldIndex(cmd.field) ? c.season.fields[cmd.field] : undefined
       if (!f) return fail('No such field.')
-      if (typeof cmd.keep !== 'boolean') return fail('Say whether the vines are kept up.')
-      if (!!f.keepVines === cmd.keep) return fail(cmd.keep ? 'The vines are already kept up.' : 'The crew already kills these vines when they are due.')
+      if (typeof cmd.keep !== 'boolean') return fail('Choose whether to keep the vines up.')
+      if (!!f.keepVines === cmd.keep) return fail(cmd.keep ? 'You\'re already keeping these vines up.' : 'Your crew already kills these vines when they\'re due.')
       if (cmd.keep) {
         f.keepVines = true
         for (const j of c.season.jobs.filter(x => x.kind === 'kill' && x.field === cmd.field && x.by === 'routine')) { c.season.jobs.splice(c.season.jobs.indexOf(j), 1); releaseJob(c, j.id) }
       } else delete f.keepVines
-      return ok([note(c, 'keepVines', 'info', cmd.keep ? `The vines in ${FIELD_NAMES[cmd.field]} stay up until you order them killed; dug green from ${formatDay(c.year, dayIndex(c.year, P.DIG_GREEN.month, P.DIG_GREEN.dom))} if they are still up.`
-        : `The crew kills the vines in ${FIELD_NAMES[cmd.field]} by itself when they are due.`)])
+      return ok([note(c, 'keepVines', 'info', cmd.keep ? `The vines in ${FIELD_NAMES[cmd.field]} will stay up until you order them killed. If they're still up on ${formatDay(c.year, dayIndex(c.year, P.DIG_GREEN.month, P.DIG_GREEN.dom))}, the field gets dug green.`
+        : `Your crew will kill the vines in ${FIELD_NAMES[cmd.field]} automatically when they're due.`)])
     }
     case 'sprayWay': {
       if (c.phase === 'over') return fail('The farm is gone.')
-      if (cmd.way !== 'auto' && cmd.way !== 'ask' && cmd.way !== 'none') return fail('Keep the fields sprayed, ask each time, or not this year.')
+      if (cmd.way !== 'auto' && cmd.way !== 'ask' && cmd.way !== 'none') return fail('Choose one: keep the fields sprayed, ask each time, or not this year.')
       if (sprayWayNow(c) === cmd.way) return fail('Spraying is already done that way this year.')
       c.sprayWay = { year: c.year, way: cmd.way }
       c.routine.spray = cmd.way === 'auto'
@@ -976,21 +977,21 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
       if (cmd.way === 'none' && c.season) {
         for (const j of c.season.jobs.filter(x => x.kind === 'spray' && x.by === 'routine')) { c.season.jobs.splice(c.season.jobs.indexOf(j), 1); releaseJob(c, j.id) }
       }
-      return ok([note(c, 'routine', 'info', cmd.way === 'auto' ? 'Spraying goes on the list by itself now, wherever a field needs it.'
-        : cmd.way === 'ask' ? 'Spraying waits for your order now.' : 'No spraying this year: no field is asked to be sprayed, and blight, if it comes, goes unchecked.')])
+      return ok([note(c, 'routine', 'info', cmd.way === 'auto' ? 'Spraying now goes on the work list automatically wherever a field needs it.'
+        : cmd.way === 'ask' ? 'Spraying now waits for your order.' : 'No spraying this year. You won\'t be asked to spray any field, and if blight comes, nothing will stop it.')])
     }
     case 'routine': {
       if (c.phase === 'over') return fail('The farm is gone.')
-      if (!(P.ROUTINE_KINDS as JobKind[]).includes(cmd.kind)) return fail(`${JOB_LABEL[cmd.kind] ?? 'That'} is never ordered by itself.`)
-      if (typeof cmd.auto !== 'boolean') return fail('Say whether it is done by itself.')
+      if (!(P.ROUTINE_KINDS as JobKind[]).includes(cmd.kind)) return fail(`${JOB_LABEL[cmd.kind] ?? 'That'} is never ordered automatically.`)
+      if (typeof cmd.auto !== 'boolean') return fail('Choose whether it\'s done automatically.')
       const kind = cmd.kind as RoutineKind
-      if (c.routine[kind] === cmd.auto && !(kind === 'spray' && sprayWayNow(c) === 'none')) return fail(cmd.auto ? `${JOB_LABEL[kind]} is already done by itself.` : `${JOB_LABEL[kind]} already waits for you.`)
+      if (c.routine[kind] === cmd.auto && !(kind === 'spray' && sprayWayNow(c) === 'none')) return fail(cmd.auto ? `${JOB_LABEL[kind]} is already done automatically.` : `${JOB_LABEL[kind]} already waits for your order.`)
       c.routine[kind] = cmd.auto
       if (kind === 'spray') c.sprayWay = { year: c.year, way: cmd.auto ? 'auto' : 'ask' }
-      return ok([note(c, 'routine', 'info', cmd.auto ? `${JOB_LABEL[kind]} goes on the list by itself now, wherever a field needs it.` : `${JOB_LABEL[kind]} waits for your order now.`)])
+      return ok([note(c, 'routine', 'info', cmd.auto ? `${JOB_LABEL[kind]} now goes on the work list automatically wherever a field needs it.` : `${JOB_LABEL[kind]} now waits for your order.`)])
     }
     case 'assign': {
-      if (c.phase !== 'season' || !c.season) return fail('No work list.')
+      if (c.phase !== 'season' || !c.season) return fail('There\'s no work list right now.')
       const job = c.season.jobs.find(j => j.id === cmd.id)
       if (!job) return fail('No such job.')
       if (!Number.isInteger(cmd.unit) || cmd.unit < -1) return fail('No such crew.')
@@ -1001,12 +1002,12 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
       return ok()
     }
     case 'cancel': {
-      if (c.phase !== 'season' || !c.season) return fail('No work list.')
+      if (c.phase !== 'season' || !c.season) return fail('There\'s no work list right now.')
       const k = c.season.jobs.findIndex(j => j.id === cmd.id)
       if (k < 0) return fail('No such job.')
-      if (c.season.jobs[k].kind === 'haul') return fail('The crop in the field has to come in.')
-      if (c.season.jobs[k].kind === 'build') return fail('The building is paid for: it stays on the list until it stands.')
-      if (c.season.jobs[k].kind === 'dig' && c.season.jobs[k].done > 0) return fail('The digger is already in the field.')
+      if (c.season.jobs[k].kind === 'haul') return fail('The crop in the field has to come in, so hauling can\'t be canceled.')
+      if (c.season.jobs[k].kind === 'build') return fail('The building is paid for, so it stays on the work list until it\'s built.')
+      if (c.season.jobs[k].kind === 'dig' && c.season.jobs[k].done > 0) return fail('The digger is already in the field, so it\'s too late to cancel.')
       // A vine kill taken off the list is the player keeping the vines up: the crew does not kill them by itself.
       if (c.season.jobs[k].kind === 'kill') c.season.fields[c.season.jobs[k].field].keepVines = true
       c.season.jobs.splice(k, 1)
@@ -1014,7 +1015,7 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
       return ok()
     }
     case 'bump': {
-      if (c.phase !== 'season' || !c.season) return fail('No work list.')
+      if (c.phase !== 'season' || !c.season) return fail('There\'s no work list right now.')
       const k = c.season.jobs.findIndex(j => j.id === cmd.id)
       if (k < 0) return fail('No such job.')
       const [job] = c.season.jobs.splice(k, 1)
@@ -1022,32 +1023,32 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
       return ok()
     }
     case 'day': {
-      if (c.phase !== 'season' || !c.season) return fail('The season is not under way.')
+      if (c.phase !== 'season' || !c.season) return fail('The season isn\'t under way.')
       if (c.season.frozen) return fail('The ground has frozen. Close out the season.')
       const orders = standingOrders(world, c)
       const day = stepDay(world, c)
       return ok([...orders, ...day, ...frostAhead(world, c)])
     }
     case 'endSeason': {
-      if (c.phase !== 'season' || !c.season) return fail('The season is not under way.')
+      if (c.phase !== 'season' || !c.season) return fail('The season isn\'t under way.')
       return ok(endSeason(world, c))
     }
     case 'sell': {
-      if (c.phase !== 'season' && c.phase !== 'cellar') return fail('Nothing to sell now.')
+      if (c.phase !== 'season' && c.phase !== 'cellar') return fail('There\'s nothing to sell right now.')
       const lot = c.lots.find(l => l.id === cmd.lot)
       if (!lot || !lot.open) return fail('That lot is gone.')
-      if (Number.isNaN(cmd.frac)) return fail('Say how much to sell.')
+      if (Number.isNaN(cmd.frac)) return fail('Choose how much to sell.')
       if (c.phase === 'season' && c.season) {
         const f = c.season.fields[lot.field]
-        if (f.status === 'digging') return fail('Still being dug.')
-        if (f.status === 'dug' && !f.weighed) return fail('Still in barrels in the field: it can be sold once it is hauled in and weighed.')
+        if (f.status === 'digging') return fail('It\'s still being dug.')
+        if (f.status === 'dug' && !f.weighed) return fail('It\'s still in barrels in the field. You can sell it once it\'s hauled in and weighed.')
         ageLot(c, lot, c.season.day)
       }
       const money = sellLot(world, c, lot, cmd.frac)
       return ok([note(c, 'sold', 'good', `Sold ${variety(lot.variety).name} from ${FIELD_NAMES[lot.field]} for $${withCommas(money)}.`, lot.field)])
     }
     case 'deliver': {
-      if (c.phase !== 'season' && c.phase !== 'cellar') return fail('Nothing to deliver now.')
+      if (c.phase !== 'season' && c.phase !== 'cellar') return fail('There\'s nothing to deliver right now.')
       const lot = c.lots.find(l => l.id === cmd.lot)
       if (!lot || !lot.open) return fail('That lot is gone.')
       const k = c.contracts.find(x => x.id === cmd.contract)
@@ -1056,23 +1057,23 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
       const name = variety(lot.variety).name
       if (k.variety !== lot.variety) return fail(`${k.buyer} wants ${variety(k.variety).name}, not ${name}.`)
       const need = k.cwt - k.delivered
-      if (need <= 1e-6) return fail('That contract is filled.')
-      if (c.phase === 'season' && c.season && c.season.fields[lot.field].status === 'digging') return fail('Still being dug.')
-      if (c.phase === 'season' && c.season && !c.season.fields[lot.field].weighed) return fail('Still in barrels in the field: it can be delivered once it is hauled in and weighed.')
-      if (lot.grades.no1 + lot.grades.chef <= 1e-6) return fail('There is no US No. 1 or large stock left in that lot.')
+      if (need <= 1e-6) return fail('That contract is already filled.')
+      if (c.phase === 'season' && c.season && c.season.fields[lot.field].status === 'digging') return fail('It\'s still being dug.')
+      if (c.phase === 'season' && c.season && !c.season.fields[lot.field].weighed) return fail('It\'s still in barrels in the field. You can deliver it once it\'s hauled in and weighed.')
+      if (lot.grades.no1 + lot.grades.chef <= 1e-6) return fail('There are no US No. 1 or large potatoes left in that lot.')
       const { take, money } = deliverLot(c, lot, k)
       return ok([note(c, 'delivered', 'good', `Delivered ${withCommas(take)} cwt of ${name} from ${FIELD_NAMES[lot.field]} to ${k.buyer.toLowerCase()} for $${withCommas(money)}.`, lot.field)])
     }
     case 'seed': {
-      if (c.phase !== 'cellar') return fail('Seed is held back from the cellar.')
+      if (c.phase !== 'cellar') return fail('You can only hold back seed once the crop is in the cellar.')
       const lot = c.lots.find(l => l.id === cmd.lot)
       if (!lot || !lot.open) return fail('That lot is gone.')
-      if (lot.broke) return fail('Rot has been through that pile. It is not fit for seed.')
+      if (lot.broke) return fail('Rot has been through that pile, so it\'s no good for seed.')
       const n = Math.floor(cmd.fields)
       if (!(n >= 1)) return fail('Hold back seed for at least one field.')
       const need = n * P.SEED_CWT_PER_FIELD
       const have = lot.grades.b + lot.grades.no1
-      if (have < need) return fail(`Not enough sound tubers: enough for ${Math.floor(have / P.SEED_CWT_PER_FIELD)} ${Math.floor(have / P.SEED_CWT_PER_FIELD) === 1 ? 'field' : 'fields'} at most.`)
+      if (have < need) return fail(`There aren't enough sound potatoes. This lot has enough for ${Math.floor(have / P.SEED_CWT_PER_FIELD)} ${Math.floor(have / P.SEED_CWT_PER_FIELD) === 1 ? 'field' : 'fields'} at most.`)
       const fromB = Math.min(lot.grades.b, need)
       lot.grades.b -= fromB
       lot.grades.no1 -= need - fromB
@@ -1081,7 +1082,7 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
       return ok()
     }
     case 'month': {
-      if (c.phase !== 'cellar') return fail('The cellar is closed.')
+      if (c.phase !== 'cellar') return fail('The cellar isn\'t open right now.')
       const out: GameEvent[] = []
       if (openLots(c).length === 0 || c.month >= P.MONTH_CURVE.length - 1) {
         for (const lot of openLots(c)) sellLot(world, c, lot, 1)
@@ -1097,7 +1098,7 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
       return ok(out)
     }
     case 'next': {
-      if (c.phase !== 'ledger') return fail('The year is not closed.')
+      if (c.phase !== 'ledger') return fail('The year isn\'t closed yet.')
       return nextYear(world, c)
     }
   }
@@ -1108,10 +1109,10 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
 export function answerBlock(c: Campaign, inc: Incident, choice: string): string {
   switch (choice) {
     case 'hire': return hireRoom(c)
-    case 'rush': return c.season && inc.back! <= c.season.day + 1 ? 'The part comes tomorrow anyway.' : ''
+    case 'rush': return c.season && inc.back! <= c.season.day + 1 ? 'The part arrives tomorrow anyway.' : ''
     case 'match': {
       const u = c.crew.find(x => x.id === inc.unit)
-      return u ? '' : 'They have gone already.'
+      return u ? '' : 'They\'ve already left.'
     }
     case 'take': {
       const lot = c.lots.find(l => l.id === inc.lot)
@@ -1136,7 +1137,7 @@ function answer(world: World, c: Campaign, s: Season, inc: Incident, choice: str
       const u = c.crew.find(x => x.id === inc.unit)!
       const was = u.wage
       u.wage = inc.wage!
-      out.push(note(c, 'incidentDone', 'info', `${u.name} stays: the wage goes from $${withCommas(was)} to $${withCommas(u.wage)} a month.`))
+      out.push(note(c, 'incidentDone', 'info', `${u.name} is staying, and their wage goes from $${withCommas(was)} to $${withCommas(u.wage)} a month.`))
       return
     }
     case 'rush': {
@@ -1144,7 +1145,7 @@ function answer(world: World, c: Campaign, s: Season, inc: Incident, choice: str
       cost(c, P.RUSH_PART)
       const k = c.broken.indexOf(inc.back!)
       if (k >= 0) c.broken[k] = s.day + 1
-      out.push(note(c, 'incidentDone', 'info', `A rush part for $${withCommas(P.RUSH_PART)}: the tractor is back tomorrow.`))
+      out.push(note(c, 'incidentDone', 'info', `You paid $${withCommas(P.RUSH_PART)} for a rush part, so the tractor will be back tomorrow.`))
       return
     }
     case 'take': {
@@ -1156,7 +1157,7 @@ function answer(world: World, c: Campaign, s: Season, inc: Incident, choice: str
       c.cash += bonus
       c.yearRevenue += bonus
       lot.revenue += bonus
-      out.push(note(c, 'incidentDone', 'good', `Sold the ${variety(lot.variety).name} from ${FIELD_NAMES[lot.field]} to the buyer for $${withCommas(money + bonus)}, 10% over the market.`, lot.field))
+      out.push(note(c, 'incidentDone', 'good', `Sold the ${variety(lot.variety).name} from ${FIELD_NAMES[lot.field]} to the buyer for $${withCommas(money + bonus)}, 10% over the market price.`, lot.field))
       return
     }
   }
@@ -1170,11 +1171,11 @@ export function stumpBlock(c: Campaign, field: number): string {
   if (!fieldIndex(field)) return 'No such field.'
   const fp = c.fields[field]
   const name = FIELD_NAMES[field]
-  if (fp.tenure === 'none') return `${name} is not the farm's.`
-  if (standing(fp.cover)) return `${name} is ${COVER_WORD[fp.cover]}. Fell it first.`
+  if (fp.tenure === 'none') return `${name} isn't yours.`
+  if (standing(fp.cover)) return `${name} is still ${COVER_WORD[fp.cover]}. Fell it first.`
   if (fp.cover !== 'stumps') return `There are no stumps on ${name}.`
   if (fp.works) return 'The contractor is already there.'
-  if (c.cash - P.STUMP_FEE < 0) return `Not enough cash for the contractor: $${withCommas(P.STUMP_FEE)}.`
+  if (c.cash - P.STUMP_FEE < 0) return `You can't afford the contractor yet. It costs $${withCommas(P.STUMP_FEE)}.`
   return ''
 }
 
@@ -1185,14 +1186,14 @@ export function tileBlock(c: Campaign, field: number): string {
   if (!fieldIndex(field)) return 'No such field.'
   const fp = c.fields[field]
   const name = FIELD_NAMES[field]
-  if (fp.tenure !== 'owned') return 'Tile drains go only under the farm\'s own land.'
-  if (fp.cover !== 'open') return `${name} is ${COVER_WORD[fp.cover]}. Clear it first.`
-  if (fp.elev !== 0) return 'Only bottom land needs tile: the slope drains itself.'
-  if (fp.tiled) return `${name} is tiled already.`
+  if (fp.tenure !== 'owned') return 'Tile drains can only go under your own land.'
+  if (fp.cover !== 'open') return `${name} is still ${COVER_WORD[fp.cover]}. Clear it first.`
+  if (fp.elev !== 0) return 'Only bottom land needs tile, because the slopes drain on their own.'
+  if (fp.tiled) return `${name} is already tiled.`
   if (fp.works) return 'The contractor is already there.'
   const st = c.season?.fields[field].status
-  if (c.phase === 'season' && (st === 'planted' || st === 'growing' || st === 'dead' || st === 'digging')) return 'Tile is laid when no crop is in the ground.'
-  if (c.cash - P.TILE_FEE < 0) return `Not enough cash for the contractor: $${withCommas(P.TILE_FEE)}.`
+  if (c.phase === 'season' && (st === 'planted' || st === 'growing' || st === 'dead' || st === 'digging')) return 'Tile can only be laid when no crop is in the ground.'
+  if (c.cash - P.TILE_FEE < 0) return `You can't afford the contractor yet. It costs $${withCommas(P.TILE_FEE)}.`
   return ''
 }
 
@@ -1200,7 +1201,7 @@ export function tileBlock(c: Campaign, field: number): string {
 function worksPhase(c: Campaign): string {
   if (c.phase === 'plan') return ''
   if (c.phase === 'season' && c.season && !c.season.frozen) return ''
-  return 'Contractors work in the season: order it in spring.'
+  return 'Contractors only work during the season, so order it in spring.'
 }
 
 export function canEndSeason(c: Campaign): boolean {

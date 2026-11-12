@@ -37,7 +37,7 @@ function prices(c: Campaign): Record<string, Price> {
   const tool = cheapest(all.filter(g => g.id.startsWith('buy:')))
   const left = c.cash - tool.cost
   const floor = !tool.block && tool.cost > 0 && left < NOTE_PAYMENT
-    ? `It would leave ${money(left)} in hand, under the ${money(NOTE_PAYMENT)} the note takes at the year end.` : ''
+    ? `That would leave ${money(left)}, less than the ${money(NOTE_PAYMENT)} yearly bank payment.` : ''
   return {
     stump: one('stump'), hire: one('hire'), foreman: one('foreman'), land: one('rent'),
     tool: floor ? { cost: tool.cost, block: floor } : tool, build: cheapest(all.filter(g => g.id.startsWith('build:'))),
@@ -70,27 +70,27 @@ export function goals(c: Campaign, o: { thisSeason?: boolean } = {}): Goal[] {
 
   // The first season, in the order the crop asks for it. A later step done means every earlier one is behind the farm.
   const season: Spec[] = [
-    { id: 'plant', title: 'Plant the fields', why: 'Seed goes in once the soil has warmed.', when: 'In the season',
+    { id: 'plant', title: 'Plant the fields', why: 'Planting can start once the soil has warmed up.', when: 'During the season',
       done: past || (potato.length > 0 && planted.length === potato.length) || any(f => f.tiDay >= 0), now: crop,
       progress: potato.length ? { n: planted.length, of: potato.length } : null },
-    { id: 'walk', title: 'Walk a field for blight', why: 'Blight shows only up close. A walk finds it while it is small.', when: 'Once the rows are up',
+    { id: 'walk', title: 'Walk a field for blight', why: 'Blight only shows up close, so walking a field catches it while it\'s still small.', when: 'Once the rows are up',
       done: past || any(f => f.lastScout >= 0), now: crop },
-    { id: 'hill', title: 'Hill the rows', why: 'Soil pulled over the row keeps the tubers from light and blight.', when: 'Once the plants are a hand high',
+    { id: 'hill', title: 'Hill the rows', why: 'Hilling (piling soil over the rows) protects the potatoes from sunlight and blight.', when: 'Once the plants are a hand tall',
       done: past || any(f => f.hillPasses > 0), now: crop,
       progress: planted.length ? { n: planted.filter(i => fields[i].hillPasses > 0).length, of: planted.length } : null },
-    { id: 'spray', title: 'Spray before the blight', why: 'Protectant has to be on the leaf before the spores land.', when: 'While the vines are green',
+    { id: 'spray', title: 'Spray before blight arrives', why: 'Spray only protects leaves it reaches before the blight does.', when: 'While the vines are green',
       done: past || any(f => f.lastSpray >= 0), now: crop },
-    { id: 'sample', title: 'Lift a test hill', why: 'One hill dug shows what the crop is making.', when: 'Once tubers have set',
+    { id: 'sample', title: 'Do a test dig', why: 'Digging up one plant shows how the potatoes are coming along.', when: 'Once potatoes have formed',
       done: past || any(f => f.samples.length > 0), now: crop },
-    { id: 'kill', title: 'Kill the vines', why: 'Growth stops and the skins set in two weeks.', when: 'In September',
+    { id: 'kill', title: 'Kill the vines', why: 'This stops the growth, and the skins toughen over about two weeks.', when: 'In September',
       done: past || any(f => f.killDay >= 0 || f.deadDay >= 0), now: crop },
-    { id: 'dig', title: 'Dig a field', why: 'The digger lifts the crop into barrels in the field.', when: 'Once the skins are set',
+    { id: 'dig', title: 'Dig a field', why: 'The digger lifts the potatoes out of the ground and into barrels.', when: 'Once the skins toughen',
       done: past || any(f => f.status === 'digging' || f.status === 'dug'), now: crop },
-    { id: 'haul', title: 'Bring the crop in', why: 'The crop waits in barrels until it is hauled; a hard frost takes a share. It is weighed once all is in.', when: 'After the dig',
+    { id: 'haul', title: 'Bring the crop in', why: 'Potatoes wait in barrels until they\'re hauled in, and a hard frost will ruin some of them. Each field is weighed once everything is in.', when: 'After digging',
       done: past || any(f => f.weighed), now: crop },
-    { id: 'sell', title: 'Sell some potatoes', why: 'Sell off the field now, or store and sell into the winter.', when: 'After the weigh-in',
+    { id: 'sell', title: 'Sell some potatoes', why: 'Sell straight from the field now, or store them and sell over the winter.', when: 'After the weigh-in',
       done: o.thisSeason ? c.lots.some(l => l.year === c.year && l.sold > 0) : c.lots.some(l => l.sold > 0) || c.history.some(y => y.cwtSold > 0), now: c.phase === 'season' || c.phase === 'cellar' },
-    { id: 'year', title: 'Get through the year', why: 'The bank takes its note at the year end, and spring comes again.', when: 'At the year end',
+    { id: 'year', title: 'Get through the year', why: 'Make your yearly bank payment at the end of the year, and spring comes around again.', when: 'At the end of the year',
       done: past && c.outcome !== 'lost', now: true },
   ]
 
@@ -102,42 +102,42 @@ export function goals(c: Campaign, o: { thisSeason?: boolean } = {}): Goal[] {
   const noTract = mine.length === 0
   const clearing: Spec[] = [
     // Felling waits until the crop is in the ground: in a season it is the work of the quiet weeks.
-    { id: 'fell', title: 'Fell a woodlot', why: 'Woods become a field: logs to the yard now, stumps and stone next.', when: noTract ? 'Once the farm holds a woodlot: bought in spring, from the Land fold' : 'Once the crop is planted, or over the winter',
+    { id: 'fell', title: 'Fell a woodlot', why: 'Cutting the woods down is the first step to a new field. The logs go to your yard, and the stumps and stones come out next.', when: noTract ? 'Once you own a woodlot, which you can buy in spring under Land' : 'Once the crop is planted, or over the winter',
       done: mine.some(t => t.f.cover === 'stumps' || t.f.cover === 'open'), now: !noTract && ((inSeason && planted.length === potato.length) || c.phase === 'cellar'),
       progress: felledMost > 0 ? { n: Math.round(felledMost * 100), of: 100 } : null },
-    { id: 'stump', title: 'Pull the stumps', why: 'A contractor with a bulldozer, for a fee.', when: 'In spring or the season',
+    { id: 'stump', title: 'Pull the stumps', why: 'A contractor with a bulldozer pulls them for a fee.', when: 'In spring or during the season',
       done: clearedMine.length > 0, now: spring || inSeason, price: price.stump },
-    { id: 'rocks', title: 'Pick rocks off new ground', why: 'A cleared tract is stony: someone picks the rocks off it (Pick rocks on its card) so it can be planted, and the stones go to the yard for building.', when: 'In the season',
+    { id: 'rocks', title: 'Pick rocks off new ground', why: 'Newly cleared land is full of rocks. Use Pick rocks on its card to have someone clear them so it can be planted, and the stones go to your yard for building.', when: 'During the season',
       done: clearedMine.some(t => t.f.stones < ROCKS_ADVISE), now: inSeason && clearedMine.length > 0 },
-    { id: 'newfield', title: 'Crop the new ground', why: 'A year in oats and clover, then potatoes on fresh soil.', when: 'From the next spring',
+    { id: 'newfield', title: 'Farm the new ground', why: 'Grow oats and clover on it for a year, then plant potatoes in the fresh soil.', when: 'Starting next spring',
       done: clearedMine.some(t => !t.f.raw || (inSeason && fields[t.i] && fields[t.i].status !== 'off')), now: (spring || inSeason) && clearedMine.length > 0 },
   ]
 
   const ladder: Spec[] = [
     ...chain(season),
-    { id: 'tool', title: 'Buy a machine', why: 'Equipment makes the jobs that matter go faster.', when: 'In spring',
+    { id: 'tool', title: 'Buy a machine', why: 'Equipment speeds up the jobs that matter most.', when: 'In spring',
       done: Object.values(c.upgrades).some(Boolean), now: spring, price: price.tool },
-    { id: 'hire', title: 'Hire a hand', why: 'A second pair of hands works the list beside you.', when: 'In spring or the season',
+    { id: 'hire', title: 'Hire a hand', why: 'A second pair of hands helps you get through the work list.', when: 'In spring or during the season',
       done: hired || c.history.some(y => y.wages > 0), now: spring || inSeason, price: price.hire },
-    { id: 'contract', title: 'Sign a contract', why: 'A buyer fixes the price, and you must fill it.', when: 'In spring',
+    { id: 'contract', title: 'Sign a contract', why: 'A buyer locks in a price, and you have to deliver the potatoes.', when: 'In spring',
       done: c.contracts.length > 0 || c.history.some(y => y.contracts > 0), now: spring },
-    { id: 'land', title: 'Farm more land', why: 'Rent or buy beyond the home six.', when: 'In spring, from the Land fold',
+    { id: 'land', title: 'Farm more land', why: 'Rent or buy fields beyond your six home fields.', when: 'In spring, under Land',
       done: c.fields.some((f, i) => i < TRACTS[0] && PARCELS[i].block !== 'home' && f.tenure !== 'none') || c.history.some(y => y.rent > 0 || y.land > 0), now: spring, price: price.land },
     ...chain(clearing),
-    { id: 'build', title: 'Raise a building', why: 'Your own people build it, from your own logs and stone.', when: 'In spring, the season or winter',
+    { id: 'build', title: 'Raise a building', why: 'Your crew builds it using your own logs and stone.', when: 'In spring, during the season or in winter',
       done: c.buildings.some(b => b.built), now: spring || inSeason || c.phase === 'cellar',
       progress: building ? { n: Math.round(building.done), of: building.need } : null, price: building ? undefined : price.build },
-    { id: 'foreman', title: 'Name a foreman', why: 'A foreman orders what a block needs, every working morning.', when: 'With someone hired',
+    { id: 'foreman', title: 'Name a foreman', why: 'A foreman orders whatever their block of land needs each working morning.', when: 'Once you\'ve hired someone',
       done: c.crew.some(u => u.foreman !== ''), now: hired, price: price.foreman },
-    { id: 'five', title: 'Keep the farm five years', why: 'The bank lets go of the note.', when: 'Every year end',
+    { id: 'five', title: 'Keep the farm five years', why: 'Make it through five years and the farm is yours for good.', when: 'At the end of every year',
       done: c.outcome === 'kept', now: true, progress: { n: Math.min(c.goalYears, c.history.length), of: c.goalYears } },
-    { id: 'cleared', title: 'Clear every tract', why: 'Every woodlot, swale and burnt hill a field.', when: 'Any year', long: true,
+    { id: 'cleared', title: 'Clear every tract', why: 'Turn every woodlot, swale and burnt hill into a field.', when: 'Any year', long: true,
       done: cleared.length === TRACTS.length, now: true, progress: { n: cleared.length, of: TRACTS.length } },
-    { id: 'map', title: 'Hold the whole map', why: 'Every field and tract the farm\'s own or rented.', when: 'Any spring', long: true,
+    { id: 'map', title: 'Farm the whole map', why: 'Own or rent every field and tract on the map.', when: 'Any spring', long: true,
       done: c.fields.every(f => f.tenure !== 'none'), now: true, progress: { n: c.fields.filter(f => f.tenure !== 'none').length, of: FIELD_COUNT } },
-    { id: 'crew', title: 'A crew of ten', why: 'Ten people on the books, and beds for them.', when: 'Any year', long: true,
+    { id: 'crew', title: 'Hire a crew of ten', why: 'Have ten people on your payroll, with a bed for each of them.', when: 'Any year', long: true,
       done: c.crew.length >= 10, now: true, progress: { n: Math.min(10, c.crew.length), of: 10 } },
-    { id: 'every', title: 'Every kind of building', why: 'A potato house, shed, bunkhouse, packing shed, pond, stand, station and road.', when: 'Any year', long: true,
+    { id: 'every', title: 'Raise every kind of building', why: 'Build a potato house, shed, bunkhouse, packing shed, pond, stand, station and road.', when: 'Any year', long: true,
       done: kindsBuilt.size === BUILDING_KINDS.length, now: true, progress: { n: kindsBuilt.size, of: BUILDING_KINDS.length } },
   ]
   return ladder.map(({ price: p, ...g }) => {

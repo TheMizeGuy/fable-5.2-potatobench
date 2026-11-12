@@ -3,7 +3,7 @@
 // to say about land, hiring or contracts.
 import { dayIndex, withCommas } from './calendar.ts'
 import * as P from './params.ts'
-import { willDo } from './people.ts'
+import { jobSkill, SKILL_LABEL, willDo } from './people.ts'
 import type { Campaign, GameEvent, JobKind, KillWhy, World } from './types.ts'
 import { fieldInfo, forecast, today } from './view.ts'
 import { openLots, sprayWayNow } from './campaign.ts'
@@ -98,7 +98,7 @@ function everything(world: World, c: Campaign): Advice[] {
     const n = f.name
     // A very stony field gets its rocks picked in spring, before the planter goes over it or while it rests.
     if ((f.status === 'idle' || f.status === 'rest') && spring && f.stones >= P.ROCKS_ADVISE && !f.works) {
-      add(i, 'rocks', `Pick the rocks off ${n}.`, 'Frost has heaved up stones. They slow the planter and the digger and bruise the crop at the dig.')
+      add(i, 'rocks', `Pick the rocks off ${n}.`, 'Frost pushed up new stones over the winter. They slow the planter and digger, and they bruise potatoes at harvest.')
     }
     if (f.status === 'idle') {
       // One rule for planting, the same the field's card and the forecast line read (plantReady).
@@ -117,58 +117,58 @@ function everything(world: World, c: Campaign): Advice[] {
       // Once the vines are coming off there is nothing left to tend.
       const tending = !killDue && !queued('kill', i) && !queued('dig', i)
       if (tending && up && f.hillPasses === 0 && f.canopy >= 0.08 && f.canopy < P.CLOSURE) {
-        add(i, 'hill', `Hill ${n}.`, 'The plants are a hand high. Soil pulled up now covers the tubers to come and buries the weeds.', f.canopy > 0.4)
+        add(i, 'hill', `Hill ${n}.`, 'The plants are a hand tall. Hilling now covers the potatoes that are about to form and buries the weeds.', f.canopy > 0.4)
       } else if (tending && up && f.hillPasses === 1 && f.canopy >= 0.42 && f.canopy < P.CLOSURE) {
-        add(i, 'hill', `Hill ${n} a second time.`, 'Last chance before the rows close. A full hill keeps tubers out of the light and out of the blight.', f.canopy > 0.7)
+        add(i, 'hill', `Hill ${n} a second time.`, 'It\'s the last chance before the rows close. A full hill keeps potatoes out of the light and away from blight.', f.canopy > 0.7)
       }
       const scoutEvery = t.watch ? 5 : 8
       if (tending && up && (f.scoutAge < 0 || f.scoutAge >= scoutEvery)) {
-        add(i, 'scout', `Walk ${n}.`, t.watch ? 'Blight weather. Lesions show a few days after infection, and only up close.' : 'A weekly walk catches trouble while it is small.')
+        add(i, 'scout', `Walk ${n}.`, t.watch ? 'It\'s blight weather, and the spots only show up close, a few days after infection.' : 'A weekly walk catches trouble while it\'s still small.')
       }
       if (tending && up && f.blightHills > 0 && f.blightHills <= 8 && f.blightKnown < 0.04) {
-        add(i, 'rogue', `Pull the blighted ${f.blightHills === 1 ? 'hill' : 'hills'} in ${n}.`, `${f.blightHills === 1 ? 'One hill is' : `${f.blightHills} hills are`} throwing spores. Out of the field, they cannot.`, true)
+        add(i, 'rogue', `Pull the blighted ${f.blightHills === 1 ? 'hill' : 'hills'} in ${n}.`, `${f.blightHills === 1 ? 'One hill is' : `${f.blightHills} hills are`} shedding spores, so pull ${f.blightHills === 1 ? 'it' : 'them'} before the blight spreads.`, true)
       }
       if (tending && up && f.protect < 0.35 && !noSpray && (t.watch || (blightSoon && t.sv >= 12) || anyBlight)) {
-        const why = anyBlight ? 'There is blight on the farm. Protectant only works if it is on the leaf before the spores.'
-          : !t.watch ? 'Blight weather is forecast and the watch is close. Protectant has to be on the leaf before the spores.'
-            : f.protect > 0.02 ? 'The blight watch is on and the protectant is wearing thin.' : 'The blight watch is on and the leaves are unprotected.'
+        const why = anyBlight ? 'Blight is on your farm. Spray only protects leaves it reaches before the blight does, so don\'t wait.'
+          : !t.watch ? 'Blight weather is forecast and a watch is close, so get spray on the leaves before the spores arrive.'
+            : f.protect > 0.02 ? 'The blight watch is on and the last spray is wearing off.' : 'The blight watch is on and the leaves have no protection.'
         add(i, 'spray', `Spray ${n}.`, why, anyBlight || blightSoon)
       }
       // Most Aroostook potatoes are rain-fed: watering is advised only with a reel, or when the crop is wilting.
       if (tending && s0.tiDay >= 0 && s0.matureDay < 0 && !rainSoon && t.day.prcp < 2 && !f.tooWet) {
         if (f.moisture < (c.upgrades.reel ? 0.38 : 0.2)) {
-          add(i, 'water', `Water ${n}.`, c.upgrades.reel ? 'The ground is dry and no rain is coming. Dry soil while tubers bulk costs yield and brings scab.' : 'The plants are wilting and no rain is coming. Hauling water is slow, but this field is losing its crop.')
+          add(i, 'water', `Water ${n}.`, c.upgrades.reel ? 'The ground is dry with no rain coming. Dry soil while potatoes size up cuts yield and causes scab.' : 'The plants are wilting and there\'s no rain coming. Hauling water is slow, but this field is losing its crop.')
         } else if (!c.upgrades.reel && f.moisture < 0.38) {
-          add(i, 'wait', `${n} is dry.`, 'Rain is the cheap cure. Without a reel, watering takes the farmer a whole day and $300 a field, so most growers here wait for rain and accept some scab.')
+          add(i, 'wait', `${n} is dry.`, 'Rain is the cheap fix. Without an irrigation reel, watering takes you a whole day and $300 a field, so most growers here wait for rain and accept some scab.')
         }
       }
       if (tending && s0.tiDay >= 0 && s.day - s0.tiDay >= 28 && (f.estimate?.digs ?? 0) < 1) {
-        add(i, 'sample', `Test dig in ${n}.`, 'One hill lifted tells you more about the crop than a week of looking at the tops.')
+        add(i, 'sample', `Test dig in ${n}.`, 'Digging up one hill tells you more about the crop than a week of looking at the leaves.')
       } else if (tending && s0.tiDay >= 0 && s.day - s0.tiDay >= 50 && (f.estimate?.digs ?? 0) < 2) {
-        add(i, 'sample', `Test dig in ${n} again.`, 'A second hill narrows the guess before you decide when to kill the vines.')
+        add(i, 'sample', `Test dig in ${n} again.`, 'A second hill sharpens the estimate before you decide when to kill the vines.')
       }
       if (killDue) {
         const kill: KillWhy = blightWinning ? 'blight' : s.day >= killBy ? 'late' : made ? 'made' : 'frost'
-        const why = kill === 'blight' ? 'Blight is winning. Killing the vines gives up the growth still to come, but dead vines stop feeding spores down to the tubers.'
-          : kill === 'late' ? 'Skins need two weeks to set after the vines die, and October is short.'
-            : kill === 'made' ? 'The crop is made. Kill the vines so the skins set.'
-              : 'Frost is forecast. Killing the vines now gives up a little growth so the skins start to set ahead of it.'
+        const why = kill === 'blight' ? 'Blight is winning here. Killing the vines gives up the rest of the growth, but it stops spores washing down to the potatoes.'
+          : kill === 'late' ? 'Skins need two weeks to toughen after the vines die, and October is short.'
+            : kill === 'made' ? 'The crop has finished growing, so kill the vines and let the skins set.'
+              : 'Frost is forecast. Killing the vines now gives up a little growth but gives the skins a head start.'
         add(i, 'kill', `Kill the vines in ${n}.`, why, blightWinning, -1, kill)
       }
       // Vines still up this late will not leave time for the skins to set before the ground freezes: dig them green.
       if (s0.tiDay >= 0 && s.day >= dayIndex(year, P.DIG_GREEN.month, P.DIG_GREEN.dom) && !queued('kill', i)) {
-        add(i, 'dig', `Dig ${n} with the vines up.`, 'It is too late for the skins to set before the freeze-up. Thin skins keep badly, but frozen tubers do not keep at all.', true)
+        add(i, 'dig', `Dig ${n} with the vines still up.`, 'It\'s too late for the skins to set before the ground freezes. Thin-skinned potatoes store badly, but frozen ones don\'t store at all.', true)
       }
     }
     if ((f.status === 'digging' || f.status === 'dug') && f.inField >= 0.5 && !f.weighed) {
       const frost = frostOnBarrels(world, c, i)
-      add(i, 'haul', `Haul the crop in from ${n}.`, frost ? `A frost is forecast: ${Math.round(f.inField)} cwt in barrels would lose a fifth of itself in the night.` : `${Math.round(f.inField)} cwt is in barrels in the field. Until it is in, frost and sun take some of it.`, frost)
+      add(i, 'haul', `Haul the crop in from ${n}.`, frost ? `Frost is forecast tonight, and it would freeze a fifth of the ${Math.round(f.inField)} cwt sitting in barrels.` : `${Math.round(f.inField)} cwt is in barrels in the field, and frost and sun spoil a little until it's hauled in.`, frost)
     }
     if (f.status === 'dead') {
       if (f.skin >= 1 || digNow) {
-        add(i, 'dig', `Dig ${n}.`, f.skin >= 1 ? 'Skins are set.' : 'Hard frost is close. Thin skins are better than frozen tubers.', digNow)
+        add(i, 'dig', `Dig ${n}.`, f.skin >= 1 ? 'The skins are set, so it\'s ready to dig.' : 'A hard frost is close, and thin skins are better than frozen potatoes.', digNow)
       } else {
-        add(i, 'wait', `Let ${n} sit.`, `Skins are ${Math.round(f.skin * 100)}% set. Tubers dug now skin, and skinned tubers do not keep.`)
+        add(i, 'wait', `Let ${n} sit.`, `Skins are ${Math.round(f.skin * 100)}% set. Potatoes dug now get skinned, and skinned potatoes don't keep.`)
       }
     }
   }
@@ -176,13 +176,13 @@ function everything(world: World, c: Campaign): Advice[] {
     const f = s.fields[lot.field]
     if (f.status !== 'dug' || !f.weighed) continue
     if (newPotatoWindow(c, lot) && lot.skinned > 20) {
-      add(lot.field, 'sell', `Sell the ${fieldInfo(c, lot.field).name} crop now.`, 'Thin-skinned new potatoes bring a premium this week and will not keep.', true, lot.id)
+      add(lot.field, 'sell', `Sell the ${fieldInfo(c, lot.field).name} crop now.`, 'Thin-skinned new potatoes sell at a premium this week, and they won\'t keep.', true, lot.id)
     } else if (lot.loss.blight > 0.03 * (lot.grades.no1 + lot.grades.b + lot.grades.no2 + lot.grades.chef + lot.grades.cull)) {
-      add(lot.field, 'sell', `Sell the ${fieldInfo(c, lot.field).name} crop off the field.`, 'Blighted tubers went over the picking table. More are in the pile, and they rot in storage.', false, lot.id)
+      add(lot.field, 'sell', `Sell the ${fieldInfo(c, lot.field).name} crop straight from the field.`, 'Blighted potatoes turned up on the picking table. There are more in the pile, and they\'ll rot in storage.', false, lot.id)
     }
   }
   if (seasonDone(c)) {
-    add(-1, 'close', 'Close out the season.', 'Everything is in. The cellar is next.', true)
+    add(-1, 'close', 'Close out the season.', 'The whole crop is in, so the cellar comes next.', true)
   }
   out.sort((a, b) => Number(b.urgent) - Number(a.urgent))
   return out
@@ -277,7 +277,7 @@ export function frostAhead(world: World, c: Campaign): GameEvent[] {
   }
   if (!cold.length || s.frostHaul === s.day - 1) return []
   const e: GameEvent = { day: s.day, type: 'frostBarrels', field: -1, level: 'warn',
-    text: `Frost is forecast on the crop still in barrels: ${cold.join(', ')}. Hauling it in comes first, Sundays too, until it is in.` }
+    text: `Frost is forecast for the crop still in barrels: ${cold.join(', ')}. Your crew hauls it in first, Sundays included, until it's all in.` }
   s.log.push(e)
   return [e]
 }
@@ -293,11 +293,11 @@ export function fieldNeeds(world: World, c: Campaign): { need: Advice | null; ho
     const mine = all.filter(a => a.field === i)
     const need = mine.find(a => a.act !== 'wait' && !(job(a) && standingBy(c, a.act as JobKind, i)))
       ?? raw.filter(a => a.field === i && job(a) && standingBy(c, a.act as JobKind, i) && nobody(a.act as JobKind))
-        .map(a => ({ ...a, why: `${a.why} Nobody on the farm will do ${JOB_LABEL[a.act as JobKind].toLowerCase()}: set someone's priority for it.` }))[0]
+        .map(a => ({ ...a, why: `${a.why} Nobody on the farm will do ${SKILL_LABEL[jobSkill(a.act as JobKind)]}, so set someone's priority for it.` }))[0]
       ?? null
     const auto = mine.find(a => job(a) && standingBy(c, a.act as JobKind, i))
     const hold = mine.find(a => a.act === 'wait')
-      ?? (auto ? { ...auto, act: 'wait' as const, text: `${JOB_LABEL[auto.act as JobKind]} goes on the list by itself.`, why: `The crew sees to it: ${auto.why}`, urgent: false } : null)
+      ?? (auto ? { ...auto, act: 'wait' as const, text: `${JOB_LABEL[auto.act as JobKind]} goes on the work list automatically.`, why: `You don't need to order it. ${auto.why}`, urgent: false } : null)
     return { need: need ?? null, hold }
   })
 }

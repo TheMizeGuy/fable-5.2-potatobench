@@ -81,7 +81,7 @@ describe('spraying', () => {
       seen.push(...ok(w, c, { t: 'day' }).events)
     }
     expect(again, 'a spray asked for a second time').toBeDefined()
-    expect(again!.inWay).toMatch(/^Sprayed on [A-Z][a-z]+ \d+, and that has worn thin\. Each order is one pass/)
+    expect(again!.inWay).toMatch(/^You last sprayed on [A-Z][a-z]+ \d+ and it's wearing off\. Each order is a single spray/)
     const passes = seen.filter(e => e.type === 'sprayed').length
     expect(c.season!.fields.reduce((n, f) => n + (f.sprays ?? 0), 0)).toBe(passes)
     if (c.phase === 'season') ok(w, c, { t: 'endSeason' })
@@ -530,7 +530,7 @@ describe('round five', () => {
         }
         for (const o of S.jobOutlook(w, c)) {
           expect(o.why).not.toMatch(/^You takes|^You is/)
-          if (/once the .+ in .+ is done/.test(o.why)) held++
+          if (/once (you've|they've) finished .+/.test(o.why)) held++
         }
         tend(w, c)
         ok(w, c, { t: 'day' })

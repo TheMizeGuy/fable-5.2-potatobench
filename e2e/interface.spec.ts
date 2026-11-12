@@ -119,7 +119,7 @@ test('every crop order has its place on the card; one that cannot be given is gr
   await expect.poll(async () => (await look(page)).queue).toBe(1)
   await expect(page.locator('#ui [data-testid="card"] .order.is-given')).toHaveCount(1)
   await page.keyboard.press('p')
-  await expect(page.getByTestId('card-line')).toContainText('Already on the list')
+  await expect(page.getByTestId('card-line')).toContainText('Already on the work list')
   // A second field, then that order is put first with Ctrl, and the first is cancelled with a click.
   await page.keyboard.press('Digit3')
   await page.keyboard.press('p')
@@ -567,7 +567,7 @@ test('the goal line says the one next thing, opens the ladder, and moves on when
   await goal.click()
   const ladder = page.getByTestId('goals')
   await expect(ladder).toContainText('The way ahead')
-  await expect(ladder).toContainText('Seed goes in once the soil has warmed')
+  await expect(ladder).toContainText('Planting can start once the soil has warmed up')
   // The long goals wait until a year is behind the farm.
   await expect(ladder).not.toContainText('Long goals')
   await page.keyboard.press('Escape')
@@ -882,7 +882,7 @@ test('every order on the list says who takes it and when, or why nobody will', a
   // Put back to the work, someone takes it, and the list says who.
   await reach(page, `const { app } = q.g(); app.do({ t: 'priority', unit: app.campaign.crew[0].id, work: 'machine', level: 1 })`)
   await expect(page.getByTestId(`nobody-${id}`)).toHaveCount(0)
-  await expect(page.getByTestId(`queue-${id}`)).toHaveAttribute('title', /takes? it|(is|are) on it|Waiting|Sunday/)
+  await expect(page.getByTestId(`queue-${id}`)).toHaveAttribute('title', /(will|'ll) (do it|get to this)|working on it|Waiting|Sunday/)
   expect(errors, errors.join('\n')).toEqual([])
 })
 

@@ -97,12 +97,12 @@ export const JOB_COST: Record<JobKind, number> = {
 export const UPGRADES: Record<UpgradeId, { name: string; cost: number; blurb: string }> = {
   boom: { name: 'Boom sprayer', cost: 6000, blurb: 'Spraying a field takes a tenth of a day instead of a quarter.' },
   harvester: { name: 'Two-row harvester', cost: 12000, blurb: 'Digging a field takes a day and a quarter instead of two days.' },
-  vent: { name: 'Cellar ventilation', cost: 7000, blurb: 'The cellar holds more, shrinks less, and rot spreads more slowly.' },
-  reel: { name: 'Irrigation reel', cost: 30000, blurb: 'A pump, pipe and a travelling gun. Watering a field takes half a day instead of a whole one, and costs less.' },
-  tractor2: { name: 'Second tractor', cost: 6000, blurb: 'A second tractor with its planter and hiller: two people can do machine work at once. It needs the machine shed.' },
-  house2: { name: 'Second potato house', cost: 18000, blurb: 'A contractor puts up a potato house at home at once. The farm can store as much again as the first one holds. Built by the farm\'s own people it costs less.' },
-  tractor3: { name: 'Third tractor', cost: 8000, blurb: 'A third tractor: three people on machine work at once. It needs the machine shed and the second tractor.' },
-  truck: { name: 'Truck', cost: 6000, blurb: 'Hauls the crop in at twice a tractor\'s rate, and leaves the tractor free.' },
+  vent: { name: 'Cellar ventilation', cost: 7000, blurb: 'Your cellar holds more, the crop shrinks less in storage, and rot spreads more slowly.' },
+  reel: { name: 'Irrigation reel', cost: 30000, blurb: 'A pump, pipe and a traveling sprinkler. Watering a field takes half a day instead of a whole one, and it costs less.' },
+  tractor2: { name: 'Second tractor', cost: 6000, blurb: 'A second tractor with its own planter and hiller, so two people can do machine work at once. You need the machine shed first.' },
+  house2: { name: 'Second potato house', cost: 18000, blurb: 'A contractor builds a second potato house at home right away, which doubles your storage there. It costs less if your own crew builds it.' },
+  tractor3: { name: 'Third tractor', cost: 8000, blurb: 'A third tractor, so three people can do machine work at once. You need the machine shed and the second tractor first.' },
+  truck: { name: 'Truck', cost: 6000, blurb: 'Hauls the crop in twice as fast as a tractor, and frees the tractor for other work.' },
 }
 
 // ---------------------------------------------------------------- the bigger farm (all invented: docs/MODEL.md section 9)
@@ -168,16 +168,16 @@ export const SPRAY_BASE = 0.84                 // a spray lays down 0.84 + 0.02 
 export const SPRAY_PER = 0.02
 
 export const TRAITS: Record<Trait, { name: string; text: string }> = {
-  strong: { name: 'Strong back', text: 'Field and woods work 15% faster.' },
-  steady: { name: 'Steady hands', text: 'Machine work comes out as if two levels more skilled.' },
-  sharp: { name: 'Sharp-eyed', text: 'Finds more of the blighted plants when scouting.' },
-  early: { name: 'Early riser', text: 'All work 8% faster.' },
-  tireless: { name: 'Hard to tire', text: 'Tires 30% more slowly.' },
-  cheerful: { name: 'Cheerful', text: 'Never gloomier than middling, and lifts everyone else a little.' },
-  hothead: { name: 'Hot-headed', text: 'Mood falls twice as fast when worn out.' },
-  careless: { name: 'Careless', text: 'Misses more blight when scouting, and bruises more at the dig.' },
-  slow: { name: 'Slow and sure', text: '10% slower, but never hurt.' },
-  homebody: { name: 'Homebody', text: 'Will not work winters.' },
+  strong: { name: 'Strong back', text: 'Does field and woods work 15% faster.' },
+  steady: { name: 'Steady hands', text: 'Does machine work as if two levels more skilled.' },
+  sharp: { name: 'Sharp-eyed', text: 'Spots more of the blighted plants when scouting.' },
+  early: { name: 'Early riser', text: 'Does all work 8% faster.' },
+  tireless: { name: 'Tireless', text: 'Gets tired 30% more slowly.' },
+  cheerful: { name: 'Cheerful', text: 'Mood never sinks below the middle, and lifts everyone else\'s a little.' },
+  hothead: { name: 'Hot-headed', text: 'Mood drops twice as fast when worn out.' },
+  careless: { name: 'Careless', text: 'Misses more blight when scouting, and bruises more potatoes at harvest.' },
+  slow: { name: 'Slow and sure', text: 'Works 10% slower, but never gets hurt.' },
+  homebody: { name: 'Homebody', text: 'Won\'t work winters.' },
 }
 export const TRAIT_LIST: Trait[] = ['strong', 'steady', 'sharp', 'early', 'tireless', 'cheerful', 'hothead', 'careless', 'slow', 'homebody']
 export const STRONG_SPEED = 1.15
@@ -280,21 +280,21 @@ export interface BuildingSpec { name: string; cash: number; logs: number; stone:
 // dufour: whether one can stand at the Dufour yard too (one of each kind per yard).
 export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
   house: { name: 'Potato house', cash: 7000, logs: 30, stone: 25, days: 30, dufour: true,
-    does: 'Stores 3,600 cwt at its yard (6,400 at home with ventilation).', catch: 'It costs as much as a field\'s growing and takes a month of building.' },
+    does: 'Stores 3,600 cwt at its yard (6,400 at home with ventilation).', catch: 'It costs about as much as growing a field, and takes a month to build.' },
   shed: { name: 'Machine shed', cash: 4500, logs: 20, stone: 10, days: 16, dufour: false,
-    does: 'Machine work goes 15% faster, breakdowns are half as likely, and a second and third tractor can be kept.', catch: 'Money and materials that grow no potatoes.' },
+    does: 'Machine work goes 15% faster, breakdowns are half as likely, and you can keep a second and third tractor.', catch: 'It takes money and materials that won\'t grow any potatoes.' },
   bunk: { name: 'Bunkhouse', cash: 3500, logs: 16, stone: 8, days: 12, dufour: true,
-    does: 'Beds for six hired people, who are happier for them.', catch: 'Beds are only worth having with people to fill them, and every one is a wage.' },
+    does: 'Gives you beds for six hired people, who are happier with a bed.', catch: 'Beds only pay off with people in them, and every person is another wage.' },
   packing: { name: 'Packing shed', cash: 8000, logs: 24, stone: 15, days: 24, dufour: false,
-    does: 'In winter, people set to pack grade the stored crop: packed No. 1 brings 15% more and B size three quarters of the No. 1 price.', catch: 'Packing costs a charge a hundredweight and someone kept on, and paid, all winter.' },
+    does: 'In winter, anyone you set to packing grades the stored crop. Packed No. 1 sells for 15% more, and packed B size sells for three quarters of the No. 1 price.', catch: 'Packing costs a fee per hundredweight, plus wages for someone kept on all winter.' },
   pond: { name: 'Irrigation pond', cash: 6000, logs: 0, stone: 30, days: 20, dufour: false,
-    does: 'Holds six waterings: a home or intervale field waters in a third of a day for $60.', catch: 'When a month brings under 40 mm of rain the brook runs low and the pond is dry, just when it is wanted.' },
+    does: 'Holds six waterings. Watering a home or intervale field from it takes a third of a day and costs $60.', catch: 'When a month brings less than 40 mm of rain, the brook runs low and the pond goes dry, right when you need it.' },
   stand: { name: 'Farm stand', cash: 600, logs: 4, stone: 0, days: 4, dufour: false,
-    does: 'From August 1 it sells about 6 cwt a day from the newest lot at twice the market price, more for red, yellow and new potatoes.', catch: 'Someone has to mind it: a fifth of a working day, every day it is open.' },
+    does: 'From August 1, it sells about 6 cwt a day from your newest lot at twice the market price, and more for red, yellow and new potatoes.', catch: 'Someone has to run it, which takes a fifth of a working day every day it\'s open.' },
   station: { name: 'Weather station', cash: 1000, logs: 0, stone: 0, days: 1, dufour: false,
-    does: 'The forecast\'s errors are 40% smaller, and each field shows today\'s blight risk from its own wet hours.', catch: 'The weather is still the weather: the forecast still errs, and knowing the risk does not spray the field.' },
-  road: { name: 'Gravelled road', cash: 1500, logs: 0, stone: 40, days: 12, dufour: false,
-    does: 'Travel and hauling 30% quicker.', catch: 'Forty loads of stone, or $1,600 of it from the quarry.' },
+    does: 'Forecast errors are 40% smaller, and each field shows today\'s blight risk based on how long its own leaves stay wet.', catch: 'The forecast can still be wrong, and knowing the risk doesn\'t spray the field for you.' },
+  road: { name: 'Gravel road', cash: 1500, logs: 0, stone: 40, days: 12, dufour: false,
+    does: 'Travel and hauling are 30% faster.', catch: 'It takes 40 loads of stone, or $1,600 to buy that much from the quarry.' },
 }
 export const BUILDING_KINDS: BuildingKind[] = ['house', 'shed', 'bunk', 'packing', 'pond', 'stand', 'station', 'road']
 export const HOUSE_CWT = 3600                  // a built potato house; at home with ventilation it holds CELLAR_CWT_VENT
