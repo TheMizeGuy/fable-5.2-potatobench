@@ -1,7 +1,7 @@
 // The top of the screen (design/season.html): two anchored boards. On the left the almanac board: the date leaf, six
 // days of forecast and the season ruled under them, with the canary goal slip hung below. On the right the bank
 // board: the balance, the clock's keys and the menu, and the contracts as ranges.
-import { goals, nextGoal, type Goal } from '../game/goals.ts'
+import { goals, nextGoal, seasonStep, type Goal } from '../game/goals.ts'
 import * as S from '../sim/index.ts'
 import { contractRows } from './contracts.ts'
 import { count, patch, type Ctx } from './core.ts'
@@ -356,6 +356,10 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
   function goalSlip(c: S.Campaign, g: Goal | null, gone: Goal | null, season: boolean): Child {
     const line = g ?? gone
     if (!line) return null
+    // In a later season the crop's own next step comes ahead of a farmstead goal, which waits in the line under it.
+    let later: Goal | null = null
+    if (season && g && !CROP_STEPS.has(g.id)) { const st = seasonStep(c); if (st) { later = g; g = st } }
+    const then = later ? `then: ${later.title.toLowerCase()}` : ''
     // Before the ground is fit, the planting goal says plainly how long it will be, counting down by the day.
     const wait = g && g.id === 'plant' && season && !app.needs().some(n => n.need?.act === 'plant') ? plantingIn(app.world, c) : -1
     // The one planting rule (S.plantReady) gives the temperature and the reason, as the field's card and the guide do.
@@ -382,7 +386,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
         onclick: () => { pop = pop === 'goals' ? '' : 'goals'; ctx.dirty() },
       }, callFirst ? fist() : null, h('span', { class: 'goal-body' }, h('span', { class: 'sr' }, callFirst ? 'Now: ' : 'Next goal: '),
         h('b', { class: 'goal-t' }, callFirst ? F.localize(call!.text) : g!.title),
-        callFirst ? (call!.line ? h('span', { class: 'goal-when' }, call!.line) : g ? h('span', { class: 'goal-when' }, `then: ${g.title.toLowerCase()}${reach ? '' : `, ${notYet(c, g)}`}`) : null) : h('span', { class: 'goal-when' }, notYet(c, g!))),
+        callFirst ? (call!.line ? h('span', { class: 'goal-when' }, call!.line) : g ? h('span', { class: 'goal-when' }, `then: ${g.title.toLowerCase()}${reach ? '' : `, ${notYet(c, g)}`}`) : null) : h('span', { class: 'goal-when' }, `${notYet(c, g!)}${then ? `; ${then}` : ''}`)),
       h('span', { class: 'sr' }, `. ${callFirst ? F.localize(call!.why) : g!.why} Open the goals.`))
       const go = callFirst ? h('button', { class: 'btn goal-go', type: 'button', testid: 'goal-do', onclick: () => takeCall(call!) }, icon(call!.fix ? 'check' : 'arrow', 'i'), call!.fixLabel) : null
       return go ? h('div', { class: 'goal-row' }, quiet, go) : quiet
@@ -397,7 +401,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     },
     gone ? h('span', { class: 'was struck' }, h('span', { class: 'sr' }, 'Done: '), gone.title) : null,
     g ? [quiet ? null : fist(), h('span', { class: 'goal-body' },
-      h('span', { class: 'sr' }, 'Next goal: '), h('b', { class: 'goal-t' }, title), quiet ? h('span', { class: 'goal-when' }, notYet(c, g)) : when),
+      h('span', { class: 'sr' }, 'Next goal: '), h('b', { class: 'goal-t' }, title), quiet ? h('span', { class: 'goal-when' }, `${notYet(c, g)}${then ? `; ${then}` : ''}`) : when ?? (then ? h('span', { class: 'goal-when' }, then) : null)),
     n ? h('span', { class: 'count goal-n num', testid: wait > 0 ? 'goal-wait' : undefined }, n) : null,
     h('span', { class: 'sr' }, `. ${g.why} Open the goals.`)] : null)
     return faster || doIt ? h('div', { class: 'goal-row' }, slip, faster ?? doIt) : slip

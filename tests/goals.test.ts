@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { goals, nextGoal, type Goal } from '../src/game/goals.ts'
+import { goals, nextGoal, seasonStep, type Goal } from '../src/game/goals.ts'
 import * as S from '../src/sim/index.ts'
 import { loadWorld } from '../tools/balance/world.ts'
 
@@ -202,6 +202,35 @@ describe('the ladder of goals', () => {
     expect(goal(d, 'tool').cost).toBe(Math.min(...(['boom', 'harvester', 'vent', 'reel', 'house2', 'truck'] as S.UpgradeId[]).map(id => S.UPGRADES[id].cost)))
     d.cash = 100
     expect(goal(d, 'tool').short).toBe(goal(d, 'tool').cost - 100)
+  })
+
+  it('a machine is not a goal while buying one would leave less than the note in hand', () => {
+    const c = farm()
+    pastYear(c)
+    c.cash = 6515
+    expect(goal(c, 'tool').block).toMatch(/would leave \$515/)
+    expect(nextGoal(c)?.id).not.toBe('tool')
+    c.cash = 24000
+    expect(goal(c, 'tool').block).toBe('')
+    expect(nextGoal(c)?.id).toBe('tool')
+  })
+
+  it('the year end shows the goal the coming spring opens on', () => {
+    const c = farm()
+    pastYear(c)
+    S.apply(w, c, { t: 'hire', kind: 'hand' })
+    c.phase = 'ledger'
+    const spring = nextGoal({ ...c, phase: 'plan' })
+    expect(nextGoal(c)?.id).toBe(spring?.id)
+  })
+
+  it('in a later season the crop\'s own next step is there for the slip, ahead of the farmstead', () => {
+    const c = farm()
+    pastYear(c)
+    S.apply(w, c, { t: 'begin' })
+    expect(seasonStep(c)?.id).toBe('plant')
+    play(c, x => x.season!.fields.filter((f, i) => S.isField(x, i) && f.status !== 'rest' && f.status !== 'off').every(f => f.plantDay >= 0))
+    expect(seasonStep(c)?.id).not.toBe('plant')
   })
 
   it('the long goals count toward their ends: every tract, the whole map, a crew of ten, every building', () => {

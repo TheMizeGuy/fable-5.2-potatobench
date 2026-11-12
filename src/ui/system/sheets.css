@@ -15,6 +15,10 @@
 
 /* The splash's name gives way at once when the land is ready, so it never stands over the title's own name. */
 #splash.gone .splash-name { opacity: 0; transition: opacity 120ms linear; }
+/* A goal just met is struck through over the slip, not above its line, so nothing beside the slip moves when it goes. */
+.topbar .goal.met { position: relative; }
+.topbar .goal.met .was { position: absolute; left: 10px; right: 10px; bottom: calc(100% + 4px); padding: 2px 8px; background: var(--paper); box-shadow: var(--laid); pointer-events: none; }
+
 /* Cash and, at its weight, what is left after the year-end bills: two lines of the pass book. */
 .topbar .balance.two { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: baseline; column-gap: 12px; row-gap: 0; }
 .topbar .balance.two > .cash { justify-self: end; }
