@@ -337,8 +337,12 @@ test('the same start by keyboard alone', async ({ page, isMobile }) => {
   await page.keyboard.press('Enter')
   await expect(page.getByTestId('forecast')).toBeVisible()
 
+  // Running at 1x by itself. The weeks until the soil is warm are passed through the test hook: the keys are what
+  // this is about.
+  expect((await look(page)).speed).toBe(1)
+  await reach(page, `const { app } = q.g(); for (let k = 0; k < 90 && !app.needs().some(n => n.need && n.need.act === 'plant'); k++) { app.campaign.incidents = []; app.do({ t: 'day' }) } app.campaign.incidents = []`)
   // Tab finds the field that needs something; Enter gives it the order.
-  await expect(page.locator(BADGE).first()).toBeVisible({ timeout: 120_000 })
+  await expect(page.locator(BADGE).first()).toBeVisible({ timeout: 30_000 })
   await page.keyboard.press('Tab')
   await expect(page.getByTestId('card')).toBeVisible()
   await expect(page.locator('#ui .plate[aria-pressed="true"]')).toHaveCount(1)
