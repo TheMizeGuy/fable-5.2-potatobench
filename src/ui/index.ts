@@ -24,6 +24,7 @@ import { planScreen } from './plan.ts'
 import { alertShort, countYearsFrom } from './rules.ts'
 import { seasonScreen } from './season.ts'
 import { titleScreen } from './title.ts'
+import { mountGuide, openGuide } from './tutorial.ts'
 
 export const mountHud: MountHud = (root, app, view, sound) => {
   mountSprites()
@@ -32,8 +33,9 @@ export const mountHud: MountHud = (root, app, view, sound) => {
   const screenLayer = h('div', { class: 'screen-layer' })
   const floating = h('div', { class: 'notes-slot floating' })
   const paperLayer = h('div', { class: 'paper-layer' })
+  const guideLayer = h('div', { class: 'guide-layer' })
   const notes = new Notes()
-  root.replaceChildren(plateLayer, screenLayer, floating, notes.liveRegion, paperLayer)
+  root.replaceChildren(plateLayer, screenLayer, floating, notes.liveRegion, paperLayer, guideLayer)
   const papers = new Papers(paperLayer, [screenLayer, plateLayer, floating], app)
   const touchQuery = matchMedia('(pointer: coarse)')
 
@@ -63,7 +65,7 @@ export const mountHud: MountHud = (root, app, view, sound) => {
 
   notes.onGo = field => { app.select(field); app.focus(field) }
 
-  const menu = () => openMenu(ctx, { onHelp: () => openHelp(ctx), onAlmanac: () => openAlmanac(ctx) })
+  const menu = () => openMenu(ctx, { onHelp: () => openHelp(ctx), onAlmanac: () => openAlmanac(ctx), onGuide: () => openGuide(ctx) })
   const almanac = () => openAlmanac(ctx)
 
   function applySettings(): void {
@@ -230,6 +232,7 @@ export const mountHud: MountHud = (root, app, view, sound) => {
   })
 
   build()
+  const guided = mountGuide(ctx, guideLayer)
   // Until the land can be drawn the name stands alone, where the title will set it; then the ground gives way to the land.
   const splash = document.getElementById('splash')
   const splashName = splash?.querySelector<HTMLElement>('.splash-name')
@@ -255,6 +258,7 @@ export const mountHud: MountHud = (root, app, view, sound) => {
     frame(dt: number) {
       if (held && performance.now() - heldAt > 1500) held = false
       sinceTick += dt
+      guided.frame(dt)
       if (sinceTick > 500) { sinceTick = 0; if (notes.count()) notes.prune(app.campaign?.season && app.screen === 'season' ? app.campaign.season.day : -1) }
       if (dirty && !held && screen) {
         dirty = false
@@ -271,6 +275,7 @@ export const mountHud: MountHud = (root, app, view, sound) => {
     },
     dispose() {
       screen?.dispose?.()
+      guided.dispose()
       root.replaceChildren()
     },
   }

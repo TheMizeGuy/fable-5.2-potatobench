@@ -6,6 +6,7 @@ import { h } from './dom.ts'
 import { icon } from './icons.ts'
 import { seasonCount } from './rules.ts'
 import { PHASE_LABEL } from './top.ts'
+import { startedFarm } from './tutorial.ts'
 
 // Starts a farm of its own, with seasons made for it. A farm still in play is not replaced unasked.
 export async function startNewFarm(ctx: Ctx): Promise<void> {
@@ -21,6 +22,7 @@ export async function startNewFarm(ctx: Ctx): Promise<void> {
   }
   ctx.papers.closeAll()
   app.newGame()
+  if (app.campaign) startedFarm(app.campaign.seed)
 }
 
 function engraving(): HTMLElement {
