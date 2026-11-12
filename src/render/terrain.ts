@@ -8,12 +8,13 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { FIELD_COUNT, PARCELS } from '../sim/index.ts'
 import { OFF_GLSL, OFF_KIND } from './fields.ts'
 import {
-  BLOCKS, FIELDS, FORD, HOME, LAND, OPEN, QUILT, REACH, ROAD, WALLS, WATER_Y, WAYS, WIDE, YARD_AT, brookHalf, brookZ, fordAt, gravelDist, groundY, hillRoadZ, TRACT_LINE, ridgeWoodAt, roadDist, townRoadZ, tractAt, wallDist, FARM, WOOD_GATE, oursAt, fieldMask, HOUSE, BARN, POTATO_HOUSE, DUFOUR_HOUSE, DUFOUR_BARN, VILLAGE, SIDING,
+  BLOCKS, FIELDS, FORD, HOME, LAND, OPEN, QUILT, REACH, ROAD, WALLS, WATER_Y, WAYS, WIDE, YARD_AT, brookHalf, brookZ, fordAt, gravelDist, groundY, hillRoadZ, TRACT_LINE, ridgeWoodAt, roadDist, townRoadZ, tractAt, wallDist, FARM, WOOD_GATE, oursAt, fieldMask, HOUSE, BARN, POTATO_HOUSE, DUFOUR_HOUSE, DUFOUR_BARN, VILLAGE, SIDING, HOME_WOODS,
 } from './layout.ts'
 import { K, KV, S, toWorld } from './scale.ts'
 import { hash2, rng, smooth } from './noise.ts'
 import { SNOW_RIME, linear, patch, snowRimeAt } from './shaders.ts'
 import { GROUND_SNOW } from './snow.ts'
+import { buildBounds } from './bounds.ts'
 
 export interface Terrain {
   group: Group
@@ -328,6 +329,10 @@ export function buildTerrain(): Terrain {
           // fern and hardhack coming in where it is not kept down, rusty by September
           vec3 brake = mix(grass * vec3(0.74, 0.86, 0.5), ${linear('#8a6a3c')} * (0.8 + 0.4 * fine), smoothstep(236.0, 262.0, uDay));
           col = mix(col, brake * (0.7 + 0.6 * tuft), smoothstep(0.6, 0.7, rough + (mid - 0.5) * 0.2) * 0.6 * meadow * uLeaf);
+          float clumpP = smoothstep(0.62, 0.72, texture2D(uNoise, p * 0.057 + 0.3).a) * smoothstep(0.45, 0.6, rough);
+          col = mix(col, mix(grass * vec3(0.4, 0.52, 0.34), ${linear('#6e5a3a')}, 0.6 * (1.0 - uLeaf)) * (0.6 + 0.8 * fine), clumpP * 0.7 * meadow);
+          float back = meadow * (1.0 - smoothstep(${HOME_WOODS.z1.toFixed(1)}, ${(HOME_WOODS.z1 + 60).toFixed(1)}, pw.y));
+          col = mix(col, mix(${linear('#6f7046')}, ${linear('#4f5a34')}, tuft) * (0.7 + 0.6 * fine), back * 0.5 * smoothstep(0.35, 0.6, texture2D(uNoise, p * 0.021 + 0.8).b));
           float trailN = texture2D(uNoise, p * 0.0052 + 0.17).b, pxm = length(fwidth(pw));
           float off = abs(trailN - 0.5) / max(fwidth(trailN), 1e-5) * pxm;
           float trail = (1.0 - smoothstep(0.2, 0.55 + pxm, off)) * smoothstep(0.4, 0.5, piece) * (1.0 - smoothstep(1.2, 3.5, pxm));
@@ -396,15 +401,21 @@ export function buildTerrain(): Terrain {
           landBump = mix(landBump, (cr.rg - 0.5) * 11.0, floorK * cfar);
         }
         col = mix(col, mix(${linear('#8a6e52')}, ${linear('#5b4534')}, uWet) * (0.82 + 0.36 * fine), smoothstep(0.25, 0.75, vSurf.z + (fine - 0.5) * 0.5) * 0.85);
-        float bank = 1.0 - smoothstep(0.1, 0.24, vSurf.y + (mid - 0.5) * 0.1);
+        {
+          float wetB = (1.0 - smoothstep(0.5, 1.0, vSurf.y + (mid - 0.5) * 0.3)) * (1.0 - vSurf.x);
+          vec3 rush = mix(grass * vec3(0.42, 0.62, 0.36), ${linear('#6f6a3c')}, 0.6 * (1.0 - uLeaf)) * (0.45 + 1.0 * texture2D(uNoise, p * 0.7).a);
+          col = mix(col, rush, wetB * (0.35 + 0.5 * smoothstep(0.4, 0.6, tuft)));
+        }
+        float barB = smoothstep(0.5, 0.7, texture2D(uNoise, pw * 0.0063 + 0.4).b);
+        float bank = max(1.0 - smoothstep(0.1, 0.24, vSurf.y + (mid - 0.5) * 0.1), barB * (1.0 - smoothstep(0.26, 0.42, vSurf.y + (mid - 0.5) * 0.12)));
         vec3 gravel = mix(${linear('#8c8676')}, ${linear('#4c4033')}, 0.45 + 0.4 * fine) * mix(1.0, 0.7, uWet);
         col = mix(col, gravel, bank);
         // Under each of the farm's fields the ground is the soil's own colour, so no green shows at a field's edge; round
         // it, a headland where the tractor turns, worn pale. Somebody else's ground runs green to its wall.
-        float headland = 0.0;
+        float headland = 0.0, margin = 0.0;
         for (int k = 0; k < ${FIELD_COUNT}; k++) {
           float fd = rectDist(FIELD_RECT[k], p);
-          if (fd > 3.0) continue;
+          if (fd > 4.6) continue;
           // Somebody else's parcel: its hay, pasture or stubble, to an edge as uneven as a mower leaves.
           if (uOffK[k] > 0.001) {
             float tall;
@@ -415,8 +426,10 @@ export function buildTerrain(): Terrain {
           }
           col = mix(col, soil * (0.8 + 0.3 * fine), (1.0 - smoothstep(0.35, 0.85, fd + (mid - 0.5) * 0.5)) * uHeld[k]);
           headland = max(headland, (1.0 - smoothstep(0.9, 2.0, fd + (fine - 0.5) * 0.6)) * smoothstep(0.3, 0.7, fd) * uHeld[k]);
+          margin = max(margin, smoothstep(1.6, 2.2, fd) * (1.0 - smoothstep(2.9, 4.4, fd + (mid - 0.5) * 1.6 + (fine - 0.5) * 0.5)));
         }
         col = mix(col, mix(grass * vec3(1.18, 1.08, 0.8), soil * 1.15, 0.35 + 0.3 * fine), headland * 0.7);
+        col = mix(col, mix(grass * vec3(0.5, 0.66, 0.4), ${linear('#8a7a4c')}, max(0.3 * step(0.6, tuft), 0.7 * (1.0 - uLeaf))) * (0.6 + 0.7 * fine), margin * 0.75);
         col *= mix(1.0, 0.84, uWet * (1.0 - bank));
         landRough = mix(landRough, 0.62, uWet * 0.6);
         landRough = mix(landRough, 0.35, wetHere * uWet);
@@ -464,10 +477,15 @@ export function buildTerrain(): Terrain {
     uniforms: { uGravel: gravel },
     vertexHead: 'varying vec2 vRoad;',
     vertexBegin: 'vRoad = uv;',
-    fragmentHead: 'uniform float uGravel; varying vec2 vRoad; float roadPool;',
+    fragmentHead: 'uniform float uGravel; varying vec2 vRoad; float roadPool; float outV; float vergeW;',
     fragmentColor: /* glsl */ `
       {
-        float u = vRoad.x, edge = min(u, 1.0 - u);
+        // A lane's ribbon is wider than its tread: a verge each side, with a ditch on one of them.
+        vergeW = ${kind === 'track' ? '2.6' : '0.0'};
+        float treadW = ${kind === 'track' ? WIDE.track.toFixed(1) : '1.0'};
+        float um = vRoad.x * (treadW + 2.0 * vergeW);
+        float u = ${kind === 'track' ? 'clamp((um - vergeW) / treadW, 0.0, 1.0)' : 'vRoad.x'}, edge = min(u, 1.0 - u);
+        outV = ${kind === 'track' ? 'max(vergeW - um, um - vergeW - treadW)' : '-1.0'};
         vec2 rp = vWorld.xz / ${S.toFixed(2)};
         vec4 rn = texture2D(uNoise, rp * 0.9);
         float fine = rn.a, mid = texture2D(uNoise, rp * 0.13).a, broad = texture2D(uNoise, rp * 0.031).b;
@@ -489,11 +507,26 @@ export function buildTerrain(): Terrain {
       {
         // Under snow a way shows only where it is trodden: the farm road between the house and the potato house.
         float snowed = smoothstep(0.25, 0.8, uSnow);
+        float stalks = 0.0;
+        if (outV > 0.0) {
+          // Longer grass and weeds nobody mows, ragged at its outer edge; dead stalks standing out of the snow in winter.
+          float vn = texture2D(uNoise, vWorld.xz * 0.61).a, vb = texture2D(uNoise, vWorld.xz * 0.043).b;
+          float k = (1.0 - smoothstep(vergeW * 0.35, vergeW, outV + (vn - 0.5) * 1.4)) * (0.55 + 0.45 * smoothstep(0.3, 0.6, vb));
+          vec3 rank = uGrass * vec3(0.6, 0.8, 0.46) * (0.5 + 0.8 * vn);
+          rank = mix(rank, ${linear('#9a8a58')} * (0.6 + 0.6 * vn), max(0.3 * step(0.66, vn), 0.75 * (1.0 - uLeaf)));
+          rank = mix(rank, mix(${linear('#d8c64a')}, ${linear('#e9e4d2')}, step(0.5, vb)), step(0.9, texture2D(uNoise, vWorld.xz * 2.3).a) * uLeaf * 0.8);
+          float ditch = step(vRoad.x, 0.5) * (1.0 - smoothstep(0.2, 0.55, abs(outV - 1.2)));
+          rank = mix(rank, vec3(0.035, 0.045, 0.03), ditch * 0.8);
+          diffuseColor.rgb = rank;
+          diffuseColor.a = max(k * 0.92, ditch * 0.8);
+          stalks = max(k * step(0.5, vn) * 0.75, ditch * 0.5);
+        }
         float trod = ${kind === 'track' ? '0.0' : '1.0'};
         float ruts = max(exp(-pow((vRoad.x - 0.27) / 0.13, 2.0)), exp(-pow((vRoad.x - 0.73) / 0.13, 2.0)));
         vec3 packed = mix(vec3(0.62, 0.67, 0.76), vec3(0.3, 0.3, 0.32), ruts * ${kind === 'town' ? '0.75' : '0.5'}) * (0.8 + 0.3 * texture2D(uNoise, vWorld.xz * 0.32).a);
         diffuseColor.rgb = mix(diffuseColor.rgb, packed, snowed * trod);
         diffuseColor.a = mix(diffuseColor.a, max(trod * smoothstep(0.02, 0.2, min(vRoad.x, 1.0 - vRoad.x)), diffuseColor.a * 0.1), snowed);
+        if (outV > 0.0) { diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.3, 0.25, 0.17), snowed); diffuseColor.a = mix(diffuseColor.a, stalks, snowed); }
       }`,
     fragmentRoughness: 'roughnessFactor = mix(mix(0.95, 0.6, uWet * 0.7), 0.05, roadPool);',
   })
@@ -538,7 +571,7 @@ export function buildTerrain(): Terrain {
   }
   for (const w of WAYS) {
     if (w.kind === 'road') ribbon(w.pts, w.pts === WAYS[0].pts ? WIDE.road : WIDE.road * 0.9, farmRoad, 0.11)
-    else if (w.kind === 'track') ribbon(w.pts, WIDE.track, trackMat, 0.08)
+    else if (w.kind === 'track') ribbon(w.pts, WIDE.track + 5.2, trackMat, 0.08)
   }
   const longRoad = (zOf: (x: number) => number): [number, number][] => {
     const pts: [number, number][] = []
@@ -643,6 +676,9 @@ export function buildTerrain(): Terrain {
   }
 
   const rocks = stoneWalls()
+  const bounds = buildBounds()
+  group.add(bounds.group)
+  disposables.push(bounds)
   group.add(rocks)
   disposables.push(rocks.geometry, rocks.material as MeshStandardMaterial)
 
@@ -704,6 +740,18 @@ function stoneWalls(): InstancedMesh {
       spots.push([x + Math.cos(a + turn) * dd * 1.7, z + Math.sin(a) * dd, s, -s * 0.38])
     }
   }
+  // Old walls that run on into the woods, where fields were let go; and along the foot of the saddle's old pasture.
+  for (const wx of [-44, -31, -8, 5, 15.2, 31.6, 44, 58, 71]) {
+    const x0 = wx * K, z0 = HOME_WOODS.z1 + 6, far = 50 + r() * 70
+    for (let d = 0; d < far; d += 9) if (r() < 0.78) line(x0 + d * 0.06, z0 - d, x0 + (d + 8) * 0.06, z0 - d - 8, 0.62)
+  }
+  // Stone picked off each field and tipped at its corners.
+  for (const f of FIELDS) for (const [cx, cz] of [[f.x0 - 5, f.z0 - 5], [f.x1 + 5, f.z0 - 5], [f.x0 - 5, f.z1 + 5], [f.x1 + 5, f.z1 + 5]]) {
+    if (r() < 0.45 || roadDist(cx, cz) < 5 || fieldMask(cx, cz, 2) > 0.01) continue
+    for (let q = 0; q < 12; q++) { const a = r() * 6.283, dd = Math.sqrt(r()) * 1.6, s = 0.22 + r() * 0.3; spots.push([cx + Math.cos(a) * dd, cz + Math.sin(a) * dd, s, dd < 0.6 ? s * 0.8 : 0]) }
+  }
+  // A culvert where a lane crosses wet ground: a headwall of flat stones each side.
+  for (const [cx, cz] of [[-0.3 * K, 21.2 * K], [-0.3 * K, 2.2 * K], [34 * K, -7.6 * K]]) for (const side of [-1, 1]) for (let q = -2; q <= 2; q++) spots.push([cx + side * 3.1 + (r() - 0.5) * 0.3, cz + q * 0.55, 0.42, q === 0 ? -0.2 : 0.05])
   const geo = new OctahedronGeometry(1, 0)
   const gp = geo.getAttribute('position') as BufferAttribute
   for (let i = 0; i < gp.count; i++) {

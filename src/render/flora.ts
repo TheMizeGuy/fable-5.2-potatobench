@@ -5,10 +5,11 @@ import {
   BufferAttribute, BufferGeometry, DoubleSide, Group, IcosahedronGeometry, InstancedBufferAttribute, InstancedMesh, Matrix4,
   MeshStandardMaterial, Quaternion, Sphere, Vector3, type MeshDepthMaterial, type PerspectiveCamera, type WebGLRenderer,
 } from 'three'
+import { fenceRuns } from './bounds.ts'
 import { BARE_SHIFT, CARD, CARD_FRAGMENT, CARD_SHADOW, CARD_SHADOW_HEAD, CARD_VERTEX, bakeCards, cardGeometry, cardMaps } from './cards.ts'
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { PARCELS, TRACTS } from '../sim/index.ts'
-import { DUFOUR, DUFOUR_BARN, DUFOUR_HOUSE, DUFOUR_POTATO_HOUSE, FARM, FARM_CENTER, FD, FIELDS, FW, HOME, HOME_WOODS, KEEP_CLEAR, LAND, POND, POTATO_HOUSE, WIDE, YARD_TREES, brookHalf, brookZ, fieldMask, groundY, hillRoadZ, oursAt, regionAt, ridgeWoodAt, roadDist, townRoadZ, tractAt, woodFront, woodsAt, WALLS, GATEWAYS, YARD_AT, ROAD, BRIDGE_X, PASTURE, VILLAGE, SIDING, WOOD_GATE } from './layout.ts'
+import { DUFOUR, DUFOUR_BARN, DUFOUR_HOUSE, DUFOUR_POTATO_HOUSE, FARM, FARM_CENTER, FD, FIELDS, FW, HOME, HOME_WOODS, KEEP_CLEAR, LAND, POND, POTATO_HOUSE, WIDE, YARD_TREES, brookHalf, brookZ, fieldMask, groundY, hillRoadZ, oursAt, regionAt, ridgeWoodAt, roadDist, townRoadZ, tractAt, woodFront, woodsAt, WALLS, GATEWAYS, YARD_AT, ROAD, BRIDGE_X, PASTURE, VILLAGE, SIDING, WOOD_GATE, wallDist, FORD } from './layout.ts'
 import { fbm2, hash2, rng, smooth } from './noise.ts'
 import { K, KV, S, toWorld } from './scale.ts'
 import { depthFor, linear, patch, snowRimeAt, sway, type Patch } from './shaders.ts'
@@ -251,7 +252,7 @@ const T = S
 // for several, never more than about this many in all.
 // Where the camera comes to rest at the end of the opening (camera.ts, TITLE): kept clear of the lane's trees.
 const TITLE_STAND = { x: 216, z: 6, r: 30 }
-const FRONT = 70, BACK_MOST = 26000, HEDGE_MOST = 9000, COUNTRY_MOST = 24000
+const FRONT = 70, BACK_MOST = 26000, HEDGE_MOST = 15000, COUNTRY_MOST = 24000
 
 const CONIFER_LOOK = /* glsl */ `
         {
@@ -474,7 +475,9 @@ export class Flora {
         if (oursAt(jx, jz, 2 * S) > 0.01 || !open(jx, jz) || tractAt(jx, jz, 1.4 * T) >= 0) continue
         const low = jx < -18 * K && jz < 34 * K
         hedged++
-        if (r() < (low ? 0.94 : 0.7)) trees.bush.push({ x: jx, z: jz, s: (0.8 + r() * 0.9) * T, r: r(), hue: r(), kind: 3 })
+        const treeLine = hash2(side * 7 + g.bx * 13, g.bz * 29 + 91) < 0.17 && !low
+        if (treeLine) { if (r() < 0.2) soft({ x: jx, z: jz, s: (5.5 + r() * 3) * T, r: r(), hue: r() }); else hard({ x: jx, z: jz, s: (5 + r() * 3.4) * T, r: r(), hue: r() }, 0.2) }
+        else if (r() < (low ? 0.94 : 0.7)) trees.bush.push({ x: jx, z: jz, s: (0.8 + r() * 0.9) * T, r: r(), hue: r(), kind: 3 })
         else hard({ x: jx, z: jz, s: ((low ? 2.4 : 3.6) + r() * 2.6) * T, r: r(), hue: r() }, 0.25)
       }
     }
@@ -541,6 +544,56 @@ export class Flora {
       const z = brookZ(x) + side * (brookHalf(x) + 0.8 + r() * 3.2)
       if (tractAt(x, z, 0.8 * T) >= 0 || !open(x, z)) continue
       trees.bush.push({ x, z, s: (1.3 + r() * (home ? 0.5 : 1.1)) * T, r: r(), hue: 0.2 + 0.3 * r(), kind: 3 })
+    }
+    // ---- The open ground is not a lawn.
+    // Pasture: hardhack, juniper and thorn in drifts wherever it is not grazed hard, thicker toward the walls.
+    for (let n = 0, put = 0; n < 70000 && put < 2600; n++) {
+      const x = LAND.x0 + r() * (LAND.x1 - LAND.x0), z = FARM.z0 - 10 + r() * (brookZ(x) - FARM.z0)
+      if (oursAt(x, z, 2 * S) < 0.9 || inPasture(x, z)) continue
+      const drift = fbm2(x / 46 + 2.7, z / 46 + 8.3), edge = Math.max(0, 1 - wallDist(x, z) / 14)
+      if (r() > Math.max(0, drift - 0.5) * 3.2 + edge * 0.5 || !free(x, z, 7) || fieldEnd(x, z)) continue
+      put++
+      if (r() < 0.3) trees.spruce.push({ x, z, s: (0.6 + r() * 0.9) * T, r: r(), hue: r(), kind: 0, w: 1.9 })
+      else trees.bush.push({ x, z, s: (0.45 + r() * 0.75) * T, r: r(), hue: r(), kind: 3 })
+    }
+    // The woods' edge runs out into the pasture in saplings and brush, in clumps, thinning as it goes.
+    for (let x = h.x0 - 2 * K; x < h.x1 + 2 * K; x += 1.7 + r() * 2.6) {
+      const d = 4 + r() * r() * 52, z = woodFront(x) + d
+      if (fbm2(x / 34 + 5.1, z / 34 + 1.9) < 0.44 + d / 150 || !free(x, z, 5)) continue
+      const q = r(), t = { x, z, s: 0, r: r(), hue: r() }
+      if (q < 0.4) trees.bush.push({ ...t, s: (0.6 + r() * 1.0) * T, kind: 3 })
+      else if (q < 0.72) trees.spruce.push({ ...t, s: (1.0 + r() * 2.6) * T * (1 - d / 110), kind: r() < 0.4 ? 1 : 0, w: 1.3 })
+      else trees.birch.push({ ...t, s: (1.8 + r() * 2.4) * T * (1 - d / 110), kind: r() < 0.4 ? 2 : 1 })
+    }
+    // The old pasture up the saddle is going back: young spruce and fir, birch and poplar, thick along the woods on
+    // either hand and scattered up the middle, more of it the higher it climbs.
+    for (let n = 0, put = 0; n < 30000 && put < 3200; n++) {
+      const x = 12 * K + r() * 22 * K, z = -112 * K + r() * (h.z1 + 6 - -112 * K)
+      if (ridgeWoodAt(x, z) > 0.04 || z > woodFront(x) + 4) continue
+      const near = Math.max(ridgeWoodAt(x - 16, z), ridgeWoodAt(x + 16, z), ridgeWoodAt(x, z - 16)) > 0.25
+      const up = Math.min(1, Math.max(0, (h.z1 - z) / (80 * K)))
+      if (r() > (near ? 0.85 : 0.1 + 0.45 * up) * (0.35 + 1.1 * fbm2(x / 52 + 7.7, z / 52 + 3.1)) || !free(x, z, 5) || Math.hypot(x - VILLAGE.x, z - VILLAGE.z) < 120) continue
+      put++
+      const q = r(), t = { x, z, s: 0, r: r(), hue: r() }, grown = 0.5 + 0.9 * r() * (near ? 1 : 0.7)
+      if (q < 0.5) trees.spruce.push({ ...t, s: (1.2 + 3.4 * grown) * T, kind: r() < 0.4 ? 1 : 0, w: 1.2 })
+      else if (q < 0.74) trees.birch.push({ ...t, s: (2 + 3 * grown) * T, kind: r() < 0.45 ? 2 : 1 })
+      else trees.bush.push({ ...t, s: (0.6 + r()) * T, kind: 3 })
+    }
+    // Along every fence: brush grown up through it here and there, and now and then a tree somebody left for shade.
+    for (const run of fenceRuns()) {
+      for (let k = 2; k < run.length - 2; k++) {
+        const [x, z] = run[k], q = hash2(Math.round(x * 0.31), Math.round(z * 0.31))
+        if (fieldMask(x, z, 3.5) > 0.01 || roadDist(x, z) < 4.5) continue
+        if (q < 0.34 && r() < 0.7) trees.bush.push({ x: x + (r() - 0.5), z: z + (r() - 0.5), s: (0.7 + r() * 0.9) * T, r: r(), hue: r(), kind: 3 })
+        else if (r() < 0.035 && !fieldEnd(x, z)) hard({ x: x + (r() - 0.5) * 2, z: z + (r() - 0.5) * 2, s: (5 + r() * 3.6) * T, r: r(), hue: r() }, 0.15)
+      }
+    }
+    // Willows along the brook, low and broad, a stone's throw apart; they and the alder mark its course from far off.
+    for (let x = LAND.x0 - 40 * K; x < LAND.x1 + 40 * K; x += 22 + r() * 34) {
+      if (Math.abs(x - BRIDGE_X.home) < 16 || Math.abs(x - BRIDGE_X.dufour) < 16 || Math.abs(x - FORD.x) < 14) continue
+      const side = r() < 0.5 ? 1 : -1, z = brookZ(x) + side * (brookHalf(x) + 2.2 + r() * 3)
+      if (tractAt(x, z, 2) >= 0 || !open(x, z) || fieldMask(x, z, 6) > 0.01) continue
+      trees.maple.push({ x, z, s: (4.2 + r() * 2.2) * T, r: r(), hue: 0.75 + 0.25 * r(), kind: 0, w: 1.55 })
     }
     // Trees round the neighbours' farmsteads.
     for (const [fx, fz] of FARMSTEADS) {
