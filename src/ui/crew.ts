@@ -171,7 +171,7 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
       h('button', {
         class: 'q press-chip', type: 'button', testid: 'pressing', 'aria-expanded': String(pop === PRESS_POP), title: ctx.touch() ? undefined : said,
         onclick: () => { pop = pop === PRESS_POP ? -1 : PRESS_POP; popWho = false; ctx.dirty() },
-      }, icon(p.kind, 'i'), h('span', { class: 'press-word' }, 'Cannot wait'), list.length > 1 ? h('span', { class: 'num' }, ` ${list.length}`) : null,
+      }, icon(p.kind, 'i'), h('span', { class: 'press-word' }, 'Needs your order'), list.length > 1 ? h('span', { class: 'num' }, ` ${list.length}`) : null,
       h('span', { class: 'sr' }, `. ${list.map(x => `${JOB_VERB[x.kind]} ${S.FIELD_NAMES[x.field] ?? ''}: ${x.why}`).join('; ')}. Press for the fix.`)),
       pop === PRESS_POP ? h('div', { class: 'q-pop sheet press-pop', role: 'group', 'aria-label': 'Work that cannot wait' },
         list.slice(0, 3).map(x => h('p', { class: 'press' }, icon(x.kind, 'i'),
