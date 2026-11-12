@@ -1,0 +1,42 @@
+/* The sheets placed in the game: papers opened over the live land, at every size. Placement and live states only;
+   the look of every component is design/system.css. */
+
+/* ---------------------------------------------------------------- a paper over the land */
+.paper-layer > .veil { pointer-events: auto; animation: sh-fade var(--t-sheet) var(--ease-out); }
+.paper-layer > .veil.out { animation: sh-fade-out var(--t-leave) var(--ease-in) forwards; }
+.dialog.sys { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(640px, calc(100vw - 2 * var(--gutter)));
+  max-height: calc(100vh - 2 * var(--gutter)); max-height: calc(100dvh - 2 * var(--gutter)); display: grid; grid-template-rows: auto minmax(0, 1fr) auto;
+  pointer-events: auto; animation: sh-in var(--t-sheet) var(--ease-paper); }
+.dialog.sys.small { width: min(460px, calc(100vw - 2 * var(--gutter))); }
+.dialog.sys.wide { width: min(940px, calc(100vw - 2 * var(--gutter))); }
+.dialog.sys.plain { background: none; box-shadow: none; width: auto; max-width: calc(100vw - 2 * var(--gutter)); }
+.dialog.sys.out { animation: sh-out var(--t-leave) var(--ease-in) forwards; }
+.dialog.sys:focus-visible { outline: none; }
+.dlg-head { display: flex; justify-content: space-between; align-items: flex-end; gap: var(--s3); margin: 0 var(--s5); padding: var(--s4) 0 var(--s2); border-bottom: 3px double var(--ink); }
+.dlg-head .t-label { margin-bottom: 4px; }
+.dlg-head.bare { position: absolute; margin: 0; padding: 0; border: 0; }
+.dlg-head .close { align-self: flex-start; margin: -6px -12px 0 0; }
+.dlg-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: var(--s4) var(--s5) var(--s5); }
+.dlg-body:focus-visible { outline: 3px solid var(--blue); outline-offset: -3px; }
+.plain > .dlg-body { padding: 0; overflow: visible; }
+.dlg-foot { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--s2); margin: 0 var(--s5); padding: var(--s3) 0 var(--s4); border-top: 1px solid var(--ink); }
+.dlg-text { display: grid; gap: var(--s2); font-size: var(--t-body); }
+.confirm .dlg-head .t-label { color: var(--red); }
+.confirm .dlg-foot { justify-content: flex-start; border-top: 0; padding-top: 0; }
+@keyframes sh-in { from { transform: translate(-50%, calc(-50% + 14px)); } }
+@keyframes sh-out { to { opacity: 0; transform: translate(-50%, calc(-50% + 10px)); } }
+@keyframes sh-fade { from { opacity: 0; } }
+@keyframes sh-fade-out { to { opacity: 0; } }
+@keyframes sh-up { from { transform: translateY(28px); } }
+@keyframes sh-down { to { opacity: 0; transform: translateY(20px); } }
+@keyframes sh-left { from { transform: translateX(28px); } }
+
+/* A phone: a paper comes up from the foot of the screen. */
+@media (max-width: 699px) {
+  .dialog.sys, .dialog.sys.small, .dialog.sys.wide { left: 0; right: 0; top: auto; bottom: 0; transform: none; width: auto; max-height: calc(100dvh - 24px); animation-name: sh-up; }
+  .dialog.sys.out { animation-name: sh-down; }
+  .dlg-head { margin: 0 var(--s4); padding-top: var(--s3); }
+  .dlg-body { padding: var(--s3) var(--s4) var(--s4); }
+  .dlg-foot { margin: 0 var(--s4); padding-bottom: max(var(--s3), env(safe-area-inset-bottom, 0px)); }
+  .dlg-foot .btn { flex: 1 1 auto; }
+}

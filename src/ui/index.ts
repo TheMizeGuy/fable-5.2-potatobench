@@ -1,6 +1,7 @@
 // The interface: the farm's own papers over the land (src/ui/system), and the screens built from them.
 import './system/system.css'
 import './system/game.css'
+import './system/sheets.css'
 import './style.css'
 import './instruments.css'
 import './papers.css'
@@ -22,7 +23,7 @@ import { alertShort, countYearsFrom } from './rules.ts'
 import { seasonScreen } from './season.ts'
 import { titleScreen } from './title.ts'
 
-export const mountHud: MountHud = (root, app, view) => {
+export const mountHud: MountHud = (root, app, view, sound) => {
   mountSprites()
   root.classList.add('hud', 'waiting')
   const plateLayer = h('div', { class: 'plate-layer' })
@@ -44,6 +45,7 @@ export const mountHud: MountHud = (root, app, view) => {
     app, view, papers, notes,
     say: (text: string, level: Level = 'info') => notes.push({ text, level, ttl: level === 'bad' ? 12000 : level === 'warn' ? 9000 : 6000 }),
     announce: (text: string) => { notes.liveRegion.textContent = text },
+    cue: (id: string) => sound?.cue?.(id),
     run(cmd) {
       const r = app.do(cmd)
       if (!r.ok) notes.push({ text: r.err, level: 'warn', ttl: 9000 })

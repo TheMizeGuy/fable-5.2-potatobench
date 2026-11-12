@@ -22,7 +22,7 @@ describe('which cue answers which event', () => {
       ['skillUp', 'good'], ['wornOut', 'warn'], ['unhappy', 'warn'], ['quit', 'bad'], ['raise', 'info'], ['foreman', 'info'],
       ['felled', 'good'], ['rocks', 'info'], ['brushed', 'info'], ['stumping', 'info'], ['stumped', 'good'], ['tiling', 'info'],
       ['tiled', 'good'], ['logsSold', 'good'], ['mortgage', 'info'], ['mortgagePaid', 'good'], ['building', 'info'], ['built', 'good'],
-      ['weighed', 'good'], ['frozenInField', 'bad'], ['pondDry', 'warn'], ['incident', 'warn'], ['incidentDone', 'info'],
+      ['frozenInField', 'bad'], ['pondDry', 'warn'], ['incident', 'warn'], ['incidentDone', 'info'],
       ['poached', 'bad'], ['hurt', 'bad'], ['breakdown', 'warn'], ['repaired', 'good'], ['hired', 'info'],
     ]
     const heard = new Set<string>()
@@ -32,8 +32,10 @@ describe('which cue answers which event', () => {
       expect(known.has(got[0]), type).toBe(true)
       heard.add(got[0])
     }
-    // The two that must not be missed have a sound to themselves.
+    // The two that must not be missed have a sound to themselves: the knock here, and the ticket from the interface,
+    // in time with the scale, so the day's event itself is silent.
     expect(ids([ev('incident', 'warn')])).toEqual(['door'])
+    expect(ids([ev('weighed', 'good')])).toEqual([])
     expect(heard.size).toBeGreaterThan(18)
   })
 
@@ -70,8 +72,8 @@ describe('which cue answers which event', () => {
   })
 
   it('sounds the short answers first and the most pressing of the long ones at their head', () => {
-    const got = ids([ev('felled', 'good', 14), ev('rocks'), ev('weighed', 'good', 0), ev('incident', 'warn'), ev('skillUp', 'good')])
-    expect(got).toEqual(['rocks', 'ticket', 'door', 'felled', 'better'])
+    const got = ids([ev('felled', 'good', 14), ev('rocks'), ev('incident', 'warn'), ev('skillUp', 'good')])
+    expect(got).toEqual(['rocks', 'door', 'felled', 'better'])
     expect(ids([ev('sample', 'info', 0, { weights: [1, 2, 3] }), ev('dug', 'good', 0)])).toEqual(['dug'])
     expect(cuesFor([ev('sample', 'info', 0, { weights: [1, 2, 3] })])).toEqual([{ id: 'sample', arg: 3 }])
   })
