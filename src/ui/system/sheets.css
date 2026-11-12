@@ -15,10 +15,19 @@
 
 /* The splash's name gives way at once when the land is ready, so it never stands over the title's own name. */
 #splash.gone .splash-name { opacity: 0; transition: opacity 120ms linear; }
-/* The year end as things stand, under the balance: its reckoning opens leftward, in from the window's edge. */
-.topbar .outlook.term { display: block; }
-.topbar .outlook.term b { font-weight: 700; }
-.topbar .outlook.term::after { left: auto; right: 0; text-align: left; font-style: normal; }
+/* Cash and, at its weight, what is left after the year-end bills: two lines of the pass book. */
+.topbar .balance.two { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: baseline; column-gap: 12px; row-gap: 0; }
+.topbar .balance.two > .cash { justify-self: end; }
+.topbar .balance.two > .cash-moved, .topbar .balance.two > .after { grid-column: 1 / -1; }
+.topbar .balance .after { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding-top: 2px; border-top: 1px solid var(--hair); text-decoration: none; }
+.topbar .balance .after .t-label { text-decoration: underline dotted; text-underline-offset: 3px; }
+.topbar .balance .after .t-figure { white-space: nowrap; }
+.topbar .balance .after.warn .t-figure { color: var(--ochre); }
+.topbar .balance .after.bad .t-figure { color: var(--red); }
+.topbar .balance .after.term::after { left: auto; right: 0; text-align: left; font-style: normal; }
+.topbar[data-layout='narrow'] .face .balance.two { display: flex; }
+.topbar[data-layout='narrow'] .face .balance .after { flex-direction: column; align-items: flex-end; gap: 0; padding-top: 1px; }
+.topbar[data-layout='narrow'] .face .balance .after .t-label { font-size: 12px; }
 
 /* ---------------------------------------------------------------- a paper over the land */
 .paper-layer > .veil { pointer-events: auto; animation: sh-fade var(--t-sheet) var(--ease-out); }
@@ -304,6 +313,8 @@
 .cat-done { display: flex; justify-content: flex-end; }
 .cat-equip li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--hair); }
 .cat-equip b { font-size: 16px; }
+.cat-equip .cat-buy { flex-wrap: wrap; justify-content: flex-end; column-gap: 6px; row-gap: 0; padding-top: 4px; padding-bottom: 4px; }
+.cat-equip .cat-buy .loan-adds { flex-basis: 100%; text-align: right; font-size: 12px; color: var(--red); }
 .cat-offer { display: grid; gap: 6px; padding: 8px 0 10px; border-bottom: 1px solid var(--hair); }
 .cat-offer .lead .i { --i: 18px; }
 .cat-offer .range { margin: 6px 0 2px; }

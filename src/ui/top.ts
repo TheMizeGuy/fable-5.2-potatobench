@@ -124,18 +124,22 @@ function progressText(g: Goal): string {
 // Before the tubers set there is no crop to count: the figure is then what the year end takes before the crop pays,
 // said as that, not as a verdict.
 export function outlook(ctx: Ctx, c: S.Campaign): { figure: number; why: string; label: string; before: boolean } {
-  const m = S.moneyNow(ctx.app.world, c)
-  const figure = Math.round(m.after / 100) * 100
+  const world = ctx.app.world
+  const m = S.moneyNow(world, c)
   const s = c.season
-  const unset = s ? s.fields.filter((f, i) => S.isField(c, i) && (f.status === 'growing' || f.status === 'planted' || f.status === 'idle') && !S.estimateYield(c, i)).length : 0
-  const before = m.growing <= 0 && m.stored <= 0 && unset > 0
-  const parts = m.parts.map(p => `${p.label} ${F.money(Math.round(p.amount))}`)
+  // The crop dug but not yet weighed is in neither the ground's estimate nor the store: counted here at today's price,
+  // so the figure does not drop through the dig and jump back at each weigh-in.
+  const dug = c.phase === 'season' && s ? c.lots.filter(l => !l.open && l.sold === 0 && l.year === c.year && s.fields[l.field] && !s.fields[l.field].weighed).reduce((a, l) => a + S.lotValue(world, c, l), 0) : 0
+  const figure = Math.round((m.after + dug) / 100) * 100
+  const unset = s && c.phase === 'season' ? s.fields.filter((f, i) => S.isField(c, i) && (f.status === 'growing' || f.status === 'planted' || f.status === 'idle') && !S.estimateYield(c, i)).length : 0
+  const before = m.growing <= 0 && m.stored <= 0 && dug <= 0 && unset > 0
+  const parts = [...m.parts, ...(dug >= 0.5 ? [{ label: 'The crop dug, not yet weighed', amount: dug }] : [])].map(p => `${p.label} ${F.money(Math.round(p.amount))}`)
   const verdict = before ? 'The crop has not set yet, so nothing is counted for it: this is what the crop has to make up by the year end.'
     : figure >= 0 ? 'The year would end in the black.'
       : figure >= S.CREDIT_LIMIT ? `The year would end in debt, inside the bank's limit of ${F.money(S.CREDIT_LIMIT)}: it carries the debt at interest.`
         : `The year would end past the bank's limit of ${F.money(S.CREDIT_LIMIT)}: it would call the note.`
   const early = unset && !before ? ` ${F.upper(F.plural(unset, 'field'))} not yet setting tubers ${unset === 1 ? 'counts' : 'count'} for nothing yet.` : ''
-  return { figure, before, label: before ? 'Year end before the crop: ' : 'Year end, sold today: ', why: `${before ? 'As things stand' : 'If everything sold today'}: ${parts.join('; ')}. ${verdict}${early}` }
+  return { figure, before, label: before ? 'Year end before the crop' : 'After year-end bills', why: `${before ? 'As things stand' : c.phase === 'cellar' ? 'If what is in store sold today' : 'If everything sold today'}: ${parts.join('; ')}. ${verdict}${early}` }
 }
 
 // Said before logs are sold: the buildings not yet up that would take them, and what buying them back costs.
@@ -235,6 +239,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
   let callList: Call[] = []
   let viewFor: unknown = null
   let viewNow: ReturnType<typeof outlook> | null = null
+  let viewCash = 0
   const closePop = (e: Event) => { if (pop && !(e.target as HTMLElement).closest?.('.tb-pop, .goal, .materials')) { pop = ''; ctx.dirty() } }
   document.addEventListener('pointerdown', closePop, true)
 
@@ -410,8 +415,9 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     const withClock = season && !low
     const withMenu = !(season && low)
     const { g, met: gone } = goalNow(c)
-    if (season && app.needs() !== viewFor) { viewFor = app.needs(); viewNow = outlook(ctx, c) }
-    const view = season && layout !== 'narrow' ? viewNow : null
+    const counted = season || c.phase === 'cellar'
+    if (counted && (app.needs() !== viewFor || viewCash !== Math.round(c.cash))) { viewFor = app.needs(); viewCash = Math.round(c.cash); viewNow = outlook(ctx, c) }
+    const view = counted ? viewNow : null
     // When the money moves, what moved it shows under the balance for a moment, and stays on the balance's hover.
     const look = moneyLook(c)
     const now = performance.now()
@@ -438,16 +444,19 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     // On an upright phone in the season there is one board: the balance is its third column (design/season.phone.html).
     const phone = season && layout === 'narrow'
     patch(el, JSON.stringify(model), () => {
-      const balance = h('div', { class: 'balance' },
-        h('span', { class: 't-label when' }, c.cash < 0 ? 'On the loan' : 'Balance'),
+      // Through the season and the winter, beside the cash and at its weight: what the farm has after the year-end
+      // bills, so the cash is never read as what the farm will keep.
+      const after = view ? h('div', {
+        class: `after term${view.before ? '' : view.figure < S.CREDIT_LIMIT ? ' bad' : view.figure < 0 ? ' warn' : ''}`, testid: 'outlook', tabindex: '0', 'data-tip': view.why,
+      }, h('span', { class: 't-label' }, view.label), h('span', { class: 't-figure num' }, F.money(view.figure)), h('span', { class: 'sr' }, `. ${view.why}`)) : null
+      const balance = h('div', { class: `balance${after ? ' two' : ''}` },
+        h('span', { class: 't-label when' }, c.cash < 0 ? 'On the loan' : after ? 'Cash' : 'Balance'),
         h('span', {
           class: `t-figure cash${c.cash < 0 ? ' neg' : ''}`, testid: 'cash',
           title: ctx.touch() ? undefined : `${c.cash >= 0 ? '' : 'Owed on the spring operating loan: the crop pays it back. The bank calls the note if the year closes too far under.'}${lastMoved ? `${c.cash >= 0 ? '' : ' '}Last moved: ${lastMoved}.` : ''}` || undefined,
         }, h('span', { class: 'sr' }, 'Cash: '), h('span', { class: 'cash-v num' }, F.money(c.cash))),
         moved && !phone ? h('span', { class: 'cash-moved', testid: 'cash-moved', role: 'status' }, moved.text) : null,
-        season && !phone && view ? h('span', {
-          class: `due outlook term num${view.before ? '' : view.figure < S.CREDIT_LIMIT ? ' c-red' : view.figure < 0 ? ' c-ochre' : ' c-green'}`, testid: 'outlook', tabindex: '0', 'data-tip': view.why,
-        }, view.label, h('b', null, F.money(view.figure)), h('span', { class: 'sr' }, `. ${view.why}`)) : null)
+        after)
       return [
         h('section', { class: 'almanac', 'aria-label': 'Date, weather and the next goal' },
           h('div', { class: 'mount' },

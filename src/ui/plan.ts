@@ -13,6 +13,7 @@ import * as R from './rules.ts'
 import { cardHead, fieldCost, landCard, springFolds, tenureRow, tractCard, type Fold } from './spring.ts'
 import { fold } from './system/parts.ts'
 import { topBar } from './top.ts'
+import { usualFirstYear } from './usual-year.ts'
 import { nextGoal } from '../game/goals.ts'
 import { holdsClock, springSlot } from './tutorial.ts'
 
@@ -367,7 +368,8 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
           over ? null : h('span', { class: 'num', testid: 'plan-loan' }, F.money(Math.abs(after)))),
         h('p', { class: 'lead quiet' }, h('span', { class: 'it' }, term('Due at the year end', 'due at the year end'), ', from the crop'), h('span', { class: 'dots' }),
           h('span', { class: 'num c-red', testid: 'plan-due' }, F.money(due))),
-        h('p', { class: 't-caption pm-parts' }, `${F.upper(parts)}: the crop pays them, and what is left is the farm's.`)),
+        h('p', { class: 't-caption pm-parts' }, `${F.upper(parts)}: the crop pays them, and what is left is the farm's.`),
+        c.history.length ? null : h('p', { class: 't-caption pm-usual', testid: 'plan-usual', title: ctx.touch() ? undefined : usualFirstYear(mn.due.note + mn.due.household).full }, usualFirstYear(mn.due.note + mn.due.household).short)),
       over ? h('p', { class: 't-caption c-red', role: 'alert' }, 'Rest a field or plant saved seed: the bank will not lend more for the spring.') : null,
       h('div', { class: 'blank-go' },
         h('button', { class: 'btn go wide', type: 'button', testid: 'begin-season', onclick: begin }, 'Start the season', icon('arrow', 'i')),
