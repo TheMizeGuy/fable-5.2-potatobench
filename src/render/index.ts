@@ -945,7 +945,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       parts: () => Object.keys(parts),
       show(name: string, on: boolean) { if (parts[name]) parts[name].visible = on },
       // One child of a part, by its place in it (to find which mesh draws something).
-      showChild(name: string, k: number, on: boolean) { const c = parts[name]?.children[k]; if (c) c.visible = on; return parts[name]?.children.length ?? 0 },
+      showChild(name: string, k: number, on: boolean) { const c = parts[name]?.children[k]; if (c) c.scale.setScalar(on ? 1 : 0); return parts[name]?.children.length ?? 0 },
       shadowsOn(on: boolean) { for (const l of shadows.lights) l.castShadow = on },
       // Stop (or go on) redrawing one shadow cascade, to measure what it costs.
       cascade(k: number, on: boolean) { shadows.held[k] = !on },

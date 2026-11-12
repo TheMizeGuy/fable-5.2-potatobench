@@ -796,7 +796,7 @@ shots.push(
   cropShot('t-yard-5-bloom', 1977, 190, [], nearOn(5)),
   cropShot('t-yard-blight', 1979, 205, ['spray', 'rogue'], nearOn(4)),
   // What is the dark bar in the sky of the yard-tier field views? The same corner of the picture with each part hidden.
-  ...[10, 11, 12, 13, 14].map(k => ({ name: `dbg-bar-${k}`, size: G_SIZE, setup: async (page: Page) => { await playTo(page, 1977, 5, 147); await playUntil(page, [], SKY('clear')); await settle(page); await view(page, nearOn(5)); console.log('  props children', await page.evaluate(k => (window as any).__countyField.showChild('props', k, false), k)); await frames(page, 12) } })),
+  ...[1, 2, 4, 8, 9].map(k => ({ name: `dbg-bar-${k}`, size: G_SIZE, setup: async (page: Page) => { await playTo(page, 1977, 5, 147); await playUntil(page, [], SKY('clear')); await settle(page); await view(page, nearOn(5)); console.log('  props children', await page.evaluate(k => (window as any).__countyField.showChild('props', k, false), k)); await frames(page, 12) } })),
   cropShot('t-yard-lane', 1977, 196, [], { frame: 'land', x: 10, z: 5.6, dist: 1.5, yaw: -1.5708, pitch: 0.07, tilt: 0 }),
   cropShot('t-yard-brook', 1977, 196, [], { frame: 'land', x: 6, z: 20.2, dist: 3.2, yaw: 0.5, pitch: 0.2, tilt: 0 }),
   cropShot('t-yard-wood-edge', 1977, 196, [], { frame: 'land', x: -2, z: -19.5, dist: 5, yaw: 0.3, pitch: 0.14, tilt: 0 }),
@@ -832,10 +832,10 @@ shots.push(
 // near at hand and all of it from the field tier, in July and in January (January by a low afternoon sun).
 const OPEN_POSES: [string, View][] = [
   ['1-lane', { frame: 'land', x: 9, z: 5.6, dist: 2.6, yaw: -1.5708, pitch: 0.2, tilt: 0 }],
-  ['2-field-edge', { frame: 'land', x: 9, z: 20.4, dist: 3.4, yaw: -1.2, pitch: 0.24, tilt: 0 }],
+  ['2-field-edge', { frame: 'near', x: 158, z: -10, dist: 14, yaw: 0.25, pitch: 0.22, tilt: 0 }],
   ['3-woods-edge', { frame: 'land', x: 21, z: -25.5, dist: 6.5, yaw: 0.12, pitch: 0.2, tilt: 0 }],
   ['5-brook', { frame: 'near', x: 66, z: 309, dist: 25, yaw: 2.05, pitch: 0.42, tilt: 0 }],
-  ['6-pasture', { frame: 'land', x: 26, z: 10, dist: 4.5, yaw: 0.6, pitch: 0.22, tilt: 0 }],
+  ['6-pasture', { frame: 'near', x: 80, z: 225, dist: 20, yaw: 0.9, pitch: 0.34, tilt: 0 }],
 ]
 const openShot = (name: string, january: boolean, go: (page: Page) => Promise<unknown>): Shot => ({
   name, size: G_SIZE, setup: async page => {
