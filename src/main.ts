@@ -9,6 +9,9 @@ import { createFieldView } from './render/index.ts'
 import * as sim from './sim/index.ts'
 import { mountHud } from './ui/index.ts'
 
+// Marks on the page's own clock, for the tool that times start-up (tools/render/startup.ts).
+const mark = (name: string) => performance.mark(`county:${name}`)
+
 // ?kit opens the living kit of the interface instead of the game (src/ui/system/kit.ts).
 if (new URLSearchParams(location.search).has('kit')) {
   document.getElementById('splash')?.remove()
@@ -16,7 +19,16 @@ if (new URLSearchParams(location.search).has('kit')) {
   void import('./ui/system/kit.ts').then(m => m.mountKit(document.getElementById('ui') as HTMLElement))
 } else start()
 
+// The splash says what is being made ready and how far along it is (the scene tells of its stages as it reaches them).
+addEventListener('county:stage', e => {
+  const { what, share } = (e as CustomEvent<{ what: string; share: number }>).detail
+  const text = document.getElementById('splash-what'), rule = document.getElementById('splash-rule')
+  if (text && what && text.textContent !== what) text.textContent = what
+  if (rule) rule.style.transform = `scaleX(${Math.min(1, Math.max(0, share)).toFixed(3)})`
+})
+
 function start(): void {
+  mark('script')
   const world = sim.makeWorld(weatherJson as unknown as sim.WeatherData, {
     priceLevel: prices as Record<string, number>,
     records: records as Record<string, sim.YearRecord>,
@@ -24,11 +36,15 @@ function start(): void {
     notes: notes as Record<string, string>,
   })
 
+  mark('world')
   const app = new App(world)
   const canvas = document.getElementById('field') as HTMLCanvasElement
+  mark('app')
   const view = createFieldView(canvas, app)
+  mark('view')
   const sound = createSound(app)
   const hud = mountHud(document.getElementById('ui') as HTMLElement, app, view, sound)
+  mark('interface')
 
   // A fixed seed and year from the address bar make a run repeatable: ?year=1987&seed=42
   const q = new URLSearchParams(location.search)
