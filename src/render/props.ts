@@ -194,6 +194,8 @@ export class Props {
       away = Infinity
       for (const yard of [-1, -2]) away = Math.min(away, Math.hypot(f.eye.x - YARD_AT[yard].x, f.eye.y, f.eye.z - YARD_AT[yard].z))
     }
+    // a lamp in a window is the yard's sign of life from the fields: it carries, as a point of light does
+    LAMP_LUM.value *= 1 + Math.min(4, Math.max(0, away - 120) / 160)
     this.life.visible = away < LIFE_REACH[this.tier]
     this.bones.visible = this.wires.visible = away < BONES_REACH[this.tier]
     for (const yard of [-1, -2]) {

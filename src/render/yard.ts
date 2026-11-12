@@ -245,11 +245,12 @@ export function yardBones(b: Builder): void {
     b.box(0.05, 0.6, 0.1, 0.01, 0.08, 0.04, '#b8402c', FIN.plain)
     const cz = townRoadZ(20.6) - 2.6
     for (const sg of [-1, 1]) {
-      const cx = 20.55 + sg * 1.25, cy = groundY(cx, cz)
+      // a low stone headwall each side of the drive, in the ditch, the pipe's mouth in it
+      const cx = 20.55 + sg * 1.7, cy = groundY(cx, cz) - 0.12
       b.at(cx, cy, cz, 0, cy)
-      b.box(0, 0.08, 0, 0.3, 0.46, 1.1, '#8f8a80', FIN.stone, { skip: 'b' })
-      b.cyl([sg * 0.16, 0.06, 0], [-sg * 0.3, 0.06, 0], 0.17, 0.17, 10, '#77736b', FIN.concrete, { cap: 'a', capColor: '#0d0c0b', capFin: FIN.dark })
-      b.blob([sg * 0.5, -0.02, 0.1], [0.5, 0.06, 0.4], 3, '#6f6a5c', FIN.gravel, { detail: 1, rough: 0.2 })
+      b.box(0, 0.04, 0, 0.24, 0.32, 0.9, '#8f8a80', FIN.stone, { skip: 'b' })
+      b.cyl([sg * 0.13, 0.03, 0], [-sg * 0.3, 0.03, 0], 0.12, 0.12, 10, '#77736b', FIN.concrete, { cap: 'a', capColor: '#0d0c0b', capFin: FIN.dark })
+      b.blob([sg * 0.45, 0.0, 0.1], [0.45, 0.05, 0.36], 3, '#6f6a5c', FIN.gravel, { detail: 1, rough: 0.2 })
     }
   }
   // The Dufour place: a rail fence gone grey along the foot of its dooryard.

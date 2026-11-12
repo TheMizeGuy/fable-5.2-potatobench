@@ -255,7 +255,7 @@ export const YARD_TREES: YardTree[] = [
   // home: the great maples of the dooryard stand south and east of the house, so that from the fields it shows white
   // against them; a birch at the garden gate; and up the slope behind the potato houses a windbreak of spruce, the
   // dark the roofs are seen against
-  tree(HOME, 'maple', 29.4, 6.6, 22, 0.3, 0.12), tree(HOME, 'maple', 31.2, 10.4, 19, 0.62, 0.5), tree(HOME, 'maple', 33.8, -1.6, 15, 0.5, 0.8),
+  tree(HOME, 'maple', 29.4, 6.6, 22, 0.3, 0.12), tree(HOME, 'maple', 31.2, 10.4, 19, 0.62, 0.5), tree(HOME, 'maple', 33.4, -4.6, 15, 0.5, 0.8),
   tree(HOME, 'birch', 19.2, 13.6, 12, 0.7, 0.62),
   ...[19.4, 22.6, 25.4, 28.8, 31.6, 34.9, 38.2, 41.0, 44.4, 47.2, 50.0].map((x, k) => tree(HOME, 'spruce', x + (hash2(k, 51) - 0.5) * 1.2, -33.4 - 1.6 * hash2(k, 53) - (k % 2) * 1.5, 14 + 6 * hash2(k, 55), hash2(k, 57), hash2(k, 59))),
   ...[-29.5, -25.8, -22.4, -18.8].map((z, k) => tree(HOME, 'spruce', 51.4 + hash2(k, 61), z, 13 + 5 * hash2(k, 63), hash2(k, 65), hash2(k, 67))),
