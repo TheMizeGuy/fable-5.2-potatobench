@@ -15,6 +15,7 @@ import { hash2, rng, smooth } from './noise.ts'
 import { SNOW_RIME, linear, patch, snowRimeAt } from './shaders.ts'
 import { GROUND_SNOW } from './snow.ts'
 import { buildBounds } from './bounds.ts'
+import { landIndex } from './landmesh.ts'
 
 export interface Terrain {
   group: Group
@@ -169,8 +170,13 @@ export function buildTerrain(): Terrain {
   land.setAttribute('position', new BufferAttribute(pos, 3))
   land.setAttribute('aSurf', new BufferAttribute(surf, 4))
   land.setAttribute('aNear', new BufferAttribute(near, 2))
+  // The ground's slope at each point is taken from the whole grid; the land is then drawn in fewer triangles.
   land.setIndex(new BufferAttribute(idx, 1))
   land.computeVertexNormals()
+  land.setIndex(new BufferAttribute(landIndex(xs, zs, [
+    ...yards.map(y => ({ x0: y.x0 - 8, x1: y.x1 + 8, z0: y.z0 - 8, z1: y.z1 + 8 })),
+    { x0: -Infinity, x1: Infinity, z0: 22.6 * K - brookBand, z1: 22.6 * K + brookBand },
+  ]), 1))
   const fieldRects = FIELDS.map(rectGlsl).join(', ')
   const blocks = Object.values(BLOCKS)
   const landMat = patch(new MeshStandardMaterial({ color: 0xffffff, roughness: 0.96, metalness: 0 }), {

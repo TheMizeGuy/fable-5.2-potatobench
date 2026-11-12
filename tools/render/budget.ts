@@ -39,7 +39,7 @@ const ROUNDS = Number(opt('rounds') ?? 5)
 // Before a page runs: a switch that stops its drawing (the renderer draws nothing while the document is hidden), and
 // a timer round each animation frame for a build that has none of its own.
 const INSTRUMENT = `(() => {
-  const M = window.__perf = { gpu: [], on: false }
+  const M = window.__perf = { gpu: [], on: false, begun: 0, lost: 0, error: 0 }
   Object.defineProperty(document, 'hidden', { configurable: true, get: () => window.__paused === true })
   const raf = window.requestAnimationFrame.bind(window)
   let pend = [], ext = null, gl = null
@@ -47,7 +47,7 @@ const INSTRUMENT = `(() => {
     if (!M.on) return cb(ts)
     if (!gl) { const c = document.getElementById('field'); gl = c && c.getContext('webgl2'); if (gl) ext = gl.getExtension('EXT_disjoint_timer_query_webgl2') }
     let q = null
-    if (ext) { q = gl.createQuery(); gl.beginQuery(ext.TIME_ELAPSED_EXT, q) }
+    if (ext) { q = gl.createQuery(); gl.beginQuery(ext.TIME_ELAPSED_EXT, q); M.begun++; const e = gl.getError(); if (e) M.error = e }
     try { cb(ts) } finally {
       if (q) {
         gl.endQuery(ext.TIME_ELAPSED_EXT)
@@ -55,7 +55,7 @@ const INSTRUMENT = `(() => {
         const disjoint = gl.getParameter(ext.GPU_DISJOINT_EXT)
         pend = pend.filter(p => {
           if (!gl.getQueryParameter(p, gl.QUERY_RESULT_AVAILABLE)) return true
-          if (!disjoint) M.gpu.push(gl.getQueryParameter(p, gl.QUERY_RESULT) / 1e6)
+          if (!disjoint) M.gpu.push(gl.getQueryParameter(p, gl.QUERY_RESULT) / 1e6); else M.lost++
           gl.deleteQuery(p)
           return false
         })
@@ -95,8 +95,10 @@ async function window1(s: Side, seconds = 1.5, how: 'whole' | 'passes' | 'parts'
     const w = window as any, f = w.__countyField, st = f.stats(), mean = f.mean(), secs = (performance.now() - w.__t0) / 1000
     let rows: Row[] = [], sum = 0, n = 0
     if (probe) { const c = f.cost(); rows = c.rows; sum = c.sum; n = c.frames; f.probe(false) } else { w.__perf.on = false; n = w.__perf.gpu.length; for (const g of w.__perf.gpu) sum += g }
-    return { rows, sum, n, mean, secs, tier: st.tier, spent: st.spent, objects: st.objects, drawn: st.drawn, samples: st.samples ?? -1, canvas: [st.width, st.height] }
+    const timer = probe || n ? '' : `no frame was timed from outside: ${w.__perf.begun} begun, ${w.__perf.lost} lost to a break in the GPU's clock, error ${w.__perf.error}`
+    return { timer, rows, sum, n, mean, secs, tier: st.tier, spent: st.spent, objects: st.objects, drawn: st.drawn, samples: st.samples ?? -1, canvas: [st.width, st.height] }
   }, probe)
+  if (r.timer) console.log(`    (${s.name}: ${r.timer})`)
   // Timed from outside, every beat of the display is timed, whether or not a frame was drawn on it: the time is shared among the frames drawn.
   const frames = probe ? r.n : r.mean.frames, gpu = frames ? r.sum / frames : NaN, fps = r.mean.frames / r.secs
   return {

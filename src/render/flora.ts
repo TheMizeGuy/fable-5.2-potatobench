@@ -1027,8 +1027,8 @@ export class Flora {
 
   // Whole trees in the patches near the camera, simpler ones beyond them, cards in the rest. A patch's cards are in the
   // two wider shadows always, and in the picture only when they are what is drawn of it.
-  // wide: the fine shadow covers the country, and a card is small in it: the cards then throw that shadow too, and the
-  // simpler trees kept standing for it are not drawn at all.
+  // wide: the fine shadow covers the farm and more, and a card is small in it: the cards then throw that shadow too,
+  // and the simpler trees kept standing for it are not drawn at all.
   update(camera: PerspectiveCamera, wide = false): void {
     const c = camera.position
     // in a few bands of distance, and by material within each: every change of material is paid for

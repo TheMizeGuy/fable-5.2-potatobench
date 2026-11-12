@@ -802,7 +802,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     MARK_WIDE.value = clamp(rig.cur.dist / (42 * S), 1, 4.5 * K / S)
     fields.update(wdt, cam, { selection: app.selection, hover: app.hover, oats: env.oats, oatsRipe: env.oatsRipe, reduced })
     grass.update(cam, fields.off, dtMs <= 0.5)
-    flora.update(cam, shadows.country && !without.cards)
+    flora.update(cam, shadows.wide && !without.cards)
     harvest.update(wdt, app.speed === 0, clamp(rig.cur.dist / (30 * S), 1, 2.3), reduced)
     PIXEL.value = (cur.msaa ? 1.7 : 1.4) / ((post.target.height) / (2 * Math.tan((cam.fov * Math.PI) / 360)))
     // A landscape seen whole is sharp from front to back: a soft focus would make a model of it. Only close in, among
@@ -1106,7 +1106,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
         if (on && known === null) trial = []
       },
       // Draw the frame without one of the things that make it cheaper: 'order' (the land and the sky drawn last),
-      // 'cards' (cards in the fine shadow when it covers the country), 'lazy' (the fine shadow redrawn only when it has
+      // 'cards' (cards in the fine shadow when it is wide), 'lazy' (the fine shadow redrawn only when it has
       // moved, where nothing in it moves to be seen), 'contact' (no contact shade where nothing is near enough to show it).
       tryWithout(name: 'order' | 'cards' | 'lazy' | 'contact', on: boolean) {
         if (name === 'lazy') shadows.eager = on

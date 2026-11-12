@@ -31,11 +31,10 @@ export class SunShadows {
   // True while the first cascade is wide enough to hold a whole field: the plants then need throw no shadow into the second.
   holdsFarm = false
   // True while the first cascade covers the farm and more (the farm tier of view and beyond): a texel of it is then a
-  // hand's length or more, and what moves in it moves by less than that from one frame to the next.
+  // hand's length or more, what moves in it moves by less than that from one frame to the next, and a tree's card
+  // stands for the tree in this cascade as in the other two (so that a wood is shaded alike on both sides of the line
+  // where one cascade gives way to the next; the far woods, which are cards alone, threw no shadow in this one).
   wide = false
-  // True while it covers the country (the county tier and the opening's far view): a tree is then a few dozen texels,
-  // and its card stands for it in this cascade as in the others.
-  country = false
   // How often each cascade is redrawn, in frames (the quality setting's): the fine one every frame or every other, the
   // wider ones less often. They are redrawn on different frames, so no frame carries all three.
   every: [number, number, number] = [2, 4, 12]
@@ -87,7 +86,6 @@ export class SunShadows {
     this.radius[2] = clamp(this.radius[1] * 3.6, 900, 4500)
     this.holdsFarm = r0 >= 100
     this.wide = r0 >= 160
-    this.country = r0 >= 250
     this.basis.lookAt(sunDir, ORIGIN, UP)
     this.right.setFromMatrixColumn(this.basis, 0)
     this.up.setFromMatrixColumn(this.basis, 1)
