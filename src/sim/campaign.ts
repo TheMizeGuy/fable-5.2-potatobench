@@ -17,7 +17,7 @@ import { article, buildBlock, buildCost, buildingAt, buildWork, hasBuilt, startB
 import { brushedNow, COVER_WORD, fell, isField, standing } from './land.ts'
 import type { Campaign, Cmd, Contract, Due, FieldPlan, GameEvent, Incident, JobKind, Lot, Result, RoutineKind, Season, SprayWay, Unit, UpgradeId, WinterWork, World, YearSummary } from './types.ts'
 import { variety } from './varieties.ts'
-import { dayIndex, withCommas } from './calendar.ts'
+import { dayIndex, formatDay, withCommas } from './calendar.ts'
 import { ageLot, finishLot } from './harvest.ts'
 import { hasYear } from './weather.ts'
 import { yearLabel } from './climate.ts'
@@ -937,6 +937,19 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
       if (mode === 'now') letGo(u)
       return ok([note(c, 'rest', 'info', mode === 'now' ? `${u.name} takes time off until rested.` : mode === 'push' ? `${u.name} works on however tired: slower, and liable to get hurt on a machine or in the woods.` : `${u.name} will rest by themselves once worn out.`)])
     }
+    case 'keepVines': {
+      if (c.phase !== 'season' || !c.season) return fail('The season is not under way.')
+      const f = fieldIndex(cmd.field) ? c.season.fields[cmd.field] : undefined
+      if (!f) return fail('No such field.')
+      if (typeof cmd.keep !== 'boolean') return fail('Say whether the vines are kept up.')
+      if (!!f.keepVines === cmd.keep) return fail(cmd.keep ? 'The vines are already kept up.' : 'The crew already kills these vines when they are due.')
+      if (cmd.keep) {
+        f.keepVines = true
+        for (const j of c.season.jobs.filter(x => x.kind === 'kill' && x.field === cmd.field && x.by === 'routine')) { c.season.jobs.splice(c.season.jobs.indexOf(j), 1); releaseJob(c, j.id) }
+      } else delete f.keepVines
+      return ok([note(c, 'keepVines', 'info', cmd.keep ? `The vines in ${FIELD_NAMES[cmd.field]} stay up until you order them killed; dug green from ${formatDay(c.year, dayIndex(c.year, P.DIG_GREEN.month, P.DIG_GREEN.dom))} if they are still up.`
+        : `The crew kills the vines in ${FIELD_NAMES[cmd.field]} by itself when they are due.`)])
+    }
     case 'sprayWay': {
       if (c.phase === 'over') return fail('The farm is gone.')
       if (cmd.way !== 'auto' && cmd.way !== 'ask' && cmd.way !== 'none') return fail('Keep the fields sprayed, ask each time, or not this year.')
@@ -955,7 +968,7 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
       if (!(P.ROUTINE_KINDS as JobKind[]).includes(cmd.kind)) return fail(`${JOB_LABEL[cmd.kind] ?? 'That'} is never ordered by itself.`)
       if (typeof cmd.auto !== 'boolean') return fail('Say whether it is done by itself.')
       const kind = cmd.kind as RoutineKind
-      if (c.routine[kind] === cmd.auto) return fail(cmd.auto ? `${JOB_LABEL[kind]} is already done by itself.` : `${JOB_LABEL[kind]} already waits for you.`)
+      if (c.routine[kind] === cmd.auto && !(kind === 'spray' && sprayWayNow(c) === 'none')) return fail(cmd.auto ? `${JOB_LABEL[kind]} is already done by itself.` : `${JOB_LABEL[kind]} already waits for you.`)
       c.routine[kind] = cmd.auto
       if (kind === 'spray') c.sprayWay = { year: c.year, way: cmd.auto ? 'auto' : 'ask' }
       return ok([note(c, 'routine', 'info', cmd.auto ? `${JOB_LABEL[kind]} goes on the list by itself now, wherever a field needs it.` : `${JOB_LABEL[kind]} waits for your order now.`)])

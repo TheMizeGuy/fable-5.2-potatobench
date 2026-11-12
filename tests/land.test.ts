@@ -403,9 +403,10 @@ describe('the winter woods', () => {
     const hand = c.crew[1]
     hand.trait = ''
     c.cash = 100000
-    restAll(c)
+    // A crop in store, so the winter goes month by month (with nothing planted it passes at once).
     ok(c, { t: 'begin' })
-    ok(c, { t: 'endSeason' })
+    for (let g = 0; g < 300 && c.phase === 'season' && !S.seasonDone(c); g++) ok(c, { t: 'day' })
+    if (c.phase === 'season') ok(c, { t: 'endSeason' })
     ok(c, { t: 'winter', unit: 0, work: 'woods', field: WOODLOT })
     ok(c, { t: 'winter', unit: hand.id, work: 'woods', field: WOODLOT })
     let felled = false

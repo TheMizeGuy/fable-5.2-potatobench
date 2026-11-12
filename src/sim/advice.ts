@@ -35,15 +35,27 @@ export function asks(world: World, c: Campaign): Advice[] {
 }
 
 // The day the crew kills this field's vines by itself, or -1: only where the dig is the routine's and the kill the
-// player's call, once the coach has asked, the vines are up and the player has not kept them up. KILL_WAIT days after
-// the asking, and no later than leaves the skins two weeks to set before the green dig.
-export function killByItself(c: Campaign, field: number): number {
+// player's call, while the coach asks for it (all: what it asks now), the vines are up and the player has not kept
+// them up. KILL_WAIT days after this run of asking began, and no later than leaves the skins two weeks to set before
+// the green dig.
+export function killByItself(c: Campaign, field: number, all: Advice[]): number {
   const s = c.season
   const f = s?.fields[field]
-  if (!s || !f || f.killAsked === undefined || f.keepVines || f.status !== 'growing' || f.deadDay >= 0) return -1
+  if (!s || !f || f.keepVines || f.status !== 'growing' || f.deadDay >= 0) return -1
   if (standingBy(c, 'kill', field) || !standingBy(c, 'dig', field)) return -1
+  if (!all.some(a => a.act === 'kill' && a.field === field)) return -1
+  const since = f.killSince ?? s.day
   const latest = dayIndex(s.year, P.DIG_GREEN.month, P.DIG_GREEN.dom) - P.SKIN_DAYS
-  return Math.max(f.killAsked, Math.min(f.killAsked + P.KILL_WAIT, latest))
+  return Math.max(since, Math.min(since + P.KILL_WAIT, latest))
+}
+
+// Each morning: the day the coach's present run of asking for a field's kill began, cleared when it stops asking.
+function noteKillRun(c: Campaign, all: Advice[]): void {
+  const s = c.season!
+  s.fields.forEach((f, i) => {
+    if (all.some(a => a.act === 'kill' && a.field === i)) f.killSince ??= s.day
+    else if (!s.jobs.some(j => j.kind === 'kill' && j.field === i)) delete f.killSince
+  })
 }
 
 // The first day reference practice asks for each field's vines to be killed, and why, kept on the field so the
@@ -222,6 +234,7 @@ export function standingOrders(world: World, c: Campaign): GameEvent[] {
   if (threatened) s.frostHaul = s.day
   const all = everything(world, c)
   noteKillAsks(world, c, all)
+  noteKillRun(c, all)
   if (!workday(c, s)) return out
   // A frost forecast for tonight: a lone hauler digs no more than the rest of the day can haul in (season.ts, work).
   s.frostLow = forecastFor(world, c.seed, s.year, s.day, 1, hasBuilt(c, 'station') ? P.STATION_ERROR : 1).lo
@@ -233,7 +246,7 @@ export function standingOrders(world: World, c: Campaign): GameEvent[] {
   }
   // The vines' kill, overdue where the dig is the routine's: the crew sees to it rather than dig green.
   for (let i = 0; i < P.FIELD_COUNT; i++) {
-    const when = killByItself(c, i)
+    const when = killByItself(c, i, all)
     if (when >= 0 && s.day >= when && !s.jobs.some(j => j.kind === 'kill' && j.field === i)) addJob(c, 'kill', i, -1, 'routine')
   }
   const cold: string[] = []

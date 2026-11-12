@@ -166,7 +166,8 @@ export interface FieldSeason {
   flags: number             // one-time announcements
   killAsked?: number        // the first day reference practice asked for the vines to be killed
   killWhy?: KillWhy          // and why it asked
-  keepVines?: boolean       // the player cancelled a vine kill here: the crew leaves the vines up
+  keepVines?: boolean       // the player keeps the vines up here: the crew does not kill them by itself
+  killSince?: number        // the day the coach's present run of asking for the kill began
   // Hills, struct of arrays, ROWS * COLS long.
   hState: number[]
   hEmergeAt: number[]
@@ -435,6 +436,7 @@ export type Cmd =
   | { t: 'job'; kind: JobKind; field: number; unit?: number }
   | { t: 'routine'; kind: JobKind; auto: boolean }
   | { t: 'sprayWay'; way: SprayWay }
+  | { t: 'keepVines'; field: number; keep: boolean }
   | { t: 'rest'; unit: number; mode?: RestMode }
   | { t: 'assign'; id: number; unit: number }
   | { t: 'cancel'; id: number }
