@@ -6,6 +6,7 @@ export interface Goal {
   id: string
   title: string                                  // a few words, for the line under the date
   why: string                                    // what it teaches or brings, in a line
+  how: string                                    // the same line, under the name the year-end sheet reads
   done: boolean
   now: boolean                                   // it can be worked on in this part of the year
   when: string                                   // when it can, for the list when it cannot now
@@ -13,7 +14,7 @@ export interface Goal {
   long: boolean                                  // one of the long goals at the top of the ladder
 }
 
-type Spec = Omit<Goal, 'done' | 'now' | 'progress' | 'long'> & { done: boolean; now: boolean; progress?: { n: number; of: number } | null; long?: boolean }
+type Spec = Omit<Goal, 'done' | 'now' | 'progress' | 'long' | 'how'> & { done: boolean; now: boolean; progress?: { n: number; of: number } | null; long?: boolean }
 
 export function goals(c: Campaign): Goal[] {
   const past = c.history.length > 0
@@ -100,7 +101,7 @@ export function goals(c: Campaign): Goal[] {
     { id: 'every', title: 'Every kind of building', why: 'A potato house, shed, bunkhouse, packing shed, pond, stand, station and road.', when: 'Any year', long: true,
       done: kindsBuilt.size === BUILDING_KINDS.length, now: true, progress: { n: kindsBuilt.size, of: BUILDING_KINDS.length } },
   ]
-  return ladder.map(g => ({ ...g, progress: g.done ? null : g.progress ?? null, long: !!g.long }))
+  return ladder.map(g => ({ ...g, how: g.why, progress: g.done ? null : g.progress ?? null, long: !!g.long }))
 }
 
 // A step further on means every step before it in the same run is behind the farm too.

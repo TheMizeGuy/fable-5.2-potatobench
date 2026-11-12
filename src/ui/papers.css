@@ -181,6 +181,9 @@
   .figure { font-size: var(--t-title); line-height: 28px; }
 }
 
+.choice-stand { grid-column: 1 / -1; display: flex; align-items: flex-start; gap: var(--sp-2); }
+.choice-stand .ic { margin-top: 1px; }
+
 /* ---------------------------------------------------------------- the reckoning */
 .grades th .sub { display: block; }
 .causes li { padding: var(--sp-2) 0; border-bottom: 1px dotted var(--rule-strong); }
@@ -263,6 +266,30 @@
   .cellar-sum strong { font-size: var(--t-lede); }
 }
 
+/* Winter's work: a line for each person, changed with a click. */
+.winter { display: grid; gap: var(--sp-2); margin: var(--sp-4) 0 var(--sp-2); }
+.winter-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--sp-1) var(--sp-3); }
+.winter-head .block-head { margin: 0; }
+.wrows { display: grid; }
+.wrow { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: var(--sp-3); align-items: start; padding: var(--sp-2) 0; border-bottom: 1px dotted var(--rule-strong); }
+.wrow-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-1) var(--sp-3); }
+.wrow-name { font-weight: 600; }
+.wrow-out { margin-top: var(--sp-h); font-size: var(--t-small); line-height: 18px; color: var(--ink-2); }
+.wseg { display: inline-flex; border: 1px solid var(--ink-3); border-radius: var(--radius); overflow: hidden; }
+.wseg-b { min-height: var(--hit-s); padding: 0 var(--sp-3); background: var(--paper-hi); font-size: var(--t-small); line-height: 18px; font-weight: 600; transition: background-color var(--t-quick) var(--ease-out); }
+.wseg-b + .wseg-b { border-left: 1px solid var(--ink-3); }
+.wseg-b.on { background: var(--ink); color: var(--paper-hi); }
+.wseg-b:disabled { color: var(--ink-3); background: var(--paper); cursor: default; text-decoration: line-through; text-decoration-color: var(--rule-strong); }
+@media (hover: hover) { .wseg-b:hover:not(.on):not(:disabled) { background: var(--paper-2); } }
+.wyard, .wbank { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); font-size: var(--t-small); line-height: 18px; color: var(--ink-2); }
+.wyard > span { flex: 1 1 200px; }
+.wbuild { display: grid; gap: var(--sp-1); }
+.wbuild li { display: grid; grid-template-columns: 16px auto minmax(48px, 1fr) auto; gap: var(--sp-2); align-items: center; font-size: var(--t-small); line-height: 18px; }
+.wbuild .gauge { display: block; height: 6px; }
+.wbuild .gauge > i { background: var(--good); }
+.wraise { border-top: 1px dotted var(--rule-strong); border-radius: 0; }
+.build-list .eq-name .sub { font-family: var(--sans); font-weight: 400; }
+
 .ledger-cols { display: grid; gap: var(--sp-5); }
 .yield-bars th { width: 1%; white-space: nowrap; padding: var(--sp-1) var(--sp-3) var(--sp-1) 0; }
 .yield-bars td { padding: var(--sp-1) 0; white-space: nowrap; text-align: right; }
@@ -276,6 +303,20 @@
 .soil li { display: grid; padding: var(--sp-2) var(--sp-3); background: var(--paper-hi); border: 1px solid var(--rule); border-radius: var(--radius); font-size: var(--t-small); line-height: 18px; }
 .soil strong { font-family: var(--serif); font-size: var(--t-body); }
 .money .call th, .money .call td { border: 0; color: var(--bad); font-weight: 600; }
+.money th .sub { font-size: var(--t-label); }
+.deeds { display: grid; gap: var(--sp-1); }
+.deeds li { position: relative; padding-left: var(--sp-4); font-size: var(--t-small); line-height: 18px; color: var(--ink-2); }
+.deeds li::before { content: ''; position: absolute; left: var(--sp-1); top: 7px; width: 5px; height: 5px; background: var(--good); }
+.built { margin-top: var(--sp-2); }
+.ahead { display: grid; gap: var(--sp-2); }
+.built-facts { display: grid; gap: var(--sp-1); }
+.built-facts div { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: var(--sp-3); padding: var(--sp-1) 0; border-bottom: 1px dotted var(--rule-strong); }
+.built-facts dt { color: var(--ink-3); padding-top: 1px; }
+.next-goal { flex: 1 1 220px; margin-right: auto; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 var(--sp-2); align-items: baseline; }
+.next-goal .t-label { color: var(--good-ink); }
+.next-goal strong { font-family: var(--serif); font-size: var(--t-body); }
+.next-goal .sub { grid-column: 1 / -1; }
+@media (max-width: 519px) { .next-goal .sub { display: none; } }
 @media (max-width: 519px) { .soil { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 /* The two occasions get the whole window. */
@@ -336,6 +377,38 @@
 @media (max-width: 699px) { .menu-cols { grid-template-columns: minmax(0, 1fr); gap: var(--sp-5); } }
 
 .help-lede { max-width: 62ch; margin-bottom: var(--sp-4); }
+/* Three pictures and three verbs: each picture is the instrument itself, drawn still. */
+.how-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-4); }
+.how-steps li { display: grid; gap: var(--sp-2); align-content: start; }
+.how-steps p { font-size: var(--t-small); line-height: 18px; color: var(--ink-2); }
+.how-steps .t-head { display: flex; align-items: center; gap: var(--sp-2); }
+.how-n { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--ink); color: var(--paper-hi); font-family: var(--sans); font-size: var(--t-small); font-weight: 700; }
+.how-pic { position: relative; display: grid; place-items: center; height: 96px; pointer-events: none; background: linear-gradient(160deg, #3d5a3a, #5b4532); border-color: var(--rule-strong); }
+.how-pic .plate { pointer-events: none; }
+.how-cursor { position: absolute; left: calc(50% + 34px); top: calc(50% + 6px); color: var(--cream); transform: rotate(-30deg); }
+.plate-wrap-pic { position: relative; display: inline-flex; margin-right: 34px; }
+.how-pic .clock { display: flex; gap: var(--sp-h); padding: var(--sp-h); background: var(--night); border: 1px solid var(--night-line); border-radius: var(--radius); }
+.how-year { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--sp-2); margin-top: var(--sp-5); padding-top: var(--sp-3); border-top: 1px solid var(--rule); counter-reset: none; }
+.how-year li { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 0 var(--sp-2); align-content: start; font-size: var(--t-small); line-height: 18px; color: var(--ink-2); }
+.how-year li .ic { color: var(--good-ink); margin-top: 1px; }
+.how-year strong { color: var(--ink); }
+.how-year li span { grid-column: 2; }
+.how-grow { margin-top: var(--sp-3); max-width: 70ch; }
+.how-more { margin-top: var(--sp-3); border-top: 1px dotted var(--rule-strong); border-bottom: 1px dotted var(--rule-strong); border-radius: 0; }
+.how-more-box .help-cols { margin-top: var(--sp-3); }
+@media (max-width: 799px) {
+  .how-steps { grid-template-columns: minmax(0, 1fr); gap: var(--sp-4); }
+  .how-pic { height: 72px; }
+  .how-year { grid-template-columns: minmax(0, 1fr); gap: var(--sp-1); }
+}
+
+/* A mechanic in two lines: what it gives, and its catch. */
+.rules { display: grid; }
+.rules div { display: grid; grid-template-columns: 176px minmax(0, 1fr); gap: 0 var(--sp-4); padding: var(--sp-2) 0; border-bottom: 1px dotted var(--rule-strong); }
+.rules dt { grid-row: span 2; font-family: var(--serif); font-weight: 600; }
+.rules dd { font-size: var(--t-small); line-height: 18px; color: var(--ink-2); }
+.rules dd.catch { color: var(--warn-ink); }
+@media (max-width: 699px) { .rules div { grid-template-columns: minmax(0, 1fr); } .rules dt { grid-row: auto; } }
 .help-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-6); }
 .keys th, .orders-help th { white-space: nowrap; padding: var(--sp-1) var(--sp-3) var(--sp-1) 0; vertical-align: top; font-weight: 600; }
 .keys td, .orders-help td { padding: var(--sp-1) 0; vertical-align: top; }
@@ -347,6 +420,7 @@
 .orders-help td, .keys td { font-size: var(--t-small); line-height: 18px; }
 .orders-help th { width: 132px; }
 .help-foot { margin-top: var(--sp-4); }
+.touch .help-foot .link { display: inline-block; padding: var(--sp-3) 0; }
 .help-farm { margin-top: var(--sp-5); }
 .help-cols.three { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-5); font-size: var(--t-small); line-height: 18px; }
 .paper-body .help-cols.three p { margin: 0; }
