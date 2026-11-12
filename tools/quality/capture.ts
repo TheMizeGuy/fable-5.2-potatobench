@@ -24,7 +24,7 @@ const MAIN = ['desk', 'phone']
 const ALL = Object.keys(SIZES)
 
 type Step = (page: Page, size: string) => Promise<void>
-interface State { name: string; what: string; sizes: string[]; run: Step }
+interface State { name: string; what: string; sizes: string[]; run: Step; full?: boolean }
 
 async function selectField(page: Page, _size: string, i: number): Promise<void> {
   await page.getByTestId(`field-${i}`).first().click()
@@ -53,6 +53,8 @@ const farmPeople: Step = async page => {
 
 const STATES: State[] = [
   { name: 'title', what: 'Title screen, first visit', sizes: ALL, run: async () => {} },
+  // The living kit of the interface (src/ui/system/kit.ts), the whole page, to set beside design/kit.sheet.html.
+  { name: 'kit', what: 'The interface system: every component in every state', sizes: ['desk', 'phone'], full: true, run: async page => { await page.goto(`${base}${base.includes('?') ? '&' : '?'}kit`); await page.waitForSelector('.kit .k-icons'); await page.evaluate(() => document.fonts.ready) } },
   { name: 'title-continue', what: 'Title screen with a saved farm', sizes: MAIN, run: async page => { await q(page, `q.start(1987, 3); q.run(q.day(5, 1)); q.g().app.quitToTitle()`) } },
   { name: 'new-farm', what: 'New farm over a saved one: the question first', sizes: [...MAIN, 'small', 'land'], run: async page => { await q(page, `q.start(1987, 3); q.g().app.quitToTitle()`); await page.getByTestId('play').click() } },
   { name: 'how-it-works', what: 'How it works', sizes: MAIN, run: async page => { await page.getByTestId('how-open').first().click() } },
@@ -299,7 +301,7 @@ async function shoot(ctx: BrowserContext, state: State, size: string): Promise<v
     errors.push(`capture: ${String(e).split('\n')[0]}`)
   }
   const file = `${state.name}.${size}.png`
-  await page.screenshot({ path: join(out, file) })
+  await page.screenshot({ path: join(out, file), fullPage: !!state.full })
   index.push({ file, state: state.name, size, what: state.what, errors })
   await page.close()
 }

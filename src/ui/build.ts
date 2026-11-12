@@ -70,7 +70,7 @@ export function yardCard(ctx: Ctx): YardCard {
           h('span', { class: 'gu-name' }, b.name),
           gauge(b.progress, { label: `${b.name} built`, text: `${F.pct(b.progress)} built` }),
           h('span', { class: 'gu-left num' }, `${F.num(Math.ceil(b.daysLeft))} crew-days left`),
-          h('span', { class: 'gu-who' }, who.length ? who.map(u => h('span', { class: 'gu-p', title: u.name }, portrait(u.id, 'portrait s'), h('span', { class: 'sr' }, firstName(u.name))))
+          h('span', { class: 'gu-who' }, who.length ? who.map(u => h('span', { class: 'gu-p', title: u.name }, portrait(u, 'portrait s'), h('span', { class: 'sr' }, firstName(u.name))))
             : h('span', { class: 'sub' }, c.phase === 'season' ? 'waiting for a builder' : 'built in the season or over the winter')))
       }),
       can.length ? h('div', { class: 'build-pick', role: 'group', 'aria-label': 'What can be built here' },

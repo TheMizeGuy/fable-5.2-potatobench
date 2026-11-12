@@ -1,7 +1,6 @@
-// The interface: small dark instruments over the land, and papers for what is read.
-import '@fontsource-variable/fraunces/opsz.css'
-import '@fontsource-variable/fraunces/opsz-italic.css'
-import '@fontsource-variable/public-sans'
+// The interface: the farm's own papers over the land (src/ui/system), and the screens built from them.
+import './system/system.css'
+import './system/game.css'
 import './style.css'
 import './instruments.css'
 import './papers.css'
@@ -13,6 +12,7 @@ import { cellarScreen } from './cellar.ts'
 import { EXIT_MS, layoutNow, Notes, Papers, unname, type Ctx, type Level, type Screen } from './core.ts'
 import { lotKey, ticket } from './dig.ts'
 import { h } from './dom.ts'
+import { mountSprites } from './icons.ts'
 import { setUnits } from './fmt.ts'
 import { openHelp } from './help.ts'
 import { ledgerScreen, overScreen } from './ledger.ts'
@@ -23,6 +23,7 @@ import { seasonScreen } from './season.ts'
 import { titleScreen } from './title.ts'
 
 export const mountHud: MountHud = (root, app, view) => {
+  mountSprites()
   root.classList.add('hud', 'waiting')
   const plateLayer = h('div', { class: 'plate-layer' })
   const screenLayer = h('div', { class: 'screen-layer' })
