@@ -319,6 +319,8 @@ test('a later year on the farmstead: an applicant hired, land on the mortgage, a
   await reach(page, `const { app } = q.g(); app.setSpeed(0); for (let n = 0; n < 40 && app.campaign.fields[${brush.i}].cover !== 'open'; n++) app.do({ t: 'day' })`)
   expect(await game<string>(page, `c.fields[${brush.i}].cover`)).toBe('open')
   while (await page.getByTestId('weighin').count()) await answerTicket(page, true)
+  // A telegram that came in those days holds the floor over a field's card: it is answered first, as a player would.
+  for (let k = 0; k < 6 && (await look(page)).incidents; k++) await answerIncident(page, false)
   // The camera is brought round to it, as a click on its alert would, and then its plate is pressed.
   await page.evaluate(`window.__county.app.focus(${brush.i})`)
   await page.getByTestId(`field-${brush.i}`).click()
