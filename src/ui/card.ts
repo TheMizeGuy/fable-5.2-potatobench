@@ -8,7 +8,7 @@ import * as F from './fmt.ts'
 import { icon } from './icons.ts'
 import { deals, deliver, versusMarket } from './contracts.ts'
 import { culledAtDig } from './dig.ts'
-import { ringFor } from './crew.ts'
+import { fates, ringFor } from './crew.ts'
 import { isTract } from './map.ts'
 import { firstName, hillWord, isJob, isStale, JOB_KEY, JOB_VERB, jobText, jobWhat, stonesText, stonesWord } from './rules.ts'
 import { term } from './glossary.ts'
@@ -533,6 +533,7 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
       gauges(c, f),
       g.el,
       say,
+      whoseLine(c, i),
       spray,
       h('div', { class: 'readings' }, known(c, f), land),
       landRow(c, i),
@@ -548,6 +549,29 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
       g.el,
       say,
     ]
+  }
+
+  // Whose work is whose on this field: what the crew has on the list here by itself and when it is taken, and which
+  // kinds of work wait for the player.
+  function whoseLine(c: S.Campaign, i: number): HTMLElement | null {
+    const s = c.season!
+    const f = S.fieldInfo(c, i)
+    if (f.status === 'dug' || f.status === 'rest' || f.status === 'lost' || f.status === 'off' || s.frozen) return null
+    const of = fates(app.world, c).of
+    const mine = s.jobs.filter(j => j.field === i && (j.by === 'routine' || j.by === 'foreman'))
+    const crew = mine.slice(0, 2).map(j => {
+      const o = of.get(j.id)
+      const u = o && o.unit >= 0 ? c.crew.find(x => x.id === o.unit) : undefined
+      const when = !o ? '' : o.unit < 0 ? 'nobody will take it yet' : o.when === 'now' ? `${firstName(u!.name)} is on it` : o.when === 'next' && /next\.$/.test(o.why) ? `${firstName(u!.name)} next` : o.when === 'waiting' ? 'waiting' : `${firstName(u!.name)}, after the orders ahead`
+      return `${JOB_VERB[j.kind].toLowerCase()}${when ? ` (${when})` : ''}`
+    })
+    const r = S.routineInfo(c)
+    const yours = r.filter(x => !x.auto && (CROP as string[]).includes(x.kind)).map(x => JOB_VERB[x.kind].toLowerCase())
+    const parts: Child[] = []
+    if (crew.length) parts.push(h('span', null, icon('sprout', 'i'), h('b', null, 'The crew: '), `${crew.join('; ')}.`))
+    else parts.push(h('span', { class: 'quiet' }, icon('sprout', 'i'), 'The crew puts this field\'s routine work on the list by itself.'))
+    if (yours.length) parts.push(h('span', null, ' ', h('b', null, 'Yours: '), `${F.list(yours)}.`))
+    return h('p', { class: 'whose', testid: 'card-whose' }, parts)
   }
 
   // The line under the orders: a refusal, why the field waits, or why the suggested order is suggested.

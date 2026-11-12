@@ -903,3 +903,21 @@ test('blight weather asks once how to spray this season, and a worn-out hand can
   await expect(card.getByTestId('person-rest-now')).toHaveAttribute('aria-pressed', 'true')
   expect(errors, errors.join('\n')).toEqual([])
 })
+
+test('a field says which work the crew does by itself and which waits for the player, and the first planting is said with Show me', async ({ page }) => {
+  const errors = watchErrors(page)
+  await startSeason(page)
+  // Days run until the crew takes up planting by itself: a note says so, and Show me goes to who is planting.
+  await reach(page, `const { app } = q.g(); const c = app.campaign; for (let k = 0; k < 90 && !c.season.jobs.some(j => j.kind === 'plant' && c.crew.some(u => u.job === j.id)); k++) { c.incidents = []; app.do({ t: 'day' }) } app.setSpeed(0)`)
+  const note = page.locator('#ui [data-testid="alert"]', { hasText: 'Planting by itself' })
+  await expect(note).toBeVisible()
+  await note.click()
+  await expect(page.getByTestId('whois')).toBeVisible()
+  await page.keyboard.press('Escape')
+  // A field's card: the crew's work on it and when, and the kinds of work that are the player's.
+  const field = await game<number>(page, `app.campaign.season.jobs.find(j => j.kind === 'plant').field`)
+  await reach(page, `q.g().app.select(${field})`)
+  await expect(page.getByTestId('card-whose')).toContainText('The crew')
+  await expect(page.getByTestId('card-whose')).toContainText(/Yours: .*spray/i)
+  expect(errors, errors.join('\n')).toEqual([])
+})
