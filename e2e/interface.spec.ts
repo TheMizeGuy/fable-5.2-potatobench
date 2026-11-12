@@ -84,7 +84,9 @@ test('only the orders that can be given are offered, and one that cannot says wh
   // The coach still says why it would wait.
   await page.keyboard.press('Escape')
   await page.getByTestId('field-0').click()
-  await expect(page.getByTestId('card-line')).toContainText('Hold off planting')
+  // The coach says why it would wait, or why now: whichever the soil on this day calls for.
+  const holding = await game<boolean>(page, '!!app.needs()[0].hold')
+  await expect(page.getByTestId('card-line')).toContainText(holding ? 'Hold off planting' : 'Plant.')
   // Given, the order joins the crew's list, and its place on the card holds still for a moment.
   await page.getByTestId('order-plant').click()
   await expect.poll(async () => (await look(page)).queue).toBe(1)

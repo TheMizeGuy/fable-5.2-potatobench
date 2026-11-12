@@ -213,12 +213,12 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
         season ? seasonTrack(c) : null,
         line ? h('button', {
           class: `tb-goal${gone ? ' met' : line.id === fresh ? ' fresh' : ''}`, type: 'button', testid: 'goal', k: `goal-${line.id}${gone ? '-met' : ''}`, 'aria-expanded': String(pop === 'goals'),
-          'aria-label': `${gone ? 'Done' : 'Next'}: ${line.title}${progressText(line) ? `, ${progressText(line)}` : ''}. ${line.why} Open the goals.`,
           title: ctx.touch() ? undefined : line.why,
           onclick: () => { pop = pop === 'goals' ? '' : 'goals'; ctx.dirty() },
-        }, icon(gone ? 'check' : 'goal', 'ic s'), h('span', { class: 'goal-t' }, line.title),
+        }, icon(gone ? 'check' : 'goal', 'ic s'), h('span', { class: 'sr' }, gone ? 'Done: ' : 'Next goal: '), h('span', { class: 'goal-t' }, line.title),
         progressText(line) && !gone ? h('span', { class: 'goal-n num' }, progressText(line)) : null,
-        !line.now && !gone ? h('span', { class: 'goal-when' }, line.when.toLowerCase()) : c.phase === 'plan' && CROP_STEPS.has(line.id) && !gone ? h('span', { class: 'goal-when' }, 'once the season starts') : null) : null,
+        !line.now && !gone ? h('span', { class: 'goal-when' }, line.when.toLowerCase()) : c.phase === 'plan' && CROP_STEPS.has(line.id) && !gone ? h('span', { class: 'goal-when' }, 'once the season starts') : null,
+        h('span', { class: 'sr' }, `. ${line.why} Open the goals.`)) : null,
         pop === 'goals' ? ladder(c, g) : null),
       season ? h('button', { class: 'forecast', type: 'button', testid: 'forecast', onclick: () => o.onAlmanac?.() },
         // The figures are for the eye; a screen reader gets the days in words.
