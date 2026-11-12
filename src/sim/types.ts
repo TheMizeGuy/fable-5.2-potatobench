@@ -166,6 +166,8 @@ export interface FieldSeason {
   flags: number             // one-time announcements
   killAsked?: number        // the first day reference practice asked for the vines to be killed
   killWhy?: KillWhy          // and why it asked
+  blightFound?: number      // the day blight was first found here: on a walk, or from the road
+  blightPulled?: number     // blighted hills pulled this season
   keepVines?: boolean       // the player keeps the vines up here: the crew does not kill them by itself
   killSince?: number        // the day the coach's present run of asking for the kill began
   // Hills, struct of arrays, ROWS * COLS long.

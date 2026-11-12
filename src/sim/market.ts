@@ -51,6 +51,17 @@ export function basePrice(world: World, c: Campaign, id: VarietyId): number {
   return v.price * seasonal * levelNow(world, c)
 }
 
+// The No. 1 price the crop still in the ground will fetch once it is lifted: the season's curve at the later of today
+// and the start of the harvest, at the level the year's price settles at.
+export function harvestPrice(world: World, c: Campaign, id: VarietyId): number {
+  const s = c.season
+  if (c.phase !== 'season' || !s) return basePrice(world, c, id)
+  const v = variety(id)
+  const level = world.priceLevel[String(c.year)] ?? 1
+  if (v.contract) return v.price * P.PROCESSING_PRICE * (1 + (level - 1) * 0.25)
+  return v.price * seasonFactor(Math.max(s.day, dayIndex(s.year, P.PICKERS_FROM.month, P.PICKERS_FROM.dom))) * level
+}
+
 export function gradePrice(world: World, c: Campaign, lot: Lot, grade: Grade): number {
   if (grade === 'cull') return P.CULL_PRICE
   const v = variety(lot.variety)

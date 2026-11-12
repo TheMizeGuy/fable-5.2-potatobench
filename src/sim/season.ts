@@ -413,6 +413,7 @@ function completeJob(world: World, c: Campaign, s: Season, job: Job, d: Day, out
         }
       }
       f.knownSev = knownSeverity(f)
+      if (found) f.blightFound ??= s.day
       const virus = f.hState.filter(st => (st & H_VIRUS) && (st & H_EMERGED) && !(st & GONE)).length
       push(s, out, 'scout', job.field, found ? 'bad' : 'good',
         found ? `Walked ${name}: blight lesions on ${found} ${found === 1 ? 'hill' : 'hills'}.` : `Walked ${name}: no blight found.`,
@@ -442,6 +443,7 @@ function completeJob(world: World, c: Campaign, s: Season, job: Job, d: Day, out
         }
       }
       f.knownSev = 0
+      f.blightPulled = (f.blightPulled ?? 0) + pulled
       if (standing > 0) f.eye *= 1 - pulled / standing
       push(s, out, 'rogued', job.field, 'info', `Pulled and bagged ${pulled} blighted ${pulled === 1 ? 'hill' : 'hills'} in ${name}.`, { pulled })
       break
@@ -1294,6 +1296,7 @@ function fieldDay(world: World, c: Campaign, s: Season, fi: number, d: Day, sevR
     }
     if (!f.seenFromRoad && f.sev >= P.ROAD_SEV) {
       f.seenFromRoad = true
+      f.blightFound ??= s.day
       for (let i = 0; i < P.HILLS; i++) if (f.hLes[i] >= P.LESION_START && !(f.hState[i] & GONE)) f.hState[i] |= H_KNOWN
       f.knownSev = knownSeverity(f)
       push(s, out, 'blightSeen', fi, 'bad', `Blight in ${name}: brown patches you can see from the road.`)
