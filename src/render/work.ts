@@ -187,8 +187,10 @@ export function siteAt(kind: JobKind, field: number, felled = 0): Spot {
   // The land fells a tract's woods from the farm's side (z1) and its brush from the road's (x0): the work stands on
   // the cut ground just short of the trees still up, facing them.
   if (kind === 'fell') {
+    // (back from the line by about the reach of the work, so the tree being cut is the stand's outermost and the
+    // people are out from under the canopy)
     const k = Math.min(0.9, Math.max(0, felled))
-    return PARCELS[f.i].cover === 'brush' ? { x: f.x0 - 0.2 + k * FW, z: f.cz, heading: 0 } : { x: f.cx, z: f.z1 + 0.2 - k * FD, heading: -Math.PI / 2 }
+    return PARCELS[f.i].cover === 'brush' ? { x: f.x0 - 1.1 + k * FW, z: f.cz, heading: 0 } : { x: f.cx, z: f.z1 + 1.4 - k * FD, heading: -Math.PI / 2 }
   }
   if (kind === 'brush') return hedgeSpot(f)
   if (kind === 'haul') return { x: f.x1 + 0.9, z: f.cz, heading: -Math.PI / 2 }
