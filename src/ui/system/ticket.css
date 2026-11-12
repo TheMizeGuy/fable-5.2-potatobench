@@ -62,18 +62,51 @@
   .dig-paper .grades { align-self: start; border-bottom: 0; padding-top: 10px; }
   .dig-paper .grades ul { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 18px; }
   .dig-paper .losses { align-self: start; margin-top: 4px; }
-  .dig-paper .tk-head h2 { font-size: 42px; }
-  .dig-paper .weighed { width: 104px; height: 104px; margin-bottom: -22px; }
-  .dig-paper .stamped.huge { font-size: 132px; }
+  .dig-paper .tk-head { padding-bottom: 4px; }
+  .dig-paper .tk-head h2 { font-size: 38px; }
+  .dig-paper .weighed { width: 92px; height: 92px; margin-bottom: -20px; }
+  .dig-paper .tk-line { padding: 5px 0 4px; }
+  .dig-paper .stamped.huge { font-size: 120px; }
   .dig-paper .tk-net { padding: 6px 0 4px; border-bottom: 1px solid var(--ink); }
   .dig-paper .ways { padding-top: 28px; }
   .dig-paper .way { min-height: 0; padding: 10px 12px 8px; }
   .dig-paper .ticket .tk-more { padding-top: 2px; }
 }
+/* A phone on its side: the weight on the left, the ways stacked on the right, both in the first screen; the grades
+   and the losses below. */
 @media (min-width: 700px) and (max-height: 500px) {
   .dig-day { --dial: calc(100vh - 176px); }
   .dig-day .scale-face { top: 8px; padding: 12px 22px 10px; }
   .dig-day .scale-face .readout .stamped { font-size: 40px; }
+  .dialog.sys.dig-paper { top: 8px; max-height: calc(100vh - 8px); max-height: calc(100dvh - 8px); }
+  .dialog.dig-paper .ticket { grid-template-columns: 40px minmax(0, 1fr); }
+  .dig-paper .stub span { font-size: 20px; }
+  .dig-paper .tk { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: 'head ways' 'line ways' 'net ways' 'grades losses';
+    grid-template-rows: auto auto 1fr auto; padding: 8px 16px 10px; }
+  .dig-paper .tk > .tk-head { grid-area: head; }
+  .dig-paper .tk > .tk-line { grid-area: line; font-size: 15px; gap: 0 14px; }
+  .dig-paper .tk > .tk-net { grid-area: net; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: start; border-bottom: 0; }
+  .dig-paper .tk > .choice { grid-area: ways; align-self: start; }
+  .dig-paper .tk > .grades { grid-area: grades; }
+  .dig-paper .tk > .losses { grid-area: losses; }
+  .dig-paper .tk-head h2 { font-size: 32px; }
+  .dig-paper .weighed { width: 72px; height: 72px; margin: -2px -4px -10px 0; }
+  .dig-paper .stamped.huge { font-size: 80px; }
+  .dig-paper .net { flex-direction: column; align-items: flex-start; gap: 0; }
+  .dig-paper .net .unit { font-size: 18px; padding-bottom: 0; }
+  .dig-paper .net-side { gap: 2px; }
+  .dig-paper .net-side .t-figure { font-size: 26px; }
+  .dig-paper .net-side .range { width: 100%; }
+  .dig-paper .net-side .carried { font-size: 14px; }
+  .dig-paper .ways { grid-template-columns: minmax(0, 1fr); gap: 8px; padding-top: 26px; }
+  .dig-paper .ways > .way.is-best:not(:first-child) { margin-top: 22px; }
+  .dig-paper .way { grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto auto; column-gap: 10px; row-gap: 2px; padding: 8px 10px; }
+  .dig-paper .way .t-label { grid-column: 1; }
+  .dig-paper .way .amount { grid-column: 1; grid-row: 2; font-size: 24px; }
+  .dig-paper .way .amount.ringed { margin: 2px 0 4px 8px; }
+  .dig-paper .way .does { grid-column: 1 / -1; grid-row: 3; font-size: 14px; line-height: 1.2; }
+  .dig-paper .way .take { grid-column: 2; grid-row: 1 / span 2; align-self: center; gap: 10px; min-height: 44px; margin: 0; }
+  .dig-paper .grades ul { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* A phone: the ticket takes the screen's width and comes up from the foot; the ways come straight after the weight,
