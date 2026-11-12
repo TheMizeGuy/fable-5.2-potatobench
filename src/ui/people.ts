@@ -128,38 +128,33 @@ export function sprayWay(c: S.Campaign): SprayWay | null {
   try { const v = localStorage.getItem(sprayKey(c)); return v === 'auto' || v === 'ask' || v === 'none' ? v : null } catch { return null }
 }
 
-// When blight weather first comes the player is asked once how spraying is to be done this season: kept up by the
-// crew by itself (with about what it costs), asked each time, or not this year. The question is a card on the season
-// screen that stops nothing; Who does what asks it again. The routine has no "not this year": that choice is kept
-// here, and the stamps for spraying are left off.
+// When blight weather first comes the player is asked once how spraying is to be done this season, on the telegram
+// card with its three numbered replies (incident.ts), the clock stopped: kept up by the crew by itself (with about
+// what it costs), asked each time, or not this year. It is asked again from Who does what and from a field's card.
+// The routine has no "not this year" yet: that choice is kept here, and the stamps for spraying are left off.
 let sprayOpen = false
 export function askSpray(ctx: Ctx): void { sprayOpen = true; ctx.dirty() }
 export function sprayAsking(): boolean { return sprayOpen }
 export function putSprayAway(ctx: Ctx): boolean { if (!sprayOpen) return false; sprayOpen = false; ctx.dirty(); return true }
 
-export function sprayQuestion(ctx: Ctx, c: S.Campaign): Child {
+export const SPRAY_WAYS: { id: SprayWay; glyph: string; name: string }[] = [
+  { id: 'auto', glyph: 'spray', name: 'Keep the fields sprayed' },
+  { id: 'ask', glyph: 'ask', name: 'Ask me each time' },
+  { id: 'none', glyph: 'close', name: 'Not this year' },
+]
+
+export function sprayDoes(ctx: Ctx, c: S.Campaign, way: SprayWay): string {
+  if (way === 'ask') return 'A stamp on a field when it wants spraying; the order is yours.'
+  if (way === 'none') return 'No spraying and no stamps for it. Blight, if it comes, goes unchecked.'
   const o = S.sprayOutlook(ctx.app.world, c)
-  const now = sprayWay(c)
-  const choose = (way: SprayWay) => {
-    try { localStorage.setItem(sprayKey(c), way) } catch { /* the routine still takes the choice */ }
-    const r = ctx.run({ t: 'routine', kind: 'spray', auto: way === 'auto' })
-    if (r.ok) ctx.announce(way === 'auto' ? 'Spraying: the crew keeps the fields sprayed by itself.' : way === 'ask' ? 'Spraying: you are asked each time.' : 'No spraying this year.')
-    putSprayAway(ctx)
-  }
-  const way = (id: SprayWay, glyph: string, name: string, does: string) => h('button', {
-    class: `way-row${now === id ? ' is-on' : ''}`, type: 'button', testid: `spray-way-${id}`, 'aria-pressed': now ? String(now === id) : null, onclick: () => choose(id),
-  }, icon(glyph, 'i'), h('span', null, h('b', null, name), ' ', h('span', { class: 'quiet' }, does)))
-  return [
-    h('header', { class: 'command-head' },
-      h('div', null, h('p', { class: 't-label' }, 'Blight weather'), h('h2', { class: 't-title', id: 'spray-ask-t' }, 'Spraying this season')),
-      h('button', { class: 'close', type: 'button', testid: 'spray-ask-close', 'aria-label': `Put it away${ctx.touch() ? '' : ' (Escape)'}`, onclick: () => putSprayAway(ctx) }, icon('close', 'i'))),
-    h('div', { class: 'spray-ask' },
-      h('p', null, 'Protectant has to be on the leaf before the spores land; rain and new leaf wear it off. How is spraying to be done?'),
-      h('div', { class: 'way-rows' },
-        way('auto', 'spray', 'Keep the fields sprayed', o.passes ? `The crew sprays when it wears thin: about ${o.passes} passes, ${F.money(o.dollars)} this season.` : 'The crew sprays when it wears thin.'),
-        way('ask', 'ask', 'Ask me each time', 'A stamp on a field when it wants spraying; the order is yours.'),
-        way('none', 'close', 'Not this year', 'No spraying and no stamps for it. Blight, if it comes, goes unchecked.'))),
-  ]
+  return o.passes ? `The crew sprays when it wears thin: about ${o.passes} passes, ${F.money(o.dollars)} this season.` : 'The crew sprays when it wears thin.'
+}
+
+export function answerSpray(ctx: Ctx, c: S.Campaign, way: SprayWay): void {
+  try { localStorage.setItem(sprayKey(c), way) } catch { /* the routine still takes the choice */ }
+  const r = ctx.run({ t: 'routine', kind: 'spray', auto: way === 'auto' })
+  if (r.ok) ctx.announce(way === 'auto' ? 'Spraying: the crew keeps the fields sprayed by itself.' : way === 'ask' ? 'Spraying: you are asked each time.' : 'No spraying this year.')
+  putSprayAway(ctx)
 }
 
 export function personCard(ctx: Ctx): PersonCard {

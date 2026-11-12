@@ -117,7 +117,7 @@ function resolve(ctx: Ctx, root: HTMLElement, p: Point | null): { el: HTMLElemen
 // them. hard: what it must never cover (a clock, a command bar, a telegram, a paper, a test-dig tray, a person's card).
 function hardOnes(root: HTMLElement): Box[] {
   const hard: Box[] = []
-  for (const el of root.querySelectorAll('.clock, .command, .telegram, .dialog, [data-testid="paused"], .tray-paper, .person-card, .work, .pin-list-at, .tb-pop, .queue, .cat-open')) {
+  for (const el of root.querySelectorAll('.clock, .command, .telegram, .spray-card, .dialog, [data-testid="paused"], .tray-paper, .person-card, .work, .pin-list-at, .tb-pop, .queue, .cat-open')) {
     if (shown(el)) hard.push(box(el.getBoundingClientRect()))
   }
   return hard
@@ -203,9 +203,8 @@ function holdLine(): HTMLElement {
 
 // lost: what it points at is on the land but out of view, so the slip says how to bring the farm back.
 function slipBody(ctx: Ctx, x: Lesson, l: Look, held: boolean, lost = false): (HTMLElement | null)[] {
-  const at = guide.place(x)
   const again = guide.replaying(x.id)
-  const where = x.part === 'opening' ? `${PART_NAME.opening}, ${at.n} of ${at.of}` : PART_NAME[x.part]
+  const where = PART_NAME[x.part]
   const done = () => { guide.noted(x.id); ctx.dirty() }
   return [
     h('header', { class: 'guide-head' },
@@ -270,11 +269,12 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
   const root = layer.parentElement as HTMLElement
   const slip = h('section', { class: 'guide floating sheet sys', 'aria-labelledby': 'guide-ask', hidden: true })
   const hand = h('div', { class: 'guide-fist sys', testid: 'guide-fist', 'aria-hidden': 'true', hidden: true }, fist())
-  layer.append(slip, hand)
+  const clockNote = h('p', { class: 'guide-clocknote sys', testid: 'guide-clock-held', hidden: true }, icon('pause', 'i'), 'Held for the agent\'s note. Any speed goes on.')
+  layer.append(slip, hand, clockNote)
 
   let input: Input = ctx.touch() ? 'touch' : 'mouse'
   let stale = true
-  const onKey = (e: KeyboardEvent) => { if (!['Shift', 'Control', 'Alt', 'Meta'].includes(e.key) && !(e.target as HTMLElement).closest?.('input')) setInput('keys') }
+  const onKey = (e: KeyboardEvent) => { if ((e.key === 'Tab' || e.key === 'Enter') && !(e.target as HTMLElement).closest?.('input')) setInput('keys') }
   // A coarse pointer is a finger, whatever the event calls itself.
   const onPointer = (e: PointerEvent) => setInput(e.pointerType === 'touch' || ctx.touch() ? 'touch' : 'mouse')
   function setInput(i: Input): void { if (input !== i) { input = i; stale = true } }
@@ -307,6 +307,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
       c: app.campaign, world: app.world, screen: app.screen, selection: app.selection, unit: app.unit, yard: app.yard, speed: app.speed,
       needs: app.campaign?.phase === 'season' ? app.needs().map(n => n.need) : [], paper: ps[ps.length - 1] ?? '', papers: ps, input,
       stopped: app.pauseReason === HOLD ? '' : app.pauseReason,
+      asking: shown(root.querySelector('[data-testid="spray-ask"]')) ? 'spray' : '',
     }
   }
 
@@ -370,9 +371,12 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
   // the speed it had once it passes. A player who starts the clock themselves is not stopped again for that lesson.
   let holding: { id: string; speed: number } | null = null
   const overridden = new Set<string>()
+  let pressedAt = -1e9
   function hold(): void {
+    // The next note does not stop a clock the player has just started again.
+    if (now?.holds && !holding && performance.now() - pressedAt < 8000) overridden.add(now.id)
     const want = now && now.holds && app.screen === 'season' && !overridden.has(now.id) ? now.id : ''
-    if (holding && app.speed > 0) { overridden.add(holding.id); holding = null }
+    if (holding && app.speed > 0) { overridden.add(holding.id); holding = null; pressedAt = performance.now(); return }
     if (want && !holding) {
       // Already stopped (by the player, or a question): it stays so, and the player starting it again is their call.
       holding = { id: want, speed: app.speed }
@@ -391,17 +395,18 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
   let restUntil = 0
   let waitFor: string[] = []
   let resting = false
+  let waitUntil = 0
   const PANELS = ['.cat-open', '.paper-layer > .dialog:not(.out)', '.person-card:not([hidden])', '.work:not([hidden])']
   const panelsOpen = () => PANELS.filter(sel => !!root.querySelector(sel))
   function paced(x: Lesson | null): Lesson | null {
     const t = performance.now()
     resting = false
     if (x?.id !== lastId) {
-      if (lastId && guide.passed(lastId)) { restUntil = t + 1200; waitFor = panelsOpen() }
+      if (lastId && guide.passed(lastId)) { restUntil = t + 1200; waitFor = panelsOpen(); waitUntil = t + 8000 }
       lastId = x?.id ?? ''
     }
     if (!x || x.urgent || x.paper) return x
-    waitFor = waitFor.filter(sel => !!root.querySelector(sel))
+    waitFor = t < waitUntil ? waitFor.filter(sel => !!root.querySelector(sel)) : []
     resting = t < restUntil || waitFor.length > 0
     if (resting) { stale = true; return null }
     return x
@@ -428,6 +433,9 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     // The spring's notes go into the catalogue; everything else floats.
     if (slot) {
       const inSlot = docked && slot.isConnected
+      // A fold open that the note is not about keeps its room: the note shrinks to its one line.
+      const fold = root.querySelector('.catalogue .cat-open')
+      slot.classList.toggle('folded', !!now && !!fold && !(t.el && fold.contains(t.el)))
       patch(slot, JSON.stringify([inSlot && offer, inSlot && now ? [now.id, now.ask(l), now.why(l), guide.replaying(now.id), lost] : 0, input]), () =>
         inSlot && offer ? h('section', { class: 'guide docked offer', testid: 'guide-offer', 'aria-label': 'A guided first year' }, offerBody(ctx))
           : inSlot && now ? h('section', { class: 'guide docked', testid: 'guide-slip', 'data-lesson': now.id, 'data-target': target, 'aria-labelledby': 'guide-ask' }, slipBody(ctx, now, l, held, lost)) : null)
@@ -472,7 +480,8 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
       const hard = [...hardOnes(root), ...[...root.querySelectorAll('.goal')].filter(shown).map(e => box(e.getBoundingClientRect()))]
       const t0 = performance.now()
       if (!busy || t0 - busyAt > 250) { busy = busyBoxes(root); busyAt = t0 }
-      const words = busy
+      const moving = [...root.querySelectorAll<HTMLElement>('.plate-layer, .pin-at, .pin-list-at, .yard-at')].flatMap(e => busyBoxes(e))
+      const words = [...busy, ...moving]
       const clear = ([x, y]: [number, number, string]) => !hard.some(a => meets({ left: x, top: y, right: x + s, bottom: y + s }, a)) && bareAt(words, pad({ left: x, top: y, right: x + s, bottom: y + s }, 2))
       // And off the field tags where it can be, so the name of what it points at stays readable.
       const tags = [...root.querySelectorAll('.plate-layer .tag')].filter(shown).map(e => box(e.getBoundingClientRect()))
@@ -487,17 +496,27 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
       }
     }
     hand.hidden = !fistBox
+    // While the guide holds the clock, the clock says so.
+    const ck = app.screen === 'season' && app.speed === 0 && app.pauseReason === HOLD ? [...root.querySelectorAll('.clock')].find(shown) : undefined
+    clockNote.hidden = !ck
+    let noteBox: Box | null = null
+    if (ck) {
+      const r = ck.getBoundingClientRect(), w = clockNote.offsetWidth, x = Math.max(8, Math.min(innerWidth - w - 8, r.right - w))
+      clockNote.style.transform = `translate3d(${x.toFixed(1)}px, ${(r.bottom + 6).toFixed(1)}px, 0)`
+      noteBox = { left: x, top: r.bottom + 6, right: x + w, bottom: r.bottom + 6 + clockNote.offsetHeight }
+    }
     if (slip.hidden) return
     const key = `${l.id}|${innerWidth}x${innerHeight}|${slip.offsetWidth}x${slip.offsetHeight}`
     const t0 = performance.now()
     // Every frame: nothing it must never cover has come over it (a card sliding in, a telegram).
-    const must = [...hardOnes(root), ...(t.at ? [pad(t.at, 10)] : []), ...(fistBox ? [pad(fistBox, 4)] : [])]
+    const must = [...hardOnes(root), ...(t.at ? [pad(t.at, 10)] : []), ...(fistBox ? [pad(fistBox, 4)] : []), ...(noteBox ? [noteBox] : [])]
     const at = place ? { left: place.x, top: place.y, right: place.x + slip.offsetWidth, bottom: place.y + slip.offsetHeight } : null
     if (placedFor === key && t0 - checked < 250 && (!at || !must.some(a => meets(at, a)))) return
     checked = t0
     const { hard, soft, costs } = obstacles(root)
     if (t.at) hard.push(pad(t.at, 10))
     if (fistBox) hard.push(pad(fistBox, 4))
+    if (noteBox) hard.push(noteBox)
     const w = slip.offsetWidth, ht = slip.offsetHeight
     const here = place ? { left: place.x, top: place.y, right: place.x + w, bottom: place.y + ht } : null
     // Stay put while the place is still clear; move only when something comes over it.

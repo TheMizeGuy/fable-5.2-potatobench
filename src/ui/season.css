@@ -53,12 +53,15 @@
 .season-screen .q-fate { max-width: 260px; font-size: 14px; line-height: 1.25; color: var(--ink-2); }
 /* Work that cannot wait, over the list: it floats above the foot and does not frame the land. */
 .season-screen .crew { position: relative; }
-.season-screen .pressing { position: absolute; left: 0; bottom: calc(100% + 6px); z-index: 3; display: grid; gap: 4px; width: max-content; max-width: min(560px, calc(100vw - 2 * var(--gutter, 16px))); }
-.season-screen .pressing .press { display: flex; align-items: center; gap: 8px; margin: 0; padding: 6px 8px 6px 10px; font-size: 15px; line-height: 1.25; background: var(--paper) url(./system/grain.png); background-blend-mode: multiply; box-shadow: var(--laid), inset 0 0 0 2px var(--red); }
-.season-screen .pressing .press > .i { --i: 18px; color: var(--red); flex: none; }
-.season-screen .pressing .press-text { flex: 1; min-width: 0; }
-.season-screen .pressing .btn { flex: none; min-height: 36px; padding: 0 10px; font-size: 14px; }
-.touch .season-screen .pressing .btn { min-height: 44px; }
+.season-screen .press-chip { color: var(--paper); background: var(--red); box-shadow: none; gap: 6px; }
+.season-screen .press-chip .i { color: var(--paper); }
+.season-screen .press-chip .press-word { font: 400 14px/1 var(--f-gothic); letter-spacing: .05em; text-transform: uppercase; }
+.season-screen .press-pop { min-width: min(420px, calc(100vw - 32px)); }
+.season-screen .press-pop .press { display: flex; align-items: center; gap: 8px; margin: 0; padding: 6px 8px 6px 10px; font-size: 15px; line-height: 1.25; background: var(--paper) url(./system/grain.png); background-blend-mode: multiply; box-shadow: var(--laid), inset 0 0 0 2px var(--red); }
+.season-screen .press-pop .press > .i { --i: 18px; color: var(--red); flex: none; }
+.season-screen .press-pop .press-text { flex: 1; min-width: 0; }
+.season-screen .press-pop .btn { flex: none; min-height: 36px; padding: 0 10px; font-size: 14px; }
+.touch .season-screen .press-pop .btn { min-height: 44px; }
 .season-screen .q .q-by { display: grid; place-items: center; color: var(--ink-2); }
 .season-screen .q .q-by .i { --i: 12px; }
 .season-screen .q.by-you { box-shadow: inset 0 0 0 1px var(--hair), inset 0 -2px 0 var(--pencil); }
@@ -101,7 +104,11 @@
 /* ---------------------------------------------------------------- the land: tags, stamps, the yard, pins, selection */
 .tag-wrap, .yard-at, .pin-at, .pin-list-at, .reg-at { position: absolute; left: 0; top: 0; will-change: transform; }
 .tag-wrap.gone, .yard-at.gone, .pin-at.gone { display: none; }
-.tag-wrap .tag-at { position: relative; transform: none; }
+.tag-wrap .tag-at { position: relative; transform: none; min-height: 44px; align-items: flex-start; }
+/* The tag's top stays where it is whether it is selected, stamped or plain: it grows and shrinks downward only. */
+.tag-wrap .tag-at .tag { margin-top: 5px; }
+.tag-wrap .tag-at .need { align-self: center; }
+.touch .tag-wrap .tag-at .tag { margin-top: 2px; }
 /* Quiet when nothing is needed; a tag with a need, or in hand, stands up a size. */
 .tag-wrap .tag-at:not(.has-need):not(.is-sel) .tag { height: 30px; padding: 0 10px 0 8px; }
 .tag-wrap .tag-at:not(.has-need):not(.is-sel) .tag .nm { font-size: 16px; }
@@ -226,8 +233,8 @@
 .season-screen[data-layout='mid'] .command:not(.compact) { width: 400px; }
 .season-screen[data-layout='mid'] .command.compact { width: 440px; }
 .season-screen[data-layout='mid'] .command.compact .orders { grid-template-columns: 1fr; }
-/* Under 1400 a bar and the alerts would meet at the foot: with something selected the alerts go above the list. */
-.season-screen[data-layout='mid'].selected .foot { flex-direction: column-reverse; align-items: flex-start; gap: var(--s2); }
+/* Under 1400 a bar and the alerts would meet at the foot, over the land: with something selected the alerts wait. */
+.season-screen[data-layout='mid'].selected .notes-slot { display: none; }
 
 /* ---------------------------------------------------------------- people: a page of the time book, the work grid */
 .season-screen .person-card, .season-screen .work { bottom: calc(var(--bottom, 140px) + 8px); max-height: calc(100% - var(--top, 220px) - var(--bottom, 140px) - 24px); overflow-y: auto; overscroll-behavior: contain; scroll-padding-bottom: 12px; }
@@ -428,20 +435,7 @@
 /* A person worn out or resting: a small "z" on their pin's head. */
 .pin-at.tired .pin .head::after { content: 'z'; position: absolute; right: -6px; top: -8px; display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; font: 700 13px/1 var(--f-text); color: var(--ink); background: var(--st-ochre); box-shadow: 0 0 0 1.5px var(--ink); }
 .pin-at .pin .head { position: relative; }
-/* Spraying this season, asked once: a card at the left under the top that stops nothing; three ways, each a row. */
-.season-screen .spray-card { position: absolute; left: max(var(--gutter), env(safe-area-inset-left, 0px)); top: calc(var(--top, 220px) + 12px); z-index: 3; width: min(380px, calc(100% - 2 * var(--gutter, 16px))); max-height: calc(100% - var(--top, 220px) - var(--bottom, 140px) - 24px); overflow-y: auto; }
-.season-screen .spray-card .spray-ask { padding: 10px 18px 16px; }
-.spray-ask { display: grid; gap: 10px; }
-.spray-ask p { margin: 0; }
-.spray-ask .way-rows { display: grid; gap: 6px; }
-.spray-ask .way-row { display: grid; grid-template-columns: 24px 1fr; align-items: start; gap: 10px; min-height: 48px; padding: 8px 12px; text-align: left; font: inherit; color: var(--ink); background: var(--paper); box-shadow: inset 0 0 0 1px var(--ink); cursor: pointer; }
-.spray-ask .way-row .i { --i: 20px; margin-top: 2px; }
-.spray-ask .way-row > span { display: grid; gap: 2px; }
-.spray-ask .way-row .quiet { font-size: 14px; }
-.spray-ask .way-row.is-on { box-shadow: inset 0 0 0 2px var(--ink), 0 2px 0 var(--ink); background: var(--paper-2); }
-@media (hover: hover) { .spray-ask .way-row:hover { box-shadow: inset 0 0 0 2px var(--ink); } }
+.command .spray-way { justify-self: start; min-height: 34px; margin: 0 18px 6px; padding: 0 10px; font-size: 14px; }
+.touch .command .spray-way { min-height: 44px; }
 .work .spray-again { justify-self: start; min-height: 36px; margin-top: 6px; font-size: 14px; }
 /* On a phone or a short window, work that cannot wait is one line, and gives way to a card or a page. */
-.season-screen[data-layout='narrow'] .pressing .press:nth-child(n+2), .season-screen[data-layout='short'] .pressing .press:nth-child(n+2) { display: none; }
-.season-screen[data-layout='narrow'].selected .pressing, .season-screen[data-layout='short'].selected .pressing, .season-screen[data-layout='narrow'].person-up .pressing { display: none; }
-.season-screen[data-layout='narrow'] .pressing .press { font-size: 14px; }

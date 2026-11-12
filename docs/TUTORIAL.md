@@ -17,7 +17,8 @@ paper disc with a keyline so it reads over any land. There is no slideshow, no s
   person picked (`app.unit`), the clock running (`app.speed`), an order on the list or carried out (the campaign), the
   camera moved (measured from the scene's anchors, `fieldAnchor`). Only notes that ask the player to read something
   carry a button, "Noted". A note whose thing is already done is passed over without being shown, so a player who runs
-  ahead is never held behind it.
+  ahead is never held behind it. A note to read is never passed by the days running: it waits for Noted. The slip
+  carries no "n of m" count (round three saw it jump as lessons were passed over); it names the part of the year.
 - **When it first matters.** The opening is only what a player needs to watch the first planting: the money and
   Start the season in spring, the clock, then planting day itself. Everything else (the forecast, the almanac, the
   list, the camera's turn, a field's card) comes the first time it is wanted, and every later note the first time its
@@ -33,15 +34,19 @@ paper disc with a keyline so it reads over any land. There is no slideshow, no s
 - **Holds the clock for a click, and says so.** In the guided first season Start the season leaves the clock stopped
   until the note that starts it. A note that asks for a click on something the days move (a need's stamp, a face on
   the land) or to watch something happen (the first planting) stops the clock while it shows, says "Clock held", and
-  lets the clock go on at the speed it had once it passes. A player who starts the clock themselves is not stopped
-  again for that note. The clock's own stops (a telegram, a weigh ticket, frost on barrels, the season's end) are
+  lets the clock go on at the speed it had once it passes. While it holds, a line under the clock itself says "Held
+  for the agent's note. Any speed goes on." Any speed key starts the clock at once, and a player who starts it is not
+  stopped again for that note, nor by the next one for a few seconds. The clock's own stops (a telegram, a weigh ticket, frost on barrels, the season's end) are
   explained the first time, under the clock's tag. A paper puts the notes away until it closes; the weigh ticket's own
   note is the one shown over its paper, set beside it. A telegram's note comes first and lies beside it, never over it.
 - **One at a time, never a step ahead.** The note on show keeps its place until it passes; only an urgent one (a
   telegram, a weigh ticket, the clock stopping) comes in front, and the one it interrupted comes back after it. After a
   note passes the next waits a moment, and waits while a panel its click opened (a catalogue fold, a paper, a person's
-  card, the grid) is still open, so People is not left half read for Land.
-- **Placed where it covers nothing it is about.** In spring the slip sits in the catalogue. Elsewhere it floats at
+  card, the grid) is still open, so People is not left half read for Land, for eight seconds at most: a card left open
+  never silences the guide. A note that cuts in (urgent, or one that holds the clock) is the only kind that takes over
+  from a note on show.
+- **Placed where it covers nothing it is about.** In spring the slip sits in the catalogue; while a fold the note is
+  not about is open (Equipment, say) it shrinks to its one line, so the fold keeps its room. Elsewhere it floats at
   the first clear place nearest the top middle of the land, keeping off the boards, the time book and every panel; it
   never lies over what it points at, the list or panel holding that, the fist, the clock, a command bar, a telegram,
   a paper, a test-dig tray or a person's card. Where it must lie over a panel it goes short (its reason line folded)
@@ -56,7 +61,8 @@ paper disc with a keyline so it reads over any land. There is no slideshow, no s
   button, the seed choice) completes from the farm's state and keeps its words when the control is missing; no note
   sends the player to a long goal the farm cannot do now (`S.goalCosts`).
 - **For everyone.** Words differ for a mouse, a touch screen and the keyboard, chosen by what the player last used:
-  keys are taught only to someone using them. Each note is read out once to a screen reader, politely. Reduced motion
+  keys are taught only to someone stepping through the screen with Tab or Enter (Space, a speed key or a letter
+  is not enough). Each note is read out once to a screen reader, politely. Reduced motion
   stills the slip's arrival and the fist's nudge. The slip's buttons are 44 px tall.
 - **Quiet beside the old tips.** While the guide is on, the one-line first-time tips for each order keep quiet: the
   notes say the same thing at the same moment.
@@ -73,12 +79,12 @@ ends them is already true. "Holds" marks a note that stops the clock while it sh
 | 1 | The money | The first spring's plan | Noted, The money opened, or the season begun | The plan's money lines |
 | 2 | Start the first season | The first spring's plan | The season begins | Start the season |
 | 3 | Start the clock | The season, the clock held | The clock running | Let the weeks go: 3× (or 3×) |
-| 4 | Watch the first planting (holds) | Planting on the list by the one planting rule, or just begun | The camera brought closer or moved | You, on the land |
-| 5 | Meet your people (holds) | After 4 | You picked, Noted, or four days run | Your face |
+| 4 | Watch the first planting (holds) | Planting on the list by the one planting rule, or just begun | The camera brought closer or moved, or three days run | You, on the land; says the routine began it with no order |
+| 5 | Meet your people (holds) | After 4 | You picked, or Noted | Your face |
 | 6 | Give the first order (holds) | A planting stamp ("ask me" only) | A planting order on the list | That field's stamp |
-| 7 | Routine work and your calls | A job the routine listed, after 5 | Noted, or five days run | The list |
+| 7 | Routine work and your calls | A job the routine listed, after 5 | Noted | The list |
 | 8 | Plant the rest (holds) | One field planted, more stamps ("ask me" only) | Every field planted, or several picked at once | The next stamp |
-| 9 | The list of orders | After 5, with orders waiting | Noted, or four days run | The list |
+| 9 | The list of orders | After 5, with orders waiting | Noted | The list |
 | 10 | Turn and tip the view | After 5 | The camera turned or tipped (or turned out of view) | (the land) |
 | 11 | Pick a field | After 5 | A field picked | Whichever potato field's tag is on screen |
 | 12 | Read a field's card | After 11, with a field picked | Noted, or the card put away | The card |
@@ -93,18 +99,19 @@ list, a reason to turn the view and a crop to read on a card.
 
 | Lesson | Starts | Ends | Points at |
 | --- | --- | --- | --- |
+| How spraying is done (urgent) | The season's spraying question on screen (`spray-ask`) | Answered or put away | Its first reply (`spray-way-auto`) |
 | Answer a telegram (urgent) | A question waiting (it stops the clock) | That question answered or lapsed | The first reply |
 | Why the clock stopped (urgent) | The clock stopped by itself, not by the guide | Noted, or the clock going on | (the note at the foot) |
-| Read the forecast | After the opening's planting, when the forecast first shows rain, frost or blight risk | Noted, or three days run | The forecast |
+| Read the forecast | After the opening's planting, when the forecast first shows rain, frost or blight risk | Noted | The forecast |
 | Open the almanac | After the forecast | The almanac opened | The forecast |
 | Work that cannot wait | `S.pressing` lists work nobody will take | Noted, or nothing pressing | (the note at the foot) |
 | Walk, hill, test dig, pull blighted plants, dig (holds) | Their stamp ("ask me" only; the routine does them) | Ordered or done | Its stamp |
 | Spray before the blight (holds) | The first spraying stamp | Spraying ordered or done | Its stamp |
-| Leave spraying to the crew | After the first spray, spraying not by itself | It is set to by itself, Noted, or six days run | (words: `S.sprayOutlook`'s passes and dollars) |
+| Leave spraying to the crew | After the first spray, spraying not by itself | It is set to by itself, or Noted | (words: `S.sprayOutlook`'s passes and dollars) |
 | Frost in the forecast | Frost likely within two days, with plants up or barrels out | Noted, or the frost days past | The forecast |
 | Water a dry field (holds) | The first watering stamp | Watering ordered | Its stamp |
 | Kill the vines (holds) | The first vine-kill stamp | Vines ordered killed or killed | Its stamp; says the trade: small tubers stay small, skins set, safe from frost |
-| What the year end takes | Digging begins, before the first weigh ticket | Noted, five days run, or the season closed | The pass book; says what the farm would end with (`S.moneyNow().after`) |
+| What the year end takes | Digging begins, before the first weigh ticket | Noted, or the season closed | The pass book; says what the farm would end with (`S.moneyNow().after`) |
 | Bring the crop in | Barrels in a field | Noted, or the crop weighed | The field |
 | Sell or store the crop (urgent) | The first weigh ticket open | The ticket answered (closed), or a sale | (the ticket's own fist) |
 | Close out the season (urgent) | The season done | The season closed | Close out the season |
@@ -122,7 +129,7 @@ list, a reason to turn the view and a crop to read on a card.
 | Rent or buy land | A later spring, once People is closed | Land opened, or land beyond the home six taken | Land |
 | The money and the loan | A later spring | The money opened | The money |
 | Start the second season | A later spring | The season begins | Start the season |
-| The season's calls | The second season | Noted, or five days run | The forecast |
+| The season's calls | The second season | Noted | The forecast |
 | Meet a hand (holds) | The season, with someone hired, after the calls | A hand picked | Their face |
 | Who does what | The season, three or more on the farm | The work grid opened | The grid at the foot |
 | Name a foreman | After a hand was picked, with land beyond the home six and a hand to name | Noted, or a foreman named | Foreman on their card, where it shows |
@@ -167,5 +174,5 @@ playing, in every state a guided year shows it in.
   rule since the routine), so the held opening clock can start then, and "Start the clock" is passed over.
 - Later telegrams of the same year have no note: the first one taught them.
 - A two-finger twist that starts on a field tag does not turn the view (the tag takes the touch).
-- "Leave spraying to the crew" teaches from the routine's state in words; the one-time question the interface writer
-  is adding when blight weather first comes is not pointed at.
+- "How spraying is done" keys on the question's test ids (`spray-ask`, `spray-way-*`); if the interface's question
+  changes them, the note keeps its words and loses its fist.

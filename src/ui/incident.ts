@@ -7,6 +7,7 @@ import { h, type Child } from './dom.ts'
 import * as F from './fmt.ts'
 import { icon } from './icons.ts'
 import { ringFor } from './crew.ts'
+import { answerSpray, putSprayAway, SPRAY_WAYS, sprayAsking, sprayDoes, sprayWay } from './people.ts'
 import { firstName, jobText, SKILL_NAME } from './rules.ts'
 import { key, stamp } from './system/parts.ts'
 import { portrait, ringed } from './system/people.ts'
@@ -128,6 +129,30 @@ export function incidentCard(ctx: Ctx): IncidentCard {
     ]
   }
 
+  // The spraying question, asked once when blight weather first comes, on this same card (people.ts).
+  function sprayBody(c: S.Campaign): Child {
+    const keys = !ctx.touch()
+    const now = sprayWay(c)
+    return h('div', { testid: 'spray-ask' },
+      h('header', { class: 'tg-head' },
+        h('p', { class: 'tg-name', 'aria-hidden': 'true' }, 'Telegram'),
+        h('p', { class: 'tg-from' }, h('span', { class: 't-label' }, 'From'), ' ', h('b', null, 'The county agent'), ' ', h('span', { class: 't-caption' }, 'blight weather has come')),
+        h('button', { class: 'close tg-later', type: 'button', testid: 'spray-ask-close', 'aria-label': `Decide later${keys ? ' (Escape)' : ''}`, title: keys ? 'Decide later (Escape)' : undefined, onclick: () => putAway() }, icon('close', 'i'))),
+      h('div', { class: 'tg-body' },
+        icon('spray', 'i tg-ic'),
+        h('div', null, h('h2', { id: 'incident-title' }, 'Spraying this season'), h('p', null, 'Protectant has to be on the leaf before the spores land; rain and new leaf wear it off. How is spraying to be done?'))),
+      h('div', { class: 'replies three' }, SPRAY_WAYS.map((w, k) => h('button', {
+        class: `reply${w.id === 'auto' ? ' first' : ''}${now === w.id ? ' is-on' : ''}`, type: 'button', testid: `spray-way-${w.id}`, 'aria-keyshortcuts': keys ? String(k + 1) : null,
+        'aria-pressed': now ? String(now === w.id) : null, onclick: () => answerSprayHere(c, w.id),
+      }, key(String(k + 1)), h('b', { class: 'c-title' }, w.name), h('span', { class: 'c-does' }, sprayDoes(ctx, c, w.id))))))
+  }
+
+  function answerSprayHere(c: S.Campaign, way: 'auto' | 'ask' | 'none'): void {
+    answerSpray(ctx, c, way)
+    app.holding = ''
+    if (!S.incidentInfo(c).some(x => !away.has(x.id)) && !ctx.papers.isOpen()) app.resumeAfterCard()
+  }
+
   function update(c: S.Campaign): void {
     const all = c.phase === 'season' ? S.incidentInfo(c) : []
     const ids = new Set(all.map(x => x.id))
@@ -139,7 +164,20 @@ export function incidentCard(ctx: Ctx): IncidentCard {
     if (fresh && shown < 0) { shown = fresh.id; err = '' }
     if (shown >= 0 && !ids.has(shown)) shown = -1
     const info = all.find(x => x.id === shown)
-    app.holding = info ? 'A telegram wants an answer. Answer it, or put it away (Escape) to go on.' : ''
+    const spray = !info && c.phase === 'season' && sprayAsking()
+    app.holding = info ? 'A telegram wants an answer. Answer it, or put it away (Escape) to go on.' : spray ? 'A question wants an answer. Answer it, or put it away (Escape) to go on.' : ''
+    if (spray && !ctx.papers.isOpen()) {
+      const was = el.hidden || el.classList.contains('out')
+      el.classList.remove('out')
+      el.hidden = false
+      patch(el, JSON.stringify(['spray', sprayWay(c), ctx.touch(), Math.round(S.sprayOutlook(app.world, c).dollars / 50)]), () => sprayBody(c))
+      if (was) {
+        if (!ctx.reduced()) { el.classList.remove('in'); void el.offsetWidth; el.classList.add('in') }
+        ctx.announce('Telegram. Spraying this season: keep the fields sprayed, ask me each time, or not this year.')
+        requestAnimationFrame(() => el.querySelector<HTMLElement>('.reply.first')?.focus({ preventScroll: true }))
+      }
+      return
+    }
     if (!info || ctx.papers.isOpen()) {
       if (!el.hidden && !ctx.reduced()) {
         el.classList.add('out')
@@ -171,6 +209,12 @@ export function incidentCard(ctx: Ctx): IncidentCard {
   }
 
   function putAway(): boolean {
+    if (shown < 0 && putSprayAway(ctx)) {
+      app.holding = ''
+      const c = app.campaign
+      if (c && !S.incidentInfo(c).some(x => !away.has(x.id)) && !ctx.papers.isOpen()) app.resumeAfterCard()
+      return true
+    }
     if (shown < 0) return false
     away.add(shown)
     shown = -1
@@ -183,6 +227,7 @@ export function incidentCard(ctx: Ctx): IncidentCard {
 
   function reply(n: number): boolean {
     const c = app.campaign
+    if (c && shown < 0 && sprayAsking() && SPRAY_WAYS[n - 1]) { answerSprayHere(c, SPRAY_WAYS[n - 1].id); return true }
     if (!c || shown < 0) return false
     const info = S.incidentInfo(c).find(x => x.id === shown)
     const ch = info?.choices[n - 1]
@@ -195,6 +240,6 @@ export function incidentCard(ctx: Ctx): IncidentCard {
   return {
     el, update, open, putAway, reply,
     waiting: c => (c.phase === 'season' ? S.incidentInfo(c) : []).filter(x => x.id !== shown),
-    isUp: () => shown >= 0,
+    isUp: () => shown >= 0 || sprayAsking(),
   }
 }

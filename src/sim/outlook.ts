@@ -1,15 +1,16 @@
 // What the player needs to see the farm's position: the fate of each order, the work the season cannot wait for, where
 // the money stands, the year's story, what goals cost, what keeping the fields sprayed would take, and the one rule
 // for planting.
-import { dayIndex, withCommas } from './calendar.ts'
+import { dayIndex, formatDay, withCommas } from './calendar.ts'
 import { buildBlock, buildCost } from './buildings.ts'
 import { apply, held, mortgageDue, openLots, planCosts, stumpBlock, tileBlock } from './campaign.ts'
 import { HOME_YARD, PARCELS, TRACTS } from './farm.ts'
 import { lotValue, basePrice } from './market.ts'
 import * as P from './params.ts'
 import { housingLimit, hiredCount, hurt, jobSkill, resting, SKILL_LABEL, willDo } from './people.ts'
-import { jobCost, pressingWhy, tractorsRunning, waitFor, workday } from './season.ts'
-import type { BuildingKind, Campaign, Cmd, Job, JobKind, UpgradeId, World, YearSummary } from './types.ts'
+import { jobCost, pressingWhy, standingBy, tractorsRunning, waitFor, workday } from './season.ts'
+import { asks, killByItself } from './advice.ts'
+import type { BuildingKind, Campaign, Cmd, Job, JobKind, KillWhy, UpgradeId, World, YearSummary } from './types.ts'
 import { estimateYield, fieldInfo } from './view.ts'
 import { getDay } from './weather.ts'
 
@@ -107,19 +108,29 @@ export function pressing(world: World, c: Campaign): Pressing[] {
     const best = c.crew.filter(u => !u.foreman).sort((a, b) => b.skills[skill] - a.skills[skill])[0]
     out.push({ kind: j.kind, field: j.field, job: j.id, why, inWay: o.why, fix: best ? { t: 'priority', unit: best.id, work: skill, level: 1 } : null })
   }
-  const watch = s.watchDay >= 0
+  // A spray is pressing where the coach asks for one under a blight watch and the routine does not order it.
+  const all = asks(world, c)
+  const sprays = s.watchDay >= 0 ? new Set(all.filter(a => a.act === 'spray').map(a => a.field)) : new Set<number>()
+  const kills: Pressing[] = []
   for (let i = 0; i < P.FIELD_COUNT; i++) {
     if (!held(c, i)) continue
     const f = s.fields[i]
-    const info = fieldInfo(c, i)
     const queued = (k: JobKind) => s.jobs.some(j => j.kind === k && j.field === i)
     const want = (kind: JobKind, why: string, inWay: string) => out.push({ kind, field: i, job: -1, why, inWay, fix: { t: 'job', kind, field: i } })
-    if (watch && f.status === 'growing' && f.emergeDay >= 0 && f.deadDay < 0 && info.protect < 0.35 && !queued('spray')) {
-      want('spray', 'blight weather will not wait', c.routine?.spray ? 'Not on the list yet.' : 'Spraying waits for your order.')
+    if (sprays.has(i) && !standingBy(c, 'spray', i)) {
+      want('spray', 'blight weather will not wait', f.lastSpray >= 0
+        ? `Sprayed on ${formatDay(s.year, f.lastSpray)}, and that has worn thin. Each order is one pass: spraying waits for your order.`
+        : 'Not sprayed yet this season. Spraying waits for your order.')
+    }
+    // After the rest: the date the crew kills by itself is days off.
+    const kill = killByItself(c, i, all)
+    if (kill >= 0 && !queued('kill')) {
+      kills.push({ kind: 'kill', field: i, job: -1, why: 'the vines are due to come off', fix: { t: 'job', kind: 'kill', field: i },
+        inWay: `The crew kills the vines on ${formatDay(s.year, Math.max(kill, s.day))} unless you keep them up, so the skins set before the dig.` })
     }
     if (f.inField >= 0.5 && !f.weighed && s.frostHaul === s.day && !queued('haul')) want('haul', 'a frost is coming on the barrels', 'Hauling waits for your order.')
   }
-  return out
+  return [...out, ...kills]
 }
 
 // ---------------------------------------------------------------- money
@@ -266,17 +277,19 @@ export function sprayOutlook(world: World, c: Campaign): SprayOutlook {
 
 // ---------------------------------------------------------------- the vine kill, judged against the coach
 
-export interface KillTiming { asked: number; killed: number; early: number }
+export interface KillTiming { asked: number; killed: number; early: number; why: KillWhy | '' }
 
-// When reference practice first asked for this field's vines to be killed, when they were, and how many days early
-// that was (0 when on or after the asking, or when nobody asked and the coach's late date was passed).
+// When reference practice first asked for this field's vines to be killed and why (blight winning, frost coming, the
+// crop made, the late date), when they were killed, and how many days early that was: 0 on or after the asking, and
+// counted to the coach's late date only for a kill nobody had asked for.
 export function killTiming(c: Campaign, field: number): KillTiming {
   const f = c.season?.fields[field]
   const asked = f?.killAsked ?? -1
+  const why = asked >= 0 ? f?.killWhy ?? '' : ''
   const killed = f?.killDay ?? -1
-  if (!f || killed < 0) return { asked, killed, early: 0 }
+  if (!f || killed < 0) return { asked, killed, early: 0, why }
   const by = asked >= 0 ? asked : dayIndex(c.year, 8, 8)
-  return { asked, killed, early: Math.max(0, by - killed) }
+  return { asked, killed, early: Math.max(0, by - killed), why }
 }
 
 // ---------------------------------------------------------------- planting: one rule
