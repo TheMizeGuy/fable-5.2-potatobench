@@ -808,12 +808,9 @@ test('tags and stamps hold still when a card opens or closes and when an order i
   await page.evaluate(() => { const { app } = (globalThis as any).__county; (globalThis as any).__selects = 0; app.on((e: any) => { if (e.type === 'select') (globalThis as any).__selects++ }) })
   for (const [n, close] of [[stamps[0], 'Escape'], [stamps[1], 'cross']] as const) {
     const was = await where()
-    const why = () => page.evaluate(() => JSON.stringify({ settled: document.querySelector<HTMLElement>('#ui .plate-layer')?.dataset.settled, ins: (globalThis as any).__county.app.insets, cam: (globalThis as any).__countyField.stats().camera }))
-    console.log('before', await why())
     await page.getByTestId('field-0').click()
     await expect(page.getByTestId('card-title')).toHaveText('North Ridge')
     await page.waitForTimeout(500)
-    console.log('after', await why())
     expect(moved(was, await where()), 'a card opening moves nothing on the land').toEqual([])
     // An order by its letter key: the tags stay put though North Ridge's tag now says "on the list".
     await page.keyboard.press('s')
