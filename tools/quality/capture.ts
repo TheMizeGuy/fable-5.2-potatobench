@@ -348,6 +348,13 @@ const STATES: State[] = [
   { name: 'guide-field', what: 'Guide: pick a field, the fist on its tag', sizes: ALL, run: guideAt('field', `${DAYS}(() => c.season.fields.some(f => f.plantDay >= 0))`) },
   { name: 'guide-card', what: 'Guide: a field picked, its card read', sizes: ALL, run: async (page, size) => { await guideAt('card', `${DAYS}(() => c.season.fields.some(f => f.plantDay >= 0))`)(page, size); await q(page, `q.g().app.select(0)`); await page.waitForTimeout(900) } },
   { name: 'guide-spray', what: 'Guide: the first call, spraying before blight weather, the fist on its stamp', sizes: ALL, run: guideAt('spray', `${DAYS}(() => app.needs().some(n => n.need && n.need.act === 'spray'))`) },
+  { name: 'guide-sprayask', what: 'Guide: the season\'s spraying question, the note beside it', sizes: ALL, run: async (page, size) => {
+    await guideAt('sprayask', `${DAYS}(() => c.season.watchDay >= 0)`)(page, size)
+    await page.getByTestId('grid-open').first().click(); await page.getByTestId('spray-ask-open').click(); await page.waitForTimeout(1500)
+  } },
+  { name: 'guide-held', what: 'Guide: a note holding the clock, the line under the clock saying so', sizes: ALL, run: async (page, size) => {
+    await guideAt('person', `${DAYS}(() => c.season.jobs.some(j => j.kind === 'plant')); app.setSpeed(1)`)(page, size)
+  } },
   { name: 'guide-telegram', what: 'Guide: a telegram, the lesson beside it', sizes: ALL, run: guideAt('telegram', `const c = app.campaign; c.incidents.push({ id: c.nextIncident++, kind: 'breakdown', day: c.season.day, until: c.season.day + 2, choices: ['rush', 'wait'], unit: 0, back: c.season.day + 3 }); app.setSpeed(1); app.setSpeed(0)`) },
   { name: 'guide-ticket', what: 'Guide: the first weigh ticket, the lesson beside it', sizes: ALL, run: async page => {
     await q(page, `window.__countyGuide.reset(); window.__countyGuide.skipTo('ticket')`)
@@ -365,6 +372,10 @@ const STATES: State[] = [
   } },
   { name: 'guide-spring', what: 'Guide: the second spring, People in the catalogue', sizes: ALL, run: async page => {
     await q(page, `q.start(1987, 3); q.year(3); q.g().app.do({ t: 'next' }); window.__countyGuide.reset(); window.__countyGuide.skipTo('people')`); await closeAll(page)
+  } },
+  { name: 'guide-fold', what: 'Guide: the second spring with Equipment open, the note down to its one line', sizes: ALL, run: async page => {
+    await q(page, `q.start(1987, 3); q.year(3); q.g().app.do({ t: 'next' }); window.__countyGuide.reset(); window.__countyGuide.skipTo('seed')`); await closeAll(page)
+    await page.getByTestId('equipment-open').first().click(); await page.waitForTimeout(900)
   } },
   { name: 'guide-paper', what: 'Guide: its own paper from the menu, every lesson to see again', sizes: ALL, run: async (page, size) => { await guideAt('clock')(page, size); await page.getByTestId('menu-open').first().click(); await page.getByTestId('guide-open').click() } },
 ]
