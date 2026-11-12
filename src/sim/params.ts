@@ -101,8 +101,8 @@ export const UPGRADES: Record<UpgradeId, { name: string; cost: number; blurb: st
   reel: { name: 'Irrigation reel', cost: 30000, blurb: 'A pump, pipe and a travelling gun. Watering a field takes half a day instead of a whole one, and costs less.' },
   tractor2: { name: 'Second tractor', cost: 6000, blurb: 'A second tractor with its planter and hiller: two people can do machine work at once. It needs the machine shed.' },
   house2: { name: 'Second potato house', cost: 18000, blurb: 'A contractor puts up a potato house at home at once. The farm can store as much again as the first one holds. Built by the farm\'s own people it costs less.' },
-  tractor3: { name: 'Third tractor', cost: 16000, blurb: 'A third tractor: three people on machine work at once. It needs the machine shed and the second tractor.' },
-  truck: { name: 'Truck', cost: 14000, blurb: 'Hauls the crop in at twice a tractor\'s rate, and leaves the tractor free.' },
+  tractor3: { name: 'Third tractor', cost: 11000, blurb: 'A third tractor: three people on machine work at once. It needs the machine shed and the second tractor.' },
+  truck: { name: 'Truck', cost: 11000, blurb: 'Hauls the crop in at twice a tractor\'s rate, and leaves the tractor free.' },
 }
 
 // ---------------------------------------------------------------- the bigger farm (all invented: docs/MODEL.md section 9)
@@ -225,8 +225,8 @@ export const LAST_NAMES = ['Ouellette', 'Michaud', 'Thibodeau', 'Cyr', 'Pelletie
 // The harvest break: the schools close and a picking crew can be had by the day.
 export const PICKERS_FROM = { month: 8, dom: 20 }   // September 20
 export const PICKERS_TO = { month: 9, dom: 10 }     // October 10
-export const PICKER_DAY = 160                  // dollars a day worked
-export const PICKER_DIG = 1.4                  // every dig goes this much faster
+export const PICKER_DAY = 130                  // dollars a day worked
+export const PICKER_DIG = 1.5                  // every dig goes this much faster
 
 // Winter, November to April: someone kept on is paid each month and puts in this many crew-days at their skill.
 export const WINTER_MONTHS = 6
@@ -271,7 +271,7 @@ export const LOG_PRICE = 55                    // dollars a load, sold
 export const MILL_PRICE = 95                   // dollars a load of logs bought for a building
 export const QUARRY_PRICE = 40                 // dollars a load of stone bought for a building
 export const MORTGAGE_DOWN = 0.25              // land is bought a quarter down, the rest on the mortgage
-export const MORTGAGE_PRINCIPAL = 0.1          // each year end: a tenth of each purchase's loan
+export const MORTGAGE_PRINCIPAL = 0.07          // each year end: a tenth of each purchase's loan
 export const MORTGAGE_RATE = 0.08              // and 8% interest on what is still owed
 
 // ---------------------------------------------------------------- the farmstead: buildings and hauling (docs/MODEL.md section 12)
@@ -298,7 +298,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
 }
 export const BUILDING_KINDS: BuildingKind[] = ['house', 'shed', 'bunk', 'packing', 'pond', 'stand', 'station', 'road']
 export const HOUSE_CWT = 3600                  // a built potato house; at home with ventilation it holds CELLAR_CWT_VENT
-export const SHED_SPEED = 1.1
+export const SHED_SPEED = 1.15
 export const BUNK_BEDS = 6
 export const PACK_PER_DAY = 30                 // cwt packed in a crew-day: 600 in a winter month's 20
 export const PACK_CHARGE = 0.4                 // dollars a hundredweight packed: cartons, bags and labels
@@ -330,9 +330,9 @@ export const GREEN_IN_FIELD = 0.005            // share of the crop in the field
 // answer before taking its default.
 export const INCIDENT_DAYS = 4                 // days an incident waits for an answer
 export const APPLICANT_CHANCE = 0.012          // a day in season: someone turns up asking for work
-export const POACH_CHANCE = 0.006              // a day in season with someone hired: a neighbour offers them more
+export const POACH_CHANCE = 0.01              // a day in season with someone hired: a neighbour offers them more
 export const POACH_RAISE = 0.15                // to match, their wage goes up this much
-export const POACH_MOOD = 0.6                  // unmatched, they go if their mood is under this
+export const POACH_MOOD = 0.7                  // unmatched, they go if their mood is under this
 export const BREAK_CHANCE = 0.004              // a day a tractor is worked: it breaks down
 export const BREAK_TIRED = 2                   // likelier with long hours: times 1 + 2 x the driver's tiredness
 export const BREAK_SHED = 0.5                  // half as likely with a machine shed

@@ -432,8 +432,8 @@ export const TUNING: Tuning = {
   earlyMarket: ['norland'], earlyBy: 25, earlyDate: 12, fieldRevenue: 25000,
   byElev: [['caribou'], ['caribou'], ['caribou']],
   landValue: { ridge: 10000, brook: 6000, dufour: 7500 }, landMargin: 0,
-  loanFloor: -75000, buyLand: -60000, buyLeft: 4, fieldCash: 15000, yearEndSafety: 10000, potatoShare: 0.5, flipLoss: 4000,
-  walkFrom: 5, walkPer: 5, tractor: { fields: 7, left: 2 }, truckFields: 5, tractor3Fields: 12, hallValue: 1000,
+  loanFloor: -75000, buyLand: -60000, buyLeft: 4, fieldCash: 15000, yearEndSafety: 20000, potatoShare: 0.5, flipLoss: 4000,
+  walkFrom: 5, walkPer: 5, tractor: { fields: 7, left: 2 }, truckFields: 5, tractor3Fields: 13, hallValue: 1000,
   rocksAt: 0.45, rocksSpring: 0.6, brushElev: [0], rushFrom: 2, pickerBacklog: 4, haulDays: 1.7, peakHire: 18, peakKeep: 12,
   buildFloor: 5000, houseOver: 1500, packStock: 3000, pondWaterings: 3, sundayTired: 0.5,
   contractGain: 0, no1Share: 0.8, contractSafety: 0.85,
@@ -926,9 +926,7 @@ export function expert(cfg: ExpertCfg = EXPERT): BotFactory {
       if (!F.priorities) return
       const p = S.peopleInfo(c).find(x => x.id === id)
       if (!p) return
-      const want: Record<Skill, number> = role === 'driver'
-        ? { machine: 1, field: 3, woods: 3, build: 2, pack: 4 }
-        : { machine: p.skills.machine >= 4 ? 4 : 0, field: 1, woods: 3, build: 2, pack: 1 }
+      const want: Record<Skill, number> = role === 'driver' ? { ...p.prio, machine: 1 } : { ...p.prio, field: 1, pack: 1 }
       for (const s of S.SKILLS) if (p.prio[s] !== want[s]) S.apply(world, c, { t: 'priority', unit: id, work: s, level: want[s] })
     }
 
@@ -937,7 +935,9 @@ export function expert(cfg: ExpertCfg = EXPERT): BotFactory {
       wantRoles = rolesFor(c, n)
       if (F.priorities) {
         const farmer = S.peopleInfo(c).find(p => p.kind === 'farmer')!
-        const want: Record<Skill, number> = { machine: 2, field: 2, woods: 2, build: 2, pack: hired(c).length ? 4 : 2 }
+        // With someone hired to walk the fields, the farmer drives first and leaves the stand to them.
+        const walkers = hired(c).some(p => roles.get(p.id) === 'walker')
+        const want: Record<Skill, number> = walkers ? { machine: 1, field: 2, woods: 2, build: 2, pack: 3 } : { machine: 2, field: 2, woods: 2, build: 2, pack: 2 }
         for (const s of S.SKILLS) if (farmer.prio[s] !== want[s]) S.apply(world, c, { t: 'priority', unit: 0, work: s, level: want[s] })
       }
       for (const r of ['driver', 'walker'] as Role[]) {
@@ -1098,7 +1098,7 @@ export function expert(cfg: ExpertCfg = EXPERT): BotFactory {
           if (have < wantRoles[r] && fitValue(a.skills, a.trait, a.ask, r) >= hall && !S.hireRoom(c) && s.day < S.dayIndex(c.year, 9, 1)) choice = 'hire'
         } else if (inc.kind === 'poach' && F.raises) {
           const p = S.peopleInfo(c).find(x => x.id === inc.unit)
-          if (p && p.mood < S.POACH_MOOD && s.day < S.dayIndex(c.year, 9, 15)) choice = 'match'
+          if (p && p.mood < S.POACH_MOOD && s.day < S.dayIndex(c.year, 9, 20)) choice = 'match'
         } else if (inc.kind === 'breakdown') {
           const w = machineWaiting(c)
           if (w.rush && w.days >= k.rushFrom) choice = 'rush'

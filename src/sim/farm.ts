@@ -38,17 +38,17 @@ export const PARCELS: Parcel[] = [
   { name: 'Brook Field', block: 'home', elev: 0, x: -8.4, z: 12.2, rent: 0, price: 0, streak: 0, vert: 0.03, cover: 'open', stones: 0.2, holding: 'field' },
   { name: 'Bottom Field', block: 'home', elev: 0, x: 7.8, z: 12.2, rent: 0, price: 0, streak: 1, vert: 0.08, cover: 'open', stones: 0.2, holding: 'field' },
   // Across the brook: deep wet bottom land, frosty, close to water.
-  { name: 'Intervale North', block: 'brook', elev: 0, x: -8.4, z: 38, rent: 3000, price: 38000, streak: 0, vert: 0.04, cover: 'open', stones: 0.3, holding: 'field' },
-  { name: 'Intervale South', block: 'brook', elev: 0, x: 7.8, z: 38, rent: 3000, price: 38000, streak: 0, vert: 0.05, cover: 'open', stones: 0.3, holding: 'field' },
+  { name: 'Intervale North', block: 'brook', elev: 0, x: -8.4, z: 38, rent: 3000, price: 30000, streak: 0, vert: 0.04, cover: 'open', stones: 0.3, holding: 'field' },
+  { name: 'Intervale South', block: 'brook', elev: 0, x: 7.8, z: 38, rent: 3000, price: 30000, streak: 0, vert: 0.05, cover: 'open', stones: 0.3, holding: 'field' },
   // North along the ridge: early, dry ground under the spruce.
-  { name: 'Spruce Lot', block: 'ridge', elev: 2, x: -44, z: -14.2, rent: 4500, price: 55000, streak: 0, vert: 0.02, cover: 'open', stones: 0.45, holding: 'field' },
-  { name: 'High Lot', block: 'ridge', elev: 2, x: -27.8, z: -14.2, rent: 4500, price: 55000, streak: 0, vert: 0.03, cover: 'open', stones: 0.4, holding: 'field' },
+  { name: 'Spruce Lot', block: 'ridge', elev: 2, x: -44, z: -14.2, rent: 5500, price: 55000, streak: 0, vert: 0.02, cover: 'open', stones: 0.45, holding: 'field' },
+  { name: 'High Lot', block: 'ridge', elev: 2, x: -27.8, z: -14.2, rent: 5500, price: 55000, streak: 0, vert: 0.03, cover: 'open', stones: 0.4, holding: 'field' },
   // The Dufour place, up the road to the south, with a potato house of its own. Old potato ground, so a little
   // more wilt in the soil than the lots that were never in potatoes.
-  { name: 'Dufour Upper', block: 'dufour', elev: 2, x: 58, z: -14.2, rent: 3500, price: 44000, streak: 0, vert: 0.06, cover: 'open', stones: 0.4, holding: 'field' },
-  { name: 'Dufour Flat', block: 'dufour', elev: 1, x: 74.2, z: -14.2, rent: 3500, price: 44000, streak: 0, vert: 0.05, cover: 'open', stones: 0.35, holding: 'field' },
-  { name: 'Dufour Middle', block: 'dufour', elev: 1, x: 58, z: -1, rent: 3500, price: 44000, streak: 0, vert: 0.04, cover: 'open', stones: 0.35, holding: 'field' },
-  { name: 'Dufour Lower', block: 'dufour', elev: 0, x: 74.2, z: -1, rent: 3500, price: 44000, streak: 0, vert: 0.08, cover: 'open', stones: 0.3, holding: 'field' },
+  { name: 'Dufour Upper', block: 'dufour', elev: 2, x: 58, z: -14.2, rent: 3500, price: 35000, streak: 0, vert: 0.06, cover: 'open', stones: 0.4, holding: 'field' },
+  { name: 'Dufour Flat', block: 'dufour', elev: 1, x: 74.2, z: -14.2, rent: 3500, price: 35000, streak: 0, vert: 0.05, cover: 'open', stones: 0.35, holding: 'field' },
+  { name: 'Dufour Middle', block: 'dufour', elev: 1, x: 58, z: -1, rent: 3500, price: 35000, streak: 0, vert: 0.04, cover: 'open', stones: 0.35, holding: 'field' },
+  { name: 'Dufour Lower', block: 'dufour', elev: 0, x: 74.2, z: -1, rent: 3500, price: 35000, streak: 0, vert: 0.08, cover: 'open', stones: 0.3, holding: 'field' },
   // Tracts to clear, each beside its block, a field's depth behind or beside the fields it shelters. Never in
   // potatoes, so almost free of early dying.
   { name: 'Home Woodlot', block: 'home', elev: 2, x: -8.4, z: -27.4, rent: 0, price: 0, streak: 0, vert: 0.01, cover: 'woods', stones: 0.75, holding: 'owned' },
