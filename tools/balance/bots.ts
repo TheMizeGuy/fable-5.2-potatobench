@@ -315,6 +315,8 @@ export function untended(routine = true): BotFactory {
   return () => ({ plan(world, c) { if (!routine) setRoutine(world, c, () => false) }, day() { /* nothing */ }, cellar() { /* nothing */ } })
 }
 
+const CALLS: JobKind[] = ['spray', 'water', 'kill']
+
 // A player who leaves the routine to itself and answers only the calls the game puts to them: each field's need
 // (spraying, watering, killing the vines), the advice's sales, and the crop sold from the cellar in March.
 export function callsOnly(sellMonth = 4, routine = true): BotFactory {
@@ -322,7 +324,7 @@ export function callsOnly(sellMonth = 4, routine = true): BotFactory {
     plan(world, c) { if (!routine) setRoutine(world, c, () => false) },
     day(world, c) {
       const needs = S.fieldNeeds(world, c)
-      needs.forEach((n, i) => { if (n.need && n.need.act !== 'sell' && n.need.act !== 'close' && n.need.act !== 'wait') job(world, c, n.need.act, i) })
+      needs.forEach((n, i) => { if (n.need && CALLS.includes(n.need.act as JobKind)) job(world, c, n.need.act as JobKind, i) })
       for (const a of S.advise(world, c)) if (a.act === 'sell') S.apply(world, c, { t: 'sell', lot: a.lot, frac: 1 })
     },
     cellar(world, c) {
