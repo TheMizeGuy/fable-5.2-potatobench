@@ -29,8 +29,8 @@ interface State { name: string; what: string; sizes: string[]; run: Step; full?:
 // A field's tag is clicked where the camera has it in frame; otherwise it is picked the way its number key picks it.
 async function selectField(page: Page, _size: string, i: number): Promise<void> {
   const tag = page.getByTestId(`field-${i}`).first()
-  if (await tag.isVisible()) await tag.click()
-  else { await q(page, `q.g().app.select(${i}); q.g().app.focus(${i})`); await page.waitForTimeout(1200) }
+  const clicked = await tag.isVisible() && await tag.click({ timeout: 4000 }).then(() => true, () => false)
+  if (!clicked) { await q(page, `q.g().app.select(${i}); q.g().app.focus(${i})`); await page.waitForTimeout(1200) }
 }
 
 const july: Step = async page => { await q(page, `q.start(1987, 3); q.run(q.day(6, 12))`); await closeAll(page) }
@@ -55,7 +55,8 @@ const farmPeople: Step = async page => {
 }
 
 // The season frames' day (design/season.html and its sisters), a working day: July 13 of a first year on the farm, the packer's
-// Kennebec contract signed, the three who asked for work taken on and a hand from the hall, the clock running at 1x.
+// Kennebec contract signed, the three who asked for work taken on and a hand from the hall. The clock is left stopped
+// (the frames show it at 1x) so no day, and no decision, comes between the state and its picture.
 const frameJuly: Step = async page => {
   await q(page, `const { app } = q.g(); app.newGame(1987, 3); const c = app.campaign; c.cash += 20000
     c.buildings.push({ id: c.nextBuilding++, kind: 'bunk', yard: -1, done: 12, need: 12, built: true })
@@ -63,7 +64,6 @@ const frameJuly: Step = async page => {
     app.do({ t: 'hire', kind: 'hand' }); app.do({ t: 'accept', offer: 19873 })
     app.do({ t: 'begin' }); q.run(q.day(6, 13)); c.incidents = []`)
   await closeAll(page)
-  await q(page, `q.g().app.setSpeed(1)`)
 }
 
 const STATES: State[] = [
