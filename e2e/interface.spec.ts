@@ -962,9 +962,10 @@ test('the clock and the keys as a player meets them: Space just after an answer 
   // Escape just after the ticket went opens no menu.
   await page.keyboard.press('Escape')
   await expect(page.getByTestId('menu')).toHaveCount(0)
-  // A press held on the land holds the days.
-  const box = (await page.locator('#field').boundingBox())!
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height * 0.55)
+  // A press held on open land holds the days.
+  const spot = await page.evaluate(() => { const land = document.getElementById('field'); for (let fy = 0.3; fy < 0.8; fy += 0.03) for (let fx = 0.15; fx < 0.85; fx += 0.04) { const x = innerWidth * fx, y = innerHeight * fy; if (document.elementFromPoint(x, y) === land) return { x, y } } return null })
+  expect(spot).not.toBeNull()
+  await page.mouse.move(spot!.x, spot!.y)
   await page.mouse.down()
   const d0 = await game<number>(page, 'app.campaign.season.day')
   await page.waitForTimeout(2500)
