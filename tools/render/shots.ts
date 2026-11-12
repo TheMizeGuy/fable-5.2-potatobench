@@ -227,6 +227,21 @@ const landShots: Shot[] = [
   landShot('c8b-october-ridge', 274, '', { x: -8, z: -18, dist: 30, yaw: 0.1, pitch: 0.2 }),
   landShot('m05-may', 135, ''), landShot('m06-june', 166, ''), landShot('m07-july', 196, ''),
   landShot('m08-august', 227, ''), landShot('m09-september', 258, ''), landShot('m10-october', 288, ''),
+  // Picking on the tracts: what a click at each tract's pin, and a little above it in the crowns, would pick; the woodlot hovered.
+  {
+    name: 'c9-pick-tracts', size: [1920, 1080], setup: async page => {
+      await page.evaluate(() => (window as any).__county.app.newGame(1977, 5))
+      await settle(page)
+      await page.evaluate(() => (window as any).__countyField.view({ x: 10, z: -8, dist: 150 }))
+      await settle(page)
+      console.log('  ', await page.evaluate(() => {
+        const f = (window as any).__countyField
+        return [14, 15, 16, 17].map(i => { const a = f.anchor(i); return `${i}: pin ${a.visible ? f.pickAt(a.x, a.y - 6).field : 'off screen'}, crowns ${a.visible ? f.pickAt(a.x, a.y - 40).field : '-'}` }).join(' | ')
+      }))
+      await page.evaluate(() => (window as any).__county.app.setHover(14))
+      await frames(page, 30)
+    },
+  },
   landShot('v1-wood-edge', 190, '', { x: -24, z: -16, dist: 22, yaw: 0.5, pitch: 0.16 }),
   landShot('v2-brook', 190, '', { x: 4, z: 23.5, dist: 16, yaw: -0.7, pitch: 0.3 }),
   landShot('v3-meadow', 190, '', { x: 38, z: 6, dist: 20, yaw: -0.4, pitch: 0.2 }),
