@@ -63,7 +63,7 @@ function cashBook(y: S.YearSummary, lost: boolean): HTMLElement {
       cashLine('Interest on debt carried', -y.interest)),
     h('tfoot', null,
       h('tr', { class: 'total' }, h('td', null, 'Cash at year end'), h('td', { class: `m num${y.cashEnd < 0 ? ' c-red' : ''}`, colspan: 2, 'data-cash': '' }, F.money(y.cashEnd))),
-      lost ? h('tr', { class: 'call' }, h('td', null, 'The bank calls the note below', stamp('Called', { ink: 'red', small: true })), h('td', { class: 'm num', colspan: 2 }, F.money(S.CREDIT_LIMIT))) : null))
+      lost ? h('tr', { class: 'call' }, h('td', null, 'The bank calls the note below'), h('td', { class: 'm num', colspan: 2 }, F.money(S.CREDIT_LIMIT))) : null))
 }
 
 const SKILL_UP = /^(.*) is better at (.*): level (\d+)\.$/
@@ -100,15 +100,17 @@ function yearOnFarm(c: S.Campaign): HTMLElement | null {
   const people = new Map<string, string[]>()
   for (const u of c.crew) if (u.kind !== 'farmer') people.set(u.name, [])
   for (const d of deeds) if (d.who) { if (!people.has(d.who)) people.set(d.who, []); people.get(d.who)!.push(d.text) }
-  for (const u of c.crew) {
-    if (u.kind === 'farmer') continue
-    people.get(u.name)!.push(`At ${F.money(S.payOf(u))} a month; ${u.winter === 'off' ? 'laid off for the winter' : 'kept on through the winter'}.`)
-  }
+  // Who is on the books now: the year's wages are not kept person by person.
+  const paid = new Map(c.crew.filter(u => u.kind !== 'farmer').map(u => [u.name, `at ${F.money(S.payOf(u))} a month; ${u.winter === 'off' ? 'laid off for the winter' : 'kept on through the winter'}.`]))
   const farm = deeds.filter(d => !d.who)
   if (!deeds.length && !people.size) return null
   return h('section', { class: 'b-people', testid: deeds.length ? 'ledger-deeds' : undefined },
     h('div', { class: 'sec-h' }, h('h2', null, 'The year on the farm')),
-    [...people].map(([who, lines]) => h('p', { class: 'ppl' }, portrait(who, 30), h('span', null, h('b', null, who), ` ${lines.map(F.upper).join(' ')}`))),
+    [...people].map(([who, lines]) => {
+      const pay = paid.get(who)
+      const said = [...lines, ...(pay ? [lines.length ? F.upper(pay) : pay] : [])].map((t, k) => k ? F.upper(t) : t).join(' ')
+      return h('p', { class: 'ppl' }, portrait(who, 30), h('span', null, h('b', null, who), lines.length ? ` ${said}` : `, ${said}`))
+    }),
     farm.map(d => h('p', { class: 'ppl' }, icon(d.icon ?? 'yard', 'i'), h('span', null, d.text))))
 }
 
@@ -174,9 +176,9 @@ function cashChart(c: S.Campaign): HTMLElement {
       'aria-label': `Cash at the start, ${F.money(pts[0])}; then at each year end: ${c.history.map(z => `${yearWord(z.year)} ${F.money(z.cashEnd)}`).join(', ')}. The bank calls the note below ${F.money(S.CREDIT_LIMIT)}.`,
     },
     grid.map(v => [
-      s('line', { class: v === 0 ? 'zero' : 'grid-l', x1: L, x2: Rt, y1: y(v).toFixed(1), y2: y(v).toFixed(1) }),
+      s('line', { class: v === 0 ? 'zero' : v === S.CREDIT_LIMIT ? 'ax' : 'grid-l', x1: L, x2: Rt, y1: y(v).toFixed(1), y2: y(v).toFixed(1) }),
       s('text', { x: L - 6, y: (y(v) + 4).toFixed(1), 'text-anchor': 'end' }, kilo(v))]),
-    s('text', { class: 'lab', x: Rt, y: (y(S.CREDIT_LIMIT) - 5).toFixed(1), 'text-anchor': 'end' }, 'the bank calls the note'),
+    s('text', { class: 'lab', x: L + 6, y: (y(S.CREDIT_LIMIT) + 16).toFixed(1), style: 'paint-order:stroke;stroke:var(--paper);stroke-width:4px' }, 'the bank calls the note below this line'),
     pts.map((_, k) => s('text', { x: x(k).toFixed(1), y: H - 4, 'text-anchor': k === 0 ? 'start' : k === pts.length - 1 ? 'end' : 'middle' }, label(k))),
     s('polyline', { class: 'ln', points: pts.map((v, k) => `${x(k).toFixed(1)},${y(v).toFixed(1)}`).join(' ') }),
     pts.map((v, k) => s('circle', { cx: x(k).toFixed(1), cy: y(v).toFixed(1), r: 3.5, style: `fill:var(${k === pts.length - 1 && v < 0 ? '--red' : '--ink'})` }))),
@@ -299,8 +301,11 @@ function bookLeaves(ctx: Ctx, book: HTMLElement, p: BookParts): Child {
     h('div', { class: 'book-tabs seg', role: 'group', 'aria-label': 'Pages' },
       p.tabs.map((t, k) => h('button', { class: 'btn', type: 'button', k: `page-${k}`, 'aria-pressed': String(k === 0), onclick: () => turn(k) }, t))),
     h('div', { class: 'book-leaves', onscroll: onScroll },
-      h('div', { class: 'page-l', 'data-scroll': 'page-l' }, p.left),
-      h('div', { class: 'page-r' }, h('div', { class: 'page-body', 'data-scroll': 'page-r' }, p.right), h('footer', { class: 'book-next' }, p.foot))),
+      // Each page scrolls when it runs long, so each can take the keyboard's focus.
+      h('div', { class: 'page-l', 'data-scroll': 'page-l', tabindex: '0', role: 'region', 'aria-label': p.tabs[0] }, p.left),
+      h('div', { class: 'page-r' },
+        h('div', { class: 'page-body', 'data-scroll': 'page-r', tabindex: '0', role: 'region', 'aria-label': p.tabs[1] }, p.right),
+        h('footer', { class: 'book-next' }, p.foot))),
   ]
 }
 
@@ -308,7 +313,7 @@ function nextGoalSlip(c: S.Campaign): HTMLElement | null {
   const goal = nextGoal(c)
   if (!goal) return null
   return h('p', { class: 'next-goal sheet laid s-canary', testid: 'next-goal' },
-    fist(), h('span', null, h('span', null, 'Next: '), h('b', null, goal.title), h('span', { class: 't-caption b-how' }, goal.how)))
+    fist(), h('span', null, h('span', { class: 'b-next-w' }, 'Next: '), h('b', null, goal.title), h('span', { class: 't-caption b-how' }, goal.how)))
 }
 
 function bookInsets(ctx: Ctx, top: HTMLElement, book: HTMLElement): [number, number, number, number] {
@@ -387,8 +392,9 @@ export function ledgerScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
             cashBook(y, false),
             y.cashEnd < 0 ? h('p', { class: 'b-debt' }, h('b', { class: 'c-red' }, 'In debt,'), ` inside the bank's limit: it calls the note only below `, h('span', { class: 'num nowrap' }, F.money(S.CREDIT_LIMIT)), '.') : null,
             yearOnFarm(c),
+            yearAhead(c, y),
           ],
-          right: [worth(c), crop(ctx, y), cashChart(c), goalsMet(c), yearAhead(c, y)],
+          right: [worth(c), crop(ctx, y), cashChart(c), goalsMet(c)],
           foot,
         })
       })

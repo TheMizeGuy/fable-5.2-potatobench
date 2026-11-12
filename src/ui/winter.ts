@@ -58,7 +58,7 @@ function gets(text: string, work: S.WinterWork): Child {
   return [h('b', null, text.slice(0, at + 1)), text.slice(at + 1)]
 }
 
-function personRow(ctx: Ctx, c: S.Campaign, u: S.Unit, p: S.PersonInfo, people: S.PersonInfo[], choices: S.WinterChoice[]): HTMLElement {
+function personRow(ctx: Ctx, c: S.Campaign, u: S.Unit, p: S.PersonInfo, people: S.PersonInfo[], choices: S.WinterChoice[], shared: Set<string>): HTMLElement {
   const tracts = S.timberTracts(c)
   const set = (work: S.WinterWork, field?: number) => {
     if (u.winter === work && (work !== 'woods' || u.winterField === field)) return
@@ -67,8 +67,8 @@ function personRow(ctx: Ctx, c: S.Campaign, u: S.Unit, p: S.PersonInfo, people: 
   const name = u.kind === 'farmer' ? 'You' : u.name
   const homebody = u.trait === 'homebody'
   const best = S.bestSkill(p.skills)
-  // Why a choice is voided, said once under the line.
-  const why = homebody ? [S.TRAITS.homebody.text] : [...new Set(choices.filter(ch => !ch.ok && ch.work !== u.winter).map(ch => ch.why))]
+  // Why a choice is voided, under the line; a reason that holds for everyone is said once under all the lines.
+  const why = homebody ? [S.TRAITS.homebody.text] : voided(u, choices).filter(x => !shared.has(x))
   return h('li', { class: 'wrow', testid: `winter-${u.id}` },
     portrait(u, 46),
     h('p', { class: 'who' }, h('b', null, name), h('span', null, homebody ? S.TRAITS.homebody.name.toLowerCase() : `${best} ${p.skills[best]}`)),
@@ -80,6 +80,10 @@ function personRow(ctx: Ctx, c: S.Campaign, u: S.Unit, p: S.PersonInfo, people: 
       }, WORK_LABEL[ch.work])
     })),
     h('p', { class: 'gets' }, gets(outcome(c, u, people), u.winter), why.length ? h('span', { class: 'quiet' }, ` ${why.join(' ')}`) : null))
+}
+
+function voided(u: S.Unit, choices: S.WinterChoice[]): string[] {
+  return [...new Set(choices.filter(ch => !ch.ok && ch.work !== u.winter).map(ch => ch.why))]
 }
 
 // The yard's materials, with logs one press from the mill.
@@ -114,7 +118,7 @@ function raisePart(ctx: Ctx, c: S.Campaign, raise: boolean, onRaise: () => void)
         h('p', { class: 'num' }, `${F.pct(b.progress)} · ${F.plural(Math.ceil(b.daysLeft), 'crew-day')} left · ${builders.length ? F.upper(F.list(builders)) : 'nobody on it'}`)),
       meter(b.progress, { label: `${b.name} built`, text: `${F.pct(b.progress)}, ${Math.ceil(b.daysLeft)} crew-days left` })))) : null,
     rows.length ? fold({
-      icon: 'raise', name: up.length ? 'Raise another' : 'Choose a building', state: `${F.plural(rows.length, 'kind')} to choose from`,
+      icon: 'raise', name: `${rows.length} to choose from`,
       open: raise, controls: 'raise-list', testid: 'raise-open', onclick: onRaise,
     }) : null,
     raise && rows.length ? h('ul', { class: 'raise', id: 'raise-list' }, rows.map(b => {
@@ -132,11 +136,17 @@ function raisePart(ctx: Ctx, c: S.Campaign, raise: boolean, onRaise: () => void)
 }
 
 // The whole of winter's work: the people's lines, then the yard and the buildings. raise: whether the list of
-// buildings that could be raised is open.
-export function winterWork(ctx: Ctx, c: S.Campaign, raise: boolean, onRaise: () => void): HTMLElement {
+// buildings that could be raised is open. after: what follows them on the page.
+export function winterWork(ctx: Ctx, c: S.Campaign, raise: boolean, onRaise: () => void, after: Child = null): HTMLElement {
   const w = S.winterInfo(c)
   const people = S.peopleInfo(c)
+  const choicesOf = (u: S.Unit) => w.people.find(p => p.id === u.id)!.choices
+  const workers = c.crew.filter(u => u.trait !== 'homebody')
+  const lists = workers.map(u => voided(u, choicesOf(u)))
+  const shared = new Set(workers.length > 1 ? lists[0].filter(x => lists.every(l => l.includes(x))) : [])
   return h('section', { class: 'w-work', 'aria-label': 'The winter\'s work', testid: 'winter' },
-    h('ul', { class: 'w-rows' }, c.crew.map(u => personRow(ctx, c, u, people.find(p => p.id === u.id)!, people, w.people.find(p => p.id === u.id)!.choices))),
-    h('div', { class: 'winter-foot' }, yardPart(ctx, c), raisePart(ctx, c, raise, onRaise)))
+    h('ul', { class: 'w-rows' }, c.crew.map(u => personRow(ctx, c, u, people.find(p => p.id === u.id)!, people, choicesOf(u), shared))),
+    shared.size ? h('p', { class: 't-caption w-why' }, [...shared].join(' ')) : null,
+    h('div', { class: 'winter-foot' }, yardPart(ctx, c), raisePart(ctx, c, raise, onRaise)),
+    after)
 }

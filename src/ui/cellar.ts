@@ -161,17 +161,15 @@ export function cellarScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
             h('h2', { class: 't-title', id: 'winter-h' }, 'The winter\'s work')),
           h('p', { class: 'num w-wages' }, wages ? [h('b', null, F.money(wages)), ' a month in wages'] : 'Nobody paid this winter')),
         h('div', { class: 'w-body', 'data-scroll': 'winter' },
-          winterWork(ctx, c, raise, () => { raise = !raise; ctx.dirty() }),
+          winterWork(ctx, c, raise, () => { raise = !raise; ctx.dirty() }, [
+            lines.length ? h('div', { class: 'sec-h' }, h('h2', null, c.month === 0 && !did.length ? 'At the close of the season' : `What ${S.CELLAR_MONTHS[Math.max(0, c.month - 1)]} did`)) : null,
+            h('ul', { class: 'c-month', testid: 'this-month' }, lines.slice(0, 6).map(t => h('li', null, t)))]),
           h('section', { class: 'w-cellar', 'aria-labelledby': 'cellar-h' },
             h('div', { class: 'sec-h' }, h('h2', { id: 'cellar-h' }, 'The crop in store'),
               h('span', { class: 't-caption num' }, `sold ${F.money(sales)} · storage ${F.money(c.yearStorage)} so far`)),
             houses(st),
             lots.length ? h('div', { class: 'lots' }, lots.map(l => lotCard(c, l, weights > 0 ? c.yearStorage * weight(l) / weights : 0)))
-              : h('p', { class: 'quiet c-empty' }, 'The cellar is empty. Nothing is left to sell from this crop.'),
-            lines.length ? [
-              h('div', { class: 'sec-h' }, h('h2', null, c.month === 0 && !did.length ? 'At the close of the season' : `What ${S.CELLAR_MONTHS[Math.max(0, c.month - 1)]} did`)),
-              h('ul', { class: 'c-month', testid: 'this-month' }, lines.slice(0, 6).map(t => h('li', null, t)))]
-              : h('ul', { class: 'c-month', testid: 'this-month' }))),
+              : h('p', { class: 'quiet c-empty' }, 'The cellar is empty. Nothing is left to sell from this crop.'))),
         h('footer', { class: 'winter-next' },
           h('p', { class: 't-caption' }, last
             ? lots.length ? 'May is the last month. Whatever is left is sold at May prices when the year closes.' : 'With the cellar empty, the year can close.'
