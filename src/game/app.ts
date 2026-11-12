@@ -238,7 +238,7 @@ export class App {
     if (!r.ok) return r
     if (cmd.t === 'next') this.meetNeighbor()
     // The last question answered, however it was answered: the days go on at the speed they had.
-    if (cmd.t === 'answer' && !c.incidents.length) this.resumeAfterCard()
+    if (cmd.t === 'answer' && !c.incidents.length) { this.holding = ''; this.resumeAfterCard() }
     this.dirty = true
     this.revision++
     for (const e of r.events) if (e.level !== 'info' || NOTABLE.has(e.type)) this.alert(c, e)

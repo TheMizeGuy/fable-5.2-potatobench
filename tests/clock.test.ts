@@ -45,6 +45,18 @@ describe('the clock', () => {
     expect(app.speed).toBe(2)
   })
 
+  it('goes on by itself once the last telegram is answered, though the interface was holding the clock for it', () => {
+    const app = farm()
+    const c = c0(app)
+    app.setSpeed(2)
+    play(app, 120, () => app.speed === 0 && c.incidents.length > 0, false)
+    expect(c.incidents.length).toBeGreaterThan(0)
+    app.holding = 'A telegram wants an answer.'
+    for (const inc of [...c.incidents]) app.do({ t: 'answer', incident: inc.id, choice: S.defaultChoice(inc) })
+    expect(app.holding).toBe('')
+    expect(app.speed).toBe(2)
+  })
+
   it('has pause and three speeds in step, the fastest still a season in about a minute and a half', () => {
     expect(DAYS_PER_SECOND.length).toBe(4)
     expect(DAYS_PER_SECOND[0]).toBe(0)
