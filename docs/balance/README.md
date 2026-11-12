@@ -1,131 +1,200 @@
 # Balance tooling
 
-`npm run balance` plays every bot below over every start year in `startYears(world)` with 24 seeds,
-five-season campaigns, and judges verification gates 1 to 4 of `docs/DESIGN.md`. Results are in
-`latest.md` (tables) and `latest.json` (the same, plus each bot's median net worth by start year). Since
-the bigger farm the whole run takes about eight minutes on fourteen worker threads of the Windows box
-mizepc2 (`tools/remote/pc2.sh bal 'npm run balance' docs/balance <local folder>`; `SEEDS` and `WORKERS`
-override). It is not run on the laptop.
+`npm run balance` plays every bot below on farms with seasons of their own, made from each farm's seed the way the
+shipped game makes them (`climateWorld` in `src/sim/climate.ts`), ten-season campaigns from Year 1, every bot on every
+farm, and judges the gates below. A smaller run plays the naive, reference and expert bots over the record's real
+start years (five seasons, six seeds), for comparison with the passes before the farmstead. Results are in `latest.md`
+(tables) and `latest.json` (the same, plus each bot's spending and counts). The run is not made on the laptop: on the
+Windows box mizepc2, `tools/remote/pc2.sh w2bal 'set SEEDS=200&& npm run balance' docs/balance <local folder>`
+(`SEEDS`, `YEARS`, `RECORD_SEEDS` and `WORKERS` override) takes about fifteen minutes on fourteen worker threads.
 
-The tournament used six seeds until the third pass, when a gate passed on seeds 1 to 6 and failed to
-repeat on any other six (see the tuning log below). At 24 seeds the gate verdicts no longer turn on the
-seed draw.
+The code is in `tools/balance/`: `bots.ts` (the bots and the campaign driver, which also tallies what each campaign
+spent and what happened on the farm), `run.ts` (the tournament and the gate verdicts), `trial.ts` (variants of the
+expert against each other on the same farms, for setting its thresholds), `stats.ts`, `world.ts`.
 
-The code is in `tools/balance/`: `bots.ts` (the bots and the campaign driver), `run.ts` (the
-tournament and the gate verdicts), `trial.ts` (trial runs of expert variants against each other, which
-can also set the land's rents and prices and the equipment prices while they play, for sizing a change
-before it is made), `stats.ts`, `world.ts`.
+## The gates
 
-The gates are judged against these targets:
+Wave 2 replaced the gates of the earlier passes with four that ask about the whole farmstead game:
 
-1. Expert > reference > naive on kept farms, and on net worth with each 95% interval above zero; the
-   expert keeps at least 90% of farms, the reference 65% to 80%, the naive bot at most 10%.
-2. Every ablation of the expert loses net worth, with the 95% interval above zero: every verb, and
-   since the bigger farm every new decision (land beyond the home six, hired crews, contracts, the
-   second tractor).
-3. No single-variety expert wins more than half of the start years or of the single seasons it can
-   play, at least four varieties win some years (over campaigns and over seasons), and the
-   fixed-calendar expert loses to the expert in most years. Since the bigger farm also: no block of land
-   is always worth holding and none never (holding it every year beats the home farm alone in 20% to 80%
-   of the start years, and of the single seasons), and signing every contract offered beats choosing in
-   fewer than half of the start years and of the single seasons.
-4. The naive bot loses more than half of its farms and the expert keeps more than half.
+- **G1, the first-time player's game.** The naive bot keeps at most 10% of farms through the game's own goal of
+  five seasons, and the reference bot (the coach's practice) 60% to 80%; the expert beats the reference and the
+  reference beats the naive bot on ten-year net worth, each interval above zero.
+- **G2, every mechanic earns its place.** For each mechanic of the farmstead and the bigger farm, the expert using it
+  as well as it can beats the same expert without it on ten-year net worth, the 95% interval above zero. A mechanic
+  whose interval lies below zero is a trap; one inside it is unproven. Each row also shows where the mechanic's catch
+  turns up as a cost (the spending lines that are higher when it is used, and the counts that change). The crop's
+  verbs (hilling, scouting, spraying and the rest) are reported the same way but do not gate.
+- **G3, no dominant plan.** No fixed plan is always right: of five building orders (the expert's own and four
+  others) and five hiring rules (the expert's fit for each opening, the hiring hall only, always the best at machine
+  work, always the best at field work, always the cheapest), none does best on more than half the farms; holding a
+  block of land every year beats the home farm alone on 20% to 80% of farms; and no farmstead rule or building is
+  worth having on 90% of farms or more (winter work, which is the whole winter's labour, and the bigger farm's land
+  and hiring at all are not counted as rules).
+- **G4, the long game holds.** The expert's median net worth rises every year to year ten, it still invests (over
+  $2,000 a year in land, buildings, equipment or contractors) in at least three of years six to ten, and its median
+  cash at year ten is under half its median net worth.
+
+Intervals are 95% bootstrap intervals over farms, 2,000 resamples; each farm is its own weather and prices, so farms
+are independent.
 
 ## Fair play
 
-A bot reads the game only as a player can: `fieldInfo`, `fieldActions`, `today`, `forecast`,
-`jobWaits` and `advise`; on the bigger farm `crewInfo`, `offerInfo`, `contractInfo`, `planCosts`,
-`cellarCapacity`, `held` and the dig time with its haul (`jobDays`); the published land table (each
-parcel's block, slope, rent and price) and equipment prices; the market quote (`basePrice`, `gradePrice`, `lotValue`, `newPotatoWindow`,
-which use only a lot's public grades and today's price); the public campaign fields; the published
-rules in `src/sim/params.ts` and `src/sim/varieties.ts` (storage charge, shrink, dormancy in a cool
-cellar, the soil warming a degree earlier on the ridge and later on the bottom land, rotation, prices);
-and the events each command and each day report (planting, tuber set, test-dig tubers, scouting finds
-and so on). It never reads a field's hill arrays or true blight, the estimate's bias, a lot's rot, seed
-blight or virus, future weather, the year's price level or the records. `tests/bots.test.ts` checks
-the source of `bots.ts` for those names and checks that the check catches them.
+A bot reads the game only as a player can: `fieldInfo`, `fieldActions`, `today`, `forecast`, `jobWaits` and
+`advise`; for the bigger farm and the farmstead `peopleInfo`, `applicantInfo`, `labourInfo`, `landInfo`,
+`tractInfo`, `buildingInfo`, `materialsInfo`, `mortgageInfo`, `storageInfo`, `standInfo`, `pondInfo`, `winterInfo`,
+`offerInfo`, `contractInfo`, `planCosts`, `cellarCapacity` and `buildCost`; the incidents waiting for an answer (whose
+person, lot and applicant the question names); the published land table, building table, equipment prices and the
+rest of the published rules in `src/sim/params.ts` and `src/sim/varieties.ts`; the market quote; the public campaign
+fields; and the events each command and each day report. It never reads a field's hill arrays or true blight, the
+estimate's bias, a lot's rot, seed blight or virus, future weather, the year's price level or the records.
+`tests/bots.test.ts` checks the source of `bots.ts` for those names, checks that the check catches them, and checks
+that each ablation really takes its mechanic away.
 
 ## The bots
 
 | Bot | What it does |
 |---|---|
-| naive | Plants the six home fields to certified Katahdin on May 20, does nothing else, digs on September 20 whatever state the vines are in, and sells each lot as soon as it is dug. |
-| reference | Follows `advise()` as given with the default plans, no equipment, keeps every lot in the cellar and sells in March (month 4). Without an irrigation reel the advice waters only a wilting field, so the reference is in effect a dryland grower, as most of Aroostook is. It keeps to the home six with the farmer alone and signs no contracts, as reference practice does by design. |
+| naive | Plants the six home fields to certified Katahdin on May 20, does nothing else, digs on September 20 whatever state the vines are in, and sells each lot once it is weighed. |
+| reference | The coach's practice: every day each field gets the order the advice has for it, which is what a player gets by giving every field its smart order (right-click); the advice's sales are made; every incident takes its default. The default plans, no land, people, buildings, equipment or contracts, and the crop is kept in the cellar and sold in March. |
 | expert | The best fair play found, described below. |
-| no-hill, no-scout (scouting and roguing), no-spray, no-water, no-sample (test digs), no-kill (the vines die on their own or are dug green from September 15), no-store (sells at the dig), no-rotation (potatoes on every field it holds every year), saved-seed (holds back seed every year and plants saved seed wherever there is stock), no-equipment (no cellar ventilation or irrigation reel) | The expert with one verb or decision taken away. Without test digs the expert times the vine kill from the yield estimate and the variety's usual tuber set instead. |
-| no-expansion (the home six only), no-hire (the farmer alone), no-contracts, no-tractor2 | The expert with one decision of the bigger farm taken away; the rest of its play adapts as it would. |
-| with-brook, with-ridge, with-dufour | The expert holding the home farm and that one block every year, rented or bought as the expert would. Against no-expansion they say whether each block is worth holding. |
-| all-contracts | The expert signing every contract offered and planting to fill them. |
-| only-*variety* | The expert with every potato field in one variety, signing contracts only for that variety. It plays only the start years in which its variety had been released. Dark Red Norland goes to the early market, as the expert would grow it. |
-| calendar | The expert held to the same dates every year: planting May 12-18 by slope, hilling 30 and 44 days after planting, weekly spraying from July 1, one watering on July 25, a test dig on August 5, vine kill on August 28 and digging from September 12. |
+| ablations | The expert with one mechanic taken away (or, for the foreman, which the expert does not use, added), listed in the G2 table. |
+| with-brook, with-ridge, with-dufour | The expert holding that block every year, rented or bought as it would. |
+| order-*, hire-* | The expert held to a fixed building order or hiring rule, for G3. |
+| only-*variety*, all-contracts, calendar | As in the earlier passes: one variety on every field, every contract signed, the same dates every year. |
 
 ### The expert
 
-- **Spring.** Buys cellar ventilation when cash allows and two or more seasons remain, and from 2015
-  on also the irrigation reel when three or more remain. Plans each field by enumerating every
-  potato-or-rest sequence for the seasons left, valuing a potato year by the field's visible wilt and
-  soil (`fieldInfo`), the published rotation rules (`SOIL_AFTER_POTATO`, `VERT_GROW`, `VERT_REST`) and
-  the published field and seed costs. Grows Katahdin on ridge fields and Yukon Gold on mid-slope and
-  bottom fields (Kennebec until Gold's release in 1980), and from Caribou Russet's release in 2015
-  Caribou everywhere; Atlantic only against a chip contract (below). Plants
-  first-generation saved seed of the low-virus varieties (Katahdin, Kennebec) when a clean lot grown
-  from certified seed was held back; certified seed otherwise.
-- **Planting.** From May 3 when the field's own soil reaches 8 C (the station reading, a degree more on
-  the ridge and a degree less on the bottom land) and the field is workable, ridge first, holding off
-  when heavy rain is forecast into soil under 11 C. Seed sitting in soil under 7 C rots.
-- **Through the season.** Hills at 6% and 38% leaf cover. Scouts every 4 days once the blight watch is
-  on (every 5 once blight is found) and pulls blighted hills while a field has two or fewer; past
-  that it sprays. Otherwise sprays only in a season of 30 or more severity values, ahead of a bad
-  blight day. With the reel it waters at the UMaine pivot triggers (below 65% of available water for
-  35 days after tuber set, 60% after); without it, when a watering takes the whole day, below 75%
-  and 65%. Either way it waits when the next two days' forecast gives rain a 60% chance and 12 mm or
-  more; the forecast is sometimes wrong both ways.
-- **Test digs and vine kill.** Lifts one hill three days before the vines are due to be killed. Kills
-  on blight of 15% or more or tuber blight in the dig; otherwise 15 days after the vines start going
-  down, or from September 10 at four days a field, bottom land first. It holds a due kill for up to
-  14 days while the crop's value still grows by 0.4% a day and no frost is forecast; the value comes
-  from the growth of the yield estimate and the tuber size the test dig shows (or, without a dig, the
-  yield estimate spread over the variety's usual set) priced by grade, B size and oversize included.
-  Kills ahead of a forecast frost from September 5.
-- **Early market.** Dark Red Norland, when grown, is dug green once its value at the falling
-  early-market price stops rising (by August 26 at the latest) and sold off the field.
-- **Digging and selling.** Digs once the skins are set, before a forecast frost late in September, and
-  in any case from October 8, keeping the job list in order of urgency every day. Reads the year's
-  price level off the quote, compares the price today with each lot's best month in the cellar, and
-  sells at the dig when the cellar cannot beat it. A lot's cellar value counts the storage charge and
-  shrink from the day of the dig, sprouting once the lot has been out of the ground longer than its
-  dormancy plus the cool cellar's 40 days (65 with ventilation), rot started by the blighted tubers
-  seen on the picking table, and for Atlantic off contract one processing price all winter. When
-  everything is in it sells what the potato houses cannot hold, the poorest keepers first. In the cellar
-  each lot is sold in its best month.
+The crop play is the expert of the third pass (planting by each field's own soil temperature, hilling at 6% and
+38% leaf cover, scouting and pulling blighted hills, spraying in a bad blight year ahead of a bad blight day, watering
+at the pivot triggers, one test dig before the kill, the kill held while the crop is still gaining value, digging once
+the skins are set, selling each lot in its best month), now on Caribou Russet everywhere since every generated year is
+past its release. It plans each field's rotation over the seasons left (up to six), and keeps the farm from swinging
+between all potatoes and all rest: a field that gives up less than $4,000 against its best rotation is planted until
+half the farm is in potatoes.
 
-#### On the bigger farm
+On the farmstead:
 
-- **Land.** Each spring, for every field beyond the home six that the farm does not own, it plans the seasons
-  left: each year grow potatoes, rest the field, or leave it to its owner (whose land keeps its soil as it was),
-  paying the rent in every year it holds it. A potato season is valued at what a healthy field of that block
-  nets before rent by the expert's own experience (ridge lots $10,000, the intervale $6,000, the Dufour fields
-  $7,500, crews and the haul included), less what the field's soil and wilt take off by the published rotation
-  rules. It takes the fields whose plan beats leaving them, best first, as far as the spring loan stretches to the
-  bank's limit, and gives back rented land whose next season would be a rest. It buys a field it holds outright
-  when its price and the spring's planting still leave the farm inside the spring loan; bought land is rotated
-  like the home six.
-- **Crews.** A field hand while more than five fields are being walked (one for six to ten, two for eleven or
-  more), let go when the walking falls off. The second tractor in a spring with nine or more potato fields and two
-  or more seasons left, if the plan still fits the loan after it; the operator with the plan for nine or more
-  potato fields, or in season once more than 24 days of machine work fall due within a month, and kept for the
-  rest of the season. Orders are not pinned: the game's own nearest-first choice wasted less than pinning the
-  operator to the far land did.
-- **Contracts.** Each offer is valued against selling the same crop the usual way (by rule of thumb 0.95 of the
-  variety's price for the storable varieties, 0.8 for Atlantic off contract), less what is lost on fields that
-  must switch variety to fill it; it signs when the gain is positive, and plants enough fields of the contract
-  variety, at 85% of the usual No. 1 crop, on the slope that variety does best on. Atlantic is grown only against
-  a contract. Each dug lot of a contract variety goes to the open contracts first, those due off the field
-  before those due from storage; what is left is sold or stored as before, and winter contracts still open are
-  filled from the cellar.
-- **The second potato house** is never built: it lost money in every trial.
+- **People.** It wants someone to walk the fields once more than five potato fields are grown (another for each
+  eight more), and on a farm of fifteen potato fields or more a driver for each tractor beyond the first. Each opening goes to the applicant whose speed at
+  that work, at $1,000 a month a point of speed, most exceeds their wage, if that beats the hiring hall; otherwise
+  the hall. People are kept from year to year while there is a role for them. A driver is set to machine work first,
+  a walker to field work first and to mind the stand; the farmer drives first once someone walks the fields. At a
+  peak of machine work (more than 18 days due within a month for each person who drives) a tractor operator from the
+  hall drives what would otherwise stand idle, a tractor or the truck, and goes when his paid month is up and the
+  work has fallen under 12 days each. Someone near quitting gets a raise; a neighbour's offer is matched for
+  someone unhappy enough to go, before the harvest is under way; raises go back to the asking wage each spring.
+  Someone asking for work in the season is taken on when a role is short. No foreman (see G2).
+- **Sundays and pickers.** Works Sundays while two or more orders wait on the list and nobody is more tired than
+  0.5. Pickers come while four or more days of digging wait, the day is fit to dig, the barrels hold under 500 cwt
+  and no frost is forecast.
+- **Land.** Each spring, for each field beyond the home six, it plans the seasons left with the field rented (each
+  year potatoes, rest or given back) or bought on the mortgage (potatoes or rest, at the interest on the loan as it
+  is paid down), and takes the better when it beats leaving the field, best first, as far as the spring loan goes.
+  It buys only with five or more seasons left, when the down payment and the spring's planting leave at least $60,000
+  of the loan, and when the year end, as far as the spring can tell (a potato field sure of $15,000), still leaves
+  $30,000. In spring, cash the year end would leave beyond $40,000 goes off the mortgage.
+- **Tracts.** The farmer fells the home woodlot (then Burnt Hill, the swale and the back lot) in winter, unpaid; the
+  stumps are pulled the next spring with three or more seasons left; Burnt Hill and the back lot are bought, one at
+  a time, when there is cash. New ground rests its first year and has its rocks picked while it is over 0.35.
+- **Rocks, brush, tile.** Rocks are picked when no crop is in: on a field over 0.45 resting or dug, over 0.6 in
+  spring before planting. Hedgerows on bottom land are cut each time they grow back. Owned bottom land is tiled with
+  four or more seasons left.
+- **Buildings.** In the order stand, weather station, machine shed, bunkhouse, potato house, road, pond, packing
+  shed, each when it is wanted: the stand and the station from the start; the shed once the farm grows ten potato
+  fields or wants a driver; the bunkhouse once more than two hired people are wanted; a potato house once the crop
+  overflowed the cellar by 1,500 cwt; the road once the yard holds most of its stone or the Dufour place is held; the
+  pond once a season needed three waterings without a reel; the packing shed once 3,000 cwt is stored. It orders over
+  the winter as the crop is sold, keeping what the year end will take and $5,000 more, or in spring while the plan
+  fits the loan and the year end. Logs beyond what the wanted buildings need are sold.
+- **Machinery.** The second tractor (once the shed stands) at twelve potato fields, the third at fifteen, the truck
+  at eight, each from cash while the spring loan and the year end allow.
+- **Winter.** The farmer builds whatever is going up, otherwise fells, otherwise packs. Hired people are kept on to
+  build or fell while there is work, or to pack when packing pays their wage; homebodies are laid off.
+- **Hauling.** The haul order goes to the top of the list every day.
+- **Incidents.** A rush part when planting, digging or hauling has two days of machine work waiting; a buyer's offer
+  taken when 10% over today's price beats the lot's best month in the cellar; applicants and neighbours' offers as
+  above.
+- **The stand.** A season that is done stays open while the stand is open, until October 31, as long as it sells
+  more than the hired people's wages.
 
-## How the expert's thresholds were set
+## Wave 2 tuning log
+
+The farmstead simulation (people, tracts, buildings, the truck, hauling, winter work, incidents) landed on the economy
+of the third pass. Round 0 is the rebuilt bots on that economy; each later round is a change of named constants in
+`src/sim/params.ts` and `src/sim/farm.ts`, with the expert's own fixes listed beside them (a better player, not a
+weaker one). At most eight rounds; seven were used. Rounds 0 to 3 ran 60 or 100 farms, rounds 4 and 5 150, rounds 6
+and 7 200.
+
+The reference's keep rate was read off a sweep before round 1 (100 farms, five seasons, nothing else changed):
+household draw 11,000: 43%; 9,000: 58%; 8,000: 64%; 7,000: 71%; start cash 25,000 alone: 54%; draw 9,000 with start cash
+24,000: 68%; hauling at 1,400 cwt a day instead of 900: 42% (the haul does not decide a newcomer's farm). Slower rest and
+a stronger tiredness slowdown (rounds 3 and 7) left it at 68%: a farmer alone on six fields is never worn down.
+
+| Round | Change | G1 (kept 5 yr: naive / reference / expert) | G2 (mechanics that earn, of 29; traps) | G3 | G4 |
+|---|---|---|---|---|---|
+| 0 | None: the rebuilt bots on the merged economy (60 farms) | FAIL: 0% / 38% / 82% | FAIL: 7; traps foreman, bunkhouse, pickers, tile, shed, truck, second tractor | FAIL: the expert's building order best on 31 of 60; blocks beat the home farm alone on 3% to 10% of farms | FAIL: cash at year ten more than half of net worth |
+| 1 | `LIVING` 11,000 to 9,000, `START_CASH` 18,000 to 24,000; rents and prices: intervale 6,000/72,000 to 3,000/38,000, ridge 8,500/102,000 to 4,500/55,000, Dufour 6,250/75,000 to 3,500/44,000; `TILE_FEE` 4,000 to 2,000, `TILE_TAW` 0.94 to 0.97; `PACK_NO1` 0.08 to 0.15, `PACK_CHARGE` 0.5 to 0.4; `STAND_CWT` 4 to 6; `MOOD_TIRED` 0.6 to 1. Expert: hall operators for machine-work peaks, pickers only for a backlog (100 farms) | PASS: 0% / 68% / 94% | FAIL: 12; traps priorities, foreman, bunkhouse, mortgage, third tractor | FAIL: building order 62 of 100; ridge 86% | PASS |
+| 2 | Ridge rent 4,500 to 5,500; prices about ten years' rent (intervale 30,000, Dufour 35,000); `MORTGAGE_PRINCIPAL` 0.1 to 0.07; `POACH_CHANCE` 0.006 to 0.01, `POACH_MOOD` 0.6 to 0.7; `PICKER_DAY` 160 to 130, `PICKER_DIG` 1.4 to 1.5; `SHED_SPEED` 1.1 to 1.15; truck 14,000 to 11,000, third tractor 16,000 to 11,000. Expert: priorities only lift each person's own work | PASS: 0% / 68% / 96% | FAIL: 12; traps foreman, bunkhouse, working every Sunday better than choosing, mortgage, shed, second and third tractor | FAIL: building order 56; blocks in band | FAIL: idle cash |
+| 3 | `REST_PER_DAY` 0.3 to 0.15, `TIRE_PER_DAY` 0.07 to 0.08 (tiredness builds over a long run of work; before, a person's tiredness at harvest averaged 0.04); `OPERATOR_WAGE` 800 to 700; packing shed 12,000 to 8,000, `PACK_PER_DAY` 30 to 40; `PICKER_DAY` to 110. Expert: keeps a finished season open while the stand pays, raises go back to the ask each spring, bought land valued without a year off | PASS: 0% / 68% / 93% | FAIL: 13; raises and packing now earn | FAIL: building order 57; clearing and prompt hauling right on 90% or more | PASS |
+| 4 | `STUMP_FEE` 3,000 to 6,000; `MORTGAGE_RATE` 0.08 to 0.06; `ROAD_SPEED` 0.8 to 0.7; `PICKER_DAY` to 90; truck and third tractor to 8,000; weather station 1,800 to 1,000. Expert: Sundays worked while orders wait and nobody is worn, a season driver only on a big farm, more careful land buying (150 farms) | PASS: 0% / 70% / 96% | FAIL: 16; mortgage, stand, Sundays-off rule earn; traps bunkhouse, shed, truck, second and third tractor | FAIL: building order 77 of 150 | FAIL: idle cash |
+| 5 | `HAND_WAGE` 450 to 380, `OPERATOR_WAGE` 700 to 550, `ASK_BASE` 100 to 70; `HURT_CHANCE` 0.05 to 0.08. Expert: pays idle cash off the mortgage, the second walker and second tractor later | PASS: 0% / 70% / 99% | FAIL: 16; traps bunkhouse, second and third tractor | FAIL: building order 112 of 150 | PASS |
+| 6 | `MOOD_BED` 0.1 to 0.2; `TILE_FEE` to 1,000; potato house 9,000 to 7,000; the road 60 loads of stone to 40; truck to 6,000. Expert: second tractor at twelve potato fields, third at fifteen, a third person only on the biggest farms (200 farms) | PASS: 0% / 69% / 97% | FAIL: 22; traps bunkhouse, working every Sunday better than choosing, second and third tractor | FAIL: building order 166 of 200 | PASS |
+| 7 | `HURT_CHANCE` back to 0.05 (0.08 broke a held rule test of the breakdown odds and bought nothing); `TIRED_SLOW` 0.3 to 0.6; `BREAK_TIRED` 2 to 3 | PASS: 0% / 69% / 98% | FAIL: 20; traps foreman, bunkhouse, third tractor; unproven: never resting Sundays, pickers, potato house, shed, stand, second tractor | FAIL: building order 169 of 200; clearing 94%, prompt hauling 93% | PASS |
+
+Round 7 is the final economy. The thresholds of the expert's farmstead play were set by trial runs (`trial.ts`, 100
+farms, against the expert as it stood before round 5): the second tractor at 12 potato fields instead of 7, +$14.0k
+($0.3k to $29.4k); at 10, +$10.4k (-$1.5k to $24.6k); peak hires at 24 days a driver instead of 18, +$3.9k (-$0.8k to
+$9.0k); no truck, +$10.1k ($4.7k to $15.4k) and no shed, +$29.8k ($14.5k to $46.2k) at the round 4 prices, which round 5
+and 6 then changed; working every Sunday, +$11.0k (-$5.3k to $28.7k); resting Sundays when anyone is over 0.7 instead of
+0.5, +$0.6k (-$8.9k to $10.5k); no bunkhouse, +$20.5k ($16.1k to $25.1k).
+
+## What the gates show
+
+See `latest.md` for every number. At round 7, 200 farms:
+
+- **G1 passes.** The naive bot keeps no farm; the reference keeps 69% through the game's five seasons and 5% through
+  ten, so a newcomer following the coach survives the first years and needs the deeper systems to go on (its yields
+  fall from wilt and stones it does nothing about: it rests a field only every other year and picks rocks only past
+  0.6). The expert keeps 98% and 97%. Expert over reference $418k ($396k to $441k), reference over naive $9k ($7k to
+  $11k). On the record's real years (five seasons, 258 campaigns) the reference keeps 86%: the generated seasons are
+  harder than the record, so the band is judged where the shipped game is played.
+- **G2 fails, honestly.** 20 of 29 mechanics earn their place, each with its catch showing as a cost: clearing
+  ($96.6k; stumping fees, wages, the mortgage on the land it lets the farm buy), winter work ($248k), rocks ($49.5k),
+  brush ($46.8k), the pond ($62.3k; dry spells), hauling before frost ($166k against hauling last), the mortgage
+  ($31.5k; interest), contracts ($34.8k), raises and matching ($23.7k; wages), answering incidents ($30.1k), work
+  priorities ($14.1k), tile ($14.2k), the packing shed ($11.5k; winter wages and the charge), the road ($14.5k), the
+  weather station ($9.4k), the truck ($9.4k), applicants over the hall, land beyond the home six, hiring at all, and
+  working Sundays at all against never ($30.8k). Still traps: **the foreman** (-$136k against an expert who gives its
+  own orders: the foreman's upside is the player's attention, which no bot runs short of, so no number makes it pay
+  here); **the bunkhouse** (-$3.9k, -$6.9k to -$0.9k: a third and fourth hired person cost more than they add on a farm
+  that tops out near 15 fields, whose work is lumpy and mostly idle outside planting and the harvest); **the third
+  tractor** (-$4.7k, -$6.7k to -$2.8k, for the same reason). Unproven (interval spans zero): never resting on Sundays
+  against the expert's choice (-$2.7k, -$12.6k to $7.8k: the Sundays-off rule costs and saves about equally), pickers
+  ($0.7k), the potato house ($5.4k), the machine shed (-$0.8k), the stand ($7.3k, -$0.1k to $14.4k) and the second
+  tractor (-$3.7k). None is free money: every mechanic that earns shows a higher cost line or a count where its catch
+  bites (see the last two columns of the G2 table). The crop's verbs all earn except test digs (-$1.2k), as in the
+  third pass.
+- **G3 fails on two counts.** The expert's own building order (stand, station, shed, bunkhouse, potato house, road,
+  pond, packing shed) is best on 169 of 200 farms: putting the cheap, quick-paying buildings first is always right.
+  Clearing the tracts (better on 94% of farms) and hauling before frost (93%) are near-certain. Hiring passes (the
+  best fixed hiring rule, always the best machine hand, wins 66 of 200), and every block of land is a real choice
+  (holding it every year beats the home farm alone on 42% of farms for the intervale, 67% for the ridge lots, 61% for
+  the Dufour place). For information: Yukon Gold is the best single variety on 80 farms, Caribou Russet on 68,
+  Russet Burbank 26, Katahdin 25; signing every contract beats choosing on 28%; the fixed calendar on 1%.
+- **G4 passes.** The expert's median net worth rises every year: $26k, $63k, $70k, $107k, $147k, $191k, $247k, $283k,
+  $331k, $387k; it invests in land, buildings, equipment and contractors until year eight, and its median cash at
+  year ten ($180k) is under half its net worth. But from year seven the farm holds 15 of the 18 parcels and every
+  building it wants, and the money's only use left is paying off the mortgage early (which it does): cash then piles
+  up. Sinks it should have: more land to buy beyond the eighteen parcels, upkeep on buildings and machinery that grows
+  with the farm, and a household draw that grows with net worth.
+
+## Earlier passes
+
+The passes before the farmstead played five seasons over the record's real start years, on the fourteen-field game.
+Their gates (expert over reference over naive; every verb earns; no single variety, block or calendar dominates;
+losable and winnable) and tuning are kept here as history.
+
+### How the expert's thresholds were set
 
 Trial runs over all 43 start years, 24 seeds, one change at a time from the final expert, on the
 final economy (mean net worth after five seasons; every setting kept 100% of farms):
@@ -178,12 +247,12 @@ $4.6k), confirmed on seeds 7 to 24 at +$3.0k ($1.8k to $4.3k); Atlantic on the t
 watering hold-off at 12 mm of forecast rain instead of 8, +$0.6k (-$0.2k to $1.4k) and on seeds 7 to 24
 +$1.1k ($0.6k to $1.7k).
 
-## Economy tuning log
+### Economy tuning log
 
 Each pass rebuilt the expert first, then tuned the economy within the listed parameters, each round a
 parameter change and a rerun.
 
-### Second pass (after `c639003`)
+#### Second pass (after `c639003`)
 
 At most ten rounds. Price moves for gate 3 were sized beforehand from the single-variety runs of the
 previous round (net worth moved by revenue times the price change), which predicted round 1's gate 3
@@ -195,7 +264,7 @@ wins exactly. Six seeds.
 | 1 | `LIVING` 15,000 to 11,500; large tubers of the non-russets 0.8 to 0.6 of No. 1; Yukon Gold $16.50 to $16.20, Russet Burbank $13.50 to $14.00, Atlantic $12.50 to $13.75 | FAIL: 100% / 80% (just over the target) / 0% | FAIL: test digs -$1k (-$2k to $1k); spraying $2k ($0k to $4k) | PASS: campaigns Burbank 13/43, Katahdin 11/43, Gold 11/36; seasons Burbank 18/51, Atlantic 15/48, Gold 11/44 | PASS |
 | 2 | Large-tuber factor back to 0.8 (it gave test digs nothing); `LIVING` 11,500 to 13,000, read off a sweep of the household draw for the reference (15,000: 60% kept, 14,500: 61%, 14,000: 66%, 13,500: 70%, 13,000: 74%, 12,500: 77%, 11,500: 84%); the expert retuned | PASS: 100% / 74% / 0% | FAIL: test digs -$1k (-$2k to $1k) | PASS | PASS |
 
-### Third pass (after `c5faac7`)
+#### Third pass (after `c5faac7`)
 
 The commit charged storage from the day of the dig, aged lots from the dig, gave the contract crop one
 price, made the yield estimate a model of what the grower can see, let the forecast miss, rotted more
@@ -210,7 +279,7 @@ flat contract. At most eight rounds; three were used. The only economy change is
 
 Round 2 is the final economy.
 
-## What the gates show
+### What the gates show
 
 See `latest.md` for the current numbers. At the time of writing (24 seeds):
 
@@ -225,7 +294,7 @@ See `latest.md` for the current numbers. At the time of writing (24 seeds):
   beats the expert in no start year and in one single season of 51.
 - Gate 4 passes: the naive bot loses every farm and the expert keeps every one.
 
-### Why test digs still do not pay
+#### Why test digs still do not pay
 
 The commit made the yield estimate genuinely uncertain: on the expert's fields, the estimate on the
 last day before the dig ran 17% (one standard deviation) from the crop that came out without a test
@@ -258,3 +327,4 @@ down, since more weight nearly always pays even with oversize at 0.8 of the No. 
 sold before the season closes pays no storage charge and does not shrink, however long ago it was dug
 (both are booked only on what is still held at the close), so the overflow is always sold with the whole
 crop in sight.
+
