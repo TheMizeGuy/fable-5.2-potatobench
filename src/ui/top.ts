@@ -458,7 +458,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
       // bills, so the cash is never read as what the farm will keep.
       const after = view ? h('div', {
         class: `after term${view.before ? '' : view.figure < S.CREDIT_LIMIT ? ' bad' : view.figure < 0 ? ' warn' : ''}`, testid: 'outlook', tabindex: '0', 'data-tip': view.why,
-      }, h('span', { class: 't-label' }, h('span', { class: 'long' }, view.label), h('span', { class: 'short', 'aria-hidden': 'true' }, view.before ? 'Before crop' : 'After bills')), h('span', { class: 't-figure num' }, F.money(view.figure)), view.spread ? h('span', { class: 'give num', testid: 'outlook-spread' }, `give or take ${F.money(view.spread)}`) : null, h('span', { class: 'sr' }, `. ${view.why}`)) : null
+      }, h('span', { class: 't-label' }, h('span', { class: 'long' }, view.label), h('span', { class: 'short', 'aria-hidden': 'true' }, view.before ? 'Before crop' : 'After bills')), h('span', { class: 't-figure num' }, F.money(view.figure)), view.spread ? h('span', { class: 'give num', testid: 'outlook-spread', 'aria-hidden': 'true' }, `±${F.money(view.spread)}`) : null, h('span', { class: 'sr' }, `. ${view.why}`)) : null
       const balance = h('div', { class: `balance${after ? ' two' : ''}` },
         h('span', { class: 't-label when' }, c.cash < 0 ? 'On the loan' : after ? 'Cash' : 'Balance'),
         h('span', {
