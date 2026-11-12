@@ -20,6 +20,7 @@ export interface FieldView {
   // Where a field's plate should sit: the top centre of the field, in CSS pixels relative to the canvas.
   fieldAnchor(field: number): { x: number; y: number; visible: boolean }
   // A field's four corners on the ground, in CSS pixels, going round it, for drawing its selection on the land.
+  // visible: the corner is in front of the camera (it may still be off the screen).
   fieldCorners(field: number): { x: number; y: number; visible: boolean }[]
   // Where a person is on the screen (a point just above them), and where a yard's marker should sit.
   unitAnchor(unit: number): { x: number; y: number; visible: boolean }

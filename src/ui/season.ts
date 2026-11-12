@@ -59,12 +59,14 @@ function quadMatrix(p: { x: number; y: number }[]): string {
   } else {
     const dx1 = p1.x - p2.x, dx2 = p3.x - p2.x, dy1 = p1.y - p2.y, dy2 = p3.y - p2.y
     const den = dx1 * dy2 - dx2 * dy1
+    if (Math.abs(den) < 1e-9) return ''
     g = (sx * dy2 - dx2 * sy) / den
     hh = (dx1 * sy - sx * dy1) / den
     a = p1.x - p0.x + g * p1.x; b = p1.y - p0.y + g * p1.y
     c = p3.x - p0.x + hh * p3.x; d = p3.y - p0.y + hh * p3.y
   }
   const k = 1 / SQ
+  if (![a, b, c, d, g, hh].every(Number.isFinite)) return ''
   return `matrix3d(${[a * k, b * k, 0, g * k, c * k, d * k, 0, hh * k, 0, 0, 1, 0, p0.x, p0.y, 0, 1].map(v => +v.toFixed(7)).join(',')})`
 }
 
@@ -92,7 +94,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   // at each corner. Under the tags and pins, over the land.
   const selLayer = h('div', { class: 'sel-layer', 'aria-hidden': 'true' })
   plateLayer.prepend(selLayer)
-  const selDrawn = new Map<number, { quad: SVGElement; marks: HTMLElement[] }>()
+  const selDrawn = new Map<number, { quad: SVGElement; marks: HTMLElement[]; unit: number }>()
 
   function drawSelection(): void {
     const want = new Set(app.selection)
@@ -106,14 +108,20 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
         const marks = [0, 1, 2, 3].map(() => h('span', { class: 'reg-at' }, s('svg', { class: 'select sel-mark sys', width: 30, height: 30, viewBox: '-15 -15 30 30' }, s('g', { class: 'reg' },
           s('path', { class: 'u', d: 'M-13 0h26M0 -13v26' }), s('circle', { class: 'u', r: 7 }), s('circle', { r: 7 }), s('path', { d: 'M-13 0h26M0 -13v26' })))))
         selLayer.append(quad, ...marks)
-        d = { quad, marks }
+        d = { quad, marks, unit: 0 }
         selDrawn.set(i, d)
       }
       const p = ctx.view.fieldCorners(i)
-      const ok = p.length === 4 && p.every(q => Number.isFinite(q.x) && Number.isFinite(q.y) && Math.abs(q.x) < innerWidth * 4 && Math.abs(q.y) < innerHeight * 4) && p.some(q => q.visible)
-      d.quad.style.display = ok ? '' : 'none'
-      if (!ok) { for (const m of d.marks) m.style.display = 'none'; continue }
-      d.quad.style.transform = quadMatrix(p)
+      // Only a field wholly in front of the camera is outlined: a corner behind it would fold the outline over.
+      const ok = p.length === 4 && p.every(q => q.visible && Number.isFinite(q.x) && Number.isFinite(q.y) && Math.abs(q.x) < innerWidth * 4 && Math.abs(q.y) < innerHeight * 4)
+      const m3 = ok ? quadMatrix(p) : ''
+      d.quad.style.display = m3 ? '' : 'none'
+      if (!m3) { for (const m of d.marks) m.style.display = 'none'; continue }
+      d.quad.style.transform = m3
+      // The line keeps its printed weight whatever the field's size on the screen.
+      const across = Math.max(30, Math.hypot(p[1].x - p[0].x, p[1].y - p[0].y), Math.hypot(p[3].x - p[0].x, p[3].y - p[0].y))
+      const unit = SQ / across
+      if (Math.abs(unit - d.unit) > d.unit * 0.12) { d.unit = unit; d.quad.style.setProperty('--u', unit.toFixed(2)) }
       p.forEach((q, k) => {
         const m = d!.marks[k]
         const seen = q.x > ins.left - 8 && q.x < innerWidth - ins.right + 8 && q.y > ins.top - 8 && q.y < innerHeight - ins.bottom + 8
@@ -359,11 +367,12 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   function placeBar(): void {
     const layout = ctx.layout()
     const bar = !card.el.hidden ? card.el : !yard.el.hidden ? yard.el : null
-    if (!bar || layout === 'narrow') { if (side !== 'right') { side = 'right'; el.classList.remove('docked-left'); ctx.dirty() } return }
+    const leftTaken = grid.isOpen() || !person.el.hidden
+    if (!bar || layout === 'narrow' || leftTaken) { if (side !== 'right') { side = 'right'; el.classList.remove('docked-left'); ctx.dirty() } return }
     // Where the thing selected lies on the screen.
     let box: { l: number; r: number } | null = null
     if (bar === card.el && app.selection.length) {
-      const xs = app.selection.flatMap(i => ctx.view.fieldCorners(i).filter(q => Number.isFinite(q.x)).map(q => q.x))
+      const xs = app.selection.flatMap(i => ctx.view.fieldCorners(i).filter(q => q.visible && Number.isFinite(q.x)).map(q => q.x))
       if (xs.length) box = { l: Math.min(...xs), r: Math.max(...xs) }
     } else if (bar === yard.el) {
       const a = ctx.view.yardAnchor(app.yard)
@@ -556,7 +565,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       const t = Math.max(top.el.getBoundingClientRect().bottom, ...[...top.el.querySelectorAll<HTMLElement>('.almanac > .mount, .bank > .mount')].map(x => x.getBoundingClientRect().bottom))
       const vis = (x: HTMLElement) => !x.hidden && x.offsetParent !== null && x.offsetHeight > 0
       // The time book, its list and the alerts at the foot; the clock with them on a phone.
-      const low = [crew, clockSlot, notesSlot, ...(layout === 'narrow' && tray ? [trayHost] : [])].filter(vis).map(x => box(x).top)
+      const low = [...(crew.children as HTMLCollectionOf<HTMLElement>), clockSlot, notesSlot, ...(layout === 'narrow' && tray ? [trayHost] : [])].filter(vis).map(x => box(x).top)
       const bottom = innerHeight - Math.min(...low, innerHeight) + 6
       // The bar docked at its edge; on a phone it is a sheet over the foot.
       const bar = [card.el, yard.el].find(vis)
@@ -571,7 +580,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       if (layout === 'wide' || layout === 'mid') for (const x of [person.el, grid.el]) if (vis(x)) left = Math.max(left, box(x).right + 8)
       return [t, right, bottom, left]
     },
-    frame: () => { coverCache = null; coverCache = covers(); P.frame(); placeYards(); people.frame(); drawSelection(); placeBar(); coverCache = null },
+    frame: () => { coverCache = null; coverCache = covers(); placeBar(); P.frame(); placeYards(); people.frame(); drawSelection(); coverCache = null },
     dispose() {
       off()
       P.dispose()

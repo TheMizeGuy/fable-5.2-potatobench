@@ -82,7 +82,7 @@ export function yardCard(ctx: Ctx): YardCard {
               : h('span', { class: 'quiet it' }, c.phase === 'season' ? 'waiting for a builder' : 'built in the season or over the winter')),
             meter(b.progress, { label: `${b.name} built`, text: `${F.pct(b.progress)} built` }))
         }),
-        !houses.length && !built.length && !up.length ? h('p', { class: 'quiet it' }, 'Nothing stands here yet.') : null),
+        !houses.length && !built.length && !up.length ? h('div', { class: 'build-row', role: 'listitem' }, h('span', { class: 'quiet it' }, 'Nothing stands here yet.')) : null),
       can.length ? h('div', { class: 'orders', role: 'group', 'aria-label': 'Raise a building' },
         can.map((b, k) => order({
           key: keys && k < 9 ? String(k + 1) : '', icon: '', name: b.name, cost: costOf(b), suggested: b.kind === best, testid: `build-${b.kind}`,

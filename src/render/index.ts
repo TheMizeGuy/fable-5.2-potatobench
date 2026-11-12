@@ -798,7 +798,11 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   function fieldCorners(i: number): { x: number; y: number; visible: boolean }[] {
     const f = FIELDS[i]
     if (!f) return []
-    return [[f.x0, f.z0], [f.x1, f.z0], [f.x1, f.z1], [f.x0, f.z1]].map(([x, z]) => screenAt(x, fieldBaseY(z) + 0.5, z))
+    const vp = viewport()
+    return [[f.x0, f.z0], [f.x1, f.z0], [f.x1, f.z1], [f.x0, f.z1]].map(([x, z]) => {
+      anchor.set(x, fieldBaseY(z) + 0.5, z).project(rig.camera)
+      return { x: (anchor.x + 1) / 2 * vp.w, y: (1 - anchor.y) / 2 * vp.h, visible: anchor.z < 1 }
+    })
   }
 
   function unitAnchor(id: number): { x: number; y: number; visible: boolean } {

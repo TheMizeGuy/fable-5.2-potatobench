@@ -120,8 +120,8 @@
 /* The selection on the land: a dashed line laid on the field's corners, a registration mark at each. */
 .sel-layer { position: absolute; left: 0; top: 0; width: 0; height: 0; z-index: 0; }
 .sel-layer .sel-quad { position: absolute; left: 0; top: 0; width: 1000px; height: 1000px; transform-origin: 0 0; overflow: visible; }
-.sel-layer .sel-quad .under { stroke-width: 14; }
-.sel-layer .sel-quad .line { stroke-width: 7; stroke-dasharray: 28 17; animation: draw-line 180ms var(--ease-out); }
+.sel-layer .sel-quad .under { stroke-width: calc(5 * var(--u, 2.8)); }
+.sel-layer .sel-quad .line { stroke-width: calc(2.5 * var(--u, 2.8)); stroke-dasharray: calc(10 * var(--u, 2.8)) calc(6 * var(--u, 2.8)); animation: draw-line 180ms var(--ease-out); }
 @keyframes draw-line { from { stroke-dashoffset: 90; } }
 .sel-layer .reg-at .sel-mark { position: absolute; left: -15px; top: -15px; width: 30px; height: 30px; overflow: visible; }
 .plate-layer .tag-wrap { z-index: 2; }

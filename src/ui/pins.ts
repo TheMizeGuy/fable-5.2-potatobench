@@ -21,6 +21,7 @@ export function pins(ctx: Ctx, layer: HTMLElement, o: { tags: () => DOMRect[]; c
   let many = false
   // The pin whose people are shown in a list, and where.
   let open = -1
+  let listFor = ''
   const list = h('div', { class: 'pin-list-at', hidden: true })
   layer.append(list)
   const closeList = (e: Event) => { if (open >= 0 && !(e.target as HTMLElement).closest?.('.pin-list-at, .pin')) { open = -1; list.hidden = true } }
@@ -59,12 +60,12 @@ export function pins(ctx: Ctx, layer: HTMLElement, o: { tags: () => DOMRect[]; c
 
   function draw(w: HTMLElement, m: Model, count: number, members: Model[]): void {
     const picked = app.unit === m.id
-    patch(w, JSON.stringify([m, count, picked, many, ctx.touch()]), () => pin(m.name, m.state, {
+    patch(w, JSON.stringify([m, count, picked, many, ctx.touch(), count > 1 ? members.map(x => [x.id, x.label]) : 0]), () => pin(m.name, m.state, {
       ring: m.ring, name: picked, testid: `pin-${m.id}`, count,
       label: count > 1 ? `${count} people here: ${members.map(x => x.label).join('; ')}. Press to choose one.` : `${m.label}${many ? `. ${picked ? 'Press to put their card away.' : 'Press for their card.'}` : ''}`,
       pressed: many && count === 1 ? picked : undefined,
       onclick: many ? () => {
-        if (count > 1) { open = open === m.id ? -1 : m.id; drawList(members); return }
+        if (count > 1) { open = open === m.id ? -1 : m.id; listFor = ''; list.style.visibility = 'hidden'; drawList(members); return }
         pick(m.id)
       } : undefined,
     }))
@@ -120,7 +121,12 @@ export function pins(ctx: Ctx, layer: HTMLElement, o: { tags: () => DOMRect[]; c
       draw(w, m, s0.members.length, s0.members)
       w.style.transform = `translate3d(${s0.x.toFixed(1)}px, ${s0.y.toFixed(1)}px, 0)`
       w.style.zIndex = String(10 - m.rank)
-      if (open === m.id) list.style.transform = `translate3d(${(s0.x + 26).toFixed(1)}px, ${(s0.y - 60).toFixed(1)}px, 0)`
+      if (open === m.id) {
+        list.style.transform = `translate3d(${(s0.x + 26).toFixed(1)}px, ${(s0.y - 60).toFixed(1)}px, 0)`
+        list.style.visibility = ''
+        const key = s0.members.map(x => `${x.id}:${x.label}`).join('|')
+        if (key !== listFor) { listFor = key; drawList(s0.members) }
+      }
     }
     if (open >= 0 && !shown.has(open)) { open = -1; list.hidden = true }
   }
