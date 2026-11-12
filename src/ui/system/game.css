@@ -60,8 +60,8 @@
 .topbar .almanac, .topbar .bank { position: relative; left: auto; right: auto; top: auto; }
 .topbar .almanac { width: auto; max-width: 540px; flex: 0 1 auto; min-width: 0; }
 .topbar .bank { width: 316px; flex: none; }
-.topbar .face { display: grid; grid-template-columns: 172px minmax(0, 1fr); }
-.topbar .face.plain { grid-template-columns: auto; }
+.topbar .almanac .face { display: grid; grid-template-columns: 172px minmax(0, 1fr); }
+.topbar .almanac .face.plain { grid-template-columns: auto; }
 .topbar .leaf .date { display: contents; }
 .topbar .leaf.word { grid-template-columns: auto; padding-right: 64px; }
 .topbar .leaf.word .date { display: block; font: 400 34px/.9 var(--f-gothic); letter-spacing: .06em; text-transform: uppercase; color: var(--red); }
@@ -120,14 +120,14 @@
 .tb-pop .mat-sell { display: flex; gap: 8px; flex-wrap: wrap; }
 
 /* a desk too narrow for six days: four, the date leaf narrower */
-.topbar[data-layout='mid'] .face { grid-template-columns: 150px minmax(0, 1fr); }
+.topbar[data-layout='mid'] .almanac .face { grid-template-columns: 150px minmax(0, 1fr); }
 @media (max-width: 1180px) { .topbar[data-layout='mid'] .forecast .d:nth-child(n+6) { display: none; } .topbar[data-layout='mid'] .forecast { grid-template-columns: repeat(4, 1fr); } }
 
 /* A phone held upright (design/season.phone.html): one board across the top, no more than a fifth of the height;
    the clock and the menu are at the thumb (the season screen's clock slot). */
 .topbar[data-layout='narrow'] { flex-direction: column; gap: 0; padding: max(10px, env(safe-area-inset-top, 0px)) 10px 0; }
 .topbar[data-layout='narrow'] .almanac { width: 100%; max-width: none; }
-.topbar[data-layout='narrow'] .face { grid-template-columns: 112px minmax(0, 1fr); }
+.topbar[data-layout='narrow'] .almanac .face { grid-template-columns: 112px minmax(0, 1fr); }
 .topbar[data-layout='narrow'] .leaf { padding: 8px 8px 7px; gap: 0 7px; }
 .topbar[data-layout='narrow'] .leaf .day { font-size: 44px; }
 .topbar[data-layout='narrow'] .leaf .month { font-size: 16px; }
@@ -141,16 +141,16 @@
 .topbar[data-layout='narrow'] .goal .fist { --i: 26px; }
 .topbar[data-layout='narrow'] .goal .goal-t { font-size: 16px; }
 /* the balance is the board's third column; outside the season the bank board keeps the menu, under the almanac */
-.topbar[data-layout='narrow'][data-phase='season'] .face { grid-template-columns: 104px minmax(0, 1fr) 112px; }
+.topbar[data-layout='narrow'][data-phase='season'] .almanac .face { grid-template-columns: 104px minmax(0, 1fr) 112px; }
 .topbar[data-layout='narrow'] .face .balance { flex-direction: column; justify-content: center; align-items: flex-end; gap: 2px; padding: 0 9px; border: 0; border-left: 1px solid var(--ink); background: none; }
 .topbar[data-layout='narrow'] .face .balance .t-figure { font-size: 20px; }
 .topbar[data-layout='narrow']:not([data-phase='season']) .bank { width: 100%; margin-top: 8px; }
-@media (max-width: 359px) { .topbar[data-layout='narrow'][data-phase='season'] .face { grid-template-columns: 88px minmax(0, 1fr) 100px; } .topbar[data-layout='narrow'] .leaf .day { font-size: 38px; } .topbar[data-layout='narrow'] .forecast .d:nth-child(n+4) { display: none; } .topbar[data-layout='narrow'] .forecast { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 359px) { .topbar[data-layout='narrow'][data-phase='season'] .almanac .face { grid-template-columns: 88px minmax(0, 1fr) 100px; } .topbar[data-layout='narrow'] .leaf .day { font-size: 38px; } .topbar[data-layout='narrow'] .forecast .d:nth-child(n+4) { display: none; } .topbar[data-layout='narrow'] .forecast { grid-template-columns: repeat(2, 1fr); } }
 
 /* A phone on its side: the boards as low as they go. */
 .topbar[data-layout='short'] { padding-top: 6px; gap: 8px; }
 .topbar[data-layout='short'] .mount { padding: 4px; }
-.topbar[data-layout='short'] .face { grid-template-columns: 112px minmax(0, 1fr); }
+.topbar[data-layout='short'] .almanac .face { grid-template-columns: 112px minmax(0, 1fr); }
 .topbar[data-layout='short'] .leaf { padding: 6px 8px 5px; }
 .topbar[data-layout='short'] .leaf .day { font-size: 40px; }
 .topbar[data-layout='short'] .leaf .year, .topbar[data-layout='short'] .season-track { display: none; }
@@ -175,6 +175,8 @@
 .clock-slot .clock .menu { background: var(--manila); border-left: 1px solid var(--ink); }
 .clock-slot .clock.done { grid-template-columns: 1fr 52px; gap: 6px; padding: 4px; }
 .clock-slot { pointer-events: auto; }
+.clock-slot .clock { min-width: 200px; }
+.topbar[data-layout='narrow'] .goal { width: auto; min-width: 0; margin-right: 12px; }
 
 /* ---------------------------------------------------------------- the living kit (?kit) */
 .kit .k-pin { position: relative; display: inline-block; width: 44px; height: 70px; }
@@ -185,3 +187,19 @@
 .kit .k-back .row { margin-bottom: 40px; }
 .kit .seg-in { max-width: 360px; }
 .kit .k-busts.small figure span { font-size: 13px; }
+.kitbody .kit { width: min(1440px, 100%); }
+@media (max-width: 900px) {
+  .kitbody .kit { padding: 16px 10px 32px; gap: 16px; }
+  .kitbody .k-sec { padding: 16px 14px 18px; }
+  .kitbody .k-two { grid-template-columns: 1fr; gap: 20px; }
+  .kitbody .k-swatches { grid-template-columns: repeat(2, 1fr); }
+  .kitbody .k-icons { grid-template-columns: repeat(5, 1fr); }
+  .kitbody .k-pins { grid-template-columns: repeat(2, 1fr); }
+  .kitbody .k-type .spec { grid-template-columns: 1fr; gap: 4px; }
+  .kitbody .k-mast h1 { font-size: 54px; }
+  .kitbody .k-table td:nth-child(3) { display: none; }
+  .kitbody .orders { padding-left: 46px !important; }
+  .kitbody .k-states .clock { width: 100% !important; }
+}
+.title-screen[data-layout='narrow'] .cover, .title-screen[data-layout='short'] .cover { padding-bottom: 24px; }
+.title-screen[data-layout='short'] .cv-name .county { text-align: left; }

@@ -105,6 +105,8 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #20242a; }
 :where(.hud) :where(strong) { font-weight: 700; }
 :where(.hud) :where(svg) { display: block; }
 .hud [hidden] { display: none !important; }
+/* Read by screen readers, not drawn (the checks skip what has no opacity). */
+.sr { opacity: 0; pointer-events: none; margin: -1px; }
 /* What the HUD draws takes the pointer; the space between lets it through to the land. */
 .hud .sys { pointer-events: auto; }
 

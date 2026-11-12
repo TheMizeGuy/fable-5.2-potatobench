@@ -42,9 +42,10 @@ function sky(name: string, colour: string): HTMLElement {
 
 export function mountKit(root: HTMLElement): void {
   mountSprites()
-  document.documentElement.style.overflow = 'auto'
+  // The kit scrolls as a document; the game's page does not.
+  document.documentElement.style.cssText = 'height:auto;overflow:auto'
   document.body.classList.add('kitbody')
-  document.body.style.overflow = 'auto'
+  document.body.style.cssText = 'height:auto;overflow:visible'
   document.title = 'The County - the system'
   const skyHost = h('div', { class: 'k-backs' })
   let at = 0
