@@ -49,12 +49,16 @@ const cross = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[
 const unit = (a: V3): V3 => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l] }
 
 export class Builder {
-  private pos: number[] = []
-  private nrm: number[] = []
-  private col: number[] = []
-  private uvh: number[] = []
-  private fin: number[] = []
-  private idx: number[] = []
+  // Two lots of geometry: everything, and the tops of roofs. A roof under a low sun is a slope the light rakes along,
+  // which a shadow map of any size stripes; roofs are drawn apart so they can throw shadow without taking it.
+  private lots: Lot[] = [lot(), lot()]
+  private at_ = 0
+  private get pos(): number[] { return this.lots[this.at_].pos }
+  private get nrm(): number[] { return this.lots[this.at_].nrm }
+  private get col(): number[] { return this.lots[this.at_].col }
+  private get uvh(): number[] { return this.lots[this.at_].uvh }
+  private get fin(): number[] { return this.lots[this.at_].fin }
+  private get idx(): number[] { return this.lots[this.at_].idx }
   private m = new Matrix4()
   private t = new Matrix4()
   private stack: Matrix4[] = []
@@ -63,8 +67,14 @@ export class Builder {
   // The level heights above ground are measured from, for what the weather does to the foot of a wall.
   ground = 0
 
-  get triangles(): number { return this.idx.length / 3 }
-  get empty(): boolean { return this.idx.length === 0 }
+  get triangles(): number { return (this.lots[0].idx.length + this.lots[1].idx.length) / 3 }
+  get empty(): boolean { return this.lots[0].idx.length + this.lots[1].idx.length === 0 }
+
+  // What is drawn from here on is the top of a roof (or is not any more).
+  roofing(on: boolean): this {
+    this.at_ = on ? 1 : 0
+    return this
+  }
 
   // Draw from here on at a place in the world, turned about the vertical.
   at(x: number, y: number, z: number, ry = 0, ground = y): this {
@@ -314,34 +324,51 @@ export class Builder {
     }
   }
 
-  geometry(): BufferGeometry {
+  geometry(which = 0): BufferGeometry {
+    const l = this.lots[which]
     const g = new BufferGeometry()
-    g.setAttribute('position', new BufferAttribute(new Float32Array(this.pos), 3))
-    g.setAttribute('normal', new BufferAttribute(new Float32Array(this.nrm), 3))
-    g.setAttribute('color', new BufferAttribute(new Float32Array(this.col), 3))
-    g.setAttribute('aUvh', new BufferAttribute(new Float32Array(this.uvh), 3))
-    g.setAttribute('aFin', new BufferAttribute(new Float32Array(this.fin), 3))
-    const n = this.pos.length / 3
-    g.setIndex(new BufferAttribute(n > 65535 ? new Uint32Array(this.idx) : new Uint16Array(this.idx), 1))
+    g.setAttribute('position', new BufferAttribute(new Float32Array(l.pos), 3))
+    g.setAttribute('normal', new BufferAttribute(new Float32Array(l.nrm), 3))
+    g.setAttribute('color', new BufferAttribute(new Float32Array(l.col), 3))
+    g.setAttribute('aUvh', new BufferAttribute(new Float32Array(l.uvh), 3))
+    g.setAttribute('aFin', new BufferAttribute(new Float32Array(l.fin), 3))
+    const n = l.pos.length / 3
+    g.setIndex(new BufferAttribute(n > 65535 ? new Uint32Array(l.idx) : new Uint16Array(l.idx), 1))
     g.computeBoundingSphere()
     return g
   }
 
-  // What has been drawn so far as one mesh that throws and takes shadow in every cascade; the builder is left empty.
+  // What has been drawn so far as one mesh that throws and takes shadow in every cascade (its roofs, which only throw
+  // it, a mesh under it); the builder is left empty.
   mesh(mat: MeshStandardMaterial, depth?: MeshDepthMaterial): Mesh {
-    const mesh = new Mesh(this.geometry(), mat)
-    if (depth) mesh.customDepthMaterial = depth
-    mesh.castShadow = true
-    mesh.receiveShadow = true
-    for (const l of [1, 2, 3]) mesh.layers.enable(l)
+    const make = (which: number): Mesh => {
+      const mesh = new Mesh(this.geometry(which), mat)
+      if (depth) mesh.customDepthMaterial = depth
+      mesh.castShadow = true
+      mesh.receiveShadow = which === 0
+      for (const l of [1, 2, 3]) mesh.layers.enable(l)
+      return mesh
+    }
+    const mesh = make(0)
+    if (this.lots[1].idx.length) mesh.add(make(1))
     this.clear()
     return mesh
   }
 
   clear(): void {
-    this.pos = []; this.nrm = []; this.col = []; this.uvh = []; this.fin = []; this.idx = []
+    this.lots = [lot(), lot()]
+    this.at_ = 0
     this.stack = []
   }
+}
+
+interface Lot { pos: number[]; nrm: number[]; col: number[]; uvh: number[]; fin: number[]; idx: number[] }
+const lot = (): Lot => ({ pos: [], nrm: [], col: [], uvh: [], fin: [], idx: [] })
+
+// Do something to a built mesh and the roofs under it.
+export function each(mesh: Mesh, fn: (m: Mesh) => void): void {
+  fn(mesh)
+  for (const c of mesh.children) fn(c as Mesh)
 }
 
 // How bright a lit window is drawn (set against the exposure each frame), and what share of the windows are lit.
@@ -397,18 +424,19 @@ export function builtMaterial(): MeshStandardMaterial {
         float splash = (1.0 - smoothstep(0.0, 0.42, hgt)) * (0.45 + 0.55 * fine);
         bRough = 0.9; bMetal = 0.0; bSnow = 1.0; bGlass = 0.0; bLit = 0.0; bBump = vec2(0.0);
         if (fin == ${FIN.clapboard}) {
-          float c = uv.y / 0.115, lap = fract(c), row = floor(c), s = seen(c);
+          float c = uv.y / 0.05, lap = fract(c), row = floor(c), s = seen(c);
           float joint = floor(uv.x / 1.7 + bh1(row) * 9.0);
+          streak = texture2D(uNoise, vec2(uv.x * 0.31, uv.y * 0.045 + 0.5)).a;
           float board = 0.9 + 0.2 * bh2(vec2(row, joint));
           // each board's foot throws a line of shade on the one below; old paint is thin, and thinnest low down
           base *= mix(1.0, board * (1.0 - 0.5 * smoothstep(0.76, 0.95, lap)) * (1.0 + 0.1 * smoothstep(0.0, 0.2, lap) * (1.0 - smoothstep(0.2, 0.5, lap))), s);
           float worn = smoothstep(0.52, 0.8, mott * 0.6 + streak * 0.4 + 0.45 * (1.0 - smoothstep(0.0, 1.2, hgt)));
-          base = mix(base, (base * vec3(0.6, 0.58, 0.54) + 0.012) * (0.8 + 0.4 * fine), worn * 0.5);
+          base = mix(base, (base * vec3(0.7, 0.68, 0.64) + 0.01) * (0.9 + 0.2 * fine), worn * 0.34);
           base = mix(base, base * vec3(0.7, 0.66, 0.56), splash * 0.6);
           bBump.y = -1.1 * s * smoothstep(0.7, 0.98, lap);
           bRough = 0.78;
         } else if (fin == ${FIN.boards}) {
-          float wide = 0.17;
+          float wide = 0.115;
           float c = uv.x / wide, id = floor(c), fr = fract(c), s = seen(c);
           float tone = 0.8 + 0.4 * bh1(id);
           float gap = smoothstep(0.88, 0.98, fr) + (1.0 - smoothstep(0.0, 0.05, fr)) * 0.4;
@@ -421,8 +449,8 @@ export function builtMaterial(): MeshStandardMaterial {
           bBump.x = s * (smoothstep(0.86, 0.98, fr) - (1.0 - smoothstep(0.0, 0.08, fr))) * 1.2;
           bRough = 0.92;
         } else if (fin == ${FIN.shingle}) {
-          float c = uv.y / 0.1, course = floor(c), lap = fract(c), s = seen(c);
-          float t = uv.x / 0.15 + 0.5 * mod(course, 2.0) + bh1(course) * 0.3, tab = floor(t), tf = fract(t);
+          float c = uv.y / 0.062, course = floor(c), lap = fract(c), s = seen(c);
+          float t = uv.x / 0.095 + 0.5 * mod(course, 2.0) + bh1(course) * 0.3, tab = floor(t), tf = fract(t);
           float tone = 0.84 + 0.3 * bh2(vec2(tab, course));
           float shade = 1.0 - 0.42 * smoothstep(0.0, 0.16, 0.16 - lap) - 0.18 * (1.0 - smoothstep(0.0, 0.06, tf));
           base *= mix(1.0, tone * shade, s);
@@ -433,7 +461,7 @@ export function builtMaterial(): MeshStandardMaterial {
           bBump.y = 0.9 * s * (smoothstep(0.0, 0.16, 0.16 - lap) - 0.4);
           bRough = 0.94;
         } else if (fin == ${FIN.metal}) {
-          float c = uv.x / 0.3, fr = fract(c), s = seen(c);
+          float c = uv.x / 0.22, fr = fract(c), s = seen(c);
           float seam = smoothstep(0.86, 0.94, fr) * (1.0 - smoothstep(0.96, 1.0, fr));
           base *= mix(1.0, 1.0 + 0.3 * seam - 0.3 * smoothstep(0.94, 1.0, fr) - 0.12 * (1.0 - smoothstep(0.0, 0.08, fr)), s);
           // rust starts at the eaves and the seams and runs down the sheet
@@ -447,8 +475,8 @@ export function builtMaterial(): MeshStandardMaterial {
           bSnow = 0.72;
           open = 1.0;
         } else if (fin == ${FIN.brick}) {
-          float c = uv.y / 0.062, course = floor(c), s = seen(c);
-          float t = uv.x / 0.135 + 0.5 * mod(course, 2.0), id = floor(t);
+          float c = uv.y / 0.036, course = floor(c), s = seen(c);
+          float t = uv.x / 0.1 + 0.5 * mod(course, 2.0), id = floor(t);
           float mortar = max(smoothstep(0.8, 0.94, fract(c)), smoothstep(0.88, 0.97, fract(t)));
           base = mix(base, mix(base * (0.7 + 0.55 * bh2(vec2(id, course))), vec3(0.42, 0.4, 0.36), mortar * 0.8), s);
           base *= 0.86 + 0.24 * streak;

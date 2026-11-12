@@ -3,7 +3,9 @@
 import { describe, expect, it } from 'vitest'
 import { FIELD_ACRES } from '../src/sim/index.ts'
 import { BAY_WIDE, FD, FIELDS, FW, PLANTED_ROWS, ROW, WIDE } from '../src/render/layout.ts'
-import { BARN, HOUSE, HOUSE_AREA, HOUSE_DOOR, PERSON, SHED_BAY, TRACTOR } from '../src/render/measures.ts'
+import {
+  BARN, BUNK, DUFOUR_BUILT, HOUSE, HOUSE2, HOUSE_AREA, HOUSE_DOOR, NEIGHBOUR, PACKING, PERSON, POLE, POTATO_HOUSE, PUMP, SHED, SHED_BAY, STAND, TRACTOR, TRUCK,
+} from '../src/render/measures.ts'
 import { K, KV, S } from '../src/render/scale.ts'
 
 const ACRE = 4046.86
@@ -31,6 +33,11 @@ describe('the scale standard', () => {
     expect(SHED_BAY.wide).toBeGreaterThan(TRACTOR.wide + 0.6)
     expect(SHED_BAY.deep).toBeGreaterThan(TRACTOR.long)
     expect(SHED_BAY.tall).toBeGreaterThan(TRACTOR.tall)
+    // the standard's bay: about four metres wide and high, and deep enough for the truck
+    expect(SHED_BAY.wide).toBeGreaterThanOrEqual(4)
+    expect(SHED_BAY.wide).toBeLessThanOrEqual(5)
+    expect(SHED_BAY.tall).toBeGreaterThanOrEqual(3.8)
+    expect(SHED_BAY.deep).toBeGreaterThan(TRUCK.long + 1)
     expect(BAY_WIDE).toBeCloseTo(SHED_BAY.wide, 5)
   })
 
@@ -38,6 +45,40 @@ describe('the scale standard', () => {
     say('rows', `${PLANTED_ROWS} to a field, ${ROW.toFixed(3)} m apart`)
     expect(ROW).toBeGreaterThanOrEqual(0.86)
     expect(ROW).toBeLessThanOrEqual(0.91)
+  })
+
+  it('builds every building to the size of a real one', () => {
+    const within = (v: number, lo: number, hi: number, what: string) => { expect(v, what).toBeGreaterThanOrEqual(lo); expect(v, what).toBeLessThanOrEqual(hi) }
+    const size = (b: { w: number; l: number; ridge?: number }) => `${b.w.toFixed(1)} by ${b.l.toFixed(1)} m${b.ridge ? `, ${b.ridge.toFixed(1)} to the ridge` : ''}`
+    say('potato house', size(POTATO_HOUSE))
+    say('machine shed', size(SHED))
+    say('bunkhouse', size(BUNK))
+    say('packing shed', size(PACKING))
+    say('second potato house', size(HOUSE2))
+    say('farm stand', size(STAND))
+    say('pump house', size(PUMP))
+    say('Dufour house, barn, potato house', `${size(DUFOUR_BUILT.house)}; ${size(DUFOUR_BUILT.barn)}; ${size(DUFOUR_BUILT.potatoHouse)}`)
+    say('a neighbour\'s house and barn', `${size(NEIGHBOUR.house)}; ${size(NEIGHBOUR.barn)}`)
+    say('a pole', `${POLE.toFixed(1)} m`)
+    // the farmhouse: about 8 by 11 m and 8 to 9 m to the ridge; with its ells near the measured median of 173 m2
+    within(HOUSE.w, 7.5, 8.6, 'house width'); within(HOUSE.l, 10.4, 11.6, 'house length'); within(HOUSE.ridge, 8, 9, 'house ridge')
+    within(HOUSE_AREA, 140, 200, 'house with its ells')
+    // the barn: 11 by 12 up to 13 by 32 m, 10 to 12 m to the ridge, a 4 m door
+    within(BARN.w, 11, 13, 'barn width'); within(BARN.l, 12, 32, 'barn length'); within(BARN.ridge, 10, 12, 'barn ridge')
+    within(BARN.door.w, 3.8, 4.4, 'barn door'); within(BARN.door.h, 3.8, 4.4, 'barn door height')
+    // the banked potato house: 12 by 18 m
+    within(POTATO_HOUSE.w, 11.4, 12.6, 'potato house width'); within(POTATO_HOUSE.l, 17, 19, 'potato house length')
+    // the machine shed: 9 by 18 m
+    within(SHED.w, 8.5, 9.5, 'shed depth'); within(SHED.l, 17, 19.5, 'shed length')
+    // a bunkhouse for six: 28 to 56 m2 of floor
+    within(BUNK.w * BUNK.l, 28, 60, 'bunkhouse floor')
+    // a packing shed about 9 by 18 m; a roadside stand about 2.4 by 4.9 m; the others between a shed and a barn
+    within(PACKING.w, 8, 10, 'packing shed width'); within(PACKING.l, 12, 19, 'packing shed length')
+    within(STAND.w, 4, 5.5, 'stand length'); within(STAND.l, 2.2, 3.2, 'stand depth')
+    within(HOUSE2.w, 9, 12.6, 'second potato house width'); within(HOUSE2.l, 12, 18.5, 'second potato house length')
+    for (const b of [DUFOUR_BUILT.barn, NEIGHBOUR.barn]) { within(b.w, 11, 13, 'a barn\'s width'); within(b.l, 12, 32, 'a barn\'s length'); within(b.ridge, 10, 12, 'a barn\'s ridge') }
+    for (const b of [DUFOUR_BUILT.house, NEIGHBOUR.house]) { within(b.w, 7, 8.6, 'a house\'s width'); within(b.l, 10, 11.6, 'a house\'s length') }
+    within(POLE, 8.5, 11, 'a pole')
   })
 
   it('makes a field the size of a field beside the barn and the house', () => {

@@ -179,7 +179,7 @@ function seat(b: Builder, s: Site): number {
 }
 
 // ---- The machine shed: a pole shed open to the yard, three bays, tin over boards.
-const SHED: Plan = { w: M.shed.w, l: M.shed.l, wall: M.shed.wall, rise: 0.72, open: true, wallColor: RED, wallFin: FIN.boards, roofColor: NEW_TIN, roofFin: FIN.metal, eave: 0.24 }
+const SHED: Plan = { w: M.shed.w, l: M.shed.l, wall: M.shed.wall, rise: M.shed.rise, open: true, wallColor: RED, wallFin: FIN.boards, roofColor: NEW_TIN, roofFin: FIN.metal, eave: 0.24 }
 function shed(b: Builder, s: Site, look: SiteLook): void {
   const depth = seat(b, s)
   if (!look.built) supplies(b, -s.w / 2 - 1.9, s.d / 2 + 0.6, look.progress, true)
@@ -199,7 +199,8 @@ function shed(b: Builder, s: Site, look: SiteLook): void {
   roof(b, w, l, wall, rise, { color: NEW_TIN, fin: FIN.metal, rust: 0.08, eave: 0.26, rake: 0.2, trim: TRIM })
   for (const sx of [1]) for (const sz of [-1, 1]) b.box(sx * (w / 2 - 0.03), wall / 2, sz * (l / 2 - 0.03), 0.1, wall, 0.1, TRIM, FIN.plain)
   // posts and the long header across the open front, braced
-  const zs = [-l / 2 + 0.07, -l / 6, l / 6, l / 2 - 0.07]
+  // four bays: three for the machines and the workshop's at the far end
+  const zs = [-l / 2 + 0.07, -l / 4, 0, l / 4, l / 2 - 0.07]
   for (const z of zs) {
     b.box(-w / 2 + 0.07, wall / 2 - 0.1, z, 0.13, wall + 0.2, 0.13, '#8d7d66', FIN.wood)
     b.box(-w / 2 + 0.07, -0.02, z, 0.24, 0.16, 0.24, CONCRETE, FIN.concrete)
@@ -219,7 +220,7 @@ function shed(b: Builder, s: Site, look: SiteLook): void {
 }
 
 // ---- The bunkhouse: a long low house in new cedar, a porch on its front, a stovepipe through the roof.
-const BUNK: Plan = { w: 3.2, l: 5.0, wall: 1.3, rise: 0.82, wallColor: CEDAR, wallFin: FIN.shingle, roofColor: '#4d4f52', roofFin: FIN.shingle, eave: 0.18 }
+const BUNK: Plan = { w: M.bunk.w, l: M.bunk.l, wall: M.bunk.wall, rise: M.bunk.rise, wallColor: CEDAR, wallFin: FIN.shingle, roofColor: '#4d4f52', roofFin: FIN.shingle, eave: 0.18 }
 function bunk(b: Builder, s: Site, look: SiteLook, marks: SiteMarks): void {
   const depth = seat(b, s)
   const pl: Plan = { ...BUNK, w: s.d, l: s.w }
@@ -262,7 +263,7 @@ function bunk(b: Builder, s: Site, look: SiteLook, marks: SiteMarks): void {
 }
 
 // ---- The packing shed: a long red shed with a loading dock, the grading line out at its end door, barrels and sacks.
-const PACKING: Plan = { w: 4.0, l: 6.0, wall: 1.75, rise: 1.1, wallColor: RED, wallFin: FIN.boards, roofColor: NEW_TIN, roofFin: FIN.metal, eave: 0.22 }
+const PACKING: Plan = { w: M.packing.w, l: M.packing.l, wall: M.packing.wall, rise: M.packing.rise, wallColor: RED, wallFin: FIN.boards, roofColor: NEW_TIN, roofFin: FIN.metal, eave: 0.22 }
 function packing(b: Builder, s: Site, look: SiteLook): void {
   const depth = seat(b, s)
   if (!look.built) { supplies(b, s.w / 2 + 2.0, -s.d / 2 + 0.4, look.progress, true); pad(b, s.w, s.d, depth) }
@@ -284,13 +285,13 @@ function packing(b: Builder, s: Site, look: SiteLook): void {
   fbox(b, sh.W, 1.5, 1.47, 2.9, 0.07, 0.06, TRIM, FIN.plain)
   leanRoof(b, -w / 2, -w / 2 - 1.2, dz0 - 0.1, dz1 + 0.1, wall - 0.06, wall - 0.36, NEW_TIN, FIN.metal, { rust: 0.05 })
   for (const z of [dz0 + 0.05, dz1 - 0.05]) b.box(-w / 2 - 1.08, (wall - 0.36) / 2, z, 0.08, wall - 0.3, 0.08, TRIM, FIN.plain)
-  for (const sw of [3.7, 4.5, 5.3]) win(b, sh.W, sw, 1.02, 0.36, 0.46, { cols: 3, rows: 3, barn: true, seed: lit })
-  for (const sw of [0.8, 2.0, 4.0, 5.2]) win(b, sh.E, sw, 1.1, 0.36, 0.4, { cols: 3, rows: 2, barn: true, seed: lit })
+  for (const sw of [l - 2.8, l - 1.9, l - 1.0]) win(b, sh.W, sw, 1.02, 0.36, 0.46, { cols: 3, rows: 3, barn: true, seed: lit })
+  for (const sw of [0.9, 2.3, l - 2.3, l - 0.9]) win(b, sh.E, sw, 1.1, 0.36, 0.4, { cols: 3, rows: 2, barn: true, seed: lit })
   win(b, sh.S, w / 2, wall + rise * 0.45, 0.34, 0.34, { cols: 2, rows: 2, barn: true })
   // barrels and sacks on the dock
   let k = 0
-  for (const [x, z, y] of [[-0.3, -2.2, 0], [-0.52, -2.0, 0], [-0.3, -1.76, 0], [-0.76, -2.22, 0], [-0.42, -2.1, 0.3], [-0.9, 0.5, 0], [-0.66, 0.62, 0]]) barrel(b, -w / 2 + x, 0.07 + y, z, 1, 0.88 + 0.24 * ((k++ * 37) % 10) / 10, y === 0 && k % 3 === 0)
-  for (const [x, z, r] of [[-0.9, -0.5, 0.2], [-0.84, -0.86, -0.3], [-0.88, -0.66, 1.2]]) b.blob([-w / 2 + x, 0.14 + (r > 1 ? 0.13 : 0), z], [0.2, 0.08, 0.13], Math.round(r * 9) + 4, '#b7a47c', FIN.cloth, { rough: 0.16, detail: 1 })
+  for (const [x, z, y] of [[-0.3, -2.2, 0], [-0.52, -2.0, 0], [-0.3, -1.76, 0], [-0.76, -2.22, 0], [-0.42, -2.1, 0.3], [-0.9, 0.5, 0], [-0.66, 0.62, 0]]) barrel(b, -w / 2 + x, 0.066 + y * 0.985, z, 1, 0.88 + 0.24 * ((k++ * 37) % 10) / 10, y === 0 && k % 3 === 0)
+  for (const [x, z, r] of [[-0.9, -0.5, 0.2], [-0.84, -0.86, -0.3], [-0.88, -0.66, 1.2]]) b.blob([-w / 2 + x, 0.128 + (r > 1 ? 0.12 : 0), z], [0.2, 0.08, 0.13], Math.round(r * 9) + 4, '#b7a47c', FIN.cloth, { rough: 0.12, detail: 1, flat: -0.75 })
   // The end to the lane: the big door, and outside it the grading line: hopper, sizing screen on its legs, the
   // picking table, and barrels set to catch each grade.
   b.quad(fp(sh.N, 1.1, 0.03, 0.012), fp(sh.N, 2.9, 0.03, 0.012), fp(sh.N, 2.9, 1.5, 0.012), fp(sh.N, 1.1, 1.5, 0.012), '#1a1410', FIN.dark)
@@ -324,7 +325,7 @@ function packing(b: Builder, s: Site, look: SiteLook): void {
 
 // ---- The second potato house: the same banked house as the first, new.
 function house(b: Builder, s: Site, look: SiteLook): void {
-  const wall = s.yard === -2 ? 1.0 : 1.15, rise = s.yard === -2 ? 1.1 : 1.25
+  const { wall, rise } = s.yard === -2 ? M.dufour.house2 : M.house2
   if (look.built) { potatoHouse(b, s.x, s.z, s.w, s.d, wall, rise, { fresh: true, barrels: 6 }); return }
   const y = groundY(s.x, s.z + s.d / 2 + 0.7) + 0.03
   const p = look.progress
@@ -435,7 +436,7 @@ function stand(b: Builder, s: Site, look: SiteLook): void {
   const kinds = ['#c2a071', '#9c4a3c', '#d3b46a', '#c2a071']
   for (let k = 0; k < 4; k++) basket(-w / 2 + 0.36 + k * 0.46, 0.525, d / 2 - 0.12, kinds[k])
   for (let k = 0; k < 3; k++) basket(-w / 2 + 0.5 + k * 0.42, -0.02, d / 2 + 0.28, kinds[(k + 1) % 4])
-  for (const [x, r] of [[0.74, 0.1], [0.94, -0.2]]) b.blob([x, 0.12, d / 2 + 0.32], [0.12, 0.17, 0.1], 7 + Math.round(r * 10), '#b7a47c', FIN.cloth, { rough: 0.14 })
+  for (const [x, r] of [[0.74, 0.1], [0.94, -0.2]]) b.blob([x, 0.1, d / 2 + 0.32], [0.12, 0.17, 0.1], 7 + Math.round(r * 10), '#b7a47c', FIN.cloth, { rough: 0.12, flat: -0.7 })
   if (look.autumn) for (const [x, z, sc] of [[-0.95, 0.5, 1], [-0.75, 0.62, 0.8], [-1.0, 0.72, 0.7]]) b.blob([x, 0.07 * sc, d / 2 + z - 0.2], [0.11 * sc, 0.08 * sc, 0.11 * sc], Math.round(x * 9), '#cf7a28', FIN.plain, { rough: 0.1 })
   b.box(0.2, 0.62, d / 2 - 0.2, 0.14, 0.18, 0.1, '#d8d4c8', FIN.plain)
   b.lathe([0.2, 0.71, d / 2 - 0.2], [[0.02, 0], [0.09, 0.02]], 8, '#8b8d88', FIN.plain)
@@ -473,7 +474,7 @@ function station(b: Builder, s: Site, look: SiteLook, marks: SiteMarks): void {
   b.box(0.45, 0.2, 0.45, 0.05, 0.4, 0.05, TRIM, FIN.wood)
   b.cyl([0.45, 0.4, 0.45], [0.45, 0.66, 0.45], 0.05, 0.065, 8, '#b9bcb8', FIN.metal)
   // the mast, guyed three ways, with the vane and the cups at its head
-  const top = 3.3
+  const top = 4.5
   b.cyl([0.35, 0, -0.35], [0.35, top, -0.35], 0.03, 0.02, 6, '#c2c5c1', FIN.metal)
   for (let k = 0; k < 3; k++) {
     const a = k * 2.094 + 0.5

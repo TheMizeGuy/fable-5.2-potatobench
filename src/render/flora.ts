@@ -8,7 +8,7 @@ import {
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { PARCELS, TRACTS } from '../sim/index.ts'
 import {
-  DUFOUR, DUFOUR_BARN, DUFOUR_HOUSE, DUFOUR_POTATO_HOUSE, FARM, FARM_CENTER, FD, FIELDS, FW, HOME, HOME_WOODS, KEEP_CLEAR, LAND, POND, POTATO_HOUSE, WIDE, brookHalf,
+  DUFOUR, DUFOUR_BARN, DUFOUR_HOUSE, DUFOUR_POTATO_HOUSE, FARM, FARM_CENTER, FD, FIELDS, FW, HOME, HOME_WOODS, KEEP_CLEAR, LAND, POND, POTATO_HOUSE, WIDE, YARD_TREES, brookHalf,
   brookZ, fieldMask, groundY, hillRoadZ, oursAt, regionAt, ridgeWoodAt, roadDist, townRoadZ, tractAt, woodFront, woodsAt,
 } from './layout.ts'
 import { fbm2, hash2, rng, smooth } from './noise.ts'
@@ -312,14 +312,8 @@ export class Flora {
     }
     // By the house, along the lane and on the brook; the Dufour dooryard's maple, and a few along the road between.
     const home = (x: number, z: number) => toWorld(HOME, x, z), dufour = (x: number, z: number) => toWorld(DUFOUR, x, z)
-    trees.maple.push({ ...home(27.3, 5.2), s: 8.6 * T, r: 0.3, hue: 0.12, kind: 0 }, { ...home(27.6, -2.4), s: 6.4 * T, r: 0.5, hue: 0.8, kind: 0 })
-    for (let k = 0; k < 4; k++) {
-      const t = { ...home(28.2 + r() * 1.4, -8.6 + k * 2.3 + r()), s: (5 + r() * 2.4) * T, r: r(), hue: r(), kind: 0 }
-      if (roadDist(t.x, t.z) > WIDE.road / 2 + 2.2) trees.spruce.push(t)
-    }
-    trees.maple.push({ ...dufour(97.4, 6.6), s: 8.8 * T, r: 0.22, hue: 0.2, kind: 0 })
-    trees.birch.push({ ...dufour(89.0, 4.6), s: 5.6 * T, r: 0.62, hue: 0.7, kind: 1 })
-    for (let k = 0; k < 3; k++) trees.spruce.push({ ...dufour(98.6 + r() * 1.6, -10 + k * 2.6), s: (5 + r() * 2.2) * T, r: r(), hue: r(), kind: 0 })
+    // (the yards' own trees are in the yards' plan: layout.ts)
+    for (const t of YARD_TREES) trees[t.kind].push({ x: t.x, z: t.z, s: t.h, r: t.r, hue: t.hue, kind: t.kind === 'birch' ? 1 : 0 })
     for (let x = home(46, 0).x; x < 48 * K; x += (4 + r() * 7) * T) {
       const side = r() < 0.5 ? -1 : 1, z = -7.6 * K + side * (WIDE.road / 2 + (2.4 + r() * 1.2) * T)
       if (!open(x, z)) continue
@@ -659,10 +653,24 @@ export class Flora {
   }
 }
 
-// Where the neighbours' houses and barns stand: along the town road and the road over the hill.
-export const FARMSTEADS: [number, number, number][] = ([
-  [-92, 0, 22, 0.3], [118, 0, -24, 2.9], [262, 0, 24, 0.1], [-246, 0, -22, 3.3],
-  [-58, 1, 22, 0.2], [96, 1, -22, 3.0], [-212, 1, 24, 0.4], [248, 1, 22, 0.1],
-  [-380, 1, -22, 3.2], [404, 1, -24, 2.8],
-] as [number, number, number, number][]).map(([x, hill, off, ry]) => [x * K, (hill ? hillRoadZ(x * K) : townRoadZ(x * K)) + off, ry] as [number, number, number])
-  .concat([[30 * K, -300 * K, 0.6], [-160 * K, -330 * K, 2.4], [210 * K, -340 * K, 1.2]])
+// Where the neighbours' houses and barns stand: along the town road and the road over the hill, a farm about every
+// three hundred metres on one side or the other, as they stand in such country; one on the lane between our two
+// places; a few far off beyond the ridge. Each: where, and which way its house looks.
+export const FARMSTEADS: [number, number, number][] = (() => {
+  const out: [number, number, number][] = []
+  const along = (zOf: (x: number) => number, x0: number, x1: number, seed: number, clear: [number, number][]) => {
+    let k = 0
+    for (let x = x0; x < x1; x += 250 + 120 * hash2(k, seed)) {
+      k++
+      if (clear.some(([c, r]) => Math.abs(x - c) < r)) continue
+      const side = hash2(k, seed + 7) < 0.5 ? -1 : 1, back = 26 + 16 * hash2(k, seed + 3)
+      // the house looks at the road
+      out.push([x, zOf(x) + side * back, side > 0 ? Math.PI : 0])
+    }
+  }
+  // (clear of our own drive and the Dufour drive where they meet the town road, and of the village)
+  along(townRoadZ, -1900, 3000, 1, [[K * 20.6, 150], [DUFOUR.x + S * 92, 150], [K * 150, 260]])
+  along(hillRoadZ, -1700, 2800, 2, [[K * 23, 240]])
+  out.push([K * 46.6, K * -10.5, Math.PI], [30 * K, -300 * K, 0.6], [-160 * K, -330 * K, 2.4], [210 * K, -340 * K, 1.2])
+  return out
+})()

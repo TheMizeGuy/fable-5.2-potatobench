@@ -5,6 +5,7 @@
 // plan unit, the two yards as islands at true size, widths and heights at their real figures.
 import { COLS, FIELD_COUNT, PARCELS, ROWS, TRACTS, type BlockId, type BuildingKind } from '../sim/index.ts'
 import { clamp, fbm2, hash2, mix, smooth } from './noise.ts'
+import { SMALL as M } from './measures.ts'
 import { K, KV, S, island, toWorld, type Frame } from './scale.ts'
 
 export const FW = 14.4 * K            // a field along its rows
@@ -151,18 +152,23 @@ export const BRIDGE: Frame = island(16.2, 18.4)
 export const PONDSIDE: Frame = { x: (K - S) * 34.6, z: K * 18.2 - S * 7.4 }
 // Where the farm road meets the town road: the mailbox and the culvert.
 export const ROADSIDE: Frame = { x: (K - S) * 20.6, z: 0 }
+// The farm stand: on the town road's near verge, a few lengths west of the gate.
+export const STANDSIDE: Frame = { x: K * 20.6 - 15, z: townRoadZ(K * 20.6 - 15) - 8.6 }
 const at = (f: Frame, p: Pt): Pt => toWorld(f, p.x, p.z)
 
 // What stands in the yards, in small units in its own frame: the builders' drawings are made in these.
 export const SMALL = {
-  HOUSE: { x: 23.6, z: 4.4 }, BARN: { x: 23.9, z: -6.5 }, POTATO_HOUSE: { x: 23.4, z: -17.6 },
+  // The house's and the barn's points are where their doors and porch are taken from (work.ts), not their middles:
+  // the big house runs toward the brook from its kitchen ell, the barn up the slope from the back house.
+  HOUSE: { x: 23.6, z: 4.4 }, BARN: { x: 23.9, z: -6.5 }, POTATO_HOUSE: { x: 24.6, z: -21.6 },
   // The Dufour place: a cape and an old barn by the yard, and a potato house banked into the slope above it.
-  DUFOUR_HOUSE: { x: 93.6, z: 2.4 }, DUFOUR_BARN: { x: 95.2, z: -6.2 }, DUFOUR_POTATO_HOUSE: { x: 89.8, z: -14.0 },
+  DUFOUR_HOUSE: { x: 93.6, z: 2.4 }, DUFOUR_BARN: { x: 96.6, z: -8.2 }, DUFOUR_POTATO_HOUSE: { x: 89.8, z: -14.0 },
   // Where the pond's basin lies: dug into the slope below the back yard, clear of the pump house on its upper bank.
   POND: { x: 39.6, z: 11.0, rx: 2.6, rz: 2.2 },
-  // Logs decked by the dooryard and across the back lane, fieldstone tipped at the barn's corner.
-  LOG_DECKS: [{ x: 20.05, z: -2.8, heading: 0 }, { x: 31.5, z: -9.7, heading: 0 }, { x: 33.6, z: -9.7, heading: 0 }] as Spot[],
-  STONE_PILE: { x: 20.75, z: -9.35 } as Pt,
+  // Logs decked across the farm road from the dooryard, on the strip between the road and the field wall, and the
+  // fieldstone tipped beyond them.
+  LOG_DECKS: [{ x: 14.6, z: -6.4, heading: 0 }, { x: 14.6, z: -3.0, heading: 0 }, { x: 14.6, z: 0.4, heading: 0 }] as Spot[],
+  STONE_PILE: { x: 13.6, z: -9.6 } as Pt,
 }
 export const HOUSE = at(HOME, SMALL.HOUSE), BARN = at(HOME, SMALL.BARN), POTATO_HOUSE = at(HOME, SMALL.POTATO_HOUSE)
 export const DUFOUR_HOUSE = at(DUFOUR, SMALL.DUFOUR_HOUSE), DUFOUR_BARN = at(DUFOUR, SMALL.DUFOUR_BARN), DUFOUR_POTATO_HOUSE = at(DUFOUR, SMALL.DUFOUR_POTATO_HOUSE)
@@ -179,8 +185,8 @@ function yardRect(f: Frame, x: number, z: number, reach: number, x0: number, x1:
   return { ...toWorld(f, x, z), reach: reach * S, x0: a.x, x1: b.x, z0: a.z, z1: b.z }
 }
 export const YARD_AT: Record<number, { x: number; z: number; reach: number; x0: number; x1: number; z0: number; z1: number }> = {
-  [-1]: yardRect(HOME, 24.4, -7.4, 13, 18.4, 42.3, -22.4, 6.7),
-  [-2]: yardRect(DUFOUR, 92.6, -6.2, 11, 83.9, 100, -18.2, 6.4),
+  [-1]: yardRect(HOME, 24.4, -7.4, 13, 12.4, 49.6, -31.0, 13.0),
+  [-2]: yardRect(DUFOUR, 92.6, -6.2, 11, 83.9, 105.5, -25.5, 6.4),
 }
 export const YARD_FRAME: Record<number, Frame> = { [-1]: HOME, [-2]: DUFOUR }
 // The yard at a point on the ground, or 0.
@@ -211,47 +217,71 @@ export const SITES: Site[] = [
   // Home: a second potato house banked into the slope beside the first, the bunkhouse beyond it up the Dufour road;
   // behind the barn, down the back lane, the machine shed and the packing shed; the pond's pump house in the low
   // ground, the stand by the bridge, the weather station in the open behind the house.
-  site('house', -1, 31.6, -18.0, 0, 4.0, 6.0),
-  site('bunk', -1, 39.2, -13.4, 0, 5.0, 3.2, -0.9),
-  site('shed', -1, 33.6, -6.0, 0, 6.4, 3.1),
-  site('packing', -1, 33.6, 1.1, 0, 6.0, 4.0, -1.2),
-  site('pond', -1, 34.6, 7.4, 0, 1.3, 1.6, 0, PONDSIDE),
-  site('stand', -1, 19.9, 19.2, -Math.PI / 2, 2.2, 1.3, 0, BRIDGE),
-  site('station', -1, 30.6, 5.4, 0, 1.7, 1.7),
-  site('road', -1, 20.4, -11.4, 0, 1.5, 1.5),
+  // (Sizes are the buildings' own, in measures.ts: a potato house 10.6 by 15.4 m, the machine shed 18 by 9 m ...)
+  site('house', -1, 36.2, -23.4, 0, M.house2.w, M.house2.l),
+  site('bunk', -1, 44.8, -20.6, 0, M.bunk.l, M.bunk.w, -0.9),
+  site('shed', -1, 37.8, -10.4, 0, M.shed.l, M.shed.w),
+  site('packing', -1, 39.8, -1.2, 0, M.packing.l, M.packing.w, -1.2),
+  site('pond', -1, 34.6, 7.4, 0, M.pump.w, M.pump.l, 0, PONDSIDE),
+  site('stand', -1, 0, 0, 0, M.stand.w, M.stand.l, 0, STANDSIDE),
+  site('station', -1, 30.6, 10.4, 0, M.station.w, M.station.l),
+  site('road', -1, 16.6, -10.4, 0, 1.5, 1.5),
   // Dufour: a second potato house beside the old one, and a bunkhouse below the yard road.
-  site('house', -2, 95.8, -15.2, 0, 3.4, 5.0),
-  site('bunk', -2, 86.6, -2.2, 0, 4.6, 3.0, -0.8),
+  site('house', -2, 99.6, -17.6, 0, M.dufour.house2.w, M.dufour.house2.l),
+  site('bunk', -2, 86.6, -2.2, 0, M.dufour.bunk.l, M.dufour.bunk.w, -0.8),
 ]
 export function siteOf(kind: BuildingKind, yard: number): Site | undefined {
   return SITES.find(s => s.kind === kind && s.yard === yard)
 }
 // Where machines the farm owns stand when nobody is on them (a heading is the way it faces: cos, sin in x, z): the
 // machine shed's three bays, where the truck waits before there is a shed, and the grass past the shed for implements.
-export const BAY_WIDE = S * (6.4 / 3)
-export const BAYS: Spot[] = [-1, 0, 1].map(k => spot(HOME, { x: 33.6 + k * (6.4 / 3), z: -5.9, heading: Math.PI / 2 }))
-export const TRUCK_SPOT: Spot = spot(HOME, { x: 36.6, z: -9.2, heading: -0.3 })
+// The shed has four bays of four and a half metres; the fourth is the workshop's.
+export const BAY_WIDE = S * (M.shed.l / M.shed.bays)
+export const BAYS: Spot[] = [0, 1, 2].map(k => spot(HOME, { x: 37.8 + (k - (M.shed.bays - 1) / 2) * (M.shed.l / M.shed.bays), z: -10.3, heading: Math.PI / 2 }))
+// Before there is a shed the truck stands behind where it will be, along the Dufour road.
+export const TRUCK_SPOT: Spot = spot(HOME, { x: 38.2, z: -13.7, heading: 0.03 })
 export const IMPLEMENT_SPOTS: Record<'harvester' | 'sprayer' | 'reel', Spot> = {
-  harvester: spot(HOME, { x: 38.5, z: -5.9, heading: -0.12 }), sprayer: spot(HOME, { x: 40.9, z: -6.1, heading: 0.2 }), reel: spot(HOME, { x: 41.3, z: -2.4, heading: -1.2 }),
+  harvester: spot(HOME, { x: 44.3, z: -10.9, heading: -0.12 }), sprayer: spot(HOME, { x: 47.0, z: -11.4, heading: 0.2 }), reel: spot(HOME, { x: 46.6, z: -8.0, heading: -1.2 }),
 }
+// The yards' own trees, which shade and shelter them: what kind, where, and how tall in metres.
+export interface YardTree { kind: 'maple' | 'birch' | 'spruce'; x: number; z: number; h: number; r: number; hue: number }
+const tree = (f: Frame, kind: YardTree['kind'], x: number, z: number, h: number, r: number, hue: number): YardTree => ({ kind, ...toWorld(f, x, z), h, r, hue })
+const onLand = (kind: YardTree['kind'], x: number, z: number, h: number, r: number, hue: number): YardTree => ({ kind, x, z, h, r, hue })
+export const YARD_TREES: YardTree[] = [
+  // home: the two great maples of the dooryard, one over the kitchen garden, a birch by the well; spruce beyond the sheds
+  tree(HOME, 'maple', 28.6, 7.4, 22, 0.3, 0.12), tree(HOME, 'maple', 19.6, 11.6, 19, 0.62, 0.5), tree(HOME, 'maple', 29.4, -6.4, 16, 0.5, 0.8),
+  tree(HOME, 'birch', 26.4, 9.4, 13, 0.7, 0.62), tree(HOME, 'spruce', 48.4, -13.6, 15, 0.2, 0.3), tree(HOME, 'spruce', 49.0, -11.0, 17, 0.6, 0.6), tree(HOME, 'spruce', 48.5, -8.2, 14, 0.9, 0.4),
+  // maples down the drive, on its field side, and a pair at the gate
+  ...[5.9, 8.4, 10.9, 13.4, 15.9].map((z, k) => onLand('maple', K * 15.95 - 7.5 - (k % 2), K * z, 17 + ((k * 7) % 5), 0.2 + 0.17 * k, 0.15 + 0.2 * k)),
+  onLand('maple', K * 20.6 - 9, townRoadZ(K * 20.6) - 16, 20, 0.44, 0.3), onLand('maple', K * 20.6 + 10, townRoadZ(K * 20.6) - 15, 18, 0.81, 0.7),
+  // Dufour: the dooryard's maple and birch, spruce to the east of the barn
+  tree(DUFOUR, 'maple', 97.8, 7.4, 21, 0.22, 0.2), tree(DUFOUR, 'birch', 89.0, 5.0, 13, 0.62, 0.7),
+  tree(DUFOUR, 'spruce', 104.2, -9.6, 14, 0.3, 0.2), tree(DUFOUR, 'spruce', 104.8, -6.8, 16, 0.7, 0.5), tree(DUFOUR, 'spruce', 104.3, -4.0, 13, 0.1, 0.8),
+]
+// The pasture east of the home yard, fenced, where the neighbour's cows are let to graze: its corners, in metres.
+export const PASTURE: Pt[] = [
+  { x: HOME.x + S * 50.4, z: HOME.z + S * -12.6 }, { x: K * 43.4, z: K * -6.6 }, { x: K * 43.4, z: K * 5.9 }, { x: HOME.x + S * 50.4, z: K * 5.9 },
+]
 // Ground kept clear of trees and long grass: each site, whether or not anything stands there yet.
 export const KEEP_CLEAR: { x: number; z: number; r: number }[] = [
   ...SITES.filter(s => s.kind !== 'road').map(s => ({ x: s.x, z: s.z, r: Math.hypot(s.w, s.d) / 2 + 1.4 * S })),
   ...LOG_DECKS.map(p => ({ x: p.x, z: p.z, r: 1.8 * S })), { ...STONE_PILE, r: 1.6 * S },
   // where the implements stand in the grass past the machine shed, and the orchard
-  { ...toWorld(HOME, 39.7, -5.8), r: 3.0 * S }, { ...toWorld(HOME, 40, 1.6), r: 3.4 * S }, { x: TRUCK_SPOT.x, z: TRUCK_SPOT.z, r: 1.8 * S },
+  { ...toWorld(HOME, 45.6, -10.2), r: 3.6 * S }, { ...toWorld(HOME, 40.4, 9.6), r: 6.6 * S }, { x: TRUCK_SPOT.x, z: TRUCK_SPOT.z, r: 1.8 * S },
+  // the dooryard, the kitchen garden and the barnyard
+  { ...toWorld(HOME, 28.2, -1.4), r: 3.2 * S }, { ...toWorld(HOME, 23.8, 9.0), r: 2.2 * S }, { ...toWorld(HOME, 26.8, -15.0), r: 3.4 * S },
 ]
 
 // Ground levelled for the buildings: each sits a step higher up the slope than the last. `at`: where up the slope
 // (a z in its frame's small units) its level is taken from.
 const PADS = ([
-  [HOME, SMALL.HOUSE.x, SMALL.HOUSE.z - 0.4, 2.9, 2.3, 4.6],
-  [HOME, SMALL.HOUSE.x + 0.1, -0.1, 2.4, 2.8, 0.4],
-  [HOME, SMALL.BARN.x, SMALL.BARN.z, 3.5, 4.1, -5.2],
-  [HOME, SMALL.POTATO_HOUSE.x, -13.1, 2.9, 1.9, -14.0],
+  [HOME, SMALL.HOUSE.x + 0.3, SMALL.HOUSE.z + 0.7, 2.7, 3.3, 5.0],
+  [HOME, SMALL.HOUSE.x + 0.25, -0.2, 2.3, 3.2, 0.2],
+  [HOME, SMALL.BARN.x + 1.1, SMALL.BARN.z - 1.9, 4.5, 5.0, -7.6],
+  [HOME, SMALL.POTATO_HOUSE.x, SMALL.POTATO_HOUSE.z + 4.3, 3.3, 1.9, -17.9],
   [DUFOUR, SMALL.DUFOUR_HOUSE.x, SMALL.DUFOUR_HOUSE.z, 2.6, 3.4, 2.4],
-  [DUFOUR, SMALL.DUFOUR_BARN.x, SMALL.DUFOUR_BARN.z, 2.9, 3.4, -6.0],
-  [DUFOUR, SMALL.DUFOUR_POTATO_HOUSE.x, -10.3, 2.5, 1.8, -11.0],
+  [DUFOUR, SMALL.DUFOUR_BARN.x + 0.6, SMALL.DUFOUR_BARN.z, 3.9, 3.6, -8.0],
+  [DUFOUR, SMALL.DUFOUR_POTATO_HOUSE.x, -10.3, 2.8, 1.8, -11.0],
 ] as [Frame, number, number, number, number, number][]).map(([f, x, z, rx, rz, up]) => ({ ...toWorld(f, x, z), rx: S * rx, rz: S * rz, level: profile(toWorld(f, x, up).z) }))
 
 export function padLevel(k: number): number {
@@ -277,21 +307,21 @@ const LANE_RIDGE = -20.8, LANE_MID = -7.6, LANE_LOW = 5.6, LANE_BROOK = 31.4, LA
 // Below the dooryard it keeps to the foot of the bottom field's headland, clear of the swale.
 // Its first eleven points run from the potato house to the bridge (the gravelling's marks follow them).
 export const ROAD: [number, number][] = [
-  H(23.4, -13.2), H(20.9, -12.0), H(18.9, -9.6), H(18.508, LANE_MID), H(17.9, -4.5), H(17.5, 3.4), L(16.5, LANE_LOW), L(15.95, 7.1), L(15.9, 15.6),
+  H(24.6, -17.2), H(20.6, -15.4), H(18.9, -9.6), H(18.508, LANE_MID), H(17.9, -4.5), H(17.5, 3.4), L(16.5, LANE_LOW), L(15.95, 7.1), L(15.9, 15.6),
   L(16.2, 18.4), L(17.8, 22.4), L(18.3, 30), L(18.458, LANE_BROOK), L(19.2, 38), L(20.2, 47.5), [K * 20.6, townRoadZ(K * 20.6)],
 ]
 export const SPURS: [number, number][][] = [
   [H(17.5, 3.4), H(21.3, 3.6)],
-  [H(17.9, -4.5), H(21.2, -5.6)],
+  [H(17.9, -4.5), H(21.0, -6.7)],
 ]
 // Where the roads cross the brook on their bridges.
 export const BRIDGE_X = { home: K * 17.8 + 0.4, dufour: D(92.0, 12.0)[0] + 2 }
 // The road to the Dufour place: out past the potato house, over the neighbour's ground, and along the Dufour lane.
-const DUFOUR_ROAD: [number, number][] = [H(23.4, -13.2), H(27.4, -13.1), H(31.8, -11.9), H(36.0, -9.4), H(40.4, -7.9), L(45.0, -7.6), L(50.0, LANE_MID)]
+const DUFOUR_ROAD: [number, number][] = [H(24.6, -17.2), H(28.4, -17.0), H(31.6, -16.5), H(36.2, -15.9), H(40.5, -15.6), H(44.8, -15.8), L(45.0, -7.6), L(50.0, LANE_MID)]
 const DUFOUR_YARD_ROAD: [number, number][] = [L(82.2, LANE_MID), D(83.6, -7.6), D(86.4, -7.4), D(89.8, -6.8)]
 // The Dufour drive, down over the brook to the town road.
 const DRIVE_X = D(92.0, 12.0)[0]
-const DUFOUR_DRIVE: [number, number][] = [
+export const DUFOUR_DRIVE: [number, number][] = [
   D(89.8, -6.8), D(91.2, 1.0), D(92.0, 12.0), [DRIVE_X + 1, K * 17], [BRIDGE_X.dufour, brookZ(BRIDGE_X.dufour)], [DRIVE_X + 3, K * 32], [DRIVE_X + 4, townRoadZ(DRIVE_X + 4)],
 ]
 
@@ -299,12 +329,14 @@ function lane(z: number, xs: number[]): [number, number][] { return xs.map(x => 
 function down(x: number, zs: number[]): [number, number][] { return zs.map(z => L(x, z)) }
 
 // The back lane behind the barn and the aprons and paths of the yards' sites. Each starts on a road already there.
+// (Each joins the Dufour road, or the lane before it, at one of that way's own points.)
 const YARD_WAYS: [number, number][][] = [
-  [H(29.0, -12.6636), H(29.0, -9.0), H(29.2, -4.0), H(29.6, 0.9)],
-  [H(29.2, -4.0), H(31.0, -3.6), H(36.6, -3.6), H(40.6, -4.0)],
-  [H(31.6, -11.9545), H(31.6, -14.6)],
-  [H(39.2, -8.3091), H(39.2, -10.9)],
-  [D(89.8, -6.8), D(92.6, -10.2), D(95.8, -12.3)],
+  [H(31.6, -16.5), H(31.6, -6.4), H(31.6, 3.6)],
+  [H(31.6, -6.4), H(37.8, -6.4), H(43.0, -6.4), H(49.4, -6.4)],
+  [H(31.6, 3.6), H(39.8, 3.6), H(44.0, 3.6)],
+  [H(36.2, -15.9), H(36.2, -17.7)],
+  [H(44.8, -15.8), H(44.8, -17.9)],
+  [D(89.8, -6.8), D(91.6, -9.6), D(95.0, -12.0), D(99.6, -12.2)],
   [D(90.985, -0.2), D(87.0, 0.3)],
 ]
 
@@ -324,6 +356,8 @@ export const WAYS: Way[] = [
   { kind: 'track', pts: down(-0.3, [LANE_RIDGE, LANE_MID, LANE_LOW, LANE_FOOT, 22.0, 27.0, LANE_BROOK]) },
   { kind: 'track', pts: lane(LANE_BROOK, [-16.4, -0.3, 15.8, 18.458]) },
   { kind: 'track', pts: down(-35.9, [LANE_RIDGE, -8.2]) },
+  // The woodlot path: from the lane under the woods through the wall and in among the trees.
+  { kind: 'track', pts: [L(15.8, LANE_RIDGE), L(14.6, -21.7), L(13.2, -23.6), L(12.9, -26.4)] },
   // The Dufour lanes.
   { kind: 'track', pts: lane(LANE_MID, [50.0, 66.1, 82.2]) },
   { kind: 'track', pts: lane(LANE_RIDGE, [50.0, 66.1, 82.2]) },
@@ -585,6 +619,8 @@ export const WALLS: [number, number, number, number][] = ([
 ] as [number, number, number, number][]).map(w => w.map(v => v * K) as [number, number, number, number])
 // Where the tracks pass through the walls: bars stand at each.
 export const GATEWAYS: Pt[] = [[16.5, -20.8], [-17.45, -20.8], [49, -7.6], [83.6, -7.6], [16.4, 31.4]].map(([x, z]) => ({ x: K * x, z: K * z }))
+// Where the woodlot path goes through the wall under the woods.
+export const WOOD_GATE: Pt = { x: K * 14.6, z: K * -21.7 }
 
 export function wallDist(x: number, z: number): number {
   let d = NO_WAY
@@ -597,14 +633,14 @@ export function wallDist(x: number, z: number): number {
 
 // Where crews wait at a yard: the farmer's tractor on the potato house apron, the second tractor beside it, the hands by
 // the barn door; at the Dufour yard, in front of its potato house.
-export const SHED_SPOT: Spot = spot(HOME, { x: 21.2, z: -12.6, heading: 2.6 })
+export const SHED_SPOT: Spot = spot(HOME, { x: 22.9, z: -17.0, heading: 2.6 })
 export function yardSpot(yard: number, slot: number, walker: boolean): Spot {
   if (yard === -2) {
     if (walker) return spot(DUFOUR, { x: 87.6 + (slot % 3) * 0.7, z: -6.0 - Math.floor(slot / 3) * 0.6, heading: -1.6 })
     return spot(DUFOUR, { x: 88.6 + slot * 2.4, z: -9.0, heading: 1.9 })
   }
   if (walker) return spot(HOME, { x: 20.4 + (slot % 3) * 0.55, z: -7.6 + Math.floor(slot / 3) * 0.6 + (slot % 3) * 0.2, heading: 0.3 })
-  return slot === 0 ? SHED_SPOT : spot(HOME, { x: 25.6 + (slot - 1) * 2.2, z: -12.2, heading: 2.2 })
+  return slot === 0 ? SHED_SPOT : spot(HOME, { x: 26.6 + (slot - 1) * 2.3, z: -15.0, heading: 2.2 })
 }
 
 // Where a crew stands at a field when it is not working the rows: on the lane above the field's corner, each crew a
