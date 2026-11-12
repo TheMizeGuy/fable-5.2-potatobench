@@ -119,11 +119,20 @@ function coverOf(t: { el: HTMLElement | null; at: Box | null }): HTMLElement | n
   const x = (t.at.left + t.at.right) / 2, y = (t.at.top + t.at.bottom) / 2
   if (x < 0 || y < 0 || x > innerWidth || y > innerHeight) return null
   const hit = document.elementFromPoint(x, y)
-  if (!hit || t.el.contains(hit)) return null
+  if (!hit || t.el.contains(hit) || hit.closest('.guide-layer')) return null
   const panel = hit.closest('.person-card, .work, .sheet')
   if (!panel || panel.contains(t.el)) return null
   const close = panel.querySelector<HTMLElement>('button.close')
   return close && shown(close) ? close : null
+}
+
+// Whether something lies over the middle of what a note points at, so a press there would not reach it.
+function hiddenAt(t: { el: HTMLElement | null; at: Box | null }): boolean {
+  if (!t.el || !t.at) return false
+  const x = (t.at.left + t.at.right) / 2, y = (t.at.top + t.at.bottom) / 2
+  if (x < 0 || y < 0 || x > innerWidth || y > innerHeight) return false
+  const hit = document.elementFromPoint(x, y)
+  return !!hit && !t.el.contains(hit) && !hit.closest('.guide-layer')
 }
 
 // Everything on the current screen the slip should not lie over: the panels themselves, not the clear boxes that hold
@@ -215,7 +224,7 @@ function holdLine(): HTMLElement {
 }
 
 // lost: what it points at is on the land but out of view, so the slip says how to bring the farm back.
-function slipBody(ctx: Ctx, x: Lesson, l: Look, held: boolean, lost = false, under = false): (HTMLElement | null)[] {
+function slipBody(ctx: Ctx, x: Lesson, l: Look, held: boolean, lost = false, under = false, show = -1): (HTMLElement | null)[] {
   const again = guide.replaying(x.id)
   const where = PART_NAME[x.part]
   const done = () => { guide.noted(x.id); ctx.dirty() }
@@ -226,6 +235,9 @@ function slipBody(ctx: Ctx, x: Lesson, l: Look, held: boolean, lost = false, und
     h('p', { class: 'guide-ask', id: 'guide-ask' }, x.ask(l)),
     h('p', { class: 'guide-why t-caption' }, x.why(l)),
     lost ? h('p', { class: 'guide-lost t-caption', testid: 'guide-lost' }, icon('field', 'i'), by(l.input, 'Out of view: Home, or a double-click on open ground, brings the farm back.', 'Out of view: a double-tap on open ground brings the farm back.', 'Out of view: Home brings the farm back.')) : null,
+    show >= 0 && !lost ? h('p', { class: 'guide-lost t-caption', testid: 'guide-hidden' }, icon('field', 'i'), 'Something lies over it: ',
+      h('button', { class: 'btn quiet', type: 'button', testid: 'guide-show', onclick: () => ctx.app.focus(show) }, 'Show me')) : null,
+    show >= 0 && lost ? h('p', { class: 'guide-lost t-caption' }, h('button', { class: 'btn quiet', type: 'button', testid: 'guide-show', onclick: () => ctx.app.focus(show) }, 'Show me')) : null,
     under ? h('p', { class: 'guide-lost t-caption', testid: 'guide-under' }, icon('close', 'i'), 'A card is in the way: its cross puts it away.') : null,
     h('footer', { class: 'guide-foot' },
       x.read || again ? h('button', { class: 'btn', type: 'button', testid: 'guide-noted', onclick: done }, icon('check', 'i'), x.read ? 'Noted' : 'Got it') : null,
@@ -311,6 +323,21 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
   let said = ''
   let target = ''
   let cover: HTMLElement | null = null
+  let due: Lesson | null = null
+  // The field a note points at, when it is out of view or something lies over it; and the spring note set aside while
+  // a fold it is not about is read.
+  let showField = -1
+  let away = false
+  // Where the slip was: for half a second after it goes, a press there is taken by nothing.
+  let slipAt: Box | null = null
+  let ghost: { b: Box; until: number } | null = null
+  let shownId = ''
+  const swallow = (e: Event) => {
+    if (!ghost || performance.now() > ghost.until || (e.target as Element).closest?.('.guide, .paper-layer, .dialog, .telegram')) return
+    const p = e as PointerEvent
+    if (p.clientX >= ghost.b.left && p.clientX <= ghost.b.right && p.clientY >= ghost.b.top && p.clientY <= ghost.b.bottom) { e.preventDefault(); e.stopImmediatePropagation() }
+  }
+  for (const k of ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click', 'contextmenu']) window.addEventListener(k, swallow, true)
   let place: { x: number; y: number } | null = null
   let placedFor = ''
   // 0: clear of every panel; 1: clear only of what it must never cover.
@@ -332,6 +359,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
       needs: app.campaign?.phase === 'season' ? app.needs().map(n => n.need) : [], paper: ps[ps.length - 1] ?? '', papers: ps, input,
       stopped: app.pauseReason === HOLD ? '' : app.pauseReason,
       asking: shown(root.querySelector('[data-testid="spray-ask"]')) ? 'spray' : '',
+      fold: root.querySelector<HTMLElement>('.catalogue .cat-open')?.dataset.testid ?? '',
     }
   }
 
@@ -397,7 +425,9 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
   const overridden = new Set<string>()
   function hold(): void {
     const t = performance.now()
-    const want = now && now.holds && app.screen === 'season' && !overridden.has(now.id) ? now.id : ''
+    // A note that holds the clock holds it from the moment it is due, through the pause before it shows.
+    const h0 = now ?? (due?.holds ? due : null)
+    const want = h0 && h0.holds && app.screen === 'season' && !overridden.has(h0.id) ? h0.id : ''
     if (holding && app.speed > 0) {
       if (t - pressedAt < 1500) { overridden.add(holding.id); holding = null; return }
       if (want) { app.setSpeed(0); app.pauseReason = HOLD; ctx.dirty(); return }
@@ -430,8 +460,8 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
       if (lastId && guide.passed(lastId)) { restUntil = t + 1200; waitFor = panelsOpen(); waitUntil = t + 8000 }
       lastId = x?.id ?? ''
     }
-    if (!x || x.urgent || x.paper) return x
-    waitFor = t < waitUntil ? waitFor.filter(sel => !!root.querySelector(sel)) : []
+    if (!x || x.urgent || x.paper || x.follows) return x
+    waitFor = t < waitUntil && !x.holds ? waitFor.filter(sel => !!root.querySelector(sel)) : []
     resting = t < restUntil || waitFor.length > 0
     if (resting) { stale = true; return null }
     return x
@@ -446,7 +476,8 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     if (shown(root.querySelector('#raise-list'))) guide.note('fold:raise')
     const l = lookNow()
     offer = guide.offerFor(c, app.screen)
-    now = offer ? null : paced(guide.showing(l))
+    due = offer ? null : guide.showing(l)
+    now = paced(due)
     hold()
     const docked = app.screen === 'plan'
     const held = !!now && app.screen === 'season' && app.speed === 0 && (guide.holdsClock(c) || app.pauseReason === HOLD || !!now?.holds)
@@ -455,28 +486,31 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     cover = app.screen === 'season' ? coverOf(t) : null
     // A note about the land itself (come closer, turn it) on a phone, with a card over half the land: the card's cross.
     if (!cover && app.screen === 'season' && ctx.layout() === 'narrow' && now?.uses?.some(u => u === 'pan' || u === 'zoom' || u === 'turn')) {
-      const sheet = [...root.querySelectorAll('.person-card, .work, .command.sheet')].find(shown)
+      const sheet = [...root.querySelectorAll('.person-card, .whois, .work, .command.sheet')].find(shown)
       const close = sheet?.querySelector<HTMLElement>('button.close')
       cover = close && shown(close) ? close : null
     }
     target = cover?.dataset.testid ?? t.id
     // Something on the land to point at, none of it in view.
     const lost = !!p && !('testid' in p) && !t.at && app.screen === 'season'
+    const fieldOf = !p ? -1 : 'field' in p ? p.field : 'badge' in p ? p.badge : 'fields' in p ? p.fields[0] ?? -1 : -1
+    showField = app.screen === 'season' && fieldOf >= 0 && !cover && (lost || hiddenAt(t)) ? fieldOf : -1
     // The spring's notes go into the catalogue; everything else floats.
     if (slot) {
       const inSlot = docked && slot.isConnected
-      // A fold open that the note is not about keeps its room: the note shrinks to its one line.
+      // A fold open that the note is not about keeps all its room: the note waits until it is closed.
       const fold = root.querySelector('.catalogue .cat-open')
-      slot.classList.toggle('folded', !!now && !!fold && !(t.el && fold.contains(t.el)))
-      patch(slot, JSON.stringify([inSlot && offer, inSlot && now ? [now.id, now.ask(l), now.why(l), guide.replaying(now.id), lost] : 0, input]), () =>
+      away = !!now && !!fold && !(t.el && fold.contains(t.el))
+      const on = inSlot && !away
+      patch(slot, JSON.stringify([inSlot && offer, on && now ? [now.id, now.ask(l), now.why(l), guide.replaying(now.id), lost] : 0, input]), () =>
         inSlot && offer ? h('section', { class: 'guide docked offer', testid: 'guide-offer', 'aria-label': 'A guided first year' }, offerBody(ctx))
-          : inSlot && now ? h('section', { class: 'guide docked', testid: 'guide-slip', 'data-lesson': now.id, 'data-target': target, 'aria-labelledby': 'guide-ask' }, slipBody(ctx, now, l, held, lost, !!cover)) : null)
-      if (inSlot && now) slot.querySelector<HTMLElement>('.guide')?.setAttribute('data-target', target)
+          : on && now ? h('section', { class: 'guide docked', testid: 'guide-slip', 'data-lesson': now.id, 'data-target': target, 'aria-labelledby': 'guide-ask' }, slipBody(ctx, now, l, held, lost, !!cover)) : null)
+      if (on && now) slot.querySelector<HTMLElement>('.guide')?.setAttribute('data-target', target)
     }
     const floating = !!now && !docked
     slip.hidden = !floating
     if (floating && now) {
-      patch(slip, JSON.stringify([now.id, now.ask(l), now.why(l), held, guide.replaying(now.id), input, lost, !!cover]), () => slipBody(ctx, now!, l, held, lost, !!cover))
+      patch(slip, JSON.stringify([now.id, now.ask(l), now.why(l), held, guide.replaying(now.id), input, lost, !!cover, showField]), () => slipBody(ctx, now!, l, held, lost, !!cover, showField))
       slip.dataset.lesson = now.id
       slip.dataset.target = target
       slip.dataset.testid = 'guide-slip'
@@ -485,6 +519,10 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
       delete slip.dataset.lesson
       patch(slip, '', () => null)
     }
+    // The slip going (passed, Noted, put aside): a press that was meant for it lands on nothing.
+    const showing = (floating || (!!slot?.querySelector('.guide.docked:not(.offer)'))) && now ? now.id : ''
+    if (shownId && showing !== shownId && slipAt && !l.paper) ghost = { b: slipAt, until: performance.now() + 500 }
+    shownId = showing
     // Each lesson is read out once, politely.
     const words = offer ? 'The county agent offers a guided first year, beside Start the season.' : now ? `${now.ask(l)} ${now.why(l)}` : ''
     const key = offer ? 'offer' : now?.id ?? ''
@@ -494,14 +532,16 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
 
   function placeAll(): void {
     const l = now
-    if (!l) { hand.hidden = true; place = null; return }
+    const visible = !slip.hidden ? slip : slot?.querySelector<HTMLElement>('.guide.docked:not(.offer)') ?? null
+    slipAt = visible ? box(visible.getBoundingClientRect()) : slipAt
+    if (!l || away || showField >= 0) { hand.hidden = true; if (!l) place = null; if (!l || away) return }
     const lk = lookNow()
     const t0r = resolve(ctx, root, l.point?.(lk) ?? null)
     // Under a card: the fist goes to the card's cross.
     const t = cover && shown(cover) ? { ...t0r, el: cover, at: box(cover.getBoundingClientRect()) } : t0r
     // The fist beside the target, pointing at it: left of it, else right, above, below.
     let fistBox: Box | null = null
-    if (t.at) {
+    if (t.at && showField < 0) {
       const cx = (t.at.left + t.at.right) / 2, cy = (t.at.top + t.at.bottom) / 2, s = 44, g = 6
       const up: [number, number, string] = [cx - s / 2, t.at.top - s - g, 'd'], down: [number, number, string] = [cx - s / 2, t.at.bottom + g, 'u']
       // Beside it, else toward the middle of the screen from it.
@@ -564,14 +604,20 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     const here = place ? { left: place.x, top: place.y, right: place.x + w, bottom: place.y + ht } : null
     // Stay put while the place is still clear; move only when something comes over it.
     const retry = tier !== 0 && t0 - placedAt > 1000
-    if (here && placedFor === key && !retry && !(tier === 0 ? [...hard, ...soft] : hard).some(a => meets(here, pad(a, 6)))) return
+    if (here && placedFor === key && !retry && !(tier === 0 ? [...hard, ...soft] : tier === 1 ? hard : []).some(a => meets(here, pad(a, 6)))) return
     let found: { x: number; y: number } | null = null
     // First off every panel and every field tag; then off the panels; then off only what it must never cover.
     const tags = [...root.querySelectorAll('.plate-layer .tag')].filter(shown).map(e => box(e.getBoundingClientRect()))
     // Over a panel only when it must, and then short, where it hides least.
-    for (const [k, compact, also] of [[0, false, tags], [0, false, []], [0, true, []], [1, true, []], [1, false, []]] as const) {
+    // Last, short, over a person's card or the list rather than not at all: a clock, a command bar, a question, a paper
+    // and what it points at are still never covered.
+    const must2 = [...[...root.querySelectorAll('.clock, .command, .telegram, .dialog, [data-testid="paused"], .tray-paper')].filter(shown).map(e => box(e.getBoundingClientRect())),
+      ...(t.at ? [pad(t.at, 10)] : []), ...(fistBox ? [pad(fistBox, 4)] : []), ...(noteBox ? [noteBox] : [])]
+    const holder = t.el?.closest('.queue, .cat-open, .command, .person-card, .work')
+    if (holder) must2.push(box(holder.getBoundingClientRect()))
+    for (const [k, compact, also] of [[0, false, tags], [0, false, []], [0, true, []], [1, true, []], [1, false, []], [2, true, []]] as const) {
       slip.classList.toggle('compact', compact)
-      found = findPlace(slip.offsetWidth, slip.offsetHeight, [...(k === 0 ? [...hard, ...soft] : hard), ...also].map(a => pad(a, 8)), k === 1 ? costs : [])
+      found = findPlace(slip.offsetWidth, slip.offsetHeight, [...(k === 0 ? [...hard, ...soft] : k === 1 ? hard : must2), ...also].map(a => pad(a, 8)), k === 0 ? [] : costs)
       if (found) { tier = k; break }
     }
     slip.classList.toggle('gone', !found)
@@ -596,6 +642,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
       off()
       document.removeEventListener('keydown', onKey, true)
       document.removeEventListener('pointerdown', onPointer, true)
+      for (const k of ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click', 'contextmenu']) window.removeEventListener(k, swallow, true)
       for (const t of ['pointerdown', 'pointermove', 'pointerup', 'wheel']) document.removeEventListener(t, onCanvas, true)
       document.removeEventListener('pointercancel', onLift, true)
       document.removeEventListener('keydown', onCamKey, true)

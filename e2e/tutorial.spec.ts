@@ -168,13 +168,16 @@ test('a guided first year: offered on a new farm, taken, and followed through th
     // telegram has no lesson of its own (the first one taught it): it is answered as that one was.
     await expect.poll(async () => {
       if (!(await slip(page)).id && (await look(page)).incidents) await page.locator('#ui [data-testid^="answer-"]').first().click().catch(() => {})
+      // Blight weather's spraying question with no note beside it: answered as the play-through answers it.
+      if (!(await slip(page)).id && await page.getByTestId('spray-ask').isVisible().catch(() => false)) await page.getByTestId('spray-way-ask').click().catch(() => {})
       // A paper a lesson's click opened (the almanac from the forecast) is closed as a player would, and the days go on.
       if (!(await slip(page)).id && (await look(page)).paper) await page.keyboard.press('Escape')
       else if (!(await slip(page)).id && (await look(page)).paused && !(await look(page)).incidents) await page.keyboard.press('Space')
       return (await finished()) ? 'done' : (await slip(page)).id
     }, { timeout: 120_000, message: `after ${did.join(' ')}` }).not.toBe('')
     if (await finished()) break
-    const { id, target } = await slip(page)
+    const { id } = await slip(page)
+    let { target } = await slip(page)
     console.log(`${id} at ${(await look(page)).speed}×`)
     if (!id) continue
     if (did[did.length - 1] !== id) did.push(id)
@@ -187,7 +190,15 @@ test('a guided first year: offered on a new farm, taken, and followed through th
     // Where a field it points at is on the screen, the fist is beside it.
     const there = /^(field|badge)-/.test(target) && await page.locator(`#ui [data-testid="${target}"]`).first().isVisible().catch(() => false)
     if (there) await expect(page.getByTestId('guide-fist'), `${id}: the fist is on ${target}`).toBeVisible()
+    // Something lies over what it asks for: the slip offers Show me, which brings that field into frame.
+    if (await page.getByTestId('guide-hidden').isVisible().catch(() => false)) {
+      await expect(page.getByTestId('guide-fist')).toBeHidden()
+      await page.getByTestId('guide-show').click()
+      await page.waitForTimeout(1500)
+      continue
+    }
     // What it asks for lies under a card: the slip says so and marks the card's cross, which is pressed first.
+    target = (await slip(page)).target
     if (/-close$/.test(target)) {
       await expect(page.getByTestId('guide-under')).toBeVisible()
       await page.getByTestId(target).first().click()
@@ -226,12 +237,15 @@ test('a guided first year: offered on a new farm, taken, and followed through th
         if (!(await marked.isVisible())) {
           // Out of view, the slip says how to bring the farm back.
           await expect(page.getByTestId('guide-lost')).toBeVisible()
-          for (let k = 0; k < 3 && !(await page.locator('#ui .plate[data-testid^="field-"]:visible').count()); k++) {
+          // Show me brings the field it means into frame.
+          await page.getByTestId('guide-show').click()
+          await page.waitForTimeout(1500)
+          for (let k = 0; k < 3 && !(await marked.isVisible()) && !(await page.locator('#ui .plate[data-testid^="field-"]:visible').count()); k++) {
             if (isMobile) await doubleTap(page, await land(page)); else await page.keyboard.press('Home')
             await page.waitForTimeout(1500)
           }
         }
-        await ((await marked.isVisible()) ? marked : page.locator('#ui .plate[data-testid^="field-"]:visible').first()).click()
+        await ((await marked.isVisible()) ? marked : page.locator('#ui .plate[data-testid^="field-"]:visible').first()).click({ timeout: 15_000 })
         break
       }
       case 'clock': case 'plant': case 'rest':
@@ -242,7 +256,7 @@ test('a guided first year: offered on a new farm, taken, and followed through th
         // Any other lesson: what its fist marks, or Noted.
         const marked = target ? page.locator(`#ui [data-testid="${target}"]`).first() : null
         const book = target.startsWith('pin-') ? page.locator(`#ui [data-testid="unit-${target.slice(4)}"]`).first() : null
-        if (page.getByTestId('guide-noted') && await page.getByTestId('guide-noted').count() && !(marked && await marked.isVisible() && id === 'person')) await page.getByTestId('guide-noted').click()
+        if (page.getByTestId('guide-noted') && await page.getByTestId('guide-noted').count() && !(marked && await marked.isVisible() && id === 'person')) await page.getByTestId('guide-noted').click({ timeout: 15_000 })
         else if (marked && await marked.isVisible()) await marked.click()
         else if (book && await book.isVisible()) await book.click()
         // Out of reach for now: a player may skip it, as the slip offers.

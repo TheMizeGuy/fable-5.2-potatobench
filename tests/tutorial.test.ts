@@ -223,6 +223,29 @@ describe('the guided first year', () => {
     expect(k.why(look(w, c))).toMatch(/frost/)
   })
 
+  it('says what to do in People as soon as it is open, words winter from what the cellar holds, and promises no good year', () => {
+    expect(lesson('begin')!.ask(look(farm(3).w, farm(3).c))).not.toMatch(/sound/)
+    expect(lesson('begin')!.why(look(farm(3).w, farm(3).c))).toMatch(/usually ends \$4,000 to \$24,000 down: the note and the household take \$19,000/)
+    const hire = lesson('hire')!
+    expect(hire.follows).toBe(true)
+    const run = guidedYear(99)
+    const { w, c, g } = run
+    expect(c.phase).toBe('plan')
+    g.skipTo('people')
+    expect(g.current(look(w, c, { fold: '' }))?.id).toBe('people')
+    g.note('fold:crew')
+    const open = g.current(look(w, c, { fold: 'crew' }))
+    expect(open?.id).toBe('hire')
+    expect(open?.point?.(look(w, c))).toEqual({ testid: ['applicant-hire-*', 'hire-*'] })
+    expect(g.current(look(w, c, { fold: '' }))?.id).not.toBe('hire')
+    const cellar = lesson('cellar')!
+    const { w: w2, c: c2 } = farm(7)
+    S.apply(w2, c2, { t: 'begin' })
+    until(w2, c2, () => false, () => stamps(w2, c2))
+    for (const lot of S.openLots(c2)) S.apply(w2, c2, { t: 'sell', lot: lot.id, frac: 1 })
+    expect(cellar.ask(look(w2, c2))).toMatch(/Close the year/)
+  })
+
   it('says the day the crew kills the vines by itself, when the stamp asks for the kill', () => {
     const k = lesson('kill')!
     let found = 0

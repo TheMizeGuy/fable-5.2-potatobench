@@ -386,6 +386,10 @@ const STATES: State[] = [
   { name: 'guide-spring', what: 'Guide: the second spring, People in the catalogue', sizes: ALL, run: async page => {
     await q(page, `q.start(1987, 3); q.year(3); q.g().app.do({ t: 'next' }); window.__countyGuide.reset(); window.__countyGuide.skipTo('people')`); await closeAll(page)
   } },
+  { name: 'guide-hire', what: 'Guide: the second spring, People just opened, the note on what to do there', sizes: ALL, run: async page => {
+    await q(page, `q.start(1987, 3); q.year(3); q.g().app.do({ t: 'next' }); window.__countyGuide.reset(); window.__countyGuide.skipTo('people')`); await closeAll(page)
+    await page.getByTestId('crew-open').first().click(); await page.waitForTimeout(900)
+  } },
   { name: 'guide-fold', what: 'Guide: the second spring with Equipment open, the note down to its one line', sizes: ALL, run: async page => {
     await q(page, `q.start(1987, 3); q.year(3); q.g().app.do({ t: 'next' }); window.__countyGuide.reset(); window.__countyGuide.skipTo('seed')`); await closeAll(page)
     await page.getByTestId('equipment-open').first().click(); await page.waitForTimeout(900)

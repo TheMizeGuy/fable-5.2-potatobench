@@ -48,17 +48,23 @@ paper disc with a keyline so it reads over any land. There is no slideshow, no s
   never silences the guide. A note that cuts in (urgent, or one that holds the clock) is the only kind that takes over
   from a note on show.
 - **Placed where it covers nothing it is about.** In spring the slip sits in the catalogue; while a fold the note is
-  not about is open (Equipment, say) it shrinks to its one line, so the fold keeps its room. Elsewhere it floats at
+  not about is open (Equipment, say) the note is set aside, fist and all, and comes back when the fold closes.
+- **A press meant for it never falls through.** For half a second after a note goes (passed, Noted, set aside), a
+  press where it lay is taken by nothing, so a click on Noted just as it left never opens what was under it. Elsewhere it floats at
   the first clear place nearest the top middle of the land, keeping off the boards, the time book and every panel; it
   never lies over what it points at, the list or panel holding that, the fist, the clock, a command bar, a telegram,
   a paper, a test-dig tray or a person's card. Where it must lie over a panel it goes short (its reason line folded)
-  and over the top boards before a sheet of words; with no room even then it stays hidden and its words are read out.
+  and over the top boards before a sheet of words; with no room even then (a person's card over half a phone) it goes
+  short over that card or the list, never over a clock, a command bar, a question, a paper or what it points at.
   It stays put until something comes over it, and moves the frame a card, a clock or a telegram slides over it.
 - **The fist only where it is clear.** It sits beside what it means (left, right, then toward the middle of the
   screen), on bare land or a sheet's empty ground only: never on words, a figure, a face, a key, a tag or a control.
   Where no such place exists (a reply inside a telegram, Start the season under the order blank on a phone) it is
   left out and the slip's words do alone. When a field it points at is out of view, the slip adds how to bring the
   farm back (Home, or a double-click or double-tap on open ground).
+- **Something over its target.** When a field's tag or stamp it points at is out of view, or something that is not a
+  card lies over it (the "Go on" key), the fist is left out and the slip offers "Show me", which brings that field
+  into frame.
 - **A card in the way.** When what a note points at lies under a card (a person's card, a field's card, the grid),
   or on a phone a card covers half the land during a note about the land itself, the fist goes to the card's cross
   and the slip says "A card is in the way: its cross puts it away."
@@ -82,7 +88,7 @@ ends them is already true. "Holds" marks a note that stops the clock while it sh
 | # | Lesson | Starts | Ends | Points at |
 | --- | --- | --- | --- | --- |
 | 1 | The money | The first spring's plan | Noted, The money opened, or the season begun | The plan's money lines |
-| 2 | Start the first season | The first spring's plan | The season begins | Start the season |
+| 2 | Start the first season | The first spring's plan | The season begins | Start the season; says a first year usually ends $4,000 to $24,000 down, as the spring sheet does, and why |
 | 3 | Start the clock | The season, the clock held | The clock running | Let the weeks go: 3× (or 3×) |
 | 4 | Watch the first planting (holds) | Planting on the list by the one planting rule, or just begun | The camera brought closer or moved, or three days run | You, on the land; says the routine began it with no order |
 | 5 | Meet your people (holds) | After 4 | You picked, or Noted | Your face |
@@ -120,7 +126,7 @@ list, a reason to turn the view and a crop to read on a card.
 | Bring the crop in | Barrels in a field | Noted, or the crop weighed | The field |
 | Sell or store the crop (urgent) | The first weigh ticket open | The ticket answered (closed), or a sale | (the ticket's own fist) |
 | Close out the season (urgent) | The season done | The season closed | Close out the season |
-| Winter in the cellar | The cellar | A month gone by | On to the next month |
+| Winter in the cellar | The cellar | A month gone by | On to the next month; with the cellar empty it says Close the year instead |
 | Fell woods in winter | The cellar, after its note, woods or brush held | Someone set to Woods, or Noted | Your Woods key in the winter's work |
 | Raise a building | The cellar, after its note, a building the farm can raise (`S.goalCosts`) | Raise a building opened, or a building ordered | Raise a building |
 | The account book | The year end | The next spring planned | Plan year 2 |
@@ -131,6 +137,7 @@ list, a reason to turn the view and a crop to read on a card.
 | --- | --- | --- | --- |
 | Choose a variety for a field | A later spring | A field picked in the plan | A potato field's tag; speaks of seed only when there is saved seed |
 | Hire a hand | A later spring | People opened, or someone hired | People |
+| Choose a hand (follows at once) | People open, after Hire a hand, nobody hired | Noted, someone hired, or People closed | The first Hire |
 | Rent or buy land | A later spring, once People is closed | Land opened, or land beyond the home six taken | Land |
 | The money and the loan | A later spring | The money opened | The money |
 | Start the second season | A later spring | The season begins | Start the season |

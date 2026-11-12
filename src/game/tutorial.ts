@@ -23,6 +23,8 @@ export interface Look {
   stopped?: string
   // A question on the screen that is not a telegram: 'spray' while the season's spraying question is up.
   asking?: string
+  // The spring catalogue's fold open now ('crew', 'land', ...), or ''.
+  fold?: string
 }
 
 // Where a lesson points: a control by its test id (the first of several that is on screen), a field's tag, a field's
@@ -67,6 +69,8 @@ export interface Lesson {
   paper?: string
   // The facts it is done by, forgotten when it is replayed so that doing it again is what passes it.
   uses?: string[]
+  // Follows at once the click that opened what it is about, without the pause between lessons.
+  follows?: boolean
 }
 
 export const KEY = 'the-county/tutorial'
@@ -164,8 +168,9 @@ export const LESSONS: Lesson[] = [
     id: 'begin', part: 'opening', name: 'Start the first season',
     when: l => l.screen === 'plan' && !!l.c && l.c.history.length === 0,
     done: l => !!l.c && (l.c.phase !== 'plan' || l.c.history.length > 0),
-    ask: l => by(l, 'The plan is already a sound one. Press Start the season.', 'The plan is already a sound one. Tap Start the season.', 'The plan is already a sound one. Enter starts the season.'),
-    why: () => 'Seed, people and land can wait for next spring. This year is for learning the crop.',
+    ask: l => by(l, 'This is a usual first year\'s plan. Press Start the season.', 'This is a usual first year\'s plan. Tap Start the season.', 'This is a usual first year\'s plan. Enter starts the season.'),
+    // The spring sheet's range (src/ui/usual-year.ts): 80 farms played by the coach's advice.
+    why: () => `A first year usually ends $4,000 to $24,000 down: the note and the household take ${owed()} whatever the crop.`,
     point: () => ({ testid: ['begin-season'] }),
   },
   {
@@ -394,8 +399,12 @@ export const LESSONS: Lesson[] = [
     id: 'cellar', part: 'year', name: 'Winter in the cellar',
     when: l => l.screen === 'cellar' && !!l.c,
     done: (l, _g, since) => !!since && !!l.c && (l.c.phase !== 'cellar' || l.c.month > since.m),
-    ask: () => 'Winter. Sell stored potatoes when the price suits you, then go on a month.',
-    why: () => 'Each month the price moves, storage costs a little and the piles shrink. Spring sprouting ends it.',
+    ask: l => !l.c || S.openLots(l.c).length > 0
+      ? 'Winter. Sell stored potatoes when the price suits you, then go on a month.'
+      : 'Winter. The cellar is empty, so the year can close: press Close the year.',
+    why: l => !l.c || S.openLots(l.c).length > 0
+      ? 'Each month the price moves, storage costs a little and the piles shrink. Spring sprouting ends it.'
+      : 'With a crop in store, each winter month would be a chance to sell at a better price.',
     point: () => ({ testid: ['month-next'] }),
   },
   {
@@ -442,6 +451,14 @@ export const LESSONS: Lesson[] = [
     ask: l => `${l.input === 'touch' ? 'Tap' : 'Open'} People: who is asking for work, and what each is best at.`,
     why: () => 'A hand works the list beside you. Wages are paid every month of the season.',
     point: () => ({ testid: ['crew-open'] }),
+  },
+  {
+    id: 'hire', part: 'spring', name: 'Choose a hand', read: true, follows: true,
+    when: (l, g) => l.screen === 'plan' && l.fold === 'crew' && g.passed('people') && !!l.c && l.c.crew.length === 1,
+    done: (l, g, since) => g.has('noted:hire') || (!!l.c && l.c.crew.length > 1) || (!!since && l.fold !== 'crew'),
+    ask: l => `Each asks a wage a month. ${by(l, 'Press Hire beside the one you want.', 'Tap Hire beside the one you want.', 'Tab to Hire beside the one you want.')}`,
+    why: () => 'Their best work is marked. Nobody is needed: you can farm alone another year.',
+    point: () => ({ testid: ['applicant-hire-*', 'hire-*'] }),
   },
   {
     id: 'land', part: 'spring', name: 'Rent or buy land', uses: ['fold:land'],
