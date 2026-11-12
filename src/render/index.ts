@@ -173,6 +173,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     grass.setTier(tier)
     flora.setTier(tier)
     crews.setScreen(vp.w, vp.h)
+    crews.setTier(tier)
     reframe(reduced)
   }
 

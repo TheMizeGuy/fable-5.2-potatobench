@@ -195,6 +195,11 @@ export class Prims {
     for (const s of SHAPES) this.n[s] = 0
   }
 
+  // Whether the parts throw shadows (not at the lowest setting).
+  setShadows(on: boolean): void {
+    for (const s of SHAPES) this.mesh[s].castShadow = on && s !== 'glow'
+  }
+
   // A part with its foot at `o`, its own y axis along `up` (`sy` long), turned so its x axis lies toward `fwd`.
   put(s: Shape, o: Vector3, up: Vector3, fwd: Vector3, sx: number, sy: number, sz: number, c: Color): void {
     const k = this.n[s]

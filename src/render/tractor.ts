@@ -196,11 +196,13 @@ function tractorBody(p: Paint): BufferGeometry {
   return s.done()
 }
 
+const HINGE = { x: -0.08, y: 0.66 }
+
 function hoodGeometry(p: Paint): BufferGeometry {
-  // The hood, hinged at the back (the origin): it lifts when the engine is being seen to.
+  // The hood, in the tractor's own space; it is hinged at HINGE and lifts when the engine is being seen to.
   const s = new Shop()
-  s.rounded(0.82, 0.24, 0.33, 0.1, p.body, 0.41, 0.03, 0)
-  for (let n = 0; n < 5; n++) for (const z of [-0.168, 0.168]) s.box(0.012, 0.09, 0.006, DARK, 0.2 + n * 0.08, 0.0, z)
+  s.rounded(0.82, 0.24, 0.33, 0.1, p.body, HINGE.x + 0.41, HINGE.y + 0.03, 0)
+  for (let n = 0; n < 5; n++) for (const z of [-0.168, 0.168]) s.box(0.012, 0.09, 0.006, DARK, HINGE.x + 0.2 + n * 0.08, HINGE.y, z)
   return s.done()
 }
 
@@ -514,7 +516,8 @@ export class Tractor extends Machine {
     const body = new Mesh(tractorBody(paint), mat)
     const hood = new Mesh(hoodGeometry(paint), mat)
     this.hood = new Group()
-    this.hood.position.set(-0.08, 0.66, 0)
+    this.hood.position.set(HINGE.x, HINGE.y, 0)
+    hood.position.set(-HINGE.x, -HINGE.y, 0)
     this.hood.add(hood)
     this.hitch.position.set(-0.78, 0.4, 0)
     this.impl = new Mesh(body.geometry, mat)

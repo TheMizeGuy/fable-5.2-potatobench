@@ -571,6 +571,7 @@ export class Crews {
   }
   private cold = false
   private screenH = 900
+  private lively = true
   private far = 0
   private pondWas = 0
 
@@ -845,7 +846,7 @@ export class Crews {
         figureMatrix(M, p.x, heightAt(p.x, p.z) + 0.02, p.z, p.heading, big)
         drawFigure(pr, M, p.dress, pose)
       })
-      for (const c of g.crows) {
+      for (const c of this.lively ? g.crows : []) {
         if (going) c.t += f.dt / 1.1
         if (c.t >= 1) {
           if (going) c.wait -= f.dt
@@ -865,7 +866,7 @@ export class Crews {
       }
     }
     // The neighbour's cows, out from May until the snow.
-    if (f.env.snow < 0.1 && snap.mode !== 'cellar') {
+    if (this.lively && f.env.snow < 0.1 && snap.mode !== 'cellar') {
       for (const c of this.cows) {
         c.t -= going || snap.mode !== 'season' ? f.dt : 0
         if (c.t <= 0) {
@@ -886,11 +887,17 @@ export class Crews {
     for (const a of this.actors) if (Math.hypot(a.x - d.x, a.z - d.z) < 11) near = true
     d.away = clamp(d.away + (near ? f.dt * 0.9 : -f.dt * 0.06), 0, 1)
     d.t += f.dt
-    if (d.away < 0.99 && snap.mode !== 'title') {
+    if (this.lively && d.away < 0.99 && snap.mode !== 'title') {
       const z = d.z - d.away * 5
       drawBeast(pr, DEER, d.x - d.away * 2, heightAt(d.x, z), z, near ? -1.9 : 0.4, big * 0.9 * (1 - 0.5 * d.away), d.away > 0.02 ? f.time * 14 : 0, d.away > 0.02 && d.away < 0.99 ? 1 : 0, near ? 0 : (Math.sin(d.t * 0.4) > 0.2 ? 1 : 0))
     }
     void sf
+  }
+
+  // At the lowest setting the small parts throw no shadows, and the cows, the deer and the crows stay away.
+  setTier(tier: 'high' | 'medium' | 'low'): void {
+    this.lively = tier !== 'low'
+    this.prims.setShadows(tier !== 'low')
   }
 
   // The screen's size in CSS pixels, for how large people must be drawn to be seen.
