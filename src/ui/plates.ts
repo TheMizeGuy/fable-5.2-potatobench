@@ -57,7 +57,7 @@ function finite(a: { x: number; y: number }): boolean {
 // never moves a tag the player may be reaching for. Crowding is settled only when the camera moves, against the room a
 // tag takes with "on the list" and a stamp. What floats over the land (a card, the grid) lies over the tags; covers is
 // not read.
-export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => PlateModel | null; onBadge: (i: number) => void; covers?: () => DOMRect[] }): { update(): void; frame(): void; dispose(): void; boxes(): DOMRect[] } {
+export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => PlateModel | null; onBadge: (i: number) => void; covers?: () => DOMRect[] }): { update(): void; frame(): void; dispose(): void; boxes(): DOMRect[]; resettle(): void } {
   const app = ctx.app
   const wraps: HTMLElement[] = []
   const models: (PlateModel | null)[] = []
@@ -384,6 +384,7 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
     update,
     frame,
     boxes,
+    resettle: () => { laid = null },
     dispose() {
       layer.classList.remove('compact', 'far')
       layer.removeEventListener('wheel', wheel)

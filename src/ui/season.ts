@@ -322,6 +322,17 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     else ctx.say(`${S.FIELD_NAMES[i]}: ${r.err}`, 'info')
   }
 
+  // The red row coming over a tag puts the tags again, once, above it (the land's foot already counts it).
+  let pressAt = ''
+  function pressOver(): void {
+    const p = crew.querySelector<HTMLElement>('.pressing')
+    const r = p && p.offsetParent !== null ? p.getBoundingClientRect() : null
+    const k = r ? `${Math.round(r.left)},${Math.round(r.top)},${Math.round(r.right)}` : ''
+    if (k === pressAt) return
+    pressAt = k
+    if (r && P.boxes().some(b => b.left < r.right && b.right > r.left && b.top < r.bottom && b.bottom > r.top)) P.resettle()
+  }
+
   // What floats over the land: nothing on the land is left under it.
   const floating = () => [card.el, yard.el, person.el, grid.el, incident.el, trayHost.firstElementChild as HTMLElement | null, paused, running, sprayCard]
   // Read once a frame, before anything on the land is moved, so the frame never forces a second layout.
@@ -598,7 +609,9 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       // The time book and its list at the foot, the alerts, and the clock with them on a phone.
       // The list's row is kept whether or not it holds an order, so the first order given moves nothing on the land.
       const book = crew.querySelector<HTMLElement>('.timebook')
-      const low = [...(book && vis(book) ? [box(book).top - LIST_ROOM] : []), ...[clockSlot, notesSlot].filter(vis).map(x => box(x).top)]
+      // The red row of work that cannot wait stands over the list while it lasts: no stamp is left under it.
+      const press = crew.querySelector<HTMLElement>('.pressing')
+      const low = [...(book && vis(book) ? [box(book).top - LIST_ROOM] : []), ...[clockSlot, notesSlot, ...(press ? [press] : [])].filter(vis).map(x => box(x).top)]
       const bottom = innerHeight - Math.min(...low, innerHeight) + 6
       // Only what always stands frames the land: a bar, a page or the grid opening on a click never moves the camera
       // (the bar steps to the other side of what it belongs to instead; a card lies over the tags). On a phone
@@ -606,7 +619,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       const sheet = layout === 'narrow' ? [card.el, yard.el].find(vis) : undefined
       return [t, 0, sheet ? innerHeight - box(sheet).top + 6 : bottom, 0]
     },
-    frame: () => { coverCache = null; coverCache = covers(); placeBar(); P.frame(); placeYards(); people.frame(); drawSelection(); coverCache = null },
+    frame: () => { coverCache = null; coverCache = covers(); placeBar(); pressOver(); P.frame(); placeYards(); people.frame(); drawSelection(); coverCache = null },
     dispose() {
       off()
       P.dispose()
