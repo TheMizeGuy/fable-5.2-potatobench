@@ -9,6 +9,7 @@ export interface Bot {
   plan(world: World, c: Campaign): void
   day(world: World, c: Campaign, events: GameEvent[]): void
   cellar(world: World, c: Campaign): void
+  close?(world: World, c: Campaign): boolean   // whether to close a season that is done; closes at once without it
 }
 
 export type BotFactory = () => Bot
@@ -129,7 +130,7 @@ export function play(world: World, name: string, make: BotFactory, startYear: nu
       const h = S.hiredCount(c)
       if (h > hands[hands.length - 1]) hands[hands.length - 1] = h
       if (c.crew.some(u => u.kind !== 'farmer' && u.rig === 'tractor')) operator[operator.length - 1] = 1
-      if (S.seasonDone(c)) {
+      if (S.seasonDone(c) && (s.frozen || !bot.close || bot.close(world, c))) {
         let cwt = 0
         for (const l of c.lots) if (l.year === c.year) cwt += S.lotCwt(l) + l.sold
         let n = 0
@@ -406,6 +407,8 @@ export interface Tuning {
   brushElev: number[]       // positions on the slope whose hedgerows it cuts
   rushFrom: number          // a rush part when this many days of machine work wait on the list
   pickerBacklog: number     // pickers while this many days of digging wait
+  pickerBarrels: number     // and less than this many cwt sits in the barrels
+  standGain: number         // dollars a day the stand brings over the market, for keeping a season open while it sells
   haulDays: number          // days of hauling a field's crop takes, for planning
   peakHire: number          // a tractor operator from the hall when machine work due within a month is more than this a driver
   peakKeep: number          // and kept another month while it is more than this a driver
@@ -434,7 +437,7 @@ export const TUNING: Tuning = {
   landValue: { ridge: 10000, brook: 6000, dufour: 7500 }, landMargin: 0,
   loanFloor: -75000, buyLand: -60000, buyLeft: 4, fieldCash: 15000, yearEndSafety: 20000, potatoShare: 0.5, flipLoss: 4000,
   walkFrom: 5, walkPer: 5, tractor: { fields: 7, left: 2 }, truckFields: 5, tractor3Fields: 13, hallValue: 1000,
-  rocksAt: 0.45, rocksSpring: 0.6, brushElev: [0], rushFrom: 2, pickerBacklog: 4, haulDays: 1.7, peakHire: 18, peakKeep: 12,
+  rocksAt: 0.45, rocksSpring: 0.6, brushElev: [0], rushFrom: 2, pickerBacklog: 4, pickerBarrels: 500, standGain: 70, haulDays: 1.7, peakHire: 18, peakKeep: 12,
   buildFloor: 5000, houseOver: 1500, packStock: 3000, pondWaterings: 3, sundayTired: 0.5,
   contractGain: 0, no1Share: 0.8, contractSafety: 0.85,
   yieldAcre: { norland: 251, superior: 287, katahdin: 325, kennebec: 337, burbank: 337, atlantic: 350, gold: 290, caribou: 371 },
@@ -749,7 +752,7 @@ export function expert(cfg: ExpertCfg = EXPERT): BotFactory {
 
     // The next few seasons of a field the farm does not own: each year grow potatoes, rest it, or leave it to its
     // owner, paying the rent in every year it is held. Returns the best first move and what the whole plan is worth.
-    function landPlan(vert: number, soil: number, value: number, rent: number, years: number): { first: 'potato' | 'rest' | 'off'; worth: number } {
+    function landPlan(vert: number, soil: number, value: number, rent: number, years: number, owned = false): { first: 'potato' | 'rest' | 'off'; worth: number } {
       const healthy = fieldValue(0.03, 1)
       let best = -Infinity, first: 'potato' | 'rest' | 'off' = 'off'
       const go = (t: number, v: number, s: number, total: number, move: 'potato' | 'rest' | 'off') => {
@@ -758,7 +761,7 @@ export function expert(cfg: ExpertCfg = EXPERT): BotFactory {
         const grow = odds * S.VERT_GROW, rest = odds * S.VERT_REST
         go(t + 1, Math.min(0.95, grow / (1 + grow)), Math.max(0, s + S.SOIL_AFTER_POTATO), total + value - (healthy - fieldValue(v, s)) - rent, t === 0 ? 'potato' : move)
         go(t + 1, Math.max(0.01, rest / (1 + rest)), 1, total + S.REST_INCOME - S.REST_COST - rent, t === 0 ? 'rest' : move)
-        go(t + 1, v, s, total, t === 0 ? 'off' : move)
+        if (!owned) go(t + 1, v, s, total, t === 0 ? 'off' : move)
       }
       go(0, vert, soil, 0, 'off')
       return { first, worth: best }
@@ -786,7 +789,7 @@ export function expert(cfg: ExpertCfg = EXPERT): BotFactory {
           // Held at the rent, or bought: then its yearly cost is the mortgage interest, which falls as the loan is paid.
           const lp = landPlan(f.vert, f.soil, k.landValue[b] ?? 0, S.PARCELS[i].rent, left)
           const interest = S.MORTGAGE_RATE * S.PARCELS[i].price * (1 - S.MORTGAGE_DOWN) * (1 - S.MORTGAGE_PRINCIPAL * (left - 1) / 2)
-          const bp = canBuy(c, i, planting) ? landPlan(f.vert, f.soil, k.landValue[b] ?? 0, interest, left) : null
+          const bp = canBuy(c, i, planting) ? landPlan(f.vert, f.soil, k.landValue[b] ?? 0, interest, left, true) : null
           const buy = !!bp && bp.first !== 'off' && bp.worth > lp.worth
           const plan = buy ? bp! : lp
           if (plan.first !== 'off' && plan.worth > k.landMargin) options.push({ i, move: cfg.rotation ? plan.first as 'potato' | 'rest' : 'potato', worth: plan.worth, buy })
@@ -933,6 +936,7 @@ export function expert(cfg: ExpertCfg = EXPERT): BotFactory {
     // The crew for the season: those kept on who still have a role, and the best fit for each opening.
     function manPeople(world: World, c: Campaign, n: number): void {
       wantRoles = rolesFor(c, n)
+      if (F.raises) for (const p of hired(c)) if (p.wage > p.ask) S.apply(world, c, { t: 'raise', unit: p.id, wage: p.ask })
       if (F.priorities) {
         const farmer = S.peopleInfo(c).find(p => p.kind === 'farmer')!
         // With someone hired to walk the fields, the farmer drives first and leaves the stand to them.
@@ -1146,7 +1150,7 @@ export function expert(cfg: ExpertCfg = EXPERT): BotFactory {
     }
 
     // Pickers are paid by the day worked: on while there is a backlog of digging and the day is fit to dig.
-    function pickers(world: World, c: Campaign, info: FieldInfo[], wet: boolean): void {
+    function pickers(world: World, c: Campaign, info: FieldInfo[], wet: boolean, frost: boolean): void {
       if (!F.pickers) return
       const on = S.labourInfo(c).pickers.on
       let backlog = 0
@@ -1154,7 +1158,8 @@ export function expert(cfg: ExpertCfg = EXPERT): BotFactory {
         if (f.status === 'digging') backlog += 1
         else if ((f.status === 'dead' && (f.skin >= 1 || queued(c, 'dig', f.index))) || queued(c, 'dig', f.index)) backlog += 2
       }
-      const want = backlog >= k.pickerBacklog && !wet
+      const barrels = info.reduce((a, f) => a + f.inField, 0)
+      const want = backlog >= k.pickerBacklog && !wet && barrels < k.pickerBarrels && !frost
       if (!on && want && S.pickersWindow(c)) S.apply(world, c, { t: 'pickers', on: true })
       else if (on && !want) S.apply(world, c, { t: 'pickers', on: false })
     }
@@ -1364,7 +1369,7 @@ export function expert(cfg: ExpertCfg = EXPERT): BotFactory {
         answerIncidents(world, c)
         minPay(world, c)
         sundays(world, c, d, info)
-        pickers(world, c, info, t.day.prcp >= 6 || !info.some(f => (f.status === 'dead' || f.status === 'digging') && !f.tooWet))
+        pickers(world, c, info, t.day.prcp >= 6 || !info.some(f => (f.status === 'dead' || f.status === 'digging') && !f.tooWet), fc.slice(0, 2).some(x => x.frostChance >= 40))
         peakCrew(world, c, info, d)
 
         for (const f of info) {
@@ -1451,6 +1456,13 @@ export function expert(cfg: ExpertCfg = EXPERT): BotFactory {
         const order = [...s.jobs].sort((a, b) => pri(a) - pri(b) || b.id - a.id)
         for (const j of order) S.apply(world, c, { t: 'bump', id: j.id })
         sellInSeason(world, c)
+      },
+
+      close(world, c) {
+        const s = c.season!
+        if (!S.standInfo(c).open || s.day >= S.dayIndex(c.year, 9, 31)) return true
+        const pay = hired(c).reduce((a, p) => a + p.pay, 0) / 30
+        return pay >= k.standGain
       },
 
       cellar(world, c) {

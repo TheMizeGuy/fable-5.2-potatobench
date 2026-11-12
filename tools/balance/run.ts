@@ -165,7 +165,8 @@ async function main(): Promise<void> {
   const dominant = (w: Record<string, number>) => Object.entries(w).filter(([, n]) => n / seeds.length > 0.5).map(([b]) => b)
   const blocks = BLOCK_BOTS.map(b => ({ ...b, p: paired(byKey, b.name, 'no-expansion', seeds) }))
   const blocksOk = blocks.every(b => b.p.aBetter >= 0.2 && b.p.aBetter <= 0.8)
-  const always = gated.filter(a => a.p.aBetter >= 0.9).map(a => a.name)
+  // Winter work is the whole winter's labour, not a rule; land and hiring at all are the bigger farm itself.
+  const always = gated.filter(a => a.group === 'farmstead' && a.name !== 'no-winter' && a.p.aBetter >= 0.9).map(a => a.name)
   const varietyBots = entries.filter(e => e.group === 'variety').map(e => e.name)
   const varietyWins = winners(byKey, varietyBots, seeds)
   const allP = paired(byKey, 'all-contracts', 'expert', seeds)

@@ -117,7 +117,7 @@ export const TRAVEL_DAYS_PER_UNIT = 0.0016     // a day's work lost per ground u
 export const PICK_WINDOW = 3                   // a crew chooses among this many of the orders it could take next
 export const PICK_LAG = 0.07                   // days of travel a crew would rather drive than skip one place down the list: more than any two home fields are apart
 export const HAND_WAGE = 450                   // dollars a month
-export const OPERATOR_WAGE = 800
+export const OPERATOR_WAGE = 700
 export const WAGE_DAYS = 30                    // wages are paid for this many days at a time, from the day hired
 export const MAX_HANDS = 4
 export const MAX_OPERATORS = 1
@@ -191,8 +191,8 @@ export const HOTHEAD_FALL = 2
 export const CARELESS_SCOUT = 0.1
 export const SLOW_SPEED = 0.9
 
-export const TIRE_PER_DAY = 0.07               // a full day's work; a part day in proportion
-export const REST_PER_DAY = 0.3                // a day without work; a part day in proportion to the time not worked
+export const TIRE_PER_DAY = 0.08               // a full day's work; a part day in proportion
+export const REST_PER_DAY = 0.15                // a day without work; a part day in proportion to the time not worked
 export const TIRED_SLOW_FROM = 0.6             // above this, speed falls in a straight line to 30% less at 1
 export const TIRED_SLOW = 0.3
 export const MOOD_START = 0.7
@@ -225,7 +225,7 @@ export const LAST_NAMES = ['Ouellette', 'Michaud', 'Thibodeau', 'Cyr', 'Pelletie
 // The harvest break: the schools close and a picking crew can be had by the day.
 export const PICKERS_FROM = { month: 8, dom: 20 }   // September 20
 export const PICKERS_TO = { month: 9, dom: 10 }     // October 10
-export const PICKER_DAY = 130                  // dollars a day worked
+export const PICKER_DAY = 110                  // dollars a day worked
 export const PICKER_DIG = 1.5                  // every dig goes this much faster
 
 // Winter, November to April: someone kept on is paid each month and puts in this many crew-days at their skill.
@@ -285,7 +285,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
     does: 'Machine work goes 10% faster, breakdowns are half as likely, and a second and third tractor can be kept.', catch: 'Money and materials that grow no potatoes.' },
   bunk: { name: 'Bunkhouse', cash: 3500, logs: 16, stone: 8, days: 12, dufour: true,
     does: 'Beds for six hired people, who are happier for them.', catch: 'Beds are only worth having with people to fill them, and every one is a wage.' },
-  packing: { name: 'Packing shed', cash: 12000, logs: 24, stone: 15, days: 24, dufour: false,
+  packing: { name: 'Packing shed', cash: 8000, logs: 24, stone: 15, days: 24, dufour: false,
     does: 'In winter, people set to pack grade the stored crop: packed No. 1 brings 8% more and B size three quarters of the No. 1 price.', catch: 'Packing costs a charge a hundredweight and someone kept on, and paid, all winter.' },
   pond: { name: 'Irrigation pond', cash: 6000, logs: 0, stone: 30, days: 20, dufour: false,
     does: 'Holds six waterings: a home or intervale field waters in a third of a day for $60.', catch: 'When a month brings under 40 mm of rain the brook runs low and the pond is dry, just when it is wanted.' },
@@ -300,7 +300,7 @@ export const BUILDING_KINDS: BuildingKind[] = ['house', 'shed', 'bunk', 'packing
 export const HOUSE_CWT = 3600                  // a built potato house; at home with ventilation it holds CELLAR_CWT_VENT
 export const SHED_SPEED = 1.15
 export const BUNK_BEDS = 6
-export const PACK_PER_DAY = 30                 // cwt packed in a crew-day: 600 in a winter month's 20
+export const PACK_PER_DAY = 40                 // cwt packed in a crew-day: 600 in a winter month's 20
 export const PACK_CHARGE = 0.4                 // dollars a hundredweight packed: cartons, bags and labels
 export const PACK_NO1 = 0.15                   // packed No. 1 brings this much more
 export const PACK_B = 0.75                     // packed B size sells at this share of the No. 1 price
