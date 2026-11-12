@@ -6,7 +6,7 @@ import {
 } from 'three'
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import {
-  DUFOUR_BARN, DUFOUR_HOUSE, DUFOUR_POTATO_HOUSE, FARM, FARM_CENTER, HOME_WOODS, POTATO_HOUSE, brookHalf, brookZ, fieldMask, groundY, hillRoadZ, roadDist,
+  DUFOUR_BARN, DUFOUR_HOUSE, DUFOUR_POTATO_HOUSE, FARM, FARM_CENTER, HOME_WOODS, KEEP_CLEAR, POTATO_HOUSE, brookHalf, brookZ, fieldMask, groundY, hillRoadZ, roadDist,
   townRoadZ, woodsAt,
 } from './layout.ts'
 import { hash2, rng } from './noise.ts'
@@ -242,6 +242,7 @@ export class Flora {
     const open = (x: number, z: number) =>
       roadDist(x, z) > 1.8 && Math.abs(z - townRoadZ(x)) > 3.2 && Math.abs(z - hillRoadZ(x)) > 3.2 && Math.abs(z - brookZ(x)) > brookHalf(x) + 0.7
       && built.every(b => Math.hypot(x - b.x, z - b.z) > 5.2) && fieldMask(x, z, 1.2) < 0.01
+      && KEEP_CLEAR.every(c => Math.hypot(x - c.x, z - c.z) > c.r + 1.2)
     const broad = (t: Tree) => (t.r < 0.45 ? trees.maple : trees.birch).push(t)
     // a fir is a slimmer spruce
     const conifer1 = (t: Tree) => trees.spruce.push(r() < 0.36 ? { ...t, w: 0.66 } : t)
