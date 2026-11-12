@@ -168,6 +168,9 @@ test('a guided first year: offered on a new farm, taken, and followed through th
     // telegram has no lesson of its own (the first one taught it): it is answered as that one was.
     await expect.poll(async () => {
       if (!(await slip(page)).id && (await look(page)).incidents) await page.locator('#ui [data-testid^="answer-"]').first().click().catch(() => {})
+      // A paper a lesson's click opened (the almanac from the forecast) is closed as a player would, and the days go on.
+      if (!(await slip(page)).id && (await look(page)).paper) await page.keyboard.press('Escape')
+      else if (!(await slip(page)).id && (await look(page)).paused && !(await look(page)).incidents) await page.keyboard.press('Space')
       return (await finished()) ? 'done' : (await slip(page)).id
     }, { timeout: 120_000, message: `after ${did.join(' ')}` }).not.toBe('')
     if (await finished()) break
