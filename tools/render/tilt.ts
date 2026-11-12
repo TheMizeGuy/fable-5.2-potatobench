@@ -73,6 +73,11 @@ for (const tier of ['yard', 'county']) {
   await page.keyboard.down('PageDown'); await page.waitForTimeout(2200); await page.keyboard.up('PageDown')
   await page.waitForTimeout(900)
   await page.screenshot({ path: `${out}/5-${tier}-down.png` })
+  // The same view slid a little way up the land: what lies on the ground moves down the picture with it, where an
+  // edge of the lighting's own (a shadow map's) would stay where it is.
+  await page.keyboard.down('ArrowUp'); await page.waitForTimeout(350); await page.keyboard.up('ArrowUp')
+  await page.waitForTimeout(900)
+  await page.screenshot({ path: `${out}/6-${tier}-down-slid.png` })
   await page.keyboard.press('Home'); await page.waitForTimeout(400)
 }
 check(errors.length === 0, `no page errors (${errors.join('; ').slice(0, 200)})`)

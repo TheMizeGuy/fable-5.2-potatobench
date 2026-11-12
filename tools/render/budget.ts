@@ -17,7 +17,7 @@
 //            still, the game paused while the camera turns, and the game running.
 //   --land   what the land's own parts cost in four views at each setting.
 //   --adapt  the game left to choose for itself, as in a player's browser: the setting it starts on from its first
-//            frames timed, then the picture made four times too dear to draw and what it does about it, then made
+//            frames timed, then the picture made nine times too dear to draw and what it does about it, then made
 //            cheap again and how long it takes to come back.
 // Usage: node tools/render/budget.ts <base-url> [--against=<url>] [--free] [--parts [--hide]] [--idle] [--land] [--adapt]
 //          [--size=1920x1080] [--dpr=1] [--only=field,county] [--rounds=5]
@@ -79,25 +79,29 @@ const wait = (n: number) => new Promise(r => setTimeout(r, n))
 
 // One stretch of frames. `gpu`: the mean of the GPU's time for a frame (the frames differ: a frame that redraws a wide
 // shadow map costs more than its neighbours). `gap`: the time from one frame drawn to the next.
-async function window1(s: Side, seconds = 1.5, byPart = false): Promise<M> {
+// how: 'whole', each frame timed as one from outside the renderer, the same way for every build; 'passes' or 'parts',
+// by the renderer's own timer (a build that has one), which breaks the frame up and so reads a little higher.
+async function window1(s: Side, seconds = 1.5, how: 'whole' | 'passes' | 'parts' = 'whole'): Promise<M> {
+  const probe = s.probe && how !== 'whole'
   await s.page.waitForTimeout(300)
-  await s.page.evaluate(([probe, byPart]) => {
+  await s.page.evaluate(([probe, byPart, has]) => {
     const w = window as any, f = w.__countyField
-    if (probe) { f.probe(true, byPart); f.cost() } else { w.__perf.gpu = []; w.__perf.on = true }
+    if (probe) { f.probe(true, byPart); f.cost() } else { if (has) f.probe(false); w.__perf.gpu = []; w.__perf.on = true }
     f.mean()
     w.__t0 = performance.now()
-  }, [s.probe, byPart])
+  }, [probe, how === 'parts', s.probe])
   await s.page.waitForTimeout(seconds * 1000)
   const r = await s.page.evaluate(probe => {
     const w = window as any, f = w.__countyField, st = f.stats(), mean = f.mean(), secs = (performance.now() - w.__t0) / 1000
     let rows: Row[] = [], sum = 0, n = 0
-    if (probe) { const c = f.cost(); rows = c.rows; sum = c.sum; n = c.frames } else { w.__perf.on = false; n = w.__perf.gpu.length; for (const g of w.__perf.gpu) sum += g }
+    if (probe) { const c = f.cost(); rows = c.rows; sum = c.sum; n = c.frames; f.probe(false) } else { w.__perf.on = false; n = w.__perf.gpu.length; for (const g of w.__perf.gpu) sum += g }
     return { rows, sum, n, mean, secs, tier: st.tier, spent: st.spent, objects: st.objects, drawn: st.drawn, samples: st.samples ?? -1, canvas: [st.width, st.height] }
-  }, s.probe)
-  const gpu = r.n ? r.sum / r.n : NaN, fps = r.mean.frames / r.secs
+  }, probe)
+  // Timed from outside, every beat of the display is timed, whether or not a frame was drawn on it: the time is shared among the frames drawn.
+  const frames = probe ? r.n : r.mean.frames, gpu = frames ? r.sum / frames : NaN, fps = r.mean.frames / r.secs
   return {
     gpu, cpu: r.rows.length ? r.rows.reduce((a, x) => a + x.cpu * x.share, 0) : r.spent.draw, triangles: r.mean.triangles, calls: Math.round(r.mean.calls), tier: r.tier, rows: r.rows,
-    drawn: r.drawn, samples: r.samples, canvas: r.canvas as [number, number], fps, perSec: gpu * fps, gap: 1000 / Math.max(fps, 1e-3), spent: r.spent, objects: r.objects,
+    drawn: r.drawn, samples: r.samples, canvas: r.canvas as [number, number], fps, perSec: frames ? gpu * fps : 0, gap: 1000 / Math.max(fps, 1e-3), spent: r.spent, objects: r.objects,
   }
 }
 
@@ -226,7 +230,9 @@ async function open(name: string, url: string): Promise<Side> {
   }
   const loaded = await page.evaluate(() => {
     const f = (window as any).__countyField
-    return { first: f.stats().firstFrame, built: f.stats().built as [string, number][], K: f.scale?.K, probe: typeof f.probe === 'function', timed: typeof f.probe === 'function' ? f.probe(true) : true }
+    const probe = typeof f.probe === 'function', timed = probe ? f.probe(true) : true
+    if (probe) f.probe(false)
+    return { first: f.stats().firstFrame, built: f.stats().built as [string, number][], K: f.scale?.K, probe, timed }
   })
   console.log(`  ${name} (${url}): K ${loaded.K}, the first frame ${(loaded.first / 1000).toFixed(2)} s after the page was asked for; the scene built by (ms) ${(loaded.built ?? []).map(([n, t]) => `${n} ${t}`).join(', ')}`)
   if (!loaded.timed) console.log('  (this browser gives no GPU timer: every GPU time below is 0, and only the counts mean anything)')
@@ -313,7 +319,7 @@ if (!flag('idle') && !flag('land') && !flag('adapt')) {
       if (browsersOnGpu() > mine) console.log('    (another browser started on the GPU during this measurement)')
       if (flag('parts') && t === 'high' && now.probe) {
         await turn(sides, now)
-        breakdown(least(await window1(now, 1.5, true), await window1(now, 1.5, true)))
+        breakdown(least(await window1(now, 1.5, 'parts'), await window1(now, 1.5, 'parts')))
         await oneAtATime()
       }
     }
@@ -419,11 +425,11 @@ if (flag('adapt')) {
   await field('f.adapt(true, null)')
   await page.waitForTimeout(2500)
   await pace('timed on its first frames')
-  // a picture of four times the pixels: every frame late
-  await field('f.force({ pixels: 8.3e6, scale: 2, ratio: 2 })')
-  for (let k = 1; k <= 12; k++) { await page.waitForTimeout(2500); await pace(`too dear for ${(k * 2.5).toFixed(0)} s`) }
+  // a picture of nine times the pixels (a test box with a strong card keeps its beat at four): every frame late
+  await field('f.force({ pixels: 1.87e7, scale: 3, ratio: 3 })')
+  for (let k = 1; k <= 16; k++) { await page.waitForTimeout(2500); await pace(`too dear for ${(k * 2.5).toFixed(0)} s`) }
   await field('f.force({})')
-  for (let k = 1; k <= 16; k++) { await page.waitForTimeout(5000); await pace(`cheap again for ${k * 5} s`) }
+  for (let k = 1; k <= 32; k++) { await page.waitForTimeout(5000); await pace(`cheap again for ${k * 5} s`) }
   await field('f.adapt(false)')
 }
 for (const s of sides) if (s.probe) await field('f.probe(false)', s.page)
