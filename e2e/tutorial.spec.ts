@@ -93,7 +93,7 @@ async function clear(page: Page, target: string): Promise<void> {
   await page.waitForTimeout(400)
   const s = page.locator('#ui [data-testid="guide-slip"]:not([hidden]):not(.gone)')
   if (!(await s.count())) return
-  const sb = await s.first().boundingBox()
+  const sb = await s.first().boundingBox({ timeout: 2000 }).catch(() => null)
   if (!sb) return
   const others = await page.evaluate(t => [...document.querySelectorAll<HTMLElement>(`#ui .clock, #ui .command, #ui .telegram, #ui .paper-layer .dialog${t ? `, #ui [data-testid="${t}"]` : ''}`)]
     .filter(e => !e.closest('.guide, .leaving, [hidden], .out') && e.offsetParent !== null)
@@ -120,8 +120,13 @@ test('a guided first year: offered on a new farm, taken, and followed to the fir
   const sown = () => page.evaluate(() => (globalThis as unknown as { __county: { app: { campaign: { season: { fields: { plantDay: number }[] } | null } } } }).__county.app.campaign.season?.fields.some(f => f.plantDay >= 0) ?? false)
   for (let step = 0; step < 40 && !planted; step++) {
     if (await sown()) { planted = true; break }
-    // Each lesson is waited for as a player would: it is on the screen, or the days are running toward it.
-    await expect.poll(async () => (await slip(page)).id, { timeout: 120_000, message: `after ${did.join(' ')}` }).not.toBe('')
+    // Each lesson is waited for as a player would: it is on the screen, or the days are running toward it. A later
+    // telegram has no lesson of its own (the first one taught it): it is answered as that one was.
+    await expect.poll(async () => {
+      if (!(await slip(page)).id && (await look(page)).incidents) await page.locator('#ui [data-testid^="answer-"]').first().click().catch(() => {})
+      return (await sown()) ? 'sown' : (await slip(page)).id
+    }, { timeout: 120_000, message: `after ${did.join(' ')}` }).not.toBe('')
+    if (await sown()) { planted = true; break }
     const { id, target } = await slip(page)
     console.log(`${id} at ${(await look(page)).speed}×`)
     // Between one lesson and the next, or under a paper a moment: look again.
