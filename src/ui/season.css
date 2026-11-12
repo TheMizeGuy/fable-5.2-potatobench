@@ -56,7 +56,7 @@
 .season-screen .press-chip { color: var(--paper); background: var(--red); box-shadow: none; gap: 6px; }
 .season-screen .press-chip .i { color: var(--paper); }
 .season-screen .press-chip .press-word { font: 400 14px/1 var(--f-gothic); letter-spacing: .05em; text-transform: uppercase; }
-.season-screen .press-pop { min-width: min(420px, calc(100vw - 32px)); }
+.season-screen .q-pop.press-pop { width: min(420px, calc(100vw - 2 * var(--gutter, 16px))); min-width: 0; }
 .season-screen .press-pop .press { display: flex; align-items: center; gap: 8px; margin: 0; padding: 6px 8px 6px 10px; font-size: 15px; line-height: 1.25; background: var(--paper) url(./system/grain.png); background-blend-mode: multiply; box-shadow: var(--laid), inset 0 0 0 2px var(--red); }
 .season-screen .press-pop .press > .i { --i: 18px; color: var(--red); flex: none; }
 .season-screen .press-pop .press-text { flex: 1; min-width: 0; }
@@ -123,6 +123,8 @@
 @keyframes stamp-down { from { transform: rotate(2deg) scale(1.15); } }
 /* Crowded, the tags keep their cut and stamp; far out, their names and stamps. */
 .plate-layer.compact .tag-at:not(.is-sel) .nm, .plate-layer.compact .tag-at:not(.is-sel) .var { display: none; }
+/* Crowded, "on the list" keeps only its cut. */
+.plate-layer.compact .tag-at:not(.is-sel) .listed .stamp { display: none; }
 .plate-layer.far .tag-at:not(.is-sel) .var, .plate-layer.far .tag-at:not(.is-sel) .listed { display: none; }
 .yard-at .yard-tag { white-space: nowrap; }
 .yard-at .yard-tag .yard-pct { margin-left: 4px; font: 400 15px/1 var(--f-gothic); letter-spacing: .06em; color: var(--board-ink); }
@@ -302,6 +304,8 @@
 .season-screen .view-home { position: absolute; right: max(var(--gutter), env(safe-area-inset-right, 0px)); bottom: calc(var(--bottom, 140px) + 8px); z-index: 1;
   background: var(--paper) url(./system/grain.png); background-blend-mode: multiply; box-shadow: var(--laid); }
 .season-screen.selected:not([data-layout='narrow']) .view-home { display: none; }
+/* On a phone the Home key stands in its own band just over the foot, which the land is framed above. */
+.season-screen[data-layout='narrow'] .view-home, .season-screen[data-layout='short'] .view-home { bottom: calc(var(--foot, 140px) + 4px); }
 .season-screen[data-layout='narrow'].selected .view-home, .season-screen[data-layout='narrow'].person-up .view-home, .season-screen.incident-up .view-home { display: none; }
 @media (hover: hover) { .season-screen .view-home:hover { box-shadow: var(--laid), inset 0 0 0 1px var(--ink); } }
 .season-screen .paused { position: absolute; right: max(var(--gutter), env(safe-area-inset-right, 0px)); top: calc(var(--top, 220px) + 8px); z-index: 2; }
@@ -370,7 +374,7 @@
 .season-screen[data-layout='narrow'] .telegram .tg-body h2 { font-size: 21px; }
 .season-screen[data-layout='narrow'] .telegram .tg-body p { font-size: 15px; }
 .season-screen[data-layout='narrow'].incident-up .notes-slot, .season-screen[data-layout='narrow'].incident-up .queue { display: none; }
-.season-screen[data-layout='narrow'] .paused { right: var(--gutter); top: calc(var(--top, 180px) + 6px); }
+.season-screen[data-layout='narrow'] .paused { right: var(--gutter); top: calc(var(--board, 180px) + 6px); }
 .season-screen[data-layout='narrow'] .tray-host { left: var(--gutter); right: var(--gutter); }
 .tag-wrap .tag { touch-action: manipulation; }
 .touch .tag-wrap .tag-at .tag, .touch .tag-wrap .tag-at:not(.has-need):not(.is-sel) .tag { height: 40px; }
@@ -429,7 +433,7 @@
 .season-screen[data-layout='short'] .telegram .reply { padding: 8px 12px; gap: 4px 10px; }
 .season-screen[data-layout='short'] .telegram .reply .c-title { font-size: 19px; }
 .season-screen[data-layout='short'] .telegram .reply .c-does { font-size: 14px; }
-.season-screen[data-layout='short'] .paused { top: calc(var(--top, 100px) + 6px); }
+.season-screen[data-layout='short'] .paused { top: calc(var(--board, 100px) + 6px); }
 .pc-tools { display: flex; align-items: flex-start; gap: 2px; margin: -10px -12px 0 0; }
 .pc-tools .close { margin: 0; }
 
@@ -445,3 +449,9 @@
 .command .whose .i { --i: 14px; margin-right: 4px; vertical-align: -2px; }
 .command .whose .btn { min-height: 30px; padding: 0 8px; font-size: 13px; }
 .touch .command .whose .btn { min-height: 40px; }
+/* A phone has little land: the clock at the thumb says paused or running, so the chip under the top board goes; the
+   list wraps, and the land is framed above it. */
+.season-screen[data-layout='narrow'] .paused { display: none; }
+/* The pop of work that cannot wait opens from the list's own left edge, so it stays inside the window. */
+.season-screen .queue { position: relative; }
+.season-screen .q-item.press-item { position: static; }
