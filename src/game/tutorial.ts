@@ -512,7 +512,7 @@ export class Guide {
   skipTo(id: string): void {
     this.p.offered = true
     this.p.mode = 'on'
-    for (const x of LESSONS) { if (x.id === id) break; this.p.passed[x.id] = 'skip' }
+    for (const x of LESSONS) { if (x.id === id) break; this.p.passed[x.id] = 'skip'; this.bring(x.id) }
     this.save()
   }
 

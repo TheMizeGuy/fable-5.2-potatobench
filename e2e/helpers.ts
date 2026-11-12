@@ -75,6 +75,14 @@ export async function pause(page: Page): Promise<void> {
   await expect.poll(async () => (await look(page)).paused).toBe(true)
 }
 
+// A first farm in this browser is offered the guided first year: these tests go straight in, as a player would.
+export async function straightIn(page: Page): Promise<void> {
+  const offer = page.getByTestId('guide-offer')
+  await expect(offer).toBeVisible()
+  await offer.getByTestId('guide-refuse').click()
+  await expect(offer).toHaveCount(0)
+}
+
 export async function noSidewaysScroll(page: Page): Promise<void> {
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
   expect(overflow).toBeLessThanOrEqual(1)

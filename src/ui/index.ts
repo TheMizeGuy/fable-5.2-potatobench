@@ -172,7 +172,7 @@ export const mountHud: MountHud = (root, app, view, sound) => {
         // The tray and the ticket speak for themselves, and a clean walk shows on the field's own card.
         if (app.screen !== 'season' || a.type === 'sample' || a.type === 'weighed' || (a.type === 'scout' && a.level !== 'bad')) break
         // In the guided first year the guide speaks: news that asks nothing goes to the almanac's diary alone.
-        if (guidedYear(app.campaign) && a.level === 'info') break
+        if (guidedYear(app.campaign) && a.level !== 'bad') break
         const short = alertShort(a)
         // Frost over barrels names no one field: the note goes to the biggest haul, where the barrels and the hauler show.
         const field = a.type === 'frostBarrels' && app.campaign ? S.haulInfo(app.world, app.campaign).sort((x, y) => y.cwt - x.cwt)[0]?.field ?? -1 : a.field

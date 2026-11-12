@@ -288,7 +288,8 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   const off = app.on(ev => {
     if (ev.type === 'yard' || ev.type === 'unit' || ev.type === 'select') ctx.dirty()
     else if (ev.type === 'events') {
-      for (const e of ev.events) if (e.type === 'sample') { const staged = app.speed < 3; void ctx.view.whenShown('sample', e.field).then(() => { if (app.screen === 'season') openTray(e, staged) }) }
+      // In the guided first year the test dig is on the field's card, not laid on the land unasked.
+      for (const e of ev.events) if (e.type === 'sample' && !guidedYear(app.campaign)) { const staged = app.speed < 3; void ctx.view.whenShown('sample', e.field).then(() => { if (app.screen === 'season') openTray(e, staged) }) }
       const c0 = app.campaign
       if (c0) { sayCrewStarts(c0); sayKillDates(c0) }
     }

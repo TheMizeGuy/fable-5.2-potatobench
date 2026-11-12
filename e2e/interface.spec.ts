@@ -1,6 +1,6 @@
 // How the interface behaves: selecting and ordering, what it says and does not say, and every size it has to hold at.
 import { test, type Page } from '@playwright/test'
-import { expect, look, noSidewaysScroll, open, putAway, reach, startSeason, watchErrors } from './helpers.ts'
+import { expect, look, noSidewaysScroll, open, putAway, reach, startSeason, straightIn, watchErrors } from './helpers.ts'
 
 // A label and its amount on a money line, however the sheet sets what lies between them (a space, "with rent $3,500").
 const line = (label: string, amount: string): RegExp => new RegExp(`${label}.{0,40}?${amount.replace(/[$.]/g, '\\$&')}(?![\\d,])`)
@@ -312,6 +312,7 @@ test('Play starts a farm of its own, counted in years of its own, and a new farm
   await open(page)
   await expect(page.getByTestId('choose-year')).toHaveCount(0)
   await page.getByTestId('play').click()
+  await straightIn(page)
   await expect(page.getByTestId('begin-season')).toBeVisible()
   await expect(page.locator('#ui main:not(.leaving) .tb-year')).toHaveText('Year 1')
   // The home six, and none of the land beyond them.

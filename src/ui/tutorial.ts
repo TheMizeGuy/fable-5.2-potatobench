@@ -12,6 +12,8 @@ import { fist, key } from './system/parts.ts'
 import './system/tutorial.css'
 
 export const guide = new Guide(localStore())
+// Set by the mounted guide: a key on a note takes effect on the next frame, not the next look round.
+let poke: () => void = () => {}
 // The pause reason the guide's own hold leaves on the clock.
 export const HOLD = 'The county agent has a note for you.'
 // For the browser tests and the capture tool, as window.__county is.
@@ -249,7 +251,7 @@ function holdLine(): HTMLElement {
 function slipBody(ctx: Ctx, x: Lesson, l: Look, held: boolean, lost = false, under = false, show = -1, ahead: ((id: string) => void) | null = null): (HTMLElement | null)[] {
   const again = guide.replaying(x.id)
   const where = PART_NAME[x.part]
-  const done = () => { guide.noted(x.id); ctx.dirty() }
+  const done = () => { guide.noted(x.id); poke(); ctx.dirty() }
   const skip = ahead ? x.skip?.(l) ?? null : null
   return [
     h('header', { class: 'guide-head' },
@@ -265,8 +267,8 @@ function slipBody(ctx: Ctx, x: Lesson, l: Look, held: boolean, lost = false, und
     h('footer', { class: 'guide-foot' },
       x.read || again ? h('button', { class: 'btn guide-ok', type: 'button', testid: 'guide-noted', onclick: done }, icon('check', 'i'), x.read ? 'Noted' : 'Got it') : null,
       skip ? h('button', { class: 'btn', type: 'button', testid: 'guide-ahead', onclick: () => ahead!(x.id) }, icon('fast', 'i'), skip) : null,
-      x.read || again ? null : h('button', { class: 'btn quiet', type: 'button', testid: 'guide-skip', onclick: () => { guide.skip(x.id); ctx.dirty() } }, 'Skip'),
-      h('button', { class: 'btn quiet', type: 'button', testid: 'guide-stop', onclick: () => { guide.stop(); ctx.say('The guide is put away. The menu brings it back.'); ctx.dirty() } }, 'Stop the guide')),
+      x.read || again ? null : h('button', { class: 'btn quiet', type: 'button', testid: 'guide-skip', onclick: () => { guide.skip(x.id); poke(); ctx.dirty() } }, 'Skip'),
+      h('button', { class: 'btn quiet', type: 'button', testid: 'guide-stop', onclick: () => { guide.stop(); poke(); ctx.say('The guide is put away. The menu brings it back.'); ctx.dirty() } }, 'Stop the guide')),
   ]
 }
 
@@ -274,7 +276,7 @@ function slipBody(ctx: Ctx, x: Lesson, l: Look, held: boolean, lost = false, und
 function offerCard(ctx: Ctx): HTMLElement {
   const keys = !ctx.touch()
   const reply = (n: number, id: string, title: string, does: string, usual: boolean, go: () => void) => h('button', {
-    class: `reply${usual ? ' first usual' : ''}`, type: 'button', testid: id, 'aria-keyshortcuts': keys ? String(n) : null, onclick: () => { go(); ctx.dirty() },
+    class: `reply${usual ? ' first usual' : ''}`, type: 'button', testid: id, 'aria-keyshortcuts': keys ? String(n) : null, onclick: () => { go(); poke(); ctx.dirty() },
   }, key(String(n)), h('b', { class: 'c-title' }, title, usual ? fist() : null), h('span', { class: 'c-does' }, does))
   return h('section', { class: 'guide-card offer telegram sheet sys', testid: 'guide-offer', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'guide-offer-h' },
     h('header', { class: 'gc-head' }, h('p', { class: 't-label' }, 'From the county agent'), h('h2', { class: 't-title', id: 'guide-offer-h' }, 'First time on the farm?')),
@@ -295,8 +297,8 @@ function frameCard(ctx: Ctx, x: Lesson, l: Look): HTMLElement {
     h('p', { class: 'gc-lead' }, `At each year's end the bank and the household take ${bills}. The crop has to pay it.`),
     h('p', { class: 'gc-deal' }, x.why(l)),
     h('footer', { class: 'guide-foot' },
-      h('button', { class: 'btn go guide-ok', type: 'button', testid: 'guide-noted', onclick: () => { guide.noted(x.id); ctx.dirty() } }, 'Begin', icon('arrow', 'i')),
-      h('button', { class: 'btn quiet', type: 'button', testid: 'guide-stop', onclick: () => { guide.stop(); ctx.dirty() } }, 'Stop the guide')))
+      h('button', { class: 'btn go guide-ok', type: 'button', testid: 'guide-noted', onclick: () => { guide.noted(x.id); poke(); ctx.dirty() } }, 'Begin', icon('arrow', 'i')),
+      h('button', { class: 'btn quiet', type: 'button', testid: 'guide-stop', onclick: () => { guide.stop(); poke(); ctx.dirty() } }, 'Stop the guide')))
 }
 
 // ---------------------------------------------------------------- the camera, read from the scene's anchors
@@ -338,23 +340,25 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
   const root = layer.parentElement as HTMLElement
   const slip = h('section', { class: 'guide floating sheet sys', 'aria-labelledby': 'guide-ask', hidden: true })
   const hand = h('div', { class: 'guide-fist sys', testid: 'guide-fist', 'aria-hidden': 'true', hidden: true }, fist())
-  const clockNote = h('p', { class: 'guide-clocknote sys', testid: 'guide-clock-held', hidden: true }, icon('pause', 'i'), 'Held for the agent\'s note. Any speed goes on.')
   const cardVeil = h('div', { class: 'guide-veil', hidden: true })
   const cardSlot = h('div', { class: 'guide-cardslot', hidden: true })
-  layer.append(cardVeil, cardSlot, slip, hand, clockNote)
+  layer.append(cardVeil, cardSlot, slip, hand)
   // While a card is up, the screen behind it waits: nothing there can be pressed or focused.
   const behind = () => [...root.querySelectorAll<HTMLElement>(':scope > .screen-layer, :scope > .plate-layer')]
   let cardKey = ''
   const onCardKey = (e: KeyboardEvent) => {
     if (cardSlot.hidden || e.ctrlKey || e.metaKey || e.altKey) return
     const press = (id: string) => { const b = cardSlot.querySelector<HTMLElement>(`[data-testid="${id}"]`); if (b) { e.preventDefault(); e.stopImmediatePropagation(); b.click() } }
-    if (offer) { if (e.key === '1') press('guide-accept'); else if (e.key === '2' || e.key === 'Escape') press('guide-refuse') }
-    else if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation() }
+    if (offer && e.key === '1') press('guide-accept')
+    else if (offer && (e.key === '2' || e.key === 'Escape')) press('guide-refuse')
+    // Nothing behind a card hears a key: only Tab, Enter and Space, which are the card's own.
+    else if (!['Tab', 'Enter', ' ', 'Shift'].includes(e.key)) { if (e.key === 'Escape') e.preventDefault(); e.stopImmediatePropagation() }
   }
   document.addEventListener('keydown', onCardKey, true)
 
   let input: Input = ctx.touch() ? 'touch' : 'mouse'
   let stale = true
+  poke = () => { stale = true }
   // When the player last touched the clock themselves: a clock the game sets going (a paper closing) is held again.
   let pressedAt = -1e9
   const CLOCK_KEYS = [' ', 'f', 'F', '+', '=', '-', '_']
@@ -499,16 +503,20 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
       return
     }
     if (want && !holding) {
-      // Running: stopped here. Stopped for a card: the speed it would go on at. Stopped by the player: it stays so.
-      const speed = fastFrom >= 0 ? fastFrom : app.speed > 0 ? app.speed : app.pauseReason && app.pauseReason !== HOLD ? app.resumeSpeed || 1 : 0
-      fastFrom = -1
+      // Running: stopped here. Stopped by the game (a card, a frost): the speed it would go on at. Stopped by the
+      // player: it stays so. A skip ahead ends at the next note, but runs on past one that only breaks in.
+      const was = app.speed > 0 ? app.speed : app.pauseReason && app.pauseReason !== HOLD ? app.resumeSpeed || 1 : 0
+      const speed = fastFrom >= 0 && !due!.urgent ? fastFrom : was
+      if (!due!.urgent) fastFrom = -1
       holding = { id: want, speed }
       if (app.speed > 0) stopNow()
     } else if (want && holding) holding.id = want
     else if (!want && holding) {
       const back = holding.speed
       holding = null
-      if (back > 0 && app.speed === 0 && app.pauseReason === HOLD) app.setSpeed(back as 1 | 2 | 3)
+      const c = app.campaign
+      // The game's own stop (a frost) ends with the note that explained it; a card still up keeps the clock.
+      if (back > 0 && app.speed === 0 && app.pauseReason !== '' && !app.holding && app.screen === 'season' && c && !S.seasonDone(c) && !cardUp(lookNow())) app.setSpeed(back as 1 | 2 | 3)
     }
   }
   // Skip ahead: the note is put away and the days run fast to the next one, which stops them again.
@@ -548,7 +556,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
   }
   // One voice: a card that wants an answer (a telegram, the spraying question, a paper) speaks alone.
   function cardUp(l: Look): boolean {
-    return !!l.paper || l.asking === 'spray' || shown(root.querySelector('.telegram:not(.guide-card)')) || shown(root.querySelector('.tray-paper'))
+    return !!l.paper || l.asking === 'spray' || ctx.awaiting > 0 || ctx.papers.pending() > 0 || shown(root.querySelector('.telegram:not(.guide-card)')) || shown(root.querySelector('.tray-paper'))
   }
 
   function render(): void {
@@ -561,7 +569,10 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     const l = lookNow()
     offer = guide.offerFor(c, app.screen)
     due = offer ? null : paced(guide.current(l))
-    now = due && cardUp(l) ? null : due
+    const carded = cardUp(l)
+    now = due && carded ? null : due
+    // A skip ahead that meets a card ends there: answered, the days go on at the speed they had.
+    if (fastFrom >= 0 && carded && app.speed === 0 && app.pauseReason !== HOLD) { app.resumeSpeed = fastFrom as 1 | 2 | 3; fastFrom = -1 }
     hold()
     // The cards in the middle: the offer, and what a year is.
     const card = offer ? 'offer' : now?.card ? now.id : ''
@@ -569,9 +580,13 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
       cardKey = card
       cardSlot.replaceChildren(...(offer ? [offerCard(ctx)] : now?.card ? [frameCard(ctx, now, l)] : []))
       cardSlot.hidden = cardVeil.hidden = !card
-      for (const el of behind()) el.inert = !!card
       if (card) (cardSlot.querySelector<HTMLElement>('.usual, .guide-ok') ?? cardSlot.querySelector<HTMLElement>('button'))?.focus({ preventScroll: true })
+      else if (!papers().length) {
+        for (const el of behind()) el.inert = false
+        if (app.screen === 'plan') root.querySelector<HTMLElement>('[data-testid="begin-season"]')?.focus({ preventScroll: true })
+      }
     }
+    if (card) for (const el of behind()) if (!el.inert) el.inert = true
     if (now?.card) now = null
     // The screen grows with the player: what a guided first year has not brought in yet is held back, in its place.
     const hide = guide.hidden(c, app.screen)
@@ -682,24 +697,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
       }
     }
     hand.hidden = !fistBox
-    // While the guide holds the clock, the clock says so.
-    const ck = now && app.screen === 'season' && app.speed === 0 && app.pauseReason === HOLD ? [...root.querySelectorAll('.clock')].find(shown) : undefined
-    let noteBox: Box | null = null
-    if (ck) {
-      // Under the clock, else over it, else under the "Go on" key: never over a face, the list or a panel.
-      clockNote.hidden = false
-      const w = clockNote.offsetWidth, ht = clockNote.offsetHeight
-      const keep = [...hardOnes(root), ...[...root.querySelectorAll('.timebook, .person, .queue, .pressing, .goal, .plate-layer .tag')].filter(shown).map(e => box(e.getBoundingClientRect()))]
-      const at = (e: Element | undefined | null, under: boolean) => {
-        if (!e || !shown(e)) return null
-        const r = e.getBoundingClientRect(), x = Math.max(8, Math.min(innerWidth - w - 8, r.right - w)), y = under ? r.bottom + 6 : r.top - ht - 6
-        return { left: x, top: y, right: x + w, bottom: y + ht }
-      }
-      const go = root.querySelector('[data-testid="paused"]')
-      noteBox = [at(ck, true), at(ck, false), at(go, true)].find(b => !!b && b.top >= 4 && b.bottom <= innerHeight - 4 && !keep.some(a => meets(b, a))) ?? null
-      if (noteBox) clockNote.style.transform = `translate3d(${noteBox.left.toFixed(1)}px, ${noteBox.top.toFixed(1)}px, 0)`
-    }
-    clockNote.hidden = !noteBox
+    const noteBox: Box | null = null
     if (slip.hidden) return
     const key = `${l.id}|${innerWidth}x${innerHeight}|${slip.offsetWidth}x${slip.offsetHeight}`
     const t0 = performance.now()
