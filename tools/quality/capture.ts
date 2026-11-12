@@ -82,6 +82,9 @@ async function toTicket(page: Page, setup: string, hold = ''): Promise<void> {
   await page.getByTestId('weighin').waitFor({ timeout: 10_000 })
 }
 
+// Runs the days, answering any question its own way, until the test given is true (a season at most).
+const DAYS = `const c = app.campaign; const sim = q.g().sim; (ok => { for (let n = 0; n < 220 && !ok() && !sim.seasonDone(c); n++) { for (const i of [...c.incidents]) app.do({ t: 'answer', incident: i.id, choice: sim.defaultChoice(i) }); app.do({ t: 'day' }) } app.setSpeed(0) })`
+
 const STATES: State[] = [
   // Each season frame in design/, in the game, to set beside the frame's picture.
   { name: 'frame-season', what: 'design/season.html: July, five people, nothing selected', sizes: [...MAIN, 'land'], run: frameJuly },
@@ -329,7 +332,52 @@ const STATES: State[] = [
       app.do({ t: 'priority', unit: u.id, work: 'pack', level: u.prio.pack === 4 ? 3 : 4 })`)
     await closeAll(page)
   } },
+
+  // The guided first year (src/ui/tutorial.ts): the offer, and a lesson at each kind of moment. Last, since each starts
+  // the guide afresh in the browser's storage and the states before them should not meet it.
+  { name: 'guide-offer', what: 'Guide: a new farm from the title, the offer in the catalogue', sizes: ALL, run: async page => {
+    await q(page, `window.__countyGuide.reset()`); await page.getByTestId('play').first().click(); await page.getByTestId('guide-offer').waitFor()
+  } },
+  { name: 'guide-begin', what: 'Guide: the offer taken, the first spring\'s one lesson on Start the season', sizes: ALL, run: async page => {
+    await q(page, `window.__countyGuide.reset()`); await page.getByTestId('play').first().click(); await page.getByTestId('guide-accept').click()
+  } },
+  { name: 'guide-look', what: 'Guide: the first day, the clock held, look round the land', sizes: ALL, run: guideAt('look') },
+  { name: 'guide-field', what: 'Guide: pick a field, the fist on its tag', sizes: ALL, run: guideAt('field') },
+  { name: 'guide-card', what: 'Guide: a field picked, its card read', sizes: ALL, run: async (page, size) => { await guideAt('card')(page, size); await q(page, `q.g().app.select(0)`); await page.waitForTimeout(900) } },
+  { name: 'guide-person', what: 'Guide: you, on the land', sizes: ALL, run: guideAt('person') },
+  { name: 'guide-clock', what: 'Guide: start the clock', sizes: ALL, run: guideAt('clock') },
+  { name: 'guide-watch', what: 'Guide: planting day, the routine puts planting on the list and the crew takes it up', sizes: ALL, run: guideAt('watch', `${DAYS}(() => c.season.jobs.some(j => j.kind === 'plant'))`) },
+  { name: 'guide-spray', what: 'Guide: the first call, spraying before blight weather, the fist on its stamp', sizes: ALL, run: guideAt('spray', `${DAYS}(() => app.needs().some(n => n.need && n.need.act === 'spray'))`) },
+  { name: 'guide-telegram', what: 'Guide: a telegram, the lesson beside it', sizes: ALL, run: guideAt('telegram', `const c = app.campaign; c.incidents.push({ id: c.nextIncident++, kind: 'breakdown', day: c.season.day, until: c.season.day + 2, choices: ['rush', 'wait'], unit: 0, back: c.season.day + 3 }); app.setSpeed(1); app.setSpeed(0)`) },
+  { name: 'guide-ticket', what: 'Guide: the first weigh ticket, the lesson beside it', sizes: ALL, run: async page => {
+    await q(page, `window.__countyGuide.reset(); window.__countyGuide.skipTo('ticket')`)
+    await toTicket(page, `q.g().app.newGame(1987, 3); q.g().app.do({ t: 'begin' })`)
+    await page.getByTestId('guide-slip').waitFor({ timeout: 10_000 }).catch(() => {})
+  } },
+  { name: 'guide-cellar', what: 'Guide: the first winter', sizes: ALL, run: async page => {
+    await q(page, `window.__countyGuide.reset(); window.__countyGuide.skipTo('cellar'); q.start(1987, 3); q.run(999, ['sell']); q.g().app.do({ t: 'endSeason' })`); await closeAll(page)
+  } },
+  { name: 'guide-book', what: 'Guide: the account book at the first year end', sizes: ALL, run: async page => {
+    await q(page, `window.__countyGuide.reset(); window.__countyGuide.skipTo('book'); q.start(1987, 3); q.year(3)`); await closeAll(page)
+  } },
+  { name: 'guide-spring', what: 'Guide: the second spring, People in the catalogue', sizes: ALL, run: async page => {
+    await q(page, `q.start(1987, 3); q.year(3); q.g().app.do({ t: 'next' }); window.__countyGuide.reset(); window.__countyGuide.skipTo('people')`); await closeAll(page)
+  } },
+  { name: 'guide-paper', what: 'Guide: its own paper from the menu, every lesson to see again', sizes: ALL, run: async (page, size) => { await guideAt('fast')(page, size); await page.getByTestId('menu-open').first().click(); await page.getByTestId('guide-open').click() } },
 ]
+
+// A new farm from the title with the guide taken, into its first season, every lesson before this one passed by.
+function guideAt(id: string, then = ''): Step {
+  return async page => {
+    await q(page, `window.__countyGuide.reset()`)
+    await page.getByTestId('play').first().click()
+    await page.getByTestId('guide-accept').click()
+    await page.getByTestId('begin-season').click()
+    await page.getByTestId('date').first().waitFor()
+    await q(page, `const { app } = q.g(); window.__countyGuide.skipTo(${JSON.stringify(id)}); ${then}`)
+    await page.waitForTimeout(1500)
+  }
+}
 // ALL_SIZES=1 takes every state at all eight sizes.
 if (process.env.ALL_SIZES) for (const s of STATES) s.sizes = ALL
 

@@ -20,6 +20,7 @@ import { plates, type PlateModel } from './plates.ts'
 import { hint as hintText, isJob, isStale, jobText, JOB_VERB, KEY_JOB, stageGlyph } from './rules.ts'
 import type { Ink } from './system/parts.ts'
 import { clock, topBar } from './top.ts'
+import { quietTips } from './tutorial.ts'
 import './season.css'
 
 const HINTS_KEY = 'the-county/hints'
@@ -223,7 +224,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   function updateHint(): void {
     const needs = app.needs()
     if (hint && (needs[hint.field]?.need?.act !== hint.kind || performance.now() - hint.at > HINT_MS || !app.settings.hints)) hint = null
-    if (!hint && app.settings.hints) {
+    if (!hint && app.settings.hints && !quietTips()) {
       for (let i = 0; i < needs.length; i++) {
         const act = needs[i].need?.act
         if (!isJob(act) || seen.has(act)) continue

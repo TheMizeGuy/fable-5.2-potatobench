@@ -12,6 +12,7 @@ import * as R from './rules.ts'
 import { cardHead, fieldCost, landCard, springFolds, tenureRow, tractCard, type Fold } from './spring.ts'
 import { fold } from './system/parts.ts'
 import { topBar } from './top.ts'
+import { holdsClock, springSlot } from './tutorial.ts'
 
 function varietyTraits(v: S.Variety, c: S.Campaign, world: S.World): string[] {
   return [
@@ -149,7 +150,7 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
   const rows = h('div', { class: 'cat-folds' })
   const foot = h('footer', { class: 'order-blank' })
   const body = h('div', { class: 'cat-body', 'data-scroll': 'spring' }, rows, track.el)
-  const sheet = h('section', { class: 'catalogue sheet sys', 'aria-label': 'The spring plan', testid: 'spring' }, mast, body, foot)
+  const sheet = h('section', { class: 'catalogue sheet sys', 'aria-label': 'The spring plan', testid: 'spring' }, mast, body, springSlot(), foot)
   const notesSlot = h('div', { class: 'notes-slot' })
   const el = h('main', { class: 'spring-screen sys' }, top.el, notesSlot, card, sheet)
   // Every fold starts shut: a newcomer's first spring is a short sheet (e2e/play.spec.ts), each fold one click away.
@@ -179,9 +180,11 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
   }
 
   function begin(): void {
+    const held = holdsClock(app.campaign)
     const r = ctx.run({ t: 'begin' })
     if (!r.ok) return
-    app.setSpeed(1)
+    // The guided first season waits for its lesson on the clock.
+    if (!held) app.setSpeed(1)
   }
 
   function toggle(id: Fold): void {

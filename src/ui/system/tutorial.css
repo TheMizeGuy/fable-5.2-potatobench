@@ -1,0 +1,59 @@
+/* The guided first year (src/ui/tutorial.ts): the county agent's printed slip, one of the farm's own papers, and the
+   printer's fist set beside the one control it asks for. Above the papers, so it can speak over its own weigh ticket. */
+.guide-layer { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
+.hud.waiting .guide-layer { visibility: hidden; }
+
+.guide { display: grid; gap: 6px; padding: 10px 14px 4px 16px; color: var(--ink); background: var(--paper) url(./grain.png); background-blend-mode: multiply;
+  box-shadow: var(--lifted); border-top: 3px double var(--ink); }
+.guide.floating { position: absolute; left: 0; top: 0; width: min(304px, calc(100vw - 24px)); pointer-events: auto; will-change: transform;
+  animation: guide-in var(--t-slip) var(--ease-out); }
+.guide.floating.gone { visibility: hidden; }
+#ui[data-layout='narrow'] .guide.floating { width: min(380px, calc(100vw - 24px)); }
+.guide-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding-bottom: 5px; border-bottom: 1px solid var(--hair); }
+.guide-head .t-label:first-child { color: var(--ink); }
+.guide-held { display: inline-flex; align-items: center; gap: 4px; color: var(--ink); }
+.guide-held .i { --i: 12px; }
+.guide-ask { font: 400 var(--t-lead)/1.3 var(--f-text); }
+.guide-why { font-size: var(--t-caption); }
+.guide-lost { display: flex; gap: 6px; align-items: center; color: var(--ink); }
+.guide-lost .i { --i: 16px; }
+.guide-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 12px; margin: 2px -4px 0; }
+.guide-foot .btn:not(.quiet) { min-height: 40px; padding: 0 12px; margin: 4px 4px 4px 0; }
+.guide-foot .btn.quiet { min-width: 44px; justify-content: center; color: var(--ink-2); font-size: 14px; }
+.guide-foot .btn .i { --i: 16px; }
+/* With little land free, the slip gives up its reason: the screen reader still hears it. */
+.guide.compact .guide-why { display: none; }
+.guide.compact { gap: 4px; padding-top: 8px; }
+
+/* In spring the slip is tucked into the seed catalogue, over the order blank. */
+.catalogue:has(> .guide-slot) { grid-template-rows: auto minmax(0, 1fr) auto auto; }
+.guide-slot:empty { display: none; }
+.guide-slot { padding: 0 24px 12px; }
+.guide.docked { box-shadow: var(--laid); animation: guide-in var(--t-slip) var(--ease-out); }
+.guide.offer .guide-yes { min-height: var(--touch); gap: 8px; padding: 0 14px 0 10px; }
+.guide.offer .guide-yes .fist { --i: 26px; }
+.spring-screen[data-layout='narrow'] .guide-slot, .spring-screen[data-layout='short'] .guide-slot { padding: 0 16px 8px; }
+.spring-screen[data-layout='narrow'].selected .guide-slot { display: none; }
+.spring-screen[data-layout='short'] .guide.docked .guide-why { display: none; }
+@media (max-height: 760px) { .spring-screen[data-layout='narrow'] .guide.docked .guide-why { display: none; } }
+
+/* The fist: a printed hand on a paper disc with its keyline, so it reads over any land, nudging toward what it means. */
+.guide-fist { position: absolute; left: 0; top: 0; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%;
+  background: var(--paper); box-shadow: 0 0 0 1px var(--edge), 0 0 0 3px var(--paper), 0 0 0 4px var(--edge), 0 4px 10px -3px rgba(20, 14, 6, .55); }
+.guide-fist .fist { --i: 30px; --nx: 3px; --ny: 0px; color: var(--ink); animation: guide-nudge 1.1s ease-in-out infinite alternate; }
+.guide-fist[data-to='l'] .fist { scale: -1 1; --nx: -3px; }
+.guide-fist[data-to='d'] .fist { rotate: 90deg; --nx: 0px; --ny: 3px; }
+.guide-fist[data-to='u'] .fist { rotate: -90deg; --nx: 0px; --ny: -3px; }
+
+/* The guide's own paper: every lesson, with the pencil tick for those behind the player. */
+.guide-list { display: grid; gap: var(--s3); }
+.guide-on { padding-top: 0; }
+.guide-part h3 { padding-bottom: 4px; border-bottom: 1px solid var(--ink); }
+.guide-part li { min-height: var(--touch); align-items: center; border-bottom: 1px solid var(--hair); }
+.guide-part li .tick { width: 18px; height: 18px; }
+.guide-part li .btn.quiet { min-height: 40px; }
+
+@keyframes guide-in { from { opacity: 0; translate: 0 6px; } }
+@keyframes guide-nudge { from { translate: calc(var(--nx) * -1) calc(var(--ny) * -1); } to { translate: var(--nx) var(--ny); } }
+.reduce-motion .guide, .reduce-motion .guide-fist .fist { animation: none; }
+@media (prefers-reduced-motion: reduce) { .guide, .guide-fist .fist { animation: none; } }
