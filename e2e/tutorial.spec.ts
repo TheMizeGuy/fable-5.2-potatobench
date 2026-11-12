@@ -225,6 +225,11 @@ test('a guided first year: offered on a new farm, taken, and followed through th
         await page.locator(`#ui [data-testid="${target}"]`).first().click(); break
       case 'telegram':
         await page.locator('#ui [data-testid^="answer-"]').first().click(); break
+      case 'stopped':
+        // It says Space goes on.
+        if (isMobile) await page.locator('#ui [data-testid="speed-toggle"], #ui [data-testid="speed-0"]').first().click()
+        else await page.keyboard.press('Space')
+        break
       default: {
         // Any other lesson: what its fist marks, or Noted.
         const marked = target ? page.locator(`#ui [data-testid="${target}"]`).first() : null
