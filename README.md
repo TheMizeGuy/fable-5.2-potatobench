@@ -21,14 +21,24 @@ house, a machine shed, a packing shed, and sign contracts you then have to fill.
 
 ## Playing
 
-- **Camera:** drag to pan, wheel to zoom, right-drag or Q and E to turn, Home
-  for the whole farm.
-- **Select:** click a field; Shift-click for more; double-click for every field
-  in the same state.
-- **Order:** click the badge a field shows when it needs something, or use the
-  command card and its letter keys.
-- **Time:** Space pauses; F runs the days until something needs you.
-- **Depth:** press I for the almanac.
+- **The crew works by itself.** What the spring plan chose gets planted, hilled,
+  walked, test-dug, dug and hauled without an order. You make the calls: spray,
+  water, kill the vines, sell or store, and everything in spring. "Who does
+  what" switches each job between "by itself" and "ask me".
+- **Camera:** drag to pan, wheel to zoom, right-drag sideways or Q and E to
+  turn, right-drag up and down or Page Up and Page Down to tip the view toward
+  straight down, Home to level it and step out a tier.
+- **Select:** click a field for its card; click a person, a machine or a
+  building for theirs; Shift-click for more fields; double-click for every
+  field in the same state.
+- **Order:** click the stamp a field shows when it wants a decision, use the
+  card and its letter keys, or Tab and Enter to step through what needs you.
+- **Time:** Space pauses and goes on; 1x, 2x and 3x set the speed. The clock
+  stops by itself only for a weigh ticket, a telegram, a frost on crop still in
+  barrels, and the season's end.
+- **First time?** A new farm offers a guided first year, which can be skipped
+  at any step and replayed lesson by lesson from the menu.
+- **Depth:** press I for the almanac: the forecast, the blight watch, prices.
 
 ## What is in the repository
 
