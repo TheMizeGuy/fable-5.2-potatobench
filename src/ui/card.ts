@@ -435,10 +435,11 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
     }
     const age = f.scoutAge
     const stale = isStale(f)
-    const seen = f.blightHills > 0
+    const seen = f.blightHills > 0 || f.blightSeen
+    const pull = f.pullBy === 'you' ? ': pulling it is your order' : f.pullBy ? ': the crew pulls it by itself' : ''
     const blight = h('p', { class: `${seen ? 'c-red blight' : ''}${stale ? ' stale' : ''}`.trim(), testid: 'blight-reading' },
       icon(seen ? (stale ? 'blight-old' : 'blight') : stale ? 'stale' : 'check', 'i'),
-      h('span', null, seen ? `Blight on ${F.plural(f.blightHills, 'hill')}` : age < 0 ? 'Not walked yet' : 'No blight seen'),
+      h('span', null, f.blightHills > 0 ? `Blight on ${F.plural(f.blightHills, 'hill')}${pull}` : seen ? 'Blight seen here' : age < 0 ? 'Not walked yet' : 'No blight seen'),
       age >= 0 ? h('span', { class: 'quiet' }, `· walked ${F.ago(age)}`) : seen ? h('span', { class: 'quiet' }, '· seen from the road') : null)
     const e = f.estimate
     if (!e) return [blight, h('p', { class: 'quiet' }, icon('bulk', 'i'), h('span', null, 'No yield estimate until the tubers set.'))]
@@ -621,7 +622,7 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
       sel, layout: ctx.layout(), day: s.day, jobs: s.jobs.map(j => [j.id, j.kind, j.field, Math.round(j.done * 20)]), u: app.settings.units, t: ctx.touch(), page,
       held: held && performance.now() < held.until ? [held.kinds, held.given] : 0, flash: flashed && performance.now() < flashed.until ? flashed.text : '',
       refused: refused && performance.now() < refused.until ? [refused.kind, refused.why] : 0,
-      f: sel.map(i => { const f = S.fieldInfo(c, i); return [f.status, f.stage, Math.round(f.canopy * 100), Math.round(f.moisture * 50), f.moistureLabel, Math.round(f.protect * 100), f.hillPasses, f.blightHills, f.scoutAge, f.estimate ? [Math.round(f.estimate.lo), Math.round(f.estimate.hi), f.estimate.digs] : 0, Math.round(f.skin * 100), f.lot, f.cover, Math.round(f.stones * 100), f.works, Math.round(f.inField), f.weighed, f.sheltered, f.brushed, c.fields[i].felled] }),
+      f: sel.map(i => { const f = S.fieldInfo(c, i); return [f.status, f.stage, Math.round(f.canopy * 100), Math.round(f.moisture * 50), f.moistureLabel, Math.round(f.protect * 100), f.hillPasses, f.blightHills, f.blightSeen, f.pullBy, f.scoutAge, f.estimate ? [Math.round(f.estimate.lo), Math.round(f.estimate.hi), f.estimate.digs] : 0, Math.round(f.skin * 100), f.lot, f.cover, Math.round(f.stones * 100), f.works, Math.round(f.inField), f.weighed, f.sheltered, f.brushed, c.fields[i].felled] }),
       cash: Math.round(c.cash / 100), crew: c.crew.map(u => [u.id, u.job, u.prio]), fc: S.haulInfo(app.world, c).map(x => [x.field, x.frostChance, x.hauler]),
       n: app.needs().filter((_, i) => sel.includes(i)).map(x => [x.need?.id, x.need?.why, x.hold?.id, x.hold?.why]),
       lots: c.lots.filter(l => sel.includes(l.field)).map(l => [l.id, l.open, Math.round(S.lotCwt(l)), Math.round(l.sold), l.open ? Math.round(S.lotValue(app.world, c, l)) : 0]),
