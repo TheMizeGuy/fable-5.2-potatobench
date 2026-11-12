@@ -146,9 +146,9 @@ test('a first season by the short path, from the opening to the next spring, wit
     if (s.incidents) await answerIncident(page, false)
     return s.badges.length
   }, { timeout: 120_000, intervals: [500] }).toBeGreaterThan(0)
-  const first = await look(page)
-  expect(first.paused).toBe(false)
-  expect(first.speed).toBe(1)
+  // An answer takes a frame to show on the clock.
+  await expect.poll(async () => (await look(page)).paused).toBe(false)
+  expect((await look(page)).speed).toBe(1)
 
   // A crop weighed in is the one thing that stops it, once the last barrel is hauled in from the field.
   await farm(page, 'ticket', { store: true, mobile: isMobile, ms: 600_000 })

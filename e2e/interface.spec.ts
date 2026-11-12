@@ -25,18 +25,23 @@ async function farmWithPeople(page: Page): Promise<void> {
   await putAway(page)
 }
 
-// Words a sighted player is given to read, counted the way tools/quality/capture.ts counts them.
-async function wordsOnScreen(page: Page): Promise<number> {
+// Words a sighted player is given to read, counted the way tools/quality/capture.ts counts them, and which elements
+// carry them, so a count over the limit says where the words are.
+async function wordsOnScreen(page: Page): Promise<{ n: number; by: string }> {
   return page.evaluate(() => {
     let words = 0
-    for (const el of document.querySelectorAll('#ui *')) {
+    const by: string[] = []
+    for (const el of document.querySelectorAll<HTMLElement>('#ui *')) {
       const r = el.getBoundingClientRect()
       if (!r.width || !r.height || r.bottom < 0 || r.top > innerHeight) continue
       const cs = getComputedStyle(el)
       if (cs.visibility === 'hidden' || cs.opacity === '0') continue
-      for (const n of el.childNodes) if (n.nodeType === 3) words += (n.nodeValue ?? '').trim().split(/\s+/).filter(Boolean).length
+      let here = 0
+      for (const n of el.childNodes) if (n.nodeType === 3) here += (n.nodeValue ?? '').trim().split(/\s+/).filter(Boolean).length
+      words += here
+      if (here >= 3) by.push(`${el.dataset.testid ?? el.className}: ${here}`)
     }
-    return words
+    return { n: words, by: by.join('; ') }
   })
 }
 
@@ -113,11 +118,11 @@ test('only the orders that can be given are offered, and one that cannot says wh
 
 test('never more than five orders, and under 80 words with nothing selected', async ({ page }) => {
   await startSeason(page)
-  expect(await wordsOnScreen(page)).toBeLessThan(80)
+  { const w = await wordsOnScreen(page); expect(w.n, w.by).toBeLessThan(80) }
   await reach(page, `q.run(q.day(6, 12))`)
   await putAway(page)
   await page.waitForTimeout(300)
-  expect(await wordsOnScreen(page)).toBeLessThan(80)
+  { const w = await wordsOnScreen(page); expect(w.n, w.by).toBeLessThan(80) }
   await page.getByTestId('field-2').click()
   const orders = page.locator('#ui [data-testid="card"] button.order:not(.more)')
   await expect(orders.first()).toBeVisible()
