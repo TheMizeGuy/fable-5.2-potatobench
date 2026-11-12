@@ -43,7 +43,7 @@ paper disc with a keyline so it reads over any land. There is no slideshow, no s
   note is the one shown over its paper, set beside it. A telegram's note comes first and lies beside it, never over it.
 - **One at a time, never a step ahead.** The note on show keeps its place until it passes; only an urgent one (a
   telegram, a weigh ticket, the clock stopping) comes in front, and the one it interrupted comes back after it. After a
-  note passes the next waits a moment, and waits while a panel its click opened (a catalogue fold, a paper, a person's
+  note passes the next waits a moment (a note that stops the clock does not wait: it shows as it stops it), and waits while a panel its click opened (a catalogue fold, a paper, a person's
   card, the grid) is still open, so People is not left half read for Land, for eight seconds at most: a card left open
   never silences the guide. A note that cuts in (urgent, or one that holds the clock) is the only kind that takes over
   from a note on show.

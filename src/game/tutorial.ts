@@ -183,8 +183,8 @@ export const LESSONS: Lesson[] = [
   },
   {
     id: 'watch', part: 'opening', moment: true, holds: true, name: 'Watch the first planting', uses: ['pan', 'zoom'],
-    // The routine lists planting by the one planting rule; a planting already begun counts too, for a quick crew.
-    when: l => inSeason(l) && !anyField(l, f => f.emergeDay >= 0) && (jobOn(l, 'plant') || anyField(l, f => f.plantDay >= 0 && (l.c?.season?.day ?? 0) - f.plantDay <= 3)),
+    // Planting under way, not an order waiting for warm soil.
+    when: l => inSeason(l) && !anyField(l, f => f.emergeDay >= 0) && (!!l.c?.season?.jobs.some(j => j.kind === 'plant' && j.done > 0) || anyField(l, f => f.plantDay >= 0 && (l.c?.season?.day ?? 0) - f.plantDay <= 3)),
     done: (l, g, since) => g.has('pan') || g.has('zoom') || (!!since && !!l.c?.season && l.c.season.day >= since.d + 3),
     ask: l => {
       const a = auto(l, 'plant') ? 'Planting has begun with no order: routine work starts by itself.' : 'Planting has begun.'

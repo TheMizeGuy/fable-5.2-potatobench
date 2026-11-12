@@ -323,7 +323,6 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
   let said = ''
   let target = ''
   let cover: HTMLElement | null = null
-  let due: Lesson | null = null
   // The field a note points at, when it is out of view or something lies over it; and the spring note set aside while
   // a fold it is not about is read.
   let showField = -1
@@ -425,9 +424,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
   const overridden = new Set<string>()
   function hold(): void {
     const t = performance.now()
-    // A note that holds the clock holds it from the moment it is due, through the pause before it shows.
-    const h0 = now ?? (due?.holds ? due : null)
-    const want = h0 && h0.holds && app.screen === 'season' && !overridden.has(h0.id) ? h0.id : ''
+    const want = now && now.holds && app.screen === 'season' && !overridden.has(now.id) ? now.id : ''
     if (holding && app.speed > 0) {
       if (t - pressedAt < 1500) { overridden.add(holding.id); holding = null; return }
       if (want) { app.setSpeed(0); app.pauseReason = HOLD; ctx.dirty(); return }
@@ -460,8 +457,9 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
       if (lastId && guide.passed(lastId)) { restUntil = t + 1200; waitFor = panelsOpen(); waitUntil = t + 8000 }
       lastId = x?.id ?? ''
     }
-    if (!x || x.urgent || x.paper || x.follows) return x
-    waitFor = t < waitUntil && !x.holds ? waitFor.filter(sel => !!root.querySelector(sel)) : []
+    // A note that stops the clock shows the moment it stops it: never a held clock with nothing said.
+    if (!x || x.urgent || x.paper || x.follows || x.holds) return x
+    waitFor = t < waitUntil ? waitFor.filter(sel => !!root.querySelector(sel)) : []
     resting = t < restUntil || waitFor.length > 0
     if (resting) { stale = true; return null }
     return x
@@ -476,8 +474,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     if (shown(root.querySelector('#raise-list'))) guide.note('fold:raise')
     const l = lookNow()
     offer = guide.offerFor(c, app.screen)
-    due = offer ? null : guide.showing(l)
-    now = paced(due)
+    now = offer ? null : paced(guide.showing(l))
     hold()
     const docked = app.screen === 'plan'
     const held = !!now && app.screen === 'season' && app.speed === 0 && (guide.holdsClock(c) || app.pauseReason === HOLD || !!now?.holds)
