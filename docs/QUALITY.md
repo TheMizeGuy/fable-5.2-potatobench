@@ -152,7 +152,9 @@ Every view is under 12 ms at the high setting (it was before, by this measure). 
 67% of the high one in every view (it cost 62 to 97%), the low one 30 to 46% (28 to 41%). In a quieter stretch the
 new build's playing view measured 4.4, 2.8 and 1.8 ms and the county tier 5.4 to 5.8, 3.8 and 2.1. The machine was
 shared with other checks throughout, and single figures moved by a millisecond or two from run to run; the counts of
-triangles and draw calls do not move.
+triangles and draw calls do not move. (The table is from the commit before `main` was last merged in. The same run
+on the merged build fell in a busy stretch, with single cells at two and three times their value in both builds and
+no order among the settings; its counts of triangles and draw calls were the same to the last digit shown.)
 
 **Where a frame at the high setting goes** (the GPU's time for each pass at its middle value, the new build):
 
