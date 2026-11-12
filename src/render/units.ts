@@ -7,6 +7,7 @@ import {
   BufferAttribute, Color, Group, InstancedBufferAttribute, InstancedBufferGeometry, Matrix4, Mesh, ShaderMaterial, Vector3, type PerspectiveCamera,
 } from 'three'
 import type { UnitKind } from '../sim/index.ts'
+import type { Thing, ThingKind } from '../game/contracts.ts'
 import { COWS, COW_SCALE as COW, DEER, drawBeast, drawCrow } from './animals.ts'
 import { LOD, Pose, dressFor, dressOf, drawFigure as drawPerson, drawn, figureMatrix, forking, hammering, sit, stand, stoop, swing, walk, type Dress } from './crew.ts'
 import type { Env } from './env.ts'
@@ -202,6 +203,9 @@ export class Crews {
   private deer = { x: 6.5 * K, z: woodFront(6.5 * K) + 4, away: 0, t: 0 }
   private cows = COWS.flatMap((_, k) => [0, 1, 2].map(n => ({ kind: k, x: COW_AT.x + 30 * (hash2(k * 3 + n, 5) - 0.5), z: COW_AT.z + 30 * (hash2(k * 3 + n, 9) - 0.5), h: hash2(k, n) * 6.28, t: hash2(n, k + 3) * 20, tx: 0, tz: 0, walking: false })))
   private extras: Dress[] = []
+  // Whatever else on the land looks like someone or is worth a name, where it was last drawn: the pointer and a click
+  // answer for it (Thing in src/game/contracts.ts).
+  private things: { kind: ThingKind; k: number; holder: number; x: number; y: number; z: number; tall: number }[] = []
   // The latest a staged dig still needs the day clock to wait at, or -1.
   stageHold = -1
 
@@ -1217,6 +1221,13 @@ export class Crews {
   private callersAndLife(f: CrewFrame, mf: MachineFrame, big: number, bigMachine: number, going: boolean): void {
     const pr = this.prims, snap = f.snap
     const pose = POSE
+    const things = this.things
+    things.length = 0
+    const seen = (kind: ThingKind, k: number, x: number, z: number, tall: number, holder = -1) => { things.push({ kind, k, holder, x, y: heightAt(x, z), z, tall }) }
+    if (snap.mode !== 'title') {
+      const each = { tractor: 0, truck: 0 }
+      for (const r of this.rigs) seen(r.kind, each[r.kind]++, r.x, r.z, 2.6 * bigMachine, r.holder)
+    }
     // People leaving the farm: down the road with a bag, and gone.
     this.leavers = this.leavers.filter(l => l.at < l.path.length)
     for (const l of this.leavers) {
@@ -1242,6 +1253,7 @@ export class Crews {
       pose.held = 'bag'
       figureMatrix(M, GATE.x + 0.75 * k * big * 0.6, heightAt(GATE.x + 0.75 * k, GATE.z) + 0.02, GATE.z + 0.35 * (k % 2) * big, GATE.heading + 0.3 * k, big)
       drawFigure(pr, M, ASKING[k % ASKING.length], pose)
+      seen('asking', k, GATE.x + 0.75 * k * big * 0.6, GATE.z + 0.35 * (k % 2) * big, 1.8 * big)
     }
     const caller = (kind: 'pickup' | 'sedan', on: boolean, spot: Spot, man: Spot, dress: Dress, style: number) => {
       let car = this.callers[kind]
@@ -1253,6 +1265,8 @@ export class Crews {
       stand(pose, f.time * 1.1 + style, 0, style)
       figureMatrix(M, man.x, heightAt(man.x, man.z) + 0.02, man.z, man.heading, big)
       drawFigure(pr, M, dress, pose)
+      seen(kind === 'pickup' ? 'neighbour' : 'buyer', 0, man.x, man.z, 1.8 * big)
+      seen(kind === 'pickup' ? 'neighbour' : 'buyer', 1, spot.x, spot.z, 1.6 * bigMachine)
     }
     caller('pickup', poach, CALLER.truck, CALLER.man, NEIGHBOUR, 1)
     caller('sedan', buyer, BUYER.car, BUYER.man, BUYER_MAN, 2)
@@ -1290,6 +1304,7 @@ export class Crews {
         pose.held = 'basket'
         figureMatrix(M, p.x, heightAt(p.x, p.z) + 0.02, p.z, p.heading, big)
         drawFigure(pr, M, p.dress, pose)
+        seen('picker', k, p.x, p.z, 1.6 * big)
       })
       for (const c of this.lively ? g.crows : []) {
         if (going) c.t += f.dt / 1.1
@@ -1325,6 +1340,7 @@ export class Crews {
         }
         // the neighbour's stock is scenery: never drawn as large as the farm's own people are from far off
         drawBeast(pr, COWS[c.kind], c.x, heightAt(c.x, c.z), c.z, c.h, big * COW, f.time * 3 + c.kind, c.walking ? 0.7 : 0, c.walking ? 0 : 1)
+        seen('cow', c.kind, c.x, c.z, 1.4 * big * COW)
       }
     }
     // A deer at the wood's edge, gone into the trees when anyone comes near.
@@ -1336,6 +1352,7 @@ export class Crews {
     if (this.lively && d.away < 0.99 && snap.mode !== 'title') {
       const z = d.z - d.away * 5 * S
       drawBeast(pr, DEER, d.x - d.away * 2 * S, heightAt(d.x, z), z, near ? -1.9 : 0.4, big * 0.95 * (1 - 0.5 * d.away), d.away > 0.02 ? f.time * 14 : 0, d.away > 0.02 && d.away < 0.99 ? 1 : 0, near ? 0 : (Math.sin(d.t * 0.4) > 0.2 ? 1 : 0))
+      if (d.away < 0.5) seen('deer', 0, d.x - d.away * 2 * S, z, 1.5 * big)
     }
   }
 
@@ -1374,6 +1391,30 @@ export class Crews {
       if (r) reach(screen(r.x, heightAt(r.x, r.z) + 1.1, r.z), screen(r.x + 2.4, heightAt(r.x, r.z) + 1.1, r.z), 30, a.id)
     }
     return best
+  }
+
+  // Whatever else is under a point on the screen, or null: a machine, a caller, a picker, an animal. Each answers
+  // within twenty-two pixels of it or over its height, whichever is more; the nearest wins.
+  pickThing(x: number, y: number, camera: PerspectiveCamera, w: number, h: number): Thing | null {
+    let best: Thing | null = null, bd = 1
+    for (const t of this.things) {
+      this.v.set(t.x, t.y + t.tall * 0.5, t.z).project(camera)
+      if (this.v.z > 1) continue
+      const sx = (this.v.x + 1) / 2 * w, sy = (1 - this.v.y) / 2 * h
+      this.v.set(t.x, t.y + t.tall, t.z).project(camera)
+      const r = Math.max(22, Math.hypot((this.v.x + 1) / 2 * w - sx, (1 - this.v.y) / 2 * h - sy) * 1.2)
+      const d = Math.hypot(sx - x, sy - y) / r
+      if (d < bd) { bd = d; best = { kind: t.kind, k: t.k, holder: t.holder } }
+    }
+    return best
+  }
+
+  // Where a thing stands in the world (its top), for the interface to set its card beside; false when it is not drawn.
+  thingAt(t: Thing, out: Vector3): boolean {
+    const s = this.things.find(x => x.kind === t.kind && x.k === t.k)
+    if (!s) return false
+    out.set(s.x, s.y + s.tall, s.z)
+    return true
   }
 
   dispose(): void {

@@ -2,7 +2,7 @@
 // Falls back to a flat drawing without WebGL.
 import { Color, PCFShadowMap, Raycaster, Scene, Triangle, Vector2, Vector3, WebGLRenderer, type Object3D } from 'three'
 import { DAYS_PER_SECOND, type App } from '../game/app.ts'
-import type { CreateFieldView, FieldView } from '../game/contracts.ts'
+import type { CreateFieldView, FieldView, Thing } from '../game/contracts.ts'
 import { FIELD_COUNT, HILLS } from '../sim/index.ts'
 import { CameraRig, HOME_FIELD, MOVE_MS, type Pose, type TierName, type Viewport } from './camera.ts'
 import { Clearing } from './clearing.ts'
@@ -99,6 +99,10 @@ export const createFieldView: CreateFieldView = (canvas, app) => {
     fieldAnchor: i => inner.fieldAnchor(i),
     fieldCorners: i => inner.fieldCorners(i),
     unitAnchor: u => inner.unitAnchor(u),
+    unitFoot: u => inner.unitFoot(u),
+    thingAnchor: t => inner.thingAnchor(t),
+    thingAt: (x, y) => inner.thingAt(x, y),
+    follow: u => inner.follow(u),
     yardAnchor: y => inner.yardAnchor(y),
     whenShown: (kind, field) => inner.whenShown(kind, field),
     dispose: () => inner.dispose(),
@@ -524,7 +528,14 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     const vp = viewport()
     return crews.pick(x, y, rig.camera, vp.w, vp.h, snap.mode === 'season' || app.unit >= 0)
   }
-  const input = attachInput(canvas, app, rig, viewport, pick, pickUnit, goHome, pickYard, i => frameField(i))
+  function thingAt(x: number, y: number): Thing | null {
+    if (snap.mode === 'title') return null
+    const vp = viewport()
+    return crews.pickThing(x, y, rig.camera, vp.w, vp.h)
+  }
+  // The person the camera keeps in the middle of the picture until the player moves it, or -1.
+  let following = -1
+  const input = attachInput(canvas, app, rig, viewport, pick, pickUnit, goHome, pickYard, i => frameField(i), thingAt)
 
   // The hour the scene is lit for. The day's own picture may be a morning (fog, a white frost, deep mist); days going
   // by quickly are never shown as mornings and stand in the plainer light of mid afternoon, and the light turns from
@@ -662,6 +673,14 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     for (let i = 0; i < FIELD_COUNT; i++) { terrain.held.value[i] = fields.held[i]; terrain.off.value[i] = fields.off[i]; terrain.avail.value[i] = fields.avail[i] }
     input.frame(dt)
     if (rig.idle < 0.2 && framing !== 'free') framing = 'free'
+    if (following >= 0) {
+      if (rig.idle < 0.2 || snap.mode === 'title') following = -1
+      else if (crews.anchor(following, far) && Math.hypot(rig.goal.x - far.x, rig.goal.z - far.z) > 1.5) {
+        const to = rig.complete({ x: far.x, z: far.z })
+        if (rig.moving()) rig.retarget(to)
+        else rig.moveTo(to, reduced, 700)
+      }
+    }
     if (snap.mode === 'title' && framing === 'title') {
       rig.level()
       if (!reduced && titleFixed < 0) titleClock += dt
@@ -838,6 +857,22 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     return crews.anchor(id, far) ? screenAt(far.x, far.y, far.z) : { x: 0, y: 0, visible: false }
   }
 
+  function unitFoot(id: number): { x: number; y: number; visible: boolean } {
+    return crews.anchor(id, far) ? screenAt(far.x, groundY(far.x, far.z) + 0.05, far.z) : { x: 0, y: 0, visible: false }
+  }
+
+  function thingAnchor(t: Thing): { x: number; y: number; visible: boolean } {
+    return crews.thingAt(t, far) ? screenAt(far.x, far.y, far.z) : { x: 0, y: 0, visible: false }
+  }
+
+  function follow(id: number): void {
+    following = id
+    if (id < 0) return
+    framing = 'free'
+    rig.idle = 99
+    if (crews.anchor(id, far)) rig.moveTo(rig.complete({ x: far.x, z: far.z, dist: Math.min(rig.goal.dist, rig.field(HOME_FIELD, viewport()).dist) }), reduced, 900)
+  }
+
   function yardAnchor(yard: number): { x: number; y: number; visible: boolean } {
     const p = YARD_AT[yard]
     return p ? screenAt(p.x, groundY(p.x, p.z) + 6.5 * S, p.z) : { x: 0, y: 0, visible: false }
@@ -1002,6 +1037,10 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     fieldAnchor,
     fieldCorners,
     unitAnchor,
+    unitFoot,
+    thingAnchor,
+    thingAt,
+    follow,
     yardAnchor,
     whenShown,
     dispose() {

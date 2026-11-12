@@ -24,6 +24,7 @@ import { planScreen } from './plan.ts'
 import { alertShort, countYearsFrom } from './rules.ts'
 import { seasonScreen } from './season.ts'
 import { titleScreen } from './title.ts'
+import { whois } from './whois.ts'
 
 export const mountHud: MountHud = (root, app, view, sound) => {
   mountSprites()
@@ -32,8 +33,9 @@ export const mountHud: MountHud = (root, app, view, sound) => {
   const screenLayer = h('div', { class: 'screen-layer' })
   const floating = h('div', { class: 'notes-slot floating' })
   const paperLayer = h('div', { class: 'paper-layer' })
+  const whoLayer = h('div', { class: 'who-layer' })
   const notes = new Notes()
-  root.replaceChildren(plateLayer, screenLayer, floating, notes.liveRegion, paperLayer)
+  root.replaceChildren(plateLayer, screenLayer, floating, whoLayer, notes.liveRegion, paperLayer)
   const papers = new Papers(paperLayer, [screenLayer, plateLayer, floating], app)
   const touchQuery = matchMedia('(pointer: coarse)')
 
@@ -62,6 +64,7 @@ export const mountHud: MountHud = (root, app, view, sound) => {
   }
 
   notes.onGo = field => { app.select(field); app.focus(field) }
+  const who = whois(ctx, whoLayer)
 
   const menu = () => openMenu(ctx, { onHelp: () => openHelp(ctx), onAlmanac: () => openAlmanac(ctx) })
   const almanac = () => openAlmanac(ctx)
@@ -180,6 +183,7 @@ export const mountHud: MountHud = (root, app, view, sound) => {
         break
       case 'select':
       case 'unit':
+      case 'inspect':
         dirty = true
         break
       case 'saved':
@@ -216,6 +220,7 @@ export const mountHud: MountHud = (root, app, view, sound) => {
     const t = e.target as HTMLElement
     if (e.key === 'Escape') {
       if (papers.isOpen()) { e.preventDefault(); papers.closeTop(); return }
+      if (who.escape()) { e.preventDefault(); return }
       if (screen?.key?.(e)) { e.preventDefault(); return }
       if (app.screen !== 'title' && app.campaign) { e.preventDefault(); menu() }
       return
@@ -261,6 +266,7 @@ export const mountHud: MountHud = (root, app, view, sound) => {
         root.dataset.layout = layoutNow()
         root.classList.toggle('touch', touchQuery.matches)
         screen.update()
+        who.update()
         const [t, r, b, l] = screen.insets().map(x => Math.max(0, Math.round(x)))
         app.setInsets(t, r, b, l)
         root.style.setProperty('--top', `${t}px`)
@@ -268,6 +274,7 @@ export const mountHud: MountHud = (root, app, view, sound) => {
         if (waiting) placeSplash()
       }
       screen?.frame?.(dt)
+      who.frame()
     },
     dispose() {
       screen?.dispose?.()

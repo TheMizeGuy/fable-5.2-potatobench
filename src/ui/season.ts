@@ -512,7 +512,8 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       const layout = ctx.layout()
       el.dataset.layout = layout
       const many = c.crew.length > 1
-      const personUp = many && app.unit >= 0 && !app.selection.length && app.yard === 0
+      // A person's page opens from the time book; picked on the land, their card opens beside them instead (whois.ts).
+      const personUp = many && app.unit >= 0 && app.unitFrom === 'list' && !app.selection.length && app.yard === 0
       const selected = app.selection.length > 0 || app.yard !== 0
       el.classList.toggle('selected', selected)
       el.classList.toggle('person-up', personUp || grid.isOpen())

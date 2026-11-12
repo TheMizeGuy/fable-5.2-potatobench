@@ -1,0 +1,42 @@
+/* Who is that (whois.ts): a person's card beside them on the land, a thing's name card, and the name and ground mark
+   under the pointer. Built from the system's sheet, buttons and type; placement and live states only. */
+.who-layer { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+.whois-layer > * { position: absolute; left: 0; top: 0; will-change: transform; }
+.whois-layer .hover-name, .whois-layer .hover-mark, .whois-layer .whois-lead { pointer-events: none; }
+.hud .whois.sys { width: 320px; padding: 12px 14px 12px; pointer-events: auto; z-index: 2; }
+.hud .whois.thing.sys { width: 290px; }
+.whois.in { animation: lay-whois var(--t-sheet) var(--ease-paper); }
+@keyframes lay-whois { from { scale: 0.96; } }
+.whois-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; padding-bottom: 8px; border-bottom: 3px double var(--ink); }
+.whois-head .t-head { font-size: 21px; }
+.whois-head .t-caption { margin-top: 2px; }
+.whois-head .close { margin: -6px -8px 0 0; }
+.whois .thing-ic { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--paper-2); box-shadow: inset 0 0 0 1.5px var(--ink); }
+.whois .thing-ic .i { --i: 22px; }
+.whois-now { display: flex; gap: 8px; align-items: flex-start; padding: 8px 0 6px; font-size: 15px; line-height: 1.3; }
+.whois-now .i { --i: 17px; flex: none; margin-top: 1px; color: var(--ink-2); }
+.whois-state { display: grid; gap: 3px; padding: 6px 0 8px; border-top: 1px solid var(--hair); border-bottom: 1px solid var(--hair); }
+.whois-state div { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 8px; align-items: baseline; font-size: 14px; }
+.whois-state dt { font-weight: 700; }
+.whois-state dd { margin: 0; color: var(--ink-2); }
+.whois-first { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 8px 0 2px; }
+.whois-first .t-label { margin-right: 6px; }
+.whois-first .btn { min-height: 36px; padding: 0 10px; font-size: 14px; }
+.whois-first .btn.is-on { color: var(--paper); background: var(--ink); box-shadow: none; }
+.key-btn { display: grid; place-items: center; width: 38px; height: 36px; color: var(--ink); background: var(--paper); box-shadow: inset 0 0 0 1px var(--ink); }
+.key-btn .i { --i: 18px; }
+.key-btn.is-on { color: var(--paper); background: var(--ink); }
+.key-btn.never { color: var(--ink-2); box-shadow: inset 0 0 0 1px rgb(30 28 25 / 0.35); }
+@media (hover: hover) { .key-btn:not(.is-on):hover { box-shadow: inset 0 0 0 1px var(--ink), inset 0 0 0 3px var(--paper), inset 0 0 0 4px var(--ink); } }
+.whois-acts { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 8px; }
+.whois-acts .btn { min-height: 40px; padding: 0 12px; font-size: 15px; }
+.whois-lead { width: 100px; height: 2px; margin-top: -1px; background: var(--paper); box-shadow: 0 0 0 1px rgb(20 16 10 / 0.55); transform-origin: 0 50%; }
+.hover-name { padding: 4px 8px 3px; font: 400 14px/1 var(--f-gothic); letter-spacing: .08em; text-transform: uppercase; color: var(--ink); white-space: nowrap;
+  background: var(--paper) url(./system/grain.png); background-blend-mode: multiply; box-shadow: var(--laid); }
+.hover-mark { width: 34px; height: 13px; margin: -6px 0 0 -17px; border-radius: 50%; border: 2.5px dashed var(--paper); box-shadow: 0 0 0 1px rgb(20 14 6 / 0.5), inset 0 0 0 1px rgb(20 14 6 / 0.5); }
+.touch .key-btn { width: 44px; height: 44px; }
+.touch .whois-first .btn, .touch .whois-acts .btn { min-height: 44px; }
+/* On a phone the card is a sheet from the bottom, over the foot of the screen. */
+.whois-layer.phone .whois { left: 10px; right: 10px; top: auto; bottom: 10px; width: auto !important; transform: none !important; max-height: 62%; overflow-y: auto; overscroll-behavior: contain; }
+.whois-layer.phone .whois.in { animation: lay-sheet var(--t-sheet) var(--ease-paper); }
+@keyframes lay-sheet { from { translate: 0 18px; } }

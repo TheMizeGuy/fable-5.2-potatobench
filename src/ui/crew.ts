@@ -99,7 +99,7 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
   }
 
   function cell(c: S.Campaign, p: S.PersonInfo, d: Doing, sign: Sign, many: boolean, goal: boolean, needsYou: boolean): HTMLElement {
-    const on = app.unit === p.id
+    const on = app.unit === p.id && app.unitFrom === 'list'
     const name = firstName(p.name)
     const ring = ringFor(c, p.id)
     const said = `${p.kind === 'farmer' ? 'You, the farmer' : p.name}: ${d.text}${sign ? `; ${sign.text}` : ''}.`

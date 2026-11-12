@@ -30,10 +30,10 @@ export function pins(ctx: Ctx, layer: HTMLElement, o: { tags: () => DOMRect[]; c
   function pick(id: number): void {
     open = -1
     list.hidden = true
-    if (app.unit === id) { app.selectUnit(-1); return }
+    if (app.unit === id && app.unitFrom === 'land') { app.selectUnit(-1); return }
     app.select(-1)
     app.selectYard(0)
-    app.selectUnit(id)
+    app.selectUnit(id, 'land')
   }
 
   function update(c: S.Campaign): void {

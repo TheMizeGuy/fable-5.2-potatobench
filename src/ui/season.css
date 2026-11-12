@@ -368,3 +368,5 @@
 .season-screen[data-layout='short'] .telegram .reply .c-title { font-size: 19px; }
 .season-screen[data-layout='short'] .telegram .reply .c-does { font-size: 14px; }
 .season-screen[data-layout='short'] .paused { top: calc(var(--top, 100px) + 6px); }
+.pc-tools { display: flex; align-items: flex-start; gap: 2px; margin: -10px -12px 0 0; }
+.pc-tools .close { margin: 0; }

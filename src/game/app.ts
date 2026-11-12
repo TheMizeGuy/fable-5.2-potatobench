@@ -3,6 +3,7 @@ import {
   apply, climateWorld, createCampaign, fieldInfo, fieldNeeds, isFarmYear, seasonDone, startYears, FARM_YEAR0,
   type Advice, type Campaign, type Cmd, type GameEvent, type JobKind, type Phase, type Result, type World,
 } from '../sim/index.ts'
+import type { Pointing, Thing } from './contracts.ts'
 import { neighborYear } from './neighbor.ts'
 import { clearSave, parseSave, readSave, readSettings, serialize, writeSave, writeSettings, type SaveFile } from './save.ts'
 
@@ -47,6 +48,8 @@ export type AppEvent =
   | { type: 'select'; field: number; fields: number[] }
   | { type: 'hover'; field: number }
   | { type: 'unit'; unit: number }
+  | { type: 'point' }
+  | { type: 'inspect' }
   | { type: 'yard'; yard: number }
   | { type: 'focus'; field: number }
   | { type: 'order'; kind: JobKind; fields: number[] }
@@ -79,6 +82,11 @@ export class App {
   hover = -1
   // The person the player has picked to give orders to, or -1 for whoever is free.
   unit = -1
+  // Where that person was picked: on the land (their card opens beside them) or from a list (the time book).
+  unitFrom: 'land' | 'list' = 'list'
+  // What the pointer is over on the land, and the thing (not a person, field or yard) last clicked there.
+  pointing: Pointing | null = null
+  thing: { thing: Thing; x: number; y: number } | null = null
   // The yard the player has selected to build in or look over: -1 the home yard, -2 the Dufour yard, 0 none.
   yard = 0
   speed: Speed = 0
@@ -351,10 +359,27 @@ export class App {
   }
 
   // Picks a crew: orders given while it is picked go to that crew. -1 lets any free crew take them.
-  selectUnit(unit: number): void {
-    if (this.unit === unit) return
+  selectUnit(unit: number, from: 'land' | 'list' = 'list'): void {
+    if (this.unit === unit && (unit < 0 || this.unitFrom === from)) return
     this.unit = unit
+    this.unitFrom = from
+    if (unit >= 0) this.thing = null
     this.emit({ type: 'unit', unit })
+  }
+
+  // The pointer over the land: what is under it, for names and marks before a click.
+  point(p: Pointing | null): void {
+    const a = this.pointing
+    if (a === p || (a && p && a.unit === p.unit && a.field === p.field && a.yard === p.yard && a.thing?.kind === p.thing?.kind && a.thing?.k === p.thing?.k && Math.abs(a.x - p.x) < 1 && Math.abs(a.y - p.y) < 1)) return
+    this.pointing = p
+    this.emit({ type: 'point' })
+  }
+
+  // A thing on the land clicked (its name card opens beside it), or null to put that card away.
+  inspect(thing: Thing | null, x = 0, y = 0): void {
+    if (!thing && !this.thing) return
+    this.thing = thing ? { thing, x, y } : null
+    this.emit({ type: 'inspect' })
   }
 
   // Selects a yard (-1 home, -2 Dufour), where buildings are ordered; 0 clears. Fields and a yard are not held at once.
