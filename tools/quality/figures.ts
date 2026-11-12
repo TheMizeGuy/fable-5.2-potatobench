@@ -41,13 +41,12 @@ async function settle(): Promise<void> {
 
 if (!measure) {
   // A farm in July: the farmer driving the sprayer, a hand walking the rows, the others as the day has them.
-  await q(page, `${FARM}; app.do({ t: 'sundays', off: false }); q.run(q.day(6, 6), ['spray']); app.campaign.incidents = []
-    const c2 = app.campaign; for (const j of [...c2.season.jobs]) app.do({ t: 'cancel', id: j.id })
-    app.do({ t: 'job', kind: 'spray', field: 0, unit: c2.crew[0].id }); app.do({ t: 'job', kind: 'scout', field: 2, unit: c2.crew[1].id })`)
+  await q(page, `${FARM}; app.do({ t: 'sundays', off: false }); q.run(q.day(6, 10), ['spray']); app.campaign.incidents = []
+    for (const j of [...app.campaign.season.jobs]) app.do({ t: 'cancel', id: j.id })
+    for (const f of [0, 2, 4, 5]) app.do({ t: 'job', kind: 'spray', field: f })
+    app.do({ t: 'job', kind: 'scout', field: 1 })`)
   await settle()
-  // under way for a moment, then the clock stopped so each is pictured at it (the camera still comes in on them)
-  await page.waitForTimeout(3000)
-  await q(page, `q.g().app.setSpeed(0)`)
+  await page.waitForTimeout(1500)
   const people = await q(page, `return q.g().app.campaign.crew.map(u => ({ id: u.id, name: u.name }))`) as { id: number; name: string }[]
   const rows: string[] = []
   for (const p of people) {
@@ -57,7 +56,7 @@ if (!measure) {
     if (!(await follow.isVisible().catch(() => false))) { rows.push(`${p.name}: no card`); continue }
     const before = await page.evaluate(id => (globalThis as any).__countyField.unitPlace(id), p.id)
     await follow.click()
-    await page.waitForTimeout(2200)
+    await page.waitForTimeout(1600)
     const after = await page.evaluate(id => `${(globalThis as any).__countyField.unitPlace(id)} following ${(globalThis as any).__countyField.following()}`, p.id)
     const at = await page.evaluate(id => {
       const g = globalThis as any
