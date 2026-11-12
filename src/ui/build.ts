@@ -61,7 +61,7 @@ export function yardCard(ctx: Ctx): YardCard {
           h('p', { class: 'card-sub num' }, `Logs ${loads(m.logs)} · stone ${loads(m.stone)} · cash ${F.money(c.cash)}`)),
         h('button', { class: 'nicon', type: 'button', testid: 'yard-close', 'aria-label': `Close${ctx.touch() ? '' : ' (Escape)'}`, onclick: () => app.selectYard(0) }, icon('close'))),
       h('div', { class: 'yard-stands', role: 'list', 'aria-label': 'Standing here' },
-        houses.map(x => h('span', { class: 'stand-chip', role: 'listitem' }, icon('house', 'ic s'), `${x.name.replace(/^Home /, '')}, ${F.mass(x.cwt)}`)),
+        houses.map(x => h('span', { class: 'stand-chip', role: 'listitem' }, icon('house', 'ic s'), `${F.upper(x.name.replace(/^Home /, ''))}, ${F.mass(x.cwt)}`)),
         built.map(b => h('span', { class: 'stand-chip', role: 'listitem', testid: `built-${b.kind}` }, icon(BUILD_GLYPH[b.kind], 'ic s'), b.name, extra(b) ? h('span', { class: 'sub' }, ` ${extra(b)}`) : null))),
       up.map(b => {
         const who = builders(c, b.kind, yard)

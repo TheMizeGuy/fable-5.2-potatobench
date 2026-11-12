@@ -234,14 +234,14 @@
   position: absolute;
   inset: auto var(--sp-3) max(var(--sp-3), env(safe-area-inset-bottom, 0px)) var(--sp-3);
   display: grid;
-  grid-template-columns: 300px minmax(0, 1fr) 300px;
+  grid-template-columns: minmax(300px, 400px) minmax(0, 1fr) 300px;
   grid-template-areas: 'crew card .';
   align-items: end;
   gap: var(--sp-3);
 }
 .clock-slot { grid-area: clock; display: flex; align-items: center; padding: var(--sp-h); }
 
-.crew { grid-area: crew; display: grid; gap: var(--sp-2); align-content: center; min-height: 48px; padding: var(--sp-2) var(--sp-3); }
+.crew { grid-area: crew; justify-self: start; max-width: 100%; display: grid; gap: var(--sp-2); align-content: center; min-height: 48px; padding: var(--sp-2) var(--sp-3); }
 /* The unit bar: a chip for each crew. With one crew the chip is a line of what it is doing. */
 .units { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1); min-width: 0; }
 .unit {
@@ -546,7 +546,7 @@
 
 /* ---------------------------------------------------------------- sizes */
 /* Under 1400 the command card takes a row of its own, above the crew. */
-.season[data-layout='mid'] .bottom { grid-template-columns: 300px minmax(0, 1fr); grid-template-areas: 'card card' 'crew .'; }
+.season[data-layout='mid'] .bottom { grid-template-columns: minmax(300px, 420px) minmax(0, 1fr); grid-template-areas: 'card card' 'crew .'; }
 .season[data-layout='mid'] .topbar { gap: var(--sp-2); }
 .season[data-layout='mid'] .fc { min-width: 60px; padding: var(--sp-1); column-gap: var(--sp-1); }
 .season[data-layout='mid'] .track { min-width: 150px; }
@@ -672,7 +672,7 @@
   transition: background-color var(--t-quick) var(--ease-out);
 }
 .tb-goal .ic { flex: none; }
-.goal-t { overflow: hidden; text-overflow: ellipsis; }
+.goal-t { white-space: nowrap; }
 .goal-n { color: var(--cream); font-weight: 700; padding-left: var(--sp-1); }
 .goal-when { color: var(--cream-2); font-weight: 400; }
 .tb-goal[aria-expanded='true'] { background: var(--night-2); }
@@ -802,7 +802,7 @@
 
 /* ---------------------------------------------------------------- the person's card */
 .person-card, .yard-card { grid-area: card; }
-.person-card { grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); grid-template-areas: 'head head' 'now skills' 'foot skills'; gap: var(--sp-2) var(--sp-5); align-items: start; }
+.person-card { grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); grid-template-areas: 'head head' 'now skills' 'foot foot'; gap: var(--sp-3) var(--sp-5); align-items: start; }
 .person-card.in, .yard-card.in { animation: rise var(--t-base) var(--ease-out); }
 .person-card.out, .yard-card.out { animation: sink var(--t-exit) var(--ease-in) forwards; pointer-events: none; }
 .p-head { grid-area: head; display: flex; align-items: center; gap: var(--sp-3); padding-right: var(--sp-7); }
@@ -818,16 +818,20 @@
 .p-st .why { color: var(--cream-2); }
 .p-st.warn strong, .p-st.warn .ic { color: var(--gold); }
 .p-st.bad strong, .p-st.bad .ic { color: var(--ember); }
-.p-skills { grid-area: skills; display: grid; grid-template-columns: 16px auto minmax(48px, 1fr) 18px auto; column-gap: var(--sp-2); row-gap: var(--sp-1); align-items: center; }
-.p-col { grid-column: 1 / 4; }
-.p-col-r { grid-column: 4 / -1; justify-self: end; }
+.p-skills { grid-area: skills; display: grid; grid-template-columns: auto repeat(5, minmax(0, 1fr)); column-gap: var(--sp-2); row-gap: var(--sp-1); align-items: center; }
+.p-row-0 { grid-row: 1; grid-column: 1; }
+.p-row { grid-row: 2; grid-column: 1; }
+.p-row-2 { grid-row: 3; }
 .p-skill { display: contents; }
-.p-skill .ic { color: var(--cream-2); }
-.p-skill-name { font-size: var(--t-small); line-height: 18px; }
+.p-skill-name { grid-row: 1; display: grid; justify-items: center; gap: 2px; font-size: var(--t-label); line-height: 14px; color: var(--cream-2); }
+.p-skill-name .ic { color: var(--cream-2); }
+.p-lvl-row { grid-row: 2; display: flex; align-items: center; gap: var(--sp-1); min-width: 0; }
+.p-lvl-row .lvl { flex: 1 1 auto; }
+.p-skill .prio { grid-row: 3; width: 100%; }
 .lvl { position: relative; display: block; height: 6px; background: var(--night-line); }
 .lvl > i { position: absolute; inset: 0 auto 0 0; background: var(--cream); transition: width var(--t-reveal) var(--ease-out); }
 .lvl > b { position: absolute; top: 0; bottom: 0; background: var(--gold); opacity: 0.85; }
-.p-lvl { font-size: var(--t-small); font-weight: 700; text-align: right; }
+.p-lvl { flex: none; min-width: 12px; font-size: var(--t-small); font-weight: 700; text-align: right; }
 .prio {
   display: grid;
   place-items: center;
@@ -844,11 +848,13 @@
 .prio.p0 { color: var(--cream-2); border-style: dashed; }
 .p-skill.never .p-skill-name, .p-skill.never .lvl { opacity: 0.55; }
 @media (hover: hover) { .prio:hover:not(.p1) { background: var(--night-2); border-color: var(--cream); } .prio.p1:hover { background: var(--paper-hi); } }
-.p-foot { grid-area: foot; display: grid; gap: var(--sp-2); min-width: 0; }
+.p-foot { grid-area: foot; display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-4); min-width: 0; padding-top: var(--sp-2); border-top: 1px solid var(--night-line); }
+.p-foot.card-line { display: block; }
+.p-blocks { flex: 1 1 100%; }
 .p-wage { font-size: var(--t-small); line-height: 18px; }
 .p-wage .sub { color: var(--cream-2); }
-.p-orders { min-height: 44px; }
-.p-orders .order { min-height: 44px; }
+.p-orders { flex: 1 1 auto; justify-content: flex-end; min-height: 44px; }
+.p-orders .order { flex: 0 1 150px; min-height: 44px; padding-right: var(--sp-2); }
 .p-blocks { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
 
 /* ---------------------------------------------------------------- the work grid */
@@ -938,7 +944,11 @@
 .bp[aria-pressed='true'] { background: var(--cream); border-color: var(--cream); color: var(--night-solid); }
 .bp[aria-pressed='true'] .bp-cost, .bp[aria-pressed='true'].short .bp-name { color: var(--ink-2); }
 @media (hover: hover) { .bp:hover:not([aria-pressed='true']) { background: var(--night-2); border-color: var(--cream); } }
-.build-detail { display: grid; gap: var(--sp-1); padding: var(--sp-2) 0 0; border-top: 1px solid var(--night-line); font-size: var(--t-small); line-height: 18px; }
+.build-detail { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: var(--sp-1) var(--sp-5); align-items: start; padding: var(--sp-2) 0 0; border-top: 1px solid var(--night-line); font-size: var(--t-small); line-height: 18px; }
+.build-detail > * { grid-area: auto; }
+.bd-does, .bd-cost { grid-column: 1; }
+.bd-catch, .build-detail .orders, .build-detail .card-line { grid-column: 2; }
+.bd-catch { grid-row: 1; }
 .bd-does { font-size: var(--t-body); line-height: 22px; }
 .bd-catch { color: var(--cream-2); }
 .bd-catch strong { color: var(--gold); }
@@ -973,7 +983,7 @@
 .inc-who .sub { color: var(--cream-2); }
 .inc-skills { display: inline-flex; gap: var(--sp-2); color: var(--cream); }
 .inc-choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--sp-2); }
-.choice {
+.inc-choice {
   display: grid;
   align-content: start;
   gap: var(--sp-h);
@@ -984,13 +994,13 @@
   color: var(--cream);
   text-align: left;
 }
-.choice strong { font-size: var(--t-body); line-height: 20px; }
-.choice-does { font-size: var(--t-small); line-height: 18px; color: var(--cream-2); }
-.choice.first { background: var(--cream); border-color: var(--cream); color: var(--night-solid); }
-.choice.first .choice-does { color: var(--ink-2); }
-.choice.off { border-style: dashed; border-color: var(--night-line); }
-.choice.off strong { color: var(--cream-2); }
-@media (hover: hover) { button.choice:not(.first):hover { background: var(--night-2); border-color: var(--cream); } button.choice.first:hover { background: var(--paper-hi); } }
+.inc-choice strong { font-size: var(--t-body); line-height: 20px; }
+.inc-does { font-size: var(--t-small); line-height: 18px; color: var(--cream-2); }
+.inc-choice.first { background: var(--cream); border-color: var(--cream); color: var(--night-solid); }
+.inc-choice.first .inc-does { color: var(--ink-2); }
+.inc-choice.off { border-style: dashed; border-color: var(--night-line); }
+.inc-choice.off strong { color: var(--cream-2); }
+@media (hover: hover) { button.inc-choice:not(.first):hover { background: var(--night-2); border-color: var(--cream); } button.inc-choice.first:hover { background: var(--paper-hi); } }
 .inc-lapse { font-size: var(--t-small); line-height: 18px; color: var(--cream-2); }
 
 /* ---------------------------------------------------------------- tracts, and the land under a field */
@@ -1023,8 +1033,16 @@
 .crew-paper .beds { display: flex; align-items: center; gap: var(--sp-2); margin-top: var(--sp-2); font-size: var(--t-small); line-height: 18px; }
 
 /* ---------------------------------------------------------------- the new parts at other sizes */
-.season[data-layout='narrow'] .person-card, .season[data-layout='short'] .person-card { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'head' 'now' 'skills' 'foot'; max-height: calc(100vh - var(--top, 56px) - 140px); overflow-y: auto; }
+.season[data-layout='narrow'] .person-card { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'head' 'now' 'skills' 'foot'; gap: var(--sp-2); max-height: calc(100vh - var(--top, 56px) - 140px); overflow-y: auto; }
+.season[data-layout='short'] .person-card { grid-template-areas: 'head head' 'now skills' 'foot foot'; gap: var(--sp-1) var(--sp-3); max-height: calc(100vh - var(--top, 44px) - 16px); overflow-y: auto; }
+.season[data-layout='narrow'] .p-orders { justify-content: stretch; }
+.season[data-layout='narrow'] .p-orders .order { flex: 1 1 0; }
 .season[data-layout='narrow'] .yard-card, .season[data-layout='short'] .yard-card { max-height: calc(100vh - var(--top, 56px) - 140px); overflow-y: auto; }
+.season[data-layout='narrow'] .build-pick, .season[data-layout='short'] .build-pick { flex-wrap: nowrap; overflow-x: auto; padding-bottom: var(--sp-1); }
+.season[data-layout='narrow'] .bp, .season[data-layout='short'] .bp { flex: none; }
+.season[data-layout='narrow'] .build-detail { grid-template-columns: minmax(0, 1fr); }
+.season[data-layout='narrow'] .build-detail > * { grid-column: 1; grid-row: auto; }
+.season[data-layout='narrow'] .yard-stands { display: none; }
 .season[data-layout='narrow'] .p-head .t-head { font-size: var(--t-lede); }
 .season[data-layout='narrow'] .portrait.l { width: 36px; height: 36px; }
 .season[data-layout='narrow'] .p-orders .order { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'ic' 'name' 'meta'; justify-items: center; text-align: center; padding: var(--sp-h); }

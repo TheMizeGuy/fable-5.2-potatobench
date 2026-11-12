@@ -6,7 +6,7 @@ import { h, type Child } from './dom.ts'
 import * as F from './fmt.ts'
 import { icon } from './icons.ts'
 import { portrait } from './people.ts'
-import { SKILL_NAME } from './rules.ts'
+import { firstName, SKILL_NAME } from './rules.ts'
 
 export interface IncidentCard {
   el: HTMLElement
@@ -56,6 +56,15 @@ export function incidentCard(ctx: Ctx): IncidentCard {
     if (app.speed === 0 && app.pauseReason && !S.incidentInfo(c).some(x => !away.has(x.id)) && !ctx.papers.isOpen()) app.setSpeed(1)
   }
 
+  // What a choice does, in the grower's words: whether someone stays is told by how they feel, not by a figure.
+  function does(c: S.Campaign, inc: S.Incident | undefined, ch: S.IncidentChoice): string {
+    if (ch.id === 'let' && inc) {
+      const u = c.crew.find(x => x.id === inc.unit)
+      if (u) return u.mood < S.POACH_MOOD ? `${firstName(u.name)} is not happy enough here, and goes.` : `${firstName(u.name)} is ${S.moodWord(u.mood)} here, and stays.`
+    }
+    return F.localize(ch.does)
+  }
+
   function body(c: S.Campaign, info: S.IncidentInfo): Child {
     const inc = c.incidents.find(x => x.id === info.id)
     const fallback = info.choices.find(x => x.id === info.fallback)
@@ -63,15 +72,15 @@ export function incidentCard(ctx: Ctx): IncidentCard {
       h('header', { class: 'inc-head' },
         h('span', { class: 'inc-glyph' }, icon(GLYPH[info.kind])),
         h('div', null,
-          h('h2', { class: 't-head', id: 'incident-title' }, info.title),
+          h('h2', { class: 't-head', id: 'incident-title' }, F.localize(info.title)),
           h('p', { class: 'card-sub' }, info.daysLeft <= 1 ? 'Answer today' : `${info.daysLeft} days to answer`)),
         h('button', { class: 'nicon', type: 'button', testid: 'incident-later', 'aria-label': `Decide later${ctx.touch() ? '' : ' (Escape)'}`, title: ctx.touch() ? undefined : 'Decide later', onclick: () => putAway() }, icon('close'))),
       h('p', { class: 'inc-text' }, F.localize(info.text)),
       about(c, inc),
       h('div', { class: 'inc-choices' }, info.choices.map(ch => ch.ok
-        ? h('button', { class: `choice${ch.id === info.fallback ? '' : ' first'}`, type: 'button', testid: `answer-${ch.id}`, onclick: () => answer(c, info, ch) },
-          h('strong', null, ch.label), h('span', { class: 'choice-does' }, F.localize(ch.does)))
-        : h('div', { class: 'choice off', testid: `answer-${ch.id}-off` }, h('strong', null, ch.label), h('span', { class: 'choice-does' }, F.localize(ch.why))))),
+        ? h('button', { class: `inc-choice${ch.id === info.fallback ? '' : ' first'}`, type: 'button', testid: `answer-${ch.id}`, onclick: () => answer(c, info, ch) },
+          h('strong', null, ch.label), h('span', { class: 'inc-does' }, does(c, inc, ch)))
+        : h('div', { class: 'inc-choice off', testid: `answer-${ch.id}-off` }, h('strong', null, ch.label), h('span', { class: 'inc-does' }, F.localize(ch.why))))),
       err ? h('p', { class: 'card-line flash lv-warn', role: 'status' }, err) : null,
       fallback ? h('p', { class: 'inc-lapse' }, `Left unanswered, on ${F.date(c.year, info.until + 1, true)}: ${fallback.label.toLowerCase()}.`) : null,
     ]
@@ -101,7 +110,7 @@ export function incidentCard(ctx: Ctx): IncidentCard {
     patch(el, JSON.stringify([info, err, ctx.touch(), c.crew.map(u => [u.id, u.wage, Math.round(u.mood * 20)])]), () => body(c, info))
     if (was) {
       if (!ctx.reduced()) { el.classList.remove('in'); void el.offsetWidth; el.classList.add('in') }
-      ctx.announce(`${info.title}. ${F.localize(info.text)}`)
+      ctx.announce(`${F.localize(info.title)}. ${F.localize(info.text)}`)
     }
   }
 
@@ -115,7 +124,7 @@ export function incidentCard(ctx: Ctx): IncidentCard {
     shown = pick.id
     err = ''
     ctx.dirty()
-    requestAnimationFrame(() => el.querySelector<HTMLElement>('.choice.first, .choice')?.focus({ preventScroll: true }))
+    requestAnimationFrame(() => el.querySelector<HTMLElement>('.inc-choice.first, button.inc-choice')?.focus({ preventScroll: true }))
   }
 
   function putAway(): boolean {

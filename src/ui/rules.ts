@@ -164,6 +164,7 @@ export function alertShort(a: Alert): { text: string; glyph: string } {
     case 'weighed': return { text: `${name}weighed in`, glyph: 'ticket' }
     case 'pickers': return { text: a.text.startsWith('A picking') ? 'Pickers hired' : 'Pickers sent home', glyph: 'pickers' }
     case 'logsSold': return { text: a.text.replace(/^Sold (.+?) loads of logs to the mill for (.+)\.$/, 'Logs sold for $2'), glyph: 'logs' }
+    case 'incident': return { text: F.localize(a.text.split('. ')[0]), glyph: 'ask' }
     case 'incidentDone': return { text: a.text.replace(/\.$/, ''), glyph: 'ask' }
     case 'foreman': return { text: a.text.replace(/:.*$/, '').replace(/\.$/, ''), glyph: 'foreman' }
     default: return { text: a.text, glyph: a.level === 'bad' ? 'blight' : a.level === 'warn' ? 'warn' : a.level === 'good' ? 'check' : 'flat' }
@@ -407,7 +408,7 @@ export function tiredWhy(c: S.Campaign, p: S.PersonInfo): string {
   const rest = c.sundaysOff ? 'Sunday rests them' : 'no day off: Sundays are worked'
   if (p.tired >= S.HURT_TIRED) return `${F.pct(slow)} slower, and can be hurt on a machine or in the woods; ${rest}`
   if (slow > 0.005) return `${F.pct(slow)} slower; ${rest}`
-  return p.tired >= 0.3 ? `a week's work adds up; ${rest}` : 'rested'
+  return p.tired >= 0.3 ? `a week's work adds up; ${rest}` : ''
 }
 
 // The quiet sign on a person's chip, the most pressing first: hurt, about to quit, worn out, unhappy, tired, idle.

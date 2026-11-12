@@ -5,7 +5,7 @@ import { confirmPaper, EXIT_MS, patch, type Ctx } from './core.ts'
 import { h, s, type Child } from './dom.ts'
 import * as F from './fmt.ts'
 import { icon } from './icons.ts'
-import { BLOCK_NAME, where } from './map.ts'
+import { BLOCK_NAME } from './map.ts'
 import * as R from './rules.ts'
 
 // A head and shoulders in the shirt, hat and skin the figure on the land wears.
@@ -24,6 +24,12 @@ export function portrait(id: number, cls = 'portrait'): SVGElement {
     top)
 }
 
+// What a person did on the last day worked, or null. Between days most hold no order, so this is what they are at.
+function lastWorked(c: S.Campaign, id: number): { kind: S.JobKind; field: number } | null {
+  const w = c.season?.worked.filter(x => x.unit === id) ?? []
+  return w.length ? w[w.length - 1] : null
+}
+
 // What a person is doing, as a glyph: their order, the road, a day of rest, a foreman's rounds, or nothing.
 export function doingGlyph(c: S.Campaign, p: S.PersonInfo): string {
   if (p.foreman) return 'foreman'
@@ -31,15 +37,24 @@ export function doingGlyph(c: S.Campaign, p: S.PersonInfo): string {
   const s0 = c.season
   if (s0 && c.phase === 'season' && !s0.frozen && !S.workday(c, s0)) return 'sunday'
   if (p.travelling) return 'go'
-  return p.job ? p.job.kind : 'stale'
+  return p.job ? p.job.kind : lastWorked(c, p.id)?.kind ?? 'stale'
 }
 
-// Whether someone stands idle while orders they could take wait on the list: their priorities, or a tractor, hold them.
+// What a person is doing in words: their order, or what they were at on the last day worked.
+export function doingText(c: S.Campaign, p: S.PersonInfo): string {
+  if (p.job || p.foreman || p.hurtUntil >= 0 || p.travelling || p.doing !== 'Nothing to do') return p.doing
+  const w = lastWorked(c, p.id)
+  return w ? R.jobText(w) : 'Nothing to do'
+}
+
+// Whether someone stood idle through the last working day while orders they could take waited on the list: their
+// priorities hold them back, or there was no tractor free.
 export function idleWithWork(c: S.Campaign, p: S.PersonInfo, waits: Record<number, string>): boolean {
   const s0 = c.season
-  if (!s0 || c.phase !== 'season' || s0.frozen || p.job || p.travelling || p.foreman || p.hurtUntil >= 0 || !S.workday(c, s0)) return false
-  const held = new Set(c.crew.map(u => u.job))
-  return s0.jobs.some(j => !held.has(j.id) && !waits[j.id] && (j.unit < 0 || j.unit === p.id))
+  if (!s0 || c.phase !== 'season' || s0.frozen || s0.day <= s0.startDay || p.job || p.travelling || p.foreman || p.hurtUntil >= 0 || !S.workday(c, s0)) return false
+  if (lastWorked(c, p.id)) return false
+  const u = c.crew.find(x => x.id === p.id)
+  return !!u && s0.jobs.some(j => !waits[j.id] && (j.unit < 0 || j.unit === p.id) && S.willDo(u, j.kind))
 }
 
 // The next order a person would take from the list by their own priorities, or null.
@@ -55,6 +70,8 @@ function nextFor(c: S.Campaign, id: number): S.Job | null {
   }
   return best
 }
+
+const SKILL_SHORT: Record<S.Skill, string> = { machine: 'Machine', field: 'Field', woods: 'Woods', build: 'Build', pack: 'Pack' }
 
 function skillBar(level: number, progress: number): HTMLElement {
   return h('span', { class: 'lvl', 'aria-hidden': 'true' },
@@ -112,7 +129,8 @@ export function personCard(ctx: Ctx): PersonCard {
     const heading = R.moodHeading(c, p)
     const sign = R.personSign(p, idleWithWork(c, p, waits))
     const blocks = S.BLOCKS.filter(b => S.PARCELS.some((x, i) => x.block === b && S.held(c, i)))
-    const look = c.crew.map(u => ({ at: u.road > 0 ? u.to : u.at, colour: personLook(u.id).shirt, ring: u.id === p.id }))
+    const doing = doingText(c, p)
+    const tiredWhy = R.tiredWhy(c, p)
     return [
       h('header', { class: 'card-head p-head' },
         portrait(p.id, 'portrait l'),
@@ -121,26 +139,24 @@ export function personCard(ctx: Ctx): PersonCard {
           h('p', { class: 'card-sub' }, farmer ? 'Every job; no wage' : `${p.traitName}: ${p.traitText.replace(/\.$/, '').replace(/^./, x => x.toLowerCase())}`)),
         h('button', { class: 'nicon', type: 'button', testid: 'person-close', 'aria-label': `Close${ctx.touch() ? '' : ' (Escape)'}`, onclick: () => app.selectUnit(-1) }, icon('close'))),
       h('div', { class: 'p-now' },
-        h('p', { class: 'reading p-doing' }, icon(doingGlyph(c, p), 'ic s'), h('span', null, p.doing),
-          next ? h('span', { class: 'age' }, `next: ${R.jobText(next, c, next.building).toLowerCase()}`) : null,
-          where(c, p.travelling ? p.to : p.at, 18, look)),
+        h('p', { class: 'reading p-doing', testid: 'person-doing' }, icon(doingGlyph(c, p), 'ic s'), h('span', null, doing),
+          next && doing === 'Nothing to do' ? h('span', { class: 'age' }, `next: ${R.jobText(next, c, next.building).toLowerCase()}`) : null),
         h('p', { class: 'p-state' },
           h('span', { class: `p-st${p.tired >= S.TIRED_SLOW_FROM ? ' warn' : ''}${p.tired >= S.HURT_TIRED ? ' bad' : ''}`, testid: 'person-tired' },
-            icon('tired', 'ic s'), h('strong', null, F.upper(p.tiredWord)), h('span', { class: 'why' }, R.tiredWhy(c, p))),
+            icon('tired', 'ic s'), h('strong', null, F.upper(p.tiredWord)), tiredWhy ? h('span', { class: 'why' }, tiredWhy) : null),
           h('span', { class: `p-st${p.mood < 0.45 ? ' warn' : ''}${p.quitIn >= 0 ? ' bad' : ''}`, testid: 'person-mood' },
             icon(p.mood < 0.45 ? 'unhappy' : 'happy', 'ic s'), h('strong', null, `${F.upper(p.moodWord)}${heading ? `, ${heading}` : ''}`),
             h('span', { class: 'why' }, p.quitIn >= 0 ? `quits in ${F.plural(p.quitIn, 'day')} unless it lifts` : why.length ? why.map(x => `${x.up ? '+' : '−'} ${x.text}`).join(', ') : 'nothing pulling either way')),
           sign && sign.glyph === 'hurt' ? h('span', { class: 'p-st bad' }, icon('hurt', 'ic s'), h('strong', null, 'Hurt'), h('span', { class: 'why' }, `back on ${F.date(c.year, p.hurtUntil)}`)) : null)),
-      h('div', { class: 'p-skills', role: 'group', 'aria-label': 'Skills, and what they do first' },
-        h('span', { class: 't-label p-col' }, 'Skill'), h('span', { class: 't-label p-col p-col-r' }, 'Does it'),
+      h('div', { class: 'p-skills', role: 'group', 'aria-label': 'Skills, and the order they take work in' },
+        h('span', { class: 'p-row-0', 'aria-hidden': 'true' }), h('span', { class: 't-label p-row' }, 'Skill'), h('span', { class: 't-label p-row p-row-2' }, 'Priority'),
         S.SKILLS.map(k => {
           const lvl = p.skills[k]
           const pr = p.prio[k]
           return h('div', { class: `p-skill${pr === 0 ? ' never' : ''}`, k: `skill-${k}` },
-            icon(R.SKILL_GLYPH[k], 'ic s'),
-            h('span', { class: 'p-skill-name' }, R.SKILL_NAME[k]),
-            skillBar(lvl, p.progress[k]),
-            h('span', { class: 'p-lvl num', 'aria-label': `level ${lvl}${lvl < S.SKILL_MAX ? `, ${F.pct(p.progress[k])} of the way to ${lvl + 1}` : ''}` }, String(lvl)),
+            h('span', { class: 'p-skill-name', title: ctx.touch() ? undefined : R.skillCovers(k) }, icon(R.SKILL_GLYPH[k], 'ic s'), SKILL_SHORT[k]),
+            h('span', { class: 'p-lvl-row' }, skillBar(lvl, p.progress[k]),
+              h('span', { class: 'p-lvl num', 'aria-label': `${R.SKILL_NAME[k]}: level ${lvl}${lvl < S.SKILL_MAX ? `, ${F.pct(p.progress[k])} of the way to ${lvl + 1}` : ''}` }, String(lvl))),
             h('button', {
               class: `prio p${pr}`, type: 'button', testid: `prio-${k}`,
               'aria-label': `${R.SKILL_NAME[k]} work, ${R.skillCovers(k).toLowerCase()}: ${R.prioWord(pr)}. Press for ${R.prioWord(R.prioNext(pr))}.`,
@@ -162,7 +178,7 @@ export function personCard(ctx: Ctx): PersonCard {
             class: 'order', type: 'button', testid: 'person-foreman', 'aria-expanded': String(foreman),
             title: ctx.touch() ? undefined : 'A foreman puts on the list what the fields of one block need, every working morning, and does no field work. Paid 40% more.',
             onclick: () => { foreman = !foreman; ctx.dirty() },
-          }, icon('foreman'), h('span', { class: 'order-name' }, p.foreman ? 'Foreman' : 'Make foreman'), h('span', { class: 'order-meta' }, p.foreman ? BLOCK_NAME[p.foreman].replace(/^The /, '').split(',')[0] : '+40% pay')) : null,
+          }, icon('foreman'), h('span', { class: 'order-name' }, 'Foreman'), h('span', { class: 'order-meta' }, p.foreman ? BLOCK_NAME[p.foreman].replace(/^The /, '').split(',')[0] : '+40% pay')) : null,
           h('button', {
             class: 'order', type: 'button', testid: 'person-dismiss',
             onclick: async () => {
