@@ -86,6 +86,26 @@ function giving(c: S.Campaign, id: S.VarietyId, delivered = 0): { lo: number; hi
   return n ? { lo: delivered + lo, hi: delivered + hi, n } : null
 }
 
+// Whether a contract's shortfall is real yet: once it has closed, or when even the top of what its fields look like
+// giving falls short, or when nothing of its variety is left in the ground. Before that, "short today" is only what
+// the farm has not yet dug, and is not said.
+export function shortReal(c: S.Campaign, k: S.ContractInfo): boolean {
+  if (k.settled) return k.penalty > 0
+  if (c.phase === 'plan' || k.needed <= 1e-6 || k.penalty <= 0) return false
+  const g = giving(c, k.variety, k.delivered)
+  if (g) return g.hi < k.cwt
+  return c.phase !== 'season' || growing(c, k.variety) === 0
+}
+
+// What the bar on a contract shows, for its hover: the three marks it is drawn with.
+export const BAR_SAYS = 'The hatched band is what the fields look like giving, low to high; the upright rule is what is promised; the violet mark is what is delivered so far.'
+
+// The bar explained under the pointer and to a screen reader, where it stands.
+function barHover(el: HTMLElement): HTMLElement {
+  el.title = BAR_SAYS
+  return el
+}
+
 // A contract as a range: what is promised (the rule) against what the fields look like giving (the hatching), and
 // what is delivered (the violet mark).
 function contractRange(c: S.Campaign, id: S.VarietyId, cwt: number, delivered: number): { el: HTMLElement; said: string } {
@@ -100,10 +120,10 @@ function signedCard(c: S.Campaign, k: S.ContractInfo): HTMLElement {
   return h('article', { class: 'offer signed cat-offer', testid: `contract-${k.id}` },
     h('p', { class: 'lead' }, icon(k.needed <= 1e-6 ? 'check' : 'contract', 'i'), h('b', null, k.buyer), h('span', { class: 'it quiet' }, k.varietyName), h('span', { class: 'dots' }),
       h('span', { class: 'num' }, F.price(k.price))),
-    r.el,
+    barHover(r.el),
     h('p', { class: 't-caption' }, `${F.mass(k.delivered)} of ${F.mass(k.cwt)} delivered, due ${k.dueBy}. ${F.upper(r.said)}.`,
       k.settled || k.needed <= 1e-6 ? null : ' On the due date the buyer takes what is still owed from the potato house, at the contract price; only what is short after that is charged as a penalty.',
-      k.penalty > 0 ? h('span', { class: 'c-red' }, ` ${k.settled ? 'Penalty' : 'Short today'}: ${F.money(-k.penalty)}.`) : null))
+      shortReal(c, k) ? h('span', { class: 'c-red' }, ` ${k.settled ? 'Penalty' : 'Short as things stand'}: ${F.money(-k.penalty)}.`) : null))
 }
 
 function offerCard(ctx: Ctx, c: S.Campaign, o: S.OfferInfo, after: () => void): HTMLElement {
@@ -113,7 +133,7 @@ function offerCard(ctx: Ctx, c: S.Campaign, o: S.OfferInfo, after: () => void): 
   return h('article', { class: 'offer cat-offer', testid: `offer-${o.id}` },
     h('p', { class: 'lead' }, icon('contract', 'i'), h('b', null, o.buyer), h('span', { class: 'it quiet' }, o.varietyName), h('span', { class: 'dots' }),
       h('span', { class: 'num' }, F.price(o.price))),
-    r.el,
+    barHover(r.el),
     h('p', { class: 't-caption' }, `${F.mass(o.cwt)} of No. 1 ${o.dueBy}: ${F.money(o.value)} in all, `,
       h('span', { class: vs < -0.015 ? 'c-ochre' : null }, `${F.versus(o.price / o.usual)} ${v.contract ? 'the processing price' : 'a usual year'}`), '. ', farmHas(c, o.variety)),
     v.contract ? h('p', { class: 't-caption c-ochre' }, `Off contract ${v.name} sells ${offContract()} its usual price.`) : null,
@@ -182,7 +202,7 @@ export function contractRows(ctx: Ctx): { key(): unknown; part(c: S.Campaign): C
         const done = k.needed <= 1e-6
         const g = growing(c, k)
         const max = Math.max(k.cwt, g?.hi ?? 0, k.delivered) * 1.15
-        const said = `${k.buyer}: ${F.mass(k.delivered)} of ${F.mass(k.cwt)} ${k.varietyName} delivered, due ${k.dueBy}${g ? `; the fields look like giving ${F.mass(g.lo)} to ${F.mass(g.hi)} in all` : ''}${k.settled ? ', closed' : done ? ', filled' : `. Short today it would cost ${F.money(k.penalty)}`}.`
+        const said = `${k.buyer}: ${F.mass(k.delivered)} of ${F.mass(k.cwt)} ${k.varietyName} delivered, due ${k.dueBy}${g ? `; the fields look like giving ${F.mass(g.lo)} to ${F.mass(g.hi)} in all` : ''}${k.settled ? ', closed' : done ? ', filled' : shortReal(c, k) ? `. Short as things stand: ${F.money(k.penalty)}` : ''}. ${BAR_SAYS}`
         return h('button', { class: `contract${done ? ' done' : ''}`, type: 'button', testid: `track-${k.id}`, title: ctx.touch() ? undefined : said, onclick: () => openContracts(ctx) },
           h('span', { class: 'who' }, icon(done ? 'check' : 'contract', 'i'), h('b', null, k.buyer.replace(/^The /, '')), `: ${k.varietyName}`),
           h('span', { class: 't-label due' }, k.settled ? 'closed' : DUE_SHORT[k.due]),
@@ -192,7 +212,7 @@ export function contractRows(ctx: Ctx): { key(): unknown; part(c: S.Campaign): C
             h('span', { class: 'promise', style: `left:${(k.cwt / max * 100).toFixed(1)}%` })),
           h('span', { class: 'says num' },
             h('b', { class: 'track-n' }, `${F.num(F.massValue(k.delivered))}/${F.mass(k.cwt)}`),
-            g ? ` · ${F.num(F.massValue(g.lo))}–${F.num(F.massValue(g.hi))} growing` : !done && k.penalty > 0 ? h('span', { class: 'c-red' }, ` · short ${F.money(k.penalty)}`) : null),
+            g ? ` · ${F.num(F.massValue(g.lo))}–${F.num(F.massValue(g.hi))} growing` : null, !done && shortReal(c, k) ? h('span', { class: 'c-red' }, ` · short ${F.money(k.penalty)}`) : null),
           h('span', { class: 'sr' }, `. ${said} Open the contracts.`))
       }))
     },

@@ -951,7 +951,10 @@ export function ticket(ctx: Ctx, lotId: number, o: { fresh: boolean; staged?: bo
           onclick: e => { if (busy) return; answered = true; if (fresh) ctx.say(`${F.mass(S.lotCwt(lot))} from ${name} went into the cellar.`, 'info'); tear(e.currentTarget as HTMLElement, close) },
         }))
         ways = list
-        box.replaceChildren(
+        // After a delivery, what is left and what becomes of it if the ticket is simply closed: it goes into store.
+        const left = delivered ? h('p', { class: 'tk-left', testid: 'ticket-left', role: 'status' },
+          icon('deliver', 'i'), `Delivered. ${F.mass(S.lotCwt(lot))} is left: sell it now, or store it. Closed as it is (Escape), it goes into the potato house.`) : null
+        box.replaceChildren(...(left ? [left] : []),
           h('div', { class: `ways${deal ? '' : ' two'}`, role: 'group', 'aria-label': 'Take the crop' }, deliverWay, sellWay, storeWay),
           h('div', { class: 'tk-more' },
             reckon(),

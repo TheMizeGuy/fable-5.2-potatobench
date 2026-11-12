@@ -123,24 +123,20 @@ function progressText(g: Goal): string {
 // if every lot and the crop in the ground sold today (S.moneyNow), with how it is made up.
 // Before the tubers set there is no crop to count: the figure is then what the year end takes before the crop pays,
 // said as that, not as a verdict.
-export function outlook(ctx: Ctx, c: S.Campaign): { figure: number; why: string; label: string; before: boolean; spread: number } {
+export function outlook(ctx: Ctx, c: S.Campaign): { figure: number; why: string; label: string; before: boolean; spread: number; risk: S.MoneyNow['callRisk'] } {
   const world = ctx.app.world
   const m = S.moneyNow(world, c)
   const s = c.season
   const figure = Math.round(m.after / 100) * 100
-  const unset = s && c.phase === 'season' ? s.fields.filter((f, i) => S.isField(c, i) && (f.status === 'growing' || f.status === 'planted' || f.status === 'idle') && !S.estimateYield(c, i)).length : 0
-  const before = m.growing <= 0 && m.stored <= 0 && unset > 0
   const parts = m.parts.map(p => `${p.label} ${F.money(Math.round(p.amount))}`)
-  const verdict = before ? 'The crop has not set yet, so nothing is counted for it: this is what the crop has to make up by the year end.'
-    : figure >= 0 ? 'The year would end in the black.'
-      : figure >= S.CREDIT_LIMIT ? `The year would end in debt, inside the bank's limit of ${F.money(S.CREDIT_LIMIT)}: it carries the debt at interest.`
-        : `The year would end past the bank's limit of ${F.money(S.CREDIT_LIMIT)}: it would call the note.`
-  const early = unset && !before ? ` ${F.upper(F.plural(unset, 'field'))} not yet setting tubers ${unset === 1 ? 'counts' : 'count'} for nothing yet.` : ''
+  // The crop is counted from the season's first day (S.moneyNow), so the only warning is the bank's own: callRisk.
+  const verdict = m.callRisk === 'likely' ? ' Even a good crop would end under the bank\'s limit: the bank would call the note.'
+    : m.callRisk === 'possible' ? ' On a middling crop this would end under the bank\'s limit.' : ''
   // While some crop is not yet weighed, how far the figure may go either way (S.moneyNow's range); none once all is in.
   const unweighed = c.phase === 'season' && !!s && s.fields.some((f, i) => S.isField(c, i) && f.status !== 'rest' && f.status !== 'off' && f.status !== 'lost' && !f.weighed)
-  const spread = unweighed && !before ? Math.round((m.range.hi - m.range.lo) / 2 / 100) * 100 : 0
+  const spread = unweighed ? Math.round((m.range.hi - m.range.lo) / 2 / 100) * 100 : 0
   const give = spread ? ` Until all of it is weighed it can come out ${F.money(spread)} either way.` : ''
-  return { figure, before, spread, label: before ? 'Year end before the crop' : 'After year-end bills', why: `${before ? 'As things stand' : c.phase === 'cellar' ? 'If what is in store sold today' : 'If everything sold today'}: ${parts.join('; ')}. ${verdict}${early}${give}` }
+  return { figure, before: false, spread, risk: m.callRisk, label: 'After year-end bills', why: `${c.phase === 'cellar' ? 'If what is in store sold today' : 'If everything sold today'}: ${parts.join('; ')}.${verdict}${give}` }
 }
 
 // Said before logs are sold: the buildings not yet up that would take them, and what buying them back costs.
@@ -195,22 +191,30 @@ const GOAL_ROUTINE: Record<string, S.JobKind> = { plant: 'plant', walk: 'scout',
 // The season's calls that are the player's to make (the routine sees to the rest), first to last.
 const CALLS: Partial<Record<string, number>> = { rogue: 0, spray: 1, kill: 2, water: 3 }
 // A call on the slip: what it is, where, why it cannot wait, and the one command that sees to it when there is one.
-interface Call { id: string; act: string; field: number; text: string; why: string; fix: S.Cmd | null; fixLabel: string; line?: string }
+interface Call { id: string; act: string; field: number; text: string; why: string; fix: S.Cmd | null; fixLabel: string; line?: string; done?: string }
+
+// Who a priority fix puts first, as the slip says it: "You" for the farmer, else their first name.
+function whoFirst(c: S.Campaign, fix: S.Cmd): string {
+  const u = c.crew.find(x => x.id === (fix as { unit: number }).unit)
+  return !u ? 'Someone' : u.kind === 'farmer' ? 'You' : firstName(u.name)
+}
 
 // Brings a control forward once the screen has drawn it: in view, ringed, under the keyboard.
-export function light(selector: string): void {
+export function light(selector: string, o: { open?: boolean; top?: boolean } = { open: true }): void {
   let tries = 0
   const go = () => {
     const el = document.querySelector<HTMLElement>(`#ui ${selector.split(', ').join(', #ui ')}`)
     if (!el) { if (++tries < 20) requestAnimationFrame(go); return }
-    if (el.getAttribute('aria-expanded') === 'false') el.click()
+    if (o.open && el.getAttribute('aria-expanded') === 'false') el.click()
     el.classList.add('goal-ring')
-    el.scrollIntoView({ block: 'nearest' })
+    el.scrollIntoView({ block: o.top ? 'start' : 'nearest' })
     el.focus({ preventScroll: true })
     setTimeout(() => el.classList.remove('goal-ring'), 4000)
   }
   requestAnimationFrame(go)
 }
+// Where a spring goal's Show me ends: the fold that holds its control, brought to the top of the sheet and ringed.
+const FOLD_OF: Partial<Record<string, string>> = { tool: 'equipment-open', hire: 'crew-open', contract: 'contracts-open', land: 'land-open' }
 // The crop's own steps: in spring they wait for the season to start.
 const CROP_STEPS = new Set(['plant', 'walk', 'hill', 'spray', 'sample', 'kill', 'dig', 'haul'])
 
@@ -238,6 +242,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
   let callShown = ''
   let callsFor: unknown = null
   let callList: Call[] = []
+  let callsJobs = -1
   let viewFor: unknown = null
   let viewNow: ReturnType<typeof outlook> | null = null
   let viewCash = 0
@@ -307,7 +312,8 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     if (c.phase !== 'season' || !c.season) { callShown = ''; return null }
     // Worked out again only when the farm has changed (the advice is cached on the same revision).
     const needs = app.needs()
-    if (needs !== callsFor) { callsFor = needs; callList = callsNow(c) }
+    const jobs = c.season.jobs.length
+    if (needs !== callsFor || jobs !== callsJobs) { callsFor = needs; callsJobs = jobs; callList = callsNow(c) }
     const list = callList
     if (!list.length) { callShown = ''; return null }
     const pick = list.find(x => x.id === callShown) ?? list[0]
@@ -319,7 +325,8 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     const urgent: Call[] = S.pressing(app.world, c).map(p => ({
       id: `p-${p.kind}-${p.field}`, act: p.kind, field: p.field, text: `${JOB_VERB[p.kind]} ${S.FIELD_NAMES[p.field]}`, why: `${F.upper(p.why)}. ${p.inWay}`,
       line: p.kind === 'kill' ? p.inWay.replace(/, so .*$/, '').replace(/\.$/, '') : undefined,
-      fix: p.fix, fixLabel: p.fix?.t === 'job' ? 'Order it' : p.fix?.t === 'priority' ? `${firstName(c.crew.find(u => u.id === (p.fix as { unit: number }).unit)?.name ?? 'Someone')} first` : 'Show me',
+      fix: p.fix, fixLabel: p.fix?.t === 'job' ? 'Order it' : p.fix?.t === 'priority' ? `${whoFirst(c, p.fix)} ${whoFirst(c, p.fix) === 'You' ? 'take' : 'takes'} it next` : 'Show me',
+      done: p.fix?.t === 'priority' ? `${whoFirst(c, p.fix)} ${whoFirst(c, p.fix) === 'You' ? 'take' : 'takes'} the ${JOB_VERB[p.kind].toLowerCase()} in ${S.FIELD_NAMES[p.field]} next.` : p.fix?.t === 'job' ? `${JOB_VERB[p.kind]} ${S.FIELD_NAMES[p.field]} is on the list.` : undefined,
     }))
     const calls: Call[] = app.needs().map((n, field) => ({ need: n.need!, field }))
       .filter(x => x.need && x.need.act !== 'close' && x.need.act !== 'wait' && x.need.act !== 'sell' && (CALLS[x.need.act] !== undefined || x.need.urgent))
@@ -329,7 +336,8 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
   }
 
   function takeCall(call: Call): void {
-    if (call.fix) { const r = ctx.run(call.fix); if (r.ok) ctx.announce(F.localize(r.events[0]?.text ?? `${call.text}: done.`)) }
+    // What the fix did is said where the player looks, not only to a screen reader.
+    if (call.fix) { const r = ctx.run(call.fix); if (r.ok) ctx.say(call.done ?? F.localize(r.events[0]?.text ?? `${call.text}: done.`), 'good') }
     if (call.field >= 0) { app.select(call.field); app.focus(call.field) }
     ctx.dirty()
   }
@@ -356,6 +364,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     o.show?.(g)
     ctx.dirty()
     if (g.id === 'foreman') light('[data-testid="person-foreman"], .cat-foreman .btn')
+    else if (FOLD_OF[g.id] && app.campaign?.phase === 'plan') light(`[data-testid="${FOLD_OF[g.id]}"]`, { top: true })
   }
 
   // The fist's slip: the one next thing, with the fist; a goal just met is struck through above it.
@@ -457,7 +466,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
       // Through the season and the winter, beside the cash and at its weight: what the farm has after the year-end
       // bills, so the cash is never read as what the farm will keep.
       const after = view ? h('div', {
-        class: `after term${view.before ? '' : view.figure < S.CREDIT_LIMIT ? ' bad' : view.figure < 0 ? ' warn' : ''}`, testid: 'outlook', tabindex: '0', 'data-tip': view.why,
+        class: `after term${view.risk === 'likely' ? ' bad' : view.risk === 'possible' ? ' warn' : ''}`, testid: 'outlook', tabindex: '0', 'data-tip': view.why,
       }, h('span', { class: 't-label' }, h('span', { class: 'long' }, view.label), h('span', { class: 'short', 'aria-hidden': 'true' }, view.before ? 'Before crop' : 'After bills')), h('span', { class: 't-figure num' }, F.money(view.figure)), view.spread ? h('span', { class: 'give num', testid: 'outlook-spread', 'aria-hidden': 'true' }, `±${F.money(view.spread)}`) : null, h('span', { class: 'sr' }, `. ${view.why}`)) : null
       const balance = h('div', { class: `balance${after ? ' two' : ''}` },
         h('span', { class: 't-label when' }, c.cash < 0 ? 'On the loan' : after ? 'Cash' : 'Balance'),
