@@ -302,19 +302,19 @@ export function buildTerrain(): Terrain {
         float wetHere = hollow * (0.45 + 0.55 * lowGround) + (1.0 - smoothstep(0.12, 0.4, vSurf.y)) * 0.6 * ours;
         col = mix(col, grass * vec3(0.62, 0.82, 0.6) * (0.8 + 0.4 * tuft), wetHere * 0.75);
         {
-          float nearK = 1.0 - smoothstep(18.0, 70.0, distance(vWorld, cameraPosition));
+          float nearK = 1.0 - smoothstep(9.0, 40.0, distance(vWorld, cameraPosition));
           if (nearK > 0.001) {
             // blades lying every way in tufts, light on some and the thatch dark between them
             // (a blade's width across, a few of its lengths along; three lies of the grass, one or another by the tuft)
             float lie1 = texture2D(uNoise, pw * 0.13).b, lie2 = texture2D(uNoise, pw * 0.13 + 0.5).a;
             vec2 g1 = vec2(pw.x * 0.95 + pw.y * 0.3, pw.y * 0.95 - pw.x * 0.3), g2 = vec2(pw.x * 0.2 + pw.y * 0.98, pw.y * 0.2 - pw.x * 0.98), g3 = vec2(pw.x * 0.7 - pw.y * 0.7, pw.x * 0.7 + pw.y * 0.7);
-            float b1 = texture2D(uNoise, g1 * vec2(0.55, 0.085)).a, b2 = texture2D(uNoise, g2 * vec2(0.55, 0.085) + 0.3).a, blade2 = texture2D(uNoise, g3 * vec2(0.5, 0.08) + 0.6).a;
+            float b1 = texture2D(uNoise, g1 * vec2(3.1, 0.47)).a, b2 = texture2D(uNoise, g2 * vec2(3.1, 0.47) + 0.3).a, blade2 = texture2D(uNoise, g3 * vec2(2.7, 0.43) + 0.6).a;
             float blade = mix(mix(b1, b2, smoothstep(0.35, 0.65, lie1)), blade2, smoothstep(0.45, 0.7, lie2));
             float sward = smoothstep(0.3, 0.7, blade);
             float meadowN = (1.0 - vSurf.x) * (1.0 - smoothstep(0.1, 0.4, vSurf.z));
             col *= mix(1.0, mix(0.6, 1.36, sward), nearK * meadowN * 0.8);
             col = mix(col, col * vec3(1.25, 1.18, 0.7), nearK * meadowN * 0.35 * smoothstep(0.62, 0.9, blade2) * (0.4 + 0.6 * (1.0 - uLeaf * 0.6)));
-            landBump += (vec2(blade, blade2) - 0.5) * 5.0 * nearK * meadowN;
+            landBump += (vec2(blade, blade2) - 0.5) * 2.5 * nearK * meadowN;
           }
         }
         // The farm's meadow moves: a gust lays the grass over and it shows pale.

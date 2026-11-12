@@ -797,6 +797,7 @@ shots.push(
   cropShot('t-yard-blight', 1979, 205, ['spray', 'rogue'], nearOn(4)),
   ...['flora', 'crews', 'props', 'birds'].map(part => ({ name: `dbg-no-${part}`, size: [960, 540] as [number, number], setup: async (page: Page) => { await playTo(page, 1977, 5, 147); await playUntil(page, [], SKY('clear')); await settle(page); await view(page, nearOn(5)); await page.evaluate(p => (window as any).__countyField.show(p, false), part); await frames(page, 12) } })),
   cropShot('t-yard-lane', 1977, 196, [], { frame: 'land', x: 10, z: 5.6, dist: 1.5, yaw: -1.5708, pitch: 0.07, tilt: 0 }),
+  cropShot('t-yard-brook', 1977, 196, [], { frame: 'land', x: 6, z: 20.2, dist: 3.2, yaw: 0.5, pitch: 0.2, tilt: 0 }),
   cropShot('t-yard-wood-edge', 1977, 196, [], { frame: 'land', x: -2, z: -19.5, dist: 5, yaw: 0.3, pitch: 0.14, tilt: 0 }),
   cropShot('t-farm-july', 1977, 196, [], FARM_VIEW),
   cropShot('t-farm-october', 1977, 288, [], FARM_VIEW),
