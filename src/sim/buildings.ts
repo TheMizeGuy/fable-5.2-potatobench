@@ -59,17 +59,17 @@ export function buildCost(c: Campaign, kind: BuildingKind): BuildCost {
 export function buildBlock(c: Campaign, kind: BuildingKind, yard: number, dufourHeld: boolean): string {
   const spec = P.BUILDINGS[kind]
   if (!spec) return 'No such building.'
-  if (c.phase === 'ledger' || c.phase === 'over') return 'Building is ordered in spring, in the season, or in winter.'
-  if (c.phase === 'season' && (!c.season || c.season.frozen)) return 'The ground has frozen: order it for the winter.'
+  if (c.phase === 'ledger' || c.phase === 'over') return 'You can order a building in spring, during the season, or in winter.'
+  if (c.phase === 'season' && (!c.season || c.season.frozen)) return 'The ground has frozen, so order it in winter instead.'
   if (yard !== HOME_YARD && yard !== DUFOUR_YARD) return 'No such yard.'
   if (yard === DUFOUR_YARD) {
-    if (!spec.dufour) return `${article(spec.name, true)} ${spec.name.toLowerCase()} goes in the home yard.`
-    if (!dufourHeld) return 'The Dufour yard is the farm\'s only while it holds Dufour land.'
+    if (!spec.dufour) return `${article(spec.name, true)} ${spec.name.toLowerCase()} can only go in the home yard.`
+    if (!dufourHeld) return 'The Dufour yard is yours only while you hold Dufour land.'
   }
   const at = buildingAt(c, kind, yard)
-  if (at) return at.built ? `There is ${article(spec.name)} ${spec.name.toLowerCase()} in ${YARD_NAME[yard]} already.` : `${article(spec.name, true)} ${spec.name.toLowerCase()} is going up in ${YARD_NAME[yard]} already.`
+  if (at) return at.built ? `There's already ${article(spec.name)} ${spec.name.toLowerCase()} in ${YARD_NAME[yard]}.` : `${article(spec.name, true)} ${spec.name.toLowerCase()} is already going up in ${YARD_NAME[yard]}.`
   const cost = buildCost(c, kind)
-  if (c.cash - cost.total < 0) return `Not enough cash: $${withCommas(cost.total)} with the materials the yard lacks. The bank will not lend for buildings.`
+  if (c.cash - cost.total < 0) return `You can't afford it yet. It costs $${withCommas(cost.total)} with the materials your yard is short of, and the bank won't lend for buildings.`
   return ''
 }
 

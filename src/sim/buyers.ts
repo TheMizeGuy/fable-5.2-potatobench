@@ -16,7 +16,7 @@ export const BUYERS: Buyer[] = [
 ]
 
 export const DUE_LABEL: Record<Due, string> = {
-  harvest: 'off the field by the close of the season',
+  harvest: 'straight from the field by the end of the season',
   winter: 'from storage by the end of February',
 }
 

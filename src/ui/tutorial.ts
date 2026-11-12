@@ -15,7 +15,7 @@ export const guide = new Guide(localStore())
 // Set by the mounted guide: a key on a note takes effect on the next frame, not the next look round.
 let poke: () => void = () => {}
 // The pause reason the guide's own hold leaves on the clock.
-export const HOLD = 'The county agent has a note for you.'
+export const HOLD = 'Paused for a tip from the county agent.'
 // For the browser tests and the capture tool, as window.__county is.
 ;(globalThis as Record<string, unknown>).__countyGuide = guide
 
@@ -36,8 +36,8 @@ export function mayAsk(c: S.Campaign | null, id: string): boolean { return !guid
 // The agent's one line inside a card the first time its kind comes (a telegram, a weigh ticket): the card is the one
 // voice, so the guide speaks in it.
 const LINES: Record<string, string> = {
-  telegram: 'Pick a reply: the clock waits for you.',
-  ticket: 'Your first weigh ticket: what the field grew, and what it lost. Sell now is the safe choice.',
+  telegram: 'The game is paused until you pick a reply.',
+  ticket: 'This is your first weigh ticket. It shows what the field grew and what was lost. Sell now is the safe choice.',
 }
 export function agentLine(kind: 'telegram' | 'ticket', key: string | number): HTMLElement | null {
   if (!guide.on) return null
@@ -64,7 +64,7 @@ const by = (i: Input, mouse: string, touch: string, keys: string) => i === 'touc
 
 export function openGuide(ctx: Ctx): void {
   ctx.papers.open({
-    title: 'The guided first year',
+    title: 'Guided first year',
     kicker: 'From the county agent',
     testid: 'guide',
     size: 'medium',
@@ -76,25 +76,25 @@ export function openGuide(ctx: Ctx): void {
             type: 'checkbox', checked: guide.on, testid: 'guide-on',
             onchange: (e: Event) => { if ((e.target as HTMLInputElement).checked) guide.resume(); else guide.stop(); draw(); ctx.dirty() },
           }), h('i', { class: `tick${guide.on ? ' on' : ''}` })),
-          h('span', null, h('b', null, 'Guide me through the year'), ' ', h('span', { class: 'quiet' }, 'each thing the first time it comes'))),
+          h('span', null, h('b', null, 'Show the tutorial'), ' ', h('span', { class: 'quiet' }, 'a tip the first time each thing comes up'))),
         ...PARTS.map(part => h('section', { class: 'guide-part' },
           h('h3', { class: 't-label' }, PART_NAME[part]),
           h('ul', null, LESSONS.filter(x => x.part === part).map(x => {
             const state = guide.p.passed[x.id]
             return h('li', { class: 'lead' },
               h('i', { class: `tick bare${state === 'done' ? ' on' : ''}`, 'aria-hidden': 'true' }),
-              h('span', { class: state ? 'pencil' : null }, x.name, h('span', { class: 'sr' }, state === 'done' ? ', done' : state === 'skip' ? ', skipped' : guide.replaying(x.id) ? ', to be shown again' : ', still to come')),
+              h('span', { class: state ? 'pencil' : null }, x.name, h('span', { class: 'sr' }, state === 'done' ? ', done' : state === 'skip' ? ', skipped' : guide.replaying(x.id) ? ', coming up again' : ', not seen yet')),
               h('span', { class: 'dots' }),
               h('button', {
-                class: 'btn quiet', type: 'button', testid: `guide-again-${x.id}`, 'aria-label': `Show ${x.name.toLowerCase()} again`,
-                onclick: () => { guide.replay(x.id); close(); ctx.say(`${x.name}: shown again when its moment comes.`); ctx.dirty() },
-              }, guide.replaying(x.id) ? 'Coming' : 'Again'))
+                class: 'btn quiet', type: 'button', testid: `guide-again-${x.id}`, 'aria-label': `Replay the lesson ${x.name}`,
+                onclick: () => { guide.replay(x.id); close(); ctx.say(`You'll see "${x.name}" again the next time it comes up.`); ctx.dirty() },
+              }, guide.replaying(x.id) ? 'Coming up' : 'Replay'))
           })))))
       draw()
-      return [h('p', { class: 'dlg-lead' }, 'One thing at a time, each the first time the year brings it. Any of them can be seen again.'), box]
+      return [h('p', { class: 'dlg-lead' }, 'The tutorial explains one thing at a time, the first time it comes up. You can replay any lesson here.'), box]
     },
     foot: shut => [
-      h('button', { class: 'btn', type: 'button', testid: 'guide-restart', onclick: () => { guide.restart(); shut(); ctx.say('The guide starts again from the beginning.'); ctx.dirty() } }, 'Start the guide again'),
+      h('button', { class: 'btn', type: 'button', testid: 'guide-restart', onclick: () => { guide.restart(); shut(); ctx.say('The tutorial will start again from the beginning.'); ctx.dirty() } }, 'Restart the tutorial'),
       h('button', { class: 'btn go', type: 'button', testid: 'guide-close', autofocus: true, onclick: shut }, 'Back', icon('arrow', 'i')),
     ],
   })
@@ -244,7 +244,7 @@ export function bareAt(busy: Box[], b: Box): boolean {
 // ---------------------------------------------------------------- the slip
 
 function holdLine(): HTMLElement {
-  return h('span', { class: 't-label guide-held', testid: 'guide-held' }, icon('pause', 'i'), 'Clock held')
+  return h('span', { class: 't-label guide-held', testid: 'guide-held' }, icon('pause', 'i'), 'Paused')
 }
 
 // lost: what it points at is on the land but out of view, so the slip says how to bring the farm back.
@@ -259,16 +259,16 @@ function slipBody(ctx: Ctx, x: Lesson, l: Look, held: boolean, lost = false, und
       held ? holdLine() : h('p', { class: 't-label guide-n' }, where)),
     h('p', { class: 'guide-ask', id: 'guide-ask' }, x.ask(l)),
     h('p', { class: 'guide-why t-caption' }, x.why(l)),
-    lost ? h('p', { class: 'guide-lost t-caption', testid: 'guide-lost' }, icon('field', 'i'), by(l.input, 'Out of view: Home, or a double-click on open ground, brings the farm back.', 'Out of view: a double-tap on open ground brings the farm back.', 'Out of view: Home brings the farm back.')) : null,
-    show >= 0 && !lost ? h('p', { class: 'guide-lost t-caption', testid: 'guide-hidden' }, icon('field', 'i'), 'Something lies over it: ',
+    lost ? h('p', { class: 'guide-lost t-caption', testid: 'guide-lost' }, icon('field', 'i'), by(l.input, 'It\'s off screen. Press Home or double-click open ground to see the farm again.', 'It\'s off screen. Double-tap open ground to see the farm again.', 'It\'s off screen. Press Home to see the farm again.')) : null,
+    show >= 0 && !lost ? h('p', { class: 'guide-lost t-caption', testid: 'guide-hidden' }, icon('field', 'i'), 'Something is covering it. ',
       h('button', { class: 'btn quiet', type: 'button', testid: 'guide-show', onclick: () => ctx.app.focus(show) }, 'Show me')) : null,
     show >= 0 && lost ? h('p', { class: 'guide-lost t-caption' }, h('button', { class: 'btn quiet', type: 'button', testid: 'guide-show', onclick: () => ctx.app.focus(show) }, 'Show me')) : null,
-    under ? h('p', { class: 'guide-lost t-caption', testid: 'guide-under' }, icon('close', 'i'), 'A card is in the way: its cross puts it away.') : null,
+    under ? h('p', { class: 'guide-lost t-caption', testid: 'guide-under' }, icon('close', 'i'), by(l.input, 'A card is in the way. Click its X to close it.', 'A card is in the way. Tap its X to close it.', 'A card is in the way. Use its X to close it.')) : null,
     h('footer', { class: 'guide-foot' },
-      x.read || again ? h('button', { class: 'btn guide-ok', type: 'button', testid: 'guide-noted', onclick: done }, icon('check', 'i'), x.read ? 'Noted' : 'Got it') : null,
+      x.read || again ? h('button', { class: 'btn guide-ok', type: 'button', testid: 'guide-noted', onclick: done }, icon('check', 'i'), 'Got it') : null,
       skip ? h('button', { class: 'btn', type: 'button', testid: 'guide-ahead', onclick: () => ahead!(x.id) }, icon('fast', 'i'), skip) : null,
       x.read || again ? null : h('button', { class: 'btn quiet', type: 'button', testid: 'guide-skip', onclick: () => { guide.skip(x.id); poke(); ctx.dirty() } }, 'Skip'),
-      h('button', { class: 'btn quiet', type: 'button', testid: 'guide-stop', onclick: () => { guide.stop(); poke(); ctx.say('The guide is put away. The menu brings it back.'); ctx.dirty() } }, 'Stop the guide')),
+      h('button', { class: 'btn quiet', type: 'button', testid: 'guide-stop', onclick: () => { guide.stop(); poke(); ctx.say('The tutorial is off. You can turn it back on from the menu.'); ctx.dirty() } }, 'Turn off the tutorial')),
   ]
 }
 
@@ -280,25 +280,25 @@ function offerCard(ctx: Ctx): HTMLElement {
   }, key(String(n)), h('b', { class: 'c-title' }, title, usual ? fist() : null), h('span', { class: 'c-does' }, does))
   return h('section', { class: 'guide-card offer telegram sheet sys', testid: 'guide-offer', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'guide-offer-h' },
     h('header', { class: 'gc-head' }, h('p', { class: 't-label' }, 'From the county agent'), h('h2', { class: 't-title', id: 'guide-offer-h' }, 'First time on the farm?')),
-    h('p', { class: 'gc-lead' }, 'I can walk you through your first year, one thing at a time, stopping the clock each time.'),
+    h('p', { class: 'gc-lead' }, 'I can walk you through your first year one step at a time, pausing the game to explain each one.'),
     h('div', { class: 'replies', role: 'group', 'aria-label': 'Your answer' },
-      reply(1, 'guide-accept', 'Guide my first year', 'The usual choice. Stop it whenever you like.', true, () => guide.accept()),
-      reply(2, 'guide-refuse', 'Straight in', 'No notes. The guide stays in the menu.', false, () => guide.refuse())))
+      reply(1, 'guide-accept', 'Start the tutorial', 'The usual choice. You can turn it off any time.', true, () => guide.accept()),
+      reply(2, 'guide-refuse', 'Skip the tutorial', 'Play without tips. You can turn it on later from the menu.', false, () => guide.refuse())))
 }
 
 // What a year is, drawn: the five things the year asks, in order, and what it costs at the end.
-const YEAR: [string, string, string][] = [['plant', 'Plant', 'May'], ['hill', 'Tend', 'summer'], ['kill', 'Kill the vines', 'September'], ['dig', 'Dig and weigh', 'fall'], ['ticket', 'Sell or store', 'fall and winter']]
+const YEAR: [string, string, string][] = [['plant', 'Plant', 'May'], ['hill', 'Tend', 'summer'], ['kill', 'Kill the vines', 'September'], ['dig', 'Harvest', 'fall'], ['ticket', 'Sell or store', 'fall and winter']]
 function frameCard(ctx: Ctx, x: Lesson, l: Look): HTMLElement {
   const bills = F.money(S.NOTE_PAYMENT + S.LIVING)
   return h('section', { class: 'guide-card frame telegram sheet sys', testid: 'guide-slip', 'data-lesson': x.id, role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'guide-ask' },
     h('header', { class: 'gc-head' }, h('p', { class: 't-label' }, 'From the county agent'), h('h2', { class: 't-title', id: 'guide-ask' }, 'Keep the farm five years')),
-    h('ol', { class: 'gc-year', 'aria-label': 'What each year asks, in order' },
+    h('ol', { class: 'gc-year', 'aria-label': 'The steps of each year, in order' },
       YEAR.map(([glyph, name, when]) => h('li', null, icon(glyph, 'i'), h('b', null, name), h('span', { class: 't-label' }, when)))),
-    h('p', { class: 'gc-lead' }, `At each year's end the bank and the household take ${bills}. The crop has to pay it.`),
+    h('p', { class: 'gc-lead' }, `At the end of each year you owe ${bills} to the bank and your family, so your crop needs to earn at least that.`),
     h('p', { class: 'gc-deal' }, x.why(l)),
     h('footer', { class: 'guide-foot' },
       h('button', { class: 'btn go guide-ok', type: 'button', testid: 'guide-noted', onclick: () => { guide.noted(x.id); poke(); ctx.dirty() } }, 'Begin', icon('arrow', 'i')),
-      h('button', { class: 'btn quiet', type: 'button', testid: 'guide-stop', onclick: () => { guide.stop(); poke(); ctx.dirty() } }, 'Stop the guide')))
+      h('button', { class: 'btn quiet', type: 'button', testid: 'guide-stop', onclick: () => { guide.stop(); poke(); ctx.dirty() } }, 'Turn off the tutorial')))
 }
 
 // ---------------------------------------------------------------- the camera, read from the scene's anchors
@@ -652,7 +652,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     if (shownId && showing !== shownId && slipAt && !l.paper) ghost = { b: slipAt, until: performance.now() + 500 }
     shownId = showing
     // Each lesson is read out once, politely.
-    const words = offer ? 'First time on the farm? The county agent offers a guided first year: 1, guide my first year; 2, straight in.' : cardKey ? `${due?.ask(l) ?? ''} ${due?.why(l) ?? ''}` : now ? `${now.ask(l)} ${now.why(l)}` : ''
+    const words = offer ? 'First time on the farm? The county agent can walk you through your first year. Press 1 to start the tutorial, or 2 to skip it.' : cardKey ? `${due?.ask(l) ?? ''} ${due?.why(l) ?? ''}` : now ? `${now.ask(l)} ${now.why(l)}` : ''
     const key = offer ? 'offer' : cardKey || (now?.id ?? '')
     if (key && key !== said) ctx.announce(words)
     said = key

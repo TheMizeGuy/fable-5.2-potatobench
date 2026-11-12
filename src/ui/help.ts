@@ -18,25 +18,25 @@ function figs(touch: boolean): HTMLElement {
     h('p', null, text))
   const spray = h('span', { class: 'need ochre is-next' }, icon('spray'))
   return h('div', { class: 'figs' },
-    fig(1, tag({ name: 'North Ridge', icon: 'bloom', selected: true, still: true }), 'Pick a field', touch ? 'Tap its tag, or the field. Its card opens with what it needs.' : 'Click its tag, or the field. Its card opens at the right with what it needs.'),
-    fig(2, tag({ name: 'Upper Middle', icon: 'bloom', need: spray, still: true }), 'Give the order', touch ? 'Tap the stamp: it gives the order the field needs.' : 'Click the stamp, or right-click the field: it gives the order the field needs.'),
+    fig(1, tag({ name: 'North Ridge', icon: 'bloom', selected: true, still: true }), 'Pick a field', touch ? 'Tap a field or its tag, and a card opens showing what it needs.' : 'Click a field or its tag, and a card opens on the right showing what it needs.'),
+    fig(2, tag({ name: 'Upper Middle', icon: 'bloom', need: spray, still: true }), 'Give an order', touch ? 'Tap the stamp to order the job the field needs.' : 'Click the stamp or right-click the field to order the job it needs.'),
     fig(3, h('div', { class: 'clock' }, h('span', { class: 'k' }, icon('pause', 'i')), h('span', { class: 'k', 'aria-pressed': 'true' }, '1×'), h('span', { class: 'k' }, '3×'), h('span', { class: 'k' }, '8×')),
-      'Let the days run', touch ? 'The days run at the speed you set, and stop when a card needs you.' : 'The days run at the speed you set, and stop when a card needs you. Space pauses.'))
+      'Let time pass', touch ? 'Time runs at the speed you pick, and the game pauses when something needs you.' : 'Time runs at the speed you pick, and the game pauses when something needs you. Press Space to pause it yourself.'))
 }
 
 export const CODE: [string, string, string, string][] = [
-  ['red', 'rogue', 'Red', 'blight or a loss. Act now.'],
+  ['red', 'rogue', 'Red', 'blight or a loss, so act now.'],
   ['ochre', 'spray', 'Ochre', 'the next thing to do.'],
   ['blue', 'water', 'Blue', 'the field is drying out.'],
-  ['', 'hill', 'Black', 'work that is due.'],
+  ['', 'hill', 'Black', 'work that\'s due.'],
 ]
 
 const YEAR: [string, string][] = [
-  ['Spring', 'Plan the fields, hire, rent if you like.'],
+  ['Spring', 'Plan your fields, and hire or rent if you like.'],
   ['The season', 'Plant, hill, scout, spray, dig.'],
-  ['Dig day', 'The weigh ticket: deliver, sell or store.'],
-  ['Winter', 'Sell from the cellar; fell and build.'],
-  ['Year end', 'The bank wants its note.'],
+  ['Harvest', 'Read the weigh ticket, then deliver, sell or store.'],
+  ['Winter', 'Sell from the cellar, clear woods and build.'],
+  ['Year end', 'Your yearly bank payment is due.'],
 ]
 
 export function openHelp(ctx: Ctx): void {
@@ -53,7 +53,7 @@ export function openHelp(ctx: Ctx): void {
       const box = h('div', { class: 'keys-box' })
       const chev = h('span', { class: 'chev', 'aria-hidden': 'true' }, '›')
       const toggle = h('button', { class: 'keys-fold', type: 'button', testid: 'how-keys', 'aria-expanded': 'false', onclick: () => { more = !more; draw() } },
-        icon('key', 'i'), h('b', null, touch ? 'Every order' : 'Every key and order'), h('span', { class: 'quiet' }, 'for when you want them'), chev)
+        icon('key', 'i'), h('b', null, touch ? 'Every order' : 'Every key and order'), h('span', { class: 'quiet' }, 'for when you need them'), chev)
       const draw = () => {
         toggle.setAttribute('aria-expanded', String(more))
         chev.textContent = '›'
@@ -61,17 +61,17 @@ export function openHelp(ctx: Ctx): void {
           touch ? null : h('section', null,
             h('p', { class: 't-label' }, 'Keys'),
             h('table', { class: 'keys-t' }, h('tbody', null,
-              row(keys('1', '–', '9', '0'), 'Select one of the first ten fields. With Shift, add it.'),
-              row(keys('Tab'), 'The next field that needs something.'),
-              row(keys('Enter'), 'Give the selection the order it needs.'),
-              row(keys('Space', 'F', '+', '−'), 'Pause and go on; step through 1×, 3×, 8×; faster; slower.'),
-              row(keys('Backspace'), 'Take the last order off the list.'),
-              row(keys('I', 'M', 'Esc'), 'The almanac; the menu; let go.'),
-              row(keys('Arrows', 'Q', 'E', 'Home'), 'Move, turn, and frame the farm.'),
-              row(keys('PgDn', 'PgUp'), 'Tip the view down toward the ground, and back up.'),
-              row(['Drag, wheel, right-drag'], 'Move over the land, zoom; turn (sideways) and tip (up and down).')))),
+              row(keys('1', '–', '9', '0'), 'Select one of your first ten fields. Hold Shift to add it to the selection.'),
+              row(keys('Tab'), 'Jump to the next field that needs something.'),
+              row(keys('Enter'), 'Order what the selected field needs.'),
+              row(keys('Space', 'F', '+', '−'), 'Pause or resume, cycle through 1×, 3× and 8×, speed up, and slow down.'),
+              row(keys('Backspace'), 'Cancel the last order on the work list.'),
+              row(keys('I', 'M', 'Esc'), 'Open the almanac, open the menu, and close or deselect.'),
+              row(keys('Arrows', 'Q', 'E', 'Home'), 'Move the view, rotate it, and center the farm.'),
+              row(keys('PgDn', 'PgUp'), 'Tilt the view down toward the ground, and back up.'),
+              row(['Drag, wheel, right-drag'], 'Drag to move, scroll to zoom, and right-drag to rotate (sideways) or tilt (up and down).')))),
           h('section', null,
-            h('p', { class: 't-label' }, 'The orders'),
+            h('p', { class: 't-label' }, 'Orders'),
             h('table', { class: 'keys-t' }, h('tbody', null, S.JOBS.map(kind => h('tr', null,
               h('th', { scope: 'row' }, h('span', { class: 'order-k' }, touch || !JOB_KEY[kind] ? null : key(JOB_KEY[kind]), icon(kind, 'i'), h('b', null, JOB_VERB[kind]))),
               h('td', null, orderHelp(kind)))))))),
@@ -82,15 +82,15 @@ export function openHelp(ctx: Ctx): void {
         h('header', { class: 'howto-head' },
           h('div', null, h('p', { class: 't-label' }, 'From the almanac'), h('p', { class: 't-title', 'aria-hidden': 'true' }, 'How to play')),
           h('button', { class: 'close', type: 'button', testid: 'how-close', autofocus: true, 'aria-label': ctx.app.screen === 'title' ? 'Back (Escape)' : 'Back to the farm (Escape)', onclick: close }, icon('close', 'i'))),
-        h('p', { class: 'howto-lead' }, 'The crop grows where you cannot see it. Give the orders, let the days run, and dig day tells the truth. Keep the farm five seasons and it is yours.'),
+        h('p', { class: 'howto-lead' }, 'Your crop grows underground where you can\'t see it. Give orders, let time pass, and find out what you grew at harvest. Keep the farm for five years and it\'s yours.'),
         figs(touch),
         h('div', { class: 'code-row' }, CODE.map(([ink, glyph, word, what]) => h('div', null,
           h('span', { class: `need${ink ? ` ${ink}` : ''}`, 'aria-hidden': 'true' }, icon(glyph)), h('p', null, h('b', null, word), `: ${what}`)))),
         h('div', { class: 'year-row' }, YEAR.map(([b, t]) => h('div', null, h('b', null, b), t))),
         toggle, box,
         h('button', { class: 'keys-fold how-guide', type: 'button', testid: 'how-guide', onclick: () => openGuide(ctx) },
-          fist(), h('b', null, 'The guided first year'), h('span', { class: 'quiet' }, 'each lesson, to see again'), h('span', { class: 'chev', 'aria-hidden': 'true' }, '›')),
-        h('p', { class: 't-caption howto-foot' }, 'Every farm gets seasons of its own, and the forecast is all you see of them ahead. ',
+          fist(), h('b', null, 'Guided first year'), h('span', { class: 'quiet' }, 'replay any tutorial lesson'), h('span', { class: 'chev', 'aria-hidden': 'true' }, '›')),
+        h('p', { class: 't-caption howto-foot' }, 'Every farm gets its own weather, and the forecast is all you\'ll see of what\'s coming. ',
           h('a', { class: 'btn quiet', href: REPO, target: '_blank', rel: 'noopener' }, 'The County on GitHub'), '.'))
     },
   })

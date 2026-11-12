@@ -58,7 +58,7 @@ describe('a dig ordered while a vine kill is part done', () => {
     const before = S.hashCampaign(c)
     const again = S.apply(world, c, { t: 'job', kind: 'dig', field: 0 })
     expect(again.ok).toBe(false)
-    expect(again.err).toBe('This field is dug.')
+    expect(again.err).toBe('This field is already dug.')
     expect(S.hashCampaign(c)).toBe(before)
     return events
   }

@@ -127,7 +127,7 @@ test('a first season by the short path, from the opening to the next spring, wit
   await page.evaluate(() => localStorage.clear())
   await page.reload()
 
-  // The opening asks one thing, once in a browser: the guided first year or straight in. Then Start: three clicks
+  // The opening asks one thing, once in a browser: start the tutorial or skip it. Then Start: three clicks
   // from the landing page to a running season, two ever after.
   let clicks = 0
   await page.getByTestId('play').click(); clicks++
@@ -348,7 +348,7 @@ test('the same start by keyboard alone', async ({ page, isMobile }) => {
   // The focus is put on Play once the land is up, which a slow engine takes a while over.
   await expect(page.getByTestId('play')).toBeFocused({ timeout: 20_000 })
   await page.keyboard.press('Enter')
-  // The offer takes the keyboard: 2 is Straight in, and the focus goes on to Start the season.
+  // The offer takes the keyboard: 2 is Skip the tutorial, and the focus goes on to Start the season.
   await expect(page.getByTestId('guide-accept')).toBeFocused()
   await page.keyboard.press('Digit2')
   await expect(page.getByTestId('guide-offer')).toHaveCount(0)

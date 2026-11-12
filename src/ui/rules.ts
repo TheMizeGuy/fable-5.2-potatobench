@@ -152,7 +152,7 @@ export function alertShort(a: Alert): { text: string; glyph: string } {
     case 'wornOut': return { text: `${who(a.text)} is worn out`, glyph: 'tired' }
     case 'hurt': return { text: `${who(a.text)} is hurt${/back on (.+)\.$/.exec(a.text) ? `, back ${/back on (.+)\.$/.exec(a.text)![1]}` : ''}`, glyph: 'hurt' }
     case 'poached': return { text: `${who(a.text)} left for the neighbor`, glyph: 'unhappy' }
-    case 'skillUp': return { text: a.text.replace(/ is better at /, ': ').replace(/: level (\d+)\.$/, ' $1'), glyph: 'rise' }
+    case 'skillUp': return { text: a.text.replace(/ (?:is|are) better at /, ': ').replace(/: level (\d+)\.$/, ' $1'), glyph: 'rise' }
     case 'breakdown': return { text: 'A tractor broke down', glyph: 'tractor' }
     case 'repaired': return { text: 'The tractor is going again', glyph: 'tractor' }
     case 'building': return { text: F.upper(a.text.replace(/ is started in .*/, ' started').replace(/^An? /, '')), glyph: 'build' }
@@ -178,7 +178,7 @@ export function alertShort(a: Alert): { text: string; glyph: string } {
       return { text: `${a.text.replace(/\.$/, '')}${more > 0 ? ` and ${F.plural(more, 'more field')}` : ''}`, glyph: typeof a.data?.act === 'string' ? a.data.act : 'warn' }
     }
     case 'incidentDone': return { text: a.text.replace(/\.$/, ''), glyph: 'ask' }
-    case 'foreman': return { text: a.text.replace(/:.*$/, '').replace(/\.$/, ''), glyph: 'foreman' }
+    case 'foreman': return { text: a.text.split('. ')[0].replace(/\.$/, ''), glyph: 'foreman' }
     default: return { text: a.text, glyph: a.level === 'bad' ? 'blight' : a.level === 'warn' ? 'warn' : a.level === 'good' ? 'check' : 'flat' }
   }
 }
