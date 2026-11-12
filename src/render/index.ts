@@ -356,7 +356,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
         framing = 'farm'
         rig.moveTo(rig.farm(viewport()), reduced)
       }
-    } else if (e.type === 'insets') reframe(reduced)
+    } else if (e.type === 'insets' && snap.mode !== 'season') reframe(reduced) // in a season a card opening or closing never moves the camera
   })
 
   function display(f: number, h: number, s: Snapshot): HillDisplay {
@@ -421,13 +421,6 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       dayT = 0
       digDir.clear()
       for (const s of crews.segments()) if (s.kind === 'dig' && !digDir.has(s.field)) { const p = new Poly(s.path).at(0); digDir.set(s.field, { dx: p.dx, dz: p.dz }) }
-      // A key moment about to play where the player is not looking: bring the field into frame, unless their hand is on the camera.
-      const staged = crews.staged(prev)
-      if (staged && !reduced && app.speed < 3 && rig.idle > 2.5) {
-        const to = rig.field(staged.field, viewport(), rig.goal.yaw)
-        const far = Math.hypot(rig.cur.x - to.x, rig.cur.z - to.z) > FD * 0.8 || rig.cur.dist > to.dist * 1.3
-        if (far) frameField(staged.field, false)
-      }
     } else if (sameDay) {
       // A command in the middle of the day: keep the day playing, refresh everything not waiting to be revealed.
       crews.sync(next)

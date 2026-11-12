@@ -179,7 +179,12 @@ export function frostOnBarrels(world: World, c: Campaign, field: number): boolea
 export function standingOrders(world: World, c: Campaign): GameEvent[] {
   const s = c.season
   const out: GameEvent[] = []
-  if (c.phase !== 'season' || !s || s.frozen || !workday(c, s)) return out
+  if (c.phase !== 'season' || !s || s.frozen) return out
+  // A frost coming on crop in barrels is hauled ahead of, Sunday or not; the morning says so once for a cold spell.
+  const threatened = s.fields.some((f, i) => f.inField >= 0.5 && !f.weighed && frostOnBarrels(world, c, i))
+  const first = threatened && s.frostHaul !== s.day - 1
+  if (threatened) s.frostHaul = s.day
+  if (!workday(c, s)) return out
   for (const a of advise(world, c)) {
     if (a.field < 0 || a.act === 'wait' || a.act === 'sell' || a.act === 'close') continue
     const by = standingBy(c, a.act, a.field)
@@ -199,10 +204,12 @@ export function standingOrders(world: World, c: Campaign): GameEvent[] {
       const j = u.job >= 0 ? s.jobs.find(x => x.id === u.job) : undefined
       if (j && j.kind !== 'haul' && MACHINE_WORK.includes(j.kind) && s.jobs.some(x => x.kind === 'haul' && standingBy(c, 'haul', x.field))) letGo(u)
     }
-    const e: GameEvent = { day: s.day, type: 'frostBarrels', field: -1, level: 'warn',
-      text: `Frost is forecast tonight on the crop still in barrels: ${cold.join(', ')}. Hauling it in comes first.` }
-    s.log.push(e)
-    out.push(e)
+    if (first) {
+      const e: GameEvent = { day: s.day, type: 'frostBarrels', field: -1, level: 'warn',
+        text: `Frost is forecast on the crop still in barrels: ${cold.join(', ')}. Hauling it in comes first, Sundays too, until it is in.` }
+      s.log.push(e)
+      out.push(e)
+    }
   }
   return out
 }

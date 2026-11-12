@@ -303,6 +303,7 @@ export interface Season {
   svToday: number
   watchDay: number          // day the spray threshold was crossed, or -1
   frozen: boolean
+  frostHaul?: number        // the last day a frost was forecast on crop still in barrels
   fields: FieldSeason[]
   jobs: Job[]
   nextJob: number

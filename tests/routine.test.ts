@@ -162,14 +162,34 @@ describe('barrels and frost', () => {
         // Put other work ahead of the haul.
         for (const j of c.season!.jobs.filter(x => x.kind !== 'haul')) ok(c, { t: 'bump', id: j.id })
         expect(c.season!.jobs[0].kind).not.toBe('haul')
+        // The first cold morning of a spell says so; the next does not stop the farm again.
+        c.season!.frostHaul = undefined
+        const again = structuredClone(c)
+        again.season!.frostHaul = again.season!.day - 1
         const r = ok(c, { t: 'day' })
         expect(r.events.some(e => e.type === 'frostBarrels')).toBe(true)
         expect(c.season!.worked.find(w => w.unit === 0)?.kind).toBe('haul')
+        expect(ok(again, { t: 'day' }).events.some(e => e.type === 'frostBarrels')).toBe(false)
+        expect(again.season!.worked.find(w => w.unit === 0)?.kind).toBe('haul')
         found = true
         break
       }
       ok(base, { t: 'day' })
     }
     expect(found).toBe(true)
+  })
+
+  it('a Sunday off is worked when a frost is coming on crop still in barrels', () => {
+    const c = S.createCampaign(world, { seed: 7, startYear: 1990 })
+    ok(c, { t: 'begin' })
+    expect(c.sundaysOff).toBe(true)
+    let sunday = false
+    for (let g = 0; g < 14 && !sunday; g++) {
+      if (!S.workday(c, c.season!)) sunday = true
+      else ok(c, { t: 'day' })
+    }
+    expect(sunday).toBe(true)
+    c.season!.frostHaul = c.season!.day
+    expect(S.workday(c, c.season!)).toBe(true)
   })
 })

@@ -623,9 +623,9 @@ function rigFor(c: Campaign, s: Season, u: Unit, job: Job): Rig | null {
   return busy < tractorsRunning(c, s.day) ? 'tractor' : null
 }
 
-// Whether today is a working day: on a Sunday off nobody works.
+// Whether today is a working day: on a Sunday off nobody works, unless a frost is coming on crop still in barrels.
 export function workday(c: Campaign, s: Season): boolean {
-  return !(c.sundaysOff && weekday(s.year, s.day) === SUNDAY)
+  return s.frostHaul === s.day || !(c.sundaysOff && weekday(s.year, s.day) === SUNDAY)
 }
 
 // Why the weather holds up this order today, on its own field (building in a yard stops only for heavy rain).
