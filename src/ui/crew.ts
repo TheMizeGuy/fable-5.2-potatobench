@@ -114,7 +114,10 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
     const ring = ringFor(c, p.id)
     const said = `${p.kind === 'farmer' ? 'You, the farmer' : p.name}: ${d.text}${sign ? `; ${sign.text}` : ''}.`
     const bad = sign?.cls === 'bad' || needsYou
-    const word = sign?.cls === 'bad' ? F.upper(sign.text) : needsYou ? 'Stopped' : doingWord(c, p)
+    // Between orders, the work the list holds for them today, never IDLE while there is some.
+    const plain = doingWord(c, p)
+    const ahead = plain === 'Idle' && (S.JOBS as string[]).includes(d.glyph) ? JOB_DOING[d.glyph as S.JobKind].replace(/ (in|from|round)$/, '') : plain
+    const word = sign?.cls === 'bad' ? F.upper(sign.text) : needsYou ? 'Stopped' : ahead
     const slip = next && next.unit === p.id && performance.now() < next.until
       ? h('span', { class: 'next tip', 'aria-hidden': 'true' }, h('span', { class: 't-label' }, 'Next'), ' ', h('span', null, icon(next.kind, 'i'), ` ${S.FIELD_NAMES[next.field]}`)) : null
     const kids: Child[] = [
@@ -144,7 +147,7 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
       list.map((j, k) => {
         const what = jobText(j, c, j.building)
         const lockDig = (j.kind === 'dig' && j.done > 0) || j.kind === 'haul' || j.kind === 'build'
-        const by = (j as { by?: 'you' | 'routine' | 'foreman' }).by ?? 'you'
+        const by = j.by ?? 'you'
         const who = holder(crews, j)
         const able = people.filter(p => S.unitBlock(c, j.kind, p.id) === '')
         const whoSaid = who ? `${who.pinned ? 'given to' : 'taken by'} ${who.u.name === S.FARMER_NAME ? 'you' : who.u.name}` : 'for anyone'

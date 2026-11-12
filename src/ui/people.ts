@@ -288,16 +288,15 @@ export function workGrid(ctx: Ctx): WorkGrid {
       class: 'check rule', type: 'button', testid, 'aria-pressed': String(on), disabled: !ok,
       onclick: () => { const r = ctx.run(testid === 'rule-sundays' ? { t: 'sundays', off: !l.sundaysOff } : { t: 'pickers', on: !l.pickers.on }); if (r.ok) ctx.announce(F.localize(r.events[0]?.text ?? '')) },
     }, h('i', { class: `tick${on ? ' on' : ''}`, 'aria-hidden': 'true' }), h('span', null, h('b', null, name), ' ', h('span', { class: 'quiet' }, why)))
-    // Which jobs the crew puts on the list by itself, and which wait for the player (S.routineInfo, when the
-    // simulation has it).
-    const routine = (S as unknown as { routineInfo?: (c: S.Campaign) => { kind: S.JobKind; auto: boolean }[] }).routineInfo?.(c) ?? []
+    // Which jobs the crew puts on the list by itself, and which wait for the player.
+    const routine = S.routineInfo(c)
     return h('div', { class: 'farm-rules', role: 'group', 'aria-label': 'Farm rules' },
       routine.length ? h('div', { class: 'routine', role: 'group', 'aria-label': 'Done by the crew without asking' },
         h('p', { class: 't-label' }, 'By itself, or ask me'),
         h('div', { class: 'routine-keys' }, routine.map(r => h('button', {
           class: `btn${r.auto ? ' is-on' : ''}`, type: 'button', testid: `routine-${r.kind}`, 'aria-pressed': String(r.auto),
           title: ctx.touch() ? undefined : r.auto ? `${R.JOB_VERB[r.kind]}: the crew puts it on the list by itself. Press to be asked instead.` : `${R.JOB_VERB[r.kind]}: waits for you. Press to let the crew do it by itself.`,
-          onclick: () => { const res = ctx.run({ t: 'routine', kind: r.kind, auto: !r.auto } as unknown as S.Cmd); if (res.ok) ctx.announce(`${R.JOB_VERB[r.kind]}: ${r.auto ? 'ask me' : 'by itself'}.`) },
+          onclick: () => { const res = ctx.run({ t: 'routine', kind: r.kind as S.RoutineKind, auto: !r.auto }); if (res.ok) ctx.announce(`${R.JOB_VERB[r.kind]}: ${r.auto ? 'ask me' : 'by itself'}.`) },
         }, icon(r.kind, 'i'), R.JOB_VERB[r.kind], h('span', { class: 'sub' }, r.auto ? 'by itself' : 'ask me'))))) : null,
       rule('rule-sundays', l.sundaysOff, 'Sundays off', l.sundaysOff ? 'Everyone rests a day a week. Working Sundays gains a day, and tires everyone.' : 'Sundays are worked: a day more each week, and everyone tires.'),
       // Pickers come forward a few weeks before the harvest break, when they can be thought about.
@@ -350,7 +349,7 @@ export function workGrid(ctx: Ctx): WorkGrid {
     el.classList.remove('out')
     el.hidden = false
     const l = S.labourInfo(c)
-    patch(el, JSON.stringify([c.crew.map(u => [u.id, u.name, u.prio, u.skills, u.foreman]), at, note, l.sundaysOff, l.pickers, ctx.touch(), app.unit, (c as { routine?: unknown }).routine ?? 0]), () => body(c))
+    patch(el, JSON.stringify([c.crew.map(u => [u.id, u.name, u.prio, u.skills, u.foreman]), at, note, l.sundaysOff, l.pickers, ctx.touch(), app.unit, c.routine]), () => body(c))
     layIn(ctx, el, was)
   }
 
