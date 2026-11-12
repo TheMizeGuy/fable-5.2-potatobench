@@ -95,18 +95,22 @@ export function goals(c: Campaign, o: { thisSeason?: boolean } = {}): Goal[] {
   ]
 
   // The farmstead, opening up from the second spring.
+  // The clearing steps are about the farm's own tracts: one it does not hold is no step of its, felled or not.
   const cleared = tracts.filter(t => t.f.cover === 'open')
+  const mine = tracts.filter(t => t.held)
+  const clearedMine = mine.filter(t => t.f.cover === 'open')
+  const noTract = mine.length === 0
   const clearing: Spec[] = [
     // Felling waits until the crop is in the ground: in a season it is the work of the quiet weeks.
-    { id: 'fell', title: 'Fell a woodlot', why: 'Woods become a field: logs to the yard now, stumps and stone next.', when: 'Once the crop is planted, or over the winter',
-      done: tracts.some(t => t.f.cover === 'stumps' || t.f.cover === 'open'), now: (inSeason && planted.length === potato.length) || c.phase === 'cellar',
+    { id: 'fell', title: 'Fell a woodlot', why: 'Woods become a field: logs to the yard now, stumps and stone next.', when: noTract ? 'Once the farm holds a woodlot: bought in spring, from the Land fold' : 'Once the crop is planted, or over the winter',
+      done: mine.some(t => t.f.cover === 'stumps' || t.f.cover === 'open'), now: !noTract && ((inSeason && planted.length === potato.length) || c.phase === 'cellar'),
       progress: felledMost > 0 ? { n: Math.round(felledMost * 100), of: 100 } : null },
     { id: 'stump', title: 'Pull the stumps', why: 'A contractor with a bulldozer, for a fee.', when: 'In spring or the season',
-      done: cleared.length > 0, now: spring || inSeason, price: price.stump },
+      done: clearedMine.length > 0, now: spring || inSeason, price: price.stump },
     { id: 'rocks', title: 'Pick rocks off new ground', why: 'A cleared tract is stony: someone picks the rocks off it (Pick rocks on its card) so it can be planted, and the stones go to the yard for building.', when: 'In the season',
-      done: cleared.some(t => t.f.stones < ROCKS_ADVISE), now: inSeason },
+      done: clearedMine.some(t => t.f.stones < ROCKS_ADVISE), now: inSeason && clearedMine.length > 0 },
     { id: 'newfield', title: 'Crop the new ground', why: 'A year in oats and clover, then potatoes on fresh soil.', when: 'From the next spring',
-      done: cleared.some(t => !t.f.raw || (inSeason && fields[t.i] && fields[t.i].status !== 'off')), now: spring || inSeason },
+      done: clearedMine.some(t => !t.f.raw || (inSeason && fields[t.i] && fields[t.i].status !== 'off')), now: (spring || inSeason) && clearedMine.length > 0 },
   ]
 
   const ladder: Spec[] = [
@@ -117,7 +121,7 @@ export function goals(c: Campaign, o: { thisSeason?: boolean } = {}): Goal[] {
       done: hired || c.history.some(y => y.wages > 0), now: spring || inSeason, price: price.hire },
     { id: 'contract', title: 'Sign a contract', why: 'A buyer fixes the price, and you must fill it.', when: 'In spring',
       done: c.contracts.length > 0 || c.history.some(y => y.contracts > 0), now: spring },
-    { id: 'land', title: 'Farm more land', why: 'Rent or buy beyond the home six.', when: 'In spring',
+    { id: 'land', title: 'Farm more land', why: 'Rent or buy beyond the home six.', when: 'In spring, from the Land fold',
       done: c.fields.some((f, i) => i < TRACTS[0] && PARCELS[i].block !== 'home' && f.tenure !== 'none') || c.history.some(y => y.rent > 0 || y.land > 0), now: spring, price: price.land },
     ...chain(clearing),
     { id: 'build', title: 'Raise a building', why: 'Your own people build it, from your own logs and stone.', when: 'In spring, the season or winter',
