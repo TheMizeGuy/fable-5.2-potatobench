@@ -327,7 +327,8 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
   // Blight as last seen, and how old that is; before the rows are up, the soil; once the vines are dead, the skins.
   function known(c: S.Campaign, f: S.FieldInfo): HTMLElement[] {
     const s = c.season!
-    if (f.status === 'idle' && (app.needs()[f.index]?.hold || app.needs()[f.index]?.need?.act === 'plant')) return []
+    const coach = app.needs()[f.index]?.hold ?? (app.needs()[f.index]?.need?.act === 'plant' ? app.needs()[f.index]?.need : null)
+    if (f.status === 'idle' && coach && /°/.test(F.localize(`${coach.text} ${coach.why}`))) return []
     if (f.status === 'idle' || f.status === 'planted') {
       const t = S.today(app.world, c)
       const soil = (t ? t.soilT : 0) + S.SOIL_T_OFFSET[f.elev]

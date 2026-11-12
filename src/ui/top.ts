@@ -121,6 +121,8 @@ function progressText(g: Goal): string {
 }
 
 const MOMENT_MS = 1600
+// The goals that are a job the crew's routine can put on the list by itself.
+const GOAL_ROUTINE: Record<string, S.JobKind> = { plant: 'plant', walk: 'scout', hill: 'hill', sample: 'sample', dig: 'dig', haul: 'haul', spray: 'spray', kill: 'kill' }
 // The crop's own steps: in spring they wait for the season to start.
 const CROP_STEPS = new Set(['plant', 'walk', 'hill', 'spray', 'sample', 'kill', 'dig', 'haul'])
 
@@ -216,7 +218,8 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     const reach = season && g && wait <= 0 ? (o.canShow?.(g) ?? false) : true
     const call = season && !reach ? app.needs().map((n, i) => ({ n: n.need, i })).find(x => x.n && x.n.act !== 'close' && x.n.act !== 'wait') : undefined
     if (season && g && !reach) {
-      const later = !g.now ? g.when.toLowerCase() : 'not yet in reach'
+      const act = GOAL_ROUTINE[g.id]
+      const later = !g.now ? g.when.toLowerCase() : act && S.routineInfo(c).some(r => r.kind === act && r.auto) ? 'the crew sees to it by itself' : 'not yet in reach'
       const quiet = h('button', {
         class: 'goal later', type: 'button', testid: 'goal', k: `goal-later-${g.id}`, 'aria-expanded': String(pop === 'goals'), title: ctx.touch() ? undefined : g.why,
         onclick: () => { pop = pop === 'goals' ? '' : 'goals'; ctx.dirty() },

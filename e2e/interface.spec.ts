@@ -151,8 +151,9 @@ test('never more than five orders, and under 80 words with nothing selected', as
     expect(rest.length).toBeGreaterThan(0)
     expect(rest.some(x => first.includes(x))).toBe(false)
   }
-  // A reading a week old is marked as old.
-  await reach(page, `const { app } = q.g(); for (let k = 0; k < 9; k++) app.do({ t: 'day' })`)
+  // A reading a week old is marked as old (with the walks switched to "ask me", so nobody walks it by themselves).
+  await reach(page, `const { app } = q.g(); app.do({ t: 'routine', kind: 'scout', auto: false }); for (const j of [...app.campaign.season.jobs]) if (j.kind === 'scout') app.do({ t: 'cancel', id: j.id })
+    for (let k = 0; k < 9; k++) app.do({ t: 'day' })`)
   await putAway(page)
   await expect(page.getByTestId('blight-reading')).toHaveClass(/stale/)
   await expect(page.getByTestId('estimate')).toContainText('–')
@@ -529,6 +530,8 @@ test('winter: each stored crop is a card, seed can be held back, and the year cl
 test('the goal line says the one next thing, opens the ladder, and moves on when the goal is met', async ({ page }) => {
   const errors = watchErrors(page)
   await startSeason(page)
+  // Planting asked of the player (switched to "ask me"), so the goal can point at a field to plant.
+  await reach(page, `q.g().app.do({ t: 'routine', kind: 'plant', auto: false })`)
   const goal = page.getByTestId('goal')
   await expect(goal).toContainText('Plant')
   const of = await game<number>(page, 'app.campaign.season.fields.filter((f, i) => sim.isField(app.campaign, i) && f.status === "idle").length')
