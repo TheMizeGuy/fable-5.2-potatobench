@@ -1,5 +1,6 @@
 // What the buildings and yards cost to draw: GPU time, triangles and draw calls of a frame with them and without, in
-// the opening, the home view and close on the yard, with nothing built and with every building standing.
+// the opening and each tier of the camera (yard, field, farm, county), with nothing built and with every building
+// standing, at each quality setting.
 // Usage: node tools/render/yardcost.ts <base-url>
 import { chromium, type Page } from '@playwright/test'
 import { GPU } from '../quality/shared.ts'
@@ -37,19 +38,21 @@ const median = (xs: number[]) => { const a = xs.slice().sort((p, q) => p - q); r
 async function once(page: Page): Promise<M> {
   await page.waitForTimeout(300)
   await page.evaluate(() => { const M = (window as any).__perf; M.gpu = []; M.on = true })
-  await page.waitForTimeout(1200)
-  const r = await page.evaluate(() => {
-    const M = (window as any).__perf
-    M.on = false
-    const s = (window as any).__countyField.stats()
-    return { gpu: M.gpu, triangles: s.triangles, calls: s.calls }
-  })
-  return { gpu: median(r.gpu), triangles: r.triangles, calls: r.calls }
+  // the wider shadow cascades are redrawn only every few frames: count the fullest frame of the window
+  let triangles = 0, calls = 0
+  for (let k = 0; k < 12; k++) {
+    await page.waitForTimeout(100)
+    const s = await page.evaluate(() => (window as any).__countyField.stats())
+    triangles = Math.max(triangles, s.triangles)
+    calls = Math.max(calls, s.calls)
+  }
+  const gpu = await page.evaluate(() => { const M = (window as any).__perf; M.on = false; return M.gpu })
+  return { gpu: median(gpu), triangles, calls }
 }
 // The GPU is shared with other checks on the machine, which only ever adds time: of a few windows, keep the quietest.
 async function measure(page: Page): Promise<M> {
   let best = await once(page)
-  for (let k = 0; k < 3; k++) { const m = await once(page); if (m.gpu < best.gpu) best = m }
+  for (let k = 0; k < 3; k++) { const m = await once(page); if (m.gpu < best.gpu) best = { gpu: m.gpu, triangles: Math.max(best.triangles, m.triangles), calls: Math.max(best.calls, m.calls) } }
   return best
 }
 
@@ -94,14 +97,16 @@ await page.evaluate(() => {
 })
 const settle = () => page.evaluate(() => (window as any).__countyField.settle())
 const show = (on: boolean) => page.evaluate(on => (window as any).__countyField.show('props', on), on)
-const YARD = { x: 28, z: -5, dist: 34, yaw: 0.55, pitch: 0.36 }
-
+const look = (v: Record<string, unknown>) => page.evaluate(v => (window as any).__countyField.view(v), v)
+// The four tiers of the camera: the yard, the field (the default playing view), the farm, the county.
 const views: [string, () => Promise<void>][] = [
   ['opening', async () => { await page.evaluate(() => (window as any).__county.app.quitToTitle()); await settle() }],
-  ['home view, nothing built', async () => { await farm(page, false); await settle() }],
-  ['yard close, nothing built', async () => { await page.evaluate(v => (window as any).__countyField.view({ frame: 'home', ...v }), YARD); await settle() }],
-  ['home view, everything built', async () => { await farm(page, true); await settle() }],
-  ['yard close, everything built', async () => { await page.evaluate(v => (window as any).__countyField.view({ frame: 'home', ...v }), YARD); await settle() }],
+  ['field tier, nothing built', async () => { await farm(page, false); await settle() }],
+  ['yard tier, nothing built', async () => { await look({ frame: 'home', x: 30, z: -7, dist: 60, yaw: 0.7, pitch: 0.36 }); await settle() }],
+  ['field tier, everything built', async () => { await farm(page, true); await settle() }],
+  ['yard tier, everything built', async () => { await look({ frame: 'home', x: 30, z: -7, dist: 60, yaw: 0.7, pitch: 0.36 }); await settle() }],
+  ['farm tier, everything built', async () => { await look({ frame: 'land', x: 12, z: 2, dist: 84, yaw: 0.2 }); await settle() }],
+  ['county tier, everything built', async () => { await look({ frame: 'land', x: 22, z: 10, dist: 170 }); await settle() }],
 ]
 for (const tier of ['high', 'medium', 'low']) {
   await page.evaluate(t => (window as any).__county.app.setSetting('quality', t), tier)

@@ -102,8 +102,7 @@ export function roof(b: Builder, w: number, l: number, wall: number, rise: numbe
       const zf = sg > 0 ? zb : za, zn = sg > 0 ? za : zb, df = sg > 0 ? db : da, dn = sg > 0 ? da : db
       const top = (x: number, y: number, z: number, d: number): V3 => [sg * (x + nx * thick), y + ny * thick - d, z]
       const und = (x: number, y: number, z: number, d: number): V3 => [sg * x, y - d, z]
-      b.roofing(true).quad(top(xe, ye, zf, df * 0.4), top(xe, ye, zn, dn * 0.4), top(0, wall + rise, zn, dn), top(0, wall + rise, zf, df), o.color, o.fin, { ex, uo: sg * 7.3 + za })
-      b.roofing(false)
+      b.quad(top(xe, ye, zf, df * 0.4), top(xe, ye, zn, dn * 0.4), top(0, wall + rise, zn, dn), top(0, wall + rise, zf, df), o.color, o.fin, { ex, uo: sg * 7.3 + za })
       b.quad(und(xe, ye, zn, dn * 0.4), und(xe, ye, zf, df * 0.4), und(0, wall + rise, zf, df), und(0, wall + rise, zn, dn), o.trim ?? '#8d8474', FIN.wood, { ex: 0.5 })
       // the eave's edge
       b.quad(und(xe, ye, zf, df * 0.4), und(xe, ye, zn, dn * 0.4), top(xe, ye, zn, dn * 0.4), top(xe, ye, zf, df * 0.4), o.trim ?? o.color, FIN.plain, { ex: 0.9 })
@@ -139,8 +138,7 @@ export function leanRoof(b: Builder, x0: number, x1: number, z0: number, z1: num
   const ex = fin === FIN.metal ? 1 - 0.5 * (o.rust ?? 0) : 1
   const A: V3 = [xl, yl + thick, sg > 0 ? zb : za], B: V3 = [xl, yl + thick, sg > 0 ? za : zb]
   const C: V3 = [x0, y1 + thick, sg > 0 ? za : zb], D: V3 = [x0, y1 + thick, sg > 0 ? zb : za]
-  b.roofing(true).quad(A, B, C, D, color, fin, { ex })
-  b.roofing(false)
+  b.quad(A, B, C, D, color, fin, { ex })
   const lo = (p: V3): V3 => [p[0], p[1] - thick, p[2]]
   b.quad(lo(B), lo(A), lo(D), lo(C), '#8d8474', FIN.wood, { ex: 0.5 })
   b.quad(lo(A), lo(B), B, A, color, FIN.plain, { ex: 0.9 })

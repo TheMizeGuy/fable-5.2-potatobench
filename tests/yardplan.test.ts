@@ -3,8 +3,8 @@
 import { describe, expect, it } from 'vitest'
 import { BUILDINGS, BUILDING_KINDS } from '../src/sim/index.ts'
 import {
-  BARN, BAYS, DUFOUR_BARN, DUFOUR_HOUSE, DUFOUR_POTATO_HOUSE, FIELDS, HOUSE, LOG_DECKS, POTATO_HOUSE, SITES, STONE_PILE, gravelDist, route, siteOf,
-  yardAt, yardSpot,
+  BARN, BAYS, DUFOUR_BARN, DUFOUR_HOUSE, DUFOUR_POTATO_HOUSE, FIELDS, HOUSE, IMPLEMENT_SPOTS, LOG_DECKS, PASTURE, POTATO_HOUSE, SITES, STONE_PILE, TRUCK_SPOT,
+  WIDE, YARD_AT, YARD_TREES, gravelDist, roadDist, route, siteOf, townRoadZ, yardAt, yardSpot,
 } from '../src/render/layout.ts'
 import { S } from '../src/render/scale.ts'
 
@@ -65,6 +65,46 @@ describe('the yards\' plan', () => {
       expect(yardAt(s.x, s.z), `${s.kind} ${s.yard}`).toBe(s.yard)
     }
     for (const f of FIELDS) expect(yardAt(f.cx, f.cz), `field ${f.i}`).toBe(0)
+  })
+
+  it('keeps each yard a compact place: about an acre of buildings, fields beginning just beyond', () => {
+    // the standing buildings of the home yard within about seventy metres of one another
+    const d = (a: { x: number; z: number }, b: { x: number; z: number }) => Math.hypot(a.x - b.x, a.z - b.z)
+    expect(d(HOUSE, BARN)).toBeLessThan(40)
+    expect(d(BARN, POTATO_HOUSE)).toBeLessThan(45)
+    expect(d(HOUSE, POTATO_HOUSE)).toBeLessThan(75)
+    for (const yard of [-1, -2]) {
+      const y = YARD_AT[yard]
+      expect(y.x1 - y.x0).toBeLessThan(100)
+      expect(y.z1 - y.z0).toBeLessThan(120)
+    }
+  })
+
+  it('plants the yards\' trees clear of the buildings, the roads and where machines stand', () => {
+    for (const t of YARD_TREES) {
+      const room = t.h > 8 ? 2.2 : 1.2
+      expect(roadDist(t.x, t.z), `a ${t.kind} on a way`).toBeGreaterThan(WIDE.road / 2 + room - 0.6)
+      for (const s of SITES.filter(q => q.kind !== 'road')) {
+        const a = box(s)
+        expect(t.x < a.x0 - room || t.x > a.x1 + room || t.z < a.z0 - room || t.z > a.z1 + room, `a ${t.kind} at the ${s.kind} site of yard ${s.yard}`).toBe(true)
+      }
+      for (const p of [...BAYS, TRUCK_SPOT, ...Object.values(IMPLEMENT_SPOTS), ...LOG_DECKS]) expect(Math.hypot(t.x - p.x, t.z - p.z)).toBeGreaterThan(3)
+      for (const f of FIELDS) expect(t.x < f.x0 || t.x > f.x1 || t.z < f.z0 || t.z > f.z1, `a ${t.kind} in field ${f.i}`).toBe(true)
+    }
+    // shade trees of real height over the house: the tallest stand twice its eaves
+    expect(Math.max(...YARD_TREES.map(t => t.h))).toBeGreaterThanOrEqual(20)
+  })
+
+  it('fences a pasture beside the yard that no road runs through, and puts the stand on the town road', () => {
+    const xs = PASTURE.map(p => p.x), zs = PASTURE.map(p => p.z)
+    for (let k = 0; k < 40; k++) {
+      const x = Math.min(...xs) + 4 + ((Math.max(...xs) - Math.min(...xs) - 8) * (k % 8)) / 7, z = Math.max(...zs) - 4 - ((Math.max(...zs) - PASTURE[1].z - 8) * Math.floor(k / 8)) / 4
+      expect(gravelDist(x, z), 'a road through the pasture').toBeGreaterThan(WIDE.road)
+    }
+    const stand = siteOf('stand', -1)!
+    const off = townRoadZ(stand.x) - stand.z
+    expect(off).toBeGreaterThan(WIDE.town / 2 + 1)
+    expect(off).toBeLessThan(16)
   })
 
   it('keeps the material piles and the shed\'s bays where they belong', () => {

@@ -132,5 +132,17 @@ the camera. What it costs is in the default view: with the whole home farm in fr
 long and a person 5, so the default view moves in to the field tier (three to five fields in frame) and every
 person carries a marker of constant size.
 
+### Phase B: the buildings to the standard
+
+Every building is now the size of a real one, held by `tests/scale.test.ts` (sizes are in `src/render/measures.ts`,
+which the drawings and the yards' plan both read): the farmhouse 8.0 by 11.0 m and 8.7 m to the ridge (166 m2 with
+its ell and back house, against a measured median of 173); the barn 12.0 by 18.0 m and 10.9 m to the ridge with a
+4.1 m door; the banked potato house 12.0 by 18.0 m; the machine shed 9.0 by 18.0 m in four bays of 4.5 m, 4.1 m to
+the eave; the bunkhouse 6.2 by 9.2 m (57 m2 for six); the packing shed 9.2 by 15.8 m; the second potato house 10.6
+by 15.4 m; the stand 4.8 by 2.9 m; a pole 9.5 m. A field is 9.6 barn lengths wide and 136 houses in area. The yards
+were replanned for them and stay compact: house, barn and potato house within 75 m, the whole home yard under a
+hectare, shade maples of 15 to 22 m over the house, an orchard, a fenced pasture, a windbreak. Neighbours stand
+about every 300 m along both roads; a village with a 30 m spire and a siding with a water tower stand on the horizon.
+
 Not yet done (phase B): the barn and the house are still shorter than the standard's (13.2 m and 7.9 m), markers for
 people, the camera's tiers, far trees as impostors, the hill squares' edges, and the viewers' estimates.

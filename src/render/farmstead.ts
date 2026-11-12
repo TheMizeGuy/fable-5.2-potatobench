@@ -201,12 +201,10 @@ function barn(b: Builder, m: Marks): void {
   }
   b.box(0, top + 0.73, 0, 0.94, 0.05, 0.94, TRIM, FIN.plain)
   const ap: V3 = [0, top + 1.24, 0], e = 0.52, ye = top + 0.75
-  b.roofing(true)
   b.tri([-e, ye, e], [e, ye, e], ap, TIN, FIN.metal, { ex: 0.9 })
   b.tri([e, ye, e], [e, ye, -e], ap, TIN, FIN.metal, { ex: 0.9 })
   b.tri([e, ye, -e], [-e, ye, -e], ap, TIN, FIN.metal, { ex: 0.9 })
   b.tri([-e, ye, -e], [-e, ye, e], ap, TIN, FIN.metal, { ex: 0.9 })
-  b.roofing(false)
   b.cyl([0, top + 1.22, 0], [0, top + 1.7, 0], 0.014, 0.008, 5, IRON, FIN.plain)
   b.blob([0, top + 1.36, 0], [0.045, 0.045, 0.045], 2, '#b08a3c', FIN.plain, { detail: 0, rough: 0 })
   m.vanes.push(b.world([0, top + 1.62, 0]))

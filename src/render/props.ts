@@ -219,9 +219,9 @@ export class Props {
       // the cookstove, on days too warm for a fire to show much
       if (cold <= 0.2 && Math.random() < 0.6) f.particles.emit(this.chimney.x, this.chimney.y, this.chimney.z, (Math.random() - 0.5) * 0.13, 0.75, (Math.random() - 0.5) * 0.13, 0.15, 0.44, 3.2, 0.74, 0.74, 0.76, 0.1, 0.8)
       // From the fields a chimney's own wisp is too small to see: the plume it becomes down the wind is what shows.
-      if (away > 140 && away < 1500 && Math.random() < 0.5) {
-        const big = Math.min(5, away / 150)
-        f.particles.emit(this.chimney.x, this.chimney.y + 1, this.chimney.z, (Math.random() - 0.5) * 0.3, 0.9, (Math.random() - 0.5) * 0.3, 0.5 * big, 0.5 * big, 7, 0.78, 0.78, 0.8, 0.07 + 0.1 * cold, 0.9)
+      if (away > 160 && away < 1800) {
+        const big = Math.min(4.5, away / 130)
+        f.particles.emit(this.chimney.x, this.chimney.y + 1, this.chimney.z, (Math.random() - 0.5) * 0.3, 1.5, (Math.random() - 0.5) * 0.3, 0.3 * big, 0.3 * big, 12, 0.8, 0.8, 0.83, 0.16 + 0.14 * cold, 0.7)
       }
       for (const p of this.smokes) f.particles.emit(p[0], p[1], p[2], (Math.random() - 0.5) * 0.18, 0.92, (Math.random() - 0.5) * 0.18, 0.2, 0.53, 3.6, 0.72, 0.72, 0.75, 0.16 + 0.2 * cold, 0.8)
       if (this.dufourSmoke && cold > 0.2) { const p = this.marks.smoke[1]; f.particles.emit(p[0], p[1], p[2], (Math.random() - 0.5) * 0.22, 1.1, (Math.random() - 0.5) * 0.22, 0.26, 0.66, 4.5, 0.74, 0.74, 0.76, 0.34 * cold, 0.8) }

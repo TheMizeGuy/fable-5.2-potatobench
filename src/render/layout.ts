@@ -153,7 +153,11 @@ export const PONDSIDE: Frame = { x: (K - S) * 34.6, z: K * 18.2 - S * 7.4 }
 // Where the farm road meets the town road: the mailbox and the culvert.
 export const ROADSIDE: Frame = { x: (K - S) * 20.6, z: 0 }
 // The farm stand: on the town road's near verge, a few lengths west of the gate.
-export const STANDSIDE: Frame = { x: K * 20.6 - 15, z: townRoadZ(K * 20.6 - 15) - 8.6 }
+export const STANDSIDE: Frame = { x: K * 20.6 - 21, z: townRoadZ(K * 20.6 - 21) - 8.6 }
+// Things of known size far off: a village on the road over the hill, seen through the saddle behind the farm, and a
+// siding down the town road. Kept clear of trees.
+export const VILLAGE: Pt = { x: K * 23, z: hillRoadZ(K * 23) }
+export const SIDING: Pt = { x: K * 150, z: townRoadZ(K * 150) - 57 }
 const at = (f: Frame, p: Pt): Pt => toWorld(f, p.x, p.z)
 
 // What stands in the yards, in small units in its own frame: the builders' drawings are made in these.
@@ -185,8 +189,8 @@ function yardRect(f: Frame, x: number, z: number, reach: number, x0: number, x1:
   return { ...toWorld(f, x, z), reach: reach * S, x0: a.x, x1: b.x, z0: a.z, z1: b.z }
 }
 export const YARD_AT: Record<number, { x: number; z: number; reach: number; x0: number; x1: number; z0: number; z1: number }> = {
-  [-1]: yardRect(HOME, 24.4, -7.4, 13, 12.4, 49.6, -31.0, 13.0),
-  [-2]: yardRect(DUFOUR, 92.6, -6.2, 11, 83.9, 105.5, -25.5, 6.4),
+  [-1]: yardRect(HOME, 24.4, -7.4, 13, 12.4, 52.6, -36.5, 15.0),
+  [-2]: yardRect(DUFOUR, 92.6, -6.2, 11, 83.9, 107.0, -27.0, 6.4),
 }
 export const YARD_FRAME: Record<number, Frame> = { [-1]: HOME, [-2]: DUFOUR }
 // The yard at a point on the ground, or 0.
@@ -224,10 +228,10 @@ export const SITES: Site[] = [
   site('packing', -1, 39.8, -1.2, 0, M.packing.l, M.packing.w, -1.2),
   site('pond', -1, 34.6, 7.4, 0, M.pump.w, M.pump.l, 0, PONDSIDE),
   site('stand', -1, 0, 0, 0, M.stand.w, M.stand.l, 0, STANDSIDE),
-  site('station', -1, 30.6, 10.4, 0, M.station.w, M.station.l),
+  site('station', -1, 25.8, 13.6, 0, M.station.w, M.station.l),
   site('road', -1, 16.6, -10.4, 0, 1.5, 1.5),
   // Dufour: a second potato house beside the old one, and a bunkhouse below the yard road.
-  site('house', -2, 99.6, -17.6, 0, M.dufour.house2.w, M.dufour.house2.l),
+  site('house', -2, 101.4, -19.4, 0, M.dufour.house2.w, M.dufour.house2.l),
   site('bunk', -2, 86.6, -2.2, 0, M.dufour.bunk.l, M.dufour.bunk.w, -0.8),
 ]
 export function siteOf(kind: BuildingKind, yard: number): Site | undefined {
@@ -248,15 +252,23 @@ export interface YardTree { kind: 'maple' | 'birch' | 'spruce'; x: number; z: nu
 const tree = (f: Frame, kind: YardTree['kind'], x: number, z: number, h: number, r: number, hue: number): YardTree => ({ kind, ...toWorld(f, x, z), h, r, hue })
 const onLand = (kind: YardTree['kind'], x: number, z: number, h: number, r: number, hue: number): YardTree => ({ kind, x, z, h, r, hue })
 export const YARD_TREES: YardTree[] = [
-  // home: the two great maples of the dooryard, one over the kitchen garden, a birch by the well; spruce beyond the sheds
-  tree(HOME, 'maple', 28.6, 7.4, 22, 0.3, 0.12), tree(HOME, 'maple', 19.6, 11.6, 19, 0.62, 0.5), tree(HOME, 'maple', 29.4, -6.4, 16, 0.5, 0.8),
-  tree(HOME, 'birch', 26.4, 9.4, 13, 0.7, 0.62), tree(HOME, 'spruce', 48.4, -13.6, 15, 0.2, 0.3), tree(HOME, 'spruce', 49.0, -11.0, 17, 0.6, 0.6), tree(HOME, 'spruce', 48.5, -8.2, 14, 0.9, 0.4),
+  // home: the great maples of the dooryard stand south and east of the house, so that from the fields it shows white
+  // against them; a birch at the garden gate; and up the slope behind the potato houses a windbreak of spruce, the
+  // dark the roofs are seen against
+  tree(HOME, 'maple', 29.4, 6.6, 22, 0.3, 0.12), tree(HOME, 'maple', 31.2, 10.4, 19, 0.62, 0.5), tree(HOME, 'maple', 33.8, -1.6, 15, 0.5, 0.8),
+  tree(HOME, 'birch', 19.2, 13.6, 12, 0.7, 0.62),
+  ...[19.4, 22.6, 25.4, 28.8, 31.6, 34.9, 38.2, 41.0, 44.4, 47.2, 50.0].map((x, k) => tree(HOME, 'spruce', x + (hash2(k, 51) - 0.5) * 1.2, -33.4 - 1.6 * hash2(k, 53) - (k % 2) * 1.5, 14 + 6 * hash2(k, 55), hash2(k, 57), hash2(k, 59))),
+  ...[-29.5, -25.8, -22.4, -18.8].map((z, k) => tree(HOME, 'spruce', 51.4 + hash2(k, 61), z, 13 + 5 * hash2(k, 63), hash2(k, 65), hash2(k, 67))),
+  // the orchard below the sheds: old apple trees in three rows, one long gone
+  ...[6.7, 10.0, 13.3].flatMap((z, i) => [35.0, 38.7, 42.4, 46.1].map((x, j) => ({ z, x, n: i * 4 + j }))).filter(t => t.n !== 5)
+    .map(t => tree(HOME, 'maple', t.x + (hash2(t.n, 3) - 0.5) * 0.5, t.z + (hash2(t.n, 5) - 0.5) * 0.5, 5.2 + 1.6 * hash2(t.n, 7), hash2(t.n, 9), 0.25 + 0.2 * hash2(t.n, 11))),
   // maples down the drive, on its field side, and a pair at the gate
   ...[5.9, 8.4, 10.9, 13.4, 15.9].map((z, k) => onLand('maple', K * 15.95 - 7.5 - (k % 2), K * z, 17 + ((k * 7) % 5), 0.2 + 0.17 * k, 0.15 + 0.2 * k)),
   onLand('maple', K * 20.6 - 9, townRoadZ(K * 20.6) - 16, 20, 0.44, 0.3), onLand('maple', K * 20.6 + 10, townRoadZ(K * 20.6) - 15, 18, 0.81, 0.7),
   // Dufour: the dooryard's maple and birch, spruce to the east of the barn
   tree(DUFOUR, 'maple', 97.8, 7.4, 21, 0.22, 0.2), tree(DUFOUR, 'birch', 89.0, 5.0, 13, 0.62, 0.7),
-  tree(DUFOUR, 'spruce', 104.2, -9.6, 14, 0.3, 0.2), tree(DUFOUR, 'spruce', 104.8, -6.8, 16, 0.7, 0.5), tree(DUFOUR, 'spruce', 104.3, -4.0, 13, 0.1, 0.8),
+  ...[86.2, 89.4, 92.2, 95.6, 98.4, 101.8, 104.6].map((x, k) => tree(DUFOUR, 'spruce', x, -24.4 - 1.4 * hash2(k, 71), 13 + 6 * hash2(k, 73), hash2(k, 75), hash2(k, 77))),
+  tree(DUFOUR, 'spruce', 105.4, -9.6, 14, 0.3, 0.2), tree(DUFOUR, 'spruce', 105.9, -6.8, 16, 0.7, 0.5), tree(DUFOUR, 'spruce', 105.4, -4.0, 13, 0.1, 0.8),
 ]
 // The pasture east of the home yard, fenced, where the neighbour's cows are let to graze: its corners, in metres.
 export const PASTURE: Pt[] = [
@@ -268,6 +280,7 @@ export const KEEP_CLEAR: { x: number; z: number; r: number }[] = [
   ...LOG_DECKS.map(p => ({ x: p.x, z: p.z, r: 1.8 * S })), { ...STONE_PILE, r: 1.6 * S },
   // where the implements stand in the grass past the machine shed, and the orchard
   { ...toWorld(HOME, 45.6, -10.2), r: 3.6 * S }, { ...toWorld(HOME, 40.4, 9.6), r: 6.6 * S }, { x: TRUCK_SPOT.x, z: TRUCK_SPOT.z, r: 1.8 * S },
+  { ...VILLAGE, r: 105 }, { x: SIDING.x + 30, z: SIDING.z + 40, r: 110 },
   // the dooryard, the kitchen garden and the barnyard
   { ...toWorld(HOME, 28.2, -1.4), r: 3.2 * S }, { ...toWorld(HOME, 23.8, 9.0), r: 2.2 * S }, { ...toWorld(HOME, 26.8, -15.0), r: 3.4 * S },
 ]
@@ -336,7 +349,7 @@ const YARD_WAYS: [number, number][][] = [
   [H(31.6, 3.6), H(39.8, 3.6), H(44.0, 3.6)],
   [H(36.2, -15.9), H(36.2, -17.7)],
   [H(44.8, -15.8), H(44.8, -17.9)],
-  [D(89.8, -6.8), D(91.6, -9.6), D(95.0, -12.0), D(99.6, -12.2)],
+  [D(89.8, -6.8), D(91.6, -9.6), D(95.0, -12.4), D(101.4, -13.0)],
   [D(90.985, -0.2), D(87.0, 0.3)],
 ]
 

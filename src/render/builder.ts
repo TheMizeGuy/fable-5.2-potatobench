@@ -49,16 +49,12 @@ const cross = (a: V3, b: V3): V3 => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[
 const unit = (a: V3): V3 => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l] }
 
 export class Builder {
-  // Two lots of geometry: everything, and the tops of roofs. A roof under a low sun is a slope the light rakes along,
-  // which a shadow map of any size stripes; roofs are drawn apart so they can throw shadow without taking it.
-  private lots: Lot[] = [lot(), lot()]
-  private at_ = 0
-  private get pos(): number[] { return this.lots[this.at_].pos }
-  private get nrm(): number[] { return this.lots[this.at_].nrm }
-  private get col(): number[] { return this.lots[this.at_].col }
-  private get uvh(): number[] { return this.lots[this.at_].uvh }
-  private get fin(): number[] { return this.lots[this.at_].fin }
-  private get idx(): number[] { return this.lots[this.at_].idx }
+  private pos: number[] = []
+  private nrm: number[] = []
+  private col: number[] = []
+  private uvh: number[] = []
+  private fin: number[] = []
+  private idx: number[] = []
   private m = new Matrix4()
   private t = new Matrix4()
   private stack: Matrix4[] = []
@@ -67,14 +63,8 @@ export class Builder {
   // The level heights above ground are measured from, for what the weather does to the foot of a wall.
   ground = 0
 
-  get triangles(): number { return (this.lots[0].idx.length + this.lots[1].idx.length) / 3 }
-  get empty(): boolean { return this.lots[0].idx.length + this.lots[1].idx.length === 0 }
-
-  // What is drawn from here on is the top of a roof (or is not any more).
-  roofing(on: boolean): this {
-    this.at_ = on ? 1 : 0
-    return this
-  }
+  get triangles(): number { return this.idx.length / 3 }
+  get empty(): boolean { return this.idx.length === 0 }
 
   // Draw from here on at a place in the world, turned about the vertical.
   at(x: number, y: number, z: number, ry = 0, ground = y): this {
@@ -324,48 +314,37 @@ export class Builder {
     }
   }
 
-  geometry(which = 0): BufferGeometry {
-    const l = this.lots[which]
+  geometry(): BufferGeometry {
     const g = new BufferGeometry()
-    g.setAttribute('position', new BufferAttribute(new Float32Array(l.pos), 3))
-    g.setAttribute('normal', new BufferAttribute(new Float32Array(l.nrm), 3))
-    g.setAttribute('color', new BufferAttribute(new Float32Array(l.col), 3))
-    g.setAttribute('aUvh', new BufferAttribute(new Float32Array(l.uvh), 3))
-    g.setAttribute('aFin', new BufferAttribute(new Float32Array(l.fin), 3))
-    const n = l.pos.length / 3
-    g.setIndex(new BufferAttribute(n > 65535 ? new Uint32Array(l.idx) : new Uint16Array(l.idx), 1))
+    g.setAttribute('position', new BufferAttribute(new Float32Array(this.pos), 3))
+    g.setAttribute('normal', new BufferAttribute(new Float32Array(this.nrm), 3))
+    g.setAttribute('color', new BufferAttribute(new Float32Array(this.col), 3))
+    g.setAttribute('aUvh', new BufferAttribute(new Float32Array(this.uvh), 3))
+    g.setAttribute('aFin', new BufferAttribute(new Float32Array(this.fin), 3))
+    const n = this.pos.length / 3
+    g.setIndex(new BufferAttribute(n > 65535 ? new Uint32Array(this.idx) : new Uint16Array(this.idx), 1))
     g.computeBoundingSphere()
     return g
   }
 
-  // What has been drawn so far as one mesh that throws and takes shadow in every cascade (its roofs, which only throw
-  // it, a mesh under it); the builder is left empty.
+  // What has been drawn so far as one mesh that throws and takes shadow in every cascade; the builder is left empty.
   mesh(mat: MeshStandardMaterial, depth?: MeshDepthMaterial): Mesh {
-    const make = (which: number): Mesh => {
-      const mesh = new Mesh(this.geometry(which), mat)
-      if (depth) mesh.customDepthMaterial = depth
-      mesh.castShadow = true
-      mesh.receiveShadow = which === 0
-      for (const l of [1, 2, 3]) mesh.layers.enable(l)
-      return mesh
-    }
-    const mesh = make(0)
-    if (this.lots[1].idx.length) mesh.add(make(1))
+    const mesh = new Mesh(this.geometry(), mat)
+    if (depth) mesh.customDepthMaterial = depth
+    mesh.castShadow = true
+    mesh.receiveShadow = true
+    for (const l of [1, 2, 3]) mesh.layers.enable(l)
     this.clear()
     return mesh
   }
 
   clear(): void {
-    this.lots = [lot(), lot()]
-    this.at_ = 0
+    this.pos = []; this.nrm = []; this.col = []; this.uvh = []; this.fin = []; this.idx = []
     this.stack = []
   }
 }
 
-interface Lot { pos: number[]; nrm: number[]; col: number[]; uvh: number[]; fin: number[]; idx: number[] }
-const lot = (): Lot => ({ pos: [], nrm: [], col: [], uvh: [], fin: [], idx: [] })
-
-// Do something to a built mesh and the roofs under it.
+// Do something to a built mesh and any under it.
 export function each(mesh: Mesh, fn: (m: Mesh) => void): void {
   fn(mesh)
   for (const c of mesh.children) fn(c as Mesh)
@@ -407,6 +386,8 @@ export function builtMaterial(): MeshStandardMaterial {
       float bRough; float bMetal; float bSnow; float bGlass; float bLit; vec2 bBump;
       float bh1(float n) { return fract(sin(n * 127.1 + 3.7) * 43758.5453); }
       float bh2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      // The noise read twice, each turned its own way, so that its own grid never lines up into rules on a wall or a roof.
+      vec4 turned(vec2 p) { return 0.5 * (texture2D(uNoise, mat2(0.8, 0.6, -0.6, 0.8) * p) + texture2D(uNoise, mat2(0.6, -0.8, 0.8, 0.6) * p * 1.31 + 0.37)); }
       // How much of a pattern this fine still shows at this distance.
       float seen(float c) { return 1.0 - smoothstep(0.3, 0.95, fwidth(c)); }
     `,
@@ -417,16 +398,16 @@ export function builtMaterial(): MeshStandardMaterial {
         float hgt = vUvh.z;
         vec3 base = diffuseColor.rgb;
         float open = vFin.y;
-        float mott = texture2D(uNoise, uv * 0.11 + 0.31).b;
+        float mott = turned(uv * 0.11 + 0.31).b;
         float fine = texture2D(uNoise, uv * 1.3).a;
         // Rain runs down a wall in streaks, and splashes the foot of it with earth.
-        float streak = texture2D(uNoise, vec2(uv.x * 1.1, uv.y * 0.07 + 0.5)).a;
+        float streak = turned(vec2(uv.x * 1.1, uv.y * 0.07 + 0.5)).a;
         float splash = (1.0 - smoothstep(0.0, 0.42, hgt)) * (0.45 + 0.55 * fine);
         bRough = 0.9; bMetal = 0.0; bSnow = 1.0; bGlass = 0.0; bLit = 0.0; bBump = vec2(0.0);
         if (fin == ${FIN.clapboard}) {
           float c = uv.y / 0.05, lap = fract(c), row = floor(c), s = seen(c);
           float joint = floor(uv.x / 1.7 + bh1(row) * 9.0);
-          streak = texture2D(uNoise, vec2(uv.x * 0.31, uv.y * 0.045 + 0.5)).a;
+          streak = turned(vec2(uv.x * 0.31, uv.y * 0.045 + 0.5)).a;
           float board = 0.9 + 0.2 * bh2(vec2(row, joint));
           // each board's foot throws a line of shade on the one below; old paint is thin, and thinnest low down
           base *= mix(1.0, board * (1.0 - 0.5 * smoothstep(0.76, 0.95, lap)) * (1.0 + 0.1 * smoothstep(0.0, 0.2, lap) * (1.0 - smoothstep(0.2, 0.5, lap))), s);
@@ -465,7 +446,7 @@ export function builtMaterial(): MeshStandardMaterial {
           float seam = smoothstep(0.86, 0.94, fr) * (1.0 - smoothstep(0.96, 1.0, fr));
           base *= mix(1.0, 1.0 + 0.3 * seam - 0.3 * smoothstep(0.94, 1.0, fr) - 0.12 * (1.0 - smoothstep(0.0, 0.08, fr)), s);
           // rust starts at the eaves and the seams and runs down the sheet
-          float rust = smoothstep(0.42, 0.78, texture2D(uNoise, vec2(uv.x * 0.21 + 0.4, uv.y * 0.09)).b * 0.72 + streak * 0.4);
+          float rust = smoothstep(0.42, 0.78, turned(vec2(uv.x * 0.21 + 0.4, uv.y * 0.09)).b * 0.72 + streak * 0.4);
           float amount = clamp(2.0 - open * 2.0, 0.0, 1.0);
           base = mix(base, vec3(0.2, 0.085, 0.04) * (0.7 + 0.6 * fine), rust * amount);
           base *= 0.88 + 0.22 * streak;
@@ -553,7 +534,7 @@ export function builtMaterial(): MeshStandardMaterial {
           // banked earth grown over: the meadow's own green, whatever the season
           vec2 tp = vWorld.xz;
           base = uGrass * (0.62 + 0.62 * texture2D(uNoise, tp * 0.043).b) * (0.82 + 0.36 * texture2D(uNoise, tp * 0.31).a) * (0.84 + 0.32 * texture2D(uNoise, tp * 0.0037).b);
-          base *= mix(vec3(1.2, 1.07, 0.78), mix(vec3(0.86, 0.9, 0.84), vec3(0.8, 0.97, 0.88), uLeaf), smoothstep(0.32, 0.68, texture2D(uNoise, tp * 0.027 + 0.31).b));
+          base *= 0.8 * mix(vec3(1.2, 1.07, 0.78), mix(vec3(0.86, 0.9, 0.84), vec3(0.8, 0.97, 0.88), uLeaf), smoothstep(0.32, 0.68, texture2D(uNoise, tp * 0.027 + 0.31).b));
           bBump = (texture2D(uNoise, tp * 0.31).rg - 0.5) * 1.2;
           bRough = 0.96;
         } else if (fin == ${FIN.cord}) {
@@ -599,11 +580,14 @@ export function builtMaterial(): MeshStandardMaterial {
         vec3 wN = normalize(vWNormal + 0.035 * (vec3(bh2(pane), bh2(pane + 3.1), bh2(pane + 7.7)) - 0.5));
         vec3 wV = normalize(cameraPosition - vWorld);
         vec3 wR = reflect(-wV, wN);
-        float fres = 0.02 + 0.5 * pow(1.0 - max(dot(wN, wV), 0.0), 4.0);
+        float fres = (0.02 + 0.5 * pow(1.0 - max(dot(wN, wV), 0.0), 4.0)) * (1.0 - 0.85 * smoothstep(0.55, 0.9, dot(normalize(wR.xz + 1e-4), normalize(uSunDir.xz + 1e-4))));
         vec3 sky = skyRadiance(vec3(wR.x, max(wR.y, 0.0) + 0.06, wR.z), 0.12) * (0.25 + 0.75 * smoothstep(-0.05, 0.3, wR.y));
-        float glint = pow(max(dot(wR, uSunDir), 0.0), 260.0);
+        // a pane mirrors the sky, never the sun's own glare: held to a few times the sky's own brightness overhead
+        vec3 over = skyIrradiance(vec3(0.0, 1.0, 0.0)) * 0.3183;
+        sky = min(sky, over * 2.5 + 0.02);
+        float glint = pow(max(dot(wR, uSunDir), 0.0), 900.0);
         vec3 lamp = vec3(1.0, 0.62, 0.27) * uLampLum * bLit * (0.55 + 0.6 * texture2D(uNoise, vUvh.xy * 0.9 + pane * 0.13).a);
-        totalEmissiveRadiance += bGlass * (sky * fres * (1.0 - 0.6 * bLit) + uSunCol * glint * 2.2 * cloudShade(vWorld) + lamp);
+        totalEmissiveRadiance += bGlass * (sky * fres * (1.0 - 0.6 * bLit) + min(uSunCol, vec3(6.0)) * glint * 0.6 * cloudShade(vWorld) + lamp);
       }`,
   })
 }

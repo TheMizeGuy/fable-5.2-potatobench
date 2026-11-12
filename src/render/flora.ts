@@ -671,6 +671,6 @@ export const FARMSTEADS: [number, number, number][] = (() => {
   // (clear of our own drive and the Dufour drive where they meet the town road, and of the village)
   along(townRoadZ, -1900, 3000, 1, [[K * 20.6, 150], [DUFOUR.x + S * 92, 150], [K * 150, 260]])
   along(hillRoadZ, -1700, 2800, 2, [[K * 23, 240]])
-  out.push([K * 46.6, K * -10.5, Math.PI], [30 * K, -300 * K, 0.6], [-160 * K, -330 * K, 2.4], [210 * K, -340 * K, 1.2])
+  out.push([K * 46.6, K * -12.9, Math.PI], [30 * K, -300 * K, 0.6], [-160 * K, -330 * K, 2.4], [210 * K, -340 * K, 1.2])
   return out
 })()
