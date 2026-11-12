@@ -128,7 +128,7 @@ export function whois(ctx: Ctx, layer: HTMLElement): Whois {
           class: `btn${p.winter === ch.work ? ' is-on' : ''}`, type: 'button', testid: `whois-winter-${ch.work}`, 'aria-pressed': String(p.winter === ch.work), disabled: !ch.ok && p.winter !== ch.work, title: ch.why || undefined,
           onclick: () => run({ t: 'winter', unit: p.id, work: ch.work, field: ch.work === 'woods' ? S.timberTracts(c)[0] : undefined }, `${name}: ${WINTER_WORDS[ch.work].toLowerCase()} this winter.`),
         }, WINTER_WORDS[ch.work]))) : p.foreman ? null : h('div', { class: 'whois-first', role: 'group', 'aria-label': `The work ${farmer ? 'you do' : `${name} does`} first` },
-        h('span', { class: 't-label', title: keys ? 'The work they do before anything else. Click one to put it first.' : undefined }, 'First priority'),
+        h('span', { class: 't-label', title: keys ? `The work ${farmer ? 'you' : 'they'} do before anything else. Click one to put it first.` : undefined }, 'First priority'),
         S.SKILLS.map(k => h('button', {
           class: `key-btn${p.prio[k] === 1 ? ' is-on' : ''}${p.prio[k] === 0 ? ' never' : ''}`, type: 'button', testid: `whois-first-${k}`, 'aria-pressed': String(p.prio[k] === 1),
           title: keys ? `${SKILL_SHORT[k]} work first` : undefined,
@@ -138,8 +138,8 @@ export function whois(ctx: Ctx, layer: HTMLElement): Whois {
       h('div', { class: 'whois-acts' },
         h('button', {
           class: `btn${ctx.view.followed() === p.id ? ' is-on' : ''}`, type: 'button', testid: 'whois-follow', 'aria-pressed': String(ctx.view.followed() === p.id),
-          title: keys ? 'The camera stays centered on them until you move it' : undefined,
-          onclick: () => { const on = ctx.view.followed() === p.id; ctx.view.follow(on ? -1 : p.id); ctx.announce(on ? 'Stopped following.' : `Following ${name}. The camera stays centered on them until you move it.`); ctx.dirty() },
+          title: keys ? `The camera stays centered on ${farmer ? 'you' : 'them'} until you move it` : undefined,
+          onclick: () => { const on = ctx.view.followed() === p.id; ctx.view.follow(on ? -1 : p.id); ctx.announce(on ? 'Stopped following.' : `Following ${farmer ? 'you' : name}. The camera stays centered on ${farmer ? 'you' : 'them'} until you move it.`); ctx.dirty() },
         }, icon('scout', 'i'), ctx.view.followed() === p.id ? 'Following' : 'Follow'),
         c.phase === 'season' && c.crew.length > 1 ? h('button', { class: 'btn', type: 'button', testid: 'whois-more', onclick: () => app.selectUnit(p.id, 'list') }, icon('people', 'i'), 'Details') : null,
         c.phase === 'plan' ? h('button', { class: 'btn', type: 'button', testid: 'whois-more', onclick: () => openCrew(ctx) }, icon('people', 'i'), 'Hiring') : null,

@@ -64,7 +64,7 @@ export function pins(ctx: Ctx, layer: HTMLElement, o: { tags: () => DOMRect[]; c
     const picked = app.unit === m.id
     patch(w, JSON.stringify([m, count, picked, many, ctx.touch(), count > 1 ? members.map(x => [x.id, x.label]) : 0]), () => pin(m.name, m.state, {
       ring: m.ring, name: picked, testid: `pin-${m.id}`, count,
-      label: count > 1 ? `${count} people are here. ${members.map(x => x.label).join('. ')}. Press to choose one.` : `${m.label}. ${picked ? 'Press to close their card.' : 'Press to open their card.'}`,
+      label: count > 1 ? `${count} people are here. ${members.map(x => x.label).join('. ')}. Press to choose one.` : `${m.label}. Press to ${picked ? 'close' : 'open'} ${m.name === 'You' ? 'your' : 'their'} card.`,
       pressed: count === 1 ? picked : undefined,
       // the pointer over a pin names them, as it does over their body
       onenter: (e: Event) => { if ((e as PointerEvent).pointerType === 'mouse') app.point({ x: 0, y: 0, unit: m.id, thing: null, field: -1, yard: 0, group: count > 1 ? members.map(x => x.id) : undefined }) },

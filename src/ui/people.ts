@@ -211,7 +211,7 @@ export function personCard(ctx: Ctx): PersonCard {
           h('h2', { class: 't-title pc-name', testid: 'person-name' }, farmer ? 'You, the farmer' : p.name),
           h('p', { class: 'pc-trait' }, farmer ? h('span', { class: 'quiet' }, 'Does every job and draws no wage.') : [h('b', null, `${p.traitName}:`), ' ', h('span', { class: 'quiet' }, p.traitText.replace(/^./, x => x.toLowerCase()))])),
         h('span', { class: 'pc-tools' },
-          h('button', { class: 'iconbtn', type: 'button', testid: 'person-show', 'aria-label': 'Find them on the farm', title: ctx.touch() ? undefined : 'Find them on the farm', onclick: () => { app.selectUnit(p.id, 'land'); ctx.view.follow(p.id) } }, icon('scout', 'i')),
+          h('button', { class: 'iconbtn', type: 'button', testid: 'person-show', 'aria-label': farmer ? 'Find yourself on the farm' : 'Find them on the farm', title: ctx.touch() ? undefined : farmer ? 'Find yourself on the farm' : 'Find them on the farm', onclick: () => { app.selectUnit(p.id, 'land'); ctx.view.follow(p.id) } }, icon('scout', 'i')),
           h('button', { class: 'close', type: 'button', testid: 'person-close', 'aria-label': `Close${ctx.touch() ? '' : ' (Escape)'}`, onclick: () => app.selectUnit(-1) }, icon('close', 'i')))),
       h('p', { class: 'pc-doing', testid: 'person-doing' }, icon(doingGlyph(c, p), 'i'), h('span', null, doing),
         next && doing === 'Nothing to do' ? h('span', { class: 'quiet it' }, `. Up next: ${R.jobText(next, c, next.building).replace(/^./, x => x.toLowerCase())}`) : null),
