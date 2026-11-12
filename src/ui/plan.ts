@@ -331,14 +331,13 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
     const pc = S.planCosts(c)
     const after = c.cash - pc.total
     const over = after < S.OPERATING_LIMIT
-    const m = S.mortgageInfo(c)
-    // What the year end takes, whatever the crop: the spring loan back, the note, the household, the land mortgage.
-    // So whatever raises the loan (a field, a hand, a machine bought from cash) raises what is due by as much.
-    const loan = over ? 0 : Math.max(0, -after)
-    const bills = S.NOTE_PAYMENT + S.LIVING + Math.round(m.principal + m.interest)
-    const due = loan + bills
+    // What the year end takes, whatever the crop (S.moneyNow): the spring loan back, the note, the household, the land
+    // mortgage. Whatever raises the loan (a field, a hand, a machine bought from cash) raises what is due by as much.
+    const mn = S.moneyNow(app.world, c)
+    const loan = over ? 0 : mn.loan
+    const due = over ? mn.due.total - mn.due.loan : mn.due.total
     const what = pc.rent || pc.wages ? `with ${F.list([pc.rent ? `rent ${F.money(pc.rent)}` : '', pc.wages ? `wages ${F.money(pc.wages)}` : ''].filter(Boolean))}` : ''
-    const parts = F.list([loan ? 'the loan back' : '', `the note ${F.money(S.NOTE_PAYMENT)}`, `the household ${F.money(S.LIVING)}`, m.owed > 0 ? `the land mortgage ${F.money(Math.round(m.principal + m.interest))}` : ''].filter(Boolean))
+    const parts = F.list([loan ? 'the loan back' : '', `the note ${F.money(mn.due.note)}`, `the household ${F.money(mn.due.household)}`, mn.due.mortgage > 0 ? `the land mortgage ${F.money(Math.round(mn.due.mortgage))}` : ''].filter(Boolean))
     return [
       h('div', { class: `plan-money${over ? ' over' : ''}`, testid: 'plan-money' },
         h('p', { class: 'lead quiet pm-cash' }, h('span', { class: 'it' }, c.cash < 0 ? 'Owed from last year' : 'The farm has'), h('span', { class: 'dots' }),

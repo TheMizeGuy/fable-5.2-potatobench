@@ -31,18 +31,15 @@ function cashLine(label: Child, v: number, o: { testid?: string; always?: boolea
 }
 
 // The year in a sentence: what the farm began with, what it ends with, and why the one became the other.
+// The three largest reasons are the simulation's (S.yearStory); land and buildings bought are named, since the farm keeps them.
 export function yearSentence(y: S.YearSummary): string {
-  const start = y.cashStart, end = y.cashEnd
-  const bills = y.note + y.living + (y.interest ?? 0)
+  const st = S.yearStory(y)
   const kept = (y.land ?? 0) + (y.building ?? 0) + (y.works ?? 0)
-  const head = `You began the year with ${F.money(start)} and end it with ${F.money(end)}.`
-  const flow = `The crop and the rest brought ${F.money(y.revenue)}; growing it and everything else cost ${F.money(y.costs)}; the note and the household took ${F.money(y.note + y.living)}${y.interest ? `, and interest ${F.money(y.interest)}` : ''}.`
-  const why = end >= start
-    ? 'The crop paid for the year and the bank, with something over.'
-    : y.revenue >= y.costs
-      ? `The crop paid what it cost to grow, but not the ${F.money(bills)} the bank and the household take every year${kept ? `; and ${F.money(kept)} went on land, buildings and clearing, which the farm keeps` : ''}.`
-      : `The year cost more than the crop brought${kept ? `, ${F.money(kept)} of it on land, buildings and clearing, which the farm keeps` : ''}.`
-  return `${head} ${flow} ${why}`
+  const reasons = st.reasons.map(r => `${r.label.toLowerCase()} ${r.amount < 0 ? 'took' : 'brought'} ${F.money(Math.abs(Math.round(r.amount)))}`)
+  const less = st.ended < st.began
+  const head = `You began the year with ${F.money(st.began)} and end it with ${F.money(st.ended)}${less ? ', less than you began' : ''}`
+  const keep = kept && less ? ` Of what went out, ${F.money(kept)} bought land, buildings and clearing, which the farm keeps.` : ''
+  return `${head}, because ${F.list(reasons)}.${keep}`
 }
 
 function cashBook(y: S.YearSummary, lost: boolean): HTMLElement {

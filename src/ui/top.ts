@@ -8,7 +8,7 @@ import { count, patch, type Ctx } from './core.ts'
 import { h, type Child } from './dom.ts'
 import * as F from './fmt.ts'
 import { icon } from './icons.ts'
-import { BLIGHT_RISK, forecastSky, plantingIn, SKY_WORD, yearName } from './rules.ts'
+import { BLIGHT_RISK, firstName, forecastSky, plantingIn, SKY_WORD, yearName } from './rules.ts'
 import { fist } from './system/parts.ts'
 
 export const PHASE_LABEL: Record<S.Phase, string> = {
@@ -119,43 +119,19 @@ function progressText(g: Goal): string {
   return g.progress ? (g.progress.of === 100 ? `${g.progress.n}%` : `${g.progress.n}/${g.progress.of}`) : ''
 }
 
-// A crop not yet set is counted at a usual yield: the farm's own past years, or a plain middling crop before any.
-const USUAL_CWT_ACRE = 250
-// Of a field's tubers, about this share sells at the No. 1 price once grades, culls and shrink take theirs.
-const SOLD_SHARE = 0.8
-
 // The one figure that answers "am I all right?" through a season: what the farm would have after the year-end bills
-// if the crop sold today, with how it is made up.
+// if every lot and the crop in the ground sold today (S.moneyNow), with how it is made up.
 export function outlook(ctx: Ctx, c: S.Campaign): { figure: number; why: string } {
-  const world = ctx.app.world
-  const past = c.history.filter(y => y.potatoFields > 0 && y.yieldCwtAcre)
-  const usual = past.length ? past.reduce((a, y) => a + (y.yieldCwtAcre ?? 0), 0) / past.length : USUAL_CWT_ACRE
-  let ground = 0, guessed = 0
+  const m = S.moneyNow(ctx.app.world, c)
+  const figure = Math.round(m.after / 100) * 100
   const s = c.season
-  if (s) for (let i = 0; i < S.FIELD_COUNT; i++) {
-    const f = s.fields[i]
-    if (!S.isField(c, i) || !f || f.status === 'rest' || f.status === 'off' || f.status === 'lost' || f.weighed) continue
-    // Dug, the crop in barrels counts (what is hauled is already a lot in store); still growing, its estimate.
-    const lifting = f.status === 'digging' || f.status === 'dug'
-    const est = lifting ? null : S.estimateYield(c, i)
-    const cwt = lifting ? f.inField : (est ? est.mean : usual) * S.FIELD_ACRES
-    if (!lifting && !est) guessed++
-    ground += cwt * S.basePrice(world, c, c.plans[i].variety) * SOLD_SHARE
-  }
-  const stored = c.lots.filter(l => l.open).reduce((a, l) => a + S.lotValue(world, c, l), 0)
-  const m = S.mortgageInfo(c)
-  const bills = S.NOTE_PAYMENT + S.LIVING + Math.round(m.principal + m.interest)
-  const figure = Math.round((c.cash + ground + stored - bills) / 100) * 100
-  const parts = [
-    `${c.cash < 0 ? 'On the loan' : 'Cash'} ${F.money(c.cash)}`,
-    ground ? `the crop in the field, about ${F.money(Math.round(ground / 100) * 100)}${guessed ? ` (${F.plural(guessed, 'field')} not yet set, counted at a usual crop)` : ''}` : '',
-    stored ? `the crop in store, ${F.money(Math.round(stored))}` : '',
-    `less ${F.money(bills)} due at the year end`,
-  ].filter(Boolean)
+  const unset = s ? s.fields.filter((f, i) => S.isField(c, i) && (f.status === 'growing' || f.status === 'planted') && !S.estimateYield(c, i)).length : 0
+  const parts = m.parts.map(p => `${p.label} ${F.money(Math.round(p.amount))}`)
   const verdict = figure >= 0 ? 'The year would end in the black.'
     : figure >= S.CREDIT_LIMIT ? `The year would end in debt, inside the bank's limit of ${F.money(S.CREDIT_LIMIT)}: it carries the debt at interest.`
       : `The year would end past the bank's limit of ${F.money(S.CREDIT_LIMIT)}: it would call the note.`
-  return { figure, why: `If the crop sold today: ${F.list(parts)}. ${verdict}` }
+  const early = unset ? ` ${F.upper(F.plural(unset, 'field'))} not yet setting tubers ${unset === 1 ? 'counts' : 'count'} for nothing yet.` : ''
+  return { figure, why: `If everything sold today: ${parts.join('; ')}. ${verdict}${early}` }
 }
 
 // Said before logs are sold: the buildings not yet up that would take them, and what buying them back costs.
@@ -171,6 +147,8 @@ const MOMENT_MS = 1600
 const GOAL_ROUTINE: Record<string, S.JobKind> = { plant: 'plant', walk: 'scout', hill: 'hill', sample: 'sample', dig: 'dig', haul: 'haul', spray: 'spray', kill: 'kill' }
 // The season's calls that are the player's to make (the routine sees to the rest), first to last.
 const CALLS: Partial<Record<string, number>> = { rogue: 0, spray: 1, kill: 2, water: 3 }
+// A call on the slip: what it is, where, why it cannot wait, and the one command that sees to it when there is one.
+interface Call { id: string; act: string; field: number; text: string; why: string; fix: S.Cmd | null; fixLabel: string }
 
 // Brings a control forward once the screen has drawn it: in view, ringed, under the keyboard.
 export function light(selector: string): void {
@@ -208,6 +186,10 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
   let fresh = ''
   let pop: '' | 'goals' | 'materials' = ''
   let callShown = ''
+  let callsFor: unknown = null
+  let callList: Call[] = []
+  let viewFor: unknown = null
+  let viewNow: { figure: number; why: string } | null = null
   const closePop = (e: Event) => { if (pop && !(e.target as HTMLElement).closest?.('.tb-pop, .goal, .materials')) { pop = ''; ctx.dirty() } }
   document.addEventListener('pointerdown', closePop, true)
 
@@ -236,9 +218,9 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
       x.done ? h('i', { class: 'tick on', 'aria-hidden': 'true' }) : cls === 'now' ? fist() : h('i', { class: 'tick', 'aria-hidden': 'true' }),
       h('span', { class: `gl-t${x.done ? ' struck' : ''}` }, x.title),
       x.progress ? h('span', { class: 'gl-n num' }, progressText(x)) : null,
-      cls === 'now' ? h('span', { class: 'gl-why' }, x.why, !x.now ? ` ${x.when}.` : '') : cls === 'later' ? h('span', { class: 'gl-when' }, x.short ? notYet(c, x) : x.when) : null,
-      cls === 'now' && x.short ? h('span', { class: 'gl-when c-red' }, `Costs ${F.money(x.cost)}: ${F.money(x.short)} more than the farm has.`) : null,
-      !x.done && x.now && !x.short && o.show && o.canShow?.(x)
+      cls === 'now' ? h('span', { class: 'gl-why' }, x.why, !x.now ? ` ${x.when}.` : '') : cls === 'later' ? h('span', { class: 'gl-when' }, x.block && x.now ? notYet(c, x) : x.when) : null,
+      cls === 'now' && x.block ? h('span', { class: 'gl-when c-red' }, F.localize(x.block)) : null,
+      !x.done && x.now && !x.block && o.show && o.canShow?.(x)
         ? h('button', { class: 'btn', type: 'button', testid: cls === 'now' ? 'goal-show' : `goal-show-${x.id}`, onclick: () => showGoal(x) }, icon('arrow', 'i'), 'Show me') : null)
     return h('div', { class: 'tb-pop goals-pop sheet', testid: 'goals', role: 'dialog', 'aria-label': 'Goals' },
       h('p', { class: 't-label' }, 'The way ahead'),
@@ -268,21 +250,43 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
 
   // The season's call that cannot wait for a goal: a field's spray, water, roguing or vine kill, or any work marked
   // urgent. The one shown stays while it is still wanted, so the slip never swaps between two.
-  function pressing(c: S.Campaign): { need: S.Advice; field: number } | null {
+  // First the simulation's pressing work (not ordered, or nobody will take it), with its one-click fix; then a field's
+  // own call from the advice.
+  function pressing(c: S.Campaign): Call | null {
     if (c.phase !== 'season' || !c.season) { callShown = ''; return null }
-    const list = app.needs().map((n, field) => ({ need: n.need!, field }))
-      .filter(x => x.need && x.need.act !== 'close' && x.need.act !== 'wait' && x.need.act !== 'sell' && (CALLS[x.need.act] !== undefined || x.need.urgent))
+    // Worked out again only when the farm has changed (the advice is cached on the same revision).
+    const needs = app.needs()
+    if (needs !== callsFor) { callsFor = needs; callList = callsNow(c) }
+    const list = callList
     if (!list.length) { callShown = ''; return null }
-    const pick = list.find(x => x.need.id === callShown) ?? list.sort((a, b) => (CALLS[a.need.act] ?? 9) - (CALLS[b.need.act] ?? 9) || Number(b.need.urgent) - Number(a.need.urgent))[0]
-    callShown = pick.need.id
+    const pick = list.find(x => x.id === callShown) ?? list[0]
+    callShown = pick.id
     return pick
+  }
+
+  function callsNow(c: S.Campaign): Call[] {
+    const urgent: Call[] = S.pressing(app.world, c).map(p => ({
+      id: `p-${p.kind}-${p.field}`, act: p.kind, field: p.field, text: `${S.JOB_LABEL[p.kind]} ${S.FIELD_NAMES[p.field]}`, why: `${F.upper(p.why)}. ${p.inWay}`,
+      fix: p.fix, fixLabel: p.fix?.t === 'job' ? 'Order it' : p.fix?.t === 'priority' ? `${firstName(c.crew.find(u => u.id === (p.fix as { unit: number }).unit)?.name ?? 'Someone')} first` : 'Show me',
+    }))
+    const calls: Call[] = app.needs().map((n, field) => ({ need: n.need!, field }))
+      .filter(x => x.need && x.need.act !== 'close' && x.need.act !== 'wait' && x.need.act !== 'sell' && (CALLS[x.need.act] !== undefined || x.need.urgent))
+      .sort((a, b) => (CALLS[a.need.act] ?? 9) - (CALLS[b.need.act] ?? 9) || Number(b.need.urgent) - Number(a.need.urgent))
+      .map(x => ({ id: x.need.id, act: x.need.act, field: x.field, text: F.localize(x.need.text), why: F.localize(x.need.why), fix: null, fixLabel: 'Show me' }))
+    return [...urgent, ...calls.filter(x => !urgent.some(u => u.act === x.act && u.field === x.field))]
+  }
+
+  function takeCall(call: Call): void {
+    if (call.fix) { const r = ctx.run(call.fix); if (r.ok) ctx.announce(F.localize(r.events[0]?.text ?? `${call.text}: done.`)) }
+    if (call.field >= 0) { app.select(call.field); app.focus(call.field) }
+    ctx.dirty()
   }
 
   // Why a goal is not the fist's to point at now, in a few words.
   function notYet(c: S.Campaign, g: Goal): string {
     const act = GOAL_ROUTINE[g.id]
     if (!g.now) return g.when.toLowerCase()
-    if (g.short) return `${F.money(g.cost)}: ${F.money(g.short)} more than the farm has`
+    if (g.block) return F.localize(g.block).replace(/\.$/, '')
     if (act && c.season?.jobs.some(j => j.kind === act)) return 'on the list'
     if (act && S.routineInfo(c).some(r => r.kind === act && r.auto)) return 'the crew sees to it by itself'
     if (g.id === 'hire') { const why = S.hireRoom(c); if (why) return F.localize(why).replace(/\.$/, '').toLowerCase() }
@@ -303,7 +307,10 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     if (!line) return null
     // Before the ground is fit, the planting goal says plainly how long it will be, counting down by the day.
     const wait = g && g.id === 'plant' && season && !app.needs().some(n => n.need?.act === 'plant') ? plantingIn(app.world, c) : -1
-    const title = wait > 0 ? `Plant when the soil reaches ${F.temp(10)}` : g?.title ?? ''
+    // The one planting rule (S.plantReady) gives the temperature and the reason, as the field's card and the guide do.
+    const first = season ? c.plans.findIndex((p, i) => S.isField(c, i) && p.crop === 'potato') : -1
+    const ready = wait > 0 && first >= 0 ? S.plantReady(app.world, c, first) : null
+    const title = ready ? `Plant when the soil reaches ${F.temp(ready.need)}` : g?.title ?? ''
     const n = wait > 1 ? `about ${F.plural(wait, 'day')}` : wait === 1 ? 'any day' : g ? progressText(g) : ''
     const when = !g ? null : !g.now ? h('span', { class: 'goal-when' }, g.when.toLowerCase())
       : c.phase === 'plan' && CROP_STEPS.has(g.id) ? h('span', { class: 'goal-when' }, 'once the season starts')
@@ -314,27 +321,27 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
         icon('fast', 'i'), 'Let the weeks go: 3×') : null
     // The fist points only at what can be done now and paid for: the season's pressing call first (a long goal waits
     // in the quiet line under it), then the goal when its control can be reached; anything else is said quietly.
-    const reach = !!g && wait <= 0 && g.now && !g.short && (o.canShow?.(g) ?? false)
+    const reach = !!g && wait <= 0 && g.now && !g.block && (o.canShow?.(g) ?? false)
     const call = season ? pressing(c) : null
-    const callFirst = call && !(g && reach && GOAL_ROUTINE[g.id] === call.need.act)
+    const callFirst = call && !(g && reach && GOAL_ROUTINE[g.id] === call.act)
     if (callFirst || (season && g && !reach && wait <= 0)) {
       const quiet = h('button', {
-        class: `goal${callFirst ? '' : ' later'}`, type: 'button', testid: 'goal', k: callFirst ? `goal-call-${call!.need.id}` : `goal-later-${g!.id}`, 'aria-expanded': String(pop === 'goals'),
-        title: ctx.touch() ? undefined : callFirst ? F.localize(call!.need.why) : g!.why,
+        class: `goal${callFirst ? '' : ' later'}`, type: 'button', testid: 'goal', k: callFirst ? `goal-call-${call!.id}` : `goal-later-${g!.id}`, 'aria-expanded': String(pop === 'goals'),
+        title: ctx.touch() ? undefined : callFirst ? F.localize(call!.why) : g!.why,
         onclick: () => { pop = pop === 'goals' ? '' : 'goals'; ctx.dirty() },
       }, callFirst ? fist() : null, h('span', { class: 'goal-body' }, h('span', { class: 'sr' }, callFirst ? 'Now: ' : 'Next goal: '),
-        h('b', { class: 'goal-t' }, callFirst ? F.localize(call!.need.text) : g!.title),
+        h('b', { class: 'goal-t' }, callFirst ? F.localize(call!.text) : g!.title),
         callFirst ? (g ? h('span', { class: 'goal-when' }, `then: ${g.title.toLowerCase()}`) : null) : h('span', { class: 'goal-when' }, notYet(c, g!))),
-      h('span', { class: 'sr' }, `. ${callFirst ? F.localize(call!.need.why) : g!.why} Open the goals.`))
-      const go = callFirst ? h('button', { class: 'btn goal-go', type: 'button', testid: 'goal-do', onclick: () => { app.select(call!.field); app.focus(call!.field) } }, icon('arrow', 'i'), 'Show me') : null
+      h('span', { class: 'sr' }, `. ${callFirst ? F.localize(call!.why) : g!.why} Open the goals.`))
+      const go = callFirst ? h('button', { class: 'btn goal-go', type: 'button', testid: 'goal-do', onclick: () => takeCall(call!) }, icon(call!.fix ? 'check' : 'arrow', 'i'), call!.fixLabel) : null
       return go ? h('div', { class: 'goal-row' }, quiet, go) : quiet
     }
     const doIt = g && reach && o.show ? h('button', { class: 'btn goal-go', type: 'button', testid: 'goal-do', onclick: () => showGoal(g) }, icon('arrow', 'i'), 'Show me') : null
     // A goal that waits for another part of the year, or for money the farm has not got, is said without the fist.
-    const quiet = !!g && (!g.now || g.short > 0)
+    const quiet = !!g && (!g.now || !!g.block)
     const slip = h('button', {
       class: `goal${gone ? ' met' : g && g.id === fresh ? ' fresh' : ''}${quiet && !gone ? ' later' : ''}`, type: 'button', testid: 'goal', k: `goal-${g?.id ?? ''}${gone ? `-was-${gone.id}` : ''}`,
-      'aria-expanded': String(pop === 'goals'), title: ctx.touch() || !g ? undefined : g.why,
+      'aria-expanded': String(pop === 'goals'), title: ctx.touch() || !g ? undefined : ready ? F.localize(ready.why) : g.why,
       onclick: () => { pop = pop === 'goals' ? '' : 'goals'; ctx.dirty() },
     },
     gone ? h('span', { class: 'was struck' }, h('span', { class: 'sr' }, 'Done: '), gone.title) : null,
@@ -357,7 +364,8 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     const withClock = season && !low
     const withMenu = !(season && low)
     const { g, met: gone } = goalNow(c)
-    const view = season && !(layout === 'narrow') ? outlook(ctx, c) : null
+    if (season && app.needs() !== viewFor) { viewFor = app.needs(); viewNow = outlook(ctx, c) }
+    const view = season && layout !== 'narrow' ? viewNow : null
     const mats = c.logs >= 0.05 || c.stone >= 0.05
     if (pop === 'materials' && !mats) pop = ''
     const stopped = season && app.speed === 0 && (c.incidents.length > 0 || ctx.awaiting > 0)
@@ -365,8 +373,8 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
       p: c.phase, y: c.year, day: c.season?.day, m: c.month, cash: Math.round(c.cash), sp: app.speed, at: app.resumeSpeed, done: season && S.seasonDone(c) && !ctx.awaiting, layout,
       w: c.season?.watchDay, f: c.season?.log.filter(e => e.type === 'frost').length, u: app.settings.units, t: ctx.touch(), days, withClock, withMenu, stopped,
       g: g ? [g.id, progressText(g), g.now] : 0, gone: gone?.id ?? '', fresh, pop, wait: season && g?.id === 'plant' ? plantingIn(app.world, c) : -1, mats: mats ? [Math.round(c.logs * 10), Math.round(c.stone * 10)] : 0,
-      ladder: pop === 'goals' ? goals(c).map(x => [x.id, x.done, progressText(x), x.short, x.now && !x.done && !!o.canShow?.(x)]) : 0, reach: g ? !!o.canShow?.(g) : false,
-      call: season ? pressing(c)?.need.id ?? '' : '', short: g?.short ?? 0, view: view?.why ?? '',
+      ladder: pop === 'goals' ? goals(c).map(x => [x.id, x.done, progressText(x), x.block, x.now && !x.done && !!o.canShow?.(x)]) : 0, reach: g ? !!o.canShow?.(g) : false,
+      call: season ? pressing(c)?.id ?? '' : '', block: g?.block ?? '', view: view?.why ?? '',
       jobs: season ? [...new Set(c.season!.jobs.map(j => j.kind))].sort().join() : '', auto: season ? S.routineInfo(c).filter(r => r.auto).map(r => r.kind).join() : '',
       k: season || c.phase === 'cellar' ? contracts.key() : 0,
     }
