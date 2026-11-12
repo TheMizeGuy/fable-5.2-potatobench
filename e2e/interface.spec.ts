@@ -815,7 +815,10 @@ test('tags and stamps hold still when a card opens or closes and when an order i
   expect(stamps.length).toBeGreaterThan(1)
   const selects = () => game<number>(page, 'window.__selects ?? 0')
   await page.evaluate(() => { const { app } = (globalThis as any).__county; (globalThis as any).__selects = 0; app.on((e: any) => { if (e.type === 'select') (globalThis as any).__selects++ }) })
+  // The camera at rest first: tags go with their fields while it moves, as they should.
+  const still = async () => { let a = '', b = '-'; while (a !== b) { a = b; await page.waitForTimeout(300); b = JSON.stringify(await page.evaluate(() => [0, 1, 2, 9].map(i => { const p = (globalThis as any).__countyField.anchor(i); return [Math.round(p.x), Math.round(p.y)] }))) } }
   for (const [n, close] of [[stamps[0], 'Escape'], [stamps[1], 'cross']] as const) {
+    await still()
     const was = await where()
     await page.getByTestId('field-0').click()
     await expect(page.getByTestId('card-title')).toHaveText('North Ridge')

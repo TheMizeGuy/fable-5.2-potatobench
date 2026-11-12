@@ -104,8 +104,22 @@ for (const [phase, setup] of Object.entries(PHASES)) {
         } else {
           // a pin goes with its person, who may be at work: its place is taken again just before the click
           const now = await page.evaluate(id => { const p = document.querySelector<HTMLElement>(`#ui [data-testid="pin-${id}"] .head`); if (!p || p.closest('.gone')) return null; const r = p.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 } }, person.id) as { x: number; y: number } | null
-          if (now) { at.x = now.x; at.y = now.y }
+          if (!now) { row.result = 'no pin on screen'; continue }
+          at.x = now.x; at.y = now.y
         }
+        // What lies at the point now (a sheet laid since, a pin that moved): a point the interface covers is no click.
+        const top = await page.evaluate(([x, y]) => { const e = document.elementFromPoint(x, y) as HTMLElement | null; return !e ? 'nothing' : e.tagName === 'CANVAS' || e.closest('.pin') ? '' : String(e.className).slice(0, 30) || e.tagName }, [at.x, at.y])
+        if (top) { row.result = `under the interface (${top})`; continue }
+        // what the click did, for the report when nothing opens: the unit events, and the pointer on the canvas
+        await page.evaluate(() => {
+          const g = globalThis as any
+          g.__clickLog = []
+          if (!g.__clickHooked) {
+            g.__clickHooked = true
+            g.__county.app.on((e: any) => { if (e.type === 'unit' || e.type === 'select' || e.type === 'inspect') g.__clickLog?.push(`${e.type}:${e.unit ?? ''}`) })
+            for (const t of ['pointerdown', 'pointerup']) document.addEventListener(t, (ev: Event) => { const el = ev.target as HTMLElement; g.__clickLog?.push(`${t}@${el.id || el.tagName}.${String(el.className).slice(0, 30)}`) }, true)
+          }
+        })
         const t0 = Date.now()
         await page.mouse.click(at.x, at.y)
         // a group pin opens to the people in it
@@ -116,7 +130,7 @@ for (const [phase, setup] of Object.entries(PHASES)) {
         while (!card && Date.now() - t0 < 300) { await page.waitForTimeout(25); card = await cardNow(page) }
         const ms = Date.now() - t0
         if (!card) {
-          const why = await page.evaluate(([x, y]) => { const f = (globalThis as any).__countyField; const { app } = (globalThis as any).__county; const p = f.pickAt(x, y); return `view picks unit ${p.unit}, field ${p.field}, yard ${p.yard}; app.unit ${app.unit} from ${app.unitFrom}` }, [at.x, at.y])
+          const why = await page.evaluate(([x, y]) => { const g = globalThis as any; const f = g.__countyField; const { app } = g.__county; const p = f.pickAt(x, y); return `view picks unit ${p.unit}, field ${p.field}, yard ${p.yard}; app.unit ${app.unit} from ${app.unitFrom}; ${(g.__clickLog ?? []).join(' ')}` }, [at.x, at.y])
           row.result = `nothing opened (${ms} ms): ${why}`; row.ok = false; continue
         }
         const dx = Math.max(card.x - at.x, 0, at.x - (card.x + card.w)), dy = Math.max(card.y - at.y, 0, at.y - (card.y + card.h))
