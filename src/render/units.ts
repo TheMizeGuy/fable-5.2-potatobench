@@ -928,7 +928,8 @@ export class Crews {
           const nx = c.x + Math.cos(c.h) * 0.25 * f.dt, nz = c.z + Math.sin(c.h) * 0.25 * f.dt
           if (Math.abs(nx - 37) < 6 && Math.abs(nz - 10) < 6) { c.x = nx; c.z = nz } else c.h += Math.PI * 0.6
         }
-        drawBeast(pr, COWS[c.kind], c.x, heightAt(c.x, c.z), c.z, c.h, big * 0.9, f.time * 3 + c.kind, c.walking ? 0.7 : 0, c.walking ? 0 : 1)
+        // the neighbour's stock is scenery: never drawn as large as the farm's own people are from far off
+        drawBeast(pr, COWS[c.kind], c.x, heightAt(c.x, c.z), c.z, c.h, Math.min(big, 1.5) * 0.9, f.time * 3 + c.kind, c.walking ? 0.7 : 0, c.walking ? 0 : 1)
       }
     }
     // A deer at the wood's edge, gone into the trees when anyone comes near.
@@ -939,7 +940,7 @@ export class Crews {
     d.t += f.dt
     if (this.lively && d.away < 0.99 && snap.mode !== 'title') {
       const z = d.z - d.away * 5
-      drawBeast(pr, DEER, d.x - d.away * 2, heightAt(d.x, z), z, near ? -1.9 : 0.4, big * 0.9 * (1 - 0.5 * d.away), d.away > 0.02 ? f.time * 14 : 0, d.away > 0.02 && d.away < 0.99 ? 1 : 0, near ? 0 : (Math.sin(d.t * 0.4) > 0.2 ? 1 : 0))
+      drawBeast(pr, DEER, d.x - d.away * 2, heightAt(d.x, z), z, near ? -1.9 : 0.4, Math.min(big, 1.5) * 0.9 * (1 - 0.5 * d.away), d.away > 0.02 ? f.time * 14 : 0, d.away > 0.02 && d.away < 0.99 ? 1 : 0, near ? 0 : (Math.sin(d.t * 0.4) > 0.2 ? 1 : 0))
     }
   }
 

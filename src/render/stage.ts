@@ -54,8 +54,8 @@ interface Site {
 }
 
 const Y = new Vector3(0, 1, 0), X = new Vector3(1, 0, 0)
-const a = new Vector3(), b = new Vector3(), c = new Vector3(), d = new Vector3(), e = new Vector3()
-const SPRUCE = new Color('#1f3a2a'), ALDER = new Color('#51683a'), WHITE = new Color(1, 1, 1), SLED = new Color('#6f5a41'), CHAIN = new Color('#2b2b2a')
+const a = new Vector3(), b = new Vector3(), c = new Vector3(), d = new Vector3(), e = new Vector3(), g = new Vector3()
+const SPRUCE = new Color('#1f3a2a'), ALDER = new Color('#51683a'), ALDER_DARK = new Color('#3f5632'), WHITE = new Color(1, 1, 1), SLED = new Color('#6f5a41'), CHAIN = new Color('#2b2b2a')
 const FLAME = [new Color(7, 2.4, 0.5), new Color(8, 4.2, 0.9), new Color(5, 1.2, 0.3)], EMBER = new Color('#2a1c14'), WATER = new Color('#cfe0ea')
 const ORANGE = new Color('#b8642a'), DRUM = new Color('#23262a'), GRAVEL = new Color('#8f8a80')
 
@@ -171,7 +171,7 @@ export class Stage {
     const sideways = n % 2 ? 1 : -1
     // the tree is no bigger than the woods it stands in, however large the people are drawn
     const ts = Math.min(s, 1.7) / s
-    const H = (brushy ? 1.25 : 2.7 + 0.5 * hash(n)) * (brushy ? 1 : ts), r = brushy ? 0.035 : 0.08 * ts
+    const H = (brushy ? 1.5 : 2.7 + 0.5 * hash(n)) * (brushy ? 1 : ts), r = 0.08 * ts
     // the tree: standing and shivering under the axe, going over, lying to be limbed
     const fall = t < tCut ? 0 : Math.pow(span(tCut, tDown, t), 2.4)
     const struck = t < tCut ? 0.012 * Math.sin(st.t * 23) * Math.max(0, Math.sin(st.t * 5)) : 0
@@ -182,13 +182,20 @@ export class Stage {
     b.copy(Y).multiplyScalar(Math.cos(ang)).addScaledVector(d, Math.sin(ang))
     const limbed = span(tDown + 0.6, T - 0.8, t)
     const gone = span(T - 0.5, T, t)
-    pr.put('log', a, b, X, r * 2 * s, H * s * (1 - 0.25 * limbed), r * 2 * s, WHITE)
     if (brushy) {
-      for (let k = 0; k < 3; k++) {
-        c.copy(a).addScaledVector(b, (0.55 + 0.2 * k) * H * s).addScaledVector(d, (k - 1) * 0.12 * s)
-        pr.put('ball', c, b, X, 0.34 * s * (1 - limbed), 0.3 * s * (1 - limbed), 0.34 * s * (1 - limbed), ALDER)
+      // an alder clump: a handful of stems leaning out from one stool, in leaf toward their ends
+      for (let k = 0; k < 5; k++) {
+        const az = hash(n * 7 + k) * 6.28, len = H * (0.65 + 0.5 * hash(n * 13 + k)) * (1 - 0.3 * limbed)
+        e.set(Math.cos(az), 0, Math.sin(az))
+        c.copy(b).addScaledVector(e, (0.16 + 0.3 * hash(n * 11 + k)) * (1 - 0.8 * fall)).normalize()
+        pr.put('log', a, c, X, 0.045 * s, len * s, 0.045 * s, WHITE)
+        for (const q of [0.62, 0.96]) {
+          g.copy(a).addScaledVector(c, q * len * s)
+          pr.put('ball', g, c, X, 0.19 * s * (1 - limbed), 0.25 * s * (1 - limbed), 0.19 * s * (1 - limbed), k % 2 ? ALDER : ALDER_DARK)
+        }
       }
     } else {
+      pr.put('log', a, b, X, r * 2 * s, H * s * (1 - 0.25 * limbed), r * 2 * s, WHITE)
       for (let k = 0; k < 5; k++) {
         const wide = (1.25 - 0.2 * k) * (1 - limbed * (0.4 + 0.12 * k)) * (1 - gone) * ts
         if (wide <= 0.02) continue
@@ -265,14 +272,16 @@ export class Stage {
     })
     if (brushy) return
     // the team: out to the tree light, back to the landing with a log on the chain
-    const TT = 17, tt = frac(st.t / TT + 0.4) * TT
-    // the team waits at the landing and comes in on the side the tree does not fall to
-    const from: [number, number] = [-0.35, sideways > 0 ? -3.4 : 3.4], to: [number, number] = [0.5, -sideways * 1.5]
-    const going = tt < 5.5, hitching = tt >= 5.5 && tt < 7.5, hauling = tt >= 7.5 && tt < 15
-    const u = going ? ease(tt / 5.5) : hitching ? 1 : hauling ? 1 - ease((tt - 7.5) / 7.5) : 0
-    const hx = from[0] + (to[0] - from[0]) * u, hz = from[1] + (to[1] - from[1]) * u
+    // It brings the last tree's log in to the landing while this one is cut, stands there until it is down, then goes out to it.
+    const landing: [number, number] = [-0.45, 3.1], last = spots[(n + 2) % 3]
+    const from: [number, number] = [last[0] - 0.6, last[1]], to: [number, number] = [tx - 0.6, tz]
+    const tHaul = 4.4, tOut = tDown + 0.9
+    const hauling = t < tHaul, going = t >= tOut
+    const u = hauling ? ease(t / tHaul) : going ? ease((t - tOut) / (T - tOut)) : 0
+    const p0 = hauling ? from : landing, p1 = hauling ? landing : going ? to : landing
+    const hx = p0[0] + (p1[0] - p0[0]) * u, hz = p0[1] + (p1[1] - p0[1]) * u
     this.local(st, s, hx, hz, PT)
-    const dirx = (to[0] - from[0]) * (going ? 1 : -1), dirz = (to[1] - from[1]) * (going ? 1 : -1)
+    const dirx = hauling || going ? p1[0] - p0[0] : tx - landing[0], dirz = hauling || going ? p1[1] - p0[1] : tz - landing[1]
     const hh = h + Math.atan2(dirz, dirx)
     const moving = (going || hauling) && f.going ? 1 : 0
     for (const sd of [-1, 1]) {
@@ -325,7 +334,8 @@ export class Stage {
       const n = Math.min(22, Math.floor(st.piles[end]))
       for (let q = 0; q < n; q++) {
         const ring = q < 9 ? 0 : q < 17 ? 1 : 2, ang = q * 2.4, rad = (0.42 - 0.15 * ring) * (0.5 + 0.5 * hash(q + end * 31))
-        this.P(st, s, ((end ? 1 : -1) * (half + 1.5)) / s + Math.cos(ang) * rad, 0.03 + 0.085 * ring, -1.2 / s + Math.sin(ang) * rad, b)
+        // in the field's own corners, off the headland where the tractors turn
+        this.P(st, s, ((end ? 1 : -1) * (half + 0.8)) / s + Math.cos(ang) * rad, 0.03 + 0.085 * ring, -((fd.z1 - fd.z0) / 2 - 0.8) / s + Math.sin(ang) * rad, b)
         pr.put('ball', b, Y, X, (0.085 + 0.04 * hash(q + 5)) * s, 0.065 * s, (0.08 + 0.03 * hash(q + 9)) * s, GRAVEL)
       }
     }
@@ -605,10 +615,10 @@ export class Stage {
         pr.rod('cyl', a, b, thick * (0.6 + 0.7 * q), WATER)
         px = x; py = y; pz = z
       }
-      if (!f.still && f.going && Math.random() < 0.06 * reachU) {
+      if (!f.still && f.going && Math.random() < 0.1 * reachU) {
         // spray falling out of the far half of the throw, and going a little way with the wind
         const q = 0.55 + Math.random() * 0.45
-        f.particles.emit(from.x + Math.cos(dirA) * reachU * q, from.y + high * 4 * q * (1 - q) * 0.8, from.z + Math.sin(dirA) * reachU * q, 0, -0.3, 0, 0.07 * s, 0.2 * s, 0.8 + Math.random() * 0.6, 0.85, 0.9, 0.94, 0.16, 0.8)
+        f.particles.emit(from.x + Math.cos(dirA) * reachU * q, from.y + high * 4 * q * (1 - q) * 0.8, from.z + Math.sin(dirA) * reachU * q, 0, -0.3, 0, 0.08 * s, 0.26 * s, 0.8 + Math.random() * 0.6, 0.85, 0.9, 0.94, 0.17, 0.8)
       }
     }
     if (reel) {
@@ -628,7 +638,7 @@ export class Stage {
       for (const sd of [-1, 1]) { b.copy(a).addScaledVector(e, sd * 0.25 * s); c.copy(a).addScaledVector(Y, 0.5 * s); pr.rod('cyl', b, c, 0.02 * s, CHAIN) }
       c.copy(a).addScaledVector(Y, 0.52 * s)
       const sweep = Math.PI + 1.25 * Math.sin(st.t * 0.5)
-      if (f.going) jet(c, sweep, 6.2 + 0.3 * Math.sin(st.t * 7), 0.85, 0.016 * s)
+      if (f.going) jet(c, sweep, 6.2 + 0.3 * Math.sin(st.t * 7), 1.5, 0.022 * s)
     } else {
       // pipe laid across the rows from the headland, a sprinkler at every joint
       b.set(hx - 0.4 * s, heightAt(hx, hz) + 0.07, hz)
