@@ -14,7 +14,7 @@ import { icon } from './icons.ts'
 import { incidentCard } from './incident.ts'
 import { ticket, trayPaper } from './dig.ts'
 import { digitFor, fieldForDigit, isTract } from './map.ts'
-import { askSpray, personCard, putSprayAway, sprayAsking, sprayQuestion, sprayWay, workGrid } from './people.ts'
+import { personCard, putSprayAway, sprayAsking, sprayQuestion, sprayWay, workGrid } from './people.ts'
 import { pins } from './pins.ts'
 import { plates, type PlateModel } from './plates.ts'
 import { hint as hintText, isJob, isStale, jobText, JOB_VERB, KEY_JOB, stageGlyph } from './rules.ts'
@@ -204,18 +204,6 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   }
 
   let frostWarned = -1
-  // Spraying is asked about once a season, the first time blight weather comes; put away unanswered, it is not asked
-  // again (Who does what asks it again).
-  let sprayAsked = ''
-  function askSprayOnce(c: S.Campaign): void {
-    const s0 = c.season
-    const key = `${c.seed}.${c.year}`
-    if (S.seasonDone(c)) putSprayAway(ctx)
-    if (!s0 || s0.watchDay < 0 || sprayAsked === key || sprayWay(c) || S.seasonDone(c) || !s0.fields.some(f => f.status === 'growing')) return
-    sprayAsked = key
-    if (S.routineInfo(c).some(r => r.kind === 'spray' && r.auto)) return
-    askSpray(ctx)
-  }
   const off = app.on(ev => {
     if (ev.type === 'yard' || ev.type === 'unit' || ev.type === 'select') ctx.dirty()
     else if (ev.type === 'events') {
@@ -577,7 +565,6 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
         if (performance.now() - ranAt < 2400) setTimeout(() => ctx.dirty(), 2450)
       }
       updateHint()
-      askSprayOnce(c)
       sprayCard.hidden = !sprayAsking()
       if (!sprayCard.hidden) patch(sprayCard, JSON.stringify([sprayWay(c), ctx.touch(), Math.round(S.sprayOutlook(app.world, c).dollars / 50)]), () => sprayQuestion(ctx, c))
       P.update()
@@ -608,11 +595,10 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       }
       const t = Math.max(top.el.getBoundingClientRect().bottom, ...[...top.el.querySelectorAll<HTMLElement>('.almanac > .mount, .bank > .mount')].map(x => x.getBoundingClientRect().bottom))
       const vis = (x: HTMLElement) => !x.hidden && x.offsetParent !== null && x.offsetHeight > 0
-      // The time book and its list at the foot; the clock with them on a phone. The alerts come and go over the land
-      // and do not frame it.
+      // The time book and its list at the foot, the alerts, and the clock with them on a phone.
       // The list's row is kept whether or not it holds an order, so the first order given moves nothing on the land.
       const book = crew.querySelector<HTMLElement>('.timebook')
-      const low = [...(book && vis(book) ? [box(book).top - LIST_ROOM] : []), ...(vis(clockSlot) ? [box(clockSlot).top] : [])]
+      const low = [...(book && vis(book) ? [box(book).top - LIST_ROOM] : []), ...[clockSlot, notesSlot].filter(vis).map(x => box(x).top)]
       const bottom = innerHeight - Math.min(...low, innerHeight) + 6
       // Only what always stands frames the land: a bar, a page or the grid opening on a click never moves the camera
       // (the bar steps to the other side of what it belongs to instead; a card lies over the tags). On a phone

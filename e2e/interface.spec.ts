@@ -871,16 +871,15 @@ test('blight weather asks once how to spray this season, and a worn-out hand can
     while (c.season.watchDay < 0 && n++ < 120) { q.run(c.season.day + 1, ['spray']); c.incidents = [] }
     app.setSpeed(0)`)
   test.skip(await game<number>(page, 'app.campaign.season.watchDay') < 0, 'no blight weather this year')
+  await page.keyboard.press('g')
+  await page.getByTestId('spray-ask-open').click()
   const ask = page.getByTestId('spray-ask')
   await expect(ask).toBeVisible()
   await expect(ask).toContainText('Keep the fields sprayed')
   await ask.getByTestId('spray-way-auto').click()
   await expect(ask).toBeHidden()
   expect(await game<boolean>(page, `sim.routineInfo(app.campaign).find(r => r.kind === 'spray').auto`)).toBe(true)
-  // Asked once: it does not come back; Who does what asks it again.
-  await page.waitForTimeout(400)
-  await expect(page.getByTestId('spray-ask')).toBeHidden()
-  await page.keyboard.press('g')
+  // Who does what asks it again.
   await page.getByTestId('spray-ask-open').click()
   await page.getByTestId('spray-ask').getByTestId('spray-way-ask').click()
   expect(await game<boolean>(page, `sim.routineInfo(app.campaign).find(r => r.kind === 'spray').auto`)).toBe(false)
