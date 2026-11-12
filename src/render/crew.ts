@@ -389,6 +389,9 @@ export function figureMatrix(out: Matrix4, x: number, y: number, z: number, head
   return out.compose(a.set(x, y, z), Q2.setFromAxisAngle(Y, -heading), b.set(scale, scale, scale))
 }
 
+// How finely the next figure is drawn: the face, the hands, the buttons and the belt only when near enough to be seen.
+export const LOD = { fine: true }
+
 // Where the last figure drawn has its head and its hands, in the world.
 export const drawn = { head: new Vector3(), handL: new Vector3(), handR: new Vector3(), chest: new Vector3(), toolB: new Vector3(), up: new Vector3(), fwd: new Vector3() }
 
@@ -450,7 +453,7 @@ export function drawFigure(pr: Prims, at: Matrix4, dress: Dress, p: Pose): void 
     pr.rod('taper', hj[i], kn[i], 0.046 * s * k, dress.trousers)
     pr.rod('taper', kn[i], an[i], 0.036 * s * k, dress.trousers)
     // the boot's leg, laced to above the ankle
-    pr.rod('cyl', an[i], a.copy(an[i]).lerp(kn[i], 0.3), 0.034 * s * k, dress.boots)
+    if (LOD.fine) pr.rod('cyl', an[i], a.copy(an[i]).lerp(kn[i], 0.3), 0.034 * s * k, dress.boots)
     pr.put('ball', kn[i], WU, WF, 0.036 * s * k, 0.036 * s * k, 0.036 * s * k, dress.trousers)
     // the boot points the way the shin's plane faces, flat on the ground when the foot is down
     a.subVectors(an[i], kn[i])
@@ -464,12 +467,14 @@ export function drawFigure(pr: Prims, at: Matrix4, dress: Dress, p: Pose): void 
   pr.put('ball', a, TU, TF, 0.05 * s * k, 0.05 * s, 0.088 * s * k, dress.trousers)
   a.copy(hip).addScaledVector(TU, -0.015 * s)
   pr.put('torso', a, TU, TF, 0.15 * s * k, (TORSO + 0.012) * s, 0.235 * s * k, dress.shirt)
+  const fine = LOD.fine
   // a belt, a collar open at the throat, a row of buttons down the front
+  SHADE.copy(dress.shirt).multiplyScalar(0.72)
+  if (fine) {
   a.copy(hip).addScaledVector(TU, -0.012 * s)
   pr.put('cyl', a, TU, TF, 0.062 * s * k, 0.02 * s, 0.1 * s * k, LEATHER)
   a.copy(hip).addScaledVector(TU, -0.01 * s).addScaledVector(TF, 0.06 * s * k)
   pr.put('box', a, TU, TF, 0.012 * s, 0.018 * s, 0.022 * s, STEEL)
-  SHADE.copy(dress.shirt).multiplyScalar(0.72)
   for (const side of [-1, 1]) {
     a.copy(neck).addScaledVector(TU, -0.022 * s).addScaledVector(TF, 0.022 * s).addScaledVector(TR, side * 0.03 * s)
     c.copy(TU).addScaledVector(TR, side * 0.9).addScaledVector(TF, 0.5).normalize()
@@ -478,6 +483,7 @@ export function drawFigure(pr: Prims, at: Matrix4, dress: Dress, p: Pose): void 
   if (!dress.bib) for (let n = 0; n < 3; n++) {
     a.copy(hip).addScaledVector(TU, (0.05 + 0.045 * n) * s).addScaledVector(TF, (0.066 + 0.006 * n) * s * k)
     pr.put('ball', a, TU, TF, 0.006 * s, 0.006 * s, 0.006 * s, SHADE)
+  }
   }
   if (dress.bib) {
     a.copy(hip).addScaledVector(TU, 0.02 * s).addScaledVector(TF, 0.052 * s * k)
@@ -493,6 +499,7 @@ export function drawFigure(pr: Prims, at: Matrix4, dress: Dress, p: Pose): void 
     pr.rod('taper', sh[i], el[i], 0.036 * s * k, dress.shirt)
     pr.put('ball', el[i], TU, TF, 0.029 * s * k, 0.029 * s * k, 0.029 * s * k, dress.sleeve)
     pr.rod('taper', el[i], hand[i], 0.029 * s * k, dress.sleeve)
+    if (!fine) { pr.put('ball', hand[i], TU, TF, 0.03 * s, 0.03 * s, 0.03 * s, dress.skin); continue }
     // a cuff at the wrist (or the roll of the sleeve at the elbow), and a hand with a thumb, along the forearm's line
     c.subVectors(hand[i], el[i]).normalize()
     if (dress.sleeve === dress.skin) pr.put('cyl', a.copy(el[i]).addScaledVector(c, 0.012 * s), c, TF, 0.031 * s * k, 0.022 * s, 0.031 * s * k, dress.shirt)
@@ -510,7 +517,7 @@ export function drawFigure(pr: Prims, at: Matrix4, dress: Dress, p: Pose): void 
   a.copy(head).addScaledVector(HF, 0.052 * s).addScaledVector(HU, -0.008 * s)
   pr.put('ball', a, HU, HF, 0.016 * s, 0.014 * s, 0.013 * s, dress.skin)
   // eyes, and the brows' shadow over them
-  for (const side of [-1, 1]) {
+  if (fine) for (const side of [-1, 1]) {
     a.copy(head).addScaledVector(HF, 0.05 * s).addScaledVector(HU, 0.012 * s).addScaledVector(HR, side * 0.022 * s)
     pr.put('ball', a, HU, HF, 0.0075 * s, 0.009 * s, 0.0085 * s, EYE)
     // a brow in the colour of the hair, and an ear
@@ -520,10 +527,12 @@ export function drawFigure(pr: Prims, at: Matrix4, dress: Dress, p: Pose): void 
     pr.put('ball', a, HU, HF, 0.012 * s, 0.018 * s, 0.008 * s, dress.skin)
   }
   // the mouth, and the jaw under it
-  a.copy(head).addScaledVector(HF, 0.05 * s).addScaledVector(HU, -0.036 * s)
-  pr.put('box', a, HU, HF, 0.008 * s, 0.005 * s, 0.024 * s, MOUTH)
-  a.copy(head).addScaledVector(HF, 0.018 * s).addScaledVector(HU, -0.04 * s)
-  pr.put('ball', a, HU, HF, 0.04 * s, 0.03 * s, 0.042 * s, dress.skin)
+  if (fine) {
+    a.copy(head).addScaledVector(HF, 0.05 * s).addScaledVector(HU, -0.036 * s)
+    pr.put('box', a, HU, HF, 0.008 * s, 0.005 * s, 0.024 * s, MOUTH)
+    a.copy(head).addScaledVector(HF, 0.018 * s).addScaledVector(HU, -0.04 * s)
+    pr.put('ball', a, HU, HF, 0.04 * s, 0.03 * s, 0.042 * s, dress.skin)
+  }
   // hair: over the back of the head and down to the collar
   b.copy(HU).addScaledVector(HF, -0.55).normalize()
   a.copy(head).addScaledVector(HF, -0.006 * s)

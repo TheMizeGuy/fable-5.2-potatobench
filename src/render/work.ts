@@ -254,6 +254,12 @@ export const PACE = { walk: 1.4, worn: 1.0, lane: 5.5, work: 2.4, truck: 8.5 }
 // least 17 m wide everywhere, so a turn stays inside the walls and off the lane beyond.
 const RUN_OUT = 4, TURN = 5
 
+// Whether a machine stands in a field or on the headland at its ends.
+function inField(field: number, p: Pt): boolean {
+  const f = FIELDS[field]
+  return p.x > f.x0 - RUN_OUT - TURN - 2 && p.x < f.x1 + RUN_OUT + TURN + 2 && p.z > f.z0 - 1 && p.z < f.z1 + 1
+}
+
 // The crossings for the share of a job from p0 to p1 of the field's depth (0 at its top), starting from the end
 // nearer to `fromX`.
 export function crossings(field: number, p0: number, p1: number, n: number, fromX: number): Pt[] {
@@ -304,7 +310,8 @@ function changed(a: HillDisplay, look: HillLook, ridge: number, kind: JobKind): 
 }
 
 // A person as the day begins: where they stand, what they will be on today, and where that machine stands now.
-export interface CrewFrom { id: number; at: Pt; slot: number; ride: Ride; machine: Pt | null; farmer: boolean; goal: Spot | null }
+// working: the row work their machine was at when the day began ('field|kind'), or ''.
+export interface CrewFrom { id: number; at: Pt; slot: number; ride: Ride; machine: Pt | null; farmer: boolean; goal: Spot | null; working: string }
 
 // How far each job had got when the day began: by field and kind, 0..1 (undefined when it was not seen before).
 export type Before = (key: string) => number | undefined
@@ -456,9 +463,11 @@ export function planDay(snap: Snapshot, shown: HillDisplay[][], crews: CrewFrom[
           }
         })
         reveals.sort((a, b) => a.at - b.at)
-        // taken up some way along the row, not always at its end
-        const from = lit ? 0 : (0.08 + 0.55 * some(segs.length)) * poly.length
-        const { walkTo, travel } = go(path[0], tractor ? 'tractor' : '')
+        // With the clock running the work is taken up some way along the row, not always at its end; and a machine
+        // already at work in this field carries on from where it is (`from` below zero), with no drive to it.
+        const here = tractor && !lit && !!machine && inField(w.field, machine) && crew.working === key
+        const from = lit ? 0 : here ? -1 : (0.08 + 0.55 * some(segs.length)) * poly.length
+        const { walkTo, travel } = here ? { walkTo: [], travel: [machine!] } : go(path[0], tractor ? 'tractor' : '')
         if (from > 0) { const e = poly.at(from); travel.push({ x: e.x, z: e.z }) }
         segs.push({ kind: w.kind, field: w.field, walker: !tractor, ride: tractor ? 'tractor' : '', walkTo, travel, path, reveals, start: 0, end: 0, site: '', lit, from })
         at = lit ? path[path.length - 1] : travel[travel.length - 1]

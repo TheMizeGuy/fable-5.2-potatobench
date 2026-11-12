@@ -8,7 +8,7 @@ import {
 } from 'three'
 import type { UnitKind } from '../sim/index.ts'
 import { COWS, COW_SCALE as COW, DEER, drawBeast, drawCrow } from './animals.ts'
-import { Pose, dressFor, dressOf, drawFigure, drawn, figureMatrix, forking, hammering, sit, stand, stoop, swing, walk, type Dress } from './crew.ts'
+import { LOD, Pose, dressFor, dressOf, drawFigure as drawPerson, drawn, figureMatrix, forking, hammering, sit, stand, stoop, swing, walk, type Dress } from './crew.ts'
 import type { Env } from './env.ts'
 import { UI_GAIN, type HillDisplay } from './fields.ts'
 import { level } from './arch.ts'
@@ -87,6 +87,7 @@ interface Actor {
   arc: number              // how far along the row in hand they have worked, metres
   arcSeg: Seg | null       // and which part of the day that is
   beat: number             // a clock for stopping and bending on a walk through the crop
+  line: { key: string; poly: Poly; arc: number; seg: Seg } | null   // the row a machine is working with the clock running
 }
 
 interface Leaver { dress: Dress; path: Poly; at: number; gait: number }
@@ -115,6 +116,14 @@ export interface CrewFrame {
 }
 
 const M = new Matrix4(), V = new Vector3(), V2 = new Vector3()
+// Faces, hands and buttons are drawn within this of the camera; further off a figure is its body and its clothes.
+const FINE_WITHIN = 75
+const EYE = new Vector3()
+function drawFigure(pr: Prims, at: Matrix4, dress: Dress, pose: Pose): void {
+  const e = at.elements
+  LOD.fine = Math.hypot(e[12] - EYE.x, e[13] - EYE.y, e[14] - EYE.z) < FINE_WITHIN
+  drawPerson(pr, at, dress, pose)
+}
 const PICKER_SHIRTS = ['#b8402e', '#2f6f9f', '#d9a441', '#e7e0cf', '#2e7d6b', '#c96f2c', '#a23b62', '#8a9a3b', '#6b4c8a']
 
 export class Crews {
@@ -205,7 +214,7 @@ export class Crews {
     return {
       id: u.id, kind: u.kind, slot, dress: dressFor(u.id), coat: dressFor(u.id, true), segs: [], clockSeg: -2, segClock: 0,
       x: rest.x, z: rest.z, heading: rest.heading, rig: null, aboard: false, shown: 0, away: false, home: null, about: DOORYARD_AT, gait: u.id * 1.3, goal: null, state: 'idle', post: '',
-      tired: u.tired, worn: u.tired, style: (u.id * 7) % 5, pose: new Pose().reset(), head: new Vector3(rest.x, 1, rest.z), scale: 1, next: [], u: 1, lastT: 1, ay: 2.2, arc: 0, arcSeg: null, beat: 0,
+      tired: u.tired, worn: u.tired, style: (u.id * 7) % 5, pose: new Pose().reset(), head: new Vector3(rest.x, 1, rest.z), scale: 1, next: [], u: 1, lastT: 1, ay: 2.2, arc: 0, arcSeg: null, beat: 0, line: null,
       worker: { id: u.id, dress: dressFor(u.id), tired: 0, w: 0, x: rest.x, z: rest.z, heading: 0, lift: 0, pose: new Pose().reset(), aboard: false, rig: null },
     }
   }
@@ -369,7 +378,9 @@ export class Crews {
       const who = this.actors.find(a => free(a) && inc && a.id === inc.unit) ?? this.actors.find(a => free(a) && a.kind === 'farmer') ?? this.actors.find(free)
       if (!who) continue
       who.state = 'mend'
-      who.goal = { x: r.x + Math.cos(r.heading) * 0.3 - Math.sin(r.heading) * 0.62, z: r.z + Math.sin(r.heading) * 0.3 + Math.cos(r.heading) * 0.62, heading: r.heading - Math.PI / 2 }
+      // (beside the engine, at arm's length from it)
+      const fwd = 0.3 * TRUE_SIZE, out = 0.6 * TRUE_SIZE
+      who.goal = { x: r.x + Math.cos(r.heading) * fwd - Math.sin(r.heading) * out, z: r.z + Math.sin(r.heading) * fwd + Math.cos(r.heading) * out, heading: r.heading - Math.PI / 2 }
     }
   }
 
@@ -386,7 +397,8 @@ export class Crews {
       rides.set(a.id, ride)
       if (a.rig && a.rig.kind !== ride) {
         // down off it, and beside it
-        if (a.aboard) { a.x = a.rig.x - Math.sin(a.rig.heading) * 0.95; a.z = a.rig.z + Math.cos(a.rig.heading) * 0.95 }
+        if (a.aboard) { a.x = a.rig.x - Math.sin(a.rig.heading) * 0.95 * TRUE_SIZE; a.z = a.rig.z + Math.cos(a.rig.heading) * 0.95 * TRUE_SIZE }
+        a.line = null
         a.rig.holder = -1
         a.rig = null
         a.aboard = false
@@ -414,6 +426,7 @@ export class Crews {
     const from: CrewFrom[] = this.actors.map(a => ({
       id: a.id, slot: a.slot, farmer: a.kind === 'farmer', ride: rides.get(a.id)!, goal: a.goal,
       at: a.aboard && a.rig ? { x: a.rig.x, z: a.rig.z } : { x: a.x, z: a.z }, machine: a.rig ? { x: a.rig.x, z: a.rig.z } : null,
+      working: a.line && a.aboard ? a.line.key : '',
     }))
     const was = new Map(this.progress)
     const plans = planDay(snap, shown, from, samples, snap.farm.pond < this.pondWas - 0.02, key => was.get(key), this.stopped)
@@ -521,6 +534,7 @@ export class Crews {
     const big = TRUE_SIZE * FIGURE
     this.mark = 0.56 * big
     this.perUnit = this.screenH / (2 * Math.tan((f.camera.fov * Math.PI) / 360))
+    EYE.copy(f.camera.position)
     // With the clock stopped a day's work is literal: everyone goes on at the pace of a person or a machine.
     const cold = env.snow > 0.3
     this.cold = cold
@@ -599,6 +613,7 @@ export class Crews {
       r.state.moved = r.moved
       r.state.turn = r.turn
       r.state.driver = holder && holder.aboard ? (cold ? holder.coat : holder.dress) : null
+      LOD.fine = Math.hypot(r.x - EYE.x, r.z - EYE.z) < FINE_WITHIN
       if (r.kind === 'tractor') (r.machine as Tractor).draw(pr, mf, r.state)
       else (r.machine as Car).draw(pr, mf, r.state)
       if (holder && holder.aboard) {
@@ -799,11 +814,27 @@ export class Crews {
           rig.state.working = w > 0 && w < 1 ? 1 : 0
           arc = w >= 1 ? Infinity : w * path.length
         } else {
-          // the band's leading row at a pace that looks right from where the camera is; the band fills in behind
-          if (a.arcSeg !== seg) { a.arcSeg = seg; a.arc = seg.from }
-          const on = w < 1 && a.arc < path.length - 0.5
-          if (on && going) a.arc = Math.min(path.length, a.arc + (this.literal ? PACE.work : this.pace) * f.dt)
-          ride(path.at(a.arc))
+          // A pass at a time at a pace that looks right from where the camera is, going on from day to day while the
+          // job lasts: along the row in hand to its end, round on the headland, and back along the band's leading row
+          // as it then stands. The band itself fills in behind as the day's work is counted.
+          const key = `${seg.field}|${seg.kind}`
+          if (a.arcSeg !== seg) {
+            a.arcSeg = seg
+            if (seg.from >= 0 || !a.line || a.line.key !== key) a.line = { key, poly: path, arc: Math.max(0, seg.from), seg }
+          }
+          const line = a.line!
+          if (line.arc >= line.poly.length - 0.5 && line.seg !== seg && w < 1) {
+            // onto the leading row from whichever end the machine is at
+            const ends = seg.path, near = Math.abs(ends[0].x - rig.x) < Math.abs(ends[ends.length - 1].x - rig.x)
+            const a0 = near ? ends[0] : ends[ends.length - 1], a1 = near ? ends[ends.length - 1] : ends[0]
+            const out = a0.x > a1.x ? 1 : -1
+            line.poly = new Poly([{ x: rig.x, z: rig.z }, { x: a0.x + out * 5, z: (rig.z + a0.z) / 2 }, a0, a1])
+            line.arc = 0
+            line.seg = seg
+          }
+          const on = w < 1 && line.arc < line.poly.length - 0.5
+          if (on && going) line.arc = Math.min(line.poly.length, line.arc + this.pace * f.dt)
+          ride(line.poly.at(line.arc))
           rig.state.working = on ? 1 : 0
           arc = w >= 1 ? Infinity : w * path.length
         }
@@ -845,7 +876,8 @@ export class Crews {
         // Walking the rows at a walker's pace, stopping every few steps: the scout bends to a plant; pulling blighted
         // plants, a stoop at each and a sack filling. What they find or pull shows over the day (or, literally, as
         // they come to it).
-        if (a.arcSeg !== seg) { a.arcSeg = seg; a.arc = seg.from; a.beat = 0 }
+        // (a tool that holds the day at a point puts them that far along)
+        if (a.arcSeg !== seg || jumped) { a.arcSeg = seg; a.arc = seg.lit ? w * path.length : seg.from; a.beat = 0 }
         if (going) a.beat += f.dt
         const cycle = seg.kind === 'scout' ? 5.2 : 3.6, walking = a.beat % cycle < cycle - 1.5
         const on = w < 1 && a.arc < path.length - 0.3
@@ -897,7 +929,7 @@ export class Crews {
       else if (a.state === 'mend') {
         // leaning in over the engine with a wrench, straightening now and then to look at it
         const u = (f.time * 0.21 + a.id * 0.3) % 1
-        if (u < 0.78) hammering(pose, u < 0.5 ? 1.2 : f.time * 7, 0.52)
+        if (u < 0.78) hammering(pose, u < 0.5 ? 1.2 : f.time * 7, 0.6)
         else stand(pose, f.time, a.tired, 1)
       }
       else if (g.seat !== undefined && g.seat >= 0 && a.state === 'sunday') sit(pose, f.time + a.id * 2, g.seat, a.tired * 0.5)
@@ -1002,7 +1034,9 @@ export class Crews {
       if (!digging) { this.gangs.delete(field); continue }
       if (going) g.idle += f.dt
       g.pickers.forEach((p, k) => {
-        const dx = p.tx - p.x, dz = p.tz - p.z, dist = Math.hypot(dx, dz)
+        let dx = p.tx - p.x, dz = p.tz - p.z, dist = Math.hypot(dx, dz)
+        // (they have been behind the digger all along, wherever the day is taken up)
+        if (dist > 45) { p.x = p.tx; p.z = p.tz; dx = dz = dist = 0 }
         if (dist > 0.25 * big) {
           const step = Math.min(dist, (!going ? 0 : this.literal ? PACE.walk * 1.5 : Math.max(this.pace * 1.2, dist > 40 ? dist * 2.5 : 0)) * f.dt)
           p.x += (dx / dist) * step

@@ -617,7 +617,7 @@ const big: Shot[] = [
   { name: 'b32-sunday-yard', setup: async page => { await farm(page, SUNDAY); await settle(page); await farm(page, `app.do({ t: 'day' })`); await page.waitForTimeout(3000); await page.evaluate(() => (window as any).__countyField.settle()); await view(page, { frame: 'home', x: 20.6, z: 1.6, dist: 9, yaw: 1.0, pitch: 0.3 }); await frames(page, 10) } },
   { name: 'b33-breakdown-yard', setup: async page => { await farm(page, `start(); hire(1); say(app.do({ t: 'begin' })); run(186); clear(); job('spray', 0, 0); until(['spray']); const c = app.campaign; c.broken.push(c.season.day + 3); c.incidents.push({ id: c.nextIncident++, kind: 'breakdown', day: c.season.day, until: c.season.day + 4, choices: ['rush', 'wait'], unit: 0, back: c.season.day + 3 }); app.emit({ type: 'change' })`); await settle(page); await farm(page, `app.do({ t: 'day' })`); await page.waitForTimeout(1500); await page.evaluate(() => (window as any).__countyField.settle()); await onTractor(page, { dist: 7, yaw: 0.9, pitch: 0.3 }, 0.4, 0.2) } },
   { name: 'b34-figures-yard', setup: async page => { await farm(page, `start(); put('bunk'); app.do({ t: 'rent', field: 10 }); put('bunk', -2); hire(11)`); await settle(page); await onUnit(page, 3, { dist: 4.2, yaw: -1.9, pitch: 0.16 }); await frames(page, 10) } },
-  { name: 'b35-callers-yard', setup: async page => { await farm(page, `start(); hire(2); say(app.do({ t: 'begin' })); run(186); const c = app.campaign, d = c.season.day; c.incidents.push({ id: c.nextIncident++, kind: 'poach', day: d, until: d + 4, choices: ['match', 'refuse'], unit: 1, wage: 900 }, { id: c.nextIncident++, kind: 'buyer', day: d, until: d + 7, choices: ['take', 'refuse'], lot: 0 }, { id: c.nextIncident++, kind: 'applicant', day: d, until: d + 4, choices: ['hire', 'refuse'], applicant: { id: 99, name: 'Test', skills: { machine: 3, field: 3, woods: 3, build: 3, pack: 3 }, trait: 'strong', ask: 700 } }); app.emit({ type: 'change' })`); await settle(page); await view(page, { frame: 'home', x: 20.2, z: 1.0, dist: 12, yaw: 0.9, pitch: 0.34 }); await frames(page, 10) } },
+  { name: 'b35-callers-yard', setup: async page => { await farm(page, `start(); hire(2); say(app.do({ t: 'begin' })); run(186); const c = app.campaign, d = c.season.day; c.incidents.push({ id: c.nextIncident++, kind: 'poach', day: d, until: d + 4, choices: ['match', 'refuse'], unit: 1, wage: 900 }, { id: c.nextIncident++, kind: 'buyer', day: d, until: d + 7, choices: ['take', 'refuse'], lot: 0 }, { id: c.nextIncident++, kind: 'applicant', day: d, until: d + 4, choices: ['hire', 'refuse'], applicant: { id: 99, name: 'Test', skills: { machine: 3, field: 3, woods: 3, build: 3, pack: 3 }, trait: 'strong', ask: 700 } }); app.emit({ type: 'change' })`); await settle(page); await view(page, { frame: 'home', x: 19.6, z: 3.4, dist: 8, yaw: 0.6, pitch: 0.36 }); await frames(page, 10) } },
   { name: 'b36-animals-yard', setup: async page => { await reach(page, SPRING, `until(['rocks'])`, 0.6, 4000); const w = await did(page, 'rocks'); await onUnit(page, w.unit, { dist: 7, yaw: 0.9, pitch: 0.26 }, 1.5, 0); await frames(page, 8) } },
 ]
 shots.push(...big)
@@ -629,8 +629,9 @@ const dayStrip = (speed: number, n: number, gap: number): Strip => ({
     await view(page, { frame: 'field', field: 2, x: 0.5, z: 0.3, dist: 260 })
     await frames(page, 10)
     if (speed > 0) await page.evaluate(sp => (window as any).__county.app.setSpeed(sp), speed)
-    // (stopped, the work is literal: the drive out from the yard alone takes a minute and a half)
-    else { await farm(page, `app.do({ t: 'day' }); app.do({ t: 'day' })`); await page.waitForTimeout(42000) }
+    // (stopped, the work is literal: the drive out from the yard alone takes a minute and a half, so the day is taken
+    // up at its middle)
+    else { await farm(page, `app.do({ t: 'day' })`); await seek(page, 0.5, 400, 1) }
   },
 })
 strips.push(dayStrip(1, 9, 170), dayStrip(2, 9, 85), dayStrip(3, 9, 55), dayStrip(0, 8, 5000))
