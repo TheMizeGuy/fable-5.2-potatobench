@@ -129,7 +129,13 @@ test('a guided first year: offered on a new farm, taken, and followed to the fir
         await page.getByTestId('almanac-close').click()
         await expect(page.getByTestId('almanac')).toHaveCount(0)
         break
-      case 'field': case 'clock': case 'fast': case 'plant': case 'rest':
+      case 'field': {
+        // It asks for a field's tag: the one its fist marks, or any on the screen.
+        const marked = page.locator(`#ui [data-testid="${target}"]`).first()
+        await ((await marked.isVisible()) ? marked : page.locator('#ui .plate[data-testid^="field-"]:visible').first()).click()
+        break
+      }
+      case 'clock': case 'fast': case 'plant': case 'rest':
         await page.locator(`#ui [data-testid="${target}"]`).first().click(); break
       case 'telegram':
         await page.locator('#ui [data-testid^="answer-"]').first().click(); break
@@ -145,8 +151,9 @@ test('a guided first year: offered on a new farm, taken, and followed to the fir
   }
   console.log(`followed: ${did.join(' > ')}`)
   expect(planted).toBe(true)
-  // The order taken is watched for as long as the planting takes, which at 3× can be a moment: it is not required here.
-  for (const id of ['begin', 'look', 'turn', 'boards', 'field', 'person', 'clock', 'plant']) expect(did).toContain(id)
+  // The routine plants by itself once the soil is warm; at 3× the planting itself can take a moment, so seeing it is
+  // not required here, only that it happened.
+  for (const id of ['begin', 'look', 'turn', 'boards', 'almanac', 'field', 'card', 'person', 'clock']) expect(did).toContain(id)
   expect(did.indexOf('look')).toBeLessThan(did.indexOf('clock'))
   // Nothing was locked and the clock was never moved by the guide: it runs at the speed the player last chose.
   const s = await look(page)

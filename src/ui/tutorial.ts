@@ -102,6 +102,7 @@ function resolve(ctx: Ctx, root: HTMLElement, p: Point | null): { el: HTMLElemen
   if ('testid' in p) return found(p.testid)
   if ('badge' in p) { const r = found([`badge-${p.badge}`, `field-${p.badge}`]); return r.el ? r : { ...r, id: `badge-${p.badge}` } }
   if ('field' in p) return found([`field-${p.field}`])
+  if ('fields' in p) return found(p.fields.map(i => `field-${i}`))
   const r = found([`pin-${p.unit}`, `unit-${p.unit}`])
   if (r.el) return r
   const a = ctx.view.unitAnchor(p.unit)

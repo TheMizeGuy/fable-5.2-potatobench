@@ -32,22 +32,40 @@ function hear(g: Guide, l: Look): string | null {
   return x?.id ?? null
 }
 
-// The coach's orders for today, as a player following the stamps gives them.
-function coach(w: S.World, c: S.Campaign, skip: string[] = []): void {
-  for (const a of S.advise(w, c)) {
-    if (a.act === 'wait' || a.act === 'close' || a.act === 'sell' || skip.includes(a.act)) continue
-    S.apply(w, c, { t: 'job', kind: a.act, field: a.field })
-  }
+// A player answering every stamp the land shows today (the calls, and whatever the routine leaves to them).
+function stamps(w: S.World, c: S.Campaign): void {
+  S.fieldNeeds(w, c).forEach((n, field) => {
+    const a = n.need
+    if (!a || a.act === 'wait' || a.act === 'close' || a.act === 'sell') return
+    S.apply(w, c, { t: 'job', kind: a.act, field })
+  })
 }
 
+// Days until something is true, a season at most.
+function until(w: S.World, c: S.Campaign, ok: () => boolean, each = () => {}): void {
+  for (let n = 0; n < 200 && !ok() && c.phase === 'season' && !S.seasonDone(c); n++) { each(); S.apply(w, c, { t: 'day' }) }
+}
+const sown = (c: S.Campaign) => c.season!.fields.some(f => f.plantDay >= 0)
+const planting = (w: S.World, c: S.Campaign) => S.fieldNeeds(w, c).some(n => n.need?.act === 'plant') || c.season!.jobs.some(j => j.kind === 'plant')
+
 // A guided first year from the spring to the second spring: each lesson's first showing and its passing, in order.
-function guidedYear(seed: number, o: { offer?: boolean } = {}): { shown: string[]; passed: string[]; g: Guide; w: S.World; c: S.Campaign } {
+function guidedYear(seed: number, o: { offer?: boolean; askMe?: boolean } = {}): { shown: string[]; passed: string[]; g: Guide; w: S.World; c: S.Campaign } {
   const { w, c } = farm(seed)
+  // Every kind of work switched to "ask me": the stamps for the routine's jobs come to the player as they used to.
+  if (o.askMe) for (const k of S.ROUTINE_KINDS) S.apply(w, c, { t: 'routine', kind: k, auto: false })
   const g = new Guide(memory())
   g.newFarm(c.seed)
   if (o.offer !== false) g.accept()
   const shown: string[] = []
-  const see = (l: Look) => { const id = hear(g, l); if (id && shown[shown.length - 1] !== id) shown.push(id) ; return id }
+  const see = (l: Look) => {
+    const id = hear(g, l)
+    if (id && shown[shown.length - 1] !== id) {
+      // A lesson comes back only after something more urgent stood in front of it.
+      if (shown.includes(id) && !lesson(shown[shown.length - 1])?.urgent) throw new Error(`${id} shown twice: ${shown.join(' ')}`)
+      if (!shown.includes(id)) shown.push(id)
+    }
+    return id
+  }
   see(look(w, c))
   S.apply(w, c, { t: 'begin' })
   // The opening, the idle weeks: the camera, the boards, a field, its card, a person, the clock.
@@ -69,7 +87,7 @@ function guidedYear(seed: number, o: { offer?: boolean } = {}): { shown: string[
     const id = see(l)
     if (id === 'frost' || id === 'haul') g.noted(id)
     if (S.seasonDone(c)) { see(look(w, c)); S.apply(w, c, { t: 'endSeason' }); break }
-    coach(w, c)
+    stamps(w, c)
     for (const inc of [...c.incidents]) S.apply(w, c, { t: 'answer', incident: inc.id, choice: S.defaultChoice(inc) })
     const r = S.apply(w, c, { t: 'day' })
     if (r.events.some(e => e.type === 'weighed')) {
@@ -132,45 +150,72 @@ describe('the guided first year', () => {
     expect(g.holdsClock(c)).toBe(true)
     expect(g.current(look(w, c, { speed: 1 }))?.id).toBe('fast')
     expect(g.holdsClock(c)).toBe(false)
-    // The weeks go by until the soil is warm: then planting day, the order taken, and the rest planted.
-    while (!S.fieldNeeds(w, c).some(n => n.need?.act === 'plant')) S.apply(w, c, { t: 'day' })
+    // The weeks go by until the soil is warm: the routine puts planting on the list by itself, so the lesson that asks
+    // for the order is passed over and the player watches it taken.
+    until(w, c, () => planting(w, c))
+    expect(c.season!.jobs.some(j => j.kind === 'plant' && j.by === 'routine')).toBe(true)
     const l = look(w, c, { speed: 1 })
+    expect(g.current(l)?.id).toBe('watch')
+    expect(g.current(l)?.ask(l)).toMatch(/routine/)
+    expect(g.passed('plant')).toBe(true)
+    until(w, c, () => sown(c))
+    // Then what the routine is, and what the player's calls are.
+    const x = g.current(look(w, c, { speed: 1 }))
+    expect(x?.id).toBe('routine')
+    expect(x?.why(look(w, c))).toMatch(/spray, water, kill the vines/)
+    g.noted('routine')
+    expect(g.current(look(w, c, { speed: 1 }))?.id).toBe('list')
+    g.noted('list')
+    until(w, c, () => !planting(w, c))
+    g.current(look(w, c, { speed: 1 }))
+    for (const id of ['begin', 'look', 'turn', 'boards', 'almanac', 'field', 'card', 'person', 'clock', 'fast', 'plant', 'watch', 'routine', 'rest', 'list']) expect(g.passed(id), id).toBe(true)
+  })
+
+  it('with every kind switched to "ask me", asks for the first order at its ringed stamp instead', () => {
+    const { w, c } = farm(99)
+    for (const k of S.ROUTINE_KINDS) S.apply(w, c, { t: 'routine', kind: k, auto: false })
+    const g = new Guide(memory())
+    g.skipTo('fast')
+    S.apply(w, c, { t: 'begin' })
+    g.current(look(w, c, { speed: 3 }))
+    until(w, c, () => planting(w, c))
+    const l = look(w, c, { speed: 3 })
     expect(g.current(l)?.id).toBe('plant')
     const i = l.needs.findIndex(a => a?.act === 'plant')
     expect(g.current(l)?.point?.(l)).toEqual({ badge: i })
     S.apply(w, c, { t: 'job', kind: 'plant', field: i })
-    expect(g.current(look(w, c, { speed: 1 }))?.id).toBe('watch')
-    for (let n = 0; n < 10 && !c.season!.fields.some(f => f.plantDay >= 0); n++) S.apply(w, c, { t: 'day' })
-    expect(g.current(look(w, c, { speed: 1 }))?.id).toBe('rest')
-    coach(w, c)
-    for (let n = 0; n < 20 && S.fieldNeeds(w, c).some(x => x.need?.act === 'plant'); n++) { coach(w, c); S.apply(w, c, { t: 'day' }) }
-    expect(g.current(look(w, c, { speed: 1 }))?.id).not.toBe('rest')
-    for (const id of ['begin', 'look', 'turn', 'boards', 'field', 'card', 'person', 'clock', 'fast', 'plant', 'watch', 'rest']) expect(g.passed(id), id).toBe(true)
+    expect(g.current(look(w, c, { speed: 3 }))?.ask(look(w, c))).toMatch(/^Watch: you take the order/)
+    until(w, c, () => sown(c))
+    expect(g.current(look(w, c, { speed: 3 }))?.id).toBe('rest')
+    until(w, c, () => !S.fieldNeeds(w, c).some(n => n.need?.act === 'plant'), () => stamps(w, c))
+    expect(g.current(look(w, c, { speed: 3 }))?.id).not.toBe('rest')
+    expect(g.passed('rest')).toBe(true)
   })
 
   it('brings each lesson of the year the first time its moment comes, and each one passes from the farm', () => {
     const met = new Set<string>()
     const passed = new Set<string>()
-    for (const seed of [99, 7, 3, 12, 41, 5]) {
-      const run = guidedYear(seed)
+    for (const askMe of [false, true]) for (const seed of [99, 7, 3, 12, 41, 5]) {
+      const run = guidedYear(seed, { askMe })
       for (const id of run.shown) met.add(id)
       for (const id of run.passed) passed.add(id)
-      // Nothing is shown twice in a year, and the opening comes first.
-      expect(new Set(run.shown).size, run.shown.join(' ')).toBe(run.shown.length)
+      // The opening comes first.
       expect(run.shown.slice(0, 2)).toEqual(['begin', 'look'])
       // The second spring's catalogue follows the account book.
       expect(run.c.phase).toBe('plan')
       expect(run.shown[run.shown.length - 1]).toBe('seed')
-      if (met.has('water') && met.has('rogue') && met.has('telegram') && met.has('frost')) break
+      // With the routine, the crew's own work is never asked for: the calls are.
+      if (!askMe) for (const id of ['scout', 'hill', 'sample', 'dig', 'rogue']) expect(run.shown, id).not.toContain(id)
+      if (['water', 'rogue', 'telegram', 'frost', 'sample', 'hill'].every(id => met.has(id)) && (askMe || met.has('routine'))) break
     }
-    for (const id of ['almanac', 'list', 'owed']) expect(met.has(id), id).toBe(true)
+    for (const id of ['almanac', 'routine', 'list', 'owed']) expect(met.has(id), id).toBe(true)
     const year = ['telegram', 'scout', 'hill', 'spray', 'frost', 'sample', 'water', 'rogue', 'kill', 'dig', 'haul', 'ticket', 'close', 'cellar', 'book']
     for (const id of year) {
       expect(met.has(id), `${id} was never shown`).toBe(true)
       expect(passed.has(id), `${id} never passed`).toBe(true)
     }
     for (const id of ['begin', 'look', 'turn', 'boards', 'field', 'card', 'person', 'clock', 'fast', 'plant', 'watch']) expect(met.has(id), id).toBe(true)
-  }, 120_000)
+  }, 240_000)
 
   it('teaches the second spring and the farm it opens up, each from the farm', () => {
     const run = guidedYear(99)
@@ -214,40 +259,18 @@ describe('the guided first year', () => {
     g.current(look(w, c, { speed: 3, selection: [1], unit: c.crew[0].id }))
     g.note('pan')
     g.note('turn')
-    while (!S.fieldNeeds(w, c).some(n => n.need?.act === 'plant')) S.apply(w, c, { t: 'day' })
-    // Every field planted on the first warm day, before the guide says a word about planting.
-    coach(w, c)
-    for (let n = 0; n < 20 && S.fieldNeeds(w, c).some(x => x.need?.act === 'plant'); n++) { coach(w, c); S.apply(w, c, { t: 'day' }) }
+    // Every field planted before the guide says a word about planting.
+    until(w, c, () => sown(c) && !planting(w, c))
     for (let n = 0; n < 5; n++) S.apply(w, c, { t: 'day' })
     const shown = g.current(look(w, c, { speed: 3 }))?.id ?? ''
-    // Only what still needs saying is left: the boards, which are read rather than done.
+    // Only what still needs saying is left, beginning with the boards, which are read rather than done.
     expect(shown).toBe('boards')
     for (const id of ['begin', 'look', 'turn', 'field', 'person', 'clock', 'fast', 'plant', 'watch', 'rest']) expect(g.passed(id), id).toBe(true)
     g.noted('boards')
     g.current(look(w, c, { paper: 'almanac', papers: ['almanac'] }))
+    g.noted('routine')
     g.noted('list')
     expect(g.current(look(w, c, { speed: 3 }))?.part ?? 'year').not.toBe('opening')
-  })
-
-  it('with the routine putting work on the list by itself, says so, and teaches the calls instead of the orders', () => {
-    const { w, c } = farm(99)
-    const g = new Guide(memory())
-    g.skipTo('plant')
-    S.apply(w, c, { t: 'begin' })
-    while (!S.fieldNeeds(w, c).some(n => n.need?.act === 'plant')) S.apply(w, c, { t: 'day' })
-    // The routine's planting order, as the simulation will put it on the list: the stamp lesson is passed over.
-    const i = S.fieldNeeds(w, c).findIndex(n => n.need?.act === 'plant')
-    S.apply(w, c, { t: 'job', kind: 'plant', field: i })
-    for (const j of c.season!.jobs) (j as { by?: string }).by = 'routine'
-    expect(g.current(look(w, c, { speed: 1 }))?.id).toBe('watch')
-    for (let n = 0; n < 10 && !c.season!.fields.some(f => f.plantDay >= 0); n++) S.apply(w, c, { t: 'day' })
-    S.apply(w, c, { t: 'job', kind: 'plant', field: S.fieldNeeds(w, c).findIndex(n => n.need?.act === 'plant') })
-    for (const j of c.season!.jobs) (j as { by?: string }).by = 'routine'
-    expect(g.passed('plant')).toBe(true)
-    const x = g.current(look(w, c, { speed: 1 }))
-    expect(x?.id).toBe('routine')
-    expect(x?.ask(look(w, c))).toMatch(/by itself/)
-    expect(x?.why(look(w, c))).toMatch(/spray, water, kill the vines/)
   })
 
   it('gets out of the way of any paper but its own, and puts a telegram first', () => {

@@ -23,7 +23,7 @@ export interface Look {
 
 // Where a lesson points: a control by its test id (the first of several that is on screen), a field's tag, a field's
 // need stamp, a person on the land.
-export type Point = { testid: string[] } | { field: number } | { badge: number } | { unit: number }
+export type Point = { testid: string[] } | { field: number } | { fields: number[] } | { badge: number } | { unit: number }
 
 // When a lesson was first shown: the year and day (or cellar month), and the question then open.
 export interface Since { y: number; d: number; m: number; inc: number }
@@ -107,7 +107,15 @@ function potatoField(c: S.Campaign | null): number {
 const farmer = (l: Look) => l.c?.crew[0]?.id ?? 0
 const hand = (l: Look) => l.c?.crew.find(u => u.kind !== 'farmer') ?? null
 // A job the routine put on the list by itself (Campaign.routine, where the simulation has it).
-const routineJob = (l: Look) => !!l.c?.season?.jobs.some(j => (j as { by?: string }).by === 'routine')
+const routineJob = (l: Look) => !!l.c?.season?.jobs.some(j => j.by === 'routine')
+// Whether the crew does this kind of work by itself (the routine), rather than waiting for the player's stamp.
+const auto = (l: Look, kind: S.RoutineKind) => !!l.c?.routine?.[kind]
+// The fields in potatoes this year, for a lesson that points at whichever of their tags is on the screen.
+function potatoFields(c: S.Campaign | null): number[] {
+  const out: number[] = []
+  if (c) for (let i = 0; i < S.FIELD_COUNT; i++) if (S.held(c, i) && S.isField(c, i) && c.plans[i]?.crop === 'potato') out.push(i)
+  return out.length ? out : [potatoField(c)]
+}
 const owed = () => `$${(S.NOTE_PAYMENT + S.LIVING).toLocaleString('en-US')}`
 const tract = (l: Look) => S.TRACTS.find(i => l.c && l.c.fields[i].tenure !== 'none' && (l.c.fields[i].cover === 'woods' || l.c.fields[i].cover === 'brush')) ?? -1
 
@@ -171,17 +179,17 @@ export const LESSONS: Lesson[] = [
     done: (_l, g) => g.has('select'),
     ask: l => {
       const i = potatoField(l.c)
-      return l.input === 'keys' && l.c ? `Press ${digitOf(l.c, i) || '1'} to pick ${name(i)}.` : `${click(l)} the tag of ${name(i)} to pick that field.`
+      return l.input === 'keys' && l.c ? `Press ${digitOf(l.c, i) || '1'} to pick ${name(i)}.` : `${click(l)} the tag of a field to pick it.`
     },
     why: () => 'Its card opens with what the field is and the orders it can take now.',
-    point: l => ({ field: potatoField(l.c) }),
+    point: l => (l.input === 'keys' ? { field: potatoField(l.c) } : { fields: potatoFields(l.c) }),
   },
   {
     id: 'card', part: 'opening', name: 'Read a field\'s card', read: true,
     when: (l, g) => inSeason(l) && g.has('select') && l.selection.length > 0 && needFor(l, 'plant') < 0,
     done: (l, g, since) => g.has('noted:card') || (!!since && l.selection.length === 0) || jobOn(l, 'plant') || anyField(l, f => f.plantDay >= 0),
     ask: () => 'The card shows the orders this field can take. It says hold off planting: the soil is cold.',
-    why: l => by(l, 'Seed in cold ground rots. Escape, or the cross, puts the card away.', 'Seed in cold ground rots. The cross puts the card away.', 'Seed in cold ground rots. Escape puts the card away.'),
+    why: l => `${auto(l, 'plant') ? 'The crew plants by itself once it is warm.' : 'Seed in cold ground rots.'} ${by(l, 'Escape, or the cross, puts the card away.', 'The cross puts the card away.', 'Escape puts the card away.')}`,
     point: () => ({ testid: ['card'] }),
   },
   {
@@ -205,7 +213,7 @@ export const LESSONS: Lesson[] = [
     when: (l, g) => inSeason(l) && g.has('run') && needFor(l, 'plant') < 0 && !anyField(l, f => f.plantDay >= 0),
     done: (l, g) => g.has('fast') || needFor(l, 'plant') >= 0 || anyField(l, f => f.plantDay >= 0) || jobOn(l, 'plant'),
     ask: l => by(l, 'Nothing to do until the soil warms. Press 3× to hurry the wait.', 'Nothing to do until the soil warms. Tap 3× to hurry the wait.', 'Nothing to do until the soil warms. F steps the clock up to 3×.'),
-    why: () => 'When the soil is warm enough a field gets a ringed stamp. The clock keeps the speed you set.',
+    why: l => auto(l, 'plant') ? 'When the soil is warm the crew plants by itself. The clock keeps the speed you set.' : 'When the soil is warm enough a field gets a ringed stamp. The clock keeps the speed you set.',
     point: () => ({ testid: ['speed-3', 'speed-cycle'] }),
   },
   {
@@ -223,7 +231,7 @@ export const LESSONS: Lesson[] = [
     id: 'watch', part: 'opening', moment: true, name: 'See the order taken',
     when: l => inSeason(l) && jobOn(l, 'plant') && !anyField(l, f => f.plantDay >= 0),
     done: l => anyField(l, f => f.plantDay >= 0),
-    ask: () => 'Watch: you take the order, go to the field and plant it.',
+    ask: l => l.c?.season?.jobs.some(j => j.kind === 'plant' && j.by === 'routine') ? 'Planting day. The routine put planting on the list: watch you go out and plant.' : 'Watch: you take the order, go to the field and plant it.',
     why: () => 'Orders wait on the list beside your face at the foot. Let the days run to see it done.',
     point: l => ({ unit: farmer(l) }),
   },
@@ -232,7 +240,7 @@ export const LESSONS: Lesson[] = [
     when: l => inSeason(l) && routineJob(l),
     done: (l, g, since) => g.has('noted:routine') || (!!since && !!l.c?.season && l.c.season.day >= since.d + 5),
     ask: () => 'Routine work goes on the list by itself: planting, hilling, walking the rows, digging.',
-    why: () => 'Your calls come as stamps on the fields: spray, water, kill the vines. Anything can still be ordered by hand.',
+    why: () => 'Your calls come as stamps on the fields: spray, water, kill the vines. Who does what switches any of them.',
     point: () => ({ testid: ['queue-*'] }),
   },
   {
@@ -260,7 +268,7 @@ export const LESSONS: Lesson[] = [
     done: (l, _g, since) => !!since && !!l.c && !l.c.incidents.some(i => i.id === since.inc),
     ask: l => by(l, 'A telegram needs an answer. Click a reply; the days left are on it.', 'A telegram needs an answer. Tap a reply; the days left are on it.', 'A telegram needs an answer. Its number keys choose a reply.'),
     why: () => 'The clock stopped for it. Left alone, it lapses to the answer printed at its foot.',
-    point: () => ({ testid: ['incident', 'incident-open'] }),
+    point: () => ({ testid: ['answer-*', 'incident-open'] }),
   },
   order({
     id: 'scout', act: 'scout', name: 'Walk a field for blight', did: l => anyField(l, f => f.lastScout >= 0),
@@ -366,10 +374,10 @@ export const LESSONS: Lesson[] = [
     done: (_l, g) => g.has('select:plan'),
     ask: l => {
       const i = potatoField(l.c)
-      return l.input === 'keys' && l.c ? `A new spring. Press ${digitOf(l.c, i) || '1'} to choose the seed for ${name(i)}.` : `A new spring. ${click(l)} the tag of ${name(i)} to choose its variety and seed.`
+      return l.input === 'keys' && l.c ? `A new spring. Press ${digitOf(l.c, i) || '1'} to choose the seed for ${name(i)}.` : `A new spring. ${click(l)} a field's tag to choose its variety and seed.`
     },
     why: () => 'Seed saved from your cellar is free but carries virus. Certified seed is clean.',
-    point: l => ({ field: potatoField(l.c) }),
+    point: l => (l.input === 'keys' ? { field: potatoField(l.c) } : { fields: potatoFields(l.c) }),
   },
   {
     id: 'people', part: 'spring', name: 'Hire a hand', uses: ['fold:crew'],
