@@ -127,13 +127,10 @@ export function outlook(ctx: Ctx, c: S.Campaign): { figure: number; why: string;
   const world = ctx.app.world
   const m = S.moneyNow(world, c)
   const s = c.season
-  // The crop dug but not yet weighed is in neither the ground's estimate nor the store: counted here at today's price,
-  // so the figure does not drop through the dig and jump back at each weigh-in.
-  const dug = c.phase === 'season' && s ? c.lots.filter(l => !l.open && l.sold === 0 && l.year === c.year && s.fields[l.field] && !s.fields[l.field].weighed).reduce((a, l) => a + S.lotValue(world, c, l), 0) : 0
-  const figure = Math.round((m.after + dug) / 100) * 100
+  const figure = Math.round(m.after / 100) * 100
   const unset = s && c.phase === 'season' ? s.fields.filter((f, i) => S.isField(c, i) && (f.status === 'growing' || f.status === 'planted' || f.status === 'idle') && !S.estimateYield(c, i)).length : 0
-  const before = m.growing <= 0 && m.stored <= 0 && dug <= 0 && unset > 0
-  const parts = [...m.parts, ...(dug >= 0.5 ? [{ label: 'The crop dug, not yet weighed', amount: dug }] : [])].map(p => `${p.label} ${F.money(Math.round(p.amount))}`)
+  const before = m.growing <= 0 && m.stored <= 0 && unset > 0
+  const parts = m.parts.map(p => `${p.label} ${F.money(Math.round(p.amount))}`)
   const verdict = before ? 'The crop has not set yet, so nothing is counted for it: this is what the crop has to make up by the year end.'
     : figure >= 0 ? 'The year would end in the black.'
       : figure >= S.CREDIT_LIMIT ? `The year would end in debt, inside the bank's limit of ${F.money(S.CREDIT_LIMIT)}: it carries the debt at interest.`
@@ -339,6 +336,11 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     if (!g.now) return lowerFirst(g.when)
     if (g.block) return F.localize(g.block).replace(/\.$/, '')
     if (act && c.season?.jobs.some(j => j.kind === act)) return 'on the list'
+    // The vine kill: the day the coach expects to ask for it on the first field due (S.killOutlook).
+    if (g.id === 'kill' && c.season) {
+      const due = c.season.fields.map((_, i) => S.isField(c, i) ? S.killOutlook(c, i) : null).filter((k): k is S.KillOutlook => !!k).sort((a, b) => a.day - b.day)[0]
+      if (due) return due.asked ? `kill due since ${F.date(c.year, due.day, true)}` : `kill due about ${F.date(c.year, due.day, true)}`
+    }
     if (act && S.routineInfo(c).some(r => r.kind === act && r.auto)) return 'the crew sees to it by itself'
     if (g.id === 'hire') { const why = S.hireRoom(c); if (why) return F.localize(why).replace(/\.$/, '').toLowerCase() }
     return lowerFirst(g.when)

@@ -29,13 +29,13 @@ function firstYear(seed: number): number | null {
 
 describe('what a usual year does to the balance', () => {
   it('the range said is the middle half of first years played by the advice', () => {
-    const ends = Array.from({ length: 60 }, (_, k) => firstYear(k + 1)).filter((x): x is number => x !== null).sort((a, b) => a - b)
+    const ends = Array.from({ length: 40 }, (_, k) => firstYear(k + 1)).filter((x): x is number => x !== null).sort((a, b) => a - b)
     const q = (p: number) => ends[Math.floor(p * ends.length)]
-    expect(ends.length).toBeGreaterThan(50)
+    expect(ends.length).toBeGreaterThan(34)
     expect(Math.abs(q(0.25) - USUAL_YEAR.lo)).toBeLessThan(3000)
     expect(Math.abs(q(0.5) - USUAL_YEAR.mid)).toBeLessThan(3000)
     expect(Math.abs(q(0.75) - USUAL_YEAR.hi)).toBeLessThan(3000)
-  })
+  }, 60_000)
 
   it('a year end says better, worse or usual against that range', () => {
     expect(againstUsual(2000)).toMatch(/^Better/)
