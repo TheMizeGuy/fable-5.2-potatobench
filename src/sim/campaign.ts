@@ -601,6 +601,7 @@ export function apply(world: World, c: Campaign, cmd: Cmd): Result {
 function openRoutine(c: Campaign): GameEvent | null {
   c.heard ??= []
   for (const j of c.season?.jobs ?? []) j.by ??= 'you'
+  for (const u of c.crew) u.rest ??= 'auto'
   if (c.routine) return null
   c.routine = { ...P.ROUTINE_DEFAULT }
   return note(c, 'routine', 'info', 'The crew now works to a routine: planting, hilling, walking the fields, test digs, digging and hauling go on the list by themselves. Spraying, watering and killing the vines are your calls. Each can be switched under Who does what.')
@@ -898,6 +899,17 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
     case 'job': {
       const why = addJob(c, cmd.kind, cmd.field, cmd.unit ?? -1, 'you')
       return why ? fail(why) : ok()
+    }
+    case 'rest': {
+      if (c.phase === 'over') return fail('The farm is gone.')
+      const u = c.crew.find(x => x.id === cmd.unit)
+      if (!u) return fail('No such person.')
+      const mode = cmd.mode ?? 'now'
+      if (mode !== 'now' && mode !== 'auto' && mode !== 'push') return fail('Rest now, rest when worn out, or work on.')
+      if (u.rest === mode) return fail(mode === 'now' ? `${u.name} is resting already.` : mode === 'push' ? `${u.name} is already told to work on.` : `${u.name} already rests when worn out.`)
+      u.rest = mode
+      if (mode === 'now') letGo(u)
+      return ok([note(c, 'rest', 'info', mode === 'now' ? `${u.name} takes time off until rested.` : mode === 'push' ? `${u.name} works on however tired: slower, and liable to get hurt on a machine or in the woods.` : `${u.name} will rest by themselves once worn out.`)])
     }
     case 'routine': {
       if (c.phase === 'over') return fail('The farm is gone.')

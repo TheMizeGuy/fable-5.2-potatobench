@@ -140,11 +140,14 @@ export function play(world: World, name: string, make: BotFactory, startYear: nu
         const r = S.apply(world, c, { t: 'endSeason' })
         tallyEvents(r.events, tally)
       } else {
-        const work = S.workday(c, s)
-        if (s.pickers && work && s.day <= S.dayIndex(s.year, S.PICKERS_TO.month, S.PICKERS_TO.dom)) { add('pickers', S.PICKER_DAY); tally.pickerDays++ }
-        if (work && S.weekday(s.year, s.day) === S.SUNDAY) tally.sundaysWorked++
+        const pickers = s.pickers && s.day <= S.dayIndex(s.year, S.PICKERS_TO.month, S.PICKERS_TO.dom)
+        const today = s.day
         if (S.standOpen(c, s)) tally.standDays++
         const r = S.apply(world, c, { t: 'day' })
+        // Whether that was a working day is known after the morning (a frost on the barrels works a Sunday).
+        const work = s.frostHaul === today || !(c.sundaysOff && S.weekday(s.year, today) === S.SUNDAY)
+        if (pickers && work) { add('pickers', S.PICKER_DAY); tally.pickerDays++ }
+        if (work && S.weekday(s.year, today) === S.SUNDAY && !(c.sundaysOff && s.frostHaul === today)) tally.sundaysWorked++
         events = r.events
         for (const e of events) { const k = DONE_EVENT[e.type]; if (k) jobs[k]++ }
         tallyEvents(events, tally)

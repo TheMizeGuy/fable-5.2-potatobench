@@ -73,6 +73,8 @@ export type Trait = 'strong' | 'steady' | 'sharp' | 'early' | 'tireless' | 'chee
 // What a person does from November to April: laid off, felling a tract, packing, or building.
 export type WinterWork = 'off' | 'woods' | 'pack' | 'build'
 export type Rig = '' | 'tractor' | 'truck'
+// When a person rests: by themselves once worn out (the default), now until fresh, or never (worked on worn out).
+export type RestMode = 'auto' | 'now' | 'push'
 // What stands on a parcel: open ground, or a tract still to clear (standing woods or brush, or stumps once felled).
 export type Cover = 'open' | 'woods' | 'brush' | 'stumps'
 
@@ -154,6 +156,7 @@ export interface FieldSeason {
   weighed: boolean          // the whole crop is in and the weigh ticket cut
   lotId: number
   flags: number             // one-time announcements
+  killAsked?: number        // the first day reference practice asked for the vines to be killed
   // Hills, struct of arrays, ROWS * COLS long.
   hState: number[]
   hEmergeAt: number[]
@@ -214,6 +217,7 @@ export interface Unit {
   low: number                       // days running with mood below the quitting line
   rig: Rig                          // what the person is driving for the order held
   out: number                       // hurt: the day they are back at work, or -1
+  rest: RestMode                    // rests when worn out, rests now until fresh, or works on worn out
 }
 
 // Something that happened and asks for a decision. It waits until the day `until` for an answer, then takes its
@@ -304,6 +308,9 @@ export interface Season {
   watchDay: number          // day the spray threshold was crossed, or -1
   frozen: boolean
   frostHaul?: number        // the last day a frost was forecast on crop still in barrels
+  pressed?: number[]        // people moved today from work that can wait to work that cannot
+  frostLow?: number         // tonight's forecast low at the station, C
+  digStop?: number[]        // fields whose digging stopped for today so that what was dug can be hauled before a frost
   fields: FieldSeason[]
   jobs: Job[]
   nextJob: number
@@ -415,6 +422,7 @@ export type Cmd =
   | { t: 'answer'; incident: number; choice: string }
   | { t: 'job'; kind: JobKind; field: number; unit?: number }
   | { t: 'routine'; kind: JobKind; auto: boolean }
+  | { t: 'rest'; unit: number; mode?: RestMode }
   | { t: 'assign'; id: number; unit: number }
   | { t: 'cancel'; id: number }
   | { t: 'bump'; id: number }

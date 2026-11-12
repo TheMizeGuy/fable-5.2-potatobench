@@ -11,6 +11,7 @@ import { newPotatoWindow } from './market.ts'
 import { addJob, FIELD_NAMES, JOB_LABEL, letGo, seasonDone, standingBy, workday } from './season.ts'
 import { hasBuilt } from './buildings.ts'
 import { forecastFor } from './weather.ts'
+import { plantReady } from './outlook.ts'
 
 export interface Advice {
   id: string
@@ -22,7 +23,6 @@ export interface Advice {
   urgent: boolean
 }
 
-function f1(c: number): number { return Math.round(c * 9 / 5 + 32) }
 
 export function advise(world: World, c: Campaign): Advice[] {
   return withinReach(c, everything(world, c))
@@ -57,10 +57,10 @@ function everything(world: World, c: Campaign): Advice[] {
       add(i, 'rocks', `Pick the rocks off ${n}.`, 'Frost has heaved up stones. They slow the planter and the digger and bruise the crop at the dig.')
     }
     if (f.status === 'idle') {
-      if (s.day < dayIndex(year, 4, 8)) add(i, 'wait', `Hold off planting ${n}.`, 'It is early. Seed sits and rots in cold ground.')
-      else if (t.soilT < 10) add(i, 'wait', `Hold off planting ${n}.`, `The soil is ${f1(t.soilT)}°F. Growers here wait for 50°F; below 45°F the seed rots.`)
-      else if (f.tooWet) add(i, 'wait', `${n} is too wet to plant.`, 'Working wet ground packs it. It will dry in a day or two.')
-      else add(i, 'plant', `Plant ${n}.`, `The soil is ${f1(t.soilT)}°F and fit to work.`, s.day > dayIndex(year, 5, 1))
+      // One rule for planting, the same the field's card and the forecast line read (plantReady).
+      const ready = plantReady(world, c, i)
+      if (ready.ok) add(i, 'plant', `Plant ${n}.`, ready.why, s.day > dayIndex(year, 5, 1))
+      else add(i, 'wait', f.tooWet && ready.soilT >= ready.need ? `${n} is too wet to plant.` : `Hold off planting ${n}.`, ready.why)
       continue
     }
     if (f.status === 'growing') {
@@ -185,8 +185,11 @@ export function standingOrders(world: World, c: Campaign): GameEvent[] {
   const first = threatened && s.frostHaul !== s.day - 1
   if (threatened) s.frostHaul = s.day
   if (!workday(c, s)) return out
+  // A frost forecast for tonight: a lone hauler digs no more than the rest of the day can haul in (season.ts, work).
+  s.frostLow = forecastFor(world, c.seed, s.year, s.day, 1, hasBuilt(c, 'station') ? P.STATION_ERROR : 1).lo
   for (const a of advise(world, c)) {
     if (a.field < 0 || a.act === 'wait' || a.act === 'sell' || a.act === 'close') continue
+    if (a.act === 'kill' && s.fields[a.field].killAsked === undefined) s.fields[a.field].killAsked = s.day
     const by = standingBy(c, a.act, a.field)
     if (by) addJob(c, a.act, a.field, -1, by)
   }
