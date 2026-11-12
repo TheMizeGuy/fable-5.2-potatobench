@@ -611,7 +611,22 @@ export function apply(world: World, c: Campaign, cmd: Cmd): Result {
   const opened = openRoutine(c)
   const r = command(world, c, cmd)
   if (opened && r.ok) r.events.unshift(opened)
+  if (r.ok) r.events.push(...lapsedBuyers(c))
   return r
+}
+
+// A buyer's offer for a lot that has since been sold, delivered or used up goes with it, so no telegram offers to buy
+// what is not there.
+function lapsedBuyers(c: Campaign): GameEvent[] {
+  const out: GameEvent[] = []
+  for (const inc of [...c.incidents]) {
+    if (inc.kind !== 'buyer') continue
+    const lot = c.lots.find(l => l.id === inc.lot)
+    if (lot && lot.open && lotCwt(lot) >= P.BUYER_MIN_CWT) continue
+    c.incidents.splice(c.incidents.indexOf(inc), 1)
+    out.push(note(c, 'incidentDone', 'info', `The buyer goes on down the road: ${lot ? `the ${variety(lot.variety).name} from ${FIELD_NAMES[lot.field]}` : 'that lot'} is no longer there to buy.`))
+  }
+  return out
 }
 
 // A game saved before the routine opens with it on, and says so once.

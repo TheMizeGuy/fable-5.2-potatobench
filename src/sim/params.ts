@@ -427,6 +427,10 @@ export const DIG_FROST_MARGIN = 1
 export const MARKETABLE_SHARE = 0.86
 export const MARKETABLE_NO2 = 0.38
 export const MARKETABLE_SPREAD = 0.042
+// Before the tubers set: the share of tubers a usual season sends to No. 2, and how far a field's yield strays from
+// its variety's usual one (18% over 384 coach-tended fields).
+export const NO2_USUAL = 0.136
+export const USUAL_SPREAD = 0.2
 // Reference practice digs a crop whose vines are still up from this date, so it is in before the freeze-up.
 export const DIG_GREEN = { month: 9, dom: 5 }   // October 5
 // Where the dig is the routine's and the kill the player's call, the crew kills the vines by itself this many days

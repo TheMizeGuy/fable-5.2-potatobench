@@ -5,11 +5,11 @@ import { dayIndex, formatDay, withCommas } from './calendar.ts'
 import { buildBlock, buildCost } from './buildings.ts'
 import { apply, held, mortgageDue, openLots, planCosts, stumpBlock, tileBlock } from './campaign.ts'
 import { HOME_YARD, PARCELS, TRACTS } from './farm.ts'
-import { basePrice, gradePrice, levelToCome, lotValue } from './market.ts'
+import { basePrice, gradePrice, harvestPrice, lotValue } from './market.ts'
 import { lotCwt, markOdds, skinAt, skinnedShare } from './harvest.ts'
 import * as P from './params.ts'
 import { housingLimit, hiredCount, hurt, jobSkill, resting, SKILL_LABEL, willDo } from './people.ts'
-import { jobCost, pressingWhy, standingBy, tractorsRunning, waitFor, workday } from './season.ts'
+import { JOB_LABEL, jobCost, placeName, pressingWhy, standingBy, tractorsRunning, waitFor, workday } from './season.ts'
 import { asks, killByItself } from './advice.ts'
 import type { BuildingKind, Campaign, Cmd, Job, JobKind, KillWhy, UpgradeId, World, YearSummary } from './types.ts'
 import { estimateYield, fieldInfo } from './view.ts'
@@ -23,6 +23,7 @@ export interface JobOutlook {
   unit: number                     // who will take it: a person's id, or -1 when nobody will
   when: 'now' | 'next' | 'waiting' // worked on the next day; taken once the work ahead of it is done; held up
   why: string                      // in plain words
+  leaves?: boolean                 // it comes off the list in the morning: nobody takes it because it is not wanted
 }
 
 // For each order on the list, who will take it and when, or why nobody will: the next day played out on a copy of
@@ -39,23 +40,35 @@ export function jobOutlook(world: World, c: Campaign): JobOutlook[] {
   const working = workday(c, s) || copy.season!.frostHaul === s.day
   return s.jobs.map((j, place) => {
     const w = worked.find(x => x.kind === j.kind && x.field === j.field)
-    if (w) return { id: j.id, unit: w.unit, when: 'now', why: `${nameOf(c, w.unit)} is on it.` }
-    if (dropped.has(j.id)) return { id: j.id, unit: -1, when: 'waiting', why: `It leaves the list in the morning: ${dropped.get(j.id)}` }
+    if (w) return { id: j.id, unit: w.unit, when: 'now', why: `${says(c, w.unit, 'is', 'are')} on it.` }
+    if (dropped.has(j.id)) return { id: j.id, unit: -1, when: 'waiting', why: `It leaves the list in the morning: ${dropped.get(j.id)}`, leaves: true }
     const who = takers(c, j)
     if (!who.length) return { id: j.id, unit: -1, when: 'waiting', why: nobody(c, j) }
     if (!working) return { id: j.id, unit: who[0], when: 'next', why: 'Sunday: nobody works today.' }
     const weather = waitFor(c, s, j, d)
-    if (weather) return { id: j.id, unit: who[0], when: 'waiting', why: `Waiting: ${weather}.` }
+    if (weather) return { id: j.id, unit: who[0], when: 'waiting', why: `Waiting: ${weather} today. ${says(c, who[0], 'takes', 'take')} it once the weather lets.` }
     if (jobSkill(j.kind) === 'machine' && tractorsRunning(c, s.day) === 0 && !(j.kind === 'haul' && c.upgrades.truck)) {
       return { id: j.id, unit: who[0], when: 'waiting', why: 'Waiting for a tractor: every tractor is broken down.' }
     }
+    // Held by work they are in the middle of: that work by name, how long it has to go, and for work that cannot wait
+    // with only one person to do it, what would get it done sooner.
+    const u = c.crew.find(x => x.id === who[0])!
+    const cur = u.job >= 0 && u.job !== j.id ? s.jobs.find(x => x.id === u.job) : undefined
+    if (cur) {
+      const days = Math.ceil(Math.max(0, cur.need - cur.done) - 1e-6)
+      const alone = takers(c, { ...j, unit: -1 }).length === 1 && !!pressingWhy(c, s, j)
+      const sooner = alone && days >= 2 ? ` Nobody else on the farm does ${SKILL_LABEL[jobSkill(j.kind)]}: a second person would take it sooner.` : ''
+      return { id: j.id, unit: who[0], when: 'next', why: `${says(c, who[0], 'takes', 'take')} it once the ${JOB_LABEL[cur.kind].toLowerCase()} in ${placeName(cur.field)} is done${days >= 2 ? `, in about ${days} days` : ''}.${sooner}` }
+    }
     const ahead = place
-    return { id: j.id, unit: who[0], when: 'next', why: ahead ? `${nameOf(c, who[0])} takes it once the ${ahead === 1 ? 'order' : `${ahead} orders`} ahead of it are done.` : `${nameOf(c, who[0])} takes it next.` }
+    return { id: j.id, unit: who[0], when: 'next', why: ahead ? `${says(c, who[0], 'takes', 'take')} it once the ${ahead === 1 ? 'order' : `${ahead} orders`} ahead of it are done.` : `${says(c, who[0], 'takes', 'take')} it next.` }
   })
 }
 
-function nameOf(c: Campaign, id: number): string {
-  return c.crew.find(u => u.id === id)?.name ?? 'Someone'
+// A person and the verb that goes with them: "Ada takes", "You take".
+function says(c: Campaign, id: number, one: string, you: string): string {
+  const u = c.crew.find(x => x.id === id)
+  return u?.kind === 'farmer' ? `You ${you}` : `${u?.name ?? 'Someone'} ${one}`
 }
 
 // Who could take an order now, best first: those who may take it, are not hurt or resting, by their priority for it.
@@ -104,7 +117,7 @@ export function pressing(world: World, c: Campaign): Pressing[] {
   for (const j of s.jobs) {
     const why = pressingWhy(c, s, j)
     const o = fate.get(j.id)
-    if (!why || !o || o.when === 'now' || (o.when === 'next' && o.unit >= 0 && !/Sunday/.test(o.why))) continue
+    if (!why || !o || o.leaves || o.when === 'now' || (o.when === 'next' && o.unit >= 0 && !/Sunday/.test(o.why))) continue
     if (o.unit >= 0) continue
     const skill = jobSkill(j.kind)
     const best = c.crew.filter(u => !u.foreman).sort((a, b) => b.skills[skill] - a.skills[skill])[0]
@@ -145,6 +158,7 @@ export interface MoneyNow {
   stored: number                   // the crop in the potato houses and the cellar, at today's price
   growing: number                  // the crop still in the ground, by the estimate, at today's price
   range: { lo: number; hi: number }   // after, give or take what the crop in the ground may come to
+  callRisk: 'none' | 'possible' | 'likely'   // the bank's limit against that: under the middle, or under even the top
   due: { note: number; household: number; mortgage: number; loan: number; total: number }   // what the year end takes, the loan included
   after: number                    // what the farm would have after the year-end bills if every lot sold today
   parts: MoneyPart[]               // the why of after, largest first
@@ -170,17 +184,19 @@ export function moneyNow(world: World, c: Campaign): MoneyNow {
         ? lotValue(world, c, lifting) - skinnedShare(skinAt(f, lifting.dugDay)) * lifting.grades.no1 * (gradePrice(world, c, lifting, 'no1') - gradePrice(world, c, lifting, 'no2'))
         : 0
       growing += lifted
-      if (f.status !== 'growing' && f.status !== 'dead' && f.status !== 'digging') continue
-      const e = estimateYield(c, i)
+      const toPlant = f.status === 'idle' && c.plans[i]?.crop === 'potato'
+      if (!toPlant && f.status !== 'planted' && f.status !== 'growing' && f.status !== 'dead' && f.status !== 'digging') continue
+      const e = harvestYield(c, i)
       if (!e) continue
       const left = f.status === 'digging' ? 1 - f.digDone / P.HILLS : 1
       // The rest at what a cwt of the usual crop brings, leaning on what this field's own has brought as the digger
       // gets further in; it cannot be sold before it is lifted, by when the year's price level has come further in.
       const dug = lifting ? lotCwt(lifting) + lifting.grades.cull : 0
       const odds = markOdds(f, c.fields[i].soil)
-      const usual = (P.MARKETABLE_SHARE - P.MARKETABLE_NO2 * (odds.scab + (1 - odds.scab) * odds.knob)) * basePrice(world, c, f.variety)
+      const no2 = f.tiDay < 0 ? P.NO2_USUAL : odds.scab + (1 - odds.scab) * odds.knob
+      const usual = (P.MARKETABLE_SHARE - P.MARKETABLE_NO2 * no2) * basePrice(world, c, f.variety)
       const own = dug >= 1 ? 1 - left : 0
-      const perCwt = (usual * (1 - own) + (own > 0 ? lifted / dug : 0) * own) * levelToCome(world, c, f.variety)
+      const perCwt = (usual * (1 - own) + (own > 0 ? lifted / dug : 0) * own) * harvestPrice(world, c, f.variety) / basePrice(world, c, f.variety)
       const spread = (1 - own) * P.MARKETABLE_SPREAD / P.MARKETABLE_SHARE
       const cwt = P.FIELD_ACRES * left
       const dig = f.status === 'digging' ? 0 : jobCost(c, 'dig')
@@ -202,7 +218,37 @@ export function moneyNow(world: World, c: Campaign): MoneyNow {
     { label: 'The household', amount: -P.LIVING },
     { label: 'The land mortgage', amount: -mortgage },
   ].filter(p => Math.abs(p.amount) >= 0.5).sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
-  return { cash, loan, stored, growing, range: { lo: after - lo, hi: after + hi }, due, after, parts }
+  const range = { lo: after - lo, hi: after + hi }
+  const callRisk = range.hi < P.CREDIT_LIMIT ? 'likely' : after < P.CREDIT_LIMIT ? 'possible' : 'none'
+  return { cash, loan, stored, growing, range, callRisk, due, after, parts }
+}
+
+// What a field's crop should come to at the dig, total cwt an acre with its give-or-take: before the tubers set, what
+// the variety usually gives on this ground (worn soil and raw ground give less); after, the tubers there now by the
+// estimate, and while the vines live, the usual yield's share of the bulking still to come by the warmth to senescence.
+function harvestYield(c: Campaign, field: number): { mean: number; lo: number; hi: number } | null {
+  const f = c.season!.fields[field]
+  const fp = c.fields[field]
+  const v = variety(f.variety)
+  const usual = v.usual * (1 - P.SOIL_YIELD * (1 - fp.soil)) * (fp.raw ? P.RAW_GROUND : 1)
+  const e = estimateYield(c, field)
+  if (!e && f.tiDay >= 0) return null
+  const s = c.season!
+  // The days of bulking left, to the day the vines are expected to come off (killOutlook), of all it would have had.
+  let toCome = e ? 0 : 1
+  if (e && f.deadDay < 0) {
+    const age = f.pdAir - f.pdEmerge
+    const pace = s.day > f.emergeDay ? age / (s.day - f.emergeDay) : 0
+    const span = s.day - f.tiDay + (pace > 0 ? Math.max(0, v.matPd - age) / pace : 0) + P.KILL_MADE_DAYS
+    const off = killOutlook(c, field)?.day ?? s.day
+    toCome = span > 0 ? Math.min(1, Math.max(0, off - s.day) / span) : 0
+  }
+  const more = toCome * usual
+  return {
+    mean: (e?.mean ?? 0) + more,
+    lo: (e?.lo ?? 0) + more * (1 - 1.5 * P.USUAL_SPREAD),
+    hi: (e?.hi ?? 0) + more * (1 + 1.5 * P.USUAL_SPREAD),
+  }
 }
 
 export interface YearStory { year: number; began: number; ended: number; reasons: MoneyPart[] }
