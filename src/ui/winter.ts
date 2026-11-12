@@ -30,7 +30,6 @@ function byMonth(c: S.Campaign, months: number): string {
 // What the winter's work comes to by spring, for this person, counted with everyone else on the same work.
 function outcome(c: S.Campaign, u: S.Unit, people: S.PersonInfo[]): string {
   const left = monthsLeft(c)
-  const p = people.find(x => x.id === u.id)!
   const pay = u.kind === 'farmer' ? 'unpaid' : `${F.money(S.payOf(u))} a month`
   if (u.winter === 'off') return u.kind === 'farmer' ? 'Resting till spring.' : 'Laid off: unpaid, back in spring.'
   const crew = c.crew.filter(x => x.winter === u.winter && (u.winter !== 'woods' || x.winterField === u.winterField))
