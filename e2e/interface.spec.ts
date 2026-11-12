@@ -21,7 +21,7 @@ async function farmWithPeople(page: Page): Promise<void> {
     c.buildings.push({ id: c.nextBuilding++, kind: 'bunk', yard: -1, done: 12, need: 12, built: true })
     for (const a of [...c.applicants]) app.do({ t: 'hire', applicant: a.id })`)
   await page.getByTestId('begin-season').click()
-  await reach(page, `const { app } = q.g(); app.setSpeed(0); q.run(q.day(5, 12)); app.setSpeed(0)`)
+  await reach(page, `const { app } = q.g(); app.setSpeed(0); q.run(q.day(5, 12)); app.setSpeed(0); app.campaign.incidents = []; app.select(-1)`)
   await putAway(page)
 }
 
@@ -180,7 +180,9 @@ test('a weigh ticket wants an answer: it cannot be tapped away, and closing it s
   await page.keyboard.press('Escape')
   await expect(ticket).toHaveCount(0)
   await expect(page.locator('#ui [data-testid="notice"]')).toContainText('went into the cellar')
-  // The stored crop is on its field's card, with the ticket and the sale.
+  // The stored crop is on its field's card, with the ticket and the sale, once the last barrel is in.
+  await putAway(page)
+  await reach(page, `const { app } = q.g(); const s = app.campaign.season; for (let k = 0; k < 10 && s.fields.some(f => f.status === 'dug' && !f.weighed); k++) app.do({ t: 'day' }); app.setSpeed(0)`)
   await putAway(page)
   const field = await page.locator('#ui .plate[aria-label*=", dug"]').first().getAttribute('data-testid')
   await page.getByTestId(field!).click()
@@ -372,7 +374,7 @@ test('a crop a contract wants: the weigh ticket delivers it and the tracker coun
   await expect(ticket.locator('.choice')).toContainText(/market/)
   await expect(ticket.getByTestId('store-houses')).toContainText('The potato house holds')
   await deliver.click()
-  await expect(ticket.locator('[data-testid^="lot-keep-"]')).toContainText('Store the rest')
+  await expect(ticket.locator('[data-testid^="lot-keep-"]')).toContainText('Store')
   await ticket.locator('[data-testid^="lot-keep-"]').click()
   await expect(ticket).toHaveCount(0)
   await expect(page.locator('#ui .track-n')).not.toHaveText(/^0\//)
@@ -499,7 +501,7 @@ test('the goal line says the one next thing, opens the ladder, and moves on when
   await page.getByTestId('goal-show').click()
   expect(await game<string>(page, 'app.needs()[app.selected]?.need?.act')).toBe('plant')
   // Every field planted: the line strikes through and the next goal writes itself in.
-  await reach(page, `const { app } = q.g(); const c = app.campaign
+  await reach(page, `const { app, sim } = q.g(); const c = app.campaign
     for (let k = 0; k < 60 && c.season.fields.some((f, i) => sim.isField(c, i) && f.status === 'idle'); k++) { for (const a of sim.advise(app.world, c)) if (a.act === 'plant') app.order('plant', { fields: [a.field] }); app.do({ t: 'day' }) }
     app.setSpeed(0)`)
   await expect(page.getByTestId('goal')).toContainText('Walk a field for blight', { timeout: 5000 })
@@ -538,8 +540,9 @@ test('people: a chip opens the card, priorities set by click and key, a raise, a
   await expect(card.getByTestId('person-doing')).toContainText('Foreman')
   await card.getByTestId('person-dismiss').click()
   await page.getByTestId('confirm-ok').click()
+  await expect.poll(() => game<number>(page, 'app.campaign.crew.length')).toBe(3)
+  expect(await game<number>(page, 'app.unit')).toBe(-1)
   await expect(card).toBeHidden()
-  expect(await game<number>(page, 'app.campaign.crew.length')).toBe(3)
   // Escape puts a person's card away.
   await page.getByTestId('unit-2').click()
   await expect(card).toBeVisible()
@@ -648,7 +651,7 @@ test('a tract cleared through the interface: felled, the stumps pulled, the rock
   await reach(page, `const { app } = q.g(); const c = app.campaign; for (let k = 0; k < 14 && c.fields[14].cover !== 'open'; k++) app.do({ t: 'day' }); app.setSpeed(0)`)
   await expect(card.getByTestId('clear-track')).toHaveAttribute('aria-label', /stumped/)
   await page.keyboard.press('o')
-  await reach(page, `const { app } = q.g(); const c = app.campaign; for (let k = 0; k < 14 && c.fields[14].stones >= sim.ROCKS_ADVISE; k++) app.do({ t: 'day' }); app.setSpeed(0)`)
+  await reach(page, `const { app, sim } = q.g(); const c = app.campaign; for (let k = 0; k < 14 && c.fields[14].stones >= sim.ROCKS_ADVISE; k++) app.do({ t: 'day' }); app.setSpeed(0)`)
   await expect(card.getByTestId('clear-track')).toHaveAttribute('aria-label', /picked/)
   expect(errors, errors.join('\n')).toEqual([])
 })

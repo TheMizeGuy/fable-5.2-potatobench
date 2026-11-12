@@ -1052,6 +1052,7 @@
 .season[data-layout='short'] .incident { top: calc(var(--top, 44px) + var(--sp-1)); padding: var(--sp-2) var(--sp-3); gap: var(--sp-2); max-height: calc(100vh - var(--top, 44px) - 12px); overflow-y: auto; }
 .season[data-layout='narrow'] .tb-goal { font-size: var(--t-label); min-height: 22px; margin-top: 1px; }
 .season[data-layout='narrow'] .goal-when { display: none; }
+.season.low-h.selected .tb-goal, .season.low-h.selected .goals-pop { display: none; }
 .season[data-layout='narrow'] .materials span { display: none; }
 .season[data-layout='narrow'] .materials { padding: 0 var(--sp-1); }
 .season[data-layout='narrow'] .unit.person { min-width: 44px; padding: var(--sp-1) var(--sp-h) 5px; }

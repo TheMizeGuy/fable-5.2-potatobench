@@ -159,12 +159,12 @@ export function personCard(ctx: Ctx): PersonCard {
               h('span', { class: 'p-lvl num', 'aria-label': `${R.SKILL_NAME[k]}: level ${lvl}${lvl < S.SKILL_MAX ? `, ${F.pct(p.progress[k])} of the way to ${lvl + 1}` : ''}` }, String(lvl))),
             h('button', {
               class: `prio p${pr}`, type: 'button', testid: `prio-${k}`,
-              'aria-label': `${R.SKILL_NAME[k]} work, ${R.skillCovers(k).toLowerCase()}: ${R.prioWord(pr)}. Press for ${R.prioWord(R.prioNext(pr))}.`,
               title: ctx.touch() ? undefined : `${R.skillCovers(k)}. 1 is done first; a dash is never.`,
               onclick: () => setPrio(p, k, R.prioNext(pr)),
               oncontextmenu: (e: Event) => { e.preventDefault(); setPrio(p, k, R.prioNext(pr, true)) },
               onkeydown: (e: Event) => prioKey(e as KeyboardEvent, p, k),
-            }, R.prioMark(pr)))
+            }, h('span', { class: 'sr' }, `${R.SKILL_NAME[k]} work priority `), R.prioMark(pr),
+            h('span', { class: 'sr' }, `: ${R.prioWord(pr)}. Press for ${R.prioWord(R.prioNext(pr))}. ${R.skillCovers(k)}.`)))
         })),
       flashed && performance.now() < flashed.until ? h('p', { class: 'card-line flash lv-warn', role: 'status' }, flashed.text) : null,
       farmer ? h('p', { class: 'card-line p-foot' }, 'You draw no wage: the household takes its share at the year end.') : h('div', { class: 'p-foot' },
@@ -318,12 +318,13 @@ export function workGrid(ctx: Ctx): WorkGrid {
                 const here = at.row === row && at.col === col
                 return h('td', { role: 'gridcell' }, h('button', {
                   class: `cell p${pr}`, type: 'button', testid: `cell-${p.id}-${k}`, 'data-cell': `${row}-${col}`, tabindex: here ? '0' : '-1',
-                  'aria-label': `${R.firstName(p.name)}, ${S.SKILL_LABEL[k]}: skill ${lvl}, ${R.prioWord(pr)}`,
                   onclick: () => { at = { row, col }; set(p.id, k, R.prioNext(pr), R.firstName(p.name)) },
                   oncontextmenu: (e: Event) => { e.preventDefault(); at = { row, col }; set(p.id, k, R.prioNext(pr, true), R.firstName(p.name)) },
                   onkeydown: (e: Event) => key(e as KeyboardEvent, people, row, col),
                   onfocus: () => { if (at.row !== row || at.col !== col) { at = { row, col }; ctx.dirty() } },
-                }, h('span', { class: 'cell-skill', style: `width:${lvl * 10}%` }), h('span', { class: 'cell-v num' }, R.prioMark(pr))))
+                }, h('span', { class: 'cell-skill', style: `width:${lvl * 10}%` }),
+                h('span', { class: 'sr' }, `${R.firstName(p.name)}, ${S.SKILL_LABEL[k]}, skill ${lvl}, priority `), h('span', { class: 'cell-v num' }, R.prioMark(pr)),
+                h('span', { class: 'sr' }, `, ${R.prioWord(pr)}`)))
               })))))),
       note ? h('p', { class: 'card-line flash lv-warn', role: 'status' }, note) : null,
       rules(c),

@@ -130,6 +130,8 @@ export function planDay(snap: Snapshot, shown: HillDisplay[][], crews: CrewFrom[
     const [fs, kind] = key.split('|') as [string, JobKind]
     const field = Number(fs), f = snap.fields[field]
     const hills: number[] = []
+    // Building is done in a yard (a negative place): there are no hills to change.
+    if (!f) { hillsFor.set(key, hills); continue }
     for (let h = 0; h < HILLS; h++) {
       const k = field * HILLS + h
       if (claimed.has(k) || !changed(shown[field][h], f.hills[h], f.ridge, kind)) continue
@@ -157,6 +159,7 @@ export function planDay(snap: Snapshot, shown: HillDisplay[][], crews: CrewFrom[
     if (u) {
       const order = u.worked.slice().sort((a, b) => first(`${b.field}|${b.kind}`) - first(`${a.field}|${a.kind}`))
       for (const w of order) {
+        if (w.field < 0) continue
         const key = `${w.field}|${w.kind}`
         const f = snap.fields[w.field]
         const { hills, rows } = share(key, crew.id)

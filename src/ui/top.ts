@@ -233,8 +233,9 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
       h('div', { class: 'tb-right' },
         mats ? h('button', {
           class: 'materials num', type: 'button', testid: 'materials', 'aria-expanded': String(pop === 'materials'),
-          'aria-label': `${F.num(c.logs, 0)} loads of logs, ${F.num(c.stone, 0)} of fieldstone. Sell logs`, onclick: () => { pop = pop === 'materials' ? '' : 'materials'; ctx.dirty() },
-        }, c.logs >= 0.05 ? [icon('logs', 'ic s'), h('span', null, F.num(Math.floor(c.logs)))] : null, c.stone >= 0.05 ? [icon('stone', 'ic s'), h('span', null, F.num(Math.floor(c.stone)))] : null) : null,
+          onclick: () => { pop = pop === 'materials' ? '' : 'materials'; ctx.dirty() },
+        }, h('span', { class: 'sr' }, 'Logs '), c.logs >= 0.05 ? [icon('logs', 'ic s'), h('span', null, F.num(Math.floor(c.logs)))] : null,
+        h('span', { class: 'sr' }, ' loads, stone '), c.stone >= 0.05 ? [icon('stone', 'ic s'), h('span', null, F.num(Math.floor(c.stone)))] : null, h('span', { class: 'sr' }, ' loads. Sell logs')) : null,
         pop === 'materials' && mats ? materials(c) : null,
         h('span', { class: 'cash num', testid: 'cash' },
           h('span', { class: 'sr' }, c.cash < 0 ? 'Owed on the spring loan: ' : 'Cash: '),

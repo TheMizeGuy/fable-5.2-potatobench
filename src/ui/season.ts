@@ -402,6 +402,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       const personUp = people && app.unit >= 0 && !app.selection.length && app.yard === 0
       el.classList.toggle('selected', app.selection.length > 0 || personUp || app.yard !== 0)
       el.classList.toggle('tray-up', !!tray)
+      el.classList.toggle('low-h', innerHeight < 760)
       // What the goal points at: the field it lights, the yard it rings.
       const g = nextGoal(c)
       const tgt = target(g)
