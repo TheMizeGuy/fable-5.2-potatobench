@@ -92,7 +92,7 @@ export function goals(c: Campaign): Goal[] {
       progress: felledMost > 0 ? { n: Math.round(felledMost * 100), of: 100 } : null },
     { id: 'stump', title: 'Pull the stumps', why: 'A contractor with a bulldozer, for a fee.', when: 'In spring or the season',
       done: cleared.length > 0, now: spring || inSeason, price: price.stump },
-    { id: 'rocks', title: 'Pick the new ground', why: 'New ground is stony. The stones come to the yard for building.', when: 'In the season',
+    { id: 'rocks', title: 'Pick rocks off new ground', why: 'A cleared tract is stony: someone picks the rocks off it (Pick rocks on its card) so it can be planted, and the stones go to the yard for building.', when: 'In the season',
       done: cleared.some(t => t.f.stones < ROCKS_ADVISE), now: inSeason },
     { id: 'newfield', title: 'Crop the new ground', why: 'A year in oats and clover, then potatoes on fresh soil.', when: 'From the next spring',
       done: cleared.some(t => !t.f.raw || (inSeason && fields[t.i] && fields[t.i].status !== 'off')), now: spring || inSeason },

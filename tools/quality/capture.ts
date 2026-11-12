@@ -213,6 +213,22 @@ const STATES: State[] = [
   // The bigger farm.
   { name: 'plan-land', what: 'Spring: land to rent or buy, found from the land fold, its card open', sizes: ALL, run: async page => { await q(page, `q.g().app.newGame(1987, 3)`); await page.getByTestId('land-open').click(); await page.getByTestId('fold-land-10').click() } },
   { name: 'plan-contracts', what: 'Spring: the contracts offered', sizes: [...MAIN, 'small'], run: async page => { await q(page, `q.g().app.newGame(1987, 3)`); await page.getByTestId('contracts-open').click() } },
+  { name: 'plan-foreman', what: 'A second spring, the next goal a foreman: Show me opens the people fold and rings the foreman control', sizes: [...MAIN, 'small', 'tiny'], run: async page => {
+    await q(page, `q.start(1987, 3); q.year(3); const { app, sim } = q.g(); app.do({ t: 'next' }); const c = app.campaign
+      c.upgrades.boom = true; for (const t of sim.TRACTS) { c.fields[t].cover = 'open'; c.fields[t].raw = false; c.fields[t].stones = 0 }
+      c.buildings.push({ id: c.nextBuilding++, kind: 'stand', yard: sim.HOME_YARD, done: 1, need: 1, built: true })
+      if (c.offers[0]) app.do({ t: 'accept', offer: c.offers[0].id }); app.do({ t: 'rent', field: 6 }); app.do({ t: 'hire', kind: 'hand' })`)
+    await closeAll(page)
+    await page.getByTestId('goal-do').click()
+    await page.waitForTimeout(400)
+  } },
+  { name: 'ledger-foreman', what: 'Year end with a hand hired: the Next box names a foreman, and pressed opens the foreman sheet', sizes: ['desk', 'laptop', 'tablet'], run: async page => {
+    await q(page, `q.start(1987, 3); q.g().app.do({ t: 'hire', kind: 'hand' }); q.year(3)`)
+    await closeAll(page)
+    // On a phone the book's foot keeps only the way on; the box is a desk's.
+    if (await page.getByTestId('next-goal').isVisible()) await page.getByTestId('next-goal').click()
+    await page.waitForTimeout(400)
+  } },
   { name: 'plan-people', what: 'Spring: the people fold opened, three asking for work (design/spring.html)', sizes: [...MAIN, 'small', 'tiny'], run: async page => { await q(page, `q.g().app.newGame(1987, 3)`); await page.getByTestId('crew-open').click() } },
   { name: 'plan-crew', what: 'Spring: hiring and letting go', sizes: MAIN, run: async page => { await q(page, `q.g().app.newGame(1987, 3); q.g().app.do({ t: 'hire', kind: 'hand' })`); await page.getByTestId('crew-open').click() } },
   { name: 'plan-bigger', what: 'Spring on the bigger farm: rented land, crews, a contract signed', sizes: ALL, run: async page => { await q(page, BIGGER) } },
