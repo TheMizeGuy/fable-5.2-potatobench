@@ -51,7 +51,7 @@ export function goals(c: Campaign): Goal[] {
       done: past || any(f => f.killDay >= 0 || f.deadDay >= 0), now: crop },
     { id: 'dig', title: 'Dig a field', why: 'The digger lifts the crop into barrels in the field.', when: 'Once the skins are set',
       done: past || any(f => f.status === 'digging' || f.status === 'dug'), now: crop },
-    { id: 'haul', title: 'Haul the crop in', why: 'Barrels left out can freeze. The weigh ticket comes when all is in.', when: 'After the dig',
+    { id: 'haul', title: 'Bring the crop in', why: 'The crop waits in barrels until it is hauled; a hard frost takes a share. It is weighed once all is in.', when: 'After the dig',
       done: past || any(f => f.weighed), now: crop },
     { id: 'sell', title: 'Sell some potatoes', why: 'Sell off the field now, or store and sell into the winter.', when: 'After the weigh-in',
       done: c.lots.some(l => l.sold > 0) || c.history.some(y => y.cwtSold > 0), now: c.phase === 'season' || c.phase === 'cellar' },

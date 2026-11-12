@@ -112,6 +112,8 @@ function progressText(g: Goal): string {
 }
 
 const MOMENT_MS = 1600
+// The crop's own steps: in spring they wait for the season to start.
+const CROP_STEPS = new Set(['plant', 'walk', 'hill', 'spray', 'sample', 'kill', 'dig', 'haul'])
 
 export interface TopBar {
   el: HTMLElement
@@ -216,7 +218,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
           onclick: () => { pop = pop === 'goals' ? '' : 'goals'; ctx.dirty() },
         }, icon(gone ? 'check' : 'goal', 'ic s'), h('span', { class: 'goal-t' }, line.title),
         progressText(line) && !gone ? h('span', { class: 'goal-n num' }, progressText(line)) : null,
-        !line.now && !gone ? h('span', { class: 'goal-when' }, line.when.toLowerCase()) : null) : null,
+        !line.now && !gone ? h('span', { class: 'goal-when' }, line.when.toLowerCase()) : c.phase === 'plan' && CROP_STEPS.has(line.id) && !gone ? h('span', { class: 'goal-when' }, 'once the season starts') : null) : null,
         pop === 'goals' ? ladder(c, g) : null),
       season ? h('button', { class: 'forecast', type: 'button', testid: 'forecast', onclick: () => o.onAlmanac?.() },
         // The figures are for the eye; a screen reader gets the days in words.
