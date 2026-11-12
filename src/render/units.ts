@@ -41,7 +41,6 @@ interface Rig {
   moved: number            // this frame
   turn: number
   state: MachineState
-  drawnAt: number          // the frame it was last placed by its driver
 }
 
 interface Actor {
@@ -199,7 +198,7 @@ export class Crews {
     const home = machineHome(kind, k)
     this.group.add(machine.group)
     return {
-      kind, machine, x: home.x, z: home.z, heading: home.heading, holder: -1, home, broken: false, moved: 0, turn: 0, drawnAt: -1,
+      kind, machine, x: home.x, z: home.z, heading: home.heading, holder: -1, home, broken: false, moved: 0, turn: 0,
       state: { moved: 0, turn: 0, working: 0, kind: 'travel', driver: null, load: 0 },
     }
   }
@@ -551,7 +550,7 @@ export class Crews {
       }
     }
 
-    this.callersAndLife(f, sf, mf, big, bigMachine, going)
+    this.callersAndLife(f, mf, big, bigMachine, going)
     this.ringGeo.instanceCount = this.rings
     this.rAt.needsUpdate = true
     this.rInfo.needsUpdate = true
@@ -599,7 +598,6 @@ export class Crews {
     r.x = x
     r.z = z
     r.moved = jump ? 0 : moved
-    r.drawnAt = this.frameNo
   }
 
   // One person at this point of their day. Returns the staged work they are at, if any.
@@ -747,7 +745,16 @@ export class Crews {
       a.x = g.x; a.z = g.z
       a.heading = g.heading
       this.spread(a, big)
-      if (a.state === 'hurt') { sit(pose, f.time + a.id, 0.2, 0.5); pose.held = 'sling'; pose.gripL = true; pose.handL.set(0.1, 0.36, 0.0) }
+      if (a.state === 'hurt') {
+        // laid up: in a chair by the kitchen door, an arm in a sling
+        sit(pose, f.time + a.id, 0.2, 0.5)
+        pose.held = 'sling'
+        pose.gripL = true
+        pose.handL.set(0.1, 0.36, 0.0)
+        const y = heightAt(a.x, a.z), bx = Math.cos(a.heading), bz = Math.sin(a.heading)
+        this.prims.put('box', V.set(a.x, y, a.z), V2.set(0, 1, 0), AXIS_X, 0.2 * big, 0.2 * big, 0.2 * big, CHAIR)
+        this.prims.put('box', V.set(a.x - bx * 0.1 * big, y + 0.2 * big, a.z - bz * 0.1 * big), V2.set(0, 1, 0), AXIS_X, 0.2 * big, 0.26 * big, 0.2 * big * 0.14, CHAIR)
+      }
       else if (a.state === 'mend') {
         // leaning in over the engine with a wrench, straightening now and then to look at it
         const u = (f.time * 0.21 + a.id * 0.3) % 1
@@ -804,7 +811,7 @@ export class Crews {
     a.next[segIdx] = n
   }
 
-  private callersAndLife(f: CrewFrame, sf: StageFrame, mf: MachineFrame, big: number, bigMachine: number, going: boolean): void {
+  private callersAndLife(f: CrewFrame, mf: MachineFrame, big: number, bigMachine: number, going: boolean): void {
     const pr = this.prims, snap = f.snap
     const pose = POSE
     // People leaving the farm: down the road with a bag, and gone.
@@ -923,7 +930,6 @@ export class Crews {
       const z = d.z - d.away * 5
       drawBeast(pr, DEER, d.x - d.away * 2, heightAt(d.x, z), z, near ? -1.9 : 0.4, big * 0.9 * (1 - 0.5 * d.away), d.away > 0.02 ? f.time * 14 : 0, d.away > 0.02 && d.away < 0.99 ? 1 : 0, near ? 0 : (Math.sin(d.t * 0.4) > 0.2 ? 1 : 0))
     }
-    void sf
   }
 
   // At the lowest setting the small parts throw no shadows, and the cows, the deer and the crows stay away.
@@ -971,7 +977,7 @@ export class Crews {
 const FIGURE = 1.14
 const DOOR = { x: 20.6, z: -6.9 }
 const POSE = new Pose()
-const AXIS_X = new Vector3(1, 0, 0), TRAY = new Color('#cbb98e')
+const AXIS_X = new Vector3(1, 0, 0), TRAY = new Color('#cbb98e'), CHAIR = new Color('#6f5a41')
 const WHITE = new Color(1, 1, 1)
 const IDLE: MachineState = { moved: 0, turn: 0, working: 0, kind: 'travel', driver: null, load: 0 }
 const ASKING: Dress[] = [

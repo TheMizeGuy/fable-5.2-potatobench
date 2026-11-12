@@ -50,6 +50,7 @@ interface Site {
   at: Map<number, { x: number; z: number; walking: boolean }>
   trip: Poly | null
   ph: number
+  piles: [number, number]  // stones put off at each end of the field
 }
 
 const Y = new Vector3(0, 1, 0), X = new Vector3(1, 0, 0)
@@ -86,7 +87,7 @@ export class Stage {
     let st = this.sites.get(key)
     if (!st) {
       const spot = kind === 'build' || kind === 'pack' ? this.yardSpot(kind, field, f.snap) : siteAt((kind === 'reel' || kind === 'pipe' ? 'haul' : kind) as JobKind, field)
-      st = { kind, field, spot, t: hash(field + kind.length) * 20, seen: this.frame, load: 0, n: 0, at: new Map(), trip: null, ph: 0 }
+      st = { kind, field, spot, t: hash(field + kind.length) * 20, seen: this.frame, load: 0, n: 0, at: new Map(), trip: null, ph: 0, piles: [3, 0] }
       this.sites.set(key, st)
     }
     st.seen = this.frame
@@ -265,7 +266,8 @@ export class Stage {
     if (brushy) return
     // the team: out to the tree light, back to the landing with a log on the chain
     const TT = 17, tt = frac(st.t / TT + 0.4) * TT
-    const from: [number, number] = [-0.25, 3.4], to: [number, number] = [0.6, sideways * 1.6]
+    // the team waits at the landing and comes in on the side the tree does not fall to
+    const from: [number, number] = [-0.35, sideways > 0 ? -3.4 : 3.4], to: [number, number] = [0.5, -sideways * 1.5]
     const going = tt < 5.5, hitching = tt >= 5.5 && tt < 7.5, hauling = tt >= 7.5 && tt < 15
     const u = going ? ease(tt / 5.5) : hitching ? 1 : hauling ? 1 - ease((tt - 7.5) / 7.5) : 0
     const hx = from[0] + (to[0] - from[0]) * u, hz = from[1] + (to[1] - from[1]) * u
@@ -309,7 +311,20 @@ export class Stage {
     const bx = dir * (-half + 2 * half * along) / s, bz = (-3 + (k % 4) * 2) / s
     const moving = along < 1 && f.going
     const unloading = along >= 1
-    if (unloading) st.load = Math.max(0, st.load - f.dt * 3)
+    if (unloading && f.going) {
+      const off = Math.min(st.load, f.dt * 3)
+      st.load -= off
+      st.piles[dir > 0 ? 1 : 0] += off
+    }
+    // the piles at the field's ends, growing as the boat is emptied
+    for (const end of [0, 1]) {
+      const n = Math.min(22, Math.floor(st.piles[end]))
+      for (let q = 0; q < n; q++) {
+        const ring = q < 9 ? 0 : q < 17 ? 1 : 2, ang = q * 2.4, rad = (0.42 - 0.15 * ring) * (0.5 + 0.5 * hash(q + end * 31))
+        this.P(st, s, ((end ? 1 : -1) * (half + 1.5)) / s + Math.cos(ang) * rad, 0.03 + 0.085 * ring, -1.2 / s + Math.sin(ang) * rad, b)
+        pr.put('ball', b, Y, X, (0.085 + 0.04 * hash(q + 5)) * s, 0.065 * s, (0.08 + 0.03 * hash(q + 9)) * s, GRAVEL)
+      }
+    }
     const hh = st.spot.heading + (dir > 0 ? 0 : Math.PI)
     this.local(st, s, bx + dir * 1.15, bz, PT)
     drawBeast(pr, HORSE, PT.x, heightAt(PT.x, PT.z), PT.z, hh, s * 0.86, st.t * 6, moving ? 0.8 : 0, moving ? 0 : 0.6 * span(1, 3, u - (leg - 5)))
