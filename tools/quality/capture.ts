@@ -1,5 +1,5 @@
 // Captures every screen of the game, in every state and at every size, on the real GPU, for review.
-// Usage: node tools/quality/capture.ts <base url> <out dir> [name filter]
+// Usage: node tools/quality/capture.ts <base url> <out dir> [name filter, or several joined by commas]
 import { chromium, type BrowserContext, type Page } from '@playwright/test'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -150,7 +150,32 @@ const STATES: State[] = [
   } },
   { name: 'ledger-bigger', what: 'Year end on the bigger farm: wages, rent and a contract', sizes: MAIN, run: async page => { await q(page, `${BIGGER}; app.do({ t: 'begin' }); q.year(3)`); await closeAll(page) } },
   { name: 'almanac-farm', what: 'The almanac: land, crews and contracts', sizes: MAIN, run: async (page, size) => { await biggerJuly(page, size); await page.keyboard.press('i'); await page.getByTestId('almanac-farm').click() } },
-  { name: 'how-bigger', what: 'How to play, with the bigger farm', sizes: ['desk'], run: async page => { await page.getByTestId('how-open').first().click(); await page.locator('.help-farm').scrollIntoViewIfNeeded() } },
+  { name: 'how-keys', what: 'How to play, with every key and order unfolded', sizes: MAIN, run: async page => { await page.getByTestId('how-open').first().click(); await page.getByTestId('how-keys').click() } },
+
+  // The farmstead's papers.
+  { name: 'plan-tract', what: 'Spring: the farm\'s own woodlot, its clearing and what it yields', sizes: MAIN, run: async page => { await q(page, `q.g().app.newGame(1987, 3)`); await page.getByTestId('field-14').click() } },
+  { name: 'plan-equipment', what: 'Spring: the equipment fold, with what each needs first', sizes: MAIN, run: async page => { await q(page, `q.g().app.newGame(1987, 3)`); await page.getByTestId('equipment-open').click() } },
+  { name: 'plan-mortgage', what: 'A later spring with land bought on the mortgage: the bank fold', sizes: MAIN, run: async page => {
+    await q(page, `q.start(1987, 3); q.year(3); const { app } = q.g(); app.do({ t: 'next' }); app.campaign.cash += 40000; app.do({ t: 'buyLand', field: 6 })`)
+    await closeAll(page)
+    await page.getByTestId('bank-open').click()
+  } },
+  { name: 'plan-later', what: 'A third spring, nothing opened: the sheet as it grows', sizes: [...MAIN, 'small', 'land', 'tiny'], run: async page => {
+    await q(page, `q.start(1987, 3); q.year(3); const { app } = q.g(); app.do({ t: 'next' }); app.do({ t: 'hire', kind: 'hand' }); app.do({ t: 'begin' }); q.year(3); app.do({ t: 'next' })`)
+    await closeAll(page)
+  } },
+  { name: 'cellar-winter', what: 'Winter on the farmstead: people kept on, logs in the yard, a bunkhouse going up', sizes: [...MAIN, 'small'], run: async page => {
+    await q(page, `${BIGGER}; c.cash += 20000; app.do({ t: 'build', kind: 'bunk', yard: -1 }); app.do({ t: 'begin' }); q.run(999, ['sell']); app.do({ t: 'endSeason' })
+      c.logs = 14.4; c.stone = 6; const b = c.buildings.find(x => !x.built); if (b) b.done = Math.min(b.done, b.need / 3)
+      app.do({ t: 'winter', unit: 0, work: 'woods', field: 14 }); app.do({ t: 'winter', unit: 1, work: 'build' })`)
+    await closeAll(page)
+  } },
+  { name: 'ledger-farmstead', what: 'Year end on the farmstead: wages, a building, the farm\'s worth, the year on the farm', sizes: MAIN, run: async page => {
+    await q(page, `${BIGGER}; c.cash += 20000; app.do({ t: 'build', kind: 'stand', yard: -1 }); app.do({ t: 'buyLand', field: 7 }); app.do({ t: 'begin' }); q.year(3)`)
+    await closeAll(page)
+  } },
+  { name: 'almanac-people', what: 'The almanac: people, and how they work', sizes: MAIN, run: async (page, size) => { await biggerJuly(page, size); await page.keyboard.press('i'); await page.getByTestId('almanac-people').click() } },
+  { name: 'almanac-buildings', what: 'The almanac: buildings', sizes: ['desk'], run: async (page, size) => { await biggerJuly(page, size); await page.keyboard.press('i'); await page.getByTestId('almanac-buildings').click() } },
 ]
 // ALL_SIZES=1 takes every state at all eight sizes.
 if (process.env.ALL_SIZES) for (const s of STATES) s.sizes = ALL
@@ -222,7 +247,7 @@ await Promise.all(Array.from({ length: par }, async () => {
     const ctx = await browser.newContext({ viewport: { width: s.width, height: s.height }, deviceScaleFactor: s.scale ?? 1, hasTouch: !!s.touch, isMobile: !!s.touch && s.width < 900 })
     await ctx.addInitScript(HELPER)
     for (const state of STATES) {
-      if (!state.sizes.includes(size) || !state.name.includes(filter)) continue
+      if (!state.sizes.includes(size) || !filter.split(',').some(f => state.name.includes(f))) continue
       await shoot(ctx, state, size)
     }
     await ctx.close()
