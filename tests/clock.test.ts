@@ -78,7 +78,8 @@ describe('the clock', () => {
     play(app, 120, () => app.speed === 0, false)
     expect(app.speed).toBe(0)
     expect(app.pauseReason).not.toBe('')
-    expect(c.season!.fields.some(f => f.weighed) || c.incidents.length > 0).toBe(true)
+    // A weigh ticket, a card, or barrels in the field ahead of a frost.
+    expect(c.season!.fields.some(f => f.weighed) || c.incidents.length > 0 || app.alerts.some(a => a.type === 'frostBarrels')).toBe(true)
     app.resumeAfterCard()
     expect(app.speed).toBe(2)
   })

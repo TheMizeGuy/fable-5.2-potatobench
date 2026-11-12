@@ -11,6 +11,8 @@ const world = loadWorld()
 function grow(year: number, seed: number, until: (c: Campaign) => boolean, skip: JobKind[] = ['kill', 'dig'], spring?: (c: Campaign) => void): Campaign {
   const c = S.createCampaign(world, { seed, startYear: year })
   spring?.(c)
+  // Work the test leaves undone is not ordered by the routine either.
+  for (const k of skip) if (S.routineInfo(c).some(r => r.kind === k && r.auto)) S.apply(world, c, { t: 'routine', kind: k, auto: false })
   expect(S.apply(world, c, { t: 'begin' }).ok).toBe(true)
   for (let guard = 0; !until(c); guard++) {
     expect(guard < 400 && c.phase === 'season').toBe(true)
