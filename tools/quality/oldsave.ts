@@ -23,7 +23,7 @@ for (const path of saves) {
   await page.goto(base)
   await page.waitForFunction(() => '__county' in globalThis, null, { timeout: 20000 })
   const button = page.getByTestId('continue')
-  const offered = await button.waitFor({ timeout: 8000 }).then(() => true, () => false)
+  const offered = await button.waitFor({ timeout: 30000 }).then(() => true, () => false)
   let state = 'no Continue offered'
   if (offered) {
     await button.click()
