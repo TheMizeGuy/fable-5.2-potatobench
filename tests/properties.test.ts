@@ -55,6 +55,7 @@ const step: fc.Arbitrary<Step> = fc.oneof(
   { weight: 3, arbitrary: fc.record({ t: fc.constant('priorityPick' as const), k: fc.nat(8), work: fc.constantFrom(...S.SKILLS, 'golf'), level: fc.oneof(fc.integer({ min: -1, max: 5 }), fc.constant(1.5)) }) },
   { weight: 2, arbitrary: fc.record({ t: fc.constant('foremanPick' as const), k: fc.nat(8), block: fc.constantFrom('home', 'brook', 'ridge', 'dufour', 'moon', null) }) },
   { weight: 1, arbitrary: fc.record({ t: fc.constant('sundays' as const), off: fc.boolean() }) },
+  { weight: 2, arbitrary: fc.record({ t: fc.constant('routine' as const), kind: fc.constantFrom(...S.JOBS, 'haul' as const, 'build' as const), auto: fc.boolean() }) },
   { weight: 2, arbitrary: fc.record({ t: fc.constant('pickers' as const), on: fc.boolean() }) },
   { weight: 2, arbitrary: fc.record({ t: fc.constant('winterPick' as const), k: fc.nat(8), work: fc.constantFrom('off', 'woods', 'pack', 'build', 'golf'), field: index }) },
   { weight: 3, arbitrary: fc.record({ t: fc.constant('winterPick' as const), k: fc.nat(8), work: fc.constant('woods'), field: fc.constantFrom(...S.TRACTS) }) },

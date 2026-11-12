@@ -61,7 +61,7 @@ export type AppEvent =
 
 // A card that needs an answer stops the clock whatever the settings say: a crop weighed in (sell or store), an
 // incident that asks for an answer, the freeze. Nothing else changes the speed the player set.
-const STOP_FOR = new Set(['weighed', 'incident', 'freeze'])
+const STOP_FOR = new Set(['weighed', 'incident', 'freeze', 'frostBarrels'])
 // Events worth an alert even though they are not warnings.
 const NOTABLE = new Set([
   'dug', 'weighed', 'sample', 'skinSet', 'emerged', 'ti', 'mature', 'watch',

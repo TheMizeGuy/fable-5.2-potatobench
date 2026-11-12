@@ -1,5 +1,5 @@
 // The campaign: planning, the season, the cellar and the year-end ledger, all driven through apply().
-import { foremanOrders } from './advice.ts'
+import { standingOrders } from './advice.ts'
 import { contractOffers } from './buyers.ts'
 import { hireBlock, hireRoom, newFarmer, newUnit } from './crew.ts'
 import { BLOCK_NAME, BLOCKS, DUFOUR_YARD, HOME_FIELDS, HOME_YARD, PARCELS, YARDS, type BlockId } from './farm.ts'
@@ -9,13 +9,13 @@ import * as P from './params.ts'
 import { applicantsFor, fromApplicant, gainXp, jobSkill, payOf, SKILL_LABEL, speed } from './people.ts'
 import { hash32 } from './rng.ts'
 import {
-  addJob, buildable, buildJob, closeIncidents, FIELD_NAMES, holdsDufour, leftInField, letGo, releaseJob, removePerson, resolveIncident, seasonDone, sheltering,
+  addJob, buildable, buildJob, closeIncidents, FIELD_NAMES, holdsDufour, JOB_LABEL, leftInField, letGo, releaseJob, removePerson, resolveIncident, seasonDone, sheltering,
   startSeason, stepDay, unitBlock,
 } from './season.ts'
 import { CHOICE_LABEL } from './incidents.ts'
 import { article, buildBlock, buildCost, buildingAt, buildWork, hasBuilt, startBuilding, YARD_NAME } from './buildings.ts'
 import { brushedNow, COVER_WORD, fell, isField, standing } from './land.ts'
-import type { Campaign, Cmd, Contract, Due, FieldPlan, GameEvent, Incident, Lot, Result, Season, Unit, UpgradeId, WinterWork, World, YearSummary } from './types.ts'
+import type { Campaign, Cmd, Contract, Due, FieldPlan, GameEvent, Incident, JobKind, Lot, Result, RoutineKind, Season, Unit, UpgradeId, WinterWork, World, YearSummary } from './types.ts'
 import { variety } from './varieties.ts'
 import { dayIndex, withCommas } from './calendar.ts'
 import { finishLot } from './harvest.ts'
@@ -69,7 +69,7 @@ export function createCampaign(world: World, opts: { seed: number; startYear: nu
     upgrades: { boom: false, harvester: false, vent: false, reel: false, tractor2: false, house2: false, tractor3: false, truck: false },
     seedStock: [], season: null, lots: [], nextLot: 1,
     crew: [newFarmer()], nextUnit: 1, applicants: [], sundaysOff: true, logs: 0, stone: 0, mortgages: [], buildings: [], nextBuilding: 1, pond: 0,
-    incidents: [], nextIncident: 1, broken: [],
+    incidents: [], nextIncident: 1, broken: [], heard: [], routine: { ...P.ROUTINE_DEFAULT },
     offers: [], contracts: [],
     month: 0,
     yearRevenue: 0, yearCosts: 0, yearRest: 0, yearStorage: 0,
@@ -548,6 +548,7 @@ function nextYear(world: World, c: Campaign): Result {
   c.contracts = []
   c.offers = contractOffers(c.seed, c.year)
   c.applicants = springApplicants(c)
+  c.heard = []
   c.phase = 'plan'
   // Carry the plan forward with the rotation flipped where the soil asks for it, and drop seed that is not there.
   // Rented land and the hired crew carry forward too, until they are released or dismissed.
@@ -574,6 +575,32 @@ function fieldIndex(field: number): boolean {
 }
 
 export function apply(world: World, c: Campaign, cmd: Cmd): Result {
+  const opened = openRoutine(c)
+  const r = command(world, c, cmd)
+  if (opened && r.ok) r.events.unshift(opened)
+  return r
+}
+
+// A game saved before the routine opens with it on, and says so once.
+function openRoutine(c: Campaign): GameEvent | null {
+  c.heard ??= []
+  for (const j of c.season?.jobs ?? []) j.by ??= 'you'
+  if (c.routine) return null
+  c.routine = { ...P.ROUTINE_DEFAULT }
+  return note(c, 'routine', 'info', 'The crew now works to a routine: planting, hilling, walking the fields, test digs, digging and hauling go on the list by themselves. Spraying, watering and killing the vines are your calls. Each can be switched under Who does what.')
+}
+
+// Whether this kind of work goes on the list by itself.
+export function routineOn(c: Campaign, kind: JobKind): boolean {
+  return (P.ROUTINE_KINDS as JobKind[]).includes(kind) && (c.routine?.[kind as RoutineKind] ?? P.ROUTINE_DEFAULT[kind as RoutineKind])
+}
+
+// The farm's standing orders, in the order they are listed.
+export function routineInfo(c: Campaign): { kind: JobKind; auto: boolean }[] {
+  return P.ROUTINE_KINDS.map(kind => ({ kind, auto: routineOn(c, kind) }))
+}
+
+function command(world: World, c: Campaign, cmd: Cmd): Result {
   switch (cmd.t) {
     case 'plan': {
       if (c.phase !== 'plan') return fail('Plans are made in spring.')
@@ -842,8 +869,17 @@ export function apply(world: World, c: Campaign, cmd: Cmd): Result {
       return ok([note(c, 'winterSet', 'info', cmd.work === 'off' ? `${u.name} will be laid off for the winter, unpaid, and back in spring.` : `${u.name} will be kept on this winter: ${WINTER_LABEL[cmd.work]}.`)])
     }
     case 'job': {
-      const why = addJob(c, cmd.kind, cmd.field, cmd.unit ?? -1)
+      const why = addJob(c, cmd.kind, cmd.field, cmd.unit ?? -1, 'you')
       return why ? fail(why) : ok()
+    }
+    case 'routine': {
+      if (c.phase === 'over') return fail('The farm is gone.')
+      if (!(P.ROUTINE_KINDS as JobKind[]).includes(cmd.kind)) return fail(`${JOB_LABEL[cmd.kind] ?? 'That'} is never ordered by itself.`)
+      if (typeof cmd.auto !== 'boolean') return fail('Say whether it is done by itself.')
+      const kind = cmd.kind as RoutineKind
+      if (c.routine[kind] === cmd.auto) return fail(cmd.auto ? `${JOB_LABEL[kind]} is already done by itself.` : `${JOB_LABEL[kind]} already waits for you.`)
+      c.routine[kind] = cmd.auto
+      return ok([note(c, 'routine', 'info', cmd.auto ? `${JOB_LABEL[kind]} goes on the list by itself now, wherever a field needs it.` : `${JOB_LABEL[kind]} waits for your order now.`)])
     }
     case 'assign': {
       if (c.phase !== 'season' || !c.season) return fail('No work list.')
@@ -878,8 +914,8 @@ export function apply(world: World, c: Campaign, cmd: Cmd): Result {
     case 'day': {
       if (c.phase !== 'season' || !c.season) return fail('The season is not under way.')
       if (c.season.frozen) return fail('The ground has frozen. Close out the season.')
-      foremanOrders(world, c)
-      return ok(stepDay(world, c))
+      const orders = standingOrders(world, c)
+      return ok([...orders, ...stepDay(world, c)])
     }
     case 'endSeason': {
       if (c.phase !== 'season' || !c.season) return fail('The season is not under way.')
