@@ -278,7 +278,7 @@ test('a later year on the farmstead: an applicant hired, land on the mortgage, a
   await page.getByTestId('begin-season').click()
   await reach(page, `const { app } = q.g(); app.setSpeed(0); for (let n = 0; n < 40 && app.campaign.fields[${brush.i}].cover !== 'open'; n++) app.do({ t: 'day' })`)
   expect(await game<string>(page, `c.fields[${brush.i}].cover`)).toBe('open')
-  await page.keyboard.press('Escape')
+  while (await page.getByTestId('weighin').count()) await answerTicket(page, true)
   await page.getByTestId(`field-${brush.i}`).click()
   const rocks = page.locator('#ui [data-testid="card"] [data-testid="order-rocks"]')
   if (await rocks.count()) await rocks.click()
