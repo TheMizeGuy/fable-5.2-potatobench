@@ -48,7 +48,7 @@ size of, so those stay true and the compression is taken where it is least seen:
 - **True size, always:** people, machines, doors, buildings, roads, walls, trees, and the spacing of the potato rows
   (the rows across a field are the ruler the eye uses).
 - **Compressed in number, not in size:** the farm has fewer and smaller fields than a real one (a field here is
-  about 2.5 acres where the district's typical field is 15), fewer rows of woods, shorter roads, nearer neighbours.
+  2.5 to 5.6 acres where the district's typical field is 15), fewer rows of woods, shorter roads, nearer neighbours.
 - **Not compressed at all:** the distance to the horizon. Country goes on past the map.
 
 ## The numbers
@@ -57,15 +57,18 @@ Two factors take the scene from what it was to the standard (`src/render/scale.t
 
 - **S = 2.2** on everything made or grown that was drawn small: buildings, roads, walls, trees, row spacing. After
   it, one unit is one metre.
-- **K = 8** on the land: where things are. A field becomes about 115 by 87 m (1.0 ha, 2.5 acres), 6 to 9 barn
-  lengths wide and about 100 house footprints in area; the six home fields with their lanes cover about 250 by
-  290 m; the whole map is about 1.3 km by 0.6 km. K is chosen from a blockout at 6, 8 and 10 and may move within
-  that range.
+- **K between 8 and 12** on the land: where things are. At 8 a field is about 115 by 87 m (1.0 ha, 2.5 acres), 6
+  to 9 barn lengths wide and about 100 house footprints in area, and the whole map about 1.3 km by 0.6 km. At 12 it
+  is about 173 by 131 m, 5.6 acres, which is what the simulation has always said a field is (`FIELD_ACRES = 5`: the
+  weigh ticket prints "5 acres"), and the map is about 1.9 km by 0.85 km. K is chosen from a blockout at 8, 10
+  and 12: the largest at which the playing view still holds the farm and the people stay findable, because a
+  field that is the size the ticket says it is leaves nothing to explain.
 - The farm's own slope grows by the square root of K, so the land rolls without becoming a hillside.
 
 The simulation is not touched: it knows parcels by its own plan coordinates (`src/sim/farm.ts`), and travel and
 hauling are worked out from those. Only the renderer's mapping from plan to ground changes, so the balance holds.
-One simulated hill (a field is 8 by 12 of them) then covers about 10 by 11 m and about 450 plants; its blight,
+One simulated hill (a field is 8 by 12 of them) then covers about 10 by 11 m and about 450 plants at K 8 (14 by
+16 m and about 1,000 at K 12); its blight,
 wilt and digging are drawn as ragged patches and worked strips inside it, never as squares.
 
 ## What the bigger land needs

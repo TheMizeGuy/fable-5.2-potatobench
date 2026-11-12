@@ -282,7 +282,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
   house: { name: 'Potato house', cash: 7000, logs: 30, stone: 25, days: 30, dufour: true,
     does: 'Stores 3,600 cwt at its yard (6,400 at home with ventilation).', catch: 'It costs as much as a field\'s growing and takes a month of building.' },
   shed: { name: 'Machine shed', cash: 4500, logs: 20, stone: 10, days: 16, dufour: false,
-    does: 'Machine work goes 10% faster, breakdowns are half as likely, and a second and third tractor can be kept.', catch: 'Money and materials that grow no potatoes.' },
+    does: 'Machine work goes 15% faster, breakdowns are half as likely, and a second and third tractor can be kept.', catch: 'Money and materials that grow no potatoes.' },
   bunk: { name: 'Bunkhouse', cash: 3500, logs: 16, stone: 8, days: 12, dufour: true,
     does: 'Beds for six hired people, who are happier for them.', catch: 'Beds are only worth having with people to fill them, and every one is a wage.' },
   packing: { name: 'Packing shed', cash: 8000, logs: 24, stone: 15, days: 24, dufour: false,
