@@ -246,47 +246,47 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     // On an upright phone in the season there is one board: the balance is its third column (design/season.phone.html).
     const phone = season && layout === 'narrow'
     patch(el, JSON.stringify(model), () => {
-    const balance = h('div', { class: 'balance' },
-      h('span', { class: 't-label when' }, c.cash < 0 ? 'On the loan' : 'Balance'),
-      h('span', {
-        class: `t-figure cash${c.cash < 0 ? ' neg' : ''}`, testid: 'cash',
-        title: ctx.touch() || c.cash >= 0 ? undefined : 'Owed on the spring operating loan: the crop pays it back. The bank calls the note if the year closes too far under.',
-      }, h('span', { class: 'sr' }, 'Cash: '), h('span', { class: 'cash-v num' }, F.money(c.cash))))
-    return [
-      h('section', { class: 'almanac', 'aria-label': 'Date, weather and the next goal' },
-        h('div', { class: 'mount' },
-          h('div', { class: `face${season ? '' : ' plain'}` },
-            leaf(c),
-            season ? h('button', { class: 'forecast', type: 'button', testid: 'forecast', onclick: () => o.onAlmanac?.() },
-              // The figures are for the eye; a screen reader gets the days in words.
-              h('span', { class: 'sr' }, `${fc.map(x => x.said).join(' ')} Open the almanac for the forecast in full.`),
-              fc.slice(0, days).map(x => h('span', { class: 'd', 'aria-hidden': 'true' },
-                h('span', { class: 't-label' }, x.day),
-                icon(x.sky, 'i'),
-                h('span', { class: 'hi num' }, `${F.degrees(x.hi)}°`),
-                h('span', { class: 'wet num' },
-                  x.rain >= 30 ? `${x.rain}%` : null,
-                  x.blight > 0 ? icon('blight', 'i risk') : null,
-                  x.frost >= 30 ? icon('frost', 'i cold') : null)))) : null,
-            phone ? balance : null),
-          season ? seasonTrack(c) : null),
-        goalSlip(c, g, gone, season),
-        pop === 'goals' ? ladder(c, g) : null),
-      phone ? null : h('section', { class: 'bank', 'aria-label': 'Money, the clock and the contracts' },
-        h('div', { class: 'mount' },
-          h('div', { class: 'face' },
-            balance,
-            withClock ? clock(ctx, layout === 'mid' && innerWidth < 1100, withMenu ? o.onMenu : undefined)
-              : withMenu ? h('div', { class: 'clock plan' }, h('span', { class: 't-label season-word' }, PHASE_LABEL[c.phase]), menuKey(ctx, o.onMenu)) : null,
-            mats ? h('button', {
-              class: 'materials', type: 'button', testid: 'materials', 'aria-expanded': String(pop === 'materials'),
-              onclick: () => { pop = pop === 'materials' ? '' : 'materials'; ctx.dirty() },
-            }, h('span', { class: 'sr' }, 'Logs '), c.logs >= 0.05 ? [icon('logs', 'i'), h('span', { class: 'num' }, `${F.num(Math.floor(c.logs))} logs`)] : null,
-            h('span', { class: 'sr' }, ' loads, stone '), c.stone >= 0.05 ? [icon('stone', 'i'), h('span', { class: 'num' }, `${F.num(Math.floor(c.stone))} stone`)] : null, h('span', { class: 'sr' }, ' loads. Sell logs')) : null,
-            season || c.phase === 'cellar' ? contracts.part(c) : null)),
-        pop === 'materials' && mats ? materials(c) : null,
-        stopped ? h('p', { class: 'stopped-tag', role: 'status' }, icon('pause', 'i'), 'Stopped for you') : null),
-    ]
+      const balance = h('div', { class: 'balance' },
+        h('span', { class: 't-label when' }, c.cash < 0 ? 'On the loan' : 'Balance'),
+        h('span', {
+          class: `t-figure cash${c.cash < 0 ? ' neg' : ''}`, testid: 'cash',
+          title: ctx.touch() || c.cash >= 0 ? undefined : 'Owed on the spring operating loan: the crop pays it back. The bank calls the note if the year closes too far under.',
+        }, h('span', { class: 'sr' }, 'Cash: '), h('span', { class: 'cash-v num' }, F.money(c.cash))))
+      return [
+        h('section', { class: 'almanac', 'aria-label': 'Date, weather and the next goal' },
+          h('div', { class: 'mount' },
+            h('div', { class: `face${season ? '' : ' plain'}` },
+              leaf(c),
+              season ? h('button', { class: 'forecast', type: 'button', testid: 'forecast', onclick: () => o.onAlmanac?.() },
+                // The figures are for the eye; a screen reader gets the days in words.
+                h('span', { class: 'sr' }, `${fc.map(x => x.said).join(' ')} Open the almanac for the forecast in full.`),
+                fc.slice(0, days).map(x => h('span', { class: 'd', 'aria-hidden': 'true' },
+                  h('span', { class: 't-label' }, x.day),
+                  icon(x.sky, 'i'),
+                  h('span', { class: 'hi num' }, `${F.degrees(x.hi)}°`),
+                  h('span', { class: 'wet num' },
+                    x.rain >= 30 ? `${x.rain}%` : null,
+                    x.blight > 0 ? icon('blight', 'i risk') : null,
+                    x.frost >= 30 ? icon('frost', 'i cold') : null)))) : null,
+              phone ? balance : null),
+            season ? seasonTrack(c) : null),
+          goalSlip(c, g, gone, season),
+          pop === 'goals' ? ladder(c, g) : null),
+        phone ? null : h('section', { class: 'bank', 'aria-label': 'Money, the clock and the contracts' },
+          h('div', { class: 'mount' },
+            h('div', { class: 'face' },
+              balance,
+              withClock ? clock(ctx, layout === 'mid' && innerWidth < 1100, withMenu ? o.onMenu : undefined)
+                : withMenu ? h('div', { class: 'clock plan' }, h('span', { class: 't-label season-word' }, PHASE_LABEL[c.phase]), menuKey(ctx, o.onMenu)) : null,
+              mats ? h('button', {
+                class: 'materials', type: 'button', testid: 'materials', 'aria-expanded': String(pop === 'materials'),
+                onclick: () => { pop = pop === 'materials' ? '' : 'materials'; ctx.dirty() },
+              }, h('span', { class: 'sr' }, 'Logs '), c.logs >= 0.05 ? [icon('logs', 'i'), h('span', { class: 'num' }, `${F.num(Math.floor(c.logs))} logs`)] : null,
+              h('span', { class: 'sr' }, ' loads, stone '), c.stone >= 0.05 ? [icon('stone', 'i'), h('span', { class: 'num' }, `${F.num(Math.floor(c.stone))} stone`)] : null, h('span', { class: 'sr' }, ' loads. Sell logs')) : null,
+              season || c.phase === 'cellar' ? contracts.part(c) : null)),
+          pop === 'materials' && mats ? materials(c) : null,
+          stopped ? h('p', { class: 'stopped-tag', role: 'status' }, icon('pause', 'i'), 'Stopped for you') : null),
+      ]
     })
     // Out of season the cash moves in a few large steps: each one counts, so it is seen to move.
     const cash = Math.round(c.cash)
