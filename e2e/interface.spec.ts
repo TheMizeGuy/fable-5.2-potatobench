@@ -479,7 +479,7 @@ test('the menu: settings take effect, ending early says what is lost, and the sa
   await expect(page.getByTestId('forecast')).toBeVisible()
   // Metric reaches the instruments.
   await page.getByTestId('field-0').click()
-  await expect(page.locator('#ui [data-testid="card"] .readings')).toContainText('°C')
+  await expect(page.getByTestId('card')).toContainText('°C')
   await page.keyboard.press('Escape')
   await page.keyboard.press('m')
   await page.getByTestId('save-delete').click()

@@ -571,8 +571,10 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       const low = [...(crew.children as HTMLCollectionOf<HTMLElement>), clockSlot, notesSlot].filter(vis).map(x => box(x).top)
       const bottom = innerHeight - Math.min(...low, innerHeight) + 6
       // Only what always stands frames the land: a bar, a page or the grid opening on a click never moves the camera
-      // (the bar steps to the other side of what it belongs to instead; tags under a card stand aside).
-      return [t, 0, bottom, 0]
+      // (the bar steps to the other side of what it belongs to instead; tags under a card stand aside). On a phone
+      // the bar is a sheet over half the land, so there the land is framed above it.
+      const sheet = layout === 'narrow' ? [card.el, yard.el].find(vis) : undefined
+      return [t, 0, sheet ? innerHeight - box(sheet).top + 6 : bottom, 0]
     },
     frame: () => { coverCache = null; coverCache = covers(); placeBar(); P.frame(); placeYards(); people.frame(); drawSelection(); coverCache = null },
     dispose() {
