@@ -813,8 +813,8 @@ export function ticket(ctx: Ctx, lotId: number, o: { fresh: boolean; staged?: bo
     if (ctx.reduced()) { then(); return }
     el.classList.add('is-torn')
     const a = el.animate([
-      { transform: 'none', clipPath: 'inset(0 0 0 0)' },
-      { transform: 'translateY(6px) rotate(3deg)', clipPath: 'inset(3px 0 0 0)' },
+      { transform: 'none', clipPath: 'inset(-32px -4px -6px -4px)' },
+      { transform: 'translateY(6px) rotate(3deg)', clipPath: 'inset(-32px 2px 3px 2px)' },
     ], { duration: 260, easing: EASE_IN, fill: 'forwards' })
     if (held('tear')) return
     a.onfinish = then

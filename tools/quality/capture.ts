@@ -57,7 +57,9 @@ const REVEAL_MS = 3800
 const DELIVER = `${BIGGER}; for (let i = 0; i < 14; i++) if (c.plans[i].crop === 'potato' && c.fields[i].tenure !== 'none') app.do({ t: 'plan', field: i, plan: { crop: 'potato', variety: 'kennebec', seed: 'certified' } }); app.do({ t: 'begin' })`
 async function toTicket(page: Page, setup: string, hold = ''): Promise<void> {
   if (hold) await page.evaluate(h => { document.documentElement.dataset.hold = h }, hold)
-  await q(page, `${setup}; q.run(999, ['sell'], 'lot'); { const a = q.g().app; const s = a.campaign.season; for (let k = 0; k < 12 && !s.fields.some(f => f.weighed); k++) a.do({ t: 'day' }); a.setSpeed(0) }`)
+  await q(page, `${setup}; q.run(999, ['sell'], 'lot')`)
+  await closeAll(page)
+  await q(page, `{ const a = q.g().app; const s = a.campaign.season; for (let k = 0; k < 12 && !s.fields.some(f => f.weighed); k++) a.do({ t: 'day' }); a.setSpeed(0) }`)
   // Whatever else the run raised is put away; the ticket waits its turn behind it.
   for (let i = 0; i < 60 && !(await page.getByTestId('weighin').count()); i++) {
     if (await page.locator('.dialog').count()) await page.keyboard.press('Escape')

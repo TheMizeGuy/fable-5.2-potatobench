@@ -90,7 +90,8 @@
   .dig-paper .tk-head h2 { font-size: 36px; }
   .dig-paper .weighed { width: 84px; height: 84px; margin: -4px -6px -14px 0; }
   .dig-paper .tk-line { gap: 2px 16px; font-size: 15px; }
-  .dig-paper .tk-net { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .dig-paper .tk-net { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .dig-day.revealing .ticket.is-waiting { display: none; }
   .dig-paper .stamped.huge { font-size: min(104px, 24vw); }
   .dig-paper .net .unit { font-size: 22px; padding-bottom: 8px; }
   .dig-paper .net-side .range { width: 100%; max-width: 260px; }
@@ -131,6 +132,7 @@
   .reck .reck-grades tr { grid-template-columns: minmax(0, 1fr) auto auto; }
   .reck .reck-grades .reck-note { grid-row: 2; }
   .reck .losses th, .reck .losses td.num { border-bottom: 0; }
+  .reck .reck-grades td.share { width: auto; }
 }
 
 /* ---------------------------------------------------------------- the test-dig tray */
