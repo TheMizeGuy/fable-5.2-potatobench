@@ -66,11 +66,14 @@ interface Sky { sun: number; cover: number; shadow: number; high: number; deck: 
 const SKY: Record<string, Sky> = {
   clear: { sun: 1, cover: 0.27, shadow: 0.66, high: 0.42, deck: 1, haze: 0.0008, key: 1, turbidity: 2.8, mie: 0.0045, storm: 0 },
   cloud: { sun: 0.97, cover: 0.46, shadow: 0.72, high: 0.3, deck: 1, haze: 0.0009, key: 0.98, turbidity: 3.1, mie: 0.005, storm: 0.12 },
-  overcast: { sun: 0.06, cover: 1, shadow: 0, high: 0, deck: 0.96, haze: 0.001, key: 0.8, turbidity: 4, mie: 0.006, storm: 0.4 },
-  rain: { sun: 0.025, cover: 1, shadow: 0, high: 0, deck: 0.6, haze: 0.0015, key: 0.66, turbidity: 6, mie: 0.006, storm: 0.8 },
-  storm: { sun: 0.015, cover: 1, shadow: 0, high: 0, deck: 0.4, haze: 0.002, key: 0.56, turbidity: 8, mie: 0.006, storm: 1 },
-  fog: { sun: 0.6, cover: 0.48, shadow: 0, high: 0.3, deck: 1.3, haze: 0.0016, key: 0.98, turbidity: 6, mie: 0.007, storm: 0 },
-  snow: { sun: 0.05, cover: 1, shadow: 0, high: 0, deck: 1.05, haze: 0.0026, key: 0.92, turbidity: 4, mie: 0.006, storm: 0.15 },
+  // Thick weather is played in: the haze is by the metre, and from the farm tier the far side of the home farm is
+  // 800 m off. Under cloud it has taken a fifth of that by then; in rain a quarter, the ridge woods a third and the back
+  // country most; falling snow closes in nearer. A day is dark and wet before it is grey.
+  overcast: { sun: 0.06, cover: 1, shadow: 0, high: 0, deck: 0.96, haze: 0.0007, key: 0.8, turbidity: 4, mie: 0.006, storm: 0.4 },
+  rain: { sun: 0.025, cover: 1, shadow: 0, high: 0, deck: 0.6, haze: 0.0009, key: 0.6, turbidity: 6, mie: 0.006, storm: 0.8 },
+  storm: { sun: 0.015, cover: 1, shadow: 0, high: 0, deck: 0.4, haze: 0.0012, key: 0.52, turbidity: 8, mie: 0.006, storm: 1 },
+  fog: { sun: 0.6, cover: 0.82, shadow: 0, high: 0.3, deck: 1.3, haze: 0.0011, key: 0.98, turbidity: 6, mie: 0.007, storm: 0 },
+  snow: { sun: 0.05, cover: 1, shadow: 0, high: 0, deck: 1.05, haze: 0.0013, key: 0.9, turbidity: 4, mie: 0.006, storm: 0.15 },
 }
 
 const tmp = new Color()
@@ -111,7 +114,8 @@ export function envTarget(snap: Snapshot, out: Env): Env {
   out.wind = clamp(w.wind / 8, 0.08, 1.4) * (w.sky === 'storm' ? 1.4 : 1)
   out.windDir = w.wdir < 0 ? 0.6 : ((w.wdir + 180) * Math.PI) / 180
   const growing = d > 130 && d < 290 && w.tmin > 2
-  out.mist = w.sky === 'fog' ? 0.8 : growing && w.wetH >= 10 ? Math.min(0.8, (w.wetH - 9) / 9) : 0
+  // Ground mist belongs to fog and to a still fair morning: on a day of rain or cloud the low ground is wet, not white.
+  out.mist = w.sky === 'fog' ? 0.65 : fair && growing && w.wetH >= 10 ? Math.min(0.8, (w.wetH - 9) / 9) : 0
   out.mistDeep = w.sky === 'fog' ? 0.6 : 0.35
   // In the season each part of the slope frosts as its own fields did last night; otherwise the picture of the time of year.
   const rime = w.tmin < 0 && w.snwd < 20 ? Math.min(1, 0.35 + -w.tmin / 4) : 0
@@ -160,7 +164,7 @@ export function envTarget(snap: Snapshot, out: Env): Env {
     out.high = 0.7
     out.turbidity = 3
     out.mie = 0.006
-    out.haze = 0.0006
+    out.haze = 0.00045
     out.mist = 0.7
     out.mistDeep = 0
     out.key = 0.96
@@ -326,26 +330,26 @@ export function light(env: Env, toSun: number, out: Light): Light {
   // Snow in the sun is the brightest thing there is: hold it below white. Night is held dark, and blue.
   out.exposure = ((env.key * 2.9) / Math.max(metered, 0.004)) * (1 - 0.3 * Math.min(1, env.snow * 1.5) * (1 - overcast) * day) * (1 - 0.74 * night)
   // Into the sun the lens is stopped down a little, so the sky keeps its colour; away from it, opened.
-  out.exposure *= 1 - 0.16 * out.low * day * (1 - overcast) * clamp(toSun, -0.5, 1)
+  out.exposure *= 1 - 0.2 * out.low * day * (1 - overcast) * clamp(toSun, -0.5, 1)
   // The sky is far brighter than the land a low sun lights, and a picture exposed for the land would show its cloud as
   // one pale mass. As a graduated filter does, hold the cloud to what the lens can show: tops just under white, bodies
   // in the middle, so a cloud has a lit edge and a base.
   const broken = 1 - overcast
   const top = lum(out.deck) * out.exposure, body = lum(out.deckDark) * out.exposure
   if (top > 0.95) out.deck.multiplyScalar(0.95 / top)
-  const want = 0.5 - 0.2 * env.storm
+  const want = 0.36 - 0.1 * env.storm
   if (body > want) out.deckDark.multiplyScalar(1 + (want / body - 1) * broken)
   const edge = lum(out.rim) * out.exposure
   if (edge > 1.5) out.rim.multiplyScalar(1.5 / edge)
   const ice = lum(out.high) * out.exposure
   if (ice > 0.9) out.high.multiplyScalar(0.9 / ice)
   // Distance takes the colour of the low sky; fog and rain take the colour of the cloud.
-  const thick = smooth(0.0012, 0.004, env.haze)
+  const thick = smooth(0.0009, 0.003, env.haze)
   const veil = Math.max(overcast, thick)
   const dark = c3.copy(NIGHT_HORIZON).multiplyScalar(night).clone()
   // The air between is lit as the low sky is: brighter than the woods it veils, a little under the sky it stands against.
   out.hazeAway.copy(away).lerp(side, 0.35).multiplyScalar(0.78 * out.skyShow).add(dark).lerp(c3.copy(grey).multiplyScalar(0.86), veil)
-  const cap = lum(out.hazeAway) * 1.5
+  const cap = lum(out.hazeAway) * 1.25
   out.hazeSun.copy(toward).multiplyScalar(Math.min(1, cap / Math.max(lum(toward), 1e-4))).add(dark).add(c3.copy(out.glow).multiplyScalar(0.5)).lerp(c3.copy(grey).multiplyScalar(0.9), veil)
   // Mist is lit: it takes the low sun's colour where the sun reaches it.
   out.mist.copy(out.hazeAway).lerp(out.hazeSun, 0.35).multiplyScalar(0.9).add(c3.copy(out.sun).multiplyScalar(0.03))
