@@ -336,6 +336,12 @@ export function buildTerrain(): Terrain {
         // The woods' floor on the ridge, needle duff and moss, its edge as uneven as the trees'.
         float floorK = smoothstep(0.25, 0.75, vSurf.x + (mid - 0.5) * 0.7);
         vec3 duff = mix(${linear('#43372a')}, ${linear('#2d3b22')}, smoothstep(0.4, 0.7, patchy + (fine - 0.5) * 0.4)) * (0.7 + 0.6 * fine);
+        // Along the wood's edge and in its bays, where light gets in under the trees: fern in beds, rusty by September.
+        {
+          float edgeW = smoothstep(0.03, 0.22, vSurf.x) * (1.0 - smoothstep(0.35, 0.8, vSurf.x + (mid - 0.5) * 0.5));
+          vec3 fern = mix(uGrass * vec3(0.7, 1.0, 0.5), ${linear('#8f6a38')}, smoothstep(236.0, 262.0, uDay)) * (0.6 + 0.8 * texture2D(uNoise, p * 0.9).a);
+          col = mix(col, fern, edgeW * smoothstep(0.35, 0.6, texture2D(uNoise, p * 0.06 + 0.4).b) * 0.8 * uLeaf);
+        }
         col = mix(col, duff, floorK * 0.94);
         // From far off a wood is its canopy: what shows between the trees drawn there is crowns, not floor.
         {

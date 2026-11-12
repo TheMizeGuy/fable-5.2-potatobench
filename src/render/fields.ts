@@ -327,12 +327,17 @@ vec4 paintCrop(vec2 f, vec4 h0, vec4 h1, float fine, float rowsPx, float rowFade
   float closed = smoothstep(0.35, 0.95, grow);
   float wide = mix(0.3 + 0.5 * pow(grow, 0.75), 1.15, closed) * (1.0 - 0.3 * h1.a);
   float duty = clamp(wide - 0.18 * (1.0 - closed) * abs(along - 0.5) * (1.0 - alongFade), 0.0, 1.0);
+  // Looked at across its rows from low down, a crop hides its furrows behind its own height.
+  vec3 vd = normalize(cameraPosition - vWorld);
+  float lean = 0.5 * (0.22 + 0.78 * pow(grow, 0.75)) * smoothstep(0.05, 0.4, grow) * ${(1 / ROW).toFixed(4)} * abs(vd.z) / max(vd.y, 0.15);
+  lean = min(1.0, lean) * rowFade;
+  duty = clamp(duty + lean, 0.0, 1.0);
   float gone = smoothstep(0.85, 1.25, rowsPx);
   float cover = mix(pulse(rowP - 0.5 + 0.5 * duty, duty, rowsPx), duty, gone);
   // a planter's miss: a few yards of a row here and there with nothing up in it
   float rowI = floor(rowP);
-  float miss = step(0.955, fract(sin(rowI * 91.3458) * 47453.5453)) * step(0.62, texture2D(uNoise, vec2(f.x * 3.1 + rowI * 0.137, rowI * 0.071)).a);
-  cover *= 1.0 - 0.9 * miss * (1.0 - smoothstep(0.5, 1.1, rowsPx));
+  float miss = step(0.94, fract(sin(rowI * 91.3458) * 47453.5453)) * step(0.72, texture2D(uNoise, vec2(f.x * 23.0 + rowI * 0.137, rowI * 0.071)).a) * (1.0 - closed * 0.6);
+  cover *= 1.0 - 0.9 * miss * (1.0 - smoothstep(0.12, 0.4, rowsPx));
   // The sprayer's wheelings: a bare furrow every so many rows, still a line when the rows have merged.
   float tramP = rowP / ${TRAM.toFixed(1)};
   cover *= 1.0 - 0.85 * pulse(tramP - 0.5 + ${(0.35 / TRAM).toFixed(4)}, ${(0.7 / TRAM).toFixed(4)}, fwidth(tramP));
@@ -352,13 +357,13 @@ vec4 paintCrop(vec2 f, vec4 h0, vec4 h1, float fine, float rowsPx, float rowFade
   cover *= 1.0 - 0.5 * pulse(bandP - 0.045, 0.09, bandPx) * (1.0 - closed * 0.5) * (1.0 - smoothstep(0.7, 1.3, bandPx));
   col *= 1.0 - 0.3 * pulse(bandP - 0.06, 0.12, bandPx) * (1.0 - smoothstep(0.7, 1.3, bandPx));
   // and past that the field keeps a grain along its rows
-  float grain = texture2D(uNoise, vec2(f.x * 1.7, rowP * 0.043)).a * 0.6 + texture2D(uNoise, vec2(f.x * 0.9 + 0.31, rowP * 0.0117)).a * 0.4;
-  col *= 0.86 + 0.28 * grain;
+  float grain = texture2D(uNoise, vec2(f.x * 0.55, rowP * 0.043)).a * 0.6 + texture2D(uNoise, vec2(f.x * 0.3 + 0.31, rowP * 0.0117)).a * 0.4;
+  col *= 0.74 + 0.52 * grain;
   // and the sprayer's bouts lie a little apart in tone
   col *= 1.0 + (fract(sin(floor(tramP + 0.5) * 37.719) * 43758.5453) - 0.5) * 0.1;
   // a rounded row: lit along its crown, dark down its sides into the furrow
   float furrow = mix(pulse(rowP - 0.16, 0.32, rowsPx), 0.32, gone);
-  col *= mix(mix(0.26, 0.84, smoothstep(0.95, 0.25, fr)), 0.86 - 0.66 * furrow, rowFade) * (0.86 + 0.28 * fine);
+  col *= mix(mix(0.26, 0.84, smoothstep(0.95, 0.25, fr)), 0.86 - 0.66 * furrow * (1.0 - 0.7 * lean), rowFade) * (0.86 + 0.28 * fine);
   // blossom: white flecks over the leaf, a haze of white from far off
   float open = uCrop.w * smoothstep(0.3, 0.55, grow) * (1.0 - h0.g) * (1.0 - bl) * (1.0 - h0.a) * (1.0 - frost);
   vec2 fc = f * vec2(${PLANTS_PER_ROW}.0 * 2.0, ${PLANTED_ROWS}.0 * 2.0);
@@ -645,7 +650,7 @@ export class Fields {
             float crest = mix(pulse(rowP - 0.25, 0.5, rowsPx), 0.5, smoothstep(0.85, 1.25, rowsPx));
             soil *= 1.0 + ridged * rowFade * ((crest - 0.5) * (0.34 + 0.5 * low) - 0.1 - 0.16 * low);
             float passP = rowP / 4.0, passPx = rowsPx / 4.0;
-            soil *= 1.0 + ridged * ((fract(sin(floor(passP) * 78.233) * 43758.5453) - 0.5) * 0.16 - 0.22 * pulse(passP - 0.05, 0.1, passPx)) * (1.0 - smoothstep(0.6, 1.2, passPx));
+            soil *= 1.0 + ridged * ((fract(sin(floor(passP) * 78.233) * 43758.5453) - 0.5) * 0.3 - 0.4 * pulse(passP - 0.06, 0.12, passPx)) * (1.0 - smoothstep(0.6, 1.2, passPx));
             soil *= 1.0 + ridged * 0.2 * (texture2D(uNoise, vec2(vF.x * 1.7, rowP * 0.043)).a - 0.5);
           }
           // Crests dry pale; furrows hold the damp. Where seed was dropped the drill line is fresh dark earth.
@@ -705,7 +710,8 @@ export class Fields {
             float lift;
             vec4 crop = paintCrop(vF, over, hill, fine, rowsPx, rowFade, lift);
             // rank and dark in the low places, thin and pale on the knolls; held back where the woods shade it
-            crop.rgb *= (1.0 - 0.2 * lowK) * (1.0 + 0.16 * knollK);
+            crop.rgb *= (1.0 - 0.3 * lowK) * (1.0 + 0.3 * knollK) * mix(1.0, 1.4, smoothstep(0.3, 0.9, rowsPx));
+            crop.rgb = mix(crop.rgb, crop.rgb * vec3(1.1, 1.06, 0.72), 0.5 * knollK);
             crop.a *= 1.0 - 0.3 * knollK * (1.0 - smoothstep(0.5, 0.9, over.r));
             float shy = uShy * (1.0 - smoothstep(0.03, 0.2, vF.y + (broad - 0.5) * 0.08));
             crop.rgb = mix(crop.rgb, crop.rgb * vec3(1.12, 1.1, 0.8), 0.6 * shy);
@@ -714,10 +720,12 @@ export class Fields {
             float leafy = texture2D(uNoise, vWorld.xz * 2.9).a;
             crop.rgb *= mix(1.0, 0.5 + 0.95 * leafy, 1.0 - smoothstep(0.02, 0.12, rowsPx));
             // leaf by leaf close to, the lie of the land's fertility from far off, and the wind laying the canopy over
-            crop.rgb *= 0.86 * (0.82 + 0.3 * broad) * (0.6 + 0.5 * n3.a) * (1.0 + 0.22 * gustAt(vWorld.xz) * min(uSway, 1.2) * smoothstep(0.4, 0.9, over.r) * (1.0 - over.a));
+            crop.rgb *= 0.72 * (0.82 + 0.3 * broad) * (0.6 + 0.5 * n3.a) * (1.0 + 0.22 * gustAt(vWorld.xz) * min(uSway, 1.2) * smoothstep(0.4, 0.9, over.r) * (1.0 - over.a));
             soil = mix(soil, crop.rgb, crop.a * paintK);
             float boutP = vF.y * ${(FD / 3.6).toFixed(2)};
             vec3 oat = mix(${linear('#86ac6c')}, ${linear('#d2b76c')}, uOatsHere.y * (0.75 + 0.5 * broad)) * (1.02 + 0.36 * fine) * (0.8 + 0.4 * n3.a);
+            // close to, it is stems and the dark between them
+            oat *= mix(0.62 + 0.5 * texture2D(uNoise, vWorld.xz * vec2(3.7, 1.1)).a, 1.0, smoothstep(0.03, 0.2, rowsPx)) * (1.0 - 0.14 * lowK + 0.12 * knollK);
             oat *= 1.0 + (fract(sin(floor(boutP) * 91.17) * 43758.5453) - 0.5) * 0.24 * (1.0 - smoothstep(0.25, 0.6, fwidth(boutP)));
             oat *= 1.0 + 0.3 * gustAt(vWorld.xz) * min(uSway, 1.2);
             // lodged where a storm laid it down
@@ -833,7 +841,7 @@ export class Fields {
         float open = uCrop.w * smoothstep(0.3, 0.55, gp.h0.r) * (1.0 - gp.h0.g) * (1.0 - gp.h0.b) * (1.0 - gp.dead)
           * (1.0 - min(1.0, uCrop.y * 1.5)) * (1.0 - 0.7 * gp.h1.a) * (1.0 - 0.6 * uCrop.x);
         // Not every plant is in flower at once: more of them at the height of the bloom.
-        showF = step(aFlower.z, open) * step(gp.r.x, 0.4 + 0.5 * uCrop.w);
+        showF = step(aFlower.z, open) * step(gp.r.x, 0.4 + 0.5 * uCrop.w) * step(0.3, slotIn) * step(${HEAD[1].toFixed(1)}, min(aAt.x - uRect.x, uRect.x + ${FW.toFixed(2)} - aAt.x));
         vTint = mix(${linear('#f8f5fa')}, ${linear('#d3c2e6')}, uTint * (0.4 + 0.6 * aFlower.w)) * 0.92;
       `,
       vertexWorld: /* glsl */ `

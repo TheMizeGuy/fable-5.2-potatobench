@@ -10,7 +10,7 @@ import type { Patch } from './shaders.ts'
 
 // A cell of the atlas in pixels and its margin; the half width and half height of what it holds, in tree heights, about
 // a point this far up the tree; and the heights of eye, in radians above the level.
-export const CARD = { cols: 7, rows: 3, w: 128, h: 160, pad: 8, halfW: 0.7, halfH: 0.88, centre: 0.56, elev: [0.17, 0.56, 0.96] }
+export const CARD = { cols: 7, rows: 3, w: 192, h: 240, pad: 10, halfW: 0.7, halfH: 0.88, centre: 0.56, elev: [0.17, 0.56, 0.96] }
 const AW = CARD.cols * CARD.w, AH = CARD.rows * CARD.h
 // How many columns on from a hardwood in leaf the same tree stands bare.
 export const BARE = 3
@@ -167,16 +167,17 @@ vec3 cardWorld(vec3 n) {
 }
 `
 export const BARE_SHIFT = f((BARE * CARD.w) / AW)
-// In the shadow pass: the card's cover read no coarser than keeps its cell its own, and a hardwood bare once its leaves
-// are down.
+// In the shadow pass (three gives a depth material its mesh's own map, so the atlas is read here by its own name): the
+// card's cover, read no coarser than keeps its cell its own, and a hardwood bare once its leaves are down.
+export const CARD_SHADOW_HEAD = 'uniform sampler2D uCard0; varying vec4 vTree; varying vec2 vCard; varying vec3 vCell;'
 export const CARD_SHADOW = /* glsl */ `
   {
-    vec2 px = vMapUv * vec2(${f(AW)}, ${f(AH)});
+    vec2 px = vCard * vec2(${f(AW)}, ${f(AH)});
     float cl = clamp(log2(max(length(dFdx(px)), length(dFdy(px))) + 1e-6), 0.0, 3.0);
-    vec2 at = vMapUv;
+    vec2 at = vCard;
     #ifndef CARD_CONIFER
       at.x += ${BARE_SHIFT} * step(uLeaf, 0.3);
     #endif
-    diffuseColor.a *= textureLod(map, at, cl).a;
+    if (textureLod(uCard0, at, cl).a < 0.4) discard;
   }
 `

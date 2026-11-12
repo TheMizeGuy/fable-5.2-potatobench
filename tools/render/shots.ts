@@ -723,6 +723,8 @@ shots.push(
 // ---- The land at its true size: the crop through its stages from the field tier and from close to, the months,
 // blight, the dig, the stages of clearing a tract, the whole farm, the whole map, and a lane at eye level.
 const FIELD_TIER: View = { frame: 'land', x: 8, z: -1, dist: 27, yaw: -0.44 }
+// The camera's own field tier, wherever the camera's writer has put it.
+const CAMERA_FIELD: View = {}
 const tierOn = (field: number): View => ({ frame: 'field', field, x: 0.5, z: 0.5, dist: 320, yaw: -0.44 })
 const nearOn = (field: number): View => ({ frame: 'field', field, x: 0.72, z: 0.62, dist: 30, yaw: -0.95, pitch: 0.3 })
 const midOn = (field: number): View => ({ frame: 'field', field, x: 0.72, z: 0.62, dist: 95, yaw: -0.95, pitch: 0.36 })
@@ -733,7 +735,8 @@ const cropShot = (name: string, year: number, day: number, skip: string[], v: Vi
     console.log('  ', await playUntil(page, skip, name.includes('bloom') ? `return sim.fieldInfo(c, 5).bloom > 0.9 && sim.today(app.world, c).sky === 'clear' ? 'bloom' : ''` : SKY('clear')))
     if (after) console.log('  ', await page.evaluate(after))
     await settle(page)
-    await view(page, v)
+    if (v === CAMERA_FIELD) await page.evaluate(() => (window as any).__countyField.tier('field'))
+    else await view(page, v)
     await frames(page, 12)
   },
 })
@@ -761,17 +764,17 @@ shots.push(
 )
 
 // ---- The land by tier of view: yard (close to), field (the playing view), farm, county.
-const FARM_TIER: View = { frame: 'land', x: 9, z: 1, dist: 62 }
+const FARM_VIEW: View = { frame: 'land', x: 9, z: 1, dist: 62 }
 const COUNTY_TIER: View = { frame: 'land', x: 22, z: 4, dist: 150 }
 shots.push(
-  cropShot('t-field-1-bare', 1977, 128, [], FIELD_TIER),
-  cropShot('t-field-2-planted', 1977, 147, [], FIELD_TIER),
-  cropShot('t-field-3-emerged', 1977, 163, [], FIELD_TIER),
-  cropShot('t-field-4-closed', 1977, 186, [], FIELD_TIER),
-  cropShot('t-field-5-bloom', 1977, 190, [], FIELD_TIER),
-  cropShot('t-field-6-dead', 1977, 260, ['dig'], FIELD_TIER),
-  cropShot('t-field-7-dug', 1977, 268, [], FIELD_TIER),
-  cropShot('t-field-8-october', 1977, 288, [], FIELD_TIER),
+  cropShot('t-field-1-bare', 1977, 128, [], CAMERA_FIELD),
+  cropShot('t-field-2-planted', 1977, 147, [], CAMERA_FIELD),
+  cropShot('t-field-3-emerged', 1977, 163, [], CAMERA_FIELD),
+  cropShot('t-field-4-closed', 1977, 186, [], CAMERA_FIELD),
+  cropShot('t-field-5-bloom', 1977, 190, [], CAMERA_FIELD),
+  cropShot('t-field-6-dead', 1977, 260, ['dig'], CAMERA_FIELD),
+  cropShot('t-field-7-dug', 1977, 268, [], CAMERA_FIELD),
+  cropShot('t-field-8-october', 1977, 288, [], CAMERA_FIELD),
   cropShot('t-field-blight', 1979, 205, ['spray', 'rogue'], tierOn(4), BLIGHT_STATES),
   landShot('t-field-tract-felled', 190, CLEARING[1][1].replaceAll('@', '14'), tierOn(14)),
   landShot('t-field-tract-rocks', 190, CLEARING[4][1].replaceAll('@', '14'), tierOn(14)),
@@ -779,10 +782,11 @@ shots.push(
   cropShot('t-yard-4-closed', 1977, 186, [], nearOn(5)),
   cropShot('t-yard-5-bloom', 1977, 190, [], nearOn(5)),
   cropShot('t-yard-blight', 1979, 205, ['spray', 'rogue'], nearOn(4)),
+  ...['flora', 'crews', 'props', 'birds'].map(part => ({ name: `dbg-no-${part}`, size: [960, 540] as [number, number], setup: async (page: Page) => { await playTo(page, 1977, 5, 147); await playUntil(page, [], SKY('clear')); await settle(page); await view(page, nearOn(5)); await page.evaluate(p => (window as any).__countyField.show(p, false), part); await frames(page, 12) } })),
   cropShot('t-yard-lane', 1977, 196, [], { frame: 'land', x: 10, z: 5.6, dist: 1.5, yaw: -1.5708, pitch: 0.07, tilt: 0 }),
   cropShot('t-yard-wood-edge', 1977, 196, [], { frame: 'land', x: -2, z: -19.5, dist: 5, yaw: 0.3, pitch: 0.14, tilt: 0 }),
-  cropShot('t-farm-july', 1977, 196, [], FARM_TIER),
-  cropShot('t-farm-october', 1977, 288, [], FARM_TIER),
+  cropShot('t-farm-july', 1977, 196, [], FARM_VIEW),
+  cropShot('t-farm-october', 1977, 288, [], FARM_VIEW),
   cropShot('t-county-july', 1977, 196, [], COUNTY_TIER),
   cropShot('t-county-october', 1977, 288, [], COUNTY_TIER),
 )

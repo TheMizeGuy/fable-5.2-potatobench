@@ -5,7 +5,7 @@ import {
   BufferAttribute, BufferGeometry, DoubleSide, Group, IcosahedronGeometry, InstancedBufferAttribute, InstancedMesh, Matrix4,
   MeshStandardMaterial, Quaternion, Sphere, Vector3, type MeshDepthMaterial, type PerspectiveCamera, type WebGLRenderer,
 } from 'three'
-import { BARE_SHIFT, CARD_FRAGMENT, CARD_SHADOW, CARD_VERTEX, bakeCards, cardGeometry, cardMaps } from './cards.ts'
+import { BARE_SHIFT, CARD_FRAGMENT, CARD_SHADOW, CARD_SHADOW_HEAD, CARD_VERTEX, bakeCards, cardGeometry, cardMaps } from './cards.ts'
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { PARCELS, TRACTS } from '../sim/index.ts'
 import { DUFOUR, DUFOUR_BARN, DUFOUR_HOUSE, DUFOUR_POTATO_HOUSE, FARM, FARM_CENTER, FD, FIELDS, FW, HOME, HOME_WOODS, KEEP_CLEAR, LAND, POND, POTATO_HOUSE, WIDE, YARD_TREES, brookHalf, brookZ, fieldMask, groundY, hillRoadZ, oursAt, regionAt, ridgeWoodAt, roadDist, townRoadZ, tractAt, woodFront, woodsAt, WALLS, GATEWAYS, YARD_AT, ROAD, BRIDGE_X, PASTURE, VILLAGE, SIDING } from './layout.ts'
@@ -234,21 +234,23 @@ export interface Kind { geo: BufferGeometry; mat: MeshStandardMaterial; wide: nu
 interface Chunk { near: InstancedMesh[]; far: InstancedMesh[]; cards: InstancedMesh[]; sphere: Sphere; fixed: boolean; level: number }
 // A tract's stand: its trees in felling order, and for each mesh that draws some of them their places in that order,
 // last to fall first, so the trees still standing are always the first of the mesh.
-interface Stand { trees: StandTree[]; sets: { mesh: InstancedMesh; ranks: number[] }[]; cut: number }
+interface Stand { trees: StandTree[]; sets: { mesh: InstancedMesh; ranks: number[] }[]; cut: number; held: number }
 
 type Cls = 'spruce' | 'maple' | 'birch' | 'bush' | 'apple' | 'conBack' | 'broadBack' | 'conFar' | 'conDistant' | 'broadFar' | 'broadDistant'
 
 // Trees are laid out in patches of ground, each its own set of meshes so what is out of sight is not drawn, nor drawn
 // into a shadow it cannot reach. On and near the farm a patch has whole trees for when the camera is close and simpler
 // ones for when it is not.
-const CELL = 140
-const NEAR_AT = { high: 110, medium: 80, low: 50 }
+const CELL = 100
+const NEAR_AT = { high: 100, medium: 75, low: 45 }
 // Past this a tree is a card.
-const MID_AT = { high: 230, medium: 170, low: 100 }
+const MID_AT = { high: 200, medium: 150, low: 90 }
 // Trees at true size: spruce and fir 15 to 25 m, maple and birch a little under, brush head-high and more.
 const T = S
 // Whole trees stand this far back from the front of the ridge woods; behind them, fewer and simpler ones, each standing
 // for several, never more than about this many in all.
+// Where the camera comes to rest at the end of the opening (camera.ts, TITLE): kept clear of the lane's trees.
+const TITLE_STAND = { x: 216, z: 6, r: 30 }
 const FRONT = 70, BACK_MOST = 26000, HEDGE_MOST = 9000, COUNTRY_MOST = 24000
 
 const CONIFER_LOOK = /* glsl */ `
@@ -463,6 +465,8 @@ export class Flora {
       && ridgeWoodAt(x, z) < 0.02 && yards.every(y => x < y.x0 - 5 || x > y.x1 + 5 || z < y.z0 - 5 || z > y.z1 + 5)
     const px0 = Math.min(...PASTURE.map(q => q.x)) - 6, px1 = Math.max(...PASTURE.map(q => q.x)) + 6, pz0 = Math.min(...PASTURE.map(q => q.z)) - 6, pz1 = Math.max(...PASTURE.map(q => q.z)) + 6
     const inPasture = (x: number, z: number) => x > px0 && x < px1 && z > pz0 && z < pz1
+    // the machines turn on ten metres of clear ground at each end of the rows
+    const fieldEnd = (x: number, z: number) => FIELDS.some(f => z > f.z0 - 4 && z < f.z1 + 4 && (Math.abs(x - f.x0) < 12 || Math.abs(x - f.x1) < 12))
     const nearYardTree = (x: number, z: number, d: number) => YARD_TREES.some(t => Math.hypot(t.x - x, t.z - z) < d)
     // The village over the hill and the siding down the road stand among trees, as places do.
     for (const [c, n] of [[VILLAGE, 26], [SIDING, 14]] as [{ x: number; z: number }, number][]) {
@@ -491,7 +495,8 @@ export class Flora {
       for (let d = (k * 7) % 11; d < len; d += 15 + r() * 5) {
         const side = nx > 0 ? 1 : -1, off = WIDE.road / 2 + 4.2 + r() * 1.2
         const x = ax + ((bx - ax) * d) / len + nx * side * off, z = az + ((bz - az) * d) / len + nz * side * off
-        if (!free(x, z, 3) || Math.abs(z - brookZ(x)) < brookHalf(x) + 6 || nearYardTree(x, z, 16)) continue
+        // (and none where the opening's last picture is taken from, by the dooryard gate)
+        if (!free(x, z, 3) || Math.abs(z - brookZ(x)) < brookHalf(x) + 6 || nearYardTree(x, z, 16) || fieldEnd(x, z) || Math.hypot(x - TITLE_STAND.x, z - TITLE_STAND.z) < TITLE_STAND.r) continue
         trees.maple.push({ x, z, s: (7.2 + r() * 2.4) * T, r: r(), hue: r(), kind: 0 })
       }
     }
@@ -659,10 +664,10 @@ export class Flora {
         ${SNOW_RIME_TREE}`,
       fragmentNormal: 'normal = normalize((viewMatrix * vec4(cardWN, 0.0)).xyz + (viewMatrix * vec4(leafBump.x, 0.0, leafBump.y, 0.0)).xyz * 0.5);',
     })
-    this.cardDepth = [depthFor({ key: 'county-conifer-card', defines: { CARD_CONIFER: 1 }, ...CARD_VERTEX }), depthFor({ key: 'county-hardwood-card', ...CARD_VERTEX })]
+    this.cardDepth = [depthFor({ key: 'county-conifer-card', defines: { CARD_CONIFER: 1 }, uniforms: cardMaps, ...CARD_VERTEX }), depthFor({ key: 'county-hardwood-card', uniforms: cardMaps, ...CARD_VERTEX })]
     for (const d of this.cardDepth) {
       const base = d.onBeforeCompile.bind(d)
-      d.onBeforeCompile = (shader, renderer) => { base(shader, renderer); shader.fragmentShader = shader.fragmentShader.replace('#include <map_fragment>', CARD_SHADOW) }
+      d.onBeforeCompile = (shader, renderer) => { base(shader, renderer); shader.fragmentShader = shader.fragmentShader.replace('#include <map_fragment>', CARD_SHADOW).replace('void main() {', `${CARD_SHADOW_HEAD}\nvoid main() {`) }
     }
     this.cardCells = [g.spruce, g.maple, g.birch, g.bush]
     this.disposables.push(this.cardGeo, this.conCard, this.leafCard, ...this.cardDepth)
@@ -706,7 +711,6 @@ export class Flora {
       { geo: con, conifer: true, bare: false }, { geo: maple, conifer: false, bare: false }, { geo: birch, conifer: false, bare: false }, { geo: bush, conifer: false, bare: false },
       { geo: maple, conifer: false, bare: true }, { geo: birch, conifer: false, bare: true }, { geo: bush, conifer: false, bare: true },
     ])
-    for (const d of this.cardDepth) { d.map = targets[0].texture; d.alphaTest = 0.4; d.needsUpdate = true }
     this.disposables.push(...targets)
   }
 
@@ -743,13 +747,21 @@ export class Flora {
     }
     const by = list.map((_, n) => n).sort((a, b) => order[a] - order[b])
     const trees = by.map(n => list[n])
-    const ch: Chunk = { near: [], far: [], cards: [], sphere: new Sphere(), fixed: false, level: -1 }
-    const stand: Stand = { trees, sets: [], cut: 0 }
+    const stand: Stand = { trees, sets: [], cut: 0, held: 0 }
     const cls = (t: StandTree) => (t.conifer ? 'spruce' : t.bush ? 'bush' : t.kind === 0 ? 'maple' : 'birch')
-    for (const c of ['spruce', 'maple', 'birch', 'bush']) {
-      const ranks: number[] = []
-      for (let n = trees.length - 1; n >= 0; n--) if (cls(trees[n]) === c) ranks.push(n)
-      if (!ranks.length) continue
+    // In patches of its own, so that only the part of the stand near the camera is whole trees.
+    const patches = new Map<string, number[]>()
+    for (let n = trees.length - 1; n >= 0; n--) {
+      const key = `${cls(trees[n])}|${Math.floor((trees[n].x - f.x0) / 62)}|${Math.floor((trees[n].z - f.z0) / 68)}`
+      let ranks = patches.get(key)
+      if (!ranks) patches.set(key, (ranks = []))
+      ranks.push(n)
+    }
+    for (const [key, ranks] of patches) {
+      const [c, px, pz] = key.split('|')
+      const at = `t|${i}|${px}|${pz}`
+      let ch = this.chunks.get(at)
+      if (!ch) this.chunks.set(at, (ch = { near: [], far: [], cards: [], sphere: new Sphere(), fixed: false, level: -1 }))
       const sub = ranks.map(n => trees[n])
       const near = this.place(this.near[c], sub), far = this.place(this.far[c], sub), card = this.placeCards(c === 'spruce', sub)
       ch.near.push(near)
@@ -757,7 +769,6 @@ export class Flora {
       ch.cards.push(card)
       stand.sets.push({ mesh: near, ranks }, { mesh: far, ranks }, { mesh: card, ranks })
     }
-    this.chunks.set(`t|${i}`, ch)
     this.stands.set(i, stand)
   }
 
@@ -771,15 +782,23 @@ export class Flora {
     const st = this.stands.get(i)
     if (!st) return 0
     const cut = Math.round(Math.max(0, Math.min(1, share)) * st.trees.length)
-    if (cut !== st.cut) {
-      st.cut = cut
+    const shown = Math.max(0, cut - st.held)
+    if (shown !== st.cut) {
+      st.cut = shown
       for (const s of st.sets) {
         let n = 0
-        while (n < s.ranks.length && s.ranks[n] >= cut) n++
+        while (n < s.ranks.length && s.ranks[n] >= shown) n++
         s.mesh.count = n
       }
     }
     return cut
+  }
+
+  // Keep the last `n` trees counted as felled standing a while longer (whoever shows them going over says how many are
+  // still on their way down); they go at the next setFelled().
+  holdStanding(i: number, n: number): void {
+    const st = this.stands.get(i)
+    if (st) st.held = Math.max(0, Math.round(n))
   }
 
   // The low brush of hedgerows and wood edges, for whoever else plants it.
@@ -787,8 +806,8 @@ export class Flora {
     return far ? this.far.bush : this.near.bush
   }
 
-  // Whole trees and the simpler ones throw shadows into the two nearer cascades; the widest takes its shadows from the
-  // cards, which stand for every tree whatever is drawn of it.
+  // Whole trees and the simpler ones throw shadows into the fine cascade; the two wider take theirs from the cards,
+  // which stand for every tree whatever is drawn of it.
   private place(kind: Kind, trees: Tree[]): InstancedMesh {
     const m = new Matrix4(), q = new Quaternion(), p = new Vector3(), sc = new Vector3(), up = new Vector3(0, 1, 0)
     const geo = new BufferGeometry()
@@ -807,7 +826,6 @@ export class Flora {
     mesh.computeBoundingSphere()
     mesh.castShadow = kind.shadow
     mesh.receiveShadow = true
-    mesh.layers.enable(1)
     if (kind.depth) mesh.customDepthMaterial = kind.depth
     this.group.add(mesh)
     this.disposables.push(geo)
@@ -834,6 +852,7 @@ export class Flora {
     mesh.castShadow = true
     mesh.receiveShadow = true
     mesh.userData.far = true
+    mesh.layers.enable(1)
     mesh.layers.enable(2)
     mesh.customDepthMaterial = this.cardDepth[conifer ? 0 : 1]
     this.group.add(mesh)
@@ -849,20 +868,22 @@ export class Flora {
   }
 
   // Whole trees in the patches near the camera, simpler ones beyond them, cards in the rest. A patch's cards are in the
-  // widest shadow always, and in the picture and the nearer shadows only when they are what is drawn of it.
+  // two wider shadows always, and in the picture and the fine shadow only when they are what is drawn of it.
   update(camera: PerspectiveCamera): void {
     const c = camera.position
     for (const ch of this.chunks.values()) {
       let level = 2
       if (!ch.fixed) {
-        const d = Math.max(0, this.v.copy(ch.sphere.center).distanceTo(c) - ch.sphere.radius)
+        const d = Math.max(0, this.v.copy(ch.sphere.center).distanceTo(c) - ch.sphere.radius * 0.6)
         level = d < this.nearAt ? 0 : d < this.midAt ? 1 : 2
       }
+      const order = -4000 + Math.min(3900, Math.round(this.v.copy(ch.sphere.center).distanceTo(c) / 8))
+      for (const m of ch.cards) m.renderOrder = order
       if (level === ch.level) continue
       ch.level = level
       for (const m of ch.near) m.visible = level === 0
       for (const m of ch.far) m.visible = level === 1
-      for (const m of ch.cards) for (const l of [0, 1, 3]) { if (level === 2) m.layers.enable(l); else m.layers.disable(l) }
+      for (const m of ch.cards) for (const l of [0, 3]) { if (level === 2) m.layers.enable(l); else m.layers.disable(l) }
     }
   }
 
