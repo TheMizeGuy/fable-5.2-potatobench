@@ -58,7 +58,7 @@ function personRow(ctx: Ctx, c: S.Campaign, u: S.Unit, people: S.PersonInfo[], c
   }
   const name = u.kind === 'farmer' ? 'You' : u.name
   return h('li', { class: 'wrow', testid: `winter-${u.id}` },
-    face(personLook(u.id), 32),
+    face(personLook(u.name), 32),
     h('div', { class: 'wrow-main' },
       h('div', { class: 'wrow-top' },
         h('span', { class: 'wrow-name' }, name),

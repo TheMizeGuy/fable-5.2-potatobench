@@ -7,6 +7,10 @@
     <meta name="theme-color" content="#161f1b" />
     <title>The County</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <!-- The title's faces (SIL Open Font Licence, beside them in fonts/), fetched before anything asks for them. -->
+    <link rel="preload" href="./fonts/league-gothic.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="./fonts/caslon-text.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="./fonts/caslon-text-italic.woff2" as="font" type="font/woff2" crossorigin />
     <style>
       /* The name alone on a quiet ground, until the land can be drawn. */
       html, body { margin: 0; height: 100%; background: #161f1b; }
@@ -17,9 +21,10 @@
         left: max(48px, env(safe-area-inset-left, 0px));
         bottom: 256px;
         margin: 0;
-        font: 600 clamp(56px, 6vw + 16px, 128px) / 0.92 'Fraunces Variable', Georgia, 'Times New Roman', serif;
-        letter-spacing: -0.02em;
-        color: #f3ecdc;
+        font: 400 clamp(56px, 6vw + 16px, 128px) / 0.86 'Gothic', 'Arial Narrow', sans-serif;
+        letter-spacing: 0.01em;
+        text-transform: uppercase;
+        color: #f6f1e4;
       }
       @media (max-width: 519px) { .splash-name { left: 16px; bottom: 300px; } }
       @media (max-height: 500px) and (orientation: landscape) { .splash-name { font-size: 48px; } }

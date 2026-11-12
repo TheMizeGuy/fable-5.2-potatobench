@@ -32,11 +32,12 @@ function mix(id: number, salt: number): number {
 const dresses = new Map<string, Dress>()
 
 // What a person wears, from their look (src/game/looks.ts), which never changes; a coat and a wool cap in the cold.
-export function dressFor(id: number, cold = false): Dress {
-  const key = `${id}|${cold ? 1 : 0}`
+// name keys the look (so an applicant hired keeps their face); id varies what the look leaves open.
+export function dressFor(id: number, cold = false, name = ''): Dress {
+  const key = `${id}|${name}|${cold ? 1 : 0}`
   let d = dresses.get(key)
   if (d) return d
-  const look = personLook(id)
+  const look = personLook(name || id)
   const shirt = new Color(look.shirt), skin = new Color(look.skin)
   const rolled = !cold && mix(id, 11) % 3 !== 0
   const bib = !cold && id !== 0 && mix(id, 12) % 3 === 0
