@@ -37,6 +37,8 @@ const INK_SAYS = Object.fromEntries(CODE.map(([ink, , name, says]) => [ink || 'i
 // With more fields in view than the home six, tags keep only their names once a field (14.4 plan units along its
 // rows) is narrower on screen than a tag: below FAR_IN pixels a plan unit, and back above FAR_OUT.
 const FAR_IN = 10, FAR_OUT = 12
+// How far the camera may carry the tags with their fields before the crowding is settled again, in pixels.
+const RESETTLE_PX = 24
 // The room kept beside every tag for "on the list" and a stamp, so neither coming crowds the next tag.
 const LIST_W = 96, STAMP_W = 52
 
@@ -66,8 +68,9 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
   const at: Box[] = []
   let compact = false
   let far = false
-  // The camera and the window the tags were last settled for.
+  // The camera and the window the tags were last settled for; and for each tag, where its field was when it was put.
   let laid: { key: string; anchors: { x: number; y: number }[] } | null = null
+  const ref: { x: number; y: number }[] = []
   for (let i = 0; i < S.FIELD_COUNT; i++) {
     const wrap = h('div', { class: 'tag-wrap gone', hidden: true })
     wraps.push(wrap)
@@ -308,7 +311,7 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
 
   // The camera has not moved: a tag that comes (a stamp on a field out of view, a field selected from the list) is put
   // where there is room for it, below the tags already there; the rest stay exactly where they are.
-  function arrivals(): void {
+  function arrivals(anchors: { x: number; y: number }[]): void {
     const want = targets(size)
     const floor = innerHeight - app.insets.bottom - GAP - 5
     for (let i = 0; i < S.FIELD_COUNT; i++) {
@@ -333,6 +336,7 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
       }
       if (w.y > floor) w.y = floor
       show(i, w)
+      ref[i] = anchors[i]
     }
   }
 
@@ -341,11 +345,27 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
     for (let i = 0; i < S.FIELD_COUNT; i++) { const a = ctx.view.fieldAnchor(i); anchors.push(a.visible ? { x: a.x, y: a.y } : { x: NaN, y: NaN }) }
     // The boards' edges changing (the list filling, a sheet on a phone) moves no tag until the camera moves.
     const key = `${innerWidth}x${innerHeight} ${ctx.touch()}`
-    const moved = !laid || laid.key !== key || anchors.some((a, i) => {
+    // A field coming into view or leaving it, or the camera carrying the tags far, settles the crowding again; a small
+    // move (the camera easing to rest, a turn begun) carries each tag with its field and leaves them as they were.
+    const far0 = !laid || laid.key !== key || anchors.some((a, i) => {
       const b = laid!.anchors[i]
-      return finite(a) !== finite(b) || (finite(a) && Math.hypot(a.x - b.x, a.y - b.y) > 0.5)
+      return finite(a) !== finite(b) || (finite(a) && Math.hypot(a.x - b.x, a.y - b.y) > RESETTLE_PX)
     })
-    if (moved) { settle(); laid = { key, anchors } } else arrivals()
+    if (far0) {
+      // Why the tags were put again, for the checks that hold them to it.
+      layer.dataset.settled = `${(parseInt(layer.dataset.settled ?? '0', 10) || 0) + 1} ${!laid ? 'first' : laid.key !== key ? 'window' : 'camera'}`
+      settle()
+      laid = { key, anchors }
+      for (let i = 0; i < S.FIELD_COUNT; i++) ref[i] = anchors[i]
+      return
+    }
+    for (let i = 0; i < S.FIELD_COUNT; i++) {
+      const a = anchors[i], r = ref[i], b = at[i]
+      if (b.place === 'gone' || b.place === 'shelf' || !r || !finite(a) || !finite(r) || Math.hypot(a.x - r.x, a.y - r.y) < 0.25) continue
+      show(i, { x: b.x + a.x - r.x, y: b.y + a.y - r.y, place: b.place })
+      ref[i] = a
+    }
+    arrivals(anchors)
   }
 
   // Where the tags are now, for the pins to keep clear of.

@@ -183,7 +183,7 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
     if (suggestedWhy) return suggestedWhy
     if (!f) return jobWhat(kind)
     switch (kind) {
-      case 'plant': { const hold = app.needs()[f.index]?.hold; if (hold) return F.localize(hold.why); const t = S.today(app.world, c); return `Soil ${F.temp((t ? t.soilT : 0) + S.SOIL_T_OFFSET[f.elev])} here; seed wants ${F.temp(10)}.` }
+      case 'plant': { const hold = app.needs()[f.index]?.hold; return F.localize(hold ? hold.why : S.plantReady(app.world, c, f.index).why) }
       case 'hill': return `Hilled ${hillWord(f.hillPasses)}.`
       case 'scout': return f.scoutAge < 0 ? 'Not walked yet.' : `Last walked ${F.ago(f.scoutAge)}.`
       case 'spray': return f.protect > 0.02 ? `${F.pct(f.protect)} protection left on the leaf.` : 'No protectant on the leaf.'
@@ -263,7 +263,7 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
         text = busy || F.localize(mine.find(x => !x.ok)?.why ?? '') || jobWhat(kind)
         el = order({
           key, icon: kind, name: JOB_VERB[kind], catch: text, testid: `order-${kind}-off`, title: touch ? undefined : text,
-          attrs: { ...attrs(' is-off'), 'aria-disabled': 'true' }, onclick: () => refuse(kind, text),
+          attrs: attrs(' is-off'), onclick: () => refuse(kind, text),
         })
       } else {
         canAny = true
@@ -418,10 +418,10 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
     const s = c.season!
     const coach = app.needs()[f.index]?.hold ?? (app.needs()[f.index]?.need?.act === 'plant' ? app.needs()[f.index]?.need : null)
     if (f.status === 'idle' && coach && /°/.test(F.localize(`${coach.text} ${coach.why}`))) return []
+    // The one planting rule (S.plantReady), the same the coach and the routine go by.
     if (f.status === 'idle' || f.status === 'planted') {
-      const t = S.today(app.world, c)
-      const soil = (t ? t.soilT : 0) + S.SOIL_T_OFFSET[f.elev]
-      return [h('p', null, icon('planted', 'i'), h('span', null, `Soil ${F.temp(soil)} here. Seed wants ${F.temp(10)}.`))]
+      const pr = S.plantReady(app.world, c, f.index)
+      return [h('p', null, icon('planted', 'i'), h('span', null, f.status === 'idle' ? F.localize(pr.why) : `Soil ${F.temp(pr.soilT)} here.`))]
     }
     if (f.status === 'dead') {
       const left = Math.ceil((1 - f.skin) * S.SKIN_DAYS)

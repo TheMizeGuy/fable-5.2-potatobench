@@ -286,7 +286,7 @@ export function personCard(ctx: Ctx): PersonCard {
     const s0 = c.season
     const model = {
       p, day: s0?.day, t: ctx.touch(), foreman, flash: flashed && performance.now() < flashed.until ? flashed.text : '',
-      jobs: s0?.jobs.map(j => [j.id, j.unit]), crew: c.crew.map(u => [u.id, u.at, u.to, u.job, u.foreman]), sun: c.sundaysOff,
+      jobs: s0?.jobs.map(j => [j.id, j.unit]), crew: c.crew.map(u => [u.id, u.at, u.to, u.job, u.foreman, u.rest]), sun: c.sundaysOff,
     }
     patch(el, JSON.stringify(model), () => body(c, p))
     el.setAttribute('aria-label', p.kind === 'farmer' ? 'You, the farmer' : p.name)
