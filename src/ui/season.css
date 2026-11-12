@@ -225,6 +225,8 @@
 .work .check.rule[disabled] { color: var(--ink-2); cursor: default; }
 
 /* ---------------------------------------------------------------- a decision: the telegram, over the veiled land */
+/* A telegram holds the floor: the bars and cards step aside until it is answered or put away. */
+.season-screen.incident-up > .command, .season-screen.incident-up > .person-card, .season-screen.incident-up > .work, .season-screen.incident-up > .notes-slot { visibility: hidden; }
 .season-screen .telegram { top: calc(var(--top, 220px) + 12px); max-width: calc(100% - 32px); max-height: calc(100% - var(--top, 220px) - 28px); overflow-y: auto; z-index: 5; }
 @media (min-width: 1400px) and (min-height: 820px) { .season-screen .telegram { top: 150px; max-height: calc(100% - 166px); } }
 .season-screen .telegram.in { animation: wire-in var(--t-sheet) var(--ease-paper); }
