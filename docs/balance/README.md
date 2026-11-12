@@ -188,6 +188,67 @@ See `latest.md` for every number. At round 7, 200 farms:
   up. Sinks it should have: more land to buy beyond the eighteen parcels, upkeep on buildings and machinery that grows
   with the farm, and a household draw that grows with net worth.
 
+## Wave 3: the routine
+
+First-time players found people idle unless every job was ordered by hand. The crew now works to a routine
+(standing orders, `docs/FARMSTEAD.md` section 8): planting, hilling, walking the fields, pulling blighted hills, test
+digs, digging and hauling go on the list by themselves; spraying, watering and killing the vines stay the player's
+calls. The bots: `untended` gives no order, answers nothing and sells nothing; `calls-only` leaves the routine to
+itself and answers only the calls (each field's spray, water or kill need), makes the advice's sales and sells the
+cellar in March; `reference` is the coach's practice. Each was also played with every standing order switched off,
+which is the game before the routine. The naive bot switches the routine off (it does nothing but plant and dig on
+its dates), and the expert keeps its own list (only hauling by itself, and not even that when hauling late).
+
+200 farms, ten seasons, after the change (the "off" rows are the game before it):
+
+| Player | Routine | Kept 1 yr | Kept 5 yr | Kept 10 yr | Year-one revenue | Ten-year net worth, median | Mean |
+|---|---|---|---|---|---|---|---|
+| untended | on | 72% | 0% | 0% | $34k | -$32k | -$38k |
+| untended | off | 0% | 0% | 0% | $2k | -$36k | -$36k |
+| calls only | on | 100% | 69% | 5% | $64k | -$28k | -$30k |
+| calls only | off | 0% | 0% | 0% | $2k | -$36k | -$36k |
+| reference | on | 100% | 67% | 3% | $63k | -$27k | -$29k |
+| reference | off | 100% | 67% | 3% | $63k | -$28k | -$30k |
+
+- An untended farm now brings in a crop: $34k in year one instead of $2k, and 72% see the second spring instead of
+  none. It still loses every farm within five years, and 28% in the first: with no vine kill the crop is dug late into
+  the frost, with no spray blight reaches the tubers, and with nothing sold the stored crop rots through the cellar
+  (in 11 of the first 12 farms' untended first years at least one pile broke down with rot; storage is a call
+  too). Neglect is ruinous, but no longer by planting nothing.
+- The calls are worth making: answering them is worth $30k of revenue in year one ($64k against $34k), 69% of
+  farms kept five seasons against none, and $8k of ten-year net worth on the mean (both lose the long game without
+  the deeper systems, as the reference does).
+- The reference is unchanged in effect (it ordered every job anyway): 67% kept five seasons, as before the routine.
+
+The gates against round 7 of wave 2 (the same 200 farms):
+
+| Gate | Wave 2, round 7 | With the routine |
+|---|---|---|
+| G1 | PASS: reference 69% kept five seasons, expert 98%; expert over reference $418k | PASS: reference 67%, expert 97%; expert over reference $425k, reference over naive $25k (was $9k: the naive bot plants and digs on its dates, the reference now also gets the late dig) |
+| G2 | FAIL: 20 of 29 earn; traps foreman, bunkhouse, third tractor | FAIL: 16 of 29 earn; traps the same three. Four that had earned by a narrow margin are now unproven, their intervals overlapping the old ones: work priorities $4.4k (-$2.8k to $12.0k; was $14.1k), the stand -$3.5k (was $7.3k), the road -$1.4k (was $14.5k), the truck $4.0k (was $9.4k). Raises fell from $23.7k to $13.1k because the neighbour now asks for a person once a year |
+| G3 | FAIL: building order 169 of 200; clearing 94%, prompt hauling 93% | FAIL: building order 165 of 200; clearing 92%, prompt hauling 97% |
+| G4 | PASS | PASS: median net worth $29k to $398k; cash at year ten $182k |
+
+What changed underneath the expert besides the routine: the crop in the potato house is charged and shrinks every
+night instead of at the sale or the close; a contract falling due takes what is owed from the potato house; ahead of
+a frost drivers leave other machine work for the barrels; the yard's logs count in whole loads; and the year's
+telegrams are bounded. No constant was retuned in this wave.
+
+### What storage really nets
+
+`node tools/balance/storage.ts` (200 generated farms, ten years each, a sound lot dug on October 1 into the cool
+cellar without ventilation, against selling it at the dig):
+
+- Katahdin's price in April stands a median 22% above October 1 (middle half 15% to 29%, one year in ten under 9%).
+  Each month's move matches the usual curve on average, and goes the other way in one year in ten or more (November
+  to December: +4.3% on the curve, median +4.4%, down in 12% of years).
+- But a stored lot does not get the price alone. Sold in April, after shrink, sprouting and the charge: Katahdin
+  -14% (it sprouts in March), Caribou Russet -17% (February), Kennebec +5%, Russet Burbank +5%. Sold in its own best
+  month: Katahdin +6% (March in half the years), Caribou +4% (February in 41%), Kennebec +7%, Burbank +7%.
+- So "usually about 25% above by April" is true of the price and wrong of the crop. `storeOutlook(world, c, lot)`
+  gives, for a lot, what keeping it to each cellar month usually nets and its best month; the ticket's words should
+  come from it.
+
 ## Earlier passes
 
 The passes before the farmstead played five seasons over the record's real start years, on the fourteen-field game.

@@ -107,6 +107,10 @@ function everything(world: World, c: Campaign): Advice[] {
             : 'The crop is made. Kill the vines so the skins set.'
         add(i, 'kill', `Kill the vines in ${n}.`, why, blightWinning)
       }
+      // Vines still up this late will not leave time for the skins to set before the ground freezes: dig them green.
+      if (s0.tiDay >= 0 && s.day >= dayIndex(year, P.DIG_GREEN.month, P.DIG_GREEN.dom) && !queued('kill', i)) {
+        add(i, 'dig', `Dig ${n} with the vines up.`, 'It is too late for the skins to set before the freeze-up. Thin skins keep badly, but frozen tubers do not keep at all.', true)
+      }
     }
     if ((f.status === 'digging' || f.status === 'dug') && f.inField >= 0.5 && !f.weighed) {
       const frost = frostOnBarrels(world, c, i)

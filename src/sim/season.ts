@@ -4,7 +4,7 @@ import { buildWork, hasBuilt, pondServes, rain30, travel, YARD_NAME } from './bu
 import { basePrice } from './market.ts'
 import { turnBefore } from './crew.ts'
 import { distance, DUFOUR_YARD, holdsDufourLand, HOME_FIELDS, HOME_YARD, PARCELS } from './farm.ts'
-import { gradeHill, newLot, finishLot, lotCwt } from './harvest.ts'
+import { ageLot, gradeHill, newLot, finishLot, lotCwt } from './harvest.ts'
 import { brushedNow, COVER_WORD, envTmin, fell, fellLeft, fieldEnv, isField, isOpen, standing, stoneBruise, stoneSpeed, stumped } from './land.ts'
 import * as P from './params.ts'
 import { breakdownChance, CHOICE_LABEL, defaultChoice, hurtChance, INCIDENT_TITLE, incidentText } from './incidents.ts'
@@ -1306,6 +1306,8 @@ export function stepDay(world: World, c: Campaign): GameEvent[] {
   }
   s.day++
   c.steps++
+  // The crop in the potato houses is charged and shrinks a night at a time.
+  for (const l of c.lots) if (l.open && l.year === s.year && s.fields[l.field]?.weighed) ageLot(c, l, s.day)
   return out
 }
 

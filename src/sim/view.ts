@@ -17,7 +17,7 @@ import {
   FIELD_NAMES, haulFactor, haulRate, holdsDufour, jobBlock, jobCost, jobDays, jobWait, JOB_LABEL, knownHills, standOpen, tractorsOwned, tractorsRunning,
   waitFor, workday,
 } from './season.ts'
-import { buildBlock, buildCost, buildingAt, hasBuilt, rain30, roadFactor, YARD_NAME } from './buildings.ts'
+import { buildBlock, buildCost, buildingAt, hasBuilt, rain30, roadFactor, wholeLoads, YARD_NAME } from './buildings.ts'
 import {
   H_DECAYED, H_DUG, H_EMERGED, H_KNOWN, H_ROGUED, H_SAMPLED, H_VIRUS, H_WILT,
   type BuildingKind, type Campaign, type Cover, type Day, type Due, type FieldSeason, type IncidentKind, type JobKind, type Skill, type Tenure, type Trait,
@@ -673,7 +673,7 @@ export function tractInfo(c: Campaign): TractInfo[] {
 }
 
 export interface MaterialsInfo {
-  logs: number              // loads in the yard
+  logs: number              // whole loads in the yard (a load still being cut shows once it is whole)
   stone: number             // loads of fieldstone in the yard
   logPrice: number          // dollars a load, sold to the mill
   millPrice: number         // dollars a load of logs bought for a building
@@ -683,7 +683,7 @@ export interface MaterialsInfo {
 
 export function materialsInfo(c: Campaign): MaterialsInfo {
   return {
-    logs: c.logs, stone: c.stone, logPrice: P.LOG_PRICE, millPrice: P.MILL_PRICE, quarryPrice: P.QUARRY_PRICE,
+    logs: wholeLoads(c.logs), stone: wholeLoads(c.stone), logPrice: P.LOG_PRICE, millPrice: P.MILL_PRICE, quarryPrice: P.QUARRY_PRICE,
     sellWhy: c.phase === 'over' ? 'The farm is gone.' : c.logs <= 0 ? 'There are no logs in the yard.' : '',
   }
 }
