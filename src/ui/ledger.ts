@@ -6,10 +6,12 @@ import * as S from '../sim/index.ts'
 import { count, patch, type Ctx, type Screen } from './core.ts'
 import { h, s, type Child } from './dom.ts'
 import * as F from './fmt.ts'
+import { term } from './glossary.ts'
 import { icon } from './icons.ts'
 import { soilWord, varietyName, yearName, yearShort, yearSpan, yearWord } from './rules.ts'
 import { goals, nextGoal } from '../game/goals.ts'
 import { startNewFarm } from './title.ts'
+import { openForeman } from './spring.ts'
 import { topBar } from './top.ts'
 import { fist, stamp } from './system/parts.ts'
 import { portrait } from './system/people.ts'
@@ -26,6 +28,21 @@ function cashLine(label: Child, v: number, o: { testid?: string; always?: boolea
     h('th', { scope: 'row' }, label),
     h('td', { class: 'm num' }, v >= 0 || o.none ? figure : null),
     h('td', { class: 'm num out' }, v < 0 && !o.none ? figure : null))
+}
+
+// The year in a sentence: what the farm began with, what it ends with, and why the one became the other.
+export function yearSentence(y: S.YearSummary): string {
+  const start = y.cashStart, end = y.cashEnd
+  const bills = y.note + y.living + (y.interest ?? 0)
+  const kept = (y.land ?? 0) + (y.building ?? 0) + (y.works ?? 0)
+  const head = `You began the year with ${F.money(start)} and end it with ${F.money(end)}.`
+  const flow = `The crop and the rest brought ${F.money(y.revenue)}; growing it and everything else cost ${F.money(y.costs)}; the note and the household took ${F.money(y.note + y.living)}${y.interest ? `, and interest ${F.money(y.interest)}` : ''}.`
+  const why = end >= start
+    ? 'The crop paid for the year and the bank, with something over.'
+    : y.revenue >= y.costs
+      ? `The crop paid what it cost to grow, but not the ${F.money(bills)} the bank and the household take every year${kept ? `; and ${F.money(kept)} went on land, buildings and clearing, which the farm keeps` : ''}.`
+      : `The year cost more than the crop brought${kept ? `, ${F.money(kept)} of it on land, buildings and clearing, which the farm keeps` : ''}.`
+  return `${head} ${flow} ${why}`
 }
 
 function cashBook(y: S.YearSummary, lost: boolean): HTMLElement {
@@ -58,8 +75,8 @@ function cashBook(y: S.YearSummary, lost: boolean): HTMLElement {
       cashLine('Packing', -packing, { testid: 'ledger-packing' }),
       cashLine('Contract penalties', -penalties, { testid: 'ledger-penalties' }),
       cashLine('Storage', -storage),
-      cashLine(['The note', y.note > 0 && !lost ? stamp('Paid', { ink: 'violet', small: true }) : null], -y.note, { always: true }),
-      cashLine('The household', -y.living, { always: true }),
+      cashLine([term('The note', 'the note'), y.note > 0 && !lost ? stamp('Paid', { ink: 'violet', small: true }) : null], -y.note, { always: true }),
+      cashLine(term('The household', 'the household'), -y.living, { always: true }),
       cashLine('Interest on debt carried', -y.interest)),
     h('tfoot', null,
       h('tr', { class: 'total' }, h('td', null, 'Cash at year end'), h('td', { class: `m num${y.cashEnd < 0 ? ' c-red' : ''}`, colspan: 2, 'data-cash': '' }, F.money(y.cashEnd))),
@@ -215,7 +232,7 @@ function yearAhead(c: S.Campaign, y: S.YearSummary): HTMLElement {
     h('ul', { class: 'b-soil' }, fields.map(f => h('li', null,
       h('b', null, f.name), ' ', h('span', { class: f.soil < 0.4 ? 'c-ochre' : '' }, `soil ${soilWord(f.soil)}`),
       h('span', { class: `num${f.vert >= 0.15 ? ' c-ochre' : ' quiet'}` }, `, early dying ${F.pct(f.vert)}`)))),
-    h('p', { class: 't-caption' }, 'Potatoes after potatoes wear the soil and build up early dying. A rest year puts the soil back at once and wears early dying down slowly.'))
+    h('p', { class: 't-caption' }, 'Potatoes after potatoes wear the soil and build up ', term('early dying'), '. A rest year puts the soil back at once and wears it down slowly.'))
 }
 
 // ---------------------------------------------------------------- the occasions and the end
@@ -308,11 +325,17 @@ function bookLeaves(ctx: Ctx, book: HTMLElement, p: BookParts): Child {
   ]
 }
 
-function nextGoalSlip(c: S.Campaign): HTMLElement | null {
+// The next goal at the foot of the book. One that can be taken here (naming a foreman) is a button to it; one that waits
+// for spring says so, without the fist.
+function nextGoalSlip(ctx: Ctx, c: S.Campaign): HTMLElement | null {
   const goal = nextGoal(c)
   if (!goal) return null
-  return h('p', { class: 'next-goal sheet laid s-canary', testid: 'next-goal' },
-    fist(), h('span', null, h('span', { class: 'b-next-w' }, 'Next: '), h('b', null, goal.title), h('span', { class: 't-caption b-how' }, goal.how)))
+  const here = goal.id === 'foreman' && c.crew.some(u => u.kind !== 'farmer')
+  const body = [here || goal.now ? fist() : null, h('span', null, h('span', { class: 'b-next-w' }, 'Next: '), h('b', null, goal.title),
+    h('span', { class: 't-caption b-how' }, here ? `${goal.how} Name one now.` : goal.now ? goal.how : `${goal.how} ${goal.when}.`))]
+  return here
+    ? h('button', { class: 'next-goal sheet laid s-canary', type: 'button', testid: 'next-goal', onclick: () => openForeman(ctx) }, body)
+    : h('p', { class: 'next-goal sheet laid s-canary', testid: 'next-goal' }, body)
 }
 
 function bookInsets(ctx: Ctx, top: HTMLElement, book: HTMLElement): [number, number, number, number] {
@@ -351,7 +374,7 @@ export function ledgerScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
       const goal = nextGoal(c)
       const key = JSON.stringify([c.year, c.history.length, c.outcome, app.settings.units, goal?.id, layout])
       const foot = [
-        !lost ? nextGoalSlip(c) : null,
+        !lost ? nextGoalSlip(ctx, c) : null,
         kept ? h('button', { class: 'btn', type: 'button', testid: 'new-farm', onclick: () => startNewFarm(ctx) }, 'Start a new farm') : null,
         h('button', { class: 'btn go', type: 'button', testid: 'year-next', onclick: () => ctx.run({ t: 'next' }) },
           lost ? 'Close the book' : !more ? 'See how it ended' : won ? `Farm on: plan ${yearWord(y.year + 1)}` : `Plan ${yearWord(y.year + 1)}`, icon('arrow', 'i')),
@@ -387,7 +410,8 @@ export function ledgerScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
             h('header', { class: 'book-head' },
               h('p', { class: 't-label' }, `Year ${c.yearIdx + 1} of ${c.goalYears}`),
               h('h1', { class: 't-title book-title' }, `The ledger, ${yearWord(y.year)}`),
-              h('p', { class: 'it b-verdict', testid: 'outcome' }, kept ? 'The farm is yours, and the bank is satisfied.' : `The bank is satisfied. ${F.upper(F.plural(left, 'season'))} to go.`)),
+              h('p', { class: 'it b-verdict', testid: 'outcome' }, kept ? 'The farm is yours, and the bank is satisfied.' : `The bank is satisfied. ${F.upper(F.plural(left, 'season'))} to go.`),
+              h('p', { class: 'b-plain', testid: 'year-sentence' }, yearSentence(y))),
             cashBook(y, false),
             y.cashEnd < 0 ? h('p', { class: 'b-debt' }, h('b', { class: 'c-red' }, 'In debt,'), ` inside the bank's limit: it calls the note only below `, h('span', { class: 'num nowrap' }, F.money(S.CREDIT_LIMIT)), '.') : null,
             yearOnFarm(c),

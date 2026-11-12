@@ -5,6 +5,7 @@ import { tracker } from './contracts.ts'
 import { patch, type Ctx, type Screen } from './core.ts'
 import { h, type Child } from './dom.ts'
 import * as F from './fmt.ts'
+import { GLOSSARY, term } from './glossary.ts'
 import { icon } from './icons.ts'
 import { digitFor, fieldForDigit, heldFields, step } from './map.ts'
 import { plates, type PlateModel } from './plates.ts'
@@ -107,10 +108,11 @@ function openMoney(ctx: Ctx): void {
       pc.wages ? ` Then ${F.money(pc.wages)} in wages every month until the season closes, and for anyone kept on over the winter.` : ''),
       h('p', { class: 't-label dlg-sub' }, 'Due at the year end'),
       h('div', { class: 'ledger-lines' },
-        line('The note on the farm', S.NOTE_PAYMENT),
-        line('The household', S.LIVING),
+        after < 0 && after >= S.OPERATING_LIMIT ? line('The spring loan back', -after) : null,
+        line(term('The note on the farm', 'the note'), S.NOTE_PAYMENT),
+        line(term('The household', 'the household'), S.LIVING),
         m.owed > 0 ? line(`The land mortgage, ${F.money(m.owed)} owed`, Math.round(m.principal + m.interest)) : null,
-        line(h('b', null, 'Due'), S.NOTE_PAYMENT + S.LIVING + Math.round(m.principal + m.interest), { cls: 'total' })),
+        line(h('b', null, 'Due'), (after < 0 && after >= S.OPERATING_LIMIT ? -after : 0) + S.NOTE_PAYMENT + S.LIVING + Math.round(m.principal + m.interest), { cls: 'total' })),
       h('p', { class: 't-caption' }, `Debt left after those is carried into next year at ${F.pct(S.CREDIT_RATE)} interest, and the bank calls the note if it is more than ${F.money(-S.CREDIT_LIMIT)}. Land, buildings and equipment are bought from cash.`),
       y ? [
         h('p', { class: 't-label dlg-sub' }, `Last year, ${R.yearWord(y.year)}`),
@@ -141,7 +143,30 @@ const TRACT_GLYPH: Record<S.Cover, string> = { open: 'idle', woods: 'woods', bru
 
 export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () => void }): Screen {
   const app = ctx.app
-  const top = topBar(ctx, o)
+  // A spring goal's "Show me" opens the fold where it is reached, or picks the tract it is about.
+  const goalFold: Partial<Record<string, Fold>> = { tool: 'equipment', hire: 'people', contract: 'contracts', land: 'land', foreman: 'people' }
+  const goalTract = (id: string) => {
+    const c = app.campaign
+    const stage = id === 'stump' ? 'stump' : id === 'fell' ? 'fell' : ''
+    return c && stage ? S.tractInfo(c).find(t => t.tenure !== 'none' && t.stage === stage)?.field ?? -1 : -1
+  }
+  const top = topBar(ctx, {
+    ...o,
+    canShow: g => {
+      const c = app.campaign
+      if (!c || c.phase !== 'plan') return false
+      if (g.id === 'foreman') return c.crew.some(u => u.kind !== 'farmer')
+      return !!goalFold[g.id] || goalTract(g.id) >= 0
+    },
+    show: g => {
+      const t = goalTract(g.id)
+      if (t >= 0) { app.select(t); return true }
+      const f = goalFold[g.id]
+      if (!f) return false
+      if (open !== f) toggle(f)
+      return true
+    },
+  })
   // A field, a lot or a tract picked on the land: its card, docked left, since the catalogue holds the right.
   const card = h('section', { class: 'command docked-left spring-card sheet sys', 'aria-label': 'The selected field', testid: 'plan-card', hidden: true })
   // The contracts signed stand under the folds: they are money promised.
@@ -230,14 +255,14 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
       h('span', { class: 'vbox-in' },
         h('b', null, v.name),
         h('span', { class: 'it' }, `${v.maturity}, ${R.yieldWord(v).split(',')[0]}`),
-        h('span', { class: v.contract ? 'c-ochre' : null }, v.contract ? 'contract only' : R.blightWord(v, true)),
+        h('span', { class: v.contract ? 'c-ochre' : null, title: v.contract ? GLOSSARY['contract only'] : undefined }, v.contract ? 'contract only' : R.blightWord(v, true)),
         h('span', { class: 'num' }, F.price(v.price))),
       h('span', { class: 'sr', id: `v-more-${v.id}` }, varietyTraits(v, c, app.world).join(', ')))
   }
 
-  function choice(name: string, label: string, opts: [string, string, boolean, () => void][]): HTMLElement {
-    return h('div', { class: 'seg-in', role: 'radiogroup', 'aria-label': label }, opts.map(([value, text, on, set]) => h('label', null,
-      h('input', { type: 'radio', name, value, checked: on, testid: `plan-${name}-${value}`, k: `${name}-${value}`, onchange: set }),
+  function choice(name: string, label: string, opts: [string, string, boolean, () => void, string?][]): HTMLElement {
+    return h('div', { class: 'seg-in', role: 'radiogroup', 'aria-label': label }, opts.map(([value, text, on, set, off]) => h('label', { title: off || undefined },
+      h('input', { type: 'radio', name, value, checked: on, disabled: !!off, testid: `plan-${name}-${value}`, k: `${name}-${value}`, onchange: set }),
       h('span', null, text))))
   }
 
@@ -257,7 +282,7 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
     const cost = sel.reduce((a, j) => a + fieldCost(c.plans[j]), 0)
     return [
       cardHead(ctx, one ? 'Field record' : 'Fields', one ? info.name : `${sel.length} fields`, one
-        ? `${R.POSITION_NOTE[info.elev]} ${F.upper(F.plural(info.streak, 'year'))} in potatoes, soil ${R.soilWord(info.soil)}, early dying in ${F.pct(info.vert)}.${info.raw ? ' New ground: a first crop grows less unless it rests a year.' : ''}`
+        ? [`${R.POSITION_NOTE[info.elev]} ${F.upper(F.plural(info.streak, 'year'))} in potatoes, soil ${R.soilWord(info.soil)}, `, term('early dying'), ` in ${F.pct(info.vert)}.${info.raw ? ' New ground: a first crop grows less unless it rests a year.' : ''}`]
         : F.list(sel.map(j => S.FIELD_NAMES[j]))),
       h('div', { class: 'card-crop' },
         choice('crop', 'Crop', [['potato', 'Potatoes', same('crop') && potato, () => setPlan({ crop: 'potato' })], ['rest', 'Rest year', same('crop') && !potato, () => setPlan({ crop: 'rest' })]]),
@@ -266,11 +291,15 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
         h('div', { class: 'vgrid', role: 'radiogroup', 'aria-label': 'Variety' }, vs.map(x => varietyBox(c, x, same('variety') && x.id === p.variety))),
         h('p', { class: 'note card-note' }, same('variety') ? `${v.blurb}${v.contract ? ` Off contract it sells ${R.offContract()} its usual price.` : ''}` : 'These fields are in different varieties.',
           ' ', h('button', { class: 'btn quiet', type: 'button', testid: 'compare-open', onclick: () => openCompare(ctx) }, 'Compare them all')),
-        saved > 0 || p.seed === 'saved' ? h('div', { class: 'card-seed' },
+        // Where the seed comes from is always on the card: saved seed is free once some is held back in the cellar.
+        h('div', { class: 'card-seed' },
+          h('p', { class: 't-label' }, 'Seed'),
           choice('seed', 'Seed', [
             ['certified', `Certified, ${F.money(S.SEED_CWT_PER_FIELD * S.CERT_SEED_PER_CWT)}`, same('seed') && p.seed === 'certified', () => setPlan({ seed: 'certified' })],
-            ['saved', `Saved, free (enough for ${saved})`, same('seed') && p.seed === 'saved', () => setPlan({ seed: 'saved' })]]),
-          h('p', { class: `t-caption${p.seed === 'saved' ? ' c-ochre' : ''}`, testid: 'seed-note' }, R.savedSeedText(stock))) : null,
+            ['saved', saved > 0 ? `Saved, free (enough for ${saved})` : 'Saved, free', same('seed') && p.seed === 'saved', () => setPlan({ seed: 'saved' }),
+              saved > 0 || p.seed === 'saved' ? '' : `No saved ${v.name} seed in the cellar`]]),
+          h('p', { class: `t-caption${p.seed === 'saved' ? ' c-ochre' : ''}`, testid: 'seed-note' }, saved > 0 || p.seed === 'saved' ? R.savedSeedText(stock)
+            : [`No saved ${v.name} seed in the cellar. Seed is saved by `, term('holding some back', 'hold back seed'), ' from a lot in store, at the weigh ticket or over the winter: it is free next spring, but it carries virus.'])),
       ] : h('p', { class: 'note card-note' }, `Oats and clover: costs ${F.money(S.REST_COST)}, earns ${F.money(S.REST_INCOME)} in the fall. A rest year puts the soil back at once and wears early dying down slowly.`),
       one ? tenureRow(ctx, c, i, onTry) : null,
       note ? h('p', { class: 'card-refused c-red', role: 'alert' }, note) : null,
@@ -303,15 +332,24 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
     const after = c.cash - pc.total
     const over = after < S.OPERATING_LIMIT
     const m = S.mortgageInfo(c)
-    const due = S.NOTE_PAYMENT + S.LIVING + Math.round(m.principal + m.interest)
+    // What the year end takes, whatever the crop: the spring loan back, the note, the household, the land mortgage.
+    // So whatever raises the loan (a field, a hand, a machine bought from cash) raises what is due by as much.
+    const loan = over ? 0 : Math.max(0, -after)
+    const bills = S.NOTE_PAYMENT + S.LIVING + Math.round(m.principal + m.interest)
+    const due = loan + bills
     const what = pc.rent || pc.wages ? `with ${F.list([pc.rent ? `rent ${F.money(pc.rent)}` : '', pc.wages ? `wages ${F.money(pc.wages)}` : ''].filter(Boolean))}` : ''
+    const parts = F.list([loan ? 'the loan back' : '', `the note ${F.money(S.NOTE_PAYMENT)}`, `the household ${F.money(S.LIVING)}`, m.owed > 0 ? `the land mortgage ${F.money(Math.round(m.principal + m.interest))}` : ''].filter(Boolean))
     return [
       h('div', { class: `plan-money${over ? ' over' : ''}`, testid: 'plan-money' },
+        h('p', { class: 'lead quiet pm-cash' }, h('span', { class: 'it' }, c.cash < 0 ? 'Owed from last year' : 'The farm has'), h('span', { class: 'dots' }),
+          h('span', { class: `num${c.cash < 0 ? ' c-red' : ''}`, testid: 'plan-cash' }, F.money(c.cash))),
         h('p', { class: 'lead' }, h('span', null, 'This plan', what ? h('span', { class: 'it quiet', testid: 'plan-rent' }, ` ${what}`) : null), h('span', { class: 'dots' }),
           h('b', { class: 'num big' }, F.money(pc.total))),
-        h('p', { class: 'lead quiet pm-loan' }, h('span', { class: 'it' }, over ? 'More than the bank will lend' : after < 0 ? 'On the spring loan' : 'From cash, leaving'), h('span', { class: 'dots' }),
-          over ? null : h('span', { class: 'num' }, F.money(Math.abs(after)))),
-        h('p', { class: 'lead quiet' }, h('span', { class: 'it' }, 'Due at the year end'), h('span', { class: 'dots' }), h('span', { class: 'num c-red' }, F.money(due)))),
+        h('p', { class: 'lead quiet pm-loan' }, h('span', { class: 'it' }, over ? 'More than the bank will lend' : after < 0 ? term('The bank\'s spring loan', 'spring loan') : 'Left in cash'), h('span', { class: 'dots' }),
+          over ? null : h('span', { class: 'num', testid: 'plan-loan' }, F.money(Math.abs(after)))),
+        h('p', { class: 'lead quiet' }, h('span', { class: 'it' }, term('Due at the year end', 'due at the year end'), ', from the crop'), h('span', { class: 'dots' }),
+          h('span', { class: 'num c-red', testid: 'plan-due' }, F.money(due))),
+        h('p', { class: 't-caption pm-parts' }, `${F.upper(parts)}: the crop pays them, and what is left is the farm's.`)),
       over ? h('p', { class: 't-caption c-red', role: 'alert' }, 'Rest a field or plant saved seed: the bank will not lend more for the spring.') : null,
       h('div', { class: 'blank-go' },
         h('button', { class: 'btn go wide', type: 'button', testid: 'begin-season', onclick: begin }, 'Start the season', icon('arrow', 'i')),
@@ -368,7 +406,7 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
       } else note = ''
       const state = [c.year, c.history.length, c.plans, c.fields.map(f => [f.tenure, f.cover]), c.seedStock.length, app.settings.units, layout]
       patch(mast, JSON.stringify([c.year, c.yearIdx]), () => drawMast(c))
-      patch(rows, JSON.stringify([...state, open, c.applicants.map(a => a.id), c.crew.map(u => [u.id, u.wage]), c.offers.map(x => x.id), c.contracts.map(k => k.id),
+      patch(rows, JSON.stringify([...state, open, c.applicants.map(a => a.id), c.crew.map(u => [u.id, u.wage, u.foreman]), c.offers.map(x => x.id), c.contracts.map(k => k.id),
         c.upgrades, c.mortgages.map(m => Math.round(m.owed)), c.sundaysOff, Math.round(c.cash), c.buildings.length]), () => drawRows(c))
       patch(foot, JSON.stringify([S.planCosts(c), Math.round(c.cash), c.mortgages.map(m => Math.round(m.owed)), app.settings.units]), () => drawFoot(c))
       el.style.setProperty('--foot-h', `${Math.round(foot.offsetHeight)}px`)

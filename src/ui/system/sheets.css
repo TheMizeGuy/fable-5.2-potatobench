@@ -1,6 +1,13 @@
 /* The sheets placed in the game: papers opened over the live land, at every size. Placement and live states only;
    the look of every component is design/system.css. */
 
+/* A control a goal's "Show me" led to: ringed in the fist's ochre for a few seconds. */
+.btn.goal-ring:is(.sys *) { box-shadow: inset 0 0 0 1px var(--ink), 0 0 0 3px var(--st-ochre), 0 0 0 4px var(--ink); }
+/* The year end as things stand, under the balance: its reckoning opens leftward, in from the window's edge. */
+.topbar .outlook.term { display: block; }
+.topbar .outlook.term b { font-weight: 700; }
+.topbar .outlook.term::after { left: auto; right: 0; text-align: left; font-style: normal; }
+
 /* ---------------------------------------------------------------- a paper over the land */
 .paper-layer > .veil { pointer-events: auto; animation: sh-fade var(--t-sheet) var(--ease-out); }
 .paper-layer > .veil.out { animation: sh-fade-out var(--t-leave) var(--ease-in) forwards; }
@@ -273,6 +280,12 @@
 .spring-screen[data-layout='narrow'] .hall-row .btn { flex: 1 1 0; min-height: 44px; }
 .cat-hired { display: grid; grid-template-columns: 32px auto minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--hair); font-size: 15px; }
 .cat-hired .it { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cat-foreman { grid-column: 2 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.cat-foreman .t-label { display: inline-flex; align-items: center; gap: 6px; }
+.cat-foreman .t-label .i { --i: 16px; }
+.cat-foreman .btn { min-height: 40px; padding: 0 12px; font-size: 14px; }
+.cat-foreman .btn[aria-pressed='true'] { color: var(--paper); background: var(--ink); }
+.touch .cat-foreman .btn { min-height: 44px; }
 .cat-done { display: flex; justify-content: flex-end; }
 .cat-equip li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--hair); }
 .cat-equip b { font-size: 16px; }
@@ -312,6 +325,9 @@
 .card-note { padding: 8px 18px; font-size: 14px; color: var(--ink-2); }
 .card-note .btn.quiet { min-height: 32px; font-style: normal; color: var(--ink); }
 .card-seed { display: grid; gap: 6px; padding: 8px 18px; border-top: 1px solid var(--hair); }
+.card-seed .seg-in input:disabled { cursor: not-allowed; }
+.card-seed .seg-in input:disabled + span { color: var(--ink-2); background: repeating-linear-gradient(135deg, transparent 0 5px, var(--hair) 5px 6px), var(--paper); }
+.order-blank .pm-parts { padding-top: 2px; }
 .card-tenure { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 10px 18px 14px; border-top: 1px solid var(--ink); font-size: 15px; }
 .card-tenure p { flex: 1 1 200px; }
 .card-refused { padding: 6px 18px 12px; font-size: 15px; }
@@ -340,7 +356,7 @@
 .spring-screen[data-layout='narrow'] .masthead h1 { font-size: 38px; }
 .spring-screen[data-layout='narrow'] .cat-body { padding: 0 16px; }
 .spring-screen[data-layout='narrow'] .order-blank { padding: 10px 16px 12px; }
-.spring-screen[data-layout='narrow'] .order-blank .pm-loan { display: none; }
+.spring-screen[data-layout='narrow'] .order-blank .pm-cash, .spring-screen[data-layout='narrow'] .order-blank .pm-parts { display: none; }
 .spring-screen[data-layout='narrow'] .applicant { grid-template-columns: 46px minmax(0, 1fr) 104px; gap: 2px 10px; align-items: center; padding: 8px 0; }
 .spring-screen[data-layout='narrow'] .applicant > .bust { width: 46px; height: 46px; }
 .spring-screen[data-layout='narrow'] .applicant .price { display: flex; gap: 3px; align-items: baseline; white-space: nowrap; font-size: 13px; }
@@ -367,7 +383,7 @@
 .spring-screen[data-layout='short'] .masthead h1 { font-size: 32px; }
 .spring-screen[data-layout='short'] .cat-body { padding: 0 16px; }
 .spring-screen[data-layout='short'] .order-blank { padding: 6px 16px 8px; }
-.spring-screen[data-layout='short'] .order-blank .lead.quiet { display: none; }
+.spring-screen[data-layout='short'] .order-blank .lead.quiet:not(.pm-loan), .spring-screen[data-layout='short'] .order-blank .pm-parts { display: none; }
 .spring-screen[data-layout='short'] .order-blank .btn.go { min-height: 44px; font-size: 20px; }
 .spring-screen[data-layout='short'] .spring-card { top: calc(var(--top, 60px) + 6px); width: calc(52vw - 32px); max-height: calc(100% - var(--top, 60px) - 12px); }
 .spring-screen[data-layout='short'] .vgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

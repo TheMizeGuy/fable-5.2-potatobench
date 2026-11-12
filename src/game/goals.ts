@@ -1,6 +1,9 @@
 // The ladder: what a farm reaches for next, in the order a player can reach it. Worked out from the farm as it stands,
 // so nothing extra is saved.
-import { BUILDING_KINDS, FELL_DAYS, FIELD_COUNT, isField, PARCELS, ROCKS_ADVISE, TRACTS, type Campaign } from '../sim/index.ts'
+import {
+  BUILDING_KINDS, buildCost, buildingAt, FELL_DAYS, FIELD_COUNT, hasBuilt, HOME_YARD, isField, PARCELS, ROCKS_ADVISE, STUMP_FEE, TRACTS, UPGRADES,
+  type Campaign, type UpgradeId,
+} from '../sim/index.ts'
 
 export interface Goal {
   id: string
@@ -12,9 +15,25 @@ export interface Goal {
   when: string                                   // when it can, for the list when it cannot now
   progress: { n: number; of: number } | null
   long: boolean                                  // one of the long goals at the top of the ladder
+  cost: number                                   // the cash the step takes before it can start (0: none)
+  short: number                                  // how much more cash than the farm has that takes (0: it can pay)
 }
 
-type Spec = Omit<Goal, 'done' | 'now' | 'progress' | 'long' | 'how'> & { done: boolean; now: boolean; progress?: { n: number; of: number } | null; long?: boolean }
+type Spec = Omit<Goal, 'done' | 'now' | 'progress' | 'long' | 'how' | 'cost' | 'short'> & { done: boolean; now: boolean; progress?: { n: number; of: number } | null; long?: boolean; cost?: number }
+
+// The cheapest piece of equipment the farm could buy now, or 0 when there is none left to buy.
+function cheapestTool(c: Campaign): number {
+  const ok = (id: UpgradeId) => !c.upgrades[id] && !((id === 'tractor2' || id === 'tractor3') && !hasBuilt(c, 'shed')) && !(id === 'tractor3' && !c.upgrades.tractor2) &&
+    !(id === 'house2' && buildingAt(c, 'house', HOME_YARD))
+  const costs = (Object.keys(UPGRADES) as UpgradeId[]).filter(ok).map(id => UPGRADES[id].cost)
+  return costs.length ? Math.min(...costs) : 0
+}
+
+// The cheapest building the home yard has room for, with the logs and stone it would have to buy.
+function cheapestBuilding(c: Campaign): number {
+  const costs = BUILDING_KINDS.filter(k => !buildingAt(c, k, HOME_YARD)).map(k => buildCost(c, k).total)
+  return costs.length ? Math.min(...costs) : 0
+}
 
 export function goals(c: Campaign): Goal[] {
   const past = c.history.length > 0
@@ -63,11 +82,12 @@ export function goals(c: Campaign): Goal[] {
   // The farmstead, opening up from the second spring.
   const cleared = tracts.filter(t => t.f.cover === 'open')
   const clearing: Spec[] = [
-    { id: 'fell', title: 'Fell a woodlot', why: 'Woods become a field: logs to the yard now, stumps and stone next.', when: 'In the season or over the winter',
-      done: tracts.some(t => t.f.cover === 'stumps' || t.f.cover === 'open'), now: inSeason || c.phase === 'cellar',
+    // Felling waits until the crop is in the ground: in a season it is the work of the quiet weeks.
+    { id: 'fell', title: 'Fell a woodlot', why: 'Woods become a field: logs to the yard now, stumps and stone next.', when: 'Once the crop is planted, or over the winter',
+      done: tracts.some(t => t.f.cover === 'stumps' || t.f.cover === 'open'), now: (inSeason && planted.length === potato.length) || c.phase === 'cellar',
       progress: felledMost > 0 ? { n: Math.round(felledMost * 100), of: 100 } : null },
     { id: 'stump', title: 'Pull the stumps', why: 'A contractor with a bulldozer, for a fee.', when: 'In spring or the season',
-      done: cleared.length > 0, now: spring || inSeason },
+      done: cleared.length > 0, now: spring || inSeason, cost: STUMP_FEE },
     { id: 'rocks', title: 'Pick the new ground', why: 'New ground is stony. The stones come to the yard for building.', when: 'In the season',
       done: cleared.some(t => t.f.stones < ROCKS_ADVISE), now: inSeason },
     { id: 'newfield', title: 'Crop the new ground', why: 'A year in oats and clover, then potatoes on fresh soil.', when: 'From the next spring',
@@ -77,7 +97,7 @@ export function goals(c: Campaign): Goal[] {
   const ladder: Spec[] = [
     ...chain(season),
     { id: 'tool', title: 'Buy a machine', why: 'Equipment makes the jobs that matter go faster.', when: 'In spring',
-      done: Object.values(c.upgrades).some(Boolean), now: spring },
+      done: Object.values(c.upgrades).some(Boolean), now: spring, cost: cheapestTool(c) },
     { id: 'hire', title: 'Hire a hand', why: 'A second pair of hands works the list beside you.', when: 'In spring or the season',
       done: hired || c.history.some(y => y.wages > 0), now: spring || inSeason },
     { id: 'contract', title: 'Sign a contract', why: 'A buyer fixes the price, and you must fill it.', when: 'In spring',
@@ -87,7 +107,7 @@ export function goals(c: Campaign): Goal[] {
     ...chain(clearing),
     { id: 'build', title: 'Raise a building', why: 'Your own people build it, from your own logs and stone.', when: 'In spring, the season or winter',
       done: c.buildings.some(b => b.built), now: spring || inSeason || c.phase === 'cellar',
-      progress: building ? { n: Math.round(building.done), of: building.need } : null },
+      progress: building ? { n: Math.round(building.done), of: building.need } : null, cost: building ? 0 : cheapestBuilding(c) },
     { id: 'foreman', title: 'Name a foreman', why: 'A foreman orders what a block needs, every working morning.', when: 'With someone hired',
       done: c.crew.some(u => u.foreman !== ''), now: hired },
     { id: 'five', title: 'Keep the farm five years', why: 'The bank lets go of the note.', when: 'Every year end',
@@ -101,7 +121,10 @@ export function goals(c: Campaign): Goal[] {
     { id: 'every', title: 'Every kind of building', why: 'A potato house, shed, bunkhouse, packing shed, pond, stand, station and road.', when: 'Any year', long: true,
       done: kindsBuilt.size === BUILDING_KINDS.length, now: true, progress: { n: kindsBuilt.size, of: BUILDING_KINDS.length } },
   ]
-  return ladder.map(g => ({ ...g, how: g.why, progress: g.done ? null : g.progress ?? null, long: !!g.long }))
+  return ladder.map(g => {
+    const cost = g.done ? 0 : g.cost ?? 0
+    return { ...g, how: g.why, progress: g.done ? null : g.progress ?? null, long: !!g.long, cost, short: cost > 0 ? Math.max(0, Math.ceil(cost - c.cash)) : 0 }
+  })
 }
 
 // A step further on means every step before it in the same run is behind the farm too.
@@ -110,11 +133,13 @@ function chain(steps: Spec[]): Spec[] {
   return steps
 }
 
-// The goal to show: the first not yet reached. When that waits for another part of the year, the first step that can be
-// taken now comes forward in its place; the long goals and the five years never jump the queue.
+// The goal to show: the first not yet reached that the farm can pay for. When that waits for another part of the year,
+// the first step that can be taken now comes forward in its place; the long goals and the five years never jump the
+// queue. A step the farm cannot pay for is passed over (the ladder says what it costs).
 export function nextGoal(c: Campaign): Goal | null {
   const all = goals(c).filter(g => !g.done)
-  const first = all[0]
+  const paid = all.filter(g => !g.short)
+  const first = paid[0] ?? all[0]
   if (!first || first.now) return first ?? null
-  return all.find(g => g.now && !g.long && g.id !== 'five') ?? first
+  return paid.find(g => g.now && !g.long && g.id !== 'five') ?? first
 }

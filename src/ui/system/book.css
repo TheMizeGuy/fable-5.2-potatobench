@@ -155,6 +155,8 @@
 .book .next-goal { display: flex; align-items: center; gap: 10px; flex: 1 1 200px; min-width: 0; padding: 8px 14px 8px 10px; font-size: var(--t-body); }
 .book .next-goal .fist { --i: 28px; }
 .book .next-goal .b-how { display: block; margin-top: 1px; }
+.book button.next-goal { text-align: left; cursor: pointer; }
+.book button.next-goal:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
 /* the closing books: the years as rows, what was built */
 .book .b-years-wrap { overflow-x: auto; }
 .book .cashbook.years { font-size: var(--t-caption); }
