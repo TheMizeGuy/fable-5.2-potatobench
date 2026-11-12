@@ -420,6 +420,7 @@
 .orders-help td, .keys td { font-size: var(--t-small); line-height: 18px; }
 .orders-help th { width: 132px; }
 .help-foot { margin-top: var(--sp-4); }
+.touch .help-foot .link { display: inline-block; padding: var(--sp-3) 0; }
 .help-farm { margin-top: var(--sp-5); }
 .help-cols.three { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-5); font-size: var(--t-small); line-height: 18px; }
 .paper-body .help-cols.three p { margin: 0; }
