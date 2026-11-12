@@ -20,7 +20,7 @@ browsers do not run on the laptop this is developed on, so the tools go to the
 Windows box through `tools/remote/pc2.sh`:
 
     tools/remote/pc2.sh <name> 'node tools/audio/render.ts out/sound' out/sound <a folder here>
-    tools/remote/pc2.sh <name> 'node tools/audio/check.ts chromium firefox webkit'
+    tools/remote/pc2.sh <name> 'node tools/audio/check.ts chromium firefox'
     node tools/audio/sheet.ts <that folder>
 
 The first writes the WAVs, pictures and tables; the second holds every render
@@ -171,8 +171,25 @@ changes nothing here: the setting is for the eye.
 ## Final measurements
 
 Chromium, at the default volume, from the last full run of
-`tools/audio/render.ts`. Rows from `bed: title screen` to `stress` are every
-case in `src/audio/dev/cases.ts`.
+`tools/audio/render.ts`: 117 cases, none outside the plan. Rows from
+`bed: title screen` to `stress` are every case in `src/audio/dev/cases.ts`.
+
+Firefox agrees with it on every one of the 117 rows to within 0.5 LU, both
+integrated and at the loudest 400 ms (the rain and the dry leaves differ
+most); sample peaks differ by up to 2.2 dB, on the rain and the chimes, whose
+partials meet at different phases. That comparison measured loudness and
+peaks only; clicks, repeats and the comparisons below were measured in
+Chromium. **WebKit was not measured in this round.** The first rebuild was
+measured in it on a Mac; the farmstead's sounds have only been rendered on a
+Windows box, where the WebKit that the test tools install is built without
+Web Audio, and `tools/audio/check.ts` now says so instead of crashing.
+
+The live game was run in Chromium and Firefox (`tools/audio/check.ts chromium
+firefox --live`): no audio before a gesture; the title bed and a season with
+the farmer planting audible and under the ceiling; volume, mute and the hidden
+tab obeyed; then, with reduced motion switched on, a person, a yard, a tract
+and a field picked in turn and the woodlot felled with the feller picked,
+audible, peaking at -12 and -14 dBFS, with no page errors.
 
 <!-- table:start -->
 | render | LUFS | mom | dBTP | pk@max | clicks | DC dB | <80% | 2-5k% | >8k% | L/R | loop | rhythm | att ms | dec ms | own bed dB | >500 Hz | storm dB |
@@ -848,6 +865,11 @@ bed.
 | The whole call | 0.99 to 1.24 s | 1.03 s with four dees |
 | Length of a dee | Not found for this species; 175 ms in a relative | 170 ms, 62 ms apart |
 
+Still different: the stack is let through a broad band, so in the picture its
+overtones from 2 to 7 kHz all come within about 10 dB of the strongest, where
+a real dee keeps to 3 to 6 kHz. It will sound buzzier and thinner than the
+bird.
+
 ### A bumblebee
 
 Wingbeat 128 to 210 Hz in queens and 153 to 252 Hz in workers, with energy at
@@ -903,6 +925,11 @@ The woods give an echo; no figure for it was found.
 | Rate | 25 to 35 a minute as a day's rhythm (Glaser) | A blow every 0.36 s within a nail, then a pause: about 60 a minute while nailing |
 | Pitch | Everyone knows each blow sounds higher than the last; no measurement was found. The free shank of a nail is a clamped rod, whose pitch goes as one over its length squared | The nail's ring climbs from 1.4 to 4.2 kHz through the blows as written, and more of each blow reaches the board; the measurement does not separate the ring from the board, whose modes at 200 and 363 Hz are the strongest lines; the last nail's four blows come 284, 309 and 240 ms apart and grow by 5 dB |
 | Hand saw | Seven or eight points to the inch "most in demand" for crosscutting (Disston 1952); no stroke rate was found | Push 0.24 s and pull 0.18 s, the pull much the quieter; rasp around 2.3 kHz grained 400 times a second, as seven teeth to the inch would be at a push of a foot and a half in a quarter second |
+
+In the picture every blow of the hammer lights the same three lines of the
+board, at 200, 363 and 640 Hz, and the nail's climbing ring is the faint
+stepping above 1 kHz. If the board is heard more than the nail, this is a drum
+on one note: the first thing to listen for in `work-build`.
 
 ### The brush fire
 
@@ -1116,10 +1143,15 @@ that could not hear and had one loaded Windows box to render on.
 - Whether the seasons are told apart by a person. The print distance between
   two beds is a number made for this check; it says the beds differ in where
   their energy lies and how it moves, not that an ear hears "October".
-- Live behaviour on a phone. The live engine is exercised in headless
-  browsers (autoplay gate, volume, mute, hidden tab, picks, felling with the
-  feller picked, reduced motion on); iOS Safari's own rules were not, nor the
-  cost on a slow phone.
+- Safari. Nothing of the farmstead has been rendered or played in WebKit (see
+  "Final measurements"), on a Mac or a phone; iOS Safari's own rules for
+  starting audio were never exercised, nor the cost on a slow phone. The live
+  engine was exercised in headless Chromium and Firefox only.
+- Low frame rates. Timed sounds are scheduled 0.4 s ahead from the frame loop,
+  as they always were. On a machine drawing the scene at one or two frames a
+  second (a headless browser without a graphics card did this in one run) the
+  work voices and the birds are scheduled late and bunch up. Nothing in the
+  check measures that.
 - Soft thumps. The click test finds true breaks in the waveform; a step
   smeared over a millisecond passes it unless it is large (see "What was
   done"). Nothing in the code makes one, but the test would not have said.

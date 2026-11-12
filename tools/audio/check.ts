@@ -5,7 +5,8 @@
 // 2. loads the game, taps the live output, and checks the autoplay gate, settings, mute and hidden-tab fade.
 // Usage: node tools/audio/check.ts [chromium] [firefox] [webkit] [--only=<case id prefix>[,<prefix>...]] [--offline] [--features]
 // With --only, just the matching offline cases are rendered and judged (for work on one voice). --offline leaves
-// out the live game; --features prints what was measured off each render for comparison with the real sound;
+// out the live game and --live leaves out the renders; --features prints what was measured off each render for
+// comparison with the real sound;
 // --quick measures loudness and masking only, at the default volume, and skips the comparisons (for setting levels:
 // it is not a pass).
 import { fileURLToPath } from 'node:url'
@@ -165,17 +166,22 @@ async function liveSmoke(page: Page): Promise<void> {
     await run(`window.__county.app.${pick}`)
     await page.waitForTimeout(250)
   }
-  const fell = await run(`(() => {
+  // The days are stepped by hand until the farmer has felled, so the check does not hang on the frame rate of a
+  // busy machine; then the clock runs, which is when work is heard.
+  const fell = String(await run(`(() => {
     const { app } = window.__county
     const r = app.order('fell', { fields: [14], first: true, unit: 0 })
     app.selectUnit(0)
+    let days = 0
+    while (days < 12 && !app.campaign.season.worked.some(w => w.kind === 'fell')) { app.do({ t: 'day' }); days++ }
     app.setSpeed(1)
-    return r.map(x => x.ok + ' ' + x.err).join('; ')
-  })()`)
+    const s = app.campaign.season
+    return r.map(x => x.ok + ' ' + x.err).join('; ') + '; after ' + days + ' days worked: ' + (s.worked.map(w => w.kind).join(' ') || 'nothing') + ', woodlot felled ' + app.campaign.fields[14].felled.toFixed(2) + ' crew-days'
+  })()`))
+  await page.waitForTimeout(1500)
   l = await level(4000)
-  const did = await run(`(() => { const { app } = window.__county; app.setSpeed(0); const s = app.campaign.season
-    return 'day ' + s.day + ', worked today: ' + (s.worked.map(w => w.kind).join(' ') || 'nothing') + ', woodlot felled ' + app.campaign.fields[14].felled.toFixed(2) + ' crew-days' })()`)
-  expect('reduced motion leaves the sound on; picks and felling with the feller picked play under the ceiling', l.peak > SILENT_PEAK && l.peak <= PEAK_LIMIT, `peak ${db(l.peak)} dB, rms ${db(l.rms)} dB; order: ${fell}; ${did}`)
+  await run(`window.__county.app.setSpeed(0)`)
+  expect('reduced motion leaves the sound on; picks, then felling with the feller picked, play under the ceiling', l.peak > SILENT_PEAK && l.peak <= PEAK_LIMIT && /worked: .*fell/.test(fell), `peak ${db(l.peak)} dB, rms ${db(l.rms)} dB; order: ${fell}`)
   await run(`window.__county.app.setSetting('reducedMotion', false)`)
 
   expect('no page errors', errors.length === 0, errors.length ? errors.join(' | ') : 'none')
@@ -188,6 +194,9 @@ const ENGINES = { chromium, firefox, webkit }
 const args = process.argv.slice(2)
 const only = (args.find(a => a.startsWith('--only='))?.slice(7) ?? '').split(',').filter(Boolean)
 const offlineOnly = args.includes('--offline')
+const liveOnly = args.includes('--live')
+// The game's scene needs the machine's own graphics card to keep its frame rate in a headless browser.
+const GPU = [process.platform === 'win32' ? '--use-angle=d3d11' : '--use-angle=metal', '--ignore-gpu-blocklist', '--enable-gpu']
 const showFeatures = args.includes('--features')
 const quick = args.includes('--quick')
 // Pages rendering at once: WORKERS in the environment, two unless told.
@@ -199,11 +208,22 @@ try {
     const type = ENGINES[name as keyof typeof ENGINES]
     if (!type) { failures.push(`unknown browser ${name}`); continue }
     engine = name
-    const browser = await type.launch()
+    const browser = await type.launch(name === 'chromium' ? { args: GPU } : {})
     try {
-      const pages = [await browser.newPage()]
-      for (let k = 1; k < workers; k++) pages.push(await browser.newPage())
-      await offline(pages)
+      // Playwright's WebKit for Windows is built without Web Audio: there is nothing to check in it there.
+      const probe = await browser.newPage()
+      const hasAudio = await probe.evaluate(() => typeof OfflineAudioContext !== 'undefined')
+      await probe.close()
+      if (!hasAudio) {
+        fail('this build of the browser has no Web Audio: nothing was rendered or played')
+        continue
+      }
+      if (!liveOnly) {
+        const pages = [await browser.newPage()]
+        for (let k = 1; k < workers; k++) pages.push(await browser.newPage())
+        await offline(pages)
+        for (const p of pages) await p.close()
+      }
       if (!only.length && !offlineOnly) await liveSmoke(await browser.newPage())
     } finally {
       await browser.close()
