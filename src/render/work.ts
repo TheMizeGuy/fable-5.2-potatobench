@@ -352,6 +352,12 @@ export function planDay(snap: Snapshot, shown: HillDisplay[][], crews: CrewFrom[
           // A test dig ends at the hill: whoever dug it stays to look at what came up.
           if (w.kind !== 'sample' || byRow.length === 0) path.push({ x: start.x - 0.5, z: start.z + 0.6 })
         }
+        // worn out, they come off the field at the day's end and sit down at its edge
+        if (!tractor && w.kind !== 'sample' && u.tired > 0.72) {
+          const last = path[path.length - 1], fr = FIELDS[w.field]
+          const up = last.z - fr.z0 < fr.z1 - last.z
+          path.push({ x: last.x, z: up ? fr.z0 - 0.7 : fr.z1 + 0.7 })
+        }
         const poly = new Poly(path)
         const lag = tractor ? (w.kind === 'dig' ? 1.7 : w.kind === 'plant' ? 1.1 : 1.0) : 0.05
         const reveals: Reveal[] = hills.map(h => {

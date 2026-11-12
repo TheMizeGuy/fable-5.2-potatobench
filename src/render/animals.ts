@@ -21,7 +21,7 @@ export interface Beast {
 
 export const HORSE: Beast = {
   long: 0.56, high: 0.66, deep: 0.3, wide: 0.24, neck: 0.3, head: 0.24, leg: 0.036,
-  coat: new Color('#6b4630'), point: new Color('#2a1f18'), face: new Color('#e6dccb'), horns: false, collar: true, patches: 0,
+  coat: new Color('#6b4630'), point: new Color('#2a1f18'), face: new Color('#5c3c29'), horns: false, collar: true, patches: 0,
 }
 export const GREY_HORSE: Beast = { ...HORSE, coat: new Color('#8f8a82'), point: new Color('#4a4743'), face: new Color('#8f8a82') }
 export const COWS: Beast[] = [
@@ -48,12 +48,12 @@ export function drawBeast(pr: Prims, k: Beast, x: number, y: number, z: number, 
   const bob = 0.012 * gait * Math.sin(phase * 2)
   const top = k.high + bob, mid = top - k.deep / 2
   // barrel: chest, belly and rump
-  at(k.long / 2, mid, 0, a)
-  pr.put('ball', a, U, F, k.deep * 0.56 * s, k.deep * 0.56 * s, k.wide * 0.52 * s, k.coat)
+  at(k.long * 0.36, mid + 0.005, 0, a)
+  pr.put('ball', a, U, F, k.deep * 0.52 * s, k.deep * 0.54 * s, k.wide * 0.5 * s, k.coat)
   at(0, mid - 0.01, 0, a)
-  pr.put('ball', a, U, F, k.long * 0.52 * s, k.deep * 0.52 * s, k.wide * 0.56 * s, k.coat)
-  at(-k.long / 2, mid + 0.01, 0, a)
-  pr.put('ball', a, U, F, k.deep * 0.58 * s, k.deep * 0.56 * s, k.wide * 0.54 * s, k.coat)
+  pr.put('ball', a, U, F, k.long * 0.64 * s, k.deep * 0.56 * s, k.wide * 0.57 * s, k.coat)
+  at(-k.long * 0.36, mid + 0.012, 0, a)
+  pr.put('ball', a, U, F, k.deep * 0.54 * s, k.deep * 0.55 * s, k.wide * 0.54 * s, k.coat)
   for (let n = 0; n < k.patches; n++) {
     at((n - 1) * k.long * 0.34, mid + 0.02 * (n % 2 ? 1 : -1), (n % 2 ? 1 : -1) * k.wide * 0.1, a)
     pr.put('ball', a, U, F, k.long * 0.2 * s, k.deep * 0.5 * s, k.wide * 0.56 * s, k.point)

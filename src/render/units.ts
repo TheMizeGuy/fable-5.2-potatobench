@@ -59,7 +59,8 @@ interface Actor {
   aboard: boolean
   shown: number
   away: boolean            // laid off for the winter: not on the farm
-  home: Spot | null        // their place in the dooryard when there is nothing to do
+  home: Spot | null        // their place in the dooryard or on the porch when there is nothing to do
+  about: Pt                // what that place is spread out from when people are drawn large
   gait: number
   goal: (Spot & { seat?: number }) | null
   state: 'work' | 'idle' | 'sunday' | 'hurt' | 'mend'
@@ -187,7 +188,7 @@ export class Crews {
     const rest = idleSpot(-1, slot, u.kind === 'farmer')
     return {
       id: u.id, kind: u.kind, slot, dress: dressFor(u.id), coat: dressFor(u.id, true), segs: [], clockSeg: -2, segClock: 0,
-      x: rest.x, z: rest.z, heading: rest.heading, rig: null, aboard: false, shown: 0, away: false, home: null, gait: u.id * 1.3, goal: null, state: 'idle', post: '',
+      x: rest.x, z: rest.z, heading: rest.heading, rig: null, aboard: false, shown: 0, away: false, home: null, about: DOOR, gait: u.id * 1.3, goal: null, state: 'idle', post: '',
       tired: u.tired, worn: u.tired, style: (u.id * 7) % 5, pose: new Pose().reset(), head: new Vector3(rest.x, 1, rest.z), scale: 1, next: [],
       worker: { id: u.id, dress: dressFor(u.id), tired: 0, w: 0, x: rest.x, z: rest.z, heading: 0, lift: 0, pose: new Pose().reset(), aboard: false, rig: null },
     }
@@ -289,6 +290,7 @@ export class Crews {
       }
       a.x = r.x; a.z = r.z; a.heading = r.heading
       a.home = a.kind !== 'farmer' && !a.post && (snap.mode !== 'season' || u.at === -1) ? r : null
+      a.about = DOOR
       a.worker.x = a.x; a.worker.z = a.z
       // part way through work with a machine: it stands where they are
       if (snap.mode === 'season' && u.rig && u.at >= 0) {
@@ -324,7 +326,8 @@ export class Crews {
       else if (u.hurt) { a.state = 'hurt'; a.goal = { ...sickSpot(sick++), seat: 0.2 } }
       else if (snap.restDay) { a.state = 'sunday'; const s = sundaySpot(sunday++); a.goal = { ...s, seat: s.seat } }
       else { a.state = 'idle'; a.goal = u.at < 0 ? idleSpot(u.at, a.slot, a.kind === 'farmer') : null }
-      a.home = a.state === 'idle' && a.goal && u.at === -1 && a.kind !== 'farmer' ? a.goal : null
+      a.home = a.state === 'sunday' || (a.state === 'idle' && a.goal && u.at === -1 && a.kind !== 'farmer') ? a.goal : null
+      a.about = a.state === 'sunday' ? PORCH : DOOR
     }
     // A tractor broken down: whoever was driving it (or else whoever has nothing to do) is at its engine.
     for (const r of this.rigs) {
@@ -530,7 +533,7 @@ export class Crews {
       const y = heightAt(r.x, r.z)
       // a machine standing idle in the yard is not drawn as large as one at work, or the yard is all machines
       const parked = !holder && Math.hypot(r.x - r.home.x, r.z - r.home.z) < 0.5
-      const s = parked ? Math.min(bigMachine, 1.5) : bigMachine
+      const s = parked ? Math.max(1, bigMachine * 0.74) : bigMachine
       const ahead = heightAt(r.x + Math.cos(r.heading) * 0.6 * s, r.z + Math.sin(r.heading) * 0.6 * s)
       const behind = heightAt(r.x - Math.cos(r.heading) * 0.6 * s, r.z - Math.sin(r.heading) * 0.6 * s)
       r.machine.place(r.x, y + 0.01, r.z, r.heading, Math.atan2(ahead - behind, 1.2 * s), s)
@@ -661,7 +664,8 @@ export class Crews {
       }
       if (seg.kind === 'travel' && p >= 1 && !a.aboard) { a.x = px; a.z = pz; this.atEase(a, f, pose, big); px = a.x; pz = a.z }
       passed(-1)
-      if (tractor && seg.ride === 'tractor' && seg.kind !== 'travel') tractor.setImplement(implementFor(seg.kind, f.snap.farm.equipment.includes('harvester')))
+      // to work staged at one place the tractor brings the trailer for a haul, and nothing else
+      if (tractor && seg.ride === 'tractor' && seg.kind !== 'travel') tractor.setImplement(seg.site ? (seg.kind === 'haul' ? 'trailer' : 'none') : implementFor(seg.kind, f.snap.farm.equipment.includes('harvester')))
     } else {
       const w = (p - tShare) / (1 - tShare)
       if (seg.site) {
@@ -702,7 +706,14 @@ export class Crews {
             pose.toolA.set(0.13, 0.64, -0.17)
             pose.toolB.set(0.16, 0.12, -0.17)
             const hill = seg.reveals[0] ? hillPos(seg.field, seg.reveals[0].hill) : null
-            if (hill) this.prims.put('box', V.set(hill.x - 0.02, heightAt(hill.x, hill.z + 0.34) + 0.0, hill.z + 0.34), V2.set(0, 1, 0), AXIS_X, 1.08, 0.035, 0.3, TRAY)
+            if (hill) {
+              const ty = heightAt(hill.x, hill.z + 0.34), up = V2.set(0, 1, 0)
+              this.prims.put('box', V.set(hill.x - 0.02, ty, hill.z + 0.34), up, AXIS_X, 1.08, 0.02, 0.32, TRAY)
+              for (const sd of [-1, 1]) {
+                this.prims.put('box', V.set(hill.x - 0.02, ty, hill.z + 0.34 + sd * 0.165), up, AXIS_X, 1.1, 0.07, 0.02, CHAIR)
+                this.prims.put('box', V.set(hill.x - 0.02 + sd * 0.545, ty, hill.z + 0.34), up, AXIS_X, 0.02, 0.07, 0.34, CHAIR)
+              }
+            }
           }
         }
         passed(w >= 0.64 ? Infinity : -1)
@@ -739,7 +750,7 @@ export class Crews {
   private atEase(a: Actor, f: CrewFrame, pose: Pose, big: number): void {
     const g = a.goal
     const k = a.home ? Math.max(1, big * 0.72) : 1
-    const there = g && (Math.hypot(g.x - a.x, g.z - a.z) < 1.2 || (a.home === g && Math.hypot(DOOR.x + (g.x - DOOR.x) * k - a.x, DOOR.z + (g.z - DOOR.z) * k - a.z) < 1.2))
+    const there = g && (Math.hypot(g.x - a.x, g.z - a.z) < 1.2 || (a.home === g && Math.hypot(a.about.x + (g.x - a.about.x) * k - a.x, a.about.z + (g.z - a.about.z) * k - a.z) < 1.2))
     if (a.aboard && a.rig) return
     if (g && there) {
       a.x = g.x; a.z = g.z
@@ -780,8 +791,8 @@ export class Crews {
   private spread(a: Actor, big: number): void {
     if (!a.home) return
     const k = Math.max(1, big * 0.72)
-    a.x = DOOR.x + (a.home.x - DOOR.x) * k
-    a.z = DOOR.z + (a.home.z - DOOR.z) * k
+    a.x = a.about.x + (a.home.x - a.about.x) * k
+    a.z = a.about.z + (a.home.z - a.about.z) * k
   }
 
   // The digger has passed these hills: the pickers and the crows go to them.
@@ -975,7 +986,9 @@ export class Crews {
 
 // People are drawn a little larger than the machines' scale, so a man at the wheel is not lost in the tractor.
 const FIGURE = 1.14
-const DOOR = { x: 20.6, z: -6.9 }
+const DOOR: Pt = { x: 20.6, z: -6.9 }
+// the porch's edge: people on it spread along it, those in the dooryard out from it
+const PORCH: Pt = { x: HOUSE.x - 2.02, z: HOUSE.z - 3.0 }
 const POSE = new Pose()
 const AXIS_X = new Vector3(1, 0, 0), TRAY = new Color('#cbb98e'), CHAIR = new Color('#6f5a41')
 const WHITE = new Color(1, 1, 1)

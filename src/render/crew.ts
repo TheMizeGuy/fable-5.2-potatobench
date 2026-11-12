@@ -67,7 +67,7 @@ export type Tool = '' | 'axe' | 'fork' | 'hammer' | 'hook' | 'pipe' | 'plank' | 
 export type Held = '' | 'sack' | 'basket' | 'barrel' | 'stone' | 'bag' | 'tray' | 'sling' | 'brush'
 
 const THIGH = 0.19, SHIN = 0.19, UPPER = 0.135, FORE = 0.135, TORSO = 0.225, SHOULDER = 0.105, HIPW = 0.05, ANKLE = 0.035
-export const STAND_HIP = 0.428
+export const STAND_HIP = 0.445
 
 // How a figure holds itself, in its own space. Feet and hands are places to reach; knees and elbows follow.
 export class Pose {
@@ -161,7 +161,7 @@ export function walk(p: Pose, phase: number, amount = 1, tired = 0, load = 0): P
   }
   foot(p.footL, phase, -HIPW * 0.9)
   foot(p.footR, phase + Math.PI, HIPW * 0.9)
-  p.hip.y = STAND_HIP - 0.012 * a - 0.014 * tired + 0.007 * a * Math.cos(phase * 2)
+  p.hip.y = STAND_HIP - 0.04 * a - 0.014 * tired + 0.007 * a * Math.cos(phase * 2)
   p.lean = 0.07 * a + 0.2 * tired + (load === 1 ? -0.1 : 0)
   p.nod = 0.28 * tired
   p.twist = 0.1 * a * Math.sin(phase)
@@ -456,8 +456,8 @@ export function drawFigure(pr: Prims, at: Matrix4, dress: Dress, p: Pose): void 
     pr.put('box', c, d.lengthSq() > 0.5 ? d : WU, b, 0.115 * s, 0.05 * s, 0.062 * s * k, dress.boots)
   }
   // pelvis and trunk
-  a.copy(hip).addScaledVector(WU, -0.045 * s)
-  pr.put('ball', hip, TU, TF, 0.066 * s * k, 0.066 * s, 0.093 * s * k, dress.trousers)
+  a.copy(hip).addScaledVector(TU, -0.032 * s)
+  pr.put('ball', a, TU, TF, 0.05 * s * k, 0.05 * s, 0.088 * s * k, dress.trousers)
   a.copy(hip).addScaledVector(TU, -0.015 * s)
   pr.put('torso', a, TU, TF, 0.15 * s * k, (TORSO + 0.012) * s, 0.235 * s * k, dress.shirt)
   if (dress.bib) {

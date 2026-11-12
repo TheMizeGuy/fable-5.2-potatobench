@@ -225,12 +225,12 @@ function implementGeometry(kind: Implement): BufferGeometry | null {
       s.box(0.05, 0.05, 1.5, IRON, -1.22, 0.3, 0)
       break
     case 'hiller':
-      s.box(0.1, 0.1, 1.5, STEEL, -0.9, 0.42, 0)
+      s.box(0.1, 0.1, 1.5, '#a8341f', -0.9, 0.42, 0)
       s.box(0.2, 0.05, 0.3, IRON, -0.8, 0.44, 0)
       for (const z of [-0.68, -0.34, 0, 0.34, 0.68]) {
         s.box(0.05, 0.34, 0.05, IRON, -0.95, 0.26, z)
         // a pair of wings that throw the soil up to the row on either side
-        for (const side of [-1, 1]) s.box(0.3, 0.16, 0.015, STEEL, -1.06, 0.12, z + side * 0.06, 0, side * 0.42)
+        for (const side of [-1, 1]) s.box(0.4, 0.24, 0.018, STEEL, -1.1, 0.14, z + side * 0.075, 0, side * 0.42)
       }
       break
     case 'sprayer':

@@ -305,12 +305,16 @@ export class Stage {
     const fd = FIELDS[st.field]
     const half = (fd.x1 - fd.x0) / 2 - 1.6
     // back and forth across the field, a row further down each time
-    const leg = (2 * half) / 0.32 + 5
+    // the boat goes a little way and stands while the stones round it are thrown on, then on again
+    const stops = Math.max(2, Math.ceil((2 * half) / (1.5 * Math.max(1, s * 0.7)))), TS = 6, GO = 1.8
+    const leg = stops * TS + 5
     const k = Math.floor(st.t / leg), u = st.t - k * leg
-    const along = Math.min(1, u / (leg - 5)), dir = k % 2 ? -1 : 1
+    const stop = Math.floor(u / TS), v = u - stop * TS
+    const unloading = stop >= stops
+    const along = unloading ? 1 : (stop + ease(Math.min(1, v / GO))) / stops, dir = k % 2 ? -1 : 1
     const bx = dir * (-half + 2 * half * along) / s, bz = (-3 + (k % 4) * 2) / s
-    const moving = along < 1 && f.going
-    const unloading = along >= 1
+    const moving = !unloading && v < GO && f.going
+    const picking = unloading ? 0 : clamp01((v - GO) / (TS - GO))
     if (unloading && f.going) {
       const off = Math.min(st.load, f.dt * 3)
       st.load -= off
@@ -327,7 +331,7 @@ export class Stage {
     }
     const hh = st.spot.heading + (dir > 0 ? 0 : Math.PI)
     this.local(st, s, bx + dir * 1.15, bz, PT)
-    drawBeast(pr, HORSE, PT.x, heightAt(PT.x, PT.z), PT.z, hh, s * 0.86, st.t * 6, moving ? 0.8 : 0, moving ? 0 : 0.6 * span(1, 3, u - (leg - 5)))
+    drawBeast(pr, HORSE, PT.x, heightAt(PT.x, PT.z), PT.z, hh, s * 0.86, st.t * 6, moving ? 0.8 : 0, unloading ? 0.6 * span(1, 3, u - stops * TS) : 0)
     c.copy(withers)
     // the boat: two runners and a deck of planks, low to the ground
     this.P(st, s, bx, 0.05, bz, a)
@@ -348,16 +352,19 @@ export class Stage {
       const sd = r % 2 ? 1 : -1
       const ox = (-0.15 + 0.55 * (r % 3)) * (dir > 0 ? 1 : -1) - dir * 0.2, oz = sd * (0.72 + 0.16 * Math.floor(r / 2))
       if (!this.go(st, w, f, bx + ox, bz + oz, dir > 0 ? 0 : Math.PI)) return
-      const cyc = frac(st.t / 3.4 + r * 0.43 + w.id * 0.17)
+      // two stones each at every stand, a little out of step with one another
+      const beat = picking * 2 - 0.12 * (r % 3)
+      const cyc = unloading ? frac(st.t / 2.6 + r * 0.43) : beat <= 0 || beat >= 2 ? 0 : frac(beat)
       if (unloading) {
         // at the field's edge: off the boat and onto the pile
         lifting(w.pose, cyc, sd, 0.1)
         w.pose.held = cyc > 0.24 && cyc < 0.78 ? 'stone' : ''
         return
       }
+      if (cyc <= 0) { stand(w.pose, st.t + r, w.tired); return }
       const thrown = lifting(w.pose, cyc, -sd * (dir > 0 ? 1 : -1), 0.12)
       w.pose.held = cyc > 0.24 && cyc < 0.78 ? 'stone' : ''
-      w.pose.size = 0.8 + 0.5 * hash(Math.floor(st.t / 3.4 + r * 0.43 + w.id * 0.17))
+      w.pose.size = 0.8 + 0.5 * hash(stop * 2 + Math.floor(Math.max(0, beat)) + r * 7)
       if (thrown > 0 && thrown < 0.55) {
         // the stone in the air between the hands and the boat
         const q = thrown / 0.55
@@ -366,7 +373,7 @@ export class Stage {
         b.y += Math.sin(q * Math.PI) * 0.22 * s
         pr.put('ball', b, Y, d, 0.07 * s, 0.055 * s, 0.062 * s, GRAVEL)
       }
-      const mark = Math.floor(st.t / 3.4 + r * 0.43 + w.id * 0.17) + r * 1000
+      const mark = (k * 100 + stop) * 2 + Math.floor(Math.max(0, beat)) + r * 100000
       if (thrown > 0.55 && st.ph !== mark && f.going) { st.ph = mark; st.load = Math.min(13, st.load + 1) }
     })
   }
@@ -377,12 +384,12 @@ export class Stage {
     const pr = f.pr, s = f.s
     const burning = f.wind < 0.5 && !f.cold
     // the hedge is ahead of the spot, along the wall; the pile and the fire a little way down the headland
-    const fx = -0.1, fz = 4.4
+    const fx = -0.1, fz = 3.0
     this.P(st, s, fx, 0, fz, a)
     // the pile, and on a still day the fire in it
     for (let n = 0; n < 6; n++) {
       b.copy(a).add(c.set((hash(n) - 0.5) * 0.6 * s, (0.08 + 0.12 * hash(n + 9)) * s, (hash(n + 4) - 0.5) * 0.6 * s))
-      pr.put('ball', b, Y, X, 0.26 * s, 0.14 * s, 0.24 * s, burning && n < 3 ? EMBER : COLORS.BRUSH)
+      pr.put('ball', b, Y, X, 0.2 * s, 0.11 * s, 0.19 * s, burning && n < 3 ? EMBER : COLORS.BRUSH)
     }
     if (burning) {
       for (let n = 0; n < 5; n++) {
@@ -595,12 +602,13 @@ export class Stage {
         const y = from.y + (high * 4 * q * (1 - q)) - q * (from.y - heightAt(x, z))
         a.set(px, py, pz)
         b.set(x, y, z)
-        pr.rod('cyl', a, b, thick * (0.7 + 0.9 * q), WATER)
+        pr.rod('cyl', a, b, thick * (0.6 + 0.7 * q), WATER)
         px = x; py = y; pz = z
       }
-      if (!f.still && f.going && Math.random() < 0.7) {
-        const q = 0.5 + Math.random() * 0.5
-        f.particles.emit(from.x + Math.cos(dirA) * reachU * q, from.y + high * 4 * q * (1 - q) * 0.8, from.z + Math.sin(dirA) * reachU * q, 0, -0.2, 0, 0.14 * s, 0.6 * s, 1.2 + Math.random(), 0.85, 0.9, 0.94, 0.22, 0.9)
+      if (!f.still && f.going && Math.random() < 0.06 * reachU) {
+        // spray falling out of the far half of the throw, and going a little way with the wind
+        const q = 0.55 + Math.random() * 0.45
+        f.particles.emit(from.x + Math.cos(dirA) * reachU * q, from.y + high * 4 * q * (1 - q) * 0.8, from.z + Math.sin(dirA) * reachU * q, 0, -0.3, 0, 0.07 * s, 0.2 * s, 0.8 + Math.random() * 0.6, 0.85, 0.9, 0.94, 0.16, 0.8)
       }
     }
     if (reel) {
@@ -620,7 +628,7 @@ export class Stage {
       for (const sd of [-1, 1]) { b.copy(a).addScaledVector(e, sd * 0.25 * s); c.copy(a).addScaledVector(Y, 0.5 * s); pr.rod('cyl', b, c, 0.02 * s, CHAIN) }
       c.copy(a).addScaledVector(Y, 0.52 * s)
       const sweep = Math.PI + 1.25 * Math.sin(st.t * 0.5)
-      if (f.going) jet(c, sweep, 6.2 + 0.3 * Math.sin(st.t * 7), 0.85, 0.035 * s)
+      if (f.going) jet(c, sweep, 6.2 + 0.3 * Math.sin(st.t * 7), 0.85, 0.016 * s)
     } else {
       // pipe laid across the rows from the headland, a sprinkler at every joint
       b.set(hx - 0.4 * s, heightAt(hx, hz) + 0.07, hz)
@@ -632,7 +640,7 @@ export class Stage {
         c.copy(a).addScaledVector(Y, 0.3 * s)
         pr.rod('cyl', a, c, 0.012 * s, COLORS.ALU)
         const turn = st.t * 1.6 + n * 1.3
-        if (f.going) for (const sd of [0, Math.PI]) jet(c, turn + sd, 2.6, 0.38, 0.018 * s)
+        if (f.going) for (const sd of [0, Math.PI]) jet(c, turn + sd, 2.6, 0.38, 0.009 * s)
       }
     }
     ws.forEach((w, r) => {
