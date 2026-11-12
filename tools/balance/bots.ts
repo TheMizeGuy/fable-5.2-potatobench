@@ -400,6 +400,7 @@ export interface Tuning {
   walkPer: number
   tractor: { fields: number; left: number }    // the second tractor: potato fields, seasons left
   truckFields: number
+  driverFields: number      // a driver hired for the whole season once this many potato fields are grown
   tractor3Fields: number
   hallValue: number         // dollars a month a point of speed at the work is worth, when choosing between people
   rocksAt: number           // picks rocks when no crop is in, on a field at least this stony
@@ -416,7 +417,8 @@ export interface Tuning {
   houseOver: number         // a potato house once the crop overflowed the cellar by this much
   packStock: number         // a packing shed once this much is stored over the winter
   pondWaterings: number     // a pond once a season needed this many waterings without a reel
-  sundayTired: number       // works a Sunday in a rush only while nobody is more tired than this
+  sundayTired: number       // works a Sunday only while nobody is more tired than this
+  sundayJobs: number        // and at least this many orders wait on the list
   contractGain: number      // signs a contract when it is worth this much more than growing for the open market
   no1Share: number          // share of the marketable crop that is US No. 1 and large, for sizing contracts
   contractSafety: number    // plants for this share of the usual crop when filling a contract
@@ -435,10 +437,10 @@ export const TUNING: Tuning = {
   earlyMarket: ['norland'], earlyBy: 25, earlyDate: 12, fieldRevenue: 25000,
   byElev: [['caribou'], ['caribou'], ['caribou']],
   landValue: { ridge: 10000, brook: 6000, dufour: 7500 }, landMargin: 0,
-  loanFloor: -75000, buyLand: -60000, buyLeft: 4, fieldCash: 15000, yearEndSafety: 20000, potatoShare: 0.5, flipLoss: 4000,
-  walkFrom: 5, walkPer: 5, tractor: { fields: 7, left: 2 }, truckFields: 5, tractor3Fields: 13, hallValue: 1000,
+  loanFloor: -75000, buyLand: -60000, buyLeft: 5, fieldCash: 15000, yearEndSafety: 30000, potatoShare: 0.5, flipLoss: 4000,
+  walkFrom: 5, walkPer: 5, tractor: { fields: 7, left: 2 }, truckFields: 8, driverFields: 11, tractor3Fields: 13, hallValue: 1000,
   rocksAt: 0.45, rocksSpring: 0.6, brushElev: [0], rushFrom: 2, pickerBacklog: 4, pickerBarrels: 500, standGain: 70, haulDays: 1.7, peakHire: 18, peakKeep: 12,
-  buildFloor: 5000, houseOver: 1500, packStock: 3000, pondWaterings: 3, sundayTired: 0.5,
+  buildFloor: 5000, houseOver: 1500, packStock: 3000, pondWaterings: 3, sundayTired: 0.5, sundayJobs: 2,
   contractGain: 0, no1Share: 0.8, contractSafety: 0.85,
   yieldAcre: { norland: 251, superior: 287, katahdin: 325, kennebec: 337, burbank: 337, atlantic: 350, gold: 290, caribou: 371 },
   realized: { norland: 1.05, superior: 0.95, katahdin: 0.95, kennebec: 0.95, burbank: 0.97, atlantic: S.PROCESSING_PRICE, gold: 0.95, caribou: 0.92 },
@@ -883,7 +885,7 @@ export function expert(cfg: ExpertCfg = EXPERT): BotFactory {
     function rolesFor(c: Campaign, n: number): { driver: number; walker: number } {
       if (!cfg.hire) return { driver: 0, walker: 0 }
       const tractors = Math.min(tractorsFor(c, n), S.tractorsOwned(c))
-      const driver = Math.max(0, tractors - 1)
+      const driver = n >= k.driverFields ? Math.max(0, tractors - 1) : 0
       const walker = n > k.walkFrom ? 1 + Math.floor((n - k.walkFrom - 1) / k.walkPer) : 0
       return { driver, walker }
     }
@@ -981,7 +983,7 @@ export function expert(cfg: ExpertCfg = EXPERT): BotFactory {
         case 'stand': return left >= 2
         case 'station': return left >= 2
         case 'shed': return left >= 3 && (n >= k.tractor.fields - 2 || wantRoles.driver > 0)
-        case 'bunk': return left >= 2 && wantRoles.driver + wantRoles.walker + (F.foreman ? 1 : 0) + (peakPaid.size ? 1 : 0) > S.HOUSED_OUT
+        case 'bunk': return left >= 2 && wantRoles.driver + wantRoles.walker + (F.foreman ? 1 : 0) > S.HOUSED_OUT
         case 'house': return left >= 3 && lastOverflow >= k.houseOver
         case 'road': return left >= 3 && (S.materialsInfo(c).stone >= S.BUILDINGS.road.stone * 0.8 || S.holdsDufour(c))
         case 'pond': return left >= 3 && !c.upgrades.reel && handWaterings >= k.pondWaterings
@@ -1142,9 +1144,8 @@ export function expert(cfg: ExpertCfg = EXPERT): BotFactory {
       if (F.sundays === 'work') off = false
       else if (F.sundays === 'choose') {
         const tired = Math.max(...S.peopleInfo(c).map(p => p.tired))
-        const planting = info.filter(f => f.status === 'idle').length >= 2 && d >= S.dayIndex(c.year, 4, 15)
-        const harvest = d >= S.dayIndex(c.year, 8, 20) && info.some(f => f.status === 'dead' || f.status === 'digging' || (f.status === 'dug' && !f.weighed))
-        off = !((planting || harvest) && tired < k.sundayTired)
+        const waiting = c.season!.jobs.filter(j => j.kind !== 'build').length >= k.sundayJobs
+        off = !(waiting && tired < k.sundayTired)
       }
       if (c.sundaysOff !== off) S.apply(world, c, { t: 'sundays', off })
     }

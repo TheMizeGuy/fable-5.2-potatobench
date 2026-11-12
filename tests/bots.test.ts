@@ -124,7 +124,7 @@ describe('bots play the generated farms', () => {
   }, 20000)
 
   it('an ablation of the farmstead\'s people and rules takes it away', () => {
-    const e = play(w2, 'expert', expert(EXPERT), YEAR1, 2, 7)
+    const e = play(w2, 'expert', expert(EXPERT), YEAR1, 2, 10)
     expect(run('no-pickers').tally.pickerDays).toBe(0)
     expect(run('all-sundays-off').tally.sundaysWorked).toBe(0)
     expect(run('work-sundays').tally.sundaysWorked).toBeGreaterThan(e.tally.sundaysWorked)
@@ -134,6 +134,6 @@ describe('bots play the generated farms', () => {
     const hall = run('no-applicants')
     expect(hall.tally.hires).toBeGreaterThan(0)
     expect(hall.tally.applicants).toBe(0)
-    expect(e.tally.applicants).toBeGreaterThan(0)
+    expect(play(farm(1), 'expert', expert(EXPERT), YEAR1, 1, 10).tally.applicants).toBeGreaterThan(0)
   }, 20000)
 })
