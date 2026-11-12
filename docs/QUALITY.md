@@ -90,12 +90,12 @@ The build tagged `live-5` (the land at true scale, twelve times larger each way;
 own papers; the farmstead game; the clock as pause and three speeds), checked on the Windows box with an RTX 2080 Ti.
 
 **Browser suite** (interface, accessibility, play-throughs, determinism; Chromium, Firefox, WebKit and a phone
-profile; 114 tests). The full run on the merged build had reached 113 of its 114 tests, with eight failures, when the reruns were started in its folder and cut it off, so it printed no totals. The eight were four tests:
+profile; 114 tests). The full run on the merged build: 88 passed, 16 skipped, 10 failed (the reruns below were started in its folder while its last tests were still going, which disturbed them). Eight of the ten were four tests:
 in spring the new sheet's root took the clicks meant for the field tags (a real fault from joining two rebuilds:
 fixed); the almanac page could not be scrolled from the keyboard (fixed); and two tests read a money line whose
 wording the rebuild changed (the tests now read it as it is). After the fixes those four were rerun, not the whole
 suite: in Chromium and WebKit, 8 runs passed; one of them failed once in Firefox under load and passed three times
-out of three alone. The play-throughs were rerun on the phone profile and WebKit with two late fixes in (a test-dig
+out of three alone. The other two were WebKit play-throughs at the very end of the run: one timed out with its trace files gone (the folder had been rebuilt under it), and one finished but logged "WebGL: INVALID_VALUE: drawBuffers: more than max draw buffers", which is not explained: it did not recur when the same tests were rerun, and it may come from the disturbance or from the tree cards' atlas, which draws to several buffers at once. The play-throughs were rerun on the phone profile and WebKit with two late fixes in (a test-dig
 tray that grew past a phone's window; a tract's tag dropped when under a sheet): 5 passed, 1 skipped.
 
 **Captures**: 75 frames of the key screens at eight sizes, no layout faults and no page errors; the live page's
