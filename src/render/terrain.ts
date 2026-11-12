@@ -18,6 +18,8 @@ import { buildBounds } from './bounds.ts'
 
 export interface Terrain {
   group: Group
+  // The land's own surface, in a group of its own that sets when it is drawn.
+  under: Group
   water: { ice: { value: number } }
   // Whether each parcel is the farm's tilled ground (1) or not (0), as the fields are drawn now; whether it is somebody
   // else's hay or pasture; and whether it is marked out to be had.
@@ -193,6 +195,7 @@ export function buildTerrain(): Terrain {
       float segD(vec2 p, vec2 a, vec2 b) { vec2 pa = p - a, ba = b - a; return length(pa - ba * clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0)); }
       const vec2 PLACES[2] = vec2[2](vec2(${VILLAGE.x.toFixed(1)}, ${VILLAGE.z.toFixed(1)}), vec2(${SIDING.x.toFixed(1)}, ${SIDING.z.toFixed(1)}));
       float rectDist(vec4 r, vec2 p) { vec2 d = max(r.xy - p, p - r.zw); return max(d.x, d.y); }
+      vec2 turned(vec2 v, float a, float b) { return vec2(v.x * a + v.y * b, v.y * a - v.x * b); }
     `,
     fragmentColor: /* glsl */ `
       {
@@ -304,12 +307,18 @@ export function buildTerrain(): Terrain {
         col = mix(col, grass * vec3(0.62, 0.82, 0.6) * (0.8 + 0.4 * tuft), wetHere * 0.75);
         {
           float nearK = 1.0 - smoothstep(9.0, 40.0, distance(vWorld, cameraPosition));
+          // (How fast the ground goes by from one pixel to the next is taken here, outside the branch, and handed to
+          // each read inside it: a branch that works that out for itself is run for every point of the land on some
+          // graphics systems, however far the camera.)
+          vec2 wx = dFdx(pw), wy = dFdy(pw);
           if (nearK > 0.001) {
             // blades lying every way in tufts, light on some and the thatch dark between them
             // (a blade's width across, a few of its lengths along; three lies of the grass, one or another by the tuft)
-            float lie1 = texture2D(uNoise, pw * 0.13).b, lie2 = texture2D(uNoise, pw * 0.13 + 0.5).a;
-            vec2 g1 = vec2(pw.x * 0.95 + pw.y * 0.3, pw.y * 0.95 - pw.x * 0.3), g2 = vec2(pw.x * 0.2 + pw.y * 0.98, pw.y * 0.2 - pw.x * 0.98), g3 = vec2(pw.x * 0.7 - pw.y * 0.7, pw.x * 0.7 + pw.y * 0.7);
-            float b1 = texture2D(uNoise, g1 * vec2(3.1, 0.47)).a, b2 = texture2D(uNoise, g2 * vec2(3.1, 0.47) + 0.3).a, blade2 = texture2D(uNoise, g3 * vec2(2.7, 0.43) + 0.6).a;
+            float lie1 = textureGrad(uNoise, pw * 0.13, wx * 0.13, wy * 0.13).b, lie2 = textureGrad(uNoise, pw * 0.13 + 0.5, wx * 0.13, wy * 0.13).a;
+            vec2 g1 = turned(pw, 0.95, 0.3), g2 = turned(pw, 0.2, 0.98), g3 = turned(pw, 0.7, -0.7);
+            float b1 = textureGrad(uNoise, g1 * vec2(3.1, 0.47), turned(wx, 0.95, 0.3) * vec2(3.1, 0.47), turned(wy, 0.95, 0.3) * vec2(3.1, 0.47)).a;
+            float b2 = textureGrad(uNoise, g2 * vec2(3.1, 0.47) + 0.3, turned(wx, 0.2, 0.98) * vec2(3.1, 0.47), turned(wy, 0.2, 0.98) * vec2(3.1, 0.47)).a;
+            float blade2 = textureGrad(uNoise, g3 * vec2(2.7, 0.43) + 0.6, turned(wx, 0.7, -0.7) * vec2(2.7, 0.43), turned(wy, 0.7, -0.7) * vec2(2.7, 0.43)).a;
             float blade = mix(mix(b1, b2, smoothstep(0.35, 0.65, lie1)), blade2, smoothstep(0.45, 0.7, lie2));
             float sward = smoothstep(0.3, 0.7, blade);
             float meadowN = (1.0 - vSurf.x) * (1.0 - smoothstep(0.1, 0.4, vSurf.z));
@@ -413,6 +422,16 @@ export function buildTerrain(): Terrain {
         // Under each of the farm's fields the ground is the soil's own colour, so no green shows at a field's edge; round
         // it, a headland where the tractor turns, worn pale. Somebody else's ground runs green to its wall.
         float headland = 0.0, margin = 0.0;
+        // What somebody else's parcel reads of the ground, read once here if any such parcel is near: the loop over
+        // the parcels then reads no texture, and can be left early.
+        float offNear = 0.0;
+        for (int k = 0; k < ${FIELD_COUNT}; k++) offNear = max(offNear, uOffK[k] * step(rectDist(FIELD_RECT[k], p), 4.6));
+        vec3 offNoise = vec3(0.0);
+        vec4 offGround = vec4(0.0);
+        if (offNear > 0.001) {
+          offNoise = vec3(texture2D(uNoise, p * 0.05).b, texture2D(uNoise, p * 0.47).a, texture2D(uNoise, p * 1.9).a);
+          offGround = offRead(p);
+        }
         for (int k = 0; k < ${FIELD_COUNT}; k++) {
           float fd = rectDist(FIELD_RECT[k], p);
           if (fd > 4.6) continue;
@@ -420,7 +439,7 @@ export function buildTerrain(): Terrain {
           if (uOffK[k] > 0.001) {
             float tall;
             vec2 f = (p - FIELD_RECT[k].xy) / (FIELD_RECT[k].zw - FIELD_RECT[k].xy);
-            vec3 meadow = offCover(p, f, OFF_KINDS[k], texture2D(uNoise, p * 0.05).b, texture2D(uNoise, p * 0.47).a, texture2D(uNoise, p * 1.9).a, tall);
+            vec3 meadow = offCover(p, f, OFF_KINDS[k], offNoise.x, offNoise.y, offNoise.z, offGround, tall);
             meadow = mix(meadow, meadow * vec3(1.16, 1.12, 0.96) + vec3(0.025, 0.02, 0.0), uAvailK[k] * 0.8);
             col = mix(col, meadow, (1.0 - smoothstep(-0.7, 0.8, fd + (mid - 0.5) * 2.2 + (fine - 0.5) * 0.6)) * uOffK[k]);
           }
@@ -463,7 +482,13 @@ export function buildTerrain(): Terrain {
   const landMesh = new Mesh(land, landMat)
   landMesh.receiveShadow = true
   landMesh.frustumCulled = false
-  group.add(landMesh)
+  landMesh.userData.part = 'land'
+  // Its surface is the costliest thing in the picture to shade: drawn after the trees, the crops and the buildings,
+  // it is shaded only where it shows between them.
+  const under = new Group()
+  under.renderOrder = 50
+  under.add(landMesh)
+  group.add(under)
   disposables.push(land, landMat)
 
   // ---- Roads and tracks: ribbons laid on the ground. A dirt road is two ruts worn pale with a grass crown between, mud
@@ -682,7 +707,7 @@ export function buildTerrain(): Terrain {
   group.add(rocks)
   disposables.push(rocks.geometry, rocks.material as MeshStandardMaterial)
 
-  return { group, water: { ice }, held, off, avail, gravel, dispose() { for (const d of disposables) d.dispose() } }
+  return { group, under, water: { ice }, held, off, avail, gravel, dispose() { for (const d of disposables) d.dispose() } }
 }
 
 // Field stone, cleared by hand and piled along the edges of every block; gateways where the tracks go through.

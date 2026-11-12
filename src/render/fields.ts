@@ -275,19 +275,25 @@ vec4 soilShape(vec2 f, vec3 at, out vec4 h0, out vec4 hill) {
 
 // Somebody else's ground: hay, pasture or last year's stubble, through the year. Moves with the wind where it stands tall.
 export const OFF_GLSL = /* glsl */ `
-vec3 offCover(vec2 p, vec2 f, float kind, float broad, float fine, float grit, out float tall) {
+// What offCover reads of the ground at p whatever grows there: the lie of the hay, the rushes, the gust and the width
+// of a pixel. Apart from it, so that the land, which looks through every parcel for each point, reads them once and
+// not once a parcel (a loop that reads a texture cannot be left early on every graphics system, and is then run whole).
+vec4 offRead(vec2 p) {
+  return vec4(texture2D(uNoise, vec2(p.x * 0.09 + p.y * 0.02, p.y * 0.6)).a, texture2D(uNoise, p * 0.31).b, gustAt(p) * min(uSway, 1.2), fwidth(p.y));
+}
+vec3 offCover(vec2 p, vec2 f, float kind, float broad, float fine, float grit, vec4 read, out float tall) {
   float d = uDay;
   float green = smoothstep(118.0, 150.0, d) * (1.0 - 0.55 * smoothstep(262.0, 300.0, d));
   vec3 live = uGrass * (0.78 + 0.44 * broad) * (0.86 + 0.28 * fine);
   vec3 dead = ${linear('#9c8a5e')} * (0.8 + 0.4 * broad) * (0.88 + 0.24 * fine);
   vec3 col;
-  float gust = gustAt(p) * min(uSway, 1.2);
+  float gust = read.z;
   tall = 0.0;
   if (kind < 0.5) {
     // Hay: tall and streaked with the lie of the grass, seed heads buff in July, cut into windrows in early August.
     // The mower works across the piece over ten days in early August; the cut hay lies in windrows, then is gone.
     float mown = smoothstep(0.0, 0.05, (d - 212.0) / 10.0 - f.x + (broad - 0.5) * 0.12) * (1.0 - smoothstep(236.0, 252.0, d));
-    float streak = texture2D(uNoise, vec2(p.x * 0.09 + p.y * 0.02, p.y * 0.6)).a;
+    float streak = read.x;
     col = mix(dead, live * vec3(1.06, 1.0, 0.76), green) * (0.9 + 0.2 * streak);
     col = mix(col, ${linear('#b7a378')} * (0.85 + 0.3 * fine), 0.42 * smoothstep(168.0, 192.0, d) * (1.0 - mown) * green);
     float row = 0.5 + 0.5 * cos(p.y * 6.2831853 / 2.1 + broad * 2.0);
@@ -298,7 +304,7 @@ vec3 offCover(vec2 p, vec2 f, float kind, float broad, float fine, float grit, o
   } else if (kind < 1.5) {
     // Pasture: short and darker, clumps of rush and thistle, a path worn where the cattle walk.
     col = mix(dead * 0.92, live * vec3(0.88, 1.0, 0.86), green) * (0.84 + 0.32 * grit);
-    float rush = smoothstep(0.72, 0.8, texture2D(uNoise, p * 0.31).b);
+    float rush = smoothstep(0.72, 0.8, read.y);
     col = mix(col, live * vec3(0.52, 0.66, 0.42), rush * 0.7);
     float path = 1.0 - smoothstep(0.0, 0.18, abs(fract(p.x * 0.07 + 0.35 * sin(p.y * 0.21 + broad * 3.0)) - 0.5) - 0.02);
     col = mix(col, ${linear('#7f6a4f')} * (0.8 + 0.4 * fine), path * 0.45);
@@ -307,7 +313,7 @@ vec3 offCover(vec2 p, vec2 f, float kind, float broad, float fine, float grit, o
   } else {
     // Stubble: last year's grain cut short in pale rows, the ground showing, weeds coming through by midsummer.
     float rows = 0.5 + 0.5 * cos(p.y * 6.2831853 / 0.19);
-    float aa = smoothstep(0.3, 0.8, fwidth(p.y) / 0.19);
+    float aa = smoothstep(0.3, 0.8, read.w / 0.19);
     vec3 straw = ${linear('#c2ad7c')} * (0.82 + 0.3 * fine);
     vec3 ground = ${linear('#6e4a36')} * (0.8 + 0.4 * broad);
     col = mix(ground, straw, mix(smoothstep(0.35, 0.8, rows), 0.55, aa));
@@ -761,7 +767,7 @@ export class Fields {
           }
           if (uOff > 0.001) {
             float tall;
-            vec3 meadow = offCover(sw, vF, uOffKind, broad, fine, grit, tall);
+            vec3 meadow = offCover(sw, vF, uOffKind, broad, fine, grit, offRead(sw), tall);
             // Land to be had stands a little paler and warmer than the land round it.
             meadow = mix(meadow, meadow * vec3(1.16, 1.12, 0.96) + vec3(0.025, 0.02, 0.0), uAvail * 0.8);
             soil = mix(soil, meadow, uOff);
