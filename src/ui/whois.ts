@@ -101,6 +101,7 @@ export function whois(ctx: Ctx, layer: HTMLElement): Whois {
     const best = [...S.SKILLS].sort((a, b) => p.skills[b] - p.skills[a])[0]
     const pulls = moodWhy(c, p)
     const keys = !ctx.touch()
+    const place = ctx.view.unitPlace(p.id)
     return [
       h('header', { class: 'whois-head' },
         ringed(p, ring, 46),
@@ -110,6 +111,9 @@ export function whois(ctx: Ctx, layer: HTMLElement): Whois {
         h('button', { class: 'close', type: 'button', testid: 'whois-close', 'aria-label': `Close${keys ? ' (Escape)' : ''}`, onclick: () => app.selectUnit(-1) }, icon('close', 'i'))),
       h('p', { class: 'whois-now', testid: 'whois-now' }, icon(season ? doingGlyph(c, p) : c.phase === 'cellar' ? 'winter' : 'idle', 'i'),
         h('span', null, h('b', null, season ? doingWord(c, p) : c.phase === 'cellar' ? 'This winter' : 'Spring'), ' ', h('span', { class: busy ? '' : 'quiet' }, detail))),
+      // Where to look for them: on a machine they are its driver; off the land, indoors in the yard.
+      place === 'machine' ? h('p', { class: 'whois-where quiet', testid: 'whois-where' }, icon('machine', 'i'), 'Driving: look for the tractor.')
+        : place === 'away' && c.phase !== 'cellar' ? h('p', { class: 'whois-where quiet', testid: 'whois-where' }, icon('house', 'i'), 'Indoors in the yard, out of sight.') : null,
       h('dl', { class: 'whois-state' },
         h('div', null, h('dt', { class: p.tired >= S.HURT_TIRED ? 'c-red' : p.tired >= S.TIRED_SLOW_FROM ? 'c-ochre' : '' }, F.upper(p.tiredWord)),
           h('dd', null, sign?.glyph === 'hurt' ? `hurt, back on ${F.date(c.year, p.hurtUntil, true)}` : restWords(c, p))),
@@ -162,7 +166,7 @@ export function whois(ctx: Ctx, layer: HTMLElement): Whois {
       const was = card.hidden
       card.hidden = false
       el.classList.toggle('phone', phone())
-      patch(card, JSON.stringify([p, c.phase, c.season?.day, c.season?.jobs.map(j => [j.id, j.kind, j.field]), ctx.touch(), phone(), c.sundaysOff, ctx.view.followed(), c.crew.find(u => u.id === p.id)?.rest]), () => body(c, p))
+      patch(card, JSON.stringify([p, c.phase, c.season?.day, c.season?.jobs.map(j => [j.id, j.kind, j.field]), ctx.touch(), phone(), c.sundaysOff, ctx.view.followed(), c.crew.find(u => u.id === p.id)?.rest, ctx.view.unitPlace(p.id)]), () => body(c, p))
       card.setAttribute('aria-label', p.kind === 'farmer' ? 'You' : p.name)
       if (was || shownFor !== p.id) {
         shownFor = p.id

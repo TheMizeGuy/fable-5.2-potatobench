@@ -46,6 +46,8 @@ export interface FieldView {
   follow(unit: number): void
   // The person the camera is following, or -1.
   followed(): number
+  // Where a person is on the land: on foot, driving a machine, or not on the land (indoors, or off the farm).
+  unitPlace(unit: number): 'foot' | 'machine' | 'away'
   // What the Home key does: back out to the farm, and in again.
   home(): void
   yardAnchor(yard: number): { x: number; y: number; visible: boolean }

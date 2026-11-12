@@ -4,7 +4,7 @@ import { Color, Group, PCFShadowMap, Raycaster, Scene, Triangle, Vector2, Vector
 import { DAYS_PER_SECOND, type App } from '../game/app.ts'
 import type { CreateFieldView, FieldView, Thing } from '../game/contracts.ts'
 import { FIELD_COUNT, HILLS } from '../sim/index.ts'
-import { CameraRig, HOME_FIELD, MOVE_MS, type Pose, type TierName, type Viewport } from './camera.ts'
+import { CameraRig, HOME_FIELD, MIN_DIST, MOVE_MS, pitchFor, type Pose, type TierName, type Viewport } from './camera.ts'
 import { Clearing } from './clearing.ts'
 import { EVENING, MORNING, copyEnv, easeEnv, envTarget, light, makeEnv, makeLight } from './env.ts'
 import { FarHills } from './far.ts'
@@ -112,6 +112,7 @@ export const createFieldView: CreateFieldView = (canvas, app) => {
     thingAt: (x, y) => inner.thingAt(x, y),
     follow: u => inner.follow(u),
     followed: () => inner.followed(),
+    unitPlace: u => inner.unitPlace(u),
     home: () => inner.home(),
     yardAnchor: y => inner.yardAnchor(y),
     whenShown: (kind, field) => inner.whenShown(kind, field),
@@ -764,8 +765,9 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     if (rig.idle < 0.2 && framing !== 'free') framing = 'free'
     if (following >= 0) {
       if (rig.idle < 0.2 || snap.mode === 'title') following = -1
+      else if (!followClose) comeClose(following)
       else if (crews.anchor(following, far) && Math.hypot(rig.goal.x - far.x, rig.goal.z - far.z) > 1.5) {
-        const to = rig.complete({ x: far.x, z: far.z })
+        const to = rig.complete({ x: far.x, z: far.z, ...followClose })
         if (rig.moving()) rig.retarget(to)
         else rig.moveTo(to, reduced, 700)
       }
@@ -990,12 +992,34 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     return crews.thingAt(t, far) ? screenAt(far.x, far.y, far.z) : { x: 0, y: 0, visible: false }
   }
 
+  // Follow ends with the person plainly on the screen: the camera comes in until their pin stands about 120 px over
+  // the ground (the figure about half that; a driver's less), or, off the land, frames the home yard where they are indoors.
   function follow(id: number): void {
     following = id
+    followClose = null
     if (id < 0) return
     framing = 'free'
     rig.idle = 99
-    if (crews.anchor(id, far)) rig.moveTo(rig.complete({ x: far.x, z: far.z, dist: Math.min(rig.goal.dist, rig.field(HOME_FIELD, viewport()).dist) }), reduced, 900)
+    if (!comeClose(id)) {
+      // Not on the land this moment (indoors, through a door): the home yard, until they come out.
+      framedYard = -1
+      rig.moveTo(rig.yard(-1, viewport()), reduced, 900)
+    }
+  }
+
+  // The view Follow holds: as close as puts them plainly on the screen, looking down a little more than a walker's eye
+  // does, so ground lower than the slope's line (a dip, the brook side) still has them in the picture.
+  let followClose: { dist: number; pitch: number } | null = null
+  function comeClose(id: number): boolean {
+    if (!crews.anchor(id, far)) return false
+    const vp = viewport()
+    const tall = Math.max(0.6, far.y - groundY(far.x, far.z))
+    const perUnit = vp.h / (2 * Math.tan((rig.camera.fov * Math.PI) / 360))
+    const want = (tall * perUnit) / (crews.placeOf(id) === 'machine' ? 90 : 120)
+    const dist = Math.max(MIN_DIST, Math.min(Math.max(rig.goal.dist, rig.cur.dist), want))
+    followClose = { dist, pitch: Math.max(pitchFor(dist), 0.3) }
+    rig.moveTo(rig.complete({ x: far.x, z: far.z, ...followClose }), reduced, 900)
+    return true
   }
 
   function yardAnchor(yard: number): { x: number; y: number; visible: boolean } {
@@ -1191,6 +1215,10 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       },
       // Where the interface pins a person's face.
       unitPin: (id: number) => unitAnchor(id),
+      // The ground under them, for checks that measure how tall a figure stands on the screen.
+      unitFoot: (id: number) => unitFoot(id),
+      unitPlace: (id: number) => crews.placeOf(id),
+      following: () => following,
       // Where people are to be looked for in the yard, in metres (for tools that point the camera at them).
       places: () => crews.places(),
       clocks: () => crews.clocks(),
@@ -1313,6 +1341,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     thingAt,
     follow,
     followed: () => following,
+    unitPlace: (id: number) => crews.placeOf(id),
     home: goHome,
     yardAnchor,
     whenShown,
