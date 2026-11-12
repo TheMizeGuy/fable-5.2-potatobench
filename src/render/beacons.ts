@@ -131,7 +131,8 @@ export class Beacons {
             vec3 eye = normalize(aAt.xyz - cameraPosition);
             vSide = position.x * sign(eye.x * uSunDir.z - eye.z * uSunDir.x);
             // Once the real thing is wide enough on the screen this gives way to it.
-            vShow = (1.0 - smoothstep(7.0, 11.0, px)) * step(0.3, min(a.w, b.w));
+            // Under a closed sky nothing far off stands out: the mark goes with the light.
+            vShow = (1.0 - smoothstep(7.0, 11.0, px)) * step(0.3, min(a.w, b.w)) * (1.0 - 0.9 * smoothstep(0.75, 1.0, uCloud.y));
             vWorld = mix(foot, top, position.y);
             gl_Position = clip;
           }`,
