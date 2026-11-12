@@ -117,13 +117,16 @@ async function covers(page: Page, target: string): Promise<string[]> {
     if (seen(slip)) for (const e of [tgt, panel]) if (seen(e) && !slip.contains(e) && meet(slip.getBoundingClientRect(), e.getBoundingClientRect())) out.push(`the slip lies over ${e.dataset.testid ?? e.className}`)
     const fist = document.querySelector<HTMLElement>('#ui [data-testid="guide-fist"]:not([hidden])')
     if (seen(fist)) {
-      const b = fist.getBoundingClientRect()
-      for (const fx of [0.15, 0.5, 0.85]) for (const fy of [0.15, 0.5, 0.85]) {
-        const top = document.elementsFromPoint(b.left + b.width * fx, b.top + b.height * fy).find(e => !e.closest('.guide-layer'))
-        if (!top || top.id === 'field' || !top.closest('#ui')) continue
-        const what = top.closest('svg, img, button, a, input, label, .tag, .need, .pin, .portrait, .key, .num, .t-figure, .goal, .date, .leaf')
-        const words = [...top.childNodes].some(n => n.nodeType === 3 && (n.nodeValue ?? '').trim())
-        if (what || words) out.push(`the hand lies on ${(what ?? top).getAttribute('data-testid') ?? (what ?? top).className ?? top.tagName}`)
+      // Read from the elements themselves: the layers over the land let the pointer through.
+      const f = fist.getBoundingClientRect()
+      const busy = 'svg, img, button, a, input, label, .tag, .need, .pin, .portrait, .key, .t-figure'
+      const range = document.createRange()
+      for (const el of document.querySelectorAll<HTMLElement>('#ui *')) {
+        if (el.closest('.guide-layer, .leaving, [hidden], .gone')) continue
+        const boxes: DOMRect[] = []
+        if (el.matches(busy)) { if (!el.parentElement?.closest(busy)) boxes.push(el.getBoundingClientRect()) }
+        else for (const n of el.childNodes) if (n.nodeType === 3 && (n.nodeValue ?? '').trim()) { range.selectNodeContents(n); boxes.push(range.getBoundingClientRect()) }
+        for (const b of boxes) if (b.width > 0 && b.height > 0 && meet(f, b)) out.push(`the hand lies on ${el.dataset.testid ?? el.className ?? el.tagName}`)
       }
     }
     return [...new Set(out)]

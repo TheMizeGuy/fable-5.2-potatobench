@@ -165,18 +165,34 @@ function findPlace(w: number, hgt: number, avoid: Box[], over: { b: Box; cost: n
   return best
 }
 
-// Whether a box on the screen lies over nothing a player reads or presses: the land itself, or the empty ground of a
-// sheet. Sampled at nine points; the guide's own layer is looked through.
-export function bareAt(root: HTMLElement, b: Box): boolean {
-  for (const fx of [0.15, 0.5, 0.85]) for (const fy of [0.15, 0.5, 0.85]) {
-    const x = b.left + (b.right - b.left) * fx, y = b.top + (b.bottom - b.top) * fy
-    const top = document.elementsFromPoint(x, y).find(e => !e.closest('.guide-layer'))
-    if (!top || top.id === 'field') continue
-    if (!root.contains(top)) continue
-    if (top.closest('svg, img, button, a, input, label, .tag, .need, .pin, .portrait, .key, .num, .t-figure, .goal, .date, .leaf')) return false
-    if ([...top.childNodes].some(n => n.nodeType === 3 && (n.nodeValue ?? '').trim())) return false
+// Everything on the screen a player reads or presses: words, figures, faces, keys, tags, stamps and controls, as boxes.
+// Read from the elements themselves (the layers over the land let the pointer through, so asking the page what lies
+// at a point would find only the land), and only the boxes of the words, not the paragraphs round them.
+const BUSY = 'svg, img, button, a, input, label, .tag, .need, .pin, .portrait, .key, .t-figure'
+export function busyBoxes(root: HTMLElement): Box[] {
+  const out: Box[] = []
+  const range = document.createRange()
+  for (const el of root.querySelectorAll<HTMLElement>('*')) {
+    if (el.closest('.guide-layer, .leaving, [hidden], .gone')) continue
+    if (el.matches(BUSY)) {
+      if (el.parentElement?.closest(BUSY)) continue
+      const r = el.getBoundingClientRect()
+      if (r.width > 0 && r.height > 0) out.push(box(r))
+      continue
+    }
+    for (const n of el.childNodes) {
+      if (n.nodeType !== 3 || !(n.nodeValue ?? '').trim()) continue
+      range.selectNodeContents(n)
+      const r = range.getBoundingClientRect()
+      if (r.width > 0 && r.height > 0) out.push(box(r))
+    }
   }
-  return true
+  return out
+}
+
+// Whether a box lies over nothing a player reads or presses.
+export function bareAt(busy: Box[], b: Box): boolean {
+  return !busy.some(a => meets(b, a))
 }
 
 // ---------------------------------------------------------------- the slip
@@ -276,6 +292,9 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
   // 0: clear of every panel; 1: clear only of what it must never cover.
   let tier = 0
   let checked = 0
+  let placedAt = 0
+  let busy: Box[] | null = null
+  let busyAt = 0
   const cam: { base: Sig | null; until: number; kind: 'pan' | 'zoom' | 'turn' | 'two'; travel: number } = { base: null, until: 0, kind: 'pan', travel: 0 }
 
   function papers(): string[] {
@@ -451,7 +470,10 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
       const free = ([x, y]: [number, number, string]) => !docked || !meets({ left: x, top: y, right: x + s, bottom: y + s }, box(docked))
       // Never over another control it would hide (a clock, a command bar, a paper), nor over anything to be read.
       const hard = [...hardOnes(root), ...[...root.querySelectorAll('.goal')].filter(shown).map(e => box(e.getBoundingClientRect()))]
-      const clear = ([x, y]: [number, number, string]) => !hard.some(a => meets({ left: x, top: y, right: x + s, bottom: y + s }, a)) && bareAt(root, { left: x, top: y, right: x + s, bottom: y + s })
+      const t0 = performance.now()
+      if (!busy || t0 - busyAt > 250) { busy = busyBoxes(root); busyAt = t0 }
+      const words = busy
+      const clear = ([x, y]: [number, number, string]) => !hard.some(a => meets({ left: x, top: y, right: x + s, bottom: y + s }, a)) && bareAt(words, pad({ left: x, top: y, right: x + s, bottom: y + s }, 2))
       // And off the field tags where it can be, so the name of what it points at stays readable.
       const tags = [...root.querySelectorAll('.plate-layer .tag')].filter(shown).map(e => box(e.getBoundingClientRect()))
       const bare = ([x, y]: [number, number, string]) => !tags.some(a => meets({ left: x, top: y, right: x + s, bottom: y + s }, a))
@@ -479,7 +501,8 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     const w = slip.offsetWidth, ht = slip.offsetHeight
     const here = place ? { left: place.x, top: place.y, right: place.x + w, bottom: place.y + ht } : null
     // Stay put while the place is still clear; move only when something comes over it.
-    if (here && placedFor === key && !(tier === 0 ? [...hard, ...soft] : hard).some(a => meets(here, pad(a, 6)))) return
+    const retry = tier !== 0 && t0 - placedAt > 1000
+    if (here && placedFor === key && !retry && !(tier === 0 ? [...hard, ...soft] : hard).some(a => meets(here, pad(a, 6)))) return
     let found: { x: number; y: number } | null = null
     // First off every panel and every field tag; then off the panels; then off only what it must never cover.
     const tags = [...root.querySelectorAll('.plate-layer .tag')].filter(shown).map(e => box(e.getBoundingClientRect()))
@@ -492,6 +515,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     slip.classList.toggle('gone', !found)
     place = found
     placedFor = `${l.id}|${innerWidth}x${innerHeight}|${slip.offsetWidth}x${slip.offsetHeight}`
+    placedAt = t0
     if (found) slip.style.transform = `translate3d(${found.x}px, ${found.y}px, 0)`
   }
 
