@@ -305,14 +305,14 @@ export function buildTerrain(): Terrain {
           float nearK = 1.0 - smoothstep(18.0, 70.0, distance(vWorld, cameraPosition));
           if (nearK > 0.001) {
             // blades lying every way in tufts, light on some and the thatch dark between them
-            vec2 gq = pw * 2.6;
-            float turnA = texture2D(uNoise, pw * 0.23).b * 6.2831853;
-            vec2 gdir = vec2(cos(turnA), sin(turnA));
-            float blade = texture2D(uNoise, vec2(dot(gq, gdir) * 2.2, dot(gq, vec2(-gdir.y, gdir.x)) * 0.32)).a;
-            float blade2 = texture2D(uNoise, vec2(dot(gq, gdir.yx) * 1.7 + 0.4, dot(gq, vec2(-gdir.x, gdir.y)) * 0.27)).a;
-            float sward = smoothstep(0.25, 0.75, blade * 0.6 + blade2 * 0.4);
+            // (a blade's width across, a few of its lengths along; three lies of the grass, one or another by the tuft)
+            float lie1 = texture2D(uNoise, pw * 0.13).b, lie2 = texture2D(uNoise, pw * 0.13 + 0.5).a;
+            vec2 g1 = vec2(pw.x * 0.95 + pw.y * 0.3, pw.y * 0.95 - pw.x * 0.3), g2 = vec2(pw.x * 0.2 + pw.y * 0.98, pw.y * 0.2 - pw.x * 0.98), g3 = vec2(pw.x * 0.7 - pw.y * 0.7, pw.x * 0.7 + pw.y * 0.7);
+            float b1 = texture2D(uNoise, g1 * vec2(0.55, 0.085)).a, b2 = texture2D(uNoise, g2 * vec2(0.55, 0.085) + 0.3).a, blade2 = texture2D(uNoise, g3 * vec2(0.5, 0.08) + 0.6).a;
+            float blade = mix(mix(b1, b2, smoothstep(0.35, 0.65, lie1)), blade2, smoothstep(0.45, 0.7, lie2));
+            float sward = smoothstep(0.3, 0.7, blade);
             float meadowN = (1.0 - vSurf.x) * (1.0 - smoothstep(0.1, 0.4, vSurf.z));
-            col *= mix(1.0, mix(0.5, 1.42, sward), nearK * meadowN * 0.85);
+            col *= mix(1.0, mix(0.6, 1.36, sward), nearK * meadowN * 0.8);
             col = mix(col, col * vec3(1.25, 1.18, 0.7), nearK * meadowN * 0.35 * smoothstep(0.62, 0.9, blade2) * (0.4 + 0.6 * (1.0 - uLeaf * 0.6)));
             landBump += (vec2(blade, blade2) - 0.5) * 5.0 * nearK * meadowN;
           }
@@ -436,8 +436,8 @@ export function buildTerrain(): Terrain {
           // The paths the household treads: house to barn, barn to potato house, and out to the lane.
           float pathD = min(min(segD(pw, vec2(${HOUSE.x.toFixed(1)}, ${HOUSE.z.toFixed(1)}), vec2(${BARN.x.toFixed(1)}, ${BARN.z.toFixed(1)})), segD(pw, vec2(${BARN.x.toFixed(1)}, ${BARN.z.toFixed(1)}), vec2(${POTATO_HOUSE.x.toFixed(1)}, ${POTATO_HOUSE.z.toFixed(1)}))),
             min(segD(pw, vec2(${HOUSE.x.toFixed(1)}, ${HOUSE.z.toFixed(1)}), vec2(${ROAD[2][0].toFixed(1)}, ${ROAD[2][1].toFixed(1)})), segD(pw, vec2(${DUFOUR_HOUSE.x.toFixed(1)}, ${DUFOUR_HOUSE.z.toFixed(1)}), vec2(${DUFOUR_BARN.x.toFixed(1)}, ${DUFOUR_BARN.z.toFixed(1)}))));
-          float path = (1.0 - smoothstep(0.3, 0.75, pathD + (texture2D(uNoise, pw * 0.09).b - 0.5) * 1.6 + (fine - 0.5) * 0.3)) * snowK;
-          col = mix(col, mix(vec3(0.5, 0.56, 0.68), soil * 0.7, 0.35 * (1.0 - smoothstep(0.5, 0.95, uSnow))) * (0.8 + 0.4 * fine), path * 0.85);
+          float path = (1.0 - smoothstep(0.45, 1.1, pathD + (texture2D(uNoise, pw * 0.09).b - 0.5) * 1.6 + (fine - 0.5) * 0.3)) * snowK;
+          col = mix(col, mix(vec3(0.42, 0.47, 0.6), soil * 0.7, 0.35 * (1.0 - smoothstep(0.5, 0.95, uSnow))) * (0.8 + 0.4 * fine), path * 0.9);
         }
         diffuseColor.rgb = col;
       }

@@ -5,7 +5,7 @@ import {
   BufferAttribute, BufferGeometry, DoubleSide, Group, IcosahedronGeometry, InstancedBufferAttribute, InstancedMesh, Matrix4,
   MeshStandardMaterial, Quaternion, Sphere, Vector3, type MeshDepthMaterial, type PerspectiveCamera, type WebGLRenderer,
 } from 'three'
-import { BARE_SHIFT, CARD_FRAGMENT, CARD_SHADOW, CARD_SHADOW_HEAD, CARD_VERTEX, bakeCards, cardGeometry, cardMaps } from './cards.ts'
+import { BARE_SHIFT, CARD, CARD_FRAGMENT, CARD_SHADOW, CARD_SHADOW_HEAD, CARD_VERTEX, bakeCards, cardGeometry, cardMaps } from './cards.ts'
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { PARCELS, TRACTS } from '../sim/index.ts'
 import { DUFOUR, DUFOUR_BARN, DUFOUR_HOUSE, DUFOUR_POTATO_HOUSE, FARM, FARM_CENTER, FD, FIELDS, FW, HOME, HOME_WOODS, KEEP_CLEAR, LAND, POND, POTATO_HOUSE, WIDE, YARD_TREES, brookHalf, brookZ, fieldMask, groundY, hillRoadZ, oursAt, regionAt, ridgeWoodAt, roadDist, townRoadZ, tractAt, woodFront, woodsAt, WALLS, GATEWAYS, YARD_AT, ROAD, BRIDGE_X, PASTURE, VILLAGE, SIDING, WOOD_GATE } from './layout.ts'
@@ -310,9 +310,9 @@ const LEAF_LOOK = /* glsl */ `
             float cover = 1.0 - smoothstep(0.58, 0.88, rim + (fine - 0.5) * 0.9 + (cl.b - 0.5) * 0.5);
             float leafOn = smoothstep(0.0, 0.3, uLeaf * 1.3 - fine * (1.0 - 0.4 * uLeaf));
             float tl = abs(cl.a - 0.5);
-            float tw = max(0.006, fwidth(cl.a) * 1.1);
-            float twig = (1.0 - smoothstep(tw * 0.5, tw, tl)) * step(0.3, fine) * (1.0 - smoothstep(0.75, 0.98, rim)) * (1.0 - leafOn);
-            diffuseColor.rgb = mix(diffuseColor.rgb, ${linear('#5a4e44')} * (0.7 + 0.5 * fine) * vTree.z, step(cover * leafOn, twig));
+            float tw = max(0.004, fwidth(cl.a) * 0.9);
+            float twig = (1.0 - smoothstep(tw * 0.5, tw, tl)) * (1.0 - smoothstep(0.75, 0.98, rim)) * (1.0 - leafOn);
+            diffuseColor.rgb = mix(diffuseColor.rgb, ${linear('#4a443f')} * (0.7 + 0.5 * fine) * vTree.z, step(cover * leafOn, twig));
             diffuseColor.a = max(cover * leafOn, twig);
           }
         }
@@ -677,16 +677,23 @@ export class Flora {
               ${treeSnow('vObj', '0.75', false)}
               diffuseColor.a = 1.0;
             } else {
-              // Its twigs: fine dark lines close to; from far off, too fine to draw, a thin grey-brown mass where the
-              // crown was, which the picture takes as a share of each pixel.
+              // Its limbs' ends and twigs: lines fanning out from where the trunk forks, finer toward the crown's edge.
+              // Too far off to draw one by one, a thin dark mass that is thickest at the crown's heart.
               if (crown < 0.4) discard;
-              vec4 tn = texture2D(uNoise, crownAt.xy * 1.9 + crownAt.z * 1.3 + fract(vTree.x) * 3.0);
-              float tl = abs(tn.a - 0.5);
-              float lines = 1.0 - smoothstep(0.006, 0.016, tl);
-              float haze = mix(lines, 0.4, smoothstep(0.3, 1.6, cl)) * smoothstep(0.4, 0.75, crown);
-              if (haze < 0.25) discard;
+              float sp = floor(vTree.x + 0.001);
+              vec2 cu = fract(vCard * vec2(${CARD.cols}.0, ${CARD.rows}.0));
+              cu = (cu * vec2(${CARD.w}.0, ${CARD.h}.0) - ${CARD.pad}.0) / vec2(${CARD.w - 2 * CARD.pad}.0, ${CARD.h - 2 * CARD.pad}.0) * 2.0 - 1.0;
+              vec2 rel = vec2(cu.x * (sp < 0.5 ? ${CARD.halfW[1].toFixed(2)} : sp < 2.5 ? ${CARD.halfW[2].toFixed(2)} : ${CARD.halfW[3].toFixed(2)}), ${CARD.centre.toFixed(2)} + cu.y * ${CARD.halfH.toFixed(2)} - (sp < 0.5 ? 0.36 : sp < 2.5 ? 0.5 : 0.02));
+              float ang = atan(rel.x, rel.y), rr = length(rel), seed = fract(vTree.x) * 7.0;
+              float n1 = texture2D(uNoise, vec2(ang * 0.21 + seed, rr * 0.16 + seed * 0.37)).a;
+              float n2 = texture2D(uNoise, vec2(ang * 0.57 + seed * 1.7, rr * 0.34 + 0.4)).a;
+              float f1 = fwidth(n1), f2 = fwidth(n2);
+              float lines = max(1.0 - smoothstep(0.5, 1.0, abs(n1 - 0.5) / max(0.02, f1 * 0.8)), (1.0 - smoothstep(0.5, 1.0, abs(n2 - 0.5) / max(0.012, f2 * 0.7))) * smoothstep(0.1, 0.22, rr));
+              float body = smoothstep(0.4, 0.95, crown);
+              float haze = mix(lines, 0.66 * body, smoothstep(0.06, 0.2, f1));
+              if (haze < 0.12) discard;
               cardWN = normalize(vec3(0.0, 1.0, 0.0) + 0.6 * cardWorld(vec3(0.0, 0.0, 1.0)));
-              diffuseColor.rgb = ${linear('#463c34')} * (0.7 + 0.5 * fract(vTree.x * 5.3)) * vTree.z * (1.0 + 0.5 * min(1.0, uSnow) * tn.a);
+              diffuseColor.rgb = ${linear('#3a332e')} * (0.7 + 0.5 * fract(vTree.x * 5.3)) * vTree.z;
               diffuseColor.a = haze;
             }
           } else diffuseColor.a = 1.0;

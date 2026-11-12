@@ -24,17 +24,17 @@ vec3 groundSnow(vec3 col, vec2 xz, float up, float amount, float hold, float pok
   float deep = smoothstep(0.5, 0.95, amount);
   // going, in spring; or come new, in the fall
   float melt = smoothstep(55.0, 95.0, uDay) * (1.0 - smoothstep(200.0, 250.0, uDay));
-  float lieNew = 0.6 + (grain - 0.5) * 0.3 + (mid - 0.5) * 0.3 + (d0 - 0.5) * 0.2 + hold * 0.1;
+  float lieNew = 0.6 + (grain - 0.5) * 0.3 + (mid - 0.5) * 0.14 + (d0 - 0.5) * 0.2 + hold * 0.25;
   float lieOld = d0 * 0.46 + d1 * 0.22 + (mid - 0.5) * 0.16 + (cr.a - 0.5) * 0.08 + hold * 0.45;
   float lie = mix(lieNew, lieOld, melt);
-  float a = amount * 1.55;
+  float a = amount * mix(1.55, 1.18, melt * (1.0 - deep));
   cover = smoothstep(1.0 - a, 1.16 - a, lie) * smoothstep(0.2, 0.55, up);
   cover *= 1.0 - clamp(poke, 0.0, 1.0) * (1.0 - deep) * (0.45 + 0.55 * grain);
   // thin snow is seen through
   float thick = mix(mix(0.78, 0.96, melt), 1.0, deep);
   // the drifts' own shape, and the wind's carving across them
   float dx = texture2D(uNoise, dq + vec2(0.004, 0.0)).b - d0, dz = texture2D(uNoise, dq + vec2(0.0, 0.004)).b - d0;
-  vec2 relief = (SNOW_WIND * dx + vec2(-SNOW_WIND.y, SNOW_WIND.x) * dz) * 4.5 * (0.35 + 0.65 * deep) + (cr.rg - 0.5) * 0.3 * seeCr;
+  vec2 relief = (SNOW_WIND * dx + vec2(-SNOW_WIND.y, SNOW_WIND.x) * dz) * 3.4 * (0.35 + 0.65 * deep) + (cr.rg - 0.5) * 0.22 * seeCr;
   // scoured to a glaze on the crowns of the drifts, soft and a little blue in their lee
   float crust = deep * (1.0 - smoothstep(0.3, 0.55, d0)) * smoothstep(0.4, 0.7, cr.a);
   vec3 snow = mix(vec3(0.84, 0.89, 0.96), vec3(0.95, 0.96, 0.98), smoothstep(0.3, 0.7, d0 * 0.8 + cr.a * 0.2));

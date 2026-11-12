@@ -686,6 +686,8 @@ export class Fields {
           // Under a closed canopy the ground gets what light the leaves let through.
           float shaded = smoothstep(0.4, 0.95, over.r) * (1.0 - over.a) * (1.0 - hill.r);
           float paintK = max(uPaint, uUnder);
+          soil *= 1.0 - 0.5 * smoothstep(0.25, 0.7, over.r) * (1.0 - 0.5 * over.a);
+          soil = mix(soil, vec3(0.13, 0.1, 0.075) * (0.6 + 0.9 * grit), gSick * (1.0 - smoothstep(0.1, 0.5, over.r)) * 0.7 * step(0.02, hill.b) * (1.0 - hill.r));
           soil *= mix(vec3(1.0), vec3(0.34, 0.5, 0.3), shaded * (1.0 - paintK));
           poolOpen = 1.0 - 0.35 * shaded;
           float cov = uCover * smoothstep(0.2, 0.5, broad * 0.6 + 0.42 * uCover + 0.2 * fine);
@@ -721,10 +723,11 @@ export class Fields {
           soil *= 1.0 + uGround.z * smoothstep(0.3, 0.7, max(uDamp, uWet)) * (0.06 + 0.4 * (1.0 - smoothstep(0.1, 1.0, lat + (fine - 0.5) * 0.5)));
           float lowG = broad * 0.6 + 0.4 * texture2D(uNoise, sw * 0.017).b;
           poolF = uWater * (1.0 - uGround.z) * mix(0.8 * smoothstep(0.74, 0.82, lowG), (1.0 - smoothstep(0.12, 0.5, vProf)) * smoothstep(0.34, 0.5, lowG), vRidged * (1.0 - rowFade));
-          float rainK = uWet * (1.0 - uOff);
-          poolF = max(poolF, rainK * 0.9 * smoothstep(0.52, 0.66, lowG + 0.12 * lowK) * mix(1.0, 1.0 - smoothstep(0.12, 0.5, vProf), vRidged * (1.0 - rowFade)));
-          soil *= 1.0 - 0.5 * rainK;
-          soilRough = mix(mix(mix(0.96, 0.66, uDamp), 0.3, rainK * 0.8), 0.04, poolF);
+          // Rain: bare soil goes near black and shines a little; water stands only in the lowest places.
+          float rainK = smoothstep(0.3, 0.8, uWet) * (1.0 - uOff) * (1.0 - cov) * (1.0 - smoothstep(0.2, 0.6, over.r));
+          poolF = max(poolF, rainK * 0.85 * smoothstep(0.88, 0.98, lowK + 0.06 * (fine - 0.5)) * mix(1.0, 1.0 - smoothstep(0.12, 0.5, vProf), vRidged * (1.0 - rowFade)));
+          soil *= 1.0 - 0.45 * rainK;
+          soilRough = mix(mix(mix(0.96, 0.66, uDamp), 0.5, rainK), 0.04, poolF);
           // Far off, the crop and the rest-year oats are painted where plants would stand.
           if (paintK > 0.001) {
             float lift;

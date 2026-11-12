@@ -22,7 +22,7 @@ const CELL = 36
 const STEP = 0.46
 // How far off a square keeps all its clumps; how far off rank grass is no longer drawn; and how far off the sward has
 // sunk out of sight. By tier.
-const REACH = { high: { full: 22, gone: 120, sward: 48 }, medium: { full: 16, gone: 90, sward: 34 }, low: { full: 14, gone: 60, sward: 0 } }
+const REACH = { high: { full: 24, gone: 120, sward: 66 }, medium: { full: 16, gone: 90, sward: 40 }, low: { full: 14, gone: 60, sward: 0 } }
 // The most squares laid out in one frame while the camera moves.
 const PER_FRAME = 2
 
@@ -93,7 +93,7 @@ export class Grass {
         if (rank <= 0.01 && ours <= 0.01) continue
         if (!this.clear(x, z, false)) continue
         if (hash2(k, 11) < Math.min(0.9, rank * 1.5)) put(x, z, bank < 2.4 * S ? 0.5 - bank * 0.05 : 0.08 + 0.3 * hash2(k, 17), k, 'r')
-        else if (hash2(k, 19) < (0.18 + 1.1 * Math.max(0, fbm2(x * 0.19 + 3.3, z * 0.19 + 8.1) - 0.3)) * ours) put(x, z, 0.02 + 0.3 * hash2(k, 17) * hash2(k, 23) * hash2(k, 29) * 1.6, k, 's')
+        else if (hash2(k, 19) < (0.26 + 1.1 * Math.max(0, fbm2(x * 0.19 + 3.3, z * 0.19 + 8.1) - 0.3)) * ours) put(x, z, 0.02 + 0.3 * hash2(k, 17) * hash2(k, 23) * hash2(k, 29) * 1.6, k, 's')
       }
     }
     const cell: Cell = { patches: [], x: cx, z: cz }
@@ -205,7 +205,7 @@ export class Grass {
         p.geo.instanceCount = Math.max(1, Math.round(p.all * k))
         // the sward's clumps are few and broad: each stands for the grass round it
         p.thin.value = Math.min(2.4, 1 / Math.sqrt(k)) * (p.sward ? 1.6 : 1)
-        if (p.sward) p.fade.value.set(far * 0.3, far * 0.8)
+        if (p.sward) p.fade.value.set(far * 0.45, far * 0.95)
       }
     }
   }
