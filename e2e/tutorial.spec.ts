@@ -416,14 +416,22 @@ test('in the second spring the goal slip stands down while the agent has a note,
     const goal = ui.querySelector<HTMLElement>('[data-testid="goal"]')
     const ring = [...ui.querySelectorAll<HTMLElement>('.catalogue .goal-ring')].find(vis)
     const { app } = (globalThis as unknown as Win).__county
+    // What the note lies over: the strip of folds, or the control it points at.
+    const nb = slipNote?.getBoundingClientRect()
+    const hits = (e: Element | null | undefined) => { if (!nb || !vis(e)) return false; const r = e.getBoundingClientRect(); return nb.left < r.right && nb.right > r.left && nb.top < r.bottom && nb.bottom > r.top }
+    const aim = slipNote?.dataset.target ? ui.querySelector(`[data-testid="${slipNote.dataset.target}"]`) : null
+    const strip = [...ui.querySelectorAll('.catalogue .fold.more.strip')].filter(vis)
     return {
+      over: strip.some(hits) ? 'the strip of folds' : hits(aim) ? `its target ${slipNote!.dataset.target}` : '', strip: strip.length,
       phase: app.campaign.phase as string, note: slipNote?.dataset.lesson ?? '', target: slipNote?.dataset.target ?? '', said: slipNote?.querySelector('.guide-ask')?.textContent ?? '',
       got: !!slipNote?.querySelector('[data-testid="guide-noted"]'), slip: vis(goal) ? (goal.querySelector('.goal-t')?.textContent ?? 'slip') : '', ring: ring ? ring.textContent ?? 'ring' : '',
       paper: !!ui.querySelector('.paper-layer > .dialog:not(.out)'),
     }
   })
   const two: string[] = []
+  const covers: string[] = []
   const notes: string[] = []
+  let strips = 0
   let pictured = false
   let idle = 0
   const until = Date.now() + 200_000
@@ -441,6 +449,8 @@ test('in the second spring the goal slip stands down while the agent has a note,
     if (!v.note) { const open = page.locator('#ui .catalogue .fold.open'); if (++idle >= 2 && await open.count()) { await open.first().click(); idle = 0 } continue }
     idle = 0
     if (notes[notes.length - 1] !== v.note) notes.push(v.note)
+    if (v.over) covers.push(`the note ${v.note} lies over ${v.over}`)
+    if (v.strip) { if (!strips) await picture(page, 'b-spring-strip-1280'); strips++ }
     if (!pictured && v.note === 'seed') { pictured = true; await picture(page, 'b-spring-note-1280') }
     // Round seven (9): with the field's record open the walk waits on that field. Nothing else comes for ten seconds
     // (longer than any timer the walk ever had), and it goes on when the record is closed.
@@ -461,6 +471,8 @@ test('in the second spring the goal slip stands down while the agent has a note,
   }
   console.log(`the second spring's notes: ${notes.join(' > ')}`)
   expect([...new Set(two)], 'two voices at once').toEqual([])
+  expect([...new Set(covers)], 'a note over the strip of folds or over what it points at').toEqual([])
+  expect(strips, 'notes seen with the strip of folds showing').toBeGreaterThan(0)
   expect(notes).toEqual(['seed', 'crop', 'people', 'hire', 'land', 'loan', 'begin2'])
   // The season: its first note, the slip down; read, and the slip is the one voice.
   await expect(note(page, 'calls2')).toBeVisible({ timeout: 15_000 })
