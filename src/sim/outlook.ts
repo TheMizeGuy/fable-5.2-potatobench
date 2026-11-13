@@ -164,7 +164,6 @@ export function pressing(world: World, c: Campaign, outlook?: JobOutlook[]): Pre
   // A spray is pressing where the coach asks for one under a blight watch and the routine does not order it.
   const all = asks(world, c)
   const sprays = s.watchDay >= 0 ? new Set(all.filter(a => a.act === 'spray').map(a => a.field)) : new Set<number>()
-  const kills: Pressing[] = []
   for (let i = 0; i < P.FIELD_COUNT; i++) {
     if (!held(c, i)) continue
     const f = s.fields[i]
@@ -175,15 +174,27 @@ export function pressing(world: World, c: Campaign, outlook?: JobOutlook[]): Pre
         ? `You last sprayed on ${formatDay(s.year, f.lastSpray)} and it's wearing off. Each order is a single spray, so order another.`
         : 'Not sprayed yet this season. Your crew won\'t spray until you order it.')
     }
-    // After the rest: the date the crew kills by itself is days off.
+    if (f.inField >= 0.5 && !f.weighed && s.frostHaul === s.day && !queued('haul')) want('haul', 'frost is coming for the crop in barrels', 'Your crew won\'t haul until you order it.')
+  }
+  // After the rest: the date the crew kills by itself is days off.
+  return [...out, ...killsAhead(world, c, all)]
+}
+
+// The fields whose vines the crew will kill by itself with no order for it, and the day: asked for alone at every
+// day's turn (the note that says a date), it does not need the next day played out as the rest of pressing does.
+export function killsAhead(world: World, c: Campaign, all = asks(world, c)): Pressing[] {
+  const s = c.season
+  if (c.phase !== 'season' || !s || s.frozen) return []
+  const kills: Pressing[] = []
+  for (let i = 0; i < P.FIELD_COUNT; i++) {
+    if (!held(c, i)) continue
     const kill = killByItself(c, i, all)
-    if (kill >= 0 && !queued('kill')) {
+    if (kill >= 0 && !s.jobs.some(j => j.kind === 'kill' && j.field === i)) {
       kills.push({ kind: 'kill', field: i, job: -1, why: 'the vines are due to be killed', fix: { t: 'job', kind: 'kill', field: i },
         inWay: `The crew kills the vines on ${formatDay(s.year, Math.max(kill, s.day))} unless you keep them up, so the skins set before harvest.` })
     }
-    if (f.inField >= 0.5 && !f.weighed && s.frostHaul === s.day && !queued('haul')) want('haul', 'frost is coming for the crop in barrels', 'Your crew won\'t haul until you order it.')
   }
-  return [...out, ...kills]
+  return kills
 }
 
 // ---------------------------------------------------------------- money
