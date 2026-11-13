@@ -42,12 +42,25 @@ function done(testid: string, onClose: () => void): HTMLElement {
   return h('p', { class: 'cat-done' }, h('button', { class: 'btn quiet', type: 'button', testid, onclick: onClose }, 'Done'))
 }
 
-function tryRun(ctx: Ctx, cmd: S.Cmd, onTry: (err: string) => void): boolean {
+function tryRun(ctx: Ctx, cmd: S.Cmd, onTry: (err: string) => void, say = false): boolean {
   const r = ctx.app.do(cmd)
   onTry(r.ok ? '' : r.err)
-  if (r.ok) ctx.announce(F.localize(r.events[0]?.text ?? 'Done.'))
+  if (r.ok && say) ctx.say(F.localize(`${r.events[0]?.text ?? 'Done.'}${cmd.t === 'hire' ? ' You can undo this until the season starts.' : ''}`))
+  else if (r.ok) ctx.announce(F.localize(r.events[0]?.text ?? 'Done.'))
   ctx.dirty()
   return r.ok
+}
+
+// A hired person's wages from the first day of the season to its close (the money board's own reckoning, which runs to
+// October 15), for a hire's price: the first month at the start, then every thirty days.
+function wagesToClose(c: S.Campaign, wage: number): number {
+  const days = S.dayIndex(c.year, 9, 15) - S.dayIndex(c.year, S.SEASON_START.month, S.SEASON_START.dom)
+  return wage * (1 + Math.floor(days / S.WAGE_DAYS))
+}
+
+// Undo, for what this spring's plan bought or hired: it costs nothing and is taken back in full.
+function undoKey(ctx: Ctx, testid: string, what: string, cmd: S.Cmd, onTry: (err: string) => void): HTMLElement {
+  return h('button', { class: 'btn', type: 'button', testid, 'aria-label': `Undo: ${what}`, title: ctx.touch() ? undefined : 'You can undo this until the season starts.', onclick: () => tryRun(ctx, cmd, onTry, true) }, icon('back', 'i'), 'Undo')
 }
 
 // A line of a fold's list: a thing on the land with what it is and its figure; pressed, it is shown there.
@@ -102,10 +115,11 @@ function applicant(ctx: Ctx, a: S.ApplicantInfo, one: boolean, onTry: (err: stri
       ? h('p', { class: 'skill-one', 'aria-label': `Best at ${best.toLowerCase()}, ${a.skills[a.best]} out of 10` }, h('b', null, `${best} ${a.skills[a.best]}`), tens(a.skills[a.best], 0, { best: true }))
       : h('ul', { class: 'skill-row', 'aria-label': `Skills out of 10: ${SKILL_WORD.map(([k, w]) => `${w} ${a.skills[k]}`).join(', ')}` },
         SKILL_WORD.map(([k, w]) => h('li', { class: k === a.best ? 'best' : null, 'aria-hidden': 'true' }, h('span', null, w), h('b', null, String(a.skills[k]))))),
-    h('p', { class: 'price' }, h('b', { class: 'num' }, F.money(a.ask)), h('span', null, 'a month')),
+    h('p', { class: 'price' }, h('b', { class: 'num' }, F.money(a.ask)), h('span', null, 'a month'),
+      h('span', { class: 't-caption to-end', testid: `applicant-to-end-${a.id}` }, `about ${F.money(wagesToClose(ctx.app.campaign!, a.ask))} to the year end`)),
     h('button', {
       class: 'btn', type: 'button', testid: `applicant-hire-${a.id}`, disabled: !!a.why, title: a.why || undefined, 'aria-label': `Hire ${a.name} for ${F.money(a.ask)} a month`,
-      onclick: () => tryRun(ctx, { t: 'hire', applicant: a.id }, onTry),
+      onclick: () => tryRun(ctx, { t: 'hire', applicant: a.id }, onTry, true),
     }, 'Hire'))
 }
 
@@ -162,8 +176,8 @@ function peopleBody(ctx: Ctx, c: S.Campaign, onTry: (err: string) => void, onClo
   const hall = (kind: 'hand' | 'operator') => {
     const why = S.hireBlock(c, kind)
     const wage = kind === 'hand' ? S.HAND_WAGE : S.OPERATOR_WAGE
-    return h('button', { class: 'btn', type: 'button', testid: `hire-${kind}`, disabled: !!why, title: why || undefined, onclick: () => tryRun(ctx, { t: 'hire', kind }, onTry) },
-      kind === 'hand' ? 'A field hand' : 'An operator', h('span', { class: 'sub num' }, F.money(wage)))
+    return h('button', { class: 'btn', type: 'button', testid: `hire-${kind}`, disabled: !!why, title: why || `About ${F.money(wagesToClose(c, wage))} in wages to the year end`, onclick: () => tryRun(ctx, { t: 'hire', kind }, onTry, true) },
+      kind === 'hand' ? 'A field hand' : 'An operator', h('span', { class: 'sub num' }, `${F.money(wage)} a month`))
   }
   return [
     ...S.applicantInfo(c).map(a => applicant(ctx, a, one, onTry)),
@@ -175,6 +189,8 @@ function peopleBody(ctx: Ctx, c: S.Campaign, onTry: (err: string) => void, onClo
         portrait(p, 32),
         h('b', null, p.name),
         h('span', { class: 'it quiet' }, `${p.traitName}, ${F.money(p.pay)} a month`),
+        // Hired this spring, the hire can be undone in full.
+        c.spring?.hired.some(x => x.unit === p.id) ? undoKey(ctx, `unhire-${p.id}`, `hiring ${p.name}`, { t: 'unhire', unit: p.id }, onTry) : null,
         // Letting someone go cannot be taken back, so it asks once more here as it does on their card.
         h('button', {
           class: 'btn hazard', type: 'button', testid: `dismiss-${p.id}`,
@@ -317,10 +333,10 @@ function equipmentBody(ctx: Ctx, c: S.Campaign, onTry: (err: string) => void, on
       const why = c.upgrades[id] ? '' : equipNeeds(c, id)
       return h('li', null,
         h('div', null, h('b', null, u.name), h('p', { class: 't-caption' }, F.localize(u.blurb)), why ? h('p', { class: 't-caption c-ochre' }, why) : null),
-        c.upgrades[id] ? h('span', { class: 'stamp sm' }, 'Owned')
+        c.upgrades[id] ? [h('span', { class: 'stamp sm' }, 'Owned'), c.spring?.bought.some(b => b.upgrade === id) ? undoKey(ctx, `unbuy-${id}`, `buying the ${u.name.toLowerCase()}`, { t: 'unbuy', upgrade: id }, onTry) : null]
           : h('button', {
             class: 'btn cat-buy', type: 'button', testid: `buy-${id}`, disabled: !!why, title: why || undefined,
-            onclick: () => tryRun(ctx, { t: 'buy', upgrade: id }, onTry),
+            onclick: () => tryRun(ctx, { t: 'buy', upgrade: id }, onTry, true),
           }, 'Buy', h('span', { class: 'sub num' }, F.money(u.cost)), loanSays(u.cost, loanAdds(u.cost)) ? h('span', { class: 'loan-adds num' }, loanSays(u.cost, loanAdds(u.cost))) : null))
     })),
     done('equipment-close', onClose),

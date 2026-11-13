@@ -26,8 +26,14 @@ export function doing(c: S.Campaign, u: S.CrewInfo, waits: Record<number, string
   const could = s.jobs.filter(j => (j.unit < 0 || j.unit === u.id) && (!unit || S.willDo(unit, j.kind)) && !crews.some(o => o.id !== u.id && o.job?.id === j.id))
   const next = could.find(j => !waits[j.id])
   if (next) return { glyph: next.kind, text: jobText(next, c, next.building), place: next.field, progress: next.need > 0 ? next.done / next.need : 0 }
-  if (could.length) return { glyph: 'stale', text: `Waiting: ${waits[could[0].id]}`, place: u.at, progress: 0 }
+  if (could.length) return { glyph: 'stale', text: `Waiting for ${WAIT_FOR[waits[could[0].id]] ?? waits[could[0].id]}`, place: u.at, progress: 0 }
   return { glyph: 'stale', text: u.at === S.HOME_YARD ? 'Idle' : `Idle at ${placeName(u.at)}`, place: u.at, progress: 0 }
+}
+
+// What holds the work up, by the word the season gives, after "Waiting for".
+const WAIT_FOR: Partial<Record<string, string>> = {
+  raining: 'the rain to stop', 'ground too wet': 'the ground to dry out', 'heavy rain': 'the rain to ease', 'too windy': 'the wind to drop',
+  'the soil is too cold': 'the soil to warm up', 'waiting for the digger': 'the digger to lift more of the crop',
 }
 
 // What a person is doing, as the time book prints it: one word under their name.
@@ -140,7 +146,7 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
     const bad = sign?.cls === 'bad' || needsYou
     // Between orders, the work the list holds for them today, never IDLE while there is some.
     const plain = doingWord(c, p)
-    const ahead = plain === 'Idle' && (S.JOBS as string[]).includes(d.glyph) ? JOB_DOING[d.glyph as S.JobKind].replace(/ (in|from|around)$/, '') : plain
+    const ahead = plain === 'Idle' && (S.JOBS as string[]).includes(d.glyph) ? JOB_DOING[d.glyph as S.JobKind].replace(/ (in|from|around)$/, '') : plain === 'Idle' && d.text.startsWith('Waiting') ? 'Waiting' : plain
     const word = sign?.cls === 'bad' ? F.upper(sign.text) : needsYou ? 'Stopped' : ahead
     const slip = next && next.unit === p.id && performance.now() < next.until
       ? h('span', { class: 'next tip', 'aria-hidden': 'true' }, h('span', { class: 't-label' }, 'Next'), ' ', h('span', null, icon(next.kind, 'i'), ` ${S.FIELD_NAMES[next.field]}`)) : null
@@ -228,6 +234,12 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
         const fateSaid = o ? F.localize(o.why) : ''
         const able = people.filter(p => S.unitBlock(c, j.kind, p.id) === '')
         const whoSaid = who ? `${who.pinned ? 'assigned to' : 'being done by'} ${who.u.name === S.FARMER_NAME ? 'you' : who.u.name}` : 'open to anyone'
+        // The chip in words, the ringed letter on it explained: "Digging Brook Field: you. ... The ringed Y stands for you."
+        const tagged = o && o.unit < 0 ? null : taker && many ? taker : many && who ? who.u : null
+        const named = (n: string) => n === S.FARMER_NAME ? 'you' : firstName(n)
+        const whose = o && o.unit < 0 ? 'nobody yet' : taker ? named(taker.name) : who ? named(who.u.name) : 'anyone'
+        const letter = tagged ? ` The ringed ${initial(tagged.name)} ${tagged.name === S.FARMER_NAME ? 'stands for you' : `is ${firstName(tagged.name)}'s initial`}.` : ''
+        const said = `${what}: ${whose}. ${fateSaid || `${F.upper(whoSaid)}.`}${letter}`
         const choices = many && able.length > 1 ? h('div', { class: 'q-who', role: 'group', 'aria-label': `${what}: choose who does it` },
           [{ id: -1, name: 'Anyone' }, ...able.map(u => ({ id: u.id, name: firstName(u.name) }))].map(x => h('button', {
             class: 'btn', type: 'button', testid: `assign-${j.id}-${x.id}`, 'aria-pressed': String(j.unit === x.id),
@@ -236,7 +248,7 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
         return h('li', { class: 'q-item', k: `q-${j.id}` },
           h('button', {
             class: `q${j === head ? ' active' : ''}${waits[j.id] || o?.when === 'waiting' ? ' waiting' : ''}${o && o.unit < 0 ? ' nobody' : ''} by-${by}`, type: 'button', testid: `queue-${j.id}`, 'aria-expanded': String(pop === j.id),
-            title: touch ? undefined : `${what}. ${fateSaid || `${F.upper(whoSaid)}.`} Click for options${k > 0 ? ', or Ctrl-click to do it first' : ''}.`,
+            title: touch ? undefined : `${said} Click for options${k > 0 ? ', or Ctrl-click to do it first' : ''}.`,
             onclick: (e: Event) => {
               const m = e as MouseEvent
               if (m.ctrlKey || m.metaKey) bump(j.id)
@@ -251,7 +263,7 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
               : many && who ? h('span', { class: `q-tag${who.pinned ? ' pinned' : ''}`, style: `--c:${ringFor(c, who.u.id)}`, 'aria-hidden': 'true' }, initial(who.u.name)) : null,
           o && o.when === 'waiting' && o.unit >= 0 ? h('span', { class: 'q-wait', 'aria-hidden': 'true' }, icon('stale', 'i')) : null,
           by !== 'you' ? h('span', { class: 'q-by', title: touch ? undefined : by === 'routine' ? 'Added by your crew\'s routine' : 'Added by the foreman' }, icon(by === 'routine' ? 'sprout' : 'foreman', 'i')) : null,
-          h('span', { class: 'sr' }, `${what}, ${by === 'routine' ? 'added by the routine, ' : by === 'foreman' ? 'added by the foreman, ' : ''}${whoSaid}${j.done > 0 && j.need > 0 ? `, ${F.pct(j.done / j.need)} done` : ''}. ${fateSaid} ${touch ? 'Tap' : 'Click'} for options.`)),
+          h('span', { class: 'sr' }, `${said}${j.done > 0 && j.need > 0 ? ` ${F.pct(j.done / j.need)} done.` : ''}${by === 'routine' ? ' Added by the routine.' : by === 'foreman' ? ' Added by the foreman.' : ''} ${touch ? 'Tap' : 'Click'} for options.`)),
           helper(c, j, crews),
           !lockDig ? h('button', { class: 'q-x', type: 'button', testid: `list-x-${j.id}`, 'aria-label': `${what}: remove from the work list`, title: touch ? undefined : 'Remove from the work list', onclick: () => cancel(j.id) }, icon('close', 'i')) : null,
           !touch ? h('span', { class: 'q-tools' },

@@ -4,8 +4,8 @@ import * as S from '../sim/index.ts'
 import * as F from './fmt.ts'
 
 // F steps the clock's speed, so felling is X, for the axe.
-export const JOB_KEY: Record<S.JobKind, string> = { plant: 'P', hill: 'H', scout: 'C', spray: 'S', water: 'W', rogue: 'R', sample: 'T', kill: 'K', dig: 'D', fell: 'X', rocks: 'O', brush: 'B', build: '', haul: '' }
-export const KEY_JOB: Record<string, S.JobKind> = { p: 'plant', h: 'hill', c: 'scout', s: 'spray', w: 'water', r: 'rogue', t: 'sample', k: 'kill', d: 'dig', x: 'fell', o: 'rocks', b: 'brush' }
+export const JOB_KEY: Record<S.JobKind, string> = { plant: 'P', hill: 'H', scout: 'C', spray: 'S', water: 'W', rogue: 'R', sample: 'T', kill: 'K', dig: 'D', fell: 'L', rocks: 'O', brush: 'B', build: '', haul: '' }
+export const KEY_JOB: Record<string, S.JobKind> = { p: 'plant', h: 'hill', c: 'scout', s: 'spray', w: 'water', r: 'rogue', t: 'sample', k: 'kill', d: 'dig', l: 'fell', o: 'rocks', b: 'brush' }
 export const JOB_VERB: Record<S.JobKind, string> = {
   plant: 'Plant', hill: 'Hill', scout: 'Scout', spray: 'Spray', water: 'Water', rogue: 'Rogue', sample: 'Test dig', kill: 'Kill vines', dig: 'Dig',
   fell: 'Fell', rocks: 'Pick rocks', brush: 'Cut brush', build: 'Build', haul: 'Haul in',

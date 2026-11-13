@@ -773,8 +773,8 @@ test('a tract cleared through the interface: felled, the stumps pulled, the rock
   await expect(card.getByTestId('clear-track')).toContainText('Fell')
   await expect(card.getByTestId('clear-track')).toHaveAttribute('aria-label', /standing/)
   await expect(card).toContainText('loads of logs')
-  // X fells, for the axe.
-  await page.keyboard.press('x')
+  // L fells, for the logs (X reads as close).
+  await page.keyboard.press('l')
   expect(await game<number>(page, 'app.campaign.season.jobs.filter(j => j.kind === "fell" && j.field === 14).length')).toBe(1)
   await reach(page, `const { app } = q.g(); const c = app.campaign; c.fields[14].felled = 39.8
     for (let k = 0; k < 10 && c.fields[14].cover === 'woods'; k++) app.do({ t: 'day' }); app.setSpeed(0)`)

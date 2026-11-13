@@ -424,7 +424,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   const covers = (): DOMRect[] => coverCache ?? floating().filter((x): x is HTMLElement => !!x && !x.hidden && x.offsetParent !== null).map(x => x.getBoundingClientRect())
   const P = plates(ctx, plateLayer, { model: plateModel, onBadge, covers })
   const people = pins(ctx, plateLayer, {
-    tags: () => [...P.boxes(), ...yardMarks.filter(m => !m.wrap.hidden && m.at).map(m => new DOMRect(m.at!.x - m.w / 2, m.at!.y - 22, m.w, 44))], covers,
+    covers,
     stopped: () => stoppedBy(app.campaign),
     board: () => board,
   })

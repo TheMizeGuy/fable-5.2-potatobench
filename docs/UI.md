@@ -165,6 +165,7 @@ Every action in the game and its weight (`src/ui/system/weight.ts` is the table 
 | Raise (a wage) | A person's page | major |
 | Let go | A person's card and page, the crew paper, the spring catalogue | major, destroying: asks once more |
 | Buy a machine | The spring catalogue | major |
+| Undo (a machine bought or a person hired this spring, taken back in full until the season starts) | The spring catalogue | std |
 | Rent, Buy, Buy for cash, Release (land); Pull stumps | A piece of land's card | major |
 | Build, raise a building | The yard's card, winter | major |
 | Pay down the mortgage | The spring catalogue's bank fold | major |

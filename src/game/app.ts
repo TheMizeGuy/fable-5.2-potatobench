@@ -1,6 +1,6 @@
 // The running game: owns the campaign, the clock, the selection and the orders, saving, and tells the views what changed.
 import {
-  advise, apply, climateWorld, createCampaign, fieldInfo, fieldNeeds, isFarmYear, seasonDone, startYears, FARM_YEAR0,
+  advise, apply, climateWorld, createCampaign, fieldInfo, fieldNeeds, isFarmYear, seasonDone, startYears, unitBlock, FARM_YEAR0,
   type Advice, type Campaign, type Cmd, type GameEvent, type JobKind, type Phase, type Result, type World,
 } from '../sim/index.ts'
 import type { Pointing, Thing } from './contracts.ts'
@@ -56,7 +56,8 @@ export type AppEvent =
   | { type: 'yard'; yard: number }
   | { type: 'focus'; field: number }
   | { type: 'order'; kind: JobKind; fields: number[] }
-  | { type: 'sent'; field: number; kind: JobKind; unit: number }
+  // An order given by a stamp or a right-click: who will do it (-1: whoever can), and the one picked who could not.
+  | { type: 'sent'; field: number; kind: JobKind; unit: number; instead?: number }
   | { type: 'alert'; alert: Alert }
   | { type: 'speed'; speed: Speed }
   | { type: 'settings' }
@@ -446,13 +447,27 @@ export class App {
     return out
   }
 
-  // Gives a field the order reference practice has for it now, if it has one. With someone picked it is theirs.
+  // A stamp's order: the one reference practice has for the field now. It goes to the person picked when they can do it,
+  // and otherwise on the work list for whoever can; either way the answer says who.
   smartOrder(field: number): OrderResult {
-    if (this.unit >= 0 && this.campaign?.season) return this.sendTo(field, this.unit)
+    const c = this.campaign
     const need = this.needs()[field]?.need
-    if (!need) return { field, ok: false, err: this.needs()[field]?.hold?.why ?? 'Nothing needs doing here right now.' }
-    if (need.act === 'sell' || need.act === 'close' || need.act === 'wait') return { field, ok: false, err: need.text }
-    return this.order(need.act, { fields: [field] })[0]
+    const picked = this.unit >= 0 && !!c?.season
+    if (!need || need.act === 'sell' || need.act === 'close' || need.act === 'wait') {
+      if (picked) return this.sendTo(field, this.unit)
+      return { field, ok: false, err: need ? need.text : this.needs()[field]?.hold?.why ?? 'Nothing needs doing here right now.' }
+    }
+    const kind = need.act
+    const instead = picked && unitBlock(c!, kind, this.unit) ? this.unit : -1
+    const unit = picked && instead < 0 ? this.unit : -1
+    const r = this.order(kind, { fields: [field], unit })[0]
+    if (r.ok) this.emit({ type: 'sent', field, kind, unit, ...(instead >= 0 ? { instead } : {}) })
+    return r
+  }
+
+  // A right-click (or a long press) on a field: with someone picked, an order to them; otherwise the field's own order.
+  orderAt(field: number): OrderResult {
+    return this.unit >= 0 && this.campaign?.season ? this.sendTo(field, this.unit) : this.smartOrder(field)
   }
 
   // The most useful work a field has now that this person can do, given to them: the suggested order, then work on the
