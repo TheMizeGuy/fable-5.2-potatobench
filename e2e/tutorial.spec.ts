@@ -138,11 +138,9 @@ test('a guided first year: offered as a card, taken, and followed from Play to t
   await page.getByTestId('guide-accept').click()
   await expect(offer).toHaveCount(0)
 
-  // What a year is, then Start the season. A new farm is the farmer alone, and the card says the work as it is.
-  await expect(page.locator('#ui [data-testid="guide-slip"][data-lesson="frame"]')).toBeVisible()
-  await expect(page.locator('#ui .gc-year li')).toHaveCount(5)
-  await expect(page.locator('#ui .guide-card.frame')).toContainText('You and anyone you hire do the field work')
-  await expect(page.locator('#ui .guide-card.frame')).not.toContainText('Your crew handles')
+  // Taking the tutorial goes straight onto the land: the usual plan stands and the season starts, with no card to
+  // read first and nothing to press on the spring sheet.
+  await expect(page.getByTestId('date')).toBeVisible({ timeout: 15_000 })
   const did: string[] = []
   let first = true
   const words: number[] = []
@@ -247,7 +245,7 @@ test('a guided first year: offered as a card, taken, and followed from Play to t
   expect((await see(page)).sold, `a crop sold, after ${did.join(' > ')}`).toBeGreaterThan(0)
   // The opening: what the game is, Start the season, and then the word to plant, with no note between: the tutorial
   // starts when planting is ready. Then planting day and the year.
-  expect(did.slice(0, 4)).toEqual(['frame', 'begin', 'word', 'plantday'])
+  expect(did.slice(0, 2)).toEqual(['word', 'plantday'])
   for (const id of ['tend', 'dig', 'ticket']) expect(did).toContain(id)
   expect(new Set(did).size, 'about a dozen notes').toBeLessThanOrEqual(17)
   // The guide ran the clock: from Start the season to the first weigh ticket in under four minutes, no speed key pressed.
@@ -298,20 +296,18 @@ test('key 1 takes the guide, the title starts a guided farm outright, and a relo
   await page.getByTestId('play').click()
   await expect(page.getByTestId('guide-offer')).toBeVisible()
   await page.keyboard.press('Digit1')
-  await expect(page.locator('#ui [data-testid="guide-slip"][data-lesson="frame"]')).toBeVisible()
-  // The card's own key is under the keyboard; Enter begins.
-  await expect(page.locator('#ui [data-testid="guide-slip"] [data-testid="guide-noted"]')).toBeFocused()
-  await page.keyboard.press('Enter')
-  await expect(page.locator('#ui [data-testid="guide-slip"][data-lesson="begin"]')).toBeVisible({ timeout: 10_000 })
+  // Straight onto the land: the guide's first note is the word to plant.
+  const word = page.locator('#ui [data-testid="guide-slip"][data-lesson="word"]')
+  await expect(word).toBeVisible({ timeout: 20_000 })
   await page.waitForTimeout(3000)
   await page.reload()
   await page.getByTestId('continue').click()
-  await expect(page.locator('#ui [data-testid="guide-slip"][data-lesson="begin"]')).toBeVisible({ timeout: 15_000 })
+  await expect(word).toBeVisible({ timeout: 20_000 })
   // From the title: a guided farm with no offer to answer.
   await page.evaluate(() => (globalThis as unknown as { __county: { app: any } }).__county.app.quitToTitle())
   await page.getByTestId('play-guided').click()
   await page.getByTestId('confirm-ok').click()
-  await expect(page.locator('#ui [data-testid="guide-slip"][data-lesson="frame"]')).toBeVisible()
+  await expect(word).toBeVisible({ timeout: 20_000 })
   await expect(page.getByTestId('guide-offer')).toHaveCount(0)
   expect(errors, errors.join('\n')).toEqual([])
 })
@@ -323,8 +319,6 @@ test('the clock is the player\'s: Space puts a note away, the next one holds the
   await fresh(page)
   await page.getByTestId('play').click()
   await page.getByTestId('guide-accept').click()
-  await page.locator('#ui [data-testid="guide-slip"] [data-testid="guide-noted"]').click()
-  await page.getByTestId('begin-season').click()
   const note = page.locator('#ui [data-testid="guide-slip"]:not([hidden])')
   // The guide carries the player to the day the soil is ready; its first note of the season is the word to plant.
   await expect(note).toHaveAttribute('data-lesson', 'word', { timeout: 15_000 })
@@ -362,11 +356,6 @@ test('the axe checks pass with the offer, the year card and a note showing', asy
   await expect(page.getByTestId('guide-offer')).toBeVisible()
   await scan('offer')
   await page.getByTestId('guide-accept').click()
-  await expect(page.locator('#ui [data-testid="guide-slip"][data-lesson="frame"]')).toBeVisible()
-  await scan('year card')
-  await page.locator('#ui [data-testid="guide-slip"] [data-testid="guide-noted"]').click()
-  await expect(page.locator('#ui [data-testid="guide-slip"][data-lesson="begin"]')).toBeVisible({ timeout: 10_000 })
-  await page.getByTestId('begin-season').click()
   // The guide's line while it carries the player through the weeks before planting, then its first note of the season.
   await expect(page.getByTestId('guide-drive')).toBeVisible({ timeout: 5000 })
   await scan('the guide running the clock')
@@ -827,8 +816,6 @@ async function firstGuidedDay(page: Page): Promise<void> {
   await fresh(page)
   await page.getByTestId('play').click()
   await page.getByTestId('guide-accept').click()
-  await page.locator('#ui [data-testid="guide-slip"] [data-testid="guide-noted"]').click()
-  await page.getByTestId('begin-season').click()
   await expect(note(page, 'word')).toBeVisible({ timeout: 15_000 })
 }
 
@@ -1286,10 +1273,6 @@ test('the tutorial starts when planting is ready: Start the season, a few second
   await page.setViewportSize({ width: 1280, height: 800 })
   await fresh(page)
   await page.getByTestId('play-guided').click()
-  await expect(note(page, 'frame')).toBeVisible()
-  await page.locator('#ui [data-testid="guide-slip"] [data-testid="guide-noted"]').click()
-  await expect(note(page, 'begin')).toBeVisible({ timeout: 10_000 })
-  await page.getByTestId('begin-season').click()
   const started = Date.now()
   // The run: the guide's line says what is passing and what comes next, with the key that takes the clock. The land
   // alone is on the screen under it.
@@ -1315,13 +1298,13 @@ test('the tutorial starts when planting is ready: Start the season, a few second
     shown: Object.keys(window.__countyGuide.p.since) })`)
   expect([at.speed, at.day - at.ask, at.jobs]).toEqual([0, 0, 0])
   // The first note of the season, and the first that asks anything of the player.
-  expect(at.shown).toEqual(['frame', 'begin', 'word'])
+  expect(at.shown).toEqual(['word'])
   await expect(page.getByTestId('guide-drive')).toHaveCount(0)
   await expect(page.getByTestId('guide-held')).toHaveText('Paused')
   const field = Number(((await note(page, 'word').getAttribute('data-target')) ?? '').replace('badge-', ''))
   expect(await reachable(page, `badge-${field}`)).toBe('in view')
   const s = await see(page)
-  check(s, ['frame', 'begin', 'word'])
+  check(s, ['word'])
   expect(s.words, s.text).toBeLessThanOrEqual(FIRST_DAY_WORDS)
   await picture(page, 'g4-ask-1280')
   // The press, the note that says what follows, and then the guide shows the planter: slowed to the first speed,

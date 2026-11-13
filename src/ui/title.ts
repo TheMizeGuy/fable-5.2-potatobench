@@ -6,7 +6,7 @@ import { h } from './dom.ts'
 import { icon } from './icons.ts'
 import { seasonCount } from './rules.ts'
 import { PHASE_LABEL } from './top.ts'
-import { guidedFarm, startedFarm } from './tutorial.ts'
+import { guidedFarm, startedFarm, straightIn } from './tutorial.ts'
 import './title.css'
 
 // Starts a farm of its own, with seasons made for it. A farm still in play is not replaced unasked.
@@ -24,7 +24,7 @@ export async function startNewFarm(ctx: Ctx, guided = false): Promise<void> {
   ctx.papers.closeAll()
   app.newGame()
   if (!app.campaign) return
-  if (guided) guidedFarm()
+  if (guided) { guidedFarm(); straightIn(ctx) }
   else startedFarm(app.campaign.seed)
 }
 

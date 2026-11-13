@@ -337,11 +337,22 @@ function driveBody(ctx: Ctx, line: string, next: string, waits: (() => void) | n
 
 // The offer: a card in the middle of the screen, as a telegram is, with two numbered replies.
 // Taking the tutorial in the first spring goes straight onto the land: the usual plan stands, the season starts, and
-// planning is taught in the second spring, when there is a year behind it to plan from.
-function straightIn(ctx: Ctx): void {
+// planning is taught in the second spring, when there is a year behind it to plan from. While the season is starting
+// no card of the opening is shown.
+let straight = false
+export function straightIn(ctx: Ctx): void {
   const c = ctx.app.campaign
   if (!c || c.phase !== 'plan' || c.history.length > 0) return
-  requestAnimationFrame(() => document.querySelector<HTMLElement>('#ui [data-testid="begin-season"]')?.click())
+  straight = true
+  let tries = 0
+  const go = () => {
+    const now = ctx.app.campaign
+    const key = now && now.phase === 'plan' ? document.querySelector<HTMLElement>('#ui [data-testid="begin-season"]') : null
+    if (key) key.click()
+    if (key || !now || now.phase !== 'plan' || ++tries > 180) { straight = false; ctx.dirty(); return }
+    requestAnimationFrame(go)
+  }
+  go()
 }
 
 function offerCard(ctx: Ctx): HTMLElement {
@@ -807,7 +818,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     offer = guide.offerFor(c, app.screen)
     const carded = cardUp(l)
     l.carded = carded
-    const owed = offer ? null : guide.current(l)
+    const owed = offer || straight ? null : guide.current(l)
     due = paced(owed)
     now = due && carded ? null : due
     hold(l)

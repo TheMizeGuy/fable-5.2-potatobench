@@ -536,7 +536,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   function land(): Land {
     if (landNow) return landNow
     const ins = app.insets
-    const bars = [...crew.querySelectorAll<HTMLElement>('.queue, .timebook'), clockSlot, paused, running, homeKey, bar.el, grid.el, trayHost.firstElementChild as HTMLElement | null]
+    const bars = [...crew.querySelectorAll<HTMLElement>('.queue, .timebook'), clockSlot, paused, running, homeKey, grid.el, trayHost.firstElementChild as HTMLElement | null]
     const blocks = bars.filter((x): x is HTMLElement => !!x && !x.hidden && x.offsetParent !== null && x.offsetHeight > 0).map(x => { const r = x.getBoundingClientRect(); return { left: r.left, top: r.top, right: r.right, bottom: r.bottom } })
     // The land runs up to the boards themselves; the slip that hangs from one is a thing to keep off, not a line
     // across the whole window, so a card clear of it has that much more room.
@@ -566,6 +566,8 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       const st = c ? S.fieldInfo(c, t.field).status : 'off'
       return of(t.box, t.need || st === 'growing' || st === 'planted' || st === 'dead' || st === 'digging' ? 3 : 1)
     })
+    // The menu bar: a card keeps off it where it can, and lies over it before it is cut.
+    if (bar.el.offsetHeight > 0) out.push(of(bar.el.getBoundingClientRect(), 4))
     for (const m of yardMarks) if (!m.wrap.hidden && m.at) out.push(of(new DOMRect(m.at.x - m.w / 2, m.at.y - 22, m.w, 44), 1))
     // The alerts' place beside the time book, whether or not a slip lies there now: a card keeps off it before any
     // tag, so a slip that comes is not under the card; but it lies there rather than be cut short (a person's page

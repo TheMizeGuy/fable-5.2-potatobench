@@ -295,7 +295,8 @@ async function hold(page: Page, k: Case, label: string, close: 'Escape' | 'groun
     if (c.end) expect.soft(await a<boolean>(page, `const END = ${JSON.stringify(c.end)}; ${k.ends}`), say(`its tether ends on the thing (${JSON.stringify(c.end)})`)).toBe(true)
   }
   expect.soft(await a<boolean>(page, k.marked), say('the thing is marked')).toBe(true)
-  expect.soft(await a<string>(page, 'return JSON.stringify(F.stats().camera)'), say('the click moved no camera')).toBe(cam0)
+  // (a press on someone's chip is the one that moves it: the camera goes to them)
+  if (k.name !== 'a person\'s chip') expect.soft(await a<string>(page, 'return JSON.stringify(F.stats().camera)'), say('the click moved no camera')).toBe(cam0)
   // Escape, or a click on empty ground, closes it.
   if (close === 'Escape') await page.keyboard.press('Escape')
   else {
@@ -400,6 +401,8 @@ async function cases(page: Page, t: string): Promise<{ list: Case[]; missing: st
     ends: 'return true', marked: `return document.querySelector('#ui [data-testid="queue-${order.id}"]').getAttribute('aria-expanded') === 'true'` })
   else missing.push('an order in the list')
   void t
+  // The chip goes last: its press takes the camera to the person, and the places found above are of this view.
+  list.sort((p, q) => Number(p.name === 'a person\'s chip') - Number(q.name === 'a person\'s chip'))
   return { list, missing }
 }
 
