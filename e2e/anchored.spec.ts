@@ -343,7 +343,8 @@ async function cases(page: Page, t: string): Promise<{ list: Case[]; missing: st
   // A resting field.
   let rested = false
   for (const i of state.rest) {
-    const at = await a<Pt | null>(page, `return A.fieldSpot(${i})`)
+    // By its ground; far out in a short window its tag can stand over all of its ground, and then by its tag.
+    const at = await a<Pt | null>(page, `return A.fieldSpot(${i}) || A.tagSpot(${i})`)
     if (!at) continue
     rested = true
     list.push({ name: 'a resting field', card: 'card', thing: `field-${i}`, head: ['Resting field', names[i]], at, middle: await a<Pt | null>(page, `return A.quad(${i}, .5, .5)`), ends: fieldEnds(i), marked: fieldMarked(i) })
