@@ -48,6 +48,9 @@
 .tk-more .btn.quiet { padding-left: 4px; }
 .ticket .tk-left { display: flex; align-items: center; gap: 8px; margin-bottom: var(--s2); padding: 6px 10px; font-size: 15px; background: var(--paper-2); box-shadow: inset 4px 0 0 var(--violet); }
 .ticket .tk-left .i { --i: 18px; flex: none; }
+/* Seed that rotted in cold ground: one line under the losses, in the ink of a loss. */
+.ticket .tk-cold { display: flex; align-items: flex-start; gap: 8px; margin-top: var(--s2); padding: 6px 10px; font-size: 15px; line-height: 1.3; background: var(--paper-2); box-shadow: inset 4px 0 0 var(--red); }
+.ticket .tk-cold .i { --i: 18px; flex: none; margin-top: 1px; }
 .tk-more .btn:not(.quiet) { min-width: 120px; }
 .tk-notes { flex: 1 1 280px; display: grid; gap: 2px; padding-top: 11px; font: italic 400 var(--t-caption)/1.3 var(--f-text); color: var(--ink-2); }
 .tk-notes .c-ochre { color: var(--ochre); }
@@ -92,6 +95,7 @@
   .dig-paper .tk > .choice { grid-area: ways; align-self: start; }
   .dig-paper .tk > .grades { grid-area: grades; }
   .dig-paper .tk > .losses { grid-area: losses; }
+  .dig-paper .tk > .tk-cold { grid-column: 1 / -1; }
   .dig-paper .tk-head h2 { font-size: 32px; }
   .dig-paper .weighed { width: 72px; height: 72px; margin: -2px -4px -10px 0; }
   .dig-paper .stamped.huge { font-size: 80px; }
@@ -122,7 +126,7 @@
   .dig-paper .stub span { font-size: 20px; }
   .dig-paper .tk { display: flex; flex-direction: column; padding: 10px 14px max(16px, env(safe-area-inset-bottom, 0px)); }
   .dig-paper .tk > .choice { order: 1; }
-  .dig-paper .tk > .grades, .dig-paper .tk > .losses { order: 2; }
+  .dig-paper .tk > .grades, .dig-paper .tk > .losses, .dig-paper .tk > .tk-cold { order: 2; }
   .dig-paper .tk-head h2 { font-size: 36px; }
   .dig-paper .weighed { width: 84px; height: 84px; margin: -4px -6px -14px 0; }
   .dig-paper .tk-line { gap: 2px 16px; font-size: 15px; }

@@ -801,6 +801,7 @@ export function ticket(ctx: Ctx, lotId: number, o: { fresh: boolean; staged?: bo
   const dug = digDays(c, lot)
   const inDay = weighDay(c, lot)
   const no = ticketNo(c, lot)
+  const cold = R.coldPlanting(c, lot, ctx.memo.digSeen[key]?.stand ?? (c.season?.year === lot.year ? S.fieldInfo(c, lot.field).stand : null), d.total)
   let answered = false
   let busy = false
   let worthEl: HTMLElement | null = null
@@ -902,6 +903,7 @@ export function ticket(ctx: Ctx, lotId: number, o: { fresh: boolean; staged?: bo
             h('tbody', null, losses.length ? losses.slice(0, 3).map(x => h('tr', null,
               h('th', { scope: 'row' }, term(CAUSE_LABEL[x.k])), h('td', { class: 'num' }, `−${F.mass(x.cwt)}`), h('td', null, phrase(ctx, c, lot, x.k))))
               : h('tr', null, h('td', { colspan: 3 }, 'Every potato kept its grade. A clean harvest.')))),
+          cold ? h('p', { class: 'tk-cold', testid: 'ticket-cold' }, icon('planted', 'i'), h('span', null, cold)) : null,
           box))
 
       const reckon = () => h('button', { class: 'btn quiet', type: 'button', testid: 'reckoning-open', onclick: () => ctx.papers.open(reckoning(ctx, lotId)) }, 'See full breakdown')
