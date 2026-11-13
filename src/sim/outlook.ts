@@ -11,7 +11,7 @@ import * as P from './params.ts'
 import { housingLimit, hiredCount, hurt, jobSkill, resting, SKILL_LABEL, subject, willDo } from './people.ts'
 import { JOB_LABEL, jobCost, placeName, pressingWhy, standingBy, tractorsRunning, waitFor, workday } from './season.ts'
 import { asks, killByItself } from './advice.ts'
-import type { BuildingKind, Campaign, Cmd, Job, JobKind, KillWhy, Unit, UpgradeId, World, YearSummary } from './types.ts'
+import type { BuildingKind, Campaign, Cmd, Job, JobKind, KillWhy, Unit, UpgradeId, VarietyId, World, YearSummary } from './types.ts'
 import { estimateYield, fieldInfo } from './view.ts'
 import { getDay } from './weather.ts'
 import { variety } from './varieties.ts'
@@ -218,9 +218,7 @@ export function moneyNow(world: World, c: Campaign): MoneyNow {
       // The rest at what a cwt of the usual crop brings, leaning on what this field's own has brought as the digger
       // gets further in; it cannot be sold before it is lifted, by when the year's price level has come further in.
       const dug = lifting ? lotCwt(lifting) + lifting.grades.cull : 0
-      const odds = markOdds(f, c.fields[i].soil)
-      const no2 = f.tiDay < 0 ? P.NO2_USUAL : odds.scab + (1 - odds.scab) * odds.knob
-      const usual = (P.MARKETABLE_SHARE - P.MARKETABLE_NO2 * no2) * basePrice(world, c, f.variety)
+      const usual = (P.MARKETABLE_SHARE - P.MARKETABLE_NO2 * no2Share(c, i)) * basePrice(world, c, f.variety)
       const own = dug >= 1 ? 1 - left : 0
       const perCwt = (usual * (1 - own) + (own > 0 ? lifted / dug : 0) * own) * harvestPrice(world, c, f.variety) / basePrice(world, c, f.variety)
       const spread = (1 - own) * P.MARKETABLE_SPREAD / P.MARKETABLE_SHARE
@@ -252,11 +250,10 @@ export function moneyNow(world: World, c: Campaign): MoneyNow {
 // What a field's crop should come to at the dig, total cwt an acre with its give-or-take: before the tubers set, what
 // the variety usually gives on this ground (worn soil and raw ground give less); after, the tubers there now by the
 // estimate, and while the vines live, the usual yield's share of the bulking still to come by the warmth to senescence.
-function harvestYield(c: Campaign, field: number): { mean: number; lo: number; hi: number } | null {
+export function harvestYield(c: Campaign, field: number): { mean: number; lo: number; hi: number } | null {
   const f = c.season!.fields[field]
-  const fp = c.fields[field]
   const v = variety(f.variety)
-  const usual = v.usual * (1 - P.SOIL_YIELD * (1 - fp.soil)) * (fp.raw ? P.RAW_GROUND : 1)
+  const usual = usualYield(c, field, f.variety)
   const e = estimateYield(c, field)
   if (!e && f.tiDay >= 0) return null
   const s = c.season!
@@ -275,6 +272,78 @@ function harvestYield(c: Campaign, field: number): { mean: number; lo: number; h
     lo: (e?.lo ?? 0) + more * (1 - 1.5 * P.USUAL_SPREAD),
     hi: (e?.hi ?? 0) + more * (1 + 1.5 * P.USUAL_SPREAD),
   }
+}
+
+// What a variety usually gives on this field, total cwt an acre: worn soil and raw ground give less.
+function usualYield(c: Campaign, field: number, id: VarietyId): number {
+  const fp = c.fields[field]
+  return variety(id).usual * (1 - P.SOIL_YIELD * (1 - fp.soil)) * (fp.raw ? P.RAW_GROUND : 1)
+}
+
+// The share of a field's tubers expected to go to No. 2: a usual season's before they set, after it the field's own
+// scab and knob odds.
+function no2Share(c: Campaign, field: number): number {
+  const f = c.season!.fields[field]
+  if (f.tiDay < 0) return P.NO2_USUAL
+  const odds = markOdds(f, c.fields[field].soil)
+  return odds.scab + (1 - odds.scab) * odds.knob
+}
+
+// ---------------------------------------------------------------- what a contract looks like getting
+
+export interface ContractOutlook {
+  lo: number; mean: number; hi: number   // cwt of US No. 1 and large by the due date, give or take
+  fields: number                          // its variety's fields still to harvest (in spring, planned)
+  // Why even the top falls short of the promise, or '': no field of its variety, too few acres for it at a usual
+  // crop, a crop lighter than that, or a harvest already in that came to less.
+  short: '' | 'none' | 'acres' | 'crop' | 'dug'
+}
+
+// What a contract for this much of a variety looks like getting by its due date: what is delivered, the US No. 1 and
+// large of that variety in hand and being lifted, and the crop its fields are expected to give at the harvest
+// (harvestYield; in spring, the plan's fields at a usual crop), only the share that grades No. 1 or large.
+export function contractOutlook(c: Campaign, id: VarietyId, cwt: number, delivered = 0): ContractOutlook {
+  let mean = delivered, lo = delivered, hi = delivered, fields = 0, grown = false, set = false
+  for (const l of openLots(c)) if (l.variety === id) { const n = l.grades.no1 + l.grades.chef; mean += n; lo += n; hi += n }
+  const add = (acres: number, share: number, yl: { mean: number; lo: number; hi: number }) => {
+    mean += yl.mean * acres * share
+    lo += yl.lo * acres * share * (1 - 1.5 * P.NO1_SPREAD)
+    hi += yl.hi * acres * share * (1 + 1.5 * P.NO1_SPREAD)
+  }
+  const s = c.season
+  if (c.phase === 'plan') {
+    const share = P.NO1_SHARE[id] - P.NO1_NO2 * P.NO2_USUAL
+    for (let i = 0; i < P.FIELD_COUNT; i++) {
+      const p = c.plans[i]
+      if (!held(c, i) || p?.crop !== 'potato' || p.variety !== id) continue
+      const u = usualYield(c, i, id)
+      add(P.FIELD_ACRES, share, { mean: u, lo: u * (1 - 1.5 * P.USUAL_SPREAD), hi: u * (1 + 1.5 * P.USUAL_SPREAD) })
+      fields++
+      grown = true
+    }
+  } else if (s) {
+    for (let i = 0; i < P.FIELD_COUNT; i++) {
+      const f = s.fields[i]
+      const toPlant = f.status === 'idle' && c.plans[i]?.crop === 'potato'
+      if (!held(c, i) || f.variety !== id || f.status === 'off' || f.status === 'rest' || (f.status === 'idle' && !toPlant)) continue
+      grown = true
+      if (c.phase !== 'season') continue
+      // What the digger has lifted and not yet weighed, less the No. 1 its skins will cost at the weigh-in.
+      const lifting = f.lotId >= 0 && !f.weighed ? c.lots.find(l => l.id === f.lotId && !l.open) : undefined
+      if (lifting) {
+        const n = lifting.grades.no1 * (1 - skinnedShare(skinAt(f, lifting.dugDay))) + lifting.grades.chef
+        mean += n; lo += n; hi += n
+      }
+      if (!toPlant && f.status !== 'planted' && f.status !== 'growing' && f.status !== 'dead' && f.status !== 'digging') continue
+      const e = harvestYield(c, i)
+      if (!e) continue
+      add(P.FIELD_ACRES * (f.status === 'digging' ? 1 - f.digDone / P.HILLS : 1), P.NO1_SHARE[id] - P.NO1_NO2 * no2Share(c, i), e)
+      fields++
+      if (f.tiDay >= 0) set = true
+    }
+  }
+  const short = hi >= cwt - 1e-6 ? '' : fields ? (set ? 'crop' : 'acres') : grown ? 'dug' : 'none'
+  return { lo, mean, hi, fields, short }
 }
 
 export interface YearStory { year: number; began: number; ended: number; reasons: MoneyPart[] }
