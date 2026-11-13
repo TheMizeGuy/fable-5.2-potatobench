@@ -35,7 +35,7 @@ interface Seen {
   overTarget: boolean
   // The guide's line while it runs the clock (not a note: nothing is paused for it): its words, the work it is
   // showing and who is doing it, whether that person's pin is inside the window, and the field whose stamp it waits on.
-  drive: string; scene: string; unit: number; pinIn: boolean; waitField: number
+  drive: string; scene: string; unit: number; inView: boolean; waitField: number
 }
 
 async function see(page: Page): Promise<Seen> {
@@ -77,12 +77,11 @@ async function see(page: Page): Promise<Seen> {
     const driving = vis(drive) ? drive : null
     const text = `${read(screen)} | ${land} | ${slip && !slip.classList.contains('guide-card') ? read(slip) : ''}${driving ? ` | ${read(driving)}` : ''}`
     const unit = Number(driving?.dataset.unit ?? -1)
-    // The one the guide is showing: their pin on the land, drawn (pins.ts takes it down where a board or a card is
-    // over them) with its face, the 36 px above the point it stands on, wholly inside the window.
-    const pinIn = unit >= 0 && [...ui.querySelectorAll<HTMLElement>(`.plate-layer .pin-at:not(.gone) [data-testid="pin-${unit}"]`)].some(p => {
-      const r = p.getBoundingClientRect()
-      return p.checkVisibility({ opacityProperty: true, visibilityProperty: true } as CheckVisibilityOptions) && r.left - 18 >= 0 && r.top - 48 >= 0 && r.left + 18 <= innerWidth && r.top <= innerHeight
-    })
+    // The one the guide is showing: the middle of their body as the land draws it, inside the window with nothing of
+    // the interface over it but their own pin (the guide's line least of all).
+    const body = unit >= 0 ? (globalThis as unknown as { __countyField: { unitAt(id: number): { x: number; y: number } | null } }).__countyField.unitAt(unit) : null
+    const over = body && body.x >= 0 && body.y >= 0 && body.x <= innerWidth && body.y <= innerHeight ? document.elementFromPoint(body.x, body.y) : null
+    const inView = !!over && (!over.closest('#ui') || !!over.closest('.pin-at'))
     const asking: string[] = []
     if (slip) asking.push('note')
     if (vis(ui.querySelector('[data-testid="guide-offer"]'))) asking.push('offer')
@@ -96,7 +95,7 @@ async function see(page: Page): Promise<Seen> {
     const sb = slip?.getBoundingClientRect(), ab = aim && vis(aim) ? aim.getBoundingClientRect() : null
     return {
       drive: driving ? read(driving) : '', scene: driving?.dataset.scene ?? '', unit, waitField: driving?.dataset.wait ? Number(driving.dataset.wait) : -1,
-      pinIn,
+      inView,
       overTarget: !!sb && !!ab && !slip!.contains(aim) && sb.left < ab.right && sb.right > ab.left && sb.top < ab.bottom && sb.bottom > ab.top,
       phase: c?.phase ?? 'title', speed: app.speed, stopped: app.pauseReason ?? '', day: c?.season?.day ?? -1, sold: c ? c.lots.filter((l: any) => l.sold > 0).length : 0, done: !!ui.querySelector('[data-testid="end-season"]'),
       note: slip?.dataset.lesson ?? '', target: slip?.dataset.target ?? '', noteWords: count(said), cardWords: card ? count(read(card)) : 0,
@@ -158,6 +157,8 @@ test('a guided first year: offered as a card, taken, and followed from Play to t
   // For each kind of work the guide slows to show: how long the one doing it was inside the window, in ms.
   const watched: Record<string, number> = {}
   let last = { scene: '', at: 0 }
+  const shot: Record<string, boolean> = {}
+  const since: Record<string, number> = {}
   while (Date.now() < until) {
     let s = await see(page)
     check(s, did)
@@ -166,9 +167,12 @@ test('a guided first year: offered as a card, taken, and followed from Play to t
     if (s.phase === 'season' && !begun) begun = Date.now()
     if (s.scene && s.unit >= 0) {
       const t = Date.now()
-      if (last.scene === s.scene && s.pinIn) watched[s.scene] = (watched[s.scene] ?? 0) + (t - last.at)
+      if (last.scene === s.scene && s.inView) watched[s.scene] = (watched[s.scene] ?? 0) + (t - last.at)
       else watched[s.scene] ??= 0
-      last = { scene: s.pinIn ? s.scene : '', at: t }
+      // A picture of each, half way through.
+      since[s.scene] ??= t
+      if (!(s.scene in shot) && t - since[s.scene] > 2200) { shot[s.scene] = true; await picture(page, `g4-scene-${s.scene}-${page.viewportSize()?.width}`) }
+      last = { scene: s.inView ? s.scene : '', at: t }
     } else last = { scene: '', at: 0 }
     // The guide waits on a ringed stamp no note is asking for: the stamp is pressed, as its line says.
     if (!s.note && !s.asking.length && s.waitField >= 0) {
@@ -1322,7 +1326,8 @@ test('the tutorial starts when planting is ready: Start the season, a few second
   await page.waitForTimeout(500)
   await note(page, 'plantday').getByTestId('guide-noted').click()
   await expect(page.locator('#ui [data-testid="guide-drive"][data-scene="plant"]')).toBeVisible({ timeout: 20_000 })
-  await expect(line).toContainText(/^You're planting /)
+  // (planted, if that day finished the field: the line says what the time book says of them)
+  await expect(line).toContainText(/^You('re planting| planted) /)
   await expect(page.getByTestId('guide-drive-next')).toHaveText('Drag to look around, and scroll to zoom.')
   expect(await game<number>(page, 'app.speed')).toBe(1)
   // Looked at twice with them in the window both times: in it for the time between.
@@ -1332,8 +1337,8 @@ test('the tutorial starts when planting is ready: Start the season, a few second
     const now = await see(page)
     const t = Date.now()
     if (now.scene !== 'plant') break
-    if (now.pinIn && was >= 0) inside += t - was
-    was = now.pinIn ? t : -1
+    if (now.inView && was >= 0) inside += t - was
+    was = now.inView ? t : -1
     if (k === 2) { await picture(page, 'g4-planter-1280'); was = -1 }
     await page.waitForTimeout(150)
   }

@@ -31,6 +31,10 @@
 .guide-drive .gd-next { color: var(--ink-2); }
 .guide-drive .guide-foot { justify-content: flex-end; margin-top: 0; }
 .guide-drive .guide-foot .btn.quiet { min-height: 36px; }
+/* On a phone the land is a strip: the line is as wide as the window and its keys stand beside its words, not under. */
+#ui[data-layout='narrow'] .guide-drive { width: calc(100vw - 24px); grid-template-columns: 1fr auto; column-gap: 10px; align-items: center; padding-bottom: 6px; }
+#ui[data-layout='narrow'] .guide-drive :is(.gd-line, .gd-next) { grid-column: 1; }
+#ui[data-layout='narrow'] .guide-drive .guide-foot { grid-column: 2; grid-row: 1 / span 2; flex-flow: column nowrap; align-items: flex-end; gap: 0; }
 /* With little land free, the slip gives up its reason: the screen reader still hears it. */
 .guide.compact .guide-why { display: none; }
 .guide.compact { gap: 4px; padding-top: 8px; }

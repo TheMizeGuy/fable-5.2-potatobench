@@ -198,7 +198,10 @@ tutorial when planting is ready and accelerate time during the tutorial where ne
 - *Where watching explains the thing it slows down and frames it.* The first day each kind of work is done in a
   first year (planting, hilling, a spray pass, a test dig, the vine kill, the dig, the haul), and the day the plants
   come up, the guide drops to 1× for four and a half seconds and follows whoever is doing it (or frames the field),
-  saying who and where: "You're planting North Ridge." Then the whole farm again, and on. Each is shown once
+  saying who and where: "You're planting North Ridge." It says "is spraying" only of someone whose order is still on
+  the list and theirs, in that field, and prefers such a one; of work that day finished it says "Bernadette sprayed
+  North Ridge ahead of the blight." (`stillAt`, the rule the time book's word for a person follows in `ui/now.ts`:
+  the line once had Bernadette spraying while the time book had her waiting). Then the whole farm again, and on. Each is shown once
   (`seen:<kind>` in the guide's own storage), and only while the player has nothing of their own open (no field,
   person or yard selected).
 - *It never runs past a decision.* The guide only sets the speed (and `App.pace`, a multiplier on it). Every pause
@@ -218,6 +221,12 @@ card. It is the guide's voice all the same, so the goal slip stands down for it 
 count in the screen's budgets below. The rule is `driving()` in `src/game/tutorial.ts` (no DOM: what the guide
 wants of the clock for a farm as it stands) and `runClock()` in `src/ui/tutorial.ts` (which carries it out).
 
+The line never lies over what it is about (`placeDrive()`): not over the one the camera is following, who is brought
+to the middle of the free land, and not over the stamp it waits on. On a desktop it stands at the top of the land
+between the boards. On a phone the land is a strip some 300 px tall and a followed worker's head comes near its top,
+so while the clock runs the line lies along the foot of the land, as wide as the window, its keys beside its words;
+waiting on a stamp it takes the first free place clear of that stamp.
+
 ## Budgets, and where they are held
 
 | Budget | Limit | Held by |
@@ -234,7 +243,7 @@ wants of the clock for a farm as it stands) and `runClock()` in `src/ui/tutorial
 | The guide's line: what is passing and what comes next | 18 words; a line that shows work, 14 | `tests/tutorial.test.ts` |
 | From Start the season to the word to plant, nothing pressed | 15 s (it takes about 3) | `e2e/tutorial.spec.ts` |
 | From Start the season to the first weigh ticket, pressing only what notes ask and no speed key | 4 minutes | `e2e/tutorial.spec.ts` |
-| Whoever is at the work the guide shows, inside the window | 2 s of the 4.5 | `e2e/tutorial.spec.ts` (planting, a spray pass, the dig) |
+| Whoever is at the work the guide shows, the middle of their body inside the window with nothing of the interface over it | 2 s of the 4.5 | `e2e/tutorial.spec.ts` (planting, a spray pass, the dig; desktop and phone) |
 
 The budgets are held by cutting the screen, not by raising the number. The weigh ticket is the one paper allowed to
 be rich (a field's whole account: about 215 words); it is laid over the screen and is not counted in the screen's

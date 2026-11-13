@@ -542,16 +542,29 @@ export const RUN_PACE = 1.5
 // How long a piece of work is watched, in seconds, at the first speed.
 export const SCENE_SECONDS = 4.5
 
-const WORK: [S.JobKind, (who: string, field: string) => string][] = [
-  ['plant', (w, f) => `${w} planting ${f}.`],
-  ['hill', (w, f) => `${w} hilling ${f}, piling soil over the rows.`],
-  ['spray', (w, f) => `${w} spraying ${f} ahead of the blight.`],
-  ['sample', (w, f) => `${w} digging a test hill in ${f} to see the crop.`],
-  ['kill', (w, f) => `${w} killing the vines in ${f}.`],
-  ['dig', (w, f) => `${w} digging ${f} into barrels.`],
-  ['haul', (w, f) => `${w} hauling ${f}'s barrels to the potato house.`],
+// Each kind of work the guide shows, as it is said while it goes on and once that day finished it.
+const WORK: [S.JobKind, string, string, (field: string) => string][] = [
+  ['plant', 'planting', 'planted', f => `${f}.`],
+  ['hill', 'hilling', 'hilled', f => `${f}, piling soil over the rows.`],
+  ['spray', 'spraying', 'sprayed', f => `${f} ahead of the blight.`],
+  ['sample', 'digging', 'dug', f => `a test hill in ${f} to see the crop.`],
+  ['kill', 'killing', 'killed', f => `the vines in ${f}.`],
+  ['dig', 'digging', 'dug', f => `${f} into barrels.`],
+  ['haul', 'hauling', 'hauled', f => `${f}'s barrels to the potato house.`],
 ]
-const who = (l: Look, unit: number) => { const u = l.c?.crew.find(x => x.id === unit); return !u || u.kind === 'farmer' ? 'You\'re' : `${first(u.name)} is` }
+// Whether the one who did this work on the last day is still at it: the order is still on the list and theirs, and
+// they are in the field (the rule the time book's own word for them follows, ui/now.ts).
+function stillAt(l: Look, w: { kind: S.JobKind; field: number; unit: number }): boolean {
+  const c = l.c!
+  const u = c.crew.find(x => x.id === w.unit)
+  const j = c.season!.jobs.find(x => x.kind === w.kind && x.field === w.field)
+  return !!u && !!j && (u.job === j.id || (u.job < 0 && !c.crew.some(o => o !== u && o.job === j.id))) && u.road <= 0 && u.at === w.field
+}
+function workLine(l: Look, w: { kind: S.JobKind; field: number; unit: number }, doing: string, did: string, rest: (field: string) => string): string {
+  const u = l.c?.crew.find(x => x.id === w.unit)
+  const you = !u || u.kind === 'farmer'
+  return stillAt(l, w) ? `${you ? 'You\'re' : `${first(u.name)} is`} ${doing} ${rest(name(w.field))}` : `${you ? 'You' : first(u.name)} ${did} ${rest(name(w.field))}`
+}
 
 // The presses the year is waiting on, that no note is asking for now: the word to plant, a vine kill that is the
 // player's, a ringed stamp. Each by its order and field ("water:2"); the word is one ask whichever field it is given on.
@@ -600,10 +613,12 @@ export function driving(l: Look, g: Guide, waved: ReadonlySet<string> = new Set(
   if (firstYear(l)) {
     const up = potatoFields(c).find(i => s.fields[i]?.status === 'growing')
     if (up !== undefined && !g.has('seen:up')) return { ...run, scene: { id: 'up', unit: -1, field: up, line: `The plants are up in ${name(up)}.` } }
-    for (const [kind, say] of WORK) {
+    for (const [kind, doing, did, rest] of WORK) {
       if (g.has(`seen:${kind}`)) continue
-      const w = s.worked.find(x => x.kind === kind && x.field >= 0)
-      if (w) return { ...run, scene: { id: kind, unit: w.unit, field: w.field, line: say(who(l, w.unit), name(w.field)) } }
+      // Someone still at it before someone who finished theirs that day.
+      const all = s.worked.filter(x => x.kind === kind && x.field >= 0)
+      const w = all.find(x => stillAt(l, x)) ?? all[0]
+      if (w) return { ...run, scene: { id: kind, unit: w.unit, field: w.field, line: workLine(l, w, doing, did, rest) } }
     }
   }
   return run

@@ -971,13 +971,30 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     if (driveEl.hidden) return
     const t = performance.now()
     const w = driveEl.offsetWidth, ht = driveEl.offsetHeight
-    const key = `${innerWidth}x${innerHeight}|${w}x${ht}`
+    const ins = app.insets
+    const narrow = ctx.layout() === 'narrow'
+    const wait = driveEl.dataset.wait ?? ''
+    const key = `${innerWidth}x${innerHeight}|${w}x${ht}|${scene?.id ?? ''}|${wait}|${narrow ? `${ins.top} ${ins.bottom}` : ''}`
     if (drivePlace && key === drivePlacedFor && t - driveChecked < 500) return
     driveChecked = t
     const { hard, soft, costs } = obstacles(root)
+    // Never over what the line is about: the one the camera is following, who is brought to the middle of the free
+    // land with their pin over them, and the stamp it waits on.
+    const keep: Box[] = []
+    const cy = (ins.top + innerHeight - ins.bottom) / 2
+    if (scene && scene.unit >= 0) { const cx = (ins.left + innerWidth - ins.right) / 2; keep.push({ left: cx - 80, top: cy - 140, right: cx + 80, bottom: cy + 30 }) }
+    const stamp = wait ? root.querySelector<HTMLElement>(`[data-testid="badge-${wait}"]`) : null
+    if (stamp && shown(stamp)) keep.push(pad(box(stamp.getBoundingClientRect()), 10))
     const here = drivePlace ? { left: drivePlace.x, top: drivePlace.y, right: drivePlace.x + w, bottom: drivePlace.y + ht } : null
-    if (here && key === drivePlacedFor && ![...hard, ...soft].some(a => meets(here, pad(a, 6)))) return
-    const found = findPlace(w, ht, [...hard, ...soft].map(a => pad(a, 8))) ?? findPlace(w, ht, hard.map(a => pad(a, 8)), costs)
+    if (here && key === drivePlacedFor && ![...hard, ...soft].some(a => meets(here, pad(a, 6))) && !keep.some(a => meets(here, a))) return
+    // On a phone the land is a strip between the boards, and its top is where a followed worker's head comes: while
+    // the clock runs the line lies along the foot of the land, over the boards there.
+    const low = narrow && !wait ? { x: Math.round((innerWidth - w) / 2), y: Math.round(innerHeight - ins.bottom - ht - 8) } : null
+    const lowBox = low ? { left: low.x, top: low.y, right: low.x + w, bottom: low.y + ht } : null
+    const found = (low && lowBox && low.y > cy && !hard.some(a => meets(lowBox, pad(a, 4))) ? low : null)
+      ?? findPlace(w, ht, [...hard, ...soft].map(a => pad(a, 8)).concat(keep))
+      ?? findPlace(w, ht, hard.map(a => pad(a, 8)).concat(keep), costs)
+      ?? findPlace(w, ht, hard.map(a => pad(a, 8)), costs)
     driveEl.classList.toggle('gone', !found)
     drivePlace = found
     drivePlacedFor = key

@@ -472,6 +472,7 @@ describe('the guide runs the clock between its notes', () => {
     const { w, c, g } = guided(11)
     const seen: Scene[] = []
     const lines = new Set<string>()
+    const tenses: string[] = []
     for (let n = 0; n < 320 && c.phase === 'season' && !S.seasonDone(c); n++) {
       if (!S.plantWordGiven(c.season!)) { const field = S.fieldNeeds(w, c).findIndex(x => x.need?.act === 'plant'); if (field >= 0) S.apply(w, c, { t: 'job', kind: 'plant', field }) }
       if (c.season!.watchDay >= 0 && S.sprayWayNow(c) === null) S.apply(w, c, { t: 'sprayWay', way: 'auto' })
@@ -485,6 +486,16 @@ describe('the guide runs the clock between its notes', () => {
         g.note(`seen:${d!.scene.id}`)
         // The same day, looked at again: that work is not shown twice.
         expect(driving(at(w, c), g)!.scene?.id).not.toBe(d!.scene.id)
+        // "is spraying" only of someone whose order is still on the list and theirs, in that field; of work the day
+        // finished it says "sprayed", so the line never has someone at work the time book has waiting.
+        if (d!.scene.id !== 'up') {
+          const sc = d!.scene
+          const u = c.crew.find(x => x.id === sc.unit)!
+          const job = c.season!.jobs.find(j => j.kind === sc.id && j.field === sc.field)
+          const going = !!job && u.at === sc.field && u.road <= 0 && (u.job === job.id || (u.job < 0 && !c.crew.some(o => o !== u && o.job === job.id)))
+          expect(/^(You're|\w+ is) /.test(sc.line), `${sc.line} (day ${n})`).toBe(going)
+          tenses.push(`${sc.id}:${going ? 'now' : 'done'}`)
+        }
       }
       S.apply(w, c, { t: 'day' })
     }
@@ -499,7 +510,8 @@ describe('the guide runs the clock between its notes', () => {
       expect(x.line).toContain(S.FIELD_NAMES[x.field])
       expect(countWords(x.line), x.line).toBeLessThanOrEqual(14)
     }
-    expect(seen.find(x => x.id === 'plant')!.line).toMatch(/^You're planting /)
+    console.log(`the work the guide shows, and whether it was still going: ${tenses.join(' ')}; ${seen.map(x => x.line).join(' | ')}`)
+    expect(seen.find(x => x.id === 'plant')!.line).toMatch(/^You('re planting| planted) /)
     // What is passing is said in a line, and what comes next in another, all year.
     expect(lines.size).toBeGreaterThan(4)
     for (const t of lines) expect(countWords(t), t).toBeLessThanOrEqual(18)
