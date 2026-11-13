@@ -26,9 +26,15 @@ export function lowCashSays(c: S.Campaign, left: number): string {
   return `That's less than a month of wages and field work (about ${F.money(Math.round(month / 100) * 100)}), so the season starts on the loan.${cut ? ` ${cut.what} would save about ${F.money(Math.round(cut.saves / 100) * 100)}.` : ''}`
 }
 
-// Why the year-end figure moved, as the board says it under the figure: "Brook Field dug light: −$2,000".
-export function causeLine(why: S.MoneyCause): string {
-  return `${why.text}: ${signedMoney(why.amount)}`
+// The key a cause's remedy is pressed by, a word each: the order that helps that field.
+export const REMEDY: Partial<Record<S.JobKind, string>> = { water: 'Water', spray: 'Spray' }
+
+// Why the year-end figure moved, as the board says it under the figure: "Brook Field dry: −$2,600"; with its remedy
+// in words where the line is itself what is pressed (an alert on a phone): "Brook Field dry: −$2,600. Water it". A sale
+// that left the figure where it was has no amount.
+export function causeLine(why: S.MoneyCause, remedy = false): string {
+  const fix = remedy && why.remedy && REMEDY[why.remedy] ? `. ${REMEDY[why.remedy]} it` : ''
+  return Math.abs(why.amount) < 0.5 ? why.text : `${why.text}: ${signedMoney(why.amount)}${fix}`
 }
 
 // A figure to the $100 with its sign: "+$25,000", "−$11,800".
@@ -37,9 +43,18 @@ export function signedMoney(n: number): string {
   return `${r > 0 ? '+' : ''}${F.money(r)}`
 }
 
+// The board's sum to its figure: the opening cash to the dollar, as the ledger said it; the rest each to the $100,
+// the largest taking the rounding, so it adds up to the figure.
+export function sumLines(parts: S.MoneyPart[], figure: number): S.MoneyPart[] {
+  const lines = parts.map(p => ({ ...p, amount: p.id === 'start' ? Math.round(p.amount) : Math.round(p.amount / 100) * 100, of: p.of?.map(q => ({ ...q, amount: Math.round(q.amount / 100) * 100 })).filter(q => q.amount !== 0) }))
+  const big = lines.reduce((b, p, i) => p.id !== 'start' && (lines[b].id === 'start' || Math.abs(p.amount) > Math.abs(lines[b].amount)) ? i : b, 0)
+  if (lines.length) lines[big].amount += figure - lines.reduce((a, p) => a + p.amount, 0)
+  return lines
+}
+
 // Where the year-end figure is likely to end, as a person reads a range.
 export function rangeSays(range: { lo: number; hi: number }): string {
-  return `likely between ${signedMoney(range.lo)} and ${signedMoney(range.hi)}`
+  return `Most years like this end between ${signedMoney(range.lo)} and ${signedMoney(range.hi)}.`
 }
 
 // The spring loan, said under the pointer on Borrowed, and once a season as a note the first time it grows.

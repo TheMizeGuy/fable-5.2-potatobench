@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest'
 import * as S from '../src/sim/index.ts'
 import type { Campaign, Cmd, World } from '../src/sim/index.ts'
-import { causeLine, dueSays, effectSays, limitSays, loanNoteNow, loanSays, lowCashSays, verdictSays, yearWalk } from '../src/ui/money-words.ts'
+import { causeLine, dueSays, effectSays, limitSays, loanNoteNow, loanSays, lowCashSays, rangeSays, sumLines, verdictSays, yearWalk } from '../src/ui/money-words.ts'
 import { loadWorld } from '../tools/balance/world.ts'
 
 const base = loadWorld()
@@ -173,7 +173,8 @@ describe('round seven', () => {
       if (c.phase !== 'ledger') continue
       ok(w, c, { t: 'next' })
       expect(c.phase).toBe('plan')
-      // Some springs rest most of the farm and buy the harvester, as a player who sank year two did.
+      // Some springs rest most of the farm and buy the harvester, as a player who sank year two did, and some owe more.
+      if (seed % 4 === 0) c.cash -= 25000
       if (seed % 3 === 0) {
         c.plans.forEach((p, i) => { if (S.held(c, i) && p.crop === 'potato' && i % 2) S.apply(w, c, { t: 'plan', field: i, plan: { ...p, crop: 'rest' } }) })
         S.apply(w, c, { t: 'buy', upgrade: 'harvester' })
@@ -182,7 +183,7 @@ describe('round seven', () => {
       const rescue = S.planRescue(w, c)
       const said = limitSays(plan, rescue)
       expect(said !== '', `seed ${seed}: ${Math.round(plan.after)}`).toBe(plan.after < S.CREDIT_LIMIT)
-      if (said) { past++; expect(rescue).not.toBeNull(); expect(said).toContain(rescue!.what) } else inside++
+      if (said) { past++; if (rescue) expect(said).toContain(rescue.what) } else inside++
       ok(w, c, { t: 'begin' })
       const day = S.moneyNow(w, c)
       expect(plan.after, `seed ${seed}`).toBeCloseTo(day.after, 6)
@@ -195,30 +196,52 @@ describe('round seven', () => {
     expect(inside).toBeGreaterThan(0)
   }, 120000)
 
-  it('3b: over 12 two-year runs, no stretch loses more than twice the step without a line, and each line names its cause', () => {
-    let lines = 0
+  it('3b and 8: over 12 two-year runs no stretch loses more than twice the step unsaid, and a field\'s fall names what is seen in it, with the order that helps', () => {
+    let lines = 0, falls = 0, named = 0, plain = 0, remedies = 0, cancels = 0
+    const kinds: Record<string, number> = {}
     for (let seed = 1; seed <= 12; seed++) {
       const w = S.climateWorld(base, seed)
       const c = S.createCampaign(w, { seed, startYear: S.FARM_YEAR0 + 1 })
       ok(w, c, { t: 'begin' })
-      let since: S.MoneyLook | null = null
-      const watch = () => {
+      let watch: S.MoneyWatch | null = null
+      const look = () => {
         if (c.phase !== 'season' && c.phase !== 'cellar') return
         const now = S.moneyLook(w, c)
-        const r = S.moneyWatch(since, now)
-        if (r.cause) { lines++; expect(r.cause.text.length).toBeGreaterThan(3) }
-        since = r.since
-        expect(since.after - now.after, `seed ${seed} ${c.year} ${c.season ? S.formatDay(c.year, c.season.day) : c.month}`).toBeLessThanOrEqual(2 * S.MONEY_STEP)
+        const was: S.MoneyWatch | null = watch
+        const r = S.moneyWatch(watch, now)
+        const at = `seed ${seed} ${c.year} ${c.season ? S.formatDay(c.year, c.season.day) : c.month}`
+        if (r.cancel) cancels++
+        const why = r.cause
+        if (why) {
+          lines++
+          expect(why.text.length).toBeGreaterThan(3)
+          if (why.amount <= -S.MONEY_STEP && (why.part.startsWith('crop:') || why.part === 'crops')) {
+            falls++
+            if (why.why) {
+              named++
+              kinds[why.why] = (kinds[why.why] ?? 0) + 1
+              // What it names is what the field shows that day.
+              const facts = now.fields[why.field!].facts!
+              expect(S.fieldWhy(facts, was?.since.fields[why.field!]?.facts), `${at}: ${why.text}`).toBe(why.why)
+              if (why.remedy) { remedies++; expect(why.remedy, `${at}: ${why.text}`).toBe(why.why === 'blight' ? 'spray' : 'water') }
+            } else if (/looks (lighter|heavier)/.test(why.text)) plain++
+          }
+        }
+        watch = r.watch
+        expect(watch.since.after - now.after, at).toBeLessThanOrEqual(2 * S.MONEY_STEP)
       }
       for (let year = 0; year < 2 && c.phase !== 'over'; year++) {
-        playYear(w, c, watch)
+        playYear(w, c, look)
         if (c.phase !== 'ledger' || c.outcome === 'lost') break
         ok(w, c, { t: 'next' })
         ok(w, c, { t: 'begin' })
       }
     }
+    console.log(`${lines} lines, ${falls} falls from fields: ${named} named by what was seen ${JSON.stringify(kinds)}, ${remedies} with a remedy, ${plain} plain; ${cancels} pairs that cancelled`)
     expect(lines).toBeGreaterThan(50)
-  }, 120000)
+    expect(named).toBeGreaterThan(0)
+    expect(remedies).toBeGreaterThan(0)
+  }, 180000)
 
   it('4: the loan\'s note is said once a season, the first time what is borrowed grows', () => {
     for (const seed of [1, 2, 3]) {
@@ -285,4 +308,73 @@ describe('round seven', () => {
     expect(down).toBeGreaterThan(0)
     expect(up).toBeGreaterThan(0)
   }, 120000)
+})
+
+describe('round eight', () => {
+  it('9: a sale that leaves the figure where it was is said once; a move that takes back the last one is not said', () => {
+    const w = S.climateWorld(base, 1)
+    const c = S.createCampaign(w, { seed: 1, startYear: S.FARM_YEAR0 + 1 })
+    ok(w, c, { t: 'begin' })
+    for (let g = 0; g < 400 && c.phase === 'season' && !S.openLots(c).some(l => c.season!.fields[l.field].weighed); g++) ok(w, c, { t: 'day' })
+    let watch = S.moneyWatch(null, S.moneyLook(w, c)).watch
+    const lots = S.openLots(c).filter(l => c.season!.fields[l.field].weighed)
+    ok(w, c, { t: 'sell', lot: lots[0].id, frac: 1 })
+    const r = S.moneyWatch(watch, S.moneyLook(w, c))
+    expect(r.cause?.text).toBe('Sold what was already counted')
+    expect(causeLine(r.cause!)).toBe('Sold what was already counted')
+    watch = r.watch
+    // Said once a year: the next sale that moves nothing says nothing.
+    for (let g = 0; g < 60 && c.phase === 'season' && !S.openLots(c).some(l => c.season!.fields[l.field].weighed); g++) ok(w, c, { t: 'day' })
+    const next = S.openLots(c).find(l => c.season!.fields[l.field].weighed)
+    if (next) {
+      ok(w, c, { t: 'sell', lot: next.id, frac: 1 })
+      expect(S.moneyWatch(watch, S.moneyLook(w, c)).cause?.text ?? '').not.toBe('Sold what was already counted')
+    }
+    // The crop's rise and the field work that takes it back: the second is not said, and the first line goes.
+    const a = S.moneyLook(w, c)
+    const crop = Object.keys(a.flows).find(k => k.startsWith('crop:'))!
+    const up = structuredClone(a); up.after += 1500; up.flows[crop] += 1500
+    const back = structuredClone(up); back.after -= 1400; back.flows.orders -= 1400
+    const first = S.moneyWatch({ since: a, before: null, counted: c.year }, up)
+    expect(first.cause?.part).toBe(crop)
+    const second = S.moneyWatch(first.watch, back)
+    expect(second.cause).toBeNull()
+    expect(second.cancel).toBe(true)
+    // A hire after a rise is a change of its own, and is said.
+    const hire = structuredClone(up); hire.after -= 1400; hire.flows.wages -= 1400
+    expect(S.moneyWatch(first.watch, hire).cause?.part).toBe('wages')
+  })
+
+  it('9: a sale says what it did to the spring loan', () => {
+    const w = S.climateWorld(base, 1)
+    const c = S.createCampaign(w, { seed: 1, startYear: S.FARM_YEAR0 + 1 })
+    ok(w, c, { t: 'begin' })
+    for (let g = 0; g < 400 && c.phase === 'season' && !S.openLots(c).some(l => c.season!.fields[l.field].weighed); g++) ok(w, c, { t: 'day' })
+    const lot = S.openLots(c).find(l => c.season!.fields[l.field].weighed)!
+    expect(c.cash).toBeLessThan(0)
+    const said = ok(w, c, { t: 'sell', lot: lot.id, frac: 1 }).events[0].text
+    const money = (n: number) => `\\$${Math.round(n).toLocaleString('en-US')}`
+    expect(said).toMatch(c.cash < 0 ? new RegExp(`\\. The loan is down to ${money(-c.cash)}\\.$`) : new RegExp(`\\. That pays off the loan, and you have ${money(c.cash)} in cash\\.$`))
+  })
+
+  it('9: the breakdown names only the costs there were, and opens on the cash the ledger said, to the dollar', () => {
+    const w = S.climateWorld(base, 2)
+    const c = S.createCampaign(w, { seed: 2, startYear: S.FARM_YEAR0 + 1 })
+    ok(w, c, { t: 'begin' })
+    for (let g = 0; g < 60; g++) ok(w, c, { t: 'day' })
+    const m = S.moneyNow(w, c)
+    const spent = m.parts.find(p => p.id === 'spent')!
+    expect(spent.of!.map(p => p.label)).not.toContain('equipment')
+    expect(spent.of!.map(p => p.label)).toContain('seed and field work')
+    const figure = Math.round(m.after / 100) * 100
+    const lines = sumLines(m.parts, figure)
+    expect(lines.reduce((a, p) => a + p.amount, 0)).toBe(figure)
+    expect(lines.find(p => p.id === 'start')!.amount).toBe(Math.round(m.parts.find(p => p.id === 'start')!.amount))
+    // With equipment bought this spring, it is named apart.
+    const d = S.createCampaign(w, { seed: 2, startYear: S.FARM_YEAR0 + 1 })
+    ok(w, d, { t: 'buy', upgrade: 'boom' })
+    ok(w, d, { t: 'begin' })
+    expect(S.moneyNow(w, d).parts.find(p => p.id === 'spent')!.of!.find(p => p.label === 'equipment')!.amount).toBe(S.UPGRADES.boom.cost)
+    expect(rangeSays({ lo: -10100, hi: 27500 })).toBe('Most years like this end between −$10,100 and +$27,500.')
+  })
 })

@@ -9,6 +9,13 @@
 .topbar .balance .cash-moved, .topbar .balance .after-why { flex-basis: 100%; text-align: right; font: italic 400 13px/1.25 var(--f-text); color: var(--ink-2); animation: sh-fade var(--t-slip) var(--ease-out); }
 /* Why the year-end figure moved, under it for a week of the season; its hover is the sum that makes it, a line a part. */
 .hud.st-hide-after .topbar .after-why { visibility: hidden; }
+/* The board's lines keep fixed rows, one line each, said or not: the keys under the board never move. */
+.topbar .balance .cash-moved { height: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.topbar .balance .after-why { display: flex; justify-content: flex-end; align-items: center; gap: 6px; height: 28px; white-space: nowrap; overflow: hidden; }
+.topbar .balance .after-why .why-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.topbar .balance .after-why .why-key { flex: none; min-height: 22px; margin: 0; }
+.topbar .balance .after .give { height: 16px; white-space: nowrap; }
+.topbar .balance :is(.cash-moved, .after-why, .give).idle { visibility: hidden; animation: none; }
 
 /* Out of the season the date leaf is one word ("November", "Year end"): the year goes under it, never over it. */
 .topbar .leaf.word { padding-right: 14px; }
@@ -28,7 +35,7 @@
 .topbar .balance .after { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding-top: 2px; border-top: 1px solid var(--hair); text-decoration: none; }
 /* The figure's label is a small key that opens the sum that makes it; "Why?" under a move opens the same. */
 .topbar .balance .after .after-key, .topbar .balance .why-key { min-height: 26px; padding: 2px 8px; margin: 2px 0; }
-.topbar .balance .why-key { min-height: 24px; padding: 2px 6px; vertical-align: middle; }
+.topbar .balance .why-key { min-height: 22px; padding: 1px 6px; font: 600 13px/1 var(--f-text); font-style: normal; }
 .topbar[data-layout='narrow'] .face .balance .after .after-key { min-height: 0; padding: 1px 4px 3px; margin: 0; line-height: 1; }
 /* The sum: a small table under the board, never over the speed keys. */
 .topbar .money-pop { width: min(400px, calc(100vw - 32px)); gap: 6px; }

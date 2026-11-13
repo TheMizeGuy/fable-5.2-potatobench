@@ -411,7 +411,7 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
         over ? null : [
           h('p', { class: 'lead pm-after' }, h('span', { class: 'it' }, 'After year-end bills'), h('span', { class: 'dots' }),
             h('span', { class: `num${year.callRisk === 'likely' ? ' c-red' : year.callRisk === 'possible' ? ' c-ochre' : ''}`, testid: 'plan-year-end' }, F.money(fig))),
-          h('p', { class: 't-caption pm-range', testid: 'plan-year-range' }, `${F.upper(rangeSays(year.range))}, if the crop does as the season starts.`),
+          h('p', { class: 't-caption pm-range', testid: 'plan-year-range' }, rangeSays(year.range)),
           past ? h('p', { class: 't-caption c-red', testid: 'plan-past-limit', role: 'status' }, past) : null,
         ],
         h('p', { class: 'lead quiet' }, h('span', { class: 'it' }, term('Due at the end of the year', 'due at the year end'), ctx.layout() === 'narrow' ? null : ', from your crop'), h('span', { class: 'dots' }),

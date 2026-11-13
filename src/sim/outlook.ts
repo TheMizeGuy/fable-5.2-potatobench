@@ -303,7 +303,7 @@ function moneyBook(world: World, c: Campaign): { now: MoneyNow; fields: Map<numb
   const spent = c.yearCosts + spring
   const other = c.yearStorage + c.yearRent + c.yearLand + c.yearMortgage + c.yearWorks + c.yearBuilding + c.yearPacking + c.yearPenalties
   const kinds: MoneyPart[] = [
-    { label: 'seed, field work and machines', amount: spent - c.yearWages - other },
+    { label: 'seed and field work', amount: spent - c.yearWages - other - (c.yearEquip ?? 0) }, { label: 'equipment', amount: c.yearEquip ?? 0 },
     { label: 'wages', amount: c.yearWages }, { label: 'rent', amount: c.yearRent }, { label: 'land', amount: c.yearLand },
     { label: 'storage', amount: c.yearStorage }, { label: 'building', amount: c.yearBuilding + c.yearWorks }, { label: 'packing', amount: c.yearPacking },
     { label: 'penalties', amount: c.yearPenalties }, { label: 'mortgage', amount: c.yearMortgage },
@@ -409,19 +409,25 @@ export function planRescue(world: World, c: Campaign): { what: string; gains: nu
 // A move of the year-end figure at least this large is said with its cause: about 5% of the yearly bills.
 export const MONEY_STEP = 1000
 
-interface FieldFacts { status: string; samples: number; set: boolean; dead: boolean; killed: boolean; rogued: number; frost: number; dug: number; weighed: boolean; revenue: number; sprouted: number; broke: number }
+// What happened to a field, and what the grower can see of it that day (fieldInfo): what the cause of a move is read from.
+interface FieldFacts {
+  status: string; samples: number; set: boolean; dead: boolean; killed: boolean; rogued: number; frost: number; dug: number; weighed: boolean; revenue: number
+  sprouted: number; broke: number
+  moisture: number; wilt: number; blight: number; blightHills: number; protect: number; unsprayed: number; frosted: number; stunted: number; weedy: boolean
+  scab: number; scabbing: boolean
+}
 
 // The year-end figure as parts that hold still when crop turns into cash: the year's opening cash, each field's crop
 // (what it brought, what is held, what is in the ground), and the year's spending and income by kind, each counting
 // what is still to come. They sum to MoneyNow.after.
 export interface MoneyLook {
-  year: number; phase: string; after: number
+  year: number; phase: string; after: number; day: number
   flows: Record<string, number>
   // Each field's crop held at today's price and at the harvest price, with its variety and what has happened to it.
   fields: Record<number, { base: number; harvest: number; variety: VarietyId; facts: FieldFacts | null }>
   prices: Record<string, { base: number; harvest: number }>
   crew: { id: number; name: string }[]
-  pickers: boolean; contracts: number
+  pickers: boolean; contracts: number; sold: number
 }
 
 export function moneyLook(world: World, c: Campaign): MoneyLook {
@@ -454,18 +460,23 @@ export function moneyLook(world: World, c: Campaign): MoneyLook {
     prices[id] ??= { base: basePrice(world, c, id), harvest: harvestPrice(world, c, id) }
     let rogued = 0
     if (f) for (let h = 0; h < f.hState.length; h++) if (f.hState[h] & H_ROGUED) rogued++
+    const fi = f && s ? fieldInfo(c, i) : null
     out[i] = {
       base: m.base, harvest: m.harvest, variety: id,
-      facts: f ? {
+      facts: f && s && fi ? {
         status: f.status, samples: f.samples.length, set: f.tiDay >= 0, dead: f.deadDay >= 0, killed: f.killDay >= 0, rogued,
         frost: c.lots.filter(l => l.field === i).reduce((a, l) => a + l.loss.frost, 0), dug: f.digDone, weighed: f.weighed, revenue: m.revenue,
         sprouted: c.lots.filter(l => l.field === i && l.sprouted).length, broke: c.lots.filter(l => l.field === i && l.broke).length,
+        moisture: fi.moisture, wilt: fi.wilt, blight: fi.blightKnown, blightHills: fi.blightHills, protect: fi.protect,
+        unsprayed: f.lastSpray >= 0 ? s.day - f.lastSpray : -1, frosted: fi.frosted, stunted: fi.stunted,
+        weedy: !f.weeded && f.closeDay >= 0, scab: f.tiDay >= 0 ? markOdds(f, c.fields[i].soil).scab : 0,
+        scabbing: f.tiDay >= 0 && s.day - f.tiDay <= P.SCAB_DAYS,
       } : null,
     }
   }
   return {
-    year: c.year, phase: c.phase, after: now.after, flows, fields: out, prices,
-    crew: c.crew.filter(u => u.kind !== 'farmer').map(u => ({ id: u.id, name: u.name })), pickers: !!s?.pickers, contracts: c.yearContracts,
+    year: c.year, phase: c.phase, after: now.after, day: s?.day ?? c.month, flows, fields: out, prices,
+    crew: c.crew.filter(u => u.kind !== 'farmer').map(u => ({ id: u.id, name: u.name })), pickers: !!s?.pickers, contracts: c.yearContracts, sold: lotRevenue,
   }
 }
 
@@ -473,7 +484,35 @@ export interface MoneyCause {
   amount: number                   // the move of the year-end figure
   part: string                     // the part that moved it (a MoneyLook flow, 'price', or 'crops' for several fields)
   share: number                    // that part's share of the move
-  text: string                     // why, in a few words: "Brook Field dug light"
+  text: string                     // why, in a few words: "Brook Field dry"
+  field?: number                   // the field it is in, when it is one field's
+  remedy?: JobKind                 // the order that would help, when there is one
+  why?: FieldWhy                   // what was seen in that field to say so
+}
+
+// What the grower can see that is taking a field's crop down, worst first: drying out, scab being set by dry soil while
+// the potatoes size up, blight on the leaf (with how long since it was sprayed), frost on the leaf, virus, weeds
+// where it was never hilled. '' when nothing seen explains it.
+export type FieldWhy = '' | 'dry' | 'scab' | 'blight' | 'frost' | 'virus' | 'weeds'
+
+export function fieldWhy(now: FieldFacts, was?: FieldFacts | null): FieldWhy {
+  const seen: [FieldWhy, number][] = [
+    ['scab', was && now.scab > was.scab + 0.005 ? 1 : 0],
+    ['dry', now.dead ? 0 : Math.max(now.wilt, (0.45 - now.moisture) / 0.45)],
+    ['blight', now.dead ? 0 : now.blight * 4 + (now.blightHills > 0 ? 0.15 : 0)],
+    ['frost', now.frosted],
+    ['virus', now.stunted],
+    ['weeds', now.weedy && !now.dead ? 0.2 : 0],
+  ]
+  const top = seen.filter(([, x]) => x >= 0.15).sort((p, q) => q[1] - p[1])[0]
+  return top ? top[0] : ''
+}
+
+// The order that helps with what was seen, while it still can.
+function remedyFor(why: FieldWhy, f: FieldFacts): JobKind | undefined {
+  if (why === 'dry' || (why === 'scab' && f.scabbing && f.moisture < 0.5)) return 'water'
+  if (why === 'blight' && f.protect < 0.35) return 'spray'
+  return undefined
 }
 
 // Why the year-end figure moved between two looks in the same year, when it moved by MONEY_STEP or more: the part
@@ -506,13 +545,34 @@ export function moneyCause(a: MoneyLook, b: MoneyLook): MoneyCause | null {
     if (keeping * sign >= Math.abs(amount) / 2) { part = 'keeping'; x = keeping }
     else if (crops * sign >= Math.abs(amount) / 2) { part = 'crops'; x = crops }
   }
-  return { amount, part, share: x / amount, text: causeText(a, b, part, x, d, moved) }
+  const out: MoneyCause = { amount, part, share: x / amount, text: '' }
+  out.text = causeText(a, b, part, x, d, moved, out)
+  return out
 }
 
-// The cause as a person says it, its subject first: "Brook Field dug light", "Lucien's wages to year end".
-function causeText(a: MoneyLook, b: MoneyLook, part: string, x: number, d: Record<string, number>, moved: Record<string, number>): string {
+// The cause as a person says it, its subject first: "Brook Field dry", "Lucien's wages to year end". A field's fall
+// is put down to what the grower can see in it (fieldWhy), with the order that helps; only when nothing seen explains
+// it is it the plain "looks lighter".
+function causeText(a: MoneyLook, b: MoneyLook, part: string, x: number, d: Record<string, number>, moved: Record<string, number>, out: MoneyCause): string {
   const up = x > 0
   const first = (name: string) => name.split(' ')[0]
+  const seen = (i: number, name: string, many: boolean): string => {
+    const was = a.fields[i]?.facts, now = b.fields[i]?.facts
+    const why = now && !up ? fieldWhy(now, was) : ''
+    if (!now || !why) return ''
+    out.field = i
+    out.why = why
+    out.remedy = remedyFor(why, now)
+    const days = now.unsprayed
+    switch (why) {
+      case 'dry': return many ? `Fields dry, ${name} worst` : `${name} dry`
+      case 'scab': return `Scab in ${name}, dry soil`
+      case 'blight': return now.protect >= 0.35 ? `Blight in ${name}` : days < 0 ? `Blight in ${name}, never sprayed` : `${name} unsprayed ${days} days`
+      case 'frost': return `Frost hit ${name}`
+      case 'virus': return `Virus in ${name}`
+      default: return `Weeds in ${name}, never hilled`
+    }
+  }
   if (part === 'price') {
     const ids = Object.entries(moved).filter(([, p]) => Math.sign(p) === Math.sign(x)).sort((p, q) => Math.abs(q[1]) - Math.abs(p[1]))
     return ids.length === 1 || (ids.length && Math.abs(ids[0][1]) >= Math.abs(x) * 0.8) ? `${variety(ids[0][0] as VarietyId).name} price ${up ? 'rose' : 'fell'}` : `Potato prices ${up ? 'rose' : 'fell'}`
@@ -526,7 +586,9 @@ function causeText(a: MoneyLook, b: MoneyLook, part: string, x: number, d: Recor
   }
   if (part === 'crops') {
     const top = Object.entries(d).filter(([k, v]) => k.startsWith('crop:') && Math.sign(v) === Math.sign(x)).sort((p, q) => Math.abs(q[1]) - Math.abs(p[1]))[0]
-    return top ? `Fields look ${up ? 'heavier' : 'lighter'}, ${FIELD_NAMES[Number(top[0].slice(5))]} most` : `Fields look ${up ? 'heavier' : 'lighter'}`
+    if (!top) return `Fields look ${up ? 'heavier' : 'lighter'}`
+    const i = Number(top[0].slice(5))
+    return seen(i, FIELD_NAMES[i], true) || `Fields look ${up ? 'heavier' : 'lighter'}, ${FIELD_NAMES[i]} most`
   }
   if (part.startsWith('crop:')) {
     const i = Number(part.slice(5))
@@ -536,13 +598,15 @@ function causeText(a: MoneyLook, b: MoneyLook, part: string, x: number, d: Recor
     if (was && was.status !== 'lost' && now.status === 'lost') return `${name} left in the ground`
     if (now.revenue > (was?.revenue ?? 0) + 0.5) return b.contracts > a.contracts + 0.5 ? `${name} delivered on contract` : `${name} sold`
     if (now.weighed && !was?.weighed) return `${name} weighed in ${up ? 'heavy' : 'light'}`
-    if (now.samples > (was?.samples ?? 0)) return `${name}'s test dig came ${up ? 'heavy' : 'light'}`
     if (now.killed && !was?.killed) return `Vines killed in ${name}`
     if (now.dead && !was?.dead) return `Vines died in ${name}`
     if (now.rogued > (was?.rogued ?? 0)) return `Blight pulled in ${name}`
     if (now.frost > (was?.frost ?? 0) + 0.5) return `Barrels froze in ${name}`
-    if (now.set && !was?.set) return `Tubers set in ${name}`
     if (now.dug > (was?.dug ?? 0)) return `${name} dug ${up ? 'heavy' : 'light'}`
+    const told = seen(i, name, false)
+    if (told) return told
+    if (now.samples > (was?.samples ?? 0)) return `${name}'s test dig came ${up ? 'heavy' : 'light'}`
+    if (now.set && !was?.set) return `Tubers set in ${name}`
     return `${name} looks ${up ? 'heavier' : 'lighter'}`
   }
   if (part === 'wages') {
@@ -563,20 +627,35 @@ function causeText(a: MoneyLook, b: MoneyLook, part: string, x: number, d: Recor
   return (WORDS[part] ?? [part, part])[up ? 0 : 1]
 }
 
-// The board's watch on the year-end figure: a move of MONEY_STEP or more since the last look that said one, however
-// slowly it came, is said with its cause, and that look becomes the one the next is measured from. A new year or a
+// The board's watch on the year-end figure. since: the look the last cause was said from; before: the one before that,
+// and part: what that cause was; counted: the year a sale that left the figure where it was has been said.
+export interface MoneyWatch { since: MoneyLook; before: MoneyLook | null; part?: string; counted: number }
+
+// A move of MONEY_STEP or more since the last line said, however slowly it came, is said with its cause. Field work
+// spent that only takes back the crop's last rise (a cost counted ahead, then paid) is not a change of the figure: it
+// is not said, and the line it undoes goes (cancel). A sale that leaves the figure where it was is said once a year. A new year or a
 // spring plan starts the watch again.
-export function moneyWatch(since: MoneyLook | null, now: MoneyLook): { cause: MoneyCause | null; since: MoneyLook } {
-  if (!since || since.year !== now.year || since.phase === 'plan' || now.phase === 'plan') return { cause: null, since: now }
-  const cause = moneyCause(since, now)
-  return { cause, since: cause ? now : since }
+export function moneyWatch(w: MoneyWatch | null, now: MoneyLook): { cause: MoneyCause | null; watch: MoneyWatch; cancel: boolean } {
+  if (!w || w.since.year !== now.year || w.since.phase === 'plan' || now.phase === 'plan') {
+    return { cause: null, watch: { since: now, before: null, counted: w && w.since.year === now.year ? w.counted : -1 }, cancel: false }
+  }
+  const cause = moneyCause(w.since, now)
+  if (cause && cause.part === 'orders' && /^(crop|sprays)/.test(w.part ?? '') && w.before && Math.abs(now.after - w.before.after) < MONEY_STEP / 2) {
+    return { cause: null, watch: { since: now, before: null, counted: w.counted }, cancel: true }
+  }
+  if (cause) return { cause, watch: { since: now, before: w.since, part: cause.part, counted: w.counted }, cancel: false }
+  if (w.counted !== now.year && now.sold - w.since.sold >= MONEY_STEP && Math.abs(now.after - w.since.after) < MONEY_STEP) {
+    return { cause: { amount: 0, part: 'sold', share: 1, text: 'Sold what was already counted' }, watch: { since: now, before: null, counted: now.year }, cancel: false }
+  }
+  return { cause: null, watch: w, cancel: false }
 }
 
 // What a field's crop should come to at the dig, total cwt an acre with its give-or-take: before the tubers set, what
 // the variety usually gives on this ground (worn soil and raw ground give less); after, the tubers there now by the
-// estimate, and while the vines live, the usual yield's share of the days from tuber set to the day the vines are
-// expected to come off (killOutlook) still ahead. Counted from the tubers setting, not from the warmth so far, so the
-// figure does not fall when they set: the early summer's slow warmth put that day far off.
+// estimate, and while the vines live, the usual yield's share of the bulking still ahead between tuber set and the day
+// the vines are expected to come off (killOutlook). Counted in days from the tubers setting, not by the warmth so far,
+// and slow at first as bulking is (x^1.5 (1 - x) + x^2 of it done at x of the days), so the figure neither falls when the
+// tubers set nor slides through July and climbs back by September.
 export function harvestYield(c: Campaign, field: number): { mean: number; lo: number; hi: number } | null {
   const f = c.season!.fields[field]
   const usual = usualYield(c, field, f.variety)
@@ -587,7 +666,8 @@ export function harvestYield(c: Campaign, field: number): { mean: number; lo: nu
   if (e && f.deadDay < 0) {
     const off = killOutlook(c, field)?.day ?? s.day
     const span = off - f.tiDay
-    toCome = span > 0 ? Math.min(1, Math.max(0, off - s.day) / span) : 0
+    const x = span > 0 ? Math.min(1, Math.max(0, s.day - f.tiDay) / span) : 1
+    toCome = 1 - (x * Math.sqrt(x) * (1 - x) + x * x)
   }
   const more = toCome * usual
   return {

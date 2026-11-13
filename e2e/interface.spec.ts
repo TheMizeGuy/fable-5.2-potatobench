@@ -1009,3 +1009,48 @@ test('the clock and the keys as a player meets them: Space just after an answer 
   await expect.poll(() => game<number>(page, 'app.campaign.season.day'), { timeout: 15_000 }).toBeGreaterThan(d0)
   expect(errors, errors.join('\n')).toEqual([])
 })
+
+// The money board keeps its rows whether its lines say anything or not, so the speed and menu keys under it never move
+// while lines come and go (round eight: a press meant for the menu opened the logs). Two seasons, a few days at a time.
+for (const [w, h] of [[1280, 800], [1440, 900]]) {
+  test(`the speed and menu keys never move while the money board's lines come and go, ${w} by ${h}`, async ({ page }) => {
+    test.setTimeout(300_000)
+    const errors = watchErrors(page)
+    await page.setViewportSize({ width: w, height: h })
+    await open(page, '?year=1990&seed=7')
+    await reach(page, `const { app } = q.g(); app.do({ t: 'begin' }); app.setSpeed(0)`)
+    await putAway(page)
+    const ids = ['speed-0', 'speed-1', 'speed-2', 'speed-3', 'menu-open']
+    const boxes = () => page.evaluate((ids: string[]) => ids.map(id => {
+      const r = document.querySelector(`#ui .topbar [data-testid="${id}"]`)?.getBoundingClientRect()
+      return r ? [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)] : null
+    }), ids)
+    const first = await boxes()
+    expect(first.every(b => b !== null)).toBe(true)
+    let samples = 0, moved = 0, why = 0
+    for (let year = 0; year < 2; year++) {
+      for (let k = 0; k < 80; k++) {
+        const going = await game<boolean>(page, `app.campaign.phase === 'season' && !sim.seasonDone(app.campaign)`)
+        if (!going) break
+        await reach(page, `const { app } = q.g(); const c = app.campaign; c.incidents = []; q.run(c.season.day + 3); c.incidents = []; app.setSpeed(0)`)
+        await page.waitForTimeout(60)
+        if (!(await game<boolean>(page, `app.campaign.phase === 'season' && !sim.seasonDone(app.campaign)`))) break
+        if (await page.locator('#ui [data-testid="cash-moved"]').count()) moved++
+        if (await page.locator('#ui [data-testid="outlook-why"]').count()) why++
+        samples++
+        expect(await boxes(), `sample ${samples}`).toEqual(first)
+      }
+      if (year === 0) {
+        await reach(page, `const { app } = q.g(); q.winter(12, 0); const c = app.campaign; if (c.phase === 'ledger' && c.outcome !== 'lost') { app.do({ t: 'next' }); app.do({ t: 'begin' }) } app.setSpeed(0)`)
+        if (!(await game<boolean>(page, `app.campaign.phase === 'season'`))) break
+        await putAway(page)
+        expect(await boxes()).toEqual(first)
+      }
+    }
+    console.log(`${samples} samples, the cash's line shown in ${moved}, the figure's line in ${why}`)
+    expect(samples).toBeGreaterThan(40)
+    expect(moved).toBeGreaterThan(0)
+    expect(why).toBeGreaterThan(0)
+    expect(errors, errors.join('\n')).toEqual([])
+  })
+}
