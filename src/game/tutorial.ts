@@ -241,15 +241,10 @@ export const LESSONS: Lesson[] = [
     when: l => inSeason(l) && firstYear(l),
     done: (_l, g) => g.has('noted:fields'),
     ask: l => { const n = potatoFields(l.c).length; const rest = resting(l.c); return rest ? `These tags mark your fields. This year ${n} will grow potatoes and ${rest} ${rest === 1 ? 'is' : 'are'} resting.` : `These tags mark your ${n} potato fields.` },
-    why: () => 'It\'s too cold to plant yet. When the soil warms, planting waits for your word.',
+    // The one tip between Start the season and the first thing the player does on the land (the word to plant): the
+    // fields, how to look round, and how long the wait is.
+    why: l => `${unplanted(l) ? `It's too cold to plant ${(l.wait ?? -1) > 1 ? `for about ${l.wait} days` : 'yet'}.` : 'Planting has started.'} ${by(l, 'Drag to look around and scroll to zoom.', 'Drag to look around and pinch to zoom.', 'Use the arrow keys to look around.')}`,
     point: l => ({ fields: potatoFields(l.c) }),
-  },
-  {
-    id: 'look', part: 'opening', name: 'Look around', read: true,
-    when: (l, g) => inSeason(l) && firstYear(l) && g.passed('fields'),
-    done: (_l, g) => g.has('noted:look'),
-    ask: l => by(l, 'Drag to move around the farm, and scroll to zoom in.', 'Drag to move around the farm, and pinch to zoom in.', 'Use the arrow keys to move around, and press Home to center the farm again.'),
-    why: l => unplanted(l) ? `The soil should be warm enough to plant${(l.wait ?? -1) > 1 ? ` in about ${l.wait} days` : ' soon'}.` : 'The game resumes when you close this.',
     skip: l => unplanted(l) ? 'Fast-forward to planting day' : null,
   },
   {
@@ -458,6 +453,15 @@ export const LESSONS: Lesson[] = [
     point: () => ({ testid: ['land-open'] }),
   },
   {
+    // The Land fold is open: the agent says what it shows and that it is a choice, and waits for Got it or the fold
+    // to close. The tutorial never goes quiet while a fold it asked for is open.
+    id: 'lots', part: 'spring', name: 'Look over the land', read: true, follows: true,
+    when: (l, g) => l.screen === 'plan' && l.fold === 'land' && g.passed('land') && !!l.c && l.c.history.length > 0,
+    done: (l, g, since) => g.has('noted:lots') || (!!since && l.fold !== 'land'),
+    ask: () => 'Each lot lists its rent for the year, then its price to buy.',
+    why: l => `More land is a choice, and the land you have is enough for now. ${by(l, 'Click', 'Tap', 'Press')} Got it when you've looked, and I'll go on.`,
+  },
+  {
     id: 'loan', part: 'spring', name: 'Money and the spring loan', uses: ['paper:money'],
     when: l => l.screen === 'plan' && !!l.c && l.c.history.length > 0,
     done: (_l, g) => g.has('paper:money') || g.has('noted:loan'),
@@ -469,7 +473,8 @@ export const LESSONS: Lesson[] = [
     id: 'begin2', part: 'spring', name: 'Start the second season',
     when: l => l.screen === 'plan' && !!l.c && l.c.history.length > 0,
     done: (l, _g, since) => !!since && !!l.c && l.c.phase !== 'plan',
-    ask: l => by(l, 'When you\'re happy with the plan, click Start the season.', 'When you\'re happy with the plan, tap Start the season.', 'When you\'re happy with the plan, start the season.'),
+    // The walk's closing line.
+    ask: l => by(l, 'That\'s the plan. Click Start the season when you\'re ready.', 'That\'s the plan. Tap Start the season when you\'re ready.', 'That\'s the plan. Start the season when you\'re ready.'),
     why: () => 'Machines and contracts can wait until a later spring.',
     point: () => ({ testid: ['begin-season'] }),
   },
@@ -477,9 +482,8 @@ export const LESSONS: Lesson[] = [
     id: 'calls2', part: 'spring', name: 'Your decisions this season', read: true,
     when: l => inSeason(l) && !!l.c && l.c.history.length > 0,
     done: (_l, g) => g.has('noted:calls2'),
-    ask: () => 'It\'s a new season. Planting waits for your word again, then your crew tends on its own. Your big decisions are spray, water and kill the vines.',
-    why: () => 'The forecast shows blight weather first, and a stamp appears when a decision is due.',
-    point: () => ({ testid: ['forecast'] }),
+    ask: () => 'It\'s a new season. The game pauses when the soil is ready, and planting waits for your word.',
+    why: () => 'Your other big decisions are spray, water and kill the vines, and a stamp appears when one is due.',
   },
   {
     id: 'hand', part: 'spring', name: 'Meet your hired hand', read: true, uses: ['unit:hand'],
