@@ -577,7 +577,7 @@ export class Crews {
   // one person at a time, in an order: nobody takes one while someone whose hours on it came before theirs (an earlier
   // day's, still being seen; or earlier in this day) has yet to be seen through them, and whoever has it gives it up to
   // them. Null while they wait for it; undefined when the farm has none for them (the work is then seen on foot).
-  // force: at once, whoever has it (a day held at a point by a tool, or stepped with the clock stopped).
+  // force: at once, whoever has it (a day held at a point by a tool: the hours of two people on it never overlap).
   private machineFor(a: Actor, seg: Seg, force: boolean, dt: number): Rig | null | undefined {
     const fits = (r: Rig) => r.kind === seg.ride && !r.broken
     const r = (a.rig && fits(a.rig) && this.uses(seg, a.rig) ? a.rig : undefined)
@@ -1187,6 +1187,12 @@ export class Crews {
       } else a.u = Math.min(a.segs[k + 1]?.start ?? 1, a.u + f.clock * Math.max(1 / base, GAP_RATE))
       if (!a.queue && (a.waited || !a.works)) a.u = Math.min(a.u, f.dayT)
     }
+    else if (this.literal && !a.way && a.u < 1 && (!this.frozen || a.segs.some(s => s.lit))) {
+      // (a day played out with the clock stopped: nobody is kept standing between the parts of it, or after them)
+      let k = -1
+      for (let s = 0; s < a.segs.length; s++) if (a.u >= a.segs[s].start) k = s
+      if (k < 0 || a.u >= a.segs[k].end - 1e-9) a.u = a.segs[k + 1]?.start ?? 1
+    }
     // A load on its way in is seen to the potato house door before the day is let go.
     const hs = a.clockSeg >= 0 ? a.segs[a.clockSeg] : undefined
     if (!held && hs && hs.kind === 'haul' && hs.site && !hs.lit && this.stage.tripOpen(hs.site, a.id)) a.u = Math.min(a.u, hs.end - 2e-3)
@@ -1206,14 +1212,14 @@ export class Crews {
     // they wait where they are.
     if (seg && seg.ride && a.u < seg.end && (a.waySeg !== seg || !a.rig || !this.uses(seg, a.rig))) {
       const had = a.rig
-      const r = this.machineFor(a, seg, held || seg.lit || (this.stopped && !this.frozen), this.frozen ? 0 : f.dt)
+      const r = this.machineFor(a, seg, held, this.frozen ? 0 : f.dt)
       if (r === null) {
         a.u = Math.min(a.u, seg.start)
         segIdx = -1
         seg = null
         waiting = true
         a.doing = 'wait'
-      } else if (r && r !== had && a.waySeg !== seg && !held && !seg.lit) this.fromHere(a, seg)
+      } else if (r && r !== had && a.waySeg !== seg && !held) this.fromHere(a, seg)
     }
     // A machine nothing more of their day is done with is let go where it stands, unless the farm's day leaves it theirs.
     if (a.rig && !a.hold && !a.lead && !held) {
@@ -1222,7 +1228,7 @@ export class Crews {
       if (!more) this.letGo(a)
     }
     // (their part with a machine seen, and the machine gone on to someone else: they stand where it left them)
-    if (seg && seg.ride && !a.rig && a.u >= seg.end && !held) seg = null
+    if (seg && seg.ride && !a.rig && a.u >= seg.end) seg = null
     const pose = a.pose.reset()
     const rig = a.rig
     const passed = (arc: number) => f.passed(k, segIdx, arc, a.gen)

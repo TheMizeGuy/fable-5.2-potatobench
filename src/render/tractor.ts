@@ -500,18 +500,19 @@ abstract class Machine {
     if (speed <= 1.5) { this.trail = 0; return }
     this.trail += st.moved
     // (hauling: a load on the lane, or the bed coming back light for the next, stands in its own dust the length of
-    // the way it went, on any ground not wet: it is what says from across the farm that the crop is coming in)
+    // the way it went, on dry ground: it is what says from across the farm that the crop is coming in)
     const hauling = st.kind === 'haul'
-    const dust = Math.max(f.dust, st.working > 0 && (st.kind === 'plant' || st.kind === 'hill' || st.kind === 'dig') ? 0.5 + 0.3 * f.dust : 0, hauling ? 0.5 + 0.3 * f.dust : 0) * (1 - f.mud)
+    const dust = Math.max(f.dust, st.working > 0 && (st.kind === 'plant' || st.kind === 'hill' || st.kind === 'dig') ? 0.5 + 0.3 * f.dust : 0, hauling && f.dust > 0.3 ? 0.5 + 0.3 * f.dust : 0) * (1 - f.mud)
     let guard = 0
     // closer together at a working pace, when each puff is all there is to see of it
     const every = speed < 12 ? 2.5 : hauling ? 3.5 : 6
     while (this.trail > every && guard++ < 14) {
       this.trail -= every
-      if (speed >= 12 && r() < 0.5) {
-        // exhaust left standing along the way
+      if (speed >= 12 && r() < (hauling ? 1 : 0.5)) {
+        // exhaust left standing along the way (under a load, and seen from far off: more of it, and longer in the air)
+        const far = hauling ? st.far : 0
         this.at(sx, sy, sz, p0)
-        pt.emit(p0.x - fwd.x * this.trail, p0.y + 1 + r() * 2, p0.z - fwd.z * this.trail, 0, 0.6, 0, 0.9, 0.7, 2.5 + r() * 2, 0.3, 0.3, 0.32, 0.22, 0.6)
+        pt.emit(p0.x - fwd.x * this.trail, p0.y + 1 + r() * 2, p0.z - fwd.z * this.trail, 0, 0.6, 0, 0.9 * (1 + 1.6 * far), 0.7, (2.5 + r() * 2) * (1 + far), 0.3 + (f.cold ? 0.4 * far : 0), 0.3 + (f.cold ? 0.4 * far : 0), 0.32 + (f.cold ? 0.4 * far : 0), 0.22 + 0.2 * far, 0.6)
       }
       if (dust < 0.06) continue
       // where the back wheels were that far back along the way it came

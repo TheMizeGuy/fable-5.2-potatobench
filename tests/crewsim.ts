@@ -101,8 +101,9 @@ export interface Seen {
 
 // Runs the days at a clock speed from the evening before `kind` is first done, and says what was seen of it.
 // foot: the work is done on foot (the one doing it is watched, not a machine); dist: how far off the camera is.
-// from: the day to begin on the evening before, in place of the first day the work is done.
-export function watch(kind: string, speed: 1 | 2 | 3, opts: { farm?: Farm; seconds?: number; dist?: number; foot?: boolean; headZ?: number; grace?: number; pauseAt?: number; from?: number } = {}): Seen {
+// from: the day to begin on the evening before, in place of the first day the work is done. stepped: the clock is
+// left stopped and a day counted every so many seconds, each played out at its own pace (as a tool plays one).
+export function watch(kind: string, speed: 1 | 2 | 3, opts: { farm?: Farm; seconds?: number; dist?: number; foot?: boolean; headZ?: number; grace?: number; pauseAt?: number; from?: number; stepped?: number } = {}): Seen {
   const farm = opts.farm ?? {}, dist = opts.dist ?? 450, grace = opts.grace ?? [5, 5, 4.5, 3.5][speed], headZ = opts.headZ ?? HEAD.z
   const days = opts.from ?? firstDay(kind, farm)
   if (!days) throw new Error(`nobody ever does ${kind}`)
@@ -156,7 +157,8 @@ export function watch(kind: string, speed: 1 | 2 | 3, opts: { farm?: Farm; secon
   const lead0 = new Map<number, { x: number; z: number }>()
   const inField = (x: number, z: number) => { for (const i of fields) { const r = FIELDS[i]; if (x > r.x0 - HEAD.x && x < r.x1 + HEAD.x && z > r.z0 - headZ && z < r.z1 + headZ) return true } return false }
   const quick = [1, 1, 1.5, 2.4][speed]
-  app.setSpeed(speed)
+  if (!opts.stepped) app.setSpeed(speed)
+  let nextDay = 0.5
   const dayOne = c.season!.day
   let dayNow = dayOne, events = 0, stopped = 0, paused = false
   out.work[0] = 0
@@ -164,7 +166,8 @@ export function watch(kind: string, speed: 1 | 2 | 3, opts: { farm?: Farm; secon
     time += dt
     if (c.incidents.length) c.incidents = []
     // (a question that stops the clock is answered a third of a second later)
-    if (app.speed !== speed && c.phase === 'season' && ++stopped > 20) { app.setSpeed(speed); stopped = 0 }
+    if (!opts.stepped && app.speed !== speed && c.phase === 'season' && ++stopped > 20) { app.setSpeed(speed); stopped = 0 }
+    if (opts.stepped && time >= nextDay) { nextDay += opts.stepped; app.do({ t: 'day' }) }
     // (the player stops the clock for a moment, as to look at something, and sets it going again)
     if (opts.pauseAt !== undefined && time >= opts.pauseAt && !paused) { paused = true; app.setSpeed(0); stopped = -60 }
     app.tick(dt * 1000)
@@ -172,7 +175,7 @@ export function watch(kind: string, speed: 1 | 2 | 3, opts: { farm?: Farm; secon
     if (dayT < 1) dayT = Math.min(1, app.speed > 0 ? Math.max(dayT + (dt / 3.4) * 0.25, app.dayProgress) : dayT + dt / 3.4)
     if (crews.stageHold >= 0) dayT = Math.min(dayT, crews.stageHold)
     crews.place({
-      dt, dayT, advancing: app.speed > 0, pace: 1, time, reduced: false, idle: false, season: snap.mode === 'season', dist, dust: env.dry, dark: 0, picked: -1, particles, passed, snap, env, camera,
+      dt, dayT, advancing: app.speed > 0, pace: opts.stepped ? 2 : 1, time, reduced: false, idle: false, season: snap.mode === 'season', dist, dust: env.dry, dark: 0, picked: -1, particles, passed, snap, env, camera,
       speed: app.speed, daySec: 1 / DAYS_PER_SECOND[Math.max(1, app.speed)], clock: dt,
     })
     particles.update(dt, 0, 0)

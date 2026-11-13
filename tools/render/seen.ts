@@ -358,7 +358,14 @@ for (const job of JOBS) {
     await shot(`${job.name}-opening-${label}`)
     if (speed !== 2) await shot(`${job.name}-opening-${label}-with-the-interface`, false)
     let m: { work: number; noise: number } | null = null
-    if (speed === 1) { const n = await now(); m = await mark(`${job.name}-opening-1x`, n.field, 1, job.headZ ?? 2) }
+    if (speed === 1) {
+      // (the field the machine is on; with none on one when the picture is taken, a field the game has the work on:
+      // never the whole picture, where the far woods' leaves alone differ by more than the floor)
+      const n = await now(), on = n.field >= 0 ? n.field : await page.evaluate(() => [...(window as any).__seen.st.fields][0] ?? -1) as number
+      if (n.field < 0) console.log('     ', `no machine is on a field of the work as the far picture is taken: it is of ${on >= 0 ? FIELD_NAMES[on] : 'no field'}`)
+      if (on >= 0) m = await mark(`${job.name}-opening-1x`, on, 1, job.headZ ?? 2)
+      else check(false, `${job.name}: from the opening view there is no field of the work to take the far picture of`)
+    }
     await until(n => n.t >= secs, secs + 2)
     const s = await end()
     if (speed === 1) { console.log(`      before the first day was counted someone was seen to go ${s.lead.toFixed(0)} m`); for (const t of s.trace.slice(0, 14)) console.log('     ', t.slice(0, 300)) }

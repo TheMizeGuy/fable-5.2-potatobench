@@ -74,7 +74,7 @@ interface Site {
   pt: number
 }
 
-// dust: hauling, how far along the lane the dust of the load in hand has been laid (metres of the trip)
+// dust: hauling, how far along the lane the dust or haze of the load in hand has been laid (metres of the trip)
 interface Doing { ph: number; t: number; x: number; z: number; n: number; dust?: number }
 
 // How far a job on a field had got by the day's end, 0..1 (below zero when nobody's day says).
@@ -87,7 +87,7 @@ function shareOf(snap: Snapshot, kind: string, field: number): number {
 // A lap of hauling with the clock running, as shares of it: standing to load (and again to unload), and when the
 // door is reached.
 const LAP_STAND = 0.18, LAP_DOOR = 0.5
-// Metres of the lane between the puffs of a load's dust.
+// Metres of the lane between the puffs of what a load leaves in the air.
 const HAUL_DUST = 7
 // How far past a field's end the stones are put off: beyond where the tractors turn.
 const HEAP_OUT = 13
@@ -727,18 +727,23 @@ export class Stage {
     // (a cut drive: going from sight over the last of the pulling away)
     const drive = out ? (lap - q0) / (q1 - q0) : back ? (lap - q2) / (1 - q2) : 1
     if (w.rig) w.rig.fade = !literal && trip.length > reach * 1.25 && drive < 0.4 ? 1 - 0.9 * clamp01((drive - 0.2) / 0.2) : 1
-    // A drive cut from sight is still made, and on dry ground under its own dust: seen from across the farm, the dust
+    // A drive cut from sight is still made, and what it leaves in the air is still left: seen from across the farm it
     // runs the length of the lane with the load, to the potato house door, and thinner behind the bed coming back
-    // light. It is what says from far off that the crop is coming in. (From close by the cut is what is seen.)
-    if (!literal && f.going && f.dry && !f.still && w.rig && (out || back) && trip.length > reach * 1.25) {
+    // light. On dry ground it is the lane's dust; on damp, the haze of an engine under load, pale and thick as steam
+    // on a cold morning. It is what says from far off that the crop is coming in. (From close by the cut is what is
+    // seen.)
+    if (!literal && f.going && !f.still && w.rig && (out || back) && trip.length > reach * 1.25) {
       const front = (out ? drive : 1 - drive) * trip.length, step = out ? HAUL_DUST : HAUL_DUST * 1.7
+      const chill = f.snap.weather.tmin < 4
+      const shade = f.dry ? 0.78 : chill ? 0.82 : 0.4, thick = (f.dry ? 0.58 : chill ? 0.44 : 0.34) * (out ? 1 : 0.7)
       let from = j.dust ?? (out ? 0 : trip.length)
       for (let n = 0; n < 24 && Math.abs(front - from) >= step; n++) {
         from += front > from ? step : -step
         const e = trip.at(from), far = f.far(e.x, e.z), q = Math.random
         if (far < 0.15) continue
-        f.particles.emit(e.x + (q() - 0.5) * 1.6, heightAt(e.x, e.z) + 1.7 + 0.8 * far, e.z + (q() - 0.5) * 1.6, (q() - 0.5) * 0.5, 0.6 + q() * 0.6, (q() - 0.5) * 0.5,
-          (1.6 + q() * 0.9) * (1 + 1.3 * far) + 2.2, 0.42 + q() * 0.2, (5 + q() * 4) * (1 + 0.5 * far), 0.78, 0.7, 0.58, Math.min(0.9, (out ? 0.58 : 0.4) * far * (1 + 0.6 * far)), 0.55)
+        f.particles.emit(e.x + (q() - 0.5) * 1.6, heightAt(e.x, e.z) + (f.dry ? 1.7 : 2.6) + 0.8 * far, e.z + (q() - 0.5) * 1.6, (q() - 0.5) * 0.5, 0.6 + q() * 0.6, (q() - 0.5) * 0.5,
+          (1.6 + q() * 0.9) * (1 + 1.3 * far) + (f.dry ? 2.2 : 1), 0.42 + q() * 0.2, (5 + q() * 4) * (1 + 0.5 * far),
+          shade, f.dry ? 0.7 : shade + 0.01, f.dry ? 0.58 : shade + 0.03, Math.min(0.9, thick * far * (1 + 0.6 * far)), 0.55)
       }
       j.dust = from
     } else j.dust = undefined

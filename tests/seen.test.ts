@@ -63,6 +63,14 @@ describe('one tractor between two people in a day', () => {
     }
   })
 
+  it('in days counted with the clock stopped and played out at their own pace, the second waits for it', () => {
+    const day = sharedDay('spray')
+    // (one day, seen through at a walker's and a machine's own pace: some twenty minutes of it)
+    const s = watch('spray', 1, { from: day.days, seconds: 1300, stepped: 5000 })
+    expect(s.turns.slice(0, 2), s.turns.join(' ')).toEqual(day.turns.slice(0, 2).map(t => `${t.unit}@${t.field}`))
+    expect(s.afoot).toBe(0)
+  })
+
   it('at 8x, too, nobody is seen at a machine\'s work without the machine', () => {
     const day = sharedDay('spray')
     const s = watch('spray', 3, { from: day.days, seconds: 12 })
