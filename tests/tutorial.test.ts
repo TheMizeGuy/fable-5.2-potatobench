@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { countWords, Guide, KEY, LESSONS, lesson, PIECES, type Input, type Look, type Store } from '../src/game/tutorial.ts'
+import { countWords, driving, Guide, KEY, LESSONS, lesson, openAsks, OPENING_PACE, PIECES, RUN_PACE, type Input, type Look, type Scene, type Store } from '../src/game/tutorial.ts'
 import * as S from '../src/sim/index.ts'
 import { loadWorld } from '../tools/balance/world.ts'
 
@@ -89,8 +89,9 @@ describe('the guided first year', () => {
   it('opens on what the game is, then the land, then planting day: a dozen notes or so, each from the farm', () => {
     for (const seed of [3, 11, 42]) {
       const { shown, c } = guidedYear(seed)
-      // (round eight: one tip between Start the season and the word to plant)
-      expect(shown.slice(0, 6), `seed ${seed}`).toEqual(['frame', 'begin', 'fields', 'word', 'plantday', 'tend'])
+      // (the owner, after round eight: the tutorial starts when planting is ready, so the season's first note is the
+      // word to plant; the guide carries the player through the weeks before it)
+      expect(shown.slice(0, 5), `seed ${seed}`).toEqual(['frame', 'begin', 'word', 'plantday', 'tend'])
       // What every year brings, whatever its weather.
       for (const id of ['kill', 'dig', 'bills', 'close', 'cellar', 'book']) expect(shown, `seed ${seed}: ${id}`).toContain(id)
       const first = shown.filter(id => lesson(id)!.part !== 'spring')
@@ -101,8 +102,8 @@ describe('the guided first year', () => {
 
   it('brings the screen in piece by piece: the land alone, then each piece with the note that introduces it', () => {
     const { hid, g, c, shown } = guidedYear(11)
-    // Its first note is shown over the land with only the field tags brought in.
-    expect(hid.fields).toEqual(PIECES.filter(p => p !== 'tags'))
+    // The season's first note (the word to plant) is shown over the land with only the tags and their stamps brought in.
+    expect(hid.word).toEqual(PIECES.filter(p => p !== 'tags' && p !== 'stamps'))
     expect(hid.plantday).not.toContain('people')
     expect(hid.plantday).toContain('forecast')
     expect(hid.plantday).toContain('list')
@@ -132,9 +133,12 @@ describe('the guided first year', () => {
     g.newFarm(c.seed)
     g.accept()
     S.apply(w, c, { t: 'begin' })
-    expect(g.current(look(w, c))?.id).toBe('fields')
-    g.skip('fields')
+    // The season opens on the land alone, with no note until the soil is ready.
+    expect(g.current(look(w, c))).toBeNull()
+    expect(g.hidden(c, 'season')).toContain('tags')
+    g.skip('word')
     expect(g.hidden(c, 'season')).not.toContain('tags')
+    expect(g.hidden(c, 'season')).not.toContain('stamps')
   })
 
   it('with spraying left to the player, the first stamp is explained and brings the stamps and the list in', () => {
@@ -185,11 +189,10 @@ describe('the guided first year', () => {
     const { w, c } = farm(21)
     const g = new Guide(memory())
     g.refuse()
-    S.apply(w, c, { t: 'begin' })
     expect(g.current(look(w, c))).toBeNull()
-    g.replay('fields')
-    expect(g.current(look(w, c))?.id).toBe('fields')
-    g.noted('fields')
+    g.replay('begin')
+    expect(g.current(look(w, c))?.id).toBe('begin')
+    S.apply(w, c, { t: 'begin' })
     expect(g.current(look(w, c))).toBeNull()
   })
 })
@@ -288,16 +291,11 @@ describe('what a note says against what the game does (round six)', () => {
     expect(stamp.show!(seen)).toEqual({ field: last })
   })
 
-  it('the keys that run the game fast say so, and no spring note argues with the goal slip', () => {
+  it('no note carries a key to run the game fast (the guide runs the clock itself), and no spring note argues with the goal slip', () => {
     const { w, c } = farm(11)
     S.apply(w, c, { t: 'begin' })
     const l = look(w, c)
-    let keys = 0
-    for (const x of LESSONS) {
-      const skip = x.skip?.(l)
-      if (skip) { keys++; expect(skip, x.id).toMatch(/^Fast-forward to /) }
-    }
-    expect(keys).toBeGreaterThan(0)
+    for (const x of LESSONS) expect('skip' in x, x.id).toBe(false)
     for (const id of ['hire', 'begin2']) expect(`${lesson(id)!.ask(l)} ${lesson(id)!.why(l)}`).not.toMatch(/don't have to hire/)
     // The notes reworded this round keep the 35 words, however they are played.
     S.apply(w, c, { t: 'hire', kind: 'hand' })
@@ -324,7 +322,6 @@ describe('round seven: what the player is for, and what the agent asks', () => {
     g.accept()
     for (const id of ['frame']) g.noted(id)
     S.apply(w, c, { t: 'begin' })
-    for (const id of ['fields']) g.noted(id)
     for (let n = 0; n < 120 && !S.fieldNeeds(w, c).some(x => x.need?.act === 'plant'); n++) {
       expect(g.current(look(w, c, { speed: 3 })), `day ${n}`).toBeNull()
       S.apply(w, c, { t: 'day' })
@@ -374,7 +371,7 @@ describe('round seven: what the player is for, and what the agent asks', () => {
     const { w, c } = farm(11)
     S.apply(w, c, { t: 'begin' })
     const l = look(w, c)
-    for (const id of ['fields', 'plantday', 'tend', 'blight', 'list', 'frost', 'dig', 'bills']) expect(lesson(id)!.asks?.(l) ?? false, id).toBe(false)
+    for (const id of ['plantday', 'tend', 'blight', 'list', 'frost', 'dig', 'bills']) expect(lesson(id)!.asks?.(l) ?? false, id).toBe(false)
     expect(lesson('stamp')!.asks!(l)).toBe(true)
     // The vine kill asks only when there is a stamp to press and the crew has given no date of its own.
     expect(lesson('kill')!.asks!(l)).toBe(false)
@@ -429,8 +426,156 @@ describe('round seven: what the player is for, and what the agent asks', () => {
   })
 })
 
+describe('the guide runs the clock between its notes', () => {
+  const at = (w: S.World, c: S.Campaign, o: Partial<Look> = {}) => look(w, c, { speed: 3, wait: c.phase === 'season' ? S.plantingIn(w, c) : -1, ...o })
+  function guided(seed = 11): { w: S.World; c: S.Campaign; g: Guide } {
+    const { w, c } = farm(seed)
+    const g = new Guide(memory())
+    g.newFarm(c.seed)
+    g.accept()
+    g.noted('frame')
+    S.apply(w, c, { t: 'begin' })
+    return { w, c, g }
+  }
+
+  it('carries the player from Start the season to the day the soil is ready in a few seconds, at one pace, saying what passes', () => {
+    for (const seed of [3, 11, 42]) {
+      const { w, c, g } = guided(seed)
+      const first = driving(at(w, c), g)!
+      expect(first.speed).toBe(3)
+      expect(first.line, `seed ${seed}`).toBe('A few weeks pass while the soil warms.')
+      expect(first.next).toBe('Next: planting, on your word.')
+      // The seconds the wait takes: each day at the pace the guide gives that day (8x is two days a second).
+      let seconds = 0
+      const paces = new Set<number>()
+      for (let n = 0; n < 120 && c.season!.plantAsk === undefined; n++) {
+        const d = driving(at(w, c), g)!
+        expect(d.waits, `seed ${seed}, day ${n}`).toBeUndefined()
+        expect(d.scene).toBeUndefined()
+        paces.add(Math.round(d.pace * 100))
+        seconds += 1 / (2 * d.pace)
+        S.apply(w, c, { t: 'day' })
+      }
+      expect(c.season!.plantAsk, `seed ${seed}`).toBeDefined()
+      expect(seconds, `seed ${seed}: seconds to the ask`).toBeLessThan(4)
+      expect([...paces], `seed ${seed}: one pace`).toEqual([OPENING_PACE * 100])
+      expect(OPENING_PACE).toBeGreaterThan(RUN_PACE)
+      // The day of the ask it waits: the press is the player's, or theirs to wave through.
+      const ask = driving(at(w, c, { speed: 0 }), g)!
+      expect(ask.waits?.id).toBe('word')
+      expect(ask.line).toBe('Planting waits for your word. Click a ringed Plant stamp.')
+      expect(driving(at(w, c, { speed: 0 }), g, new Set(['word']))!.waits).toBeUndefined()
+    }
+  })
+
+  it('slows to show each kind of work the first day it is done, once, and says who is doing it where', () => {
+    const { w, c, g } = guided(11)
+    const seen: Scene[] = []
+    const lines = new Set<string>()
+    const tenses: string[] = []
+    for (let n = 0; n < 320 && c.phase === 'season' && !S.seasonDone(c); n++) {
+      if (!S.plantWordGiven(c.season!)) { const field = S.fieldNeeds(w, c).findIndex(x => x.need?.act === 'plant'); if (field >= 0) S.apply(w, c, { t: 'job', kind: 'plant', field }) }
+      if (c.season!.watchDay >= 0 && S.sprayWayNow(c) === null) S.apply(w, c, { t: 'sprayWay', way: 'auto' })
+      for (const inc of [...c.incidents]) S.apply(w, c, { t: 'answer', incident: inc.id, choice: S.defaultChoice(inc) })
+      for (const lot of S.openLots(c)) if (c.season!.fields[lot.field]?.weighed) S.apply(w, c, { t: 'sell', lot: lot.id, frac: 1 })
+      const d = driving(at(w, c), g)
+      expect(d, `day ${n}`).not.toBeNull()
+      lines.add(`${d!.line} ${d!.next}`)
+      if (d!.scene) {
+        seen.push(d!.scene)
+        g.note(`seen:${d!.scene.id}`)
+        // The same day, looked at again: that work is not shown twice.
+        expect(driving(at(w, c), g)!.scene?.id).not.toBe(d!.scene.id)
+        // "is spraying" only of someone whose order is still on the list and theirs, in that field; of work the day
+        // finished it says "sprayed", so the line never has someone at work the time book has waiting.
+        // Whoever is followed is in the field the line names; one who has gone on to other work is not followed, and
+        // their field is shown instead.
+        if (d!.scene.id !== 'up') {
+          const sc = d!.scene
+          const going = (unit: number, field: number) => {
+            const u = c.crew.find(x => x.id === unit)
+            const job = c.season!.jobs.find(j => j.kind === sc.id && j.field === field)
+            return !!u && !!job && !S.resting(u) && !S.hurt(u, c.season!.day) && u.at === field && u.road <= 0 && (u.job === job.id || (u.job < 0 && !c.crew.some(o => o !== u && o.job === job.id)))
+          }
+          // Never on a day off: the time book has everyone at home then.
+          expect(S.workday(c, c.season!), `${sc.line} (day ${n})`).toBe(true)
+          const now = /^(You're|\w+ is) /.test(sc.line)
+          expect(now, `${sc.line} (day ${n})`).toBe(c.season!.worked.some(x => x.kind === sc.id && going(x.unit, x.field)))
+          if (now) expect(going(sc.unit, sc.field), sc.line).toBe(true)
+          if (sc.unit >= 0) expect(c.crew.find(x => x.id === sc.unit)!.at, sc.line).toBe(sc.field)
+          else expect(c.season!.worked.some(x => x.kind === sc.id && c.crew.some(u => u.id === x.unit && u.road <= 0 && u.at === x.field)), `${sc.line}: nobody left in a field it was done in`).toBe(false)
+          tenses.push(`${sc.id}:${now ? 'now' : sc.unit >= 0 ? 'done' : 'done, gone'}`)
+        }
+      }
+      S.apply(w, c, { t: 'day' })
+    }
+    const ids = seen.map(x => x.id)
+    for (const id of ['plant', 'up', 'hill', 'kill', 'dig', 'haul']) expect(ids, ids.join(' ')).toContain(id)
+    expect(new Set(ids).size).toBe(ids.length)
+    expect(ids.indexOf('plant')).toBeLessThan(ids.indexOf('up'))
+    expect(ids.indexOf('kill')).toBeLessThan(ids.indexOf('dig'))
+    for (const x of seen) {
+      expect(x.field, x.id).toBeGreaterThanOrEqual(0)
+      if (x.id !== 'up') expect(x.unit === -1 || c.crew.some(u => u.id === x.unit), `${x.id}: someone to follow, or the field`).toBe(true)
+      expect(x.line).toContain(S.FIELD_NAMES[x.field])
+      expect(countWords(x.line), x.line).toBeLessThanOrEqual(14)
+    }
+    console.log(`the work the guide shows, and whether it was still going: ${tenses.join(' ')}; ${seen.map(x => x.line).join(' | ')}`)
+    expect(seen.find(x => x.id === 'plant')!.line).toMatch(/^You('re planting| planted) /)
+    // What is passing is said in a line, and what comes next in another, all year.
+    expect(lines.size).toBeGreaterThan(4)
+    for (const t of lines) expect(countWords(t), t).toBeLessThanOrEqual(18)
+  })
+
+  it('is the guide\'s in a first year until the player takes the clock, and the player\'s after that and in later years unless they hand it back', () => {
+    const { w, c, g } = guided(11)
+    expect(g.drives(c)).toBe(true)
+    expect(driving(at(w, c), g)).not.toBeNull()
+    g.takeClock()
+    expect(g.drives(c)).toBe(false)
+    expect(driving(at(w, c), g)).toBeNull()
+    g.giveClock()
+    expect(driving(at(w, c), g)).not.toBeNull()
+    // The tutorial off: nothing runs the clock.
+    g.stop()
+    expect(driving(at(w, c), g)).toBeNull()
+    // A second year: the guide is quiet about the clock unless asked.
+    const later = guidedYear(11)
+    S.apply(later.w, later.c, { t: 'begin' })
+    const h = new Guide(memory())
+    h.skipTo('calls2')
+    expect(h.drives(later.c)).toBe(false)
+    expect(driving(at(later.w, later.c), h)).toBeNull()
+    h.giveClock()
+    expect(driving(at(later.w, later.c), h)).not.toBeNull()
+    expect(driving(at(later.w, later.c), h)!.scene).toBeUndefined()
+  })
+
+  it('waits for a ringed stamp the year is waiting on, and goes on once it is pressed or waved through', () => {
+    const { w, c, g } = guided(11)
+    S.apply(w, c, { t: 'sprayWay', way: 'ask' })
+    let field = -1
+    for (let n = 0; n < 200 && field < 0; n++) {
+      if (!S.plantWordGiven(c.season!)) { const f = S.fieldNeeds(w, c).findIndex(x => x.need?.act === 'plant'); if (f >= 0) S.apply(w, c, { t: 'job', kind: 'plant', field: f }) }
+      for (const inc of [...c.incidents]) S.apply(w, c, { t: 'answer', incident: inc.id, choice: S.defaultChoice(inc) })
+      field = S.fieldNeeds(w, c).findIndex(x => x.need?.act === 'spray')
+      if (field < 0) S.apply(w, c, { t: 'day' })
+    }
+    expect(field).toBeGreaterThanOrEqual(0)
+    const open = openAsks(at(w, c))
+    expect(open.length).toBeGreaterThan(0)
+    const d = driving(at(w, c), g)!
+    expect(d.waits?.id).toBe(open[0].id)
+    expect(d.line).toMatch(/ Click its ringed stamp\.$/)
+    expect(driving(at(w, c), g, new Set(open.map(a => a.id)))!.waits).toBeUndefined()
+    // Pressed, for every field that asks: nothing is waited on.
+    S.fieldNeeds(w, c).forEach((x, i) => { if (x.need?.act === 'spray') S.apply(w, c, { t: 'job', kind: 'spray', field: i }) })
+    expect(driving(at(w, c), g)!.waits).toBeUndefined()
+  })
+})
+
 describe('round eight: the guide in the opening and in the second spring', () => {
-  it('at the opening one tip stands between Start the season and the first thing the player does on the land', () => {
+  it('at the opening nothing stands between Start the season and the first thing the player does on the land: no note until the word', () => {
     const { w, c } = farm(11)
     const g = new Guide(memory())
     g.newFarm(c.seed)
@@ -438,14 +583,8 @@ describe('round eight: the guide in the opening and in the second spring', () =>
     g.noted('frame')
     expect(g.current(look(w, c))?.id).toBe('begin')
     S.apply(w, c, { t: 'begin' })
-    // The one tip: the fields, how to look round and how long the wait is, with the key that runs to planting day.
-    const tip = g.current(look(w, c, { wait: 26 }))!
-    expect(tip.id).toBe('fields')
-    expect(`${tip.ask(look(w, c, { wait: 26 }))} ${tip.why(look(w, c, { wait: 26 }))}`).toBe('These tags mark your fields. This year 4 will grow potatoes and 2 are resting. It\'s too cold to plant for about 26 days. Drag to look around and scroll to zoom.')
-    expect(tip.skip?.(look(w, c))).toBe('Fast-forward to planting day')
-    for (const input of INPUTS) expect(countWords(`${tip.ask({ ...look(w, c), input })} ${tip.why({ ...look(w, c), input })}`), input).toBeLessThanOrEqual(35)
-    g.noted('fields')
-    // Nothing more until the soil is ready, and then the ask for the word.
+    // No note until the soil is ready, and then the ask for the word. (The owner, after round eight: "we should
+    // start the tutorial when planting is ready".)
     let next = ''
     for (let n = 0; n < 120 && !next; n++) {
       next = g.current(look(w, c, { speed: 3 }))?.id ?? ''
@@ -453,6 +592,7 @@ describe('round eight: the guide in the opening and in the second spring', () =>
     }
     expect(next).toBe('word')
     expect(lesson('look')).toBeUndefined()
+    expect(lesson('fields')).toBeUndefined()
   })
 
   it('the second spring\'s walk never goes quiet over a fold it opened, says hiring and land are choices, and ends on a closing line', () => {

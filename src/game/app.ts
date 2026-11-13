@@ -225,6 +225,7 @@ export class App {
   private afterLoad(): void {
     this.speed = 0
     this.resumeSpeed = 1
+    this.pace = 1
     this.pauseReason = ''
     this.pauseCause = ''
     this.owed = null
@@ -613,6 +614,9 @@ export class App {
     this.emit({ type: 'settings' })
   }
 
+  // How many times faster than its speed the clock runs: 1 but while the tutorial carries the player past days that
+  // teach nothing (src/ui/tutorial.ts). Every pause the game makes itself stops it all the same.
+  pace = 1
   // While a pointer is held down on the land (a drag, a press on a stamp) the days wait, so nothing is lost to it.
   pressing = false
   // When an answer last set the days going again (performance.now()), so a Space just after it is not taken back.
@@ -622,7 +626,7 @@ export class App {
     const c = this.campaign
     if (c && this.screen === 'season' && this.speed > 0 && c.season && !seasonDone(c) && !this.pressing) {
       if (this.owed && this.pauseOwed(c)) return
-      this.dayProgress += (Math.min(dtMs, 250) / 1000) * DAYS_PER_SECOND[this.speed]
+      this.dayProgress += (Math.min(dtMs, 250) / 1000) * DAYS_PER_SECOND[this.speed] * this.pace
       let guard = 0
       while (this.dayProgress >= 1 && guard++ < 3 && this.speed > 0) {
         this.dayProgress -= 1

@@ -2,7 +2,7 @@
 // time, set where it covers nothing it is about, and the printer's fist on the one control it asks for. In spring the
 // slip is tucked into the seed catalogue above the order blank; elsewhere it floats over the land.
 import { SPEED_X } from '../game/app.ts'
-import { Guide, lesson, LESSONS, localStore, PART_NAME, PIECES, type Input, type Lesson, type Look, type Part, type Point, type Show } from '../game/tutorial.ts'
+import { driving, Guide, lesson, LESSONS, localStore, openAsks, PART_NAME, PIECES, SCENE_SECONDS, type Input, type Lesson, type Look, type Part, type Point, type Show } from '../game/tutorial.ts'
 import * as S from '../sim/index.ts'
 import { patch, type Ctx } from './core.ts'
 import { h } from './dom.ts'
@@ -91,6 +91,12 @@ export function openGuide(ctx: Ctx): void {
             onchange: (e: Event) => { if ((e.target as HTMLInputElement).checked) guide.resume(); else guide.stop(); draw(); ctx.dirty() },
           }), h('i', { class: `tick${guide.on ? ' on' : ''}` })),
           h('span', null, h('b', null, 'Show the tutorial'), ' ', h('span', { class: 'quiet' }, 'a tip the first time each thing comes up'))),
+        h('label', { class: 'check guide-on' },
+          h('span', { class: 'check-in' }, h('input', {
+            type: 'checkbox', checked: guide.drives(ctx.app.campaign), disabled: !guide.on, testid: 'guide-clock',
+            onchange: (e: Event) => { if ((e.target as HTMLInputElement).checked) guide.giveClock(); else guide.takeClock(); draw(); ctx.dirty() },
+          }), h('i', { class: `tick${guide.drives(ctx.app.campaign) ? ' on' : ''}` })),
+          h('span', null, h('b', null, 'Run the clock for me'), ' ', h('span', { class: 'quiet' }, 'time runs on between tips and stops at each decision'))),
         ...PARTS.map(part => h('section', { class: 'guide-part' },
           h('h3', { class: 't-label' }, PART_NAME[part]),
           h('ul', null, LESSONS.filter(x => x.part === part).map(x => {
@@ -284,14 +290,15 @@ function holdLine(): HTMLElement {
 // back: the speed the game resumes at when the note is closed (0: it stays paused, because it was paused before or
 // because the note asks for a press on the land; -1: no clock here).
 // go: where the lesson's own Show me leads, when what it is about is not on the screen.
-function slipBody(ctx: Ctx, x: Lesson, l: Look, held: boolean, lost = false, under = false, show = -1, ahead: ((id: string) => void) | null = null, back = -1, go: Show | null = null): (HTMLElement | null)[] {
+// clock: whose the clock is between notes in this season ('' out of one): the guide runs it on by itself, or it is
+// the player's and the note offers to take it back.
+function slipBody(ctx: Ctx, x: Lesson, l: Look, held: boolean, lost = false, under = false, show = -1, clock: 'guide' | 'player' | '' = '', back = -1, go: Show | null = null): (HTMLElement | null)[] {
   const again = guide.replaying(x.id)
   const where = PART_NAME[x.part]
   const done = () => { guide.noted(x.id); poke(); ctx.dirty() }
-  const skip = ahead ? x.skip?.(l) ?? null : null
   const act = x.act?.(l) ?? null
   // Each key that touches the clock says what it does to it.
-  const resumes = back < 0 ? null : h('span', { class: 'sub', testid: 'guide-resumes' }, back > 0 ? `resumes at ${SPEED_X[back]}` : 'stays paused')
+  const resumes = back < 0 ? null : h('span', { class: 'sub', testid: 'guide-resumes' }, back <= 0 ? 'stays paused' : clock === 'guide' ? 'time runs on' : `resumes at ${SPEED_X[back]}`)
   const lead = (s: Show) => { if ('field' in s) { ctx.app.select(s.field); ctx.app.focus(s.field) } else { if (s.foreman) showForemanKey(); ctx.app.selectUnit(s.unit); ctx.dirty() } }
   return [
     h('header', { class: 'guide-head' },
@@ -309,9 +316,22 @@ function slipBody(ctx: Ctx, x: Lesson, l: Look, held: boolean, lost = false, und
       // Every note has a Got it. On one that points at a control (guide-pass) it passes the step without doing it.
       x.read || again ? h('button', { class: `btn${act ? '' : ' guide-ok'}`, type: 'button', testid: 'guide-noted', onclick: done }, icon('check', 'i'), h('span', { class: 'two' }, 'Got it', resumes))
         : h('button', { class: 'btn', type: 'button', testid: 'guide-pass', onclick: () => { guide.skip(x.id); poke(); ctx.dirty() } }, icon('check', 'i'), h('span', { class: 'two' }, 'Got it', resumes)),
-      skip ? h('button', { class: 'btn', type: 'button', testid: 'guide-ahead', onclick: () => ahead!(x.id) }, icon('fast', 'i'), h('span', { class: 'two' }, skip, h('span', { class: 'sub' }, `runs at ${SPEED_X[3]}`))) : null,
       go && show < 0 ? h('button', { class: 'btn quiet', type: 'button', testid: 'guide-show', onclick: () => lead(go) }, 'Show me') : null,
+      // The clock is the player's: the guide offers, once a note, to run it again.
+      clock === 'player' ? h('button', { class: 'btn quiet', type: 'button', testid: 'guide-give', onclick: () => { guide.giveClock(); poke(); ctx.dirty() } }, 'Run the clock for me') : null,
       h('button', { class: 'btn quiet', type: 'button', testid: 'guide-stop', onclick: () => { guide.stop(); poke(); ctx.say('The tutorial is off. You can turn it back on from the menu.'); ctx.dirty() } }, 'Turn off the tutorial')),
+  ]
+}
+
+// The guide's line while it runs the clock: what is passing and what comes next, and the key that takes the clock.
+// waits: it is waiting for a press instead, and the player can send it on without one.
+function driveBody(ctx: Ctx, line: string, next: string, waits: (() => void) | null, take: () => void): HTMLElement[] {
+  return [
+    h('p', { class: 'gd-line', testid: 'guide-drive-line' }, line),
+    h('p', { class: 'gd-next t-caption', testid: 'guide-drive-next' }, next),
+    h('footer', { class: 'guide-foot' },
+      waits ? h('button', { class: 'btn quiet', type: 'button', testid: 'guide-wave', onclick: () => { waits(); poke(); ctx.dirty() } }, 'Go on without it') : null,
+      h('button', { class: 'btn quiet', type: 'button', testid: 'guide-take', onclick: () => { take(); poke(); ctx.dirty() } }, 'Take the clock')),
   ]
 }
 
@@ -385,7 +405,9 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
   const hand = h('div', { class: 'guide-fist sys', testid: 'guide-fist', 'aria-hidden': 'true', hidden: true }, fist())
   const cardVeil = h('div', { class: 'guide-veil', hidden: true })
   const cardSlot = h('div', { class: 'guide-cardslot', hidden: true })
-  layer.append(cardVeil, cardSlot, slip, hand)
+  // The guide's line while it runs the clock between notes. It is not a note: nothing is paused for it.
+  const driveEl = h('aside', { class: 'guide-drive sheet sys', 'aria-label': 'The county agent is running the clock', hidden: true })
+  layer.append(cardVeil, cardSlot, slip, driveEl, hand)
   // While a card is up, the screen behind it waits: nothing there can be pressed or focused.
   const behind = () => [...root.querySelectorAll<HTMLElement>(':scope > .screen-layer, :scope > .plate-layer')]
   let cardKey = ''
@@ -586,19 +608,153 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
         if (app.speed === 0 && app.pauseReason === HOLD) { app.pauseReason = ''; ctx.dirty() }
         return
       }
+      // Where the guide runs the clock, it sets the days going itself a moment after the note (runClock).
+      if (guide.drives(c)) return
       // A card still up keeps the clock.
       // So does a pause the game made for a decision on the land: only the player's own resume runs past that.
       if (back > 0 && app.speed === 0 && app.pauseReason !== '' && !waitsOnLand() && !app.holding && app.screen === 'season' && c && !S.seasonDone(c) && !cardUp(lookNow())) app.setSpeed(back as 1 | 2 | 3)
     }
   }
-  // Fast-forward: the note is closed and the game runs at its fastest to the next note or card, which pauses it. The
-  // speed stays where this put it, as the clock shows, until the player changes it.
-  function ahead(id: string): void {
-    guide.noted(id)
-    holding = null
-    app.setSpeed(3)
-    stale = true
-    ctx.dirty()
+
+  // The guide runs the clock between its notes (game/tutorial.ts, driving): fast where nothing teaches, slowed and
+  // framed the first time each kind of work is done, stopped for a press the year waits on. It only ever sets the
+  // speed: every pause the game makes itself (app.ts, SELF_PAUSES), every card and every note stops it as they stop
+  // anyone. The player's own hand on the clock (a speed, a pause, "Take the clock") takes it for good; a note
+  // offers to take it back.
+  let driven = false
+  let scene: { id: string; unit: number; line: string; until: number } | null = null
+  // Not before this: a moment after a note goes or a press is answered, so the answer is read before the days run.
+  let beatAt = 0
+  let seenPress = pressedAt
+  let onScreen: string = app.screen
+  let hadNote = false
+  let hadWait = false
+  let waitOn = ''
+  let waitSince = 0
+  let waitFramed = false
+  let driveKey = ''
+  let driveShown = false
+  let driveSaid = ''
+  let drivePlace: { x: number; y: number } | null = null
+  let drivePlacedFor = ''
+  let driveChecked = 0
+  // Asks the player sent the guide on without, for as long as each stays open.
+  const waved = new Set<string>()
+  const wavedGone = new Map<string, number>()
+  function endScene(home: boolean): void {
+    if (!scene) return
+    if (scene.unit >= 0 && ctx.view.followed() === scene.unit) ctx.view.follow(-1)
+    if (home && app.screen === 'season') app.focus(-1)
+    scene = null
+  }
+  function letGo(): void {
+    endScene(false)
+    if (driven) { app.pace = 1; driven = false }
+  }
+  function takeClock(): void {
+    guide.takeClock()
+    letGo()
+    if (app.speed > 1) app.setSpeed(1)
+    ctx.say(app.speed > 0 ? 'The clock is yours, and it\'s running at 1×.' : 'The clock is yours.')
+  }
+  // wait: the ask the guide is waiting on ('' when it runs), and the field its stamp is on.
+  function showDrive(line: string, next: string, wait: string, field = -1): void {
+    const key = JSON.stringify([line, next, wait, input])
+    if (key !== driveKey || driveEl.hidden) {
+      driveKey = key
+      driveEl.hidden = false
+      driveEl.dataset.testid = 'guide-drive'
+      driveEl.dataset.scene = scene?.id ?? ''
+      driveEl.dataset.unit = String(scene?.unit ?? -1)
+      driveEl.dataset.wait = wait ? String(field) : ''
+      // Sent on without the press: that is the player's answer to a pause the game made for it, too.
+      const wave = () => { waved.add(wait); if (app.speed === 0 && (app.pauseCause === 'plantAsk' || app.pauseCause === 'killCall')) { app.pauseReason = HOLD; app.pauseCause = '' } }
+      driveEl.replaceChildren(...driveBody(ctx, line, next, wait ? wave : null, takeClock))
+    }
+    driveShown = true
+    if (line !== driveSaid) { driveSaid = line; ctx.announce(`${line} ${next}`) }
+  }
+  function hideDrive(): void {
+    driveShown = false
+    if (driveEl.hidden) return
+    driveEl.hidden = true
+    delete driveEl.dataset.testid
+    driveEl.replaceChildren()
+    driveKey = ''
+    drivePlace = null
+  }
+  function runClock(l: Look, carded: boolean): void {
+    const c = app.campaign
+    const t = performance.now()
+    // The player's own hand on the clock takes it.
+    if (pressedAt > seenPress) {
+      seenPress = pressedAt
+      if (app.screen === 'season' && guide.drives(c)) { guide.takeClock(); letGo(); ctx.say('The clock is yours now. I\'ll still pause to explain things.') }
+    }
+    const noted = !!due || !!holding
+    if (noted) hadNote = true
+    else if (hadNote) { hadNote = false; beatAt = Math.max(beatAt, t + 700) }
+    // A season come back to (Continue) is paused: the guide says what is passing a moment before it runs on.
+    if (app.screen !== onScreen) { if (app.screen === 'season' && app.speed === 0) beatAt = Math.max(beatAt, t + 1800); onScreen = app.screen }
+    const open = app.screen === 'season' ? openAsks(l) : []
+    // An ask waved through is not asked again: the word to plant until the crew has started (its stamps come and go
+    // with the weather), any other until it has been gone two seconds (a day's turn takes the stamps down a moment).
+    for (const id of [...waved]) {
+      if (open.some(a => a.id === id) || (id === 'word' && c?.season && !S.plantWordGiven(c.season))) { wavedGone.delete(id); continue }
+      const gone = wavedGone.get(id) ?? t
+      wavedGone.set(id, gone)
+      if (t - gone > 2000) { waved.delete(id); wavedGone.delete(id) }
+    }
+    const d = !offer && !noted && !carded && !app.holding && app.screen === 'season' ? driving(l, guide, waved) : null
+    // A note or a card that cuts a showing short gets the whole farm back, where the stamps it may point at are in
+    // view; the player's own hand on the clock leaves the picture where they are watching it.
+    if (!d) { if (scene && guide.drives(c)) endScene(true); letGo(); hideDrive(); return }
+    if (d.waits) {
+      // A press the year waits on: the guide stops its own clock and says what it is waiting for, over the whole farm.
+      endScene(true)
+      if (app.speed > 0) { app.resumeSpeed = app.speed; app.setSpeed(0); app.pauseReason = HOLD; ctx.dirty() }
+      app.pace = 1
+      driven = false
+      hadWait = true
+      showDrive(d.line, d.next, d.waits.id, d.waits.field)
+      // The stamp it asks for must be there to press. Off the screen or under something once the picture has
+      // settled (on a phone a person's pin can stand over it): its field is brought up close, once.
+      if (waitOn !== d.waits.id) { waitOn = d.waits.id; waitSince = t; waitFramed = false }
+      if (!waitFramed && t - waitSince > 1400) {
+        const el = root.querySelector<HTMLElement>(`[data-testid="badge-${d.waits.field}"]`)
+        if (!shown(el) || hiddenAt({ el, at: box(el.getBoundingClientRect()) })) { waitFramed = true; app.focus(d.waits.field) }
+      }
+      return
+    }
+    if (hadWait) { hadWait = false; waitOn = ''; if (waitFramed) app.focus(-1); beatAt = Math.max(beatAt, t + 900) }
+    if (scene && t >= scene.until) { endScene(true); beatAt = Math.max(beatAt, t + 300) }
+    // Work is watched only while the player is looking at nothing of their own: no card open, nobody picked. And
+    // someone is followed only while they are out on the land (indoors, the camera would show the house).
+    if (!scene && d.scene && t >= beatAt && app.selection.length === 0 && app.unit < 0 && app.yard === 0 && (d.scene.unit < 0 || ctx.view.unitPlace(d.scene.unit) !== 'away')) {
+      guide.note(`seen:${d.scene.id}`)
+      scene = { id: d.scene.id, unit: d.scene.unit, line: d.scene.line, until: t + SCENE_SECONDS * 1000 }
+      if (scene.unit >= 0) ctx.view.follow(scene.unit); else app.focus(d.scene.field)
+    }
+    // The planter is the first thing the guide moves the camera to: the hands for moving it are said there.
+    const line = scene ? scene.line : d.line
+    const next = scene ? (scene.id === 'plant' ? by(input, 'Drag to look around, and scroll to zoom.', 'Drag to look around, and pinch to zoom.', 'The arrow keys look around.') : 'I\'ll go on in a moment.') : d.next
+    if (app.speed === 0) {
+      // A pause the game made (a decision, the season's end) or one the player's own is never the guide's to end;
+      // only its own, and the one a note that asked for a press left behind.
+      const own = app.pauseCause === '' && (app.pauseReason === '' || app.pauseReason === HOLD)
+      if (!own) { letGo(); hideDrive(); return }
+      showDrive(line, next, '')
+      if (t < beatAt) return
+    }
+    // While the player has a card of their own open (a field, a person, a yard) the days go at the first speed, so
+    // what they are reading does not change under them.
+    const slow = !!scene || app.selection.length > 0 || app.unit >= 0 || app.yard !== 0
+    const want = slow ? 1 : d.speed
+    if (app.speed !== want) app.setSpeed(want)
+    if (app.speed === 0) { hideDrive(); return }
+    app.pace = slow ? 1 : d.pace
+    driven = true
+    showDrive(line, next, '')
   }
 
   // 22: one lesson at a time and never a step ahead of the click. After one passes, the next waits a moment, and waits
@@ -646,9 +802,13 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     const owed = offer ? null : guide.current(l)
     due = paced(owed)
     now = due && carded ? null : due
-    if (speaking !== (offer || !!owed)) { speaking = offer || !!owed; ctx.dirty() }
-    root.classList.toggle('agent', speaking)
     hold(l)
+    runClock(l, carded)
+    // The guide's line while it runs the clock is its voice too: the goal slip stands down for it as for a note.
+    const speaks = offer || !!owed || driveShown
+    if (speaking !== speaks) { speaking = speaks; ctx.dirty() }
+    root.classList.toggle('agent', speaking)
+    root.classList.toggle('driven', driveShown)
     // The cards in the middle: the offer, and what a year is.
     const card = offer ? 'offer' : now?.card ? now.id : ''
     if (card !== cardKey) {
@@ -688,7 +848,9 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     // to point at is about.
     const sh = now?.show?.(l) ?? null
     const go = !sh ? null : 'unit' in sh ? (inCard(root.querySelector('[data-testid="person-foreman"]')) ? null : sh) : now?.point ? null : sh
-    const back = app.screen === 'season' && now ? (now.asks?.(l) || waitsOnLand() ? 0 : holding?.speed ?? 0) : -1
+    // Whose the clock is in this season: the guide's own Got it says time runs on (unless a press is still waited on).
+    const clock = app.screen !== 'season' || !guide.on ? '' : guide.drives(c) ? 'guide' : 'player'
+    const back = app.screen === 'season' && now ? (now.asks?.(l) || waitsOnLand() ? 0 : clock === 'guide' ? (openAsks(l).some(a => !waved.has(a.id)) ? 0 : 3) : holding?.speed ?? 0) : -1
     // Something on the land to point at, none of it in view.
     const lost = !!p && !('testid' in p) && !t.at && app.screen === 'season'
     const fieldOf = !p ? -1 : 'field' in p ? p.field : 'badge' in p ? p.badge : 'fields' in p ? p.fields[0] ?? -1 : -1
@@ -701,14 +863,14 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
       away = docked && !!now && !!fold && !(t.el && fold.contains(t.el))
       const on = inSlot && docked && !away
       patch(slot, JSON.stringify([on && now ? [now.id, now.ask(l), now.why(l), guide.replaying(now.id), lost, !!go] : 0, input]), () =>
-        on && now ? h('section', { class: 'guide docked', testid: 'guide-slip', 'data-lesson': now.id, 'data-target': target, 'aria-labelledby': 'guide-ask' }, slipBody(ctx, now, l, held, lost, !!cover, -1, null, -1, go)) : null)
+        on && now ? h('section', { class: 'guide docked', testid: 'guide-slip', 'data-lesson': now.id, 'data-target': target, 'aria-labelledby': 'guide-ask' }, slipBody(ctx, now, l, held, lost, !!cover, -1, '', -1, go)) : null)
       if (on && now) slot.querySelector<HTMLElement>('.guide')?.setAttribute('data-target', target)
     }
     const floating = !!now && !docked
     slip.hidden = !floating
     if (floating && now) {
       const season = app.screen === 'season'
-      patch(slip, JSON.stringify([now.id, now.ask(l), now.why(l), held, guide.replaying(now.id), input, lost, !!cover, showField, season && now.skip?.(l), back, go, now.act?.(l)?.label]), () => slipBody(ctx, now!, l, held, lost, !!cover, showField, season ? ahead : null, back, go))
+      patch(slip, JSON.stringify([now.id, now.ask(l), now.why(l), held, guide.replaying(now.id), input, lost, !!cover, showField, season && clock, back, go, now.act?.(l)?.label]), () => slipBody(ctx, now!, l, held, lost, !!cover, showField, season ? clock : '', back, go))
       slip.dataset.lesson = now.id
       slip.dataset.target = target
       slip.dataset.testid = 'guide-slip'
@@ -824,6 +986,42 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     if (found) slip.style.transform = `translate3d(${found.x}px, ${found.y}px, 0)`
   }
 
+  // The guide's line: the first free place nearest the top of the land and its middle, off every panel. It stays put
+  // while that place is clear, so it does not jump as tags pass under it.
+  function placeDrive(): void {
+    if (driveEl.hidden) return
+    const t = performance.now()
+    const w = driveEl.offsetWidth, ht = driveEl.offsetHeight
+    const ins = app.insets
+    const narrow = ctx.layout() === 'narrow'
+    const wait = driveEl.dataset.wait ?? ''
+    const key = `${innerWidth}x${innerHeight}|${w}x${ht}|${scene?.id ?? ''}|${wait}|${narrow ? `${ins.top} ${ins.bottom}` : ''}`
+    if (drivePlace && key === drivePlacedFor && t - driveChecked < 500) return
+    driveChecked = t
+    const { hard, soft, costs } = obstacles(root)
+    // Never over what the line is about: the one the camera is following, who is brought to the middle of the free
+    // land with their pin over them, and the stamp it waits on.
+    const keep: Box[] = []
+    const cy = (ins.top + innerHeight - ins.bottom) / 2
+    if (scene && scene.unit >= 0) { const cx = (ins.left + innerWidth - ins.right) / 2; keep.push({ left: cx - 80, top: cy - 140, right: cx + 80, bottom: cy + 30 }) }
+    const stamp = wait ? root.querySelector<HTMLElement>(`[data-testid="badge-${wait}"]`) : null
+    if (stamp && shown(stamp)) keep.push(pad(box(stamp.getBoundingClientRect()), 10))
+    const here = drivePlace ? { left: drivePlace.x, top: drivePlace.y, right: drivePlace.x + w, bottom: drivePlace.y + ht } : null
+    if (here && key === drivePlacedFor && ![...hard, ...soft].some(a => meets(here, pad(a, 6))) && !keep.some(a => meets(here, a))) return
+    // On a phone the land is a strip between the boards, and its top is where a followed worker's head comes: while
+    // the clock runs the line lies along the foot of the land, over the boards there.
+    const low = narrow && !wait ? { x: Math.round((innerWidth - w) / 2), y: Math.round(innerHeight - ins.bottom - ht - 8) } : null
+    const lowBox = low ? { left: low.x, top: low.y, right: low.x + w, bottom: low.y + ht } : null
+    const found = (low && lowBox && low.y > cy && !hard.some(a => meets(lowBox, pad(a, 4))) ? low : null)
+      ?? findPlace(w, ht, [...hard, ...soft].map(a => pad(a, 8)).concat(keep))
+      ?? findPlace(w, ht, hard.map(a => pad(a, 8)).concat(keep), costs)
+      ?? findPlace(w, ht, hard.map(a => pad(a, 8)), costs)
+    driveEl.classList.toggle('gone', !found)
+    drivePlace = found
+    drivePlacedFor = key
+    if (found) driveEl.style.transform = `translate3d(${found.x}px, ${found.y}px, 0)`
+  }
+
   return {
     frame(dt: number) {
       since += dt
@@ -834,6 +1032,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
       }
       if (now && (now.id === 'watch' || now.id === 'turn') && app.screen === 'season') watchCamera()
       placeAll()
+      placeDrive()
     },
     dispose() {
       off()
@@ -846,7 +1045,9 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
       document.removeEventListener('pointercancel', onLift, true)
       document.removeEventListener('keydown', onCamKey, true)
       document.removeEventListener('keyup', onCamKey, true)
+      letGo()
       slip.remove()
+      driveEl.remove()
       hand.remove()
     },
   }

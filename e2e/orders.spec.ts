@@ -558,23 +558,40 @@ test('the answer to a right-click is seen while a tutorial note is up, and befor
   await page.waitForFunction(() => '__county' in globalThis && !document.getElementById('splash'))
   await page.getByTestId('play').click()
   await page.getByTestId('guide-accept').click()
-  // The notes that ask for a press are answered until the season is running with a note up.
-  // As e2e/tutorial.spec.ts follows it: the note's own key, or what it points at, until the season runs with a note up.
-  for (let k = 0; k < 30 && !(await game<boolean>(page, `app.screen === 'season' && document.getElementById('ui').classList.contains('noting')`)); k++) {
+  // The notes before the season are answered as e2e/tutorial.spec.ts follows them: the note's own key, or what it
+  // points at. In the season nothing is pressed: the guide runs the cold weeks itself, and the first note there is the
+  // word to plant.
+  for (let k = 0; k < 30 && !(await game<boolean>(page, `app.screen === 'season'`)); k++) {
     const slip = page.locator('#ui [data-testid="guide-slip"]').first()
-    const key = slip.locator('[data-testid="guide-noted"], [data-testid="guide-ahead"]').first()
+    const key = slip.locator('[data-testid="guide-noted"]').first()
     const target = await slip.getAttribute('data-target').catch(() => null)
     if (await key.isVisible().catch(() => false)) await key.click({ timeout: 3000 }).catch(() => {})
     else if (target) await page.locator(`#ui [data-testid="${target}"]`).first().click({ timeout: 3000 }).catch(() => {})
     await page.waitForTimeout(500)
   }
+  await expect(page.locator('#ui [data-testid="guide-slip"][data-lesson="word"]')).toBeVisible({ timeout: 20_000 })
   expect(await game<string>(page, `app.screen + ' ' + document.getElementById('ui').className + ' ' + (document.querySelector('#ui [data-testid="guide-slip"]')?.getAttribute('data-lesson') ?? '')`)).toMatch(/^season .*noting/)
+  // (The tutorial starts when planting is ready, so the season's first note is the word to plant: the soil is fit.
+  // A field with nothing to order is asked about here, and the cold weeks before planting in the test below.)
+  const rest = await game<number>(page, `app.campaign.plans.findIndex((p, i) => p.crop === 'rest' && sim.held(app.campaign, i))`)
+  const at = await landOf(page, rest)
+  await page.mouse.click(at.x, at.y, { button: 'right' })
+  const tip = page.getByTestId('answer-tip')
+  await expect(tip).toBeVisible()
+  await expect(tip).toContainText('To send someone here, select them first.')
+  expect(errors, errors.join('\n')).toEqual([])
+})
+
+test('before planting, a right-click on a potato field says why it is too early', async ({ page }) => {
+  const errors = watchErrors(page)
+  await open(page)
+  // A guided first season stopped on its first day, the clock the test's (as a player's who took it from the guide).
+  await reach(page, `const guide = window.__countyGuide; guide.reset(); guide.skipTo('word'); guide.takeClock(); const { app } = q.g(); app.newGame(1987, 3); app.do({ t: 'begin' }); app.campaign.incidents = []; app.setSpeed(0)`)
+  await putAway(page)
   const field = await game<number>(page, `app.campaign.plans.findIndex((p, i) => p.crop === 'potato' && sim.held(app.campaign, i) && sim.fieldInfo(app.campaign, i).status === 'idle')`)
   const name = await game<string>(page, `sim.FIELD_NAMES[${field}]`)
   const at = await landOf(page, field)
   await page.mouse.click(at.x, at.y, { button: 'right' })
-  const tip = page.getByTestId('answer-tip')
-  await expect(tip).toBeVisible()
-  await expect(tip).toContainText(`It's too early to plant ${name}.`)
+  await expect(page.locator('#ui [data-testid="answer-tip"], #ui .notes .alert').filter({ hasText: `It's too early to plant ${name}.` }).first()).toBeVisible()
   expect(errors, errors.join('\n')).toEqual([])
 })
