@@ -349,7 +349,7 @@
 .cat-foreman .t-label .i { --i: 16px; }
 .cat-foreman .btn { padding: 0 12px 3px; font-size: 14px; }
 .cat-done { display: flex; justify-content: flex-end; }
-.cat-equip li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--hair); }
+.cat-equip li { display: grid; grid-template-columns: minmax(0, 1fr) minmax(132px, 42%); align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--hair); }
 .cat-equip b { font-size: 16px; }
 .cat-equip .cat-buy { min-width: 132px; row-gap: 2px; }
 .cat-equip .cat-buy .loan-adds { flex-basis: 100%; font: 400 13px/1.15 var(--f-text); letter-spacing: 0; text-transform: none; color: var(--red); }
@@ -449,6 +449,12 @@
 .spring-screen[data-layout='narrow'] .blank-go { grid-template-columns: 1fr; gap: 2px; }
 
 .spring-screen[data-layout='narrow'] .notes-slot { left: 10px; right: 10px; width: auto; top: calc(var(--top, 80px) + 8px); bottom: auto; }
+/* A fold open on a phone: the strip of the other folds by name on one line, and the masthead set aside for the room. */
+.spring-screen[data-layout='narrow'] .fold.more.strip { display: flex; flex-wrap: wrap; gap: 4px; padding: 0; }
+.spring-screen[data-layout='narrow'] .fold.more.strip .btn { padding: 0 5px; font-size: 13px; }
+.spring-screen[data-layout='narrow'] .fold.more.strip .btn .i { display: none; }
+.spring-screen[data-layout='narrow'] .catalogue.folded .masthead { display: none; }
+.spring-screen[data-layout='narrow'] .catalogue.folded { grid-template-rows: minmax(0, 1fr) auto auto; }
 @media (max-width: 359px) {
   .spring-screen[data-layout='narrow'] .applicant { grid-template-columns: 40px 1fr 84px; }
   .spring-screen[data-layout='narrow'] .fold.more { grid-template-columns: 1fr 1fr; }

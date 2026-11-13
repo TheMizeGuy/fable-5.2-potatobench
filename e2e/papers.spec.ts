@@ -346,6 +346,32 @@ for (const [w, h] of [[1280, 800], [1280, 720]] as const) {
   })
 }
 
+test.describe('the spring sheet on a phone, 390 by 844', () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
+
+  test('each fold opened shows its first item, with Start the season and the totals kept', async ({ page }) => {
+    test.setTimeout(180_000)
+    const errors = watchErrors(page)
+    await open(page, '?year=1990&seed=7')
+    await expect(page.getByTestId('begin-season')).toBeVisible()
+    for (const f of FOLDS) {
+      await page.getByTestId(f.open).click()
+      await expect(page.getByTestId(f.body)).toBeVisible()
+      await page.waitForTimeout(400)
+      const s = await foldSeen(page, f)
+      const at = `phone, ${f.body}`
+      console.log(`${at}: room ${s.region} px${s.holds ? ', holds it all' : ''}; first item ${s.item ? 'whole' : 'cut'}`)
+      await snap(page, `spring-y1-${f.body}-phone`)
+      expect(s.item, `${at}: the first item whole in view (${s.where})`).toBe(true)
+      expect(s.start, `${at}: Start the season in view`).toBe(true)
+      expect(s.totals, `${at}: This plan and what is due in view`).toBe(true)
+      await page.getByTestId(f.open).click()
+      await expect(page.getByTestId(f.body)).toHaveCount(0)
+    }
+    expect(errors, errors.join('\n')).toEqual([])
+  })
+})
+
 test.describe('the spring sheet, first sight', () => {
   test.use({ viewport: { width: 1280, height: 800 } })
 
