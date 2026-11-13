@@ -9,6 +9,7 @@ import { count, patch, type Ctx } from './core.ts'
 import { h, type Child } from './dom.ts'
 import * as F from './fmt.ts'
 import { icon } from './icons.ts'
+import { causeLine } from './money-words.ts'
 import { BLIGHT_RISK, firstName, forecastSky, JOB_VERB, jobText, plantingIn, SKY_WORD, yearName } from './rules.ts'
 import { fist } from './system/parts.ts'
 
@@ -162,12 +163,16 @@ function progressText(g: Goal): string {
 // if every lot and the crop in the ground sold today (S.moneyNow), with how it is made up.
 // Before the tubers set there is no crop to count: the figure is then what the year end takes before the crop pays,
 // said as that, not as a verdict.
-export function outlook(ctx: Ctx, c: S.Campaign): { figure: number; why: string; label: string; before: boolean; spread: number; risk: S.MoneyNow['callRisk'] } {
+export function outlook(ctx: Ctx, c: S.Campaign): { figure: number; why: string; label: string; before: boolean; spread: number; risk: S.MoneyNow['callRisk']; look: S.MoneyLook } {
   const world = ctx.app.world
   const m = S.moneyNow(world, c)
   const s = c.season
   const figure = Math.round(m.after / 100) * 100
-  const parts = m.parts.map(p => `${p.label} ${F.money(Math.round(p.amount))}`)
+  // The sum from the cash now to the figure, each part to the $100 and the largest taking the rounding, so it adds up.
+  const round = m.parts.map(p => ({ ...p, amount: Math.round(p.amount / 100) * 100 }))
+  const big = round.reduce((b, p, i) => Math.abs(p.amount) > Math.abs(round[b].amount) ? i : b, 0)
+  if (round.length) round[big].amount += figure - round.reduce((a, p) => a + p.amount, 0)
+  const parts = round.map(p => `${p.label} ${p.amount > 0 && p.id !== 'cash' ? '+' : ''}${F.money(p.amount)}`)
   // The crop is counted from the season's first day (S.moneyNow), so the only warning is the bank's own: callRisk.
   const limit = F.money(-S.CREDIT_LIMIT)
   const verdict = m.callRisk === 'likely' ? ` Even a good crop would leave you more than ${limit} in the red, so the bank would foreclose.`
@@ -176,7 +181,10 @@ export function outlook(ctx: Ctx, c: S.Campaign): { figure: number; why: string;
   const unweighed = c.phase === 'season' && !!s && s.fields.some((f, i) => S.isField(c, i) && f.status !== 'rest' && f.status !== 'off' && f.status !== 'lost' && !f.weighed)
   const spread = unweighed ? Math.round((m.range.hi - m.range.lo) / 2 / 100) * 100 : 0
   const give = spread ? ` Until the whole crop is weighed, this could be off by ${F.money(spread)} either way.` : ''
-  return { figure, before: false, spread, risk: m.callRisk, label: 'After year-end bills', why: `${c.phase === 'cellar' ? 'If you sold everything in storage today' : 'If you sold everything today'}: ${parts.join(', ')}.${verdict}${give}` }
+  return {
+    figure, before: false, spread, risk: m.callRisk, label: 'After year-end bills', look: S.moneyLook(world, c),
+    why: `${c.phase === 'cellar' ? 'If you sold everything in storage today' : 'If the crop sold today'}:\n${parts.join('\n')}\n= ${F.money(figure)} after year-end bills.${verdict}${give}`,
+  }
 }
 
 // Said before logs are sold: the buildings not yet up that would take them, and what buying them back costs.
@@ -226,6 +234,10 @@ export function moneyMoved(a: MoneyLook, b: MoneyLook): string {
 
 const MOMENT_MS = 1600
 const MOVED_MS = 4000
+// How many season days the cause of a move of the year-end figure stays under it.
+const WHY_DAYS = 7
+// A point in the year to time that by: the season's day, or past it, the winter's month.
+const stampOf = (c: S.Campaign) => c.phase === 'cellar' ? 1000 + c.month : c.season?.day ?? 0
 // The goals that are a field's job: put on the list by the player, or by the crew's routine.
 const GOAL_ROUTINE: Record<string, S.JobKind> = { plant: 'plant', walk: 'scout', hill: 'hill', sample: 'sample', dig: 'dig', haul: 'haul', spray: 'spray', kill: 'kill' }
 // The season's calls that are the player's to make (the routine sees to the rest), first to last.
@@ -286,6 +298,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
   let viewFor: unknown = null
   let viewNow: ReturnType<typeof outlook> | null = null
   let viewCash = 0
+  let whyNow: { text: string; at: number } | null = null
   const closePop = (e: Event) => { if (pop && !(e.target as HTMLElement).closest?.('.tb-pop, .goal, .materials')) { pop = ''; ctx.dirty() } }
   document.addEventListener('pointerdown', closePop, true)
 
@@ -475,7 +488,15 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     const withMenu = !(season && low)
     const { g, met: gone } = goalNow(c)
     const counted = season || c.phase === 'cellar'
-    if (counted && (app.needs() !== viewFor || viewCash !== Math.round(c.cash))) { viewFor = app.needs(); viewCash = Math.round(c.cash); viewNow = outlook(ctx, c) }
+    if (counted && (app.needs() !== viewFor || viewCash !== Math.round(c.cash))) {
+      viewFor = app.needs(); viewCash = Math.round(c.cash)
+      const was = viewNow?.look
+      viewNow = outlook(ctx, c)
+      // A move of the year-end figure says its cause under it, for a week of the season or the winter's month.
+      const why = was ? S.moneyCause(was, viewNow.look) : null
+      if (why) whyNow = { text: causeLine(why), at: stampOf(c) }
+    }
+    if (whyNow && (!counted || stampOf(c) - whyNow.at > (season ? WHY_DAYS : 0) || stampOf(c) < whyNow.at)) whyNow = null
     const view = counted ? viewNow : null
     // When the money moves, what moved it shows under the balance for a moment, and stays on the balance's hover.
     const look = moneyLook(c)
@@ -494,7 +515,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
       w: c.season?.watchDay, f: c.season?.log.filter(e => e.type === 'frost').length, u: app.settings.units, t: ctx.touch(), days, withClock, withMenu, stopped,
       g: g ? [g.id, progressText(g), g.now] : 0, gone: gone?.id ?? '', fresh, pop, wait: season && g?.id === 'plant' ? plantingIn(app.world, c) : -1, mats: mats ? [Math.round(c.logs * 10), Math.round(c.stone * 10)] : 0,
       ladder: pop === 'goals' ? goals(c).map(x => [x.id, x.done, progressText(x), x.block, x.now && !x.done && !!o.canShow?.(x)]) : 0, reach: g ? !!o.canShow?.(g) : false,
-      call: season ? pressing(c)?.id ?? '' : '', block: g?.block ?? '', view: view?.why ?? '', moved: moved?.text ?? '', last: lastMoved,
+      call: season ? pressing(c)?.id ?? '' : '', block: g?.block ?? '', view: view?.why ?? '', moved: moved?.text ?? '', last: lastMoved, why: whyNow?.text ?? '',
       jobs: season ? [...new Set(c.season!.jobs.map(j => j.kind))].sort().join() : '', auto: season ? S.routineInfo(c).filter(r => r.auto).map(r => r.kind).join() : '',
       k: season || c.phase === 'cellar' ? contracts.key() : 0, ph: season ? phaseNow(c) : '',
     }
@@ -508,14 +529,17 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
       const after = view ? h('div', {
         class: `after term${view.risk === 'likely' ? ' bad' : view.risk === 'possible' ? ' warn' : ''}`, testid: 'outlook', tabindex: '0', 'data-tip': view.why,
       }, h('span', { class: 't-label' }, h('span', { class: 'long' }, view.label), h('span', { class: 'short', 'aria-hidden': 'true' }, view.before ? 'Before crop' : 'After bills')), h('span', { class: 't-figure num' }, F.money(view.figure)), view.spread ? h('span', { class: 'give num', testid: 'outlook-spread', 'aria-hidden': 'true' }, `±${F.money(view.spread)}`) : null, h('span', { class: 'sr' }, `. ${view.why}`)) : null
+      // Cash below zero through the season and the winter is what the bank has lent, said as that, not as a loss.
+      const borrowed = !!after && c.cash < 0
       const balance = h('div', { class: `balance${after ? ' two' : ''}` },
-        h('span', { class: 't-label when' }, c.cash < 0 ? 'In the red' : after ? 'Cash' : 'Balance'),
+        h('span', { class: 't-label when' }, borrowed ? 'Borrowed' : c.cash < 0 ? 'In the red' : after ? 'Cash' : 'Balance'),
         h('span', {
-          class: `t-figure cash${c.cash < 0 ? ' neg' : ''}`, testid: 'cash',
+          class: `t-figure cash${c.cash < 0 && !borrowed ? ' neg' : ''}`, testid: 'cash',
           title: ctx.touch() ? undefined : `${c.cash >= 0 ? '' : 'You owe this on the spring loan, and the crop pays it back. The bank will foreclose if you end the year too far in the red.'}${lastMoved ? `${c.cash >= 0 ? '' : ' '}Last change: ${lastMoved}.` : ''}` || undefined,
-        }, h('span', { class: 'sr' }, 'Cash: '), h('span', { class: 'cash-v num' }, F.money(c.cash))),
+        }, h('span', { class: 'sr' }, borrowed ? 'Borrowed: ' : 'Cash: '), h('span', { class: 'cash-v num' }, F.money(borrowed ? -c.cash : c.cash))),
         moved && !phone ? h('span', { class: 'cash-moved', testid: 'cash-moved', role: 'status' }, moved.text) : null,
-        after)
+        after,
+        after && whyNow ? h('span', { class: 'after-why', testid: 'outlook-why', role: 'status' }, whyNow.text) : null)
       return [
         h('section', { class: 'almanac', 'aria-label': 'Date, weather and your next goal' },
           h('div', { class: 'mount' },

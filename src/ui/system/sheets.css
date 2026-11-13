@@ -6,7 +6,10 @@
 .fold.goal-ring:is(.sys *) { --w-mark: inset 5px 0 0 var(--st-ochre), 0 0 0 3px var(--st-ochre), 0 0 0 4px var(--ink); padding-left: 16px; background-color: var(--paper-2); }
 
 /* What moved the money, under the balance for a moment. */
-.topbar .balance .cash-moved { flex-basis: 100%; text-align: right; font: italic 400 13px/1.25 var(--f-text); color: var(--ink-2); animation: sh-fade var(--t-slip) var(--ease-out); }
+.topbar .balance .cash-moved, .topbar .balance .after-why { flex-basis: 100%; text-align: right; font: italic 400 13px/1.25 var(--f-text); color: var(--ink-2); animation: sh-fade var(--t-slip) var(--ease-out); }
+/* Why the year-end figure moved, under it for a week of the season; its hover is the sum that makes it, a line a part. */
+.topbar .balance .after.term::after { white-space: pre-line; }
+.topbar[data-layout='narrow'] .face .balance .after-why { flex-basis: auto; font-size: 12px; text-align: left; }
 
 /* Out of the season the date leaf is one word ("November", "Year end"): the year goes under it, never over it. */
 .topbar .leaf.word { padding-right: 14px; }
@@ -22,7 +25,7 @@
 /* Cash and, at its weight, what is left after the year-end bills: two lines of the pass book. */
 .topbar .balance.two { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: baseline; column-gap: 12px; row-gap: 0; }
 .topbar .balance.two > .cash { justify-self: end; }
-.topbar .balance.two > .cash-moved, .topbar .balance.two > .after { grid-column: 1 / -1; }
+.topbar .balance.two > .cash-moved, .topbar .balance.two > .after, .topbar .balance.two > .after-why { grid-column: 1 / -1; }
 .topbar .balance .after { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding-top: 2px; border-top: 1px solid var(--hair); text-decoration: none; }
 .topbar .balance .after .t-label { text-decoration: underline dotted; text-underline-offset: 3px; }
 .topbar .balance .after .t-figure { white-space: nowrap; }
