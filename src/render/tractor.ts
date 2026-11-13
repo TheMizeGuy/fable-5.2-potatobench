@@ -499,16 +499,20 @@ abstract class Machine {
     }
     if (speed <= 1.5) { this.trail = 0; return }
     this.trail += st.moved
-    const dust = Math.max(f.dust, st.working > 0 && (st.kind === 'plant' || st.kind === 'hill' || st.kind === 'dig') ? 0.5 + 0.3 * f.dust : 0) * (1 - f.mud)
+    // (hauling: a load on the lane, or the bed coming back light for the next, stands in its own dust the length of
+    // the way it went, on dry ground: it is what says from across the farm that the crop is coming in)
+    const hauling = st.kind === 'haul'
+    const dust = Math.max(f.dust, st.working > 0 && (st.kind === 'plant' || st.kind === 'hill' || st.kind === 'dig') ? 0.5 + 0.3 * f.dust : 0, hauling && f.dust > 0.3 ? 0.5 + 0.3 * f.dust : 0) * (1 - f.mud)
     let guard = 0
     // closer together at a working pace, when each puff is all there is to see of it
-    const every = speed < 12 ? 2.5 : 6
+    const every = speed < 12 ? 2.5 : hauling ? 3.5 : 6
     while (this.trail > every && guard++ < 14) {
       this.trail -= every
-      if (speed >= 12 && r() < 0.5) {
-        // exhaust left standing along the way
+      if (speed >= 12 && r() < (hauling ? 1 : 0.5)) {
+        // exhaust left standing along the way (under a load, and seen from far off: more of it, and longer in the air)
+        const far = hauling ? st.far : 0
         this.at(sx, sy, sz, p0)
-        pt.emit(p0.x - fwd.x * this.trail, p0.y + 1 + r() * 2, p0.z - fwd.z * this.trail, 0, 0.6, 0, 0.9, 0.7, 2.5 + r() * 2, 0.3, 0.3, 0.32, 0.22, 0.6)
+        pt.emit(p0.x - fwd.x * this.trail, p0.y + 1 + r() * 2, p0.z - fwd.z * this.trail, 0, 0.6, 0, 0.9 * (1 + 1.6 * far), 0.7, (2.5 + r() * 2) * (1 + far), 0.3 + (f.cold ? 0.4 * far : 0), 0.3 + (f.cold ? 0.4 * far : 0), 0.32 + (f.cold ? 0.4 * far : 0), 0.22 + 0.2 * far, 0.6)
       }
       if (dust < 0.06) continue
       // where the back wheels were that far back along the way it came
@@ -516,8 +520,10 @@ abstract class Machine {
       const soil = st.working > 0
       // (hurrying, the puffs are far apart: each is wider and thinner, so they run together into a haze along the way)
       const fast = speed >= 12 ? 1 : 0
+      // (a load's dust is as thick at its pace as a working machine's; the bed going back light raises less)
+      const thin = hauling ? (st.load > 0 ? 0.04 : 0.2) * fast : 0.36 * fast
       pt.emit(bx + (r() - 0.5) * 1.6, this.y + 0.9 + fast + 0.8 * st.far, bz + (r() - 0.5) * 1.6, (r() - 0.5) * 0.5, 0.6 + r() * 0.6, (r() - 0.5) * 0.5, (1.6 + r() * 0.9) * (1 + 1.3 * st.far) + 2.2 * fast, 0.42 + r() * 0.2, (5 + r() * 4) * (1 + 0.5 * st.far),
-        soil ? 0.72 : 0.78, soil ? 0.62 : 0.7, soil ? 0.5 : 0.58, Math.min(0.9, (0.62 - 0.36 * fast) * Math.min(1, dust * 1.4) * (1 + 0.6 * st.far)), 0.55)
+        soil ? 0.72 : 0.78, soil ? 0.62 : 0.7, soil ? 0.5 : 0.58, Math.min(0.9, (0.62 - thin) * Math.min(1, dust * 1.4) * (1 + 0.6 * st.far)), 0.55)
     }
   }
 
@@ -766,9 +772,18 @@ export class Car extends Machine {
     }
     // (low enough that a hat clears the cab's roof)
     if (st.driver) this.seated(pr, f, st, sedan ? -0.14 : 0.02, sedan ? 0.3 : 0.4, -0.17)
-    if (st.driver) for (const z of [-0.34, 0.34]) this.lamp(pr, f, sedan ? 0.97 : 1.03, sedan ? 0.46 : 0.56, sedan ? z * 0.82 : z, 0.055)
+    if (st.driver) for (const z of [-0.34, 0.34]) this.lamp(pr, f, sedan ? 0.97 : 1.03, sedan ? 0.46 : 0.56, sedan ? z * 0.82 : z, 0.055, st.far)
     if (this.kind === 'truck') {
       const s = this.scale
+      // From across the farm, in sun: the light off its glass as it goes (as the tractor's is caught).
+      if (st.driver && st.far > 0.15 && f.sun > 0.2 && st.moved > 0) {
+        const k = 0.5 + 0.5 * Math.sin(this.travelled * 0.9)
+        if (k > 0.35) {
+          this.at(0.5, 0.95, 0, p0)
+          const g = 0.7 * st.far * s
+          pr.put('glow', p0, up, fwd, g, g, g, LAMPC.set(3.4, 3.2, 2.7).multiplyScalar(f.sun * st.far * k))
+        }
+      }
       for (let k = 0; k < Math.min(st.load, 16); k++) {
         const tier = Math.floor(k / 8), i = k % 8
         this.at(-0.5 - Math.floor(i / 2) * 0.37 - tier * 0.12, 0.525 + tier * 0.4, (i % 2 - 0.5) * 0.4, p0)

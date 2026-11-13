@@ -1,12 +1,12 @@
 // The people and machines of the land run without a picture: the real game stepped a frame at a time at a clock
 // speed, the field view's own bookkeeping of days and plans done as src/render/index.ts does it, and every frame
 // where each person and machine is seen. For tests of what is seen of the work (tests/seen.test.ts).
-import { PerspectiveCamera, Texture } from 'three'
+import { PerspectiveCamera, Texture, Vector3 } from 'three'
 import { App } from '../src/game/app.ts'
 import { Crews, type PendingReveal } from '../src/render/units.ts'
 import { copyEnv, envTarget, makeEnv } from '../src/render/env.ts'
 import type { HillDisplay } from '../src/render/fields.ts'
-import { FIELDS } from '../src/render/layout.ts'
+import { FIELDS, fieldAt } from '../src/render/layout.ts'
 import { Particles } from '../src/render/particles.ts'
 import { snapshot, type Snapshot } from '../src/render/state.ts'
 import * as sim from '../src/sim/index.ts'
@@ -33,6 +33,40 @@ function start(farm: Farm): App {
   return app
 }
 
+// The machine work of the first day on which two people each have hours of this kind on one machine: who, where and
+// from when, in the order of the hours; and how many days go by before it.
+export function sharedDay(kind: string, farm: Farm = {}): { days: number; turns: { unit: number; field: number; from: number }[] } {
+  const app = start(farm), c = app.campaign!
+  for (let n = 1; n < 240 && c.phase === 'season' && !sim.seasonDone(c); n++) {
+    c.incidents = []
+    app.do({ t: 'day' })
+    const did = c.season!.worked.filter(w => w.kind === kind && !!w.machine).sort((a, b) => (a.from ?? 0) - (b.from ?? 0))
+    for (const w of did) {
+      const same = did.filter(x => x.machine === w.machine)
+      if (new Set(same.map(x => x.unit)).size > 1) return { days: n, turns: same.map(x => ({ unit: x.unit, field: x.field, from: x.from ?? 0 })) }
+    }
+  }
+  return { days: 0, turns: [] }
+}
+
+// Over a season: on how many mornings the picture has someone to set out for an order, and on how many of them the
+// day then gives that order to that person.
+export function leads(farm: Farm = {}): { said: number; right: number } {
+  const app = start(farm), c = app.campaign!
+  const out = { said: 0, right: 0 }
+  for (let n = 1; n < 400 && c.phase === 'season' && !sim.seasonDone(c); n++) {
+    c.incidents = []
+    const lead = snapshot(app).lead
+    app.do({ t: 'day' })
+    if (!lead) continue
+    const s = c.season!
+    out.said++
+    const job = s.jobs.find(j => j.id === c.crew.find(u => u.id === lead.unit)?.job)
+    if (s.worked.some(w => w.unit === lead.unit && w.kind === lead.kind && w.field === lead.field) || (job && job.kind === lead.kind && job.field === lead.field)) out.right++
+  }
+  return out
+}
+
 // How many days go by on this farm before a kind of work is first done (0: never).
 export function firstDay(kind: string, farm: Farm = {}): number {
   const app = start(farm), c = app.campaign!
@@ -57,14 +91,21 @@ export interface Seen {
   fields: number[]
   work: [number, number]   // how many times someone's day had this work in it, at the start and by the end
   lead: number             // metres the first to set out was seen to go, step by step, before the first day was counted
+  turns: string[]          // who was seen at this work on a machine, and in which field, in the order seen: '1@0', '0@2'
+  afoot: number            // seconds someone was seen at a machine's row work with no machine under them
+  waited: number           // seconds someone was seen waiting for a machine someone else had
+  rowsWaiting: number      // metres those waiting were seen to go along a field's rows
+  pins: string[]           // a pin given for someone gone from sight, or away from where they are seen
   trace: string[]
 }
 
 // Runs the days at a clock speed from the evening before `kind` is first done, and says what was seen of it.
 // foot: the work is done on foot (the one doing it is watched, not a machine); dist: how far off the camera is.
-export function watch(kind: string, speed: 1 | 2 | 3, opts: { farm?: Farm; seconds?: number; dist?: number; foot?: boolean; headZ?: number; grace?: number; pauseAt?: number } = {}): Seen {
+// from: the day to begin on the evening before, in place of the first day the work is done. stepped: the clock is
+// left stopped and a day counted every so many seconds, each played out at its own pace (as a tool plays one).
+export function watch(kind: string, speed: 1 | 2 | 3, opts: { farm?: Farm; seconds?: number; dist?: number; foot?: boolean; headZ?: number; grace?: number; pauseAt?: number; from?: number; stepped?: number } = {}): Seen {
   const farm = opts.farm ?? {}, dist = opts.dist ?? 450, grace = opts.grace ?? [5, 5, 4.5, 3.5][speed], headZ = opts.headZ ?? HEAD.z
-  const days = firstDay(kind, farm)
+  const days = opts.from ?? firstDay(kind, farm)
   if (!days) throw new Error(`nobody ever does ${kind}`)
   const app = start(farm), c = app.campaign!
   for (let n = 0; n < days - 1; n++) { c.incidents = []; app.do({ t: 'day' }) }
@@ -108,14 +149,16 @@ export function watch(kind: string, speed: 1 | 2 | 3, opts: { farm?: Farm; secon
   }
 
   const dt = 1 / 60
-  const out: Seen = { seconds: 0, atWork: 0, working: 0, busy: 0, path: 0, along: 0, moving: 0, jumps: [], cuts: 0, fields: [], work: [NaN, NaN], lead: 0, trace: [] }
+  const out: Seen = { seconds: 0, atWork: 0, working: 0, busy: 0, path: 0, along: 0, moving: 0, jumps: [], cuts: 0, fields: [], work: [NaN, NaN], lead: 0, trace: [], turns: [], afoot: 0, waited: 0, rowsWaiting: 0, pins: [] }
+  const pin = new Vector3()
   const fields = new Set<number>()
   let since = Infinity, begun = false, time = 0, lastTrace = -1
   const was = new Map<string, { x: number; z: number; fade: number }>()
   const lead0 = new Map<number, { x: number; z: number }>()
   const inField = (x: number, z: number) => { for (const i of fields) { const r = FIELDS[i]; if (x > r.x0 - HEAD.x && x < r.x1 + HEAD.x && z > r.z0 - headZ && z < r.z1 + headZ) return true } return false }
   const quick = [1, 1, 1.5, 2.4][speed]
-  app.setSpeed(speed)
+  if (!opts.stepped) app.setSpeed(speed)
+  let nextDay = 0.5
   const dayOne = c.season!.day
   let dayNow = dayOne, events = 0, stopped = 0, paused = false
   out.work[0] = 0
@@ -123,7 +166,8 @@ export function watch(kind: string, speed: 1 | 2 | 3, opts: { farm?: Farm; secon
     time += dt
     if (c.incidents.length) c.incidents = []
     // (a question that stops the clock is answered a third of a second later)
-    if (app.speed !== speed && c.phase === 'season' && ++stopped > 20) { app.setSpeed(speed); stopped = 0 }
+    if (!opts.stepped && app.speed !== speed && c.phase === 'season' && ++stopped > 20) { app.setSpeed(speed); stopped = 0 }
+    if (opts.stepped && time >= nextDay) { nextDay += opts.stepped; app.do({ t: 'day' }) }
     // (the player stops the clock for a moment, as to look at something, and sets it going again)
     if (opts.pauseAt !== undefined && time >= opts.pauseAt && !paused) { paused = true; app.setSpeed(0); stopped = -60 }
     app.tick(dt * 1000)
@@ -131,7 +175,7 @@ export function watch(kind: string, speed: 1 | 2 | 3, opts: { farm?: Farm; secon
     if (dayT < 1) dayT = Math.min(1, app.speed > 0 ? Math.max(dayT + (dt / 3.4) * 0.25, app.dayProgress) : dayT + dt / 3.4)
     if (crews.stageHold >= 0) dayT = Math.min(dayT, crews.stageHold)
     crews.place({
-      dt, dayT, advancing: app.speed > 0, pace: 1, time, reduced: false, idle: false, season: snap.mode === 'season', dist, dust: env.dry, dark: 0, picked: -1, particles, passed, snap, env, camera,
+      dt, dayT, advancing: app.speed > 0, pace: opts.stepped ? 2 : 1, time, reduced: false, idle: false, season: snap.mode === 'season', dist, dust: env.dry, dark: 0, picked: -1, particles, passed, snap, env, camera,
       speed: app.speed, daySec: 1 / DAYS_PER_SECOND[Math.max(1, app.speed)], clock: dt,
     })
     particles.update(dt, 0, 0)
@@ -145,6 +189,21 @@ export function watch(kind: string, speed: 1 | 2 | 3, opts: { farm?: Farm; secon
     // (a build that does not say who is gone from sight, or what a machine is at: nobody is, and it is not said)
     for (const p of [...w.units, ...w.rigs]) p.fade ??= 1
     for (const r of w.rigs) { r.work ??= ''; r.tool ??= '' }
+    // whose turn on a machine is seen, and what those without one are seen at
+    for (const r of w.rigs) if (r.work === kind && r.holder >= 0 && r.fade >= 0.5 && fieldAt(r.x, r.z) >= 0) { const t = `${r.holder}@${fieldAt(r.x, r.z)}`; if (out.turns[out.turns.length - 1] !== t) out.turns.push(t) }
+    // where the interface is told to pin each person: only someone to be seen, and where they are seen
+    for (const u of w.units) {
+      if (!crews.anchor(u.id, pin)) continue
+      const rig = w.rigs.find(r => r.holder === u.id)
+      const off = Math.min(Math.hypot(pin.x - u.x, pin.z - u.z), rig && !u.foot ? Math.hypot(pin.x - rig.x, pin.z - rig.z) : Infinity)
+      if (u.fade < 0.5 || (rig && !u.foot && rig.fade < 0.5) || !(off < 4)) out.pins.push(`person ${u.id} at ${time.toFixed(1)} s: ${u.fade < 0.5 ? 'gone from sight' : `${off.toFixed(0)} m off`}`)
+    }
+    for (const u of w.units) {
+      if (u.fade < 0.5) continue
+      if (u.doing === 'rows' && u.foot) out.afoot += dt
+      const b = was.get(`person ${u.id}`)
+      if (u.doing === 'wait') { out.waited += dt; if (b && fieldAt(u.x, u.z) >= 0 && Number.isFinite(b.x)) out.rowsWaiting += Math.abs(u.x - b.x) }
+    }
     const last = new Map<object, { x: number; z: number }>()
     w.rigs.forEach((r, k) => { const b = was.get(`${r.kind} ${k}`); if (b) last.set(r, b) })
     // steps nobody could make (someone gone from sight through a cut is not seen to make one)

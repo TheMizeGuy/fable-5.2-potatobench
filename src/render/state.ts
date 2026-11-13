@@ -49,7 +49,9 @@ export interface Weather {
 }
 
 // share: how far the order has got by the day's end, 0..1 (1 once it is finished); only on a person's own work.
-export interface Work { kind: sim.JobKind; field: number; share?: number }
+// rig, machine, from, to: for machine work, what was driven, which of the farm's machines it was, and its hours as
+// shares of the day (the farm's day books each machine's hours once: src/sim/season.ts).
+export interface Work { kind: sim.JobKind; field: number; share?: number; rig?: sim.Rig; machine?: string; from?: number; to?: number }
 
 // A crew as the farm knows it: where it is, where it is driving to, and what it did today, in order.
 export interface UnitVis {
@@ -117,6 +119,8 @@ export interface Snapshot {
 const BARE: sim.HillLook = { kind: 'bare', canopy: 0, vigor: 1, blight: 0, stunted: false, yellow: 0 }
 
 const RIDGE_BY_PASSES = [0.1, 0.55, 1]
+// The order people take their turns at the day's work (as src/sim/crew.ts has it).
+const TURN: Record<sim.UnitKind, number> = { hand: 0, operator: 1, farmer: 2 }
 const WETNESS: Record<string, number> = { 'standing water': 1, wet: 0.8, good: 0.34, drying: 0.16, dry: 0.04, wilting: 0 }
 
 export function snapshot(app: App): Snapshot {
@@ -219,29 +223,45 @@ export function snapshot(app: App): Snapshot {
       job: inSeason && u.job ? { kind: u.job.kind, field: u.job.field } : null,
       worked: inSeason ? s.worked.filter(w => w.unit === u.id).map(w => {
         const j = s.jobs.find(x => x.kind === w.kind && x.field === w.field)
-        return { kind: w.kind, field: w.field, share: j && j.need > 0 ? Math.max(0, Math.min(1, j.done / j.need)) : 1 }
+        return { kind: w.kind, field: w.field, share: j && j.need > 0 ? Math.max(0, Math.min(1, j.done / j.need)) : 1, rig: w.rig, machine: w.machine, from: w.from, to: w.to }
       }) : [],
     }
   })
   const nextJob = inSeason && s.jobs.length ? s.jobs[0] : null
-  // The order someone would set out for this morning: the first that nobody holds and nothing holds up (on the list,
-  // or one the routine or a foreman will put there when the day is counted), and the first person fit for work who
-  // will do that kind of work.
+  // The order someone would set out for this morning, and who, as the farm's day will give the work out
+  // (src/sim/season.ts): the hands first, then the operators, then the farmer, each to the nearest of the first few
+  // orders of their first kind of work that nobody holds and nothing holds up: those on the list, and those the
+  // routine or a foreman will put there when the day is counted.
   let lead: (Work & { unit: number }) | null = null
   if (inSeason && !s.frozen && sim.workday(c, s)) {
     const today = sim.getDay(app.world, s.year, s.day)
-    const free = (kind: sim.JobKind, unit: number) => c.crew.find(u => (unit < 0 || unit === u.id) && u.job < 0 && sim.willDo(u, kind) && !sim.hurt(u, s.day) && u.rest !== 'now' && u.tired < 0.9)
-    for (const j of s.jobs) {
-      if (lead || j.field < 0 || c.crew.some(u => u.job === j.id) || (today && sim.waitFor(c, s, j, today))) continue
-      const who = free(j.kind, j.unit)
-      if (who) lead = { kind: j.kind, field: j.field, unit: who.id }
-    }
-    if (!lead) for (const a of sim.advise(app.world, c)) {
-      if (lead || a.field < 0 || a.act === 'wait' || a.act === 'sell' || a.act === 'close' || s.jobs.some(j => j.kind === a.act && j.field === a.field)) continue
+    const fit = c.crew.filter(u => u.job < 0 && !u.foreman && !sim.hurt(u, s.day) && !sim.resting(u)).sort((a, b) => TURN[a.kind] - TURN[b.kind] || a.id - b.id)
+    const open: { id: number; kind: sim.JobKind; field: number; unit: number }[] = s.jobs.filter(j => !c.crew.some(u => u.job === j.id) && !(today && sim.waitFor(c, s, j, today)))
+    let made = -1
+    for (const a of sim.advise(app.world, c)) {
+      if (a.field < 0 || a.act === 'wait' || a.act === 'sell' || a.act === 'close' || s.jobs.some(j => j.kind === a.act && j.field === a.field)) continue
+      if (a.act === 'kill' && s.fields[a.field].keepVines) continue
+      // (the year's first planting waits for the player's word, or for the crew to start by itself)
+      if (sim.awaitsWord(c, a.act, a.field) && !(s.plantAsk !== undefined && s.day - s.plantAsk >= sim.PLANT_WORD_DAYS)) continue
       const by = sim.standingBy(c, a.act, a.field)
       if (!by || (today && sim.waitFor(c, s, { id: -1, kind: a.act, field: a.field, done: 0, need: 1, unit: -1, by }, today))) continue
-      const who = free(a.act, -1)
-      if (who) lead = { kind: a.act, field: a.field, unit: who.id }
+      const job = { id: made--, kind: a.act, field: a.field, unit: -1 }
+      if (a.act === 'haul') open.unshift(job)
+      else open.push(job)
+    }
+    const taken = new Set<number>()
+    for (const u of fit) {
+      if (lead) break
+      let pick: (typeof open)[number] | null = null
+      for (let level = 1; level <= sim.PRIORITY_MAX && !pick; level++) {
+        const cands = open.filter(j => !taken.has(j.id) && (j.unit < 0 || j.unit === u.id) && u.prio[sim.jobSkill(j.kind)] === level).slice(0, sim.PICK_WINDOW)
+        let least = Infinity
+        cands.forEach((j, r) => { const cost = sim.travel(c, u.at, j.field) + r * sim.PICK_LAG; if (cost < least) { least = cost; pick = j } })
+      }
+      const j = pick as (typeof open)[number] | null
+      if (!j) continue
+      taken.add(j.id)
+      if (j.field >= 0) lead = { kind: j.kind, field: j.field, unit: u.id }
     }
   }
   const heldFields = fields.filter(f => f.held)
