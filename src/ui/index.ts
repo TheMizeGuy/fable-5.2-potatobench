@@ -21,7 +21,7 @@ import { openHelp } from './help.ts'
 import { ledgerScreen, overScreen } from './ledger.ts'
 import { openMenu } from './menu.ts'
 import { planScreen } from './plan.ts'
-import { alertShort, countYearsFrom, firstName } from './rules.ts'
+import { alertShort, countYearsFrom, firstName, jobText } from './rules.ts'
 import { seasonScreen } from './season.ts'
 import { titleScreen } from './title.ts'
 import { guidedYear, HOLD, mountGuide, openGuide } from './tutorial.ts'
@@ -35,6 +35,18 @@ const SENT: Record<S.JobKind, string> = {
   plant: 'plant', hill: 'hill', scout: 'scout', spray: 'spray', water: 'water', rogue: 'rogue', sample: 'do a test dig in',
   kill: 'kill the vines in', dig: 'dig', fell: 'fell the trees in', rocks: 'pick rocks in', brush: 'cut brush around',
   build: 'build in', haul: 'haul the crop in from',
+}
+
+// The answer to a stamp or a right-click: who will do what where, or that it's on the work list and why not the one picked.
+function sentText(c: S.Campaign, e: { field: number; kind: S.JobKind; unit: number; instead?: number }): string {
+  const u = c.crew.find(x => x.id === e.unit)
+  if (u) return `${u.kind === 'farmer' ? 'You\'ll' : `${firstName(u.name)} will`} ${SENT[e.kind]} ${S.placeName(e.field)}.`
+  const what = jobText(e)
+  const not = c.crew.find(x => x.id === e.instead)
+  if (!not) return `${what} is on the work list.`
+  const why = not.foreman ? `${firstName(not.name)} is a foreman` : `${not.kind === 'farmer' ? 'You don\'t' : `${firstName(not.name)} doesn't`} do ${S.SKILL_LABEL[S.jobSkill(e.kind)]}`
+  const other = c.crew.some(x => x.id !== not.id && !x.foreman && S.willDo(x, e.kind))
+  return `${why}, so ${what.replace(/^./, x => x.toLowerCase())} is on the work list ${other ? 'for someone else' : 'until someone on the farm does'}.`
 }
 
 export const mountHud: MountHud = (root, app, view, sound) => {
@@ -225,8 +237,8 @@ export const mountHud: MountHud = (root, app, view, sound) => {
         break
       }
       case 'sent': {
-        const u = app.campaign?.crew.find(x => x.id === e.unit)
-        if (u) notes.push({ text: `${u.kind === 'farmer' ? 'You\'ll' : `${firstName(u.name)} will`} ${SENT[e.kind]} ${S.placeName(e.field)}.`, level: 'info', ttl: 7000 })
+        const c = app.campaign
+        if (c) notes.push({ text: sentText(c, e), level: 'info', ttl: 7000 })
         break
       }
     }
