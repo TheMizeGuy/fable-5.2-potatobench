@@ -192,8 +192,10 @@ export function placeCard(a: Ask): Placed {
           if (x < win.left || x + w > win.right || Math.abs(x - usual.x) > reach) continue
           // (still on its own side of the point: never across it, beside some bar far off)
           if (side === 'right' ? x < p.x : x + w > p.x) continue
-          // Whole there, or at least taller: a card that can be whole nowhere still gets the most height there is.
-          if (lay(side, null, x).h > usual.h + 1) starts.push({ off: x, aside: true })
+          // Whole there: a card that would still be cut stays by its thing. (Among the furniture, where its usual
+          // place may be no place at all, taller will do: it gets the most height there is.)
+          const there = lay(side, null, x).h
+          if (among ? there > usual.h + 1 : there >= h0 - 2) starts.push({ off: x, aside: true })
         }
       }
     }

@@ -355,6 +355,10 @@ describe('keeping off the other tags and people', () => {
       expect(at.y, `${x}: level with them`).toBeGreaterThanOrEqual(c.y)
       expect(at.y, `${x}: level with them`).toBeLessThanOrEqual(c.y + c.h)
     }
+    // A card that can be whole nowhere stays by its thing, cut: a step along is for a whole card only.
+    const tall = placeCard({ point: { x: 1036, y: 424 }, size: { w: 440, h: 895 }, least: 271, win: { ...win, bottom: 712 }, blocks: [{ ...bar, top: 589, bottom: 704 }, ...blocks.slice(1)] })
+    expect(tall.aside).toBe(false)
+    expect(tall.h).toBeLessThan(895)
     // A shorter window, where the land over the bar is shorter than the card wherever it stands in it.
     const low = placeCard({ point: { x: 133, y: 576 }, size: { w: 452, h: 492 }, least: 451, win: { ...win, bottom: 712 }, blocks: [{ ...bar, top: 589, bottom: 704 }, ...blocks.slice(1)] })
     expect(low.h).toBe(492)
