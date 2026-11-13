@@ -362,8 +362,7 @@ const STATES: State[] = [
   { name: 'guide-begin', what: 'Guide: the plan, the note on Start the season', sizes: ALL, run: springClear(async page => {
     await q(page, `window.__countyGuide.reset(); window.__countyGuide.skipTo('begin')`); await page.getByTestId('play').first().click()
   }) },
-  { name: 'guide-first-day', what: 'Guide: the first day of a guided season: the land, the date, the cash and one note, the clock held', sizes: ALL, run: guideAt('fields') },
-  { name: 'guide-look', what: 'Guide: how to look round, and the skip to planting day', sizes: ALL, run: guideAt('look') },
+  { name: 'guide-first-day', what: 'Guide: the first day of a guided season: the land, the date, the cash and the one tip (the fields, how to look round, the skip to planting day), the clock held', sizes: ALL, run: guideAt('fields') },
   { name: 'guide-word', what: 'Guide: the soil ready, the ask for the word to plant, the fist on the ringed Plant stamp', sizes: ALL, run: guideAt('word', `${DAYS}(() => app.needs().some(n => n.need && n.need.act === 'plant'))`) },
   { name: 'guide-plantday', what: 'Guide: planting day, the people shown for the first time', sizes: ALL, run: guideAt('plantday', `${DAYS}(() => c.season.fields.some(f => f.plantDay >= 0))`) },
   { name: 'guide-tend', what: 'Guide: the fields planted, the summer said', sizes: ALL, run: guideAt('tend', `${DAYS}(() => !c.season.fields.some((f, i) => c.plans[i] && c.plans[i].crop === 'potato' && c.fields[i].tenure !== 'none' && f.plantDay < 0))`) },
@@ -409,7 +408,7 @@ const STATES: State[] = [
     await q(page, `q.start(1987, 3); q.year(3); q.g().app.do({ t: 'next' }); window.__countyGuide.reset(); window.__countyGuide.skipTo('seed')`); await closeAll(page)
     await page.getByTestId('equipment-open').first().click(); await page.waitForTimeout(900)
   }) },
-  { name: 'guide-paper', what: 'Guide: its own paper from the menu, every lesson to see again', sizes: ALL, run: async (page, size) => { await guideAt('look')(page, size); await page.getByTestId('menu-open').first().click(); await page.getByTestId('guide-open').click() } },
+  { name: 'guide-paper', what: 'Guide: its own paper from the menu, every lesson to see again', sizes: ALL, run: async (page, size) => { await guideAt('fields')(page, size); await page.getByTestId('menu-open').first().click(); await page.getByTestId('guide-open').click() } },
 ]
 
 // In spring the guide's note lies over no row of the catalogue and no applicant (as much of each as its list shows):

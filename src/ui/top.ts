@@ -550,7 +550,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     if (moved && now >= moved.until) moved = null
     const mats = c.logs >= 0.05 || c.stone >= 0.05
     if (pop === 'materials' && !mats) pop = ''
-    const stopped = season && app.speed === 0 && (c.incidents.length > 0 || ctx.awaiting > 0 || app.pauseCause === 'plantAsk' || app.pauseCause === 'killCall')
+    const stopped = season && app.speed === 0 && (c.incidents.length > 0 || ctx.awaiting > 0)
     const model = {
       p: c.phase, y: c.year, day: c.season?.day, m: c.month, cash: Math.round(c.cash), sp: app.speed, at: app.resumeSpeed, done: season && S.seasonDone(c) && !ctx.awaiting, layout,
       w: c.season?.watchDay, f: c.season?.log.filter(e => e.type === 'frost').length, u: app.settings.units, t: ctx.touch(), days, withClock, withMenu, stopped,

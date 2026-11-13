@@ -350,7 +350,7 @@ export class App {
   // stays stopped.
   // Stops the clock for a question the interface asks (the season's spraying, a weigh ticket): answered or put away,
   // it goes on.
-  stopFor(cause: 'spray' | 'weighed', why: string): void {
+  stopFor(why: string, cause: 'spray' | 'weighed' = 'spray'): void {
     if (this.speed > 0) this.halt(cause, why)
   }
 

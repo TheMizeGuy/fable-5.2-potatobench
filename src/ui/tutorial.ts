@@ -306,8 +306,9 @@ function slipBody(ctx: Ctx, x: Lesson, l: Look, held: boolean, lost = false, und
     under ? h('p', { class: 'guide-lost t-caption', testid: 'guide-under' }, icon('close', 'i'), by(l.input, 'A card is in the way. Click its X to close it.', 'A card is in the way. Tap its X to close it.', 'A card is in the way. Use its X to close it.')) : null,
     h('footer', { class: 'guide-foot' },
       act ? h('button', { class: 'btn guide-ok', type: 'button', testid: 'guide-act', onclick: () => { let said = ''; for (const cmd of act.cmds) { const r = ctx.run(cmd); said = (r.ok ? r.events[0]?.text : r.err) ?? said } const text = act.done ?? said; if (text) ctx.say(F.localize(text), 'good'); done() } }, icon('check', 'i'), act.label) : null,
-      // Every note has a Got it. On one that points at a control it passes the step without doing it.
-      h('button', { class: `btn${act || !(x.read || again) ? '' : ' guide-ok'}`, type: 'button', testid: 'guide-noted', onclick: x.read || again ? done : () => { guide.skip(x.id); poke(); ctx.dirty() } }, icon('check', 'i'), h('span', { class: 'two' }, 'Got it', resumes)),
+      // Every note has a Got it. On one that points at a control (guide-pass) it passes the step without doing it.
+      x.read || again ? h('button', { class: `btn${act ? '' : ' guide-ok'}`, type: 'button', testid: 'guide-noted', onclick: done }, icon('check', 'i'), h('span', { class: 'two' }, 'Got it', resumes))
+        : h('button', { class: 'btn', type: 'button', testid: 'guide-pass', onclick: () => { guide.skip(x.id); poke(); ctx.dirty() } }, icon('check', 'i'), h('span', { class: 'two' }, 'Got it', resumes)),
       skip ? h('button', { class: 'btn', type: 'button', testid: 'guide-ahead', onclick: () => ahead!(x.id) }, icon('fast', 'i'), h('span', { class: 'two' }, skip, h('span', { class: 'sub' }, `runs at ${SPEED_X[3]}`))) : null,
       go && show < 0 ? h('button', { class: 'btn quiet', type: 'button', testid: 'guide-show', onclick: () => lead(go) }, 'Show me') : null,
       h('button', { class: 'btn quiet', type: 'button', testid: 'guide-stop', onclick: () => { guide.stop(); poke(); ctx.say('The tutorial is off. You can turn it back on from the menu.'); ctx.dirty() } }, 'Turn off the tutorial')),

@@ -308,7 +308,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     sprayAsked = key
     if (S.routineInfo(c).some(r => r.kind === 'spray' && r.auto)) return
     askSpray(ctx)
-    app.stopFor('spray', 'You need to decide how to handle spraying this season.')
+    app.stopFor('You need to decide how to handle spraying this season.', 'spray')
   }
   // A pause that waits for a press on a stamp (the word to plant, a vine kill that is the player's): with none of
   // those stamps on the screen, the whole farm is shown.

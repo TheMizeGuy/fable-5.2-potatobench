@@ -177,7 +177,7 @@ Every action in the game and its weight (`src/ui/system/weight.ts` is the table 
 | A field's orders: Plant, Hill, Scout, Spray, Water, Rogue, Test dig, Kill vines, Dig, Haul | The command bar | std |
 | Order it, and the other fixes of a need | The work list, the goal slip | std |
 | Show me | The goal slip, the goals | std |
-| Skip ahead; Got it; Begin; Restart the tutorial | The tutorial's note and paper | std |
+| Skip ahead; Got it (on every note: read, or pass a step without doing it); Begin; Restart the tutorial | The tutorial's note and paper | std |
 | The answer keys of a choice that can be changed: winter work, foreman of a block, by itself or ask me, farm rules, varieties, seed, Sundays | Winter, a person's page, the work grid, the spring cards | std |
 | Follow; Details; Hiring; See who has it | A person's or a thing's card | std |
 | Rest choices; what a person takes first; the priority keys and cells | A person's card and page, the work grid | std |

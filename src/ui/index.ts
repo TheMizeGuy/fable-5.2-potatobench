@@ -203,7 +203,7 @@ export const mountHud: MountHud = (root, app, view, sound) => {
         const spec = app.screen === 'season' ? ticket(ctx, lot, { fresh: true, staged: app.speed < 3 }) : null
         // The game stops for it as for any card that needs an answer (so answering it sets the days going again), with no
         // line of its own: the ticket is the answer's place.
-        if (spec) { ticketing = true; app.stopFor('weighed', e.text); ticketing = false; papers.enqueue(spec) }
+        if (spec) { ticketing = true; app.stopFor(e.text, 'weighed'); ticketing = false; papers.enqueue(spec) }
         dirty = true
       }
     }
