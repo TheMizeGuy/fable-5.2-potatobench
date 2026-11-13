@@ -25,6 +25,14 @@ time('save', () => serialize(c, 1))
 time('advise', () => S.advise(world, c))
 time('a day', () => S.apply(world, structuredClone(c), { t: 'day' } as never), 5)
 time('copy', () => structuredClone(c), 5)
+// The spring plan's reckonings, each tried on copies of the farm: asked for every time the plan's sheet is drawn.
+{
+  const p = S.createCampaign(world, { seed: 3, startYear: 1987 })
+  time('plan: year end', () => S.moneyPlan(world, p), 5)
+  time('plan: rescue', () => S.planRescue(world, p), 3)
+  time('plan: a key', () => S.moneyEffect(world, p, { t: 'buy', upgrade: 'sprayer' } as never), 5)
+  time('plan: as text', () => JSON.stringify(p), 20)
+}
 const fns = S as unknown as Record<string, (...a: unknown[]) => unknown>
 for (const k of ['moneyNow', 'moneyLook', 'moneyWatch', 'pressing', 'jobOutlook', 'goalCosts', 'routineInfo', 'yearStory', 'standingOrders', 'needs', 'remedies']) {
   const f = fns[k]

@@ -733,7 +733,9 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       const tgt = target(g)
       goalField = tgt && 'field' in tgt ? tgt.field : -1
       frostAt = Object.fromEntries(S.haulInfo(app.world, c).map(x => [x.field, x.frostChance]))
+      laps.end('interface: goal')
       top.update()
+      laps.end('interface: boards')
       // On a phone the clock sits by the thumb, over the time book.
       const low = layout === 'narrow' || layout === 'short'
       clockSlot.hidden = !low
@@ -757,11 +759,16 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       }
       updateHint()
       askSprayOnce(c)
+      laps.end('interface: clock, hint')
       P.update()
       updateYards(c, tgt && 'yard' in tgt ? tgt.yard : 0)
+      laps.end('interface: tags drawn')
       units.update(c)
+      laps.end('interface: time book, list')
       people.update(c)
+      laps.end('interface: pins drawn')
       card.update(c)
+      laps.end('interface: field card')
       tied.card.update(card.el.hidden ? null : ties().field())
       person.update(c, personUp)
       tied.person.update(personUp ? ties().unit() : null)
@@ -770,8 +777,10 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       tied.yard.update(ties().yard())
       landNow = null
       if (c.crew.length < 3 && grid.isOpen()) grid.toggle(false)
+      laps.end('interface: person, yard')
       grid.update(c)
       incident.update(c)
+      laps.end('interface: grid, telegram')
       const up = incident.isUp()
       veil.hidden = !up
       el.classList.toggle('incident-up', up)

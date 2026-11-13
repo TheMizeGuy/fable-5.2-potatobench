@@ -8,6 +8,9 @@
 //   --throttle=4   the page's thread slowed that many times (CDP), to stand in for a laptop
 //   --adapt        the game left to follow frame time as a player's browser does (the picture's size and the setting)
 //   --budget       fail where a state does not keep its frames (see BUDGET below)
+//   --hz=144       the game is called on the beat of a display that fast (the browser's own frame limit taken off and
+//                  the calls let through at that rate), and with --adapt what the pace of drawing does there is said:
+//                  it should come to every beat on a machine that keeps it
 // Usage: node tools/render/flow.ts <url> <out dir> [--size=1512x982] [--dpr=2] [--throttle=4] [--seconds=20] [--states=a,b] [--adapt] [--budget]
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { chromium } from '@playwright/test'
@@ -22,16 +25,23 @@ const DPR = Number(opt('dpr') ?? 2)
 const THROTTLE = Number(opt('throttle') ?? 1)
 const SECONDS = Number(opt('seconds') ?? 20)
 const ONLY = opt('states')?.split(',')
+const HZ = Number(opt('hz') ?? 0)
 mkdirSync(out, { recursive: true })
 // What a state has to keep, with the page's thread at full speed and slowed four times.
 const BUDGET = THROTTLE > 1 ? { p99: 34, over33: 2, steps: 0 } : { p99: 20, over33: 0, steps: 0 }
 
 const INSTRUMENT = `(() => {
-  const F = window.__flow = { on: false, rows: [], long: [], ids: [], fine: {} }
+  const F = window.__flow = { on: false, rows: [], long: [], ids: [], fine: {}, worst: {}, hz: HZ_HERE, due: 0 }
   const real = window.requestAnimationFrame.bind(window)
   let cbs = [], asked = false
   const run = ts => {
     asked = false
+    if (F.hz) {
+      // (a faster display stood in for: the calls let through on its beat)
+      const now = performance.now()
+      if (now < F.due - 0.2) { asked = true; real(run); return }
+      F.due = Math.max(F.due + 1000 / F.hz, now - 1000 / F.hz)
+    }
     const list = cbs; cbs = []
     const t0 = performance.now()
     for (const cb of list) cb(ts)
@@ -41,7 +51,7 @@ const INSTRUMENT = `(() => {
     if (!f || !f.drew) return
     const d = f.drew(), c = a && a.campaign, cam = f.rig.cur
     const laps = { days: 0, land: 0, interface: 0, sound: 0 }
-    for (const m of performance.getEntriesByType('measure')) if (m.name.startsWith('county:')) { const n = m.name.slice(7), k = n.split(':')[0]; laps[k] = (laps[k] || 0) + m.duration; if (n !== k) F.fine[n] = (F.fine[n] || 0) + m.duration }
+    for (const m of performance.getEntriesByType('measure')) if (m.name.startsWith('county:')) { const n = m.name.slice(7), k = n.split(':')[0]; laps[k] = (laps[k] || 0) + m.duration; if (n !== k) { F.fine[n] = (F.fine[n] || 0) + m.duration; if (m.duration > (F.worst[n] || 0)) F.worst[n] = m.duration } }
     performance.clearMeasures()
     const row = [ts, t1 - t0, d[0], d[1], d[2], c && c.season ? c.season.day : -1, a ? a.speed : 0, laps.days, laps.land, laps.interface, laps.sound, cam.x, cam.z, cam.dist, cam.yaw]
     for (const id of F.ids) { const p = f.unitPin(id); row.push(p.visible ? p.x : NaN, p.visible ? p.y : NaN) }
@@ -53,9 +63,9 @@ const INSTRUMENT = `(() => {
   } catch {}
 })()`
 
-const browser = await chromium.launch({ args: GPU })
+const browser = await chromium.launch({ args: HZ ? [...GPU, '--disable-frame-rate-limit', '--disable-gpu-vsync'] : GPU })
 const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: DPR })
-await page.addInitScript(INSTRUMENT)
+await page.addInitScript(INSTRUMENT.replace('HZ_HERE', String(HZ)))
 const errors: string[] = []
 page.on('pageerror', e => errors.push(e.message))
 await page.goto(base + (flag('adapt') ? '?adapt' : ''))
@@ -87,16 +97,16 @@ let failed = 0
 async function take(name: string, during: (() => Promise<void>) | null = null, seconds = SECONDS): Promise<void> {
   if (ONLY && !ONLY.includes(name)) return
   const ids = await page.evaluate(() => ((window as any).__county.app.campaign?.crew ?? []).map((u: { id: number }) => u.id)) as number[]
-  await page.evaluate(ids => { const F = (window as any).__flow; F.rows = []; F.long = []; F.fine = {}; F.ids = ids; (window as any).__countyField.laps(true); performance.clearMeasures(); F.on = true }, ids)
+  await page.evaluate(ids => { const F = (window as any).__flow; F.rows = []; F.long = []; F.fine = {}; F.worst = {}; F.ids = ids; (window as any).__countyField.laps(true); performance.clearMeasures(); F.on = true }, ids)
   if (THROTTLE > 1) await cdp.send('Emulation.setCPUThrottlingRate', { rate: THROTTLE })
   const until = Date.now() + seconds * 1000
   if (during) while (Date.now() < until) await during()
   else await page.waitForTimeout(seconds * 1000)
   if (THROTTLE > 1) await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 })
-  const got = await page.evaluate(() => { const F = (window as any).__flow; F.on = false; (window as any).__countyField.laps(false); return { rows: F.rows, long: F.long, fine: F.fine } }) as { rows: Row[]; long: State['long']; fine: Record<string, number> }
+  const got = await page.evaluate(() => { const F = (window as any).__flow; F.on = false; (window as any).__countyField.laps(false); return { rows: F.rows, long: F.long, fine: F.fine, worst: F.worst } }) as { rows: Row[]; long: State['long']; fine: Record<string, number>; worst: Record<string, number> }
   report({ name, rows: got.rows, long: got.long, ids })
-  const fine = Object.entries(got.fine).map(([k, v]) => [k, v / Math.max(1, got.rows.length)] as [string, number]).filter(x => x[1] >= 0.05).sort((a, b) => b[1] - a[1])
-  if (fine.length) console.log(`       parts, ms a frame: ${fine.map(([k, v]) => `${k} ${v.toFixed(2)}`).join('; ')}`)
+  const fine = Object.entries(got.fine).map(([k, v]) => [k, v / Math.max(1, got.rows.length)] as [string, number]).filter(x => x[1] >= 0.05 || got.worst[x[0]] >= 4).sort((a, b) => b[1] - a[1])
+  if (fine.length) console.log(`       parts, ms a frame (and the worst): ${fine.map(([k, v]) => `${k} ${v.toFixed(2)} (${got.worst[k].toFixed(0)})`).join('; ')}`)
 }
 
 function report(s: State): void {
@@ -169,6 +179,16 @@ await page.waitForTimeout(1500)
 await take('paused, the land dragged', drag)
 await page.evaluate(keepRunning)
 await clear(); await speed(1)
+if (HZ) {
+  // What the pace of drawing does on a fast display, said every few seconds for a while.
+  const pace = () => page.evaluate(() => { const f = (window as any).__countyField, p = f.pace(); return `beat ${p.beat.toFixed(2)} ms, every ${p.every}, ${p.fps} a second, size ${p.size}, ${p.tier}` })
+  let last = ''
+  for (let k = 0; k < 9; k++) { await page.waitForTimeout(4000); last = await pace(); console.log(`     at ${(k + 1) * 4} s: ${last}`) }
+  const every = Number(/every (\d+)/.exec(last)?.[1]), fps = Number(/, (\d+) a second/.exec(last)?.[1])
+  const ok = !flag('adapt') || (every === 1 && fps > HZ * 0.85)
+  console.log(`${ok ? 'ok  ' : 'FAIL'} a display of ${HZ} a second${flag('adapt') ? ' is drawn on its every beat' : ''}: ${last}`)
+  if (!ok) failed++
+}
 await take('running at 1x')
 await clear(); await speed(3)
 await take('running at 8x')

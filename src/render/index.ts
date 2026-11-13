@@ -862,10 +862,18 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     if (following >= 0) {
       if (rig.idle < 0.2 || snap.mode === 'title') following = -1
       else if (!followClose) comeClose(following)
-      else if (crews.anchor(following, far) && Math.hypot(rig.goal.x - far.x, rig.goal.z - far.z) > 1.5) {
-        const to = rig.complete({ x: far.x, z: far.z, ...followClose })
-        if (rig.moving()) rig.retarget(to)
-        else rig.moveTo(to, reduced, 700)
+      else if (crews.anchor(following, far)) {
+        // On the way in, and after a cut that brings them in far off, a timed move; once with them the camera goes
+        // as they go, every frame, a little behind: never a wait until they are a step and a half off and then a
+        // lurch after them.
+        const gap = Math.hypot(rig.goal.x - far.x, rig.goal.z - far.z)
+        if (rig.moving()) { if (gap > 1.5) rig.retarget(rig.complete({ x: far.x, z: far.z, ...followClose })) }
+        else if (gap > 40) rig.moveTo(rig.complete({ x: far.x, z: far.z, ...followClose }), reduced, 700)
+        else if (gap > 0.01) {
+          const k = reduced ? 1 : 1 - Math.exp(-dt / 0.3)
+          rig.goal.x += (far.x - rig.goal.x) * k
+          rig.goal.z += (far.z - rig.goal.z) * k
+        }
       }
     }
     if (snap.mode === 'title' && framing === 'title') {

@@ -383,7 +383,9 @@ export const mountHud: MountHud = (root, app, view, sound) => {
         root.dataset.layout = layoutNow()
         root.classList.toggle('touch', touchQuery.matches)
         screen.update()
+        laps.end('interface: screen')
         who.update()
+        laps.end('interface: card on the land')
         // One voice: no toast under a card that wants an answer.
         root.classList.toggle('voice', !!root.querySelector('.screen-layer .telegram:not([hidden]), .paper-layer > .dialog:not(.out)'))
         const [t, r, b0, l] = screen.insets().map(x => Math.max(0, Math.round(x)))
