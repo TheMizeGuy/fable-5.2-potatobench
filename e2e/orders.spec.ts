@@ -369,10 +369,16 @@ test('two lots weighed on the same day: each ticket is up the moment the game st
   })
   await reach(page, `q.g().app.setSpeed(1)`)
   const ticket = page.getByTestId('weighin')
+  // One ticket, then the other the moment the first is answered.
+  const sold: string[] = []
   for (let k = 0; k < 2; k++) {
-    await expect(ticket).toBeVisible()
-    await ticket.locator('[data-testid^="lot-sell-"]').first().click()
-    await expect(ticket).toHaveCount(0)
+    const sell = ticket.locator('[data-testid^="lot-sell-"]').first()
+    await expect(sell).toBeVisible()
+    const id = (await sell.getAttribute('data-testid'))!
+    expect(sold).not.toContain(id)
+    sold.push(id)
+    await sell.click()
+    await expect(page.getByTestId(id)).toHaveCount(0)
   }
   const waits = await page.evaluate(() => (globalThis as any).__ticketWait as number[])
   expect(waits).toHaveLength(2)

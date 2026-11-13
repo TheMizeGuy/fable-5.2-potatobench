@@ -73,6 +73,8 @@ export const mountHud: MountHud = (root, app, view, sound) => {
   const tip = h('p', { class: 'alert answer-tip sys', testid: 'answer-tip', role: 'status', hidden: true, style: 'position:absolute;max-width:320px;margin:0;pointer-events:none' })
   guideLayer.append(tip)
   let tipTimer = 0
+  // While a weigh ticket's own stop is made: the ticket says why, so no pause line is printed for it.
+  let ticketing = false
   let lastSent: { kind: S.JobKind; unit: number; instead?: number; fields: number[]; at: number; text: string } | null = null
   function answer(text: string): void {
     notes.push({ text, level: 'info', ttl: 7000 })
@@ -195,7 +197,9 @@ export const mountHud: MountHud = (root, app, view, sound) => {
         // The ticket comes up the moment the lot is weighed, so the game never stands paused for one that isn't on
         // screen; a ticket already up keeps it waiting its turn behind.
         const spec = app.screen === 'season' ? ticket(ctx, lot, { fresh: true, staged: app.speed < 3 }) : null
-        if (spec) papers.enqueue(spec)
+        // The game stops for it as for any card that needs an answer (so answering it sets the days going again), with no
+        // line of its own: the ticket is the answer's place.
+        if (spec) { ticketing = true; app.stopFor(e.text); ticketing = false; papers.enqueue(spec) }
         dirty = true
       }
     }
@@ -252,7 +256,7 @@ export const mountHud: MountHud = (root, app, view, sound) => {
         const c = app.campaign
         if (e.speed > 0 && pauseSaid) { notes.forget(pauseSaid); pauseSaid = '' }
         if (e.speed === 0 && app.holding) ctx.announce(app.pauseReason)
-        else if (e.speed === 0 && app.pauseReason && app.pauseReason !== HOLD && !guidedYear(c) && app.screen === 'season' && c && !S.seasonDone(c) && !papers.isOpen() && !notes.has(app.pauseReason)) {
+        else if (!ticketing && e.speed === 0 && app.pauseReason && app.pauseReason !== HOLD && !guidedYear(c) && app.screen === 'season' && c && !S.seasonDone(c) && !papers.isOpen() && !notes.has(app.pauseReason)) {
           pauseSaid = `Paused: ${app.pauseReason}`
           notes.push({ text: pauseSaid, level: 'info', ttl: 9000 })
         }
