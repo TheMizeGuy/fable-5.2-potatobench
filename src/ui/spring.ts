@@ -189,8 +189,10 @@ function peopleBody(ctx: Ctx, c: S.Campaign, onTry: (err: string) => void, onClo
         portrait(p, 32),
         h('b', null, p.name),
         h('span', { class: 'it quiet' }, `${p.traitName}, ${F.money(p.pay)} a month`),
-        // Hired this spring, the hire is undone in full; letting someone go cannot be taken back, so it asks once more.
-        c.spring?.hired.some(x => x.unit === p.id) ? undoKey(ctx, `unhire-${p.id}`, `hiring ${p.name}`, { t: 'unhire', unit: p.id }, onTry) : h('button', {
+        // Hired this spring, the hire can be undone in full.
+        c.spring?.hired.some(x => x.unit === p.id) ? undoKey(ctx, `unhire-${p.id}`, `hiring ${p.name}`, { t: 'unhire', unit: p.id }, onTry) : null,
+        // Letting someone go cannot be taken back, so it asks once more here as it does on their card.
+        h('button', {
           class: 'btn hazard', type: 'button', testid: `dismiss-${p.id}`,
           onclick: async () => {
             const yes = await confirmPaper(ctx, { title: `Let ${p.name.split(' ')[0]} go?`, text: "They'll leave today and won't come back.", yes: 'Let them go', danger: true })
