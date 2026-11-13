@@ -27,16 +27,67 @@ test('in April with the soil too cold, the Plant stamp warns on its second line 
   await expect(plant).toBeVisible()
   await expect(plant).not.toHaveClass(/is-off/)
   await expect(plant.locator('.cost')).toHaveText(/too cold/i)
-  await expect(plant).toHaveAttribute('title', /rots in cold soil.*wait until about (April|May|June) \d+/i)
-  await expect(plant).toHaveAccessibleName(/rots in cold soil/i)
+  await expect(plant).toHaveAttribute('title', /seed needs 50°F or it can rot, so wait until about (April|May|June) \d+\. Planting now is up to you/)
+  await expect(plant).toHaveAccessibleName(/can rot/i)
   await plant.hover()
-  await expect(page.locator('#ui [data-testid="card-line"]')).toContainText(/rots in cold soil/i)
+  await expect(page.locator('#ui [data-testid="card-line"]')).toContainText(/can rot/i)
   await shot(page, '1-plant-cold')
   await plant.click()
   await expect(page.getByTestId('order-plant-given')).toBeVisible()
   expect(await game<number>(page, `app.campaign.season.jobs.filter(j => j.kind === 'plant' && j.field === ${field}).length`)).toBe(1)
   expect(errors, errors.join('\n')).toEqual([])
 })
+
+// The words a player can see in the field's card: not a screen reader's, not a hover title.
+function cardText(page: Page): Promise<string> {
+  return page.locator('#ui [data-testid="card"]').evaluate(from => {
+    const out: string[] = []
+    const walk = document.createTreeWalker(from, NodeFilter.SHOW_TEXT)
+    for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+      const p = n.parentElement
+      const t = n.textContent?.trim()
+      if (!p || !t || p.closest('.sr, [hidden]')) continue
+      if (!p.checkVisibility({ opacityProperty: true, visibilityProperty: true } as CheckVisibilityOptions)) continue
+      out.push(t)
+    }
+    return out.join(' ')
+  })
+}
+
+for (const [w, h] of [[1280, 800], [1280, 720]] as const) {
+  test(`April in a later year, ${w} by ${h}: an unplanted field's card says why it waits once, and is whole with its rocks row`, async ({ page }) => {
+    const errors = watchErrors(page)
+    await page.setViewportSize({ width: w, height: h })
+    await open(page)
+    await reach(page, `q.start(1987, 3); q.year(3); const { app } = q.g(); app.do({ t: 'next' }); app.do({ t: 'begin' }); app.setSpeed(0); app.campaign.incidents = []`)
+    await putAway(page)
+    // A potato field the rocks row is offered for, not yet planted, in cold soil.
+    const field = await game<number>(page, `[...Array(sim.FIELD_COUNT).keys()].find(i => sim.held(app.campaign, i) && app.campaign.plans[i].crop === 'potato' && !sim.plantReady(app.world, app.campaign, i).ok && sim.fieldInfo(app.campaign, i).stones >= 0.3) ?? -1`)
+    expect(field, 'an unplanted potato field with stones').toBeGreaterThanOrEqual(0)
+    await game(page, `app.focus(${field})`)
+    await page.waitForTimeout(1500)
+    await game(page, `app.select(${field})`)
+    await expect(page.getByTestId('card-title')).toBeVisible()
+    await page.mouse.move(2, Math.round(h / 2))
+    await page.waitForTimeout(600)
+    await expect(page.locator('#ui [data-testid="card"] [data-k="order-rocks"]')).toBeVisible()
+    const text = await cardText(page)
+    console.log(`the April card, ${w}x${h}: ${text}`)
+    // The reason, with its number and its date, once.
+    expect(text.match(/can rot/g)?.length ?? 0, text).toBe(1)
+    expect(text.match(/The soil here is/g)?.length ?? 0, text).toBe(1)
+    expect(text).toMatch(/The soil here is \d+°F and seed needs 50°F or it can rot, so wait until about (April|May|June) \d+\./)
+    expect(text).not.toMatch(/Hold off planting/)
+    await expect(page.getByTestId('order-plant').locator('.cost')).toHaveText(/^Too cold/)
+    // Whole: nothing in the card has to be scrolled to.
+    const room = await page.locator('#ui [data-testid="card"]').evaluate(el => [el, ...el.querySelectorAll<HTMLElement>('[data-scroll]')].map(x => [x.scrollHeight, x.clientHeight]))
+    for (const [sh, ch] of room) expect(sh, `the card scrolls: ${JSON.stringify(room)}`).toBeLessThanOrEqual(ch + 1)
+    const card = (await page.getByTestId('card').boundingBox())!
+    expect(card.y + card.height, 'the card ends inside the window').toBeLessThanOrEqual(h)
+    await shot(page, `1-april-card-${w}x${h}`)
+    expect(errors, errors.join('\n')).toEqual([])
+  })
+}
 
 // The Kill vines stamp of field i, read off its card.
 async function killStamp(page: Page, i: number): Promise<{ cost: string; title: string; name: string; risk: boolean; given: boolean }> {

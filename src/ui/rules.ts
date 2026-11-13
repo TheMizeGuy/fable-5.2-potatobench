@@ -193,27 +193,8 @@ function whoIs(text: string): string {
   return w === 'You' ? 'You\'re' : `${w} is`
 }
 
-// Days until the ground is fit to plant, as a grower would reckon it: the soil drawn toward each day's mean, from the
-// forecast for five days and the usual weather after, and never before the date the coach calls too early. -1 when
-// it cannot be told within three months.
-export function plantingIn(world: S.World, c: S.Campaign): number {
-  const s = c.season
-  const t = S.today(world, c)
-  if (!s || !t) return -1
-  const earliest = S.dayIndex(s.year, 4, 8)
-  const fc = S.forecast(world, c, 5)
-  const nm = world.weather.normals
-  let soil = t.soilT
-  for (let k = 1; k <= 90; k++) {
-    const day = s.day + k
-    const f = fc[k - 1]
-    const slot = !S.isLeap(s.year) && day >= 59 ? day + 1 : day
-    const mean = f ? (f.hi + f.lo) / 2 : (nm.tmax[slot] + nm.tmin[slot]) / 20
-    soil += S.SOIL_T_GAIN * (mean - soil)
-    if (day >= earliest && soil >= 10) return k
-  }
-  return -1
-}
+// Days until the ground is fit to plant (S.plantingIn).
+export const plantingIn = S.plantingIn
 
 // Killing the vines before they are due is warned of once it gives up this much, cwt an acre (a farm can lose half
 // again or half as much as S.killCostToday says, so the warning says "about").

@@ -11,7 +11,7 @@ import { deals, deliver, versusMarket } from './contracts.ts'
 import { culledAtDig } from './dig.ts'
 import { fates, ringFor } from './crew.ts'
 import { isTract } from './map.ts'
-import { firstName, hillWord, isJob, isStale, JOB_KEY, JOB_VERB, jobText, jobWhat, killEarly, plantingIn, stonesText, stonesWord, type KillEarly } from './rules.ts'
+import { firstName, hillWord, isJob, isStale, JOB_KEY, JOB_VERB, jobText, jobWhat, killEarly, stonesText, stonesWord, type KillEarly } from './rules.ts'
 import { term } from './glossary.ts'
 import { meter, order, range } from './system/parts.ts'
 import { ringed } from './system/people.ts'
@@ -321,9 +321,8 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
   function coldSoil(c: S.Campaign, fields: number[]): string {
     const s = c.season!
     const early = s.day < S.dayIndex(s.year, S.PLANT_FROM.month, S.PLANT_FROM.dom)
-    if (!fields.some(i => { const pr = S.plantReady(app.world, c, i); return !pr.ok && (early || pr.soilT < pr.need) })) return ''
-    const wait = plantingIn(app.world, c)
-    return `Seed rots in cold soil, so it's safer to wait until ${wait > 0 ? `about ${F.date(c.year, s.day + wait)}` : 'the soil warms up'}. Planting now is up to you.`
+    const cold = fields.map(i => S.plantReady(app.world, c, i)).find(pr => !pr.ok && (early || pr.soilT < pr.need))
+    return cold ? `${F.localize(cold.why)} Planting now is up to you.` : ''
   }
 
   // Killing the vines before they are due, for the fields where the coach is not asking for it (blight winning): the
@@ -411,7 +410,8 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
       const { need, hold } = needs[i] ?? { need: null, hold: null }
       if (need && need.act === 'sell') return note([h('b', null, 'Sell. '), F.localize(need.why)])
       if (need && isJob(need.act)) return note('')
-      if (hold) return note(`${F.localize(hold.text)} ${F.localize(hold.why)}`)
+      // Why a field waits to be planted is said once, in the planting rule's own sentence.
+      if (hold) return note(S.fieldInfo(c, i).status === 'idle' ? F.localize(hold.why) : `${F.localize(hold.text)} ${F.localize(hold.why)}`)
       if (!canAny) {
         const f = S.fieldInfo(c, i)
         const job = s.jobs.find(j => j.kind === 'dig' && j.field === i)
@@ -456,9 +456,8 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
     if (f.status === 'idle' && coach && /°/.test(F.localize(`${coach.text} ${coach.why}`))) return []
     // The one planting rule (S.plantReady), the same the coach and the routine go by.
     if (f.status === 'idle' || f.status === 'planted') {
-      const pr = S.plantReady(app.world, c, f.index)
-      const why = F.localize(pr.why)
-      return [h('p', null, icon('planted', 'i'), h('span', null, f.status === 'idle' && why.includes('°') ? why : `The soil here is ${F.temp(pr.soilT)}.${f.status === 'idle' ? ` ${why}` : ''}`))]
+      // The reading only: why it matters is said once, on the line under the orders.
+      return [h('p', null, icon('planted', 'i'), h('span', null, `The soil here is ${F.temp(S.plantReady(app.world, c, f.index).soilT)}.`))]
     }
     if (f.status === 'dead') {
       const left = Math.ceil((1 - f.skin) * S.SKIN_DAYS)
