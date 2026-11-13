@@ -4,7 +4,9 @@
 // saved game opened again. A frame fails where a figure's two arms are both held straight out to its sides (the
 // letter T), or both straight out in front with nothing in its hands, or where a figure is carried over the ground
 // faster than a slow walk while its legs are not stepping and it is not sat on anything (it slides as it stands).
-// Usage: node tools/render/pose.ts <base-url> <out dir> [--seconds=6]
+//   --show          the first figure seen covering ground on its feet in each state is pictured too
+//   --only=a,b      only the states whose names hold one of these
+// Usage: node tools/render/pose.ts <base-url> <out dir> [--seconds=6] [--show] [--only=planting,spraying]
 import { mkdirSync } from 'node:fs'
 import { chromium } from '@playwright/test'
 import { closeAll, GPU, HELPER, q } from '../quality/shared.ts'
@@ -12,6 +14,7 @@ import { closeAll, GPU, HELPER, q } from '../quality/shared.ts'
 const args = process.argv.slice(2)
 const [base = 'http://localhost:5317/', out = 'out/pose'] = args.filter(a => !a.startsWith('--'))
 const SECONDS = Number(args.find(a => a.startsWith('--seconds='))?.slice(10) ?? 6)
+const ONLY = args.find(a => a.startsWith('--only='))?.slice(7).split(',')
 mkdirSync(out, { recursive: true })
 let failed = 0
 const check = (ok: boolean, what: string) => { console.log(`${ok ? 'ok  ' : 'FAIL'} ${what}`); if (!ok) failed++ }
@@ -77,6 +80,7 @@ async function open(): Promise<void> {
 }
 // Watches for a while under a name; a stiff figure found is looked at where it stands.
 async function watch(label: string, seconds = SECONDS): Promise<void> {
+  if (ONLY && !ONLY.some(k => label.includes(k))) return
   await page.evaluate(l => { (window as any).__pose.label = l }, label)
   await page.waitForTimeout(seconds * 1000)
   await page.evaluate(() => { (window as any).__pose.label = '' })
