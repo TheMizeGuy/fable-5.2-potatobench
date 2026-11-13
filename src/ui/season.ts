@@ -456,6 +456,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     covers,
     stopped: () => stoppedBy(app.campaign),
     board: () => board,
+    stamps: () => P.byField().filter(t => t.need).map(t => new DOMRect(t.box.right - 52, t.box.top, 52, t.box.height)),
   })
 
   // ------------------------------------------------------------ the yards on the land
