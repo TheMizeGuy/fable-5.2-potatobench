@@ -31,6 +31,8 @@ interface Seen {
   words: number; text: string
   hidden: string[]
   ticketSell: string; paperWords: number
+  // The note lying over the stamp or control it points at.
+  overTarget: boolean
 }
 
 async function see(page: Page): Promise<Seen> {
@@ -77,7 +79,10 @@ async function see(page: Page): Promise<Seen> {
     if (vis(ui.querySelector('.press-pop'))) asking.push('pop')
     if (vis(ui.querySelector('.tray-paper'))) asking.push('tray')
     const sell = ui.querySelector<HTMLElement>('.paper-layer [data-testid^="lot-sell-"]')
+    const aim = slip?.dataset.target ? ui.querySelector<HTMLElement>(`[data-testid="${slip.dataset.target}"]`) : null
+    const sb = slip?.getBoundingClientRect(), ab = aim && vis(aim) ? aim.getBoundingClientRect() : null
     return {
+      overTarget: !!sb && !!ab && !slip!.contains(aim) && sb.left < ab.right && sb.right > ab.left && sb.top < ab.bottom && sb.bottom > ab.top,
       phase: c?.phase ?? 'title', speed: app.speed, stopped: app.pauseReason ?? '', day: c?.season?.day ?? -1, sold: c ? c.lots.filter((l: any) => l.sold > 0).length : 0, done: !!ui.querySelector('[data-testid="end-season"]'),
       note: slip?.dataset.lesson ?? '', target: slip?.dataset.target ?? '', noteWords: count(said), cardWords: card ? count(read(card)) : 0,
       keys: slip ? [...slip.querySelectorAll<HTMLElement>('button')].filter(vis).map(b => b.dataset.testid ?? '') : [],
@@ -95,6 +100,7 @@ function check(s: Seen, did: string[]): void {
   expect(s.asking.length, `one voice ${at}: ${s.asking.join(' + ')}`).toBeLessThanOrEqual(1)
   if (s.phase === 'season' && s.asking.length && !s.asking.includes('toast')) expect(s.speed, `the clock stands while ${s.asking[0]} is up, ${at}`).toBe(0)
   if (s.note) expect(s.noteWords, `${s.note} says it in ${NOTE_WORDS} words or fewer`).toBeLessThanOrEqual(NOTE_WORDS)
+  expect(s.overTarget, `the note ${s.note} lies over what it points at (${s.target}) ${at}`).toBe(false)
   expect(s.cardWords, `a card of ${CARD_WORDS} words or fewer ${at}`).toBeLessThanOrEqual(CARD_WORDS)
   if (s.phase === 'season') expect(s.words, `words on the season screen ${at}: ${s.text}`).toBeLessThanOrEqual(s.asking.includes('telegram') ? TELEGRAM_WORDS : SEASON_WORDS)
 }
@@ -118,9 +124,11 @@ test('a guided first year: offered as a card, taken, and followed from Play to t
   await page.getByTestId('guide-accept').click()
   await expect(offer).toHaveCount(0)
 
-  // What a year is, then Start the season.
+  // What a year is, then Start the season. A new farm is the farmer alone, and the card says the work as it is.
   await expect(page.locator('#ui [data-testid="guide-slip"][data-lesson="frame"]')).toBeVisible()
   await expect(page.locator('#ui .gc-year li')).toHaveCount(5)
+  await expect(page.locator('#ui .guide-card.frame')).toContainText('You and anyone you hire do the field work')
+  await expect(page.locator('#ui .guide-card.frame')).not.toContainText('Your crew handles')
   const did: string[] = []
   let first = true
   const words: number[] = []
@@ -157,11 +165,20 @@ test('a guided first year: offered as a card, taken, and followed from Play to t
         }
       }
       // Only what the note asks: the stamp it says to click, its skip ahead, its Got it, or the control it points at.
-      const key = s.note === 'stamp' && s.target.startsWith('badge-') ? '' : s.keys.includes('guide-ahead') ? 'guide-ahead' : s.keys.includes('guide-noted') ? 'guide-noted' : ''
+      const stamp = (s.note === 'stamp' || s.note === 'word') && s.target.startsWith('badge-')
+      // A note that asks for a press says the game stays paused, and a press on the stamp does not change the speed.
+      if (stamp) await expect(page.locator('#ui [data-testid="guide-slip"] [data-testid="guide-resumes"]')).toHaveText('stays paused')
+      const key = stamp ? '' : s.keys.includes('guide-ahead') ? 'guide-ahead' : s.keys.includes('guide-noted') ? 'guide-noted' : ''
       if (key) await page.locator(`#ui [data-testid="guide-slip"] [data-testid="${key}"]`).first().click()
       else await page.locator(`#ui [data-testid="${s.target}"]`).first().click()
       await page.waitForTimeout(120)
+      if (stamp) expect((await see(page)).speed, `the speed after a press on the stamp of ${s.note}`).toBe(0)
       continue
+    }
+    // Paused with nothing asking, by the player's own pause (a stamp pressed): the clock's own way on.
+    if (s.phase === 'season' && s.speed === 0 && !s.asking.length && !s.stopped && !s.done) {
+      const go = page.locator('#ui [data-testid="paused-go"]:visible, #ui [data-testid="speed-0"]:visible, #ui [data-testid="speed-toggle"]:visible').first()
+      if (await go.isVisible().catch(() => false)) { await go.click(); await page.waitForTimeout(150); continue }
     }
     if (s.asking.includes('telegram')) cardMost = Math.max(cardMost, s.words)
     if (s.asking.includes('telegram')) {
@@ -183,10 +200,10 @@ test('a guided first year: offered as a card, taken, and followed from Play to t
   console.log(`followed: ${did.join(' > ')}`)
   console.log(`words on the screen at each note: ${words.join(' ')}; the most with a telegram up: ${cardMost}`)
   expect((await see(page)).sold, `a crop sold, after ${did.join(' > ')}`).toBeGreaterThan(0)
-  // The opening: what the game is, the land, planting day; then the year.
-  expect(did.slice(0, 5)).toEqual(['frame', 'begin', 'fields', 'look', 'plantday'])
+  // The opening: what the game is, the land, the word to plant, planting day; then the year.
+  expect(did.slice(0, 6)).toEqual(['frame', 'begin', 'fields', 'look', 'word', 'plantday'])
   for (const id of ['tend', 'dig', 'ticket']) expect(did).toContain(id)
-  expect(new Set(did).size, 'about a dozen notes').toBeLessThanOrEqual(16)
+  expect(new Set(did).size, 'about a dozen notes').toBeLessThanOrEqual(17)
   if (!isMobile) await noSidewaysScroll(page)
   expect(errors, errors.join('\n')).toEqual([])
 })
@@ -399,15 +416,24 @@ test('in the second spring the goal slip stands down while the agent has a note,
     const goal = ui.querySelector<HTMLElement>('[data-testid="goal"]')
     const ring = [...ui.querySelectorAll<HTMLElement>('.catalogue .goal-ring')].find(vis)
     const { app } = (globalThis as unknown as Win).__county
+    // What the note lies over: the strip of folds, or the control it points at.
+    const nb = slipNote?.getBoundingClientRect()
+    const hits = (e: Element | null | undefined) => { if (!nb || !vis(e)) return false; const r = e.getBoundingClientRect(); return nb.left < r.right && nb.right > r.left && nb.top < r.bottom && nb.bottom > r.top }
+    const aim = slipNote?.dataset.target ? ui.querySelector(`[data-testid="${slipNote.dataset.target}"]`) : null
+    const strip = [...ui.querySelectorAll('.catalogue .fold.more.strip')].filter(vis)
     return {
+      over: strip.some(hits) ? 'the strip of folds' : hits(aim) ? `its target ${slipNote!.dataset.target}` : '', strip: strip.length,
       phase: app.campaign.phase as string, note: slipNote?.dataset.lesson ?? '', target: slipNote?.dataset.target ?? '', said: slipNote?.querySelector('.guide-ask')?.textContent ?? '',
       got: !!slipNote?.querySelector('[data-testid="guide-noted"]'), slip: vis(goal) ? (goal.querySelector('.goal-t')?.textContent ?? 'slip') : '', ring: ring ? ring.textContent ?? 'ring' : '',
       paper: !!ui.querySelector('.paper-layer > .dialog:not(.out)'),
     }
   })
   const two: string[] = []
+  const covers: string[] = []
   const notes: string[] = []
+  let strips = 0
   let pictured = false
+  let idle = 0
   const until = Date.now() + 200_000
   while (Date.now() < until) {
     // Watched for a second and a half at each step, the gaps between notes included.
@@ -419,9 +445,25 @@ test('in the second spring the goal slip stands down while the agent has a note,
     }
     if (v.phase !== 'plan') break
     if (v.paper) { await page.keyboard.press('Escape'); continue }
-    if (!v.note) continue
+    // No step while a fold the last step opened is still open: read, it is closed, as a player moving on would.
+    if (!v.note) { const open = page.locator('#ui .catalogue .fold.open'); if (++idle >= 2 && await open.count()) { await open.first().click(); idle = 0 } continue }
+    idle = 0
     if (notes[notes.length - 1] !== v.note) notes.push(v.note)
+    if (v.over) covers.push(`the note ${v.note} lies over ${v.over}`)
+    if (v.strip) { if (!strips) await picture(page, 'b-spring-strip-1280'); strips++ }
     if (!pictured && v.note === 'seed') { pictured = true; await picture(page, 'b-spring-note-1280') }
+    // Round seven (9): with the field's record open the walk waits on that field. Nothing else comes for ten seconds
+    // (longer than any timer the walk ever had), and it goes on when the record is closed.
+    if (v.note === 'crop') {
+      await expect(page.getByTestId('plan-card')).toBeVisible()
+      for (let k = 0; k < 20; k++) {
+        await page.waitForTimeout(500)
+        expect((await voices()).note, `the step ${k / 2}s after the field's record opened`).toBe('crop')
+      }
+      await page.locator('#ui [data-testid="plan-card"] button.close').first().click()
+      await expect(page.getByTestId('plan-card')).toBeHidden()
+      continue
+    }
     // What the note asks: its Got it, or the control it points at.
     if (v.got) await page.locator('#ui [data-testid="guide-slip"]:not([hidden]) [data-testid="guide-noted"]').first().click()
     else await page.locator(`#ui [data-testid="${v.target}"]`).first().click()
@@ -429,7 +471,9 @@ test('in the second spring the goal slip stands down while the agent has a note,
   }
   console.log(`the second spring's notes: ${notes.join(' > ')}`)
   expect([...new Set(two)], 'two voices at once').toEqual([])
-  expect(notes).toEqual(['seed', 'people', 'hire', 'land', 'loan', 'begin2'])
+  expect([...new Set(covers)], 'a note over the strip of folds or over what it points at').toEqual([])
+  expect(strips, 'notes seen with the strip of folds showing').toBeGreaterThan(0)
+  expect(notes).toEqual(['seed', 'crop', 'people', 'hire', 'land', 'loan', 'begin2'])
   // The season: its first note, the slip down; read, and the slip is the one voice.
   await expect(note(page, 'calls2')).toBeVisible({ timeout: 15_000 })
   expect((await voices()).slip).toBe('')
@@ -439,26 +483,56 @@ test('in the second spring the goal slip stands down while the agent has a note,
   expect(errors, errors.join('\n')).toEqual([])
 })
 
-// C (13): what a foreman is, where the key is, and what naming one did.
+// Round seven (7): a foreman is not offered to a farm with one hand, by the slip, the ring or the tutorial.
+test('a farm with one hired hand is never asked to name a foreman, and the key says what it costs in work as well as pay', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'run at the desk, at the players\' size')
+  test.setTimeout(240_000)
+  const errors = watchErrors(page)
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await secondSpring(page, null, `app.do({ t: 'hire', kind: 'hand' }); c.cash = 400`)
+  await page.getByTestId('begin-season').click()
+  await expect(page.getByTestId('date')).toBeVisible()
+  const hand = await game<number>(page, 'c.crew.find(u => u.kind !== "farmer").id')
+  // With the tutorial on and every step before it behind the player: still no foreman step.
+  await page.evaluate(() => { const w = globalThis as unknown as Win; w.__countyGuide.skipTo('foreman'); w.__county.app.setSpeed(3) })
+  const until = Date.now() + 12_000
+  while (Date.now() < until) {
+    expect(await page.getByTestId('goal').textContent(), 'the goal slip').not.toMatch(/foreman/i)
+    await expect(note(page, 'foreman')).toHaveCount(0)
+    expect(await page.locator('#ui .person.goal-ring').count(), 'a person ringed for the foreman goal').toBe(0)
+    await page.waitForTimeout(500)
+  }
+  // The key is still on the hand's card for a player who wants one, and says both costs.
+  await page.evaluate(() => { const w = globalThis as unknown as Win; w.__countyGuide.stop(); w.__county.app.setSpeed(0) })
+  await page.getByTestId(`unit-${hand}`).click()
+  await expect(page.getByTestId('person-card')).toBeVisible()
+  await expect(page.getByTestId('person-foreman')).toContainText('+40% pay, no field work')
+  await expect(page.locator('#ui [data-testid="person-foreman"].goal-ring')).toHaveCount(0)
+  expect(errors, errors.join('\n')).toEqual([])
+})
+
+// C (13), and round seven (7): what a foreman is and why it pays, where the key is, and what naming one did.
 test('naming a foreman: the slip says what one is, the key comes into view lit, and the card and a note answer at once', async ({ page, isMobile }) => {
   test.skip(isMobile, 'run at the desk, at the players\' size')
   test.setTimeout(240_000)
   const errors = watchErrors(page)
   await page.setViewportSize({ width: 1280, height: 800 })
-  // A hand hired, and too little in hand to build: the next goal is the foreman, as it was for all three players.
-  await secondSpring(page, null, `app.do({ t: 'hire', kind: 'hand' }); c.cash = 400`)
+  // Two hands hired, a field rented away from home, and too little in hand to build or buy: the next goal is the foreman.
+  await secondSpring(page, null, `app.do({ t: 'rent', field: 6 }); c.buildings.push({ id: c.nextBuilding++, kind: 'bunk', yard: -1, done: 12, need: 12, built: true })
+    app.do({ t: 'hire', kind: 'hand' }); app.do({ t: 'hire', kind: 'hand' }); c.cash = 400`)
   await page.getByTestId('begin-season').click()
   await expect(page.getByTestId('date')).toBeVisible()
   const hand = await game<number>(page, 'c.crew.find(u => u.kind !== "farmer").id')
   const first = await game<string>(page, 'c.crew.find(u => u.kind !== "farmer").name.split(" ")[0]')
   // The slip names the goal and says what it is.
   await expect(page.getByTestId('goal')).toContainText('name a foreman')
-  await expect(page.getByTestId('goal')).toContainText('a hand who orders a block\'s work')
+  await expect(page.getByTestId('goal')).toContainText('a hand who runs your fields away from home')
   await picture(page, 'c-slip-1280')
   // The tutorial's own note for it (turned on here): what a foreman is, and a Show me to the key.
   await page.evaluate(() => { const g = (globalThis as unknown as Win).__countyGuide; g.skipTo('foreman') })
   await expect(note(page, 'foreman')).toBeVisible({ timeout: 10_000 })
-  await expect(note(page, 'foreman')).toContainText('A foreman is a hired hand who orders a block\'s field work for you each morning')
+  await expect(note(page, 'foreman')).toContainText('A foreman orders the work on your fields away from home each morning, so nothing out there waits for you.')
+  await expect(note(page, 'foreman')).not.toContainText(/block/i)
   await expect(note(page, 'foreman')).toContainText(`Foreman on ${first}'s card`)
   await note(page, 'foreman').getByTestId('guide-show').click()
   await expect.poll(() => game<number>(page, 'app.unit')).toBe(hand)
@@ -473,10 +547,12 @@ test('naming a foreman: the slip says what one is, the key comes into view lit, 
   await expect(page.getByTestId('person-card')).toBeVisible()
   await expect.poll(() => reachable(page, 'person-foreman'), { timeout: 8000 }).toBe('in view')
   await expect(page.locator('#ui [data-testid="person-foreman"].goal-ring')).toHaveCount(1)
+  await expect(page.getByTestId('person-foreman')).toContainText('+40% pay, no field work')
   await picture(page, 'c-key-1280')
   // Pressed: what it will do, and the block to pick, in view.
   await page.getByTestId('person-foreman').click()
-  await expect(page.getByTestId('foreman-what')).toContainText('A foreman orders the work on one block of fields for you each morning')
+  await expect(page.getByTestId('foreman-what')).toContainText('A foreman orders the work on one group of fields for you each morning, which pays once you farm fields away from home')
+  await expect(page.getByTestId('foreman-what')).not.toContainText(/block/i)
   await expect(page.getByTestId('foreman-what')).toContainText('40% more')
   await expect.poll(() => reachable(page, 'foreman-home'), { timeout: 8000 }).toBe('in view')
   await picture(page, 'c-choices-1280')
@@ -519,36 +595,83 @@ test('the winter note names the building list by the words on its key', async ({
 
 // D (12): the first planting is said when it has begun, not while its order waits for warm soil, and its Show me
 // goes to the field it names.
-test('"Planting has started" waits for the planting, and its Show me goes to the field', async ({ page, isMobile }) => {
-  test.skip(isMobile, 'run at the desk')
-  test.setTimeout(240_000)
-  const errors = watchErrors(page)
+// A farm without the tutorial, stopped on the evening the crew first stands ready to plant.
+async function soilReady(page: Page): Promise<{ fit: number[]; potato: number[] }> {
   await open(page)
   await reach(page, `const guide = window.__countyGuide; guide.reset(); guide.refuse(); const { app } = q.g(); app.newGame(1987, 3); app.do({ t: 'begin' }); app.setSpeed(0)`)
   await putAway(page)
-  const toast = page.locator('#ui .notes .alert').filter({ hasText: 'Planting has started' })
-  let named = ''
-  for (let day = 0; day < 90 && !named; day++) {
-    const begun = await page.evaluate(() => {
+  for (let day = 0; day < 90; day++) {
+    const asked = await page.evaluate(() => {
       const { app } = (globalThis as unknown as Win).__county
       const c = app.campaign
-      for (const i of [...c.incidents]) app.do({ t: 'answer', incident: i.id, choice: i.choices[i.choices.length - 1] })
+      if (c.season.plantAsk !== undefined) return true
+      c.incidents = []
       app.do({ t: 'day' })
       app.setSpeed(0)
-      return c.season.jobs.some((j: any) => j.kind === 'plant' && j.done > 0) || c.season.fields.some((f: any) => f.plantDay >= 0)
+      return c.season.plantAsk !== undefined
     })
-    await page.waitForTimeout(120)
-    const up = await toast.count()
-    if (!begun) expect(up, `said on day ${day}, before any planting was done`).toBe(0)
-    else if (up) named = ((await toast.first().textContent()) ?? '').match(/started in ([A-Z][a-z]+(?: [A-Z][a-z]+)?)\./)?.[1] ?? ''
-    else if (begun) await page.waitForTimeout(400)
+    if (asked) break
+    expect(await game<number>(page, `c.season.jobs.filter(j => j.kind === 'plant').length`), `planting on the list on day ${day}, before the crew asked`).toBe(0)
   }
-  expect(named, 'the toast came once planting had begun').not.toBe('')
+  await page.waitForTimeout(400)
+  return {
+    fit: await game<number[]>(page, `app.needs().map((n, i) => n.need && n.need.act === 'plant' ? i : -1).filter(i => i >= 0)`),
+    potato: await game<number[]>(page, `c.plans.map((p, i) => p && p.crop === 'potato' && c.fields[i].tenure !== 'none' ? i : -1).filter(i => i >= 0)`),
+  }
+}
+// A day passed by the test, the game left paused.
+const aDay = (page: Page) => page.evaluate(() => { const { app } = (globalThis as unknown as Win).__county; app.campaign.incidents = []; app.do({ t: 'day' }); app.setSpeed(0) })
+
+// Round seven (1): the year's first planting waits for the player's word.
+test('the crew stands ready and says so; one press on a Plant stamp starts planting and the crew plants the rest, with a note that says so', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'run at the desk')
+  test.setTimeout(240_000)
+  const errors = watchErrors(page)
+  await page.setViewportSize({ width: 1280, height: 800 })
+  const { fit, potato } = await soilReady(page)
+  expect(fit.length, 'fields fit to plant').toBeGreaterThan(0)
+  // Said where the player looks: a toast, the goal slip, and a ringed Plant stamp on each field that is fit.
+  await expect(page.locator('#ui .notes .alert').filter({ hasText: 'The soil is ready. Press a ringed Plant stamp to give the word' })).toBeVisible()
+  await expect(page.getByTestId('goal')).toContainText('Give the word to plant')
+  for (const i of fit) await expect(page.locator(`#ui [data-testid="badge-${i}"]`), `the Plant stamp on field ${i}`).toBeVisible()
+  await expect(page.locator('#ui .plate-layer .need.is-next')).toHaveCount(1)
+  // Nothing starts without the word: two more days, and still no planting on the list.
+  for (let k = 0; k < 2; k++) { await aDay(page); expect(await game<number>(page, `c.season.jobs.filter(j => j.kind === 'plant').length + c.season.fields.filter(f => f.plantDay >= 0).length`)).toBe(0) }
+  await picture(page, 'r7-ready-1280')
+  // One press. The speed is not changed by it.
+  const first = (await game<number[]>(page, `app.needs().map((n, i) => n.need && n.need.act === 'plant' ? i : -1).filter(i => i >= 0)`))[0]
+  await page.locator(`#ui [data-testid="badge-${first}"]`).click()
+  expect(await game<number>(page, 'app.speed')).toBe(0)
+  await expect(page.locator('#ui .notes .alert').filter({ hasText: `You gave the word. Your crew will plant the other ${potato.length - 1} fields too.` })).toBeVisible()
+  expect(await game<[number, string][]>(page, `c.season.jobs.filter(j => j.kind === 'plant').map(j => [j.field, j.by])`)).toEqual([[first, 'you']])
+  await picture(page, 'r7-word-toast-1280')
+  // The rest follows with no other order from the player.
+  for (let day = 0; day < 30 && (await game<number>(page, `c.season.fields.filter(f => f.plantDay >= 0).length`)) < potato.length; day++) await aDay(page)
+  expect(await game<number[]>(page, `c.season.fields.map((f, i) => f.plantDay >= 0 ? i : -1).filter(i => i >= 0)`)).toEqual(potato)
+  expect(await game<string>(page, 'c.season.plantWordBy')).toBe('you')
+  expect(errors, errors.join('\n')).toEqual([])
+})
+
+test('with no word in three days the crew starts planting by itself and says so, and the note leads to the field', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'run at the desk')
+  test.setTimeout(240_000)
+  const errors = watchErrors(page)
+  await soilReady(page)
+  const asked = await game<number>(page, 'c.season.plantAsk')
+  let started = -1
+  for (let day = 0; day < 6 && started < 0; day++) {
+    await aDay(page)
+    if (await game<boolean>(page, 'c.season.plantWord !== undefined')) started = await game<number>(page, 'c.season.plantWord')
+    else expect(await game<number>(page, `c.season.jobs.filter(j => j.kind === 'plant').length`)).toBe(0)
+  }
+  expect(started - asked, 'days from the ask to the crew\'s own start').toBeGreaterThanOrEqual(3)
+  expect(started - asked).toBeLessThanOrEqual(4)
+  expect(await game<string>(page, 'c.season.plantWordBy')).toBe('crew')
+  const toast = page.locator('#ui .notes .alert').filter({ hasText: 'You gave no word in 3 days, so your crew has started planting on its own.' })
+  await expect(toast).toBeVisible()
+  const field = await game<number>(page, `c.season.log.find(e => e.type === 'plantWord').field`)
   await toast.first().click()
-  const field = await page.evaluate(n => (globalThis as unknown as Win).__county.sim.FIELD_NAMES.indexOf(n), named)
   await expect.poll(() => game<number[]>(page, 'app.selection')).toEqual([field])
-  expect(await game<number>(page, 'app.unit')).toBe(-1)
-  await expect(page.getByTestId('card-title')).toHaveText(named)
   expect(errors, errors.join('\n')).toEqual([])
 })
 
@@ -642,8 +765,24 @@ test('Got it says the speed it resumes at and resumes at that speed; the fast-fo
   await expect(ahead).toContainText('runs at 8×')
   await ahead.click()
   await expect.poll(() => game<number>(page, 'app.speed')).toBe(3)
-  // The next note pauses it, and its Got it goes back to the speed the clock showed: 8x, not the 1x of the morning.
+  // Round seven (8): the next note asks for a press on the land. It says the game stays paused, and Got it leaves it so,
+  // as the player's own pause at the speed it had.
+  await expect(note(page, 'word')).toBeVisible({ timeout: 90_000 })
+  expect(await game<number>(page, 'app.speed')).toBe(0)
+  await expect(note(page, 'word').getByTestId('guide-resumes')).toHaveText('stays paused')
+  await page.waitForTimeout(500)
+  await note(page, 'word').getByTestId('guide-noted').click()
+  await expect(note(page, 'word')).toHaveCount(0)
+  await page.waitForTimeout(1200)
+  expect(await game<[number, string, number]>(page, '[app.speed, app.pauseReason, app.resumeSpeed]')).toEqual([0, '', 3])
+  const go = page.getByTestId('paused-go')
+  await expect(go).toContainText('Resume at 8×')
+  // The player resumes. With no word in three days the crew starts, and the note that tells it pauses the game and
+  // goes back to the speed the clock showed: 8x, not the 1x of the morning.
+  await go.click()
+  await expect.poll(() => game<number>(page, 'app.speed')).toBe(3)
   await expect(note(page, 'plantday')).toBeVisible({ timeout: 90_000 })
+  await expect(note(page, 'plantday')).toContainText('You gave no word, so your crew started planting on its own.')
   expect(await game<number>(page, 'app.speed')).toBe(0)
   await expect(note(page, 'plantday').getByTestId('guide-resumes')).toHaveText('resumes at 8×')
   await page.waitForTimeout(500)
@@ -695,5 +834,123 @@ test('a note\'s keys work from the first frame it is shown, and a double-click a
   // And a press there, at once, runs the game fast.
   await page.mouse.click(firstFrame.x, firstFrame.y)
   await expect.poll(() => game<number>(page, 'app.speed')).toBe(3)
+  expect(errors, errors.join('\n')).toEqual([])
+})
+
+// ---------------------------------------------------------------- round seven (docs/quality/players/round-7.md)
+
+// The guided first year at the players' size, fast-forwarded to the morning the soil is ready.
+async function toTheWord(page: Page): Promise<number> {
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await firstGuidedDay(page)
+  await note(page, 'fields').getByTestId('guide-noted').click()
+  await note(page, 'look').getByTestId('guide-ahead').click()
+  await expect(note(page, 'word')).toBeVisible({ timeout: 90_000 })
+  await page.waitForTimeout(700)
+  return Number(((await note(page, 'word').getAttribute('data-target')) ?? '').replace('badge-', ''))
+}
+
+// (1): in the guided year the planting note is the ask for the press, and the press is the first thing done on the land.
+test('the guided year asks for the word to plant, and the press starts planting with a note that says what follows', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'run at the desk, at the players\' size')
+  test.setTimeout(240_000)
+  const errors = watchErrors(page)
+  const field = await toTheWord(page)
+  const name = await page.evaluate(i => (globalThis as unknown as Win).__county.sim.FIELD_NAMES[i], field)
+  await expect(note(page, 'word')).toContainText(`The soil is ready, and planting waits for your word. Click the ringed Plant stamp on ${name}.`)
+  await expect(note(page, 'word')).toContainText('Your crew then plants the other 3 fields on its own.')
+  await expect(page.getByTestId('guide-held')).toHaveText('Paused')
+  // The stamp it names is on the screen, ringed, and nothing lies over it: not the note, not the pointing hand.
+  const stamp = page.locator(`#ui [data-testid="badge-${field}"]`)
+  await expect(stamp).toBeVisible()
+  expect(await reachable(page, `badge-${field}`)).toBe('in view')
+  expect((await see(page)).overTarget).toBe(false)
+  expect(await game<number>(page, `c.season.jobs.filter(j => j.kind === 'plant').length`)).toBe(0)
+  await picture(page, 'r7-ask-1280')
+  await stamp.click()
+  // The press: planting on the list there, the speed unchanged, and the note that says what the crew does next.
+  await expect(note(page, 'plantday')).toBeVisible()
+  await expect(note(page, 'plantday')).toContainText('You gave the word. Your crew will plant the other 3 fields too.')
+  expect(await game<number>(page, 'app.speed')).toBe(0)
+  expect(await game<[number, string][]>(page, `c.season.jobs.filter(j => j.kind === 'plant').map(j => [j.field, j.by])`)).toEqual([[field, 'you']])
+  await expect(note(page, 'plantday').getByTestId('guide-resumes')).toHaveText('resumes at 8×')
+  await page.waitForTimeout(700)
+  await picture(page, 'r7-after-press-1280')
+  expect(errors, errors.join('\n')).toEqual([])
+})
+
+// (9): a stamp half under a card is not one the player can be sent to: the note says a card is in the way.
+test('a note never points at a stamp that something half covers: it says a card is in the way', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'run at the desk')
+  test.setTimeout(240_000)
+  const errors = watchErrors(page)
+  const field = await toTheWord(page)
+  await expect(page.getByTestId('guide-under')).toHaveCount(0)
+  // A card laid over the lower half of the stamp, as a person's card was in the players' pictures.
+  await page.evaluate(i => {
+    const r = document.querySelector<HTMLElement>(`#ui [data-testid="badge-${i}"]`)!.getBoundingClientRect()
+    const card = document.createElement('section')
+    card.className = 'sheet person-card sys'
+    card.dataset.testid = 'a-card-over'
+    card.style.cssText = `position:fixed; z-index:60; left:${r.left - 40}px; top:${r.top + r.height / 2}px; width:260px; height:160px; margin:0; max-height:none; bottom:auto; transform:none; pointer-events:auto;`
+    const close = document.createElement('button')
+    close.className = 'close'
+    close.type = 'button'
+    close.textContent = 'x'
+    close.style.cssText = 'position:absolute; right:8px; top:8px; width:32px; height:32px;'
+    close.onclick = () => card.remove()
+    card.append(close)
+    document.getElementById('ui')!.append(card)
+  }, field)
+  await expect(page.getByTestId('guide-under')).toBeVisible({ timeout: 5000 })
+  await expect(page.getByTestId('guide-under')).toContainText('A card is in the way')
+  // Closed, the note points at the stamp again.
+  await page.locator('#ui [data-testid="a-card-over"] button.close').click()
+  await expect(page.getByTestId('guide-under')).toHaveCount(0)
+  expect(errors, errors.join('\n')).toEqual([])
+})
+
+// (8): the press the note asks for never changes the speed, with the note up or after it.
+test('a press on a stamp never changes the speed: the game stays paused until the player resumes', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'run at the desk')
+  test.setTimeout(240_000)
+  const errors = watchErrors(page)
+  await open(page)
+  // A guided first year with spraying left to the player, run by the test to the first spray stamps, the game at 8x.
+  await reach(page, `const guide = window.__countyGuide; guide.reset(); guide.skipTo('stamp'); const { app } = q.g(); app.newGame(1987, 3); app.do({ t: 'begin' }); app.do({ t: 'sprayWay', way: 'ask' })
+    const c = app.campaign
+    for (let n = 0; n < 200 && !app.needs().some(x => x.need && x.need.act === 'spray'); n++) { c.incidents = []; app.do({ t: 'day' }) }
+    c.incidents = []; app.setSpeed(3)`)
+  await expect(note(page, 'stamp')).toBeVisible({ timeout: 15_000 })
+  await expect(note(page, 'stamp').getByTestId('guide-resumes')).toHaveText('stays paused')
+  expect(await game<number>(page, 'app.speed')).toBe(0)
+  // Each stamp the note names is pressed, as it asks, until it has no more to ask.
+  for (let k = 0; k < 8 && await note(page, 'stamp').count(); k++) {
+    const target = (await note(page, 'stamp').getAttribute('data-target')) ?? ''
+    if (!target.startsWith('badge-')) break
+    await page.locator(`#ui [data-testid="${target}"]`).first().click()
+    await page.waitForTimeout(500)
+    expect(await game<number>(page, 'app.speed'), `the speed after pressing ${target}`).toBe(0)
+  }
+  await expect(note(page, 'stamp')).toHaveCount(0)
+  await page.waitForTimeout(1500)
+  expect(await game<[number, string]>(page, '[app.speed, app.pauseReason]')).toEqual([0, ''])
+  expect(await game<number>(page, `c.season.jobs.filter(j => j.kind === 'spray').length`)).toBeGreaterThan(0)
+  // The way on is the player's, at the speed the game had.
+  await expect(page.getByTestId('paused-go')).toContainText('Resume at 8×')
+  await page.keyboard.press('Space')
+  await expect.poll(() => game<number>(page, 'app.speed')).toBe(3)
+  expect(errors, errors.join('\n')).toEqual([])
+})
+
+// (20): the first spring sheet says what a usual first year looks like without the fright.
+test('the first spring sheet says a usual first year and that the loan carries it', async ({ page }) => {
+  const errors = watchErrors(page)
+  await fresh(page)
+  await page.getByTestId('play').click()
+  await page.getByTestId('guide-refuse').click()
+  const line = page.getByTestId('plan-usual')
+  await expect(line).toBeVisible()
+  await expect(line).toHaveText('The loan covers usual first-year losses: $4,000 to $24,000.')
   expect(errors, errors.join('\n')).toEqual([])
 })

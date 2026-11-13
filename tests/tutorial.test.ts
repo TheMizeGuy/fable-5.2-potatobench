@@ -54,6 +54,8 @@ function guidedYear(seed: number, way: S.SprayWay = 'auto'): { shown: string[]; 
   for (let n = 0; n < 320 && c.phase === 'season'; n++) {
     const id = read(() => look(w, c, { speed: 1 }))
     if (id === 'close') { S.apply(w, c, { t: 'endSeason' }); break }
+    // The word to plant is given where its note points, once the note is read.
+    if (g.passed('word') && !S.plantWordGiven(c.season!)) { const field = S.fieldNeeds(w, c).findIndex(x => x.need?.act === 'plant'); if (field >= 0) S.apply(w, c, { t: 'job', kind: 'plant', field }) }
     // The spraying question comes once its note is read.
     if (g.passed('blight') && S.sprayWayNow(c) === null) S.apply(w, c, { t: 'sprayWay', way })
     if (way === 'ask') S.fieldNeeds(w, c).forEach((x, field) => { const a = x.need; if (a && a.act !== 'wait' && a.act !== 'close' && a.act !== 'sell') S.apply(w, c, { t: 'job', kind: a.act, field }) })
@@ -87,7 +89,7 @@ describe('the guided first year', () => {
   it('opens on what the game is, then the land, then planting day: a dozen notes or so, each from the farm', () => {
     for (const seed of [3, 11, 42]) {
       const { shown, c } = guidedYear(seed)
-      expect(shown.slice(0, 6), `seed ${seed}`).toEqual(['frame', 'begin', 'fields', 'look', 'plantday', 'tend'])
+      expect(shown.slice(0, 7), `seed ${seed}`).toEqual(['frame', 'begin', 'fields', 'look', 'word', 'plantday', 'tend'])
       // What every year brings, whatever its weather.
       for (const id of ['kill', 'dig', 'bills', 'close', 'cellar', 'book']) expect(shown, `seed ${seed}: ${id}`).toContain(id)
       const first = shown.filter(id => lesson(id)!.part !== 'spring')
@@ -225,57 +227,45 @@ describe('what a note says against what the game does (round six)', () => {
   }
   const cold = (w: S.World, c: S.Campaign) => S.haulInfo(w, c).filter(x => S.frostOnBarrels(w, c, x.field))
 
-  it('the frost note promises nothing the night can break: it says what the crew does and what a tractor hauls, and warns when that is not enough', () => {
+  it('the frost note promises nothing the night can break, and its key is the one order that hauls the barrels in now', () => {
     const frost = lesson('frost')!
     let warned = 0, short = 0
     for (const [year, seeds] of [[1985, [2, 8, 11, 12]], [1995, [7, 8, 12]], [2008, [2]]] as const) {
       for (const seed of seeds) {
-        frostEvenings(seed, year, (w, c) => {
+        frostEvenings(seed, year, (w, c0) => {
+          const c = structuredClone(c0)
           const g = new Guide(memory())
           g.skipTo('frost')
           const l = look(w, c, { speed: 3 })
           // The warning brings the note by itself: the game is not paused for it first.
           expect(g.current(l)?.id, `${year}/${seed}`).toBe('frost')
           warned++
-          const days = cold(w, c).reduce((t, x) => t + x.daysToHaul, 0)
+          const most = [...cold(w, c)].sort((a, b) => b.cwt - a.cwt)[0]
           for (const input of INPUTS) {
             const said = `${frost.ask({ ...l, input })} ${frost.why({ ...l, input })}`
             expect(said).not.toMatch(/don't need to do anything|will haul them in|before the frost/)
             expect(said).toMatch(/a fifth/)
-            expect(said).toMatch(/may freeze|can still catch/)
+            expect(said).toContain(`Haul it in now sends whoever can bring in the most from ${S.FIELD_NAMES[most.field]} by dark`)
             expect(countWords(said)).toBeLessThanOrEqual(35)
-            if (days > 0.9) expect(said, `${days.toFixed(2)} days of hauling`).toMatch(/may freeze/)
           }
-          if (days > 0.9) short++
-          // The hauling is on the list: nothing for the player to order, so the note offers no order.
-          expect(frost.act!(l)).toBeNull()
-          expect(frost.show!(l)).toEqual({ field: [...cold(w, c)].sort((a, b) => b.cwt - a.cwt)[0].field })
+          expect(frost.show!(l)).toEqual({ field: most.field })
+          // One way to order the haul: the frost toast's own command, and the game's own answer to it, which says
+          // how much comes in by dark and how much stays out.
+          const act = frost.act!(l)!
+          expect(act.label).toBe('Haul it in now')
+          expect(act.cmds).toEqual([{ t: 'haulNow', field: most.field }])
+          expect(act.done).toBeUndefined()
+          const r = S.apply(w, c, act.cmds[0])
+          expect(r.ok).toBe(true)
+          // (or that nobody can drive tonight, when the one driver is laid up)
+          expect(r.events[0].text).toMatch(/hauling .* now\. .* by dark|stay out tonight/)
+          if (/will stay out|stay out tonight/.test(r.events[0].text)) short++
+          expect(c.season!.jobs[0]).toMatchObject({ kind: 'haul', field: most.field })
         })
       }
     }
     expect(warned).toBeGreaterThan(4)
     expect(short).toBeGreaterThan(0)
-  })
-
-  it('with hauling off the crew\'s routine, the frost note says so and its key orders the haul', () => {
-    const frost = lesson('frost')!
-    let seen = 0
-    frostEvenings(8, 1985, (w, c0) => {
-      if (seen) return
-      const c = structuredClone(c0)
-      expect(S.apply(w, c, { t: 'routine', kind: 'haul', auto: false }).ok).toBe(true)
-      // (a haul already ordered cannot be cancelled by a player: taken off here to stand for one never ordered)
-      c.season!.jobs = c.season!.jobs.filter(j => j.kind !== 'haul')
-      for (const u of c.crew) u.job = -1
-      const l = look(w, c)
-      expect(frost.why(l)).toMatch(/until you order it/)
-      const act = frost.act!(l)!
-      expect(act.label).toBe('Order the haul')
-      for (const cmd of act.cmds) expect(S.apply(w, c, cmd).ok).toBe(true)
-      expect(frost.act!(look(w, c))).toBeNull()
-      seen++
-    })
-    expect(seen).toBe(1)
   })
 
   it('a note about a stamp names the field whose stamp is on the screen, and its Show me goes there', () => {
@@ -316,6 +306,124 @@ describe('what a note says against what the game does (round six)', () => {
     }
     // A control is named by the words on it: the winter sheet's heading, and its key's count.
     expect(lesson('yard')!.ask(look(w, c))).toMatch(/^Under Put up a building, click "\d+ to choose from"/)
-    expect(lesson('foreman')!.ask(look(w, c))).toMatch(/^A foreman is a hired hand who orders a block's field work for you each morning\./)
+    // (round seven: what a foreman does and why it pays, with no "block")
+    const foreman = `${lesson('foreman')!.ask(look(w, c))} ${lesson('foreman')!.why(look(w, c))}`
+    expect(foreman).toMatch(/^A foreman orders the work on your fields away from home each morning, so nothing out there waits for you\./)
+    expect(foreman).toMatch(/40% more and stop field work/)
+    expect(foreman).not.toMatch(/block/i)
+  })
+})
+
+describe('round seven: what the player is for, and what the agent asks', () => {
+  // A first guided season brought to the day the soil is fit and the Plant stamps go up.
+  function ready(seed = 11): { w: S.World; c: S.Campaign; g: Guide } {
+    const { w, c } = farm(seed)
+    const g = new Guide(memory())
+    g.newFarm(c.seed)
+    g.accept()
+    for (const id of ['frame']) g.noted(id)
+    S.apply(w, c, { t: 'begin' })
+    for (const id of ['fields', 'look']) g.noted(id)
+    for (let n = 0; n < 120 && !S.fieldNeeds(w, c).some(x => x.need?.act === 'plant'); n++) {
+      expect(g.current(look(w, c, { speed: 3 })), `day ${n}`).toBeNull()
+      S.apply(w, c, { t: 'day' })
+    }
+    return { w, c, g }
+  }
+
+  it('the planting note is the ask for the player\'s word: it names the stamp to press, and the press brings the note that says what followed', () => {
+    const { w, c, g } = ready()
+    const l = look(w, c, { speed: 3 })
+    const word = g.current(l)!
+    expect(word.id).toBe('word')
+    const field = S.fieldNeeds(w, c).findIndex(n => n.need?.act === 'plant')
+    expect(word.ask(l)).toBe(`The soil is ready, and planting waits for your word. Click the ringed Plant stamp on ${S.FIELD_NAMES[field]}.`)
+    expect(word.why(l)).toBe('Your crew then plants the other 3 fields on its own.')
+    expect(word.point!(l)).toEqual({ badge: field })
+    // It brings the stamps onto the guided screen, and it asks: the game stays paused after Got it.
+    expect(g.hidden(c, 'season')).not.toContain('stamps')
+    expect(word.asks!(l)).toBe(true)
+    // The stamp in view is the one named.
+    const other = S.fieldNeeds(w, c).findIndex((n, i) => i !== field && n.need?.act === 'plant')
+    if (other >= 0) expect(word.ask({ ...l, inView: [other] })).toContain(S.FIELD_NAMES[other])
+    // No press: the note stays, however many times it is looked at. The press passes it.
+    for (let k = 0; k < 5; k++) expect(g.current(look(w, c))?.id).toBe('word')
+    expect(S.apply(w, c, { t: 'job', kind: 'plant', field }).ok).toBe(true)
+    const after = g.current(look(w, c))!
+    expect(after.id).toBe('plantday')
+    expect(after.ask(look(w, c))).toBe('You gave the word. Your crew will plant the other 3 fields too. You\'re on the crew, and your face at the bottom shows what you\'re doing.')
+    expect(after.asks?.(look(w, c)) ?? false).toBe(false)
+    for (const input of INPUTS) for (const x of [word, after]) expect(countWords(`${x.ask({ ...l, input })} ${x.why({ ...l, input })}`), x.id).toBeLessThanOrEqual(35)
+  })
+
+  it('with the note put away and no press, the crew starts after three days and the next note says so', () => {
+    const { w, c, g } = ready()
+    expect(g.current(look(w, c))?.id).toBe('word')
+    g.noted('word')
+    for (let n = 0; n < 9 && !S.plantWordGiven(c.season!); n++) { expect(g.current(look(w, c, { speed: 1 }))).toBeNull(); S.apply(w, c, { t: 'day' }) }
+    expect(c.season!.plantWordBy).toBe('crew')
+    const after = g.current(look(w, c))!
+    expect(after.id).toBe('plantday')
+    expect(after.ask(look(w, c))).toMatch(/^You gave no word, so your crew started planting on its own\./)
+  })
+
+  it('a note that asks for a press on the land says so, and one that only tells does not', () => {
+    const asking = LESSONS.filter(x => x.asks).map(x => x.id)
+    expect(asking).toEqual(['word', 'stamp', 'kill', 'hand'])
+    const { w, c } = farm(11)
+    S.apply(w, c, { t: 'begin' })
+    const l = look(w, c)
+    for (const id of ['fields', 'look', 'plantday', 'tend', 'blight', 'list', 'frost', 'dig', 'bills']) expect(lesson(id)!.asks?.(l) ?? false, id).toBe(false)
+    expect(lesson('stamp')!.asks!(l)).toBe(true)
+    // The vine kill asks only when there is a stamp to press and the crew has given no date of its own.
+    expect(lesson('kill')!.asks!(l)).toBe(false)
+  })
+
+  it('the first card says who does the field work as it is: you alone, or you and your crew', () => {
+    const { w, c } = farm(11)
+    const frame = lesson('frame')!
+    expect(c.crew.length).toBe(1)
+    expect(frame.why(look(w, c))).toBe('You and anyone you hire do the field work, and you make the big decisions. I\'ll pause the game to explain each one.')
+    expect(frame.why(look(w, c))).not.toMatch(/Your crew handles/)
+    S.apply(w, c, { t: 'hire', kind: 'hand' })
+    expect(frame.why(look(w, c))).toMatch(/^You and your crew do the field work/)
+  })
+
+  it('in the second spring a step waits for its own thing: the field\'s record open holds the walk until it is closed or the player says Got it', () => {
+    const { w, c } = guidedYear(11)
+    expect(c.phase).toBe('plan')
+    const g = new Guide(memory())
+    g.skipTo('seed')
+    expect(g.current(look(w, c))?.id).toBe('seed')
+    // A field picked: the step about that field, for as long as its record is open, whatever else is looked at.
+    const picked = look(w, c, { selection: [0] })
+    expect(g.current(picked)?.id).toBe('crop')
+    expect(lesson('crop')!.ask(picked)).toBe(`Choose potatoes or a rest year for ${S.FIELD_NAMES[0]}, and which variety to grow.`)
+    for (let k = 0; k < 20; k++) expect(g.current(look(w, c, { selection: [0], fold: k % 2 ? 'crew' : '' }))?.id).toBe('crop')
+    // Closed: the walk goes on to People, and not before.
+    expect(g.current(look(w, c))?.id).toBe('people')
+    // Or the player says so with the record still open.
+    const h = new Guide(memory())
+    h.skipTo('seed')
+    h.current(look(w, c))
+    expect(h.current(picked)?.id).toBe('crop')
+    h.noted('crop')
+    expect(h.current(picked)?.id).toBe('people')
+  })
+
+  it('a foreman is offered only where one pays: two hired hands and fields away from home', () => {
+    const { w, c } = guidedYear(11)
+    S.apply(w, c, { t: 'begin' })
+    const g = new Guide(memory())
+    g.skipTo('foreman')
+    const shown = () => g.current(look(w, c))?.id ?? ''
+    expect(shown()).toBe('')
+    S.apply(w, c, { t: 'hire', kind: 'hand' })
+    expect(shown()).toBe('')
+    c.fields[6].tenure = 'rented'
+    expect(shown()).toBe('')
+    c.buildings.push({ id: c.nextBuilding++, kind: 'bunk', yard: S.HOME_YARD, done: 1, need: 1, built: true })
+    expect(S.apply(w, c, { t: 'hire', kind: 'hand' }).ok).toBe(true)
+    expect(shown()).toBe('foreman')
   })
 })

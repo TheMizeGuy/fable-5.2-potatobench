@@ -61,6 +61,10 @@ export function goals(c: Campaign, o: { thisSeason?: boolean } = {}): Goal[] {
   const planted = potato.filter(i => fields[i].plantDay >= 0)
   const any = (f: (x: NonNullable<Campaign['season']>['fields'][number]) => boolean) => fields.some(f)
   const hired = c.crew.some(u => u.kind !== 'farmer')
+  // A foreman pays only where one hired hand can be spared from field work and there are fields away from home to
+  // run: with fewer, the step is not on the ladder at all.
+  const foremanPays = c.crew.filter(u => u.kind !== 'farmer').length >= 2 && c.fields.some((f, i) => i < TRACTS[0] && PARCELS[i].block !== 'home' && f.tenure !== 'none')
+  const hasForeman = c.crew.some(u => u.foreman !== '')
   const tracts = TRACTS.map(i => ({ i, f: c.fields[i], held: c.fields[i].tenure !== 'none' }))
   const standingHeld = tracts.filter(t => t.held && (t.f.cover === 'woods' || t.f.cover === 'brush'))
   const felledMost = standingHeld.reduce((m, t) => Math.max(m, t.f.felled / FELL_DAYS[t.f.cover as 'woods' | 'brush']), 0)
@@ -70,7 +74,7 @@ export function goals(c: Campaign, o: { thisSeason?: boolean } = {}): Goal[] {
 
   // The first season, in the order the crop asks for it. A later step done means every earlier one is behind the farm.
   const season: Spec[] = [
-    { id: 'plant', title: 'Plant the fields', why: 'Planting can start once the soil has warmed up.', when: 'During the season',
+    { id: 'plant', title: 'Plant the fields', why: 'Planting can start once the soil has warmed up. Your crew then waits for your word, so order Plant on one field and they\'ll plant the rest.', when: 'During the season',
       done: past || (potato.length > 0 && planted.length === potato.length) || any(f => f.tiDay >= 0), now: crop,
       progress: potato.length ? { n: planted.length, of: potato.length } : null },
     { id: 'walk', title: 'Walk a field for blight', why: 'Blight only shows up close, so walking a field catches it while it\'s still small.', when: 'Once the rows are up',
@@ -127,8 +131,8 @@ export function goals(c: Campaign, o: { thisSeason?: boolean } = {}): Goal[] {
     { id: 'build', title: 'Raise a building', why: 'Your crew builds it using your own logs and stone.', when: 'In spring, during the season or in winter',
       done: c.buildings.some(b => b.built), now: spring || inSeason || c.phase === 'cellar',
       progress: building ? { n: Math.round(building.done), of: building.need } : null, price: building ? undefined : price.build },
-    { id: 'foreman', title: 'Name a foreman', why: 'A foreman orders whatever their block of land needs each working morning.', when: 'Once you\'ve hired someone',
-      done: c.crew.some(u => u.foreman !== ''), now: hired, price: price.foreman },
+    ...(foremanPays || hasForeman ? [{ id: 'foreman', title: 'Name a foreman', why: 'A foreman orders the work on your fields away from home each morning, so nothing out there waits for you. They earn 40% more and stop doing field work.', when: 'Once you\'ve hired two people and farm fields away from home',
+      done: hasForeman, now: foremanPays, price: price.foreman }] : []),
     { id: 'five', title: 'Keep the farm five years', why: 'Make it through five years and the farm is yours for good.', when: 'At the end of every year',
       done: c.outcome === 'kept', now: true, progress: { n: Math.min(c.goalYears, c.history.length), of: c.goalYears } },
     { id: 'cleared', title: 'Clear every tract', why: 'Turn every woodlot, swale and burnt hill into a field.', when: 'Any year', long: true,

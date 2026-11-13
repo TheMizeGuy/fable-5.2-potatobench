@@ -582,7 +582,8 @@ test('the goal line says the one next thing, opens the ladder, and moves on when
   // Once the soil is warm the goal points at a field that can be planted.
   await reach(page, `const { app } = q.g(); for (let k = 0; k < 40 && !app.needs().some(n => n.need && n.need.act === 'plant'); k++) app.do({ t: 'day' }); app.setSpeed(0)`)
   await putAway(page)
-  await expect(goal).toContainText(`Plant the fields0/${of}`)
+  // (round seven: the year's first planting waits for the player's word, and the slip asks for it)
+  await expect(goal).toContainText(`Give the word to plant0/${of}`)
   await goal.click()
   await page.getByTestId('goal-show').click()
   expect(await game<string>(page, 'app.needs()[app.selected]?.need?.act')).toBe('plant')
@@ -951,15 +952,15 @@ test('blight weather asks once how to spray this season, and a worn-out hand can
   expect(errors, errors.join('\n')).toEqual([])
 })
 
-test('a field says which work the crew does by itself and which waits for the player, and the first planting is said with Show me', async ({ page }) => {
+test('a field says which work the crew does by itself and which waits for the player, and the crew\'s own start at planting is said and leads to the field', async ({ page }) => {
   const errors = watchErrors(page)
   await startSeason(page)
-  // Days run until the crew has planted by itself: a note says so, and Show me goes to the field it names (round six:
-  // it used to come while the order still waited for warm soil, and to open the planter's card instead).
-  await reach(page, `const { app } = q.g(); const c = app.campaign; for (let k = 0; k < 90 && !c.season.worked.some(w => w.kind === 'plant'); k++) { c.incidents = []; app.do({ t: 'day' }) } app.setSpeed(0)`)
-  const note = page.locator('#ui [data-testid="alert"]', { hasText: 'Planting has started' })
+  // Round seven: the year's first planting waits three days for the player's word. With none given the crew starts by
+  // itself: a note says so, and a press on it goes to the field where it started (never to the planter's card).
+  await reach(page, `const { app } = q.g(); const c = app.campaign; for (let k = 0; k < 90 && c.season.plantWord === undefined; k++) { c.incidents = []; app.do({ t: 'day' }) } app.setSpeed(0)`)
+  const note = page.locator('#ui [data-testid="alert"]', { hasText: 'You gave no word in 3 days, so your crew has started planting on its own.' })
   await expect(note).toBeVisible()
-  const named = ((await note.textContent()) ?? '').match(/started in (.+?)\. Show me/)?.[1] ?? ''
+  const named = await game<string>(page, `sim.FIELD_NAMES[app.campaign.season.log.find(e => e.type === 'plantWord').field]`)
   await note.click()
   await expect(page.getByTestId('card-title')).toHaveText(named)
   await expect(page.getByTestId('whois')).toBeHidden()

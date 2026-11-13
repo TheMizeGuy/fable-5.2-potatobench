@@ -35,6 +35,15 @@ clock's keys are the player's: Space or a speed key pressed in the second and a 
 closes the note and runs the game; the game starting the clock by itself (a paper closing, a telegram answered) is
 paused again at once. A note never appears, changes or moves under a running clock.
 
+**C3. A note that asks for a press leaves the game paused.** Some notes only tell (the summer, the work list, the
+harvest); some ask the player to do something on the land (give the word to plant, click a ringed stamp, click a
+hand's face). An asking note's Got it reads "stays paused" and does that: the pause becomes the player's own, the
+clock shows "Resume at 8×", and Space or the clock resumes at the speed the game had. Doing the thing asked does
+not resume it either: a press on a stamp never changes the speed. Round seven's players had Got it resume at 8× so
+that the press it had just asked for landed on a moving scene, and a click on the water stamp restarted the game by
+itself (the hold let go when the lesson passed: `hold()` in `src/ui/tutorial.ts`). When a telling note follows the
+press at once (the word to plant, then "You gave the word"), that note's Got it resumes as usual.
+
 **C2. A notice pauses only the first time it teaches something.** In the guided year a kind of notice that asks
 nothing (frost forecast on the barrels) comes once as a note, which pauses like any note; after that it arrives as
 a toast and the game keeps running. Outside the tutorial it never pauses: the game stops itself only for a card
@@ -64,7 +73,7 @@ a card is up, the spraying question is three short replies, and the first-time t
 **E. Each note says what, why and what to do.** What the thing is, why it matters as a consequence, and what to do
 now (often: nothing). 35 words at most, in the voice of `docs/VOICE.md`: no term is used before a note has said
 what it is (blight is "a disease that can wipe out a field in one wet week" the first time it is named, hilling is
-"(piles soil over them)", a foreman is "a hired hand who orders a block's field work for you each morning").
+"(piles soil over them)", a foreman "orders the work on your fields away from home each morning").
 
 **E2. A note says only what the screen and the game bear out.**
 - It names a control by the words on it: the winter sheet's building list is 'Under Put up a building, click "8 to
@@ -78,9 +87,11 @@ what it is (blight is "a disease that can wipe out a field in one wet week" the 
 - It promises nothing the game may not do. The frost note used to say "Your crew will haul them in first, so you
   don't need to do anything", and then 100 to 200 cwt froze: the crew does haul first, but one tractor moves about
   900 cwt a day, the forecast misses some nights, and what is dug after the haul stays out. It now says what a frost
-  does ("ruins a fifth of the potatoes still out in barrels"), what the crew is doing, and whether that is enough
-  today. When hauling is off the crew's routine and not on the work list, the note says so and carries the one thing
-  the player can do, as its key: "Order the haul".
+  does ("ruins a fifth of the potatoes still out in barrels") and carries the one thing the player can do about it,
+  as its key: "Haul it in now". That is the same order, in the same words, as the frost toast's key for players
+  without the tutorial (the `haulNow` command): it puts the haul first today for whoever brings in the most by dark,
+  day off or not, and the game's own answer says how much comes in and how much stays out. There is one way to order
+  the haul, not two.
 
 **F. The screen grows with the year.** In the guided first year the season opens on the land, the date and the
 cash. Each other piece appears when it first matters, introduced by the one note that holds the clock for it:
@@ -88,10 +99,10 @@ cash. Each other piece appears when it first matters, introduced by the one note
 | Piece | Hidden until | Introduced by |
 | --- | --- | --- |
 | The fields' tags | the first day | "Your fields" |
-| The people (faces on the land, the time book) | planting begins | "Planting day" |
+| The stamps on fields | the soil ready to plant | "Give the word to plant" |
+| The people (faces on the land, the time book) | the word given | "Planting day" |
 | The forecast | blight weather | "Blight weather" |
 | The list of work | the crew's first spray, or the first call | "The work list" / "A decision on a field" |
-| The stamps on fields | the first call that is the player's | "A decision on a field" / "Kill the vines" |
 | The figure after the year-end bills | the first crop weighed | "The year-end bills" |
 
 A hidden piece keeps its place in the layout (`visibility: hidden` on a class of the root, `st-hide-<piece>`), so
@@ -105,7 +116,17 @@ money just did is left out. The year's phases on the date board are, for every p
 with only the present one named in a word (Plant, Tend, Kill, Dig, Sell): an ordinary season screen is held under
 80 words by `e2e/interface.spec.ts`, and five names did not fit in it.
 
-**G. Few decisions, no dead time.** The crew plants, hills, walks, digs and hauls by itself. The first year asks for
+**G. Few decisions, no dead time, and one act that is the player's.** The crew hills, walks, digs and hauls by
+itself, and plants too, but each year's first planting waits for the player's word (round seven: two of three players
+said the year ran without them; "let me start planting myself, or at least tell me the crew did it"). When the soil
+is ready the crew says it stands ready, a ringed Plant stamp goes up on every planned potato field that is fit, and
+the goal slip reads "Give the word to plant". One press (the stamp, Plant on the field's card, or P) starts planting
+there and the crew carries on through the other planned fields by itself, with a note that says exactly that: "You
+gave the word. Your crew will plant the other 3 fields too." With no press in three days the crew starts by itself
+and says so; nothing is lost but those days. This is the simulation's rule, in every year and with the tutorial off
+(`plantAsked`, `standingOrders` and `wordToPlant` in `src/sim/advice.ts`, `plantWordGiven` in `src/sim/season.ts`,
+`PLANT_WORD_DAYS`); a save from before it, taken with planting ordered or begun, carries on. It is one deliberate
+act, not a return to ordering everything. The first year also asks for
 the spraying question (with "Keep the fields sprayed" marked the usual choice), the telegrams the year sends, and
 each weigh ticket. A note with a wait after it carries "Fast-forward to <the next thing>", with "runs at 8×" under
 it: named for what it does, since it does not jump. It sets the clock to 8× and the next note or card pauses it.
@@ -143,17 +164,18 @@ Words are for a mouse; a touch screen says "Tap" and "pinch", the keyboard its k
 | # | Note | When | It says | Then |
 | --- | --- | --- | --- | --- |
 | 0 | The offer (card) | Play, a new farm | "First time on the farm? I can walk you through your first year one step at a time, pausing the game to explain each one." 1 Start the tutorial / 2 Skip the tutorial | |
-| 1 | How a year works (card) | the first plan | The five phases as a picture; "At the end of each year you owe $19,000 to the bank and your family, so your crop needs to earn at least that. Your crew handles the field work and you make the big decisions. I'll pause the game and explain each one as it comes up." | Begin |
+| 1 | How a year works (card) | the first plan | The five phases as a picture; "At the end of each year you owe $19,000 to the bank and your family, so your crop needs to earn at least that. You and anyone you hire do the field work, and you make the big decisions. I'll pause the game to explain each one." (with people hired: "You and your crew do the field work...") | Begin |
 | 2 | Start the first season | the first plan | "Your plan is ready, with 4 fields of potatoes. Click Start the season. The bank's spring loan covers the cost, and your crop pays it back." | the key itself |
-| 3 | Your fields (brings the tags) | the first day | "These tags mark your fields. This year 4 will grow potatoes and 2 are resting. It's too cold to plant yet. Your crew will start automatically when the soil warms." | Got it |
-| 4 | Look around | after 3 | "Drag to move around the farm, and scroll to zoom in. Planting starts when the soil warms up, in about 9 days." | Fast-forward to planting day |
-| 5 | Planting day (brings the people) | planting begun | "Your crew has started planting. You didn't need to tell them. You're on the crew too, and your face at the bottom shows what you're doing. The same face on the land is you." | Fast-forward to the end of planting |
+| 3 | Your fields (brings the tags) | the first day | "These tags mark your fields. This year 4 will grow potatoes and 2 are resting. It's too cold to plant yet. When the soil warms, planting waits for your word." | Got it |
+| 4 | Look around | after 3 | "Drag to move around the farm, and scroll to zoom in. The soil should be warm enough to plant in about 9 days." | Fast-forward to planting day |
+| 5 | Give the word to plant (brings the stamps; asks) | the soil ready, the Plant stamps up | "The soil is ready, and planting waits for your word. Click the ringed Plant stamp on North Ridge. Your crew then plants the other 3 fields on its own." | the stamp; Got it stays paused |
+| 5b | Planting day (brings the people) | the word given, or three days gone with none | "You gave the word. Your crew will plant the other 3 fields too. You're on the crew, and your face at the bottom shows what you're doing. The same face on the land is you." (with no word: "You gave no word, so your crew started planting on its own. ...") | Fast-forward to the end of planting |
 | 6 | The summer | every field planted | "Planting is done. All summer your crew hills the rows (piles soil over them) and checks for disease. You don't need to do anything until blight weather arrives. That'll be your first big decision." | Fast-forward to your first decision |
 | 7 | Blight weather (brings the forecast) | the blight watch begins | "Blight weather is coming. Blight is a disease that can wipe out a field in one wet week. The forecast marks it with a red leaf. Spraying protects a field for about a week." | Got it, then the spraying question, the usual choice marked |
 | 8 | The work list (brings the list) | the crew's first spray on the list | "Your crew now sprays on its own. The work list at the bottom shows their jobs in order. Each spray costs about $X a field. You don't need to do anything else." | Fast-forward to the next decision |
 | 8b | A decision on a field (brings the stamps and the list) | a call that is the player's ("ask me", or water) | "A ringed stamp means a field needs a decision from you. This one: <the need>. Click the stamp to order it. The job goes on the work list." | the stamp, or Got it |
 | 9 | Kill the vines (brings the stamps) | the kill in sight | "The crop is nearly ready. Killing the vines stops the growth, so the skins toughen for harvest. Your crew will do this automatically on <day>. Click a stamp to do it sooner." | Fast-forward to the harvest |
-| 10 | Frost on the barrels (only if it comes; later warnings are toasts) | the evening's frost warning, with crop still in barrels | "Frost tonight ruins a fifth of the potatoes still out in barrels." Then one of: "Your crew hauls the barrels in <field> first. A frost can still catch what's dug later today." / "Your crew hauls them in first, but <field> has more out than one tractor can haul today, so some may freeze." / "Hauling is off your crew's routine, so the barrels in <field> stay out until you order it." | Got it; Show me (the field); Order the haul when there is one to order |
+| 10 | Frost on the barrels (only if it comes; later warnings are toasts) | the evening's frost warning, with crop still in barrels | "Frost tonight ruins a fifth of the potatoes still out in barrels. Haul it in now sends whoever can bring in the most from <field> by dark, day off or not." | Haul it in now (answered by the game: "You're hauling <field> now. One tractor brings in about 900 cwt by dark, so about 450 cwt will stay out."); Got it; Show me (the field) |
 | 11 | The harvest | digging begun | "The harvest has started. Your crew digs the potatoes into barrels and hauls them to the potato house. You don't need to do anything. Each field is weighed when its barrels are in." | Fast-forward to the weigh ticket |
 | 12 | The first weigh ticket (the agent's line inside it) | the first field weighed | "This is your first weigh ticket. It shows what the field grew and what was lost. Sell now is the safe choice." | Sell or store |
 | 13 | The year-end bills (brings the figure) | the ticket answered | "Your first crop is weighed. "After year-end bills" at the top right is what's left after paying the $19,000. It counts the crop still in the ground, so it'll change until every field is in." | Fast-forward to the next ticket |
@@ -162,17 +184,32 @@ Words are for a mouse; a touch screen says "Tap" and "pinch", the keyboard its k
 The first telegram carries, inside it: "Paused until you pick a reply."
 
 After the season: Winter in the cellar, Fell woods in winter, Put up a building, The ledger; then the second
-spring (a variety, People, who to hire, Land, the money, Start the second season) and its season (Your decisions this
-season, Meet your hired hand, Who does what, Name a foreman), in the same voice.
+spring (pick a field, choose what it grows, People, who to hire, Land, the money, Start the second season) and its
+season (Your decisions this season, Meet your hired hand, Who does what, Name a foreman), in the same voice.
 
-**Name a foreman** comes the first time the goal slip asks for one (or the farm takes land beyond the home six):
-"A foreman is a hired hand who orders a block's field work for you each morning. Name one with Foreman on <name>'s
-card. A foreman earns 40% more and stops doing field work." Its Show me opens that person's card with the Foreman
-key scrolled into view and ringed. For every player, tutorial or not: the slip glosses the word where it first
-shows ("then name a foreman (a hand who orders a block's work)"); a hand's card opened while the slip asks for a
-foreman brings the key into view, ringed; pressing it opens the blocks under it, in view, with what a foreman does
-and costs; and naming one answers at once on the card (its heading reads "Foreman, the home farm", the key shows
-the block, a line under it says what they now do, the pay line reads "as foreman") and as a note where the player
+**A spring step waits for its own thing.** Each step of the second spring's walk passes when the player has done
+it or says Skip or Got it; none passes on a timer or on a click elsewhere. Picking a field opens its record, and the
+step that follows ("Choose potatoes or a rest year for North Ridge, and which variety to grow. Take your time...")
+stays for as long as the record is open: round seven's players had the walk move on to People and Land a second
+after they clicked the tag, before they had chosen anything. The next step waits while a fold or a paper the last
+click opened is still open, however long that is (it used to give up after eight seconds).
+
+**A note never points at a stamp something half covers.** What a note points at is checked at its middle and at
+each corner; with a card over any of it the note says "A card is in the way. Click its X to close it." and the
+pointing hand goes to that X (a player's stamp was half under a person's card with nothing said).
+
+**Name a foreman** is offered only where one pays: at least two hired hands, so one can be spared from field work,
+and fields away from home for a foreman to run. Without both, the goal is not on the ladder, the slip never names
+it, no person is ringed for it and the tutorial has no step for it (round seven: all three players were pushed to
+make their only hand a foreman, 40% more pay to take him out of the field). Where it is offered the note says why it
+pays, without the word "block": "A foreman orders the work on your fields away from home each morning, so nothing
+out there waits for you. Name one with Foreman on <name>'s card. They earn 40% more and stop field work." The
+Foreman key's second line says both costs: "+40% pay, no field work", broken after the comma so it takes two short lines and the card needs no scrolling at 1280 by 720. Its Show me opens that person's card with
+the Foreman key scrolled into view and ringed. For every player, tutorial or not: the slip glosses the word where it
+first shows ("then name a foreman (a hand who runs your fields away from home)"); a hand's card opened while the
+slip asks for a foreman brings the key into view, ringed; pressing it opens the groups of fields under it, in view,
+with what a foreman does and costs; and naming one answers at once on the card (its heading reads "Foreman, the home farm", the key shows
+the fields they run, a line under it says what they now do, the pay line reads "as foreman") and as a note where the player
 is looking.
 
 ## How it behaves
@@ -202,10 +239,15 @@ is looking.
   back and brought by its note, and never held back off the guide or past the first year; "ask me" and "by itself"
   each explained; the word limits in every way of playing; storage, skipping, replaying; the simulation's rule
   that no telegram comes before the first planting is finished; and, from round six: the frost note on real frost
-  evenings promising nothing and warning when a day's hauling is not enough, its key ordering the haul when hauling
-  is off the routine, a stamp's note naming the field whose stamp is in view, the fast keys named "Fast-forward".
+  evenings promising nothing, its key being the one order that hauls the barrels in now (`haulNow`), a stamp's note naming the field whose stamp is in view, the fast keys named "Fast-forward".
   `tests/clock.test.ts`: frost forecast on the barrels does not pause a running game, and does for a player with
-  "Pause on alerts" on.
+  "Pause on alerts" on. From round seven: the planting note as the ask for the word, the note after the press and
+  after three days with none, which notes ask and which tell, the first card's words alone and with a crew, the
+  spring step held while a field's record is open, the foreman step only with two hands and fields away from home.
+  `tests/routine.test.ts`: no planting before the word within three days; one press plants every planned field in
+  turn; the crew's own start after three days, said, and a crop for a farm that never presses; an old save in the
+  middle of planting; planting on "ask me" unchanged. `tests/goals.test.ts`: the foreman goal off the ladder until
+  one pays.
 - `e2e/tutorial.spec.ts` (Chromium and the phone): a guided first year played from Play to the first sale by
   pressing only what the notes ask (their "Skip to", Got it, the control they point at, a card's usual reply),
   holding every budget above at every step; Space putting a note away, the next note holding the days again; the offer centred, under the keyboard, answered by click and by keys 1
@@ -217,6 +259,11 @@ is looking.
   words against the key's own; "Planting has started" not said before planting, its Show me selecting the field;
   a frost warning leaving the game running, tutorial off and (once explained) on; Got it saying and doing "resumes
   at", the fast key saying "runs at 8×"; a note's keys live on its first frame, and a double-click answering one note.
+  From round seven (`docs/quality/players/round-7.md`): the crew standing ready with a toast, the slip and the
+  stamps, one press planting the rest, and the crew's own start after three days; the guided year asking for the
+  word and answering the press; an asking note's Got it and a stamp's press leaving the game paused; a farm with one
+  hand never asked for a foreman; the spring walk held for ten seconds on an open field record; a card laid half
+  over a stamp said to be in the way; the first spring sheet's line about a usual first year.
 - `tools/quality/capture.ts`: the states `guide-*` (the offer, the year card, the plan's note, the first guided
   day, each note of the year, the spraying question, the first telegram and weigh ticket, the cellar, the account
   book, the second spring, the guide's paper) at all eight sizes.
@@ -224,10 +271,14 @@ is looking.
 ## Known limits
 
 - With one tractor a frost can catch barrels the crew could not bring in, and the forecast misses some nights; the
-  frost note says so and offers nothing to press unless hauling is not on the work list. Making the lone digger dig
+  frost note's key hauls now, and its answer says how much will stay out. Making the lone digger dig
   only what he can haul whenever the game would warn of frost was tried in the simulation and put back: over 120
   hands-off first years it cut what froze in barrels by two thirds (14.8 to 4.7 cwt a farm) but caught more fields at
   freeze-up (17 to 22 half dug, none to 1 lost in the ground), with the year's revenue unchanged.
+- After Got it on an asking note, or a press on the stamp it asked for, the game is paused with only the clock's
+  "Resume at 8×" saying how to go on. A telling note that comes after the player's own pause says "stays paused".
+- The Plant stamps go up the evening the first field is fit; fields still too wet show none until they dry, and the
+  crew plants them in turn after the word.
 - A new season opens at 1×, whatever speed the last one ended at (`src/ui/plan.ts`), so the first note of a second
   year says "resumes at 1×".
 - The vine-kill note reads the crew's kill day out of `S.pressing`'s words (the first "on <Month> <day>" after

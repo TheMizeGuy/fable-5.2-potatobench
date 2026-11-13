@@ -40,6 +40,10 @@ const SENT: Record<S.JobKind, string> = {
 // The answer to a stamp or a right-click: who will do what where, or that it's on the work list and why not the one picked.
 // fields: more than one pressed in a row, said together ("Killing vines in 4 fields is on the work list.").
 function sentText(c: S.Campaign, e: { field: number; kind: S.JobKind; unit: number; instead?: number }, fields = 1): string {
+  // The year's first planting order is the word the crew waited for: the answer is what follows from it, however
+  // many Plant stamps are pressed after it.
+  const word = e.kind === 'plant' ? c.season?.log.find(x => x.type === 'plantWord' && x.day === c.season!.day && c.season!.plantWordBy === 'you') : undefined
+  if (word) return word.text
   const where = fields > 1 ? `${fields} fields` : S.placeName(e.field)
   const u = c.crew.find(x => x.id === e.unit)
   if (u) return `${u.kind === 'farmer' ? 'You\'ll' : `${firstName(u.name)} will`} ${SENT[e.kind]} ${where}.`

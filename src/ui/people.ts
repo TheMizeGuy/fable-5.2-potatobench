@@ -152,33 +152,15 @@ export function personCard(ctx: Ctx): PersonCard {
   let shownFor = -1
   let flashed: { text: string; until: number } | null = null
   const FOREMAN_KEY = '[data-testid="person-foreman"]'
-  // A control of the foreman's ringed for a few seconds, through every redraw of the card, and brought inside the
-  // card's own window: see names what must be in view (the control, or the line under it that answers it).
+  // A control of the foreman's ringed for a few seconds, through every redraw of the card. The key, its choices and
+  // its answer are in the card's pinned foot, so they are in view without scrolling.
   let lit: { sel: string; until: number } | null = null
-  function lightUp(sel: string, see = sel): void {
+  function lightUp(sel: string): void {
     const mine = lit = { sel, until: performance.now() + 4000 }
     setTimeout(() => ctx.dirty(), 4050)
     ctx.dirty()
-    // The card scrolls inside itself, and is laid, sized and redrawn over several frames (a redraw can put it back
-    // at its top): watched until it has held still in view for three quarters of a second, or the player scrolls it.
-    let frames = 0, inside = 0
-    const mineNow = () => { frames = 1e9 }
-    el.addEventListener('wheel', mineNow, { once: true, passive: true })
-    el.addEventListener('touchmove', mineNow, { once: true, passive: true })
-    const settle = () => {
-      if (lit !== mine || frames++ > 240) return
-      const k = el.querySelector<HTMLElement>(see) ?? el.querySelector<HTMLElement>(sel)
-      if (k && !el.hidden) {
-        const kr = k.getBoundingClientRect(), cr = el.getBoundingClientRect()
-        const tall = kr.height > cr.height - 24
-        if (kr.top >= cr.top - 1 && (tall || kr.bottom <= cr.bottom + 1)) {
-          if (++inside === 4) el.querySelector<HTMLElement>(sel)?.focus({ preventScroll: true })
-          if (inside >= 45) return
-        } else { inside = 0; el.scrollTop += tall || kr.top < cr.top ? kr.top - cr.top - 12 : kr.bottom - cr.bottom + 12 }
-      }
-      requestAnimationFrame(settle)
-    }
-    requestAnimationFrame(settle)
+    // Under the keyboard once the card has drawn it.
+    requestAnimationFrame(() => requestAnimationFrame(() => { if (lit === mine) el.querySelector<HTMLElement>(sel)?.focus({ preventScroll: true }) }))
   }
   function showLit(): void {
     for (const k of el.querySelectorAll('.goal-ring')) if (!lit || performance.now() >= lit.until || !k.matches(lit.sel)) k.classList.remove('goal-ring')
@@ -192,7 +174,7 @@ export function personCard(ctx: Ctx): PersonCard {
     const r = app.do({ t: 'foreman', unit: p.id, block })
     if (!r.ok) { flash(r.err); return }
     ctx.say(F.localize(r.events[0]?.text ?? ''), 'good')
-    lightUp(FOREMAN_KEY, '[data-testid="foreman-said"]')
+    lightUp(FOREMAN_KEY)
   }
 
   function flash(text: string): void {
@@ -278,10 +260,10 @@ export function personCard(ctx: Ctx): PersonCard {
           }, icon('raise', 'i'), h('span', null, 'Raise', h('span', { class: 'sub num' }, `to ${F.money(raiseTo(p))}`))),
           blocks.length ? h('button', {
             class: `btn${foreman ? ' is-on' : ''}`, type: 'button', testid: 'person-foreman', 'aria-expanded': String(foreman),
-            title: ctx.touch() ? undefined : 'A foreman adds what one block\'s fields need to the work list every working morning, and doesn\'t do field work. A foreman is paid 40% more.',
+            title: ctx.touch() ? undefined : 'A foreman adds what one group of fields needs to the work list every working morning, and doesn\'t do field work. A foreman is paid 40% more.',
             // Its choices open under it, brought into view with the first one lit.
-            onclick: () => { foreman = !foreman; if (foreman) lightUp('.pc-blocks .btn', '.pc-blocks'); else lit = null; ctx.dirty() },
-          }, icon('foreman', 'i'), h('span', null, 'Foreman', h('span', { class: 'sub' }, p.foreman ? BLOCK_NAME[p.foreman].replace(/^The /, '').split(',')[0] : '+40% pay'))) : h('span'),
+            onclick: () => { foreman = !foreman; if (foreman) lightUp('.pc-blocks .btn'); else lit = null; ctx.dirty() },
+          }, icon('foreman', 'i'), h('span', null, 'Foreman', p.foreman ? h('span', { class: 'sub' }, BLOCK_NAME[p.foreman].replace(/^The /, '').split(',')[0]) : h('span', { class: 'sub' }, h('span', null, '+40% pay,'), ' ', h('span', null, 'no field work')))) : h('span'),
           h('button', {
             class: 'btn hazard', type: 'button', testid: 'person-dismiss',
             onclick: async () => {
@@ -292,7 +274,7 @@ export function personCard(ctx: Ctx): PersonCard {
         p.foreman && !foreman ? h('p', { class: 'pc-fore', role: 'status', testid: 'foreman-said' }, icon('foreman', 'i'),
           h('span', null, `Foreman of ${S.BLOCK_NAME[p.foreman]}. ${R.firstName(p.name)} adds its fields' jobs to the work list each morning and doesn't do field work.`)) : null,
         foreman ? h('div', { class: 'pc-blocks', role: 'group', 'aria-label': 'Foreman of' },
-          h('p', { class: 'pc-fore', testid: 'foreman-what' }, h('span', null, `A foreman orders the work on one block of fields for you each morning. ${R.firstName(p.name)} would earn 40% more and stop doing field work. Pick the block.`)),
+          h('p', { class: 'pc-fore', testid: 'foreman-what' }, h('span', null, `A foreman orders the work on one group of fields for you each morning, which pays once you farm fields away from home. ${R.firstName(p.name)} would earn 40% more and stop doing field work. Pick the fields.`)),
           blocks.map(b => {
             const other = c.crew.find(u => u.foreman === b && u.id !== p.id)
             return h('button', {

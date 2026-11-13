@@ -345,6 +345,17 @@ export function standingBy(c: Campaign, kind: JobKind, field: number): JobBy | n
   return (P.ROUTINE_KINDS as JobKind[]).includes(kind) && (c.routine?.[kind as RoutineKind] ?? P.ROUTINE_DEFAULT[kind as RoutineKind]) ? 'routine' : null
 }
 
+// The word to plant: the routine's planting waits each year for the player's first planting order, or for
+// PLANT_WORD_DAYS after the crew stood ready. A season with planting already ordered or done (an old save) has it.
+export function plantWordGiven(s: Season): boolean {
+  return s.plantWord !== undefined || s.jobs.some(j => j.kind === 'plant') || s.fields.some(f => f.plantDay >= 0)
+}
+
+// Whether the routine's planting of this field is waiting for that word.
+export function awaitsWord(c: Campaign, kind: JobKind, field: number): boolean {
+  return kind === 'plant' && !!c.season && standingBy(c, 'plant', field) === 'routine' && !plantWordGiven(c.season)
+}
+
 // A person lets go of the order they hold, and of the tractor or truck they were driving for it.
 export function letGo(u: Unit): void {
   u.job = -1
