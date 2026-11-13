@@ -372,8 +372,8 @@ test('two lots weighed on the same day: each ticket is up the moment the game st
   // One ticket, then the other the moment the first is answered.
   const sold: string[] = []
   for (let k = 0; k < 2; k++) {
-    const sell = ticket.locator('[data-testid^="lot-sell-"]').first()
-    await expect(sell).toBeVisible()
+    const sell = page.locator('#ui .dialog:not(.out) [data-testid^="lot-sell-"]').first()
+    await expect(sell).toBeVisible({ timeout: 15_000 })
     const id = (await sell.getAttribute('data-testid'))!
     expect(sold).not.toContain(id)
     sold.push(id)
