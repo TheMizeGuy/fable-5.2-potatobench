@@ -205,7 +205,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   let snap: Snapshot = snapshot(app)
   let shown: HillDisplay[][] = snap.fields.map(f => f.hills.map(look => ({ look, ridge: f.ridge })))
   let dayT = 1
-  let dirty = true, dayPassed = false, first = true
+  let dirty = true, dayPassed = false, first = true, turnHeld = false
   // Whether the clock was running when the day just counted was counted (what it brought may have stopped it since).
   let dayRan = false
   const samples = new Map<number, SampleInfo>()
@@ -840,7 +840,9 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     ambient += wdt * (reduced ? STILL : 1)
     fall += reduced ? 0 : wdt
     frameNo++
-    if (dirty) rebuild()
+    // A day's turn with the clock running: the land is made again in the frame after the day's own, not in it.
+    if (dirty && dayPassed && dayRan && !turnHeld) turnHeld = true
+    else if (dirty) { turnHeld = false; rebuild() }
     // Day clock: follows the game clock when it runs, plays the day out by itself when paused.
     if (snap.mode === 'title') dayT = reduced ? 0.12 : titleDay()
     else if (dayT < 1) dayT = Math.min(1, app.speed > 0 ? Math.max(dayT + dt / DAY_ANIM_S * 0.25, app.dayProgress) : dayT + dt / DAY_ANIM_S * replayPace)

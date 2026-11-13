@@ -103,6 +103,10 @@ export const mountHud: MountHud = (root, app, view, sound) => {
 
   let dirty = true
   let dayTurned = false
+  // A day's turn with the clock running, drawn over the frames after it: 1 while the land is made again, 2 while the
+  // screen draws itself a part a frame (steps).
+  let turn = 0
+  let steps: Iterator<void> | null = null
   let held = false
   let heldAt = 0
   let screen: Screen | null = null
@@ -186,7 +190,8 @@ export const mountHud: MountHud = (root, app, view, sound) => {
   }
 
   // Instruments change size as fonts load and content wraps; the field view must hear about it.
-  const resized = new ResizeObserver(() => { dirty = true })
+  // (in the middle of a day's turn the insets are measured when its last part is drawn)
+  const resized = new ResizeObserver(() => { if (!turn) dirty = true })
   document.fonts?.ready.then(() => { dirty = true })
 
   function onEvents(events: S.GameEvent[]): void {
@@ -229,8 +234,8 @@ export const mountHud: MountHud = (root, app, view, sound) => {
       case 'events':
         onEvents(e.events)
         dirty = true
-        // A day's turn is the dearest frame there is (the day itself, then the land made again): what is drawn here
-        // of it waits for the frame after, so the two are not one long frame.
+        // A day's turn is the dearest frame there is: the day itself, then the land made again in the frame after
+        // (render/index.ts), and what is drawn here of it in the frames after that, never all in one long frame.
         if (e.dayPassed && app.speed > 0) dayTurned = true
         break
       case 'alert': {
@@ -382,13 +387,12 @@ export const mountHud: MountHud = (root, app, view, sound) => {
       laps.end('interface: guide')
       notes.hush(papers.isOpen() || !!app.holding)
       if (sinceTick > 500) { sinceTick = 0; if (notes.count() || notes.held()) notes.prune(app.campaign?.season && app.screen === 'season' ? app.campaign.season.day : -1) }
-      if (dirty && dayTurned) dayTurned = false
-      else if (dirty && !held && screen) {
-        dirty = false
+      const before = (): void => {
         root.dataset.layout = layoutNow()
         root.classList.toggle('touch', touchQuery.matches)
-        screen.update()
-        laps.end('interface: screen')
+      }
+      const after = (): void => {
+        if (!screen) return
         who.update()
         laps.end('interface: card on the land')
         // One voice: no toast under a card that wants an answer.
@@ -399,6 +403,22 @@ export const mountHud: MountHud = (root, app, view, sound) => {
         root.style.setProperty('--top', `${t}px`)
         root.style.setProperty('--bottom', `${b}px`)
         if (waiting) placeSplash()
+      }
+      // Anything else that changes in the middle of a day's turn, or a hand held on the land: the whole is drawn at
+      // once, as ever.
+      if (turn && (dirty || held || !screen)) { turn = 0; steps = null; dirty = true }
+      if (dirty && dayTurned) { dayTurned = false; dirty = false; turn = 1 }
+      else if (dirty && !held && screen) {
+        dirty = false
+        before()
+        screen.update()
+        laps.end('interface: screen')
+        after()
+      } else if (turn === 1) turn = 2
+      else if (turn === 2 && screen) {
+        if (!steps) { before(); steps = screen.steps?.() ?? null }
+        if (!steps) screen.update()
+        if (!steps || steps.next().done) { laps.end('interface: screen'); after(); steps = null; turn = 0 }
       }
       laps.end('interface: drawn again')
       tying.frame()

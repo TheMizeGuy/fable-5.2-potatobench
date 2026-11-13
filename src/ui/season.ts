@@ -331,10 +331,12 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       // A test dig's result is offered, never laid over what the player is doing: a slip at the foot with Show me
       // (and the field's own card has it). In the guided first year the guide speaks for the slips.
       for (const e of ev.events) if (e.type === 'sample' && !guidedYear(app.campaign)) { const staged = app.speed < 3; void ctx.view.whenShown('sample', e.field).then(() => { if (app.screen === 'season') offerTray(e, staged) }) }
-      const c0 = app.campaign
-      if (c0) { sayCrewStarts(c0); sayKillDates(c0) }
+      // (what the crew has started and when the vines will be killed are said as the screen is next drawn: the
+      // second plays the next day on a copy of the farm, which the frame a day turns in is not asked to carry too)
+      toSay = true
     }
   })
+  let toSay = false
 
   // ------------------------------------------------------------ tags, stamps and the tips
 
@@ -710,84 +712,98 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     return null
   }
 
+  // Everything on the screen drawn from the game as it stands: at once (update), or a part at a time over the frames
+  // after a day's turn (steps), each part what one frame can carry on a slow machine.
+  function* drawn(): Generator<void> {
+    const c = app.campaign
+    if (!c || !c.season) return
+    if (toSay) { toSay = false; sayCrewStarts(c); sayKillDates(c) }
+    // (each order's fate, which the time book, the board and the cards all ask for)
+    fates(app.world, c)
+    laps.end('interface: fates')
+    yield
+    const layout = ctx.layout()
+    el.dataset.layout = layout
+    const many = c.crew.length > 1
+    // A person's page opens from the time book; picked on the land, their card opens beside them instead (whois.ts).
+    const personUp = many && app.unit >= 0 && app.unitFrom === 'list' && !app.selection.length && app.yard === 0
+    const selected = app.selection.length > 0 || app.yard !== 0
+    el.classList.toggle('selected', selected)
+    el.classList.toggle('person-up', personUp || grid.isOpen())
+    el.classList.toggle('tray-up', !!tray)
+    // What the goal points at: the field it lights, the yard it rings.
+    const g = nextGoal(c)
+    const tgt = target(g)
+    goalField = tgt && 'field' in tgt ? tgt.field : -1
+    frostAt = Object.fromEntries(S.haulInfo(app.world, c).map(x => [x.field, x.frostChance]))
+    laps.end('interface: goal')
+    top.update()
+    laps.end('interface: boards')
+    yield
+    // On a phone the clock sits by the thumb, over the time book.
+    const low = layout === 'narrow' || layout === 'short'
+    clockSlot.hidden = !low
+    if (low) patch(clockSlot, JSON.stringify([app.speed, app.resumeSpeed, S.seasonDone(c), ctx.awaiting, ctx.touch()]), () => clock(ctx, false, o.onMenu))
+    // Stopped by the player, the one obvious way on: a press goes on at the speed the clock had. Stopped for a
+    // decision, the bank board's own tag says so instead.
+    const stoppedFor = c.incidents.length > 0 || ctx.awaiting > 0
+    const stopped = app.speed === 0 && !S.seasonDone(c)
+    paused.hidden = !stopped || (stoppedFor && layout !== 'narrow')
+    el.classList.toggle('is-paused', !paused.hidden)
+    if (!paused.hidden) patch(paused, JSON.stringify([ctx.touch(), app.resumeSpeed]), () => h('button', { class: 'paused-go btn', type: 'button', testid: 'paused-go', onclick: () => app.togglePause() },
+      icon('play', 'i'), h('span', { class: 'sr' }, 'Paused. '), `Resume at ${SPEED_X[app.resumeSpeed || 1]}`, ctx.touch() ? null : h('span', { class: 'key' }, 'Space')))
+    const wasRunning = !running.hidden
+    running.hidden = app.speed === 0 || S.seasonDone(c) || (stoppedFor && layout !== 'narrow') || (layout === 'narrow' && app.selection.length > 0)
+    if (!running.hidden && !wasRunning) ranAt = performance.now()
+    if (!running.hidden) {
+      patch(running, JSON.stringify([ctx.touch(), app.speed]), () => h('button', { class: 'paused-go btn', type: 'button', testid: 'running-stop', onclick: () => app.togglePause() },
+        icon('pause', 'i'), `Running at ${SPEED_X[app.speed]}`, ctx.touch() ? null : h('span', { class: 'key' }, 'Space')))
+      running.classList.toggle('lit', performance.now() - ranAt < 2400)
+      if (performance.now() - ranAt < 2400) setTimeout(() => ctx.dirty(), 2450)
+    }
+    updateHint()
+    askSprayOnce(c)
+    laps.end('interface: clock, hint')
+    P.update()
+    updateYards(c, tgt && 'yard' in tgt ? tgt.yard : 0)
+    laps.end('interface: tags drawn')
+    yield
+    units.update(c)
+    laps.end('interface: time book, list')
+    people.update(c)
+    laps.end('interface: pins drawn')
+    yield
+    card.update(c)
+    laps.end('interface: field card')
+    tied.card.update(card.el.hidden ? null : ties().field())
+    person.update(c, personUp)
+    tied.person.update(personUp ? ties().unit() : null)
+    const build = g?.id === 'build' ? (S.buildingInfo(c).filter(b => b.yard === app.yard && b.state === 'none' && b.ok).sort((a, b) => a.total - b.total)[0]?.kind ?? null) : null
+    yard.update(c, build)
+    tied.yard.update(ties().yard())
+    landNow = null
+    if (c.crew.length < 3 && grid.isOpen()) grid.toggle(false)
+    laps.end('interface: person, yard')
+    yield
+    grid.update(c)
+    incident.update(c)
+    laps.end('interface: grid, telegram')
+    const up = incident.isUp()
+    veil.hidden = !up
+    el.classList.toggle('incident-up', up)
+    ctx.notes.limit(1)
+    ctx.notes.maxAge = layout === 'short' ? 9000 : 0
+    ctx.notes.prune(c.season.day)
+  }
+
   return {
     el,
     notes: notesSlot,
     key,
     escapes,
     goFor,
-    update() {
-      const c = app.campaign
-      if (!c || !c.season) return
-      const layout = ctx.layout()
-      el.dataset.layout = layout
-      const many = c.crew.length > 1
-      // A person's page opens from the time book; picked on the land, their card opens beside them instead (whois.ts).
-      const personUp = many && app.unit >= 0 && app.unitFrom === 'list' && !app.selection.length && app.yard === 0
-      const selected = app.selection.length > 0 || app.yard !== 0
-      el.classList.toggle('selected', selected)
-      el.classList.toggle('person-up', personUp || grid.isOpen())
-      el.classList.toggle('tray-up', !!tray)
-      // What the goal points at: the field it lights, the yard it rings.
-      const g = nextGoal(c)
-      const tgt = target(g)
-      goalField = tgt && 'field' in tgt ? tgt.field : -1
-      frostAt = Object.fromEntries(S.haulInfo(app.world, c).map(x => [x.field, x.frostChance]))
-      laps.end('interface: goal')
-      top.update()
-      laps.end('interface: boards')
-      // On a phone the clock sits by the thumb, over the time book.
-      const low = layout === 'narrow' || layout === 'short'
-      clockSlot.hidden = !low
-      if (low) patch(clockSlot, JSON.stringify([app.speed, app.resumeSpeed, S.seasonDone(c), ctx.awaiting, ctx.touch()]), () => clock(ctx, false, o.onMenu))
-      // Stopped by the player, the one obvious way on: a press goes on at the speed the clock had. Stopped for a
-      // decision, the bank board's own tag says so instead.
-      const stoppedFor = c.incidents.length > 0 || ctx.awaiting > 0
-      const stopped = app.speed === 0 && !S.seasonDone(c)
-      paused.hidden = !stopped || (stoppedFor && layout !== 'narrow')
-      el.classList.toggle('is-paused', !paused.hidden)
-      if (!paused.hidden) patch(paused, JSON.stringify([ctx.touch(), app.resumeSpeed]), () => h('button', { class: 'paused-go btn', type: 'button', testid: 'paused-go', onclick: () => app.togglePause() },
-        icon('play', 'i'), h('span', { class: 'sr' }, 'Paused. '), `Resume at ${SPEED_X[app.resumeSpeed || 1]}`, ctx.touch() ? null : h('span', { class: 'key' }, 'Space')))
-      const wasRunning = !running.hidden
-      running.hidden = app.speed === 0 || S.seasonDone(c) || (stoppedFor && layout !== 'narrow') || (layout === 'narrow' && app.selection.length > 0)
-      if (!running.hidden && !wasRunning) ranAt = performance.now()
-      if (!running.hidden) {
-        patch(running, JSON.stringify([ctx.touch(), app.speed]), () => h('button', { class: 'paused-go btn', type: 'button', testid: 'running-stop', onclick: () => app.togglePause() },
-          icon('pause', 'i'), `Running at ${SPEED_X[app.speed]}`, ctx.touch() ? null : h('span', { class: 'key' }, 'Space')))
-        running.classList.toggle('lit', performance.now() - ranAt < 2400)
-        if (performance.now() - ranAt < 2400) setTimeout(() => ctx.dirty(), 2450)
-      }
-      updateHint()
-      askSprayOnce(c)
-      laps.end('interface: clock, hint')
-      P.update()
-      updateYards(c, tgt && 'yard' in tgt ? tgt.yard : 0)
-      laps.end('interface: tags drawn')
-      units.update(c)
-      laps.end('interface: time book, list')
-      people.update(c)
-      laps.end('interface: pins drawn')
-      card.update(c)
-      laps.end('interface: field card')
-      tied.card.update(card.el.hidden ? null : ties().field())
-      person.update(c, personUp)
-      tied.person.update(personUp ? ties().unit() : null)
-      const build = g?.id === 'build' ? (S.buildingInfo(c).filter(b => b.yard === app.yard && b.state === 'none' && b.ok).sort((a, b) => a.total - b.total)[0]?.kind ?? null) : null
-      yard.update(c, build)
-      tied.yard.update(ties().yard())
-      landNow = null
-      if (c.crew.length < 3 && grid.isOpen()) grid.toggle(false)
-      laps.end('interface: person, yard')
-      grid.update(c)
-      incident.update(c)
-      laps.end('interface: grid, telegram')
-      const up = incident.isUp()
-      veil.hidden = !up
-      el.classList.toggle('incident-up', up)
-      ctx.notes.limit(1)
-      ctx.notes.maxAge = layout === 'short' ? 9000 : 0
-      ctx.notes.prune(c.season.day)
-    },
+    update() { const all = drawn(); while (!all.next().done); },
+    steps: drawn,
     insets() {
       const layout = ctx.layout()
       // Where things rest, not where a card being laid down happens to be this frame: offsets ignore transforms.
