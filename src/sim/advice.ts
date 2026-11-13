@@ -8,7 +8,7 @@ import type { Campaign, GameEvent, JobKind, KillWhy, World } from './types.ts'
 import { fieldInfo, forecast, today } from './view.ts'
 import { openLots, sprayWayNow } from './campaign.ts'
 import { newPotatoWindow } from './market.ts'
-import { addJob, FIELD_NAMES, JOB_LABEL, letGo, seasonDone, standingBy, workday } from './season.ts'
+import { addJob, awaitsWord, FIELD_NAMES, JOB_LABEL, letGo, plantWordGiven, seasonDone, standingBy, workday } from './season.ts'
 import { hasBuilt } from './buildings.ts'
 import { forecastFor } from './weather.ts'
 import { plantReady } from './outlook.ts'
@@ -236,9 +236,18 @@ export function standingOrders(world: World, c: Campaign): GameEvent[] {
   if (!workday(c, s)) return out
   // A frost forecast for tonight: a lone hauler digs no more than the rest of the day can haul in (season.ts, work).
   s.frostLow = forecastFor(world, c.seed, s.year, s.day, 1, hasBuilt(c, 'station') ? P.STATION_ERROR : 1).lo
+  // The year's first planting waits for the player's word (plantAsked said the crew stands ready). With no word
+  // PLANT_WORD_DAYS later, the crew starts by itself this morning, and says so.
+  const fit = all.filter(a => a.act === 'plant' && awaitsWord(c, 'plant', a.field))
+  if (fit.length && s.plantAsk !== undefined && s.day - s.plantAsk >= P.PLANT_WORD_DAYS) {
+    s.plantWord = s.day
+    s.plantWordBy = 'crew'
+    out.push(said(s, 'plantWord', fit[0].field, `You gave no word in ${P.PLANT_WORD_DAYS} days, so your crew has started planting on its own.`))
+  }
   for (const a of withinReach(c, all)) {
     if (a.field < 0 || a.act === 'wait' || a.act === 'sell' || a.act === 'close') continue
     if (a.act === 'kill' && s.fields[a.field].keepVines) continue
+    if (awaitsWord(c, a.act, a.field)) continue
     const by = standingBy(c, a.act, a.field)
     if (by) addJob(c, a.act, a.field, -1, by)
   }
@@ -263,6 +272,36 @@ export function standingOrders(world: World, c: Campaign): GameEvent[] {
     }
   }
   return out
+}
+
+function said(s: NonNullable<Campaign['season']>, type: string, field: number, text: string): GameEvent {
+  const e: GameEvent = { day: s.day, type, field, level: 'info', text }
+  s.log.push(e)
+  return e
+}
+
+// The evening the first field comes fit to plant, with the planting waiting for the player's word: the crew says it
+// stands ready, once, dated the morning the stamps are up, and the days to its own start count from there.
+export function plantAsked(world: World, c: Campaign): GameEvent[] {
+  const s = c.season
+  if (c.phase !== 'season' || !s || s.frozen || s.plantAsk !== undefined || plantWordGiven(s)) return []
+  const fit = everything(world, c).find(a => a.act === 'plant' && awaitsWord(c, 'plant', a.field))
+  if (!fit) return []
+  s.plantAsk = s.day
+  return [said(s, 'plantAsk', fit.field, `The soil is ready and your crew is waiting for your word. Order Plant on any potato field, or they'll start on their own in ${P.PLANT_WORD_DAYS} days.`)]
+}
+
+// The player's first planting order of the year is the word the crew waits for: said back, with what follows.
+export function wordToPlant(c: Campaign, field: number): GameEvent | null {
+  const s = c.season
+  if (!s || s.plantWord !== undefined || standingBy(c, 'plant', field) !== 'routine') return null
+  const first = !s.fields.some(f => f.plantDay >= 0) && s.jobs.filter(j => j.kind === 'plant').length === 1
+  s.plantWord = s.day
+  s.plantWordBy = 'you'
+  if (!first) return null
+  let others = 0
+  for (let i = 0; i < P.FIELD_COUNT; i++) if (i !== field && c.plans[i]?.crop === 'potato' && c.fields[i].tenure !== 'none' && s.fields[i].plantDay < 0 && standingBy(c, 'plant', i) === 'routine') others++
+  return said(s, 'plantWord', field, others ? `You gave the word. Your crew will plant the other ${others === 1 ? 'field' : `${others} fields`} too.` : 'You gave the word, and planting has started.')
 }
 
 // The evening before a frost on crop still in barrels, once for a cold spell: the one warning, dated the day the
@@ -291,11 +330,13 @@ export function fieldNeeds(world: World, c: Campaign): { need: Advice | null; ho
   const nobody = (kind: JobKind) => !c.crew.some(u => willDo(u, kind))
   return c.fields.map((_, i) => {
     const mine = all.filter(a => a.field === i)
-    const need = mine.find(a => a.act !== 'wait' && !(job(a) && standingBy(c, a.act as JobKind, i)))
+    // The planting that waits for the player's word is theirs to give, on every field that is fit.
+    const need = raw.find(a => a.field === i && a.act === 'plant' && awaitsWord(c, 'plant', i))
+      ?? mine.find(a => a.act !== 'wait' && !(job(a) && standingBy(c, a.act as JobKind, i)))
       ?? raw.filter(a => a.field === i && job(a) && standingBy(c, a.act as JobKind, i) && nobody(a.act as JobKind))
         .map(a => ({ ...a, why: `${a.why} Nobody on the farm will do ${SKILL_LABEL[jobSkill(a.act as JobKind)]}, so set someone's priority for it.` }))[0]
       ?? null
-    const auto = mine.find(a => job(a) && standingBy(c, a.act as JobKind, i))
+    const auto = mine.find(a => job(a) && standingBy(c, a.act as JobKind, i) && !awaitsWord(c, a.act as JobKind, i))
     const hold = mine.find(a => a.act === 'wait')
       ?? (auto ? { ...auto, act: 'wait' as const, text: `${JOB_LABEL[auto.act as JobKind]} goes on the work list automatically.`, why: `You don't need to order it. ${auto.why}`, urgent: false } : null)
     return { need: need ?? null, hold }

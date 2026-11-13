@@ -10,7 +10,9 @@ const range = () => `${F.money(-USUAL_YEAR.hi)} to ${F.money(-USUAL_YEAR.lo)}`
 // Short, for the order blank; the whole of it for the hover.
 export function usualFirstYear(bills: number): { short: string; full: string } {
   return {
-    short: `A first year usually ends ${range()} down.`,
+    // The truth without the fright: what a usual first year looks like, and that the loan carries it. Nine words,
+    // as the line it replaces had: the first spring sheet is held under 115 (e2e/play.spec.ts).
+    short: `The loan covers usual first-year losses: ${range()}.`,
     full: `A first year played the way the tutorial suggests usually ends ${range()} below where it started. The crop covers what it costs to grow, but the bank payment and your family's living costs take ${F.money(bills)} no matter what it earns.`,
   }
 }

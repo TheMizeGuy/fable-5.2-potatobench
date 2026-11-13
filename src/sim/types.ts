@@ -323,6 +323,9 @@ export interface Season {
   frostHaul?: number        // the last day a frost was forecast on crop still in barrels
   pressed?: number[]        // people moved today from work that can wait to work that cannot
   frostLow?: number         // tonight's forecast low at the station, C
+  plantAsk?: number         // the day the crew first stood ready to plant and asked for the word
+  plantWord?: number        // the day the word to plant was given: the player's first planting order, or the crew's own start
+  plantWordBy?: 'you' | 'crew'
   telegram?: number         // the day the last telegram came
   digStop?: number[]        // fields whose digging stopped for today so that what was dug can be hauled before a frost
   fields: FieldSeason[]

@@ -160,26 +160,36 @@ function resolve(ctx: Ctx, root: HTMLElement, p: Point | null): { el: HTMLElemen
   return { el: null, at: null, id: `pin-${p.unit}` }
 }
 
-// What the player would press to see a target a card lies over: that card's close key, or null when nothing does.
-function coverOf(t: { el: HTMLElement | null; at: Box | null }): HTMLElement | null {
-  if (!t.el || !t.at) return null
-  const x = (t.at.left + t.at.right) / 2, y = (t.at.top + t.at.bottom) / 2
-  if (x < 0 || y < 0 || x > innerWidth || y > innerHeight) return null
-  const hit = document.elementFromPoint(x, y)
-  if (!hit || t.el.contains(hit) || hit.closest('.guide-layer')) return null
-  const panel = hit.closest('.person-card, .work, .sheet')
-  if (!panel || panel.contains(t.el)) return null
-  const close = panel.querySelector<HTMLElement>('button.close')
-  return close && shown(close) ? close : null
+// What lies over a target, at its middle or over any part of it (a stamp half under a card is not one the player
+// can be sent to): the elements found at its middle and a little in from each corner that are not its own.
+function over(t: { el: HTMLElement | null; at: Box | null }): Element[] {
+  if (!t.el || !t.at) return []
+  const b = t.at
+  const dx = Math.min(6, (b.right - b.left) / 4), dy = Math.min(6, (b.bottom - b.top) / 4)
+  const pts = [[(b.left + b.right) / 2, (b.top + b.bottom) / 2], [b.left + dx, b.top + dy], [b.right - dx, b.top + dy], [b.left + dx, b.bottom - dy], [b.right - dx, b.bottom - dy]]
+  const out: Element[] = []
+  for (const [x, y] of pts) {
+    if (x < 0 || y < 0 || x > innerWidth || y > innerHeight) continue
+    const hit = document.elementFromPoint(x, y)
+    if (hit && !t.el.contains(hit) && !hit.closest('.guide-layer') && !hit.contains(t.el)) out.push(hit)
+  }
+  return out
 }
 
-// Whether something lies over the middle of what a note points at, so a press there would not reach it.
+// What the player would press to see a target a card lies over: that card's close key, or null when nothing does.
+function coverOf(t: { el: HTMLElement | null; at: Box | null }): HTMLElement | null {
+  for (const hit of over(t)) {
+    const panel = hit.closest('.person-card, .whois, .work, .sheet')
+    if (!panel || panel.contains(t.el)) continue
+    const close = panel.querySelector<HTMLElement>('button.close')
+    if (close && shown(close)) return close
+  }
+  return null
+}
+
+// Whether something lies over what a note points at, so a press there would not reach it.
 function hiddenAt(t: { el: HTMLElement | null; at: Box | null }): boolean {
-  if (!t.el || !t.at) return false
-  const x = (t.at.left + t.at.right) / 2, y = (t.at.top + t.at.bottom) / 2
-  if (x < 0 || y < 0 || x > innerWidth || y > innerHeight) return false
-  const hit = document.elementFromPoint(x, y)
-  return !!hit && !t.el.contains(hit) && !hit.closest('.guide-layer')
+  return over(t).length > 0
 }
 
 // Everything on the current screen the slip should not lie over: the panels themselves, not the clear boxes that hold
@@ -271,7 +281,8 @@ function holdLine(): HTMLElement {
 }
 
 // lost: what it points at is on the land but out of view, so the slip says how to bring the farm back.
-// back: the speed the game resumes at when the note is closed (0: it was paused before, and stays so; -1: no clock here).
+// back: the speed the game resumes at when the note is closed (0: it stays paused, because it was paused before or
+// because the note asks for a press on the land; -1: no clock here).
 // go: where the lesson's own Show me leads, when what it is about is not on the screen.
 function slipBody(ctx: Ctx, x: Lesson, l: Look, held: boolean, lost = false, under = false, show = -1, ahead: ((id: string) => void) | null = null, back = -1, go: Show | null = null): (HTMLElement | null)[] {
   const again = guide.replaying(x.id)
@@ -294,7 +305,7 @@ function slipBody(ctx: Ctx, x: Lesson, l: Look, held: boolean, lost = false, und
     show >= 0 && lost ? h('p', { class: 'guide-lost t-caption' }, h('button', { class: 'btn quiet', type: 'button', testid: 'guide-show', onclick: () => ctx.app.focus(show) }, 'Show me')) : null,
     under ? h('p', { class: 'guide-lost t-caption', testid: 'guide-under' }, icon('close', 'i'), by(l.input, 'A card is in the way. Click its X to close it.', 'A card is in the way. Tap its X to close it.', 'A card is in the way. Use its X to close it.')) : null,
     h('footer', { class: 'guide-foot' },
-      act ? h('button', { class: 'btn guide-ok', type: 'button', testid: 'guide-act', onclick: () => { let ok = true; for (const cmd of act.cmds) ok = ctx.run(cmd).ok && ok; if (ok) ctx.say(act.done, 'good'); done() } }, icon('check', 'i'), act.label) : null,
+      act ? h('button', { class: 'btn guide-ok', type: 'button', testid: 'guide-act', onclick: () => { let said = ''; for (const cmd of act.cmds) { const r = ctx.run(cmd); said = (r.ok ? r.events[0]?.text : r.err) ?? said } const text = act.done ?? said; if (text) ctx.say(F.localize(text), 'good'); done() } }, icon('check', 'i'), act.label) : null,
       x.read || again ? h('button', { class: `btn${act ? '' : ' guide-ok'}`, type: 'button', testid: 'guide-noted', onclick: done }, icon('check', 'i'), h('span', { class: 'two' }, 'Got it', resumes)) : null,
       skip ? h('button', { class: 'btn', type: 'button', testid: 'guide-ahead', onclick: () => ahead!(x.id) }, icon('fast', 'i'), h('span', { class: 'two' }, skip, h('span', { class: 'sub' }, `runs at ${SPEED_X[3]}`))) : null,
       go && show < 0 ? h('button', { class: 'btn quiet', type: 'button', testid: 'guide-show', onclick: () => lead(go) }, 'Show me') : null,
@@ -530,13 +541,16 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
   // before: the speed on the clock then, never one remembered from earlier. A game the player had paused stays
   // paused. The player's own press on the clock closes the note (a note only to be read is noted; one that asks is
   // skipped) and runs the game. due: the note that is owed, shown or waiting behind a card.
-  let holding: { id: string; speed: number } | null = null
+  // stay: the note asks for a press on the land, so the game stays paused when the note goes, whether by Got it or
+  // by the thing being done: a press on a stamp never changes the speed. The player resumes when they're ready.
+  let holding: { id: string; speed: number; stay: boolean } | null = null
   let due: Lesson | null = null
   // The speed it had is the speed the clock's own keys resume at, Space included.
   function stopNow(): void { if (app.speed > 0) app.resumeSpeed = app.speed; app.setSpeed(0); app.pauseReason = HOLD; ctx.dirty() }
-  function hold(): void {
+  function hold(l: Look): void {
     const t = performance.now()
     const want = due && app.screen === 'season' ? due.id : ''
+    const stay = !!want && !!due!.asks?.(l)
     if (holding && want && app.speed > 0) {
       if (t - pressedAt < 1500 && now) {
         // The player's press: the note goes, and the days are theirs.
@@ -555,14 +569,20 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
       // Running: paused here. Paused by the game for a card: the speed it would resume at. Paused by the player: it
       // stays so.
       const speed = app.speed > 0 ? app.speed : app.pauseReason && app.pauseReason !== HOLD ? app.resumeSpeed || 1 : 0
-      holding = { id: want, speed }
+      holding = { id: want, speed, stay }
       if (app.speed > 0) stopNow()
-    } else if (want && holding) holding.id = want
+    } else if (want && holding) { holding.id = want; holding.stay = stay }
     else if (!want && holding) {
       const back = holding.speed
+      const stays = holding.stay
       holding = null
       const c = app.campaign
-      // The game's own stop (a frost) ends with the note that explained it; a card still up keeps the clock.
+      if (stays) {
+        // The pause becomes the player's own: Space, or the clock, resumes at the speed the game had.
+        if (app.speed === 0 && app.pauseReason === HOLD) { app.pauseReason = ''; ctx.dirty() }
+        return
+      }
+      // A card still up keeps the clock.
       if (back > 0 && app.speed === 0 && app.pauseReason !== '' && !app.holding && app.screen === 'season' && c && !S.seasonDone(c) && !cardUp(lookNow())) app.setSpeed(back as 1 | 2 | 3)
     }
   }
@@ -581,19 +601,22 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
   let lastId = ''
   let restUntil = 0
   let waitFor: string[] = []
-  let waitUntil = 0
   const PANELS = ['.cat-open', '.paper-layer > .dialog:not(.out)', '.person-card:not([hidden])', '.work:not([hidden])']
   const panelsOpen = () => PANELS.filter(sel => !!root.querySelector(sel))
   function paced(x: Lesson | null): Lesson | null {
     const t = performance.now()
     if (x?.id !== lastId) {
-      if (lastId && guide.passed(lastId)) { restUntil = t + 1200; waitFor = panelsOpen(); waitUntil = t + 8000 }
+      // Passed by the player's own word (Got it, Skip): the next step may come. Passed by doing its thing: the next
+      // waits while what that opened is still being read.
+      const said = !!lastId && (guide.has(`noted:${lastId}`) || guide.p.passed[lastId] === 'skip')
+      if (lastId && guide.passed(lastId)) { restUntil = t + 1200; waitFor = said ? [] : panelsOpen() }
       lastId = x?.id ?? ''
     }
     // In a season the next note follows at once and takes over the hold: no days run between two notes. Out of it,
     // the next waits a moment, and while a panel the last click opened is still open.
     if (!x || app.screen === 'season' || x.urgent || x.paper || x.follows || x.card) return x
-    waitFor = t < waitUntil ? waitFor.filter(sel => !!root.querySelector(sel)) : []
+    // (for as long as it is open: a step never comes on a timer over what the player is still reading)
+    waitFor = waitFor.filter(sel => !!root.querySelector(sel))
     if (t < restUntil || waitFor.length > 0) { stale = true; return null }
     return x
   }
@@ -619,7 +642,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     now = due && carded ? null : due
     if (speaking !== (offer || !!owed)) { speaking = offer || !!owed; ctx.dirty() }
     root.classList.toggle('agent', speaking)
-    hold()
+    hold(l)
     // The cards in the middle: the offer, and what a year is.
     const card = offer ? 'offer' : now?.card ? now.id : ''
     if (card !== cardKey) {
@@ -659,7 +682,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     // to point at is about.
     const sh = now?.show?.(l) ?? null
     const go = !sh ? null : 'unit' in sh ? (inCard(root.querySelector('[data-testid="person-foreman"]')) ? null : sh) : now?.point ? null : sh
-    const back = app.screen === 'season' && now ? holding?.speed ?? 0 : -1
+    const back = app.screen === 'season' && now ? (now.asks?.(l) ? 0 : holding?.speed ?? 0) : -1
     // Something on the land to point at, none of it in view.
     const lost = !!p && !('testid' in p) && !t.at && app.screen === 'season'
     const fieldOf = !p ? -1 : 'field' in p ? p.field : 'badge' in p ? p.badge : 'fields' in p ? p.fields[0] ?? -1 : -1

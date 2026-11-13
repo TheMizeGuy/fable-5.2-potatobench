@@ -851,7 +851,8 @@ async function guidedYear(page: Page, at: (note: string) => Promise<boolean | vo
         if (await at(s.note)) break
         continue
       }
-      const key = s.note === 'stamp' && s.target.startsWith('badge-') ? '' : s.keys.includes('guide-ahead') ? 'guide-ahead' : s.keys.includes('guide-noted') ? 'guide-noted' : ''
+      // (the word to plant and a decision on a field ask for a press on the stamp they name)
+      const key = (s.note === 'stamp' || s.note === 'word') && s.target.startsWith('badge-') ? '' : s.keys.includes('guide-ahead') ? 'guide-ahead' : s.keys.includes('guide-noted') ? 'guide-noted' : ''
       if (key) await page.locator(`#ui [data-testid="guide-slip"] [data-testid="${key}"]`).first().click().catch(() => {})
       else {
         // What the note points at: a field's tag or a person's chip opens that thing's card, by the player's press.
@@ -868,6 +869,11 @@ async function guidedYear(page: Page, at: (note: string) => Promise<boolean | vo
       else await page.locator('#ui .season-screen .telegram .reply.first').first().click().catch(() => {})
       await page.waitForTimeout(200)
       continue
+    }
+    // A press on a stamp leaves the game paused (round seven): the player's own way on is the clock's.
+    if (s.phase === 'season' && s.speed === 0) {
+      const go = page.getByTestId('paused-go')
+      if (await go.isVisible().catch(() => false)) { await go.click().catch(() => {}); await page.waitForTimeout(150); continue }
     }
     await page.waitForTimeout(250)
   }

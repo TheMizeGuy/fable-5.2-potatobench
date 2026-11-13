@@ -364,6 +364,7 @@ const STATES: State[] = [
   }) },
   { name: 'guide-first-day', what: 'Guide: the first day of a guided season: the land, the date, the cash and one note, the clock held', sizes: ALL, run: guideAt('fields') },
   { name: 'guide-look', what: 'Guide: how to look round, and the skip to planting day', sizes: ALL, run: guideAt('look') },
+  { name: 'guide-word', what: 'Guide: the soil ready, the ask for the word to plant, the fist on the ringed Plant stamp', sizes: ALL, run: guideAt('word', `${DAYS}(() => app.needs().some(n => n.need && n.need.act === 'plant'))`) },
   { name: 'guide-plantday', what: 'Guide: planting day, the people shown for the first time', sizes: ALL, run: guideAt('plantday', `${DAYS}(() => c.season.fields.some(f => f.plantDay >= 0))`) },
   { name: 'guide-tend', what: 'Guide: the fields planted, the summer said', sizes: ALL, run: guideAt('tend', `${DAYS}(() => !c.season.fields.some((f, i) => c.plans[i] && c.plans[i].crop === 'potato' && c.fields[i].tenure !== 'none' && f.plantDay < 0))`) },
   { name: 'guide-blight', what: 'Guide: blight weather, the forecast shown for the first time', sizes: ALL, run: guideAt('blight', `${DAYS}(() => c.season.watchDay >= 0 && c.season.fields.some(f => f.status === 'growing'))`) },

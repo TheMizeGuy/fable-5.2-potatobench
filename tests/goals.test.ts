@@ -161,9 +161,20 @@ describe('the ladder of goals', () => {
     expect(goal(c, 'build').progress).toEqual({ n: 0, of: S.BUILDINGS.stand.days })
     c.buildings[0].built = true
     expect(goal(c, 'build').done).toBe(true)
-    expect(goal(c, 'foreman').now).toBe(false)
+    // A foreman is a step only where one pays (round seven: it was pushed on farms with one hand): two hired hands,
+    // and fields away from home for a foreman to run. Until then it is not on the ladder at all.
+    const onLadder = () => goals(c).some(g => g.id === 'foreman')
+    expect(onLadder()).toBe(false)
     expect(S.apply(w, c, { t: 'hire', kind: 'hand' }).ok).toBe(true)
+    expect(onLadder()).toBe(false)
+    c.buildings.push({ id: c.nextBuilding++, kind: 'bunk', yard: S.HOME_YARD, done: 1, need: 1, built: true })
+    expect(S.apply(w, c, { t: 'hire', kind: 'hand' }).ok).toBe(true)
+    expect(onLadder()).toBe(false)
+    c.fields[6].tenure = 'rented'
     expect(goal(c, 'foreman').now).toBe(true)
+    expect(goal(c, 'foreman').why).toMatch(/fields away from home/)
+    expect(goal(c, 'foreman').why).toMatch(/40% more and stop doing field work/)
+    expect(`${goal(c, 'foreman').title} ${goal(c, 'foreman').why} ${goal(c, 'foreman').when}`).not.toMatch(/block/i)
     expect(S.apply(w, c, { t: 'foreman', unit: c.crew[1].id, block: 'home' }).ok).toBe(true)
     expect(goal(c, 'foreman').done).toBe(true)
     expect(goal(c, 'five').progress).toEqual({ n: 1, of: 5 })
