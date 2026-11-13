@@ -5,11 +5,12 @@
 import type { Thing } from '../game/contracts.ts'
 import * as S from '../sim/index.ts'
 import { confirmPaper, patch, type Ctx } from './core.ts'
-import { doing, doingWord, openCrew, ringFor } from './crew.ts'
+import { doingWord, openCrew, ringFor } from './crew.ts'
+import { personNow } from './now.ts'
 import { h, type Child } from './dom.ts'
 import * as F from './fmt.ts'
 import { icon } from './icons.ts'
-import { doingGlyph, doingText, moodSaid, restControl, restWords } from './people.ts'
+import { moodSaid, restControl, restWords } from './people.ts'
 import { firstName, jobText, KIND_NAME, LET_GO_TEXT, moodWhy, personSign, SKILL_NAME, skillCovers } from './rules.ts'
 import { ringed } from './system/people.ts'
 import { anchored, ties } from './tie.ts'
@@ -90,14 +91,11 @@ export function whois(ctx: Ctx, layer: HTMLElement): Whois {
     const name = farmer ? 'You' : p.name
     const ring = ringFor(c, p.id)
     const season = c.phase === 'season' && !!c.season
-    const crews = season ? S.crewInfo(c) : []
-    const ci = crews.find(x => x.id === p.id)
-    const now = season && ci ? doing(c, ci, S.jobWaits(app.world, c), crews) : null
-    // What they are at now, and why when it is not plain: what holds them up, or that nothing on the list is theirs.
-    const busy = !!p.job || !!p.foreman || p.hurtUntil >= 0 || p.travelling
+    // What they are at now, said as the time book says it (now.ts).
+    const now = season ? personNow(c, p.id, S.jobWaits(app.world, c)) : null
+    const busy = !!now && !['Idle', 'Waiting', 'Sunday'].includes(now.word)
     const lower = (t: string) => t.replace(/^./, x => x.toLowerCase())
-    const detail = c.phase === 'cellar' ? lower(p.winterText) : !season ? 'waiting for the season to start' : busy ? lower(doingText(c, p))
-      : now && now.text.startsWith('Waiting') ? lower(now.text) : `${now && now.text.startsWith('Idle at ') ? `${now.text.slice(5)}, ` : ''}${c.season!.jobs.length ? `nothing on the work list for ${farmer ? 'you' : 'them'}` : 'the work list is empty'}`
+    const detail = c.phase === 'cellar' ? lower(p.winterText) : !season ? 'waiting for the season to start' : now!.rest
     const sign = personSign(p, false)
     const best = [...S.SKILLS].sort((a, b) => p.skills[b] - p.skills[a])[0]
     const pulls = moodWhy(c, p)
@@ -110,11 +108,12 @@ export function whois(ctx: Ctx, layer: HTMLElement): Whois {
           h('h2', { class: 't-head', id: 'whois-name', testid: 'whois-name' }, name),
           h('p', { class: 't-caption' }, farmer ? 'The farmer · every job, no wage' : `${KIND_NAME[p.kind]}${p.traitName ? ` · ${p.traitName.toLowerCase()}` : ''}`)),
         h('button', { class: 'close', type: 'button', testid: 'whois-close', 'aria-label': `Close${keys ? ' (Escape)' : ''}`, onclick: () => app.selectUnit(-1) }, icon('close', 'i'))),
-      h('p', { class: 'whois-now', testid: 'whois-now' }, icon(season ? doingGlyph(c, p) : c.phase === 'cellar' ? 'winter' : 'idle', 'i'),
-        h('span', null, h('b', null, season ? doingWord(c, p) : c.phase === 'cellar' ? 'This winter' : 'Spring'), ' ', h('span', { class: busy ? '' : 'quiet' }, detail))),
-      // Where to look for them: on a machine they are its driver; off the land, indoors in the yard.
+      h('p', { class: 'whois-now', testid: 'whois-now' }, icon(now ? now.glyph : c.phase === 'cellar' ? 'winter' : 'idle', 'i'),
+        h('span', null, h('b', null, now ? now.word : c.phase === 'cellar' ? 'This winter' : 'Spring'), ' ', h('span', { class: busy ? '' : 'quiet' }, detail))),
+      // Where to look for them: on a machine they are its driver; off the land, indoors in the yard. Not said of
+      // someone the line has at work in a field, which is where they are between days.
       place === 'machine' ? h('p', { class: 'whois-where quiet', testid: 'whois-where' }, icon('machine', 'i'), 'Driving, so look for the tractor.')
-        : place === 'away' && c.phase !== 'cellar' ? h('p', { class: 'whois-where quiet', testid: 'whois-where' }, icon('house', 'i'), 'Indoors in the yard, out of sight.') : null,
+        : place === 'away' && c.phase !== 'cellar' && !(now && now.place >= 0 && busy) ? h('p', { class: 'whois-where quiet', testid: 'whois-where' }, icon('house', 'i'), 'Indoors in the yard, out of sight.') : null,
       h('dl', { class: 'whois-state' },
         h('div', null, h('dt', { class: p.tired >= S.HURT_TIRED ? 'c-red' : p.tired >= S.TIRED_SLOW_FROM ? 'c-ochre' : '' }, F.upper(p.tiredWord)),
           h('dd', null, sign?.glyph === 'hurt' ? `hurt, back on ${F.date(c.year, p.hurtUntil, true)}` : restWords(c, p))),
@@ -169,7 +168,7 @@ export function whois(ctx: Ctx, layer: HTMLElement): Whois {
       card.setAttribute('aria-label', p.kind === 'farmer' ? 'You' : p.name)
       if (was || shownFor !== p.id) {
         shownFor = p.id
-        ctx.announce(`${p.kind === 'farmer' ? 'You' : p.name}: ${doingWord(c, p)}.`)
+        ctx.announce(`${p.kind === 'farmer' ? 'You' : p.name}: ${doingWord(c, p, S.jobWaits(app.world, c))}.`)
         if (!ctx.reduced()) { card.classList.remove('in'); void card.offsetWidth; card.classList.add('in') }
       }
     }

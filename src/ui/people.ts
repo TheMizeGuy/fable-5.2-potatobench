@@ -6,6 +6,7 @@ import { h, type Child } from './dom.ts'
 import * as F from './fmt.ts'
 import { icon } from './icons.ts'
 import { BLOCK_NAME } from './map.ts'
+import { personNow } from './now.ts'
 import * as R from './rules.ts'
 import { tens } from './system/parts.ts'
 import { portrait as bust, ringed, ringOf } from './system/people.ts'
@@ -23,21 +24,13 @@ function lastWorked(c: S.Campaign, id: number): { kind: S.JobKind; field: number
   return w.length ? w[w.length - 1] : null
 }
 
-// What a person is doing, as a glyph: their order, the road, a day of rest, a foreman's rounds, or nothing.
-export function doingGlyph(c: S.Campaign, p: S.PersonInfo): string {
-  if (p.foreman) return 'foreman'
-  if (p.hurtUntil >= 0) return 'hurt'
-  const s0 = c.season
-  if (s0 && c.phase === 'season' && !s0.frozen && !S.workday(c, s0)) return 'sunday'
-  if (p.travelling) return 'go'
-  return p.job ? p.job.kind : lastWorked(c, p.id)?.kind ?? 'stale'
+// What a person is doing, as a glyph and in words: as the time book says it (now.ts).
+export function doingGlyph(c: S.Campaign, p: S.PersonInfo, waits: Record<number, string> = {}): string {
+  return personNow(c, p.id, waits).glyph
 }
 
-// What a person is doing in words: their order, or what they were at on the last day worked.
-export function doingText(c: S.Campaign, p: S.PersonInfo): string {
-  if (p.job || p.foreman || p.hurtUntil >= 0 || p.travelling || p.doing !== 'Nothing to do') return p.doing
-  const w = lastWorked(c, p.id)
-  return w ? R.jobText(w) : 'Nothing to do'
+export function doingText(c: S.Campaign, p: S.PersonInfo, waits: Record<number, string> = {}): string {
+  return personNow(c, p.id, waits).line
 }
 
 // Whether someone stood idle through the last working day while orders they could take waited on the list: their
@@ -51,20 +44,6 @@ export function idleWithWork(c: S.Campaign, p: S.PersonInfo, waits: Record<numbe
   const others = new Set(s0.worked.filter(w => w.unit !== p.id).map(w => `${w.kind}|${w.field}`))
   const held = new Set(c.crew.filter(x => x.id !== p.id).map(x => x.job))
   return !!u && s0.jobs.some(j => !waits[j.id] && !held.has(j.id) && (j.unit < 0 || j.unit === p.id) && S.willDo(u, j.kind) && !others.has(`${j.kind}|${j.field}`))
-}
-
-// The next order a person would take from the list by their own priorities, or null.
-function nextFor(c: S.Campaign, id: number): S.Job | null {
-  const s0 = c.season
-  const u = c.crew.find(x => x.id === id)
-  if (!s0 || !u || c.phase !== 'season') return null
-  const held = new Set(c.crew.filter(x => x.id !== id).map(x => x.job))
-  let best: S.Job | null = null
-  for (const j of s0.jobs) {
-    if (held.has(j.id) || j.id === u.job || (j.unit >= 0 && j.unit !== id) || !S.willDo(u, j.kind)) continue
-    if (!best || u.prio[S.jobSkill(j.kind)] < u.prio[S.jobSkill(best.kind)]) best = j
-  }
-  return best
 }
 
 const SKILL_SHORT: Record<S.Skill, string> = { machine: 'Machine', field: 'Field', woods: 'Woods', build: 'Build', pack: 'Pack' }
@@ -243,11 +222,11 @@ export function personCard(ctx: Ctx): PersonCard {
 
   function body(c: S.Campaign, p: S.PersonInfo): Child {
     const farmer = p.kind === 'farmer'
-    const next = p.job ? null : nextFor(c, p.id)
     const why = R.moodWhy(c, p)
     const heading = R.moodHeading(c, p)
     const blocks = S.BLOCKS.filter(b => S.PARCELS.some((x, i) => x.block === b && S.held(c, i)))
-    const doing = doingText(c, p)
+    const waits = S.jobWaits(app.world, c)
+    const doing = doingText(c, p, waits)
     const tiredWhy = R.tiredWhy(c, p)
     const best = Math.max(...S.SKILLS.map(k => p.skills[k]))
     const tiredCls = p.tired >= S.HURT_TIRED ? 'c-red' : p.tired >= S.TIRED_SLOW_FROM ? 'c-ochre' : ''
@@ -262,8 +241,7 @@ export function personCard(ctx: Ctx): PersonCard {
         h('span', { class: 'pc-tools' },
           h('button', { class: 'iconbtn', type: 'button', testid: 'person-show', 'aria-label': farmer ? 'Find yourself on the farm' : 'Find them on the farm', title: ctx.touch() ? undefined : farmer ? 'Find yourself on the farm' : 'Find them on the farm', onclick: () => { app.selectUnit(p.id, 'land'); ctx.view.follow(p.id) } }, icon('scout', 'i')),
           h('button', { class: 'close', type: 'button', testid: 'person-close', 'aria-label': `Close${ctx.touch() ? '' : ' (Escape)'}`, onclick: () => app.selectUnit(-1) }, icon('close', 'i')))),
-      h('p', { class: 'pc-doing', testid: 'person-doing' }, icon(doingGlyph(c, p), 'i'), h('span', null, doing),
-        next && doing === 'Nothing to do' ? h('span', { class: 'quiet it' }, `. Up next: ${R.jobText(next, c, next.building).replace(/^./, x => x.toLowerCase())}`) : null),
+      h('p', { class: 'pc-doing', testid: 'person-doing' }, icon(doingGlyph(c, p, waits), 'i'), h('span', null, doing)),
       h('table', { class: 'skills' },
         h('caption', { class: 'sr' }, 'Skills out of ten, and the priority of each kind of work. 1 gets done first, and a dash means never.'),
         h('tbody', null, S.SKILLS.map(k => {

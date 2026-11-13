@@ -6,43 +6,23 @@ import { h, type Child } from './dom.ts'
 import * as F from './fmt.ts'
 import { icon } from './icons.ts'
 import { placeName, where } from './map.ts'
-import { askSpray, doingGlyph, idleWithWork, sprayWay } from './people.ts'
+import { personNow, type Now } from './now.ts'
+import { askSpray, idleWithWork, sprayWay } from './people.ts'
 import { firstName, initial, JOB_DOING, JOB_VERB, jobText, KIND_GLYPH, KIND_NAME, kindDoes, LET_GO_TEXT, personSign, SKILL_NAME, type Sign } from './rules.ts'
 import { portrait, ringed, ringOf } from './system/people.ts'
 import { guidedYear } from './tutorial.ts'
 
-// What a crew is doing now, in a few words, and the glyph and place that go with it.
+// What a crew is doing now, in a few words, and the glyph and place that go with it (now.ts says it).
 export interface Doing { glyph: string; text: string; place: number; progress: number }
 
-export function doing(c: S.Campaign, u: S.CrewInfo, waits: Record<number, string>, crews: S.CrewInfo[] = []): Doing {
-  const s = c.season
-  if (!s) return { glyph: 'stale', text: 'Idle', place: u.at, progress: 0 }
-  if (s.frozen) return { glyph: 'frost', text: 'The ground has frozen', place: u.at, progress: 0 }
-  const job = u.job ? s.jobs.find(j => j.id === u.job!.id) : undefined
-  if (u.travelling) return { glyph: 'go', text: `Heading to ${placeName(u.to)}`, place: u.to, progress: 0 }
-  if (job) return { glyph: job.kind, text: jobText(job, c, job.building), place: job.field, progress: job.need > 0 ? job.done / job.need : 0 }
-  // Between orders: the first on the list it could take next, or why it is held up.
-  const unit = c.crew.find(x => x.id === u.id)
-  const could = s.jobs.filter(j => (j.unit < 0 || j.unit === u.id) && (!unit || S.willDo(unit, j.kind)) && !crews.some(o => o.id !== u.id && o.job?.id === j.id))
-  const next = could.find(j => !waits[j.id])
-  if (next) return { glyph: next.kind, text: jobText(next, c, next.building), place: next.field, progress: next.need > 0 ? next.done / next.need : 0 }
-  if (could.length) return { glyph: 'stale', text: `Waiting for ${WAIT_FOR[waits[could[0].id]] ?? waits[could[0].id]}`, place: u.at, progress: 0 }
-  return { glyph: 'stale', text: u.at === S.HOME_YARD ? 'Idle' : `Idle at ${placeName(u.at)}`, place: u.at, progress: 0 }
-}
-
-// What holds the work up, by the word the season gives, after "Waiting for".
-const WAIT_FOR: Partial<Record<string, string>> = {
-  raining: 'the rain to stop', 'ground too wet': 'the ground to dry out', 'heavy rain': 'the rain to ease', 'too windy': 'the wind to drop',
-  'the soil is too cold': 'the soil to warm up', 'waiting for the digger': 'the digger to lift more of the crop',
+export function doing(c: S.Campaign, u: S.CrewInfo, waits: Record<number, string>): Doing {
+  const n = personNow(c, u.id, waits)
+  return { glyph: n.glyph, text: n.line, place: n.place, progress: n.progress }
 }
 
 // What a person is doing, as the time book prints it: one word under their name.
-const WORD: Partial<Record<string, string>> = { foreman: 'Foreman', hurt: 'Hurt', sunday: 'Sunday', go: 'Traveling', stale: 'Idle', frost: 'Ground frozen' }
-export function doingWord(c: S.Campaign, p: S.PersonInfo): string {
-  const g = doingGlyph(c, p)
-  if (WORD[g]) return WORD[g]!
-  const kind = g as S.JobKind
-  return JOB_DOING[kind] ? JOB_DOING[kind].replace(/ (in|from|around)$/, '') : 'Idle'
+export function doingWord(c: S.Campaign, p: S.PersonInfo, waits: Record<number, string> = {}): string {
+  return personNow(c, p.id, waits).word
 }
 
 // Each person's ring, by the order they joined the farm.
@@ -113,7 +93,7 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
     if (!j) return
     const crews = S.crewInfo(c)
     const waits = S.jobWaits(app.world, c)
-    const who = j.unit >= 0 ? crews.find(u => u.id === j.unit) : crews.find(u => { const d = doing(c, u, waits, crews); return d.place === j.field && d.glyph === j.kind })
+    const who = j.unit >= 0 ? crews.find(u => u.id === j.unit) : crews.find(u => { const d = doing(c, u, waits); return d.place === j.field && d.glyph === j.kind })
     if (!who || c.crew.length < 2) return
     next = { unit: who.id, kind: j.kind, field: j.field, until: performance.now() + (ctx.reduced() ? NEXT_MS : NEXT_MS) }
     setTimeout(() => ctx.dirty(), NEXT_MS + 40)
@@ -137,25 +117,22 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
     if (ctx.run({ t: 'assign', id, unit }).ok) ctx.announce(`${what}: ${unit < 0 ? 'anyone can do it' : who === 'You' ? 'you\'ll do it' : `${who} will do it`}.`)
   }
 
-  function cell(c: S.Campaign, p: S.PersonInfo, d: Doing, sign: Sign, many: boolean, goal: boolean, needsYou: boolean): HTMLElement {
+  function cell(c: S.Campaign, p: S.PersonInfo, d: Now, sign: Sign, many: boolean, goal: boolean, needsYou: boolean): HTMLElement {
     // Alone on the farm there is no page of people: the farmer's own card opens beside them, as a click on the land would.
     const on = app.unit === p.id && (app.unitFrom === 'list' || !many)
     const name = firstName(p.name)
     const ring = ringFor(c, p.id)
-    const said = `${p.kind === 'farmer' ? 'You, the farmer' : p.name}: ${d.text}${sign ? `, ${sign.text}` : ''}.`
+    const said = `${p.kind === 'farmer' ? 'You, the farmer' : p.name}: ${d.line}${sign ? `, ${sign.text}` : ''}.`
     const bad = sign?.cls === 'bad' || needsYou
-    // Between orders, the work the list holds for them today, never IDLE while there is some.
-    const plain = doingWord(c, p)
-    const ahead = plain === 'Idle' && (S.JOBS as string[]).includes(d.glyph) ? JOB_DOING[d.glyph as S.JobKind].replace(/ (in|from|around)$/, '') : plain === 'Idle' && d.text.startsWith('Waiting') ? 'Waiting' : plain
-    const word = sign?.cls === 'bad' ? F.upper(sign.text) : needsYou ? 'Stopped' : ahead
+    const word = sign?.cls === 'bad' ? F.upper(sign.text) : needsYou ? 'Stopped' : d.word
     const slip = next && next.unit === p.id && performance.now() < next.until
       ? h('span', { class: 'next tip', 'aria-hidden': 'true' }, h('span', { class: 't-label' }, 'Next'), ' ', h('span', null, icon(next.kind, 'i'), ` ${S.FIELD_NAMES[next.field]}`)) : null
     const kids: Child[] = [
       ringed(p, ring, 46),
       h('span', { class: 'nm unit-name' }, name),
-      h('span', { class: `doing${bad ? ' bad' : ''}` }, icon(doingGlyph(c, p), 'i'), h('span', { class: 'unit-text' }, word)),
+      h('span', { class: `doing${bad ? ' bad' : ''}` }, icon(d.glyph, 'i'), h('span', { class: 'unit-text' }, word)),
       bad ? h('span', { class: 'flag' }, h('span', { class: 'badge-dot', 'aria-hidden': 'true' }, '!')) : null,
-      d.progress > 0 && !many ? h('span', { class: 'meter', role: 'meter', 'aria-label': d.text, 'aria-valuemin': 0, 'aria-valuemax': 100, 'aria-valuenow': Math.round(d.progress * 100), 'aria-valuetext': `${F.pct(d.progress)} done` }, h('i', { style: `width:${(d.progress * 100).toFixed(1)}%` })) : null,
+      d.progress > 0 && !many ? h('span', { class: 'meter', role: 'meter', 'aria-label': d.line, 'aria-valuemin': 0, 'aria-valuemax': 100, 'aria-valuenow': Math.round(d.progress * 100), 'aria-valuetext': `${F.pct(d.progress)} done` }, h('i', { style: `width:${(d.progress * 100).toFixed(1)}%` })) : null,
       slip,
     ]
     // What the cell prints is its name to a screen reader too, with the rest of what is known after it.
@@ -304,7 +281,7 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
     // In the guided first year: the next two, and a count.
     const guided = guidedYear(c)
     const room = guided ? 3 : layout === 'narrow' ? Math.max(3, Math.floor((innerWidth - 120) / 52)) : layout === 'short' ? 4 : 7
-    const now = crews.map(u => doing(c, u, waits, crews))
+    const now = people.map(p => personNow(c, p.id, waits))
     const signs = people.map(p => personSign(p, idleWithWork(c, p, waits)))
     if (next && performance.now() >= next.until) next = null
     const way = sprayWay(c)
@@ -312,7 +289,7 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
     const spraying = s0.watchDay >= 0 && !S.seasonDone(c) && (!!way || !guided)
     const model = {
       j: jobs.map(j => [j.id, j.kind, j.field, j.unit, Math.round(j.need > 0 ? j.done / j.need * 20 : 0), waits[j.id]]),
-      u: crews.map((u, k) => [u.id, u.name, now[k].text, now[k].place, Math.round(now[k].progress * 20), signs[k]?.glyph, signs[k]?.cls, doingGlyph(c, people[k]), doingWord(c, people[k])]),
+      u: people.map((p, k) => [p.id, p.name, now[k].glyph, now[k].line, Math.round(now[k].progress * 20), signs[k]?.glyph, signs[k]?.cls]),
       pick: app.unit, expanded, pop, popWho, layout, room, guided, touch, h: c.fields.map(f => f.tenure), w: waiting.map(x => x.id), grid: hooks.gridOpen(), hire: hooks.hireShown(), goal,
       next: next ? [next.unit, next.kind, next.field] : 0, stopped: [...stopped], spray: spraying ? way ?? 'ask' : 0,
       pr: c.crew.map(u => [u.id, u.prio, u.job, u.rest]),
