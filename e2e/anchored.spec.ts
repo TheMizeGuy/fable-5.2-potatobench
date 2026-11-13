@@ -509,9 +509,12 @@ test('on a phone the card is a sheet at the foot, headed with the thing, notched
   // A field, by its tag.
   const i = await a<number>(page, `return [3, 0, 2, 4, 5, 1].find(i => !!A.handle('.plate[data-k="field-' + i + '"]'))`)
   const tag = (await a<Pt | null>(page, `return A.handle('.plate[data-k="field-${i}"]')`))!
+  // Where on the tag the tap lands, from its left edge: the notch points at that point of it, wherever the tag goes.
+  const dx = await a<number>(page, `return ${tag.x} - document.querySelector('#ui .plate[data-k="field-${i}"]').getBoundingClientRect().left`)
   await page.touchscreen.tap(tag.x, tag.y)
-  // (tapped by its tag, the sheet's notch points at the tag; the field itself is in view above the sheet with it)
-  await sheet('card', `field-${i}`, [/Potato field|Resting field/, names[i]], `const e = document.querySelector('#ui .plate[data-k="field-${i}"]'); const m = A.mid(e); return { x: m.x, y: m.y, visible: A.vis(e) && F.anchor(${i}).visible }`, 'a field')
+  // (tapped by its tag, the sheet's notch points at the point of the tag that was tapped; the field itself is in view
+  // above the sheet with it)
+  await sheet('card', `field-${i}`, [/Potato field|Resting field/, names[i]], `const e = document.querySelector('#ui .plate[data-k="field-${i}"]'); const b = e.getBoundingClientRect(); return { x: b.left + Math.min(b.width, ${dx}), y: b.top + b.height / 2, visible: A.vis(e) && F.anchor(${i}).visible }`, 'a field')
   const anchor = await a<{ x: number; y: number; visible: boolean }>(page, `return F.anchor(${i})`)
   expect(anchor.visible && anchor.y < (await cards(page))[0].rect.top, 'the field is in view above its sheet').toBe(true)
   await page.getByTestId('card-close').tap()
