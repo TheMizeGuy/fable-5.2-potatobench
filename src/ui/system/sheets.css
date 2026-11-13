@@ -32,7 +32,7 @@
 /* The sum: a small table under the board, never over the speed keys. */
 .topbar .money-pop { width: min(400px, calc(100vw - 32px)); gap: 6px; }
 /* On an upright phone the speed keys are at the thumb: the sum stops short of them and scrolls. */
-.topbar[data-layout='narrow'] .money-pop { max-height: 42vh; }
+.topbar[data-layout='narrow'] .money-pop { position: fixed; top: 20vh; left: 16px; right: 16px; width: auto; max-height: 52vh; }
 .topbar .money-pop .mp-head { margin: 0; color: var(--ink-2); }
 .topbar .money-pop .mp-sum { width: 100%; border-collapse: collapse; font-size: 15px; }
 .topbar .money-pop .mp-sum th { text-align: left; font-weight: 400; padding: 3px 8px 3px 0; vertical-align: top; }
