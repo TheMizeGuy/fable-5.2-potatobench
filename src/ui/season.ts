@@ -118,6 +118,15 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       if (!isJob(need.act) || (need.act === 'spray' && sprayWay(c) === 'none') || s0.jobs.some(j => j.kind === need.act && j.field === i)) continue
       out.push({ field: i, glyph: need.act, text: F.localize(need.text), why: F.localize(need.why), urgent: need.urgent, go: go(i) })
     }
+    // Dry soil in the weeks after the potatoes form sets scab, and the crew's routine does not water: said here so
+    // the player hears of it while watering can still help.
+    for (let i = 0; i < s0.fields.length; i++) {
+      const fs = s0.fields[i]
+      if (!S.held(c, i) || fs.status !== 'growing' || fs.tiDay < 0 || s0.day - fs.tiDay > S.SCAB_DAYS) continue
+      const f = S.fieldInfo(c, i)
+      if (f.moisture >= 0.5 || out.some(t => t.field === i) || s0.jobs.some(j => j.kind === 'water' && j.field === i)) continue
+      out.push({ field: i, glyph: 'water', text: `Water ${f.name}`, why: 'The soil is dry while the potatoes form, which sets scab.', urgent: false, go: go(i) })
+    }
     for (const x of fates(app.world, c).pressing) {
       if (x.job < 0 || !x.inWay) continue
       out.push({ field: x.field, glyph: x.kind, text: `${JOB_VERB[x.kind]} ${S.FIELD_NAMES[x.field] ?? ''} is held up`, why: F.localize(x.inWay), urgent: true, go: go(x.field) })
