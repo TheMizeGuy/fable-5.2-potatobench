@@ -349,9 +349,11 @@ export function personCard(ctx: Ctx): PersonCard {
       jobs: s0?.jobs.map(j => [j.id, j.unit]), crew: c.crew.map(u => [u.id, u.at, u.to, u.job, u.foreman, u.rest]), sun: c.sundaysOff,
     }
     // The card scrolls inside itself: a redraw leaves it where the player (or a lit control) had it, not at its top.
+    // Put back after this update's task, since the card's tether measures it at full height straight after this
+    // (src/ui/tie.ts, update), which sends the scroll to the top.
     const top = was || !same ? 0 : el.scrollTop
     patch(el, JSON.stringify(model), () => body(c, p))
-    if (el.scrollTop !== top) el.scrollTop = top
+    queueMicrotask(() => { if (!el.hidden && el.scrollTop !== top) el.scrollTop = top })
     el.setAttribute('aria-label', p.kind === 'farmer' ? 'You, the farmer' : p.name)
     layIn(ctx, el, was)
     showLit()
