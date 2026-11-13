@@ -103,10 +103,14 @@ export function mountTies(ctx: Ctx, root: HTMLElement): Ties {
   // A handle on the screen (a tag, a chip): the card stands beside it, tied to its edge. at: the point of it that was
   // pressed. Gone from the screen, the tie falls back to the thing itself. The handle is taken at the size it has
   // when its card first stands beside it: a tag that then grows ("on the list") moves neither the card nor the point.
-  function handle(thing: string, sel: string, at: Pt | null, fall: Tie, hold?: (el: HTMLElement) => HTMLElement): Tie {
+  // ref: where the thing itself is on the land, when it is on the land. The point pressed goes with that, not with
+  // the tag's own edge: a tag taken in hand grows, and may be set again about its middle; the pixel that was pressed
+  // has not moved, and the card must not come to lie on it.
+  function handle(thing: string, sel: string, at: Pt | null, fall: Tie, hold?: (el: HTMLElement) => HTMLElement, ref?: () => Pt | null): Tie {
     const first = find(sel)
     const b0 = first?.getBoundingClientRect()
     const d = at && b0 ? { x: at.x - b0.left, y: at.y - b0.top } : null
+    const r0 = at ? ref?.() ?? null : null
     let size: { w: number; h: number } | null = null
     return {
       thing, show: fall.show,
@@ -116,7 +120,9 @@ export function mountTies(ctx: Ctx, root: HTMLElement): Ties {
         const b = el.getBoundingClientRect()
         const k = (hold?.(el) ?? el).getBoundingClientRect()
         size ??= { w: k.width, h: k.height }
-        const point = d ? { x: b.left + Math.max(0, Math.min(b.width, d.x)), y: b.top + Math.max(0, Math.min(b.height, d.y)) } : { x: b.left + Math.min(b.width, size.w) / 2, y: b.top + b.height / 2 }
+        const r = r0 ? ref!() : null
+        const point = at && r0 && r ? { x: at.x + r.x - r0.x, y: at.y + r.y - r0.y }
+          : d ? { x: b.left + Math.max(0, Math.min(b.width, d.x)), y: b.top + Math.max(0, Math.min(b.height, d.y)) } : { x: b.left + Math.min(b.width, size.w) / 2, y: b.top + b.height / 2 }
         return { point, keep: { left: k.left, top: k.top, right: k.left + size.w, bottom: k.top + size.h }, avoid: fall.at()?.avoid }
       },
     }
@@ -137,7 +143,7 @@ export function mountTies(ctx: Ctx, root: HTMLElement): Ties {
     const self: Tie = { thing, show, at() { const a = view.fieldAnchor(i); return finite(a) ? { point: { x: a.x, y: a.y }, avoid: fieldMiddle(i) } : null } }
     const tag = handle(thing, TAG(i), null, self, tagBox)
     if (!p) return tag
-    if (p.el?.closest('.plate')?.getAttribute('data-k') === `field-${i}`) return handle(thing, TAG(i), p, self, tagBox)
+    if (p.el?.closest('.plate')?.getAttribute('data-k') === `field-${i}`) return handle(thing, TAG(i), p, self, tagBox, () => { const a = view.fieldAnchor(i); return a.visible && finite(a) ? { x: a.x, y: a.y } : null })
     if (p.el?.tagName !== 'CANVAS' || !(sure || inQuad(view.fieldCorners(i), p))) return tag
     const w = ground(p)
     const a0 = view.fieldAnchor(i)
@@ -163,7 +169,7 @@ export function mountTies(ctx: Ctx, root: HTMLElement): Ties {
     const self: Tie = { thing, show, at() { const a = view.yardAnchor(y); return finite(a) && (a.visible || a.x !== 0 || a.y !== 0) ? { point: { x: a.x, y: a.y }, avoid: middle() } : null } }
     const tag = handle(thing, YARD(y), null, self)
     if (!p) return tag
-    if (p.el?.closest('.yard-tag')) return handle(thing, YARD(y), p, self)
+    if (p.el?.closest('.yard-tag')) return handle(thing, YARD(y), p, self, undefined, () => { const a = view.yardAnchor(y); return a.visible && finite(a) ? { x: a.x, y: a.y } : null })
     const w = p.el?.tagName === 'CANVAS' ? ground(p) : null
     if (!w) return tag
     return {
