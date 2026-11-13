@@ -16,7 +16,7 @@ export { hashCampaign } from './hash.ts'
 export { lotCwt, markOdds, tuberWeights, type Tuber } from './harvest.ts'
 export { basePrice, gradePrice, harvestPrice, levelNow, lotValue, newPotatoWindow, storeOutlook, type StoreMonth } from './market.ts'
 export {
-  FIELD_NAMES, JOB_LABEL, haulDistance, haulFactor, haulRate, holdsDufour, jobBlock, jobCost, jobDays, jobWait, knownHills, placeName, seasonDone, standingBy,
+  FIELD_NAMES, JOB_LABEL, haulByDark, haulDistance, haulFactor, haulRate, holdsDufour, jobBlock, jobCost, jobDays, jobWait, knownHills, placeName, seasonDone, standingBy,
   standLot, standOpen, tractorsOwned, tractorsRunning, unitBlock, waitFor, workday,
 } from './season.ts'
 export {

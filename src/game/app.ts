@@ -1,6 +1,6 @@
 // The running game: owns the campaign, the clock, the selection and the orders, saving, and tells the views what changed.
 import {
-  advise, apply, climateWorld, createCampaign, fieldInfo, fieldNeeds, isFarmYear, seasonDone, startYears, unitBlock, FARM_YEAR0,
+  advise, apply, climateWorld, createCampaign, fieldInfo, fieldNeeds, FIELD_NAMES, held, isFarmYear, plantReady, seasonDone, startYears, unitBlock, FARM_YEAR0,
   type Advice, type Campaign, type Cmd, type GameEvent, type JobKind, type Phase, type Result, type World,
 } from '../sim/index.ts'
 import type { Pointing, Thing } from './contracts.ts'
@@ -465,9 +465,28 @@ export class App {
     return r
   }
 
+  // The frost warning pressed: the haul of a field's barrels first, today, and the answer says who and how much.
+  haulAhead(field: number): void {
+    const r = this.do({ t: 'haulNow', field })
+    this.notice(r.ok ? r.events[0]?.text ?? '' : r.err)
+  }
+
   // A right-click (or a long press) on a field: with someone picked, an order to them; otherwise the field's own order.
   orderAt(field: number): OrderResult {
-    return this.unit >= 0 && this.campaign?.season ? this.sendTo(field, this.unit) : this.smartOrder(field)
+    const r = this.unit >= 0 && this.campaign?.season ? this.sendTo(field, this.unit) : this.smartOrder(field)
+    return r.ok ? r : { ...r, err: this.tooEarly(field) || r.err }
+  }
+
+  // Why a field that is to grow potatoes cannot be planted yet, or '': the season has not begun, or the soil is cold.
+  private tooEarly(field: number): string {
+    const c = this.campaign
+    if (!c || c.plans[field]?.crop !== 'potato' || !held(c, field)) return ''
+    const name = FIELD_NAMES[field]
+    if (c.phase === 'plan') return `It's too early to plant ${name}. Planting starts once the season does.`
+    if (c.phase !== 'season' || fieldInfo(c, field).status !== 'idle') return ''
+    const pr = plantReady(this.world, c, field)
+    if (pr.ok) return ''
+    return `It's too early to plant ${name}. ${pr.why.startsWith('It\'s too early.') ? 'Seed just sits and rots in cold ground.' : pr.why}`
   }
 
   // The most useful work a field has now that this person can do, given to them: the suggested order, then work on the
