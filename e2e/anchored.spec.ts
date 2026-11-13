@@ -14,7 +14,7 @@ if (SHOTS) mkdirSync(SHOTS, { recursive: true })
 
 interface Pt { x: number; y: number }
 interface Box { left: number; top: number; right: number; bottom: number }
-interface Card { id: string; thing: string; side: string; rect: Box; head: string; strangers: string[]; controls: number; end: Pt | null; line: boolean; show: boolean; notch: Pt | null; notched: boolean; onTop: boolean }
+interface Card { id: string; thing: string; side: string; rect: Box; head: string; strangers: string[]; controls: number; end: Pt | null; line: boolean; show: boolean; notch: Pt | null; notched: boolean; onTop: boolean; fits: boolean; cut: boolean; room: number[]; aside: boolean }
 
 // Runs in the page: where things are, what a click there would pick, and which card is up.
 const PROBE = `window.__a = {
@@ -48,6 +48,16 @@ const PROBE = `window.__a = {
     if (!pts.length) return null
     const c = { x: pts.reduce((t, p) => t + p.x, 0) / pts.length, y: pts.reduce((t, p) => t + p.y, 0) / pts.length }
     return pts.reduce((b, p) => Math.hypot(p.x - c.x, p.y - c.y) < Math.hypot(b.x - c.x, b.y - c.y) ? p : b)
+  },
+  // The tag of a field as it stands (with its stamp), or null when it is not on the land.
+  tag(i) { const e = document.querySelector('#ui .plate[data-k="field-' + i + '"]'); return this.vis(e) ? this.box(e.closest('.tag-at') || e) : null },
+  // A point of a tag that a press would reach (nothing lies over it there), or null.
+  tagSpot(i) {
+    const e = document.querySelector('#ui .plate[data-k="field-' + i + '"]')
+    if (!this.vis(e)) return null
+    const r = e.getBoundingClientRect()
+    for (const f of [.5, .3, .7, .15, .85, .05, .95]) { const p = { x: r.left + r.width * f, y: r.top + r.height / 2 }; const hit = document.elementFromPoint(p.x, p.y); if (hit && e.contains(hit) && this.inWin(p)) return p }
+    return null
   },
   yardSpot(y) { return this.middleOf(this.scan(k => k.yard === y && k.unit < 0 && !k.thing && k.field < 0)) },
   emptySpot() { return this.middleOf(this.scan(k => k.field < 0 && k.unit < 0 && !k.thing && k.yard === 0, 24)) },
@@ -94,6 +104,10 @@ const PROBE = `window.__a = {
         controls: controls.length, end: end ? this.mid(end) : null, line: !!part('tether'), show: !!part('show'), notch: notch ? this.mid(notch) : null,
         notched: id === 'order-card' && getComputedStyle(el, '::after').content !== 'none',
         onTop: !!top && el.contains(top),
+        // The whole card shows: nothing in it has to be scrolled to, and it was not cut to the room there was.
+        fits: [el, ...el.querySelectorAll('[data-scroll]')].every(x => x.scrollHeight <= x.clientHeight + 1), cut: !!el.style.maxHeight,
+        room: [el, ...el.querySelectorAll('[data-scroll]')].flatMap(x => [x.scrollHeight, x.clientHeight]),
+        aside: el.dataset.aside === '1',
       })
     }
     return out
@@ -220,8 +234,12 @@ async function hold(page: Page, k: Case, label: string, close: 'Escape' | 'groun
     expect.soft(Math.min(...tops) - c.rect.bottom, say('stands right over the list and the people bar')).toBeLessThanOrEqual(16)
   }
   // Beside what was clicked: the point on the land, or the handle (the tag, the chip, the order) when it was one.
-  if (k.handle) expect.soft(apart(c.rect, k.handle), say(`its nearest edge is within 60 px of the handle clicked (${Math.round(apart(c.rect, k.handle))} px)`)).toBeLessThanOrEqual(60)
-  else expect.soft(away(c.rect, from), say(`its nearest edge is within 60 px of the point clicked (${Math.round(away(c.rect, from))} px)`)).toBeLessThanOrEqual(60)
+  // Where the land beside it is too short for the whole card (a short window, between the slip under the date board
+  // and the people bar), the card steps along that side, clear of the bar, whole and still tied: no further than 190 px.
+  const reach = c.aside ? 190 : 60
+  if (c.aside) expect.soft(c.fits && !c.cut, say('stepped aside from the point, it is whole')).toBe(true)
+  if (k.handle) expect.soft(apart(c.rect, k.handle), say(`its nearest edge is within ${reach} px of the handle clicked (${Math.round(apart(c.rect, k.handle))} px)`)).toBeLessThanOrEqual(reach)
+  else expect.soft(away(c.rect, from), say(`its nearest edge is within ${reach} px of the point clicked (${Math.round(away(c.rect, from))} px)`)).toBeLessThanOrEqual(reach)
   expect.soft(holds(c.rect, from), say('does not cover the point clicked')).toBe(false)
   if (k.handle) expect.soft(meets(c.rect, k.handle), say('does not cover the handle clicked')).toBe(false)
   if (k.middle) expect.soft(holds(c.rect, k.middle), say('does not cover the middle of the thing')).toBe(false)
@@ -393,6 +411,126 @@ test('a machine nobody is on and a neighbour\'s thing: each has its card beside 
   }
   expect([...found].sort(), 'a machine and a neighbour\'s thing were both found on the land').toEqual(['a machine', 'a neighbour\'s thing'])
 })
+
+// The planted potato fields whose tags are on the land, and the one in the middle of them.
+async function potatoFields(page: Page): Promise<{ all: { i: number; tag: Box }[]; middle: number }> {
+  return a(page, `const c = app.campaign
+    const all = [0, 1, 2, 3, 4, 5].filter(i => ['growing', 'planted'].includes(sim.fieldInfo(c, i).status)).map(i => ({ i, tag: A.tag(i) })).filter(x => x.tag)
+    const mid = t => ({ x: (t.left + t.right) / 2, y: (t.top + t.bottom) / 2 })
+    const cx = all.reduce((t, x) => t + mid(x.tag).x, 0) / all.length, cy = all.reduce((t, x) => t + mid(x.tag).y, 0) / all.length
+    const middle = all.slice().sort((p, q) => Math.hypot(mid(p.tag).x - cx, mid(p.tag).y - cy) - Math.hypot(mid(q.tag).x - cx, mid(q.tag).y - cy))[0]
+    return { all, middle: middle ? middle.i : -1 }`)
+}
+
+for (const [w, h] of [[1512, 982], [1920, 1080]] as const) {
+  for (const t of TIERS) {
+    test(`a field's card leaves the tags of the fields next to it in reach, ${w} by ${h}, the ${t} tier`, async ({ page, isMobile, browserName }) => {
+      test.skip(isMobile || browserName !== 'chromium', 'the desk rule, read through the 3D view\'s hooks')
+      test.setTimeout(180_000)
+      const errors = watchErrors(page)
+      await page.setViewportSize({ width: w, height: h })
+      await farm(page)
+      await tier(page, t)
+      const names = await a<string[]>(page, 'return sim.FIELD_NAMES')
+      const { all, middle } = await potatoFields(page)
+      expect(all.length, 'the potato fields have their tags on the land').toBeGreaterThanOrEqual(3)
+      const mid = (b: Box) => ({ x: (b.left + b.right) / 2, y: (b.top + b.bottom) / 2 })
+      const home = all.find(x => x.i === middle)!
+      // The two potato fields whose tags stand nearest the middle one's.
+      const near = all.filter(x => x.i !== middle).sort((p, q) => Math.hypot(mid(p.tag).x - mid(home.tag).x, mid(p.tag).y - mid(home.tag).y) - Math.hypot(mid(q.tag).x - mid(home.tag).x, mid(q.tag).y - mid(home.tag).y)).slice(0, 2)
+      for (const how of ['its ground', 'its tag'] as const) {
+        const at = await a<Pt | null>(page, how === 'its ground' ? `return A.fieldSpot(${middle})` : `return A.tagSpot(${middle})`)
+        expect(at, `${names[middle]} can be clicked by ${how}`).not.toBeNull()
+        await page.mouse.click(at!.x, at!.y)
+        expect(await a<number>(page, `return A.shown('card', 'field-${middle}')`)).toBeGreaterThanOrEqual(0)
+        await page.waitForTimeout(400)
+        const c = (await cards(page)).find(x => x.id === 'card')!
+        if (SHOTS) await page.screenshot({ path: `${SHOTS}/tags-${w}x${h}-${t}-by-${how.replace(/\W+/g, '-')}.png` })
+        // The tags as they stand now (the one in hand stands up a size; the others have not moved).
+        const now = await a<{ i: number; tag: Box | null }[]>(page, `return ${JSON.stringify(all.map(x => x.i))}.map(i => ({ i, tag: A.tag(i) }))`)
+        const under = now.filter(x => x.i !== middle && x.tag && meets(c.rect, x.tag)).map(x => names[x.i])
+        console.log(`${w}x${h} ${t}, ${names[middle]} by ${how}: card ${JSON.stringify(Object.values(c.rect).map(Math.round))} on the ${c.side}; potato tags under it: ${under.length ? under.join(', ') : 'none'}; nearest two: ${near.map(x => names[x.i]).join(', ')}`)
+        expect.soft(near.filter(x => under.includes(names[x.i])).map(x => names[x.i]), `${w}x${h} ${t}, ${names[middle]} by ${how}: the tags of the two nearest potato fields are not under its card`).toEqual([])
+        // Still beside what was clicked, whole, and tied.
+        expect.soft(c.aside, `${names[middle]} by ${how}: the card has not stepped away from what was clicked`).toBe(false)
+        expect.soft(how === 'its ground' ? away(c.rect, at!) : apart(c.rect, (await a<Box>(page, `return A.tag(${middle})`))), `${names[middle]} by ${how}: the card is still within 60 px of what was clicked`).toBeLessThanOrEqual(60)
+        expect.soft(c.end, `${names[middle]} by ${how}: its tether is drawn`).not.toBeNull()
+        // A tag the card does lie over: a press on the part of it that shows, or on that field's ground, still takes
+        // the card to that field (one card at a time).
+        const hidden = now.find(x => x.i !== middle && x.tag && under.includes(names[x.i]))
+        if (hidden) {
+          const spot = await a<Pt | null>(page, `return A.tagSpot(${hidden.i}) || A.fieldSpot(${hidden.i})`)
+          if (spot) {
+            await page.mouse.click(spot.x, spot.y)
+            expect.soft(await a<number>(page, `return A.shown('card', 'field-${hidden.i}')`), `a click on what shows of ${names[hidden.i]} moves the card to it`).toBeGreaterThanOrEqual(0)
+            expect.soft((await cards(page)).map(x => x.id), 'one card at a time').toEqual(['card'])
+            await letGo(page)
+            await page.mouse.click(at!.x, at!.y)
+            expect(await a<number>(page, `return A.shown('card', 'field-${middle}')`)).toBeGreaterThanOrEqual(0)
+            await page.waitForTimeout(300)
+          }
+        }
+        // A tag the card does not lie over is reached by a press, and the card goes to that field.
+        const next = near.find(x => !under.includes(names[x.i]))
+        if (next) {
+          const spot = await a<Pt | null>(page, `return A.tagSpot(${next.i})`)
+          if (spot) {
+            await page.mouse.click(spot.x, spot.y)
+            expect.soft(await a<number>(page, `return A.shown('card', 'field-${next.i}')`), `a click on ${names[next.i]}'s tag moves the card to it`).toBeGreaterThanOrEqual(0)
+            expect.soft((await cards(page)).map(x => x.id), 'one card at a time').toEqual(['card'])
+          }
+        }
+        await letGo(page)
+      }
+      expect(errors, errors.join('\n')).toEqual([])
+    })
+  }
+}
+
+for (const [w, h] of [[1280, 720], [1366, 768]] as const) {
+  test(`a planted field's whole card fits a short window without scrolling, ${w} by ${h}`, async ({ page, isMobile, browserName }) => {
+    test.skip(isMobile || browserName !== 'chromium', 'the desk rule, read through the 3D view\'s hooks')
+    test.setTimeout(240_000)
+    const errors = watchErrors(page)
+    await page.setViewportSize({ width: w, height: h })
+    await farm(page)
+    expect(await page.getByTestId('date').textContent(), 'a day in July').toMatch(/July/i)
+    const names = await a<string[]>(page, 'return sim.FIELD_NAMES')
+    let tried = 0
+    for (const t of TIERS) {
+      await tier(page, t)
+      const { all } = await potatoFields(page)
+      for (const f of all) {
+        for (const how of ['its ground', 'its tag'] as const) {
+          const at = await a<Pt | null>(page, how === 'its ground' ? `return A.fieldSpot(${f.i})` : `return A.tagSpot(${f.i})`)
+          if (!at) continue
+          tried++
+          const say = (m: string) => `${w}x${h} ${t}, ${names[f.i]} by ${how}: ${m}`
+          await page.mouse.click(at.x, at.y)
+          expect(await a<number>(page, `return A.shown('card', 'field-${f.i}')`), say('its card opens')).toBeGreaterThanOrEqual(0)
+          await page.waitForTimeout(400)
+          const c = (await cards(page)).find(x => x.id === 'card')!
+          if (SHOTS && tried <= 4) await page.screenshot({ path: `${SHOTS}/fits-${w}x${h}-${t}-${names[f.i].replace(/\W+/g, '-')}-by-${how.replace(/\W+/g, '-')}.png` })
+          // The nine orders, the crew's line and the readings: all of it in view.
+          await expect.soft(page.locator('#ui [data-testid="card"] .orders.slots > .order'), say('its nine orders')).toHaveCount(9)
+          await expect.soft(page.getByTestId('card-whose'), say('whose work is whose')).toBeVisible()
+          await expect.soft(page.getByTestId('blight-reading'), say('its readings')).toBeVisible()
+          expect.soft(c.fits, say(`nothing in it has to be scrolled to (scroll and client heights ${c.room.join(', ')})`)).toBe(true)
+          expect.soft(c.cut, say('it was not cut to the room there was')).toBe(false)
+          expect.soft(c.rect.left >= -0.5 && c.rect.top >= -0.5 && c.rect.right <= w + 0.5 && c.rect.bottom <= h + 0.5, say(`its box lies inside the window (${JSON.stringify(c.rect)})`)).toBe(true)
+          const boards = await a<Box[]>(page, `return A.rects('.topbar .almanac > .mount, .topbar .bank > .mount, .topbar .goal')`)
+          expect.soft(boards.filter(b => meets(c.rect, b)), say('clear of the date board, the cash board and the slip under it')).toEqual([])
+          // The last reading's last line is inside the card's box, not under its edge.
+          const last = await a<Box | null>(page, `const ps = document.querySelectorAll('#ui [data-testid="card"] .readings p'); return ps.length ? A.box(ps[ps.length - 1]) : null`)
+          expect.soft(!!last && last.bottom <= c.rect.bottom + 0.5 && last.top >= c.rect.top, say('its last reading is inside the card')).toBe(true)
+          await letGo(page)
+        }
+      }
+    }
+    expect(tried, 'planted fields were opened by their ground and by their tags').toBeGreaterThanOrEqual(6)
+    expect(errors, errors.join('\n')).toEqual([])
+  })
+}
 
 test('clicking another thing moves the card; Shift adds a field to it; the card goes with its thing and waits at the edge with Show', async ({ page, isMobile, browserName }) => {
   test.skip(isMobile || browserName !== 'chromium', 'the desk rule, read through the 3D view\'s hooks')

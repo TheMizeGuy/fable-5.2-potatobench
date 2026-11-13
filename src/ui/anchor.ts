@@ -1,6 +1,8 @@
 // Where a card goes: beside the point that was clicked. To the right of it and level with it by preference; flipped
 // left, below or above to stay in the window, off the bars, off the handle that was clicked and off the thing's own
-// middle. Geometry only (tie.ts holds a card to its thing with it); every card on the land is placed by this one rule.
+// middle; and, of the places beside the point where the whole card fits, the one that lies over the fewest of the
+// other tags and people on the land (slid up or down its side, or along over or under the point, to step clear of
+// them). Geometry only (tie.ts holds a card to its thing with it); every card on the land is placed by this one rule.
 
 export interface Pt { x: number; y: number }
 export interface Box { left: number; top: number; right: number; bottom: number }
@@ -21,10 +23,14 @@ export interface Ask {
   avoid?: Box[]
   // What it would rather not lie over: the thing's tag, a person's pin.
   spare?: Box[]
-  // The other tags on the land: of two sides that will do, the one that hides fewer of them.
-  others?: Box[]
+  // The other tags and people on the land: of the places that will do, the one that hides the fewest of them.
+  // weight: how much one counts beside the rest (a field that takes orders more than a field at rest).
+  others?: (Box & { weight?: number })[]
   // The side it lies on now: held while it still serves, so a small move of the camera never flips it.
   prev?: Side | null
+  // Where it lies now, from the point: with `prev`, it goes on lying just so (the camera is carrying the land by)
+  // unless that place no longer serves at all.
+  prevOff?: Pt | null
   gap?: number
 }
 
@@ -34,6 +40,11 @@ export interface Placed {
   // The height there is room for (the card's own, or less: then it scrolls).
   h: number
   side: Side
+  // How many of the other tags and people it lies over.
+  over: number
+  // It stands further off than beside the point: the land beside the point is too short for the whole card (a bar
+  // under it, a slip over it), and it stepped along clear of them to fit whole. Its tether says whose it is.
+  aside: boolean
   // The thing is out of the window or under a bar: the card waits at the nearest edge.
   away: boolean
   // The point the card was laid beside (the thing's, brought inside the window).
@@ -50,6 +61,17 @@ const LEVEL = 0.22
 const SIDES: Side[] = ['right', 'left', 'below', 'above']
 const COST: Record<Side, number> = { right: 0, left: 30, below: 60, above: 90 }
 const STAY = 50
+// Lying over one more tag or person: worse than any side, better than a card cut short by more than a line or two.
+const OVER = 110
+// A card cut short has to be scrolled to reach what is under the cut: the last resort, after lying over any number
+// of tags (though not over the thing's own middle). And so much again for each pixel cut.
+const SHORT = 1500, CUT = 6
+// Each pixel a card is slid from level with the point (or, over and under it, from its usual place along).
+const SLIDE = 0.12
+// Going on lying where it lay, from the point, while the camera moves.
+const SAME = 700
+// The furthest a card steps along from the point to fit whole clear of a bar.
+export const ASIDE = 190
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(Math.max(lo, hi), v))
 export const meets = (a: Box, b: Box) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top
@@ -95,34 +117,80 @@ export function placeCard(a: Ask): Placed {
     return { top, bottom: Math.max(top, bottom) }
   }
 
-  const lay = (side: Side): { x: number; y: number; h: number; forced?: boolean } => {
+  // The other tags that are not the thing's own (its tag is in keep or spare).
+  const own = [...(keep ? [keep] : []), ...(a.spare ?? [])]
+  const share = (o: Box, k: Box) => Math.max(0, Math.min(o.right, k.right) - Math.max(o.left, k.left)) * Math.max(0, Math.min(o.bottom, k.bottom) - Math.max(o.top, k.top)) / Math.max(1, (o.right - o.left) * (o.bottom - o.top))
+  const others = (a.others ?? []).filter(o => !own.some(k => share(o, k) > 0.5))
+
+  interface Lay { side: Side; x: number; y: number; h: number; slid: number; forced?: boolean; same?: boolean; aside?: boolean }
+  // Beside the point: right or left of it, level with it or slid up or down that side; under or over it, slid along.
+  // at: where along (null: its usual place). off: stepped that far from the point, to stand clear of a bar.
+  const lay = (side: Side, at: number | null, off: number | null = null): Lay => {
     if (side === 'right' || side === 'left') {
-      const x = clamp(side === 'right' ? Math.max(p.x + gap, keep ? keep.right + KEEP : -Infinity) : Math.min(p.x - gap, keep ? keep.left - KEEP : Infinity) - w, win.left, win.right - w)
+      const x = off !== null ? off : clamp(side === 'right' ? Math.max(p.x + gap, keep ? keep.right + KEEP : -Infinity) : Math.min(p.x - gap, keep ? keep.left - KEEP : Infinity) - w, win.left, win.right - w)
       const b = band(x, x + w)
       const h = Math.min(h0, b.bottom - b.top)
-      return { x, y: clamp(p.y - Math.min(h * LEVEL, 96), b.top, b.bottom - h), h }
+      const level = clamp(p.y - Math.min(h * LEVEL, 96), b.top, b.bottom - h)
+      // Slid, it still stands beside the point: the point (some of the handle) lies within its height.
+      const lo = (keep ? keep.top : p.y) - h + 12, hi = (keep ? keep.bottom : p.y) - 12
+      const y = at === null ? level : clamp(clamp(at, lo, hi), b.top, b.bottom - h)
+      return { side, x, y, h, slid: Math.abs(y - level) }
     }
-    const x = clamp(p.x - w * 0.3, win.left, win.right - w)
+    const usual = clamp(p.x - w * 0.3, win.left, win.right - w)
+    const x = at === null ? usual : clamp(clamp(at, p.x - w + 16, p.x - 16), win.left, win.right - w)
     const b = band(x, x + w)
     if (side === 'below') {
       const top = Math.max(p.y + gap, keep ? keep.bottom + KEEP : -Infinity, b.top)
       const room = b.bottom - top
-      if (room >= Math.min(h0, LEAST)) return { x, y: top, h: Math.min(h0, room) }
+      if (room >= Math.min(h0, LEAST)) return { side, x, y: top, h: Math.min(h0, room), slid: Math.abs(x - usual) }
     } else {
       const foot = Math.min(p.y - gap, keep ? keep.top - KEEP : Infinity, b.bottom)
       const room = foot - b.top
-      if (room >= Math.min(h0, LEAST)) { const h = Math.min(h0, room); return { x, y: foot - h, h } }
+      if (room >= Math.min(h0, LEAST)) { const h = Math.min(h0, room); return { side, x, y: foot - h, h, slid: Math.abs(x - usual) } }
     }
     // No room on that side: what it would be, to be marked down below.
     const h = Math.min(h0, b.bottom - b.top)
-    return { x, y: side === 'below' ? b.bottom - h : b.top, h, forced: true }
+    return { side, x, y: side === 'below' ? b.bottom - h : b.top, h, slid: Math.abs(x - usual), forced: true }
   }
 
-  let best: { x: number; y: number; h: number; side: Side; s: number } | null = null
+  const tries: Lay[] = []
   for (const side of SIDES) {
-    const c = lay(side)
+    const first = lay(side, null)
+    tries.push(first)
+    if (first.forced) continue
+    // Cut short by a bar under it or a slip over it: stepped along that side until it stands clear of them, whole.
+    if (first.h < h0 - 2 && (side === 'right' || side === 'left')) {
+      for (const b of blocks) {
+        if (b.right <= first.x - 4 || b.left >= first.x + w + 4) continue
+        const x = side === 'right' ? b.right + 6 : b.left - 6 - w
+        if (x < win.left || x + w > win.right || Math.abs(x - first.x) > ASIDE - gap) continue
+        const c = lay(side, null, x)
+        if (c.h >= h0 - 2) tries.push({ ...c, aside: true })
+      }
+    }
+    // Slid to step just clear of each tag it would lie over, one way and the other.
+    const r: Box = { left: first.x, top: first.y, right: first.x + w, bottom: first.y + first.h }
+    const upright = side === 'right' || side === 'left'
+    for (const o of others) {
+      if (upright ? o.right <= r.left || o.left >= r.right : o.bottom <= r.top || o.top >= r.bottom) continue
+      for (const at of upright ? [o.bottom + 3, o.top - 3 - first.h] : [o.right + 3, o.left - 3 - w]) {
+        const c = lay(side, at)
+        if (!tries.some(t => t.side === side && Math.abs(t.x - c.x) < 1 && Math.abs(t.y - c.y) < 1)) tries.push(c)
+      }
+    }
+  }
+  // Where it lay, from the point, on the side it lay on.
+  if (a.prev && a.prevOff) {
+    const upright = a.prev === 'right' || a.prev === 'left'
+    const c = lay(a.prev, upright ? p.y + a.prevOff.y : p.x + a.prevOff.x)
+    if (Math.abs(c.x - (p.x + a.prevOff.x)) < 1 && Math.abs(c.y - (p.y + a.prevOff.y)) < 1) tries.push({ ...c, same: true })
+  }
+
+  let best: { c: Lay; s: number; over: number } | null = null
+  for (const c of tries) {
+    const side = c.side
     const r: Box = { left: c.x, top: c.y, right: c.x + w, bottom: c.y + c.h }
-    let s = COST[side] - (side === a.prev ? STAY : 0)
+    let s = COST[side] - (side === a.prev ? STAY : 0) - (c.same ? SAME : 0) + c.slid * SLIDE
     if (!away && holds(r, p, 2)) s += 10000
     // Pushed by the window's edge or a bar until it no longer stands on its side of the point: marked down.
     const beside = side === 'right' || side === 'left'
@@ -134,14 +202,17 @@ export function placeCard(a: Ask): Placed {
     if (c.h < Math.min(h0, LEAST)) s += 3000
     for (const v of a.avoid ?? []) if (meets(r, v)) s += 2000
     for (const v of a.spare ?? []) if (meets(r, v)) s += 300
-    for (const v of a.others ?? []) if (meets(r, v)) s += 35
+    const under = others.filter(v => meets(r, v))
+    const over = under.length
+    s += under.reduce((t, v) => t + (v.weight ?? 1), 0) * OVER
     // How far it stands from what was clicked: the point, or the whole handle when it was one.
     s += Math.max(0, (keep ? boxGap(r, keep) : distance(r, p)) - gap - 2) * 4
-    // A card cut short has to be scrolled to reach its orders: worse than standing a little further off.
-    s += (h0 - c.h) * 3
-    if (!best || s < best.s) best = { x: c.x, y: c.y, h: c.h, side, s }
+    // The whole card before anything else that is a matter of taste: a card cut short has to be scrolled.
+    if (c.h < h0 - 2) s += SHORT + (h0 - c.h) * CUT
+    if (!best || s < best.s) best = { c, s, over }
   }
-  return { x: best!.x, y: best!.y, h: best!.h, side: best!.side, away, at: p }
+  const c = best!.c
+  return { x: c.x, y: c.y, h: c.h, side: c.side, over: best!.over, aside: !away && !!c.aside, away, at: p }
 }
 
 // How far down a card whose top left corner stays where it is may reach: the window's foot, or the first bar under it.

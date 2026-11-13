@@ -23,8 +23,8 @@ export interface Tie {
   loose?: boolean
 }
 
-// tags: the field tags on the land now, which a card hides as few of as it can.
-export interface Land { win: Box; blocks: Box[]; tags?: Box[] }
+// tags: the other tags and people's pins on the land now, which a card hides as few of as it can.
+export interface Land { win: Box; blocks: Box[]; tags?: () => (Box & { weight?: number })[] }
 
 export interface Ties {
   field(): Tie | null
@@ -425,7 +425,13 @@ export function anchored(ctx: Ctx, card: HTMLElement, o: { mark?: boolean } = {}
     const keep = fits && !ties().moving() && (at < 0.05 || (!!tie!.loose && at < HOLD))
     if (!keep) {
       const stepped = !!tie!.loose && !!placed && !ties().moving()
-      const p = placeCard({ point: t.point, size, win: land.win, blocks: land.blocks, keep: t.keep, avoid: t.avoid, spare: t.spare, others: land.tags, prev: side })
+      // Laid for the first time, the card takes the place beside its thing that hides the fewest other tags and
+      // people. Carried by the camera after that it lies as it lay, so a tag passing under it never makes it jump.
+      const fresh = !placed || placed.away
+      const p = placeCard({
+        point: t.point, size, win: land.win, blocks: land.blocks, keep: t.keep, avoid: t.avoid, spare: t.spare, others: fresh ? land.tags?.() : undefined,
+        prev: side, prevOff: fresh ? null : { x: placed!.x - placed!.at.x, y: placed!.y - placed!.at.y },
+      })
       placed = { ...p, for: t.point, win, size: sized }
       side = p.side
       if (stepped && !ctx.reduced()) { hopUntil = performance.now() + 220; card.classList.add('hop') }
@@ -436,6 +442,8 @@ export function anchored(ctx: Ctx, card: HTMLElement, o: { mark?: boolean } = {}
     const max = p.h < size.h - 0.5 ? `${Math.floor(p.h)}px` : ''
     if (drawn.max !== max) { card.style.maxHeight = max; drawn.max = max }
     if (card.dataset.side !== p.side) card.dataset.side = p.side
+    if (card.dataset.over !== String(p.over)) card.dataset.over = String(p.over)
+    if ((card.dataset.aside === '1') !== p.aside) { if (p.aside) card.dataset.aside = '1'; else delete card.dataset.aside }
     if (p.away) {
       // Out of the picture: no tether to draw, only the way it lies and the key that brings it back.
       hide(line, dot, mark)

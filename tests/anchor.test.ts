@@ -1,6 +1,6 @@
 // Where a card opens (src/ui/anchor.ts): beside the point clicked, by one rule for every card.
 import { describe, expect, it } from 'vitest'
-import { distance, GAP, holds, KEEP, meets, notchOf, placeCard, roomUnder, tetherOf, type Ask, type Box, type Pt } from '../src/ui/anchor.ts'
+import { ASIDE, distance, GAP, holds, KEEP, meets, notchOf, placeCard, roomUnder, tetherOf, type Ask, type Box, type Pt } from '../src/ui/anchor.ts'
 
 const WIN: Box = { left: 8, top: 158, right: 1272, bottom: 712 }
 // The list and the people bar at the foot's left, a chip under the bank board at the right.
@@ -166,6 +166,142 @@ describe('a card beside the point clicked', () => {
       expect(distance(r, c.at)).toBeLessThanOrEqual(60)
     }
     expect(placeCard(ask({ x: 300, y: 650 })).away, 'under the people bar').toBe(true)
+  })
+})
+
+describe('keeping off the other tags and people', () => {
+  const over = (c: { x: number; y: number; h: number }, tags: Box[]) => tags.filter(t => meets(rect(c), t)).length
+  const p = { x: 560, y: 420 }
+
+  it('slides up or down its side to step clear of a tag, and still stands beside the point', () => {
+    // Level with the point, the card to its right would lie over a tag a little above it.
+    const size = { w: 430, h: 260 }
+    const tag: Box = { left: 640, top: 345, right: 800, bottom: 385 }
+    expect(over(placeCard(ask(p, { size })), [tag])).toBe(1)
+    const c = placeCard(ask(p, { size, others: [tag] }))
+    expect(c.side).toBe('right')
+    expect(c.over).toBe(0)
+    expect(over(c, [tag])).toBe(0)
+    expect(c.x).toBe(p.x + GAP)
+    expect(c.y).toBe(tag.bottom + 3)
+    expect(c.h).toBe(size.h)
+    // the point is still within the card's height: the card has not left it
+    expect(p.y).toBeGreaterThan(c.y)
+    expect(p.y).toBeLessThan(c.y + c.h)
+  })
+
+  it('goes to another side when that hides fewer, and never further from the point to do it', () => {
+    // A column of tags to the right that no slide clears; nothing to the left.
+    const tags: Box[] = [{ left: 620, top: 200, right: 780, bottom: 240 }, { left: 620, top: 420, right: 780, bottom: 460 }, { left: 620, top: 640, right: 780, bottom: 680 }]
+    const c = placeCard(ask(p, { others: tags }))
+    expect(c.side).toBe('left')
+    expect(c.over).toBe(0)
+    for (const q of points(71)) {
+      const d = placeCard(ask(q, { others: tags }))
+      expect(distance(rect(d), q), `${q.x},${q.y}`).toBeLessThanOrEqual(60)
+      expect(holds(rect(d), q), `${q.x},${q.y} covered`).toBe(false)
+      expect(BARS.some(b => meets(rect(d), b)), `${q.x},${q.y} on a bar`).toBe(false)
+    }
+  })
+
+  it('with no place clear of every tag, takes the one that lies over the fewest', () => {
+    // Tags all round the point.
+    const tags: Box[] = [
+      { left: 600, top: 380, right: 760, bottom: 420 }, { left: 700, top: 500, right: 860, bottom: 540 }, { left: 620, top: 250, right: 780, bottom: 290 },
+      { left: 300, top: 400, right: 460, bottom: 440 }, { left: 520, top: 520, right: 680, bottom: 560 }, { left: 420, top: 300, right: 580, bottom: 340 },
+    ]
+    const c = placeCard(ask(p, { others: tags }))
+    expect(c.over).toBe(over(c, tags))
+    // no side at its usual place does better
+    for (const prev of ['right', 'left', 'below', 'above'] as const) {
+      const plain = placeCard(ask(p, { prev }))
+      expect(c.over, prev).toBeLessThanOrEqual(over(plain, tags))
+    }
+    expect(c.over).toBeLessThan(over(placeCard(ask(p)), tags))
+  })
+
+  it('does not count the thing\'s own tag, and never lies on the handle to spare another tag', () => {
+    const own: Box = { left: 400, top: 400, right: 560, bottom: 440 }
+    const size = { w: 430, h: 260 }
+    const other: Box = { left: 620, top: 350, right: 780, bottom: 390 }
+    expect(meets(rect(placeCard(ask({ x: 480, y: 420 }, { size, keep: own }))), other)).toBe(true)
+    const c = placeCard(ask({ x: 480, y: 420 }, { size, keep: own, others: [own, other] }))
+    expect(meets(rect(c), own)).toBe(false)
+    expect(meets(rect(c), other)).toBe(false)
+    expect(c.over).toBe(0)
+  })
+
+  it('fits the whole card before it stands level, and a card cut short is worse than a tag covered', () => {
+    // Near the foot of the window: the card moves up to fit whole.
+    const low = placeCard(ask({ x: 700, y: 690 }))
+    expect(low.h).toBe(CARD.h)
+    expect(low.y + low.h).toBeLessThanOrEqual(WIN.bottom)
+    // The only place clear of the tag would cut the card: it keeps its height and lies over the tag.
+    const tall = { w: 430, h: 540 }
+    const at = { x: 600, y: 430 }
+    const tags: Box[] = [{ left: 660, top: 300, right: 820, bottom: 340 }, { left: 660, top: 520, right: 820, bottom: 560 }]
+    expect(placeCard(ask(at, { size: tall })).h).toBe(540)
+    const c = placeCard(ask(at, { size: tall, others: tags }))
+    expect(c.h).toBe(540)
+    expect(c.over).toBeGreaterThan(0)
+  })
+
+  it('a field that takes orders counts for more than a field at rest or a face', () => {
+    // One tag under the card on either side, whatever it does: to the right a potato field's, to the left a resting
+    // field's. Counted alike it would go right, as ever; the potato field's counts for more, and it goes left.
+    const right: (Box & { weight?: number })[] = [{ left: 620, top: 395, right: 780, bottom: 445 }]
+    const left: (Box & { weight?: number })[] = [{ left: 300, top: 395, right: 460, bottom: 445 }]
+    expect(placeCard(ask(p, { others: [...right, ...left] })).side).toBe('right')
+    right[0].weight = 2
+    left[0].weight = 1
+    const c = placeCard(ask(p, { others: [...right, ...left] }))
+    expect(c.side).toBe('left')
+    expect(right.some(t => meets(rect(c), t))).toBe(false)
+  })
+
+  it('where the land beside the point is too short for the whole card, it steps along clear of the bar and stays whole', () => {
+    // A short window: a slip hangs over the left of the land and the people bar stands under it.
+    const win: Box = { left: 8, top: 171, right: 1272, bottom: 712 }
+    const blocks: Box[] = [{ left: 33, top: 166, right: 365, bottom: 212 }, { left: 16, top: 592, right: 409, bottom: 704 }]
+    const size = { w: 400, h: 480 }
+    const at = { x: 280, y: 400 }
+    const c = placeCard({ point: at, size, win, blocks })
+    expect(c.h).toBe(480)
+    expect(c.aside).toBe(true)
+    expect(c.side).toBe('right')
+    expect(c.x).toBe(blocks[1].right + 6)
+    expect(blocks.some(b => meets({ left: c.x, top: c.y, right: c.x + size.w, bottom: c.y + c.h }, b))).toBe(false)
+    expect(c.y).toBeGreaterThanOrEqual(win.top)
+    expect(c.y + c.h).toBeLessThanOrEqual(win.bottom)
+    expect(c.x - at.x).toBeLessThanOrEqual(ASIDE)
+    // With room beside the point it never steps away.
+    expect(placeCard({ point: { x: 700, y: 400 }, size, win, blocks }).aside).toBe(false)
+    expect(placeCard({ point: { x: 700, y: 400 }, size, win, blocks }).x).toBe(700 + GAP)
+    // Too far to step (the bar is wider than its reach): it stays beside the point, cut short.
+    const wide: Box[] = [{ left: 16, top: 592, right: 900, bottom: 704 }]
+    const d = placeCard({ point: { x: 200, y: 400 }, size: { w: 400, h: 520 }, win, blocks: wide })
+    expect(d.aside).toBe(false)
+    expect(d.h).toBeLessThan(520)
+  })
+
+  it('carried by the camera it lies as it lay: a tag passing under it does not make it jump', () => {
+    const size = { w: 430, h: 260 }
+    const tag: Box = { left: 640, top: 345, right: 800, bottom: 385 }
+    const first = placeCard(ask(p, { size, others: [tag] }))
+    const off = { x: first.x - first.at.x, y: first.y - first.at.y }
+    expect(off.y).not.toBe(placeCard(ask(p, { size })).y - p.y)
+    // The camera carries the point along; the tags are no longer asked about.
+    for (let k = 1; k <= 30; k++) {
+      const q = { x: p.x + k * 3, y: p.y - k * 2 }
+      const c = placeCard(ask(q, { size, prev: first.side, prevOff: off }))
+      expect(c.side).toBe(first.side)
+      expect(c.x - q.x, `step ${k}`).toBeCloseTo(off.x, 6)
+      expect(c.y - q.y, `step ${k}`).toBeCloseTo(off.y, 6)
+    }
+    // Where that place would run off the window it gives way, and the card is still whole and beside the point.
+    const edge = placeCard(ask({ x: 1000, y: 400 }, { size, prev: first.side, prevOff: off }))
+    expect(rect(edge).right).toBeLessThanOrEqual(WIN.right)
+    expect(holds(rect(edge), { x: 1000, y: 400 })).toBe(false)
   })
 })
 

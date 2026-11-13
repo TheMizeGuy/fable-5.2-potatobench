@@ -469,10 +469,34 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       const b = book.getBoundingClientRect()
       blocks.push({ left: b.right + 8, top: b.bottom - 56, right: Math.min(innerWidth - 8, b.right + 536), bottom: b.bottom })
     }
-    landNow = { win: { left: 8, top: ins.top + 8, right: innerWidth - 8, bottom: innerHeight - 8 }, blocks }
+    // The land runs up to the boards themselves; the slip that hangs from one is a thing to keep off, not a line
+    // across the whole window, so a card clear of it has that much more room.
+    for (const x of top.el.querySelectorAll<HTMLElement>('.goal, .tb-pop')) {
+      if (x.offsetParent === null || !x.offsetHeight) continue
+      const r = x.getBoundingClientRect()
+      blocks.push({ left: r.left, top: r.top, right: r.right, bottom: r.bottom })
+    }
+    landNow = { win: { left: 8, top: (board > 0 ? Math.min(ins.top, board) : ins.top) + 8, right: innerWidth - 8, bottom: innerHeight - 8 }, blocks }
     return landNow
   }
-  ties().setLand(() => ({ ...land(), tags: P.boxes() }))
+  // What a card hides as little of as it can: the field tags, the yards' tags and people's pins.
+  // A field with a crop in the ground, or a stamp on its tag, is the next thing a player reaches for: its tag counts
+  // twice a resting field's, and four times a face (a person is also reached by their place in the people bar).
+  function marks(): { left: number; top: number; right: number; bottom: number; weight: number }[] {
+    const c = app.campaign
+    const of = (r: DOMRect, weight: number) => ({ left: r.left, top: r.top, right: r.right, bottom: r.bottom, weight })
+    const out = P.byField().map(t => {
+      const st = c ? S.fieldInfo(c, t.field).status : 'off'
+      return of(t.box, t.need || st === 'growing' || st === 'planted' || st === 'dead' || st === 'digging' ? 2 : 1)
+    })
+    for (const m of yardMarks) if (!m.wrap.hidden && m.at) out.push(of(new DOMRect(m.at.x - m.w / 2, m.at.y - 22, m.w, 44), 1))
+    for (const u of c?.crew ?? []) {
+      const a = ctx.view.unitAnchor(u.id)
+      if (a.visible && Number.isFinite(a.x) && Number.isFinite(a.y)) out.push(of(new DOMRect(a.x - 20, a.y - 52, 40, 52), 0.5))
+    }
+    return out
+  }
+  ties().setLand(() => ({ ...land(), tags: marks }))
   function placeCards(): void {
     const layout = ctx.layout()
     const quiet = incident.isUp()

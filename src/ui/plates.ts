@@ -57,7 +57,7 @@ function finite(a: { x: number; y: number }): boolean {
 // never moves a tag the player may be reaching for. Crowding is settled only when the camera moves, against the room a
 // tag takes with "on the list" and a stamp. What floats over the land (a card, the grid) lies over the tags; covers is
 // not read.
-export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => PlateModel | null; onBadge: (i: number) => void; covers?: () => DOMRect[] }): { update(): void; frame(): void; dispose(): void; boxes(): DOMRect[] } {
+export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => PlateModel | null; onBadge: (i: number) => void; covers?: () => DOMRect[] }): { update(): void; frame(): void; dispose(): void; boxes(): DOMRect[]; byField(): { field: number; box: DOMRect; need: boolean }[] } {
   const app = ctx.app
   const wraps: HTMLElement[] = []
   const models: (PlateModel | null)[] = []
@@ -418,21 +418,25 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
     arrivals(anchors)
   }
 
-  // Where the tags are now, for the pins to keep clear of.
-  function boxes(): DOMRect[] {
-    const out: DOMRect[] = []
+  // Where the tags are now, for the pins to keep clear of; and each with its field, for a card to keep off them.
+  function byField(): { field: number; box: DOMRect; need: boolean }[] {
+    const out: { field: number; box: DOMRect; need: boolean }[] = []
     for (let i = 0; i < S.FIELD_COUNT; i++) {
       const b = at[i]
       if (!models[i] || b.place === 'gone' || wraps[i].hidden) continue
-      out.push(new DOMRect(b.x - size[i].w / 2, b.y - size[i].h - 5, size[i].w + size[i].extra, size[i].h + 10))
+      out.push({ field: i, box: new DOMRect(b.x - size[i].w / 2, b.y - size[i].h - 5, size[i].w + size[i].extra, size[i].h + 10), need: !!models[i]!.badge })
     }
     return out
+  }
+  function boxes(): DOMRect[] {
+    return byField().map(x => x.box)
   }
 
   return {
     update,
     frame,
     boxes,
+    byField,
     dispose() {
       layer.classList.remove('compact', 'far')
       layer.removeEventListener('wheel', wheel)
