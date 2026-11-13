@@ -37,7 +37,7 @@
 .check-in .tick { --w-up: 2px; --w-cast: 0 1px 1px rgba(20, 14, 6, .3); }
 .seg-in label > span { min-height: var(--key); padding-bottom: 3px; }
 @media (hover: hover) { .seg-in label:hover input:not(:checked, :disabled) + span { --w-h: calc(var(--w-up) + 1px); --w-cast: 0 6px 9px -4px rgba(20, 14, 6, .6); } }
-.seg-in label:active input:not(:checked, :disabled) + span, .vbox:active input:not(:checked) + .vbox-in { translate: 0 2px; --w-h: 0px; --w-sep: 0px; --w-in: 0 3px 4px -1px rgba(20, 14, 6, .5); --w-cast: 0 0 0 0 transparent; }
+.seg-in label:active input:not(:checked, :disabled) + span, .vbox:active input:not(:checked) + .vbox-in { --w-h: 0px; --w-sep: 0px; --w-in: 0 var(--w-up) 0 0 rgba(20, 14, 6, .34); --w-cast: 0 0 0 0 transparent; }
 
 /* The kit's own layout for this rule's specimens. */
 .kit .k-weights { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-bottom: 14px; }

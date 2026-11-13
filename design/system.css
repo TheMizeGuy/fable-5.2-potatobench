@@ -145,7 +145,8 @@ table .num, .tab { font-variant-numeric: lining-nums proportional-nums; }
 /* 7 ---------------------------------------------------------------- controls: depth and weight */
 /* What can be pressed stands off the paper; what is only read is ink on it. A control is a key cut from card: a face
    inside an ink rim, the card's own edge under the face, a shadow on the paper below. It stands higher under the
-   pointer and goes down under the press. How far it stands and how big it is say what the press costs (docs/UI.md,
+   pointer and goes down under the press: the edge closes and a shadow as deep as the edge opens along the top. Its
+   box never moves, so a press on its very edge still lands. How far it stands and how big it is say what the press costs (docs/UI.md,
    "Controls: depth and weight"): data-w is major, std or minor, set where the control is made (h() does it).
    The edge is marked important so that no screen's stylesheet flattens a key by accident: a screen changes a key
    through the --w- properties, never through box-shadow. Marks on the land (a tag, a stamp, a pin) keep their own
@@ -161,7 +162,7 @@ table .num, .tab { font-variant-numeric: lining-nums proportional-nums; }
   --w-key: inset 0 0 0 var(--w-rim) var(--w-line), var(--w-mark), inset var(--w-in),
     inset 0 calc(0px - var(--w-h) - var(--w-rim)) 0 0 var(--w-side), inset 0 calc(0px - var(--w-h) - var(--w-rim) - var(--w-sep)) 0 0 var(--w-line), var(--w-cast);
   box-shadow: var(--w-key) !important; cursor: pointer;
-  transition: translate var(--t-tap) var(--ease-out), box-shadow var(--t-tap) var(--ease-out), background-color var(--t-tap) linear;
+  transition: box-shadow var(--t-tap) var(--ease-out), background-color var(--t-tap) linear;
 }
 [data-w='major'] { --w-up: 6px; --w-rim: 2px; --w-cast: 0 4px 6px -2px rgba(20, 14, 6, .55); }
 [data-w='minor'] { --w-up: 2px; --w-line: var(--ink-2); --w-cast: 0 1px 1px rgba(20, 14, 6, .3); }
@@ -171,7 +172,7 @@ table .num, .tab { font-variant-numeric: lining-nums proportional-nums; }
   [data-w]:hover:not([disabled], [aria-disabled='true'], .is-off, .is-given, .is-busy, [aria-pressed='true'], [aria-expanded='true'], .is-on) { --w-h: calc(var(--w-up) + 1px); --w-cast: 0 6px 9px -4px rgba(20, 14, 6, .6); }
 }
 [data-w]:active:not([disabled], [aria-disabled='true'], .is-off, .is-given), [data-w].is-pressed {
-  translate: 0 2px; --w-h: 0px; --w-sep: 0px; --w-in: 0 3px 4px -1px rgba(20, 14, 6, .5); --w-cast: 0 0 0 0 transparent; transition-duration: 40ms; }
+  --w-h: 0px; --w-sep: 0px; --w-in: 0 var(--w-up) 0 0 rgba(20, 14, 6, .34); --w-cast: 0 0 0 0 transparent; background-color: var(--paper-2); transition-duration: 40ms; }
 /* On, chosen: the key stays down and is filled in pencil, the mark for what the player chose. */
 [data-w]:is([aria-pressed='true'], [aria-checked='true'], [aria-current='page'], .is-on):not(.tag, .need, .yard-tag, .pin, .quiet), :is(.seg-in, .vbox) input:checked + :is(span, .vbox-in) {
   --w-h: 0px; --w-sep: 0px; --w-in: 0 3px 4px -1px rgba(10, 8, 4, .55); --w-cast: 0 0 0 0 transparent;
@@ -183,6 +184,7 @@ table .num, .tab { font-variant-numeric: lining-nums proportional-nums; }
 [data-w].armed { background-image: repeating-linear-gradient(90deg, var(--ink) 0 6px, transparent 6px 10px); background-repeat: no-repeat; background-size: calc(100% - 14px) 3px; background-position: 50% calc(100% - var(--w-up) - 6px); }
 /* Suggested: ochre, with the printer's fist. */
 [data-w].is-suggested { --w-rim: 2px; --w-side: #b07a1f; color: var(--ink); background-color: var(--st-ochre) !important; }
+[data-w].is-suggested .sub { color: var(--ink); }
 /* Busy: half down, a broken line running along its foot. */
 [data-w]:is(.is-busy, [aria-busy='true']) { --w-h: 1px; --w-cast: 0 0 0 0 transparent; cursor: progress; }
 /* Greyed: flat and voided; it says why under the pointer. */
@@ -205,7 +207,7 @@ table .num, .tab { font-variant-numeric: lining-nums proportional-nums; }
 .btn[data-w='minor'] { min-height: var(--key-s) !important; padding: 0 12px 2px; font: 400 var(--t-caption)/1.1 var(--f-text); letter-spacing: 0; text-transform: none; }
 .btn.quiet { --w-key: 0 0 0 0 transparent; background: none; padding: 0 4px; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
 @media (hover: hover) { .btn.quiet:hover { text-decoration-thickness: 2px; } }
-.btn.quiet:active { translate: 0 1px; }
+.btn.quiet:active { color: var(--ink-2); }
 /* Major: money, time, or it cannot be taken back. The biggest and heaviest key on its paper, its price or what
    follows on a second line. One on a paper may be filled (.go): the one the game would press. */
 .btn[data-w='major'] { min-height: var(--major) !important; padding: 2px 18px 9px !important; align-content: center; justify-content: flex-start; gap: 3px 10px;

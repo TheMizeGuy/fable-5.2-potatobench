@@ -108,8 +108,8 @@ pixel deep, the same whether it closed a card or sold the year's crop, and some 
 
 **What can be pressed stands off the paper. What is only read is ink on it.** A control is a key cut from card: a
 face inside an ink rim, the card's own edge showing under the face, a shadow on the paper below. Under the pointer
-it stands a pixel higher; under the press the edge closes up and the key goes down; a focus ring goes round it; the
-pointer is a hand. A fact has no rim that looks like a key, no edge, no shadow and no hand. A word that is pressed is
+it stands a pixel higher; under the press the edge closes and a shadow as deep as the edge opens along the top (the
+key's box never moves, so a press on its very edge still lands); a focus ring goes round it; the pointer is a hand. A fact has no rim that looks like a key, no edge, no shadow and no hand. A word that is pressed is
 underlined. A printed key cap (`key()`) is flat, because it is read.
 
 How far a key stands, and how big it is, says what its press costs. The weight is on the control as `data-w`:

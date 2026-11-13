@@ -214,27 +214,37 @@ test.describe('on a phone', () => {
   }
 })
 
-test('a key goes down under the press, a major one furthest, and comes back', async ({ page }) => {
+test('a key goes down under the press, a major one furthest, without moving from under the pointer', async ({ page }) => {
   await open(page)
   await reach(page, `q.start(1987, 3); q.run(999, ['sell']); q.winter(0, 9)`)
   await closeAll(page)
   const up = (id: string) => page.getByTestId(id).first().evaluate(e => {
     const cs = getComputedStyle(e)
-    return { up: cs.getPropertyValue('--w-up').trim(), h: cs.getPropertyValue('--w-h').trim(), move: cs.translate, sound: (e as HTMLElement).dataset.sound ?? '' }
+    const r = e.getBoundingClientRect()
+    return { up: cs.getPropertyValue('--w-up').trim(), h: cs.getPropertyValue('--w-h').trim(), recess: cs.getPropertyValue('--w-in').trim(), top: r.top, sound: (e as HTMLElement).dataset.sound ?? '' }
   })
   const major = page.getByTestId('month-next')
-  expect(await up('month-next')).toMatchObject({ up: '6px', move: 'none', sound: 'press' })
+  const rest = await up('month-next')
+  expect(rest).toMatchObject({ up: '6px', h: '6px', sound: 'press' })
   expect((await up('menu-open')).up).toBe('3px')
+  // Pressed on its top row of pixels: the edge closes, a shadow as deep as the edge opens, and the key's box stays
+  // under the pointer.
   const box = (await major.boundingBox())!
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await page.mouse.move(box.x + box.width / 2, box.y + 1)
   await page.mouse.down()
   await expect.poll(async () => (await up('month-next')).h).toBe('0px')
-  expect((await up('month-next')).move).toBe('0px 2px')
+  const down = await up('month-next')
+  expect(down.recess).toContain('6px')
+  expect(down.top).toBe(rest.top)
+  expect(await page.evaluate(([x, y]) => !!document.elementFromPoint(x, y)?.closest('[data-testid="month-next"]'), [box.x + box.width / 2, box.y + 1])).toBe(true)
   // Let go off the key: nothing is pressed, and it stands again.
   await page.mouse.move(2, 2)
   await page.mouse.up()
-  await expect.poll(async () => (await up('month-next')).move).toBe('none')
+  await expect.poll(async () => (await up('month-next')).h).toBe('6px')
   await expect(page.getByTestId('month-next')).toBeVisible()
+  // A press on the top row of pixels lands: the month turns.
+  await page.mouse.click(box.x + box.width / 2, box.y + 1)
+  await expect(page.getByTestId('month-next')).toContainText(/January|Jan/i)
 })
 
 test('letting someone go asks once more, wherever it is pressed', async ({ page }) => {
