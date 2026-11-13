@@ -481,13 +481,13 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   }
   // What a card hides as little of as it can: the field tags, the yards' tags and people's pins.
   // A field with a crop in the ground, or a stamp on its tag, is the next thing a player reaches for: its tag counts
-  // twice a resting field's, and four times a face (a person is also reached by their place in the people bar).
+  // three times a resting field's, and six times a face (a person is also reached by their place in the people bar).
   function marks(): { left: number; top: number; right: number; bottom: number; weight: number }[] {
     const c = app.campaign
     const of = (r: DOMRect, weight: number) => ({ left: r.left, top: r.top, right: r.right, bottom: r.bottom, weight })
     const out = P.byField().map(t => {
       const st = c ? S.fieldInfo(c, t.field).status : 'off'
-      return of(t.box, t.need || st === 'growing' || st === 'planted' || st === 'dead' || st === 'digging' ? 2 : 1)
+      return of(t.box, t.need || st === 'growing' || st === 'planted' || st === 'dead' || st === 'digging' ? 3 : 1)
     })
     for (const m of yardMarks) if (!m.wrap.hidden && m.at) out.push(of(new DOMRect(m.at.x - m.w / 2, m.at.y - 22, m.w, 44), 1))
     for (const u of c?.crew ?? []) {

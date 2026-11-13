@@ -72,7 +72,13 @@ Grafted from the print direction:
   as how spraying is done this season, stands with the people at the foot); it goes with the thing as the camera
   moves, and waits at the nearest edge with a Show key when the thing leaves the picture; one card at a time,
   closed by Escape, its cross or a click on empty ground. On a phone the card is a sheet at the foot with a notch
-  on its edge toward the thing, which is kept in view above it.
+  on its edge toward the thing, which is kept in view above it. Of the places beside the click the card takes the
+  one that lies over the fewest other tags and faces (a field that takes orders counts three times a resting one,
+  a face half), slid up or down its side to step clear of them and never further from the click to do it; once
+  laid it keeps its place as the camera carries the land by. A card cut short is the last resort: where a bar
+  under the click or the slip over it leaves too little room, the card steps along that side, whole, on a longer
+  tether (190 px at most); and at 800 px of window height or less the field card's own spacing is tighter, so a
+  planted field's whole card fits a 720-line window.
 - **Selection is drawn on the land**: a dashed outline with registration marks at the field's corners.
 - **Colour as signal on the land**: a need's stamp is inked by kind (blight and loss red, the suggested next thing
   ochre, water blue), always with its icon, never colour alone.

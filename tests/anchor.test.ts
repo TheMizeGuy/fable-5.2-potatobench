@@ -284,6 +284,22 @@ describe('keeping off the other tags and people', () => {
     expect(d.h).toBeLessThan(520)
   })
 
+  it('beside a tag whose field lies just past it, the card stands a step further along, off the field\'s middle', () => {
+    // A field small on the screen: its middle is a few pixels from its tag's end, where the card would begin.
+    const tag: Box = { left: 447, top: 561, right: 613, bottom: 605 }
+    const middle: Box = { left: 630, top: 566, right: 654, bottom: 590 }
+    const win: Box = { left: 8, top: 193, right: 1912, bottom: 1072 }
+    // (to its left another potato field's tag, which the card would lie over there)
+    const others = [{ left: 173, top: 672, right: 335, bottom: 726, weight: 3 }]
+    const c = placeCard({ point: { x: 523, y: 581 }, size: { w: 430, h: 579 }, win, keep: tag, avoid: [middle], others })
+    expect(c.side).toBe('right')
+    expect(c.x).toBe(middle.right + 3)
+    expect(c.over).toBe(0)
+    expect(c.aside).toBe(false)
+    // and no further from the tag than a card ever stands
+    expect(c.x - tag.right).toBeLessThanOrEqual(60)
+  })
+
   it('carried by the camera it lies as it lay: a tag passing under it does not make it jump', () => {
     const size = { w: 430, h: 260 }
     const tag: Box = { left: 640, top: 345, right: 800, bottom: 385 }

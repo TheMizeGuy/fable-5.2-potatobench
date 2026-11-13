@@ -155,27 +155,39 @@ export function placeCard(a: Ask): Placed {
 
   const tries: Lay[] = []
   for (const side of SIDES) {
-    const first = lay(side, null)
-    tries.push(first)
-    if (first.forced) continue
-    // Cut short by a bar under it or a slip over it: stepped along that side until it stands clear of them, whole.
-    if (first.h < h0 - 2 && (side === 'right' || side === 'left')) {
-      for (const b of blocks) {
-        if (b.right <= first.x - 4 || b.left >= first.x + w + 4) continue
-        const x = side === 'right' ? b.right + 6 : b.left - 6 - w
-        if (x < win.left || x + w > win.right || Math.abs(x - first.x) > ASIDE - gap) continue
-        const c = lay(side, null, x)
-        if (c.h >= h0 - 2) tries.push({ ...c, aside: true })
+    const upright = side === 'right' || side === 'left'
+    const usual = lay(side, null)
+    // Beside a tag whose own field's middle lies just past it, the card stands a step further along, past the middle.
+    const starts: (number | null)[] = [null]
+    if (upright && !usual.forced) {
+      for (const v of a.avoid ?? []) {
+        const x = side === 'right' ? v.right + 3 : v.left - 3 - w
+        const step = side === 'right' ? x - usual.x : usual.x - x
+        if (step > 0 && step <= 44 && x >= win.left && x + w <= win.right) starts.push(x)
       }
     }
-    // Slid to step just clear of each tag it would lie over, one way and the other.
-    const r: Box = { left: first.x, top: first.y, right: first.x + w, bottom: first.y + first.h }
-    const upright = side === 'right' || side === 'left'
-    for (const o of others) {
-      if (upright ? o.right <= r.left || o.left >= r.right : o.bottom <= r.top || o.top >= r.bottom) continue
-      for (const at of upright ? [o.bottom + 3, o.top - 3 - first.h] : [o.right + 3, o.left - 3 - w]) {
-        const c = lay(side, at)
-        if (!tries.some(t => t.side === side && Math.abs(t.x - c.x) < 1 && Math.abs(t.y - c.y) < 1)) tries.push(c)
+    for (const off of starts) {
+      const first = off === null ? usual : lay(side, null, off)
+      tries.push(first)
+      if (first.forced) continue
+      // Cut short by a bar under it or a slip over it: stepped along that side until it stands clear of them, whole.
+      if (off === null && first.h < h0 - 2 && upright) {
+        for (const b of blocks) {
+          if (b.right <= first.x - 4 || b.left >= first.x + w + 4) continue
+          const x = side === 'right' ? b.right + 6 : b.left - 6 - w
+          if (x < win.left || x + w > win.right || Math.abs(x - first.x) > ASIDE - gap) continue
+          const c = lay(side, null, x)
+          if (c.h >= h0 - 2) tries.push({ ...c, aside: true })
+        }
+      }
+      // Slid to step just clear of each tag it would lie over, one way and the other.
+      const r: Box = { left: first.x, top: first.y, right: first.x + w, bottom: first.y + first.h }
+      for (const o of others) {
+        if (upright ? o.right <= r.left || o.left >= r.right : o.bottom <= r.top || o.top >= r.bottom) continue
+        for (const at of upright ? [o.bottom + 3, o.top - 3 - first.h] : [o.right + 3, o.left - 3 - w]) {
+          const c = lay(side, at, upright ? off : null)
+          if (!tries.some(t => t.side === side && Math.abs(t.x - c.x) < 1 && Math.abs(t.y - c.y) < 1)) tries.push(c)
+        }
       }
     }
   }
