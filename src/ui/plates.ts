@@ -126,10 +126,6 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
   const at: Box[] = []
   let compact = false
   let far = false
-  // No room kept beside the tags for "on the list" and a stamp, because whole tags with it could not all stand by their
-  // fields; names only, because whole tags could not at all.
-  let snug = false
-  let short = false
   // The camera and the window the tags were last settled for; and for each tag, where its field was when it was put.
   let laid: { key: string; anchors: { x: number; y: number }[]; k: number } | null = null
   const ref: { x: number; y: number }[] = []
@@ -232,7 +228,7 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
         const eye = t.querySelector<HTMLElement>('.eyelet')
         face[i] = { t: t.offsetTop, h: t.offsetHeight, eye: eye ? eye.offsetLeft + eye.offsetWidth / 2 : 15 }
       }
-      if (!compact) (far || short ? brief : full)[i] = size[i]
+      if (!compact) (far ? brief : full)[i] = size[i]
     }
   }
 
@@ -242,7 +238,7 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
     // On a phone the tags settle again whenever anything changes (no pointer rests on them), and there is no width
     // to keep in reserve.
     const small = ctx.layout() === 'narrow' || ctx.layout() === 'short'
-    if (far || snug || short || small || models[i]?.land) return z
+    if (far || small || models[i]?.land) return z
     return { w: z.w + (listed[i] ? 0 : LIST_W), h: z.h, extra: Math.max(z.extra, STAMP_W) }
   }
 
@@ -290,9 +286,10 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
 
   // Where each tag goes for tags of these sizes: over its field, clear of the boards and of each other.
   // over: there was not the room, and some had to overlap. final: the last fold, where a tag may give way (gave).
-  function place(sz0: Size[], final = false): { want: Box[]; over: boolean; gave: number[] } {
+  // snug: no room kept beside any tag (nearer in, when keeping it would carry a tag off its field).
+  function place(sz0: Size[], final = false, snug = false): { want: Box[]; over: boolean; gave: number[] } {
     const ins = app.insets
-    const sz = sz0.map((_, i) => room(i, sz0))
+    const sz = sz0.map((_, i) => snug ? sz0[i] : room(i, sz0))
     const want = targets(sz)
     // The tag is drawn from its left edge as the room would put it, whatever it holds now.
     for (let i = 0; i < S.FIELD_COUNT; i++) if (want[i].place !== 'gone') want[i].x += (sz0[i].w - sz[i].w) / 2
@@ -331,13 +328,25 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
     const taken = [...keep, ...shelf.map(i => roomAt(i, want[i], sz0, sz))]
     const kept = (i: number) => app.selection.includes(i) || !!models[i]?.badge
     const under = (i: number) => { const a = ctx.view.fieldAnchor(i); return a.visible && (a.y > innerHeight - ins.bottom || a.y < ins.top || a.x < ins.left || a.x > innerWidth - ins.right) }
-    const rank = (i: number) => (app.selection.includes(i) ? 4 : 0) + (models[i]?.badge ? 2 : 0) + (under(i) ? 1 : 0)
+    // Nearer in, what is in hand or stamped does not change the order, so a card opening or an order given leaves the
+    // tags as they are.
+    const rank = (i: number) => (far ? (app.selection.includes(i) ? 4 : 0) + (models[i]?.badge ? 2 : 0) : 0) + (under(i) ? 1 : 0)
     const order = shown.filter(i => want[i].place !== 'shelf').sort((p, q) => rank(q) - rank(p) || want[p].y - want[q].y || p - q)
     let over = false
     const gave: number[] = []
     const tags: Rect[] = shelf.map(i => roomAt(i, want[i], sz0, sz))
     for (const i of order) {
       let w = spot(i, want[i], sz0, sz, taken, false)
+      if (!far) {
+        // Nearer in tags stay whole and off the people on the land: looking further round the field, and only then as
+        // near its field as there is room (over: a tag had to leave its field).
+        if (!w) w = spot(i, want[i], sz0, sz, taken, false, true)
+        if (!w) { over = true; w = spot(i, want[i], sz0, sz, taken, true) }
+        if (w) want[i] = w
+        taken.push(roomAt(i, want[i], sz0, sz))
+        tags.push(roomAt(i, want[i], sz0, sz))
+        continue
+      }
       // Folded to their cut and still no room: a tag may lie over a person or a yard's tag (their pins stand above it)
       // rather than leave its field.
       if (!w && final) w = spot(i, want[i], sz0, sz, tags, false, true)
@@ -464,13 +473,13 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
   }
 
   // The camera moved (or the window, or the boards): every tag is put again, on or right beside its own field. Far out
-  // (a field narrower on the screen than a tag), the tags keep only their names. Nearer in, where whole tags cannot all
-  // stand by their fields with room kept beside them, the room goes; where they still cannot, they keep only their
-  // names; and where named tags still cannot, all but the selected one fold down to their cut: tags shorten rather than
-  // stray. Each test is made with the sizes of the fold before it, so a fold cannot flicker.
+  // (a field narrower on the screen than a tag), the tags keep only their names, and where named tags would still have to
+  // overlap or stray, all but the selected one fold down to their cut; the test is made with the named sizes, so the
+  // fold cannot flicker. Nearer in the tags stay whole and only where they stand changes. data-fold says which.
   function folds(): void {
-    layer.classList.toggle('far', far || short)
+    layer.classList.toggle('far', far)
     layer.classList.toggle('compact', compact)
+    layer.dataset.fold = compact ? 'cut' : far ? 'names' : 'whole'
   }
 
   function settle(): void {
@@ -478,13 +487,11 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
     const nowFar = far ? k < FAR_OUT : k < FAR_IN
     if (nowFar !== far) {
       far = nowFar
-      snug = false
-      short = false
       compact = false
       folds()
       measure()
     }
-    const tier = () => far || short ? brief : full
+    const tier = () => far ? brief : full
     // Tags coming into view are drawn first, so they are settled at their own size.
     const first = place(tier()).want
     let fresh = false
@@ -495,17 +502,9 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
       fresh = true
     }
     if (fresh) measure()
-    snug = false
-    const roomy = far || !place(full).over
-    snug = !roomy
-    const nowShort = snug && place(full).over
-    if (nowShort !== short) {
-      short = nowShort
-      compact = false
-      folds()
-      measure()
-    }
-    const named = place(tier())
+    let named = place(tier())
+    // Nearer in, the room kept beside the tags goes before any tag leaves its field; they never fold.
+    if (!far && named.over) named = { ...place(full, false, true), over: false }
     if (named.over !== compact) {
       compact = named.over
       folds()
@@ -567,9 +566,9 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
     const moving = !lastAnchors || anchors.some((a, i) => { const b = lastAnchors![i]; return finite(a) !== finite(b) || (finite(a) && Math.hypot(a.x - b.x, a.y - b.y) > 0.25) })
     lastAnchors = anchors
     // On a phone, once the camera comes to rest the crowding is settled for where it stopped (riding the last small
-    // moves can bring tags together); there is no pointer resting on a tag to keep still. At a desk too while the tags
-    // are shortened, so a camera that stops nearer leaves them whole.
-    const rested = (small || far || short || compact) && wasMoving && !moving
+    // moves can bring tags together); there is no pointer resting on a tag to keep still. Far out too, where the
+    // fields are small beside the tags.
+    const rested = (small || far) && wasMoving && !moving
     wasMoving = moving
     // A zoom changes the fields' size on the screen under tags that keep theirs, so it settles them too.
     const k = scale()

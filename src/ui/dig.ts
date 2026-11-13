@@ -557,7 +557,9 @@ function reckoning(ctx: Ctx, lotId: number): PaperSpec {
     })
   }
   const stand = seen?.stand ?? S.fieldInfo(c, lot.field).stand
-  if (stand < 0.92 && stand > 0) {
+  // Seed that rotted in cold soil is named here however little (the ticket names it only as its biggest loss).
+  // Other thin stands from 8%.
+  if (stand > 0 && (stand < 0.92 || !!R.coldSeed(c, lot, stand, d.total))) {
     const planted = fieldLog(c, lot.field, 'planted')[0]
     never.push({
       head: 'Thin stand', cwt: d.total * (1 - stand) / stand,
