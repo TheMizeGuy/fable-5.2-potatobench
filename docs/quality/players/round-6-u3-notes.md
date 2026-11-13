@@ -1,0 +1,56 @@
+# Notes u3
+001: Title "The County", potato farm, 5 years. Hit big PLAY. Got a planning screen with a "First time on the farm?" tutorial popup. Map behind is blurry. Right panel: Spring, Fields/People/Land, START THE SEASON. Want to skip tutorial.
+002: Skipped tutorial (2). Scrolled wheel up at map -> zoomed way in on a pine forest. Zoom works. Hint banner "Plant the fields once the season starts". Pleased something moved.
+003: Right-dragged, held W, left-dragged. View now looks straight down on forest; can't tell which action did what. Labels stayed put. Bit lost but it moves.
+004: Zoomed out and pressed START THE SEASON (~req 4). Now April 20, weather strip, speed buttons (pause/1x/3x/8x), "Plant when soil reaches 50F about 26 days". Money "-$15,300 in the red". A little farmer icon on map and "You IDLE" card. Gloomy grey look. Want to click the farmer.
+005: Clicked farmer at (825,607): details panel opened next to him: "You, the farmer", Idle work list empty, Fresh/Content, priority icons, rest options, Follow. Nice. Pressing Follow and zooming in.
+006: Follow + zoom: camera swooped to the farmer in a red shirt and hat, beside a white farmhouse porch, in the rain. Looks good. Details panel moved and now covers him. Closing it, trying Q and PageUp to turn/tilt.
+007: Q + PageUp: camera turned and tilted right down to ground level, looking through the porch posts at the farmer and fields. Tilt/turn works by keys (Q, PageUp). Cool but clipped into the porch. Now tilt back, zoom out, Skip ahead at 8x.
+008: Skip ahead at 8x worked: now May 10, speed shows 8x, "about 9 days". Farmer over a house roof (camera still following). Waiting for planting time.
+009: Zoom-out wheel barely moved (maybe because following). May 20, farm house + red barn visible, very pretty. Popup "Planting has started in North Ridge. Show me", and a WORK LIST bar with 4 icon cards appeared. Farmer still says IDLE, odd. Clicking Show me.
+010: "Show me" seemed to jump to my farmer on grass with his panel open again (not the field). Panel says "Idle nothing on the work list for you" but his card bottom-left says PLANTING with progress bar. Contradiction, confused. Work list down to 1 card. Money -$15,750 "orders -$150". Unfollowing, closing, zooming out.
+011: Now June 2, phase moved to TEND. Banner "Walk a field for blight - your crew handles it automatically". Did planting happen? I never saw it. Zoom-out only nudged. Pausing with Space and wheeling out several times.
+012: Space paused (red play button, "Resume at 8x"). Zoomed out to see 6 fields with labels: North Ridge, Upper Middle, Brook Field, South Ridge, Lower Middle, Bottom Field. Some look darker (planted?). Clicking North Ridge label.
+013: Clicked North Ridge label: field panel "Katahdin, planted", leaf 0%, water good, buttons Plant/Hill/Scout/Spray/Water/Rogue/Test dig/Kill vines/Dig; only Water lit ($300). The field outline is up-left of the label, not under it. "You: spray, water and kill vines." So planting did happen by itself. Closing, resuming, waiting 10s.
+014: June 23. Banner now "Spray before blight arrives while the vines are green". Upper Middle has "ON THE LIST" hill tag. Farmer still IDLE. Will open North Ridge and Spray.
+015: North Ridge now "growing leaf", 14%, hill once. Hill/Scout/Spray/Water lit. A hover tip about Scouting is printed ON TOP of the "You: spray, water and kill vines. Vine kill due around Sep 8" line - two texts overlap, unreadable. Farmer card now says HILLING. Clicking SPRAY ($110).
+016: After Spray: protection went 21%, money -$16,250 (orders -$120). It worked, I think, but at 8x it was already done before I saw anything. Tip now "Do a test dig". Farmer TRAVELING. Clicking the person+ button by my card.
+017: Hiring window (game paused itself): Field hand $380/mo, Tractor operator $550/mo, skill bars. Too much text, but clear enough. Hiring a field hand.
+018: Hired Lucien, field hand, -$380 straight away. He appeared on the map and in the card row. Closing, resuming, clicking his card.
+019: Game still paused (Space after closing Hiring didn't resume?). Map gone pale/foggy. Clicking Lucien's card opened a strange half-drawn strip "FIELD HAND" stretching right from the card at bottom. Toast "Lucien hired". Waiting a moment to see if panel finishes drawing.
+020: Same: the strip at the bottom stays half-drawn (only "FIELD HAND" and the top of a portrait circle). Looks broken. Clicking Lucien on the map instead.
+021: Clicked Lucien on map: his panel opened fine (Field hand, sharp-eyed, idle, $380/mo, Follow, Details, LET GO). Closing, pressing Resume, waiting 10s.
+022: July 19. Year-end figure dropped from $25,000 to $11,600 - no idea why (scary). Round spray icons popped up beside 4 field labels and a button "Spray North Ridge and 3 more fields". Clicking it.
+023: A TELEGRAM from the county agent popped (not sure whether from my click or by itself): "Spraying this season" - Keep fields sprayed (~$3,080) / Ask me each time / Not this year. Big clear choice. Work list shows red "NEEDS YOU 4". Picking keep sprayed.
+024: After the telegram, the North Ridge field panel was open (didn't ask for it) and the camera had moved; other field labels lost their names, just icons. Farmer SPRAYING, work list 4 sprays. Leaf 89%, yield 55-108 cwt/acre "by eye". Closing and waiting 12s at 8x.
+025: Game paused itself, "WAITING FOR YOU". Telegram: neighbor offers Lucien $437. Match or Let them choose ("Lucien is content here and will stay"). Easy: let them choose. Then Space and wait.
+026: Aug 11. Another telegram (Yvette McCrum asks for work, $480) stacked over a "TEST DIG Brook Field" sheet with drawn potatoes and weights. Two popups at once, the potato sheet half hidden. Saying Not now.
+027: Hint "Water North Ridge, then kill the vines (due ~Sep 8)" + toast "Click the ringed stamp to water" with a glowing orange drop stamp on the map. Test dig sheet is cut off at the bottom ("Too small ... 4" then nothing). Closing it and clicking the stamp.
+028: Clicked the stamp: "NEXT North Ridge (water)" note over my card, so the farmer took it. Now hint says Water Upper Middle; two blue drop stamps on map. Field labels have only icons now, no names - which is which? Clicking both stamps, waiting 6s.
+029: Aug 30. New test dig sheet popped by itself: 8 potatoes 1.2 lb, bigger now - nice drawing. Hint "Kill the vines due around Sep 8". Pausing and opening a field label to kill vines.
+030: North Ridge: leaf 100%, water "wilting" in red, "Blight seen here", 230-349 cwt/acre. Clicking KILL VINES ($120) since that's what the hint wants.
+031: Kill vines now "ON THE LIST", hint "on the work list". Trying the other three potato fields: click label, press K key each.
+032: K key works: all 4 potato fields now have Kill vines on the work list (4 cards). Pleased - fast. Resuming, waiting 12s.
+033: Sep 20. Big WEIGH TICKET for North Ridge: 1,390 cwt, sell today $15,849, or store at -$208/mo. Digging happened on its own (I never ordered Dig). "Too small: vines were killed Sep 1, 7 days early" - so my kill-vines click cost me, oops. Wall of text; I just hit SELL.
+034: Sold: balance jumped from -$21,548 to -$6,199. Felt good. Sep 23, DIG phase, autumn colours in the woods - lovely. "Upper Middle: harvested" toast; farmer HAULING. Waiting.
+035: Game paused itself after only one day (Sep 24) with toast "Frost tonight. Hauling the 119 cwt in barrels first". Nothing to answer, I don't know why it stopped. Resuming.
+036: Second weigh ticket, Upper Middle 1,288 cwt, $14,125. Same layout, so I know where SELL is. Pressing key 1 to sell, then resume.
+037: Key 1 sold it - CASH now +$7,400. But game paused again two days later on a toast "Brook Field: barrels froze, 1 cwt". Annoying stop-start. Clicking 8x button.
+038: Again paused after 3 days on "Frost tonight" toast. Trying Space, wait, Space, wait (hoping 2nd Space resumes if it stopped again).
+039: Oct 1, third weigh ticket (Brook Field 1,200 cwt, $13,973; "Greened - sat 6 days in barrels in the sun"). Selling with key 1 again, Space, wait.
+040: Fourth weigh ticket, Bottom Field 1,135 cwt $12,759. Cash behind now $20,417. Top right changed to an arrow button. Selling with 1.
+041: All four sold. Cash $33,176, after bills $14,200. Phase SELL. Speed buttons replaced by a big "CLOSE OUT THE SEASON ->". Fog/snow over the map. Pressing it.
+042: November "Winter work" sheet: You/Lucien Off/Woods/Pack/Build toggles, put up a building (8 to choose), stored crop 0, sold $56,706. "The oats and clover brought in $1,800" - didn't know I had oats. Hitting CLOSE THE YEAR.
+043: YEAR END ledger book: farm worth $15,976, down $8,024, "The bank is happy this year. 4 seasons to go." Neighbor got 301 cwt/acre vs my 251. Nice book look, a lot to read. Hint: Sign a contract. Pressing PLAN YEAR 2.
+044: Year 2 Spring plan, snowy map with lots of named lots (Burnt Hill, Dufour Back Lot...). New "Farm rules: Sundays off" row. Contracts row highlighted orange "Sign a contract here". Clicking it.
+045: Contracts opened as a paragraph of explanation (skipped it) and "The seed house Atlantic $12.85/cwt" with a slider bar; the rest is cut off by the money box. Scrolling the panel.
+046: Contracts: Seed house wants Atlantic, fry plant wants Russet Burbank - my plan has neither, "give it a field on the map". Don't know how to change a variety yet. Pressing ACCEPT on the seed house anyway.
+047: Signed! Says "Nothing is planted for it, you've promised 1,150 cwt". The hint jumped on to "Farm more land". Need Atlantic in a field - clicking North Ridge label on the map.
+048: North Ridge field record opened: Potatoes / Rest year, and 8 variety cards (Atlantic "contract only"). Panel runs off the bottom of the screen. Clicking Atlantic.
+049: Atlantic chosen; label now "NORTH RIDGE Atlantic" and the contract updated to "likely 700 to 1,300 cwt" with a hatched band. That linkage was clear and satisfying. Closing, START THE SEASON, Skip ahead at 8x.
+050: Year 2 running, May 15. Contract tracker "seed house: Atlantic 0/1,150 cwt by March" under the money. Hint "Plant when soil reaches 50F, then name a foreman"; Lucien's card glows orange. Pausing and testing mouse camera: right-drag then left-drag.
+051: Mouse camera works: right-drag turned the map (fields now laid out sideways), left-drag panned it. Field labels lost their names again at this zoom (icons only). Clicking Lucien's glowing card to find "foreman".
+052: Clicking Lucien's card again gave the same broken half-drawn "FIELD HAND" strip as in 019 - repeatable. No foreman option seen. Annoyed. Resuming, waiting 12s.
+053: Once the game ran, the strip from 052 finished opening into a full Lucien sheet (skill bars Machine 2 / Field 5..., priority numbers 1/2), so it was only stuck while paused. Bottom of it is cut off ("When worn out / Rest now / Push on" half visible). Hint skipped ahead to "Hill the rows ... then fell a woodlot" - I never named a foreman. Pausing and scrolling the sheet.
+054: Scrolled: found "Foreman +40% pay" button at the bottom beside RAISE and LET GO (the foreman option was hidden below the fold). Clicking Foreman.
+055: Clicked Foreman: the sheet just jumped back to the top, title still "FIELD HAND", no confirmation anywhere. Can't tell if it worked. Out of requests (55), ~9 minutes used. Stopping in Year 2, June 8.
