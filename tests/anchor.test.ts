@@ -184,6 +184,27 @@ describe('a card beside the point clicked', () => {
     expect(meets(cb(held), bar)).toBe(false)
   })
 
+  it('someone at the window\'s foot beside the bars: their card is whole over them, slid along clear of a chip in its way', () => {
+    // 1280 by 720: the work list and the people bar at the left of the foot, the clock's chip under the cash board,
+    // and a hand standing at the very foot of the window. A card 470 px tall.
+    const win: Box = { left: 8, top: 171, right: 1272, bottom: 712 }
+    const blocks: Box[] = [{ left: 16, top: 537, right: 474, bottom: 581 }, { left: 16, top: 589, right: 406, bottom: 704 }, { left: 1062, top: 222, right: 1264, bottom: 262 }, { left: 34, top: 166, right: 364, bottom: 212 }]
+    const at = { x: 862, y: 708 }
+    const c = placeCard({ point: at, size: { w: 452, h: 470 }, least: 440, win, blocks })
+    const r: Box = { left: c.x, top: c.y, right: c.x + 452, bottom: c.y + c.h }
+    expect(c.h).toBe(470)
+    expect(c.side).toBe('above')
+    expect(blocks.some(b => meets(r, b))).toBe(false)
+    expect(holds(r, at)).toBe(false)
+    expect(at.x).toBeGreaterThan(r.left)
+    expect(at.x).toBeLessThan(r.right)
+    expect(r.top).toBeGreaterThanOrEqual(win.top)
+    expect(distance(r, at)).toBeLessThanOrEqual(60)
+    // Never the sliver under the bars.
+    const beside = placeCard({ point: { x: 500, y: 708 }, size: { w: 452, h: 470 }, least: 440, win, blocks })
+    expect(beside.h).toBeGreaterThan(300)
+  })
+
   it('waits at the nearest edge when the thing has left the window', () => {
     for (const p of [{ x: 1500, y: 400 }, { x: -200, y: 300 }, { x: 640, y: -90 }, { x: 640, y: 1200 }]) {
       const c = placeCard(ask(p))

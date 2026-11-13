@@ -270,9 +270,10 @@ async function hold(page: Page, k: Case, label: string, close: 'Escape' | 'groun
   const reach = c.aside ? 190 : k.onBar ? 100 : 60
   if (c.aside) expect.soft(c.fits && !c.cut, say('stepped aside from the point, it is whole')).toBe(true)
   if (k.onBar && c.aside) {
-    // Beside the very bar its chip stands in, however wide the bar: right at its edge.
-    const bar = (await a<Box[]>(page, `return A.rects('.timebook')`))[0]
-    expect.soft(Math.abs(c.rect.left - bar.right) <= 16 || Math.abs(bar.left - c.rect.right) <= 16, say(`stepped aside, it stands at the edge of the people bar (card ${JSON.stringify(c.rect)}, bar ${JSON.stringify(bar)})`)).toBe(true)
+    // Beside the very bar its chip stands in, however wide the bar: right at its edge, or at the edge of the work
+    // list that lies over the bar when the list is the wider.
+    const edges = await a<Box[]>(page, `return A.rects('.timebook, .queue')`)
+    expect.soft(edges.some(b => Math.abs(c.rect.left - b.right) <= 16 || Math.abs(b.left - c.rect.right) <= 16), say(`stepped aside, it stands at the edge of the people bar or its work list (card ${JSON.stringify(c.rect)}, bars ${JSON.stringify(edges)})`)).toBe(true)
   } else if (k.handle) expect.soft(apart(c.rect, k.handle), say(`its nearest edge is within ${reach} px of the handle clicked (${Math.round(apart(c.rect, k.handle))} px)`)).toBeLessThanOrEqual(reach)
   else expect.soft(away(c.rect, from), say(`its nearest edge is within ${reach} px of the point clicked (${Math.round(away(c.rect, from))} px)`)).toBeLessThanOrEqual(reach)
   expect.soft(holds(c.rect, from), say('does not cover the point clicked')).toBe(false)

@@ -68,7 +68,7 @@
   .whois-layer:not(.phone) .whois-where { margin: -1px 0 4px; }
   .whois-layer:not(.phone) .whois-state { gap: 1px; padding: 4px 0 5px; }
   .whois-layer:not(.phone) .whois-first { padding: 5px 0 0; }
-  .whois-layer:not(.phone) .whois-first .key-btn { height: 32px; }
+  .whois-layer:not(.phone) .whois-first .key-btn { height: 44px; gap: 2px; padding: 3px 3px 4px; }
   .whois-layer:not(.phone) .rest-keys { flex-wrap: nowrap; padding: 5px 0 0; }
   .whois-layer:not(.phone) .rest-keys .btn { min-height: 32px; padding: 0 8px; font-size: 13.5px; white-space: nowrap; }
   .whois-layer:not(.phone) .whois-acts { flex-wrap: nowrap; padding-top: 7px; }
