@@ -325,8 +325,11 @@ for (const [w, h] of [[1280, 800], [1280, 720]] as const) {
         if (year === 'past') await reach(page, PAST_LIMIT)
         await expect(page.getByTestId('begin-season')).toBeVisible()
         if (year === 'past') await expect(page.getByTestId('plan-past-limit')).toBeVisible()
-        // With no fold open the whole foot shows.
+        // With no fold open the foot shows its three figures, and the whole of it behind Details.
+        await expect(page.getByTestId('plan-due')).toBeHidden()
+        await page.getByTestId('plan-more').click()
         await expect(page.getByTestId('plan-due')).toBeVisible()
+        await page.getByTestId('plan-more').click()
         for (const f of FOLDS) {
           await page.getByTestId(f.open).click()
           const body = page.getByTestId(f.body)

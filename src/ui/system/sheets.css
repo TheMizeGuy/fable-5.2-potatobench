@@ -339,6 +339,9 @@
 /* Five or more keys: their names alone, so they keep to one line. */
 .catalogue .fold.more.strip.many .btn .i { display: none; }
 /* Of the money, an open fold keeps what a choice in it turns on: This plan, After year-end bills and the bank's limit. */
+/* At a glance: what you have, what the plan costs, where the year will end. The rest waits behind Details. */
+.order-blank .plan-money:not(.more, .over) :is(.pm-loan, .pm-parts, .pm-usual, .pm-range) { display: none; }
+.order-blank .plan-money:not(.more, .over) .lead:has([data-testid="plan-due"]) { display: none; }
 .catalogue.folded .order-blank :is(.pm-cash, .pm-parts, .pm-usual, .pm-range, [data-testid="plan-low"]) { display: none; }
 .catalogue.folded .order-blank .plan-money:not(.over) .pm-loan { display: none; }
 .catalogue.folded .order-blank .lead:has([data-testid="plan-due"]) { display: none; }

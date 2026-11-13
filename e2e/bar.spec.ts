@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { mkdirSync } from 'node:fs'
-import { putAway, reach, startSeason } from './helpers.ts'
+import { open, putAway, reach, startSeason } from './helpers.ts'
 
 const PICS = process.env.PICS ? 'out/bar' : ''
 if (PICS) mkdirSync(PICS, { recursive: true })
@@ -81,4 +81,19 @@ test('what the pointer rests on is named on the game\'s own slip, never the brow
   await page.mouse.move(4, 300)
   await expect(tip).toBeHidden()
   expect(await key.getAttribute('title')).toBe(title)
+})
+
+test('the spring blank says three figures at a glance, and the rest behind Details', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'a desk\'s sheet')
+  await open(page, '?year=1990&seed=7')
+  const money = page.getByTestId('plan-money')
+  await expect(money).toBeVisible()
+  const lines = () => money.locator('p').evaluateAll(ps => ps.filter(p => (p as HTMLElement).offsetHeight > 0).map(p => (p.textContent ?? '').trim()))
+  const glance = await lines()
+  expect(glance.length, glance.join(' | ')).toBeLessThanOrEqual(3)
+  expect(glance.join(' ').split(/\s+/).length, glance.join(' | ')).toBeLessThanOrEqual(16)
+  await shot(page, 'plan-glance')
+  await page.getByTestId('plan-more').click()
+  expect((await lines()).length).toBeGreaterThan(3)
+  await shot(page, 'plan-details')
 })

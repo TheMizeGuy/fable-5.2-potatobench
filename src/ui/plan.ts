@@ -383,6 +383,7 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
     ]
   }
 
+  let moneyMore = false
   function drawFoot(c: S.Campaign): Child {
     const pc = S.planCosts(c)
     const after = c.cash - pc.total
@@ -400,7 +401,7 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
     const fig = Math.round(year.after / 100) * 100
     const past = over ? '' : limitSays(year, year.after < S.CREDIT_LIMIT ? S.planRescue(app.world, c) : null)
     return [
-      h('div', { class: `plan-money${over ? ' over' : ''}`, testid: 'plan-money' },
+      h('div', { class: `plan-money${over ? ' over' : ''}${moneyMore ? ' more' : ''}`, testid: 'plan-money' },
         h('p', { class: 'lead quiet pm-cash' }, h('span', { class: 'it' }, c.cash < 0 ? 'Owed from last year' : 'You have'), h('span', { class: 'dots' }),
           h('span', { class: `num${c.cash < 0 ? ' c-red' : ''}`, testid: 'plan-cash' }, F.money(c.cash))),
         h('p', { class: 'lead' }, h('span', null, 'This plan', what ? h('span', { class: 'it quiet', testid: 'plan-rent' }, ` ${what}`) : null), h('span', { class: 'dots' }),
@@ -417,10 +418,13 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
         h('p', { class: 'lead quiet' }, h('span', { class: 'it' }, term('Due at the end of the year', 'due at the year end'), ctx.layout() === 'narrow' ? null : ', from your crop'), h('span', { class: 'dots' }),
           h('span', { class: 'num c-red', testid: 'plan-due' }, F.money(due.total))),
         h('p', { class: 't-caption pm-parts' }, due.text),
-        c.history.length ? null : h('p', { class: 't-caption pm-usual', testid: 'plan-usual', title: ctx.touch() ? undefined : usualFirstYear(mn.due.note + mn.due.household).full }, usualFirstYear(mn.due.note + mn.due.household).short)),
+        c.history.length ? null : h('p', { class: 't-caption pm-usual', testid: 'plan-usual' }, usualFirstYear(mn.due.note + mn.due.household).short)),
       over ? h('p', { class: 't-caption c-red', role: 'alert' }, 'Rest a field or plant saved seed, because the bank won\'t lend any more this spring.') : null,
       h('div', { class: 'blank-go' },
         h('button', { class: 'btn go wide', type: 'button', testid: 'begin-season', onclick: begin }, 'Start the season', icon('arrow', 'i')),
+        // At a glance the blank says three things: what you have, what the plan costs, where the year will end. The
+        // loan, the range and what falls due are one press away.
+        over ? null : h('button', { class: 'btn quiet', type: 'button', testid: 'plan-more', 'aria-expanded': String(moneyMore), onclick: () => { moneyMore = !moneyMore; ctx.dirty() } }, moneyMore ? 'Less' : 'Details'),
         h('button', { class: 'btn quiet', type: 'button', testid: 'money-open', onclick: () => openMoney(ctx) }, 'See the money')),
     ]
   }
@@ -480,7 +484,7 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
       patch(mast, JSON.stringify([c.year, c.yearIdx]), () => drawMast(c))
       patch(rows, JSON.stringify([...state, open, nextGoal(c)?.id, agentSpeaking(), c.applicants.map(a => a.id), c.crew.map(u => [u.id, u.wage, u.foreman]), c.offers.map(x => x.id), c.contracts.map(k => k.id),
         c.upgrades, c.mortgages.map(m => Math.round(m.owed)), c.sundaysOff, Math.round(c.cash), c.buildings.length]), () => drawRows(c))
-      patch(foot, JSON.stringify([S.planCosts(c), Math.round(c.cash), c.plans, c.contracts.map(k => k.id), c.crew.map(u => [u.id, u.wage]), c.upgrades, c.mortgages.map(m => Math.round(m.owed)), app.settings.units, layout]), () => drawFoot(c))
+      patch(foot, JSON.stringify([moneyMore, S.planCosts(c), Math.round(c.cash), c.plans, c.contracts.map(k => k.id), c.crew.map(u => [u.id, u.wage]), c.upgrades, c.mortgages.map(m => Math.round(m.owed)), app.settings.units, layout]), () => drawFoot(c))
       el.style.setProperty('--foot-h', `${Math.round(foot.offsetHeight)}px`)
       // The one thing to do here is under the keyboard from the start.
       if (!focused && !ctx.papers.isOpen()) {

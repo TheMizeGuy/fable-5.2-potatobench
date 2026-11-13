@@ -1089,6 +1089,8 @@ test('the first spring sheet says a usual first year and that the loan carries i
   await fresh(page)
   await page.getByTestId('play').click()
   await page.getByTestId('guide-refuse').click()
+  // (the blank shows three figures at a glance; this line is behind Details)
+  await page.getByTestId('plan-more').click()
   const line = page.getByTestId('plan-usual')
   await expect(line).toBeVisible()
   await expect(line).toHaveText('The loan covers usual first-year losses: $4,000 to $24,000.')
