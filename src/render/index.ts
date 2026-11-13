@@ -281,6 +281,8 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   const times: number[] = []
   let fps = 60, warm = 0
   const pacing = new Pace(), sizer = new Sizer(), rate = new Rate()
+  // Counts the pictures drawn and the window's changes: what is worked out of the screen for one is kept until the next.
+  let seenGen = 0
   // A tool may ask for every beat of the display to be drawn, and for the frame to be drawn without one or another of
   // the things that make it cheaper, to measure what each saves.
   let capped = true
@@ -299,6 +301,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   // The setting the parts were last told of: a change of size alone leaves them as they are.
   let told: Tier | '' = ''
   function resize(): void {
+    seenGen++
     cur = { ...TIERS[tier], ...over }
     const vp = viewport(), pr = pixelRatio(), t = cur
     renderer.setPixelRatio(pr)
@@ -815,6 +818,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     // (the opening's camera never stops: there the beats to a frame may change as it goes)
     const dtMs = timed ? (capped ? pacing.tick(beatMs, busy(), snap.mode === 'title', camMoving && snap.mode !== 'title') : beatMs) : beatMs
     if (timed && dtMs === 0) return
+    seenGen++
     const vp = viewport()
     // A move to a screen of another density changes the pixel ratio without any resize event.
     if (vp.w !== size.w || vp.h !== size.h || pixelRatio() !== size.pr) { upDue = false; resize() }
@@ -1049,10 +1053,31 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   // The foot the anchors keep above: the interface's foot as it first stood at this window size on this screen, so a
   // list, an alert or a card coming and going never moves a field's tag point while the camera stands still.
   let anchorFoot = { w: 0, h: 0, mode: '', bottom: 0 }
-  function fieldAnchor(i: number): { x: number; y: number; visible: boolean } {
+  // Between two pictures the camera does not move, and the interface asks where each field stands many times over in
+  // one frame (every tag is tried in many places): each place on the screen is worked out once for a picture, and
+  // the window measured once.
+  type OnScreen = { x: number; y: number; visible: boolean }
+  let seenKey = ''
+  let vpSeen: Viewport | null = null
+  const anchorSeen: (OnScreen | undefined)[] = [], cornersSeen: (OnScreen[] | undefined)[] = []
+  function sameSight(): void {
+    const key = `${seenGen} ${innerWidth}x${innerHeight} ${snap.mode}`
+    if (key === seenKey) return
+    seenKey = key
+    vpSeen = null
+    anchorSeen.length = 0
+    cornersSeen.length = 0
+  }
+  function sight(): Viewport { sameSight(); return vpSeen ??= viewport() }
+  function fieldAnchor(i: number): OnScreen {
+    sameSight()
+    const kept = anchorSeen[i] ??= fieldAnchorNow(i)
+    return { x: kept.x, y: kept.y, visible: kept.visible }
+  }
+  function fieldAnchorNow(i: number): OnScreen {
     const f = FIELDS[i]
     if (!f) return { x: 0, y: 0, visible: false }
-    const vp = viewport()
+    const vp = sight()
     if (anchorFoot.w !== vp.w || anchorFoot.h !== vp.h || anchorFoot.mode !== snap.mode || (!anchorFoot.bottom && vp.bottom)) anchorFoot = { w: vp.w, h: vp.h, mode: snap.mode, bottom: vp.bottom }
     const cam = rig.camera.position
     const near = fields.nearEdge(i, cam.x, cam.z)
@@ -1077,7 +1102,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   }
 
   function screenAt(x: number, y: number, z: number): { x: number; y: number; visible: boolean } {
-    const vp = viewport()
+    const vp = sight()
     anchor.set(x, y, z).project(rig.camera)
     const sx = (anchor.x + 1) / 2 * vp.w, sy = (1 - anchor.y) / 2 * vp.h
     return { x: sx, y: sy, visible: anchor.z < 1 && sx >= 0 && sx <= vp.w && sy >= 0 && sy <= vp.h }
@@ -1091,14 +1116,15 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     return { x: vp.w / 2 - (a.x - vp.w / 2) * 1e3, y: vp.h / 2 - (a.y - vp.h / 2) * 1e3, visible: false }
   }
 
-  function fieldCorners(i: number): { x: number; y: number; visible: boolean }[] {
+  function fieldCorners(i: number): OnScreen[] {
     const f = FIELDS[i]
     if (!f) return []
-    const vp = viewport()
-    return [[f.x0, f.z0], [f.x1, f.z0], [f.x1, f.z1], [f.x0, f.z1]].map(([x, z]) => {
+    const vp = sight()
+    const kept = cornersSeen[i] ??= [[f.x0, f.z0], [f.x1, f.z0], [f.x1, f.z1], [f.x0, f.z1]].map(([x, z]) => {
       anchor.set(x, fieldBaseY(z) + 0.5, z).project(rig.camera)
       return { x: (anchor.x + 1) / 2 * vp.w, y: (1 - anchor.y) / 2 * vp.h, visible: anchor.z < 1 }
     })
+    return kept.map(p => ({ x: p.x, y: p.y, visible: p.visible }))
   }
 
   function unitAnchor(id: number): { x: number; y: number; visible: boolean } {
@@ -1649,7 +1675,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     const changing = hooks as unknown as Record<string, (...a: unknown[]) => unknown>
     for (const name of ['settle', 'seek', 'view', 'titleAt', 'tune', 'home', 'tier', 'show', 'showChild', 'shadowsOn', 'force', 'cascade', 'emptyCascade', 'adapt', 'uncap', 'tryWithout', 'trees']) {
       const call = changing[name]
-      changing[name] = (...a) => { pacing.wake(); return call(...a) }
+      changing[name] = (...a) => { pacing.wake(); const r = call(...a); seenGen++; return r }
     }
     ;(globalThis as Record<string, unknown>).__countyField = hooks
   })()
