@@ -310,7 +310,7 @@ export const mountHud: MountHud = (root, app, view, sound) => {
       sinceTick += dt
       guided.frame(dt)
       notes.hush(papers.isOpen() || !!app.holding)
-      if (sinceTick > 500) { sinceTick = 0; if (notes.count()) notes.prune(app.campaign?.season && app.screen === 'season' ? app.campaign.season.day : -1) }
+      if (sinceTick > 500) { sinceTick = 0; if (notes.count() || notes.held()) notes.prune(app.campaign?.season && app.screen === 'season' ? app.campaign.season.day : -1) }
       if (dirty && !held && screen) {
         dirty = false
         root.dataset.layout = layoutNow()
