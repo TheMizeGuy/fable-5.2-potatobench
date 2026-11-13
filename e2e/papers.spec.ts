@@ -281,8 +281,10 @@ const FOLDS: { open: string; body: string; item: string; key: string }[] = [
 
 // A second spring, after a first year played by the advice and the cellar sold at its usual month.
 const YEAR_TWO = `q.start(1990, 7); q.year(3); q.g().app.do({ t: 'next' })`
+// The same spring owing enough from last year that the plan ends past the bank's limit.
+const PAST_LIMIT = `const { app, sim } = q.g(); const c = app.campaign; const f = c.plans.findIndex(p => p.crop === 'potato'); c.cash -= sim.moneyPlan(app.world, c).after - sim.CREDIT_LIMIT + 3000; app.do({ t: 'plan', field: f, plan: { ...c.plans[f] } })`
 
-interface FoldSeen { region: number; holds: boolean; item: boolean; key: boolean; start: boolean; totals: boolean; lead: number; text: string; where: string; strip: number }
+interface FoldSeen { region: number; holds: boolean; item: boolean; key: boolean; start: boolean; totals: boolean; past: boolean; lead: number; text: string; where: string; strip: number }
 
 async function foldSeen(page: Page, f: (typeof FOLDS)[number]): Promise<FoldSeen> {
   return page.evaluate(({ body, item, key }) => {
@@ -300,7 +302,9 @@ async function foldSeen(page: Page, f: (typeof FOLDS)[number]): Promise<FoldSeen
       region: Math.round(region.clientHeight), holds: region.scrollHeight <= region.clientHeight + 1,
       item: inView(first, box), key: inView(first?.querySelector(key) ?? (first?.matches(key) ? first : null), box),
       start: inView(document.querySelector('#ui [data-testid="begin-season"]')),
-      totals: inView(document.querySelector('#ui [data-testid="plan-money"] .big')) && inView(document.querySelector('#ui [data-testid="plan-due"]')),
+      // The two money lines a choice turns on: This plan, and After year-end bills (or the bank refusing the plan).
+      totals: inView(document.querySelector('#ui [data-testid="plan-money"] .big')) && (inView(document.querySelector('#ui [data-testid="plan-year-end"]')) || !!document.querySelector('#ui .plan-money.over')),
+      past: inView(document.querySelector('#ui [data-testid="plan-past-limit"]')),
       lead: ((lead as HTMLElement | null)?.innerText ?? '').trim().split(/\s+/).filter(Boolean).length, text: ((lead as HTMLElement | null)?.innerText ?? '').trim(),
       strip: new Set([...document.querySelectorAll<HTMLElement>('#ui .fold.more.strip > .btn')].map(b => Math.round(b.getBoundingClientRect().top))).size,
       where: `room ${Math.round(box.top)} to ${Math.round(box.bottom)}, first item ${first ? (({ top, bottom, left, right }) => `${Math.round(top)} to ${Math.round(bottom)}, ${Math.round(left)} to ${Math.round(right)}`)(first.getBoundingClientRect()) : 'none'}`,
@@ -312,13 +316,17 @@ for (const [w, h] of [[1280, 800], [1280, 720]] as const) {
   test.describe(`the spring sheet at ${w} by ${h}`, () => {
     test.use({ viewport: { width: w, height: h } })
 
-    for (const year of [1, 2]) {
+    for (const year of [1, 2, 'past'] as const) {
       test(`year ${year}: each fold opened has room to be used, its first item and key in view, the totals and Start the season kept`, async ({ page }) => {
         test.setTimeout(180_000)
         const errors = watchErrors(page)
         await open(page, '?year=1990&seed=7')
-        if (year === 2) { await reach(page, YEAR_TWO); await putAway(page) }
+        if (year !== 1) { await reach(page, YEAR_TWO); await putAway(page) }
+        if (year === 'past') await reach(page, PAST_LIMIT)
         await expect(page.getByTestId('begin-season')).toBeVisible()
+        if (year === 'past') await expect(page.getByTestId('plan-past-limit')).toBeVisible()
+        // With no fold open the whole foot shows.
+        await expect(page.getByTestId('plan-due')).toBeVisible()
         for (const f of FOLDS) {
           await page.getByTestId(f.open).click()
           const body = page.getByTestId(f.body)
@@ -333,7 +341,8 @@ for (const [w, h] of [[1280, 800], [1280, 720]] as const) {
           expect(s.region >= 300 || s.holds, `${at}: a room of 300 px or all of it (${s.region} px)`).toBe(true)
           expect(s.start, `${at}: Start the season in view`).toBe(true)
           expect(s.strip, `${at}: the other folds on one line`).toBeLessThanOrEqual(1)
-          expect(s.totals, `${at}: This plan and what is due in view`).toBe(true)
+          expect(s.totals, `${at}: This plan and After year-end bills in view`).toBe(true)
+          if (year === 'past') expect(s.past, `${at}: the bank's limit in view`).toBe(true)
           if (f.body === 'contracts') expect(s.lead, `${at}: ${s.text}`).toBeLessThanOrEqual(30)
           // One sentence opens each fold.
           if (s.text) expect(s.text.split(/(?<=[.!?])\s+(?=[A-Z])/).length, `${at}: ${s.text}`).toBe(1)
@@ -364,7 +373,7 @@ test.describe('the spring sheet on a phone, 390 by 844', () => {
       await snap(page, `spring-y1-${f.body}-phone`)
       expect(s.item, `${at}: the first item whole in view (${s.where})`).toBe(true)
       expect(s.start, `${at}: Start the season in view`).toBe(true)
-      expect(s.totals, `${at}: This plan and what is due in view`).toBe(true)
+      expect(s.totals, `${at}: This plan and After year-end bills in view`).toBe(true)
       await page.getByTestId(f.open).click()
       await expect(page.getByTestId(f.body)).toHaveCount(0)
     }
