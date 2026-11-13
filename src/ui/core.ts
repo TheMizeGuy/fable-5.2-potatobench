@@ -262,11 +262,9 @@ export class Papers {
     if (this.stack.length === 0 && !this.queue.length && this.resume) {
       const r = this.resume
       this.resume = null
-      // The clock goes back to what it was doing, unless something else has set it since.
-      if (this.app.screen === 'season' && this.app.speed === 0) {
-        if (this.app.pauseReason === '' && r.speed > 0) this.app.setSpeed(r.speed)
-        else this.app.resumeAfterCard()
-      }
+      // The clock goes back to what it was doing, unless something else has set it since. A clock the game had stopped
+      // stays stopped: a paper the game stopped for (the weigh ticket) sets it going itself once it is answered.
+      if (this.app.screen === 'season' && this.app.speed === 0 && this.app.pauseReason === '' && r.speed > 0) this.app.setSpeed(r.speed)
     }
     if (now || reducedNow()) gone()
     else {
