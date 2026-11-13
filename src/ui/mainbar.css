@@ -5,7 +5,7 @@
   font: 400 13px/1 var(--f-gothic); letter-spacing: .07em; text-transform: uppercase; white-space: nowrap; }
 .mainbar .mb-tab.has { background: var(--canary); }
 .mainbar .mb-n { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; background: var(--red); color: var(--paper); font: 700 12px/1 var(--f-text); letter-spacing: 0; }
-/* A phone and a short window keep their foot as it is: the same sheets open from the menu there. */
+/* A phone and a short window keep their foot as it is: the needs strip, the people's chips and the menu key. */
 #ui[data-layout='narrow'] .mainbar, #ui[data-layout='short'] .mainbar { display: none; }
 .season-screen.incident-up > .mainbar { visibility: hidden; }
 
