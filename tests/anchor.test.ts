@@ -1,6 +1,6 @@
 // Where a card opens (src/ui/anchor.ts): beside the point clicked, by one rule for every card.
 import { describe, expect, it } from 'vitest'
-import { ASIDE, distance, GAP, holds, KEEP, meets, notchOf, placeCard, roomUnder, tetherOf, type Ask, type Box, type Pt } from '../src/ui/anchor.ts'
+import { ASIDE, distance, GAP, holds, KEEP, meets, notchOf, placeCard, roomUnder, tetherOf, tetherShown, type Ask, type Box, type Pt } from '../src/ui/anchor.ts'
 
 const WIN: Box = { left: 8, top: 158, right: 1272, bottom: 712 }
 // The list and the people bar at the foot's left, a chip under the bank board at the right.
@@ -330,6 +330,19 @@ describe('keeping off the other tags and people', () => {
     }
     // With room to, it keeps off the toast as well.
     expect(meets(box(placeCard({ point: at, size: { w: 452, h: 474 }, win, blocks, keep: chip, others: [toast] }), 452), toast)).toBe(false)
+    // A wider bar (four people) or a panel (the grid of who does what): beside the bar its chip stands on, however
+    // far along that is.
+    const wide: Box = { left: 16, top: 592, right: 406, bottom: 704 }
+    const c4 = placeCard({ point: { x: 147, y: 650 }, size: { w: 452, h: 474 }, win: { left: 8, top: 171, right: 1272, bottom: 712 }, blocks: [{ left: 16, top: 541, right: 190, bottom: 585 }, wide, slip], keep: { left: 106, top: 600, right: 189, bottom: 696 } })
+    expect(c4.h).toBe(474)
+    expect(c4.x).toBe(wide.right + 6)
+    expect(c4.aside).toBe(true)
+    const grid: Box = { left: 16, top: 231, right: 528, bottom: 603 }
+    const row: Box = { left: 35, top: 428, right: 140, bottom: 472 }
+    const cg = placeCard({ point: { x: 90, y: 450 }, size: { w: 452, h: 474 }, win, blocks: [grid, bar, slip], keep: row })
+    expect(cg.h).toBe(474)
+    expect(cg.x).toBe(grid.right + 6)
+    expect(meets(box(cg, 452), grid)).toBe(false)
     // Never a strip: whatever the height asked, it is given at least the land over the list.
     const tall = placeCard({ point: at, size: { w: 452, h: 700 }, win, blocks, keep: chip })
     expect(tall.h).toBeGreaterThanOrEqual(380)
@@ -372,6 +385,21 @@ describe('the tether and the notch', () => {
     expect(t.to.y).toBe(tag.bottom)
     expect(t.from.y).toBe(card.top)
     expect(t.len).toBe(10)
+  })
+
+  it('to a chip on a bar the line stops at the bar\'s edge and never crosses its other keys', () => {
+    const list: Box = { left: 16, top: 617, right: 348, bottom: 661 }
+    const bar: Box = { left: 16, top: 668, right: 240, bottom: 784 }
+    // A card beside the bar, its chip's right edge 51 px inside the bar (the hire key stands between).
+    expect(tetherShown({ x: 286, y: 725 }, { x: 189, y: 725 }, [list, bar])).toBeCloseTo(46, 6)
+    // A card over the work list: the line stops at the list.
+    expect(tetherShown({ x: 147, y: 611 }, { x: 147, y: 676 }, [list, bar])).toBeCloseTo(6, 6)
+    // A thing on the land: the whole line, whatever bars there are.
+    expect(tetherShown({ x: 514, y: 360 }, { x: 500, y: 360 }, [list, bar])).toBe(14)
+    // A slanting line into the bar's corner.
+    const d = tetherShown({ x: 300, y: 600 }, { x: 189, y: 700 }, [bar])
+    expect(d).toBeGreaterThan(0)
+    expect(d).toBeLessThan(Math.hypot(111, 100))
   })
 
   it('a notch stands on the sheet edge as near the thing as the edge goes', () => {

@@ -64,12 +64,18 @@ export function yardCard(ctx: Ctx): YardCard {
     const best = suggest && can.some(b => b.kind === suggest && b.ok) ? suggest : null
     const keys = !ctx.touch()
     const flash = flashed && performance.now() < flashed.until ? flashed : null
-    return [
-      h('header', { class: 'command-head' },
+    // What cannot be paid for is said once for the yard, not on every row: each row keeps its own figures and a
+    // short state.
+    const poor = (b: S.BuildingInfo) => !b.ok && b.total > c.cash && /^You can't afford/.test(b.why)
+    const short = can.filter(poor)
+    const bought = short.some(b => b.buyLogs > 0 || b.buyStone > 0)
+    const head = h('header', { class: 'command-head' },
         h('div', null,
           h('p', { class: 't-label num' }, `${yard === S.HOME_YARD ? 'The home farm' : 'The Dufour place'} · ${loads(m.logs)} logs, ${loads(m.stone)} stone in the yard`),
           h('h2', { class: 't-title', testid: 'yard-title' }, YARD_TITLE[yard])),
-        h('button', { class: 'close', type: 'button', testid: 'yard-close', 'aria-label': `Close${keys ? ' (Escape)' : ''}`, onclick: () => app.selectYard(0) }, icon('close', 'i'))),
+        h('button', { class: 'close', type: 'button', testid: 'yard-close', 'aria-label': `Close${keys ? ' (Escape)' : ''}`, onclick: () => app.selectYard(0) }, icon('close', 'i')))
+    // The head and its cross stay in view; what is under them scrolls inside the card when the window is short.
+    return [head, h('div', { class: 'card-body', 'data-scroll': 'yard' },
       h('div', { class: 'builds', role: 'list', 'aria-label': 'Built and going up' },
         houses.map(x => h('div', { class: 'build-row', role: 'listitem' }, icon('store', 'i'), h('span', null, h('span', { class: 't-label' }, 'Built'), ' ', h('b', null, F.upper(x.name.replace(/^Home /, ''))), ' ', h('span', { class: 'quiet num' }, `holds ${F.mass(x.cwt)}`)), h('span'))),
         built.map(b => h('div', { class: 'build-row', role: 'listitem', testid: `built-${b.kind}` }, icon(BUILD_GLYPH[b.kind], 'i'), h('span', null, h('span', { class: 't-label' }, 'Built'), ' ', h('b', null, b.name), extra(b) ? [' ', h('span', { class: 'quiet' }, extra(b))] : null), h('span'))),
@@ -89,15 +95,17 @@ export function yardCard(ctx: Ctx): YardCard {
           catch: `The mill pays ${F.money(m.logPrice)} a load, but a building that runs short has to buy logs back at ${F.money(m.millPrice)}.`,
           onclick: () => { const r = ctx.run({ t: 'sellLogs', loads: Math.floor(m.logs) }); if (r.ok) ctx.announce(F.localize(r.events[0]?.text ?? '')) },
         })) : null,
+      short.length ? h('p', { class: 'note yard-short c-red', testid: 'yard-short' },
+        `${c.cash >= 1 ? `You have ${F.money(Math.floor(c.cash))} to build with` : 'You have no cash to build with'}, and the bank won't lend for buildings.${bought ? ' Logs and stone your yard is short of have to be bought.' : ''}`) : null,
       can.length ? h('div', { class: 'orders', role: 'group', 'aria-label': 'Put up a building' },
         can.map((b, k) => order({
           key: keys && k < 9 ? String(k + 1) : '', icon: '', name: b.name, cost: costOf(b), suggested: b.kind === best, testid: `build-${b.kind}`,
-          catch: flash?.kind === b.kind ? flash.text : !b.ok ? F.localize(b.why) : `Catch: ${b.catch.replace(/^./, x => x.toLowerCase())}`,
+          catch: flash?.kind === b.kind && !poor(b) ? flash.text : poor(b) ? `Can't afford yet${b.buyLogs > 0 || b.buyStone > 0 ? `: ${F.money(b.total)} with materials` : ''}.` : !b.ok ? F.localize(b.why) : `Catch: ${b.catch.replace(/^./, x => x.toLowerCase())}`,
           refused: flash?.kind === b.kind || !b.ok,
           title: keys ? b.does : undefined,
           said: `${b.does} ${F.money(b.total)} in all${b.buyLogs > 0 || b.buyStone > 0 ? `, with ${[b.buyLogs > 0 ? `${loads(b.buyLogs)} logs` : '', b.buyStone > 0 ? `${loads(b.buyStone)} stone` : ''].filter(Boolean).join(' and ')} bought in` : ''}.`,
           onclick: () => build(b),
-        }))) : h('p', { class: 'note' }, 'This yard already has every building it can hold.'),
+        }))) : h('p', { class: 'note' }, 'This yard already has every building it can hold.')),
     ]
   }
 
