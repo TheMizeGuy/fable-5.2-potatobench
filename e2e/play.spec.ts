@@ -5,7 +5,7 @@
 // the test hook if not. Play gives a farm of its own with seasons made from a random seed, so nothing here may count
 // on one year's weather, and money is read from the game rather than written into the test.
 import { test, type Page } from '@playwright/test'
-import { expect, look, noSidewaysScroll, pause, putAway, reach, straightIn, watchErrors } from './helpers.ts'
+import { expect, look, noSidewaysScroll, putAway, reach, straightIn, watchErrors } from './helpers.ts'
 
 const BADGE = '#ui [data-testid^="badge-"]'
 
@@ -61,6 +61,14 @@ async function answerIncident(page: Page, take: boolean): Promise<'card' | 'hook
   }
   await page.evaluate(`window.__county.app.do({ t: 'answer', incident: ${inc.id}, choice: '${inc.choice}' })`)
   return 'hook'
+}
+
+// Answers a weigh ticket or a telegram that is up now, as a player would. True when there was one.
+async function answerWhatIsUp(page: Page): Promise<boolean> {
+  const s = await look(page)
+  if (s.ticket) { await answerTicket(page, true); return true }
+  if (s.incidents || s.spray) return (await answerIncident(page, false)) !== ''
+  return false
 }
 
 // The fastest of the three speeds, from its own button, or on a phone by stepping the one speed button round.
@@ -180,12 +188,31 @@ test('a first season by the short path, from the opening to the next spring, wit
   await expect(page.getByTestId('reckoning')).toContainText('Grade by grade')
   await page.getByTestId('reckoning-close').click()
   await expect(page.getByTestId('reckoning')).toHaveCount(0)
-  // Answered, the days go on at the speed they had: the short path had set 3x.
+  // Answered, the days go on at the speed they had: the short path had set 3x. Read from the clock's own changes,
+  // the first speed it takes after the answer, so that what comes next (a second ticket, a telegram) cannot be
+  // mistaken for it; anything that does come first is answered as a player would.
+  await page.evaluate(() => {
+    const w = globalThis as unknown as { __speeds: number[]; __county: { app: { on(f: (e: { type: string; speed?: number }) => void): void } } }
+    w.__speeds = []
+    w.__county.app.on(e => { if (e.type === 'speed') w.__speeds.push(e.speed ?? 0) })
+  })
   await answerTicket(page, true)
-  await expect.poll(async () => (await look(page)).speed).toBe(3)
+  await expect.poll(async () => {
+    const first = await page.evaluate(() => (globalThis as unknown as { __speeds: number[] }).__speeds.find(s => s > 0) ?? 0)
+    if (!first) await answerWhatIsUp(page)
+    return first
+  }, { timeout: 60_000, intervals: [200] }).toBe(3)
 
-  // Stop, reload, continue: the same day and the same cash.
-  await pause(page)
+  // Stop, reload, continue: the same day and the same cash. Stopped by the player with nothing asking: a ticket or
+  // a telegram that lands first is answered and the stop tried again, so the reload never meets a card half answered.
+  await expect.poll(async () => {
+    if (await answerWhatIsUp(page)) return false
+    const mine = await game<boolean>(page, `app.speed === 0 && app.pauseReason === '' && !c.incidents.length`)
+    if (mine) return !(await look(page)).paper
+    const whole = page.getByTestId('speed-0')
+    await ((await whole.count()) ? whole : page.getByTestId('speed-toggle')).click({ timeout: 2000 }).catch(() => {})
+    return false
+  }, { timeout: 120_000, intervals: [200] }).toBe(true)
   const before = await look(page)
   await page.waitForTimeout(3000)
   await page.reload()
@@ -386,7 +413,10 @@ test('the same start by keyboard alone', async ({ page, isMobile }) => {
   await page.keyboard.press('Enter')
   await expect.poll(async () => (await look(page)).queue).toBeGreaterThan(0)
 
-  // The clock: Space, plus and minus, F stepping through the three speeds.
+  // The clock: Space, plus and minus, F stepping through the three speeds. (A Space within a second of the clock
+  // being set going after a card is taken as "go on" (src/ui/season.ts); the hook above set it going, so that second
+  // is waited out by the app's own mark, not by how fast the steps before happened to run.)
+  await page.waitForFunction(() => performance.now() - (globalThis as unknown as { __county: { app: { resumedAt: number } } }).__county.app.resumedAt > 1100)
   expect((await look(page)).speed).toBe(1)
   await page.keyboard.press('Space')
   await expect(page.getByTestId('paused')).toBeVisible()

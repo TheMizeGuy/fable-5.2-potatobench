@@ -4,6 +4,7 @@ import type { Cmd, Estimate, Lot, Result } from '../sim/index.ts'
 import { h, morphChildren, type Child } from './dom.ts'
 import { icon } from './icons.ts'
 import { localize } from './fmt.ts'
+import { waitsItsTurn } from './turn.ts'
 
 // wide: everything on one line along each edge. mid: the command card gets a row to itself.
 // narrow: a phone or tablet held upright. short: a phone on its side.
@@ -342,6 +343,8 @@ export class Notes {
   // While a paper or a card that needs an answer is up, news waits behind it and shows when it has gone.
   private quiet = false
   private waiting: Parameters<Notes['push']>[0][] = []
+  // Slips nobody asked for, held back while a warning is still being read.
+  private later: Parameters<Notes['push']>[0][] = []
   // Where the rows sit over the land itself, each one goes after this long (0: it stays).
   maxAge = 0
   onGo: (field: number) => void = () => {}
@@ -356,8 +359,10 @@ export class Notes {
   get liveRegion(): HTMLElement { return this.live }
 
   // text: what the row shows. full: what a screen reader hears (the whole sentence).
-  push(o: { level?: Level; glyph?: string; text: string; full?: string; field?: number; day?: number; ttl?: number; go?: (() => void) | null }): void {
+  // offer: nobody asked for it, so it never takes the place of a warning that has only just come up.
+  push(o: { level?: Level; glyph?: string; text: string; full?: string; field?: number; day?: number; ttl?: number; go?: (() => void) | null; offer?: boolean }): void {
     if (this.quiet) { this.waiting.push(o); this.live.textContent = localize(o.full ?? o.text); return }
+    if (o.offer && waitsItsTurn(this.items, this.keep, performance.now())) { this.later.push(o); this.live.textContent = localize(o.full ?? o.text); return }
     const level = o.level ?? 'info'
     const text = localize(o.text)
     const full = localize(o.full ?? o.text)
@@ -379,6 +384,7 @@ export class Notes {
   // Drops what has gone stale: a notice after its time, an alert once it is days old.
   prune(day: number): void {
     const now = performance.now()
+    if (this.later.length && !this.quiet && !waitsItsTurn(this.items, this.keep, now)) for (const o of this.later.splice(0)) if (!(o.day !== undefined && day >= 0 && day - o.day > 6)) this.push(o)
     const gone = this.items.filter(n => (n.ttl > 0 && !this.hovered && now - n.born > n.ttl) || (n.day >= 0 && day >= 0 && day - n.day > 6) ||
       (this.maxAge > 0 && !this.hovered && now - n.born > this.maxAge))
     if (!gone.length) return
@@ -388,6 +394,7 @@ export class Notes {
 
   clear(): void {
     this.items = []
+    this.later = []
     this.pinned = null
     this.el.replaceChildren()
   }
@@ -416,6 +423,7 @@ export class Notes {
   }
 
   count(): number { return this.items.length }
+  held(): boolean { return this.later.length > 0 }
   has(full: string): boolean { return this.items.some(n => n.full === localize(full)) }
 
   // Takes down a line that no longer holds, shown or waiting behind a card.

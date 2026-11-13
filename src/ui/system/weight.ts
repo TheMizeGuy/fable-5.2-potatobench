@@ -10,7 +10,7 @@ const MAJOR: RegExp[] = [
   // the crop: sell, store, deliver, hold back for seed
   /^(lot|field)-(sell|sell-half|deliver)-/, /^lot-seed-(?!open-)/, /^(sell-logs|sell-logs-some|sell-logs-all|yard-sell-logs)$/,
   // people: hire, let go, pay more
-  /^(hire|hire-applicant|applicant-hire|dismiss)-/, /^(person-raise|person-dismiss|whois-letgo)$/,
+  /^(hire|hire-applicant|applicant-hire|dismiss)-/, /^(person-raise|person-dismiss|whois-letgo)$/, /^foreman-(?!none$|said$|what$)/,
   // machines, land, buildings, the bank
   /^buy-/, /^(land-rent|land-buy|land-buy-cash|land-release|tract-stump|order-stump)$/, /^build-/, /^raise-(?!open$)/, /^pay-/,
   // a contract signed, a telegram answered, a step confirmed

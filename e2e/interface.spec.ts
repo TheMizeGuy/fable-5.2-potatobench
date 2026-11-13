@@ -954,12 +954,15 @@ test('blight weather asks once how to spray this season, and a worn-out hand can
 test('a field says which work the crew does by itself and which waits for the player, and the first planting is said with Show me', async ({ page }) => {
   const errors = watchErrors(page)
   await startSeason(page)
-  // Days run until the crew takes up planting by itself: a note says so, and Show me goes to who is planting.
-  await reach(page, `const { app } = q.g(); const c = app.campaign; for (let k = 0; k < 90 && !c.season.jobs.some(j => j.kind === 'plant' && c.crew.some(u => u.job === j.id)); k++) { c.incidents = []; app.do({ t: 'day' }) } app.setSpeed(0)`)
+  // Days run until the crew has planted by itself: a note says so, and Show me goes to the field it names (round six:
+  // it used to come while the order still waited for warm soil, and to open the planter's card instead).
+  await reach(page, `const { app } = q.g(); const c = app.campaign; for (let k = 0; k < 90 && !c.season.worked.some(w => w.kind === 'plant'); k++) { c.incidents = []; app.do({ t: 'day' }) } app.setSpeed(0)`)
   const note = page.locator('#ui [data-testid="alert"]', { hasText: 'Planting has started' })
   await expect(note).toBeVisible()
+  const named = ((await note.textContent()) ?? '').match(/started in (.+?)\. Show me/)?.[1] ?? ''
   await note.click()
-  await expect(page.getByTestId('whois')).toBeVisible()
+  await expect(page.getByTestId('card-title')).toHaveText(named)
+  await expect(page.getByTestId('whois')).toBeHidden()
   await page.keyboard.press('Escape')
   // A field's card: the crew's work on it and when, and the kinds of work that are the player's.
   const field = await game<number>(page, `app.campaign.season.jobs.find(j => j.kind === 'plant').field`)
