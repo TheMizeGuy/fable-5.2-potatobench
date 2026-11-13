@@ -336,7 +336,8 @@ export const LESSONS: Lesson[] = [
     id: 'bills', part: 'year', name: 'The year-end bills', read: true, reveals: ['after'],
     when: l => inSeason(l) && anyField(l, f => f.weighed) && !l.papers.includes('weighin'),
     done: (l, g, since) => g.has('noted:bills') || (!!since && !!l.c && l.c.phase !== 'season'),
-    ask: () => `Your first crop is weighed. Under your cash you'll see what's left after the year-end bills of ${owed()}.`,
+    // By the words on the money board: its second figure is labelled "After year-end bills".
+    ask: () => `Your first crop is weighed. "After year-end bills" at the top right is what's left after paying the ${owed()}.`,
     why: () => 'It counts the crop still in the ground, so it\'ll change until every field is in.',
     point: () => ({ testid: ['outlook'] }),
     skip: l => (l.c && S.seasonDone(l.c) ? null : 'Fast-forward to the next ticket'),

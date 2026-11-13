@@ -545,6 +545,9 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
         stale = true
         return
       }
+      // The game set the clock going itself (a telegram answered, a paper closed): paused again, and that speed is
+      // the one the note goes back to.
+      holding.speed = app.speed
       stopNow()
       return
     }
