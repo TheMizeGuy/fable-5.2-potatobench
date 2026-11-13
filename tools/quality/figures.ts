@@ -83,7 +83,7 @@ if (!measure) {
 
 // ---------------------------------------------------------------- --measure
 
-interface Sample { t: number; day: number; speed: number; jobs: string; follow: number; units: { id: number; x: number; z: number; foot: boolean; job: number; px: number; py: number; pv: boolean }[] }
+interface Sample { t: number; day: number; speed: number; jobs: string; follow: number; units: { id: number; x: number; z: number; foot: boolean; fade: number; job: number; px: number; py: number; pv: boolean }[] }
 
 // Every frame for `ms`: each person's place, whether on foot, their order, and their pin on the screen.
 async function sample(p: Page, ms: number): Promise<Sample[]> {
@@ -101,7 +101,7 @@ async function sample(p: Page, ms: number): Promise<Sample[]> {
         jobs: (s?.jobs ?? []).map((j: any) => j.id).join(','),
         units: info.units.map((u: any) => {
           const pin = f.unitPin(u.id)
-          return { id: u.id, x: u.x, z: u.z, foot: u.foot, job: app.campaign.crew.find((c: any) => c.id === u.id)?.job ?? -1, px: pin.x, py: pin.y, pv: pin.visible }
+          return { id: u.id, x: u.x, z: u.z, foot: u.foot, fade: u.fade ?? 1, job: app.campaign.crew.find((c: any) => c.id === u.id)?.job ?? -1, px: pin.x, py: pin.y, pv: pin.visible }
         }),
       })
       if (performance.now() - t0 < ms) requestAnimationFrame(step)
@@ -111,13 +111,17 @@ async function sample(p: Page, ms: number): Promise<Sample[]> {
   }), ms)
 }
 
-// A step no walker (10 m/s) or driver (30 m/s) could make in the time a frame took, and more than half a metre.
-const tooFar = (m: number, dtMs: number, foot: boolean) => m > Math.max(0.5, (foot ? 10 : 30) * dtMs / 1000)
+// A step no walker (10 m/s) or driver (30 m/s) could make in the time a frame took, and more than half a metre. At the
+// faster clocks people and machines are let go quicker (half as fast again at 3x, two and a half times at 8x). A way
+// too long to show is cut: whoever is on it goes from sight and is next seen where it brings them in, which is no
+// step of theirs.
+const QUICK = [1, 1, 1.5, 2.4]
+const tooFar = (m: number, dtMs: number, foot: boolean, speed: number) => m > Math.max(0.5, (foot ? 10 : 30) * (QUICK[speed] ?? 1) * dtMs / 1000)
 
-interface Row { state: string; speed: string; frames: number; maxM: number; maxPx: number; jumps: number; at: Record<string, number>; worst: string[] }
+interface Row { state: string; speed: string; frames: number; maxM: number; maxPx: number; jumps: number; cuts: number; at: Record<string, number>; worst: string[] }
 
 function analyse(state: string, speed: string, ss: Sample[]): Row {
-  const row: Row = { state, speed, frames: ss.length, maxM: 0, maxPx: 0, jumps: 0, at: {}, worst: [] }
+  const row: Row = { state, speed, frames: ss.length, maxM: 0, maxPx: 0, jumps: 0, cuts: 0, at: {}, worst: [] }
   const big: { m: number; s: string }[] = []
   for (let k = 1; k < ss.length; k++) {
     const a = ss[k - 1], b = ss[k]
@@ -128,9 +132,11 @@ function analyse(state: string, speed: string, ss: Sample[]): Row {
       const ua = a.units.find(u => u.id === ub.id)
       if (!ua) continue
       const m = Math.hypot(ub.x - ua.x, ub.z - ua.z)
+      // (gone from sight through a cut)
+      if (Math.min(ua.fade, ub.fade) < 0.5) { if (m > 20) row.cuts++; continue }
       if (m > row.maxM) row.maxM = m
       if (ua.pv && ub.pv) row.maxPx = Math.max(row.maxPx, Math.hypot(ub.px - ua.px, ub.py - ua.py))
-      if (!tooFar(m, b.t - a.t, ua.foot && ub.foot)) continue
+      if (!tooFar(m, b.t - a.t, ua.foot && ub.foot, b.speed)) continue
       jumped = true
       if (m > 20) big.push({ m, s: `#${k} unit ${ub.id} ${m.toFixed(0)} m ${ua.x.toFixed(0)},${ua.z.toFixed(0)} -> ${ub.x.toFixed(0)},${ub.z.toFixed(0)} foot ${ua.foot}->${ub.foot} job ${ua.job}->${ub.job} day ${a.day}->${b.day} dt ${(b.t - a.t).toFixed(0)}` })
       const why = a.day !== b.day ? 'day turn' : ua.job !== ub.job ? 'job change' : ua.foot !== ub.foot ? 'mount/leave' : a.jobs !== b.jobs ? 'list change' : a.follow !== b.follow ? 'follow' : 'other'
@@ -167,15 +173,15 @@ for (const [state, setup] of STATES) {
     rows.push(analyse(state, speed === 0 ? 'paused' : ['', '1x', '3x', '8x'][speed], [...card, ...followed]))
     const r = rows[rows.length - 1]
     for (const w of r.worst) console.log(`  ${w}`)
-    console.log(`${r.state} | ${r.speed} | ${r.frames} | ${r.maxM.toFixed(2)} | ${r.maxPx.toFixed(0)} | ${r.jumps} | ${Object.entries(r.at).map(([k, n]) => `${k} ${n}`).join(', ') || '-'}`)
+    console.log(`${r.state} | ${r.speed} | ${r.frames} | ${r.maxM.toFixed(2)} | ${r.maxPx.toFixed(0)} | ${r.jumps} | ${r.cuts} | ${Object.entries(r.at).map(([k, n]) => `${k} ${n}`).join(', ') || '-'}`)
     await page.keyboard.press('Escape')
     await page.evaluate(() => { (globalThis as any).__county.app.selectUnit(-1); (globalThis as any).__countyField.tier('farm') })
     await page.waitForTimeout(600)
   }
 }
 console.log('--')
-const lines = ['state | speed | frames | largest step m | largest pin step px | frames with an impossible step | where', '---|---|---|---|---|---|---',
-  ...rows.map(r => `${r.state} | ${r.speed} | ${r.frames} | ${r.maxM.toFixed(2)} | ${r.maxPx.toFixed(0)} | ${r.jumps} | ${Object.entries(r.at).map(([k, n]) => `${k} ${n}`).join(', ') || '-'}`)]
+const lines = ['state | speed | frames | largest step seen m | largest pin step px | frames with an impossible step | cuts | where', '---|---|---|---|---|---|---|---',
+  ...rows.map(r => `${r.state} | ${r.speed} | ${r.frames} | ${r.maxM.toFixed(2)} | ${r.maxPx.toFixed(0)} | ${r.jumps} | ${r.cuts} | ${Object.entries(r.at).map(([k, n]) => `${k} ${n}`).join(', ') || '-'}`)]
 writeFileSync(join(out, 'motion.md'), lines.join('\n') + `\n\nerrors: ${errors.join(' | ') || 'none'}\n`)
 console.log(lines.join('\n'))
 console.log(`errors: ${errors.length}`)

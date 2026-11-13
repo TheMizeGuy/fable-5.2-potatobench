@@ -24,7 +24,8 @@ export interface Worker {
   lift: number             // height above the ground
   pose: Pose
   aboard: boolean          // in the seat of its machine
-  rig: { x: number; z: number; heading: number; load: number } | null
+  // fade: below 1 while the machine goes from sight where a drive is cut (it is next seen coming in at the far end)
+  rig: { x: number; z: number; heading: number; load: number; fade?: number } | null
   loads: number            // hauling: how many loads the day's part of it comes to
   lit: boolean             // this part of the day was planned with the clock stopped
 }
@@ -701,7 +702,7 @@ export class Stage {
     // the other.
     const literal = f.literal && w.lit
     const q0 = literal ? 0.22 : LAP_STAND, q1 = LAP_DOOR, q2 = q1 + q0
-    const lapS = Math.min(3.4, Math.max(2.4, 2 * f.day)), legS = lapS * (q1 - q0), reach = f.lane * legS
+    const lapS = Math.min(6, Math.max(2.6, 1.5 * f.day)), legS = lapS * (q1 - q0), reach = f.lane * legS
     if (literal) j.t = frac(Math.min(0.99999, w.w) * Math.max(1, w.loads))
     // (the clock stopped on a day that was running: the load in hand is seen in to the door, and no more)
     else if (f.going) j.t = f.literal ? (j.t < q2 ? Math.min(q2, j.t + f.dt / lapS) : j.t) : frac(j.t + f.dt / lapS)
@@ -714,6 +715,9 @@ export class Stage {
       return 1 - ((reach * 0.6) / trip.length) * (1 - r) * (1 - r)
     }
     const along = loading ? 0 : out ? leg((lap - q0) / (q1 - q0)) : unloading ? 1 : 1 - leg((lap - q2) / (1 - q2))
+    // (a cut drive: going from sight over the last of the pulling away)
+    const drive = out ? (lap - q0) / (q1 - q0) : back ? (lap - q2) / (1 - q2) : 1
+    if (w.rig) w.rig.fade = !literal && trip.length > reach * 1.25 && drive < 0.4 ? 1 - 0.9 * clamp01((drive - 0.2) / 0.2) : 1
     // the second machine stands a length behind the first
     const stood = loading || unloading
     const p = trip.at(Math.max(0, Math.min(trip.length, along * trip.length - (unloading ? r * 3.4 * s : 0))))

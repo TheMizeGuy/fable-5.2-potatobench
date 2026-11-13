@@ -17,7 +17,7 @@ import { Flora } from './flora.ts'
 import { Grass } from './grass.ts'
 import { Harvest } from './harvest.ts'
 import { attachInput } from './input.ts'
-import { DUFOUR, FD, FIELDS, FW, HOME, LAND, POTATO_HOUSE, ROAD, WATER_Y, brookZ, fieldBaseY, groundY, YARD_AT, yardAt } from './layout.ts'
+import { DUFOUR, FD, FIELDS, FW, HOME, HOUSE, LAND, POTATO_HOUSE, ROAD, WATER_Y, brookZ, fieldBaseY, groundY, YARD_AT, yardAt } from './layout.ts'
 import { clamp, hash2, smooth } from './noise.ts'
 import { K, KV, S } from './scale.ts'
 import { laps } from './laps.ts'
@@ -505,6 +505,8 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     } else if (sameDay) {
       // A command in the middle of the day: keep the day playing, refresh everything not waiting to be revealed.
       crews.sync(next)
+      // (an order just given, with the clock running: whoever would take it sets out)
+      if (app.speed > 0) crews.setOut(next)
       const wait = new Set(pending.map(r => r.field * HILLS + r.hill))
       shown = next.fields.map((f, i) => f.hills.map((_, h) => (wait.has(i * HILLS + h) ? shown[i][h] : display(i, h, next))))
     } else {
@@ -1105,9 +1107,10 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     framing = 'free'
     rig.idle = 99
     if (!comeClose(id)) {
-      // Not on the land this moment (indoors, through a door): the home yard, until they come out.
+      // Not on the land this moment (indoors, a day off at home): the house, from near enough that it is plainly the
+      // house that is shown, until they come out.
       framedYard = -1
-      rig.moveTo(rig.yard(-1, viewport()), reduced, 900)
+      rig.moveTo(rig.complete({ x: HOUSE.x - 1.2 * S, z: HOUSE.z - 1.6 * S, dist: 58, pitch: 0.3 }), reduced, 900)
     }
   }
 
