@@ -204,6 +204,8 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     const name = S.FIELD_NAMES[e.field] ?? ''
     // The same field dug again: the tray the player has open is brought up to date, since they asked for it.
     if (tray && tray.field === e.field) { openTray(e, staged); return }
+    // The foot has one place for a slip: a tip about a stamp gives it up to the offer, which comes only once.
+    if (hint) { hint = null; ctx.notes.unpin() }
     ctx.notes.push({
       level: 'info', glyph: 'sample', ttl: 20000, field: e.field, day: e.day,
       text: `The test dig at ${name} is in. Show me`,

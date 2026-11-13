@@ -90,7 +90,8 @@ test('the season: instruments, the card, the almanac, the menu and its confirmat
 test('the test-dig tray, the weigh ticket and the reckoning', async ({ page }) => {
   await open(page, '?year=1990&seed=7')
   await page.getByTestId('begin-season').click()
-  await reach(page, `q.g().app.setSpeed(0); q.run(q.day(6, 28), ['sample']); const { app } = q.g(); app.do({ t: 'job', kind: 'sample', field: 2 }); app.do({ t: 'bump', id: app.campaign.season.jobs.at(-1).id }); app.do({ t: 'day' })`)
+  // (spraying settled first, as a player would when the question comes: a slip waits behind a telegram)
+  await reach(page, `q.g().app.setSpeed(0); q.g().app.do({ t: 'sprayWay', way: 'ask' }); q.run(q.day(6, 28), ['sample']); const { app } = q.g(); app.do({ t: 'job', kind: 'sample', field: 2 }); app.do({ t: 'bump', id: app.campaign.season.jobs.at(-1).id }); app.do({ t: 'day' })`)
   // (the test dig is offered on a slip; Show me lays its tray)
   await page.locator('#ui [data-testid="alert"]', { hasText: 'test dig' }).click()
   await expect(page.getByTestId('sample-dialog')).toBeVisible()

@@ -825,7 +825,9 @@ test('tags and stamps hold still when a card opens or closes and when an order i
   await page.setViewportSize({ width: 1280, height: 800 })
   await startSeason(page)
   // Late August, stopped, with the player's calls (spray, the vine kill) left as stamps on the fields.
-  await reach(page, `const { app } = q.g(); app.setSpeed(0); q.run(q.day(7, 28), ['spray', 'kill', 'sell']); app.setSpeed(0); app.campaign.incidents = []; app.select(-1)`)
+  // (Spraying is settled as "ask me", as a player would answer the question when blight weather came. Until test
+  // digs stopped laying their trays unasked, this test's Escapes for those trays put the question away by chance.)
+  await reach(page, `const { app } = q.g(); app.setSpeed(0); app.do({ t: 'sprayWay', way: 'ask' }); q.run(q.day(7, 28), ['spray', 'kill', 'sell']); app.setSpeed(0); app.campaign.incidents = []; app.select(-1)`)
   await putAway(page)
   // Where every tag and stamp on the land is now, by test id.
   const where = () => page.evaluate(() => Object.fromEntries([...document.querySelectorAll<HTMLElement>('#ui .plate[data-testid^="field-"], #ui [data-testid^="badge-"]')]
