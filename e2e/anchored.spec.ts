@@ -259,13 +259,15 @@ async function hold(page: Page, k: Case, label: string, close: 'Escape' | 'groun
   expect.soft(bars.filter(b => meets(c.rect, b)), say('clear of the top boards and the foot\'s bars')).toEqual([])
   if (k.onBar) {
     // A chip stands in the people bar under the list: its card stands directly over them, above the chip.
+    // (or, too tall for the land over the list, beside the list and the bar: then it has stepped aside, whole)
     const tops = bars.filter(b => b.left < c.rect.right && b.right > c.rect.left && b.top > size.height / 2).map(b => b.top)
-    expect.soft(Math.min(...tops) - c.rect.bottom, say('stands right over the list and the people bar')).toBeLessThanOrEqual(16)
+    if (!c.aside) expect.soft(Math.min(...tops) - c.rect.bottom, say('stands right over the list and the people bar')).toBeLessThanOrEqual(16)
   }
   // Beside what was clicked: the point on the land, or the handle (the tag, the chip, the order) when it was one.
   // Where the land beside it is too short for the whole card (a short window, between the slip under the date board
   // and the people bar), the card steps along that side, clear of the bar, whole and still tied: no further than 190 px.
-  const reach = c.aside ? 190 : 60
+  // (a chip stands on the people bar under the work list: its card stands over the list, the list's height further off)
+  const reach = c.aside ? 190 : k.onBar ? 100 : 60
   if (c.aside) expect.soft(c.fits && !c.cut, say('stepped aside from the point, it is whole')).toBe(true)
   if (k.handle) expect.soft(apart(c.rect, k.handle), say(`its nearest edge is within ${reach} px of the handle clicked (${Math.round(apart(c.rect, k.handle))} px)`)).toBeLessThanOrEqual(reach)
   else expect.soft(away(c.rect, from), say(`its nearest edge is within ${reach} px of the point clicked (${Math.round(away(c.rect, from))} px)`)).toBeLessThanOrEqual(reach)
