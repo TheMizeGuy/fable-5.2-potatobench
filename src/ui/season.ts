@@ -310,13 +310,15 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     askSpray(ctx)
     app.stopFor('You need to decide how to handle spraying this season.', 'spray')
   }
-  // A pause that waits for a press on a stamp (the word to plant, a vine kill that is the player's): with none of
-  // those stamps on the screen, the whole farm is shown.
+  // A pause that waits for a press on a stamp (the word to plant, a vine kill that is the player's): unless every
+  // field that carries one is on the screen itself (a tag waiting at the edge for land out of view is not the
+  // field), the whole farm is shown.
   function showStamps(act: 'plant' | 'kill'): void {
-    const onScreen = () => app.needs().some((n, i) => {
-      if (n.need?.act !== act) return false
+    const onScreen = () => app.needs().every((n, i) => {
+      if (n.need?.act !== act) return true
+      const a = ctx.view.fieldAnchor(i)
       const r = document.querySelector(`#ui .plate-layer [data-testid="badge-${i}"]`)?.getBoundingClientRect()
-      return !!r && r.width > 0 && r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight
+      return a.visible && a.x >= 0 && a.y >= 0 && a.x <= innerWidth && a.y <= innerHeight && !!r && r.width > 0 && r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight
     })
     setTimeout(() => { if (app.screen === 'season' && app.speed === 0 && !onScreen()) ctx.view.home() }, 400)
   }

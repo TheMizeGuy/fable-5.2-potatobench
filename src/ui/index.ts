@@ -268,7 +268,7 @@ export const mountHud: MountHud = (root, app, view, sound) => {
         const sayPause = (why: string) => {
           if (app.speed !== 0 || app.pauseReason !== why || app.screen !== 'season' || !app.campaign || S.seasonDone(app.campaign) || papers.isOpen() || notes.has(why)) return
           pauseSaid = `Paused: ${why}`
-          notes.push({ text: pauseSaid, level: 'info', ttl: asks ? 0 : 9000 })
+          notes.push({ text: pauseSaid, level: 'info', glyph: app.pauseCause === 'plantAsk' ? 'plant' : app.pauseCause === 'killCall' ? 'kill' : undefined, ttl: asks ? 0 : 9000 })
         }
         if (e.speed === 0 && app.holding) ctx.announce(app.pauseReason)
         else if (!ticketing && e.speed === 0 && app.pauseReason && app.pauseReason !== HOLD) {

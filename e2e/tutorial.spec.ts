@@ -1014,8 +1014,11 @@ async function atTheAsk(page: Page, what: string): Promise<number[]> {
   await expect.poll(async () => {
     const out: string[] = []
     for (const i of at.fit) { const r = await reachable(page, `badge-${i}`); if (r !== 'in view') out.push(`badge-${i} ${r}`) }
+    // The fields themselves are on the screen: a tag waiting at the window's edge stands for land out of view.
+    const edge = await page.evaluate(fit => fit.filter(i => { const r = document.querySelector(`#ui [data-testid="field-${i}"]`)?.getBoundingClientRect(); return !r || r.left < 40 || r.right > innerWidth - 40 }), at.fit)
+    for (const i of edge) out.push(`field-${i} at the edge`)
     return out
-  }, { timeout: 10_000, message: `${what}: the Plant stamps are in view` }).toEqual([])
+  }, { timeout: 10_000, message: `${what}: the Plant stamps are in view, on fields that are on the screen` }).toEqual([])
   await expect(page.getByTestId('goal')).toContainText('Give the word to plant')
   return at.fit
 }
@@ -1083,9 +1086,8 @@ test('year two without the tutorial at 3x: paused at the ask with the stamps bro
   await page.mouse.move(640, 520)
   for (let k = 0; k < 6; k++) { await page.mouse.wheel(0, -600); await page.waitForTimeout(120) }
   await page.waitForTimeout(900)
-  const away: string[] = []
-  for (const i of potato) if ((await reachable(page, `field-${i}`)) !== 'in view') away.push(`field-${i}`)
-  expect(away.length, 'potato fields off the screen before the ask').toBeGreaterThan(0)
+  const away = await page.evaluate(list => list.filter(i => { const r = document.querySelector(`#ui [data-testid="field-${i}"]`)?.getBoundingClientRect(); return !r || r.left < 40 || r.right > innerWidth - 40 || r.width === 0 }), potato)
+  expect(away.length, 'potato fields off the screen before the ask (their tags wait at the edge)').toBeGreaterThan(0)
   await page.getByTestId('speed-2').click()
   expect(await game<number>(page, 'app.speed')).toBe(2)
   const fit = await atTheAsk(page, 'year two at 3x')
