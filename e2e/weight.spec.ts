@@ -224,6 +224,11 @@ test('a key goes down under the press, a major one furthest, without moving from
     return { up: cs.getPropertyValue('--w-up').trim(), h: cs.getPropertyValue('--w-h').trim(), recess: cs.getPropertyValue('--w-in').trim(), top: r.top, sound: (e as HTMLElement).dataset.sound ?? '' }
   })
   const major = page.getByTestId('month-next')
+  // The screen arrives and the sheet lays itself down first: the key is measured once nothing above it is moving.
+  await page.waitForFunction(() => {
+    for (let p = document.querySelector('#ui [data-testid="month-next"]'); p; p = p.parentElement) if (p.getAnimations().length) return false
+    return true
+  })
   const rest = await up('month-next')
   expect(rest).toMatchObject({ up: '6px', h: '6px', sound: 'press' })
   expect((await up('menu-open')).up).toBe('3px')
