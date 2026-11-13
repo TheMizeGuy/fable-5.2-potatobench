@@ -8,6 +8,7 @@ import * as F from './fmt.ts'
 import { GLOSSARY, term } from './glossary.ts'
 import { icon } from './icons.ts'
 import { digitFor, fieldForDigit, heldFields, step } from './map.ts'
+import { dueSays, lowCashSays } from './money-words.ts'
 import { plates, type PlateModel } from './plates.ts'
 import * as R from './rules.ts'
 import { cardHead, fieldCost, landCard, springFolds, tenureRow, tractCard, type Fold } from './spring.ts'
@@ -365,9 +366,9 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
     // mortgage. Whatever raises the loan (a field, a hand, a machine bought from cash) raises what is due by as much.
     const mn = S.moneyNow(app.world, c)
     const loan = over ? 0 : mn.loan
-    const due = over ? mn.due.total - mn.due.loan : mn.due.total
     const what = pc.rent || pc.wages ? `with ${F.list([pc.rent ? `rent ${F.money(pc.rent)}` : '', pc.wages ? `wages ${F.money(pc.wages)}` : ''].filter(Boolean))}` : ''
-    const parts = F.list([loan ? 'the spring loan' : '', `${F.money(mn.due.note)} for the yearly bank payment`, `${F.money(mn.due.household)} for your family's living costs`, mn.due.mortgage > 0 ? `${F.money(Math.round(mn.due.mortgage))} for the land mortgage` : ''].filter(Boolean))
+    const due = dueSays(mn.due, loan)
+    const low = over ? '' : lowCashSays(c, after)
     return [
       h('div', { class: `plan-money${over ? ' over' : ''}`, testid: 'plan-money' },
         h('p', { class: 'lead quiet pm-cash' }, h('span', { class: 'it' }, c.cash < 0 ? 'Owed from last year' : 'You have'), h('span', { class: 'dots' }),
@@ -375,10 +376,11 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
         h('p', { class: 'lead' }, h('span', null, 'This plan', what ? h('span', { class: 'it quiet', testid: 'plan-rent' }, ` ${what}`) : null), h('span', { class: 'dots' }),
           h('b', { class: 'num big' }, F.money(pc.total))),
         h('p', { class: 'lead quiet pm-loan' }, h('span', { class: 'it' }, over ? 'More than the bank will lend' : after < 0 ? term('The bank\'s spring loan', 'spring loan') : 'Left in cash'), h('span', { class: 'dots' }),
-          over ? null : h('span', { class: 'num', testid: 'plan-loan' }, F.money(Math.abs(after)))),
+          over ? null : h('span', { class: `num${low ? ' c-ochre' : ''}`, testid: 'plan-loan' }, F.money(Math.abs(after)))),
+        low ? h('p', { class: 't-caption c-ochre', testid: 'plan-low', role: 'status' }, low) : null,
         h('p', { class: 'lead quiet' }, h('span', { class: 'it' }, term('Due at the end of the year', 'due at the year end'), ctx.layout() === 'narrow' ? null : ', from your crop'), h('span', { class: 'dots' }),
-          h('span', { class: 'num c-red', testid: 'plan-due' }, F.money(due))),
-        h('p', { class: 't-caption pm-parts' }, `That's ${parts}. You keep whatever's left.`),
+          h('span', { class: 'num c-red', testid: 'plan-due' }, F.money(due.total))),
+        h('p', { class: 't-caption pm-parts' }, due.text),
         c.history.length ? null : h('p', { class: 't-caption pm-usual', testid: 'plan-usual', title: ctx.touch() ? undefined : usualFirstYear(mn.due.note + mn.due.household).full }, usualFirstYear(mn.due.note + mn.due.household).short)),
       over ? h('p', { class: 't-caption c-red', role: 'alert' }, 'Rest a field or plant saved seed, because the bank won\'t lend any more this spring.') : null,
       h('div', { class: 'blank-go' },
