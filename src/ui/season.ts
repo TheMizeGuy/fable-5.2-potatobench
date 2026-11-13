@@ -266,7 +266,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
         text: `${kind === 'plant' ? 'Planting' : 'Digging'} has started in ${S.FIELD_NAMES[j.field]}. Show me`,
         full: `${kind === 'plant' ? 'Planting' : 'Digging'} has started in ${S.FIELD_NAMES[j.field]} without an order from you. ${who} working there. Press to see.`,
         // To the field the sentence names, where the work shows.
-        go: () => { app.selectUnit(-1); app.select(j.field); app.focus(j.field) },
+        go: () => { app.selectUnit(-1); app.select(j.field); app.focus(j.field) }, offer: true,
       })
     }
   }
@@ -288,7 +288,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
         level: soon ? 'warn' : 'info', glyph: 'kill', ttl: 14000, field: p.field, day: s0.day,
         text: `${name}: ${due && date && !soon ? `vine kill due around ${S.formatDay(s0.year, due.day, true)}. Your crew does it on ${date}` : `your crew will kill the vines ${soon ? 'tomorrow' : date ? `on ${date}` : 'soon'}`}. Show me`,
         full: `${F.localize(p.inWay)} Press to see the field, where you can tell the crew to keep the vines up.`,
-        go: () => { app.select(p.field); app.focus(p.field) },
+        go: () => { app.select(p.field); app.focus(p.field) }, offer: !soon,
       })
     }
   }

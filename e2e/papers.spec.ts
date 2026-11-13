@@ -128,8 +128,12 @@ for (const [w, h] of [[1280, 800], [1280, 720]] as const) {
       await page.keyboard.press('Shift+t')
       await expect.poll(async () => (await look(page)).queue).toBeGreaterThan(0)
       await page.getByTestId('speed-1').click()
+      // The result is offered on a slip; the tray opens when it is asked for.
+      const offer = page.locator('#ui [data-testid="alert"]', { hasText: 'test dig' })
+      await expect(offer).toBeVisible({ timeout: 30_000 })
+      await offer.click()
       const tray = page.getByTestId('sample-dialog')
-      await expect(tray).toBeVisible({ timeout: 30_000 })
+      await expect(tray).toBeVisible()
       await page.getByTestId('speed-0').click()
       await page.waitForTimeout(1500)
       const paper = (await box(page, '#ui [data-testid="sample-dialog"]'))!
@@ -238,8 +242,11 @@ test.describe('on a phone, 390 by 844', () => {
     await expect(page.getByTestId('date')).toBeVisible()
     await reach(page, `const { app } = q.g(); app.setSpeed(0); app.do({ t: 'sprayWay', way: 'ask' }); q.run(q.day(8, 4), ['sample']); app.setSpeed(0)
       app.do({ t: 'job', kind: 'sample', field: 2 }); app.do({ t: 'bump', id: app.campaign.season.jobs.at(-1).id }); app.do({ t: 'day' }); app.setSpeed(0)`)
+    const offer = page.locator('#ui [data-testid="alert"]', { hasText: 'test dig' })
+    await expect(offer).toBeVisible({ timeout: 30_000 })
+    await offer.click()
     const tray = page.getByTestId('sample-dialog')
-    await expect(tray).toBeVisible({ timeout: 30_000 })
+    await expect(tray).toBeVisible()
     await page.waitForTimeout(2600)
     await snap(page, 'test-dig-phone')
     const paper = (await box(page, '#ui [data-testid="sample-dialog"]'))!

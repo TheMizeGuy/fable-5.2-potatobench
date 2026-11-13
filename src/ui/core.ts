@@ -343,7 +343,7 @@ export class Notes {
   // While a paper or a card that needs an answer is up, news waits behind it and shows when it has gone.
   private quiet = false
   private waiting: Parameters<Notes['push']>[0][] = []
-  // Slips nobody asked for, held back while a warning is still being read.
+  // Slips nobody asked for, held back while what is showing is still being read.
   private later: Parameters<Notes['push']>[0][] = []
   // Where the rows sit over the land itself, each one goes after this long (0: it stays).
   maxAge = 0
@@ -359,7 +359,7 @@ export class Notes {
   get liveRegion(): HTMLElement { return this.live }
 
   // text: what the row shows. full: what a screen reader hears (the whole sentence).
-  // offer: nobody asked for it, so it never takes the place of a warning that has only just come up.
+  // offer: nobody asked for it, so it never takes the place of a row that has only just come up.
   push(o: { level?: Level; glyph?: string; text: string; full?: string; field?: number; day?: number; ttl?: number; go?: (() => void) | null; offer?: boolean }): void {
     if (this.quiet) { this.waiting.push(o); this.live.textContent = localize(o.full ?? o.text); return }
     if (o.offer && waitsItsTurn(this.items, this.keep, performance.now())) { this.later.push(o); this.live.textContent = localize(o.full ?? o.text); return }
