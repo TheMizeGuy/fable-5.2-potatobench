@@ -218,9 +218,12 @@ export function mountTies(ctx: Ctx, root: HTMLElement): Ties {
       // (a press a moment earlier on something else never carries their card off to where it was).
       if (p.el?.closest(`[data-testid="unit-${id}"]`)) return onChip(beside({ x: 0, y: 0 }), p)
       if (p.el?.closest(`[data-testid="grid-person-${id}"]`)) return handle(thing, ROW(id), p, beside({ x: 0, y: 0 }), undefined, true)
+      // Named in the list a shared pin opens: the list goes, and the card stands beside the person, not beside where
+      // their row was (which, off to one side of them, could leave the card nowhere to lie but over them).
+      if (p.el?.closest(`[data-testid="pin-pick-${id}"]`)) return beside({ x: 0, y: 0 })
       const b = body(id)
       const d = b ? { x: p.x - b.mid.x, y: p.y - b.mid.y } : null
-      if (d && (p.el?.closest(`[data-testid="pin-${id}"], [data-testid="pin-pick-${id}"]`) || (p.el?.tagName === 'CANVAS' && Math.hypot(d.x, d.y) < 90))) return beside(d)
+      if (d && (p.el?.closest(`[data-testid="pin-${id}"]`) || (p.el?.tagName === 'CANVAS' && Math.hypot(d.x, d.y) < 90))) return beside(d)
     }
     return from === 'land' ? beside({ x: 0, y: 0 }) : onChip(beside({ x: 0, y: 0 }), null)
   }

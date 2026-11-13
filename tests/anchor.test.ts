@@ -381,6 +381,24 @@ describe('keeping off the other tags and people', () => {
     expect(c.x - tag.right).toBeLessThanOrEqual(60)
   })
 
+  it('a tag standing short of its field\'s middle with no room on its other side: the card steps aside past the middle, whole', () => {
+    // The field tier at 1512 by 982: the tag at the window's left, its field's middle 56 px past its end.
+    const tag: Box = { left: 112, top: 601, right: 289, bottom: 645 }
+    const middle: Box = { left: 318, top: 596, right: 342, bottom: 620 }
+    const win: Box = { left: 8, top: 8, right: 1504, bottom: 974 }
+    const blocks: Box[] = [{ left: 16, top: 16, right: 409, bottom: 228 }, { left: 16, top: 800, right: 407, bottom: 966 }]
+    const size = { w: 430, h: 533 }
+    const c = placeCard({ point: { x: 193, y: 621 }, size, win, blocks, keep: tag, avoid: [middle] })
+    expect(c.side).toBe('right')
+    expect(c.x).toBe(middle.right + 3)
+    expect(c.aside).toBe(true)
+    expect(c.h).toBe(size.h)
+    expect(c.x - tag.right).toBeLessThanOrEqual(ASIDE)
+    // Where it would be cut there, it stays by its tag.
+    const cut = placeCard({ point: { x: 193, y: 621 }, size: { w: 430, h: 900 }, win, blocks: [...blocks, { left: 330, top: 700, right: 900, bottom: 760 }], keep: tag, avoid: [middle] })
+    expect(cut.aside).toBe(false)
+  })
+
   it('a chip in the people bar, with the work list between it and the land: the card is whole, above the list or beside the bars', () => {
     // As a player had it at 1280 by 800: the slip under the date board, the work list over the people bar, a toast.
     const win: Box = { left: 8, top: 171, right: 1272, bottom: 792 }

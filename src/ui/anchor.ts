@@ -176,6 +176,9 @@ export function placeCard(a: Ask): Placed {
         const x = side === 'right' ? v.right + 3 : v.left - 3 - w
         const step = side === 'right' ? x - usual.x : usual.x - x
         if (step > 0 && step <= 44 && x >= win.left && x + w <= win.right) starts.push({ off: x, aside: false })
+        // Further than a step (a tag standing short of its field's middle, with no room on its other side): stepped
+        // aside past the middle, as past a bar, where it stands whole there.
+        else if (keep && step > 44 && step <= ASIDE - gap && x >= win.left && x + w <= win.right && lay(side, null, x).h >= h0 - 2) starts.push({ off: x, aside: true })
       }
       // Cut short by a bar under it or a slip over it: stepped along that side until it stands clear of them, whole.
       if (usual.h < h0 - 2) {
