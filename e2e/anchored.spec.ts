@@ -343,11 +343,16 @@ async function cases(page: Page, t: string): Promise<{ list: Case[]; missing: st
   // A resting field.
   let rested = false
   for (const i of state.rest) {
-    // By its ground; far out in a short window its tag can stand over all of its ground, and then by its tag.
-    const at = await a<Pt | null>(page, `return A.fieldSpot(${i}) || A.tagSpot(${i})`)
+    // By its ground; far out in a short window its tag can stand over all of its ground, and then by its tag. Its
+    // tether ends on its ground or on its own tag, whichever the card was tied to.
+    const tag = `.plate[data-k="field-${i}"]`
+    const ground = await a<Pt | null>(page, `return A.fieldSpot(${i})`)
+    const hd = ground ? null : await a<(Pt & { box: Box }) | null>(page, `return A.handle('${tag}')`)
+    const at = ground ?? (hd ? { x: hd.x, y: hd.y } : null)
     if (!at) continue
     rested = true
-    list.push({ name: 'a resting field', card: 'card', thing: `field-${i}`, head: ['Resting field', names[i]], at, middle: await a<Pt | null>(page, `return A.quad(${i}, .5, .5)`), ends: fieldEnds(i), marked: fieldMarked(i) })
+    const ends = `if ((() => { ${fieldEnds(i)} })()) return true; ${onHandle(tag)}`
+    list.push({ name: 'a resting field', card: 'card', thing: `field-${i}`, head: ['Resting field', names[i]], at, handle: hd?.box, middle: await a<Pt | null>(page, `return A.quad(${i}, .5, .5)`), ends, marked: fieldMarked(i) })
     break
   }
   if (!rested) missing.push('a resting field')
