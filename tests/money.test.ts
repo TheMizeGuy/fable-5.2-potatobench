@@ -38,7 +38,7 @@ describe('the year-end figure', () => {
           moves++
           const at = `seed ${seed} ${c.season ? S.formatDay(c.year, c.season.day) : ''} ${c.phase} ${what}: ${Math.round(moved)}`
           if (!why || why.share < 0.5 || !why.text) unexplained.push(`${at} ${why ? `${why.part} ${why.share.toFixed(2)}` : 'none'}`)
-          else named[why.text] = (named[why.text] ?? 0) + 1
+          else { named[why.text] = (named[why.text] ?? 0) + 1; if (causeLine(why).split(/\s+/).length > 7) unexplained.push(`${at}: "${causeLine(why)}" is more than 7 words`) }
         }
         was = now
       }
@@ -76,7 +76,7 @@ describe('the year-end figure', () => {
     const name = c.crew[c.crew.length - 1].name.split(' ')[0]
     expect(why.part).toBe('wages')
     expect(why.share).toBeGreaterThanOrEqual(0.5)
-    expect(causeLine(why)).toMatch(new RegExp(`^−\\$[\\d,]+: ${name}'s wages to the year end$`))
+    expect(causeLine(why)).toMatch(new RegExp(`^−\\$[\\d,]+: ${name}'s wages to year end$`))
     // A spray order is a move of $110: under the step, so no line.
     const now = S.moneyLook(w, c)
     ok(w, c, { t: 'job', kind: 'spray', field: c.plans.findIndex(p => p.crop === 'potato') })

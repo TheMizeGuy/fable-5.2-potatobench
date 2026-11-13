@@ -410,7 +410,7 @@ export interface MoneyCause {
 
 // Why the year-end figure moved between two looks in the same year, when it moved by MONEY_STEP or more: the part
 // that moved most the same way, a price's move told from the crop's, and the fields together when no one field
-// carries half of it.
+// carries half of it. Its words are five or so, for the board's word budget.
 export function moneyCause(a: MoneyLook, b: MoneyLook): MoneyCause | null {
   const amount = b.after - a.after
   if (a.year !== b.year || Math.abs(amount) < MONEY_STEP) return null
@@ -448,42 +448,42 @@ function causeText(a: MoneyLook, b: MoneyLook, part: string, x: number, d: Recor
     const ids = Object.entries(moved).filter(([, p]) => Math.sign(p) === Math.sign(x)).sort((p, q) => Math.abs(q[1]) - Math.abs(p[1]))
     return ids.length === 1 || (ids.length && Math.abs(ids[0][1]) >= Math.abs(x) * 0.8) ? `${variety(ids[0][0] as VarietyId).name} price ${up ? 'rose' : 'fell'}` : `potato prices ${up ? 'rose' : 'fell'}`
   }
-  if (part === 'keeping') return up ? 'the stored crop' : 'storage charges, shrink and rot'
+  if (part === 'keeping') return up ? 'the stored crop' : 'storage, shrink and rot'
   if (part === 'crops') {
     const top = Object.entries(d).filter(([k, v]) => k.startsWith('crop:') && Math.sign(v) === Math.sign(x)).sort((p, q) => Math.abs(q[1]) - Math.abs(p[1]))[0]
-    return `the crop looks ${up ? 'heavier' : 'lighter'}${top ? `, ${FIELD_NAMES[Number(top[0].slice(5))]} most` : ''}`
+    return `crop ${up ? 'heavier' : 'lighter'}${top ? `, ${FIELD_NAMES[Number(top[0].slice(5))]} most` : ''}`
   }
   if (part.startsWith('crop:')) {
     const i = Number(part.slice(5))
     const name = FIELD_NAMES[i]
     const was = a.fields[i]?.facts, now = b.fields[i]?.facts
-    if (!now) return `the crop from ${name}`
-    if (was && was.status !== 'lost' && now.status === 'lost') return `${name} was left in the ground`
-    if (now.revenue > (was?.revenue ?? 0) + 0.5) return b.contracts > a.contracts + 0.5 ? `${name}'s crop went on contract` : `${name}'s crop was sold`
-    if (now.weighed && !was?.weighed) return `${name} weighed in ${up ? 'heavier' : 'lighter'} than expected`
-    if (now.samples > (was?.samples ?? 0)) return `the test dig in ${name} came in ${up ? 'heavy' : 'light'}`
-    if (now.killed && !was?.killed) return up ? `the vines in ${name} were killed` : `the vines in ${name} were killed, so it stops growing`
-    if (now.dead && !was?.dead) return `the vines in ${name} died back`
-    if (now.rogued > (was?.rogued ?? 0)) return `blighted plants were pulled in ${name}`
-    if (now.frost > (was?.frost ?? 0) + 0.5) return `frost in the barrels in ${name}`
-    if (now.set && !was?.set) return `the tubers set in ${name}`
-    if (now.dug > (was?.dug ?? 0)) return `the harvest in ${name} is coming in ${up ? 'heavier' : 'lighter'}`
-    return `the crop in ${name} looks ${up ? 'heavier' : 'lighter'}`
+    if (!now) return `crop from ${name}`
+    if (was && was.status !== 'lost' && now.status === 'lost') return `${name} left in the ground`
+    if (now.revenue > (was?.revenue ?? 0) + 0.5) return b.contracts > a.contracts + 0.5 ? `${name} delivered on contract` : `${name} crop sold`
+    if (now.weighed && !was?.weighed) return `${name} weighed in ${up ? 'heavy' : 'light'}`
+    if (now.samples > (was?.samples ?? 0)) return `${up ? 'heavy' : 'light'} test dig, ${name}`
+    if (now.killed && !was?.killed) return `vines killed in ${name}`
+    if (now.dead && !was?.dead) return `vines died in ${name}`
+    if (now.rogued > (was?.rogued ?? 0)) return `blight pulled in ${name}`
+    if (now.frost > (was?.frost ?? 0) + 0.5) return `barrels froze in ${name}`
+    if (now.set && !was?.set) return `tubers set in ${name}`
+    if (now.dug > (was?.dug ?? 0)) return `${name} digging ${up ? 'heavier' : 'lighter'}`
+    return `${name} looks ${up ? 'heavier' : 'lighter'}`
   }
   if (part === 'wages') {
     const hired = b.crew.filter(u => !a.crew.some(w => w.id === u.id))
     const gone = a.crew.filter(u => !b.crew.some(w => w.id === u.id))
-    if (!up && hired.length) return `${first(hired[0].name)}'s wages to the year end`
+    if (!up && hired.length) return `${first(hired[0].name)}'s wages to year end`
     if (up && gone.length) return `no more wages for ${first(gone[0].name)}`
-    if (!up && b.pickers && !a.pickers) return 'the pickers\' wages'
-    return up ? 'less to pay in wages' : 'more to pay in wages'
+    if (!up && b.pickers && !a.pickers) return 'pickers\' wages'
+    return up ? 'less in wages' : 'more in wages'
   }
   const WORDS: Record<string, [string, string]> = {
     orders: ['field work and orders', 'field work and orders'], rest: ['oats and clover', 'oats and clover'],
-    penalties: ['a contract looks closer to filled', 'a contract looks short'], storage: ['storage', 'storage'], rent: ['rent', 'rent'], land: ['land', 'land bought'],
-    contractor: ['contractors', 'contractors'], building: ['building', 'building'], packing: ['packing', 'packing'], mortgage: ['the land mortgage', 'the land mortgage'],
-    bills: ['the year-end bills', 'the year-end bills'], logs: ['logs sold', 'logs'], other: ['other sales', 'other costs'],
-    interest: ['less interest on what\'s left owed', 'interest on what\'s left owed'], start: ['the year\'s opening cash', 'the year\'s opening cash'],
+    penalties: ['contract nearer filled', 'contract looks short'], storage: ['storage', 'storage'], rent: ['rent', 'rent'], land: ['land', 'land bought'],
+    contractor: ['contractors', 'contractors'], building: ['building', 'building'], packing: ['packing', 'packing'], mortgage: ['land mortgage', 'land mortgage'],
+    bills: ['year-end bills', 'year-end bills'], logs: ['logs sold', 'logs'], other: ['other sales', 'other costs'],
+    interest: ['less interest owed', 'interest on what\'s owed'], start: ['opening cash', 'opening cash'],
   }
   return (WORDS[part] ?? [part, part])[up ? 0 : 1]
 }

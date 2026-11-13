@@ -420,8 +420,9 @@ test('the same start by keyboard alone', async ({ page, isMobile }) => {
 })
 
 // The money board says why the year-end figure moved, under it, for a week of the season: a hand taken on in July is
-// their wages to the year end. A spray order moves the figure by far less than the step, so the line stays the hire's.
-// SHOTS keeps a picture of the board with its line (at 1280 by 800, or on the phone).
+// their wages to the year end. An upright phone's board has no room, so there it is said by the alerts. A spray order
+// moves the figure by far less than the step, so the line stays the hire's. SHOTS keeps pictures of the board with its
+// line (at 1280 by 800, or the phone) and of a spring plan that leaves $8.
 test('the money board says why the year-end figure moved', async ({ page, isMobile }) => {
   const errors = watchErrors(page)
   if (!isMobile) await page.setViewportSize({ width: 1280, height: 800 })
@@ -436,20 +437,21 @@ test('the money board says why the year-end figure moved', async ({ page, isMobi
   }
   await reach(page, `const { app } = q.g(); app.do({ t: 'begin' }); app.setSpeed(0); q.run(q.day(6, 6)); app.setSpeed(0); app.campaign.incidents = []; app.select(-1)`)
   await putAway(page)
-  const why = page.locator('#ui [data-testid="outlook-why"]')
+  const why = isMobile ? page.locator('#ui [data-testid="alert"]', { hasText: 'wages to year end' }) : page.locator('#ui [data-testid="outlook-why"]')
   await expect(page.locator('#ui [data-testid="outlook"]')).toBeVisible()
   await reach(page, `const { app } = q.g(); app.do({ t: 'hire', kind: 'hand' }); app.setSpeed(0)`)
   const name = await game<string>(page, `c.crew[c.crew.length - 1].name.split(' ')[0]`)
-  await expect(why).toHaveText(new RegExp(`^−\\$[\\d,]+: ${name}'s wages to the year end$`))
+  await expect(why).toContainText(new RegExp(`−\\$[\\d,]+: ${name}'s wages to year end`))
   if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/money-why-${isMobile ? 'phone' : '1280x800'}.png` })
   // Its hover is the sum from the cash now to the figure.
   const tip = await page.locator('#ui [data-testid="outlook"]').getAttribute('data-tip')
   expect(tip).toMatch(/Wages to the year end −\$[\d,]+/)
   expect(tip).toMatch(/= −?\$[\d,]+ after year-end bills\./)
+  if (isMobile) return expect(errors, errors.join('\n')).toEqual([])
   // A spray order is $110: the cash's line says it, and the figure's line never does.
   const field = await game<number>(page, `c.plans.findIndex((p, i) => p.crop === 'potato' && sim.held(c, i))`)
   await reach(page, `const { app } = q.g(); app.do({ t: 'job', kind: 'spray', field: ${field} }); app.setSpeed(0)`)
-  await expect(why).toHaveText(new RegExp(`${name}'s wages to the year end`))
+  await expect(why).toHaveText(new RegExp(`${name}'s wages to year end`))
   await reach(page, `const { app } = q.g(); app.do({ t: 'day' }); app.setSpeed(0)`)
   await expect(why).toHaveText(/^[+−]\$[\d,]+: \w.+$/)
   await expect(why).not.toHaveText(/field work/)

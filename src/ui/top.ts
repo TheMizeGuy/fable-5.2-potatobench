@@ -494,7 +494,9 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
       viewNow = outlook(ctx, c)
       // A move of the year-end figure says its cause under it, for a week of the season or the winter's month.
       const why = was ? S.moneyCause(was, viewNow.look) : null
-      if (why) whyNow = { text: causeLine(why), at: stampOf(c) }
+      // An upright phone's board has no room for it (a fifth of the height): there it is said by the alerts.
+      if (why && season && layout === 'narrow') ctx.say(causeLine(why))
+      else if (why) whyNow = { text: causeLine(why), at: stampOf(c) }
     }
     if (whyNow && (!counted || stampOf(c) - whyNow.at > (season ? WHY_DAYS : 0) || stampOf(c) < whyNow.at)) whyNow = null
     const view = counted ? viewNow : null
@@ -539,7 +541,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
         }, h('span', { class: 'sr' }, borrowed ? 'Borrowed: ' : 'Cash: '), h('span', { class: 'cash-v num' }, F.money(borrowed ? -c.cash : c.cash))),
         moved && !phone ? h('span', { class: 'cash-moved', testid: 'cash-moved', role: 'status' }, moved.text) : null,
         after,
-        after && whyNow ? h('span', { class: 'after-why', testid: 'outlook-why', role: 'status' }, whyNow.text) : null)
+        after && whyNow && !phone ? h('span', { class: 'after-why', testid: 'outlook-why', role: 'status' }, whyNow.text) : null)
       return [
         h('section', { class: 'almanac', 'aria-label': 'Date, weather and your next goal' },
           h('div', { class: 'mount' },
