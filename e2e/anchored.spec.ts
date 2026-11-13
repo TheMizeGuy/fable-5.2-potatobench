@@ -869,8 +869,9 @@ async function guidedYear(page: Page, at: (note: string) => Promise<boolean | vo
         if (await at(s.note)) break
         continue
       }
-      // (the word to plant and a decision on a field ask for a press on the stamp they name)
-      const key = (s.note === 'stamp' || s.note === 'word') && s.target.startsWith('badge-') ? '' : s.keys.includes('guide-ahead') ? 'guide-ahead' : s.keys.includes('guide-noted') ? 'guide-noted' : ''
+      // (the word to plant, a decision on a field and a vine kill that is the player's ask for a press on the stamp
+      // they name; the guide runs the clock between notes, so no note carries a key to run the game fast)
+      const key = (s.note === 'stamp' || s.note === 'word' || s.note === 'kill') && s.target.startsWith('badge-') ? '' : s.keys.includes('guide-noted') ? 'guide-noted' : ''
       if (key) await page.locator(`#ui [data-testid="guide-slip"] [data-testid="${key}"]`).first().click().catch(() => {})
       else {
         // What the note points at: a field's tag or a person's chip opens that thing's card, by the player's press.
@@ -888,11 +889,10 @@ async function guidedYear(page: Page, at: (note: string) => Promise<boolean | vo
       await page.waitForTimeout(200)
       continue
     }
-    // A press on a stamp leaves the game paused (round seven): the player's own way on is the clock's.
-    if (s.phase === 'season' && s.speed === 0) {
-      const go = page.getByTestId('paused-go')
-      if (await go.isVisible().catch(() => false)) { await go.click().catch(() => {}); await page.waitForTimeout(150); continue }
-    }
+    // The guide runs the clock between its notes. Where it waits on a ringed stamp no note is asking for, the stamp
+    // is pressed, as its line says.
+    const wait = await page.evaluate(() => document.querySelector<HTMLElement>('#ui [data-testid="guide-drive"]')?.dataset.wait ?? '')
+    if (wait) { await page.locator(`#ui [data-testid="badge-${wait}"]`).first().click().catch(() => {}); await page.waitForTimeout(150); continue }
     await page.waitForTimeout(250)
   }
   return did

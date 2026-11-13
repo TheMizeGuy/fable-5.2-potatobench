@@ -652,7 +652,8 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     if (app.speed > 1) app.setSpeed(1)
     ctx.say(app.speed > 0 ? 'The clock is yours, and it\'s running at 1×.' : 'The clock is yours.')
   }
-  function showDrive(line: string, next: string, wait: string): void {
+  // wait: the ask the guide is waiting on ('' when it runs), and the field its stamp is on.
+  function showDrive(line: string, next: string, wait: string, field = -1): void {
     const key = JSON.stringify([line, next, wait, input])
     if (key !== driveKey || driveEl.hidden) {
       driveKey = key
@@ -660,6 +661,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
       driveEl.dataset.testid = 'guide-drive'
       driveEl.dataset.scene = scene?.id ?? ''
       driveEl.dataset.unit = String(scene?.unit ?? -1)
+      driveEl.dataset.wait = wait ? String(field) : ''
       // Sent on without the press: that is the player's answer to a pause the game made for it, too.
       const wave = () => { waved.add(wait); if (app.speed === 0 && (app.pauseCause === 'plantAsk' || app.pauseCause === 'killCall')) { app.pauseReason = HOLD; app.pauseCause = '' } }
       driveEl.replaceChildren(...driveBody(ctx, line, next, wait ? wave : null, takeClock))
@@ -698,7 +700,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
       app.pace = 1
       driven = false
       hadWait = true
-      showDrive(d.line, d.next, d.waits.id)
+      showDrive(d.line, d.next, d.waits.id, d.waits.field)
       return
     }
     if (hadWait) { hadWait = false; beatAt = Math.max(beatAt, t + 900) }
