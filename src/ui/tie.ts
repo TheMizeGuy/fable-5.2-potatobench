@@ -363,12 +363,22 @@ export function anchored(ctx: Ctx, card: HTMLElement, o: { mark?: boolean } = {}
     if (tie) card.dataset.thing = tie.thing
     else delete card.dataset.thing
     if (card.hidden || !tie) return
-    // Its own height, with all the room it wants: the frame gives it that, or less where the land is short.
+    measure()
+  }
+
+  // Its own height, with all the room it wants: the frame gives it that, or less where the land is short.
+  function measure(): void {
+    stale = false
     const was = card.style.maxHeight
     card.style.maxHeight = 'none'
     size = { w: card.offsetWidth || size.w, h: card.offsetHeight || size.h }
     card.style.maxHeight = was
   }
+  // A card may grow between two drawings of the screen (a stamp's line under the pointer): its size is taken again
+  // on the next frame, so it is held to its corner and to the land's room at once, paused or running.
+  let stale = false
+  const seen = typeof ResizeObserver === 'function' ? new ResizeObserver(() => { stale = true }) : null
+  seen?.observe(card)
 
   function frame(mode: Mode, quiet = false): void {
     const live = !!tie && !card.hidden && !quiet
@@ -395,7 +405,6 @@ export function anchored(ctx: Ctx, card: HTMLElement, o: { mark?: boolean } = {}
     hide(notch)
     const land = ties().land()
     const win = `${innerWidth}x${innerHeight}`
-    const sized = `${size.w}x${size.h}`
     if (!t) {
       // Nowhere to tie it: it stays where it was, or stands in the middle of the land.
       hide(line, dot, show, mark)
@@ -405,15 +414,17 @@ export function anchored(ctx: Ctx, card: HTMLElement, o: { mark?: boolean } = {}
       }
       return
     }
+    if (stale) measure()
+    const sized = `${size.w}x${size.h}`
     const cardBox = (p: Placed): Box => ({ left: p.x, top: p.y, right: p.x + size.w, bottom: p.y + p.h })
     const at = placed ? Math.hypot(t.point.x - placed.for.x, t.point.y - placed.for.y) : Infinity
     // Where it lies still serves: in the window, off the bars (a list that grew, the grid opened), off its handle.
     let fits = !!placed && placed.win === win && !placed.away && holds(land.win, t.point, 0.5)
     if (fits && placed!.size !== sized) {
-      // Its own height changed (an order given, a line more under the orders): its top left corner stays where it
-      // is, so nothing in it moves under the pointer; it grows downward, or scrolls.
+      // Its own height changed (an order given, a stamp's line under the pointer): its top left corner stays where
+      // it is, so nothing in it moves under the pointer; it grows downward, or scrolls where there is no more room.
       const h = Math.min(size.h, roomUnder(placed!.x, placed!.y, size.w, land.win, land.blocks) - placed!.y)
-      if (h >= Math.min(size.h, 220)) placed = { ...placed!, h, size: sized }
+      if (h >= Math.min(size.h, 160)) placed = { ...placed!, h, size: sized }
       else fits = false
     }
     if (fits) {
@@ -468,5 +479,5 @@ export function anchored(ctx: Ctx, card: HTMLElement, o: { mark?: boolean } = {}
     }
   }
 
-  return { parts, update, frame, dispose() { for (const el of parts) el.remove(); card.classList.remove('anchored') } }
+  return { parts, update, frame, dispose() { seen?.disconnect(); for (const el of parts) el.remove(); card.classList.remove('anchored') } }
 }

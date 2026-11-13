@@ -462,13 +462,6 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     const ins = app.insets
     const bars = [...crew.querySelectorAll<HTMLElement>('.queue, .timebook'), clockSlot, paused, running, homeKey, grid.el, trayHost.firstElementChild as HTMLElement | null]
     const blocks = bars.filter((x): x is HTMLElement => !!x && !x.hidden && x.offsetParent !== null && x.offsetHeight > 0).map(x => { const r = x.getBoundingClientRect(); return { left: r.left, top: r.top, right: r.right, bottom: r.bottom } })
-    // The alerts' place beside the time book is kept clear whether or not a slip lies there now, so a slip that comes
-    // is never under a card (and no card moves when one comes). Under 1400 the alerts wait while a field is in hand.
-    const book = crew.querySelector<HTMLElement>('.timebook')
-    if (book && book.offsetParent !== null && !(ctx.layout() === 'mid' && el.classList.contains('selected'))) {
-      const b = book.getBoundingClientRect()
-      blocks.push({ left: b.right + 8, top: b.bottom - 56, right: Math.min(innerWidth - 8, b.right + 536), bottom: b.bottom })
-    }
     // The land runs up to the boards themselves; the slip that hangs from one is a thing to keep off, not a line
     // across the whole window, so a card clear of it has that much more room.
     for (const x of top.el.querySelectorAll<HTMLElement>('.goal, .tb-pop')) {
@@ -490,6 +483,15 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       return of(t.box, t.need || st === 'growing' || st === 'planted' || st === 'dead' || st === 'digging' ? 3 : 1)
     })
     for (const m of yardMarks) if (!m.wrap.hidden && m.at) out.push(of(new DOMRect(m.at.x - m.w / 2, m.at.y - 22, m.w, 44), 1))
+    // The alerts' place beside the time book, whether or not a slip lies there now: a card keeps off it before any
+    // tag, so a slip that comes is not under the card; but it lies there rather than be cut short (a person's page
+    // opened from the people bar has nowhere else to be whole in a short window). Under 1400 the alerts wait while
+    // a field is in hand.
+    const book = crew.querySelector<HTMLElement>('.timebook')
+    if (book && book.offsetParent !== null && !(ctx.layout() === 'mid' && el.classList.contains('selected'))) {
+      const b = book.getBoundingClientRect()
+      out.push(of(new DOMRect(b.right + 8, b.bottom - 56, Math.min(innerWidth - 8, b.right + 536) - b.right - 8, 56), 4))
+    }
     for (const u of c?.crew ?? []) {
       const a = ctx.view.unitAnchor(u.id)
       if (a.visible && Number.isFinite(a.x) && Number.isFinite(a.y)) out.push(of(new DOMRect(a.x - 20, a.y - 52, 40, 52), 0.5))
