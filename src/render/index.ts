@@ -726,8 +726,6 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     if (!adaptive || probe.on) return
     const late = waited[Math.floor(waited.length * 0.73)] / pacing.frameMs, slow = late > 1.23
     const auto = app.settings.quality === 'auto'
-    // Too slow for any size of the picture to mend (under 26 frames a second where 60 are asked for), two stretches
-    // running, is not walked down a size at a time. (One such stretch is as often something else on the machine.)
     // A fast display drawn on its every beat goes back to about sixty a second before anything is made smaller; one
     // drawn at about sixty is tried on every beat when it has been in time for a while at its full size.
     // (drawn on every beat it is kept there for as long as that gives more pictures than about sixty would: seventy a
@@ -736,6 +734,8 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     const went = rate.feed(pacing.full ? !fast : slow, seconds, pacing.sixty > 1 && sizer.step === 0 && !lowered && !upDue)
     if (went) { pacing.full = rate.full; return }
     if (pacing.full) return
+    // Too slow for any size of the picture to mend (under 26 frames a second where 60 are asked for), two stretches
+    // running, is not walked down a size at a time. (One such stretch is as often something else on the machine.)
     tooSlow = late > 2.3 ? tooSlow + 1 : 0
     const plainly = tooSlow >= 2 && auto && tier !== 'low'
     if (plainly) tooSlow = 0

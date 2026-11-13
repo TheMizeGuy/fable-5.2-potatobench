@@ -704,6 +704,63 @@ end while the tractor digs, and a load is seen on the lane only once there is a 
 boughs of the next tree to fall is hidden by them, from the side and from above. At 8x the picture is of what the
 farm is doing, some seconds (as many as a dozen days) behind the calendar and the words on the people's cards.
 
+### How frames come, and nobody slid as they stand (after `live-29`)
+
+The owner, after playing `live-29`: "theres sitll disjointed logic fps lag characters t-posing", and then: "Theres also
+slight FPS even on my windows machine with a 4090 which would hint toward a rendering bug". Two tools were written
+before anything was changed. `tools/render/pose.ts` watches every figure drawn, on every frame, through a first year
+and into a second (each clock, paused, someone followed, a hire, a day off, a saved game opened again, winter) and
+fails on a figure held as a T, with both arms straight out in front, or carried over the ground faster than a slow
+walk while its legs are not stepping. `tools/render/flow.ts` keeps every animation frame of ten seconds in each state
+a player spends time in (when it came, the page's work in it part by part, whether a picture was drawn, its size, the
+day, each pin and the camera) and gives the series, not the mean; `--throttle=4` slows the page's thread, `--hz`
+stands in for a faster display.
+
+**Nobody was ever held as a T.** The figures are posed every frame from what they are doing; the nearest any arm
+came to a T in 28 states was 0.10 of one. What the owner saw was people sliding: since `1f9d045` each person is
+drawn at a place that chases where the day's script has them, and their pose came from the script alone. Arrived
+in the script and still being carried there in the picture, they were drawn standing (or bent to their work) and
+slid over the ground at up to 9, 13.5 and 21.6 m/s at the three clocks: eleven of the twelve cases in
+`tests/slide.test.ts` (planting, spraying, digging, scouting at each clock) fail with the fix switched off, and
+`pose.ts` found it in planting and spraying at 1x and 8x and in the dig at 1x. Now anyone carried over the ground
+faster than 0.45 m/s without stepping is seen walking there, facing the way they go (`figure` in
+`src/render/units.ts`). The scarecrow in the kitchen garden, a man-sized coat on a cross by the house, had his
+arms let down. A person followed was also followed in lurches (the camera waited until they were a step and a
+half off and then made a timed move after them: steps of up to 1.65 m a frame against a usual 0.07); the camera
+now goes as they go, every frame.
+
+**The frame rate on a fast display was held down, and could be taken for slowness.** `src/render/pace.ts` drew a
+display faster than sixty a second on every second, third or fourth of its beats: 72 pictures a second at 144, 55
+at 165, 60 at 240 and 60 on a 120-a-second laptop, whatever the machine. And the test for a machine that cannot keep
+up was the time between two pictures: on such a display a picture waits one beat more whenever a call falls just
+short (the page's thread missing a beat of a 240-a-second display is enough), which read as late frames, made the
+picture smaller a size at a time and then brought the setting down. A stand-in for it on the test box (an RTX
+2080 Ti with every frame to spare) went from high at full size to low at seven tenths of the side in 36 seconds,
+at 47 pictures a second. Now:
+
+- how long the browser took to call again says whether the machine keeps up, not the pace chosen (`Pace.gap`);
+- a fast display is tried on its every beat once frames have been in time for six seconds at the full size, and
+  kept there for as long as that gives seventy pictures a second or better; two slow stretches put it back to
+  about sixty, and the wait before the next try doubles each time a try did not hold (`Rate`).
+
+**The page's own work.** On the test box at full speed (an i9-9900K) both `live-29` and this build hold sixty a
+second in every state: gaps 16.7 / 16.8 / 16.8 ms at the middle, 95th and 99th, one picture in about 650 late.
+The page works 3.5 to 4 ms a frame, 2.8 of it sending the picture (354 draw calls, 4,308 things in the scene) and
+under half a millisecond in the interface, except:
+
+- **the land dragged**: the tags were settled again every few frames at 13 ms a time (3.6 ms a frame, more than
+  the picture). Each field's place on the screen was worked out afresh every time it was asked for (several
+  hundred times in a settling, each one measuring the window), and a tag with no room on its field tried thousands
+  of places in full. Each place is now worked out once a picture (`src/render/index.ts`), and places that could
+  neither stand on the free land nor point at the field are passed over untried (`spot` in `src/ui/plates.ts`);
+- **a day's turn**: the day itself (4 to 7 ms with what listens to it), the land made again (3 to 4) and the
+  interface drawn again (10 to 25, most of it the browser's own style and layout after the boards, the tags and
+  the cards are rebuilt) fell in one frame. The interface now draws a day's turn on the frame after it.
+
+With the page's thread slowed four times every state misses frames (the picture alone is then 11 to 20 ms a
+frame of the page's work), and a day's turn is a frame of 100 to 250 ms. That is not mended here: it wants the
+picture sent in fewer calls and the interface redrawn in parts.
+
 ## Wave three: bugs and UX, checked by players who see only pictures
 
 After live-5 the owner asked for a camera that tips down, lighter rendering, a card for anyone clicked, a far more
