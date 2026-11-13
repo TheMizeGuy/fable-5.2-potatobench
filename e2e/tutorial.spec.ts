@@ -1337,13 +1337,15 @@ test('the tutorial starts when planting is ready: Start the season, a few second
   // Looked at twice with them in the window both times: in it for the time between.
   let inside = 0
   let was = -1
+  let pictured = false
   for (let k = 0; k < 40; k++) {
     const now = await see(page)
     const t = Date.now()
     if (now.scene !== 'plant') break
     if (now.inView && was >= 0) inside += t - was
     was = now.inView ? t : -1
-    if (k === 2) { await picture(page, 'g4-planter-1280'); was = -1 }
+    // The picture once the camera has come to them (it takes most of a second from the whole farm).
+    if (!pictured && inside >= 700) { pictured = true; await picture(page, 'g4-planter-1280'); was = -1 }
     await page.waitForTimeout(150)
   }
   expect(inside, 'ms the planter was inside the window while shown').toBeGreaterThanOrEqual(2000)
