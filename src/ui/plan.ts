@@ -8,7 +8,7 @@ import * as F from './fmt.ts'
 import { GLOSSARY, term } from './glossary.ts'
 import { icon } from './icons.ts'
 import { digitFor, fieldForDigit, heldFields, step } from './map.ts'
-import { dueSays, lowCashSays } from './money-words.ts'
+import { dueSays, limitSays, lowCashSays, rangeSays } from './money-words.ts'
 import { plates, type PlateModel } from './plates.ts'
 import * as R from './rules.ts'
 import { cardHead, fieldCost, landCard, springFolds, tenureRow, tractCard, type Fold } from './spring.ts'
@@ -379,9 +379,14 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
     // mortgage. Whatever raises the loan (a field, a hand, a machine bought from cash) raises what is due by as much.
     const mn = S.moneyNow(app.world, c)
     const loan = over ? 0 : mn.loan
-    const what = pc.rent || pc.wages ? `with ${F.list([pc.rent ? `rent ${F.money(pc.rent)}` : '', pc.wages ? `wages ${F.money(pc.wages)}` : ''].filter(Boolean))}` : ''
+    const what = pc.rent || pc.wages ? `with ${F.list([pc.rent ? `rent ${F.money(pc.rent)}` : '', pc.wages ? `the first month's wages ${F.money(pc.wages)}` : ''].filter(Boolean))}` : ''
     const due = dueSays(mn.due, loan)
     const low = over ? '' : lowCashSays(c, after)
+    // The year-end figure the season will open with (S.moneyPlan: this plan begun on a copy of the farm), with where it
+    // is likely to end, and past the bank's limit, the one change that would bring it back most.
+    const year = S.moneyPlan(app.world, c)
+    const fig = Math.round(year.after / 100) * 100
+    const past = over ? '' : limitSays(year, year.after < S.CREDIT_LIMIT ? S.planRescue(app.world, c) : null)
     return [
       h('div', { class: `plan-money${over ? ' over' : ''}`, testid: 'plan-money' },
         h('p', { class: 'lead quiet pm-cash' }, h('span', { class: 'it' }, c.cash < 0 ? 'Owed from last year' : 'You have'), h('span', { class: 'dots' }),
@@ -391,6 +396,12 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
         h('p', { class: 'lead quiet pm-loan' }, h('span', { class: 'it' }, over ? 'More than the bank will lend' : after < 0 ? term('The bank\'s spring loan', 'spring loan') : 'Left in cash'), h('span', { class: 'dots' }),
           over ? null : h('span', { class: `num${low ? ' c-ochre' : ''}`, testid: 'plan-loan' }, F.money(Math.abs(after)))),
         low ? h('p', { class: 't-caption c-ochre', testid: 'plan-low', role: 'status' }, low) : null,
+        over ? null : [
+          h('p', { class: 'lead pm-after' }, h('span', { class: 'it' }, 'After year-end bills'), h('span', { class: 'dots' }),
+            h('span', { class: `num${year.callRisk === 'likely' ? ' c-red' : year.callRisk === 'possible' ? ' c-ochre' : ''}`, testid: 'plan-year-end' }, F.money(fig))),
+          h('p', { class: 't-caption pm-range', testid: 'plan-year-range' }, `${F.upper(rangeSays(year.range))}, if the crop does as the season starts.`),
+          past ? h('p', { class: 't-caption c-red', testid: 'plan-past-limit', role: 'status' }, past) : null,
+        ],
         h('p', { class: 'lead quiet' }, h('span', { class: 'it' }, term('Due at the end of the year', 'due at the year end'), ctx.layout() === 'narrow' ? null : ', from your crop'), h('span', { class: 'dots' }),
           h('span', { class: 'num c-red', testid: 'plan-due' }, F.money(due.total))),
         h('p', { class: 't-caption pm-parts' }, due.text),
@@ -455,7 +466,7 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
       patch(mast, JSON.stringify([c.year, c.yearIdx]), () => drawMast(c))
       patch(rows, JSON.stringify([...state, open, nextGoal(c)?.id, agentSpeaking(), c.applicants.map(a => a.id), c.crew.map(u => [u.id, u.wage, u.foreman]), c.offers.map(x => x.id), c.contracts.map(k => k.id),
         c.upgrades, c.mortgages.map(m => Math.round(m.owed)), c.sundaysOff, Math.round(c.cash), c.buildings.length]), () => drawRows(c))
-      patch(foot, JSON.stringify([S.planCosts(c), Math.round(c.cash), c.mortgages.map(m => Math.round(m.owed)), app.settings.units, layout]), () => drawFoot(c))
+      patch(foot, JSON.stringify([S.planCosts(c), Math.round(c.cash), c.plans, c.contracts.map(k => k.id), c.crew.map(u => [u.id, u.wage]), c.upgrades, c.mortgages.map(m => Math.round(m.owed)), app.settings.units, layout]), () => drawFoot(c))
       el.style.setProperty('--foot-h', `${Math.round(foot.offsetHeight)}px`)
       // The one thing to do here is under the keyboard from the start.
       if (!focused && !ctx.papers.isOpen()) {

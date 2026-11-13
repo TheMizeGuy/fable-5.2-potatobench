@@ -26,10 +26,59 @@ export function lowCashSays(c: S.Campaign, left: number): string {
   return `That's less than a month of wages and field work (about ${F.money(Math.round(month / 100) * 100)}), so the season starts on the loan.${cut ? ` ${cut.what} would save about ${F.money(Math.round(cut.saves / 100) * 100)}.` : ''}`
 }
 
-// Why the year-end figure moved, as the board says it under the figure: "−$13,400: the test dig in Brook Field came
-// in light".
+// Why the year-end figure moved, as the board says it under the figure: "Brook Field dug light: −$2,000".
 export function causeLine(why: S.MoneyCause): string {
-  return `${why.amount > 0 ? '+' : ''}${F.money(Math.round(why.amount / 100) * 100)}: ${why.text}`
+  return `${why.text}: ${signedMoney(why.amount)}`
+}
+
+// A figure to the $100 with its sign: "+$25,000", "−$11,800".
+export function signedMoney(n: number): string {
+  const r = Math.round(n / 100) * 100
+  return `${r > 0 ? '+' : ''}${F.money(r)}`
+}
+
+// Where the year-end figure is likely to end, as a person reads a range.
+export function rangeSays(range: { lo: number; hi: number }): string {
+  return `likely between ${signedMoney(range.lo)} and ${signedMoney(range.hi)}`
+}
+
+// The spring loan, said under the pointer on Borrowed, and once a season as a note the first time it grows.
+export const BORROWED_SAYS = `This is the bank's spring loan. Wages and field work go on it until the crop sells, it costs no interest until the end of the year, and the crop's sales pay it back. Whatever is still owed then carries at ${F.pct(S.CREDIT_RATE)}.`
+export const LOAN_NOTE = 'Wages and field work go on the spring loan until the crop sells.'
+
+// Whether the loan's note is due now: in the season, the first time this year that what is borrowed grows (not the
+// spring loan's own start).
+export function loanNoteNow(c: S.Campaign, cashWas: number, saidIn: number): boolean {
+  return c.phase === 'season' && saidIn !== c.year && cashWas < 0 && Math.round(c.cash) < cashWas
+}
+
+// What a press would do to this year's year-end figure, for a key's second line: "year end −$12,000"; a hire's as
+// what it takes to the year end: "about $3,300 to the year end".
+export function effectSays(d: number | null, hire = false): string {
+  if (d === null || Math.abs(d) < 50) return ''
+  return hire && d < 0 ? `about ${F.money(-Math.round(d / 100) * 100)} to the year end` : `year end ${signedMoney(d)}`
+}
+
+// The spring plan's year-end figure past the bank's limit: one line, and the change that would bring it back most.
+export function limitSays(m: S.MoneyNow, rescue: { what: string; gains: number } | null): string {
+  if (m.after >= S.CREDIT_LIMIT) return ''
+  return `That's past the bank's limit of ${F.money(S.CREDIT_LIMIT)}, so it would call in the loan.${rescue ? ` ${rescue.what} would bring it up about ${F.money(Math.round(rescue.gains / 100) * 100)}.` : ''}`
+}
+
+// The ledger's verdict, by the bank's own rule (campaign.ts, closeYear): in hand, or down but inside the limit.
+export function verdictSays(y: S.YearSummary, left: number, kept: boolean): string {
+  const more = left > 0 ? ` ${F.upper(F.plural(left, 'season'))} to go.` : ''
+  if (kept) return y.cashEnd >= 0 ? 'The farm is yours, and the bank is happy.' : `The farm is yours. You ended ${F.money(-y.cashEnd)} down, inside what the bank allows.`
+  if (y.cashEnd >= 0) return `You ended the year with ${F.money(y.cashEnd)} in hand, so the bank is happy.${more}`
+  return `You ended ${F.money(-y.cashEnd)} down, inside what the bank allows, so it carries you another year.${more}`
+}
+
+// The ledger's first line: from what was sold to what was kept.
+export function yearWalk(y: S.YearSummary): string {
+  const bills = y.note + y.living + y.interest
+  const gap = Math.round(y.cashEnd - y.cashStart)
+  const kept = (y.land ?? 0) + (y.building ?? 0) + (y.works ?? 0)
+  return `You sold ${F.money(y.revenue)}, spent ${F.money(y.costs)} on the farm and ${F.money(bills)} on the bank and your family, and ended with ${F.money(y.cashEnd)}, ${gap === 0 ? 'the same as you started' : `${F.money(Math.abs(gap))} ${gap < 0 ? 'less' : 'more'} than you started with`}.${kept && gap < 0 ? ` ${F.money(kept)} of it paid for land, buildings and clearing, which you keep.` : ''}`
 }
 
 // How a purchase is paid in spring: the cash first, the rest on the spring loan. '' when the cash covers it.

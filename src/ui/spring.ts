@@ -9,7 +9,7 @@ import * as F from './fmt.ts'
 import { term } from './glossary.ts'
 import { icon } from './icons.ts'
 import { BLOCK_NAME, BLOCK_NOTE, heldFields, roadTime } from './map.ts'
-import { loanSays } from './money-words.ts'
+import { effectSays, loanSays } from './money-words.ts'
 import { POSITION_NOTE, soilWord } from './rules.ts'
 import { tens } from './system/parts.ts'
 import { portrait } from './system/people.ts'
@@ -51,11 +51,9 @@ function tryRun(ctx: Ctx, cmd: S.Cmd, onTry: (err: string) => void, say = false)
   return r.ok
 }
 
-// A hired person's wages from the first day of the season to its close (the money board's own reckoning, which runs to
-// October 15), for a hire's price: the first month at the start, then every thirty days.
-function wagesToClose(c: S.Campaign, wage: number): number {
-  const days = S.dayIndex(c.year, 9, 15) - S.dayIndex(c.year, S.SEASON_START.month, S.SEASON_START.dom)
-  return wage * (1 + Math.floor(days / S.WAGE_DAYS))
+// What a press would do to this year's year-end figure, the money board's own reckoning (S.moneyEffect).
+function yearEnd(ctx: Ctx, cmd: S.Cmd): string {
+  return effectSays(S.moneyEffect(ctx.app.world, ctx.app.campaign!, cmd), cmd.t === 'hire')
 }
 
 // Undo, for what this spring's plan bought or hired: it costs nothing and is taken back in full.
@@ -116,7 +114,7 @@ function applicant(ctx: Ctx, a: S.ApplicantInfo, one: boolean, onTry: (err: stri
       : h('ul', { class: 'skill-row', 'aria-label': `Skills out of 10: ${SKILL_WORD.map(([k, w]) => `${w} ${a.skills[k]}`).join(', ')}` },
         SKILL_WORD.map(([k, w]) => h('li', { class: k === a.best ? 'best' : null, 'aria-hidden': 'true' }, h('span', null, w), h('b', null, String(a.skills[k]))))),
     h('p', { class: 'price' }, h('b', { class: 'num' }, F.money(a.ask)), h('span', null, 'a month'),
-      h('span', { class: 't-caption to-end', testid: `applicant-to-end-${a.id}` }, `about ${F.money(wagesToClose(ctx.app.campaign!, a.ask))} to the year end`)),
+      h('span', { class: 't-caption to-end', testid: `applicant-to-end-${a.id}` }, yearEnd(ctx, { t: 'hire', applicant: a.id }))),
     h('button', {
       class: 'btn', type: 'button', testid: `applicant-hire-${a.id}`, disabled: !!a.why, title: a.why || undefined, 'aria-label': `Hire ${a.name} for ${F.money(a.ask)} a month`,
       onclick: () => tryRun(ctx, { t: 'hire', applicant: a.id }, onTry, true),
@@ -176,8 +174,9 @@ function peopleBody(ctx: Ctx, c: S.Campaign, onTry: (err: string) => void, onClo
   const hall = (kind: 'hand' | 'operator') => {
     const why = S.hireBlock(c, kind)
     const wage = kind === 'hand' ? S.HAND_WAGE : S.OPERATOR_WAGE
-    return h('button', { class: 'btn', type: 'button', testid: `hire-${kind}`, disabled: !!why, title: why || `About ${F.money(wagesToClose(c, wage))} in wages to the year end`, onclick: () => tryRun(ctx, { t: 'hire', kind }, onTry, true) },
-      kind === 'hand' ? 'A field hand' : 'An operator', h('span', { class: 'sub num' }, `${F.money(wage)} a month`))
+    const end = why ? '' : yearEnd(ctx, { t: 'hire', kind })
+    return h('button', { class: 'btn', type: 'button', testid: `hire-${kind}`, disabled: !!why, title: why || undefined, onclick: () => tryRun(ctx, { t: 'hire', kind }, onTry, true) },
+      kind === 'hand' ? 'A field hand' : 'An operator', h('span', { class: 'sub num' }, `${F.money(wage)} a month`), end ? h('span', { class: 'sub num year-end', testid: `hire-${kind}-year-end` }, end) : null)
   }
   return [
     ...S.applicantInfo(c).map(a => applicant(ctx, a, one, onTry)),
@@ -337,7 +336,8 @@ function equipmentBody(ctx: Ctx, c: S.Campaign, onTry: (err: string) => void, on
           : h('button', {
             class: 'btn cat-buy', type: 'button', testid: `buy-${id}`, disabled: !!why, title: why || undefined,
             onclick: () => tryRun(ctx, { t: 'buy', upgrade: id }, onTry, true),
-          }, 'Buy', h('span', { class: 'sub num' }, F.money(u.cost)), loanSays(u.cost, loanAdds(u.cost)) ? h('span', { class: 'loan-adds num' }, loanSays(u.cost, loanAdds(u.cost))) : null))
+          }, 'Buy', h('span', { class: 'sub num' }, F.money(u.cost)), loanSays(u.cost, loanAdds(u.cost)) ? h('span', { class: 'loan-adds num' }, loanSays(u.cost, loanAdds(u.cost))) : null,
+          why ? null : h('span', { class: 'loan-adds num year-end', testid: `buy-${id}-year-end` }, yearEnd(ctx, { t: 'buy', upgrade: id }))))
     })),
     done('equipment-close', onClose),
   ]

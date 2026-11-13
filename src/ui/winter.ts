@@ -6,6 +6,7 @@ import { h, type Child } from './dom.ts'
 import * as F from './fmt.ts'
 import { term } from './glossary.ts'
 import { icon } from './icons.ts'
+import { effectSays } from './money-words.ts'
 import { fold, meter } from './system/parts.ts'
 import { portrait } from './system/people.ts'
 import { logsWanted } from './top.ts'
@@ -77,7 +78,8 @@ function personRow(ctx: Ctx, c: S.Campaign, u: S.Unit, p: S.PersonInfo, people: 
     h('div', { class: 'seg', role: 'group', 'aria-label': u.kind === 'farmer' ? 'Your winter work' : `${name}'s winter work` }, choices.map(ch => {
       const on = u.winter === ch.work
       return h('button', {
-        class: 'btn', type: 'button', testid: `winter-${u.id}-${ch.work}`, 'aria-pressed': String(on), disabled: !ch.ok && !on, title: ch.why || undefined,
+        class: 'btn', type: 'button', testid: `winter-${u.id}-${ch.work}`, 'aria-pressed': String(on), disabled: !ch.ok && !on,
+        title: ch.why || (on ? undefined : effectSays(S.moneyEffect(ctx.app.world, c, { t: 'winter', unit: u.id, work: ch.work, field: ch.work === 'woods' ? tracts[0] : undefined })).replace(/^y/, 'Y') || undefined),
         onclick: () => set(ch.work, ch.work === 'woods' ? (u.winter === 'woods' ? tracts[(tracts.indexOf(u.winterField) + 1) % tracts.length] : tracts[0]) : undefined),
       }, WORK_LABEL[ch.work])
     })),

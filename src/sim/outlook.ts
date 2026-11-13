@@ -3,7 +3,7 @@
 // for planting.
 import { dayIndex, formatDay, isLeap, SUNDAY, weekday, withCommas } from './calendar.ts'
 import { buildBlock, buildCost } from './buildings.ts'
-import { apply, held, mortgageDue, openLots, planCosts, stumpBlock, tileBlock } from './campaign.ts'
+import { apply, held, mortgageDue, openLots, planCosts, sprayWayNow, stumpBlock, tileBlock } from './campaign.ts'
 import { HOME_YARD, PARCELS, TRACTS } from './farm.ts'
 import { basePrice, gradePrice, harvestPrice, lotValue } from './market.ts'
 import { lotCwt, markOdds, skinAt, skinnedShare } from './harvest.ts'
@@ -176,7 +176,7 @@ export function pressing(world: World, c: Campaign): Pressing[] {
 
 // ---------------------------------------------------------------- money
 
-export interface MoneyPart { label: string; amount: number; id?: string }
+export interface MoneyPart { label: string; amount: number; id?: string; of?: MoneyPart[] }
 
 export interface MoneyNow {
   cash: number                     // in hand, or owed on the spring loan when below zero
@@ -185,6 +185,7 @@ export interface MoneyNow {
   growing: number                  // the crop still in the ground, by the estimate, at today's price
   rest: number                     // what the resting fields' oats and clover bring at the season's close
   wages: number                    // wages still to pay before the year end: the season's, and anyone kept on over the winter
+  sprays: number                   // the sprays still to come while the crew keeps the fields sprayed by itself (sprayOutlook)
   penalties: number                // what the open contracts look like costing in penalties (contractOutlook's middle)
   interest: number                 // the bank's interest on what the year end would leave owed
   range: { lo: number; hi: number }   // after, give or take what the crop in the ground may come to
@@ -281,6 +282,7 @@ function moneyBook(world: World, c: Campaign): { now: MoneyNow; fields: Map<numb
     }
   }
   const wages = wagesAhead(c)
+  const sprays = c.phase === 'season' && sprayWayNow(c) === 'auto' ? sprayOutlook(world, c).dollars : 0
   // On a due date the buyer charges for what is still short (campaign.ts, settleContracts).
   let penalties = 0
   for (const k of c.contracts) {
@@ -294,15 +296,27 @@ function moneyBook(world: World, c: Campaign): { now: MoneyNow; fields: Map<numb
   const due = { note: P.NOTE_PAYMENT, household: P.LIVING, mortgage, loan, total: bills + loan }
   // Debt left after the year end carries at CREDIT_RATE, charged then (campaign.ts, closeYear).
   const owedAt = (x: number) => x < 0 ? -x * P.CREDIT_RATE : 0
-  const before = cash + stored + growing + rest - wages - penalties - bills
+  const before = cash + stored + growing + rest - wages - sprays - penalties - bills
   const interest = owedAt(before)
   const after = before - interest
+  // The cash now, walked from the year's start: what was sold and what was spent, the spending by kind.
+  const spent = c.yearCosts + spring
+  const other = c.yearStorage + c.yearRent + c.yearLand + c.yearMortgage + c.yearWorks + c.yearBuilding + c.yearPacking + c.yearPenalties
+  const kinds: MoneyPart[] = [
+    { label: 'seed, field work and machines', amount: spent - c.yearWages - other },
+    { label: 'wages', amount: c.yearWages }, { label: 'rent', amount: c.yearRent }, { label: 'land', amount: c.yearLand },
+    { label: 'storage', amount: c.yearStorage }, { label: 'building', amount: c.yearBuilding + c.yearWorks }, { label: 'packing', amount: c.yearPacking },
+    { label: 'penalties', amount: c.yearPenalties }, { label: 'mortgage', amount: c.yearMortgage },
+  ].filter(p => p.amount >= 0.5).sort((a, b) => b.amount - a.amount)
   const parts: MoneyPart[] = [
-    { id: 'cash', label: cash >= 0 ? 'Cash now' : 'Borrowed now', amount: cash },
+    { id: 'start', label: 'Cash at the start of the year', amount: cash - c.yearRevenue + spent },
+    { id: 'sold', label: 'Sold so far', amount: c.yearRevenue },
+    { id: 'spent', label: 'Spent so far', amount: -spent, of: kinds },
     { id: 'stored', label: 'Stored crop', amount: stored },
     { id: 'growing', label: 'Crop in the ground', amount: growing },
     { id: 'rest', label: 'Oats and clover', amount: rest },
     { id: 'wages', label: 'Wages to the year end', amount: -wages },
+    { id: 'sprays', label: 'Sprays still to come', amount: -sprays },
     { id: 'penalties', label: 'Contract penalties', amount: -penalties },
     { id: 'bills', label: 'The bank payment and living costs', amount: -(P.NOTE_PAYMENT + P.LIVING) },
     { id: 'mortgage', label: 'The land mortgage', amount: -mortgage },
@@ -310,7 +324,7 @@ function moneyBook(world: World, c: Campaign): { now: MoneyNow; fields: Map<numb
   ].filter(p => Math.abs(p.amount) >= 0.5)
   const range = { lo: before - lo - owedAt(before - lo), hi: before + hi - owedAt(before + hi) }
   const callRisk = range.hi < P.CREDIT_LIMIT ? 'likely' : after < P.CREDIT_LIMIT ? 'possible' : 'none'
-  return { now: { cash, loan, stored, growing, rest, wages, penalties, interest, range, callRisk, due, after, parts }, fields }
+  return { now: { cash, loan, stored, growing, rest, wages, sprays, penalties, interest, range, callRisk, due, after, parts }, fields }
 }
 
 // ---------------------------------------------------------------- the spring plan's cash
@@ -338,12 +352,64 @@ export function planCut(c: Campaign): { what: string; saves: number } | null {
   return out.sort((a, b) => b.saves - a.saves)[0] ?? null
 }
 
+// The year-end figure as the season will open with it: in spring, the plan begun on a copy of the farm, so the plan and
+// the season's first day are one reckoning; through the season and the winter, moneyNow.
+export function moneyPlan(world: World, c: Campaign): MoneyNow {
+  return begun(world, c) ?? moneyNow(world, c)
+}
+
+// The plan begun on a copy, or null when the season could not begin on it (the bank would not lend for it).
+function begun(world: World, c: Campaign): MoneyNow | null {
+  if (c.phase !== 'plan') return moneyNow(world, c)
+  const copy = structuredClone(c)
+  return apply(world, copy, { t: 'begin' }).ok ? moneyNow(world, copy) : null
+}
+
+// What a command would do to the year-end figure (moneyPlan's), tried on a copy of the farm; null when it can't be given,
+// or when it would leave a spring plan the season could not begin on.
+export function moneyEffect(world: World, c: Campaign, cmd: Cmd, was = moneyPlan(world, c).after): number | null {
+  const copy = structuredClone(c)
+  if (!apply(world, copy, cmd).ok) return null
+  const now = begun(world, copy)
+  return now ? now.after - was : null
+}
+
+// The one change to the spring plan that would raise the year-end figure most, and by how much: not buying or hiring
+// what this spring added, letting someone go, giving up rented land, planting a resting field or resting a planted one,
+// saved seed for certified. null when nothing would raise it.
+export function planRescue(world: World, c: Campaign): { what: string; gains: number } | null {
+  if (c.phase !== 'plan') return null
+  const was = moneyPlan(world, c).after
+  const tries: { what: string; cmd: Cmd }[] = []
+  for (const b of c.spring?.bought ?? []) tries.push({ what: `Not buying the ${P.UPGRADES[b.upgrade].name.toLowerCase()}`, cmd: { t: 'unbuy', upgrade: b.upgrade } })
+  for (const u of c.crew) {
+    if (u.kind === 'farmer' || u.wage <= 0) continue
+    const fresh = c.spring?.hired.some(x => x.unit === u.id)
+    tries.push({ what: `${fresh ? 'Not hiring' : 'Letting'} ${u.name.split(' ')[0]}${fresh ? '' : ' go'}`, cmd: fresh ? { t: 'unhire', unit: u.id } : { t: 'dismiss', unit: u.id } })
+  }
+  const grown = c.plans.find((p, i) => held(c, i) && p.crop === 'potato')?.variety ?? 'katahdin'
+  c.plans.forEach((p, i) => {
+    if (!held(c, i) || c.fields[i].cover !== 'open') return
+    if (c.fields[i].tenure === 'rented') tries.push({ what: `Giving up ${FIELD_NAMES[i]}`, cmd: { t: 'release', field: i } })
+    if (p.crop === 'potato') {
+      tries.push({ what: `Resting ${FIELD_NAMES[i]}`, cmd: { t: 'plan', field: i, plan: { ...p, crop: 'rest' } } })
+      if (p.seed === 'certified') tries.push({ what: `Saved seed in ${FIELD_NAMES[i]}`, cmd: { t: 'plan', field: i, plan: { ...p, seed: 'saved' } } })
+    } else tries.push({ what: `Planting ${FIELD_NAMES[i]}`, cmd: { t: 'plan', field: i, plan: { crop: 'potato', variety: grown, seed: 'certified' } } })
+  })
+  let best: { what: string; gains: number } | null = null
+  for (const t of tries) {
+    const d = moneyEffect(world, c, t.cmd, was)
+    if (d !== null && d >= 0.5 && (!best || d > best.gains)) best = { what: t.what, gains: d }
+  }
+  return best
+}
+
 // ---------------------------------------------------------------- why the year-end figure moved
 
 // A move of the year-end figure at least this large is said with its cause: about 5% of the yearly bills.
 export const MONEY_STEP = 1000
 
-interface FieldFacts { status: string; samples: number; set: boolean; dead: boolean; killed: boolean; rogued: number; frost: number; dug: number; weighed: boolean; revenue: number }
+interface FieldFacts { status: string; samples: number; set: boolean; dead: boolean; killed: boolean; rogued: number; frost: number; dug: number; weighed: boolean; revenue: number; sprouted: number; broke: number }
 
 // The year-end figure as parts that hold still when crop turns into cash: the year's opening cash, each field's crop
 // (what it brought, what is held, what is in the ground), and the year's spending and income by kind, each counting
@@ -367,6 +433,7 @@ export function moneyLook(world: World, c: Campaign): MoneyLook {
     start: now.cash - c.yearRevenue + c.yearCosts,
     wages: -(c.yearWages + now.wages),
     orders: -(c.yearCosts - c.yearWages - otherCosts),
+    sprays: -now.sprays,
     rest: c.yearRest + now.rest,
     penalties: -(c.yearPenalties + now.penalties),
     storage: -c.yearStorage, rent: -c.yearRent, land: -c.yearLand, contractor: -c.yearWorks, building: -c.yearBuilding, packing: -c.yearPacking,
@@ -392,6 +459,7 @@ export function moneyLook(world: World, c: Campaign): MoneyLook {
       facts: f ? {
         status: f.status, samples: f.samples.length, set: f.tiDay >= 0, dead: f.deadDay >= 0, killed: f.killDay >= 0, rogued,
         frost: c.lots.filter(l => l.field === i).reduce((a, l) => a + l.loss.frost, 0), dug: f.digDone, weighed: f.weighed, revenue: m.revenue,
+        sprouted: c.lots.filter(l => l.field === i && l.sprouted).length, broke: c.lots.filter(l => l.field === i && l.broke).length,
       } : null,
     }
   }
@@ -405,7 +473,7 @@ export interface MoneyCause {
   amount: number                   // the move of the year-end figure
   part: string                     // the part that moved it (a MoneyLook flow, 'price', or 'crops' for several fields)
   share: number                    // that part's share of the move
-  text: string                     // why, in a few words: "the test dig in Brook Field came in light"
+  text: string                     // why, in a few words: "Brook Field dug light"
 }
 
 // Why the year-end figure moved between two looks in the same year, when it moved by MONEY_STEP or more: the part
@@ -435,57 +503,73 @@ export function moneyCause(a: MoneyLook, b: MoneyLook): MoneyCause | null {
   const crops = Object.entries(d).filter(([k]) => k.startsWith('crop:')).reduce((t, [, v]) => t + v, 0)
   const keeping = b.phase === 'cellar' ? crops + d.storage + d.packing : 0
   if (Math.abs(x) < Math.abs(amount) / 2) {
-    if (crops * sign >= Math.abs(amount) / 2) { part = 'crops'; x = crops }
-    else if (keeping * sign >= Math.abs(amount) / 2) { part = 'keeping'; x = keeping }
+    if (keeping * sign >= Math.abs(amount) / 2) { part = 'keeping'; x = keeping }
+    else if (crops * sign >= Math.abs(amount) / 2) { part = 'crops'; x = crops }
   }
   return { amount, part, share: x / amount, text: causeText(a, b, part, x, d, moved) }
 }
 
+// The cause as a person says it, its subject first: "Brook Field dug light", "Lucien's wages to year end".
 function causeText(a: MoneyLook, b: MoneyLook, part: string, x: number, d: Record<string, number>, moved: Record<string, number>): string {
   const up = x > 0
   const first = (name: string) => name.split(' ')[0]
   if (part === 'price') {
     const ids = Object.entries(moved).filter(([, p]) => Math.sign(p) === Math.sign(x)).sort((p, q) => Math.abs(q[1]) - Math.abs(p[1]))
-    return ids.length === 1 || (ids.length && Math.abs(ids[0][1]) >= Math.abs(x) * 0.8) ? `${variety(ids[0][0] as VarietyId).name} price ${up ? 'rose' : 'fell'}` : `potato prices ${up ? 'rose' : 'fell'}`
+    return ids.length === 1 || (ids.length && Math.abs(ids[0][1]) >= Math.abs(x) * 0.8) ? `${variety(ids[0][0] as VarietyId).name} price ${up ? 'rose' : 'fell'}` : `Potato prices ${up ? 'rose' : 'fell'}`
   }
-  if (part === 'keeping') return up ? 'the stored crop' : 'storage, shrink and rot'
+  if (part === 'keeping') {
+    const facts = (l: MoneyLook) => Object.values(l.fields).map(f => f.facts).filter(f => !!f)
+    const count = (l: MoneyLook, k: 'sprouted' | 'broke') => facts(l).reduce((t, f) => t + f![k], 0)
+    if (!up && count(b, 'broke') > count(a, 'broke')) return 'Rot in the potato house'
+    if (!up && count(b, 'sprouted') > count(a, 'sprouted')) return 'Stored crop sprouted'
+    return up ? 'Stored crop' : 'Storage, shrink and rot'
+  }
   if (part === 'crops') {
     const top = Object.entries(d).filter(([k, v]) => k.startsWith('crop:') && Math.sign(v) === Math.sign(x)).sort((p, q) => Math.abs(q[1]) - Math.abs(p[1]))[0]
-    return `crop ${up ? 'heavier' : 'lighter'}${top ? `, ${FIELD_NAMES[Number(top[0].slice(5))]} most` : ''}`
+    return top ? `Fields look ${up ? 'heavier' : 'lighter'}, ${FIELD_NAMES[Number(top[0].slice(5))]} most` : `Fields look ${up ? 'heavier' : 'lighter'}`
   }
   if (part.startsWith('crop:')) {
     const i = Number(part.slice(5))
     const name = FIELD_NAMES[i]
     const was = a.fields[i]?.facts, now = b.fields[i]?.facts
-    if (!now) return `crop from ${name}`
+    if (!now) return `Crop from ${name}`
     if (was && was.status !== 'lost' && now.status === 'lost') return `${name} left in the ground`
-    if (now.revenue > (was?.revenue ?? 0) + 0.5) return b.contracts > a.contracts + 0.5 ? `${name} delivered on contract` : `${name} crop sold`
+    if (now.revenue > (was?.revenue ?? 0) + 0.5) return b.contracts > a.contracts + 0.5 ? `${name} delivered on contract` : `${name} sold`
     if (now.weighed && !was?.weighed) return `${name} weighed in ${up ? 'heavy' : 'light'}`
-    if (now.samples > (was?.samples ?? 0)) return `${up ? 'heavy' : 'light'} test dig, ${name}`
-    if (now.killed && !was?.killed) return `vines killed in ${name}`
-    if (now.dead && !was?.dead) return `vines died in ${name}`
-    if (now.rogued > (was?.rogued ?? 0)) return `blight pulled in ${name}`
-    if (now.frost > (was?.frost ?? 0) + 0.5) return `barrels froze in ${name}`
-    if (now.set && !was?.set) return `tubers set in ${name}`
-    if (now.dug > (was?.dug ?? 0)) return `${name} digging ${up ? 'heavier' : 'lighter'}`
+    if (now.samples > (was?.samples ?? 0)) return `${name}'s test dig came ${up ? 'heavy' : 'light'}`
+    if (now.killed && !was?.killed) return `Vines killed in ${name}`
+    if (now.dead && !was?.dead) return `Vines died in ${name}`
+    if (now.rogued > (was?.rogued ?? 0)) return `Blight pulled in ${name}`
+    if (now.frost > (was?.frost ?? 0) + 0.5) return `Barrels froze in ${name}`
+    if (now.set && !was?.set) return `Tubers set in ${name}`
+    if (now.dug > (was?.dug ?? 0)) return `${name} dug ${up ? 'heavy' : 'light'}`
     return `${name} looks ${up ? 'heavier' : 'lighter'}`
   }
   if (part === 'wages') {
     const hired = b.crew.filter(u => !a.crew.some(w => w.id === u.id))
     const gone = a.crew.filter(u => !b.crew.some(w => w.id === u.id))
     if (!up && hired.length) return `${first(hired[0].name)}'s wages to year end`
-    if (up && gone.length) return `no more wages for ${first(gone[0].name)}`
-    if (!up && b.pickers && !a.pickers) return 'pickers\' wages'
-    return up ? 'less in wages' : 'more in wages'
+    if (up && gone.length) return `No more wages for ${first(gone[0].name)}`
+    if (!up && b.pickers && !a.pickers) return 'Pickers\' wages'
+    return up ? 'Less to pay in wages' : 'More to pay in wages'
   }
   const WORDS: Record<string, [string, string]> = {
-    orders: ['field work and orders', 'field work and orders'], rest: ['oats and clover', 'oats and clover'],
-    penalties: ['contract nearer filled', 'contract looks short'], storage: ['storage', 'storage'], rent: ['rent', 'rent'], land: ['land', 'land bought'],
-    contractor: ['contractors', 'contractors'], building: ['building', 'building'], packing: ['packing', 'packing'], mortgage: ['land mortgage', 'land mortgage'],
-    bills: ['year-end bills', 'year-end bills'], logs: ['logs sold', 'logs'], other: ['other sales', 'other costs'],
-    interest: ['less interest owed', 'interest on what\'s owed'], start: ['opening cash', 'opening cash'],
+    orders: ['Field work', 'Field work'], sprays: ['Fewer sprays to pay for', 'Keeping the fields sprayed'], rest: ['Oats and clover', 'Oats and clover'],
+    penalties: ['Contract nearer filled', 'Contract looks short'], storage: ['Storage', 'Storage'], rent: ['Rent', 'Rent'], land: ['Land', 'Land bought'],
+    contractor: ['Contractors', 'Contractors'], building: ['Building', 'Building'], packing: ['Packing', 'Packing'], mortgage: ['Land mortgage', 'Land mortgage'],
+    bills: ['Year-end bills', 'Year-end bills'], logs: ['Logs sold', 'Logs'], other: ['Other sales', 'Other costs'],
+    interest: ['Less interest owed', 'Interest on what\'s owed'], start: ['Opening cash', 'Opening cash'],
   }
   return (WORDS[part] ?? [part, part])[up ? 0 : 1]
+}
+
+// The board's watch on the year-end figure: a move of MONEY_STEP or more since the last look that said one, however
+// slowly it came, is said with its cause, and that look becomes the one the next is measured from. A new year or a
+// spring plan starts the watch again.
+export function moneyWatch(since: MoneyLook | null, now: MoneyLook): { cause: MoneyCause | null; since: MoneyLook } {
+  if (!since || since.year !== now.year || since.phase === 'plan' || now.phase === 'plan') return { cause: null, since: now }
+  const cause = moneyCause(since, now)
+  return { cause, since: cause ? now : since }
 }
 
 // What a field's crop should come to at the dig, total cwt an acre with its give-or-take: before the tubers set, what
