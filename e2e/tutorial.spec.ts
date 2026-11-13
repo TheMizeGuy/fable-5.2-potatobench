@@ -557,9 +557,10 @@ test('"Planting has started" waits for the planting, and its Show me goes to the
 // the game stopped there (at 1x the next day, and its news, would come four seconds later).
 async function toFrostWarning(page: Page, guided: boolean): Promise<{ speed: number; why: string; farm: string }> {
   await open(page)
-  return page.evaluate(guided => {
+  return page.evaluate(async guided => {
     const w = globalThis as unknown as Win
     const { app, sim } = w.__county
+    const answer = (c: any, go: (cmd: unknown) => unknown) => { for (const i of [...c.incidents]) go({ t: 'answer', incident: i.id, choice: sim.defaultChoice(i) }) }
     for (const seed of [7, 8, 12]) {
       w.__countyGuide.reset()
       if (guided) { w.__countyGuide.skipTo('bills') } else w.__countyGuide.refuse()
@@ -567,17 +568,27 @@ async function toFrostWarning(page: Page, guided: boolean): Promise<{ speed: num
       const c = app.campaign
       app.do({ t: 'begin' })
       app.do({ t: 'sprayWay', way: 'auto' })
-      for (let n = 0; n < 300 && !sim.seasonDone(c) && !c.season.fields.some((f: any) => f.weighed); n++) {
-        for (const i of [...c.incidents]) app.do({ t: 'answer', incident: i.id, choice: sim.defaultChoice(i) })
-        app.setSpeed(1)
-        const r = app.do({ t: 'day' })
-        if (r.events.some((e: any) => e.type === 'frostBarrels')) {
-          // What the clock did by itself is read here; then it is stopped by the test, so the screen holds still to be looked at.
-          const at = { speed: app.speed as number, why: app.pauseReason as string, farm: `1995, seed ${seed}, day ${c.season.day}` }
-          app.setSpeed(0)
-          return at
-        }
+      // Which day brings the warning, found on a copy of the farm.
+      const copy = structuredClone(c)
+      let days = -1
+      for (let n = 0; n < 300 && days < 0 && !sim.seasonDone(copy) && !copy.season.fields.some((f: any) => f.weighed); n++) {
+        answer(copy, cmd => sim.apply(app.world, copy, cmd))
+        if (sim.apply(app.world, copy, { t: 'day' }).events.some((e: any) => e.type === 'frostBarrels')) days = n
       }
+      if (days < 0) continue
+      // The farm itself is brought to the day before, and the screen let settle: news of the days hurried through
+      // (a test dig's offer comes a moment after its day) arrives and goes before the day this is about.
+      for (let n = 0; n < days; n++) { answer(c, cmd => app.do(cmd)); app.do({ t: 'day' }) }
+      app.setSpeed(0)
+      await new Promise(done => setTimeout(done, 2500))
+      answer(c, cmd => app.do(cmd))
+      app.setSpeed(1)
+      const r = app.do({ t: 'day' })
+      if (!r.events.some((e: any) => e.type === 'frostBarrels')) continue
+      // What the clock did by itself is read here; then it is stopped by the test, so the screen holds still to be looked at.
+      const at = { speed: app.speed as number, why: app.pauseReason as string, farm: `1995, seed ${seed}, day ${c.season.day}` }
+      app.setSpeed(0)
+      return at
     }
     return { speed: -1, why: 'no frost warning before the first ticket', farm: '' }
   }, guided)

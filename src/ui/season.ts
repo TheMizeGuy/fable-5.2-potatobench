@@ -255,16 +255,16 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     for (const kind of ['plant', 'dig'] as const) {
       const key = `${c.seed}.${c.year}.${kind}`
       if (startedSaid.has(key)) continue
-      // Work begun, not an order someone holds while it waits for warm soil.
-      const j = s0.jobs.find(x => x.kind === kind && x.by === 'routine' && x.done > 0 && c.crew.some(u => u.job === x.id))
+      // Work done today, not an order someone holds while it waits for warm soil; and not work the player ordered.
+      const j = s0.worked.find(x => x.kind === kind && !s0.jobs.some(o => o.kind === kind && o.field === x.field && o.by !== 'routine'))
       if (!j) continue
       startedSaid.add(key)
-      const u = c.crew.find(x => x.job === j.id)!
-      const who = u.kind === 'farmer' ? 'You\'re' : `${u.name.split(' ')[0]} is`
+      const u = c.crew.find(x => x.id === j.unit)
+      const who = !u || u.kind === 'farmer' ? 'You\'re' : `${u.name.split(' ')[0]} is`
       ctx.notes.push({
         level: 'info', glyph: kind, ttl: 12000, field: j.field, day: s0.day,
         text: `${kind === 'plant' ? 'Planting' : 'Digging'} has started in ${S.FIELD_NAMES[j.field]}. Show me`,
-        full: `${kind === 'plant' ? 'Planting' : 'Digging'} has started in ${S.FIELD_NAMES[j.field]} without an order from you. ${who} on the way there. Press to see.`,
+        full: `${kind === 'plant' ? 'Planting' : 'Digging'} has started in ${S.FIELD_NAMES[j.field]} without an order from you. ${who} working there. Press to see.`,
         // To the field the sentence names, where the work shows.
         go: () => { app.selectUnit(-1); app.select(j.field); app.focus(j.field) },
       })
