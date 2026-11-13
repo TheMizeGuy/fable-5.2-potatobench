@@ -1071,13 +1071,13 @@ test('with the guide running the clock, a press on a stamp does not change the s
 })
 
 // (20): the first spring sheet says what a usual first year looks like without the fright.
-test('the first spring sheet says a usual first year and that the loan carries it', async ({ page }) => {
+test('the first spring sheet says a usual first year and that the loan carries it', async ({ page, isMobile }) => {
   const errors = watchErrors(page)
   await fresh(page)
   await page.getByTestId('play').click()
   await page.getByTestId('guide-refuse').click()
-  // (the blank shows three figures at a glance; this line is behind Details)
-  await page.getByTestId('plan-more').click()
+  // (at a desk the blank shows three figures at a glance and this line is behind Details; a phone's sheet shows it)
+  if (!isMobile) await page.getByTestId('plan-more').click()
   const line = page.getByTestId('plan-usual')
   await expect(line).toBeVisible()
   await expect(line).toHaveText('The loan covers usual first-year losses: $4,000 to $24,000.')
