@@ -331,7 +331,8 @@ export interface Season {
   fields: FieldSeason[]
   jobs: Job[]
   nextJob: number
-  worked: { kind: JobKind; field: number; unit: number }[]   // what each crew did on the last day worked, in order
+  // what each crew did on the last day worked, in order; machine work with what they drove and its hours (shares of the day)
+  worked: { kind: JobKind; field: number; unit: number; rig?: Rig; machine?: string; from?: number; to?: number }[]
   spent: number
   log: GameEvent[]
   pickers: boolean          // a picking crew hired by the day for the harvest break

@@ -55,8 +55,13 @@ export function personNow(c: S.Campaign, id: number, waits: Record<number, strin
   if (u.road > 0) return said('go', 'Heading', `to ${S.placeName(u.to)}`, u.to)
   // Work they could take: held up, or theirs to start on the next working morning.
   const could = s.jobs.filter(j => (j.unit < 0 || j.unit === id) && S.willDo(u, j.kind) && !others(j))
-  const next = could.find(j => !waits[j.id])
+  // Machine work waits for a machine while everyone else's hold all the farm has running (season.ts books their hours).
+  const tractors = S.tractorsRunning(c, s.day)
+  const free = (j: S.Job) => S.jobSkill(j.kind) !== 'machine' || c.crew.filter(o => o !== u && o.rig === 'tractor').length < tractors ||
+    (j.kind === 'haul' && c.upgrades.truck && !c.crew.some(o => o !== u && o.rig === 'truck'))
+  const next = could.find(j => !waits[j.id] && free(j))
   if (next) return said(next.kind, 'Next', jobText(next, c, next.building).replace(/^./, x => x.toLowerCase()), next.field)
+  if (could.some(j => !waits[j.id])) return said('stale', 'Waiting', tractors > 1 ? 'for a tractor' : 'for the tractor', at)
   if (could.length) return said('stale', 'Waiting', `for ${WAIT_FOR[waits[could[0].id]] ?? waits[could[0].id]}`, at)
   const where = at === S.HOME_YARD ? '' : `at ${S.placeName(at)}, `
   return said('stale', 'Idle', `${where}${s.jobs.length ? `nothing on the work list for ${u.kind === 'farmer' ? 'you' : 'them'}` : 'the work list is empty'}`, at)

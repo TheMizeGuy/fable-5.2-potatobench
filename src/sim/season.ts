@@ -625,8 +625,27 @@ function digProgress(c: Campaign, s: Season, f: FieldSeason, field: number, job:
 //    with the least travel plus PICK_LAG for each place down the list, the earliest on a tie; they drive there and
 //    work it at their own speed until it is done or the day is used up. Someone who finds nothing is idle.
 // People end the day where they worked, and one still on the road carries the rest of the drive into tomorrow.
+//
+// A machine's hours are booked, not just its holder at an instant. Each tractor, the truck and each implement the farm
+// has only one of (the boom sprayer, the harvester, the irrigation reel) has the day's hours once. Machine work is
+// laid end to end on it: someone who takes a machine has it from when it was last let go (the drive with it counts),
+// waits for it until then, and gets only what is left of the day; with none left they look for other work.
 
-interface Turn { u: Unit; left: number; idle: boolean; spent: Record<Skill, number>; tractor: boolean }
+interface Turn { u: Unit; left: number; idle: boolean; spent: Record<Skill, number>; tractor: boolean; waited: number; keys: string[] }
+
+// The day's bookings: for each machine, the share of the day at which it is free (held: to the end of the day).
+type Book = Map<string, number>
+
+// What a machine order takes besides its tractor: an implement the farm has only one of.
+const IMPLEMENT: Partial<Record<JobKind, 'boom' | 'harvester' | 'reel'>> = { spray: 'boom', dig: 'harvester', water: 'reel' }
+
+interface Booking { rig: Rig; keys: string[]; start: number }
+
+// The day's record of a stretch of work; machine work says which machine and its hours, for the picture.
+function logWork(s: Season, t: Turn, kind: JobKind, field: number, time: number): void {
+  const u = t.u
+  s.worked.push(u.rig && t.keys.length ? { kind, field, unit: u.id, rig: u.rig, machine: t.keys[0], from: 1 - t.left - time, to: 1 - t.left } : { kind, field, unit: u.id })
+}
 
 function heldByOther(c: Campaign, job: Job, u: Unit): boolean {
   for (const o of c.crew) if (o !== u && o.job === job.id) return true
@@ -649,15 +668,20 @@ export function tractorsRunning(c: Campaign, day: number): number {
   return Math.max(0, tractorsOwned(c) - out)
 }
 
-// What this person would drive to work this order: '' for work on foot, the truck for hauling when it is free, a
-// tractor otherwise, or null when every running tractor is taken.
-function rigFor(c: Campaign, s: Season, u: Unit, job: Job): Rig | null {
-  if (jobSkill(job.kind) !== 'machine') return ''
-  if (u.rig) return u.rig
-  if (job.kind === 'haul' && c.upgrades.truck && !c.crew.some(o => o !== u && o.rig === 'truck')) return 'truck'
-  let busy = 0
-  for (const o of c.crew) if (o !== u && o.rig === 'tractor') busy++
-  return busy < tractorsRunning(c, s.day) ? 'tractor' : null
+// What this person would drive to work this order, from now (a share of the day): '' for work on foot, the truck for
+// hauling, or the tractor (with the one implement, where the farm has it) that is free soonest; and when it is free.
+// Null when no machine has any of the day left.
+function rigFor(c: Campaign, s: Season, job: Job, book: Book, now: number): Booking | null {
+  if (jobSkill(job.kind) !== 'machine') return { rig: '', keys: [], start: now }
+  const at = (k: string) => Math.max(now, book.get(k) ?? 0)
+  const gear = IMPLEMENT[job.kind]
+  const extra = gear && c.upgrades[gear] ? [gear] : []
+  let best: Booking | null = null
+  const offer = (b: Booking) => { if (b.start < 1 - EPS && (!best || b.start < best.start - EPS)) best = b }
+  // The truck hauls when it can, ahead of a tractor free as soon.
+  if (job.kind === 'haul' && c.upgrades.truck) offer({ rig: 'truck', keys: ['truck'], start: at('truck') })
+  for (let i = 0; i < tractorsRunning(c, s.day); i++) offer({ rig: 'tractor', keys: [`tractor${i}`, ...extra], start: Math.max(at(`tractor${i}`), ...extra.map(at)) })
+  return best
 }
 
 // Whether today is a working day: on a Sunday off nobody works, unless a frost is coming on crop still in barrels.
@@ -778,7 +802,7 @@ function work(world: World, c: Campaign, s: Season, t: Turn, job: Job, d: Day, o
   job.done += use
   t.left -= time
   t.spent[jobSkill(job.kind)] += time
-  s.worked.push({ kind: job.kind, field: job.field, unit: u.id })
+  logWork(s, t, job.kind, job.field, time)
   if (job.kind === 'dig') digProgress(c, s, f, job.field, job, d, u)
   if (job.kind === 'fell' && fell(c, job.field, use, u)) job.done = job.need
   if (job.kind === 'dig' && cap < t.left + time - EPS && job.done < job.need - 1e-6) { stopDig(c, s, u, job, out); return }
@@ -828,7 +852,7 @@ function haulWork(c: Campaign, s: Season, t: Turn, job: Job, out: GameEvent[]): 
   t.spent.machine += time
   job.done += time
   job.need = job.done + f.inField / rate
-  s.worked.push({ kind: 'haul', field: job.field, unit: u.id })
+  logWork(s, t, 'haul', job.field, time)
   if (f.inField >= 0.5) return
   letGo(u)
   const lot = c.lots.find(l => l.id === f.lotId)
@@ -856,42 +880,45 @@ function buildDay(world: World, c: Campaign, s: Season, t: Turn, job: Job, _d: D
   }
 }
 
-function choose(c: Campaign, s: Season, u: Unit, d: Day, out: GameEvent[]): { job: Job; rig: Rig } | null {
-  const pick = byPriority(c, s, u, d, out)
+type Pick = { job: Job } & Booking
+
+function choose(c: Campaign, s: Season, u: Unit, d: Day, out: GameEvent[], book: Book, now: number): Pick | null {
+  const pick = byPriority(c, s, u, d, out, book, now)
   if (pick && !waitable(pick.job.kind)) return pick
   for (const job of [...s.jobs]) {
     if (waitable(job.kind) || !mayTake(u, job) || heldByOther(c, job, u) || stoppedToday(s, job) || !pressingWhy(c, s, job)) continue
     if (!stillWanted(c, s, job, out)) continue
-    const rig = rigFor(c, s, u, job)
+    const rig = rigFor(c, s, job, book, now)
     if (waitFor(c, s, job, d) || rig === null) continue
     if (pick && !(s.pressed ?? []).includes(u.id)) {
       s.pressed = [...(s.pressed ?? []), u.id]
       push(s, out, 'pressing', job.field, 'info', `${subject(u, 'leaves', 'You leave')} ${pick ? JOB_LABEL[pick.job.kind].toLowerCase() : 'other work'} to do the ${JOB_LABEL[job.kind].toLowerCase()} in ${placeName(job.field)}, because ${pressingWhy(c, s, job)}.`, { unit: u.id, job: job.id })
     }
-    return { job, rig }
+    return { job, ...rig }
   }
   return pick
 }
 
-function byPriority(c: Campaign, s: Season, u: Unit, d: Day, out: GameEvent[]): { job: Job; rig: Rig } | null {
+function byPriority(c: Campaign, s: Season, u: Unit, d: Day, out: GameEvent[], book: Book, now: number): Pick | null {
   for (let level = 1; level <= P.PRIORITY_MAX; level++) {
     let any = false
     for (const k of P.SKILLS) if (u.prio[k] === level) any = true
     if (!any) continue
-    const cands: { job: Job; rig: Rig }[] = []
+    const cands: Pick[] = []
     let k = 0
     while (k < s.jobs.length && cands.length < P.PICK_WINDOW) {
       const job = s.jobs[k]
       if (u.prio[jobSkill(job.kind)] !== level || !mayTake(u, job) || heldByOther(c, job, u) || stoppedToday(s, job)) { k++; continue }
       if (!stillWanted(c, s, job, out)) continue
-      const rig = rigFor(c, s, u, job)
-      if (!waitFor(c, s, job, d) && rig !== null) cands.push({ job, rig })
+      const rig = rigFor(c, s, job, book, now)
+      if (!waitFor(c, s, job, d) && rig !== null) cands.push({ job, ...rig })
       k++
     }
-    let best: { job: Job; rig: Rig } | null = null
+    let best: Pick | null = null
     let bestCost = Infinity
     for (let r = 0; r < cands.length; r++) {
-      const cost = travel(c, u.at, cands[r].job.field) + r * P.PICK_LAG
+      // waiting for a machine costs as the drive does
+      const cost = travel(c, u.at, cands[r].job.field) + r * P.PICK_LAG + (cands[r].start - now)
       if (cost < bestCost) { best = cands[r]; bestCost = cost }
     }
     if (best) return best
@@ -903,7 +930,7 @@ function byPriority(c: Campaign, s: Season, u: Unit, d: Day, out: GameEvent[]): 
 function turnsFor(c: Campaign, s: Season): Turn[] {
   if (!workday(c, s)) return []
   const turns: Turn[] = []
-  for (const u of c.crew) if (!u.foreman && !hurt(u, s.day) && !resting(u)) turns.push({ u, left: 1, idle: false, spent: zeroSkills(), tractor: false })
+  for (const u of c.crew) if (!u.foreman && !hurt(u, s.day) && !resting(u)) turns.push({ u, left: 1, idle: false, spent: zeroSkills(), tractor: false, waited: 0, keys: [] })
   turns.sort((a, b) => turnBefore(a.u, b.u) ? -1 : turnBefore(b.u, a.u) ? 1 : 0)
   return turns
 }
@@ -980,12 +1007,29 @@ function runCrews(world: World, c: Campaign, s: Season, d: Day, out: GameEvent[]
   s.worked = []
   const turns = turnsFor(c, s)
   const minded = mindStand(c, s, turns)
+  const book: Book = new Map()
+  // Takes a booking: the person waits for the machine, which is theirs to the end of the day until they let it go.
+  const take = (t: Turn, b: Booking) => {
+    const wait = Math.max(0, b.start - (1 - t.left))
+    t.left -= wait
+    t.waited += wait
+    for (const k of b.keys) book.set(k, 1)
+    t.u.rig = b.rig
+    t.keys = b.keys
+  }
+  // Once they are done for now: let go, the machine is free from that moment; still held, it stays booked.
+  const done = (t: Turn, b: Booking) => { if (t.u.job < 0) for (const k of b.keys) book.set(k, 1 - t.left); t.keys = [] }
   for (const t of turns) {
     const u = t.u
-    if (!drive(t)) continue
     const job = u.job >= 0 ? s.jobs.find(j => j.id === u.job) : undefined
-    if (!job || !mayTake(u, job) || !stillWanted(c, s, job, out) || waitFor(c, s, job, d)) { letGo(u); continue }
+    // Carrying on: a machine held from yesterday is booked first thing, or the order goes back when none is free.
+    const b = job && u.rig ? rigFor(c, s, job, book, 1 - t.left) : null
+    if (job && u.rig && !b) { letGo(u); continue }
+    if (b) take(t, b)
+    if (!drive(t)) { if (b) done(t, b); continue }
+    if (!job || !mayTake(u, job) || !stillWanted(c, s, job, out) || waitFor(c, s, job, d)) { letGo(u); if (b) done(t, b); continue }
     work(world, c, s, t, job, d, out)
+    if (b) done(t, b)
   }
   for (;;) {
     let t: Turn | null = null
@@ -994,11 +1038,12 @@ function runCrews(world: World, c: Campaign, s: Season, d: Day, out: GameEvent[]
       if (!t || x.left > t.left) t = x
     }
     if (!t) break
-    const pick = choose(c, s, t.u, d, out)
+    const pick = choose(c, s, t.u, d, out, book, 1 - t.left)
     if (!pick) { t.idle = true; continue }
     t.u.job = pick.job.id
-    t.u.rig = pick.rig
+    take(t, pick)
     work(world, c, s, t, pick.job, d, out)
+    done(t, pick)
   }
   return { turns, minded }
 }
@@ -1010,7 +1055,8 @@ function peopleDay(c: Campaign, s: Season, turns: Turn[], out: GameEvent[]): voi
   const quit: Unit[] = []
   for (const u of c.crew) {
     const t = turns.find(x => x.u === u)
-    const used = t ? Math.max(0, Math.min(1, 1 - t.left)) : 0
+    // (a wait for a machine is no work)
+    const used = t ? Math.max(0, Math.min(1, 1 - t.left - t.waited)) : 0
     if (t) {
       for (const k of P.SKILLS) {
         for (const level of gainXp(u, k, t.spent[k])) push(s, out, 'skillUp', -1, 'good', `${subject(u, 'is', 'You are')} better at ${SKILL_LABEL[k]}: level ${level}.`, { unit: u.id, level })
