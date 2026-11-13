@@ -49,3 +49,6 @@
 .rest-keys .t-label { margin-right: 6px; }
 .rest-keys .btn { min-height: 36px; padding: 0 10px; font-size: 14px; }
 .touch .rest-keys .btn { min-height: 44px; }
+/* A telegram or a paper holds the floor: a card beside someone on the land steps aside with its tether, and is back
+   as it was when the paper is answered. */
+.hud.voice .whois-layer { visibility: hidden; }

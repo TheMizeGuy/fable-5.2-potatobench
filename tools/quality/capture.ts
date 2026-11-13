@@ -168,6 +168,8 @@ const STATES: State[] = [
     await q(page, `q.start(1987, 3); q.run(q.day(6, 28), ['sample'])`)
     await closeAll(page)
     await q(page, `const { app } = q.g(); app.do({ t: 'job', kind: 'sample', field: 2 }); app.do({ t: 'bump', id: app.campaign.season.jobs.at(-1).id }); app.do({ t: 'day' })`)
+    // The test dig is offered on a slip at the foot: Show me lays its tray.
+    await page.locator('#ui [data-testid="alert"]', { hasText: 'test dig' }).click({ timeout: 5000 }).catch(() => {})
     await page.getByTestId('sample-dialog').waitFor({ timeout: 5000 }).catch(() => {})
     // The tray sets its tubers down and narrows the estimate over about two seconds: the frame is of the end.
     await page.waitForTimeout(2600)

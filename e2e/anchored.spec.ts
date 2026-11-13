@@ -725,6 +725,12 @@ for (const [w, h] of [[1280, 800], [1280, 720]] as const) {
         const bars = await a<Box[]>(page, `return A.rects('.timebook, .queue, .topbar .almanac > .mount, .topbar .bank > .mount')`)
         expect.soft(bars.filter(b => meets(c.rect, b)), say('not over the people bar, the work list or the boards')).toEqual([])
         expect.soft(c.end, say('its tether is drawn')).not.toBeNull()
+        // The tether's line crosses no key that is not its own chip: it stops at the bar's edge, its pin on the chip.
+        const crossed = await a<string[]>(page, `const line = document.querySelector('#ui [data-testid="tether-person-card"]')
+          if (!A.vis(line)) return []
+          const l = line.getBoundingClientRect()
+          return [...document.querySelectorAll('#ui .timebook button, #ui .queue button')].filter(b => A.vis(b) && b.dataset.testid !== 'unit-${p.id}').filter(b => { const r = b.getBoundingClientRect(); return l.left < r.right - 1 && l.right > r.left + 1 && l.top < r.bottom - 1 && l.bottom > r.top + 1 }).map(b => b.dataset.testid || b.className)`)
+        expect.soft(crossed, say('its tether crosses no other key')).toEqual([])
         await chip.click()
         await page.waitForTimeout(300)
         expect.soft((await cards(page)).map(x => x.id), say('a second press on the chip puts the card away')).toEqual([])
@@ -770,6 +776,310 @@ for (const [w, h] of [[1280, 800], [1280, 720], [1512, 982]] as const) {
       await letGo(page)
     }
     expect(stamps, 'stamps were pointed at').toBeGreaterThanOrEqual(9)
+    expect(errors, errors.join('\n')).toEqual([])
+  })
+}
+
+// ---------------------------------------------------------------- nothing opens unasked; the yard's card; a person's card
+
+// The cards and sheets that are up now, each with the thing it is about.
+async function upNow(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const out: string[] = []
+    const vis = (e: Element | null): e is HTMLElement => e instanceof HTMLElement && !e.hidden && e.offsetParent !== null && !e.closest('[hidden], .out, .leaving') && getComputedStyle(e).visibility !== 'hidden' && e.getBoundingClientRect().height > 0
+    for (const id of ['card', 'yard-card', 'whois', 'person-card', 'thing-card', 'sample-dialog', 'work-grid']) {
+      const el = document.querySelector<HTMLElement>(`#ui [data-testid="${id}"]`)
+      if (vis(el)) out.push(`${id}:${el.dataset.thing ?? ''}`)
+    }
+    return out
+  })
+}
+
+interface Guided { note: string; target: string; keys: string[]; telegram: boolean; spray: boolean; ticket: string; phase: string; day: number; speed: number }
+async function guidedNow(page: Page): Promise<Guided> {
+  return page.evaluate(() => {
+    const { app } = (globalThis as unknown as { __county: { app: { campaign: { phase: string; season?: { day: number } } | null; speed: number } } }).__county
+    const ui = document.getElementById('ui')!
+    const vis = (e: Element | null): e is HTMLElement => e instanceof HTMLElement && !e.closest('[hidden], .leaving, .out, .gone') && e.getBoundingClientRect().width > 0 && getComputedStyle(e).visibility !== 'hidden'
+    const slip = [...ui.querySelectorAll<HTMLElement>('[data-testid="guide-slip"]')].find(vis) ?? null
+    const sell = ui.querySelector<HTMLElement>('.paper-layer [data-testid^="lot-sell-"]')
+    return {
+      note: slip?.dataset.lesson ?? '', target: slip?.dataset.target ?? '', keys: slip ? [...slip.querySelectorAll<HTMLElement>('button')].filter(vis).map(b => b.dataset.testid ?? '') : [],
+      telegram: vis(ui.querySelector('.season-screen .telegram')), spray: vis(ui.querySelector('[data-testid="spray-way-auto"]')), ticket: sell && vis(sell) ? sell.dataset.testid! : '',
+      phase: app.campaign?.phase ?? 'title', day: app.campaign?.season?.day ?? -1, speed: app.speed,
+    }
+  })
+}
+
+// A guided first year followed as a newcomer follows it: only what each note asks, its skips ahead (which run at 8×)
+// taken. at: called once when each note is first read. Ends at the first weigh ticket, or when `at` says so.
+// Whenever it looks, no card or sheet is up that the run did not open itself.
+async function guidedYear(page: Page, at: (note: string) => Promise<boolean | void>): Promise<string[]> {
+  await page.goto('./')
+  await page.evaluate(() => localStorage.clear())
+  await page.reload()
+  await page.waitForFunction(() => '__county' in globalThis && !document.getElementById('splash'))
+  await page.getByTestId('play').click()
+  await page.getByTestId('guide-accept').click()
+  const did: string[] = []
+  const mine = new Set<string>()
+  const until = Date.now() + 600_000
+  while (Date.now() < until) {
+    const s = await guidedNow(page)
+    const up = await upNow(page)
+    if (!up.length) mine.clear()
+    expect.soft(up.filter(x => !mine.has(x.split(':')[1])), `nothing is open that the player did not open, after ${did.slice(-5).join(' > ')} (day ${s.day})`).toEqual([])
+    if (s.ticket) { did.push('ticket'); break }
+    if (s.note) {
+      if (did[did.length - 1] !== s.note) {
+        did.push(s.note)
+        await page.waitForTimeout(500)
+        if (await at(s.note)) break
+        continue
+      }
+      const key = s.note === 'stamp' && s.target.startsWith('badge-') ? '' : s.keys.includes('guide-ahead') ? 'guide-ahead' : s.keys.includes('guide-noted') ? 'guide-noted' : ''
+      if (key) await page.locator(`#ui [data-testid="guide-slip"] [data-testid="${key}"]`).first().click().catch(() => {})
+      else {
+        // What the note points at: a field's tag or a person's chip opens that thing's card, by the player's press.
+        const m = /^(field|unit)-(\d+)$/.exec(s.target)
+        if (m) mine.add(m[1] === 'field' ? `field-${m[2]}` : `person-${m[2]}`)
+        await page.locator(`#ui [data-testid="${s.target}"]`).first().click().catch(() => {})
+      }
+      await page.waitForTimeout(150)
+      continue
+    }
+    if (s.telegram) {
+      did.push(s.spray ? 'spraying' : 'telegram')
+      if (s.spray) await page.getByTestId('spray-way-auto').click().catch(() => {})
+      else await page.locator('#ui .season-screen .telegram .reply.first').first().click().catch(() => {})
+      await page.waitForTimeout(200)
+      continue
+    }
+    await page.waitForTimeout(250)
+  }
+  return did
+}
+
+// The yard's card held to its rule: no row cuts its words, what cannot be paid for is said once, its head and cross
+// are in view, it lies inside the window and off the tutorial's note.
+async function yardHolds(page: Page, label: string): Promise<void> {
+  await page.evaluate(PROBE)
+  let at = await a<Pt | null>(page, 'return A.yardSpot(-1)')
+  if (!at) { await tier(page, 'yard'); at = await a<Pt | null>(page, 'return A.yardSpot(-1)') }
+  expect(at, `${label}: the home yard is on the land to click`).not.toBeNull()
+  await page.mouse.click(at!.x, at!.y)
+  expect(await a<number>(page, `return A.shown('yard-card', 'yard-home')`), `${label}: the yard's card opens`).toBeGreaterThanOrEqual(0)
+  // (the card laid, and the note given its moment to step off a card that had nowhere else to be)
+  await page.waitForTimeout(900)
+  if (SHOTS) await page.screenshot({ path: `${SHOTS}/yard-${label.replace(/\W+/g, '-')}.png` })
+  const size = page.viewportSize()!
+  const seen = await a<{ rect: Box; rows: string[]; said: number; once: number; head: boolean; note: Box | null; scroll: number[]; cut: string[] }>(page, `const el = document.querySelector('#ui [data-testid="yard-card"]')
+    const rows = [...el.querySelectorAll('.orders .order')]
+    const inWin = b => b.top >= -0.5 && b.left >= -0.5 && b.bottom <= innerHeight + 0.5 && b.right <= innerWidth + 0.5
+    const close = el.querySelector('[data-testid="yard-close"]'), title = el.querySelector('[data-testid="yard-title"]')
+    const cr = close.getBoundingClientRect()
+    const hit = document.elementFromPoint(cr.left + cr.width / 2, cr.top + cr.height / 2)
+    const note = [...document.querySelectorAll('#ui [data-testid="guide-slip"]')].find(n => A.vis(n))
+    const body = el.querySelector('.card-body')
+    return {
+      rect: A.box(el),
+      // a row whose words are taller than its box, or run out of it
+      rows: rows.filter(r => r.scrollHeight > r.clientHeight + 1 || [...r.querySelectorAll('.name, .cost, .catch')].some(x => { const b = x.getBoundingClientRect(), rb = r.getBoundingClientRect(); return b.height > 0 && (b.bottom > rb.bottom + 0.5 || b.top < rb.top - 0.5) })).map(r => r.dataset.testid),
+      said: rows.filter(r => /bank won't lend/.test(r.textContent)).length,
+      once: el.querySelectorAll('[data-testid="yard-short"]').length,
+      head: inWin(cr) && inWin(title.getBoundingClientRect()) && !!hit && close.contains(hit),
+      note: note ? A.box(note) : null,
+      scroll: body ? [body.scrollHeight, body.clientHeight] : [],
+      // a row the card's own edge cuts through (in view in part): only whole rows or rows scrolled out of sight
+      cut: [],
+    }`)
+  expect.soft(seen.rows, `${label}: no row of the yard's card has words taller than its box`).toEqual([])
+  expect.soft(seen.said, `${label}: no row repeats why the bank will not pay`).toBe(0)
+  expect.soft(seen.once, `${label}: what the yard is short of is said once, at the head`).toBe(1)
+  expect.soft(seen.head, `${label}: its name and its cross are in view, and the cross can be pressed`).toBe(true)
+  expect.soft(seen.rect.left >= -0.5 && seen.rect.top >= -0.5 && seen.rect.right <= size.width + 0.5 && seen.rect.bottom <= size.height + 0.5, `${label}: the card lies inside the window (${JSON.stringify(seen.rect)})`).toBe(true)
+  expect.soft(seen.note, `${label}: the tutorial's note is up`).not.toBeNull()
+  if (seen.note) expect.soft(meets(seen.rect, seen.note), `${label}: the card does not lie over the tutorial's note (card ${JSON.stringify(seen.rect)}, note ${JSON.stringify(seen.note)})`).toBe(false)
+  const boards = await a<Box[]>(page, `return A.rects('.topbar .almanac > .mount, .topbar .bank > .mount, .timebook')`)
+  expect.soft(boards.filter(b => meets(seen.rect, b)), `${label}: clear of the boards and the people bar`).toEqual([])
+  // Scrolled to its foot, the last building's row is whole too.
+  if (seen.scroll.length && seen.scroll[0] > seen.scroll[1] + 1) {
+    await a(page, `const b = document.querySelector('#ui [data-testid="yard-card"] .card-body'); b.scrollTop = b.scrollHeight`)
+    await page.waitForTimeout(150)
+    const last = await a<boolean>(page, `const el = document.querySelector('#ui [data-testid="yard-card"]'); const rows = el.querySelectorAll('.orders .order'); const r = rows[rows.length - 1].getBoundingClientRect(), c = el.getBoundingClientRect(); return r.bottom <= c.bottom + 0.5 && r.top >= c.top`)
+    expect.soft(last, `${label}: scrolled inside itself, the last row is whole and inside the card`).toBe(true)
+    if (SHOTS) await page.screenshot({ path: `${SHOTS}/yard-${label.replace(/\W+/g, '-')}-foot.png` })
+  }
+  await page.getByTestId('yard-close').click()
+  await page.waitForTimeout(350)
+  expect.soft(await upNow(page), `${label}: its cross closes it`).toEqual([])
+}
+
+test('a guided first year to the first weigh ticket: nothing opens that the player did not open, and the yard\'s card holds its rows, 1280 by 800', async ({ page, isMobile, browserName }) => {
+  test.skip(isMobile || browserName !== 'chromium', 'a desk window')
+  test.setTimeout(900_000)
+  const errors = watchErrors(page)
+  await page.setViewportSize({ width: 1280, height: 800 })
+  let yard = false
+  const did = await guidedYear(page, async note => {
+    // With the crew's summer note up, as a player had it: a click in the yard.
+    if (note === 'tend' && !yard) { yard = true; await yardHolds(page, '1280x800 guided') }
+  })
+  console.log(`followed: ${did.join(' > ')}`)
+  expect(yard, 'the note about the summer came up, and the yard was opened under it').toBe(true)
+  expect(did[did.length - 1], `the run reached the first weigh ticket (${did.join(' > ')})`).toBe('ticket')
+  expect(errors, errors.join('\n')).toEqual([])
+})
+
+test('the yard\'s card holds its rows and keeps off the tutorial\'s note, 1280 by 720', async ({ page, isMobile, browserName }) => {
+  test.skip(isMobile || browserName !== 'chromium', 'a desk window')
+  test.setTimeout(600_000)
+  const errors = watchErrors(page)
+  await page.setViewportSize({ width: 1280, height: 720 })
+  let yard = false
+  await guidedYear(page, async note => {
+    if (note !== 'tend') return false
+    yard = true
+    await yardHolds(page, '1280x720 guided')
+    return true
+  })
+  expect(yard, 'the note about the summer came up, and the yard was opened under it').toBe(true)
+  expect(errors, errors.join('\n')).toEqual([])
+})
+
+test('a test dig is offered, not laid over the land; a telegram hides an open tray and gives it back; a person\'s page does not come back by itself', async ({ page, isMobile, browserName }) => {
+  test.skip(isMobile || browserName !== 'chromium', 'a desk window')
+  test.setTimeout(240_000)
+  const errors = watchErrors(page)
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await farm(page)
+  expect(await upNow(page)).toEqual([])
+  // The crew lifts a test hill: nothing opens. A slip at the foot offers it.
+  await reach(page, `const { app } = q.g(); app.do({ t: 'job', kind: 'sample', field: 2 }); app.do({ t: 'bump', id: app.campaign.season.jobs.at(-1).id }); app.do({ t: 'day' }); app.setSpeed(0)`)
+  const offer = page.locator('#ui [data-testid="alert"]', { hasText: 'test dig' })
+  await expect(offer).toBeVisible({ timeout: 20_000 })
+  await page.waitForTimeout(1500)
+  expect(await upNow(page), 'the test dig\'s tray is not laid by itself').toEqual([])
+  await expect(offer).toContainText('Show me')
+  await offer.click()
+  const tray = page.getByTestId('sample-dialog')
+  await expect(tray).toBeVisible()
+  if (SHOTS) await page.screenshot({ path: `${SHOTS}/tray-asked-for.png` })
+  // A telegram comes: it holds the floor alone, and the tray is back as it was when it is answered.
+  await reach(page, `const { app, sim } = q.g(); const c = app.campaign
+    const p = sim.applicantsFor(c.seed, c.year, new Set(c.crew.map(u => u.name)), 1, c.season.day)[0]
+    c.incidents.push({ id: c.nextIncident++, kind: 'applicant', day: c.season.day, until: c.season.day + 4, choices: ['hire', 'pass'], applicant: p })
+    app.setSpeed(1); app.setSpeed(0)`)
+  const wire = page.getByTestId('incident')
+  await expect(wire).toBeVisible()
+  await page.waitForTimeout(300)
+  expect(await upNow(page), 'nothing else is up with the telegram').toEqual([])
+  if (SHOTS) await page.screenshot({ path: `${SHOTS}/telegram-alone.png` })
+  await wire.getByTestId('answer-pass').click()
+  await expect(wire).toBeHidden()
+  await reach(page, 'q.g().app.setSpeed(0)')
+  await expect(tray).toBeVisible()
+  // Closed by the player, it stays closed: the next days and the next test dig do not bring it back.
+  await page.getByTestId('sample-close').click()
+  await expect(tray).toHaveCount(0)
+  await reach(page, `const { app } = q.g(); app.do({ t: 'job', kind: 'sample', field: 0 }); app.do({ t: 'bump', id: app.campaign.season.jobs.at(-1).id }); app.do({ t: 'day' }); app.do({ t: 'day' }); app.setSpeed(0)`)
+  await page.waitForTimeout(1800)
+  expect(await upNow(page), 'a second test dig lays nothing by itself').toEqual([])
+  // A person's page, then a field by its number: the field's card takes its place (orders there go to them). The
+  // field's card put away, nothing is left open, and nobody is left picked.
+  await putAway(page)
+  await page.getByTestId('unit-1').click()
+  await expect(page.getByTestId('person-card')).toBeVisible()
+  await page.keyboard.press('Digit3')
+  await expect(page.getByTestId('card')).toBeVisible()
+  await expect(page.getByTestId('person-card')).toBeHidden()
+  await page.getByTestId('card-close').click()
+  await page.waitForTimeout(500)
+  expect(await upNow(page), 'the person\'s page does not come back when the field\'s card is closed').toEqual([])
+  expect(await a<number>(page, 'return app.unit'), 'nobody is left picked with no card to say so').toBe(-1)
+  // The same from the land: someone clicked, then a field, then the field's card closed.
+  const who = await a<{ id: number; at: Pt } | null>(page, `for (const u of app.campaign.crew) { const at = A.unitSpot(u.id); if (at) return { id: u.id, at } } return null`)
+  if (who) {
+    await page.mouse.click(who.at.x, who.at.y)
+    const pick = page.getByTestId(`pin-pick-${who.id}`)
+    await page.waitForTimeout(100)
+    if (await pick.isVisible().catch(() => false)) await pick.click()
+    await expect(page.getByTestId('whois')).toBeVisible()
+    await page.keyboard.press('Digit3')
+    await expect(page.getByTestId('card')).toBeVisible()
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(500)
+    expect(await upNow(page), 'their card does not come back when the field\'s card is closed').toEqual([])
+    // And a click on them opens it again, as ever.
+    const again = await a<Pt | null>(page, `return A.unitSpot(${who.id})`)
+    if (again) {
+      await page.mouse.click(again.x, again.y)
+      await page.waitForTimeout(100)
+      if (await pick.isVisible().catch(() => false)) await pick.click()
+      await expect(page.getByTestId('whois')).toBeVisible()
+    }
+  }
+  expect(errors, errors.join('\n')).toEqual([])
+})
+
+for (const [w, h] of [[1280, 800], [1280, 720]] as const) {
+  test(`a hired hand's card is whole from their chip, from the land and from the grid, ${w} by ${h}`, async ({ page, isMobile, browserName }) => {
+    test.skip(isMobile || browserName !== 'chromium', 'a desk window')
+    test.setTimeout(240_000)
+    const errors = watchErrors(page)
+    await page.setViewportSize({ width: w, height: h })
+    await farm(page)
+    const hands = await a<{ id: number; name: string }[]>(page, `return app.campaign.crew.filter(u => u.kind !== 'farmer').map(u => ({ id: u.id, name: u.name }))`)
+    expect(hands.length).toBeGreaterThanOrEqual(2)
+    // Whole: at its own height, nothing to scroll to, its name and every key inside it and the window.
+    const whole = async (id: string, thing: string, must: string[], how: string) => {
+      expect(await a<number>(page, `return A.shown(${JSON.stringify(id)}, ${JSON.stringify(thing)})`), `${w}x${h}, ${how}: the card opens`).toBeGreaterThanOrEqual(0)
+      await page.waitForTimeout(450)
+      const c = (await cards(page)).find(x => x.id === id)!
+      if (SHOTS) await page.screenshot({ path: `${SHOTS}/hand-${w}x${h}-${how.replace(/\W+/g, '-')}.png` })
+      expect.soft(c.fits && !c.cut, `${w}x${h}, ${how}: nothing in it has to be scrolled to, and it was not cut (heights ${c.room.join(', ')})`).toBe(true)
+      expect.soft(c.rect.left >= -0.5 && c.rect.top >= -0.5 && c.rect.right <= w + 0.5 && c.rect.bottom <= h + 0.5, `${w}x${h}, ${how}: inside the window (${JSON.stringify(c.rect)})`).toBe(true)
+      const out = await a<string[]>(page, `const el = document.querySelector('#ui [data-testid="${id}"]'); const r = el.getBoundingClientRect()
+        const keys = [...el.querySelectorAll('button')].filter(x => A.vis(x))
+        const bad = keys.filter(x => { const b = x.getBoundingClientRect(); return b.top < r.top - 0.5 || b.bottom > r.bottom + 0.5 || b.left < r.left - 0.5 || b.right > r.right + 0.5 || b.top < 0 || b.bottom > innerHeight || b.left < 0 || b.right > innerWidth }).map(x => x.dataset.testid || x.className)
+        const have = new Set(keys.map(x => x.dataset.testid))
+        return [...bad, ...${JSON.stringify(must)}.filter(k => !have.has(k)).map(k => 'missing ' + k)]`)
+      expect.soft(out, `${w}x${h}, ${how}: every key is inside it and the window, ${must.join(' and ')} among them`).toEqual([])
+      const bars = await a<Box[]>(page, `return A.rects('.timebook, .queue, .topbar .almanac > .mount, .topbar .bank > .mount')`)
+      expect.soft(bars.filter(b => meets(c.rect, b)), `${w}x${h}, ${how}: off the bars and the boards`).toEqual([])
+    }
+    // From their chip in the people bar.
+    const p = hands[0]
+    await page.getByTestId(`unit-${p.id}`).click()
+    await whole('person-card', `person-${p.id}`, ['person-foreman', 'person-dismiss', 'person-raise'], 'from the chip')
+    await letGo(page)
+    // From the land: on their body or their pin.
+    await tier(page, 'field')
+    let on: { id: number; at: Pt } | null = null
+    for (const t of ['field', 'farm', 'yard']) {
+      await tier(page, t)
+      on = await a<{ id: number; at: Pt } | null>(page, `for (const id of ${JSON.stringify(hands.map(x => x.id))}) { const at = A.unitSpot(id); if (at) return { id, at } } return null`)
+      if (on) break
+    }
+    expect(on, 'a hired hand is on the land to click').not.toBeNull()
+    await page.mouse.click(on!.at.x, on!.at.y)
+    await page.waitForTimeout(100)
+    const pick = page.getByTestId(`pin-pick-${on!.id}`)
+    if (await pick.isVisible().catch(() => false)) await pick.click()
+    await whole('whois', `person-${on!.id}`, ['whois-letgo', 'whois-more', 'whois-follow'], 'from the land')
+    // Details, from that card: their whole page, the Foreman key with it.
+    await page.getByTestId('whois-more').click()
+    await whole('person-card', `person-${on!.id}`, ['person-foreman', 'person-dismiss'], 'from Details')
+    await letGo(page)
+    // From the grid of who does what.
+    await page.keyboard.press('g')
+    await expect(page.getByTestId('work-grid')).toBeVisible()
+    await page.waitForTimeout(400)
+    await page.getByTestId(`grid-person-${p.id}`).click()
+    await whole('person-card', `person-${p.id}`, ['person-foreman', 'person-dismiss'], 'from the grid')
+    const grid = (await page.getByTestId('work-grid').boundingBox())!
+    const c = (await cards(page)).find(x => x.id === 'person-card')!
+    expect.soft(meets(c.rect, { left: grid.x, top: grid.y, right: grid.x + grid.width, bottom: grid.y + grid.height }), `${w}x${h}, from the grid: the card does not lie over the grid it was opened from`).toBe(false)
     expect(errors, errors.join('\n')).toEqual([])
   })
 }

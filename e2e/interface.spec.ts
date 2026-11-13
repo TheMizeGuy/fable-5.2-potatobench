@@ -173,7 +173,7 @@ test('the crop orders hold their places when one is given, and under 80 words wi
   await expect(page.getByTestId('estimate')).toContainText('–')
 })
 
-test('a test dig is a tray beside the land, does not stop the clock, and can be reopened', async ({ page }) => {
+test('a test dig is offered on a slip, its tray beside the land does not stop the clock, and it can be reopened', async ({ page }) => {
   const errors = watchErrors(page)
   await startSeason(page)
   // Spraying settled for the season first, as a player would when the question comes, so the days can run.
@@ -183,8 +183,13 @@ test('a test dig is a tray beside the land, does not stop the clock, and can be 
   await page.keyboard.press('Shift+t')
   await expect.poll(async () => (await look(page)).queue).toBeGreaterThan(0)
   await page.getByTestId('speed-1').click()
+  // The result is offered on a slip at the foot (nothing is laid over the land unasked); Show me lays the tray.
   const tray = page.getByTestId('sample-dialog')
-  await expect(tray).toBeVisible({ timeout: 30_000 })
+  const offer = page.locator('#ui [data-testid="alert"]', { hasText: 'test dig' })
+  await expect(offer).toBeVisible({ timeout: 30_000 })
+  await expect(tray).toHaveCount(0)
+  await offer.click()
+  await expect(tray).toBeVisible()
   expect((await look(page)).paused).toBe(false)
   await expect(tray).toContainText('one hill of')
   expect(await tray.locator('.tuber').count()).toBeGreaterThan(0)

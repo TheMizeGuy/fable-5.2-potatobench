@@ -174,11 +174,19 @@
 .season-screen:is([data-layout='mid'], [data-layout='wide']) :is(.command, .command.compact.sys, .person-card) { left: 0; top: 0; right: auto; bottom: auto; max-height: none; z-index: 3; will-change: transform; }
 .season-screen:is([data-layout='mid'], [data-layout='wide']) :is(.command, .person-card).in { animation: lay-card var(--t-sheet) var(--ease-paper); }
 .season-screen:is([data-layout='mid'], [data-layout='wide']) :is(.command, .person-card).out { animation: leave-card var(--t-leave) var(--ease-in) forwards; }
-.season-screen .command.compact { overflow-y: auto; overscroll-behavior: contain; }
+.season-screen .command.compact:not(.yard-card) { overflow-y: auto; overscroll-behavior: contain; }
 /* The field card: its head and cross stay in view, and what is under them scrolls inside the window. A fixed width,
    so an order given or a longer line under the orders never moves one. */
 .season-screen .command.card { display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; width: min(430px, calc(100vw - 2 * var(--gutter, 16px))); }
-.season-screen .command.card > .card-body { display: grid; align-content: start; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+/* Each row of the body is as tall as what is in it, always: held to less room than it wants, the body scrolls. (Rows
+   left to size themselves are squeezed toward their min-heights first, and their words then print over the next
+   row or are cut by it.) */
+.season-screen .command > .card-body { display: grid; align-content: start; grid-auto-rows: max-content; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+/* The yard's card the same way: its head and cross in view, its buildings scrolling under them. */
+.season-screen .command.yard-card { display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; }
+.season-screen .command.yard-card .orders { grid-auto-rows: max-content; }
+.season-screen .command.yard-card .yard-short { padding: 8px 18px 0; font-size: 14.5px; line-height: 1.3; }
+.season-screen .command.yard-card .order .catch { overflow-wrap: anywhere; }
 /* The crop's nine orders, each in its own place whatever the field's state; one that cannot be given is greyed. */
 .season-screen .command .orders.slots { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 10px 12px 4px; }
 .season-screen .command .orders.slots .order-who { grid-column: 1 / -1; }
@@ -243,7 +251,7 @@
 .command .builds > .quiet { font-size: 15px; }
 /* A short window: the bar scrolls rather than run off it, and the fist that would hang outside it stays home. */
 @media (max-height: 820px) {
-  .season-screen .command:not(.card) { overflow-y: auto; overscroll-behavior: contain; }
+  .season-screen .command:not(.card, .yard-card) { overflow-y: auto; overscroll-behavior: contain; }
   .season-screen .command .order.is-suggested .fist { display: none; }
   .season-screen .command .order { min-height: 50px; padding-top: 5px; padding-bottom: 5px; }
   .season-screen .command .gauge { padding: 6px 12px 8px; }
@@ -337,7 +345,7 @@
 
 /* ---------------------------------------------------------------- a decision: the telegram, over the veiled land */
 /* A telegram holds the floor: the bars and cards step aside until it is answered or put away. */
-.season-screen.incident-up > .command, .season-screen.incident-up > .person-card, .season-screen.incident-up > .work, .season-screen.incident-up > .notes-slot { visibility: hidden; }
+.season-screen.incident-up > .command, .season-screen.incident-up > .person-card, .season-screen.incident-up > .work, .season-screen.incident-up > .notes-slot, .season-screen.incident-up > .tray-host { visibility: hidden; }
 .season-screen .telegram { top: calc(var(--top, 220px) + 12px); max-width: calc(100% - 32px); max-height: calc(100% - var(--top, 220px) - 28px); overflow-y: auto; z-index: 5; }
 @media (min-width: 1400px) and (min-height: 820px) { .season-screen .telegram { top: 150px; max-height: calc(100% - 166px); } }
 .season-screen .telegram.in { animation: wire-in var(--t-sheet) var(--ease-paper); }
@@ -398,7 +406,7 @@
 /* With something selected, its bar is a sheet over the foot and the clock stays at the thumb. */
 .season-screen[data-layout='narrow'].selected .queue, .season-screen[data-layout='narrow'].selected .timebook, .season-screen[data-layout='narrow'].selected .notes-slot { display: none; }
 .season-screen[data-layout='narrow'] .command { left: var(--gutter); right: var(--gutter); width: auto; top: auto; bottom: calc(var(--gutter) + 62px); max-height: min(46%, calc(100% - var(--top, 180px) - 140px)); overflow-y: auto; overscroll-behavior: contain; }
-.season-screen[data-layout='narrow'] .command.card { overflow: hidden; }
+.season-screen[data-layout='narrow'] .command:is(.card, .yard-card) { overflow: hidden; }
 .season-screen[data-layout='narrow'].selected .paused { display: none; }
 .season-screen[data-layout='narrow'] .command .gauges .meter { height: 6px; }
 .season-screen[data-layout='narrow'] .command .orders { padding: 8px 10px 10px; }
@@ -466,7 +474,7 @@
 .season-screen[data-layout='short'] .clock-slot.dock .clock .k, .season-screen[data-layout='short'] .clock-slot.dock .clock .menu { height: 46px; }
 .season-screen[data-layout='short'] .notes-slot { position: absolute; left: 0; bottom: calc(100% + 6px); max-width: 50%; }
 .season-screen[data-layout='short'] .command { top: calc(var(--top, 100px) + 54px); bottom: var(--gutter); max-height: none; width: 360px; overflow-y: auto; }
-.season-screen[data-layout='short'] .command.card { overflow: hidden; }
+.season-screen[data-layout='short'] .command:is(.card, .yard-card) { overflow: hidden; }
 .season-screen[data-layout='short'] .command .order.is-suggested .fist { display: none; }
 .season-screen[data-layout='short'] .command.compact .orders { grid-template-columns: 1fr; }
 .season-screen[data-layout='short'].selected .queue, .season-screen[data-layout='short'].selected .timebook, .season-screen[data-layout='short'].selected .notes-slot,

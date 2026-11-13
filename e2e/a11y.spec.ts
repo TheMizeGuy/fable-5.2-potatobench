@@ -91,6 +91,8 @@ test('the test-dig tray, the weigh ticket and the reckoning', async ({ page }) =
   await open(page, '?year=1990&seed=7')
   await page.getByTestId('begin-season').click()
   await reach(page, `q.g().app.setSpeed(0); q.run(q.day(6, 28), ['sample']); const { app } = q.g(); app.do({ t: 'job', kind: 'sample', field: 2 }); app.do({ t: 'bump', id: app.campaign.season.jobs.at(-1).id }); app.do({ t: 'day' })`)
+  // (the test dig is offered on a slip; Show me lays its tray)
+  await page.locator('#ui [data-testid="alert"]', { hasText: 'test dig' }).click()
   await expect(page.getByTestId('sample-dialog')).toBeVisible()
   expect(await serious(page), 'tray').toEqual([])
   // The ticket comes once the crop is hauled in and weighed.

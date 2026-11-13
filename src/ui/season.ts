@@ -200,6 +200,18 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     ctx.dirty()
   }
 
+  function offerTray(e: S.GameEvent, staged: boolean): void {
+    const name = S.FIELD_NAMES[e.field] ?? ''
+    // The same field dug again: the tray the player has open is brought up to date, since they asked for it.
+    if (tray && tray.field === e.field) { openTray(e, staged); return }
+    ctx.notes.push({
+      level: 'info', glyph: 'sample', ttl: 20000, field: e.field, day: e.day,
+      text: `The test dig at ${name} is in. Show me`,
+      full: `The test dig at ${name} is in. Press to see what came up.`,
+      go: () => openTray(e, false),
+    })
+  }
+
   function showTray(field: number): void {
     const c = app.campaign
     const e = [...(c?.season?.log ?? [])].reverse().find(x => x.type === 'sample' && x.field === field)
@@ -294,7 +306,9 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     if (ev.type === 'yard' || ev.type === 'unit' || ev.type === 'select') ctx.dirty()
     else if (ev.type === 'events') {
       // In the guided first year the test dig is on the field's card, not laid on the land unasked.
-      for (const e of ev.events) if (e.type === 'sample' && !guidedYear(app.campaign)) { const staged = app.speed < 3; void ctx.view.whenShown('sample', e.field).then(() => { if (app.screen === 'season') openTray(e, staged) }) }
+      // A test dig's result is offered, never laid over what the player is doing: a slip at the foot with Show me
+      // (and the field's own card has it). In the guided first year the guide speaks for the slips.
+      for (const e of ev.events) if (e.type === 'sample' && !guidedYear(app.campaign)) { const staged = app.speed < 3; void ctx.view.whenShown('sample', e.field).then(() => { if (app.screen === 'season') offerTray(e, staged) }) }
       const c0 = app.campaign
       if (c0) { sayCrewStarts(c0); sayKillDates(c0) }
     }
@@ -498,7 +512,15 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     }
     return out
   }
-  ties().setLand(() => ({ ...land(), tags: marks }))
+  // The tutorial's note is the thing the player was told to read: a card keeps off it before any tag (the note steps
+  // off a card that has nowhere else to be whole).
+  function withNote(): { left: number; top: number; right: number; bottom: number; weight: number }[] {
+    const out = marks()
+    const note = document.querySelector<HTMLElement>('.guide-layer .guide:not([hidden]):not(.gone), .guide-slot .guide.docked')
+    if (note && note.offsetParent !== null) { const r = note.getBoundingClientRect(); if (r.width > 0) out.push({ left: r.left - 6, top: r.top - 6, right: r.right + 6, bottom: r.bottom + 6, weight: 8 }) }
+    return out
+  }
+  ties().setLand(() => ({ ...land(), tags: withNote }))
   function placeCards(): void {
     const layout = ctx.layout()
     const quiet = incident.isUp()

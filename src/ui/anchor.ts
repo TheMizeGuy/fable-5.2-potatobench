@@ -248,6 +248,28 @@ export function tetherOf(card: Box, to: Pt | Box): { from: Pt; to: Pt; len: numb
   return { from, to: end, len: Math.hypot(end.x - from.x, end.y - from.y), angle: Math.atan2(end.y - from.y, end.x - from.x) }
 }
 
+// How much of a tether is drawn, from the card's end. To a thing that stands on a bar (a chip in the people bar) the
+// line runs only as far as the first bar it meets: it never crosses the bar's other keys, or the work list's orders.
+// The pin on the thing still says which one.
+export function tetherShown(from: Pt, to: Pt, bars: Box[]): number {
+  const len = Math.hypot(to.x - from.x, to.y - from.y)
+  if (!bars.some(b => holds(b, to, 1))) return len
+  let first = 1
+  const dx = to.x - from.x, dy = to.y - from.y
+  for (const b of bars) {
+    // Where the line comes into the box (the slab test), as a share of its length.
+    let t0 = 0, t1 = 1
+    for (const [d, lo, hi, o] of [[dx, b.left, b.right, from.x], [dy, b.top, b.bottom, from.y]] as const) {
+      if (Math.abs(d) < 1e-9) { if (o < lo || o > hi) { t0 = 2; break } continue }
+      const a = (lo - o) / d, c = (hi - o) / d
+      t0 = Math.max(t0, Math.min(a, c))
+      t1 = Math.min(t1, Math.max(a, c))
+    }
+    if (t0 <= t1 && t0 < first) first = t0
+  }
+  return len * Math.max(0, first)
+}
+
 // Where a notch stands on the edge of a sheet at the foot (or a panel at the side): as near the thing as the edge goes.
 export function notchOf(sheet: Box, to: Pt, edge: 'top' | 'left', inset = 22): Pt {
   return edge === 'top'

@@ -3,7 +3,7 @@
 // camera moves, and when the thing leaves the picture it waits at the nearest edge with a Show key. On a phone the
 // card is a sheet at the foot with a notch on its edge toward the thing.
 import type { Place, Thing } from '../game/contracts.ts'
-import { holds, meets, notchOf, placeCard, roomUnder, tetherOf, type Box, type Placed, type Pt, type Side } from './anchor.ts'
+import { holds, meets, notchOf, placeCard, roomUnder, tetherOf, tetherShown, type Box, type Placed, type Pt, type Side } from './anchor.ts'
 import type { Ctx } from './core.ts'
 import { h } from './dom.ts'
 import { icon } from './icons.ts'
@@ -243,7 +243,16 @@ export function mountTies(ctx: Ctx, root: HTMLElement): Ties {
   let thingNow: { tie: Tie; t: Thing } | null = null
   const fieldId = (sel: number[]) => (sel.length === 1 ? `field-${sel[0]}` : `fields-${sel.join('+')}`)
 
+  // A person's card gives way to a field's or a yard's card (orders given there still go to them). When that card is
+  // put away the person is let go with it, so their card never comes back by itself: a card opens on a press.
+  let displaced = -1
   const off = app.on(e => {
+    if (e.type === 'unit') displaced = -1
+    else if (e.type === 'select' || e.type === 'yard') {
+      const held = app.selection.length > 0 || app.yard !== 0
+      if (held && app.unit >= 0) displaced = app.unit
+      else if (!held && displaced >= 0) { const was = displaced; displaced = -1; if (app.unit === was) app.selectUnit(-1) }
+    }
     if (e.type === 'select') {
       const last = app.selected
       if (last < 0) { fieldNow = null; had = []; return }
@@ -469,8 +478,10 @@ export function anchored(ctx: Ctx, card: HTMLElement, o: { mark?: boolean } = {}
     }
     hide(show)
     const tt = tetherOf(cardBox(p), t.keep ?? t.end ?? t.point)
-    if (tt.len < 2) hide(line)
-    else { reveal(line); set(line, 'line', `translate3d(${tt.from.x.toFixed(1)}px, ${tt.from.y.toFixed(1)}px, 0) rotate(${tt.angle.toFixed(4)}rad) scaleX(${(tt.len / 100).toFixed(4)})`) }
+    // To a chip on a bar the line stops at the bar's edge (it never crosses another key); its pin stands on the chip.
+    const shown = t.keep ? tetherShown(tt.from, tt.to, land.blocks) : tt.len
+    if (shown < 2) hide(line)
+    else { reveal(line); set(line, 'line', `translate3d(${tt.from.x.toFixed(1)}px, ${tt.from.y.toFixed(1)}px, 0) rotate(${tt.angle.toFixed(4)}rad) scaleX(${(shown / 100).toFixed(4)})`) }
     reveal(dot)
     set(dot, 'dot', `translate3d(${tt.to.x.toFixed(1)}px, ${tt.to.y.toFixed(1)}px, 0)`)
     if (mark) {
