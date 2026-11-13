@@ -489,6 +489,10 @@ test('naming a foreman: the slip says what one is, the key comes into view lit, 
   await expect.poll(() => reachable(page, 'person-foreman')).toBe('in view')
   await expect(page.getByTestId('person-foreman')).toContainText('home farm')
   await expect(page.locator('#ui .notes .alert').filter({ hasText: 'is now foreman of the home farm' })).toBeVisible()
+  // And it stays there while the days run and the card is redrawn.
+  await expect.poll(() => game<number>(page, 'c.season.day - app.campaign.season.startDay'), { timeout: 30_000 }).toBeGreaterThan(1)
+  await page.waitForTimeout(400)
+  expect(await reachable(page, 'foreman-said')).toBe('in view')
   await picture(page, 'c-named-1280')
   // Nothing but the card scrolled to show them.
   expect(await page.evaluate(() => [document.documentElement.scrollTop, document.body.scrollTop, document.getElementById('ui')!.scrollTop])).toEqual([0, 0, 0])

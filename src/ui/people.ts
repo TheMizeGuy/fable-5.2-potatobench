@@ -338,6 +338,7 @@ export function personCard(ctx: Ctx): PersonCard {
     el.classList.remove('out')
     el.hidden = false
     // Opened while the goal slip asks for a foreman: the key is brought into view, lit.
+    const same = shownFor === p.id
     const hand = p.kind !== 'farmer' && !p.foreman
     const asked = hand && (performance.now() - foremanAsked < 2000 || (shownFor !== p.id && nextGoal(c)?.id === 'foreman'))
     if (shownFor !== p.id) { shownFor = p.id; foreman = false; flashed = null; lit = null }
@@ -347,7 +348,10 @@ export function personCard(ctx: Ctx): PersonCard {
       p, day: s0?.day, t: ctx.touch(), foreman, lit: lit && performance.now() < lit.until ? lit.sel : '', flash: flashed && performance.now() < flashed.until ? flashed.text : '',
       jobs: s0?.jobs.map(j => [j.id, j.unit]), crew: c.crew.map(u => [u.id, u.at, u.to, u.job, u.foreman, u.rest]), sun: c.sundaysOff,
     }
+    // The card scrolls inside itself: a redraw leaves it where the player (or a lit control) had it, not at its top.
+    const top = was || !same ? 0 : el.scrollTop
     patch(el, JSON.stringify(model), () => body(c, p))
+    if (el.scrollTop !== top) el.scrollTop = top
     el.setAttribute('aria-label', p.kind === 'farmer' ? 'You, the farmer' : p.name)
     layIn(ctx, el, was)
     showLit()
