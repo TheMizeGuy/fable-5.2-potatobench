@@ -1,4 +1,5 @@
 // The interface: the farm's own papers over the land (src/ui/system), and the screens built from them.
+import { laps } from '../render/laps.ts'
 import './system/system.css'
 import './system/game.css'
 import './system/sheets.css'
@@ -374,6 +375,7 @@ export const mountHud: MountHud = (root, app, view, sound) => {
       if (held && performance.now() - heldAt > 1500) held = false
       sinceTick += dt
       guided.frame(dt)
+      laps.end('interface: guide')
       notes.hush(papers.isOpen() || !!app.holding)
       if (sinceTick > 500) { sinceTick = 0; if (notes.count() || notes.held()) notes.prune(app.campaign?.season && app.screen === 'season' ? app.campaign.season.day : -1) }
       if (dirty && !held && screen) {
@@ -391,6 +393,7 @@ export const mountHud: MountHud = (root, app, view, sound) => {
         root.style.setProperty('--bottom', `${b}px`)
         if (waiting) placeSplash()
       }
+      laps.end('interface: drawn again')
       tying.frame()
       screen?.frame?.(dt)
       who.frame()

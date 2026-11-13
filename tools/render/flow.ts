@@ -27,7 +27,7 @@ mkdirSync(out, { recursive: true })
 const BUDGET = THROTTLE > 1 ? { p99: 34, over33: 2, steps: 0 } : { p99: 20, over33: 0, steps: 0 }
 
 const INSTRUMENT = `(() => {
-  const F = window.__flow = { on: false, rows: [], long: [], ids: [] }
+  const F = window.__flow = { on: false, rows: [], long: [], ids: [], fine: {} }
   const real = window.requestAnimationFrame.bind(window)
   let cbs = [], asked = false
   const run = ts => {
@@ -41,7 +41,7 @@ const INSTRUMENT = `(() => {
     if (!f || !f.drew) return
     const d = f.drew(), c = a && a.campaign, cam = f.rig.cur
     const laps = { days: 0, land: 0, interface: 0, sound: 0 }
-    for (const m of performance.getEntriesByType('measure')) if (m.name.startsWith('county:')) laps[m.name.slice(7)] = (laps[m.name.slice(7)] || 0) + m.duration
+    for (const m of performance.getEntriesByType('measure')) if (m.name.startsWith('county:')) { const n = m.name.slice(7), k = n.split(':')[0]; laps[k] = (laps[k] || 0) + m.duration; if (n !== k) F.fine[n] = (F.fine[n] || 0) + m.duration }
     performance.clearMeasures()
     const row = [ts, t1 - t0, d[0], d[1], d[2], c && c.season ? c.season.day : -1, a ? a.speed : 0, laps.days, laps.land, laps.interface, laps.sound, cam.x, cam.z, cam.dist, cam.yaw]
     for (const id of F.ids) { const p = f.unitPin(id); row.push(p.visible ? p.x : NaN, p.visible ? p.y : NaN) }
@@ -87,14 +87,16 @@ let failed = 0
 async function take(name: string, during: (() => Promise<void>) | null = null, seconds = SECONDS): Promise<void> {
   if (ONLY && !ONLY.includes(name)) return
   const ids = await page.evaluate(() => ((window as any).__county.app.campaign?.crew ?? []).map((u: { id: number }) => u.id)) as number[]
-  await page.evaluate(ids => { const F = (window as any).__flow; F.rows = []; F.long = []; F.ids = ids; (window as any).__countyField.laps(true); performance.clearMeasures(); F.on = true }, ids)
+  await page.evaluate(ids => { const F = (window as any).__flow; F.rows = []; F.long = []; F.fine = {}; F.ids = ids; (window as any).__countyField.laps(true); performance.clearMeasures(); F.on = true }, ids)
   if (THROTTLE > 1) await cdp.send('Emulation.setCPUThrottlingRate', { rate: THROTTLE })
   const until = Date.now() + seconds * 1000
   if (during) while (Date.now() < until) await during()
   else await page.waitForTimeout(seconds * 1000)
   if (THROTTLE > 1) await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 })
-  const got = await page.evaluate(() => { const F = (window as any).__flow; F.on = false; (window as any).__countyField.laps(false); return { rows: F.rows, long: F.long } }) as { rows: Row[]; long: State['long'] }
+  const got = await page.evaluate(() => { const F = (window as any).__flow; F.on = false; (window as any).__countyField.laps(false); return { rows: F.rows, long: F.long, fine: F.fine } }) as { rows: Row[]; long: State['long']; fine: Record<string, number> }
   report({ name, rows: got.rows, long: got.long, ids })
+  const fine = Object.entries(got.fine).map(([k, v]) => [k, v / Math.max(1, got.rows.length)] as [string, number]).filter(x => x[1] >= 0.05).sort((a, b) => b[1] - a[1])
+  if (fine.length) console.log(`       parts, ms a frame: ${fine.map(([k, v]) => `${k} ${v.toFixed(2)}`).join('; ')}`)
 }
 
 function report(s: State): void {

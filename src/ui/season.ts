@@ -4,6 +4,7 @@
 import type { Goal } from '../game/goals.ts'
 import { SPEED_X } from '../game/app.ts'
 import { nextGoal } from '../game/goals.ts'
+import { laps } from '../render/laps.ts'
 import * as S from '../sim/index.ts'
 import { yardCard, YARD_TITLE } from './build.ts'
 import { commandCard } from './card.ts'
@@ -822,7 +823,14 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       const sheet = layout === 'narrow' ? [card.el, yard.el].find(vis) : undefined
       return [tAll, 0, sheet ? innerHeight - box(sheet).top + 6 : bottom, 0]
     },
-    frame: () => { coverCache = null; coverCache = covers(); P.frame(); placeYards(); placeCards(); people.frame(); drawSelection(); clearLand(); coverCache = null },
+    frame: () => {
+      coverCache = null; coverCache = covers(); laps.end('interface: covers')
+      P.frame(); laps.end('interface: tags')
+      placeYards(); placeCards(); laps.end('interface: cards')
+      people.frame(); laps.end('interface: pins')
+      drawSelection(); clearLand(); laps.end('interface: selection')
+      coverCache = null
+    },
     dispose() {
       off()
       P.dispose()

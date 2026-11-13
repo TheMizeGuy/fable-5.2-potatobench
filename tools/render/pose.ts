@@ -22,7 +22,8 @@ page.on('pageerror', e => errors.push(e.message))
 
 // In the page: every frame, each figure drawn is judged by its arms.
 const WATCH = `(() => {
-  const P = window.__pose = { label: '', by: {}, first: {} }
+  const SHOW = ${args.includes('--show')}
+  const P = window.__pose = { label: '', by: {}, first: {}, show: SHOW }
   let was = [], wasT = 0
   const tick = now => {
     requestAnimationFrame(tick)
@@ -50,7 +51,15 @@ const WATCH = `(() => {
       const sliding = v > 0.6 && !(flags & 16) && !(flags & 32)
       r.run = sliding ? ((near && near.run) || 0) + 1 : 0
       if (r.run === 5) { b.slid++; if (v > b.fastest) b.fastest = v }
-      if ((tee || front || r.run === 5) && !P.first[P.label]) P.first[P.label] = { x, y, z, s, kind: tee ? 'T' : front ? 'front' : 'slides at ' + v.toFixed(1) + ' m/s', row: r.map(v => +v.toFixed(2)) }
+      // The first stiff figure of a state is looked at where it is, on the frame it was found: the clock stopped and
+      // the camera brought to it. (--show: the first figure seen covering ground on its feet, to look at as well.)
+      const show = P.show && !P.first[P.label] && v > 2.5 && (flags & 16) && (r.strode = ((near && near.strode) || 0) + 1) === 8
+      if ((tee || front || r.run === 5 || show) && !P.first[P.label]) {
+        P.first[P.label] = { x, y, z, s, kind: tee ? 'T' : front ? 'front' : show ? 'walks at ' + v.toFixed(1) + ' m/s' : 'slides at ' + v.toFixed(1) + ' m/s', row: r.map(v => +v.toFixed(2)), speed: window.__county.app.speed }
+        window.__county.app.setSpeed(0)
+        f.view({ x, z, dist: 11, pitch: 0.28 })
+        f.settle()
+      }
     }
     was = rows
   }
@@ -58,7 +67,7 @@ const WATCH = `(() => {
 })()`
 
 type Sum = { frames: number; figures: number; tee: number; front: number; most: number; slid: number; fastest: number }
-type First = { x: number; y: number; z: number; s: number; kind: string; row: number[] }
+type First = { x: number; y: number; z: number; s: number; kind: string; row: number[]; speed: number }
 async function open(): Promise<void> {
   await page.goto(base)
   await page.waitForFunction(() => (window as any).__countyField?.stats?.().firstFrame > 0, null, { timeout: 180000 })
@@ -74,14 +83,12 @@ async function watch(label: string, seconds = SECONDS): Promise<void> {
   const [b, first] = await page.evaluate(l => { const P = (window as any).__pose; return [P.by[l], P.first[l] ?? null] }, label) as [Sum | undefined, First | null]
   if (!b) { check(false, `${label}: nothing was watched`); return }
   if (first) {
-    const speed = await page.evaluate(() => (window as any).__county.app.speed) as number
-    await page.evaluate(() => (window as any).__county.app.setSpeed(0))
-    await page.evaluate(p => { const f = (window as any).__countyField; f.view({ x: p.x, z: p.z, dist: 9, pitch: 0.3 }); f.settle() }, first)
-    await page.waitForTimeout(700)
+    await page.waitForTimeout(500)
     await page.screenshot({ path: `${out}/${label.replace(/[^\w]+/g, '-')}.png` })
-    await page.evaluate(s => (window as any).__county.app.setSpeed(s), speed)
+    await page.evaluate(s => (window as any).__county.app.setSpeed(s), first.speed)
+    await page.evaluate(() => { const f = (window as any).__countyField; f.tier('farm'); f.settle() })
   }
-  check(b.tee === 0 && b.front === 0 && b.slid === 0, `${label}: ${b.figures} figures over ${b.frames} frames, ${b.tee} held as a T, ${b.front} with both arms straight out in front, ${b.slid} slid as they stood${b.slid ? ` (to ${b.fastest.toFixed(1)} m/s)` : ''}, the nearest to a T ${b.most.toFixed(2)} of 1${first ? `; first ${first.kind} at (${first.x.toFixed(0)}, ${first.z.toFixed(0)}): ${first.row.join(' ')}` : ''}`)
+  check(b.tee === 0 && b.front === 0 && b.slid === 0, `${label}: ${b.figures} figures over ${b.frames} frames, ${b.tee} held as a T, ${b.front} with both arms straight out in front, ${b.slid} slid as they stood${b.slid ? ` (to ${b.fastest.toFixed(1)} m/s)` : ''}, the nearest to a T ${b.most.toFixed(2)} of 1${first ? `; ${first.kind} at (${first.x.toFixed(0)}, ${first.z.toFixed(0)}): ${first.row.join(' ')}` : ''}`)
 }
 const speed = (s: number) => page.evaluate(s => (window as any).__county.app.setSpeed(s), s)
 const farmView = () => page.evaluate(() => { const f = (window as any).__countyField; f.tier('farm'); f.settle() })
