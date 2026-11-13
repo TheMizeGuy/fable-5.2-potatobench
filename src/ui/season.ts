@@ -669,6 +669,15 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     if (a.type === 'incident' && typeof a.data?.incident === 'number') { const id = a.data.incident; return () => incident.open(id) }
     // Frost on the barrels: the haul of the biggest pile first, today.
     if (a.type === 'frostBarrels') return () => { const h = app.campaign ? S.haulInfo(app.world, app.campaign).sort((x, y) => y.cwt - x.cwt)[0] : undefined; if (h) app.haulAhead(h.field) }
+    // Someone idle with work waiting that they are set never to do: the press lets them, last in their order.
+    if (a.type === 'idleNever' && unit >= 0 && typeof a.data?.work === 'string') {
+      const work = a.data.work as S.Skill
+      return () => {
+        const u = app.campaign?.crew.find(x => x.id === unit)
+        if (!u || !ctx.run({ t: 'priority', unit, work, level: S.PRIORITY_MAX }).ok) return
+        ctx.say(`${u.name.split(' ')[0]} will now take ${S.SKILL_LABEL[work]} when nothing else needs them.`)
+      }
+    }
     if (unit >= 0 && a.type !== 'poached' && a.type !== 'quit') return () => { if (app.campaign?.crew.some(u => u.id === unit)) { app.select(-1); app.selectUnit(unit) } }
     if (a.type === 'built' || a.type === 'building' || a.type === 'pondDry') {
       const b = typeof a.data?.building === 'number' ? c.buildings.find(x => x.id === a.data!.building) : undefined

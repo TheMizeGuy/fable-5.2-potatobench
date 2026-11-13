@@ -330,7 +330,9 @@ function takeOn(c: Campaign, u: Unit): GameEvent {
   }
   c.crew.push(u)
   const as = u.kind === 'hand' ? 'a field hand' : 'a tractor operator'
-  return note(c, 'hired', 'info', `${u.name} is hired as ${as} at $${withCommas(u.wage)} a month.`)
+  // What a hand will do, so the farmer keeps to the machines.
+  const does = u.kind === 'hand' && u.prio.field > 0 ? ` ${u.name.split(' ')[0]} will scout, pull blighted plants and do test digs${u.prio.machine > 0 ? ', and drive when you can\'t' : ''}, so you can stay on the tractor.` : ''
+  return note(c, 'hired', 'info', `${u.name} is hired as ${as} at $${withCommas(u.wage)} a month.${does}`)
 }
 
 // The tracts the farm holds with standing woods or brush to fell.

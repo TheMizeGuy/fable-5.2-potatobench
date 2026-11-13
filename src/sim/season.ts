@@ -753,6 +753,7 @@ export function pressingWhy(c: Campaign, s: Season, job: Job): string {
     case 'plant': return 'the planting season is short'
     case 'haul': return s.frostHaul === s.day ? 'frost is coming for the crop in barrels' : ''
     case 'dig': return s.day >= dayIndex(s.year, P.PICKERS_FROM.month, P.PICKERS_FROM.dom) ? 'the ground will freeze before long' : ''
+    case 'kill': return f && f.deadDay < 0 ? 'the vines are due to be killed' : ''
   }
   return ''
 }
@@ -882,9 +883,11 @@ function buildDay(world: World, c: Campaign, s: Season, t: Turn, job: Job, _d: D
 
 type Pick = { job: Job } & Booking
 
+// Work whose delay loses crop comes before work that can wait, for anyone who can do both, whatever their first kind of
+// work, unless the player pinned the work that can wait to them.
 function choose(c: Campaign, s: Season, u: Unit, d: Day, out: GameEvent[], book: Book, now: number): Pick | null {
   const pick = byPriority(c, s, u, d, out, book, now)
-  if (pick && !waitable(pick.job.kind)) return pick
+  if (pick && (!waitable(pick.job.kind) || pick.job.unit === u.id)) return pick
   for (const job of [...s.jobs]) {
     if (waitable(job.kind) || !mayTake(u, job) || heldByOther(c, job, u) || stoppedToday(s, job) || !pressingWhy(c, s, job)) continue
     if (!stillWanted(c, s, job, out)) continue
@@ -1049,6 +1052,21 @@ function runCrews(world: World, c: Campaign, s: Season, d: Day, out: GameEvent[]
 }
 
 // The end of each person's day: experience in what they worked at, tiredness, mood, and whether they have had enough.
+// Someone with nothing to do on three working days in a row while work waits that they are set never to do: said
+// once a season, with the kind of work that would use them.
+const IDLE_SAY = 3
+function idleWatch(c: Campaign, s: Season, u: Unit, used: number, out: GameEvent[]): void {
+  const never = used <= EPS ? s.jobs.find(j => u.prio[jobSkill(j.kind)] <= 0 && !c.crew.some(o => o.job === j.id)) : undefined
+  if (!never) { delete u.idleRun; return }
+  u.idleRun = (u.idleRun ?? 0) + 1
+  if (u.idleRun < IDLE_SAY || (s.idleSaid ?? []).includes(u.id) || u.kind === 'farmer') return
+  s.idleSaid = [...(s.idleSaid ?? []), u.id]
+  const skill = jobSkill(never.kind)
+  const first = u.name.split(' ')[0]
+  const does: Record<Skill, string> = { machine: 'drive', field: 'do field work', woods: 'work in the woods', build: 'build', pack: 'pack' }
+  push(s, out, 'idleNever', never.field, 'warn', `${first} has had nothing to do for ${IDLE_SAY} days. Let ${first} ${does[skill]}?`, { unit: u.id, work: skill })
+}
+
 function peopleDay(c: Campaign, s: Season, turns: Turn[], out: GameEvent[]): void {
   let fieldsIn = 0
   for (const f of s.fields) if (f.status === 'dug') fieldsIn++
@@ -1057,6 +1075,7 @@ function peopleDay(c: Campaign, s: Season, turns: Turn[], out: GameEvent[]): voi
     const t = turns.find(x => x.u === u)
     // (a wait for a machine is no work)
     const used = t ? Math.max(0, Math.min(1, 1 - t.left - t.waited)) : 0
+    if (t) idleWatch(c, s, u, used, out)
     if (t) {
       for (const k of P.SKILLS) {
         for (const level of gainXp(u, k, t.spent[k])) push(s, out, 'skillUp', -1, 'good', `${subject(u, 'is', 'You are')} better at ${SKILL_LABEL[k]}: level ${level}.`, { unit: u.id, level })
