@@ -77,8 +77,11 @@ async function see(page: Page): Promise<Seen> {
     const driving = vis(drive) ? drive : null
     const text = `${read(screen)} | ${land} | ${slip && !slip.classList.contains('guide-card') ? read(slip) : ''}${driving ? ` | ${read(driving)}` : ''}`
     const unit = Number(driving?.dataset.unit ?? -1)
-    const pin = unit >= 0 ? ui.querySelector<HTMLElement>(`[data-testid="pin-${unit}"]`) : null
-    const pr = pin && vis(pin) ? pin.getBoundingClientRect() : null
+    // The one the guide is showing: their pin on the land, drawn and wholly inside the window.
+    const pinIn = unit >= 0 && [...ui.querySelectorAll<HTMLElement>(`.plate-layer [data-testid="pin-${unit}"]`)].some(p => {
+      const r = p.getBoundingClientRect()
+      return r.width > 0 && r.height > 0 && p.checkVisibility({ opacityProperty: true, visibilityProperty: true } as CheckVisibilityOptions) && r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight
+    })
     const asking: string[] = []
     if (slip) asking.push('note')
     if (vis(ui.querySelector('[data-testid="guide-offer"]'))) asking.push('offer')
@@ -92,7 +95,7 @@ async function see(page: Page): Promise<Seen> {
     const sb = slip?.getBoundingClientRect(), ab = aim && vis(aim) ? aim.getBoundingClientRect() : null
     return {
       drive: driving ? read(driving) : '', scene: driving?.dataset.scene ?? '', unit, waitField: driving?.dataset.wait ? Number(driving.dataset.wait) : -1,
-      pinIn: !!pr && pr.left >= 0 && pr.top >= 0 && pr.right <= innerWidth && pr.bottom <= innerHeight,
+      pinIn,
       overTarget: !!sb && !!ab && !slip!.contains(aim) && sb.left < ab.right && sb.right > ab.left && sb.top < ab.bottom && sb.bottom > ab.top,
       phase: c?.phase ?? 'title', speed: app.speed, stopped: app.pauseReason ?? '', day: c?.season?.day ?? -1, sold: c ? c.lots.filter((l: any) => l.sold > 0).length : 0, done: !!ui.querySelector('[data-testid="end-season"]'),
       note: slip?.dataset.lesson ?? '', target: slip?.dataset.target ?? '', noteWords: count(said), cardWords: card ? count(read(card)) : 0,
@@ -1290,6 +1293,8 @@ test('the tutorial starts when planting is ready: Start the season, a few second
   expect(running.asking, 'nothing asks while the weeks pass').toEqual([])
   expect(running.words, running.text).toBeLessThanOrEqual(FIRST_DAY_WORDS)
   expect(running.hidden.sort()).toEqual(['after', 'forecast', 'list', 'people', 'stamps', 'tags'])
+  // (the picture once the spring sheet has gone, if the weeks are still passing)
+  await page.waitForFunction(() => !document.querySelector('#ui .screen-layer > main.leaving'), null, { timeout: 3000 }).catch(() => {})
   await picture(page, 'g4-opening-run-1280')
   // The ask: paused the day the crew asks, nothing planted, the stamp the note names in view with nothing over it.
   await expect(note(page, 'word')).toBeVisible({ timeout: 15_000 })
@@ -1420,12 +1425,14 @@ test('the guide never runs past a decision: the word to plant, the spraying ques
   while (Date.now() < until && !seen) {
     if (await ask.isVisible().catch(() => false)) { seen = 'spray'; break }
     const telegram = page.locator('#ui .season-screen .telegram:not(.spray-card) .reply.first').first()
-    if (await telegram.isVisible().catch(() => false)) {
+    if (await game<number>(page, 'c.incidents.length') > 0 && await telegram.isVisible().catch(() => false)) {
       // A telegram on the way: the days stand while it is up, however long.
       const day = await game<number>(page, 'c.season.day')
       await page.waitForTimeout(1500)
       expect(await game<[number, number]>(page, '[app.speed, c.season.day]'), 'a telegram stops the guide').toEqual([0, day])
       await telegram.click()
+      await expect.poll(() => game<number>(page, 'c.incidents.length')).toBe(0)
+      await page.waitForTimeout(500)
       continue
     }
     const got = page.locator('#ui [data-testid="guide-slip"]:not([hidden]) [data-testid="guide-noted"]').first()
