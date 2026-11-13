@@ -229,15 +229,16 @@ async function hold(page: Page, k: Case, label: string, close: 'Escape' | 'groun
   const cam0 = await a<string>(page, 'return JSON.stringify(F.stats().camera)')
   await a(page, `A.arm(${JSON.stringify(k.card)}, ${JSON.stringify(k.thing)})`)
   await page.mouse.click(k.at.x, k.at.y)
-  let from = k.at
+  // (named in the list a shared pin opens, the list goes and the card stands beside the person themselves: the rule is
+  // held against where they stand, as when they are clicked alone)
+  const from = k.at
   if (k.pick) {
     await page.waitForTimeout(80)
     const one = page.getByTestId(k.pick)
     if (await one.isVisible().catch(() => false)) {
       const b = (await one.boundingBox())!
-      from = { x: b.x + b.width / 2, y: b.y + b.height / 2 }
       await a(page, `A.arm(${JSON.stringify(k.card)}, ${JSON.stringify(k.thing)})`)
-      await page.mouse.click(from.x, from.y)
+      await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2)
     }
   }
   const ms = await a<number>(page, 'return A.wait()')
@@ -279,7 +280,7 @@ async function hold(page: Page, k: Case, label: string, close: 'Escape' | 'groun
   else expect.soft(away(c.rect, from), say(`its nearest edge is within ${reach} px of the point clicked (${Math.round(away(c.rect, from))} px)`)).toBeLessThanOrEqual(reach)
   expect.soft(holds(c.rect, from), say('does not cover the point clicked')).toBe(false)
   if (k.handle) expect.soft(meets(c.rect, k.handle), say('does not cover the handle clicked')).toBe(false)
-  if (k.middle) expect.soft(holds(c.rect, k.middle), say('does not cover the middle of the thing')).toBe(false)
+  if (k.middle) expect.soft(holds(c.rect, k.middle), say(`does not cover the middle of the thing (card ${JSON.stringify(Object.values(c.rect).map(Math.round))} ${c.side}${c.aside ? ' aside' : ''}, middle ${JSON.stringify(k.middle)}, clicked ${JSON.stringify(k.at)}, pressed ${JSON.stringify(from)}, handle ${JSON.stringify(k.handle ?? null)}, now ${k.thing.startsWith('person-') ? JSON.stringify(await a(page, `return F.unitAt(${k.thing.slice(7)})`)) : ''})`)).toBe(false)
   expect.soft(c.thing, say('says which thing it is about')).toBe(k.thing)
   for (const h of k.head) {
     if (typeof h === 'string') expect.soft(c.head, say('its head names the thing and what it is')).toContain(h)
@@ -648,7 +649,11 @@ test('clicking another thing moves the card; Shift adds a field to it; the card 
   const who = await a<{ id: number; at: Pt } | null>(page, `for (const u of app.campaign.crew) { const at = A.unitSpot(u.id); if (at) return { id: u.id, at } } return null`)
   if (who) {
     await page.mouse.click(who.at.x, who.at.y)
-    expect(await a<number>(page, `return A.shown('whois', 'person-${who.id}')`)).toBeGreaterThanOrEqual(0)
+    // (standing with someone, they share a pin that opens to a list of them: they are named there)
+    await page.waitForTimeout(80)
+    const row = page.getByTestId(`pin-pick-${who.id}`)
+    if (await row.isVisible().catch(() => false)) await row.click()
+    expect(await a<number>(page, `return A.shown('whois', 'person-${who.id}')`), `person ${who.id} clicked at ${JSON.stringify(who.at)}: ${JSON.stringify(await a(page, `return { at: F.unitAt(${who.id}), pick: F.pickAt(${who.at.x}, ${who.at.y}), unit: app.unit, from: app.unitFrom, cards: A.cards().map(c => c.id + ':' + c.thing), top: String((document.elementFromPoint(${who.at.x}, ${who.at.y}) || {}).className) }`))}`).toBeGreaterThanOrEqual(0)
     await page.waitForTimeout(380)
     expect((await cards(page)).map(x => x.id)).toEqual(['whois'])
   }
@@ -1404,6 +1409,8 @@ test('on a phone the card is a sheet at the foot, headed with the thing, notched
   }
   // A field, by its tag.
   const i = await a<number>(page, `return [3, 0, 2, 4, 5, 1].find(i => !!A.handle('.plate[data-k="field-' + i + '"]'))`)
+  if (SHOTS) await page.screenshot({ path: `${SHOTS}/phone-as-it-stands.png` })
+  expect(i, `a field's tag can be tapped (${JSON.stringify(await a(page, `return [...document.querySelectorAll('#ui .plate')].map(e => { const r = e.getBoundingClientRect(); const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return [e.dataset.k, A.vis(e), Math.round(r.left), Math.round(r.top), Math.round(r.width), hit ? String(hit.className).slice(0, 40) : ''] })`))})`).toBeDefined()
   const tag = (await a<Pt | null>(page, `return A.handle('.plate[data-k="field-${i}"]')`))!
   // Where on the tag the tap lands, from its left edge: the notch points at that point of it, wherever the tag goes.
   const dx = await a<number>(page, `return ${tag.x} - document.querySelector('#ui .plate[data-k="field-${i}"]').getBoundingClientRect().left`)

@@ -308,6 +308,7 @@ for (const [w, h] of [[320, 640], [390, 844], [844, 390], [820, 1180], [1024, 70
         }
         return out
       }, selected)
+      if (process.env.SHOTS && found.length) await page.screenshot({ path: `${process.env.SHOTS}/holds-${w}x${h}-${selected ? 'selected' : 'plain'}.png` })
       expect(found, found.join('; ')).toEqual([])
     }
     await noSidewaysScroll(page)

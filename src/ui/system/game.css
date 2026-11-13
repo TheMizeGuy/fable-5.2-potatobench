@@ -238,6 +238,8 @@
 .topbar[data-layout='mid'] .goal .fist { --i: 28px; }
 .topbar[data-layout='mid'] .balance { padding: 5px 12px 5px 16px; }
 .topbar[data-layout='short'] .goal { min-height: var(--touch); }
+/* The slip without its fist keeps its own two columns at every size (the narrow and short slips above set three). */
+.topbar[data-layout] .goal.later { grid-template-columns: 1fr auto; }
 
 /* ---------------------------------------------------------------- the HUD's layers and a change of screen */
 .plate-layer, .screen-layer, .paper-layer { position: absolute; inset: 0; pointer-events: none; }
