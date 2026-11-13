@@ -1154,6 +1154,98 @@ for (const [w, h] of [[1280, 720], [1366, 768]] as const) {
   })
 }
 
+for (const [w, h] of [[1280, 800], [1280, 720]] as const) {
+  test(`a hired hand's card keeps its head in view: its name, its cross and the way to them never scroll or cut away, ${w} by ${h}`, async ({ page, isMobile, browserName }) => {
+    test.skip(isMobile || browserName !== 'chromium', 'a desk window')
+    test.setTimeout(300_000)
+    const errors = watchErrors(page)
+    await page.setViewportSize({ width: w, height: h })
+    await farm(page)
+    // As a player had it: the goal slip under the date board, and four orders in the work list over the people bar.
+    await a(page, `const c = app.campaign; for (const j of [...c.season.jobs]) app.do({ t: 'cancel', id: j.id }); for (const f of [0, 2, 4, 5]) app.do({ t: 'job', kind: 'scout', field: f })`)
+    await expect(page.getByTestId('goal')).toBeVisible()
+    await expect(page.locator('#ui .queue .q[data-testid^="queue-"]')).toHaveCount(4)
+    const hands = await a<{ id: number; name: string }[]>(page, `return app.campaign.crew.filter(u => u.kind !== 'farmer').map(u => ({ id: u.id, name: u.name }))`)
+    // What is in view of a card: inside its box and the window, with nothing lying over its middle.
+    const inView = (id: string, keys: string[]) => a<string[]>(page, `const el = document.querySelector('#ui [data-testid="${id}"]'); const r = el.getBoundingClientRect()
+      return ${JSON.stringify(keys)}.filter(k => { const x = el.querySelector('[data-testid="' + k + '"]'); if (!x || !A.vis(x)) return true
+        const b = x.getBoundingClientRect(); const hit = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2)
+        return b.top < r.top - 0.5 || b.bottom > r.bottom + 0.5 || b.top < 0 || b.bottom > innerHeight + 0.5 || b.left < 0 || b.right > innerWidth + 0.5 || !hit || !(x.contains(hit) || hit.contains(x)) })`)
+    const head = async (id: string, keys: string[], how: string) => {
+      const out = await inView(id, keys)
+      expect.soft(out, `${w}x${h}, ${how}: ${keys.join(', ')} are in view, in the card and the window, with nothing over them`).toEqual([])
+      const c = (await cards(page)).find(x => x.id === id)!
+      const over = await a<Box[]>(page, `return A.rects('.topbar .almanac > .mount, .topbar .bank > .mount, .topbar .goal, .timebook')`)
+      expect.soft(over.filter(b => meets(c.rect, b)), `${w}x${h}, ${how}: the card is not under the slip, the boards or the people bar`).toEqual([])
+      expect.soft(c.rect.top >= -0.5 && c.rect.bottom <= h + 0.5 && c.rect.left >= -0.5 && c.rect.right <= w + 0.5, `${w}x${h}, ${how}: inside the window (${JSON.stringify(c.rect)})`).toBe(true)
+    }
+    // A hand's whole page: the Foreman key is asked for, and its choices open; the head stays.
+    const page2 = async (id: number, name: string, how: string) => {
+      expect(await a<number>(page, `return A.shown('person-card', 'person-${id}')`), `${w}x${h}, ${how}: the card opens`).toBeGreaterThanOrEqual(0)
+      await page.waitForTimeout(500)
+      if (SHOTS) await page.screenshot({ path: `${SHOTS}/head-${w}x${h}-${how.replace(/\W+/g, '-')}.png` })
+      await head('person-card', ['person-name', 'person-close', 'person-show'], how)
+      await expect.soft(page.getByTestId('person-name'), `${w}x${h}, ${how}: names them`).toHaveText(name)
+      // The Foreman key: in view at once, or after the body under the head is scrolled, the head still in view.
+      const reach = async () => {
+        if (!(await inView('person-card', ['person-foreman'])).length) return true
+        await a(page, `const k = document.querySelector('#ui [data-testid="person-card"] [data-testid="person-foreman"]'); const b = k.closest('[data-scroll]'); if (b) b.scrollTop = b.scrollHeight`)
+        await page.waitForTimeout(150)
+        return !(await inView('person-card', ['person-foreman'])).length
+      }
+      expect.soft(await reach(), `${w}x${h}, ${how}: the Foreman key can be reached`).toBe(true)
+      await head('person-card', ['person-name', 'person-close', 'person-show'], `${how}, with the Foreman key in view`)
+      // Asked for: its choices open, are ringed and brought into view (the card's own help scrolls for them).
+      await page.getByTestId('person-foreman').click()
+      await expect(page.getByTestId('foreman-home')).toBeVisible()
+      await page.waitForTimeout(1300)
+      if (SHOTS) await page.screenshot({ path: `${SHOTS}/head-${w}x${h}-${how.replace(/\W+/g, '-')}-foreman.png` })
+      await head('person-card', ['person-name', 'person-close', 'person-show'], `${how}, the foreman's choices open`)
+      expect.soft(await inView('person-card', ['foreman-home', 'person-foreman', 'person-dismiss', 'person-raise']), `${w}x${h}, ${how}: the foreman's choices and the keys at the foot are in view`).toEqual([])
+      // Whatever scrolls the card itself (as the help once did) cannot carry its head away.
+      await a(page, `const el = document.querySelector('#ui [data-testid="person-card"]'); el.scrollTop = 9999; el.querySelector('[data-testid="person-dismiss"]').scrollIntoView({ block: 'end' })`)
+      await page.waitForTimeout(200)
+      await head('person-card', ['person-name', 'person-close', 'person-show'], `${how}, after the card is asked to scroll`)
+      await page.getByTestId('person-foreman').click()
+      await page.waitForTimeout(200)
+    }
+    for (const p of hands) {
+      await page.getByTestId(`unit-${p.id}`).click()
+      await page2(p.id, p.name, `${p.name.split(' ')[0]} from the chip`)
+      await letGo(page)
+    }
+    // From the land.
+    let on: { id: number; at: Pt } | null = null
+    for (const t of ['field', 'farm', 'yard']) {
+      await tier(page, t)
+      on = await a<{ id: number; at: Pt } | null>(page, `for (const id of ${JSON.stringify(hands.map(x => x.id))}) { const at = A.unitSpot(id); if (at) return { id, at } } return null`)
+      if (on) break
+    }
+    expect(on, 'a hired hand is on the land to click').not.toBeNull()
+    await page.mouse.click(on!.at.x, on!.at.y)
+    await page.waitForTimeout(100)
+    const pick = page.getByTestId(`pin-pick-${on!.id}`)
+    if (await pick.isVisible().catch(() => false)) await pick.click()
+    expect(await a<number>(page, `return A.shown('whois', 'person-${on!.id}')`)).toBeGreaterThanOrEqual(0)
+    await page.waitForTimeout(500)
+    if (SHOTS) await page.screenshot({ path: `${SHOTS}/head-${w}x${h}-from-the-land.png` })
+    await head('whois', ['whois-name', 'whois-close', 'whois-follow', 'whois-more', 'whois-letgo'], 'from the land')
+    await a(page, `const el = document.querySelector('#ui [data-testid="whois"]'); el.scrollTop = 9999; el.querySelector('[data-testid="whois-letgo"]').scrollIntoView({ block: 'end' })`)
+    await page.waitForTimeout(200)
+    await head('whois', ['whois-name', 'whois-close', 'whois-follow'], 'from the land, after the card is asked to scroll')
+    await page.getByTestId('whois-more').click()
+    await page2(on!.id, hands.find(x => x.id === on!.id)!.name, 'from Details on the land')
+    await letGo(page)
+    // From the grid.
+    await page.keyboard.press('g')
+    await expect(page.getByTestId('work-grid')).toBeVisible()
+    await page.waitForTimeout(400)
+    await page.getByTestId(`grid-person-${hands[0].id}`).click()
+    await page2(hands[0].id, hands[0].name, 'from the grid')
+    expect(errors, errors.join('\n')).toEqual([])
+  })
+}
+
 test('on a phone the card is a sheet at the foot, headed with the thing, notched toward it, and the thing stays in view above it', async ({ page, isMobile }) => {
   test.skip(!isMobile, 'the phone\'s sheet')
   test.setTimeout(180_000)

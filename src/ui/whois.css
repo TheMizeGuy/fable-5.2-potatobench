@@ -3,7 +3,10 @@
 .who-layer { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
 .whois-layer > * { position: absolute; left: 0; top: 0; will-change: transform; }
 .whois-layer .hover-name, .whois-layer .hover-mark { pointer-events: none; }
-.hud .whois.sys { width: 320px; padding: 12px 14px 12px; pointer-events: auto; z-index: 2; overflow-y: auto; overscroll-behavior: contain; }
+.hud .whois.sys { width: 320px; padding: 12px 14px 12px; pointer-events: auto; z-index: 2; overflow: clip; }
+/* A person's card: who it is and its cross stay in view, and so do the keys at its foot; what is between scrolls. */
+.hud .whois.sys:not(.thing) { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
+.whois > .card-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .hud .whois.thing.sys { width: 290px; }
 .whois.in { animation: lay-whois var(--t-sheet) var(--ease-paper); }
 @keyframes lay-whois { from { scale: 0.96; } }
@@ -42,7 +45,7 @@
 .touch .key-btn { height: 52px; }
 .touch .whois-first .btn, .touch .whois-acts .btn { min-height: 44px; }
 /* On a phone the card is a sheet from the bottom, over the foot of the screen. */
-.whois-layer.phone .whois { left: 10px; right: 10px; top: auto; bottom: 10px; width: auto !important; transform: none !important; max-height: 52%; overflow-y: auto; overscroll-behavior: contain; }
+.whois-layer.phone .whois { left: 10px; right: 10px; top: auto; bottom: 10px; width: auto !important; transform: none !important; max-height: 52%; }
 .whois-layer.phone .whois.in { animation: lay-sheet var(--t-sheet) var(--ease-paper); }
 @keyframes lay-sheet { from { translate: 0 18px; } }
 .whois.thing .whois-head:last-child { padding-bottom: 0; border-bottom: 0; }
