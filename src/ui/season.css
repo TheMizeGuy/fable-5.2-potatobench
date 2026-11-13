@@ -204,7 +204,8 @@
 .season-screen .command .orders.slots .order > span:empty { display: none; }
 .season-screen .command .orders.slots .order .catch:empty { display: none; }
 .season-screen .command .orders.slots .order.is-suggested .fist { display: none; }
-.season-screen .command .orders.slots .order.is-cold .cost { color: var(--red); font-family: var(--f-gothic); letter-spacing: .04em; }
+/* An order that can be given but risks the crop (cold soil, vines still growing): its warning in red. */
+.season-screen .command .orders.slots .order.is-risk .cost { color: var(--red); font-family: var(--f-gothic); letter-spacing: .04em; }
 .season-screen .command .orders.slots .order.is-off { background: transparent; box-shadow: inset 0 0 0 1px var(--hair); cursor: help; }
 .season-screen .command .orders.slots .order.is-off > :not(.catch) { opacity: .45; }
 /* The line under the orders. Room for two lines is kept by a strut inside it, never by a min-height: a row of the
@@ -215,7 +216,6 @@
 /* While it says what the stamp under the pointer does, it takes the place of the line about whose work is whose. */
 .season-screen .command .order-say.is-telling + .whose-box { display: none; }
 .season-screen .command .order-say.is-telling::before { height: 3.9em; }
-.season-screen .command .orders.slots .order.is-cold .cost { color: var(--red); font-family: var(--f-gothic); letter-spacing: .04em; }
 .season-screen .command .land-orders { padding-top: 0; }
 .season-screen .command.compact .order.is-suggested .fist { display: none; }
 .season-screen .command.in { animation: lay-right var(--t-sheet) var(--ease-paper); }

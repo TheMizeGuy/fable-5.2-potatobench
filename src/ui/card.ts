@@ -11,7 +11,7 @@ import { deals, deliver, versusMarket } from './contracts.ts'
 import { culledAtDig } from './dig.ts'
 import { fates, ringFor } from './crew.ts'
 import { isTract } from './map.ts'
-import { firstName, hillWord, isJob, isStale, JOB_KEY, JOB_VERB, jobText, jobWhat, plantingIn, stonesText, stonesWord } from './rules.ts'
+import { firstName, hillWord, isJob, isStale, JOB_KEY, JOB_VERB, jobText, jobWhat, killEarly, plantingIn, stonesText, stonesWord, type KillEarly } from './rules.ts'
 import { term } from './glossary.ts'
 import { meter, order, range } from './system/parts.ts'
 import { ringed } from './system/people.ts'
@@ -139,6 +139,7 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
     if (u && busy) { refuse(kind, `${busy} Close their card so anyone can take the order.`); return }
     const before = shown(offers(c, app.selection)).map(x => x.kind)
     const cold = kind === 'plant' && !!coldSoil(c, app.selection)
+    const early = kind === 'kill' ? killSoon(c, app.selection) : null
     const res = app.order(kind, { first })
     const took = res.filter(r => r.ok)
     if (!took.length) {
@@ -151,6 +152,7 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
     setTimeout(() => ctx.dirty(), HOLD_MS + 50)
     ctx.announce(`${JOB_VERB[kind]} is ${first ? 'first on the work list' : 'on the work list'} for ${F.list(took.map(r => S.FIELD_NAMES[r.field]))}${u ? `, assigned to ${u.name === S.FARMER_NAME ? 'you' : u.name}` : ''}.`)
     if (cold) flash(`You're planting ${F.list(took.map(r => S.FIELD_NAMES[r.field]))} in cold soil, so some seed may rot before it comes up.`, 'info')
+    else if (early && took.some(r => r.field === early.field)) flash(early.did, 'info')
   }
 
   // An order that cannot be given says why at once: on its own button when it is on the bar, on the note otherwise.
@@ -280,14 +282,18 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
         const cost = can.reduce((t, i) => t + mine[sel.indexOf(i)].cost, 0)
         const part = can.length < sel.length ? ` ${can.length} of ${sel.length}` : ''
         const no = refused?.kind === kind
-        // Planting in cold ground can be ordered, and the stamp says plainly what it risks.
+        // Planting in cold ground and killing vines before they are due can be ordered, and the stamp says plainly
+        // what each risks.
         const cold = kind === 'plant' ? coldSoil(c, can) : ''
-        text = no ? refused!.why : cold || catchFor(c, kind, f, kind === suggestedKind ? why : '')
+        const early = kind === 'kill' ? killSoon(c, can) : null
+        const risk = cold || early?.why || ''
+        text = no ? refused!.why : risk || catchFor(c, kind, f, kind === suggestedKind ? why : '')
         el = order({
-          key, icon: kind, name: [JOB_VERB[kind], part ? h('span', { class: 'order-part num' }, part) : null], cost: cold ? `Too cold${cost ? ` · ${F.money(cost)}` : ''}` : costText(days, cost), catch: '',
-          suggested: kind === suggestedKind, refused: no, testid: `order-${kind}`, title: touch ? undefined : cold ? `${cold} ${costText(days, cost)}.` : jobWhat(kind), said: `${jobWhat(kind)} ${text}`,
+          key, icon: kind, name: [JOB_VERB[kind], part ? h('span', { class: 'order-part num' }, part) : null],
+          cost: cold ? `Too cold${cost ? ` · ${F.money(cost)}` : ''}` : early ? early.short : costText(days, cost), catch: '',
+          suggested: kind === suggestedKind, refused: no, testid: `order-${kind}`, title: touch ? undefined : risk ? `${risk} ${costText(days, cost)}.` : jobWhat(kind), said: `${jobWhat(kind)} ${text}`,
           onclick: (e: Event) => give(kind, (e as MouseEvent).ctrlKey || (e as MouseEvent).metaKey),
-          attrs: { ...attrs(), class: `slot${cold ? ' is-cold' : ''}`, oncontextmenu: (e: Event) => { e.preventDefault(); give(kind, true) } },
+          attrs: { ...attrs(), class: `slot${risk ? ' is-risk' : ''}`, oncontextmenu: (e: Event) => { e.preventDefault(); give(kind, true) } },
         })
       }
       tell.push({ el, text })
@@ -318,6 +324,12 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
     if (!fields.some(i => { const pr = S.plantReady(app.world, c, i); return !pr.ok && (early || pr.soilT < pr.need) })) return ''
     const wait = plantingIn(app.world, c)
     return `Seed rots in cold soil, so it's safer to wait until ${wait > 0 ? `about ${F.date(c.year, s.day + wait)}` : 'the soil warms up'}. Planting now is up to you.`
+  }
+
+  // Killing the vines before they are due, for the fields where the coach is not asking for it (blight winning): the
+  // worst field's cost, or null when none gives up enough to say.
+  function killSoon(c: S.Campaign, fields: number[]): KillEarly | null {
+    return killEarly(app.world, c, fields.filter(i => app.needs()[i]?.need?.act !== 'kill'))
   }
 
   // Care of the land beside the crop's orders, when it is wanted: rocks, hedgerows, tile drains.
