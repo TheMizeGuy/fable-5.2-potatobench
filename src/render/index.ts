@@ -22,7 +22,7 @@ import { WATCH } from './crew.ts'
 import { clamp, hash2, smooth } from './noise.ts'
 import { K, KV, S } from './scale.ts'
 import { laps } from './laps.ts'
-import { Climb, Pace, Rate, SIZES, Sizer, startOn } from './pace.ts'
+import { Climb, Pace, Rate, SIZES, Sizer, judge, startOn } from './pace.ts'
 import { Particles } from './particles.ts'
 import { Pond } from './pond.ts'
 import { Post } from './post.ts'
@@ -718,19 +718,17 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     timesFor += dtMs
     if (timesFor < 1500 || times.length < 12) return
     const sorted = times.slice().sort((a, b) => a - b), seconds = timesFor / 1000
-    const waited = waits.slice().sort((a, b) => a - b)
+    const { slow, fast, late } = judge(waits, times, pacing.frameMs)
     times.length = 0
     waits.length = 0
     timesFor = 0
     fps = Math.round(1000 / Math.max(1, sorted[sorted.length >> 1]))
     if (!adaptive || probe.on) return
-    const late = waited[Math.floor(waited.length * 0.73)] / pacing.frameMs, slow = late > 1.23
     const auto = app.settings.quality === 'auto'
     // A fast display drawn on its every beat goes back to about sixty a second before anything is made smaller; one
     // drawn at about sixty is tried on every beat when it has been in time for a while at its full size.
     // (drawn on every beat it is kept there for as long as that gives more pictures than about sixty would: seventy a
     // second or better, however uneven the browser's calls)
-    const fast = sorted[Math.floor(sorted.length * 0.73)] <= 1000 / 70
     const went = rate.feed(pacing.full ? !fast : slow, seconds, pacing.sixty > 1 && sizer.step === 0 && !lowered && !upDue)
     if (went) { pacing.full = rate.full; return }
     if (pacing.full) return

@@ -175,6 +175,17 @@ export class Sizer {
   }
 }
 
+// A stretch of frames, judged. waits: how long the browser took to call again before each picture drawn; covered:
+// the time each picture covers; frameMs: the time a picture has. slow: more than a quarter of the waits ran past the
+// time a picture has by a margin (the machine does not keep up: a smaller picture may mend it). fast: drawn on every
+// beat, the pictures come at seventy a second or better (worth keeping on every beat, however uneven the calls).
+// late: how late the slower frames were, as a multiple of the time a picture has.
+export function judge(waits: number[], covered: number[], frameMs: number): { slow: boolean; fast: boolean; late: number } {
+  const at = (v: number[]) => v.slice().sort((a, b) => a - b)[Math.floor(v.length * 0.73)] ?? 0
+  const late = at(waits) / frameMs
+  return { slow: late > 1.23, fast: at(covered) <= 1000 / 70, late }
+}
+
 // Whether a display faster than sixty a second is drawn on its every beat. It begins at about sixty; after a clean
 // while at the full size it is tried on every beat, and kept there for as long as the frames keep that beat. Two slow
 // stretches running put it back, and the wait before the next try doubles each time a try did not hold, so a machine

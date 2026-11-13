@@ -1,7 +1,7 @@
 // How often the picture is drawn and how large (src/render/pace.ts): a fast display is not drawn on every beat, a
 // land where nothing moves comes to rest, and the picture's size settles instead of swinging.
 import { describe, expect, it } from 'vitest'
-import { Climb, HELD_MS, HOLD_AFTER_S, Pace, Rate, SIZES, Sizer, UNWATCHED_S, startOn } from '../src/render/pace.ts'
+import { Climb, HELD_MS, HOLD_AFTER_S, Pace, Rate, SIZES, Sizer, UNWATCHED_S, judge, startOn } from '../src/render/pace.ts'
 
 // Frames drawn over `seconds` of a display beating every `beat` ms.
 function run(p: Pace, beat: number, seconds: number, busy: boolean, alone = false): number {
@@ -342,5 +342,60 @@ describe('a fast display on a machine that keeps its beat', () => {
     const r = new Rate()
     while (r.feed(false, 1.5, true) !== 'full') { /* until it is tried */ }
     expect(r.feed(false, 1.5, false)).toBe('sixty')
+  })
+})
+
+// A display's calls played through the pace, the frames judged, and the pace of drawing and the picture's size left to
+// follow as src/render/index.ts has them follow. gaps: how long the browser takes to call again, turn about.
+function play(hz: number, gaps: (beat: number, drew: boolean) => number, seconds: number): { fps: number; every: number; step: number; full: boolean } {
+  const p = new Pace(), r = new Rate(), z = new Sizer()
+  const beat = 1000 / hz
+  let waits: number[] = [], covered: number[] = [], forMs = 0, drawn = 0, since = 0, drew = false
+  for (let t = 0; t < seconds * 1000;) {
+    const gap = gaps(beat, drew)
+    t += gap
+    const ms = p.tick(gap, true)
+    drew = ms > 0
+    if (!drew) continue
+    if (t > (seconds - 4) * 1000) { drawn++; since += ms }
+    waits.push(Math.min(ms, p.gap))
+    covered.push(ms)
+    forMs += ms
+    if (forMs < 1500) continue
+    const j = judge(waits, covered, p.frameMs)
+    const went = r.feed(p.full ? !j.fast : j.slow, forMs / 1000, p.sixty > 1 && z.step === 0)
+    if (went) p.full = r.full
+    else if (!p.full) z.feed(j.slow, forMs / 1000, j.late)
+    waits = []; covered = []; forMs = 0
+  }
+  return { fps: Math.round(drawn / (since / 1000)), every: p.every, step: z.step, full: p.full }
+}
+
+describe('a fast display, with the frames judged as the picture judges them', () => {
+  it('is drawn on its every beat by a machine that keeps the beat: 120, 144, 165 and 240 a second', () => {
+    for (const hz of [120, 144, 165, 240]) {
+      const got = play(hz, beat => beat, 40)
+      expect(got.full, `${hz} a second`).toBe(true)
+      expect(got.fps, `${hz} a second`).toBeGreaterThan(hz * 0.97)
+      expect(got.step, `${hz} a second: the picture at its full size`).toBe(0)
+    }
+  })
+
+  it('is drawn on every call, and never made smaller, where the page keeps only every other beat of 240 a second after a picture', () => {
+    // (the beat after a picture is missed: the page was still at it)
+    const got = play(240, (beat, drew) => (drew ? beat * 2 : beat), 60)
+    expect(got.step, 'the picture at its full size').toBe(0)
+    expect(got.fps).toBeGreaterThan(100)
+  })
+
+  it('goes back to about sixty where every beat cannot be kept (a picture takes a sixtieth of a second on a 120 a second display), without the picture being made smaller for it', () => {
+    const got = play(120, (beat, drew) => (drew ? beat * 2 : beat), 60)
+    expect(got.fps).toBeGreaterThanOrEqual(58)
+    expect(got.fps).toBeLessThanOrEqual(62)
+    expect(got.step).toBe(0)
+  })
+
+  it('is still made smaller where the machine does not keep up at all: every call a fortieth of a second apart', () => {
+    for (const hz of [60, 144]) expect(play(hz, () => 25, 30).step, `${hz} a second`).toBeGreaterThan(0)
   })
 })
