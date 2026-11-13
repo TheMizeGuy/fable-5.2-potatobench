@@ -187,6 +187,8 @@ export function placeCard(a: Ask): Placed {
           if (!among && (b.right <= usual.x - 4 || b.left >= usual.x + w + 4)) continue
           const x = side === 'right' ? b.right + 6 : b.left - 6 - w
           if (x < win.left || x + w > win.right || (!among && Math.abs(x - usual.x) > ASIDE - gap)) continue
+          // (still on its own side of the point: never across it, beside some bar far off)
+          if (side === 'right' ? x < p.x : x + w > p.x) continue
           // Whole there, or at least taller: a card that can be whole nowhere still gets the most height there is.
           if (lay(side, null, x).h > usual.h + 1) starts.push({ off: x, aside: true })
         }

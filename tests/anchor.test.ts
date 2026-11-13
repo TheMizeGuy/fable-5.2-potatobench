@@ -421,6 +421,13 @@ describe('keeping off the other tags and people', () => {
     expect(open9.h).toBe(520)
     expect(open9.x).toBe(grid9.right + 6)
     expect([grid9, list9, bar9].some(b => meets(box(open9, 452), b))).toBe(false)
+    // Tags on the land are no reason to carry a chip's card off across the window to stand beside some other bar:
+    // it stays at the edge of its own.
+    const chipFar: Box = { left: 1062, top: 222, right: 1264, bottom: 262 }
+    const tagsNear = [{ left: 430, top: 300, right: 590, bottom: 340, weight: 3 }, { left: 440, top: 420, right: 600, bottom: 460, weight: 3 }]
+    const stay = placeCard({ point: { x: 147, y: 645 }, size: { w: 452, h: 474 }, least: 440, win: win720, blocks: [{ left: 16, top: 537, right: 182, bottom: 581 }, bar4, chipFar, { left: 34, top: 166, right: 364, bottom: 212 }], keep: chip4, others: tagsNear })
+    expect(stay.x).toBe(bar4.right + 6)
+    expect(stay.h).toBe(474)
     // Never a strip: whatever the height asked, it is given at least the land over the list.
     const tall = placeCard({ point: at, size: { w: 452, h: 700 }, win, blocks, keep: chip })
     expect(tall.h).toBeGreaterThanOrEqual(380)
