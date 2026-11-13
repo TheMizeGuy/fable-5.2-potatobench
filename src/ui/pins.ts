@@ -14,7 +14,7 @@ interface Model { id: number; name: string; ring: string; state: PinState; label
 // How close two people stand, in screen pixels, before they share a pin.
 const NEAR = 40
 
-export function pins(ctx: Ctx, layer: HTMLElement, o: { tags: () => DOMRect[]; covers: () => DOMRect[]; stopped: () => Set<number> }): { update(c: S.Campaign): void; frame(): void; escape(): boolean; dispose(): void } {
+export function pins(ctx: Ctx, layer: HTMLElement, o: { tags: () => DOMRect[]; covers: () => DOMRect[]; stopped: () => Set<number>; board?: () => number }): { update(c: S.Campaign): void; frame(): void; escape(): boolean; dispose(): void } {
   const app = ctx.app
   const wraps = new Map<number, HTMLElement>()
   let models: Model[] = []
@@ -94,7 +94,10 @@ export function pins(ctx: Ctx, layer: HTMLElement, o: { tags: () => DOMRect[]; c
     for (const m of models) {
       const a = ctx.view.unitAnchor(m.id)
       if (!a.visible || !Number.isFinite(a.x) || !Number.isFinite(a.y)) continue
-      if (a.x < ins.left + 20 || a.x > innerWidth - ins.right - 20 || a.y < ins.top + 56 || a.y > innerHeight - ins.bottom) continue
+      // The one in hand keeps their pin wherever the land shows under the boards (a slip hanging from a board frames
+      // the land for everything else, and on a phone leaves little between it and a sheet).
+      const top = m.id === app.unit && o.board ? Math.min(ins.top, o.board()) : ins.top
+      if (a.x < ins.left + 20 || a.x > innerWidth - ins.right - 20 || a.y < top + 56 || a.y > innerHeight - ins.bottom) continue
       if (covers.some(r => a.x > r.left - 22 && a.x < r.right + 22 && a.y > r.top && a.y - 56 < r.bottom)) continue
       at.set(m.id, a)
     }
@@ -114,7 +117,7 @@ export function pins(ctx: Ctx, layer: HTMLElement, o: { tags: () => DOMRect[]; c
         if (!t) break
         y = t.top - 1
       }
-      if (y - 56 < ins.top + 4) continue
+      if (y - 56 < (m.id === app.unit && o.board ? Math.min(ins.top, o.board()) : ins.top) + 4) continue
       shown.set(m.id, { m, x: p.x, y, members })
     }
     for (const m of models) {

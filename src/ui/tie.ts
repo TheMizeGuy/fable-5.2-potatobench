@@ -3,15 +3,15 @@
 // camera moves, and when the thing leaves the picture it waits at the nearest edge with a Show key. On a phone the
 // card is a sheet at the foot with a notch on its edge toward the thing.
 import type { Place, Thing } from '../game/contracts.ts'
-import { holds, notchOf, placeCard, tetherOf, type Box, type Placed, type Pt, type Side } from './anchor.ts'
+import { holds, meets, notchOf, placeCard, roomUnder, tetherOf, type Box, type Placed, type Pt, type Side } from './anchor.ts'
 import type { Ctx } from './core.ts'
 import { h } from './dom.ts'
 import { icon } from './icons.ts'
 import './tie.css'
 
 // Where a thing is now. keep: the handle that was clicked (a tag, a chip); end: where the tether ends when that is
-// not the point itself; mark: where a thing with no mark of its own on the land is ringed.
-export interface Tied { point: Pt; keep?: Box | null; end?: Pt; avoid?: Box[]; mark?: Pt }
+// not the point itself; avoid: the thing's own middle; spare: its tag or pin, kept clear when that costs nothing; mark: where a thing with no mark of its own on the land is ringed.
+export interface Tied { point: Pt; keep?: Box | null; end?: Pt; avoid?: Box[]; spare?: Box[]; mark?: Pt }
 export interface Tie {
   // What the card is about, as its data-thing says it.
   thing: string
@@ -23,7 +23,8 @@ export interface Tie {
   loose?: boolean
 }
 
-export interface Land { win: Box; blocks: Box[] }
+// tags: the field tags on the land now, which a card hides as few of as it can.
+export interface Land { win: Box; blocks: Box[]; tags?: Box[] }
 
 export interface Ties {
   field(): Tie | null
@@ -71,9 +72,26 @@ export function mountTies(ctx: Ctx, root: HTMLElement): Ties {
     if (e.type === 'click' && m.detail === 0 && el) { const r = el.getBoundingClientRect(); press = { x: r.left + r.width / 2, y: r.top + r.height / 2, t: performance.now(), el } }
     else press = { x: m.clientX, y: m.clientY, t: performance.now(), el }
   }
-  addEventListener('pointerup', onPress, true)
+  // A click on the field already in hand selects nothing new: its card comes to the point clicked all the same.
+  let down: { x: number; y: number } | null = null
+  let used = -1
+  const onDown = (e: PointerEvent) => { down = { x: e.clientX, y: e.clientY } }
+  const onUp = (e: PointerEvent) => {
+    onPress(e)
+    const p = press
+    const tap = e.button === 0 && !e.shiftKey && !!down && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 6 && p.el?.tagName === 'CANVAS'
+    if (tap) queueMicrotask(() => {
+      const last = app.selected
+      if (used === p.t || last < 0 || !fieldNow || fieldNow.last !== last || !inQuad(view.fieldCorners(last), p)) return
+      fieldNow = { last, tie: fieldTie(fieldNow.tie.thing, last, p, true) }
+      ctx.dirty()
+    })
+  }
+  addEventListener('pointerdown', onDown, true)
+  addEventListener('pointerup', onUp, true)
   addEventListener('click', onPress, true)
-  const fresh = () => (performance.now() - press.t < 250 ? press : null)
+  // A selection is made inside the press's own event: a press older than that made something else.
+  const fresh = () => { if (performance.now() - press.t >= 50) return null; used = press.t; return press }
 
   const find = (sel: string): HTMLElement | null => {
     for (const el of root.querySelectorAll<HTMLElement>(sel)) if (el.offsetParent !== null && !el.closest('[hidden], .gone, .leaving, .out')) return el
@@ -82,19 +100,24 @@ export function mountTies(ctx: Ctx, root: HTMLElement): Ties {
   const ground = (p: Pt): Place | null => view.groundAt?.(p.x, p.y) ?? null
   const onLand = (w: Place): Pt => { const s = view.screenOf!(w); return { x: s.x, y: s.y } }
 
-  // A handle on the screen (a tag, a chip): the card stands beside it, tied to its edge. where: the point of it that
-  // was pressed, as shares of its width and height. Gone from the screen, the tie falls back to the thing itself.
+  // A handle on the screen (a tag, a chip): the card stands beside it, tied to its edge. at: the point of it that was
+  // pressed. Gone from the screen, the tie falls back to the thing itself. The handle is taken at the size it has
+  // when its card first stands beside it: a tag that then grows ("on the list") moves neither the card nor the point.
   function handle(thing: string, sel: string, at: Pt | null, fall: Tie, hold?: (el: HTMLElement) => HTMLElement): Tie {
-    let f = { x: 0.5, y: 0.5 }
     const first = find(sel)
-    if (at && first) { const b = first.getBoundingClientRect(); f = { x: Math.max(0, Math.min(1, (at.x - b.left) / (b.width || 1))), y: Math.max(0, Math.min(1, (at.y - b.top) / (b.height || 1))) } }
+    const b0 = first?.getBoundingClientRect()
+    const d = at && b0 ? { x: at.x - b0.left, y: at.y - b0.top } : null
+    let size: { w: number; h: number } | null = null
     return {
       thing, show: fall.show,
       at() {
         const el = find(sel)
-        if (!el) return fall.at()
+        if (!el) { size = null; return fall.at() }
         const b = el.getBoundingClientRect()
-        return { point: { x: b.left + f.x * b.width, y: b.top + f.y * b.height }, keep: box((hold?.(el) ?? el).getBoundingClientRect()), avoid: fall.at()?.avoid }
+        const k = (hold?.(el) ?? el).getBoundingClientRect()
+        size ??= { w: k.width, h: k.height }
+        const point = d ? { x: b.left + Math.max(0, Math.min(b.width, d.x)), y: b.top + Math.max(0, Math.min(b.height, d.y)) } : { x: b.left + Math.min(b.width, size.w) / 2, y: b.top + b.height / 2 }
+        return { point, keep: { left: k.left, top: k.top, right: k.left + size.w, bottom: k.top + size.h }, avoid: fall.at()?.avoid }
       },
     }
   }
@@ -126,7 +149,7 @@ export function mountTies(ctx: Ctx, root: HTMLElement): Ties {
         const point = w ? onLand(w) : finite(a) ? { x: a.x + d.x, y: a.y + d.y } : null
         if (!finite(point)) return null
         const t = find(TAG(i))
-        return { point, avoid: [...fieldMiddle(i), ...(t ? [box(tagBox(t).getBoundingClientRect())] : [])] }
+        return { point, avoid: fieldMiddle(i), spare: t ? [box(tagBox(t).getBoundingClientRect())] : [] }
       },
     }
   }
@@ -149,7 +172,7 @@ export function mountTies(ctx: Ctx, root: HTMLElement): Ties {
         const point = onLand(w)
         if (!finite(point)) return null
         const t = find(YARD(y))
-        return { point, avoid: [...middle(), ...(t ? [box(t.getBoundingClientRect())] : [])] }
+        return { point, avoid: middle(), spare: t ? [box(t.getBoundingClientRect())] : [] }
       },
     }
   }
@@ -177,16 +200,20 @@ export function mountTies(ctx: Ctx, root: HTMLElement): Ties {
           const b = body(id)
           if (!b) return chip.at()
           const far = Math.hypot(d.x, d.y) > 32
-          return { point: { x: b.mid.x + d.x, y: b.mid.y + d.y }, end: far ? b.mid : undefined, avoid: [round(b.mid, 10), { left: b.top.x - 10, top: b.top.y - 50, right: b.top.x + 10, bottom: b.top.y }] }
+          return { point: { x: b.mid.x + d.x, y: b.mid.y + d.y }, end: far ? b.mid : undefined, avoid: [round(b.mid, 10)], spare: [{ left: b.top.x - 12, top: b.top.y - 50, right: b.top.x + 12, bottom: b.top.y }] }
         },
       }
     }
     if (p) {
       // A key in a card already open on them: the card stays where it is tied.
       if (was && was.thing === thing && p.el?.closest('.anchored')) return was
-      if (p.el?.closest('.person.unit')) return onChip(beside({ x: 0, y: 0 }), p)
-      if (p.el?.closest('.w-who')) return handle(thing, ROW(id), p, beside({ x: 0, y: 0 }))
-      if (p.el?.tagName === 'CANVAS' || p.el?.closest('.pin, .pin-list')) { const b = body(id); return beside(b ? { x: p.x - b.mid.x, y: p.y - b.mid.y } : { x: 0, y: 0 }) }
+      // The press counts only when it was on them: their chip, their row, their pin, or the land within reach of them
+      // (a press a moment earlier on something else never carries their card off to where it was).
+      if (p.el?.closest(`[data-testid="unit-${id}"]`)) return onChip(beside({ x: 0, y: 0 }), p)
+      if (p.el?.closest(`[data-testid="grid-person-${id}"]`)) return handle(thing, ROW(id), p, beside({ x: 0, y: 0 }))
+      const b = body(id)
+      const d = b ? { x: p.x - b.mid.x, y: p.y - b.mid.y } : null
+      if (d && (p.el?.closest(`[data-testid="pin-${id}"], [data-testid="pin-pick-${id}"]`) || (p.el?.tagName === 'CANVAS' && Math.hypot(d.x, d.y) < 90))) return beside(d)
     }
     return from === 'land' ? beside({ x: 0, y: 0 }) : onChip(beside({ x: 0, y: 0 }), null)
   }
@@ -224,7 +251,7 @@ export function mountTies(ctx: Ctx, root: HTMLElement): Ties {
       const onIt = !!p && (p.el?.closest('.plate')?.getAttribute('data-k') === `field-${last}` || (p.el?.tagName === 'CANVAS' && inQuad(view.fieldCorners(last), p)))
       // Another field let go with Shift: the card stays tied where it was, to the one last clicked.
       if (fieldNow && fieldNow.last === last && !onIt) fieldNow = { last, tie: { ...fieldNow.tie, thing: fieldId(app.selection) } }
-      else fieldNow = { last, tie: fieldTie(fieldId(app.selection), last, p, !had.includes(last)) }
+      else fieldNow = { last, tie: fieldTie(fieldId(app.selection), last, p, !had.includes(last) && !!p && performance.now() - p.t < 8) }
       had = [...app.selection]
     } else if (e.type === 'yard') {
       yardNow = e.yard !== 0 ? { y: e.yard, tie: yardTie(e.yard, fresh()) } : null
@@ -280,7 +307,8 @@ export function mountTies(ctx: Ctx, root: HTMLElement): Ties {
     },
     dispose() {
       off()
-      removeEventListener('pointerup', onPress, true)
+      removeEventListener('pointerdown', onDown, true)
+      removeEventListener('pointerup', onUp, true)
       removeEventListener('click', onPress, true)
       now = null
     },
@@ -319,7 +347,7 @@ export function anchored(ctx: Ctx, card: HTMLElement, o: { mark?: boolean } = {}
   const parts = [line, dot, notch, show, ...(mark ? [mark] : [])]
   let tie: Tie | null = null
   let size = { w: card.offsetWidth || 320, h: 240 }
-  let placed: (Placed & { for: Pt; win: string }) | null = null
+  let placed: (Placed & { for: Pt; win: string; size: string }) | null = null
   let side: Side | null = null
   let hopUntil = 0
   const drawn = { card: '', max: '', line: '', dot: '', notch: '', show: '', mark: '' }
@@ -366,7 +394,8 @@ export function anchored(ctx: Ctx, card: HTMLElement, o: { mark?: boolean } = {}
     }
     hide(notch)
     const land = ties().land()
-    const win = `${innerWidth}x${innerHeight} ${size.w}x${size.h}`
+    const win = `${innerWidth}x${innerHeight}`
+    const sized = `${size.w}x${size.h}`
     if (!t) {
       // Nowhere to tie it: it stays where it was, or stands in the middle of the land.
       hide(line, dot, show, mark)
@@ -377,13 +406,27 @@ export function anchored(ctx: Ctx, card: HTMLElement, o: { mark?: boolean } = {}
       return
     }
     const cardBox = (p: Placed): Box => ({ left: p.x, top: p.y, right: p.x + size.w, bottom: p.y + p.h })
-    // A person walking, a tractor at work: the card waits while they are still close by, then steps after them.
-    const held = !!tie!.loose && !!placed && placed.win === win && !placed.away && !ties().moving()
-      && Math.hypot(t.point.x - placed.for.x, t.point.y - placed.for.y) < HOLD && !holds(cardBox(placed), t.point, 4) && holds(land.win, t.point)
-    if (!held) {
+    const at = placed ? Math.hypot(t.point.x - placed.for.x, t.point.y - placed.for.y) : Infinity
+    // Where it lies still serves: in the window, off the bars (a list that grew, the grid opened), off its handle.
+    let fits = !!placed && placed.win === win && !placed.away && holds(land.win, t.point, 0.5)
+    if (fits && placed!.size !== sized) {
+      // Its own height changed (an order given, a line more under the orders): its top left corner stays where it
+      // is, so nothing in it moves under the pointer; it grows downward, or scrolls.
+      const h = Math.min(size.h, roomUnder(placed!.x, placed!.y, size.w, land.win, land.blocks) - placed!.y)
+      if (h >= Math.min(size.h, 220)) placed = { ...placed!, h, size: sized }
+      else fits = false
+    }
+    if (fits) {
+      const b = cardBox(placed!)
+      fits = b.right <= land.win.right + 0.5 && b.bottom <= land.win.bottom + 0.5 && !land.blocks.some(k => meets(b, k)) && !(t.keep && meets(b, t.keep)) && !holds(b, t.point, 2)
+    }
+    // Nothing moved: it stays. A person walking, a tractor at work: the card waits while they are still close by,
+    // then steps after them.
+    const keep = fits && !ties().moving() && (at < 0.05 || (!!tie!.loose && at < HOLD))
+    if (!keep) {
       const stepped = !!tie!.loose && !!placed && !ties().moving()
-      const p = placeCard({ point: t.point, size, win: land.win, blocks: land.blocks, keep: t.keep, avoid: t.avoid, prev: side })
-      placed = { ...p, for: t.point, win }
+      const p = placeCard({ point: t.point, size, win: land.win, blocks: land.blocks, keep: t.keep, avoid: t.avoid, spare: t.spare, others: land.tags, prev: side })
+      placed = { ...p, for: t.point, win, size: sized }
       side = p.side
       if (stepped && !ctx.reduced()) { hopUntil = performance.now() + 220; card.classList.add('hop') }
     }

@@ -140,7 +140,9 @@ test('every crop order has its place on the card; one that cannot be given is gr
   await expect.poll(async () => (await look(page)).queue).toBe(2)
   await page.locator('#ui .queue [data-testid^="list-x-"]').last().click()
   await expect.poll(async () => (await look(page)).queue).toBe(1)
-  // A resting field offers nothing and says so in one line.
+  // A resting field offers nothing and says so in one line. (A card opens beside its field and may lie over the next
+  // field's tag: the card in hand is put away first, as a click on open ground or Escape does.)
+  await page.keyboard.press('Escape')
   await page.getByTestId('field-1').click()
   await expect(orders).toHaveCount(0)
   await expect(page.getByTestId('card-line')).toContainText('Resting in oats and clover')

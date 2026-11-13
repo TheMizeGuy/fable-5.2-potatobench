@@ -435,7 +435,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       else if (viewport().w < 700) {
         // The field that was framed is framed again above the sheet; anything else in hand is brought out from under it.
         if (framing !== 'free' && covered(app.selected)) reframe(reduced)
-        else keepInView()
+        else if (app.selected < 0 || framing === 'free') keepInView()
       }
     }
   })
@@ -1153,10 +1153,17 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     if (app.unit >= 0 && app.unitFrom === 'land') { if (crews.anchor(app.unit, far)) { p = { x: far.x, z: far.z }; at = screenAt(far.x, far.y, far.z) } }
     else if (app.yard !== 0 && YARD_AT[app.yard]) { p = YARD_AT[app.yard]; at = yardAnchor(app.yard) }
     else if (app.thing && app.thing.thing.kind !== 'yard') { if (crews.thingAt(app.thing.thing, far)) { p = { x: far.x, z: far.z }; at = screenAt(far.x, far.y, far.z) } }
-    else if (app.selected >= 0 && FIELDS[app.selected]) { p = { x: FIELDS[app.selected].cx, z: FIELDS[app.selected].cz }; at = fieldAnchor(app.selected) }
+    else if (app.selected >= 0 && FIELDS[app.selected]) {
+      // A field: the middle of its near edge, where its tag stands and from where it runs up the picture.
+      if (!covered(app.selected)) return
+      const cam = rig.camera.position
+      const near = fields.nearEdge(app.selected, cam.x, cam.z)
+      p = { x: near.x, z: near.z }
+      at = { x: 0, y: 0, visible: false }
+    }
     if (!p || !at) return
     const vp = viewport()
-    if (at.visible && at.x >= vp.left && at.x <= vp.w - vp.right && at.y >= vp.top + 8 && at.y <= vp.h - vp.bottom - 8) return
+    if (at.visible && at.x >= vp.left && at.x <= vp.w - vp.right && at.y >= vp.top && at.y <= vp.h - vp.bottom) return
     following = -1
     framing = 'free'
     rig.moveTo(centredOn(p), reduced, 500)

@@ -191,7 +191,7 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
       const ins = app.insets
       landNow = { win: { left: 8, top: ins.top + 8, right: Math.min(innerWidth, sheet.getBoundingClientRect().left) - 8, bottom: innerHeight - 8 }, blocks: [] }
     }
-    return landNow
+    return { ...landNow, tags: P.boxes() }
   })
   // Every fold starts shut: a newcomer's first spring is a short sheet (e2e/play.spec.ts), each fold one click away.
   let open: Fold | null = null

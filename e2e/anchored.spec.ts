@@ -98,16 +98,29 @@ const PROBE = `window.__a = {
     }
     return out
   },
-  arm() { window.__t0 = 0; addEventListener('pointerup', () => { window.__t0 = performance.now() }, { capture: true, once: true }) },
-  // The card for a thing, once it stands where it is to stand: how long after the press, in milliseconds (-1: never).
-  async wait(id, thing, limit = 1500) {
+  up(id, thing) { const c = this.cards().find(x => x.id === id && (!thing || x.thing === thing)); return !!c && !!(c.side || id === 'order-card' || c.notch || innerWidth < 900) },
+  // From the next press: how long until the card for the thing stands where it is to stand, measured in the page
+  // (frame by frame), in milliseconds.
+  arm(id, thing) {
+    const run = window.__run = {}
+    window.__ms = -1
+    addEventListener('pointerup', () => {
+      const t0 = performance.now()
+      const tick = () => { if (window.__run !== run) return; if (this.up(id, thing)) { window.__ms = performance.now() - t0; return } if (performance.now() - t0 < 3000) requestAnimationFrame(tick) }
+      tick()
+    }, { capture: true, once: true })
+  },
+  // The time arm() measured, once it has one (-1: the card never came).
+  async wait(limit = 1500) {
     const t1 = performance.now()
-    for (;;) {
-      const c = this.cards().find(x => x.id === id && (!thing || x.thing === thing))
-      if (c && (c.side || id === 'order-card' || c.notch || innerWidth < 900)) return Math.round(performance.now() - (window.__t0 || t1))
-      if (performance.now() - t1 > limit) return -1
-      await new Promise(r => requestAnimationFrame(r))
-    }
+    while (window.__ms < 0 && performance.now() - t1 < limit) await new Promise(r => requestAnimationFrame(r))
+    return Math.round(window.__ms)
+  },
+  // Without a press to time: until the card for a thing is up (-1: never).
+  async shown(id, thing, limit = 1500) {
+    const t1 = performance.now()
+    while (!this.up(id, thing)) { if (performance.now() - t1 > limit) return -1; await new Promise(r => requestAnimationFrame(r)) }
+    return Math.round(performance.now() - t1)
   },
 }`
 
@@ -117,8 +130,9 @@ const holds = (b: Box, p: Pt, pad = 0) => p.x > b.left - pad && p.x < b.right + 
 const meets = (x: Box, y: Box) => x.left < y.right - 0.5 && x.right > y.left + 0.5 && x.top < y.bottom - 0.5 && x.bottom > y.top + 0.5
 const away = (b: Box, p: Pt) => Math.hypot(Math.max(b.left - p.x, 0, p.x - b.right), Math.max(b.top - p.y, 0, p.y - b.bottom))
 const apart = (x: Box, y: Box) => Math.hypot(Math.max(0, x.left - y.right, y.left - x.right), Math.max(0, x.top - y.bottom, y.top - x.bottom))
-// In the page: the tether's end lies on a handle's box, give or take the width of its pin.
-const onBox = (b: Box) => `const b = ${JSON.stringify(b)}; return END.x >= b.left - 8 && END.x <= b.right + 8 && END.y >= b.top - 8 && END.y <= b.bottom + 8`
+// In the page: the tether's end lies on a handle as it stands now (a tag in hand stands up a size), give or take the
+// width of its pin.
+const onHandle = (sel: string) => `const e = document.querySelector('#ui ${sel}'); if (!A.vis(e)) return false; const b = A.box(e.closest('.tag-at') || e); return END.x >= b.left - 8 && END.x <= b.right + 8 && END.y >= b.top - 8 && END.y <= b.bottom + 8`
 
 // A first year with the three who asked for work taken on, into the season, stopped in June with orders on the list.
 async function farm(page: Page): Promise<void> {
@@ -170,7 +184,7 @@ interface Case {
 async function hold(page: Page, k: Case, label: string, close: 'Escape' | 'ground'): Promise<void> {
   const say = (m: string) => `${label}, ${k.name}: ${m}`
   const cam0 = await a<string>(page, 'return JSON.stringify(F.stats().camera)')
-  await a(page, 'A.arm()')
+  await a(page, `A.arm(${JSON.stringify(k.card)}, ${JSON.stringify(k.thing)})`)
   await page.mouse.click(k.at.x, k.at.y)
   let from = k.at
   if (k.pick) {
@@ -179,11 +193,11 @@ async function hold(page: Page, k: Case, label: string, close: 'Escape' | 'groun
     if (await one.isVisible().catch(() => false)) {
       const b = (await one.boundingBox())!
       from = { x: b.x + b.width / 2, y: b.y + b.height / 2 }
-      await a(page, 'A.arm()')
+      await a(page, `A.arm(${JSON.stringify(k.card)}, ${JSON.stringify(k.thing)})`)
       await page.mouse.click(from.x, from.y)
     }
   }
-  const ms = await a<number>(page, `return A.wait(${JSON.stringify(k.card)}, ${JSON.stringify(k.thing)})`)
+  const ms = await a<number>(page, 'return A.wait()')
   expect.soft(ms, say(`its card is up within 300 ms of the click (${ms} ms; cards: ${JSON.stringify((await cards(page)).map(c => `${c.id}:${c.thing}`))})`)).toBeGreaterThanOrEqual(0)
   expect.soft(ms, say('its card is up within 300 ms of the click')).toBeLessThanOrEqual(300)
   if (ms < 0) { await letGo(page); return }
@@ -266,7 +280,7 @@ async function cases(page: Page, t: string): Promise<{ list: Case[]; missing: st
     if (!hd) continue
     tagged = i
     list.push({ name: 'a planted field by its tag', card: 'card', thing: `field-${i}`, head: ['Potato field', names[i]], at: { x: hd.x, y: hd.y }, handle: hd.box, middle: await a<Pt | null>(page, `return A.quad(${i}, .5, .5)`),
-      ends: onBox(hd.box), marked: fieldMarked(i) })
+      ends: onHandle(`.plate[data-k="field-${i}"]`), marked: fieldMarked(i) })
     break
   }
   if (tagged < 0) missing.push('a planted field by its tag')
@@ -284,7 +298,7 @@ async function cases(page: Page, t: string): Promise<{ list: Case[]; missing: st
   const yardTag = await a<(Pt & { box: Box }) | null>(page, `return A.handle('[data-testid="yard-home"]')`)
   const yardMarked = `const tag = document.querySelector('#ui [data-testid="yard-home"]'); return app.yard === -1 && (!A.vis(tag) || tag.getAttribute('aria-pressed') === 'true')`
   if (yardTag) list.push({ name: 'the home yard by its tag', card: 'yard-card', thing: 'yard-home', head: ['home yard'], at: { x: yardTag.x, y: yardTag.y }, handle: yardTag.box,
-    ends: onBox(yardTag.box), marked: yardMarked })
+    ends: onHandle('[data-testid="yard-home"]'), marked: yardMarked })
   else missing.push('the home yard by its tag')
   const yardAt = await a<Pt | null>(page, 'return A.yardSpot(-1)')
   if (yardAt) list.push({ name: 'a building in the yard', card: 'yard-card', thing: 'yard-home', head: ['home yard'], at: yardAt, ends: 'return F.pickAt(END.x, END.y).yard === -1', marked: yardMarked })
@@ -306,7 +320,7 @@ async function cases(page: Page, t: string): Promise<{ list: Case[]; missing: st
   const who = state.people[0]
   const chip = who ? await a<(Pt & { box: Box }) | null>(page, `return A.handle('[data-testid="unit-${who.id}"]')`) : null
   if (chip) list.push({ name: 'a person\'s chip', card: 'person-card', thing: `person-${who.id}`, head: [who.name, /Field hand|Tractor operator/], at: { x: chip.x, y: chip.y }, handle: chip.box, onBar: true,
-    ends: onBox(chip.box), marked: `return app.unit === ${who.id} && document.querySelector('#ui [data-testid="unit-${who.id}"]').getAttribute('aria-pressed') === 'true'` })
+    ends: onHandle(`[data-testid="unit-${who.id}"]`), marked: `return app.unit === ${who.id} && document.querySelector('#ui [data-testid="unit-${who.id}"]').getAttribute('aria-pressed') === 'true'` })
   else missing.push('a person\'s chip')
   // A machine nobody is on, and a neighbour's thing.
   for (const [name, kinds, head] of [['a machine', ['tractor', 'truck'], /Your (second |third )?(tractor|truck)/], ['a neighbour\'s thing', ['cow', 'deer'], /neighbour|deer/i]] as const) {
@@ -392,14 +406,14 @@ test('clicking another thing moves the card; Shift adds a field to it; the card 
   expect(spots.length).toBeGreaterThanOrEqual(3)
   const [one] = spots
   await page.mouse.click(one.at.x, one.at.y)
-  expect(await a<number>(page, `return A.wait('card', 'field-${one.i}')`)).toBeGreaterThanOrEqual(0)
+  expect(await a<number>(page, `return A.shown('card', 'field-${one.i}')`)).toBeGreaterThanOrEqual(0)
   await page.waitForTimeout(380)
   // A second field, where the first one's card does not lie: the card moves to it.
   const free = async (not: number[]) => (await a<{ i: number; at: Pt }[]>(page, `return [0, 1, 2, 3, 4, 5].map(i => ({ i, at: A.fieldSpot(i) })).filter(x => x.at)`)).find(x => !not.includes(x.i))
   const two = (await free([one.i]))!
   expect(two, 'a second field is in reach beside the first one\'s card').toBeTruthy()
   await page.mouse.click(two.at.x, two.at.y)
-  expect(await a<number>(page, `return A.wait('card', 'field-${two.i}')`)).toBeGreaterThanOrEqual(0)
+  expect(await a<number>(page, `return A.shown('card', 'field-${two.i}')`)).toBeGreaterThanOrEqual(0)
   await page.waitForTimeout(380)
   let c = (await cards(page))
   expect(c.map(x => x.id)).toEqual(['card'])
@@ -411,7 +425,7 @@ test('clicking another thing moves the card; Shift adds a field to it; the card 
   await page.keyboard.down('Shift')
   await page.mouse.click(three.at.x, three.at.y)
   await page.keyboard.up('Shift')
-  expect(await a<number>(page, `return A.wait('card', 'fields-${two.i}+${three.i}')`)).toBeGreaterThanOrEqual(0)
+  expect(await a<number>(page, `return A.shown('card', 'fields-${two.i}+${three.i}')`)).toBeGreaterThanOrEqual(0)
   await page.waitForTimeout(380)
   c = await cards(page)
   expect(c.map(x => x.id)).toEqual(['card'])
@@ -426,7 +440,7 @@ test('clicking another thing moves the card; Shift adds a field to it; the card 
   const who = await a<{ id: number; at: Pt } | null>(page, `for (const u of app.campaign.crew) { const at = A.unitSpot(u.id); if (at) return { id: u.id, at } } return null`)
   if (who) {
     await page.mouse.click(who.at.x, who.at.y)
-    expect(await a<number>(page, `return A.wait('whois', 'person-${who.id}')`)).toBeGreaterThanOrEqual(0)
+    expect(await a<number>(page, `return A.shown('whois', 'person-${who.id}')`)).toBeGreaterThanOrEqual(0)
     await page.waitForTimeout(380)
     expect((await cards(page)).map(x => x.id)).toEqual(['whois'])
   }
@@ -435,7 +449,7 @@ test('clicking another thing moves the card; Shift adds a field to it; the card 
   await tier(page, 'field')
   const at = (await a<{ i: number; at: Pt }[]>(page, `return [3, 0, 1, 2, 4, 5].map(i => ({ i, at: A.fieldSpot(i) })).filter(x => x.at)`))[0]
   await page.mouse.click(at.at.x, at.at.y)
-  expect(await a<number>(page, `return A.wait('card', 'field-${at.i}')`)).toBeGreaterThanOrEqual(0)
+  expect(await a<number>(page, `return A.shown('card', 'field-${at.i}')`)).toBeGreaterThanOrEqual(0)
   await page.mouse.move(at.at.x - 40, at.at.y + 60)
   await page.mouse.wheel(0, 240)
   await page.keyboard.down('ArrowLeft')
@@ -473,7 +487,7 @@ test('on a phone the card is a sheet at the foot, headed with the thing, notched
   const size = page.viewportSize()!
   const names = await a<string[]>(page, 'return sim.FIELD_NAMES')
   const sheet = async (id: string, thing: string, head: (string | RegExp)[], pin: string, name: string) => {
-    expect(await a<number>(page, `return A.wait(${JSON.stringify(id)}, ${JSON.stringify(thing)})`), `${name}: its sheet is up`).toBeGreaterThanOrEqual(0)
+    expect(await a<number>(page, `return A.shown(${JSON.stringify(id)}, ${JSON.stringify(thing)})`), `${name}: its sheet is up`).toBeGreaterThanOrEqual(0)
     // (the land is framed above the sheet, and comes to rest)
     await page.waitForTimeout(1600)
     const up = await cards(page)
@@ -494,15 +508,19 @@ test('on a phone the card is a sheet at the foot, headed with the thing, notched
   }
   // A field, by its tag.
   const i = await a<number>(page, `return [3, 0, 2, 4, 5, 1].find(i => !!A.handle('.plate[data-k="field-' + i + '"]'))`)
-  await page.locator(`#ui .plate[data-k="field-${i}"]`).tap()
-  await sheet('card', `field-${i}`, [/Potato field|Resting field/, names[i]], `return F.anchor(${i})`, 'a field')
+  const tag = (await a<Pt | null>(page, `return A.handle('.plate[data-k="field-${i}"]')`))!
+  await page.touchscreen.tap(tag.x, tag.y)
+  // (tapped by its tag, the sheet's notch points at the tag; the field itself is in view above the sheet with it)
+  await sheet('card', `field-${i}`, [/Potato field|Resting field/, names[i]], `const e = document.querySelector('#ui .plate[data-k="field-${i}"]'); const m = A.mid(e); return { x: m.x, y: m.y, visible: A.vis(e) && F.anchor(${i}).visible }`, 'a field')
+  const anchor = await a<{ x: number; y: number; visible: boolean }>(page, `return F.anchor(${i})`)
+  expect(anchor.visible && anchor.y < (await cards(page))[0].rect.top, 'the field is in view above its sheet').toBe(true)
   await page.getByTestId('card-close').tap()
   await page.waitForTimeout(400)
   expect((await cards(page)).map(x => x.id), 'the cross closes the sheet').toEqual([])
   // The yard.
   const yardTag = await a<Pt | null>(page, `return A.handle('[data-testid="yard-home"]')`)
-  if (yardTag) await page.getByTestId('yard-home').tap()
-  else await a(page, 'app.selectYard(-1)')
+  if (yardTag) await page.touchscreen.tap(yardTag.x, yardTag.y)
+  if (await a<number>(page, 'return app.yard') !== -1) await a(page, 'app.selectYard(-1)')
   await sheet('yard-card', 'yard-home', ['home yard'], 'return F.yardPin(-1)', 'the yard')
   await page.getByTestId('yard-close').tap()
   await page.waitForTimeout(400)

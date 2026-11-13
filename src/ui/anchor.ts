@@ -17,8 +17,12 @@ export interface Ask {
   blocks?: Box[]
   // The handle that was clicked, when it was one (a tag, a chip): the card lies beside it, never on it.
   keep?: Box | null
-  // What it keeps off when it can: the thing's own middle.
+  // What it keeps off unless nothing else will do: the thing's own middle.
   avoid?: Box[]
+  // What it would rather not lie over: the thing's tag, a person's pin.
+  spare?: Box[]
+  // The other tags on the land: of two sides that will do, the one that hides fewer of them.
+  others?: Box[]
   // The side it lies on now: held while it still serves, so a small move of the camera never flips it.
   prev?: Side | null
   gap?: number
@@ -128,7 +132,9 @@ export function placeCard(a: Ask): Placed {
     if (keep && meets(r, keep)) s += 8000
     if (blocks.some(b => meets(r, b))) s += 6000
     if (c.h < Math.min(h0, LEAST)) s += 3000
-    for (const v of a.avoid ?? []) if (meets(r, v)) s += 600
+    for (const v of a.avoid ?? []) if (meets(r, v)) s += 2000
+    for (const v of a.spare ?? []) if (meets(r, v)) s += 300
+    for (const v of a.others ?? []) if (meets(r, v)) s += 35
     // How far it stands from what was clicked: the point, or the whole handle when it was one.
     s += Math.max(0, (keep ? boxGap(r, keep) : distance(r, p)) - gap - 2) * 4
     // A card cut short has to be scrolled to reach its orders: worse than standing a little further off.
@@ -136,6 +142,13 @@ export function placeCard(a: Ask): Placed {
     if (!best || s < best.s) best = { x: c.x, y: c.y, h: c.h, side, s }
   }
   return { x: best!.x, y: best!.y, h: best!.h, side: best!.side, away, at: p }
+}
+
+// How far down a card whose top left corner stays where it is may reach: the window's foot, or the first bar under it.
+export function roomUnder(x: number, y: number, w: number, win: Box, blocks: Box[] = []): number {
+  let bottom = win.bottom
+  for (const b of blocks) if (b.right > x - 4 && b.left < x + w + 4 && b.bottom > y && b.top < bottom) bottom = Math.max(y, b.top - 6)
+  return bottom
 }
 
 // The tether: from the card's edge to the thing. to: the point on the thing (or the nearest edge of the handle).

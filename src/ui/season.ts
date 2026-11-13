@@ -207,6 +207,8 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   }
 
   let foot = { key: '', bottom: 0 }
+  // The foot of the boards themselves, without the slip that hangs from one.
+  let board = 0
   // An alert that lies over a tag or a stamp lets the press through to it, faded: a press meant for a stamp never
   // opens what an alert goes to (10).
   let clearAt = 0
@@ -406,6 +408,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   const people = pins(ctx, plateLayer, {
     tags: () => [...P.boxes(), ...yardMarks.filter(m => !m.wrap.hidden && m.at).map(m => new DOMRect(m.at!.x - m.w / 2, m.at!.y - 22, m.w, 44))], covers,
     stopped: () => stoppedBy(app.campaign),
+    board: () => board,
   })
 
   // ------------------------------------------------------------ the yards on the land
@@ -441,7 +444,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       const a = ctx.view.yardAnchor(m.y)
       const ins = app.insets
       // The yard in hand keeps its tag: its own card stands beside it, never on it.
-      const ok = a.visible && Number.isFinite(a.x) && Number.isFinite(a.y) && a.y > ins.top + 40 && a.y < innerHeight - ins.bottom && a.x > ins.left + 60 && a.x < innerWidth - ins.right - 60 &&
+      const ok = a.visible && Number.isFinite(a.x) && Number.isFinite(a.y) && a.y > (app.yard === m.y ? Math.min(ins.top, board) : ins.top) + 40 && a.y < innerHeight - ins.bottom && a.x > ins.left + 60 && a.x < innerWidth - ins.right - 60 &&
         (app.yard === m.y || !cv.some(r => a.x > r.left - 80 && a.x < r.right + 80 && a.y > r.top - 20 && a.y < r.bottom + 20))
       m.wrap.classList.toggle('gone', !ok)
       m.at = ok ? { x: a.x, y: a.y } : null
@@ -459,10 +462,17 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     const ins = app.insets
     const bars = [...crew.querySelectorAll<HTMLElement>('.queue, .timebook'), clockSlot, paused, running, homeKey, grid.el, trayHost.firstElementChild as HTMLElement | null]
     const blocks = bars.filter((x): x is HTMLElement => !!x && !x.hidden && x.offsetParent !== null && x.offsetHeight > 0).map(x => { const r = x.getBoundingClientRect(); return { left: r.left, top: r.top, right: r.right, bottom: r.bottom } })
+    // The alerts' place beside the time book is kept clear whether or not a slip lies there now, so a slip that comes
+    // is never under a card (and no card moves when one comes). Under 1400 the alerts wait while a field is in hand.
+    const book = crew.querySelector<HTMLElement>('.timebook')
+    if (book && book.offsetParent !== null && !(ctx.layout() === 'mid' && el.classList.contains('selected'))) {
+      const b = book.getBoundingClientRect()
+      blocks.push({ left: b.right + 8, top: b.bottom - 56, right: Math.min(innerWidth - 8, b.right + 536), bottom: b.bottom })
+    }
     landNow = { win: { left: 8, top: ins.top + 8, right: innerWidth - 8, bottom: innerHeight - 8 }, blocks }
     return landNow
   }
-  ties().setLand(land)
+  ties().setLand(() => ({ ...land(), tags: P.boxes() }))
   function placeCards(): void {
     const layout = ctx.layout()
     const quiet = incident.isUp()
@@ -673,6 +683,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
         return { left: l, top: t0, right: l + x.offsetWidth, bottom: t0 + x.offsetHeight }
       }
       const t = Math.max(top.el.getBoundingClientRect().bottom, ...[...top.el.querySelectorAll<HTMLElement>('.almanac > .mount, .bank > .mount')].map(x => x.getBoundingClientRect().bottom))
+      board = Math.max(0, ...[...top.el.querySelectorAll<HTMLElement>('.almanac > .mount, .bank > .mount')].map(x => x.getBoundingClientRect().bottom))
       const vis = (x: HTMLElement) => !x.hidden && x.offsetParent !== null && x.offsetHeight > 0
       // The time book and its list at the foot, and the clock with them on a phone. Not the alerts: they come and go,
       // and the picture is centred on the free land, so counting them would move the land under the pointer (at

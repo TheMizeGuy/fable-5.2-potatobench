@@ -1,6 +1,6 @@
 // Where a card opens (src/ui/anchor.ts): beside the point clicked, by one rule for every card.
 import { describe, expect, it } from 'vitest'
-import { distance, GAP, holds, KEEP, meets, notchOf, placeCard, tetherOf, type Ask, type Box, type Pt } from '../src/ui/anchor.ts'
+import { distance, GAP, holds, KEEP, meets, notchOf, placeCard, roomUnder, tetherOf, type Ask, type Box, type Pt } from '../src/ui/anchor.ts'
 
 const WIN: Box = { left: 8, top: 158, right: 1272, bottom: 712 }
 // The list and the people bar at the foot's left, a chip under the bank board at the right.
@@ -89,6 +89,22 @@ describe('a card beside the point clicked', () => {
     const c = placeCard(ask(p, { avoid: [middle] }))
     expect(c.side).toBe('left')
     expect(meets(rect(c), middle)).toBe(false)
+    // Its tag is spared too where the other side is free; with no other side to go to, the card lies over the tag.
+    const tag: Box = { left: 560, top: 380, right: 700, bottom: 420 }
+    expect(placeCard(ask(p, { spare: [tag] })).side).toBe('left')
+    expect(placeCard(ask({ x: 300, y: 250 }, { spare: [{ left: 340, top: 240, right: 480, bottom: 280 }] })).side).toBe('right')
+    // Short of room everywhere else, the card is cut short before it lies over the middle.
+    const low = placeCard(ask({ x: 300, y: 300 }, { avoid: [{ left: 380, top: 290, right: 400, bottom: 310 }], size: { w: 430, h: 520 } }))
+    expect(meets(rect(low), { left: 380, top: 290, right: 400, bottom: 310 })).toBe(false)
+  })
+
+  it('of two sides that will do, takes the one that hides fewer of the other tags', () => {
+    const p = { x: 640, y: 400 }
+    const tags: Box[] = [{ left: 700, top: 380, right: 860, bottom: 420 }, { left: 800, top: 520, right: 960, bottom: 560 }]
+    expect(placeCard(ask(p)).side).toBe('right')
+    expect(placeCard(ask(p, { others: tags })).side).toBe('left')
+    // One tag on each side: to the right, as ever.
+    expect(placeCard(ask(p, { others: [tags[0], { left: 300, top: 380, right: 460, bottom: 420 }] })).side).toBe('right')
   })
 
   it('holds its side and moves no further than the point does under a small move of the camera', () => {
@@ -128,6 +144,13 @@ describe('a card beside the point clicked', () => {
     expect(c.h).toBeLessThan(520)
     expect(BARS.some(b => meets(r, b))).toBe(false)
     expect(r.top).toBeGreaterThanOrEqual(WIN.top)
+  })
+
+  it('a card that grows keeps its corner: there is room under it down to the window\'s foot or the first bar', () => {
+    expect(roomUnder(600, 300, 430, WIN, BARS)).toBe(WIN.bottom)
+    expect(roomUnder(60, 200, 430, WIN, BARS)).toBe(BARS[0].top - 6)
+    // (a bar above the card's top is not under it)
+    expect(roomUnder(900, 260, 430, WIN, BARS)).toBe(WIN.bottom)
   })
 
   it('waits at the nearest edge when the thing has left the window', () => {

@@ -42,6 +42,8 @@ test('spring: the map, the plan card and its papers', async ({ page }) => {
   await page.getByTestId('equipment-open').click()
   expect(await serious(page), 'equipment').toEqual([])
   await page.getByTestId('equipment-close').click()
+  // (the field's card stands beside its field and may lie over the next marker: it is put away first)
+  await page.keyboard.press('Escape')
   await page.getByTestId('land-10').click()
   expect(await serious(page), 'land card').toEqual([])
   await page.getByTestId('crew-open').click()

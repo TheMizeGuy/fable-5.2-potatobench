@@ -226,7 +226,11 @@ export function whois(ctx: Ctx, layer: HTMLElement): Whois {
     if (foot?.visible) mark.style.transform = `translate3d(${foot.x.toFixed(1)}px, ${foot.y.toFixed(1)}px, 0)`
   }
 
-  const off = app.on(e => { if (e.type === 'unit' || e.type === 'inspect' || e.type === 'screen' || e.type === 'select' || e.type === 'yard') ctx.dirty() })
+  const off = app.on(e => {
+    // One card at a time: a field or a yard taken in hand puts a thing's name card away.
+    if ((e.type === 'select' && app.selection.length > 0) || (e.type === 'yard' && e.yard !== 0)) app.inspect(null)
+    if (e.type === 'unit' || e.type === 'inspect' || e.type === 'screen' || e.type === 'select' || e.type === 'yard') ctx.dirty()
+  })
 
   return {
     el,
