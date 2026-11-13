@@ -119,11 +119,11 @@ function audit(o: { scope: string; taller: number }): Found {
     }
     if (off) {
       if (stands(face) >= 3) faults.push(`${at}: greyed, yet it stands off the paper`)
-      if (getComputedStyle(e).cursor === 'pointer') faults.push(`${at}: greyed, yet the pointer says press`)
+      if (/pointer$/.test(getComputedStyle(e).cursor)) faults.push(`${at}: greyed, yet the pointer says press`)
       if ((el as HTMLButtonElement).disabled && !el.title && !el.querySelector('.catch') && !el.getAttribute('aria-describedby')) faults.push(`${at}: greyed without a reason`)
       continue
     }
-    if (getComputedStyle(e).cursor !== 'pointer') faults.push(`${at}: pressable, but the pointer does not say so (${getComputedStyle(e).cursor})`)
+    if (!/pointer$/.test(getComputedStyle(e).cursor)) faults.push(`${at}: pressable, but the pointer does not say so (${getComputedStyle(e).cursor.replace(/url\([^)]*\)/, 'url()')})`)
     const word = cs.textDecorationLine.includes('underline')
     const onLand = e.matches(LAND)
     const range = e.matches('input[type="range"]')
@@ -177,7 +177,7 @@ function audit(o: { scope: string; taller: number }): Found {
     if (e.matches('label') || e.querySelector(':scope > input')) continue
     out.facts++
     const cs = getComputedStyle(e)
-    if (cs.cursor === 'pointer') faults.push(`${say(e)}: only read, but the pointer says press`)
+    if (/pointer$/.test(cs.cursor)) faults.push(`${say(e)}: only read, but the pointer says press`)
     if (stands(e) >= 3) faults.push(`${say(e)}: only read, but it stands off the paper like a key`)
     if ((e as unknown as { __click?: boolean }).__click && !e.matches('.hud, .veil, .shade, .paper-layer, .dialog')) faults.push(`${say(e)}: listens for a press, but is not a button`)
   }

@@ -15,7 +15,7 @@ test('the pointer is the game\'s own, and nothing is picked up as text', async (
   })
   expect(look.body).toMatch(/^url\(.*\) 5 3, default$/)
   expect(look.key).toMatch(/^url\(.*\) 13 3, pointer$/)
-  expect(look.land).toMatch(/^url\(.*\), (grab|pointer)$/)
+  expect(look.land).toMatch(/^url\(.*\) \d+ \d+, (grab|pointer)$/)
   expect(look.select).toBe('none')
   // A drag across the boards and a double click on a figure leave nothing selected.
   await page.mouse.move(60, 60)
