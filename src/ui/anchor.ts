@@ -111,19 +111,22 @@ export function placeCard(a: Ask): Placed {
   // Under a bar: the nearest free edge of it.
   if (under) p = { x: p.x, y: (under.top + under.bottom) / 2 < (win.top + win.bottom) / 2 ? Math.min(win.bottom, under.bottom) : Math.max(win.top, under.top) }
 
-  // The free height of a column of the window: between the bars above the point and the bars below it. A handle on
-  // a bar (a chip in the people bar) is not on the land at all: every bar of the foot is then under the land, the
-  // list that stands between the chip and the land with them, and every bar of the top over it.
+  // The free height of a column of the window: the stretch between the bars in it that the point lies in, when the
+  // card is of use there; failing that the nearest stretch it is of use in (a chip on the people bar: the land over
+  // the bar and its list; someone standing at the window's foot beside the bars: the land over them), and failing
+  // that the tallest.
   const onBar = blocks.some(b => holds(b, p, 1))
   const band = (x0: number, x1: number) => {
-    let top = win.top, bottom = win.bottom
-    for (const b of blocks) {
-      if (b.right <= x0 - 4 || b.left >= x1 + 4) continue
-      const from = onBar ? (win.top + win.bottom) / 2 : p.y
-      if ((b.top + b.bottom) / 2 < from) top = Math.max(top, b.bottom + 6)
-      else bottom = Math.min(bottom, b.top - 6)
-    }
-    return { top, bottom: Math.max(top, bottom) }
+    const cuts = blocks.filter(b => !(b.right <= x0 - 4 || b.left >= x1 + 4)).map(b => [b.top - 6, b.bottom + 6]).sort((f, g) => f[0] - g[0])
+    const free: [number, number][] = []
+    let y = win.top
+    for (const [t, u] of cuts) { if (t > y) free.push([y, Math.min(t, win.bottom)]); y = Math.max(y, u) }
+    if (y < win.bottom) free.push([y, win.bottom])
+    if (!free.length) return { top: win.top, bottom: win.top }
+    const off = (f: [number, number]) => (p.y < f[0] ? f[0] - p.y : p.y > f[1] ? p.y - f[1] : 0)
+    const ok = free.filter(f => f[1] - f[0] >= least)
+    const pick = ok.length ? ok.sort((f, g) => off(f) - off(g))[0] : free.sort((f, g) => (g[1] - g[0]) - (f[1] - f[0]))[0]
+    return { top: pick[0], bottom: Math.max(pick[0], pick[1]) }
   }
 
   // The other tags that are not the thing's own (its tag is in keep or spare).
@@ -176,20 +179,34 @@ export function placeCard(a: Ask): Placed {
       }
       // Cut short by a bar under it or a slip over it: stepped along that side until it stands clear of them, whole.
       if (usual.h < h0 - 2) {
+        // A handle that stands on a bar or a panel (a chip in the people bar, a row of the grid) is among the
+        // interface's own furniture, not on the land: its card may stand past any of it (the bar, the work list over
+        // the bar, the grid open above them), wherever it has its height. The nearest such place wins.
+        const among = !!keep && onBar
         for (const b of blocks) {
-          if (b.right <= usual.x - 4 || b.left >= usual.x + w + 4) continue
+          if (!among && (b.right <= usual.x - 4 || b.left >= usual.x + w + 4)) continue
           const x = side === 'right' ? b.right + 6 : b.left - 6 - w
-          // (beside the very bar or panel its handle stands on is never too far: a chip in a wide people bar, a
-          // row of the grid; and for a chip on a bar at the foot, the work list that lies over that bar with it)
-          const own = !!keep && (meets(b, keep) || (onBar && (b.top + b.bottom) / 2 > (win.top + win.bottom) / 2))
-          if (x < win.left || x + w > win.right || (!own && Math.abs(x - usual.x) > ASIDE - gap)) continue
+          if (x < win.left || x + w > win.right || (!among && Math.abs(x - usual.x) > ASIDE - gap)) continue
+          // (still on its own side of the point: never across it, beside some bar far off)
+          if (side === 'right' ? x < p.x : x + w > p.x) continue
           // Whole there, or at least taller: a card that can be whole nowhere still gets the most height there is.
           if (lay(side, null, x).h > usual.h + 1) starts.push({ off: x, aside: true })
         }
       }
     }
+    // Over or under the point and cut short (or with no room) by a bar in its column: slid along until its column
+    // is clear of that bar, the point still within its width.
+    if (!upright && (usual.forced || usual.h < h0 - 2)) {
+      for (const b of blocks) {
+        if (b.right <= usual.x - 4 || b.left >= usual.x + w + 4) continue
+        for (const x of [b.left - 6 - w, b.right + 6]) {
+          const c = lay(side, x)
+          if (Math.abs(c.x - x) < 1 && !c.forced && c.h > usual.h + 1) starts.push({ off: x, aside: false })
+        }
+      }
+    }
     for (const st of starts) {
-      const first = st.off === null ? usual : lay(side, null, st.off)
+      const first = st.off === null ? usual : upright ? lay(side, null, st.off) : lay(side, st.off)
       tries.push({ ...first, aside: st.aside })
       if (first.forced) continue
       // Slid to step just clear of each tag it would lie over, one way and the other.

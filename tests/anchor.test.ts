@@ -184,6 +184,27 @@ describe('a card beside the point clicked', () => {
     expect(meets(cb(held), bar)).toBe(false)
   })
 
+  it('someone at the window\'s foot beside the bars: their card is whole over them, slid along clear of a chip in its way', () => {
+    // 1280 by 720: the work list and the people bar at the left of the foot, the clock's chip under the cash board,
+    // and a hand standing at the very foot of the window. A card 470 px tall.
+    const win: Box = { left: 8, top: 171, right: 1272, bottom: 712 }
+    const blocks: Box[] = [{ left: 16, top: 537, right: 474, bottom: 581 }, { left: 16, top: 589, right: 406, bottom: 704 }, { left: 1062, top: 222, right: 1264, bottom: 262 }, { left: 34, top: 166, right: 364, bottom: 212 }]
+    const at = { x: 862, y: 708 }
+    const c = placeCard({ point: at, size: { w: 452, h: 470 }, least: 440, win, blocks })
+    const r: Box = { left: c.x, top: c.y, right: c.x + 452, bottom: c.y + c.h }
+    expect(c.h).toBe(470)
+    expect(c.side).toBe('above')
+    expect(blocks.some(b => meets(r, b))).toBe(false)
+    expect(holds(r, at)).toBe(false)
+    expect(at.x).toBeGreaterThan(r.left)
+    expect(at.x).toBeLessThan(r.right)
+    expect(r.top).toBeGreaterThanOrEqual(win.top)
+    expect(distance(r, at)).toBeLessThanOrEqual(60)
+    // Never the sliver under the bars.
+    const beside = placeCard({ point: { x: 500, y: 708 }, size: { w: 452, h: 470 }, least: 440, win, blocks })
+    expect(beside.h).toBeGreaterThan(300)
+  })
+
   it('waits at the nearest edge when the thing has left the window', () => {
     for (const p of [{ x: 1500, y: 400 }, { x: -200, y: 300 }, { x: 640, y: -90 }, { x: 640, y: 1200 }]) {
       const c = placeCard(ask(p))
@@ -389,6 +410,24 @@ describe('keeping off the other tags and people', () => {
     const tallg = placeCard({ point: { x: 90, y: 450 }, size: { w: 452, h: 660 }, least: 520, win, blocks: [grid4, { left: 16, top: 617, right: 474, bottom: 661 }, bar, slip], keep: { left: 35, top: 428, right: 140, bottom: 472 } })
     expect(tallg.x).toBe(grid4.right + 6)
     expect(tallg.h).toBe(win.bottom - win.top)
+    // A chip pressed while the grid of who does what is open over the list and the bar: between the grid and the
+    // list there is a slit; the card stands past the grid, whole.
+    const win900: Box = { left: 8, top: 171, right: 1432, bottom: 892 }
+    const grid9: Box = { left: 16, top: 231, right: 528, bottom: 603 }
+    const list9: Box = { left: 16, top: 737, right: 190, bottom: 781 }
+    const bar9: Box = { left: 16, top: 788, right: 406, bottom: 884 }
+    const chip9: Box = { left: 106, top: 796, right: 189, bottom: 876 }
+    const open9 = placeCard({ point: { x: 147, y: 836 }, size: { w: 452, h: 520 }, least: 480, win: win900, blocks: [grid9, list9, bar9, { left: 34, top: 166, right: 364, bottom: 212 }], keep: chip9 })
+    expect(open9.h).toBe(520)
+    expect(open9.x).toBe(grid9.right + 6)
+    expect([grid9, list9, bar9].some(b => meets(box(open9, 452), b))).toBe(false)
+    // Tags on the land are no reason to carry a chip's card off across the window to stand beside some other bar:
+    // it stays at the edge of its own.
+    const chipFar: Box = { left: 1062, top: 222, right: 1264, bottom: 262 }
+    const tagsNear = [{ left: 430, top: 300, right: 590, bottom: 340, weight: 3 }, { left: 440, top: 420, right: 600, bottom: 460, weight: 3 }]
+    const stay = placeCard({ point: { x: 147, y: 645 }, size: { w: 452, h: 474 }, least: 440, win: win720, blocks: [{ left: 16, top: 537, right: 182, bottom: 581 }, bar4, chipFar, { left: 34, top: 166, right: 364, bottom: 212 }], keep: chip4, others: tagsNear })
+    expect(stay.x).toBe(bar4.right + 6)
+    expect(stay.h).toBe(474)
     // Never a strip: whatever the height asked, it is given at least the land over the list.
     const tall = placeCard({ point: at, size: { w: 452, h: 700 }, win, blocks, keep: chip })
     expect(tall.h).toBeGreaterThanOrEqual(380)

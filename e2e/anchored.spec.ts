@@ -270,9 +270,10 @@ async function hold(page: Page, k: Case, label: string, close: 'Escape' | 'groun
   const reach = c.aside ? 190 : k.onBar ? 100 : 60
   if (c.aside) expect.soft(c.fits && !c.cut, say('stepped aside from the point, it is whole')).toBe(true)
   if (k.onBar && c.aside) {
-    // Beside the very bar its chip stands in, however wide the bar: right at its edge.
-    const bar = (await a<Box[]>(page, `return A.rects('.timebook')`))[0]
-    expect.soft(Math.abs(c.rect.left - bar.right) <= 16 || Math.abs(bar.left - c.rect.right) <= 16, say(`stepped aside, it stands at the edge of the people bar (card ${JSON.stringify(c.rect)}, bar ${JSON.stringify(bar)})`)).toBe(true)
+    // Beside the very bar its chip stands in, however wide the bar: right at its edge, or at the edge of the work
+    // list that lies over the bar when the list is the wider.
+    const edges = await a<Box[]>(page, `return A.rects('.timebook, .queue')`)
+    expect.soft(edges.some(b => Math.abs(c.rect.left - b.right) <= 16 || Math.abs(b.left - c.rect.right) <= 16), say(`stepped aside, it stands at the edge of the people bar or its work list (card ${JSON.stringify(c.rect)}, bars ${JSON.stringify(edges)})`)).toBe(true)
   } else if (k.handle) expect.soft(apart(c.rect, k.handle), say(`its nearest edge is within ${reach} px of the handle clicked (${Math.round(apart(c.rect, k.handle))} px)`)).toBeLessThanOrEqual(reach)
   else expect.soft(away(c.rect, from), say(`its nearest edge is within ${reach} px of the point clicked (${Math.round(away(c.rect, from))} px)`)).toBeLessThanOrEqual(reach)
   expect.soft(holds(c.rect, from), say('does not cover the point clicked')).toBe(false)
@@ -1248,6 +1249,110 @@ for (const [w, h] of [[1280, 800], [1280, 720]] as const) {
     await page.waitForTimeout(400)
     await page.getByTestId(`grid-person-${hands[0].id}`).click()
     await page2(hands[0].id, hands[0].name, 'from the grid')
+    expect(errors, errors.join('\n')).toEqual([])
+  })
+}
+
+for (const [w, h] of [[1440, 900], [1280, 800], [1280, 720]] as const) {
+  test(`every key of a person's page can be pressed, and its body stays where the wheel put it, ${w} by ${h}`, async ({ page, isMobile, browserName }) => {
+    test.skip(isMobile || browserName !== 'chromium', 'a desk window')
+    test.setTimeout(420_000)
+    const errors = watchErrors(page)
+    await page.setViewportSize({ width: w, height: h })
+    await farm(page)
+    // One of the hands worked to the bone: their page has the most to say, and Rest is the key that matters.
+    await a(page, 'app.campaign.crew[1].tired = 0.97; app.do({ t: "priority", unit: app.campaign.crew[1].id, work: "pack", level: app.campaign.crew[1].prio.pack })')
+    const hands = await a<{ id: number; name: string }[]>(page, `return app.campaign.crew.filter(u => u.kind !== 'farmer').map(u => ({ id: u.id, name: u.name.split(' ')[0] }))`)
+    // Every key the card shows can be pressed as a player presses it: Playwright's own test of a click (in view after
+    // scrolling to it, holding still, nothing over it), without the press.
+    const pressable = async (id: string, how: string) => {
+      const keys = await a<string[]>(page, `return [...document.querySelectorAll('#ui [data-testid="${id}"] button')].filter(b => A.vis(b) && !b.disabled).map(b => b.dataset.testid)`)
+      expect(keys.length, `${w}x${h}, ${how}: the card has its keys`).toBeGreaterThanOrEqual(5)
+      const stuck: string[] = []
+      for (const k of keys) {
+        const ok = await page.locator(`#ui [data-testid="${id}"] [data-testid="${k}"]`).click({ trial: true, timeout: 3000 }).then(() => true, () => false)
+        if (!ok) stuck.push(k)
+      }
+      if (stuck.length) {
+        console.log(`${w}x${h}, ${how}: ` + await a<string>(page, `const el = document.querySelector('#ui [data-testid="${id}"]'); const r = x => { if (!x) return null; const b = x.getBoundingClientRect(); return [Math.round(b.left), Math.round(b.top), Math.round(b.width), Math.round(b.height)] }
+          const body = el.querySelector(':scope > .card-body'); return JSON.stringify({ card: r(el), max: el.style.maxHeight, side: el.dataset.side, aside: el.dataset.aside, head: r(el.querySelector(':scope > header')), body: r(body), bodyScroll: body ? [body.scrollHeight, body.clientHeight, body.scrollTop] : null, foot: r(el.querySelector(':scope > .card-foot')) })`))
+        if (SHOTS) await page.screenshot({ path: `${SHOTS}/keys-${w}x${h}-${how.replace(/\W+/g, '-')}.png` })
+      }
+      expect.soft(stuck, `${w}x${h}, ${how}: every key can be pressed (of ${keys.join(', ')})`).toEqual([])
+      return keys
+    }
+    // The body between the head and the foot: wheeled down, it stays there through two seconds of the game's updates.
+    const wheeled = async (id: string, how: string) => {
+      const body = page.locator(`#ui [data-testid="${id}"] > .card-body`)
+      const room = await body.evaluate(b => [b.scrollHeight, b.clientHeight])
+      if (room[0] <= room[1] + 1) return
+      const b = (await body.boundingBox())!
+      await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2)
+      await page.mouse.wheel(0, 60)
+      await page.waitForTimeout(250)
+      const put = await body.evaluate(x => x.scrollTop)
+      expect.soft(put, `${w}x${h}, ${how}: the body scrolls under the wheel`).toBeGreaterThan(0)
+      await a(page, 'app.setSpeed(1)')
+      await page.waitForTimeout(2000)
+      await a(page, 'app.setSpeed(0); app.campaign.incidents = []')
+      await page.waitForTimeout(300)
+      expect.soft(await body.evaluate(x => x.scrollTop), `${w}x${h}, ${how}: after two seconds of the game the body is where the wheel put it`).toBe(put)
+      // A whole row of keys shows at once in the body.
+      expect.soft(room[1], `${w}x${h}, ${how}: the body has room for a row of keys and the line over it (${room[1]} px)`).toBeGreaterThanOrEqual(72)
+    }
+    for (const p of hands) {
+      await page.getByTestId(`unit-${p.id}`).click()
+      expect(await a<number>(page, `return A.shown('person-card', 'person-${p.id}')`)).toBeGreaterThanOrEqual(0)
+      await page.waitForTimeout(500)
+      const keys = await pressable('person-card', `${p.name} from the chip`)
+      for (const must of ['person-rest-now', 'person-foreman', 'person-dismiss', 'person-close']) expect.soft(keys, `${w}x${h}, ${p.name} from the chip`).toContain(must)
+      await wheeled('person-card', `${p.name} from the chip`)
+      if (SHOTS) await page.screenshot({ path: `${SHOTS}/keys-${w}x${h}-${p.name}-from-the-chip-after.png` })
+      await letGo(page)
+    }
+    // Beside someone on the land.
+    let on: { id: number; at: Pt } | null = null
+    for (const t of ['field', 'farm', 'yard']) {
+      await tier(page, t)
+      on = await a<{ id: number; at: Pt } | null>(page, `for (const id of ${JSON.stringify(hands.map(x => x.id))}) { const at = A.unitSpot(id); if (at) return { id, at } } return null`)
+      if (on) break
+    }
+    expect(on, 'a hired hand is on the land to click').not.toBeNull()
+    await page.mouse.click(on!.at.x, on!.at.y)
+    await page.waitForTimeout(100)
+    const pick = page.getByTestId(`pin-pick-${on!.id}`)
+    if (await pick.isVisible().catch(() => false)) await pick.click()
+    expect(await a<number>(page, `return A.shown('whois', 'person-${on!.id}')`)).toBeGreaterThanOrEqual(0)
+    await page.waitForTimeout(500)
+    const keys = await pressable('whois', 'from the land')
+    for (const must of ['whois-rest-now', 'whois-follow', 'whois-letgo', 'whois-close']) expect.soft(keys, `${w}x${h}, from the land`).toContain(must)
+    await wheeled('whois', 'from the land')
+    await letGo(page)
+    // From the grid of who does what.
+    await page.keyboard.press('g')
+    await expect(page.getByTestId('work-grid')).toBeVisible()
+    await page.waitForTimeout(400)
+    for (const p of hands.slice(0, 2)) {
+      await page.getByTestId(`grid-person-${p.id}`).click()
+      expect(await a<number>(page, `return A.shown('person-card', 'person-${p.id}')`)).toBeGreaterThanOrEqual(0)
+      await page.waitForTimeout(500)
+      await pressable('person-card', `${p.name} from the grid`)
+      await wheeled('person-card', `${p.name} from the grid`)
+    }
+    // With the grid still open, from a chip in the people bar: the card is not squeezed between the grid and the list.
+    for (const p of [hands[2], hands[0]]) {
+      await page.getByTestId(`unit-${p.id}`).click()
+      expect(await a<number>(page, `return A.shown('person-card', 'person-${p.id}')`)).toBeGreaterThanOrEqual(0)
+      await page.waitForTimeout(500)
+      await expect(page.getByTestId('work-grid')).toBeVisible()
+      if (SHOTS) await page.screenshot({ path: `${SHOTS}/keys-${w}x${h}-${p.name}-from-the-chip-grid-open.png` })
+      const keys = await pressable('person-card', `${p.name} from the chip, the grid open`)
+      expect.soft(keys, `${w}x${h}, ${p.name} from the chip, the grid open`).toContain('person-rest-now')
+      const c = (await cards(page)).find(x => x.id === 'person-card')!
+      const g = (await page.getByTestId('work-grid').boundingBox())!
+      expect.soft(meets(c.rect, { left: g.x, top: g.y, right: g.x + g.width, bottom: g.y + g.height }), `${w}x${h}, ${p.name} from the chip, the grid open: the card is off the grid`).toBe(false)
+      await wheeled('person-card', `${p.name} from the chip, the grid open`)
+    }
     expect(errors, errors.join('\n')).toEqual([])
   })
 }
