@@ -9,6 +9,7 @@ import { term } from './glossary.ts'
 import { icon } from './icons.ts'
 import * as R from './rules.ts'
 import { storeCall } from './store-band.ts'
+import { expectedFrom } from './ticket-words.ts'
 import { coupon, range } from './system/parts.ts'
 import { agentLine } from './tutorial.ts'
 
@@ -245,7 +246,7 @@ function tray(weights: number[], marks: number[], v: S.Variety, W: number, close
 
 // The estimate before and now on one scale, with the hill itself as the violet mark. Staged, the band narrows from
 // the old range to the new one (a clip opening on the union of the two), and the figures count.
-function narrowing(before: S.Estimate | null, after: S.Estimate, hill: number, staged: boolean, delay: number): HTMLElement {
+function narrowing(before: S.Estimate | null, after: S.Estimate, hill: number, staged: boolean, delay: number): { rows: HTMLElement; caption: HTMLElement } {
   // The scale is fitted to these figures, so the narrowing is wide enough to see.
   const max = Math.ceil(Math.max(after.hi, before?.hi ?? 0, hill) * 1.2 / 50) * 50 || 50
   const digits = F.metric() ? 1 : 0
@@ -272,7 +273,7 @@ function narrowing(before: S.Estimate | null, after: S.Estimate, hill: number, s
       setTimeout(() => { band.style.cssText = `left:${x(after.lo)};width:calc(${x(after.hi)} - ${x(after.lo)})` }, 640)
     }, delay)
   }
-  return h('div', { class: 'narrowing' },
+  const rows = h('div', { class: 'narrowing' },
     before ? h('div', { class: 'nrow was' },
       h('span', { class: 't-label' }, term('Before', 'estimate before')),
       range({ lo: before.lo, hi: before.hi, max, label: `Before: ${F.perAreaSpan(before.lo, before.hi)}` }),
@@ -280,8 +281,9 @@ function narrowing(before: S.Estimate | null, after: S.Estimate, hill: number, s
     h('div', { class: 'nrow' },
       h('span', { class: 't-label' }, 'Now'),
       now,
-      h('b', { class: 'num' }, lo, '–', hi)),
-    h('p', { class: 't-caption' }, `Yield in ${F.perAreaUnit()}, from ${F.plural(after.digs, 'test dig')}. The tick is this hill, and one hill isn't the whole field, so the range moves but never narrows to one number.${F.cwtNote()}`))
+      h('b', { class: 'num' }, lo, '–', hi)))
+  const caption = h('p', { class: 't-caption tray-caption' }, `Yield in ${F.perAreaUnit()}, from ${F.plural(after.digs, 'test dig')}. The tick is this hill, and one hill isn't the whole field, so the range moves but never narrows to one number.${F.cwtNote()}`)
+  return { rows, caption }
 }
 
 // The tray paper for one test dig. It sits beside the land and does not stop the clock.
@@ -303,18 +305,23 @@ export function trayPaper(ctx: Ctx, e: S.GameEvent, before: S.Estimate | null, o
   const W = narrow ? Math.min(360, innerWidth - 48) : 360
   const staged = o.staged && !ctx.reduced()
   const arrive = Math.min(6, weights.length) * 90 + 420
+  const est = after ? narrowing(before, after, alone, staged, arrive + 500) : null
   const el = h('section', { class: `tray-paper sheet sys${staged ? ' staged' : ''}`, role: 'region', 'aria-label': `Test dig, ${S.FIELD_NAMES[e.field]}`, testid: 'sample-dialog', 'data-layout': ctx.layout() },
     h('header', { class: 'tray-head' },
       h('div', null,
         h('p', { class: 't-label' }, icon('sample', 'i'), 'Test dig'),
         h('h2', null, S.FIELD_NAMES[e.field])),
       h('button', { class: 'close', type: 'button', 'aria-label': 'Close the tray', testid: 'sample-close', onclick: o.onClose }, icon('close', 'i'))),
-    h('p', { class: 'tray-lede' }, `${F.date(c.year, e.day)}, one hill of ${v.name}. ${F.plural(weights.length, 'potato', 'potatoes')} weighing `, h('span', { class: 'stamped' }, F.hillMass(grams)), '.'),
-    // On a phone the tubers keep to one row where they can, so the tray leaves the land its room.
-    tray(weights, marks, v, W, narrow),
-    h('div', { class: 'tally sheet laid', role: 'list', 'aria-label': 'The tally' },
-      [...tally].map(([k, n]) => h('p', { class: 'lead', role: 'listitem' }, h('span', null, F.upper(k)), h('span', { class: 'dots' }), h('b', { class: 'num' }, n)))),
-    after ? narrowing(before, after, alone, staged, arrive + 500) : null)
+    // Where the window is too short for the whole tray, the tray, its tally and what the estimate means scroll
+    // between the head and the estimate, which stay in view.
+    h('div', { class: 'tray-scroll', testid: 'tray-scroll', tabindex: '-1' },
+      h('p', { class: 'tray-lede' }, `${F.date(c.year, e.day)}, one hill of ${v.name}. ${F.plural(weights.length, 'potato', 'potatoes')} weighing `, h('span', { class: 'stamped' }, F.hillMass(grams)), '.'),
+      // On a phone the tubers keep to one row where they can, so the tray leaves the land its room.
+      tray(weights, marks, v, W, narrow),
+      h('div', { class: 'tally sheet laid', role: 'list', 'aria-label': 'The tally' },
+        [...tally].map(([k, n]) => h('p', { class: 'lead', role: 'listitem' }, h('span', null, term(F.upper(k), k === 'sound, B size' ? 'B size' : k)), h('span', { class: 'dots' }), h('b', { class: 'num' }, n)))),
+      est?.caption ?? null),
+    est?.rows ?? null)
   // A click anywhere on the tray skips the staging.
   if (staged) el.addEventListener('pointerdown', () => el.classList.remove('staged'), { once: true })
   return el
@@ -394,11 +401,11 @@ function why(ctx: Ctx, c: S.Campaign, lot: S.Lot, cause: S.Cause): string {
         + (inWindow ? ` ${name} was drying out by ${date(dry.day)}` : ` ${name} was dry for part of that time`)
         + (watered ? ` and was watered ${F.times(watered)}.` : reel ? ' and wasn\'t watered.' : '.')
         + ` ${water}`
-        + ` ${v.name} ${v.scab >= 1.3 ? 'scabs easily' : v.scab < 0.7 ? 'resists scab' : 'is about average for scab'}`
+        + ` ${v.name} ${v.scab >= 1.3 ? 'scabs easily' : v.scab < 0.7 ? 'rarely gets scab' : 'is about average for scab'}`
         + (f.soil < 0.6 ? ', and growing potatoes year after year leaves scab in the soil.' : '.')
     }
     case 'hollow':
-      return `The big potatoes went hollow inside. That happens when growth stalls in a dry spell and then surges after rain, or when the soil is cold as the potatoes form.${dry ? ` ${name} was drying out by ${date(dry.day)}.` : ''} ${v.name} ${v.hollow >= 0.1 ? 'is prone to it' : 'rarely has this problem'}.`
+      return `The big potatoes went hollow inside. That happens when growth stalls in a dry spell and then surges after rain, or when the soil is cold as the potatoes form.${dry ? ` ${name} was drying out by ${date(dry.day)}.` : ''} ${v.name} ${v.hollow >= 0.1 ? 'goes hollow easily' : 'rarely has this problem'}.`
     case 'knob':
       return `A dry spell followed by rain makes potatoes grow in spurts and crack${dry ? `, and ${name} was drying out by ${date(dry.day)}` : ''}.${v.rough >= 1.2 ? ` ${v.name} gets rough easily.` : ''} Steady water while the potatoes are filling out, from rain or irrigation, prevents it.`
     case 'skin': {
@@ -432,7 +439,7 @@ function why(ctx: Ctx, c: S.Campaign, lot: S.Lot, cause: S.Cause): string {
       let end = ` In ${name} they were dug on ${date(lot.dugDay)} while the vines were still green.`
       const kt = S.killTiming(c, lot.field)
       if (killed && (!died || killed.day <= died.day) && kt.killed >= 0 && kt.early >= EARLY_DAYS) {
-        end = ` In ${name} the vines were killed on ${date(killed.day)}, ${F.plural(kt.early, 'day')} earlier than needed, so the potatoes hadn't finished growing.`
+        end = ` In ${name} the vines were killed on ${date(killed.day)}, ${F.plural(kt.early, 'day')} earlier than needed, so the potatoes hadn't finished growing.${Number(killed.data?.lost ?? 0) > 0 ? ' The weight they never put on is under What never grew.' : ''}`
       } else if (killed && (!died || killed.day <= died.day) && kt.killed >= 0 && kt.asked >= 0) {
         end = ` In ${name} the vines were killed on ${date(killed.day)}, right on schedule${KILL_ASKED[kt.why] ? ` because ${KILL_ASKED[kt.why]}` : ''}. Some small potatoes are the price of skins that toughen in time.`
       } else if (killed && (!died || killed.day <= died.day)) {
@@ -494,6 +501,13 @@ function gradebar(d: AtDig, parts: string[]): HTMLElement {
     d.rows.map(r => h('i', { class: TINT[r.key], style: `width:${(d.total > 0 ? r.cwt / d.total * 100 : 0).toFixed(1)}%` })))
 }
 
+// The strip in words, by its first grade: "73% made US No. 1, the full price."
+function topGrade(d: AtDig): Child[] {
+  const no1 = d.rows.find(r => r.key === 'no1')?.cwt ?? 0
+  const share = d.total > 0 ? no1 / d.total : 0
+  return [h('i', { class: `sw ${TINT.no1}` }), `${F.pct(share)} made `, term('US No. 1'), ', the full price.']
+}
+
 // What a grower weighs before keeping a crop, in full.
 function sellOrKeep(ctx: Ctx, c: S.Campaign, lot: S.Lot): HTMLElement[] {
   const world = ctx.app.world
@@ -550,6 +564,16 @@ function reckoning(ctx: Ctx, lotId: number): PaperSpec {
       text: `${F.pct(1 - stand)} of the seed pieces rotted before they came up${planted ? `, after planting on ${F.date(c.year, planted.day)}` : ''}. Seed rots in cold ground, so wait for soil near ${F.temp(10)}.`,
     })
   }
+  // The growth an early kill gave up never reached any grade: the kill's own record says how much.
+  const killed = fieldLog(c, lot.field, 'killed')[0]
+  const gaveUp = Number(killed?.data?.lost ?? 0)
+  if (killed && gaveUp > 0) {
+    const early = Number(killed.data?.early ?? 0)
+    never.push({
+      head: 'Killed early', cwt: gaveUp * S.FIELD_ACRES,
+      text: `The vines in ${name} were killed on ${F.date(c.year, killed.day)}${early > 0 ? `, about ${F.plural(early, 'day')} before they were due` : ''}. Potatoes stop growing the day the vines die, so the crop missed what it would have put on by then. That's an estimate, since the weather in those days can't be rerun.`,
+    })
+  }
   const st = S.storageInfo(c)
   const head = (text: string) => h('h3', { class: 'reck-h t-label' }, text)
   return {
@@ -568,7 +592,7 @@ function reckoning(ctx: Ctx, lotId: number): PaperSpec {
           h('table', { class: 'losses reck-grades' },
             h('thead', { class: 'sr' }, h('tr', null, h('th', { scope: 'col' }, 'Grade'), h('th', { scope: 'col' }, 'What it sells for'), h('th', { scope: 'col' }, 'Weight'), h('th', { scope: 'col' }, 'Share'))),
             h('tbody', null, d.rows.map((r, k) => h('tr', null,
-              h('th', { scope: 'row' }, h('i', { class: `sw ${TINT[r.key]}` }), GRADE_LABEL[r.key]),
+              h('th', { scope: 'row' }, h('i', { class: `sw ${TINT[r.key]}` }), term(GRADE_LABEL[r.key])),
               h('td', { class: 'reck-note' }, gradeNote(ctx, c, lot, r.key)),
               h('td', { class: 'num' }, shown.parts[k]),
               h('td', { class: 'num share' }, d.total > 0 ? (r.cwt / d.total < 0.005 ? 'under 1%' : F.pct(r.cwt / d.total)) : ''))))),
@@ -590,7 +614,8 @@ function reckoning(ctx: Ctx, lotId: number): PaperSpec {
       lot.open ? h('section', { class: 'reck-part reck-keep' },
         head('Sell now or store it?'),
         sellOrKeep(ctx, c, lot),
-        h('p', { class: st.stored > st.capacity ? 'c-ochre' : 'quiet' }, storageLine(c))) : null),
+        h('p', { class: st.stored > st.capacity ? 'c-ochre' : 'quiet' }, storageLine(c)),
+        S.hasBuilt(c, 'packing') ? h('p', { testid: 'store-packing' }, `If you pack it over the winter, its No. 1 sells for ${F.pct(S.PACK_NO1)} more and its B size for ${F.pct(S.PACK_B)} of the No. 1 price, minus ${F.money(S.PACK_CHARGE)} a hundredweight for packing.`) : null) : null),
     foot: close => h('button', { class: 'btn', type: 'button', testid: 'reckoning-close', autofocus: true, onclick: close }, icon('back', 'i'), 'Back to the ticket'),
   }
 }
@@ -797,7 +822,6 @@ export function ticket(ctx: Ctx, lotId: number, o: { fresh: boolean; staged?: bo
   const fresh = o.fresh
   const reveal = fresh && !!o.staged && !ctx.reduced() && d.known && d.total > 0
   const advice = S.advise(app.world, c).find(a => a.act === 'sell' && a.lot === lotId)
-  const m = R.sproutMonth(lot.year, lot.dugDay, lot.variety, c.upgrades.vent)
   const dug = digDays(c, lot)
   const inDay = weighDay(c, lot)
   const no = ticketNo(c, lot)
@@ -880,31 +904,35 @@ export function ticket(ctx: Ctx, lotId: number, o: { fresh: boolean; staged?: bo
           h('p', { class: 'tk-line' },
             h('span', null, h('span', { class: 't-label' }, 'Variety'), ' ', h('b', null, v.name)),
             h('span', null, h('span', { class: 't-label' }, 'Dug'), ' ', h('b', { class: 'num' }, daySpan(lot.year, dug.start, dug.end))),
-            inDay > dug.end ? h('span', null, h('span', { class: 't-label' }, 'Hauled in'), ' ', h('b', { class: 'num' }, F.date(lot.year, inDay, true))) : null,
-            h('span', null, h('span', { class: 't-label' }, 'From'), ' ', h('b', { class: 'num' }, F.area(S.FIELD_ACRES)))),
+            inDay > dug.end ? h('span', null, h('span', { class: 't-label' }, 'Hauled in'), ' ', h('b', { class: 'num' }, F.date(lot.year, inDay, true))) : null),
           h('div', { class: 'tk-net' },
-            h('p', { class: 'net' }, net, h('span', { class: 'unit' }, F.massUnit(), h('br'), sold ? 'sold' : 'to sell')),
+            h('div', { class: 'net-main' },
+              h('p', { class: 'net' }, net, h('span', { class: 'unit' }, F.massUnit(), h('br'), sold ? 'sold' : 'to sell')),
+              F.cwtNote() ? h('p', { class: 'cwt-note', testid: 'ticket-cwt' }, F.cwtNote().trim()) : null),
             h('div', { class: 'net-side' },
               h('p', null, h('span', { class: 't-label' }, sold ? 'Sold for' : 'Sell today for')),
               h('p', null, worth),
-              h('p', { class: 'quiet num' }, `${F.perArea(d.market / S.FIELD_ACRES)} · ${F.mass(d.cull)} culled`),
+              h('p', { class: 'quiet num' }, est ? '' : `${F.perArea(d.market / S.FIELD_ACRES)} · `, `${F.mass(d.cull)} `, term('culled', 'culls')),
               est ? [
-                range({ lo: est.lo, hi: est.hi, max, mark: perAcre, label: `You expected ${F.perAreaSpan(est.lo, est.hi)} and the field gave ${F.perArea(perAcre)}` }),
-                h('p', { class: 'carried', testid: 'carried' }, 'You expected ', h('span', { class: 'num' }, F.perAreaSpan(est.lo, est.hi)), ` ${est.digs ? `from ${F.plural(est.digs, 'test dig')}` : 'by eye'}. The field gave `,
-                  h('b', { class: 'num' }, F.perArea(perAcre)), ` with the culls, which is ${inside ? 'inside that range' : perAcre < est.lo ? 'under it' : 'over it'}.`),
+                range({ lo: est.lo, hi: est.hi, max, mark: perAcre, label: `${expectedFrom(est.digs)} ${F.perAreaSpan(est.lo, est.hi)} and the field gave ${F.perArea(perAcre)}` }),
+                h('p', { class: 'carried', testid: 'carried' }, `${expectedFrom(est.digs)} `, h('span', { class: 'num' }, F.perAreaSpan(est.lo, est.hi)), '. The field gave ',
+                  h('b', { class: 'num' }, F.perArea(perAcre).replace(` ${F.perAreaUnit()}`, '')), `, ${inside ? 'inside that range' : perAcre < est.lo ? 'under it' : 'over it'}.`),
               ] : null)),
+          // The first reading: the grades as a strip and what most of it made, the one biggest loss. Every grade
+          // and every loss in full is one press away, on the full breakdown.
           d.known ? h('div', { class: 'grades' },
             gradebar(d, parts.parts),
-            h('ul', null, d.rows.map((r, k) => h('li', { class: `lead${r.key === 'cull' ? ' quiet' : ''}` },
-              h('i', { class: `sw ${TINT[r.key]}` }), GRADE_LABEL[r.key], h('span', { class: 'dots' }), h('b', { class: 'num' }, parts.parts[k].replace(/ (cwt|t)$/, '')))))) : h('p', { class: 'grades t-caption' }, 'The grade sheet for this crop went with the sale.'),
-          h('table', { class: 'losses' },
-            h('caption', { class: 't-label' }, losses.length ? 'The biggest losses' : 'Losses'),
-            h('tbody', null, losses.length ? losses.slice(0, 3).map(x => h('tr', null,
-              h('th', { scope: 'row' }, term(CAUSE_LABEL[x.k])), h('td', { class: 'num' }, `−${F.mass(x.cwt)}`), h('td', null, phrase(ctx, c, lot, x.k))))
-              : h('tr', null, h('td', { colspan: 3 }, 'Every potato kept its grade. A clean harvest.')))),
+            h('p', { class: 'tk-top' }, topGrade(d))) : h('p', { class: 'grades t-caption' }, 'The grade sheet for this crop went with the sale.'),
+          h('div', { class: 'tk-loss' },
+            h('table', { class: 'losses' },
+              h('caption', { class: 't-label' }, losses.length ? 'Biggest loss' : 'Losses'),
+              h('tbody', null, losses.length ? losses.slice(0, 1).map(x => h('tr', null,
+                h('th', { scope: 'row' }, term(CAUSE_LABEL[x.k])), h('td', { class: 'num' }, `−${F.mass(x.cwt)}`), h('td', null, phrase(ctx, c, lot, x.k))))
+                : h('tr', null, h('td', { colspan: 3 }, 'Every potato kept its grade. A clean harvest.')))),
+            h('button', { class: 'btn quiet', type: 'button', testid: 'reckoning-open', onclick: () => ctx.papers.open(reckoning(ctx, lotId)) },
+              losses.length > 1 ? 'See every grade and loss' : 'See every grade')),
           box))
 
-      const reckon = () => h('button', { class: 'btn quiet', type: 'button', testid: 'reckoning-open', onclick: () => ctx.papers.open(reckoning(ctx, lotId)) }, 'See full breakdown')
       let delivered = false
       // Delivering takes the No. 1 and large tubers a contract wants; what is left still has to be sold or stored.
       const draw = () => {
@@ -912,7 +940,7 @@ export function ticket(ctx: Ctx, lotId: number, o: { fresh: boolean; staged?: bo
         if (!lot.open && !sold) { answered = true; close(); return }
         if (sold) {
           ways = []
-          box.replaceChildren(h('p', { class: 'tk-more' }, h('button', { class: 'btn', type: 'button', testid: `lot-keep-${lot.id}`, autofocus: true, onclick: close }, 'Close'), reckon()))
+          box.replaceChildren(h('p', { class: 'tk-more' }, h('button', { class: 'btn', type: 'button', testid: `lot-keep-${lot.id}`, autofocus: true, onclick: close }, 'Close')))
           return
         }
         const deal = deals(app.world, c, lot)[0]
@@ -920,6 +948,7 @@ export function ticket(ctx: Ctx, lotId: number, o: { fresh: boolean; staged?: bo
         if (worthEl) worthEl.textContent = F.money(now)
         const month = Math.round(S.lotCwt(lot) * S.STORE_COST)
         const st = S.storageInfo(c)
+        const over = st.stored > st.capacity + 0.5
         // The farm stand sells from the newest crop weighed, whatever is chosen here.
         const s0 = c.season
         const newest = s0 ? S.standLot(c, s0) : undefined
@@ -929,6 +958,8 @@ export function ticket(ctx: Ctx, lotId: number, o: { fresh: boolean; staged?: bo
         const outlook = S.storeOutlook(app.world, c, lot)
         const call = storeCall(outlook)
         const best = deal && deal.pays >= deal.market - 0.5 ? 'deliver' : advice || !call.store ? 'sell' : 'store'
+        // One rule (storeCall) sets the tab and its words; advice to sell (new potatoes, blight in the pile) makes selling the surer way.
+        const tab = best === 'deliver' ? 'Brings most' : advice && call.store ? 'Surer' : call.tab
         let n = 0
         const k = () => String(++n)
         const list: Way[] = []
@@ -940,30 +971,28 @@ export function ticket(ctx: Ctx, lotId: number, o: { fresh: boolean; staged?: bo
           onclick: e => { if (busy || !deliver(ctx, lot, deal)) return; delivered = true; tear(e.currentTarget as HTMLElement, draw) },
         })) : null
         const sellWay = add(coupon({
-          icon: 'sell', label: delivered ? 'Sell the rest' : 'Sell now', amount: F.money(now), take: 'Sell', key: k(), best: best === 'sell',
+          icon: 'sell', label: delivered ? 'Sell the rest' : 'Sell now', amount: F.money(now), take: 'Sell', key: k(), best: best === 'sell', bestLabel: tab,
           does: advice && !delivered ? h('span', { class: 'choice-advice' }, F.localize(advice.why)) : `${F.price(S.basePrice(app.world, c, lot.variety))} today for US No. 1.`,
           testid: `lot-sell-${lot.id}`,
           onclick: e => { if (busy) return; answered = true; if (ctx.run({ t: 'sell', lot: lot.id, frac: 1 }).ok) tear(e.currentTarget as HTMLElement, close) },
         }))
         const storeWay = add(coupon({
-          icon: 'store', label: delivered ? 'Store the rest' : fresh ? 'Store it' : 'Keep it stored', take: 'Store', key: k(), best: best === 'store',
+          icon: 'store', label: delivered ? 'Store the rest' : fresh ? 'Store it' : 'Keep it stored', take: 'Store', key: k(), best: best === 'store', bestLabel: tab,
           amount: [h('span', { 'aria-hidden': 'true' }, `−${F.money(month).replace('−', '')}`, h('small', null, '/mo')), h('span', { class: 'sr' }, `Storing costs ${F.money(month)} a month.`)],
-          does: `${F.upper(call.phrase)}. It ${R.sproutText(m)}.`,
+          does: advice ? `${call.short.replace(/\.$/, '')}. But ${F.localize(advice.why).replace(/^./, x => x.toLowerCase())}` : call.short,
           testid: `lot-keep-${lot.id}`,
           onclick: e => { if (busy) return; answered = true; if (fresh) ctx.say(`${F.mass(S.lotCwt(lot))} from ${name} went into the cellar.`, 'info'); tear(e.currentTarget as HTMLElement, close) },
         }))
         ways = list
         // After a delivery, what is left and what becomes of it if the ticket is simply closed: it goes into store.
         const left = delivered ? h('p', { class: 'tk-left', testid: 'ticket-left', role: 'status' },
-          icon('deliver', 'i'), `Delivered. You have ${F.mass(S.lotCwt(lot))} left to sell now or store. If you just close the ticket (Escape), it goes into the potato house.`) : null
+          icon('deliver', 'i'), `Delivered. ${F.mass(S.lotCwt(lot))} is left to sell or store. Closing the ticket (Escape) stores it.`) : null
         box.replaceChildren(...(left ? [left] : []),
           h('div', { class: `ways${deal ? '' : ' two'}`, role: 'group', 'aria-label': 'What to do with the crop' }, deliverWay, sellWay, storeWay),
+          // Below the ways only what changes the choice: whether the potato house has room, the farm stand.
           h('div', { class: 'tk-more' },
-            reckon(),
             h('div', { class: 'tk-notes' },
-              h('p', { class: st.stored > st.capacity + 0.5 ? 'c-ochre' : '', testid: 'store-houses' }, storageLine(c)),
-              S.hasBuilt(c, 'packing') ? h('p', { testid: 'store-packing' }, `If you pack it over the winter, its No. 1 sells for ${F.pct(S.PACK_NO1)} more and its B size for ${F.pct(S.PACK_B)} of the No. 1 price, minus ${F.money(S.PACK_CHARGE)} a hundredweight for packing.`) : null,
-              F.cwtNote() ? h('p', null, F.cwtNote().trim()) : null,
+              h('p', { class: over ? 'c-ochre' : '', testid: 'store-houses' }, over ? storageLine(c) : `The potato house has room, with ${F.mass(st.free)} to spare.`),
               stand ? h('p', { class: 'choice-stand', testid: 'ticket-stand' }, icon('stand', 'i'), stand) : null)))
       }
       draw()

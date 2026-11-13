@@ -194,7 +194,7 @@ test('a test dig is a tray beside the land, does not stop the clock, and can be 
   await expect(tray).toHaveCount(0)
   await page.getByTestId('sample-again').click()
   await expect(tray).toBeVisible()
-  await expect(tray.locator('.narrowing')).toContainText('The tick is this hill')
+  await expect(tray).toContainText('The tick is this hill')
   expect(errors, errors.join('\n')).toEqual([])
 })
 
@@ -446,7 +446,7 @@ test('a crop a contract wants: the weigh ticket delivers it and the tracker coun
   const deliver = ticket.locator('[data-testid^="lot-deliver-"]')
   await expect(deliver).toContainText('Deliver to the fry plant')
   await expect(ticket.locator('.choice')).toContainText(/market/)
-  await expect(ticket.getByTestId('store-houses')).toContainText('The potato house holds')
+  await expect(ticket.getByTestId('store-houses')).toContainText('The potato house')
   await deliver.click()
   // Once the delivery slip has torn off, what is left can be sold or stored.
   await expect(ticket.locator('[data-testid^="lot-keep-"]')).toContainText('Store the rest')
