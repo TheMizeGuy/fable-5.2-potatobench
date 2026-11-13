@@ -4,7 +4,7 @@
 // with those on it gone from sight through the cut); and someone sets out the moment the clock is set going. The
 // people and machines are run without a picture (tests/crewsim.ts); tools/render/seen.ts checks the picture itself.
 import { describe, expect, it } from 'vitest'
-import { sharedDay, watch, type Farm, type Seen } from './crewsim.ts'
+import { leads, sharedDay, watch, type Farm, type Seen } from './crewsim.ts'
 import { FW } from '../src/render/layout.ts'
 import * as sim from '../src/sim/index.ts'
 import { personNow } from '../src/ui/now.ts'
@@ -71,6 +71,17 @@ describe('one tractor between two people in a day', () => {
   })
 })
 
+describe('where the interface pins a person', () => {
+  it('is where they are seen, and nowhere while a cut has them gone from sight', () => {
+    const truck: Farm = { spring: app => { app.do({ t: 'buy', upgrade: 'truck' }) } }
+    for (const [speed] of SPEEDS) for (const [kind, farm] of [['spray', {}], ['haul', truck]] as [string, Farm][]) {
+      const s = watch(kind, speed, { farm, seconds: 14 })
+      expect(s.cuts, `${kind}: someone goes through a cut`).toBeGreaterThan(0)
+      expect(s.pins, s.pins.slice(0, 4).join('; ')).toEqual([])
+    }
+  })
+})
+
 describe('work with no rows to it', () => {
   it('hauling with the truck: it is seen at the field and on its way, at 1x and 3x', () => {
     const farm: Farm = { spring: app => { app.do({ t: 'buy', upgrade: 'truck' }) } }
@@ -110,6 +121,16 @@ describe('the first seconds', () => {
     expect(watch('plant', 1, { seconds: 6 }).lead).toBeGreaterThan(20)
     // (an order the player has given: felling, on foot)
     expect(watch('fell', 1, { farm: { order: app => { app.do({ t: 'job', kind: 'fell', field: 14 }) } }, foot: true, seconds: 6 }).lead).toBeGreaterThan(8)
+  })
+})
+
+describe('whoever sets out', () => {
+  it('is whoever the day then gives that work to, on nine mornings in ten', () => {
+    for (const farm of [{}, { spring: app => { app.do({ t: 'buy', upgrade: 'truck' }) } }] as Farm[]) {
+      const l = leads(farm)
+      expect(l.said).toBeGreaterThan(40)
+      expect(l.right / l.said, `${l.right} of ${l.said}`).toBeGreaterThanOrEqual(0.9)
+    }
   })
 })
 

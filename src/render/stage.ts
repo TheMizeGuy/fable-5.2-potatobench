@@ -74,7 +74,8 @@ interface Site {
   pt: number
 }
 
-interface Doing { ph: number; t: number; x: number; z: number; n: number }
+// dust: hauling, how far along the lane the dust of the load in hand has been laid (metres of the trip)
+interface Doing { ph: number; t: number; x: number; z: number; n: number; dust?: number }
 
 // How far a job on a field had got by the day's end, 0..1 (below zero when nobody's day says).
 function shareOf(snap: Snapshot, kind: string, field: number): number {
@@ -86,6 +87,8 @@ function shareOf(snap: Snapshot, kind: string, field: number): number {
 // A lap of hauling with the clock running, as shares of it: standing to load (and again to unload), and when the
 // door is reached.
 const LAP_STAND = 0.18, LAP_DOOR = 0.5
+// Metres of the lane between the puffs of a load's dust.
+const HAUL_DUST = 7
 // How far past a field's end the stones are put off: beyond where the tractors turn.
 const HEAP_OUT = 13
 
@@ -724,6 +727,21 @@ export class Stage {
     // (a cut drive: going from sight over the last of the pulling away)
     const drive = out ? (lap - q0) / (q1 - q0) : back ? (lap - q2) / (1 - q2) : 1
     if (w.rig) w.rig.fade = !literal && trip.length > reach * 1.25 && drive < 0.4 ? 1 - 0.9 * clamp01((drive - 0.2) / 0.2) : 1
+    // A drive cut from sight is still made, and on dry ground under its own dust: seen from across the farm, the dust
+    // runs the length of the lane with the load, to the potato house door, and thinner behind the bed coming back
+    // light. It is what says from far off that the crop is coming in. (From close by the cut is what is seen.)
+    if (!literal && f.going && f.dry && !f.still && w.rig && (out || back) && trip.length > reach * 1.25) {
+      const front = (out ? drive : 1 - drive) * trip.length, step = out ? HAUL_DUST : HAUL_DUST * 1.7
+      let from = j.dust ?? (out ? 0 : trip.length)
+      for (let n = 0; n < 24 && Math.abs(front - from) >= step; n++) {
+        from += front > from ? step : -step
+        const e = trip.at(from), far = f.far(e.x, e.z), q = Math.random
+        if (far < 0.15) continue
+        f.particles.emit(e.x + (q() - 0.5) * 1.6, heightAt(e.x, e.z) + 1.7 + 0.8 * far, e.z + (q() - 0.5) * 1.6, (q() - 0.5) * 0.5, 0.6 + q() * 0.6, (q() - 0.5) * 0.5,
+          (1.6 + q() * 0.9) * (1 + 1.3 * far) + 2.2, 0.42 + q() * 0.2, (5 + q() * 4) * (1 + 0.5 * far), 0.78, 0.7, 0.58, Math.min(0.9, (out ? 0.58 : 0.4) * far * (1 + 0.6 * far)), 0.55)
+      }
+      j.dust = from
+    } else j.dust = undefined
     // the second machine stands a length behind the first
     const stood = loading || unloading
     const p = trip.at(Math.max(0, Math.min(trip.length, along * trip.length - (unloading ? r * 3.4 * s : 0))))

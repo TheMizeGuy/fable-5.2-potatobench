@@ -409,7 +409,7 @@ export class Crews {
     this.gangs.clear()
     this.stage.clear()
     for (const r of this.rigs) {
-      r.x = r.home.x; r.z = r.home.z; r.heading = r.home.heading; r.holder = -1
+      r.x = r.home.x; r.z = r.home.z; r.heading = r.home.heading; r.holder = r.last = -1
       if (r.kind === 'tractor') (r.machine as Tractor).setImplement('none')
     }
     for (const a of this.actors) {
@@ -840,10 +840,15 @@ export class Crews {
   // they are in), so it does not bob as they walk or dip as they bend; false when there is no such person on the farm.
   anchor(id: number, out: Vector3): boolean {
     const a = this.actors.find(x => x.id === id)
-    // (gone from sight through a cut, they have no place to be pinned at until they are seen again)
-    if (!a || a.away || a.shown < 0.5 || a.fade < 0.5 || !Number.isFinite(a.sx)) return false
+    if (!a || !this.inSight(a)) return false
     this.over(a, out)
     return true
+  }
+
+  // Whether someone is to be seen: on the farm, and not gone from sight through a cut (nor the machine they are on).
+  // Until they are seen again they have no place to be pinned at, or picked at.
+  private inSight(a: Actor): boolean {
+    return !a.away && a.shown >= 0.5 && a.fade >= 0.5 && Number.isFinite(a.sx) && !(a.aboard && !!a.rig && (a.rig.fade < 0.5 || !Number.isFinite(a.rig.sx)))
   }
 
   private over(a: Actor, out: Vector3): Vector3 {
@@ -1801,7 +1806,7 @@ export class Crews {
       if (d < r && d < bd) { bd = d; best = id }
     }
     for (const a of this.actors) {
-      if (a.away || a.shown < 0.5 || a.fade < 0.5 || !Number.isFinite(a.sx)) continue
+      if (!this.inSight(a)) continue
       const o = this.over(a, V2), ox = o.x, oy = o.y, oz = o.z
       const base = oy - a.ay
       // the body (half way up it, out to its head), and the foot of the pin
