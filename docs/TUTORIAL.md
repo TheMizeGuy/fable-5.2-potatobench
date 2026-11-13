@@ -201,7 +201,11 @@ tutorial when planting is ready and accelerate time during the tutorial where ne
   saying who and where: "You're planting North Ridge." It says "is spraying" only of someone whose order is still on
   the list and theirs, in that field, and prefers such a one; of work that day finished it says "Bernadette sprayed
   North Ridge ahead of the blight." (`stillAt`, the rule the time book's word for a person follows in `ui/now.ts`:
-  the line once had Bernadette spraying while the time book had her waiting). Then the whole farm again, and on. Each is shown once
+  the line once had Bernadette spraying while the time book had her waiting). Someone who has gone on to other work
+  is not followed: the field the work was done in is framed instead (the line once said Jeannette killed the vines in
+  Brook Field over a picture of Bottom Field, where she was by then). And nobody is followed while they are indoors
+  (the camera would show the house): the work is shown once they are out, that day or the next it is done. Then the
+  whole farm again, and on. Each is shown once
   (`seen:<kind>` in the guide's own storage), and only while the player has nothing of their own open (no field,
   person or yard selected).
 - *It never runs past a decision.* The guide only sets the speed (and `App.pace`, a multiplier on it). Every pause

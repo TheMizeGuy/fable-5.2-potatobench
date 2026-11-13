@@ -708,8 +708,9 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     }
     if (hadWait) { hadWait = false; beatAt = Math.max(beatAt, t + 900) }
     if (scene && t >= scene.until) { endScene(true); beatAt = Math.max(beatAt, t + 300) }
-    // Work is watched only while the player is looking at nothing of their own: no card open, nobody picked.
-    if (!scene && d.scene && t >= beatAt && app.selection.length === 0 && app.unit < 0 && app.yard === 0) {
+    // Work is watched only while the player is looking at nothing of their own: no card open, nobody picked. And
+    // someone is followed only while they are out on the land (indoors, the camera would show the house).
+    if (!scene && d.scene && t >= beatAt && app.selection.length === 0 && app.unit < 0 && app.yard === 0 && (d.scene.unit < 0 || ctx.view.unitPlace(d.scene.unit) !== 'away')) {
       guide.note(`seen:${d.scene.id}`)
       scene = { id: d.scene.id, unit: d.scene.unit, line: d.scene.line, until: t + SCENE_SECONDS * 1000 }
       if (scene.unit >= 0) ctx.view.follow(scene.unit); else app.focus(d.scene.field)

@@ -488,13 +488,21 @@ describe('the guide runs the clock between its notes', () => {
         expect(driving(at(w, c), g)!.scene?.id).not.toBe(d!.scene.id)
         // "is spraying" only of someone whose order is still on the list and theirs, in that field; of work the day
         // finished it says "sprayed", so the line never has someone at work the time book has waiting.
+        // Whoever is followed is in the field the line names; one who has gone on to other work is not followed, and
+        // their field is shown instead.
         if (d!.scene.id !== 'up') {
           const sc = d!.scene
-          const u = c.crew.find(x => x.id === sc.unit)!
-          const job = c.season!.jobs.find(j => j.kind === sc.id && j.field === sc.field)
-          const going = !!job && u.at === sc.field && u.road <= 0 && (u.job === job.id || (u.job < 0 && !c.crew.some(o => o !== u && o.job === job.id)))
-          expect(/^(You're|\w+ is) /.test(sc.line), `${sc.line} (day ${n})`).toBe(going)
-          tenses.push(`${sc.id}:${going ? 'now' : 'done'}`)
+          const going = (unit: number, field: number) => {
+            const u = c.crew.find(x => x.id === unit)
+            const job = c.season!.jobs.find(j => j.kind === sc.id && j.field === field)
+            return !!u && !!job && u.at === field && u.road <= 0 && (u.job === job.id || (u.job < 0 && !c.crew.some(o => o !== u && o.job === job.id)))
+          }
+          const now = /^(You're|\w+ is) /.test(sc.line)
+          expect(now, `${sc.line} (day ${n})`).toBe(c.season!.worked.some(x => x.kind === sc.id && going(x.unit, x.field)))
+          if (now) expect(going(sc.unit, sc.field), sc.line).toBe(true)
+          if (sc.unit >= 0) expect(c.crew.find(x => x.id === sc.unit)!.at, sc.line).toBe(sc.field)
+          else expect(c.season!.worked.some(x => x.kind === sc.id && c.crew.some(u => u.id === x.unit && u.road <= 0 && u.at === x.field)), `${sc.line}: nobody left in a field it was done in`).toBe(false)
+          tenses.push(`${sc.id}:${now ? 'now' : sc.unit >= 0 ? 'done' : 'done, gone'}`)
         }
       }
       S.apply(w, c, { t: 'day' })
@@ -506,7 +514,7 @@ describe('the guide runs the clock between its notes', () => {
     expect(ids.indexOf('kill')).toBeLessThan(ids.indexOf('dig'))
     for (const x of seen) {
       expect(x.field, x.id).toBeGreaterThanOrEqual(0)
-      if (x.id !== 'up') expect(c.crew.some(u => u.id === x.unit), `${x.id}: someone to follow`).toBe(true)
+      if (x.id !== 'up') expect(x.unit === -1 || c.crew.some(u => u.id === x.unit), `${x.id}: someone to follow, or the field`).toBe(true)
       expect(x.line).toContain(S.FIELD_NAMES[x.field])
       expect(countWords(x.line), x.line).toBeLessThanOrEqual(14)
     }

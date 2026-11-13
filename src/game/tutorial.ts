@@ -615,10 +615,12 @@ export function driving(l: Look, g: Guide, waved: ReadonlySet<string> = new Set(
     if (up !== undefined && !g.has('seen:up')) return { ...run, scene: { id: 'up', unit: -1, field: up, line: `The plants are up in ${name(up)}.` } }
     for (const [kind, doing, did, rest] of WORK) {
       if (g.has(`seen:${kind}`)) continue
-      // Someone still at it before someone who finished theirs that day.
+      // Someone still at it before someone who finished theirs that day; of those, one still in the field before
+      // one who has gone on to other work, whose field is shown without them.
       const all = s.worked.filter(x => x.kind === kind && x.field >= 0)
-      const w = all.find(x => stillAt(l, x)) ?? all[0]
-      if (w) return { ...run, scene: { id: kind, unit: w.unit, field: w.field, line: workLine(l, w, doing, did, rest) } }
+      const there = (x: { field: number; unit: number }) => c.crew.some(u => u.id === x.unit && u.road <= 0 && u.at === x.field)
+      const w = all.find(x => stillAt(l, x)) ?? all.find(there) ?? all[0]
+      if (w) return { ...run, scene: { id: kind, unit: there(w) ? w.unit : -1, field: w.field, line: workLine(l, w, doing, did, rest) } }
     }
   }
   return run
