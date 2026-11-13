@@ -168,14 +168,11 @@ export const mountHud: MountHud = (root, app, view, sound) => {
         if (!found) continue
         const key = lotKey(c, lot)
         ctx.memo.lots[key] = structuredClone(found)
-        const staged = app.speed < 3
-        ctx.awaiting++
-        void view.whenShown('dig', e.field).then(() => {
-          ctx.awaiting--
-          const spec = app.campaign === c && app.screen === 'season' ? ticket(ctx, lot, { fresh: true, staged }) : null
-          if (spec) papers.enqueue(spec)
-          dirty = true
-        })
+        // The ticket comes up the moment the lot is weighed, so the game never stands paused for one that isn't on
+        // screen; a ticket already up keeps it waiting its turn behind.
+        const spec = app.screen === 'season' ? ticket(ctx, lot, { fresh: true, staged: app.speed < 3 }) : null
+        if (spec) papers.enqueue(spec)
+        dirty = true
       }
     }
   }
