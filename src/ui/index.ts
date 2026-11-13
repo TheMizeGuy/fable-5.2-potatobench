@@ -196,13 +196,13 @@ export const mountHud: MountHud = (root, app, view, sound) => {
         notes.push({ text: e.text, level: 'info', ttl: 7000 })
         break
       case 'saved':
-        if (!e.ok) notes.push({ text: 'This browser would not store the save. Export it from the menu to keep it.', level: 'warn', ttl: 12000 })
+        if (!e.ok) notes.push({ text: 'This browser couldn\'t save your game. Export it from the menu to keep it.', level: 'warn', ttl: 12000 })
         break
       case 'speed': {
         // The clock stopped itself for something nothing on screen has said: say what.
         const c = app.campaign
         if (e.speed === 0 && app.pauseReason && app.pauseReason !== HOLD && !guidedYear(c) && app.screen === 'season' && c && !S.seasonDone(c) && !papers.isOpen() && !notes.has(app.pauseReason)) {
-          notes.push({ text: app.holding ? app.pauseReason : `Stopped: ${app.pauseReason}`, level: 'info', ttl: 9000 })
+          notes.push({ text: app.holding ? app.pauseReason : `Paused: ${app.pauseReason}`, level: 'info', ttl: 9000 })
         }
         dirty = true
         break

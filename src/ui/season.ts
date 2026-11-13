@@ -89,7 +89,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   let ranAt = 0
   const veil = h('div', { class: 'veil sys', hidden: true })
   // The way back from a zoom, a pan or a tilt, always in the same place: what the Home key does.
-  const homeKey = h('button', { class: 'iconbtn view-home sys', type: 'button', testid: 'view-home', 'aria-label': 'Back to the whole farm (Home)', title: 'Back to the whole farm (Home)', onclick: () => ctx.view.home() }, icon('land', 'i'))
+  const homeKey = h('button', { class: 'iconbtn view-home sys', type: 'button', testid: 'view-home', 'aria-label': 'Show the whole farm (Home)', title: 'Show the whole farm (Home)', onclick: () => ctx.view.home() }, icon('land', 'i'))
   let tray: { el: HTMLElement; field: number; day: number } | null = null
 
   const openTicket = (lot: number) => { const spec = ticket(ctx, lot, { fresh: false }); if (spec) ctx.papers.open(spec) }
@@ -240,11 +240,11 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       if (!j) continue
       startedSaid.add(key)
       const u = c.crew.find(x => x.job === j.id)!
-      const who = u.kind === 'farmer' ? 'You go' : `${u.name.split(' ')[0]} goes`
+      const who = u.kind === 'farmer' ? 'You\'re' : `${u.name.split(' ')[0]} is`
       ctx.notes.push({
         level: 'info', glyph: kind, ttl: 12000, field: j.field, day: s0.day,
-        text: `${kind === 'plant' ? 'Planting' : 'Digging'} by itself: ${who} to ${S.FIELD_NAMES[j.field]}. Show me`,
-        full: `The crew starts ${kind === 'plant' ? 'planting' : 'digging'} by itself: ${who.toLowerCase()} to ${S.FIELD_NAMES[j.field]}. Press to see it.`,
+        text: `${kind === 'plant' ? 'Planting' : 'Digging'} has started in ${S.FIELD_NAMES[j.field]}. Show me`,
+        full: `${kind === 'plant' ? 'Planting' : 'Digging'} has started in ${S.FIELD_NAMES[j.field]} without an order from you. ${who} on the way there. Press to see.`,
         go: () => { app.select(-1); app.selectUnit(u.id, 'land'); ctx.view.follow(u.id) },
       })
     }
@@ -265,8 +265,8 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       const due = S.killOutlook(c, p.field)
       ctx.notes.push({
         level: soon ? 'warn' : 'info', glyph: 'kill', ttl: 14000, field: p.field, day: s0.day,
-        text: `${name}: ${due && !soon ? `kill due about ${S.formatDay(s0.year, due.day, true)}; ` : ''}the crew kills the vines ${soon ? 'tomorrow' : `on ${date}`}. Show me`,
-        full: `${F.localize(p.inWay)} Press to see the field, where they can be kept up.`,
+        text: `${name}: ${due && date && !soon ? `vine kill due around ${S.formatDay(s0.year, due.day, true)}. Your crew does it on ${date}` : `your crew will kill the vines ${soon ? 'tomorrow' : date ? `on ${date}` : 'soon'}`}. Show me`,
+        full: `${F.localize(p.inWay)} Press to see the field, where you can tell the crew to keep the vines up.`,
         go: () => { app.select(p.field); app.focus(p.field) },
       })
     }
@@ -283,7 +283,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     sprayAsked = key
     if (S.routineInfo(c).some(r => r.kind === 'spray' && r.auto)) return
     askSpray(ctx)
-    app.stopFor('Spraying this season wants an answer.')
+    app.stopFor('You need to decide how to handle spraying this season.')
   }
   const off = app.on(ev => {
     if (ev.type === 'yard' || ev.type === 'unit' || ev.type === 'select') ctx.dirty()
@@ -320,7 +320,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     if (hint) {
       const kind = hint.kind
       // Five words at the foot; the field's card has the rest.
-      ctx.notes.pin({ key: `tip-${kind}`, glyph: kind, text: `${JOB_VERB[kind]}: ${ctx.touch() ? 'tap' : 'click'} the ringed stamp.`, onClose: () => { hint = null; ctx.dirty() } })
+      ctx.notes.pin({ key: `tip-${kind}`, glyph: kind, text: `${ctx.touch() ? 'Tap' : 'Click'} the ringed stamp to ${JOB_VERB[kind].toLowerCase()}.`, onClose: () => { hint = null; ctx.dirty() } })
     } else ctx.notes.unpin()
   }
 
@@ -352,7 +352,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     if (live && (f.moistureLabel === 'dry' || f.moistureLabel === 'wilting')) { marks.push({ glyph: 'dry', cls: f.moistureLabel === 'wilting' ? 'bad' : 'warn' }); said.push(`soil ${f.moistureLabel}`) }
     if (f.blightHills > 0 && (live || f.status === 'dead')) {
       marks.push({ glyph: isStale(f) ? 'blight-old' : 'blight', cls: 'bad' })
-      said.push(`blight seen on ${F.plural(f.blightHills, 'hill')}${f.scoutAge >= 0 ? `, walked ${F.ago(f.scoutAge)}` : ''}`)
+      said.push(`blight seen on ${F.plural(f.blightHills, 'plant')}${f.scoutAge >= 0 ? `, scouted ${F.ago(f.scoutAge)}` : ''}`)
     }
     const anyBlight = s0.fields.some((_, k) => S.fieldInfo(c, k).blightHills > 0)
     if (f.status === 'growing' && f.protect < 0.35 && (s0.watchDay >= 0 || anyBlight)) { marks.push({ glyph: 'bare', cls: 'warn' }); said.push('leaves unprotected') }
@@ -360,26 +360,26 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     if (f.inField >= 0.5) {
       const frost = frostAt[i] ?? 0
       sub = `${F.massValue(f.inField) >= 1000 ? `${F.num(F.massValue(f.inField) / 1000, 1)}k` : F.num(F.massValue(f.inField))} in barrels`
-      said.push(`${F.mass(f.inField)} in barrels${frost >= 30 ? `, ${frost}% frost tonight` : ''}`)
+      said.push(`${F.mass(f.inField)} in barrels${frost >= 30 ? `, ${frost}% chance of frost tonight` : ''}`)
     }
-    if (f.works) { marks.push({ glyph: f.works.kind, cls: '' }); said.push(f.works.kind === 'stump' ? 'stumps being pulled' : 'tile going in') }
+    if (f.works) { marks.push({ glyph: f.works.kind, cls: '' }); said.push(f.works.kind === 'stump' ? 'stumps being pulled' : 'tile drains going in') }
     if (tract && f.cover !== 'open' && c.fields[i].felled > 0 && f.clearing) said.push(`${F.pct(f.clearing.felled)} felled`)
     const waits = S.jobWaits(app.world, c)
     const head = s0.jobs.find(j => !waits[j.id])
     const queue = queued.map(j => ({ glyph: j.kind as string, active: j === head }))
-    if (queue.length) said.push(`on the list: ${F.list(queued.map(j => JOB_VERB[j.kind].toLowerCase()))}`)
+    if (queue.length) said.push(`on the work list: ${F.list(queued.map(j => JOB_VERB[j.kind].toLowerCase()))}`)
     const lot = f.lot >= 0 ? c.lots.find(l => l.id === f.lot) : undefined
     // Spraying the player said not to do this year carries no stamp.
     const badge = need && isJob(need.act) && !(need.act === 'spray' && sprayWay(c) === 'none')
       ? { glyph: need.act as string, label: `${F.localize(need.text)} ${F.localize(need.why)}`, urgent: need.urgent, ink: inkFor(need.act, need.urgent, f) }
       : need && need.act === 'sell' && lot ? { glyph: 'ticket', label: `${F.localize(need.text)} ${F.localize(need.why)}`, urgent: need.urgent, ink: 'ink' as Ink } : null
     const key = digitFor(c, i)
-    const what = tract ? (f.cover === 'open' ? 'new ground, ready next spring' : f.coverWord) : f.status === 'rest' ? 'resting in oats and clover' : `${f.variety}, ${f.stage.toLowerCase()}`
+    const what = tract ? (f.cover === 'open' ? 'new ground, ready to plant next spring' : f.coverWord) : f.status === 'rest' ? 'resting in oats and clover' : `${f.variety}, ${f.stage.toLowerCase()}`
     return {
       name: f.name,
       glyph: tract ? COVER_GLYPH[f.cover] : stageGlyph(f),
       sub, marks, queue, badge, key, cls: tract ? 'tract' : undefined,
-      said: `${key ? `key ${key}` : f.block === 'home' ? 'the home farm' : 'beyond the home farm'}: ${what}${said.length ? `; ${said.join('; ')}` : ''}${badge ? `. Needs: ${F.localize(need!.text)}` : '.'}`,
+      said: `${key ? `Key ${key}` : f.block === 'home' ? 'The home farm' : 'Beyond the home farm'}: ${what}${said.length ? `, ${said.join(', ')}` : ''}${badge ? `. Needs: ${F.localize(need!.text)}` : '.'}`,
       taught: !!badge && ((!!hint && need?.act === hint.kind) || goalField === i),
     }
   }
@@ -390,7 +390,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     const need = app.needs()[i]?.need
     if (need && need.act === 'sell') { openTicket(need.lot); return }
     const r = app.smartOrder(i)
-    if (r.ok) ctx.announce(`${need ? F.localize(need.text) : 'Order given.'} On the list.`)
+    if (r.ok) ctx.announce(`${need ? F.localize(need.text) : 'Order given.'} It's on the work list.`)
     else ctx.say(`${S.FIELD_NAMES[i]}: ${r.err}`, 'info')
   }
 
@@ -424,7 +424,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       const name = m.y === S.HOME_YARD ? 'Home yard' : 'Dufour yard'
       patch(m.wrap, JSON.stringify([sel, up ? [up.kind, Math.round(up.done / up.need * 100)] : 0, goalYard === m.y, ctx.touch()]), () => h('button', {
         class: `yard-tag sys plate yard${sel ? ' is-sel on' : ''}${goalYard === m.y ? ' goal-ring' : ''}`, type: 'button', testid: m.y === S.HOME_YARD ? 'yard-home' : 'yard-dufour', 'aria-pressed': String(sel),
-        'aria-label': `${YARD_TITLE[m.y]}${up ? `: ${S.BUILDINGS[up.kind].name.toLowerCase()} going up, ${F.pct(up.done / up.need)} built` : ''}. Build here${ctx.touch() ? '' : ' (Y)'}.`,
+        'aria-label': `${YARD_TITLE[m.y]}${up ? `, where the ${S.BUILDINGS[up.kind].name.toLowerCase()} is ${F.pct(up.done / up.need)} built` : ''}. Press to build here${ctx.touch() ? '' : ' (Y)'}.`,
         onclick: () => app.selectYard(sel ? 0 : m.y),
       }, icon('yard', 'i'), name, up ? h('span', { class: 'yard-pct num' }, F.pct(up.done / up.need)) : null))
       m.w = (m.wrap.firstElementChild as HTMLElement | null)?.offsetWidth || m.w
@@ -496,7 +496,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     app.focus(next)
     plateLayer.querySelector<HTMLElement>(`[data-k="field-${next}"]`)?.focus({ preventScroll: true })
     const n = needs[next].need!
-    ctx.announce(`${S.FIELD_NAMES[next]} selected. ${F.localize(n.text)} ${F.localize(n.why)} Enter gives the order.`)
+    ctx.announce(`${S.FIELD_NAMES[next]} selected. ${F.localize(n.text)} ${F.localize(n.why)} Press Enter to give the order.`)
     return true
   }
 
@@ -535,7 +535,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       if (onControl) (t.closest?.('button, a') as HTMLElement | null)?.blur()
       // Just after an answer set the days going by themselves, Space is taken as "go on", not as a pause: the chip
       // that says the days are running is lit again instead.
-      if (app.speed > 0 && performance.now() - app.resumedAt < 1000) { ranAt = performance.now(); ctx.dirty(); ctx.announce(`The days are running at ${SPEED_X[app.speed]}.`); return true }
+      if (app.speed > 0 && performance.now() - app.resumedAt < 1000) { ranAt = performance.now(); ctx.dirty(); ctx.announce(`The game is running at ${SPEED_X[app.speed]}.`); return true }
       app.togglePause()
       return true
     }
@@ -561,16 +561,16 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       const jobs = c.season.jobs.filter(j => j.kind !== 'haul' && j.kind !== 'build')
       const mine = app.selection.length ? jobs.filter(j => app.selection.includes(j.field)) : jobs
       const last = mine[mine.length - 1]
-      if (!last) ctx.say('Nothing on the list to take off.')
-      else if (ctx.run({ t: 'cancel', id: last.id }).ok) ctx.announce(`${jobText(last)}: taken off the list.`)
+      if (!last) ctx.say('There\'s nothing on the work list to remove.')
+      else if (ctx.run({ t: 'cancel', id: last.id }).ok) ctx.announce(`${jobText(last)} was taken off the work list.`)
       return true
     }
     const low = k.toLowerCase()
     if (low === 'f' && !e.ctrlKey) { if (!S.seasonDone(c)) app.cycleSpeed(); return true }
-    if (low === 'g' && !e.ctrlKey) { if (c.crew.length >= 3) grid.toggle(); else ctx.say('The work grid opens once three people are on the farm.'); return true }
+    if (low === 'g' && !e.ctrlKey) { if (c.crew.length >= 3) grid.toggle(); else ctx.say('Who does what opens once you have three people on the farm.'); return true }
     if (low === 'y' && !e.ctrlKey) {
       if (yardShown(c)) app.selectYard(app.yard === S.HOME_YARD ? 0 : S.HOME_YARD)
-      else ctx.say('Building opens once the farm can pay for one.')
+      else ctx.say('You can build once the farm can afford a building.')
       return true
     }
     const kind = KEY_JOB[low]
@@ -628,13 +628,13 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       paused.hidden = !stopped || (stoppedFor && layout !== 'narrow')
       el.classList.toggle('is-paused', !paused.hidden)
       if (!paused.hidden) patch(paused, JSON.stringify([ctx.touch(), app.resumeSpeed]), () => h('button', { class: 'paused-go btn', type: 'button', testid: 'paused-go', onclick: () => app.togglePause() },
-        icon('play', 'i'), h('span', { class: 'sr' }, 'Paused. '), `Go on at ${SPEED_X[app.resumeSpeed || 1]}`, ctx.touch() ? null : h('span', { class: 'key' }, 'Space')))
+        icon('play', 'i'), h('span', { class: 'sr' }, 'Paused. '), `Resume at ${SPEED_X[app.resumeSpeed || 1]}`, ctx.touch() ? null : h('span', { class: 'key' }, 'Space')))
       const wasRunning = !running.hidden
       running.hidden = app.speed === 0 || S.seasonDone(c) || (stoppedFor && layout !== 'narrow') || (layout === 'narrow' && app.selection.length > 0)
       if (!running.hidden && !wasRunning) ranAt = performance.now()
       if (!running.hidden) {
         patch(running, JSON.stringify([ctx.touch(), app.speed]), () => h('button', { class: 'paused-go btn', type: 'button', testid: 'running-stop', onclick: () => app.togglePause() },
-          icon('pause', 'i'), `Days running at ${SPEED_X[app.speed]}`, ctx.touch() ? null : h('span', { class: 'key' }, 'Space')))
+          icon('pause', 'i'), `Running at ${SPEED_X[app.speed]}`, ctx.touch() ? null : h('span', { class: 'key' }, 'Space')))
         running.classList.toggle('lit', performance.now() - ranAt < 2400)
         if (performance.now() - ranAt < 2400) setTimeout(() => ctx.dirty(), 2450)
       }

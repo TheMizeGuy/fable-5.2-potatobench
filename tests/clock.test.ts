@@ -36,10 +36,10 @@ describe('the clock', () => {
     app.newGame(undefined, 11)
     app.do({ t: 'begin' })
     app.setSpeed(0)
-    app.holding = 'A telegram wants an answer.'
+    app.holding = 'This telegram needs an answer.'
     app.setSpeed(2)
     expect(app.speed).toBe(0)
-    expect(app.pauseReason).toBe('A telegram wants an answer.')
+    expect(app.pauseReason).toBe('This telegram needs an answer.')
     app.holding = ''
     app.setSpeed(2)
     expect(app.speed).toBe(2)
@@ -51,7 +51,7 @@ describe('the clock', () => {
     app.setSpeed(2)
     play(app, 120, () => app.speed === 0 && c.incidents.length > 0, false)
     expect(c.incidents.length).toBeGreaterThan(0)
-    app.holding = 'A telegram wants an answer.'
+    app.holding = 'This telegram needs an answer.'
     for (const inc of [...c.incidents]) app.do({ t: 'answer', incident: inc.id, choice: S.defaultChoice(inc) })
     expect(app.holding).toBe('')
     expect(app.speed).toBe(2)
