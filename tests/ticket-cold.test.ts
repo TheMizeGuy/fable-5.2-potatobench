@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import * as S from '../src/sim/index.ts'
 import { loadWorld } from '../tools/balance/world.ts'
-import { coldPlanting } from '../src/ui/rules.ts'
+import { coldSeed } from '../src/ui/rules.ts'
 
 const record = loadWorld()
 
@@ -24,36 +24,31 @@ function plantedCold(seed: number, another = false): { c: S.Campaign; lot: S.Lot
 }
 
 describe('the weigh ticket names cold planting', () => {
-  it('says when a field was planted in cold soil and what the rotted seed cost', () => {
+  it('counts the seed that rotted in cold soil as a loss, with the planting day', () => {
     let named = 0
     for (let seed = 1; seed <= 4; seed++) {
       const { c, lot } = plantedCold(seed)
       expect(lot).toBeDefined()
       const stand = S.fieldInfo(c, lot.field).stand
       const total = S.lotCwt(lot) + (['green', 'blight', 'frost', 'rot', 'small'] as S.Cause[]).reduce((a, k) => a + lot.loss[k], 0)
-      const line = coldPlanting(c, lot, stand, total)
       const on = S.monthDay(lot.year, c.season!.fields[lot.field].plantDay)
       expect(on.month, `seed ${seed}: planted in April`).toBe(3)
-      expect(line, `seed ${seed}`).toMatch(/^Planted in cold soil on April \d+/)
+      const loss = coldSeed(c, lot, stand, total)
       if (stand < 0.99) {
-        // The loss: what the rotted share of the seed would have grown, as the full breakdown counts it.
-        const per = Math.round(total * (1 - stand) / stand / S.FIELD_ACRES)
-        expect(line).toContain(`${Math.round((1 - stand) * 100)}% of the seed rotted before it came up, which cost about ${per.toLocaleString('en-US')} cwt/acre.`)
+        // What the rotted share of the seed would have grown, as the full breakdown counts it.
+        expect(loss!.cwt).toBeCloseTo(total * (1 - stand) / stand, 6)
+        expect(loss!.phrase).toBe(`${Math.round((1 - stand) * 100)}% after a cold planting on April ${on.dom}`)
         named++
-      } else expect(line).toMatch(/but the seed came up anyway\.$/)
-      console.log(`seed ${seed}: ${line}`)
+      } else expect(loss).toBeNull()
+      console.log(`seed ${seed}: ${loss ? `${Math.round(loss.cwt)} cwt, ${loss.phrase}` : 'nothing rotted'}`)
     }
     expect(named, 'at least one cold planting lost seed').toBeGreaterThan(0)
   })
 
-  it('without a stand to go by, it says so without a number', () => {
-    const { c, lot } = plantedCold(1)
-    expect(coldPlanting(c, lot, null, 1000)).toMatch(/^Planted in cold soil on April \d+, so some of the seed may have rotted before it came up\.$/)
-  })
-
-  it('says nothing of a field the coach planted when the soil was fit and that came up whole', () => {
-    const { c, warm } = plantedCold(2, true)
+  it('says nothing without a stand to go by, or for a field the coach planted that came up whole', () => {
+    const { c, lot, warm } = plantedCold(2, true)
+    expect(coldSeed(c, lot, null, 1000)).toBeNull()
     expect(warm).toBeDefined()
-    expect(coldPlanting(c, warm!, 1, 1000)).toBe('')
+    expect(coldSeed(c, warm!, 1, 1000)).toBeNull()
   })
 })

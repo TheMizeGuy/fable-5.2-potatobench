@@ -262,6 +262,7 @@ export function personCard(ctx: Ctx): PersonCard {
         h('span', { class: 'pc-tools' },
           h('button', { class: 'iconbtn', type: 'button', testid: 'person-show', 'aria-label': farmer ? 'Find yourself on the farm' : 'Find them on the farm', title: ctx.touch() ? undefined : farmer ? 'Find yourself on the farm' : 'Find them on the farm', onclick: () => { app.selectUnit(p.id, 'land'); ctx.view.follow(p.id) } }, icon('scout', 'i')),
           h('button', { class: 'close', type: 'button', testid: 'person-close', 'aria-label': `Close${ctx.touch() ? '' : ' (Escape)'}`, onclick: () => app.selectUnit(-1) }, icon('close', 'i')))),
+      h('div', { class: 'card-body', 'data-scroll': 'person' },
       h('p', { class: 'pc-doing', testid: 'person-doing' }, icon(doingGlyph(c, p), 'i'), h('span', null, doing),
         next && doing === 'Nothing to do' ? h('span', { class: 'quiet it' }, `. Up next: ${R.jobText(next, c, next.building).replace(/^./, x => x.toLowerCase())}`) : null),
       h('table', { class: 'skills' },
@@ -288,7 +289,8 @@ export function personCard(ctx: Ctx): PersonCard {
           h('dd', null, p.quitIn >= 0 ? `Will quit in ${F.plural(p.quitIn, 'day')} unless their mood improves.` : why.length ? F.upper(`${moodSaid(why)}.`) : 'No strong reasons either way.')),
         p.hurtUntil >= 0 ? h('div', null, h('dt', { class: 'c-red' }, 'Hurt'), h('dd', null, `Back on ${F.date(c.year, p.hurtUntil)}.`)) : null),
       restControl(ctx, c, p.id, 'person-rest'),
-      flashed && performance.now() < flashed.until ? h('p', { class: 'pc-flash c-red', role: 'status' }, flashed.text) : null,
+      flashed && performance.now() < flashed.until ? h('p', { class: 'pc-flash c-red', role: 'status' }, flashed.text) : null),
+      h('div', { class: 'card-foot' },
       farmer ? h('p', { class: 'pay quiet it' }, 'You don\'t draw a wage. Your family\'s living costs come out at the end of the year.') : [
         h('p', { class: 'pay lead' }, h('span', null, h('b', { class: 'num' }, F.money(p.pay)), ` a month${p.foreman ? ' as foreman' : ''}`), h('span', { class: 'dots' }), p.ask ? h('span', { class: 'quiet num' }, `asked for ${F.money(p.ask)}`) : null),
         h('div', { class: 'pc-actions' },
@@ -322,7 +324,7 @@ export function personCard(ctx: Ctx): PersonCard {
             }, BLOCK_NAME[b].replace(/^The /, '').split(',')[0])
           }),
           p.foreman ? h('button', { class: 'btn', type: 'button', testid: 'foreman-none', onclick: () => nameForeman(p, null) }, 'Back to field work') : null) : null,
-      ],
+      ]),
     ]
   }
 

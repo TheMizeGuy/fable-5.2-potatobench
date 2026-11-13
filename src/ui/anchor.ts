@@ -180,10 +180,11 @@ export function placeCard(a: Ask): Placed {
           if (b.right <= usual.x - 4 || b.left >= usual.x + w + 4) continue
           const x = side === 'right' ? b.right + 6 : b.left - 6 - w
           // (beside the very bar or panel its handle stands on is never too far: a chip in a wide people bar, a
-          // row of the grid)
-          const own = !!keep && meets(b, keep)
+          // row of the grid; and for a chip on a bar at the foot, the work list that lies over that bar with it)
+          const own = !!keep && (meets(b, keep) || (onBar && (b.top + b.bottom) / 2 > (win.top + win.bottom) / 2))
           if (x < win.left || x + w > win.right || (!own && Math.abs(x - usual.x) > ASIDE - gap)) continue
-          if (lay(side, null, x).h >= h0 - 2) starts.push({ off: x, aside: true })
+          // Whole there, or at least taller: a card that can be whole nowhere still gets the most height there is.
+          if (lay(side, null, x).h > usual.h + 1) starts.push({ off: x, aside: true })
         }
       }
     }
@@ -197,7 +198,7 @@ export function placeCard(a: Ask): Placed {
         if (upright ? o.right <= r.left || o.left >= r.right : o.bottom <= r.top || o.top >= r.bottom) continue
         for (const at of upright ? [o.bottom + 3, o.top - 3 - first.h] : [o.right + 3, o.left - 3 - w]) {
           const c = lay(side, at, upright ? st.off : null)
-          if (st.aside && c.h < h0 - 2) continue
+          if (st.aside && c.h < first.h - 1) continue
           if (!tries.some(t => t.side === side && Math.abs(t.x - c.x) < 1 && Math.abs(t.y - c.y) < 1)) tries.push({ ...c, aside: st.aside })
         }
       }

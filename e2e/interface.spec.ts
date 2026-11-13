@@ -112,7 +112,7 @@ test('every crop order has its place on the card; one that cannot be given is gr
   await page.getByTestId('field-0').click()
   // The coach says why it would wait; or, when the soil says now, planting is the suggested order, filled, with the fist.
   const holding = await game<boolean>(page, '!!app.needs()[0].hold')
-  if (holding) await expect(page.getByTestId('card-line')).toContainText('Hold off planting')
+  if (holding) await expect(page.getByTestId('card-line')).toContainText(/seed needs \d+°F or it can rot, so wait/)
   else await expect(page.getByTestId('order-plant')).toHaveClass(/is-suggested/)
   // Given, the order joins the crew's list, and its place on the card holds still for a moment.
   await page.getByTestId('order-plant').click()

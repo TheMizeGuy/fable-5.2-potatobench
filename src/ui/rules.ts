@@ -195,41 +195,53 @@ function whoIs(text: string): string {
   return w === 'You' ? 'You\'re' : `${w} is`
 }
 
-// Days until the ground is fit to plant, as a grower would reckon it: the soil drawn toward each day's mean, from the
-// forecast for five days and the usual weather after, and never before the date the coach calls too early. -1 when
-// it cannot be told within three months.
-export function plantingIn(world: S.World, c: S.Campaign): number {
-  const s = c.season
-  const t = S.today(world, c)
-  if (!s || !t) return -1
-  const earliest = S.dayIndex(s.year, 4, 8)
-  const fc = S.forecast(world, c, 5)
-  const nm = world.weather.normals
-  let soil = t.soilT
-  for (let k = 1; k <= 90; k++) {
-    const day = s.day + k
-    const f = fc[k - 1]
-    const slot = !S.isLeap(s.year) && day >= 59 ? day + 1 : day
-    const mean = f ? (f.hi + f.lo) / 2 : (nm.tmax[slot] + nm.tmin[slot]) / 20
-    soil += S.SOIL_T_GAIN * (mean - soil)
-    if (day >= earliest && soil >= 10) return k
+// Days until the ground is fit to plant (S.plantingIn).
+export const plantingIn = S.plantingIn
+
+// Killing the vines before they are due is warned of once it gives up this much, cwt an acre (a farm can lose half
+// again or half as much as S.killCostToday says, so the warning says "about").
+export const KILL_WARN_CWT = 5
+
+export interface KillEarly { field: number; cost: S.KillCost; short: string; why: string; did: string }
+
+// The worst of these fields to kill the vines on today, in words: the stamp's short line, its reason, and what the
+// note says once it is ordered. null when no field would give up KILL_WARN_CWT an acre (the kill is due, the coach
+// asked for it, or the potatoes have not formed).
+export function killEarly(world: S.World, c: S.Campaign, fields: number[]): KillEarly | null {
+  let worst: { field: number; cost: S.KillCost } | null = null
+  for (const i of fields) {
+    const cost = S.killCostToday(world, c, i)
+    if (cost && cost.cwtPerAcre >= KILL_WARN_CWT && (!worst || cost.cwtPerAcre > worst.cost.cwtPerAcre)) worst = { field: i, cost }
   }
-  return -1
+  if (!worst) return null
+  const { field, cost } = worst
+  const early = `${F.plural(cost.days, 'day')} early`
+  const where = fields.length > 1 ? ` in ${S.FIELD_NAMES[field]}` : ''
+  const lost = `about ${F.perArea(cost.cwtPerAcre)}`
+  const due = F.date(c.year, cost.dueDay)
+  const then = S.standingBy(c, 'kill', field) ? `Your crew will do it on ${due}.` : `It's due on ${due}.`
+  return {
+    field, cost, short: early,
+    why: `The potatoes are still growing, so killing the vines${where} ${early} gives up ${lost}. ${then}`,
+    did: `You're killing the vines${fields.length > 1 ? ` in ${S.FIELD_NAMES[field]}` : ''} ${early}, which gives up ${lost}.`,
+  }
 }
 
-// Seed that rotted in cold ground, in one line for the ticket: the planting day, and what it cost where the field's
-// stand is known (stand: the share of the seed that came up; total: the crop dug, cwt). Seed rots only in cold soil
-// before it comes up. Empty when nothing rotted and the planting was not before the season's earliest date.
-export function coldPlanting(c: S.Campaign, lot: S.Lot, stand: number | null, total: number): string {
+// Seed that rotted in cold ground, as a loss on the weigh ticket: what it cost the field, cwt (stand: the share of the
+// seed that came up; total: the crop dug, cwt), and a phrase with the planting day. Seed rots only in cold soil before
+// it comes up. null when the stand is not known or no seed worth saying rotted.
+export function coldSeed(c: S.Campaign, lot: S.Lot, stand: number | null, total: number): { cwt: number; phrase: string } | null {
+  if (stand === null || !(stand > 0) || 1 - stand < 0.01) return null
+  const cwt = total * (1 - stand) / stand
+  if (cwt / S.FIELD_ACRES < 0.5) return null
   const s = c.season
   const day = s && s.year === lot.year ? s.fields[lot.field]?.plantDay ?? -1 : -1
   const early = day >= 0 && day < S.dayIndex(lot.year, S.PLANT_FROM.month, S.PLANT_FROM.dom)
-  const on = day >= 0 ? ` on ${F.date(lot.year, day)}` : ''
-  const rotted = stand !== null && stand > 0 ? 1 - stand : 0
-  const lost = rotted >= 0.01 ? total * rotted / stand! / S.FIELD_ACRES : 0
-  if (lost >= 0.5) return `${early ? `Planted in cold soil${on}, and` : `The soil turned cold after planting${on}, and`} ${F.pct(rotted)} of the seed rotted before it came up, which cost about ${F.perArea(lost)}.`
-  if (!early) return ''
-  return stand === null ? `Planted in cold soil${on}, so some of the seed may have rotted before it came up.` : `Planted in cold soil${on}, but the seed came up anyway.`
+  const share = F.pct(1 - stand)
+  return {
+    cwt,
+    phrase: day < 0 ? `${share} rotted in cold soil` : early ? `${share} after a cold planting on ${F.date(lot.year, day)}` : `${share} after the soil turned cold, planted ${F.date(lot.year, day)}`,
+  }
 }
 
 // What the five-day forecast says the sky will do, from its own chance of rain.
