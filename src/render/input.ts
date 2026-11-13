@@ -130,7 +130,7 @@ export function attachInput(
       const i = pick(p.x, p.y)
       if (downAt.button === 2) {
         // a right-click always answers: the order given, or why not
-        if (i >= 0) { const r = app.orderAt(i); if (!r.ok) app.notice(r.err) } else if (app.unit >= 0) app.notice('Right-click a field to send them there.')
+        if (i >= 0) { const r = app.orderAt(i); if (!r.ok) app.notice(r.err) } else app.notice(app.unit >= 0 ? 'Right-click a field to send them there.' : 'Select someone first, then right-click a field to send them there.')
       } else if (unit >= 0) {
         // One thing in hand at a time: a person clicked lets the field or the yard go, and the other way about.
         app.select(-1)

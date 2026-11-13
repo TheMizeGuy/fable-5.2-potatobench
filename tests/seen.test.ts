@@ -5,6 +5,10 @@
 // people and machines are run without a picture (tests/crewsim.ts); tools/render/seen.ts checks the picture itself.
 import { describe, expect, it } from 'vitest'
 import { watch, type Farm, type Seen } from './crewsim.ts'
+import * as sim from '../src/sim/index.ts'
+import { personNow } from '../src/ui/now.ts'
+import { JOB_DOING } from '../src/ui/rules.ts'
+import { loadWorld } from '../tools/balance/world.ts'
 
 const SPEEDS = [[1, '1x'], [2, '3x'], [3, '8x']] as const
 const share = (a: number, b: number) => (b > 0 ? a / b : 0)
@@ -78,5 +82,34 @@ describe('the first seconds', () => {
     expect(watch('plant', 1, { seconds: 6 }).lead).toBeGreaterThan(20)
     // (an order the player has given: felling, on foot)
     expect(watch('fell', 1, { farm: { order: app => { app.do({ t: 'job', kind: 'fell', field: 14 }) } }, foot: true, seconds: 6 }).lead).toBeGreaterThan(8)
+  })
+})
+
+describe('what the state says of the machine work', () => {
+  it('someone said to be at machine work in a field holds a machine there, every day of a season', () => {
+    const world = loadWorld()
+    const c = sim.createCampaign(world, { seed: 5, startYear: 1977 })
+    c.cash += 60000
+    sim.apply(world, c, { t: 'hire', applicant: c.applicants[0].id })
+    sim.apply(world, c, { t: 'begin' })
+    sim.apply(world, c, { t: 'sprayWay', way: 'auto' })
+    let said = 0
+    for (let g = 0; g < 400 && c.phase === 'season' && !sim.seasonDone(c); g++) {
+      c.incidents = []
+      sim.apply(world, c, { t: 'day' })
+      const s = c.season!
+      const waits = sim.jobWaits(world, c)
+      for (const u of c.crew) {
+        const n = personNow(c, u.id, waits)
+        const kind = sim.JOBS.find(k => JOB_DOING[k].replace(/ (in|from|around)$/, '') === n.word)
+        if (!kind || sim.jobSkill(kind) !== 'machine' || n.place < 0) continue
+        said++
+        // holding the order with a machine, or on the last day worked it on a machine of its own hours there
+        const holds = u.rig !== '' && s.jobs.some(j => j.id === u.job && j.field === n.place)
+        const drove = s.worked.some(w => w.unit === u.id && w.field === n.place && w.kind === kind && !!w.machine)
+        expect(holds || drove, `${u.name} on day ${s.day}: ${n.line}`).toBe(true)
+      }
+    }
+    expect(said).toBeGreaterThan(5)
   })
 })

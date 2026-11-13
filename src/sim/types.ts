@@ -231,6 +231,7 @@ export interface Unit {
   rig: Rig                          // what the person is driving for the order held
   out: number                       // hurt: the day they are back at work, or -1
   rest: RestMode                    // rests when worn out, rests now until fresh, or works on worn out
+  idleRun?: number                  // working days in a row with nothing to do while work waits that they are set never to do
 }
 
 // Something that happened and asks for a decision. It waits until the day `until` for an answer, then takes its
@@ -321,6 +322,8 @@ export interface Season {
   watchDay: number          // day the spray threshold was crossed, or -1
   frozen: boolean
   frostHaul?: number        // the last day a frost was forecast on crop still in barrels
+  barrelsSaid?: number[]    // fields whose barrels the season has said have stood out three days
+  idleSaid?: number[]       // people the season has said once were idle with work waiting that they are set never to do
   pressed?: number[]        // people moved today from work that can wait to work that cannot
   frostLow?: number         // tonight's forecast low at the station, C
   plantAsk?: number         // the day the crew first stood ready to plant and asked for the word
@@ -331,7 +334,8 @@ export interface Season {
   fields: FieldSeason[]
   jobs: Job[]
   nextJob: number
-  worked: { kind: JobKind; field: number; unit: number }[]   // what each crew did on the last day worked, in order
+  // what each crew did on the last day worked, in order; machine work with what they drove and its hours (shares of the day)
+  worked: { kind: JobKind; field: number; unit: number; rig?: Rig; machine?: string; from?: number; to?: number }[]
   spent: number
   log: GameEvent[]
   pickers: boolean          // a picking crew hired by the day for the harvest break

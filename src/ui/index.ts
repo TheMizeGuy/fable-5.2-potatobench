@@ -57,6 +57,11 @@ function sentText(c: S.Campaign, e: { field: number; kind: S.JobKind; unit: numb
 
 // How close together presses of the same order come to be answered by one line.
 const JOIN_MS = 2500
+// How long the answer to a press stays: long enough to be read after a glance at the land.
+const ANSWER_MS = 15000
+
+// The alerts whose one remedy is a press, and the words on its key.
+const KEYED: Partial<Record<string, string>> = { frostBarrels: 'Haul it in now', barrelsOut: 'Haul them in now', idleNever: 'Let them help' }
 
 export const mountHud: MountHud = (root, app, view, sound) => {
   mountSprites()
@@ -70,8 +75,9 @@ export const mountHud: MountHud = (root, app, view, sound) => {
   const notes = new Notes()
   root.replaceChildren(plateLayer, screenLayer, floating, whoLayer, notes.liveRegion, paperLayer, guideLayer)
 
-  // The answer to the player's own press (an order, or why not) is a note; while a tutorial note is up the notes are
-  // hidden, so it is also shown beside the pointer for a moment.
+  // The answer to the player's own press (an order, or why not) is a note, kept long enough to be read after a glance
+  // away; while a tutorial note or a paper hides the notes it is also shown beside the pointer, and the note itself
+  // shows once the paper has gone.
   let pressedAt = { x: innerWidth / 2, y: innerHeight / 2 }
   document.addEventListener('pointerdown', e => { pressedAt = { x: e.clientX, y: e.clientY } }, true)
   const tip = h('p', { class: 'alert answer-tip sys', testid: 'answer-tip', role: 'status', hidden: true, style: 'position:absolute;max-width:320px;margin:0;pointer-events:none' })
@@ -81,14 +87,14 @@ export const mountHud: MountHud = (root, app, view, sound) => {
   let ticketing = false
   let lastSent: { kind: S.JobKind; unit: number; instead?: number; fields: number[]; at: number; text: string } | null = null
   function answer(text: string): void {
-    notes.push({ text, level: 'info', ttl: 7000 })
-    if (!root.classList.contains('noting')) return
+    notes.push({ text, level: 'info', ttl: ANSWER_MS })
+    if (!root.classList.contains('noting') && !papers.isOpen() && !app.holding) return
     tip.textContent = localize(text)
     tip.hidden = false
     tip.style.left = `${Math.max(8, Math.min(innerWidth - 328, pressedAt.x + 14))}px`
     tip.style.top = `${Math.max(8, Math.min(innerHeight - 96, pressedAt.y + 14))}px`
     clearTimeout(tipTimer)
-    tipTimer = window.setTimeout(() => { tip.hidden = true }, 4500)
+    tipTimer = window.setTimeout(() => { tip.hidden = true }, 8000)
   }
   const papers = new Papers(paperLayer, [screenLayer, plateLayer, floating], app)
   const touchQuery = matchMedia('(pointer: coarse)')
@@ -232,7 +238,8 @@ export const mountHud: MountHud = (root, app, view, sound) => {
         const short = alertShort(a)
         // Frost over barrels names no one field: the note goes to the biggest haul, where the barrels and the hauler show.
         const field = a.type === 'frostBarrels' && app.campaign ? S.haulInfo(app.world, app.campaign).sort((x, y) => y.cwt - x.cwt)[0]?.field ?? -1 : a.field
-        notes.push({ level: a.level, glyph: short.glyph, text: short.text, full: a.text, field, day: a.day, go: screen?.goFor?.(a) })
+        const go = screen?.goFor?.(a)
+        notes.push({ level: a.level, glyph: short.glyph, text: short.text, full: a.text, field, day: a.day, go, key: go ? KEYED[a.type] : undefined })
         break
       }
       case 'change':

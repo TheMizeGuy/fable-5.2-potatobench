@@ -6,14 +6,15 @@ import { BLOCK_NAME, BLOCKS, DUFOUR_YARD, HOME_FIELDS, HOME_YARD, PARCELS, YARDS
 import { lotCwt } from './harvest.ts'
 import { sellLot } from './market.ts'
 import * as P from './params.ts'
-import { applicantsFor, fromApplicant, gainXp, jobSkill, payOf, SKILL_LABEL, speed, subject } from './people.ts'
+import { applicantsFor, fromApplicant, gainXp, jobSkill, payOf, SKILL_LABEL, speed, subject, willDo } from './people.ts'
+import { heldUpBy } from './remedies.ts'
 import { hash32 } from './rng.ts'
 import {
   addJob, buildable, buildJob, closeIncidents, FIELD_NAMES, holdsDufour, JOB_LABEL, leftInField, letGo, releaseJob, removePerson, resolveIncident, seasonDone, sheltering,
-  haulByDark, startSeason, stepDay, unitBlock,
+  haulByDark, haulRate, placeName, startSeason, stepDay, tractorsRunning, unitBlock, workday,
 } from './season.ts'
 import { CHOICE_LABEL } from './incidents.ts'
-import { article, buildBlock, buildCost, buildingAt, buildWork, hasBuilt, startBuilding, YARD_NAME } from './buildings.ts'
+import { article, buildBlock, buildCost, buildingAt, buildWork, hasBuilt, startBuilding, travel, YARD_NAME } from './buildings.ts'
 import { brushedNow, COVER_WORD, fell, isField, standing } from './land.ts'
 import type { Campaign, Cmd, Contract, Due, FieldPlan, GameEvent, Incident, JobKind, Lot, Result, RoutineKind, Season, SprayWay, Unit, UpgradeId, WinterWork, World, YearSummary } from './types.ts'
 import { variety } from './varieties.ts'
@@ -330,7 +331,9 @@ function takeOn(c: Campaign, u: Unit): GameEvent {
   }
   c.crew.push(u)
   const as = u.kind === 'hand' ? 'a field hand' : 'a tractor operator'
-  return note(c, 'hired', 'info', `${u.name} is hired as ${as} at $${withCommas(u.wage)} a month.`)
+  // What a hand will do, so the farmer keeps to the machines.
+  const does = u.kind === 'hand' && u.prio.field > 0 ? ` ${u.name.split(' ')[0]} will scout, pull blighted plants and do test digs${u.prio.machine > 0 ? ', and drive when you can\'t' : ''}, so you can stay on the tractor.` : ''
+  return note(c, 'hired', 'info', `${u.name} is hired as ${as} at $${withCommas(u.wage)} a month.${does}`)
 }
 
 // The tracts the farm holds with standing woods or brush to fell.
@@ -1075,16 +1078,40 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
       s.jobs.unshift(...s.jobs.splice(s.jobs.indexOf(job), 1))
       const name = FIELD_NAMES[cmd.field]
       const by = haulByDark(c, cmd.field)
-      if (!by) return ok([note(c, 'haulNow', 'warn', `Nobody on the farm drives, so the barrels in ${name} stay out tonight. Set someone's priority for machine work to haul them in.`)])
+      if (!by) {
+        const why = heldUpBy(c, 'haul', false)
+        const fix = c.crew.some(x => !x.foreman && x.prio.machine <= 0) ? ' Set someone\'s priority for machine work to haul them in.' : ''
+        const out = why ? `${why} The barrels in ${name} stay out tonight.` : `Nobody on the farm drives, so the barrels in ${name} stay out tonight.`
+        return ok([note(c, 'haulNow', 'warn', `${out}${fix}`)])
+      }
       // A day off gives way to the frost, as on a morning the frost is forecast (workday); the extra day tires them.
+      const off = !workday(c, s)
       s.frostHaul = s.day
-      const u = c.crew.find(x => x.id === by.unit)!
+      let u = c.crew.find(x => x.id === by.unit)!
+      let cwt = by.cwt
+      let stops = ''
+      let stopsWork = false
+      // Every machine held for other work by those who will carry on with it first thing: one of them stops for the haul.
+      const holders = c.crew.filter(o => o.rig === 'tractor' && o.job >= 0 && o.job !== job!.id)
+      const truck = !!c.upgrades.truck && !c.crew.some(o => o.rig === 'truck')
+      if (!truck && holders.length >= tractorsRunning(c, s.day) && !holders.includes(u)) {
+        const h = holders.find(o => willDo(o, 'haul'))
+        if (!h) return ok([note(c, 'haulNow', 'warn', `Every tractor is out on other work with someone who won't haul, so the barrels in ${name} stay out tonight.`)])
+        u = h
+        cwt = Math.min(f.inField, haulRate(c, u, cmd.field, 'tractor') * Math.max(0, 1 - travel(c, u.at, cmd.field)))
+        stopsWork = true
+      }
+      // Whoever hauls drops what they were on, and the answer says so: "Wendell stops digging Lower Middle for it."
+      const was = u.job >= 0 && u.job !== job.id ? s.jobs.find(x => x.id === u.job) : undefined
+      if (was) stops = ` ${u.kind === 'farmer' ? 'You stop' : `${u.name.split(' ')[0]} stops`} ${JOB_LABEL[was.kind].toLowerCase()} ${was.field === cmd.field ? 'there' : placeName(was.field)} for it.`
       job.unit = u.id
       if (u.job >= 0 && u.job !== job.id) letGo(u)
-      const about = (cwt: number) => withCommas(Math.max(50, Math.round(cwt / 50) * 50))
-      const left = f.inField - by.cwt
-      const brings = `${by.rig === 'truck' ? 'The truck brings' : 'One tractor brings'} in about ${about(by.cwt)} cwt by dark`
-      return ok([note(c, 'haulNow', 'info', `${u.kind === 'farmer' ? 'You\'re' : `${u.name.split(' ')[0]} is`} hauling ${name} now. ${brings}${left >= 25 ? `, so about ${about(left)} cwt will stay out` : ', which is all of it'}.`)])
+      const about = (x: number) => withCommas(Math.max(50, Math.round(x / 50) * 50))
+      const left = f.inField - cwt
+      const brings = `${by.rig === 'truck' && !stopsWork ? 'The truck brings' : 'One tractor brings'} in about ${about(cwt)} cwt by dark`
+      const tires = off ? ` It's a day off, so it tires ${u.kind === 'farmer' ? 'you' : 'them'} as a working day does.` : ''
+      const now = `${u.kind === 'farmer' ? 'You\'re' : `${u.name.split(' ')[0]} is`} hauling ${name} now.${stops}${tires} `
+      return ok([note(c, 'haulNow', 'info', `${now}${brings}${left >= 25 ? `, so about ${about(left)} cwt will stay out` : ', which is all of it'}.`)])
     }
     case 'day': {
       if (c.phase !== 'season' || !c.season) return fail('The season isn\'t under way.')

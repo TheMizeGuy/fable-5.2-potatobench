@@ -249,14 +249,14 @@ describe('travel', () => {
     expect(nearEvents.some(e => e.type === 'planted' && e.field === 2)).toBe(true)
     expect(order(far, 'plant', 8)!.done).toBeCloseTo((1 - S.travelDays(-1, 8)) * rate * S.stoneSpeed(c.fields[8].stones), 12)
     expect([crewOf(near, 0).at, crewOf(far, 0).at]).toEqual([2, 8])
-    expect(near.season!.worked).toEqual([{ kind: 'plant', field: 2, unit: 0 }])
+    expect(near.season!.worked).toMatchObject([{ kind: 'plant', field: 2, unit: 0 }])
     // The farmer holds the planting it began and, on the next day fit for it, finishes it before anything else.
     expect(crewOf(far, 0).job!.kind).toBe('plant')
     ok(far, { t: 'job', kind: 'plant', field: 2 })
     ok(far, { t: 'bump', id: order(far, 'plant', 2)!.id })
     const { events, worked } = untilDone(far, 'plant', 8)
     expect(events.some(e => e.type === 'planted' && e.field === 8)).toBe(true)
-    expect(worked[0]).toEqual({ kind: 'plant', field: 8, unit: 0 })
+    expect(worked[0]).toMatchObject({ kind: 'plant', field: 8, unit: 0 })
   })
 
   it('a field hand cannot plant: pinned it is refused, and unpinned the planting waits for the farmer', () => {
@@ -267,7 +267,7 @@ describe('travel', () => {
     ok(x, { t: 'job', kind: 'plant', field: 2 })
     refused(x, { t: 'assign', id: order(x, 'plant', 2)!.id, unit: hand }, /field hand/)
     days(x, 1)
-    expect(x.season!.worked).toEqual([{ kind: 'plant', field: 2, unit: 0 }])
+    expect(x.season!.worked).toMatchObject([{ kind: 'plant', field: 2, unit: 0 }])
     expect(crewOf(x, hand)).toMatchObject({ at: -1, job: null })
   })
 
@@ -284,7 +284,7 @@ describe('travel', () => {
     expect(crewOf(x, 0).job).toBeNull()
     expect(crewOf(x, op.id).job).toBeNull()
     const { events, worked } = untilDone(x, 'plant', 8)
-    expect(worked).toEqual([{ kind: 'plant', field: 8, unit: op.id }])
+    expect(worked).toMatchObject([{ kind: 'plant', field: 8, unit: op.id }])
     expect(events.filter(e => e.type === 'planted' && e.field === 8).length).toBe(1)
     expect(crewOf(x, op.id).at).toBe(8)
     expect(crewOf(x, 0).at).toBe(8)
@@ -373,7 +373,7 @@ describe('crews in midsummer', () => {
     ok(c, { t: 'cancel', id: order(c, 'scout', 3)!.id })
     // Unpinned, a machine job goes to a crew that can do it, never to the hand.
     days(c, 1)
-    expect(c.season!.worked).toEqual([{ kind: 'spray', field: 2, unit: op }])
+    expect(c.season!.worked).toMatchObject([{ kind: 'spray', field: 2, unit: op }])
     expect(crewOf(c, hand).at).toBe(-1)
   })
 

@@ -35,3 +35,4 @@ export { contractOutlook, goalCosts, harvestYield, jobOutlook, killOutlook, kill
 export { killCostToday, type KillCost } from './killcost.ts'
 export { pressingWhy, waitable } from './season.ts'
 export { resting } from './people.ts'
+export { heldUpBy, remedies, type Remedy } from './remedies.ts'
