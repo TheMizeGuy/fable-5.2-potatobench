@@ -6,6 +6,8 @@ import type { App } from './app.ts'
 // person who has a machine in hand, or -1.
 export type ThingKind = 'tractor' | 'truck' | 'asking' | 'neighbour' | 'buyer' | 'picker' | 'cow' | 'deer' | 'yard'
 export interface Thing { kind: ThingKind; k: number; holder: number }
+// A point of the land, in the field view's own measure.
+export interface Place { x: number; y: number; z: number }
 // What the pointer is over on the land, in CSS pixels: a person (-1 none), a thing, a field (-1), a yard (0 none).
 // group: the people a pin stands for when several stand together.
 export interface Pointing { x: number; y: number; unit: number; thing: Thing | null; field: number; yard: number; group?: number[] }
@@ -51,6 +53,12 @@ export interface FieldView {
   // What the Home key does: back out to the farm, and in again.
   home(): void
   yardAnchor(yard: number): { x: number; y: number; visible: boolean }
+  // The ground under a point of the screen (null: none there), for holding a card to the place that was clicked as
+  // the camera moves; and where a point of the land is on the screen now (off it, the way it lies, visible false).
+  groundAt?(x: number, y: number): Place | null
+  screenOf?(p: Place): { x: number; y: number; visible: boolean }
+  // Brings something into the middle of the picture, from as far off as the camera stands, and selects nothing.
+  show?(what: { unit: number } | { yard: number } | { thing: Thing } | { at: Place }): void
   // Settles once the land has shown a test dig's hill lifted, or the last row of a day's digging come out
   // (at once when there is nothing to show), so the paper result can arrive after the land has shown it.
   whenShown(kind: 'sample' | 'dig', field: number): Promise<void>

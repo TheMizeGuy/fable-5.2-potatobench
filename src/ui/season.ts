@@ -1,6 +1,6 @@
 // The season (design/season.html): the land, with a stencilled tag on each field and a face pin on each person; the
 // two boards at the top; the time book of people at the foot with the alerts beside it; and, for whatever is
-// selected, a command bar docked at the edge of the land with the selection drawn on the land itself.
+// selected, its card beside the point clicked and tied to it (tie.ts), with the selection drawn on the land itself.
 import type { Goal } from '../game/goals.ts'
 import { SPEED_X } from '../game/app.ts'
 import { nextGoal } from '../game/goals.ts'
@@ -18,6 +18,7 @@ import { digitFor, fieldForDigit, isTract } from './map.ts'
 import { askSpray, personCard, sprayAsking, sprayWay, workGrid } from './people.ts'
 import { pins } from './pins.ts'
 import { plates, type PlateModel } from './plates.ts'
+import { anchored, ties, type Land, type Mode } from './tie.ts'
 import { hint as hintText, isJob, isStale, jobText, JOB_VERB, KEY_JOB, stageGlyph } from './rules.ts'
 import type { Ink } from './system/parts.ts'
 import { clock, topBar } from './top.ts'
@@ -98,7 +99,9 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   const yard = yardCard(ctx)
   const grid = workGrid(ctx)
   const incident = incidentCard(ctx)
-  const el = h('main', { class: 'season-screen' }, veil, top.el, paused, running, homeKey, card.el, yard.el, person.el, grid.el, trayHost,
+  // Each card opens beside the thing it is about and stays tied to it.
+  const tied = { card: anchored(ctx, card.el), yard: anchored(ctx, yard.el), person: anchored(ctx, person.el) }
+  const el = h('main', { class: 'season-screen' }, veil, top.el, paused, running, homeKey, tied.card.parts, tied.yard.parts, tied.person.parts, card.el, yard.el, person.el, grid.el, trayHost,
     h('div', { class: 'foot' }, h('div', { class: 'foot-book' }, crew, clockSlot), notesSlot), incident.el)
 
   // The selection drawn on the land: a dashed line round each selected field laid on its corners, a registration mark
@@ -204,6 +207,8 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   }
 
   let foot = { key: '', bottom: 0 }
+  // The foot of the boards themselves, without the slip that hangs from one.
+  let board = 0
   // An alert that lies over a tag or a stamp lets the press through to it, faded: a press meant for a stamp never
   // opens what an alert goes to (10).
   let clearAt = 0
@@ -403,6 +408,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   const people = pins(ctx, plateLayer, {
     tags: () => [...P.boxes(), ...yardMarks.filter(m => !m.wrap.hidden && m.at).map(m => new DOMRect(m.at!.x - m.w / 2, m.at!.y - 22, m.w, 44))], covers,
     stopped: () => stoppedBy(app.campaign),
+    board: () => board,
   })
 
   // ------------------------------------------------------------ the yards on the land
@@ -437,37 +443,43 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       if (m.wrap.hidden) continue
       const a = ctx.view.yardAnchor(m.y)
       const ins = app.insets
-      const ok = a.visible && Number.isFinite(a.x) && Number.isFinite(a.y) && a.y > ins.top + 40 && a.y < innerHeight - ins.bottom && a.x > ins.left + 60 && a.x < innerWidth - ins.right - 60 &&
-        !cv.some(r => a.x > r.left - 80 && a.x < r.right + 80 && a.y > r.top - 20 && a.y < r.bottom + 20)
+      // The yard in hand keeps its tag: its own card stands beside it, never on it.
+      const ok = a.visible && Number.isFinite(a.x) && Number.isFinite(a.y) && a.y > (app.yard === m.y ? Math.min(ins.top, board) : ins.top) + 40 && a.y < innerHeight - ins.bottom && a.x > ins.left + 60 && a.x < innerWidth - ins.right - 60 &&
+        (app.yard === m.y || !cv.some(r => a.x > r.left - 80 && a.x < r.right + 80 && a.y > r.top - 20 && a.y < r.bottom + 20))
       m.wrap.classList.toggle('gone', !ok)
       m.at = ok ? { x: a.x, y: a.y } : null
       if (ok) m.wrap.style.transform = `translate3d(${a.x.toFixed(1)}px, ${a.y.toFixed(1)}px, 0)`
     }
   }
 
-  // ------------------------------------------------------------ the bar's side: never over the thing it belongs to
+  // ------------------------------------------------------------ where a card may stand
 
-  let side: 'right' | 'left' = 'right'
-  function placeBar(): void {
-    const layout = ctx.layout()
-    const bar = !card.el.hidden ? card.el : !yard.el.hidden ? yard.el : null
-    const leftTaken = grid.isOpen() || !person.el.hidden || !!trayHost.firstElementChild
-    if (!bar || layout === 'narrow' || leftTaken) { if (side !== 'right') { side = 'right'; el.classList.remove('docked-left'); ctx.dirty() } return }
-    // Where the thing selected lies on the screen.
-    let box: { l: number; r: number } | null = null
-    if (bar === card.el && app.selection.length) {
-      const xs = app.selection.flatMap(i => ctx.view.fieldCorners(i).filter(q => q.visible && Number.isFinite(q.x)).map(q => q.x))
-      if (xs.length) box = { l: Math.min(...xs), r: Math.max(...xs) }
-    } else if (bar === yard.el) {
-      const a = ctx.view.yardAnchor(app.yard)
-      if (a.visible) box = { l: a.x - 90, r: a.x + 90 }
+  // What a card keeps off: the list and the time book at the foot, the clock's chip under the boards, the work grid
+  // and a test-dig tray. Read once after each change, not every frame.
+  let landNow: Land | null = null
+  function land(): Land {
+    if (landNow) return landNow
+    const ins = app.insets
+    const bars = [...crew.querySelectorAll<HTMLElement>('.queue, .timebook'), clockSlot, paused, running, homeKey, grid.el, trayHost.firstElementChild as HTMLElement | null]
+    const blocks = bars.filter((x): x is HTMLElement => !!x && !x.hidden && x.offsetParent !== null && x.offsetHeight > 0).map(x => { const r = x.getBoundingClientRect(); return { left: r.left, top: r.top, right: r.right, bottom: r.bottom } })
+    // The alerts' place beside the time book is kept clear whether or not a slip lies there now, so a slip that comes
+    // is never under a card (and no card moves when one comes). Under 1400 the alerts wait while a field is in hand.
+    const book = crew.querySelector<HTMLElement>('.timebook')
+    if (book && book.offsetParent !== null && !(ctx.layout() === 'mid' && el.classList.contains('selected'))) {
+      const b = book.getBoundingClientRect()
+      blocks.push({ left: b.right + 8, top: b.bottom - 56, right: Math.min(innerWidth - 8, b.right + 536), bottom: b.bottom })
     }
-    if (!box) return
-    const w = bar.offsetWidth + 16
-    const overRight = Math.max(0, box.r - (innerWidth - w)), overLeft = Math.max(0, w - box.l)
-    const span = Math.max(1, box.r - box.l)
-    const want = side === 'right' ? (overRight > span * 0.25 && overLeft < overRight ? 'left' : 'right') : (overLeft > span * 0.25 && overRight < overLeft ? 'right' : 'left')
-    if (want !== side) { side = want; el.classList.toggle('docked-left', side === 'left'); ctx.dirty() }
+    landNow = { win: { left: 8, top: ins.top + 8, right: innerWidth - 8, bottom: innerHeight - 8 }, blocks }
+    return landNow
+  }
+  ties().setLand(() => ({ ...land(), tags: P.boxes() }))
+  function placeCards(): void {
+    const layout = ctx.layout()
+    const quiet = incident.isUp()
+    const bar: Mode = layout === 'narrow' ? 'sheet' : layout === 'short' ? 'side' : 'float'
+    tied.card.frame(bar, quiet)
+    tied.yard.frame(bar, quiet)
+    tied.person.frame(layout === 'narrow' ? 'sheet' : layout === 'short' ? 'plain' : 'float', quiet)
   }
 
   // ------------------------------------------------------------ the time book and the list
@@ -645,9 +657,13 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       units.update(c)
       people.update(c)
       card.update(c)
+      tied.card.update(card.el.hidden ? null : ties().field())
       person.update(c, personUp)
+      tied.person.update(personUp ? ties().unit() : null)
       const build = g?.id === 'build' ? (S.buildingInfo(c).filter(b => b.yard === app.yard && b.state === 'none' && b.ok).sort((a, b) => a.total - b.total)[0]?.kind ?? null) : null
       yard.update(c, build)
+      tied.yard.update(ties().yard())
+      landNow = null
       if (c.crew.length < 3 && grid.isOpen()) grid.toggle(false)
       grid.update(c)
       incident.update(c)
@@ -667,6 +683,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
         return { left: l, top: t0, right: l + x.offsetWidth, bottom: t0 + x.offsetHeight }
       }
       const t = Math.max(top.el.getBoundingClientRect().bottom, ...[...top.el.querySelectorAll<HTMLElement>('.almanac > .mount, .bank > .mount')].map(x => x.getBoundingClientRect().bottom))
+      board = Math.max(0, ...[...top.el.querySelectorAll<HTMLElement>('.almanac > .mount, .bank > .mount')].map(x => x.getBoundingClientRect().bottom))
       const vis = (x: HTMLElement) => !x.hidden && x.offsetParent !== null && x.offsetHeight > 0
       // The time book and its list at the foot, and the clock with them on a phone. Not the alerts: they come and go,
       // and the picture is centred on the free land, so counting them would move the land under the pointer (at
@@ -695,18 +712,20 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
         el.style.setProperty('--foot', `${Math.round(raw)}px`)
         bottom = raw + (vis(homeKey) ? homeKey.offsetHeight + 10 : 0)
       }
-      // Only what always stands frames the land: a bar, a page or the grid opening on a click never moves the camera
-      // (the bar steps to the other side of what it belongs to instead; a card lies over the tags). On a phone
-      // the bar is a sheet over half the land, so there the land is framed above it.
+      // Only what always stands frames the land: a card, a page or the grid opening on a click never moves the camera
+      // (a card opens beside what it belongs to, never on it; it lies over the tags). On a phone the card is a sheet
+      // over half the land, so there the land is framed above it.
       const sheet = layout === 'narrow' ? [card.el, yard.el].find(vis) : undefined
       return [tAll, 0, sheet ? innerHeight - box(sheet).top + 6 : bottom, 0]
     },
-    frame: () => { coverCache = null; coverCache = covers(); placeBar(); P.frame(); placeYards(); people.frame(); drawSelection(); clearLand(); coverCache = null },
+    frame: () => { coverCache = null; coverCache = covers(); P.frame(); placeYards(); placeCards(); people.frame(); drawSelection(); clearLand(); coverCache = null },
     dispose() {
       off()
       P.dispose()
       people.dispose()
       units.dispose()
+      ties().setLand(null)
+      for (const t of Object.values(tied)) t.dispose()
       selLayer.remove()
       for (const m of yardMarks) m.wrap.remove()
     },

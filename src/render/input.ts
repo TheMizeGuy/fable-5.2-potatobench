@@ -131,9 +131,14 @@ export function attachInput(
         // a right-click always answers: the order given, or why not
         if (i >= 0) { const r = app.smartOrder(i); if (!r.ok) app.notice(r.err) } else if (app.unit >= 0) app.notice('Right-click a field to send them there.')
       } else if (unit >= 0) {
+        // One thing in hand at a time: a person clicked lets the field or the yard go, and the other way about.
+        app.select(-1)
+        app.selectYard(0)
         app.selectUnit(unit, 'land')
         lastClick = { t: 0, x: p.x, y: p.y, field: -2 }
       } else if (thing) {
+        app.select(-1)
+        app.selectYard(0)
         app.selectUnit(-1)
         app.inspect(thing, p.x, p.y)
         lastClick = { t: 0, x: p.x, y: p.y, field: -2 }

@@ -5,7 +5,7 @@ import {
   type Material, type Mesh, type MeshDepthMaterial, type MeshStandardMaterial, type Object3D, type Side,
 } from 'three'
 import { DAYS_PER_SECOND, type App } from '../game/app.ts'
-import type { CreateFieldView, FieldView, Thing } from '../game/contracts.ts'
+import type { CreateFieldView, FieldView, Place, Thing } from '../game/contracts.ts'
 import { FIELD_COUNT, HILLS } from '../sim/index.ts'
 import { CameraRig, HOME_FIELD, MIN_DIST, MOVE_MS, pitchFor, type Pose, type TierName, type Viewport } from './camera.ts'
 import { Clearing } from './clearing.ts'
@@ -120,6 +120,9 @@ export const createFieldView: CreateFieldView = (canvas, app) => {
     unitPlace: u => inner.unitPlace(u),
     home: () => inner.home(),
     yardAnchor: y => inner.yardAnchor(y),
+    groundAt: (x, y) => inner.groundAt?.(x, y) ?? null,
+    screenOf: p => inner.screenOf?.(p) ?? { x: 0, y: 0, visible: false },
+    show: what => inner.show?.(what),
     whenShown: (kind, field) => inner.whenShown(kind, field),
     dispose: () => inner.dispose(),
   }
@@ -428,7 +431,12 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     } else if (e.type === 'insets') {
       // In a season the camera is the player's: only on a narrow screen, where a card takes half of it, is the view
       // moved, and then only when the card would cover the field in hand.
-      if (snap.mode !== 'season' || (viewport().w < 700 && covered(app.selected))) reframe(reduced)
+      if (snap.mode !== 'season') reframe(reduced)
+      else if (viewport().w < 700) {
+        // The field that was framed is framed again above the sheet; anything else in hand is brought out from under it.
+        if (framing !== 'free' && covered(app.selected)) reframe(reduced)
+        else if (app.selected < 0 || framing === 'free') keepInView()
+      }
     }
   })
 
@@ -589,6 +597,17 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       if (t > 0 && yardAt(o.x + d.x * t, o.z + d.z * t) === yard) return yard
     }
     return 0
+  }
+  // The ground a point of the screen lies over: the ray followed down to the slope it meets.
+  function groundAt(x: number, y: number): Place | null {
+    const vp = viewport()
+    ray.setFromCamera(ndc.set((x / vp.w) * 2 - 1, -(y / vp.h) * 2 + 1), rig.camera)
+    const o = ray.ray.origin, d = ray.ray.direction
+    if (d.y > -1e-4) return null
+    const look = rig.looksAt(vp)
+    let gy = groundY(look.x, look.z), t = 0
+    for (let k = 0; k < 5; k++) { t = (gy - o.y) / d.y; gy = groundY(o.x + d.x * t, o.z + d.z * t) }
+    return t > 0 && Number.isFinite(t) ? { x: o.x + d.x * t, y: gy, z: o.z + d.z * t } : null
   }
   function pickUnit(x: number, y: number): number {
     if (snap.mode === 'title') return -1
@@ -1046,6 +1065,14 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     return { x: sx, y: sy, visible: anchor.z < 1 && sx >= 0 && sx <= vp.w && sy >= 0 && sy <= vp.h }
   }
 
+  // A point of the land on the screen; behind the camera, a point far off the way it lies.
+  function screenOf(p: Place): { x: number; y: number; visible: boolean } {
+    const a = screenAt(p.x, p.y, p.z)
+    if (anchor.z < 1) return a
+    const vp = viewport()
+    return { x: vp.w / 2 - (a.x - vp.w / 2) * 1e3, y: vp.h / 2 - (a.y - vp.h / 2) * 1e3, visible: false }
+  }
+
   function fieldCorners(i: number): { x: number; y: number; visible: boolean }[] {
     const f = FIELDS[i]
     if (!f) return []
@@ -1097,6 +1124,49 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     followClose = { dist, pitch: Math.max(pitchFor(dist), 0.3) }
     rig.moveTo(rig.complete({ x: far.x, z: far.z, ...followClose }), reduced, 900)
     return true
+  }
+
+  // Brings a person, a yard, a thing or a point of the land to the middle of the picture, from where the camera stands.
+  function show(what: { unit: number } | { yard: number } | { thing: Thing } | { at: Place }): void {
+    let p: { x: number; z: number } | null = null
+    if ('unit' in what) { if (crews.anchor(what.unit, far)) p = { x: far.x, z: far.z } }
+    else if ('yard' in what) p = YARD_AT[what.yard] ?? null
+    else if ('thing' in what) { if (what.thing.kind === 'yard') p = YARD_AT[what.thing.k] ?? null; else if (crews.thingAt(what.thing, far)) p = { x: far.x, z: far.z } }
+    else p = what.at
+    if (!p) return
+    following = -1
+    framing = 'free'
+    rig.moveTo(centredOn(p), reduced, 600)
+  }
+
+  // The view from where the camera stands that puts a point of the land in the middle of what the interface leaves
+  // free (a view's own middle is the window's, which a sheet on a phone may cover).
+  function centredOn(p: { x: number; z: number }): Pose {
+    const c = rig.looksAt(viewport())
+    return rig.complete({ x: rig.cur.x + p.x - c.x, z: rig.cur.z + p.z - c.z })
+  }
+
+  // On a phone a sheet takes half the land: whatever is in hand is kept in view above it.
+  function keepInView(): void {
+    let p: { x: number; z: number } | null = null
+    let at: { x: number; y: number; visible: boolean } | null = null
+    if (app.unit >= 0 && app.unitFrom === 'land') { if (crews.anchor(app.unit, far)) { p = { x: far.x, z: far.z }; at = screenAt(far.x, far.y, far.z) } }
+    else if (app.yard !== 0 && YARD_AT[app.yard]) { p = YARD_AT[app.yard]; at = yardAnchor(app.yard) }
+    else if (app.thing && app.thing.thing.kind !== 'yard') { if (crews.thingAt(app.thing.thing, far)) { p = { x: far.x, z: far.z }; at = screenAt(far.x, far.y, far.z) } }
+    else if (app.selected >= 0 && FIELDS[app.selected]) {
+      // A field: the middle of its near edge, where its tag stands and from where it runs up the picture.
+      if (!covered(app.selected)) return
+      const cam = rig.camera.position
+      const near = fields.nearEdge(app.selected, cam.x, cam.z)
+      p = { x: near.x, z: near.z }
+      at = { x: 0, y: 0, visible: false }
+    }
+    if (!p || !at) return
+    const vp = viewport()
+    if (at.visible && at.x >= vp.left && at.x <= vp.w - vp.right && at.y >= vp.top && at.y <= vp.h - vp.bottom) return
+    following = -1
+    framing = 'free'
+    rig.moveTo(centredOn(p), reduced, 500)
   }
 
   function yardAnchor(yard: number): { x: number; y: number; visible: boolean } {
@@ -1334,12 +1404,15 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       // The ground under them, for checks that measure how tall a figure stands on the screen.
       unitFoot: (id: number) => unitFoot(id),
       unitPlace: (id: number) => crews.placeOf(id),
+      // Where a yard's tag and a thing are pinned, for checks that a card opens beside them.
+      yardPin: (yard: number) => yardAnchor(yard),
+      thingPin: (t: Thing) => thingAnchor(t),
       following: () => following,
       // Where people are to be looked for in the yard, in metres (for tools that point the camera at them).
       places: () => crews.places(),
       clocks: () => crews.clocks(),
       // What a click at a point on the screen would pick.
-      pickAt: (x: number, y: number) => ({ field: pick(x, y), unit: pickUnit(x, y), yard: pickYard(x, y), mode: snap.mode, held: snap.fields.map(f => f.held), available: snap.fields.map(f => f.available) }),
+      pickAt: (x: number, y: number) => ({ field: pick(x, y), unit: pickUnit(x, y), yard: pickYard(x, y), thing: thingAt(x, y), mode: snap.mode, held: snap.fields.map(f => f.held), available: snap.fields.map(f => f.available) }),
       parts: () => Object.keys(parts),
       show(name: string, on: boolean) { if (parts[name]) parts[name].visible = on },
       // One child of a part, by its place in it (to find which mesh draws something).
@@ -1571,6 +1644,9 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     unitPlace: (id: number) => crews.placeOf(id),
     home: goHome,
     yardAnchor,
+    groundAt,
+    screenOf,
+    show,
     whenShown,
     dispose() {
       off()

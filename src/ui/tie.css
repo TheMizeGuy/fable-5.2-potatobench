@@ -1,0 +1,26 @@
+/* A card tied to its thing (tie.ts): the tether from the card's edge to the thing, the notch on a docked sheet's edge
+   toward it, the key that brings a thing back into the picture. Placement and live states only. */
+.tether, .tether-end, .tether-notch, .tether-tab, .thing-mark { position: absolute; left: 0; top: 0; z-index: 3; will-change: transform; }
+.tether, .tether-end, .tether-notch, .thing-mark { pointer-events: none; }
+/* A length of string from the card to a pin on the thing. */
+.tether { width: 100px; height: 2px; margin-top: -1px; background: var(--paper); box-shadow: 0 0 0 1px rgb(20 16 10 / 0.6); transform-origin: 0 50%; }
+/* Flat fills only: a gradient or a blurred shadow here cost the first card of a visit a 300 ms frame. */
+.tether-end { width: 5px; height: 5px; margin: -6.5px 0 0 -6.5px; border-radius: 50%; background: #1e1c19; border: 4px solid var(--paper); box-sizing: content-box; outline: 1.5px solid #1e1c19; }
+.tether-notch { width: 24px; height: 13px; margin: -12px 0 0 -12px; background: var(--paper); clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+.tether-notch[data-edge='left'] { width: 13px; height: 24px; clip-path: polygon(0 50%, 100% 0, 100% 100%); }
+/* Out of the picture: a tab on the card with the way the thing lies and the key that brings it back. */
+.tether-tab { display: flex; padding: 3px; }
+.tether-tab .btn { gap: 6px; min-height: 34px; padding: 0 10px; font-size: 15px; }
+.tether-tab .btn .i { --i: 16px; }
+.touch .tether-tab .btn { min-height: 44px; }
+/* A thing with no mark of its own on the land (a machine, a caller, an animal): ringed where it stands. */
+.thing-mark { width: 30px; height: 30px; margin: -15px 0 0 -15px; border-radius: 50%; border: 2.5px dashed var(--paper); box-shadow: 0 0 0 1px rgb(20 14 6 / 0.5), inset 0 0 0 1px rgb(20 14 6 / 0.5); }
+/* A person walked on: their card steps after them in one move. */
+.anchored.hop { transition: transform 180ms var(--ease-out); }
+.reduce-motion .anchored.hop { transition: none; }
+/* A card laid beside its thing comes and goes in place: its transform is its place, so it is never slid in. */
+@keyframes lay-card { from { scale: 0.96; opacity: 0.4; } }
+@keyframes leave-card { to { scale: 0.98; opacity: 0; } }
+/* In spring the field's card opens beside the field too, on the land the catalogue leaves free. */
+.spring-screen:is([data-layout='mid'], [data-layout='wide']) .spring-card.anchored { left: 0; top: 0; right: auto; bottom: auto; max-height: none; z-index: 3; will-change: transform; }
+.spring-screen:is([data-layout='mid'], [data-layout='wide']) .spring-card.anchored.in { animation: lay-card var(--t-sheet) var(--ease-paper); }

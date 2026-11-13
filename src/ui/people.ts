@@ -208,6 +208,7 @@ export function personCard(ctx: Ctx): PersonCard {
       h('header', { class: 'pc-head' },
         ringed(p, ringOfId(c, p.id), 64),
         h('div', null,
+          farmer ? null : h('p', { class: 't-label', testid: 'person-kind' }, R.KIND_NAME[p.kind]),
           h('h2', { class: 't-title pc-name', testid: 'person-name' }, farmer ? 'You, the farmer' : p.name),
           h('p', { class: 'pc-trait' }, farmer ? h('span', { class: 'quiet' }, 'Does every job and draws no wage.') : [h('b', null, `${p.traitName}:`), ' ', h('span', { class: 'quiet' }, p.traitText.replace(/^./, x => x.toLowerCase()))])),
         h('span', { class: 'pc-tools' },

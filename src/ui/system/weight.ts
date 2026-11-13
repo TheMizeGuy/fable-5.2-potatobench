@@ -21,7 +21,7 @@ const MAJOR: RegExp[] = [
 // Minor: close, back, more, change, a goal's list, put away.
 const MINOR: RegExp[] = [
   /-close$/, /^(card-close|paper-close|hint-close|incident-later|spray-ask-close)$/, /^lot-keep-/, /^(how-keys|how-guide)$/,
-  /^(goal|next-goal|forecast|materials|sample-again|order-more|queue-more|compare-open|money-open|reckoning-open|spray-ask-open|card-spray-way)$/,
+  /^(goal|next-goal|forecast|materials|sample-again|order-more|queue-more|compare-open|money-open|reckoning-open|spray-ask-open|spraying-open)$/,
   /^(track|list-x|queue-first|queue-who|help|guide-again|grid-person)-/, /^(guide-skip|guide-stop|guide-show)$/,
 ]
 const MAJOR_CLASS = /(^| )(way|reply|hazard)( |$)/
