@@ -203,7 +203,7 @@ export const mountHud: MountHud = (root, app, view, sound) => {
         const spec = app.screen === 'season' ? ticket(ctx, lot, { fresh: true, staged: app.speed < 3 }) : null
         // The game stops for it as for any card that needs an answer (so answering it sets the days going again), with no
         // line of its own: the ticket is the answer's place.
-        if (spec) { ticketing = true; app.stopFor(e.text); ticketing = false; papers.enqueue(spec) }
+        if (spec) { ticketing = true; app.stopFor('weighed', e.text); ticketing = false; papers.enqueue(spec) }
         dirty = true
       }
     }
@@ -229,6 +229,8 @@ export const mountHud: MountHud = (root, app, view, sound) => {
         // a kind of notice the guide has explained once, which then comes as a toast. A player who asked to be paused
         // on alerts is shown what paused the game.
         if (quietAlert(app.campaign, a.type, a.level) && !app.settings.pauseOnAlerts) break
+        // A decision the game pauses for is said by the pause itself, once.
+        if ((a.type === 'plantAsk' || a.type === 'killCall') && app.speed > 0) break
         const short = alertShort(a)
         // Frost over barrels names no one field: the note goes to the biggest haul, where the barrels and the hauler show.
         const field = a.type === 'frostBarrels' && app.campaign ? S.haulInfo(app.world, app.campaign).sort((x, y) => y.cwt - x.cwt)[0]?.field ?? -1 : a.field
@@ -258,11 +260,21 @@ export const mountHud: MountHud = (root, app, view, sound) => {
         // The clock stopped itself for something nothing on screen has said: say what. A card that needs an answer
         // says so itself, and a line queued behind it would only show once it had been answered.
         const c = app.campaign
-        if (e.speed > 0 && pauseSaid) { notes.forget(pauseSaid); pauseSaid = '' }
+        // Taken down once the game runs again, or once the order it waited for is given.
+        if (pauseSaid && (e.speed > 0 || !app.pauseReason)) { notes.forget(pauseSaid); pauseSaid = '' }
+        // A pause for a decision on the land (the word to plant, a vine kill) stays said for as long as it waits. In
+        // the guided first year the agent's note says it, when one comes: the line waits a moment to see.
+        const asks = app.pauseCause === 'plantAsk' || app.pauseCause === 'killCall'
+        const sayPause = (why: string) => {
+          if (app.speed !== 0 || app.pauseReason !== why || app.screen !== 'season' || !app.campaign || S.seasonDone(app.campaign) || papers.isOpen() || notes.has(why)) return
+          pauseSaid = `Paused: ${why}`
+          notes.push({ text: pauseSaid, level: 'info', ttl: asks ? 0 : 9000 })
+        }
         if (e.speed === 0 && app.holding) ctx.announce(app.pauseReason)
-        else if (!ticketing && e.speed === 0 && app.pauseReason && app.pauseReason !== HOLD && !guidedYear(c) && app.screen === 'season' && c && !S.seasonDone(c) && !papers.isOpen() && !notes.has(app.pauseReason)) {
-          pauseSaid = `Paused: ${app.pauseReason}`
-          notes.push({ text: pauseSaid, level: 'info', ttl: 9000 })
+        else if (!ticketing && e.speed === 0 && app.pauseReason && app.pauseReason !== HOLD) {
+          const why = app.pauseReason
+          if (!guidedYear(c)) sayPause(why)
+          else if (asks) setTimeout(() => sayPause(why), 700)
         }
         dirty = true
         break

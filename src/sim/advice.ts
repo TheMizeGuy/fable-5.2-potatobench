@@ -1,7 +1,7 @@
 // Reference practice: what a careful Aroostook grower would do next, from what the grower can see.
 // The in-game coach shows it, and the reference bot follows it. It tends the fields the farm holds; it has nothing
 // to say about land, hiring or contracts.
-import { dayIndex, withCommas } from './calendar.ts'
+import { dayIndex, formatDay, withCommas } from './calendar.ts'
 import * as P from './params.ts'
 import { jobSkill, SKILL_LABEL, willDo } from './people.ts'
 import type { Campaign, GameEvent, JobKind, KillWhy, World } from './types.ts'
@@ -274,8 +274,8 @@ export function standingOrders(world: World, c: Campaign): GameEvent[] {
   return out
 }
 
-function said(s: NonNullable<Campaign['season']>, type: string, field: number, text: string): GameEvent {
-  const e: GameEvent = { day: s.day, type, field, level: 'info', text }
+function said(s: NonNullable<Campaign['season']>, type: string, field: number, text: string, data?: GameEvent['data']): GameEvent {
+  const e: GameEvent = { day: s.day, type, field, level: 'info', text, ...(data ? { data } : {}) }
   s.log.push(e)
   return e
 }
@@ -302,6 +302,37 @@ export function wordToPlant(c: Campaign, field: number): GameEvent | null {
   let others = 0
   for (let i = 0; i < P.FIELD_COUNT; i++) if (i !== field && c.plans[i]?.crop === 'potato' && c.fields[i].tenure !== 'none' && s.fields[i].plantDay < 0 && standingBy(c, 'plant', i) === 'routine') others++
   return said(s, 'plantWord', field, others ? `You gave the word. Your crew will plant the other ${others === 1 ? 'field' : `${others} fields`} too.` : 'You gave the word, and planting has started.')
+}
+
+// The evening a field's vine kill comes due and is the player's to give, said once for each field. Where the crew
+// would not kill by itself (the kill and the dig are both the player's own orders): the day reference practice first
+// asks for it. Where the player keeps the vines up: KILL_CALL_DAYS before the last day a kill still leaves the skins
+// time to set. A kill the routine, a foreman or the crew's own date takes care of is never said.
+export function killCalled(world: World, c: Campaign): GameEvent[] {
+  const s = c.season
+  if (c.phase !== 'season' || !s || s.frozen) return []
+  const latest = dayIndex(s.year, P.DIG_GREEN.month, P.DIG_GREEN.dom) - P.SKIN_DAYS
+  // The fields whose kill would be the player's alone, before asking whether it is due.
+  const theirs: number[] = []
+  s.fields.forEach((f, i) => {
+    if (f.killCall !== undefined || f.status !== 'growing' || f.deadDay >= 0 || standingBy(c, 'kill', i)) return
+    if (f.keepVines ? s.day < latest - P.KILL_CALL_DAYS : !!standingBy(c, 'dig', i)) return
+    if (!s.jobs.some(j => j.kind === 'kill' && j.field === i)) theirs.push(i)
+  })
+  if (!theirs.length) return []
+  const all = everything(world, c)
+  const due: number[] = []
+  const kept: number[] = []
+  for (const i of theirs) {
+    if (!all.some(a => a.act === 'kill' && a.field === i)) continue
+    s.fields[i].killCall = s.day
+    ;(s.fields[i].keepVines ? kept : due).push(i)
+  }
+  const names = (list: number[]) => { const n = list.map(i => FIELD_NAMES[i]); return n.length > 1 ? `${n.slice(0, -1).join(', ')} and ${n[n.length - 1]}` : n[0] }
+  const out: GameEvent[] = []
+  if (due.length) out.push(said(s, 'killCall', due[0], `The vines in ${names(due)} are due to be killed, and that's your decision. Order Kill vines there, or they stay up.`, { fields: due }))
+  if (kept.length) out.push(said(s, 'killCall', kept[0], `You're keeping the vines up in ${names(kept)}. Kill them by ${formatDay(s.year, latest)} so the skins toughen before the harvest, or the field gets dug green.`, { fields: kept }))
+  return out
 }
 
 // The evening before a frost on crop still in barrels, once for a cold spell: the one warning, dated the day the

@@ -308,10 +308,21 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     sprayAsked = key
     if (S.routineInfo(c).some(r => r.kind === 'spray' && r.auto)) return
     askSpray(ctx)
-    app.stopFor('You need to decide how to handle spraying this season.')
+    app.stopFor('spray', 'You need to decide how to handle spraying this season.')
+  }
+  // A pause that waits for a press on a stamp (the word to plant, a vine kill that is the player's): with none of
+  // those stamps on the screen, the whole farm is shown.
+  function showStamps(act: 'plant' | 'kill'): void {
+    const onScreen = () => app.needs().some((n, i) => {
+      if (n.need?.act !== act) return false
+      const r = document.querySelector(`#ui .plate-layer [data-testid="badge-${i}"]`)?.getBoundingClientRect()
+      return !!r && r.width > 0 && r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight
+    })
+    setTimeout(() => { if (app.screen === 'season' && app.speed === 0 && !onScreen()) ctx.view.home() }, 400)
   }
   const off = app.on(ev => {
     if (ev.type === 'yard' || ev.type === 'unit' || ev.type === 'select') ctx.dirty()
+    else if (ev.type === 'speed' && ev.speed === 0 && (app.pauseCause === 'plantAsk' || app.pauseCause === 'killCall')) showStamps(app.pauseCause === 'plantAsk' ? 'plant' : 'kill')
     else if (ev.type === 'events') {
       // In the guided first year the test dig is on the field's card, not laid on the land unasked.
       // A test dig's result is offered, never laid over what the player is doing: a slip at the foot with Show me

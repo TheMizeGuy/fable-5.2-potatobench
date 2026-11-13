@@ -170,6 +170,7 @@ export interface FieldSeason {
   blightPulled?: number     // blighted hills pulled this season
   keepVines?: boolean       // the player keeps the vines up here: the crew does not kill them by itself
   killSince?: number        // the day the coach's present run of asking for the kill began
+  killCall?: number         // the day the game said this field's vine kill is the player's to give (advice.ts, killCalled)
   // Hills, struct of arrays, ROWS * COLS long.
   hState: number[]
   hEmergeAt: number[]
