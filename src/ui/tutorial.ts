@@ -1,13 +1,15 @@
 // The guided first year on screen (src/game/tutorial.ts holds the lessons): the county agent's printed slip, one at a
 // time, set where it covers nothing it is about, and the printer's fist on the one control it asks for. In spring the
 // slip is tucked into the seed catalogue above the order blank; elsewhere it floats over the land.
-import { Guide, LESSONS, localStore, PART_NAME, PIECES, type Input, type Lesson, type Look, type Part, type Point } from '../game/tutorial.ts'
+import { SPEED_X } from '../game/app.ts'
+import { Guide, LESSONS, localStore, PART_NAME, PIECES, type Input, type Lesson, type Look, type Part, type Point, type Show } from '../game/tutorial.ts'
 import * as S from '../sim/index.ts'
 import { patch, type Ctx } from './core.ts'
 import { h } from './dom.ts'
 import * as F from './fmt.ts'
 import { icon } from './icons.ts'
 import { plantingIn } from './rules.ts'
+import { showForemanKey } from './people.ts'
 import { fist, key } from './system/parts.ts'
 import './system/tutorial.css'
 
@@ -36,7 +38,7 @@ export function mayAsk(c: S.Campaign | null, id: string): boolean { return !guid
 // The agent's one line inside a card the first time its kind comes (a telegram, a weigh ticket): the card is the one
 // voice, so the guide speaks in it.
 const LINES: Record<string, string> = {
-  telegram: 'The game is paused until you pick a reply.',
+  telegram: 'Paused until you pick a reply.',
   ticket: 'This is your first weigh ticket. It shows what the field grew and what was lost. Sell now is the safe choice.',
 }
 export function agentLine(kind: 'telegram' | 'ticket', key: string | number): HTMLElement | null {
@@ -45,6 +47,18 @@ export function agentLine(kind: 'telegram' | 'ticket', key: string | number): HT
   if (seen && seen !== `line:${kind}:${key}`) return null
   guide.note(`line:${kind}:${key}`)
   return h('p', { class: 'guide-line', testid: 'guide-line' }, h('span', { class: 't-label' }, 'The county agent'), ' ', LINES[kind])
+}
+
+// One voice: while the agent has a note to give on this screen (up, or waiting its turn), the goal slip and the
+// fold it rings stand down. They are two lists that cannot be made to name the same step, so they take turns.
+let speaking = false
+export function agentSpeaking(): boolean { return speaking }
+
+// In the guided first year the agent speaks for the news that asks nothing. A kind of notice the agent has explained
+// once (frost on the barrels) comes as a toast after that, and never pauses the game again.
+export function quietAlert(c: S.Campaign | null, type: string, level: string): boolean {
+  if (!guidedYear(c) || level === 'bad') return false
+  return !(type === 'frostBarrels' && guide.passed('frost'))
 }
 
 // The first-time tips for the orders say what the guide says; while it is on they keep quiet.
@@ -112,6 +126,15 @@ function shown(el: Element | null): el is HTMLElement {
   if (el.closest('.leaving, [inert], .guide-layer, .out')) return false
   const r = el.getBoundingClientRect()
   return r.width > 0 && r.height > 0 && r.bottom > 0 && r.right > 0 && r.top < innerHeight && r.left < innerWidth
+}
+
+// On the screen and inside the window of the card that holds it, not scrolled out of it.
+function inCard(el: Element | null): boolean {
+  if (!shown(el)) return false
+  const card = el.closest('.person-card')
+  if (!card) return true
+  const r = el.getBoundingClientRect(), c = card.getBoundingClientRect()
+  return r.top >= c.top - 1 && r.bottom <= c.bottom + 1
 }
 
 function byTestid(root: HTMLElement, ids: string[]): HTMLElement | null {
@@ -248,11 +271,17 @@ function holdLine(): HTMLElement {
 }
 
 // lost: what it points at is on the land but out of view, so the slip says how to bring the farm back.
-function slipBody(ctx: Ctx, x: Lesson, l: Look, held: boolean, lost = false, under = false, show = -1, ahead: ((id: string) => void) | null = null): (HTMLElement | null)[] {
+// back: the speed the game resumes at when the note is closed (0: it was paused before, and stays so; -1: no clock here).
+// go: where the lesson's own Show me leads, when what it is about is not on the screen.
+function slipBody(ctx: Ctx, x: Lesson, l: Look, held: boolean, lost = false, under = false, show = -1, ahead: ((id: string) => void) | null = null, back = -1, go: Show | null = null): (HTMLElement | null)[] {
   const again = guide.replaying(x.id)
   const where = PART_NAME[x.part]
   const done = () => { guide.noted(x.id); poke(); ctx.dirty() }
   const skip = ahead ? x.skip?.(l) ?? null : null
+  const act = x.act?.(l) ?? null
+  // Each key that touches the clock says what it does to it.
+  const resumes = back < 0 ? null : h('span', { class: 'sub', testid: 'guide-resumes' }, back > 0 ? `resumes at ${SPEED_X[back]}` : 'stays paused')
+  const lead = (s: Show) => { if ('field' in s) { ctx.app.select(s.field); ctx.app.focus(s.field) } else { if (s.foreman) showForemanKey(); ctx.app.selectUnit(s.unit); ctx.dirty() } }
   return [
     h('header', { class: 'guide-head' },
       h('p', { class: 't-label' }, 'The county agent'),
@@ -265,8 +294,10 @@ function slipBody(ctx: Ctx, x: Lesson, l: Look, held: boolean, lost = false, und
     show >= 0 && lost ? h('p', { class: 'guide-lost t-caption' }, h('button', { class: 'btn quiet', type: 'button', testid: 'guide-show', onclick: () => ctx.app.focus(show) }, 'Show me')) : null,
     under ? h('p', { class: 'guide-lost t-caption', testid: 'guide-under' }, icon('close', 'i'), by(l.input, 'A card is in the way. Click its X to close it.', 'A card is in the way. Tap its X to close it.', 'A card is in the way. Use its X to close it.')) : null,
     h('footer', { class: 'guide-foot' },
-      x.read || again ? h('button', { class: 'btn guide-ok', type: 'button', testid: 'guide-noted', onclick: done }, icon('check', 'i'), 'Got it') : null,
-      skip ? h('button', { class: 'btn', type: 'button', testid: 'guide-ahead', onclick: () => ahead!(x.id) }, icon('fast', 'i'), skip) : null,
+      act ? h('button', { class: 'btn guide-ok', type: 'button', testid: 'guide-act', onclick: () => { let ok = true; for (const cmd of act.cmds) ok = ctx.run(cmd).ok && ok; if (ok) ctx.say(act.done, 'good'); done() } }, icon('check', 'i'), act.label) : null,
+      x.read || again ? h('button', { class: `btn${act ? '' : ' guide-ok'}`, type: 'button', testid: 'guide-noted', onclick: done }, icon('check', 'i'), h('span', { class: 'two' }, 'Got it', resumes)) : null,
+      skip ? h('button', { class: 'btn', type: 'button', testid: 'guide-ahead', onclick: () => ahead!(x.id) }, icon('fast', 'i'), h('span', { class: 'two' }, skip, h('span', { class: 'sub' }, `runs at ${SPEED_X[3]}`))) : null,
+      go && show < 0 ? h('button', { class: 'btn quiet', type: 'button', testid: 'guide-show', onclick: () => lead(go) }, 'Show me') : null,
       x.read || again ? null : h('button', { class: 'btn quiet', type: 'button', testid: 'guide-skip', onclick: () => { guide.skip(x.id); poke(); ctx.dirty() } }, 'Skip'),
       h('button', { class: 'btn quiet', type: 'button', testid: 'guide-stop', onclick: () => { guide.stop(); poke(); ctx.say('The tutorial is off. You can turn it back on from the menu.'); ctx.dirty() } }, 'Turn off the tutorial')),
   ]
@@ -398,6 +429,16 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     if (p.clientX >= ghost.b.left && p.clientX <= ghost.b.right && p.clientY >= ghost.b.top && p.clientY <= ghost.b.bottom) { e.preventDefault(); e.stopImmediatePropagation() }
   }
   for (const k of ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click', 'contextmenu']) window.addEventListener(k, swallow, true)
+  // A double-click is one press: its second click (the browser counts them in detail; a key's or a script's click
+  // counts 0), landing where a note has just come, does not answer that note too. Nothing else is held back, so a
+  // note's keys work from the frame it is shown.
+  let firstAt = -1e9
+  let cameAt = 0
+  const twice = (e: MouseEvent) => {
+    if (e.detail >= 2 && cameAt > firstAt && (e.target as Element).closest?.('.guide, .guide-card')) { e.preventDefault(); e.stopImmediatePropagation(); return }
+    if (e.detail === 1) firstAt = performance.now()
+  }
+  window.addEventListener('click', twice, true)
   let place: { x: number; y: number } | null = null
   let placedFor = ''
   // 0: clear of every panel; 1: clear only of what it must never cover.
@@ -407,6 +448,10 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
   let busy: Box[] | null = null
   let busyAt = 0
   const cam: { base: Sig | null; until: number; kind: 'pan' | 'zoom' | 'turn' | 'two'; travel: number } = { base: null, until: 0, kind: 'pan', travel: 0 }
+
+  // The stamps on the screen, read once a look round (not every frame), and the field the note on show has named.
+  let stamps: number[] = []
+  let stampKept = -1
 
   function papers(): string[] {
     return [...root.querySelectorAll<HTMLElement>('.paper-layer > .dialog:not(.out)')].map(d => d.dataset.testid ?? 'paper')
@@ -421,6 +466,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
       wait: app.campaign?.phase === 'season' ? plantingIn(app.world, app.campaign) : -1,
       asking: shown(root.querySelector('[data-testid="spray-ask"]')) ? 'spray' : '',
       fold: root.querySelector<HTMLElement>('.catalogue .cat-open')?.dataset.testid ?? '',
+      inView: stampKept >= 0 ? [stampKept, ...stamps] : stamps,
     }
   }
 
@@ -480,14 +526,14 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     if (shown(root.querySelector('[data-testid="work-grid"]'))) guide.note('open:work-grid')
   }
 
-  // Every note stops the clock the moment it comes, and the days go on at the speed they had when it goes. The
-  // player's own press on the clock puts the note away (a note only to be read is noted; one that asks is skipped)
-  // and sets the days going. due: the note that is owed, shown or waiting behind a card.
+  // Every note pauses the game the moment it comes, and closing it puts the game back at the speed it had just
+  // before: the speed on the clock then, never one remembered from earlier. A game the player had paused stays
+  // paused. The player's own press on the clock closes the note (a note only to be read is noted; one that asks is
+  // skipped) and runs the game. due: the note that is owed, shown or waiting behind a card.
   let holding: { id: string; speed: number } | null = null
   let due: Lesson | null = null
-  // The speed to go back to after a skip ahead ran the days fast to the next note.
-  let fastFrom = -1
-  function stopNow(): void { app.setSpeed(0); app.pauseReason = HOLD; ctx.dirty() }
+  // The speed it had is the speed the clock's own keys resume at, Space included.
+  function stopNow(): void { if (app.speed > 0) app.resumeSpeed = app.speed; app.setSpeed(0); app.pauseReason = HOLD; ctx.dirty() }
   function hold(): void {
     const t = performance.now()
     const want = due && app.screen === 'season' ? due.id : ''
@@ -499,22 +545,16 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
         stale = true
         return
       }
+      // The game set the clock going itself (a telegram answered, a paper closed): paused again, and that speed is
+      // the one the note goes back to.
+      holding.speed = app.speed
       stopNow()
       return
     }
-    // A stop the guide has explained once (frost on the barrels) is not made again: the crew sees to it, and the
-    // days go on.
-    const c0 = app.campaign
-    if (!want && !holding && app.speed === 0 && c0 && guidedYear(c0) && app.screen === 'season' && guide.passed('frost') && /frost/i.test(app.pauseReason) && !app.holding && !S.seasonDone(c0) && !cardUp(lookNow())) {
-      app.setSpeed((app.resumeSpeed || 1) as 1 | 2 | 3)
-      return
-    }
     if (want && !holding) {
-      // Running: stopped here. Stopped by the game (a card, a frost): the speed it would go on at. Stopped by the
-      // player: it stays so. A skip ahead ends at the next note, but runs on past one that only breaks in.
-      const was = app.speed > 0 ? app.speed : app.pauseReason && app.pauseReason !== HOLD ? app.resumeSpeed || 1 : 0
-      const speed = fastFrom < 0 ? was : due!.urgent ? 3 : fastFrom
-      if (!due!.urgent) fastFrom = -1
+      // Running: paused here. Paused by the game for a card: the speed it would resume at. Paused by the player: it
+      // stays so.
+      const speed = app.speed > 0 ? app.speed : app.pauseReason && app.pauseReason !== HOLD ? app.resumeSpeed || 1 : 0
       holding = { id: want, speed }
       if (app.speed > 0) stopNow()
     } else if (want && holding) holding.id = want
@@ -526,12 +566,11 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
       if (back > 0 && app.speed === 0 && app.pauseReason !== '' && !app.holding && app.screen === 'season' && c && !S.seasonDone(c) && !cardUp(lookNow())) app.setSpeed(back as 1 | 2 | 3)
     }
   }
-  // Skip ahead: the note is put away and the days run fast to the next one, which stops them again.
+  // Fast-forward: the note is closed and the game runs at its fastest to the next note or card, which pauses it. The
+  // speed stays where this put it, as the clock shows, until the player changes it.
   function ahead(id: string): void {
-    const back = holding?.speed || app.resumeSpeed || 1
     guide.noted(id)
     holding = null
-    fastFrom = back
     app.setSpeed(3)
     stale = true
     ctx.dirty()
@@ -543,8 +582,6 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
   let restUntil = 0
   let waitFor: string[] = []
   let waitUntil = 0
-  // A note newly come takes no press for a moment, so a second click meant for the one before does not put it away.
-  let freshUntil = 0
   const PANELS = ['.cat-open', '.paper-layer > .dialog:not(.out)', '.person-card:not([hidden])', '.work:not([hidden])']
   const panelsOpen = () => PANELS.filter(sel => !!root.querySelector(sel))
   function paced(x: Lesson | null): Lesson | null {
@@ -552,7 +589,6 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     if (x?.id !== lastId) {
       if (lastId && guide.passed(lastId)) { restUntil = t + 1200; waitFor = panelsOpen(); waitUntil = t + 8000 }
       lastId = x?.id ?? ''
-      freshUntil = t + 450
     }
     // In a season the next note follows at once and takes over the hold: no days run between two notes. Out of it,
     // the next waits a moment, and while a panel the last click opened is still open.
@@ -573,21 +609,22 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     if (app.screen === 'plan') notePlan()
     if (app.screen === 'season') noteOpen()
     if (shown(root.querySelector('#raise-list'))) guide.note('fold:raise')
+    stamps = app.screen === 'season' ? [...root.querySelectorAll<HTMLElement>('.plate-layer [data-testid^="badge-"]')].filter(shown).map(e => Number(e.dataset.testid!.slice(6))) : []
     const l = lookNow()
     offer = guide.offerFor(c, app.screen)
     const carded = cardUp(l)
     l.carded = carded
-    due = offer ? null : paced(guide.current(l))
+    const owed = offer ? null : guide.current(l)
+    due = paced(owed)
     now = due && carded ? null : due
-    // A skip ahead runs on past a telegram once it is answered, to the note it was for. A paper (the weigh ticket)
-    // ends it, and so does the player's own hand on the clock.
-    if (fastFrom >= 0 && l.paper && app.speed === 0) { app.resumeSpeed = fastFrom as 1 | 2 | 3; fastFrom = -1 }
-    else if (fastFrom >= 0 && !carded && (app.speed === 0 ? !app.pauseReason : app.speed !== 3)) fastFrom = -1
+    if (speaking !== (offer || !!owed)) { speaking = offer || !!owed; ctx.dirty() }
+    root.classList.toggle('agent', speaking)
     hold()
     // The cards in the middle: the offer, and what a year is.
     const card = offer ? 'offer' : now?.card ? now.id : ''
     if (card !== cardKey) {
       cardKey = card
+      if (card) cameAt = performance.now()
       cardSlot.replaceChildren(...(offer ? [offerCard(ctx)] : now?.card ? [frameCard(ctx, now, l)] : []))
       cardSlot.hidden = cardVeil.hidden = !card
       if (card) (cardSlot.querySelector<HTMLElement>('.usual, .guide-ok') ?? cardSlot.querySelector<HTMLElement>('button'))?.focus({ preventScroll: true })
@@ -608,6 +645,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     const docked = app.screen === 'plan' && ctx.layout() === 'narrow'
     const held = !!now && app.screen === 'season' && app.speed === 0
     const p = now?.point?.(l) ?? null
+    stampKept = p && 'badge' in p ? p.badge : -1
     const t = resolve(ctx, root, p)
     cover = app.screen === 'season' ? coverOf(t) : null
     // A note about the land itself (come closer, turn it) on a phone, with a card over half the land: the card's cross.
@@ -617,6 +655,11 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
       cover = close && shown(close) ? close : null
     }
     target = cover?.dataset.testid ?? (p && 'fields' in p && p.fields.some(i => `field-${i}` === picked) && shown(root.querySelector(`[data-testid="${picked}"]`)) ? picked : t.id)
+    // The lesson's own Show me: to a person's control that is not on the screen, or to the field a note with nothing
+    // to point at is about.
+    const sh = now?.show?.(l) ?? null
+    const go = !sh ? null : 'unit' in sh ? (inCard(root.querySelector('[data-testid="person-foreman"]')) ? null : sh) : now?.point ? null : sh
+    const back = app.screen === 'season' && now ? holding?.speed ?? 0 : -1
     // Something on the land to point at, none of it in view.
     const lost = !!p && !('testid' in p) && !t.at && app.screen === 'season'
     const fieldOf = !p ? -1 : 'field' in p ? p.field : 'badge' in p ? p.badge : 'fields' in p ? p.fields[0] ?? -1 : -1
@@ -628,17 +671,15 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
       const fold = root.querySelector('.catalogue .cat-open')
       away = docked && !!now && !!fold && !(t.el && fold.contains(t.el))
       const on = inSlot && docked && !away
-      patch(slot, JSON.stringify([on && now ? [now.id, now.ask(l), now.why(l), guide.replaying(now.id), lost] : 0, input]), () =>
-        on && now ? h('section', { class: 'guide docked', testid: 'guide-slip', 'data-lesson': now.id, 'data-target': target, 'aria-labelledby': 'guide-ask' }, slipBody(ctx, now, l, held, lost, !!cover)) : null)
+      patch(slot, JSON.stringify([on && now ? [now.id, now.ask(l), now.why(l), guide.replaying(now.id), lost, !!go] : 0, input]), () =>
+        on && now ? h('section', { class: 'guide docked', testid: 'guide-slip', 'data-lesson': now.id, 'data-target': target, 'aria-labelledby': 'guide-ask' }, slipBody(ctx, now, l, held, lost, !!cover, -1, null, -1, go)) : null)
       if (on && now) slot.querySelector<HTMLElement>('.guide')?.setAttribute('data-target', target)
     }
     const floating = !!now && !docked
     slip.hidden = !floating
     if (floating && now) {
       const season = app.screen === 'season'
-      patch(slip, JSON.stringify([now.id, now.ask(l), now.why(l), held, guide.replaying(now.id), input, lost, !!cover, showField, season && now.skip?.(l)]), () => slipBody(ctx, now!, l, held, lost, !!cover, showField, season ? ahead : null))
-      slip.classList.toggle('fresh', performance.now() < freshUntil)
-      if (performance.now() < freshUntil) stale = true
+      patch(slip, JSON.stringify([now.id, now.ask(l), now.why(l), held, guide.replaying(now.id), input, lost, !!cover, showField, season && now.skip?.(l), back, go, now.act?.(l)?.label]), () => slipBody(ctx, now!, l, held, lost, !!cover, showField, season ? ahead : null, back, go))
       slip.dataset.lesson = now.id
       slip.dataset.target = target
       slip.dataset.testid = 'guide-slip'
@@ -650,6 +691,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     // The slip going (passed, Noted, put aside): a press that was meant for it lands on nothing.
     const showing = (floating || (!!slot?.querySelector('.guide.docked:not(.offer)'))) && now ? now.id : ''
     if (shownId && showing !== shownId && slipAt && !l.paper) ghost = { b: slipAt, until: performance.now() + 500 }
+    if (showing !== shownId && showing) cameAt = performance.now()
     shownId = showing
     // Each lesson is read out once, politely.
     const words = offer ? 'First time on the farm? The county agent can walk you through your first year. Press 1 to start the tutorial, or 2 to skip it.' : cardKey ? `${due?.ask(l) ?? ''} ${due?.why(l) ?? ''}` : now ? `${now.ask(l)} ${now.why(l)}` : ''
@@ -767,6 +809,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
       document.removeEventListener('keydown', onCardKey, true)
       document.removeEventListener('pointerdown', onPointer, true)
       for (const k of ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click', 'contextmenu']) window.removeEventListener(k, swallow, true)
+      window.removeEventListener('click', twice, true)
       for (const t of ['pointerdown', 'pointermove', 'pointerup', 'wheel']) document.removeEventListener(t, onCanvas, true)
       document.removeEventListener('pointercancel', onLift, true)
       document.removeEventListener('keydown', onCamKey, true)

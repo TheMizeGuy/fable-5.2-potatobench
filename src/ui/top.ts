@@ -267,6 +267,8 @@ export function light(selector: string, o: { open?: boolean; top?: boolean } = {
 }
 // Where a spring goal's Show me ends: the fold that holds its control, brought to the top of the sheet and ringed.
 const FOLD_OF: Partial<Record<string, string>> = { tool: 'equipment-open', hire: 'crew-open', contract: 'contracts-open', land: 'land-open' }
+// A goal named by a word a newcomer has not met says what it is, in a clause.
+const GLOSS: Partial<Record<string, string>> = { foreman: 'a hand who orders a block\'s work' }
 // The crop's own steps: in spring they wait for the season to start.
 const CROP_STEPS = new Set(['plant', 'walk', 'hill', 'spray', 'sample', 'kill', 'dig', 'haul'])
 
@@ -427,7 +429,8 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     // In a later season the crop's own next step comes ahead of a farmstead goal, which waits in the line under it.
     let later: Goal | null = null
     if (season && g && !CROP_STEPS.has(g.id)) { const st = seasonStep(c); if (st) { later = g; g = st } }
-    const then = later ? `then ${later.title.toLowerCase()}` : ''
+    const then = later ? `then ${later.title.toLowerCase()}${GLOSS[later.id] ? ` (${GLOSS[later.id]})` : ''}` : ''
+    const gloss = g && GLOSS[g.id] ? GLOSS[g.id]! : ''
     // Before the ground is fit, the planting goal says plainly how long it will be, counting down by the day.
     const wait = g && g.id === 'plant' && season && !app.needs().some(n => n.need?.act === 'plant') ? plantingIn(app.world, c) : -1
     // The one planting rule (S.plantReady) gives the temperature and the reason, as the field's card and the guide do.
@@ -469,7 +472,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     },
     gone ? h('span', { class: 'was struck' }, h('span', { class: 'sr' }, 'Done: '), gone.title) : null,
     g ? [quiet ? null : fist(), h('span', { class: 'goal-body' },
-      h('span', { class: 'sr' }, 'Next goal: '), h('b', { class: 'goal-t' }, title), quiet ? h('span', { class: 'goal-when' }, `${notYet(c, g)}${then ? ` · ${then}` : ''}`) : when ?? (then ? h('span', { class: 'goal-when' }, then) : null)),
+      h('span', { class: 'sr' }, 'Next goal: '), h('b', { class: 'goal-t' }, title), quiet ? h('span', { class: 'goal-when' }, `${notYet(c, g)}${then ? ` · ${then}` : ''}`) : when ?? (then || gloss ? h('span', { class: 'goal-when' }, then || gloss) : null)),
     n ? h('span', { class: 'count goal-n num', testid: wait > 0 ? 'goal-wait' : undefined }, n) : null,
     h('span', { class: 'sr' }, `. ${g.why} Press to open your goals.`)] : null)
     return faster || doIt ? h('div', { class: 'goal-row' }, slip, faster ?? doIt) : slip

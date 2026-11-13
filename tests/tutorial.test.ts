@@ -209,3 +209,113 @@ describe('the farm\'s first weeks', () => {
     expect(after).toBeGreaterThan(0)
   })
 })
+
+describe('what a note says against what the game does (round six)', () => {
+  // A hands-off first year with the crew spraying, stopped on each evening's frost warning.
+  function frostEvenings(seed: number, year: number, each: (w: S.World, c: S.Campaign) => void): void {
+    const c = S.createCampaign(record, { seed, startYear: year })
+    S.apply(record, c, { t: 'begin' })
+    S.apply(record, c, { t: 'sprayWay', way: 'auto' })
+    for (let n = 0; n < 400 && c.phase === 'season' && !S.seasonDone(c); n++) {
+      for (const inc of [...c.incidents]) S.apply(record, c, { t: 'answer', incident: inc.id, choice: S.defaultChoice(inc) })
+      for (const lot of S.openLots(c)) if (c.season!.fields[lot.field]?.weighed) S.apply(record, c, { t: 'sell', lot: lot.id, frac: 1 })
+      const r = S.apply(record, c, { t: 'day' })
+      if (r.events.some(e => e.type === 'frostBarrels')) each(record, c)
+    }
+  }
+  const cold = (w: S.World, c: S.Campaign) => S.haulInfo(w, c).filter(x => S.frostOnBarrels(w, c, x.field))
+
+  it('the frost note promises nothing the night can break: it says what the crew does and what a tractor hauls, and warns when that is not enough', () => {
+    const frost = lesson('frost')!
+    let warned = 0, short = 0
+    for (const [year, seeds] of [[1985, [2, 8, 11, 12]], [1995, [7, 8, 12]], [2008, [2]]] as const) {
+      for (const seed of seeds) {
+        frostEvenings(seed, year, (w, c) => {
+          const g = new Guide(memory())
+          g.skipTo('frost')
+          const l = look(w, c, { speed: 3 })
+          // The warning brings the note by itself: the game is not paused for it first.
+          expect(g.current(l)?.id, `${year}/${seed}`).toBe('frost')
+          warned++
+          const days = cold(w, c).reduce((t, x) => t + x.daysToHaul, 0)
+          for (const input of INPUTS) {
+            const said = `${frost.ask({ ...l, input })} ${frost.why({ ...l, input })}`
+            expect(said).not.toMatch(/don't need to do anything|will haul them in|before the frost/)
+            expect(said).toMatch(/a fifth/)
+            expect(said).toMatch(/may freeze|can still catch/)
+            expect(countWords(said)).toBeLessThanOrEqual(35)
+            if (days > 0.9) expect(said, `${days.toFixed(2)} days of hauling`).toMatch(/may freeze/)
+          }
+          if (days > 0.9) short++
+          // The hauling is on the list: nothing for the player to order, so the note offers no order.
+          expect(frost.act!(l)).toBeNull()
+          expect(frost.show!(l)).toEqual({ field: [...cold(w, c)].sort((a, b) => b.cwt - a.cwt)[0].field })
+        })
+      }
+    }
+    expect(warned).toBeGreaterThan(4)
+    expect(short).toBeGreaterThan(0)
+  })
+
+  it('with hauling off the crew\'s routine, the frost note says so and its key orders the haul', () => {
+    const frost = lesson('frost')!
+    let seen = 0
+    frostEvenings(8, 1985, (w, c0) => {
+      if (seen) return
+      const c = structuredClone(c0)
+      expect(S.apply(w, c, { t: 'routine', kind: 'haul', auto: false }).ok).toBe(true)
+      // (a haul already ordered cannot be cancelled by a player: taken off here to stand for one never ordered)
+      c.season!.jobs = c.season!.jobs.filter(j => j.kind !== 'haul')
+      for (const u of c.crew) u.job = -1
+      const l = look(w, c)
+      expect(frost.why(l)).toMatch(/until you order it/)
+      const act = frost.act!(l)!
+      expect(act.label).toBe('Order the haul')
+      for (const cmd of act.cmds) expect(S.apply(w, c, cmd).ok).toBe(true)
+      expect(frost.act!(look(w, c))).toBeNull()
+      seen++
+    })
+    expect(seen).toBe(1)
+  })
+
+  it('a note about a stamp names the field whose stamp is on the screen, and its Show me goes there', () => {
+    const { w, c } = farm(11)
+    S.apply(w, c, { t: 'begin' })
+    S.apply(w, c, { t: 'sprayWay', way: 'ask' })
+    const stamp = lesson('stamp')!
+    let l = look(w, c)
+    for (let n = 0; n < 200 && l.needs.filter(a => a?.act === 'spray').length < 2; n++) { S.apply(w, c, { t: 'day' }); l = look(w, c) }
+    const fields = l.needs.map((a, i) => (a?.act === 'spray' ? i : -1)).filter(i => i >= 0)
+    expect(fields.length).toBeGreaterThan(1)
+    const last = fields[fields.length - 1]
+    // Nothing known of the screen: the first. A later field's stamp in view: that one, in the words, the fist and Show me.
+    expect(stamp.ask(l)).toContain(S.FIELD_NAMES[fields[0]])
+    const seen = { ...l, inView: [last] }
+    expect(stamp.ask(seen)).toContain(S.FIELD_NAMES[last])
+    expect(stamp.ask(seen)).not.toContain(S.FIELD_NAMES[fields[0]])
+    expect(stamp.point!(seen)).toEqual({ badge: last })
+    expect(stamp.show!(seen)).toEqual({ field: last })
+  })
+
+  it('the keys that run the game fast say so, and no spring note argues with the goal slip', () => {
+    const { w, c } = farm(11)
+    S.apply(w, c, { t: 'begin' })
+    const l = look(w, c)
+    let keys = 0
+    for (const x of LESSONS) {
+      const skip = x.skip?.(l)
+      if (skip) { keys++; expect(skip, x.id).toMatch(/^Fast-forward to /) }
+    }
+    expect(keys).toBeGreaterThan(0)
+    for (const id of ['hire', 'begin2']) expect(`${lesson(id)!.ask(l)} ${lesson(id)!.why(l)}`).not.toMatch(/don't have to hire/)
+    // The notes reworded this round keep the 35 words, however they are played.
+    S.apply(w, c, { t: 'hire', kind: 'hand' })
+    for (const id of ['yard', 'foreman', 'frost']) for (const input of INPUTS) {
+      const v = { ...look(w, c), input }
+      expect(countWords(`${lesson(id)!.ask(v)} ${lesson(id)!.why(v)}`), id).toBeLessThanOrEqual(35)
+    }
+    // A control is named by the words on it: the winter sheet's heading, and its key's count.
+    expect(lesson('yard')!.ask(look(w, c))).toMatch(/^Under Put up a building, click "\d+ to choose from"/)
+    expect(lesson('foreman')!.ask(look(w, c))).toMatch(/^A foreman is a hired hand who orders a block's field work for you each morning\./)
+  })
+})

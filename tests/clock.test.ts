@@ -153,3 +153,42 @@ describe('the clock', () => {
     expect(app.speed).toBe(3)
   })
 })
+
+describe('a notice that asks nothing', () => {
+  // A harvest with frost forecast on the barrels (the record's 1985, seed 8), run at the fastest speed: every reason
+  // the clock gave for stopping itself, and whether the frost warning came.
+  function harvest(pauseOnAlerts: boolean): { reasons: string[]; warned: number } {
+    const app = new App(loadWorld())
+    app.settings.pauseOnAlerts = pauseOnAlerts
+    app.newGame(1985, 8)
+    app.do({ t: 'begin' })
+    app.do({ t: 'sprayWay', way: 'auto' })
+    const c = app.campaign!
+    const reasons: string[] = []
+    app.on(e => { if (e.type === 'speed' && e.speed === 0 && app.pauseReason) reasons.push(app.pauseReason) })
+    app.setSpeed(3)
+    for (let ms = 0; ms < 400_000 && !S.seasonDone(c); ms += 50) {
+      if (app.speed === 0) {
+        for (const inc of [...c.incidents]) app.do({ t: 'answer', incident: inc.id, choice: S.defaultChoice(inc) })
+        for (const lot of S.openLots(c)) if (c.season!.fields[lot.field]?.weighed) app.do({ t: 'sell', lot: lot.id, frac: 1 })
+        app.setSpeed(3)
+      }
+      app.tick(50)
+    }
+    return { reasons, warned: c.season!.log.filter(e => e.type === 'frostBarrels').length }
+  }
+
+  it('frost forecast on the barrels is news, not a pause: the crew hauls ahead of it without being told', () => {
+    const { reasons, warned } = harvest(false)
+    expect(warned).toBeGreaterThan(0)
+    expect(reasons.filter(r => /frost/i.test(r))).toEqual([])
+    // What does stop it: a weigh ticket, a telegram, the season's end.
+    expect(reasons.length).toBeGreaterThan(0)
+  })
+
+  it('and pauses the game for a player who asked to be paused on alerts', () => {
+    const { reasons, warned } = harvest(true)
+    expect(warned).toBeGreaterThan(0)
+    expect(reasons.some(r => /^Frost is forecast/.test(r))).toBe(true)
+  })
+})

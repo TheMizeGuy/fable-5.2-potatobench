@@ -17,7 +17,7 @@ import { fold } from './system/parts.ts'
 import { topBar } from './top.ts'
 import { usualFirstYear } from './usual-year.ts'
 import { nextGoal } from '../game/goals.ts'
-import { springSlot } from './tutorial.ts'
+import { agentSpeaking, springSlot } from './tutorial.ts'
 
 function varietyTraits(v: S.Variety, c: S.Campaign, world: S.World): string[] {
   return [
@@ -356,7 +356,8 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
     const later = phone ? folds.filter(f => f.id !== 'fields' && f.id !== 'people' && f.id !== open) : []
     // The fold where the slip's goal is reached is ringed, and says so, so it is found without the slip.
     const g = nextGoal(c)
-    const goalAt = g && g.now && !g.block ? goalFold[g.id] : undefined
+    // While the county agent has a note for this screen, the ring waits with the slip: one voice at a time.
+    const goalAt = g && g.now && !g.block && !agentSpeaking() ? goalFold[g.id] : undefined
     return [
       folds.filter(f => !later.includes(f)).map(f => {
         const on = open === f.id
@@ -452,7 +453,7 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
       landNow = null
       const state = [c.year, c.history.length, c.plans, c.fields.map(f => [f.tenure, f.cover]), c.seedStock.length, app.settings.units, layout]
       patch(mast, JSON.stringify([c.year, c.yearIdx]), () => drawMast(c))
-      patch(rows, JSON.stringify([...state, open, nextGoal(c)?.id, c.applicants.map(a => a.id), c.crew.map(u => [u.id, u.wage, u.foreman]), c.offers.map(x => x.id), c.contracts.map(k => k.id),
+      patch(rows, JSON.stringify([...state, open, nextGoal(c)?.id, agentSpeaking(), c.applicants.map(a => a.id), c.crew.map(u => [u.id, u.wage, u.foreman]), c.offers.map(x => x.id), c.contracts.map(k => k.id),
         c.upgrades, c.mortgages.map(m => Math.round(m.owed)), c.sundaysOff, Math.round(c.cash), c.buildings.length]), () => drawRows(c))
       patch(foot, JSON.stringify([S.planCosts(c), Math.round(c.cash), c.mortgages.map(m => Math.round(m.owed)), app.settings.units, layout]), () => drawFoot(c))
       el.style.setProperty('--foot-h', `${Math.round(foot.offsetHeight)}px`)
