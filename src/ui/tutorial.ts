@@ -637,6 +637,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
   let driveChecked = 0
   // Asks the player sent the guide on without, for as long as each stays open.
   const waved = new Set<string>()
+  const wavedGone = new Map<string, number>()
   function endScene(home: boolean): void {
     if (!scene) return
     if (scene.unit >= 0 && ctx.view.followed() === scene.unit) ctx.view.follow(-1)
@@ -693,7 +694,14 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     // A season come back to (Continue) is paused: the guide says what is passing a moment before it runs on.
     if (app.screen !== onScreen) { if (app.screen === 'season' && app.speed === 0) beatAt = Math.max(beatAt, t + 1800); onScreen = app.screen }
     const open = app.screen === 'season' ? openAsks(l) : []
-    for (const id of [...waved]) if (!open.some(a => a.id === id)) waved.delete(id)
+    // An ask waved through is not asked again: the word to plant until the crew has started (its stamps come and go
+    // with the weather), any other until it has been gone two seconds (a day's turn takes the stamps down a moment).
+    for (const id of [...waved]) {
+      if (open.some(a => a.id === id) || (id === 'word' && c?.season && !S.plantWordGiven(c.season))) { wavedGone.delete(id); continue }
+      const gone = wavedGone.get(id) ?? t
+      wavedGone.set(id, gone)
+      if (t - gone > 2000) { waved.delete(id); wavedGone.delete(id) }
+    }
     const d = !offer && !noted && !carded && !app.holding && app.screen === 'season' ? driving(l, guide, waved) : null
     // A note or a card that cuts a showing short gets the whole farm back, where the stamps it may point at are in
     // view; the player's own hand on the clock leaves the picture where they are watching it.

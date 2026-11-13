@@ -212,7 +212,10 @@ tutorial when planting is ready and accelerate time during the tutorial where ne
   the game makes itself (C4's list), every card and every note stops it as they stop anyone, and it never ends a
   pause the game made or the player's own. A press the year is waiting on that no note is asking for (the word to
   plant with its note put away, a ringed stamp, a vine kill that is the player's) stops it too: the guide pauses
-  and says what it waits for ("Water Brook Field. Click its ringed stamp."), with "Go on without it".
+  and says what it waits for ("Water Brook Field. Click its ringed stamp."), with "Go on without it". An ask sent
+  on is not asked again: the word to plant until the crew has started (its stamps come and go with the weather, and a
+  day's turn takes them down for a frame), any other until its stamp has been gone two seconds. Waiting, the guide
+  shows the whole farm, as it does when a note or a card cuts a showing short, so the stamp asked for is in view.
 - *The player keeps the clock.* A speed set, a pause (Space included) or "Take the clock" on the guide's line takes
   it, and the guide does not start again by itself. A note then offers it back with a quiet key, "Run the clock
   for me", and the guide's paper has the same as a tick box. "Turn off the tutorial" stops it with everything
