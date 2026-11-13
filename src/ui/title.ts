@@ -7,6 +7,7 @@ import { icon } from './icons.ts'
 import { seasonCount } from './rules.ts'
 import { PHASE_LABEL } from './top.ts'
 import { guidedFarm, startedFarm } from './tutorial.ts'
+import './title.css'
 
 // Starts a farm of its own, with seasons made for it. A farm still in play is not replaced unasked.
 export async function startNewFarm(ctx: Ctx, guided = false): Promise<void> {
@@ -26,6 +27,16 @@ export async function startNewFarm(ctx: Ctx, guided = false): Promise<void> {
   if (guided) guidedFarm()
   else startedFarm(app.campaign.seed)
 }
+
+let entered = false
+// Motes of dust in the low sun: where each starts (percent of the frame), its size, how long it drifts, how far into
+// its drift it starts, where it drifts to, and how bright it gets.
+const MOTES: [number, number, number, number, number, number, number, number][] = [
+  [58, 62, 5, 26, 3, 90, -150, .55], [66, 78, 3, 31, 12, 120, -210, .45], [74, 55, 6, 37, 20, 70, -120, .4], [81, 70, 4, 29, 7, 140, -190, .5],
+  [49, 84, 4, 34, 16, 110, -230, .45], [88, 46, 3, 41, 28, 60, -110, .35], [63, 40, 5, 44, 9, 80, -90, .3], [71, 88, 7, 33, 22, 100, -260, .5],
+  [93, 80, 4, 27, 5, 50, -170, .45], [55, 50, 3, 39, 31, 130, -140, .35], [78, 34, 4, 47, 14, 90, -80, .28], [84, 60, 6, 30, 18, 75, -200, .48],
+  [45, 70, 3, 36, 25, 150, -180, .38], [68, 64, 4, 42, 2, 60, -130, .42], [96, 58, 5, 35, 11, 40, -150, .4], [60, 92, 5, 28, 19, 110, -240, .5],
+]
 
 function engraving(): HTMLElement {
   const box = h('span', { class: 'cv-plate' })
@@ -47,7 +58,26 @@ export function titleScreen(ctx: Ctx, o: { onMenu: () => void; onHelp: () => voi
     h('footer', { class: 'imprint', testid: 'credit' },
       h('p', { class: 'a' }, 'Fable 5.2 - PotatoBench'),
       h('p', { class: 'b' }, 'PotatoBench made by TheMizeGuy')))
-  const el = h('main', { class: 'title-screen sys' }, h('div', { class: 'title-shade' }), cover)
+  // The frame's dressing: bars, the dark at its corners, the sun's haze, grain, motes of dust in the light, and the
+  // black the first frame comes up out of. All of it lies under the name and the menu and takes no press.
+  const barT = h('div', { class: 'cine-bar t' }), barB = h('div', { class: 'cine-bar b' })
+  const motes = h('div', { class: 'cine-motes', 'aria-hidden': 'true' }, MOTES.map(([x, y, s, d, w, dx, dy, o]) =>
+    h('i', { style: `--x:${x}%;--y:${y}%;--s:${s}px;--d:${d}s;--w:-${w}s;--dx:${dx}px;--dy:${dy}px;--o:${o}` })))
+  const el = h('main', { class: 'title-screen cine sys' }, h('div', { class: 'cine-haze' }), h('div', { class: 'title-shade' }), h('div', { class: 'cine-vignette' }), motes,
+    h('div', { class: 'cine-grain' }), barT, barB, cover, h('p', { class: 'cine-hint', 'aria-hidden': 'true' }, 'Enter to play'), h('div', { class: 'cine-fade' }))
+  // The entrance plays once a visit, the first time the landing is shown.
+  if (!entered) {
+    entered = true
+    const go = () => { el.classList.remove('await'); el.classList.add('intro'); setTimeout(() => el.classList.remove('intro'), 4200) }
+    // It waits for the loading page to lift, so the name is set over the land and not behind the page that hid it.
+    const splash = document.getElementById('splash')
+    if (splash && !splash.classList.contains('gone')) {
+      el.classList.add('await')
+      const seen = new MutationObserver(() => { if (splash.classList.contains('gone') || !splash.isConnected) { seen.disconnect(); go() } })
+      seen.observe(splash, { attributes: true, attributeFilter: ['class'] })
+      if (splash.parentNode) seen.observe(splash.parentNode, { childList: true })
+    } else go()
+  }
   let focused = false
   return {
     el,
@@ -79,7 +109,8 @@ export function titleScreen(ctx: Ctx, o: { onMenu: () => void; onHelp: () => voi
     insets() {
       // The cover takes the left of the frame; on a phone, the whole of it but the sky above.
       const r = cover.getBoundingClientRect()
-      return r.width > innerWidth * 0.7 ? [0, 0, Math.max(0, innerHeight - r.top), 0] : [0, 0, 0, Math.max(0, r.right)]
+      // (under the bars the picture is composed between them, to the right of the name)
+      return r.width > innerWidth * 0.7 ? [0, 0, Math.max(0, innerHeight - r.top), 0] : [barT.offsetHeight, 0, barB.offsetHeight, Math.max(0, r.right)]
     },
   }
 }

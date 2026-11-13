@@ -1,0 +1,90 @@
+/* The landing: the opening shot full across the window, dressed as a film's first frame. Bars above and below, the
+   name set straight on the picture, the menu a slip of paper laid on it, grain and motes of dust in the light.
+   Everything that moves here moves by transform or opacity alone, so none of it costs the picture a frame.
+   A phone and a short window keep the almanac's cover. */
+.title-screen.cine { --bar-t: 0px; --bar-b: 0px; }
+.cine .cine-bar, .cine .cine-vignette, .cine .cine-haze, .cine .cine-grain, .cine .cine-motes, .cine .cine-fade, .cine .cine-hint { position: absolute; pointer-events: none; }
+.cine .cine-bar, .cine .cine-hint, .cine .cine-motes, .cine .cine-haze { display: none; }
+.cine .cine-vignette { inset: 0; background: radial-gradient(125% 95% at 62% 42%, rgb(8 5 2 / 0) 52%, rgb(8 5 2 / 0.6) 100%); }
+.cine .cine-grain { inset: -120px; background: url(./system/grain.png) repeat; opacity: .09; animation: cine-grain 1s steps(1) infinite; will-change: transform; }
+.cine .cine-fade { inset: 0; background: #060504; opacity: 0; z-index: 5; }
+
+.title-screen.cine:is([data-layout='wide'], [data-layout='mid']) { --bar-t: 5.5vh; --bar-b: 8.5vh; }
+.cine:is([data-layout='wide'], [data-layout='mid']) .cine-bar { display: block; left: 0; right: 0; background: #060504; z-index: 1; }
+.cine:is([data-layout='wide'], [data-layout='mid']) .cine-bar.t { top: 0; height: var(--bar-t); box-shadow: 0 1px 0 rgb(246 241 228 / 0.08); }
+.cine:is([data-layout='wide'], [data-layout='mid']) .cine-bar.b { bottom: 0; height: var(--bar-b); box-shadow: 0 -1px 0 rgb(246 241 228 / 0.08); }
+.cine:is([data-layout='wide'], [data-layout='mid']) .cine-haze { display: block; inset: 0; background: radial-gradient(58% 62% at 60% 0%, rgb(255 214 150 / 0.3), rgb(255 214 150 / 0) 72%); animation: cine-breathe 11s ease-in-out infinite alternate; }
+.cine:is([data-layout='wide'], [data-layout='mid']) .cine-motes { display: block; inset: var(--bar-t) 0 var(--bar-b) 0; overflow: hidden; }
+.cine .cine-motes i { position: absolute; left: var(--x); top: var(--y); width: var(--s); height: var(--s); border-radius: 50%; opacity: 0;
+  background: radial-gradient(circle, rgb(255 238 196 / 0.95), rgb(255 238 196 / 0) 70%); animation: cine-mote var(--d) linear var(--w) infinite; will-change: transform, opacity; }
+.cine:is([data-layout='wide'], [data-layout='mid']) .title-shade { background:
+  linear-gradient(90deg, rgb(10 7 3 / 0.82) 0%, rgb(10 7 3 / 0.58) 24%, rgb(10 7 3 / 0) 58%),
+  linear-gradient(0deg, rgb(10 7 3 / 0.45), rgb(10 7 3 / 0) 38%); }
+.cine:is([data-layout='wide'], [data-layout='mid']) .cine-hint { display: block; right: max(5vw, 44px); bottom: 0; height: var(--bar-b); z-index: 2; display: grid; align-items: center;
+  font: 400 13px/1 var(--f-gothic); letter-spacing: .26em; text-transform: uppercase; color: rgb(246 241 228 / 0.62); }
+
+/* The name on the picture. */
+.title-screen.cine:is([data-layout='wide'], [data-layout='mid']) .cover { left: max(5vw, 44px); top: var(--bar-t); bottom: var(--bar-b); width: min(540px, 42vw); max-height: none;
+  padding: 0 0 4.5vh; transform: none; background: none; box-shadow: none; color: var(--paper); align-content: end; z-index: 2; }
+.title-screen.cine:is([data-layout='wide'], [data-layout='mid']) .cover::before, .title-screen.cine:is([data-layout='wide'], [data-layout='mid']) .cover::after { display: none; }
+.cine:is([data-layout='wide'], [data-layout='mid']) .cv-top { justify-content: flex-start; gap: 14px; color: rgb(246 241 228 / 0.86); font-size: 14px; letter-spacing: .34em; text-shadow: 0 1px 2px rgb(0 0 0 / 0.6); }
+.cine:is([data-layout='wide'], [data-layout='mid']) .cv-top .orn { flex: 0 0 72px; background: radial-gradient(circle, rgb(246 241 228 / 0.8) 1.6px, transparent 2.1px) center / 9px 8px repeat-x; }
+.cine:is([data-layout='wide'], [data-layout='mid']) .cover .cv-name { color: var(--paper); margin: 10px 0 0; }
+.cine:is([data-layout='wide'], [data-layout='mid']) .cover .cv-name .the { font-size: min(52px, 4.4vw); color: var(--canary); margin: 0 0 -0.12em 0.08em; text-shadow: 0 2px 10px rgb(0 0 0 / 0.55); }
+.title-screen.cine:is([data-layout='wide'], [data-layout='mid']) .cover .cv-name .county { font-size: min(212px, 14.6vw, 25vh); line-height: .82; text-align: left; letter-spacing: .012em; white-space: nowrap;
+  text-shadow: 0 1px 0 rgb(0 0 0 / 0.4), 0 3px 0 rgb(40 24 6 / 0.35), 0 14px 46px rgb(20 10 0 / 0.6); }
+.cine:is([data-layout='wide'], [data-layout='mid']) .cover hr.rule { width: 100%; margin: 14px 0 0; border: 0; height: 5px; background: none; border-top: 2px solid rgb(246 241 228 / 0.92); border-bottom: 1px solid rgb(246 241 228 / 0.92); transform-origin: left center; }
+.title-screen.cine:is([data-layout='wide'], [data-layout='mid']) .cv-cut { display: block; padding: 12px 0 18px; color: inherit; }
+.title-screen.cine:is([data-layout='wide'], [data-layout='mid']) .cv-plate, .title-screen.cine:is([data-layout='wide'], [data-layout='mid']) .cv-cut figcaption { display: none; }
+.title-screen.cine:is([data-layout='wide'], [data-layout='mid']) .cv-cut p { max-width: 30em; font-size: 19px; line-height: 1.4; color: rgb(246 241 228 / 0.94); text-shadow: 0 1px 3px rgb(0 0 0 / 0.7); }
+/* The low sun catches the name once as it is set. */
+.title-screen.cine:is([data-layout='wide'], [data-layout='mid']) .cover .cv-name .county { position: relative; justify-self: start; }
+.title-screen.cine:is([data-layout='wide'], [data-layout='mid']) .cover .cv-name .county::after { content: 'County'; position: absolute; inset: 0; color: transparent; text-shadow: none; pointer-events: none;
+  background: linear-gradient(102deg, rgb(255 236 190 / 0) 42%, rgb(255 244 214 / 0.95) 50%, rgb(255 236 190 / 0) 58%) 130% 0 / 260% 100% no-repeat; -webkit-background-clip: text; background-clip: text; }
+.title-screen.intro.cine .cover .cv-name .county::after { animation: cine-glint 1.7s 1.5s cubic-bezier(.3, .2, .2, 1) both; }
+/* A lower window gives up the line over the name and sets it smaller, so the whole stands between the bars. */
+@media (max-height: 780px) {
+  .title-screen.cine:is([data-layout='wide'], [data-layout='mid']) .cover .cv-name .county { font-size: min(170px, 13vw, 21.5vh); }
+  .cine:is([data-layout='wide'], [data-layout='mid']) .cv-top { display: none; }
+  .title-screen.cine:is([data-layout='wide'], [data-layout='mid']) .cv-cut { padding: 8px 0 12px; }
+  .title-screen.cine:is([data-layout='wide'], [data-layout='mid']) .cv-cut p { font-size: 17px; }
+  .title-screen.cine:is([data-layout='wide'], [data-layout='mid']) .cover { padding-bottom: 3vh; }
+}
+/* The menu: a slip of the game's paper laid on the picture, its keys standing off it as everywhere else. */
+.cine:is([data-layout='wide'], [data-layout='mid']) .cv-menu { width: min(430px, 100%); padding: 14px 16px 12px; color: var(--ink); background: var(--paper) url(./system/grain.png); background-blend-mode: multiply;
+  box-shadow: 0 0 0 1px var(--edge), 0 2px 0 rgb(0 0 0 / 0.25), 0 22px 48px rgb(0 0 0 / 0.5); transform: rotate(-.5deg); transform-origin: left bottom; }
+.cine:is([data-layout='wide'], [data-layout='mid']) .cv-menu > .t-label { display: none; }
+.cine:is([data-layout='wide'], [data-layout='mid']) .imprint { position: absolute; left: 0; top: 100%; height: var(--bar-b); margin: 0; padding: 0; border: 0; display: flex; align-items: center; gap: 12px; white-space: nowrap; color: rgb(246 241 228 / 0.72); }
+.cine:is([data-layout='wide'], [data-layout='mid']) .imprint .a { font: 400 13px/1 var(--f-gothic); letter-spacing: .26em; text-transform: uppercase; }
+.cine:is([data-layout='wide'], [data-layout='mid']) .imprint .b { font: italic 400 14px/1 var(--f-text); color: rgb(246 241 228 / 0.55); }
+
+/* The first time the page shows it, the frame comes up out of black and the name is set line by line. The keys only
+   fade: they are where they will be from the first frame, so a press never waits on the entrance. */
+.title-screen.intro .cine-fade { animation: cine-out 2.4s cubic-bezier(.4, 0, .2, 1) both; }
+/* Until the land is up behind it, nothing of the name shows: the entrance starts as the loading page lifts. */
+.title-screen.await:is([data-layout='wide'], [data-layout='mid']) :is(.cv-top, .cv-name, hr.rule, .cv-cut p, .cv-menu, .imprint, .cine-hint) { opacity: 0; }
+.title-screen.await .cine-fade { opacity: .75; }
+.title-screen.intro .cv-top { animation: cine-in .9s .55s both; }
+.title-screen.intro .cv-name .the { animation: cine-up .9s .7s cubic-bezier(.2, .7, .2, 1) both; }
+.title-screen.intro .cv-name .county { animation: cine-up 1.2s .8s cubic-bezier(.2, .7, .2, 1) both; }
+.title-screen.intro .cover hr.rule { animation: cine-rule 1s 1.25s cubic-bezier(.3, .7, .2, 1) both; }
+.title-screen.intro .cv-cut p { animation: cine-in 1s 1.45s both; }
+.title-screen.intro .cv-menu { animation: cine-in .8s 1.6s both; }
+.title-screen.intro .imprint, .title-screen.intro .cine-hint { animation: cine-in 1.2s 2s both; }
+.title-screen.intro .cine-bar.t { animation: cine-bar-t 1.1s cubic-bezier(.3, .7, .2, 1) both; }
+.title-screen.intro .cine-bar.b { animation: cine-bar-b 1.1s cubic-bezier(.3, .7, .2, 1) both; }
+
+@keyframes cine-out { from { opacity: .75; } to { opacity: 0; } }
+@keyframes cine-glint { from { background-position: 130% 0; } to { background-position: -30% 0; } }
+@keyframes cine-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes cine-up { from { opacity: 0; transform: translate3d(0, 26px, 0); } to { opacity: 1; transform: none; } }
+@keyframes cine-rule { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes cine-bar-t { from { transform: translate3d(0, -100%, 0); } to { transform: none; } }
+@keyframes cine-bar-b { from { transform: translate3d(0, 100%, 0); } to { transform: none; } }
+@keyframes cine-breathe { from { opacity: .62; } to { opacity: 1; } }
+@keyframes cine-grain { 0% { transform: translate3d(0, 0, 0); } 17% { transform: translate3d(-41px, 27px, 0); } 33% { transform: translate3d(33px, -52px, 0); } 50% { transform: translate3d(-64px, -18px, 0); } 67% { transform: translate3d(52px, 44px, 0); } 83% { transform: translate3d(-17px, 61px, 0); } }
+@keyframes cine-mote { 0% { opacity: 0; transform: translate3d(0, 0, 0); } 12% { opacity: var(--o); } 80% { opacity: var(--o); } 100% { opacity: 0; transform: translate3d(var(--dx), var(--dy), 0); } }
+
+.reduce-motion .title-screen .cine-grain, .reduce-motion .title-screen .cine-haze { animation: none; }
+.reduce-motion .title-screen .cine-motes { display: none !important; }
+.reduce-motion .title-screen.intro * { animation: none !important; }
