@@ -58,7 +58,7 @@ function sentText(c: S.Campaign, e: { field: number; kind: S.JobKind; unit: numb
 // How close together presses of the same order come to be answered by one line.
 const JOIN_MS = 2500
 // How long the answer to a press stays: long enough to be read after a glance at the land.
-const ANSWER_MS = 12000
+const ANSWER_MS = 15000
 
 // The alerts whose one remedy is a press, and the words on its key.
 const KEYED: Partial<Record<string, string>> = { frostBarrels: 'Haul it in now', barrelsOut: 'Haul them in now', idleNever: 'Let them help' }
