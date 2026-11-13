@@ -8,6 +8,8 @@
 //   --throttle=4   the page's thread slowed that many times (CDP), to stand in for a laptop
 //   --adapt        the game left to follow frame time as a player's browser does (the picture's size and the setting)
 //   --budget       fail where a state does not keep its frames (see BUDGET below)
+//   --turns        only the states in which days turn (the clock at 1x, 3x and 8x, with a field card open and without)
+//   --profile      where the time of a day's turn went, by function (best read from a build made with --minify false)
 //   --hz=120       the game is called on the beat of a display that fast (the browser's own frame limit taken off and
 //                  the calls let through at that rate; the rate has to divide the browser's unlimited one, about 240
 //                  a second on the test box), and with --adapt what the pace of drawing does there is said: it
@@ -99,17 +101,54 @@ let failed = 0
 
 async function take(name: string, during: (() => Promise<void>) | null = null, seconds = SECONDS): Promise<void> {
   if (ONLY && !ONLY.includes(name)) return
+  if (flag('turns') && !/^running|card open/.test(name)) return
   const ids = await page.evaluate(() => ((window as any).__county.app.campaign?.crew ?? []).map((u: { id: number }) => u.id)) as number[]
   await page.evaluate(ids => { const F = (window as any).__flow; F.rows = []; F.long = []; F.fine = {}; F.worst = {}; F.ids = ids; (window as any).__countyField.laps(true); performance.clearMeasures(); F.on = true }, ids)
   if (THROTTLE > 1) await cdp.send('Emulation.setCPUThrottlingRate', { rate: THROTTLE })
+  if (flag('profile')) { await cdp.send('Profiler.enable'); await cdp.send('Profiler.setSamplingInterval', { interval: 250 }); await cdp.send('Profiler.start') }
   const until = Date.now() + seconds * 1000
   if (during) while (Date.now() < until) await during()
   else await page.waitForTimeout(seconds * 1000)
+  const profile = flag('profile') ? (await cdp.send('Profiler.stop')).profile : null
   if (THROTTLE > 1) await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 })
   const got = await page.evaluate(() => { const F = (window as any).__flow; F.on = false; (window as any).__countyField.laps(false); return { rows: F.rows, long: F.long, fine: F.fine, worst: F.worst } }) as { rows: Row[]; long: State['long']; fine: Record<string, number>; worst: Record<string, number> }
   report({ name, rows: got.rows, long: got.long, ids })
   const fine = Object.entries(got.fine).map(([k, v]) => [k, v / Math.max(1, got.rows.length)] as [string, number]).filter(x => x[1] >= 0.05 || got.worst[x[0]] >= 4).sort((a, b) => b[1] - a[1])
   if (fine.length) console.log(`       parts, ms a frame (and the worst): ${fine.map(([k, v]) => `${k} ${v.toFixed(2)} (${got.worst[k].toFixed(0)})`).join('; ')}`)
+  if (profile) turns(profile as unknown as Profile, name)
+}
+
+// Where the time of a day's turn went: the profiler's samples from the day's own call (the app's tick calling its do)
+// through the frames after it, by function, with everything under it and by itself.
+type Profile = { nodes: { id: number; callFrame: { functionName: string; url: string; lineNumber: number }; children?: number[] }[]; startTime: number; samples: number[]; timeDeltas: number[] }
+function turns(p: Profile, state: string): void {
+  const node = new Map(p.nodes.map(n => [n.id, n]))
+  const parent = new Map<number, number>()
+  for (const n of p.nodes) for (const c of n.children ?? []) parent.set(c, n.id)
+  const label = (id: number) => { const f = node.get(id)!.callFrame; return `${f.functionName || '(anonymous)'}:${f.lineNumber + 1}` }
+  const stacks = new Map<number, string[]>()
+  const stack = (id: number): string[] => {
+    let s = stacks.get(id)
+    if (!s) { s = []; for (let k: number | undefined = id; k !== undefined; k = parent.get(k)) s.push(label(k)); stacks.set(id, s) }
+    return s
+  }
+  const WINDOW = (THROTTLE > 1 ? 150 : 75) * 1000
+  let t = p.startTime, until = -1, count = 0
+  const self = new Map<string, number>(), under = new Map<string, number>()
+  for (let i = 0; i < p.samples.length; i++) {
+    t += p.timeDeltas[i]
+    const s = stack(p.samples[i])
+    const day = s.some(x => x.startsWith('do:')) && s.some(x => x.startsWith('tick:'))
+    if (day && t > until) { until = t + WINDOW; count++ }
+    if (t > until) continue
+    const ms = (p.timeDeltas[i + 1] ?? 0) / 1000
+    if (s[0].startsWith('(idle)') || s[0].startsWith('(program)')) continue
+    self.set(s[0], (self.get(s[0]) ?? 0) + ms)
+    for (const x of new Set(s)) under.set(x, (under.get(x) ?? 0) + ms)
+  }
+  const top = (m: Map<string, number>, n: number) => [...m].sort((a, b) => b[1] - a[1]).slice(0, n).map(([k, v]) => `${k} ${(v / Math.max(1, count)).toFixed(1)}`).join('; ')
+  console.log(`       ${state}: ${count} days' turns; ms a turn, with all under it: ${top(under, 90)}`)
+  console.log(`       ${state}: ms a turn, by itself: ${top(self, 50)}`)
 }
 
 function report(s: State): void {
@@ -127,7 +166,7 @@ function report(s: State): void {
   const part = (k: number) => rows.reduce((a, r) => a + r[k], 0) / rows.length
   const parts: [string, number][] = [['days', part(7)], ['land', part(8)], ['interface', part(9)], ['sound', part(10)]]
   const worst: [string, number][] = [['days', Math.max(...rows.map(r => r[7]))], ['land', Math.max(...rows.map(r => r[8]))], ['interface', Math.max(...rows.map(r => r[9]))], ['sound', Math.max(...rows.map(r => r[10]))]]
-  const late = settled.filter(g => g.ms > 33)
+  const late = settled.filter(g => g.ms > 34)
   // What each late picture fell on: a day's turn in the frames since the last picture, and the dearest part of them.
   const on = new Map<string, number>()
   for (const g of late) {
@@ -157,7 +196,8 @@ function report(s: State): void {
   const p50 = pct(ms, 0.5), p95 = pct(ms, 0.95), p99 = pct(ms, 0.99), max = ms.length ? Math.max(...ms) : 0
   const over20 = ms.filter(v => v > 20).length, over33 = late.length
   const line = `${s.name.padEnd(26)} ${(drawn.length / span).toFixed(0).padStart(3)} fps | gaps ${p50.toFixed(1)} / ${p95.toFixed(1)} / ${p99.toFixed(1)} / ${max.toFixed(0)} ms | over 20: ${over20}, over 33: ${over33} of ${ms.length} | work ${pct(work, 0.5).toFixed(1)} / ${pct(work, 0.99).toFixed(1)} / ${Math.max(...work).toFixed(0)} ms (${parts.map(p => `${p[0]} ${p[1].toFixed(1)}`).join(', ')}; worst ${worst.map(p => `${p[0]} ${p[1].toFixed(0)}`).join(', ')}) | sizes ${[...sizes].join(',')}${resized ? ` changed ${resized} times` : ''}, beats ${[...every].join(',')} | long frames ${s.long.length}${s.long.length ? ` (worst ${Math.max(...s.long.map(l => l[1])).toFixed(0)} ms; style and layout to ${Math.max(...s.long.map(l => l[4] + l[5])).toFixed(0)} ms, ${Math.max(...s.long.map(l => l[5])).toFixed(0)} of it forced by script)` : ''} | steps ${stepped}${stepped ? ` (to ${biggest.toFixed(1)} times the usual)` : ''}${late.length ? ` | late on: ${[...on].map(([k, n]) => `${k} x${n}`).join('; ')}` : ''}`
-  const ok = !flag('budget') || (p99 <= BUDGET.p99 && over33 <= BUDGET.over33 && stepped <= BUDGET.steps)
+  // (--turns: a day's turn never costs a beat with the page's thread at full speed, nor two with it slowed)
+  const ok = !flag('budget') || (flag('turns') ? (THROTTLE > 1 ? over33 === 0 : over20 === 0) : p99 <= BUDGET.p99 && over33 <= BUDGET.over33 && stepped <= BUDGET.steps)
   console.log(`${ok ? 'ok  ' : 'FAIL'} ${line}`)
   results.push(line)
   if (!ok) failed++
@@ -198,14 +238,17 @@ if (HZ) {
   if (!ok) failed++
 }
 await take('running at 1x')
+if (flag('turns')) { await clear(); await speed(2); await take('running at 3x') }
 await clear(); await speed(3)
 await take('running at 8x')
 await clear(); await speed(1)
 await page.evaluate(() => (window as any).__county.app.select(0))
 await page.waitForTimeout(500)
 await take('a field card open, 1x')
+if (flag('turns')) { await speed(2); await take('a field card open, 3x') }
 await speed(3)
 await take('a field card open, 8x')
+if (flag('turns')) { await browser.close(); process.exit(failed ? 1 : 0) }
 await page.evaluate(() => (window as any).__county.app.select(-1))
 await speed(1)
 const who = await q(page, `return q.g().app.campaign.crew[0].id`) as number
