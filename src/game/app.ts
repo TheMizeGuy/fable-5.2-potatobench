@@ -1,6 +1,6 @@
 // The running game: owns the campaign, the clock, the selection and the orders, saving, and tells the views what changed.
 import {
-  advise, apply, awaitsWord, climateWorld, createCampaign, fieldInfo, fieldNeeds, FIELD_NAMES, held, isFarmYear, plantReady, seasonDone, startYears, unitBlock, FARM_YEAR0,
+  advise, apply, awaitsWord, climateWorld, createCampaign, fieldInfo, fieldNeeds, FIELD_NAMES, held, isFarmYear, plantReady, plantWordGiven, seasonDone, startYears, unitBlock, FARM_YEAR0, PLANT_WORD_DAYS,
   type Advice, type Campaign, type Cmd, type GameEvent, type JobKind, type Phase, type Result, type World,
 } from '../sim/index.ts'
 import type { Pointing, Thing } from './contracts.ts'
@@ -64,17 +64,35 @@ export type AppEvent =
   | { type: 'insets' }
   | { type: 'saved'; ok: boolean }
 
-// A card that needs an answer stops the clock whatever the settings say: a crop weighed in (sell or store), an
-// incident that asks for an answer, the freeze. Nothing else changes the speed the player set: a notice that asks
-// nothing (frost forecast on the barrels, which the crew hauls ahead of by itself) is a toast, and pauses only for a
-// player who turned on "Pause on alerts".
-const STOP_FOR = new Set(['weighed', 'incident', 'freeze'])
+// The one rule for a game that pauses itself: it does so only where the year waits on the player's own decision and
+// loses something if it is missed, in every year, with the tutorial on or off and whatever "Pause on alerts" says.
+// "Skip ahead" and every "Fast-forward to ..." key only set the speed, so they stop there too. Nothing else changes
+// the speed the player set: a notice that asks nothing (frost forecast on the barrels, which the crew hauls ahead of
+// by itself, a job the crew handles, news) is a toast. Every cause, and the decision it waits on:
+export const SELF_PAUSES = {
+  plantAsk: 'The word to plant: the crew stands ready, and starts on its own three days after the game resumes.',
+  killCall: 'A vine kill that is the player\'s to give: they keep these vines up, or the crew does not kill them by itself.',
+  spray: 'The season\'s spraying question, at the first blight weather (asked by the season screen).',
+  weighed: 'A crop weighed in: sell it now or store it.',
+  incident: 'A telegram that needs a reply.',
+  over: 'The season is over (the crop is in, or the ground froze): no days are left to run until it is closed out.',
+  alerts: 'Only for a player who turned on "Pause on alerts": anything new that needs doing.',
+} as const
+export type PauseCause = keyof typeof SELF_PAUSES
+// The events of a day that pause the game, and the cause each one is.
+const STOP_FOR: Record<string, PauseCause> = { weighed: 'weighed', incident: 'incident', freeze: 'over', plantAsk: 'plantAsk', killCall: 'killCall' }
+// Why the game paused for a decision made on the land, read after "Paused: ". Resuming is an answer too.
+export const PLANT_PAUSE = `the soil is ready. Press a ringed Plant stamp, or resume and your crew starts in ${PLANT_WORD_DAYS} days.`
+function killPause(e: GameEvent): string {
+  const first = e.text.slice(0, e.text.indexOf('. ') + 1) || e.text
+  return `${first.charAt(0).toLowerCase()}${first.slice(1)} Press a ringed Kill vines stamp, or resume and they stay up.`
+}
 // Events worth an alert even though they are not warnings.
 const NOTABLE = new Set([
   'dug', 'weighed', 'sample', 'skinSet', 'emerged', 'ti', 'mature', 'watch',
   'skillUp', 'hired', 'quit', 'hurt', 'poached', 'incident', 'incidentDone', 'breakdown', 'repaired',
   'felled', 'stumped', 'tiled', 'rocks', 'brushed', 'brushBack', 'building', 'built', 'pondDry', 'frozenInField', 'crewKill',
-  'plantAsk', 'plantWord',
+  'plantAsk', 'plantWord', 'killCall',
 ])
 const ALERTS_KEPT = 24
 
@@ -106,6 +124,10 @@ export class App {
   insets = { top: 0, right: 0, bottom: 0, left: 0 }
   // Why the clock last stopped itself, in the game's words ('' when the player set it).
   pauseReason = ''
+  // Which of SELF_PAUSES that was ('' when the player paused, or a tutorial note or a card holds the game).
+  pauseCause: PauseCause | '' = ''
+  // A pause for a decision on the land that another card came ahead of: made as soon as the game would run again.
+  private owed: { cause: 'plantAsk' | 'killCall'; why: string; fields: number[] } | null = null
   // The speed the clock was at when it stopped itself, to go back to once the card is answered.
   resumeSpeed: Speed = 1
   // The most recent alerts, newest last.
@@ -204,6 +226,8 @@ export class App {
     this.speed = 0
     this.resumeSpeed = 1
     this.pauseReason = ''
+    this.pauseCause = ''
+    this.owed = null
     this.advised = new Set()
     this.alerts = []
     this.dayProgress = 0
@@ -246,6 +270,7 @@ export class App {
     if (cmd.t === 'next') this.meetNeighbor()
     // The last question answered, however it was answered: the days go on at the speed they had.
     if (cmd.t === 'answer' && !c.incidents.length) { this.holding = ''; this.resumeAfterCard() }
+    if (cmd.t === 'job') this.answered(cmd.kind)
     this.dirty = true
     this.revision++
     for (const e of r.events) if (e.level !== 'info' || NOTABLE.has(e.type)) this.alert(c, e)
@@ -256,7 +281,7 @@ export class App {
       this.emit({ type: 'events', events: r.events, dayPassed: false })
     }
     if (c.phase !== this.screen && this.screen !== 'title') {
-      this.halt('')
+      this.halt('over', '')
       this.setScreen(c.phase)
       this.save()
     }
@@ -271,35 +296,62 @@ export class App {
     this.emit({ type: 'alert', alert: a })
   }
 
-  // After a day: a card that needs an answer stops the clock, and so does the season's end. Anything new that needs
-  // doing is said where the player looks, and stops the clock only for a player who asked for that.
+  // After a day: a decision that waits on the player pauses the game (SELF_PAUSES), and so does the season's end.
+  // Anything else new that needs doing is said where the player looks, and pauses only for a player who asked for that.
   private paceAfterDay(c: Campaign, events: GameEvent[]): void {
     const fresh = this.freshNeeds(c)
     if (this.speed === 0) return
-    const decision = events.find(e => STOP_FOR.has(e.type))
-    if (seasonDone(c)) this.halt('The season is over.')
-    else if (decision) this.halt(decision.text)
+    for (const e of events) {
+      if (e.type === 'plantAsk') this.owed = { cause: 'plantAsk', why: PLANT_PAUSE, fields: [] }
+      else if (e.type === 'killCall') this.owed = { cause: 'killCall', why: killPause(e), fields: Array.isArray(e.data?.fields) ? e.data.fields : [e.field] }
+    }
+    const decision = events.find(e => STOP_FOR[e.type] && e.type !== 'plantAsk' && e.type !== 'killCall')
+    if (seasonDone(c)) this.halt('over', 'The season is over.')
+    else if (decision) this.halt(STOP_FOR[decision.type], decision.text)
+    else if (this.owed) this.pauseOwed(c)
     else if (this.settings.pauseOnAlerts) {
       const trouble = events.find(e => e.level === 'bad' || e.level === 'warn')
       const why = trouble ? trouble.text : fresh[0]?.text ?? ''
-      if (why) this.halt(why)
+      if (why) this.halt('alerts', why)
     }
   }
 
-  private halt(why: string): void {
+  // The pause a decision on the land is owed, unless the decision has been made since. True when the game paused.
+  private pauseOwed(c: Campaign): boolean {
+    const o = this.owed
+    this.owed = null
+    const s = c.season
+    if (!o || !s || this.speed === 0 || seasonDone(c)) return false
+    const waits = o.cause === 'plantAsk' ? !plantWordGiven(s)
+      : o.fields.some(i => s.fields[i]?.status === 'growing' && s.fields[i].deadDay < 0 && !s.jobs.some(j => j.kind === 'kill' && j.field === i))
+    if (waits) this.halt(o.cause, o.why)
+    return waits
+  }
+
+  // The player gave the order a pause was waiting for: the pause is their own now, and stays until they resume.
+  private answered(kind: JobKind): void {
+    if (!(this.pauseCause === 'plantAsk' && kind === 'plant') && !(this.pauseCause === 'killCall' && kind === 'kill')) return
+    this.pauseReason = ''
+    this.pauseCause = ''
+    this.emit({ type: 'speed', speed: this.speed })
+  }
+
+  private halt(cause: PauseCause, why: string): void {
     this.dayProgress = 0
     if (this.speed === 0) return
     this.resumeSpeed = this.speed
     this.speed = 0
     this.pauseReason = why
+    this.pauseCause = cause
     this.emit({ type: 'speed', speed: 0 })
   }
 
   // Once the card the clock stopped for is answered, the days go on at the speed they had. A clock the player stopped
   // stays stopped.
-  // Stops the clock for a question the interface asks (the season's spraying): answered or put away, it goes on.
-  stopFor(why: string): void {
-    if (this.speed > 0) this.halt(why)
+  // Stops the clock for a question the interface asks (the season's spraying, a weigh ticket): answered or put away,
+  // it goes on.
+  stopFor(why: string, cause: 'spray' | 'weighed' = 'spray'): void {
+    if (this.speed > 0) this.halt(cause, why)
   }
 
   resumeAfterCard(): void {
@@ -439,6 +491,7 @@ export class App {
       taken.push(field)
       // What an order sets off is said (the word to plant: "Your crew will plant the other 3 fields too").
       for (const e of r.events) if (e.level !== 'info' || NOTABLE.has(e.type)) this.alert(c, e)
+      this.answered(kind)
       const jobs = c.season?.jobs ?? []
       if (opts.first && jobs.length) apply(this.world, c, { t: 'bump', id: jobs[jobs.length - 1].id })
     }
@@ -537,6 +590,7 @@ export class App {
       return
     }
     this.pauseReason = ''
+    this.pauseCause = ''
     if (this.speed === speed) return
     this.speed = speed
     if (speed === 0) this.dayProgress = 0
@@ -567,6 +621,7 @@ export class App {
   tick(dtMs: number): void {
     const c = this.campaign
     if (c && this.screen === 'season' && this.speed > 0 && c.season && !seasonDone(c) && !this.pressing) {
+      if (this.owed && this.pauseOwed(c)) return
       this.dayProgress += (Math.min(dtMs, 250) / 1000) * DAYS_PER_SECOND[this.speed]
       let guard = 0
       while (this.dayProgress >= 1 && guard++ < 3 && this.speed > 0) {

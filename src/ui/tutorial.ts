@@ -2,7 +2,7 @@
 // time, set where it covers nothing it is about, and the printer's fist on the one control it asks for. In spring the
 // slip is tucked into the seed catalogue above the order blank; elsewhere it floats over the land.
 import { SPEED_X } from '../game/app.ts'
-import { Guide, LESSONS, localStore, PART_NAME, PIECES, type Input, type Lesson, type Look, type Part, type Point, type Show } from '../game/tutorial.ts'
+import { Guide, lesson, LESSONS, localStore, PART_NAME, PIECES, type Input, type Lesson, type Look, type Part, type Point, type Show } from '../game/tutorial.ts'
 import * as S from '../sim/index.ts'
 import { patch, type Ctx } from './core.ts'
 import { h } from './dom.ts'
@@ -306,10 +306,11 @@ function slipBody(ctx: Ctx, x: Lesson, l: Look, held: boolean, lost = false, und
     under ? h('p', { class: 'guide-lost t-caption', testid: 'guide-under' }, icon('close', 'i'), by(l.input, 'A card is in the way. Click its X to close it.', 'A card is in the way. Tap its X to close it.', 'A card is in the way. Use its X to close it.')) : null,
     h('footer', { class: 'guide-foot' },
       act ? h('button', { class: 'btn guide-ok', type: 'button', testid: 'guide-act', onclick: () => { let said = ''; for (const cmd of act.cmds) { const r = ctx.run(cmd); said = (r.ok ? r.events[0]?.text : r.err) ?? said } const text = act.done ?? said; if (text) ctx.say(F.localize(text), 'good'); done() } }, icon('check', 'i'), act.label) : null,
-      x.read || again ? h('button', { class: `btn${act ? '' : ' guide-ok'}`, type: 'button', testid: 'guide-noted', onclick: done }, icon('check', 'i'), h('span', { class: 'two' }, 'Got it', resumes)) : null,
+      // Every note has a Got it. On one that points at a control (guide-pass) it passes the step without doing it.
+      x.read || again ? h('button', { class: `btn${act ? '' : ' guide-ok'}`, type: 'button', testid: 'guide-noted', onclick: done }, icon('check', 'i'), h('span', { class: 'two' }, 'Got it', resumes))
+        : h('button', { class: 'btn', type: 'button', testid: 'guide-pass', onclick: () => { guide.skip(x.id); poke(); ctx.dirty() } }, icon('check', 'i'), h('span', { class: 'two' }, 'Got it', resumes)),
       skip ? h('button', { class: 'btn', type: 'button', testid: 'guide-ahead', onclick: () => ahead!(x.id) }, icon('fast', 'i'), h('span', { class: 'two' }, skip, h('span', { class: 'sub' }, `runs at ${SPEED_X[3]}`))) : null,
       go && show < 0 ? h('button', { class: 'btn quiet', type: 'button', testid: 'guide-show', onclick: () => lead(go) }, 'Show me') : null,
-      x.read || again ? null : h('button', { class: 'btn quiet', type: 'button', testid: 'guide-skip', onclick: () => { guide.skip(x.id); poke(); ctx.dirty() } }, 'Skip'),
       h('button', { class: 'btn quiet', type: 'button', testid: 'guide-stop', onclick: () => { guide.stop(); poke(); ctx.say('The tutorial is off. You can turn it back on from the menu.'); ctx.dirty() } }, 'Turn off the tutorial')),
   ]
 }
@@ -546,6 +547,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
   let holding: { id: string; speed: number; stay: boolean } | null = null
   let due: Lesson | null = null
   // The speed it had is the speed the clock's own keys resume at, Space included.
+  const waitsOnLand = () => app.pauseCause === 'plantAsk' || app.pauseCause === 'killCall'
   function stopNow(): void { if (app.speed > 0) app.resumeSpeed = app.speed; app.setSpeed(0); app.pauseReason = HOLD; ctx.dirty() }
   function hold(l: Look): void {
     const t = performance.now()
@@ -571,6 +573,8 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
       const speed = app.speed > 0 ? app.speed : app.pauseReason && app.pauseReason !== HOLD ? app.resumeSpeed || 1 : 0
       holding = { id: want, speed, stay }
       if (app.speed > 0) stopNow()
+      // The game's own pause for the decision this note asks for (app.ts, SELF_PAUSES) is the note's from here.
+      else if ((app.pauseCause === 'plantAsk' && want === 'word') || (app.pauseCause === 'killCall' && want === 'kill')) { app.pauseReason = HOLD; app.pauseCause = ''; ctx.dirty() }
     } else if (want && holding) { holding.id = want; holding.stay = stay }
     else if (!want && holding) {
       const back = holding.speed
@@ -583,7 +587,8 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
         return
       }
       // A card still up keeps the clock.
-      if (back > 0 && app.speed === 0 && app.pauseReason !== '' && !app.holding && app.screen === 'season' && c && !S.seasonDone(c) && !cardUp(lookNow())) app.setSpeed(back as 1 | 2 | 3)
+      // So does a pause the game made for a decision on the land: only the player's own resume runs past that.
+      if (back > 0 && app.speed === 0 && app.pauseReason !== '' && !waitsOnLand() && !app.holding && app.screen === 'season' && c && !S.seasonDone(c) && !cardUp(lookNow())) app.setSpeed(back as 1 | 2 | 3)
     }
   }
   // Fast-forward: the note is closed and the game runs at its fastest to the next note or card, which pauses it. The
@@ -606,9 +611,10 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
   function paced(x: Lesson | null): Lesson | null {
     const t = performance.now()
     if (x?.id !== lastId) {
-      // Passed by the player's own word (Got it, Skip): the next step may come. Passed by doing its thing: the next
-      // waits while what that opened is still being read.
-      const said = !!lastId && (guide.has(`noted:${lastId}`) || guide.p.passed[lastId] === 'skip')
+      // Passed by the player's own word (Got it): the next step may come, and so it may after a step that was about
+      // an open fold is done there (someone hired). Passed by opening something: the next waits while that is read,
+      // and every fold the walk opens has a note of its own, so the agent never goes quiet over one.
+      const said = !!lastId && (guide.has(`noted:${lastId}`) || guide.p.passed[lastId] === 'skip' || !!lesson(lastId)?.follows)
       if (lastId && guide.passed(lastId)) { restUntil = t + 1200; waitFor = said ? [] : panelsOpen() }
       lastId = x?.id ?? ''
     }
@@ -682,7 +688,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     // to point at is about.
     const sh = now?.show?.(l) ?? null
     const go = !sh ? null : 'unit' in sh ? (inCard(root.querySelector('[data-testid="person-foreman"]')) ? null : sh) : now?.point ? null : sh
-    const back = app.screen === 'season' && now ? (now.asks?.(l) ? 0 : holding?.speed ?? 0) : -1
+    const back = app.screen === 'season' && now ? (now.asks?.(l) || waitsOnLand() ? 0 : holding?.speed ?? 0) : -1
     // Something on the land to point at, none of it in view.
     const lost = !!p && !('testid' in p) && !t.at && app.screen === 'season'
     const fieldOf = !p ? -1 : 'field' in p ? p.field : 'badge' in p ? p.badge : 'fields' in p ? p.fields[0] ?? -1 : -1
@@ -711,6 +717,9 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
       delete slip.dataset.lesson
       patch(slip, '', () => null)
     }
+    // One telling: the answer shown beside the pointer goes when the note itself says that sentence.
+    const tip = root.querySelector<HTMLElement>('[data-testid="answer-tip"]')
+    if (tip && !tip.hidden && now && tip.textContent && F.localize(`${now.ask(l)} ${now.why(l)}`).includes(tip.textContent)) tip.hidden = true
     // The slip going (passed, Noted, put aside): a press that was meant for it lands on nothing.
     const showing = (floating || (!!slot?.querySelector('.guide.docked:not(.offer)'))) && now ? now.id : ''
     if (shownId && showing !== shownId && slipAt && !l.paper) ghost = { b: slipAt, until: performance.now() + 500 }

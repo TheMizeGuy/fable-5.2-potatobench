@@ -452,6 +452,8 @@ export const DIG_GREEN = { month: 9, dom: 5 }   // October 5
 // after the coach first asks, and no later than two weeks of skin set before the green dig, unless the player kept
 // them up (advice.ts, killByItself).
 export const KILL_WAIT = 7
+// A field whose vines the player keeps up is called to them this many days before the last day a kill sets the skins.
+export const KILL_CALL_DAYS = 2
 // Reference practice asks for the vines to be killed by this date, or this many days after the crop is made.
 export const KILL_BY = { month: 8, dom: 8 }      // September 8
 export const KILL_MADE_DAYS = 4
