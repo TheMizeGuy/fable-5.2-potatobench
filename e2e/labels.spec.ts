@@ -16,7 +16,7 @@ async function game<T>(page: Page, expr: string): Promise<T> {
   return page.evaluate(`(() => { const { app, sim } = window.__county; return ${expr} })()`) as Promise<T>
 }
 
-test('in April with the soil too cold, the Plant stamp warns on its second line and under the pointer, and still plants', async ({ page }) => {
+test('in April with the soil too cold, the Plant stamp warns on its second line and under the pointer, and still plants', async ({ page, isMobile }) => {
   const errors = watchErrors(page)
   await startSeason(page)
   const field = await game<number>(page, `app.campaign.plans.findIndex((p, i) => p.crop === 'potato' && sim.held(app.campaign, i))`)
@@ -27,10 +27,13 @@ test('in April with the soil too cold, the Plant stamp warns on its second line 
   await expect(plant).toBeVisible()
   await expect(plant).not.toHaveClass(/is-off/)
   await expect(plant.locator('.cost')).toHaveText(/too cold/i)
-  await expect(plant).toHaveAttribute('title', /seed needs 50°F or it can rot, so wait until about (April|May|June) \d+\. Planting now is up to you/)
-  await expect(plant).toHaveAccessibleName(/can rot/i)
-  await plant.hover()
-  await expect(page.locator('#ui [data-testid="card-line"]')).toContainText(/can rot/i)
+  // Under the pointer at a desk; to a screen reader everywhere.
+  if (!isMobile) await expect(plant).toHaveAttribute('title', /seed needs 50°F or it can rot, so wait until about (April|May|June) \d+\. Planting now is up to you/)
+  await expect(plant).toHaveAccessibleName(/seed needs 50°F or it can rot, so wait until about (April|May|June) \d+\. Planting now is up to you/)
+  if (!isMobile) {
+    await plant.hover()
+    await expect(page.locator('#ui [data-testid="card-line"]')).toContainText(/can rot/i)
+  }
   await shot(page, '1-plant-cold')
   await plant.click()
   await expect(page.getByTestId('order-plant-given')).toBeVisible()
@@ -103,7 +106,7 @@ async function killStamp(page: Page, i: number): Promise<{ cost: string; title: 
   })
 }
 
-test('a week before the vines are due, Kill vines warns with what it gives up; on the due day, and with blight winning, it does not', async ({ page }) => {
+test('a week before the vines are due, Kill vines warns with what it gives up; on the due day, and with blight winning, it does not', async ({ page, isMobile }) => {
   const errors = watchErrors(page)
   await page.setViewportSize({ width: 1280, height: 800 })
   await startSeason(page)
@@ -121,11 +124,16 @@ test('a week before the vines are due, Kill vines warns with what it gives up; o
   let k = await killStamp(page, a)
   expect(k.risk).toBe(true)
   expect(k.cost).toBe('7 days early')
-  expect(k.title).toContain(`The potatoes are still growing, so killing the vines 7 days early gives up about ${lost.cwtPerAcre} cwt/acre.`)
-  expect(k.title).toContain(`on ${due}.`)
+  // Its words under the pointer at a desk, and to a screen reader (the stamp's own text) everywhere.
+  for (const said of isMobile ? [k.name] : [k.title, k.name]) {
+    expect(said).toContain(`The potatoes are still growing, so killing the vines 7 days early gives up about ${lost.cwtPerAcre} cwt/acre.`)
+    expect(said).toContain(`on ${due}.`)
+  }
   await expect(page.getByTestId('order-kill')).toHaveAccessibleName(new RegExp(`gives up about ${lost.cwtPerAcre} cwt/acre`))
-  await page.getByTestId('order-kill').hover()
-  await expect(page.locator('#ui [data-testid="card-line"]')).toContainText(`gives up about ${lost.cwtPerAcre} cwt/acre`)
+  if (!isMobile) {
+    await page.getByTestId('order-kill').hover()
+    await expect(page.locator('#ui [data-testid="card-line"]')).toContainText(`gives up about ${lost.cwtPerAcre} cwt/acre`)
+  }
   await shot(page, '1-kill-early')
   // Pressed anyway: the order is given, and the note says what was chosen.
   await page.getByTestId('order-kill').click()
@@ -136,7 +144,7 @@ test('a week before the vines are due, Kill vines warns with what it gives up; o
   await game(page, `(() => { app.campaign.season.fields[${b}].knownSev = 0.3; app.revision++; app.select(-1) })()`)
   k = await killStamp(page, b)
   expect(k.risk, 'no warning with blight winning').toBe(false)
-  expect(k.title).not.toContain('gives up')
+  expect(`${k.title} ${k.name}`).not.toContain('gives up')
   await shot(page, '1-kill-blight')
   // On the due day: no warning.
   await reach(page, `const { app } = q.g(); const c = app.campaign; app.select(-1); c.incidents = []; q.run(${lost.dueDay}, ['kill', 'sell']); app.setSpeed(0); c.incidents = []
@@ -145,7 +153,7 @@ test('a week before the vines are due, Kill vines warns with what it gives up; o
   expect(await game<number>(page, 'app.campaign.season.day')).toBe(lost.dueDay)
   k = await killStamp(page, a)
   expect(k.risk, 'no warning on the due day').toBe(false)
-  expect(k.title).not.toContain('gives up')
+  expect(`${k.title} ${k.name}`).not.toContain('gives up')
   await shot(page, '1-kill-due')
   expect(errors, errors.join('\n')).toEqual([])
 })
