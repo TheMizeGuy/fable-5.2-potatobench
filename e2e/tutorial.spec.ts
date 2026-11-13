@@ -494,7 +494,7 @@ test('a farm with one hired hand is never asked to name a foreman, and the key s
   await page.evaluate(() => { const w = globalThis as unknown as Win; w.__countyGuide.stop(); w.__county.app.setSpeed(0) })
   await page.getByTestId(`unit-${hand}`).click()
   await expect(page.getByTestId('person-card')).toBeVisible()
-  await expect(page.getByTestId('person-foreman')).toContainText('+40% pay, stops field work')
+  await expect(page.getByTestId('person-foreman')).toContainText('+40% pay, no field work')
   await expect(page.locator('#ui [data-testid="person-foreman"].goal-ring')).toHaveCount(0)
   expect(errors, errors.join('\n')).toEqual([])
 })
@@ -535,7 +535,7 @@ test('naming a foreman: the slip says what one is, the key comes into view lit, 
   await expect(page.getByTestId('person-card')).toBeVisible()
   await expect.poll(() => reachable(page, 'person-foreman'), { timeout: 8000 }).toBe('in view')
   await expect(page.locator('#ui [data-testid="person-foreman"].goal-ring')).toHaveCount(1)
-  await expect(page.getByTestId('person-foreman')).toContainText('+40% pay, stops field work')
+  await expect(page.getByTestId('person-foreman')).toContainText('+40% pay, no field work')
   await picture(page, 'c-key-1280')
   // Pressed: what it will do, and the block to pick, in view.
   await page.getByTestId('person-foreman').click()

@@ -263,7 +263,7 @@ export function personCard(ctx: Ctx): PersonCard {
             title: ctx.touch() ? undefined : 'A foreman adds what one group of fields needs to the work list every working morning, and doesn\'t do field work. A foreman is paid 40% more.',
             // Its choices open under it, brought into view with the first one lit.
             onclick: () => { foreman = !foreman; if (foreman) lightUp('.pc-blocks .btn'); else lit = null; ctx.dirty() },
-          }, icon('foreman', 'i'), h('span', null, 'Foreman', h('span', { class: 'sub' }, p.foreman ? BLOCK_NAME[p.foreman].replace(/^The /, '').split(',')[0] : '+40% pay, stops field work'))) : h('span'),
+          }, icon('foreman', 'i'), h('span', null, 'Foreman', p.foreman ? h('span', { class: 'sub' }, BLOCK_NAME[p.foreman].replace(/^The /, '').split(',')[0]) : h('span', { class: 'sub' }, h('span', null, '+40% pay,'), ' ', h('span', null, 'no field work')))) : h('span'),
           h('button', {
             class: 'btn hazard', type: 'button', testid: 'person-dismiss',
             onclick: async () => {

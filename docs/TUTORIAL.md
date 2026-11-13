@@ -204,7 +204,7 @@ it, no person is ringed for it and the tutorial has no step for it (round seven:
 make their only hand a foreman, 40% more pay to take him out of the field). Where it is offered the note says why it
 pays, without the word "block": "A foreman orders the work on your fields away from home each morning, so nothing
 out there waits for you. Name one with Foreman on <name>'s card. They earn 40% more and stop field work." The
-Foreman key's second line says both costs: "+40% pay, stops field work". Its Show me opens that person's card with
+Foreman key's second line says both costs: "+40% pay, no field work", broken after the comma so it takes two short lines and the card needs no scrolling at 1280 by 720. Its Show me opens that person's card with
 the Foreman key scrolled into view and ringed. For every player, tutorial or not: the slip glosses the word where it
 first shows ("then name a foreman (a hand who runs your fields away from home)"); a hand's card opened while the
 slip asks for a foreman brings the key into view, ringed; pressing it opens the groups of fields under it, in view,
