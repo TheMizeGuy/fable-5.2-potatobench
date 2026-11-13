@@ -1,6 +1,6 @@
 // People on the land (design/season.html): a face pin for each, in their ring, at one size whatever the camera does,
 // following them with transforms only. People standing together share one pin with a count that opens to them all;
-// a pin gives way to a field's tag where they meet, unless it needs the player. A click on a pin picks the person.
+// a pin is drawn over a field's or a yard's tag where they meet. A click on a pin picks the person.
 import * as S from '../sim/index.ts'
 import { patch, type Ctx } from './core.ts'
 import { doingWord, ringFor } from './crew.ts'
@@ -14,7 +14,7 @@ interface Model { id: number; name: string; ring: string; state: PinState; label
 // How close two people stand, in screen pixels, before they share a pin.
 const NEAR = 40
 
-export function pins(ctx: Ctx, layer: HTMLElement, o: { tags: () => DOMRect[]; covers: () => DOMRect[]; stopped: () => Set<number>; board?: () => number }): { update(c: S.Campaign): void; frame(): void; escape(): boolean; dispose(): void } {
+export function pins(ctx: Ctx, layer: HTMLElement, o: { covers: () => DOMRect[]; stopped: () => Set<number>; board?: () => number }): { update(c: S.Campaign): void; frame(): void; escape(): boolean; dispose(): void } {
   const app = ctx.app
   const wraps = new Map<number, HTMLElement>()
   let models: Model[] = []
@@ -89,7 +89,6 @@ export function pins(ctx: Ctx, layer: HTMLElement, o: { tags: () => DOMRect[]; c
   function frame(): void {
     const ins = app.insets
     const covers = o.covers()
-    const tags = o.tags()
     const at = new Map<number, { x: number; y: number }>()
     for (const m of models) {
       const a = ctx.view.unitAnchor(m.id)
@@ -110,13 +109,9 @@ export function pins(ctx: Ctx, layer: HTMLElement, o: { tags: () => DOMRect[]; c
       const p = at.get(m.id)!
       const members = order.filter(x => !taken.has(x.id) && Math.hypot(at.get(x.id)!.x - p.x, at.get(x.id)!.y - p.y) < NEAR)
       for (const x of members) taken.add(x.id)
-      // A pin gives way to a tag it meets: it stands just above the tag, so the tag can be read and the person found.
-      let y = p.y
-      for (let k = 0; k < 3; k++) {
-        const t = tags.find(r => p.x - 22 < r.right && p.x + 22 > r.left && y - 56 < r.bottom && y > r.top)
-        if (!t) break
-        y = t.top - 1
-      }
+      // A pin stays over its person even where a tag or a yard's tag lies there: it is drawn above them, so a click on
+      // the person never lands on the tag instead.
+      const y = p.y
       if (y - 56 < (m.id === app.unit && o.board ? Math.min(ins.top, o.board()) : ins.top) + 4) continue
       shown.set(m.id, { m, x: p.x, y, members })
     }
