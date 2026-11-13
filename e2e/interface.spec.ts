@@ -970,8 +970,14 @@ test('the clock and the keys as a player meets them: Space just after an answer 
   await untilTicket(page)
   // Answered, the days go on by themselves; a Space a moment later is not taken back as a pause.
   await ticket.locator('[data-testid^="lot-sell-"]').first().click()
+  // The press comes the moment the days go on again, as a player's would: it is watched for in the page, so a slow
+  // test box cannot let the second run out first.
+  await page.evaluate(() => new Promise<void>(done => {
+    const app = (globalThis as unknown as { __county: { app: { speed: number } } }).__county.app
+    const tick = () => { if (app.speed > 0) { document.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', code: 'Space', bubbles: true })); done() } else requestAnimationFrame(tick) }
+    tick()
+  }))
   await expect(ticket).toHaveCount(0)
-  await page.keyboard.press('Space')
   expect((await look(page)).speed).toBe(2)
   // Escape just after the ticket went opens no menu.
   await page.keyboard.press('Escape')

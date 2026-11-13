@@ -96,6 +96,7 @@
 .season-screen .notes-slot { min-width: 0; }
 .season-screen .notes-slot .alert.over-land { pointer-events: none; opacity: .55; }
 .notes.alerts { position: static; display: grid; gap: var(--s2); justify-items: start; }
+.notes.alerts.hushed > .alert { visibility: hidden; }
 .notes.alerts .alert { animation: slip-up var(--t-slip) var(--ease-out); text-align: left; }
 .notes.alerts .alert.warn .i { color: var(--ochre); }
 .notes.alerts .alert.good .i { color: var(--green); }

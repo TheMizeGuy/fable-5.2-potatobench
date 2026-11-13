@@ -341,6 +341,9 @@ export class Notes {
   // One row that stays below the alerts until it is put away: a tip, or what to do when nothing is happening.
   private pinned: { key: string; el: HTMLElement } | null = null
   keep = 3
+  // While a paper or a card that needs an answer is up, news waits behind it and shows when it has gone.
+  private quiet = false
+  private waiting: Parameters<Notes['push']>[0][] = []
   // Where the rows sit over the land itself, each one goes after this long (0: it stays).
   maxAge = 0
   onGo: (field: number) => void = () => {}
@@ -356,6 +359,7 @@ export class Notes {
 
   // text: what the row shows. full: what a screen reader hears (the whole sentence).
   push(o: { level?: Level; glyph?: string; text: string; full?: string; field?: number; day?: number; ttl?: number; go?: (() => void) | null }): void {
+    if (this.quiet) { this.waiting.push(o); this.live.textContent = localize(o.full ?? o.text); return }
     const level = o.level ?? 'info'
     const text = localize(o.text)
     const full = localize(o.full ?? o.text)
@@ -365,6 +369,13 @@ export class Notes {
     while (this.items.length > this.keep) this.items.shift()
     this.live.textContent = full
     this.draw()
+  }
+
+  hush(on: boolean): void {
+    if (this.quiet === on) return
+    this.quiet = on
+    this.el.classList.toggle('hushed', on)
+    if (!on) for (const o of this.waiting.splice(0)) this.push(o)
   }
 
   // Drops what has gone stale: a notice after its time, an alert once it is days old.
