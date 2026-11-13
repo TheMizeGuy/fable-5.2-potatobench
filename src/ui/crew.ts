@@ -26,8 +26,14 @@ export function doing(c: S.Campaign, u: S.CrewInfo, waits: Record<number, string
   const could = s.jobs.filter(j => (j.unit < 0 || j.unit === u.id) && (!unit || S.willDo(unit, j.kind)) && !crews.some(o => o.id !== u.id && o.job?.id === j.id))
   const next = could.find(j => !waits[j.id])
   if (next) return { glyph: next.kind, text: jobText(next, c, next.building), place: next.field, progress: next.need > 0 ? next.done / next.need : 0 }
-  if (could.length) return { glyph: 'stale', text: `Waiting: ${waits[could[0].id]}`, place: u.at, progress: 0 }
+  if (could.length) return { glyph: 'stale', text: `Waiting for ${WAIT_FOR[waits[could[0].id]] ?? waits[could[0].id]}`, place: u.at, progress: 0 }
   return { glyph: 'stale', text: u.at === S.HOME_YARD ? 'Idle' : `Idle at ${placeName(u.at)}`, place: u.at, progress: 0 }
+}
+
+// What holds the work up, by the word the season gives, after "Waiting for".
+const WAIT_FOR: Partial<Record<string, string>> = {
+  raining: 'the rain to stop', 'ground too wet': 'the ground to dry out', 'heavy rain': 'the rain to ease', 'too windy': 'the wind to drop',
+  'the soil is too cold': 'the soil to warm up', 'waiting for the digger': 'the digger to lift more of the crop',
 }
 
 // What a person is doing, as the time book prints it: one word under their name.
@@ -140,7 +146,7 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
     const bad = sign?.cls === 'bad' || needsYou
     // Between orders, the work the list holds for them today, never IDLE while there is some.
     const plain = doingWord(c, p)
-    const ahead = plain === 'Idle' && (S.JOBS as string[]).includes(d.glyph) ? JOB_DOING[d.glyph as S.JobKind].replace(/ (in|from|around)$/, '') : plain
+    const ahead = plain === 'Idle' && (S.JOBS as string[]).includes(d.glyph) ? JOB_DOING[d.glyph as S.JobKind].replace(/ (in|from|around)$/, '') : plain === 'Idle' && d.text.startsWith('Waiting') ? 'Waiting' : plain
     const word = sign?.cls === 'bad' ? F.upper(sign.text) : needsYou ? 'Stopped' : ahead
     const slip = next && next.unit === p.id && performance.now() < next.until
       ? h('span', { class: 'next tip', 'aria-hidden': 'true' }, h('span', { class: 't-label' }, 'Next'), ' ', h('span', null, icon(next.kind, 'i'), ` ${S.FIELD_NAMES[next.field]}`)) : null
