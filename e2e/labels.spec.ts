@@ -112,10 +112,12 @@ async function zoomedOut(page: Page, steps = 30, delta = 500): Promise<void> {
   console.log(`camera at ${Math.round(await dist())} m; the tags' layer: ${await page.locator('#ui .plate-layer').getAttribute('class')}`)
 }
 
-function check(tags: Laid[], what: string): void {
+// held: the tags are to stay by their fields here (far out); elsewhere their gaps are only printed.
+function check(tags: Laid[], what: string, held = true): void {
   if (process.env.TAGS_DEBUG) for (const t of tags) console.log(`  ${t.field}: box ${[t.box.l, t.box.t, t.box.r, t.box.b].map(Math.round).join(',')} outline ${t.outline.map(p => `${Math.round(p.x)},${Math.round(p.y)}`).join(' ')}`)
   console.log(`${what}: ${tags.length} tags; gaps ${tags.map(t => `${t.field}:${t.gap === Infinity ? 'inf' : Math.round(t.gap)}${t.owed ? ` (${Math.round(t.owed)} under the boards)` : ''}`).join(' ')}`)
   expect(tags.length, `${what}: tags on the land`).toBeGreaterThan(0)
+  if (!held) return
   for (const t of tags) expect.soft(t.gap - t.owed, `${what}: the tag of field ${t.field} lies ${Math.round(t.gap)}px from its field (${Math.round(t.owed)} under the boards) ${JSON.stringify(t.box)} ${JSON.stringify(t.outline.map(p => [Math.round(p.x), Math.round(p.y)]))}`).toBeLessThanOrEqual(NEAR_PX)
   for (const a of tags) for (const b of tags) {
     if (a.field >= b.field) continue
@@ -133,13 +135,15 @@ test('zoomed all the way out, every tag sits on or beside its own field, and no 
   console.log(`insets ${JSON.stringify(await game(page, 'app.insets'))}, window ${JSON.stringify(page.viewportSize())}`)
   if (process.env.TAGS_DEBUG) console.log(await page.evaluate(() => { const F = (globalThis as any).__countyField; return [0, 1, 2, 3, 4, 5].map(i => { const a = F.anchor(i); return `${i}: anchor ${Math.round(a.x)},${Math.round(a.y)} ${a.visible} corners ${F.corners(i).map((p: any) => `${Math.round(p.x)},${Math.round(p.y)}`).join(' ')}` }).join('\n') }))
   await shot(page, '2-near-first-season')
-  check(await laid(page), 'the first season, as it opens')
+  check(await laid(page), 'the first season, as it opens', false)
   await zoomedOut(page, 4, 80)
   await shot(page, '2-mid-first-season')
-  check(await laid(page), 'the first season, part way out')
+  check(await laid(page), 'the first season, part way out', /\bfar\b/.test(await page.locator('#ui .plate-layer').getAttribute('class') ?? ''))
   await zoomedOut(page)
   await shot(page, '2-far-first-season')
-  check(await laid(page), 'the first season, farthest out')
+  const far = await laid(page)
+  check(far, 'the first season, farthest out')
+  expect(far.map(t => t.field).sort(), 'every home field keeps its tag').toEqual([0, 1, 2, 3, 4, 5])
   // A later season: the woods and brush to clear have tags too.
   await open(page)
   await reach(page, `q.start(1987, 3); q.year(3); const { app } = q.g(); app.do({ t: 'next' }); app.do({ t: 'begin' }); app.setSpeed(0); app.campaign.incidents = []`)
