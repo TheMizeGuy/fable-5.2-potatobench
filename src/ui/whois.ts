@@ -10,7 +10,7 @@ import { h, type Child } from './dom.ts'
 import * as F from './fmt.ts'
 import { icon } from './icons.ts'
 import { doingGlyph, doingText, moodSaid, restControl, restWords } from './people.ts'
-import { firstName, jobText, KIND_NAME, LET_GO_TEXT, moodWhy, personSign, SKILL_NAME } from './rules.ts'
+import { firstName, jobText, KIND_NAME, LET_GO_TEXT, moodWhy, personSign, SKILL_NAME, skillCovers } from './rules.ts'
 import { ringed } from './system/people.ts'
 import { anchored, ties } from './tie.ts'
 import './whois.css'
@@ -128,13 +128,13 @@ export function whois(ctx: Ctx, layer: HTMLElement): Whois {
         S.winterInfo(c).people.find(x => x.id === p.id)?.choices.map(ch => h('button', {
           class: `btn${p.winter === ch.work ? ' is-on' : ''}`, type: 'button', testid: `whois-winter-${ch.work}`, 'aria-pressed': String(p.winter === ch.work), disabled: !ch.ok && p.winter !== ch.work, title: ch.why || undefined,
           onclick: () => run({ t: 'winter', unit: p.id, work: ch.work, field: ch.work === 'woods' ? S.timberTracts(c)[0] : undefined }, `${name}: ${WINTER_WORDS[ch.work].toLowerCase()} this winter.`),
-        }, WINTER_WORDS[ch.work]))) : p.foreman ? null : h('div', { class: 'whois-first', role: 'group', 'aria-label': `The work ${farmer ? 'you do' : `${name} does`} first` },
+        }, WINTER_WORDS[ch.work]))) : p.foreman ? null : h('div', { class: 'whois-first prio-first', role: 'group', 'aria-label': `The work ${farmer ? 'you do' : `${name} does`} first` },
         h('span', { class: 't-label', title: keys ? `The work ${farmer ? 'you' : 'they'} do before anything else. Click one to put it first.` : undefined }, 'First priority'),
         S.SKILLS.map(k => h('button', {
           class: `key-btn${p.prio[k] === 1 ? ' is-on' : ''}${p.prio[k] === 0 ? ' never' : ''}`, type: 'button', testid: `whois-first-${k}`, 'aria-pressed': String(p.prio[k] === 1),
-          title: keys ? `${SKILL_SHORT[k]} work first` : undefined,
+          title: `${SKILL_NAME[k]} work first: ${skillCovers(k).toLowerCase()}`,
           onclick: () => run({ t: 'priority', unit: p.id, work: k, level: 1 }, `${name}: ${SKILL_NAME[k].toLowerCase()} work first.`),
-        }, icon(SKILL_CUT[k], 'i'), h('span', { class: 'sr' }, `${SKILL_SHORT[k]} first`)))),
+        }, icon(SKILL_CUT[k], 'i'), h('span', { class: 'key-name' }, SKILL_SHORT[k]), h('span', { class: 'sr' }, ' work first')))),
       restControl(ctx, c, p.id, 'whois-rest'),
       h('div', { class: 'whois-acts' },
         h('button', {
