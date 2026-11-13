@@ -307,8 +307,6 @@
 .season-screen[data-layout='mid'] .command:not(.compact) { width: 400px; }
 .season-screen[data-layout='mid'] .command.compact { width: 440px; }
 .season-screen[data-layout='mid'] .command.compact .orders { grid-template-columns: 1fr; }
-/* Under 1400 a bar and the alerts would meet at the foot, over the land: with something selected the alerts wait. */
-.season-screen[data-layout='mid'].selected .notes-slot { display: none; }
 
 /* ---------------------------------------------------------------- people: a page of the time book, the work grid */
 .season-screen .person-card, .season-screen .work { bottom: calc(var(--bottom, 140px) + 8px); max-height: calc(100% - var(--top, 220px) - var(--bottom, 140px) - 24px); overflow-y: auto; overscroll-behavior: contain; scroll-padding-bottom: 12px; }
