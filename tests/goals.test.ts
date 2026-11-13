@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { goals, nextGoal, seasonStep, type Goal } from '../src/game/goals.ts'
+import { goals, needsHand, nextGoal, seasonStep, waitingFor, type Goal } from '../src/game/goals.ts'
 import * as S from '../src/sim/index.ts'
 import { loadWorld } from '../tools/balance/world.ts'
 
@@ -99,6 +99,14 @@ describe('the ladder of goals', () => {
     expect(nextGoal(c)?.id).toBe('tool')
     c.upgrades.boom = true
     expect(goal(c, 'tool').done).toBe(true)
+    // (round eight) A hand is no step while one person can farm the plan: four potato fields at home.
+    expect(needsHand(c)).toBe(false)
+    expect(goals(c).some(g => g.id === 'hire')).toBe(false)
+    expect(nextGoal(c)?.id).toBe('contract')
+    // A fifth potato field is more than one person plants and digs: the step is on the ladder, and next.
+    const rest = [...Array(6).keys()].find(i => c.plans[i].crop === 'rest')!
+    expect(S.apply(w, c, { t: 'plan', field: rest, plan: { ...c.plans[rest], crop: 'potato' } }).ok).toBe(true)
+    expect(needsHand(c)).toBe(true)
     expect(nextGoal(c)?.id).toBe('hire')
     expect(S.apply(w, c, { t: 'hire', kind: 'hand' }).ok).toBe(true)
     expect(goal(c, 'hire').done).toBe(true)
@@ -121,6 +129,10 @@ describe('the ladder of goals', () => {
     S.apply(w, c, { t: 'begin' })
     expect(goal(c, 'tool').done).toBe(false)
     expect(goal(c, 'tool').now).toBe(false)
+    // With no step to take now (a hand is not needed on four fields), the line says what waits for spring.
+    expect(nextGoal(c)?.id).toBe('tool')
+    // Fields away from home are more than one person's work: hiring can be done now, so it comes forward.
+    c.fields[6].tenure = 'rented'
     expect(nextGoal(c)?.id).toBe('hire')
     // At the year end nothing on the farm can be done: the line says what spring brings.
     const d = farm()
@@ -259,5 +271,55 @@ describe('the ladder of goals', () => {
     expect(goal(c, 'every').done).toBe(true)
     // A long goal never takes the line from a step that can be taken.
     expect(nextGoal(c)?.long).toBe(false)
+  })
+})
+
+// Round eight (11): while the season's next step is the crew's own work, the slip says what the player is waiting for.
+describe('what the player is waiting for', () => {
+  const day = (c: S.Campaign) => S.apply(w, c, { t: 'day' })
+  it('says the planting\'s progress after the word, then the next decision that is the player\'s and when, never the crew\'s job', () => {
+    const c = farm()
+    S.apply(w, c, { t: 'begin' })
+    // Before the soil is fit and before the word, the planting is the player's to start: nothing is said in its place.
+    expect(waitingFor(c)).toBeNull()
+    for (let n = 0; n < 120 && !S.fieldNeeds(w, c).some(x => x.need?.act === 'plant'); n++) day(c)
+    expect(waitingFor(c)).toBeNull()
+    const first = S.fieldNeeds(w, c).findIndex(x => x.need?.act === 'plant')
+    expect(S.apply(w, c, { t: 'job', kind: 'plant', field: first }).ok).toBe(true)
+    // The word given: how far along the planting is, counting up, and never the soil again.
+    expect(waitingFor(c)).toEqual({ title: 'Planting: 0 of 4 fields', when: 'your crew plants the rest on its own' })
+    const seen = new Set<string>()
+    for (let n = 0; n < 60 && c.season!.fields.filter(f => f.plantDay >= 0).length < 4; n++) { day(c); seen.add(waitingFor(c)?.title ?? '') }
+    expect([...seen].filter(t => /^Planting: [1-3] of 4 fields$/.test(t)).length).toBeGreaterThan(0)
+    // Planted: nothing is the player's until blight weather, whatever the crew is walking or hilling.
+    const said = new Set<string>()
+    for (let n = 0; n < 200 && c.season!.watchDay < 0; n++) {
+      const x = waitingFor(c)!
+      said.add(`${x.title} / ${x.when}`)
+      expect(seasonStep(c)?.id === 'walk' || seasonStep(c)?.id === 'hill' || seasonStep(c)?.id === 'spray' || seasonStep(c)?.id === 'sample').toBe(true)
+      day(c)
+    }
+    expect([...said]).toEqual(['Nothing for you until blight weather / your crew tends the fields on its own'])
+    // Spraying decided: the next decision is the vine kill, with its date.
+    expect(S.apply(w, c, { t: 'sprayWay', way: 'auto' }).ok).toBe(true)
+    const kill = waitingFor(c)!
+    expect(kill.title).toBe('Your next decision is killing the vines')
+    expect(kill.when).toMatch(/^due (around|since) [A-Z][a-z]+ \d+$/)
+    // No title the slip can show names a job of the crew's as the player's goal.
+    for (const t of [kill.title, ...said, ...seen]) expect(t).not.toMatch(/Walk a field|Hill the rows|Do a test dig|Dig a field|Bring the crop in/)
+    // The vines dead: nothing until the weigh ticket.
+    for (let n = 0; n < 200 && c.season!.fields.some(f => f.status === 'growing' && f.deadDay < 0) && !S.seasonDone(c); n++) day(c)
+    const end = waitingFor(c)
+    if (end) expect(end).toEqual({ title: 'Nothing for you until the weigh ticket', when: 'your crew digs and hauls on its own' })
+  })
+
+  it('says nothing in the place of a step the player took from the crew', () => {
+    const c = farm()
+    S.apply(w, c, { t: 'begin' })
+    S.apply(w, c, { t: 'routine', kind: 'plant', auto: false })
+    for (let n = 0; n < 120 && !S.fieldNeeds(w, c).some(x => x.need?.act === 'plant'); n++) day(c)
+    const first = S.fieldNeeds(w, c).findIndex(x => x.need?.act === 'plant')
+    S.apply(w, c, { t: 'job', kind: 'plant', field: first })
+    expect(waitingFor(c)).toBeNull()
   })
 })

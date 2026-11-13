@@ -407,13 +407,95 @@ test('the frost warning on a Sunday with barrels out is a key: the haul goes fir
   // The warning, as the evening before a frost brings it.
   await page.evaluate(([f, n]) => { const { app } = (globalThis as any).__county; const c = app.campaign
     app.alert(c, { day: c.season.day, type: 'frostBarrels', field: -1, level: 'warn', text: `Frost is forecast for the crop still in barrels: ${Math.round(c.season.fields[f].inField)} cwt in ${n}. Your crew hauls it in first, Sundays included, until it's all in.` }) }, [field, name] as const)
-  const warning = notes(page).filter({ hasText: 'Haul it in now' })
+  const warning = notes(page).filter({ hasText: 'Frost tonight' })
   await expect(warning).toBeVisible()
-  await warning.click()
+  // The remedy is a key on the slip, weighed as every key is.
+  const key = warning.getByTestId('alert-key')
+  await expect(key).toHaveText('Haul it in now')
+  await expect(key).toHaveAttribute('data-w', 'std')
+  await key.click()
   expect(await game<{ kind: string; field: number }>(page, '({ kind: app.campaign.season.jobs[0].kind, field: app.campaign.season.jobs[0].field })')).toEqual({ kind: 'haul', field })
-  await expect(notes(page).filter({ hasText: `You're hauling ${name} now. One tractor brings in about` })).toBeVisible()
+  // Answered at once, with who, how much and what the day off costs.
+  await expect(notes(page).filter({ hasText: `You're hauling ${name} now. It's a day off, so it tires you as a working day does. One tractor brings in about` })).toBeVisible({ timeout: 1000 })
   await reach(page, `q.g().app.do({ t: 'day' }); q.g().app.setSpeed(0)`)
   expect(await game<boolean>(page, `app.campaign.season.worked.some(w => w.kind === 'haul' && w.field === ${field})`)).toBe(true)
+  expect(errors, errors.join('\n')).toEqual([])
+})
+
+// The farmer alone, run to the first day `until` holds (c, s and f, the field with barrels out, in hand), and the frost
+// warning brought up as the evening before a frost brings it. -1 when the season has no such day.
+async function frostWhen(page: Page, until: string): Promise<{ field: number; name: string }> {
+  await open(page, '?year=1990&seed=7')
+  await page.getByTestId('begin-season').click()
+  const field = await game<number>(page, `(() => { const c = app.campaign; app.setSpeed(0)
+    for (let g = 0; g < 400 && !sim.seasonDone(c); g++) {
+      c.incidents = []
+      const s = c.season
+      const f = s.fields.findIndex(x => x.inField >= 200 && !x.weighed)
+      if (f >= 0 && (${until})) return f
+      app.do({ t: 'day' })
+    }
+    return -1 })()`)
+  if (field < 0) return { field, name: '' }
+  await reach(page, 'q.g().app.setSpeed(0)')
+  await putAway(page)
+  const name = await game<string>(page, `sim.FIELD_NAMES[${field}]`)
+  await page.evaluate(([f, n]) => { const { app } = (globalThis as any).__county; const c = app.campaign
+    app.alert(c, { day: c.season.day, type: 'frostBarrels', field: -1, level: 'warn', text: `Frost is forecast for the crop still in barrels: ${Math.round(c.season.fields[f].inField)} cwt in ${n}. Your crew hauls it in first, Sundays included, until it's all in.` }) }, [field, name] as const)
+  return { field, name }
+}
+
+test('the frost key with the only tractor out digging: the digger stops for the haul, and the answer says so at once', async ({ page }) => {
+  const errors = watchErrors(page)
+  const { field, name } = await frostWhen(page, `sim.workday(c, s) && c.crew[0].rig === 'tractor' && s.jobs.some(j => j.id === c.crew[0].job && j.kind === 'dig')`)
+  test.skip(field < 0, 'no day digging with barrels out')
+  const dug = await game<number>(page, `app.campaign.season.jobs.find(j => j.id === app.campaign.crew[0].job).field`)
+  const where = dug === field ? 'there' : await game<string>(page, `sim.FIELD_NAMES[${dug}]`)
+  await notes(page).filter({ hasText: 'Frost tonight' }).getByTestId('alert-key').click()
+  await expect(notes(page).filter({ hasText: `You're hauling ${name} now. You stop digging ${where} for it. One tractor brings in about` })).toBeVisible({ timeout: 1000 })
+  expect(await game<{ kind: string; unit: number }>(page, '({ kind: app.campaign.season.jobs[0].kind, unit: app.campaign.season.jobs[0].unit })')).toEqual({ kind: 'haul', unit: 0 })
+  expect(errors, errors.join('\n')).toEqual([])
+})
+
+test('the frost key with nobody able to drive says exactly why the barrels stay out', async ({ page }) => {
+  const errors = watchErrors(page)
+  const { field, name } = await frostWhen(page, 'true')
+  test.skip(field < 0, 'no day with barrels out')
+  await page.evaluate(() => { (globalThis as any).__county.app.campaign.crew[0].rest = 'now' })
+  await notes(page).filter({ hasText: 'Frost tonight' }).getByTestId('alert-key').click()
+  await expect(notes(page).filter({ hasText: `You're resting, worn out. The barrels in ${name} stay out tonight.` })).toBeVisible({ timeout: 1000 })
+  expect(errors, errors.join('\n')).toEqual([])
+})
+
+test('the frost key pressed as a paper comes up: the answer is beside the pointer at once, and is the note once the paper is put away', async ({ page }) => {
+  const errors = watchErrors(page)
+  const { field, name } = await frostWhen(page, 'true')
+  test.skip(field < 0, 'no day with barrels out')
+  const key = notes(page).filter({ hasText: 'Frost tonight' }).getByTestId('alert-key')
+  await expect(key).toBeVisible()
+  const box = (await key.boundingBox())!
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  // The press lands in the moment the almanac opens over the notes.
+  await page.keyboard.press('i')
+  await expect(page.locator('#ui .dialog:not(.out)')).toBeVisible()
+  await page.evaluate(() => (document.querySelector('#ui [data-testid="alert-key"]') as HTMLButtonElement).click())
+  const tip = page.getByTestId('answer-tip')
+  await expect(tip).toBeVisible({ timeout: 1000 })
+  await expect(tip).toContainText(`hauling ${name} now.`)
+  await page.keyboard.press('Escape')
+  await expect(page.locator('#ui .dialog:not(.out)')).toHaveCount(0)
+  await expect(notes(page).filter({ hasText: `hauling ${name} now.` })).toBeVisible()
+  expect(errors, errors.join('\n')).toEqual([])
+})
+
+test('a right-click with nobody picked is answered: the field\'s order, or why not and how to send someone', async ({ page }) => {
+  const errors = watchErrors(page)
+  await farmWithPeople(page)
+  await reach(page, `const { app } = q.g(); app.selectUnit(-1); app.select(-1)`)
+  const rest = await game<number>(page, `app.campaign.season.fields.findIndex(f => f.status === 'rest')`)
+  const spot = await landOf(page, rest)
+  await page.mouse.click(spot.x, spot.y, { button: 'right' })
+  await expect(notes(page).filter({ hasText: 'Nothing needs doing here right now. To send someone here, select them first.' })).toBeVisible({ timeout: 1000 })
   expect(errors, errors.join('\n')).toEqual([])
 })
 

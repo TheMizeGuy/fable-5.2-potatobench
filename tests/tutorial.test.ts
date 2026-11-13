@@ -89,7 +89,8 @@ describe('the guided first year', () => {
   it('opens on what the game is, then the land, then planting day: a dozen notes or so, each from the farm', () => {
     for (const seed of [3, 11, 42]) {
       const { shown, c } = guidedYear(seed)
-      expect(shown.slice(0, 7), `seed ${seed}`).toEqual(['frame', 'begin', 'fields', 'look', 'word', 'plantday', 'tend'])
+      // (round eight: one tip between Start the season and the word to plant)
+      expect(shown.slice(0, 6), `seed ${seed}`).toEqual(['frame', 'begin', 'fields', 'word', 'plantday', 'tend'])
       // What every year brings, whatever its weather.
       for (const id of ['kill', 'dig', 'bills', 'close', 'cellar', 'book']) expect(shown, `seed ${seed}: ${id}`).toContain(id)
       const first = shown.filter(id => lesson(id)!.part !== 'spring')
@@ -323,7 +324,7 @@ describe('round seven: what the player is for, and what the agent asks', () => {
     g.accept()
     for (const id of ['frame']) g.noted(id)
     S.apply(w, c, { t: 'begin' })
-    for (const id of ['fields', 'look']) g.noted(id)
+    for (const id of ['fields']) g.noted(id)
     for (let n = 0; n < 120 && !S.fieldNeeds(w, c).some(x => x.need?.act === 'plant'); n++) {
       expect(g.current(look(w, c, { speed: 3 })), `day ${n}`).toBeNull()
       S.apply(w, c, { t: 'day' })
@@ -373,7 +374,7 @@ describe('round seven: what the player is for, and what the agent asks', () => {
     const { w, c } = farm(11)
     S.apply(w, c, { t: 'begin' })
     const l = look(w, c)
-    for (const id of ['fields', 'look', 'plantday', 'tend', 'blight', 'list', 'frost', 'dig', 'bills']) expect(lesson(id)!.asks?.(l) ?? false, id).toBe(false)
+    for (const id of ['fields', 'plantday', 'tend', 'blight', 'list', 'frost', 'dig', 'bills']) expect(lesson(id)!.asks?.(l) ?? false, id).toBe(false)
     expect(lesson('stamp')!.asks!(l)).toBe(true)
     // The vine kill asks only when there is a stamp to press and the crew has given no date of its own.
     expect(lesson('kill')!.asks!(l)).toBe(false)
@@ -425,5 +426,66 @@ describe('round seven: what the player is for, and what the agent asks', () => {
     c.buildings.push({ id: c.nextBuilding++, kind: 'bunk', yard: S.HOME_YARD, done: 1, need: 1, built: true })
     expect(S.apply(w, c, { t: 'hire', kind: 'hand' }).ok).toBe(true)
     expect(shown()).toBe('foreman')
+  })
+})
+
+describe('round eight: the guide in the opening and in the second spring', () => {
+  it('at the opening one tip stands between Start the season and the first thing the player does on the land', () => {
+    const { w, c } = farm(11)
+    const g = new Guide(memory())
+    g.newFarm(c.seed)
+    g.accept()
+    g.noted('frame')
+    expect(g.current(look(w, c))?.id).toBe('begin')
+    S.apply(w, c, { t: 'begin' })
+    // The one tip: the fields, how to look round and how long the wait is, with the key that runs to planting day.
+    const tip = g.current(look(w, c, { wait: 26 }))!
+    expect(tip.id).toBe('fields')
+    expect(`${tip.ask(look(w, c, { wait: 26 }))} ${tip.why(look(w, c, { wait: 26 }))}`).toBe('These tags mark your fields. This year 4 will grow potatoes and 2 are resting. It\'s too cold to plant for about 26 days. Drag to look around and scroll to zoom.')
+    expect(tip.skip?.(look(w, c))).toBe('Fast-forward to planting day')
+    for (const input of INPUTS) expect(countWords(`${tip.ask({ ...look(w, c), input })} ${tip.why({ ...look(w, c), input })}`), input).toBeLessThanOrEqual(35)
+    g.noted('fields')
+    // Nothing more until the soil is ready, and then the ask for the word.
+    let next = ''
+    for (let n = 0; n < 120 && !next; n++) {
+      next = g.current(look(w, c, { speed: 3 }))?.id ?? ''
+      if (!next) S.apply(w, c, { t: 'day' })
+    }
+    expect(next).toBe('word')
+    expect(lesson('look')).toBeUndefined()
+  })
+
+  it('the second spring\'s walk never goes quiet over a fold it opened, says hiring and land are choices, and ends on a closing line', () => {
+    const { w, c } = guidedYear(11)
+    expect(c.phase).toBe('plan')
+    const g = new Guide(memory())
+    g.skipTo('people')
+    expect(g.current(look(w, c))?.id).toBe('people')
+    // People open: the note about hiring, which says it is a choice.
+    g.note('fold:crew')
+    const crew = look(w, c, { fold: 'crew' })
+    expect(g.current(crew)?.id).toBe('hire')
+    expect(lesson('hire')!.why(crew)).toMatch(/You can also wait, because you can farm alone for another year\./)
+    g.noted('hire')
+    expect(g.current(crew)?.id).toBe('land')
+    // Land open: a note of its own, for as long as the fold is open or until Got it. The walk does not vanish.
+    g.note('fold:land')
+    const land = look(w, c, { fold: 'land' })
+    for (let k = 0; k < 20; k++) expect(g.current(land)?.id).toBe('lots')
+    expect(lesson('lots')!.read).toBe(true)
+    expect(`${lesson('lots')!.ask(land)} ${lesson('lots')!.why(land)}`).toBe('Each lot lists its rent for the year, then its price to buy. More land is a choice, and the land you have is enough for now. Click Got it when you\'ve looked, and I\'ll go on.')
+    g.noted('lots')
+    expect(g.current(land)?.id).toBe('loan')
+    g.skip('loan')
+    // The closing line, which the player sees whether or not the money was opened.
+    const last = g.current(land)!
+    expect(last.id).toBe('begin2')
+    expect(last.ask(land)).toBe('That\'s the plan. Click Start the season when you\'re ready.')
+    for (const id of ['lots', 'begin2', 'calls2']) for (const input of INPUTS) {
+      const v = { ...land, input }
+      expect(countWords(`${lesson(id)!.ask(v)} ${lesson(id)!.why(v)}`), id).toBeLessThanOrEqual(40)
+    }
+    // The season's first note says the game pauses for the word.
+    expect(lesson('calls2')!.ask(land)).toBe('It\'s a new season. The game pauses when the soil is ready, and planting waits for your word.')
   })
 })

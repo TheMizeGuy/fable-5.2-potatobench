@@ -10,12 +10,16 @@
 //   (b) at each speed the machine is seen moving along the rows at a pace the eye can follow, nobody is seen to make
 //       a step no walker or driver could, and the work's count goes up;
 //   (c) from the opening view, the picture of that field with the work in it differs from the same picture with the
-//       people, machines and what they leave in the air taken out by more than a floor of pixels.
+//       people, machines and what they leave in the air taken out by more than a floor of pixels;
+//   (d) on the first day two people each have hours of spraying on the one tractor (the day's record says whose, and
+//       when), it is seen at work with the first in their field and then with the second in theirs, and neither is
+//       seen going along a field's rows on foot.
 // tests/seen.test.ts holds the same of the people and machines run without a picture.
-// Usage: node tools/render/seen.ts <base-url> <out dir> [--jobs=plant,hill,...] [--report]   (--report: never fails)
+// Usage: node tools/render/seen.ts <base-url> <out dir> [--jobs=plant,hill,...,shared] [--report]   (--report: never fails)
 import { mkdirSync } from 'node:fs'
 import { chromium } from '@playwright/test'
 import { FIELDS } from '../../src/render/layout.ts'
+import { FIELD_NAMES } from '../../src/sim/index.ts'
 import { GPU, HELPER, q } from '../quality/shared.ts'
 
 const args = process.argv.slice(2)
@@ -33,11 +37,14 @@ mkdirSync(out, { recursive: true })
 // that the machine hauling is to be seen (not gone from sight through a cut) for this share of the time at each
 // clock, and at the field, loading, for this. The pictures for (c) are taken in fair, dry air (the watcher holds it
 // so at 1x): in rain and fog a machine is found from far off by its lamps and by the face the interface pins to it.
-const FLOOR = { there: [0, 0.5, 0.5, 0.3], working: [0, 0.4, 0.25, 0.12], along: 0.8, pace: [1, 28], px: 4, mark: 300, follow: 0.5, foot: 0.6, haul: { shown: [0, 0.5, 0.4, 0.2], there: 0.12 } }
+// rows: the most metres along a field's rows that those with hours on a shared machine are seen to go on foot in the
+// run (someone who gets down in a field goes off it to its nearer end to wait: half a field's length, each time).
+const FLOOR = { there: [0, 0.5, 0.5, 0.3], working: [0, 0.4, 0.25, 0.12], along: 0.8, pace: [1, 28], px: 4, mark: 300, follow: 0.5, foot: 0.6, haul: { shown: [0, 0.5, 0.4, 0.2], there: 0.12 }, rows: FIELDS[0].x1 - FIELDS[0].x0 }
 const QUICK = [1, 1, 1.5, 2.4]
 const SPEEDS: [number, string, number][] = [[1, '1x', 17], [2, '3x', 12], [3, '8x', 9]]
 
-interface Job { name: string; kind: string; spring?: string; order?: string; foot?: boolean; none?: boolean; headZ?: number }
+// later: the run begins this many days after the work is first done; once: only at 1x from the opening view
+interface Job { name: string; kind: string; spring?: string; order?: string; foot?: boolean; none?: boolean; headZ?: number; later?: number; once?: boolean }
 const JOBS: Job[] = [
   { name: 'plant', kind: 'plant' },
   { name: 'hill', kind: 'hill' },
@@ -48,6 +55,10 @@ const JOBS: Job[] = [
   // (with the farm's one tractor on the digger the crop is handed up by the barrel at the field's end; a load is seen
   // on the lane once there is a machine for it, here the truck)
   { name: 'haul', kind: 'haul', spring: `app.do({ t: 'buy', upgrade: 'truck' })` },
+  // (the truck loads in the field the digger is digging, and the far mark there is of both. A day of nothing but
+  // hauling: with the harvester the one tractor digs a day and takes the wagon the next, and what is in the air over
+  // the field then is the load's alone)
+  { name: 'haul-wagon', kind: 'haul', spring: `app.do({ t: 'buy', upgrade: 'harvester' })`, later: 1, once: true },
   { name: 'fell', kind: 'fell', order: `app.do({ t: 'job', kind: 'fell', field: 14 })`, foot: true, headZ: 8 },
   { name: 'stump', kind: 'stump', order: `const f = c.fields[14]; f.felled = sim.FELL_DAYS.woods; f.cover = 'stumps'; app.emit({ type: 'change' }); said.push('stump ordered: ' + JSON.stringify(app.do({ t: 'stump', field: 14 }).ok))`, none: true },
 ]
@@ -314,8 +325,9 @@ function line(s: Sum, what: string): string {
 for (const job of JOBS) {
   if (only && !only.includes(job.name)) continue
   console.log(`\n== ${job.name}`)
-  const days = await find(job)
-  if (!days) { check(false, `${job.name}: the game never had anyone at it`); continue }
+  const first = await find(job)
+  if (!first) { check(false, `${job.name}: the game never had anyone at it`); continue }
+  const days = first + (job.later ?? 0)
   if (job.none) {
     // Work the farm pays a contractor for: nobody of the farm's is at it, so only the picture can say what is seen.
     console.log('  ', await reach(job, days))
@@ -334,8 +346,9 @@ for (const job of JOBS) {
   }
   const what = job.foot ? 'whoever does it' : 'a machine'
   for (const [speed, label, secs] of SPEEDS) {
+    if (job.once && speed !== 1) continue
     const said = await reach(job, days - 1)
-    if (speed === 1) console.log('  ', `first done on day ${days}; ${said}`)
+    if (speed === 1) console.log('  ', `first done on day ${first}${job.later ? `, and seen from ${job.later} after` : ''}; ${said}`)
     await start(job, speed)
     // a picture with the work going on in it (or, if it never is, three seconds after the game first has it)
     // (some seconds into the work itself, where the build says what its machines are at)
@@ -345,7 +358,14 @@ for (const job of JOBS) {
     await shot(`${job.name}-opening-${label}`)
     if (speed !== 2) await shot(`${job.name}-opening-${label}-with-the-interface`, false)
     let m: { work: number; noise: number } | null = null
-    if (speed === 1) { const n = await now(); m = await mark(`${job.name}-opening-1x`, n.field, 1, job.headZ ?? 2) }
+    if (speed === 1) {
+      // (the field the machine is on; with none on one when the picture is taken, a field the game has the work on:
+      // never the whole picture, where the far woods' leaves alone differ by more than the floor)
+      const n = await now(), on = n.field >= 0 ? n.field : await page.evaluate(() => [...(window as any).__seen.st.fields][0] ?? -1) as number
+      if (n.field < 0) console.log('     ', `no machine is on a field of the work as the far picture is taken: it is of ${on >= 0 ? FIELD_NAMES[on] : 'no field'}`)
+      if (on >= 0) m = await mark(`${job.name}-opening-1x`, on, 1, job.headZ ?? 2)
+      else check(false, `${job.name}: from the opening view there is no field of the work to take the far picture of`)
+    }
     await until(n => n.t >= secs, secs + 2)
     const s = await end()
     if (speed === 1) { console.log(`      before the first day was counted someone was seen to go ${s.lead.toFixed(0)} m`); for (const t of s.trace.slice(0, 14)) console.log('     ', t.slice(0, 300)) }
@@ -359,6 +379,7 @@ for (const job of JOBS) {
     check(s.secs > 1 && there && moves && works && s.jumps.length === 0 && s.work > 0, `${job.name} at ${label}, opening view: ${line(s, what)}`)
     if (m) check(m.work >= FLOOR.mark, `${job.name}: from the opening view the work changes ${m.work} pixels of its field's picture (floor ${FLOOR.mark}; ${m.noise} differ between two pictures taken alike)`)
   }
+  if (job.once) continue
   // Follow, as a player turns it on: the card of someone the game has at the work, and its key.
   await reach(job, days - 1)
   await start(job, 1)
@@ -386,6 +407,125 @@ for (const job of JOBS) {
     await page.evaluate(() => { const b = document.querySelector('[data-testid="whois-follow"]') as HTMLElement | null; if (b?.getAttribute('aria-pressed') === 'true') b.click() })
     await page.keyboard.press('Escape')
   } else { await end(); check(false, `${job.name}: with Follow, the work never began`) }
+}
+
+// ---- (d) one tractor between two people in a day
+
+// In the page: who is seen at this work on a machine and in which field, in the order seen; and what those with
+// hours on it are seen at on foot.
+await page.evaluate(rects => {
+  const W = window as any
+  W.__hand = {
+    on: false, st: null as any, near: 0, watch: -1,
+    begin(kind: string, who: number[], near: number) {
+      this.near = near
+      this.watch = -1
+      const st = this.st = { t: 0, turns: [] as string[], at: -1, since: 0, has: -1, took: 0, afoot: 0, rows: 0, says: false, tractor: { x: 0, z: 0, field: -1 }, where: [] as string[], people: [] as { id: number; x: number; z: number }[], was: new Map<number, { x: number; z: number }>() }
+      let last = performance.now()
+      this.on = true
+      const inField = (x: number, z: number) => rects.findIndex(r => x > r.x0 && x < r.x1 && z > r.z0 && z < r.z1)
+      const tick = (now: number) => {
+        if (!this.on) return
+        requestAnimationFrame(tick)
+        const dt = Math.min(0.1, (now - last) / 1000)
+        last = now
+        const info = W.__countyField.info()
+        if (W.__county.app.speed === 0) { st.was.clear(); return }
+        st.t += dt
+        const seen = (p: any) => (p.fade ?? 1) >= 0.5 && Number.isFinite(p.x)
+        const tr = info.rigs.find((r: any) => r.kind === 'tractor')
+        if (tr && seen(tr)) st.tractor = { x: tr.x, z: tr.z, field: inField(tr.x, tr.z) }
+        // (near: the camera kept on the tractor, or on one of the people, from this far off)
+        const on = this.watch < 0 ? st.tractor : st.people.find((p: any) => p.id === this.watch)
+        if (this.near > 0 && on && (this.watch >= 0 || tr)) W.__countyField.view({ x: on.x, z: on.z, dist: this.near, yaw: -0.3, pitch: 0.5 })
+        st.people = info.units.filter(seen).map((u: any) => ({ id: u.id, x: u.x, z: u.z }))
+        // whoever has it, and since when
+        if (tr && tr.holder !== st.has) { st.has = tr.holder; st.took = st.t }
+        // at this work now, in a field
+        const rig = info.rigs.find((r: any) => r.work === kind && r.holder >= 0 && seen(r) && inField(r.x, r.z) >= 0)
+        const at = rig ? rig.holder : -1
+        if (at !== st.at) { st.at = at; st.since = st.t }
+        if (rig) { const t = `${rig.holder}@${inField(rig.x, rig.z)}`; if (st.turns[st.turns.length - 1] !== t) st.turns.push(t) }
+        st.where = info.units.map((u: any) => `${u.id} ${!seen(u) ? 'gone from sight' : `${u.foot ? 'on foot' : 'riding'} at ${u.x.toFixed(0)},${u.z.toFixed(0)}${u.doing ? ' (' + u.doing + ')' : ''}`}`)
+        for (const u of info.units) {
+          if (!who.includes(u.id) || !seen(u)) { st.was.delete(u.id); continue }
+          if (u.doing !== undefined) st.says = true
+          if (u.doing === 'rows' && u.foot) st.afoot += dt
+          const b = st.was.get(u.id)
+          if (b && u.foot && inField(u.x, u.z) >= 0) { const d = Math.abs(u.x - b.x); if (d < 3) st.rows += d }
+          st.was.set(u.id, { x: u.x, z: u.z })
+        }
+      }
+      requestAnimationFrame(tick)
+    },
+    now() { const st = this.st; return { t: st.t, turns: st.turns, at: st.at, held: st.t - st.since, has: st.has, taken: st.t - st.took, afoot: st.afoot, rows: st.rows, says: st.says, tractor: st.tractor, where: st.where } },
+    end() { this.on = false; return this.now() },
+  }
+}, FIELDS.map(f => ({ x0: f.x0, x1: f.x1, z0: f.z0, z1: f.z1 })))
+
+type Hand = { t: number; turns: string[]; at: number; held: number; has: number; taken: number; afoot: number; rows: number; says: boolean; tractor: { x: number; z: number; field: number }; where: string[] }
+const hand = () => page.evaluate(() => (window as any).__hand.now()) as Promise<Hand>
+
+if (!only || only.includes('shared')) {
+  console.log('\n== one tractor between two people (spraying)')
+  const job: Job = { name: 'shared', kind: 'spray' }
+  const day = await q(page, `${farm(job)}; for (let n = 1; n < 240 && c.phase === 'season' && !sim.seasonDone(c); n++) { c.incidents = []; app.do({ t: 'day' })
+    const did = c.season.worked.filter(w => w.kind === 'spray' && w.machine).sort((a, b) => a.from - b.from)
+    for (const w of did) { const same = did.filter(x => x.machine === w.machine); if (new Set(same.map(x => x.unit)).size > 1) return { days: n, turns: same.map(x => ({ unit: x.unit, field: x.field, from: x.from, to: x.to })) } } }
+    return null`) as { days: number; turns: { unit: number; field: number; from: number; to: number }[] } | null
+  if (!day) check(false, 'shared: the day\'s record never has two people on one machine (a build from before it said)')
+  else {
+    const [a, b] = day.turns
+    console.log('  ', `day ${day.days}: ${day.turns.map(t => `person ${t.unit} sprays ${FIELD_NAMES[t.field]} from ${t.from.toFixed(2)} to ${t.to.toFixed(2)} of the day`).join(', then ')}`)
+    const who = [...new Set(day.turns.map(t => t.unit))]
+    const wait = async (test: (h: Hand) => boolean, most: number): Promise<Hand> => {
+      const t0 = Date.now()
+      let h = await hand()
+      while (Date.now() - t0 < most * 1000 && !test(h)) { await page.waitForTimeout(60); h = await hand() }
+      return h
+    }
+    const said = (h: Hand) => `${h.t.toFixed(1)} s: the tractor is with ${h.has < 0 ? 'nobody' : `person ${h.has}`}${h.at >= 0 ? `, at work with person ${h.at}` : ''}; ${h.where.join('; ')}`
+    // near: the camera is kept on the tractor from close by (else the view the season opens with)
+    for (const near of [false, true]) {
+      const tag = near ? 'near' : 'opening'
+      console.log('  ', near ? 'from near the tractor:' : 'from the view the season opens with:', await reach(job, day.days - 1))
+      await start(job, 1)
+      await page.evaluate(([kind, who, near]) => (window as any).__hand.begin(kind, who, near), ['spray', who, near ? 46 : 0] as [string, number[], number])
+      const snapAt = async (name: string) => { await shot(`shared-${tag}-${name}`); console.log('     ', `${name}: ${said(await hand())}`) }
+      // the first to have it, at work; and the other, meanwhile (near: the camera goes over to them for it)
+      let h = await wait(h => h.at === a.unit && h.held > 1.6, 16)
+      await snapAt('1-first-holder')
+      if (near) {
+        await page.evaluate(id => { (window as any).__hand.watch = id }, b.unit)
+        await frames(8)
+        await snapAt('1-the-other-meanwhile')
+        await page.evaluate(() => { (window as any).__hand.watch = -1 })
+      }
+      // it changes hands: let go where it stands, and then the second pulling away in it
+      h = await wait(h => h.has === b.unit, 14)
+      const changed = h.has === b.unit
+      await snapAt('2-hand-over-let-go')
+      if (changed) { await wait(h => h.has === b.unit && h.taken > 1.12, 3); await snapAt('3-hand-over-away') }
+      // the second, at work; and the first, meanwhile
+      h = await wait(h => h.at === b.unit && h.held > 1.6, 12)
+      await snapAt('4-second-holder')
+      if (near) {
+        await page.evaluate(id => { (window as any).__hand.watch = id }, a.unit)
+        await frames(8)
+        await snapAt('4-the-first-meanwhile')
+        await page.evaluate(() => { (window as any).__hand.watch = -1 })
+      }
+      if (!near) await shot('shared-opening-4-second-holder-with-the-interface', false)
+      await wait(h => h.t > 22, 8)
+      const s = await end(), e = await page.evaluate(() => (window as any).__hand.end()) as Hand
+      const want = [`${a.unit}@${a.field}`, `${b.unit}@${b.field}`]
+      console.log('     ', `seen at work on it, in order: ${e.turns.map(t => `person ${t.split('@')[0]} in ${FIELD_NAMES[Number(t.split('@')[1])]}`).join(', ') || 'nobody'}`)
+      if (near) continue
+      check(e.turns[0] === want[0] && e.turns[1] === want[1], `shared: the tractor is seen at work with person ${a.unit} in ${FIELD_NAMES[a.field]} and then with person ${b.unit} in ${FIELD_NAMES[b.field]} (seen: ${e.turns.slice(0, 3).join(', ') || 'nobody'})`)
+      check(e.rows <= FLOOR.rows && e.afoot === 0, `shared: those with hours on it are seen to go ${e.rows.toFixed(0)} m along a field's rows on foot (most ${FLOOR.rows.toFixed(0)})${e.says ? `, and at a machine's row work with no machine for ${e.afoot.toFixed(1)} s` : ' (the build does not say what each is at)'}`)
+      check(s.jumps.length === 0, `shared: steps nobody could make ${s.jumps.length}${s.jumps.length ? ' (' + s.jumps.slice(0, 3).join('; ') + ')' : ''}, cuts ${s.cuts}`)
+    }
+  }
 }
 
 check(errors.length === 0, `no page errors (${errors.join('; ').slice(0, 300)})`)

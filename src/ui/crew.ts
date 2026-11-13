@@ -159,13 +159,33 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
       }, icon(p.kind, 'i'), h('span', { class: 'press-word' }, 'Needs you'), list.length > 1 ? h('span', { class: 'num' }, ` ${list.length}`) : null,
       h('span', { class: 'sr' }, `. ${list.map(x => `${JOB_VERB[x.kind]} ${S.FIELD_NAMES[x.field] ?? ''}: ${x.why}`).join('. ')}. Press to see how to fix it.`)),
       pop === PRESS_POP ? h('div', { class: 'q-pop sheet press-pop', role: 'group', 'aria-label': 'Work that can\'t wait' },
-        list.slice(0, 3).map(x => h('p', { class: 'press' }, icon(x.kind, 'i'),
-          h('span', { class: 'press-text' }, h('b', null, `${JOB_VERB[x.kind]} ${S.FIELD_NAMES[x.field] ?? ''}`.trim()), `: ${x.why}. ${F.localize(x.inWay)}`),
-          x.fix ? h('button', {
-            class: 'btn', type: 'button', testid: `pressing-fix-${x.kind}-${x.field}`,
-            onclick: () => { pop = -1; const r = ctx.run(x.fix!); if (r.ok) ctx.announce(`${fixWord(c, x)}. Done.`) },
-          }, x.kind === 'kill' && x.job < 0 ? 'Kill them now' : fixWord(c, x)) : null,
-          x.kind === 'kill' && x.job < 0 ? keepButton(x.field, `keep-vines-${x.field}`) : null))) : null)
+        list.slice(0, 3).map(x => {
+          // Ordered and nobody takes it: why, person by person, and each way to get it done with what it costs.
+          const held = x.job >= 0 ? S.heldUpBy(c, x.kind) : ''
+          return h('p', { class: 'press' }, icon(x.kind, 'i'),
+            h('span', { class: 'press-text' }, h('b', null, `${JOB_VERB[x.kind]} ${S.FIELD_NAMES[x.field] ?? ''}`.trim()), `: ${x.why}. ${F.localize(held || x.inWay)}`),
+            x.job >= 0 ? remedyKeys(c, x)
+              : x.fix ? h('button', {
+                class: 'btn', type: 'button', testid: `pressing-fix-${x.kind}-${x.field}`,
+                onclick: () => { pop = -1; const r = ctx.run(x.fix!); if (r.ok) ctx.announce(`${fixWord(c, x)}. Done.`) },
+              }, x.kind === 'kill' && x.job < 0 ? 'Kill them now' : fixWord(c, x)) : null,
+            x.kind === 'kill' && x.job < 0 ? keepButton(x.field, `keep-vines-${x.field}`) : null)
+        })) : null)
+  }
+
+  // The ways to get a job nobody takes done, most useful first; a press does it and the answer says what follows.
+  function remedyKeys(c: S.Campaign, x: S.Pressing): Child {
+    return S.remedies(c, x.kind, x.field).map(m => h('button', {
+      class: 'btn remedy', type: 'button', testid: `remedy-${m.id}${m.unit >= 0 ? `-${m.unit}` : ''}-${x.field}`,
+      onclick: () => {
+        pop = -1
+        for (const cmd of m.cmds) if (!ctx.run(cmd).ok) return
+        const c2 = app.campaign
+        const j = c2?.season?.jobs.find(y => y.kind === x.kind && y.field === x.field)
+        const fate = j && c2 ? S.jobOutlook(app.world, c2).find(o => o.id === j.id) : undefined
+        ctx.say(m.cmds.length ? `${m.label}. ${fate ? F.localize(fate.why) : 'Done.'}` : `${JOB_VERB[x.kind]} ${S.FIELD_NAMES[x.field] ?? ''} waits.`)
+      },
+    }, m.label, h('span', { class: 'sub' }, ` (${m.cost})`)))
   }
 
   // Refuses the vine kill the crew would do by itself on a field.

@@ -57,6 +57,11 @@ function sentText(c: S.Campaign, e: { field: number; kind: S.JobKind; unit: numb
 
 // How close together presses of the same order come to be answered by one line.
 const JOIN_MS = 2500
+// How long the answer to a press stays: long enough to be read after a glance at the land.
+const ANSWER_MS = 15000
+
+// The alerts whose one remedy is a press, and the words on its key.
+const KEYED: Partial<Record<string, string>> = { frostBarrels: 'Haul it in now', barrelsOut: 'Haul them in now', idleNever: 'Let them help' }
 
 export const mountHud: MountHud = (root, app, view, sound) => {
   mountSprites()
@@ -70,8 +75,9 @@ export const mountHud: MountHud = (root, app, view, sound) => {
   const notes = new Notes()
   root.replaceChildren(plateLayer, screenLayer, floating, whoLayer, notes.liveRegion, paperLayer, guideLayer)
 
-  // The answer to the player's own press (an order, or why not) is a note; while a tutorial note is up the notes are
-  // hidden, so it is also shown beside the pointer for a moment.
+  // The answer to the player's own press (an order, or why not) is a note, kept long enough to be read after a glance
+  // away; while a tutorial note or a paper hides the notes it is also shown beside the pointer, and the note itself
+  // shows once the paper has gone.
   let pressedAt = { x: innerWidth / 2, y: innerHeight / 2 }
   document.addEventListener('pointerdown', e => { pressedAt = { x: e.clientX, y: e.clientY } }, true)
   const tip = h('p', { class: 'alert answer-tip sys', testid: 'answer-tip', role: 'status', hidden: true, style: 'position:absolute;max-width:320px;margin:0;pointer-events:none' })
@@ -81,14 +87,14 @@ export const mountHud: MountHud = (root, app, view, sound) => {
   let ticketing = false
   let lastSent: { kind: S.JobKind; unit: number; instead?: number; fields: number[]; at: number; text: string } | null = null
   function answer(text: string): void {
-    notes.push({ text, level: 'info', ttl: 7000 })
-    if (!root.classList.contains('noting')) return
+    notes.push({ text, level: 'info', ttl: ANSWER_MS })
+    if (!root.classList.contains('noting') && !papers.isOpen() && !app.holding) return
     tip.textContent = localize(text)
     tip.hidden = false
     tip.style.left = `${Math.max(8, Math.min(innerWidth - 328, pressedAt.x + 14))}px`
     tip.style.top = `${Math.max(8, Math.min(innerHeight - 96, pressedAt.y + 14))}px`
     clearTimeout(tipTimer)
-    tipTimer = window.setTimeout(() => { tip.hidden = true }, 4500)
+    tipTimer = window.setTimeout(() => { tip.hidden = true }, 8000)
   }
   const papers = new Papers(paperLayer, [screenLayer, plateLayer, floating], app)
   const touchQuery = matchMedia('(pointer: coarse)')
@@ -203,7 +209,7 @@ export const mountHud: MountHud = (root, app, view, sound) => {
         const spec = app.screen === 'season' ? ticket(ctx, lot, { fresh: true, staged: app.speed < 3 }) : null
         // The game stops for it as for any card that needs an answer (so answering it sets the days going again), with no
         // line of its own: the ticket is the answer's place.
-        if (spec) { ticketing = true; app.stopFor(e.text); ticketing = false; papers.enqueue(spec) }
+        if (spec) { ticketing = true; app.stopFor(e.text, 'weighed'); ticketing = false; papers.enqueue(spec) }
         dirty = true
       }
     }
@@ -229,10 +235,13 @@ export const mountHud: MountHud = (root, app, view, sound) => {
         // a kind of notice the guide has explained once, which then comes as a toast. A player who asked to be paused
         // on alerts is shown what paused the game.
         if (quietAlert(app.campaign, a.type, a.level) && !app.settings.pauseOnAlerts) break
+        // A decision the game pauses for is said by the pause itself, once.
+        if ((a.type === 'plantAsk' || a.type === 'killCall') && app.speed > 0) break
         const short = alertShort(a)
         // Frost over barrels names no one field: the note goes to the biggest haul, where the barrels and the hauler show.
         const field = a.type === 'frostBarrels' && app.campaign ? S.haulInfo(app.world, app.campaign).sort((x, y) => y.cwt - x.cwt)[0]?.field ?? -1 : a.field
-        notes.push({ level: a.level, glyph: short.glyph, text: short.text, full: a.text, field, day: a.day, go: screen?.goFor?.(a) })
+        const go = screen?.goFor?.(a)
+        notes.push({ level: a.level, glyph: short.glyph, text: short.text, full: a.text, field, day: a.day, go, key: go ? KEYED[a.type] : undefined })
         break
       }
       case 'change':
@@ -258,11 +267,21 @@ export const mountHud: MountHud = (root, app, view, sound) => {
         // The clock stopped itself for something nothing on screen has said: say what. A card that needs an answer
         // says so itself, and a line queued behind it would only show once it had been answered.
         const c = app.campaign
-        if (e.speed > 0 && pauseSaid) { notes.forget(pauseSaid); pauseSaid = '' }
+        // Taken down once the game runs again, or once the order it waited for is given.
+        if (pauseSaid && (e.speed > 0 || !app.pauseReason)) { notes.forget(pauseSaid); pauseSaid = '' }
+        // A pause for a decision on the land (the word to plant, a vine kill) stays said for as long as it waits. In
+        // the guided first year the agent's note says it, when one comes: the line waits a moment to see.
+        const asks = app.pauseCause === 'plantAsk' || app.pauseCause === 'killCall'
+        const sayPause = (why: string) => {
+          if (app.speed !== 0 || app.pauseReason !== why || app.screen !== 'season' || !app.campaign || S.seasonDone(app.campaign) || papers.isOpen() || notes.has(why)) return
+          pauseSaid = `Paused: ${why}`
+          notes.push({ text: pauseSaid, level: 'info', glyph: app.pauseCause === 'plantAsk' ? 'plant' : app.pauseCause === 'killCall' ? 'kill' : undefined, ttl: asks ? 0 : 9000 })
+        }
         if (e.speed === 0 && app.holding) ctx.announce(app.pauseReason)
-        else if (!ticketing && e.speed === 0 && app.pauseReason && app.pauseReason !== HOLD && !guidedYear(c) && app.screen === 'season' && c && !S.seasonDone(c) && !papers.isOpen() && !notes.has(app.pauseReason)) {
-          pauseSaid = `Paused: ${app.pauseReason}`
-          notes.push({ text: pauseSaid, level: 'info', ttl: 9000 })
+        else if (!ticketing && e.speed === 0 && app.pauseReason && app.pauseReason !== HOLD) {
+          const why = app.pauseReason
+          if (!guidedYear(c)) sayPause(why)
+          else if (asks) setTimeout(() => sayPause(why), 700)
         }
         dirty = true
         break

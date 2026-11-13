@@ -70,7 +70,7 @@ export function pins(ctx: Ctx, layer: HTMLElement, o: { covers: () => DOMRect[];
       onenter: (e: Event) => { if ((e as PointerEvent).pointerType === 'mouse') app.point({ x: 0, y: 0, unit: m.id, thing: null, field: -1, yard: 0, group: count > 1 ? members.map(x => x.id) : undefined }) },
       onleave: () => { if (app.pointing?.unit === m.id) app.point(null) },
       onclick: () => {
-        if (count > 1) { open = open === m.id ? -1 : m.id; listFor = ''; list.style.visibility = 'hidden'; drawList(members); return }
+        if (count > 1) { open = open === m.id ? -1 : m.id; listFor = ''; drawList(members); frame(); return }
         pick(m.id)
       },
     }))

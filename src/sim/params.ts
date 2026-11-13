@@ -322,6 +322,7 @@ export const HAUL_CWT_DAY = 900                // cwt a day one person with a tr
 export const TRUCK_HAUL = 2                    // the truck hauls at twice a tractor's rate
 export const FREEZE_IN_FIELD = -2              // C at the field: a night this cold freezes a share of the crop still in the field
 export const FREEZE_SHARE = 0.2
+export const BARRELS_SAY = 3                   // days barrels stand out in a field before a slip says what they cost
 export const GREEN_IN_FIELD = 0.005            // share of the crop in the field greened each bright day
 
 // ---------------------------------------------------------------- the farmstead: incidents (docs/MODEL.md section 13)
@@ -453,6 +454,8 @@ export const DIG_GREEN = { month: 9, dom: 5 }   // October 5
 // after the coach first asks, and no later than two weeks of skin set before the green dig, unless the player kept
 // them up (advice.ts, killByItself).
 export const KILL_WAIT = 7
+// A field whose vines the player keeps up is called to them this many days before the last day a kill sets the skins.
+export const KILL_CALL_DAYS = 2
 // Reference practice asks for the vines to be killed by this date, or this many days after the crop is made.
 export const KILL_BY = { month: 8, dom: 8 }      // September 8
 export const KILL_MADE_DAYS = 4

@@ -124,6 +124,7 @@ export function alertShort(a: Alert): { text: string; glyph: string } {
   switch (a.type) {
     case 'plantAsk': return { text: 'The soil is ready. Press a ringed Plant stamp to give the word', glyph: 'plant' }
     case 'plantWord': return { text: a.text, glyph: 'plant' }
+    case 'killCall': return { text: a.text, glyph: 'kill' }
     case 'emerged': return { text: `${name}${a.level === 'warn' ? 'plants are up, but sparse' : 'plants are up'}`, glyph: 'leaf' }
     case 'ti': return { text: `${name}potatoes are forming`, glyph: 'bulk' }
     case 'mature': return { text: `${name}vines are dying back`, glyph: 'down' }
@@ -168,8 +169,9 @@ export function alertShort(a: Alert): { text: string; glyph: string } {
     case 'pondDry': return { text: 'The pond is dry', glyph: 'pond' }
     case 'frostBarrels': {
       const cwt = [...a.text.matchAll(/([\d,]+) cwt in /g)].reduce((t, m) => t + Number(m[1].replace(/,/g, '')), 0)
-      return { text: `Frost tonight on ${cwt ? F.localize(`${cwt} cwt`) : 'the crop'} in barrels. Haul it in now`, glyph: 'frost' }
+      return { text: `Frost tonight on ${cwt ? F.localize(`${cwt} cwt`) : 'the crop'} in barrels`, glyph: 'frost' }
     }
+    case 'barrelsOut': return { text: a.text.replace(/^The barrels in .+? have stood out (\d+) days, and ([\d,]+) cwt has gone green.*$/, (_, d: string, g: string) => `${name}barrels out ${d} days, ${F.localize(`${g.replace(/,/g, '')} cwt`)} gone green`), glyph: 'warn' }
     case 'frozenInField': return { text: `${name}barrels froze${typeof a.data?.cwt === 'number' && a.data.cwt > 0 ? `, ${F.localize(`${a.data.cwt} cwt`)}` : ''}`, glyph: 'frost' }
     case 'weighed': return { text: `${name}weighed in`, glyph: 'ticket' }
     case 'pickers': return { text: a.text.startsWith('A picking') ? 'Pickers hired' : 'Pickers sent home', glyph: 'pickers' }

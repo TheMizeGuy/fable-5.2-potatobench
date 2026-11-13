@@ -308,10 +308,23 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     sprayAsked = key
     if (S.routineInfo(c).some(r => r.kind === 'spray' && r.auto)) return
     askSpray(ctx)
-    app.stopFor('You need to decide how to handle spraying this season.')
+    app.stopFor('You need to decide how to handle spraying this season.', 'spray')
+  }
+  // A pause that waits for a press on a stamp (the word to plant, a vine kill that is the player's): unless every
+  // field that carries one is on the screen itself (a tag waiting at the edge for land out of view is not the
+  // field), the whole farm is shown.
+  function showStamps(act: 'plant' | 'kill'): void {
+    const onScreen = () => app.needs().every((n, i) => {
+      if (n.need?.act !== act) return true
+      const a = ctx.view.fieldAnchor(i)
+      const r = document.querySelector(`#ui .plate-layer [data-testid="badge-${i}"]`)?.getBoundingClientRect()
+      return a.visible && a.x >= 0 && a.y >= 0 && a.x <= innerWidth && a.y <= innerHeight && !!r && r.width > 0 && r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight
+    })
+    setTimeout(() => { if (app.screen === 'season' && app.speed === 0 && !onScreen()) app.focus(-1) }, 400)
   }
   const off = app.on(ev => {
     if (ev.type === 'yard' || ev.type === 'unit' || ev.type === 'select') ctx.dirty()
+    else if (ev.type === 'speed' && ev.speed === 0 && (app.pauseCause === 'plantAsk' || app.pauseCause === 'killCall')) showStamps(app.pauseCause === 'plantAsk' ? 'plant' : 'kill')
     else if (ev.type === 'events') {
       // In the guided first year the test dig is on the field's card, not laid on the land unasked.
       // A test dig's result is offered, never laid over what the player is doing: a slip at the foot with Show me
@@ -500,7 +513,15 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       const r = x.getBoundingClientRect()
       blocks.push({ left: r.left, top: r.top, right: r.right, bottom: r.bottom })
     }
-    landNow = { win: { left: 8, top: (board > 0 ? Math.min(ins.top, board) : ins.top) + 8, right: innerWidth - 8, bottom: innerHeight - 8 }, blocks }
+    // At a desk the two boards are things to keep off as well: between them, and beside the shorter one, the land
+    // runs on up, so a card there has that much more room.
+    let line = (board > 0 ? Math.min(ins.top, board) : ins.top) + 8
+    const mounts = ctx.layout() === 'narrow' || ctx.layout() === 'short' ? [] : [...top.el.querySelectorAll<HTMLElement>('.almanac > .mount, .bank > .mount')]
+    if (mounts.length === 2) {
+      for (const x of mounts) { const r = x.getBoundingClientRect(); blocks.push({ left: r.left, top: Math.min(0, r.top), right: r.right, bottom: r.bottom }) }
+      line = 8
+    }
+    landNow = { win: { left: 8, top: line, right: innerWidth - 8, bottom: innerHeight - 8 }, blocks }
     return landNow
   }
   // What a card hides as little of as it can: the field tags, the yards' tags and people's pins.
@@ -669,6 +690,16 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     if (a.type === 'incident' && typeof a.data?.incident === 'number') { const id = a.data.incident; return () => incident.open(id) }
     // Frost on the barrels: the haul of the biggest pile first, today.
     if (a.type === 'frostBarrels') return () => { const h = app.campaign ? S.haulInfo(app.world, app.campaign).sort((x, y) => y.cwt - x.cwt)[0] : undefined; if (h) app.haulAhead(h.field) }
+    if (a.type === 'barrelsOut' && a.field >= 0) { const field = a.field; return () => app.haulAhead(field) }
+    // Someone idle with work waiting that they are set never to do: the press lets them, last in their order.
+    if (a.type === 'idleNever' && unit >= 0 && typeof a.data?.work === 'string') {
+      const work = a.data.work as S.Skill
+      return () => {
+        const u = app.campaign?.crew.find(x => x.id === unit)
+        if (!u || !ctx.run({ t: 'priority', unit, work, level: S.PRIORITY_MAX }).ok) return
+        ctx.say(`${u.name.split(' ')[0]} will now take ${S.SKILL_LABEL[work]} when nothing else needs them.`)
+      }
+    }
     if (unit >= 0 && a.type !== 'poached' && a.type !== 'quit') return () => { if (app.campaign?.crew.some(u => u.id === unit)) { app.select(-1); app.selectUnit(unit) } }
     if (a.type === 'built' || a.type === 'building' || a.type === 'pondDry') {
       const b = typeof a.data?.building === 'number' ? c.buildings.find(x => x.id === a.data!.building) : undefined

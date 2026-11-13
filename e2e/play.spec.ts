@@ -158,14 +158,23 @@ test('a first season by the short path, from the opening to the next spring, wit
   // Start goes straight into a running game at 1x: no chip to dismiss, nothing more to press.
   expect((await look(page)).speed).toBe(1)
   await expect(page.getByTestId('paused')).toBeHidden()
-  // Nothing has to be ordered: once the ground is fit the crew puts the planting on the list by itself. The clock keeps
-  // the speed it was given; a question that comes meanwhile is answered on its card, as a player would, and the clock
-  // goes on at 1x.
+  // Nothing has to be ordered. Once the ground is fit the game pauses itself and asks for the word to plant (round
+  // eight: the one act the year asks of the player stops the clock), and says so. The short path resumes without a
+  // press, and three days on the crew puts the planting on the list by itself. A question that comes meanwhile is
+  // answered on its card, as a player would, and the clock goes on at 1x.
+  let asked = 0
   await expect.poll(async () => {
     const s = await look(page)
     if (s.incidents) await answerIncident(page, false)
+    else if (await game<boolean>(page, `app.speed === 0 && app.pauseCause === 'plantAsk'`)) {
+      asked++
+      await expect(page.locator('#ui .notes .alert').filter({ hasText: 'Paused: the soil is ready. Press a ringed Plant stamp, or resume and your crew starts in 3 days.' })).toBeVisible()
+      expect(await game<number>(page, `c.season.jobs.filter(j => j.kind === 'plant').length + c.season.fields.filter(f => f.plantDay >= 0).length`)).toBe(0)
+      await (isMobile ? page.locator('#ui [data-testid="speed-0"]:visible, #ui [data-testid="speed-toggle"]:visible').first() : page.getByTestId('paused-go')).click()
+    }
     return game<number>(page, `c.season.jobs.filter(j => j.by === 'routine').length + c.season.worked.length`)
   }, { timeout: 240_000, intervals: [500] }).toBeGreaterThan(0)
+  expect(asked, 'the game paused once for the word to plant').toBe(1)
   expect(await game<number>(page, `c.season.jobs.filter(j => j.by === 'you').length`)).toBe(0)
   // An answer takes a frame to show on the clock.
   await expect.poll(async () => (await look(page)).paused).toBe(false)

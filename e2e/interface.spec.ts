@@ -591,7 +591,8 @@ test('the goal line says the one next thing, opens the ladder, and moves on when
   await reach(page, `const { app, sim } = q.g(); const c = app.campaign
     for (let k = 0; k < 60 && c.season.fields.some((f, i) => sim.isField(c, i) && f.status === 'idle'); k++) { for (const a of sim.advise(app.world, c)) if (a.act === 'plant') app.order('plant', { fields: [a.field] }); app.do({ t: 'day' }) }
     app.setSpeed(0)`)
-  await expect(page.getByTestId('goal')).toContainText('Walk a field for blight', { timeout: 5000 })
+  // (round eight: the walking is the crew's, so the slip says what the player is waiting for)
+  await expect(page.getByTestId('goal')).toContainText('Nothing for you until blight weather', { timeout: 5000 })
   expect(errors, errors.join('\n')).toEqual([])
 })
 

@@ -4,7 +4,12 @@
 // with those on it gone from sight through the cut); and someone sets out the moment the clock is set going. The
 // people and machines are run without a picture (tests/crewsim.ts); tools/render/seen.ts checks the picture itself.
 import { describe, expect, it } from 'vitest'
-import { watch, type Farm, type Seen } from './crewsim.ts'
+import { leads, sharedDay, watch, type Farm, type Seen } from './crewsim.ts'
+import { FW } from '../src/render/layout.ts'
+import * as sim from '../src/sim/index.ts'
+import { personNow } from '../src/ui/now.ts'
+import { JOB_DOING } from '../src/ui/rules.ts'
+import { loadWorld } from '../tools/balance/world.ts'
 
 const SPEEDS = [[1, '1x'], [2, '3x'], [3, '8x']] as const
 const share = (a: number, b: number) => (b > 0 ? a / b : 0)
@@ -41,6 +46,50 @@ describe('a machine at work is seen on its field', () => {
   }
 })
 
+describe('one tractor between two people in a day', () => {
+  it('is seen with each for their hours, in the order of the hours: nobody sprays on foot, and whoever waits stands by', () => {
+    const day = sharedDay('spray')
+    expect(day.turns.length).toBeGreaterThan(1)
+    for (const [speed] of SPEEDS.slice(0, 2)) {
+      const s = watch('spray', speed, { from: day.days, seconds: speed === 1 ? 24 : 14 })
+      expect(s.jumps, s.jumps.join('; ')).toEqual([])
+      // the first to have it is seen on it in their field, then the second in theirs
+      expect(s.turns.slice(0, 2), s.turns.join(' ')).toEqual(day.turns.slice(0, 2).map(t => `${t.unit}@${t.field}`))
+      expect(s.afoot).toBe(0)
+      // the second waits for it, and not by walking a field's rows as the machine would (off them to the field's
+      // nearer end, at most, each time someone waits)
+      expect(s.waited).toBeGreaterThan(1)
+      expect(s.rowsWaiting).toBeLessThan(FW)
+    }
+  })
+
+  it('in days counted with the clock stopped and played out at their own pace, the second waits for it', () => {
+    const day = sharedDay('spray')
+    // (one day, seen through at a walker's and a machine's own pace: some twenty minutes of it)
+    const s = watch('spray', 1, { from: day.days, seconds: 1300, stepped: 5000 })
+    expect(s.turns.slice(0, 2), s.turns.join(' ')).toEqual(day.turns.slice(0, 2).map(t => `${t.unit}@${t.field}`))
+    expect(s.afoot).toBe(0)
+  })
+
+  it('at 8x, too, nobody is seen at a machine\'s work without the machine', () => {
+    const day = sharedDay('spray')
+    const s = watch('spray', 3, { from: day.days, seconds: 12 })
+    expect(s.jumps, s.jumps.join('; ')).toEqual([])
+    expect(s.afoot).toBe(0)
+  })
+})
+
+describe('where the interface pins a person', () => {
+  it('is where they are seen, and nowhere while a cut has them gone from sight', () => {
+    const truck: Farm = { spring: app => { app.do({ t: 'buy', upgrade: 'truck' }) } }
+    for (const [speed] of SPEEDS) for (const [kind, farm] of [['spray', {}], ['haul', truck]] as [string, Farm][]) {
+      const s = watch(kind, speed, { farm, seconds: 14 })
+      expect(s.cuts, `${kind}: someone goes through a cut`).toBeGreaterThan(0)
+      expect(s.pins, s.pins.slice(0, 4).join('; ')).toEqual([])
+    }
+  })
+})
+
 describe('work with no rows to it', () => {
   it('hauling with the truck: it is seen at the field and on its way, at 1x and 3x', () => {
     const farm: Farm = { spring: app => { app.do({ t: 'buy', upgrade: 'truck' }) } }
@@ -64,8 +113,10 @@ describe('work with no rows to it', () => {
 
 describe('the clock stopped and set going again', () => {
   it('leaves whoever was being seen at work at it: a machine digging goes on digging', () => {
+    // (a truck brings the crop in: with it the digger digs on the next day, and does not leave the field to haul)
+    const truck: Farm = { spring: app => { app.do({ t: 'buy', upgrade: 'truck' }) } }
     for (const kind of ['dig', 'plant']) {
-      const s = watch(kind, 1, { seconds: 20, dist: 308, pauseAt: 8.9 })
+      const s = watch(kind, 1, { farm: kind === 'dig' ? truck : {}, seconds: 20, dist: 308, pauseAt: 8.9 })
       expect(s.jumps, s.jumps.join('; ')).toEqual([])
       expect(share(s.working, s.seconds), `${kind}: working ${Math.round(100 * share(s.working, s.seconds))}%`).toBeGreaterThanOrEqual(0.5)
     }
@@ -78,5 +129,44 @@ describe('the first seconds', () => {
     expect(watch('plant', 1, { seconds: 6 }).lead).toBeGreaterThan(20)
     // (an order the player has given: felling, on foot)
     expect(watch('fell', 1, { farm: { order: app => { app.do({ t: 'job', kind: 'fell', field: 14 }) } }, foot: true, seconds: 6 }).lead).toBeGreaterThan(8)
+  })
+})
+
+describe('whoever sets out', () => {
+  it('is whoever the day then gives that work to, on nine mornings in ten', () => {
+    for (const farm of [{}, { spring: app => { app.do({ t: 'buy', upgrade: 'truck' }) } }] as Farm[]) {
+      const l = leads(farm)
+      expect(l.said).toBeGreaterThan(40)
+      expect(l.right / l.said, `${l.right} of ${l.said}`).toBeGreaterThanOrEqual(0.9)
+    }
+  })
+})
+
+describe('what the state says of the machine work', () => {
+  it('someone said to be at machine work in a field holds a machine there, every day of a season', () => {
+    const world = loadWorld()
+    const c = sim.createCampaign(world, { seed: 5, startYear: 1977 })
+    c.cash += 60000
+    sim.apply(world, c, { t: 'hire', applicant: c.applicants[0].id })
+    sim.apply(world, c, { t: 'begin' })
+    sim.apply(world, c, { t: 'sprayWay', way: 'auto' })
+    let said = 0
+    for (let g = 0; g < 400 && c.phase === 'season' && !sim.seasonDone(c); g++) {
+      c.incidents = []
+      sim.apply(world, c, { t: 'day' })
+      const s = c.season!
+      const waits = sim.jobWaits(world, c)
+      for (const u of c.crew) {
+        const n = personNow(c, u.id, waits)
+        const kind = sim.JOBS.find(k => JOB_DOING[k].replace(/ (in|from|around)$/, '') === n.word)
+        if (!kind || sim.jobSkill(kind) !== 'machine' || n.place < 0) continue
+        said++
+        // holding the order with a machine, or on the last day worked it on a machine of its own hours there
+        const holds = u.rig !== '' && s.jobs.some(j => j.id === u.job && j.field === n.place)
+        const drove = s.worked.some(w => w.unit === u.id && w.field === n.place && w.kind === kind && !!w.machine)
+        expect(holds || drove, `${u.name} on day ${s.day}: ${n.line}`).toBe(true)
+      }
+    }
+    expect(said).toBeGreaterThan(5)
   })
 })

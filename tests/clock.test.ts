@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { App, DAYS_PER_SECOND, SPEED_X, type AppEvent } from '../src/game/app.ts'
+import { App, DAYS_PER_SECOND, PLANT_PAUSE, SELF_PAUSES, SPEED_X, type AppEvent, type Speed } from '../src/game/app.ts'
 import * as S from '../src/sim/index.ts'
 import { loadWorld } from '../tools/balance/world.ts'
 
@@ -17,10 +17,16 @@ function farm(): App {
 }
 
 // Runs the clock for this many seconds of play, a frame at a time. An incident card is answered as a player in a hurry
-// would, with its default, and the clock goes on; answer: false leaves it for the test.
+// would, with its default, and the clock goes on; answer: false leaves it for the test. The word to plant, which
+// pauses the game every year (round eight), is given where the crew asks, and the player resumes.
 function play(app: App, seconds: number, stop: () => boolean = () => false, answer = true): void {
   const c = app.campaign!
   for (let ms = 0; ms < seconds * 1000 && !stop(); ms += 50) {
+    if (app.speed === 0 && app.pauseCause === 'plantAsk') {
+      const at = app.resumeSpeed
+      app.order('plant', { fields: [app.needs().findIndex(n => n.need?.act === 'plant')] })
+      app.setSpeed(at)
+    }
     if (answer && app.speed === 0 && c.incidents.length) {
       for (const inc of [...c.incidents]) app.do({ t: 'answer', incident: inc.id, choice: S.defaultChoice(inc) })
       app.resumeAfterCard()
@@ -81,7 +87,7 @@ describe('the clock', () => {
     // Through planting and the first weeks of growth, when new needs appear day after day.
     play(app, 60, () => c.season!.fields.some(f => f.hillPasses > 0) || c.season!.fields.some(f => f.weighed))
     expect(c.season!.day).toBeGreaterThan(S.dayIndex(c.year, 3, 30))
-    // The only stops were for incident cards, and each time the clock went back to 3x.
+    // The only stops were for incident cards and the word to plant, and each time the clock went back to 3x.
     expect(speeds.filter(s => s !== 0 && s !== 3)).toEqual([])
     expect(app.speed).toBe(3)
   })
@@ -190,5 +196,185 @@ describe('a notice that asks nothing', () => {
     const { reasons, warned } = harvest(true)
     expect(warned).toBeGreaterThan(0)
     expect(reasons.some(r => /^Frost is forecast/.test(r))).toBe(true)
+  })
+})
+
+// Round eight: a decision that waits for the player pauses the game, and nothing else does.
+describe('a decision that waits for the player pauses the game', () => {
+  const potato = (c: S.Campaign) => [...Array(S.FIELD_COUNT).keys()].filter(i => c.plans[i]?.crop === 'potato' && c.fields[i].tenure !== 'none')
+  // The clock run a frame at a time, telegrams answered and weighed crops sold, until the test says or the game
+  // pauses for something else.
+  function run(app: App, seconds: number, stop: () => boolean): void {
+    const c = c0(app)
+    for (let ms = 0; ms < seconds * 1000 && !stop() && c.phase === 'season'; ms += 50) {
+      if (app.speed === 0 && (app.pauseCause === 'incident' || app.pauseCause === 'weighed' || app.pauseCause === 'alerts')) {
+        const at = app.resumeSpeed
+        for (const inc of [...c.incidents]) app.do({ t: 'answer', incident: inc.id, choice: S.defaultChoice(inc) })
+        for (const lot of S.openLots(c)) if (c.season!.fields[lot.field]?.weighed) app.do({ t: 'sell', lot: lot.id, frac: 1 })
+        app.setSpeed(at)
+      }
+      app.tick(50)
+    }
+  }
+  // A first year played without the clock, the word given and the questions answered, then the second spring begun.
+  function secondYear(app: App): void {
+    const c = c0(app)
+    app.do({ t: 'sprayWay', way: 'auto' })
+    for (let n = 0; n < 400 && c.phase === 'season'; n++) {
+      if (S.seasonDone(c)) { app.do({ t: 'endSeason' }); break }
+      const at = S.fieldNeeds(app.world, c).findIndex(x => x.need?.act === 'plant')
+      if (at >= 0 && !S.plantWordGiven(c.season!)) app.do({ t: 'job', kind: 'plant', field: at })
+      for (const inc of [...c.incidents]) app.do({ t: 'answer', incident: inc.id, choice: S.defaultChoice(inc) })
+      for (const lot of S.openLots(c)) if (c.season!.fields[lot.field]?.weighed) app.do({ t: 'sell', lot: lot.id, frac: 1 })
+      app.do({ t: 'day' })
+    }
+    for (let m = 0; m < 14 && c.phase === 'cellar'; m++) app.do({ t: 'month' })
+    if (c.phase === 'ledger') app.do({ t: 'next' })
+    expect(c.phase).toBe('plan')
+    expect(c.history.length).toBe(1)
+    expect(app.do({ t: 'begin' }).ok).toBe(true)
+  }
+  const waitsForWord = (app: App) => app.speed === 0 && app.pauseCause === 'plantAsk'
+
+  it('pauses the day the crew asks for the word, in years one and two, at 1x, 3x and 8x and whatever "Pause on alerts" says, with nothing planted', () => {
+    for (const year of [1, 2]) for (const speed of [1, 2, 3] as Speed[]) for (const alerts of year === 1 && speed === 3 ? [false, true] : [false]) {
+      const what = `year ${year} at ${SPEED_X[speed]}${alerts ? ', pause on alerts' : ''}`
+      const app = farm()
+      app.settings.pauseOnAlerts = alerts
+      if (year === 2) secondYear(app)
+      const c = c0(app)
+      const stops: string[] = []
+      app.on((e: AppEvent) => { if (e.type === 'speed' && e.speed === 0 && app.pauseCause === 'plantAsk') stops.push(app.pauseReason) })
+      // "Skip ahead" and every "Fast-forward to ..." key only set the speed.
+      app.setSpeed(speed)
+      run(app, 600, () => waitsForWord(app))
+      expect(waitsForWord(app), what).toBe(true)
+      expect(app.pauseReason, what).toBe(PLANT_PAUSE)
+      expect(PLANT_PAUSE).toBe('the soil is ready. Press a ringed Plant stamp, or resume and your crew starts in 3 days.')
+      const s = c.season!
+      expect(s.plantAsk, `${what}: paused on the day the crew asks`).toBe(s.day)
+      expect(s.jobs.filter(j => j.kind === 'plant'), what).toEqual([])
+      expect(potato(c).filter(i => s.fields[i].plantDay >= 0), what).toEqual([])
+      expect(S.plantWordGiven(s), what).toBe(false)
+      // The stamps are up: every fit potato field carries the need.
+      expect(app.needs().filter(n => n.need?.act === 'plant').length, what).toBeGreaterThan(0)
+      expect(app.resumeSpeed, what).toBe(speed)
+      // Resumed without a press, the crew starts three days later (the first working morning the soil is still fit
+      // from then), and the game does not pause for it again.
+      app.togglePause()
+      expect(app.speed, what).toBe(speed)
+      let early = false
+      run(app, 200, () => { if (s.day - s.plantAsk! < S.PLANT_WORD_DAYS && S.plantWordGiven(s)) early = true; return s.plantWord !== undefined })
+      expect(early, `${what}: nothing planted in the three days`).toBe(false)
+      expect(s.plantWordBy, what).toBe('crew')
+      expect(s.plantWord! - s.plantAsk!, what).toBeGreaterThanOrEqual(S.PLANT_WORD_DAYS)
+      expect(s.plantWord! - s.plantAsk!, what).toBeLessThanOrEqual(S.PLANT_WORD_DAYS + 4)
+      expect(stops, what).toEqual([PLANT_PAUSE])
+    }
+  })
+
+  it('a press on a Plant stamp answers the pause without changing the speed: the game stays paused until the player resumes', () => {
+    const app = farm()
+    const c = c0(app)
+    app.setSpeed(3)
+    run(app, 600, () => waitsForWord(app))
+    const speeds: number[] = []
+    app.on((e: AppEvent) => { if (e.type === 'speed') speeds.push(e.speed) })
+    const r = app.smartOrder(app.needs().findIndex(n => n.need?.act === 'plant'))
+    expect(r.ok).toBe(true)
+    expect(c.season!.plantWordBy).toBe('you')
+    expect(app.speed).toBe(0)
+    expect(speeds.every(x => x === 0)).toBe(true)
+    // The pause is the player's own now, said by nothing, and Space resumes at the speed the game had.
+    expect(app.pauseReason).toBe('')
+    expect(app.pauseCause).toBe('')
+    app.togglePause()
+    expect(app.speed).toBe(3)
+  })
+
+  it('lists every cause that can pause the game by itself, and a whole year at 8x pauses for those alone', () => {
+    expect(Object.keys(SELF_PAUSES).sort()).toEqual(['alerts', 'incident', 'killCall', 'over', 'plantAsk', 'spray', 'weighed'])
+    for (const why of Object.values(SELF_PAUSES)) expect(why.length).toBeGreaterThan(20)
+    const app = farm()
+    const c = c0(app)
+    app.do({ t: 'sprayWay', way: 'auto' })
+    const causes: string[] = []
+    app.on((e: AppEvent) => { if (e.type === 'speed' && e.speed === 0 && app.pauseReason) causes.push(app.pauseCause) })
+    app.setSpeed(3)
+    for (let ms = 0; ms < 400_000 && !S.seasonDone(c); ms += 50) {
+      if (app.speed === 0) {
+        for (const inc of [...c.incidents]) app.do({ t: 'answer', incident: inc.id, choice: S.defaultChoice(inc) })
+        for (const lot of S.openLots(c)) if (c.season!.fields[lot.field]?.weighed) app.do({ t: 'sell', lot: lot.id, frac: 1 })
+        app.setSpeed(3)
+      }
+      app.tick(50)
+    }
+    expect(S.seasonDone(c)).toBe(true)
+    // With "Pause on alerts" off and the routine as it comes: the word to plant once, each weigh ticket, each
+    // telegram, the season's end. (The spraying question is the season screen's: it was answered above.)
+    expect(causes.filter(x => x === 'plantAsk').length).toBe(1)
+    expect([...new Set(causes)].filter(x => !['plantAsk', 'weighed', 'incident', 'over'].includes(x))).toEqual([])
+    // The vine kill the crew does on its own date asked nothing of the player, so it paused nothing.
+    expect(c.season!.log.filter(e => e.type === 'killCall')).toEqual([])
+    expect(c.season!.fields.some(f => f.killDay >= 0)).toBe(true)
+  })
+
+  // A farm brought to the day reference practice first asks for a field's vines, the word given and the clock at 3x.
+  function toKill(prepare: (app: App) => void): { app: App; c: S.Campaign } {
+    const app = farm()
+    const c = c0(app)
+    app.do({ t: 'sprayWay', way: 'auto' })
+    prepare(app)
+    app.setSpeed(3)
+    for (let ms = 0; ms < 400_000 && !S.seasonDone(c) && !(app.speed === 0 && app.pauseCause === 'killCall'); ms += 50) {
+      if (app.speed === 0) {
+        const at = app.needs().findIndex(n => n.need?.act === 'plant')
+        if (app.pauseCause === 'plantAsk' && at >= 0) app.order('plant', { fields: [at] })
+        for (const inc of [...c.incidents]) app.do({ t: 'answer', incident: inc.id, choice: S.defaultChoice(inc) })
+        for (const lot of S.openLots(c)) if (c.season!.fields[lot.field]?.weighed) app.do({ t: 'sell', lot: lot.id, frac: 1 })
+        app.setSpeed(3)
+      }
+      // The player keeps a field's vines up the day the crew would otherwise set a date for them.
+      if (keep >= 0 && c.season!.fields[keep].killAsked !== undefined && !c.season!.fields[keep].keepVines && c.season!.fields[keep].status === 'growing' && c.season!.fields[keep].deadDay < 0 && !kept) { kept = app.do({ t: 'keepVines', field: keep, keep: true }).ok }
+      app.tick(50)
+    }
+    return { app, c }
+  }
+  let keep = -1
+  let kept = false
+
+  it('pauses for a vine kill only when it is the player\'s to give: where the crew does not kill by itself, the day it comes due', () => {
+    keep = -1
+    // The kill and the dig both left to the player's own orders: the crew sets no date of its own.
+    const { app, c } = toKill(a => { a.do({ t: 'routine', kind: 'dig', auto: false }) })
+    expect(app.pauseCause).toBe('killCall')
+    const s = c.season!
+    const called = s.fields.map((f, i) => (f.killCall === s.day ? i : -1)).filter(i => i >= 0)
+    expect(called.length).toBeGreaterThan(0)
+    for (const i of called) expect(S.advise(app.world, c).some(a => a.act === 'kill' && a.field === i), S.FIELD_NAMES[i]).toBe(true)
+    expect(app.pauseReason).toMatch(/^the vines in .+ are due to be killed, and that's your decision\. Press a ringed Kill vines stamp, or resume and they stay up\.$/)
+    expect(app.pauseReason).toContain(S.FIELD_NAMES[called[0]])
+    // Ordered, the pause is answered and the game stays paused. Each field is called once.
+    app.order('kill', { fields: called })
+    expect(app.pauseCause).toBe('')
+    expect(app.speed).toBe(0)
+    expect(s.log.filter(e => e.type === 'killCall' && e.data && (e.data.fields as number[]).includes(called[0])).length).toBe(1)
+  })
+
+  it('and where the player keeps the vines up, two days before the last day a kill still sets the skins', () => {
+    keep = potato(c0(farm()))[0]
+    kept = false
+    const { app, c } = toKill(() => {})
+    expect(kept).toBe(true)
+    expect(app.pauseCause).toBe('killCall')
+    const s = c.season!
+    const latest = S.dayIndex(s.year, S.DIG_GREEN.month, S.DIG_GREEN.dom) - S.SKIN_DAYS
+    expect(s.day).toBe(latest - S.KILL_CALL_DAYS)
+    expect(s.fields[keep].killCall).toBe(s.day)
+    expect(app.pauseReason).toBe(`you're keeping the vines up in ${S.FIELD_NAMES[keep]}. Press a ringed Kill vines stamp, or resume and they stay up.`)
+    expect(s.log.find(e => e.type === 'killCall')!.text).toBe(`You're keeping the vines up in ${S.FIELD_NAMES[keep]}. Kill them by ${S.formatDay(s.year, latest)} so the skins toughen before the harvest, or the field gets dug green.`)
+    // The other fields, which the crew killed on its own date, were never called.
+    expect(s.fields.filter(f => f.killCall !== undefined).length).toBe(1)
+    keep = -1
   })
 })

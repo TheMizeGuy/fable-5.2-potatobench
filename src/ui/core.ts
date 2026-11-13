@@ -328,7 +328,7 @@ export function confirmPaper(ctx: Ctx, o: { title: string; text: Child; yes: str
 
 // ---------------------------------------------------------------- alerts and notices
 
-export interface Note { id: string; level: Level; glyph: string; text: string; full: string; field: number; day: number; born: number; ttl: number; go?: () => void }
+export interface Note { id: string; level: Level; glyph: string; text: string; full: string; field: number; day: number; born: number; ttl: number; go?: () => void; key?: string }
 
 const LEVEL_GLYPH: Record<Level, string> = { info: 'flat', good: 'check', warn: 'warn', bad: 'blight' }
 
@@ -362,7 +362,7 @@ export class Notes {
 
   // text: what the row shows. full: what a screen reader hears (the whole sentence).
   // offer: nobody asked for it, so it never takes the place of a row that has only just come up.
-  push(o: { level?: Level; glyph?: string; text: string; full?: string; field?: number; day?: number; ttl?: number; go?: (() => void) | null; offer?: boolean }): void {
+  push(o: { level?: Level; glyph?: string; text: string; full?: string; field?: number; day?: number; ttl?: number; go?: (() => void) | null; offer?: boolean; key?: string }): void {
     if (this.quiet) { this.waiting.push(o); this.live.textContent = localize(o.full ?? o.text); return }
     if (o.offer && waitsItsTurn(this.items, this.keep, performance.now())) { this.later.push(o); this.live.textContent = localize(o.full ?? o.text); return }
     const level = o.level ?? 'info'
@@ -370,7 +370,7 @@ export class Notes {
     const full = localize(o.full ?? o.text)
     const dup = this.items.find(n => n.full === full)
     if (dup) this.drop(dup)
-    this.items.push({ id: `n${++this.seq}`, level, glyph: o.glyph ?? LEVEL_GLYPH[level], text, full, field: o.field ?? -1, day: o.day ?? -1, born: performance.now(), ttl: o.ttl ?? 0, go: o.go ?? undefined })
+    this.items.push({ id: `n${++this.seq}`, level, glyph: o.glyph ?? LEVEL_GLYPH[level], text, full, field: o.field ?? -1, day: o.day ?? -1, born: performance.now(), ttl: o.ttl ?? 0, go: o.go ?? undefined, key: o.key })
     while (this.items.length > this.keep) this.items.shift()
     this.live.textContent = full
     this.draw()
@@ -471,7 +471,10 @@ export class Notes {
   private row(n: Note): HTMLElement {
     const inner = [icon(n.glyph, 'i'), h('span', null, n.text)]
     const kind = n.level === 'bad' ? ' bad' : n.glyph === 'water' || n.glyph === 'dry' || n.glyph === 'rain' ? ' water' : n.level === 'warn' ? ' warn' : n.level === 'good' ? ' good' : ''
-    const row = n.go || n.field >= 0
+    // A slip that does something has its own key, named for what it does: the slip is read, the key is pressed.
+    const row = n.key && n.go
+      ? h('div', { class: `alert${kind} lv-${n.level} has-key`, testid: 'alert' }, inner, h('button', { class: 'btn alert-key', type: 'button', testid: 'alert-key', onclick: () => n.go!() }, n.key))
+      : n.go || n.field >= 0
       ? h('button', { class: `alert${kind} lv-${n.level}`, type: 'button', testid: 'alert', onclick: () => (n.go ? n.go() : this.onGo(n.field)) }, inner, h('span', { class: 'sr' }, '. Go there.'))
       : h('div', { class: `alert${kind} lv-${n.level}`, testid: 'notice' }, inner)
     row.dataset.id = n.id

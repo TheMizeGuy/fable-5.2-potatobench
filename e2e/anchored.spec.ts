@@ -265,9 +265,10 @@ async function hold(page: Page, k: Case, label: string, close: 'Escape' | 'groun
   }
   // Beside what was clicked: the point on the land, or the handle (the tag, the chip, the order) when it was one.
   // Where the land beside it is too short for the whole card (a short window, between the slip under the date board
-  // and the people bar), the card steps along that side, clear of the bar, whole and still tied: no further than 190 px.
+  // and the people bar), the card steps along that side, clear of the bar, whole and still tied: no further than 190 px,
+  // or, for a thing standing over or under one of those bars, than the card's own width (to that bar's end).
   // (a chip stands on the people bar under the work list: its card stands over the list, the list's height further off)
-  const reach = c.aside ? 190 : k.onBar ? 100 : 60
+  const reach = c.aside ? (bars.some(b => k.at.x > b.left && k.at.x < b.right) ? Math.max(190, c.rect.right - c.rect.left + 16) : 190) : k.onBar ? 100 : 60
   if (c.aside) expect.soft(c.fits && !c.cut, say('stepped aside from the point, it is whole')).toBe(true)
   if (k.onBar && c.aside) {
     // Beside the very bar its chip stands in, however wide the bar: right at its edge, or at the edge of the work
@@ -594,25 +595,41 @@ test('clicking another thing moves the card; Shift adds a field to it; the card 
   const names = await a<string[]>(page, 'return sim.FIELD_NAMES')
   const spots = await a<{ i: number; at: Pt }[]>(page, `return [0, 1, 2, 3, 4, 5].map(i => ({ i, at: A.fieldSpot(i) })).filter(x => x.at)`)
   expect(spots.length).toBeGreaterThanOrEqual(3)
-  const [one] = spots
-  await page.mouse.click(one.at.x, one.at.y)
-  expect(await a<number>(page, `return A.shown('card', 'field-${one.i}')`)).toBeGreaterThanOrEqual(0)
-  await page.waitForTimeout(380)
-  // A second field, where the first one's card does not lie: the card moves to it.
-  // (potato fields, which can take the order given to both below; a resting field takes none)
+  // A second field, where the first one's card does not lie: the card moves to it. And a third, where the second
+  // one's card does not lie, to add with Shift. Far out a card lies over more of the farm than a field does, so the
+  // three are taken in an order a player could click them in.
+  // (the second and third are potato fields, which can take the order given to both below; a resting field takes none)
   const free = async (not: number[]) => (await a<{ i: number; at: Pt }[]>(page, `return [0, 1, 2, 3, 4, 5].filter(i => ['growing', 'planted'].includes(sim.fieldInfo(app.campaign, i).status)).map(i => ({ i, at: A.fieldSpot(i) })).filter(x => x.at)`)).find(x => !not.includes(x.i))
-  const two = (await free([one.i]))!
-  expect(two, 'a second field is in reach beside the first one\'s card').toBeTruthy()
-  await page.mouse.click(two.at.x, two.at.y)
-  expect(await a<number>(page, `return A.shown('card', 'field-${two.i}')`)).toBeGreaterThanOrEqual(0)
-  await page.waitForTimeout(380)
-  let c = (await cards(page))
-  expect(c.map(x => x.id)).toEqual(['card'])
-  expect(c[0].head).toContain(names[two.i])
-  expect(away(c[0].rect, two.at)).toBeLessThanOrEqual(60)
+  let second: { i: number; at: Pt } | undefined, third: { i: number; at: Pt } | undefined
+  let c = await cards(page)
+  pick: for (const one of spots) {
+    const tried: number[] = []
+    for (;;) {
+      await page.mouse.click(one.at.x, one.at.y)
+      expect(await a<number>(page, `return A.shown('card', 'field-${one.i}')`)).toBeGreaterThanOrEqual(0)
+      await page.waitForTimeout(380)
+      const next = await free([one.i, ...tried])
+      if (!next) break
+      await page.mouse.click(next.at.x, next.at.y)
+      expect(await a<number>(page, `return A.shown('card', 'field-${next.i}')`)).toBeGreaterThanOrEqual(0)
+      await page.waitForTimeout(380)
+      c = await cards(page)
+      expect(c.map(x => x.id)).toEqual(['card'])
+      expect(c[0].head).toContain(names[next.i])
+      expect(away(c[0].rect, next.at)).toBeLessThanOrEqual(60)
+      second = next
+      third = await free([one.i, next.i])
+      if (third) break pick
+      console.log(`${names[one.i]}, then ${names[next.i]}: no third potato field's ground shows beside its card`)
+      tried.push(next.i)
+      await letGo(page)
+    }
+    await letGo(page)
+  }
+  expect(second, 'a second field is in reach beside the first one\'s card').toBeTruthy()
   // Shift-click a third: one card, named for the fields, tied to the one last clicked; an order goes to all of them.
-  const three = (await free([one.i, two.i]))!
-  expect(three, 'a third field is in reach').toBeTruthy()
+  expect(third, 'a third field is in reach').toBeTruthy()
+  const two = second!, three = third!
   await page.keyboard.down('Shift')
   await page.mouse.click(three.at.x, three.at.y)
   await page.keyboard.up('Shift')
@@ -1060,6 +1077,7 @@ for (const [w, h] of [[1280, 800], [1280, 720]] as const) {
       if (SHOTS) await page.screenshot({ path: `${SHOTS}/hand-${w}x${h}-${how.replace(/\W+/g, '-')}.png` })
       expect.soft(c.fits && !c.cut, `${w}x${h}, ${how}: nothing in it has to be scrolled to, and it was not cut (heights ${c.room.join(', ')})`).toBe(true)
       expect.soft(c.rect.left >= -0.5 && c.rect.top >= -0.5 && c.rect.right <= w + 0.5 && c.rect.bottom <= h + 0.5, `${w}x${h}, ${how}: inside the window (${JSON.stringify(c.rect)})`).toBe(true)
+      expect.soft(c.onTop, `${w}x${h}, ${how}: nothing lies over its head (${JSON.stringify(c.rect)})`).toBe(true)
       const out = await a<string[]>(page, `const el = document.querySelector('#ui [data-testid="${id}"]'); const r = el.getBoundingClientRect()
         const keys = [...el.querySelectorAll('button')].filter(x => A.vis(x))
         const bad = keys.filter(x => { const b = x.getBoundingClientRect(); return b.top < r.top - 0.5 || b.bottom > r.bottom + 0.5 || b.left < r.left - 0.5 || b.right > r.right + 0.5 || b.top < 0 || b.bottom > innerHeight || b.left < 0 || b.right > innerWidth }).map(x => x.dataset.testid || x.className)

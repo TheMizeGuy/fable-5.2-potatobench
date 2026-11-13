@@ -106,6 +106,9 @@
 .notes.alerts .alert.hint { max-width: 420px; }
 .notes.alerts .alert.hint .i { color: var(--ink); }
 .notes.alerts .alert .close { margin: -8px -12px -8px 2px; }
+/* An alert whose remedy is one press carries it as a key of its own. */
+.notes.alerts .alert.has-key { max-width: 460px; }
+.notes.alerts .alert .alert-key { flex: none; margin: -2px -6px -2px auto; white-space: nowrap; }
 @media (hover: hover) { .notes.alerts button.alert:hover { box-shadow: var(--laid), inset 0 0 0 1px var(--ink); } .notes.alerts button.alert.bad:hover { box-shadow: var(--laid), inset 5px 0 0 var(--red), inset 0 0 0 1px var(--ink); } }
 @keyframes slip-up { from { transform: translateY(14px); } }
 
@@ -286,6 +289,18 @@
   .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .whose { padding: 3px 16px 5px; font-size: 13.5px; line-height: 1.3; }
   .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .whose > .quiet:first-child { display: none; }
   .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .readings { gap: 3px; padding: 6px 16px 7px; font-size: 14.5px; }
+}
+/* A 720-line window, paused: the clock's chip under the cash board leaves the land beside it 443 px, and a sheltered
+   field's card has a third reading. The same spacing a little tighter again, so that card is whole there too. */
+@media (max-height: 740px) {
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .command-head { padding: 6px 16px 4px; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .command-head .t-title { font-size: 24px; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .gauge { gap: 2px; padding: 4px 12px 4px; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .orders.slots { gap: 4px; padding: 6px 12px 2px; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .orders.slots .order { grid-template-rows: 22px 15px 13px; height: 57px; padding: 2px 8px 5px; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .orders.slots .order .name { font-size: 15px; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .order-say, .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .order-say.is-telling, .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .whose { padding-top: 2px; padding-bottom: 3px; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .readings { gap: 2px; padding: 3px 16px 4px; font-size: 14px; line-height: 1.25; }
 }
 /* The same of a person's page: whole in a 720-line window, beside the people bar it was opened from. */
 /* A short window: the care of the land is one line, its catch under the pointer. */

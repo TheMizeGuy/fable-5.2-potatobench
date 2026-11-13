@@ -21,7 +21,7 @@ test('money, time and what cannot be taken back are major', () => {
 
 test('close, back, more and change are minor', () => {
   for (const id of ['card-close', 'paper-close', 'whois-close', 'crew-close', 'money-close', 'reckoning-close', 'incident-later', 'spray-ask-close', 'goal', 'next-goal',
-    'forecast', 'materials', 'order-more', 'queue-more', 'compare-open', 'money-open', 'reckoning-open', 'track-19873', 'list-x-4', 'queue-first-4', 'queue-who-4', 'guide-skip', 'how-keys']) {
+    'forecast', 'materials', 'order-more', 'queue-more', 'compare-open', 'money-open', 'reckoning-open', 'track-19873', 'list-x-4', 'queue-first-4', 'queue-who-4', 'guide-stop', 'how-keys']) {
     expect(weightOf('btn go', id), id).toBe('minor')
   }
   expect(weightOf('close', '')).toBe('minor')
@@ -31,7 +31,7 @@ test('close, back, more and change are minor', () => {
 })
 
 test('everything else is a standard key', () => {
-  for (const id of ['order-spray', 'order-dig', 'goal-do', 'guide-noted', 'guide-ahead', 'speed-1', 'speed-0', 'menu-open', 'whois-follow', 'whois-first-field', 'prio-field',
+  for (const id of ['order-spray', 'order-dig', 'goal-do', 'guide-noted', 'guide-pass', 'guide-ahead', 'speed-1', 'speed-0', 'menu-open', 'whois-follow', 'whois-first-field', 'prio-field',
     'person-rest-sunday', 'unit-2', 'cell-2-field', 'almanac-farm', 'menu-continue', 'quit-title', 'raise-open', 'lot-seed-open-3', 'thing-hire', 'crew-open', 'beds-build', 'weighin-3', 'play-guided']) {
     expect(weightOf('btn', id), id).toBe('std')
   }

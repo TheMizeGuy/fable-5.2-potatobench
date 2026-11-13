@@ -87,6 +87,19 @@ describe('a right-click with someone picked', () => {
   })
 })
 
+describe('a right-click with nobody picked', () => {
+  it('orders the field\'s own work, or says why not and how to send someone', () => {
+    const app = summer(7, 30)
+    const c = app.campaign!
+    const resting = c.season!.fields.findIndex(f => f.status === 'rest')
+    const field = app.needs().findIndex(n => n.need?.act === 'spray')
+    expect(app.unit).toBe(-1)
+    expect(app.orderAt(resting)).toEqual({ field: resting, ok: false, err: 'Nothing needs doing here right now. To send someone here, select them first.' })
+    expect(app.orderAt(field).ok).toBe(true)
+    expect(c.season!.jobs.some(j => j.field === field && j.kind === 'spray')).toBe(true)
+  })
+})
+
 describe('a stamp pressed', () => {
   it('is the field\'s order: the person picked takes it when they can, and whoever can when they cannot', () => {
     const app = summer(7, 30)
