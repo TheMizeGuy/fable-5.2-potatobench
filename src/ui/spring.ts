@@ -326,7 +326,7 @@ function equipmentBody(ctx: Ctx, c: S.Campaign, onTry: (err: string) => void, on
   const plan = S.planCost(c)
   const loanAdds = (cost: number) => Math.max(0, plan - (c.cash - cost)) - Math.max(0, plan - c.cash)
   return [
-    h('p', { class: 't-caption', testid: 'equip-cash' }, `Equipment is paid from your cash, ${F.money(Math.max(0, c.cash))} right now. Your plan still costs the same, so any of that cash your plan needed is borrowed on the spring loan instead, and you repay it at the end of the year.`),
+    h('p', { class: 't-caption', testid: 'equip-cash' }, `Equipment is paid from your cash, ${F.money(Math.max(0, c.cash))} now, and whatever your plan needed of it goes on the `, term('spring loan'), '.'),
     h('ul', { class: 'cat-list cat-equip' }, ids.map(id => {
       const u = S.UPGRADES[id]
       const why = c.upgrades[id] ? '' : equipNeeds(c, id)

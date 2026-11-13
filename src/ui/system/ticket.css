@@ -183,7 +183,8 @@
 .tray-paper.sys.out { animation: tray-out var(--t-leave) var(--ease-in) forwards; }
 /* The tray never runs past the land's room: the host is held between the bars, the paper takes no more than the host,
    and only the tray and its tally scroll, between the head and the estimate. */
-.season-screen > .tray-host.sys { display: flex; flex-direction: column; overflow: visible; }
+/* It stands with the cards and their tethers (z-index 3), after them in the page, so a tether to a card passes under it. */
+.season-screen > .tray-host.sys { display: flex; flex-direction: column; overflow: visible; z-index: 3; }
 .tray-paper.sys { display: flex; flex-direction: column; min-height: 0; }
 .tray-paper[data-layout='short'] { max-height: calc(100vh - var(--top, 44px) - 12px); }
 .tray-paper > .tray-head, .tray-paper > .narrowing { flex: none; }
