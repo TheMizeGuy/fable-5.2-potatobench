@@ -117,6 +117,8 @@ async function winterAndYearEnd(page: Page): Promise<void> {
   // The last weigh ticket can arrive as the season closes; it is answered first.
   await page.waitForTimeout(500)
   while (await page.getByTestId('weighin').count()) await answerTicket(page, true)
+  // (a telegram that came with the last day is answered before the season is closed)
+  await expect.poll(async () => { await answerIncident(page, true); return game<number>(page, 'c.incidents.length') }).toBe(0)
   await page.getByTestId('end-season').click()
   await expect(page.getByTestId('month-next')).toBeVisible()
   for (let i = 0; i < 9 && !(await page.getByTestId('year-next').count()); i++) {
@@ -308,6 +310,8 @@ test('a later year on the farmstead: an applicant hired, land on the mortgage, a
   // Winter: a building raised by the farm's own people, the farmer on it, the new hand felling the brush.
   await page.waitForTimeout(500)
   while (await page.getByTestId('weighin').count()) await answerTicket(page, true)
+  // (a telegram that came with the last day is answered before the season is closed)
+  await expect.poll(async () => { await answerIncident(page, true); return game<number>(page, 'c.incidents.length') }).toBe(0)
   await page.getByTestId('end-season').click()
   await expect(page.getByTestId('month-next')).toBeVisible()
   // A poor second year must not be what stops the building or, next spring, the contractor.
