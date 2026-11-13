@@ -458,7 +458,8 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     // In a later season the crop's own next step comes ahead of a farmstead goal, which waits in the line under it.
     let later: Goal | null = null
     if (season && g && !CROP_STEPS.has(g.id)) { const st = seasonStep(c); if (st) { later = g; g = st } }
-    const then = later ? `then ${later.title.toLowerCase()}${GLOSS[later.id] ? ` (${GLOSS[later.id]})` : ''}` : ''
+    // The line under it names the farmstead goal only while that goal can be taken: not a contract in July.
+    const then = later && later.now && !later.block ? `then ${later.title.toLowerCase()}${GLOSS[later.id] ? ` (${GLOSS[later.id]})` : ''}` : ''
     const gloss = g && GLOSS[g.id] ? GLOSS[g.id]! : ''
     // Before the ground is fit, the planting goal says plainly how long it will be, counting down by the day.
     // (Once the word is given the planting is under way: the slip says how far along it is, not the soil again.)
@@ -482,16 +483,19 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     const reach = !!g && wait <= 0 && g.now && !g.block && (o.canShow?.(g) ?? false)
     const call = season ? pressing(c) : null
     const callFirst = call && !(g && reach && GOAL_ROUTINE[g.id] === call.act)
-    if (callFirst || (season && g && !reach && wait <= 0)) {
-      // The next step is the crew's own: what the player is waiting for, in their terms, never the crew's job.
-      const mine = !callFirst && CROP_STEPS.has(g!.id) ? waitingFor(c) : null
+    // The next step is the crew's own: what the player is waiting for, in their terms, never the crew's job, whether
+    // or not a "Show me" could reach it. With something asked of the player now, that comes first.
+    const mine = !call && season && g && wait <= 0 && CROP_STEPS.has(g.id) ? waitingFor(c) : null
+    // What comes after the pressing call: the next goal, unless that is work the crew does by itself.
+    const crewOwn = (x: Goal) => { const act = GOAL_ROUTINE[x.id]; return !!act && S.routineInfo(c).some(r => r.kind === act && r.auto) }
+    if (callFirst || mine || (season && g && !reach && wait <= 0)) {
       const quiet = h('button', {
         class: `goal${callFirst ? '' : ' later'}`, type: 'button', testid: 'goal', k: callFirst ? `goal-call-${call!.id}` : `goal-later-${g!.id}`, 'data-waiting': mine ? 'crew' : undefined, 'aria-expanded': String(pop === 'goals'),
         title: ctx.touch() ? undefined : callFirst ? F.localize(call!.why) : g!.why,
         onclick: () => { pop = pop === 'goals' ? '' : 'goals'; ctx.dirty() },
       }, callFirst ? fist() : null, h('span', { class: 'goal-body' }, h('span', { class: 'sr' }, callFirst ? 'Now: ' : 'Next goal: '),
-        h('b', { class: 'goal-t' }, callFirst ? F.localize(call!.text) : mine ? mine.title : g!.title),
-        callFirst ? (call!.line ? h('span', { class: 'goal-when' }, call!.line) : g ? h('span', { class: 'goal-when' }, `then ${g.title.toLowerCase()}${reach ? '' : ` (${notYet(c, g)})`}`) : null) : h('span', { class: 'goal-when' }, `${mine ? F.localize(mine.when) : notYet(c, g!)}${then ? ` · ${then}` : ''}`)),
+        h('b', { class: 'goal-t' }, callFirst ? F.localize(call!.text).replace(/\.$/, '') : mine ? mine.title : g!.title),
+        callFirst ? (call!.line ? h('span', { class: 'goal-when' }, call!.line) : g && !crewOwn(g) ? h('span', { class: 'goal-when' }, `then ${g.title.toLowerCase()}${reach ? '' : ` (${notYet(c, g)})`}`) : null) : h('span', { class: 'goal-when' }, `${mine ? F.localize(mine.when) : notYet(c, g!)}${then ? ` · ${then}` : ''}`)),
       h('span', { class: 'sr' }, `. ${callFirst ? F.localize(call!.why) : g!.why} Press to open your goals.`))
       const go = callFirst ? h('button', { class: 'btn goal-go', type: 'button', testid: 'goal-do', onclick: () => takeCall(call!) }, icon(call!.fix ? 'check' : 'arrow', 'i'), call!.fixLabel) : null
       return go ? h('div', { class: 'goal-row' }, quiet, go) : quiet

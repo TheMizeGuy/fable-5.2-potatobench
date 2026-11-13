@@ -475,7 +475,7 @@ export class Notes {
     const row = n.key && n.go
       ? h('div', { class: `alert${kind} lv-${n.level} has-key`, testid: 'alert' }, inner, h('button', { class: 'btn alert-key', type: 'button', testid: 'alert-key', onclick: () => n.go!() }, n.key))
       : n.go || n.field >= 0
-      ? h('button', { class: `alert${kind} lv-${n.level}`, type: 'button', testid: 'alert', onclick: () => (n.go ? n.go() : this.onGo(n.field)) }, inner, h('span', { class: 'sr' }, '. Go there.'))
+      ? h('button', { class: `alert${kind} lv-${n.level}`, type: 'button', testid: 'alert', onclick: () => (n.go ? n.go() : this.onGo(n.field)) }, inner, h('span', { class: 'sr' }, /[.?!]$/.test(n.text) ? ' Go there.' : '. Go there.'))
       : h('div', { class: `alert${kind} lv-${n.level}`, testid: 'notice' }, inner)
     row.dataset.id = n.id
     return row

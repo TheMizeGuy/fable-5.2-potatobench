@@ -137,7 +137,7 @@ export function alertShort(a: Alert): { text: string; glyph: string } {
     case 'scout': return { text: a.level === 'bad' ? `${name}blight on ${F.plural(typeof a.data?.found === 'number' ? a.data.found : Number(n), 'plant')}` : `${name}scouted, no blight`, glyph: a.level === 'bad' ? 'blight' : 'scout' }
     case 'watch': return { text: 'Blight watch is on', glyph: 'blight' }
     case 'sample': return { text: `${name}test dig found ${n} potatoes`, glyph: 'sample' }
-    case 'dug': return { text: `${name}${a.level === 'bad' ? 'froze before it was all dug' : 'harvested'}`, glyph: 'dig' }
+    case 'dug': return { text: `${name}${a.level === 'bad' ? 'froze before it was all dug' : 'all dug'}`, glyph: 'dig' }
     case 'lost': return { text: a.field >= 0 ? `${name}crop lost` : a.text, glyph: 'close' }
     case 'freeze': return { text: 'The ground has frozen', glyph: 'frost' }
     case 'dropped': {
@@ -155,7 +155,7 @@ export function alertShort(a: Alert): { text: string; glyph: string } {
     case 'wornOut': return { text: `${whoIs(a.text)} worn out`, glyph: 'tired' }
     case 'hurt': return { text: `${whoIs(a.text)} hurt${/back on (.+)\.$/.exec(a.text) ? `, back ${/back on (.+)\.$/.exec(a.text)![1]}` : ''}`, glyph: 'hurt' }
     case 'poached': return { text: `${who(a.text)} left to work for the neighbor`, glyph: 'unhappy' }
-    case 'skillUp': return { text: a.text.replace(/ (?:is|are) better at /, ': ').replace(/: level (\d+)\.$/, ' $1'), glyph: 'rise' }
+    case 'skillUp': return { text: a.text.replace(/^You are /, 'You\'re ').replace(/: level (\d+)\.$/, ', now $1 of 10'), glyph: 'rise' }
     case 'breakdown': return { text: 'A tractor broke down', glyph: 'tractor' }
     case 'repaired': return { text: 'The tractor is running again', glyph: 'tractor' }
     case 'building': return { text: F.upper(a.text.replace(/ is started in .*/, ' started').replace(/^An? /, '')), glyph: 'build' }
@@ -564,4 +564,16 @@ export function yearShort(year: number): string {
 export function yearSpan(a: number, b: number): string {
   if (a === b) return yearName(a)
   return `Years ${yearShort(a)} to ${yearShort(b)}`
+}
+
+// Why blight got into a field the crew keeps sprayed, said with the find, from how the leaf stood: nothing where the
+// spraying is the player's own, who knows when they sprayed.
+export function blightWhy(c: S.Campaign, field: number): string {
+  const s0 = c.season
+  if (!s0 || S.sprayWayNow(c) !== 'auto') return ''
+  const f = s0.fields[field]
+  if (!f || f.lastSpray < 0) return 'Got in before the first spray'
+  const days = s0.day - f.lastSpray
+  if (S.fieldInfo(c, field).protect < 0.35) return days <= 4 ? 'Rain washed the spray off' : `Sprayed ${days} days ago, worn off`
+  return 'Spray slows blight, it can\'t stop it all'
 }

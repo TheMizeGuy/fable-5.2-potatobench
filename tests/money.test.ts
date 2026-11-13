@@ -298,7 +298,7 @@ describe('round seven', () => {
       const y = c.history[0]
       if (!y || c.outcome === 'lost') continue
       const said = verdictSays(y, 4, false)
-      if (y.cashEnd < 0) { down++; expect(said, `seed ${seed}`).toMatch(/^You ended \$[\d,]+ down, inside what the bank allows/); expect(said).not.toMatch(/happy/) }
+      if (y.cashEnd < 0) { down++; expect(said, `seed ${seed}`).toMatch(/^You ended \$[\d,]+ in debt, inside what the bank allows/); expect(said).not.toMatch(/happy/) }
       else { up++; expect(said, `seed ${seed}`).toMatch(/^You ended the year with \$[\d,]+ in hand, so the bank is happy\./) }
       expect(y.cashEnd).toBeGreaterThanOrEqual(S.CREDIT_LIMIT)
       expect(Math.round(y.cashStart + y.revenue - y.costs - y.note - y.living - y.interest)).toBe(Math.round(y.cashEnd))

@@ -518,7 +518,9 @@ function remedyFor(why: FieldWhy, f: FieldFacts): JobKind | undefined {
 // Why the year-end figure moved between two looks in the same year, when it moved by MONEY_STEP or more: the part
 // that moved most the same way, a price's move told from the crop's, and the fields together when no one field
 // carries half of it. Its words are five or so, for the board's word budget.
-export function moneyCause(a: MoneyLook, b: MoneyLook): MoneyCause | null {
+// last: the look just before b, when a is further back. A thing that happened to a field (vines killed, a test dig,
+// tubers set) is the cause only if it happened since then, not weeks ago on the way from a.
+export function moneyCause(a: MoneyLook, b: MoneyLook, last: MoneyLook = a): MoneyCause | null {
   const amount = b.after - a.after
   if (a.year !== b.year || Math.abs(amount) < MONEY_STEP) return null
   const d: Record<string, number> = {}
@@ -546,14 +548,14 @@ export function moneyCause(a: MoneyLook, b: MoneyLook): MoneyCause | null {
     else if (crops * sign >= Math.abs(amount) / 2) { part = 'crops'; x = crops }
   }
   const out: MoneyCause = { amount, part, share: x / amount, text: '' }
-  out.text = causeText(a, b, part, x, d, moved, out)
+  out.text = causeText(a, b, part, x, d, moved, out, last.year === b.year ? last : a)
   return out
 }
 
 // The cause as a person says it, its subject first: "Brook Field dry", "Lucien's wages to year end". A field's fall
 // is put down to what the grower can see in it (fieldWhy), with the order that helps; only when nothing seen explains
 // it is it the plain "looks lighter".
-function causeText(a: MoneyLook, b: MoneyLook, part: string, x: number, d: Record<string, number>, moved: Record<string, number>, out: MoneyCause): string {
+function causeText(a: MoneyLook, b: MoneyLook, part: string, x: number, d: Record<string, number>, moved: Record<string, number>, out: MoneyCause, last: MoneyLook): string {
   const up = x > 0
   const first = (name: string) => name.split(' ')[0]
   const seen = (i: number, name: string, many: boolean): string => {
@@ -593,7 +595,7 @@ function causeText(a: MoneyLook, b: MoneyLook, part: string, x: number, d: Recor
   if (part.startsWith('crop:')) {
     const i = Number(part.slice(5))
     const name = FIELD_NAMES[i]
-    const was = a.fields[i]?.facts, now = b.fields[i]?.facts
+    const was = last.fields[i]?.facts ?? a.fields[i]?.facts, now = b.fields[i]?.facts
     if (!now) return `Crop from ${name}`
     if (was && was.status !== 'lost' && now.status === 'lost') return `${name} left in the ground`
     if (now.revenue > (was?.revenue ?? 0) + 0.5) return b.contracts > a.contracts + 0.5 ? `${name} delivered on contract` : `${name} sold`
@@ -629,7 +631,8 @@ function causeText(a: MoneyLook, b: MoneyLook, part: string, x: number, d: Recor
 
 // The board's watch on the year-end figure. since: the look the last cause was said from; before: the one before that,
 // and part: what that cause was; counted: the year a sale that left the figure where it was has been said.
-export interface MoneyWatch { since: MoneyLook; before: MoneyLook | null; part?: string; counted: number }
+// today: the newest look; last: the newest from before that look's day (several looks come in a day, one after each order).
+export interface MoneyWatch { since: MoneyLook; before: MoneyLook | null; part?: string; counted: number; last?: MoneyLook; today?: MoneyLook }
 
 // A move of MONEY_STEP or more since the last line said, however slowly it came, is said with its cause. Field work
 // spent that only takes back the crop's last rise (a cost counted ahead, then paid) is not a change of the figure: it
@@ -639,15 +642,17 @@ export function moneyWatch(w: MoneyWatch | null, now: MoneyLook): { cause: Money
   if (!w || w.since.year !== now.year || w.since.phase === 'plan' || now.phase === 'plan') {
     return { cause: null, watch: { since: now, before: null, counted: w && w.since.year === now.year ? w.counted : -1 }, cancel: false }
   }
-  const cause = moneyCause(w.since, now)
+  const today = w.today ?? w.since
+  const last = now.day !== today.day || now.phase !== today.phase ? today : w.last ?? w.since
+  const cause = moneyCause(w.since, now, last)
   if (cause && cause.part === 'orders' && /^(crop|sprays)/.test(w.part ?? '') && w.before && Math.abs(now.after - w.before.after) < MONEY_STEP / 2) {
-    return { cause: null, watch: { since: now, before: null, counted: w.counted }, cancel: true }
+    return { cause: null, watch: { since: now, before: null, counted: w.counted, last, today: now }, cancel: true }
   }
-  if (cause) return { cause, watch: { since: now, before: w.since, part: cause.part, counted: w.counted }, cancel: false }
+  if (cause) return { cause, watch: { since: now, before: w.since, part: cause.part, counted: w.counted, last, today: now }, cancel: false }
   if (w.counted !== now.year && now.sold - w.since.sold >= MONEY_STEP && Math.abs(now.after - w.since.after) < MONEY_STEP) {
-    return { cause: { amount: 0, part: 'sold', share: 1, text: 'Sold what was already counted' }, watch: { since: now, before: null, counted: now.year }, cancel: false }
+    return { cause: { amount: 0, part: 'sold', share: 1, text: 'Sold what was already counted' }, watch: { since: now, before: null, counted: now.year, last, today: now }, cancel: false }
   }
-  return { cause: null, watch: w, cancel: false }
+  return { cause: null, watch: { ...w, last, today: now }, cancel: false }
 }
 
 // What a field's crop should come to at the dig, total cwt an acre with its give-or-take: before the tubers set, what
