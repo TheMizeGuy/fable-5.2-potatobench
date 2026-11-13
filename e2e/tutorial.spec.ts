@@ -553,7 +553,8 @@ test('"Planting has started" waits for the planting, and its Show me goes to the
 })
 
 // A harvest where frost is forecast on the first barrels, before any ticket: the days run by the test to the evening
-// of the warning with the game at 1x. Returns the speed after that day and why the clock says it stopped.
+// of the warning with the game at 1x. Returns the speed after that day and why the clock says it stopped, and leaves
+// the game stopped there (at 1x the next day, and its news, would come four seconds later).
 async function toFrostWarning(page: Page, guided: boolean): Promise<{ speed: number; why: string; farm: string }> {
   await open(page)
   return page.evaluate(guided => {
@@ -570,7 +571,12 @@ async function toFrostWarning(page: Page, guided: boolean): Promise<{ speed: num
         for (const i of [...c.incidents]) app.do({ t: 'answer', incident: i.id, choice: sim.defaultChoice(i) })
         app.setSpeed(1)
         const r = app.do({ t: 'day' })
-        if (r.events.some((e: any) => e.type === 'frostBarrels')) return { speed: app.speed as number, why: app.pauseReason as string, farm: `1995, seed ${seed}, day ${c.season.day}` }
+        if (r.events.some((e: any) => e.type === 'frostBarrels')) {
+          // What the clock did by itself is read here; then it is stopped by the test, so the screen holds still to be looked at.
+          const at = { speed: app.speed as number, why: app.pauseReason as string, farm: `1995, seed ${seed}, day ${c.season.day}` }
+          app.setSpeed(0)
+          return at
+        }
       }
     }
     return { speed: -1, why: 'no frost warning before the first ticket', farm: '' }
@@ -584,8 +590,6 @@ test('frost forecast on the barrels is a toast, not a pause, for a player withou
   const at = await toFrostWarning(page, false)
   expect(at.speed, `${at.farm}: paused with "${at.why}"`).toBe(1)
   await expect(page.locator('#ui .notes .alert').filter({ hasText: 'Frost tonight' })).toBeVisible()
-  await page.waitForTimeout(600)
-  expect(await game<number>(page, 'app.speed')).toBe(1)
   expect(errors, errors.join('\n')).toEqual([])
 })
 
@@ -596,8 +600,6 @@ test('in the guided year a frost warning the agent has explained once comes as a
   const at = await toFrostWarning(page, true)
   expect(at.speed, `${at.farm}: paused with "${at.why}"`).toBe(1)
   await expect(page.locator('#ui .notes .alert').filter({ hasText: 'Frost tonight' })).toBeVisible()
-  await page.waitForTimeout(600)
-  expect(await game<number>(page, 'app.speed')).toBe(1)
   await expect(page.locator('#ui [data-testid="guide-slip"]:not([hidden])')).toHaveCount(0)
   expect(errors, errors.join('\n')).toEqual([])
 })
