@@ -116,8 +116,9 @@ function yearOnFarm(c: S.Campaign): HTMLElement | null {
       const hire = all.map(t => /^is hired as (.+?) at /.exec(t)?.[1]).find(Boolean)
       const lines = paid.has(who) ? all.filter(t => !/^is hired /.test(t)) : all
       const pay = paid.get(who)?.replace(/^hired /, hire ? `hired as ${hire} ` : 'hired ')
-      const said = [...lines, ...(pay ? [lines.length ? F.upper(pay) : pay] : [])].map((t, k) => k ? F.upper(t) : t).join(' ')
-      return h('p', { class: 'ppl' }, portrait(who, 30), h('span', null, h('b', null, who), lines.length ? ` ${said}` : `, ${said}`))
+      // Someone on the books: their pay first, joined to their name, then what else the year held, each a sentence.
+      const said = pay ? [pay, ...lines.map(t => F.upper(t))].join(' ') : lines.map((t, k) => k ? F.upper(t) : t).join(' ')
+      return h('p', { class: 'ppl' }, portrait(who, 30), h('span', null, h('b', null, who), pay ? `, ${said}` : ` ${said}`))
     }),
     farm.map(d => h('p', { class: 'ppl' }, icon(d.icon ?? 'yard', 'i'), h('span', null, d.text))))
 }

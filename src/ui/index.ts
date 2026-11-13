@@ -90,6 +90,10 @@ export const mountHud: MountHud = (root, app, view, sound) => {
   function answer(text: string): void {
     notes.push({ text, level: 'info', ttl: ANSWER_MS })
     if (!root.classList.contains('noting') && !papers.isOpen() && !app.holding) return
+    // One telling: the tip is not shown, or is taken back, when the note that is up says the same words.
+    const told = () => [...guideLayer.children].some(x => x !== tip && (x.textContent ?? '').replace(/\s+/g, ' ').includes(localize(text).replace(/\s+/g, ' ').slice(0, 28)))
+    if (told()) return
+    setTimeout(() => { if (told()) tip.hidden = true }, 500)
     tip.textContent = localize(text)
     tip.hidden = false
     tip.style.left = `${Math.max(8, Math.min(innerWidth - 328, pressedAt.x + 14))}px`
@@ -138,6 +142,35 @@ export const mountHud: MountHud = (root, app, view, sound) => {
     document.documentElement.classList.toggle('reduce-motion', app.settings.reducedMotion)
   }
   applySettings()
+
+  // An ask stands while one of its fields still needs that order and has none on the list; a warning about barrels,
+  // while barrels are out. Once it no longer holds it is taken down, so nothing on screen asks for what is done.
+  const standing: { full: string; act: string; fields: number[] }[] = []
+  function settle(): void {
+    const c = app.campaign
+    if (!standing.length) return
+    const s0 = c?.phase === 'season' ? c.season : null
+    const needs = s0 ? app.needs() : []
+    for (let k = standing.length - 1; k >= 0; k--) {
+      const x = standing[k]
+      const holds = !!s0 && (x.act === 'haul'
+        ? (x.fields.length ? x.fields : s0.fields.map((_, i) => i)).some(i => (s0.fields[i]?.inField ?? 0) >= 0.5)
+        : x.fields.some(i => needs[i]?.need?.act === x.act && !s0.jobs.some(j => j.kind === x.act && j.field === i)))
+      if (!holds) { notes.forget(x.full); standing.splice(k, 1) }
+    }
+  }
+
+  // Why blight got into a field the crew keeps sprayed: said with the find, from how the leaf stood.
+  function blightWhy(c: S.Campaign, field: number): string {
+    const s0 = c.season
+    if (!s0 || S.sprayWayNow(c) !== 'auto') return ''
+    const f = s0.fields[field]
+    const info = S.fieldInfo(c, field)
+    if (!f || f.lastSpray < 0) return 'It got in before the first spray'
+    const days = s0.day - f.lastSpray
+    if (info.protect < 0.35) return days <= 4 ? 'Rain washed the last spray off' : `Last sprayed ${days} days ago, worn off`
+    return 'Spray can\'t cure a plant that already has it'
+  }
 
   // Runs after every command, so when a day's events arrive this still holds the day before.
   function remember(): void {
@@ -242,11 +275,17 @@ export const mountHud: MountHud = (root, app, view, sound) => {
         // Frost over barrels names no one field: the note goes to the biggest haul, where the barrels and the hauler show.
         const field = a.type === 'frostBarrels' && app.campaign ? S.haulInfo(app.world, app.campaign).sort((x, y) => y.cwt - x.cwt)[0]?.field ?? -1 : a.field
         const go = screen?.goFor?.(a)
-        notes.push({ level: a.level, glyph: short.glyph, text: short.text, full: a.text, field, day: a.day, go, key: go ? KEYED[a.type] : undefined })
+        // Blight found where the spraying is left to the crew: why it got in, by how the leaf stood when it was found.
+        const why = a.type === 'scout' && a.level === 'bad' && app.campaign && a.field >= 0 ? blightWhy(app.campaign, a.field) : ''
+        notes.push({ level: a.level, glyph: short.glyph, text: why ? `${short.text}. ${why}` : short.text, full: why ? `${a.text} ${why}.` : a.text, field, day: a.day, go, key: go ? KEYED[a.type] : undefined })
+        // What an ask or a warning stands on, so it comes down once that is no longer so.
+        if (a.type === 'need' && typeof a.data?.act === 'string') standing.push({ full: why ? `${a.text} ${why}.` : a.text, act: a.data.act, fields: Array.isArray(a.data.fields) ? a.data.fields as number[] : [a.field] })
+        else if (a.type === 'frostBarrels' || a.type === 'barrelsOut') standing.push({ full: a.text, act: 'haul', fields: a.type === 'barrelsOut' ? [a.field] : [] })
         break
       }
       case 'change':
         remember()
+        settle()
         dirty = true
         break
       case 'settings':

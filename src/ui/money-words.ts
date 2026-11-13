@@ -83,9 +83,10 @@ export function limitSays(m: S.MoneyNow, rescue: { what: string; gains: number }
 // The ledger's verdict, by the bank's own rule (campaign.ts, closeYear): in hand, or down but inside the limit.
 export function verdictSays(y: S.YearSummary, left: number, kept: boolean): string {
   const more = left > 0 ? ` ${F.upper(F.plural(left, 'season'))} to go.` : ''
-  if (kept) return y.cashEnd >= 0 ? 'The farm is yours, and the bank is happy.' : `The farm is yours. You ended ${F.money(-y.cashEnd)} down, inside what the bank allows.`
+  if (kept) return y.cashEnd >= 0 ? 'The farm is yours, and the bank is happy.' : `The farm is yours. You ended ${F.money(-y.cashEnd)} in debt, inside what the bank allows.`
   if (y.cashEnd >= 0) return `You ended the year with ${F.money(y.cashEnd)} in hand, so the bank is happy.${more}`
-  return `You ended ${F.money(-y.cashEnd)} down, inside what the bank allows, so it carries you another year.${more}`
+  // "In debt", not "down": the lines beside it use "down" for cash against the year's start, which is another figure.
+  return `You ended ${F.money(-y.cashEnd)} in debt, inside what the bank allows, so it carries you another year.${more}`
 }
 
 // The ledger's first line: from what was sold to what was kept.
