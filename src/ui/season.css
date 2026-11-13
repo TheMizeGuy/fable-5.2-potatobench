@@ -193,7 +193,14 @@
 .season-screen .command .orders.slots .order.is-suggested .fist { display: none; }
 .season-screen .command .orders.slots .order.is-off { background: transparent; box-shadow: inset 0 0 0 1px var(--hair); cursor: help; }
 .season-screen .command .orders.slots .order.is-off > :not(.catch) { opacity: .45; }
-.season-screen .command .order-say { min-height: calc(2.6em + 8px); padding: 4px 18px 6px; font-size: 15px; }
+/* The line under the orders. Room for two lines is kept by a strut inside it, never by a min-height: a row of the
+   card's grid can be squeezed down to a min-height when the card is held to the land's room, and its words would then
+   print over the next line; a row sized by what is in it cannot be. */
+.season-screen .command .order-say { display: flow-root; min-height: auto; padding: 4px 18px 6px; font-size: 15px; }
+.season-screen .command .order-say::before { content: ''; float: left; width: 0; height: 2.6em; }
+/* While it says what the stamp under the pointer does, it takes the place of the line about whose work is whose. */
+.season-screen .command .order-say.is-telling + .whose-box { display: none; }
+.season-screen .command .order-say.is-telling::before { height: 3.9em; }
 .season-screen .command .land-orders { padding-top: 0; }
 .season-screen .command.compact .order.is-suggested .fist { display: none; }
 .season-screen .command.in { animation: lay-right var(--t-sheet) var(--ease-paper); }
@@ -253,10 +260,34 @@
   .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .orders.slots { gap: 5px; padding: 8px 12px 2px; }
   .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .orders.slots .order { grid-template-rows: 22px 16px 14px; height: 61px; padding: 3px 8px 5px; gap: 0 6px; }
   .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .orders.slots .order .name { font-size: 16px; }
-  .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .order-say { min-height: 0; padding: 3px 16px 4px; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .order-say { padding: 3px 16px 4px; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .order-say::before { height: 0; }
+  /* A stamp's line stands where the two lines about whose work is whose stood, at their size: the card keeps its
+     height while the pointer goes over the stamps (a third line makes it one line taller). */
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .order-say.is-telling { padding: 3px 16px 5px; font-size: 13.5px; line-height: 1.3; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .order-say.is-telling::before { height: 2.6em; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .whose-box > .whose:first-child { display: flow-root; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .whose-box > .whose:first-child::before { content: ''; float: left; width: 0; height: 2.6em; }
   .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .whose { padding: 3px 16px 5px; font-size: 13.5px; line-height: 1.3; }
   .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .whose > .quiet:first-child { display: none; }
   .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .readings { gap: 3px; padding: 6px 16px 7px; font-size: 14.5px; }
+}
+/* The same of a person's page: whole in a 720-line window, beside the people bar it was opened from. */
+@media (max-height: 800px) {
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .person-card { padding: 10px 16px 12px; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .person-card .pc-head { grid-template-columns: 52px 1fr auto; gap: 12px; padding-bottom: 7px; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .person-card .pc-head .ringed .bust { width: 52px; height: 52px; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .person-card .pc-name { font-size: 23px; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .person-card .pc-trait { margin-top: 2px; font-size: 14px; line-height: 1.25; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .person-card .pc-doing { padding: 5px 0 0; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .person-card .skills { margin: 4px 0 4px; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .person-card .skills th { height: 27px; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .person-card .prio.key { height: 25px; font-size: 16px; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .person-card .state { gap: 2px; padding: 5px 0; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .person-card .rest-keys { padding: 5px 0 0; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .person-card .rest-keys .btn { min-height: 32px; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .person-card .pay { padding: 5px 0 7px; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .person-card .pc-actions .btn { min-height: 46px; padding: 4px 10px; }
 }
 .season-screen[data-layout='mid'] .command:not(.compact) { width: 400px; }
 .season-screen[data-layout='mid'] .command.compact { width: 440px; }

@@ -300,6 +300,41 @@ describe('keeping off the other tags and people', () => {
     expect(c.x - tag.right).toBeLessThanOrEqual(60)
   })
 
+  it('a chip in the people bar, with the work list between it and the land: the card is whole, above the list or beside the bars', () => {
+    // As a player had it at 1280 by 800: the slip under the date board, the work list over the people bar, a toast.
+    const win: Box = { left: 8, top: 171, right: 1272, bottom: 792 }
+    const slip: Box = { left: 35, top: 166, right: 483, bottom: 214 }
+    const list: Box = { left: 16, top: 617, right: 348, bottom: 661 }
+    const bar: Box = { left: 16, top: 668, right: 240, bottom: 784 }
+    const chip: Box = { left: 106, top: 676, right: 189, bottom: 776 }
+    const blocks = [list, bar, slip, { left: 1059, top: 276, right: 1264, bottom: 316 }]
+    const toast = { left: 364, top: 740, right: 739, bottom: 782, weight: 4 }
+    const at = { x: 147, y: 725 }
+    const box = (c: { x: number; y: number; h: number }, w: number): Box => ({ left: c.x, top: c.y, right: c.x + w, bottom: c.y + c.h })
+    // A card short enough stands right over the list, over its chip.
+    const small = placeCard({ point: at, size: { w: 452, h: 360 }, win, blocks, keep: chip, others: [toast] })
+    expect(small.side).toBe('above')
+    expect(small.h).toBe(360)
+    expect(small.y + small.h).toBe(list.top - 6)
+    expect(small.aside).toBe(false)
+    // A person's whole page is taller than the land over the list: it stands beside the list and the bar, whole.
+    for (const h of [474, 530]) {
+      const c = placeCard({ point: at, size: { w: 452, h }, win, blocks, keep: chip, others: [toast] })
+      const r = box(c, 452)
+      expect(c.h, `${h}`).toBe(h)
+      expect(blocks.some(b => meets(r, b)), `${h} on a bar`).toBe(false)
+      expect(r.top, `${h}`).toBeGreaterThanOrEqual(win.top)
+      expect(r.bottom, `${h}`).toBeLessThanOrEqual(win.bottom)
+      expect(c.aside, `${h}`).toBe(true)
+      expect(c.x - chip.right, `${h}`).toBeLessThanOrEqual(ASIDE)
+    }
+    // With room to, it keeps off the toast as well.
+    expect(meets(box(placeCard({ point: at, size: { w: 452, h: 474 }, win, blocks, keep: chip, others: [toast] }), 452), toast)).toBe(false)
+    // Never a strip: whatever the height asked, it is given at least the land over the list.
+    const tall = placeCard({ point: at, size: { w: 452, h: 700 }, win, blocks, keep: chip })
+    expect(tall.h).toBeGreaterThanOrEqual(380)
+  })
+
   it('carried by the camera it lies as it lay: a tag passing under it does not make it jump', () => {
     const size = { w: 430, h: 260 }
     const tag: Box = { left: 640, top: 345, right: 800, bottom: 385 }

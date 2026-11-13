@@ -115,6 +115,35 @@ const PROBE = `window.__a = {
   up(id, thing) { const c = this.cards().find(x => x.id === id && (!thing || x.thing === thing)); return !!c && !!(c.side || id === 'order-card' || c.notch || innerWidth < 900) },
   // From the next press: how long until the card for the thing stands where it is to stand, measured in the page
   // (frame by frame), in milliseconds.
+  // Every line of text a sighted player reads inside a card, and each pair of lines (of different blocks) that lie
+  // over one another.
+  overlaps(id) {
+    const el = document.querySelector('#ui [data-testid="' + id + '"]')
+    if (!this.vis(el)) return ['the card is not up']
+    const lines = []
+    const range = document.createRange()
+    for (const e of el.querySelectorAll('*')) {
+      if (e.closest('.sr, [hidden], [aria-hidden="true"]') || !this.vis(e)) continue
+      const cs = getComputedStyle(e)
+      if (cs.visibility === 'hidden' || cs.opacity === '0') continue
+      for (const n of e.childNodes) {
+        if (n.nodeType !== 3 || !(n.nodeValue || '').trim()) continue
+        range.selectNodeContents(n)
+        for (const r of range.getClientRects()) if (r.width > 1 && r.height > 1) lines.push({ e, r, text: (n.nodeValue || '').trim().slice(0, 28) })
+      }
+    }
+    const out = []
+    for (let i = 0; i < lines.length; i++) for (let j = i + 1; j < lines.length; j++) {
+      const p = lines[i], q = lines[j]
+      if (p.e === q.e || p.e.contains(q.e) || q.e.contains(p.e)) continue
+      // (two runs of one paragraph share its lines: only different blocks count)
+      const block = x => x.closest('p, li, button, h2, td, th, dd, dt, header > div') || x
+      if (block(p.e) === block(q.e)) continue
+      const x = Math.min(p.r.right, q.r.right) - Math.max(p.r.left, q.r.left), y = Math.min(p.r.bottom, q.r.bottom) - Math.max(p.r.top, q.r.top)
+      if (x > 2 && y > 3) out.push('"' + p.text + '" over "' + q.text + '" by ' + Math.round(x) + ' x ' + Math.round(y) + ' px')
+    }
+    return [...new Set(out)].slice(0, 6)
+  },
   arm(id, thing) {
     const run = window.__run = {}
     window.__ms = -1
@@ -230,13 +259,15 @@ async function hold(page: Page, k: Case, label: string, close: 'Escape' | 'groun
   expect.soft(bars.filter(b => meets(c.rect, b)), say('clear of the top boards and the foot\'s bars')).toEqual([])
   if (k.onBar) {
     // A chip stands in the people bar under the list: its card stands directly over them, above the chip.
+    // (or, too tall for the land over the list, beside the list and the bar: then it has stepped aside, whole)
     const tops = bars.filter(b => b.left < c.rect.right && b.right > c.rect.left && b.top > size.height / 2).map(b => b.top)
-    expect.soft(Math.min(...tops) - c.rect.bottom, say('stands right over the list and the people bar')).toBeLessThanOrEqual(16)
+    if (!c.aside) expect.soft(Math.min(...tops) - c.rect.bottom, say('stands right over the list and the people bar')).toBeLessThanOrEqual(16)
   }
   // Beside what was clicked: the point on the land, or the handle (the tag, the chip, the order) when it was one.
   // Where the land beside it is too short for the whole card (a short window, between the slip under the date board
   // and the people bar), the card steps along that side, clear of the bar, whole and still tied: no further than 190 px.
-  const reach = c.aside ? 190 : 60
+  // (a chip stands on the people bar under the work list: its card stands over the list, the list's height further off)
+  const reach = c.aside ? 190 : k.onBar ? 100 : 60
   if (c.aside) expect.soft(c.fits && !c.cut, say('stepped aside from the point, it is whole')).toBe(true)
   if (k.handle) expect.soft(apart(c.rect, k.handle), say(`its nearest edge is within ${reach} px of the handle clicked (${Math.round(apart(c.rect, k.handle))} px)`)).toBeLessThanOrEqual(reach)
   else expect.soft(away(c.rect, from), say(`its nearest edge is within ${reach} px of the point clicked (${Math.round(away(c.rect, from))} px)`)).toBeLessThanOrEqual(reach)
@@ -633,6 +664,115 @@ test('clicking another thing moves the card; Shift adds a field to it; the card 
   await expect.poll(async () => !!(await cards(page))[0]?.end, { timeout: 5000 }).toBe(true)
   expect(errors, errors.join('\n')).toEqual([])
 })
+
+// A farm with a second person, in its first May, as a player has it a few clicks in: two orders in the work list.
+async function twoPeople(page: Page): Promise<void> {
+  await open(page, '?year=1990&seed=7')
+  await reach(page, `q.g().app.do({ t: 'hire', kind: 'hand' })`)
+  await page.getByTestId('begin-season').click()
+  await expect(page.getByTestId('date')).toBeVisible()
+  // Paused the way a player pauses: with Space. Nothing in this test resumes it until it says so.
+  await page.keyboard.press('Space')
+  await expect.poll(() => page.evaluate(() => (globalThis as unknown as { __county: { app: { speed: number } } }).__county.app.speed)).toBe(0)
+  await putAway(page)
+  await page.evaluate(PROBE)
+}
+
+// Two orders in the work list and a toast at the foot, as they stood when the player clicked.
+async function listAndToast(page: Page): Promise<void> {
+  const n = await a<number>(page, `const c = app.campaign
+    for (const j of [...c.season.jobs]) app.do({ t: 'cancel', id: j.id })
+    for (const [kind, field] of [['plant', 0], ['plant', 2], ['plant', 4], ['plant', 5], ['scout', 0], ['scout', 2]]) { if (c.season.jobs.length >= 2) break; app.do({ t: 'job', kind, field }) }
+    app.notice('Planting has started in South Ridge.')
+    return c.season.jobs.length`)
+  expect(n, 'two orders are on the work list').toBeGreaterThanOrEqual(2)
+  await expect(page.locator('#ui .queue .q[data-testid^="queue-"]').first()).toBeVisible()
+  await expect(page.locator('#ui [data-testid="notice"], #ui .notes .alert').first()).toBeVisible()
+}
+
+for (const [w, h] of [[1280, 800], [1280, 720]] as const) {
+  test(`a person's card opened from their chip is whole, paused and running, ${w} by ${h}`, async ({ page, isMobile, browserName }) => {
+    test.skip(isMobile || browserName !== 'chromium', 'the desk rule')
+    test.setTimeout(180_000)
+    const errors = watchErrors(page)
+    await page.setViewportSize({ width: w, height: h })
+    await twoPeople(page)
+    const people = await a<{ id: number; name: string }[]>(page, `return app.campaign.crew.map(u => ({ id: u.id, name: u.kind === 'farmer' ? 'You' : u.name.split(' ')[0] }))`)
+    expect(people.length).toBe(2)
+    for (const state of ['paused', 'running'] as const) {
+      if (state === 'running') {
+        await page.getByTestId('speed-1').click()
+        await expect.poll(() => a<number>(page, 'return app.speed')).toBe(1)
+      } else expect(await a<number>(page, 'return app.speed'), 'still paused: never resumed since the pause').toBe(0)
+      for (const p of people) {
+        await listAndToast(page)
+        const say = (m: string) => `${w}x${h}, ${state}, ${p.name}'s chip: ${m}`
+        const chip = page.getByTestId(`unit-${p.id}`)
+        await chip.click()
+        expect(await a<number>(page, `return A.shown('person-card', 'person-${p.id}')`), say('their card opens')).toBeGreaterThanOrEqual(0)
+        await page.waitForTimeout(450)
+        const c = (await cards(page)).find(x => x.id === 'person-card')!
+        if (SHOTS) await page.screenshot({ path: `${SHOTS}/chip-${w}x${h}-${state}-${p.name}.png` })
+        expect.soft(c.fits, say(`nothing in it has to be scrolled to (scroll and client heights ${c.room.join(', ')})`)).toBe(true)
+        expect.soft(c.cut, say('it was not cut to the room there was')).toBe(false)
+        expect.soft(c.rect.bottom - c.rect.top, say('it stands at its whole height')).toBeGreaterThanOrEqual(c.room[0] - 1)
+        expect.soft(c.rect.left >= -0.5 && c.rect.top >= -0.5 && c.rect.right <= w + 0.5 && c.rect.bottom <= h + 0.5, say(`its box lies inside the window (${JSON.stringify(c.rect)})`)).toBe(true)
+        // The name and every control: inside the card's box and the window.
+        const out = await a<string[]>(page, `const el = document.querySelector('#ui [data-testid="person-card"]'); const r = el.getBoundingClientRect()
+          return [el.querySelector('[data-testid="person-name"]'), ...el.querySelectorAll('button')].filter(x => x && A.vis(x)).filter(x => { const b = x.getBoundingClientRect(); return b.top < r.top - 0.5 || b.bottom > r.bottom + 0.5 || b.left < r.left - 0.5 || b.right > r.right + 0.5 || b.top < 0 || b.bottom > innerHeight || b.left < 0 || b.right > innerWidth }).map(x => x.dataset.testid || x.className)`)
+        expect.soft(out, say('the name and every control are inside it and the window')).toEqual([])
+        await expect.soft(page.getByTestId('person-name'), say('names them')).toContainText(p.name === 'You' ? 'You' : p.name)
+        const bars = await a<Box[]>(page, `return A.rects('.timebook, .queue, .topbar .almanac > .mount, .topbar .bank > .mount')`)
+        expect.soft(bars.filter(b => meets(c.rect, b)), say('not over the people bar, the work list or the boards')).toEqual([])
+        expect.soft(c.end, say('its tether is drawn')).not.toBeNull()
+        await chip.click()
+        await page.waitForTimeout(300)
+        expect.soft((await cards(page)).map(x => x.id), say('a second press on the chip puts the card away')).toEqual([])
+      }
+    }
+    expect(errors, errors.join('\n')).toEqual([])
+  })
+}
+
+for (const [w, h] of [[1280, 800], [1280, 720], [1512, 982]] as const) {
+  test(`hovering a stamp never prints one text over another in a field's card, ${w} by ${h}`, async ({ page, isMobile, browserName }) => {
+    test.skip(isMobile || browserName !== 'chromium', 'a pointer over a stamp')
+    test.setTimeout(180_000)
+    const errors = watchErrors(page)
+    await page.setViewportSize({ width: w, height: h })
+    await farm(page)
+    const names = await a<string[]>(page, 'return sim.FIELD_NAMES')
+    const { all } = await potatoFields(page)
+    let stamps = 0
+    for (const f of all.slice(0, 2)) {
+      const at = await a<Pt | null>(page, `return A.tagSpot(${f.i}) || A.fieldSpot(${f.i})`)
+      if (!at) continue
+      await page.mouse.click(at.x, at.y)
+      expect(await a<number>(page, `return A.shown('card', 'field-${f.i}')`)).toBeGreaterThanOrEqual(0)
+      await page.waitForTimeout(400)
+      expect.soft(await a<string[]>(page, `return A.overlaps('card')`), `${w}x${h}, ${names[f.i]}: no text over another before any stamp is pointed at`).toEqual([])
+      const corner = (await cards(page)).find(x => x.id === 'card')!.rect
+      const ids = await a<string[]>(page, `return [...document.querySelectorAll('#ui [data-testid="card"] .orders .order')].filter(b => A.vis(b)).map(b => b.dataset.testid)`)
+      for (const id of ids) {
+        const b = (await page.locator(`#ui [data-testid="card"] [data-testid="${id}"]`).boundingBox())!
+        await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2)
+        await page.waitForTimeout(140)
+        stamps++
+        const over = await a<string[]>(page, `return A.overlaps('card')`)
+        if (over.length && SHOTS) await page.screenshot({ path: `${SHOTS}/hover-${w}x${h}-${names[f.i].replace(/\W+/g, '-')}-${id}.png` })
+        expect.soft(over, `${w}x${h}, ${names[f.i]}, the pointer over ${id}: no text printed over another`).toEqual([])
+        // The stamps hold their places while the pointer moves over them: the next one is where it was aimed at.
+        const now = (await cards(page)).find(x => x.id === 'card')!.rect
+        expect.soft([Math.round(now.left), Math.round(now.top)], `${w}x${h}, ${names[f.i]}, the pointer over ${id}: the card's corner holds`).toEqual([Math.round(corner.left), Math.round(corner.top)])
+      }
+      if (SHOTS) await page.screenshot({ path: `${SHOTS}/hover-${w}x${h}-${names[f.i].replace(/\W+/g, '-')}.png` })
+      await page.mouse.move(4, h / 2)
+      await letGo(page)
+    }
+    expect(stamps, 'stamps were pointed at').toBeGreaterThanOrEqual(9)
+    expect(errors, errors.join('\n')).toEqual([])
+  })
+}
 
 test('on a phone the card is a sheet at the foot, headed with the thing, notched toward it, and the thing stays in view above it', async ({ page, isMobile }) => {
   test.skip(!isMobile, 'the phone\'s sheet')
