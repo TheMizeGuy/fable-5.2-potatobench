@@ -73,7 +73,7 @@ const STOP_FOR = new Set(['weighed', 'incident', 'freeze'])
 const NOTABLE = new Set([
   'dug', 'weighed', 'sample', 'skinSet', 'emerged', 'ti', 'mature', 'watch',
   'skillUp', 'hired', 'quit', 'hurt', 'poached', 'incident', 'incidentDone', 'breakdown', 'repaired',
-  'felled', 'stumped', 'tiled', 'rocks', 'brushed', 'brushBack', 'building', 'built', 'pondDry', 'frozenInField',
+  'felled', 'stumped', 'tiled', 'rocks', 'brushed', 'brushBack', 'building', 'built', 'pondDry', 'frozenInField', 'crewKill',
   'plantAsk', 'plantWord',
 ])
 const ALERTS_KEPT = 24

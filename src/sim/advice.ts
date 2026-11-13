@@ -252,9 +252,15 @@ export function standingOrders(world: World, c: Campaign): GameEvent[] {
     if (by) addJob(c, a.act, a.field, -1, by)
   }
   // The vines' kill, overdue where the dig is the routine's: the crew sees to it rather than dig green.
+  // Said in one line, so stamps the player had not pressed are seen to go to the list, not to vanish.
+  const killing: number[] = []
   for (let i = 0; i < P.FIELD_COUNT; i++) {
     const when = killByItself(c, i, all)
-    if (when >= 0 && s.day >= when && !s.jobs.some(j => j.kind === 'kill' && j.field === i)) addJob(c, 'kill', i, -1, 'routine')
+    if (when >= 0 && s.day >= when && !s.jobs.some(j => j.kind === 'kill' && j.field === i) && !addJob(c, 'kill', i, -1, 'routine')) killing.push(i)
+  }
+  if (killing.length) {
+    out.push({ day: s.day, type: 'crewKill', field: killing[0], level: 'info', data: { fields: killing },
+      text: `Your crew has put the vine kill ${killing.length > 1 ? `in ${killing.length} fields` : `in ${FIELD_NAMES[killing[0]]}`} on the work list, so the skins set before the harvest.` })
   }
   const cold: string[] = []
   for (let i = 0; i < P.FIELD_COUNT; i++) {

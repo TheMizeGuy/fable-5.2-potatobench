@@ -31,7 +31,7 @@ describe('haul it in now', () => {
     expect(r.ok, r.err).toBe(true)
     expect(s.jobs[0]).toMatchObject({ kind: 'haul', field, unit: 0 })
     expect(S.workday(c, s)).toBe(true)
-    expect(r.events[0].text).toMatch(/^You're hauling .+ now\. One tractor brings in about [\d,]+ cwt by dark(, so about [\d,]+ cwt will stay out|, which is all of it)\.$/)
+    expect(r.events[0].text).toMatch(/^You're hauling .+ now\. It's a day off, so it tires you as a working day does\. One tractor brings in about [\d,]+ cwt by dark(, so about [\d,]+ cwt will stay out|, which is all of it)\.$/)
     const by = S.haulByDark(c, field)!
     expect(S.apply(world, c, { t: 'day' }).ok).toBe(true)
     expect(s.worked.some(w => w.kind === 'haul' && w.field === field && w.unit === 0)).toBe(true)

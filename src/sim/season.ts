@@ -575,9 +575,19 @@ function exposure(c: Campaign, s: Season, d: Day, out: GameEvent[]): void {
     if (tmin <= P.FREEZE_IN_FIELD) {
       const frozen = f.inField * P.FREEZE_SHARE
       lose(f, lot, frozen, 'frost')
-      if (frozen >= 0.5) push(s, out, 'frozenInField', i, 'bad', `A hard frost hit the barrels in ${FIELD_NAMES[i]}, and ${withCommas(frozen)} cwt froze before it was hauled in.`, { cwt: Math.round(frozen) })
+      // a frost nobody forecast is said to be one, so it doesn't read as a warning that went astray
+      if (frozen >= 0.5) {
+        push(s, out, 'frozenInField', i, 'bad', s.frostHaul === s.day
+          ? `A hard frost hit the barrels in ${FIELD_NAMES[i]}, and ${withCommas(frozen)} cwt froze before it was hauled in.`
+          : `An unforecast frost hit the barrels in ${FIELD_NAMES[i]}, and ${withCommas(frozen)} cwt froze. The forecast missed it, as it sometimes does.`, { cwt: Math.round(frozen) })
+      }
     }
     if (bright) lose(f, lot, f.inField * P.GREEN_IN_FIELD, 'green')
+    // Barrels standing out three days: said once, with what the sun has cost so far.
+    if (s.day - lot.dugDay >= P.BARRELS_SAY && f.inField >= 0.5 && !(s.barrelsSaid ?? []).includes(i)) {
+      s.barrelsSaid = [...(s.barrelsSaid ?? []), i]
+      push(s, out, 'barrelsOut', i, 'warn', `The barrels in ${FIELD_NAMES[i]} have stood out ${s.day - lot.dugDay} days, and ${withCommas(Math.round(lot.loss.green))} cwt has gone green in the sun. ${withCommas(Math.round(f.inField))} cwt is still out.`, { cwt: Math.round(f.inField) })
+    }
     if (f.status === 'dug' && f.inField < 0.5) weigh(s, f, i, lot, out)
   }
 }

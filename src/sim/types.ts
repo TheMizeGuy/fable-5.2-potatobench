@@ -322,6 +322,7 @@ export interface Season {
   watchDay: number          // day the spray threshold was crossed, or -1
   frozen: boolean
   frostHaul?: number        // the last day a frost was forecast on crop still in barrels
+  barrelsSaid?: number[]    // fields whose barrels the season has said have stood out three days
   idleSaid?: number[]       // people the season has said once were idle with work waiting that they are set never to do
   pressed?: number[]        // people moved today from work that can wait to work that cannot
   frostLow?: number         // tonight's forecast low at the station, C

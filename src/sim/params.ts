@@ -322,6 +322,7 @@ export const HAUL_CWT_DAY = 900                // cwt a day one person with a tr
 export const TRUCK_HAUL = 2                    // the truck hauls at twice a tractor's rate
 export const FREEZE_IN_FIELD = -2              // C at the field: a night this cold freezes a share of the crop still in the field
 export const FREEZE_SHARE = 0.2
+export const BARRELS_SAY = 3                   // days barrels stand out in a field before a slip says what they cost
 export const GREEN_IN_FIELD = 0.005            // share of the crop in the field greened each bright day
 
 // ---------------------------------------------------------------- the farmstead: incidents (docs/MODEL.md section 13)

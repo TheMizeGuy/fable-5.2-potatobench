@@ -6,14 +6,14 @@ import { BLOCK_NAME, BLOCKS, DUFOUR_YARD, HOME_FIELDS, HOME_YARD, PARCELS, YARDS
 import { lotCwt } from './harvest.ts'
 import { sellLot } from './market.ts'
 import * as P from './params.ts'
-import { applicantsFor, fromApplicant, gainXp, jobSkill, payOf, SKILL_LABEL, speed, subject } from './people.ts'
+import { applicantsFor, fromApplicant, gainXp, jobSkill, payOf, SKILL_LABEL, speed, subject, willDo } from './people.ts'
 import { hash32 } from './rng.ts'
 import {
   addJob, buildable, buildJob, closeIncidents, FIELD_NAMES, holdsDufour, JOB_LABEL, leftInField, letGo, releaseJob, removePerson, resolveIncident, seasonDone, sheltering,
-  haulByDark, startSeason, stepDay, unitBlock,
+  haulByDark, haulRate, placeName, startSeason, stepDay, tractorsRunning, unitBlock, workday,
 } from './season.ts'
 import { CHOICE_LABEL } from './incidents.ts'
-import { article, buildBlock, buildCost, buildingAt, buildWork, hasBuilt, startBuilding, YARD_NAME } from './buildings.ts'
+import { article, buildBlock, buildCost, buildingAt, buildWork, hasBuilt, startBuilding, travel, YARD_NAME } from './buildings.ts'
 import { brushedNow, COVER_WORD, fell, isField, standing } from './land.ts'
 import type { Campaign, Cmd, Contract, Due, FieldPlan, GameEvent, Incident, JobKind, Lot, Result, RoutineKind, Season, SprayWay, Unit, UpgradeId, WinterWork, World, YearSummary } from './types.ts'
 import { variety } from './varieties.ts'
@@ -1079,14 +1079,29 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
       const by = haulByDark(c, cmd.field)
       if (!by) return ok([note(c, 'haulNow', 'warn', `Nobody on the farm drives, so the barrels in ${name} stay out tonight. Set someone's priority for machine work to haul them in.`)])
       // A day off gives way to the frost, as on a morning the frost is forecast (workday); the extra day tires them.
+      const off = !workday(c, s)
       s.frostHaul = s.day
-      const u = c.crew.find(x => x.id === by.unit)!
+      let u = c.crew.find(x => x.id === by.unit)!
+      let cwt = by.cwt
+      let stops = ''
+      // Every machine held for other work by those who will carry on with it first thing: one of them stops for the haul.
+      const holders = c.crew.filter(o => o.rig === 'tractor' && o.job >= 0 && o.job !== job!.id)
+      const truck = !!c.upgrades.truck && !c.crew.some(o => o.rig === 'truck')
+      if (!truck && holders.length >= tractorsRunning(c, s.day) && !holders.includes(u)) {
+        const h = holders.find(o => willDo(o, 'haul'))
+        if (!h) return ok([note(c, 'haulNow', 'warn', `Every tractor is out on other work with someone who won't haul, so the barrels in ${name} stay out tonight.`)])
+        const was = s.jobs.find(x => x.id === h.job)
+        stops = was ? `${h.kind === 'farmer' ? 'You stop' : `${h.name.split(' ')[0]} stops`} ${JOB_LABEL[was.kind].toLowerCase()} ${placeName(was.field)} to haul ${name}. ` : ''
+        u = h
+        cwt = Math.min(f.inField, haulRate(c, u, cmd.field, 'tractor') * Math.max(0, 1 - travel(c, u.at, cmd.field)))
+      }
       job.unit = u.id
       if (u.job >= 0 && u.job !== job.id) letGo(u)
-      const about = (cwt: number) => withCommas(Math.max(50, Math.round(cwt / 50) * 50))
-      const left = f.inField - by.cwt
-      const brings = `${by.rig === 'truck' ? 'The truck brings' : 'One tractor brings'} in about ${about(by.cwt)} cwt by dark`
-      return ok([note(c, 'haulNow', 'info', `${u.kind === 'farmer' ? 'You\'re' : `${u.name.split(' ')[0]} is`} hauling ${name} now. ${brings}${left >= 25 ? `, so about ${about(left)} cwt will stay out` : ', which is all of it'}.`)])
+      const about = (x: number) => withCommas(Math.max(50, Math.round(x / 50) * 50))
+      const left = f.inField - cwt
+      const brings = `${by.rig === 'truck' && !stops ? 'The truck brings' : 'One tractor brings'} in about ${about(cwt)} cwt by dark`
+      const now = stops || `${u.kind === 'farmer' ? 'You\'re' : `${u.name.split(' ')[0]} is`} hauling ${name} now.${off ? ` It's a day off, so it tires ${u.kind === 'farmer' ? 'you' : 'them'} as a working day does.` : ''} `
+      return ok([note(c, 'haulNow', 'info', `${now}${brings}${left >= 25 ? `, so about ${about(left)} cwt will stay out` : ', which is all of it'}.`)])
     }
     case 'day': {
       if (c.phase !== 'season' || !c.season) return fail('The season isn\'t under way.')
