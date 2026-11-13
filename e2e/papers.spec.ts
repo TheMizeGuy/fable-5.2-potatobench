@@ -128,13 +128,16 @@ for (const [w, h] of [[1280, 800], [1280, 720]] as const) {
       await page.keyboard.press('Shift+t')
       await expect.poll(async () => (await look(page)).queue).toBeGreaterThan(0)
       await page.getByTestId('speed-1').click()
-      // The result is offered on a slip; the tray opens when it is asked for.
+      // The result is offered on a slip, or kept on the field's card once the slip has gone; the tray opens when it is
+      // asked for.
       const offer = page.locator('#ui [data-testid="alert"]', { hasText: 'test dig' })
-      await expect(offer).toBeVisible({ timeout: 30_000 })
-      await offer.click()
+      const again = page.getByTestId('sample-again')
+      await expect(offer.or(again).first()).toBeVisible({ timeout: 30_000 })
+      await page.getByTestId('speed-0').click()
+      if (await offer.isVisible()) await offer.click()
+      else await again.click()
       const tray = page.getByTestId('sample-dialog')
       await expect(tray).toBeVisible()
-      await page.getByTestId('speed-0').click()
       await page.waitForTimeout(1500)
       const paper = (await box(page, '#ui [data-testid="sample-dialog"]'))!
       const host = (await box(page, '#ui .tray-host'))!
@@ -168,6 +171,13 @@ for (const [w, h] of [[1280, 800], [1280, 720]] as const) {
     test('the field record keeps inside the window: its head and seed in view, the crop and varieties scroll between', async ({ page }) => {
       const errors = watchErrors(page)
       await open(page, '?year=1990&seed=7')
+      // First with the three varieties of a first spring, then with all of them once the comparison has been seen.
+      for (const all of [false, true]) {
+      if (all) {
+        await page.evaluate(() => (globalThis as any).__county.app.select(0))
+        await page.getByTestId('compare-open').click()
+        await page.getByTestId('compare-close').click()
+      }
       let seen = 0
       for (const field of [0, 1, 2, 3, 4, 5]) {
         const potato = await page.evaluate(f => { const { app } = (globalThis as any).__county; app.select(f); return app.campaign.plans[f].crop === 'potato' }, field)
@@ -182,7 +192,7 @@ for (const [w, h] of [[1280, 800], [1280, 720]] as const) {
           const r = document.querySelector(`#ui [data-testid="${id}"]`)!.getBoundingClientRect()
           return { top: r.top, bottom: r.bottom, left: r.left, right: r.right }
         }))
-        const at = `field ${field} at ${w} by ${h}`
+        const at = `field ${field} at ${w} by ${h}${all ? ', every variety' : ''}`
         expect(c.top, at).toBeGreaterThanOrEqual(0)
         expect(c.bottom, at).toBeLessThanOrEqual(h + 0.5)
         // The seed at the foot, whole inside the card; the middle above it.
@@ -201,10 +211,11 @@ for (const [w, h] of [[1280, 800], [1280, 720]] as const) {
         expect(fit.cut, at).toBeLessThanOrEqual(1)
         expect(fit.inside, at).toBe(true)
         if (fit.scrolls) seen++
-        if (field === 0) await snap(page, `field-record-${w}x${h}`)
+        if (field === 0) await snap(page, `field-record-${w}x${h}${all ? '-all' : ''}`)
         console.log(`the field record, ${at}: ${Math.round(c.bottom - c.top)} px tall, ${fit.scrolls ? 'its middle scrolls' : 'whole'}`)
       }
-      if (h <= 720) expect(seen, 'a short window has a field record whose middle scrolls').toBeGreaterThan(0)
+      if (h <= 720 && all) expect(seen, 'a short window has a field record whose middle scrolls').toBeGreaterThan(0)
+      }
       expect(errors, errors.join('\n')).toEqual([])
     })
   })
@@ -255,4 +266,213 @@ test.describe('on a phone, 390 by 844', () => {
     await expect(tray.locator('.narrowing')).toBeInViewport()
     expect(errors, errors.join('\n')).toEqual([])
   })
+})
+
+// The spring sheet (round 7, items 14 and 20).
+
+// What each fold's first item is, and the key on it.
+const FOLDS: { open: string; body: string; item: string; key: string }[] = [
+  { open: 'fields-open', body: 'fields', item: '.cat-list > li', key: '[data-testid^="fold-field-"]' },
+  { open: 'crew-open', body: 'crew', item: '.applicant, .hall-row', key: 'button' },
+  { open: 'land-open', body: 'land', item: '.cat-list > li', key: '[data-testid^="fold-land-"]' },
+  { open: 'contracts-open', body: 'contracts', item: '.cat-offer', key: 'button, .range' },
+  { open: 'equipment-open', body: 'equipment', item: '.cat-equip > li', key: 'button, .stamp' },
+]
+
+// A second spring, after a first year played by the advice and the cellar sold at its usual month.
+const YEAR_TWO = `q.start(1990, 7); q.year(3); q.g().app.do({ t: 'next' })`
+// The same spring owing enough from last year that the plan ends past the bank's limit.
+const PAST_LIMIT = `const { app, sim } = q.g(); const c = app.campaign; const f = c.plans.findIndex(p => p.crop === 'potato'); c.cash -= sim.moneyPlan(app.world, c).after - sim.CREDIT_LIMIT + 3000; app.do({ t: 'plan', field: f, plan: { ...c.plans[f] } })`
+
+interface FoldSeen { region: number; holds: boolean; item: boolean; key: boolean; start: boolean; totals: boolean; past: boolean; lead: number; text: string; where: string; strip: number }
+
+async function foldSeen(page: Page, f: (typeof FOLDS)[number]): Promise<FoldSeen> {
+  return page.evaluate(({ body, item, key }) => {
+    const inView = (e: Element | null, inside?: DOMRect) => {
+      if (!e) return false
+      const r = e.getBoundingClientRect()
+      const ok = r.width > 0 && r.height > 0 && r.top >= -0.5 && r.bottom <= innerHeight + 0.5 && r.left >= -0.5 && r.right <= innerWidth + 0.5
+      return ok && (!inside || (r.top >= inside.top - 0.5 && r.bottom <= inside.bottom + 0.5))
+    }
+    const region = document.querySelector<HTMLElement>(`#ui [data-testid="${body}"]`)!
+    const box = region.getBoundingClientRect()
+    const first = region.querySelector(item)
+    const lead = region.querySelector(':scope > .t-caption')
+    return {
+      region: Math.round(region.clientHeight), holds: region.scrollHeight <= region.clientHeight + 1,
+      item: inView(first, box), key: inView(first?.querySelector(key) ?? (first?.matches(key) ? first : null), box),
+      start: inView(document.querySelector('#ui [data-testid="begin-season"]')),
+      // The two money lines a choice turns on: This plan, and After year-end bills (or the bank refusing the plan).
+      totals: inView(document.querySelector('#ui [data-testid="plan-money"] .big')) && (inView(document.querySelector('#ui [data-testid="plan-year-end"]')) || !!document.querySelector('#ui .plan-money.over')),
+      past: inView(document.querySelector('#ui [data-testid="plan-past-limit"]')),
+      lead: ((lead as HTMLElement | null)?.innerText ?? '').trim().split(/\s+/).filter(Boolean).length, text: ((lead as HTMLElement | null)?.innerText ?? '').trim(),
+      strip: new Set([...document.querySelectorAll<HTMLElement>('#ui .fold.more.strip > .btn')].map(b => Math.round(b.getBoundingClientRect().top))).size,
+      where: `room ${Math.round(box.top)} to ${Math.round(box.bottom)}, first item ${first ? (({ top, bottom, left, right }) => `${Math.round(top)} to ${Math.round(bottom)}, ${Math.round(left)} to ${Math.round(right)}`)(first.getBoundingClientRect()) : 'none'}`,
+    }
+  }, f)
+}
+
+for (const [w, h] of [[1280, 800], [1280, 720]] as const) {
+  test.describe(`the spring sheet at ${w} by ${h}`, () => {
+    test.use({ viewport: { width: w, height: h } })
+
+    for (const year of [1, 2, 'past'] as const) {
+      test(`year ${year}: each fold opened has room to be used, its first item and key in view, the totals and Start the season kept`, async ({ page }) => {
+        test.setTimeout(180_000)
+        const errors = watchErrors(page)
+        await open(page, '?year=1990&seed=7')
+        if (year !== 1) { await reach(page, YEAR_TWO); await putAway(page) }
+        if (year === 'past') await reach(page, PAST_LIMIT)
+        await expect(page.getByTestId('begin-season')).toBeVisible()
+        if (year === 'past') await expect(page.getByTestId('plan-past-limit')).toBeVisible()
+        // With no fold open the whole foot shows.
+        await expect(page.getByTestId('plan-due')).toBeVisible()
+        for (const f of FOLDS) {
+          await page.getByTestId(f.open).click()
+          const body = page.getByTestId(f.body)
+          await expect(body).toBeVisible()
+          await page.waitForTimeout(400)
+          const s = await foldSeen(page, f)
+          const at = `year ${year}, ${f.body}, ${w} by ${h}`
+          console.log(`${at}: room ${s.region} px${s.holds ? ', holds it all' : ''}; first item ${s.item ? 'whole' : 'cut'}; opening ${s.lead} words`)
+          await snap(page, `spring-y${year}-${f.body}-${w}x${h}`)
+          expect(s.item, `${at}: the first item whole in view (${s.where})`).toBe(true)
+          expect(s.key, `${at}: its key in view`).toBe(true)
+          expect(s.region >= 300 || s.holds, `${at}: a room of 300 px or all of it (${s.region} px)`).toBe(true)
+          expect(s.start, `${at}: Start the season in view`).toBe(true)
+          expect(s.strip, `${at}: the other folds on one line`).toBeLessThanOrEqual(1)
+          expect(s.totals, `${at}: This plan and After year-end bills in view`).toBe(true)
+          if (year === 'past') expect(s.past, `${at}: the bank's limit in view`).toBe(true)
+          if (f.body === 'contracts') expect(s.lead, `${at}: ${s.text}`).toBeLessThanOrEqual(30)
+          // One sentence opens each fold.
+          if (s.text) expect(s.text.split(/(?<=[.!?])\s+(?=[A-Z])/).length, `${at}: ${s.text}`).toBe(1)
+          await page.getByTestId(f.open).click()
+          await expect(body).toHaveCount(0)
+        }
+        expect(errors, errors.join('\n')).toEqual([])
+      })
+    }
+  })
+}
+
+test.describe('the spring sheet on a phone, 390 by 844', () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
+
+  test('each fold opened shows its first item, with Start the season and the totals kept', async ({ page }) => {
+    test.setTimeout(180_000)
+    const errors = watchErrors(page)
+    await open(page, '?year=1990&seed=7')
+    await expect(page.getByTestId('begin-season')).toBeVisible()
+    for (const f of FOLDS) {
+      await page.getByTestId(f.open).click()
+      await expect(page.getByTestId(f.body)).toBeVisible()
+      await page.waitForTimeout(400)
+      const s = await foldSeen(page, f)
+      const at = `phone, ${f.body}`
+      console.log(`${at}: room ${s.region} px${s.holds ? ', holds it all' : ''}; first item ${s.item ? 'whole' : 'cut'}`)
+      await snap(page, `spring-y1-${f.body}-phone`)
+      expect(s.item, `${at}: the first item whole in view (${s.where})`).toBe(true)
+      expect(s.start, `${at}: Start the season in view`).toBe(true)
+      expect(s.totals, `${at}: This plan and After year-end bills in view`).toBe(true)
+      await page.getByTestId(f.open).click()
+      await expect(page.getByTestId(f.body)).toHaveCount(0)
+    }
+    expect(errors, errors.join('\n')).toEqual([])
+  })
+})
+
+test.describe('the spring sheet, first sight', () => {
+  test.use({ viewport: { width: 1280, height: 800 } })
+
+  test('a first spring\'s field record shows three varieties, and the comparison shows them all', async ({ page }) => {
+    const errors = watchErrors(page)
+    await open(page, '?year=1990&seed=7')
+    const all = await page.evaluate(() => { const { app, sim } = (globalThis as any).__county; return sim.availableVarieties(app.campaign.year).length as number })
+    await page.evaluate(() => (globalThis as any).__county.app.select(0))
+    const card = page.getByTestId('plan-card')
+    await expect(card.locator('.vbox')).toHaveCount(3)
+    await expect(card.locator('.vbox input:checked')).toHaveCount(1)
+    await snap(page, 'field-record-first-sight')
+    await card.getByTestId('compare-open').click()
+    await expect(page.locator('#ui [data-testid="compare"] tbody tr')).toHaveCount(all)
+    await page.getByTestId('compare-close').click()
+    await expect(card.locator('.vbox')).toHaveCount(all)
+    expect(errors, errors.join('\n')).toEqual([])
+  })
+
+  test('a hire at the year end is said in one sentence', async ({ page }) => {
+    test.setTimeout(180_000)
+    const errors = watchErrors(page)
+    await open(page, '?year=1990&seed=7')
+    // Hired in the season, so the year's own record says it as well as the books.
+    await reach(page, `const { app } = q.g(); app.do({ t: 'begin' }); q.run(q.day(5, 20)); app.do({ t: 'hire', kind: 'operator' }); q.year(3)`)
+    await putAway(page)
+    const name = await page.evaluate(() => { const c = (globalThis as any).__county.app.campaign; return c.crew.filter((u: any) => u.kind !== 'farmer').at(-1).name as string })
+    const line = page.locator('#ui .b-people .ppl', { hasText: name }).first()
+    await expect(line).toBeVisible({ timeout: 30_000 })
+    const text = (await line.textContent())!.trim()
+    console.log(`the hire at the year end: ${text}`)
+    expect(text.match(/hired/gi)?.length, text).toBe(1)
+    expect(text.split(/(?<=\.)\s+(?=[A-Z])/).length, text).toBe(1)
+    expect(errors, errors.join('\n')).toEqual([])
+  })
+})
+
+test.describe('the test dig asked for, with a field card open', () => {
+  for (const [w, h] of [[1280, 800], [1280, 720]] as const) {
+    test(`${w} by ${h}: the tray is whole and a card's tether passes under it`, async ({ page }) => {
+      test.setTimeout(180_000)
+      const errors = watchErrors(page)
+      await page.setViewportSize({ width: w, height: h })
+      await startSeason(page)
+      await reach(page, `const { app } = q.g(); app.setSpeed(0); app.do({ t: 'sprayWay', way: 'ask' }); q.run(q.day(7, 12), ['sample']); app.setSpeed(0); app.campaign.incidents = []`)
+      await putAway(page)
+      for (const field of [2, 0, 4]) {
+        await page.evaluate(f => { const { app } = (globalThis as any).__county; app.select(f); app.focus(f) }, field)
+        await reach(page, `const { app } = q.g(); app.do({ t: 'job', kind: 'sample', field: ${field} }); app.do({ t: 'bump', id: app.campaign.season.jobs.at(-1).id }); app.do({ t: 'day' }); app.setSpeed(0)`)
+        // The dig is in when the field's record has it; the slip at the foot then offers it.
+        await page.waitForFunction(f => { const c = (globalThis as any).__county.app.campaign; if (!c.season.log.some((e: any) => e.type === 'sample' && e.field === f && e.day >= c.season.day - 1)) { (globalThis as any).__county.app.do({ t: 'day' }); (globalThis as any).__county.app.setSpeed(0); return false } return true }, field, { polling: 500, timeout: 20_000 })
+        const tray = page.getByTestId('sample-dialog')
+        const offer = page.locator('#ui [data-testid="alert"]', { hasText: /test dig/i }).last()
+        await expect(offer.or(tray).first()).toBeVisible({ timeout: 20_000 })
+        if (!(await tray.isVisible())) await offer.click()
+        await expect(tray).toBeVisible()
+        await page.evaluate(f => { const { app } = (globalThis as any).__county; if (app.selected !== f) app.select(f) }, field)
+        await expect(page.getByTestId('card')).toBeVisible()
+        await page.waitForTimeout(2800)
+        await snap(page, `tray-with-card-f${field}-${w}x${h}`)
+        const seen = await page.evaluate(() => {
+          const paper = document.querySelector<HTMLElement>('#ui [data-testid="sample-dialog"]')!
+          const r = paper.getBoundingClientRect()
+          const t = document.querySelector<HTMLElement>('#ui [data-testid="tether-card"]')
+          let crossing = 0, over = 0
+          if (t && !t.hidden) {
+            // The tether lets presses through; for this look it takes them, so the topmost thing at each point is known.
+            t.style.pointerEvents = 'auto'
+            const m = new DOMMatrix(getComputedStyle(t).transform)
+            for (let k = 1; k < 40; k++) {
+              const x = m.e + m.a * 100 * (k / 40), y = m.f + m.b * 100 * (k / 40)
+              if (x < r.left + 2 || x > r.right - 2 || y < r.top + 2 || y > r.bottom - 2) continue
+              crossing++
+              if (document.elementFromPoint(x, y) === t) over++
+            }
+            t.style.pointerEvents = ''
+          }
+          // Wherever a tether may run, it is drawn under the tray: the tray stands at least as high and after it.
+          const host = paper.parentElement!
+          const z = (e: Element) => Number(getComputedStyle(e).zIndex) || 0
+          const under = !!t && z(host) >= z(t) && !!(t.compareDocumentPosition(host) & Node.DOCUMENT_POSITION_FOLLOWING)
+          return { top: r.top, bottom: r.bottom, crossing, over, under }
+        })
+        console.log(`the tray with field ${field}'s card at ${w} by ${h}: ${Math.round(seen.top)} to ${Math.round(seen.bottom)} px; the tether crosses it at ${seen.crossing} points, over it at ${seen.over}`)
+        expect(seen.top).toBeGreaterThanOrEqual(0)
+        expect(seen.bottom).toBeLessThanOrEqual(h)
+        await expect(tray.locator('.narrowing')).toBeInViewport({ ratio: 1 })
+        expect(seen.over, 'the tether passes under the tray').toBe(0)
+        expect(seen.under, 'the tray stands over any tether').toBe(true)
+        await page.keyboard.press('Escape')
+      }
+      expect(errors, errors.join('\n')).toEqual([])
+    })
+  }
 })

@@ -314,7 +314,32 @@
 .cat-open { padding: 2px 0 8px; display: grid; gap: 6px; border-bottom: 1px solid var(--hair); }
 .cat-open .t-caption { padding: 4px 0 0; }
 .cat-sub { padding-top: 8px; }
-.cat-list { display: grid; }
+.cat-list { display: grid; grid-template-columns: minmax(0, 1fr); }
+/* A fold open: the other folds stand as one strip of keys above it, the open fold fills the sheet and scrolls in its
+   own room, and the order blank keeps its two totals and Start the season (the rest is on See the money). */
+.spring-screen .catalogue.folded .cat-body { display: flex; flex-direction: column; overflow: hidden; }
+.catalogue.folded .cat-folds { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; min-width: 0; }
+.catalogue.folded .cat-fold { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; min-width: 0; }
+.catalogue.folded .cat-fold > .fold { flex: none; }
+.catalogue.folded .cat-open { flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; grid-template-columns: minmax(0, 1fr); align-content: start; border-bottom: 0; }
+.catalogue.folded .tracker { display: none; }
+.spring-screen .catalogue.folded .masthead { padding-top: 10px; padding-bottom: 6px; }
+.spring-screen .catalogue.folded .masthead h1 { font-size: 40px; }
+.catalogue .fold.more.strip { display: flex; flex-wrap: wrap; gap: 4px; flex: none; min-height: 0; margin-top: 8px; padding: 0; background: none; border-bottom: 0; }
+.catalogue .fold.more.strip .btn { flex: 1 1 auto; min-height: 36px; padding: 0 5px; gap: 3px; font-size: 13px; white-space: nowrap; }
+.catalogue .fold.more.strip .btn .i { --i: 13px; flex: none; }
+.touch .catalogue .fold.more.strip .btn { min-height: 44px; }
+/* Five or more keys: their names alone, so they keep to one line. */
+.catalogue .fold.more.strip.many .btn .i { display: none; }
+/* Of the money, an open fold keeps what a choice in it turns on: This plan, After year-end bills and the bank's limit. */
+.catalogue.folded .order-blank :is(.pm-cash, .pm-parts, .pm-usual, .pm-range, [data-testid="plan-low"]) { display: none; }
+.catalogue.folded .order-blank .plan-money:not(.over) .pm-loan { display: none; }
+.catalogue.folded .order-blank .lead:has([data-testid="plan-due"]) { display: none; }
+/* The contract band's two marks, named in small type under the first band. */
+.band-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; margin-top: 2px; font: italic 400 13px/1.2 var(--f-text); color: var(--ink-2); }
+.band-legend i { display: inline-block; flex: none; }
+.band-legend .lg-band { width: 18px; height: 9px; background: repeating-linear-gradient(135deg, var(--ink) 0 1.5px, transparent 1.5px 3.5px); box-shadow: inset 0 0 0 1px var(--ink); }
+.band-legend .lg-line { width: 2px; height: 13px; margin-left: 8px; background: var(--ink); }
 .cat-row { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 40px; margin-top: 4px; padding: 2px 10px 5px; text-align: left; font-size: 15px; background-color: var(--paper); }
 .cat-row .i { --i: 18px; color: var(--ink-2); }
 .cat-row b { white-space: nowrap; }
@@ -339,7 +364,7 @@
 .cat-foreman .t-label .i { --i: 16px; }
 .cat-foreman .btn { padding: 0 12px 3px; font-size: 14px; }
 .cat-done { display: flex; justify-content: flex-end; }
-.cat-equip li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--hair); }
+.cat-equip li { display: grid; grid-template-columns: minmax(0, 1fr) minmax(132px, 42%); align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--hair); }
 .cat-equip b { font-size: 16px; }
 .cat-equip .cat-buy { min-width: 132px; row-gap: 2px; }
 .cat-equip .cat-buy .loan-adds { flex-basis: 100%; font: 400 13px/1.15 var(--f-text); letter-spacing: 0; text-transform: none; color: var(--red); }
@@ -347,6 +372,11 @@
 .cat-offer .lead .i { --i: 18px; }
 .cat-offer .range { margin: 6px 0 2px; }
 .cat-offer .btn { justify-self: start; }
+/* An offer's Accept stands beside its terms, so one whole offer fits an open fold on a short window. */
+.cat-offer:not(.signed) { grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; }
+.cat-offer:not(.signed) > :not(.t-caption, .btn) { grid-column: 1 / -1; }
+.cat-offer:not(.signed) > .t-caption { grid-column: 1; }
+.cat-offer:not(.signed) > .btn { grid-column: 2; grid-row: span 2; align-self: end; justify-self: end; }
 .cat-loan { padding: 4px 0; font-size: 15px; }
 .cat-loan .i { --i: 18px; }
 .spring-screen .tracker { padding: 8px 0; }
@@ -367,6 +397,7 @@
 .card-cost { display: grid; justify-items: end; }
 .card-cost b { font: 700 var(--t-head)/1 var(--f-text); }
 .vgrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; padding: 10px 18px 4px; }
+.vgrid.few { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .vbox { position: relative; display: flex; }
 .vbox input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
 .vbox-in { display: grid; align-content: start; gap: 2px; width: 100%; padding: 7px 8px 11px; background: var(--paper); box-shadow: inset 0 0 0 1px var(--ink); font-size: 13px; line-height: 1.2; }
@@ -438,6 +469,12 @@
 .spring-screen[data-layout='narrow'] .blank-go { grid-template-columns: 1fr; gap: 2px; }
 
 .spring-screen[data-layout='narrow'] .notes-slot { left: 10px; right: 10px; width: auto; top: calc(var(--top, 80px) + 8px); bottom: auto; }
+/* A fold open on a phone: the strip of the other folds by name on one line, and the masthead set aside for the room. */
+.spring-screen[data-layout='narrow'] .fold.more.strip { display: flex; flex-wrap: wrap; gap: 4px; padding: 0; }
+.spring-screen[data-layout='narrow'] .fold.more.strip .btn { padding: 0 5px; font-size: 13px; }
+.spring-screen[data-layout='narrow'] .fold.more.strip .btn .i { display: none; }
+.spring-screen[data-layout='narrow'] .catalogue.folded .masthead { display: none; }
+.spring-screen[data-layout='narrow'] .catalogue.folded { grid-template-rows: minmax(0, 1fr) auto auto; }
 @media (max-width: 359px) {
   .spring-screen[data-layout='narrow'] .applicant { grid-template-columns: 40px 1fr 84px; }
   .spring-screen[data-layout='narrow'] .fold.more { grid-template-columns: 1fr 1fr; }

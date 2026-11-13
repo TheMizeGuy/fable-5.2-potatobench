@@ -78,19 +78,25 @@ function contractRange(c: S.Campaign, id: S.VarietyId, cwt: number, delivered: n
   return { el: range({ lo: g?.lo ?? 0, hi: g?.hi ?? 0, max, mark: delivered > 0 ? delivered : undefined, promise: cwt, label: said }), said }
 }
 
-function signedCard(c: S.Campaign, k: S.ContractInfo): HTMLElement {
+// The band's marks named on the band, under the first contract of a list.
+function legend(): HTMLElement {
+  return h('p', { class: 'band-legend', 'aria-hidden': 'true' }, h('i', { class: 'lg-band' }), 'what your fields look likely to give', h('i', { class: 'lg-line' }), 'what you promise')
+}
+
+function signedCard(c: S.Campaign, k: S.ContractInfo, first = false): HTMLElement {
   const r = contractRange(c, k.variety, k.cwt, k.delivered)
   const why = shortWhy(c, k)
   return h('article', { class: 'offer signed cat-offer', testid: `contract-${k.id}` },
     h('p', { class: 'lead' }, icon(k.needed <= 1e-6 ? 'check' : 'contract', 'i'), h('b', null, k.buyer), h('span', { class: 'it quiet' }, k.varietyName), h('span', { class: 'dots' }),
       h('span', { class: 'num' }, F.price(k.price))),
     barHover(r.el),
+    first ? legend() : null,
     h('p', { class: 't-caption' }, `${F.mass(k.delivered)} of ${F.mass(k.cwt)} delivered, due ${k.dueBy}. ${F.upper(r.said)}.`,
       k.settled || k.needed <= 1e-6 ? null : ' On the due date the buyer takes whatever you still owe from your potato house at the contract price, and you only pay a penalty on what\'s still missing after that.',
       k.settled && k.penalty > 0 ? h('span', { class: 'c-red' }, ` Penalty: ${F.money(-k.penalty)}.`) : why ? h('span', { class: 'c-ochre' }, ` ${why}`) : null))
 }
 
-function offerCard(ctx: Ctx, c: S.Campaign, o: S.OfferInfo, after: () => void): HTMLElement {
+function offerCard(ctx: Ctx, c: S.Campaign, o: S.OfferInfo, after: () => void, first = false): HTMLElement {
   const v = S.variety(o.variety)
   const vs = o.price / o.usual - 1
   const r = contractRange(c, o.variety, o.cwt, 0)
@@ -98,6 +104,7 @@ function offerCard(ctx: Ctx, c: S.Campaign, o: S.OfferInfo, after: () => void): 
     h('p', { class: 'lead' }, icon('contract', 'i'), h('b', null, o.buyer), h('span', { class: 'it quiet' }, o.varietyName), h('span', { class: 'dots' }),
       h('span', { class: 'num' }, F.price(o.price))),
     barHover(r.el),
+    first ? legend() : null,
     h('p', { class: 't-caption' }, `${F.mass(o.cwt)} of No. 1 ${o.dueBy} for ${F.money(o.value)} in all, `,
       h('span', { class: vs < -0.015 ? 'c-ochre' : null }, `${F.versus(o.price / o.usual)} ${v.contract ? 'the processing price' : 'a usual year'}`), '. ', farmHas(c, o.variety)),
     v.contract ? h('p', { class: 't-caption c-ochre' }, `Without a contract ${v.name} sells ${offContract()} its usual price.`) : null,
@@ -112,12 +119,12 @@ function contractCards(ctx: Ctx, c: S.Campaign, after: () => void): Child {
   const offers = S.offerInfo(c)
   const signed = S.contractInfo(c)
   return [
-    h('p', { class: 't-caption' }, `A contract pays a fixed price for No. 1 potatoes delivered by a set date. The hatched band is what your fields look likely to produce and the line is what you've promised. On the due date the buyer takes what you owe from your potato house, and anything still missing costs you ${F.pct(S.CONTRACT_PENALTY)} of its contract price.${F.cwtNote()}`),
-    signed.length ? [h('p', { class: 't-label cat-sub' }, 'Signed'), h('div', { class: 'offers' }, signed.map(k => signedCard(c, k)))] : null,
+    h('p', { class: 't-caption', testid: 'contracts-lead' }, `A contract pays a fixed price for No. 1 potatoes delivered by a set date, and whatever is still missing then costs you ${F.pct(S.CONTRACT_PENALTY)} of its price.`),
+    signed.length ? [h('p', { class: 't-label cat-sub' }, 'Signed'), h('div', { class: 'offers' }, signed.map((k, n) => signedCard(c, k, n === 0)))] : null,
     c.phase === 'plan' ? [
       h('p', { class: 't-label cat-sub' }, offers.length ? 'Offered this spring' : 'No more offers this spring'),
-      offers.length ? h('div', { class: 'offers' }, offers.map(o => offerCard(ctx, c, o, after))) : null,
-      h('p', { class: 't-caption' }, 'Offers expire when the season starts.'),
+      offers.length ? h('div', { class: 'offers' }, offers.map((o, n) => offerCard(ctx, c, o, after, n === 0 && !signed.length))) : null,
+      h('p', { class: 't-caption' }, `Offers expire when the season starts.${F.cwtNote()}`),
     ] : h('p', { class: 't-caption' }, 'You can deliver from the weigh ticket, a dug field\'s card or the cellar. Harvest contracts close when the season ends, and winter ones at the end of February.'),
   ]
 }
