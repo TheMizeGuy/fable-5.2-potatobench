@@ -1128,7 +1128,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     let dist = Math.max(MIN_DIST, Math.min(Math.max(rig.goal.dist, rig.cur.dist), want))
     let pitch = Math.max(pitchFor(dist), 0.3)
     // At a tract's trees (felling, the brush) a walker's eye is among the boughs: from further up and steeper, over them.
-    const wooded = snap.fields.some((f, i) => f.cover !== 'open' && far.x > FIELDS[i].x0 - 12 && far.x < FIELDS[i].x1 + 12 && far.z > FIELDS[i].z0 - 12 && far.z < FIELDS[i].z1 + 12)
+    const wooded = snap.fields.some((f, i) => (f.cover === 'woods' || f.cover === 'brush') && far.x > FIELDS[i].x0 - 12 && far.x < FIELDS[i].x1 + 12 && far.z > FIELDS[i].z0 - 12 && far.z < FIELDS[i].z1 + 12)
     if (wooded) { dist = Math.max(dist, 30); pitch = Math.max(pitch, 0.86) }
     followClose = { dist, pitch }
     rig.moveTo(rig.complete({ x: far.x, z: far.z, ...followClose }), reduced, 900)

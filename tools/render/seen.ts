@@ -150,7 +150,8 @@ await page.evaluate(({ rects, QUICK }) => {
         // (digging: the farm's one tractor takes the trailer between whiles and brings in what it dug: that is the
         // harvest's work as much, and counts as the machine at it)
         const carting = kind === 'dig' && follow < 0 && cand.some(r => r.tool === 'trailer')
-        if (late && (at.length || carting)) st.secs += dt
+        if (late && !(at.length || carting)) return
+        if (late) st.secs += dt
         if (carting && !at.length) { st.inside += dt; st.there += dt; st.busy += dt }
         const drv = info.rigs.find((r: any) => riding(r) && seen(r) && fieldOf(r.x, r.z) >= 0)
         if (drv) st.driver = drv.holder

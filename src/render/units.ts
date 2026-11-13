@@ -932,7 +932,8 @@ export class Crews {
       r.state.turn = r.turn
       r.state.driver = holder && holder.aboard && !walking ? (cold ? holder.coat : holder.dress) : null
       // how far off it is seen from: beyond a field's length its dust, mist and lamps are drawn to be found by
-      r.state.far = clamp((Math.hypot(r.sx - EYE.x, y - EYE.y, r.sz - EYE.z) - 110) / 330, 0, 1)
+      // (not in the opening, whose camera comes down the road to what it first saw from far off)
+      r.state.far = snap.mode === 'title' ? 0 : clamp((Math.hypot(r.sx - EYE.x, y - EYE.y, r.sz - EYE.z) - 110) / 330, 0, 1)
       LOD.fine = Math.hypot(r.sx - EYE.x, r.sz - EYE.z) < FINE_WITHIN
       if (r.kind === 'tractor') (r.machine as Tractor).draw(pr, mf, r.state)
       else (r.machine as Car).draw(pr, mf, r.state)
