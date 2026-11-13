@@ -326,7 +326,7 @@ export function confirmPaper(ctx: Ctx, o: { title: string; text: Child; yes: str
 
 // ---------------------------------------------------------------- alerts and notices
 
-export interface Note { id: string; level: Level; glyph: string; text: string; full: string; field: number; day: number; born: number; ttl: number; go?: () => void; answer?: boolean }
+export interface Note { id: string; level: Level; glyph: string; text: string; full: string; field: number; day: number; born: number; ttl: number; go?: () => void }
 
 const LEVEL_GLYPH: Record<Level, string> = { info: 'flat', good: 'check', warn: 'warn', bad: 'blight' }
 
@@ -343,7 +343,7 @@ export class Notes {
   // While a paper or a card that needs an answer is up, news waits behind it and shows when it has gone.
   private quiet = false
   private waiting: Parameters<Notes['push']>[0][] = []
-  // Slips nobody asked for, held back while a warning is still being read.
+  // Slips nobody asked for, held back while what is showing is still being read.
   private later: Parameters<Notes['push']>[0][] = []
   // Where the rows sit over the land itself, each one goes after this long (0: it stays).
   maxAge = 0
@@ -359,9 +359,8 @@ export class Notes {
   get liveRegion(): HTMLElement { return this.live }
 
   // text: what the row shows. full: what a screen reader hears (the whole sentence).
-  // offer: nobody asked for it, so it never takes the place of a warning, or of an answer, that has only just come up.
-  // answer: what the player's own press did.
-  push(o: { level?: Level; glyph?: string; text: string; full?: string; field?: number; day?: number; ttl?: number; go?: (() => void) | null; offer?: boolean; answer?: boolean }): void {
+  // offer: nobody asked for it, so it never takes the place of a row that has only just come up.
+  push(o: { level?: Level; glyph?: string; text: string; full?: string; field?: number; day?: number; ttl?: number; go?: (() => void) | null; offer?: boolean }): void {
     if (this.quiet) { this.waiting.push(o); this.live.textContent = localize(o.full ?? o.text); return }
     if (o.offer && waitsItsTurn(this.items, this.keep, performance.now())) { this.later.push(o); this.live.textContent = localize(o.full ?? o.text); return }
     const level = o.level ?? 'info'
@@ -369,7 +368,7 @@ export class Notes {
     const full = localize(o.full ?? o.text)
     const dup = this.items.find(n => n.full === full)
     if (dup) this.drop(dup)
-    this.items.push({ id: `n${++this.seq}`, level, glyph: o.glyph ?? LEVEL_GLYPH[level], text, full, field: o.field ?? -1, day: o.day ?? -1, born: performance.now(), ttl: o.ttl ?? 0, go: o.go ?? undefined, answer: o.answer })
+    this.items.push({ id: `n${++this.seq}`, level, glyph: o.glyph ?? LEVEL_GLYPH[level], text, full, field: o.field ?? -1, day: o.day ?? -1, born: performance.now(), ttl: o.ttl ?? 0, go: o.go ?? undefined })
     while (this.items.length > this.keep) this.items.shift()
     this.live.textContent = full
     this.draw()
