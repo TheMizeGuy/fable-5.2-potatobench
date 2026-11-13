@@ -284,7 +284,7 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
         const cold = kind === 'plant' ? coldSoil(c, can) : ''
         text = no ? refused!.why : cold || catchFor(c, kind, f, kind === suggestedKind ? why : '')
         el = order({
-          key, icon: kind, name: [JOB_VERB[kind], part ? h('span', { class: 'order-part num' }, part) : null], cost: cold ? 'Soil too cold' : costText(days, cost), catch: '',
+          key, icon: kind, name: [JOB_VERB[kind], part ? h('span', { class: 'order-part num' }, part) : null], cost: cold ? `Too cold${cost ? ` · ${F.money(cost)}` : ''}` : costText(days, cost), catch: '',
           suggested: kind === suggestedKind, refused: no, testid: `order-${kind}`, title: touch ? undefined : cold ? `${cold} ${costText(days, cost)}.` : jobWhat(kind), said: `${jobWhat(kind)} ${text}`,
           onclick: (e: Event) => give(kind, (e as MouseEvent).ctrlKey || (e as MouseEvent).metaKey),
           attrs: { ...attrs(), class: `slot${cold ? ' is-cold' : ''}`, oncontextmenu: (e: Event) => { e.preventDefault(); give(kind, true) } },
