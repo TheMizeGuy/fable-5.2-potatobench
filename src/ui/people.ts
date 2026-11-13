@@ -180,16 +180,22 @@ export function personCard(ctx: Ctx): PersonCard {
     const mine = lit = { sel, until: performance.now() + 4000 }
     setTimeout(() => ctx.dirty(), 4050)
     ctx.dirty()
-    // The card scrolls inside itself, and is laid and sized over a few frames: watched for a second and a half.
+    // The card scrolls inside itself, and is laid, sized and redrawn over several frames (a redraw can put it back
+    // at its top): watched until it has held still in view for three quarters of a second, or the player scrolls it.
     let frames = 0, inside = 0
+    const mineNow = () => { frames = 1e9 }
+    el.addEventListener('wheel', mineNow, { once: true, passive: true })
+    el.addEventListener('touchmove', mineNow, { once: true, passive: true })
     const settle = () => {
-      if (lit !== mine || frames++ > 90) return
+      if (lit !== mine || frames++ > 240) return
       const k = el.querySelector<HTMLElement>(see) ?? el.querySelector<HTMLElement>(sel)
       if (k && !el.hidden) {
         const kr = k.getBoundingClientRect(), cr = el.getBoundingClientRect()
         const tall = kr.height > cr.height - 24
-        if (kr.top >= cr.top - 1 && (tall || kr.bottom <= cr.bottom + 1)) { if (++inside >= 4) { el.querySelector<HTMLElement>(sel)?.focus({ preventScroll: true }); return } }
-        else { inside = 0; el.scrollTop += tall || kr.top < cr.top ? kr.top - cr.top - 12 : kr.bottom - cr.bottom + 12 }
+        if (kr.top >= cr.top - 1 && (tall || kr.bottom <= cr.bottom + 1)) {
+          if (++inside === 4) el.querySelector<HTMLElement>(sel)?.focus({ preventScroll: true })
+          if (inside >= 45) return
+        } else { inside = 0; el.scrollTop += tall || kr.top < cr.top ? kr.top - cr.top - 12 : kr.bottom - cr.bottom + 12 }
       }
       requestAnimationFrame(settle)
     }

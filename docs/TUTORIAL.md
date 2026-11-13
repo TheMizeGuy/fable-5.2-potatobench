@@ -159,7 +159,7 @@ Words are for a mouse; a touch screen says "Tap" and "pinch", the keyboard its k
 | 13 | The year-end bills (brings the figure) | the ticket answered | "Your first crop is weighed. Under your cash you'll see what's left after the year-end bills of $19,000. It counts the crop still in the ground, so it'll change until every field is in." | Fast-forward to the next ticket |
 | 14 | Close out the season | the season done | "The crop is in, so the season is over. Click Close out the season. Winter comes next, and that's when you can sell what you stored." | the key itself |
 
-The first telegram carries, inside it: "The game is paused until you pick a reply."
+The first telegram carries, inside it: "Paused until you pick a reply."
 
 After the season: Winter in the cellar, Fell woods in winter, Put up a building, The ledger; then the second
 spring (a variety, People, who to hire, Land, the money, Start the second season) and its season (Your decisions this

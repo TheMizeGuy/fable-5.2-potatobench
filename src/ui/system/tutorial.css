@@ -121,3 +121,5 @@
 .hud.guided .topbar .forecast .d:nth-child(n+4) :is(.hi, .pct) { display: none; }
 .hud.guided .plate-layer .listed .stamp { display: none; }
 .hud.guided .topbar .cash-moved { display: none; }
+/* The first telegram carries the agent's own line that the game is paused: the board's tag would say it twice. */
+.hud:has(.telegram .guide-line) .topbar .stopped-tag { display: none; }
