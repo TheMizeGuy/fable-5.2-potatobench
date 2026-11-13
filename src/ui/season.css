@@ -201,6 +201,7 @@
 /* While it says what the stamp under the pointer does, it takes the place of the line about whose work is whose. */
 .season-screen .command .order-say.is-telling + .whose-box { display: none; }
 .season-screen .command .order-say.is-telling::before { height: 3.9em; }
+.season-screen .command .orders.slots .order.is-cold .cost { color: var(--red); font-family: var(--f-gothic); letter-spacing: .04em; }
 .season-screen .command .land-orders { padding-top: 0; }
 .season-screen .command.compact .order.is-suggested .fist { display: none; }
 .season-screen .command.in { animation: lay-right var(--t-sheet) var(--ease-paper); }
