@@ -173,7 +173,10 @@ export function placeCard(a: Ask): Placed {
         for (const b of blocks) {
           if (b.right <= usual.x - 4 || b.left >= usual.x + w + 4) continue
           const x = side === 'right' ? b.right + 6 : b.left - 6 - w
-          if (x < win.left || x + w > win.right || Math.abs(x - usual.x) > ASIDE - gap) continue
+          // (beside the very bar or panel its handle stands on is never too far: a chip in a wide people bar, a
+          // row of the grid)
+          const own = !!keep && meets(b, keep)
+          if (x < win.left || x + w > win.right || (!own && Math.abs(x - usual.x) > ASIDE - gap)) continue
           if (lay(side, null, x).h >= h0 - 2) starts.push({ off: x, aside: true })
         }
       }

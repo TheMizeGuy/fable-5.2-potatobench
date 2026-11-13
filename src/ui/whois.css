@@ -52,3 +52,18 @@
 /* A telegram or a paper holds the floor: a card beside someone on the land steps aside with its tether, and is back
    as it was when the paper is answered. */
 .hud.voice .whois-layer { visibility: hidden; }
+/* A short desk window: the whole card beside them, Let go included, in 720 lines. A little wider, so the rest keys
+   and the three keys at its foot each stand in one row. */
+@media (max-height: 800px) {
+  .hud .whois-layer:not(.phone) .whois.sys:not(.thing) { width: 356px; padding: 9px 13px 10px; }
+  .whois-layer:not(.phone) .whois-head { padding-bottom: 5px; }
+  .whois-layer:not(.phone) .whois-now { padding: 5px 0 3px; font-size: 14.5px; line-height: 1.25; }
+  .whois-layer:not(.phone) .whois-where { margin: -1px 0 4px; }
+  .whois-layer:not(.phone) .whois-state { gap: 1px; padding: 4px 0 5px; }
+  .whois-layer:not(.phone) .whois-first { padding: 5px 0 0; }
+  .whois-layer:not(.phone) .whois-first .key-btn { height: 32px; }
+  .whois-layer:not(.phone) .rest-keys { flex-wrap: nowrap; padding: 5px 0 0; }
+  .whois-layer:not(.phone) .rest-keys .btn { min-height: 32px; padding: 0 8px; font-size: 13.5px; white-space: nowrap; }
+  .whois-layer:not(.phone) .whois-acts { flex-wrap: nowrap; padding-top: 7px; }
+  .whois-layer:not(.phone) .whois-acts .btn { min-height: 36px; padding: 0 10px; font-size: 14.5px; white-space: nowrap; }
+}

@@ -269,7 +269,11 @@ async function hold(page: Page, k: Case, label: string, close: 'Escape' | 'groun
   // (a chip stands on the people bar under the work list: its card stands over the list, the list's height further off)
   const reach = c.aside ? 190 : k.onBar ? 100 : 60
   if (c.aside) expect.soft(c.fits && !c.cut, say('stepped aside from the point, it is whole')).toBe(true)
-  if (k.handle) expect.soft(apart(c.rect, k.handle), say(`its nearest edge is within ${reach} px of the handle clicked (${Math.round(apart(c.rect, k.handle))} px)`)).toBeLessThanOrEqual(reach)
+  if (k.onBar && c.aside) {
+    // Beside the very bar its chip stands in, however wide the bar: right at its edge.
+    const bar = (await a<Box[]>(page, `return A.rects('.timebook')`))[0]
+    expect.soft(Math.abs(c.rect.left - bar.right) <= 16 || Math.abs(bar.left - c.rect.right) <= 16, say(`stepped aside, it stands at the edge of the people bar (card ${JSON.stringify(c.rect)}, bar ${JSON.stringify(bar)})`)).toBe(true)
+  } else if (k.handle) expect.soft(apart(c.rect, k.handle), say(`its nearest edge is within ${reach} px of the handle clicked (${Math.round(apart(c.rect, k.handle))} px)`)).toBeLessThanOrEqual(reach)
   else expect.soft(away(c.rect, from), say(`its nearest edge is within ${reach} px of the point clicked (${Math.round(away(c.rect, from))} px)`)).toBeLessThanOrEqual(reach)
   expect.soft(holds(c.rect, from), say('does not cover the point clicked')).toBe(false)
   if (k.handle) expect.soft(meets(c.rect, k.handle), say('does not cover the handle clicked')).toBe(false)
@@ -757,7 +761,17 @@ for (const [w, h] of [[1280, 800], [1280, 720], [1512, 982]] as const) {
       expect(await a<number>(page, `return A.shown('card', 'field-${f.i}')`)).toBeGreaterThanOrEqual(0)
       await page.waitForTimeout(400)
       expect.soft(await a<string[]>(page, `return A.overlaps('card')`), `${w}x${h}, ${names[f.i]}: no text over another before any stamp is pointed at`).toEqual([])
-      const corner = (await cards(page)).find(x => x.id === 'card')!.rect
+      // The corner is read once the card has come to rest (the camera may still be easing the land, and the card
+      // goes with its field): two readings alike.
+      let corner = (await cards(page)).find(x => x.id === 'card')!.rect
+      for (let k = 0; k < 40; k++) {
+        await page.waitForTimeout(150)
+        const next = (await cards(page)).find(x => x.id === 'card')!.rect
+        const same = next.left === corner.left && next.top === corner.top
+        corner = next
+        if (same) break
+      }
+      expect.soft([corner.left % 1, corner.top % 1], `${w}x${h}, ${names[f.i]}: the card lies on whole pixels`).toEqual([0, 0])
       const ids = await a<string[]>(page, `return [...document.querySelectorAll('#ui [data-testid="card"] .orders .order')].filter(b => A.vis(b)).map(b => b.dataset.testid)`)
       for (const id of ids) {
         const b = (await page.locator(`#ui [data-testid="card"] [data-testid="${id}"]`).boundingBox())!
@@ -883,8 +897,8 @@ async function yardHolds(page: Page, label: string): Promise<void> {
     const body = el.querySelector('.card-body')
     return {
       rect: A.box(el),
-      // a row whose words are taller than its box, or run out of it
-      rows: rows.filter(r => r.scrollHeight > r.clientHeight + 1 || [...r.querySelectorAll('.name, .cost, .catch')].some(x => { const b = x.getBoundingClientRect(), rb = r.getBoundingClientRect(); return b.height > 0 && (b.bottom > rb.bottom + 0.5 || b.top < rb.top - 0.5) })).map(r => r.dataset.testid),
+      // a row whose words are taller than its box, run out of it, or run under the key's lower edge (8 px of it)
+      rows: rows.filter(r => r.scrollHeight > r.clientHeight + 1 || [...r.querySelectorAll('.name, .cost, .catch')].some(x => { const b = x.getBoundingClientRect(), rb = r.getBoundingClientRect(); return b.height > 0 && (b.bottom > rb.bottom - 7.5 || b.top < rb.top - 0.5) })).map(r => r.dataset.testid),
       said: rows.filter(r => /bank won't lend/.test(r.textContent)).length,
       once: el.querySelectorAll('[data-testid="yard-short"]').length,
       head: inWin(cr) && inWin(title.getBoundingClientRect()) && !!hit && close.contains(hit),

@@ -330,6 +330,19 @@ describe('keeping off the other tags and people', () => {
     }
     // With room to, it keeps off the toast as well.
     expect(meets(box(placeCard({ point: at, size: { w: 452, h: 474 }, win, blocks, keep: chip, others: [toast] }), 452), toast)).toBe(false)
+    // A wider bar (four people) or a panel (the grid of who does what): beside the bar its chip stands on, however
+    // far along that is.
+    const wide: Box = { left: 16, top: 592, right: 406, bottom: 704 }
+    const c4 = placeCard({ point: { x: 147, y: 650 }, size: { w: 452, h: 474 }, win: { left: 8, top: 171, right: 1272, bottom: 712 }, blocks: [{ left: 16, top: 541, right: 190, bottom: 585 }, wide, slip], keep: { left: 106, top: 600, right: 189, bottom: 696 } })
+    expect(c4.h).toBe(474)
+    expect(c4.x).toBe(wide.right + 6)
+    expect(c4.aside).toBe(true)
+    const grid: Box = { left: 16, top: 231, right: 528, bottom: 603 }
+    const row: Box = { left: 35, top: 428, right: 140, bottom: 472 }
+    const cg = placeCard({ point: { x: 90, y: 450 }, size: { w: 452, h: 474 }, win, blocks: [grid, bar, slip], keep: row })
+    expect(cg.h).toBe(474)
+    expect(cg.x).toBe(grid.right + 6)
+    expect(meets(box(cg, 452), grid)).toBe(false)
     // Never a strip: whatever the height asked, it is given at least the land over the list.
     const tall = placeCard({ point: at, size: { w: 452, h: 700 }, win, blocks, keep: chip })
     expect(tall.h).toBeGreaterThanOrEqual(380)

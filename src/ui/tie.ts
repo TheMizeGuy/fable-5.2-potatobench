@@ -379,9 +379,13 @@ export function anchored(ctx: Ctx, card: HTMLElement, o: { mark?: boolean } = {}
   function measure(): void {
     stale = false
     const was = card.style.maxHeight
+    if (!was) { size = { w: card.offsetWidth || size.w, h: card.offsetHeight || size.h }; return }
+    // Held to less than it wants: let out for the measure, with what the player had scrolled to kept where it was.
+    const scrolled = [card, ...card.querySelectorAll<HTMLElement>('[data-scroll]')].map(x => [x, x.scrollTop] as const)
     card.style.maxHeight = 'none'
     size = { w: card.offsetWidth || size.w, h: card.offsetHeight || size.h }
     card.style.maxHeight = was
+    for (const [x, top] of scrolled) if (x.scrollTop !== top) x.scrollTop = top
   }
   // A card may grow between two drawings of the screen (a stamp's line under the pointer): its size is taken again
   // on the next frame, so it is held to its corner and to the land's room at once, paused or running.
@@ -457,8 +461,9 @@ export function anchored(ctx: Ctx, card: HTMLElement, o: { mark?: boolean } = {}
       if (stepped && !ctx.reduced()) { hopUntil = performance.now() + 220; card.classList.add('hop') }
     }
     if (hopUntil && performance.now() > hopUntil) { hopUntil = 0; card.classList.remove('hop') }
-    const p = placed!
-    set(card, 'card', `translate3d(${p.x.toFixed(1)}px, ${p.y.toFixed(1)}px, 0)`)
+    // On whole pixels: its words are sharp, and a change of its own height can never nudge its edge.
+    const p = { ...placed!, x: Math.round(placed!.x), y: Math.round(placed!.y) }
+    set(card, 'card', `translate3d(${p.x}px, ${p.y}px, 0)`)
     const max = p.h < size.h - 0.5 ? `${Math.floor(p.h)}px` : ''
     if (drawn.max !== max) { card.style.maxHeight = max; drawn.max = max }
     if (card.dataset.side !== p.side) card.dataset.side = p.side
