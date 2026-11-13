@@ -177,7 +177,7 @@ test('a guided first year: offered as a card, taken, and followed from Play to t
     }
     // Paused with nothing asking, by the player's own pause (a stamp pressed): the clock's own way on.
     if (s.phase === 'season' && s.speed === 0 && !s.asking.length && !s.stopped && !s.done) {
-      const go = page.locator('#ui [data-testid="paused-go"]:visible, #ui [data-testid="speed-toggle"]:visible').first()
+      const go = page.locator('#ui [data-testid="paused-go"]:visible, #ui [data-testid="speed-0"]:visible, #ui [data-testid="speed-toggle"]:visible').first()
       if (await go.isVisible().catch(() => false)) { await go.click(); await page.waitForTimeout(150); continue }
     }
     if (s.asking.includes('telegram')) cardMost = Math.max(cardMost, s.words)

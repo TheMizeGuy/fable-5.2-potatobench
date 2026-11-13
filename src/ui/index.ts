@@ -39,6 +39,9 @@ const SENT: Record<S.JobKind, string> = {
 
 // The answer to a stamp or a right-click: who will do what where, or that it's on the work list and why not the one picked.
 function sentText(c: S.Campaign, e: { field: number; kind: S.JobKind; unit: number; instead?: number }): string {
+  // The year's first planting order is the word the crew waited for: the answer is what follows from it.
+  const word = e.kind === 'plant' ? c.season?.log.find(x => x.type === 'plantWord' && x.field === e.field && x.day === c.season!.day && c.season!.plantWordBy === 'you') : undefined
+  if (word) return word.text
   const u = c.crew.find(x => x.id === e.unit)
   if (u) return `${u.kind === 'farmer' ? 'You\'ll' : `${firstName(u.name)} will`} ${SENT[e.kind]} ${S.placeName(e.field)}.`
   const what = jobText(e)

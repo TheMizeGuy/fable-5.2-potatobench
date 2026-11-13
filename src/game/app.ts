@@ -437,6 +437,8 @@ export class App {
       out.push({ field, ok: r.ok, err: r.err })
       if (!r.ok) continue
       taken.push(field)
+      // What an order sets off is said (the word to plant: "Your crew will plant the other 3 fields too").
+      for (const e of r.events) if (e.level !== 'info' || NOTABLE.has(e.type)) this.alert(c, e)
       const jobs = c.season?.jobs ?? []
       if (opts.first && jobs.length) apply(this.world, c, { t: 'bump', id: jobs[jobs.length - 1].id })
     }
