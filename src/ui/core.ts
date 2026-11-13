@@ -46,6 +46,8 @@ export interface Screen {
   insets(): [number, number, number, number]
   frame?(dt: number): void
   key?(e: KeyboardEvent): boolean
+  // What Escape closes here, by how near it is: a popover or breakdown, then a card (index.ts keeps the order).
+  escapes?: { popover(): boolean; card(): boolean }
   // Where the alerts sit on this screen.
   notes?: HTMLElement
   // Where an alert takes the player when it is clicked, for alerts about something other than a field.

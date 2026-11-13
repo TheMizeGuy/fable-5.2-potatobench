@@ -566,6 +566,22 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     return true
   }
 
+  // What Escape closes on this screen, nearest first (the order across the interface is in index.ts).
+  const escapes = {
+    // a popover or breakdown: the money board's, a shared pin's list of people, an order's choices
+    popover: (): boolean => top.escape() || people.escape() || units.escape(),
+    // a card: the work grid, a telegram, a test-dig tray, and what a selection shows (a field's, the yard's, a person's)
+    card: (): boolean => {
+      if (grid.isOpen()) { grid.toggle(false); return true }
+      if (incident.putAway()) return true
+      if (tray) { closeTray(); return true }
+      if (app.selection.length) { app.select(-1); (document.activeElement as HTMLElement | null)?.blur?.(); return true }
+      if (app.yard !== 0) { app.selectYard(0); return true }
+      if (app.unit >= 0) { app.selectUnit(-1); return true }
+      return false
+    },
+  }
+
   function key(e: KeyboardEvent): boolean {
     if (e.altKey || e.metaKey) return false
     const c = app.campaign
@@ -578,18 +594,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     const onSelected = at >= 0 && app.selection.length === 1 && app.selected === at
     const onControl = !!t.closest?.('button, input, a') && !onSelected
     const k = e.key
-    if (k === 'Escape') {
-      if (top.escape()) return true
-      if (people.escape()) return true
-      if (units.escape()) return true
-      if (grid.isOpen()) { grid.toggle(false); return true }
-      if (incident.putAway()) return true
-      if (tray) { closeTray(); return true }
-      if (app.selection.length) { app.select(-1); (document.activeElement as HTMLElement | null)?.blur?.(); return true }
-      if (app.yard !== 0) { app.selectYard(0); return true }
-      if (app.unit >= 0) { app.selectUnit(-1); return true }
-      return false
-    }
+    if (k === 'Escape') return escapes.popover() || escapes.card()
     if (k === 'Tab') {
       if (e.ctrlKey || (!!t.closest?.('button, input, a') && !onPlate)) return false
       const from = at >= 0 ? at : app.selected >= 0 ? app.selected : e.shiftKey ? S.FIELD_COUNT : -1
@@ -666,6 +671,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     el,
     notes: notesSlot,
     key,
+    escapes,
     goFor,
     update() {
       const c = app.campaign

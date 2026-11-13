@@ -264,9 +264,15 @@ export const mountHud: MountHud = (root, app, view, sound) => {
   document.addEventListener('keydown', e => {
     const t = e.target as HTMLElement
     if (e.key === 'Escape') {
-      if (papers.isOpen()) { e.preventDefault(); papers.closeTop(); return }
-      if (who.escape()) { e.preventDefault(); return }
-      if (screen?.key?.(e)) { e.preventDefault(); return }
+      // Escape undoes the nearest thing first: a popover or breakdown, a paper, a card (a selection's card among them),
+      // Follow. Only with nothing open does it open the menu.
+      const steps: (() => boolean)[] = [
+        () => !papers.isOpen() && !!screen?.escapes?.popover(),
+        () => { if (!papers.isOpen()) return false; papers.closeTop(); return true },
+        () => who.escape() || (screen?.escapes ? screen.escapes.card() : !!screen?.key?.(e)),
+        () => { if (app.screen !== 'season' || view.followed() < 0) return false; view.follow(-1); ctx.announce('Stopped following.'); return true },
+      ]
+      if (steps.some(step => step())) { e.preventDefault(); return }
       if (performance.now() - papers.closedAt < 1500) { e.preventDefault(); return }
       if (app.screen !== 'title' && app.campaign) { e.preventDefault(); menu() }
       return
