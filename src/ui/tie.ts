@@ -3,7 +3,7 @@
 // camera moves, and when the thing leaves the picture it waits at the nearest edge with a Show key. On a phone the
 // card is a sheet at the foot with a notch on its edge toward the thing.
 import type { Place, Thing } from '../game/contracts.ts'
-import { holds, meets, notchOf, placeCard, roomUnder, tetherOf, tetherShown, type Box, type Placed, type Pt, type Side } from './anchor.ts'
+import { holds, meets, MIDDLE, notchOf, placeCard, roomUnder, tetherOf, tetherShown, type Box, type Placed, type Pt, type Side } from './anchor.ts'
 import type { Ctx } from './core.ts'
 import { h } from './dom.ts'
 import { icon } from './icons.ts'
@@ -103,10 +103,14 @@ export function mountTies(ctx: Ctx, root: HTMLElement): Ties {
   // A handle on the screen (a tag, a chip): the card stands beside it, tied to its edge. at: the point of it that was
   // pressed. Gone from the screen, the tie falls back to the thing itself. The handle is taken at the size it has
   // when its card first stands beside it: a tag that then grows ("on the list") moves neither the card nor the point.
+  // The handle is taken at the size it comes to rest at in its first moments in hand (a tag taken in hand grows, and
+  // may be set again about its middle): the card stands beside all of it, so never on the pixel that was pressed.
+  // After that a tag that grows ("on the list") moves neither the card nor the point.
   function handle(thing: string, sel: string, at: Pt | null, fall: Tie, hold?: (el: HTMLElement) => HTMLElement): Tie {
     const first = find(sel)
     const b0 = first?.getBoundingClientRect()
     const d = at && b0 ? { x: at.x - b0.left, y: at.y - b0.top } : null
+    const born = performance.now()
     let size: { w: number; h: number } | null = null
     return {
       thing, show: fall.show,
@@ -115,7 +119,7 @@ export function mountTies(ctx: Ctx, root: HTMLElement): Ties {
         if (!el) { size = null; return fall.at() }
         const b = el.getBoundingClientRect()
         const k = (hold?.(el) ?? el).getBoundingClientRect()
-        size ??= { w: k.width, h: k.height }
+        if (!size || performance.now() - born < 300) size = { w: k.width, h: k.height }
         const point = d ? { x: b.left + Math.max(0, Math.min(b.width, d.x)), y: b.top + Math.max(0, Math.min(b.height, d.y)) } : { x: b.left + Math.min(b.width, size.w) / 2, y: b.top + b.height / 2 }
         return { point, keep: { left: k.left, top: k.top, right: k.left + size.w, bottom: k.top + size.h }, avoid: fall.at()?.avoid }
       },
@@ -378,15 +382,22 @@ export function anchored(ctx: Ctx, card: HTMLElement, o: { mark?: boolean } = {}
   // Its own height, with all the room it wants: the frame gives it that, or less where the land is short.
   function measure(): void {
     stale = false
+    // A head (and a foot) that stay and a middle that scrolls: the card is of use with them and some of the middle.
+    const take = () => {
+      size = { w: card.offsetWidth || size.w, h: card.offsetHeight || size.h }
+      const mid = card.querySelector<HTMLElement>(':scope > [data-scroll]')
+      least = mid && mid.offsetHeight ? size.h - mid.offsetHeight + Math.min(mid.offsetHeight, MIDDLE) : undefined
+    }
     const was = card.style.maxHeight
-    if (!was) { size = { w: card.offsetWidth || size.w, h: card.offsetHeight || size.h }; return }
+    if (!was) { take(); return }
     // Held to less than it wants: let out for the measure, with what the player had scrolled to kept where it was.
     const scrolled = [card, ...card.querySelectorAll<HTMLElement>('[data-scroll]')].map(x => [x, x.scrollTop] as const)
     card.style.maxHeight = 'none'
-    size = { w: card.offsetWidth || size.w, h: card.offsetHeight || size.h }
+    take()
     card.style.maxHeight = was
     for (const [x, top] of scrolled) if (x.scrollTop !== top) x.scrollTop = top
   }
+  let least: number | undefined
   // A card may grow between two drawings of the screen (a stamp's line under the pointer): its size is taken again
   // on the next frame, so it is held to its corner and to the land's room at once, paused or running.
   let stale = false
@@ -437,7 +448,7 @@ export function anchored(ctx: Ctx, card: HTMLElement, o: { mark?: boolean } = {}
       // Its own height changed (an order given, a stamp's line under the pointer): its top left corner stays where
       // it is, so nothing in it moves under the pointer; it grows downward, or scrolls where there is no more room.
       const h = Math.min(size.h, roomUnder(placed!.x, placed!.y, size.w, land.win, land.blocks) - placed!.y)
-      if (h >= Math.min(size.h, 160)) placed = { ...placed!, h, size: sized }
+      if (h >= Math.min(size.h, least ?? 160)) placed = { ...placed!, h, size: sized }
       else fits = false
     }
     if (fits) {
@@ -453,7 +464,7 @@ export function anchored(ctx: Ctx, card: HTMLElement, o: { mark?: boolean } = {}
       // people. Carried by the camera after that it lies as it lay, so a tag passing under it never makes it jump.
       const fresh = !placed || placed.away
       const p = placeCard({
-        point: t.point, size, win: land.win, blocks: land.blocks, keep: t.keep, avoid: t.avoid, spare: t.spare, others: fresh ? land.tags?.() : undefined,
+        point: t.point, size, least, win: land.win, blocks: land.blocks, keep: t.keep, avoid: t.avoid, spare: t.spare, others: fresh ? land.tags?.() : undefined,
         prev: side, prevOff: fresh ? null : { x: placed!.x - placed!.at.x, y: placed!.y - placed!.at.y },
       })
       placed = { ...p, for: t.point, win, size: sized }

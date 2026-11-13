@@ -233,7 +233,9 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     const tags = P.boxes()
     for (const a of notesSlot.querySelectorAll<HTMLElement>('.alert')) {
       const r = a.getBoundingClientRect()
-      const over = !!r.width && tags.some(t => r.left < t.right && r.right > t.left && r.top < t.bottom && r.bottom > t.top)
+      // (a slip that offers to show something is there to be pressed: it stays whole and in reach)
+      const offer = !!a.querySelector(':scope > span:not(.sr)')?.textContent?.trim().endsWith('Show me')
+      const over = !offer && !!r.width && tags.some(t => r.left < t.right && r.right > t.left && r.top < t.bottom && r.bottom > t.top)
       a.classList.toggle('over-land', over)
     }
   }
