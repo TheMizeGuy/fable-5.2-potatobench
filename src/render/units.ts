@@ -77,6 +77,8 @@ const CATCH_UP = 1.6
 // The fastest anyone is seen to go at 1x, catching up with where the day's script has them: on foot, and driving
 // (m/s); half as fast again at 3x and two and a half times at 8x. The script's own ways keep within it.
 const FOOT_MOST = 9, RIG_MOST = 28
+// Faster than this over the ground (metres a second) without stepping is a slide.
+const SLID = 0.45
 const QUICK = [1, 1, 1.5, 2.4]
 // Hauling with the clock stopped: seconds to a load, there and back.
 const HAUL_LAP_S = 130
@@ -1100,7 +1102,16 @@ export class Crews {
   }
 
   private figure(a: Actor, pose: Pose, scale: number, lift = 0): void {
+    const bx = a.sx, bz = a.sz
     this.follow(a, this.vFoot, FOOT_MOST * this.quick)
+    // Carried over the ground to where the day has them, they are seen walking there and facing the way they go:
+    // nobody is slid along as they stand or work.
+    const gone = Number.isFinite(bx) ? Math.hypot(a.sx - bx, a.sz - bz) : 0
+    if (gone > SLID * this.dtNow && !pose.walking && !pose.seated) {
+      a.gait += Math.min(this.dtNow * 14, (gone / (0.46 * scale)) * Math.PI * 2)
+      a.heading = Math.atan2(a.sz - bz, a.sx - bx)
+      walk(pose, a.gait, 1, a.tired, 0)
+    }
     const y = heightAt(a.sx, a.sz) + 0.02 + lift * scale
     figureMatrix(M, a.sx, y, a.sz, a.heading, scale * (0.3 + 0.7 * a.shown) * a.fade)
     drawFigure(this.prims, M, this.cold ? a.coat : a.dress, pose)

@@ -43,6 +43,8 @@ export interface Ctx {
 export interface Screen {
   el: HTMLElement
   update(): void
+  // The same update a part at a time, for a day's turn drawn over several frames.
+  steps?(): Iterator<void>
   insets(): [number, number, number, number]
   frame?(dt: number): void
   key?(e: KeyboardEvent): boolean

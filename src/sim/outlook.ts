@@ -31,6 +31,17 @@ export interface JobOutlook {
 export function jobOutlook(world: World, c: Campaign): JobOutlook[] {
   const s = c.season
   if (c.phase !== 'season' || !s || s.frozen) return []
+  // Asked again of the same farm (the time book, the board's calls and the work that cannot wait each ask at a day's
+  // turn), it is answered from the last reckoning: the farm as text says whether anything at all has changed.
+  const key = JSON.stringify(c)
+  if (last && last.world === world && last.key === key) return last.out.map(o => ({ ...o }))
+  const out = outlookOf(world, c, s)
+  last = { world, key, out }
+  return out.map(o => ({ ...o }))
+}
+let last: { world: World; key: string; out: JobOutlook[] } | null = null
+
+function outlookOf(world: World, c: Campaign, s: NonNullable<Campaign['season']>): JobOutlook[] {
   const copy = structuredClone(c)
   const r = apply(world, copy, { t: 'day' })
   const worked = copy.season!.worked
@@ -135,11 +146,12 @@ export interface Pressing {
 // Work the season cannot wait for (spraying under a blight watch, planting, the haul ahead of a frost, the late dig)
 // that nobody will take, or that is not ordered, with what is in its way and the fix. Taken ahead of work that can
 // wait whatever the priorities (src/sim/season.ts, choose), so a willing person never leaves it for the woods.
-export function pressing(world: World, c: Campaign): Pressing[] {
+// (outlook: the orders' fates where the caller has just reckoned them)
+export function pressing(world: World, c: Campaign, outlook?: JobOutlook[]): Pressing[] {
   const s = c.season
   if (c.phase !== 'season' || !s || s.frozen) return []
   const out: Pressing[] = []
-  const fate = new Map(jobOutlook(world, c).map(o => [o.id, o]))
+  const fate = new Map((outlook ?? jobOutlook(world, c)).map(o => [o.id, o]))
   for (const j of s.jobs) {
     const why = pressingWhy(c, s, j)
     const o = fate.get(j.id)

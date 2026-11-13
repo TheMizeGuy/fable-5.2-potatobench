@@ -95,6 +95,8 @@ export class Pose {
   toolB = new Vector3()
   held: Held = ''
   size = 1                 // of what is held
+  walking = false          // the legs are stepping (walk)
+  seated = false           // sat down, on the ground, a seat or a machine
 
   reset(): this {
     this.hip.set(0, STAND_HIP, 0)
@@ -108,6 +110,7 @@ export class Pose {
     this.tool = ''
     this.held = ''
     this.size = 1
+    this.walking = this.seated = false
     return this
   }
 }
@@ -158,6 +161,7 @@ export function stand(p: Pose, t: number, tired = 0, style = 0): Pose {
 export function walk(p: Pose, phase: number, amount = 1, tired = 0, load = 0): Pose {
   p.reset()
   const a = amount, L = 0.115 * (1 - 0.35 * tired) * a
+  p.walking = a > 0
   const foot = (f: Vector3, ph: number, z: number) => {
     const s = Math.sin(ph), c = Math.cos(ph)
     f.set(L * c, ANKLE + Math.max(0, s) * 0.065 * a * (1 - 0.4 * tired), z)
@@ -209,6 +213,7 @@ export function stoop(p: Pose, depth: number, reach = 0, both = true): Pose {
 export function sit(p: Pose, t: number, seat = 0, tired = 0): Pose {
   p.reset()
   const ground = seat < 0.05
+  p.seated = true
   p.hip.set(0, seat + 0.075, 0)
   p.lean = ground ? 0.3 + 0.25 * tired : 0.08 + 0.3 * tired
   p.nod = 0.1 + 0.4 * tired + 0.03 * Math.sin(t * 0.8)
@@ -233,6 +238,7 @@ export function sit(p: Pose, t: number, seat = 0, tired = 0): Pose {
 // At the wheel of a tractor or a truck: the seat is the figure's origin. steer -1..1.
 export function drive(p: Pose, t: number, steer: number, bounce: number): Pose {
   p.reset()
+  p.seated = true
   p.hip.set(0, 0.07 + bounce, 0)
   p.lean = 0.16
   p.nod = -0.05
@@ -393,6 +399,11 @@ export function figureMatrix(out: Matrix4, x: number, y: number, z: number, head
 // How finely the next figure is drawn: the face, the hands, the buttons and the belt only when near enough to be seen.
 export const LOD = { fine: true }
 
+// For the tool that looks for stiff figures (tools/render/pose.ts): every figure drawn while it is on, by where its
+// feet (or its seat) are and how each arm is held (how far out it reaches, 0..1, and which way against the trunk: out to its own
+// side, forward, up), with what is in its hands and whether it is stepping or sat down.
+export const WATCH = { on: false, rows: [] as number[][] }
+
 // Where the last figure drawn has its head and its hands, in the world.
 export const drawn = { head: new Vector3(), handL: new Vector3(), handR: new Vector3(), chest: new Vector3(), toolB: new Vector3(), up: new Vector3(), fwd: new Vector3() }
 
@@ -448,6 +459,17 @@ export function drawFigure(pr: Prims, at: Matrix4, dress: Dress, p: Pose): void 
   drawn.up.copy(TU)
   drawn.fwd.copy(TF)
   drawn.chest.copy(hip).addScaledVector(TU, TORSO * 0.7 * s)
+  if (WATCH.on) {
+    const row = [e[12], e[13], e[14], s]
+    for (let i = 0; i < 2; i++) {
+      c.subVectors(hand[i], sh[i])
+      const len = c.length() || 1e-9
+      c.multiplyScalar(1 / len)
+      row.push(len / ((UPPER + FORE) * s), c.dot(TR) * (i === 0 ? -1 : 1), c.dot(TF), c.dot(TU))
+    }
+    row.push((p.gripL ? 1 : 0) + (p.gripR ? 2 : 0) + (p.tool ? 4 : 0) + (p.held ? 8 : 0) + (p.walking ? 16 : 0) + (p.seated ? 32 : 0))
+    WATCH.rows.push(row)
+  }
 
   // legs: thigh, shin, knee, boot
   for (let i = 0; i < 2; i++) {
