@@ -363,6 +363,8 @@ export const FIELD_COST = 8000                 // fertilizer, fuel, repairs and 
 export const SEED_CWT_PER_FIELD = 100
 export const CERT_SEED_PER_CWT = 17
 export const REST_COST = 250
+// About what a potato field's work costs a month of the season, the dig included (coach-tended first years: $397).
+export const FIELD_WORK_MONTH = 400
 export const REST_INCOME = 900
 
 export const CELLAR_CWT = 3600

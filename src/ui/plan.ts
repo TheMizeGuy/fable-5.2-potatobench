@@ -8,6 +8,7 @@ import * as F from './fmt.ts'
 import { GLOSSARY, term } from './glossary.ts'
 import { icon } from './icons.ts'
 import { digitFor, fieldForDigit, heldFields, step } from './map.ts'
+import { dueSays, lowCashSays } from './money-words.ts'
 import { plates, type PlateModel } from './plates.ts'
 import * as R from './rules.ts'
 import { cardHead, fieldCost, landCard, springFolds, tenureRow, tractCard, type Fold } from './spring.ts'
@@ -273,6 +274,9 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
   }
   const P = plates(ctx, plateLayer, { model: plateModel, onBadge: () => {}, covers: () => card.hidden ? [] : [card.getBoundingClientRect()] })
 
+  // The box's word for leaf blight, which names what it is about ("prone" alone was not understood).
+  const BOX_BLIGHT = ['resists blight', 'some blight resistance', 'prone to blight', 'very prone to blight']
+
   // A variety as a printed box to tick: its name, how it matures and yields, its price; what else it is like is said
   // to a screen reader, and in full on the comparison sheet.
   function varietyBox(c: S.Campaign, v: S.Variety, on: boolean): HTMLElement {
@@ -281,7 +285,7 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
       h('span', { class: 'vbox-in' },
         h('b', null, v.name),
         h('span', { class: 'it' }, `${v.maturity}, ${R.yieldWord(v).split(',')[0]}`),
-        h('span', { class: v.contract ? 'c-ochre' : null, title: v.contract ? GLOSSARY['contract only'] : undefined }, v.contract ? 'contract only' : R.blightWord(v, true)),
+        h('span', { class: v.contract ? 'c-ochre' : null, title: v.contract ? GLOSSARY['contract only'] : undefined }, v.contract ? 'contract only' : BOX_BLIGHT[R.blightMark(v)]),
         h('span', { class: 'num' }, F.price(v.price))),
       h('span', { class: 'sr', id: `v-more-${v.id}` }, varietyTraits(v, c, app.world).join(', ')))
   }
@@ -306,29 +310,38 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
     const stock = c.seedStock.filter(x => x.variety === p.variety && x.fields > 0)
     const saved = stock.reduce((a, x) => a + x.fields, 0)
     const cost = sel.reduce((a, j) => a + fieldCost(c.plans[j]), 0)
+    // Saved seed's warning stands with the seed choice; how to save some is read with the varieties.
+    const seedNote = h('p', { class: `t-caption${p.seed === 'saved' ? ' c-ochre' : ''}`, testid: 'seed-note' }, saved > 0 || p.seed === 'saved' ? R.savedSeedText(stock)
+      : [`You have no saved ${v.name} seed in the cellar. To save some, `, term('hold some back', 'hold back seed'), ' from a stored crop over the winter. It\'s free to plant next spring, but it carries virus.'])
+    // Head and seed stay in view; where the land leaves the card too little room, the crop and the varieties scroll
+    // between them.
     return [
       cardHead(ctx, one ? 'Field record' : 'Fields', one ? info.name : `${sel.length} fields`, one
         ? [`${R.POSITION_NOTE[info.elev]} ${info.streak > 1 ? `Potatoes ${info.streak} years in a row` : info.streak ? 'Potatoes last year' : 'No potatoes last year'}. The soil is ${R.soilWord(info.soil)} and `, term('early dying'), ` hits ${F.pct(info.vert)} of plants.${info.raw ? ' It\'s new ground, so a first crop will be smaller unless it rests a year.' : ''}`]
         : F.list(sel.map(j => S.FIELD_NAMES[j]))),
-      h('div', { class: 'card-crop' },
-        choice('crop', 'Crop', [['potato', 'Potatoes', same('crop') && potato, () => setPlan({ crop: 'potato' })], ['rest', 'Rest year', same('crop') && !potato, () => setPlan({ crop: 'rest' })]]),
-        h('p', { class: 'card-cost' }, h('span', { class: 't-label' }, sel.length > 1 ? 'Together' : 'Costs'), h('b', { class: 'num', testid: 'field-cost' }, F.money(cost)))),
-      potato ? [
-        h('div', { class: 'vgrid', role: 'radiogroup', 'aria-label': 'Variety' }, vs.map(x => varietyBox(c, x, same('variety') && x.id === p.variety))),
-        h('p', { class: 'note card-note' }, same('variety') ? `${v.blurb}${v.contract ? ` Without a contract it sells ${R.offContract()} its usual price.` : ''}` : 'These fields are planted with different varieties.',
-          ' ', h('button', { class: 'btn quiet', type: 'button', testid: 'compare-open', onclick: () => openCompare(ctx) }, 'Compare them all')),
-        // Where the seed comes from is always on the card: saved seed is free once some is held back in the cellar.
-        h('div', { class: 'card-seed' },
-          h('p', { class: 't-label' }, 'Seed'),
-          choice('seed', 'Seed', [
-            ['certified', `Certified, ${F.money(S.SEED_CWT_PER_FIELD * S.CERT_SEED_PER_CWT)}`, same('seed') && p.seed === 'certified', () => setPlan({ seed: 'certified' })],
-            ['saved', saved > 0 ? `Saved, free (enough for ${saved})` : 'Saved, free', same('seed') && p.seed === 'saved', () => setPlan({ seed: 'saved' }),
-              saved > 0 || p.seed === 'saved' ? '' : `You have no saved ${v.name} seed in the cellar`]]),
-          h('p', { class: `t-caption${p.seed === 'saved' ? ' c-ochre' : ''}`, testid: 'seed-note' }, saved > 0 || p.seed === 'saved' ? R.savedSeedText(stock)
-            : [`You have no saved ${v.name} seed in the cellar. To save some, `, term('hold some back', 'hold back seed'), ' from a stored crop over the winter. It\'s free to plant next spring, but it carries virus.'])),
-      ] : h('p', { class: 'note card-note' }, `Oats and clover cost ${F.money(S.REST_COST)} and earn ${F.money(S.REST_INCOME)} in the fall. A rest year restores the soil right away and slowly reduces early dying.`),
-      one ? tenureRow(ctx, c, i, onTry) : null,
-      note ? h('p', { class: 'card-refused c-red', role: 'alert' }, note) : null,
+      h('div', { class: 'card-scroll', 'data-scroll': 'record', testid: 'record-scroll' },
+        h('div', { class: 'card-crop' },
+          choice('crop', 'Crop', [['potato', 'Potatoes', same('crop') && potato, () => setPlan({ crop: 'potato' })], ['rest', 'Rest year', same('crop') && !potato, () => setPlan({ crop: 'rest' })]]),
+          h('p', { class: 'card-cost' }, h('span', { class: 't-label' }, sel.length > 1 ? 'Together' : 'Costs'), h('b', { class: 'num', testid: 'field-cost' }, F.money(cost)))),
+        potato ? [
+          h('div', { class: 'vgrid', role: 'radiogroup', 'aria-label': 'Variety' }, vs.map(x => varietyBox(c, x, same('variety') && x.id === p.variety))),
+          h('p', { class: 'note card-note' }, same('variety') ? `${v.blurb}${v.contract ? ` Without a contract it sells ${R.offContract()} its usual price.` : ''}` : 'These fields are planted with different varieties.',
+            ' ', h('button', { class: 'btn quiet', type: 'button', testid: 'compare-open', onclick: () => openCompare(ctx) }, 'Compare them all')),
+          p.seed === 'saved' ? null : h('div', { class: 'card-seed-note' }, seedNote),
+        ] : h('p', { class: 'note card-note' }, `Oats and clover cost ${F.money(S.REST_COST)} and earn ${F.money(S.REST_INCOME)} in the fall. A rest year restores the soil right away and slowly reduces early dying.`)),
+      h('div', { class: 'card-foot', testid: 'record-foot' },
+        potato ? [
+          // Where the seed comes from is always on the card: saved seed is free once some is held back in the cellar.
+          h('div', { class: 'card-seed' },
+            h('p', { class: 't-label' }, 'Seed'),
+            choice('seed', 'Seed', [
+              ['certified', `Certified, ${F.money(S.SEED_CWT_PER_FIELD * S.CERT_SEED_PER_CWT)}`, same('seed') && p.seed === 'certified', () => setPlan({ seed: 'certified' })],
+              ['saved', saved > 0 ? `Saved, free (enough for ${saved})` : 'Saved, free', same('seed') && p.seed === 'saved', () => setPlan({ seed: 'saved' }),
+                saved > 0 || p.seed === 'saved' ? '' : `You have no saved ${v.name} seed in the cellar`]]),
+            p.seed === 'saved' ? seedNote : null),
+        ] : null,
+        one ? tenureRow(ctx, c, i, onTry) : null,
+        note ? h('p', { class: 'card-refused c-red', role: 'alert' }, note) : null),
     ]
   }
 
@@ -365,9 +378,9 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
     // mortgage. Whatever raises the loan (a field, a hand, a machine bought from cash) raises what is due by as much.
     const mn = S.moneyNow(app.world, c)
     const loan = over ? 0 : mn.loan
-    const due = over ? mn.due.total - mn.due.loan : mn.due.total
     const what = pc.rent || pc.wages ? `with ${F.list([pc.rent ? `rent ${F.money(pc.rent)}` : '', pc.wages ? `wages ${F.money(pc.wages)}` : ''].filter(Boolean))}` : ''
-    const parts = F.list([loan ? 'the spring loan' : '', `${F.money(mn.due.note)} for the yearly bank payment`, `${F.money(mn.due.household)} for your family's living costs`, mn.due.mortgage > 0 ? `${F.money(Math.round(mn.due.mortgage))} for the land mortgage` : ''].filter(Boolean))
+    const due = dueSays(mn.due, loan)
+    const low = over ? '' : lowCashSays(c, after)
     return [
       h('div', { class: `plan-money${over ? ' over' : ''}`, testid: 'plan-money' },
         h('p', { class: 'lead quiet pm-cash' }, h('span', { class: 'it' }, c.cash < 0 ? 'Owed from last year' : 'You have'), h('span', { class: 'dots' }),
@@ -375,10 +388,11 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
         h('p', { class: 'lead' }, h('span', null, 'This plan', what ? h('span', { class: 'it quiet', testid: 'plan-rent' }, ` ${what}`) : null), h('span', { class: 'dots' }),
           h('b', { class: 'num big' }, F.money(pc.total))),
         h('p', { class: 'lead quiet pm-loan' }, h('span', { class: 'it' }, over ? 'More than the bank will lend' : after < 0 ? term('The bank\'s spring loan', 'spring loan') : 'Left in cash'), h('span', { class: 'dots' }),
-          over ? null : h('span', { class: 'num', testid: 'plan-loan' }, F.money(Math.abs(after)))),
+          over ? null : h('span', { class: `num${low ? ' c-ochre' : ''}`, testid: 'plan-loan' }, F.money(Math.abs(after)))),
+        low ? h('p', { class: 't-caption c-ochre', testid: 'plan-low', role: 'status' }, low) : null,
         h('p', { class: 'lead quiet' }, h('span', { class: 'it' }, term('Due at the end of the year', 'due at the year end'), ctx.layout() === 'narrow' ? null : ', from your crop'), h('span', { class: 'dots' }),
-          h('span', { class: 'num c-red', testid: 'plan-due' }, F.money(due))),
-        h('p', { class: 't-caption pm-parts' }, `That's ${parts}. You keep whatever's left.`),
+          h('span', { class: 'num c-red', testid: 'plan-due' }, F.money(due.total))),
+        h('p', { class: 't-caption pm-parts' }, due.text),
         c.history.length ? null : h('p', { class: 't-caption pm-usual', testid: 'plan-usual', title: ctx.touch() ? undefined : usualFirstYear(mn.due.note + mn.due.household).full }, usualFirstYear(mn.due.note + mn.due.household).short)),
       over ? h('p', { class: 't-caption c-red', role: 'alert' }, 'Rest a field or plant saved seed, because the bank won\'t lend any more this spring.') : null,
       h('div', { class: 'blank-go' },

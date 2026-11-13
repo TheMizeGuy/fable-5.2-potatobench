@@ -135,6 +135,9 @@
 /* Crowded, "on the list" keeps only its cut. */
 .plate-layer.compact .tag-at:not(.is-sel) .listed .stamp { display: none; }
 .plate-layer.far .tag-at:not(.is-sel) .var, .plate-layer.far .tag-at:not(.is-sel) .listed { display: none; }
+/* What a resting field grows, under its tag while the pointer is on it or it is in hand (whois.css's hover name). */
+.tag-wrap > .hover-name { position: absolute; left: 18px; top: calc(100% - 3px); display: none; pointer-events: none; }
+.tag-wrap.named > .hover-name { display: block; }
 .yard-at .yard-tag { white-space: nowrap; }
 .yard-at .yard-tag .yard-pct { margin-left: 4px; font: 400 15px/1 var(--f-gothic); letter-spacing: .06em; color: var(--board-ink); }
 .yard-at .yard-tag.goal-ring { box-shadow: 0 0 0 1px #17120c, 0 0 0 4px var(--st-ochre), 0 0 0 5px #17120c; }
@@ -174,11 +177,21 @@
 .season-screen:is([data-layout='mid'], [data-layout='wide']) :is(.command, .command.compact.sys, .person-card) { left: 0; top: 0; right: auto; bottom: auto; max-height: none; z-index: 3; will-change: transform; }
 .season-screen:is([data-layout='mid'], [data-layout='wide']) :is(.command, .person-card).in { animation: lay-card var(--t-sheet) var(--ease-paper); }
 .season-screen:is([data-layout='mid'], [data-layout='wide']) :is(.command, .person-card).out { animation: leave-card var(--t-leave) var(--ease-in) forwards; }
-.season-screen .command.compact { overflow-y: auto; overscroll-behavior: contain; }
+.season-screen .command.compact:not(.yard-card) { overflow-y: auto; overscroll-behavior: contain; }
 /* The field card: its head and cross stay in view, and what is under them scrolls inside the window. A fixed width,
    so an order given or a longer line under the orders never moves one. */
 .season-screen .command.card { display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; width: min(430px, calc(100vw - 2 * var(--gutter, 16px))); }
-.season-screen .command.card > .card-body { display: grid; align-content: start; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+/* Each row of the body is as tall as what is in it, always: held to less room than it wants, the body scrolls. (Rows
+   left to size themselves are squeezed toward their min-heights first, and their words then print over the next
+   row or are cut by it.) */
+.season-screen .command > .card-body { display: grid; align-content: start; grid-auto-rows: max-content; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+/* The yard's card the same way: its head and cross in view, its buildings scrolling under them. */
+.season-screen .command.yard-card { display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; }
+.season-screen .command.yard-card .orders { grid-auto-rows: max-content; }
+.season-screen .command.yard-card .yard-short { padding: 8px 18px 0; font-size: 14.5px; line-height: 1.3; }
+.season-screen .command.yard-card .order .catch { overflow-wrap: anywhere; }
+/* A building is a key that stands off the paper: its last line keeps clear of the key's lower edge. */
+.season-screen .command.yard-card .orders .order { padding-bottom: 16px; }
 /* The crop's nine orders, each in its own place whatever the field's state; one that cannot be given is greyed. */
 .season-screen .command .orders.slots { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 10px 12px 4px; }
 .season-screen .command .orders.slots .order-who { grid-column: 1 / -1; }
@@ -191,9 +204,18 @@
 .season-screen .command .orders.slots .order > span:empty { display: none; }
 .season-screen .command .orders.slots .order .catch:empty { display: none; }
 .season-screen .command .orders.slots .order.is-suggested .fist { display: none; }
+.season-screen .command .orders.slots .order.is-cold .cost { color: var(--red); font-family: var(--f-gothic); letter-spacing: .04em; }
 .season-screen .command .orders.slots .order.is-off { background: transparent; box-shadow: inset 0 0 0 1px var(--hair); cursor: help; }
 .season-screen .command .orders.slots .order.is-off > :not(.catch) { opacity: .45; }
-.season-screen .command .order-say { min-height: calc(2.6em + 8px); padding: 4px 18px 6px; font-size: 15px; }
+/* The line under the orders. Room for two lines is kept by a strut inside it, never by a min-height: a row of the
+   card's grid can be squeezed down to a min-height when the card is held to the land's room, and its words would then
+   print over the next line; a row sized by what is in it cannot be. */
+.season-screen .command .order-say { display: flow-root; min-height: auto; padding: 4px 18px 6px; font-size: 15px; }
+.season-screen .command .order-say::before { content: ''; float: left; width: 0; height: 2.6em; }
+/* While it says what the stamp under the pointer does, it takes the place of the line about whose work is whose. */
+.season-screen .command .order-say.is-telling + .whose-box { display: none; }
+.season-screen .command .order-say.is-telling::before { height: 3.9em; }
+.season-screen .command .orders.slots .order.is-cold .cost { color: var(--red); font-family: var(--f-gothic); letter-spacing: .04em; }
 .season-screen .command .land-orders { padding-top: 0; }
 .season-screen .command.compact .order.is-suggested .fist { display: none; }
 .season-screen .command.in { animation: lay-right var(--t-sheet) var(--ease-paper); }
@@ -236,7 +258,7 @@
 .command .builds > .quiet { font-size: 15px; }
 /* A short window: the bar scrolls rather than run off it, and the fist that would hang outside it stays home. */
 @media (max-height: 820px) {
-  .season-screen .command:not(.card) { overflow-y: auto; overscroll-behavior: contain; }
+  .season-screen .command:not(.card, .yard-card) { overflow-y: auto; overscroll-behavior: contain; }
   .season-screen .command .order.is-suggested .fist { display: none; }
   .season-screen .command .order { min-height: 50px; padding-top: 5px; padding-bottom: 5px; }
   .season-screen .command .gauge { padding: 6px 12px 8px; }
@@ -253,10 +275,34 @@
   .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .orders.slots { gap: 5px; padding: 8px 12px 2px; }
   .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .orders.slots .order { grid-template-rows: 22px 16px 14px; height: 61px; padding: 3px 8px 5px; gap: 0 6px; }
   .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .orders.slots .order .name { font-size: 16px; }
-  .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .order-say { min-height: 0; padding: 3px 16px 4px; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .order-say { padding: 3px 16px 4px; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .order-say::before { height: 0; }
+  /* A stamp's line stands where the two lines about whose work is whose stood, at their size: the card keeps its
+     height while the pointer goes over the stamps (a third line makes it one line taller). */
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .order-say.is-telling { padding: 3px 16px 5px; font-size: 13.5px; line-height: 1.3; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .order-say.is-telling::before { height: 2.6em; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .whose-box > .whose:first-child { display: flow-root; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .whose-box > .whose:first-child::before { content: ''; float: left; width: 0; height: 2.6em; }
   .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .whose { padding: 3px 16px 5px; font-size: 13.5px; line-height: 1.3; }
   .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .whose > .quiet:first-child { display: none; }
   .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .readings { gap: 3px; padding: 6px 16px 7px; font-size: 14.5px; }
+}
+/* The same of a person's page: whole in a 720-line window, beside the people bar it was opened from. */
+@media (max-height: 800px) {
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .person-card { padding: 10px 16px 12px; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .person-card .pc-head { grid-template-columns: 52px 1fr auto; gap: 12px; padding-bottom: 7px; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .person-card .pc-head .ringed .bust { width: 52px; height: 52px; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .person-card .pc-name { font-size: 23px; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .person-card .pc-trait { margin-top: 2px; font-size: 14px; line-height: 1.25; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .person-card .pc-doing { padding: 5px 0 0; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .person-card .skills { margin: 4px 0 4px; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .person-card .skills th { height: 27px; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .person-card .prio.key { height: 25px; font-size: 16px; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .person-card .state { gap: 2px; padding: 5px 0; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .person-card .rest-keys { padding: 5px 0 0; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .person-card .rest-keys .btn { min-height: 32px; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .person-card .pay { padding: 5px 0 7px; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .person-card .pc-actions .btn { min-height: 46px; padding: 4px 10px; }
 }
 .season-screen[data-layout='mid'] .command:not(.compact) { width: 400px; }
 .season-screen[data-layout='mid'] .command.compact { width: 440px; }
@@ -306,7 +352,7 @@
 
 /* ---------------------------------------------------------------- a decision: the telegram, over the veiled land */
 /* A telegram holds the floor: the bars and cards step aside until it is answered or put away. */
-.season-screen.incident-up > .command, .season-screen.incident-up > .person-card, .season-screen.incident-up > .work, .season-screen.incident-up > .notes-slot { visibility: hidden; }
+.season-screen.incident-up > .command, .season-screen.incident-up > .person-card, .season-screen.incident-up > .work, .season-screen.incident-up > .notes-slot, .season-screen.incident-up > .tray-host { visibility: hidden; }
 .season-screen .telegram { top: calc(var(--top, 220px) + 12px); max-width: calc(100% - 32px); max-height: calc(100% - var(--top, 220px) - 28px); overflow-y: auto; z-index: 5; }
 @media (min-width: 1400px) and (min-height: 820px) { .season-screen .telegram { top: 150px; max-height: calc(100% - 166px); } }
 .season-screen .telegram.in { animation: wire-in var(--t-sheet) var(--ease-paper); }
@@ -367,7 +413,7 @@
 /* With something selected, its bar is a sheet over the foot and the clock stays at the thumb. */
 .season-screen[data-layout='narrow'].selected .queue, .season-screen[data-layout='narrow'].selected .timebook, .season-screen[data-layout='narrow'].selected .notes-slot { display: none; }
 .season-screen[data-layout='narrow'] .command { left: var(--gutter); right: var(--gutter); width: auto; top: auto; bottom: calc(var(--gutter) + 62px); max-height: min(46%, calc(100% - var(--top, 180px) - 140px)); overflow-y: auto; overscroll-behavior: contain; }
-.season-screen[data-layout='narrow'] .command.card { overflow: hidden; }
+.season-screen[data-layout='narrow'] .command:is(.card, .yard-card) { overflow: hidden; }
 .season-screen[data-layout='narrow'].selected .paused { display: none; }
 .season-screen[data-layout='narrow'] .command .gauges .meter { height: 6px; }
 .season-screen[data-layout='narrow'] .command .orders { padding: 8px 10px 10px; }
@@ -435,7 +481,7 @@
 .season-screen[data-layout='short'] .clock-slot.dock .clock .k, .season-screen[data-layout='short'] .clock-slot.dock .clock .menu { height: 46px; }
 .season-screen[data-layout='short'] .notes-slot { position: absolute; left: 0; bottom: calc(100% + 6px); max-width: 50%; }
 .season-screen[data-layout='short'] .command { top: calc(var(--top, 100px) + 54px); bottom: var(--gutter); max-height: none; width: 360px; overflow-y: auto; }
-.season-screen[data-layout='short'] .command.card { overflow: hidden; }
+.season-screen[data-layout='short'] .command:is(.card, .yard-card) { overflow: hidden; }
 .season-screen[data-layout='short'] .command .order.is-suggested .fist { display: none; }
 .season-screen[data-layout='short'] .command.compact .orders { grid-template-columns: 1fr; }
 .season-screen[data-layout='short'].selected .queue, .season-screen[data-layout='short'].selected .timebook, .season-screen[data-layout='short'].selected .notes-slot,

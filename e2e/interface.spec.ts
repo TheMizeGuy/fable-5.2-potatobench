@@ -173,7 +173,7 @@ test('the crop orders hold their places when one is given, and under 80 words wi
   await expect(page.getByTestId('estimate')).toContainText('–')
 })
 
-test('a test dig is a tray beside the land, does not stop the clock, and can be reopened', async ({ page }) => {
+test('a test dig is offered on a slip, its tray beside the land does not stop the clock, and it can be reopened', async ({ page }) => {
   const errors = watchErrors(page)
   await startSeason(page)
   // Spraying settled for the season first, as a player would when the question comes, so the days can run.
@@ -183,8 +183,13 @@ test('a test dig is a tray beside the land, does not stop the clock, and can be 
   await page.keyboard.press('Shift+t')
   await expect.poll(async () => (await look(page)).queue).toBeGreaterThan(0)
   await page.getByTestId('speed-1').click()
+  // The result is offered on a slip at the foot (nothing is laid over the land unasked); Show me lays the tray.
   const tray = page.getByTestId('sample-dialog')
-  await expect(tray).toBeVisible({ timeout: 30_000 })
+  const offer = page.locator('#ui [data-testid="alert"]', { hasText: 'test dig' })
+  await expect(offer).toBeVisible({ timeout: 30_000 })
+  await expect(tray).toHaveCount(0)
+  await offer.click()
+  await expect(tray).toBeVisible()
   expect((await look(page)).paused).toBe(false)
   await expect(tray).toContainText('one hill of')
   expect(await tray.locator('.tuber').count()).toBeGreaterThan(0)
@@ -194,7 +199,7 @@ test('a test dig is a tray beside the land, does not stop the clock, and can be 
   await expect(tray).toHaveCount(0)
   await page.getByTestId('sample-again').click()
   await expect(tray).toBeVisible()
-  await expect(tray.locator('.narrowing')).toContainText('The tick is this hill')
+  await expect(tray).toContainText('The tick is this hill')
   expect(errors, errors.join('\n')).toEqual([])
 })
 
@@ -446,7 +451,7 @@ test('a crop a contract wants: the weigh ticket delivers it and the tracker coun
   const deliver = ticket.locator('[data-testid^="lot-deliver-"]')
   await expect(deliver).toContainText('Deliver to the fry plant')
   await expect(ticket.locator('.choice')).toContainText(/market/)
-  await expect(ticket.getByTestId('store-houses')).toContainText('The potato house holds')
+  await expect(ticket.getByTestId('store-houses')).toContainText('The potato house')
   await deliver.click()
   // Once the delivery slip has torn off, what is left can be sold or stored.
   await expect(ticket.locator('[data-testid^="lot-keep-"]')).toContainText('Store the rest')
@@ -820,7 +825,9 @@ test('tags and stamps hold still when a card opens or closes and when an order i
   await page.setViewportSize({ width: 1280, height: 800 })
   await startSeason(page)
   // Late August, stopped, with the player's calls (spray, the vine kill) left as stamps on the fields.
-  await reach(page, `const { app } = q.g(); app.setSpeed(0); q.run(q.day(7, 28), ['spray', 'kill', 'sell']); app.setSpeed(0); app.campaign.incidents = []; app.select(-1)`)
+  // (Spraying is settled as "ask me", as a player would answer the question when blight weather came. Until test
+  // digs stopped laying their trays unasked, this test's Escapes for those trays put the question away by chance.)
+  await reach(page, `const { app } = q.g(); app.setSpeed(0); app.do({ t: 'sprayWay', way: 'ask' }); q.run(q.day(7, 28), ['spray', 'kill', 'sell']); app.setSpeed(0); app.campaign.incidents = []; app.select(-1)`)
   await putAway(page)
   // Where every tag and stamp on the land is now, by test id.
   const where = () => page.evaluate(() => Object.fromEntries([...document.querySelectorAll<HTMLElement>('#ui .plate[data-testid^="field-"], #ui [data-testid^="badge-"]')]

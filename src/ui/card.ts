@@ -11,7 +11,7 @@ import { deals, deliver, versusMarket } from './contracts.ts'
 import { culledAtDig } from './dig.ts'
 import { fates, ringFor } from './crew.ts'
 import { isTract } from './map.ts'
-import { firstName, hillWord, isJob, isStale, JOB_KEY, JOB_VERB, jobText, jobWhat, stonesText, stonesWord } from './rules.ts'
+import { firstName, hillWord, isJob, isStale, JOB_KEY, JOB_VERB, jobText, jobWhat, plantingIn, stonesText, stonesWord } from './rules.ts'
 import { term } from './glossary.ts'
 import { meter, order, range } from './system/parts.ts'
 import { ringed } from './system/people.ts'
@@ -138,6 +138,7 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
     const busy = u ? S.unitBlock(c, kind, u.id) : ''
     if (u && busy) { refuse(kind, `${busy} Close their card so anyone can take the order.`); return }
     const before = shown(offers(c, app.selection)).map(x => x.kind)
+    const cold = kind === 'plant' && !!coldSoil(c, app.selection)
     const res = app.order(kind, { first })
     const took = res.filter(r => r.ok)
     if (!took.length) {
@@ -149,6 +150,7 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
     held = { until: performance.now() + HOLD_MS, kinds: held && performance.now() < held.until ? held.kinds : before, given: [...(held?.given ?? []), kind] }
     setTimeout(() => ctx.dirty(), HOLD_MS + 50)
     ctx.announce(`${JOB_VERB[kind]} is ${first ? 'first on the work list' : 'on the work list'} for ${F.list(took.map(r => S.FIELD_NAMES[r.field]))}${u ? `, assigned to ${u.name === S.FARMER_NAME ? 'you' : u.name}` : ''}.`)
+    if (cold) flash(`You're planting ${F.list(took.map(r => S.FIELD_NAMES[r.field]))} in cold soil, so some seed may rot before it comes up.`, 'info')
   }
 
   // An order that cannot be given says why at once: on its own button when it is on the bar, on the note otherwise.
@@ -278,12 +280,14 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
         const cost = can.reduce((t, i) => t + mine[sel.indexOf(i)].cost, 0)
         const part = can.length < sel.length ? ` ${can.length} of ${sel.length}` : ''
         const no = refused?.kind === kind
-        text = no ? refused!.why : catchFor(c, kind, f, kind === suggestedKind ? why : '')
+        // Planting in cold ground can be ordered, and the stamp says plainly what it risks.
+        const cold = kind === 'plant' ? coldSoil(c, can) : ''
+        text = no ? refused!.why : cold || catchFor(c, kind, f, kind === suggestedKind ? why : '')
         el = order({
-          key, icon: kind, name: [JOB_VERB[kind], part ? h('span', { class: 'order-part num' }, part) : null], cost: costText(days, cost), catch: '',
-          suggested: kind === suggestedKind, refused: no, testid: `order-${kind}`, title: touch ? undefined : jobWhat(kind), said: `${jobWhat(kind)} ${text}`,
+          key, icon: kind, name: [JOB_VERB[kind], part ? h('span', { class: 'order-part num' }, part) : null], cost: cold ? `Too cold${cost ? ` · ${F.money(cost)}` : ''}` : costText(days, cost), catch: '',
+          suggested: kind === suggestedKind, refused: no, testid: `order-${kind}`, title: touch ? undefined : cold ? `${cold} ${costText(days, cost)}.` : jobWhat(kind), said: `${jobWhat(kind)} ${text}`,
           onclick: (e: Event) => give(kind, (e as MouseEvent).ctrlKey || (e as MouseEvent).metaKey),
-          attrs: { ...attrs(), oncontextmenu: (e: Event) => { e.preventDefault(); give(kind, true) } },
+          attrs: { ...attrs(), class: `slot${cold ? ' is-cold' : ''}`, oncontextmenu: (e: Event) => { e.preventDefault(); give(kind, true) } },
         })
       }
       tell.push({ el, text })
@@ -295,9 +299,9 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
       el, canAny,
       wire(say: HTMLElement) {
         const base = [...say.childNodes]
-        const back = () => say.replaceChildren(...base)
+        const back = () => { say.replaceChildren(...base); say.classList.remove('is-telling') }
         for (const t of tell) {
-          const show = () => say.replaceChildren(t.text)
+          const show = () => { say.replaceChildren(t.text); say.classList.add('is-telling') }
           t.el.addEventListener('pointerenter', e => { if ((e as PointerEvent).pointerType === 'mouse') show() })
           t.el.addEventListener('pointerleave', back)
           t.el.addEventListener('focus', show)
@@ -305,6 +309,15 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
         }
       },
     }
+  }
+
+  // Why planting now is a risk, with the day the soil should be warm enough; empty once the soil is fit (or only wet).
+  function coldSoil(c: S.Campaign, fields: number[]): string {
+    const s = c.season!
+    const early = s.day < S.dayIndex(s.year, S.PLANT_FROM.month, S.PLANT_FROM.dom)
+    if (!fields.some(i => { const pr = S.plantReady(app.world, c, i); return !pr.ok && (early || pr.soilT < pr.need) })) return ''
+    const wait = plantingIn(app.world, c)
+    return `Seed rots in cold soil, so it's safer to wait until ${wait > 0 ? `about ${F.date(c.year, s.day + wait)}` : 'the soil warms up'}. Planting now is up to you.`
   }
 
   // Care of the land beside the crop's orders, when it is wanted: rocks, hedgerows, tile drains.

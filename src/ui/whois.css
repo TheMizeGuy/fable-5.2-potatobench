@@ -26,8 +26,11 @@
 
 .whois-first .btn { min-height: 36px; padding: 0 10px; font-size: 14px; }
 .whois-first .btn.is-on { color: var(--paper); background: var(--ink); box-shadow: none; }
-.key-btn { display: grid; place-items: center; width: 38px; height: 36px; color: var(--ink); background: var(--paper); box-shadow: inset 0 0 0 1px var(--ink); }
+/* The work a person takes first: the five kinds side by side under their label, each with its cut and its name. */
+.whois-first.prio-first .t-label { flex-basis: 100%; }
+.key-btn { display: grid; grid-template-rows: auto auto; place-items: center; gap: 3px; flex: 1 1 0; min-width: 44px; height: 48px; padding: 4px 3px 5px; color: var(--ink); background: var(--paper); box-shadow: inset 0 0 0 1px var(--ink); }
 .key-btn .i { --i: 18px; }
+.key-btn .key-name { font: 400 14px/1 var(--f-gothic); letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; }
 .key-btn.is-on { color: var(--paper); background: var(--ink); }
 .key-btn.never { color: var(--ink-2); box-shadow: inset 0 0 0 1px rgb(30 28 25 / 0.35); }
 @media (hover: hover) { .key-btn:not(.is-on):hover { box-shadow: inset 0 0 0 1px var(--ink), inset 0 0 0 3px var(--paper), inset 0 0 0 4px var(--ink); } }
@@ -36,7 +39,7 @@
 .hover-name { padding: 4px 8px 3px; font: 400 14px/1 var(--f-gothic); letter-spacing: .08em; text-transform: uppercase; color: var(--ink); white-space: nowrap;
   background: var(--paper) url(./system/grain.png); background-blend-mode: multiply; box-shadow: var(--laid); }
 .hover-mark { width: 34px; height: 13px; margin: -6px 0 0 -17px; border-radius: 50%; border: 2.5px dashed var(--paper); box-shadow: 0 0 0 1px rgb(20 14 6 / 0.5), inset 0 0 0 1px rgb(20 14 6 / 0.5); }
-.touch .key-btn { width: 44px; height: 44px; }
+.touch .key-btn { height: 52px; }
 .touch .whois-first .btn, .touch .whois-acts .btn { min-height: 44px; }
 /* On a phone the card is a sheet from the bottom, over the foot of the screen. */
 .whois-layer.phone .whois { left: 10px; right: 10px; top: auto; bottom: 10px; width: auto !important; transform: none !important; max-height: 52%; overflow-y: auto; overscroll-behavior: contain; }
@@ -49,3 +52,21 @@
 .rest-keys .t-label { margin-right: 6px; }
 .rest-keys .btn { min-height: 36px; padding: 0 10px; font-size: 14px; }
 .touch .rest-keys .btn { min-height: 44px; }
+/* A telegram or a paper holds the floor: a card beside someone on the land steps aside with its tether, and is back
+   as it was when the paper is answered. */
+.hud.voice .whois-layer { visibility: hidden; }
+/* A short desk window: the whole card beside them, Let go included, in 720 lines. A little wider, so the rest keys
+   and the three keys at its foot each stand in one row. */
+@media (max-height: 800px) {
+  .hud .whois-layer:not(.phone) .whois.sys:not(.thing) { width: 356px; padding: 9px 13px 10px; }
+  .whois-layer:not(.phone) .whois-head { padding-bottom: 5px; }
+  .whois-layer:not(.phone) .whois-now { padding: 5px 0 3px; font-size: 14.5px; line-height: 1.25; }
+  .whois-layer:not(.phone) .whois-where { margin: -1px 0 4px; }
+  .whois-layer:not(.phone) .whois-state { gap: 1px; padding: 4px 0 5px; }
+  .whois-layer:not(.phone) .whois-first { padding: 5px 0 0; }
+  .whois-layer:not(.phone) .whois-first .key-btn { height: 32px; }
+  .whois-layer:not(.phone) .rest-keys { flex-wrap: nowrap; padding: 5px 0 0; }
+  .whois-layer:not(.phone) .rest-keys .btn { min-height: 32px; padding: 0 8px; font-size: 13.5px; white-space: nowrap; }
+  .whois-layer:not(.phone) .whois-acts { flex-wrap: nowrap; padding-top: 7px; }
+  .whois-layer:not(.phone) .whois-acts .btn { min-height: 36px; padding: 0 10px; font-size: 14.5px; white-space: nowrap; }
+}

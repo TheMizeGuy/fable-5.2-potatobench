@@ -200,6 +200,20 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     ctx.dirty()
   }
 
+  function offerTray(e: S.GameEvent, staged: boolean): void {
+    const name = S.FIELD_NAMES[e.field] ?? ''
+    // The same field dug again: the tray the player has open is brought up to date, since they asked for it.
+    if (tray && tray.field === e.field) { openTray(e, staged); return }
+    // The foot has one place for a slip: a tip about a stamp gives it up to the offer, which comes only once.
+    if (hint) { hint = null; ctx.notes.unpin() }
+    ctx.notes.push({
+      level: 'info', glyph: 'sample', ttl: 20000, field: e.field, day: e.day,
+      text: `The test dig at ${name} is in. Show me`,
+      full: `The test dig at ${name} is in. Press to see what came up.`,
+      go: () => openTray(e, false),
+    })
+  }
+
   function showTray(field: number): void {
     const c = app.campaign
     const e = [...(c?.season?.log ?? [])].reverse().find(x => x.type === 'sample' && x.field === field)
@@ -294,7 +308,9 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     if (ev.type === 'yard' || ev.type === 'unit' || ev.type === 'select') ctx.dirty()
     else if (ev.type === 'events') {
       // In the guided first year the test dig is on the field's card, not laid on the land unasked.
-      for (const e of ev.events) if (e.type === 'sample' && !guidedYear(app.campaign)) { const staged = app.speed < 3; void ctx.view.whenShown('sample', e.field).then(() => { if (app.screen === 'season') openTray(e, staged) }) }
+      // A test dig's result is offered, never laid over what the player is doing: a slip at the foot with Show me
+      // (and the field's own card has it). In the guided first year the guide speaks for the slips.
+      for (const e of ev.events) if (e.type === 'sample' && !guidedYear(app.campaign)) { const staged = app.speed < 3; void ctx.view.whenShown('sample', e.field).then(() => { if (app.screen === 'season') offerTray(e, staged) }) }
       const c0 = app.campaign
       if (c0) { sayCrewStarts(c0); sayKillDates(c0) }
     }
@@ -383,7 +399,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     return {
       name: f.name,
       glyph: tract ? COVER_GLYPH[f.cover] : stageGlyph(f),
-      sub, marks, queue, badge, key, cls: tract ? 'tract' : undefined,
+      sub, marks, queue, badge, key, cls: tract ? 'tract' : undefined, hoverName: !tract && f.status === 'rest' ? 'Resting: oats and clover' : undefined,
       said: `${key ? `Key ${key}` : f.block === 'home' ? 'The home farm' : 'Beyond the home farm'}: ${what}${said.length ? `, ${said.join(', ')}` : ''}${badge ? `. Needs: ${F.localize(need!.text)}` : '.'}`,
       taught: !!badge && ((!!hint && need?.act === hint.kind) || goalField === i),
     }
@@ -462,13 +478,6 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     const ins = app.insets
     const bars = [...crew.querySelectorAll<HTMLElement>('.queue, .timebook'), clockSlot, paused, running, homeKey, grid.el, trayHost.firstElementChild as HTMLElement | null]
     const blocks = bars.filter((x): x is HTMLElement => !!x && !x.hidden && x.offsetParent !== null && x.offsetHeight > 0).map(x => { const r = x.getBoundingClientRect(); return { left: r.left, top: r.top, right: r.right, bottom: r.bottom } })
-    // The alerts' place beside the time book is kept clear whether or not a slip lies there now, so a slip that comes
-    // is never under a card (and no card moves when one comes). Under 1400 the alerts wait while a field is in hand.
-    const book = crew.querySelector<HTMLElement>('.timebook')
-    if (book && book.offsetParent !== null && !(ctx.layout() === 'mid' && el.classList.contains('selected'))) {
-      const b = book.getBoundingClientRect()
-      blocks.push({ left: b.right + 8, top: b.bottom - 56, right: Math.min(innerWidth - 8, b.right + 536), bottom: b.bottom })
-    }
     // The land runs up to the boards themselves; the slip that hangs from one is a thing to keep off, not a line
     // across the whole window, so a card clear of it has that much more room.
     for (const x of top.el.querySelectorAll<HTMLElement>('.goal, .tb-pop')) {
@@ -490,13 +499,30 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       return of(t.box, t.need || st === 'growing' || st === 'planted' || st === 'dead' || st === 'digging' ? 3 : 1)
     })
     for (const m of yardMarks) if (!m.wrap.hidden && m.at) out.push(of(new DOMRect(m.at.x - m.w / 2, m.at.y - 22, m.w, 44), 1))
+    // The alerts' place beside the time book, whether or not a slip lies there now: a card keeps off it before any
+    // tag, so a slip that comes is not under the card; but it lies there rather than be cut short (a person's page
+    // opened from the people bar has nowhere else to be whole in a short window). Under 1400 the alerts wait while
+    // a field is in hand.
+    const book = crew.querySelector<HTMLElement>('.timebook')
+    if (book && book.offsetParent !== null && !(ctx.layout() === 'mid' && el.classList.contains('selected'))) {
+      const b = book.getBoundingClientRect()
+      out.push(of(new DOMRect(b.right + 8, b.bottom - 56, Math.min(innerWidth - 8, b.right + 536) - b.right - 8, 56), 4))
+    }
     for (const u of c?.crew ?? []) {
       const a = ctx.view.unitAnchor(u.id)
       if (a.visible && Number.isFinite(a.x) && Number.isFinite(a.y)) out.push(of(new DOMRect(a.x - 20, a.y - 52, 40, 52), 0.5))
     }
     return out
   }
-  ties().setLand(() => ({ ...land(), tags: marks }))
+  // The tutorial's note is the thing the player was told to read: a card keeps off it before any tag (the note steps
+  // off a card that has nowhere else to be whole).
+  function withNote(): { left: number; top: number; right: number; bottom: number; weight: number }[] {
+    const out = marks()
+    const note = document.querySelector<HTMLElement>('.guide-layer .guide:not([hidden]):not(.gone), .guide-slot .guide.docked')
+    if (note && note.offsetParent !== null) { const r = note.getBoundingClientRect(); if (r.width > 0) out.push({ left: r.left - 6, top: r.top - 6, right: r.right + 6, bottom: r.bottom + 6, weight: 8 }) }
+    return out
+  }
+  ties().setLand(() => ({ ...land(), tags: withNote }))
   function placeCards(): void {
     const layout = ctx.layout()
     const quiet = incident.isUp()

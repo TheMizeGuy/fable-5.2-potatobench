@@ -215,6 +215,21 @@ export function plantingIn(world: S.World, c: S.Campaign): number {
   return -1
 }
 
+// Seed that rotted in cold ground, in one line for the ticket: the planting day, and what it cost where the field's
+// stand is known (stand: the share of the seed that came up; total: the crop dug, cwt). Seed rots only in cold soil
+// before it comes up. Empty when nothing rotted and the planting was not before the season's earliest date.
+export function coldPlanting(c: S.Campaign, lot: S.Lot, stand: number | null, total: number): string {
+  const s = c.season
+  const day = s && s.year === lot.year ? s.fields[lot.field]?.plantDay ?? -1 : -1
+  const early = day >= 0 && day < S.dayIndex(lot.year, S.PLANT_FROM.month, S.PLANT_FROM.dom)
+  const on = day >= 0 ? ` on ${F.date(lot.year, day)}` : ''
+  const rotted = stand !== null && stand > 0 ? 1 - stand : 0
+  const lost = rotted >= 0.01 ? total * rotted / stand! / S.FIELD_ACRES : 0
+  if (lost >= 0.5) return `${early ? `Planted in cold soil${on}, and` : `The soil turned cold after planting${on}, and`} ${F.pct(rotted)} of the seed rotted before it came up, which cost about ${F.perArea(lost)}.`
+  if (!early) return ''
+  return stand === null ? `Planted in cold soil${on}, so some of the seed may have rotted before it came up.` : `Planted in cold soil${on}, but the seed came up anyway.`
+}
+
 // What the five-day forecast says the sky will do, from its own chance of rain.
 export function forecastSky(d: S.ForecastDay): string {
   if (d.rainChance >= 60) return d.hi <= 1 ? 'snow' : d.rainMm >= 20 ? 'storm' : 'rain'
