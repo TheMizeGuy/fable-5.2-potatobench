@@ -433,7 +433,7 @@ function why(ctx: Ctx, c: S.Campaign, lot: S.Lot, cause: S.Cause): string {
       let end = ` In ${name} they were dug on ${date(lot.dugDay)} while the vines were still green.`
       const kt = S.killTiming(c, lot.field)
       if (killed && (!died || killed.day <= died.day) && kt.killed >= 0 && kt.early >= EARLY_DAYS) {
-        end = ` In ${name} the vines were killed on ${date(killed.day)}, ${F.plural(kt.early, 'day')} earlier than needed, so the potatoes hadn't finished growing.`
+        end = ` In ${name} the vines were killed on ${date(killed.day)}, ${F.plural(kt.early, 'day')} earlier than needed, so the potatoes hadn't finished growing.${Number(killed.data?.lost ?? 0) > 0 ? ' The weight they never put on is under What never grew.' : ''}`
       } else if (killed && (!died || killed.day <= died.day) && kt.killed >= 0 && kt.asked >= 0) {
         end = ` In ${name} the vines were killed on ${date(killed.day)}, right on schedule${KILL_ASKED[kt.why] ? ` because ${KILL_ASKED[kt.why]}` : ''}. Some small potatoes are the price of skins that toughen in time.`
       } else if (killed && (!died || killed.day <= died.day)) {
@@ -549,6 +549,16 @@ function reckoning(ctx: Ctx, lotId: number): PaperSpec {
     never.push({
       head: 'Thin stand', cwt: d.total * (1 - stand) / stand,
       text: `${F.pct(1 - stand)} of the seed pieces rotted before they came up${planted ? `, after planting on ${F.date(c.year, planted.day)}` : ''}. Seed rots in cold ground, so wait for soil near ${F.temp(10)}.`,
+    })
+  }
+  // The growth an early kill gave up never reached any grade: the kill's own record says how much.
+  const killed = fieldLog(c, lot.field, 'killed')[0]
+  const gaveUp = Number(killed?.data?.lost ?? 0)
+  if (killed && gaveUp > 0) {
+    const early = Number(killed.data?.early ?? 0)
+    never.push({
+      head: 'Killed early', cwt: gaveUp * S.FIELD_ACRES,
+      text: `The vines in ${name} were killed on ${F.date(c.year, killed.day)}${early > 0 ? `, about ${F.plural(early, 'day')} before they were due` : ''}. Potatoes stop growing the day the vines die, so the crop missed what it would have put on by then. That's an estimate, since the weather in those days can't be rerun.`,
     })
   }
   const st = S.storageInfo(c)

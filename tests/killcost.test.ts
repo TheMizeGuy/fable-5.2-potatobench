@@ -21,27 +21,33 @@ function weighed(c: S.Campaign, field: number): number {
   return (S.lotCwt(lot) + lot.grades.cull) / S.FIELD_ACRES
 }
 
-// For a seed: a week or more before a field's kill is due, what the game says killing today costs, against what it
-// cost: the same farm run on twice, killed that day in one and when due (when the coach asks) in the other.
-function trial(seed: number): { said: number; cost: number } | null {
+interface Trial { said: number; cost: number; days: number; logged: number }
+
+// For a seed: on the first day a field's kill is due lo to hi days ahead, what the game says killing today costs,
+// against what it cost: the same farm run on twice, killed that day in one and when the coach asks in the other.
+function trial(seed: number, lo: number, hi: number): Trial | null {
   const w = S.climateWorld(record, seed)
   const c = S.createCampaign(w, { seed, startYear: S.FARM_YEAR0 + 1 })
   S.apply(w, c, { t: 'begin' })
   const field = c.plans.findIndex((p, i) => S.isField(c, i) && p.crop === 'potato')
   for (let n = 0; n < 300 && c.phase === 'season' && !S.seasonDone(c); n++) {
     const k = S.killCostToday(w, c, field)
-    if (k && k.days >= 6 && k.days <= 12) {
+    if (k && k.days >= lo && k.days <= hi) {
       const early = structuredClone(c), late = structuredClone(c)
       S.apply(w, early, { t: 'job', kind: 'kill', field })
       for (let m = 0; m < 200 && !early.season!.fields[field].weighed && early.phase === 'season'; m++) step(w, early, -1)
+      const killed = early.season!.log.find(e => e.type === 'killed' && e.field === field)
       for (let m = 0; m < 200 && !late.season!.fields[field].weighed && late.phase === 'season'; m++) step(w, late, -1)
       const cost = weighed(late, field) - weighed(early, field)
-      return Number.isFinite(cost) ? { said: k.cwtPerAcre, cost } : null
+      return Number.isFinite(cost) ? { said: k.cwtPerAcre, cost, days: k.days, logged: Number(killed?.data?.lost ?? 0) } : null
     }
     step(w, c, field)
   }
   return null
 }
+
+const seeds = (from: number, n: number) => Array.from({ length: n }, (_, k) => from + k)
+const mean = (xs: Trial[], f: (x: Trial) => number) => xs.reduce((a, x) => a + f(x), 0) / xs.length
 
 describe('what killing the vines early costs', () => {
   it('says nothing before the tubers have set', () => {
@@ -51,13 +57,43 @@ describe('what killing the vines early costs', () => {
     expect(S.killCostToday(w, c, 0)).toBeNull()
   })
 
-  it('comes within reach of what the same farm lost by killing that day, over a dozen farms', () => {
-    const seen = Array.from({ length: 12 }, (_, k) => trial(k + 1)).filter((x): x is { said: number; cost: number } => !!x)
-    expect(seen.length).toBeGreaterThan(8)
-    // Each said cost within 25 cwt an acre or half again of what it cost, and on average no more than a fifth off.
-    const near = seen.filter(x => Math.abs(x.said - x.cost) <= Math.max(25, x.cost * 0.5))
-    expect(near.length / seen.length).toBeGreaterThanOrEqual(0.75)
-    const mean = (f: (x: { said: number; cost: number }) => number) => seen.reduce((a, x) => a + f(x), 0) / seen.length
-    expect(Math.abs(mean(x => x.said) - mean(x => x.cost))).toBeLessThan(Math.max(10, mean(x => x.cost) * 0.2))
-  }, 120_000)
+  it('costs nothing once the kill is due or asked for', () => {
+    for (const seed of [1, 2, 3]) {
+      const w = S.climateWorld(record, seed)
+      const c = S.createCampaign(w, { seed, startYear: S.FARM_YEAR0 + 1 })
+      S.apply(w, c, { t: 'begin' })
+      const field = c.plans.findIndex((p, i) => S.isField(c, i) && p.crop === 'potato')
+      let seen = false
+      for (let n = 0; n < 300 && c.phase === 'season' && !S.seasonDone(c); n++) {
+        const due = S.killCostToday(w, c, field)
+        if (due && due.days === 0) expect(due.cwtPerAcre, `seed ${seed}, due today`).toBe(0)
+        for (const a of S.advise(w, c)) {
+          if (a.act === 'wait' || a.act === 'close' || a.act === 'sell') continue
+          S.apply(w, c, { t: 'job', kind: a.act, field: a.field })
+          if (a.act === 'kill' && a.field === field) { expect(S.killCostToday(w, c, field)?.cwtPerAcre, `seed ${seed}, asked`).toBe(0); seen = true }
+        }
+        S.apply(w, c, { t: 'day' })
+      }
+      expect(seen, `seed ${seed}: the coach asked for the kill`).toBe(true)
+    }
+  })
+
+  // Held out: the share LATE_SEASON was set on seeds 1 to 12 at a week or more ahead.
+  for (const [lo, hi, from] of [[6, 12, 1], [6, 12, 13], [2, 5, 13], [13, 25, 13]] as const) {
+    it(`a kill ${lo} to ${hi} days early, seeds ${from} to ${from + 17}: near what the same farm lost, and the kill's own record says it`, () => {
+      const seen = seeds(from, 18).map(s => trial(s, lo, hi)).filter((x): x is Trial => !!x)
+      expect(seen.length).toBeGreaterThan(12)
+      const pairs = JSON.stringify(seen.map(x => [x.said, Math.round(x.cost)]))
+      // The weather ahead isn't known, so one farm can lose half again or half as much as said: each said cost within
+      // 15 cwt an acre or half of what it cost in two farms of three, and on average a fifth off at most.
+      const near = seen.filter(x => Math.abs(x.said - x.cost) <= Math.max(15, x.cost * 0.5))
+      expect(near.length / seen.length, pairs).toBeGreaterThanOrEqual(2 / 3)
+      expect(Math.abs(mean(seen, x => x.said) - mean(seen, x => x.cost)), pairs).toBeLessThan(Math.max(5, mean(seen, x => x.cost) * 0.2))
+      // The killed event carries the cost on the day the kill was done, a working day or more nearer its due day.
+      for (const x of seen) {
+        expect(x.logged, 'the killed event carries the figure').toBeGreaterThan(0)
+        expect(x.logged, 'the killed event carries the figure').toBeLessThanOrEqual(x.said + 1)
+      }
+    }, 120_000)
+  }
 })
