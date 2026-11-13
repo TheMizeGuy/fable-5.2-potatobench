@@ -29,6 +29,7 @@ import { mountTies } from './tie.ts'
 import { whois } from './whois.ts'
 // Last, after every screen's own stylesheet: the control rule fitted to the live game.
 import './system/weight.css'
+import './system/cursor.css'
 
 // What someone sent to a field by a right-click is going to do there: "Ruth will scout North Ridge."
 const SENT: Record<S.JobKind, string> = {

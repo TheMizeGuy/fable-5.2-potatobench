@@ -1,0 +1,11 @@
+/* The pointer is the game's own: an inked arrow, a printer's hand over what can be pressed, an open hand over the
+   land and a closed one while it is dragged. Nothing on the page is picked up as text or dragged off as a picture. */
+:root {
+  --cur: url('./cursors/arrow.svg') 5 3, default;
+  --cur-point: url('./cursors/point.svg') 13 3, pointer;
+  --cur-grab: url('./cursors/grab.svg') 15 14, grab;
+  --cur-grabbing: url('./cursors/grabbing.svg') 15 16, grabbing;
+  --cur-help: url('./cursors/help.svg') 5 3, help;
+}
+html, body { cursor: var(--cur); user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+img, svg, a, canvas { -webkit-user-drag: none; }

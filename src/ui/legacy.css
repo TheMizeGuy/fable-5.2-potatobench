@@ -44,7 +44,7 @@
 .nbtn.primary:not(.sys, .sys *) { background: var(--cream); border-color: var(--cream); color: var(--night-solid); }
 .nbtn.big:not(.sys, .sys *) { min-height: 48px; padding: 0 var(--sp-5); font-size: var(--t-lede); }
 .nbtn .sub:not(.sys, .sys *) { color: inherit; font-weight: 400; opacity: 0.8; }
-.nbtn:disabled:not(.sys, .sys *) { opacity: 0.45; cursor: default; }
+.nbtn:disabled:not(.sys, .sys *) { opacity: 0.45; cursor: var(--cur, default); }
 @media (hover: hover) {
   .nicon:hover:not([aria-pressed='true']):not(.sys, .sys *), .nbtn:hover:not(.primary):not(:disabled):not(.sys, .sys *) { background: var(--night-2); }
   .nbtn:hover:not(.primary):not(:disabled):not(.sys, .sys *) { border-color: var(--cream); }
@@ -220,7 +220,7 @@
 .nseg:not(.sys, .sys *) { display: inline-flex; border: 1px solid var(--night-edge); border-radius: var(--radius); overflow: hidden; max-width: 100%; }
 .nseg-opt:not(.sys, .sys *) { position: relative; display: flex; flex: 1 1 auto; }
 .nseg-opt + .nseg-opt:not(.sys, .sys *) { border-left: 1px solid var(--night-edge); }
-.nseg-opt input:not(.sys, .sys *), .vcard input:not(.sys, .sys *) { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.nseg-opt input:not(.sys, .sys *), .vcard input:not(.sys, .sys *) { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: var(--cur-point, pointer); }
 .nseg-opt span:not(.sys, .sys *) { display: flex; align-items: center; justify-content: center; min-height: var(--hit); padding: 0 var(--sp-4); width: 100%; font-weight: 600; text-align: center; }
 .nseg-opt input:checked + span:not(.sys, .sys *) { background: var(--cream); color: var(--night-solid); }
 .nseg-opt input:focus-visible + span:not(.sys, .sys *), .vcard input:focus-visible + .vcard-in:not(.sys, .sys *) { outline: 2px solid var(--cream); outline-offset: -4px; }

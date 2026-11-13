@@ -130,7 +130,7 @@
 .tag-wrap .need { animation: stamp-in var(--t-stamp) var(--ease-out); }
 .tag-wrap .tag .listed .stamp { animation: stamp-down var(--t-stamp) var(--ease-out); }
 .tag-wrap.still .need, .tag-wrap.still .tag .listed .stamp { animation: none; }
-.tag-wrap .need.fading { opacity: .35; cursor: default; transition: opacity var(--t-slip) var(--ease-out); }
+.tag-wrap .need.fading { opacity: .35; cursor: var(--cur, default); transition: opacity var(--t-slip) var(--ease-out); }
 @keyframes stamp-in { from { transform: rotate(-2deg) scale(1.15); } }
 @keyframes stamp-down { from { transform: rotate(2deg) scale(1.15); } }
 /* Crowded, the tags keep their cut and stamp; far out, their names and stamps. */
@@ -147,7 +147,7 @@
 @media (hover: hover) { .yard-at .yard-tag:hover { background-color: #4c4134; } }
 /* Face pins: a pin at rest under the tags, one that needs the player or is picked over them. */
 .pin-at .pin { display: block; }
-.pin-at button.pin { cursor: pointer; }
+.pin-at button.pin { cursor: var(--cur-point, pointer); }
 .pin-at .pin .head { transition: box-shadow var(--t-slip) var(--ease-out); }
 .pin-at .pin.needs .badge, .pin-at .pin.is-hurt .badge { animation: stamp-in var(--t-stamp) var(--ease-out); }
 .pin-at .pin.is-hurt .head { transition: transform var(--t-sheet) var(--ease-paper); }
@@ -209,7 +209,7 @@
 .season-screen .command .orders.slots .order.is-suggested .fist { display: none; }
 /* An order that can be given but risks the crop (cold soil, vines still growing): its warning in red. */
 .season-screen .command .orders.slots .order.is-risk .cost { color: var(--red); font-family: var(--f-gothic); letter-spacing: .04em; }
-.season-screen .command .orders.slots .order.is-off { background: transparent; box-shadow: inset 0 0 0 1px var(--hair); cursor: help; }
+.season-screen .command .orders.slots .order.is-off { background: transparent; box-shadow: inset 0 0 0 1px var(--hair); cursor: var(--cur-help, help); }
 .season-screen .command .orders.slots .order.is-off > :not(.catch) { opacity: .45; }
 /* The line under the orders. Room for two lines is kept by a strut inside it, never by a min-height: a row of the
    card's grid can be squeezed down to a min-height when the card is held to the land's room, and its words would then
@@ -245,7 +245,7 @@
 .command .order.no-icon .catch { grid-column: 2 / -1; }
 .command .order .key.blank { visibility: hidden; }
 .command .order.is-refused .catch { color: var(--red); }
-.command .order.is-given { cursor: default; }
+.command .order.is-given { cursor: var(--cur, default); }
 .command .order.is-given .stamp { animation: stamp-down var(--t-stamp) var(--ease-out); }
 .command .order-more { justify-self: start; min-height: 36px; font-size: 15px; }
 .command .order .cost { text-align: right; }
@@ -346,7 +346,7 @@
 .person-card .pc-doing .i { --i: 17px; color: var(--ink-2); }
 .person-card .skills td:last-child { width: 44px; padding-left: 10px; text-align: right; }
 .person-card .skills td:nth-child(3) { width: 56%; }
-.person-card .prio.key { position: relative; min-width: 34px; height: 30px; font-size: 18px; cursor: pointer; }
+.person-card .prio.key { position: relative; min-width: 34px; height: 30px; font-size: 18px; cursor: var(--cur-point, pointer); }
 .person-card .prio.key.never { color: var(--ink-2); }
 .person-card .prio.key.first::before { content: ''; position: absolute; left: 50%; top: 50%; width: 30px; height: 30px; transform: translate(-50%, -54%) rotate(-8deg); border: 2px solid var(--pencil); border-radius: 50% 46% 52% 44%; }
 @media (hover: hover) { .person-card .prio.key:hover { box-shadow: inset 0 0 0 1px var(--ink), inset 0 0 0 3px var(--paper), inset 0 0 0 4px var(--ink); } }
@@ -372,7 +372,7 @@
 .work .routine-keys .btn.is-on { color: var(--paper); background: var(--ink); box-shadow: none; }
 .work .routine-keys .btn.is-on .sub { color: var(--board-ink); }
 .work .check.rule { width: 100%; text-align: left; }
-.work .check.rule[disabled] { color: var(--ink-2); cursor: default; }
+.work .check.rule[disabled] { color: var(--ink-2); cursor: var(--cur, default); }
 
 /* ---------------------------------------------------------------- a decision: the telegram, over the veiled land */
 /* A telegram holds the floor: the bars and cards step aside until it is answered or put away. */

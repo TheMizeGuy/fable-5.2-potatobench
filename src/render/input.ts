@@ -50,9 +50,9 @@ export function attachInput(
     const yard = unit < 0 && !thing && field < 0 ? pickYard(x, y) : 0
     app.setHover(field)
     app.point({ x, y, unit, thing, field, yard })
-    if (!downAt) canvas.style.cursor = unit >= 0 || thing || field >= 0 || yard ? 'pointer' : 'grab'
+    if (!downAt) canvas.style.cursor = unit >= 0 || thing || field >= 0 || yard ? 'var(--cur-point, pointer)' : 'var(--cur-grab, grab)'
   }
-  const away = () => { app.setHover(-1); app.point(null); if (!downAt) canvas.style.cursor = 'grab' }
+  const away = () => { app.setHover(-1); app.point(null); if (!downAt) canvas.style.cursor = 'var(--cur-grab, grab)' }
 
   const onDown = (e: PointerEvent) => {
     app.pressing = true
@@ -105,7 +105,7 @@ export function attachInput(
     if (downAt && !dragged && Math.hypot(p.x - downAt.x, p.y - downAt.y) > slop) {
       dragged = true
       clearTimeout(pressTimer)
-      canvas.style.cursor = 'grabbing'
+      canvas.style.cursor = 'var(--cur-grabbing, grabbing)'
       if (app.hover !== -1) app.setHover(-1)
       app.point(null)
     }
@@ -165,7 +165,7 @@ export function attachInput(
     if (pointers.size === 0) {
       app.pressing = false
       downAt = null
-      canvas.style.cursor = app.hover >= 0 ? 'pointer' : 'grab'
+      canvas.style.cursor = app.hover >= 0 ? 'var(--cur-point, pointer)' : 'var(--cur-grab, grab)'
     }
   }
   const onUp = (e: PointerEvent) => release(e, true)
@@ -213,7 +213,7 @@ export function attachInput(
   addEventListener('keydown', onKeyDown)
   addEventListener('keyup', onKeyUp)
   addEventListener('blur', onBlur)
-  canvas.style.cursor = 'grab'
+  canvas.style.cursor = 'var(--cur-grab, grab)'
 
   return {
     frame(dt) {

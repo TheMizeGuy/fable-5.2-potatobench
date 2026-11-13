@@ -98,7 +98,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #20242a; }
 :where(.hud) :where(fieldset) { border: 0; min-width: 0; }
 :where(.hud) :where(h1, h2, h3, h4) { font-weight: 700; font-size: inherit; line-height: inherit; }
 :where(.hud) :where(button, input) { font: inherit; color: inherit; }
-:where(.hud) :where(button) { background: none; border: 0; padding: 0; margin: 0; cursor: pointer; text-align: inherit; border-radius: 0; touch-action: manipulation; }
+:where(.hud) :where(button) { background: none; border: 0; padding: 0; margin: 0; cursor: var(--cur-point, pointer); text-align: inherit; border-radius: 0; touch-action: manipulation; }
 :where(.hud) :where(table) { border-collapse: collapse; border-spacing: 0; width: 100%; }
 :where(.hud) :where(th) { font-weight: 400; text-align: left; }
 :where(.hud) :where(a) { color: inherit; }
@@ -118,17 +118,17 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #20242a; }
 /* ---------------------------------------------------------------- the game's real form inputs, in the system's look */
 /* A check: a real checkbox over the printed tick box. */
 .check-in { position: relative; display: inline-grid; width: 22px; height: 22px; flex: none; }
-.check-in input { position: absolute; inset: -11px; width: 44px; height: 44px; margin: 0; opacity: 0; cursor: pointer; }
+.check-in input { position: absolute; inset: -11px; width: 44px; height: 44px; margin: 0; opacity: 0; cursor: var(--cur-point, pointer); }
 .check-in input:focus-visible + .tick { outline: 3px solid var(--blue); outline-offset: 3px; }
 /* A choice: real radio inputs under printed boxes. */
 .seg-in { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; }
 .seg-in label { position: relative; display: flex; }
 .seg-in label + label { margin-left: -1px; }
-.seg-in input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.seg-in input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: var(--cur-point, pointer); }
 .seg-in span { display: flex; align-items: center; justify-content: center; width: 100%; min-height: var(--touch); padding: 0 8px; font-size: 14px; text-align: center; background: var(--paper); box-shadow: inset 0 0 0 1px var(--ink); }
 .seg-in input:focus-visible + span { outline: 3px solid var(--blue); outline-offset: 2px; position: relative; z-index: 1; }
 /* A slider: a real range input drawn as the printed scale. */
-.slider-in { width: 100%; height: var(--touch); margin: 0; appearance: none; -webkit-appearance: none; background: transparent; cursor: pointer; }
+.slider-in { width: 100%; height: var(--touch); margin: 0; appearance: none; -webkit-appearance: none; background: transparent; cursor: var(--cur-point, pointer); }
 .slider-in::-webkit-slider-runnable-track { height: 22px; background: repeating-linear-gradient(90deg, var(--ink) 0 1px, transparent 1px 10%) 0 100% / 100% 7px no-repeat, linear-gradient(var(--ink), var(--ink)) 0 calc(100% - 7px) / var(--fill, 50%) 4px no-repeat, linear-gradient(var(--ink), var(--ink)) 0 calc(100% - 7px) / 100% 1px no-repeat; }
 .slider-in::-moz-range-track { height: 22px; background: repeating-linear-gradient(90deg, var(--ink) 0 1px, transparent 1px 10%) 0 100% / 100% 7px no-repeat, linear-gradient(var(--ink), var(--ink)) 0 calc(100% - 7px) / var(--fill, 50%) 4px no-repeat, linear-gradient(var(--ink), var(--ink)) 0 calc(100% - 7px) / 100% 1px no-repeat; }
 .slider-in::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 20px; margin-top: -2px; background: var(--ink); border: 0; clip-path: polygon(0 0, 100% 0, 100% 60%, 50% 100%, 0 60%); }
@@ -143,7 +143,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #20242a; }
 .btn.big:not(.sys *) { min-height: 52px; padding: 0 22px; } /* [.btn.go] */
 .link:not(.sys *) { font: inherit; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; } /* [.btn.quiet] */
 .icon-btn:not(.sys *) { display: inline-grid; place-items: center; width: var(--touch); height: var(--touch); flex: none; color: inherit; } /* [.iconbtn] */
-.icon-btn:disabled:not(.sys *) { opacity: 0.45; cursor: default; }
+.icon-btn:disabled:not(.sys *) { opacity: 0.45; cursor: var(--cur, default); }
 .t-small:not(.sys *) { font-size: var(--t-caption); line-height: 1.3; } /* [.t-caption] */
 .t-lede:not(.sys *) { font-size: var(--t-lead); line-height: 1.45; } /* [body 17] */
 .t-moment:not(.sys *) { font: 700 var(--t-figure) / 1.1 var(--f-text); } /* [.t-figure] */
@@ -163,12 +163,12 @@ kbd:not(.sys *) { display: inline-grid; place-items: center; min-width: 24px; he
 .seg:not(.sys, .sys *) { display: inline-flex; max-width: 100%; box-shadow: inset 0 0 0 1px var(--ink); }
 .seg-opt:not(.sys *) { position: relative; display: flex; flex: 1 1 auto; }
 .seg-opt + .seg-opt:not(.sys *) { box-shadow: -1px 0 0 var(--ink); }
-.seg-opt input:not(.sys *) { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.seg-opt input:not(.sys *) { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: var(--cur-point, pointer); }
 .seg-opt span:not(.sys *) { display: flex; align-items: center; justify-content: center; min-height: var(--touch); padding: 0 var(--s4); width: 100%; background: var(--paper); text-align: center; }
 .seg-opt input:checked + span:not(.sys *) { background: var(--ink); color: var(--paper); }
 .seg-opt input:focus-visible + span:not(.sys *) { outline: 3px solid var(--blue); outline-offset: -4px; }
-.check:not(.sys, .sys *) { display: grid; grid-template-columns: 44px 1fr; gap: var(--s1); align-items: start; cursor: pointer; }
-.check:not(.sys, .sys *) input { appearance: none; -webkit-appearance: none; position: relative; width: 44px; height: 44px; margin: 0; background: none; border: 0; cursor: pointer; }
+.check:not(.sys, .sys *) { display: grid; grid-template-columns: 44px 1fr; gap: var(--s1); align-items: start; cursor: var(--cur-point, pointer); }
+.check:not(.sys, .sys *) input { appearance: none; -webkit-appearance: none; position: relative; width: 44px; height: 44px; margin: 0; background: none; border: 0; cursor: var(--cur-point, pointer); }
 .check:not(.sys, .sys *) input::before { content: ''; position: absolute; left: 11px; top: 11px; width: 22px; height: 22px; box-shadow: inset 0 0 0 1.5px var(--ink); background: var(--paper); }
 .check:not(.sys, .sys *) input::after { content: ''; position: absolute; left: 16px; top: 15px; width: 12px; height: 6px; border: solid var(--pencil); border-width: 0 0 2.5px 2.5px; transform: rotate(-45deg); opacity: 0; }
 .check:not(.sys, .sys *) input:checked::after { opacity: 1; }
@@ -176,7 +176,7 @@ kbd:not(.sys *) { display: inline-grid; place-items: center; min-width: 24px; he
 .check-label { display: block; font-weight: 700; }
 .check .sub { display: block; }
 .slider:not(.sys, .sys *) { display: grid; grid-template-columns: auto 1fr; gap: var(--s4); align-items: center; padding: var(--s2) 0; }
-.slider:not(.sys, .sys *) input { appearance: none; -webkit-appearance: none; width: 100%; height: var(--touch); margin: 0; background: transparent; cursor: pointer; }
+.slider:not(.sys, .sys *) input { appearance: none; -webkit-appearance: none; width: 100%; height: var(--touch); margin: 0; background: transparent; cursor: var(--cur-point, pointer); }
 .slider:not(.sys, .sys *) input::-webkit-slider-runnable-track { height: 4px; background: linear-gradient(var(--ink), var(--ink)) 0 / var(--fill, 50%) 100% no-repeat, var(--paper-2); box-shadow: inset 0 0 0 1px var(--ink); }
 .slider:not(.sys, .sys *) input::-moz-range-track { height: 4px; background: var(--paper-2); }
 .slider:not(.sys, .sys *) input::-moz-range-progress { height: 4px; background: var(--ink); }
