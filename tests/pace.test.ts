@@ -321,6 +321,23 @@ describe('a fast display on a machine that keeps its beat', () => {
     expect(until('full', false)).toBeGreaterThanOrEqual(third * 2 - 1.5)
   })
 
+  it('says how long the browser took to call again, whatever it then draws: on a display of 240 a second that the page keeps only every other beat of, the wait is two beats, not the four or five a picture covers', () => {
+    const p = new Pace()
+    run(p, 1000 / 240, 1, true)
+    expect(p.every).toBe(4)
+    const waits: number[] = [], covered: number[] = []
+    for (let k = 0; k < 600; k++) {
+      // (a call on one beat, then one that misses a beat, turn about)
+      const gap = (1000 / 240) * (k % 2 ? 2 : 1)
+      const ms = p.tick(gap, true)
+      if (ms > 0) { waits.push(p.gap); covered.push(ms) }
+    }
+    expect(Math.max(...waits)).toBeLessThanOrEqual(1000 / 120 + 1e-6)
+    // The pictures themselves come a beat late as often as not: taken for lateness, that would make the picture smaller.
+    expect(covered.filter(ms => ms > 1.23 * p.frameMs).length).toBeGreaterThan(covered.length * 0.27)
+    expect(waits.filter(ms => ms > 1.23 * p.frameMs).length).toBe(0)
+  })
+
   it('goes back at once when the picture is made smaller or the setting comes down', () => {
     const r = new Rate()
     while (r.feed(false, 1.5, true) !== 'full') { /* until it is tried */ }
