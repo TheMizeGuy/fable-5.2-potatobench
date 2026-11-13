@@ -1,7 +1,7 @@
 // What the player needs to see the farm's position: the fate of each order, the work the season cannot wait for, where
 // the money stands, the year's story, what goals cost, what keeping the fields sprayed would take, and the one rule
 // for planting.
-import { dayIndex, formatDay, SUNDAY, weekday, withCommas } from './calendar.ts'
+import { dayIndex, formatDay, isLeap, SUNDAY, weekday, withCommas } from './calendar.ts'
 import { buildBlock, buildCost } from './buildings.ts'
 import { apply, held, mortgageDue, openLots, planCosts, stumpBlock, tileBlock } from './campaign.ts'
 import { HOME_YARD, PARCELS, TRACTS } from './farm.ts'
@@ -12,7 +12,7 @@ import { housingLimit, hiredCount, hurt, jobSkill, payOf, resting, SKILL_LABEL, 
 import { FIELD_NAMES, JOB_LABEL, jobCost, placeName, pressingWhy, seasonDone, standingBy, tractorsRunning, waitFor, workday } from './season.ts'
 import { asks, killByItself } from './advice.ts'
 import { H_ROGUED, type BuildingKind, type Campaign, type Cmd, type Job, type JobKind, type KillWhy, type Unit, type UpgradeId, type VarietyId, type World, type YearSummary } from './types.ts'
-import { estimateYield, fieldInfo } from './view.ts'
+import { estimateYield, fieldInfo, forecast, today } from './view.ts'
 import { getDay } from './weather.ts'
 import { variety } from './varieties.ts'
 
@@ -731,14 +731,41 @@ export interface PlantReady { ok: boolean; soilT: number; need: number; rots: nu
 // The one rule for planting, used by the advice and so the routine: the field's own soil (the station's, a degree
 // more on the ridge and less on the bottom land) at the planting temperature, not before the season's earliest date,
 // and the ground fit to work.
+// Days until the ground is fit to plant, as a grower would reckon it: the soil drawn toward each day's mean, from the
+// forecast for five days and the usual weather after, and never before the season's earliest planting date. -1 when
+// it cannot be told within three months.
+export function plantingIn(world: World, c: Campaign): number {
+  const s = c.season
+  const t = today(world, c)
+  if (!s || !t) return -1
+  const earliest = dayIndex(s.year, P.PLANT_FROM.month, P.PLANT_FROM.dom)
+  const fc = forecast(world, c, 5)
+  const nm = world.weather.normals
+  let soil = t.soilT
+  for (let k = 1; k <= 90; k++) {
+    const day = s.day + k
+    const f = fc[k - 1]
+    const slot = !isLeap(s.year) && day >= 59 ? day + 1 : day
+    const mean = f ? (f.hi + f.lo) / 2 : (nm.tmax[slot] + nm.tmin[slot]) / 20
+    soil += P.SOIL_T_GAIN * (mean - soil)
+    if (day >= earliest && soil >= P.PLANT_SOIL_C) return k
+  }
+  return -1
+}
+
 export function plantReady(world: World, c: Campaign, field: number): PlantReady {
   const s = c.season
   const need = P.PLANT_SOIL_C, rots = P.PLANT_ROT_C
   if (!s) return { ok: false, soilT: 0, need, rots, why: 'Planting happens during the season.' }
   const soilT = s.soilT
   const f = (x: number) => Math.round(x * 9 / 5 + 32)
-  if (s.day < dayIndex(s.year, P.PLANT_FROM.month, P.PLANT_FROM.dom)) return { ok: false, soilT, need, rots, why: 'It\'s too early. Seed just sits and rots in cold ground.' }
-  if (soilT < need) return { ok: false, soilT, need, rots, why: `The soil here is ${f(soilT)}°F. Seed needs ${f(need)}°F, and below ${f(rots)}°F it rots.` }
+  // Too early or too cold, said once with the soil's reading and the day to wait for: the card, the advice and the
+  // coach all read this sentence.
+  if (s.day < dayIndex(s.year, P.PLANT_FROM.month, P.PLANT_FROM.dom) || soilT < need) {
+    const wait = plantingIn(world, c)
+    const until = wait > 0 ? `wait until about ${formatDay(s.year, s.day + wait)}` : 'wait for it to warm up'
+    return { ok: false, soilT, need, rots, why: soilT < need ? `The soil here is ${f(soilT)}°F and seed needs ${f(need)}°F or it can rot, so ${until}.` : `It's too early, since a cold spell can still rot the seed, so ${until}.` }
+  }
   if (fieldInfo(c, field).tooWet) return { ok: false, soilT, need, rots, why: 'It\'s too wet to work, but it\'ll dry in a day or two.' }
   return { ok: true, soilT, need, rots, why: `The soil here is ${f(soilT)}°F and dry enough to work.` }
 }

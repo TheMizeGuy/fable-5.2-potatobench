@@ -557,7 +557,9 @@ function reckoning(ctx: Ctx, lotId: number): PaperSpec {
     })
   }
   const stand = seen?.stand ?? S.fieldInfo(c, lot.field).stand
-  if (stand < 0.92 && stand > 0) {
+  // Seed that rotted in cold soil is named here however little (the ticket names it only as its biggest loss).
+  // Other thin stands from 8%.
+  if (stand > 0 && (stand < 0.92 || !!R.coldSeed(c, lot, stand, d.total))) {
     const planted = fieldLog(c, lot.field, 'planted')[0]
     never.push({
       head: 'Thin stand', cwt: d.total * (1 - stand) / stand,
@@ -825,7 +827,9 @@ export function ticket(ctx: Ctx, lotId: number, o: { fresh: boolean; staged?: bo
   const dug = digDays(c, lot)
   const inDay = weighDay(c, lot)
   const no = ticketNo(c, lot)
-  const cold = R.coldPlanting(c, lot, ctx.memo.digSeen[key]?.stand ?? (c.season?.year === lot.year ? S.fieldInfo(c, lot.field).stand : null), d.total)
+  // Seed that rotted in cold soil is the loss the face shows when it is the biggest; otherwise it is one press away.
+  const cold = R.coldSeed(c, lot, ctx.memo.digSeen[key]?.stand ?? (c.season?.year === lot.year ? S.fieldInfo(c, lot.field).stand : null), d.total)
+  const coldFirst = !!cold && (!losses.length || cold.cwt > losses[0].cwt)
   let answered = false
   let busy = false
   let worthEl: HTMLElement | null = null
@@ -926,11 +930,12 @@ export function ticket(ctx: Ctx, lotId: number, o: { fresh: boolean; staged?: bo
             h('p', { class: 'tk-top' }, topGrade(d))) : h('p', { class: 'grades t-caption' }, 'The grade sheet for this crop went with the sale.'),
           h('div', { class: 'tk-loss' },
             h('table', { class: 'losses' },
-              h('caption', { class: 't-label' }, losses.length ? 'Biggest loss' : 'Losses'),
-              h('tbody', null, losses.length ? losses.slice(0, 1).map(x => h('tr', null,
-                h('th', { scope: 'row' }, term(CAUSE_LABEL[x.k])), h('td', { class: 'num' }, `−${F.mass(x.cwt)}`), h('td', null, phrase(ctx, c, lot, x.k))))
-                : h('tr', null, h('td', { colspan: 3 }, 'Every potato kept its grade. A clean harvest.')))),
-            cold ? h('p', { class: 'tk-cold', testid: 'ticket-cold' }, icon('planted', 'i'), h('span', null, cold)) : null,
+              h('caption', { class: 't-label' }, losses.length || coldFirst ? 'Biggest loss' : 'Losses'),
+              h('tbody', null, coldFirst ? h('tr', { testid: 'ticket-cold' },
+                h('th', { scope: 'row' }, 'Rotted seed'), h('td', { class: 'num' }, `−${F.mass(cold!.cwt)}`), h('td', null, cold!.phrase))
+                : losses.length ? losses.slice(0, 1).map(x => h('tr', null,
+                  h('th', { scope: 'row' }, term(CAUSE_LABEL[x.k])), h('td', { class: 'num' }, `−${F.mass(x.cwt)}`), h('td', null, phrase(ctx, c, lot, x.k))))
+                  : h('tr', null, h('td', { colspan: 3 }, 'Every potato kept its grade. A clean harvest.')))),
             h('button', { class: 'btn quiet', type: 'button', testid: 'reckoning-open', onclick: () => ctx.papers.open(reckoning(ctx, lotId)) },
               losses.length > 1 ? 'See every grade and loss' : 'See every grade')),
           box))
