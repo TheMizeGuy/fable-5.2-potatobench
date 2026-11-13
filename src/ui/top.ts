@@ -518,7 +518,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     const counted = season || c.phase === 'cellar'
     if (counted && (app.needs() !== viewFor || viewCash !== Math.round(c.cash))) {
       // The first time in a season the spring loan grows, a note says what it is.
-      if (loanNoteNow(c, viewCash, loanSaid)) { loanSaid = c.year; ctx.say(LOAN_NOTE) }
+      if (loanNoteNow(c, viewCash, loanSaid)) { loanSaid = c.year; ctx.notes.push({ text: LOAN_NOTE, offer: true }) }
       viewFor = app.needs(); viewCash = Math.round(c.cash)
       viewNow = outlook(ctx, c)
       // A move of the year-end figure since the last one said, however slowly it came, says its cause under it for a
@@ -528,7 +528,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
       const why = watch.cause
       const ask = !!why && openedIn !== c.year
       // An upright phone's board has no room for it (a fifth of the height): there it is an alert that opens the sum.
-      if (why && season && layout === 'narrow') ctx.notes.push({ text: causeLine(why), go: () => openMoney('press') })
+      if (why && season && layout === 'narrow') ctx.notes.push({ text: causeLine(why), go: () => openMoney('press'), offer: true })
       else if (why) whyNow = { text: causeLine(why), at: stampOf(c), ask }
     }
     if (whyNow && (!counted || stampOf(c) - whyNow.at > (season ? WHY_DAYS : 0) || stampOf(c) < whyNow.at)) whyNow = null
@@ -582,7 +582,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
         moved && !phone ? h('span', { class: 'cash-moved', testid: 'cash-moved', role: 'status' }, moved.text) : null,
         after,
         after && whyNow && !phone ? h('span', { class: 'after-why', testid: 'outlook-why', role: 'status' }, whyNow.text,
-          whyNow.ask ? [' ', h('button', { class: 'why-key', type: 'button', testid: 'outlook-why-open', 'aria-expanded': String(pop === 'money'), onclick: () => openMoney('press') }, 'Why?')] : null) : null)
+          whyNow.ask ? [' ', h('button', { class: 'why-key', type: 'button', testid: 'outlook-why-open', 'aria-label': 'Why?', title: ctx.touch() ? undefined : 'Why?', 'aria-expanded': String(pop === 'money'), onclick: () => openMoney('press') }, icon('help', 'i'))] : null) : null)
       // The sum that makes the figure, under the board, clear of the speed keys.
       const money = pop === 'money' && view ? h('div', {
         class: 'tb-pop money-pop sheet', id: 'money-pop', testid: 'money-pop', role: 'dialog', 'aria-label': 'How the year-end figure is made up',

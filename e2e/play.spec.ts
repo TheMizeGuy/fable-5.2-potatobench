@@ -508,7 +508,8 @@ test('the money board says why the year-end figure moved, and its sum opens from
     return
   }
   const why = page.locator('#ui [data-testid="outlook-why"]')
-  await expect(why).toContainText(new RegExp(`^${name}'s wages to year end: −\\$[\\d,]+ Why\\?$`))
+  await expect(why).toContainText(new RegExp(`^${name}'s wages to year end: −\\$[\\d,]+`))
+  await expect(page.getByTestId('outlook-why-open')).toHaveAttribute('aria-label', 'Why?')
   await shot('board-why')
   // "Why?" opens the sum, which adds up to the figure.
   await page.getByTestId('outlook-why-open').click()

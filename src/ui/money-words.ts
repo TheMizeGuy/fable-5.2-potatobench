@@ -46,15 +46,17 @@ export function rangeSays(range: { lo: number; hi: number }): string {
 export const BORROWED_SAYS = `This is the bank's spring loan. Wages and field work go on it until the crop sells, it costs no interest until the end of the year, and the crop's sales pay it back. Whatever is still owed then carries at ${F.pct(S.CREDIT_RATE)}.`
 export const LOAN_NOTE = 'Wages and field work go on the spring loan until the crop sells.'
 
-// Whether the loan's note is due now: in the season, the first time this year that what is borrowed grows.
+// Whether the loan's note is due now: in the season, the first time this year that what is borrowed grows (not the
+// spring loan's own start).
 export function loanNoteNow(c: S.Campaign, cashWas: number, saidIn: number): boolean {
-  return c.phase === 'season' && saidIn !== c.year && c.cash < 0 && Math.round(c.cash) < cashWas
+  return c.phase === 'season' && saidIn !== c.year && cashWas < 0 && Math.round(c.cash) < cashWas
 }
 
-// What a press would do to this year's year-end figure, for a key's second line: "year end −$12,000".
-export function effectSays(d: number | null): string {
+// What a press would do to this year's year-end figure, for a key's second line: "year end −$12,000"; a hire's as
+// what it takes to the year end: "about $3,300 to the year end".
+export function effectSays(d: number | null, hire = false): string {
   if (d === null || Math.abs(d) < 50) return ''
-  return `year end ${signedMoney(d)}`
+  return hire && d < 0 ? `about ${F.money(-Math.round(d / 100) * 100)} to the year end` : `year end ${signedMoney(d)}`
 }
 
 // The spring plan's year-end figure past the bank's limit: one line, and the change that would bring it back most.

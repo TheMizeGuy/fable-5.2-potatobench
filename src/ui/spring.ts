@@ -53,7 +53,7 @@ function tryRun(ctx: Ctx, cmd: S.Cmd, onTry: (err: string) => void, say = false)
 
 // What a press would do to this year's year-end figure, the money board's own reckoning (S.moneyEffect).
 function yearEnd(ctx: Ctx, cmd: S.Cmd): string {
-  return effectSays(S.moneyEffect(ctx.app.world, ctx.app.campaign!, cmd))
+  return effectSays(S.moneyEffect(ctx.app.world, ctx.app.campaign!, cmd), cmd.t === 'hire')
 }
 
 // Undo, for what this spring's plan bought or hired: it costs nothing and is taken back in full.

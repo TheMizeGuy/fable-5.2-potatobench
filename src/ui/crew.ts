@@ -389,7 +389,7 @@ export function openCrew(ctx: Ctx): void {
             h('span', { class: 'hall-ic' }, icon(KIND_GLYPH[kind], 'i')),
             h('div', { class: 'who' }, h('h3', null, KIND_NAME[kind]), h('p', null, `${kindDoes(kind).replace(/\.$/, '')}, but won't ${kind === 'hand' ? 'drive' : 'do field work on foot'} unless you change their priorities.`)),
             skillRow(kind === 'hand' ? S.HAND_SKILLS : S.OPERATOR_SKILLS),
-            h('p', { class: 'price' }, h('b', { class: 'num' }, F.money(wage)), h('span', null, 'a month'), room ? null : h('span', { class: 't-caption to-end', testid: `hire-${kind}-year-end` }, effectSays(S.moneyEffect(app.world, c, { t: 'hire', kind })))),
+            h('p', { class: 'price' }, h('b', { class: 'num' }, F.money(wage)), h('span', null, 'a month'), room ? null : h('span', { class: 't-caption to-end', testid: `hire-${kind}-year-end` }, effectSays(S.moneyEffect(app.world, c, { t: 'hire', kind }), true))),
             room ? null : h('button', { class: 'btn', type: 'button', testid: `hire-${kind}`, onclick: () => hired(ctx.run({ t: 'hire', kind })) }, 'Hire', h('span', { class: 'sr' }, `, ${F.money(wage)} a month`)))
         }
         const applicants = S.applicantInfo(c)
@@ -404,7 +404,7 @@ export function openCrew(ctx: Ctx): void {
               portrait(a, 52),
               h('div', { class: 'who' }, h('h3', null, a.name), h('p', null, h('b', null, a.traitName), `: ${a.traitText.replace(/^./, x => x.toLowerCase())}`)),
               skillRow(a.skills),
-              h('p', { class: 'price' }, h('b', { class: 'num' }, F.money(a.ask)), h('span', null, 'a month'), a.why ? null : h('span', { class: 't-caption to-end', testid: `applicant-to-end-${a.id}` }, effectSays(S.moneyEffect(app.world, c, { t: 'hire', applicant: a.id })))),
+              h('p', { class: 'price' }, h('b', { class: 'num' }, F.money(a.ask)), h('span', null, 'a month'), a.why ? null : h('span', { class: 't-caption to-end', testid: `applicant-to-end-${a.id}` }, effectSays(S.moneyEffect(app.world, c, { t: 'hire', applicant: a.id }), true))),
               a.why ? null : h('button', { class: 'btn', type: 'button', testid: `hire-applicant-${a.id}`, onclick: () => hired(ctx.run({ t: 'hire', applicant: a.id })) }, 'Hire'))),
           ] : null,
           h('h3', { class: 't-label crew-h' }, applicants.length ? 'Or from the hiring hall' : 'From the hiring hall'),
