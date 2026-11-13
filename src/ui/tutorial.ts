@@ -429,15 +429,14 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     if (p.clientX >= ghost.b.left && p.clientX <= ghost.b.right && p.clientY >= ghost.b.top && p.clientY <= ghost.b.bottom) { e.preventDefault(); e.stopImmediatePropagation() }
   }
   for (const k of ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click', 'contextmenu']) window.addEventListener(k, swallow, true)
-  // A double-click is one press: its second click, landing where a note has just come, does not answer that note
-  // too. Nothing else is held back, so a note's keys work from the frame it is shown.
-  let lastClick = { x: -99, y: -99, t: -1e9 }
+  // A double-click is one press: its second click (the browser counts them in detail; a key's or a script's click
+  // counts 0), landing where a note has just come, does not answer that note too. Nothing else is held back, so a
+  // note's keys work from the frame it is shown.
+  let firstAt = -1e9
   let cameAt = 0
   const twice = (e: MouseEvent) => {
-    const t = performance.now()
-    const second = t - lastClick.t < 400 && Math.hypot(e.clientX - lastClick.x, e.clientY - lastClick.y) < 10
-    if (second && cameAt > lastClick.t && (e.target as Element).closest?.('.guide, .guide-card')) { e.preventDefault(); e.stopImmediatePropagation(); return }
-    lastClick = { x: e.clientX, y: e.clientY, t }
+    if (e.detail >= 2 && cameAt > firstAt && (e.target as Element).closest?.('.guide, .guide-card')) { e.preventDefault(); e.stopImmediatePropagation(); return }
+    if (e.detail === 1) firstAt = performance.now()
   }
   window.addEventListener('click', twice, true)
   let place: { x: number; y: number } | null = null
