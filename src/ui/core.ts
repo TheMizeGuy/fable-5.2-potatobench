@@ -418,6 +418,16 @@ export class Notes {
   count(): number { return this.items.length }
   has(full: string): boolean { return this.items.some(n => n.full === localize(full)) }
 
+  // Takes down a line that no longer holds, shown or waiting behind a card.
+  forget(full: string): void {
+    const f = localize(full)
+    this.waiting = this.waiting.filter(o => localize(o.full ?? o.text) !== f)
+    const n = this.items.find(x => x.full === f)
+    if (!n) return
+    this.drop(n)
+    this.draw()
+  }
+
   private drop(n: Note): void {
     const k = this.items.indexOf(n)
     if (k >= 0) this.items.splice(k, 1)

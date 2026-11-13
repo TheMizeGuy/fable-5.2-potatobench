@@ -56,6 +56,8 @@ export const mountHud: MountHud = (root, app, view, sound) => {
   let heldAt = 0
   let screen: Screen | null = null
   let sinceTick = 0
+  // The line that says why the game paused itself, taken down once it runs again.
+  let pauseSaid = ''
 
   const ctx: Ctx = {
     app, view, papers, notes,
@@ -210,10 +212,14 @@ export const mountHud: MountHud = (root, app, view, sound) => {
         if (!e.ok) notes.push({ text: 'This browser couldn\'t save your game. Export it from the menu to keep it.', level: 'warn', ttl: 12000 })
         break
       case 'speed': {
-        // The clock stopped itself for something nothing on screen has said: say what.
+        // The clock stopped itself for something nothing on screen has said: say what. A card that needs an answer
+        // says so itself, and a line queued behind it would only show once it had been answered.
         const c = app.campaign
-        if (e.speed === 0 && app.pauseReason && app.pauseReason !== HOLD && !guidedYear(c) && app.screen === 'season' && c && !S.seasonDone(c) && !papers.isOpen() && !notes.has(app.pauseReason)) {
-          notes.push({ text: app.holding ? app.pauseReason : `Paused: ${app.pauseReason}`, level: 'info', ttl: 9000 })
+        if (e.speed > 0 && pauseSaid) { notes.forget(pauseSaid); pauseSaid = '' }
+        if (e.speed === 0 && app.holding) ctx.announce(app.pauseReason)
+        else if (e.speed === 0 && app.pauseReason && app.pauseReason !== HOLD && !guidedYear(c) && app.screen === 'season' && c && !S.seasonDone(c) && !papers.isOpen() && !notes.has(app.pauseReason)) {
+          pauseSaid = `Paused: ${app.pauseReason}`
+          notes.push({ text: pauseSaid, level: 'info', ttl: 9000 })
         }
         dirty = true
         break
