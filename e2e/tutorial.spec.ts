@@ -939,6 +939,6 @@ test('the first spring sheet says a usual first year and that the loan carries i
   await page.getByTestId('guide-refuse').click()
   const line = page.getByTestId('plan-usual')
   await expect(line).toBeVisible()
-  await expect(line).toHaveText('Most first years end $4,000 to $24,000 down, and the loan carries you through.')
+  await expect(line).toHaveText('The loan covers usual first-year losses: $4,000 to $24,000.')
   expect(errors, errors.join('\n')).toEqual([])
 })
