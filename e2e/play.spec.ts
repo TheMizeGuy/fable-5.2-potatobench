@@ -5,7 +5,7 @@
 // the test hook if not. Play gives a farm of its own with seasons made from a random seed, so nothing here may count
 // on one year's weather, and money is read from the game rather than written into the test.
 import { test, type Page } from '@playwright/test'
-import { expect, look, noSidewaysScroll, pause, reach, straightIn, watchErrors } from './helpers.ts'
+import { expect, look, noSidewaysScroll, pause, putAway, reach, straightIn, watchErrors } from './helpers.ts'
 
 const BADGE = '#ui [data-testid^="badge-"]'
 
@@ -427,8 +427,15 @@ test('the money board says why the year-end figure moved', async ({ page, isMobi
   if (!isMobile) await page.setViewportSize({ width: 1280, height: 800 })
   await page.goto('./?year=1990&seed=7')
   await page.waitForFunction(() => '__county' in globalThis && !document.getElementById('splash'))
+  // (for the pictures only: the spring plan's foot when the plan leaves $8 in cash, then the cash put back)
+  if (process.env.SHOTS) {
+    await reach(page, `const { app, sim } = q.g(); const c = app.campaign; window.__was = c.cash; c.cash = sim.planCosts(c).total + 8; app.do({ t: 'plan', field: 0, plan: { ...c.plans[0] } })`)
+    await expect(page.getByTestId('plan-low')).toBeVisible()
+    await page.screenshot({ path: `${process.env.SHOTS}/plan-low-${isMobile ? 'phone' : '1280x800'}.png` })
+    await reach(page, `const { app } = q.g(); const c = app.campaign; c.cash = window.__was; app.do({ t: 'plan', field: 0, plan: { ...c.plans[0] } })`)
+  }
   await reach(page, `const { app } = q.g(); app.do({ t: 'begin' }); app.setSpeed(0); q.run(q.day(6, 6)); app.setSpeed(0); app.campaign.incidents = []; app.select(-1)`)
-  await page.keyboard.press('Escape')
+  await putAway(page)
   const why = page.locator('#ui [data-testid="outlook-why"]')
   await expect(page.locator('#ui [data-testid="outlook"]')).toBeVisible()
   await reach(page, `const { app } = q.g(); app.do({ t: 'hire', kind: 'hand' }); app.setSpeed(0)`)
@@ -439,8 +446,12 @@ test('the money board says why the year-end figure moved', async ({ page, isMobi
   const tip = await page.locator('#ui [data-testid="outlook"]').getAttribute('data-tip')
   expect(tip).toMatch(/Wages to the year end −\$[\d,]+/)
   expect(tip).toMatch(/= −?\$[\d,]+ after year-end bills\./)
+  // A spray order is $110: the cash's line says it, and the figure's line never does.
   const field = await game<number>(page, `c.plans.findIndex((p, i) => p.crop === 'potato' && sim.held(c, i))`)
-  await reach(page, `const { app } = q.g(); app.do({ t: 'job', kind: 'spray', field: ${field} }); app.do({ t: 'day' }); app.setSpeed(0)`)
+  await reach(page, `const { app } = q.g(); app.do({ t: 'job', kind: 'spray', field: ${field} }); app.setSpeed(0)`)
   await expect(why).toHaveText(new RegExp(`${name}'s wages to the year end`))
+  await reach(page, `const { app } = q.g(); app.do({ t: 'day' }); app.setSpeed(0)`)
+  await expect(why).toHaveText(/^[+−]\$[\d,]+: \w.+$/)
+  await expect(why).not.toHaveText(/field work/)
   expect(errors, errors.join('\n')).toEqual([])
 })
