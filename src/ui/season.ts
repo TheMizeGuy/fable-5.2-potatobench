@@ -426,18 +426,6 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     stopped: () => stoppedBy(app.campaign),
     board: () => board,
   })
-  // A person standing where a field's tag or the yard's tag lies is picked before the tag (a stamp still answers): a
-  // shared pin stands over only one of the people in it.
-  const personFirst = (e: Event) => {
-    const t = e.target as HTMLElement
-    if (!t.closest?.('.tag-wrap, .yard-at') || t.closest('.need, .badge, .pin')) return
-    const id = people.at((e as MouseEvent).clientX, (e as MouseEvent).clientY)
-    if (id < 0) return
-    e.stopPropagation()
-    e.preventDefault()
-    people.pick(id)
-  }
-  plateLayer.addEventListener('click', personFirst, true)
 
   // ------------------------------------------------------------ the yards on the land
 
@@ -790,7 +778,6 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       for (const t of Object.values(tied)) t.dispose()
       selLayer.remove()
       for (const m of yardMarks) m.wrap.remove()
-      plateLayer.removeEventListener('click', personFirst, true)
     },
   }
 }
