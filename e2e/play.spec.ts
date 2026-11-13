@@ -206,7 +206,7 @@ test('a first season by the short path, from the opening to the next spring, wit
     await page.getByTestId('year-next').click()
     await expect(page.getByTestId('over-title')).toBeVisible()
   } else {
-    await expect(page.getByTestId('outcome')).toContainText('The bank is satisfied')
+    await expect(page.getByTestId('outcome')).toContainText('The bank is happy')
     await expect(page.getByTestId('next-goal')).toBeVisible()
     await page.getByTestId('year-next').click()
     await expect(page.getByTestId('begin-season')).toBeVisible()

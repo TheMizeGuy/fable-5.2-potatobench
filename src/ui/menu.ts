@@ -24,10 +24,10 @@ function endSeasonEarly(ctx: Ctx): void {
   void confirmPaper(ctx, {
     title: 'End the season now?',
     text: [
-      left.length ? h('p', null, `${F.list(left)} ${left.length === 1 ? 'is' : 'are'} still in the ground. ${left.length === 1 ? 'That crop will be lost, and the work that went into it' : 'Those crops will be lost, and the work that went into them'}.`) : null,
-      bare.length ? h('p', null, `${F.list(bare)} ${bare.length === 1 ? 'was' : 'were'} never planted. The ${F.money(S.FIELD_COST)} a field already spent on ${bare.length === 1 ? 'it' : 'them'} is gone, and ${bare.length === 1 ? 'it grows' : 'they grow'} nothing this year.`) : null,
-      digging.length ? h('p', null, `${F.list(digging)} ${digging.length === 1 ? 'is' : 'are'} half dug. What is out of the ground is kept; the rest is left.`) : null,
-      h('p', null, `The cellar opens next, and the season cannot be reopened. The note and the household, ${F.money(S.NOTE_PAYMENT + S.LIVING)}, still come due at the year end.`),
+      left.length ? h('p', null, `${F.list(left)} still ${left.length === 1 ? 'has its crop' : 'have their crops'} in the ground. You'll lose ${left.length === 1 ? 'that crop and the work that went into it' : 'those crops and the work that went into them'}.`) : null,
+      bare.length ? h('p', null, `${F.list(bare)} ${bare.length === 1 ? 'was' : 'were'} never planted. The ${F.money(S.FIELD_COST)}${bare.length === 1 ? '' : ' a field'} you already spent on ${bare.length === 1 ? 'it' : 'them'} is gone, and ${bare.length === 1 ? 'it' : 'they'} won't grow anything this year.`) : null,
+      digging.length ? h('p', null, `${F.list(digging)} ${digging.length === 1 ? 'is' : 'are'} only partly dug. You keep what's already out of the ground and lose the rest.`) : null,
+      h('p', null, `Winter in the cellar comes next, and you can't come back to this season. You'll still owe ${F.money(S.NOTE_PAYMENT + S.LIVING)} for the bank payment and your family's living costs at the end of the year.`),
     ],
     yes: 'End the season',
     no: 'Keep farming',
@@ -35,7 +35,7 @@ function endSeasonEarly(ctx: Ctx): void {
   }).then(ok => { if (ok) ctx.run({ t: 'endSeason' }) })
 }
 
-const TIER_WORD = { high: 'full detail', medium: 'medium detail', low: 'low detail', flat: 'the flat drawing' }
+const TIER_WORD = { high: 'in full detail', medium: 'in medium detail', low: 'in low detail', flat: 'the simple flat view' }
 
 // The menu (design/menu.html): the office file open over the live land, the menu on its left page and the settings on
 // its right. From the title it holds the settings and the save.
@@ -77,7 +77,7 @@ export function openMenu(ctx: Ctx, o: { onHelp: () => void; onAlmanac: () => voi
         const text = await f.text()
         file.value = ''
         if (app.importSave(text)) { ctx.say('Save loaded.', 'good'); close() }
-        else status.textContent = 'That file is not a save from this game, or it is from a newer version.'
+        else status.textContent = 'That file isn\'t a save from this game, or it\'s from a newer version. Try a different file.'
       })
       const q = ctx.view.quality()
       const vol = Math.round(set.volume * 100)
@@ -89,13 +89,13 @@ export function openMenu(ctx: Ctx, o: { onHelp: () => void; onAlmanac: () => voi
         a.click()
         a.remove()
         setTimeout(() => URL.revokeObjectURL(a.href), 1000)
-        status.textContent = 'A copy is saved to your downloads.'
-        ctx.say('A copy of the farm is saved.', 'good')
+        status.textContent = 'A copy was saved to your downloads.'
+        ctx.say('Saved a copy of your farm.', 'good')
       }
       const deleteSave = async () => {
         const ok = await confirmPaper(ctx, {
           title: 'Delete the save?',
-          text: h('p', null, 'The farm in this browser is erased and cannot be brought back. Save a copy first if you might want it.'),
+          text: h('p', null, 'This deletes the farm saved in this browser, and it can\'t be undone. Save a copy first if you might want it back.'),
           yes: 'Delete it', no: 'Keep it', danger: true,
         })
         if (ok) { close(); app.deleteSave(); ctx.say('Save deleted.', 'info') }
@@ -111,11 +111,11 @@ export function openMenu(ctx: Ctx, o: { onHelp: () => void; onAlmanac: () => voi
           h('button', { class: 'btn wide', type: 'button', testid: 'save-export', disabled: !c, onclick: exportSave }, icon('save', 'i'), 'Save a copy'),
           h('button', { class: 'btn wide', type: 'button', testid: 'save-import', onclick: () => file.click() }, icon('ticket', 'i'), 'Load a saved farm'),
           h('button', { class: 'btn wide', type: 'button', testid: 'how-open', onclick: () => o.onHelp() }, icon('key', 'i'), 'How to play'),
-          o.onGuide ? h('button', { class: 'btn wide', type: 'button', testid: 'guide-open', onclick: () => o.onGuide!() }, icon('fist', 'i'), 'The guided first year') : null,
+          o.onGuide ? h('button', { class: 'btn wide', type: 'button', testid: 'guide-open', onclick: () => o.onGuide!() }, icon('fist', 'i'), 'Guided first year') : null,
           season && !S.seasonDone(c!) ? h('button', { class: 'btn wide hazard', type: 'button', testid: 'end-season-early', onclick: () => { close(); endSeasonEarly(ctx) } }, icon('skip', 'i'), 'End the season early') : null,
           inGame ? h('button', { class: 'btn wide', type: 'button', testid: 'quit-title', onclick: () => { close(); app.quitToTitle() } }, icon('letgo', 'i'), 'Quit to the title') : null,
           h('button', { class: 'btn wide quiet menu-delete', type: 'button', testid: 'save-delete', disabled: !app.savedGame() && !c, onclick: deleteSave }, 'Delete the save')),
-        h('p', { class: 't-caption' }, 'The game saves itself in this browser.'),
+        h('p', { class: 't-caption' }, 'The game saves automatically in this browser.'),
         file, status)
       const settings = h('section', { 'aria-label': 'Settings' },
         h('header', { class: 'form-head' },
@@ -141,12 +141,12 @@ export function openMenu(ctx: Ctx, o: { onHelp: () => void; onAlmanac: () => voi
             }),
             h('b', { class: 'num' }, String(vol)))),
         h('fieldset', { class: 'f-row' }, h('legend', { class: 't-label' }, 'Play'),
-          toggle('hints', 'Hints', 'a sentence the first time each order is called for'),
-          toggle('pauseOnAlerts', 'Pause on alerts', 'stop the clock when something new needs you'),
-          toggle('reducedMotion', 'Reduce motion', 'papers change at once; the land holds still')),
+          toggle('hints', 'Hints', 'a short tip the first time each order comes up'),
+          toggle('pauseOnAlerts', 'Pause on alerts', 'pause the game when something new needs you'),
+          toggle('reducedMotion', 'Reduce motion', 'sheets switch instantly and the land stays still')),
         h('fieldset', { class: 'f-row' }, h('legend', { class: 't-label' }, 'Picture'),
           seg('quality', 'Picture', (['auto', 'high', 'medium', 'low'] as Quality[]).map(k => [k, F.upper(k)]), set.quality, v => app.setSetting('quality', v as Quality)),
-          h('p', { class: 't-caption', testid: 'quality-now' }, `Drawing ${TIER_WORD[q.tier]}${q.fps > 0 ? ` at ${Math.round(q.fps)} frames a second` : ''}.`)))
+          h('p', { class: 't-caption', testid: 'quality-now' }, `Drawing ${TIER_WORD[q.tier]}${q.fps > 0 ? `, at ${Math.round(q.fps)} frames a second` : ''}.`)))
       return h('section', { class: 'file sys' },
         h('span', { class: 'file-tab', 'aria-hidden': 'true' }, 'The office file'),
         h('div', { class: 'file-pages' }, menuPage, settings))

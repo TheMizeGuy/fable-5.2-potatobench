@@ -13,13 +13,13 @@ export function priceBand(ahead: number): number {
 // prices wander. The line says the month, the usual figure, how far off it can be, and so whether to count on it.
 export function storeCall(o: { now: number; months: S.StoreMonth[]; best: S.StoreMonth | null }): { store: boolean; phrase: string } {
   const b = o.best
-  if (!b) return { store: false, phrase: 'there is no month left to keep it to' }
+  if (!b) return { store: false, phrase: 'there are no months left to store it' }
   const spread = Math.round((b.net * priceBand(o.months.indexOf(b) + 1)) / 10) * 10
   const d = b.net - o.now
-  if (d < 0.5) return { store: false, phrase: `after the cellar's charge and shrink no month usually pays more than today; ${b.name}, the best, about ${F.money(b.net)}` }
+  if (d < 0.5) return { store: false, phrase: `after storage costs and shrinkage, no month usually pays more than today, and the best is ${b.name} at about ${F.money(b.net)}` }
   const sure = d > spread
   return {
     store: sure,
-    phrase: `kept to ${b.name}, usually about ${F.money(b.net)} after the cellar's charge and shrink, give or take ${F.money(spread)}: ${F.money(d)} more than today${sure ? '' : ', inside what prices wander in that time, so not a gain to count on'}${b.sprouted ? ', though sprouted' : ''}`,
+    phrase: `stored until ${b.name} it usually brings about ${F.money(b.net)} after storage costs and shrinkage, give or take ${F.money(spread)}. That's ${F.money(d)} more than today${b.sprouted ? ', even after it sprouts' : ''}${sure ? '' : ', but prices can swing that much by then, so don\'t count on it'}`,
   }
 }

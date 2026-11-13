@@ -22,11 +22,12 @@ function houses(st: S.StorageInfo): HTMLElement {
   const share = st.capacity > 0 ? Math.min(1, st.stored / st.capacity) : 0
   const over = st.stored > st.capacity + 0.5
   return h('div', { class: 'c-houses', testid: 'houses' },
-    h('p', { class: 'lead' }, h('span', { class: 't-label' }, 'In store'), h('span', { class: 'dots' }),
+    h('p', { class: 'lead' }, h('span', { class: 't-label' }, 'In storage'), h('span', { class: 'dots' }),
       h('b', { class: 'num' }, F.mass(st.stored)), h('span', { class: 'quiet num' }, `of ${F.mass(st.capacity)}`)),
-    meter(share, { label: 'In store', text: `${F.mass(st.stored)} of ${F.mass(st.capacity)}`, kind: over ? 'warn' : undefined }),
+    meter(share, { label: 'In storage', text: `${F.mass(st.stored)} of ${F.mass(st.capacity)}`, kind: over ? 'warn' : undefined }),
     h('ul', { class: 'c-house-list' }, st.houses.map(x => h('li', null, icon('store', 'i'), h('span', null, x.name), h('span', { class: 'num quiet' }, F.mass(x.cwt))))),
-    over ? h('p', { class: 'c-ochre' }, `${F.mass(st.stored - st.capacity)} more than the houses hold.`) : null)
+    over ? h('p', { class: 'c-ochre' }, `That's ${F.mass(st.stored - st.capacity)} more than your potato houses can hold.`) : null,
+    F.cwtNote() ? h('p', { class: 't-caption' }, F.cwtNote().trim()) : null)
 }
 
 export function cellarScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
@@ -63,11 +64,11 @@ export function cellarScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
     const cwt = lots.reduce((a, l) => a + S.lotCwt(l), 0)
     did = [
       `Storage for ${S.CELLAR_MONTHS[was.month]}: ${F.money(c.yearStorage - was.storage)}.`,
-      was.cwt - cwt >= 0.5 ? `The piles shrank ${F.mass(was.cwt - cwt)}.` : '',
+      was.cwt - cwt >= 0.5 ? `The piles shrank by ${F.mass(was.cwt - cwt)}.` : '',
       ...Object.entries(was.price).map(([id, p]) => {
         const now = S.basePrice(app.world, c, id as S.VarietyId)
         const d = now / p - 1
-        return `${S.variety(id as S.VarietyId).name}: ${Math.abs(d) < 0.005 ? 'no change' : `${d > 0 ? 'up' : 'down'} ${F.num(Math.abs(d) * 100, 1)}%`}, to ${F.price(now)}.`
+        return `${S.variety(id as S.VarietyId).name} ${Math.abs(d) < 0.005 ? 'held steady at' : `went ${d > 0 ? 'up' : 'down'} ${F.num(Math.abs(d) * 100, 1)}% to`} ${F.price(now)}.`
       }),
       ...r.events.filter(e => ['sprout', 'breakdown', 'contractShort', 'contractFilled', 'felled', 'built', 'skillUp', 'winterIdle'].includes(e.type)).map(e => F.localize(e.text)),
     ].filter(Boolean)
@@ -88,8 +89,8 @@ export function cellarScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
     const gain = nx ? nx.net - value : 0
     // The usual curve is a guess: a month's price can wander a tenth from it, so a move inside that is called flat.
     const spread = nx ? Math.round((nx.net * priceBand(1)) / 10) * 10 : 0
-    const heading: [string, string] = !nx ? ['flat', 'May is the last month: what is left is sold at its end']
-      : [gain > spread ? 'up' : gain < -spread ? 'fall' : 'flat', `Kept to ${nx.name}: usually about ${F.money(nx.net)}, give or take ${F.money(spread)}; ${Math.abs(gain) < 0.5 ? 'the same as selling now' : `${F.money(Math.abs(gain))} ${gain > 0 ? 'more' : 'less'} than selling now`}${o.best && o.best !== nx && o.best.net > Math.max(value, nx.net) + Math.max(25, value * 0.01) ? `; ${o.best.name} is usually the best, about ${F.money(o.best.net)}` : ''}`]
+    const heading: [string, string] = !nx ? ['flat', 'May is the last month, so whatever is left gets sold when it ends']
+      : [gain > spread ? 'up' : gain < -spread ? 'fall' : 'flat', `Keep it until ${nx.name} and it usually brings about ${F.money(nx.net)}, give or take ${F.money(spread)}, which is ${Math.abs(gain) < 0.5 ? 'the same as selling now' : `${F.money(Math.abs(gain))} ${gain > 0 ? 'more' : 'less'} than selling now`}${o.best && o.best !== nx && o.best.net > Math.max(value, nx.net) + Math.max(25, value * 0.01) ? `, and ${o.best.name} is usually the best month at about ${F.money(o.best.net)}` : ''}`]
     const grewWith = c.season?.fields[lot.field]?.seedVirus
     const rent = Math.round(S.lotCwt(lot) * S.STORE_COST)
     const deal = deals(app.world, c, lot)[0]
@@ -97,17 +98,17 @@ export function cellarScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
     return h('article', { class: 'lot', 'aria-labelledby': `lot-h-${lot.id}`, k: `lot-${lot.id}` },
       h('header', { class: 'lot-head' },
         h('h3', { id: `lot-h-${lot.id}` }, S.FIELD_NAMES[lot.field]),
-        h('span', { class: 'lot-value num', testid: `lot-value-${lot.id}`, 'data-lot': lot.id, title: ctx.touch() ? undefined : 'What selling it today pays' }, F.money(value))),
+        h('span', { class: 'lot-value num', testid: `lot-value-${lot.id}`, 'data-lot': lot.id, title: ctx.touch() ? undefined : 'What you\'d get if you sold it today' }, F.money(value))),
       h('p', { class: 'lot-sub quiet' }, `${v.name} · ${F.mass(S.lotCwt(lot))}${lot.seedHeld ? ` · seed held for ${F.plural(lot.seedHeld, 'field')}` : ''}`,
         h('span', { class: 'num' }, ` · ${F.price(S.basePrice(app.world, c, lot.variety))} for No. 1`)),
       h('ul', { class: 'lot-facts' },
         h('li', null, icon(heading[0], 'i'), h('span', null, heading[1])),
-        lot.sprouted ? h('li', { class: 'c-ochre' }, icon('sprout', 'i'), h('span', null, 'Sprouting: worth 15% less, and shrinking faster'))
-          : h('li', null, icon('sprout', 'i'), h('span', null, m > c.month ? F.upper(R.sproutText(m)) : 'Sprouting soon')),
-        lot.broke ? h('li', { class: 'c-red' }, icon('blight', 'i'), h('span', null, 'Rot ran through it')) : null,
-        lot.packed > 0.005 ? h('li', { testid: `lot-packed-${lot.id}` }, icon('box', 'i'), h('span', null, `${F.pct(lot.packed)} of its No. 1 and B size packed: No. 1 ${F.pct(S.PACK_NO1)} more, B size ${F.pct(S.PACK_B)} of the No. 1 price`)) : null,
-        h('li', null, icon('store', 'i'), h('span', null, `Storage ${F.money(rent)} a month; about ${F.money(storageSoFar)} so far`))),
-      deal ? h('p', { class: 'lot-deal' }, `${deal.k.buyer} takes ${F.mass(deal.take)} of No. 1 at ${F.price(deal.k.price)}: ${versusMarket(deal)}.`) : null,
+        lot.sprouted ? h('li', { class: 'c-ochre' }, icon('sprout', 'i'), h('span', null, 'It\'s sprouting, so it\'s worth 15% less and shrinks faster'))
+          : h('li', null, icon('sprout', 'i'), h('span', null, m > c.month ? F.upper(R.sproutText(m)) : 'It\'ll start sprouting soon')),
+        lot.broke ? h('li', { class: 'c-red' }, icon('blight', 'i'), h('span', null, 'Rot has spread through it')) : null,
+        lot.packed > 0.005 ? h('li', { testid: `lot-packed-${lot.id}` }, icon('box', 'i'), h('span', null, `${F.pct(lot.packed)} of its No. 1 and B size is packed, and packed No. 1 sells for ${F.pct(S.PACK_NO1)} more and packed B size for ${F.pct(S.PACK_B)} of the No. 1 price`)) : null,
+        h('li', null, icon('store', 'i'), h('span', null, `Storage costs ${F.money(rent)} a month, about ${F.money(storageSoFar)} so far`))),
+      deal ? h('p', { class: 'lot-deal' }, `${deal.k.buyer} will take ${F.mass(deal.take)} of No. 1 at ${F.price(deal.k.price)}, ${versusMarket(deal)}.`) : null,
       h('div', { class: 'lot-actions' },
         deal ? h('button', { class: 'btn', type: 'button', testid: `lot-deliver-${lot.id}`, onclick: () => deliver(ctx, lot, deal) },
           icon('deliver', 'i'), `Deliver to ${deal.k.buyer.replace(/^The /, 'the ')}`, h('span', { class: 'sub num' }, F.money(deal.pays))) : null,
@@ -126,11 +127,11 @@ export function cellarScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
           // .primary marks the answer for the checks that read the sheet; inside .sys it draws as a plain box.
           h('button', {
             class: 'btn primary', type: 'button', testid: `lot-seed-${lot.id}`,
-            onclick: () => { if (ctx.run({ t: 'seed', lot: lot.id, fields: n }).ok) { seedOpen[lot.id] = false; ctx.say(`${F.mass(n * S.SEED_CWT_PER_FIELD)} of ${v.name} held back to plant ${F.plural(n, 'field')} next spring.`, 'good') } },
+            onclick: () => { if (ctx.run({ t: 'seed', lot: lot.id, fields: n }).ok) { seedOpen[lot.id] = false; ctx.say(`You held back ${F.mass(n * S.SEED_CWT_PER_FIELD)} of ${v.name}, enough to plant ${F.plural(n, 'field')} next spring.`, 'good') } },
           }, `Hold back ${F.mass(n * S.SEED_CWT_PER_FIELD)}`)),
         h('p', { class: 't-caption', testid: `seed-cost-${lot.id}` },
-          `Held-back seed is free next spring (certified costs ${F.money(S.SEED_CWT_PER_FIELD * S.CERT_SEED_PER_CWT)} a field), but it carries this crop's virus and more every year it is saved, and any blight that went into the cellar comes back up in the field.`,
-          grewWith !== undefined ? ` This crop grew from seed with about ${F.pct(grewWith)} virus; ${v.name} ${R.seedWord(v)}.` : '')) : null)
+          `Seed you hold back is free to plant next spring (certified seed costs ${F.money(S.SEED_CWT_PER_FIELD * S.CERT_SEED_PER_CWT)} a field), but it carries this crop's virus, which builds up every year you save it, and any blight that went into the cellar with it comes back in the field.`,
+          grewWith !== undefined ? ` This crop grew from seed with about ${F.pct(grewWith)} virus, and ${v.name} ${R.seedWord(v)}.` : '')) : null)
   }
 
   const screen: Screen = {
@@ -164,26 +165,26 @@ export function cellarScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
         h('header', { class: 'winter-head' },
           h('div', null,
             h('p', { class: 't-label' }, `${month} · ${R.yearName(c.year)} · `, term('The cellar months', 'the cellar months')),
-            h('h2', { class: 't-title', id: 'winter-h' }, 'The winter\'s work')),
-          h('p', { class: 'num w-wages' }, wages ? [h('b', null, F.money(wages)), ' a month in wages'] : 'Nobody paid this winter')),
+            h('h2', { class: 't-title', id: 'winter-h' }, 'Winter work')),
+          h('p', { class: 'num w-wages' }, wages ? [h('b', null, F.money(wages)), ' a month in wages'] : 'No wages this winter')),
         h('div', { class: `w-body${c.crew.length <= 1 ? ' few' : ''}`, 'data-scroll': 'winter' },
           winterWork(ctx, c, raise, () => { raise = !raise; ctx.dirty() }, [
-            lines.length ? h('div', { class: 'sec-h' }, h('h2', null, c.month === 0 && !did.length ? 'At the close of the season' : `What ${S.CELLAR_MONTHS[Math.max(0, c.month - 1)]} did`)) : null,
+            lines.length ? h('div', { class: 'sec-h' }, h('h2', null, c.month === 0 && !did.length ? 'When the season ended' : `What happened in ${S.CELLAR_MONTHS[Math.max(0, c.month - 1)]}`)) : null,
             h('ul', { class: 'c-month', testid: 'this-month' }, lines.slice(0, 6).map(t => h('li', null, t)))]),
           h('section', { class: 'w-cellar', 'aria-labelledby': 'cellar-h' },
-            h('div', { class: 'sec-h' }, h('h2', { id: 'cellar-h' }, 'The crop in store'),
+            h('div', { class: 'sec-h' }, h('h2', { id: 'cellar-h' }, 'Your stored crop'),
               h('span', { class: 't-caption num' }, `sold ${F.money(sales)} · storage ${F.money(c.yearStorage)} so far`)),
             houses(st),
             // Said once where the button stands, for every lot that has one.
             lots.some(l => !l.broke && Math.floor((l.grades.b + l.grades.no1) / S.SEED_CWT_PER_FIELD) >= 1)
-              ? h('p', { class: 't-caption c-seed-note', testid: 'seed-explained' }, term('Hold back seed', 'hold back seed'), `: keep some of a lot as next spring's seed. It is free to plant, where certified seed costs ${F.money(S.SEED_CWT_PER_FIELD * S.CERT_SEED_PER_CWT)} a field, but it carries this crop's virus.`)
+              ? h('p', { class: 't-caption c-seed-note', testid: 'seed-explained' }, term('Hold back seed', 'hold back seed'), ` lets you keep part of a stored crop as next spring's seed. It's free to plant, while certified seed costs ${F.money(S.SEED_CWT_PER_FIELD * S.CERT_SEED_PER_CWT)} a field, but it carries this crop's virus.`)
               : null,
             lots.length ? h('div', { class: 'lots' }, lots.map(l => lotCard(c, l, weights > 0 ? c.yearStorage * weight(l) / weights : 0)))
-              : h('p', { class: 'quiet c-empty' }, 'The cellar is empty. Nothing is left to sell from this crop.'))),
+              : h('p', { class: 'quiet c-empty' }, 'The cellar is empty, so there\'s nothing left to sell from this crop.'))),
         h('footer', { class: 'winter-next' },
           h('p', { class: 't-caption' }, last
-            ? lots.length ? 'May is the last month. Whatever is left is sold at May prices when the year closes.' : 'With the cellar empty, the year can close.'
-            : `Each month the storage bill comes${wages ? `, ${F.money(wages)} of wages is paid` : ''}, the piles shrink a little, and prices move.`),
+            ? lots.length ? 'May is the last month. Anything you still have gets sold at May prices when the year closes.' : 'The cellar is empty, so you can close the year.'
+            : `Each month you pay for storage${wages ? ` and ${F.money(wages)} in wages` : ''}, the piles shrink a little and prices move.`),
           h('button', { class: 'btn go', type: 'button', testid: 'month-next', onclick: nextMonth },
             last ? (lots.length ? 'Sell the rest and close the year' : 'Close the year') : `On to ${S.CELLAR_MONTHS[c.month + 1]}`, icon('arrow', 'i'))),
       ] as Child)

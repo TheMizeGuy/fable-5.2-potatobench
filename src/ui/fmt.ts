@@ -81,6 +81,9 @@ export function storeRate(usdPerCwtMonth: number): string {
 
 export function hundredweight(): string { return metric() ? 'tonne' : 'hundredweight' }
 
+// What cwt means, said once on a screen that counts in it; nothing in metric.
+export function cwtNote(): string { return metric() ? '' : ' A cwt is a hundredweight (100 lb).' }
+
 export function massValue(cwt: number): number { return metric() ? cwt * T_PER_CWT : cwt }
 
 export function perArea(cwtPerAcre: number): string {
@@ -163,6 +166,11 @@ export function list(names: string[]): string {
 
 export function plural(n: number, one: string, many = `${one}s`): string {
   return `${num(n)} ${n === 1 ? one : many}`
+}
+
+// "once", "twice", "3 times".
+export function times(n: number): string {
+  return n === 1 ? 'once' : n === 2 ? 'twice' : plural(n, 'time')
 }
 
 // "both" for two, "all 4" for more.

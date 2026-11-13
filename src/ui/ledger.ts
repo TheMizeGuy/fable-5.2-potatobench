@@ -36,11 +36,11 @@ function cashLine(label: Child, v: number, o: { testid?: string; always?: boolea
 export function yearSentence(y: S.YearSummary): string {
   const st = S.yearStory(y)
   const kept = (y.land ?? 0) + (y.building ?? 0) + (y.works ?? 0)
-  const reasons = st.reasons.map(r => `${r.label.toLowerCase()} ${r.amount < 0 ? 'took' : 'brought'} ${F.money(Math.abs(Math.round(r.amount)))}`)
+  const reasons = st.reasons.map(r => `${F.money(Math.abs(Math.round(r.amount)))} ${r.amount < 0 ? 'for' : 'from'} ${r.label[0].toLowerCase()}${r.label.slice(1)}`)
   const gap = Math.round(st.ended - st.began)
-  const head = `You began the year with ${F.money(st.began)} and end it with ${F.money(st.ended)}: ${gap === 0 ? 'the same' : `${F.money(Math.abs(gap))} ${gap < 0 ? 'less' : 'more'}`}.`
-  const keep = kept && gap < 0 ? ` Of what went out, ${F.money(kept)} bought land, buildings and clearing, which the farm keeps.` : ''
-  return `${head} The largest reasons: ${reasons.join('; ')}.${keep}`
+  const head = `You started the year with ${F.money(st.began)} and ended it with ${F.money(st.ended)}, which is ${gap === 0 ? 'exactly the same' : `${F.money(Math.abs(gap))} ${gap < 0 ? 'less' : 'more'}`}.`
+  const keep = kept && gap < 0 ? ` ${F.money(kept)} of what you spent paid for land, buildings and clearing, which you keep.` : ''
+  return `${head} The biggest ${reasons.length === 1 ? 'reason was' : 'reasons were'} ${F.list(reasons)}.${keep}`
 }
 
 function cashBook(y: S.YearSummary, lost: boolean): HTMLElement {
@@ -61,24 +61,24 @@ function cashBook(y: S.YearSummary, lost: boolean): HTMLElement {
       cashLine(contracts ? 'Sold on the market' : sold ? `Potato sales, ${F.mass(y.cwtSold)}` : 'Potato sales', sold ? y.revenue - rest - contracts - logs - stand : 0, { always: true, none: !sold }),
       cashLine('Delivered on contract', contracts, { testid: 'ledger-contracts' }),
       cashLine('The farm stand', stand, { testid: 'ledger-stand' }),
-      cashLine('Logs to the mill', logs, { testid: 'ledger-logs' }),
+      cashLine('Logs sold to the mill', logs, { testid: 'ledger-logs' }),
       cashLine('Oats and clover', rest),
       cashLine('Growing: seed, fields, work, equipment', -(y.costs - storage - wages - rent - land - penalties - mortgage - works - building - packing), { always: true }),
       cashLine('Wages', -wages, { testid: 'ledger-wages' }),
       cashLine('Rent', -rent, { testid: 'ledger-rent' }),
-      cashLine('Land, the quarter down', -land, { testid: 'ledger-land' }),
+      cashLine('Land, down payments', -land, { testid: 'ledger-land' }),
       cashLine('The land mortgage', -mortgage, { testid: 'ledger-mortgage' }),
       cashLine('Buildings', -building, { testid: 'ledger-building' }),
       cashLine('Contractors', -works, { testid: 'ledger-works' }),
       cashLine('Packing', -packing, { testid: 'ledger-packing' }),
       cashLine('Contract penalties', -penalties, { testid: 'ledger-penalties' }),
       cashLine('Storage', -storage),
-      cashLine([term('The note', 'the note'), y.note > 0 && !lost ? stamp('Paid', { ink: 'violet', small: true }) : null], -y.note, { always: true }),
-      cashLine(term('The household', 'the household'), -y.living, { always: true }),
-      cashLine('Interest on debt carried', -y.interest)),
+      cashLine([term('Bank payment', 'the note'), y.note > 0 && !lost ? stamp('Paid', { ink: 'violet', small: true }) : null], -y.note, { always: true }),
+      cashLine(term('Living costs', 'the household'), -y.living, { always: true }),
+      cashLine('Interest on your debt', -y.interest)),
     h('tfoot', null,
       h('tr', { class: 'total' }, h('td', null, 'Cash at year end'), h('td', { class: `m num${y.cashEnd < 0 ? ' c-red' : ''}`, colspan: 2, 'data-cash': '' }, F.money(y.cashEnd))),
-      lost ? h('tr', { class: 'call' }, h('td', null, 'The bank calls the note below'), h('td', { class: 'm num', colspan: 2 }, F.money(S.CREDIT_LIMIT))) : null))
+      lost ? h('tr', { class: 'call' }, h('td', null, 'Bank calls in the loan below'), h('td', { class: 'm num', colspan: 2 }, F.money(S.CREDIT_LIMIT))) : null))
 }
 
 const SKILL_UP = /^(.*) (?:is|are) better at (.*): level (\d+)\.$/
@@ -116,7 +116,7 @@ function yearOnFarm(c: S.Campaign): HTMLElement | null {
   for (const u of c.crew) if (u.kind !== 'farmer') people.set(u.name, [])
   for (const d of deeds) if (d.who) { if (!people.has(d.who)) people.set(d.who, []); people.get(d.who)!.push(d.text) }
   // Who is on the books now: the year's wages are not kept person by person.
-  const paid = new Map(c.crew.filter(u => u.kind !== 'farmer').map(u => [u.name, `at ${F.money(S.payOf(u))} a month; ${u.winter === 'off' ? 'laid off for the winter' : 'kept on through the winter'}.`]))
+  const paid = new Map(c.crew.filter(u => u.kind !== 'farmer').map(u => [u.name, `hired at ${F.money(S.payOf(u))} a month, ${u.winter === 'off' ? 'laid off for the winter' : 'kept on through the winter'}.`]))
   const farm = deeds.filter(d => !d.who)
   if (!deeds.length && !people.size) return null
   return h('section', { class: 'b-people', testid: deeds.length ? 'ledger-deeds' : undefined },
@@ -145,10 +145,10 @@ function worth(c: S.Campaign): HTMLElement {
   const line = (label: string, v: number) => h('p', { class: 'lead' }, h('span', null, label), h('span', { class: 'dots' }), h('span', { class: `num${v < 0 ? ' c-red' : ''}` }, F.money(v)))
   return h('section', { class: 'worth', testid: 'ledger-worth' },
     h('div', null, h('p', { class: 't-label' }, 'The farm is worth'), h('p', { class: `t-display num${total < 0 ? ' c-red' : ''}` }, F.money(total))),
-    h('p', { class: 'it quiet b-worth-note' }, 'what it holds,', h('br'), 'less what is owed'),
+    h('p', { class: 'it quiet b-worth-note' }, 'what you own,', h('br'), 'minus what you owe'),
     h('div', { class: 'lines' },
-      land ? line('Land bought, at its price', land) : null,
-      equip ? line('Equipment, at half what it cost', equip) : null,
+      land ? line('Land you bought, at its price', land) : null,
+      equip ? line('Equipment, at half its cost', equip) : null,
       built ? line(`${F.plural(standing.length, 'building')}, at their cash cost`, built) : null,
       owed ? line('Owed on the land', -owed) : null,
       line('Cash', c.cash)))
@@ -157,16 +157,16 @@ function worth(c: S.Campaign): HTMLElement {
 // The crop beside the neighbor's, as bars in the printer's tints.
 function crop(ctx: Ctx, y: S.YearSummary): HTMLElement {
   const nb = ctx.app.world.neighbor[String(y.year)]
-  const head = h('div', { class: 'sec-h' }, h('h2', null, 'The crop'), h('span', { class: 't-caption' }, `${F.metric() ? 't a hectare' : 'cwt an acre'} sold, on the same weather`))
-  if (!y.potatoFields) return h('section', { class: 'compare' }, head, h('p', { class: 'b-plain' }, `No potatoes were planted in ${yearWord(y.year)}, so there was no crop to sell.`))
+  const head = h('div', { class: 'sec-h' }, h('h2', null, 'The crop'), h('span', { class: 't-caption' }, `${F.metric() ? 't a hectare' : 'cwt an acre'} sold, in the same weather`))
+  if (!y.potatoFields) return h('section', { class: 'compare' }, head, h('p', { class: 'b-plain' }, `You didn't plant potatoes in ${yearWord(y.year)}, so there was no crop to sell.`))
   const rows: [string, number, string][] = [['Your farm', y.yieldCwtAcre, '']]
-  if (nb) rows.push(['The neighbor', nb.yieldCwtAcre, ' n'])
+  if (nb) rows.push(['Your neighbor', nb.yieldCwtAcre, ' n'])
   const max = Math.max(...rows.map(r => r[1]), 1) * 1.1
   return h('section', { class: 'compare' }, head,
     rows.map(([label, v, cls]) => h('p', null, h('span', null, label),
       h('span', { class: `cbar${cls}`, role: 'img', 'aria-label': `${label}: ${F.perArea(v)}` }, h('i', { style: `width:${(v / max * 100).toFixed(1)}%` })),
       h('b', { class: 'num' }, F.num(F.perAreaValue(v), F.metric() ? 1 : 0)))),
-    h('p', { class: 't-caption', testid: 'crop-sprays' }, `${F.mass(y.cwtCulled)} culled. ${y.sprays !== undefined && y.potatoFields > 0 ? `You sprayed about ${F.plural(Math.round(y.sprays / y.potatoFields), 'time')} a field${nb ? `; the neighbor ${nb.sprays}` : ''}. ` : ''}${nb ? `The neighbor grew ${varietyName(nb.variety)}: planted ${F.date(y.year, nb.plant)}, dug from ${F.date(y.year, nb.dig)}.` : ''}`))
+    h('p', { class: 't-caption', testid: 'crop-sprays' }, `You culled ${F.mass(y.cwtCulled)}. ${y.sprays !== undefined && y.potatoFields > 0 ? `You sprayed each field about ${F.times(Math.round(y.sprays / y.potatoFields))}${nb ? ` and your neighbor sprayed ${F.times(nb.sprays)}` : ''}. ` : ''}${nb ? `Your neighbor grew ${varietyName(nb.variety)}, planted on ${F.date(y.year, nb.plant)} and dug from ${F.date(y.year, nb.dig)}.` : ''}${F.cwtNote()}`))
 }
 
 const kilo = (v: number) => v === 0 ? '0' : `${v < 0 ? '−' : ''}${Math.abs(v / 1000)}k`
@@ -185,19 +185,19 @@ function cashChart(c: S.Campaign): HTMLElement {
   for (let v = hi; v >= lo; v -= step) grid.push(v)
   const label = (k: number) => k === 0 ? 'Start' : yearName(c.history[k - 1].year)
   return h('section', { class: 'chart' },
-    h('div', { class: 'sec-h' }, h('h2', null, 'Cash at each year end')),
+    h('div', { class: 'sec-h' }, h('h2', null, 'Cash at the end of each year')),
     s('svg', {
       viewBox: `0 0 ${W} ${H}`, role: 'img',
-      'aria-label': `Cash at the start, ${F.money(pts[0])}; then at each year end: ${c.history.map(z => `${yearWord(z.year)} ${F.money(z.cashEnd)}`).join(', ')}. The bank calls the note below ${F.money(S.CREDIT_LIMIT)}.`,
+      'aria-label': `You started with ${F.money(pts[0])} in cash. At the end of each year you had: ${c.history.map(z => `${yearWord(z.year)} ${F.money(z.cashEnd)}`).join(', ')}. The bank calls in the loan below ${F.money(S.CREDIT_LIMIT)}.`,
     },
     grid.map(v => [
       s('line', { class: v === 0 ? 'zero' : v === S.CREDIT_LIMIT ? 'ax' : 'grid-l', x1: L, x2: Rt, y1: y(v).toFixed(1), y2: y(v).toFixed(1) }),
       s('text', { x: L - 6, y: (y(v) + 4).toFixed(1), 'text-anchor': 'end' }, kilo(v))]),
-    s('text', { class: 'lab', x: L + 6, y: (y(S.CREDIT_LIMIT) + 16).toFixed(1), style: 'paint-order:stroke;stroke:var(--paper);stroke-width:4px' }, 'the bank calls the note below this line'),
+    s('text', { class: 'lab', x: L + 6, y: (y(S.CREDIT_LIMIT) + 16).toFixed(1), style: 'paint-order:stroke;stroke:var(--paper);stroke-width:4px' }, 'the bank calls in the loan below this line'),
     pts.map((_, k) => s('text', { x: x(k).toFixed(1), y: H - 4, 'text-anchor': k === 0 ? 'start' : k === pts.length - 1 ? 'end' : 'middle' }, label(k))),
     s('polyline', { class: 'ln', points: pts.map((v, k) => `${x(k).toFixed(1)},${y(v).toFixed(1)}`).join(' ') }),
     pts.map((v, k) => s('circle', { cx: x(k).toFixed(1), cy: y(v).toFixed(1), r: 3.5, style: `fill:var(${k === pts.length - 1 && v < 0 ? '--red' : '--ink'})` }))),
-    h('p', { class: 't-caption' }, c.history.length > 1 ? 'The book keeps the cash at each year end, not month by month.' : 'The book keeps the cash at the start of the year and at its end, not month by month.'))
+    h('p', { class: 't-caption' }, c.history.length > 1 ? 'The ledger shows your cash at the end of each year, not month by month.' : 'The ledger shows your cash at the start of the year and at the end, not month by month.'))
 }
 
 // The goals met so far, struck through in pencil.
@@ -208,7 +208,7 @@ function goalsMet(c: S.Campaign): HTMLElement | null {
   return h('section', { class: 'b-goals' },
     h('div', { class: 'sec-h' }, h('h2', null, 'Goals met')),
     h('p', null, h('span', { class: 'struck' }, shown.map(g => g.title).join(' · ')),
-      met.length > shown.length ? h('span', { class: 'quiet' }, `, and ${met.length - shown.length} before them`) : null))
+      met.length > shown.length ? h('span', { class: 'quiet' }, `, and ${met.length - shown.length} earlier`) : null))
 }
 
 // What next spring brings, in a few lines, and the soil it starts from.
@@ -217,10 +217,10 @@ function yearAhead(c: S.Campaign, y: S.YearSummary): HTMLElement {
   const standing = S.tractInfo(c).filter(t => t.tenure !== 'none' && t.stage !== 'done').map(t => t.name)
   const m = S.mortgageInfo(c)
   const lines = [
-    `${S.APPLICANTS} people will ask for work, buyers will bring contracts, and land comes up to rent or buy.`,
-    tired.length ? `${F.list(tired)} ${tired.length === 1 ? 'has' : 'have'} had two potato years running: the plan rests ${tired.length === 1 ? 'it' : 'them'}.` : '',
-    standing.length ? `${F.list(standing)} still ${standing.length === 1 ? 'stands' : 'stand'} to be cleared into ${standing.length === 1 ? 'a field' : 'fields'}.` : '',
-    m.owed > 0 ? `The land mortgage takes ${F.money(m.principal + m.interest)} at the next year end.` : '',
+    `Next spring ${S.APPLICANTS} people will ask for work, buyers will offer contracts and land will come up to rent or buy.`,
+    tired.length ? `${F.list(tired)} ${tired.length === 1 ? 'has' : 'have'} grown potatoes two years in a row, so next year's plan rests ${tired.length === 1 ? 'it' : 'them'}.` : '',
+    standing.length ? `${F.list(standing)} ${standing.length === 1 ? 'is' : 'are'} still waiting to be cleared into ${standing.length === 1 ? 'a field' : 'fields'}.` : '',
+    m.owed > 0 ? `The land mortgage will cost ${F.money(m.principal + m.interest)} at the end of next year.` : '',
   ].filter(Boolean)
   const fields = Array.from({ length: S.FIELD_COUNT }, (_, i) => S.fieldInfo(c, i)).filter(f => f.tenure !== 'none' && f.cover === 'open')
   return h('section', { class: 'b-ahead', testid: 'year-ahead' },
@@ -230,7 +230,7 @@ function yearAhead(c: S.Campaign, y: S.YearSummary): HTMLElement {
     h('ul', { class: 'b-soil' }, fields.map(f => h('li', null,
       h('b', null, f.name), ' ', h('span', { class: f.soil < 0.4 ? 'c-ochre' : '' }, `soil ${soilWord(f.soil)}`),
       h('span', { class: `num${f.vert >= 0.15 ? ' c-ochre' : ' quiet'}` }, `, early dying ${F.pct(f.vert)}`)))),
-    h('p', { class: 't-caption' }, 'Potatoes after potatoes wear the soil and build up ', term('early dying'), '. A rest year puts the soil back at once and wears it down slowly.'))
+    h('p', { class: 't-caption' }, 'Growing potatoes year after year wears out the soil and builds up ', term('early dying'), '. A rest year restores the soil right away and slowly reduces early dying.'))
 }
 
 // ---------------------------------------------------------------- the occasions and the end
@@ -258,7 +258,7 @@ function yearsTable(ctx: Ctx, c: S.Campaign): HTMLElement {
           h('td', { class: `m num${y.cashEnd < 0 ? ' c-red' : ''}` }, F.money(y.cashEnd)),
           h('td', { class: 'm num' }, y.potatoFields ? cell(y.yieldCwtAcre) : '–'),
           h('td', { class: 'm num' }, cell(world.neighbor[String(y.year)]?.yieldCwtAcre))))))),
-    h('p', { class: 't-caption' }, `Yields in ${F.perAreaUnit()} sold. The neighbor is the farm next door, under ordinary good practice on the same weather.`))
+    h('p', { class: 't-caption' }, `Yields are in ${F.perAreaUnit()} sold.${F.cwtNote()} Your neighbor is the farm next door, run with ordinary good practice in the same weather.`))
 }
 
 // The farm as it stands: what was built up, for the sheets that close the game.
@@ -269,8 +269,8 @@ function farmBuilt(c: S.Campaign): HTMLElement | null {
   const people = c.crew.filter(u => u.kind !== 'farmer').map(u => u.name)
   const machines = (Object.keys(S.UPGRADES) as S.UpgradeId[]).filter(id => c.upgrades[id] && id !== 'house2').map(id => S.UPGRADES[id].name.toLowerCase())
   const rows: [string, string, string][] = [
-    ['field', 'Fields', `${held} worked${held > S.HOME_FIELDS ? `, ${held - S.HOME_FIELDS} beyond the home six` : ''}`],
-    ...(cleared ? [['stump', 'Cleared', `${F.plural(cleared, 'tract')} of woods and brush made into fields`] as [string, string, string]] : []),
+    ['field', 'Fields', `${held} in use${held > S.HOME_FIELDS ? `, ${held - S.HOME_FIELDS} more than the ${S.HOME_FIELDS} you started with` : ''}`],
+    ...(cleared ? [['stump', 'Cleared', `${F.plural(cleared, 'tract')} of woods and brush turned into ${cleared === 1 ? 'a field' : 'fields'}`] as [string, string, string]] : []),
     ...(standing.length ? [['build', 'Built', F.upper(F.list(standing))] as [string, string, string]] : []),
     ...(people.length ? [['people', 'People', F.list(people)] as [string, string, string]] : []),
     ...(machines.length ? [['machine', 'Machines', F.upper(F.list(machines))] as [string, string, string]] : []),
@@ -345,7 +345,7 @@ function bookInsets(ctx: Ctx, top: HTMLElement, book: HTMLElement): [number, num
 export function ledgerScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
   const app = ctx.app
   const top = topBar(ctx, o)
-  const book = h('section', { class: 'book ledger-sheet sys', 'aria-label': 'The year end' })
+  const book = h('section', { class: 'book ledger-sheet sys', 'aria-label': 'The end of the year' })
   const el = h('main', { class: 'ledger-screen' }, top.el, book)
   let counted = ''
   const screen: Screen = {
@@ -375,7 +375,7 @@ export function ledgerScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
         !lost ? nextGoalSlip(ctx, c) : null,
         kept ? h('button', { class: 'btn', type: 'button', testid: 'new-farm', onclick: () => startNewFarm(ctx) }, 'Start a new farm') : null,
         h('button', { class: 'btn go', type: 'button', testid: 'year-next', onclick: () => ctx.run({ t: 'next' }) },
-          lost ? 'Close the book' : !more ? 'See how it ended' : won ? `Farm on: plan ${yearWord(y.year + 1)}` : `Plan ${yearWord(y.year + 1)}`, icon('arrow', 'i')),
+          lost ? 'Close the ledger' : !more ? 'See how it ended' : won ? `Keep farming in ${yearWord(y.year + 1)}` : `Plan ${yearWord(y.year + 1)}`, icon('arrow', 'i')),
       ]
       patch(book, key, () => {
         if (occasion) {
@@ -384,13 +384,13 @@ export function ledgerScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
             left: [
               closingHead(c, {
                 won, testid: won ? 'kept-moment' : 'lost-moment',
-                outcome: won ? `Five seasons, and the bank is paid every one of them. You finish with ${F.money(y.cashEnd)}.`
-                  : `The bank has called the note. After ${F.plural(c.history.length, 'season')} the land, the house and the potato house go to auction.`,
+                outcome: won ? `You made it through five seasons and paid the bank every year. You finished with ${F.money(y.cashEnd)}.`
+                  : `The bank has called in the loan. After ${F.plural(c.history.length, 'season')}, the land, the house and the potato house are going to auction.`,
               }),
               cashChart(c),
               c.history.length > 1 ? h('p', { class: 'b-plain' }, won
-                ? `${yearName(closest.year)} was the nearest thing: ${closest.cashEnd < 0 ? `${F.money(-closest.cashEnd)} in debt` : `${F.money(closest.cashEnd)} in hand`}, with the bank's line at ${F.money(S.CREDIT_LIMIT)}.`
-                : `The line at ${F.money(S.CREDIT_LIMIT)} is where the bank calls the note.`) : null,
+                ? `${yearName(closest.year)} was your closest call. You ended it ${closest.cashEnd < 0 ? `${F.money(-closest.cashEnd)} in debt` : `with ${F.money(closest.cashEnd)} in cash`}, and the bank's limit is ${F.money(S.CREDIT_LIMIT)}.`
+                : `The line at ${F.money(S.CREDIT_LIMIT)} is where the bank calls in the loan.`) : null,
               yearsTable(ctx, c),
             ],
             right: [
@@ -408,10 +408,10 @@ export function ledgerScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
             h('header', { class: 'book-head' },
               h('p', { class: 't-label' }, `Year ${c.yearIdx + 1} of ${c.goalYears}`),
               h('h1', { class: 't-title book-title' }, `The ledger, ${yearWord(y.year)}`),
-              h('p', { class: 'it b-verdict', testid: 'outcome' }, kept ? 'The farm is yours, and the bank is satisfied.' : `The bank is satisfied. ${F.upper(F.plural(left, 'season'))} to go.`),
+              h('p', { class: 'it b-verdict', testid: 'outcome' }, kept ? 'The farm is yours, and the bank is happy.' : `The bank is happy this year. ${F.upper(F.plural(left, 'season'))} to go.`),
               h('p', { class: 'b-plain', testid: 'year-sentence' }, `${yearSentence(y)} ${againstUsual(y.cashEnd - y.cashStart)}`)),
             cashBook(y, false),
-            y.cashEnd < 0 ? h('p', { class: 'b-debt' }, h('b', { class: 'c-red' }, 'In debt,'), ` inside the bank's limit: it calls the note only below `, h('span', { class: 'num nowrap' }, F.money(S.CREDIT_LIMIT)), '.') : null,
+            y.cashEnd < 0 ? h('p', { class: 'b-debt' }, h('b', { class: 'c-red' }, 'In debt,'), ` but inside the bank's limit. It only calls in the loan below `, h('span', { class: 'num nowrap' }, F.money(S.CREDIT_LIMIT)), '.') : null,
             yearOnFarm(c),
             yearAhead(c, y),
           ],
@@ -457,8 +457,8 @@ export function overScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
           closingHead(c, {
             won: !lost,
             outcome: lost
-              ? `After ${F.plural(years, 'season')} the bank called the note. The land, the house and the potato house went at auction${last ? ` with the farm ${F.money(-last.cashEnd)} in debt` : ''}.`
-              : `You kept the farm through ${F.plural(years, 'season')}${last ? `, and finished with ${F.money(last.cashEnd)}` : ''}. This is as far as the farm's years go.`,
+              ? `After ${F.plural(years, 'season')} the bank called in the loan. The land, the house and the potato house were sold at auction${last ? ` with the farm ${F.money(-last.cashEnd)} in debt` : ''}.`
+              : `You kept the farm through ${F.plural(years, 'season')}${last ? ` and finished with ${F.money(last.cashEnd)}` : ''}. There are no more years to play on this farm.`,
           }),
           years ? cashChart(c) : null,
           years ? yearsTable(ctx, c) : null,
