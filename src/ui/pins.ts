@@ -14,7 +14,7 @@ interface Model { id: number; name: string; ring: string; state: PinState; label
 // How close two people stand, in screen pixels, before they share a pin.
 const NEAR = 40
 
-export function pins(ctx: Ctx, layer: HTMLElement, o: { covers: () => DOMRect[]; stopped: () => Set<number>; board?: () => number }): { update(c: S.Campaign): void; frame(): void; escape(): boolean; dispose(): void } {
+export function pins(ctx: Ctx, layer: HTMLElement, o: { covers: () => DOMRect[]; stopped: () => Set<number>; board?: () => number; stamps?: () => DOMRect[] }): { update(c: S.Campaign): void; frame(): void; escape(): boolean; dispose(): void } {
   const app = ctx.app
   const wraps = new Map<number, HTMLElement>()
   let models: Model[] = []
@@ -89,6 +89,7 @@ export function pins(ctx: Ctx, layer: HTMLElement, o: { covers: () => DOMRect[];
   function frame(): void {
     const ins = app.insets
     const covers = o.covers()
+    const stamps = o.stamps?.() ?? []
     const at = new Map<number, { x: number; y: number }>()
     for (const m of models) {
       const a = ctx.view.unitAnchor(m.id)
@@ -111,7 +112,9 @@ export function pins(ctx: Ctx, layer: HTMLElement, o: { covers: () => DOMRect[];
       for (const x of members) taken.add(x.id)
       // A pin stays over its person even where a tag or a yard's tag lies there: it is drawn above them, so a click on
       // the person never lands on the tag instead.
-      const y = p.y
+      // A stamp that asks for the player is the one thing a pin gives way to: it stands just above it.
+      let y = p.y
+      for (const r of stamps) if (p.x > r.left - 20 && p.x < r.right + 20 && y > r.top - 2 && y - 56 < r.bottom) y = r.top - 2
       if (y - 56 < (m.id === app.unit && o.board ? Math.min(ins.top, o.board()) : ins.top) + 4) continue
       shown.set(m.id, { m, x: p.x, y, members })
     }

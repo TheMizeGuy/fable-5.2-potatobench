@@ -280,8 +280,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     const s0 = c.season
     if (!s0 || guidedYear(c)) return
     const tomorrow = S.formatDay(s0.year, s0.day + 1)
-    for (const p of fates(app.world, c).pressing) {
-      if (p.kind !== 'kill' || p.job >= 0) continue
+    for (const p of S.killsAhead(app.world, c)) {
       const date = /on ([A-Z][a-z]+ \d+)/.exec(p.inWay)?.[1] ?? ''
       const soon = date === tomorrow
       const key = `${c.seed}.${c.year}.${p.field}.${soon ? 'soon' : 'set'}`
@@ -331,12 +330,10 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       // A test dig's result is offered, never laid over what the player is doing: a slip at the foot with Show me
       // (and the field's own card has it). In the guided first year the guide speaks for the slips.
       for (const e of ev.events) if (e.type === 'sample' && !guidedYear(app.campaign)) { const staged = app.speed < 3; void ctx.view.whenShown('sample', e.field).then(() => { if (app.screen === 'season') offerTray(e, staged) }) }
-      // (what the crew has started and when the vines will be killed are said as the screen is next drawn: the
-      // second plays the next day on a copy of the farm, which the frame a day turns in is not asked to carry too)
-      toSay = true
+      const c0 = app.campaign
+      if (c0) { sayCrewStarts(c0); sayKillDates(c0) }
     }
   })
-  let toSay = false
 
   // ------------------------------------------------------------ tags, stamps and the tips
 
@@ -456,6 +453,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     covers,
     stopped: () => stoppedBy(app.campaign),
     board: () => board,
+    stamps: () => P.byField().filter(t => t.need).map(t => new DOMRect(t.box.right - 52, t.box.top, 52, t.box.height)),
   })
 
   // ------------------------------------------------------------ the yards on the land
@@ -717,8 +715,8 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   function* drawn(): Generator<void> {
     const c = app.campaign
     if (!c || !c.season) return
-    if (toSay) { toSay = false; sayCrewStarts(c); sayKillDates(c) }
-    // (each order's fate, which the time book, the board and the cards all ask for)
+    // Each order's fate, which the time book, the board and the cards all ask for: the next day played on a copy of
+    // the farm, a frame's work by itself.
     fates(app.world, c)
     laps.end('interface: fates')
     yield
@@ -770,6 +768,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     yield
     units.update(c)
     laps.end('interface: time book, list')
+    yield
     people.update(c)
     laps.end('interface: pins drawn')
     yield
