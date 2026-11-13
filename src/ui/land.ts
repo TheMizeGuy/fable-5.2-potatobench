@@ -62,6 +62,6 @@ export function tenureRow(ctx: Ctx, c: S.Campaign, field: number, o: { onTry: (e
   if (fp.tenure === 'owned') return h('p', { class: 'card-line', testid: 'tenure' }, `${BLOCK_NAME[p.block]}. The farm owns it.`)
   return h('div', { class: 'plan-row land-row', testid: 'tenure' },
     h('p', { class: 'card-line' }, `${BLOCK_NAME[p.block]}. Rented, ${F.money(p.rent)} this year.`),
-    h('button', { class: 'nbtn', type: 'button', testid: 'land-release', onclick: () => tryCmd({ t: 'release', field }) }, 'Release'),
+    h('button', { class: 'nbtn', type: 'button', testid: 'land-release', onclick: () => tryCmd({ t: 'release', field }) }, 'Stop renting'),
     h('button', { class: 'nbtn', type: 'button', testid: 'land-buy', onclick: () => tryCmd({ t: 'buyLand', field }) }, 'Buy', h('span', { class: 'sub num' }, F.money(p.price))))
 }
