@@ -162,7 +162,7 @@ Every action in the game and its weight (`src/ui/system/weight.ts` is the table 
 | Show me | The goal slip, the goals | std |
 | Skip ahead; Got it; Begin; Restart the tutorial | The tutorial's note and paper | std |
 | The answer keys of a choice that can be changed: winter work, foreman of a block, by itself or ask me, farm rules, varieties, seed, Sundays | Winter, a person's page, the work grid, the spring cards | std |
-| Follow; Their page; Hiring; Who has it | A person's or a thing's card | std |
+| Follow; Details; Hiring; See who has it | A person's or a thing's card | std |
 | Rest choices; what a person takes first; the priority keys and cells | A person's card and page, the work grid | std |
 | Pause and the three speeds; the menu key | The clock | std |
 | A field's tag, a need's stamp, a yard's tag, a person's pin | The land | std (they keep their own shapes) |
