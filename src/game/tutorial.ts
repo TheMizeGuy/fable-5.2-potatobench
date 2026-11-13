@@ -558,7 +558,7 @@ function stillAt(l: Look, w: { kind: S.JobKind; field: number; unit: number }): 
   const c = l.c!
   const u = c.crew.find(x => x.id === w.unit)
   const j = c.season!.jobs.find(x => x.kind === w.kind && x.field === w.field)
-  return !!u && !!j && (u.job === j.id || (u.job < 0 && !c.crew.some(o => o !== u && o.job === j.id))) && u.road <= 0 && u.at === w.field
+  return !!u && !!j && !S.resting(u) && !S.hurt(u, c.season!.day) && (u.job === j.id || (u.job < 0 && !c.crew.some(o => o !== u && o.job === j.id))) && u.road <= 0 && u.at === w.field
 }
 function workLine(l: Look, w: { kind: S.JobKind; field: number; unit: number }, doing: string, did: string, rest: (field: string) => string): string {
   const u = l.c?.crew.find(x => x.id === w.unit)
@@ -613,7 +613,8 @@ export function driving(l: Look, g: Guide, waved: ReadonlySet<string> = new Set(
   if (firstYear(l)) {
     const up = potatoFields(c).find(i => s.fields[i]?.status === 'growing')
     if (up !== undefined && !g.has('seen:up')) return { ...run, scene: { id: 'up', unit: -1, field: up, line: `The plants are up in ${name(up)}.` } }
-    for (const [kind, doing, did, rest] of WORK) {
+    // Work is shown on a working day: on a Sunday off the time book has everyone at home, whatever they did the day before.
+    for (const [kind, doing, did, rest] of S.workday(c, s) && !s.frozen ? WORK : []) {
       if (g.has(`seen:${kind}`)) continue
       // Someone still at it before someone who finished theirs that day; of those, one still in the field before
       // one who has gone on to other work, whose field is shown without them.

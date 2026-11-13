@@ -495,8 +495,10 @@ describe('the guide runs the clock between its notes', () => {
           const going = (unit: number, field: number) => {
             const u = c.crew.find(x => x.id === unit)
             const job = c.season!.jobs.find(j => j.kind === sc.id && j.field === field)
-            return !!u && !!job && u.at === field && u.road <= 0 && (u.job === job.id || (u.job < 0 && !c.crew.some(o => o !== u && o.job === job.id)))
+            return !!u && !!job && !S.resting(u) && !S.hurt(u, c.season!.day) && u.at === field && u.road <= 0 && (u.job === job.id || (u.job < 0 && !c.crew.some(o => o !== u && o.job === job.id)))
           }
+          // Never on a day off: the time book has everyone at home then.
+          expect(S.workday(c, c.season!), `${sc.line} (day ${n})`).toBe(true)
           const now = /^(You're|\w+ is) /.test(sc.line)
           expect(now, `${sc.line} (day ${n})`).toBe(c.season!.worked.some(x => x.kind === sc.id && going(x.unit, x.field)))
           if (now) expect(going(sc.unit, sc.field), sc.line).toBe(true)
