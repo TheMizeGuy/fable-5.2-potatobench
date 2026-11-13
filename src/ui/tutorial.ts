@@ -336,6 +336,14 @@ function driveBody(ctx: Ctx, line: string, next: string, waits: (() => void) | n
 }
 
 // The offer: a card in the middle of the screen, as a telegram is, with two numbered replies.
+// Taking the tutorial in the first spring goes straight onto the land: the usual plan stands, the season starts, and
+// planning is taught in the second spring, when there is a year behind it to plan from.
+function straightIn(ctx: Ctx): void {
+  const c = ctx.app.campaign
+  if (!c || c.phase !== 'plan' || c.history.length > 0) return
+  requestAnimationFrame(() => document.querySelector<HTMLElement>('#ui [data-testid="begin-season"]')?.click())
+}
+
 function offerCard(ctx: Ctx): HTMLElement {
   const keys = !ctx.touch()
   const reply = (n: number, id: string, title: string, does: string, usual: boolean, go: () => void) => h('button', {
@@ -343,9 +351,9 @@ function offerCard(ctx: Ctx): HTMLElement {
   }, key(String(n)), h('b', { class: 'c-title' }, title, usual ? fist() : null), h('span', { class: 'c-does' }, does))
   return h('section', { class: 'guide-card offer telegram sheet sys', testid: 'guide-offer', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'guide-offer-h' },
     h('header', { class: 'gc-head' }, h('p', { class: 't-label' }, 'From the county agent'), h('h2', { class: 't-title', id: 'guide-offer-h' }, 'First time on the farm?')),
-    h('p', { class: 'gc-lead' }, 'I can walk you through your first year one step at a time, pausing the game to explain each one.'),
+    h('p', { class: 'gc-lead' }, 'I can start your first season on a usual plan and point things out as they come up, one at a time.'),
     h('div', { class: 'replies', role: 'group', 'aria-label': 'Your answer' },
-      reply(1, 'guide-accept', 'Start the tutorial', 'The usual choice. You can turn it off any time.', true, () => guide.accept()),
+      reply(1, 'guide-accept', 'Start the tutorial', 'The usual choice. Your first season starts right away.', true, () => { guide.accept(); straightIn(ctx) }),
       reply(2, 'guide-refuse', 'Skip the tutorial', 'Play without tips. You can turn it on later from the menu.', false, () => guide.refuse())))
 }
 

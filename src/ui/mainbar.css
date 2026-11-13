@@ -1,0 +1,24 @@
+/* The menu that is always up: a row of tabs on a chipboard mount at the foot of the season screen. */
+.season-screen .mainbar { position: absolute; right: max(var(--gutter), env(safe-area-inset-right, 0px)); bottom: max(var(--gutter), env(safe-area-inset-bottom, 0px));
+  display: flex; gap: 2px; padding: 4px; background: var(--board); border-radius: 3px; box-shadow: 0 0 0 1px #17130f, 0 6px 14px rgba(0, 0, 0, .4); z-index: 3; pointer-events: auto; }
+.mainbar .mb-tab { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 10px; background: var(--paper); color: var(--ink);
+  font: 400 13px/1 var(--f-gothic); letter-spacing: .07em; text-transform: uppercase; white-space: nowrap; }
+.mainbar .mb-tab.has { background: var(--canary); }
+.mainbar .mb-n { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; background: var(--red); color: var(--paper); font: 700 12px/1 var(--f-text); letter-spacing: 0; }
+/* A phone and a short window keep their foot as it is: the same sheets open from the menu there. */
+#ui[data-layout='narrow'] .mainbar, #ui[data-layout='short'] .mainbar { display: none; }
+.season-screen.incident-up > .mainbar { visibility: hidden; }
+
+.mb-sheet { display: grid; gap: var(--s3); }
+.mb-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.mb-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; width: 100%; min-height: 48px; padding: 6px 12px; text-align: left; background: var(--paper-2); }
+.mb-row.urgent { box-shadow: inset 4px 0 0 var(--red); }
+.mb-row .i { --i: 20px; }
+.mb-what { display: grid; gap: 1px; min-width: 0; }
+.mb-what b { font-weight: 600; }
+.mb-go { color: var(--ink-2); white-space: nowrap; }
+.mb-none, .mb-next { margin: 0; }
+.mb-table { width: 100%; border-collapse: collapse; font-size: 15px; }
+.mb-table th, .mb-table td { padding: 6px 10px 6px 0; text-align: left; border-bottom: 1px solid var(--hair); vertical-align: baseline; }
+.mb-table td.num { font-variant-numeric: tabular-nums; }
+.mb-table .mb-name { font: 600 16px/1.2 var(--f-text); text-decoration: underline; text-underline-offset: 3px; min-height: 32px; }

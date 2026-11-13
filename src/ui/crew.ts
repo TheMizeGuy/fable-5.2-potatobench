@@ -139,7 +139,7 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
     // What the cell prints is its name to a screen reader too, with the rest of what is known after it.
     return h('button', {
       class: `person unit${many ? '' : ' solo'}${on ? ' is-picked' : ''}${bad ? ' needs' : ''}${goal ? ' goal-ring' : ''}`, type: 'button', testid: `unit-${p.id}`, 'aria-pressed': String(on), style: `--c:${ring}`,
-      title: ctx.touch() ? undefined : said, onclick: () => { if (on) app.selectUnit(-1); else { app.select(-1); app.selectYard(0); app.selectUnit(p.id, many ? 'list' : 'land') } },
+      title: ctx.touch() ? undefined : said, onclick: () => { if (on) app.selectUnit(-1); else { app.select(-1); app.selectYard(0); app.selectUnit(p.id, many ? 'list' : 'land'); ctx.view.show?.({ unit: p.id }) } },
     }, kids, h('span', { class: 'sr' }, `. ${said} ${on ? `${p.kind === 'farmer' ? 'Your' : 'Their'} card is open. Press again to close it.` : p.kind === 'farmer' ? 'Press to open your card. While it\'s open, you do the work you order.' : 'Press to open their card. While it\'s open, your orders go to them.'}`))
   }
 

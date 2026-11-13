@@ -57,7 +57,7 @@ async function see(page: Page): Promise<Seen> {
       for (let n = walk.nextNode(); n; n = walk.nextNode()) {
         const p = n.parentElement
         const t = n.textContent?.trim()
-        if (!p || !t || p.closest('.sr, [hidden], .leaving, .out, .gone')) continue
+        if (!p || !t || p.closest('.sr, [hidden], .leaving, .out, .gone, .mainbar')) continue
         if (!p.checkVisibility({ opacityProperty: true, visibilityProperty: true } as CheckVisibilityOptions)) continue
         const r = p.getBoundingClientRect()
         if (r.width < 2 || r.height < 2 || r.bottom < 0 || r.top > innerHeight || r.right < 0 || r.left > innerWidth) continue

@@ -23,7 +23,9 @@ export function pins(ctx: Ctx, layer: HTMLElement, o: { covers: () => DOMRect[];
   let open = -1
   let listFor = ''
   const list = h('div', { class: 'pin-list-at', hidden: true })
-  layer.append(list)
+  // The name of the one in hand, under the ring at their feet.
+  const foot = h('div', { class: 'pin-foot sys', 'aria-hidden': 'true', hidden: true })
+  layer.append(list, foot)
   const closeList = (e: Event) => { if (open >= 0 && !(e.target as HTMLElement).closest?.('.pin-list-at, .pin')) { open = -1; list.hidden = true } }
   document.addEventListener('pointerdown', closeList, true)
 
@@ -118,12 +120,17 @@ export function pins(ctx: Ctx, layer: HTMLElement, o: { covers: () => DOMRect[];
       if (y - 56 < (m.id === app.unit && o.board ? Math.min(ins.top, o.board()) : ins.top) + 4) continue
       shown.set(m.id, { m, x: p.x, y, members })
     }
+    let picked: Model | null = null
     for (const m of models) {
       const w = wraps.get(m.id)
       if (!w) continue
       const s0 = shown.get(m.id)
-      w.classList.toggle('gone', !s0)
-      if (!s0) continue
+      // The one in hand is marked on the ground at their feet (the ring the land draws, and their name under it):
+      // no face hangs over their head. Standing with others, the shared pin stays, since it is how one is chosen.
+      const afoot = !!s0 && m.id === app.unit && s0.members.length === 1
+      w.classList.toggle('gone', !s0 || afoot)
+      if (afoot) picked = m
+      if (!s0 || afoot) continue
       draw(w, m, s0.members.length, s0.members)
       w.classList.toggle('tired', !!m.tired)
       w.style.transform = `translate3d(${s0.x.toFixed(1)}px, ${s0.y.toFixed(1)}px, 0)`
@@ -136,6 +143,13 @@ export function pins(ctx: Ctx, layer: HTMLElement, o: { covers: () => DOMRect[];
       }
     }
     if (open >= 0 && !shown.has(open)) { open = -1; list.hidden = true }
+    const ft = picked ? ctx.view.unitFoot(picked.id) : null
+    foot.hidden = !picked || !ft?.visible
+    if (picked && ft?.visible) {
+      const name = picked.name === 'You' ? 'You' : firstName(picked.name)
+      if (foot.textContent !== name) foot.textContent = name
+      foot.style.transform = `translate3d(${ft.x.toFixed(1)}px, ${(ft.y + 10).toFixed(1)}px, 0) translateX(-50%)`
+    }
   }
 
   return {
@@ -145,6 +159,7 @@ export function pins(ctx: Ctx, layer: HTMLElement, o: { covers: () => DOMRect[];
     dispose() {
       document.removeEventListener('pointerdown', closeList, true)
       for (const w of wraps.values()) w.remove()
+      foot.remove()
       list.remove()
     },
   }

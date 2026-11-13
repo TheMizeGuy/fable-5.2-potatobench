@@ -51,7 +51,8 @@ async function wordsOnScreen(page: Page): Promise<{ n: number; by: string }> {
       const r = el.getBoundingClientRect()
       if (!r.width || !r.height || r.bottom < 0 || r.top > innerHeight) continue
       // A screen on its way out is a picture fading, not words given to read.
-      if (el.closest('.leaving, [inert]')) continue
+      // (and the menu bar's tab names are fixed chrome, not words a moment gives to read)
+      if (el.closest('.leaving, [inert], .mainbar')) continue
       const cs = getComputedStyle(el)
       if (cs.visibility === 'hidden' || cs.opacity === '0') continue
       let here = 0

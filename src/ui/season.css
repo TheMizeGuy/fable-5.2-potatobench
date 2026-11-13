@@ -147,6 +147,8 @@
 @media (hover: hover) { .yard-at .yard-tag:hover { background-color: #4c4134; } }
 /* Face pins: a pin at rest under the tags, one that needs the player or is picked over them. */
 .pin-at .pin { display: block; }
+.pin-foot { position: absolute; left: 0; top: 0; padding: 1px 7px 2px; background: var(--paper); color: var(--ink); box-shadow: 0 0 0 1px var(--edge), 0 2px 4px rgba(0, 0, 0, .35);
+  font: 400 12px/1.3 var(--f-gothic); letter-spacing: .07em; text-transform: uppercase; white-space: nowrap; pointer-events: none; will-change: transform; z-index: 6; }
 .pin-at button.pin { cursor: var(--cur-point, pointer); }
 .pin-at .pin .head { transition: box-shadow var(--t-slip) var(--ease-out); }
 .pin-at .pin.needs .badge, .pin-at .pin.is-hurt .badge { animation: stamp-in var(--t-stamp) var(--ease-out); }

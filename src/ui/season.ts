@@ -17,6 +17,7 @@ import { incidentCard } from './incident.ts'
 import { ticket, trayPaper } from './dig.ts'
 import { digitFor, fieldForDigit, isTract } from './map.ts'
 import { askSpray, personCard, sprayAsking, sprayWay, workGrid } from './people.ts'
+import { mainBar, type Todo } from './mainbar.ts'
 import { pins } from './pins.ts'
 import { plates, type PlateModel } from './plates.ts'
 import { anchored, ties, type Land, type Mode } from './tie.ts'
@@ -102,7 +103,37 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   const incident = incidentCard(ctx)
   // Each card opens beside the thing it is about and stays tied to it.
   const tied = { card: anchored(ctx, card.el), yard: anchored(ctx, yard.el), person: anchored(ctx, person.el) }
-  const el = h('main', { class: 'season-screen' }, veil, top.el, paused, running, homeKey, tied.card.parts, tied.yard.parts, tied.person.parts, card.el, yard.el, person.el, grid.el, trayHost,
+  // The menu that is always up, and what waits on the player for its first tab.
+  function todo(): Todo[] {
+    const c = app.campaign
+    const s0 = c?.season
+    if (!c || !s0) return []
+    const out: Todo[] = []
+    const needs = app.needs()
+    const go = (i: number) => () => { app.selectUnit(-1); app.select(i); app.focus(i) }
+    for (let i = 0; i < needs.length; i++) {
+      const need = needs[i]?.need
+      if (!need || !S.held(c, i)) continue
+      if (need.act === 'sell') { out.push({ field: i, glyph: 'ticket', text: F.localize(need.text), why: F.localize(need.why), urgent: need.urgent, go: () => openTicket(need.lot) }); continue }
+      if (!isJob(need.act) || (need.act === 'spray' && sprayWay(c) === 'none') || s0.jobs.some(j => j.kind === need.act && j.field === i)) continue
+      out.push({ field: i, glyph: need.act, text: F.localize(need.text), why: F.localize(need.why), urgent: need.urgent, go: go(i) })
+    }
+    for (const x of fates(app.world, c).pressing) {
+      if (x.job < 0 || !x.inWay) continue
+      out.push({ field: x.field, glyph: x.kind, text: `${JOB_VERB[x.kind]} ${S.FIELD_NAMES[x.field] ?? ''} is held up`, why: F.localize(x.inWay), urgent: true, go: go(x.field) })
+    }
+    return out.sort((p, q) => Number(q.urgent) - Number(p.urgent))
+  }
+  const bar = mainBar(ctx, {
+    todo,
+    goField: i => { app.selectUnit(-1); app.select(i); app.focus(i) },
+    goUnit: id => { app.select(-1); app.selectYard(0); app.selectUnit(id, 'land'); ctx.view.show?.({ unit: id }) },
+    onWork: () => grid.toggle(true),
+    onMoney: () => top.el.querySelector<HTMLElement>('[data-testid="outlook-key"]')?.click(),
+    onAlmanac: o.onAlmanac,
+    onMenu: o.onMenu,
+  })
+  const el = h('main', { class: 'season-screen' }, veil, top.el, paused, running, homeKey, bar.el, tied.card.parts, tied.yard.parts, tied.person.parts, card.el, yard.el, person.el, grid.el, trayHost,
     h('div', { class: 'foot' }, h('div', { class: 'foot-book' }, crew, clockSlot), notesSlot), incident.el)
 
   // The selection drawn on the land: a dashed line round each selected field laid on its corners, a registration mark
@@ -505,7 +536,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   function land(): Land {
     if (landNow) return landNow
     const ins = app.insets
-    const bars = [...crew.querySelectorAll<HTMLElement>('.queue, .timebook'), clockSlot, paused, running, homeKey, grid.el, trayHost.firstElementChild as HTMLElement | null]
+    const bars = [...crew.querySelectorAll<HTMLElement>('.queue, .timebook'), clockSlot, paused, running, homeKey, bar.el, grid.el, trayHost.firstElementChild as HTMLElement | null]
     const blocks = bars.filter((x): x is HTMLElement => !!x && !x.hidden && x.offsetParent !== null && x.offsetHeight > 0).map(x => { const r = x.getBoundingClientRect(); return { left: r.left, top: r.top, right: r.right, bottom: r.bottom } })
     // The land runs up to the boards themselves; the slip that hangs from one is a thing to keep off, not a line
     // across the whole window, so a card clear of it has that much more room.
@@ -785,6 +816,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     laps.end('interface: person, yard')
     yield
     grid.update(c)
+    bar.update(c)
     incident.update(c)
     laps.end('interface: grid, telegram')
     const up = incident.isUp()

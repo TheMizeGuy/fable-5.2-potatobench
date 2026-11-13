@@ -19,6 +19,7 @@ import { h } from './dom.ts'
 import { mountSprites } from './icons.ts'
 import { localize, setUnits } from './fmt.ts'
 import { openHelp } from './help.ts'
+import { mountTips } from './tip.ts'
 import { ledgerScreen, overScreen } from './ledger.ts'
 import { openMenu } from './menu.ts'
 import { planScreen } from './plan.ts'
@@ -67,6 +68,7 @@ const KEYED: Partial<Record<string, string>> = { frostBarrels: 'Haul it in now',
 
 export const mountHud: MountHud = (root, app, view, sound) => {
   mountSprites()
+  mountTips(root)
   root.classList.add('hud', 'waiting')
   const plateLayer = h('div', { class: 'plate-layer' })
   const screenLayer = h('div', { class: 'screen-layer' })
