@@ -557,9 +557,10 @@ test('the answer to a right-click is seen while a tutorial note is up, and befor
   await page.waitForFunction(() => '__county' in globalThis && !document.getElementById('splash'))
   await page.getByTestId('play').click()
   await page.getByTestId('guide-accept').click()
-  // The notes that ask for a press are answered until the season is running with a note up.
-  // As e2e/tutorial.spec.ts follows it: the note's own key, or what it points at, until the season runs with a note up.
-  for (let k = 0; k < 30 && !(await game<boolean>(page, `app.screen === 'season' && document.getElementById('ui').classList.contains('noting')`)); k++) {
+  // The notes before the season are answered as e2e/tutorial.spec.ts follows them: the note's own key, or what it
+  // points at. In the season nothing is pressed: the guide runs the cold weeks itself, and the first note there is the
+  // word to plant.
+  for (let k = 0; k < 30 && !(await game<boolean>(page, `app.screen === 'season'`)); k++) {
     const slip = page.locator('#ui [data-testid="guide-slip"]').first()
     const key = slip.locator('[data-testid="guide-noted"]').first()
     const target = await slip.getAttribute('data-target').catch(() => null)
@@ -567,6 +568,7 @@ test('the answer to a right-click is seen while a tutorial note is up, and befor
     else if (target) await page.locator(`#ui [data-testid="${target}"]`).first().click({ timeout: 3000 }).catch(() => {})
     await page.waitForTimeout(500)
   }
+  await expect(page.locator('#ui [data-testid="guide-slip"][data-lesson="word"]')).toBeVisible({ timeout: 20_000 })
   expect(await game<string>(page, `app.screen + ' ' + document.getElementById('ui').className + ' ' + (document.querySelector('#ui [data-testid="guide-slip"]')?.getAttribute('data-lesson') ?? '')`)).toMatch(/^season .*noting/)
   // (The tutorial starts when planting is ready, so the season's first note is the word to plant: the soil is fit.
   // A field with nothing to order is asked about here, and the cold weeks before planting in the test below.)
