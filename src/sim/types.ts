@@ -414,6 +414,7 @@ export interface Campaign {
   yearBuilding: number
   yearStand: number
   yearPacking: number
+  yearEquip?: number        // what this year's equipment cost, part of yearCosts
   history: YearSummary[]
   steps: number
 }

@@ -579,6 +579,7 @@ function nextYear(world: World, c: Campaign): Result {
   c.yearBuilding = 0
   c.yearStand = 0
   c.yearPacking = 0
+  delete c.yearEquip
   c.month = 0
   c.season = null
   c.lots = []
@@ -696,6 +697,7 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
       if (c.cash - u.cost < 0) return fail('You can\'t afford it yet, and the bank won\'t lend for equipment.')
       c.cash -= u.cost
       c.yearCosts += u.cost
+      c.yearEquip = (c.yearEquip ?? 0) + u.cost
       c.upgrades[cmd.upgrade] = true
       const bought: { upgrade: UpgradeId; building?: number } = { upgrade: cmd.upgrade }
       // A contractor puts up the second potato house at once.
@@ -714,6 +716,7 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
       const b = c.spring!.bought.splice(k, 1)[0]
       c.cash += u.cost
       c.yearCosts -= u.cost
+      c.yearEquip = (c.yearEquip ?? 0) - u.cost
       c.upgrades[cmd.upgrade] = false
       if (b.building !== undefined) c.buildings = c.buildings.filter(x => x.id !== b.building)
       return ok([note(c, 'unbought', 'info', `You took back the ${u.name.toLowerCase()}, and the $${withCommas(u.cost)} is back in your cash.`)])
@@ -1108,8 +1111,10 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
         if (f.status === 'dug' && !f.weighed) return fail('It\'s still in barrels in the field. You can sell it once it\'s hauled in and weighed.')
         ageLot(c, lot, c.season.day)
       }
+      const owed = -c.cash
       const money = sellLot(world, c, lot, cmd.frac)
-      return ok([note(c, 'sold', 'good', `Sold ${variety(lot.variety).name} from ${FIELD_NAMES[lot.field]} for $${withCommas(money)}.`, lot.field)])
+      const loan = owed <= 0 ? '' : c.cash < 0 ? ` The loan is down to $${withCommas(-c.cash)}.` : ` That pays off the loan, and you have $${withCommas(c.cash)} in cash.`
+      return ok([note(c, 'sold', 'good', `Sold ${variety(lot.variety).name} from ${FIELD_NAMES[lot.field]} for $${withCommas(money)}.${loan}`, lot.field)])
     }
     case 'deliver': {
       if (c.phase !== 'season' && c.phase !== 'cellar') return fail('There\'s nothing to deliver right now.')
