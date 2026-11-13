@@ -60,7 +60,7 @@ export function fates(world: S.World, c: S.Campaign): { of: Map<number, S.JobOut
   const s = c.season
   if (!s) return { of: new Map(), pressing: [] }
   const key = JSON.stringify([c.seed, c.year, s.day, s.watchDay, s.jobs.map(j => [j.id, j.unit, j.kind, j.field, j.done > 0]), c.crew.map(u => [u.id, u.prio, u.rest, u.foreman, u.out, u.job, Math.round(u.tired * 20)]), c.routine, c.sprayWay, s.fields.map(f => f.keepVines ? 1 : 0)])
-  if (key !== fate.key) fate = { key, of: new Map(S.jobOutlook(world, c).map(o => [o.id, o])), pressing: S.pressing(world, c) }
+  if (key !== fate.key) { const of = S.jobOutlook(world, c); fate = { key, of: new Map(of.map(o => [o.id, o])), pressing: S.pressing(world, c, of) } }
   return fate
 }
 

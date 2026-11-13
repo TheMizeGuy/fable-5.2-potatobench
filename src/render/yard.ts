@@ -332,9 +332,12 @@ export function yardLife(b: Builder): void {
     const sx = gx1 - 0.5, sz2 = gz0 + 1.9, sy = groundY(sx, sz2)
     b.at(sx, sy, sz2, 0.6, sy)
     b.box(0, 0.4, 0, 0.03, 0.8, 0.03, POST, FIN.wood)
-    b.box(0, 0.6, 0, 0.52, 0.03, 0.03, POST, FIN.wood)
+    // (his arms hang from a sagging crosspiece: from across the yard he is a coat on a stick, not a man standing stiff)
     b.box(0, 0.5, 0, 0.2, 0.28, 0.07, '#4a5f7a', FIN.cloth, { flex: [0.06, 0] })
-    for (const sg of [-1, 1]) b.box(sg * 0.19, 0.57, 0, 0.18, 0.08, 0.06, '#4a5f7a', FIN.cloth, { flex: 0.03 })
+    for (const sg of [-1, 1]) {
+      b.beam([sg * 0.04, 0.62, 0], [sg * 0.27, sg < 0 ? 0.43 : 0.5, sg * 0.03], 0.03, 0.03, POST, FIN.wood)
+      b.beam([sg * 0.09, 0.61, 0], [sg * 0.23, sg < 0 ? 0.46 : 0.52, sg * 0.03], 0.07, 0.06, '#4a5f7a', FIN.cloth)
+    }
     b.blob([0, 0.74, 0], [0.06, 0.07, 0.06], 4, '#c9b27a', FIN.cloth, { detail: 0, rough: 0.1 })
     b.lathe([0, 0.79, 0], [[0.12, 0], [0.06, 0.01], [0.05, 0.06], [0, 0.07]], 8, '#6b5a3c', FIN.cloth)
   }

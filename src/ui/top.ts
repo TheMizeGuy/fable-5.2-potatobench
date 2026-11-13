@@ -544,7 +544,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
       const ask = !!why && openedIn !== c.year
       // An upright phone's board has no room for it (a fifth of the height): there it is an alert, which goes to the
       // field on the order that helps, or else opens the sum.
-      if (why && season && low) ctx.notes.push({ text: causeLine(why, true), go: () => why.remedy ? fix(why) : openMoney('press') })
+      if (why && season && low) ctx.notes.push({ text: causeLine(why, true), go: () => why.remedy ? fix(why) : openMoney('press'), offer: true })
       else if (why) whyNow = { text: causeLine(why), at: stampOf(c), ask, cause: why }
     }
     if (whyNow && (!counted || stampOf(c) - whyNow.at > (season ? WHY_DAYS : 0) || stampOf(c) < whyNow.at)) whyNow = null

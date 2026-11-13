@@ -635,7 +635,8 @@ export class App {
       if (this.speed === 0) this.dayProgress = 0
     }
     this.sinceSave += dtMs
-    if (this.dirty && this.sinceSave > 2500) this.save()
+    // (with the clock running, well into a day: never in the frames a day's turn is drawn over)
+    if (this.dirty && this.sinceSave > 2500 && (this.speed === 0 || this.dayProgress > 0.4 || this.sinceSave > 8000)) this.save()
   }
 
   save(): void {

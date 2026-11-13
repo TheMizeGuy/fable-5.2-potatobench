@@ -103,7 +103,7 @@ export interface Seen {
 // foot: the work is done on foot (the one doing it is watched, not a machine); dist: how far off the camera is.
 // from: the day to begin on the evening before, in place of the first day the work is done. stepped: the clock is
 // left stopped and a day counted every so many seconds, each played out at its own pace (as a tool plays one).
-export function watch(kind: string, speed: 1 | 2 | 3, opts: { farm?: Farm; seconds?: number; dist?: number; foot?: boolean; headZ?: number; grace?: number; pauseAt?: number; from?: number; stepped?: number } = {}): Seen {
+export function watch(kind: string, speed: 1 | 2 | 3, opts: { farm?: Farm; seconds?: number; dist?: number; foot?: boolean; headZ?: number; grace?: number; pauseAt?: number; from?: number; stepped?: number; frame?: (dt: number) => void } = {}): Seen {
   const farm = opts.farm ?? {}, dist = opts.dist ?? 450, grace = opts.grace ?? [5, 5, 4.5, 3.5][speed], headZ = opts.headZ ?? HEAD.z
   const days = opts.from ?? firstDay(kind, farm)
   if (!days) throw new Error(`nobody ever does ${kind}`)
@@ -179,6 +179,7 @@ export function watch(kind: string, speed: 1 | 2 | 3, opts: { farm?: Farm; secon
       speed: app.speed, daySec: 1 / DAYS_PER_SECOND[Math.max(1, app.speed)], clock: dt,
     })
     particles.update(dt, 0, 0)
+    opts.frame?.(dt)
     const s = c.season
     if (!s || c.phase !== 'season') break
     // who the game has at this work

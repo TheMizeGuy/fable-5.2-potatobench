@@ -18,10 +18,11 @@ import { Grass } from './grass.ts'
 import { Harvest } from './harvest.ts'
 import { attachInput } from './input.ts'
 import { DUFOUR, FD, FIELDS, FW, HOME, HOUSE, LAND, POTATO_HOUSE, ROAD, WATER_Y, brookZ, fieldBaseY, groundY, YARD_AT, yardAt } from './layout.ts'
+import { WATCH } from './crew.ts'
 import { clamp, hash2, smooth } from './noise.ts'
 import { K, KV, S } from './scale.ts'
 import { laps } from './laps.ts'
-import { Climb, Pace, SIZES, Sizer, startOn } from './pace.ts'
+import { Climb, Pace, Rate, SIZES, Sizer, judge, startOn } from './pace.ts'
 import { Particles } from './particles.ts'
 import { Pond } from './pond.ts'
 import { Post } from './post.ts'
@@ -204,7 +205,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   let snap: Snapshot = snapshot(app)
   let shown: HillDisplay[][] = snap.fields.map(f => f.hills.map(look => ({ look, ridge: f.ridge })))
   let dayT = 1
-  let dirty = true, dayPassed = false, first = true
+  let dirty = true, dayPassed = false, first = true, turnHeld = false
   // Whether the clock was running when the day just counted was counted (what it brought may have stopped it since).
   let dayRan = false
   const samples = new Map<number, SampleInfo>()
@@ -277,9 +278,11 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   // The first run's frames, timed whole (null once the choice is made).
   let trial: number[] | null = adaptive && app.settings.quality === 'auto' && !known ? [] : null
   const onePixel = new Uint8Array(4)
-  const times: number[] = []
+  const times: number[] = [], waits: number[] = []
   let fps = 60, warm = 0
-  const pacing = new Pace(), sizer = new Sizer()
+  const pacing = new Pace(), sizer = new Sizer(), rate = new Rate()
+  // Counts the pictures drawn and the window's changes: what is worked out of the screen for one is kept until the next.
+  let seenGen = 0
   // A tool may ask for every beat of the display to be drawn, and for the frame to be drawn without one or another of
   // the things that make it cheaper, to measure what each saves.
   let capped = true
@@ -298,6 +301,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   // The setting the parts were last told of: a change of size alone leaves them as they are.
   let told: Tier | '' = ''
   function resize(): void {
+    seenGen++
     cur = { ...TIERS[tier], ...over }
     const vp = viewport(), pr = pixelRatio(), t = cur
     renderer.setPixelRatio(pr)
@@ -706,15 +710,28 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     if (warm < 150) { warm++; return }
     if (dtMs > 250) return
     times.push(dtMs)
+    // Whether the machine keeps up is told by how long the browser took to call again, not by the time between two
+    // pictures: on a fast display drawn at about sixty a second a picture waits a beat more whenever a call falls
+    // just short, and taken for lateness that made the picture smaller and the setting lower on machines with every
+    // frame to spare (a stand-in for such a display went to the low setting at its smallest size, at 47 a second).
+    waits.push(capped ? Math.min(dtMs, pacing.gap || dtMs) : dtMs)
     timesFor += dtMs
     if (timesFor < 1500 || times.length < 12) return
     const sorted = times.slice().sort((a, b) => a - b), seconds = timesFor / 1000
+    const { slow, fast, late } = judge(waits, times, pacing.frameMs)
     times.length = 0
+    waits.length = 0
     timesFor = 0
     fps = Math.round(1000 / Math.max(1, sorted[sorted.length >> 1]))
     if (!adaptive || probe.on) return
-    const late = sorted[Math.floor(sorted.length * 0.73)] / pacing.frameMs, slow = late > 1.23
     const auto = app.settings.quality === 'auto'
+    // A fast display drawn on its every beat goes back to about sixty a second before anything is made smaller; one
+    // drawn at about sixty is tried on every beat when it has been in time for a while at its full size.
+    // (drawn on every beat it is kept there for as long as that gives more pictures than about sixty would: seventy a
+    // second or better, however uneven the browser's calls)
+    const went = rate.feed(pacing.full ? !fast : slow, seconds, pacing.sixty > 1 && sizer.step === 0 && !lowered && !upDue)
+    if (went) { pacing.full = rate.full; return }
+    if (pacing.full) return
     // Too slow for any size of the picture to mend (under 26 frames a second where 60 are asked for), two stretches
     // running, is not walked down a size at a time. (One such stretch is as often something else on the machine.)
     tooSlow = late > 2.3 ? tooSlow + 1 : 0
@@ -809,6 +826,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     // (the opening's camera never stops: there the beats to a frame may change as it goes)
     const dtMs = timed ? (capped ? pacing.tick(beatMs, busy(), snap.mode === 'title', camMoving && snap.mode !== 'title') : beatMs) : beatMs
     if (timed && dtMs === 0) return
+    seenGen++
     const vp = viewport()
     // A move to a screen of another density changes the pixel ratio without any resize event.
     if (vp.w !== size.w || vp.h !== size.h || pixelRatio() !== size.pr) { upDue = false; resize() }
@@ -822,7 +840,9 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     ambient += wdt * (reduced ? STILL : 1)
     fall += reduced ? 0 : wdt
     frameNo++
-    if (dirty) rebuild()
+    // A day's turn with the clock running: the land is made again in the frame after the day's own, not in it.
+    if (dirty && dayPassed && dayRan && !turnHeld) turnHeld = true
+    else if (dirty) { turnHeld = false; rebuild() }
     // Day clock: follows the game clock when it runs, plays the day out by itself when paused.
     if (snap.mode === 'title') dayT = reduced ? 0.12 : titleDay()
     else if (dayT < 1) dayT = Math.min(1, app.speed > 0 ? Math.max(dayT + dt / DAY_ANIM_S * 0.25, app.dayProgress) : dayT + dt / DAY_ANIM_S * replayPace)
@@ -856,10 +876,18 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     if (following >= 0) {
       if (rig.idle < 0.2 || snap.mode === 'title') following = -1
       else if (!followClose) comeClose(following)
-      else if (crews.anchor(following, far) && Math.hypot(rig.goal.x - far.x, rig.goal.z - far.z) > 1.5) {
-        const to = rig.complete({ x: far.x, z: far.z, ...followClose })
-        if (rig.moving()) rig.retarget(to)
-        else rig.moveTo(to, reduced, 700)
+      else if (crews.anchor(following, far)) {
+        // On the way in, and after a cut that brings them in far off, a timed move; once with them the camera goes
+        // as they go, every frame, a little behind: never a wait until they are a step and a half off and then a
+        // lurch after them.
+        const gap = Math.hypot(rig.goal.x - far.x, rig.goal.z - far.z)
+        if (rig.moving()) { if (gap > 1.5) rig.retarget(rig.complete({ x: far.x, z: far.z, ...followClose })) }
+        else if (gap > 40) rig.moveTo(rig.complete({ x: far.x, z: far.z, ...followClose }), reduced, 700)
+        else if (gap > 0.01) {
+          const k = reduced ? 1 : 1 - Math.exp(-dt / 0.3)
+          rig.goal.x += (far.x - rig.goal.x) * k
+          rig.goal.z += (far.z - rig.goal.z) * k
+        }
       }
     }
     if (snap.mode === 'title' && framing === 'title') {
@@ -1035,10 +1063,31 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   // The foot the anchors keep above: the interface's foot as it first stood at this window size on this screen, so a
   // list, an alert or a card coming and going never moves a field's tag point while the camera stands still.
   let anchorFoot = { w: 0, h: 0, mode: '', bottom: 0 }
-  function fieldAnchor(i: number): { x: number; y: number; visible: boolean } {
+  // Between two pictures the camera does not move, and the interface asks where each field stands many times over in
+  // one frame (every tag is tried in many places): each place on the screen is worked out once for a picture, and
+  // the window measured once.
+  type OnScreen = { x: number; y: number; visible: boolean }
+  let seenKey = ''
+  let vpSeen: Viewport | null = null
+  const anchorSeen: (OnScreen | undefined)[] = [], cornersSeen: (OnScreen[] | undefined)[] = []
+  function sameSight(): void {
+    const key = `${seenGen} ${innerWidth}x${innerHeight} ${snap.mode}`
+    if (key === seenKey) return
+    seenKey = key
+    vpSeen = null
+    anchorSeen.length = 0
+    cornersSeen.length = 0
+  }
+  function sight(): Viewport { sameSight(); return vpSeen ??= viewport() }
+  function fieldAnchor(i: number): OnScreen {
+    sameSight()
+    const kept = anchorSeen[i] ??= fieldAnchorNow(i)
+    return { x: kept.x, y: kept.y, visible: kept.visible }
+  }
+  function fieldAnchorNow(i: number): OnScreen {
     const f = FIELDS[i]
     if (!f) return { x: 0, y: 0, visible: false }
-    const vp = viewport()
+    const vp = sight()
     if (anchorFoot.w !== vp.w || anchorFoot.h !== vp.h || anchorFoot.mode !== snap.mode || (!anchorFoot.bottom && vp.bottom)) anchorFoot = { w: vp.w, h: vp.h, mode: snap.mode, bottom: vp.bottom }
     const cam = rig.camera.position
     const near = fields.nearEdge(i, cam.x, cam.z)
@@ -1063,7 +1112,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   }
 
   function screenAt(x: number, y: number, z: number): { x: number; y: number; visible: boolean } {
-    const vp = viewport()
+    const vp = sight()
     anchor.set(x, y, z).project(rig.camera)
     const sx = (anchor.x + 1) / 2 * vp.w, sy = (1 - anchor.y) / 2 * vp.h
     return { x: sx, y: sy, visible: anchor.z < 1 && sx >= 0 && sx <= vp.w && sy >= 0 && sy <= vp.h }
@@ -1077,14 +1126,15 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     return { x: vp.w / 2 - (a.x - vp.w / 2) * 1e3, y: vp.h / 2 - (a.y - vp.h / 2) * 1e3, visible: false }
   }
 
-  function fieldCorners(i: number): { x: number; y: number; visible: boolean }[] {
+  function fieldCorners(i: number): OnScreen[] {
     const f = FIELDS[i]
     if (!f) return []
-    const vp = viewport()
-    return [[f.x0, f.z0], [f.x1, f.z0], [f.x1, f.z1], [f.x0, f.z1]].map(([x, z]) => {
+    const vp = sight()
+    const kept = cornersSeen[i] ??= [[f.x0, f.z0], [f.x1, f.z0], [f.x1, f.z1], [f.x0, f.z1]].map(([x, z]) => {
       anchor.set(x, fieldBaseY(z) + 0.5, z).project(rig.camera)
       return { x: (anchor.x + 1) / 2 * vp.w, y: (1 - anchor.y) / 2 * vp.h, visible: anchor.z < 1 }
     })
+    return kept.map(p => ({ x: p.x, y: p.y, visible: p.visible }))
   }
 
   function unitAnchor(id: number): { x: number; y: number; visible: boolean } {
@@ -1600,6 +1650,9 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       // to a frame, shader programs made, which shadow maps were drawn again, squares of grass laid, patches of trees
       // that changed how they are drawn, geometries held).
       laps: (on: boolean) => laps.watch(on),
+      // Every figure drawn since the last asking, by how its arms are held (crew.ts WATCH), while a tool watches.
+      figures(on: boolean) { WATCH.on = on; WATCH.rows.length = 0 },
+      figureRows() { const rows = WATCH.rows.slice(); WATCH.rows.length = 0; return rows },
       // The shader programs made so far, and which of the scene's materials (or their shadows) use each.
       shaders() {
         const names = namesOf()
@@ -1632,7 +1685,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     const changing = hooks as unknown as Record<string, (...a: unknown[]) => unknown>
     for (const name of ['settle', 'seek', 'view', 'titleAt', 'tune', 'home', 'tier', 'show', 'showChild', 'shadowsOn', 'force', 'cascade', 'emptyCascade', 'adapt', 'uncap', 'tryWithout', 'trees']) {
       const call = changing[name]
-      changing[name] = (...a) => { pacing.wake(); return call(...a) }
+      changing[name] = (...a) => { pacing.wake(); const r = call(...a); seenGen++; return r }
     }
     ;(globalThis as Record<string, unknown>).__countyField = hooks
   })()

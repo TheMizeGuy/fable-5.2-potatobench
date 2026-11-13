@@ -335,7 +335,9 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
     const under = (i: number) => { const a = ctx.view.fieldAnchor(i); return a.visible && (a.y > innerHeight - ins.bottom || a.y < ins.top || a.x < ins.left || a.x > innerWidth - ins.right) }
     // Nearer in, what is in hand or stamped does not change the order, so a card opening or an order given leaves the
     // tags as they are.
-    const rank = (i: number) => (far ? (app.selection.includes(i) ? 4 : 0) + (models[i]?.badge ? 2 : 0) : 0) + (under(i) ? 1 : 0)
+    const rankOf = (i: number) => (far ? (app.selection.includes(i) ? 4 : 0) + (models[i]?.badge ? 2 : 0) : 0) + (under(i) ? 1 : 0)
+    const ranks = new Map(shown.map(i => [i, rankOf(i)]))
+    const rank = (i: number) => ranks.get(i)!
     const order = shown.filter(i => want[i].place !== 'shelf').sort((p, q) => rank(q) - rank(p) || want[p].y - want[q].y || p - q)
     let over = false
     const gave: number[] = []
@@ -393,7 +395,7 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
   // Whether tag i at a place points at its own field: its eyelet on the field's outline or inside it, wherever any of
   // the field is on the free land; as near it as the free land allows where the field lies under the bars. A field out
   // of view has nothing to point at. Worked out once for the many places tried.
-  function aim(i: number, sz0: Size[]): (w: Box) => boolean {
+  function aim(i: number, sz0: Size[]): ((w: Box) => boolean) & { within?: Rect } {
     const outline = outlineOf(i)
     if (!outline) return () => true
     // Where an eyelet can be with its tag wholly on the free land.
@@ -402,10 +404,13 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
     const most = gapTo(reach, outline) + NEAR
     const xs = outline.map(p => p.x), ys = outline.map(p => p.y)
     const box = { l: Math.min(...xs) - most, t: Math.min(...ys) - most, r: Math.max(...xs) + most, b: Math.max(...ys) + most }
-    return (w: Box) => {
+    const near: ((w: Box) => boolean) & { within?: Rect } = (w: Box) => {
       const p = eyelet(i, w, sz0)
       return p.x >= box.l && p.x <= box.r && p.y >= box.t && p.y <= box.b && gapTo({ l: p.x, t: p.y, r: p.x, b: p.y }, outline) <= most
     }
+    // (where the eyelet may be at all, for the search to leave out every place outside it without trying it)
+    near.within = box
+    return near
   }
 
 
@@ -436,7 +441,18 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
       const bx = Math.max(land.l + sz0[i].w / 2, Math.min(land.r - sz[i].w - sz[i].extra + sz0[i].w / 2, a.x + (sz0[i].w - sz[i].w) / 2))
       const by = Math.max(land.t - face[i].t + sz[i].h, Math.min(land.b + below, a.y))
       const near = aim(i, sz0)
-      for (const t of steps(Math.round((wide ? 2.5 : 1.25) * sz0[i].w / STEP_X), Math.ceil((wide ? 2 : 1) * REACH_ROWS * (sz[i].h + ROW_GAP) / STEP_Y))) {
+      // The steps that could neither stand on the free land nor point at the field are passed over untried: with a
+      // field under the bars that is all of them, and thousands of places were each tried in full on every settling.
+      let x0 = land.l + sz0[i].w / 2 - bx, x1 = land.r - sz[i].w - sz[i].extra + sz0[i].w / 2 - bx
+      let y0 = land.t - face[i].t + sz[i].h - by, y1 = land.b + below - by
+      const k = near.within
+      if (k) {
+        const ex = sz0[i].w / 2 - face[i].eye - bx, ey = sz0[i].h - face[i].t - face[i].h / 2 - by
+        x0 = Math.max(x0, k.l + ex); x1 = Math.min(x1, k.r + ex)
+        y0 = Math.max(y0, k.t + ey); y1 = Math.min(y1, k.b + ey)
+      }
+      for (const t of x1 < x0 || y1 < y0 ? [] : steps(Math.round((wide ? 2.5 : 1.25) * sz0[i].w / STEP_X), Math.ceil((wide ? 2 : 1) * REACH_ROWS * (sz[i].h + ROW_GAP) / STEP_Y))) {
+        if (t.dx < x0 - 1e-6 || t.dx > x1 + 1e-6 || t.dy < y0 - 1e-6 || t.dy > y1 + 1e-6) continue
         const v: Box = { x: bx + t.dx, y: by + t.dy, place: w.place === 'on' && by === a.y && !t.dx && !t.dy ? 'on' : 'docked' }
         if (near(v) && free(v)) return v
       }

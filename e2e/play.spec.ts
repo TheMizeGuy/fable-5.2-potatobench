@@ -508,7 +508,8 @@ test('the money board says why the year-end figure moved, and its sum opens from
   }
   if (isMobile) {
     const note = page.locator('#ui .alert', { hasText: 'wages to year end' })
-    await expect(note).toContainText(new RegExp(`${name}'s wages to year end: −\\$[\\d,]+`))
+    // (it comes once the note that answered the hire has had its time)
+    await expect(note).toContainText(new RegExp(`${name}'s wages to year end: −\\$[\\d,]+`), { timeout: 20_000 })
     await shot('board-why')
     await note.click()
     await expect(pop).toBeVisible()
