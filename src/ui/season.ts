@@ -500,7 +500,15 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       const r = x.getBoundingClientRect()
       blocks.push({ left: r.left, top: r.top, right: r.right, bottom: r.bottom })
     }
-    landNow = { win: { left: 8, top: (board > 0 ? Math.min(ins.top, board) : ins.top) + 8, right: innerWidth - 8, bottom: innerHeight - 8 }, blocks }
+    // At a desk the two boards are things to keep off as well: between them, and beside the shorter one, the land
+    // runs on up, so a card there has that much more room.
+    let line = (board > 0 ? Math.min(ins.top, board) : ins.top) + 8
+    const mounts = ctx.layout() === 'narrow' || ctx.layout() === 'short' ? [] : [...top.el.querySelectorAll<HTMLElement>('.almanac > .mount, .bank > .mount')]
+    if (mounts.length === 2) {
+      for (const x of mounts) { const r = x.getBoundingClientRect(); blocks.push({ left: r.left, top: Math.min(0, r.top), right: r.right, bottom: r.bottom }) }
+      line = 8
+    }
+    landNow = { win: { left: 8, top: line, right: innerWidth - 8, bottom: innerHeight - 8 }, blocks }
     return landNow
   }
   // What a card hides as little of as it can: the field tags, the yards' tags and people's pins.

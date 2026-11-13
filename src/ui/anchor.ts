@@ -75,7 +75,7 @@ const SHORT = 1500, CUT = 6
 const SLIDE = 0.12
 // Going on lying where it lay, from the point, while the camera moves.
 const SAME = 700
-// The furthest a card steps along from the point to fit whole clear of a bar.
+// The furthest a card steps along from the point to fit whole clear of a bar (one the point stands over: see below).
 export const ASIDE = 190
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(Math.max(lo, hi), v))
@@ -186,7 +186,10 @@ export function placeCard(a: Ask): Placed {
         for (const b of blocks) {
           if (!among && (b.right <= usual.x - 4 || b.left >= usual.x + w + 4)) continue
           const x = side === 'right' ? b.right + 6 : b.left - 6 - w
-          if (x < win.left || x + w > win.right || (!among && Math.abs(x - usual.x) > ASIDE - gap)) continue
+          // (a thing standing over or under the very bar that cuts its card has no place nearer than that bar's
+          // end: it may go there, up to the card's own width along)
+          const reach = among ? Infinity : p.x > b.left && p.x < b.right ? Math.max(ASIDE - gap, w) : ASIDE - gap
+          if (x < win.left || x + w > win.right || Math.abs(x - usual.x) > reach) continue
           // (still on its own side of the point: never across it, beside some bar far off)
           if (side === 'right' ? x < p.x : x + w > p.x) continue
           // Whole there, or at least taller: a card that can be whole nowhere still gets the most height there is.

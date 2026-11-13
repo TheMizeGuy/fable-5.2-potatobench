@@ -77,7 +77,10 @@ Grafted from the print direction:
   a face half), slid up or down its side to step clear of them and never further from the click to do it; once
   laid it keeps its place as the camera carries the land by. A card cut short is the last resort: where a bar
   under the click or the slip over it leaves too little room, the card steps along that side, whole, on a longer
-  tether (190 px at most); and at 800 px of window height or less the field card's own spacing is tighter, so a
+  tether (190 px at most; a thing standing right over or under the bar that cuts its card, such as someone at the
+  foot of the land over the people bar, may send it to that bar's end, up to the card's own width along). The two
+  boards at the top are things to keep off, not a line across the window: between them the land runs on up, and a
+  card there has that room. At 800 px of window height or less the field card's own spacing is tighter, so a
   planted field's whole card fits a 720-line window.
 - **Selection is drawn on the land**: a dashed outline with registration marks at the field's corners.
 - **Colour as signal on the land**: a need's stamp is inked by kind (blight and loss red, the suggested next thing

@@ -336,6 +336,31 @@ describe('keeping off the other tags and people', () => {
     expect(d.h).toBeLessThan(520)
   })
 
+  it('someone standing on the land right over the people bar: their card steps to the bar\'s end and is whole', () => {
+    // 1280 by 800: the two boards and the slip at the top, the people bar at the foot, a hand at the foot of the land.
+    const win: Box = { left: 8, top: 8, right: 1272, bottom: 792 }
+    const bar: Box = { left: 16, top: 669, right: 406, bottom: 784 }
+    const blocks: Box[] = [bar, { left: 1062, top: 223, right: 1264, bottom: 263 }, { left: 1220, top: 559, right: 1264, bottom: 603 }, { left: 34, top: 165, right: 364, bottom: 215 },
+      { left: 16, top: 0, right: 408, bottom: 170 }, { left: 948, top: 0, right: 1264, bottom: 213 }]
+    const size = { w: 452, h: 474 }
+    for (const x of [40, 133, 300]) {
+      const at = { x, y: 656 }
+      const c = placeCard({ point: at, size, least: 451, win, blocks })
+      expect(c.h, `${x}`).toBe(474)
+      expect(c.aside, `${x}`).toBe(true)
+      expect(c.side, `${x}`).toBe('right')
+      // (clear of the bar, or over it where the slip's end leaves the height)
+      expect([blocks[3].right + 6, bar.right + 6], `${x}`).toContain(c.x)
+      expect(blocks.some(b => meets({ left: c.x, top: c.y, right: c.x + size.w, bottom: c.y + c.h }, b)), `${x}`).toBe(false)
+      expect(at.y, `${x}: level with them`).toBeGreaterThanOrEqual(c.y)
+      expect(at.y, `${x}: level with them`).toBeLessThanOrEqual(c.y + c.h)
+    }
+    // A shorter window, where the land over the bar is shorter than the card wherever it stands in it.
+    const low = placeCard({ point: { x: 133, y: 576 }, size: { w: 452, h: 492 }, least: 451, win: { ...win, bottom: 712 }, blocks: [{ ...bar, top: 589, bottom: 704 }, ...blocks.slice(1)] })
+    expect(low.h).toBe(492)
+    expect(low.x).toBe(bar.right + 6)
+  })
+
   it('beside a tag whose field lies just past it, the card stands a step further along, off the field\'s middle', () => {
     // A field small on the screen: its middle is a few pixels from its tag's end, where the card would begin.
     const tag: Box = { left: 447, top: 561, right: 613, bottom: 605 }
