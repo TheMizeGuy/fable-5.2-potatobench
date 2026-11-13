@@ -59,7 +59,7 @@ export function rangeSays(range: { lo: number; hi: number }): string {
 
 // The spring loan, said under the pointer on Borrowed, and once a season as a note the first time it grows.
 export const BORROWED_SAYS = `This is the bank's spring loan. Wages and field work go on it until the crop sells, it costs no interest until the end of the year, and the crop's sales pay it back. Whatever is still owed then carries at ${F.pct(S.CREDIT_RATE)}.`
-export const LOAN_NOTE = 'Wages and field work go on the spring loan until the crop sells.'
+export const LOAN_NOTE = 'Costs go on the loan until the crop sells.'
 
 // Whether the loan's note is due now: in the season, the first time this year that what is borrowed grows (not the
 // spring loan's own start).
@@ -83,9 +83,10 @@ export function limitSays(m: S.MoneyNow, rescue: { what: string; gains: number }
 // The ledger's verdict, by the bank's own rule (campaign.ts, closeYear): in hand, or down but inside the limit.
 export function verdictSays(y: S.YearSummary, left: number, kept: boolean): string {
   const more = left > 0 ? ` ${F.upper(F.plural(left, 'season'))} to go.` : ''
-  if (kept) return y.cashEnd >= 0 ? 'The farm is yours, and the bank is happy.' : `The farm is yours. You ended ${F.money(-y.cashEnd)} down, inside what the bank allows.`
+  if (kept) return y.cashEnd >= 0 ? 'The farm is yours, and the bank is happy.' : `The farm is yours. You ended ${F.money(-y.cashEnd)} in debt, inside what the bank allows.`
   if (y.cashEnd >= 0) return `You ended the year with ${F.money(y.cashEnd)} in hand, so the bank is happy.${more}`
-  return `You ended ${F.money(-y.cashEnd)} down, inside what the bank allows, so it carries you another year.${more}`
+  // "In debt", not "down": the lines beside it use "down" for cash against the year's start, which is another figure.
+  return `You ended ${F.money(-y.cashEnd)} in debt, inside what the bank allows, so it carries you another year.${more}`
 }
 
 // The ledger's first line: from what was sold to what was kept.

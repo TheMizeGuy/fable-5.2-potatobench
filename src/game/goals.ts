@@ -201,17 +201,32 @@ export function waitingFor(c: Campaign): { title: string; when: string } | null 
     return { title: `Planting: ${planted} of ${potato.length} ${potato.length === 1 ? 'field' : 'fields'}`, when: 'your crew plants the rest on its own' }
   }
   if (!crew('hill') || !crew('scout')) return null
-  // The season's spraying is asked once, when blight weather first comes.
-  if (s.watchDay < 0 && !sprayWayNow(c) && !crew('spray')) return { title: 'Nothing for you until blight weather', when: 'your crew tends the fields on its own' }
   const up = potato.filter(i => { const f = s.fields[i]; return (f.status === 'planted' || f.status === 'growing') && f.deadDay < 0 })
+  const kills = up.map(i => ({ i, k: killOutlook(c, i), listed: s.jobs.some(j => j.kind === 'kill' && j.field === i) }))
+  const due = kills.map(x => x.k).filter((k): k is NonNullable<typeof k> => !!k).sort((a, b) => a.day - b.day)[0]
+  // While the spraying is the player's (not left to the crew), a spray is their next decision until the vine kill
+  // comes near: before the first one it comes with the first blight weather, after it with each new forecast of it.
+  if (up.length && !crew('spray') && sprayWayNow(c) !== 'none' && !(due && due.day - s.day <= KILL_NEAR)) {
+    if (!s.fields.some(f => f.lastSpray >= 0)) return { title: 'Nothing for you until blight weather', when: 'your crew tends the fields on its own' }
+    return { title: 'Your next decision is a spray', when: 'when blight weather is forecast' }
+  }
   if (up.length && !crew('kill')) {
-    const due = up.map(i => killOutlook(c, i)).filter((k): k is NonNullable<typeof k> => !!k).sort((a, b) => a.day - b.day)[0]
-    return { title: 'Your next decision is killing the vines', when: due ? `${due.asked ? 'due since' : 'due around'} ${formatDay(c.year, due.day, true)}` : 'in September' }
+    // Due and not yet ordered: the decision is the player's now, and the goal or the stamp says so.
+    if (kills.some(x => x.k?.asked && !x.listed)) return null
+    // Ordered, and the vines not yet down: how far along it is, as the planting was.
+    if (kills.some(x => x.listed)) {
+      const dead = potato.filter(i => s.fields[i].killDay >= 0 || s.fields[i].deadDay >= 0).length
+      return { title: `Killing the vines: ${dead} of ${potato.length} ${potato.length === 1 ? 'field' : 'fields'}`, when: 'on the work list' }
+    }
+    return { title: 'Your next decision is killing the vines', when: due ? `due around ${formatDay(c.year, due.day, true)}` : 'in September' }
   }
   if (!crew('dig') || !crew('haul')) return null
   if (potato.some(i => !s.fields[i].weighed && s.fields[i].status !== 'lost')) return { title: 'Nothing for you until the weigh ticket', when: up.length ? 'your crew kills the vines and digs on its own' : 'your crew digs and hauls on its own' }
   return null
 }
+
+// How near the vine kill is, in days, before it is the player's next decision ahead of another spray.
+const KILL_NEAR = 14
 
 const CROP = new Set(['plant', 'walk', 'hill', 'spray', 'sample', 'kill', 'dig', 'haul'])
 

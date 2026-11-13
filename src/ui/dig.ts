@@ -9,7 +9,7 @@ import { term } from './glossary.ts'
 import { icon } from './icons.ts'
 import * as R from './rules.ts'
 import { storeCall } from './store-band.ts'
-import { expectedFrom } from './ticket-words.ts'
+import { expectedFrom, ticketPlace } from './ticket-words.ts'
 import { coupon, range } from './system/parts.ts'
 import { agentLine } from './tutorial.ts'
 
@@ -530,7 +530,7 @@ export function storageLine(c: S.Campaign): string {
 }
 
 function ticketNo(c: S.Campaign, lot: S.Lot): string {
-  return `${R.yearShort(lot.year || c.year)}-${lot.id}`
+  return `${R.yearShort(lot.year || c.year)}-${ticketPlace(c, lot)}`
 }
 
 // ---------------------------------------------------------------- the full reckoning

@@ -754,3 +754,40 @@ captured the states they touched); the GPU budget; anything on a MacBook or inte
 - Start-up: about 6 s to the first frame on a quiet test box, nearly all of it one shader's compile; the splash
   says what it is waiting for but stands still for the first 3 s. A plan is in the start-up writer's report.
 - Balance gates G2 and G3 still fail (traps: foreman, bunkhouse, second and third tractor; one build order best).
+
+## What the game says against what the farm holds (after `live-29`)
+
+The owner, after playing: "theres sitll disjointed logic". `tools/quality/agree.ts` plays two years on the fixed farm
+as the game asks (the word to plant, the spraying answered on its card, every stamp that is the player's pressed, a
+hand hired and a sprayer bought the second spring) and on every game day reads the page beside the farm's state: each
+person's chip, pin and card, the goal slip, every slip that comes up, each field's stamp, need and card, the work
+list, the money board and its reason, the phase strip, each weigh ticket, the ledgers. Its rules count each way two
+places told it differently (`--check <days.jsonl>` runs the rules alone over readings already taken).
+
+On main before the fixes it found nine kinds, 210 times in the two years:
+
+| Kind | Times | Cause, and the one source it reads now |
+| --- | --- | --- |
+| Someone called "Idle" after a day's work | 104 | `personNow` (src/ui/now.ts) read only the order held between days, so work begun and finished within a day left "Idle". With nothing ahead it now says the work finished ("Sprayed Bottom Field", "Walked the rows in South Ridge") from the day's record of work. |
+| An ask left up after it was met | 35 | A note stayed for its time whatever was done. src/ui/index.ts keeps what each ask or barrel warning stands on and takes it down once no field needs it. |
+| "then sign a contract" in a season | 27 | The slip named the next goal whether or not it could be taken; it is named only while it can. |
+| "Nothing for you until blight weather" after spraying began | 19 | `waitingFor` (src/game/goals.ts) knew only the first blight weather; after the first spray it says "Your next decision is a spray". |
+| A money reason for something days old | 8 | `moneyCause` compared today with the look the last line was said from, so "Vines killed in South Ridge" was said 26 days after the kill. A field's event is the cause only if it happened since the look of the day before. |
+| A slip title ending in a period, the crew's job as the player's "then" | 6, 5 | The slip printed the advice's sentence whole, and "then do a test dig (your crew handles it automatically)". |
+| Tickets numbered by the lot's id | 4 | "No. 2-5" was the second year's first ticket: `ticketPlace` (src/ui/ticket-words.ts) numbers them in the order they are cut, from 1 each year. |
+| "Your next decision is killing the vines, due since Sep 8" with the kills on the work list | 2 | `waitingFor` now says "Killing the vines: 2 of 4 fields". |
+
+Also made one: the ledger's "ended $4,650 down" beside "most years end $4,000 to $24,000 down" (two different figures:
+it is "in debt" now); a hired person's ledger line ("Hired at $550 a month" as a sentence of its own); "harvested" for
+a field whose barrels were still out ("all dug"); blight found where the crew keeps the fields sprayed, with nothing
+saying why (the find now says "Rain washed the spray off", "Sprayed 9 days ago, worn off" or "Spray slows blight, it
+can't stop it all"); the frost key pressed with every barrel in (it says so); an answer shown beside the pointer and
+in the tutorial's note at once.
+
+After the fixes the same reading finds none. `tests/agree.test.ts` holds the pure ones over seeded two-year farms.
+
+Left, and whose it is: the season's spraying question comes with the first blight weather, after four rounds of spray
+stamps on the fixed farm's first year (the tutorial's lessons key on the same day); a person's chip opens the short
+card on a farm of one and the full page on a farm of several; the date board and the chips stand at the morning of a
+day while the land replays the day before; the planting countdown follows the forecast and can go from 3 days back
+to 9; a hired field hand has work on about one day in four.
