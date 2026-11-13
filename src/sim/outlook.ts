@@ -355,16 +355,23 @@ export function planCut(c: Campaign): { what: string; saves: number } | null {
 // The year-end figure as the season will open with it: in spring, the plan begun on a copy of the farm, so the plan and
 // the season's first day are one reckoning; through the season and the winter, moneyNow.
 export function moneyPlan(world: World, c: Campaign): MoneyNow {
-  if (c.phase !== 'plan') return moneyNow(world, c)
-  const copy = structuredClone(c)
-  return apply(world, copy, { t: 'begin' }).ok ? moneyNow(world, copy) : moneyNow(world, c)
+  return begun(world, c) ?? moneyNow(world, c)
 }
 
-// What a command would do to the year-end figure (moneyPlan's), tried on a copy of the farm; null when it can't be given.
+// The plan begun on a copy, or null when the season could not begin on it (the bank would not lend for it).
+function begun(world: World, c: Campaign): MoneyNow | null {
+  if (c.phase !== 'plan') return moneyNow(world, c)
+  const copy = structuredClone(c)
+  return apply(world, copy, { t: 'begin' }).ok ? moneyNow(world, copy) : null
+}
+
+// What a command would do to the year-end figure (moneyPlan's), tried on a copy of the farm; null when it can't be given,
+// or when it would leave a spring plan the season could not begin on.
 export function moneyEffect(world: World, c: Campaign, cmd: Cmd, was = moneyPlan(world, c).after): number | null {
   const copy = structuredClone(c)
   if (!apply(world, copy, cmd).ok) return null
-  return moneyPlan(world, copy).after - was
+  const now = begun(world, copy)
+  return now ? now.after - was : null
 }
 
 // The one change to the spring plan that would raise the year-end figure most, and by how much: not buying or hiring

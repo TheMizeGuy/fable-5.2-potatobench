@@ -483,6 +483,16 @@ test('the money board says why the year-end figure moved, and its sum opens from
   await reach(page, `const { app } = q.g(); app.do({ t: 'hire', kind: 'hand' }); app.setSpeed(0)`)
   const name = await game<string>(page, `c.crew[c.crew.length - 1].name.split(' ')[0]`)
   const pop = page.locator('#ui [data-testid="money-pop"]')
+  // The sum lies clear of every speed key, at the board's foot or at the thumb.
+  const clear = async () => {
+    const box = (await pop.boundingBox())!
+    for (const k of await page.locator('#ui [data-testid^="speed-"]').all()) {
+      const b = await k.boundingBox()
+      if (!b) continue
+      const apart = box.x >= b.x + b.width || b.x >= box.x + box.width || box.y >= b.y + b.height || b.y >= box.y + box.height
+      expect(apart, 'the sum covers a speed key').toBe(true)
+    }
+  }
   if (isMobile) {
     const note = page.locator('#ui .alert', { hasText: 'wages to year end' })
     await expect(note).toContainText(new RegExp(`${name}'s wages to year end: −\\$[\\d,]+`))
@@ -490,24 +500,23 @@ test('the money board says why the year-end figure moved, and its sum opens from
     await note.click()
     await expect(pop).toBeVisible()
     await shot('breakdown')
+    await clear()
+    await reach(page, `q.year(4)`)
+    await expect(page.getByTestId('outcome')).toBeVisible()
+    await shot('ledger')
     expect(errors, errors.join('\n')).toEqual([])
     return
   }
   const why = page.locator('#ui [data-testid="outlook-why"]')
   await expect(why).toContainText(new RegExp(`^${name}'s wages to year end: −\\$[\\d,]+ Why\\?$`))
   await shot('board-why')
-  // "Why?" opens the sum; it lies clear of the speed keys and adds up to the figure.
+  // "Why?" opens the sum, which adds up to the figure.
   await page.getByTestId('outlook-why-open').click()
   await expect(pop).toBeVisible()
   await expect(pop).toContainText('Spent so far')
   await expect(pop).toContainText('Wages to the year end')
   await shot('breakdown')
-  const box = (await pop.boundingBox())!
-  for (const k of await page.locator('#ui .clock [data-testid^="speed-"]').all()) {
-    const b = (await k.boundingBox())!
-    const apart = box.x >= b.x + b.width || b.x >= box.x + box.width || box.y >= b.y + b.height || b.y >= box.y + box.height
-    expect(apart, 'the sum covers a speed key').toBe(true)
-  }
+  await clear()
   await page.keyboard.press('Escape')
   await expect(pop).toHaveCount(0)
   // The label opens it too; a press elsewhere puts it away.
