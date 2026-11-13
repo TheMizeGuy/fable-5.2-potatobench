@@ -413,7 +413,10 @@ test('the same start by keyboard alone', async ({ page, isMobile }) => {
   await page.keyboard.press('Enter')
   await expect.poll(async () => (await look(page)).queue).toBeGreaterThan(0)
 
-  // The clock: Space, plus and minus, F stepping through the three speeds.
+  // The clock: Space, plus and minus, F stepping through the three speeds. (A Space within a second of the clock
+  // being set going after a card is taken as "go on" (src/ui/season.ts); the hook above set it going, so that second
+  // is waited out by the app's own mark, not by how fast the steps before happened to run.)
+  await page.waitForFunction(() => performance.now() - (globalThis as unknown as { __county: { app: { resumedAt: number } } }).__county.app.resumedAt > 1100)
   expect((await look(page)).speed).toBe(1)
   await page.keyboard.press('Space')
   await expect(page.getByTestId('paused')).toBeVisible()
