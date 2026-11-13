@@ -118,14 +118,15 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       if (!isJob(need.act) || (need.act === 'spray' && sprayWay(c) === 'none') || s0.jobs.some(j => j.kind === need.act && j.field === i)) continue
       out.push({ field: i, glyph: need.act, text: F.localize(need.text), why: F.localize(need.why), urgent: need.urgent, go: go(i) })
     }
-    // Dry soil in the weeks after the potatoes form sets scab, and the crew's routine does not water: said here so
-    // the player hears of it while watering can still help.
-    for (let i = 0; i < s0.fields.length; i++) {
+    // Dry soil in the weeks after the potatoes form sets scab, and the coach asks for water only once a crop wilts:
+    // said here, with what watering costs, while it can still help. Rain on the way answers it for nothing.
+    const rain = S.forecast(app.world, c, 3).some(d => d.rainChance >= 60 && d.rainMm >= 8)
+    for (let i = 0; i < s0.fields.length && !rain; i++) {
       const fs = s0.fields[i]
       if (!S.held(c, i) || fs.status !== 'growing' || fs.tiDay < 0 || s0.day - fs.tiDay > S.SCAB_DAYS) continue
       const f = S.fieldInfo(c, i)
-      if (f.moisture >= 0.5 || out.some(t => t.field === i) || s0.jobs.some(j => j.kind === 'water' && j.field === i)) continue
-      out.push({ field: i, glyph: 'water', text: `Water ${f.name}`, why: 'The soil is dry while the potatoes form, which sets scab.', urgent: false, go: go(i) })
+      if (f.moisture >= 0.5 || f.tooWet || out.some(t => t.field === i) || s0.jobs.some(j => j.kind === 'water' && j.field === i)) continue
+      out.push({ field: i, glyph: 'water', text: `${f.name} is drying out`, why: `Dry soil while the potatoes form sets scab. Watering costs ${F.money(S.jobCost(c, 'water', i))}; rain is free if it comes.`, urgent: false, go: go(i) })
     }
     for (const x of fates(app.world, c).pressing) {
       if (x.job < 0 || !x.inWay) continue

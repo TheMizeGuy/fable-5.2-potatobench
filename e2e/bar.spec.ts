@@ -97,3 +97,42 @@ test('the spring blank says three figures at a glance, and the rest behind Detai
   expect((await lines()).length).toBeGreaterThan(3)
   await shot(page, 'plan-details')
 })
+
+test('a field drying out while its potatoes form is on To do, with what watering costs, unless rain is on the way', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'a desk\'s bar; a phone keeps its foot')
+  await startSeason(page)
+  await reach(page, `const { app } = q.g(); app.do({ t: 'sprayWay', way: 'none' }); q.run(q.day(7, 20)); app.setSpeed(0); app.campaign.incidents = []; app.select(-1); app.selectUnit(-1)`)
+  await putAway(page)
+  // One growing field, three days past tuber set, dried to just under half its water; no order to water it.
+  const state = await page.evaluate(() => {
+    const { app, sim } = (globalThis as any).__county
+    const c = app.campaign, s = c.season
+    const i = s.fields.findIndex((f: any, k: number) => sim.held(c, k) && f.status === 'growing')
+    if (i < 0) return null
+    const f = s.fields[i]
+    f.tiDay = s.day - 3
+    f.wet = 0
+    s.jobs = s.jobs.filter((j: any) => !(j.kind === 'water' && j.field === i))
+    for (let k = 0; k < 400 && sim.fieldInfo(c, i).moisture >= 0.45; k++) f.dr += 1
+    const rain = sim.forecast(app.world, c, 3).some((d: any) => d.rainChance >= 60 && d.rainMm >= 8)
+    const coach = app.needs()[i]?.need?.act ?? ''
+    app.touch?.()
+    return { i, name: sim.fieldInfo(c, i).name as string, moisture: sim.fieldInfo(c, i).moisture as number, rain, coach, cost: sim.jobCost(c, 'water', i) as number }
+  })
+  test.skip(!state, 'no field growing on this day')
+  console.log(`dry field: ${JSON.stringify(state)}`)
+  expect(state!.moisture).toBeLessThan(0.5)
+  await page.locator('#ui .mainbar').getByTestId('bar-todo').click()
+  const todo = page.getByTestId('todo')
+  await expect(todo).toBeVisible()
+  const row = todo.locator('.mb-row').filter({ hasText: `${state!.name} is drying out` })
+  if (state!.rain || (state!.coach && state!.coach !== 'wait')) await expect(row).toHaveCount(0)
+  else {
+    await expect(row).toHaveCount(1)
+    await expect(row).toContainText(`Watering costs $${state!.cost.toLocaleString('en-US')}`)
+    await shot(page, 'todo-dry')
+    await row.click()
+    await expect(todo).toBeHidden()
+    await expect.poll(() => game<number[]>(page, 'app.selection')).toEqual([state!.i])
+  }
+})
