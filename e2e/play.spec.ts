@@ -475,7 +475,7 @@ test('the money board says why the year-end figure moved, and its sum opens from
   await reach(page, `const { app, sim } = q.g(); const c = app.campaign; window.__was = c.cash; c.cash -= sim.moneyPlan(app.world, c).after - sim.CREDIT_LIMIT + 3000; app.do({ t: 'plan', field: 0, plan: { ...c.plans[0] } })`)
   await expect(page.getByTestId('plan-past-limit')).toBeVisible()
   await expect(page.getByTestId('plan-past-limit')).toContainText('bank\'s limit')
-  await expect(page.getByTestId('plan-year-range')).toContainText(/^Likely between/)
+  await expect(page.getByTestId('plan-year-range')).toContainText(/^Most years like this end between/)
   await shot('plan-limit')
   await reach(page, `const { app } = q.g(); const c = app.campaign; c.cash = window.__was; app.do({ t: 'plan', field: 0, plan: { ...c.plans[0] } })`)
   await expect(page.getByTestId('plan-past-limit')).toHaveCount(0)

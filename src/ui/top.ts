@@ -540,7 +540,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
       const ask = !!why && openedIn !== c.year
       // An upright phone's board has no room for it (a fifth of the height): there it is an alert, which goes to the
       // field on the order that helps, or else opens the sum.
-      if (why && season && layout === 'narrow') ctx.notes.push({ text: causeLine(why, true), go: () => why.remedy ? fix(why) : openMoney('press') })
+      if (why && season && low) ctx.notes.push({ text: causeLine(why, true), go: () => why.remedy ? fix(why) : openMoney('press') })
       else if (why) whyNow = { text: causeLine(why), at: stampOf(c), ask, cause: why }
     }
     if (whyNow && (!counted || stampOf(c) - whyNow.at > (season ? WHY_DAYS : 0) || stampOf(c) < whyNow.at)) whyNow = null
@@ -571,6 +571,8 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     el.dataset.layout = layout
     // On an upright phone in the season there is one board: the balance is its third column (design/season.phone.html).
     const phone = season && layout === 'narrow'
+    // A low window's board keeps to its figures: its lines are said by the alerts, and it never grows or shrinks.
+    const lines = !(season && low)
     patch(el, JSON.stringify(model), () => {
       // Through the season and the winter, beside the cash and at its weight: what the farm has after the year-end
       // bills, so the cash is never read as what the farm will keep.
@@ -591,12 +593,12 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
           class: `t-figure cash${c.cash < 0 && !borrowed ? ' neg' : ''}`, testid: 'cash',
           title: ctx.touch() ? undefined : `${c.cash >= 0 ? '' : borrowed ? BORROWED_SAYS : 'You owe this on the spring loan, and the crop pays it back. The bank will foreclose if you end the year too far in the red.'}${lastMoved ? `${c.cash >= 0 ? '' : ' '}Last change: ${lastMoved}.` : ''}` || undefined,
         }, h('span', { class: 'sr' }, borrowed ? 'Borrowed: ' : 'Cash: '), h('span', { class: 'cash-v num' }, F.money(borrowed ? -c.cash : c.cash))),
-        moved && !phone ? h('span', { class: 'cash-moved', testid: 'cash-moved', role: 'status' }, moved.text) : null,
+        moved && lines ? h('span', { class: 'cash-moved', testid: 'cash-moved', role: 'status' }, moved.text) : null,
         // The cash's line and the figure's line keep their rows whether they say anything or not, so the keys under
         // the board never move.
-        after && !phone && !moved ? h('span', { class: 'cash-moved idle', 'aria-hidden': 'true' }, '\u00a0') : null,
+        after && lines && !moved ? h('span', { class: 'cash-moved idle', 'aria-hidden': 'true' }, '\u00a0') : null,
         after,
-        after && !phone ? h('span', { class: `after-why${whyNow ? '' : ' idle'}`, testid: whyNow ? 'outlook-why' : undefined, role: whyNow ? 'status' : undefined, 'aria-hidden': whyNow ? undefined : 'true' },
+        after && lines ? h('span', { class: `after-why${whyNow ? '' : ' idle'}`, testid: whyNow ? 'outlook-why' : undefined, role: whyNow ? 'status' : undefined, 'aria-hidden': whyNow ? undefined : 'true' },
           whyNow ? [h('span', { class: 'why-t' }, whyNow.text),
             whyNow.cause.remedy ? [' ', h('button', { class: 'why-key fix-key', type: 'button', testid: 'outlook-fix', onclick: () => fix(whyNow!.cause) }, REMEDY[whyNow.cause.remedy] ?? 'Show me')] : null,
             whyNow.ask ? [' ', h('button', { class: 'why-key', type: 'button', testid: 'outlook-why-open', 'aria-label': 'Why?', title: ctx.touch() ? undefined : 'Why?', 'aria-expanded': String(pop === 'money'), onclick: () => openMoney('press') }, icon('help', 'i'))] : null]
