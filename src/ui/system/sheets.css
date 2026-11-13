@@ -10,6 +10,7 @@
 /* Why the year-end figure moved, under it for a week of the season; its hover is the sum that makes it, a line a part. */
 .topbar .balance .after.term::after { white-space: pre-line; }
 .topbar[data-layout='narrow'] .face .balance .after-why { flex-basis: auto; font-size: 12px; text-align: left; }
+.hud.st-hide-after .topbar .after-why { visibility: hidden; }
 
 /* Out of the season the date leaf is one word ("November", "Year end"): the year goes under it, never over it. */
 .topbar .leaf.word { padding-right: 14px; }
