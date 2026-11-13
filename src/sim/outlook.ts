@@ -627,21 +627,23 @@ function causeText(a: MoneyLook, b: MoneyLook, part: string, x: number, d: Recor
   return (WORDS[part] ?? [part, part])[up ? 0 : 1]
 }
 
-// The board's watch on the year-end figure. since: the look the last cause was said from; before: the one before that;
-// counted: the year a sale that left the figure where it was has been said.
-export interface MoneyWatch { since: MoneyLook; before: MoneyLook | null; counted: number }
+// The board's watch on the year-end figure. since: the look the last cause was said from; before: the one before that,
+// and part: what that cause was; counted: the year a sale that left the figure where it was has been said.
+export interface MoneyWatch { since: MoneyLook; before: MoneyLook | null; part?: string; counted: number }
 
-// A move of MONEY_STEP or more since the last line said, however slowly it came, is said with its cause. A move that
-// only takes back the last one (a cost counted ahead, then spent) is not a change of the figure: it is not said, and
-// the line it undoes goes (cancel). A sale that leaves the figure where it was is said once a year. A new year or a
+// A move of MONEY_STEP or more since the last line said, however slowly it came, is said with its cause. Field work
+// spent that only takes back the crop's last rise (a cost counted ahead, then paid) is not a change of the figure: it
+// is not said, and the line it undoes goes (cancel). A sale that leaves the figure where it was is said once a year. A new year or a
 // spring plan starts the watch again.
 export function moneyWatch(w: MoneyWatch | null, now: MoneyLook): { cause: MoneyCause | null; watch: MoneyWatch; cancel: boolean } {
   if (!w || w.since.year !== now.year || w.since.phase === 'plan' || now.phase === 'plan') {
     return { cause: null, watch: { since: now, before: null, counted: w && w.since.year === now.year ? w.counted : -1 }, cancel: false }
   }
   const cause = moneyCause(w.since, now)
-  if (cause && w.before && Math.abs(now.after - w.before.after) < MONEY_STEP / 2) return { cause: null, watch: { since: now, before: null, counted: w.counted }, cancel: true }
-  if (cause) return { cause, watch: { since: now, before: w.since, counted: w.counted }, cancel: false }
+  if (cause && cause.part === 'orders' && /^(crop|sprays)/.test(w.part ?? '') && w.before && Math.abs(now.after - w.before.after) < MONEY_STEP / 2) {
+    return { cause: null, watch: { since: now, before: null, counted: w.counted }, cancel: true }
+  }
+  if (cause) return { cause, watch: { since: now, before: w.since, part: cause.part, counted: w.counted }, cancel: false }
   if (w.counted !== now.year && now.sold - w.since.sold >= MONEY_STEP && Math.abs(now.after - w.since.after) < MONEY_STEP) {
     return { cause: { amount: 0, part: 'sold', share: 1, text: 'Sold what was already counted' }, watch: { since: now, before: null, counted: now.year }, cancel: false }
   }

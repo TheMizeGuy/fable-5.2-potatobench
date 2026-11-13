@@ -330,15 +330,19 @@ describe('round eight', () => {
       ok(w, c, { t: 'sell', lot: next.id, frac: 1 })
       expect(S.moneyWatch(watch, S.moneyLook(w, c)).cause?.text ?? '').not.toBe('Sold what was already counted')
     }
-    // A move and its taking back: the second is not said, and the first line goes.
+    // The crop's rise and the field work that takes it back: the second is not said, and the first line goes.
     const a = S.moneyLook(w, c)
-    const up = structuredClone(a); up.after += 1500; up.flows.orders += 1500
-    const back = structuredClone(a); back.after += 100; back.flows.orders += 100
+    const crop = Object.keys(a.flows).find(k => k.startsWith('crop:'))!
+    const up = structuredClone(a); up.after += 1500; up.flows[crop] += 1500
+    const back = structuredClone(up); back.after -= 1400; back.flows.orders -= 1400
     const first = S.moneyWatch({ since: a, before: null, counted: c.year }, up)
-    expect(first.cause).not.toBeNull()
+    expect(first.cause?.part).toBe(crop)
     const second = S.moneyWatch(first.watch, back)
     expect(second.cause).toBeNull()
     expect(second.cancel).toBe(true)
+    // A hire after a rise is a change of its own, and is said.
+    const hire = structuredClone(up); hire.after -= 1400; hire.flows.wages -= 1400
+    expect(S.moneyWatch(first.watch, hire).cause?.part).toBe('wages')
   })
 
   it('9: a sale says what it did to the spring loan', () => {
