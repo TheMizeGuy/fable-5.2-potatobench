@@ -315,6 +315,11 @@
 /* ---------------------------------------------------------------- people: a page of the time book, the work grid */
 .season-screen .person-card, .season-screen .work { bottom: calc(var(--bottom, 140px) + 8px); max-height: calc(100% - var(--top, 220px) - var(--bottom, 140px) - 24px); overflow-y: auto; overscroll-behavior: contain; scroll-padding-bottom: 12px; }
 .season-screen .person-card { left: max(var(--gutter), env(safe-area-inset-left, 0px)); }
+/* Who it is and the cross that closes it stay in view, and so do the pay and the keys at its foot: only what is
+   between them scrolls. The card itself never scrolls (clip), so nothing can carry its head out of sight. */
+.season-screen .person-card { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; overflow: clip; }
+.season-screen .person-card > .card-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scroll-padding-bottom: 8px; }
+.season-screen .person-card > .card-foot { position: relative; box-shadow: 0 -1px 0 var(--hair); }
 .season-screen .work { left: max(var(--gutter), env(safe-area-inset-left, 0px)); }
 .season-screen .person-card.in, .season-screen .work.in { animation: lay-up var(--t-sheet) var(--ease-paper); }
 .season-screen .person-card.out, .season-screen .work.out { animation: leave-down var(--t-leave) var(--ease-in) forwards; }

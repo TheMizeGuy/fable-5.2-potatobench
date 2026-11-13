@@ -374,6 +374,21 @@ describe('keeping off the other tags and people', () => {
     expect(cg.h).toBe(474)
     expect(cg.x).toBe(grid.right + 6)
     expect(meets(box(cg, 452), grid)).toBe(false)
+    // A work list wider than the bar, and a card that can be whole nowhere (its foreman's choices open, at 720
+    // lines): beside the list, at the land's whole height, never the slit over the list.
+    const win720: Box = { left: 8, top: 171, right: 1272, bottom: 712 }
+    const list4: Box = { left: 16, top: 537, right: 474, bottom: 581 }
+    const bar4: Box = { left: 16, top: 588, right: 406, bottom: 704 }
+    const chip4: Box = { left: 106, top: 596, right: 189, bottom: 696 }
+    const tall4 = placeCard({ point: { x: 147, y: 645 }, size: { w: 452, h: 600 }, least: 520, win: win720, blocks: [list4, bar4, { left: 34, top: 166, right: 364, bottom: 212 }], keep: chip4 })
+    expect(tall4.x).toBe(list4.right + 6)
+    expect(tall4.h).toBe(win720.bottom - win720.top)
+    expect(tall4.aside).toBe(true)
+    // The same from a row of the grid, the grid over the list and the bar: beside the grid, as tall as the land.
+    const grid4: Box = { left: 16, top: 231, right: 528, bottom: 603 }
+    const tallg = placeCard({ point: { x: 90, y: 450 }, size: { w: 452, h: 660 }, least: 520, win, blocks: [grid4, { left: 16, top: 617, right: 474, bottom: 661 }, bar, slip], keep: { left: 35, top: 428, right: 140, bottom: 472 } })
+    expect(tallg.x).toBe(grid4.right + 6)
+    expect(tallg.h).toBe(win.bottom - win.top)
     // Never a strip: whatever the height asked, it is given at least the land over the list.
     const tall = placeCard({ point: at, size: { w: 452, h: 700 }, win, blocks, keep: chip })
     expect(tall.h).toBeGreaterThanOrEqual(380)

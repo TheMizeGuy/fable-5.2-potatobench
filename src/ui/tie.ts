@@ -106,7 +106,9 @@ export function mountTies(ctx: Ctx, root: HTMLElement): Ties {
   // The handle is taken at the size it comes to rest at in its first moments in hand (a tag taken in hand grows, and
   // may be set again about its middle): the card stands beside all of it, so never on the pixel that was pressed.
   // After that a tag that grows ("on the list") moves neither the card nor the point.
-  function handle(thing: string, sel: string, at: Pt | null, fall: Tie, hold?: (el: HTMLElement) => HTMLElement): Tie {
+  // away: the handle is not on the thing (a chip in the people bar, a row of the grid): where the thing itself
+  // stands on the land is spared when that costs nothing, and is no reason to cut the card short.
+  function handle(thing: string, sel: string, at: Pt | null, fall: Tie, hold?: (el: HTMLElement) => HTMLElement, away = false): Tie {
     const first = find(sel)
     const b0 = first?.getBoundingClientRect()
     const d = at && b0 ? { x: at.x - b0.left, y: at.y - b0.top } : null
@@ -121,7 +123,8 @@ export function mountTies(ctx: Ctx, root: HTMLElement): Ties {
         const k = (hold?.(el) ?? el).getBoundingClientRect()
         if (!size || performance.now() - born < 300) size = { w: k.width, h: k.height }
         const point = d ? { x: b.left + Math.max(0, Math.min(b.width, d.x)), y: b.top + Math.max(0, Math.min(b.height, d.y)) } : { x: b.left + Math.min(b.width, size.w) / 2, y: b.top + b.height / 2 }
-        return { point, keep: { left: k.left, top: k.top, right: k.left + size.w, bottom: k.top + size.h }, avoid: fall.at()?.avoid }
+        const on = fall.at()?.avoid
+        return { point, keep: { left: k.left, top: k.top, right: k.left + size.w, bottom: k.top + size.h }, ...(away ? { spare: on } : { avoid: on }) }
       },
     }
   }
@@ -194,7 +197,7 @@ export function mountTies(ctx: Ctx, root: HTMLElement): Ties {
     const thing = `person-${id}`
     const show = () => { if (view.show) view.show({ unit: id }); else view.follow(id) }
     // Nowhere on the land (indoors) and no chip on this screen: null, and the card stays where it is.
-    const onChip = (fall: Tie, at: Pt | null) => handle(thing, CHIP(id), at, fall)
+    const onChip = (fall: Tie, at: Pt | null) => handle(thing, CHIP(id), at, fall, undefined, true)
     const nowhere: Tie = { thing, show, at: () => null }
     const beside = (d: Pt): Tie => {
       const chip = onChip(nowhere, null)
@@ -214,7 +217,7 @@ export function mountTies(ctx: Ctx, root: HTMLElement): Ties {
       // The press counts only when it was on them: their chip, their row, their pin, or the land within reach of them
       // (a press a moment earlier on something else never carries their card off to where it was).
       if (p.el?.closest(`[data-testid="unit-${id}"]`)) return onChip(beside({ x: 0, y: 0 }), p)
-      if (p.el?.closest(`[data-testid="grid-person-${id}"]`)) return handle(thing, ROW(id), p, beside({ x: 0, y: 0 }))
+      if (p.el?.closest(`[data-testid="grid-person-${id}"]`)) return handle(thing, ROW(id), p, beside({ x: 0, y: 0 }), undefined, true)
       const b = body(id)
       const d = b ? { x: p.x - b.mid.x, y: p.y - b.mid.y } : null
       if (d && (p.el?.closest(`[data-testid="pin-${id}"], [data-testid="pin-pick-${id}"]`) || (p.el?.tagName === 'CANVAS' && Math.hypot(d.x, d.y) < 90))) return beside(d)

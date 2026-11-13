@@ -110,6 +110,7 @@ export function whois(ctx: Ctx, layer: HTMLElement): Whois {
           h('h2', { class: 't-head', id: 'whois-name', testid: 'whois-name' }, name),
           h('p', { class: 't-caption' }, farmer ? 'The farmer · every job, no wage' : `${KIND_NAME[p.kind]}${p.traitName ? ` · ${p.traitName.toLowerCase()}` : ''}`)),
         h('button', { class: 'close', type: 'button', testid: 'whois-close', 'aria-label': `Close${keys ? ' (Escape)' : ''}`, onclick: () => app.selectUnit(-1) }, icon('close', 'i'))),
+      h('div', { class: 'card-body', 'data-scroll': 'whois' },
       h('p', { class: 'whois-now', testid: 'whois-now' }, icon(season ? doingGlyph(c, p) : c.phase === 'cellar' ? 'winter' : 'idle', 'i'),
         h('span', null, h('b', null, season ? doingWord(c, p) : c.phase === 'cellar' ? 'This winter' : 'Spring'), ' ', h('span', { class: busy ? '' : 'quiet' }, detail))),
       // Where to look for them: on a machine they are its driver; off the land, indoors in the yard.
@@ -136,7 +137,8 @@ export function whois(ctx: Ctx, layer: HTMLElement): Whois {
           onclick: () => run({ t: 'priority', unit: p.id, work: k, level: 1 }, `${name}: ${SKILL_NAME[k].toLowerCase()} work first.`),
         }, icon(SKILL_CUT[k], 'i'), h('span', { class: 'key-name' }, SKILL_SHORT[k]), h('span', { class: 'sr' }, ' work first')))),
       restControl(ctx, c, p.id, 'whois-rest'),
-      h('div', { class: 'whois-acts' },
+      ),
+      h('div', { class: 'whois-acts card-foot' },
         h('button', {
           class: `btn${ctx.view.followed() === p.id ? ' is-on' : ''}`, type: 'button', testid: 'whois-follow', 'aria-pressed': String(ctx.view.followed() === p.id),
           title: keys ? `The camera stays centered on ${farmer ? 'you' : 'them'} until you move it` : undefined,
