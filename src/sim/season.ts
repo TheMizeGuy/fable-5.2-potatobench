@@ -541,7 +541,7 @@ function exposure(c: Campaign, s: Season, d: Day, out: GameEvent[]): void {
     if (tmin <= P.FREEZE_IN_FIELD) {
       const frozen = f.inField * P.FREEZE_SHARE
       lose(f, lot, frozen, 'frost')
-      push(s, out, 'frozenInField', i, 'bad', `A hard frost hit the barrels in ${FIELD_NAMES[i]}, and ${withCommas(frozen)} cwt froze before it was hauled in.`, { cwt: Math.round(frozen) })
+      if (frozen >= 0.5) push(s, out, 'frozenInField', i, 'bad', `A hard frost hit the barrels in ${FIELD_NAMES[i]}, and ${withCommas(frozen)} cwt froze before it was hauled in.`, { cwt: Math.round(frozen) })
     }
     if (bright) lose(f, lot, f.inField * P.GREEN_IN_FIELD, 'green')
     if (f.status === 'dug' && f.inField < 0.5) weigh(s, f, i, lot, out)
