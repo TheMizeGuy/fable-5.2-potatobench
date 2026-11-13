@@ -29,7 +29,7 @@
 /* The figure's label is a small key that opens the sum that makes it; "Why?" under a move opens the same. */
 .topbar .balance .after .after-key, .topbar .balance .why-key { min-height: 26px; padding: 2px 8px; margin: 2px 0; }
 .topbar .balance .why-key { min-height: 24px; padding: 2px 6px; vertical-align: middle; }
-.topbar[data-layout='narrow'] .face .balance .after .after-key { min-height: 0; padding: 0 4px; margin: 0; }
+.topbar[data-layout='narrow'] .face .balance .after .after-key { min-height: 0; padding: 1px 4px 3px; margin: 0; line-height: 1; }
 /* The sum: a small table under the board, never over the speed keys. */
 .topbar .money-pop { width: min(400px, calc(100vw - 32px)); gap: 6px; }
 /* On an upright phone the speed keys are at the thumb: the sum stops short of them and scrolls. */
