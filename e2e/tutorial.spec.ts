@@ -77,11 +77,11 @@ async function see(page: Page): Promise<Seen> {
     const driving = vis(drive) ? drive : null
     const text = `${read(screen)} | ${land} | ${slip && !slip.classList.contains('guide-card') ? read(slip) : ''}${driving ? ` | ${read(driving)}` : ''}`
     const unit = Number(driving?.dataset.unit ?? -1)
-    // The one the guide is showing: their pin on the land (a point; its face is the box), drawn and wholly inside
-    // the window.
-    const pinIn = unit >= 0 && [...ui.querySelectorAll<HTMLElement>(`.plate-layer [data-testid="pin-${unit}"] .head`)].some(p => {
+    // The one the guide is showing: their pin on the land, drawn (pins.ts takes it down where a board or a card is
+    // over them) with its face, the 36 px above the point it stands on, wholly inside the window.
+    const pinIn = unit >= 0 && [...ui.querySelectorAll<HTMLElement>(`.plate-layer .pin-at:not(.gone) [data-testid="pin-${unit}"]`)].some(p => {
       const r = p.getBoundingClientRect()
-      return r.width > 0 && r.height > 0 && p.checkVisibility({ opacityProperty: true, visibilityProperty: true } as CheckVisibilityOptions) && r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight
+      return p.checkVisibility({ opacityProperty: true, visibilityProperty: true } as CheckVisibilityOptions) && r.left - 18 >= 0 && r.top - 48 >= 0 && r.left + 18 <= innerWidth && r.top <= innerHeight
     })
     const asking: string[] = []
     if (slip) asking.push('note')
@@ -1325,13 +1325,17 @@ test('the tutorial starts when planting is ready: Start the season, a few second
   await expect(line).toContainText(/^You're planting /)
   await expect(page.getByTestId('guide-drive-next')).toHaveText('Drag to look around, and scroll to zoom.')
   expect(await game<number>(page, 'app.speed')).toBe(1)
+  // Looked at twice with them in the window both times: in it for the time between.
   let inside = 0
-  for (let k = 0; k < 16; k++) {
+  let was = -1
+  for (let k = 0; k < 40; k++) {
     const now = await see(page)
+    const t = Date.now()
     if (now.scene !== 'plant') break
-    if (now.pinIn) inside += 250
-    if (k === 6) await picture(page, 'g4-planter-1280')
-    await page.waitForTimeout(250)
+    if (now.pinIn && was >= 0) inside += t - was
+    was = now.pinIn ? t : -1
+    if (k === 2) { await picture(page, 'g4-planter-1280'); was = -1 }
+    await page.waitForTimeout(150)
   }
   expect(inside, 'ms the planter was inside the window while shown').toBeGreaterThanOrEqual(2000)
   // Then it runs on, fast, saying what is passing.
