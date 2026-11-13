@@ -16,7 +16,7 @@ import { EXIT_MS, layoutNow, Notes, Papers, unname, type Ctx, type Level, type S
 import { lotKey, ticket } from './dig.ts'
 import { h } from './dom.ts'
 import { mountSprites } from './icons.ts'
-import { setUnits } from './fmt.ts'
+import { localize, setUnits } from './fmt.ts'
 import { openHelp } from './help.ts'
 import { ledgerScreen, overScreen } from './ledger.ts'
 import { openMenu } from './menu.ts'
@@ -60,6 +60,24 @@ export const mountHud: MountHud = (root, app, view, sound) => {
   const guideLayer = h('div', { class: 'guide-layer' })
   const notes = new Notes()
   root.replaceChildren(plateLayer, screenLayer, floating, whoLayer, notes.liveRegion, paperLayer, guideLayer)
+
+  // The answer to the player's own press (an order, or why not) is a note; while a tutorial note is up the notes are
+  // hidden, so it is also shown beside the pointer for a moment.
+  let pressedAt = { x: innerWidth / 2, y: innerHeight / 2 }
+  document.addEventListener('pointerdown', e => { pressedAt = { x: e.clientX, y: e.clientY } }, true)
+  const tip = h('p', { class: 'alert answer-tip sys', testid: 'answer-tip', role: 'status', hidden: true, style: 'position:absolute;max-width:320px;margin:0;pointer-events:none' })
+  guideLayer.append(tip)
+  let tipTimer = 0
+  function answer(text: string): void {
+    notes.push({ text, level: 'info', ttl: 7000 })
+    if (!root.classList.contains('noting')) return
+    tip.textContent = localize(text)
+    tip.hidden = false
+    tip.style.left = `${Math.max(8, Math.min(innerWidth - 328, pressedAt.x + 14))}px`
+    tip.style.top = `${Math.max(8, Math.min(innerHeight - 96, pressedAt.y + 14))}px`
+    clearTimeout(tipTimer)
+    tipTimer = window.setTimeout(() => { tip.hidden = true }, 4500)
+  }
   const papers = new Papers(paperLayer, [screenLayer, plateLayer, floating], app)
   const touchQuery = matchMedia('(pointer: coarse)')
 
@@ -217,7 +235,7 @@ export const mountHud: MountHud = (root, app, view, sound) => {
         dirty = true
         break
       case 'notice':
-        notes.push({ text: e.text, level: 'info', ttl: 7000 })
+        answer(e.text)
         break
       case 'saved':
         if (!e.ok) notes.push({ text: 'This browser couldn\'t save your game. Export it from the menu to keep it.', level: 'warn', ttl: 12000 })
@@ -237,7 +255,7 @@ export const mountHud: MountHud = (root, app, view, sound) => {
       }
       case 'sent': {
         const c = app.campaign
-        if (c) notes.push({ text: sentText(c, e), level: 'info', ttl: 7000 })
+        if (c) answer(sentText(c, e))
         break
       }
     }
