@@ -1,7 +1,7 @@
 // The top of the screen (design/season.html): two anchored boards. On the left the almanac board: the date leaf, six
 // days of forecast and the season ruled under them, with the canary goal slip hung below. On the right the bank
 // board: the balance, the clock's keys and the menu, and the contracts as ranges.
-import { goals, nextGoal, seasonStep, type Goal } from '../game/goals.ts'
+import { goals, nextGoal, seasonStep, waitingFor, type Goal } from '../game/goals.ts'
 import { SPEED_X } from '../game/app.ts'
 import * as S from '../sim/index.ts'
 import { contractRows } from './contracts.ts'
@@ -457,7 +457,8 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     const then = later ? `then ${later.title.toLowerCase()}${GLOSS[later.id] ? ` (${GLOSS[later.id]})` : ''}` : ''
     const gloss = g && GLOSS[g.id] ? GLOSS[g.id]! : ''
     // Before the ground is fit, the planting goal says plainly how long it will be, counting down by the day.
-    const wait = g && g.id === 'plant' && season && !app.needs().some(n => n.need?.act === 'plant') ? plantingIn(app.world, c) : -1
+    // (Once the word is given the planting is under way: the slip says how far along it is, not the soil again.)
+    const wait = g && g.id === 'plant' && season && !(c.season && S.plantWordGiven(c.season)) && !app.needs().some(n => n.need?.act === 'plant') ? plantingIn(app.world, c) : -1
     // The one planting rule (S.plantReady) gives the temperature and the reason, as the field's card and the guide do.
     const first = season ? c.plans.findIndex((p, i) => S.isField(c, i) && p.crop === 'potato') : -1
     const ready = wait > 0 && first >= 0 ? S.plantReady(app.world, c, first) : null
@@ -478,13 +479,15 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     const call = season ? pressing(c) : null
     const callFirst = call && !(g && reach && GOAL_ROUTINE[g.id] === call.act)
     if (callFirst || (season && g && !reach && wait <= 0)) {
+      // The next step is the crew's own: what the player is waiting for, in their terms, never the crew's job.
+      const mine = !callFirst && CROP_STEPS.has(g!.id) ? waitingFor(c) : null
       const quiet = h('button', {
-        class: `goal${callFirst ? '' : ' later'}`, type: 'button', testid: 'goal', k: callFirst ? `goal-call-${call!.id}` : `goal-later-${g!.id}`, 'aria-expanded': String(pop === 'goals'),
+        class: `goal${callFirst ? '' : ' later'}`, type: 'button', testid: 'goal', k: callFirst ? `goal-call-${call!.id}` : `goal-later-${g!.id}`, 'data-waiting': mine ? 'crew' : undefined, 'aria-expanded': String(pop === 'goals'),
         title: ctx.touch() ? undefined : callFirst ? F.localize(call!.why) : g!.why,
         onclick: () => { pop = pop === 'goals' ? '' : 'goals'; ctx.dirty() },
       }, callFirst ? fist() : null, h('span', { class: 'goal-body' }, h('span', { class: 'sr' }, callFirst ? 'Now: ' : 'Next goal: '),
-        h('b', { class: 'goal-t' }, callFirst ? F.localize(call!.text) : g!.title),
-        callFirst ? (call!.line ? h('span', { class: 'goal-when' }, call!.line) : g ? h('span', { class: 'goal-when' }, `then ${g.title.toLowerCase()}${reach ? '' : ` (${notYet(c, g)})`}`) : null) : h('span', { class: 'goal-when' }, `${notYet(c, g!)}${then ? ` · ${then}` : ''}`)),
+        h('b', { class: 'goal-t' }, callFirst ? F.localize(call!.text) : mine ? mine.title : g!.title),
+        callFirst ? (call!.line ? h('span', { class: 'goal-when' }, call!.line) : g ? h('span', { class: 'goal-when' }, `then ${g.title.toLowerCase()}${reach ? '' : ` (${notYet(c, g)})`}`) : null) : h('span', { class: 'goal-when' }, `${mine ? F.localize(mine.when) : notYet(c, g!)}${then ? ` · ${then}` : ''}`)),
       h('span', { class: 'sr' }, `. ${callFirst ? F.localize(call!.why) : g!.why} Press to open your goals.`))
       const go = callFirst ? h('button', { class: 'btn goal-go', type: 'button', testid: 'goal-do', onclick: () => takeCall(call!) }, icon(call!.fix ? 'check' : 'arrow', 'i'), call!.fixLabel) : null
       return go ? h('div', { class: 'goal-row' }, quiet, go) : quiet
@@ -547,7 +550,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     if (moved && now >= moved.until) moved = null
     const mats = c.logs >= 0.05 || c.stone >= 0.05
     if (pop === 'materials' && !mats) pop = ''
-    const stopped = season && app.speed === 0 && (c.incidents.length > 0 || ctx.awaiting > 0)
+    const stopped = season && app.speed === 0 && (c.incidents.length > 0 || ctx.awaiting > 0 || app.pauseCause === 'plantAsk' || app.pauseCause === 'killCall')
     const model = {
       p: c.phase, y: c.year, day: c.season?.day, m: c.month, cash: Math.round(c.cash), sp: app.speed, at: app.resumeSpeed, done: season && S.seasonDone(c) && !ctx.awaiting, layout,
       w: c.season?.watchDay, f: c.season?.log.filter(e => e.type === 'frost').length, u: app.settings.units, t: ctx.touch(), days, withClock, withMenu, stopped,
@@ -555,7 +558,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
       ladder: pop === 'goals' ? goals(c).map(x => [x.id, x.done, progressText(x), x.block, x.now && !x.done && !!o.canShow?.(x)]) : 0, reach: g ? !!o.canShow?.(g) : false,
       call: season ? pressing(c)?.id ?? '' : '', block: g?.block ?? '', view: view?.why ?? '', moved: moved?.text ?? '', last: lastMoved, why: whyNow ? [whyNow.text, whyNow.ask] : '', by: popBy,
       jobs: season ? [...new Set(c.season!.jobs.map(j => j.kind))].sort().join() : '', auto: season ? S.routineInfo(c).filter(r => r.auto).map(r => r.kind).join() : '',
-      k: season || c.phase === 'cellar' ? contracts.key() : 0, ph: season ? phaseNow(c) : '',
+      k: season || c.phase === 'cellar' ? contracts.key() : 0, ph: season ? phaseNow(c) : '', mine: season ? waitingFor(c) : 0,
     }
     el.dataset.phase = c.phase
     el.dataset.layout = layout

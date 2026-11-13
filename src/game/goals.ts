@@ -1,6 +1,6 @@
 // The ladder: what a farm reaches for next, in the order a player can reach it. Worked out from the farm as it stands,
 // so nothing extra is saved.
-import { BUILDING_KINDS, FELL_DAYS, FIELD_COUNT, goalCosts, isField, NOTE_PAYMENT, PARCELS, ROCKS_ADVISE, TRACTS, type Campaign, type GoalCost } from '../sim/index.ts'
+import { BUILDING_KINDS, FELL_DAYS, FIELD_COUNT, formatDay, goalCosts, isField, killOutlook, NOTE_PAYMENT, PARCELS, plantWordGiven, ROCKS_ADVISE, sprayWayNow, standingBy, TRACTS, type Campaign, type GoalCost, type JobKind } from '../sim/index.ts'
 
 export interface Goal {
   id: string
@@ -61,6 +61,8 @@ export function goals(c: Campaign, o: { thisSeason?: boolean } = {}): Goal[] {
   const planted = potato.filter(i => fields[i].plantDay >= 0)
   const any = (f: (x: NonNullable<Campaign['season']>['fields'][number]) => boolean) => fields.some(f)
   const hired = c.crew.some(u => u.kind !== 'farmer')
+  // A hand is a step only once the farm's work needs one: until then hiring is a choice, as the agent says in spring.
+  const handNeeded = needsHand(c)
   // A foreman pays only where one hired hand can be spared from field work and there are fields away from home to
   // run: with fewer, the step is not on the ladder at all.
   const foremanPays = c.crew.filter(u => u.kind !== 'farmer').length >= 2 && c.fields.some((f, i) => i < TRACTS[0] && PARCELS[i].block !== 'home' && f.tenure !== 'none')
@@ -121,8 +123,8 @@ export function goals(c: Campaign, o: { thisSeason?: boolean } = {}): Goal[] {
     ...chain(season),
     { id: 'tool', title: 'Buy a machine', why: 'Equipment speeds up the jobs that matter most.', when: 'In spring',
       done: Object.values(c.upgrades).some(Boolean), now: spring, price: price.tool },
-    { id: 'hire', title: 'Hire a hand', why: 'A second pair of hands helps you get through the work list.', when: 'In spring or during the season',
-      done: hired || c.history.some(y => y.wages > 0), now: spring || inSeason, price: price.hire },
+    ...(handNeeded || hired || c.history.some(y => y.wages > 0) ? [{ id: 'hire', title: 'Hire a hand', why: 'A second pair of hands helps you get through the work list.', when: 'In spring or during the season',
+      done: hired || c.history.some(y => y.wages > 0), now: spring || inSeason, price: price.hire }] : []),
     { id: 'contract', title: 'Sign a contract', why: 'A buyer locks in a price, and you have to deliver the potatoes.', when: 'In spring',
       done: c.contracts.length > 0 || c.history.some(y => y.contracts > 0), now: spring },
     { id: 'land', title: 'Farm more land', why: 'Rent or buy fields beyond your six home fields.', when: 'In spring, under Land',
@@ -170,6 +172,45 @@ export function nextGoal(c: Campaign): Goal | null {
   const first = open[0] ?? all[0]
   if (!first || first.now) return first ?? null
   return open.find(g => g.now && !g.long && g.id !== 'five') ?? first
+}
+
+// How many fields of potatoes one person farms alone, as the first year's plan has it.
+export const ALONE_FIELDS = 4
+
+// Whether the farm's work needs a hired hand: more potato fields than one person plants and digs, or fields away
+// from home. With less, the farmer can farm alone, and hiring is not asked for.
+export function needsHand(c: Campaign): boolean {
+  let potato = 0
+  for (let i = 0; i < FIELD_COUNT; i++) if (c.fields[i].tenure !== 'none' && isField(c, i) && c.plans[i]?.crop === 'potato') potato++
+  return potato > ALONE_FIELDS || c.fields.some((f, i) => i < TRACTS[0] && PARCELS[i].block !== 'home' && f.tenure !== 'none')
+}
+
+// While the season's next step is the crew's own work (planting after the word, walking, hilling, digging), the slip
+// says what the player is waiting for in the player's terms: the progress of the planting they ordered, or their next
+// decision and when it comes. Never a job that is not theirs. Null when the next step is the player's own to take.
+export function waitingFor(c: Campaign): { title: string; when: string } | null {
+  const s = c.season
+  if (c.phase !== 'season' || !s || s.frozen) return null
+  const potato: number[] = []
+  for (let i = 0; i < FIELD_COUNT; i++) if (isField(c, i) && s.fields[i].status !== 'off' && s.fields[i].status !== 'rest') potato.push(i)
+  if (!potato.length) return null
+  const crew = (kind: JobKind) => potato.every(i => !!standingBy(c, kind, i))
+  const planted = potato.filter(i => s.fields[i].plantDay >= 0).length
+  if (planted < potato.length) {
+    if (!crew('plant') || !plantWordGiven(s)) return null
+    return { title: `Planting: ${planted} of ${potato.length} ${potato.length === 1 ? 'field' : 'fields'}`, when: 'your crew plants the rest on its own' }
+  }
+  if (!crew('hill') || !crew('scout')) return null
+  // The season's spraying is asked once, when blight weather first comes.
+  if (s.watchDay < 0 && !sprayWayNow(c) && !crew('spray')) return { title: 'Nothing for you until blight weather', when: 'your crew tends the fields on its own' }
+  const up = potato.filter(i => { const f = s.fields[i]; return (f.status === 'planted' || f.status === 'growing') && f.deadDay < 0 })
+  if (up.length && !crew('kill')) {
+    const due = up.map(i => killOutlook(c, i)).filter((k): k is NonNullable<typeof k> => !!k).sort((a, b) => a.day - b.day)[0]
+    return { title: 'Your next decision is killing the vines', when: due ? `${due.asked ? 'due since' : 'due around'} ${formatDay(c.year, due.day, true)}` : 'in September' }
+  }
+  if (!crew('dig') || !crew('haul')) return null
+  if (potato.some(i => !s.fields[i].weighed && s.fields[i].status !== 'lost')) return { title: 'Nothing for you until the weigh ticket', when: up.length ? 'your crew kills the vines and digs on its own' : 'your crew digs and hauls on its own' }
+  return null
 }
 
 const CROP = new Set(['plant', 'walk', 'hill', 'spray', 'sample', 'kill', 'dig', 'haul'])
