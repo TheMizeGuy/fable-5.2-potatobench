@@ -135,9 +135,10 @@ export function whois(ctx: Ctx, layer: HTMLElement): Whois {
           title: `${SKILL_NAME[k]} work first: ${skillCovers(k).toLowerCase()}`,
           onclick: () => run({ t: 'priority', unit: p.id, work: k, level: 1 }, `${name}: ${SKILL_NAME[k].toLowerCase()} work first.`),
         }, icon(SKILL_CUT[k], 'i'), h('span', { class: 'key-name' }, SKILL_SHORT[k]), h('span', { class: 'sr' }, ' work first')))),
-      restControl(ctx, c, p.id, 'whois-rest'),
       ),
-      h('div', { class: 'whois-acts card-foot' },
+      h('div', { class: 'card-foot' },
+      restControl(ctx, c, p.id, 'whois-rest'),
+      h('div', { class: 'whois-acts' },
         h('button', {
           class: `btn${ctx.view.followed() === p.id ? ' is-on' : ''}`, type: 'button', testid: 'whois-follow', 'aria-pressed': String(ctx.view.followed() === p.id),
           title: keys ? `The camera stays centered on ${farmer ? 'you' : 'them'} until you move it` : undefined,
@@ -152,7 +153,7 @@ export function whois(ctx: Ctx, layer: HTMLElement): Whois {
             const r = ctx.run({ t: 'dismiss', unit: p.id })
             if (r.ok) { app.selectUnit(-1); ctx.announce(`You let ${p.name} go.`) }
           },
-        }, icon('letgo', 'i'), 'Let go')),
+        }, icon('letgo', 'i'), 'Let go'))),
     ]
   }
 

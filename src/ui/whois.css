@@ -7,6 +7,7 @@
 /* A person's card: who it is and its cross stay in view, and so do the keys at its foot; what is between scrolls. */
 .hud .whois.sys:not(.thing) { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
 .whois > .card-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.whois > .card-foot { box-shadow: 0 -1px 0 var(--hair); }
 .hud .whois.thing.sys { width: 290px; }
 .whois.in { animation: lay-whois var(--t-sheet) var(--ease-paper); }
 @keyframes lay-whois { from { scale: 0.96; } }

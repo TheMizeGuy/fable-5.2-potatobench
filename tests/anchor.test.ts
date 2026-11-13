@@ -389,6 +389,17 @@ describe('keeping off the other tags and people', () => {
     const tallg = placeCard({ point: { x: 90, y: 450 }, size: { w: 452, h: 660 }, least: 520, win, blocks: [grid4, { left: 16, top: 617, right: 474, bottom: 661 }, bar, slip], keep: { left: 35, top: 428, right: 140, bottom: 472 } })
     expect(tallg.x).toBe(grid4.right + 6)
     expect(tallg.h).toBe(win.bottom - win.top)
+    // A chip pressed while the grid of who does what is open over the list and the bar: between the grid and the
+    // list there is a slit; the card stands past the grid, whole.
+    const win900: Box = { left: 8, top: 171, right: 1432, bottom: 892 }
+    const grid9: Box = { left: 16, top: 231, right: 528, bottom: 603 }
+    const list9: Box = { left: 16, top: 737, right: 190, bottom: 781 }
+    const bar9: Box = { left: 16, top: 788, right: 406, bottom: 884 }
+    const chip9: Box = { left: 106, top: 796, right: 189, bottom: 876 }
+    const open9 = placeCard({ point: { x: 147, y: 836 }, size: { w: 452, h: 520 }, least: 480, win: win900, blocks: [grid9, list9, bar9, { left: 34, top: 166, right: 364, bottom: 212 }], keep: chip9 })
+    expect(open9.h).toBe(520)
+    expect(open9.x).toBe(grid9.right + 6)
+    expect([grid9, list9, bar9].some(b => meets(box(open9, 452), b))).toBe(false)
     // Never a strip: whatever the height asked, it is given at least the land over the list.
     const tall = placeCard({ point: at, size: { w: 452, h: 700 }, win, blocks, keep: chip })
     expect(tall.h).toBeGreaterThanOrEqual(380)

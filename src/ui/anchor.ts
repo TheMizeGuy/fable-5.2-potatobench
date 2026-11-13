@@ -176,13 +176,14 @@ export function placeCard(a: Ask): Placed {
       }
       // Cut short by a bar under it or a slip over it: stepped along that side until it stands clear of them, whole.
       if (usual.h < h0 - 2) {
+        // A handle that stands on a bar or a panel (a chip in the people bar, a row of the grid) is among the
+        // interface's own furniture, not on the land: its card may stand past any of it (the bar, the work list over
+        // the bar, the grid open above them), wherever it has its height. The nearest such place wins.
+        const among = !!keep && onBar
         for (const b of blocks) {
-          if (b.right <= usual.x - 4 || b.left >= usual.x + w + 4) continue
+          if (!among && (b.right <= usual.x - 4 || b.left >= usual.x + w + 4)) continue
           const x = side === 'right' ? b.right + 6 : b.left - 6 - w
-          // (beside the very bar or panel its handle stands on is never too far: a chip in a wide people bar, a
-          // row of the grid; and for a chip on a bar at the foot, the work list that lies over that bar with it)
-          const own = !!keep && (meets(b, keep) || (onBar && (b.top + b.bottom) / 2 > (win.top + win.bottom) / 2))
-          if (x < win.left || x + w > win.right || (!own && Math.abs(x - usual.x) > ASIDE - gap)) continue
+          if (x < win.left || x + w > win.right || (!among && Math.abs(x - usual.x) > ASIDE - gap)) continue
           // Whole there, or at least taller: a card that can be whole nowhere still gets the most height there is.
           if (lay(side, null, x).h > usual.h + 1) starts.push({ off: x, aside: true })
         }

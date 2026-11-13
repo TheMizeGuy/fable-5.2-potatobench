@@ -266,9 +266,9 @@ export function personCard(ctx: Ctx): PersonCard {
         h('div', { testid: 'person-mood' }, h('dt', { class: moodCls }, `${F.upper(p.moodWord)}${heading ? `, ${heading === 'rising' ? 'improving' : 'getting worse'}` : ''}`),
           h('dd', null, p.quitIn >= 0 ? `Will quit in ${F.plural(p.quitIn, 'day')} unless their mood improves.` : why.length ? F.upper(`${moodSaid(why)}.`) : 'No strong reasons either way.')),
         p.hurtUntil >= 0 ? h('div', null, h('dt', { class: 'c-red' }, 'Hurt'), h('dd', null, `Back on ${F.date(c.year, p.hurtUntil)}.`)) : null),
-      restControl(ctx, c, p.id, 'person-rest'),
       flashed && performance.now() < flashed.until ? h('p', { class: 'pc-flash c-red', role: 'status' }, flashed.text) : null),
       h('div', { class: 'card-foot' },
+      restControl(ctx, c, p.id, 'person-rest'),
       farmer ? h('p', { class: 'pay quiet it' }, 'You don\'t draw a wage. Your family\'s living costs come out at the end of the year.') : [
         h('p', { class: 'pay lead' }, h('span', null, h('b', { class: 'num' }, F.money(p.pay)), ` a month${p.foreman ? ' as foreman' : ''}`), h('span', { class: 'dots' }), p.ask ? h('span', { class: 'quiet num' }, `asked for ${F.money(p.ask)}`) : null),
         h('div', { class: 'pc-actions' },
