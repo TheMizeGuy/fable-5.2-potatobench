@@ -236,8 +236,8 @@ export function snapshot(app: App): Snapshot {
       const who = free(j.kind, j.unit)
       if (who) lead = { kind: j.kind, field: j.field, unit: who.id }
     }
-    if (!lead && !s.jobs.length) for (const a of sim.advise(app.world, c)) {
-      if (lead || a.field < 0 || a.act === 'wait' || a.act === 'sell' || a.act === 'close') continue
+    if (!lead) for (const a of sim.advise(app.world, c)) {
+      if (lead || a.field < 0 || a.act === 'wait' || a.act === 'sell' || a.act === 'close' || s.jobs.some(j => j.kind === a.act && j.field === a.field)) continue
       const by = sim.standingBy(c, a.act, a.field)
       if (!by || (today && sim.waitFor(c, s, { id: -1, kind: a.act, field: a.field, done: 0, need: 1, unit: -1, by }, today))) continue
       const who = free(a.act, -1)

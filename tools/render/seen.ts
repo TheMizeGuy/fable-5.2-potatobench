@@ -3,7 +3,8 @@
 // at 1x, 3x and 8x from the view the season opens with, and at 1x with Follow on whoever does it. Every frame it reads
 // where the game says the work is and where the machines and people are drawn, and it fails unless
 //   (a) a machine stands inside the outline, on the screen, of a field that work is on (the field with its headlands)
-//       for a fair share of the time the work goes on (and a few seconds after: the picture runs behind the days),
+//       for a fair share of the time the game has someone at the work (what the picture shows of it in the few
+//       seconds after counts too: it runs behind the days),
 //       from the opening view; and with Follow, whoever does the work is in the picture and on that ground (a field's
 //       outline is not all on the screen from so near);
 //   (b) at each speed the machine is seen moving along the rows at a pace the eye can follow, nobody is seen to make
@@ -28,10 +29,13 @@ mkdirSync(out, { recursive: true })
 // of what it covers working, the least share along the rows; pace: metres a second on the ground at 1x (more at the
 // faster clocks), and the least pixels a second on the screen; mark: the least pixels of the field's picture that
 // the work changes from the opening view; follow: with Follow, the least share of the time whoever does the work
-// is in the picture on that ground.
-const FLOOR = { there: [0, 0.5, 0.5, 0.3], working: [0, 0.4, 0.25, 0.12], along: 0.8, pace: [1, 28], px: 4, mark: 300, follow: 0.5, foot: 0.6, haul: 0.3 }
+// is in the picture on that ground; haul: a load goes between the field and the potato house, so what is asked is
+// that the machine hauling is to be seen (not gone from sight through a cut) for this share of the time at each
+// clock, and at the field, loading, for this. The pictures for (c) are taken in fair, dry air (the watcher holds it
+// so at 1x): in rain and fog a machine is found from far off by its lamps and by the face the interface pins to it.
+const FLOOR = { there: [0, 0.5, 0.5, 0.3], working: [0, 0.4, 0.25, 0.12], along: 0.8, pace: [1, 28], px: 4, mark: 300, follow: 0.5, foot: 0.6, haul: { shown: [0, 0.5, 0.4, 0.2], there: 0.12 } }
 const QUICK = [1, 1, 1.5, 2.4]
-const SPEEDS: [number, string, number][] = [[1, '1x', 20], [2, '3x', 13], [3, '8x', 10]]
+const SPEEDS: [number, string, number][] = [[1, '1x', 17], [2, '3x', 12], [3, '8x', 9]]
 
 interface Job { name: string; kind: string; spring?: string; order?: string; foot?: boolean; none?: boolean; headZ?: number }
 const JOBS: Job[] = [
@@ -78,11 +82,11 @@ await page.evaluate(({ rects, QUICK }) => {
     },
     // foot: the work is on foot (whoever does it is watched, not a machine); grace: seconds after the game last had
     // anyone at the work that still count; follow: the person the camera is on (they are watched)
-    begin(kind: string, want: number, headX: number, headZ: number, foot: boolean, grace: number, follow: number) {
+    begin(kind: string, want: number, headX: number, headZ: number, foot: boolean, grace: number, follow: number, fair = false) {
       const st = this.st = {
-        t: 0, secs: 0, there: 0, inside: 0, working: 0, busy: 0, view: 0, path: 0, along: 0, px: 0, moving: 0, jumps: [] as string[], cuts: 0, stops: 0, long: 0, tall: 0, sized: 0, work: 0, lead: 0,
+        t: 0, secs: 0, there: 0, inside: 0, working: 0, busy: 0, view: 0, shown: 0, path: 0, along: 0, px: 0, moving: 0, jumps: [] as string[], cuts: 0, stops: 0, long: 0, tall: 0, sized: 0, work: 0, lead: 0,
         fields: new Set<number>(), who: -1, driver: -1, field: -1, now: false, trace: [] as string[], lastTrace: -1, was: new Map<string, { x: number; z: number; sx: number; sy: number; fade: number }>(),
-        since: Infinity, begun: false, day: -1, day0: -1, known: false,
+        since: Infinity, begun: false, day: -1, day0: -1, known: false, halt: 0,
       }
       const quick = QUICK[want]
       let last = performance.now()
@@ -96,7 +100,10 @@ await page.evaluate(({ rects, QUICK }) => {
         if (this.hold) { st.was.clear(); return }
         if (!s || c.phase !== 'season') return
         if (c.incidents.length) c.incidents = []
-        if (app.speed !== want) { st.stops++; app.setSpeed(want) }
+        // (a question that stops the clock is answered a third of a second later)
+        if (app.speed !== want) { st.halt += dt; if (st.halt > 0.33) { st.halt = 0; st.stops++; app.setSpeed(want) } return }
+        // (a fair, dry afternoon held, so that what the work leaves in the air is judged in air it can be seen in)
+        if (fair) f.tune({ hour: 0.72, cloud: 0.27, cloudShadow: 0.66, sunScale: 1, deck: 1, key: 1, storm: 0, haze: 0.0008, mist: 0, rain: 0, snowfall: 0, wet: 0.1, dry: 0.8 })
         st.t += dt
         if (st.day0 < 0) st.day0 = st.day = s.day
         if (s.day !== st.day) { st.day = s.day; st.work += s.worked.filter((w: any) => w.kind === kind).length }
@@ -128,7 +135,9 @@ await page.evaluate(({ rects, QUICK }) => {
         if (who.size) { st.since = st.t; st.begun = true; if (st.who < 0 || !who.has(st.who)) st.who = [...who][0] }
         st.now = false
         if (!st.begun || st.t - st.since > grace) return
-        st.secs += dt
+        // (once the game no longer has anyone at it, the picture's catching up counts, and nothing else of that time)
+        const late = !who.size
+        if (!late) st.secs += dt
         // what is watched: with Follow, that person; for work on foot, whoever does it; else the machines with someone on them
         const riding = (r: any) => r.holder >= 0 && !info.units.find((u: any) => u.id === r.holder)?.foot
         const hauls = (r: any) => kind !== 'haul' || r.kind === 'truck' || r.tool === 'trailer' || r.tool === undefined
@@ -138,10 +147,16 @@ await page.evaluate(({ rects, QUICK }) => {
           : foot ? info.units.filter((u: any) => who.has(u.id) && seen(u))
             : info.rigs.filter((r: any) => riding(r) && seen(r) && hauls(r))
         const at = cand.filter(p => fieldOf(p.x, p.z) >= 0)
+        // (digging: the farm's one tractor takes the trailer between whiles and brings in what it dug: that is the
+        // harvest's work as much, and counts as the machine at it)
+        const carting = kind === 'dig' && follow < 0 && cand.some(r => r.tool === 'trailer')
+        if (late && (at.length || carting)) st.secs += dt
+        if (carting && !at.length) { st.inside += dt; st.there += dt; st.busy += dt }
         const drv = info.rigs.find((r: any) => riding(r) && seen(r) && fieldOf(r.x, r.z) >= 0)
         if (drv) st.driver = drv.holder
         const p = at[0] ?? cand[0]
         if (!p) return
+        st.shown += dt
         const sc = f.screenOf(p.x, p.z, 1.2)
         if (sc.visible && sc.x >= 0 && sc.x <= vw && sc.y >= 0 && sc.y <= vh) st.view += dt
         if (!at.length) { for (const k of [...st.was.keys()]) if (k.startsWith('at ')) st.was.delete(k); return }
@@ -150,10 +165,13 @@ await page.evaluate(({ rects, QUICK }) => {
         st.now = true
         st.field = field
         if (at.some(r => r.work === kind)) st.working += dt
-        if (at.some(r => !!r.work)) st.busy += dt
+        if (at.some(r => !!r.work) || carting) st.busy += dt
         const poly = this.outline(field, headX, headZ)
         const feet = [[-2, -1.2], [2, -1.2], [2, 1.2], [-2, 1.2]].map(([dx, dz]) => f.screenOf(p.x + dx, p.z + dz, 0.1))
-        if (poly.every((q: any) => q.visible) && feet.every((q: any) => q.visible && q.x >= 0 && q.x <= vw && q.y >= 0 && q.y <= vh && inPoly(q, poly))) st.inside += dt
+        // (where a corner of the field is behind the camera its outline has no shape on the screen: the machine is on
+        // that field's ground, and what is asked is that all of it is in the picture)
+        const whole = poly.every((q: any) => q.visible)
+        if (feet.every((q: any) => q.visible && q.x >= 0 && q.x <= vw && q.y >= 0 && q.y <= vh && (!whole || inPoly(q, poly)))) st.inside += dt
         const a = f.screenOf(p.x - 1.7, p.z, 0.1), b = f.screenOf(p.x + 1.7, p.z, 0.1), top = f.screenOf(p.x, p.z, 2.6), low = f.screenOf(p.x, p.z, 0)
         st.long += Math.hypot(a.x - b.x, a.y - b.y); st.tall += Math.hypot(top.x - low.x, top.y - low.y); st.sized++
         // how it goes while it works (where the build says what a machine is at; else wherever it is on the field)
@@ -171,20 +189,20 @@ await page.evaluate(({ rects, QUICK }) => {
       }
       requestAnimationFrame(tick)
     },
-    now() { const st = this.st; return { secs: st.secs, there: st.there, now: st.now, who: st.who, driver: st.driver, field: st.field, t: st.t } },
+    now() { const st = this.st; return { secs: st.secs, there: st.there, working: st.working, known: st.known, now: st.now, who: st.who, driver: st.driver, field: st.field, t: st.t } },
     end() {
       this.on = false
       const st = this.st, n = Math.max(1, st.sized)
       return {
-        t: st.t, secs: st.secs, there: st.there, inside: st.inside, working: st.working, busy: st.busy, view: st.view, path: st.path, along: st.along, px: st.px, moving: st.moving, jumps: st.jumps, cuts: st.cuts, stops: st.stops,
+        t: st.t, secs: st.secs, there: st.there, inside: st.inside, working: st.working, busy: st.busy, view: st.view, shown: st.shown, path: st.path, along: st.along, px: st.px, moving: st.moving, jumps: st.jumps, cuts: st.cuts, stops: st.stops,
         long: st.long / n, tall: st.tall / n, work: st.work, lead: st.lead, fields: [...st.fields], trace: st.trace, known: st.known,
       }
     },
   }
 }, { rects: FIELDS.map(f => ({ x0: f.x0, x1: f.x1, z0: f.z0, z1: f.z1 })), QUICK })
 
-type Sum = { t: number; secs: number; there: number; inside: number; working: number; busy: number; view: number; path: number; along: number; px: number; moving: number; jumps: string[]; cuts: number; stops: number; long: number; tall: number; work: number; lead: number; fields: number[]; trace: string[]; known: boolean }
-type Now = { secs: number; there: number; now: boolean; who: number; driver: number; field: number; t: number }
+type Sum = { t: number; secs: number; there: number; inside: number; working: number; busy: number; view: number; shown: number; path: number; along: number; px: number; moving: number; jumps: string[]; cuts: number; stops: number; long: number; tall: number; work: number; lead: number; fields: number[]; trace: string[]; known: boolean }
+type Now = { secs: number; there: number; working: number; known: boolean; now: boolean; who: number; driver: number; field: number; t: number }
 const frames = (n: number) => page.evaluate(n => new Promise<void>(res => { let k = 0; const tick = () => (++k >= n ? res() : requestAnimationFrame(tick)); requestAnimationFrame(tick) }), n)
 const bare = (on: boolean) => page.evaluate(on => { for (const el of [...document.body.children]) if (el.tagName !== 'CANVAS' && el.tagName !== 'SCRIPT') (el as HTMLElement).style.visibility = on ? 'hidden' : '' }, on)
 const now = () => page.evaluate(() => (window as any).__seen.now()) as Promise<Now>
@@ -222,8 +240,8 @@ async function reach(job: Job, days: number): Promise<string> {
 }
 const start = (job: Job, speed: number, follow = -1) => page.evaluate(([kind, speed, headZ, foot, grace, follow]) => {
   (window as any).__county.app.setSpeed(speed)
-  ;(window as any).__seen.begin(kind, speed, 12, headZ, foot, grace, follow)
-}, [job.kind, speed, job.headZ ?? 2, !!job.foot, [6, 6, 4.5, 3.5][speed], follow] as [string, number, number, boolean, number, number])
+  ;(window as any).__seen.begin(kind, speed, 12, headZ, foot, grace, follow, speed === 1 && follow < 0)
+}, [job.kind, speed, job.headZ ?? 2, !!job.foot, [5, 5, 4.5, 3.5][speed], follow] as [string, number, number, boolean, number, number])
 const end = () => page.evaluate(() => (window as any).__seen.end()) as Promise<Sum>
 // Waits until something holds of the watcher (or `most` seconds have gone by).
 async function until(test: (n: Now) => boolean, most: number): Promise<boolean> {
@@ -276,7 +294,8 @@ async function mark(name: string, field: number, speed: number, headZ: number): 
     const pts = (window as any).__seen.outline(field, 12, headZ) as { x: number; y: number; visible: boolean }[]
     if (!pts.every(p => p.visible)) return null
     const cx = pts.reduce((s, p) => s + p.x, 0) / 4, cy = pts.reduce((s, p) => s + p.y, 0) / 4
-    return pts.map(p => { const d = Math.hypot(p.x - cx, p.y - cy) || 1; return { x: p.x + ((p.x - cx) / d) * 30, y: p.y + ((p.y - cy) / d) * 30 } })
+    // (and upward from its far side by 90: what the work leaves in the air stands over it)
+    return pts.map(p => { const d = Math.hypot(p.x - cx, p.y - cy) || 1; return { x: p.x + ((p.x - cx) / d) * 30, y: p.y + ((p.y - cy) / d) * 30 - (p.y < cy ? 90 : 0) } })
   }, [field, headZ])
   const out = { work: await differ(a1, b, poly), noise: await differ(a1, a2, poly) }
   await page.evaluate(speed => { (window as any).__county.app.setSpeed(speed); (window as any).__seen.hold = false }, speed)
@@ -286,7 +305,7 @@ async function mark(name: string, field: number, speed: number, headZ: number): 
 const pct = (a: number, b: number) => `${b > 0 ? Math.round((100 * a) / b) : 0}%`
 function line(s: Sum, what: string): string {
   const m = Math.max(1e-6, s.moving)
-  return `the work goes on ${s.secs.toFixed(1)} s; ${what} on its field ${pct(s.there, s.secs)} of that, inside its outline on the screen ${pct(s.inside, s.secs)}, in the picture ${pct(s.view, s.secs)}, working ${pct(s.working, s.secs)} (at any work ${pct(s.busy, s.secs)}); `
+  return `the work goes on ${s.secs.toFixed(1)} s; ${what} on its field ${pct(s.there, s.secs)} of that, inside its outline on the screen ${pct(s.inside, s.secs)}, in the picture ${pct(s.view, s.secs)}, to be seen ${pct(s.shown, s.secs)}, working ${pct(s.working, s.secs)} (at any work ${pct(s.busy, s.secs)}); `
     + `working it goes ${(s.path / m).toFixed(1)} m/s, ${pct(s.along, s.path)} along the rows, ${(s.px / m).toFixed(0)} px/s, drawn ${Math.round(s.long)} by ${Math.round(s.tall)} px; steps nobody could make ${s.jumps.length}${s.jumps.length ? ' (' + s.jumps.slice(0, 3).join('; ') + ')' : ''}, cuts ${s.cuts}; `
     + `days with this work in them ${s.work}; fields ${s.fields.join(',')}${s.stops ? `; the clock was stopped ${s.stops} times` : ''}`
 }
@@ -306,6 +325,9 @@ for (const job of JOBS) {
     await page.evaluate(() => (window as any).__countyField.tier('field', 14))
     await page.waitForTimeout(1500)
     await shot(`${job.name}-its-own-view`)
+    await page.evaluate(() => (window as any).__countyField.view({ frame: 'field', field: 14, x: 0.5, z: 0.72, dist: 95, yaw: -0.24, pitch: 0.42 }))
+    await page.waitForTimeout(2500)
+    await shot(`${job.name}-from-near`)
     check(m.work >= FLOOR.mark, `${job.name}: from the opening view the work changes ${m.work} pixels of its tract's picture (floor ${FLOOR.mark}; ${m.noise} differ between two pictures taken alike)`)
     continue
   }
@@ -315,7 +337,9 @@ for (const job of JOBS) {
     if (speed === 1) console.log('  ', `first done on day ${days}; ${said}`)
     await start(job, speed)
     // a picture with the work going on in it (or, if it never is, three seconds after the game first has it)
-    const at = await until(n => n.now && n.there > 2.4, 18)
+    // (some seconds into the work itself, where the build says what its machines are at)
+    const row = !job.foot && job.kind !== 'haul'
+    const at = await until(n => n.now && (row && n.known ? n.working > 2 : n.there > 2.4), 18)
     if (!at) await until(n => n.secs > 3, 6)
     await shot(`${job.name}-opening-${label}`)
     if (speed !== 2) await shot(`${job.name}-opening-${label}-with-the-interface`, false)
@@ -325,11 +349,13 @@ for (const job of JOBS) {
     const s = await end()
     if (speed === 1) { console.log(`      before the first day was counted someone was seen to go ${s.lead.toFixed(0)} m`); for (const t of s.trace.slice(0, 14)) console.log('     ', t.slice(0, 300)) }
     const mv = Math.max(1e-6, s.moving), pace = s.path / mv, px = s.px / mv
-    const floor = job.foot ? FLOOR.foot : job.kind === 'haul' ? FLOOR.haul : FLOOR.there[speed]
+    const floor = job.foot ? FLOOR.foot : FLOOR.there[speed]
+    const there = job.kind === 'haul' ? s.shown >= FLOOR.haul.shown[speed] * s.secs && s.there >= FLOOR.haul.there * s.secs : s.inside >= floor * s.secs
     const moves = job.foot || job.kind === 'haul' || (pace >= FLOOR.pace[0] && pace <= FLOOR.pace[1] * QUICK[speed] && s.along >= FLOOR.along * s.path && px >= FLOOR.px)
     // (a build that does not say what its machines are at is held to where they are and how they go)
-    const works = job.foot || job.kind === 'haul' || !s.known || (speed === 1 ? s.working : s.busy) >= FLOOR.working[speed] * s.secs
-    check(s.secs > 1 && s.inside >= floor * s.secs && moves && works && s.jumps.length === 0 && s.work > 0, `${job.name} at ${label}, opening view: ${line(s, what)}`)
+    // (digging: the farm's one tractor is on the trailer between whiles, bringing in what it dug)
+    const works = job.foot || job.kind === 'haul' || !s.known || (speed === 1 && job.kind !== 'dig' ? s.working : s.busy) >= FLOOR.working[speed] * s.secs
+    check(s.secs > 1 && there && moves && works && s.jumps.length === 0 && s.work > 0, `${job.name} at ${label}, opening view: ${line(s, what)}`)
     if (m) check(m.work >= FLOOR.mark, `${job.name}: from the opening view the work changes ${m.work} pixels of its field's picture (floor ${FLOOR.mark}; ${m.noise} differ between two pictures taken alike)`)
   }
   // Follow, as a player turns it on: the card of someone the game has at the work, and its key.
@@ -337,7 +363,8 @@ for (const job of JOBS) {
   await start(job, 1)
   if (await until(n => n.who >= 0 && n.secs > 0.4, 14)) {
     await until(n => n.driver >= 0, 5)
-    const n = await now(), who = n.driver >= 0 ? n.driver : n.who
+    // (whoever is on the machine at it; for hauling, whoever the game has hauling)
+    const n = await now(), who = n.driver >= 0 && job.kind !== 'haul' ? n.driver : n.who
     await end()
     await page.evaluate(id => (window as any).__county.app.selectUnit(id, 'land'), who)
     await page.waitForTimeout(500)

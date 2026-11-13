@@ -251,9 +251,14 @@ function hedgeSpot(f: FieldRect): Spot {
 //    of the field's depth, from its top). What is above the band is done; what is below is still to do.
 //  - With the clock running, the machine (or the person on foot) works the band's leading row at a pace that looks
 //    right on the screen, and the band behind them fills in over the day, from the top down to the row they are on.
-//  - The way to a day's work is seen for most of a day's length on the clock (units.ts, WAY_DAY), at a pace that
-//    reads from where the camera is; a way too long for that is cut to its start and its last stretch. The work
-//    begins when they are there: the picture is that far behind the day, the day is not held.
+//  - The way to a day's work is seen for a second or two (units.ts, WAY_MOST: less at the faster clocks), at a pace
+//    that reads from where the camera is and that the places people are seen at can keep; a way too long for that
+//    is cut to its start and its last stretch, with those on it gone from sight through the cut. The work begins
+//    when they are there, and each part of it is seen for some seconds at least (WORK_LEAST) however fast the days
+//    go: the picture is that far behind the days, which are not held; the newest work waits its turn, and what was
+//    not seen is passed over.
+//  - One tractor that two people each had a turn on in a day is seen with whoever has it over all of that ground;
+//    the other stands by at the end of the rows of their own part.
 //  - With the clock stopped (a day stepped or replayed), it is literal: they go at a machine's and a person's real
 //    pace, back and forth over the band a pass at a time, turning on the headland, and the ground changes where they
 //    have been. A test dig and a day's digging are the exceptions: the interface waits to see them, so they play

@@ -45,7 +45,7 @@ export function firstDay(kind: string, farm: Farm = {}): number {
 }
 
 export interface Seen {
-  seconds: number          // from when the game first had anyone at this work to the end (or to `grace` after it last had)
+  seconds: number          // the time the game had someone at this work, and what a machine was seen at it for up to `grace` after
   atWork: number           // of them, a machine was seen on a field of this work (for work on foot: whoever does it)
   working: number          // and at this work, by its own account
   busy: number             // or at any work there (behind the days, the picture may be of the work before)
@@ -56,14 +56,14 @@ export interface Seen {
   cuts: number             // times someone went from sight and was seen again elsewhere
   fields: number[]
   work: [number, number]   // how many times someone's day had this work in it, at the start and by the end
-  lead: number             // metres the first to set out was seen to go before the first day was counted
+  lead: number             // metres the first to set out was seen to go, step by step, before the first day was counted
   trace: string[]
 }
 
 // Runs the days at a clock speed from the evening before `kind` is first done, and says what was seen of it.
 // foot: the work is done on foot (the one doing it is watched, not a machine); dist: how far off the camera is.
-export function watch(kind: string, speed: 1 | 2 | 3, opts: { farm?: Farm; seconds?: number; dist?: number; foot?: boolean; headZ?: number; grace?: number } = {}): Seen {
-  const farm = opts.farm ?? {}, dist = opts.dist ?? 450, grace = opts.grace ?? [6, 6, 4.5, 3.5][speed], headZ = opts.headZ ?? HEAD.z
+export function watch(kind: string, speed: 1 | 2 | 3, opts: { farm?: Farm; seconds?: number; dist?: number; foot?: boolean; headZ?: number; grace?: number; pauseAt?: number } = {}): Seen {
+  const farm = opts.farm ?? {}, dist = opts.dist ?? 450, grace = opts.grace ?? [5, 5, 4.5, 3.5][speed], headZ = opts.headZ ?? HEAD.z
   const days = firstDay(kind, farm)
   if (!days) throw new Error(`nobody ever does ${kind}`)
   const app = start(farm), c = app.campaign!
@@ -80,8 +80,8 @@ export function watch(kind: string, speed: 1 | 2 | 3, opts: { farm?: Farm; secon
   let pending: PendingReveal[] = []
   crews.rest(snap)
   copyEnv(env, envTarget(snap, envT))
-  let dirty = false, dayPassed = false, dayT = 1
-  app.on(e => { if (e.type === 'change' || e.type === 'screen') dirty = true; else if (e.type === 'events') { dirty = true; if (e.dayPassed) dayPassed = true } })
+  let dirty = false, dayPassed = false, dayRan = false, dayT = 1
+  app.on(e => { if (e.type === 'change' || e.type === 'screen') dirty = true; else if (e.type === 'events') { dirty = true; if (e.dayPassed) { dayPassed = true; dayRan = app.speed > 0 } } })
   const reveal = (r: PendingReveal) => { shown[r.field][r.hill] = { look: r.look, ridge: r.ridge } }
   const passed = (unit: number, seg: number, arc: number, gen: number) => {
     pending = pending.filter(r => { const now = r.unit === unit && (r.gen < gen || (r.gen === gen && (r.seg < seg || (r.seg === seg && r.at <= arc)))); if (now) reveal(r); return !now })
@@ -93,7 +93,7 @@ export function watch(kind: string, speed: 1 | 2 | 3, opts: { farm?: Farm; secon
     snap = next
     const wait = () => new Set(pending.map(r => r.field * sim.HILLS + r.hill))
     if (sameSeason) {
-      pending = pending.concat(crews.plan(next, shown, new Map()))
+      pending = pending.concat(crews.plan(next, shown, new Map(), new Set(), dayRan))
       const w = wait(), fresh = display(next)
       shown = fresh.map((hills, i) => hills.map((d, h) => (w.has(i * sim.HILLS + h) ? shown[i][h] : d)))
       dayT = 0
@@ -117,13 +117,15 @@ export function watch(kind: string, speed: 1 | 2 | 3, opts: { farm?: Farm; secon
   const quick = [1, 1, 1.5, 2.4][speed]
   app.setSpeed(speed)
   const dayOne = c.season!.day
-  let dayNow = dayOne, events = 0, stopped = 0
+  let dayNow = dayOne, events = 0, stopped = 0, paused = false
   out.work[0] = 0
   for (let n = 0; n < (opts.seconds ?? 20) * 60; n++) {
     time += dt
     if (c.incidents.length) c.incidents = []
     // (a question that stops the clock is answered a third of a second later)
     if (app.speed !== speed && c.phase === 'season' && ++stopped > 20) { app.setSpeed(speed); stopped = 0 }
+    // (the player stops the clock for a moment, as to look at something, and sets it going again)
+    if (opts.pauseAt !== undefined && time >= opts.pauseAt && !paused) { paused = true; app.setSpeed(0); stopped = -60 }
     app.tick(dt * 1000)
     if (dirty) rebuild()
     if (dayT < 1) dayT = Math.min(1, app.speed > 0 ? Math.max(dayT + (dt / 3.4) * 0.25, app.dayProgress) : dayT + dt / 3.4)
@@ -155,7 +157,7 @@ export function watch(kind: string, speed: 1 | 2 | 3, opts: { farm?: Farm; secon
       was.set(key, { x: p.x, z: p.z, fade: p.fade })
     }
     const moved = (r: { x: number; z: number }) => { const b = last.get(r); return !!b && Math.hypot(r.x - b.x, r.z - b.z) > 0.02 }
-    if (!begun && s.day === dayOne) { const lead = snap.lead ? w.units.find(u => u.id === snap.lead!.unit) : undefined; const b = lead ? lead0.get(lead.id) : undefined; if (lead) { if (b) out.lead += Math.hypot(lead.x - b.x, lead.z - b.z); lead0.set(lead.id, { x: lead.x, z: lead.z }) } }
+    if (!begun && s.day === dayOne) { const lead = snap.lead ? w.units.find(u => u.id === snap.lead!.unit) : undefined; const b = lead ? lead0.get(lead.id) : undefined; if (lead) { const d = b ? Math.hypot(lead.x - b.x, lead.z - b.z) : 0; if (d < 2) out.lead += d; lead0.set(lead.id, { x: lead.x, z: lead.z }) } }
     if (s.day !== dayNow) { dayNow = s.day; events += s.worked.filter(x => x.kind === kind).length }
     if (who.size) { since = time; begun = true }
     out.work[1] = events
@@ -164,16 +166,19 @@ export function watch(kind: string, speed: 1 | 2 | 3, opts: { farm?: Farm; secon
       out.trace.push(`${time.toFixed(1)}s day ${s.day} ${w.rigs.map(r => `${r.kind}${r.holder >= 0 ? '(' + r.holder + ')' : ''} ${r.x.toFixed(0)},${r.z.toFixed(0)} ${r.tool} ${r.work}${r.fade < 0.5 ? ' gone' : ''}`).join(' | ')} || ${w.units.map(u => `${u.id}${u.foot ? ' on foot' : ' riding'} ${u.x.toFixed(0)},${u.z.toFixed(0)}${u.fade < 0.5 ? ' gone' : ''}`).join(' | ')} || ${crews.clocks().join(' || ')}`)
     }
     if (!begun || time - since > grace) continue
-    out.seconds += dt
     const at = opts.foot
       ? w.units.filter(u => who.has(u.id) && u.fade >= 0.5 && inField(u.x, u.z))
       // (hauling: the truck, or the tractor with the trailer on, at the field or on its way)
       : kind === 'haul' ? w.rigs.filter(r => r.holder >= 0 && r.fade >= 0.5 && (r.kind === 'truck' || r.tool === 'trailer') && (inField(r.x, r.z) || moved(r)))
-        : w.rigs.filter(r => r.holder >= 0 && r.fade >= 0.5 && inField(r.x, r.z) && !w.units.find(u => u.id === r.holder)?.foot)
+        // (digging: the farm's one tractor takes the trailer between whiles and brings in what it dug, which is the
+        // harvest's work as much)
+        : w.rigs.filter(r => r.holder >= 0 && r.fade >= 0.5 && ((inField(r.x, r.z) && !w.units.find(u => u.id === r.holder)?.foot) || (kind === 'dig' && r.tool === 'trailer')))
+    // (once the game no longer has anyone at it, the picture's catching up counts, and nothing else of that time)
+    if (who.size || at.length) out.seconds += dt
     if (at.length) {
       out.atWork += dt
       if (!opts.foot && at.some(r => (r as { work: string }).work === kind)) out.working += dt
-      if (!opts.foot && at.some(r => (r as { work: string }).work !== '')) out.busy += dt
+      if (!opts.foot && at.some(r => (r as { work: string }).work !== '' || (r as { tool: string }).tool === 'trailer')) out.busy += dt
       const p = at[0], key = opts.foot ? `at ${(p as { id: number }).id}` : `at ${w.rigs.indexOf(p as never)}`
       const b = was.get(key)
       // (how it goes while it works: the way in along the headland is not the work)

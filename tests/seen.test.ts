@@ -9,8 +9,9 @@ import { watch, type Farm, type Seen } from './crewsim.ts'
 const SPEEDS = [[1, '1x'], [2, '3x'], [3, '8x']] as const
 const share = (a: number, b: number) => (b > 0 ? a / b : 0)
 // What the picture owes at each clock: a machine on a field of the work for this share of the time the game has that
-// work going on (and a little after: the picture runs behind the days), and working there for this share of it.
-const OWED = { 1: { there: 0.5, working: 0.4 }, 2: { there: 0.5, working: 0.25 }, 3: { there: 0.3, working: 0.12 } }
+// work going on (what it shows of it in the few seconds after counts too: the picture runs behind the days), and
+// working there for this share of it.
+const OWED = { 1: { there: 0.6, working: 0.4 }, 2: { there: 0.6, working: 0.3 }, 3: { there: 0.5, working: 0.3 } }
 
 const ROWS: [string, string, Farm][] = [
   ['planting', 'plant', {}],
@@ -57,6 +58,16 @@ describe('work with no rows to it', () => {
       const s = watch('fell', speed, { farm, foot: true, headZ: 8, seconds: speed === 1 ? 20 : 12 })
       expect(s.jumps, s.jumps.join('; ')).toEqual([])
       expect(share(s.atWork, s.seconds)).toBeGreaterThanOrEqual(0.6)
+    }
+  })
+})
+
+describe('the clock stopped and set going again', () => {
+  it('leaves whoever was being seen at work at it: a machine digging goes on digging', () => {
+    for (const kind of ['dig', 'plant']) {
+      const s = watch(kind, 1, { seconds: 20, dist: 308, pauseAt: 8.9 })
+      expect(s.jumps, s.jumps.join('; ')).toEqual([])
+      expect(share(s.working, s.seconds), `${kind}: working ${Math.round(100 * share(s.working, s.seconds))}%`).toBeGreaterThanOrEqual(0.5)
     }
   })
 })
