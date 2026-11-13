@@ -66,4 +66,29 @@ describe('keeping a crop is said with how sure it is', () => {
     }
     expect(wrong).toBeLessThanOrEqual(Math.ceil(called * 0.05))
   })
+
+  it('over twelve harvests the tab sits on the way the rule favours, and the store line never says it brings more than that way', () => {
+    let lots = 0, surer = 0
+    for (let seed = 1; seed <= 12; seed++) {
+      const { w, c } = harvested(seed)
+      for (const l of S.openLots(c)) {
+        const o = S.storeOutlook(w, c, l)
+        const call = storeCall(o)
+        const b = o.best
+        const d = b ? b.net - o.now : 0
+        const spread = b ? Math.round((b.net * priceBand(o.months.indexOf(b) + 1)) / 10) * 10 : 0
+        lots++
+        // The rule: store only when the usual gain is bigger than prices can swing by then.
+        expect(call.store, `seed ${seed} lot ${l.id}`).toBe(!!b && d > spread)
+        // Selling is the way: the store line says it could bring less, never that it brings more.
+        if (!call.store) expect(call.phrase).not.toMatch(/\$[\d,]+ more than/)
+        if (call.store) expect(call.phrase).toMatch(/more than selling today/)
+        // The tab's words: "Brings most" only when that way brings the most even with the swing.
+        expect(call.tab).toBe(!call.store && b && d >= 0.5 ? 'Surer' : 'Brings most')
+        if (call.tab === 'Surer') { surer++; expect(call.phrase).toMatch(/could as easily bring less/) }
+      }
+    }
+    expect(lots).toBeGreaterThan(30)
+    expect(surer).toBeGreaterThan(0)
+  })
 })

@@ -9,6 +9,7 @@ import { term } from './glossary.ts'
 import { icon } from './icons.ts'
 import * as R from './rules.ts'
 import { storeCall } from './store-band.ts'
+import { expectedFrom } from './ticket-words.ts'
 import { coupon, range } from './system/parts.ts'
 import { agentLine } from './tutorial.ts'
 
@@ -889,8 +890,8 @@ export function ticket(ctx: Ctx, lotId: number, o: { fresh: boolean; staged?: bo
               h('p', null, worth),
               h('p', { class: 'quiet num' }, `${F.perArea(d.market / S.FIELD_ACRES)} · ${F.mass(d.cull)} culled`),
               est ? [
-                range({ lo: est.lo, hi: est.hi, max, mark: perAcre, label: `You expected ${F.perAreaSpan(est.lo, est.hi)} and the field gave ${F.perArea(perAcre)}` }),
-                h('p', { class: 'carried', testid: 'carried' }, 'You expected ', h('span', { class: 'num' }, F.perAreaSpan(est.lo, est.hi)), ` ${est.digs ? `from ${F.plural(est.digs, 'test dig')}` : 'by eye'}. The field gave `,
+                range({ lo: est.lo, hi: est.hi, max, mark: perAcre, label: `${expectedFrom(est.digs)} ${F.perAreaSpan(est.lo, est.hi)} and the field gave ${F.perArea(perAcre)}` }),
+                h('p', { class: 'carried', testid: 'carried' }, `${expectedFrom(est.digs)} `, h('span', { class: 'num' }, F.perAreaSpan(est.lo, est.hi)), '. The field gave ',
                   h('b', { class: 'num' }, F.perArea(perAcre)), ` with the culls, which is ${inside ? 'inside that range' : perAcre < est.lo ? 'under it' : 'over it'}.`),
               ] : null)),
           d.known ? h('div', { class: 'grades' },
@@ -929,6 +930,8 @@ export function ticket(ctx: Ctx, lotId: number, o: { fresh: boolean; staged?: bo
         const outlook = S.storeOutlook(app.world, c, lot)
         const call = storeCall(outlook)
         const best = deal && deal.pays >= deal.market - 0.5 ? 'deliver' : advice || !call.store ? 'sell' : 'store'
+        // One rule (storeCall) sets the tab and its words; advice to sell (new potatoes, blight in the pile) makes selling the surer way.
+        const tab = best === 'deliver' ? 'Brings most' : advice && call.store ? 'Surer' : call.tab
         let n = 0
         const k = () => String(++n)
         const list: Way[] = []
@@ -940,15 +943,15 @@ export function ticket(ctx: Ctx, lotId: number, o: { fresh: boolean; staged?: bo
           onclick: e => { if (busy || !deliver(ctx, lot, deal)) return; delivered = true; tear(e.currentTarget as HTMLElement, draw) },
         })) : null
         const sellWay = add(coupon({
-          icon: 'sell', label: delivered ? 'Sell the rest' : 'Sell now', amount: F.money(now), take: 'Sell', key: k(), best: best === 'sell',
+          icon: 'sell', label: delivered ? 'Sell the rest' : 'Sell now', amount: F.money(now), take: 'Sell', key: k(), best: best === 'sell', bestLabel: tab,
           does: advice && !delivered ? h('span', { class: 'choice-advice' }, F.localize(advice.why)) : `${F.price(S.basePrice(app.world, c, lot.variety))} today for US No. 1.`,
           testid: `lot-sell-${lot.id}`,
           onclick: e => { if (busy) return; answered = true; if (ctx.run({ t: 'sell', lot: lot.id, frac: 1 }).ok) tear(e.currentTarget as HTMLElement, close) },
         }))
         const storeWay = add(coupon({
-          icon: 'store', label: delivered ? 'Store the rest' : fresh ? 'Store it' : 'Keep it stored', take: 'Store', key: k(), best: best === 'store',
+          icon: 'store', label: delivered ? 'Store the rest' : fresh ? 'Store it' : 'Keep it stored', take: 'Store', key: k(), best: best === 'store', bestLabel: tab,
           amount: [h('span', { 'aria-hidden': 'true' }, `−${F.money(month).replace('−', '')}`, h('small', null, '/mo')), h('span', { class: 'sr' }, `Storing costs ${F.money(month)} a month.`)],
-          does: `${F.upper(call.phrase)}. It ${R.sproutText(m)}.`,
+          does: `${F.upper(call.phrase)}${advice ? `. But ${F.localize(advice.why).replace(/^./, x => x.toLowerCase())}` : '.'}${advice ? '' : ` It ${R.sproutText(m)}.`}`,
           testid: `lot-keep-${lot.id}`,
           onclick: e => { if (busy) return; answered = true; if (fresh) ctx.say(`${F.mass(S.lotCwt(lot))} from ${name} went into the cellar.`, 'info'); tear(e.currentTarget as HTMLElement, close) },
         }))

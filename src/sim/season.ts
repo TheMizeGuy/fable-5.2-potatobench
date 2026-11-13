@@ -510,6 +510,9 @@ function completeJob(world: World, c: Campaign, s: Season, job: Job, d: Day, out
 function weigh(s: Season, f: FieldSeason, field: number, lot: Lot, out: GameEvent[]): void {
   f.inField = 0
   f.weighed = true
+  // Storage is charged from the morning the ticket is offered (the day after the weigh-in), the first day the crop
+  // can be sold: before it the crop was in barrels or on the way in, and a crop sold off the ticket was never stored.
+  lot.aged = s.day + 1
   const total = lotCwt(lot)
   push(s, out, 'weighed', field, 'good', `The weigh ticket for ${FIELD_NAMES[field]} is in: ${withCommas(total)} cwt in the potato house, ready to sell or store.`, { lot: lot.id })
   const k = s.jobs.findIndex(j => j.kind === 'haul' && j.field === field)
