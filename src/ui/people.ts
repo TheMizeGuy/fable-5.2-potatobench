@@ -98,9 +98,15 @@ export interface PersonCard {
 // How rested a person is, in words, with what follows from it: resting today, or slower, or a fall likelier.
 export function restWords(c: S.Campaign, p: S.PersonInfo): string {
   const u = c.crew.find(x => x.id === p.id)
-  if (u && S.resting(u) && c.phase === 'season') return u.rest === 'now' ? 'resting until fresh' : 'worn out: resting today, back when fresh'
-  if (p.tired >= S.HURT_TIRED) return u?.rest === 'push' ? 'worn out and working on: slower, and a fall is likelier' : 'worn out: rests tomorrow'
-  return p.tired >= S.TIRED_SLOW_FROM ? 'slower for it; a rest day brings them back' : 'fit for work'
+  if (u && S.resting(u) && c.phase === 'season') return u.rest === 'now' ? 'resting until recovered' : 'worn out, so resting today'
+  if (p.tired >= S.HURT_TIRED) return u?.rest === 'push' ? 'worn out but still working' : 'worn out, so resting tomorrow'
+  return p.tired >= S.TIRED_SLOW_FROM ? (p.kind === 'farmer' ? 'you need a rest day' : 'needs a rest day') : 'fit for work'
+}
+
+// What lifts a person's mood and what lowers it, in a line: "happy about a bed in the bunkhouse, unhappy about the pay".
+export function moodSaid(why: { up: boolean; text: string }[]): string {
+  const ups = why.filter(x => x.up).map(x => x.text), downs = why.filter(x => !x.up).map(x => x.text)
+  return [ups.length ? `happy about ${F.list(ups)}` : '', downs.length ? `unhappy about ${F.list(downs)}` : ''].filter(Boolean).join(', ')
 }
 
 // When a person rests: by themselves once worn out (the farm's way unless told), now until fresh, or never.
@@ -109,15 +115,16 @@ export function restControl(ctx: Ctx, c: S.Campaign, id: number, testid: string)
   if (!u || c.phase !== 'season') return null
   const mode = u.rest ?? 'auto'
   const name = u.kind === 'farmer' ? 'You' : R.firstName(u.name)
-  const opt = (m: S.RestMode, word: string, tip: string) => h('button', {
+  const will = name === 'You' ? 'You\'ll' : `${name} will`
+  const opt = (m: S.RestMode, word: string, tip: string, said: string) => h('button', {
     class: `btn${mode === m ? ' is-on' : ''}`, type: 'button', testid: `${testid}-${m}`, 'aria-pressed': String(mode === m), title: ctx.touch() ? undefined : tip,
-    onclick: () => { const r = ctx.run({ t: 'rest', unit: id, mode: m }); if (r.ok) ctx.announce(`${name}: ${word.toLowerCase()}.`) },
+    onclick: () => { const r = ctx.run({ t: 'rest', unit: id, mode: m }); if (r.ok) ctx.announce(`${will} ${said}.`) },
   }, word)
   return h('div', { class: 'rest-keys', role: 'group', 'aria-label': name === 'You' ? 'When you rest' : `When ${name} rests`, testid },
     h('span', { class: 't-label' }, 'Rest'),
-    opt('auto', 'When worn out', 'Rests by themselves once worn out, then back to work.'),
-    opt('now', 'Rest now', 'Takes days off until fresh.'),
-    opt('push', 'Work on', 'Works on worn out: slower, and a fall is likelier.'))
+    opt('auto', 'When worn out', 'Takes a rest day automatically when worn out, then goes back to work.', 'rest when worn out'),
+    opt('now', 'Rest now', 'Takes days off until recovered.', 'rest now until recovered'),
+    opt('push', 'Push on', 'Keeps working even when worn out, which is slower and makes an injury more likely.', 'keep working when worn out'))
 }
 
 // ---------------------------------------------------------------- spraying this season, asked once
@@ -143,14 +150,14 @@ export const SPRAY_WAYS: { id: SprayWay; glyph: string; name: string }[] = [
 ]
 
 export function sprayDoes(ctx: Ctx, c: S.Campaign, way: SprayWay): string {
-  if (way === 'ask') return 'A stamp on a field when it wants spraying; the order is yours.'
-  if (way === 'none') return 'No spraying and no stamps for it. Blight, if it comes, goes unchecked.'
+  if (way === 'ask') return 'A stamp appears on a field when it needs spraying, and you give the order.'
+  if (way === 'none') return 'No spraying, and no stamps asking for it. If blight shows up, nothing will stop it.'
   return keepSprayedLine(ctx.app.world, c)
 }
 
 export function answerSpray(ctx: Ctx, c: S.Campaign, way: SprayWay): void {
   const r = sprayWay(c) === way ? { ok: true } : ctx.run({ t: 'sprayWay', way })
-  if (r.ok) ctx.announce(way === 'auto' ? 'Spraying: the crew keeps the fields sprayed by itself.' : way === 'ask' ? 'Spraying: you are asked each time.' : 'No spraying this year.')
+  if (r.ok) ctx.announce(way === 'auto' ? 'Your crew will keep the fields sprayed automatically.' : way === 'ask' ? 'You\'ll be asked each time a field needs spraying.' : 'No spraying this year.')
   putSprayAway(ctx)
 }
 
@@ -203,14 +210,14 @@ export function personCard(ctx: Ctx): PersonCard {
         h('div', null,
           farmer ? null : h('p', { class: 't-label', testid: 'person-kind' }, R.KIND_NAME[p.kind]),
           h('h2', { class: 't-title pc-name', testid: 'person-name' }, farmer ? 'You, the farmer' : p.name),
-          h('p', { class: 'pc-trait' }, farmer ? h('span', { class: 'quiet' }, 'Every job; no wage.') : [h('b', null, `${p.traitName}:`), ' ', h('span', { class: 'quiet' }, p.traitText.replace(/^./, x => x.toLowerCase()))])),
+          h('p', { class: 'pc-trait' }, farmer ? h('span', { class: 'quiet' }, 'Does every job and draws no wage.') : [h('b', null, `${p.traitName}:`), ' ', h('span', { class: 'quiet' }, p.traitText.replace(/^./, x => x.toLowerCase()))])),
         h('span', { class: 'pc-tools' },
-          h('button', { class: 'iconbtn', type: 'button', testid: 'person-show', 'aria-label': 'Show them on the land', title: ctx.touch() ? undefined : 'Show them on the land', onclick: () => { app.selectUnit(p.id, 'land'); ctx.view.follow(p.id) } }, icon('scout', 'i')),
+          h('button', { class: 'iconbtn', type: 'button', testid: 'person-show', 'aria-label': farmer ? 'Find yourself on the farm' : 'Find them on the farm', title: ctx.touch() ? undefined : farmer ? 'Find yourself on the farm' : 'Find them on the farm', onclick: () => { app.selectUnit(p.id, 'land'); ctx.view.follow(p.id) } }, icon('scout', 'i')),
           h('button', { class: 'close', type: 'button', testid: 'person-close', 'aria-label': `Close${ctx.touch() ? '' : ' (Escape)'}`, onclick: () => app.selectUnit(-1) }, icon('close', 'i')))),
       h('p', { class: 'pc-doing', testid: 'person-doing' }, icon(doingGlyph(c, p), 'i'), h('span', null, doing),
-        next && doing === 'Nothing to do' ? h('span', { class: 'quiet it' }, ` next: ${R.jobText(next, c, next.building).toLowerCase()}`) : null),
+        next && doing === 'Nothing to do' ? h('span', { class: 'quiet it' }, `. Up next: ${R.jobText(next, c, next.building).replace(/^./, x => x.toLowerCase())}`) : null),
       h('table', { class: 'skills' },
-        h('caption', { class: 'sr' }, 'Skills out of ten, and the order they take work in: 1 is done first, a dash is never'),
+        h('caption', { class: 'sr' }, 'Skills out of ten, and the priority of each kind of work. 1 gets done first, and a dash means never.'),
         h('tbody', null, S.SKILLS.map(k => {
           const lvl = p.skills[k]
           const pr = p.prio[k]
@@ -220,7 +227,7 @@ export function personCard(ctx: Ctx): PersonCard {
             h('td', null, tens(lvl, lvl < S.SKILL_MAX ? p.progress[k] : 0, { best: lvl === best && best >= 5, label: `${R.SKILL_NAME[k]}: level ${lvl}${lvl < S.SKILL_MAX ? `, ${F.pct(p.progress[k])} of the way to ${lvl + 1}` : ''}` })),
             h('td', { class: 'pr' }, h('button', {
               class: `prio key${pr === 0 ? ' never' : ''}${pr === 1 ? ' first' : ''}`, type: 'button', testid: `prio-${k}`,
-              title: ctx.touch() ? undefined : `${R.skillCovers(k)}. 1 is done first; a dash is never. A click makes it sooner, a right-click later.`,
+              title: ctx.touch() ? undefined : `${R.skillCovers(k)}. 1 gets done first, and a dash means never. Click to move it up, or right-click to move it down.`,
               onclick: () => setPrio(p, k, R.prioNext(pr, true)),
               oncontextmenu: (e: Event) => { e.preventDefault(); setPrio(p, k, R.prioNext(pr)) },
               onkeydown: (e: Event) => prioKey(e as KeyboardEvent, p, k),
@@ -228,29 +235,29 @@ export function personCard(ctx: Ctx): PersonCard {
             h('span', { class: 'sr' }, `: ${R.prioWord(pr)}. Press for ${R.prioWord(R.prioNext(pr, true))}. ${R.skillCovers(k)}.`))))
         }))),
       h('dl', { class: 'state' },
-        h('div', { testid: 'person-tired' }, h('dt', { class: tiredCls }, F.upper(p.tiredWord)), h('dd', null, p.tired >= S.TIRED_SLOW_FROM ? `${restWords(c, p)}${tiredWhy ? `; ${tiredWhy}` : ''}` : tiredWhy || 'rested enough')),
-        h('div', { testid: 'person-mood' }, h('dt', { class: moodCls }, `${F.upper(p.moodWord)}${heading ? `, ${heading}` : ''}`),
-          h('dd', null, p.quitIn >= 0 ? `quits in ${F.plural(p.quitIn, 'day')} unless it lifts` : why.length ? why.map(x => `${x.up ? '' : 'not: '}${x.text}`).join('; ') : 'nothing pulling either way')),
-        p.hurtUntil >= 0 ? h('div', null, h('dt', { class: 'c-red' }, 'Hurt'), h('dd', null, `back on ${F.date(c.year, p.hurtUntil)}`)) : null),
+        h('div', { testid: 'person-tired' }, h('dt', { class: tiredCls }, F.upper(p.tiredWord)), h('dd', null, p.tired >= S.TIRED_SLOW_FROM ? `${F.upper(restWords(c, p))}.${tiredWhy ? ` ${tiredWhy}` : ''}` : tiredWhy || 'Rested enough.')),
+        h('div', { testid: 'person-mood' }, h('dt', { class: moodCls }, `${F.upper(p.moodWord)}${heading ? `, ${heading === 'rising' ? 'improving' : 'getting worse'}` : ''}`),
+          h('dd', null, p.quitIn >= 0 ? `Will quit in ${F.plural(p.quitIn, 'day')} unless their mood improves.` : why.length ? F.upper(`${moodSaid(why)}.`) : 'No strong reasons either way.')),
+        p.hurtUntil >= 0 ? h('div', null, h('dt', { class: 'c-red' }, 'Hurt'), h('dd', null, `Back on ${F.date(c.year, p.hurtUntil)}.`)) : null),
       restControl(ctx, c, p.id, 'person-rest'),
       flashed && performance.now() < flashed.until ? h('p', { class: 'pc-flash c-red', role: 'status' }, flashed.text) : null,
-      farmer ? h('p', { class: 'pay quiet it' }, 'You draw no wage: the household takes its share at the year end.') : [
-        h('p', { class: 'pay lead' }, h('span', null, h('b', { class: 'num' }, F.money(p.pay)), ` a month${p.foreman ? ' as foreman' : ''}`), h('span', { class: 'dots' }), p.ask ? h('span', { class: 'quiet num' }, `asked ${F.money(p.ask)}`) : null),
+      farmer ? h('p', { class: 'pay quiet it' }, 'You don\'t draw a wage. Your family\'s living costs come out at the end of the year.') : [
+        h('p', { class: 'pay lead' }, h('span', null, h('b', { class: 'num' }, F.money(p.pay)), ` a month${p.foreman ? ' as foreman' : ''}`), h('span', { class: 'dots' }), p.ask ? h('span', { class: 'quiet num' }, `asked for ${F.money(p.ask)}`) : null),
         h('div', { class: 'pc-actions' },
           h('button', {
-            class: 'btn', type: 'button', testid: 'person-raise', title: ctx.touch() ? undefined : 'More pay lifts their mood: about a tenth of the way for each 10% over what they asked.',
+            class: 'btn', type: 'button', testid: 'person-raise', title: ctx.touch() ? undefined : 'Every 10% over what they asked for moves their mood about a tenth of the way up.',
             onclick: () => run({ t: 'raise', unit: p.id, wage: raiseTo(p) }, `${R.firstName(p.name)} now earns ${F.money(raiseTo(p))} a month.`),
           }, icon('raise', 'i'), h('span', null, 'Raise', h('span', { class: 'sub num' }, `to ${F.money(raiseTo(p))}`))),
           blocks.length ? h('button', {
             class: `btn${foreman ? ' is-on' : ''}`, type: 'button', testid: 'person-foreman', 'aria-expanded': String(foreman),
-            title: ctx.touch() ? undefined : 'A foreman puts on the list what the fields of one block need, every working morning, and does no field work. Paid 40% more.',
+            title: ctx.touch() ? undefined : 'A foreman adds what one block\'s fields need to the work list every working morning, and doesn\'t do field work. A foreman is paid 40% more.',
             onclick: () => { foreman = !foreman; ctx.dirty() },
           }, icon('foreman', 'i'), h('span', null, 'Foreman', h('span', { class: 'sub' }, p.foreman ? BLOCK_NAME[p.foreman].replace(/^The /, '').split(',')[0] : '+40% pay'))) : h('span'),
           h('button', {
             class: 'btn hazard', type: 'button', testid: 'person-dismiss',
             onclick: async () => {
-              const yes = await confirmPaper(ctx, { title: `Let ${R.firstName(p.name)} go?`, text: 'They leave today. The month already paid is not given back, and they will not come back.', yes: 'Let them go', danger: true })
-              if (yes && run({ t: 'dismiss', unit: p.id }, `${p.name} is let go.`)) app.selectUnit(-1)
+              const yes = await confirmPaper(ctx, { title: `Let ${R.firstName(p.name)} go?`, text: R.LET_GO_TEXT, yes: 'Let them go', danger: true })
+              if (yes && run({ t: 'dismiss', unit: p.id }, `You let ${p.name} go.`)) app.selectUnit(-1)
             },
           }, icon('letgo', 'i'), h('span', null, 'Let go', h('span', { class: 'sub' }, 'today')))),
         foreman ? h('div', { class: 'pc-blocks', role: 'group', 'aria-label': 'Foreman of' },
@@ -258,11 +265,11 @@ export function personCard(ctx: Ctx): PersonCard {
             const other = c.crew.find(u => u.foreman === b && u.id !== p.id)
             return h('button', {
               class: 'btn', type: 'button', testid: `foreman-${b}`, 'aria-pressed': String(p.foreman === b), disabled: !!other,
-              title: other ? `${other.name} is foreman there` : undefined,
-              onclick: () => { foreman = false; run({ t: 'foreman', unit: p.id, block: b }, `${R.firstName(p.name)} is foreman of ${S.BLOCK_NAME[b]}.`) },
+              title: other ? `${other.name} is already foreman there` : undefined,
+              onclick: () => { foreman = false; run({ t: 'foreman', unit: p.id, block: b }, `${R.firstName(p.name)} is now foreman of ${S.BLOCK_NAME[b]}.`) },
             }, BLOCK_NAME[b].replace(/^The /, '').split(',')[0])
           }),
-          p.foreman ? h('button', { class: 'btn', type: 'button', testid: 'foreman-none', onclick: () => { foreman = false; run({ t: 'foreman', unit: p.id, block: null }, `${R.firstName(p.name)} goes back to field work.`) } }, 'Back to field work') : null) : null,
+          p.foreman ? h('button', { class: 'btn', type: 'button', testid: 'foreman-none', onclick: () => { foreman = false; run({ t: 'foreman', unit: p.id, block: null }, `${R.firstName(p.name)} is back on field work.`) } }, 'Back to field work') : null) : null,
       ],
     ]
   }
@@ -353,19 +360,19 @@ export function workGrid(ctx: Ctx): WorkGrid {
     // Which jobs the crew puts on the list by itself, and which wait for the player.
     const routine = S.routineInfo(c)
     return h('div', { class: 'farm-rules', role: 'group', 'aria-label': 'Farm rules' },
-      routine.length ? h('div', { class: 'routine', role: 'group', 'aria-label': 'Done by the crew without asking' },
-        h('p', { class: 't-label' }, 'By itself, or ask me'),
+      routine.length ? h('div', { class: 'routine', role: 'group', 'aria-label': 'Work your crew does without asking' },
+        h('p', { class: 't-label' }, 'Automatic, or ask me'),
         c.season && c.season.watchDay >= 0 ? h('button', { class: 'btn quiet spray-again', type: 'button', testid: 'spray-ask-open', onclick: () => askSpray(ctx) },
           icon('spray', 'i'), 'Spraying this season: ', h('b', null, sprayWay(c) === 'auto' ? 'kept sprayed' : sprayWay(c) === 'none' ? 'not this year' : 'ask me'), h('span', { class: 'quiet' }, ' · change')) : null,
         h('div', { class: 'routine-keys' }, routine.map(r => h('button', {
           class: `btn${r.auto ? ' is-on' : ''}`, type: 'button', testid: `routine-${r.kind}`, 'aria-pressed': String(r.auto),
-          title: ctx.touch() ? undefined : r.auto ? `${R.JOB_VERB[r.kind]}: the crew puts it on the list by itself. Press to be asked instead.` : `${R.JOB_VERB[r.kind]}: waits for you. Press to let the crew do it by itself.`,
-          onclick: () => { const res = ctx.run({ t: 'routine', kind: r.kind as S.RoutineKind, auto: !r.auto }); if (res.ok) ctx.announce(`${R.JOB_VERB[r.kind]}: ${r.auto ? 'ask me' : 'by itself'}.`) },
-        }, icon(r.kind, 'i'), R.JOB_VERB[r.kind], h('span', { class: 'sub' }, r.auto ? 'by itself' : r.kind === 'kill' ? 'your call; the crew does it a week after it is due' : 'ask me'))))) : null,
-      rule('rule-sundays', l.sundaysOff, 'Sundays off', l.sundaysOff ? 'Everyone rests a day a week. Working Sundays gains a day, and tires everyone.' : 'Sundays are worked: a day more each week, and everyone tires.'),
+          title: ctx.touch() ? undefined : r.auto ? `${R.JOB_VERB[r.kind]}: your crew adds it to the work list automatically. Click to be asked instead.` : `${R.JOB_VERB[r.kind]}: waits for your order. Click to let your crew handle it automatically.`,
+          onclick: () => { const res = ctx.run({ t: 'routine', kind: r.kind as S.RoutineKind, auto: !r.auto }); if (res.ok) ctx.announce(`${R.JOB_VERB[r.kind]}: ${r.auto ? 'ask me' : 'automatic'}.`) },
+        }, icon(r.kind, 'i'), R.JOB_VERB[r.kind], h('span', { class: 'sub' }, r.auto ? 'automatic' : r.kind === 'kill' ? 'your decision, but the crew does it a week after it\'s due' : 'ask me'))))) : null,
+      rule('rule-sundays', l.sundaysOff, 'Sundays off', l.sundaysOff ? 'Everyone rests one day a week. Working Sundays gains you a day, but it tires everyone out.' : 'Sundays are worked, which gives you an extra day each week but tires everyone out.'),
       // Pickers come forward a few weeks before the harvest break, when they can be thought about.
       l.pickers.ok || l.pickers.on || pickersNear(c)
-        ? rule('rule-pickers', l.pickers.on, 'Pickers', `${F.money(l.pickers.perDay)} a day worked: every dig ${F.pct(l.pickers.digFaster - 1)} faster. ${pickFrom} to ${pickTo}, while the schools close.`, l.pickers.ok || l.pickers.on) : null)
+        ? rule('rule-pickers', l.pickers.on, 'Pickers', `${F.money(l.pickers.perDay)} for each day worked, and every dig goes ${F.pct(l.pickers.digFaster - 1)} faster. Available ${pickFrom} to ${pickTo}, while the schools are closed.`, l.pickers.ok || l.pickers.on) : null)
   }
 
   function pickersNear(c: S.Campaign): boolean {
@@ -378,8 +385,8 @@ export function workGrid(ctx: Ctx): WorkGrid {
     if (at.row >= people.length) at = { row: people.length - 1, col: at.col }
     return [
       h('header', { class: 'command-head work-head' },
-        h('div', null, h('h2', { class: 't-title', id: 'grid-title' }, 'Who does what'), h('p', { class: 't-caption', testid: 'grid-how' }, `1 is done first; a dash is never. ${ctx.touch() ? 'A tap makes the work come sooner' : 'A click makes the work come sooner, a right-click later'}; a digit sets it. The bar is the skill.`)),
-        h('button', { class: 'close', type: 'button', testid: 'grid-close', 'aria-label': `Close the work grid${ctx.touch() ? '' : ' (G)'}`, onclick: () => toggle(false) }, icon('close', 'i'))),
+        h('div', null, h('h2', { class: 't-title', id: 'grid-title' }, 'Who does what'), h('p', { class: 't-caption', testid: 'grid-how' }, `1 gets done first, and a dash means never. ${ctx.touch() ? 'Tap to move work up' : 'Click to move work up, right-click to move it down, or type a number'}. The bar shows skill.`)),
+        h('button', { class: 'close', type: 'button', testid: 'grid-close', 'aria-label': `Close Who does what${ctx.touch() ? '' : ' (G)'}`, onclick: () => toggle(false) }, icon('close', 'i'))),
       h('div', { class: 'grid-scroll', 'data-scroll': 'grid' },
         h('table', { class: 'grid', role: 'grid', 'aria-labelledby': 'grid-title' },
           h('thead', null, h('tr', null, h('th', { scope: 'col' }, h('span', { class: 'sr' }, 'Person')),
@@ -388,7 +395,7 @@ export function workGrid(ctx: Ctx): WorkGrid {
             h('th', { scope: 'row' },
               h('button', { class: 'w-who', type: 'button', testid: `grid-person-${p.id}`, tabindex: '-1', onclick: () => { app.selectUnit(p.id) } },
                 ringed(p, ringOfId(c, p.id), 28), h('span', null, R.firstName(p.name)))),
-            p.foreman ? h('td', { colspan: S.SKILLS.length, class: 'w-foreman' }, `Foreman of ${S.BLOCK_NAME[p.foreman]}: no field work`)
+            p.foreman ? h('td', { colspan: S.SKILLS.length, class: 'w-foreman' }, `Foreman of ${S.BLOCK_NAME[p.foreman]}, so no field work`)
               : S.SKILLS.map((k, col) => {
                 const lvl = p.skills[k]
                 const pr = p.prio[k]

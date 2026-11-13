@@ -27,6 +27,8 @@ import { titleScreen } from './title.ts'
 import { guidedYear, HOLD, mountGuide, openGuide } from './tutorial.ts'
 import { mountTies } from './tie.ts'
 import { whois } from './whois.ts'
+// Last, after every screen's own stylesheet: the control rule fitted to the live game.
+import './system/weight.css'
 
 export const mountHud: MountHud = (root, app, view, sound) => {
   mountSprites()
@@ -198,13 +200,13 @@ export const mountHud: MountHud = (root, app, view, sound) => {
         notes.push({ text: e.text, level: 'info', ttl: 7000 })
         break
       case 'saved':
-        if (!e.ok) notes.push({ text: 'This browser would not store the save. Export it from the menu to keep it.', level: 'warn', ttl: 12000 })
+        if (!e.ok) notes.push({ text: 'This browser couldn\'t save your game. Export it from the menu to keep it.', level: 'warn', ttl: 12000 })
         break
       case 'speed': {
         // The clock stopped itself for something nothing on screen has said: say what.
         const c = app.campaign
         if (e.speed === 0 && app.pauseReason && app.pauseReason !== HOLD && !guidedYear(c) && app.screen === 'season' && c && !S.seasonDone(c) && !papers.isOpen() && !notes.has(app.pauseReason)) {
-          notes.push({ text: app.holding ? app.pauseReason : `Stopped: ${app.pauseReason}`, level: 'info', ttl: 9000 })
+          notes.push({ text: app.holding ? app.pauseReason : `Paused: ${app.pauseReason}`, level: 'info', ttl: 9000 })
         }
         dirty = true
         break
@@ -221,9 +223,12 @@ export const mountHud: MountHud = (root, app, view, sound) => {
   document.addEventListener('pointerup', release, true)
   document.addEventListener('pointercancel', release, true)
 
-  // A mouse click leaves focus on the button; drop it so Space goes back to the clock.
+  // A mouse click leaves focus on the button; drop it so Space goes back to the clock. A control that names a sound
+  // (data-sound: every major one does) has it asked of the sound, which plays the cues it knows.
   root.addEventListener('click', e => {
     const b = (e.target as HTMLElement).closest('button')
+    const cue = (e.target as HTMLElement).closest<HTMLElement>('[data-sound]')?.dataset.sound
+    if (cue) ctx.cue(cue)
     if (b && e.detail > 0 && !b.closest('.dialog')) b.blur()
   })
 
@@ -274,6 +279,7 @@ export const mountHud: MountHud = (root, app, view, sound) => {
       if (held && performance.now() - heldAt > 1500) held = false
       sinceTick += dt
       guided.frame(dt)
+      notes.hush(papers.isOpen() || !!app.holding)
       if (sinceTick > 500) { sinceTick = 0; if (notes.count()) notes.prune(app.campaign?.season && app.screen === 'season' ? app.campaign.season.day : -1) }
       if (dirty && !held && screen) {
         dirty = false

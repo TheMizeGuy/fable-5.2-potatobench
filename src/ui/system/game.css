@@ -86,10 +86,10 @@
 /* the goal slip, a button: open it for the goals; beside it while the soil warms, the key that lets the weeks go */
 .topbar .goal-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
 /* a goal not yet in reach: said on plain paper, without the fist */
-.topbar .goal.later { grid-template-columns: 1fr auto; background-color: var(--paper); }
+.topbar .goal.later { --w-side: var(--card); grid-template-columns: 1fr auto; background-color: var(--paper); }
 .topbar .goal.later .goal-t { font-weight: 400; font-style: italic; }
 .topbar .goal-row .goal { flex: 0 1 auto; }
-.topbar .goal-go { min-height: 40px; padding: 0 12px; margin-top: 6px; font-size: 15px; gap: 6px; box-shadow: var(--laid), inset 0 0 0 1px var(--ink); }
+.topbar .goal-go { padding: 0 12px 3px; margin-top: 6px; font-size: 15px; gap: 6px; }
 .topbar[data-layout='narrow'] .goal-go, .topbar[data-layout='short'] .goal-go { min-height: var(--touch); margin: 4px 0 0 12px; }
 .topbar .goal { text-align: left; min-height: var(--touch); max-width: 100%; }
 .topbar .goal .goal-body { display: grid; min-width: 0; }
@@ -97,25 +97,27 @@
 .topbar .goal .goal-when { font: italic 400 14px/1.2 var(--f-text); color: var(--ink-2); }
 .topbar .goal .was { grid-column: 1 / -1; }
 .topbar .goal.met .goal-t { animation: write var(--t-sheet) var(--ease-out) backwards; }
-.topbar .goal[aria-expanded='true'] { box-shadow: var(--laid), inset 0 0 0 2px var(--ink); }
+.topbar .goal[aria-expanded='true'] { --w-rim: 2px; --w-line: var(--ink); }
 @keyframes write { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
 /* the bank board */
 .topbar .balance .cash { white-space: nowrap; }
 .topbar .balance { flex-wrap: wrap; row-gap: 0; }
 .topbar .balance .due { flex-basis: 100%; text-align: right; font: italic 400 14px/1.2 var(--f-text); color: var(--ink-2); }
 .topbar .clock.compact { grid-template-columns: 1fr 1fr 52px; }
-.topbar .clock .k.armed { box-shadow: inset 0 -4px 0 var(--ink); }
-.topbar .clock .k.stopped { color: var(--paper); background: var(--red); }
+/* the pause key shows red while the game is stopped (the speed it goes on at is the armed key: design/system.css) */
+.clock .k.stopped { --w-line: #4f160f; color: var(--paper) !important; background-color: var(--red) !important; }
 .topbar .clock.plan { grid-template-columns: 1fr 52px; }
 .topbar .clock.plan .season-word { align-self: center; padding: 0 12px; color: var(--ink); }
 .topbar .clock.plan .menu { height: var(--touch); }
 .topbar .clock.done { display: grid; grid-template-columns: 1fr 52px; padding: 6px; gap: 6px; }
-.topbar .materials { display: flex; align-items: center; gap: 6px; width: 100%; min-height: 40px; padding: 4px 12px; border-bottom: 1px solid var(--ink); font-size: 15px; }
+/* the stock, the contracts and the forecast open a paper each: quiet keys on the boards */
+.topbar .materials { display: flex; align-items: center; gap: 6px; width: 100%; min-height: 40px; padding: 4px 12px 6px; font-size: 15px; background-color: var(--paper); }
+.topbar .forecast { --w-rim: 0px; padding-bottom: 3px; }
 .topbar .materials .i { --i: 17px; }
 .topbar .materials > .num + .i { margin-left: 8px; }
 .topbar .contracts { display: grid; }
-.topbar .contract, .tracker .contract { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; width: 100%; padding: 8px 12px 10px; text-align: left; border-top: 1px solid var(--hair); }
-.topbar .contract:first-child { border-top: 0; }
+.topbar .contract, .tracker .contract { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; width: 100%; padding: 8px 12px 12px; text-align: left; background-color: var(--paper); }
+.topbar .contract + .contract { margin-top: -1px; }
 .contract .who { display: flex; align-items: center; gap: 6px; font-size: 15px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .contract .who .i { --i: 16px; flex: none; }
 .contract .due { color: var(--ink); }
@@ -187,11 +189,9 @@
 
 /* the clock at the thumb on a phone (season.ts's clock slot) */
 .clock-slot .clock { display: grid; grid-template-columns: 1fr 1fr 52px; width: 100%; background: var(--paper) url(./grain.png); background-blend-mode: multiply; box-shadow: var(--laid); }
-.clock-slot .clock .k, .clock-slot .clock .menu { display: grid; place-items: center; height: 52px; font: 400 24px/1 var(--f-gothic); border-left: 1px solid var(--hair); }
-.clock-slot .clock .k:first-child { border-left: 0; }
-.clock-slot .clock .k[aria-pressed='true'] { color: var(--paper); background: var(--ink); }
-.clock-slot .clock .k.stopped { color: var(--paper); background: var(--red); }
-.clock-slot .clock .menu { background: var(--manila); border-left: 1px solid var(--ink); }
+.clock-slot .clock .k, .clock-slot .clock .menu { display: grid; place-items: center; height: 52px; font: 400 24px/1 var(--f-gothic); }
+.clock-slot .clock .k + .k, .clock-slot .clock .k + .menu { margin-left: -1px; }
+.clock-slot .clock .menu { --w-side: #b39a63; background: var(--manila); }
 .clock-slot .clock.done { grid-template-columns: 1fr 52px; gap: 6px; padding: 4px; }
 .clock-slot { pointer-events: auto; }
 .clock-slot .clock { min-width: 200px; }

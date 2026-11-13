@@ -90,7 +90,7 @@ const PROBE = `window.__a = {
       out.push({
         id, thing: el.dataset.thing || '', side: el.dataset.side || '', rect: this.box(el),
         head: (el.querySelector('header') || el.querySelector('.q-pop-title') || el).textContent || '',
-        strangers: controls.filter(b => b.closest('[data-thing]') !== el || /^(card-spray-way|spray-ask-open|spray-way-open|rule-|routine-|grid-open|crew-open|speed-)/.test(b.dataset.testid || '')).map(b => b.dataset.testid || b.className),
+        strangers: controls.filter(b => b.closest('[data-thing]') !== el || /^(card-spray-way|spray-ask-open|spraying-open|rule-|routine-|grid-open|crew-open|speed-)/.test(b.dataset.testid || '')).map(b => b.dataset.testid || b.className),
         controls: controls.length, end: end ? this.mid(end) : null, line: !!part('tether'), show: !!part('show'), notch: notch ? this.mid(notch) : null,
         notched: id === 'order-card' && getComputedStyle(el, '::after').content !== 'none',
         onTop: !!top && el.contains(top),

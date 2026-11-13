@@ -99,6 +99,7 @@
 .season-screen .notes-slot { min-width: 0; }
 .season-screen .notes-slot .alert.over-land { pointer-events: none; opacity: .55; }
 .notes.alerts { position: static; display: grid; gap: var(--s2); justify-items: start; }
+.notes.alerts.hushed > .alert { visibility: hidden; }
 .notes.alerts .alert { animation: slip-up var(--t-slip) var(--ease-out); text-align: left; }
 .notes.alerts .alert.warn .i { color: var(--ochre); }
 .notes.alerts .alert.good .i { color: var(--green); }
@@ -446,8 +447,6 @@
 /* A person worn out or resting: a small "z" on their pin's head. */
 .pin-at.tired .pin .head::after { content: 'z'; position: absolute; right: -6px; top: -8px; display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; font: 700 13px/1 var(--f-text); color: var(--ink); background: var(--st-ochre); box-shadow: 0 0 0 1.5px var(--ink); }
 .pin-at .pin .head { position: relative; }
-.command .spray-way { justify-self: start; min-height: 34px; margin: 0 18px 6px; padding: 0 10px; font-size: 14px; }
-.touch .command .spray-way { min-height: 44px; }
 .work .spray-again { justify-self: start; min-height: 36px; margin-top: 6px; font-size: 14px; }
 /* On a phone or a short window, work that cannot wait is one line, and gives way to a card or a page. */
 /* Whose work is whose on a field: what the crew does by itself, and what waits for the player. */

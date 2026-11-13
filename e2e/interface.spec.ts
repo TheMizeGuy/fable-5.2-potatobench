@@ -134,7 +134,7 @@ test('every crop order has its place on the card; one that cannot be given is gr
   await page.locator('#ui .queue [data-testid^="list-x-"]').first().click()
   await expect.poll(async () => (await look(page)).queue).toBe(1)
   await expect(items.first()).toContainText('Planting North Ridge')
-  const undo = page.locator('#ui [data-testid="alert"]', { hasText: 'taken off the list' })
+  const undo = page.locator('#ui [data-testid="alert"]', { hasText: 'taken off the work list' })
   await expect(undo).toBeVisible()
   await undo.click()
   await expect.poll(async () => (await look(page)).queue).toBe(2)
@@ -351,7 +351,7 @@ test('spring land: a marker opens a card, renting puts a plate and the rent on t
   await page.keyboard.press('Escape')
   await page.keyboard.press('Digit7')
   await expect(card.getByTestId('card-title')).toHaveText('Dufour Upper')
-  await expect(card.getByTestId('tenure')).toContainText(`Rented, ${rent} this year`)
+  await expect(card.getByTestId('tenure')).toContainText(`You rent it for ${rent} this year`)
   await card.getByTestId('land-release').click()
   await expect(page.getByTestId('field-10')).toHaveCount(0)
   await expect(page.getByTestId('plan-money')).toContainText(line('This plan', before))
@@ -369,7 +369,7 @@ test('spring land: a marker opens a card, renting puts a plate and the rent on t
   await expect(page.getByTestId('plan-money')).toContainText(line('wages', hand))
   await page.getByTestId('contracts-open').click()
   const contracts = page.getByTestId('contracts')
-  await expect(contracts.getByTestId('offer-19903')).toContainText('Off contract Atlantic sells 20% under')
+  await expect(contracts.getByTestId('offer-19903')).toContainText('Without a contract Atlantic sells 20% under')
   await contracts.getByTestId('accept-19903').click()
   await expect(contracts.locator('.offer.signed')).toHaveCount(1)
   await page.getByTestId('contracts-close').click()
@@ -512,7 +512,7 @@ test('the menu: settings take effect, ending early says what is lost, and the sa
   await page.keyboard.press('Escape')
   await page.keyboard.press('m')
   await page.getByTestId('save-delete').click()
-  await expect(confirm).toContainText('cannot be brought back')
+  await expect(confirm).toContainText("can't be undone")
   await page.getByTestId('confirm-cancel').click()
   await expect(menu).toBeVisible()
   await page.getByTestId('save-delete').click()
@@ -548,7 +548,7 @@ test('winter: each stored crop is a card, seed can be held back, and the year cl
   await expect(page.getByTestId('outcome')).toBeVisible()
   const sheet = page.locator('#ui .ledger-sheet')
   await expect(sheet).toContainText('Cash at year end')
-  await expect(sheet).toContainText('The neighbor')
+  await expect(sheet).toContainText('Your neighbor')
   await expect(sheet).toContainText('The soil going into year 2')
   await page.getByTestId('year-next').click()
   await expect(page.getByTestId('begin-season')).toBeVisible()
@@ -568,10 +568,10 @@ test('the goal line says the one next thing, opens the ladder, and moves on when
   else await expect(goal).toContainText(`0/${of}`)
   await goal.click()
   const ladder = page.getByTestId('goals')
-  await expect(ladder).toContainText('The way ahead')
+  await expect(ladder).toContainText('Your goals')
   await expect(ladder).toContainText('Planting can start once the soil has warmed up')
   // The long goals wait until a year is behind the farm.
-  await expect(ladder).not.toContainText('Long goals')
+  await expect(ladder).not.toContainText('Long-term goals')
   await page.keyboard.press('Escape')
   await expect(ladder).toHaveCount(0)
   // Once the soil is warm the goal points at a field that can be planted.
@@ -685,7 +685,7 @@ test('the work grid: G opens it, a click or a key sets a cell, and the farm rule
   await grid.getByTestId('cell-2-woods').click()
   expect(await prio(2, 'woods')).toBe(was === 1 ? 0 : was === 0 ? 4 : was - 1)
   // The grid says which way a click goes.
-  await expect(grid.getByTestId('grid-how')).toContainText('A click makes the work come sooner')
+  await expect(grid.getByTestId('grid-how')).toContainText('Click to move work up')
   // The arrow keys walk the grid and a digit sets the cell under the focus.
   await grid.getByTestId('cell-2-woods').focus()
   await page.keyboard.press('ArrowRight')
@@ -696,7 +696,7 @@ test('the work grid: G opens it, a click or a key sets a cell, and the farm rule
   await expect(grid.getByTestId('cell-3-build')).toBeFocused()
   await page.keyboard.press('Delete')
   expect(await prio(3, 'build')).toBe(0)
-  await expect(grid).toContainText('Working Sundays gains a day')
+  await expect(grid).toContainText('Working Sundays gains you a day')
   // Pickers come forward only near the harvest break; in June there is nothing to decide about them.
   await expect(grid.getByTestId('rule-pickers')).toHaveCount(0)
   await grid.getByTestId('rule-sundays').click()
@@ -743,7 +743,7 @@ test('an incident is one card with its choices and what each does; put away, it 
   await expect(card).toContainText('Someone asks for work')
   await expect(card.getByTestId('answer-hire')).toContainText('starts at')
   await expect(card.getByTestId('answer-pass')).toContainText('elsewhere')
-  await expect(card).toContainText('Unanswered')
+  await expect(card).toContainText('If you don\'t answer')
   // Each reply says what it costs against the other, in plain words.
   await expect(card.getByTestId('answer-hire')).toContainText('a month in wages')
   await expect(card.getByTestId('answer-pass')).toContainText('Costs nothing')
@@ -949,7 +949,7 @@ test('a field says which work the crew does by itself and which waits for the pl
   await startSeason(page)
   // Days run until the crew takes up planting by itself: a note says so, and Show me goes to who is planting.
   await reach(page, `const { app } = q.g(); const c = app.campaign; for (let k = 0; k < 90 && !c.season.jobs.some(j => j.kind === 'plant' && c.crew.some(u => u.job === j.id)); k++) { c.incidents = []; app.do({ t: 'day' }) } app.setSpeed(0)`)
-  const note = page.locator('#ui [data-testid="alert"]', { hasText: 'Planting by itself' })
+  const note = page.locator('#ui [data-testid="alert"]', { hasText: 'Planting has started' })
   await expect(note).toBeVisible()
   await note.click()
   await expect(page.getByTestId('whois')).toBeVisible()
@@ -957,8 +957,8 @@ test('a field says which work the crew does by itself and which waits for the pl
   // A field's card: the crew's work on it and when, and the kinds of work that are the player's.
   const field = await game<number>(page, `app.campaign.season.jobs.find(j => j.kind === 'plant').field`)
   await reach(page, `q.g().app.select(${field})`)
-  await expect(page.getByTestId('card-whose')).toContainText('The crew')
-  await expect(page.getByTestId('card-whose')).toContainText(/Yours: .*spray/i)
+  await expect(page.getByTestId('card-whose')).toContainText('Your crew')
+  await expect(page.getByTestId('card-whose')).toContainText(/You: .*spray/i)
   expect(errors, errors.join('\n')).toEqual([])
 })
 
@@ -972,8 +972,14 @@ test('the clock and the keys as a player meets them: Space just after an answer 
   await untilTicket(page)
   // Answered, the days go on by themselves; a Space a moment later is not taken back as a pause.
   await ticket.locator('[data-testid^="lot-sell-"]').first().click()
+  // The press comes the moment the days go on again, as a player's would: it is watched for in the page, so a slow
+  // test box cannot let the second run out first.
+  await page.evaluate(() => new Promise<void>(done => {
+    const app = (globalThis as unknown as { __county: { app: { speed: number } } }).__county.app
+    const tick = () => { if (app.speed > 0) { document.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', code: 'Space', bubbles: true })); done() } else requestAnimationFrame(tick) }
+    tick()
+  }))
   await expect(ticket).toHaveCount(0)
-  await page.keyboard.press('Space')
   expect((await look(page)).speed).toBe(2)
   // Escape just after the ticket went opens no menu.
   await page.keyboard.press('Escape')

@@ -3,6 +3,7 @@
 // which keeps the old stylesheets off it.
 import { h, s, type Attrs, type Child } from '../dom.ts'
 import { icon } from '../icons.ts'
+import type { Weight } from './weight.ts'
 
 type Click = (e: Event) => void
 export type Ink = 'red' | 'ochre' | 'blue' | 'ink'
@@ -59,14 +60,16 @@ export function tag(o: {
 // given: on the list (pencil, stamped). The key also works from the keyboard anywhere on the screen; that is the
 // screen's to wire, this says so to assistive technology.
 // refused: the catch turns red and says why (MOTION.md: a refused order shakes nothing). key may be '' (no key);
-// icon may be '' (a building chosen by its number). attrs: more for the button.
+// icon may be '' (a building chosen by its number). attrs: more for the button. w: what the press costs, when the
+// order's test id does not already say (system/weight.ts): a field's order is std, one that spends the year's money
+// or cannot be taken back is major.
 export function order(o: {
   key: string; icon: string; name: Child; cost?: string; catch: Child; suggested?: boolean; given?: boolean; refused?: boolean
-  testid?: string; title?: string; onclick?: Click; disabled?: boolean; attrs?: Attrs; said?: string
+  testid?: string; title?: string; onclick?: Click; disabled?: boolean; attrs?: Attrs; said?: string; w?: Weight
 }): HTMLElement {
   const more = o.attrs ?? {}
   return h('button', {
-    ...more, class: `order sys${o.suggested ? ' is-suggested' : ''}${o.given ? ' is-given' : ''}${o.refused ? ' is-refused' : ''}${o.icon ? '' : ' no-icon'}${more.class ? ` ${more.class}` : ''}`,
+    'data-w': o.w, ...more, class: `order sys${o.suggested ? ' is-suggested' : ''}${o.given ? ' is-given' : ''}${o.refused ? ' is-refused' : ''}${o.icon ? '' : ' no-icon'}${more.class ? ` ${more.class}` : ''}`,
     type: 'button', testid: o.testid, title: o.title, 'aria-keyshortcuts': o.key || null, disabled: o.disabled, onclick: o.onclick,
   },
   o.suggested ? fist() : null,
@@ -79,8 +82,8 @@ export function order(o: {
 }
 
 // A fold of a sheet (the spring catalogue): a button that opens its part, with what it holds in a few words.
-export function fold(o: { icon: string; name: string; state?: string; figure?: string; open: boolean; controls?: string; testid?: string; onclick?: Click }): HTMLElement {
-  return h('button', { class: `fold sys${o.open ? ' open' : ''}`, type: 'button', 'aria-expanded': String(o.open), 'aria-controls': o.controls, testid: o.testid, onclick: o.onclick },
+export function fold(o: { icon: string; name: string; state?: string; figure?: string; open: boolean; controls?: string; testid?: string; onclick?: Click; w?: Weight }): HTMLElement {
+  return h('button', { 'data-w': o.w, class: `fold sys${o.open ? ' open' : ''}`, type: 'button', 'aria-expanded': String(o.open), 'aria-controls': o.controls, testid: o.testid, onclick: o.onclick },
     icon(o.icon, 'i'), h('b', null, o.name),
     o.state ? h('span', { class: 'quiet it' }, o.state) : null,
     h('span', { style: 'flex:1' }),
@@ -89,9 +92,9 @@ export function fold(o: { icon: string; name: string; state?: string; figure?: s
 }
 
 // A way to take something (the weigh ticket's three): a tear-off coupon with its own button line and key.
-// best: the one that brings most, tabbed and filled, its amount ringed in pencil.
+// best: the one that brings most, tabbed and filled, its amount ringed in pencil. Taking the crop is always major.
 export function coupon(o: { icon: string; label: string; amount: Child; does: Child; take: string; key: string; best?: boolean; testid?: string; onclick?: Click }): HTMLElement {
-  return h('button', { class: `way sys${o.best ? ' is-best' : ''}`, type: 'button', testid: o.testid, 'aria-keyshortcuts': o.key, onclick: o.onclick },
+  return h('button', { 'data-w': 'major', class: `way sys${o.best ? ' is-best' : ''}`, type: 'button', testid: o.testid, 'aria-keyshortcuts': o.key, onclick: o.onclick },
     o.best ? h('span', { class: 'brings' }, fist(), 'Brings most') : null,
     h('span', { class: 't-label' }, icon(o.icon, 'i'), o.label),
     h('span', { class: `amount num${o.best ? ' ringed' : ''}` }, o.amount, o.best ? ring() : null),
@@ -131,10 +134,10 @@ export function tens(level: number, progress = 0, o: { best?: boolean; label?: s
 }
 
 // A slip from the order book: an alert. bad: a red rule down its edge.
-export function slip(text: Child, o: { icon: string; kind?: 'bad' | 'water'; testid?: string; onclick?: Click } ): HTMLElement {
+export function slip(text: Child, o: { icon: string; kind?: 'bad' | 'water'; testid?: string; onclick?: Click; w?: Weight } ): HTMLElement {
   const kids = [icon(o.icon), h('span', null, text)]
   return o.onclick
-    ? h('button', { class: `alert sys${o.kind ? ` ${o.kind}` : ''}`, type: 'button', testid: o.testid, onclick: o.onclick }, kids)
+    ? h('button', { 'data-w': o.w, class: `alert sys${o.kind ? ` ${o.kind}` : ''}`, type: 'button', testid: o.testid, onclick: o.onclick }, kids)
     : h('p', { class: `alert sys${o.kind ? ` ${o.kind}` : ''}`, testid: o.testid }, kids)
 }
 

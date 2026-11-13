@@ -7,7 +7,7 @@ import * as F from './fmt.ts'
 import { icon } from './icons.ts'
 import { placeName, where } from './map.ts'
 import { askSpray, doingGlyph, idleWithWork, sprayWay } from './people.ts'
-import { firstName, initial, JOB_DOING, JOB_VERB, jobText, KIND_GLYPH, KIND_NAME, kindDoes, personSign, SKILL_NAME, type Sign } from './rules.ts'
+import { firstName, initial, JOB_DOING, JOB_VERB, jobText, KIND_GLYPH, KIND_NAME, kindDoes, LET_GO_TEXT, personSign, SKILL_NAME, type Sign } from './rules.ts'
 import { portrait, ringed, ringOf } from './system/people.ts'
 import { guidedYear } from './tutorial.ts'
 
@@ -19,7 +19,7 @@ export function doing(c: S.Campaign, u: S.CrewInfo, waits: Record<number, string
   if (!s) return { glyph: 'stale', text: 'Idle', place: u.at, progress: 0 }
   if (s.frozen) return { glyph: 'frost', text: 'The ground has frozen', place: u.at, progress: 0 }
   const job = u.job ? s.jobs.find(j => j.id === u.job!.id) : undefined
-  if (u.travelling) return { glyph: 'go', text: `To ${placeName(u.to)}`, place: u.to, progress: 0 }
+  if (u.travelling) return { glyph: 'go', text: `Heading to ${placeName(u.to)}`, place: u.to, progress: 0 }
   if (job) return { glyph: job.kind, text: jobText(job, c, job.building), place: job.field, progress: job.need > 0 ? job.done / job.need : 0 }
   // Between orders: the first on the list it could take next, or why it is held up.
   const unit = c.crew.find(x => x.id === u.id)
@@ -31,12 +31,12 @@ export function doing(c: S.Campaign, u: S.CrewInfo, waits: Record<number, string
 }
 
 // What a person is doing, as the time book prints it: one word under their name.
-const WORD: Partial<Record<string, string>> = { foreman: 'Foreman', hurt: 'Hurt', sunday: 'Sunday', go: 'On the road', stale: 'Idle', frost: 'Frozen' }
+const WORD: Partial<Record<string, string>> = { foreman: 'Foreman', hurt: 'Hurt', sunday: 'Sunday', go: 'Traveling', stale: 'Idle', frost: 'Ground frozen' }
 export function doingWord(c: S.Campaign, p: S.PersonInfo): string {
   const g = doingGlyph(c, p)
   if (WORD[g]) return WORD[g]!
   const kind = g as S.JobKind
-  return JOB_DOING[kind] ? JOB_DOING[kind].replace(/ (in|from|round)$/, '') : 'Idle'
+  return JOB_DOING[kind] ? JOB_DOING[kind].replace(/ (in|from|around)$/, '') : 'Idle'
 }
 
 // Each person's ring, by the order they joined the farm.
@@ -82,7 +82,7 @@ function fixWord(c: S.Campaign, p: S.Pressing): string {
   const f = p.fix
   if (!f) return ''
   if (f.t === 'job') return `${JOB_VERB[p.kind]} ${S.FIELD_NAMES[p.field] ?? ''}`.trim()
-  if (f.t === 'priority') { const u = c.crew.find(x => x.id === f.unit); return u ? `${firstName(u.name)}: ${SKILL_NAME[f.work].toLowerCase()} work first` : 'Put it first' }
+  if (f.t === 'priority') { const u = c.crew.find(x => x.id === f.unit); return u ? (u.kind === 'farmer' ? `Put your ${SKILL_NAME[f.work].toLowerCase()} work first` : `Put ${SKILL_NAME[f.work].toLowerCase()} work first for ${firstName(u.name)}`) : 'Put it first' }
   return 'Clear the way'
 }
 
@@ -122,13 +122,13 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
     const was = { kind: j.kind, field: j.field, unit: j.unit }
     if (!ctx.run({ t: 'cancel', id }).ok) return
     const what = jobText(j, c, j.building)
-    ctx.notes.push({ level: 'info', glyph: j.kind, text: `${what}: taken off the list. Put it back`, full: `${what}: taken off the list. Press to put it back.`,
-      ttl: 9000, go: () => { if (ctx.run({ t: 'job', kind: was.kind, field: was.field, unit: was.unit >= 0 ? was.unit : undefined }).ok) ctx.announce(`${what}: back on the list.`) } })
+    ctx.notes.push({ level: 'info', glyph: j.kind, text: `${what} taken off the work list. Undo`, full: `${what} was taken off the work list. Press to put it back.`,
+      ttl: 9000, go: () => { if (ctx.run({ t: 'job', kind: was.kind, field: was.field, unit: was.unit >= 0 ? was.unit : undefined }).ok) ctx.announce(`${what} is back on the work list.`) } })
   }
   function bump(id: number): void { pop = -1; ctx.run({ t: 'bump', id }) }
   function assign(id: number, unit: number, what: string, who: string): void {
     pop = -1
-    if (ctx.run({ t: 'assign', id, unit }).ok) ctx.announce(`${what}: ${unit < 0 ? 'anyone can take it' : `${who} takes it`}.`)
+    if (ctx.run({ t: 'assign', id, unit }).ok) ctx.announce(`${what}: ${unit < 0 ? 'anyone can do it' : who === 'You' ? 'you\'ll do it' : `${who} will do it`}.`)
   }
 
   function cell(c: S.Campaign, p: S.PersonInfo, d: Doing, sign: Sign, many: boolean, goal: boolean, needsYou: boolean): HTMLElement {
@@ -136,11 +136,11 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
     const on = app.unit === p.id && (app.unitFrom === 'list' || !many)
     const name = firstName(p.name)
     const ring = ringFor(c, p.id)
-    const said = `${p.kind === 'farmer' ? 'You, the farmer' : p.name}: ${d.text}${sign ? `; ${sign.text}` : ''}.`
+    const said = `${p.kind === 'farmer' ? 'You, the farmer' : p.name}: ${d.text}${sign ? `, ${sign.text}` : ''}.`
     const bad = sign?.cls === 'bad' || needsYou
     // Between orders, the work the list holds for them today, never IDLE while there is some.
     const plain = doingWord(c, p)
-    const ahead = plain === 'Idle' && (S.JOBS as string[]).includes(d.glyph) ? JOB_DOING[d.glyph as S.JobKind].replace(/ (in|from|round)$/, '') : plain
+    const ahead = plain === 'Idle' && (S.JOBS as string[]).includes(d.glyph) ? JOB_DOING[d.glyph as S.JobKind].replace(/ (in|from|around)$/, '') : plain
     const word = sign?.cls === 'bad' ? F.upper(sign.text) : needsYou ? 'Stopped' : ahead
     const slip = next && next.unit === p.id && performance.now() < next.until
       ? h('span', { class: 'next tip', 'aria-hidden': 'true' }, h('span', { class: 't-label' }, 'Next'), ' ', h('span', null, icon(next.kind, 'i'), ` ${S.FIELD_NAMES[next.field]}`)) : null
@@ -156,7 +156,7 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
     return h('button', {
       class: `person unit${many ? '' : ' solo'}${on ? ' is-picked' : ''}${bad ? ' needs' : ''}${goal ? ' goal-ring' : ''}`, type: 'button', testid: `unit-${p.id}`, 'aria-pressed': String(on), style: `--c:${ring}`,
       title: ctx.touch() ? undefined : said, onclick: () => { if (on) app.selectUnit(-1); else { app.select(-1); app.selectYard(0); app.selectUnit(p.id, many ? 'list' : 'land') } },
-    }, kids, h('span', { class: 'sr' }, `. ${said} ${on ? 'Their card is open. Press again to close it.' : 'Press for their card; orders given now go to them.'}`))
+    }, kids, h('span', { class: 'sr' }, `. ${said} ${on ? `${p.kind === 'farmer' ? 'Your' : 'Their'} card is open. Press again to close it.` : p.kind === 'farmer' ? 'Press to open your card. While it\'s open, you do the work you order.' : 'Press to open their card. While it\'s open, your orders go to them.'}`))
   }
 
   // Work the season cannot wait for that nobody will take, or that is not ordered: what it is, what is in its way,
@@ -172,14 +172,14 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
       h('button', {
         class: 'q press-chip', type: 'button', testid: 'pressing', 'aria-expanded': String(pop === PRESS_POP), title: ctx.touch() ? undefined : said,
         onclick: () => { pop = pop === PRESS_POP ? -1 : PRESS_POP; popWho = false; ctx.dirty() },
-      }, icon(p.kind, 'i'), h('span', { class: 'press-word' }, 'Needs your order'), list.length > 1 ? h('span', { class: 'num' }, ` ${list.length}`) : null,
-      h('span', { class: 'sr' }, `. ${list.map(x => `${JOB_VERB[x.kind]} ${S.FIELD_NAMES[x.field] ?? ''}: ${x.why}`).join('; ')}. Press for the fix.`)),
-      pop === PRESS_POP ? h('div', { class: 'q-pop sheet press-pop', role: 'group', 'aria-label': 'Work that cannot wait' },
+      }, icon(p.kind, 'i'), h('span', { class: 'press-word' }, 'Needs you'), list.length > 1 ? h('span', { class: 'num' }, ` ${list.length}`) : null,
+      h('span', { class: 'sr' }, `. ${list.map(x => `${JOB_VERB[x.kind]} ${S.FIELD_NAMES[x.field] ?? ''}: ${x.why}`).join('. ')}. Press to see how to fix it.`)),
+      pop === PRESS_POP ? h('div', { class: 'q-pop sheet press-pop', role: 'group', 'aria-label': 'Work that can\'t wait' },
         list.slice(0, 3).map(x => h('p', { class: 'press' }, icon(x.kind, 'i'),
           h('span', { class: 'press-text' }, h('b', null, `${JOB_VERB[x.kind]} ${S.FIELD_NAMES[x.field] ?? ''}`.trim()), `: ${x.why}. ${F.localize(x.inWay)}`),
           x.fix ? h('button', {
             class: 'btn', type: 'button', testid: `pressing-fix-${x.kind}-${x.field}`,
-            onclick: () => { pop = -1; const r = ctx.run(x.fix!); if (r.ok) ctx.announce(`${fixWord(c, x)}: done.`) },
+            onclick: () => { pop = -1; const r = ctx.run(x.fix!); if (r.ok) ctx.announce(`${fixWord(c, x)}. Done.`) },
           }, x.kind === 'kill' && x.job < 0 ? 'Kill them now' : fixWord(c, x)) : null,
           x.kind === 'kill' && x.job < 0 ? keepButton(x.field, `keep-vines-${x.field}`) : null))) : null)
   }
@@ -188,7 +188,7 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
   function keepButton(field: number, testid: string): HTMLElement {
     return h('button', {
       class: 'btn', type: 'button', testid,
-      onclick: () => { pop = -1; const r = ctx.run({ t: 'keepVines', field, keep: true }); if (r.ok) ctx.announce(`${S.FIELD_NAMES[field]}: the vines are kept up.`) },
+      onclick: () => { pop = -1; const r = ctx.run({ t: 'keepVines', field, keep: true }); if (r.ok) ctx.announce(`${S.FIELD_NAMES[field]}: the crew will leave the vines up.`) },
     }, 'Keep them up')
   }
 
@@ -202,20 +202,20 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
     if (!idle) return null
     const name = firstName(idle.name)
     return h('button', {
-      class: 'q-help', type: 'button', testid: `help-${j.id}`, 'aria-label': `${name} stands idle and never does ${SKILL_NAME[skill].toLowerCase()} work: let them help`,
-      title: ctx.touch() ? undefined : `${name} stands idle and never does ${SKILL_NAME[skill].toLowerCase()} work. Press to let them help.`,
-      onclick: () => { const r = ctx.run({ t: 'priority', unit: idle.id, work: skill, level: 2 }); if (r.ok) ctx.announce(`${name} helps with the ${SKILL_NAME[skill].toLowerCase()} work.`) },
+      class: 'q-help', type: 'button', testid: `help-${j.id}`, 'aria-label': `${name} is idle and set to never do ${SKILL_NAME[skill].toLowerCase()} work. Press to let them help.`,
+      title: ctx.touch() ? undefined : `${name} is idle and set to never do ${SKILL_NAME[skill].toLowerCase()} work. Click to let them help.`,
+      onclick: () => { const r = ctx.run({ t: 'priority', unit: idle.id, work: skill, level: 2 }); if (r.ok) ctx.announce(`${name} will help with the ${SKILL_NAME[skill].toLowerCase()} work.`) },
     }, icon('people', 'i'), h('span', { class: 'num' }, '+1'))
   }
 
   function queue(c: S.Campaign, jobs: S.Job[], crews: S.CrewInfo[], people: S.PersonInfo[], waits: Record<number, string>, many: boolean, room: number, of: Map<number, S.JobOutlook>, press: Child): Child {
-    if (!jobs.length) return press ? h('ol', { class: 'queue', 'aria-label': 'Orders' }, h('li', { class: 'q-label t-label', 'aria-hidden': 'true' }, 'On the list'), press) : null
+    if (!jobs.length) return press ? h('ol', { class: 'queue', 'aria-label': 'Work list' }, h('li', { class: 'q-label t-label', 'aria-hidden': 'true' }, 'Work list'), press) : null
     const touch = ctx.touch()
     const head = jobs.find(j => !waits[j.id]) ?? null
     const all = expanded || jobs.length <= room
     const list = all ? jobs : jobs.slice(0, room - 1)
-    return h('ol', { class: `queue${expanded ? ' all' : ''}`, 'aria-label': 'Orders, in the order the crews take them' },
-      h('li', { class: 'q-label t-label', 'aria-hidden': 'true' }, 'On the list'),
+    return h('ol', { class: `queue${expanded ? ' all' : ''}`, 'aria-label': 'Work list, in the order your crew will do it' },
+      h('li', { class: 'q-label t-label', 'aria-hidden': 'true' }, 'Work list'),
       press,
       list.map((j, k) => {
         const what = jobText(j, c, j.building)
@@ -227,8 +227,8 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
         const taker = o && o.unit >= 0 ? c.crew.find(u => u.id === o.unit) : undefined
         const fateSaid = o ? F.localize(o.why) : ''
         const able = people.filter(p => S.unitBlock(c, j.kind, p.id) === '')
-        const whoSaid = who ? `${who.pinned ? 'given to' : 'taken by'} ${who.u.name === S.FARMER_NAME ? 'you' : who.u.name}` : 'for anyone'
-        const choices = many && able.length > 1 ? h('div', { class: 'q-who', role: 'group', 'aria-label': `Who does ${what.toLowerCase()}` },
+        const whoSaid = who ? `${who.pinned ? 'assigned to' : 'being done by'} ${who.u.name === S.FARMER_NAME ? 'you' : who.u.name}` : 'open to anyone'
+        const choices = many && able.length > 1 ? h('div', { class: 'q-who', role: 'group', 'aria-label': `${what}: choose who does it` },
           [{ id: -1, name: 'Anyone' }, ...able.map(u => ({ id: u.id, name: firstName(u.name) }))].map(x => h('button', {
             class: 'btn', type: 'button', testid: `assign-${j.id}-${x.id}`, 'aria-pressed': String(j.unit === x.id),
             onclick: () => assign(j.id, x.id, what, x.name),
@@ -236,7 +236,7 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
         return h('li', { class: 'q-item', k: `q-${j.id}` },
           h('button', {
             class: `q${j === head ? ' active' : ''}${waits[j.id] || o?.when === 'waiting' ? ' waiting' : ''}${o && o.unit < 0 ? ' nobody' : ''} by-${by}`, type: 'button', testid: `queue-${j.id}`, 'aria-expanded': String(pop === j.id),
-            title: touch ? undefined : `${what}. ${fateSaid || whoSaid} Click for its choices${k > 0 ? '; Ctrl-click to do it first' : ''}`,
+            title: touch ? undefined : `${what}. ${fateSaid || `${F.upper(whoSaid)}.`} Click for options${k > 0 ? ', or Ctrl-click to do it first' : ''}.`,
             onclick: (e: Event) => {
               const m = e as MouseEvent
               if (m.ctrlKey || m.metaKey) bump(j.id)
@@ -250,21 +250,21 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
             : taker && many ? h('span', { class: `q-tag${who?.pinned ? ' pinned' : ''} q-${o!.when}`, style: `--c:${ringFor(c, taker.id)}`, 'aria-hidden': 'true' }, initial(taker.name))
               : many && who ? h('span', { class: `q-tag${who.pinned ? ' pinned' : ''}`, style: `--c:${ringFor(c, who.u.id)}`, 'aria-hidden': 'true' }, initial(who.u.name)) : null,
           o && o.when === 'waiting' && o.unit >= 0 ? h('span', { class: 'q-wait', 'aria-hidden': 'true' }, icon('stale', 'i')) : null,
-          by !== 'you' ? h('span', { class: 'q-by', title: touch ? undefined : by === 'routine' ? 'Put on the list by the crew\'s routine' : 'Put on the list by the foreman' }, icon(by === 'routine' ? 'sprout' : 'foreman', 'i')) : null,
-          h('span', { class: 'sr' }, `${what}, ${by === 'routine' ? 'put on the list by the routine, ' : by === 'foreman' ? 'put on the list by the foreman, ' : ''}${whoSaid}${j.done > 0 && j.need > 0 ? `, ${F.pct(j.done / j.need)} done` : ''}. ${fateSaid} ${touch ? 'Tap' : 'Click'} for its choices.`)),
+          by !== 'you' ? h('span', { class: 'q-by', title: touch ? undefined : by === 'routine' ? 'Added by your crew\'s routine' : 'Added by the foreman' }, icon(by === 'routine' ? 'sprout' : 'foreman', 'i')) : null,
+          h('span', { class: 'sr' }, `${what}, ${by === 'routine' ? 'added by the routine, ' : by === 'foreman' ? 'added by the foreman, ' : ''}${whoSaid}${j.done > 0 && j.need > 0 ? `, ${F.pct(j.done / j.need)} done` : ''}. ${fateSaid} ${touch ? 'Tap' : 'Click'} for options.`)),
           helper(c, j, crews),
-          !lockDig ? h('button', { class: 'q-x', type: 'button', testid: `list-x-${j.id}`, 'aria-label': `${what}: take it off the list`, title: touch ? undefined : 'Take it off the list', onclick: () => cancel(j.id) }, icon('close', 'i')) : null,
+          !lockDig ? h('button', { class: 'q-x', type: 'button', testid: `list-x-${j.id}`, 'aria-label': `${what}: remove from the work list`, title: touch ? undefined : 'Remove from the work list', onclick: () => cancel(j.id) }, icon('close', 'i')) : null,
           !touch ? h('span', { class: 'q-tools' },
             k > 0 ? h('button', { class: 'q-first', type: 'button', testid: `queue-first-${j.id}`, 'aria-label': `${what}: do it first`, title: 'Do it first', onclick: () => bump(j.id) }, icon('first', 'i')) : null,
             choices ? h('button', {
-              class: 'q-first', type: 'button', testid: `queue-who-${j.id}`, 'aria-label': `${what}: choose who does it`, 'aria-expanded': String(pop === j.id), title: 'Who does it',
+              class: 'q-first', type: 'button', testid: `queue-who-${j.id}`, 'aria-label': `${what}: choose who does it`, 'aria-expanded': String(pop === j.id), title: 'Choose who does it',
               onclick: () => { pop = pop === j.id ? -1 : j.id; popWho = true; ctx.dirty() },
             }, icon('people', 'i')) : null) : null,
           // The order's own card, over the order that was clicked: everything on it is about that order.
           pop === j.id ? h('div', { class: 'q-pop order-card sheet', role: 'group', 'aria-label': what, testid: 'order-card', 'data-thing': `order-${j.id}` },
             h('span', { class: 't-label q-pop-title' }, what),
             fateSaid ? h('span', { class: `q-fate${o && o.unit < 0 ? ' c-red' : ''}`, testid: `fate-${j.id}` }, fateSaid) : null,
-            !popWho && k > 0 ? h('button', { class: 'btn', type: 'button', testid: `queue-first-${j.id}`, onclick: () => bump(j.id) }, icon('first', 'i'), 'First') : null,
+            !popWho && k > 0 ? h('button', { class: 'btn', type: 'button', testid: `queue-first-${j.id}`, onclick: () => bump(j.id) }, icon('first', 'i'), 'Do it first') : null,
             !popWho && !lockDig ? h('button', { class: 'btn', type: 'button', testid: `queue-cancel-${j.id}`, onclick: () => cancel(j.id) }, icon('close', 'i'), 'Cancel') : null,
             choices) : null)
       }),
@@ -317,11 +317,11 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
             // How spraying is done this season, and the way to change it, once blight weather has come: the whole
             // farm's, so it stands with the people and not on any one field's card.
             spraying ? h('button', {
-              class: 'iconbtn spray-way', type: 'button', testid: 'spray-way-open', 'data-w': 'minor', title: touch ? undefined : `Spraying this season: ${way === 'auto' ? 'kept sprayed' : way === 'none' ? 'not this year' : 'ask me'} · change`,
+              class: 'iconbtn spray-way', type: 'button', testid: 'spraying-open', title: touch ? undefined : `Spraying this season: ${way === 'auto' ? 'kept sprayed' : way === 'none' ? 'not this year' : 'ask me'} · change`,
               onclick: () => askSpray(ctx),
             }, icon('spray', 'i'), h('span', { class: 'sr' }, 'Spraying this season: ', h('b', null, way === 'auto' ? 'kept sprayed' : way === 'none' ? 'not this year' : 'ask me'), h('span', { class: 'quiet' }, ' · change'))) : null,
             waiting.length ? h('button', {
-              class: 'iconbtn inc-mark', type: 'button', testid: 'incident-open', 'aria-label': `${waiting[0].title}: waiting for an answer`, title: touch ? undefined : waiting[0].title,
+              class: 'iconbtn inc-mark', type: 'button', testid: 'incident-open', 'aria-label': `${waiting[0].title}. Waiting for your answer.`, title: touch ? undefined : waiting[0].title,
               onclick: () => hooks.onIncident(),
             }, icon('ask', 'i'), waiting.length > 1 ? h('span', { class: 'inc-n num', 'aria-hidden': 'true' }, String(waiting.length)) : null) : null,
             people.length >= 3 ? h('button', {
@@ -374,19 +374,19 @@ export function openCrew(ctx: Ctx): void {
           const wage = kind === 'hand' ? S.HAND_WAGE : S.OPERATOR_WAGE
           return h('article', { class: 'applicant hall' },
             h('span', { class: 'hall-ic' }, icon(KIND_GLYPH[kind], 'i')),
-            h('div', { class: 'who' }, h('h3', null, KIND_NAME[kind]), h('p', null, kind === 'hand' ? `${kindDoes('hand')} Set never to drive.` : `${kindDoes('operator')} Set never to walk the rows.`)),
+            h('div', { class: 'who' }, h('h3', null, KIND_NAME[kind]), h('p', null, `${kindDoes(kind).replace(/\.$/, '')}, but won't ${kind === 'hand' ? 'drive' : 'do field work on foot'} unless you change their priorities.`)),
             skillRow(kind === 'hand' ? S.HAND_SKILLS : S.OPERATOR_SKILLS),
             h('p', { class: 'price' }, h('b', { class: 'num' }, F.money(wage)), h('span', null, 'a month')),
             room ? null : h('button', { class: 'btn', type: 'button', testid: `hire-${kind}`, onclick: () => hired(ctx.run({ t: 'hire', kind })) }, 'Hire', h('span', { class: 'sr' }, `, ${F.money(wage)} a month`)))
         }
         const applicants = S.applicantInfo(c)
         box.replaceChildren(h('div', { class: 'crew-in' },
-          h('p', { class: 't-caption' }, 'Everyone works the list by their own priorities. Skill makes the work quicker and better.'),
+          h('p', { class: 't-caption' }, 'Everyone picks jobs from the work list by their own priorities. More skill means faster, better work.'),
           h('p', { class: `beds${room ? ' c-red' : ''}`, testid: 'beds' }, icon('bunk', 'i'),
-            room ? F.localize(room) : `${l.hired} hired; room for ${l.housing}. ${S.HOUSED_OUT} live out, and a bunkhouse beds ${S.BUNK_BEDS}.`,
+            room ? F.localize(room) : `${l.hired} hired, with room for ${l.housing}. ${S.HOUSED_OUT} can live off the farm, and a bunkhouse sleeps ${S.BUNK_BEDS}.`,
             room && S.buildingInfo(c).some(b => b.kind === 'bunk' && b.state === 'none') ? h('button', { class: 'btn', type: 'button', testid: 'beds-build', onclick: () => { ctx.papers.closeTop(); app.selectYard(S.HOME_YARD) } }, icon('bunk', 'i'), 'Build a bunkhouse') : null),
           applicants.length ? [
-            h('h3', { class: 't-label crew-h' }, 'Asking for work this spring'),
+            h('h3', { class: 't-label crew-h' }, 'Looking for work this spring'),
             applicants.map(a => h('article', { class: 'applicant' },
               portrait(a, 52),
               h('div', { class: 'who' }, h('h3', null, a.name), h('p', null, h('b', null, a.traitName), `: ${a.traitText.replace(/^./, x => x.toLowerCase())}`)),
@@ -406,7 +406,7 @@ export function openCrew(ctx: Ctx): void {
               h('button', {
                 class: 'btn hazard', type: 'button', testid: `dismiss-${u.id}`,
                 onclick: async () => {
-                  const yes = await confirmPaper(ctx, { title: `Let ${firstName(u.name)} go?`, text: 'They leave today. The month already paid is not given back, and they will not come back.', yes: 'Let them go', danger: true })
+                  const yes = await confirmPaper(ctx, { title: `Let ${firstName(u.name)} go?`, text: LET_GO_TEXT, yes: 'Let them go', danger: true })
                   if (!yes) return
                   const r = ctx.run({ t: 'dismiss', unit: u.id })
                   if (r.ok) { if (app.unit === u.id) app.selectUnit(-1); ctx.announce(F.localize(r.events[0]?.text ?? 'Let go.')); draw() }
@@ -414,8 +414,8 @@ export function openCrew(ctx: Ctx): void {
               }, icon('letgo', 'i'), 'Let go'))),
           ] : null,
           h('p', { class: 't-caption crew-foot' }, season
-            ? 'Hired now, the first month is paid at once, then a month at a time until the season closes. The month already paid is not given back.'
-            : 'Hired in spring, the first month is paid when the season begins. People stay on from year to year until let go.'),
+            ? 'If you hire now, you pay the first month right away and then a month at a time until the season ends. You don\'t get back a month you\'ve already paid.'
+            : 'If you hire in spring, you pay the first month when the season starts. People stay on from year to year until you let them go.'),
         ))
       }
       draw()

@@ -9,7 +9,7 @@ import { count, patch, type Ctx } from './core.ts'
 import { h, type Child } from './dom.ts'
 import * as F from './fmt.ts'
 import { icon } from './icons.ts'
-import { BLIGHT_RISK, firstName, forecastSky, JOB_VERB, plantingIn, SKY_WORD, yearName } from './rules.ts'
+import { BLIGHT_RISK, firstName, forecastSky, JOB_VERB, jobText, plantingIn, SKY_WORD, yearName } from './rules.ts'
 import { fist } from './system/parts.ts'
 
 export const PHASE_LABEL: Record<S.Phase, string> = {
@@ -52,7 +52,7 @@ function seasonTrack(c: S.Campaign): HTMLElement | null {
     ends(F.monthName(S.SEASON_START.month, true), PHASES[at]?.short ?? ''),
     h('span', {
       class: 'bar', role: 'img',
-      'aria-label': `The season runs ${F.date(y, a)} to ${F.date(y, b)}: ${Math.round(((now - a) / (b - a)) * 100)}% gone${ss.watchDay >= 0 ? `. Blight watch since ${F.date(y, ss.watchDay)}` : ''}`,
+      'aria-label': `The season runs from ${F.date(y, a)} to ${F.date(y, b)}, and it's ${Math.round(((now - a) / (b - a)) * 100)}% done.${ss.watchDay >= 0 ? ` The blight watch started on ${F.date(y, ss.watchDay)}.` : ''}`,
     },
     h('i', { style: `width:${x(now)}` }),
     frosts.map(d => h('u', { class: 'frost', style: `left:${x(d)}` })),
@@ -63,11 +63,11 @@ function seasonTrack(c: S.Campaign): HTMLElement | null {
 
 // What the year asks, in order: where the farm is in it, and what comes next. For every player.
 const PHASES: { id: string; glyph: string; name: string; short: string; from: [number, number]; says: string }[] = [
-  { id: 'plant', glyph: 'plant', name: 'Plant', short: 'Plant', from: [S.SEASON_START.month, S.SEASON_START.dom], says: 'Plant: the crew plants each field once the soil is warm enough, in May.' },
-  { id: 'tend', glyph: 'hill', name: 'Tend', short: 'Tend', from: [6, 1], says: 'Tend: the crew hills and walks the rows. Your call is the spraying, when blight weather comes.' },
-  { id: 'kill', glyph: 'kill', name: 'Kill the vines', short: 'Kill', from: [9, 1], says: 'Kill the vines: in September, so the skins toughen for digging.' },
-  { id: 'dig', glyph: 'dig', name: 'Dig and weigh', short: 'Dig', from: [9, 20], says: 'Dig and weigh: the crew digs and hauls each field, and it is weighed at the potato house.' },
-  { id: 'sell', glyph: 'ticket', name: 'Sell or store', short: 'Sell', from: [10, 20], says: 'Sell or store: each weighed crop is sold at once, or stored to sell over the winter.' },
+  { id: 'plant', glyph: 'plant', name: 'Plant', short: 'Plant', from: [S.SEASON_START.month, S.SEASON_START.dom], says: 'Plant. Your crew plants each field in May, once the soil is warm enough.' },
+  { id: 'tend', glyph: 'hill', name: 'Tend', short: 'Tend', from: [6, 1], says: 'Tend. Your crew hills and scouts the fields. Spraying is your decision when blight weather arrives.' },
+  { id: 'kill', glyph: 'kill', name: 'Kill the vines', short: 'Kill', from: [9, 1], says: 'Kill the vines. This happens in September, so the skins toughen up for harvest.' },
+  { id: 'dig', glyph: 'dig', name: 'Harvest', short: 'Dig', from: [9, 20], says: 'Harvest. Your crew digs and hauls each field, and the crop is weighed at the potato house.' },
+  { id: 'sell', glyph: 'ticket', name: 'Sell or store', short: 'Sell', from: [10, 20], says: 'Sell or store. You can sell each weighed crop right away, or store it to sell over the winter.' },
 ]
 
 // The phase the farm is in, by what the fields show, not by the date alone.
@@ -90,7 +90,7 @@ function phaseRow(c: S.Campaign): HTMLElement | null {
   const at = PHASES.findIndex(p => p.id === now)
   const end = S.dayIndex(y, S.SEASON_LAST.month, S.SEASON_LAST.dom)
   const start = (k: number) => (k < PHASES.length ? S.dayIndex(y, PHASES[k].from[0], PHASES[k].from[1]) : end)
-  return h('ol', { class: 'phases', testid: 'phases', 'aria-label': `The year, in order. Now: ${PHASES[at]?.name ?? ''}${PHASES[at + 1] ? `; next: ${PHASES[at + 1].name}` : ''}` },
+  return h('ol', { class: 'phases', testid: 'phases', 'aria-label': `The stages of the year. Now: ${PHASES[at]?.name ?? ''}.${PHASES[at + 1] ? ` Next: ${PHASES[at + 1].name}.` : ''}` },
     PHASES.map((p, k) => h('li', {
       class: `term${k === at ? ' now' : k < at ? ' past' : ''}`, style: `flex:${start(k + 1) - start(k)} 0 auto`, tabindex: '0', 'data-tip': p.says, 'aria-current': k === at ? 'step' : null,
     }, icon(p.glyph, 'i'), k === at ? p.short : h('span', { class: 'sr' }, p.name))))
@@ -130,22 +130,22 @@ export function clock(ctx: Ctx, compact: boolean, onMenu?: () => void): HTMLElem
   const at = paused ? app.resumeSpeed || 1 : app.speed
   const pause = h('button', {
     class: `k${paused ? ' stopped' : ''}`, type: 'button', testid: compact ? 'speed-toggle' : 'speed-0', 'aria-pressed': String(paused),
-    'aria-label': paused ? `Paused. Go on at ${SPEED_X[at]}${keys ? ' (Space)' : ''}` : `Pause${keys ? ' (Space)' : ''}`,
-    title: keys ? (paused ? `Go on at ${SPEED_X[at]} (Space)` : 'Pause (Space)') : undefined, onclick: () => app.togglePause(),
+    'aria-label': paused ? `Paused. Resume at ${SPEED_X[at]}${keys ? ' (Space)' : ''}` : `Pause${keys ? ' (Space)' : ''}`,
+    title: keys ? (paused ? `Resume at ${SPEED_X[at]} (Space)` : 'Pause (Space)') : undefined, onclick: () => app.togglePause(),
   }, icon(paused ? 'play' : 'pause'))
   if (compact) {
     const next = (at % 3 + 1) as 1 | 2 | 3
-    return h('div', { class: 'clock sys compact', role: 'group', 'aria-label': 'Clock' }, pause,
+    return h('div', { class: 'clock sys compact', role: 'group', 'aria-label': 'Game speed' }, pause,
       h('button', { class: 'k speed-x num', type: 'button', testid: 'speed-cycle', 'aria-pressed': String(!paused), onclick: () => app.setSpeed(next) },
         SPEED_X[at], h('span', { class: 'sr' }, ` speed${paused ? ', paused' : ''}. Change to ${SPEED_NAME[next]}`)),
       onMenu ? menuKey(ctx, onMenu) : null)
   }
-  return h('div', { class: 'clock sys', role: 'group', 'aria-label': 'Clock' }, pause,
+  return h('div', { class: 'clock sys', role: 'group', 'aria-label': 'Game speed' }, pause,
     ([1, 2, 3] as const).map(k => h('button', {
       class: `k speed-x num${paused && k === at ? ' armed' : ''}`, type: 'button', testid: `speed-${k}`, 'aria-pressed': String(app.speed === k),
-      title: keys ? `${SPEED_NAME[k]} (F steps through the speeds; + and − too)` : undefined,
+      title: keys ? `${SPEED_NAME[k]} (press F to cycle through the speeds, or + and − to change it)` : undefined,
       onclick: () => app.setSpeed(k),
-    }, SPEED_X[k], h('span', { class: 'sr' }, ` speed${paused && k === at ? ', the speed it goes on at' : ''}`))),
+    }, SPEED_X[k], h('span', { class: 'sr' }, ` speed${paused && k === at ? ', the speed the game will resume at' : ''}`))),
     onMenu ? menuKey(ctx, onMenu) : null)
 }
 
@@ -169,13 +169,14 @@ export function outlook(ctx: Ctx, c: S.Campaign): { figure: number; why: string;
   const figure = Math.round(m.after / 100) * 100
   const parts = m.parts.map(p => `${p.label} ${F.money(Math.round(p.amount))}`)
   // The crop is counted from the season's first day (S.moneyNow), so the only warning is the bank's own: callRisk.
-  const verdict = m.callRisk === 'likely' ? ' Even a good crop would end under the bank\'s limit: the bank would call the note.'
-    : m.callRisk === 'possible' ? ' On a middling crop this would end under the bank\'s limit.' : ''
+  const limit = F.money(-S.CREDIT_LIMIT)
+  const verdict = m.callRisk === 'likely' ? ` Even a good crop would leave you more than ${limit} in the red, so the bank would foreclose.`
+    : m.callRisk === 'possible' ? ` With an average crop you'd end the year more than ${limit} in the red, which is the bank's limit.` : ''
   // While some crop is not yet weighed, how far the figure may go either way (S.moneyNow's range); none once all is in.
   const unweighed = c.phase === 'season' && !!s && s.fields.some((f, i) => S.isField(c, i) && f.status !== 'rest' && f.status !== 'off' && f.status !== 'lost' && !f.weighed)
   const spread = unweighed ? Math.round((m.range.hi - m.range.lo) / 2 / 100) * 100 : 0
-  const give = spread ? ` Until all of it is weighed it can come out ${F.money(spread)} either way.` : ''
-  return { figure, before: false, spread, risk: m.callRisk, label: 'After year-end bills', why: `${c.phase === 'cellar' ? 'If what is in store sold today' : 'If everything sold today'}: ${parts.join('; ')}.${verdict}${give}` }
+  const give = spread ? ` Until the whole crop is weighed, this could be off by ${F.money(spread)} either way.` : ''
+  return { figure, before: false, spread, risk: m.callRisk, label: 'After year-end bills', why: `${c.phase === 'cellar' ? 'If you sold everything in storage today' : 'If you sold everything today'}: ${parts.join(', ')}.${verdict}${give}` }
 }
 
 // Said before logs are sold: the buildings not yet up that would take them, and what buying them back costs.
@@ -183,7 +184,7 @@ export function logsWanted(c: S.Campaign): string {
   const want = S.BUILDING_KINDS.filter(k => S.BUILDINGS[k].logs > 0 && !S.buildingAt(c, k, S.HOME_YARD))
     .map(k => ({ name: S.BUILDINGS[k].name.toLowerCase(), logs: S.BUILDINGS[k].logs })).sort((a, b) => b.logs - a.logs).slice(0, 2)
   if (!want.length) return ''
-  return `Keep some for building: ${F.list(want.map(w => `${S.article(w.name)} ${w.name} takes ${w.logs} loads`))}. Bought back, logs cost ${F.money(S.MILL_PRICE)} a load.`
+  return `Keep some for building. ${F.upper(F.list(want.map(w => `${S.article(w.name)} ${w.name} takes ${w.logs} loads`)))}, and logs cost ${F.money(S.MILL_PRICE)} a load to buy back.`
 }
 
 // A goal's when, run into a line: its first word lower-cased, a month's name left as it is.
@@ -318,13 +319,13 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
       !x.done && x.now && !x.block && o.show && o.canShow?.(x)
         ? h('button', { class: 'btn', type: 'button', testid: cls === 'now' ? 'goal-show' : `goal-show-${x.id}`, onclick: () => showGoal(x) }, icon('arrow', 'i'), 'Show me') : null)
     return h('div', { class: 'tb-pop goals-pop sheet', testid: 'goals', role: 'dialog', 'aria-label': 'Goals' },
-      h('p', { class: 't-label' }, 'The way ahead'),
+      h('p', { class: 't-label' }, 'Your goals'),
       h('ol', { class: 'gls' },
-        reached.length > 3 ? h('li', { class: 'gl done more' }, h('i', { class: 'tick on', 'aria-hidden': 'true' }), h('span', { class: 'gl-t' }, `${reached.length - 3} more reached`)) : null,
+        reached.length > 3 ? h('li', { class: 'gl done more' }, h('i', { class: 'tick on', 'aria-hidden': 'true' }), h('span', { class: 'gl-t' }, `${reached.length - 3} more done`)) : null,
         reached.slice(-3).map(x => row(x, 'done')),
         g && !g.long ? row(g, 'now') : null,
         ahead.map(x => row(x, 'later'))),
-      c.history.length ? [h('p', { class: 't-label' }, 'Long goals'),
+      c.history.length ? [h('p', { class: 't-label' }, 'Long-term goals'),
         h('ol', { class: 'gls' }, all.filter(x => x.long).map(x => row(x, x.done ? 'done' : x.id === g?.id ? 'now' : 'long')))] : null)
   }
 
@@ -340,7 +341,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
         some >= 1 && some < m.logs - 0.05 ? h('button', { class: 'btn', type: 'button', testid: 'sell-logs-some', onclick: () => sell(some) }, `Sell ${some}`, h('span', { class: 'sub num' }, F.money(some * m.logPrice))) : null,
         h('button', { class: 'btn', type: 'button', testid: 'sell-logs-all', onclick: () => sell(m.logs) }, 'Sell all', h('span', { class: 'sub num' }, F.money(m.logs * m.logPrice)))),
       h('p', { class: 'mat-row' }, icon('stone', 'i'), h('b', { class: 'num' }, `${F.num(m.stone, m.stone % 1 && m.stone < 10 ? 1 : 0)} loads of fieldstone`)),
-      h('p', { class: 't-caption' }, `For building. Bought at the quarry it costs ${F.money(m.quarryPrice)} a load.`))
+      h('p', { class: 't-caption' }, `Used for building. It costs ${F.money(m.quarryPrice)} a load to buy at the quarry.`))
   }
 
   // The season's call that cannot wait for a goal: a field's spray, water, roguing or vine kill, or any work marked
@@ -364,8 +365,8 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     const urgent: Call[] = S.pressing(app.world, c).map(p => ({
       id: `p-${p.kind}-${p.field}`, act: p.kind, field: p.field, text: `${JOB_VERB[p.kind]} ${S.FIELD_NAMES[p.field]}`, why: `${F.upper(p.why)}. ${p.inWay}`,
       line: p.kind === 'kill' ? p.inWay.replace(/, so .*$/, '').replace(/\.$/, '') : undefined,
-      fix: p.fix, fixLabel: p.fix?.t === 'job' ? 'Order it' : p.fix?.t === 'priority' ? `${whoFirst(c, p.fix)} ${whoFirst(c, p.fix) === 'You' ? 'take' : 'takes'} it next` : 'Show me',
-      done: p.fix?.t === 'priority' ? `${whoFirst(c, p.fix)} ${whoFirst(c, p.fix) === 'You' ? 'take' : 'takes'} the ${JOB_VERB[p.kind].toLowerCase()} in ${S.FIELD_NAMES[p.field]} next.` : p.fix?.t === 'job' ? `${JOB_VERB[p.kind]} ${S.FIELD_NAMES[p.field]} is on the list.` : undefined,
+      fix: p.fix, fixLabel: p.fix?.t === 'job' ? 'Order it' : p.fix?.t === 'priority' ? (whoFirst(c, p.fix) === 'You' ? 'Do it yourself next' : `Have ${whoFirst(c, p.fix)} do it next`) : 'Show me',
+      done: p.fix?.t === 'priority' ? `${jobText(p)} is next for ${whoFirst(c, p.fix) === 'You' ? 'you' : whoFirst(c, p.fix)}.` : p.fix?.t === 'job' ? `${jobText(p)} is on the work list.` : undefined,
     }))
     const calls: Call[] = app.needs().map((n, field) => ({ need: n.need!, field }))
       .filter(x => x.need && x.need.act !== 'close' && x.need.act !== 'wait' && x.need.act !== 'sell' && (CALLS[x.need.act] !== undefined || x.need.urgent))
@@ -376,7 +377,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
 
   function takeCall(call: Call): void {
     // What the fix did is said where the player looks, not only to a screen reader.
-    if (call.fix) { const r = ctx.run(call.fix); if (r.ok) ctx.say(call.done ?? F.localize(r.events[0]?.text ?? `${call.text}: done.`), 'good') }
+    if (call.fix) { const r = ctx.run(call.fix); if (r.ok) ctx.say(call.done ?? F.localize(r.events[0]?.text ?? `Done: ${call.text}.`), 'good') }
     if (call.field >= 0) { app.select(call.field); app.focus(call.field) }
     ctx.dirty()
   }
@@ -386,13 +387,13 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     const act = GOAL_ROUTINE[g.id]
     if (!g.now) return lowerFirst(g.when)
     if (g.block) return F.localize(g.block).replace(/\.$/, '')
-    if (act && c.season?.jobs.some(j => j.kind === act)) return 'on the list'
+    if (act && c.season?.jobs.some(j => j.kind === act)) return 'on the work list'
     // The vine kill: the day the coach expects to ask for it on the first field due (S.killOutlook).
     if (g.id === 'kill' && c.season) {
       const due = c.season.fields.map((_, i) => S.isField(c, i) ? S.killOutlook(c, i) : null).filter((k): k is S.KillOutlook => !!k).sort((a, b) => a.day - b.day)[0]
-      if (due) return due.asked ? `kill due since ${F.date(c.year, due.day, true)}` : `kill due about ${F.date(c.year, due.day, true)}`
+      if (due) return due.asked ? `due since ${F.date(c.year, due.day, true)}` : `due around ${F.date(c.year, due.day, true)}`
     }
-    if (act && S.routineInfo(c).some(r => r.kind === act && r.auto)) return 'the crew sees to it by itself'
+    if (act && S.routineInfo(c).some(r => r.kind === act && r.auto)) return 'your crew handles it automatically'
     if (g.id === 'hire') { const why = S.hireRoom(c); if (why) return F.localize(why).replace(/\.$/, '').toLowerCase() }
     return lowerFirst(g.when)
   }
@@ -413,21 +414,21 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     // In a later season the crop's own next step comes ahead of a farmstead goal, which waits in the line under it.
     let later: Goal | null = null
     if (season && g && !CROP_STEPS.has(g.id)) { const st = seasonStep(c); if (st) { later = g; g = st } }
-    const then = later ? `then: ${later.title.toLowerCase()}` : ''
+    const then = later ? `then ${later.title.toLowerCase()}` : ''
     // Before the ground is fit, the planting goal says plainly how long it will be, counting down by the day.
     const wait = g && g.id === 'plant' && season && !app.needs().some(n => n.need?.act === 'plant') ? plantingIn(app.world, c) : -1
     // The one planting rule (S.plantReady) gives the temperature and the reason, as the field's card and the guide do.
     const first = season ? c.plans.findIndex((p, i) => S.isField(c, i) && p.crop === 'potato') : -1
     const ready = wait > 0 && first >= 0 ? S.plantReady(app.world, c, first) : null
     const title = ready ? `Plant when the soil reaches ${F.temp(ready.need)}` : g?.title ?? ''
-    const n = wait > 1 ? `about ${F.plural(wait, 'day')}` : wait === 1 ? 'any day' : g ? progressText(g) : ''
+    const n = wait > 1 ? `about ${F.plural(wait, 'day')}` : wait === 1 ? 'any day now' : g ? progressText(g) : ''
     const when = !g ? null : !g.now ? h('span', { class: 'goal-when' }, lowerFirst(g.when))
       : c.phase === 'plan' && CROP_STEPS.has(g.id) ? h('span', { class: 'goal-when' }, 'once the season starts')
         : null
     // While the soil warms there is nothing to do but wait: a key beside the slip lets the weeks go by at 3x.
     const faster = wait > 0 && app.speed < 3 && !S.seasonDone(c)
-      ? h('button', { class: 'btn goal-go', type: 'button', testid: 'goal-faster', title: ctx.touch() ? undefined : 'The clock stops by itself when there is work (F steps the speed)', onclick: () => app.setSpeed(3) },
-        icon('fast', 'i'), `Let the weeks go: ${SPEED_X[3]}`) : null
+      ? h('button', { class: 'btn goal-go', type: 'button', testid: 'goal-faster', title: ctx.touch() ? undefined : 'The game pauses automatically when there\'s work to do (press F to change the speed)', onclick: () => app.setSpeed(3) },
+        icon('fast', 'i'), `Skip ahead at ${SPEED_X[3]}`) : null
     // The fist points only at what can be done now and paid for: the season's pressing call first (a long goal waits
     // in the quiet line under it), then the goal when its control can be reached; anything else is said quietly.
     const reach = !!g && wait <= 0 && g.now && !g.block && (o.canShow?.(g) ?? false)
@@ -440,8 +441,8 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
         onclick: () => { pop = pop === 'goals' ? '' : 'goals'; ctx.dirty() },
       }, callFirst ? fist() : null, h('span', { class: 'goal-body' }, h('span', { class: 'sr' }, callFirst ? 'Now: ' : 'Next goal: '),
         h('b', { class: 'goal-t' }, callFirst ? F.localize(call!.text) : g!.title),
-        callFirst ? (call!.line ? h('span', { class: 'goal-when' }, call!.line) : g ? h('span', { class: 'goal-when' }, `then: ${g.title.toLowerCase()}${reach ? '' : `, ${notYet(c, g)}`}`) : null) : h('span', { class: 'goal-when' }, `${notYet(c, g!)}${then ? `; ${then}` : ''}`)),
-      h('span', { class: 'sr' }, `. ${callFirst ? F.localize(call!.why) : g!.why} Open the goals.`))
+        callFirst ? (call!.line ? h('span', { class: 'goal-when' }, call!.line) : g ? h('span', { class: 'goal-when' }, `then ${g.title.toLowerCase()}${reach ? '' : ` (${notYet(c, g)})`}`) : null) : h('span', { class: 'goal-when' }, `${notYet(c, g!)}${then ? ` · ${then}` : ''}`)),
+      h('span', { class: 'sr' }, `. ${callFirst ? F.localize(call!.why) : g!.why} Press to open your goals.`))
       const go = callFirst ? h('button', { class: 'btn goal-go', type: 'button', testid: 'goal-do', onclick: () => takeCall(call!) }, icon(call!.fix ? 'check' : 'arrow', 'i'), call!.fixLabel) : null
       return go ? h('div', { class: 'goal-row' }, quiet, go) : quiet
     }
@@ -455,9 +456,9 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     },
     gone ? h('span', { class: 'was struck' }, h('span', { class: 'sr' }, 'Done: '), gone.title) : null,
     g ? [quiet ? null : fist(), h('span', { class: 'goal-body' },
-      h('span', { class: 'sr' }, 'Next goal: '), h('b', { class: 'goal-t' }, title), quiet ? h('span', { class: 'goal-when' }, `${notYet(c, g)}${then ? `; ${then}` : ''}`) : when ?? (then ? h('span', { class: 'goal-when' }, then) : null)),
+      h('span', { class: 'sr' }, 'Next goal: '), h('b', { class: 'goal-t' }, title), quiet ? h('span', { class: 'goal-when' }, `${notYet(c, g)}${then ? ` · ${then}` : ''}`) : when ?? (then ? h('span', { class: 'goal-when' }, then) : null)),
     n ? h('span', { class: 'count goal-n num', testid: wait > 0 ? 'goal-wait' : undefined }, n) : null,
-    h('span', { class: 'sr' }, `. ${g.why} Open the goals.`)] : null)
+    h('span', { class: 'sr' }, `. ${g.why} Press to open your goals.`)] : null)
     return faster || doIt ? h('div', { class: 'goal-row' }, slip, faster ?? doIt) : slip
   }
 
@@ -508,21 +509,21 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
         class: `after term${view.risk === 'likely' ? ' bad' : view.risk === 'possible' ? ' warn' : ''}`, testid: 'outlook', tabindex: '0', 'data-tip': view.why,
       }, h('span', { class: 't-label' }, h('span', { class: 'long' }, view.label), h('span', { class: 'short', 'aria-hidden': 'true' }, view.before ? 'Before crop' : 'After bills')), h('span', { class: 't-figure num' }, F.money(view.figure)), view.spread ? h('span', { class: 'give num', testid: 'outlook-spread', 'aria-hidden': 'true' }, `±${F.money(view.spread)}`) : null, h('span', { class: 'sr' }, `. ${view.why}`)) : null
       const balance = h('div', { class: `balance${after ? ' two' : ''}` },
-        h('span', { class: 't-label when' }, c.cash < 0 ? 'On the loan' : after ? 'Cash' : 'Balance'),
+        h('span', { class: 't-label when' }, c.cash < 0 ? 'In the red' : after ? 'Cash' : 'Balance'),
         h('span', {
           class: `t-figure cash${c.cash < 0 ? ' neg' : ''}`, testid: 'cash',
-          title: ctx.touch() ? undefined : `${c.cash >= 0 ? '' : 'Owed on the spring operating loan: the crop pays it back. The bank calls the note if the year closes too far under.'}${lastMoved ? `${c.cash >= 0 ? '' : ' '}Last moved: ${lastMoved}.` : ''}` || undefined,
+          title: ctx.touch() ? undefined : `${c.cash >= 0 ? '' : 'You owe this on the spring loan, and the crop pays it back. The bank will foreclose if you end the year too far in the red.'}${lastMoved ? `${c.cash >= 0 ? '' : ' '}Last change: ${lastMoved}.` : ''}` || undefined,
         }, h('span', { class: 'sr' }, 'Cash: '), h('span', { class: 'cash-v num' }, F.money(c.cash))),
         moved && !phone ? h('span', { class: 'cash-moved', testid: 'cash-moved', role: 'status' }, moved.text) : null,
         after)
       return [
-        h('section', { class: 'almanac', 'aria-label': 'Date, weather and the next goal' },
+        h('section', { class: 'almanac', 'aria-label': 'Date, weather and your next goal' },
           h('div', { class: 'mount' },
             h('div', { class: `face${season ? '' : ' plain'}` },
               leaf(c),
               season ? h('button', { class: 'forecast', type: 'button', testid: 'forecast', onclick: () => o.onAlmanac?.() },
                 // The figures are for the eye; a screen reader gets the days in words.
-                h('span', { class: 'sr' }, `${fc.map(x => x.said).join(' ')} Open the almanac for the forecast in full.`),
+                h('span', { class: 'sr' }, `${fc.map(x => x.said).join(' ')} Press to open the almanac for the full forecast.`),
                 fc.slice(0, days).map(x => h('span', { class: 'd', 'aria-hidden': 'true' },
                   h('span', { class: 't-label' }, x.day),
                   icon(x.sky, 'i'),
@@ -536,7 +537,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
             season ? phaseRow(c) : null),
           goalSlip(c, g, gone, season),
           pop === 'goals' ? ladder(c, g) : null),
-        phone ? null : h('section', { class: 'bank', 'aria-label': 'Money, the clock and the contracts' },
+        phone ? null : h('section', { class: 'bank', 'aria-label': 'Money, game speed and contracts' },
           h('div', { class: 'mount' },
             h('div', { class: 'face' },
               balance,
@@ -545,11 +546,12 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
               mats ? h('button', {
                 class: 'materials', type: 'button', testid: 'materials', 'aria-expanded': String(pop === 'materials'),
                 onclick: () => { pop = pop === 'materials' ? '' : 'materials'; ctx.dirty() },
-              }, h('span', { class: 'sr' }, 'Logs '), c.logs >= 0.05 ? [icon('logs', 'i'), h('span', { class: 'num' }, `${F.num(Math.floor(c.logs))} logs`)] : null,
-              h('span', { class: 'sr' }, ' loads, stone '), c.stone >= 0.05 ? [icon('stone', 'i'), h('span', { class: 'num' }, `${F.num(Math.floor(c.stone))} stone`)] : null, h('span', { class: 'sr' }, ' loads. Sell logs')) : null,
+              }, c.logs >= 0.05 ? [icon('logs', 'i'), h('span', { class: 'num' }, `${F.num(Math.floor(c.logs))} logs`)] : null,
+              c.logs >= 0.05 && c.stone >= 0.05 ? h('span', { class: 'sr' }, ' and ') : null, c.stone >= 0.05 ? [icon('stone', 'i'), h('span', { class: 'num' }, `${F.num(Math.floor(c.stone))} stone`)] : null,
+              h('span', { class: 'sr' }, ' in the yard, counted in loads. Press to see them or sell logs.')) : null,
               season || c.phase === 'cellar' ? contracts.part(c) : null)),
           pop === 'materials' && mats ? materials(c) : null,
-          stopped ? h('p', { class: 'stopped-tag', role: 'status' }, icon('pause', 'i'), 'Stopped for you') : null),
+          stopped ? h('p', { class: 'stopped-tag', role: 'status' }, icon('pause', 'i'), 'Waiting for you') : null),
       ]
     })
     // Out of season the cash moves in a few large steps: each one counts, so it is seen to move.

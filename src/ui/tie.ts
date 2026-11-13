@@ -343,7 +343,7 @@ export function anchored(ctx: Ctx, card: HTMLElement, o: { mark?: boolean } = {}
   const arrow = icon('arrow', 'i')
   // The key stands on a tab of the card's own paper, so it reads over the land.
   const show = h('span', { class: 'tether-tab sheet sys', hidden: true },
-    h('button', { class: 'btn', type: 'button', testid: `show-${name}`, 'data-w': 'std', 'aria-label': 'Show it on the land', onclick: () => tie?.show() }, arrow, 'Show'))
+    h('button', { class: 'btn', type: 'button', testid: `show-${name}`, 'aria-label': 'Show it on the land', onclick: () => tie?.show() }, arrow, 'Show'))
   const parts = [line, dot, notch, show, ...(mark ? [mark] : [])]
   let tie: Tie | null = null
   let size = { w: card.offsetWidth || 320, h: 240 }
