@@ -287,7 +287,12 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
   // Where each tag goes for tags of these sizes: over its field, clear of the boards and of each other.
   // over: there was not the room, and some had to overlap. final: the last fold, where a tag may give way (gave).
   // snug: no room kept beside any tag (nearer in, when keeping it would carry a tag off its field).
-  function place(sz0: Size[], final = false, snug = false): { want: Box[]; over: boolean; gave: number[] } {
+  function place(sz0: Size[], final = false, snug = false, tight = false): { want: Box[]; over: boolean; gave: number[] } {
+    close = tight
+    try { return placed(sz0, final, snug) } finally { close = false }
+  }
+
+  function placed(sz0: Size[], final: boolean, snug: boolean): { want: Box[]; over: boolean; gave: number[] } {
     const ins = app.insets
     const sz = sz0.map((_, i) => snug ? sz0[i] : room(i, sz0))
     const want = targets(sz)
@@ -410,8 +415,12 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
 
 
   // The room a tag at w takes from the others: from its left edge, with its stamp beside it.
+  // close: the last resort nearer in, before a tag would leave its field: a tag with no stamp takes only its own
+  // face's height from the others, not the row kept for a stamp.
+  let close = false
   function roomAt(i: number, w: Box, sz0: Size[], sz: Size[]): Rect {
     const l = w.x - sz0[i].w / 2
+    if (close && !sz0[i].extra) { const t = w.y - sz0[i].h + face[i].t; return { l, t, r: l + sz[i].w, b: t + face[i].h } }
     return { l, t: w.y - sz[i].h, r: l + sz[i].w + sz[i].extra, b: w.y }
   }
 
@@ -426,7 +435,7 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
     const a = ctx.view.fieldAnchor(i)
     const free = (v: Box) => {
       const r = roomAt(i, v, sz0, sz)
-      return r.l >= land.l && r.r <= land.r && r.t + face[i].t >= land.t && r.b - below <= land.b && !taken.some(x => meet(r, x, GAP, ROW_GAP))
+      return r.l >= land.l && r.r <= land.r && v.y - sz[i].h + face[i].t >= land.t && v.y - below <= land.b && !taken.some(x => meet(r, x, GAP, ROW_GAP))
     }
     if (a.visible) {
       const bx = Math.max(land.l + sz0[i].w / 2, Math.min(land.r - sz[i].w - sz[i].extra + sz0[i].w / 2, a.x + (sz0[i].w - sz[i].w) / 2))
@@ -520,7 +529,11 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
     if (fresh) measure()
     let named = place(tier())
     // Nearer in, the room kept beside the tags goes before any tag leaves its field; they never fold.
-    if (!far && named.over) named = { ...place(full, false, true), over: false }
+    // (and, if a tag would still leave its field, the row kept over and under a tag that has no stamp)
+    if (!far && named.over) {
+      const snug = place(full, false, true)
+      named = { ...(snug.over ? place(full, false, true, true) : snug), over: false }
+    }
     if (named.over !== compact) {
       compact = named.over
       folds()
