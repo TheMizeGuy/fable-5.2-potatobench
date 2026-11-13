@@ -21,6 +21,10 @@ export class Pace {
   // How many beats make about a sixtieth of a second; and whether a faster display is drawn on its every beat.
   sixty = 1
   full = false
+  // How long the browser took to call again, the last time it did: the wait that says whether the machine keeps up.
+  // (The time a drawn frame covers says nothing of that on a fast display drawn at about sixty: it is so many beats
+  // by choice, and one beat more whenever a call falls just short.)
+  gap = 0
   // 0 while things move .. 1 at rest
   still = 0
   private gaps: number[] = []
@@ -46,6 +50,7 @@ export class Pace {
   // hold: the camera is moving, and the pace is left as it is until it has stopped.
   tick(dtMs: number, busy: boolean, alone = false, hold = false): number {
     const dt = Math.min(dtMs, 250)
+    this.gap = dt
     this.owed += dt
     this.untouched += dt / 1000
     this.halved = alone && this.untouched > UNWATCHED_S

@@ -278,7 +278,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   // The first run's frames, timed whole (null once the choice is made).
   let trial: number[] | null = adaptive && app.settings.quality === 'auto' && !known ? [] : null
   const onePixel = new Uint8Array(4)
-  const times: number[] = []
+  const times: number[] = [], waits: number[] = []
   let fps = 60, warm = 0
   const pacing = new Pace(), sizer = new Sizer(), rate = new Rate()
   // Counts the pictures drawn and the window's changes: what is worked out of the screen for one is kept until the next.
@@ -710,22 +710,32 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     if (warm < 150) { warm++; return }
     if (dtMs > 250) return
     times.push(dtMs)
+    // Whether the machine keeps up is told by how long the browser took to call again, not by the time between two
+    // pictures: on a fast display drawn at about sixty a second a picture waits a beat more whenever a call falls
+    // just short, and taken for lateness that made the picture smaller and the setting lower on machines with every
+    // frame to spare (a stand-in for such a display went to the low setting at its smallest size, at 47 a second).
+    waits.push(capped ? Math.min(dtMs, pacing.gap || dtMs) : dtMs)
     timesFor += dtMs
     if (timesFor < 1500 || times.length < 12) return
     const sorted = times.slice().sort((a, b) => a - b), seconds = timesFor / 1000
+    const waited = waits.slice().sort((a, b) => a - b)
     times.length = 0
+    waits.length = 0
     timesFor = 0
     fps = Math.round(1000 / Math.max(1, sorted[sorted.length >> 1]))
     if (!adaptive || probe.on) return
-    const late = sorted[Math.floor(sorted.length * 0.73)] / pacing.frameMs, slow = late > 1.23
+    const late = waited[Math.floor(waited.length * 0.73)] / pacing.frameMs, slow = late > 1.23
     const auto = app.settings.quality === 'auto'
     // Too slow for any size of the picture to mend (under 26 frames a second where 60 are asked for), two stretches
     // running, is not walked down a size at a time. (One such stretch is as often something else on the machine.)
     // A fast display drawn on its every beat goes back to about sixty a second before anything is made smaller; one
     // drawn at about sixty is tried on every beat when it has been in time for a while at its full size.
-    const went = rate.feed(slow, seconds, pacing.sixty > 1 && sizer.step === 0 && !lowered && !upDue)
+    // (drawn on every beat it is kept there for as long as that gives more pictures than about sixty would: seventy a
+    // second or better, however uneven the browser's calls)
+    const fast = sorted[Math.floor(sorted.length * 0.73)] <= 1000 / 70
+    const went = rate.feed(pacing.full ? !fast : slow, seconds, pacing.sixty > 1 && sizer.step === 0 && !lowered && !upDue)
     if (went) { pacing.full = rate.full; return }
-    if (pacing.full && slow) return
+    if (pacing.full) return
     tooSlow = late > 2.3 ? tooSlow + 1 : 0
     const plainly = tooSlow >= 2 && auto && tier !== 'low'
     if (plainly) tooSlow = 0
