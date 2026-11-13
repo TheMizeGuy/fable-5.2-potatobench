@@ -629,6 +629,9 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
   let onScreen: string = app.screen
   let hadNote = false
   let hadWait = false
+  let waitOn = ''
+  let waitSince = 0
+  let waitFramed = false
   let driveKey = ''
   let driveShown = false
   let driveSaid = ''
@@ -714,9 +717,16 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
       driven = false
       hadWait = true
       showDrive(d.line, d.next, d.waits.id, d.waits.field)
+      // The stamp it asks for must be there to press. Off the screen or under something once the picture has
+      // settled (on a phone a person's pin can stand over it): its field is brought up close, once.
+      if (waitOn !== d.waits.id) { waitOn = d.waits.id; waitSince = t; waitFramed = false }
+      if (!waitFramed && t - waitSince > 1400) {
+        const el = root.querySelector<HTMLElement>(`[data-testid="badge-${d.waits.field}"]`)
+        if (!shown(el) || hiddenAt({ el, at: box(el.getBoundingClientRect()) })) { waitFramed = true; app.focus(d.waits.field) }
+      }
       return
     }
-    if (hadWait) { hadWait = false; beatAt = Math.max(beatAt, t + 900) }
+    if (hadWait) { hadWait = false; waitOn = ''; if (waitFramed) app.focus(-1); beatAt = Math.max(beatAt, t + 900) }
     if (scene && t >= scene.until) { endScene(true); beatAt = Math.max(beatAt, t + 300) }
     // Work is watched only while the player is looking at nothing of their own: no card open, nobody picked. And
     // someone is followed only while they are out on the land (indoors, the camera would show the house).

@@ -217,7 +217,9 @@ tutorial when planting is ready and accelerate time during the tutorial where ne
   and says what it waits for ("Water Brook Field. Click its ringed stamp."), with "Go on without it". An ask sent
   on is not asked again: the word to plant until the crew has started (its stamps come and go with the weather, and a
   day's turn takes them down for a frame), any other until its stamp has been gone two seconds. Waiting, the guide
-  shows the whole farm, as it does when a note or a card cuts a showing short, so the stamp asked for is in view.
+  shows the whole farm, as it does when a note or a card cuts a showing short, so the stamp asked for is in view; a
+  stamp that is still off the screen or under something a second and a half on (on a phone a person's pin can stand
+  over it) has its field brought up close, once, and the whole farm comes back when the wait is over.
 - *The player keeps the clock.* A speed set, a pause (Space included) or "Take the clock" on the guide's line takes
   it, and the guide does not start again by itself. A note then offers it back with a quiet key, "Run the clock
   for me", and the guide's paper has the same as a tick box. "Turn off the tutorial" stops it with everything
