@@ -1,13 +1,15 @@
 // Plays two years on the fixed farm the way the game asks (the word to plant, the season's spraying answered, the
 // stamps pressed, each crop sold at its ticket; a hand hired and a sprayer bought in the second spring) and, on every
 // game day, writes down what the page says beside what the farm holds, so that two places which disagree can be found.
-// Usage: node tools/quality/agree.ts <base url> <out dir>
-import { mkdirSync, writeFileSync } from 'node:fs'
+// Usage: node tools/quality/agree.ts <base url> <out dir>   (or: --check <days.jsonl>, the rules alone)
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { chromium } from '@playwright/test'
 import { closeAll, GPU, HELPER, q } from './shared.ts'
 
 const [base, out] = process.argv.slice(2)
-if (!base || !out) throw new Error('usage: agree.ts <base url> <out dir>')
+if (!base || !out) throw new Error('usage: agree.ts <base url> <out dir>, or agree.ts --check <days.jsonl>')
+// --check: the rules alone, over readings already taken.
+if (base === '--check') { check(readFileSync(out, 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l) as unknown), []); process.exit() }
 mkdirSync(out, { recursive: true })
 
 // Runs in the page: one day's reading. What is printed, from the page; what is so, from the farm.
@@ -144,3 +146,56 @@ await browser.close()
 writeFileSync(`${out}/days.jsonl`, rows.map(r => JSON.stringify(r)).join('\n'))
 console.log(`${rows.length} readings written to ${out}/days.jsonl; ${errors.length} page errors`)
 for (const e of errors.slice(0, 10)) console.log(`  ${e}`)
+check(rows, errors)
+
+// The readings held against each other: each rule is a way two places can tell it differently.
+interface Row {
+  tag: string; day: number; year: number; phase: string; goalT: string; goalWhen: string; notes: string[]; why: string; paper: string; who: string; whois: string; whoOf: number
+  people: { id: number; name: string; chip: string; pin: string }[]; worked: { unit: number; kind: string }[]
+  fields: { i: number; name: string; status: string; killDay: number; deadDay: number; lastSpray: number; jobs: string[]; need: { act: string } | null; badge: string }[]
+}
+function check(rows: unknown[], errors: string[]): void {
+const found: Record<string, string[]> = {}
+const fault = (rule: string, r: Row, text: string) => { (found[rule] ??= []).push(`year ${r.year} day ${r.day}: ${text}`) }
+const days = (rows as Row[]).filter(r => typeof r.day === 'number' && r.phase === 'season')
+let last = -1
+const cut: Record<number, number> = {}
+for (const r of days) {
+  const first = r.day !== last
+  last = r.day
+  if (first) for (const p of r.people) {
+    const did = r.worked.filter(w => w.unit === p.id).map(w => w.kind)
+    if (p.chip === 'Idle' && did.length) fault('called idle after a day\'s work', r, `${p.name}: ${did.join(', ')}`)
+    const word = /^[^,]+, ([a-z]+)/.exec(p.pin)?.[1] ?? ''
+    if (p.pin && word && !['resting', 'idle'].includes(word) && word !== p.chip.toLowerCase().split(' ')[0] && !/needs you|worn/.test(p.pin)) fault('a pin says other than its chip', r, `${p.name}: chip "${p.chip}", pin "${p.pin.slice(0, 60)}"`)
+  }
+  const me = r.people.find(p => p.id === r.whoOf)
+  const line = (r.who || r.whois).trim()
+  if (me && line && me.chip && !/^(Stopped|Worn)/i.test(me.chip) && !line.toLowerCase().startsWith(me.chip.toLowerCase())) fault('a card\'s line says other than its chip', r, `${me.name}: chip "${me.chip}", card "${line.slice(0, 70)}"`)
+  if (!first) continue
+  if (/until blight weather/.test(r.goalT) && r.fields.some(f => f.lastSpray >= 0)) fault('"until blight weather" after spraying began', r, r.goalT)
+  if (/\.$/.test(r.goalT)) fault('a slip title ending in a period', r, r.goalT)
+  if (/then sign a contract|then buy a machine/.test(r.goalWhen)) fault('"then" a goal that cannot be taken in the season', r, r.goalWhen)
+  if (/then .*your crew handles it automatically/.test(r.goalWhen)) fault('the crew\'s job given as the player\'s "then"', r, `${r.goalT} | ${r.goalWhen}`)
+  if (/next decision is killing/.test(r.goalT) && r.fields.some(f => f.jobs.includes('kill'))) fault('"next decision" for a kill already ordered', r, `${r.goalT} | ${r.goalWhen}`)
+  for (const n of r.notes) {
+    const m = /^(Spray|Water|Kill the vines in|Hill) (.+?)(?: and \d+ more fields?)?$/.exec(n.replace(/\s*\.? ?Go there\.$/, '').trim())
+    if (!m) continue
+    const act = m[1] === 'Kill the vines in' ? 'kill' : m[1].toLowerCase()
+    if (!r.fields.some(f => f.need?.act === act && !f.jobs.includes(act))) fault('an ask left up after it was met', r, n.slice(0, 70))
+  }
+  const k = /^Vines killed in (.+?):/.exec(r.why)
+  if (k) { const f = r.fields.find(x => x.name === k[1]); if (f && f.killDay >= 0 && f.killDay < r.day - 2) fault('a money reason for something that happened days before', r, `${r.why} (killed on day ${f.killDay})`) }
+  for (const f of r.fields) if (f.badge && f.need && f.jobs.includes(f.need.act)) fault('a stamp for work already on the list', r, `${f.name}: ${f.badge.slice(0, 50)}`)
+}
+for (const r of rows as Row[]) {
+  const m = /WEIGH TICKET NO\. (\d+)-(\d+)/.exec(r.paper ?? '')
+  if (!m || !/ticket$/.test(r.tag)) continue
+  cut[Number(m[1])] = (cut[Number(m[1])] ?? 0) + 1
+  if (Number(m[2]) !== cut[Number(m[1])]) fault('a ticket numbered out of the order it was cut', r, `No. ${m[1]}-${m[2]}, the year's ${cut[Number(m[1])]}${['', 'st', 'nd', 'rd'][cut[Number(m[1])]] ?? 'th'}`)
+}
+const rules = Object.keys(found)
+console.log(rules.length ? `${rules.length} kinds of disagreement:` : 'no disagreement found')
+for (const k of rules) { console.log(`  ${k}: ${found[k].length}`); for (const x of found[k].slice(0, 3)) console.log(`    ${x}`) }
+if (rules.length || errors.length) process.exitCode = 1
+}

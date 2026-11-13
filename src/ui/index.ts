@@ -169,7 +169,7 @@ export const mountHud: MountHud = (root, app, view, sound) => {
     if (!f || f.lastSpray < 0) return 'It got in before the first spray'
     const days = s0.day - f.lastSpray
     if (info.protect < 0.35) return days <= 4 ? 'Rain washed the last spray off' : `Last sprayed ${days} days ago, worn off`
-    return 'Spray can\'t cure a plant that already has it'
+    return 'Spray slows blight but can\'t keep all of it out'
   }
 
   // Runs after every command, so when a day's events arrive this still holds the day before.
