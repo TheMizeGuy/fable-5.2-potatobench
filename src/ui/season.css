@@ -287,6 +287,18 @@
   .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .whose > .quiet:first-child { display: none; }
   .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .readings { gap: 3px; padding: 6px 16px 7px; font-size: 14.5px; }
 }
+/* A 720-line window, paused: the clock's chip under the cash board leaves the land beside it 443 px, and a sheltered
+   field's card has a third reading. The same spacing a little tighter again, so that card is whole there too. */
+@media (max-height: 740px) {
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .command-head { padding: 6px 16px 4px; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .command-head .t-title { font-size: 24px; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .gauge { gap: 2px; padding: 4px 12px 4px; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .orders.slots { gap: 4px; padding: 6px 12px 2px; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .orders.slots .order { grid-template-rows: 22px 15px 13px; height: 57px; padding: 2px 8px 5px; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .orders.slots .order .name { font-size: 15px; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .order-say, .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .order-say.is-telling, .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .whose { padding-top: 2px; padding-bottom: 3px; }
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .readings { gap: 2px; padding: 3px 16px 4px; font-size: 14px; line-height: 1.25; }
+}
 /* The same of a person's page: whole in a 720-line window, beside the people bar it was opened from. */
 /* A short window: the care of the land is one line, its catch under the pointer. */
 @media (max-height: 760px) {

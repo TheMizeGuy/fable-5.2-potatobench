@@ -586,10 +586,15 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
       for (let i = 0; i < S.FIELD_COUNT; i++) ref[i] = anchors[i]
       return
     }
+    // A tag held at the edge of the free land for a field under the boards stays at that edge while the field moves
+    // beneath them: it rides only as far as the field's place on the free land moves.
+    const land = freeLand()
     for (let i = 0; i < S.FIELD_COUNT; i++) {
       const a = anchors[i], r = ref[i], b = at[i]
       if (b.place === 'gone' || b.place === 'shelf' || !r || !finite(a) || !finite(r) || Math.hypot(a.x - r.x, a.y - r.y) < 0.25) continue
-      show(i, { x: b.x + a.x - r.x, y: b.y + a.y - r.y, place: b.place })
+      const top = land.t - face[i].t + size[i].h, foot = Math.max(top, land.b + size[i].h - face[i].t - face[i].h)
+      const held = (y: number) => Math.max(top, Math.min(foot, y))
+      show(i, { x: b.x + a.x - r.x, y: b.y + held(a.y) - held(r.y), place: b.place })
       ref[i] = a
     }
     arrivals(anchors)
