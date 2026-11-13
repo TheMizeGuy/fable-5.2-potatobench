@@ -17,7 +17,7 @@ export { lotCwt, markOdds, tuberWeights, type Tuber } from './harvest.ts'
 export { basePrice, gradePrice, harvestPrice, levelNow, lotValue, newPotatoWindow, storeOutlook, type StoreMonth } from './market.ts'
 export {
   FIELD_NAMES, JOB_LABEL, haulDistance, haulFactor, haulRate, holdsDufour, jobBlock, jobCost, jobDays, jobWait, knownHills, placeName, seasonDone, standingBy,
-  standLot, standOpen, tractorsOwned, tractorsRunning, unitBlock, waitFor, workday,
+  standLot, standOpen, tractorsOwned, tractorsRunning, unitBlock, waitFor, workday, awaitsWord, plantWordGiven,
 } from './season.ts'
 export {
   article, buildBlock, buildCost, buildingAt, bunkhouses, hasBuilt, pondServes, rain30, roadFactor, travel, wholeLoads, YARD_NAME, type BuildCost,

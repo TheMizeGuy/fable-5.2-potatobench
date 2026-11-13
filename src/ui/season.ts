@@ -249,24 +249,26 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     e.preventDefault()
     land.dispatchEvent(new WheelEvent('wheel', { deltaX: e.deltaX, deltaY: e.deltaY, deltaMode: e.deltaMode, clientX: e.clientX, clientY: e.clientY, ctrlKey: e.ctrlKey, bubbles: true, cancelable: true }))
   }, { passive: false })
-  // The first planting and the first dig the crew starts by itself this season are said, with a way to see them.
+  // The first dig the crew starts by itself this season is said, with a way to see it.
   const startedSaid = new Set<string>()
   function sayCrewStarts(c: S.Campaign): void {
     const s0 = c.season
     if (!s0 || guidedYear(c)) return
-    for (const kind of ['plant', 'dig'] as const) {
+    // (planting says its own start: the player's word, or the crew's start without one, src/sim/advice.ts)
+    {
+      const kind = 'dig'
       const key = `${c.seed}.${c.year}.${kind}`
-      if (startedSaid.has(key)) continue
+      if (startedSaid.has(key)) return
       // Work done today, not an order someone holds while it waits for warm soil; and not work the player ordered.
       const j = s0.worked.find(x => x.kind === kind && !s0.jobs.some(o => o.kind === kind && o.field === x.field && o.by !== 'routine'))
-      if (!j) continue
+      if (!j) return
       startedSaid.add(key)
       const u = c.crew.find(x => x.id === j.unit)
       const who = !u || u.kind === 'farmer' ? 'You\'re' : `${u.name.split(' ')[0]} is`
       ctx.notes.push({
         level: 'info', glyph: kind, ttl: 12000, field: j.field, day: s0.day,
-        text: `${kind === 'plant' ? 'Planting' : 'Digging'} has started in ${S.FIELD_NAMES[j.field]}. Show me`,
-        full: `${kind === 'plant' ? 'Planting' : 'Digging'} has started in ${S.FIELD_NAMES[j.field]} without an order from you. ${who} working there. Press to see.`,
+        text: `Digging has started in ${S.FIELD_NAMES[j.field]}. Show me`,
+        full: `Digging has started in ${S.FIELD_NAMES[j.field]} without an order from you. ${who} working there. Press to see.`,
         // To the field the sentence names, where the work shows.
         go: () => { app.selectUnit(-1); app.select(j.field); app.focus(j.field) }, offer: true,
       })

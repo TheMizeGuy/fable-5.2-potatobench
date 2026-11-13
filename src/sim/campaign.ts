@@ -1,5 +1,5 @@
 // The campaign: planning, the season, the cellar and the year-end ledger, all driven through apply().
-import { asks, frostAhead, noteKillAsks, standingOrders } from './advice.ts'
+import { asks, frostAhead, noteKillAsks, plantAsked, standingOrders, wordToPlant } from './advice.ts'
 import { contractOffers } from './buyers.ts'
 import { hireBlock, hireRoom, newFarmer, newUnit } from './crew.ts'
 import { BLOCK_NAME, BLOCKS, DUFOUR_YARD, HOME_FIELDS, HOME_YARD, PARCELS, YARDS, type BlockId } from './farm.ts'
@@ -977,7 +977,9 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
       if (why) return fail(why)
       noteKillAsks(world, c, asked)
       if (cmd.kind === 'kill') delete c.season!.fields[cmd.field].keepVines
-      return ok()
+      // The year's first planting order is the word the crew waits for.
+      const word = cmd.kind === 'plant' ? wordToPlant(c, cmd.field) : null
+      return ok(word ? [word] : [])
     }
     case 'rest': {
       if (c.phase === 'over') return fail('The farm is gone.')
@@ -1063,7 +1065,7 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
       if (c.season.frozen) return fail('The ground has frozen. Close out the season.')
       const orders = standingOrders(world, c)
       const day = stepDay(world, c)
-      return ok([...orders, ...day, ...frostAhead(world, c)])
+      return ok([...orders, ...day, ...frostAhead(world, c), ...plantAsked(world, c)])
     }
     case 'endSeason': {
       if (c.phase !== 'season' || !c.season) return fail('The season isn\'t under way.')

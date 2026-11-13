@@ -64,7 +64,7 @@ function seasonTrack(c: S.Campaign): HTMLElement | null {
 
 // What the year asks, in order: where the farm is in it, and what comes next. For every player.
 const PHASES: { id: string; glyph: string; name: string; short: string; from: [number, number]; says: string }[] = [
-  { id: 'plant', glyph: 'plant', name: 'Plant', short: 'Plant', from: [S.SEASON_START.month, S.SEASON_START.dom], says: 'Plant. Your crew plants each field in May, once the soil is warm enough.' },
+  { id: 'plant', glyph: 'plant', name: 'Plant', short: 'Plant', from: [S.SEASON_START.month, S.SEASON_START.dom], says: 'Plant. In May, once the soil is warm enough, your crew plants each field when you give the word.' },
   { id: 'tend', glyph: 'hill', name: 'Tend', short: 'Tend', from: [6, 1], says: 'Tend. Your crew hills and scouts the fields. Spraying is your decision when blight weather arrives.' },
   { id: 'kill', glyph: 'kill', name: 'Kill the vines', short: 'Kill', from: [9, 1], says: 'Kill the vines. This happens in September, so the skins toughen up for harvest.' },
   { id: 'dig', glyph: 'dig', name: 'Harvest', short: 'Dig', from: [9, 20], says: 'Harvest. Your crew digs and hauls each field, and the crop is weighed at the potato house.' },
@@ -268,7 +268,7 @@ export function light(selector: string, o: { open?: boolean; top?: boolean } = {
 // Where a spring goal's Show me ends: the fold that holds its control, brought to the top of the sheet and ringed.
 const FOLD_OF: Partial<Record<string, string>> = { tool: 'equipment-open', hire: 'crew-open', contract: 'contracts-open', land: 'land-open' }
 // A goal named by a word a newcomer has not met says what it is, in a clause.
-const GLOSS: Partial<Record<string, string>> = { foreman: 'a hand who orders a block\'s work' }
+const GLOSS: Partial<Record<string, string>> = { foreman: 'a hand who runs your fields away from home' }
 // The crop's own steps: in spring they wait for the season to start.
 const CROP_STEPS = new Set(['plant', 'walk', 'hill', 'spray', 'sample', 'kill', 'dig', 'haul'])
 
@@ -436,7 +436,9 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     // The one planting rule (S.plantReady) gives the temperature and the reason, as the field's card and the guide do.
     const first = season ? c.plans.findIndex((p, i) => S.isField(c, i) && p.crop === 'potato') : -1
     const ready = wait > 0 && first >= 0 ? S.plantReady(app.world, c, first) : null
-    const title = ready ? `Plant when the soil reaches ${F.temp(ready.need)}` : g?.title ?? ''
+    // The soil fit and the crew standing ready: the year's first planting waits for the player's word.
+    const word = !!g && g.id === 'plant' && season && !!c.season && !S.plantWordGiven(c.season) && app.needs().some(n => n.need?.act === 'plant')
+    const title = ready ? `Plant when the soil reaches ${F.temp(ready.need)}` : word ? 'Give the word to plant' : g?.title ?? ''
     const n = wait > 1 ? `about ${F.plural(wait, 'day')}` : wait === 1 ? 'any day now' : g ? progressText(g) : ''
     const when = !g ? null : !g.now ? h('span', { class: 'goal-when' }, lowerFirst(g.when))
       : c.phase === 'plan' && CROP_STEPS.has(g.id) ? h('span', { class: 'goal-when' }, 'once the season starts')

@@ -27,7 +27,7 @@ describe('the routine', () => {
     expect(S.routineInfo(c).filter(r => !r.auto).map(r => r.kind)).toEqual(['spray', 'water', 'kill'])
   })
 
-  it('a farm whose player never gives an order plants, hills, walks, digs and hauls its planned fields; the calls are left as needs', () => {
+  it('a farm whose player never gives an order plants (after waiting three days for the word), hills, walks, digs and hauls its planned fields; the calls are left as needs', () => {
     // 2001, seed 3: a season the untended farm brings in whole (in 1990, seed 7 it loses one field to the freeze-up).
     const c = S.createCampaign(world, { seed: 3, startYear: 2001 })
     ok(c, { t: 'begin' })
@@ -36,7 +36,9 @@ describe('the routine', () => {
     for (let g = 0; g < 400 && c.phase === 'season' && !S.seasonDone(c); g++) {
       for (const n of S.fieldNeeds(world, c)) {
         if (!n.need || n.need.act === 'sell' || n.need.act === 'close' || n.need.act === 'wait') continue
-        expect(['spray', 'water', 'kill']).toContain(n.need.act)
+        // (the year's first planting is asked of the player for three days, then the crew starts by itself)
+        expect(['plant', 'spray', 'water', 'kill']).toContain(n.need.act)
+        if (n.need.act === 'plant') expect(S.plantWordGiven(c.season!)).toBe(false)
         callsAsked.add(n.need.act)
       }
       seen.push(...ok(c, { t: 'day' }).events)
@@ -191,5 +193,112 @@ describe('barrels and frost', () => {
     expect(sunday).toBe(true)
     c.season!.frostHaul = c.season!.day
     expect(S.workday(c, c.season!)).toBe(true)
+  })
+})
+
+describe('the word to plant (round seven)', () => {
+  const potato = (c: Campaign) => [...Array(S.FIELD_COUNT).keys()].filter(i => c.plans[i]?.crop === 'potato' && c.fields[i].tenure !== 'none')
+  const planting = (c: Campaign) => c.season!.jobs.filter(j => j.kind === 'plant')
+  const planted = (c: Campaign) => potato(c).filter(i => c.season!.fields[i].plantDay >= 0)
+  // Days pass until the crew stands ready: the first evening it says so.
+  function untilAsked(c: Campaign): GameEvent {
+    for (let g = 0; g < 120; g++) {
+      const ask = ok(c, { t: 'day' }).events.find(e => e.type === 'plantAsk')
+      if (ask) return ask
+      expect(planting(c).length, 'no planting on the list before the crew asks').toBe(0)
+    }
+    throw new Error('the crew never stood ready')
+  }
+
+  it('the crew stands ready and says so, and no planting starts within three days without the word', () => {
+    const c = S.createCampaign(world, { seed: 3, startYear: 2001 })
+    ok(c, { t: 'begin' })
+    const ask = untilAsked(c)
+    expect(ask.text).toBe('The soil is ready and your crew is waiting for your word. Order Plant on any potato field, or they\'ll start on their own in 3 days.')
+    const asked = c.season!.plantAsk!
+    // Every planned potato field that is fit carries the need, as the player's to give.
+    const needs = S.fieldNeeds(world, c)
+    const fit = potato(c).filter(i => needs[i].need?.act === 'plant')
+    expect(fit.length).toBeGreaterThan(0)
+    for (const i of potato(c)) expect(needs[i].need?.act === 'plant' || needs[i].hold?.act === 'wait', S.FIELD_NAMES[i]).toBe(true)
+    while (c.season!.day - asked < S.PLANT_WORD_DAYS) {
+      expect(planting(c)).toEqual([])
+      expect(planted(c)).toEqual([])
+      expect(S.plantWordGiven(c.season!)).toBe(false)
+      ok(c, { t: 'day' })
+    }
+  })
+
+  it('one press plants there and the crew carries on through the other planned fields by itself, and says exactly that', () => {
+    const c = S.createCampaign(world, { seed: 3, startYear: 2001 })
+    ok(c, { t: 'begin' })
+    untilAsked(c)
+    const first = S.fieldNeeds(world, c).findIndex(n => n.need?.act === 'plant')
+    const r = ok(c, { t: 'job', kind: 'plant', field: first })
+    const others = potato(c).length - 1
+    expect(r.events.map(e => [e.type, e.text])).toEqual([['plantWord', `You gave the word. Your crew will plant the other ${others} fields too.`]])
+    expect(c.season!.plantWordBy).toBe('you')
+    expect(planting(c).map(j => [j.field, j.by])).toEqual([[first, 'you']])
+    // No other order from the player: every planned field is planted, the pressed one first.
+    const seen: GameEvent[] = []
+    leave(c, x => planted(x).length === potato(x).length, seen)
+    expect(planted(c)).toEqual(potato(c))
+    expect(seen.filter(e => e.type === 'planted')[0].field).toBe(first)
+    expect(seen.some(e => e.type === 'plantWord' || e.type === 'plantAsk')).toBe(false)
+    // The need is gone from every field, and a second order says nothing more.
+    expect(S.fieldNeeds(world, c).some(n => n.need?.act === 'plant')).toBe(false)
+  })
+
+  it('with no word in three days the crew starts by itself and says so, and a farm that never presses still brings in a crop', () => {
+    const c = S.createCampaign(world, { seed: 3, startYear: 2001 })
+    ok(c, { t: 'begin' })
+    untilAsked(c)
+    const asked = c.season!.plantAsk!
+    const seen: GameEvent[] = []
+    leave(c, x => planting(x).length > 0 || planted(x).length > 0, seen)
+    const own = seen.filter(e => e.type === 'plantWord')
+    expect(own.map(e => e.text)).toEqual(['You gave no word in 3 days, so your crew has started planting on its own.'])
+    // (three days, or four where the third is a Sunday off)
+    expect(own[0].day - asked).toBeGreaterThanOrEqual(S.PLANT_WORD_DAYS)
+    expect(own[0].day - asked).toBeLessThanOrEqual(S.PLANT_WORD_DAYS + 1)
+    expect(c.season!.plantWordBy).toBe('crew')
+    expect(planting(c).every(j => j.by === 'routine')).toBe(true)
+    leave(c, () => false)
+    expect(S.seasonDone(c)).toBe(true)
+    for (const i of potato(c)) expect(c.season!.fields[i].weighed, S.FIELD_NAMES[i]).toBe(true)
+    // It holds in every year: the next spring's planting waits again.
+    ok(c, { t: 'endSeason' })
+    for (let m = 0; m < 12 && c.phase === 'cellar'; m++) ok(c, { t: 'month' })
+    ok(c, { t: 'next' })
+    ok(c, { t: 'begin' })
+    expect(S.plantWordGiven(c.season!)).toBe(false)
+    expect(untilAsked(c).type).toBe('plantAsk')
+  })
+
+  it('a save from before the rule, taken in the middle of planting, carries on with no word asked', () => {
+    const c = S.createCampaign(world, { seed: 3, startYear: 2001 })
+    ok(c, { t: 'begin' })
+    untilAsked(c)
+    ok(c, { t: 'job', kind: 'plant', field: S.fieldNeeds(world, c).findIndex(n => n.need?.act === 'plant') })
+    leave(c, x => planted(x).length >= 1)
+    // As an old save has it: the fields planted and the orders on the list, and none of the rule's own marks.
+    const old = structuredClone(c)
+    delete old.season!.plantAsk; delete old.season!.plantWord; delete old.season!.plantWordBy
+    for (const j of old.season!.jobs) if (j.kind === 'plant') j.by = 'routine'
+    expect(S.plantWordGiven(old.season!)).toBe(true)
+    const seen: GameEvent[] = []
+    leave(old, x => planted(x).length === potato(x).length, seen)
+    expect(planted(old)).toEqual(potato(old))
+    expect(seen.some(e => e.type === 'plantAsk' || e.type === 'plantWord')).toBe(false)
+  })
+
+  it('planting switched to "ask me" is the player\'s on every field as before, with no word and no start by the crew', () => {
+    const c = S.createCampaign(world, { seed: 3, startYear: 2001 })
+    ok(c, { t: 'routine', kind: 'plant', auto: false })
+    ok(c, { t: 'begin' })
+    const seen: GameEvent[] = []
+    leave(c, x => x.season!.day >= S.dayIndex(2001, 6, 10), seen)
+    expect(seen.some(e => e.type === 'plantAsk' || e.type === 'plantWord')).toBe(false)
+    expect(planted(c)).toEqual([])
   })
 })

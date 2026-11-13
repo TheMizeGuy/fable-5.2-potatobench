@@ -1,6 +1,6 @@
 // The running game: owns the campaign, the clock, the selection and the orders, saving, and tells the views what changed.
 import {
-  advise, apply, climateWorld, createCampaign, fieldInfo, fieldNeeds, isFarmYear, seasonDone, startYears, unitBlock, FARM_YEAR0,
+  advise, apply, awaitsWord, climateWorld, createCampaign, fieldInfo, fieldNeeds, isFarmYear, seasonDone, startYears, unitBlock, FARM_YEAR0,
   type Advice, type Campaign, type Cmd, type GameEvent, type JobKind, type Phase, type Result, type World,
 } from '../sim/index.ts'
 import type { Pointing, Thing } from './contracts.ts'
@@ -74,6 +74,7 @@ const NOTABLE = new Set([
   'dug', 'weighed', 'sample', 'skinSet', 'emerged', 'ti', 'mature', 'watch',
   'skillUp', 'hired', 'quit', 'hurt', 'poached', 'incident', 'incidentDone', 'breakdown', 'repaired',
   'felled', 'stumped', 'tiled', 'rocks', 'brushed', 'brushBack', 'building', 'built', 'pondDry', 'frozenInField',
+  'plantAsk', 'plantWord',
 ])
 const ALERTS_KEPT = 24
 
@@ -313,7 +314,8 @@ export class App {
   // takes the player to the first field it is for. Scouting and test digs come round too often to be news.
   private freshNeeds(c: Campaign): Advice[] {
     if (c.phase !== 'season') return []
-    const now = this.needs().map(n => n.need).filter((a): a is Advice => !!a && a.act !== 'scout' && a.act !== 'sample' && a.act !== 'close')
+    // (the planting that waits for the player's word is said by the crew itself: plantAsk)
+    const now = this.needs().map(n => n.need).filter((a): a is Advice => !!a && a.act !== 'scout' && a.act !== 'sample' && a.act !== 'close' && !(a.act === 'plant' && awaitsWord(c, 'plant', a.field)))
     const fresh = now.filter(a => !this.advised.has(a.id))
     this.advised = new Set(now.map(a => a.id))
     const byAct = new Map<string, Advice[]>()

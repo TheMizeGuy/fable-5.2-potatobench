@@ -298,10 +298,10 @@ export function personCard(ctx: Ctx): PersonCard {
           }, icon('raise', 'i'), h('span', null, 'Raise', h('span', { class: 'sub num' }, `to ${F.money(raiseTo(p))}`))),
           blocks.length ? h('button', {
             class: `btn${foreman ? ' is-on' : ''}`, type: 'button', testid: 'person-foreman', 'aria-expanded': String(foreman),
-            title: ctx.touch() ? undefined : 'A foreman adds what one block\'s fields need to the work list every working morning, and doesn\'t do field work. A foreman is paid 40% more.',
+            title: ctx.touch() ? undefined : 'A foreman adds what one group of fields needs to the work list every working morning, and doesn\'t do field work. A foreman is paid 40% more.',
             // Its choices open under it, brought into view with the first one lit.
             onclick: () => { foreman = !foreman; if (foreman) lightUp('.pc-blocks .btn', '.pc-blocks'); else lit = null; ctx.dirty() },
-          }, icon('foreman', 'i'), h('span', null, 'Foreman', h('span', { class: 'sub' }, p.foreman ? BLOCK_NAME[p.foreman].replace(/^The /, '').split(',')[0] : '+40% pay'))) : h('span'),
+          }, icon('foreman', 'i'), h('span', null, 'Foreman', h('span', { class: 'sub' }, p.foreman ? BLOCK_NAME[p.foreman].replace(/^The /, '').split(',')[0] : '+40% pay, stops field work'))) : h('span'),
           h('button', {
             class: 'btn hazard', type: 'button', testid: 'person-dismiss',
             onclick: async () => {
@@ -312,7 +312,7 @@ export function personCard(ctx: Ctx): PersonCard {
         p.foreman && !foreman ? h('p', { class: 'pc-fore', role: 'status', testid: 'foreman-said' }, icon('foreman', 'i'),
           h('span', null, `Foreman of ${S.BLOCK_NAME[p.foreman]}. ${R.firstName(p.name)} adds its fields' jobs to the work list each morning and doesn't do field work.`)) : null,
         foreman ? h('div', { class: 'pc-blocks', role: 'group', 'aria-label': 'Foreman of' },
-          h('p', { class: 'pc-fore', testid: 'foreman-what' }, h('span', null, `A foreman orders the work on one block of fields for you each morning. ${R.firstName(p.name)} would earn 40% more and stop doing field work. Pick the block.`)),
+          h('p', { class: 'pc-fore', testid: 'foreman-what' }, h('span', null, `A foreman orders the work on one group of fields for you each morning, which pays once you farm fields away from home. ${R.firstName(p.name)} would earn 40% more and stop doing field work. Pick the fields.`)),
           blocks.map(b => {
             const other = c.crew.find(u => u.foreman === b && u.id !== p.id)
             return h('button', {

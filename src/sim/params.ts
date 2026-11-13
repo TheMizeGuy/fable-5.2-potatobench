@@ -410,6 +410,9 @@ export const CAUSES: Cause[] = ['green', 'scab', 'hollow', 'knob', 'skin', 'brui
 export const GRADES: Grade[] = ['no1', 'chef', 'b', 'no2', 'cull']
 // The farm's standing orders, in the order they are listed, and which are on in a new game: the routine work goes on
 // the list by itself; spraying, watering and killing the vines are the player's calls.
+// The year's first planting waits for the player's word: this many days after the crew first stands ready it starts
+// by itself.
+export const PLANT_WORD_DAYS = 3
 export const ROUTINE_KINDS: RoutineKind[] = ['plant', 'hill', 'scout', 'rogue', 'sample', 'dig', 'haul', 'spray', 'water', 'kill']
 export const ROUTINE_DEFAULT: Record<RoutineKind, boolean> = {
   plant: true, hill: true, scout: true, rogue: true, sample: true, dig: true, haul: true, spray: false, water: false, kill: false,
