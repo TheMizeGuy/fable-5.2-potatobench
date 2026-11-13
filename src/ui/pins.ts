@@ -14,7 +14,7 @@ interface Model { id: number; name: string; ring: string; state: PinState; label
 // How close two people stand, in screen pixels, before they share a pin.
 const NEAR = 40
 
-export function pins(ctx: Ctx, layer: HTMLElement, o: { covers: () => DOMRect[]; stopped: () => Set<number>; board?: () => number }): { update(c: S.Campaign): void; frame(): void; escape(): boolean; dispose(): void } {
+export function pins(ctx: Ctx, layer: HTMLElement, o: { covers: () => DOMRect[]; stopped: () => Set<number>; board?: () => number }): { update(c: S.Campaign): void; frame(): void; at(x: number, y: number): number; pick(id: number): void; escape(): boolean; dispose(): void } {
   const app = ctx.app
   const wraps = new Map<number, HTMLElement>()
   let models: Model[] = []
@@ -135,9 +135,24 @@ export function pins(ctx: Ctx, layer: HTMLElement, o: { covers: () => DOMRect[];
     if (open >= 0 && !shown.has(open)) { open = -1; list.hidden = true }
   }
 
+  // The person whose pin stands at a point of the screen, or would if they did not share one, or -1: within a pin's
+  // width of them, from the top of the pin down to their shoulders.
+  function at(x: number, y: number): number {
+    let best = -1, bd = Infinity
+    for (const m of models) {
+      const a = ctx.view.unitAnchor(m.id)
+      if (!a.visible || Math.abs(x - a.x) > 22 || y < a.y - 56 || y > a.y + 20) continue
+      const d = Math.hypot(x - a.x, y - a.y)
+      if (d < bd) { bd = d; best = m.id }
+    }
+    return best
+  }
+
   return {
     update,
     frame,
+    at,
+    pick,
     escape() { if (open < 0) return false; open = -1; list.hidden = true; return true },
     dispose() {
       document.removeEventListener('pointerdown', closeList, true)
