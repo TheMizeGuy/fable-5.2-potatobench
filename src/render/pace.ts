@@ -1,6 +1,6 @@
 // How often the picture is drawn and how large it is. A display that runs faster than sixty frames a second is drawn
-// on every second or third of its beats; when nothing has moved for a while the land comes to rest and is drawn a
-// couple of times a second; a picture that moves by itself with nobody at it (the opening) is drawn at half its pace;
+// on its every beat by a machine that keeps that beat (Rate), and otherwise on every second or third of its beats;
+// when nothing has moved for a while the land comes to rest and is drawn a couple of times a second; a picture that moves by itself with nobody at it (the opening) is drawn at half its pace;
 // and the picture's size follows whether frames keep their beat. Nothing is drawn here: index.ts asks and obeys.
 // A frame is due by the time gone since the last one, not by a count of beats: on a fast display a frame whose work
 // runs past one beat is called again on the next, and is drawn then, a sixtieth of a second after the last as ever.
@@ -18,6 +18,9 @@ export class Pace {
   // The display's beat in milliseconds, and how many of its beats go to one frame drawn.
   beat = 1000 / 60
   every = 1
+  // How many beats make about a sixtieth of a second; and whether a faster display is drawn on its every beat.
+  sixty = 1
+  full = false
   // 0 while things move .. 1 at rest
   still = 0
   private gaps: number[] = []
@@ -49,8 +52,9 @@ export class Pace {
     if (dtMs > 2 && dtMs < 70) this.learn(dtMs)
     if (!hold && this.beat !== this.learnt) {
       this.beat = this.learnt
-      this.every = Math.max(1, Math.floor(1000 / this.beat / 60 + 0.25))
+      this.sixty = Math.max(1, Math.floor(1000 / this.beat / 60 + 0.25))
     }
+    this.every = this.full ? 1 : this.sixty
     this.quiet = busy ? 0 : this.quiet + dt / 1000
     const rest = this.quiet > HOLD_AFTER_S
     this.still = Math.min(1, Math.max(0, this.still + (rest ? dt / 1000 / REST_S : -dt / 1000 / STIR_S)))
@@ -163,6 +167,46 @@ export class Sizer {
     this.good = 0
     this.wentUp = this.changed = this.clock
     return 'larger'
+  }
+}
+
+// Whether a display faster than sixty a second is drawn on its every beat. It begins at about sixty; after a clean
+// while at the full size it is tried on every beat, and kept there for as long as the frames keep that beat. Two slow
+// stretches running put it back, and the wait before the next try doubles each time a try did not hold, so a machine
+// that cannot keep the display's beat is asked less and less often.
+export class Rate {
+  full = false
+  private bad = 0
+  private clean = 0
+  private wait = 6
+  private clock = 0
+  private wentUp = -1e9
+
+  // One stretch of `seconds`. slow: frames were being missed in it. room: the display is a fast one and the picture is
+  // at its full size on a setting that has not come down. Gives 'full' or 'sixty' when the pace has changed.
+  feed(slow: boolean, seconds: number, room: boolean): 'full' | 'sixty' | '' {
+    this.clock += seconds
+    if (this.full) {
+      if (!room) return this.fall()
+      if (!slow) { this.bad = 0; return '' }
+      return ++this.bad < 2 ? '' : this.fall()
+    }
+    if (slow || !room) { this.clean = 0; return '' }
+    this.clean += seconds
+    if (this.clean < this.wait) return ''
+    this.clean = 0
+    this.full = true
+    this.bad = 0
+    this.wentUp = this.clock
+    return 'full'
+  }
+
+  private fall(): 'sixty' {
+    if (this.clock - this.wentUp < 60) this.wait = Math.min(this.wait * 2, 3600)
+    this.full = false
+    this.bad = 0
+    this.clean = 0
+    return 'sixty'
   }
 }
 

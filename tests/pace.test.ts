@@ -1,7 +1,7 @@
 // How often the picture is drawn and how large (src/render/pace.ts): a fast display is not drawn on every beat, a
 // land where nothing moves comes to rest, and the picture's size settles instead of swinging.
 import { describe, expect, it } from 'vitest'
-import { Climb, HELD_MS, HOLD_AFTER_S, Pace, SIZES, Sizer, UNWATCHED_S, startOn } from '../src/render/pace.ts'
+import { Climb, HELD_MS, HOLD_AFTER_S, Pace, Rate, SIZES, Sizer, UNWATCHED_S, startOn } from '../src/render/pace.ts'
 
 // Frames drawn over `seconds` of a display beating every `beat` ms.
 function run(p: Pace, beat: number, seconds: number, busy: boolean, alone = false): number {
@@ -270,5 +270,60 @@ describe('the setting a machine starts on', () => {
     expect(startOn(20)).toBe('medium')
     expect(startOn(24)).toBe('low')
     expect(startOn(200)).toBe('low')
+  })
+})
+
+describe('a fast display on a machine that keeps its beat', () => {
+  it('is drawn on its every beat once it is asked to be, and at about sixty again when it is not', () => {
+    for (const hz of [120, 144, 165, 240]) {
+      const p = new Pace()
+      run(p, 1000 / hz, 1, true)
+      p.full = true
+      const drawn = run(p, 1000 / hz, 2, true) / 2
+      expect(p.every, `${hz} a second`).toBe(1)
+      expect(drawn, `${hz} a second`).toBeGreaterThan(hz - 2)
+      expect(p.frameMs, `${hz} a second`).toBeCloseTo(1000 / hz, 1)
+      p.full = false
+      const back = run(p, 1000 / hz, 2, true) / 2
+      expect(back, `${hz} a second`).toBeLessThanOrEqual(91)
+    }
+  })
+
+  it('is tried on every beat after a clean while, and only with room for it', () => {
+    const r = new Rate()
+    expect(r.feed(false, 1.5, false)).toBe('')
+    for (let k = 0; k < 10; k++) expect(r.feed(false, 1.5, false), 'a sixty-a-second display, or a picture made smaller').toBe('')
+    const said: string[] = []
+    for (let k = 0; k < 4; k++) said.push(r.feed(false, 1.5, true))
+    expect(said).toEqual(['', '', '', 'full'])
+    expect(r.full).toBe(true)
+    // In time: it stays.
+    for (let k = 0; k < 40; k++) expect(r.feed(false, 1.5, true)).toBe('')
+  })
+
+  it('goes back to about sixty after two slow stretches, not one, and waits twice as long before each next try', () => {
+    const r = new Rate()
+    const until = (want: string, slow: boolean) => { let n = 0; while (r.feed(slow, 1.5, true) !== want && n < 5000) n++; return (n + 1) * 1.5 }
+    const first = until('full', false)
+    expect(r.feed(true, 1.5, true)).toBe('')
+    expect(r.feed(false, 1.5, true)).toBe('')
+    expect(r.feed(true, 1.5, true)).toBe('')
+    expect(r.feed(true, 1.5, true)).toBe('sixty')
+    const second = until('full', false)
+    expect(second).toBeGreaterThanOrEqual(first * 2 - 1.5)
+    until('sixty', true)
+    const third = until('full', false)
+    expect(third).toBeGreaterThanOrEqual(second * 2 - 1.5)
+    // A slow stretch while waiting starts the wait again.
+    until('sixty', true)
+    for (let k = 0; k < 3; k++) r.feed(false, 1.5, true)
+    r.feed(true, 1.5, true)
+    expect(until('full', false)).toBeGreaterThanOrEqual(third * 2 - 1.5)
+  })
+
+  it('goes back at once when the picture is made smaller or the setting comes down', () => {
+    const r = new Rate()
+    while (r.feed(false, 1.5, true) !== 'full') { /* until it is tried */ }
+    expect(r.feed(false, 1.5, false)).toBe('sixty')
   })
 })

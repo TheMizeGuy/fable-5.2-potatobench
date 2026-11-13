@@ -22,7 +22,7 @@ import { WATCH } from './crew.ts'
 import { clamp, hash2, smooth } from './noise.ts'
 import { K, KV, S } from './scale.ts'
 import { laps } from './laps.ts'
-import { Climb, Pace, SIZES, Sizer, startOn } from './pace.ts'
+import { Climb, Pace, Rate, SIZES, Sizer, startOn } from './pace.ts'
 import { Particles } from './particles.ts'
 import { Pond } from './pond.ts'
 import { Post } from './post.ts'
@@ -280,7 +280,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   const onePixel = new Uint8Array(4)
   const times: number[] = []
   let fps = 60, warm = 0
-  const pacing = new Pace(), sizer = new Sizer()
+  const pacing = new Pace(), sizer = new Sizer(), rate = new Rate()
   // A tool may ask for every beat of the display to be drawn, and for the frame to be drawn without one or another of
   // the things that make it cheaper, to measure what each saves.
   let capped = true
@@ -718,6 +718,11 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     const auto = app.settings.quality === 'auto'
     // Too slow for any size of the picture to mend (under 26 frames a second where 60 are asked for), two stretches
     // running, is not walked down a size at a time. (One such stretch is as often something else on the machine.)
+    // A fast display drawn on its every beat goes back to about sixty a second before anything is made smaller; one
+    // drawn at about sixty is tried on every beat when it has been in time for a while at its full size.
+    const went = rate.feed(slow, seconds, pacing.sixty > 1 && sizer.step === 0 && !lowered && !upDue)
+    if (went) { pacing.full = rate.full; return }
+    if (pacing.full && slow) return
     tooSlow = late > 2.3 ? tooSlow + 1 : 0
     const plainly = tooSlow >= 2 && auto && tier !== 'low'
     if (plainly) tooSlow = 0
