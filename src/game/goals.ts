@@ -74,7 +74,7 @@ export function goals(c: Campaign, o: { thisSeason?: boolean } = {}): Goal[] {
 
   // The first season, in the order the crop asks for it. A later step done means every earlier one is behind the farm.
   const season: Spec[] = [
-    { id: 'plant', title: 'Plant the fields', why: 'Once the soil has warmed up, your crew waits for your word to plant. Order Plant on one field and they plant the rest.', when: 'During the season',
+    { id: 'plant', title: 'Plant the fields', why: 'Planting can start once the soil has warmed up. Your crew then waits for your word, so order Plant on one field and they\'ll plant the rest.', when: 'During the season',
       done: past || (potato.length > 0 && planted.length === potato.length) || any(f => f.tiDay >= 0), now: crop,
       progress: potato.length ? { n: planted.length, of: potato.length } : null },
     { id: 'walk', title: 'Walk a field for blight', why: 'Blight only shows up close, so walking a field catches it while it\'s still small.', when: 'Once the rows are up',
