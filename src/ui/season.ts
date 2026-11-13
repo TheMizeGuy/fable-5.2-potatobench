@@ -320,7 +320,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       const r = document.querySelector(`#ui .plate-layer [data-testid="badge-${i}"]`)?.getBoundingClientRect()
       return a.visible && a.x >= 0 && a.y >= 0 && a.x <= innerWidth && a.y <= innerHeight && !!r && r.width > 0 && r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight
     })
-    setTimeout(() => { if (app.screen === 'season' && app.speed === 0 && !onScreen()) ctx.view.home() }, 400)
+    setTimeout(() => { if (app.screen === 'season' && app.speed === 0 && !onScreen()) app.focus(-1) }, 400)
   }
   const off = app.on(ev => {
     if (ev.type === 'yard' || ev.type === 'unit' || ev.type === 'select') ctx.dirty()

@@ -1002,7 +1002,7 @@ test('the first spring sheet says a usual first year and that the loan carries i
 // (1): a decision that waits for the player pauses the game. Whatever ran the days (a speed key, "Skip ahead", a
 // "Fast-forward to ..." key), the game is paused the day the crew asks for the word, with the stamps in view and
 // nothing planted, and says why in the pause's own words. Telegrams on the way are answered with their defaults.
-async function atTheAsk(page: Page, what: string): Promise<number[]> {
+async function atTheAsk(page: Page, what: string, shot = ''): Promise<number[]> {
   await expect.poll(() => game<string>(page, `(() => { for (const i of [...c.incidents]) app.do({ t: 'answer', incident: i.id, choice: sim.defaultChoice(i) }); return app.speed === 0 ? app.pauseCause : '' })()`),
     { timeout: 150_000, intervals: [250], message: `${what}: the game pauses for the word` }).toBe('plantAsk')
   const at = await game<{ day: number; ask: number; jobs: number; planted: number; fit: number[] }>(page, `({ day: c.season.day, ask: c.season.plantAsk, jobs: c.season.jobs.filter(j => j.kind === 'plant').length,
@@ -1011,6 +1011,7 @@ async function atTheAsk(page: Page, what: string): Promise<number[]> {
   expect([at.jobs, at.planted], `${what}: planting has not started`).toEqual([0, 0])
   expect(at.fit.length, `${what}: fields fit to plant`).toBeGreaterThan(0)
   await expect(page.locator('#ui .notes .alert').filter({ hasText: 'Paused: the soil is ready. Press a ringed Plant stamp, or resume and your crew starts in 3 days.' }), what).toBeVisible()
+  if (shot) { await page.waitForTimeout(2500); await picture(page, shot) }
   await expect.poll(async () => {
     const out: string[] = []
     for (const i of at.fit) { const r = await reachable(page, `badge-${i}`); if (r !== 'in view') out.push(`badge-${i} ${r}`) }
@@ -1090,10 +1091,8 @@ test('year two without the tutorial at 3x: paused at the ask with the stamps bro
   expect(away.length, 'potato fields off the screen before the ask (their tags wait at the edge)').toBeGreaterThan(0)
   await page.getByTestId('speed-2').click()
   expect(await game<number>(page, 'app.speed')).toBe(2)
-  const fit = await atTheAsk(page, 'year two at 3x')
+  const fit = await atTheAsk(page, 'year two at 3x', 'r8-pause-year2-1280')
   await expect(page.getByTestId('paused-go')).toContainText('Resume at 3×')
-  await page.waitForTimeout(600)
-  await picture(page, 'r8-pause-year2-1280')
   // One press on a ringed stamp: the word, said once; the speed unchanged; the pause the player's own.
   await page.locator(`#ui [data-testid="badge-${fit[0]}"]`).click()
   await expect(page.locator('#ui .notes .alert').filter({ hasText: /^You gave the word/ })).toBeVisible()
