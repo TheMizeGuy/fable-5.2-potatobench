@@ -862,7 +862,7 @@ test('Got it says what it does to the clock: time runs on under the guide, and t
   await expect(note(page, 'tend')).toBeVisible({ timeout: 90_000 })
   expect(await game<number>(page, 'app.speed')).toBe(0)
   await expect(note(page, 'tend').getByTestId('guide-resumes')).toHaveText('resumes at 8×')
-  await expect(note(page, 'tend').getByTestId('guide-give')).toHaveText('Let the guide run the clock')
+  await expect(note(page, 'tend').getByTestId('guide-give')).toHaveText('Run the clock for me')
   await page.waitForTimeout(500)
   const after = await page.evaluate(() => new Promise<number>(resolve => {
     document.querySelector<HTMLElement>('#ui [data-testid="guide-slip"][data-lesson="tend"] [data-testid="guide-noted"]')!.click()

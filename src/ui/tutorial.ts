@@ -96,7 +96,7 @@ export function openGuide(ctx: Ctx): void {
             type: 'checkbox', checked: guide.drives(ctx.app.campaign), disabled: !guide.on, testid: 'guide-clock',
             onchange: (e: Event) => { if ((e.target as HTMLInputElement).checked) guide.giveClock(); else guide.takeClock(); draw(); ctx.dirty() },
           }), h('i', { class: `tick${guide.drives(ctx.app.campaign) ? ' on' : ''}` })),
-          h('span', null, h('b', null, 'Let the guide run the clock'), ' ', h('span', { class: 'quiet' }, 'time runs on between tips and stops at each decision'))),
+          h('span', null, h('b', null, 'Run the clock for me'), ' ', h('span', { class: 'quiet' }, 'time runs on between tips and stops at each decision'))),
         ...PARTS.map(part => h('section', { class: 'guide-part' },
           h('h3', { class: 't-label' }, PART_NAME[part]),
           h('ul', null, LESSONS.filter(x => x.part === part).map(x => {
@@ -318,7 +318,7 @@ function slipBody(ctx: Ctx, x: Lesson, l: Look, held: boolean, lost = false, und
         : h('button', { class: 'btn', type: 'button', testid: 'guide-pass', onclick: () => { guide.skip(x.id); poke(); ctx.dirty() } }, icon('check', 'i'), h('span', { class: 'two' }, 'Got it', resumes)),
       go && show < 0 ? h('button', { class: 'btn quiet', type: 'button', testid: 'guide-show', onclick: () => lead(go) }, 'Show me') : null,
       // The clock is the player's: the guide offers, once a note, to run it again.
-      clock === 'player' ? h('button', { class: 'btn quiet', type: 'button', testid: 'guide-give', onclick: () => { guide.giveClock(); poke(); ctx.dirty() } }, 'Let the guide run the clock') : null,
+      clock === 'player' ? h('button', { class: 'btn quiet', type: 'button', testid: 'guide-give', onclick: () => { guide.giveClock(); poke(); ctx.dirty() } }, 'Run the clock for me') : null,
       h('button', { class: 'btn quiet', type: 'button', testid: 'guide-stop', onclick: () => { guide.stop(); poke(); ctx.say('The tutorial is off. You can turn it back on from the menu.'); ctx.dirty() } }, 'Turn off the tutorial')),
   ]
 }
@@ -626,6 +626,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
   // Not before this: a moment after a note goes or a press is answered, so the answer is read before the days run.
   let beatAt = 0
   let seenPress = pressedAt
+  let onScreen: string = app.screen
   let hadNote = false
   let hadWait = false
   let driveKey = ''
@@ -689,6 +690,8 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     const noted = !!due || !!holding
     if (noted) hadNote = true
     else if (hadNote) { hadNote = false; beatAt = Math.max(beatAt, t + 700) }
+    // A season come back to (Continue) is paused: the guide says what is passing a moment before it runs on.
+    if (app.screen !== onScreen) { if (app.screen === 'season' && app.speed === 0) beatAt = Math.max(beatAt, t + 1800); onScreen = app.screen }
     const open = app.screen === 'season' ? openAsks(l) : []
     for (const id of [...waved]) if (!open.some(a => a.id === id)) waved.delete(id)
     const d = !offer && !noted && !carded && !app.holding && app.screen === 'season' ? driving(l, guide, waved) : null
@@ -722,10 +725,13 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
       showDrive(line, next, '')
       if (t < beatAt) return
     }
-    const want = scene ? 1 : d.speed
+    // While the player has a card of their own open (a field, a person, a yard) the days go at the first speed, so
+    // what they are reading does not change under them.
+    const slow = !!scene || app.selection.length > 0 || app.unit >= 0 || app.yard !== 0
+    const want = slow ? 1 : d.speed
     if (app.speed !== want) app.setSpeed(want)
     if (app.speed === 0) { hideDrive(); return }
-    app.pace = scene ? 1 : d.pace
+    app.pace = slow ? 1 : d.pace
     driven = true
     showDrive(line, next, '')
   }

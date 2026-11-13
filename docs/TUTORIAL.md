@@ -193,6 +193,8 @@ tutorial when planting is ready and accelerate time during the tutorial where ne
   plants come up.", "Your crew hills the rows and walks the fields. Next: blight weather, your first big
   decision.", "Your crew is digging and hauling. Next: the first weigh ticket." A player who presses only what a
   note asks (Got it, the stamp it names, a card's reply) reaches the first weigh ticket with no speed key pressed.
+  While the player has a card of their own open (a field, a person, a yard) the days go at 1×, so what they are
+  reading does not change under them.
 - *Where watching explains the thing it slows down and frames it.* The first day each kind of work is done in a
   first year (planting, hilling, a spray pass, a test dig, the vine kill, the dig, the haul), and the day the plants
   come up, the guide drops to 1× for four and a half seconds and follows whoever is doing it (or frames the field),
@@ -205,8 +207,8 @@ tutorial when planting is ready and accelerate time during the tutorial where ne
   plant with its note put away, a ringed stamp, a vine kill that is the player's) stops it too: the guide pauses
   and says what it waits for ("Water Brook Field. Click its ringed stamp."), with "Go on without it".
 - *The player keeps the clock.* A speed set, a pause (Space included) or "Take the clock" on the guide's line takes
-  it, and the guide does not start again by itself. A note then offers it back with a quiet key, "Let the guide run
-  the clock", and the guide's paper has the same as a tick box. "Turn off the tutorial" stops it with everything
+  it, and the guide does not start again by itself. A note then offers it back with a quiet key, "Run the clock
+  for me", and the guide's paper has the same as a tick box. "Turn off the tutorial" stops it with everything
   else. Nothing runs the clock with the tutorial off.
 - *Year two.* The short spring walk stays. In the season the guide is quiet except for firsts and does not run the
   clock unless the player hands it over (the notes offer; the paper's tick box).
@@ -329,9 +331,11 @@ is looking.
 
 ## How it behaves
 
-- **Refusable at every step.** Every note has "Turn off the tutorial" and Got it. The
+- **Refusable at every step.** Every note has "Turn off the tutorial" and Got it, and the guide's line while it
+  runs the clock has "Take the clock". The
   guide's paper ("Guided first year", from the menu and How to play) lists every lesson, turns the tutorial on and
-  off ("Show the tutorial"), and replays any lesson ("Replay"). Progress
+  off ("Show the tutorial"), says whose the clock is ("Run the clock for me"), and replays any lesson
+  ("Replay"). Progress
   is kept in the browser under `the-county/tutorial`, apart from the save, and survives a reload.
 - **The cards take the keyboard.** While the offer or the year card is up, the layers behind are inert and keys
   other than the card's own are taken by nothing.
@@ -368,17 +372,29 @@ is looking.
   the two vine kills that are the player's; `tests/goals.test.ts` what the player is waiting for at each stage of a
   season and the hire step off the ladder until the work needs a hand; `tests/tutorial.test.ts` the one opening
   tip, the Land note, the closing line.
+  For the guide running the clock (rule I): the weeks before planting at one pace and under four seconds on three
+  farms, with the wait at the ask; each kind of work shown once, in order, with someone to follow and a line of 14
+  words or fewer; whose the clock is in a first year, after it is taken, handed back, with the tutorial off and in a
+  second year; a ringed stamp waited for, and not once pressed or waved through; no lesson carrying a fast key.
 - `e2e/tutorial.spec.ts` (Chromium and the phone): a guided first year played from Play to the first sale by
-  pressing only what the notes ask (their "Skip to", Got it, the control they point at, a card's usual reply),
-  holding every budget above at every step; Space putting a note away, the next note holding the days again; the offer centred, under the keyboard, answered by click and by keys 1
+  pressing only what the notes ask (Got it, the stamp they name, the control they point at, a card's usual reply)
+  and no speed key, in under four minutes from Start the season to the first weigh ticket, with whoever the guide
+  shows planting, spraying and digging inside the window for two seconds or more, holding every budget above at
+  every step; the tutorial starting at planting (Start the season, the guide's line over the land alone, the word
+  to plant within 15 seconds as the first note of the season, then the planter followed at 1×); the clock taken by
+  "Take the clock", by a pause and by a speed key, never started again by the guide, handed back from a note's
+  quiet key, and nothing running it with the tutorial off; the guide stopped at the word (its note put away), by a
+  telegram and by the spraying question; a stamp's press changing nothing for three frames and the guide running on
+  a moment after the last one; Space putting a note away, the next note holding the days again; the offer centred, under the keyboard, answered by click and by keys 1
   and 2; Skip the tutorial showing the whole interface and no note; a guided farm started from the title; a reload keeping
   its place; axe with the offer, the year card and a note showing. From round six (`docs/quality/players/round-6.md`):
   the goal slip's figure never on its words at six widths, a note up or not; the second spring played by its notes
   with the slip and its ring never showing beside one, and the slip back in the season; a foreman explained on the
   slip and the note, the key in view and ringed, naming one answered on the card and by a note; the winter note's
   words against the key's own; "Planting has started" not said before planting, its Show me selecting the field;
-  a frost warning leaving the game running, tutorial off and (once explained) on; Got it saying and doing "resumes
-  at", the fast key saying "runs at 8×"; a note's keys live on its first frame, and a double-click answering one note.
+  a frost warning leaving the game running, tutorial off and (once explained) on; Got it saying what it does to the
+  clock ("stays paused", "time runs on" under the guide, "resumes at 8×" once the clock is the player's) and doing
+  it; a note's keys live on its first frame, and a double-click answering one note.
   From round seven (`docs/quality/players/round-7.md`): the crew standing ready with a toast, the slip and the
   stamps, one press planting the rest, and the crew's own start after three days; the guided year asking for the
   word and answering the press; an asking note's Got it and a stamp's press leaving the game paused; a farm with one
@@ -403,8 +419,18 @@ is looking.
 - "Resume and your crew starts in 3 days" counts working mornings with the soil still fit: a Sunday or a cold snap
   makes it four or five.
 - The pause for a vine kill that is the player's to give is held by unit tests only; no browser test reaches it.
-- After Got it on an asking note, or a press on the stamp it asked for, the game is paused with only the clock's
-  "Resume at 8×" saying how to go on. A telling note that comes after the player's own pause says "stays paused".
+- With the clock the player's: after Got it on an asking note, or a press on the stamp it asked for, the game is
+  paused with only the clock's "Resume at 8×" saying how to go on. A telling note that comes after the player's own
+  pause says "stays paused".
+- The guide's line calls a pause or a speed key "taking the clock" only in a toast after the fact ("The clock is
+  yours now. I'll still pause to explain things."): a player who pauses to look round has to hand the clock back
+  from the next note's quiet key, or the guide's paper, to have the guide run it again.
+- While the guide runs the days at three a second, or the weeks before planting at ten, the picture of who is
+  where falls behind the calendar, as it does at 8× for any player; the work it slows down for is shown at 1×.
+- The work the guide shows is whatever the crew did on the day it first happened: with a hired hand it may be the
+  hand, not the farmer, who is followed. A kind of work first done while the player has a card open is shown the
+  next day it is done.
+- A season come back to with Continue is paused; the guide runs it on by itself about two seconds later.
 - The Plant stamps go up the evening the first field is fit; fields still too wet show none until they dry, and the
   crew plants them in turn after the word.
 - A new season opens at 1×, whatever speed the last one ended at (`src/ui/plan.ts`), so the first note of a second
