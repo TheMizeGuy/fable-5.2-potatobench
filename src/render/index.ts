@@ -17,7 +17,7 @@ import { Flora } from './flora.ts'
 import { Grass } from './grass.ts'
 import { Harvest } from './harvest.ts'
 import { attachInput } from './input.ts'
-import { DUFOUR, FD, FIELDS, FW, HOME, LAND, POTATO_HOUSE, ROAD, WATER_Y, brookZ, fieldBaseY, groundY, YARD_AT, yardAt } from './layout.ts'
+import { DUFOUR, FD, FIELDS, FW, HOME, HOUSE, LAND, POTATO_HOUSE, ROAD, WATER_Y, brookZ, fieldBaseY, groundY, YARD_AT, yardAt } from './layout.ts'
 import { clamp, hash2, smooth } from './noise.ts'
 import { K, KV, S } from './scale.ts'
 import { laps } from './laps.ts'
@@ -205,6 +205,8 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   let shown: HillDisplay[][] = snap.fields.map(f => f.hills.map(look => ({ look, ridge: f.ridge })))
   let dayT = 1
   let dirty = true, dayPassed = false, first = true
+  // Whether the clock was running when the day just counted was counted (what it brought may have stopped it since).
+  let dayRan = false
   const samples = new Map<number, SampleInfo>()
   let time = 0
   // Clocks for water, cloud, mist and smoke (`ambient`) and for rain and snow (`fall`): under reduced motion the first
@@ -407,7 +409,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     if (e.type === 'change' || e.type === 'screen') dirty = true
     else if (e.type === 'events') {
       dirty = true
-      if (e.dayPassed) dayPassed = true
+      if (e.dayPassed) { dayPassed = true; dayRan = app.speed > 0 }
       for (const ev of e.events) {
         if (ev.type === 'sample' && ev.field >= 0 && ev.data && typeof ev.data.hill === 'number') {
           samples.set(ev.field, {
@@ -496,7 +498,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     const sameDay = !dayPassed && !first && prev.mode === next.mode && prev.year === next.year && prev.seasonDay === next.seasonDay
     if (sameSeason) {
       for (const [f, s] of samples) lastSample.set(f, s)
-      pending = pending.concat(crews.plan(next, shown, new Map([...samples].map(([f, s]) => [f, s.hill]))))
+      pending = pending.concat(crews.plan(next, shown, new Map([...samples].map(([f, s]) => [f, s.hill])), new Set(waiters.filter(w => w.kind === 'dig').map(w => w.field)), dayRan))
       const wait = new Set(pending.map(r => r.field * HILLS + r.hill))
       shown = next.fields.map((f, i) => f.hills.map((_, h) => (wait.has(i * HILLS + h) ? shown[i][h] : display(i, h, next))))
       dayT = 0
@@ -505,6 +507,8 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     } else if (sameDay) {
       // A command in the middle of the day: keep the day playing, refresh everything not waiting to be revealed.
       crews.sync(next)
+      // (an order just given, with the clock running: whoever would take it sets out)
+      if (app.speed > 0) crews.setOut(next)
       const wait = new Set(pending.map(r => r.field * HILLS + r.hill))
       shown = next.fields.map((f, i) => f.hills.map((_, h) => (wait.has(i * HILLS + h) ? shown[i][h] : display(i, h, next))))
     } else {
@@ -1105,9 +1109,10 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     framing = 'free'
     rig.idle = 99
     if (!comeClose(id)) {
-      // Not on the land this moment (indoors, through a door): the home yard, until they come out.
+      // Not on the land this moment (indoors, a day off at home): the house, from near enough that it is plainly the
+      // house that is shown, until they come out.
       framedYard = -1
-      rig.moveTo(rig.yard(-1, viewport()), reduced, 900)
+      rig.moveTo(rig.complete({ x: HOUSE.x - 1.2 * S, z: HOUSE.z - 1.6 * S, dist: 58, pitch: 0.3 }), reduced, 900)
     }
   }
 
@@ -1120,8 +1125,12 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     const tall = Math.max(0.6, far.y - groundY(far.x, far.z))
     const perUnit = vp.h / (2 * Math.tan((rig.camera.fov * Math.PI) / 360))
     const want = (tall * perUnit) / (crews.placeOf(id) === 'machine' ? 90 : 120)
-    const dist = Math.max(MIN_DIST, Math.min(Math.max(rig.goal.dist, rig.cur.dist), want))
-    followClose = { dist, pitch: Math.max(pitchFor(dist), 0.3) }
+    let dist = Math.max(MIN_DIST, Math.min(Math.max(rig.goal.dist, rig.cur.dist), want))
+    let pitch = Math.max(pitchFor(dist), 0.3)
+    // At a tract's trees (felling, the brush) a walker's eye is among the boughs: from further up and steeper, over them.
+    const wooded = snap.fields.some((f, i) => (f.cover === 'woods' || f.cover === 'brush') && far.x > FIELDS[i].x0 - 12 && far.x < FIELDS[i].x1 + 12 && far.z > FIELDS[i].z0 - 12 && far.z < FIELDS[i].z1 + 12)
+    if (wooded) { dist = Math.max(dist, 30); pitch = Math.max(pitch, 0.86) }
+    followClose = { dist, pitch }
     rig.moveTo(rig.complete({ x: far.x, z: far.z, ...followClose }), reduced, 900)
     return true
   }

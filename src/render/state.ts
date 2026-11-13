@@ -107,6 +107,7 @@ export interface Snapshot {
   units: UnitVis[]
   farm: FarmVis
   next: Work | null
+  lead: (Work & { unit: number }) | null   // the first order on the list that can be worked today, and who would take it
   frozen: boolean
   restDay: boolean         // the day just worked was a day off: nobody worked
   rime: number[] | null    // in the season, rime on the ridge, mid-slope and bottom land
@@ -223,6 +224,26 @@ export function snapshot(app: App): Snapshot {
     }
   })
   const nextJob = inSeason && s.jobs.length ? s.jobs[0] : null
+  // The order someone would set out for this morning: the first that nobody holds and nothing holds up (on the list,
+  // or one the routine or a foreman will put there when the day is counted), and the first person fit for work who
+  // will do that kind of work.
+  let lead: (Work & { unit: number }) | null = null
+  if (inSeason && !s.frozen && sim.workday(c, s)) {
+    const today = sim.getDay(app.world, s.year, s.day)
+    const free = (kind: sim.JobKind, unit: number) => c.crew.find(u => (unit < 0 || unit === u.id) && u.job < 0 && sim.willDo(u, kind) && !sim.hurt(u, s.day) && u.rest !== 'now' && u.tired < 0.9)
+    for (const j of s.jobs) {
+      if (lead || j.field < 0 || c.crew.some(u => u.job === j.id) || (today && sim.waitFor(c, s, j, today))) continue
+      const who = free(j.kind, j.unit)
+      if (who) lead = { kind: j.kind, field: j.field, unit: who.id }
+    }
+    if (!lead) for (const a of sim.advise(app.world, c)) {
+      if (lead || a.field < 0 || a.act === 'wait' || a.act === 'sell' || a.act === 'close' || s.jobs.some(j => j.kind === a.act && j.field === a.field)) continue
+      const by = sim.standingBy(c, a.act, a.field)
+      if (!by || (today && sim.waitFor(c, s, { id: -1, kind: a.act, field: a.field, done: 0, need: 1, unit: -1, by }, today))) continue
+      const who = free(a.act, -1)
+      if (who) lead = { kind: a.act, field: a.field, unit: who.id }
+    }
+  }
   const heldFields = fields.filter(f => f.held)
   const wetGround = heldFields.reduce((a, f) => a + (WETNESS[f.moisture] ?? 0.3), 0) / Math.max(1, heldFields.length)
   const pond = sim.pondInfo(app.world, c)
@@ -243,6 +264,7 @@ export function snapshot(app: App): Snapshot {
   return {
     mode, year: c.year, day, seasonDay: s ? s.day : -1, month: c.month, fields, weather, worked, units, farm,
     next: nextJob ? { kind: nextJob.kind, field: nextJob.field } : null,
+    lead,
     frozen: s ? s.frozen : false,
     restDay: inSeason && !s.frozen && s.day > s.startDay && c.sundaysOff && sim.weekday(s.year, s.day - 1) === sim.SUNDAY,
     rime,
@@ -294,6 +316,6 @@ function showcase(): Snapshot {
     weather: { sky: 'clear', tmin: 13, tmax: 25, wind: 2.6, wdir: 250, prcp: 0, wetH: 6, snwd: 0 },
     worked: [], units: [{ id: 0, kind: 'farmer', name: '', at: -1, to: -1, along: 1, job: null, worked: [], rig: '', tired: 0, mood: 1, hurt: false, resting: false, winter: 'off', winterField: -1, livesOut: false }],
     farm: { buildings: [], logs: 0, stone: 0, pond: 0, standOpen: false, tractors: 1, broken: 0, truck: false, pickers: false, dufour: false, equipment: [], incidents: [], applicants: 0 },
-    next: null, frozen: false, restDay: false, rime: null, wetGround: 0.1,
+    next: null, lead: null, frozen: false, restDay: false, rime: null, wetGround: 0.1,
   }
 }

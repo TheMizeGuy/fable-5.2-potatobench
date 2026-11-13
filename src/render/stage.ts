@@ -24,7 +24,8 @@ export interface Worker {
   lift: number             // height above the ground
   pose: Pose
   aboard: boolean          // in the seat of its machine
-  rig: { x: number; z: number; heading: number; load: number } | null
+  // fade: below 1 while the machine goes from sight where a drive is cut (it is next seen coming in at the far end)
+  rig: { x: number; z: number; heading: number; load: number; fade?: number } | null
   loads: number            // hauling: how many loads the day's part of it comes to
   lit: boolean             // this part of the day was planned with the clock stopped
 }
@@ -46,6 +47,7 @@ export interface StageFrame {
   literal: boolean         // the clock is stopped and the day's work goes at its own pace
   dry: boolean             // dry ground: what is dragged over it raises dust
   day: number              // how long a day lasts on the clock, seconds
+  far: (x: number, z: number) => number   // 0 seen from close by .. 1 from across the farm, where smoke is what is found
 }
 
 interface Site {
@@ -275,6 +277,9 @@ export class Stage {
     }
     st.falls = st.falls.filter(t => t.t < 6)
     const falling = st.falls.find(t => t.t >= -0.3 && t.t < 2.1), lying = st.falls.find(t => t.t >= 2.1)
+    // The slash is burnt on the cut ground behind the work as it comes off, as cut brush is, except in a high wind,
+    // in the wet or on snow: from across the farm the smoke shows where the felling is.
+    if (ws.length) this.fire(st, f, -5.2, 2.6, f.going && f.wind < 0.85 && !f.cold && f.snap.weather.prcp < 1)
     // the people
     const pair = ws.length >= 2 && !brushy
     ws.forEach((w, k) => {
@@ -575,6 +580,7 @@ export class Stage {
   private fire(st: Site, f: StageFrame, fx: number, fz: number, burning: boolean): void {
     const pr = f.pr, s = f.s
     this.P(st, s, fx, 0, fz, a)
+    const far = f.far(a.x, a.z)
     for (let n = 0; n < 6; n++) {
       b.copy(a).add(c.set((hash(n) - 0.5) * 0.6 * s, (0.08 + 0.12 * hash(n + 9)) * s, (hash(n + 4) - 0.5) * 0.6 * s))
       pr.put('ball', b, Y, X, 0.2 * s, 0.11 * s, 0.19 * s, burning && n < 3 ? EMBER : COLORS.BRUSH)
@@ -590,7 +596,8 @@ export class Stage {
     // (the air does not carry a puff far up: the column is laid in along its length)
     if (q() < 0.7) {
       const up = Math.pow(q(), 1.4) * 34
-      f.particles.emit(a.x + (q() - 0.5) * (0.6 + 0.12 * up), a.y + 0.8 + up, a.z + (q() - 0.5) * (0.6 + 0.12 * up), 0, 0.9, 0, 0.7 + 0.16 * up, 0.5 + 0.03 * up, 5 + q() * 4, 0.6, 0.59, 0.58, 0.5 * (1 - up / 46), 0.35 + up / 60)
+      // (from across the farm the column is drawn wider and denser: it is what says where the work is)
+      f.particles.emit(a.x + (q() - 0.5) * (0.6 + 0.12 * up), a.y + 0.8 + up, a.z + (q() - 0.5) * (0.6 + 0.12 * up), 0, 0.9, 0, (0.7 + 0.16 * up) * (1 + 0.9 * far), 0.5 + 0.03 * up, 5 + q() * 4, 0.6 + 0.08 * far, 0.59 + 0.08 * far, 0.58 + 0.08 * far, Math.min(0.85, 0.5 * (1 - up / 46) * (1 + 0.7 * far)), 0.35 + up / 60)
     }
     if (q() < 0.2) f.particles.emit(a.x, a.y + 0.3 * s, a.z, (q() - 0.5) * 0.8, 1.6 + q(), (q() - 0.5) * 0.8, 0.018 * s, 0, 0.9, 6, 2.2, 0.5, 0.9, 0.5)
   }
@@ -701,7 +708,7 @@ export class Stage {
     // the other.
     const literal = f.literal && w.lit
     const q0 = literal ? 0.22 : LAP_STAND, q1 = LAP_DOOR, q2 = q1 + q0
-    const lapS = Math.min(3.4, Math.max(2.4, 2 * f.day)), legS = lapS * (q1 - q0), reach = f.lane * legS
+    const lapS = Math.min(6, Math.max(2.6, 1.5 * f.day)), legS = lapS * (q1 - q0), reach = f.lane * legS
     if (literal) j.t = frac(Math.min(0.99999, w.w) * Math.max(1, w.loads))
     // (the clock stopped on a day that was running: the load in hand is seen in to the door, and no more)
     else if (f.going) j.t = f.literal ? (j.t < q2 ? Math.min(q2, j.t + f.dt / lapS) : j.t) : frac(j.t + f.dt / lapS)
@@ -714,6 +721,9 @@ export class Stage {
       return 1 - ((reach * 0.6) / trip.length) * (1 - r) * (1 - r)
     }
     const along = loading ? 0 : out ? leg((lap - q0) / (q1 - q0)) : unloading ? 1 : 1 - leg((lap - q2) / (1 - q2))
+    // (a cut drive: going from sight over the last of the pulling away)
+    const drive = out ? (lap - q0) / (q1 - q0) : back ? (lap - q2) / (1 - q2) : 1
+    if (w.rig) w.rig.fade = !literal && trip.length > reach * 1.25 && drive < 0.4 ? 1 - 0.9 * clamp01((drive - 0.2) / 0.2) : 1
     // the second machine stands a length behind the first
     const stood = loading || unloading
     const p = trip.at(Math.max(0, Math.min(trip.length, along * trip.length - (unloading ? r * 3.4 * s : 0))))

@@ -604,6 +604,106 @@ same to within the spread.
 **Not done**: within a patch, the rows of trees behind the first two are still drawn (into depth only, from low
 down); a patch behind another is cards by distance, not by what stands before it.
 
+### Work that is seen (after `live-27`)
+
+Round seven's players never saw a machine at work: "only status words, never a tractor or harvester working", and
+Follow led to someone on foot. What was drawn was measured before anything was changed. `tools/render/seen.ts`
+plays the farm a first player has (the farmer, one hired hand, one tractor, the routine doing the ordering) to the
+evening before each kind of work is first done, runs the days at each clock from the view the season opens with,
+and at 1x with Follow, and reads every frame where the game has the work and where the machines and people are
+drawn.
+
+**What was drawn at `05b7f52`.** At 1x no machine was on a field of its work at any time it went on when
+planting, hilling, digging with the harvester or hauling, and with the digger for 17 of each hundred; when spraying
+or killing vines one was there for 93 and stood still (0 m/s): it had been left there. At 3x and 8x one was there
+for none to 97 of each hundred, standing, or crossing the field at whatever pace the place it was drawn at was
+chasing the script. With Follow the camera held someone crossing the farm on foot. Nothing made a step it could
+not have made; the work was simply never where the picture was. (The contractor's bulldozer was not drawn.)
+
+**The cause.** Since `1f9d045` each person and machine is drawn at a place that chases where the day's script has
+them at no more than a walker's or a driver's pace (9 and 28 m/s: `follow` in `src/render/units.ts`), so that
+nobody jumps. The script, written before that, crossed the farm as fast as the days go: a way was cut to its
+start and its last stretch, and a day is four seconds at 1x and half a second at 8x. The seen places could not
+keep up. A driver whose seen place was the length of the farm from the machine was drawn walking to it while the
+machine waited (the same file, where the machines are placed), and by the time they were there the script was
+three days on. And with one tractor, the farm's day gives it to two people in the same hours (`rigFor` in
+`src/sim/season.ts` counts the tractors held at that moment, and a quarter-day's spraying is done and the tractor
+let go inside one turn); the one without it was drawn walking the rows on foot.
+
+**What changed** (`units.ts`, `work.ts`, `stage.ts`, `tractor.ts`, `state.ts`, `index.ts`):
+
+- The script's ways keep within what is seen: no faster on foot or driving than the seen places go (half as fast
+  again at 3x, two and a half times at 8x), for no longer than 2.4, 1.5 and 1.1 seconds at the three clocks. A way
+  too long for that is cut, and now the cut is seen as one: those on it go from sight as they pull away, and are
+  next seen, small and growing, where it brings them in, with the seen place set there. A long walk to a machine is
+  cut the same way to its setting off.
+- Each part of a day's work is seen for at least 4.4, 3.2 and 2.6 seconds at the three clocks, the machine going
+  along the leading row at a pace that reads from where the camera is. The picture then falls behind the days: the
+  newest work waits its turn, what was not seen is passed over, and the ground keeps the days' time (at 1x it waits
+  for the machine that is being seen at it, and no other).
+- One tractor two people each had a turn on is seen with whoever holds it, over all of that ground; the other
+  stands by at the end of the rows of their own part. The state says both are spraying: that is the state's doing,
+  and is reported to whoever has the simulation.
+- Whoever would take the first order that can be worked today (on the list, or one the routine will put there)
+  sets out as the clock is set going or the order is given: a few steps toward the machine, then in its seat with
+  the implement on and rolling down the lane, 30 m in the four seconds before the first day is counted at 1x.
+- With the clock stopped by the player the way and the row in hand wait where they are. A day a question stopped
+  is planned as the running day it was. Only what the interface is waiting to see keeps the day's time: a test dig,
+  and the digging of a field whose crop has just been weighed.
+- Found from across the farm: dust, the spray's mist, the flail's chaff, the smoke of a working engine, lamps and,
+  in sun, a glint are drawn larger and denser the further off they are seen from (as drawn before from within a
+  field's length); the slash is burnt behind the felling; the contractor's bulldozer, which was not drawn at all,
+  works the line the torn ground has reached, its dust pale against the woods.
+- Follow on someone off the land frames the house from 58 m. Among a tract's trees it looks from higher and
+  steeper.
+
+**After** (the same check; 1280 by 800, the box quiet; shares are of the time the game has the work going, and of
+what a machine is seen at it for in the five seconds after):
+
+| work | 1x: on its field, working | 3x | 8x | Follow at 1x: in the picture | far mark, pixels |
+| --- | --- | --- | --- | --- | --- |
+| planting | 86%, 63% | 86%, 60% | 83%, 60% | 92% | 747 |
+| hilling | 79%, 68% | 82%, 57% | 77%, 64% | 100% | 525 |
+| spraying | 81%, 64% | 82%, 59% | 94%, 68% | 100% | 1120 |
+| killing the vines | 85%, 57% | 83%, 57% | 82%, 66% | 100% | 789 |
+| digging, the digger | 80%, 67% | 66%, 49% | 63%, 46% | 100% | 526 |
+| digging, the harvester | 80%, 68% | 80%, 71% | 68%, 47% | 94% | 460 |
+| hauling, with the truck | to be seen 53%, at the field 40% | 54%, 49% | 36%, 26% | 95% | **60 to 160** |
+| felling | whoever fells at the tract 100% | 83% | 83% | 96% | 615 |
+| stumping (a contractor) | | | | | 374 |
+
+"On its field" is the machine's footprint inside the field's outline on the screen; "working", at 1x, at this work
+by its own account, and at the faster clocks at any (behind the days it may be the work before); for digging, the
+tractor bringing in what it dug counts. The machine goes 8 m/s along the rows from the opening view (12 to 23
+pixels a second) and 2.3 to 3 m/s under Follow. No step that nobody could make at any clock; a way is cut 5 to 23
+times in a run. The far mark is the pixels of the field's picture, from the opening view on a fair dry afternoon, that
+differ by more than a tenth with the people, machines and what they leave in the air taken out (floor 300; the
+machine itself is 5 to 9 pixels long). **Hauling's far mark is under the floor**: 151, 127 and 160 with the load
+standing at the field and 107 and 60 as it pulls in, over five runs; readings of 552 to 2890 in earlier runs were
+the digger's dust in the same field. The check has 42 lines and 41 hold; at `05b7f52` 27 of them fail: every
+kind of row work at every clock from the opening view, hauling at 1x, five of the seven Follows with a machine,
+and the far mark of planting, felling and stumping (felling, on foot, was seen where it was).
+`tests/seen.test.ts` runs the people and machines without a picture and holds the same at each clock, and that a
+stopped clock set going again leaves a machine at its work: 22 pass, and all 22 fail on `05b7f52`'s code.
+
+**The frame budget, as it was.** This build and the live one, turn about in one page (`budget.ts --against`, 1512
+by 982 at ratio 2, high, drawing as fast as it can; other agents' browsers were on the GPU for part of it, which
+falls on both alike): the playing view 3.46 ms from frame to frame against 3.49, level over the crop from 160 m
+3.98 against 4.02, the closest level view over a crop 4.65 against 4.63, the closest tipped down 2.32 against
+2.30, the closest in the yard 3.40 against 3.55; the same triangles and draw calls in each; what hangs in the air
+0.12 to 0.14 ms in both. The lit fragments to a pixel of trees, their cards and the far woods (`--close --level`)
+are what they were: 0.33 in the playing view, 0.31 from the yard tier, 0.31 level from 160 m, 1.34 from the closest
+over a crop, 0.44 from the closest in the yard; the crop's leaves 1.22 (0.86 in front). The opening shot's machine
+is drawn as it was (no far signs there: its camera comes down to what it first saw from far off).
+
+**What it does not do.** A load at the field's end is not found from the opening view by anything of its own but
+the face pinned to whoever hauls: the truck, its barrels and the smoke of its engine change 60 to 160 pixels. In
+rain and fog the far signs are the lamps and the face the interface pins to whoever
+works: the far mark there is under the floor. With one tractor the crop is handed up by the barrel at the field's
+end while the tractor digs, and a load is seen on the lane only once there is a machine for it. A feller under the
+boughs of the next tree to fall is hidden by them, from the side and from above. At 8x the picture is of what the
+farm is doing, some seconds (as many as a dozen days) behind the calendar and the words on the people's cards.
+
 ## Wave three: bugs and UX, checked by players who see only pictures
 
 After live-5 the owner asked for a camera that tips down, lighter rendering, a card for anyone clicked, a far more

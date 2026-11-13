@@ -379,6 +379,7 @@ export interface MachineFrame {
   dust: number             // 0 damp ground .. 1 dust-dry
   mud: number              // 0..1
   lamps: number            // how much the light wants lamps, 0..1
+  sun: number              // how much direct sun there is to catch on glass and paint, 0..1
   still: boolean           // no smoke, no shake
   cold: boolean
 }
@@ -391,6 +392,7 @@ export interface MachineState {
   kind: JobKind | 'travel'
   driver: Dress | null
   load: number             // barrels aboard
+  far: number              // 0 seen from close by .. 1 from across the farm, where it is found by what it leaves in the air
 }
 
 abstract class Machine {
@@ -457,10 +459,11 @@ abstract class Machine {
     drawFigure(pr, SEAT, st.driver, drive(pose, f.time, st.turn, bounce))
   }
 
-  protected lamp(pr: Prims, f: MachineFrame, x: number, y: number, z: number, r: number): void {
+  protected lamp(pr: Prims, f: MachineFrame, x: number, y: number, z: number, r: number, far = 0): void {
     if (f.lamps < 0.05) return
     this.at(x, y, z, p0)
-    const s = r * this.scale
+    // (from across the farm a lamp is a point of light a few pixels wide, as it is to the eye)
+    const s = r * this.scale * (1 + 5 * far + 16 * far * far)
     pr.put('glow', p0, up, fwd, s * 0.5, s, s, LAMPC.copy(LAMP).multiplyScalar(f.lamps))
   }
 
@@ -485,7 +488,9 @@ abstract class Machine {
     if (on && speed < 12 && this.puffAt > 0.09) {
       this.puffAt = 0
       this.at(sx, sy, sz, p0)
-      pt.emit(p0.x, p0.y, p0.z, 0, 1.1 + r() * 0.5, 0, 0.12, 0.7, 1.2 + r() * 0.8, 0.3, 0.3, 0.32, f.cold ? 0.42 : 0.26, 0.6)
+      // (under load, and seen from far off: a darker column that stands a few seconds over where the machine is)
+      const far = st.far * (st.working > 0 ? 1 : 0.4)
+      pt.emit(p0.x, p0.y, p0.z, 0, 1.1 + r() * 0.5 + 1.2 * far, 0, 0.12 + 0.7 * far, 0.7 + 0.6 * far, (1.2 + r() * 0.8) * (1 + 1.6 * far), 0.3 - 0.1 * far, 0.3 - 0.1 * far, 0.32 - 0.1 * far, (f.cold ? 0.42 : 0.26) + 0.3 * far, 0.6)
       // mud flung off the tyres on a wet day: dark, heavy, soon down
       if (f.mud > 0.3 && speed > 0.5 && r() < f.mud * 0.5) {
         this.at(back - 0.1, 0.2, r() < 0.5 ? -half : half, p0)
@@ -511,8 +516,8 @@ abstract class Machine {
       const soil = st.working > 0
       // (hurrying, the puffs are far apart: each is wider and thinner, so they run together into a haze along the way)
       const fast = speed >= 12 ? 1 : 0
-      pt.emit(bx + (r() - 0.5) * 1.6, this.y + 0.9 + fast, bz + (r() - 0.5) * 1.6, (r() - 0.5) * 0.5, 0.6 + r() * 0.6, (r() - 0.5) * 0.5, 1.6 + r() * 0.9 + 2.2 * fast, 0.42 + r() * 0.2, 5 + r() * 4,
-        soil ? 0.72 : 0.78, soil ? 0.62 : 0.7, soil ? 0.5 : 0.58, (0.62 - 0.36 * fast) * Math.min(1, dust * 1.4), 0.55)
+      pt.emit(bx + (r() - 0.5) * 1.6, this.y + 0.9 + fast + 0.8 * st.far, bz + (r() - 0.5) * 1.6, (r() - 0.5) * 0.5, 0.6 + r() * 0.6, (r() - 0.5) * 0.5, (1.6 + r() * 0.9) * (1 + 1.3 * st.far) + 2.2 * fast, 0.42 + r() * 0.2, (5 + r() * 4) * (1 + 0.5 * st.far),
+        soil ? 0.72 : 0.78, soil ? 0.62 : 0.7, soil ? 0.5 : 0.58, Math.min(0.9, (0.62 - 0.36 * fast) * Math.min(1, dust * 1.4) * (1 + 0.6 * st.far)), 0.55)
     }
   }
 
@@ -584,7 +589,16 @@ export class Tractor extends Machine {
     for (const z of [-0.31, 0.31]) this.wheel(pr, 'tyre', 0.62, 0.2, z, 0.2, 0.1, -st.turn * 0.5)
     this.seated(pr, f, st, -0.44, 0.8, 0)
     // lamps are lit only with someone at the wheel
-    if (st.driver) for (const z of [-0.2, 0.2]) this.lamp(pr, f, 0.675, 0.8, z, 0.05)
+    if (st.driver) for (const z of [-0.2, 0.2]) this.lamp(pr, f, 0.675, 0.8, z, 0.05, st.far)
+    // From across the farm, in sun: the light it catches as it goes, a glint that comes and goes with the ground.
+    if (st.driver && st.far > 0.15 && f.sun > 0.2 && (st.moved > 0 || st.working > 0)) {
+      const k = 0.5 + 0.5 * Math.sin(this.travelled * 0.9)
+      if (k > 0.35) {
+        this.at(0.3, 1.05, 0, p0)
+        const g = 0.7 * st.far * s
+        pr.put('glow', p0, up, fwd, g, g, g, LAMPC.set(3.4, 3.2, 2.7).multiplyScalar(f.sun * st.far * k))
+      }
+    }
     const w = st.working
     switch (this.current) {
       case 'planter':
@@ -663,15 +677,21 @@ export class Tractor extends Machine {
       else if (st.kind === 'kill') emit(-1.5, 0.2, (r() - 0.5) * 1.3, -(1.2 + r()), 0.8 + r(), 0, 0.2, 0.5, 0.9 + r() * 0.5, 0.5, 0.52, 0.3, 0.42, 0.4)
       else if (st.kind === 'dig' && r() < 0.6) emit(-1.9, 0.16, (r() - 0.5) * 1.1, -0.6, 0.6 + r() * 0.6, 0, 0.25, 0.6, 1.2 + r(), 0.42, 0.31, 0.24, 0.3, 0.3)
     }
-    // From far off: a drift hanging over the rows just worked, going with the wind.
+    // From far off: a drift hanging over the rows just worked, going with the wind; wider, denser and longer in the
+    // air the further off it is seen from, so the work is found from the far side of the farm.
     this.wake += st.moved
     let guard = 0
+    const far = st.far, wide = 1 + 1.3 * far, long = 1 + 0.6 * far, dense = 1 + 1.1 * far
     while (this.wake > 4 && guard++ < 16) {
       this.wake -= 4
       const bx = -1.3 - this.wake / this.scale
-      if (st.kind === 'spray') for (const z of [-0.9, 0.9]) emit(bx, 0.7, z + (r() - 0.5) * 0.8, 0, 0.2, 0, 2.0 + r() * 0.8, 0.6, 5 + r() * 4, 0.92, 0.95, 0.97, 0.26, 0.95)
-      else if (st.kind === 'water') emit(bx, 0.9, (r() - 0.5) * 3, 0, 0.3, 0, 1.6, 0.6, 3 + r() * 2, 0.84, 0.89, 0.93, 0.2, 0.7)
-      else if (st.kind === 'kill') emit(bx, 0.6, (r() - 0.5) * 1.3, 0, 0.5, 0, 1.5, 0.5, 4 + r() * 3, 0.58, 0.58, 0.36, 0.34, 0.5)
+      if (st.kind === 'spray') for (const z of [-0.9, 0.9]) emit(bx, 0.7 + 0.5 * far, z + (r() - 0.5) * 0.8, 0, 0.2, 0, (2.0 + r() * 0.8) * wide, 0.6, (5 + r() * 4) * long, 0.92, 0.95, 0.97, 0.26 * dense, 0.95)
+      else if (st.kind === 'water') emit(bx, 0.9 + 0.5 * far, (r() - 0.5) * 3, 0, 0.3, 0, 1.6 * wide, 0.6, (3 + r() * 2) * long, 0.84, 0.89, 0.93, 0.2 * dense, 0.7)
+      else if (st.kind === 'kill') emit(bx, 0.6 + 0.5 * far, (r() - 0.5) * 1.3, 0, 0.5, 0, 1.5 * wide, 0.5, (4 + r() * 3) * long, 0.62, 0.6, 0.36, 0.34 * dense, 0.5)
+      // (on ground too damp for dust the planter, the hiller and the digger still leave the haze of turned earth)
+      else if ((st.kind === 'plant' || st.kind === 'hill' || st.kind === 'dig') && f.dust * (1 - f.mud) < 0.2 && far > 0.1) emit(bx, 0.7 + 0.5 * far, (r() - 0.5) * 1.6, 0, 0.3, 0, 1.3 * wide, 0.45, (3.5 + r() * 2.5) * long, 0.5, 0.42, 0.34, 0.3 * far * (1 - 0.6 * f.mud), 0.4)
+      // (and in the wet, whatever it is at, the spray its wheels and its work throw up off the ground)
+      if (f.mud > 0.3 && far > 0.1) emit(bx, 0.6 + 0.4 * far, (r() - 0.5) * 2, 0, 0.35, 0, 1.2 * wide, 0.5, (2.6 + r() * 2) * long, 0.78, 0.8, 0.82, 0.34 * far * f.mud, 0.7)
     }
   }
 }
