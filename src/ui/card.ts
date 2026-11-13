@@ -343,7 +343,7 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
       const ok = a.ok && !(u && S.unitBlock(c, kind, u.id))
       return order({
         key: touch ? '' : JOB_KEY[kind], icon: kind, name: JOB_VERB[kind], cost: ok ? `${F.num(Math.ceil(a.days))} crew-days${a.cost ? ` · ${F.money(a.cost)}` : ''}` : undefined,
-        catch: ok ? catchFor(c, kind, f, '') : F.localize(a.why), testid: ok ? `order-${kind}` : `order-${kind}-off`,
+        catch: ok ? catchFor(c, kind, f, '') : F.localize(a.why), title: touch ? undefined : ok ? catchFor(c, kind, f, '') : F.localize(a.why), testid: ok ? `order-${kind}` : `order-${kind}-off`,
         attrs: { 'data-k': `order-${kind}`, class: ok ? '' : 'is-off', 'aria-disabled': ok ? null : 'true' },
         onclick: () => (ok ? give(kind, false) : refuse(kind, F.localize(a.why))),
       })
@@ -562,12 +562,14 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
     return [
       headWith(fieldKind(f), f.name, [`${f.variety}, `, term((SHORT_STAGE[f.stage] ?? f.stage).toLowerCase())]),
       // What is known first, then everything that can be ordered here in one group, then what the orders say back.
-      gauges(c, f),
+      // Nothing grows yet on an unplanted field, so it has no leaf, spray or hilling to read.
+      f.status === 'idle' ? null : gauges(c, f),
       g.el,
       landRow(c, i),
       say,
       whoseLine(c, i),
-      h('div', { class: 'readings' }, known(c, f), land),
+      // The stones are said once: by the Pick rocks order when it is on the card.
+      h('div', { class: 'readings' }, known(c, f), landCare(c, f, 'rocks') ? land.filter(e => e.dataset.testid !== 'stones') : land),
     ]
   }
 

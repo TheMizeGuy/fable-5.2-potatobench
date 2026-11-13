@@ -288,6 +288,10 @@
   .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .readings { gap: 3px; padding: 6px 16px 7px; font-size: 14.5px; }
 }
 /* The same of a person's page: whole in a 720-line window, beside the people bar it was opened from. */
+/* A short window: the care of the land is one line, its catch under the pointer. */
+@media (max-height: 760px) {
+  .season-screen:is([data-layout='mid'], [data-layout='wide']) .command.card .land-orders .order .catch { display: none; }
+}
 @media (max-height: 800px) {
   .season-screen:is([data-layout='mid'], [data-layout='wide']) .person-card { padding: 10px 16px 12px; }
   .season-screen:is([data-layout='mid'], [data-layout='wide']) .person-card .pc-head { grid-template-columns: 52px 1fr auto; gap: 12px; padding-bottom: 7px; }

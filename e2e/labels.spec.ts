@@ -64,12 +64,12 @@ for (const [w, h] of [[1280, 800], [1280, 720]] as const) {
     // A potato field the rocks row is offered for, not yet planted, in cold soil.
     const field = await game<number>(page, `[...Array(sim.FIELD_COUNT).keys()].find(i => sim.held(app.campaign, i) && app.campaign.plans[i].crop === 'potato' && !sim.plantReady(app.world, app.campaign, i).ok && sim.fieldInfo(app.campaign, i).stones >= 0.3) ?? -1`)
     expect(field, 'an unplanted potato field with stones').toBeGreaterThanOrEqual(0)
-    await game(page, `app.focus(${field})`)
-    await page.waitForTimeout(1500)
-    await game(page, `app.select(${field})`)
+    // Picked by its tag, as a player does.
+    await page.getByTestId(`field-${field}`).click()
     await expect(page.getByTestId('card-title')).toBeVisible()
     await page.mouse.move(2, Math.round(h / 2))
     await page.waitForTimeout(600)
+    await shot(page, `1-april-card-${w}x${h}`)
     await expect(page.locator('#ui [data-testid="card"] [data-k="order-rocks"]')).toBeVisible()
     const text = await cardText(page)
     console.log(`the April card, ${w}x${h}: ${text}`)
@@ -81,10 +81,11 @@ for (const [w, h] of [[1280, 800], [1280, 720]] as const) {
     await expect(page.getByTestId('order-plant').locator('.cost')).toHaveText(/^Too cold/)
     // Whole: nothing in the card has to be scrolled to.
     const room = await page.locator('#ui [data-testid="card"]').evaluate(el => [el, ...el.querySelectorAll<HTMLElement>('[data-scroll]')].map(x => [x.scrollHeight, x.clientHeight]))
+    const parts = await page.locator('#ui [data-testid="card"] .card-body').evaluate(b => [...b.children].map(x => `${x.className || x.tagName}:${Math.round(x.getBoundingClientRect().height)}`).join(' '))
+    console.log(`the April card's parts, ${w}x${h}: ${parts}; heights ${JSON.stringify(room)}`)
     for (const [sh, ch] of room) expect(sh, `the card scrolls: ${JSON.stringify(room)}`).toBeLessThanOrEqual(ch + 1)
     const card = (await page.getByTestId('card').boundingBox())!
     expect(card.y + card.height, 'the card ends inside the window').toBeLessThanOrEqual(h)
-    await shot(page, `1-april-card-${w}x${h}`)
     expect(errors, errors.join('\n')).toEqual([])
   })
 }
