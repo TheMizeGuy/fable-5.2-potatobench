@@ -242,7 +242,7 @@ describe('what a note says against what the game does (round six)', () => {
             const said = `${frost.ask({ ...l, input })} ${frost.why({ ...l, input })}`
             expect(said).not.toMatch(/don't need to do anything|will haul them in|before the frost/)
             expect(said).toMatch(/a fifth/)
-            expect(said).toMatch(/cwt a day/)
+            expect(said).toMatch(/may freeze|can still catch/)
             expect(countWords(said)).toBeLessThanOrEqual(35)
             if (days > 0.9) expect(said, `${days.toFixed(2)} days of hauling`).toMatch(/may freeze/)
           }
@@ -308,5 +308,14 @@ describe('what a note says against what the game does (round six)', () => {
     }
     expect(keys).toBeGreaterThan(0)
     for (const id of ['hire', 'begin2']) expect(`${lesson(id)!.ask(l)} ${lesson(id)!.why(l)}`).not.toMatch(/don't have to hire/)
+    // The notes reworded this round keep the 35 words, however they are played.
+    S.apply(w, c, { t: 'hire', kind: 'hand' })
+    for (const id of ['yard', 'foreman', 'frost']) for (const input of INPUTS) {
+      const v = { ...look(w, c), input }
+      expect(countWords(`${lesson(id)!.ask(v)} ${lesson(id)!.why(v)}`), id).toBeLessThanOrEqual(35)
+    }
+    // A control is named by the words on it: the winter sheet's heading, and its key's count.
+    expect(lesson('yard')!.ask(look(w, c))).toMatch(/^Under Put up a building, click "\d+ to choose from"/)
+    expect(lesson('foreman')!.ask(look(w, c))).toMatch(/^A foreman is a hired hand who orders a block's field work for you each morning\./)
   })
 })

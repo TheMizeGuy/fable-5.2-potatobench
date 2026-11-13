@@ -256,7 +256,7 @@ export function light(selector: string, o: { open?: boolean; top?: boolean } = {
 // Where a spring goal's Show me ends: the fold that holds its control, brought to the top of the sheet and ringed.
 const FOLD_OF: Partial<Record<string, string>> = { tool: 'equipment-open', hire: 'crew-open', contract: 'contracts-open', land: 'land-open' }
 // A goal named by a word a newcomer has not met says what it is, in a clause.
-const GLOSS: Partial<Record<string, string>> = { foreman: 'a hired hand who orders a block\'s work for you' }
+const GLOSS: Partial<Record<string, string>> = { foreman: 'a hand who orders a block\'s work' }
 // The crop's own steps: in spring they wait for the season to start.
 const CROP_STEPS = new Set(['plant', 'walk', 'hill', 'spray', 'sample', 'kill', 'dig', 'haul'])
 

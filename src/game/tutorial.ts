@@ -30,12 +30,13 @@ export interface Look {
   wait?: number
   // A card that wants an answer is up: the note waits behind it, and brings nothing onto the screen yet.
   carded?: boolean
-  // The fields whose stamp is on the screen now, so a note names the stamp the player can see.
+  // The fields whose stamp is on the screen now, the one a note already named first, so a note names a stamp the
+  // player can see and keeps to it.
   inView?: number[]
 }
 
 // Where a note's "Show me" goes: the field or the person its sentence is about, and the control lit there.
-export type Show = { field: number } | { unit: number; light?: string }
+export type Show = { field: number } | { unit: number; foreman?: boolean }
 // A thing the player can do about what a note says, as its key: the words on it and the orders it gives.
 export interface Act { label: string; cmds: S.Cmd[]; done: string }
 
@@ -184,26 +185,24 @@ const unplanted = (l: Look) => !!l.c && potatoFields(l.c).some(i => (l.c!.season
 // Of several fields with one, the first whose stamp is on the screen: the note names the stamp the player sees.
 const seen = (l: Look, ok: (a: S.Advice | null) => boolean) => {
   const all = l.needs.map((a, i) => (ok(a) ? i : -1)).filter(i => i >= 0)
-  return all.find(i => l.inView?.includes(i)) ?? all[0] ?? -1
+  return l.inView?.find(i => all.includes(i)) ?? all[0] ?? -1
 }
 const call = (l: Look) => seen(l, a => jobAct(a?.act) && a?.act !== 'kill' && (a?.act !== 'spray' || (!!l.c && S.sprayWayNow(l.c) === 'ask')))
 const killAt = (l: Look) => seen(l, a => a?.act === 'kill')
 // The buildings the winter sheet's list offers (src/ui/winter.ts): its key reads "N to choose from".
 const toRaise = (c: S.Campaign | null) => (c ? S.buildingInfo(c).filter(b => b.state === 'none' && (b.yard === S.HOME_YARD || S.holdsDufour(c))).length : 0)
-const cwt = (n: number) => Math.round(n).toLocaleString('en-US')
 
-// A frost forecast tonight on crop still in barrels: how much is out and where most of it is, the days one tractor
-// needs to haul it, what a tractor hauls in a day, and the fields whose haul is not on the work list.
-function frostNow(l: Look): { cwt: number; field: number; days: number; rate: number; unlisted: number[] } | null {
+// A frost forecast tonight on crop still in barrels: where most of it is, the days one tractor needs to haul it all,
+// and the fields whose haul is not on the work list.
+function frostNow(l: Look): { field: number; days: number; unlisted: number[] } | null {
   const c = l.c
   const s = c?.season
   if (!c || !s || c.phase !== 'season' || s.frozen) return null
   const cold = S.haulInfo(l.world, c).filter(x => !s.fields[x.field].weighed && S.frostOnBarrels(l.world, c, x.field))
   if (!cold.length) return null
   const most = [...cold].sort((a, b) => b.cwt - a.cwt)[0]
-  const total = cold.reduce((t, x) => t + x.cwt, 0)
   const days = cold.reduce((t, x) => t + x.daysToHaul, 0)
-  return { cwt: total, field: most.field, days, rate: days > 0 ? total / days : 0, unlisted: cold.filter(x => !s.jobs.some(j => j.kind === 'haul' && j.field === x.field)).map(x => x.field) }
+  return { field: most.field, days, unlisted: cold.filter(x => !s.jobs.some(j => j.kind === 'haul' && j.field === x.field)).map(x => x.field) }
 }
 // The evening's frost warning (S.frostAhead) is dated the day the barrels are hauled in: today.
 const frostWarned = (l: Look) => { const s = l.c?.season; return !!s && s.log.some(e => e.type === 'frostBarrels' && e.day === s.day) }
@@ -308,16 +307,16 @@ export const LESSONS: Lesson[] = [
     // The warning itself, not a pause for it: the game no longer stops for a frost by itself.
     when: l => inSeason(l) && frostWarned(l) && !!frostNow(l),
     done: (_l, g) => g.has('noted:frost'),
-    ask: () => 'Frost tonight ruins a fifth of any potatoes still in barrels in the field.',
-    // What the crew does, and what a day's hauling can and can't bring in: never a promise the night may break.
+    ask: () => 'Frost tonight ruins a fifth of the potatoes still out in barrels.',
+    // What the crew does, and what a day's hauling can and can't bring in: never a promise the night may break
+    // (a tractor hauls about 900 cwt a day, the forecast misses, and what is dug after the haul stays out).
     why: l => {
       const f = frostNow(l)
       if (!f) return 'Your crew hauls barrels in ahead of everything else.'
-      if (f.unlisted.length) return `Hauling is off your crew's routine, so the ${cwt(f.cwt)} cwt in ${name(f.field)} stay out until you order it.`
-      // The day's drive and digging can still leave some out: the rate is said, and no night is promised.
+      if (f.unlisted.length) return `Hauling is off your crew's routine, so the barrels in ${name(f.field)} stay out until you order it.`
       return f.days <= 0.9
-        ? `Your crew hauls the ${cwt(f.cwt)} cwt in ${name(f.field)} first. One tractor moves about ${cwt(f.rate)} cwt a day.`
-        : `Your crew hauls first, but one tractor moves about ${cwt(f.rate)} cwt a day, so some of the ${cwt(f.cwt)} cwt may freeze.`
+        ? `Your crew hauls the barrels in ${name(f.field)} first. A frost can still catch what's dug later today.`
+        : `Your crew hauls them in first, but ${name(f.field)} has more out than one tractor can haul today, so some may freeze.`
     },
     show: l => { const f = frostNow(l); return f ? { field: f.field } : null },
     act: l => {
@@ -375,8 +374,8 @@ export const LESSONS: Lesson[] = [
     when: (l, g) => l.screen === 'cellar' && g.passed('cellar') && !!l.c && S.goalCosts(l.c).some(x => x.id.startsWith('build:') && x.can),
     done: (l, g) => g.has('fold:raise') || (!!l.c && l.c.buildings.length > 0),
     // By the words on the control: the sheet's heading, and the key under it (src/ui/winter.ts).
-    ask: l => `Under Put up a building, ${l.input === 'touch' ? 'tap' : 'click'} "${toRaise(l.c)} to choose from" to raise one this winter with your own logs and stone.`,
-    why: () => 'Whoever you set to Build works on it, and a second potato house stores more of your crop.',
+    ask: l => `Under Put up a building, ${l.input === 'touch' ? 'tap' : 'click'} "${toRaise(l.c)} to choose from" to raise one this winter.`,
+    why: () => 'Whoever you set to Build works on it, using your own logs and stone.',
     point: () => ({ testid: ['raise-open'] }),
   },
   {
@@ -475,7 +474,7 @@ export const LESSONS: Lesson[] = [
     ask: l => `A foreman is a hired hand who orders a block's field work for you each morning. Name one with Foreman on ${first(hand(l)?.name ?? 'their')}'s card.`,
     why: () => 'A foreman earns 40% more and stops doing field work.',
     point: () => ({ testid: ['person-foreman'] }),
-    show: l => { const u = hand(l); return u ? { unit: u.id, light: '[data-testid="person-foreman"]' } : null },
+    show: l => { const u = hand(l); return u ? { unit: u.id, foreman: true } : null },
   },
 ]
 

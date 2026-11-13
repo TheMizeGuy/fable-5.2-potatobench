@@ -9,8 +9,8 @@ import { h } from './dom.ts'
 import * as F from './fmt.ts'
 import { icon } from './icons.ts'
 import { plantingIn } from './rules.ts'
+import { showForemanKey } from './people.ts'
 import { fist, key } from './system/parts.ts'
-import { light } from './top.ts'
 import './system/tutorial.css'
 
 export const guide = new Guide(localStore())
@@ -126,6 +126,15 @@ function shown(el: Element | null): el is HTMLElement {
   if (el.closest('.leaving, [inert], .guide-layer, .out')) return false
   const r = el.getBoundingClientRect()
   return r.width > 0 && r.height > 0 && r.bottom > 0 && r.right > 0 && r.top < innerHeight && r.left < innerWidth
+}
+
+// On the screen and inside the window of the card that holds it, not scrolled out of it.
+function inCard(el: Element | null): boolean {
+  if (!shown(el)) return false
+  const card = el.closest('.person-card')
+  if (!card) return true
+  const r = el.getBoundingClientRect(), c = card.getBoundingClientRect()
+  return r.top >= c.top - 1 && r.bottom <= c.bottom + 1
 }
 
 function byTestid(root: HTMLElement, ids: string[]): HTMLElement | null {
@@ -272,7 +281,7 @@ function slipBody(ctx: Ctx, x: Lesson, l: Look, held: boolean, lost = false, und
   const act = x.act?.(l) ?? null
   // Each key that touches the clock says what it does to it.
   const resumes = back < 0 ? null : h('span', { class: 'sub', testid: 'guide-resumes' }, back > 0 ? `resumes at ${SPEED_X[back]}` : 'stays paused')
-  const lead = (s: Show) => { if ('field' in s) { ctx.app.select(s.field); ctx.app.focus(s.field) } else { ctx.app.selectUnit(s.unit); if (s.light) light(s.light, {}) } }
+  const lead = (s: Show) => { if ('field' in s) { ctx.app.select(s.field); ctx.app.focus(s.field) } else { if (s.foreman) showForemanKey(); ctx.app.selectUnit(s.unit); ctx.dirty() } }
   return [
     h('header', { class: 'guide-head' },
       h('p', { class: 't-label' }, 'The county agent'),
@@ -441,6 +450,10 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
   let busyAt = 0
   const cam: { base: Sig | null; until: number; kind: 'pan' | 'zoom' | 'turn' | 'two'; travel: number } = { base: null, until: 0, kind: 'pan', travel: 0 }
 
+  // The stamps on the screen, read once a look round (not every frame), and the field the note on show has named.
+  let stamps: number[] = []
+  let stampKept = -1
+
   function papers(): string[] {
     return [...root.querySelectorAll<HTMLElement>('.paper-layer > .dialog:not(.out)')].map(d => d.dataset.testid ?? 'paper')
   }
@@ -454,7 +467,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
       wait: app.campaign?.phase === 'season' ? plantingIn(app.world, app.campaign) : -1,
       asking: shown(root.querySelector('[data-testid="spray-ask"]')) ? 'spray' : '',
       fold: root.querySelector<HTMLElement>('.catalogue .cat-open')?.dataset.testid ?? '',
-      inView: app.screen === 'season' ? [...root.querySelectorAll<HTMLElement>('.plate-layer [data-testid^="badge-"]')].filter(shown).map(e => Number(e.dataset.testid!.slice(6))) : [],
+      inView: stampKept >= 0 ? [stampKept, ...stamps] : stamps,
     }
   }
 
@@ -520,7 +533,8 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
   // skipped) and runs the game. due: the note that is owed, shown or waiting behind a card.
   let holding: { id: string; speed: number } | null = null
   let due: Lesson | null = null
-  function stopNow(): void { app.setSpeed(0); app.pauseReason = HOLD; ctx.dirty() }
+  // The speed it had is the speed the clock's own keys resume at, Space included.
+  function stopNow(): void { if (app.speed > 0) app.resumeSpeed = app.speed; app.setSpeed(0); app.pauseReason = HOLD; ctx.dirty() }
   function hold(): void {
     const t = performance.now()
     const want = due && app.screen === 'season' ? due.id : ''
@@ -593,6 +607,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     if (app.screen === 'plan') notePlan()
     if (app.screen === 'season') noteOpen()
     if (shown(root.querySelector('#raise-list'))) guide.note('fold:raise')
+    stamps = app.screen === 'season' ? [...root.querySelectorAll<HTMLElement>('.plate-layer [data-testid^="badge-"]')].filter(shown).map(e => Number(e.dataset.testid!.slice(6))) : []
     const l = lookNow()
     offer = guide.offerFor(c, app.screen)
     const carded = cardUp(l)
@@ -628,6 +643,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     const docked = app.screen === 'plan' && ctx.layout() === 'narrow'
     const held = !!now && app.screen === 'season' && app.speed === 0
     const p = now?.point?.(l) ?? null
+    stampKept = p && 'badge' in p ? p.badge : -1
     const t = resolve(ctx, root, p)
     cover = app.screen === 'season' ? coverOf(t) : null
     // A note about the land itself (come closer, turn it) on a phone, with a card over half the land: the card's cross.
@@ -640,7 +656,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     // The lesson's own Show me: to a person's control that is not on the screen, or to the field a note with nothing
     // to point at is about.
     const sh = now?.show?.(l) ?? null
-    const go = !sh ? null : 'unit' in sh ? (sh.light && shown(root.querySelector(sh.light)) ? null : sh) : now?.point ? null : sh
+    const go = !sh ? null : 'unit' in sh ? (inCard(root.querySelector('[data-testid="person-foreman"]')) ? null : sh) : now?.point ? null : sh
     const back = app.screen === 'season' && now ? holding?.speed ?? 0 : -1
     // Something on the land to point at, none of it in view.
     const lost = !!p && !('testid' in p) && !t.at && app.screen === 'season'

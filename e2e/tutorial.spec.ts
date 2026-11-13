@@ -321,7 +321,10 @@ const reachable = (page: Page, id: string) => page.evaluate(id => {
   if (!el) return 'not there'
   const r = el.getBoundingClientRect()
   const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)
-  return r.top >= 0 && r.bottom <= innerHeight && r.width > 0 && !!hit && el.contains(hit) ? 'in view' : `out of view (${Math.round(r.top)} to ${Math.round(r.bottom)} of ${innerHeight})`
+  if (r.top >= 0 && r.bottom <= innerHeight && r.width > 0 && !!hit && el.contains(hit)) return 'in view'
+  const card = el.closest<HTMLElement>('.person-card')
+  const cb = card?.getBoundingClientRect()
+  return `out of view (${Math.round(r.top)} to ${Math.round(r.bottom)} of ${innerHeight}; under ${hit ? `${hit.tagName}.${String(hit.className).split(' ').slice(0, 3).join('.')}` : 'nothing'}; its card ${cb ? `${Math.round(cb.top)} to ${Math.round(cb.bottom)}, scrolls ${card!.scrollTop} of ${card!.scrollHeight - card!.clientHeight}, max-height ${getComputedStyle(card!).maxHeight}` : 'none'})`
 }, id)
 
 // The goal slip as it is laid out: whether its figure lies on its words, and how wide its words' column is. Read from
@@ -450,7 +453,7 @@ test('naming a foreman: the slip says what one is, the key comes into view lit, 
   const first = await game<string>(page, 'c.crew.find(u => u.kind !== "farmer").name.split(" ")[0]')
   // The slip names the goal and says what it is.
   await expect(page.getByTestId('goal')).toContainText('name a foreman')
-  await expect(page.getByTestId('goal')).toContainText('a hired hand who orders a block\'s work for you')
+  await expect(page.getByTestId('goal')).toContainText('a hand who orders a block\'s work')
   await picture(page, 'c-slip-1280')
   // The tutorial's own note for it (turned on here): what a foreman is, and a Show me to the key.
   await page.evaluate(() => { const g = (globalThis as unknown as Win).__countyGuide; g.skipTo('foreman') })
@@ -459,7 +462,9 @@ test('naming a foreman: the slip says what one is, the key comes into view lit, 
   await expect(note(page, 'foreman')).toContainText(`Foreman on ${first}'s card`)
   await note(page, 'foreman').getByTestId('guide-show').click()
   await expect.poll(() => game<number>(page, 'app.unit')).toBe(hand)
+  await expect.poll(() => reachable(page, 'person-foreman'), { timeout: 8000 }).toBe('in view')
   await expect(page.locator('#ui [data-testid="person-foreman"].goal-ring')).toHaveCount(1)
+  await picture(page, 'c-note-show-1280')
   await note(page, 'foreman').getByTestId('guide-noted').click()
   await page.evaluate(() => { const w = globalThis as unknown as Win; w.__countyGuide.stop(); w.__county.app.selectUnit(-1); w.__county.app.setSpeed(1) })
   await expect(page.getByTestId('person-card')).toBeHidden()
@@ -485,6 +490,8 @@ test('naming a foreman: the slip says what one is, the key comes into view lit, 
   await expect(page.getByTestId('person-foreman')).toContainText('home farm')
   await expect(page.locator('#ui .notes .alert').filter({ hasText: 'is now foreman of the home farm' })).toBeVisible()
   await picture(page, 'c-named-1280')
+  // Nothing but the card scrolled to show them.
+  expect(await page.evaluate(() => [document.documentElement.scrollTop, document.body.scrollTop, document.getElementById('ui')!.scrollTop])).toEqual([0, 0, 0])
   expect(errors, errors.join('\n')).toEqual([])
 })
 
@@ -545,7 +552,6 @@ test('"Planting has started" waits for the planting, and its Show me goes to the
 // of the warning with the game at 1x. Returns the speed after that day and why the clock says it stopped.
 async function toFrostWarning(page: Page, guided: boolean): Promise<{ speed: number; why: string; farm: string }> {
   await open(page)
-  await putAway(page)
   return page.evaluate(guided => {
     const w = globalThis as unknown as Win
     const { app, sim } = w.__county

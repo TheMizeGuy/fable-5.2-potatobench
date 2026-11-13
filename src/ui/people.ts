@@ -162,6 +162,10 @@ export function answerSpray(ctx: Ctx, c: S.Campaign, way: SprayWay): void {
   putSprayAway(ctx)
 }
 
+// Asked for from outside the card (a tutorial note's Show me): the foreman's key, brought into view and lit.
+let foremanAsked = -1e9
+export function showForemanKey(): void { foremanAsked = performance.now() }
+
 export function personCard(ctx: Ctx): PersonCard {
   const app = ctx.app
   const el = h('section', { class: 'person-card sheet sys', testid: 'person-card', 'aria-label': 'Person', hidden: true })
@@ -169,21 +173,32 @@ export function personCard(ctx: Ctx): PersonCard {
   let shownFor = -1
   let flashed: { text: string; until: number } | null = null
   const FOREMAN_KEY = '[data-testid="person-foreman"]'
-  // A control of the foreman's brought into view and ringed for a few seconds, through every redraw of the card.
-  let lit: { sel: string; until: number; seen: number } | null = null
-  function lightUp(sel: string): void {
-    lit = { sel, until: performance.now() + 4000, seen: 0 }
+  // A control of the foreman's ringed for a few seconds, through every redraw of the card, and brought inside the
+  // card's own window: see names what must be in view (the control, or the line under it that answers it).
+  let lit: { sel: string; until: number } | null = null
+  function lightUp(sel: string, see = sel): void {
+    const mine = lit = { sel, until: performance.now() + 4000 }
     setTimeout(() => ctx.dirty(), 4050)
     ctx.dirty()
+    // The card scrolls inside itself, and is laid and sized over a few frames: watched for a second and a half.
+    let frames = 0, inside = 0
+    const settle = () => {
+      if (lit !== mine || frames++ > 90) return
+      const k = el.querySelector<HTMLElement>(see) ?? el.querySelector<HTMLElement>(sel)
+      if (k && !el.hidden) {
+        const kr = k.getBoundingClientRect(), cr = el.getBoundingClientRect()
+        const tall = kr.height > cr.height - 24
+        if (kr.top >= cr.top - 1 && (tall || kr.bottom <= cr.bottom + 1)) { if (++inside >= 4) { el.querySelector<HTMLElement>(sel)?.focus({ preventScroll: true }); return } }
+        else { inside = 0; el.scrollTop += tall || kr.top < cr.top ? kr.top - cr.top - 12 : kr.bottom - cr.bottom + 12 }
+      }
+      requestAnimationFrame(settle)
+    }
+    requestAnimationFrame(settle)
   }
   function showLit(): void {
     for (const k of el.querySelectorAll('.goal-ring')) if (!lit || performance.now() >= lit.until || !k.matches(lit.sel)) k.classList.remove('goal-ring')
     if (!lit || performance.now() >= lit.until) { lit = null; return }
-    const k = el.querySelector<HTMLElement>(lit.sel)
-    if (!k) return
-    k.classList.add('goal-ring')
-    // Twice: once as it is found, and once more after the card has settled round it.
-    if (lit.seen++ < 2) { k.scrollIntoView({ block: 'nearest' }); k.focus({ preventScroll: true }) }
+    el.querySelector<HTMLElement>(lit.sel)?.classList.add('goal-ring')
   }
   // Naming a foreman, or sending one back to the fields: said on the card (its key, and the line under it), and as
   // a note where the player is looking; the key stays in view.
@@ -192,7 +207,7 @@ export function personCard(ctx: Ctx): PersonCard {
     const r = app.do({ t: 'foreman', unit: p.id, block })
     if (!r.ok) { flash(r.err); return }
     ctx.say(F.localize(r.events[0]?.text ?? ''), 'good')
-    lightUp(FOREMAN_KEY)
+    lightUp(FOREMAN_KEY, '[data-testid="foreman-said"]')
   }
 
   function flash(text: string): void {
@@ -279,7 +294,7 @@ export function personCard(ctx: Ctx): PersonCard {
             class: `btn${foreman ? ' is-on' : ''}`, type: 'button', testid: 'person-foreman', 'aria-expanded': String(foreman),
             title: ctx.touch() ? undefined : 'A foreman adds what one block\'s fields need to the work list every working morning, and doesn\'t do field work. A foreman is paid 40% more.',
             // Its choices open under it, brought into view with the first one lit.
-            onclick: () => { foreman = !foreman; if (foreman) lightUp('.pc-blocks .btn'); else lit = null; ctx.dirty() },
+            onclick: () => { foreman = !foreman; if (foreman) lightUp('.pc-blocks .btn', '.pc-blocks'); else lit = null; ctx.dirty() },
           }, icon('foreman', 'i'), h('span', null, 'Foreman', h('span', { class: 'sub' }, p.foreman ? BLOCK_NAME[p.foreman].replace(/^The /, '').split(',')[0] : '+40% pay'))) : h('span'),
           h('button', {
             class: 'btn hazard', type: 'button', testid: 'person-dismiss',
@@ -317,9 +332,10 @@ export function personCard(ctx: Ctx): PersonCard {
     el.classList.remove('out')
     el.hidden = false
     // Opened while the goal slip asks for a foreman: the key is brought into view, lit.
-    const asked = shownFor !== p.id && p.kind !== 'farmer' && !p.foreman && nextGoal(c)?.id === 'foreman'
+    const hand = p.kind !== 'farmer' && !p.foreman
+    const asked = hand && (performance.now() - foremanAsked < 2000 || (shownFor !== p.id && nextGoal(c)?.id === 'foreman'))
     if (shownFor !== p.id) { shownFor = p.id; foreman = false; flashed = null; lit = null }
-    if (asked) lightUp(FOREMAN_KEY)
+    if (asked) { foremanAsked = -1e9; lightUp(FOREMAN_KEY) }
     const s0 = c.season
     const model = {
       p, day: s0?.day, t: ctx.touch(), foreman, lit: lit && performance.now() < lit.until ? lit.sel : '', flash: flashed && performance.now() < flashed.until ? flashed.text : '',
