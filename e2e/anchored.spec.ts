@@ -563,7 +563,8 @@ test('clicking another thing moves the card; Shift adds a field to it; the card 
   expect(await a<number>(page, `return A.shown('card', 'field-${one.i}')`)).toBeGreaterThanOrEqual(0)
   await page.waitForTimeout(380)
   // A second field, where the first one's card does not lie: the card moves to it.
-  const free = async (not: number[]) => (await a<{ i: number; at: Pt }[]>(page, `return [0, 1, 2, 3, 4, 5].map(i => ({ i, at: A.fieldSpot(i) })).filter(x => x.at)`)).find(x => !not.includes(x.i))
+  // (potato fields, which can take the order given to both below; a resting field takes none)
+  const free = async (not: number[]) => (await a<{ i: number; at: Pt }[]>(page, `return [0, 1, 2, 3, 4, 5].filter(i => ['growing', 'planted'].includes(sim.fieldInfo(app.campaign, i).status)).map(i => ({ i, at: A.fieldSpot(i) })).filter(x => x.at)`)).find(x => !not.includes(x.i))
   const two = (await free([one.i]))!
   expect(two, 'a second field is in reach beside the first one\'s card').toBeTruthy()
   await page.mouse.click(two.at.x, two.at.y)
