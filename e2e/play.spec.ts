@@ -437,7 +437,7 @@ test('the money board says why the year-end figure moved', async ({ page, isMobi
   }
   await reach(page, `const { app } = q.g(); app.do({ t: 'begin' }); app.setSpeed(0); q.run(q.day(6, 6)); app.setSpeed(0); app.campaign.incidents = []; app.select(-1)`)
   await putAway(page)
-  const why = isMobile ? page.locator('#ui [data-testid="alert"]', { hasText: 'wages to year end' }) : page.locator('#ui [data-testid="outlook-why"]')
+  const why = isMobile ? page.locator('#ui .alert', { hasText: 'wages to year end' }) : page.locator('#ui [data-testid="outlook-why"]')
   await expect(page.locator('#ui [data-testid="outlook"]')).toBeVisible()
   await reach(page, `const { app } = q.g(); app.do({ t: 'hire', kind: 'hand' }); app.setSpeed(0)`)
   const name = await game<string>(page, `c.crew[c.crew.length - 1].name.split(' ')[0]`)
