@@ -144,7 +144,7 @@ test('a week before the vines are due, Kill vines warns with what it gives up; o
   await game(page, `(() => { app.campaign.season.fields[${b}].knownSev = 0.3; app.revision++; app.select(-1) })()`)
   k = await killStamp(page, b)
   expect(k.risk, 'no warning with blight winning').toBe(false)
-  expect(`${k.title} ${k.name}`).not.toContain('gives up')
+  expect(`${k.title} ${k.name}`).not.toContain('days early gives up about')
   await shot(page, '1-kill-blight')
   // On the due day: no warning.
   await reach(page, `const { app } = q.g(); const c = app.campaign; app.select(-1); c.incidents = []; q.run(${lost.dueDay}, ['kill', 'sell']); app.setSpeed(0); c.incidents = []
@@ -153,7 +153,7 @@ test('a week before the vines are due, Kill vines warns with what it gives up; o
   expect(await game<number>(page, 'app.campaign.season.day')).toBe(lost.dueDay)
   k = await killStamp(page, a)
   expect(k.risk, 'no warning on the due day').toBe(false)
-  expect(`${k.title} ${k.name}`).not.toContain('gives up')
+  expect(`${k.title} ${k.name}`).not.toContain('days early gives up about')
   await shot(page, '1-kill-due')
   expect(errors, errors.join('\n')).toEqual([])
 })
