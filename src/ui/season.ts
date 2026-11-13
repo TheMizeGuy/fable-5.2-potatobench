@@ -334,7 +334,8 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     if (!hint && app.settings.hints && !quietTips()) {
       for (let i = 0; i < needs.length; i++) {
         const act = needs[i].need?.act
-        if (!isJob(act) || seen.has(act)) continue
+        // (the planting that waits for the player's word is said by the crew itself, with what to press)
+        if (!isJob(act) || seen.has(act) || (act === 'plant' && !!app.campaign && S.awaitsWord(app.campaign, 'plant', i))) continue
         hint = { kind: act, field: i, at: performance.now(), first: seen.size === 0 }
         seen.add(act)
         try { localStorage.setItem(HINTS_KEY, JSON.stringify([...seen])) } catch { /* storage blocked: the tip may show again */ }

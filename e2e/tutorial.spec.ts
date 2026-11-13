@@ -425,6 +425,7 @@ test('in the second spring the goal slip stands down while the agent has a note,
   const two: string[] = []
   const notes: string[] = []
   let pictured = false
+  let idle = 0
   const until = Date.now() + 200_000
   while (Date.now() < until) {
     // Watched for a second and a half at each step, the gaps between notes included.
@@ -436,7 +437,9 @@ test('in the second spring the goal slip stands down while the agent has a note,
     }
     if (v.phase !== 'plan') break
     if (v.paper) { await page.keyboard.press('Escape'); continue }
-    if (!v.note) continue
+    // No step while a fold the last step opened is still open: read, it is closed, as a player moving on would.
+    if (!v.note) { const open = page.locator('#ui .catalogue .fold.open'); if (++idle >= 2 && await open.count()) { await open.first().click(); idle = 0 } continue }
+    idle = 0
     if (notes[notes.length - 1] !== v.note) notes.push(v.note)
     if (!pictured && v.note === 'seed') { pictured = true; await picture(page, 'b-spring-note-1280') }
     // Round seven (9): with the field's record open the walk waits on that field. Nothing else comes for ten seconds
@@ -616,7 +619,7 @@ test('the crew stands ready and says so; one press on a Plant stamp starts plant
   const { fit, potato } = await soilReady(page)
   expect(fit.length, 'fields fit to plant').toBeGreaterThan(0)
   // Said where the player looks: a toast, the goal slip, and a ringed Plant stamp on each field that is fit.
-  await expect(page.locator('#ui .notes .alert').filter({ hasText: 'The soil is ready. Give the word to plant' })).toBeVisible()
+  await expect(page.locator('#ui .notes .alert').filter({ hasText: 'The soil is ready. Press a ringed Plant stamp to give the word' })).toBeVisible()
   await expect(page.getByTestId('goal')).toContainText('Give the word to plant')
   for (const i of fit) await expect(page.locator(`#ui [data-testid="badge-${i}"]`), `the Plant stamp on field ${i}`).toBeVisible()
   await expect(page.locator('#ui .plate-layer .need.is-next')).toHaveCount(1)

@@ -606,7 +606,10 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
   function paced(x: Lesson | null): Lesson | null {
     const t = performance.now()
     if (x?.id !== lastId) {
-      if (lastId && guide.passed(lastId)) { restUntil = t + 1200; waitFor = panelsOpen() }
+      // Passed by the player's own word (Got it, Skip): the next step may come. Passed by doing its thing: the next
+      // waits while what that opened is still being read.
+      const said = !!lastId && (guide.has(`noted:${lastId}`) || guide.p.passed[lastId] === 'skip')
+      if (lastId && guide.passed(lastId)) { restUntil = t + 1200; waitFor = said ? [] : panelsOpen() }
       lastId = x?.id ?? ''
     }
     // In a season the next note follows at once and takes over the hold: no days run between two notes. Out of it,
