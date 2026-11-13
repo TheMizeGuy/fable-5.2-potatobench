@@ -54,6 +54,19 @@ export const GLOSSARY: Record<string, string> = {
   'early dying': 'A wilt disease in the soil that kills plants early. It builds up when you plant potatoes after potatoes, and a rest year brings it back down.',
   lesions: 'The brown, spreading spots late blight makes on the leaves.',
   'hollow heart': 'A hollow spot in the middle of a big potato, caused by growing too fast after dry weather. It lowers the potato\'s grade.',
+  large: 'Potatoes over the No. 1 size. Some buyers pay more for big ones and some pay less, depending on the variety.',
+  'thin-skinned': 'Potatoes dug before their skins toughened. They sell at the No. 2 price unless they go straight from the field early in the season.',
+  'knobs and cracks': 'Lumps and splits on potatoes that grew in spurts, when a dry spell was followed by rain. They drop to US No. 2.',
+  scab: 'Rough, corky patches on the skin from a soil germ that thrives when the soil is dry. Scabby potatoes drop to US No. 2.',
+  greened: 'Potatoes that grew up into the light turned green and bitter, so they can\'t be sold.',
+  'thin skins': 'Skins that hadn\'t toughened when the field was dug. They need about two weeks after the vines die.',
+  'tuber blight': 'Late blight that got into the potatoes themselves, washed down from the leaves. They rot, so they\'re culled.',
+  'too small': 'Potatoes too small to grade. They go to the starch factory with the culls.',
+  'stone bruise': 'Bruises from the digger knocking potatoes against stones. They drop to US No. 2.',
+  'tracts': 'Woods, brush or rough ground that the farm owns or can buy. Once it\'s felled, cleared of stumps and picked clean of rocks, it becomes a new field.',
+  'cellar months': 'November to April, while your crop is in storage. You can sell it as prices move, and keep people on to fell trees, pack or build.',
+  prone: 'Likely to get it: a variety prone to blight is easily infected.',
+  resists: 'Holds out against it: a variety that resists blight rarely gets it badly.',
 }
 
 let seq = 0

@@ -370,6 +370,15 @@
 .card-tenure { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 10px 18px 14px; border-top: 1px solid var(--ink); font-size: 15px; }
 .card-tenure p { flex: 1 1 200px; }
 .card-refused { padding: 6px 18px 12px; font-size: 15px; }
+/* A field record held short by the land: its head and its seed stay, the crop and the varieties scroll between them. */
+.spring-card:has(> .card-scroll) { display: flex; flex-direction: column; overflow: hidden; }
+.spring-card > .command-head, .spring-card > .card-foot { flex: none; }
+.spring-card > .card-scroll { flex: 0 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.spring-card > .card-foot { position: relative; background-color: inherit; box-shadow: 0 -1px 0 var(--ink), 0 -9px 10px -8px rgb(20 14 6 / 0.35); }
+.spring-card > .card-foot:empty { display: none; }
+.spring-card > .card-foot > :first-child { border-top: 0; }
+.card-seed-note { padding: 0 18px 10px; }
+.spring-screen[data-layout='narrow'] .card-seed-note { padding: 0 14px 10px; }
 
 /* a desk of middling width: a narrower catalogue */
 .spring-screen[data-layout='mid'] .catalogue { width: 430px; }
