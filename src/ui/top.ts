@@ -318,12 +318,13 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
   let viewNow: ReturnType<typeof outlook> | null = null
   let viewCash = 0
   let whyNow: { text: string; at: number; ask: boolean } | null = null
-  // The look the last cause was said from, the year "Why?" was offered, and the year the loan's note was said.
+  // The look the last cause was said from, the year the sum was first opened (until then a cause offers "Why?"), and
+  // the year the loan's note was said.
   let since: S.MoneyLook | null = null
-  let askedIn = -1
+  let openedIn = -1
   let loanSaid = -1
   const closePop = (e: Event) => { if (pop && !(e.target as HTMLElement).closest?.('.tb-pop, .goal, .materials, .after-key, .why-key')) { pop = ''; ctx.dirty() } }
-  const openMoney = (by: 'press' | 'hover') => { if (pop === 'money' && by === 'press' && popBy === 'press') pop = ''; else { pop = 'money'; popBy = by } ctx.dirty() }
+  const openMoney = (by: 'press' | 'hover') => { if (pop === 'money' && by === 'press' && popBy === 'press') pop = ''; else { pop = 'money'; popBy = by; openedIn = app.campaign?.year ?? -1; if (whyNow) whyNow.ask = false } ctx.dirty() }
   let leaving = 0
   const leaveMoney = () => { if (pop !== 'money' || popBy !== 'hover') return; clearTimeout(leaving); leaving = window.setTimeout(() => { if (pop === 'money' && popBy === 'hover' && !el.querySelector('.money-pop:hover, .after-key:hover')) { pop = ''; ctx.dirty() } }, 250) }
   document.addEventListener('pointerdown', closePop, true)
@@ -525,8 +526,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
       const watch = S.moneyWatch(since, viewNow.look)
       since = watch.since
       const why = watch.cause
-      const ask = !!why && askedIn !== c.year
-      if (ask) askedIn = c.year
+      const ask = !!why && openedIn !== c.year
       // An upright phone's board has no room for it (a fifth of the height): there it is an alert that opens the sum.
       if (why && season && layout === 'narrow') ctx.notes.push({ text: causeLine(why), go: () => openMoney('press') })
       else if (why) whyNow = { text: causeLine(why), at: stampOf(c), ask }
