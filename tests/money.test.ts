@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest'
 import * as S from '../src/sim/index.ts'
 import type { Campaign, Cmd, World } from '../src/sim/index.ts'
-import { causeLine, dueSays, loanSays, lowCashSays } from '../src/ui/money-words.ts'
+import { causeLine, dueSays, effectSays, limitSays, loanNoteNow, loanSays, lowCashSays, verdictSays, yearWalk } from '../src/ui/money-words.ts'
 import { loadWorld } from '../tools/balance/world.ts'
 
 const base = loadWorld()
@@ -76,7 +76,7 @@ describe('the year-end figure', () => {
     const name = c.crew[c.crew.length - 1].name.split(' ')[0]
     expect(why.part).toBe('wages')
     expect(why.share).toBeGreaterThanOrEqual(0.5)
-    expect(causeLine(why)).toMatch(new RegExp(`^−\\$[\\d,]+: ${name}'s wages to year end$`))
+    expect(causeLine(why)).toMatch(new RegExp(`^${name}'s wages to year end: −\\$[\\d,]+$`))
     // A spray order is a move of $110: under the step, so no line.
     const now = S.moneyLook(w, c)
     ok(w, c, { t: 'job', kind: 'spray', field: c.plans.findIndex(p => p.crop === 'potato') })
@@ -97,7 +97,7 @@ describe('the year-end figure', () => {
     for (let d = hand.paidTo; d <= close; d += S.WAGE_DAYS) pays++
     expect(m.wages).toBe(pays * hand.wage)
     expect(m.rest).toBe(c.season!.fields.filter(f => f.status === 'rest').length * S.REST_INCOME)
-    const before = m.cash + m.stored + m.growing + m.rest - m.wages - m.penalties - m.due.note - m.due.household - m.due.mortgage
+    const before = m.cash + m.stored + m.growing + m.rest - m.wages - m.sprays - m.penalties - m.due.note - m.due.household - m.due.mortgage
     expect(m.interest).toBeCloseTo(before < 0 ? -before * S.CREDIT_RATE : 0, 6)
     expect(m.after).toBeCloseTo(before - m.interest, 6)
   })
@@ -141,4 +141,148 @@ describe('the spring plan\'s money', () => {
     expect(loanSays(12000, 12000)).toBe('+$12,000 on the loan')
     expect(loanSays(6000, 0)).toBe('')
   })
+})
+
+// A year played by the coach's commands, everything sold when it says, through the winter to the ledger.
+function playYear(w: World, c: Campaign, each?: () => void): void {
+  for (let g = 0; g < 400 && c.phase === 'season' && !S.seasonDone(c); g++) {
+    for (const a of S.advise(w, c)) {
+      if (a.act === 'wait' || a.act === 'close') continue
+      S.apply(w, c, a.act === 'sell' ? { t: 'sell', lot: a.lot, frac: 1 } : { t: 'job', kind: a.act, field: a.field })
+      each?.()
+    }
+    ok(w, c, { t: 'day' })
+    each?.()
+  }
+  if (c.phase === 'season') { ok(w, c, { t: 'endSeason' }); each?.() }
+  for (let k = 0; k < 12 && c.phase === 'cellar'; k++) {
+    for (const a of S.advise(w, c)) if (a.act === 'sell') ok(w, c, { t: 'sell', lot: a.lot, frac: 1 })
+    ok(w, c, { t: 'month' })
+    each?.()
+  }
+}
+
+describe('round seven', () => {
+  it('3a: a second spring plan shows the year-end figure the season opens with, and says so exactly when the likely figure is past the bank\'s limit', () => {
+    let past = 0, inside = 0
+    for (let seed = 1; seed <= 12; seed++) {
+      const w = S.climateWorld(base, seed)
+      const c = S.createCampaign(w, { seed, startYear: S.FARM_YEAR0 + 1 })
+      ok(w, c, { t: 'begin' })
+      playYear(w, c)
+      if (c.phase !== 'ledger') continue
+      ok(w, c, { t: 'next' })
+      expect(c.phase).toBe('plan')
+      // Some springs rest most of the farm and buy the harvester, as a player who sank year two did.
+      if (seed % 3 === 0) {
+        c.plans.forEach((p, i) => { if (S.held(c, i) && p.crop === 'potato' && i % 2) S.apply(w, c, { t: 'plan', field: i, plan: { ...p, crop: 'rest' } }) })
+        S.apply(w, c, { t: 'buy', upgrade: 'harvester' })
+      }
+      const plan = S.moneyPlan(w, c)
+      const rescue = S.planRescue(w, c)
+      const said = limitSays(plan, rescue)
+      expect(said !== '', `seed ${seed}: ${Math.round(plan.after)}`).toBe(plan.after < S.CREDIT_LIMIT)
+      if (said) { past++; expect(rescue).not.toBeNull(); expect(said).toContain(rescue!.what) } else inside++
+      ok(w, c, { t: 'begin' })
+      const day = S.moneyNow(w, c)
+      expect(plan.after, `seed ${seed}`).toBeCloseTo(day.after, 6)
+      expect(plan.range.lo).toBeCloseTo(day.range.lo, 6)
+      expect(plan.range.hi).toBeCloseTo(day.range.hi, 6)
+      if (rescue) expect(rescue.gains).toBeGreaterThan(0)
+    }
+    expect(past + inside).toBeGreaterThanOrEqual(10)
+    expect(past).toBeGreaterThan(0)
+    expect(inside).toBeGreaterThan(0)
+  }, 120000)
+
+  it('3b: over 12 two-year runs, no stretch loses more than twice the step without a line, and each line names its cause', () => {
+    let lines = 0
+    for (let seed = 1; seed <= 12; seed++) {
+      const w = S.climateWorld(base, seed)
+      const c = S.createCampaign(w, { seed, startYear: S.FARM_YEAR0 + 1 })
+      ok(w, c, { t: 'begin' })
+      let since: S.MoneyLook | null = null
+      const watch = () => {
+        if (c.phase !== 'season' && c.phase !== 'cellar') return
+        const now = S.moneyLook(w, c)
+        const r = S.moneyWatch(since, now)
+        if (r.cause) { lines++; expect(r.cause.text.length).toBeGreaterThan(3) }
+        since = r.since
+        expect(since.after - now.after, `seed ${seed} ${c.year} ${c.season ? S.formatDay(c.year, c.season.day) : c.month}`).toBeLessThanOrEqual(2 * S.MONEY_STEP)
+      }
+      for (let year = 0; year < 2 && c.phase !== 'over'; year++) {
+        playYear(w, c, watch)
+        if (c.phase !== 'ledger' || c.outcome === 'lost') break
+        ok(w, c, { t: 'next' })
+        ok(w, c, { t: 'begin' })
+      }
+    }
+    expect(lines).toBeGreaterThan(50)
+  }, 120000)
+
+  it('4: the loan\'s note is said once a season, the first time what is borrowed grows', () => {
+    for (const seed of [1, 2, 3]) {
+      const w = S.climateWorld(base, seed)
+      const c = S.createCampaign(w, { seed, startYear: S.FARM_YEAR0 + 1 })
+      let saidIn = -1, says = 0, was = Math.round(c.cash)
+      ok(w, c, { t: 'begin' })
+      playYear(w, c, () => {
+        if (loanNoteNow(c, was, saidIn)) { saidIn = c.year; says++ }
+        was = Math.round(c.cash)
+      })
+      expect(says, `seed ${seed}`).toBe(1)
+    }
+  }, 60000)
+
+  it('5: each Buy and Hire says what it does to the year-end figure, and that is what pressing it does', () => {
+    for (const [seed, year] of [[1, 2002], [4, 2002], [7, 1999]]) {
+      for (const cmd of [{ t: 'buy', upgrade: 'harvester' }, { t: 'buy', upgrade: 'boom' }, { t: 'hire', kind: 'hand' }, { t: 'hire', kind: 'operator' }] as Cmd[]) {
+        const c = S.createCampaign(base, { seed, startYear: year })
+        const was = S.moneyPlan(base, c).after
+        const d = S.moneyEffect(base, c, cmd)
+        if (d === null) continue
+        expect(effectSays(d)).toMatch(/^year end [+−]\$[\d,]+$/)
+        ok(base, c, cmd)
+        expect(S.moneyPlan(base, c).after - was, `${seed} ${JSON.stringify(cmd)}`).toBeCloseTo(d, 6)
+        if (cmd.t === 'buy') expect(d).toBeLessThan(0)
+      }
+    }
+    // A hand kept on to fell in the winter: their wages to March.
+    const w = S.climateWorld(base, 2)
+    const c = S.createCampaign(w, { seed: 2, startYear: S.FARM_YEAR0 + 1 })
+    ok(w, c, { t: 'hire', kind: 'hand' })
+    ok(w, c, { t: 'begin' })
+    for (let g = 0; g < 400 && c.phase === 'season' && !S.seasonDone(c); g++) ok(w, c, { t: 'day' })
+    ok(w, c, { t: 'endSeason' })
+    const hand = c.crew.find(u => u.kind !== 'farmer')!
+    const woods = { t: 'winter', unit: hand.id, work: 'woods', field: S.timberTracts(c)[0] } as Cmd
+    const d = S.moneyEffect(w, c, woods)!
+    expect(d).toBeLessThan(-hand.wage * 3)
+    const was = S.moneyNow(w, c).after
+    ok(w, c, woods)
+    expect(S.moneyNow(w, c).after - was).toBeCloseTo(d, 6)
+  })
+
+  it('6: over 24 year ends the ledger\'s verdict agrees with its figure, and its first line walks from sold to kept', () => {
+    let down = 0, up = 0
+    for (let seed = 1; seed <= 24; seed++) {
+      const w = S.climateWorld(base, seed)
+      const c = S.createCampaign(w, { seed, startYear: S.FARM_YEAR0 + 1 })
+      if (seed % 2) ok(w, c, { t: 'hire', kind: 'operator' })
+      if (seed % 4 === 1) ok(w, c, { t: 'buy', upgrade: 'harvester' })
+      ok(w, c, { t: 'begin' })
+      playYear(w, c)
+      const y = c.history[0]
+      if (!y || c.outcome === 'lost') continue
+      const said = verdictSays(y, 4, false)
+      if (y.cashEnd < 0) { down++; expect(said, `seed ${seed}`).toMatch(/^You ended \$[\d,]+ down, inside what the bank allows/); expect(said).not.toMatch(/happy/) }
+      else { up++; expect(said, `seed ${seed}`).toMatch(/^You ended the year with \$[\d,]+ in hand, so the bank is happy\./) }
+      expect(y.cashEnd).toBeGreaterThanOrEqual(S.CREDIT_LIMIT)
+      expect(Math.round(y.cashStart + y.revenue - y.costs - y.note - y.living - y.interest)).toBe(Math.round(y.cashEnd))
+      expect(yearWalk(y)).toMatch(/^You sold \$[\d,]+, spent \$[\d,]+ on the farm and \$[\d,]+ on the bank and your family, and ended with -?.?\$[\d,]+/)
+    }
+    expect(down + up).toBeGreaterThanOrEqual(20)
+    expect(down).toBeGreaterThan(0)
+    expect(up).toBeGreaterThan(0)
+  }, 120000)
 })

@@ -233,7 +233,7 @@ test('a first season by the short path, from the opening to the next spring, wit
     await page.getByTestId('year-next').click()
     await expect(page.getByTestId('over-title')).toBeVisible()
   } else {
-    await expect(page.getByTestId('outcome')).toContainText('The bank is happy')
+    await expect(page.getByTestId('outcome')).toContainText(/the bank is happy|inside what the bank allows/)
     await expect(page.getByTestId('next-goal')).toBeVisible()
     await page.getByTestId('year-next').click()
     await expect(page.getByTestId('begin-season')).toBeVisible()
@@ -450,40 +450,84 @@ test('the same start by keyboard alone', async ({ page, isMobile }) => {
 })
 
 // The money board says why the year-end figure moved, under it, for a week of the season: a hand taken on in July is
-// their wages to the year end. An upright phone's board has no room, so there it is said by the alerts. A spray order
-// moves the figure by far less than the step, so the line stays the hire's. SHOTS keeps pictures of the board with its
-// line (at 1280 by 800, or the phone) and of a spring plan that leaves $8.
-test('the money board says why the year-end figure moved', async ({ page, isMobile }) => {
+// their wages to the year end, and the first line of a year offers "Why?". An upright phone's board has no room, so
+// there the line is an alert that opens the sum. The figure's label is a key to the sum: it never covers the speed
+// keys, Escape and a press elsewhere put it away, and Space stays the clock's with the label focused. SHOTS keeps
+// pictures of a spring plan past the bank's limit, the board with its line, the sum open, and the ledger's top.
+test('the money board says why the year-end figure moved, and its sum opens from its key', async ({ page, isMobile }) => {
+  test.setTimeout(180_000)
   const errors = watchErrors(page)
+  const shot = (name: string) => process.env.SHOTS ? page.screenshot({ path: `${process.env.SHOTS}/${name}-${isMobile ? 'phone' : '1280x800'}.png` }) : Promise.resolve()
   if (!isMobile) await page.setViewportSize({ width: 1280, height: 800 })
   await page.goto('./?year=1990&seed=7')
   await page.waitForFunction(() => '__county' in globalThis && !document.getElementById('splash'))
-  // (for the pictures only: the spring plan's foot when the plan leaves $8 in cash, then the cash put back)
-  if (process.env.SHOTS) {
-    await reach(page, `const { app, sim } = q.g(); const c = app.campaign; window.__was = c.cash; c.cash = sim.planCosts(c).total + 8; app.do({ t: 'plan', field: 0, plan: { ...c.plans[0] } })`)
-    await expect(page.getByTestId('plan-low')).toBeVisible()
-    await page.screenshot({ path: `${process.env.SHOTS}/plan-low-${isMobile ? 'phone' : '1280x800'}.png` })
-    await reach(page, `const { app } = q.g(); const c = app.campaign; c.cash = window.__was; app.do({ t: 'plan', field: 0, plan: { ...c.plans[0] } })`)
-  }
-  await reach(page, `const { app } = q.g(); app.do({ t: 'begin' }); app.setSpeed(0); q.run(q.day(6, 6)); app.setSpeed(0); app.campaign.incidents = []; app.select(-1)`)
+  // A spring that owes from last year: the plan says it ends past the bank's limit, and what
+  // would bring it back. (The cash is put back after.)
+  await reach(page, `const { app, sim } = q.g(); const c = app.campaign; window.__was = c.cash; c.cash -= sim.moneyPlan(app.world, c).after - sim.CREDIT_LIMIT + 3000; app.do({ t: 'plan', field: 0, plan: { ...c.plans[0] } })`)
+  await expect(page.getByTestId('plan-past-limit')).toBeVisible()
+  await expect(page.getByTestId('plan-past-limit')).toContainText('bank\'s limit')
+  await expect(page.getByTestId('plan-year-range')).toContainText(/^Likely between/)
+  await shot('plan-limit')
+  await reach(page, `const { app } = q.g(); const c = app.campaign; c.cash = window.__was; app.do({ t: 'plan', field: 0, plan: { ...c.plans[0] } })`)
+  await expect(page.getByTestId('plan-past-limit')).toHaveCount(0)
+  const planned = await game<number>(page, `Math.round(sim.moneyPlan(app.world, c).after / 100) * 100`)
+
+  await reach(page, `const { app } = q.g(); app.do({ t: 'begin' }); app.setSpeed(0)`)
+  // The season opens on the figure the plan showed.
+  expect(await game<number>(page, `Math.round(sim.moneyNow(app.world, c).after / 100) * 100`)).toBe(planned)
+  await reach(page, `const { app } = q.g(); q.run(q.day(6, 6)); app.setSpeed(0); app.campaign.incidents = []; app.select(-1)`)
   await putAway(page)
-  const why = isMobile ? page.locator('#ui .alert', { hasText: 'wages to year end' }) : page.locator('#ui [data-testid="outlook-why"]')
   await expect(page.locator('#ui [data-testid="outlook"]')).toBeVisible()
+  const key = page.locator('#ui [data-testid="outlook-key"]')
+  expect(await key.getAttribute('data-w')).toBe('minor')
   await reach(page, `const { app } = q.g(); app.do({ t: 'hire', kind: 'hand' }); app.setSpeed(0)`)
   const name = await game<string>(page, `c.crew[c.crew.length - 1].name.split(' ')[0]`)
-  await expect(why).toContainText(new RegExp(`−\\$[\\d,]+: ${name}'s wages to year end`))
-  if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/money-why-${isMobile ? 'phone' : '1280x800'}.png` })
-  // Its hover is the sum from the cash now to the figure.
-  const tip = await page.locator('#ui [data-testid="outlook"]').getAttribute('data-tip')
-  expect(tip).toMatch(/Wages to the year end −\$[\d,]+/)
-  expect(tip).toMatch(/= −?\$[\d,]+ after year-end bills\./)
-  if (isMobile) return expect(errors, errors.join('\n')).toEqual([])
-  // A spray order is $110: the cash's line says it, and the figure's line never does.
-  const field = await game<number>(page, `c.plans.findIndex((p, i) => p.crop === 'potato' && sim.held(c, i))`)
-  await reach(page, `const { app } = q.g(); app.do({ t: 'job', kind: 'spray', field: ${field} }); app.setSpeed(0)`)
-  await expect(why).toHaveText(new RegExp(`${name}'s wages to year end`))
-  await reach(page, `const { app } = q.g(); app.do({ t: 'day' }); app.setSpeed(0)`)
-  await expect(why).toHaveText(/^[+−]\$[\d,]+: \w.+$/)
-  await expect(why).not.toHaveText(/field work/)
+  const pop = page.locator('#ui [data-testid="money-pop"]')
+  if (isMobile) {
+    const note = page.locator('#ui .alert', { hasText: 'wages to year end' })
+    await expect(note).toContainText(new RegExp(`${name}'s wages to year end: −\\$[\\d,]+`))
+    await shot('board-why')
+    await note.click()
+    await expect(pop).toBeVisible()
+    await shot('breakdown')
+    expect(errors, errors.join('\n')).toEqual([])
+    return
+  }
+  const why = page.locator('#ui [data-testid="outlook-why"]')
+  await expect(why).toContainText(new RegExp(`^${name}'s wages to year end: −\\$[\\d,]+ Why\\?$`))
+  await shot('board-why')
+  // "Why?" opens the sum; it lies clear of the speed keys and adds up to the figure.
+  await page.getByTestId('outlook-why-open').click()
+  await expect(pop).toBeVisible()
+  await expect(pop).toContainText('Spent so far')
+  await expect(pop).toContainText('Wages to the year end')
+  await shot('breakdown')
+  const box = (await pop.boundingBox())!
+  for (const k of await page.locator('#ui .clock [data-testid^="speed-"]').all()) {
+    const b = (await k.boundingBox())!
+    const apart = box.x >= b.x + b.width || b.x >= box.x + box.width || box.y >= b.y + b.height || b.y >= box.y + box.height
+    expect(apart, 'the sum covers a speed key').toBe(true)
+  }
+  await page.keyboard.press('Escape')
+  await expect(pop).toHaveCount(0)
+  // The label opens it too; a press elsewhere puts it away.
+  await key.click()
+  await expect(pop).toBeVisible()
+  await page.mouse.click(640, 560)
+  await expect(pop).toHaveCount(0)
+  // Space is the clock's with the label focused.
+  await key.focus()
+  await expect(page.getByTestId('paused')).toBeVisible()
+  await page.keyboard.press('Space')
+  await expect(page.getByTestId('paused')).toBeHidden()
+  await page.keyboard.press('Space')
+  await expect(page.getByTestId('paused')).toBeVisible()
+  // The ledger at the year's end: its verdict agrees with its figure.
+  await reach(page, `q.year(4)`)
+  await expect(page.getByTestId('outcome')).toBeVisible()
+  const end = await game<number>(page, `c.history[c.history.length - 1].cashEnd`)
+  await expect(page.getByTestId('outcome')).toContainText(end < 0 ? 'inside what the bank allows' : 'the bank is happy')
+  await expect(page.getByTestId('year-sentence')).toContainText(/^You sold \$[\d,]+/)
+  await shot('ledger')
   expect(errors, errors.join('\n')).toEqual([])
 })

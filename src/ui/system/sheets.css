@@ -8,7 +8,6 @@
 /* What moved the money, under the balance for a moment. */
 .topbar .balance .cash-moved, .topbar .balance .after-why { flex-basis: 100%; text-align: right; font: italic 400 13px/1.25 var(--f-text); color: var(--ink-2); animation: sh-fade var(--t-slip) var(--ease-out); }
 /* Why the year-end figure moved, under it for a week of the season; its hover is the sum that makes it, a line a part. */
-.topbar .balance .after.term::after { white-space: pre-line; }
 .hud.st-hide-after .topbar .after-why { visibility: hidden; }
 
 /* Out of the season the date leaf is one word ("November", "Year end"): the year goes under it, never over it. */
@@ -27,11 +26,20 @@
 .topbar .balance.two > .cash { justify-self: end; }
 .topbar .balance.two > .cash-moved, .topbar .balance.two > .after, .topbar .balance.two > .after-why { grid-column: 1 / -1; }
 .topbar .balance .after { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding-top: 2px; border-top: 1px solid var(--hair); text-decoration: none; }
-.topbar .balance .after .t-label { text-decoration: underline dotted; text-underline-offset: 3px; }
+/* The figure's label is a small key that opens the sum that makes it; "Why?" under a move opens the same. */
+.topbar .balance .after .after-key, .topbar .balance .why-key { min-height: 26px; padding: 2px 8px; margin: 2px 0; }
+.topbar .balance .why-key { font: 600 13px/1 var(--f-text); font-style: normal; vertical-align: baseline; }
+/* The sum: a small table under the board, never over the speed keys. */
+.topbar .money-pop { width: min(400px, calc(100vw - 32px)); gap: 6px; }
+.topbar .money-pop .mp-head { margin: 0; color: var(--ink-2); }
+.topbar .money-pop .mp-sum { width: 100%; border-collapse: collapse; font-size: 15px; }
+.topbar .money-pop .mp-sum th { text-align: left; font-weight: 400; padding: 3px 8px 3px 0; vertical-align: top; }
+.topbar .money-pop .mp-sum td { text-align: right; white-space: nowrap; padding: 3px 0; vertical-align: top; }
+.topbar .money-pop .mp-of { display: block; font: italic 400 13px/1.25 var(--f-text); color: var(--ink-2); }
+.topbar .money-pop .mp-sum tfoot th, .topbar .money-pop .mp-sum tfoot td { border-top: 1px solid var(--ink); font-weight: 700; padding-top: 5px; }
 .topbar .balance .after .t-figure { white-space: nowrap; }
 .topbar .balance .after.warn .t-figure { color: var(--ochre); }
 .topbar .balance .after.bad .t-figure { color: var(--red); }
-.topbar .balance .after.term::after { left: auto; right: 0; text-align: left; font-style: normal; }
 .topbar[data-layout='narrow'] .face .balance.two { display: flex; }
 .topbar .balance .after .short { display: none; }
 .topbar .balance .after { flex-wrap: wrap; row-gap: 0; }
