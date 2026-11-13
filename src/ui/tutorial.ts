@@ -695,10 +695,12 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     const open = app.screen === 'season' ? openAsks(l) : []
     for (const id of [...waved]) if (!open.some(a => a.id === id)) waved.delete(id)
     const d = !offer && !noted && !carded && !app.holding && app.screen === 'season' ? driving(l, guide, waved) : null
-    if (!d) { letGo(); hideDrive(); return }
+    // A note or a card that cuts a showing short gets the whole farm back, where the stamps it may point at are in
+    // view; the player's own hand on the clock leaves the picture where they are watching it.
+    if (!d) { if (scene && guide.drives(c)) endScene(true); letGo(); hideDrive(); return }
     if (d.waits) {
-      // A press the year waits on: the guide stops its own clock and says what it is waiting for.
-      endScene(false)
+      // A press the year waits on: the guide stops its own clock and says what it is waiting for, over the whole farm.
+      endScene(true)
       if (app.speed > 0) { app.resumeSpeed = app.speed; app.setSpeed(0); app.pauseReason = HOLD; ctx.dirty() }
       app.pace = 1
       driven = false

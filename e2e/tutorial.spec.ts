@@ -159,6 +159,7 @@ test('a guided first year: offered as a card, taken, and followed from Play to t
   let last = { scene: '', at: 0 }
   const shot: Record<string, boolean> = {}
   const since: Record<string, number> = {}
+  let shows = 0
   while (Date.now() < until) {
     let s = await see(page)
     check(s, did)
@@ -174,8 +175,9 @@ test('a guided first year: offered as a card, taken, and followed from Play to t
       if (!(s.scene in shot) && t - since[s.scene] > 2200) { shot[s.scene] = true; await picture(page, `g4-scene-${s.scene}-${page.viewportSize()?.width}`) }
       last = { scene: s.inView ? s.scene : '', at: t }
     } else last = { scene: '', at: 0 }
-    // The guide waits on a ringed stamp no note is asking for: the stamp is pressed, as its line says.
-    if (!s.note && !s.asking.length && s.waitField >= 0) {
+    // The guide waits on a ringed stamp no note is asking for: the stamp is pressed, as its line says (a toast up
+    // beside it asks nothing).
+    if (!s.note && !s.asking.some(a => a !== 'toast') && s.waitField >= 0) {
       did.push(`wait-${s.waitField}`)
       await page.locator(`#ui [data-testid="badge-${s.waitField}"]`).first().click()
       await page.waitForTimeout(150)
@@ -215,6 +217,8 @@ test('a guided first year: offered as a card, taken, and followed from Play to t
       // A note that asks for a press says the game stays paused, and the press itself does not change the speed.
       if (stamp) await expect(page.locator('#ui [data-testid="guide-slip"] [data-testid="guide-resumes"]')).toHaveText('stays paused')
       const key = stamp ? '' : s.keys.includes('guide-noted') ? 'guide-noted' : ''
+      // "Something is covering it. Show me": pressed as the note says, and the stamp is looked for again.
+      if (stamp && s.keys.includes('guide-show') && shows++ < 6) { await page.locator('#ui [data-testid="guide-slip"] [data-testid="guide-show"]').first().click(); await page.waitForTimeout(900); continue }
       if (key) await page.locator(`#ui [data-testid="guide-slip"] [data-testid="${key}"]`).first().click()
       else await page.locator(`#ui [data-testid="${s.target}"]`).first().click()
       await page.waitForTimeout(120)
