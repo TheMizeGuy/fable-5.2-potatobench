@@ -153,14 +153,14 @@ Every action in the game and its weight (`src/ui/system/weight.ts` is the table 
 | Build, raise a building | The yard's card, winter | major |
 | Pay down the mortgage | The spring catalogue's bank fold | major |
 | Accept a contract | The contracts | major |
-| A telegram's replies; the spraying question's replies; the guide's offer | The telegram | major |
+| A telegram's replies; the spraying question's replies; the tutorial's offer | The telegram | major |
 | The step itself, on a paper that asks once more | The confirmation | major (striped when it destroys) |
 | End the season early | The menu | major, destroying: asks once more |
 | Delete the save | The menu | major, destroying: asks once more |
 | A field's orders: Plant, Hill, Scout, Spray, Water, Rogue, Test dig, Kill vines, Dig, Haul | The command bar | std |
 | Order it, and the other fixes of a need | The work list, the goal slip | std |
-| Show me | The goal slip, the goals, the guide | std |
-| Skip ahead; Got it; Noted; Begin | The guide's note | std |
+| Show me | The goal slip, the goals | std |
+| Skip ahead; Got it; Begin; Restart the tutorial | The tutorial's note and paper | std |
 | The answer keys of a choice that can be changed: winter work, foreman of a block, by itself or ask me, farm rules, varieties, seed, Sundays | Winter, a person's page, the work grid, the spring cards | std |
 | Follow; Their page; Hiring; Who has it | A person's or a thing's card | std |
 | Rest choices; what a person takes first; the priority keys and cells | A person's card and page, the work grid | std |
@@ -179,8 +179,8 @@ Every action in the game and its weight (`src/ui/system/weight.ts` is the table 
 | The forecast, a contract, the stock (each opens its paper) | The boards | minor |
 | More orders; the rest of the work list; All the keys | The command bar, the work list, How to play | minor |
 | Take it off the list; Do it first; Who does it; Let them help | The work list's small keys | minor |
-| Compare them all; The money; The full reckoning; change the spraying; see the test dig | Underlined words | minor |
-| Skip; Stop the guide; Again | The guide | minor |
+| Compare them all; The money; The full reckoning; change the spraying; see the test dig; Show me in a tutorial note | Underlined words | minor |
+| Skip; Turn off the tutorial; Again | The tutorial | minor |
 
 A destroying control is never the one in focus when its question opens: the other answer is.
 

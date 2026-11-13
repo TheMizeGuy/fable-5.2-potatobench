@@ -17,12 +17,16 @@
 .pin-list .pl-row { padding-bottom: 7px; background-color: var(--paper); }
 .pin-list .pl-row + .pl-row { border-top: 0; margin-top: -1px; }
 .pin-list .pl-row.is-picked { --w-h: 0px; --w-sep: 0px; --w-mark: inset 4px 0 0 var(--ink); background-color: var(--paper-2); }
-.work .w-who { padding: 4px 8px 6px 4px; background-color: var(--paper); }
+.work .w-who { padding: 0 8px 2px 0; background-color: var(--paper); }
 /* a farm rule is a key with a tick box on it: ticked, it still stands, and the pencil tick says it is on */
 .work .check.rule { padding: 8px 10px 11px; background-color: var(--paper); }
 .work .check.rule[aria-pressed='true'] { --w-h: var(--w-up); --w-sep: 1px; --w-in: 0 0 0 0 transparent; --w-cast: 0 2px 3px -1px rgba(20, 14, 6, .45); color: var(--ink) !important; background-color: var(--paper) !important; }
 .work .check.rule[aria-pressed='true'] :is(.sub, .quiet, .t-caption) { color: var(--ink-2) !important; }
+/* keys of different weights in one row keep their own heights */
+.whois-acts { align-items: flex-end; }
+.whois-acts .btn[data-w='major'] { font-size: 20px; }
 .key-btn { padding-bottom: 3px; }
+.key-btn.never { --w-line: rgba(30, 28, 25, .45); }
 .person-card .prio.key { padding-bottom: 3px; }
 
 /* over the land: the key that lets the days go on, and the one that stops them */

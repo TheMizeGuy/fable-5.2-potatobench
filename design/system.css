@@ -150,7 +150,8 @@ table .num, .tab { font-variant-numeric: lining-nums proportional-nums; }
    The edge is marked important so that no screen's stylesheet flattens a key by accident: a screen changes a key
    through the --w- properties, never through box-shadow. Marks on the land (a tag, a stamp, a pin) keep their own
    shapes and stand off the land by their own shadows. The faces of real form inputs are keys too. */
-:is([data-w], .seg-in label > span, .vbox-in, .check-in .tick):not(.tag, .need, .yard-tag, .pin) {
+/* (:where keeps this rule weightless, so a weight, a state or a component below can change any --w- property) */
+:where([data-w], .seg-in label > span, .vbox-in, .check-in .tick):not(:where(.tag, .need, .yard-tag, .pin)) {
   --w-up: 3px;                       /* how far the key stands off the paper */
   --w-h: var(--w-up);                /* how much of that shows now: none while it is down */
   --w-rim: 1px; --w-sep: 1px; --w-line: var(--ink); --w-side: var(--card);
@@ -172,10 +173,10 @@ table .num, .tab { font-variant-numeric: lining-nums proportional-nums; }
 [data-w]:active:not([disabled], [aria-disabled='true'], .is-off, .is-given), [data-w].is-pressed {
   translate: 0 2px; --w-h: 0px; --w-sep: 0px; --w-in: 0 3px 4px -1px rgba(20, 14, 6, .5); --w-cast: 0 0 0 0 transparent; transition-duration: 40ms; }
 /* On, chosen: the key stays down and is filled in pencil, the mark for what the player chose. */
-[data-w]:is([aria-pressed='true'], [aria-checked='true'], [aria-current='page'], .is-on):not(.tag, .need, .yard-tag, .pin), :is(.seg-in, .vbox) input:checked + :is(span, .vbox-in) {
+[data-w]:is([aria-pressed='true'], [aria-checked='true'], [aria-current='page'], .is-on):not(.tag, .need, .yard-tag, .pin, .quiet), :is(.seg-in, .vbox) input:checked + :is(span, .vbox-in) {
   --w-h: 0px; --w-sep: 0px; --w-in: 0 3px 4px -1px rgba(10, 8, 4, .55); --w-cast: 0 0 0 0 transparent;
   color: var(--paper) !important; background-color: var(--pencil) !important; }
-[data-w]:is([aria-pressed='true'], [aria-checked='true'], [aria-current='page'], .is-on):not(.tag, .need, .yard-tag, .pin) :is(.sub, .quiet, .t-caption) { color: var(--paper) !important; }
+[data-w]:is([aria-pressed='true'], [aria-checked='true'], [aria-current='page'], .is-on):not(.tag, .need, .yard-tag, .pin, .quiet) :is(.sub, .quiet, .t-caption) { color: var(--paper) !important; }
 /* Open: a key that holds a part of the sheet open stays down, unfilled. */
 [data-w][aria-expanded='true'] { --w-h: 0px; --w-sep: 0px; --w-in: 0 3px 4px -1px rgba(20, 14, 6, .4); --w-cast: 0 0 0 0 transparent; }
 /* Armed: where the clock goes on from. A broken bar along the foot of a key that still stands. */
@@ -207,11 +208,12 @@ table .num, .tab { font-variant-numeric: lining-nums proportional-nums; }
 .btn.quiet:active { translate: 0 1px; }
 /* Major: money, time, or it cannot be taken back. The biggest and heaviest key on its paper, its price or what
    follows on a second line. One on a paper may be filled (.go): the one the game would press. */
-.btn[data-w='major'] { min-height: var(--major) !important; padding: 2px 18px 9px !important; flex-wrap: wrap; align-content: center; justify-content: flex-start; gap: 3px 10px;
+.btn[data-w='major'] { min-height: var(--major) !important; padding: 2px 18px 9px !important; align-content: center; justify-content: flex-start; gap: 3px 10px;
   font: 400 22px/1 var(--f-gothic); letter-spacing: .08em; text-transform: uppercase; }
+.btn[data-w='major']:has(> .sub) { flex-wrap: wrap; }
 .btn[data-w='major'] .sub { flex-basis: 100%; font: 400 15px/1.15 var(--f-text); letter-spacing: 0; text-transform: none; color: var(--ink-2); }
 .btn[data-w='major'] .i { --i: 22px; }
-.btn[data-w='major'] > .i:last-child { margin-left: auto; }
+.btn[data-w='major'] > .i:last-child:not(:first-child) { margin-left: auto; }
 [data-w='major'].go { --w-side: #7a694f; --w-line: #0c0a08; color: var(--paper); background-color: var(--ink); }
 [data-w='major'].go .sub { color: rgba(246, 241, 228, .85); }
 [data-w='major'].go.is-hover { background-color: #37322a; }
@@ -479,7 +481,7 @@ table .num, .tab { font-variant-numeric: lining-nums proportional-nums; }
 .grid tbody th .bust { width: 28px; height: 28px; vertical-align: middle; margin-right: 8px; }
 .grid td { padding: 0; border-bottom: 1px solid var(--hair); border-left: 1px solid var(--rule-red); }
 /* a cell: the priority as a plain figure, the first ringed in pencil, the person's skill as a quiet bar along its foot */
-.cell { --w-up: 2px; --w-rim: 0px; --w-cast: 0 0 0 0 transparent; position: relative; display: grid; place-items: center; width: 100%; height: 47px; padding-bottom: 3px; font: 400 23px/1 var(--f-gothic); color: var(--ink); }
+.cell { --w-cast: 0 0 0 0 transparent; position: relative; display: grid; place-items: center; width: 100%; height: 47px; padding-bottom: 3px; font: 400 23px/1 var(--f-gothic); color: var(--ink); }
 .cell::after { content: ''; position: absolute; left: 6px; bottom: 5px; height: 3px; width: calc((100% - 12px) * var(--sk, 0) / 10); background: rgba(75, 70, 61, .45); }
 .cell.never { color: var(--ink-2); }
 .cell.first::before { content: ''; position: absolute; left: 50%; top: 50%; width: 32px; height: 32px; transform: translate(-50%, -54%) rotate(-8deg); border: 2px solid var(--pencil); border-radius: 50% 46% 52% 44%; }
@@ -494,7 +496,8 @@ table .num, .tab { font-variant-numeric: lining-nums proportional-nums; }
 .tg-name { font: 400 50px/.82 var(--f-gothic); letter-spacing: .12em; text-transform: uppercase; color: var(--green); }
 .tg-from { display: grid; font-size: 15px; }
 .tg-from .t-label { color: var(--green); }
-.days { display: grid; justify-items: center; padding: 6px 10px 5px; border: 2px solid var(--ink); background: var(--paper); }
+/* the days left are read, not pressed: a figure between two rules, not a box */
+.days { display: grid; justify-items: center; padding: 6px 10px 5px; border-top: 3px double var(--ink); border-bottom: 3px double var(--ink); }
 .days b { font: 400 34px/.9 var(--f-gothic); }
 .days .t-label { color: var(--ink); }
 .tg-body { display: grid; grid-template-columns: 52px 1fr; gap: 14px; align-items: center; padding: 14px 4px 14px; }
@@ -579,7 +582,7 @@ table .num, .tab { font-variant-numeric: lining-nums proportional-nums; }
 .masthead .t-label { color: var(--green); padding-bottom: 4px; }
 .cat-body { overflow: hidden; padding: 0 24px; }
 /* a fold is a key the width of the sheet; open, it stays down */
-.fold { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; margin-top: 6px; padding: 0 12px 3px; background: var(--paper); font-size: 16px; }
+.fold { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; margin-top: 6px; padding: 0 8px 3px; background: var(--paper); font-size: 16px; }
 .fold .i { --i: 19px; }
 .fold b { font-size: 18px; }
 .fold .quiet { font-size: 15px; }
@@ -712,11 +715,11 @@ table .num, .tab { font-variant-numeric: lining-nums proportional-nums; }
 .cv-cut .cut { width: 200px; height: auto; display: block; }
 .cv-cut p { font: italic 400 17px/1.35 var(--f-text); color: var(--ink); }
 .cv-cut figcaption { grid-column: 1 / -1; font-size: 14px; color: var(--ink-2); }
-.cv-menu { display: grid; gap: 6px; align-content: end; }
+.cv-menu { display: grid; gap: 4px; align-content: end; }
 .cv-menu .t-label { padding-bottom: 6px; border-bottom: 1px solid var(--ink); margin-bottom: 8px; letter-spacing: .24em; }
 .cv-menu .btn.go { --major: 62px; font-size: 30px; margin-bottom: 6px; }
-.cv-item { min-height: 46px; padding: 0 12px 3px; font-size: 18px; background: var(--paper); }
-.cv-item .it { font-size: 16px; white-space: nowrap; }
+.cv-item { min-height: 44px; padding: 0 6px 3px; align-items: center; font-size: 17px; background: var(--paper); }
+.cv-item .it { font-size: 15px; white-space: nowrap; }
 .cv-item .chev { font-size: 22px; color: var(--ink-2); }
 .imprint { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--ink); text-align: center; }
 .imprint .a { font: 700 14px/1.25 var(--f-text); }

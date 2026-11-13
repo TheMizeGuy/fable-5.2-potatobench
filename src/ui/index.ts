@@ -8,7 +8,6 @@ import './style.css'
 import './legacy.css'
 import './papers.css'
 import './screens.css'
-import './system/weight.css'
 import type { MountHud } from '../game/contracts.ts'
 import * as S from '../sim/index.ts'
 import { openAlmanac } from './almanac.ts'
@@ -27,6 +26,8 @@ import { seasonScreen } from './season.ts'
 import { titleScreen } from './title.ts'
 import { guidedYear, HOLD, mountGuide, openGuide } from './tutorial.ts'
 import { whois } from './whois.ts'
+// Last, after every screen's own stylesheet: the control rule fitted to the live game.
+import './system/weight.css'
 
 export const mountHud: MountHud = (root, app, view, sound) => {
   mountSprites()

@@ -18,7 +18,7 @@ const BACKDROPS: Record<string, string> = {
 // every control carries (data-w), the stamps.
 // Every other rule of the system is a component and reaches only inside an element marked .sys, so the old screens'
 // markup (which uses some of the same class names) is not restyled under them while they wait to be rebuilt.
-const GLOBAL = /^(:root|\*|html|body|button|p\b|h[1-4]\b|ul\b|ol\b|b\b|fieldset|:focus-visible|\[data-w|:is\(\[data-w|:is\(\.seg-in|\.seg-in|\.(sr|i|veil|stage|t-[a-z]+|num|tab|it|quiet|c-[a-z]+|rule|lead|btn|key|iconbtn|sheet|mount|s-[a-z]+|stamp)(?![a-z0-9-]))/
+const GLOBAL = /^(:root|\*|html|body|button|p\b|h[1-4]\b|ul\b|ol\b|b\b|fieldset|:focus-visible|\[data-w|:where\(\[data-w|:is\(\.seg-in|\.seg-in|\.(sr|i|veil|stage|t-[a-z]+|num|tab|it|quiet|c-[a-z]+|rule|lead|btn|key|iconbtn|sheet|mount|s-[a-z]+|stamp)(?![a-z0-9-]))/
 const SCOPE = ':is(.sys, .sys *)'
 
 function scopeSelector(sel: string): string {
