@@ -59,7 +59,7 @@ const INSTRUMENT = `(() => {
   }
   window.requestAnimationFrame = cb => { cbs.push(cb); if (!asked) { asked = true; real(run) } return 0 }
   try {
-    new PerformanceObserver(list => { if (F.on) for (const e of list.getEntries()) F.long.push([e.startTime, e.duration, e.blockingDuration || 0, (e.scripts || []).map(s => (s.sourceFunctionName || s.invoker || '?') + ' ' + Math.round(s.duration)).join(', ')]) }).observe({ type: 'long-animation-frame', buffered: false })
+    new PerformanceObserver(list => { if (F.on) for (const e of list.getEntries()) F.long.push([e.startTime, e.duration, e.blockingDuration || 0, (e.scripts || []).map(s => (s.sourceFunctionName || s.invoker || '?') + ' ' + Math.round(s.duration)).join(', '), e.styleAndLayoutStart ? e.startTime + e.duration - e.styleAndLayoutStart : 0, (e.scripts || []).reduce((a, s) => a + (s.forcedStyleAndLayoutDuration || 0), 0)]) }).observe({ type: 'long-animation-frame', buffered: false })
   } catch {}
 })()`
 
@@ -89,7 +89,7 @@ const keepRunning = `window.__keep = setInterval(() => { const { app } = window.
 const stopKeeping = `clearInterval(window.__keep)`
 
 type Row = number[]
-type State = { name: string; rows: Row[]; long: [number, number, number, string][]; ids: number[] }
+type State = { name: string; rows: Row[]; long: [number, number, number, string, number, number][]; ids: number[] }
 const pct = (v: number[], p: number) => (v.length ? v.slice().sort((a, b) => a - b)[Math.min(v.length - 1, Math.floor(v.length * p))] : 0)
 const results: string[] = []
 let failed = 0
@@ -153,7 +153,7 @@ function report(s: State): void {
   void camStill
   const p50 = pct(ms, 0.5), p95 = pct(ms, 0.95), p99 = pct(ms, 0.99), max = ms.length ? Math.max(...ms) : 0
   const over20 = ms.filter(v => v > 20).length, over33 = late.length
-  const line = `${s.name.padEnd(26)} ${(drawn.length / span).toFixed(0).padStart(3)} fps | gaps ${p50.toFixed(1)} / ${p95.toFixed(1)} / ${p99.toFixed(1)} / ${max.toFixed(0)} ms | over 20: ${over20}, over 33: ${over33} of ${ms.length} | work ${pct(work, 0.5).toFixed(1)} / ${pct(work, 0.99).toFixed(1)} / ${Math.max(...work).toFixed(0)} ms (${parts.map(p => `${p[0]} ${p[1].toFixed(1)}`).join(', ')}; worst ${worst.map(p => `${p[0]} ${p[1].toFixed(0)}`).join(', ')}) | sizes ${[...sizes].join(',')}${resized ? ` changed ${resized} times` : ''}, beats ${[...every].join(',')} | long frames ${s.long.length}${s.long.length ? ` (worst ${Math.max(...s.long.map(l => l[1])).toFixed(0)} ms)` : ''} | steps ${stepped}${stepped ? ` (to ${biggest.toFixed(1)} times the usual)` : ''}${late.length ? ` | late on: ${[...on].map(([k, n]) => `${k} x${n}`).join('; ')}` : ''}`
+  const line = `${s.name.padEnd(26)} ${(drawn.length / span).toFixed(0).padStart(3)} fps | gaps ${p50.toFixed(1)} / ${p95.toFixed(1)} / ${p99.toFixed(1)} / ${max.toFixed(0)} ms | over 20: ${over20}, over 33: ${over33} of ${ms.length} | work ${pct(work, 0.5).toFixed(1)} / ${pct(work, 0.99).toFixed(1)} / ${Math.max(...work).toFixed(0)} ms (${parts.map(p => `${p[0]} ${p[1].toFixed(1)}`).join(', ')}; worst ${worst.map(p => `${p[0]} ${p[1].toFixed(0)}`).join(', ')}) | sizes ${[...sizes].join(',')}${resized ? ` changed ${resized} times` : ''}, beats ${[...every].join(',')} | long frames ${s.long.length}${s.long.length ? ` (worst ${Math.max(...s.long.map(l => l[1])).toFixed(0)} ms; style and layout to ${Math.max(...s.long.map(l => l[4] + l[5])).toFixed(0)} ms, ${Math.max(...s.long.map(l => l[5])).toFixed(0)} of it forced by script)` : ''} | steps ${stepped}${stepped ? ` (to ${biggest.toFixed(1)} times the usual)` : ''}${late.length ? ` | late on: ${[...on].map(([k, n]) => `${k} x${n}`).join('; ')}` : ''}`
   const ok = !flag('budget') || (p99 <= BUDGET.p99 && over33 <= BUDGET.over33 && stepped <= BUDGET.steps)
   console.log(`${ok ? 'ok  ' : 'FAIL'} ${line}`)
   results.push(line)

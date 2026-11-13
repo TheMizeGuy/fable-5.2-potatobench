@@ -102,6 +102,7 @@ export const mountHud: MountHud = (root, app, view, sound) => {
   const touchQuery = matchMedia('(pointer: coarse)')
 
   let dirty = true
+  let dayTurned = false
   let held = false
   let heldAt = 0
   let screen: Screen | null = null
@@ -228,6 +229,9 @@ export const mountHud: MountHud = (root, app, view, sound) => {
       case 'events':
         onEvents(e.events)
         dirty = true
+        // A day's turn is the dearest frame there is (the day itself, then the land made again): what is drawn here
+        // of it waits for the frame after, so the two are not one long frame.
+        if (e.dayPassed && app.speed > 0) dayTurned = true
         break
       case 'alert': {
         const a = e.alert
@@ -378,7 +382,8 @@ export const mountHud: MountHud = (root, app, view, sound) => {
       laps.end('interface: guide')
       notes.hush(papers.isOpen() || !!app.holding)
       if (sinceTick > 500) { sinceTick = 0; if (notes.count() || notes.held()) notes.prune(app.campaign?.season && app.screen === 'season' ? app.campaign.season.day : -1) }
-      if (dirty && !held && screen) {
+      if (dirty && dayTurned) dayTurned = false
+      else if (dirty && !held && screen) {
         dirty = false
         root.dataset.layout = layoutNow()
         root.classList.toggle('touch', touchQuery.matches)
