@@ -9,6 +9,7 @@ import * as F from './fmt.ts'
 import { term } from './glossary.ts'
 import { icon } from './icons.ts'
 import { BLOCK_NAME, BLOCK_NOTE, heldFields, roadTime } from './map.ts'
+import { loanSays } from './money-words.ts'
 import { POSITION_NOTE, soilWord } from './rules.ts'
 import { tens } from './system/parts.ts'
 import { portrait } from './system/people.ts'
@@ -310,7 +311,7 @@ function equipmentBody(ctx: Ctx, c: S.Campaign, onTry: (err: string) => void, on
   const plan = S.planCost(c)
   const loanAdds = (cost: number) => Math.max(0, plan - (c.cash - cost)) - Math.max(0, plan - c.cash)
   return [
-    h('p', { class: 't-caption', testid: 'equip-cash' }, `Equipment is paid from your cash, ${F.money(Math.max(0, c.cash))} right now. Your plan still costs the same, so the spring loan covers whatever cash a machine uses up, and its price is added to what you owe at the end of the year.`),
+    h('p', { class: 't-caption', testid: 'equip-cash' }, `Equipment is paid from your cash, ${F.money(Math.max(0, c.cash))} right now. Your plan still costs the same, so any of that cash your plan needed is borrowed on the spring loan instead, and you repay it at the end of the year.`),
     h('ul', { class: 'cat-list cat-equip' }, ids.map(id => {
       const u = S.UPGRADES[id]
       const why = c.upgrades[id] ? '' : equipNeeds(c, id)
@@ -320,7 +321,7 @@ function equipmentBody(ctx: Ctx, c: S.Campaign, onTry: (err: string) => void, on
           : h('button', {
             class: 'btn cat-buy', type: 'button', testid: `buy-${id}`, disabled: !!why, title: why || undefined,
             onclick: () => tryRun(ctx, { t: 'buy', upgrade: id }, onTry),
-          }, 'Buy', h('span', { class: 'sub num' }, F.money(u.cost)), loanAdds(u.cost) >= 0.5 ? h('span', { class: 'loan-adds num' }, `+${F.money(loanAdds(u.cost))} on the loan`) : null))
+          }, 'Buy', h('span', { class: 'sub num' }, F.money(u.cost)), loanSays(u.cost, loanAdds(u.cost)) ? h('span', { class: 'loan-adds num' }, loanSays(u.cost, loanAdds(u.cost))) : null))
     })),
     done('equipment-close', onClose),
   ]

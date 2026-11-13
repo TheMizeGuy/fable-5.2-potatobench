@@ -1,7 +1,8 @@
 // The pointer on the land and the camera keys, as src/game/contracts.ts lays them down:
 // drag pans, the wheel or a pinch zooms toward the pointer, right-drag or a twist or Q and E turn, arrows pan, Home frames
 // the farm; a click on a crew picks it, a click on a field selects it, Shift-click adds, a double-click selects alike, a
-// click on empty ground lets both go; a right-click or long press gives the field its order. A drag never selects.
+// click on empty ground lets both go; a right-click or long press gives the field its order, to the person picked if
+// there is one. A drag never selects.
 import type { App } from '../game/app.ts'
 import type { Thing } from '../game/contracts.ts'
 import type { CameraRig, Viewport } from './camera.ts'

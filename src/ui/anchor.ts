@@ -105,12 +105,15 @@ export function placeCard(a: Ask): Placed {
   // Under a bar: the nearest free edge of it.
   if (under) p = { x: p.x, y: (under.top + under.bottom) / 2 < (win.top + win.bottom) / 2 ? Math.min(win.bottom, under.bottom) : Math.max(win.top, under.top) }
 
-  // The free height of a column of the window: between the bars above the point and the bars below it.
+  // The free height of a column of the window: between the bars above the point and the bars below it. A handle on
+  // a bar (a chip in the people bar) is not on the land at all: every bar of the foot is then under the land, the
+  // list that stands between the chip and the land with them, and every bar of the top over it.
+  const onBar = blocks.some(b => holds(b, p, 1))
   const band = (x0: number, x1: number) => {
     let top = win.top, bottom = win.bottom
     for (const b of blocks) {
       if (b.right <= x0 - 4 || b.left >= x1 + 4) continue
-      const from = holds(b, p, 1) ? (win.top + win.bottom) / 2 : p.y
+      const from = onBar ? (win.top + win.bottom) / 2 : p.y
       if ((b.top + b.bottom) / 2 < from) top = Math.max(top, b.bottom + 6)
       else bottom = Math.min(bottom, b.top - 6)
     }
@@ -157,36 +160,39 @@ export function placeCard(a: Ask): Placed {
   for (const side of SIDES) {
     const upright = side === 'right' || side === 'left'
     const usual = lay(side, null)
-    // Beside a tag whose own field's middle lies just past it, the card stands a step further along, past the middle.
-    const starts: (number | null)[] = [null]
+    const starts: { off: number | null; aside: boolean }[] = [{ off: null, aside: false }]
     if (upright && !usual.forced) {
+      // Beside a tag whose own field's middle lies just past it, the card stands a step further along, past the middle.
       for (const v of a.avoid ?? []) {
         const x = side === 'right' ? v.right + 3 : v.left - 3 - w
         const step = side === 'right' ? x - usual.x : usual.x - x
-        if (step > 0 && step <= 44 && x >= win.left && x + w <= win.right) starts.push(x)
+        if (step > 0 && step <= 44 && x >= win.left && x + w <= win.right) starts.push({ off: x, aside: false })
       }
-    }
-    for (const off of starts) {
-      const first = off === null ? usual : lay(side, null, off)
-      tries.push(first)
-      if (first.forced) continue
       // Cut short by a bar under it or a slip over it: stepped along that side until it stands clear of them, whole.
-      if (off === null && first.h < h0 - 2 && upright) {
+      if (usual.h < h0 - 2) {
         for (const b of blocks) {
-          if (b.right <= first.x - 4 || b.left >= first.x + w + 4) continue
+          if (b.right <= usual.x - 4 || b.left >= usual.x + w + 4) continue
           const x = side === 'right' ? b.right + 6 : b.left - 6 - w
-          if (x < win.left || x + w > win.right || Math.abs(x - first.x) > ASIDE - gap) continue
-          const c = lay(side, null, x)
-          if (c.h >= h0 - 2) tries.push({ ...c, aside: true })
+          // (beside the very bar or panel its handle stands on is never too far: a chip in a wide people bar, a
+          // row of the grid)
+          const own = !!keep && meets(b, keep)
+          if (x < win.left || x + w > win.right || (!own && Math.abs(x - usual.x) > ASIDE - gap)) continue
+          if (lay(side, null, x).h >= h0 - 2) starts.push({ off: x, aside: true })
         }
       }
+    }
+    for (const st of starts) {
+      const first = st.off === null ? usual : lay(side, null, st.off)
+      tries.push({ ...first, aside: st.aside })
+      if (first.forced) continue
       // Slid to step just clear of each tag it would lie over, one way and the other.
       const r: Box = { left: first.x, top: first.y, right: first.x + w, bottom: first.y + first.h }
       for (const o of others) {
         if (upright ? o.right <= r.left || o.left >= r.right : o.bottom <= r.top || o.top >= r.bottom) continue
         for (const at of upright ? [o.bottom + 3, o.top - 3 - first.h] : [o.right + 3, o.left - 3 - w]) {
-          const c = lay(side, at, upright ? off : null)
-          if (!tries.some(t => t.side === side && Math.abs(t.x - c.x) < 1 && Math.abs(t.y - c.y) < 1)) tries.push(c)
+          const c = lay(side, at, upright ? st.off : null)
+          if (st.aside && c.h < h0 - 2) continue
+          if (!tries.some(t => t.side === side && Math.abs(t.x - c.x) < 1 && Math.abs(t.y - c.y) < 1)) tries.push({ ...c, aside: st.aside })
         }
       }
     }
@@ -243,6 +249,28 @@ export function tetherOf(card: Box, to: Pt | Box): { from: Pt; to: Pt; len: numb
   } else end = to
   const from = nearest(card, end)
   return { from, to: end, len: Math.hypot(end.x - from.x, end.y - from.y), angle: Math.atan2(end.y - from.y, end.x - from.x) }
+}
+
+// How much of a tether is drawn, from the card's end. To a thing that stands on a bar (a chip in the people bar) the
+// line runs only as far as the first bar it meets: it never crosses the bar's other keys, or the work list's orders.
+// The pin on the thing still says which one.
+export function tetherShown(from: Pt, to: Pt, bars: Box[]): number {
+  const len = Math.hypot(to.x - from.x, to.y - from.y)
+  if (!bars.some(b => holds(b, to, 1))) return len
+  let first = 1
+  const dx = to.x - from.x, dy = to.y - from.y
+  for (const b of bars) {
+    // Where the line comes into the box (the slab test), as a share of its length.
+    let t0 = 0, t1 = 1
+    for (const [d, lo, hi, o] of [[dx, b.left, b.right, from.x], [dy, b.top, b.bottom, from.y]] as const) {
+      if (Math.abs(d) < 1e-9) { if (o < lo || o > hi) { t0 = 2; break } continue }
+      const a = (lo - o) / d, c = (hi - o) / d
+      t0 = Math.max(t0, Math.min(a, c))
+      t1 = Math.min(t1, Math.max(a, c))
+    }
+    if (t0 <= t1 && t0 < first) first = t0
+  }
+  return len * Math.max(0, first)
 }
 
 // Where a notch stands on the edge of a sheet at the foot (or a panel at the side): as near the thing as the edge goes.

@@ -31,6 +31,7 @@ export {
   type ClearStage, type FieldEnv,
 } from './land.ts'
 export { advise, fieldNeeds, frostOnBarrels, type Advice } from './advice.ts'
-export { goalCosts, jobOutlook, killOutlook, killTiming, plantReady, moneyNow, pressing, sprayOutlook, yearStory, type GoalCost, type JobOutlook, type KillOutlook, type KillTiming, type MoneyNow, type MoneyPart, type PlantReady, type Pressing, type SprayOutlook, type YearStory } from './outlook.ts'
+export { contractOutlook, goalCosts, harvestYield, jobOutlook, killOutlook, killTiming, MONEY_STEP, moneyCause, moneyLook, monthCost, planCut, plantReady, moneyNow, pressing, sprayOutlook, yearStory, type ContractOutlook, type GoalCost, type MoneyCause, type MoneyLook, type JobOutlook, type KillOutlook, type KillTiming, type MoneyNow, type MoneyPart, type PlantReady, type Pressing, type SprayOutlook, type YearStory } from './outlook.ts'
+export { killCostToday, type KillCost } from './killcost.ts'
 export { pressingWhy, waitable } from './season.ts'
 export { resting } from './people.ts'

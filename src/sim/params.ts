@@ -363,6 +363,8 @@ export const FIELD_COST = 8000                 // fertilizer, fuel, repairs and 
 export const SEED_CWT_PER_FIELD = 100
 export const CERT_SEED_PER_CWT = 17
 export const REST_COST = 250
+// About what a potato field's work costs a month of the season, the dig included (coach-tended first years: $397).
+export const FIELD_WORK_MONTH = 400
 export const REST_INCOME = 900
 
 export const CELLAR_CWT = 3600
@@ -432,6 +434,14 @@ export const MARKETABLE_SPREAD = 0.042
 // its variety's usual one (18% over 384 coach-tended fields).
 export const NO2_USUAL = 0.136
 export const USUAL_SPREAD = 0.2
+// The share of a crop's total cwt that grades US No. 1 or large, what a contract takes: each variety's in a crop clear
+// of scab and knobs, less this much for each share of tubers sent to No. 2, and how far a field strays from that
+// (fitted over 384 coach-tended fields, 48 of each variety).
+export const NO1_SHARE: Record<VarietyId, number> = {
+  norland: 0.655, superior: 0.756, katahdin: 0.815, kennebec: 0.818, burbank: 0.696, atlantic: 0.802, gold: 0.803, caribou: 0.786,
+}
+export const NO1_NO2 = 0.81
+export const NO1_SPREAD = 0.08
 // Reference practice digs a crop whose vines are still up from this date, so it is in before the freeze-up.
 export const DIG_GREEN = { month: 9, dom: 5 }   // October 5
 // Where the dig is the routine's and the kill the player's call, the crew kills the vines by itself this many days

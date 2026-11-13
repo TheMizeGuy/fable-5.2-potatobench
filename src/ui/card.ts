@@ -295,9 +295,9 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
       el, canAny,
       wire(say: HTMLElement) {
         const base = [...say.childNodes]
-        const back = () => say.replaceChildren(...base)
+        const back = () => { say.replaceChildren(...base); say.classList.remove('is-telling') }
         for (const t of tell) {
-          const show = () => say.replaceChildren(t.text)
+          const show = () => { say.replaceChildren(t.text); say.classList.add('is-telling') }
           t.el.addEventListener('pointerenter', e => { if ((e as PointerEvent).pointerType === 'mouse') show() })
           t.el.addEventListener('pointerleave', back)
           t.el.addEventListener('focus', show)

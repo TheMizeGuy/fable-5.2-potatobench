@@ -548,6 +548,11 @@ in one page (`budget.ts --close --crop=twopass,cardshadow,treereach,corners,thin
   browser: on the test box conifer cards leave 14321 pixels either way, hardwood cards 12803, leaves 26090 and
   26162; with the first pass pushed off by two parts in ten thousand of the depth they leave 0, 2 and 6 and the
   check says no; with the push taken away it says yes again. No skyline is thinned: every card is still drawn.
+  A first pass must draw exactly the trees its mesh draws. As first shipped, felling a tract took its trees out of
+  the mesh and left them in the first pass, which wrote their depth with nothing to light it: a felled tract stood
+  as a black shape of its trees (a player's second spring, after a winter in the woods). Both counts are now set
+  in one place (`draw` in `flora.ts`); `tests/flora.test.ts` holds every pair to it through felling and each
+  setting, and `tools/render/felled.ts` looks at felled tracts in a browser for any patch of near black.
 - **Trees whole beside the camera, not a hundred metres off.** Whole within 60 m and simpler to 150 m of a camera
   that is down among them (it was 100 and 200), less as it climbs, none whole under a camera 70 m up; and whole
   beside what a higher camera looks at where that is a yard, so the yard tier keeps the yard's own trees.

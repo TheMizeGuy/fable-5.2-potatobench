@@ -3,7 +3,7 @@
 // camera moves, and when the thing leaves the picture it waits at the nearest edge with a Show key. On a phone the
 // card is a sheet at the foot with a notch on its edge toward the thing.
 import type { Place, Thing } from '../game/contracts.ts'
-import { holds, meets, notchOf, placeCard, roomUnder, tetherOf, type Box, type Placed, type Pt, type Side } from './anchor.ts'
+import { holds, meets, notchOf, placeCard, roomUnder, tetherOf, tetherShown, type Box, type Placed, type Pt, type Side } from './anchor.ts'
 import type { Ctx } from './core.ts'
 import { h } from './dom.ts'
 import { icon } from './icons.ts'
@@ -243,7 +243,16 @@ export function mountTies(ctx: Ctx, root: HTMLElement): Ties {
   let thingNow: { tie: Tie; t: Thing } | null = null
   const fieldId = (sel: number[]) => (sel.length === 1 ? `field-${sel[0]}` : `fields-${sel.join('+')}`)
 
+  // A person's card gives way to a field's or a yard's card (orders given there still go to them). When that card is
+  // put away the person is let go with it, so their card never comes back by itself: a card opens on a press.
+  let displaced = -1
   const off = app.on(e => {
+    if (e.type === 'unit') displaced = -1
+    else if (e.type === 'select' || e.type === 'yard') {
+      const held = app.selection.length > 0 || app.yard !== 0
+      if (held && app.unit >= 0) displaced = app.unit
+      else if (!held && displaced >= 0) { const was = displaced; displaced = -1; if (app.unit === was) app.selectUnit(-1) }
+    }
     if (e.type === 'select') {
       const last = app.selected
       if (last < 0) { fieldNow = null; had = []; return }
@@ -363,12 +372,26 @@ export function anchored(ctx: Ctx, card: HTMLElement, o: { mark?: boolean } = {}
     if (tie) card.dataset.thing = tie.thing
     else delete card.dataset.thing
     if (card.hidden || !tie) return
-    // Its own height, with all the room it wants: the frame gives it that, or less where the land is short.
+    measure()
+  }
+
+  // Its own height, with all the room it wants: the frame gives it that, or less where the land is short.
+  function measure(): void {
+    stale = false
     const was = card.style.maxHeight
+    if (!was) { size = { w: card.offsetWidth || size.w, h: card.offsetHeight || size.h }; return }
+    // Held to less than it wants: let out for the measure, with what the player had scrolled to kept where it was.
+    const scrolled = [card, ...card.querySelectorAll<HTMLElement>('[data-scroll]')].map(x => [x, x.scrollTop] as const)
     card.style.maxHeight = 'none'
     size = { w: card.offsetWidth || size.w, h: card.offsetHeight || size.h }
     card.style.maxHeight = was
+    for (const [x, top] of scrolled) if (x.scrollTop !== top) x.scrollTop = top
   }
+  // A card may grow between two drawings of the screen (a stamp's line under the pointer): its size is taken again
+  // on the next frame, so it is held to its corner and to the land's room at once, paused or running.
+  let stale = false
+  const seen = typeof ResizeObserver === 'function' ? new ResizeObserver(() => { stale = true }) : null
+  seen?.observe(card)
 
   function frame(mode: Mode, quiet = false): void {
     const live = !!tie && !card.hidden && !quiet
@@ -395,7 +418,6 @@ export function anchored(ctx: Ctx, card: HTMLElement, o: { mark?: boolean } = {}
     hide(notch)
     const land = ties().land()
     const win = `${innerWidth}x${innerHeight}`
-    const sized = `${size.w}x${size.h}`
     if (!t) {
       // Nowhere to tie it: it stays where it was, or stands in the middle of the land.
       hide(line, dot, show, mark)
@@ -405,15 +427,17 @@ export function anchored(ctx: Ctx, card: HTMLElement, o: { mark?: boolean } = {}
       }
       return
     }
+    if (stale) measure()
+    const sized = `${size.w}x${size.h}`
     const cardBox = (p: Placed): Box => ({ left: p.x, top: p.y, right: p.x + size.w, bottom: p.y + p.h })
     const at = placed ? Math.hypot(t.point.x - placed.for.x, t.point.y - placed.for.y) : Infinity
     // Where it lies still serves: in the window, off the bars (a list that grew, the grid opened), off its handle.
     let fits = !!placed && placed.win === win && !placed.away && holds(land.win, t.point, 0.5)
     if (fits && placed!.size !== sized) {
-      // Its own height changed (an order given, a line more under the orders): its top left corner stays where it
-      // is, so nothing in it moves under the pointer; it grows downward, or scrolls.
+      // Its own height changed (an order given, a stamp's line under the pointer): its top left corner stays where
+      // it is, so nothing in it moves under the pointer; it grows downward, or scrolls where there is no more room.
       const h = Math.min(size.h, roomUnder(placed!.x, placed!.y, size.w, land.win, land.blocks) - placed!.y)
-      if (h >= Math.min(size.h, 220)) placed = { ...placed!, h, size: sized }
+      if (h >= Math.min(size.h, 160)) placed = { ...placed!, h, size: sized }
       else fits = false
     }
     if (fits) {
@@ -437,8 +461,9 @@ export function anchored(ctx: Ctx, card: HTMLElement, o: { mark?: boolean } = {}
       if (stepped && !ctx.reduced()) { hopUntil = performance.now() + 220; card.classList.add('hop') }
     }
     if (hopUntil && performance.now() > hopUntil) { hopUntil = 0; card.classList.remove('hop') }
-    const p = placed!
-    set(card, 'card', `translate3d(${p.x.toFixed(1)}px, ${p.y.toFixed(1)}px, 0)`)
+    // On whole pixels: its words are sharp, and a change of its own height can never nudge its edge.
+    const p = { ...placed!, x: Math.round(placed!.x), y: Math.round(placed!.y) }
+    set(card, 'card', `translate3d(${p.x}px, ${p.y}px, 0)`)
     const max = p.h < size.h - 0.5 ? `${Math.floor(p.h)}px` : ''
     if (drawn.max !== max) { card.style.maxHeight = max; drawn.max = max }
     if (card.dataset.side !== p.side) card.dataset.side = p.side
@@ -458,8 +483,10 @@ export function anchored(ctx: Ctx, card: HTMLElement, o: { mark?: boolean } = {}
     }
     hide(show)
     const tt = tetherOf(cardBox(p), t.keep ?? t.end ?? t.point)
-    if (tt.len < 2) hide(line)
-    else { reveal(line); set(line, 'line', `translate3d(${tt.from.x.toFixed(1)}px, ${tt.from.y.toFixed(1)}px, 0) rotate(${tt.angle.toFixed(4)}rad) scaleX(${(tt.len / 100).toFixed(4)})`) }
+    // To a chip on a bar the line stops at the bar's edge (it never crosses another key); its pin stands on the chip.
+    const shown = t.keep ? tetherShown(tt.from, tt.to, land.blocks) : tt.len
+    if (shown < 2) hide(line)
+    else { reveal(line); set(line, 'line', `translate3d(${tt.from.x.toFixed(1)}px, ${tt.from.y.toFixed(1)}px, 0) rotate(${tt.angle.toFixed(4)}rad) scaleX(${(shown / 100).toFixed(4)})`) }
     reveal(dot)
     set(dot, 'dot', `translate3d(${tt.to.x.toFixed(1)}px, ${tt.to.y.toFixed(1)}px, 0)`)
     if (mark) {
@@ -468,5 +495,5 @@ export function anchored(ctx: Ctx, card: HTMLElement, o: { mark?: boolean } = {}
     }
   }
 
-  return { parts, update, frame, dispose() { for (const el of parts) el.remove(); card.classList.remove('anchored') } }
+  return { parts, update, frame, dispose() { seen?.disconnect(); for (const el of parts) el.remove(); card.classList.remove('anchored') } }
 }

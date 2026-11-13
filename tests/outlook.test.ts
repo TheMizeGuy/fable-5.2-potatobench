@@ -156,7 +156,10 @@ describe('what goals cost, the money and the year', () => {
     until(c, x => x.season!.fields.some(f => f.weighed))
     const m = S.moneyNow(world, c)
     expect(m.stored).toBeGreaterThan(0)
-    expect(m.after).toBeCloseTo(m.cash + m.stored + m.growing - S.NOTE_PAYMENT - S.LIVING - m.due.mortgage, 6)
+    // The oats and clover the resting fields bring at the season's close count, as do the wages and penalties still to
+    // pay and the interest on what the year end would leave owed.
+    expect(m.rest).toBe(c.season!.fields.filter(f => f.status === 'rest').length * S.REST_INCOME)
+    expect(m.after).toBeCloseTo(m.cash + m.stored + m.growing + m.rest - m.wages - m.penalties - S.NOTE_PAYMENT - S.LIVING - m.due.mortgage - m.interest, 6)
     expect(m.parts.reduce((a, p) => a + p.amount, 0)).toBeCloseTo(m.after, 6)
   })
 

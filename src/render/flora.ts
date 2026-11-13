@@ -388,6 +388,14 @@ export class Flora {
     m.material = (two ? m.userData.second : m.userData.one) as MeshStandardMaterial
   }
 
+  // How many of a mesh's trees are drawn, in its first pass as in the mesh: a tree in the first pass alone would
+  // write its depth and never be lit, a dark shape where it stood.
+  private draw(m: InstancedMesh, n: number): void {
+    m.count = n
+    const first = m.userData.first as InstancedMesh | undefined
+    if (first) first.count = n
+  }
+
   // Draw the cards in two passes, or in one as they were.
   twoPass(on: boolean): void {
     this.two = on
@@ -1058,7 +1066,7 @@ export class Flora {
       for (const s of st.sets) {
         let n = 0
         while (n < s.ranks.length && s.ranks[n] >= shown) n++
-        s.mesh.count = n
+        this.draw(s.mesh, n)
       }
     }
     return cut
@@ -1161,8 +1169,7 @@ export class Flora {
     for (const b of this.blocks) b.state = -1
     // The low setting draws half the far woods, the middle one three quarters.
     for (const m of this.thin) {
-      m.count = Math.ceil((m.userData.all as number) * (tier === 'low' ? 0.5 : tier === 'medium' ? 0.75 : 1))
-      ;(m.userData.first as InstancedMesh).count = m.count
+      this.draw(m, Math.ceil((m.userData.all as number) * (tier === 'low' ? 0.5 : tier === 'medium' ? 0.75 : 1)))
     }
   }
 

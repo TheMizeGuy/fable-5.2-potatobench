@@ -17,6 +17,7 @@ import {
 } from './types.ts'
 import { variety } from './varieties.ts'
 import { clamp, getDay, pDays, pUnit, skyOf, wallin } from './weather.ts'
+import { killCostToday } from './killcost.ts'
 
 const GONE = H_ROGUED | H_SAMPLED | H_DUG | H_DECAYED
 const NO_CROP = H_ROGUED | H_DUG | H_DECAYED
@@ -471,13 +472,16 @@ function completeJob(world: World, c: Campaign, s: Season, job: Job, d: Day, out
         { hill: i, grams, weights: tubers.map(t => Math.round(t.w)), marks: tubers.map(t => t.mark) })
       break
     }
-    case 'kill':
+    case 'kill': {
+      // What the kill gave up against waiting for its due day, kept for the weigh ticket (it can't be worked out after).
+      const lost = killCostToday(world, c, job.field)
       f.killDay = s.day
       f.deadDay = s.day
       f.status = 'dead'
       for (let i = 0; i < P.HILLS; i++) f.hC[i] *= 0.08
-      push(s, out, 'killed', job.field, 'info', `The vines in ${name} have been killed. The skins will set in about two weeks.`)
+      push(s, out, 'killed', job.field, 'info', `The vines in ${name} have been killed. The skins will set in about two weeks.`, lost && lost.cwtPerAcre > 0 ? { lost: lost.cwtPerAcre, early: lost.days } : undefined)
       break
+    }
     case 'fell':
       push(s, out, 'felled', job.field, 'good', `${name} is felled. The stumps are still there, and a contractor can pull them.${sheltering(c, job.field)}`, { logs: Math.round(c.logs) })
       break
@@ -510,6 +514,9 @@ function completeJob(world: World, c: Campaign, s: Season, job: Job, d: Day, out
 function weigh(s: Season, f: FieldSeason, field: number, lot: Lot, out: GameEvent[]): void {
   f.inField = 0
   f.weighed = true
+  // Storage is charged from the morning the ticket is offered (the day after the weigh-in), the first day the crop
+  // can be sold: before it the crop was in barrels or on the way in, and a crop sold off the ticket was never stored.
+  lot.aged = s.day + 1
   const total = lotCwt(lot)
   push(s, out, 'weighed', field, 'good', `The weigh ticket for ${FIELD_NAMES[field]} is in: ${withCommas(total)} cwt in the potato house, ready to sell or store.`, { lot: lot.id })
   const k = s.jobs.findIndex(j => j.kind === 'haul' && j.field === field)
@@ -541,7 +548,7 @@ function exposure(c: Campaign, s: Season, d: Day, out: GameEvent[]): void {
     if (tmin <= P.FREEZE_IN_FIELD) {
       const frozen = f.inField * P.FREEZE_SHARE
       lose(f, lot, frozen, 'frost')
-      push(s, out, 'frozenInField', i, 'bad', `A hard frost hit the barrels in ${FIELD_NAMES[i]}, and ${withCommas(frozen)} cwt froze before it was hauled in.`, { cwt: Math.round(frozen) })
+      if (frozen >= 0.5) push(s, out, 'frozenInField', i, 'bad', `A hard frost hit the barrels in ${FIELD_NAMES[i]}, and ${withCommas(frozen)} cwt froze before it was hauled in.`, { cwt: Math.round(frozen) })
     }
     if (bright) lose(f, lot, f.inField * P.GREEN_IN_FIELD, 'green')
     if (f.status === 'dug' && f.inField < 0.5) weigh(s, f, i, lot, out)
