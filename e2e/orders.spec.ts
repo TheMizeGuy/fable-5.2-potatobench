@@ -219,15 +219,32 @@ test('a person\'s pin stands over them above a tag or the yard\'s tag, and a cli
     for (const id of await game<number[]>(page, 'app.campaign.crew.map(u => u.id)')) {
       await page.evaluate(() => { const { app } = (globalThis as any).__county; app.selectUnit(-1); app.selectYard(0); app.select(-1) })
       await page.waitForTimeout(200)
-      // Just over their head, where their pin stands: is a tag or the yard's tag there too?
+      // Their pin (or the one they share with whoever stands with them), over their head: is a tag or the yard's tag
+      // under it, and is the pin what a click there meets?
       const at = await page.evaluate(id => {
+        const { app } = (globalThis as any).__county
         const a = (globalThis as any).__countyField.unitPin(id)
         if (!a.visible || a.x < 20 || a.y < 120 || a.x > innerWidth - 20 || a.y > innerHeight - 120) return null
-        const p = { x: a.x, y: a.y - 8 }
-        const tag = [...document.querySelectorAll<HTMLElement>('#ui .tag-wrap:not(.gone) .tag-at, #ui .yard-at:not(.gone) .yard-tag')].some(e => { const b = e.getBoundingClientRect(); return p.x > b.left && p.x < b.right && p.y > b.top && p.y < b.bottom })
-        return { ...p, tag }
-      }, id) as { x: number; y: number; tag: boolean } | null
-      if (!at) continue
+        const u = app.campaign.crew.find((x: any) => x.id === id)
+        const name = u.kind === 'farmer' ? 'You' : u.name.split(' ')[0]
+        const own = document.querySelector<HTMLElement>(`#ui .pin-at:not(.gone) [data-testid="pin-${id}"]`)
+        const pin = own ?? [...document.querySelectorAll<HTMLElement>('#ui .pin-at:not(.gone) button.pin.is-many')].find(b => (b.textContent ?? '').includes(name))
+        const head = pin?.querySelector('.head svg')?.getBoundingClientRect()
+        if (!head) return { x: 0, y: 0, tag: false, top: false, none: true }
+        const p = { x: head.left + head.width / 2, y: head.top + head.height / 2 }
+        // where the pin's face and a tag overlap, the pin is on top
+        let tag = false, top = !!document.elementFromPoint(p.x, p.y)?.closest('.pin')
+        for (const e of document.querySelectorAll<HTMLElement>('#ui .tag-wrap:not(.gone) .tag-at, #ui .yard-at:not(.gone) .yard-tag')) {
+          const b = e.getBoundingClientRect()
+          const l = Math.max(b.left, head.left), r = Math.min(b.right, head.right), t = Math.max(b.top, head.top), d = Math.min(b.bottom, head.bottom)
+          if (r - l < 4 || d - t < 4) continue
+          tag = true
+          top &&= !!document.elementFromPoint((l + r) / 2, (t + d) / 2)?.closest('.pin')
+        }
+        return { ...p, tag, top, none: false }
+      }, id) as { x: number; y: number; tag: boolean; top: boolean; none: boolean } | null
+      if (!at || at.none) continue
+      expect(at.top, `${tier}: person ${id}'s pin is on top, over any tag it meets`).toBe(true)
       if (at.tag) over++
       await page.mouse.click(at.x, at.y)
       const pick = page.getByTestId(`pin-pick-${id}`)
@@ -237,7 +254,7 @@ test('a person\'s pin stands over them above a tag or the yard\'s tag, and a cli
       await page.keyboard.press('Escape')
     }
   }
-  expect(over, 'at least one person stood where a tag lies').toBeGreaterThan(0)
+  expect(over, 'at least one pin met a tag').toBeGreaterThan(0)
   expect(errors, errors.join('\n')).toEqual([])
 })
 
