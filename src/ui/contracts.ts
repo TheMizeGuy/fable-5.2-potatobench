@@ -1,5 +1,6 @@
 // Contracts: the spring offers, the small tracker of what is signed, and delivering a crop against one.
 import * as S from '../sim/index.ts'
+import { giving, shortWhy } from './contract-words.ts'
 import { patch, type Ctx } from './core.ts'
 import { h, type Child } from './dom.ts'
 import * as F from './fmt.ts'
@@ -37,13 +38,6 @@ export function deliver(ctx: Ctx, lot: S.Lot, d: Deal): boolean {
   return r.ok
 }
 
-// Potato fields planned to a variety on land the farm holds.
-function plannedFields(c: S.Campaign, id: S.VarietyId): number {
-  let n = 0
-  c.plans.forEach((p, i) => { if (S.held(c, i) && p.crop === 'potato' && p.variety === id) n++ })
-  return n
-}
-
 function inHand(c: S.Campaign, id: S.VarietyId): number {
   return S.openLots(c).filter(l => l.variety === id).reduce((a, l) => a + l.grades.no1 + l.grades.chef, 0)
 }
@@ -58,43 +52,12 @@ function growing(c: S.Campaign, id: S.VarietyId): number {
 function farmHas(c: S.Campaign, id: S.VarietyId): string {
   const name = S.variety(id).name
   if (c.phase === 'plan') {
-    const n = plannedFields(c, id)
-    return n ? `Your plan has ${F.plural(n, 'field')} of ${name}, good for about ${F.mass(n * S.CONTRACT_CWT_MIN)} of No. 1 in a usual year.`
+    const g = S.contractOutlook(c, id, 0)
+    return g.fields ? `Your plan has ${F.plural(g.fields, 'field')} of ${name}, good for about ${F.mass(Math.round(g.mean / 10) * 10)} of No. 1 in a usual year.`
       : `Your plan has no ${name}, so give it a field on the map before the season starts.`
   }
   const have = inHand(c, id), out = growing(c, id)
   return `You have ${F.mass(have)} of No. 1 ${name} on hand${out ? ` and ${F.plural(out, 'field')} still to dig` : ''}.`
-}
-
-// What the fields of a contract's variety look like giving: in spring, the plan's fields at a usual crop and either
-// side of it; in the season, what is delivered plus the estimates still in the ground.
-function giving(c: S.Campaign, id: S.VarietyId, delivered = 0): { lo: number; hi: number; n: number } | null {
-  if (c.phase === 'plan') {
-    const n = plannedFields(c, id)
-    return n ? { lo: n * S.CONTRACT_CWT_MIN * 0.7, hi: n * S.CONTRACT_CWT_MIN * 1.3, n } : null
-  }
-  if (c.phase !== 'season' || !c.season) return null
-  let lo = 0, hi = 0, n = 0
-  for (let i = 0; i < S.FIELD_COUNT; i++) {
-    if (!S.held(c, i)) continue
-    const f = S.fieldInfo(c, i)
-    if (f.variety !== S.variety(id).name || !f.estimate) continue
-    lo += f.estimate.lo * S.FIELD_ACRES
-    hi += f.estimate.hi * S.FIELD_ACRES
-    n++
-  }
-  return n ? { lo: delivered + lo, hi: delivered + hi, n } : null
-}
-
-// Whether a contract's shortfall is real yet: once it has closed, or when even the top of what its fields look like
-// giving falls short, or when nothing of its variety is left in the ground. Before that, "short today" is only what
-// the farm has not yet dug, and is not said.
-export function shortReal(c: S.Campaign, k: S.ContractInfo): boolean {
-  if (k.settled) return k.penalty > 0
-  if (c.phase === 'plan' || k.needed <= 1e-6 || k.penalty <= 0) return false
-  const g = giving(c, k.variety, k.delivered)
-  if (g) return g.hi < k.cwt
-  return c.phase !== 'season' || growing(c, k.variety) === 0
 }
 
 // What the bar on a contract shows, for its hover: the three marks it is drawn with.
@@ -109,21 +72,22 @@ function barHover(el: HTMLElement): HTMLElement {
 // A contract as a range: what is promised (the rule) against what the fields look like giving (the hatching), and
 // what is delivered (the violet mark).
 function contractRange(c: S.Campaign, id: S.VarietyId, cwt: number, delivered: number): { el: HTMLElement; said: string } {
-  const g = giving(c, id, delivered)
+  const g = giving(c, id, cwt, delivered)
   const max = Math.max(cwt, g?.hi ?? 0, delivered) * 1.15
-  const said = g ? `your fields look likely to produce ${F.mass(g.lo)} to ${F.mass(g.hi)}, and you've promised ${F.mass(cwt)}` : `nothing is planted for it, and you've promised ${F.mass(cwt)}`
+  const said = g ? `your fields look likely to produce ${F.mass(g.lo)} to ${F.mass(g.hi)} of No. 1, and you've promised ${F.mass(cwt)}` : `nothing is planted for it, and you've promised ${F.mass(cwt)}`
   return { el: range({ lo: g?.lo ?? 0, hi: g?.hi ?? 0, max, mark: delivered > 0 ? delivered : undefined, promise: cwt, label: said }), said }
 }
 
 function signedCard(c: S.Campaign, k: S.ContractInfo): HTMLElement {
   const r = contractRange(c, k.variety, k.cwt, k.delivered)
+  const why = shortWhy(c, k)
   return h('article', { class: 'offer signed cat-offer', testid: `contract-${k.id}` },
     h('p', { class: 'lead' }, icon(k.needed <= 1e-6 ? 'check' : 'contract', 'i'), h('b', null, k.buyer), h('span', { class: 'it quiet' }, k.varietyName), h('span', { class: 'dots' }),
       h('span', { class: 'num' }, F.price(k.price))),
     barHover(r.el),
     h('p', { class: 't-caption' }, `${F.mass(k.delivered)} of ${F.mass(k.cwt)} delivered, due ${k.dueBy}. ${F.upper(r.said)}.`,
       k.settled || k.needed <= 1e-6 ? null : ' On the due date the buyer takes whatever you still owe from your potato house at the contract price, and you only pay a penalty on what\'s still missing after that.',
-      shortReal(c, k) ? h('span', { class: 'c-red' }, ` ${k.settled ? 'Penalty' : 'Short right now'}: ${F.money(-k.penalty)}.`) : null))
+      k.settled && k.penalty > 0 ? h('span', { class: 'c-red' }, ` Penalty: ${F.money(-k.penalty)}.`) : why ? h('span', { class: 'c-ochre' }, ` ${why}`) : null))
 }
 
 function offerCard(ctx: Ctx, c: S.Campaign, o: S.OfferInfo, after: () => void): HTMLElement {
@@ -187,13 +151,14 @@ export function openContracts(ctx: Ctx): void {
 }
 
 // The contracts on the bank board (top.ts): each as a range, what is promised marked against what the fields of its
-// variety look like giving (delivered so far plus the yield estimates still in the ground), with the date it is due.
+// variety look like giving (delivered, in hand and expected at the harvest), with the date it is due.
 export function contractRows(ctx: Ctx): { key(): unknown; part(c: S.Campaign): Child } {
-  const growing = (c: S.Campaign, k: S.ContractInfo) => giving(c, k.variety, k.delivered)
+  const growing = (c: S.Campaign, k: S.ContractInfo) => giving(c, k.variety, k.cwt, k.delivered)
   return {
     key() {
       const c = ctx.app.campaign
-      return c ? [S.contractInfo(c).map(k => [k.id, Math.round(k.delivered), Math.round(k.penalty), k.settled]), c.season?.day, c.phase === 'plan' ? c.plans : 0, ctx.app.settings.units] : 0
+      return c ? [S.contractInfo(c).map(k => [k.id, Math.round(k.delivered), Math.round(k.penalty), k.settled]), c.season?.day, c.phase === 'plan' ? c.plans : 0,
+        S.openLots(c).map(l => Math.round(l.grades.no1 + l.grades.chef)), ctx.app.settings.units] : 0
     },
     part(c) {
       const ks = S.contractInfo(c)
@@ -202,7 +167,8 @@ export function contractRows(ctx: Ctx): { key(): unknown; part(c: S.Campaign): C
         const done = k.needed <= 1e-6
         const g = growing(c, k)
         const max = Math.max(k.cwt, g?.hi ?? 0, k.delivered) * 1.15
-        const said = `${k.buyer}: ${F.mass(k.delivered)} of ${F.mass(k.cwt)} ${k.varietyName} delivered, due ${k.dueBy}${g ? `, and your fields look likely to produce ${F.mass(g.lo)} to ${F.mass(g.hi)} in all` : ''}${k.settled ? ', closed' : done ? ', filled' : shortReal(c, k) ? `. Short right now: ${F.money(k.penalty)}` : ''}. ${BAR_SAYS}`
+        const why = shortWhy(c, k)
+        const said = `${k.buyer}: ${F.mass(k.delivered)} of ${F.mass(k.cwt)} ${k.varietyName} delivered, due ${k.dueBy}${g ? `, and your fields look likely to produce ${F.mass(g.lo)} to ${F.mass(g.hi)} of No. 1 in all` : ''}${k.settled ? `, closed${k.penalty > 0 ? ` with a penalty of ${F.money(k.penalty)}` : ''}` : done ? ', filled' : why ? `. ${why.replace(/\.$/, '')}` : ''}. ${BAR_SAYS}`
         return h('button', { class: `contract${done ? ' done' : ''}`, type: 'button', testid: `track-${k.id}`, title: ctx.touch() ? undefined : said, onclick: () => openContracts(ctx) },
           h('span', { class: 'who' }, icon(done ? 'check' : 'contract', 'i'), h('b', null, k.buyer.replace(/^The /, '')), `: ${k.varietyName}`),
           h('span', { class: 't-label due' }, k.settled ? 'closed' : DUE_SHORT[k.due]),
@@ -212,7 +178,8 @@ export function contractRows(ctx: Ctx): { key(): unknown; part(c: S.Campaign): C
             h('span', { class: 'promise', style: `left:${(k.cwt / max * 100).toFixed(1)}%` })),
           h('span', { class: 'says num' },
             h('b', { class: 'track-n' }, `${F.num(F.massValue(k.delivered))}/${F.mass(k.cwt)}`),
-            g ? ` · ${F.num(F.massValue(g.lo))}–${F.num(F.massValue(g.hi))} growing` : null, !done && shortReal(c, k) ? h('span', { class: 'c-red' }, ` · short ${F.money(k.penalty)}`) : null),
+            g ? ` · ${F.num(F.massValue(g.lo))}–${F.num(F.massValue(g.hi))} expected` : null,
+            k.settled && k.penalty > 0 ? h('span', { class: 'c-red' }, ` · short ${F.money(k.penalty)}`) : why ? h('span', { class: 'c-ochre' }, ' · likely short') : null),
           h('span', { class: 'sr' }, `. ${said} Opens your contracts.`))
       }))
     },
