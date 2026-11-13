@@ -399,7 +399,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     return {
       name: f.name,
       glyph: tract ? COVER_GLYPH[f.cover] : stageGlyph(f),
-      sub, marks, queue, badge, key, cls: tract ? 'tract' : undefined,
+      sub, marks, queue, badge, key, cls: tract ? 'tract' : undefined, hoverName: !tract && f.status === 'rest' ? 'Resting: oats and clover' : undefined,
       said: `${key ? `Key ${key}` : f.block === 'home' ? 'The home farm' : 'Beyond the home farm'}: ${what}${said.length ? `, ${said.join(', ')}` : ''}${badge ? `. Needs: ${F.localize(need!.text)}` : '.'}`,
       taught: !!badge && ((!!hint && need?.act === hint.kind) || goalField === i),
     }
