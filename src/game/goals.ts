@@ -208,7 +208,7 @@ export function waitingFor(c: Campaign): { title: string; when: string } | null 
   // comes near: before the first one it comes with the first blight weather, after it with each new forecast of it.
   if (up.length && !crew('spray') && sprayWayNow(c) !== 'none' && !(due && due.day - s.day <= KILL_NEAR)) {
     if (!s.fields.some(f => f.lastSpray >= 0)) return { title: 'Nothing for you until blight weather', when: 'your crew tends the fields on its own' }
-    return { title: 'Your next decision is the next spray', when: 'a stamp comes up when blight weather is forecast' }
+    return { title: 'Your next decision is a spray', when: 'when blight weather is forecast' }
   }
   if (up.length && !crew('kill')) {
     // Due and not yet ordered: the decision is the player's now, and the goal or the stamp says so.

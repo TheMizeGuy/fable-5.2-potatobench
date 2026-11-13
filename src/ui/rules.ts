@@ -565,3 +565,15 @@ export function yearSpan(a: number, b: number): string {
   if (a === b) return yearName(a)
   return `Years ${yearShort(a)} to ${yearShort(b)}`
 }
+
+// Why blight got into a field the crew keeps sprayed, said with the find, from how the leaf stood: nothing where the
+// spraying is the player's own, who knows when they sprayed.
+export function blightWhy(c: S.Campaign, field: number): string {
+  const s0 = c.season
+  if (!s0 || S.sprayWayNow(c) !== 'auto') return ''
+  const f = s0.fields[field]
+  if (!f || f.lastSpray < 0) return 'Got in before the first spray'
+  const days = s0.day - f.lastSpray
+  if (S.fieldInfo(c, field).protect < 0.35) return days <= 4 ? 'Rain washed the spray off' : `Sprayed ${days} days ago, worn off`
+  return 'Spray slows blight, it can\'t stop it all'
+}

@@ -59,7 +59,7 @@ export function rangeSays(range: { lo: number; hi: number }): string {
 
 // The spring loan, said under the pointer on Borrowed, and once a season as a note the first time it grows.
 export const BORROWED_SAYS = `This is the bank's spring loan. Wages and field work go on it until the crop sells, it costs no interest until the end of the year, and the crop's sales pay it back. Whatever is still owed then carries at ${F.pct(S.CREDIT_RATE)}.`
-export const LOAN_NOTE = 'Wages and field work go on the spring loan until the crop sells.'
+export const LOAN_NOTE = 'Costs go on the loan until the crop sells.'
 
 // Whether the loan's note is due now: in the season, the first time this year that what is borrowed grows (not the
 // spring loan's own start).

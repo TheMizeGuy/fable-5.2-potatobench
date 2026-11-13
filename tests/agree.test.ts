@@ -6,6 +6,7 @@ import * as S from '../src/sim/index.ts'
 import { waitingFor } from '../src/game/goals.ts'
 import { verdictSays } from '../src/ui/money-words.ts'
 import { personNow } from '../src/ui/now.ts'
+import { blightWhy } from '../src/ui/rules.ts'
 import { ticketPlace } from '../src/ui/ticket-words.ts'
 import { loadWorld } from '../tools/balance/world.ts'
 
@@ -78,7 +79,7 @@ describe('what the game says agrees with what the farm holds', () => {
         if (/^Planting:/.test(w.title)) expect(S.plantWordGiven(s), at).toBe(true)
       })
     }
-    expect([...said].some(t => /next spray/.test(t))).toBe(true)
+    expect([...said].some(t => /decision is a spray/.test(t))).toBe(true)
   })
 
   it('the year-end figure\'s reason names a vine kill, a test dig or tubers setting only on the day it happened', () => {
@@ -122,6 +123,23 @@ describe('what the game says agrees with what the farm holds', () => {
       })
     }
     expect(tickets).toBeGreaterThan(8)
+  })
+
+  it('blight found where the crew keeps the fields sprayed says why it got in, by how the leaf stood', () => {
+    const c = S.createCampaign(world, { seed: 7, startYear: 1990 })
+    expect(S.apply(world, c, { t: 'begin' }).ok).toBe(true)
+    const s = c.season!
+    const i = s.fields.findIndex((f, k) => S.isField(c, k) && f.status !== 'rest' && f.status !== 'off')
+    // The player sprays for themselves: nothing is added, they know when they sprayed.
+    expect(blightWhy(c, i)).toBe('')
+    expect(S.apply(world, c, { t: 'sprayWay', way: 'auto' }).ok).toBe(true)
+    expect(blightWhy(c, i)).toBe('Got in before the first spray')
+    s.fields[i].lastSpray = s.day - 9; s.fields[i].residue = 0.1
+    expect(blightWhy(c, i)).toBe('Sprayed 9 days ago, worn off')
+    s.fields[i].lastSpray = s.day - 2
+    expect(blightWhy(c, i)).toBe('Rain washed the spray off')
+    s.fields[i].residue = 0.8
+    expect(blightWhy(c, i)).toBe('Spray slows blight, it can\'t stop it all')
   })
 
   it('a year that ends owing says "in debt", and keeps "down" for cash against the year\'s start', () => {
