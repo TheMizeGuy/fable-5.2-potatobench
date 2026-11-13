@@ -106,6 +106,9 @@
 .notes.alerts .alert.hint { max-width: 420px; }
 .notes.alerts .alert.hint .i { color: var(--ink); }
 .notes.alerts .alert .close { margin: -8px -12px -8px 2px; }
+/* An alert whose remedy is one press carries it as a key of its own. */
+.notes.alerts .alert.has-key { max-width: 460px; }
+.notes.alerts .alert .alert-key { flex: none; margin: -2px -6px -2px auto; white-space: nowrap; }
 @media (hover: hover) { .notes.alerts button.alert:hover { box-shadow: var(--laid), inset 0 0 0 1px var(--ink); } .notes.alerts button.alert.bad:hover { box-shadow: var(--laid), inset 5px 0 0 var(--red), inset 0 0 0 1px var(--ink); } }
 @keyframes slip-up { from { transform: translateY(14px); } }
 
