@@ -669,6 +669,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     if (a.type === 'incident' && typeof a.data?.incident === 'number') { const id = a.data.incident; return () => incident.open(id) }
     // Frost on the barrels: the haul of the biggest pile first, today.
     if (a.type === 'frostBarrels') return () => { const h = app.campaign ? S.haulInfo(app.world, app.campaign).sort((x, y) => y.cwt - x.cwt)[0] : undefined; if (h) app.haulAhead(h.field) }
+    if (a.type === 'barrelsOut' && a.field >= 0) { const field = a.field; return () => app.haulAhead(field) }
     // Someone idle with work waiting that they are set never to do: the press lets them, last in their order.
     if (a.type === 'idleNever' && unit >= 0 && typeof a.data?.work === 'string') {
       const work = a.data.work as S.Skill

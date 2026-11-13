@@ -476,9 +476,13 @@ export class App {
   }
 
   // A right-click (or a long press) on a field: with someone picked, an order to them; otherwise the field's own order.
+  // With nobody picked and nothing to order, the answer also says how to send someone.
   orderAt(field: number): OrderResult {
-    const r = this.unit >= 0 && this.campaign?.season ? this.sendTo(field, this.unit) : this.smartOrder(field)
-    return r.ok ? r : { ...r, err: this.tooEarly(field) || r.err }
+    const picked = this.unit >= 0 && !!this.campaign?.season
+    const r = picked ? this.sendTo(field, this.unit) : this.smartOrder(field)
+    if (r.ok) return r
+    const err = this.tooEarly(field) || r.err
+    return { ...r, err: picked || this.campaign?.phase !== 'season' ? err : `${err} To send someone here, select them first.` }
   }
 
   // Why a field that is to grow potatoes cannot be planted yet, or '': the season has not begun, or the soil is cold.

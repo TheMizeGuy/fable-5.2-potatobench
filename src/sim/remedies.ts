@@ -75,12 +75,13 @@ function dedupe(out: Remedy[]): Remedy[] {
 }
 
 // Why nobody takes the work, person by person: "You're resting, worn out, and Lucien is set never to drive."
-export function heldUpBy(c: Campaign, kind: JobKind): string {
+// dayOff: whether a day off holds the job up (a frost haul goes out Sunday or not).
+export function heldUpBy(c: Campaign, kind: JobKind, dayOff = true): string {
   const s = c.season
   if (!s) return ''
   const skill = jobSkill(kind)
   const parts: string[] = []
-  if (!workday(c, s)) parts.push('it\'s a Sunday off')
+  if (dayOff && !workday(c, s)) parts.push('it\'s a Sunday off')
   if (skill === 'machine' && tractorsRunning(c, s.day) === 0) parts.push('the tractor is broken down')
   for (const u of c.crew) {
     if (u.foreman) parts.push(`${who(u, 'you\'re', 'is')} a foreman`)
