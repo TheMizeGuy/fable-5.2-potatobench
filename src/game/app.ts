@@ -1,6 +1,6 @@
 // The running game: owns the campaign, the clock, the selection and the orders, saving, and tells the views what changed.
 import {
-  apply, climateWorld, createCampaign, fieldInfo, fieldNeeds, isFarmYear, seasonDone, startYears, FARM_YEAR0,
+  advise, apply, climateWorld, createCampaign, fieldInfo, fieldNeeds, isFarmYear, seasonDone, startYears, FARM_YEAR0,
   type Advice, type Campaign, type Cmd, type GameEvent, type JobKind, type Phase, type Result, type World,
 } from '../sim/index.ts'
 import type { Pointing, Thing } from './contracts.ts'
@@ -56,6 +56,7 @@ export type AppEvent =
   | { type: 'yard'; yard: number }
   | { type: 'focus'; field: number }
   | { type: 'order'; kind: JobKind; fields: number[] }
+  | { type: 'sent'; field: number; kind: JobKind; unit: number }
   | { type: 'alert'; alert: Alert }
   | { type: 'speed'; speed: Speed }
   | { type: 'settings' }
@@ -443,19 +444,41 @@ export class App {
     return out
   }
 
-  // Gives a field the order reference practice has for it now, if it has one.
+  // Gives a field the order reference practice has for it now, if it has one. With someone picked it is theirs.
   smartOrder(field: number): OrderResult {
+    if (this.unit >= 0 && this.campaign?.season) return this.sendTo(field, this.unit)
     const need = this.needs()[field]?.need
-    // With someone picked, a field the routine is seeing to is theirs to go and do: its order on the list goes to them.
-    const c = this.campaign
-    const mine = !need && this.unit >= 0 && c?.season ? c.season.jobs.find(j => j.field === field && j.unit < 0 && j.by !== 'you') : undefined
-    if (mine && c) {
-      const r = this.do({ t: 'assign', id: mine.id, unit: this.unit })
-      return r.ok ? { field, ok: true, err: '' } : { field, ok: false, err: r.err }
-    }
     if (!need) return { field, ok: false, err: this.needs()[field]?.hold?.why ?? 'Nothing needs doing here right now.' }
     if (need.act === 'sell' || need.act === 'close' || need.act === 'wait') return { field, ok: false, err: need.text }
     return this.order(need.act, { fields: [field] })[0]
+  }
+
+  // The most useful work a field has now that this person can do, given to them: the suggested order, then work on the
+  // list nobody is named for, then what the routine would put on the list. Otherwise why not, in one sentence.
+  private sendTo(field: number, unit: number): OrderResult {
+    const c = this.campaign!
+    const s = c.season!
+    const { need, hold } = this.needs()[field] ?? { need: null, hold: null }
+    const job = (a: Advice | null): a is Advice & { act: JobKind } => !!a && a.act !== 'wait' && a.act !== 'sell' && a.act !== 'close'
+    const tries: { kind: JobKind; id?: number }[] = [
+      ...(job(need) ? [{ kind: need.act }] : []),
+      ...s.jobs.filter(j => j.field === field && j.unit < 0 && j.kind !== 'build').map(j => ({ kind: j.kind, id: j.id })),
+      ...advise(this.world, c).filter(a => a.field === field && job(a) && a.act !== need?.act).map(a => ({ kind: a.act as JobKind })),
+    ]
+    let err = ''
+    for (const t of tries) {
+      const r = t.id !== undefined ? this.do({ t: 'assign', id: t.id, unit }) : this.order(t.kind, { fields: [field], unit })[0]
+      if (r.ok) {
+        this.emit({ type: 'sent', field, kind: t.kind, unit })
+        return { field, ok: true, err: '' }
+      }
+      err ||= r.err
+    }
+    const named = s.jobs.find(j => j.field === field && j.unit >= 0 && j.kind !== 'build')
+    const who = named ? c.crew.find(u => u.id === named.unit) : undefined
+    const has = !who ? '' : who.kind === 'farmer' ? 'You already have' : who.id === unit ? 'They already have' : `${who.name.split(' ')[0]} already has`
+    if (!err && has) err = `${has} this field's work on the work list.`
+    return { field, ok: false, err: err || (need ? need.text : hold?.why ?? 'Nothing needs doing here right now.') }
   }
 
   // ---------------------------------------------------------------- the clock
