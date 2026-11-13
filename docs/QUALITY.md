@@ -755,11 +755,35 @@ under half a millisecond in the interface, except:
   neither stand on the free land nor point at the field are passed over untried (`spot` in `src/ui/plates.ts`);
 - **a day's turn**: the day itself (4 to 7 ms with what listens to it), the land made again (3 to 4) and the
   interface drawn again (10 to 25, most of it the browser's own style and layout after the boards, the tags and
-  the cards are rebuilt) fell in one frame. The interface now draws a day's turn on the frame after it.
+  the cards are rebuilt) fell in one frame. See the next part.
 
-With the page's thread slowed four times every state misses frames (the picture alone is then 11 to 20 ms a
-frame of the page's work), and a day's turn is a frame of 100 to 250 ms. That is not mended here: it wants the
-picture sent in fewer calls and the interface redrawn in parts.
+#### A day's turn, a part a frame
+
+Read by function with the page's thread slowed four times (`flow.ts --turns --profile` on a build made with
+`--minify false`), a day's turn was mostly not the day. The next day was played out on a copy of the farm three
+times over: `jobOutlook` once for the time book, again inside `pressing` for the same caller, and a third time
+for the board's calls, the first two in the day's own frame because the note that says when the vines will be
+killed asked for them there. Each is a copy of the whole farm and a day of the simulation.
+
+- `jobOutlook` asked again of a farm that has not changed answers from its last reckoning (the farm as text is
+  the key, so nothing can be stale), and `pressing` takes the outlook its caller has (`src/sim/outlook.ts`). The
+  kill-date note asks only for those dates (`killsAhead`), which need no day played out.
+- With the clock running a day's turn is spread over the frames after it: the day itself; the land made again
+  (`rebuild` in `src/render/index.ts` waits one frame); then the screen a part a frame (`drawn` in
+  `src/ui/season.ts`, stepped by `src/ui/index.ts`): the orders' fates, the boards, the tags, the time book, the
+  pins, the cards, the grid and telegram with the insets. Anything else that changes meanwhile draws the whole at
+  once as before, and with the clock stopped nothing is spread.
+- The save waits until well into a day (`tick` in `src/game/app.ts`).
+
+Days never come several to a frame (a day at 8x is about 48 frames; `tick` allows three only after a stall).
+
+On mizepc2 with other suites running beside it (no quiet run was to be had): at full speed every frame of a turn
+is 4 to 13 ms of the page's work at 1x, 3x and 8x and none loses a beat; with a field card open the last part
+(the insets measured after the last writes) is 13 to 24 ms on some turns. Slowed four times a turn's frames are
+20 to 47 ms of work, the worst 58 (before: two frames of 59 to 73 on a quiet box), so beats are still lost there:
+the boards' part alone is 15 to 26 ms slowed, and the picture's own 15 to 21 leaves it no room. Not mended: the
+boards drawn in two parts, and the picture's upkeep (three.js composes and multiplies the matrix of each of the
+4,308 things every frame, about a sixth of the page's work in the profile, though almost none of them move).
 
 ## Wave three: bugs and UX, checked by players who see only pictures
 

@@ -767,6 +767,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     yield
     units.update(c)
     laps.end('interface: time book, list')
+    yield
     people.update(c)
     laps.end('interface: pins drawn')
     yield
