@@ -77,8 +77,9 @@ async function see(page: Page): Promise<Seen> {
     const driving = vis(drive) ? drive : null
     const text = `${read(screen)} | ${land} | ${slip && !slip.classList.contains('guide-card') ? read(slip) : ''}${driving ? ` | ${read(driving)}` : ''}`
     const unit = Number(driving?.dataset.unit ?? -1)
-    // The one the guide is showing: their pin on the land, drawn and wholly inside the window.
-    const pinIn = unit >= 0 && [...ui.querySelectorAll<HTMLElement>(`.plate-layer [data-testid="pin-${unit}"]`)].some(p => {
+    // The one the guide is showing: their pin on the land (a point; its face is the box), drawn and wholly inside
+    // the window.
+    const pinIn = unit >= 0 && [...ui.querySelectorAll<HTMLElement>(`.plate-layer [data-testid="pin-${unit}"] .head`)].some(p => {
       const r = p.getBoundingClientRect()
       return r.width > 0 && r.height > 0 && p.checkVisibility({ opacityProperty: true, visibilityProperty: true } as CheckVisibilityOptions) && r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight
     })
@@ -896,32 +897,30 @@ test('a note\'s keys work from the first frame it is shown, and a double-click a
   await expect(note(page, 'tend')).toBeVisible()
   await page.waitForTimeout(700)
   await expect(note(page, 'tend')).toBeVisible()
-  // Planting day's note again (replayed) behind this one, read with one press: on the frame it comes, the point at
-  // the middle of its Got it is that key.
+  // Planting day's note again (replayed: it takes the summer's place, which waits on it): on the frame it comes, the
+  // point at the middle of its Got it is that key.
   const firstFrame = await page.evaluate(() => new Promise<{ hit: boolean; x: number; y: number; dim: string; key: string }>(resolve => {
     ;(globalThis as unknown as Win).__countyGuide.replay('plantday')
-    const wait = () => {
-      const got = document.querySelector<HTMLElement>('#ui [data-testid="guide-slip"][data-lesson="tend"]:not([hidden]) [data-testid="guide-noted"]')
-      if (!got) { requestAnimationFrame(wait); return }
-      got.click()
-      const look = () => {
-        const slip = document.querySelector<HTMLElement>('#ui [data-testid="guide-slip"][data-lesson="plantday"]:not([hidden])')
-        const key = slip?.querySelector<HTMLElement>('[data-testid="guide-noted"]')
-        if (!key) { requestAnimationFrame(look); return }
-        const r = key.getBoundingClientRect()
-        const x = r.left + r.width / 2, y = r.top + r.height / 2
-        const at = document.elementFromPoint(x, y)
-        resolve({ hit: !!at && key.contains(at), x, y, dim: getComputedStyle(key.closest('.guide-foot')!).pointerEvents, key: key.dataset.testid ?? '' })
-      }
-      requestAnimationFrame(look)
+    const look = () => {
+      const slip = document.querySelector<HTMLElement>('#ui [data-testid="guide-slip"][data-lesson="plantday"]:not([hidden])')
+      const key = slip?.querySelector<HTMLElement>('[data-testid="guide-noted"]')
+      if (!key) { requestAnimationFrame(look); return }
+      const r = key.getBoundingClientRect()
+      const x = r.left + r.width / 2, y = r.top + r.height / 2
+      const at = document.elementFromPoint(x, y)
+      resolve({ hit: !!at && key.contains(at), x, y, dim: getComputedStyle(key.closest('.guide-foot')!).pointerEvents, key: key.dataset.testid ?? '' })
     }
-    requestAnimationFrame(wait)
+    requestAnimationFrame(look)
   }))
   expect(firstFrame.dim, 'the keys take presses').not.toBe('none')
   expect(firstFrame.hit, 'the key is under the pointer on its first frame').toBe(true)
-  // And a press there, at once, is taken: the note goes, and the guide sets the days going.
+  // And a press there, at once, is taken: the note goes and the summer's comes back; put away, the guide sets the
+  // days going.
   await page.mouse.click(firstFrame.x, firstFrame.y)
   await expect(note(page, 'plantday')).toHaveCount(0)
+  await expect(note(page, 'tend')).toBeVisible()
+  await page.waitForTimeout(600)
+  await note(page, 'tend').getByTestId('guide-noted').click()
   await expect.poll(() => game<number>(page, 'app.speed'), { timeout: 5000 }).toBeGreaterThan(0)
   expect(errors, errors.join('\n')).toEqual([])
 })
