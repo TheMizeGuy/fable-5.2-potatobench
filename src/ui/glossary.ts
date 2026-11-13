@@ -63,10 +63,6 @@ export const GLOSSARY: Record<string, string> = {
   'tuber blight': 'Late blight that got into the potatoes themselves, washed down from the leaves. They rot, so they\'re culled.',
   'too small': 'Potatoes too small to grade. They go to the starch factory with the culls.',
   'stone bruise': 'Bruises from the digger knocking potatoes against stones. They drop to US No. 2.',
-  'tracts': 'Woods, brush or rough ground that the farm owns or can buy. Once it\'s felled, cleared of stumps and picked clean of rocks, it becomes a new field.',
-  'cellar months': 'November to April, while your crop is in storage. You can sell it as prices move, and keep people on to fell trees, pack or build.',
-  prone: 'Likely to get it: a variety prone to blight is easily infected.',
-  resists: 'Holds out against it: a variety that resists blight rarely gets it badly.',
 }
 
 let seq = 0
