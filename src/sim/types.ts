@@ -378,6 +378,8 @@ export interface Campaign {
   crew: Unit[]              // the farmer first, then hired units in the order hired
   nextUnit: number
   applicants: Applicant[]   // this spring's people asking for work, until the season begins
+  // What this spring's plan bought and hired, which can be taken back until the season begins (absent: nothing).
+  spring?: { bought: { upgrade: UpgradeId; building?: number }[]; hired: { unit: number; applicant?: Applicant }[] }
   sundaysOff: boolean       // the farm rule: nobody works Sundays
   logs: number              // loads of logs in the yard
   stone: number             // loads of fieldstone in the yard
@@ -424,6 +426,8 @@ export type Cmd =
   | { t: 'hire'; kind: UnitKind }
   | { t: 'hire'; applicant: number }
   | { t: 'dismiss'; unit: number }
+  | { t: 'unbuy'; upgrade: UpgradeId }
+  | { t: 'unhire'; unit: number }
   | { t: 'raise'; unit: number; wage: number }
   | { t: 'priority'; unit: number; work: Skill; level: number }
   | { t: 'foreman'; unit: number; block: BlockId | null }

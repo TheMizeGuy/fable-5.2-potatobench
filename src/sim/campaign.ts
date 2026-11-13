@@ -316,6 +316,11 @@ export function pickersWindow(c: Campaign): boolean {
 }
 
 // Puts a new person on the books: in season their first month is paid now; in spring it is part of the plan.
+// This spring's purchases and hires, kept so they can be taken back until the season starts.
+function springOf(c: Campaign): NonNullable<Campaign['spring']> {
+  return (c.spring ??= { bought: [], hired: [] })
+}
+
 function takeOn(c: Campaign, u: Unit): GameEvent {
   if (c.phase === 'season' && c.season) {
     const pay = payOf(u)
@@ -692,9 +697,26 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
       c.cash -= u.cost
       c.yearCosts += u.cost
       c.upgrades[cmd.upgrade] = true
+      const bought: { upgrade: UpgradeId; building?: number } = { upgrade: cmd.upgrade }
       // A contractor puts up the second potato house at once.
-      if (cmd.upgrade === 'house2') c.buildings.push({ id: c.nextBuilding++, kind: 'house', yard: HOME_YARD, done: P.BUILDINGS.house.days, need: P.BUILDINGS.house.days, built: true })
-      return ok()
+      if (cmd.upgrade === 'house2') {
+        bought.building = c.nextBuilding
+        c.buildings.push({ id: c.nextBuilding++, kind: 'house', yard: HOME_YARD, done: P.BUILDINGS.house.days, need: P.BUILDINGS.house.days, built: true })
+      }
+      springOf(c).bought.push(bought)
+      return ok([note(c, 'bought', 'info', `You bought the ${u.name.toLowerCase()} for $${withCommas(u.cost)}. You can undo this until the season starts.`)])
+    }
+    case 'unbuy': {
+      const k = c.phase === 'plan' ? c.spring?.bought.findIndex(b => b.upgrade === cmd.upgrade) ?? -1 : -1
+      if (k < 0) return fail(c.phase === 'plan' ? 'That wasn\'t bought this spring, so it can\'t be undone.' : 'A purchase can only be undone in spring, before the season starts.')
+      if (cmd.upgrade === 'tractor2' && c.upgrades.tractor3) return fail('Undo the third tractor first.')
+      const u = P.UPGRADES[cmd.upgrade]
+      const b = c.spring!.bought.splice(k, 1)[0]
+      c.cash += u.cost
+      c.yearCosts -= u.cost
+      c.upgrades[cmd.upgrade] = false
+      if (b.building !== undefined) c.buildings = c.buildings.filter(x => x.id !== b.building)
+      return ok([note(c, 'unbought', 'info', `You took back the ${u.name.toLowerCase()}, and the $${withCommas(u.cost)} is back in your cash.`)])
     }
     case 'answer': {
       const s = c.season
@@ -827,6 +849,7 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
       c.yearWages += pc.wages
       c.offers = []
       c.applicants = []
+      delete c.spring
       startSeason(world, c)
       c.phase = 'season'
       return ok()
@@ -838,11 +861,24 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
         const a = c.applicants.find(x => x.id === cmd.applicant)
         if (!a) return fail(c.phase === 'plan' ? 'No such applicant.' : 'The people who asked for work in spring have found other work.')
         c.applicants = c.applicants.filter(x => x !== a)
-        return ok([takeOn(c, fromApplicant(c, a))])
+        const u = fromApplicant(c, a)
+        if (c.phase === 'plan') springOf(c).hired.push({ unit: u.id, applicant: a })
+        return ok([takeOn(c, u)])
       }
       const why = hireBlock(c, cmd.kind)
       if (why) return fail(why)
-      return ok([takeOn(c, newUnit(c, cmd.kind as 'hand' | 'operator'))])
+      const u = newUnit(c, cmd.kind as 'hand' | 'operator')
+      if (c.phase === 'plan') springOf(c).hired.push({ unit: u.id })
+      return ok([takeOn(c, u)])
+    }
+    case 'unhire': {
+      const k = c.phase === 'plan' ? c.spring?.hired.findIndex(x => x.unit === cmd.unit) ?? -1 : -1
+      const u = c.crew.find(x => x.id === cmd.unit)
+      if (k < 0 || !u) return fail(c.phase === 'plan' ? 'They weren\'t hired this spring, so it can\'t be undone.' : 'A hire can only be undone in spring, before the season starts.')
+      const h = c.spring!.hired.splice(k, 1)[0]
+      removePerson(c, u)
+      if (h.applicant) c.applicants.push(h.applicant)
+      return ok([note(c, 'unhired', 'info', `${u.name} isn't hired after all, and no wages are owed.`)])
     }
     case 'dismiss': {
       if (c.phase !== 'plan' && c.phase !== 'season') return fail('You can let people go in spring or during the season.')
