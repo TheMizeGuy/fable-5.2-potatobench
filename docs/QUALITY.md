@@ -668,7 +668,7 @@ what a machine is seen at it for in the five seconds after):
 | killing the vines | 85%, 57% | 83%, 57% | 82%, 66% | 100% | 789 |
 | digging, the digger | 80%, 67% | 66%, 49% | 63%, 46% | 100% | 526 |
 | digging, the harvester | 80%, 68% | 80%, 71% | 68%, 47% | 94% | 460 |
-| hauling, with the truck | to be seen 53%, at the field 40% | 54%, 49% | 36%, 26% | 95% | 2890 |
+| hauling, with the truck | to be seen 53%, at the field 40% | 54%, 49% | 36%, 26% | 95% | **60 to 160** |
 | felling | whoever fells at the tract 100% | 83% | 83% | 96% | 615 |
 | stumping (a contractor) | | | | | 374 |
 
@@ -678,7 +678,9 @@ tractor bringing in what it dug counts. The machine goes 8 m/s along the rows fr
 pixels a second) and 2.3 to 3 m/s under Follow. No step that nobody could make at any clock; a way is cut 5 to 23
 times in a run. The far mark is the pixels of the field's picture, from the opening view on a fair dry afternoon, that
 differ by more than a tenth with the people, machines and what they leave in the air taken out (floor 300; the
-machine itself is 5 to 9 pixels long). The check has 42 lines and all hold; at `05b7f52` 27 of them fail: every
+machine itself is 5 to 9 pixels long). **Hauling's far mark is under the floor**: 151, 127 and 160 with the load
+standing at the field and 107 and 60 as it pulls in, over five runs; readings of 552 to 2890 in earlier runs were
+the digger's dust in the same field. The check has 42 lines and 41 hold; at `05b7f52` 27 of them fail: every
 kind of row work at every clock from the opening view, hauling at 1x, five of the seven Follows with a machine,
 and the far mark of planting, felling and stumping (felling, on foot, was seen where it was).
 `tests/seen.test.ts` runs the people and machines without a picture and holds the same at each clock, and that a
@@ -694,7 +696,9 @@ are what they were: 0.33 in the playing view, 0.31 from the yard tier, 0.31 leve
 over a crop, 0.44 from the closest in the yard; the crop's leaves 1.22 (0.86 in front). The opening shot's machine
 is drawn as it was (no far signs there: its camera comes down to what it first saw from far off).
 
-**What it does not do.** In rain and fog the far signs are the lamps and the face the interface pins to whoever
+**What it does not do.** A load at the field's end is not found from the opening view by anything of its own but
+the face pinned to whoever hauls: the truck, its barrels and the smoke of its engine change 60 to 160 pixels. In
+rain and fog the far signs are the lamps and the face the interface pins to whoever
 works: the far mark there is under the floor. With one tractor the crop is handed up by the barrel at the field's
 end while the tractor digs, and a load is seen on the lane only once there is a machine for it. A feller under the
 boughs of the next tree to fall is hidden by them, from the side and from above. At 8x the picture is of what the

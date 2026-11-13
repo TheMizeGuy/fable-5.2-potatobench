@@ -891,6 +891,8 @@ export class Crews {
           this.driveTo(r, w.rig.x, w.rig.z, w.rig.heading, moved, f.dt, true)
           r.state.load = w.rig.load
           r.state.kind = 'haul'
+          // (standing to be loaded or unloaded with its engine running: the smoke over it is seen from far off)
+          if (!w.aboard && going) r.state.working = 1
           if (r.kind === 'tractor') (r.machine as Tractor).setImplement('trailer')
         }
         if (a.aboard) return
