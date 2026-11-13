@@ -6,7 +6,7 @@ import { App } from '../src/game/app.ts'
 import { Crews, type PendingReveal } from '../src/render/units.ts'
 import { copyEnv, envTarget, makeEnv } from '../src/render/env.ts'
 import type { HillDisplay } from '../src/render/fields.ts'
-import { FIELDS } from '../src/render/layout.ts'
+import { FIELDS, fieldAt } from '../src/render/layout.ts'
 import { Particles } from '../src/render/particles.ts'
 import { snapshot, type Snapshot } from '../src/render/state.ts'
 import * as sim from '../src/sim/index.ts'
@@ -33,6 +33,22 @@ function start(farm: Farm): App {
   return app
 }
 
+// The machine work of the first day on which two people each have hours of this kind on one machine: who, where and
+// from when, in the order of the hours; and how many days go by before it.
+export function sharedDay(kind: string, farm: Farm = {}): { days: number; turns: { unit: number; field: number; from: number }[] } {
+  const app = start(farm), c = app.campaign!
+  for (let n = 1; n < 240 && c.phase === 'season' && !sim.seasonDone(c); n++) {
+    c.incidents = []
+    app.do({ t: 'day' })
+    const did = c.season!.worked.filter(w => w.kind === kind && !!w.machine).sort((a, b) => (a.from ?? 0) - (b.from ?? 0))
+    for (const w of did) {
+      const same = did.filter(x => x.machine === w.machine)
+      if (new Set(same.map(x => x.unit)).size > 1) return { days: n, turns: same.map(x => ({ unit: x.unit, field: x.field, from: x.from ?? 0 })) }
+    }
+  }
+  return { days: 0, turns: [] }
+}
+
 // How many days go by on this farm before a kind of work is first done (0: never).
 export function firstDay(kind: string, farm: Farm = {}): number {
   const app = start(farm), c = app.campaign!
@@ -57,14 +73,19 @@ export interface Seen {
   fields: number[]
   work: [number, number]   // how many times someone's day had this work in it, at the start and by the end
   lead: number             // metres the first to set out was seen to go, step by step, before the first day was counted
+  turns: string[]          // who was seen at this work on a machine, and in which field, in the order seen: '1@0', '0@2'
+  afoot: number            // seconds someone was seen at a machine's row work with no machine under them
+  waited: number           // seconds someone was seen waiting for a machine someone else had
+  rowsWaiting: number      // metres those waiting were seen to go along a field's rows
   trace: string[]
 }
 
 // Runs the days at a clock speed from the evening before `kind` is first done, and says what was seen of it.
 // foot: the work is done on foot (the one doing it is watched, not a machine); dist: how far off the camera is.
-export function watch(kind: string, speed: 1 | 2 | 3, opts: { farm?: Farm; seconds?: number; dist?: number; foot?: boolean; headZ?: number; grace?: number; pauseAt?: number } = {}): Seen {
+// from: the day to begin on the evening before, in place of the first day the work is done.
+export function watch(kind: string, speed: 1 | 2 | 3, opts: { farm?: Farm; seconds?: number; dist?: number; foot?: boolean; headZ?: number; grace?: number; pauseAt?: number; from?: number } = {}): Seen {
   const farm = opts.farm ?? {}, dist = opts.dist ?? 450, grace = opts.grace ?? [5, 5, 4.5, 3.5][speed], headZ = opts.headZ ?? HEAD.z
-  const days = firstDay(kind, farm)
+  const days = opts.from ?? firstDay(kind, farm)
   if (!days) throw new Error(`nobody ever does ${kind}`)
   const app = start(farm), c = app.campaign!
   for (let n = 0; n < days - 1; n++) { c.incidents = []; app.do({ t: 'day' }) }
@@ -108,7 +129,7 @@ export function watch(kind: string, speed: 1 | 2 | 3, opts: { farm?: Farm; secon
   }
 
   const dt = 1 / 60
-  const out: Seen = { seconds: 0, atWork: 0, working: 0, busy: 0, path: 0, along: 0, moving: 0, jumps: [], cuts: 0, fields: [], work: [NaN, NaN], lead: 0, trace: [] }
+  const out: Seen = { seconds: 0, atWork: 0, working: 0, busy: 0, path: 0, along: 0, moving: 0, jumps: [], cuts: 0, fields: [], work: [NaN, NaN], lead: 0, trace: [], turns: [], afoot: 0, waited: 0, rowsWaiting: 0 }
   const fields = new Set<number>()
   let since = Infinity, begun = false, time = 0, lastTrace = -1
   const was = new Map<string, { x: number; z: number; fade: number }>()
@@ -145,6 +166,14 @@ export function watch(kind: string, speed: 1 | 2 | 3, opts: { farm?: Farm; secon
     // (a build that does not say who is gone from sight, or what a machine is at: nobody is, and it is not said)
     for (const p of [...w.units, ...w.rigs]) p.fade ??= 1
     for (const r of w.rigs) { r.work ??= ''; r.tool ??= '' }
+    // whose turn on a machine is seen, and what those without one are seen at
+    for (const r of w.rigs) if (r.work === kind && r.holder >= 0 && r.fade >= 0.5 && fieldAt(r.x, r.z) >= 0) { const t = `${r.holder}@${fieldAt(r.x, r.z)}`; if (out.turns[out.turns.length - 1] !== t) out.turns.push(t) }
+    for (const u of w.units) {
+      if (u.fade < 0.5) continue
+      if (u.doing === 'rows' && u.foot) out.afoot += dt
+      const b = was.get(`person ${u.id}`)
+      if (u.doing === 'wait') { out.waited += dt; if (b && fieldAt(u.x, u.z) >= 0 && Number.isFinite(b.x)) out.rowsWaiting += Math.abs(u.x - b.x) }
+    }
     const last = new Map<object, { x: number; z: number }>()
     w.rigs.forEach((r, k) => { const b = was.get(`${r.kind} ${k}`); if (b) last.set(r, b) })
     // steps nobody could make (someone gone from sight through a cut is not seen to make one)

@@ -36,15 +36,25 @@ const STAGE_DRIVE_S = 0.5
 const STAGE_S = { sample: 2, dig: 0.8 }
 const SAMPLE_S = 1
 // The way to a part of the day's work is seen on a clock of its own, whatever the game's clock is doing, for no longer
-// than this at each clock setting (seconds): the day is not held for it, and the work at the far end is what is to be
-// seen. (A day lasts four seconds at 1x, a second and a third at 3x, half a second at 8x.)
+// than this at each clock setting (seconds; and the walk to a machine someone else left, HAND_S at most): the day is not
+// held for it, and the work at the far end is what is to be seen. (A day lasts four seconds at 1x, a second and a
+// third at 3x, half a second at 8x.)
 const WAY_MOST = [2.4, 2.4, 1.5, 1.1]
+// A cut way shorter than this (metres) is seen for less, in proportion, down to this share of the time; so is the
+// rest of the way of someone who had set out for the work before its day was counted.
+const WAY_FULL = 200, WAY_SHORT = 0.6, WAY_LED = 0.7
 // The walk in from the road of someone who has been off the farm, as a share of a day's length.
 const ARRIVE = 0.5
 // Each part of a day's work is seen for at least this long at each clock setting (seconds) before whoever does it
 // goes on: a machine's passes at a pace the eye can follow, however fast the days go by. The picture then falls
 // behind the days; what was not seen is passed over, and the newest work is what is shown next.
 const WORK_LEAST = [4.4, 4.4, 3.2, 2.6]
+// The longest anyone stands waiting for a machine that whoever has it has not been seen to let go (seconds): then it
+// is taken as it stands.
+const WAIT_MOST = 9
+// Between the parts of a day (a wait for a machine, the day's work done) their own clock runs on at no less than
+// this many days a second: the wait itself is seen for as long as the machine is seen elsewhere.
+const GAP_RATE = 2.5
 // On the way to an order before its day has been counted: no faster than this (m/s at 1x), and never cut.
 const LEAD_PACE = 13
 // A walk to the machine is seen for no longer than this (seconds); a longer one is cut to its setting off.
@@ -56,8 +66,12 @@ const WAY_STAGED: Record<string, [number, number]> = { sample: [0.6, 0.75], dig:
 // A way too long to go at a pace the eye can follow is cut: they pull away for this share of the time, and are next
 // seen coming in over the last stretch.
 const WAY_LEAD = 0.3
-// (someone coming in by the road is seen on it for half the time)
+// (someone coming in by the road is seen on it for half the time; a machine taken where it was left, pulling away)
 const WAY_LEAD_IN = 0.5
+const WAY_TAKEN = 0.42
+// Taking over a machine someone else has left: seconds seen going to it at 1x, and how much of a way's time the drive
+// away with it then has.
+const HAND_S = 1, HAND_DRIVE = 0.85
 // How much quicker than the clock the day's work is seen through by someone behind it.
 const CATCH_UP = 1.6
 // The fastest anyone is seen to go at 1x, catching up with where the day's script has them: on foot, and driving
@@ -74,6 +88,7 @@ export type PendingReveal = Reveal & { unit: number; seg: number; gen: number }
 interface Rig {
   kind: 'tractor' | 'truck'
   k: number                // which of its kind
+  key: string              // as the day's record names it today: 'tractor0', 'truck'
   machine: Tractor | Car
   x: number
   z: number
@@ -81,6 +96,7 @@ interface Rig {
   sx: number               // where it is seen: x, z go where the day's script puts it; sx, sz follow, never jumping
   sz: number
   holder: number           // the person who has it, or -1
+  last: number             // and who had it last, or -1
   home: Spot
   broken: boolean
   moved: number            // this frame
@@ -106,7 +122,8 @@ interface Actor {
   rig: Rig | null          // the machine in hand
   aboard: boolean
   shown: number
-  away: boolean            // laid off for the winter: not on the farm
+  away: boolean            // laid off for the winter, or home for a day off: not on the farm
+  leaving: boolean         // home for the day off once the work they are being seen at has been seen
   home: Spot | null        // their place in the dooryard or on the porch when there is nothing to do
   about: Pt                // what that place is spread out from when people are drawn large
   gait: number
@@ -139,31 +156,38 @@ interface Actor {
   hold: boolean            // a load of theirs is on its way in: the machine stays theirs until it is there
   queue: Queued | null     // the day after, waiting until this one's work has been seen
   works: number            // how many parts of the day they are seen at are work
+  keep: boolean            // the farm's day leaves them holding a machine (an order still theirs): they stay in its seat
+  wait: number             // seconds they have stood waiting for a machine someone else has
+  handed: boolean          // the machine in hand was someone else's before: the way to it and away with it is seen
+  doing: string            // this frame: 'wait' for a machine someone else has, 'rows' at a machine's row work, or ''
   waited: boolean          // the interface waits to see this day's work: it keeps the day's time
   lead: boolean            // on the way to an order ahead of its day's plan
+  led: boolean             // and was, when its plan came
   fade: number             // 1 as they are; less while they go from sight and come back where a way is cut
 }
 
 // waited: the interface is waiting to see this day's work (a test dig; the digging of a field whose crop is weighed)
-interface Queued { segs: Seg[]; gen: number; arrives: boolean; ride: Ride; waited: boolean }
+// keep: the day leaves them holding a machine
+interface Queued { segs: Seg[]; gen: number; arrives: boolean; waited: boolean; keep: boolean }
 
-// t of T seconds gone over L metres; cut: `lead` metres from the start are seen, then the last `reach` of them.
-// share: of the time, how much is the pulling away. walk: the first metres are on foot, for `afoot` of the time
-// (hop: only so many of them are seen: they set off for the machine, go from sight, and are next seen in its seat).
-// ramp: seconds getting up to pace and coming down from it.
+// t of T seconds gone over L metres. walk: the first metres are on foot, for `afoot` of the time (hop: only so many
+// of them are seen: they set off for the machine, go from sight, and are next seen in its seat). cut: of what is
+// left, `lead` metres from its start are seen, then the last `reach` of them; share: of its time, how much is the
+// pulling away. ramp: seconds getting up to pace and coming down from it.
 interface Way { t: number; T: number; L: number; reach: number; lead: number; cut: boolean; share: number; walk: number; afoot: number; hop: number; ramp: number }
 
 function wayAt(w: Way): number {
   const q = clamp(w.t / w.T, 0, 1)
+  if (w.afoot > 0 && q < w.afoot) { const r = q / w.afoot; return w.hop > 0 ? w.hop * r * r : w.walk * r * r * (3 - 2 * r) }
   if (!w.cut) {
-    if (w.afoot > 0 && q < w.afoot) { const r = q / w.afoot; return w.hop > 0 ? w.hop * r * r : w.walk * r * r * (3 - 2 * r) }
     // up to pace, at it, and down from it
     const T = w.T * (1 - w.afoot), t = (q - w.afoot) * w.T, D = w.L - w.walk, ta = Math.min(w.ramp, T / 2), v = D / Math.max(1e-6, T - ta)
     const s = t < ta ? (v * t * t) / (2 * ta) : t < T - ta ? v * (t - ta / 2) : D - (v * (T - t) * (T - t)) / (2 * ta)
     return w.walk + clamp(s, 0, D)
   }
-  if (q < w.share) { const r = q / w.share; return w.lead * r * (w.share > WAY_LEAD ? 1 : r) }
-  const r = (q - w.share) / (1 - w.share)
+  const from = w.afoot > 0 ? w.walk : 0, qc = (q - w.afoot) / (1 - w.afoot)
+  if (qc < w.share) { const r = qc / w.share; return from + w.lead * r * (w.share > WAY_LEAD ? 1 : r) }
+  const r = (qc - w.share) / (1 - w.share)
   return w.L - w.reach * (1 - w.share) * (1 - r) * (1 - r)
 }
 
@@ -299,9 +323,9 @@ export class Crews {
     const rest = idleSpot(-1, slot, u.kind === 'farmer')
     return {
       id: u.id, kind: u.kind, slot, dress: dressFor(u.id, false, u.name), coat: dressFor(u.id, true, u.name), segs: [], clockSeg: -2, segClock: 0,
-      x: rest.x, z: rest.z, sx: NaN, sz: NaN, heading: rest.heading, rig: null, aboard: false, shown: 0, away: false, home: null, about: DOORYARD_AT, gait: u.id * 1.3, goal: null, state: 'idle', post: '',
+      x: rest.x, z: rest.z, sx: NaN, sz: NaN, heading: rest.heading, rig: null, aboard: false, shown: 0, away: false, home: null, about: DOORYARD_AT, gait: u.id * 1.3, goal: null, state: 'idle', post: '', leaving: false,
       tired: u.tired, worn: u.tired, style: (u.id * 7) % 5, pose: new Pose().reset(), head: new Vector3(rest.x, 1, rest.z), scale: 1, next: [], u: 1, lastT: 1, ay: 2.2, arc: 0, arcSeg: null, beat: 0, line: null,
-      way: null, waySeg: null, came: null, worked: 0, siteKey: '', gen: 0, queue: null, arrived: false, rate: 1.6, hold: false, works: 0, waited: false, lead: false, fade: 1,
+      way: null, waySeg: null, came: null, worked: 0, siteKey: '', gen: 0, queue: null, arrived: false, rate: 1.6, hold: false, works: 0, keep: false, wait: 0, handed: false, doing: '', waited: false, lead: false, led: false, fade: 1,
       worker: { id: u.id, dress: dressFor(u.id, false, u.name), tired: 0, w: 0, x: rest.x, z: rest.z, heading: 0, lift: 0, pose: new Pose().reset(), aboard: false, rig: null, loads: 1, lit: false },
     }
   }
@@ -311,7 +335,7 @@ export class Crews {
     const home = machineHome(kind, k, this.shed, this.tractors)
     this.group.add(machine.group)
     return {
-      kind, k, machine, x: home.x, z: home.z, sx: NaN, sz: NaN, heading: home.heading, holder: -1, home, broken: false, moved: 0, turn: 0, fade: 1,
+      kind, k, key: kind === 'truck' ? 'truck' : `tractor${k}`, machine, x: home.x, z: home.z, sx: NaN, sz: NaN, heading: home.heading, holder: -1, last: -1, home, broken: false, moved: 0, turn: 0, fade: 1,
       state: { moved: 0, turn: 0, working: 0, kind: 'travel', driver: null, load: 0, far: 0 },
     }
   }
@@ -397,6 +421,8 @@ export class Crews {
       a.lead = false
       a.waited = false
       a.works = 0
+      a.keep = !!u.rig
+      a.wait = 0
       a.fade = 1
       a.clockSeg = -2
       a.u = a.lastT = 1
@@ -405,6 +431,7 @@ export class Crews {
       a.state = 'idle'
       a.goal = null
       a.away = false
+      a.leaving = false
       let r: Spot = snap.mode === 'season' ? (u.at < 0 ? idleSpot(u.at, a.slot, a.kind === 'farmer') : restAt(u.at, a.slot, true)) : idleSpot(-1, a.slot, a.kind === 'farmer')
       if (snap.mode === 'cellar') {
         // the cellar months: at the winter's work, or by the door with the wood to split
@@ -460,14 +487,11 @@ export class Crews {
       a.home = a.state === 'sunday' || (a.state === 'idle' && a.goal && u.at === -1 && a.kind !== 'farmer') ? a.goal : null
       a.about = a.state === 'sunday' ? PORCH_AT : DOORYARD_AT
       // Someone who lives out is not on the farm on a day off: they are back by the road with the next day's work.
-      a.away = snap.restDay && u.livesOut && a.state === 'sunday'
-      if (a.away) {
-        a.goal = null; a.home = null; a.x = OFF_FARM.x; a.z = OFF_FARM.z; a.shown = 0
-        // (the machine they had stands where they left it, with nobody in its seat)
-        if (a.rig) { a.rig.holder = -1; a.rig = null }
-        a.aboard = false
-        a.line = null
-      }
+      // (Seen at work still, or waiting their turn at it, with the clock running: they go once that has been seen.)
+      const off = snap.restDay && u.livesOut && a.state === 'sunday'
+      a.leaving = off && !a.away && !this.stopped && this.unseen(a)
+      if (off && !a.leaving) this.goHome(a)
+      else if (!off) a.away = false
     }
     // A tractor broken down: whoever was driving it (or else whoever has nothing to do) is at its engine.
     for (const r of this.rigs) {
@@ -483,43 +507,110 @@ export class Crews {
     }
   }
 
-  // Who has which machine today: those already in a seat keep it; the rest take the nearest that is free and runs.
-  private assign(snap: Snapshot): Map<number, Ride> {
-    const rides = new Map<number, Ride>()
-    const truck = this.rigs.find(r => r.kind === 'truck')
-    const hauls = (u: UnitVis) => u.worked.some(w => w.kind === 'haul') || u.job?.kind === 'haul'
-    for (const a of this.actors) {
-      const u = snap.units.find(w => w.id === a.id)!
-      const machine = u.worked.some(w => MACHINE_JOBS.has(w.kind)) || (u.to !== u.at && !!u.job && MACHINE_JOBS.has(u.job.kind)) || u.rig !== ''
-      let ride: Ride = !machine ? '' : u.rig || 'tractor'
-      // Still being seen at work with a machine (the picture is behind the days): it is theirs until that is seen.
-      const seeing = !this.stopped && !!a.rig && ((a.segs.length > 0 && (!!a.way || a.u < 0.9) && a.segs.some(s => s.kind !== 'travel' && s.ride === a.rig!.kind)) || !!a.queue?.segs.some(s => s.kind !== 'travel' && s.ride === a.rig!.kind))
-      if (!ride && seeing) ride = a.rig!.kind
-      if (ride === 'tractor' && !u.rig && truck && hauls(u) && (truck.holder < 0 || truck.holder === a.id) && !snap.units.some(o => o.id !== u.id && o.rig === 'truck')) ride = 'truck'
-      rides.set(a.id, ride)
-      if (a.rig && a.rig.kind !== ride && !a.hold) {
-        // down off it, and beside it
-        if (a.aboard) { a.x = a.rig.x - Math.sin(a.rig.heading) * 0.95 * TRUE_SIZE; a.z = a.rig.z + Math.cos(a.rig.heading) * 0.95 * TRUE_SIZE }
-        a.line = null
-        a.rig.holder = -1
-        a.rig = null
-        a.aboard = false
+  // Whether work of the day they are seen at has yet to be seen.
+  private unseen(a: Actor): boolean {
+    return a.segs.some(s => s.kind !== 'travel' && a.u < s.end)
+  }
+
+  // Off the farm for a day off.
+  private goHome(a: Actor): void {
+    a.away = true
+    a.leaving = false
+    a.goal = null; a.home = null; a.x = OFF_FARM.x; a.z = OFF_FARM.z; a.shown = 0
+    // (the machine they had stands where they left it, with nobody in its seat)
+    if (a.rig) { a.rig.holder = -1; a.rig = null }
+    a.aboard = false
+    a.line = null
+    a.segs = []
+    a.queue = null
+  }
+
+  // Which of the machines drawn is which of the day's record ('tractor0', 'tractor1': the farm's day names them only
+  // by the order it gave them out in). Each name goes to the machine its first user of the day has now, or the one that
+  // had the name, or the nearest that runs and is not spoken for.
+  private name(snap: Snapshot): void {
+    const tractors = this.rigs.filter(r => r.kind === 'tractor')
+    const first = new Map<string, number>()
+    for (const { w, unit } of snap.units.flatMap(u => u.worked.map(w => ({ w, unit: u.id }))).filter(x => x.w.machine?.startsWith('tractor')).sort((a, b) => (a.w.from ?? 0) - (b.w.from ?? 0))) if (!first.has(w.machine!)) first.set(w.machine!, unit)
+    const named = new Map<Rig, string>()
+    const free = (r: Rig | null | undefined): r is Rig => !!r && r.kind === 'tractor' && !r.broken && !named.has(r)
+    for (const [key, unit] of first) {
+      const a = this.actors.find(x => x.id === unit)
+      const near = (r: Rig) => (a ? Math.hypot(r.x - a.x, r.z - a.z) : 0)
+      const r = free(a?.rig) ? a!.rig! : tractors.find(x => x.key === key && free(x)) ?? tractors.filter(free).sort((p, q) => near(p) - near(q))[0]
+      if (r) named.set(r, key)
+    }
+    const taken = new Set(named.values())
+    for (const r of tractors) r.key = named.get(r) ?? (taken.has(r.key) ? '' : r.key)
+    for (const r of tractors) {
+      if (r.key) continue
+      let n = 0
+      while (tractors.some(x => x.key === `tractor${n}`)) n++
+      r.key = `tractor${n}`
+    }
+  }
+
+  // Down off a machine, and beside it: it stands where it is, anyone's.
+  private letGo(a: Actor): void {
+    const r = a.rig
+    if (!r) return
+    if (a.aboard) { a.x = r.x - Math.sin(r.heading) * 0.95 * TRUE_SIZE; a.z = r.z + Math.cos(r.heading) * 0.95 * TRUE_SIZE }
+    a.line = null
+    a.doing = ''
+    r.holder = -1
+    r.last = a.id
+    a.rig = null
+    a.aboard = false
+  }
+
+  // Whether a part of someone's day is done with this machine.
+  private uses(s: Seg, r: Rig): boolean {
+    return !!s.ride && s.ride === r.kind && (!s.machine || s.machine === r.key)
+  }
+
+  // Whether a day of someone else's, being seen or waiting to be, has work for this machine yet to be seen.
+  private spoken(r: Rig, but: Actor): boolean {
+    return this.actors.some(x => x !== but && !x.away && (x.segs.some(s => this.uses(s, r) && x.u < s.end) || !!x.queue?.segs.some(s => this.uses(s, r))))
+  }
+
+  // The machine a part of the day is done with: theirs already, or taken now. The day's record gives each machine to
+  // one person at a time, in an order: nobody takes one while someone whose hours on it came before theirs (an earlier
+  // day's, still being seen; or earlier in this day) has yet to be seen through them, and whoever has it gives it up to
+  // them. Null while they wait for it; undefined when the farm has none for them (the work is then seen on foot).
+  // force: at once, whoever has it (a day held at a point by a tool, or stepped with the clock stopped).
+  private machineFor(a: Actor, seg: Seg, force: boolean, dt: number): Rig | null | undefined {
+    const fits = (r: Rig) => r.kind === seg.ride && !r.broken
+    const r = (a.rig && fits(a.rig) && this.uses(seg, a.rig) ? a.rig : undefined)
+      ?? this.rigs.find(x => fits(x) && !!seg.machine && x.key === seg.machine)
+      ?? this.rigs.filter(x => fits(x) && (x.holder < 0 || x.holder === a.id)).sort((p, q) => Math.hypot(p.x - a.x, p.z - a.z) - Math.hypot(q.x - a.x, q.z - a.z))[0]
+    if (!r) return undefined
+    const mine = r.holder === a.id
+    if (!force && a.wait < WAIT_MOST) {
+      // someone else is on it: it is theirs until they are seen to let it go
+      const before = (gen: number, s: Seg) => s.machine === r.key && (gen < a.gen || (gen === a.gen && (s.hours?.[0] ?? s.start) < (seg.hours?.[0] ?? seg.start) - 1e-6))
+      const ahead = this.actors.some(x => x !== a && !x.away && (
+        x.segs.some(s => x.u < s.end && before(x.gen, s)) || (!!x.queue && x.queue.segs.some(s => before(x.queue!.gen, s)))))
+      // (whoever has it and is not at work with it now gives it up to hours that come before their own)
+      const has = this.actors.find(x => x.id === r.holder && x !== a)
+      const busy = !!has && (has.lead || has.hold || has.segs.some(s => this.uses(s, r) && has.u >= s.start && has.u < s.end))
+      if (busy || ahead) {
+        if (mine) this.letGo(a)
+        // (the wait that runs out is for one nobody is seen on: whoever is on it is seen through their hours)
+        if (busy) a.wait = 0
+        else a.wait += dt
+        return null
       }
     }
-    // (whoever the farm's day leaves holding a machine takes one before those who only had a turn on it)
-    const holds = (a: Actor) => (snap.units.find(w => w.id === a.id)?.rig ? 0 : 1)
-    for (const a of this.actors.slice().sort((p, q) => holds(p) - holds(q))) {
-      const ride = rides.get(a.id)!
-      if (!ride || a.rig) continue
-      let best: Rig | null = null, bd = Infinity
-      for (const r of this.rigs) {
-        if (r.kind !== ride || r.holder >= 0 || r.broken) continue
-        const d = Math.hypot(r.x - a.x, r.z - a.z)
-        if (d < bd) { bd = d; best = r }
-      }
-      if (best) { best.holder = a.id; a.rig = best } else rides.set(a.id, '')
-    }
-    return rides
+    a.wait = 0
+    if (mine) return r
+    if (a.rig) this.letGo(a)
+    const was = this.actors.find(x => x.id === r.holder)
+    if (was) this.letGo(was)
+    // (from someone else: it is seen to change hands)
+    a.handed = r.last >= 0 && r.last !== a.id
+    r.holder = a.id
+    a.rig = r
+    return r
   }
 
   // Plan the day just passed for everyone. Returns the hills to reveal as they pass.
@@ -531,26 +622,24 @@ export class Crews {
     this.sync(snap)
     this.goals(snap)
     // Whoever set out ahead of this plan is taken up by it from where that has got them.
-    for (const a of this.actors) if (a.lead) { a.lead = false; a.segs = []; a.way = a.waySeg = a.came = null; a.u = 1 }
-    const had = new Map(this.actors.map(a => [a.id, a.rig]))
+    for (const a of this.actors) { a.led = a.lead; if (a.lead) { a.lead = false; a.segs = []; a.way = a.waySeg = a.came = null; a.u = 1 } }
+    this.name(snap)
     // (a load on its way in keeps its machine until it is at the door)
     for (const a of this.actors) a.hold = !this.stopped && !a.away && a.segs.some(s => s.kind === 'haul' && !!s.site && !s.lit && this.stage.tripOpen(s.site, a.id))
-    const rides = this.assign(snap)
     this.gen++
     // With the clock running, someone whose day's work has not yet been seen (they were on the way to it) is left
     // at it: the new day waits its turn and is planned from where the old one will leave them.
     const hauling = (a: Actor) => a.hold
-    const behind = (a: Actor) => !this.stopped && !a.away && a.segs.length > 0 && (!!a.way || a.u < 0.9 || hauling(a)) && had.get(a.id) === a.rig
+    // (or have hours with a machine still to come, for which they wait their turn)
+    const behind = (a: Actor) => !this.stopped && !a.away && a.segs.length > 0 && (!!a.way || a.u < 0.9 || hauling(a) || a.segs.some(s => !!s.ride && s.kind !== 'travel' && a.u < s.end))
     const from: CrewFrom[] = this.actors.map(a => {
       let working = a.line && a.aboard ? a.line.key : a.siteKey
       let at = a.aboard && a.rig ? { x: a.rig.x, z: a.rig.z } : { x: a.x, z: a.z }
-      let machine = a.rig ? { x: a.rig.x, z: a.rig.z } : null
       const line = a.queue ? a.queue.segs : behind(a) ? a.segs : null
       const s = line && line.length ? line[line.length - 1] : null
       if (s) {
         const e = s.site ? (s.kind === 'haul' && a.hold ? cropDoor(snap, s.field).stop : s.path[0]) : s.kind === 'travel' ? s.travel[s.travel.length - 1] : s.walker ? s.path[s.path.length - 1] : s.path[0]
         at = { x: e.x, z: e.z }
-        if (a.rig && s.ride) machine = at
         working = s.site ? s.site : s.kind !== 'travel' && !s.walker ? `${s.field}|${s.kind}` : ''
       }
       // Someone who lives out and has been off the farm comes back in by the road, when the days go slowly enough for
@@ -560,10 +649,11 @@ export class Crews {
       const off = a.x === OFF_FARM.x && a.z === OFF_FARM.z
       const arrives = this.arriving && u.livesOut && !a.away && off
       if (arrives) at = this.roadAt(a.slot)
-      return { id: a.id, slot: a.slot, farmer: a.kind === 'farmer', ride: rides.get(a.id)!, goal: a.goal, at, machine, working, arrives }
+      return { id: a.id, slot: a.slot, farmer: a.kind === 'farmer', goal: a.goal, at, working, holding: a.rig?.key ?? '', arrives }
     })
     const was = new Map(this.progress)
-    const plans = planDay(snap, shown, from, samples, snap.farm.pond < this.pondWas - 0.02, key => was.get(key), this.stopped)
+    const rigAt = (key: string) => { const r = this.rigs.find(x => x.key === key && !x.broken); return r ? { x: r.x, z: r.z } : null }
+    const plans = planDay(snap, shown, from, samples, snap.farm.pond < this.pondWas - 0.02, key => was.get(key), this.stopped, rigAt)
     // Back to work staged at one place: to where they stood at it, not to the middle of it.
     plans.forEach((segs, k) => {
       for (const s of segs) {
@@ -582,11 +672,11 @@ export class Crews {
     this.actors.forEach((a, k) => {
       // (someone off the farm for the day has no part in it)
       if (a.away) { plans[k] = []; a.segs = []; a.queue = null }
+      if (a.leaving) plans[k] = []
       // (what the interface waits to see is never kept waiting: a test dig, and below 8x the digging it has a weigh
       // ticket for)
-      const first = plans[k][0]
-      const waited = !!first && (first.kind === 'sample' || (first.kind === 'dig' && this.speedNow < 3 && digs.has(first.field)))
-      const next: Queued = { segs: plans[k], gen: this.gen, arrives: from[k].arrives === true, ride: rides.get(a.id) ?? '', waited }
+      const waited = plans[k].some(s => s.kind === 'sample' || (s.kind === 'dig' && this.speedNow < 3 && digs.has(s.field)))
+      const next: Queued = { segs: plans[k], gen: this.gen, arrives: from[k].arrives === true, waited, keep: !!snap.units.find(w => w.id === a.id)?.rig }
       if (behind(a) && !waited) {
         // the newest work waits its turn; a day with none in it does not push out work still waiting to be seen
         if (works(plans[k]) || !a.queue || !works(a.queue.segs)) a.queue = next
@@ -609,13 +699,13 @@ export class Crews {
     // (not someone still being seen at work, or with work waiting to be seen)
     if (!a || !f || a.away || a.queue || a.lead || a.state === 'hurt' || (works(a.segs) && (!!a.way || a.u < 1))) return
     const machine = MACHINE_JOBS.has(lead.kind)
+    // (never with a machine the days being seen have work for: that is taken in its turn)
+    if (machine && a.rig && this.spoken(a.rig, a)) return
     if (machine && !a.rig) {
-      let best: Rig | null = null, bd = Infinity
-      for (const r of this.rigs) {
-        if (r.kind !== 'tractor' || r.holder >= 0 || r.broken) continue
-        const d = Math.hypot(r.x - a.x, r.z - a.z)
-        if (d < bd) { bd = d; best = r }
-      }
+      // the truck for a haul, as the farm's day has it; else the nearest tractor nobody has
+      const free = this.rigs.filter(r => r.holder < 0 && !r.broken && !this.spoken(r, a))
+      const best = (lead.kind === 'haul' ? free.find(r => r.kind === 'truck') : undefined)
+        ?? free.filter(r => r.kind === 'tractor').sort((p, q) => Math.hypot(p.x - a.x, p.z - a.z) - Math.hypot(q.x - a.x, q.z - a.z))[0]
       if (!best) return
       best.holder = a.id
       a.rig = best
@@ -665,15 +755,9 @@ export class Crews {
   // A person takes up a day's plan. late: it waited for the day before to be seen through.
   private take(a: Actor, q: Queued, late: boolean): void {
     a.arrived = q.arrives
-    if (a.rig && a.rig.kind !== q.ride) {
-      // the machine kept for a load's way in is left where the load went
-      if (a.aboard) { a.x = a.rig.x - Math.sin(a.rig.heading) * 0.95 * TRUE_SIZE; a.z = a.rig.z + Math.cos(a.rig.heading) * 0.95 * TRUE_SIZE }
-      a.line = null
-      a.rig.holder = -1
-      a.rig = null
-      a.aboard = false
-    }
     a.hold = false
+    a.keep = q.keep
+    a.wait = 0
     a.rate = CATCH_UP
     if (q.arrives) { const p = this.roadAt(a.slot); a.aboard = false; a.x = p.x; a.z = p.z; a.shown = 0.3; a.sx = NaN }
     else if (late && q.segs.length) this.fromHere(a, q.segs[0])
@@ -731,16 +815,17 @@ export class Crews {
   }
 
   // Where the farmer's machine is, and the person on foot if anyone is walking (for the look tools).
-  // (fade: below 1 while they are gone from sight where a way is cut; work: the row work a machine is at, or '')
-  where(): { tractor: Pt; farmer: { x: number; z: number; turn: number } | null; units: { id: number; kind: UnitKind; x: number; z: number; foot: boolean; fade: number }[]; rigs: { kind: string; x: number; z: number; holder: number; broken: boolean; fade: number; work: string; tool: string }[] } {
+  // (fade: below 1 while they are gone from sight where a way is cut; work: the row work a machine is at, or '';
+  // doing: 'wait' for a machine someone else has, 'rows' at a machine's row work, or '')
+  where(): { tractor: Pt; farmer: { x: number; z: number; turn: number } | null; units: { id: number; kind: UnitKind; x: number; z: number; foot: boolean; fade: number; doing: string }[]; rigs: { kind: string; key: string; x: number; z: number; holder: number; broken: boolean; fade: number; work: string; tool: string }[] } {
     const f = this.actors.find(a => a.kind === 'farmer')
     const rig = f?.rig ?? this.rigs.find(r => r.kind === 'tractor')
     const walker = this.actors.find(a => !a.aboard && a.segs.length > 0) ?? this.actors.find(a => !a.aboard)
     return {
       tractor: rig ? { x: rig.x, z: rig.z } : { x: 0, z: 0 },
       farmer: walker ? { x: walker.x, z: walker.z, turn: -walker.heading } : null,
-      units: this.actors.map(a => ({ id: a.id, kind: a.kind, x: a.sx, z: a.sz, foot: !a.aboard, fade: a.away ? 0 : a.fade })),
-      rigs: this.rigs.map(r => ({ kind: r.kind, x: r.sx, z: r.sz, holder: r.holder, broken: r.broken, fade: r.fade, work: r.state.working > 0 ? r.state.kind : '', tool: r.kind === 'tractor' ? (r.machine as Tractor).current : '' })),
+      units: this.actors.map(a => ({ id: a.id, kind: a.kind, x: a.sx, z: a.sz, foot: !a.aboard, fade: a.away ? 0 : a.fade, doing: a.away ? '' : a.doing })),
+      rigs: this.rigs.map(r => ({ kind: r.kind, key: r.key, x: r.sx, z: r.sz, holder: r.holder, broken: r.broken, fade: r.fade, work: r.state.working > 0 ? r.state.kind : '', tool: r.kind === 'tractor' ? (r.machine as Tractor).current : '' })),
     }
   }
 
@@ -755,7 +840,8 @@ export class Crews {
   // they are in), so it does not bob as they walk or dip as they bend; false when there is no such person on the farm.
   anchor(id: number, out: Vector3): boolean {
     const a = this.actors.find(x => x.id === id)
-    if (!a || a.away || a.shown < 0.5 || a.fade < 0.5) return false
+    // (gone from sight through a cut, they have no place to be pinned at until they are seen again)
+    if (!a || a.away || a.shown < 0.5 || a.fade < 0.5 || !Number.isFinite(a.sx)) return false
     this.over(a, out)
     return true
   }
@@ -1075,6 +1161,7 @@ export class Crews {
     // unless a tool holds the day at a point.
     const jumped = f.dayT < a.lastT - 1e-6 || f.dayT > a.lastT + 0.2
     const held = jumped || (!f.advancing && !this.literal)
+    if (a.leaving && (held || !this.unseen(a))) { this.goHome(a); return null }
     // The day after takes its turn once this one's work has been seen (or at once, when nothing is being played out).
     // (a load on its way in is seen to the door first, even if a card has stopped the clock)
     // (with the clock stopped by the player nobody moves, and what they are being seen at is not changed under them)
@@ -1082,10 +1169,18 @@ export class Crews {
     if (held) { a.u = f.dayT; a.way = null }
     else if (f.advancing && !a.way) {
       // Behind the clock after a way to go, the work is seen through a little quicker than the day runs, never
-      // jumped; and each part of it for no less than WORK_LEAST, whatever the clock (what the interface waits to
-      // see keeps the day's time).
-      const day = a.waited ? f.daySec / a.rate : Math.max(f.daySec / a.rate, (WORK_LEAST[f.speed] ?? 4) * a.works)
-      a.u = Math.min(a.queue || day > f.daySec ? 1 : f.dayT, a.u + f.clock / day)
+      // jumped; and each part of it for no less than WORK_LEAST, whatever the clock and however short its hours
+      // of the day (what the interface waits to see keeps the day's time). Between parts their clock runs on.
+      const base = f.daySec / a.rate
+      let k = -1
+      for (let s = 0; s < a.segs.length; s++) if (a.u >= a.segs[s].start) k = s
+      const cur = k >= 0 ? a.segs[k] : null
+      if (cur && a.u < cur.end) {
+        const span = cur.end - cur.start
+        const dur = a.waited || cur.kind === 'travel' ? base * span : Math.max(base * span, WORK_LEAST[f.speed] ?? 4)
+        a.u = Math.min(cur.end, a.u + (f.clock * span) / Math.max(1e-3, dur))
+      } else a.u = Math.min(a.segs[k + 1]?.start ?? 1, a.u + f.clock * Math.max(1 / base, GAP_RATE))
+      if (!a.queue && (a.waited || !a.works)) a.u = Math.min(a.u, f.dayT)
     }
     // A load on its way in is seen to the potato house door before the day is let go.
     const hs = a.clockSeg >= 0 ? a.segs[a.clockSeg] : undefined
@@ -1099,7 +1194,30 @@ export class Crews {
       this.take(a, a.queue, true)
       segIdx = part()
     }
-    const seg: Seg | null = segIdx >= 0 ? a.segs[segIdx] : null
+    let seg: Seg | null = segIdx >= 0 ? a.segs[segIdx] : null
+    let waiting = false
+    a.doing = ''
+    // A part of the day done with a machine: it is taken up when it is theirs to take (machineFor), and until then
+    // they wait where they are.
+    if (seg && seg.ride && a.u < seg.end && (a.waySeg !== seg || !a.rig || !this.uses(seg, a.rig))) {
+      const had = a.rig
+      const r = this.machineFor(a, seg, held || seg.lit || (this.stopped && !this.frozen), this.frozen ? 0 : f.dt)
+      if (r === null) {
+        a.u = Math.min(a.u, seg.start)
+        segIdx = -1
+        seg = null
+        waiting = true
+        a.doing = 'wait'
+      } else if (r && r !== had && a.waySeg !== seg && !held && !seg.lit) this.fromHere(a, seg)
+    }
+    // A machine nothing more of their day is done with is let go where it stands, unless the farm's day leaves it theirs.
+    if (a.rig && !a.hold && !a.lead && !held) {
+      const r = a.rig
+      const more = a.segs.some(s => this.uses(s, r) && a.u < s.end) || (a.queue ? a.queue.keep || a.queue.segs.some(s => this.uses(s, r)) : a.keep)
+      if (!more) this.letGo(a)
+    }
+    // (their part with a machine seen, and the machine gone on to someone else: they stand where it left them)
+    if (seg && seg.ride && !a.rig && a.u >= seg.end && !held) seg = null
     const pose = a.pose.reset()
     const rig = a.rig
     const passed = (arc: number) => f.passed(k, segIdx, arc, a.gen)
@@ -1122,6 +1240,21 @@ export class Crews {
     }
     let site: { key: string; kind: string; field: number; w: number; loads: number; lit: boolean } | null = null
     if (!seg) {
+      // Waiting for a machine out in a field: off the rows to the field's end, and there until it is theirs.
+      const within = waiting && !a.aboard ? fieldAt(a.x, a.z) : -1
+      if (within >= 0 && going && !this.frozen) {
+        // (along the row they are in, to whichever end is nearer)
+        const fr = FIELDS[within]
+        const to = { x: a.x - fr.x0 < fr.x1 - a.x ? fr.x0 - 0.5 * S : fr.x1 + 0.5 * S, z: a.z }, d = Math.hypot(to.x - a.x, to.z - a.z)
+        const step = Math.min(d, Math.min(FOOT_MOST, clamp(f.dist / 40, 2.8, 9)) * this.quick * f.dt)
+        if (d > 0.05) {
+          foot({ x: a.x + ((to.x - a.x) / d) * step, z: a.z + ((to.z - a.z) / d) * step, dx: to.x - a.x, dz: to.z - a.z })
+          a.x = px; a.z = pz
+          this.figure(a, pose, big)
+          this.ring(a.sx, heightAt(a.sx, a.sz), a.sz, this.mark, a, f, this.far)
+          return null
+        }
+      }
       // no part in today's work: where the day off, the sick bed or the yard has them
       this.atEase(a, f, pose, big)
       if (a.aboard && rig) { a.x = rig.x; a.z = rig.z; a.heading = rig.heading; return null }
@@ -1188,16 +1321,19 @@ export class Crews {
       if (going) wy.t += f.clock
       // Where the way is cut they go from sight as they pull away, and come into sight again small, and grow, where
       // it brings them in: the place they are seen at is set there with them, not left to cross the farm after them.
-      if (wy.cut) {
-        const q = wy.t / (wy.share * wy.T)
-        if (q < 1) a.fade = Math.min(a.fade, 1 - 0.9 * clamp((q - 0.5) / 0.5, 0, 1))
-        if (was < wy.share * wy.T && wy.t >= wy.share * wy.T) { a.fade = 0.1; a.sx = NaN; if (rig && seg.ride) rig.sx = NaN }
-        if (rig && seg.ride) rig.fade = Math.min(rig.fade, a.fade)
-      } else if (wy.hop > 0) {
+      const t0 = wy.afoot * wy.T
+      if (wy.hop > 0 && was < t0) {
         // (a long walk to the machine: seen setting off for it, and next in its seat)
-        const q = wy.t / (wy.afoot * wy.T)
+        const q = wy.t / t0
         if (q < 1) a.fade = Math.min(a.fade, 1 - 0.9 * clamp((q - 0.45) / 0.55, 0, 1))
-        if (was < wy.afoot * wy.T && wy.t >= wy.afoot * wy.T) { a.fade = 0.1; a.sx = NaN }
+        else { a.fade = 0.1; a.sx = NaN }
+      } else if (wy.cut && wy.t >= t0) {
+        const tc = t0 + wy.share * (wy.T - t0), q = (wy.t - t0) / (tc - t0)
+        // (the machine goes from sight with them through the cut: not while they are coming into sight in its seat)
+        const k = q < 1 ? 1 - 0.9 * clamp((q - 0.5) / 0.5, 0, 1) : a.fade
+        if (q < 1) a.fade = Math.min(a.fade, k)
+        if (was < tc && wy.t >= tc) { a.fade = 0.1; a.sx = NaN; if (rig && seg.ride) rig.sx = NaN }
+        if (rig && seg.ride) rig.fade = Math.min(rig.fade, q < 1 ? k : a.fade)
       }
       const s = wayAt(wy)
       if (s < lw) foot(walkTo.at(s))
@@ -1234,6 +1370,7 @@ export class Crews {
         site = { key: seg.site, kind: seg.site.split('|')[1], field: seg.field, w, loads: seg.loads ?? 1, lit: seg.lit }
         passed(-1)
       } else if (!seg.walker && rig) {
+        a.doing = 'rows'
         if (tractor) tractor.setImplement(implementFor(seg.kind, f.snap.farm.equipment.includes('harvester')))
         rig.state.kind = seg.kind
         let arc: number
@@ -1247,7 +1384,7 @@ export class Crews {
           // job lasts: along the row in hand to its end, round on the headland, and back along the band's leading row
           // as it then stands. The band itself fills in behind as the day's work is counted.
           const key = `${seg.field}|${seg.kind}`
-          if (a.arcSeg !== seg) {
+          if (a.arcSeg !== seg || !a.line) {
             a.arcSeg = seg
             if (seg.from >= 0 || !a.line || a.line.key !== key) a.line = { key, poly: path, arc: Math.max(0, seg.from), seg }
           }
@@ -1324,8 +1461,6 @@ export class Crews {
         }
         if (seg.kind === 'rogue') { pose.held = 'sack'; pose.size = 0.6 + 0.6 * w }
         if (!on) this.idle(a, f, pose)
-        // (standing by at the rows' end while the tractor works this ground: turned to it)
-        if (seg.help && Math.hypot(px - a.x, pz - a.z) < 1e-3) a.heading = Math.PI
         passed(w >= 1 ? Infinity : seg.lit ? a.arc : w * path.length)
       }
     }
@@ -1358,7 +1493,16 @@ export class Crews {
     const share = a.arrived ? WAY_LEAD_IN : WAY_LEAD
     a.arrived = false
     if (need <= most * 1.1) return { t: 0, T: Math.max(0.35, need), L, reach: L, cut: false, lead: 0, share, walk: lw, afoot: need > 0 ? tw / need : 0, hop: hop ? Math.min(lw, afoot * 0.5 * HOP_S) : 0, ramp }
-    const reach = v * 0.55 * most
+    most *= (a.led ? WAY_LED : 1) * clamp(L / WAY_FULL, WAY_SHORT, 1)
+    a.led = false
+    const reach = Math.min(L, v * 0.55 * most)
+    // (to a machine someone else has left, then a drive too long to show: they are seen to it and pulling away in it,
+    // which is how it is seen to change hands; what the interface waits for is not kept waiting for that)
+    // (at 8x there is no time for it: a day is half a second)
+    const to = Math.min(tw, HAND_S / this.quick)
+    const handed = a.handed
+    a.handed = false
+    if (handed && lw > 0.3 && seg.ride && a.rig && !st && f.speed < 3) return { t: 0, T: to + most * HAND_DRIVE, L, reach, cut: true, lead: reach * WAY_TAKEN, share: WAY_TAKEN, walk: lw, afoot: to / (to + most * HAND_DRIVE), hop: hop ? Math.min(lw, afoot * 0.5 * to) : 0, ramp: 0 }
     return { t: 0, T: most, L, reach, cut: true, lead: lw > 0.3 ? Math.min(lw, afoot * 0.6 * most * share) : reach * share, share, walk: lw, afoot: 0, hop: 0, ramp: 0 }
   }
 
@@ -1657,14 +1801,15 @@ export class Crews {
       if (d < r && d < bd) { bd = d; best = id }
     }
     for (const a of this.actors) {
-      if (a.away || a.shown < 0.5) continue
+      if (a.away || a.shown < 0.5 || a.fade < 0.5 || !Number.isFinite(a.sx)) continue
       const o = this.over(a, V2), ox = o.x, oy = o.y, oz = o.z
       const base = oy - a.ay
       // the body (half way up it, out to its head), and the foot of the pin
       reach(screen(ox, base + a.ay * 0.45, oz), screen(ox, oy, oz), 26, a.id)
       reach(screen(ox, oy, oz), null, 22, a.id)
+      // (their machine, where it is seen)
       const r = a.rig
-      if (r) reach(screen(r.x, heightAt(r.x, r.z) + 1.1, r.z), screen(r.x + 2.4, heightAt(r.x, r.z) + 1.1, r.z), 30, a.id)
+      if (r && Number.isFinite(r.sx)) reach(screen(r.sx, heightAt(r.sx, r.sz) + 1.1, r.sz), screen(r.sx + 2.4, heightAt(r.sx, r.sz) + 1.1, r.sz), 30, a.id)
     }
     return best
   }

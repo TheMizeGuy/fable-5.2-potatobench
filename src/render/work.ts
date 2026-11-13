@@ -29,7 +29,8 @@ export interface Seg {
   lit: boolean           // planned with the clock stopped: worked literally, a pass at a time
   from: number           // where along `path` the work is taken up, as arc length
   loads?: number         // hauling: the loads this part of the day comes to
-  help?: boolean         // standing by at the headland while the one tractor works this ground under someone else
+  machine?: string       // which of the farm's machines this part of the day is done with (as the day's record names it)
+  hours?: [number, number]   // and its hours on it, as shares of the day
   polys?: { walkTo: Poly; travel: Poly; path: Poly }
 }
 
@@ -257,8 +258,10 @@ function hedgeSpot(f: FieldRect): Spot {
 //    when they are there, and each part of it is seen for some seconds at least (WORK_LEAST) however fast the days
 //    go: the picture is that far behind the days, which are not held; the newest work waits its turn, and what was
 //    not seen is passed over.
-//  - One tractor that two people each had a turn on in a day is seen with whoever has it over all of that ground;
-//    the other stands by at the end of the rows of their own part.
+//  - A machine two people each had hours on in a day (the day's record says whose, and when) is seen with the first
+//    for theirs and then with the second: whoever comes after waits where they are until it has been let go, goes to
+//    it where it was left, and drives it to their own work. Each part of a day with a machine has its hours of the
+//    day; work on foot shares what is between them.
 //  - With the clock stopped (a day stepped or replayed), it is literal: they go at a machine's and a person's real
 //    pace, back and forth over the band a pass at a time, turning on the headland, and the ground changes where they
 //    have been. A test dig and a day's digging are the exceptions: the interface waits to see them, so they play
@@ -276,12 +279,6 @@ export function wayFrom(a: Pt, b: Pt): Pt[] {
   if (fi < 0 || Math.hypot(a.x - b.x, a.z - b.z) < 2.5 * S) return route(a, b)
   const f = FIELDS[fi], end = { x: Math.abs(a.x - f.x0) < Math.abs(a.x - f.x1) ? f.x0 - RUN_OUT : f.x1 + RUN_OUT, z: a.z }
   return [a, ...route(end, b)]
-}
-
-// Where someone stands by while the tractor works their part of a field: off the rows' end, beside where it turns.
-function standBy(field: number, top: number): Pt {
-  const f = FIELDS[field]
-  return { x: f.x1 + 2.6, z: Math.max(f.z0 + 1.5, Math.min(f.z1 - 1.5, f.z0 + top * FD - 3.5)) }
 }
 
 // Whether a machine stands in a field or on the headland at its ends.
@@ -341,14 +338,16 @@ function changed(a: HillDisplay, look: HillLook, ridge: number, kind: JobKind): 
 
 // A person as the day begins: where they stand, what they will be on today, and where that machine stands now.
 // working: the row work their machine was at when the day began ('field|kind'), or ''.
-export interface CrewFrom { id: number; at: Pt; slot: number; ride: Ride; machine: Pt | null; farmer: boolean; goal: Spot | null; working: string; arrives?: boolean }
+// holding: the machine they have now, as the day's record names it, or ''.
+export interface CrewFrom { id: number; at: Pt; slot: number; farmer: boolean; goal: Spot | null; working: string; holding: string; arrives?: boolean }
 
 // How far each job had got when the day began: by field and kind, 0..1 (undefined when it was not seen before).
 export type Before = (key: string) => number | undefined
 
 // Plan the day that just passed for every person. `shown` is what is on screen now, `snap` the new state; each starts
 // where they stand on screen. Returns each one's segments, in the order of `crews`.
-export function planDay(snap: Snapshot, shown: HillDisplay[][], crews: CrewFrom[], sampleHills: Map<number, number>, pondDrawn = false, before: Before = () => undefined, literal = false): Seg[][] {
+// rigAt: where a machine (as the day's record names it) stands now, or null when it is not on the farm.
+export function planDay(snap: Snapshot, shown: HillDisplay[][], crews: CrewFrom[], sampleHills: Map<number, number>, pondDrawn = false, before: Before = () => undefined, literal = false, rigAt: (machine: string) => Pt | null = () => null): Seg[][] {
   const units = new Map<number, UnitVis>(snap.units.map(u => [u.id, u]))
   // Who worked each field at each job today, in order: they share out the hills that changed.
   const sharers = new Map<string, number[]>()
@@ -402,26 +401,24 @@ export function planDay(snap: Snapshot, shown: HillDisplay[][], crews: CrewFrom[
     return { hills: (hillsFor.get(key) ?? []).filter(h => n === 1 || mine(h)), band }
   }
 
-  // A tractor between people who each did row work with it today (the farm's day gives it to one and then the other):
-  // it is seen with whoever has it, over all of that ground, and the others stand by at the end of their own part.
-  const drivers = crews.filter(c => c.ride === 'tractor')
-  const lent = new Map<number, { w: Work; of: number }[]>()
-  let turn = 0
-  if (drivers.length) for (const crew of crews) {
-    const u = units.get(crew.id)
-    if (!u || crew.ride) continue
-    for (const w of u.worked) {
-      if (!ROW_JOBS.has(w.kind) || (w.kind === 'water' && waterWay(snap, w.field, pondDrawn) !== 'tank')) continue
-      const d = drivers[turn++ % drivers.length]
-      lent.set(d.id, [...(lent.get(d.id) ?? []), { w, of: crew.id }])
-    }
+  // Where each machine stands before each stretch of the day's work on it: where the stretch before left it (planned
+  // so; whoever takes it up goes to where it is then seen).
+  const stood = new Map<Work, Pt | null>()
+  const left = new Map<string, Pt | null>()
+  for (const w of snap.units.flatMap(u => u.worked).filter(w => !!w.machine).sort((a, b) => (a.from ?? 0) - (b.from ?? 0))) {
+    const key = w.machine!
+    if (!left.has(key)) left.set(key, rigAt(key))
+    stood.set(w, left.get(key) ?? null)
+    const f = FIELDS[w.field]
+    left.set(key, w.kind === 'haul' ? cropDoor(snap, w.field).stop : f ? { x: f.x1 + RUN_OUT, z: f.cz } : left.get(key) ?? null)
   }
 
   return crews.map(crew => {
     const u = units.get(crew.id)
     const segs: Seg[] = []
     let at = crew.at
-    let machine = crew.machine
+    let machine: Pt | null = null
+    let driven = ''
     // To a place: on the machine when today's work has one (walking to it first if it stands elsewhere), else on foot.
     const way = wayFrom
     const go = (to: Pt, ride: Ride): { walkTo: Pt[]; travel: Pt[] } => {
@@ -432,10 +429,14 @@ export function planDay(snap: Snapshot, shown: HillDisplay[][], crews: CrewFrom[
     }
     const some = (n: number) => { const v = Math.sin((snap.seasonDay + 1) * 12.9898 + (crew.id + 1) * 78.233 + n * 37.719) * 43758.5453; return v - Math.floor(v) }
     if (u) {
-      const order = [...u.worked.map(w => ({ w, of: crew.id })), ...(lent.get(crew.id) ?? [])].sort((a, b) => first(`${b.w.field}|${b.w.kind}`) - first(`${a.w.field}|${a.w.kind}`))
-      for (const { w, of } of order) {
+      // (in the day's own order, a test dig first: it is what the player is waiting to see)
+      const order = u.worked.slice().sort((a, b) => (b.kind === 'sample' ? 1 : 0) - (a.kind === 'sample' ? 1 : 0))
+      for (const w of order) {
         const key = `${w.field}|${w.kind}`
-        const ride: Ride = MACHINE_JOBS.has(w.kind) ? crew.ride : ''
+        const ride: Ride = MACHINE_JOBS.has(w.kind) && w.machine ? w.rig ?? '' : ''
+        // (a machine someone else had before them today stands where that left it)
+        if (ride && w.machine !== driven) { machine = stood.get(w) ?? null; driven = w.machine! }
+        const hours: [number, number] | undefined = ride && w.from !== undefined && w.to !== undefined ? [w.from, w.to] : undefined
         const wet = w.kind === 'water' ? waterWay(snap, w.field, pondDrawn) : 'tank'
         if (SITE_JOBS.has(w.kind) || wet !== 'tank') {
           // Staged at one place: the stage puts each worker where the work wants them.
@@ -447,7 +448,7 @@ export function planDay(snap: Snapshot, shown: HillDisplay[][], crews: CrewFrom[
           const { walkTo, travel } = there ? { walkTo: [], travel: [at] } : go(spot, ride)
           // a day's hauling in loads: what one person brings in, by the barrel, over what a bed holds (a last day is a short one)
           const loads = w.kind === 'haul' ? Math.max(1, Math.ceil(((ride === 'truck' ? HAUL_CWT_DAY * TRUCK_HAUL : HAUL_CWT_DAY) / (LOAD * BARREL_CWT)) * (w.share !== undefined && w.share >= 1 ? 0.5 : 1))) : undefined
-          segs.push({ kind: w.kind, field: w.field, walker: !ride, ride, walkTo, travel, path: [{ x: spot.x, z: spot.z }], reveals: [], start: 0, end: 0, site: wet !== 'tank' ? `${w.field}|${wet}` : key, lit: literal, from: 0, loads })
+          segs.push({ kind: w.kind, field: w.field, walker: !ride, ride, walkTo, travel, path: [{ x: spot.x, z: spot.z }], reveals: [], start: 0, end: 0, site: wet !== 'tank' ? `${w.field}|${wet}` : key, lit: literal, from: 0, loads, machine: ride ? w.machine : undefined, hours })
           if (!there) at = { x: spot.x, z: spot.z }
           if (ride) {
             // a day's hauling ends at the potato house door
@@ -456,15 +457,14 @@ export function planDay(snap: Snapshot, shown: HillDisplay[][], crews: CrewFrom[
           continue
         }
         const f = snap.fields[w.field]
-        const { hills, band } = share(key, of)
+        const { hills, band } = share(key, crew.id)
         const tractor = ROW_JOBS.has(w.kind) && ride === 'tractor'
-        const help = !tractor && ROW_JOBS.has(w.kind) && drivers.length > 0
         let path: Pt[]
         const start = parkSpot(w.field, crew.slot)
         // A day's digging is never literal: the interface waits to see the day's band out, so it plays as a running day does.
         const lit = (literal && w.kind !== 'dig') || w.kind === 'sample'
         // on foot in this field since yesterday: carry on from where they stand
-        const afoot = !tractor && !help && !lit && w.kind !== 'scout' && !crew.arrives && inField(w.field, at)
+        const afoot = !tractor && !lit && w.kind !== 'scout' && !crew.arrives && inField(w.field, at)
         if (tractor) {
           // the dug ground is the band the dug hills lie in (the simulation digs in rows from the top)
           let [p0, p1] = band
@@ -475,8 +475,6 @@ export function planDay(snap: Snapshot, shown: HillDisplay[][], crews: CrewFrom[
           }
           // literally: a pass through each stretch of the band; with the clock running: the band's leading row
           path = lit ? crossings(w.field, p0, p1, Math.max(1, Math.round((p1 - p0) * (HILLS / COLS))), (machine ?? at).x) : crossings(w.field, Math.max(p0, p1 - 0.004), p1, 1, (machine ?? at).x)
-        } else if (help) {
-          path = [standBy(w.field, band[0])]
         } else if (w.kind === 'scout') {
           path = scoutWalk(w.field, crew.slot % 2 === 1)
         } else {
@@ -502,7 +500,7 @@ export function planDay(snap: Snapshot, shown: HillDisplay[][], crews: CrewFrom[
         const lag = tractor ? (w.kind === 'dig' ? 1.7 : w.kind === 'plant' ? 1.1 : 1.0) * S + SX / 2 : 0.05
         // With the clock running the band fills in over the day, from its top down, a stretch of a row at a time.
         const ordered = lit ? hills : hills.slice().sort((a, b) => (Math.floor(a / COLS) - Math.floor(b / COLS)) || ((a % COLS) - (b % COLS)) * (Math.floor(a / COLS) % 2 ? 1 : -1))
-        const reveals: Reveal[] = help ? [] : ordered.map((h, n) => {
+        const reveals: Reveal[] = ordered.map((h, n) => {
           const p = hillPos(w.field, h)
           return {
             field: w.field, hill: h, at: lit ? Math.min(poly.length, poly.nearest(p.x, p.z) + lag) : ((n + 0.5) / ordered.length) * poly.length, look: f.hills[h], ridge: f.ridge,
@@ -511,24 +509,25 @@ export function planDay(snap: Snapshot, shown: HillDisplay[][], crews: CrewFrom[
         })
         reveals.sort((a, b) => a.at - b.at)
         // A machine already at work in this field carries on from where it is (`from` below zero), with no drive to it.
-        const here = tractor && !lit && !!machine && inField(w.field, machine) && crew.working === key
+        const here = tractor && !lit && !!machine && inField(w.field, machine) && crew.working === key && crew.holding === w.machine
         const from = here ? -1 : 0
         // (someone who lives out comes in by the road to the machine where it was left)
         const { walkTo, travel } = here ? { walkTo: crew.arrives ? way(at, machine!) : [], travel: [machine!] } : afoot ? { walkTo: [], travel: [at] } : go(path[0], tractor ? 'tractor' : '')
         if (from > 0) { const e = poly.at(from); travel.push({ x: e.x, z: e.z }) }
-        segs.push({ kind: w.kind, field: w.field, walker: !tractor, ride: tractor ? 'tractor' : '', walkTo, travel, path, reveals, start: 0, end: 0, site: '', lit, from, help })
+        segs.push({ kind: w.kind, field: w.field, walker: !tractor, ride: tractor ? 'tractor' : '', walkTo, travel, path, reveals, start: 0, end: 0, site: '', lit, from, machine: tractor ? w.machine : undefined, hours: tractor ? hours : undefined })
         at = lit ? path[path.length - 1] : travel[travel.length - 1]
         if (tractor) machine = at
       }
       // Still on the road at the end of the day: as far along the way as the farm's day took them.
       if (u.to !== u.at) {
-        const ride: Ride = u.job && MACHINE_JOBS.has(u.job.kind) ? crew.ride : ''
+        const ride: Ride = u.job && MACHINE_JOBS.has(u.job.kind) ? u.rig : ''
+        if (ride && !driven) machine = rigAt(crew.holding)
         const dest = restAt(u.to, crew.slot, !ride)
         const { walkTo, travel } = go(dest, ride)
         const trip = new Poly(travel)
         if (trip.length > 0.3) {
           const part = u.along >= 1 ? trip.pts : trip.upTo(trip.length * u.along)
-          segs.push({ kind: 'travel', field: -1, walker: !ride, ride, walkTo, travel: part, path: [part[part.length - 1]], reveals: [], start: 0, end: 0, site: '', lit: literal, from: 0 })
+          segs.push({ kind: 'travel', field: -1, walker: !ride, ride, walkTo, travel: part, path: [part[part.length - 1]], reveals: [], start: 0, end: 0, site: '', lit: literal, from: 0, machine: ride ? driven || crew.holding || undefined : undefined })
         }
       } else if (!u.worked.length && crew.goal === null && u.at >= 0) {
         // nothing done today and nowhere to go: at the field they were left at
@@ -542,7 +541,22 @@ export function planDay(snap: Snapshot, shown: HillDisplay[][], crews: CrewFrom[
       segs.push({ kind: 'travel', field: -1, walker: true, ride: '', walkTo: [], travel, path: [{ x: crew.goal.x, z: crew.goal.z }], reveals: [], start: 0, end: 0.5, site: '', lit: literal, from: 0 })
       return segs
     }
-    // Share the day: travel is quick, real work takes most of it.
+    // Share the day. Work with a machine has its own hours of it (the day's record); work on foot, and a way, share
+    // what lies between those evenly. With no machine in the day: travel is quick, real work takes most of it.
+    if (segs.some(s => s.hours)) {
+      let t = 0
+      for (let i = 0; i < segs.length; i++) {
+        const s = segs[i]
+        if (s.hours) { s.start = Math.max(t, s.hours[0]); s.end = Math.max(s.start + 1e-3, s.hours[1]); t = s.end; continue }
+        let j = i
+        while (j < segs.length && !segs[j].hours) j++
+        const until = Math.max(t + 1e-3 * (j - i), j < segs.length ? segs[j].hours![0] : 1)
+        for (let k = i; k < j; k++) { segs[k].start = t + ((until - t) * (k - i)) / (j - i); segs[k].end = t + ((until - t) * (k - i + 1)) / (j - i) }
+        t = until
+        i = j - 1
+      }
+      return segs
+    }
     const weight = (s: Seg) => (s.kind === 'travel' ? 0.6 : 1)
     const total = segs.reduce((a, s) => a + weight(s), 0)
     let t = 0

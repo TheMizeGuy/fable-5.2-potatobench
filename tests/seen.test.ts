@@ -4,7 +4,8 @@
 // with those on it gone from sight through the cut); and someone sets out the moment the clock is set going. The
 // people and machines are run without a picture (tests/crewsim.ts); tools/render/seen.ts checks the picture itself.
 import { describe, expect, it } from 'vitest'
-import { watch, type Farm, type Seen } from './crewsim.ts'
+import { sharedDay, watch, type Farm, type Seen } from './crewsim.ts'
+import { FW } from '../src/render/layout.ts'
 import * as sim from '../src/sim/index.ts'
 import { personNow } from '../src/ui/now.ts'
 import { JOB_DOING } from '../src/ui/rules.ts'
@@ -45,6 +46,31 @@ describe('a machine at work is seen on its field', () => {
   }
 })
 
+describe('one tractor between two people in a day', () => {
+  it('is seen with each for their hours, in the order of the hours: nobody sprays on foot, and whoever waits stands by', () => {
+    const day = sharedDay('spray')
+    expect(day.turns.length).toBeGreaterThan(1)
+    for (const [speed] of SPEEDS.slice(0, 2)) {
+      const s = watch('spray', speed, { from: day.days, seconds: speed === 1 ? 24 : 14 })
+      expect(s.jumps, s.jumps.join('; ')).toEqual([])
+      // the first to have it is seen on it in their field, then the second in theirs
+      expect(s.turns.slice(0, 2), s.turns.join(' ')).toEqual(day.turns.slice(0, 2).map(t => `${t.unit}@${t.field}`))
+      expect(s.afoot).toBe(0)
+      // the second waits for it, and not by walking a field's rows as the machine would (off them to the field's
+      // nearer end, at most, each time someone waits)
+      expect(s.waited).toBeGreaterThan(1)
+      expect(s.rowsWaiting).toBeLessThan(FW)
+    }
+  })
+
+  it('at 8x, too, nobody is seen at a machine\'s work without the machine', () => {
+    const day = sharedDay('spray')
+    const s = watch('spray', 3, { from: day.days, seconds: 12 })
+    expect(s.jumps, s.jumps.join('; ')).toEqual([])
+    expect(s.afoot).toBe(0)
+  })
+})
+
 describe('work with no rows to it', () => {
   it('hauling with the truck: it is seen at the field and on its way, at 1x and 3x', () => {
     const farm: Farm = { spring: app => { app.do({ t: 'buy', upgrade: 'truck' }) } }
@@ -68,8 +94,10 @@ describe('work with no rows to it', () => {
 
 describe('the clock stopped and set going again', () => {
   it('leaves whoever was being seen at work at it: a machine digging goes on digging', () => {
+    // (a truck brings the crop in: with it the digger digs on the next day, and does not leave the field to haul)
+    const truck: Farm = { spring: app => { app.do({ t: 'buy', upgrade: 'truck' }) } }
     for (const kind of ['dig', 'plant']) {
-      const s = watch(kind, 1, { seconds: 20, dist: 308, pauseAt: 8.9 })
+      const s = watch(kind, 1, { farm: kind === 'dig' ? truck : {}, seconds: 20, dist: 308, pauseAt: 8.9 })
       expect(s.jumps, s.jumps.join('; ')).toEqual([])
       expect(share(s.working, s.seconds), `${kind}: working ${Math.round(100 * share(s.working, s.seconds))}%`).toBeGreaterThanOrEqual(0.5)
     }
