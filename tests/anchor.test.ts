@@ -153,6 +153,37 @@ describe('a card beside the point clicked', () => {
     expect(roomUnder(900, 260, 430, WIN, BARS)).toBe(WIN.bottom)
   })
 
+  it('a card with a pinned head and foot is given its least height before it keeps off its own tag', () => {
+    // Spring at 1280 by 720: the land left of the catalogue, a tag in the middle of it, a record 445 px wide whose
+    // head and foot take 230 px. Beside the tag there is no room for its width; over the tag, 300 px of height.
+    const win: Box = { left: 8, top: 129, right: 778, bottom: 712 }
+    const tag: Box = { left: 190, top: 437, right: 372, bottom: 481 }
+    const at = { x: 281, y: 459 }
+    const size = { w: 445, h: 700 }
+    const cb = (c: { x: number; y: number; h: number }): Box => ({ left: c.x, top: c.y, right: c.x + 445, bottom: c.y + c.h })
+    // With no least height of its own it stands over its tag, cut to the slit between the tag and the boards.
+    const slit = placeCard({ point: at, size, win, keep: tag })
+    expect(slit.side).toBe('above')
+    expect(slit.h).toBeLessThan(310)
+    // Saying it needs 430 px (its head, its foot and 200 px of its middle), it is given the land's whole height
+    // beside the tag, part of the tag under it, and never the point itself.
+    const c = placeCard({ point: at, size, least: 430, win, keep: tag })
+    expect(c.h).toBe(win.bottom - win.top)
+    expect(c.h).toBeGreaterThanOrEqual(430)
+    expect(holds(cb(c), at)).toBe(false)
+    expect(cb(c).right).toBeLessThanOrEqual(win.right)
+    expect(cb(c).left).toBeGreaterThanOrEqual(win.left)
+    // Where a side has its least height clear of the tag, it takes that side and stays off the tag.
+    const roomy = placeCard({ point: { x: 151, y: 459 }, size, least: 430, win, keep: { left: 60, top: 437, right: 242, bottom: 481 } })
+    expect(roomy.side).toBe('right')
+    expect(meets(cb(roomy), { left: 60, top: 437, right: 242, bottom: 481 })).toBe(false)
+    expect(roomy.h).toBe(win.bottom - win.top)
+    // A bar is never lain on to gain height.
+    const bar: Box = { left: 8, top: 560, right: 778, bottom: 712 }
+    const held = placeCard({ point: at, size, least: 430, win, blocks: [bar], keep: tag })
+    expect(meets(cb(held), bar)).toBe(false)
+  })
+
   it('waits at the nearest edge when the thing has left the window', () => {
     for (const p of [{ x: 1500, y: 400 }, { x: -200, y: 300 }, { x: 640, y: -90 }, { x: 640, y: 1200 }]) {
       const c = placeCard(ask(p))

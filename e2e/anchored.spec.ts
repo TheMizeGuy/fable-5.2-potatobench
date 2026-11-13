@@ -1098,6 +1098,59 @@ for (const [w, h] of [[1280, 800], [1280, 720]] as const) {
   })
 }
 
+for (const [w, h] of [[1280, 720], [1366, 768]] as const) {
+  test(`in spring a field's record is given a middle of use: 200 px of it or all of it, ${w} by ${h}`, async ({ page, isMobile, browserName }) => {
+    test.skip(isMobile || browserName !== 'chromium', 'a desk window')
+    test.setTimeout(180_000)
+    const errors = watchErrors(page)
+    await page.setViewportSize({ width: w, height: h })
+    await open(page, '?year=1990&seed=7')
+    await page.evaluate(PROBE)
+    const names = await a<string[]>(page, 'return sim.FIELD_NAMES')
+    const potato = await a<number[]>(page, `return [0, 1, 2, 3, 4, 5].filter(i => app.campaign.plans[i].crop === 'potato')`)
+    expect(potato.length).toBeGreaterThanOrEqual(3)
+    for (const f of potato) {
+      // By its tag where a press reaches it, and by its number as the keys pick it.
+      for (const how of ['its tag', 'its number'] as const) {
+        const at = how === 'its tag' ? await a<Pt | null>(page, `return A.tagSpot(${f})`) : null
+        if (how === 'its tag' && !at) continue
+        if (at) await page.mouse.click(at.x, at.y)
+        else await a(page, `app.select(${f})`)
+        const card = page.getByTestId('plan-card')
+        await expect(card).toBeVisible()
+        // Read once it has come to rest beside its field.
+        let last = ''
+        for (let k = 0; k < 30; k++) {
+          await page.waitForTimeout(200)
+          const now = JSON.stringify(await card.boundingBox())
+          if (now === last) break
+          last = now
+        }
+        const say = (m: string) => `${w}x${h}, ${names[f]} by ${how}: ${m}`
+        const seen = await a<{ rect: Box; mid: number[]; head: boolean; foot: boolean; sheet: Box | null; point: boolean }>(page, `const el = document.querySelector('#ui [data-testid="plan-card"]'), m = el.querySelector('[data-testid="record-scroll"]')
+          const inside = x => { if (!x) return false; const b = x.getBoundingClientRect(), r = el.getBoundingClientRect(); return b.height > 0 && b.top >= r.top - 0.5 && b.bottom <= r.bottom + 0.5 && b.top >= 0 && b.bottom <= innerHeight + 0.5 }
+          const sheet = document.querySelector('#ui [data-testid="spring"]')
+          return { rect: A.box(el), mid: m ? [m.clientHeight, m.scrollHeight] : [], head: inside(el.querySelector('[data-testid="card-title"]')) && inside(el.querySelector('[data-testid="card-close"]')), foot: inside(el.querySelector('[data-testid="record-foot"]')), sheet: sheet ? A.box(sheet) : null, point: false }`)
+        if (SHOTS && how === 'its number') await page.screenshot({ path: `${SHOTS}/record-${w}x${h}-${names[f].replace(/\W+/g, '-')}.png` })
+        expect.soft(seen.mid.length, say('it has a middle that scrolls between its head and its seed')).toBe(2)
+        expect.soft(seen.mid[0] >= 200 || seen.mid[1] <= seen.mid[0] + 1, say(`its middle is 200 px tall or whole (${seen.mid[0]} px of ${seen.mid[1]})`)).toBe(true)
+        expect.soft(seen.head && seen.foot, say('its head, its cross and its seed are in view')).toBe(true)
+        expect.soft(seen.rect.left >= -0.5 && seen.rect.top >= -0.5 && seen.rect.right <= w + 0.5 && seen.rect.bottom <= h + 0.5, say(`inside the window (${JSON.stringify(seen.rect)})`)).toBe(true)
+        if (seen.sheet) expect.soft(meets(seen.rect, seen.sheet), say('off the Spring sheet')).toBe(false)
+        const boards = await a<Box[]>(page, `return A.rects('.topbar .almanac > .mount, .topbar .bank > .mount')`)
+        expect.soft(boards.filter(b => meets(seen.rect, b)), say('off the boards')).toEqual([])
+        if (at) expect.soft(holds(seen.rect, at), say('not over the point clicked')).toBe(false)
+        // Scrolled to its end, the last variety is in view in the middle (nothing is lost under the notes after it).
+        const end = await a<boolean>(page, `const m = document.querySelector('#ui [data-testid="record-scroll"]'); m.scrollTop = m.scrollHeight; const r = m.getBoundingClientRect(), l = [...m.querySelectorAll('.vbox')].pop().getBoundingClientRect(); return l.bottom <= r.bottom + 1 && l.bottom > r.top`)
+        expect.soft(end, say('scrolled to its end, the last variety is in view')).toBe(true)
+        await page.keyboard.press('Escape')
+        await expect(card).toBeHidden()
+      }
+    }
+    expect(errors, errors.join('\n')).toEqual([])
+  })
+}
+
 test('on a phone the card is a sheet at the foot, headed with the thing, notched toward it, and the thing stays in view above it', async ({ page, isMobile }) => {
   test.skip(!isMobile, 'the phone\'s sheet')
   test.setTimeout(180_000)

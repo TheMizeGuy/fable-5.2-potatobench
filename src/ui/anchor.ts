@@ -13,6 +13,9 @@ export interface Ask {
   point: Pt
   // The card as it would stand with all the room it wants.
   size: { w: number; h: number }
+  // The least height it is of use at: a card with a head and a foot that stay and a middle that scrolls needs them
+  // and 200 px of the middle (or the whole middle, if that is less). Without it, 220 px.
+  least?: number
   // The part of the window a card may use.
   win: Box
   // What a card never lies over: the bars at the foot, a chip under the boards.
@@ -54,8 +57,10 @@ export interface Placed {
 export const GAP = 14
 // Beside a handle the card stands this far off its edge.
 export const KEEP = 10
-// The least height worth opening a card at.
-const LEAST = 220
+// The least height worth opening a card at, when it does not say its own.
+export const LEAST = 220
+// How much of a scrolling middle a card with a pinned head and foot must be given.
+export const MIDDLE = 200
 // How far down the card the point lies when the card is level with it.
 const LEVEL = 0.22
 const SIDES: Side[] = ['right', 'left', 'below', 'above']
@@ -95,6 +100,7 @@ export function boxGap(a: Box, b: Box): number {
 export function placeCard(a: Ask): Placed {
   const gap = a.gap ?? GAP
   const { w, h: h0 } = a.size
+  const least = Math.min(h0, a.least ?? LEAST)
   const win = a.win
   const blocks = a.blocks ?? []
   const keep = a.keep ?? null
@@ -145,11 +151,11 @@ export function placeCard(a: Ask): Placed {
     if (side === 'below') {
       const top = Math.max(p.y + gap, keep ? keep.bottom + KEEP : -Infinity, b.top)
       const room = b.bottom - top
-      if (room >= Math.min(h0, LEAST)) return { side, x, y: top, h: Math.min(h0, room), slid: Math.abs(x - usual) }
+      if (room >= least) return { side, x, y: top, h: Math.min(h0, room), slid: Math.abs(x - usual) }
     } else {
       const foot = Math.min(p.y - gap, keep ? keep.top - KEEP : Infinity, b.bottom)
       const room = foot - b.top
-      if (room >= Math.min(h0, LEAST)) { const h = Math.min(h0, room); return { side, x, y: foot - h, h, slid: Math.abs(x - usual) } }
+      if (room >= least) { const h = Math.min(h0, room); return { side, x, y: foot - h, h, slid: Math.abs(x - usual) } }
     }
     // No room on that side: what it would be, to be marked down below.
     const h = Math.min(h0, b.bottom - b.top)
@@ -215,9 +221,12 @@ export function placeCard(a: Ask): Placed {
       ? (side === 'right' ? r.left >= p.x : r.right <= p.x) && p.y >= r.top - gap && p.y <= r.bottom + gap
       : p.x >= r.left && p.x <= r.right
     if (!beside || c.forced) s += 200
+    // In this order: never on a bar or a board; never over the point clicked; then of use (its least height) before
+    // it keeps off the handle it was opened from: a card squeezed between a tag and the boards until its middle is
+    // a slit is no card, and beside the tag with part of the tag under it is the lesser fault.
+    if (blocks.some(b => meets(r, b))) s += 20000
+    if (c.h < least) s += 9000 + (least - c.h) * 4
     if (keep && meets(r, keep)) s += 8000
-    if (blocks.some(b => meets(r, b))) s += 6000
-    if (c.h < Math.min(h0, LEAST)) s += 3000
     for (const v of a.avoid ?? []) if (meets(r, v)) s += 2000
     for (const v of a.spare ?? []) if (meets(r, v)) s += 300
     const under = others.filter(v => meets(r, v))
