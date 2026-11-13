@@ -9,6 +9,7 @@ import { BLOCK_NAME } from './map.ts'
 import * as R from './rules.ts'
 import { tens } from './system/parts.ts'
 import { portrait as bust, ringed, ringOf } from './system/people.ts'
+import { nextGoal } from '../game/goals.ts'
 
 // A head and shoulders in the colours the figure on the land wears: the system's portrait (src/ui/system/people.ts).
 // Old screens size it with their own class.
@@ -167,6 +168,32 @@ export function personCard(ctx: Ctx): PersonCard {
   let foreman = false
   let shownFor = -1
   let flashed: { text: string; until: number } | null = null
+  const FOREMAN_KEY = '[data-testid="person-foreman"]'
+  // A control of the foreman's brought into view and ringed for a few seconds, through every redraw of the card.
+  let lit: { sel: string; until: number; seen: number } | null = null
+  function lightUp(sel: string): void {
+    lit = { sel, until: performance.now() + 4000, seen: 0 }
+    setTimeout(() => ctx.dirty(), 4050)
+    ctx.dirty()
+  }
+  function showLit(): void {
+    for (const k of el.querySelectorAll('.goal-ring')) if (!lit || performance.now() >= lit.until || !k.matches(lit.sel)) k.classList.remove('goal-ring')
+    if (!lit || performance.now() >= lit.until) { lit = null; return }
+    const k = el.querySelector<HTMLElement>(lit.sel)
+    if (!k) return
+    k.classList.add('goal-ring')
+    // Twice: once as it is found, and once more after the card has settled round it.
+    if (lit.seen++ < 2) { k.scrollIntoView({ block: 'nearest' }); k.focus({ preventScroll: true }) }
+  }
+  // Naming a foreman, or sending one back to the fields: said on the card (its key, and the line under it), and as
+  // a note where the player is looking; the key stays in view.
+  function nameForeman(p: S.PersonInfo, block: S.BlockId | null): void {
+    foreman = false
+    const r = app.do({ t: 'foreman', unit: p.id, block })
+    if (!r.ok) { flash(r.err); return }
+    ctx.say(F.localize(r.events[0]?.text ?? ''), 'good')
+    lightUp(FOREMAN_KEY)
+  }
 
   function flash(text: string): void {
     flashed = { text: F.localize(text), until: performance.now() + 5000 }
@@ -208,7 +235,7 @@ export function personCard(ctx: Ctx): PersonCard {
       h('header', { class: 'pc-head' },
         ringed(p, ringOfId(c, p.id), 64),
         h('div', null,
-          farmer ? null : h('p', { class: 't-label', testid: 'person-kind' }, R.KIND_NAME[p.kind]),
+          farmer ? null : h('p', { class: 't-label', testid: 'person-kind' }, p.foreman ? `Foreman, ${S.BLOCK_NAME[p.foreman]}` : R.KIND_NAME[p.kind]),
           h('h2', { class: 't-title pc-name', testid: 'person-name' }, farmer ? 'You, the farmer' : p.name),
           h('p', { class: 'pc-trait' }, farmer ? h('span', { class: 'quiet' }, 'Does every job and draws no wage.') : [h('b', null, `${p.traitName}:`), ' ', h('span', { class: 'quiet' }, p.traitText.replace(/^./, x => x.toLowerCase()))])),
         h('span', { class: 'pc-tools' },
@@ -251,7 +278,8 @@ export function personCard(ctx: Ctx): PersonCard {
           blocks.length ? h('button', {
             class: `btn${foreman ? ' is-on' : ''}`, type: 'button', testid: 'person-foreman', 'aria-expanded': String(foreman),
             title: ctx.touch() ? undefined : 'A foreman adds what one block\'s fields need to the work list every working morning, and doesn\'t do field work. A foreman is paid 40% more.',
-            onclick: () => { foreman = !foreman; ctx.dirty() },
+            // Its choices open under it, brought into view with the first one lit.
+            onclick: () => { foreman = !foreman; if (foreman) lightUp('.pc-blocks .btn'); else lit = null; ctx.dirty() },
           }, icon('foreman', 'i'), h('span', null, 'Foreman', h('span', { class: 'sub' }, p.foreman ? BLOCK_NAME[p.foreman].replace(/^The /, '').split(',')[0] : '+40% pay'))) : h('span'),
           h('button', {
             class: 'btn hazard', type: 'button', testid: 'person-dismiss',
@@ -260,16 +288,19 @@ export function personCard(ctx: Ctx): PersonCard {
               if (yes && run({ t: 'dismiss', unit: p.id }, `You let ${p.name} go.`)) app.selectUnit(-1)
             },
           }, icon('letgo', 'i'), h('span', null, 'Let go', h('span', { class: 'sub' }, 'today')))),
+        p.foreman && !foreman ? h('p', { class: 'pc-fore', role: 'status', testid: 'foreman-said' }, icon('foreman', 'i'),
+          h('span', null, `Foreman of ${S.BLOCK_NAME[p.foreman]}. ${R.firstName(p.name)} adds its fields' jobs to the work list each morning and doesn't do field work.`)) : null,
         foreman ? h('div', { class: 'pc-blocks', role: 'group', 'aria-label': 'Foreman of' },
+          h('p', { class: 'pc-fore', testid: 'foreman-what' }, h('span', null, `A foreman orders the work on one block of fields for you each morning. ${R.firstName(p.name)} would earn 40% more and stop doing field work. Pick the block.`)),
           blocks.map(b => {
             const other = c.crew.find(u => u.foreman === b && u.id !== p.id)
             return h('button', {
               class: 'btn', type: 'button', testid: `foreman-${b}`, 'aria-pressed': String(p.foreman === b), disabled: !!other,
               title: other ? `${other.name} is already foreman there` : undefined,
-              onclick: () => { foreman = false; run({ t: 'foreman', unit: p.id, block: b }, `${R.firstName(p.name)} is now foreman of ${S.BLOCK_NAME[b]}.`) },
+              onclick: () => nameForeman(p, b),
             }, BLOCK_NAME[b].replace(/^The /, '').split(',')[0])
           }),
-          p.foreman ? h('button', { class: 'btn', type: 'button', testid: 'foreman-none', onclick: () => { foreman = false; run({ t: 'foreman', unit: p.id, block: null }, `${R.firstName(p.name)} is back on field work.`) } }, 'Back to field work') : null) : null,
+          p.foreman ? h('button', { class: 'btn', type: 'button', testid: 'foreman-none', onclick: () => nameForeman(p, null) }, 'Back to field work') : null) : null,
       ],
     ]
   }
@@ -285,15 +316,19 @@ export function personCard(ctx: Ctx): PersonCard {
     const was = el.hidden === true || el.classList.contains('out')
     el.classList.remove('out')
     el.hidden = false
-    if (shownFor !== p.id) { shownFor = p.id; foreman = false; flashed = null }
+    // Opened while the goal slip asks for a foreman: the key is brought into view, lit.
+    const asked = shownFor !== p.id && p.kind !== 'farmer' && !p.foreman && nextGoal(c)?.id === 'foreman'
+    if (shownFor !== p.id) { shownFor = p.id; foreman = false; flashed = null; lit = null }
+    if (asked) lightUp(FOREMAN_KEY)
     const s0 = c.season
     const model = {
-      p, day: s0?.day, t: ctx.touch(), foreman, flash: flashed && performance.now() < flashed.until ? flashed.text : '',
+      p, day: s0?.day, t: ctx.touch(), foreman, lit: lit && performance.now() < lit.until ? lit.sel : '', flash: flashed && performance.now() < flashed.until ? flashed.text : '',
       jobs: s0?.jobs.map(j => [j.id, j.unit]), crew: c.crew.map(u => [u.id, u.at, u.to, u.job, u.foreman, u.rest]), sun: c.sundaysOff,
     }
     patch(el, JSON.stringify(model), () => body(c, p))
     el.setAttribute('aria-label', p.kind === 'farmer' ? 'You, the farmer' : p.name)
     layIn(ctx, el, was)
+    showLit()
   }
 
   return { el, update }

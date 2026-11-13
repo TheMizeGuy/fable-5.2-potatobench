@@ -241,7 +241,8 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     for (const kind of ['plant', 'dig'] as const) {
       const key = `${c.seed}.${c.year}.${kind}`
       if (startedSaid.has(key)) continue
-      const j = s0.jobs.find(x => x.kind === kind && x.by === 'routine' && c.crew.some(u => u.job === x.id))
+      // Work begun, not an order someone holds while it waits for warm soil.
+      const j = s0.jobs.find(x => x.kind === kind && x.by === 'routine' && x.done > 0 && c.crew.some(u => u.job === x.id))
       if (!j) continue
       startedSaid.add(key)
       const u = c.crew.find(x => x.job === j.id)!
@@ -250,7 +251,8 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
         level: 'info', glyph: kind, ttl: 12000, field: j.field, day: s0.day,
         text: `${kind === 'plant' ? 'Planting' : 'Digging'} has started in ${S.FIELD_NAMES[j.field]}. Show me`,
         full: `${kind === 'plant' ? 'Planting' : 'Digging'} has started in ${S.FIELD_NAMES[j.field]} without an order from you. ${who} on the way there. Press to see.`,
-        go: () => { app.select(-1); app.selectUnit(u.id, 'land'); ctx.view.follow(u.id) },
+        // To the field the sentence names, where the work shows.
+        go: () => { app.selectUnit(-1); app.select(j.field); app.focus(j.field) },
       })
     }
   }

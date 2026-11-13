@@ -24,7 +24,7 @@ import { planScreen } from './plan.ts'
 import { alertShort, countYearsFrom } from './rules.ts'
 import { seasonScreen } from './season.ts'
 import { titleScreen } from './title.ts'
-import { guidedYear, HOLD, mountGuide, openGuide } from './tutorial.ts'
+import { guidedYear, HOLD, mountGuide, openGuide, quietAlert } from './tutorial.ts'
 import { mountTies } from './tie.ts'
 import { whois } from './whois.ts'
 // Last, after every screen's own stylesheet: the control rule fitted to the live game.
@@ -175,8 +175,10 @@ export const mountHud: MountHud = (root, app, view, sound) => {
         const a = e.alert
         // The tray and the ticket speak for themselves, and a clean walk shows on the field's own card.
         if (app.screen !== 'season' || a.type === 'sample' || a.type === 'weighed' || (a.type === 'scout' && a.level !== 'bad')) break
-        // In the guided first year the guide speaks: news that asks nothing goes to the almanac's diary alone.
-        if (guidedYear(app.campaign) && a.level !== 'bad') break
+        // In the guided first year the guide speaks: news that asks nothing goes to the almanac's diary alone, but for
+        // a kind of notice the guide has explained once, which then comes as a toast. A player who asked to be paused
+        // on alerts is shown what paused the game.
+        if (quietAlert(app.campaign, a.type, a.level) && !app.settings.pauseOnAlerts) break
         const short = alertShort(a)
         // Frost over barrels names no one field: the note goes to the biggest haul, where the barrels and the hauler show.
         const field = a.type === 'frostBarrels' && app.campaign ? S.haulInfo(app.world, app.campaign).sort((x, y) => y.cwt - x.cwt)[0]?.field ?? -1 : a.field

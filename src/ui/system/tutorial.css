@@ -94,8 +94,10 @@
 #ui[data-layout='short'] .gc-year li { padding: 4px; }
 #ui[data-layout='short'] .gc-year li .i { --i: 20px; }
 
-/* A note newly come takes no press for a moment. */
-.guide.fresh .guide-foot { pointer-events: none; }
+/* A key that touches the clock says what it does to it, on a second line. */
+.guide-foot .btn .two { display: grid; text-align: left; line-height: 1.15; }
+.guide-foot .btn .two .sub { font: 400 12px/1.2 var(--f-gothic); letter-spacing: .05em; text-transform: uppercase; color: var(--ink-2); }
+.guide-foot .btn:has(.sub) { padding-top: 4px; padding-bottom: 4px; }
 /* The agent's one line inside a card of the game's own (a first telegram, a first weigh ticket). */
 .guide-line { margin: 0; padding: 6px 10px; font: 400 15px/1.3 var(--f-text); background: var(--paper-2, #f4ecd4); border-left: 3px solid var(--ink); }
 
@@ -106,8 +108,10 @@
 .hud.st-hide-list .crew .queue, .hud.st-hide-list .plate-layer .listed { visibility: hidden; }
 .hud.st-hide-forecast .topbar .forecast { visibility: hidden; }
 .hud.st-hide-after .topbar .after { visibility: hidden; }
-/* One voice: while a note or a card is up the slip keeps to one line, and nothing at the foot competes. */
-.hud.noting .topbar .goal .goal-when, .hud.noting .topbar .goal-go, .hud.noting .topbar .goal .fist { display: none; }
+/* One voice: while the agent has a note for this screen (up, or waiting its turn) the goal slip stands down whole,
+   in its place, and nothing at the foot competes. Never a part of the slip alone: its words sit in a grid, and a
+   part taken out would let the rest slide into its column. */
+.hud.agent .topbar :is(.goal, .goal-go) { visibility: hidden; }
 .hud.noting .notes, .hud.voice .notes { visibility: hidden; }
 .hud.noting .season-screen .paused, .hud.noting .season-screen .running, .hud.voice .season-screen .paused, .hud.voice .season-screen .running { visibility: hidden; }
 /* In the guided first year the notes say what is next; the goal slip comes with the second year. */

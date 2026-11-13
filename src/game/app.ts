@@ -63,8 +63,10 @@ export type AppEvent =
   | { type: 'saved'; ok: boolean }
 
 // A card that needs an answer stops the clock whatever the settings say: a crop weighed in (sell or store), an
-// incident that asks for an answer, the freeze. Nothing else changes the speed the player set.
-const STOP_FOR = new Set(['weighed', 'incident', 'freeze', 'frostBarrels'])
+// incident that asks for an answer, the freeze. Nothing else changes the speed the player set: a notice that asks
+// nothing (frost forecast on the barrels, which the crew hauls ahead of by itself) is a toast, and pauses only for a
+// player who turned on "Pause on alerts".
+const STOP_FOR = new Set(['weighed', 'incident', 'freeze'])
 // Events worth an alert even though they are not warnings.
 const NOTABLE = new Set([
   'dug', 'weighed', 'sample', 'skinSet', 'emerged', 'ti', 'mature', 'watch',

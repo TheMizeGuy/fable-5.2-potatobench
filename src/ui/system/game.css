@@ -92,6 +92,14 @@
 .topbar .goal-go { padding: 0 12px 3px; margin-top: 6px; font-size: 15px; gap: 6px; }
 .topbar[data-layout='narrow'] .goal-go, .topbar[data-layout='short'] .goal-go { min-height: var(--touch); margin: 4px 0 0 12px; }
 .topbar .goal { text-align: left; min-height: var(--touch); max-width: 100%; }
+/* Each part of the slip has its own column, so the words never fall into the fist's and the figure never lies on
+   the words, whichever parts a slip has and however narrow it is. */
+.topbar .goal > .fist { grid-column: 1; }
+.topbar .goal > .goal-body { grid-column: 2; }
+.topbar .goal > .count { grid-column: 3; white-space: nowrap; }
+.topbar .goal.later > .goal-body { grid-column: 1; }
+.topbar .goal.later > .count { grid-column: 2; }
+.topbar .goal .goal-t, .topbar .goal .goal-when { overflow-wrap: anywhere; }
 .topbar .goal .goal-body { display: grid; min-width: 0; }
 .topbar .goal .goal-t { font: 700 19px/1.1 var(--f-text); white-space: normal; }
 .topbar .goal .goal-when { font: italic 400 14px/1.2 var(--f-text); color: var(--ink-2); }
