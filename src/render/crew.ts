@@ -393,6 +393,11 @@ export function figureMatrix(out: Matrix4, x: number, y: number, z: number, head
 // How finely the next figure is drawn: the face, the hands, the buttons and the belt only when near enough to be seen.
 export const LOD = { fine: true }
 
+// For the tool that looks for stiff figures (tools/render/pose.ts): every figure drawn while it is on, by where it
+// stands and how each arm is held (how far out it reaches, 0..1, and which way against the trunk: out to its own
+// side, forward, up).
+export const WATCH = { on: false, rows: [] as number[][] }
+
 // Where the last figure drawn has its head and its hands, in the world.
 export const drawn = { head: new Vector3(), handL: new Vector3(), handR: new Vector3(), chest: new Vector3(), toolB: new Vector3(), up: new Vector3(), fwd: new Vector3() }
 
@@ -448,6 +453,17 @@ export function drawFigure(pr: Prims, at: Matrix4, dress: Dress, p: Pose): void 
   drawn.up.copy(TU)
   drawn.fwd.copy(TF)
   drawn.chest.copy(hip).addScaledVector(TU, TORSO * 0.7 * s)
+  if (WATCH.on) {
+    const row = [hip.x, hip.y, hip.z, s]
+    for (let i = 0; i < 2; i++) {
+      c.subVectors(hand[i], sh[i])
+      const len = c.length() || 1e-9
+      c.multiplyScalar(1 / len)
+      row.push(len / ((UPPER + FORE) * s), c.dot(TR) * (i === 0 ? -1 : 1), c.dot(TF), c.dot(TU))
+    }
+    row.push((p.gripL ? 1 : 0) + (p.gripR ? 2 : 0) + (p.tool ? 4 : 0) + (p.held ? 8 : 0))
+    WATCH.rows.push(row)
+  }
 
   // legs: thigh, shin, knee, boot
   for (let i = 0; i < 2; i++) {

@@ -18,6 +18,7 @@ import { Grass } from './grass.ts'
 import { Harvest } from './harvest.ts'
 import { attachInput } from './input.ts'
 import { DUFOUR, FD, FIELDS, FW, HOME, HOUSE, LAND, POTATO_HOUSE, ROAD, WATER_Y, brookZ, fieldBaseY, groundY, YARD_AT, yardAt } from './layout.ts'
+import { WATCH } from './crew.ts'
 import { clamp, hash2, smooth } from './noise.ts'
 import { K, KV, S } from './scale.ts'
 import { laps } from './laps.ts'
@@ -1600,6 +1601,9 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       // to a frame, shader programs made, which shadow maps were drawn again, squares of grass laid, patches of trees
       // that changed how they are drawn, geometries held).
       laps: (on: boolean) => laps.watch(on),
+      // Every figure drawn since the last asking, by how its arms are held (crew.ts WATCH), while a tool watches.
+      figures(on: boolean) { WATCH.on = on; WATCH.rows.length = 0 },
+      figureRows() { const rows = WATCH.rows.slice(); WATCH.rows.length = 0; return rows },
       // The shader programs made so far, and which of the scene's materials (or their shadows) use each.
       shaders() {
         const names = namesOf()
