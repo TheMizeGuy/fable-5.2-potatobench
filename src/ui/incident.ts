@@ -30,8 +30,8 @@ export interface IncidentCard {
 // Who sends each kind of telegram.
 const FROM: Record<S.IncidentKind, [string, string]> = {
   applicant: ['The hiring hall', 'hands and operators, by the season'],
-  poach: ['A neighbouring farm', 'an offer for one of your people'],
-  breakdown: ['Grange Supply', 'implements, parts and repairs'],
+  poach: ['A neighboring farm', 'an offer for one of your people'],
+  breakdown: ['Grange Supply', 'equipment, parts and repairs'],
   buyer: ['A produce buyer', 'cash for a whole lot, this week only'],
 }
 
@@ -55,9 +55,9 @@ export function incidentCard(ctx: Ctx): IncidentCard {
       case 'take': {
         const lot = c.lots.find(l => l.id === inc.lot)
         const v = lot ? S.lotValue(app.world, c, lot) : 0
-        return v ? [h('span', { class: 'c-green num' }, F.money(v * S.BUYER_PREMIUM)), ' more than the market today'] : null
+        return v ? [h('span', { class: 'c-green num' }, F.money(v * S.BUYER_PREMIUM)), ' more than today\'s market price'] : null
       }
-      case 'let': return u ? (u.mood < S.POACH_MOOD ? [h('span', { class: 'c-red' }, `${firstName(u.name)} goes`)] : 'Costs nothing, if they stay') : 'Costs nothing'
+      case 'let': return u ? (u.mood < S.POACH_MOOD ? [h('span', { class: 'c-red' }, `${firstName(u.name)} leaves`)] : 'Costs nothing if they stay') : 'Costs nothing'
       default: return 'Costs nothing'
     }
   }
@@ -81,8 +81,8 @@ export function incidentCard(ctx: Ctx): IncidentCard {
     if (inc?.kind === 'breakdown' && inc.back !== undefined) {
       const u = c.crew.find(x => x.id === inc.unit)
       const j = u && c.season ? c.season.jobs.find(x => x.id === u.job) : undefined
-      return [u ? ['Under ', h('b', null, u.kind === 'farmer' ? 'you' : firstName(u.name)), j ? `, ${jobText(j, c, j.building).replace(/^./, x => x.toLowerCase())}` : '', '. '] : '',
-        'Waiting for the part, it is back on ', h('b', null, F.date(c.year, inc.back, true)), '.']
+      return [u ? [h('b', null, u.kind === 'farmer' ? 'You' : firstName(u.name)), u.kind === 'farmer' ? ' were driving it' : ' was driving it', j ? `, ${jobText(j, c, j.building).replace(/^./, x => x.toLowerCase())}` : '', '. '] : '',
+        'If you wait for the part, it\'ll be running again on ', h('b', null, F.date(c.year, inc.back, true)), '.']
     }
     return F.localize(info.text)
   }
@@ -102,7 +102,7 @@ export function incidentCard(ctx: Ctx): IncidentCard {
   function does(c: S.Campaign, inc: S.Incident | undefined, ch: S.IncidentChoice): string {
     if (ch.id === 'let' && inc) {
       const u = c.crew.find(x => x.id === inc.unit)
-      if (u) return u.mood < S.POACH_MOOD ? `${firstName(u.name)} is not happy enough here, and goes.` : `${firstName(u.name)} is ${S.moodWord(u.mood)} here, and stays.`
+      if (u) return u.mood < S.POACH_MOOD ? `${firstName(u.name)} isn't happy enough here and will leave.` : `${firstName(u.name)} is ${S.moodWord(u.mood)} here and will stay.`
     }
     return F.localize(ch.does)
   }
@@ -127,7 +127,7 @@ export function incidentCard(ctx: Ctx): IncidentCard {
           key(String(k + 1)), h('b', { class: 'c-title' }, ch.label), h('span', { class: 'c-does' }, does(c, inc, ch)), h('span', { class: 'c-cost' }, cost(c, inc, ch)))
         : h('div', { class: 'reply off', testid: `answer-${ch.id}-off` }, key(String(k + 1)), h('b', { class: 'c-title' }, ch.label), h('span', { class: 'c-does' }, F.localize(ch.why))))),
       err ? h('p', { class: 'tg-err c-red', role: 'status' }, err) : null,
-      fallback ? h('p', { class: 'lapse' }, stamp(`Lapses ${F.date(c.year, info.until + 1, true)}`, { small: true, ink: 'violet' }), ` Unanswered: ${fallback.label.toLowerCase()}.`) : null,
+      fallback ? h('p', { class: 'lapse' }, stamp(`Expires ${F.date(c.year, info.until + 1, true)}`, { small: true, ink: 'violet' }), ` If you don't answer: ${fallback.label.toLowerCase()}.`) : null,
     ]
   }
 
@@ -138,11 +138,11 @@ export function incidentCard(ctx: Ctx): IncidentCard {
     return h('div', { testid: 'spray-ask' },
       h('header', { class: 'tg-head' },
         h('p', { class: 'tg-name', 'aria-hidden': 'true' }, 'Telegram'),
-        h('p', { class: 'tg-from' }, h('span', { class: 't-label' }, 'From'), ' ', h('b', null, 'The county agent'), ' ', h('span', { class: 't-caption' }, 'blight weather has come')),
+        h('p', { class: 'tg-from' }, h('span', { class: 't-label' }, 'From'), ' ', h('b', null, 'The county agent'), ' ', h('span', { class: 't-caption' }, 'blight weather is here')),
         h('button', { class: 'close tg-later', type: 'button', testid: 'spray-ask-close', 'aria-label': `Decide later${keys ? ' (Escape)' : ''}`, title: keys ? 'Decide later (Escape)' : undefined, onclick: () => putAway() }, icon('close', 'i'))),
       h('div', { class: 'tg-body' },
         icon('spray', 'i tg-ic'),
-        h('div', null, h('h2', { id: 'incident-title' }, 'Spraying this season'), h('p', null, 'Blight can take a whole field in one wet week. A spray protects a field for about a week.'))),
+        h('div', null, h('h2', { id: 'incident-title' }, 'Spraying this season'), h('p', null, 'Blight can wipe out a field in one wet week, and a spray protects it for about a week.'))),
       h('div', { class: 'replies three' }, SPRAY_WAYS.map((w, k) => h('button', {
         class: `reply${w.id === 'auto' ? ' first' : ''}${now === w.id ? ' is-on' : ''}`, type: 'button', testid: `spray-way-${w.id}`, 'aria-keyshortcuts': keys ? String(k + 1) : null,
         'aria-pressed': now ? String(now === w.id) : null, onclick: () => answerSprayHere(c, w.id),
@@ -152,10 +152,10 @@ export function incidentCard(ctx: Ctx): IncidentCard {
 
   // The card's own few words for each way; the people's sheet has the long ones.
   function sprayShort(c: S.Campaign, way: 'auto' | 'ask' | 'none'): string {
-    if (way === 'ask') return 'A stamp on a field when it wants spraying.'
-    if (way === 'none') return 'Blight, if it comes, goes unchecked.'
+    if (way === 'ask') return 'A stamp shows up when a field needs spraying.'
+    if (way === 'none') return 'Nothing stops blight if it comes.'
     const o = S.sprayOutlook(app.world, c)
-    return o.dollars > 0 ? `The crew does it by itself: about ${F.money(o.dollars)} this season.` : 'The crew does it by itself.'
+    return o.dollars > 0 ? `Your crew handles it automatically, for about ${F.money(o.dollars)} this season.` : 'Your crew handles it automatically.'
   }
 
   function answerSprayHere(c: S.Campaign, way: 'auto' | 'ask' | 'none'): void {
@@ -177,7 +177,8 @@ export function incidentCard(ctx: Ctx): IncidentCard {
     if (shown >= 0 && !ids.has(shown)) shown = -1
     const info = all.find(x => x.id === shown)
     const spray = !info && c.phase === 'season' && sprayAsking()
-    app.holding = info ? 'A telegram wants an answer. Answer it, or put it away (Escape) to go on.' : spray ? 'A question wants an answer. Answer it, or put it away (Escape) to go on.' : ''
+    const orClose = ctx.touch() ? 'Reply, or close it to keep playing.' : 'Reply, or press Escape to close it and keep playing.'
+    app.holding = info ? `This telegram needs an answer. ${orClose}` : spray ? `This question needs an answer. ${orClose}` : ''
     if (spray && !ctx.papers.isOpen()) {
       const was = el.hidden || el.classList.contains('out')
       el.classList.remove('out')

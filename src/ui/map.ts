@@ -12,7 +12,7 @@ export const BLOCK_NAME: Record<S.BlockId, string> = {
 
 export const BLOCK_NOTE: Record<S.BlockId, string> = {
   home: 'The six fields on the slope below the house.',
-  brook: 'Deep wet bottom land: heavy crops, but frost, blight and standing water.',
+  brook: 'Deep, wet bottom land that grows heavy crops but gets frost, blight and standing water.',
   ridge: 'Early, dry ground under the spruce.',
   dufour: 'A second farmstead with its own potato house, a long drive from home.',
 }

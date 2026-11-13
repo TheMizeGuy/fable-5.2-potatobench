@@ -15,13 +15,13 @@ export function landOf(c: S.Campaign, field: number): S.LandInfo | undefined {
 
 // What the land is, in a line, for the marker on the map and its card.
 export function landSaid(l: S.LandInfo): string {
-  return `${l.name}, ${BLOCK_NAME[l.block].toLowerCase()}: land to rent at ${F.money(l.rent)} a year or buy for ${F.money(l.price)}.`
+  return `${l.name}, ${BLOCK_NAME[l.block].toLowerCase()}. You can rent it for ${F.money(l.rent)} a year or buy it for ${F.money(l.price)}.`
 }
 
 // The facts a grower weighs before taking on a field: its ground, the drive, the haul, and what comes with it.
 function facts(l: S.LandInfo): string {
-  const haul = l.haul > 0.005 ? ` Digging it takes ${F.pct(l.haul)} longer, for the haul to the potato house.` : ''
-  return `Soil ${soilWord(l.soil)}, early dying in ${F.pct(l.vert)} of plants. ${F.upper(roadTime(l.travel))} on the road from the home yard each way.${haul}`
+  const haul = l.haul > 0.005 ? ` Digging it takes ${F.pct(l.haul)} longer because of the haul to the potato house.` : ''
+  return `The soil is ${soilWord(l.soil)}, with early dying in ${F.pct(l.vert)} of plants. It's ${roadTime(l.travel)} each way by road from the home yard.${haul}`
 }
 
 // The card for land the farm does not hold: Rent or Buy. note: why the last try was refused.
@@ -44,7 +44,7 @@ export function landCard(ctx: Ctx, c: S.Campaign, field: number, note: string, o
     h('div', { class: 'plan-row land-row' },
       h('button', { class: 'nbtn primary', type: 'button', testid: 'land-rent', onclick: () => tryCmd({ t: 'rent', field }) }, 'Rent', h('span', { class: 'sub num' }, `${F.money(l.rent)} a year`)),
       h('button', { class: 'nbtn', type: 'button', testid: 'land-buy', onclick: () => tryCmd({ t: 'buyLand', field }) }, 'Buy', h('span', { class: 'sub num' }, F.money(l.price))),
-      h('p', { class: 'card-line' }, `Rent is paid when the season begins. Planted, it costs ${F.money(GROW)} more to grow; rested, ${F.money(S.REST_COST)}. Land is bought from cash, ${F.money(Math.max(0, c.cash))} now.`)),
+      h('p', { class: 'card-line' }, `You pay rent when the season starts. Growing a crop on it costs ${F.money(GROW)} more, or ${F.money(S.REST_COST)} if you rest it. You buy land with cash, and you have ${F.money(Math.max(0, c.cash))} now.`)),
     note ? h('p', { class: 'card-line flash lv-warn', role: 'alert' }, note) : null,
   ]
 }

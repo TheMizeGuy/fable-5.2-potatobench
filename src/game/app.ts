@@ -272,7 +272,7 @@ export class App {
     const fresh = this.freshNeeds(c)
     if (this.speed === 0) return
     const decision = events.find(e => STOP_FOR.has(e.type))
-    if (seasonDone(c)) this.halt('The season is done.')
+    if (seasonDone(c)) this.halt('The season is over.')
     else if (decision) this.halt(decision.text)
     else if (this.settings.pauseOnAlerts) {
       const trouble = events.find(e => e.level === 'bad' || e.level === 'warn')
@@ -453,7 +453,7 @@ export class App {
       const r = this.do({ t: 'assign', id: mine.id, unit: this.unit })
       return r.ok ? { field, ok: true, err: '' } : { field, ok: false, err: r.err }
     }
-    if (!need) return { field, ok: false, err: this.needs()[field]?.hold?.why ?? 'Nothing needs doing here now.' }
+    if (!need) return { field, ok: false, err: this.needs()[field]?.hold?.why ?? 'Nothing needs doing here right now.' }
     if (need.act === 'sell' || need.act === 'close' || need.act === 'wait') return { field, ok: false, err: need.text }
     return this.order(need.act, { fields: [field] })[0]
   }

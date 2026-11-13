@@ -60,7 +60,7 @@ export function yardCard(ctx: Ctx): YardCard {
     const built = all.filter(b => b.state === 'built' && b.kind !== 'house')
     const pond = S.pondInfo(app.world, c)
     const stand = S.standInfo(c)
-    const extra = (b: S.BuildingInfo) => b.kind === 'pond' && pond.built ? `${F.num(Math.floor(pond.waterings))} of ${pond.capacity} waterings` : b.kind === 'stand' && stand.built ? `${stand.open ? 'open' : 'shut'}, ${F.money(stand.sales)} this year` : ''
+    const extra = (b: S.BuildingInfo) => b.kind === 'pond' && pond.built ? `${F.num(Math.floor(pond.waterings))} of ${pond.capacity} waterings` : b.kind === 'stand' && stand.built ? `${stand.open ? 'open' : 'closed'}, ${F.money(stand.sales)} this year` : ''
     const best = suggest && can.some(b => b.kind === suggest && b.ok) ? suggest : null
     const keys = !ctx.touch()
     const flash = flashed && performance.now() < flashed.until ? flashed : null
@@ -70,26 +70,26 @@ export function yardCard(ctx: Ctx): YardCard {
           h('p', { class: 't-label num' }, `${yard === S.HOME_YARD ? 'The home farm' : 'The Dufour place'} · ${loads(m.logs)} logs, ${loads(m.stone)} stone in the yard`),
           h('h2', { class: 't-title', testid: 'yard-title' }, YARD_TITLE[yard])),
         h('button', { class: 'close', type: 'button', testid: 'yard-close', 'aria-label': `Close${keys ? ' (Escape)' : ''}`, onclick: () => app.selectYard(0) }, icon('close', 'i'))),
-      h('div', { class: 'builds', role: 'list', 'aria-label': 'Standing and going up' },
-        houses.map(x => h('div', { class: 'build-row', role: 'listitem' }, icon('store', 'i'), h('span', null, h('span', { class: 't-label' }, 'Standing'), ' ', h('b', null, F.upper(x.name.replace(/^Home /, ''))), ' ', h('span', { class: 'quiet num' }, `holds ${F.mass(x.cwt)}`)), h('span'))),
-        built.map(b => h('div', { class: 'build-row', role: 'listitem', testid: `built-${b.kind}` }, icon(BUILD_GLYPH[b.kind], 'i'), h('span', null, h('span', { class: 't-label' }, 'Standing'), ' ', h('b', null, b.name), extra(b) ? [' ', h('span', { class: 'quiet' }, extra(b))] : null), h('span'))),
+      h('div', { class: 'builds', role: 'list', 'aria-label': 'Built and going up' },
+        houses.map(x => h('div', { class: 'build-row', role: 'listitem' }, icon('store', 'i'), h('span', null, h('span', { class: 't-label' }, 'Built'), ' ', h('b', null, F.upper(x.name.replace(/^Home /, ''))), ' ', h('span', { class: 'quiet num' }, `holds ${F.mass(x.cwt)}`)), h('span'))),
+        built.map(b => h('div', { class: 'build-row', role: 'listitem', testid: `built-${b.kind}` }, icon(BUILD_GLYPH[b.kind], 'i'), h('span', null, h('span', { class: 't-label' }, 'Built'), ' ', h('b', null, b.name), extra(b) ? [' ', h('span', { class: 'quiet' }, extra(b))] : null), h('span'))),
         up.map(b => {
           const who = builders(c, b.kind, yard)
           return h('div', { class: 'build-row', role: 'listitem', testid: `going-${b.kind}` },
             icon('build', 'i'),
             h('span', null, h('span', { class: 't-label' }, 'Going up'), ' ', h('b', null, b.name), ' ', h('span', { class: 'quiet num' }, `${F.pct(b.progress)} · ${F.num(Math.ceil(b.daysLeft))} crew-days`)),
             h('span', { class: 'who' }, who.length ? who.slice(0, 3).map(u => [ringed(u, ringFor(c, u.id), 24), h('span', null, firstName(u.name))])
-              : h('span', { class: 'quiet it' }, c.phase === 'season' ? 'waiting for a builder' : 'built in the season or over the winter')),
+              : h('span', { class: 'quiet it' }, c.phase === 'season' ? 'waiting for a builder' : 'gets built during the season or over the winter')),
             meter(b.progress, { label: `${b.name} built`, text: `${F.pct(b.progress)} built` }))
         }),
-        !houses.length && !built.length && !up.length ? h('div', { class: 'build-row', role: 'listitem' }, h('span', { class: 'quiet it' }, 'Nothing stands here yet.')) : null),
+        !houses.length && !built.length && !up.length ? h('div', { class: 'build-row', role: 'listitem' }, h('span', { class: 'quiet it' }, 'Nothing is built here yet.')) : null),
       m.logs >= 1 && !m.sellWhy ? h('div', { class: 'orders sell-logs', role: 'group', 'aria-label': 'Logs' },
         order({
           key: '', icon: 'logs', name: `Sell ${F.plural(Math.floor(m.logs), 'load')} of logs`, cost: F.money(Math.floor(m.logs) * m.logPrice), testid: 'yard-sell-logs',
-          catch: `The mill pays ${F.money(m.logPrice)} a load; a building short of logs buys them back at ${F.money(m.millPrice)}.`,
+          catch: `The mill pays ${F.money(m.logPrice)} a load, but a building that runs short has to buy logs back at ${F.money(m.millPrice)}.`,
           onclick: () => { const r = ctx.run({ t: 'sellLogs', loads: Math.floor(m.logs) }); if (r.ok) ctx.announce(F.localize(r.events[0]?.text ?? '')) },
         })) : null,
-      can.length ? h('div', { class: 'orders', role: 'group', 'aria-label': 'Raise a building' },
+      can.length ? h('div', { class: 'orders', role: 'group', 'aria-label': 'Put up a building' },
         can.map((b, k) => order({
           key: keys && k < 9 ? String(k + 1) : '', icon: '', name: b.name, cost: costOf(b), suggested: b.kind === best, testid: `build-${b.kind}`,
           catch: flash?.kind === b.kind ? flash.text : !b.ok ? F.localize(b.why) : `Catch: ${b.catch.replace(/^./, x => x.toLowerCase())}`,
@@ -97,7 +97,7 @@ export function yardCard(ctx: Ctx): YardCard {
           title: keys ? b.does : undefined,
           said: `${b.does} ${F.money(b.total)} in all${b.buyLogs > 0 || b.buyStone > 0 ? `, with ${[b.buyLogs > 0 ? `${loads(b.buyLogs)} logs` : '', b.buyStone > 0 ? `${loads(b.buyStone)} stone` : ''].filter(Boolean).join(' and ')} bought in` : ''}.`,
           onclick: () => build(b),
-        }))) : h('p', { class: 'note' }, 'Every building this yard can hold stands here.'),
+        }))) : h('p', { class: 'note' }, 'This yard already has every building it can hold.'),
     ]
   }
 
