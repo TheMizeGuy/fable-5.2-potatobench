@@ -21,7 +21,7 @@ import { openHelp } from './help.ts'
 import { ledgerScreen, overScreen } from './ledger.ts'
 import { openMenu } from './menu.ts'
 import { planScreen } from './plan.ts'
-import { alertShort, countYearsFrom, firstName, jobText } from './rules.ts'
+import { alertShort, countYearsFrom, firstName, JOB_DOING, jobText } from './rules.ts'
 import { seasonScreen } from './season.ts'
 import { titleScreen } from './title.ts'
 import { guidedYear, HOLD, mountGuide, openGuide, quietAlert } from './tutorial.ts'
@@ -38,16 +38,21 @@ const SENT: Record<S.JobKind, string> = {
 }
 
 // The answer to a stamp or a right-click: who will do what where, or that it's on the work list and why not the one picked.
-function sentText(c: S.Campaign, e: { field: number; kind: S.JobKind; unit: number; instead?: number }): string {
+// fields: more than one pressed in a row, said together ("Killing vines in 4 fields is on the work list.").
+function sentText(c: S.Campaign, e: { field: number; kind: S.JobKind; unit: number; instead?: number }, fields = 1): string {
+  const where = fields > 1 ? `${fields} fields` : S.placeName(e.field)
   const u = c.crew.find(x => x.id === e.unit)
-  if (u) return `${u.kind === 'farmer' ? 'You\'ll' : `${firstName(u.name)} will`} ${SENT[e.kind]} ${S.placeName(e.field)}.`
-  const what = jobText(e)
+  if (u) return `${u.kind === 'farmer' ? 'You\'ll' : `${firstName(u.name)} will`} ${SENT[e.kind]} ${where}.`
+  const what = fields > 1 ? `${JOB_DOING[e.kind]} ${where}` : jobText(e)
   const not = c.crew.find(x => x.id === e.instead)
   if (!not) return `${what} is on the work list.`
   const why = not.foreman ? `${firstName(not.name)} is a foreman` : `${not.kind === 'farmer' ? 'You don\'t' : `${firstName(not.name)} doesn't`} do ${S.SKILL_LABEL[S.jobSkill(e.kind)]}`
   const other = c.crew.some(x => x.id !== not.id && !x.foreman && S.willDo(x, e.kind))
   return `${why}, so ${what.replace(/^./, x => x.toLowerCase())} is on the work list ${other ? 'for someone else' : 'until someone on the farm does'}.`
 }
+
+// How close together presses of the same order come to be answered by one line.
+const JOIN_MS = 2500
 
 export const mountHud: MountHud = (root, app, view, sound) => {
   mountSprites()
@@ -68,6 +73,7 @@ export const mountHud: MountHud = (root, app, view, sound) => {
   const tip = h('p', { class: 'alert answer-tip sys', testid: 'answer-tip', role: 'status', hidden: true, style: 'position:absolute;max-width:320px;margin:0;pointer-events:none' })
   guideLayer.append(tip)
   let tipTimer = 0
+  let lastSent: { kind: S.JobKind; unit: number; instead?: number; fields: number[]; at: number; text: string } | null = null
   function answer(text: string): void {
     notes.push({ text, level: 'info', ttl: 7000 })
     if (!root.classList.contains('noting')) return
@@ -255,7 +261,15 @@ export const mountHud: MountHud = (root, app, view, sound) => {
       }
       case 'sent': {
         const c = app.campaign
-        if (c) answer(sentText(c, e))
+        if (!c) break
+        // Presses of the same order within a moment of each other are answered by one line.
+        const now = performance.now()
+        const same = lastSent && now - lastSent.at < JOIN_MS && lastSent.kind === e.kind && lastSent.unit === e.unit && lastSent.instead === e.instead && !lastSent.fields.includes(e.field)
+        const fields = same ? [...lastSent!.fields, e.field] : [e.field]
+        if (same) notes.forget(lastSent!.text)
+        const text = sentText(c, e, fields.length)
+        lastSent = { kind: e.kind, unit: e.unit, instead: e.instead, fields, at: now, text }
+        answer(text)
         break
       }
     }
