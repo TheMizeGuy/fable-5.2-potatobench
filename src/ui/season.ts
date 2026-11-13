@@ -651,6 +651,8 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     if (!c) return null
     const unit = typeof a.data?.unit === 'number' ? a.data.unit : -1
     if (a.type === 'incident' && typeof a.data?.incident === 'number') { const id = a.data.incident; return () => incident.open(id) }
+    // Frost on the barrels: the haul of the biggest pile first, today.
+    if (a.type === 'frostBarrels') return () => { const h = app.campaign ? S.haulInfo(app.world, app.campaign).sort((x, y) => y.cwt - x.cwt)[0] : undefined; if (h) app.haulAhead(h.field) }
     if (unit >= 0 && a.type !== 'poached' && a.type !== 'quit') return () => { if (app.campaign?.crew.some(u => u.id === unit)) { app.select(-1); app.selectUnit(unit) } }
     if (a.type === 'built' || a.type === 'building' || a.type === 'pondDry') {
       const b = typeof a.data?.building === 'number' ? c.buildings.find(x => x.id === a.data!.building) : undefined

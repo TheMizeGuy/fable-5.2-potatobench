@@ -465,6 +465,12 @@ export class App {
     return r
   }
 
+  // The frost warning pressed: the haul of a field's barrels first, today, and the answer says who and how much.
+  haulAhead(field: number): void {
+    const r = this.do({ t: 'haulNow', field })
+    this.notice(r.ok ? r.events[0]?.text ?? '' : r.err)
+  }
+
   // A right-click (or a long press) on a field: with someone picked, an order to them; otherwise the field's own order.
   orderAt(field: number): OrderResult {
     return this.unit >= 0 && this.campaign?.season ? this.sendTo(field, this.unit) : this.smartOrder(field)

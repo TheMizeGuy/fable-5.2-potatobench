@@ -166,7 +166,7 @@ export function alertShort(a: Alert): { text: string; glyph: string } {
     case 'pondDry': return { text: 'The pond is dry', glyph: 'pond' }
     case 'frostBarrels': {
       const cwt = [...a.text.matchAll(/([\d,]+) cwt in /g)].reduce((t, m) => t + Number(m[1].replace(/,/g, '')), 0)
-      return { text: `Frost tonight. Hauling the ${cwt ? F.localize(`${cwt} cwt`) : 'crop'} in barrels first`, glyph: 'frost' }
+      return { text: `Frost tonight on ${cwt ? F.localize(`${cwt} cwt`) : 'the crop'} in barrels. Haul it in now`, glyph: 'frost' }
     }
     case 'frozenInField': return { text: `${name}barrels froze${typeof a.data?.cwt === 'number' && a.data.cwt > 0 ? `, ${F.localize(`${a.data.cwt} cwt`)}` : ''}`, glyph: 'frost' }
     case 'weighed': return { text: `${name}weighed in`, glyph: 'ticket' }
