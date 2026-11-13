@@ -36,7 +36,13 @@ Rubber stamps appear only at the moments that earn them: weighed, paid, a decisi
 - Orders are buttons: key, name, cost, then the catch. The suggested one is filled ochre and carries the fist.
 - Selection is drawn on the land: a dashed line round the thing, a registration mark at each corner.
 - A person is the same everywhere: portrait, pin ring and time-book cell in the colours their 3D figure wears.
-- A step that cannot be undone wears a red hazard border (Let go, End the season early).
+- A step that cannot be undone wears a red hazard border (Let go, End the season early, Delete the save) and asks
+  once more.
+- What can be pressed stands off the paper as a key cut from card (a rim, the card's edge under the face, a shadow);
+  what is only read is ink on the paper. How far a key stands and how big it is says what its press costs: `data-w`
+  is `major`, `std` or `minor` (`system.css` § 7; docs/UI.md, "Controls: depth and weight"). The still frames here
+  were drawn before this rule and show the old printed boxes: the live kit (`?kit` in the game) is the reference for
+  controls.
 - A range is always a range; money is right-aligned; a negative figure carries its minus sign.
 - The clock is Pause and three speeds and never changes speed by itself; when it stops for you it says so.
 - Menus are sheets over the live land (a plain veil, never a blur behind a sheet).

@@ -3,10 +3,11 @@
 // and the checks look at.
 import './system.css'
 import './game.css'
+import './weight.css'
 import { personLook, type PortraitCut } from '../../game/looks.ts'
 import { h, type Child } from '../dom.ts'
 import { icon, ICON_NAMES, mountSprites } from '../icons.ts'
-import { coupon, fold, key, meter, need, order, range, slip, stamp, tag, tens, tip } from './parts.ts'
+import { coupon, fist, fold, key, meter, need, order, range, slip, stamp, tag, tens, tip } from './parts.ts'
 import { pin, portrait } from './people.ts'
 
 const sec = (n: string, title: string, note: string, ...kids: Child[]) =>
@@ -28,6 +29,40 @@ const INKS: [string, string, string, string][] = [
 ]
 const SKIES: [string, string][] = [['July', '#4f7a34'], ['Snow', '#e2e5e8'], ['Night', '#3a4a6a']]
 const CUTS: [PortraitCut, string][] = [['farmer', 'You'], ['cap-moustache', 'Normand Nadeau'], ['felt-beard', 'Alcide Theriault'], ['kerchief', 'Verna Bubar'], ['curls', 'Lucien'], ['cap-glasses', 'Wendell']]
+
+// One paper with every weight on it in every state, beside what is only read. The words are specimens.
+type KeyState = [label: string, cls: string, more?: { disabled?: boolean; pressed?: boolean; title?: string }]
+const REST: KeyState[] = [['rest', ''], ['hover', 'is-hover'], ['pressed', 'is-pressed'], ['focused', 'is-focus']]
+const OFF: KeyState = ['greyed, says why', '', { disabled: true, title: 'Not enough cash: $18,271' }]
+const BUSY: KeyState = ['busy', 'is-busy']
+function keyOf(w: 'major' | 'std' | 'minor', cls: string, st: KeyState, kids: Child[]): HTMLElement {
+  const [label, more, o] = st
+  return state(label, h('button', { class: `${cls}${more ? ` ${more}` : ''}`, type: 'button', 'data-w': w, disabled: o?.disabled, title: o?.title, 'aria-pressed': o?.pressed ? 'true' : null }, kids))
+}
+function weights(name: string, cls: string): HTMLElement {
+  const row = (...kids: Child[]) => h('div', { class: 'row' }, kids)
+  return h('figure', { class: `k-paper sheet ${cls}` },
+    h('figcaption', { class: 't-label' }, name),
+    lab('major, filled: the one the game would press'),
+    row([...REST, BUSY].map(st => keyOf('major', 'btn go', st, ['Sell now', h('span', { class: 'sub num' }, '$18,271 today')]))),
+    lab('major: money, time, or it cannot be taken back'),
+    row([...REST, OFF].map(st => keyOf('major', 'btn', st, ['Store it', h('span', { class: 'sub num' }, '$310 a month')]))),
+    lab('major, destroying: striped, and it asks once more'),
+    row([REST[0], REST[1], REST[2]].map(st => keyOf('major', 'btn hazard', st, [icon('letgo', 'i'), 'Let go', h('span', { class: 'sub' }, 'today')]))),
+    lab('standard: a plain key, its cost small at the side'),
+    row([...REST, BUSY, OFF].map(st => keyOf('std', 'btn', st, [icon('scout', 'i'), 'Follow']))),
+    row(keyOf('std', 'btn', ['on, chosen', '', { pressed: true }], [icon('scout', 'i'), 'Following']),
+      keyOf('std', 'btn is-suggested', ['suggested', ''], [fist(), 'Spray', h('span', { class: 'sub num' }, '$110')]),
+      keyOf('std', 'btn', ['with its cost', ''], ['Sell 2', h('span', { class: 'sub num' }, '$180')])),
+    lab('minor: close, back, more, change'),
+    row([...REST, OFF].map(st => keyOf('minor', 'btn', st, [icon('back', 'i'), 'Back'])),
+      keyOf('minor', 'btn quiet', ['an underlined word', ''], ['The full reckoning']),
+      state('close', h('button', { class: 'close', type: 'button', 'data-w': 'minor', style: 'margin:0', 'aria-label': 'Close' }, icon('close', 'i')))),
+    lab('only read: ink on the paper, no edge, no shadow'),
+    h('div', { class: 'k-facts' },
+      h('p', { class: 'lead' }, h('span', null, 'Net weight'), h('span', { class: 'dots' }), h('b', { class: 'num' }, '1,374 cwt')),
+      h('p', null, h('span', { class: 't-label' }, 'Press '), key('S'), ' to spray: a printed key is read, not pressed.')))
+}
 
 function sky(name: string, colour: string): HTMLElement {
   return h('figure', { class: 'k-back', style: `background:${colour}` },
@@ -80,22 +115,15 @@ export function mountKit(root: HTMLElement): void {
         h('p', { class: 'spec' }, lab('.t-figure 28 · Caslon bold'), h('span', { class: 't-figure num' }, '−$22,820')),
         h('p', { class: 'spec' }, lab('.stamped · gothic violet'), h('span', { class: 'stamped', style: 'font-size:46px' }, '1,374')))),
 
-    sec('4', 'Controls, every state', '.btn with .is-hover .is-pressed .is-focus .is-off .is-on .is-busy',
+    sec('4', 'Controls: depth and weight', 'what can be pressed stands off the paper; how far says what the press costs (data-w)',
+      h('div', { class: 'k-weights' }, weights('On paper', ''), weights('On the weigh ticket', 'buff'), weights('On a telegram', 'wire')),
       h('div', { class: 'k-states' },
-        state('rest', h('button', { class: 'btn', type: 'button' }, 'Hire')),
-        state('hover', h('button', { class: 'btn is-hover', type: 'button' }, 'Hire')),
-        state('pressed', h('button', { class: 'btn is-pressed', type: 'button' }, 'Hire')),
-        state('focused', h('button', { class: 'btn is-focus', type: 'button' }, 'Hire')),
-        state('disabled', h('button', { class: 'btn is-off', type: 'button', disabled: true }, 'Hire')),
-        state('selected', h('button', { class: 'btn is-on', type: 'button', 'aria-pressed': 'true' }, 'Hired')),
-        state('busy', h('button', { class: 'btn is-busy', type: 'button' }, 'Saving')),
-        state('.btn.quiet', h('button', { class: 'btn quiet', type: 'button' }, 'The full reckoning'))),
-      h('div', { class: 'k-states' },
-        state('.btn.go', h('button', { class: 'btn go', type: 'button' }, 'Start the season', icon('arrow', 'i'))),
-        state('hover', h('button', { class: 'btn go is-hover', type: 'button' }, 'Start the season', icon('arrow', 'i'))),
-        state('focused', h('button', { class: 'btn go is-focus', type: 'button' }, 'Start the season', icon('arrow', 'i'))),
-        state('.btn.hazard', h('button', { class: 'btn hazard', type: 'button' }, icon('letgo', 'i'), 'Let go')),
-        state('hazard, hover', h('button', { class: 'btn hazard is-hover', type: 'button' }, icon('skip', 'i'), 'End the season early'))),
+        state('the strong action, with its arrow', h('button', { class: 'btn go', type: 'button', 'data-w': 'major' }, 'Start the season', icon('arrow', 'i'))),
+        state('destroying, hover', h('button', { class: 'btn hazard is-hover', type: 'button', 'data-w': 'major' }, icon('skip', 'i'), 'End the season early')),
+        state('armed: where the clock goes on from', h('div', { class: 'clock sheet laid', style: 'width:270px', role: 'group', 'aria-label': 'Clock, stopped' },
+          h('button', { class: 'k stopped', type: 'button', 'aria-pressed': 'true', 'aria-label': 'Paused' }, icon('play')),
+          [1, 2, 3].map(k => h('button', { class: `k num${k === 1 ? ' armed' : ''}`, type: 'button', 'aria-pressed': 'false' }, `${k}×`)),
+          h('button', { class: 'menu', type: 'button', 'aria-label': 'Menu' }, icon('menu'))))),
       h('div', { class: 'k-states', style: 'border-bottom:0;margin-bottom:0' },
         state('key()', h('span', { style: 'display:flex;gap:6px' }, key('S'), key('1'), key('Space'))),
         state('check: a real checkbox', h('span', { style: 'display:flex;gap:14px' },
@@ -159,7 +187,7 @@ export function mountKit(root: HTMLElement): void {
           h('p', { class: 't-label c-red' }, 'Cannot be undone'),
           h('b', { style: 'font-size:21px' }, 'Let Normand Nadeau go today?'),
           h('p', { class: 'quiet' }, 'He leaves the farm today and does not come back.'),
-          h('div', { style: 'display:flex;gap:10px;margin-top:4px' }, h('button', { class: 'btn hazard', type: 'button' }, 'Let him go'), h('button', { class: 'btn is-focus', type: 'button' }, 'Keep him on'))),
+          h('div', { style: 'display:flex;gap:10px;margin-top:4px;align-items:flex-end' }, h('button', { class: 'btn hazard', type: 'button' }, 'Let him go'), h('button', { class: 'btn is-focus', type: 'button' }, 'Keep him on'))),
         h('h2', { class: 'k-h sp' }, 'Stamps', h('span', { class: 'k-note' }, 'only where the moment earns them')),
         h('div', { class: 'k-row' }, stamp('Weighed', { ink: 'violet' }), stamp('Paid', { ink: 'violet' }), stamp('Lapses Jul 16', { ink: 'violet', small: true }), stamp('On the list', { small: true }),
           h('p', { class: 'stopped-tag', style: 'position:relative;right:auto;top:auto' }, icon('pause', 'i'), 'Stopped for you')),

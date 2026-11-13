@@ -26,6 +26,8 @@ import { seasonScreen } from './season.ts'
 import { titleScreen } from './title.ts'
 import { guidedYear, HOLD, mountGuide, openGuide } from './tutorial.ts'
 import { whois } from './whois.ts'
+// Last, after every screen's own stylesheet: the control rule fitted to the live game.
+import './system/weight.css'
 
 export const mountHud: MountHud = (root, app, view, sound) => {
   mountSprites()
@@ -219,9 +221,12 @@ export const mountHud: MountHud = (root, app, view, sound) => {
   document.addEventListener('pointerup', release, true)
   document.addEventListener('pointercancel', release, true)
 
-  // A mouse click leaves focus on the button; drop it so Space goes back to the clock.
+  // A mouse click leaves focus on the button; drop it so Space goes back to the clock. A control that names a sound
+  // (data-sound: every major one does) has it asked of the sound, which plays the cues it knows.
   root.addEventListener('click', e => {
     const b = (e.target as HTMLElement).closest('button')
+    const cue = (e.target as HTMLElement).closest<HTMLElement>('[data-sound]')?.dataset.sound
+    if (cue) ctx.cue(cue)
     if (b && e.detail > 0 && !b.closest('.dialog')) b.blur()
   })
 

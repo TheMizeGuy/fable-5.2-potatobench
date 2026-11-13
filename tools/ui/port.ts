@@ -14,10 +14,11 @@ const BACKDROPS: Record<string, string> = {
   'play-july.jpg': '#4f7a34', 'play-snow.jpg': '#e2e5e8', 'winter-night.jpg': '#3a4a6a', 'title.jpg': '#c98f5a', 'play-october.jpg': '#7a6a4a',
 }
 
-// The materials every screen shares, old or rebuilt: the tokens, the type, the paper, the buttons, the stamps.
+// The materials every screen shares, old or rebuilt: the tokens, the type, the paper, the buttons and the weight
+// every control carries (data-w), the stamps.
 // Every other rule of the system is a component and reaches only inside an element marked .sys, so the old screens'
 // markup (which uses some of the same class names) is not restyled under them while they wait to be rebuilt.
-const GLOBAL = /^(:root|\*|html|body|button|p\b|h[1-4]\b|ul\b|ol\b|b\b|fieldset|:focus-visible|\.(sr|i|veil|stage|t-[a-z]+|num|tab|it|quiet|c-[a-z]+|rule|lead|btn|key|iconbtn|sheet|mount|s-[a-z]+|stamp)(?![a-z0-9-]))/
+const GLOBAL = /^(:root|\*|html|body|button|p\b|h[1-4]\b|ul\b|ol\b|b\b|fieldset|:focus-visible|\[data-w|:where\(\[data-w|:is\(\.seg-in|\.seg-in|\.(sr|i|veil|stage|t-[a-z]+|num|tab|it|quiet|c-[a-z]+|rule|lead|btn|key|iconbtn|sheet|mount|s-[a-z]+|stamp)(?![a-z0-9-]))/
 const SCOPE = ':is(.sys, .sys *)'
 
 function scopeSelector(sel: string): string {

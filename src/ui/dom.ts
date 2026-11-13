@@ -1,4 +1,6 @@
 // Small DOM builders. Text always goes in as text nodes, never as markup.
+import { weigh } from './system/weight.ts'
+
 export type Child = Node | string | number | null | undefined | false | Child[]
 type Value = string | number | boolean | null | undefined | ((e: Event) => void)
 export type Attrs = Record<string, Value>
@@ -88,6 +90,8 @@ export function h<K extends keyof HTMLElementTagNameMap>(tag: K, attrs?: Attrs |
   const el = document.createElement(tag)
   setAttrs(el, attrs)
   if (el.dataset.testid && !el.dataset.k) el.dataset.k = el.dataset.testid
+  // Every control says what its press costs (system/weight.ts); what is only read says nothing.
+  if (tag === 'button' || (tag === 'a' && el.hasAttribute('href'))) weigh(el)
   append(el, kids)
   return el
 }
