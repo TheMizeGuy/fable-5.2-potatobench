@@ -210,7 +210,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       level: 'info', glyph: 'sample', ttl: 20000, field: e.field, day: e.day,
       text: `The test dig at ${name} is in. Show me`,
       full: `The test dig at ${name} is in. Press to see what came up.`,
-      go: () => openTray(e, false),
+      go: () => openTray(e, false), offer: true,
     })
   }
 
