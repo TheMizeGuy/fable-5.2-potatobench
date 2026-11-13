@@ -16,6 +16,7 @@ import { anchored, ties, type Land } from './tie.ts'
 import { fold } from './system/parts.ts'
 import { topBar } from './top.ts'
 import { usualFirstYear } from './usual-year.ts'
+import { firstSight } from './first-sight.ts'
 import { nextGoal } from '../game/goals.ts'
 import { agentSpeaking, springSlot } from './tutorial.ts'
 
@@ -33,11 +34,16 @@ function varietyTraits(v: S.Variety, c: S.Campaign, world: S.World): string[] {
   ]
 }
 
+// Whether the player has seen every variety side by side: from then on the field record lists them all.
+let compared = false
+
 // Every variety that can be planted this year, side by side.
 function openCompare(ctx: Ctx): void {
   const app = ctx.app
   const c = app.campaign
   if (!c) return
+  compared = true
+  ctx.dirty()
   const vs = S.availableVarieties(c.year)
   const cols: [string, (v: S.Variety) => string][] = [
     ['Matures', v => F.upper(v.maturity)],
@@ -168,7 +174,7 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
       const f = goalFold[g.id]
       if (!f) return false
       // Opened outright: the control it leads to is then scrolled into view (light, in top.ts), not held in place.
-      if (open !== f) { open = f; ctx.dirty() }
+      if (open !== f) { open = f; body.scrollTop = 0; ctx.dirty() }
       return true
     },
   })
@@ -233,6 +239,8 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
     const was = head()?.getBoundingClientRect().top
     open = open === id ? null : id
     ctx.dirty()
+    // Open, the fold scrolls in its own room under the strip; the sheet itself stands at its top.
+    if (open) { body.scrollTop = 0; body.style.paddingBottom = ''; return }
     requestAnimationFrame(() => requestAnimationFrame(() => {
       const now = head()?.getBoundingClientRect().top
       if (was === undefined || now === undefined) return
@@ -305,7 +313,8 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
     const same = (k: keyof S.FieldPlan) => sel.every(j => c.plans[j][k] === p[k])
     const potato = p.crop === 'potato'
     const info = S.fieldInfo(c, i)
-    const vs = S.availableVarieties(c.year)
+    const all = S.availableVarieties(c.year)
+    const vs = c.history.length || compared ? all : firstSight(all, [...new Set(sel.map(j => c.plans[j].variety))])
     const v = S.variety(p.variety)
     const stock = c.seedStock.filter(x => x.variety === p.variety && x.fields > 0)
     const saved = stock.reduce((a, x) => a + x.fields, 0)
@@ -324,9 +333,9 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
           choice('crop', 'Crop', [['potato', 'Potatoes', same('crop') && potato, () => setPlan({ crop: 'potato' })], ['rest', 'Rest year', same('crop') && !potato, () => setPlan({ crop: 'rest' })]]),
           h('p', { class: 'card-cost' }, h('span', { class: 't-label' }, sel.length > 1 ? 'Together' : 'Costs'), h('b', { class: 'num', testid: 'field-cost' }, F.money(cost)))),
         potato ? [
-          h('div', { class: 'vgrid', role: 'radiogroup', 'aria-label': 'Variety' }, vs.map(x => varietyBox(c, x, same('variety') && x.id === p.variety))),
+          h('div', { class: `vgrid${vs.length < all.length ? ' few' : ''}`, role: 'radiogroup', 'aria-label': 'Variety' }, vs.map(x => varietyBox(c, x, same('variety') && x.id === p.variety))),
           h('p', { class: 'note card-note' }, same('variety') ? `${v.blurb}${v.contract ? ` Without a contract it sells ${R.offContract()} its usual price.` : ''}` : 'These fields are planted with different varieties.',
-            ' ', h('button', { class: 'btn quiet', type: 'button', testid: 'compare-open', onclick: () => openCompare(ctx) }, 'Compare them all')),
+            ' ', h('button', { class: 'btn quiet', type: 'button', testid: 'compare-open', onclick: () => openCompare(ctx) }, vs.length < all.length ? `Compare all ${all.length}` : 'Compare them all')),
           p.seed === 'saved' ? null : h('div', { class: 'card-seed-note' }, seedNote),
         ] : h('p', { class: 'note card-note' }, `Oats and clover cost ${F.money(S.REST_COST)} and earn ${F.money(S.REST_INCOME)} in the fall. A rest year restores the soil right away and slowly reduces early dying.`)),
       h('div', { class: 'card-foot', testid: 'record-foot' },
@@ -351,23 +360,26 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
 
   function drawRows(c: S.Campaign): Child {
     const folds = springFolds(ctx, c, onTry, () => { open = null; ctx.dirty() })
-    const phone = ctx.layout() === 'narrow'
-    // On a phone the folds after the people stand as one row of buttons until one is opened (design/spring.phone.html).
-    const later = phone ? folds.filter(f => f.id !== 'fields' && f.id !== 'people' && f.id !== open) : []
     // The fold where the slip's goal is reached is ringed, and says so, so it is found without the slip.
     const g = nextGoal(c)
     // While the county agent has a note for this screen, the ring waits with the slip: one voice at a time.
     const goalAt = g && g.now && !g.block && !agentSpeaking() ? goalFold[g.id] : undefined
+    const phone = ctx.layout() === 'narrow'
+    // On a phone the folds after the people stand as one row of buttons until one is opened (design/spring.phone.html).
+    // While a fold is open every other one stands in that row above it, so the open one has the sheet's room.
+    const later = open ? folds.filter(f => f.id !== open) : phone ? folds.filter(f => f.id !== 'fields' && f.id !== 'people') : []
+    const strip = later.length ? h('div', { class: `fold more${open ? ` strip${later.length > 4 ? ' many' : ''}` : ''}`, role: 'group', 'aria-label': 'More sections', k: 'fold-more' },
+      later.map(f => h('button', { class: `btn${goalAt === f.id ? ' goal-ring' : ''}`, type: 'button', testid: f.open, 'aria-expanded': 'false', onclick: () => toggle(f.id) }, icon(f.glyph, 'i'), h('span', { class: 'nm' }, f.name)))) : null
     return [
+      open ? strip : null,
       folds.filter(f => !later.includes(f)).map(f => {
         const on = open === f.id
         const el = fold({ icon: f.glyph, name: f.name, state: goalAt === f.id && !on ? `${g!.title} here` : phone ? f.short ?? f.state : f.state, figure: f.figure, open: on, controls: on ? `fold-${f.id}` : undefined, testid: f.open, onclick: () => toggle(f.id) })
         if (goalAt === f.id && !on) el.classList.add('goal-ring')
         return h('div', { class: 'cat-fold', k: `fold-${f.id}` }, el,
-          on ? h('div', { class: 'cat-open', id: `fold-${f.id}`, testid: f.testid }, f.body()) : null)
+          on ? h('div', { class: 'cat-open', id: `fold-${f.id}`, testid: f.testid, 'data-scroll': `fold-${f.id}` }, f.body()) : null)
       }),
-      later.length ? h('div', { class: 'fold more', role: 'group', 'aria-label': 'More sections', k: 'fold-more' },
-        later.map(f => h('button', { class: `btn${goalAt === f.id ? ' goal-ring' : ''}`, type: 'button', testid: f.open, 'aria-expanded': 'false', onclick: () => toggle(f.id) }, icon(f.glyph, 'i'), f.name))) : null,
+      open ? null : strip,
     ]
   }
 
@@ -435,6 +447,8 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
       if (!c) return
       const layout = ctx.layout()
       el.dataset.layout = layout
+      // An open fold takes the sheet's room: the other folds as a strip, the order blank down to its two totals.
+      sheet.classList.toggle('folded', !!open)
       top.update()
       track.update()
       P.update()
@@ -446,7 +460,7 @@ export function planScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () =>
       card.hidden = shown.length === 0
       el.classList.toggle('selected', shown.length > 0)
       if (shown.length) {
-        patch(card, JSON.stringify([shown, c.plans, c.seedStock, note, app.settings.units, c.year, c.fields.map(f => [f.tenure, f.cover, f.works?.left]), Math.round(c.cash), c.mortgages.length]), () => drawCard(c, shown))
+        patch(card, JSON.stringify([shown, compared, c.plans, c.seedStock, note, app.settings.units, c.year, c.fields.map(f => [f.tenure, f.cover, f.works?.left]), Math.round(c.cash), c.mortgages.length]), () => drawCard(c, shown))
         if (was && !ctx.reduced()) { card.classList.remove('in'); void card.offsetWidth; card.classList.add('in') }
       } else note = ''
       tied.update(card.hidden ? null : ties().field())

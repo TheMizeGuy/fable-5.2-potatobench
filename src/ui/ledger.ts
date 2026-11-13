@@ -121,8 +121,11 @@ function yearOnFarm(c: S.Campaign): HTMLElement | null {
   if (!deeds.length && !people.size) return null
   return h('section', { class: 'b-people', testid: deeds.length ? 'ledger-deeds' : undefined },
     h('div', { class: 'sec-h' }, h('h2', null, 'The year on the farm')),
-    [...people].map(([who, lines]) => {
-      const pay = paid.get(who)
+    [...people].map(([who, all]) => {
+      // The hire is said once: in the line of what they're paid, with the job they were hired for.
+      const hire = all.map(t => /^is hired as (.+?) at /.exec(t)?.[1]).find(Boolean)
+      const lines = paid.has(who) ? all.filter(t => !/^is hired /.test(t)) : all
+      const pay = paid.get(who)?.replace(/^hired /, hire ? `hired as ${hire} ` : 'hired ')
       const said = [...lines, ...(pay ? [lines.length ? F.upper(pay) : pay] : [])].map((t, k) => k ? F.upper(t) : t).join(' ')
       return h('p', { class: 'ppl' }, portrait(who, 30), h('span', null, h('b', null, who), lines.length ? ` ${said}` : `, ${said}`))
     }),
