@@ -159,7 +159,7 @@ describe('what goals cost, the money and the year', () => {
     // The oats and clover the resting fields bring at the season's close count, as do the wages and penalties still to
     // pay and the interest on what the year end would leave owed.
     expect(m.rest).toBe(c.season!.fields.filter(f => f.status === 'rest').length * S.REST_INCOME)
-    expect(m.after).toBeCloseTo(m.cash + m.stored + m.growing + m.rest - m.wages - m.penalties - S.NOTE_PAYMENT - S.LIVING - m.due.mortgage - m.interest, 6)
+    expect(m.after).toBeCloseTo(m.cash + m.stored + m.growing + m.rest - m.wages - m.sprays - m.penalties - S.NOTE_PAYMENT - S.LIVING - m.due.mortgage - m.interest, 6)
     expect(m.parts.reduce((a, p) => a + p.amount, 0)).toBeCloseTo(m.after, 6)
   })
 
