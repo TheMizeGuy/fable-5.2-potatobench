@@ -420,7 +420,15 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   // Read once a frame, before anything on the land is moved, so the frame never forces a second layout.
   let coverCache: DOMRect[] | null = null
   const covers = (): DOMRect[] => coverCache ?? floating().filter((x): x is HTMLElement => !!x && !x.hidden && x.offsetParent !== null).map(x => x.getBoundingClientRect())
-  const P = plates(ctx, plateLayer, { model: plateModel, onBadge, covers })
+  // What a tag moved by its field steps clear of: each person on the land, head to foot, and the yards' tags.
+  const keep = (): DOMRect[] => [
+    ...(app.campaign?.crew ?? []).flatMap(u => {
+      const a = ctx.view.unitAnchor(u.id), f = ctx.view.unitFoot(u.id)
+      return a.visible && f.visible ? [new DOMRect(f.x - 12, Math.min(a.y, f.y - 24), 24, f.y + 2 - Math.min(a.y, f.y - 24))] : []
+    }),
+    ...yardMarks.filter(m => !m.wrap.hidden && m.at).map(m => new DOMRect(m.at!.x - m.w / 2, m.at!.y - 22, m.w, 44)),
+  ]
+  const P = plates(ctx, plateLayer, { model: plateModel, onBadge, covers, keep })
   const people = pins(ctx, plateLayer, {
     tags: () => [...P.boxes(), ...yardMarks.filter(m => !m.wrap.hidden && m.at).map(m => new DOMRect(m.at!.x - m.w / 2, m.at!.y - 22, m.w, 44))], covers,
     stopped: () => stoppedBy(app.campaign),
