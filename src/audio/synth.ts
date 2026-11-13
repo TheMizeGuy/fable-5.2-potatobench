@@ -234,8 +234,11 @@ export function noiseBed(rig: Rig, t: number, width: number): AudioNode {
 // A gain envelope with no corners: a raised-cosine rise to `peak`, a hold, and a raised-cosine fall, over `dur`.
 export function swell(g: AudioParam, t: number, dur: number, peak: number, rise: number, fall: number): void {
   g.value = 0
-  g.setValueCurveAtTime(curve(peak, true), t, rise)
-  g.setValueCurveAtTime(curve(peak, false), t + dur - fall, fall)
+  // Two curves may not overlap: a sound shorter than its rise and fall has both shortened to fit.
+  const k = Math.min(1, dur / (rise + fall + 1e-3))
+  const up = Math.max(1e-3, rise * k), down = Math.max(1e-3, fall * k)
+  g.setValueCurveAtTime(curve(peak, true), t, up)
+  g.setValueCurveAtTime(curve(peak, false), Math.max(t + up, t + dur - down), down)
 }
 
 function curve(peak: number, up: boolean): Float32Array<ArrayBuffer> {
