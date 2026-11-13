@@ -231,11 +231,14 @@ test('a person\'s pin stands over them above a tag or the yard\'s tag, and a cli
         const pin = own ?? [...document.querySelectorAll<HTMLElement>('#ui .pin-at:not(.gone) button.pin.is-many')].find(b => (b.textContent ?? '').includes(name))
         const head = pin?.querySelector('.head svg')?.getBoundingClientRect()
         if (!head) return { x: 0, y: 0, tag: false, top: false, none: true }
-        const p = { x: head.left + head.width / 2, y: head.top + head.height / 2 }
+        const tags = [...document.querySelectorAll<HTMLElement>('#ui .tag-wrap:not(.gone) .tag-at, #ui .yard-at:not(.gone) .yard-tag')].map(e => e.getBoundingClientRect())
+        // With a pin of their own, the click is aimed just over their head, where a player aims: the pin is there,
+        // whatever tag lies there too. Sharing one, the click goes to the shared pin.
+        const p = own ? { x: a.x, y: a.y - 8 } : { x: head.left + head.width / 2, y: head.top + head.height / 2 }
+        let tag = !!own && tags.some(b => p.x > b.left && p.x < b.right && p.y > b.top && p.y < b.bottom)
+        let top = !!document.elementFromPoint(p.x, p.y)?.closest('.pin')
         // where the pin's face and a tag overlap, the pin is on top
-        let tag = false, top = !!document.elementFromPoint(p.x, p.y)?.closest('.pin')
-        for (const e of document.querySelectorAll<HTMLElement>('#ui .tag-wrap:not(.gone) .tag-at, #ui .yard-at:not(.gone) .yard-tag')) {
-          const b = e.getBoundingClientRect()
+        for (const b of tags) {
           const l = Math.max(b.left, head.left), r = Math.min(b.right, head.right), t = Math.max(b.top, head.top), d = Math.min(b.bottom, head.bottom)
           if (r - l < 4 || d - t < 4) continue
           tag = true
