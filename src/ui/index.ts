@@ -16,12 +16,12 @@ import { EXIT_MS, layoutNow, Notes, Papers, unname, type Ctx, type Level, type S
 import { lotKey, ticket } from './dig.ts'
 import { h } from './dom.ts'
 import { mountSprites } from './icons.ts'
-import { setUnits } from './fmt.ts'
+import { localize, setUnits } from './fmt.ts'
 import { openHelp } from './help.ts'
 import { ledgerScreen, overScreen } from './ledger.ts'
 import { openMenu } from './menu.ts'
 import { planScreen } from './plan.ts'
-import { alertShort, countYearsFrom, firstName, jobText } from './rules.ts'
+import { alertShort, countYearsFrom, firstName, JOB_DOING, jobText } from './rules.ts'
 import { seasonScreen } from './season.ts'
 import { titleScreen } from './title.ts'
 import { guidedYear, HOLD, mountGuide, openGuide, quietAlert } from './tutorial.ts'
@@ -38,19 +38,25 @@ const SENT: Record<S.JobKind, string> = {
 }
 
 // The answer to a stamp or a right-click: who will do what where, or that it's on the work list and why not the one picked.
-function sentText(c: S.Campaign, e: { field: number; kind: S.JobKind; unit: number; instead?: number }): string {
-  // The year's first planting order is the word the crew waited for: the answer is what follows from it.
-  const word = e.kind === 'plant' ? c.season?.log.find(x => x.type === 'plantWord' && x.field === e.field && x.day === c.season!.day && c.season!.plantWordBy === 'you') : undefined
+// fields: more than one pressed in a row, said together ("Killing vines in 4 fields is on the work list.").
+function sentText(c: S.Campaign, e: { field: number; kind: S.JobKind; unit: number; instead?: number }, fields = 1): string {
+  // The year's first planting order is the word the crew waited for: the answer is what follows from it, however
+  // many Plant stamps are pressed after it.
+  const word = e.kind === 'plant' ? c.season?.log.find(x => x.type === 'plantWord' && x.day === c.season!.day && c.season!.plantWordBy === 'you') : undefined
   if (word) return word.text
+  const where = fields > 1 ? `${fields} fields` : S.placeName(e.field)
   const u = c.crew.find(x => x.id === e.unit)
-  if (u) return `${u.kind === 'farmer' ? 'You\'ll' : `${firstName(u.name)} will`} ${SENT[e.kind]} ${S.placeName(e.field)}.`
-  const what = jobText(e)
+  if (u) return `${u.kind === 'farmer' ? 'You\'ll' : `${firstName(u.name)} will`} ${SENT[e.kind]} ${where}.`
+  const what = fields > 1 ? `${JOB_DOING[e.kind]} ${where}` : jobText(e)
   const not = c.crew.find(x => x.id === e.instead)
   if (!not) return `${what} is on the work list.`
   const why = not.foreman ? `${firstName(not.name)} is a foreman` : `${not.kind === 'farmer' ? 'You don\'t' : `${firstName(not.name)} doesn't`} do ${S.SKILL_LABEL[S.jobSkill(e.kind)]}`
   const other = c.crew.some(x => x.id !== not.id && !x.foreman && S.willDo(x, e.kind))
   return `${why}, so ${what.replace(/^./, x => x.toLowerCase())} is on the work list ${other ? 'for someone else' : 'until someone on the farm does'}.`
 }
+
+// How close together presses of the same order come to be answered by one line.
+const JOIN_MS = 2500
 
 export const mountHud: MountHud = (root, app, view, sound) => {
   mountSprites()
@@ -63,6 +69,27 @@ export const mountHud: MountHud = (root, app, view, sound) => {
   const guideLayer = h('div', { class: 'guide-layer' })
   const notes = new Notes()
   root.replaceChildren(plateLayer, screenLayer, floating, whoLayer, notes.liveRegion, paperLayer, guideLayer)
+
+  // The answer to the player's own press (an order, or why not) is a note; while a tutorial note is up the notes are
+  // hidden, so it is also shown beside the pointer for a moment.
+  let pressedAt = { x: innerWidth / 2, y: innerHeight / 2 }
+  document.addEventListener('pointerdown', e => { pressedAt = { x: e.clientX, y: e.clientY } }, true)
+  const tip = h('p', { class: 'alert answer-tip sys', testid: 'answer-tip', role: 'status', hidden: true, style: 'position:absolute;max-width:320px;margin:0;pointer-events:none' })
+  guideLayer.append(tip)
+  let tipTimer = 0
+  // While a weigh ticket's own stop is made: the ticket says why, so no pause line is printed for it.
+  let ticketing = false
+  let lastSent: { kind: S.JobKind; unit: number; instead?: number; fields: number[]; at: number; text: string } | null = null
+  function answer(text: string): void {
+    notes.push({ text, level: 'info', ttl: 7000 })
+    if (!root.classList.contains('noting')) return
+    tip.textContent = localize(text)
+    tip.hidden = false
+    tip.style.left = `${Math.max(8, Math.min(innerWidth - 328, pressedAt.x + 14))}px`
+    tip.style.top = `${Math.max(8, Math.min(innerHeight - 96, pressedAt.y + 14))}px`
+    clearTimeout(tipTimer)
+    tipTimer = window.setTimeout(() => { tip.hidden = true }, 4500)
+  }
   const papers = new Papers(paperLayer, [screenLayer, plateLayer, floating], app)
   const touchQuery = matchMedia('(pointer: coarse)')
 
@@ -171,14 +198,13 @@ export const mountHud: MountHud = (root, app, view, sound) => {
         if (!found) continue
         const key = lotKey(c, lot)
         ctx.memo.lots[key] = structuredClone(found)
-        const staged = app.speed < 3
-        ctx.awaiting++
-        void view.whenShown('dig', e.field).then(() => {
-          ctx.awaiting--
-          const spec = app.campaign === c && app.screen === 'season' ? ticket(ctx, lot, { fresh: true, staged }) : null
-          if (spec) papers.enqueue(spec)
-          dirty = true
-        })
+        // The ticket comes up the moment the lot is weighed, so the game never stands paused for one that isn't on
+        // screen; a ticket already up keeps it waiting its turn behind.
+        const spec = app.screen === 'season' ? ticket(ctx, lot, { fresh: true, staged: app.speed < 3 }) : null
+        // The game stops for it as for any card that needs an answer (so answering it sets the days going again), with no
+        // line of its own: the ticket is the answer's place.
+        if (spec) { ticketing = true; app.stopFor(e.text); ticketing = false; papers.enqueue(spec) }
+        dirty = true
       }
     }
   }
@@ -223,7 +249,7 @@ export const mountHud: MountHud = (root, app, view, sound) => {
         dirty = true
         break
       case 'notice':
-        notes.push({ text: e.text, level: 'info', ttl: 7000 })
+        answer(e.text)
         break
       case 'saved':
         if (!e.ok) notes.push({ text: 'This browser couldn\'t save your game. Export it from the menu to keep it.', level: 'warn', ttl: 12000 })
@@ -234,7 +260,7 @@ export const mountHud: MountHud = (root, app, view, sound) => {
         const c = app.campaign
         if (e.speed > 0 && pauseSaid) { notes.forget(pauseSaid); pauseSaid = '' }
         if (e.speed === 0 && app.holding) ctx.announce(app.pauseReason)
-        else if (e.speed === 0 && app.pauseReason && app.pauseReason !== HOLD && !guidedYear(c) && app.screen === 'season' && c && !S.seasonDone(c) && !papers.isOpen() && !notes.has(app.pauseReason)) {
+        else if (!ticketing && e.speed === 0 && app.pauseReason && app.pauseReason !== HOLD && !guidedYear(c) && app.screen === 'season' && c && !S.seasonDone(c) && !papers.isOpen() && !notes.has(app.pauseReason)) {
           pauseSaid = `Paused: ${app.pauseReason}`
           notes.push({ text: pauseSaid, level: 'info', ttl: 9000 })
         }
@@ -243,7 +269,15 @@ export const mountHud: MountHud = (root, app, view, sound) => {
       }
       case 'sent': {
         const c = app.campaign
-        if (c) notes.push({ text: sentText(c, e), level: 'info', ttl: 7000 })
+        if (!c) break
+        // Presses of the same order within a moment of each other are answered by one line.
+        const now = performance.now()
+        const same = lastSent && now - lastSent.at < JOIN_MS && lastSent.kind === e.kind && lastSent.unit === e.unit && lastSent.instead === e.instead && !lastSent.fields.includes(e.field)
+        const fields = same ? [...lastSent!.fields, e.field] : [e.field]
+        if (same) notes.forget(lastSent!.text)
+        const text = sentText(c, e, fields.length)
+        lastSent = { kind: e.kind, unit: e.unit, instead: e.instead, fields, at: now, text }
+        answer(text)
         break
       }
     }
@@ -270,9 +304,15 @@ export const mountHud: MountHud = (root, app, view, sound) => {
   document.addEventListener('keydown', e => {
     const t = e.target as HTMLElement
     if (e.key === 'Escape') {
-      if (papers.isOpen()) { e.preventDefault(); papers.closeTop(); return }
-      if (who.escape()) { e.preventDefault(); return }
-      if (screen?.key?.(e)) { e.preventDefault(); return }
+      // Escape undoes the nearest thing first: a popover or breakdown, a paper, a card (a selection's card among them),
+      // Follow. Only with nothing open does it open the menu.
+      const steps: (() => boolean)[] = [
+        () => !papers.isOpen() && !!screen?.escapes?.popover(),
+        () => { if (!papers.isOpen()) return false; papers.closeTop(); return true },
+        () => who.escape() || (screen?.escapes ? screen.escapes.card() : !!screen?.key?.(e)),
+        () => { if (app.screen !== 'season' || view.followed() < 0) return false; view.follow(-1); ctx.announce('Stopped following.'); return true },
+      ]
+      if (steps.some(step => step())) { e.preventDefault(); return }
       if (performance.now() - papers.closedAt < 1500) { e.preventDefault(); return }
       if (app.screen !== 'title' && app.campaign) { e.preventDefault(); menu() }
       return

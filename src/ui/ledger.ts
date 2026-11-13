@@ -8,6 +8,7 @@ import { h, s, type Child } from './dom.ts'
 import * as F from './fmt.ts'
 import { term } from './glossary.ts'
 import { icon } from './icons.ts'
+import { verdictSays, yearWalk } from './money-words.ts'
 import { soilWord, varietyName, yearName, yearShort, yearSpan, yearWord } from './rules.ts'
 import { goals, nextGoal } from '../game/goals.ts'
 import { startNewFarm } from './title.ts'
@@ -31,17 +32,6 @@ function cashLine(label: Child, v: number, o: { testid?: string; always?: boolea
     h('td', { class: 'm num out' }, v < 0 && !o.none ? figure : null))
 }
 
-// The year in a sentence: what the farm began with, what it ends with, and why the one became the other.
-// The three largest reasons are the simulation's (S.yearStory); land and buildings bought are named, since the farm keeps them.
-export function yearSentence(y: S.YearSummary): string {
-  const st = S.yearStory(y)
-  const kept = (y.land ?? 0) + (y.building ?? 0) + (y.works ?? 0)
-  const reasons = st.reasons.map(r => `${F.money(Math.abs(Math.round(r.amount)))} ${r.amount < 0 ? 'for' : 'from'} ${r.label[0].toLowerCase()}${r.label.slice(1)}`)
-  const gap = Math.round(st.ended - st.began)
-  const head = `You started the year with ${F.money(st.began)} and ended it with ${F.money(st.ended)}, which is ${gap === 0 ? 'exactly the same' : `${F.money(Math.abs(gap))} ${gap < 0 ? 'less' : 'more'}`}.`
-  const keep = kept && gap < 0 ? ` ${F.money(kept)} of what you spent paid for land, buildings and clearing, which you keep.` : ''
-  return `${head} The biggest ${reasons.length === 1 ? 'reason was' : 'reasons were'} ${F.list(reasons)}.${keep}`
-}
 
 function cashBook(y: S.YearSummary, lost: boolean): HTMLElement {
   const rest = y.restIncome ?? 0
@@ -408,8 +398,8 @@ export function ledgerScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
             h('header', { class: 'book-head' },
               h('p', { class: 't-label' }, `Year ${c.yearIdx + 1} of ${c.goalYears}`),
               h('h1', { class: 't-title book-title' }, `The ledger, ${yearWord(y.year)}`),
-              h('p', { class: 'it b-verdict', testid: 'outcome' }, kept ? 'The farm is yours, and the bank is happy.' : `The bank is happy this year. ${F.upper(F.plural(left, 'season'))} to go.`),
-              h('p', { class: 'b-plain', testid: 'year-sentence' }, `${yearSentence(y)} ${againstUsual(y.cashEnd - y.cashStart)}`)),
+              h('p', { class: 'it b-verdict', testid: 'outcome' }, verdictSays(y, left, kept)),
+              h('p', { class: 'b-plain', testid: 'year-sentence' }, `${yearWalk(y)} ${againstUsual(y.cashEnd - y.cashStart)}`)),
             cashBook(y, false),
             y.cashEnd < 0 ? h('p', { class: 'b-debt' }, h('b', { class: 'c-red' }, 'In debt,'), ` but inside the bank's limit. It only calls in the loan below `, h('span', { class: 'num nowrap' }, F.money(S.CREDIT_LIMIT)), '.') : null,
             yearOnFarm(c),

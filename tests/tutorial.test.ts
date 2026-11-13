@@ -227,57 +227,45 @@ describe('what a note says against what the game does (round six)', () => {
   }
   const cold = (w: S.World, c: S.Campaign) => S.haulInfo(w, c).filter(x => S.frostOnBarrels(w, c, x.field))
 
-  it('the frost note promises nothing the night can break: it says what the crew does and what a tractor hauls, and warns when that is not enough', () => {
+  it('the frost note promises nothing the night can break, and its key is the one order that hauls the barrels in now', () => {
     const frost = lesson('frost')!
     let warned = 0, short = 0
     for (const [year, seeds] of [[1985, [2, 8, 11, 12]], [1995, [7, 8, 12]], [2008, [2]]] as const) {
       for (const seed of seeds) {
-        frostEvenings(seed, year, (w, c) => {
+        frostEvenings(seed, year, (w, c0) => {
+          const c = structuredClone(c0)
           const g = new Guide(memory())
           g.skipTo('frost')
           const l = look(w, c, { speed: 3 })
           // The warning brings the note by itself: the game is not paused for it first.
           expect(g.current(l)?.id, `${year}/${seed}`).toBe('frost')
           warned++
-          const days = cold(w, c).reduce((t, x) => t + x.daysToHaul, 0)
+          const most = [...cold(w, c)].sort((a, b) => b.cwt - a.cwt)[0]
           for (const input of INPUTS) {
             const said = `${frost.ask({ ...l, input })} ${frost.why({ ...l, input })}`
             expect(said).not.toMatch(/don't need to do anything|will haul them in|before the frost/)
             expect(said).toMatch(/a fifth/)
-            expect(said).toMatch(/may freeze|can still catch/)
+            expect(said).toContain(`Haul it in now sends whoever can bring in the most from ${S.FIELD_NAMES[most.field]} by dark`)
             expect(countWords(said)).toBeLessThanOrEqual(35)
-            if (days > 0.9) expect(said, `${days.toFixed(2)} days of hauling`).toMatch(/may freeze/)
           }
-          if (days > 0.9) short++
-          // The hauling is on the list: nothing for the player to order, so the note offers no order.
-          expect(frost.act!(l)).toBeNull()
-          expect(frost.show!(l)).toEqual({ field: [...cold(w, c)].sort((a, b) => b.cwt - a.cwt)[0].field })
+          expect(frost.show!(l)).toEqual({ field: most.field })
+          // One way to order the haul: the frost toast's own command, and the game's own answer to it, which says
+          // how much comes in by dark and how much stays out.
+          const act = frost.act!(l)!
+          expect(act.label).toBe('Haul it in now')
+          expect(act.cmds).toEqual([{ t: 'haulNow', field: most.field }])
+          expect(act.done).toBeUndefined()
+          const r = S.apply(w, c, act.cmds[0])
+          expect(r.ok).toBe(true)
+          // (or that nobody can drive tonight, when the one driver is laid up)
+          expect(r.events[0].text).toMatch(/hauling .* now\. .* by dark|stay out tonight/)
+          if (/will stay out|stay out tonight/.test(r.events[0].text)) short++
+          expect(c.season!.jobs[0]).toMatchObject({ kind: 'haul', field: most.field })
         })
       }
     }
     expect(warned).toBeGreaterThan(4)
     expect(short).toBeGreaterThan(0)
-  })
-
-  it('with hauling off the crew\'s routine, the frost note says so and its key orders the haul', () => {
-    const frost = lesson('frost')!
-    let seen = 0
-    frostEvenings(8, 1985, (w, c0) => {
-      if (seen) return
-      const c = structuredClone(c0)
-      expect(S.apply(w, c, { t: 'routine', kind: 'haul', auto: false }).ok).toBe(true)
-      // (a haul already ordered cannot be cancelled by a player: taken off here to stand for one never ordered)
-      c.season!.jobs = c.season!.jobs.filter(j => j.kind !== 'haul')
-      for (const u of c.crew) u.job = -1
-      const l = look(w, c)
-      expect(frost.why(l)).toMatch(/until you order it/)
-      const act = frost.act!(l)!
-      expect(act.label).toBe('Order the haul')
-      for (const cmd of act.cmds) expect(S.apply(w, c, cmd).ok).toBe(true)
-      expect(frost.act!(look(w, c))).toBeNull()
-      seen++
-    })
-    expect(seen).toBe(1)
   })
 
   it('a note about a stamp names the field whose stamp is on the screen, and its Show me goes there', () => {

@@ -152,6 +152,22 @@ export function haulRate(c: Campaign, u: Unit, field: number, rig: Rig): number 
     / (haulFactor(c, field) * roadHaul(c))
 }
 
+// What one driver brings in from a field's barrels by dark today: the one who would bring in most (the drive there
+// comes off their day), and how much, at most what is out; null when nobody on the farm will drive.
+export function haulByDark(c: Campaign, field: number): { unit: number; cwt: number; rig: Rig } | null {
+  const s = c.season
+  const f = s?.fields[field]
+  if (!s || !f) return null
+  const rig: Rig = c.upgrades.truck ? 'truck' : 'tractor'
+  let best: { unit: number; cwt: number; rig: Rig } | null = null
+  for (const u of c.crew) {
+    if (u.foreman || hurt(u, s.day) || resting(u) || !willDo(u, 'haul')) continue
+    const cwt = Math.min(f.inField, haulRate(c, u, field, rig) * Math.max(0, 1 - travel(c, u.at, field)))
+    if (!best || cwt > best.cwt) best = { unit: u.id, cwt, rig }
+  }
+  return best
+}
+
 export function jobCost(c: Campaign, kind: JobKind, field = -1): number {
   if (kind === 'water' && pondServes(c, field)) return P.POND_COST
   if (kind === 'water' && c.upgrades.reel) return 200

@@ -46,7 +46,7 @@ export function pins(ctx: Ctx, layer: HTMLElement, o: { covers: () => DOMRect[];
       const state: PinState = p.hurtUntil >= 0 ? 'hurt' : sign?.cls === 'bad' || stopped.has(p.id) ? 'needs' : app.unit === p.id ? 'picked' : 'rest'
       const u = c.crew.find(x => x.id === p.id)
       const resting = !!u && S.resting(u) && !!c.season
-      const word = resting ? 'resting, worn out' : sign?.cls === 'bad' ? sign.text : doingWord(c, p).toLowerCase()
+      const word = resting ? 'resting, worn out' : sign?.cls === 'bad' ? sign.text : doingWord(c, p, waits).toLowerCase()
       const label = `${p.kind === 'farmer' ? 'You' : firstName(p.name)}, ${word}${state === 'needs' && p.kind !== 'farmer' ? ', needs you' : ''}`
       return { id: p.id, name: p.kind === 'farmer' ? 'You' : p.name, ring: ringFor(c, p.id), state: app.unit === p.id && state !== 'needs' && state !== 'hurt' ? 'picked' : state, label, rank: app.unit === p.id ? 0 : state === 'needs' ? 1 : state === 'hurt' ? 2 : 3, tired: resting || p.tired >= S.HURT_TIRED }
     })

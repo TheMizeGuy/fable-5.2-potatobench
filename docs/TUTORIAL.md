@@ -87,9 +87,11 @@ what it is (blight is "a disease that can wipe out a field in one wet week" the 
 - It promises nothing the game may not do. The frost note used to say "Your crew will haul them in first, so you
   don't need to do anything", and then 100 to 200 cwt froze: the crew does haul first, but one tractor moves about
   900 cwt a day, the forecast misses some nights, and what is dug after the haul stays out. It now says what a frost
-  does ("ruins a fifth of the potatoes still out in barrels"), what the crew is doing, and whether that is enough
-  today. When hauling is off the crew's routine and not on the work list, the note says so and carries the one thing
-  the player can do, as its key: "Order the haul".
+  does ("ruins a fifth of the potatoes still out in barrels") and carries the one thing the player can do about it,
+  as its key: "Haul it in now". That is the same order, in the same words, as the frost toast's key for players
+  without the tutorial (the `haulNow` command): it puts the haul first today for whoever brings in the most by dark,
+  day off or not, and the game's own answer says how much comes in and how much stays out. There is one way to order
+  the haul, not two.
 
 **F. The screen grows with the year.** In the guided first year the season opens on the land, the date and the
 cash. Each other piece appears when it first matters, introduced by the one note that holds the clock for it:
@@ -173,7 +175,7 @@ Words are for a mouse; a touch screen says "Tap" and "pinch", the keyboard its k
 | 8 | The work list (brings the list) | the crew's first spray on the list | "Your crew now sprays on its own. The work list at the bottom shows their jobs in order. Each spray costs about $X a field. You don't need to do anything else." | Fast-forward to the next decision |
 | 8b | A decision on a field (brings the stamps and the list) | a call that is the player's ("ask me", or water) | "A ringed stamp means a field needs a decision from you. This one: <the need>. Click the stamp to order it. The job goes on the work list." | the stamp, or Got it |
 | 9 | Kill the vines (brings the stamps) | the kill in sight | "The crop is nearly ready. Killing the vines stops the growth, so the skins toughen for harvest. Your crew will do this automatically on <day>. Click a stamp to do it sooner." | Fast-forward to the harvest |
-| 10 | Frost on the barrels (only if it comes; later warnings are toasts) | the evening's frost warning, with crop still in barrels | "Frost tonight ruins a fifth of the potatoes still out in barrels." Then one of: "Your crew hauls the barrels in <field> first. A frost can still catch what's dug later today." / "Your crew hauls them in first, but <field> has more out than one tractor can haul today, so some may freeze." / "Hauling is off your crew's routine, so the barrels in <field> stay out until you order it." | Got it; Show me (the field); Order the haul when there is one to order |
+| 10 | Frost on the barrels (only if it comes; later warnings are toasts) | the evening's frost warning, with crop still in barrels | "Frost tonight ruins a fifth of the potatoes still out in barrels. Haul it in now sends whoever can bring in the most from <field> by dark, day off or not." | Haul it in now (answered by the game: "You're hauling <field> now. One tractor brings in about 900 cwt by dark, so about 450 cwt will stay out."); Got it; Show me (the field) |
 | 11 | The harvest | digging begun | "The harvest has started. Your crew digs the potatoes into barrels and hauls them to the potato house. You don't need to do anything. Each field is weighed when its barrels are in." | Fast-forward to the weigh ticket |
 | 12 | The first weigh ticket (the agent's line inside it) | the first field weighed | "This is your first weigh ticket. It shows what the field grew and what was lost. Sell now is the safe choice." | Sell or store |
 | 13 | The year-end bills (brings the figure) | the ticket answered | "Your first crop is weighed. "After year-end bills" at the top right is what's left after paying the $19,000. It counts the crop still in the ground, so it'll change until every field is in." | Fast-forward to the next ticket |
@@ -237,8 +239,7 @@ is looking.
   back and brought by its note, and never held back off the guide or past the first year; "ask me" and "by itself"
   each explained; the word limits in every way of playing; storage, skipping, replaying; the simulation's rule
   that no telegram comes before the first planting is finished; and, from round six: the frost note on real frost
-  evenings promising nothing and warning when a day's hauling is not enough, its key ordering the haul when hauling
-  is off the routine, a stamp's note naming the field whose stamp is in view, the fast keys named "Fast-forward".
+  evenings promising nothing, its key being the one order that hauls the barrels in now (`haulNow`), a stamp's note naming the field whose stamp is in view, the fast keys named "Fast-forward".
   `tests/clock.test.ts`: frost forecast on the barrels does not pause a running game, and does for a player with
   "Pause on alerts" on. From round seven: the planting note as the ask for the word, the note after the press and
   after three days with none, which notes ask and which tell, the first card's words alone and with a crew, the
@@ -270,7 +271,7 @@ is looking.
 ## Known limits
 
 - With one tractor a frost can catch barrels the crew could not bring in, and the forecast misses some nights; the
-  frost note says so and offers nothing to press unless hauling is not on the work list. Making the lone digger dig
+  frost note's key hauls now, and its answer says how much will stay out. Making the lone digger dig
   only what he can haul whenever the game would warn of frost was tried in the simulation and put back: over 120
   hands-off first years it cut what froze in barrels by two thirds (14.8 to 4.7 cwt a farm) but caught more fields at
   freeze-up (17 to 22 half dug, none to 1 lost in the ground), with the year's revenue unchanged.

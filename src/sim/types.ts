@@ -430,6 +430,7 @@ export type Cmd =
   | { t: 'hire'; applicant: number }
   | { t: 'dismiss'; unit: number }
   | { t: 'unbuy'; upgrade: UpgradeId }
+  | { t: 'haulNow'; field: number }
   | { t: 'unhire'; unit: number }
   | { t: 'raise'; unit: number; wage: number }
   | { t: 'priority'; unit: number; work: Skill; level: number }

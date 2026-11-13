@@ -36,8 +36,9 @@ export interface Look {
 
 // Where a note's "Show me" goes: the field or the person its sentence is about, and the control lit there.
 export type Show = { field: number } | { unit: number; foreman?: boolean }
-// A thing the player can do about what a note says, as its key: the words on it and the orders it gives.
-export interface Act { label: string; cmds: S.Cmd[]; done: string }
+// A thing the player can do about what a note says, as its key: the words on it and the orders it gives. done: what
+// is said after; left out, the game's own answer to the order is said.
+export interface Act { label: string; cmds: S.Cmd[]; done?: string }
 
 // Where a lesson points: a control by its test id (the first of several that is on screen), a field's tag, a field's
 // need stamp, a person on the land.
@@ -203,17 +204,14 @@ const killAt = (l: Look) => seen(l, a => a?.act === 'kill')
 // The buildings the winter sheet's list offers (src/ui/winter.ts): its key reads "N to choose from".
 const toRaise = (c: S.Campaign | null) => (c ? S.buildingInfo(c).filter(b => b.state === 'none' && (b.yard === S.HOME_YARD || S.holdsDufour(c))).length : 0)
 
-// A frost forecast tonight on crop still in barrels: where most of it is, the days one tractor needs to haul it all,
-// and the fields whose haul is not on the work list.
-function frostNow(l: Look): { field: number; days: number; unlisted: number[] } | null {
+// A frost forecast tonight on crop still in barrels: the field with most of it out.
+function frostNow(l: Look): { field: number } | null {
   const c = l.c
   const s = c?.season
   if (!c || !s || c.phase !== 'season' || s.frozen) return null
   const cold = S.haulInfo(l.world, c).filter(x => !s.fields[x.field].weighed && S.frostOnBarrels(l.world, c, x.field))
   if (!cold.length) return null
-  const most = [...cold].sort((a, b) => b.cwt - a.cwt)[0]
-  const days = cold.reduce((t, x) => t + x.daysToHaul, 0)
-  return { field: most.field, days, unlisted: cold.filter(x => !s.jobs.some(j => j.kind === 'haul' && j.field === x.field)).map(x => x.field) }
+  return { field: [...cold].sort((a, b) => b.cwt - a.cwt)[0].field }
 }
 // The evening's frost warning (S.frostAhead) is dated the day the barrels are hauled in: today.
 const frostWarned = (l: Look) => { const s = l.c?.season; return !!s && s.log.some(e => e.type === 'frostBarrels' && e.day === s.day) }
@@ -337,20 +335,17 @@ export const LESSONS: Lesson[] = [
     when: l => inSeason(l) && frostWarned(l) && !!frostNow(l),
     done: (_l, g) => g.has('noted:frost'),
     ask: () => 'Frost tonight ruins a fifth of the potatoes still out in barrels.',
-    // What the crew does, and what a day's hauling can and can't bring in: never a promise the night may break
-    // (a tractor hauls about 900 cwt a day, the forecast misses, and what is dug after the haul stays out).
+    // Never a promise the night may break (a tractor hauls about 900 cwt a day, the forecast misses, and what is dug
+    // after the haul stays out): what the player can do now, by the same order and the same words as the frost
+    // toast's key (the haulNow command), whose answer says how much comes in by dark and how much stays out.
     why: l => {
       const f = frostNow(l)
-      if (!f) return 'Your crew hauls barrels in ahead of everything else.'
-      if (f.unlisted.length) return `Hauling is off your crew's routine, so the barrels in ${name(f.field)} stay out until you order it.`
-      return f.days <= 0.9
-        ? `Your crew hauls the barrels in ${name(f.field)} first. A frost can still catch what's dug later today.`
-        : `Your crew hauls them in first, but ${name(f.field)} has more out than one tractor can haul today, so some may freeze.`
+      return f ? `Haul it in now sends whoever can bring in the most from ${name(f.field)} by dark, day off or not.` : 'Your crew hauls barrels in ahead of everything else.'
     },
     show: l => { const f = frostNow(l); return f ? { field: f.field } : null },
     act: l => {
       const f = frostNow(l)
-      return f?.unlisted.length ? { label: 'Order the haul', cmds: f.unlisted.map(field => ({ t: 'job', kind: 'haul', field }) as S.Cmd), done: 'Hauling is on the work list, ahead of everything else.' } : null
+      return f ? { label: 'Haul it in now', cmds: [{ t: 'haulNow', field: f.field }] } : null
     },
   },
   {

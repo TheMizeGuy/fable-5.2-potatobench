@@ -10,7 +10,7 @@ import { applicantsFor, fromApplicant, gainXp, jobSkill, payOf, SKILL_LABEL, spe
 import { hash32 } from './rng.ts'
 import {
   addJob, buildable, buildJob, closeIncidents, FIELD_NAMES, holdsDufour, JOB_LABEL, leftInField, letGo, releaseJob, removePerson, resolveIncident, seasonDone, sheltering,
-  startSeason, stepDay, unitBlock,
+  haulByDark, startSeason, stepDay, unitBlock,
 } from './season.ts'
 import { CHOICE_LABEL } from './incidents.ts'
 import { article, buildBlock, buildCost, buildingAt, buildWork, hasBuilt, startBuilding, YARD_NAME } from './buildings.ts'
@@ -1059,6 +1059,32 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
       const [job] = c.season.jobs.splice(k, 1)
       c.season.jobs.unshift(job)
       return ok()
+    }
+    case 'haulNow': {
+      // Frost on the barrels: the haul goes first for whoever brings in most by dark, today, Sunday or not.
+      const s = c.season
+      if (c.phase !== 'season' || !s) return fail('The season isn\'t under way.')
+      const f = s.fields[cmd.field]
+      if (!f || f.inField < 0.5) return fail('There\'s nothing in barrels there to haul.')
+      let job = s.jobs.find(j => j.kind === 'haul' && j.field === cmd.field)
+      if (!job) {
+        const why = addJob(c, 'haul', cmd.field)
+        if (why) return fail(why)
+        job = s.jobs.find(j => j.kind === 'haul' && j.field === cmd.field)!
+      }
+      s.jobs.unshift(...s.jobs.splice(s.jobs.indexOf(job), 1))
+      const name = FIELD_NAMES[cmd.field]
+      const by = haulByDark(c, cmd.field)
+      if (!by) return ok([note(c, 'haulNow', 'warn', `Nobody on the farm drives, so the barrels in ${name} stay out tonight. Set someone's priority for machine work to haul them in.`)])
+      // A day off gives way to the frost, as on a morning the frost is forecast (workday); the extra day tires them.
+      s.frostHaul = s.day
+      const u = c.crew.find(x => x.id === by.unit)!
+      job.unit = u.id
+      if (u.job >= 0 && u.job !== job.id) letGo(u)
+      const about = (cwt: number) => withCommas(Math.max(50, Math.round(cwt / 50) * 50))
+      const left = f.inField - by.cwt
+      const brings = `${by.rig === 'truck' ? 'The truck brings' : 'One tractor brings'} in about ${about(by.cwt)} cwt by dark`
+      return ok([note(c, 'haulNow', 'info', `${u.kind === 'farmer' ? 'You\'re' : `${u.name.split(' ')[0]} is`} hauling ${name} now. ${brings}${left >= 25 ? `, so about ${about(left)} cwt will stay out` : ', which is all of it'}.`)])
     }
     case 'day': {
       if (c.phase !== 'season' || !c.season) return fail('The season isn\'t under way.')

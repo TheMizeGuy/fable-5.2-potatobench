@@ -333,3 +333,165 @@ test('no key cap reads as close: Fell\'s key is L', async ({ page }) => {
   expect(await page.evaluate(() => [...document.querySelectorAll('#ui .key, #ui kbd')].map(e => e.textContent?.trim()).filter(t => t === 'X'))).toEqual([])
   expect(errors, errors.join('\n')).toEqual([])
 })
+
+test('two lots weighed on the same day: each ticket is up the moment the game stops for it, one after the other', async ({ page }) => {
+  test.setTimeout(240_000)
+  const errors = watchErrors(page)
+  await farmWithPeople(page)
+  // Days run on until the next one weighs two lots (looked at on a copy of the farm first).
+  const found = await game<boolean>(page, `(() => { const c = app.campaign
+    for (let g = 0; g < 200 && !sim.seasonDone(c); g++) {
+      c.incidents = []
+      for (const a of sim.advise(app.world, c)) if (a.act !== 'wait' && a.act !== 'close' && a.act !== 'sell') app.do({ t: 'job', kind: a.act, field: a.field })
+      const peek = structuredClone(c)
+      if (sim.apply(app.world, peek, { t: 'day' }).events.filter(e => e.type === 'weighed').length >= 2) return true
+      app.do({ t: 'day' })
+      for (const l of c.lots) if (l.open) app.do({ t: 'sell', lot: l.id, frac: 1 })
+    }
+    return false })()`)
+  test.skip(!found, 'no day weighs two lots this season')
+  await putAway(page)
+  // How long after the game stops each ticket is on the screen.
+  await page.evaluate(() => {
+    const g = globalThis as any
+    g.__ticketWait = []
+    let stoppedAt = -1
+    let ran = false
+    const tick = () => {
+      const up = !!document.querySelector('#ui [data-testid="weighin"]')
+      if (g.__county.app.speed > 0) ran = true
+      if (ran && g.__county.app.speed === 0 && stoppedAt === -1) stoppedAt = performance.now()
+      if (stoppedAt >= 0 && up) { g.__ticketWait.push(Math.round(performance.now() - stoppedAt)); stoppedAt = -2 }
+      if (stoppedAt === -2 && !up) stoppedAt = performance.now()
+      if (g.__ticketWait.length < 2) requestAnimationFrame(tick)
+    }
+    requestAnimationFrame(tick)
+  })
+  await reach(page, `q.g().app.setSpeed(1)`)
+  const ticket = page.getByTestId('weighin')
+  // One ticket, then the other the moment the first is answered.
+  const sold: string[] = []
+  for (let k = 0; k < 2; k++) {
+    const sell = page.locator('#ui .dialog:not(.out) [data-testid^="lot-sell-"]').first()
+    await expect(sell).toBeVisible({ timeout: 15_000 })
+    const id = (await sell.getAttribute('data-testid'))!
+    expect(sold).not.toContain(id)
+    sold.push(id)
+    await sell.click()
+    await expect(page.getByTestId(id)).toHaveCount(0)
+  }
+  const waits = await page.evaluate(() => (globalThis as any).__ticketWait as number[])
+  expect(waits).toHaveLength(2)
+  for (const w of waits) expect(w, `the ticket was up ${w} ms after the game stopped for it`).toBeLessThan(500)
+  expect(errors, errors.join('\n')).toEqual([])
+})
+
+test('the frost warning on a Sunday with barrels out is a key: the haul goes first and someone drives that day', async ({ page }) => {
+  const errors = watchErrors(page)
+  await open(page, '?year=1990&seed=7')
+  await page.getByTestId('begin-season').click()
+  // tests/haulnow.test.ts: the farmer alone, to the first Sunday off with crop out in barrels.
+  const field = await game<number>(page, `(() => { const c = app.campaign; app.setSpeed(0)
+    for (let g = 0; g < 400 && !sim.seasonDone(c); g++) {
+      c.incidents = []
+      const s = c.season
+      const f = s.fields.findIndex(x => x.inField >= 200 && !x.weighed)
+      if (f >= 0 && !sim.workday(c, s)) return f
+      app.do({ t: 'day' })
+    }
+    return -1 })()`)
+  test.skip(field < 0, 'no Sunday with barrels out')
+  await reach(page, 'q.g().app.setSpeed(0)')
+  await putAway(page)
+  const name = await game<string>(page, `sim.FIELD_NAMES[${field}]`)
+  // The warning, as the evening before a frost brings it.
+  await page.evaluate(([f, n]) => { const { app } = (globalThis as any).__county; const c = app.campaign
+    app.alert(c, { day: c.season.day, type: 'frostBarrels', field: -1, level: 'warn', text: `Frost is forecast for the crop still in barrels: ${Math.round(c.season.fields[f].inField)} cwt in ${n}. Your crew hauls it in first, Sundays included, until it's all in.` }) }, [field, name] as const)
+  const warning = notes(page).filter({ hasText: 'Haul it in now' })
+  await expect(warning).toBeVisible()
+  await warning.click()
+  expect(await game<{ kind: string; field: number }>(page, '({ kind: app.campaign.season.jobs[0].kind, field: app.campaign.season.jobs[0].field })')).toEqual({ kind: 'haul', field })
+  await expect(notes(page).filter({ hasText: `You're hauling ${name} now. One tractor brings in about` })).toBeVisible()
+  await reach(page, `q.g().app.do({ t: 'day' }); q.g().app.setSpeed(0)`)
+  expect(await game<boolean>(page, `app.campaign.season.worked.some(w => w.kind === 'haul' && w.field === ${field})`)).toBe(true)
+  expect(errors, errors.join('\n')).toEqual([])
+})
+
+test('Escape undoes the nearest thing first: a popover, a card, Follow, then the menu; and a paper before its card', async ({ page }) => {
+  const errors = watchErrors(page)
+  await farmWithPeople(page)
+  const id = await game<number>(page, `app.campaign.crew.find(u => u.kind === 'hand').id`)
+  // Following someone, with a field's card open and the goals open over it.
+  await reach(page, `const { app } = q.g(); app.selectUnit(${id}, 'land')`)
+  await page.getByTestId('whois').getByTestId('whois-follow').click()
+  const followed = () => page.evaluate(() => (globalThis as any).__countyField.following())
+  expect(await followed()).toBe(id)
+  await reach(page, `const { app } = q.g(); app.selectUnit(-1); app.select(0)`)
+  await expect(page.getByTestId('card')).toBeVisible()
+  await page.getByTestId('goal').click()
+  const ladder = () => page.evaluate(() => document.querySelector('#ui [data-testid="goal"]')?.getAttribute('aria-expanded'))
+  expect(await ladder()).toBe('true')
+  await page.keyboard.press('Escape')
+  expect(await ladder()).toBe('false')
+  await expect(page.getByTestId('card')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.getByTestId('card')).toBeHidden()
+  expect(await followed()).toBe(id)
+  await page.keyboard.press('Escape')
+  expect(await followed()).toBe(-1)
+  await expect(page.getByTestId('menu')).toHaveCount(0)
+  await page.waitForTimeout(1600)
+  await page.keyboard.press('Escape')
+  await expect(page.getByTestId('menu')).toBeVisible()
+  await page.keyboard.press('Escape')
+  // A paper over a card goes first.
+  await reach(page, `q.g().app.select(0)`)
+  await page.keyboard.press('i')
+  await expect(page.locator('#ui .dialog:not(.out)')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.locator('#ui .dialog:not(.out)')).toHaveCount(0)
+  expect(await game<number[]>(page, 'app.selection')).toEqual([0])
+  expect(errors, errors.join('\n')).toEqual([])
+})
+
+test('four stamps pressed in a row are answered by one line', async ({ page }) => {
+  const errors = watchErrors(page)
+  await farmWithPeople(page)
+  await reach(page, `const { app } = q.g(); app.do({ t: 'sprayWay', way: 'ask' }); q.run(q.day(7, 30), ['spray', 'kill', 'sell']); app.setSpeed(0); app.campaign.incidents = []; app.select(-1)`)
+  await putAway(page)
+  const fields = (await game<number[]>(page, `app.needs().map((n, i) => n.need?.act === 'spray' && !app.campaign.season.jobs.some(j => j.field === i) ? i : -1).filter(i => i >= 0)`)).slice(0, 4)
+  expect(fields.length).toBeGreaterThanOrEqual(3)
+  for (const i of fields) await page.getByTestId(`badge-${i}`).dispatchEvent('click')
+  await expect(notes(page).filter({ hasText: `Spraying ${fields.length} fields is on the work list.` })).toBeVisible()
+  expect(await notes(page).filter({ hasText: /^Spraying [A-Z]/ }).count()).toBe(0)
+  expect(errors, errors.join('\n')).toEqual([])
+})
+
+test('the answer to a right-click is seen while a tutorial note is up, and before planting it says why', async ({ page }) => {
+  const errors = watchErrors(page)
+  await page.goto('./')
+  await page.evaluate(() => localStorage.clear())
+  await page.reload()
+  await page.waitForFunction(() => '__county' in globalThis && !document.getElementById('splash'))
+  await page.getByTestId('play').click()
+  await page.getByTestId('guide-accept').click()
+  // The notes that ask for a press are answered until the season is running with a note up.
+  // As e2e/tutorial.spec.ts follows it: the note's own key, or what it points at, until the season runs with a note up.
+  for (let k = 0; k < 30 && !(await game<boolean>(page, `app.screen === 'season' && document.getElementById('ui').classList.contains('noting')`)); k++) {
+    const slip = page.locator('#ui [data-testid="guide-slip"]').first()
+    const key = slip.locator('[data-testid="guide-noted"], [data-testid="guide-ahead"]').first()
+    const target = await slip.getAttribute('data-target').catch(() => null)
+    if (await key.isVisible().catch(() => false)) await key.click({ timeout: 3000 }).catch(() => {})
+    else if (target) await page.locator(`#ui [data-testid="${target}"]`).first().click({ timeout: 3000 }).catch(() => {})
+    await page.waitForTimeout(500)
+  }
+  expect(await game<string>(page, `app.screen + ' ' + document.getElementById('ui').className + ' ' + (document.querySelector('#ui [data-testid="guide-slip"]')?.getAttribute('data-lesson') ?? '')`)).toMatch(/^season .*noting/)
+  const field = await game<number>(page, `app.campaign.plans.findIndex((p, i) => p.crop === 'potato' && sim.held(app.campaign, i) && sim.fieldInfo(app.campaign, i).status === 'idle')`)
+  const name = await game<string>(page, `sim.FIELD_NAMES[${field}]`)
+  const at = await landOf(page, field)
+  await page.mouse.click(at.x, at.y, { button: 'right' })
+  const tip = page.getByTestId('answer-tip')
+  await expect(tip).toBeVisible()
+  await expect(tip).toContainText(`It's too early to plant ${name}.`)
+  expect(errors, errors.join('\n')).toEqual([])
+})
