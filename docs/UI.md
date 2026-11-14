@@ -253,3 +253,35 @@ frame's "saved" note; some old rules still load from `src/ui/legacy.css`, `paper
 
 Not yet run: the blind pairs of the old interface against the new, first-time players in a real browser, measured
 contrast in the live game, and the audit for anything that looks default.
+
+## One place for a card (14 November)
+
+The owner, of a resting field's card laid beside its tag and over the menu bar on a 2560 by 1440 screen at one and
+a half scale: "its impossible to tell whats even going on in that corner of the screen". The field's name and
+"resting, oats and clover" were on the screen four times (tag, the caption under it, the card's kicker and title,
+its subtitle and its body), the card's foot lay on the bar's keys, and a tether's end hung at the window's edge.
+
+Three reviewers went over captures of every field's and person's card at that size (`tools/quality/corner.ts`),
+one each for where things lie, the words, and what is understood in three seconds. All three said the same first
+thing: a card laid fresh beside whatever was clicked is somewhere new every time and, at 430 by 570 on a screen 956
+tall, always lands on something; a strategy game keeps one selection panel.
+
+What changed:
+
+- **At a desk 1600 wide or more (in the interface's own pixels) a field's, a yard's and a person's card stand in
+  one place**: at the right, under the bank board and the clock's chip, above the menu bar, scrolling inside if
+  taller than that room. Nothing ties them to the land; what is picked is marked on the land itself
+  (`docking()` in `src/ui/season.ts`, the `dock` mode in `src/ui/tie.ts`). Narrower desks keep the card beside
+  its thing, as the tests of that describe (`e2e/anchored.spec.ts`).
+- **A card never lies over the menu bar** at a desk: the bar is one of the things a floating card keeps off.
+- **A tag does not say again what its open card says**: a resting field's caption shows under the pointer only.
+- **The picked field has one solid line round it**; the registration marks at its corners are gone.
+- **Fewer words.** A resting field: "Oats and clover", "Earns $900 in the fall and restores the soil." A potato
+  field no longer explains work the crew does by itself in a paragraph: "Your crew does the routine work. You:
+  water and kill vines. Vine kill due: around Sep 8."
+
+Held to it: `e2e/interface.spec.ts`, "at a wide desk a field's card and a person's stand in one place".
+
+Not done from the reviews: the rings and glyphs on tags, the brackets round a face and the numbered badge beside
+one, the second strip under the clock ("Paused / Running at 1×"), greyed order keys, and the person card's
+sentences ("Rested enough.", "No strong reasons either way.").
