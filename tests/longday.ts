@@ -26,6 +26,7 @@ export interface LongSeen {
   shown: number                         // hills whose ground changed as the work passed
   ahead: string[]                       // ground shown worked that the day's end did not have worked
   atWork: { kind: string; field: number; unit: number; hours: number; seen: number }[]   // each stretch of row work in the days' records, and the share of its hours a machine was seen at it in its field
+  filled: number                        // seconds a planter stood at the headland with its driver down beside it
   replans: { at: number; moved: number }[]   // an order given part way through a day: how far anyone in sight was moved by the new plan
   orders: string[]
   plans: string[]
@@ -68,7 +69,7 @@ export function watchLong(opts: { job: sim.JobKind; days?: number; order?: numbe
   let dirty = false, dayPassed = false, dayT = 1
   let longKey = '', longFor = -1, longShares = new Map<string, number>()
   const doneToday = new Set<number>()
-  const out: LongSeen = { days: 0, jumps: [], fastest: { foot: 0, rig: 0, working: 0 }, where: { foot: '', rig: '' }, slowestWorking: 0, slid: 0, popped: 0, shown: 0, ahead: [], atWork: [], replans: [], orders: [], plans: [] }
+  const out: LongSeen = { days: 0, jumps: [], fastest: { foot: 0, rig: 0, working: 0 }, where: { foot: '', rig: '' }, slowestWorking: 0, slid: 0, popped: 0, shown: 0, ahead: [], atWork: [], filled: 0, replans: [], orders: [], plans: [] }
   app.on(e => { if (e.type === 'change' || e.type === 'screen') dirty = true; else if (e.type === 'events') { dirty = true; if (e.dayPassed) dayPassed = true } })
   const reveal = (r: PendingReveal, late: boolean) => { shown[r.field][r.hill] = { look: r.look, ridge: r.ridge }; doneToday.add(r.field * sim.HILLS + r.hill); if (late) out.popped++; else out.shown++ }
   const passed = (unit: number, seg: number, arc: number, gen: number) => {
@@ -179,7 +180,11 @@ export function watchLong(opts: { job: sim.JobKind; days?: number; order?: numbe
       for (const r of w.rigs) {
         if (!r.work || r.fade < 0.95) continue
         const b = was.get(`${r.key} pace`)
-        if (b) { const v = Math.hypot(r.x - b.x, r.z - b.z) / dt; if (v > 0.2) { paces.push(v); out.fastest.working = Math.max(out.fastest.working, v) } }
+        if (b) {
+          const v = Math.hypot(r.x - b.x, r.z - b.z) / dt
+          if (v > 0.2) { paces.push(v); out.fastest.working = Math.max(out.fastest.working, v) }
+          else if (r.work === 'plant' && w.units.find(u => u.id === r.holder)?.foot) out.filled += dt
+        }
       }
       for (const r of w.rigs) was.set(`${r.key} pace`, { x: r.x, z: r.z, fade: r.fade })
       // the stretches of row work in today's plan, and whether a machine is seen at each in its field in its hours

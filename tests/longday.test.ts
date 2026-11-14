@@ -35,6 +35,10 @@ describe('a long day, watched as it is worked', () => {
     // Every stretch of the planting is seen being done in its field for nearly all of its hours.
     // (a stretch of minutes at the end of a way is half way and half work)
     for (const s of r.atWork) expect(s.seen, `${s.kind} in field ${s.field}, ${(s.hours * 100).toFixed(0)}% of a day`).toBeGreaterThan(s.hours > 0.15 ? 0.9 : 0.4)
+    // The planter is filled at the headland each time it is back where it set out: twice in a field, its driver down
+    // beside it for some seconds each time (four fields' worth of lanes in these two days).
+    expect(r.filled).toBeGreaterThan(20)
+    expect(r.filled).toBeLessThan(45)
     // The order given at eleven: whoever takes it sets out then, and the planter is not moved by the new plan.
     expect(r.orders).toEqual(['rocks on field 1 at 0.45'])
     // (the day is counted by the hour, and laid out again each time: nobody is moved by that either)

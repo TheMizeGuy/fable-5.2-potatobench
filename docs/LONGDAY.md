@@ -98,8 +98,13 @@ tests of the game's rules and its interface, and a test that waits for a day sho
   digs a little more. Over a season the two differ by a few hundredweight.
 - A swath is wider than the implement drawn: six lanes plant a field that seventy real passes would.
 - Someone with nothing to do walks home and moves about the dooryard; the simulation has no work for them to be
-  seen at. The planter is worked by its driver alone: the second man on the planter and the stops to fill its
-  hoppers at the headland (docs/research/farm-work-practice.md) are not drawn yet.
+  seen at.
+- The planter stops at the headland it set out from, each time it is back there, to be filled: seed barrels and
+  fertilizer sacks stand there from the morning, and its driver gets down and tips four barrels in (about eight
+  seconds). It is worked by its driver alone: the second man who rode a real planter is not in the simulation, so
+  he is not drawn.
+- The digger's ground is the simulation's: a field is eight bands deep, and a band is dug as the digger passes
+  along it, about sixteen metres wide.
 - Hauling is so many whole loads in its hours; a stretch too short for a load is seen loading only.
 - A change of clock between 1× and the faster speeds brings everyone into sight again where the new clock's day
   has them (a quick fade), since the two pictures are not the same day.
