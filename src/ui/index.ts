@@ -423,7 +423,12 @@ export const mountHud: MountHud = (root, app, view, sound) => {
         const long = app.screen === 'season' && app.daySeconds() >= 30 && !!app.campaign?.season?.clock
         const hr = long ? 6 + Math.min(10, Math.floor(app.dayProgress * 11)) : -1
         const said = hr < 0 ? '' : ` ${hr % 12 || 12} ${hr < 12 ? 'AM' : 'PM'}`
-        if (hourEl.textContent !== said) hourEl.textContent = said
+        if (hourEl.textContent !== said) {
+          hourEl.textContent = said
+          // (with the hour beside it the weekday is said short, so the line keeps to the leaf)
+          const day = hourEl.parentElement, name = day?.dataset.day ?? ''
+          if (day?.firstChild && day.firstChild.nodeType === 3) day.firstChild.nodeValue = said ? name.slice(0, 3) : name
+        }
       }
       guided.frame(dt)
       laps.end('interface: guide')

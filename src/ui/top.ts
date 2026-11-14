@@ -30,7 +30,7 @@ function leaf(c: S.Campaign): HTMLElement {
         h('span', { class: 'day num' }, String(dom)),
         h('span', { class: 'month' }, S.MONTHS[month]),
         // (the hour of a long day, written in as it passes: src/ui/index.ts)
-        h('span', { class: 'weekday' }, F.weekday(c.year, d), h('span', { class: 'hour num', testid: 'hour' }))),
+        h('span', { class: 'weekday', 'data-day': F.weekday(c.year, d) }, F.weekday(c.year, d), h('span', { class: 'hour num', testid: 'hour' }))),
       year)
   }
   const word = c.phase === 'cellar' ? S.CELLAR_MONTHS[c.month] : c.phase === 'plan' ? 'Spring' : c.phase === 'ledger' ? 'Year end' : 'The end'

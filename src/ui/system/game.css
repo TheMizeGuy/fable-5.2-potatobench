@@ -266,3 +266,6 @@
   background: var(--paper); box-shadow: var(--laid); pointer-events: none; }
 .term:focus { outline: none; }
 .term:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+/* The hour of a long day, beside the weekday: one line, never wrapped. */
+.leaf .weekday { white-space: nowrap; }
