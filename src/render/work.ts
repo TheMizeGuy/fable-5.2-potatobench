@@ -32,6 +32,8 @@ export interface Seg {
   machine?: string       // which of the farm's machines this part of the day is done with (as the day's record names it)
   hours?: [number, number]   // and its hours on it, as shares of the day
   work?: number          // a long day, watched as it is worked: the share of the day at which they are there and begin
+  laneFrom?: number      // a long day's row work: how far along the field's lanes `path` begins (metres)
+  stops?: number[]       // and where along `path` the machine stops to be filled (a planter, at the headland)
   polys?: { walkTo: Poly; travel: Poly; path: Poly }
 }
 
@@ -332,6 +334,19 @@ export function crossings(field: number, p0: number, p1: number, n: number, from
 // about it.
 export const LANES: Record<string, number> = { plant: 6, hill: 3, spray: 2, kill: 2, water: 4, dig: ROWS }
 const lanePolys = new Map<string, Poly>()
+const laneEnds = new Map<string, number[]>()
+// A planter is filled at the headland it set out from, each time it is back there: seed from barrels set out along
+// the field's end, fertilizer from sacks (USDA Farmers' Bulletin 1958: "one man tips a barrel into the seed hopper
+// while another empties fertilizer bags"; docs/research/farm-work-practice.md). Where: how far along the field's
+// lanes, the place the tractor stands, and the way it faces.
+export interface Fill { arc: number; x: number; z: number; dx: number; dz: number }
+export function fillStops(field: number, kind: string): Fill[] {
+  if (kind !== 'plant') return []
+  const poly = lanePoly(field, kind), ends = laneEnds.get(`${field}|${kind}`) ?? []
+  const out: Fill[] = []
+  for (let k = 1; k < ends.length - 1; k += 2) { const e = poly.at(ends[k] - 0.01); out.push({ arc: ends[k], x: e.x, z: e.z, dx: e.dx, dz: e.dz }) }
+  return out
+}
 export function lanePoly(field: number, kind: string): Poly {
   const key = `${field}|${kind}`
   const had = lanePolys.get(key)
@@ -339,6 +354,7 @@ export function lanePoly(field: number, kind: string): Poly {
   const f = FIELDS[field], n = LANES[kind] ?? 4
   const rowZ = (z: number) => f.z0 + (Math.max(0, Math.min(PLANTED_ROWS - 1, Math.round((z - f.z0) / ROW - 0.5))) + 0.5) * ROW
   const pts: Pt[] = []
+  const endAt: number[] = []
   let last = 0
   for (let k = 0; k < n; k++) {
     const z = rowZ(f.z0 + ((k + 0.5) / n) * FD), east = k % 2 === 0
@@ -350,10 +366,12 @@ export function lanePoly(field: number, kind: string): Poly {
       for (let m = 0; m < 5; m++) { const t = (m / 5) * (Math.PI / 2); pts.push({ x: x + out * r * Math.cos(t), z: z - r + r * Math.sin(t) }) }
     }
     pts.push(east ? a : b, east ? b : a)
+    endAt.push(pts.length - 1)
     last = z
   }
   const poly = new Poly(pts)
   lanePolys.set(key, poly)
+  laneEnds.set(key, endAt.map(i => poly.cum[i]))
   return poly
 }
 // How far behind a machine the ground it has worked is clear of it and of what it draws.
@@ -544,6 +562,7 @@ export function planDay(snap: Snapshot, shown: HillDisplay[][], crews: CrewFrom[
         const { hills, band } = share(key, crew.id)
         const tractor = ROW_JOBS.has(w.kind) && ride === 'tractor'
         let path: Pt[]
+        let laneFrom: number | undefined, stops: number[] | undefined
         const start = parkSpot(w.field, crew.slot)
         // A day's digging is never literal: the interface waits to see the day's band out, so it plays as a running day does.
         const lit = (literal && (w.kind !== 'dig' || !!live)) || w.kind === 'sample'
@@ -553,6 +572,8 @@ export function planDay(snap: Snapshot, shown: HillDisplay[][], crews: CrewFrom[
           // the job's own lanes, from where it stood to where the day leaves it
           const lane = lanePoly(w.field, w.kind)
           path = lane.slice(band[0] * lane.length, band[1] * lane.length)
+          laneFrom = band[0] * lane.length
+          stops = fillStops(w.field, w.kind).map(x => x.arc - laneFrom!).filter(x => x > 2 && x < (band[1] - band[0]) * lane.length - 2)
         } else if (tractor) {
           // the dug ground is the band the dug hills lie in (the simulation digs in rows from the top)
           let [p0, p1] = band
@@ -604,7 +625,7 @@ export function planDay(snap: Snapshot, shown: HillDisplay[][], crews: CrewFrom[
         // (someone who lives out comes in by the road to the machine where it was left)
         const { walkTo, travel } = here ? { walkTo: crew.arrives ? way(at, machine!) : [], travel: [machine!] } : afoot ? { walkTo: [], travel: [at] } : go(path[0], tractor ? 'tractor' : '')
         if (from > 0) { const e = poly.at(from); travel.push({ x: e.x, z: e.z }) }
-        segs.push({ kind: w.kind, field: w.field, walker: !tractor, ride: tractor ? 'tractor' : '', walkTo, travel, path, reveals, start: 0, end: 0, site: '', lit, from, machine: tractor ? w.machine : undefined, hours: tractor || live ? hours : undefined })
+        segs.push({ kind: w.kind, field: w.field, walker: !tractor, ride: tractor ? 'tractor' : '', walkTo, travel, path, reveals, start: 0, end: 0, site: '', lit, from, machine: tractor ? w.machine : undefined, hours: tractor || live ? hours : undefined, laneFrom, stops: stops?.length ? stops : undefined })
         at = lit ? path[path.length - 1] : travel[travel.length - 1]
         if (tractor) machine = at
       }

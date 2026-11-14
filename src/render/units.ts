@@ -9,7 +9,7 @@ import {
 import { PARCELS, STUMP_DAYS, type UnitKind } from '../sim/index.ts'
 import type { Thing, ThingKind } from '../game/contracts.ts'
 import { COWS, COW_SCALE as COW, DEER, drawBeast, drawCrow } from './animals.ts'
-import { LOD, Pose, dressFor, dressOf, drawFigure as drawPerson, drawn, figureMatrix, forking, hammering, sit, stand, stoop, swing, walk, type Dress } from './crew.ts'
+import { LOD, Pose, dressFor, dressOf, drawFigure as drawPerson, drawn, figureMatrix, forking, hammering, lifting, sit, stand, stoop, swing, walk, type Dress } from './crew.ts'
 import type { Env } from './env.ts'
 import { UI_GAIN, type HillDisplay } from './fields.ts'
 import { level } from './arch.ts'
@@ -26,7 +26,7 @@ import { Stage, type StageFrame, type Worker } from './stage.ts'
 import type { Snapshot, UnitVis } from './state.ts'
 import { Car, GRIME, PAINTS, Tractor, Yarded, implementFor, type MachineFrame, type MachineState, type YardKind } from './tractor.ts'
 import {
-  BUYER, CALLER, DOORYARD_AT, GATE, LIVE_PACE, MACHINE_JOBS, OFF_FARM, PACE, PORCH_AT, Poly, SITE_JOBS, buildSite, cropDoor, heightAt, idleSpot, machineHome, packSite, planDay, restAt, sickSpot, siteAt, sundaySpot, wayFrom,
+  BUYER, CALLER, DOORYARD_AT, GATE, LIVE_PACE, MACHINE_JOBS, OFF_FARM, PACE, PORCH_AT, Poly, fillStops, SITE_JOBS, buildSite, cropDoor, heightAt, idleSpot, machineHome, packSite, planDay, restAt, sickSpot, siteAt, sundaySpot, wayFrom,
   type CrewFrom, type Reveal, type Ride, type Seg, type Spot,
 } from './work.ts'
 
@@ -79,6 +79,20 @@ const CATCH_UP = 1.6
 const FOOT_MOST = 9, RIG_MOST = 28
 // On a long day: a run, and a machine flat out on the lane.
 const LIVE_FOOT_MOST = 4.2, LIVE_RIG_MOST = 17
+// Filling a planter at the headland: seconds stopped, and barrels of seed tipped in.
+const FILL_S = 8.5, FILL_BARRELS = 4
+
+// Where a machine that stops to be filled is, w of the way through its T seconds of work over L metres: it goes at
+// one pace between the stops and stands FILL_S at each. stop: which it stands at (-1 none), k: how far through that.
+function filling(w: number, L: number, stops: number[], T: number): { arc: number; stop: number; k: number } {
+  const d = Math.min(FILL_S / Math.max(1, T), 0.5 / stops.length), go = 1 - stops.length * d
+  for (let i = 0; i < stops.length; i++) {
+    const t = (stops[i] / L) * go + i * d
+    if (w < t) return { arc: ((w - i * d) / go) * L, stop: -1, k: 0 }
+    if (w < t + d) return { arc: stops[i], stop: i, k: (w - t) / d }
+  }
+  return { arc: Math.min(L, ((w - stops.length * d) / go) * L), stop: -1, k: 0 }
+}
 // Faster than this over the ground (metres a second) without stepping is a slide.
 const SLID = 0.45
 const QUICK = [1, 1, 1.5, 2.4]
@@ -1487,6 +1501,7 @@ export class Crews {
       }
       if (seg.kind === 'travel' && p >= 1 && !a.aboard) { a.x = px; a.z = pz; this.atEase(a, f, pose, big); px = a.x; pz = a.z }
       passed(-1)
+      if (live && seg.laneFrom !== undefined && seg.lit) this.depots(seg, seg.laneFrom, null, big)
       // to work staged at one place the tractor brings the trailer for a haul, and nothing else
       if (tractor && seg.ride === 'tractor' && seg.kind !== 'travel') tractor.setImplement(seg.site ? (seg.kind === 'haul' ? 'trailer' : 'none') : implementFor(seg.kind, f.snap.farm.equipment.includes('harvester')))
     } else {
@@ -1505,9 +1520,26 @@ export class Crews {
         let arc: number
         if (seg.lit) {
           // literally: along every pass of the day's ground, which changes where the machine has been
-          ride(path.at(w * path.length))
+          // (a long day's planter stops at the headland to be filled: its driver gets down and tips the seed in)
+          const fill = live && seg.stops ? filling(w, path.length, seg.stops, span * (1 - tShare) * f.daySec) : null
+          const along = fill ? fill.arc : w * path.length
+          ride(path.at(along))
           rig.state.working = w > 0 && w < 1 ? 1 : 0
-          arc = w >= 1 ? Infinity : w * path.length
+          arc = w >= 1 ? Infinity : along
+          if (live && seg.laneFrom !== undefined) {
+            // (down from the seat as it stops, and back in it a second before it goes on)
+            const kk = fill && fill.stop >= 0 ? clamp((fill.k - 0.05) / 0.83, 0, 1) : 0
+            const at = this.depots(seg, w >= 1 ? Infinity : seg.laneFrom + along, fill && fill.stop >= 0 ? { stop: fill.stop, k: kk } : null, big)
+            if (at && fill && fill.k < 0.88) {
+              // beside the hoppers: a barrel up from the ground and tipped in, four times
+              a.aboard = false
+              px = at.x; pz = at.z
+              a.heading = at.heading
+              const cyc = Math.min(FILL_BARRELS - 0.001, kk * FILL_BARRELS) % 1
+              lifting(pose, cyc, at.side, 0.16)
+              pose.held = cyc > 0.24 && cyc < 0.78 ? 'barrel' : ''
+            }
+          }
         } else {
           // A pass at a time at a pace that looks right from where the camera is, going on from day to day while the
           // job lasts: along the row in hand to its end, round on the headland, and back along the band's leading row
@@ -1606,6 +1638,39 @@ export class Crews {
     this.figure(a, pose, big)
     this.ring(a.sx, heightAt(a.sx, a.sz), a.sz, this.mark, a, f, this.far)
     return null
+  }
+
+  // The seed and fertilizer set out at a field's end for the planter, at each place it will be filled: barrels
+  // standing and sacks before it has been there, the barrels emptied one by one while it is, lying empty after.
+  // laneArc: how far along the field's lanes the planter is. Returns where its driver stands to fill it now.
+  private depots(seg: Seg, laneArc: number, fill: { stop: number; k: number } | null, big: number): { x: number; z: number; heading: number; side: number } | null {
+    const stops = fillStops(seg.field, seg.kind)
+    let out: { x: number; z: number; heading: number; side: number } | null = null
+    const s = 0.42 * big, up = V2.set(0, 1, 0)
+    stops.forEach((st, i) => {
+      const now = !!fill && Math.abs(st.arc - (seg.laneFrom ?? 0) - (seg.stops?.[fill.stop] ?? -1e9)) < 0.5
+      // (the planter's hoppers are 2.2 m behind the tractor; its driver stands beside them, on the side the land is
+      // looked at from, clear of the turn into the next lane)
+      const rx = -st.dz, rz = st.dx, side = 1
+      const hx = st.x - st.dx * 1.02 * S, hz = st.z - st.dz * 1.02 * S
+      const mx = hx + rx * side * 2.0, mz = hz + rz * side * 2.0
+      if (now) out = { x: mx, z: mz, heading: Math.atan2(st.dz, st.dx), side: -side }
+      const emptied = now ? Math.min(FILL_BARRELS, Math.floor(fill!.k * FILL_BARRELS + 0.3)) : laneArc > st.arc + 0.5 ? FILL_BARRELS : 0
+      for (let n = 0; n < FILL_BARRELS; n++) {
+        // (a short row of them along the headland, ahead of where he stands)
+        const bx = mx + st.dx * (1.0 + 0.56 * n) + rx * side * 0.1 * (n % 2), bz = mz + st.dz * (1.0 + 0.56 * n) + rz * side * 0.1 * (n % 2)
+        const y = heightAt(bx, bz)
+        if (n < emptied) this.prims.put('barrel', V.set(bx + rx * side * 0.5, y + 0.45 * s, bz + rz * side * 0.5), V3.set(rx, 0, rz), up, s, s, s, WHITE)
+        else this.prims.put('barrel', V.set(bx, y, bz), up, AXIS_X, s, s, s, WHITE)
+      }
+      // fertilizer in sacks, stacked flat: gone once the planter has been filled here
+      const sacks = now ? (fill!.k < 0.5 ? 2 : fill!.k < 0.8 ? 1 : 0) : laneArc > st.arc + 0.5 ? 0 : 3
+      for (let n = 0; n < sacks; n++) {
+        const bx = mx - st.dx * 0.9 + rx * side * 0.5, bz = mz - st.dz * 0.9 + rz * side * 0.5
+        this.prims.put('box', V.set(bx, heightAt(bx, bz) + n * 0.16 * big * 0.5, bz), up, V3.set(st.dx, 0, st.dz), 0.5 * big * 0.5, 0.15 * big * 0.5, 0.3 * big * 0.5, SACKING)
+      }
+    })
+    return out
   }
 
   // A long day's way to a part of its work, q of the way through its T seconds: on foot to the machine, then the
@@ -2059,6 +2124,7 @@ const YARD_KINDS: YardKind[] = ['harvester', 'sprayer', 'reel']
 const POSE = new Pose()
 const AXIS_X = new Vector3(1, 0, 0), TRAY = new Color('#cbb98e'), CHAIR = new Color('#6f5a41')
 const WHITE = new Color(1, 1, 1)
+const SACKING = new Color('#b39a6b'), V3 = new Vector3()
 const DOZER_UP = new Vector3(0, 1, 0), DOZER_PAINT = new Color('#c9961c'), DOZER_CAB = new Color('#a87a14'), DOZER_TRACK = new Color('#2a2927'), DOZER_BLADE = new Color('#8a8d8b')
 const IDLE: MachineState = { moved: 0, turn: 0, working: 0, kind: 'travel', driver: null, load: 0, far: 0 }
 const ASKING: Dress[] = [

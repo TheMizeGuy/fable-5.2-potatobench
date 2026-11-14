@@ -20,6 +20,8 @@ const orderAt = Number(opt('order', '0'))
 // --follow=<metres>: the camera keeps on the first machine at work (or, with none, the first person), from this far
 const follow = Number(opt('follow', '0'))
 const clear = args.includes('--clear')
+// --only=0.3-0.4: pictures only between these shares of the first day
+const only = opt('only', '').split('-').map(Number)
 mkdirSync(out, { recursive: true })
 
 const browser = await chromium.launch({ args: GPU })
@@ -101,7 +103,7 @@ for (let n = 0; n <= frames * sub; n++) {
     if (r && Number.isFinite(r.x)) await page.evaluate(([x, z, d]) => (globalThis as unknown as { __countyField: { view(p: object): void } }).__countyField.view({ x, z, dist: d, pitch: 0.62 }), [r.x, r.z, follow])
   }
   if (clear) await page.evaluate(() => (globalThis as unknown as { __countyField: { tune(o: object): void } }).__countyField.tune({ rain: 0, cloud: 0.15, mist: 0, wet: 0.2 }))
-  if (n % sub === 0) {
+  if (n % sub === 0 && (only.length < 2 || (now.day === start.day && now.at >= only[0] && now.at <= only[1]))) {
     const k = n / sub
     await page.screenshot({ path: `${out}/${String(k).padStart(2, '0')}.jpg`, type: 'jpeg', quality: 72 })
     const who = [...now.info.units.map(u => `${u.foot ? 'f' : 'a'}${u.id}(${u.x.toFixed(0)},${u.z.toFixed(0)}${u.doing ? ` ${u.doing}` : ''}${u.fade < 0.95 ? ' faint' : ''})`), ...now.info.rigs.map(r => `${r.key}(${r.x.toFixed(0)},${r.z.toFixed(0)}${r.work ? ` ${r.work}` : ''}${r.tool && r.tool !== 'none' ? ` ${r.tool}` : ''})`)].join(' ')
