@@ -73,7 +73,8 @@ const say = (ok: boolean, text: string) => { if (!ok) bad++; console.log(`${ok ?
 // land, for a field under the boards), or glides to another place beside it: a jump is a step in one frame that is
 // none of those, further than a glide goes in a frame. And a tag comes and goes by fading: it is never there whole in
 // one frame and absent in the next.
-function read(name: string, frames: Frame[], hop = 20): void {
+// (a glide of the longest kind, 130 px, reaches 16 px in a frame, and a little more while the land itself is zooming)
+function read(name: string, frames: Frame[], hop = 24): void {
   let worst = 0, hops = 0, pops = 0, steps = 0, moved = 0, faint = 0, all = 0
   const movedBy = new Map<number, number>()
   const big: { d: number; say: string }[] = [], popped: string[] = []

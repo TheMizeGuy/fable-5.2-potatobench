@@ -1417,6 +1417,9 @@ test('on a phone the card is a sheet at the foot, headed with the thing, notched
     }
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/phone-${name.replace(/[^\w]+/g, '-')}.png` })
   }
+  // (on a phone the tags are put again once the camera has come to rest: the tap is aimed once they hold still)
+  const tagsAt = () => a<string>(page, `return JSON.stringify([...document.querySelectorAll('#ui .plate')].map(e => { const b = e.getBoundingClientRect(); return [Math.round(b.left), Math.round(b.top)] }))`)
+  await expect.poll(async () => { const was = await tagsAt(); await page.waitForTimeout(300); return was === await tagsAt() }, { timeout: 10_000 }).toBe(true)
   // A field, by its tag.
   const i = await a<number>(page, `return [3, 0, 2, 4, 5, 1].find(i => !!A.handle('.plate[data-k="field-' + i + '"]'))`)
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/phone-as-it-stands.png` })
