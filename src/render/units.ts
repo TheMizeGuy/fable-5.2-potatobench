@@ -77,6 +77,8 @@ const CATCH_UP = 1.6
 // The fastest anyone is seen to go at 1x, catching up with where the day's script has them: on foot, and driving
 // (m/s); half as fast again at 3x and two and a half times at 8x. The script's own ways keep within it.
 const FOOT_MOST = 9, RIG_MOST = 28
+// On a long day: a run, and a machine flat out on the lane.
+const LIVE_FOOT_MOST = 4.2, LIVE_RIG_MOST = 17
 // Faster than this over the ground (metres a second) without stepping is a slide.
 const SLID = 0.45
 const QUICK = [1, 1, 1.5, 2.4]
@@ -487,8 +489,9 @@ export class Crews {
       if (u.worked.length || u.to !== u.at) { a.state = 'work'; a.goal = null }
       else if (u.hurt) { a.state = 'hurt'; a.goal = { ...sickSpot(sick++), seat: 0.2 } }
       else if (snap.restDay) { a.state = 'sunday'; const s = sundaySpot(sunday++); a.goal = { ...s, seat: s.seat } }
-      else { a.state = 'idle'; a.goal = u.at < 0 ? idleSpot(u.at, a.slot, a.kind === 'farmer') : null }
-      a.home = a.state === 'sunday' || (a.state === 'idle' && a.goal && u.at === -1 && a.kind !== 'farmer') ? a.goal : null
+      // (on a long day someone left at a field with nothing to do goes home to the dooryard)
+      else { a.state = 'idle'; a.goal = u.at < 0 ? idleSpot(u.at, a.slot, a.kind === 'farmer') : this.live ? idleSpot(-1, a.slot, a.kind === 'farmer') : null }
+      a.home = a.state === 'sunday' || (a.state === 'idle' && a.goal && (u.at === -1 || (this.live && u.at >= 0)) && a.kind !== 'farmer') ? a.goal : null
       a.about = a.state === 'sunday' ? PORCH_AT : DOORYARD_AT
       // Someone who lives out is not on the farm on a day off: they are back by the road with the next day's work.
       // (Seen at work still, or waiting their turn at it, with the clock running: they go once that has been seen.)
@@ -699,6 +702,7 @@ export class Crews {
   // same morning in it, and they are where it has them at this time of day.
   private planLive(snap: Snapshot, shown: HillDisplay[][], samples: Map<number, number>, live: { daySec: number; day: number; shares: Map<string, number>; now?: number }): PendingReveal[] {
     this.stopped = false
+    this.live = true
     this.sync(snap)
     // (who the day had nothing for, in the plan this one replaces)
     const free = new Set(this.actors.filter(a => a.state !== 'work' && !a.aboard).map(a => a.id))
@@ -1091,7 +1095,7 @@ export class Crews {
       // and they are seen on foot until they are at it.
       const walking = !!holder && holder.aboard && Number.isFinite(holder.sx) && Math.hypot(holder.sx - r.sx, holder.sz - r.sz) > 0.3
       if (walking) {
-        this.follow(holder!, this.vFoot, FOOT_MOST * quick, { x: r.sx, z: r.sz })
+        this.follow(holder!, this.vFoot, this.live ? LIVE_FOOT_MOST : FOOT_MOST * quick, { x: r.sx, z: r.sz })
         holder!.heading = Math.atan2(r.sz - holder!.sz, r.sx - holder!.sx)
         const pose = holder!.pose.reset()
         walk(pose, f.time * 7, 1, holder!.tired, 0)
@@ -1100,7 +1104,7 @@ export class Crews {
         drawFigure(this.prims, M, cold ? holder!.coat : holder!.dress, pose)
         holder!.head.copy(drawn.head)
       } else {
-        this.follow(r, this.vRig, RIG_MOST * quick)
+        this.follow(r, this.vRig, this.live ? LIVE_RIG_MOST : RIG_MOST * quick)
         if (holder && holder.aboard) { holder.sx = r.sx; holder.sz = r.sz }
       }
       // a machine standing idle in the yard is not drawn as large as one at work, or the yard is all machines; under
@@ -1192,7 +1196,7 @@ export class Crews {
 
   private figure(a: Actor, pose: Pose, scale: number, lift = 0): void {
     const bx = a.sx, bz = a.sz
-    this.follow(a, this.vFoot, FOOT_MOST * this.quick)
+    this.follow(a, this.vFoot, this.live ? LIVE_FOOT_MOST : FOOT_MOST * this.quick)
     // Carried over the ground to where the day has them, they are seen walking there and facing the way they go:
     // nobody is slid along as they stand or work.
     const gone = Number.isFinite(bx) ? Math.hypot(a.sx - bx, a.sz - bz) : 0
