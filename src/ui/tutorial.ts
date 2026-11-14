@@ -816,6 +816,9 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
   return {
     frame(dt: number) {
       since += dt
+      // One voice: a card that comes while a tip is up (a telegram, a paper, the test-dig tray) has the tip put away
+      // in the same frame, not at the next look.
+      if (shownId && (ctx.awaiting > 0 || ctx.papers.pending() > 0 || shown(root.querySelector('.telegram:not(.guide-card)')) || shown(root.querySelector('.tray-paper')))) stale = true
       if (stale || since > 300) {
         stale = false
         since = 0
