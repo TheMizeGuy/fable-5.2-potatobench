@@ -18,7 +18,7 @@ function figs(touch: boolean): HTMLElement {
     h('p', null, text))
   const spray = h('span', { class: 'need ochre is-next' }, icon('spray'))
   return h('div', { class: 'figs' },
-    fig(1, tag({ name: 'North Ridge', icon: 'bloom', selected: true, still: true }), 'Pick a field', touch ? 'Tap a field or its tag, and a card opens showing what it needs.' : 'Click a field or its tag, and a card opens on the right showing what it needs.'),
+    fig(1, tag({ name: 'North Ridge', icon: 'bloom', selected: true, still: true }), 'Pick a field', touch ? 'Tap a field or its tag, and a card opens showing what it needs.' : 'Click a field or its tag, and a card opens showing what it needs.'),
     fig(2, tag({ name: 'Upper Middle', icon: 'bloom', need: spray, still: true }), 'Give an order', touch ? 'Tap the stamp to order the job the field needs.' : 'Click the stamp or right-click the field to order the job it needs.'),
     fig(3, h('div', { class: 'clock' }, h('span', { class: 'k' }, icon('pause', 'i')), h('span', { class: 'k', 'aria-pressed': 'true' }, '1×'), h('span', { class: 'k' }, '3×'), h('span', { class: 'k' }, '8×')),
       'Let time pass', touch ? 'Time runs at the speed you pick, and the game pauses when something needs you.' : 'Time runs at the speed you pick, and the game pauses when something needs you. Press Space to pause it yourself.'))
@@ -26,7 +26,7 @@ function figs(touch: boolean): HTMLElement {
 
 export const CODE: [string, string, string, string][] = [
   ['red', 'rogue', 'Red', 'blight or a loss, so act now.'],
-  ['ochre', 'spray', 'Ochre', 'the next thing to do.'],
+  ['ochre', 'spray', 'Yellow', 'the next thing to do.'],
   ['blue', 'water', 'Blue', 'the field is drying out.'],
   ['', 'hill', 'Black', 'work that\'s due.'],
 ]
@@ -82,7 +82,7 @@ export function openHelp(ctx: Ctx): void {
         h('header', { class: 'howto-head' },
           h('div', null, h('p', { class: 't-label' }, 'From the almanac'), h('p', { class: 't-title', 'aria-hidden': 'true' }, 'How to play')),
           h('button', { class: 'close', type: 'button', testid: 'how-close', autofocus: true, 'aria-label': ctx.app.screen === 'title' ? 'Back (Escape)' : 'Back to the farm (Escape)', onclick: close }, icon('close', 'i'))),
-        h('p', { class: 'howto-lead' }, 'Your crop grows underground where you can\'t see it. Give orders, let time pass, and find out what you grew at harvest. Keep the farm for five years and it\'s yours.'),
+        h('p', { class: 'howto-lead' }, 'Plant potatoes, give your crew orders, and sell the harvest. Test digs show how the crop is doing. Keep the farm going for five years.'),
         figs(touch),
         h('div', { class: 'code-row' }, CODE.map(([ink, glyph, word, what]) => h('div', null,
           h('span', { class: `need${ink ? ` ${ink}` : ''}`, 'aria-hidden': 'true' }, icon(glyph)), h('p', null, h('b', null, word), `: ${what}`)))),

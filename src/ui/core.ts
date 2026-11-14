@@ -5,6 +5,7 @@ import { h, morphChildren, type Child } from './dom.ts'
 import { icon } from './icons.ts'
 import { localize } from './fmt.ts'
 import { waitsItsTurn } from './turn.ts'
+import { localHeight, localWidth, toLocal } from './scale.ts'
 
 // wide: everything on one line along each edge. mid: the command card gets a row to itself.
 // narrow: a phone or tablet held upright. short: a phone on its side.
@@ -61,7 +62,8 @@ export interface Screen {
 }
 
 export function layoutNow(): Layout {
-  const w = innerWidth, hh = innerHeight
+  // (the window as the scaled interface sees it)
+  const w = localWidth(), hh = localHeight()
   if (hh <= 500 && w > hh) return 'short'
   if (w < 900) return 'narrow'
   return w < 1400 ? 'mid' : 'wide'
@@ -186,6 +188,8 @@ export class Papers {
 
   // True while a paper is up or on its way out.
   isOpen(): boolean { return this.stack.length > 0 || this.leaving > 0 }
+  // A paper that Escape can still put away (one already on its way out is not).
+  isUp(): boolean { return this.stack.length > 0 }
   top(): HTMLElement | null { return this.stack[this.stack.length - 1]?.el ?? null }
 
   open(spec: PaperSpec): () => void {
@@ -465,7 +469,7 @@ export class Notes {
       const dy = was - row.getBoundingClientRect().top
       if (Math.abs(dy) < 1) continue
       row.style.transition = 'none'
-      row.style.transform = `translateY(${dy}px)`
+      row.style.transform = `translateY(${toLocal(dy)}px)`
       void row.offsetWidth
       row.style.transition = ''
       row.style.transform = ''

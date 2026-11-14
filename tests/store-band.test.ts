@@ -83,8 +83,8 @@ describe('keeping a crop is said with how sure it is', () => {
         // Selling is the way: the store line says it could bring less, never that it brings more.
         if (!call.store) expect(call.phrase).not.toMatch(/\$[\d,]+ more than/)
         if (call.store) expect(call.phrase).toMatch(/more than selling today/)
-        // The tab's words: "Brings most" only when that way brings the most even with the swing.
-        expect(call.tab).toBe(!call.store && b && d >= 0.5 ? 'Surer' : 'Brings most')
+        // The tab's words: "Pays most" only when that way brings the most even with the swing.
+        expect(call.tab).toBe(!call.store && b && d >= 0.5 ? 'Surer' : 'Pays most')
         if (call.tab === 'Surer') { surer++; expect(call.phrase).toMatch(/could as easily bring less/) }
         // The coupon's one sentence makes the same call.
         if (!call.store) expect(call.short).not.toMatch(/\$[\d,]+ more than/)

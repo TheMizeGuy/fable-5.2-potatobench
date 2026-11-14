@@ -86,7 +86,7 @@ b, strong { font-weight: 700; }
 .i { display: inline-block; width: var(--i, 20px); height: var(--i, 20px); flex: none; vertical-align: middle; overflow: visible; }
 :focus-visible { outline: 3px solid var(--blue); outline-offset: 3px; }
 
-.stage { position: relative; width: 100vw; height: 100vh; overflow: hidden; background: #2b3a2e center / cover no-repeat; }
+.stage { position: relative; width: calc(100 * var(--vw, 1vw)); height: calc(100 * var(--vh, 1vh)); overflow: hidden; background: #2b3a2e center / cover no-repeat; }
 .stage.july { background-image: url(backdrops/play-july.jpg); }
 .stage.snow { background-image: url(backdrops/play-snow.jpg); }
 .stage.night { background-image: url(backdrops/winter-night.jpg); }

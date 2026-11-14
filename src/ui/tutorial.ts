@@ -12,6 +12,7 @@ import { plantingIn } from './rules.ts'
 import { showForemanKey } from './people.ts'
 import { fist, key } from './system/parts.ts'
 import './system/tutorial.css'
+import { toLocal, toScreen } from './scale.ts'
 
 export const guide = new Guide(localStore())
 // Set by the mounted guide: a key on a note takes effect on the next frame, not the next look round.
@@ -926,7 +927,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     // The fist beside the target, pointing at it: left of it, else right, above, below.
     let fistBox: Box | null = null
     if (t.at && showField < 0) {
-      const s = 44, g = 6
+      const s = toScreen(44), g = 6
       // In spring the slip is in the catalogue: the fist keeps off it.
       const docked = slot?.isConnected ? slot.querySelector('.guide')?.getBoundingClientRect() : undefined
       const inside = ([x, y]: [number, number, string]) => x >= 4 && y >= 4 && x + s <= innerWidth - 4 && y + s <= innerHeight - 4
@@ -956,7 +957,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
       for (const o of options) { fit = fitFor(o.at!); if (fit) { t = o; break } }
       if (fit) {
         fistBox = { left: fit[0], top: fit[1], right: fit[0] + s, bottom: fit[1] + s }
-        hand.style.transform = `translate3d(${fit[0].toFixed(1)}px, ${fit[1].toFixed(1)}px, 0)`
+        hand.style.transform = `translate3d(${toLocal(fit[0]).toFixed(1)}px, ${toLocal(fit[1]).toFixed(1)}px, 0)`
         hand.dataset.to = fit[2]
         if (t.id !== picked) { picked = t.id; if (!slip.hidden) slip.dataset.target = target = t.id }
       }
@@ -964,13 +965,13 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     hand.hidden = !fistBox
     const noteBox: Box | null = null
     if (slip.hidden) return
-    const key = `${l.id}|${innerWidth}x${innerHeight}|${slip.offsetWidth}x${slip.offsetHeight}`
+    const key = `${l.id}|${innerWidth}x${innerHeight}|${toScreen(slip.offsetWidth)}x${toScreen(slip.offsetHeight)}`
     const t0 = performance.now()
     // Every frame: nothing it must never cover has come over it (a card sliding in, a telegram).
     const cat = app.screen === 'plan' ? root.querySelector('.catalogue') : null
     const catBox = cat && shown(cat) ? [box(cat.getBoundingClientRect())] : []
     const must = [...hardOnes(root), ...catBox, ...(t.at ? [pad(t.at, 10)] : []), ...(fistBox ? [pad(fistBox, 4)] : []), ...(noteBox ? [noteBox] : [])]
-    const at = place ? { left: place.x, top: place.y, right: place.x + slip.offsetWidth, bottom: place.y + slip.offsetHeight } : null
+    const at = place ? { left: place.x, top: place.y, right: place.x + toScreen(slip.offsetWidth), bottom: place.y + toScreen(slip.offsetHeight) } : null
     if (placedFor === key && t0 - checked < 250 && (!at || !must.some(a => meets(at, a)))) return
     checked = t0
     const { hard, soft, costs } = obstacles(root)
@@ -978,7 +979,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     if (t.at) hard.push(pad(t.at, 10))
     if (fistBox) hard.push(pad(fistBox, 4))
     if (noteBox) hard.push(noteBox)
-    const w = slip.offsetWidth, ht = slip.offsetHeight
+    const w = toScreen(slip.offsetWidth), ht = toScreen(slip.offsetHeight)
     const here = place ? { left: place.x, top: place.y, right: place.x + w, bottom: place.y + ht } : null
     // Stay put while the place is still clear; move only when something comes over it.
     const retry = tier !== 0 && t0 - placedAt > 1000
@@ -995,14 +996,14 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     if (holder) must2.push(box(holder.getBoundingClientRect()))
     for (const [k, compact, also] of [[0, false, tags], [0, false, []], [0, true, []], [1, true, []], [1, false, []], [2, true, []]] as const) {
       slip.classList.toggle('compact', compact)
-      found = findPlace(slip.offsetWidth, slip.offsetHeight, [...(k === 0 ? [...hard, ...soft] : k === 1 ? hard : must2), ...also].map(a => pad(a, 8)), k === 0 ? [] : costs)
+      found = findPlace(toScreen(slip.offsetWidth), toScreen(slip.offsetHeight), [...(k === 0 ? [...hard, ...soft] : k === 1 ? hard : must2), ...also].map(a => pad(a, 8)), k === 0 ? [] : costs)
       if (found) { tier = k; break }
     }
     slip.classList.toggle('gone', !found)
     place = found
-    placedFor = `${l.id}|${innerWidth}x${innerHeight}|${slip.offsetWidth}x${slip.offsetHeight}`
+    placedFor = `${l.id}|${innerWidth}x${innerHeight}|${toScreen(slip.offsetWidth)}x${toScreen(slip.offsetHeight)}`
     placedAt = t0
-    if (found) slip.style.transform = `translate3d(${found.x}px, ${found.y}px, 0)`
+    if (found) slip.style.transform = `translate3d(${+toLocal(found.x).toFixed(2)}px, ${+toLocal(found.y).toFixed(2)}px, 0)`
   }
 
   // The guide's line: the first free place nearest the top of the land and its middle, off every panel. It stays put
@@ -1010,7 +1011,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
   function placeDrive(): void {
     if (driveEl.hidden) return
     const t = performance.now()
-    const w = driveEl.offsetWidth, ht = driveEl.offsetHeight
+    const w = toScreen(driveEl.offsetWidth), ht = toScreen(driveEl.offsetHeight)
     const ins = app.insets
     const narrow = ctx.layout() === 'narrow'
     const wait = driveEl.dataset.wait ?? ''
@@ -1038,7 +1039,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     driveEl.classList.toggle('gone', !found)
     drivePlace = found
     drivePlacedFor = key
-    if (found) driveEl.style.transform = `translate3d(${found.x}px, ${found.y}px, 0)`
+    if (found) driveEl.style.transform = `translate3d(${+toLocal(found.x).toFixed(2)}px, ${+toLocal(found.y).toFixed(2)}px, 0)`
   }
 
   return {

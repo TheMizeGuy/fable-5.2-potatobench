@@ -288,7 +288,7 @@ export const BUILDINGS: Record<BuildingKind, BuildingSpec> = {
   packing: { name: 'Packing shed', cash: 8000, logs: 24, stone: 15, days: 24, dufour: false,
     does: 'In winter, anyone you set to packing grades the stored crop. Packed No. 1 sells for 15% more, and packed B size sells for three quarters of the No. 1 price.', catch: 'Packing costs a fee per hundredweight, plus wages for someone kept on all winter.' },
   pond: { name: 'Irrigation pond', cash: 6000, logs: 0, stone: 30, days: 20, dufour: false,
-    does: 'Holds six waterings. Watering a home or intervale field from it takes a third of a day and costs $60.', catch: 'When a month brings less than 40 mm of rain, the brook runs low and the pond goes dry, right when you need it.' },
+    does: 'Holds six waterings. Watering a home or intervale field from it takes a third of a day and costs $60.', catch: 'When a month brings less than 1.6 inches (40 mm) of rain, the brook runs low and the pond goes dry, right when you need it.' },
   stand: { name: 'Farm stand', cash: 600, logs: 4, stone: 0, days: 4, dufour: false,
     does: 'From August 1, it sells about 6 cwt a day from your newest lot at twice the market price, and more for red, yellow and new potatoes.', catch: 'Someone has to run it, which takes a fifth of a working day every day it\'s open.' },
   station: { name: 'Weather station', cash: 1000, logs: 0, stone: 0, days: 1, dufour: false,

@@ -40,9 +40,9 @@
 .topbar .balance .why-key { min-height: 22px; padding: 1px 6px; font: 600 13px/1 var(--f-text); font-style: normal; }
 .topbar[data-layout='narrow'] .face .balance .after .after-key { min-height: 0; padding: 1px 4px 3px; margin: 0; line-height: 1; }
 /* The sum: a small table under the board, never over the speed keys. */
-.topbar .money-pop { width: min(400px, calc(100vw - 32px)); gap: 6px; }
+.topbar .money-pop { width: min(400px, calc(calc(100 * var(--vw, 1vw)) - 32px)); gap: 6px; }
 /* On an upright phone the speed keys are at the thumb: the sum stops short of them and scrolls. */
-.topbar[data-layout='narrow'] .money-pop { position: fixed; top: 20vh; left: 16px; right: 16px; width: auto; max-height: 52vh; }
+.topbar[data-layout='narrow'] .money-pop { position: fixed; top: calc(20 * var(--vh, 1vh)); left: 16px; right: 16px; width: auto; max-height: calc(52 * var(--vh, 1vh)); }
 .topbar .money-pop .mp-head { margin: 0; color: var(--ink-2); }
 .topbar .money-pop .mp-sum { width: 100%; border-collapse: collapse; font-size: 15px; }
 .topbar .money-pop .mp-sum th { text-align: left; font-weight: 400; padding: 3px 8px 3px 0; vertical-align: top; }
@@ -70,12 +70,12 @@
 /* ---------------------------------------------------------------- a paper over the land */
 .paper-layer > .veil { pointer-events: auto; animation: sh-fade var(--t-sheet) var(--ease-out); }
 .paper-layer > .veil.out { animation: sh-fade-out var(--t-leave) var(--ease-in) forwards; }
-.dialog.sys { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(640px, calc(100vw - 2 * var(--gutter)));
-  max-height: calc(100vh - 2 * var(--gutter)); max-height: calc(100dvh - 2 * var(--gutter)); display: grid; grid-template-rows: auto minmax(0, 1fr) auto;
+.dialog.sys { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(640px, calc(calc(100 * var(--vw, 1vw)) - 2 * var(--gutter)));
+  max-height: calc(calc(100 * var(--vh, 1vh)) - 2 * var(--gutter)); max-height: calc(calc(100 * var(--vh, 1dvh)) - 2 * var(--gutter)); display: grid; grid-template-rows: auto minmax(0, 1fr) auto;
   pointer-events: auto; animation: sh-in var(--t-sheet) var(--ease-paper); }
-.dialog.sys.small { width: min(460px, calc(100vw - 2 * var(--gutter))); }
-.dialog.sys.wide { width: min(940px, calc(100vw - 2 * var(--gutter))); }
-.dialog.sys.plain { background: none; box-shadow: none; width: auto; max-width: calc(100vw - 2 * var(--gutter)); }
+.dialog.sys.small { width: min(460px, calc(calc(100 * var(--vw, 1vw)) - 2 * var(--gutter))); }
+.dialog.sys.wide { width: min(940px, calc(calc(100 * var(--vw, 1vw)) - 2 * var(--gutter))); }
+.dialog.sys.plain { background: none; box-shadow: none; width: auto; max-width: calc(calc(100 * var(--vw, 1vw)) - 2 * var(--gutter)); }
 .dialog.sys.out { animation: sh-out var(--t-leave) var(--ease-in) forwards; }
 .dialog.sys:focus-visible { outline: none; }
 .dlg-head { display: flex; justify-content: space-between; align-items: flex-end; gap: var(--s3); margin: 0 var(--s5); padding: var(--s4) 0 var(--s2); border-bottom: 3px double var(--ink); }
@@ -99,7 +99,7 @@
 
 /* A phone: a paper comes up from the foot of the screen. */
 @media (max-width: 699px) {
-  .dialog.sys, .dialog.sys.small, .dialog.sys.wide { left: 0; right: 0; top: auto; bottom: 0; transform: none; width: auto; max-height: calc(100dvh - 24px); animation-name: sh-up; }
+  .dialog.sys, .dialog.sys.small, .dialog.sys.wide { left: 0; right: 0; top: auto; bottom: 0; transform: none; width: auto; max-height: calc(calc(100 * var(--vh, 1dvh)) - 24px); animation-name: sh-up; }
   .dialog.sys.out { animation-name: sh-down; }
   .dialog.sys.plain { max-width: none; }
   .dlg-head { margin: 0 var(--s4); padding-top: var(--s3); }
@@ -115,8 +115,8 @@
 .paper-layer:has(> .menu-dialog:not(.out)) > .veil { background: transparent; }
 @keyframes sh-file { from { transform: translateX(-28px); } }
 @keyframes sh-file-out { to { opacity: 0; transform: translateX(-20px); } }
-.menu-dialog .file { position: relative; left: auto; top: auto; width: min(820px, calc(100vw - 80px)); }
-.menu-dialog .file-pages { max-height: calc(100vh - 140px); max-height: calc(100dvh - 140px); overflow-y: auto; overscroll-behavior: contain; }
+.menu-dialog .file { position: relative; left: auto; top: auto; width: min(820px, calc(calc(100 * var(--vw, 1vw)) - 80px)); }
+.menu-dialog .file-pages { max-height: calc(calc(100 * var(--vh, 1vh)) - 140px); max-height: calc(calc(100 * var(--vh, 1dvh)) - 140px); overflow-y: auto; overscroll-behavior: contain; }
 .menu-dialog .form-head .t-title { font-size: 26px; }
 .menu-dialog .check { cursor: var(--cur-point, pointer); }
 .menu-dialog .check-in { margin-top: 0; }
@@ -129,7 +129,7 @@
   .dialog.sys.menu-dialog { left: 0; right: 0; top: auto; bottom: 0; max-width: none; animation-name: sh-up; }
   .dialog.sys.menu-dialog.out { animation-name: sh-down; }
   .menu-dialog .file { width: auto; padding: 30px 8px 8px; border-radius: 3px 3px 0 0; }
-  .menu-dialog .file-pages { grid-template-columns: minmax(0, 1fr); max-height: calc(100dvh - 60px); }
+  .menu-dialog .file-pages { grid-template-columns: minmax(0, 1fr); max-height: calc(calc(100 * var(--vh, 1dvh)) - 60px); }
   .menu-dialog .file-pages > section + section { border-left: 0; border-top: 1px solid var(--ink); }
   .menu-dialog .mini-mark .county { font-size: 58px; }
 }
@@ -142,8 +142,8 @@
 }
 
 /* ---------------------------------------------------------------- how to play: from the almanac (design/howto.html) */
-.how-dialog .howto { position: relative; left: auto; top: auto; transform: none; width: min(900px, calc(100vw - 2 * var(--gutter)));
-  max-height: calc(100vh - 2 * var(--gutter)); max-height: calc(100dvh - 2 * var(--gutter)); overflow-y: auto; overscroll-behavior: contain; }
+.how-dialog .howto { position: relative; left: auto; top: auto; transform: none; width: min(900px, calc(calc(100 * var(--vw, 1vw)) - 2 * var(--gutter)));
+  max-height: calc(calc(100 * var(--vh, 1vh)) - 2 * var(--gutter)); max-height: calc(calc(100 * var(--vh, 1dvh)) - 2 * var(--gutter)); overflow-y: auto; overscroll-behavior: contain; }
 .howto-lead { font-size: 18px; padding-top: 12px; }
 .howto .keys-fold { text-align: left; }
 /* The frame shows the land itself behind each picture; the game draws rows of crop in its place. */
@@ -169,7 +169,7 @@
   .how-dialog .year-row { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 }
 @media (max-width: 699px) {
-  .how-dialog .howto { width: auto; max-height: calc(100dvh - 24px); padding: 14px var(--s4) max(var(--s3), env(safe-area-inset-bottom, 0px)); border-radius: 3px 3px 0 0; }
+  .how-dialog .howto { width: auto; max-height: calc(calc(100 * var(--vh, 1dvh)) - 24px); padding: 14px var(--s4) max(var(--s3), env(safe-area-inset-bottom, 0px)); border-radius: 3px 3px 0 0; }
   .how-dialog .howto-head .t-title { font-size: 26px; }
   .how-dialog .howto-lead { font-size: 16px; }
   .how-dialog .fig { grid-template-columns: 128px minmax(0, 1fr); column-gap: var(--s2); }
@@ -186,8 +186,8 @@
 }
 
 /* ---------------------------------------------------------------- the almanac: printed pages with a thumb index */
-.alm { position: relative; display: grid; grid-template: 'head index' auto 'page index' minmax(0, 1fr) / minmax(0, 1fr) 172px; width: min(1000px, calc(100vw - 2 * var(--gutter)));
-  height: min(740px, calc(100vh - 2 * var(--gutter))); height: min(740px, calc(100dvh - 2 * var(--gutter))); overflow: hidden; }
+.alm { position: relative; display: grid; grid-template: 'head index' auto 'page index' minmax(0, 1fr) / minmax(0, 1fr) 172px; width: min(1000px, calc(calc(100 * var(--vw, 1vw)) - 2 * var(--gutter)));
+  height: min(740px, calc(calc(100 * var(--vh, 1vh)) - 2 * var(--gutter))); height: min(740px, calc(calc(100 * var(--vh, 1dvh)) - 2 * var(--gutter))); overflow: hidden; }
 .alm-head { display: flex; justify-content: space-between; align-items: flex-end; gap: var(--s3); grid-area: head; margin: 0 var(--s5); padding: var(--s4) 0 var(--s2); border-bottom: 3px double var(--ink); }
 .alm-head .t-label { color: var(--green); margin-bottom: 4px; }
 .alm-head .close { position: absolute; z-index: 2; right: 6px; top: 6px; margin: 0; }
@@ -250,7 +250,7 @@
 }
 /* A phone: the index runs along the head of the page as tabs, and the paper comes up from the foot. */
 @media (max-width: 699px) {
-  .alm { width: auto; height: calc(100dvh - 48px); border-radius: 3px 3px 0 0; }
+  .alm { width: auto; height: calc(calc(100 * var(--vh, 1dvh)) - 48px); border-radius: 3px 3px 0 0; }
   .alm { grid-template: 'head' auto 'index' auto 'page' minmax(0, 1fr) / minmax(0, 1fr); }
   .alm-head { margin: 0 52px 0 var(--s4); padding-top: var(--s3); }
   .alm-mark { font-size: 34px; }
@@ -266,7 +266,7 @@
 }
 /* A phone on its side: the head shrinks to a line and the index scrolls down the fore-edge. */
 @media (max-height: 500px) and (orientation: landscape) {
-  .alm { height: calc(100dvh - 16px); }
+  .alm { height: calc(calc(100 * var(--vh, 1dvh)) - 16px); }
   .alm { grid-template-columns: minmax(0, 1fr) 156px; }
   .alm-head { padding: 8px 0 4px; }
   .alm-head .t-label { display: none; }
@@ -317,7 +317,7 @@
 .alert.lv-good .i:is(.sys *) { color: var(--green); }
 .alert .nicon:is(.sys *) { display: grid; place-items: center; flex: none; width: 40px; height: 40px; margin: -8px -10px -8px auto; }
 .spring-screen .catalogue { top: max(var(--gutter), env(safe-area-inset-top, 0px)); right: max(var(--gutter), env(safe-area-inset-right, 0px)); bottom: max(var(--gutter), env(safe-area-inset-bottom, 0px));
-  max-width: calc(100vw - 2 * var(--gutter)); animation: sh-left var(--t-sheet) var(--ease-paper); }
+  max-width: calc(calc(100 * var(--vw, 1vw)) - 2 * var(--gutter)); animation: sh-left var(--t-sheet) var(--ease-paper); }
 .spring-screen .cat-body { overflow-y: auto; overscroll-behavior: contain; }
 .cat-fold .fold { padding: 0 8px 3px; }
 .cat-open { padding: 2px 0 8px; display: grid; gap: 6px; border-bottom: 1px solid var(--hair); }
@@ -400,7 +400,7 @@
 .blank-go .btn.go { margin-top: 0; }
 
 /* The card of a field, a lot or a tract picked in spring: docked left, under the bank's board. */
-.spring-screen .spring-card { top: calc(var(--top, 120px) + 12px); left: max(var(--gutter), env(safe-area-inset-left, 0px)); width: min(444px, calc(100vw - 478px - 4 * var(--gutter)));
+.spring-screen .spring-card { top: calc(var(--top, 120px) + 12px); left: max(var(--gutter), env(safe-area-inset-left, 0px)); width: min(444px, calc(calc(100 * var(--vw, 1vw)) - 478px - 4 * var(--gutter)));
   max-height: calc(100% - var(--top, 120px) - 12px - var(--gutter)); overflow-y: auto; overscroll-behavior: contain; grid-template-rows: none; }
 .spring-card.in { animation: sh-left var(--t-sheet) var(--ease-paper); }
 .spring-card .orders { padding: 10px 12px 12px; }
@@ -441,7 +441,7 @@
 
 /* a desk of middling width: a narrower catalogue */
 .spring-screen[data-layout='mid'] .catalogue { width: 430px; }
-.spring-screen[data-layout='mid'] .spring-card { width: min(444px, calc(100vw - 430px - 4 * var(--gutter))); }
+.spring-screen[data-layout='mid'] .spring-card { width: min(444px, calc(calc(100 * var(--vw, 1vw)) - 430px - 4 * var(--gutter))); }
 @media (max-width: 1180px) { .spring-screen[data-layout='mid'] .vgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 /* A phone held upright: the catalogue under the bank's board, the land a strip above; with a field picked, its card
@@ -495,12 +495,21 @@
 }
 
 /* A phone on its side: the catalogue on the right half, the card on the left. */
-.spring-screen[data-layout='short'] .catalogue { top: 6px; bottom: 6px; right: max(8px, env(safe-area-inset-right, 0px)); width: min(400px, 48vw); }
+.spring-screen[data-layout='short'] .catalogue { top: 6px; bottom: 6px; right: max(8px, env(safe-area-inset-right, 0px)); width: min(400px, calc(48 * var(--vw, 1vw))); }
 .spring-screen[data-layout='short'] .masthead { padding: 6px 16px 4px; }
 .spring-screen[data-layout='short'] .masthead h1 { font-size: 32px; }
 .spring-screen[data-layout='short'] .cat-body { padding: 0 16px; }
 .spring-screen[data-layout='short'] .order-blank { padding: 6px 16px 8px; }
 .spring-screen[data-layout='short'] .order-blank .lead.quiet:not(.pm-loan), .spring-screen[data-layout='short'] .order-blank .pm-parts { display: none; }
 .spring-screen[data-layout='short'] .order-blank .btn.go { min-height: 44px; font-size: 20px; }
-.spring-screen[data-layout='short'] .spring-card { top: calc(var(--top, 60px) + 6px); width: calc(52vw - 32px); max-height: calc(100% - var(--top, 60px) - 12px); }
+.spring-screen[data-layout='short'] .spring-card { top: calc(var(--top, 60px) + 6px); width: calc(calc(52 * var(--vw, 1vw)) - 32px); max-height: calc(100% - var(--top, 60px) - 12px); }
 .spring-screen[data-layout='short'] .vgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+/* The money board at a glance: the figure for the year's end leads; cash on hand is the smaller line over it, and money
+   owed to the bank is in the ledger's red, so a debt never reads as cash in hand. */
+.topbar .balance.two > .cash { font-size: 21px; }
+.topbar .balance.two > .cash.owed, .topbar .balance.two > .when.owed { color: var(--red); }
+
+/* With no fold open the spring sheet is as tall as its rows and its totals: no half page of blank paper between them. */
+.spring-screen:is([data-layout='wide'], [data-layout='mid']) .catalogue:not(.folded) { bottom: auto; max-height: calc(100% - 2 * var(--gutter)); }
+.spring-screen:is([data-layout='wide'], [data-layout='mid']) .catalogue:not(.folded) .cat-body { padding-bottom: 10px; }

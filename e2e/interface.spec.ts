@@ -161,8 +161,10 @@ test('the crop orders hold their places when one is given, and under 80 words wi
   const slots = page.locator('#ui [data-testid="card"] .orders.slots > .order')
   await expect(slots).toHaveCount(9)
   const at = () => slots.evaluateAll(els => els.map(e => { const r = e.getBoundingClientRect(); return `${e.getAttribute('data-k')} ${Math.round(r.left)},${Math.round(r.top)}` }))
-  // (once the card has finished laying itself down)
+  // (once the camera has come to rest on the field and the card has finished laying itself down)
+  await page.waitForFunction(() => !(globalThis as unknown as { __countyField: { rig: { moving(): boolean } } }).__countyField.rig.moving())
   await page.waitForTimeout(700)
+  await expect.poll(async () => { const a = await at(); await page.waitForTimeout(150); return JSON.stringify(a) === JSON.stringify(await at()) }).toBe(true)
   const before = await at()
   // An order given, or one refused with its reason, moves no other order.
   for (const k of ['c', 'w']) { await page.keyboard.press(k); await page.waitForTimeout(250); expect(await at()).toEqual(before) }
@@ -726,8 +728,9 @@ test('building: Y opens the yard, a building is chosen and ordered, and it goes 
   await expect(yard.getByTestId('yard-title')).toHaveText('The home yard')
   // Each building is an order on the yard's bar: its cost in dollars, logs and crew-days, then its catch.
   const stand = yard.getByTestId('build-stand')
-  await expect(stand).toContainText('Catch:')
-  await expect(stand).toContainText(/crew-days?/)
+  await expect(stand).toContainText('Downside:')
+  // (the hyphen is a non-breaking one, so the number is never parted from what it counts)
+  await expect(stand).toContainText(/crew[-\u2011]days?/)
   await stand.click()
   expect(await game<number>(page, 'app.campaign.buildings.filter(b => b.kind === "stand").length')).toBe(1)
   await expect(yard.getByTestId('going-stand')).toBeVisible()

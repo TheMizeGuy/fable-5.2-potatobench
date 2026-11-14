@@ -966,7 +966,7 @@ export function ticket(ctx: Ctx, lotId: number, o: { fresh: boolean; staged?: bo
         const call = storeCall(outlook)
         const best = deal && deal.pays >= deal.market - 0.5 ? 'deliver' : advice || !call.store ? 'sell' : 'store'
         // One rule (storeCall) sets the tab and its words; advice to sell (new potatoes, blight in the pile) makes selling the surer way.
-        const tab = best === 'deliver' ? 'Brings most' : advice && call.store ? 'Surer' : call.tab
+        const tab = best === 'deliver' ? 'Pays most' : advice && call.store ? 'Surer' : call.tab
         let n = 0
         const k = () => String(++n)
         const list: Way[] = []

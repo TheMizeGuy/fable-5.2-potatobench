@@ -2,7 +2,7 @@
 .season-screen .mainbar { position: absolute; right: max(var(--gutter), env(safe-area-inset-right, 0px)); bottom: max(var(--gutter), env(safe-area-inset-bottom, 0px));
   display: flex; gap: 2px; padding: 4px; background: var(--board); border-radius: 3px; box-shadow: 0 0 0 1px #17130f, 0 6px 14px rgba(0, 0, 0, .4); z-index: 3; pointer-events: auto; }
 .mainbar .mb-tab { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 10px; background: var(--paper); color: var(--ink);
-  font: 400 13px/1 var(--f-gothic); letter-spacing: .07em; text-transform: uppercase; white-space: nowrap; }
+  font: 400 15px/1 var(--f-gothic); letter-spacing: .07em; text-transform: uppercase; white-space: nowrap; }
 .mainbar .mb-tab.has { background: var(--canary); }
 .mainbar .mb-n, .menu-farm .mb-n { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; background: var(--red); color: var(--paper); font: 700 12px/1 var(--f-text); letter-spacing: 0; }
 /* A phone and a short window keep their foot as it is: the needs strip, the people's chips and the menu key. */

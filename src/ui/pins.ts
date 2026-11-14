@@ -8,6 +8,7 @@ import { h } from './dom.ts'
 import { firstName, personSign } from './rules.ts'
 import { idleWithWork } from './people.ts'
 import { pin, ringed, type PinState } from './system/people.ts'
+import { toLocal } from './scale.ts'
 
 interface Model { id: number; name: string; ring: string; state: PinState; label: string; rank: number; tired?: boolean }
 
@@ -93,9 +94,12 @@ export function pins(ctx: Ctx, layer: HTMLElement, o: { covers: () => DOMRect[];
     const covers = o.covers()
     const stamps = o.stamps?.() ?? []
     const at = new Map<number, { x: number; y: number }>()
+    // (where each one stands whether or not their pin shows: a pin that goes fades over them, not where it was left)
+    const stands = new Map<number, { x: number; y: number }>()
     for (const m of models) {
       const a = ctx.view.unitAnchor(m.id)
       if (!a.visible || !Number.isFinite(a.x) || !Number.isFinite(a.y)) continue
+      stands.set(m.id, a)
       // The one in hand keeps their pin wherever the land shows under the boards (a slip hanging from a board frames
       // the land for everything else, and on a phone leaves little between it and a sheet).
       const top = m.id === app.unit && o.board ? Math.min(ins.top, o.board()) : ins.top
@@ -130,13 +134,17 @@ export function pins(ctx: Ctx, layer: HTMLElement, o: { covers: () => DOMRect[];
       const afoot = !!s0 && m.id === app.unit && s0.members.length === 1
       w.classList.toggle('gone', !s0 || afoot)
       if (afoot) picked = m
-      if (!s0 || afoot) continue
+      if (!s0 || afoot) {
+        const p = stands.get(m.id)
+        if (p) w.style.transform = `translate3d(${toLocal(p.x).toFixed(1)}px, ${toLocal(p.y).toFixed(1)}px, 0)`
+        continue
+      }
       draw(w, m, s0.members.length, s0.members)
       w.classList.toggle('tired', !!m.tired)
-      w.style.transform = `translate3d(${s0.x.toFixed(1)}px, ${s0.y.toFixed(1)}px, 0)`
+      w.style.transform = `translate3d(${toLocal(s0.x).toFixed(1)}px, ${toLocal(s0.y).toFixed(1)}px, 0)`
       w.style.zIndex = String(10 - m.rank)
       if (open === m.id) {
-        list.style.transform = `translate3d(${(s0.x + 26).toFixed(1)}px, ${(s0.y - 60).toFixed(1)}px, 0)`
+        list.style.transform = `translate3d(${(toLocal(s0.x) + 26).toFixed(1)}px, ${(toLocal(s0.y) - 60).toFixed(1)}px, 0)`
         list.style.visibility = ''
         const key = s0.members.map(x => `${x.id}:${x.label}`).join('|')
         if (key !== listFor) { listFor = key; drawList(s0.members) }
@@ -148,7 +156,7 @@ export function pins(ctx: Ctx, layer: HTMLElement, o: { covers: () => DOMRect[];
     if (picked && ft?.visible) {
       const name = picked.name === 'You' ? 'You' : firstName(picked.name)
       if (foot.textContent !== name) foot.textContent = name
-      foot.style.transform = `translate3d(${ft.x.toFixed(1)}px, ${(ft.y + 10).toFixed(1)}px, 0) translateX(-50%)`
+      foot.style.transform = `translate3d(${toLocal(ft.x).toFixed(1)}px, ${(toLocal(ft.y) + 10).toFixed(1)}px, 0) translateX(-50%)`
     }
   }
 

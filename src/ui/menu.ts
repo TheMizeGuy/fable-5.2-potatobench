@@ -7,6 +7,7 @@ import { icon } from './icons.ts'
 import * as F from './fmt.ts'
 import { seasonCount, yearWord } from './rules.ts'
 import { PHASE_LABEL } from './top.ts'
+import { uiScale } from './scale.ts'
 
 function endSeasonEarly(ctx: Ctx): void {
   const c = ctx.app.campaign
@@ -57,7 +58,7 @@ export function openMenu(ctx: Ctx, o: { onHelp: () => void; onAlmanac: () => voi
   }
   const seg = (name: string, label: string, opts: [string, string][], now: string, pick: (v: string) => void) =>
     h('div', { class: 'seg-in', role: 'radiogroup', 'aria-label': label }, opts.map(([v, text]) => h('label', null,
-      h('input', { type: 'radio', name, value: v, checked: now === v, testid: `${name === 'units' ? 'units' : 'quality'}-${v}`, onchange: () => pick(v) }),
+      h('input', { type: 'radio', name, value: v, checked: now === v, testid: `${name}-${v}`, onchange: () => pick(v) }),
       h('span', null, text))))
 
   const c = app.campaign
@@ -149,11 +150,14 @@ export function openMenu(ctx: Ctx, o: { onHelp: () => void; onAlmanac: () => voi
           toggle('hints', 'Hints', 'a short tip the first time each order comes up'),
           toggle('pauseOnAlerts', 'Pause on alerts', 'pause the game when something new needs you'),
           toggle('reducedMotion', 'Reduce motion', 'sheets switch instantly and the land stays still')),
+        h('fieldset', { class: 'f-row' }, h('legend', { class: 't-label' }, 'Interface size'),
+          seg('scale', 'Interface size', [['auto', 'Auto'], ['1', '100%'], ['1.25', '125%'], ['1.5', '150%'], ['1.75', '175%'], ['2', '200%']], set.uiScale ?? 'auto', v => app.setSetting('uiScale', v as typeof set.uiScale)),
+          h('p', { class: 't-caption', testid: 'scale-now' }, `Auto fits the interface to your window. It is drawn at ${Math.round(uiScale() * 100)}% now.`)),
         h('fieldset', { class: 'f-row' }, h('legend', { class: 't-label' }, 'Picture'),
           seg('quality', 'Picture', (['auto', 'high', 'medium', 'low'] as Quality[]).map(k => [k, F.upper(k)]), set.quality, v => app.setSetting('quality', v as Quality)),
           h('p', { class: 't-caption', testid: 'quality-now' }, `Drawing ${TIER_WORD[q.tier]}${q.fps > 0 ? `, at ${Math.round(q.fps)} frames a second` : ''}.`)))
       return h('section', { class: 'file sys' },
-        h('span', { class: 'file-tab', 'aria-hidden': 'true' }, 'The office file'),
+        h('span', { class: 'file-tab', 'aria-hidden': 'true' }, 'Menu'),
         h('div', { class: 'file-pages' }, menuPage, settings))
     },
   })

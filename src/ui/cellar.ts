@@ -90,7 +90,7 @@ export function cellarScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
     // The usual curve is a guess: a month's price can wander a tenth from it, so a move inside that is called flat.
     const spread = nx ? Math.round((nx.net * priceBand(1)) / 10) * 10 : 0
     const heading: [string, string] = !nx ? ['flat', 'May is the last month, so whatever is left gets sold when it ends']
-      : [gain > spread ? 'up' : gain < -spread ? 'fall' : 'flat', `Keep it until ${nx.name} and it usually brings about ${F.money(nx.net)}, give or take ${F.money(spread)}, which is ${Math.abs(gain) < 0.5 ? 'the same as selling now' : `${F.money(Math.abs(gain))} ${gain > 0 ? 'more' : 'less'} than selling now`}${o.best && o.best !== nx && o.best.net > Math.max(value, nx.net) + Math.max(25, value * 0.01) ? `, and ${o.best.name} is usually the best month at about ${F.money(o.best.net)}` : ''}`]
+      : [gain > spread ? 'up' : gain < -spread ? 'fall' : 'flat', `Hold to ${nx.name}: about ${F.money(nx.net)} (give or take ${F.money(spread)}), ${Math.abs(gain) < 0.5 ? 'the same as selling now' : `${F.money(Math.abs(gain))} ${gain > 0 ? 'more' : 'less'} than selling now`}${o.best && o.best !== nx && o.best.net > Math.max(value, nx.net) + Math.max(25, value * 0.01) ? `, and ${o.best.name} is usually the best month at about ${F.money(o.best.net)}` : ''}`]
     const grewWith = c.season?.fields[lot.field]?.seedVirus
     const rent = Math.round(S.lotCwt(lot) * S.STORE_COST)
     const deal = deals(app.world, c, lot)[0]
@@ -164,7 +164,7 @@ export function cellarScreen(ctx: Ctx, o: { onMenu: () => void }): Screen {
       patch(sheet, JSON.stringify(model), () => [
         h('header', { class: 'winter-head' },
           h('div', null,
-            h('p', { class: 't-label' }, `${month} · ${R.yearName(c.year)} · `, term('The cellar months', 'the cellar months')),
+            h('p', { class: 't-label' }, `${month} · ${R.yearName(c.year)} · `, term('Winter', 'the cellar months')),
             h('h2', { class: 't-title', id: 'winter-h' }, 'Winter work')),
           h('p', { class: 'num w-wages' }, wages ? [h('b', null, F.money(wages)), ' a month in wages'] : 'No wages this winter')),
         h('div', { class: `w-body${c.crew.length <= 1 ? ' few' : ''}`, 'data-scroll': 'winter' },

@@ -108,7 +108,7 @@ function fieldsPage(ctx: Ctx, c: S.Campaign): Child {
         if (f.stand < 0.995) add('Stand', `${F.pct(f.stand)} of the seed came up`)
       }
       if (f.estimate) {
-        add('Yield', `${F.perAreaSpan(f.estimate.lo, f.estimate.hi)}, ${f.estimate.digs ? `from ${F.plural(f.estimate.digs, 'test dig')}` : 'by eye'}`)
+        add('Yield', `${F.perAreaSpan(f.estimate.lo, f.estimate.hi)}, ${f.estimate.digs ? `from ${F.plural(f.estimate.digs, 'test dig')}` : 'estimate'}`)
         if (f.tubers) add('Potato size', `${F.num(f.tubers.perHill, 0)} per hill in the test ${f.tubers.digs === 1 ? 'dig' : 'digs'}, so about ${F.gramsSpan(f.tubers.lo, f.tubers.hi)} each. US No. 1 starts at ${F.grams(S.SIZE_A)}, and anything over ${F.grams(S.SIZE_CHEF)} counts as large and sells ${R.largeRule(ctx.app.world, c, c.plans[i].variety)}.`)
       }
       if (f.status === 'dead') add('Skins', f.skin >= 1 ? 'set' : `${F.pct(f.skin)} set, vines dead for ${F.plural(f.deadDays, 'day')}`)

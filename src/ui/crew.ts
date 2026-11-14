@@ -212,6 +212,12 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
     }, icon('people', 'i'), h('span', { class: 'num' }, '+1'))
   }
 
+  // A place's name short enough for a chip of the work list: "N. Ridge", "Upper Mid.", "Brook".
+  function shortPlace(field: number): string {
+    if (field < 0 || !S.FIELD_NAMES[field]) return 'Yard'
+    return S.FIELD_NAMES[field].replace(/^North /, 'N. ').replace(/^South /, 'S. ').replace(/ Field$/, '').replace(/ Middle$/, ' Mid.').replace(/^Home /, '')
+  }
+
   function queue(c: S.Campaign, jobs: S.Job[], crews: S.CrewInfo[], people: S.PersonInfo[], waits: Record<number, string>, many: boolean, room: number, of: Map<number, S.JobOutlook>, press: Child): Child {
     if (!jobs.length) return press ? h('ol', { class: 'queue', 'aria-label': 'Work list' }, h('li', { class: 'q-label t-label', 'aria-hidden': 'true' }, 'Work list'), press) : null
     const touch = ctx.touch()
@@ -255,7 +261,7 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
             oncontextmenu: (e: Event) => { e.preventDefault(); bump(j.id) },
             onpointerenter: (e: Event) => { if ((e as PointerEvent).pointerType === 'mouse' && j.field >= 0) app.setHover(j.field) },
             onpointerleave: () => { if (app.hover === j.field) app.setHover(-1) },
-          }, icon(j.kind, 'i'), where(c, j.field),
+          }, icon(j.kind, 'i'), ctx.layout() === 'wide' ? h('span', { class: 'q-name' }, shortPlace(j.field)) : where(c, j.field),
           o && o.unit < 0 ? h('span', { class: 'q-tag q-nobody', testid: `nobody-${j.id}`, 'aria-hidden': 'true' }, '!')
             : taker && many ? h('span', { class: `q-tag${who?.pinned ? ' pinned' : ''} q-${o!.when}`, style: `--c:${ringFor(c, taker.id)}`, 'aria-hidden': 'true' }, initial(taker.name))
               : many && who ? h('span', { class: `q-tag${who.pinned ? ' pinned' : ''}`, style: `--c:${ringFor(c, who.u.id)}`, 'aria-hidden': 'true' }, initial(who.u.name)) : null,
@@ -301,7 +307,7 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
     // How many orders the list has room for before the rest fold behind a count.
     // In the guided first year: the next two, and a count.
     const guided = guidedYear(c)
-    const room = guided ? 3 : layout === 'narrow' ? Math.max(3, Math.floor((innerWidth - 120) / 52)) : layout === 'short' ? 4 : 7
+    const room = guided ? 3 : layout === 'narrow' ? Math.max(3, Math.floor((innerWidth - 120) / 52)) : layout === 'short' ? 4 : layout === 'wide' ? 5 : 7
     const now = people.map(p => personNow(c, p.id, waits))
     const signs = people.map(p => personSign(p, idleWithWork(c, p, waits)))
     if (next && performance.now() >= next.until) next = null

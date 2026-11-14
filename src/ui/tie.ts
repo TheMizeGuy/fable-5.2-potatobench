@@ -8,6 +8,7 @@ import type { Ctx } from './core.ts'
 import { h } from './dom.ts'
 import { icon } from './icons.ts'
 import './tie.css'
+import { toLocal, toScreen } from './scale.ts'
 
 // Where a thing is now. keep: the handle that was clicked (a tag, a chip); end: where the tether ends when that is
 // not the point itself; avoid: the thing's own middle; spare: its tag or pin, kept clear when that costs nothing; mark: where a thing with no mark of its own on the land is ringed.
@@ -365,7 +366,7 @@ export function anchored(ctx: Ctx, card: HTMLElement, o: { mark?: boolean } = {}
     h('button', { class: 'btn', type: 'button', testid: `show-${name}`, 'aria-label': 'Show it on the land', onclick: () => tie?.show() }, arrow, 'Show'))
   const parts = [line, dot, notch, show, ...(mark ? [mark] : [])]
   let tie: Tie | null = null
-  let size = { w: card.offsetWidth || 320, h: 240 }
+  let size = { w: toScreen(card.offsetWidth) || 320, h: 240 }
   let placed: (Placed & { for: Pt; win: string; size: string }) | null = null
   let side: Side | null = null
   let hopUntil = 0
@@ -390,9 +391,9 @@ export function anchored(ctx: Ctx, card: HTMLElement, o: { mark?: boolean } = {}
     stale = false
     // A head (and a foot) that stay and a middle that scrolls: the card is of use with them and some of the middle.
     const take = () => {
-      size = { w: card.offsetWidth || size.w, h: card.offsetHeight || size.h }
+      size = { w: toScreen(card.offsetWidth) || size.w, h: toScreen(card.offsetHeight) || size.h }
       const mid = card.querySelector<HTMLElement>(':scope > [data-scroll]')
-      least = mid && mid.offsetHeight ? size.h - mid.offsetHeight + Math.min(mid.offsetHeight, MIDDLE) : undefined
+      least = mid && mid.offsetHeight ? size.h - toScreen(mid.offsetHeight) + Math.min(toScreen(mid.offsetHeight), MIDDLE) : undefined
     }
     const was = card.style.maxHeight
     if (!was) { take(); return }
@@ -440,7 +441,7 @@ export function anchored(ctx: Ctx, card: HTMLElement, o: { mark?: boolean } = {}
       hide(line, dot, show, mark)
       if (!placed) {
         const x = Math.max(land.win.left, (land.win.left + land.win.right - size.w) / 2), y = Math.max(land.win.top, (land.win.top + land.win.bottom - size.h) / 2)
-        set(card, 'card', `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0)`)
+        set(card, 'card', `translate3d(${toLocal(x).toFixed(1)}px, ${toLocal(y).toFixed(1)}px, 0)`)
       }
       return
     }
@@ -480,8 +481,8 @@ export function anchored(ctx: Ctx, card: HTMLElement, o: { mark?: boolean } = {}
     if (hopUntil && performance.now() > hopUntil) { hopUntil = 0; card.classList.remove('hop') }
     // On whole pixels: its words are sharp, and a change of its own height can never nudge its edge.
     const p = { ...placed!, x: Math.round(placed!.x), y: Math.round(placed!.y) }
-    set(card, 'card', `translate3d(${p.x}px, ${p.y}px, 0)`)
-    const max = p.h < size.h - 0.5 ? `${Math.floor(p.h)}px` : ''
+    set(card, 'card', `translate3d(${+toLocal(p.x).toFixed(2)}px, ${+toLocal(p.y).toFixed(2)}px, 0)`)
+    const max = p.h < size.h - 0.5 ? `${Math.floor(toLocal(p.h))}px` : ''
     if (drawn.max !== max) { card.style.maxHeight = max; drawn.max = max }
     if (card.dataset.side !== p.side) card.dataset.side = p.side
     if (card.dataset.over !== String(p.over)) card.dataset.over = String(p.over)
@@ -491,9 +492,9 @@ export function anchored(ctx: Ctx, card: HTMLElement, o: { mark?: boolean } = {}
       hide(line, dot, mark)
       reveal(show)
       const b = cardBox(p)
-      const tall = show.offsetHeight || 40
+      const tall = toScreen(show.offsetHeight) || 40
       const above = b.top - tall - 4 >= land.win.top - 4
-      set(show, 'show', `translate3d(${(b.left + 10).toFixed(1)}px, ${(above ? b.top - tall - 4 : b.bottom + 4).toFixed(1)}px, 0)`)
+      set(show, 'show', `translate3d(${toLocal(b.left + 10).toFixed(1)}px, ${toLocal(above ? b.top - tall - 4 : b.bottom + 4).toFixed(1)}px, 0)`)
       const way = Math.atan2(t.point.y - (b.top + b.bottom) / 2, t.point.x - (b.left + b.right) / 2)
       arrow.style.transform = `rotate(${way.toFixed(3)}rad)`
       return
@@ -503,11 +504,11 @@ export function anchored(ctx: Ctx, card: HTMLElement, o: { mark?: boolean } = {}
     // To a chip on a bar the line stops at the bar's edge (it never crosses another key); its pin stands on the chip.
     const shown = t.keep ? tetherShown(tt.from, tt.to, land.blocks) : tt.len
     if (shown < 2) hide(line)
-    else { reveal(line); set(line, 'line', `translate3d(${tt.from.x.toFixed(1)}px, ${tt.from.y.toFixed(1)}px, 0) rotate(${tt.angle.toFixed(4)}rad) scaleX(${(shown / 100).toFixed(4)})`) }
+    else { reveal(line); set(line, 'line', `translate3d(${toLocal(tt.from.x).toFixed(1)}px, ${toLocal(tt.from.y).toFixed(1)}px, 0) rotate(${tt.angle.toFixed(4)}rad) scaleX(${(toLocal(shown) / 100).toFixed(4)})`) }
     reveal(dot)
-    set(dot, 'dot', `translate3d(${tt.to.x.toFixed(1)}px, ${tt.to.y.toFixed(1)}px, 0)`)
+    set(dot, 'dot', `translate3d(${toLocal(tt.to.x).toFixed(1)}px, ${toLocal(tt.to.y).toFixed(1)}px, 0)`)
     if (mark) {
-      if (t.mark) { reveal(mark); set(mark, 'mark', `translate3d(${t.mark.x.toFixed(1)}px, ${t.mark.y.toFixed(1)}px, 0)`) }
+      if (t.mark) { reveal(mark); set(mark, 'mark', `translate3d(${toLocal(t.mark.x).toFixed(1)}px, ${toLocal(t.mark.y).toFixed(1)}px, 0)`) }
       else hide(mark)
     }
   }

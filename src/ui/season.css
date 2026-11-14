@@ -44,6 +44,7 @@
 .season-screen .q-item { position: relative; display: flex; align-items: center; }
 .season-screen .q { display: flex; align-items: center; gap: 5px; height: 36px; padding: 0 7px; box-shadow: inset 0 0 0 1px var(--hair); background: var(--paper); }
 .season-screen .q .i { --i: 18px; }
+.season-screen .q .q-name { font: 400 14px/1 var(--f-gothic); letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; }
 .season-screen .q.active { box-shadow: inset 0 0 0 1px var(--ink), inset 0 -3px 0 var(--ink); }
 .season-screen .q.waiting { color: var(--pencil); }
 .season-screen .q.nobody { box-shadow: inset 0 0 0 2px var(--red); }
@@ -56,7 +57,7 @@
 .season-screen .press-chip { color: var(--paper); background: var(--red); box-shadow: none; gap: 6px; }
 .season-screen .press-chip .i { color: var(--paper); }
 .season-screen .press-chip .press-word { font: 400 14px/1 var(--f-gothic); letter-spacing: .05em; text-transform: uppercase; }
-.season-screen .q-pop.press-pop { width: min(440px, calc(100vw - 2 * var(--gutter, 16px))); min-width: 0; max-height: min(60vh, 420px); overflow-y: auto; }
+.season-screen .q-pop.press-pop { width: min(440px, calc(calc(100 * var(--vw, 1vw)) - 2 * var(--gutter, 16px))); min-width: 0; max-height: min(calc(60 * var(--vh, 1vh)), 420px); overflow-y: auto; }
 .season-screen .press-pop .press { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; padding: 6px 8px 6px 10px; font-size: 15px; line-height: 1.25; background: var(--paper) url(./system/grain.png); background-blend-mode: multiply; box-shadow: var(--laid), inset 0 0 0 2px var(--red); }
 .season-screen .press-pop .press > .i { --i: 18px; color: var(--red); flex: none; }
 .season-screen .press-pop .press-text { flex: 1 1 220px; min-width: 0; }
@@ -114,17 +115,30 @@
 
 /* ---------------------------------------------------------------- the land: tags, stamps, the yard, pins, selection */
 .tag-wrap, .yard-at, .pin-at, .pin-list-at, .reg-at { position: absolute; left: 0; top: 0; will-change: transform; }
-.tag-wrap.gone, .yard-at.gone, .pin-at.gone { display: none; }
+/* What comes and goes on the land fades: it is never simply there, or simply gone, between two frames. */
+.tag-wrap, .yard-at, .pin-at { transition: opacity 150ms var(--ease-out); }
+.tag-wrap.gone, .yard-at.gone, .pin-at.gone, .plate-layer .tag-wrap.under { opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 130ms var(--ease-out), visibility 0s 130ms; }
+.tag-wrap.gone *, .yard-at.gone *, .pin-at.gone *, .plate-layer .tag-wrap.under * { pointer-events: none; }
 .tag-wrap .tag-at { position: relative; transform: none; min-height: 44px; align-items: flex-start; }
 /* The tag's top stays where it is whether it is selected, stamped or plain: it grows and shrinks downward only. */
 .tag-wrap .tag-at .tag { margin-top: 5px; }
 .tag-wrap .tag-at .need { align-self: center; }
 .touch .tag-wrap .tag-at .tag { margin-top: 2px; }
+/* On the land a tag is card stock lying a little above the ground: light along its top edge, shade along its foot,
+   a tight shadow under it and a soft one round it. Under the pointer it lifts (the shadow deepens; it does not move). */
+.plate-layer .tag-wrap .tag-at { filter: drop-shadow(0 1px 0 rgb(20 14 6 / .62)) drop-shadow(0 2px 2px rgb(20 14 6 / .3)) drop-shadow(0 7px 9px rgb(20 14 6 / .3)); transition: filter var(--t-tap) var(--ease-out); }
+.plate-layer .tag-wrap .tag { background-image: linear-gradient(180deg, rgb(255 250 232 / .3), rgb(255 250 232 / 0) 48%, rgb(84 62 24 / .13)), url(./system/grain.png); background-blend-mode: normal, multiply; transition: background-color var(--t-tap) linear; }
+.plate-layer .tag-wrap .tag::before { box-shadow: inset 0 0 0 1px var(--edge), inset 0 2px 0 rgb(255 251 236 / .5), inset 0 -2px 0 rgb(84 62 24 / .16); }
+.plate-layer .tag-wrap .tag .nm { text-shadow: 0 1px 0 rgb(255 251 236 / .38); }
+.plate-layer .tag-wrap .need { background-image: radial-gradient(circle at 34% 28%, rgb(255 255 255 / .16), rgb(255 255 255 / 0) 58%); }
+@media (hover: hover) { .plate-layer .tag-wrap .tag-at:has(.tag:hover) { filter: drop-shadow(0 1px 0 rgb(20 14 6 / .62)) drop-shadow(0 3px 3px rgb(20 14 6 / .32)) drop-shadow(0 11px 14px rgb(20 14 6 / .36)); } }
+.plate-layer .tag-wrap .tag-at:has(.tag:active) { filter: drop-shadow(0 1px 0 rgb(20 14 6 / .62)) drop-shadow(0 1px 1px rgb(20 14 6 / .34)) drop-shadow(0 3px 4px rgb(20 14 6 / .26)); }
+.yard-at .yard-tag { box-shadow: 0 0 0 1px #17120c, inset 0 1px 0 rgb(255 244 218 / .18), inset 0 -1px 0 rgb(0 0 0 / .25), 0 2px 2px rgb(0 0 0 / .32), 0 8px 12px -2px rgb(0 0 0 / .42); }
 /* Quiet when nothing is needed; a tag with a need, or in hand, stands up a size. */
 .tag-wrap .tag-at:not(.has-need):not(.is-sel) .tag { height: 30px; padding: 0 10px 0 8px; }
 .tag-wrap .tag-at:not(.has-need):not(.is-sel) .tag .nm { font-size: 16px; }
 .tag-wrap .tag-at:not(.has-need):not(.is-sel) .tag::after { height: 30px; }
-.tag-wrap .tag-at.is-land .tag { color: var(--ink-2); background-color: var(--paper-2); }
+.tag-wrap .tag-at.is-land .tag { color: var(--ink-2); background-color: var(--paper-2); opacity: .8; outline: 1px dashed var(--pencil); outline-offset: -3px; }
 .tag-wrap .tag-at.is-land .tag::before { box-shadow: inset 0 0 0 1px var(--edge), inset 0 0 0 3px var(--paper-2), inset 0 0 0 4px rgb(74 63 46 / 0.4); }
 @media (hover: hover) { .tag-wrap .tag:hover { background-color: var(--paper); } .tag-wrap .need:hover { box-shadow: 0 0 0 3px var(--paper), 0 0 0 5px var(--ink), inset 0 0 0 2px rgb(246 241 228 / 0.55); } }
 .tag-wrap .need { animation: stamp-in var(--t-stamp) var(--ease-out); }
@@ -141,7 +155,7 @@
 /* What a resting field grows, under its tag while the pointer is on it or it is in hand (whois.css's hover name). */
 .tag-wrap > .hover-name { position: absolute; left: 18px; top: calc(100% - 3px); display: none; pointer-events: none; }
 .tag-wrap.named > .hover-name { display: block; }
-.yard-at .yard-tag { white-space: nowrap; }
+.yard-at .yard-tag { white-space: nowrap; margin-top: -40px; }
 .yard-at .yard-tag .yard-pct { margin-left: 4px; font: 400 15px/1 var(--f-gothic); letter-spacing: .06em; color: var(--board-ink); }
 .yard-at .yard-tag.goal-ring { box-shadow: 0 0 0 1px #17120c, 0 0 0 4px var(--st-ochre), 0 0 0 5px #17120c; }
 @media (hover: hover) { .yard-at .yard-tag:hover { background-color: #4c4134; } }
@@ -185,7 +199,7 @@
 .season-screen .command.compact:not(.yard-card) { overflow-y: auto; overscroll-behavior: contain; }
 /* The field card: its head and cross stay in view, and what is under them scrolls inside the window. A fixed width,
    so an order given or a longer line under the orders never moves one. */
-.season-screen .command.card { display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; width: min(430px, calc(100vw - 2 * var(--gutter, 16px))); }
+.season-screen .command.card { display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; width: min(430px, calc(calc(100 * var(--vw, 1vw)) - 2 * var(--gutter, 16px))); }
 /* Each row of the body is as tall as what is in it, always: held to less room than it wants, the body scrolls. (Rows
    left to size themselves are squeezed toward their min-heights first, and their words then print over the next
    row or are cut by it.) */
@@ -210,7 +224,7 @@
 .season-screen .command .orders.slots .order .catch:empty { display: none; }
 .season-screen .command .orders.slots .order.is-suggested .fist { display: none; }
 /* An order that can be given but risks the crop (cold soil, vines still growing): its warning in red. */
-.season-screen .command .orders.slots .order.is-risk .cost { color: var(--red); font-family: var(--f-gothic); letter-spacing: .04em; }
+.season-screen .command .orders.slots .order.is-risk .cost { color: var(--ink-2); font-family: var(--f-gothic); letter-spacing: .04em; }
 .season-screen .command .orders.slots .order.is-off { background: transparent; box-shadow: inset 0 0 0 1px var(--hair); cursor: var(--cur-help, help); }
 .season-screen .command .orders.slots .order.is-off > :not(.catch) { opacity: .45; }
 /* The line under the orders. Room for two lines is kept by a strut inside it, never by a min-height: a row of the

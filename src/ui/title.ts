@@ -8,6 +8,7 @@ import { seasonCount } from './rules.ts'
 import { PHASE_LABEL } from './top.ts'
 import { guidedFarm, startedFarm, straightIn } from './tutorial.ts'
 import './title.css'
+import { toScreen } from './scale.ts'
 
 // Starts a farm of its own, with seasons made for it. A farm still in play is not replaced unasked.
 export async function startNewFarm(ctx: Ctx, guided = false): Promise<void> {
@@ -100,7 +101,7 @@ export function titleScreen(ctx: Ctx, o: { onMenu: () => void; onHelp: () => voi
       // The cover takes the left of the frame; on a phone, the whole of it but the sky above.
       const r = cover.getBoundingClientRect()
       // (under the bars the picture is composed between them, to the right of the name)
-      return r.width > innerWidth * 0.7 ? [0, 0, Math.max(0, innerHeight - r.top), 0] : [barT.offsetHeight, 0, barB.offsetHeight, Math.max(0, r.right)]
+      return r.width > innerWidth * 0.7 ? [0, 0, Math.max(0, innerHeight - r.top), 0] : [toScreen(barT.offsetHeight), 0, toScreen(barB.offsetHeight), Math.max(0, r.right)]
     },
   }
 }

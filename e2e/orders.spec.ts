@@ -257,7 +257,18 @@ test('a person\'s pin stands over them above a tag or the yard\'s tag, and a cli
       await page.keyboard.press('Escape')
     }
   }
-  expect(over, 'at least one pin met a tag').toBeGreaterThan(0)
+  // Tags step clear of the people on the land whenever they are put, so with the camera still a pin and a tag seldom
+  // meet. Where none did, the order they are stacked in is read itself: every pin stands above every tag.
+  if (!over) {
+    const stacked = await page.evaluate(() => {
+      const z = (e: Element) => Number(getComputedStyle(e).zIndex) || 0
+      const pins = [...document.querySelectorAll('#ui .pin-at:not(.gone)')].map(z), tags = [...document.querySelectorAll('#ui .tag-wrap:not(.gone), #ui .yard-at:not(.gone)')].map(z)
+      return { pins, tags }
+    })
+    expect(stacked.pins.length, 'pins on the land').toBeGreaterThan(0)
+    expect(stacked.tags.length, 'tags on the land').toBeGreaterThan(0)
+    expect(Math.min(...stacked.pins), `every pin is stacked above every tag (pins ${stacked.pins.join(',')}; tags ${stacked.tags.join(',')})`).toBeGreaterThan(Math.max(...stacked.tags))
+  }
   expect(errors, errors.join('\n')).toEqual([])
 })
 

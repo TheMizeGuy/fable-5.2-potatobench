@@ -6,6 +6,7 @@ import { patch, type Ctx } from './core.ts'
 import { h } from './dom.ts'
 import { CODE } from './help.ts'
 import { need, tag, type Ink } from './system/parts.ts'
+import { toLocal, toScreen } from './scale.ts'
 
 export interface PlateModel {
   name: string
@@ -40,8 +41,14 @@ const INK_SAYS = Object.fromEntries(CODE.map(([ink, , name, says]) => [ink || 'i
 // narrower on screen than a tag: below FAR_IN pixels a plan unit, and back above FAR_OUT.
 const FAR_IN = 10, FAR_OUT = 12
 // How far the camera may carry the tags with their fields before the crowding is settled again, in pixels, or zoom
-// (the log of the change in scale).
-const RESETTLE_PX = 24, RESETTLE_ZOOM = 0.06
+// (the log of the change in scale). Often, so that what each settling changes is small.
+const RESETTLE_PX = 12, RESETTLE_ZOOM = 0.04
+// A tag put somewhere else comes to its new place on a spring (critically damped, at rest in about a quarter of a
+// second), so being put again is seen as a glide and never as a jump. Further than FAR_MOVE it does not cross the
+// land: it fades in where it now stands.
+const SPRING = 1 / 0.052, FAR_MOVE = 130
+// How long a tag that goes is still carried with its field while it fades (season.css: .tag-wrap.gone).
+const FADE_OUT_MS = 180
 // The room kept beside every tag for "on the list" and a stamp, so neither coming crowds the next tag.
 const LIST_W = 96, STAMP_W = 52
 
@@ -110,8 +117,9 @@ function gapTo(r: Rect, poly: Pt[]): number {
 // never moves a tag the player may be reaching for. Crowding is settled only when the camera moves, against the room a
 // tag takes with "on the list" and a stamp. What floats over the land (a card, the grid) lies over the tags; covers is
 // not read.
-// keep: what a tag moved by its field steps clear of (the people on the land, the yards' tags).
-export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => PlateModel | null; onBadge: (i: number) => void; covers?: () => DOMRect[]; keep?: () => DOMRect[] }): { update(): void; frame(): void; dispose(): void; boxes(): DOMRect[]; byField(): { field: number; box: DOMRect; need: boolean }[] } {
+// keep: what a tag moved by its field steps clear of (the people on the land). yards: the yards' tags, which a tag
+// steps clear of too, but lies over before it would leave its own field.
+export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => PlateModel | null; onBadge: (i: number) => void; covers?: () => DOMRect[]; keep?: () => DOMRect[]; yards?: () => DOMRect[]; boards?: () => DOMRect[] }): { update(): void; frame(): void; dispose(): void; boxes(): DOMRect[]; byField(): { field: number; box: DOMRect; need: boolean }[] } {
   const app = ctx.app
   const wraps: HTMLElement[] = []
   const models: (PlateModel | null)[] = []
@@ -131,6 +139,13 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
   const ref: { x: number; y: number }[] = []
   let lastAnchors: { x: number; y: number }[] | null = null
   let wasMoving = false
+  // How far each tag is drawn from where it is put, and how fast that is closing (the spring).
+  const lag: { x: number; y: number; vx: number; vy: number }[] = []
+  // The top left corner each tag was last put at; and, for a tag that went, where it fades and until when.
+  const corner: ({ x: number; y: number } | null)[] = []
+  const out: ({ x: number; y: number; until: number } | null)[] = []
+  let clock = 0
+  let resting = true
   // Tags that gave way to others on a phone, until the next settling.
   const yielded: boolean[] = new Array(S.FIELD_COUNT).fill(false)
   for (let i = 0; i < S.FIELD_COUNT; i++) {
@@ -143,6 +158,9 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
     face.push({ t: 0, h: 34, eye: 15 })
     listed.push(false)
     at.push({ x: -1, y: -1, place: 'gone' })
+    lag.push({ x: 0, y: 0, vx: 0, vy: 0 })
+    corner.push(null)
+    out.push(null)
     layer.append(wrap)
   }
 
@@ -224,9 +242,9 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
       // leaves the tag where it is.
       const row = t?.parentElement
       if (t && t.offsetWidth) {
-        size[i] = { w: t.offsetWidth, h: row?.offsetHeight || t.offsetHeight, extra: n ? n.offsetWidth + 7 : 0 }
+        size[i] = { w: toScreen(t.offsetWidth), h: toScreen(row?.offsetHeight || t.offsetHeight), extra: n ? toScreen(n.offsetWidth + 7) : 0 }
         const eye = t.querySelector<HTMLElement>('.eyelet')
-        face[i] = { t: t.offsetTop, h: t.offsetHeight, eye: eye ? eye.offsetLeft + eye.offsetWidth / 2 : 15 }
+        face[i] = { t: toScreen(t.offsetTop), h: toScreen(t.offsetHeight), eye: toScreen(eye ? eye.offsetLeft + eye.offsetWidth / 2 : 15) }
       }
       if (!compact) (far ? brief : full)[i] = size[i]
     }
@@ -287,9 +305,13 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
   // Where each tag goes for tags of these sizes: over its field, clear of the boards and of each other.
   // over: there was not the room, and some had to overlap. final: the last fold, where a tag may give way (gave).
   // snug: no room kept beside any tag (nearer in, when keeping it would carry a tag off its field).
-  function place(sz0: Size[], final = false, snug = false, tight = false): { want: Box[]; over: boolean; gave: number[] } {
+  // fresh: every tag is put as if for the first time. Otherwise a tag keeps the place it has while that serves
+  // (spot); that is tried first, and given up for a fresh putting whenever it leaves some tag without a place by its
+  // own field.
+  function place(sz0: Size[], final = false, snug = false, tight = false, fresh = false): { want: Box[]; over: boolean; gave: number[] } {
     close = tight
-    try { return placed(sz0, final, snug) } finally { close = false }
+    sticky = !fresh
+    try { return placed(sz0, final, snug) } finally { close = false; sticky = true }
   }
 
   function placed(sz0: Size[], final: boolean, snug: boolean): { want: Box[]; over: boolean; gave: number[] } {
@@ -330,7 +352,10 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
     // field lies under the bars (they have the least room), then the rest from the top down, each takes the nearest
     // place by its own field clear of the ones already put and of the people on the land.
     const keep = (o.keep?.() ?? []).map(r => ({ l: r.left, t: r.top, r: r.right, b: r.bottom }))
-    const taken = [...keep, ...shelf.map(i => roomAt(i, want[i], sz0, sz))]
+    const yards = (o.yards?.() ?? []).map(r => ({ l: r.left, t: r.top, r: r.right, b: r.bottom }))
+    const taken = [...keep, ...yards, ...shelf.map(i => roomAt(i, want[i], sz0, sz))]
+    // (the same without the yards' tags)
+    const firm = [...keep, ...shelf.map(i => roomAt(i, want[i], sz0, sz))]
     const kept = (i: number) => app.selection.includes(i) || !!models[i]?.badge
     const under = (i: number) => { const a = ctx.view.fieldAnchor(i); return a.visible && (a.y > innerHeight - ins.bottom || a.y < ins.top || a.x < ins.left || a.x > innerWidth - ins.right) }
     // Nearer in, what is in hand or stamped does not change the order, so a card opening or an order given leaves the
@@ -342,15 +367,24 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
     let over = false
     const gave: number[] = []
     const tags: Rect[] = shelf.map(i => roomAt(i, want[i], sz0, sz))
+    // Where the tags not yet put stand now: a tag goes back over its field only when no other stands there, so one
+    // tag going home never sends its neighbour across the land.
+    const standing = new Map<number, Rect>()
+    for (const i of order) { const c = at[i]; if ((c.place === 'on' || c.place === 'docked') && finite(c)) standing.set(i, roomAt(i, c, sz0, sz)) }
     for (const i of order) {
-      let w = spot(i, want[i], sz0, sz, taken, false)
+      standing.delete(i)
+      const rest = [...standing.values()]
+      let w = spot(i, want[i], sz0, sz, taken, false, false, rest)
       if (!far) {
         // Nearer in tags stay whole and off the people on the land: looking further round the field, and only then as
         // near its field as there is room (over: a tag had to leave its field).
-        if (!w) w = spot(i, want[i], sz0, sz, taken, false, true)
-        if (!w) { over = true; w = spot(i, want[i], sz0, sz, taken, true) }
+        if (!w) w = spot(i, want[i], sz0, sz, taken, false, true, rest)
+        // (over a yard's tag sooner than off its own field)
+        if (!w) w = spot(i, want[i], sz0, sz, firm, false, true, rest)
+        if (!w) { over = true; w = spot(i, want[i], sz0, sz, taken, true, false, rest) }
         if (w) want[i] = w
         taken.push(roomAt(i, want[i], sz0, sz))
+        firm.push(roomAt(i, want[i], sz0, sz))
         tags.push(roomAt(i, want[i], sz0, sz))
         continue
       }
@@ -368,6 +402,7 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
       }
       if (w) want[i] = w
       taken.push(roomAt(i, want[i], sz0, sz))
+      firm.push(roomAt(i, want[i], sz0, sz))
       tags.push(roomAt(i, want[i], sz0, sz))
     }
     return { want, over, gave }
@@ -395,7 +430,7 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
   // Whether tag i at a place points at its own field: its eyelet on the field's outline or inside it, wherever any of
   // the field is on the free land; as near it as the free land allows where the field lies under the bars. A field out
   // of view has nothing to point at. Worked out once for the many places tried.
-  function aim(i: number, sz0: Size[]): ((w: Box) => boolean) & { within?: Rect } {
+  function aim(i: number, sz0: Size[]): ((w: Box, slack?: number) => boolean) & { within?: Rect } {
     const outline = outlineOf(i)
     if (!outline) return () => true
     // Where an eyelet can be with its tag wholly on the free land.
@@ -404,9 +439,11 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
     const most = gapTo(reach, outline) + NEAR
     const xs = outline.map(p => p.x), ys = outline.map(p => p.y)
     const box = { l: Math.min(...xs) - most, t: Math.min(...ys) - most, r: Math.max(...xs) + most, b: Math.max(...ys) + most }
-    const near: ((w: Box) => boolean) & { within?: Rect } = (w: Box) => {
+    // (slack: how far off its field the eyelet may be beyond what the free land forces; a place kept from before is
+    // held to none, since the camera may carry it a little further before the tags are next put)
+    const near: ((w: Box, slack?: number) => boolean) & { within?: Rect } = (w: Box, slack = NEAR) => {
       const p = eyelet(i, w, sz0)
-      return p.x >= box.l && p.x <= box.r && p.y >= box.t && p.y <= box.b && gapTo({ l: p.x, t: p.y, r: p.x, b: p.y }, outline) <= most
+      return p.x >= box.l && p.x <= box.r && p.y >= box.t && p.y <= box.b && gapTo({ l: p.x, t: p.y, r: p.x, b: p.y }, outline) <= most - NEAR + slack
     }
     // (where the eyelet may be at all, for the search to leave out every place outside it without trying it)
     near.within = box
@@ -418,6 +455,7 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
   // close: the last resort nearer in, before a tag would leave its field: a tag with no stamp takes only its own
   // face's height from the others, not the row kept for a stamp.
   let close = false
+  let sticky = true
   function roomAt(i: number, w: Box, sz0: Size[], sz: Size[]): Rect {
     const l = w.x - sz0[i].w / 2
     if (close && !sz0[i].extra) { const t = w.y - sz0[i].h + face[i].t; return { l, t, r: l + sz[i].w, b: t + face[i].h } }
@@ -429,7 +467,7 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
   // boards), never drifting off it; or, for a field out of view or when loose, up and down from where it waits.
   // null: there is no such place.
   // wide: look twice as far round the field before giving up on it.
-  function spot(i: number, w: Box, sz0: Size[], sz: Size[], taken: Rect[], loose: boolean, wide = false): Box | null {
+  function spot(i: number, w: Box, sz0: Size[], sz: Size[], taken: Rect[], loose: boolean, wide = false, standing: Rect[] = []): Box | null {
     const land = freeLand()
     const below = sz0[i].h - face[i].t - face[i].h
     const a = ctx.view.fieldAnchor(i)
@@ -450,6 +488,15 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
         const ex = sz0[i].w / 2 - face[i].eye - bx, ey = sz0[i].h - face[i].t - face[i].h / 2 - by
         x0 = Math.max(x0, k.l + ex); x1 = Math.min(x1, k.r + ex)
         y0 = Math.max(y0, k.t + ey); y1 = Math.min(y1, k.b + ey)
+      }
+      // A tag keeps the place it has beside its field while that place still serves, and goes back over its field as
+      // soon as there is room there: it never changes sides because another place came a little nearer.
+      const cur = at[i]
+      if (sticky && (cur.place === 'on' || cur.place === 'docked')) {
+        const home: Box = { x: bx, y: by, place: w.place === 'on' && by === a.y ? 'on' : 'docked' }
+        if (near(home) && free(home) && !standing.some(x => meet(roomAt(i, home, sz0, sz), x, GAP, ROW_GAP))) return home
+        const stay: Box = { x: cur.x, y: cur.y, place: 'docked' }
+        if (finite(stay) && near(stay, 0) && free(stay)) return stay
       }
       for (const t of x1 < x0 || y1 < y0 ? [] : steps(Math.round((wide ? 2.5 : 1.25) * sz0[i].w / STEP_X), Math.ceil((wide ? 2 : 1) * REACH_ROWS * (sz[i].h + ROW_GAP) / STEP_Y))) {
         if (t.dx < x0 - 1e-6 || t.dx > x1 + 1e-6 || t.dy < y0 - 1e-6 || t.dy > y1 + 1e-6) continue
@@ -487,14 +534,59 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
 
   // The tag's top left corner is fixed when it is put: a tag that grows afterwards grows to the right and down.
   const drawn: string[] = []
+  const topLeft = (i: number, w: Box) => ({ x: w.x - size[i].w / 2, y: w.y - size[i].h })
+  // Put somewhere (again): from where it is drawn now it glides there; from far off, or from nowhere, it fades in.
   function show(i: number, w: Box): void {
+    const was = at[i], from = corner[i], g = lag[i]
     at[i] = w
     const wrap = wraps[i]
     wrap.classList.toggle('gone', w.place === 'gone')
     wrap.classList.toggle('docked', w.place === 'docked' || w.place === 'shelf')
-    if (w.place === 'gone') return
-    const t = `translate3d(${(w.x - size[i].w / 2).toFixed(1)}px, ${(w.y - size[i].h).toFixed(1)}px, 0)`
-    if (t !== drawn[i]) { wrap.style.transform = t; drawn[i] = t }
+    if (w.place === 'gone') {
+      // (a tag that goes keeps its place beside its field while it fades)
+      if (was.place !== 'gone' && from) out[i] = { x: from.x + g.x, y: from.y + g.y, until: performance.now() + FADE_OUT_MS }
+      corner[i] = null
+      g.x = g.y = g.vx = g.vy = 0
+      return
+    }
+    out[i] = null
+    const to = topLeft(i, w)
+    const dx = from ? from.x - to.x : 0, dy = from ? from.y - to.y : 0
+    if (was.place === 'gone' || !from || !Number.isFinite(dx + dy) || ctx.reduced()) g.x = g.y = g.vx = g.vy = 0
+    else if (Math.hypot(dx + g.x, dy + g.y) > FAR_MOVE) {
+      g.x = g.y = g.vx = g.vy = 0
+      wrap.animate?.([{ opacity: 0 }, { opacity: 1 }], { duration: 160, easing: 'ease-out' })
+    } else { g.x += dx; g.y += dy }
+    corner[i] = to
+    draw(i)
+  }
+
+  // Carried with its field: no glide, it is where its field is.
+  function ride(i: number, w: Box): void {
+    at[i] = w
+    corner[i] = topLeft(i, w)
+  }
+
+  // On whole pixels once the camera and the tag are at rest (sharp letters); to the tenth of one while either moves.
+  function draw(i: number): void {
+    const c = corner[i] ?? out[i]
+    if (!c) return
+    const g = lag[i], still = resting && !g.x && !g.y
+    const x = c.x + (corner[i] ? g.x : 0), y = c.y + (corner[i] ? g.y : 0)
+    const t = still ? `translate3d(${toLocal(Math.round(x)).toFixed(3)}px, ${toLocal(Math.round(y)).toFixed(3)}px, 0)` : `translate3d(${toLocal(x).toFixed(2)}px, ${toLocal(y).toFixed(2)}px, 0)`
+    if (t !== drawn[i]) { wraps[i].style.transform = t; drawn[i] = t }
+  }
+
+  function spring(dt: number): void {
+    if (!(dt > 0)) return
+    const k = Math.exp(-SPRING * dt)
+    for (const g of lag) {
+      if (!g.x && !g.y && !g.vx && !g.vy) continue
+      const ax = g.vx + SPRING * g.x, ay = g.vy + SPRING * g.y
+      g.x = (g.x + ax * dt) * k; g.vx = (g.vx - SPRING * ax * dt) * k
+      g.y = (g.y + ay * dt) * k; g.vy = (g.vy - SPRING * ay * dt) * k
+      if (Math.abs(g.x) < 0.08 && Math.abs(g.y) < 0.08 && Math.abs(g.vx) < 2 && Math.abs(g.vy) < 2) g.x = g.y = g.vx = g.vy = 0
+    }
   }
 
   // The camera moved (or the window, or the boards): every tag is put again, on or right beside its own field. Far out
@@ -528,18 +620,19 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
     }
     if (fresh) measure()
     let named = place(tier())
+    if (named.over) named = place(tier(), false, false, false, true)
     // Nearer in, the room kept beside the tags goes before any tag leaves its field; they never fold.
     // (and, if a tag would still leave its field, the row kept over and under a tag that has no stamp)
     if (!far && named.over) {
-      const snug = place(full, false, true)
-      named = { ...(snug.over ? place(full, false, true, true) : snug), over: false }
+      const snug = place(full, false, true, false, true)
+      named = { ...(snug.over ? place(full, false, true, true, true) : snug), over: false }
     }
     if (named.over !== compact) {
       compact = named.over
       folds()
       measure()
     }
-    const put = compact ? place(size, true) : named
+    const put = compact ? place(size, true, false, false, true) : named
     const want = put.want
     yielded.fill(false)
     for (const i of put.gave) yielded[i] = true
@@ -575,7 +668,7 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
       const sz = size.map((_, j) => room(j, size))
       const w = { ...targets(sz)[i] }
       w.x += (size[i].w - z.w) / 2
-      const keep = (o.keep?.() ?? []).map(r => ({ l: r.left, t: r.top, r: r.right, b: r.bottom }))
+      const keep = [...(o.keep?.() ?? []), ...(o.yards?.() ?? [])].map(r => ({ l: r.left, t: r.top, r: r.right, b: r.bottom }))
       const others = at.flatMap((b, j) => j !== i && b.place !== 'gone' && !wraps[j].hidden && finite(b) ? [roomAt(j, b, size, sz)] : [])
       show(i, spot(i, w, size, sz, [...keep, ...others], true) ?? { ...w, y: Math.min(w.y, floor) })
       ref[i] = anchors[i]
@@ -606,6 +699,30 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
       const b = laid!.anchors[i]
       return finite(a) !== finite(b) || (finite(a) && Math.hypot(a.x - b.x, a.y - b.y) > (rested ? 0.5 : RESETTLE_PX))
     })))
+    const now = performance.now()
+    spring(Math.min(0.05, clock ? (now - clock) / 1000 : 0))
+    clock = now
+    resting = !moving
+    // First each tag goes with its field, exactly. A tag held at the edge of the free land for a field under the
+    // boards stays at that edge while the field moves beneath them: it rides only as far as the field's place on the
+    // free land moves. A tag that went rides on while it fades.
+    const land = freeLand()
+    for (let i = 0; i < S.FIELD_COUNT; i++) {
+      const a = anchors[i], r = ref[i], b = at[i]
+      if (!r || !finite(a) || !finite(r)) continue
+      const gone = out[i]
+      if (gone) {
+        if (now > gone.until) out[i] = null
+        else { gone.x += a.x - r.x; gone.y += a.y - r.y }
+        ref[i] = a
+        continue
+      }
+      if (b.place === 'gone' || b.place === 'shelf' || Math.hypot(a.x - r.x, a.y - r.y) < 0.01) continue
+      const top = land.t - face[i].t + size[i].h, foot = Math.max(top, land.b + size[i].h - face[i].t - face[i].h)
+      const held = (y: number) => Math.max(top, Math.min(foot, y))
+      ride(i, { x: b.x + a.x - r.x, y: b.y + held(a.y) - held(r.y), place: b.place })
+      ref[i] = a
+    }
     if (far0) {
       // Why the tags were put again, for the checks that hold them to it.
       const why = !laid ? 'first' : laid.key !== key ? 'window' : `camera${zoomed ? ' zoom' : ''} ${anchors.map((a, i) => { const b = laid!.anchors[i]; return finite(a) !== finite(b) ? `${i}:seen` : finite(a) && Math.hypot(a.x - b.x, a.y - b.y) > RESETTLE_PX ? `${i}:${Math.round(a.x - b.x)},${Math.round(a.y - b.y)}` : '' }).filter(Boolean).join(' ')}`
@@ -613,20 +730,8 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
       settle()
       laid = { key, anchors, k }
       for (let i = 0; i < S.FIELD_COUNT; i++) ref[i] = anchors[i]
-      return
-    }
-    // A tag held at the edge of the free land for a field under the boards stays at that edge while the field moves
-    // beneath them: it rides only as far as the field's place on the free land moves.
-    const land = freeLand()
-    for (let i = 0; i < S.FIELD_COUNT; i++) {
-      const a = anchors[i], r = ref[i], b = at[i]
-      if (b.place === 'gone' || b.place === 'shelf' || !r || !finite(a) || !finite(r) || Math.hypot(a.x - r.x, a.y - r.y) < 0.25) continue
-      const top = land.t - face[i].t + size[i].h, foot = Math.max(top, land.b + size[i].h - face[i].t - face[i].h)
-      const held = (y: number) => Math.max(top, Math.min(foot, y))
-      show(i, { x: b.x + a.x - r.x, y: b.y + held(a.y) - held(r.y), place: b.place })
-      ref[i] = a
-    }
-    arrivals(anchors)
+    } else arrivals(anchors)
+    for (let i = 0; i < S.FIELD_COUNT; i++) draw(i)
   }
 
   // Where the tags are now, for the pins to keep clear of; and each with its field, for a card to keep off them.
@@ -643,9 +748,25 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
     return byField().map(x => x.box)
   }
 
+  // A tag that a card or a board lies over is put away whole: half a name showing from under paper reads as a fault.
+  // (The field in hand keeps its tag: its card stands beside it.)
+  function under(): void {
+    const cv = [...(o.covers?.() ?? []), ...(o.boards?.() ?? [])]
+    for (let i = 0; i < S.FIELD_COUNT; i++) {
+      const w = at[i]
+      if (!models[i] || !w || w.place === 'gone' || !size[i]) { wraps[i].classList.remove('under'); continue }
+      const l = w.x - size[i].w / 2, t = w.y - size[i].h, r = l + size[i].w + size[i].extra, b = w.y
+      const hit = !app.selection.includes(i) && cv.some(c => {
+        const ox = Math.min(r, c.right) - Math.max(l, c.left), oy = Math.min(b, c.bottom) - Math.max(t, c.top)
+        return ox > 6 && oy > 6
+      })
+      wraps[i].classList.toggle('under', hit)
+    }
+  }
+
   return {
     update,
-    frame,
+    frame() { frame(); under() },
     boxes,
     byField,
     dispose() {

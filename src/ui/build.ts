@@ -48,7 +48,8 @@ export function yardCard(ctx: Ctx): YardCard {
 
   // A building's cost as its order prints it: dollars, then what the yard must find, then the days of work.
   function costOf(b: S.BuildingInfo): string {
-    return [F.money(b.cash), b.logs ? `${b.logs} logs` : '', b.stone ? `${b.stone} stone` : '', `${b.days} ${b.days === 1 ? 'crew-day' : 'crew-days'}`].filter(Boolean).join(' · ')
+    // (each item keeps to one line: a number is never parted from what it counts)
+    return [F.money(b.cash), b.logs ? `${b.logs}\u00a0logs` : '', b.stone ? `${b.stone}\u00a0stone` : '', `${b.days}\u00a0${b.days === 1 ? 'crew\u2011day' : 'crew\u2011days'}`].filter(Boolean).join(' · ')
   }
 
   function body(c: S.Campaign, yard: number, suggest: S.BuildingKind | null): Child {
@@ -100,7 +101,7 @@ export function yardCard(ctx: Ctx): YardCard {
       can.length ? h('div', { class: 'orders', role: 'group', 'aria-label': 'Put up a building' },
         can.map((b, k) => order({
           key: keys && k < 9 ? String(k + 1) : '', icon: '', name: b.name, cost: costOf(b), suggested: b.kind === best, testid: `build-${b.kind}`,
-          catch: flash?.kind === b.kind && !poor(b) ? flash.text : poor(b) ? `Can't afford yet${b.buyLogs > 0 || b.buyStone > 0 ? `: ${F.money(b.total)} with materials` : ''}.` : !b.ok ? F.localize(b.why) : `Catch: ${b.catch.replace(/^./, x => x.toLowerCase())}`,
+          catch: flash?.kind === b.kind && !poor(b) ? flash.text : poor(b) ? `Can't afford yet${b.buyLogs > 0 || b.buyStone > 0 ? `: ${F.money(b.total)} with materials` : ''}.` : !b.ok ? F.localize(b.why) : `Downside: ${b.catch.replace(/^./, x => x.toLowerCase())}`,
           refused: flash?.kind === b.kind || !b.ok,
           title: keys ? b.does : undefined,
           said: `${b.does} ${F.money(b.total)} in all${b.buyLogs > 0 || b.buyStone > 0 ? `, with ${[b.buyLogs > 0 ? `${loads(b.buyLogs)} logs` : '', b.buyStone > 0 ? `${loads(b.buyStone)} stone` : ''].filter(Boolean).join(' and ')} bought in` : ''}.`,

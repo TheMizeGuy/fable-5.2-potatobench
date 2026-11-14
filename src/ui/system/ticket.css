@@ -3,7 +3,7 @@
    The look of every component is design/system.css. */
 
 /* ---------------------------------------------------------------- the paper the ticket comes on */
-.dialog.sys.dig-paper { top: 19px; transform: translateX(-50%); max-height: calc(100vh - 19px); max-height: calc(100dvh - 19px);
+.dialog.sys.dig-paper { top: 19px; transform: translateX(-50%); max-height: calc(calc(100 * var(--vh, 1vh)) - 19px); max-height: calc(calc(100 * var(--vh, 1dvh)) - 19px);
   display: flex; flex-direction: column; animation-name: dig-in; }
 .dialog.sys.dig-paper.out { animation-name: dig-out; }
 .dialog.sys.dig-paper.is-reveal { animation: none; }
@@ -12,9 +12,9 @@
 @keyframes dig-in { from { transform: translate(-50%, 14px); } }
 @keyframes dig-out { to { opacity: 0; transform: translate(-50%, 10px); } }
 
-.dig-day { --dial: min(470px, calc(100vw - 2 * var(--gutter) - 92px), calc(100vh - 250px));
+.dig-day { --dial: min(470px, calc(calc(100 * var(--vw, 1vw)) - 2 * var(--gutter) - 92px), calc(calc(100 * var(--vh, 1vh)) - 250px));
   position: relative; display: grid; justify-items: center; }
-@supports (height: 100dvh) { .dig-day { --dial: min(470px, calc(100vw - 2 * var(--gutter) - 92px), calc(100dvh - 250px)); } }
+@supports (height: 100dvh) { .dig-day { --dial: min(470px, calc(calc(100 * var(--vw, 1vw)) - 2 * var(--gutter) - 92px), calc(calc(100 * var(--vh, 1dvh)) - 250px)); } }
 .dig-day.revealing { min-height: calc(var(--dial) + 250px); }
 /* While the scale weighs, the paper is as tall as the dial. The ticket's lines keep to the top of it, where they will
    stay once the paper closes up under them, so a key pressed early is where it was aimed. */
@@ -67,7 +67,7 @@
 
 /* A desk too short for the frame's ticket: the ticket goes wider, the grades and the losses side by side. */
 @media (min-width: 700px) and (max-height: 860px) {
-  .dialog.dig-paper .ticket { width: min(980px, calc(100vw - 2 * var(--gutter) - 2 * var(--s4))); }
+  .dialog.dig-paper .ticket { width: min(980px, calc(calc(100 * var(--vw, 1vw)) - 2 * var(--gutter) - 2 * var(--s4))); }
   .dig-paper .tk { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); column-gap: var(--s5); padding: 10px 22px 6px; }
   .dig-paper .tk > :not(.grades, .tk-loss) { grid-column: 1 / -1; }
   .dig-paper .grades { align-self: stretch; align-content: start; padding-top: 10px; }
@@ -88,10 +88,10 @@
 /* A phone on its side: the weight on the left, the ways stacked on the right, both in the first screen; the grades
    and the losses below. */
 @media (min-width: 700px) and (max-height: 500px) {
-  .dig-day { --dial: calc(100vh - 176px); }
+  .dig-day { --dial: calc(calc(100 * var(--vh, 1vh)) - 176px); }
   .dig-day .scale-face { top: 8px; padding: 12px 22px 10px; }
   .dig-day .scale-face .readout .stamped { font-size: 40px; }
-  .dialog.sys.dig-paper { top: 8px; max-height: calc(100vh - 8px); max-height: calc(100dvh - 8px); }
+  .dialog.sys.dig-paper { top: 8px; max-height: calc(calc(100 * var(--vh, 1vh)) - 8px); max-height: calc(calc(100 * var(--vh, 1dvh)) - 8px); }
   .dialog.dig-paper .ticket { grid-template-columns: 40px minmax(0, 1fr); }
   .dig-paper .stub span { font-size: 20px; }
   .dig-paper .tk { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: 'head ways' 'line ways' 'net ways' 'grades losses';
@@ -125,7 +125,7 @@
 /* A phone: the ticket takes the screen's width and comes up from the foot; the ways come straight after the weight,
    stacked, each with its take line beside its amount. */
 @media (max-width: 699px) {
-  .dialog.sys.dig-paper { left: 0; right: 0; top: auto; bottom: 0; width: auto; max-width: none; transform: none; max-height: calc(100vh - 12px); max-height: calc(100dvh - 12px); animation-name: sh-up; }
+  .dialog.sys.dig-paper { left: 0; right: 0; top: auto; bottom: 0; width: auto; max-width: none; transform: none; max-height: calc(calc(100 * var(--vh, 1vh)) - 12px); max-height: calc(calc(100 * var(--vh, 1dvh)) - 12px); animation-name: sh-up; }
   .dialog.sys.dig-paper.out { animation-name: sh-down; }
   .dialog.dig-paper > .dlg-body { padding: 1px 0 0; }
   .dialog.dig-paper .ticket { width: 100%; grid-template-columns: 40px minmax(0, 1fr); }
@@ -138,7 +138,7 @@
   .dig-paper .tk-line { gap: 2px 16px; font-size: 15px; }
   .dig-paper .tk-net { grid-template-columns: minmax(0, 1fr); gap: 14px; }
   .dig-day.revealing .ticket.is-waiting { display: none; }
-  .dig-paper .stamped.huge { font-size: min(104px, 24vw); }
+  .dig-paper .stamped.huge { font-size: min(104px, calc(24 * var(--vw, 1vw))); }
   .dig-paper .net .unit { font-size: 22px; padding-bottom: 8px; }
   .dig-paper .net-side .range { width: 100%; max-width: 260px; }
   .dig-paper .grades ul { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 16px; }
@@ -182,14 +182,14 @@
 }
 
 /* ---------------------------------------------------------------- the test-dig tray */
-.tray-paper.sys { width: 392px; max-width: calc(100vw - 16px); padding: var(--s3) var(--s4) var(--s4); animation: tray-in var(--t-sheet) var(--ease-paper); }
+.tray-paper.sys { width: 392px; max-width: calc(calc(100 * var(--vw, 1vw)) - 16px); padding: var(--s3) var(--s4) var(--s4); animation: tray-in var(--t-sheet) var(--ease-paper); }
 .tray-paper.sys.out { animation: tray-out var(--t-leave) var(--ease-in) forwards; }
 /* The tray never runs past the land's room: the host is held between the bars, the paper takes no more than the host,
    and only the tray and its tally scroll, between the head and the estimate. */
 /* It stands with the cards and their tethers (z-index 3), after them in the page, so a tether to a card passes under it. */
 .season-screen > .tray-host.sys { display: flex; flex-direction: column; overflow: visible; z-index: 3; }
 .tray-paper.sys { display: flex; flex-direction: column; min-height: 0; }
-.tray-paper[data-layout='short'] { max-height: calc(100vh - var(--top, 44px) - 12px); }
+.tray-paper[data-layout='short'] { max-height: calc(calc(100 * var(--vh, 1vh)) - var(--top, 44px) - 12px); }
 .tray-paper > .tray-head, .tray-paper > .narrowing { flex: none; }
 .tray-paper .tray-scroll { flex: 0 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; outline: 0; }
 .tray-paper .tray-scroll > .tally { margin-bottom: 2px; }

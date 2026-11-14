@@ -1,6 +1,6 @@
 // The ladder: what a farm reaches for next, in the order a player can reach it. Worked out from the farm as it stands,
 // so nothing extra is saved.
-import { BUILDING_KINDS, FELL_DAYS, FIELD_COUNT, formatDay, goalCosts, isField, killOutlook, NOTE_PAYMENT, PARCELS, plantWordGiven, ROCKS_ADVISE, sprayWayNow, standingBy, TRACTS, type Campaign, type GoalCost, type JobKind } from '../sim/index.ts'
+import { BUILDING_KINDS, forecast, FELL_DAYS, FIELD_COUNT, formatDay, goalCosts, isField, killOutlook, NOTE_PAYMENT, PARCELS, plantWordGiven, ROCKS_ADVISE, sprayWayNow, standingBy, TRACTS, type Campaign, type World, type GoalCost, type JobKind } from '../sim/index.ts'
 
 export interface Goal {
   id: string
@@ -188,7 +188,14 @@ export function needsHand(c: Campaign): boolean {
 // While the season's next step is the crew's own work (planting after the word, walking, hilling, digging), the slip
 // says what the player is waiting for in the player's terms: the progress of the planting they ordered, or their next
 // decision and when it comes. Never a job that is not theirs. Null when the next step is the player's own to take.
-export function waitingFor(c: Campaign): { title: string; when: string } | null {
+// What the forecast says about blight, for the line under a spray decision: the day it comes, or that none is in sight.
+function blightAhead(world: World | undefined, c: Campaign): string {
+  if (!world) return 'when blight weather is forecast'
+  const k = forecast(world, c, 6).findIndex(d => d.blight >= 2)
+  return k < 0 ? 'no blight weather in the forecast' : `blight weather ${k === 0 ? 'today' : k === 1 ? 'tomorrow' : `in ${k} days`}`
+}
+
+export function waitingFor(c: Campaign, world?: World): { title: string; when: string } | null {
   const s = c.season
   if (c.phase !== 'season' || !s || s.frozen) return null
   const potato: number[] = []
@@ -208,7 +215,7 @@ export function waitingFor(c: Campaign): { title: string; when: string } | null 
   // comes near: before the first one it comes with the first blight weather, after it with each new forecast of it.
   if (up.length && !crew('spray') && sprayWayNow(c) !== 'none' && !(due && due.day - s.day <= KILL_NEAR)) {
     if (!s.fields.some(f => f.lastSpray >= 0)) return { title: 'Nothing to do until blight weather', when: 'your crew tends the fields on its own' }
-    return { title: 'Your next decision is a spray', when: 'when blight weather is forecast' }
+    return { title: 'Your next decision is a spray', when: blightAhead(world, c) }
   }
   if (up.length && !crew('kill')) {
     // Due and not yet ordered: the decision is the player's now, and the goal or the stamp says so.

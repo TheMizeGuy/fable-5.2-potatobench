@@ -5,10 +5,10 @@
 
 .guide { display: grid; gap: 6px; padding: 10px 14px 4px 16px; color: var(--ink); background: var(--paper) url(./grain.png); background-blend-mode: multiply;
   box-shadow: var(--lifted); border-top: 3px double var(--ink); }
-.guide.floating { position: absolute; left: 0; top: 0; width: min(304px, calc(100vw - 24px)); pointer-events: auto; will-change: transform;
+.guide.floating { position: absolute; left: 0; top: 0; width: min(304px, calc(calc(100 * var(--vw, 1vw)) - 24px)); pointer-events: auto; will-change: transform;
   animation: guide-in var(--t-slip) var(--ease-out); }
 .guide.floating.gone { visibility: hidden; }
-#ui[data-layout='narrow'] .guide.floating { width: min(380px, calc(100vw - 24px)); }
+#ui[data-layout='narrow'] .guide.floating { width: min(380px, calc(calc(100 * var(--vw, 1vw)) - 24px)); }
 .guide-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding-bottom: 5px; border-bottom: 1px solid var(--hair); }
 .guide-head .t-label:first-child { color: var(--ink); }
 .guide-held { display: inline-flex; align-items: center; gap: 4px; color: var(--ink); }
@@ -23,7 +23,7 @@
 .guide-foot .btn .i { --i: 16px; }
 /* The guide's line while it runs the clock between notes: a strip of the same paper, smaller than a note and with
    no rule at its head, since nothing is paused for it. */
-.guide-drive { position: absolute; left: 0; top: 0; display: grid; gap: 2px; width: min(340px, calc(100vw - 24px)); padding: 8px 12px 2px 14px; pointer-events: auto;
+.guide-drive { position: absolute; left: 0; top: 0; display: grid; gap: 2px; width: min(340px, calc(calc(100 * var(--vw, 1vw)) - 24px)); padding: 8px 12px 2px 14px; pointer-events: auto;
   color: var(--ink); background: var(--paper) url(./grain.png); background-blend-mode: multiply; box-shadow: var(--laid); border-left: 3px solid var(--ink);
   will-change: transform; animation: guide-in var(--t-slip) var(--ease-out); }
 .guide-drive.gone { visibility: hidden; }
@@ -34,7 +34,7 @@
 .guide-drive .guide-foot { justify-content: flex-end; margin-top: 0; }
 .guide-drive .guide-foot .btn.quiet { min-height: 36px; }
 /* On a phone the land is a strip: the line is as wide as the window and its keys stand beside its words, not under. */
-#ui[data-layout='narrow'] .guide-drive { width: calc(100vw - 24px); grid-template-columns: 1fr auto; column-gap: 10px; align-items: center; padding-bottom: 6px; }
+#ui[data-layout='narrow'] .guide-drive { width: calc(calc(100 * var(--vw, 1vw)) - 24px); grid-template-columns: 1fr auto; column-gap: 10px; align-items: center; padding-bottom: 6px; }
 #ui[data-layout='narrow'] .guide-drive :is(.gd-line, .gd-next) { grid-column: 1; }
 #ui[data-layout='narrow'] .guide-drive .guide-foot { grid-column: 2; grid-row: 1 / span 2; flex-flow: column nowrap; align-items: flex-end; gap: 0; }
 /* With little land free, the slip gives up its reason: the screen reader still hears it. */
@@ -63,7 +63,7 @@
 .guide-fist[data-to='u'] .fist { rotate: -90deg; --nx: 0px; --ny: -3px; }
 
 /* Under the clock while the guide holds it: what stopped it, and that any speed goes on. */
-.guide-clocknote { position: absolute; left: 0; top: 0; display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; max-width: calc(100vw - 16px);
+.guide-clocknote { position: absolute; left: 0; top: 0; display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px; max-width: calc(calc(100 * var(--vw, 1vw)) - 16px);
   font: 400 var(--t-caption)/1.25 var(--f-text); color: var(--ink); background: var(--paper); box-shadow: var(--laid); border-left: 3px solid var(--ink); }
 .guide-clocknote .i { --i: 12px; flex: none; }
 

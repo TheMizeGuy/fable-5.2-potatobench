@@ -104,7 +104,7 @@ export function restControl(ctx: Ctx, c: S.Campaign, id: number, testid: string)
     h('span', { class: 't-label' }, 'Rest'),
     opt('auto', 'When worn out', 'Takes a rest day automatically when worn out, then goes back to work.', 'rest when worn out'),
     opt('now', 'Rest now', 'Takes days off until recovered.', 'rest now until recovered'),
-    opt('push', 'Push on', 'Keeps working even when worn out, which is slower and makes an injury more likely.', 'keep working when worn out'))
+    opt('push', 'No rest', 'Keeps working even when worn out, which is slower and makes an injury more likely.', 'keep working when worn out'))
 }
 
 // ---------------------------------------------------------------- spraying this season, asked once

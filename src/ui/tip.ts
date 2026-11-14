@@ -3,6 +3,7 @@
 // pointer leaves, so a title is still what the page and a screen reader hold.
 import { h } from './dom.ts'
 import './tip.css'
+import { toLocal, toScreen } from './scale.ts'
 
 export function mountTips(root: HTMLElement): () => void {
   const tip = h('div', { class: 'game-tip sys', role: 'presentation', hidden: true })
@@ -13,10 +14,10 @@ export function mountTips(root: HTMLElement): () => void {
   let at = { x: 0, y: 0 }
 
   const put = () => {
-    const w = tip.offsetWidth, hh = tip.offsetHeight
+    const w = toScreen(tip.offsetWidth), hh = toScreen(tip.offsetHeight)
     const x = Math.max(8, Math.min(innerWidth - w - 8, at.x + 14))
     const y = at.y + 22 + hh > innerHeight - 8 ? at.y - hh - 12 : at.y + 22
-    tip.style.transform = `translate3d(${Math.round(x)}px, ${Math.round(Math.max(8, y))}px, 0)`
+    tip.style.transform = `translate3d(${Math.round(toLocal(x))}px, ${Math.round(toLocal(Math.max(8, y)))}px, 0)`
   }
   const drop = () => {
     clearTimeout(timer)

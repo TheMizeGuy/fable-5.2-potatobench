@@ -26,6 +26,7 @@ import type { Ink } from './system/parts.ts'
 import { clock, topBar } from './top.ts'
 import { guidedYear, mayAsk, quietTips } from './tutorial.ts'
 import './season.css'
+import { toLocal, toScreen } from './scale.ts'
 
 const HINTS_KEY = 'the-county/hints'
 const HINT_MS = 45000
@@ -505,15 +506,16 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   // Read once a frame, before anything on the land is moved, so the frame never forces a second layout.
   let coverCache: DOMRect[] | null = null
   const covers = (): DOMRect[] => coverCache ?? floating().filter((x): x is HTMLElement => !!x && !x.hidden && x.offsetParent !== null).map(x => x.getBoundingClientRect())
-  // What a tag moved by its field steps clear of: each person on the land, head to foot, and the yards' tags.
-  const keep = (): DOMRect[] => [
-    ...(app.campaign?.crew ?? []).flatMap(u => {
-      const a = ctx.view.unitAnchor(u.id), f = ctx.view.unitFoot(u.id)
-      return a.visible && f.visible ? [new DOMRect(f.x - 12, Math.min(a.y, f.y - 24), 24, f.y + 2 - Math.min(a.y, f.y - 24))] : []
-    }),
-    ...yardMarks.filter(m => !m.wrap.hidden && m.at).map(m => new DOMRect(m.at!.x - m.w / 2, m.at!.y - 22, m.w, 44)),
-  ]
-  const P = plates(ctx, plateLayer, { model: plateModel, onBadge, covers, keep })
+  // What a tag moved by its field steps clear of: each person on the land, head to foot; and the yards' tags, which
+  // it steps clear of while it can do so without leaving its own field.
+  const keep = (): DOMRect[] => (app.campaign?.crew ?? []).flatMap(u => {
+    const a = ctx.view.unitAnchor(u.id), f = ctx.view.unitFoot(u.id)
+    return a.visible && f.visible ? [new DOMRect(f.x - 12, Math.min(a.y, f.y - 24), 24, f.y + 2 - Math.min(a.y, f.y - 24))] : []
+  })
+  const yardTags = (): DOMRect[] => yardMarks.filter(m => !m.wrap.hidden && m.at).map(m => new DOMRect(m.at!.x - m.w / 2, m.at!.y - 62, m.w, 44))
+  // The boards that always stand (the work list, the people, the menu bar): a tag one of them lies over is put away too.
+  const boards = (): DOMRect[] => ctx.layout() === 'narrow' || ctx.layout() === 'short' ? [] : [...crew.querySelectorAll<HTMLElement>('.queue, .timebook'), bar.el].filter(x => !x.hidden && x.offsetParent !== null).map(x => x.getBoundingClientRect())
+  const P = plates(ctx, plateLayer, { model: plateModel, onBadge, covers, keep, yards: yardTags, boards })
   const people = pins(ctx, plateLayer, {
     covers,
     stopped: () => stoppedBy(app.campaign),
@@ -543,7 +545,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
         'aria-label': `${YARD_TITLE[m.y]}${up ? `, where the ${S.BUILDINGS[up.kind].name.toLowerCase()} is ${F.pct(up.done / up.need)} built` : ''}. Press to build here${ctx.touch() ? '' : ' (Y)'}.`,
         onclick: () => app.selectYard(sel ? 0 : m.y),
       }, icon('yard', 'i'), name, up ? h('span', { class: 'yard-pct num' }, F.pct(up.done / up.need)) : null))
-      m.w = (m.wrap.firstElementChild as HTMLElement | null)?.offsetWidth || m.w
+      m.w = toScreen((m.wrap.firstElementChild as HTMLElement | null)?.offsetWidth ?? 0) || m.w
     }
   }
 
@@ -558,7 +560,8 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
         (app.yard === m.y || !cv.some(r => a.x > r.left - 80 && a.x < r.right + 80 && a.y > r.top - 20 && a.y < r.bottom + 20))
       m.wrap.classList.toggle('gone', !ok)
       m.at = ok ? { x: a.x, y: a.y } : null
-      if (ok) m.wrap.style.transform = `translate3d(${a.x.toFixed(1)}px, ${a.y.toFixed(1)}px, 0)`
+      // (a tag that goes fades over its yard, not where it was left)
+      if (Number.isFinite(a.x) && Number.isFinite(a.y)) m.wrap.style.transform = `translate3d(${toLocal(a.x).toFixed(1)}px, ${toLocal(a.y).toFixed(1)}px, 0)`
     }
   }
 
@@ -601,8 +604,8 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       return of(t.box, t.need || st === 'growing' || st === 'planted' || st === 'dead' || st === 'digging' ? 3 : 1)
     })
     // The menu bar: a card keeps off it where it can, and lies over it before it is cut.
-    if (bar.el.offsetHeight > 0) out.push(of(bar.el.getBoundingClientRect(), 4))
-    for (const m of yardMarks) if (!m.wrap.hidden && m.at) out.push(of(new DOMRect(m.at.x - m.w / 2, m.at.y - 22, m.w, 44), 1))
+    if (bar.el.offsetHeight > 0) out.push(of(bar.el.getBoundingClientRect(), ctx.layout() === 'wide' ? 24 : 4))
+    for (const m of yardMarks) if (!m.wrap.hidden && m.at) out.push(of(new DOMRect(m.at.x - m.w / 2, m.at.y - 62, m.w, 44), 1))
     // The alerts' place beside the time book, whether or not a slip lies there now: a card keeps off it before any
     // tag, so a slip that comes is not under the card; but it lies there rather than be cut short (a person's page
     // opened from the people bar has nowhere else to be whole in a short window). Under 1400 the alerts wait while
@@ -818,7 +821,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     paused.hidden = !stopped || (stoppedFor && layout !== 'narrow')
     el.classList.toggle('is-paused', !paused.hidden)
     if (!paused.hidden) patch(paused, JSON.stringify([ctx.touch(), app.resumeSpeed]), () => h('button', { class: 'paused-go btn', type: 'button', testid: 'paused-go', onclick: () => app.togglePause() },
-      icon('play', 'i'), h('span', { class: 'sr' }, 'Paused. '), `Resume at ${SPEED_X[app.resumeSpeed || 1]}`, ctx.touch() ? null : h('span', { class: 'key' }, 'Space')))
+      h('span', { class: 't-label paused-word' }, 'Paused'), icon('play', 'i'), `Resume at ${SPEED_X[app.resumeSpeed || 1]}`, ctx.touch() ? null : h('span', { class: 'key' }, 'Space')))
     const wasRunning = !running.hidden
     running.hidden = app.speed === 0 || S.seasonDone(c) || (stoppedFor && layout !== 'narrow') || (layout === 'narrow' && app.selection.length > 0)
     if (!running.hidden && !wasRunning) ranAt = performance.now()
@@ -880,7 +883,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       const box = (x: HTMLElement) => {
         let l = 0, t0 = 0
         for (let e: HTMLElement | null = x; e && e !== el; e = e.offsetParent as HTMLElement | null) { l += e.offsetLeft; t0 += e.offsetTop }
-        return { left: l, top: t0, right: l + x.offsetWidth, bottom: t0 + x.offsetHeight }
+        return { left: toScreen(l), top: toScreen(t0), right: toScreen(l + x.offsetWidth), bottom: toScreen(t0 + x.offsetHeight) }
       }
       const t = Math.max(top.el.getBoundingClientRect().bottom, ...[...top.el.querySelectorAll<HTMLElement>('.almanac > .mount, .bank > .mount')].map(x => x.getBoundingClientRect().bottom))
       board = Math.max(0, ...[...top.el.querySelectorAll<HTMLElement>('.almanac > .mount, .bank > .mount')].map(x => x.getBoundingClientRect().bottom))
@@ -899,7 +902,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       }
       let bottom = foot.bottom
       // On a phone the clock's chip under the top board frames the land as the board does.
-      el.style.setProperty('--board', `${Math.round(t)}px`)
+      el.style.setProperty('--board', `${Math.round(toLocal(t))}px`)
       const chip = [paused, running].find(x => !x.hidden && x.offsetParent !== null)
       const tAll = (layout === 'narrow' || layout === 'short') && chip ? Math.max(t, chip.getBoundingClientRect().bottom + 4) : t
       // On a phone or a short window there is no pointer to keep still, and little land: everything standing over the
@@ -909,8 +912,8 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
         const over = [...crew.querySelectorAll<HTMLElement>('.queue, .timebook, .q-pop'), clockSlot, ...notesSlot.querySelectorAll<HTMLElement>('.alert')]
           .filter(x => x.offsetParent !== null && x.offsetHeight > 0).map(x => x.getBoundingClientRect().top)
         const raw = innerHeight - Math.min(...over, innerHeight) + 6
-        el.style.setProperty('--foot', `${Math.round(raw)}px`)
-        bottom = raw + (vis(homeKey) ? homeKey.offsetHeight + 10 : 0)
+        el.style.setProperty('--foot', `${Math.round(toLocal(raw))}px`)
+        bottom = raw + (vis(homeKey) ? toScreen(homeKey.offsetHeight) + 10 : 0)
       }
       // Only what always stands frames the land: a card, a page or the grid opening on a click never moves the camera
       // (a card opens beside what it belongs to, never on it; it lies over the tags). On a phone the card is a sheet

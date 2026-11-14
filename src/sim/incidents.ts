@@ -15,7 +15,7 @@ export const INCIDENT_TITLE: Record<IncidentKind, string> = {
 }
 
 export const CHOICE_LABEL: Record<string, string> = {
-  hire: 'Take them on', pass: 'Not now',
+  hire: 'Hire', pass: 'Not now',
   match: 'Match the offer', let: 'Let them choose',
   rush: 'Pay for a rush part', wait: 'Wait for the part',
   take: 'Take the offer', refuse: 'Turn it down',

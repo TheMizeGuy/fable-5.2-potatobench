@@ -1,7 +1,7 @@
 /* What is left of the old papers for the screens not yet in the system; it stops at .sys. */
-.spring:not(.sys, .sys *) { --sheet-w: clamp(344px, 28vw, 412px); }
+.spring:not(.sys, .sys *) { --sheet-w: clamp(344px, calc(28 * var(--vw, 1vw)), 412px); }
 .spring[data-layout='mid']:not(.sys, .sys *) { --sheet-w: 360px; }
-.spring[data-layout='short']:not(.sys, .sys *) { --sheet-w: min(360px, 46vw); }
+.spring[data-layout='short']:not(.sys, .sys *) { --sheet-w: min(360px, calc(46 * var(--vw, 1vw))); }
 .season.spring .bottom:not(.sys, .sys *) { right: calc(var(--sheet-w) + 2 * var(--sp-3)); grid-template-areas: 'card'; }
 .fold:not(.sys, .sys *) { border-bottom: 1px dotted var(--rule-strong); }
 .hall:not(.sys, .sys *) { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }

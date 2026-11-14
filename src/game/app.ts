@@ -24,9 +24,11 @@ export interface Settings {
   hints: boolean            // the one-line tips that come with a badge the first time
   pauseOnAlerts: boolean    // stop the clock when something new needs the player (off: the speed set is the speed it runs)
   quality: Quality
+  // How large the interface is drawn: 'auto' fits it to the window (src/ui/scale.ts).
+  uiScale: 'auto' | '1' | '1.25' | '1.5' | '1.75' | '2'
 }
 
-const DEFAULT_SETTINGS: Settings = { units: 'us', sound: true, volume: 0.6, reducedMotion: false, hints: true, pauseOnAlerts: false, quality: 'auto' }
+const DEFAULT_SETTINGS: Settings = { units: 'us', sound: true, volume: 0.6, reducedMotion: false, hints: true, pauseOnAlerts: false, quality: 'auto', uiScale: 'auto' }
 
 export type Screen = 'title' | Phase
 

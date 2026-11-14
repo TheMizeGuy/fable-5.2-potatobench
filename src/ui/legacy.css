@@ -254,7 +254,7 @@
 .season[data-layout='narrow'] .plan-bar:not(.sys, .sys *) { padding: var(--sp-2); }
 .season[data-layout='narrow'] .plan-actions:not(.sys, .sys *) { width: 100%; }
 .season[data-layout='narrow'] .plan-actions .primary:not(.sys, .sys *) { flex: 1 1 auto; }
-.season[data-layout='narrow'] .plan-card:not(.sys, .sys *) { max-height: calc(100vh - var(--top, 56px) - 190px); overflow-y: auto; overscroll-behavior: contain; }
+.season[data-layout='narrow'] .plan-card:not(.sys, .sys *) { max-height: calc(calc(100 * var(--vh, 1vh)) - var(--top, 56px) - 190px); overflow-y: auto; overscroll-behavior: contain; }
 .season[data-layout='narrow'] .vcards:not(.sys, .sys *) { grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); }
 .season[data-layout='short'] .bottom:not(.sys, .sys *) { inset: auto max(var(--sp-2), env(safe-area-inset-right, 0px)) var(--sp-2) max(var(--sp-2), env(safe-area-inset-left, 0px)); grid-template-columns: auto minmax(0, 1fr); grid-template-areas: 'clock card' 'crew card'; gap: var(--sp-1) var(--sp-2); }
 .season[data-layout='short'] .card:not(.sys, .sys *) { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'head orders' 'gauges orders' 'main orders'; gap: var(--sp-1) var(--sp-3); padding: var(--sp-2) var(--sp-3); justify-self: stretch; width: auto; align-self: end; }
@@ -264,8 +264,8 @@
 .season[data-layout='short'] .card-line.flash:not(.sys, .sys *), .season[data-layout='short'] .card-line.need:not(.sys, .sys *), .season[data-layout='short'] .card-line.urgent:not(.sys, .sys *) { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .season[data-layout='short'] .notes-slot:not(.sys, .sys *) { inset: calc(var(--top, 44px) + var(--sp-2)) auto auto max(var(--sp-2), env(safe-area-inset-left, 0px)); }
 .season[data-layout='short'] .notes:not(.sys, .sys *) { align-items: flex-start; }
-.season[data-layout='short'] .tray-paper:not(.sys, .sys *) { max-height: calc(100vh - var(--top, 44px) - 12px); overflow-y: auto; }
-.season[data-layout='short'] .plan-card:not(.sys, .sys *) { max-height: calc(100vh - 130px); overflow-y: auto; }
+.season[data-layout='short'] .tray-paper:not(.sys, .sys *) { max-height: calc(calc(100 * var(--vh, 1vh)) - var(--top, 44px) - 12px); overflow-y: auto; }
+.season[data-layout='short'] .plan-card:not(.sys, .sys *) { max-height: calc(calc(100 * var(--vh, 1vh)) - 130px); overflow-y: auto; }
 @keyframes strike {
   from { text-decoration-color: transparent; }
 }
@@ -301,8 +301,8 @@
 .crew-paper .hall-skills:not(.sys, .sys *) { display: flex; flex-wrap: wrap; gap: 0 var(--sp-3); font-size: var(--t-small); line-height: 18px; color: var(--ink-2); }
 .crew-paper .hall-skills .good:not(.sys, .sys *) { color: var(--good-ink); font-weight: 600; }
 .crew-paper .beds:not(.sys, .sys *) { display: flex; align-items: center; gap: var(--sp-2); margin-top: var(--sp-2); font-size: var(--t-small); line-height: 18px; }
-.season[data-layout='narrow'] .card.person-card:not(.sys, .sys *) { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'head' 'now' 'skills' 'foot'; gap: var(--sp-2); max-height: calc(100vh - var(--top, 56px) - 140px); overflow-y: auto; }
-.season[data-layout='short'] .card.person-card:not(.sys, .sys *) { grid-template-areas: 'head head' 'now skills' 'foot foot'; gap: var(--sp-1) var(--sp-3); max-height: calc(100vh - var(--top, 44px) - 16px); overflow-y: auto; }
+.season[data-layout='narrow'] .card.person-card:not(.sys, .sys *) { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'head' 'now' 'skills' 'foot'; gap: var(--sp-2); max-height: calc(calc(100 * var(--vh, 1vh)) - var(--top, 56px) - 140px); overflow-y: auto; }
+.season[data-layout='short'] .card.person-card:not(.sys, .sys *) { grid-template-areas: 'head head' 'now skills' 'foot foot'; gap: var(--sp-1) var(--sp-3); max-height: calc(calc(100 * var(--vh, 1vh)) - var(--top, 44px) - 16px); overflow-y: auto; }
 .season[data-layout='short'] .card.person-card .card-head .nicon:not(.sys, .sys *) { position: absolute; top: var(--sp-1); right: var(--sp-1); margin: 0; }
 .season[data-layout='narrow'] .portrait.l:not(.sys, .sys *) { width: 36px; height: 36px; }
 .season[data-layout='narrow'].incident-up .bottom > .card:not(.sys, .sys *) { display: none; }

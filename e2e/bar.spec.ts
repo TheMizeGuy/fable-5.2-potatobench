@@ -134,8 +134,9 @@ test('a field drying out while its potatoes form is on To do, with what watering
     await row.locator('[data-testid^="todo-go-"]').click()
     await expect(todo).toBeHidden()
     await expect.poll(() => game<number[]>(page, 'app.selection')).toEqual([state!.i])
-    // Its own key orders the watering, with the cost on the key.
+    // Its own key orders the watering, with the cost on the key. (The field's card is put away first.)
     await page.keyboard.press('Escape')
+    await expect.poll(() => game<number>(page, 'app.selection.length')).toBe(0)
     await page.locator('#ui .mainbar').getByTestId('bar-todo').click()
     const key = todo.locator('.mb-row').filter({ hasText: `${state!.name} is drying out` }).locator('[data-testid^="todo-do-"]')
     await expect(key).toContainText('Water')

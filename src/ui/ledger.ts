@@ -201,7 +201,7 @@ function goalsMet(c: S.Campaign): HTMLElement | null {
   const shown = met.slice(-4)
   return h('section', { class: 'b-goals' },
     h('div', { class: 'sec-h' }, h('h2', null, 'Goals met')),
-    h('p', null, h('span', { class: 'struck' }, shown.map(g => g.title).join(' · ')),
+    h('p', null, h('span', { class: 'met-list' }, shown.map(g => `\u2713 ${g.title}`).join(' \u00b7 ')),
       met.length > shown.length ? h('span', { class: 'quiet' }, `, and ${met.length - shown.length} earlier`) : null))
 }
 

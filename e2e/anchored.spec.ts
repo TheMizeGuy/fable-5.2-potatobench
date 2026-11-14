@@ -6,7 +6,8 @@ import { mkdirSync } from 'node:fs'
 import { test, type Page } from '@playwright/test'
 import { expect, open, putAway, reach, watchErrors } from './helpers.ts'
 
-const SIZES = [[1280, 720], [1512, 982], [1920, 1080]] as const
+// (1920 by 1080 and 2560 by 1440 are drawn scaled up, at 125% and 150%: src/ui/scale.ts)
+const SIZES = [[1280, 720], [1512, 982], [1920, 1080], [2560, 1440]] as const
 const TIERS = ['field', 'farm'] as const
 // Pictures of each card open on its thing, when a folder is named for them.
 const SHOTS = process.env.SHOTS ?? ''
@@ -1094,7 +1095,7 @@ for (const [w, h] of [[1280, 800], [1280, 720]] as const) {
       expect.soft(c.onTop, `${w}x${h}, ${how}: nothing lies over its head (${JSON.stringify(c.rect)})`).toBe(true)
       const out = await a<string[]>(page, `const el = document.querySelector('#ui [data-testid="${id}"]'); const r = el.getBoundingClientRect()
         const keys = [...el.querySelectorAll('button')].filter(x => A.vis(x))
-        const bad = keys.filter(x => { const b = x.getBoundingClientRect(); return b.top < r.top - 0.5 || b.bottom > r.bottom + 0.5 || b.left < r.left - 0.5 || b.right > r.right + 0.5 || b.top < 0 || b.bottom > innerHeight || b.left < 0 || b.right > innerWidth }).map(x => x.dataset.testid || x.className)
+        const bad = keys.filter(x => { const b = x.getBoundingClientRect(); return b.top < r.top - 0.5 || b.bottom > r.bottom + 0.5 || b.left < r.left - 0.5 || b.right > r.right + 0.5 || b.top < 0 || b.bottom > innerHeight || b.left < 0 || b.right > innerWidth }).map(x => { const b = x.getBoundingClientRect(); return (x.dataset.testid || x.className) + ' at ' + [b.left, b.top, b.right, b.bottom].map(n => Math.round(n * 10) / 10).join(',') + ' in ' + [r.left, r.top, r.right, r.bottom].map(n => Math.round(n * 10) / 10).join(',') })
         const have = new Set(keys.map(x => x.dataset.testid))
         return [...bad, ...${JSON.stringify(must)}.filter(k => !have.has(k)).map(k => 'missing ' + k)]`)
       expect.soft(out, `${w}x${h}, ${how}: every key is inside it and the window, ${must.join(' and ')} among them`).toEqual([])

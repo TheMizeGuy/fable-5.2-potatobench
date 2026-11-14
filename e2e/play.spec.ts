@@ -244,7 +244,7 @@ test('a first season by the short path, from the opening to the next spring, wit
     await page.getByTestId('year-next').click()
     await expect(page.getByTestId('over-title')).toBeVisible()
   } else {
-    await expect(page.getByTestId('outcome')).toContainText(/the bank is happy|inside what the bank allows/)
+    await expect(page.getByTestId('outcome')).toContainText(/the bank is satisfied|inside what the bank allows/)
     await expect(page.getByTestId('next-goal')).toBeVisible()
     await page.getByTestId('year-next').click()
     await expect(page.getByTestId('begin-season')).toBeVisible()
@@ -550,7 +550,7 @@ test('the money board says why the year-end figure moved, and its sum opens from
   await reach(page, `q.year(4)`)
   await expect(page.getByTestId('outcome')).toBeVisible()
   const end = await game<number>(page, `c.history[c.history.length - 1].cashEnd`)
-  await expect(page.getByTestId('outcome')).toContainText(end < 0 ? 'inside what the bank allows' : 'the bank is happy')
+  await expect(page.getByTestId('outcome')).toContainText(end < 0 ? 'inside what the bank allows' : 'the bank is satisfied')
   await expect(page.getByTestId('year-sentence')).toContainText(/^You sold \$[\d,]+/)
   await shot('ledger')
   expect(errors, errors.join('\n')).toEqual([])

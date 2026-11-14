@@ -144,7 +144,7 @@ describe('what the game says agrees with what the farm holds', () => {
 
   it('a year that ends owing says "in debt", and keeps "down" for cash against the year\'s start', () => {
     const y = { cashEnd: -4650, cashStart: 16444 } as S.YearSummary
-    expect(verdictSays(y, 3, false)).toBe('You ended $4,650 in debt, inside what the bank allows, so it carries you another year. 3 seasons to go.')
+    expect(verdictSays(y, 3, false)).toBe('You ended $4,650 in debt, inside what the bank allows, so it carries you another year. 3 years to go.')
     expect(verdictSays(y, 0, true)).not.toMatch(/ down/)
   })
 })

@@ -45,7 +45,7 @@ export function mainBar(ctx: Ctx, o: Hooks): { el: HTMLElement; update(c: S.Camp
         const orders = list.filter(t => t.order)
         const all = orders.reduce((n, t) => n + t.order!.cost, 0)
         const goal = nextGoal(c)
-        const wait = c.phase === 'season' ? waitingFor(c) : null
+        const wait = c.phase === 'season' ? waitingFor(c, app.world) : null
         return h('div', { class: 'mb-sheet' },
           list.length
             ? h('ul', { class: 'mb-list' }, list.map((t, k) => h('li', null,

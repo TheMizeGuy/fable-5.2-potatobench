@@ -32,6 +32,7 @@ import { whois } from './whois.ts'
 // Last, after every screen's own stylesheet: the control rule fitted to the live game.
 import './system/weight.css'
 import './system/cursor.css'
+import { mountScale, toLocal, toScreen, type ScalePref } from './scale.ts'
 
 // What someone sent to a field by a right-click is going to do there: "Ruth will scout North Ridge."
 const SENT: Record<S.JobKind, string> = {
@@ -99,8 +100,8 @@ export const mountHud: MountHud = (root, app, view, sound) => {
     setTimeout(() => { if (told()) tip.hidden = true }, 500)
     tip.textContent = localize(text)
     tip.hidden = false
-    tip.style.left = `${Math.max(8, Math.min(innerWidth - 328, pressedAt.x + 14))}px`
-    tip.style.top = `${Math.max(8, Math.min(innerHeight - 96, pressedAt.y + 14))}px`
+    tip.style.left = `${toLocal(Math.max(8, Math.min(innerWidth - toScreen(328), pressedAt.x + 14)))}px`
+    tip.style.top = `${toLocal(Math.max(8, Math.min(innerHeight - toScreen(96), pressedAt.y + 14)))}px`
     clearTimeout(tipTimer)
     tipTimer = window.setTimeout(() => { tip.hidden = true }, 8000)
   }
@@ -145,7 +146,10 @@ export const mountHud: MountHud = (root, app, view, sound) => {
   const menu = () => openMenu(ctx, { onHelp: () => openHelp(ctx), onAlmanac: () => openAlmanac(ctx), onGuide: () => openGuide(ctx), farm: screen?.farmSheets?.() ?? null })
   const almanac = () => openAlmanac(ctx)
 
+  // The interface's scale follows the window and the player's choice; whatever is placed from the land is placed again.
+  const rescale = mountScale(() => (app.settings.uiScale ?? 'auto') as ScalePref, () => { dispatchEvent(new Event('resize')) })
   function applySettings(): void {
+    rescale()
     setUnits(app.settings.units)
     document.documentElement.classList.toggle('reduce-motion', app.settings.reducedMotion)
   }
@@ -367,7 +371,8 @@ export const mountHud: MountHud = (root, app, view, sound) => {
       // Follow. Only with nothing open does it open the menu.
       const steps: (() => boolean)[] = [
         () => !papers.isOpen() && !!screen?.escapes?.popover(),
-        () => { if (!papers.isOpen()) return false; papers.closeTop(); return true },
+        // (a paper already on its way out takes no second Escape: that one goes to the card under it)
+        () => { if (!papers.isUp()) return false; papers.closeTop(); return true },
         () => who.escape() || (screen?.escapes ? screen.escapes.card() : !!screen?.key?.(e)),
         () => { if (app.screen !== 'season' || view.followed() < 0) return false; view.follow(-1); ctx.announce('Stopped following.'); return true },
       ]
@@ -429,8 +434,8 @@ export const mountHud: MountHud = (root, app, view, sound) => {
         const [t, r, b0, l] = screen.insets().map(x => Math.max(0, Math.round(x)))
         const b = Math.max(b0, Math.round(who.inset()))
         app.setInsets(t, r, b, l)
-        root.style.setProperty('--top', `${t}px`)
-        root.style.setProperty('--bottom', `${b}px`)
+        root.style.setProperty('--top', `${toLocal(t)}px`)
+        root.style.setProperty('--bottom', `${toLocal(b)}px`)
         if (waiting) placeSplash()
       }
       // Anything else that changes in the middle of a day's turn, or a hand held on the land: the whole is drawn at

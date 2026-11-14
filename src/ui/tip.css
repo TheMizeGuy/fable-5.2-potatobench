@@ -1,4 +1,4 @@
 /* The game's own tooltip: a slip of its paper by the pointer, never the browser's grey box. */
-.game-tip { position: fixed; left: 0; top: 0; z-index: 90; max-width: 300px; padding: 6px 10px 7px; background: var(--paper); color: var(--ink);
+.game-tip { zoom: var(--z, 1); position: fixed; left: 0; top: 0; z-index: 90; max-width: 300px; padding: 6px 10px 7px; background: var(--paper); color: var(--ink);
   font: 400 14px/1.35 var(--f-text); box-shadow: 0 0 0 1px var(--edge), 0 6px 14px rgba(0, 0, 0, .4); border-left: 3px solid var(--ink); pointer-events: none; white-space: pre-line; }
 .game-tip[hidden] { display: none; }

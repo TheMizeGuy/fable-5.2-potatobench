@@ -480,11 +480,11 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
     const max = Math.max(500, Math.ceil(e.hi / 100) * 100)
     const sample = [...(c.season?.log ?? [])].reverse().find(x => x.type === 'sample' && x.field === f.index)
     return [blight, h('p', { class: 'estimate', testid: 'estimate' }, icon('bloom', 'i'), h('b', { class: 'num' }, F.metric() ? F.perAreaSpan(e.lo, e.hi) : term(F.perAreaSpan(e.lo, e.hi), 'cwt/acre')),
-      range({ lo: e.lo, hi: e.hi, max, label: `Yield estimate ${F.perAreaSpan(e.lo, e.hi)}, ${e.digs ? `from ${F.plural(e.digs, 'test dig')}` : 'by eye'}` }),
+      range({ lo: e.lo, hi: e.hi, max, label: `Yield estimate ${F.perAreaSpan(e.lo, e.hi)}, ${e.digs ? `from ${F.plural(e.digs, 'test dig')}` : 'estimate'}` }),
       sample ? h('button', {
         class: 'btn quiet est-by', type: 'button', testid: 'sample-again', 'aria-label': `See the test dig from ${F.date(c.year, sample.day)}`, title: ctx.touch() ? undefined : `See the test dig from ${F.date(c.year, sample.day)}`,
         onclick: () => o.onTray(f.index),
-      }, icon('sample', 'i'), e.digs ? 'test dig' : 'by eye') : h('span', { class: 'quiet' }, 'by eye'))]
+      }, icon('sample', 'i'), e.digs ? 'test dig' : 'estimate') : h('span', { class: 'quiet' }, 'estimate'))]
   }
 
   // A tract: where its clearing stands, what it takes and yields, and the orders that move it on.

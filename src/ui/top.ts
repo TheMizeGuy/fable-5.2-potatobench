@@ -482,11 +482,14 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     const ready = wait > 0 && first >= 0 ? S.plantReady(app.world, c, first) : null
     // The soil fit and the crew standing ready: the year's first planting waits for the player's word.
     const word = !!g && g.id === 'plant' && season && !!c.season && !S.plantWordGiven(c.season) && app.needs().some(n => n.need?.act === 'plant')
-    const title = ready ? `Plant when the soil reaches ${F.temp(ready.need)}` : word ? 'Start planting' : g?.title ?? ''
+    // On the spring plan the one way on is Start the season: the slip names that key, not what comes after it.
+    const toStart = c.phase === 'plan' && !!g && CROP_STEPS.has(g.id) && g.now
+    const title = toStart ? 'Start the season' : ready ? `Plant when the soil reaches ${F.temp(ready.need)}` : word ? 'Start planting' : g?.title ?? ''
     const n = wait > 1 ? `about ${F.plural(wait, 'day')}` : wait === 1 ? 'any day now' : g ? progressText(g) : ''
     const when = !g ? null : !g.now ? h('span', { class: 'goal-when' }, lowerFirst(g.when))
-      : c.phase === 'plan' && CROP_STEPS.has(g.id) ? h('span', { class: 'goal-when' }, 'once the season starts')
-        : null
+      : toStart ? h('span', { class: 'goal-when' }, 'your plan is ready, and the rest is optional')
+        : ready && !then ? h('span', { class: 'goal-when' }, `it's ${F.temp(ready.soilT)} today`)
+          : null
     // While the soil warms there is nothing to do but wait: a key beside the slip lets the weeks go by at 3x.
     const faster = wait > 0 && app.speed < 3 && !S.seasonDone(c)
       ? h('button', { class: 'btn goal-go', type: 'button', testid: 'goal-faster', title: ctx.touch() ? undefined : 'Runs fast until there\'s something for you to decide, then goes back to the speed you had', onclick: () => app.skipAhead() },
@@ -498,7 +501,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     const callFirst = call && !(g && reach && GOAL_ROUTINE[g.id] === call.act)
     // The next step is the crew's own: what the player is waiting for, in their terms, never the crew's job, whether
     // or not a "Show me" could reach it. With something asked of the player now, that comes first.
-    const mine = !call && season && g && wait <= 0 && CROP_STEPS.has(g.id) ? waitingFor(c) : null
+    const mine = !call && season && g && wait <= 0 && CROP_STEPS.has(g.id) ? waitingFor(c, app.world) : null
     // What comes after the pressing call: the next goal, unless that is work the crew does by itself.
     const crewOwn = (x: Goal) => { const act = GOAL_ROUTINE[x.id]; return !!act && S.routineInfo(c).some(r => r.kind === act && r.auto) }
     if (callFirst || mine || (season && g && !reach && wait <= 0)) {
@@ -582,7 +585,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
       ladder: pop === 'goals' ? goals(c).map(x => [x.id, x.done, progressText(x), x.block, x.now && !x.done && !!o.canShow?.(x)]) : 0, reach: g ? !!o.canShow?.(g) : false,
       call: season ? pressing(c)?.id ?? '' : '', block: g?.block ?? '', view: view?.why ?? '', moved: moved?.text ?? '', last: lastMoved, why: whyNow ? [whyNow.text, whyNow.ask, remedied(c)] : '', by: popBy,
       jobs: season ? [...new Set(c.season!.jobs.map(j => j.kind))].sort().join() : '', auto: season ? S.routineInfo(c).filter(r => r.auto).map(r => r.kind).join() : '',
-      k: season || c.phase === 'cellar' ? contracts.key() : 0, ph: season ? phaseNow(c) : '', mine: season ? waitingFor(c) : 0,
+      k: season || c.phase === 'cellar' ? contracts.key() : 0, ph: season ? phaseNow(c) : '', mine: season ? waitingFor(c, app.world) : 0,
     }
     el.dataset.phase = c.phase
     el.dataset.layout = layout
@@ -605,9 +608,9 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
       // Cash below zero through the season and the winter is what the bank has lent, said as that, not as a loss.
       const borrowed = !!after && c.cash < 0
       const balance = h('div', { class: `balance${after ? ' two' : ''}` },
-        h('span', { class: 't-label when' }, borrowed ? 'Borrowed' : c.cash < 0 ? 'In the red' : after ? 'Cash' : 'Balance'),
+        h('span', { class: `t-label when${c.cash < 0 ? ' owed' : ''}` }, borrowed ? 'Borrowed' : c.cash < 0 ? 'In the red' : after ? 'Cash' : 'Balance'),
         h('span', {
-          class: `t-figure cash${c.cash < 0 && !borrowed ? ' neg' : ''}`, testid: 'cash',
+          class: `t-figure cash${c.cash < 0 && !borrowed ? ' neg' : ''}${c.cash < 0 ? ' owed' : ''}`, testid: 'cash',
           title: ctx.touch() ? undefined : `${c.cash >= 0 ? '' : borrowed ? BORROWED_SAYS : 'You owe this on the spring loan, and the crop pays it back. The bank will foreclose if you end the year too far in the red.'}${lastMoved ? `${c.cash >= 0 ? '' : ' '}Last change: ${lastMoved}.` : ''}` || undefined,
         }, h('span', { class: 'sr' }, borrowed ? 'Borrowed: ' : 'Cash: '), h('span', { class: 'cash-v num' }, F.money(borrowed ? -c.cash : c.cash))),
         moved && lines ? h('span', { class: 'cash-moved', testid: 'cash-moved', role: 'status' }, moved.text) : null,

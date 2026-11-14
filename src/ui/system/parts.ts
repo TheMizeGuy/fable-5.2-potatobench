@@ -95,7 +95,7 @@ export function fold(o: { icon: string; name: string; state?: string; figure?: s
 // best: the one that brings most, tabbed and filled, its amount ringed in pencil. Taking the crop is always major.
 export function coupon(o: { icon: string; label: string; amount: Child; does: Child; take: string; key: string; best?: boolean; bestLabel?: string; testid?: string; onclick?: Click }): HTMLElement {
   return h('button', { 'data-w': 'major', class: `way sys${o.best ? ' is-best' : ''}`, type: 'button', testid: o.testid, 'aria-keyshortcuts': o.key, onclick: o.onclick },
-    o.best ? h('span', { class: 'brings' }, fist(), o.bestLabel ?? 'Brings most') : null,
+    o.best ? h('span', { class: 'brings' }, fist(), o.bestLabel ?? 'Pays most') : null,
     h('span', { class: 't-label' }, icon(o.icon, 'i'), o.label),
     h('span', { class: `amount num${o.best ? ' ringed' : ''}` }, o.amount, o.best ? ring() : null),
     h('span', { class: 'does' }, o.does),

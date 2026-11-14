@@ -177,7 +177,7 @@ export function contractRows(ctx: Ctx): { key(): unknown; part(c: S.Campaign): C
         const why = shortWhy(c, k)
         const said = `${k.buyer}: ${F.mass(k.delivered)} of ${F.mass(k.cwt)} ${k.varietyName} delivered, due ${k.dueBy}${g ? `, and your fields look likely to produce ${F.mass(g.lo)} to ${F.mass(g.hi)} of No. 1 in all` : ''}${k.settled ? `, closed${k.penalty > 0 ? ` with a penalty of ${F.money(k.penalty)}` : ''}` : done ? ', filled' : why ? `. ${why.replace(/\.$/, '')}` : ''}. ${BAR_SAYS}`
         return h('button', { class: `contract${done ? ' done' : ''}`, type: 'button', testid: `track-${k.id}`, title: ctx.touch() ? undefined : said, onclick: () => openContracts(ctx) },
-          h('span', { class: 'who' }, icon(done ? 'check' : 'contract', 'i'), h('b', null, k.buyer.replace(/^The /, '')), `: ${k.varietyName}`),
+          h('span', { class: 'who' }, icon(done ? 'check' : 'contract', 'i'), h('b', null, k.varietyName), ` for ${k.buyer.replace(/^The /, 'the ')}`),
           h('span', { class: 't-label due' }, k.settled ? 'closed' : DUE_SHORT[k.due]),
           h('span', { class: 'range', 'aria-hidden': 'true' },
             g ? h('span', { class: 'band', style: `left:${(g.lo / max * 100).toFixed(1)}%;width:${((g.hi - g.lo) / max * 100).toFixed(1)}%` }) : null,

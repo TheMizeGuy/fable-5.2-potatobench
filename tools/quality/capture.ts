@@ -19,9 +19,11 @@ const SIZES: Record<string, Size> = {
   tablet: { width: 820, height: 1180, touch: true },
   land: { width: 844, height: 390, touch: true, scale: 2 },
   tiny: { width: 320, height: 640, touch: true, scale: 2 },
+  // A large desk monitor: what a fixed-size interface looks like with room to spare.
+  qhd: { width: 2560, height: 1440 },
 }
 const MAIN = ['desk', 'phone']
-const ALL = Object.keys(SIZES)
+const ALL = Object.keys(SIZES).filter(k => k !== 'qhd')
 
 type Step = (page: Page, size: string) => Promise<void>
 interface State { name: string; what: string; sizes: string[]; run: Step; full?: boolean }
@@ -451,14 +453,20 @@ function guideAt(id: string, then = ''): Step {
 }
 // ALL_SIZES=1 takes every state at all eight sizes.
 if (process.env.ALL_SIZES) for (const s of STATES) s.sizes = ALL
+// FORCE_SIZES=wide,qhd draws every state at exactly those sizes.
+const forced = process.env.FORCE_SIZES ? process.env.FORCE_SIZES.split(',') : null
+if (forced) for (const s of STATES) s.sizes = forced
 
 // Runs in the page: what styles are actually in use on screen, and what overflows.
 const AUDIT = `(() => {
-  const out = { size: {}, color: {}, bg: {}, radius: {}, weight: {}, family: {}, small: [], clipped: [], tiny: [], words: 0, controls: 0,
+  const out = { size: {}, color: {}, bg: {}, radius: {}, weight: {}, family: {}, small: [], clipped: [], tiny: [], low: [], under14: 0, texts: 0, words: 0, controls: 0,
     overflowX: document.documentElement.scrollWidth - document.documentElement.clientWidth }
   const bump = (o, k) => { o[k] = (o[k] || 0) + 1 }
   const name = el => (el.dataset.testid || el.className || el.tagName).toString().slice(0, 40)
   const touch = matchMedia('(pointer: coarse)').matches
+  const parse = s => { const m = (s.match(/[\\d.]+/g) || []).map(Number); return { rgb: m.slice(0, 3), a: m.length > 3 ? m[3] : 1 } }
+  const lum = c => { const [r, g, b] = c.map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4) }); return 0.2126 * r + 0.7152 * g + 0.0722 * b }
+  const bgOf = el => { for (let e = el; e && e.id !== 'ui'; e = e.parentElement) { const cs = getComputedStyle(e); const c = parse(cs.backgroundColor); if (c.rgb.length === 3 && c.a > 0.9) return c.rgb; if (cs.backgroundImage !== 'none') return null } return null }
   for (const el of document.querySelectorAll('#ui *')) {
     const r = el.getBoundingClientRect()
     if (!r.width || !r.height || r.bottom < 0 || r.top > innerHeight) continue
@@ -470,6 +478,15 @@ const AUDIT = `(() => {
       for (const n of el.childNodes) if (n.nodeType === 3) out.words += n.nodeValue.trim().split(/\\s+/).filter(Boolean).length
       bump(out.size, cs.fontSize); bump(out.color, cs.color); bump(out.weight, cs.fontWeight); bump(out.family, cs.fontFamily.split(',')[0].trim())
       if (parseFloat(cs.fontSize) < 12) out.small.push(name(el) + ' ' + cs.fontSize)
+      out.texts++
+      if (parseFloat(cs.fontSize) < 14) out.under14++
+      const bg = bgOf(el), fg = parse(cs.color)
+      if (bg && fg.rgb.length === 3 && !el.closest('.sr')) {
+        const a = lum(fg.rgb), b = lum(bg), ratio = (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05) * 1
+        const big = parseFloat(cs.fontSize) >= 24 || (parseFloat(cs.fontSize) >= 18.66 && Number(cs.fontWeight) >= 700)
+        const eff = fg.a < 1 ? 1 + (ratio - 1) * fg.a : ratio
+        if (eff < (big ? 3 : 4.5)) out.low.push(name(el) + ' ' + eff.toFixed(2) + ' ' + cs.fontSize + ' "' + el.textContent.trim().slice(0, 24) + '"')
+      }
       if (cs.overflow !== 'visible' && el.scrollWidth > el.clientWidth + 1) out.clipped.push(name(el))
     }
     if (cs.backgroundColor !== 'rgba(0, 0, 0, 0)') bump(out.bg, cs.backgroundColor)
@@ -479,7 +496,7 @@ const AUDIT = `(() => {
   return out
 })()`
 
-interface Audit { size: Record<string, number>; color: Record<string, number>; bg: Record<string, number>; radius: Record<string, number>; weight: Record<string, number>; family: Record<string, number>; small: string[]; clipped: string[]; tiny: string[]; words: number; controls: number; overflowX: number }
+interface Audit { low: string[]; under14: number; texts: number; size: Record<string, number>; color: Record<string, number>; bg: Record<string, number>; radius: Record<string, number>; weight: Record<string, number>; family: Record<string, number>; small: string[]; clipped: string[]; tiny: string[]; words: number; controls: number; overflowX: number }
 const audits: Record<string, Audit> = {}
 
 const browser = await chromium.launch({ args: GPU })
@@ -512,7 +529,7 @@ async function shoot(ctx: BrowserContext, state: State, size: string): Promise<v
 // SIZES=desk,phone keeps to those sizes. PAR sets how many sizes are drawn at once (two by default).
 const only = process.env.SIZES ? process.env.SIZES.split(',') : ALL
 const par = Math.max(1, Number(process.env.PAR ?? 2))
-const queue = ALL.filter(size => only.includes(size))
+const queue = Object.keys(SIZES).filter(size => only.includes(size))
 await Promise.all(Array.from({ length: par }, async () => {
   for (let size = queue.shift(); size; size = queue.shift()) {
     const s = SIZES[size]
@@ -534,7 +551,7 @@ const problems: Record<string, string[]> = {}
 for (const [frame, a] of Object.entries(audits)) {
   for (const k of Object.keys(total)) for (const [v, n] of Object.entries(a[k as 'size'])) total[k][v] = (total[k][v] ?? 0) + n
   const p = [...(a.overflowX > 1 ? [`page scrolls sideways by ${a.overflowX}px`] : []), ...[...new Set(a.clipped)].map(x => `clipped text: ${x}`),
-    ...[...new Set(a.small)].map(x => `text under 12px: ${x}`), ...[...new Set(a.tiny)].map(x => `touch target under 40px: ${x}`)]
+    ...[...new Set(a.small)].map(x => `text under 12px: ${x}`), ...[...new Set(a.tiny)].map(x => `touch target under 40px: ${x}`), ...[...new Set(a.low)].map(x => `low contrast: ${x}`)]
   if (p.length) problems[frame] = p
 }
 const ranked = (o: Record<string, number>) => Object.fromEntries(Object.entries(o).sort((x, y) => y[1] - x[1]))
@@ -543,7 +560,7 @@ writeFileSync(join(out, 'styles.json'), JSON.stringify({
   inUse: Object.fromEntries(Object.entries(total).map(([k, v]) => [k, ranked(v)])),
   problems,
   // How much the player is asked to read and choose between on each frame.
-  load: Object.fromEntries(Object.entries(audits).map(([f, a]) => [f, { words: a.words, controls: a.controls }])),
+  load: Object.fromEntries(Object.entries(audits).map(([f, a]) => [f, { words: a.words, controls: a.controls, texts: a.texts, under14: a.under14 }])),
 }, null, 1) + '\n')
 console.log('distinct in use:', Object.entries(total).map(([k, v]) => `${k} ${Object.keys(v).length}`).join(', '), `| frames with layout problems: ${Object.keys(problems).length}`)
 const bad = index.filter(x => x.errors.length)

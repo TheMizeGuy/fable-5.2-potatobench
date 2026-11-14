@@ -76,5 +76,6 @@ export function personNow(c: S.Campaign, id: number, waits: Record<number, strin
   // Nothing ahead of them, and they worked the last day through: what they did.
   if (last) { const [word, rest] = DID[last.kind]; return said(last.kind, word, rest(S.placeName(last.field)), last.field, 1) }
   const where = at === S.HOME_YARD ? '' : `at ${S.placeName(at)}, `
-  return said('stale', 'Idle', `${where}${s.jobs.length ? `nothing on the work list for ${u.kind === 'farmer' ? 'you' : 'them'}` : 'the work list is empty'}`, at)
+  // "Idle" is for someone standing while work is on the list; with the list empty they are simply free.
+  return said('stale', s.jobs.length ? 'Idle' : 'Free', `${where}${s.jobs.length ? `nothing on the work list for ${u.kind === 'farmer' ? 'you' : 'them'}` : 'the work list is empty'}`, at)
 }

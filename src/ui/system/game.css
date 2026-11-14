@@ -36,7 +36,7 @@
 .title-screen[data-layout='narrow'] .cover {
   left: 10px; right: 10px; top: auto; bottom: max(10px, env(safe-area-inset-bottom, 0px)); width: auto; transform: none; padding: 18px 22px 14px; max-height: calc(100% - 20px);
 }
-.title-screen[data-layout='narrow'] .cv-name .county { font-size: clamp(88px, 30vw, 150px); }
+.title-screen[data-layout='narrow'] .cv-name .county { font-size: clamp(88px, calc(30 * var(--vw, 1vw)), 150px); }
 .title-screen[data-layout='narrow'] .cv-name .the { font-size: 34px; margin-bottom: -10px; }
 .title-screen[data-layout='narrow'] .cv-cut { grid-template-columns: 96px 1fr; gap: 4px 12px; padding: 8px 0; }
 .title-screen[data-layout='narrow'] .cv-plate .cut { width: 96px; }
@@ -50,7 +50,7 @@
   .title-screen[data-layout='narrow'] .cv-plate { display: none; }
 }
 /* A phone on its side: the cover on the left, as short as it can stand. */
-.title-screen[data-layout='short'] .cover { left: 10px; width: min(400px, 50vw); padding: 12px 20px 10px; max-height: calc(100% - 16px); }
+.title-screen[data-layout='short'] .cover { left: 10px; width: min(400px, calc(50 * var(--vw, 1vw))); padding: 12px 20px 10px; max-height: calc(100% - 16px); }
 .title-screen[data-layout='short'] .cv-top, .title-screen[data-layout='short'] .cv-cut, .title-screen[data-layout='short'] .cover > .rule, .title-screen[data-layout='short'] .cv-menu > .t-label { display: none; }
 .title-screen[data-layout='short'] .cv-name .county { font-size: 64px; }
 .title-screen[data-layout='short'] .cv-name .the { font-size: 22px; margin: 0 0 -4px; }
@@ -140,7 +140,7 @@
 @media (hover: hover) { .topbar .contract:hover, .topbar .materials:hover { background: var(--paper-2); } }
 .topbar .stopped-tag { right: 18px; }
 /* the goals and the materials, opened from the boards */
-.topbar .tb-pop { position: absolute; z-index: 3; top: calc(100% + 8px); width: min(380px, calc(100vw - 32px)); max-height: 60vh; overflow: auto; padding: 14px 16px; display: grid; gap: 8px; }
+.topbar .tb-pop { position: absolute; z-index: 3; top: calc(100% + 8px); width: min(380px, calc(calc(100 * var(--vw, 1vw)) - 32px)); max-height: calc(60 * var(--vh, 1vh)); overflow: auto; padding: 14px 16px; display: grid; gap: 8px; }
 .topbar .almanac .tb-pop { left: 0; }
 .topbar .bank .tb-pop { right: 0; }
 .tb-pop .gls { display: grid; gap: 2px; }

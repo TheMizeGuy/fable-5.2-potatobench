@@ -78,6 +78,10 @@
 
 html, body { margin: 0; height: 100%; overflow: hidden; background: #20242a; }
 
+/* The whole interface is scaled up on a window with room to spare (src/ui/scale.ts sets --z). What is drawn on the
+   land in screen pixels (a selected field's outline) keeps to them. */
+.hud { zoom: var(--z, 1); }
+.hud .sel-layer { zoom: calc(1 / var(--z, 1)); }
 .hud {
   position: fixed;
   inset: 0;

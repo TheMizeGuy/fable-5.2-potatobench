@@ -15,6 +15,7 @@ import { firstName, jobText, KIND_NAME, LET_GO_TEXT, moodWhy, personSign, SKILL_
 import { ringed } from './system/people.ts'
 import { anchored, ties } from './tie.ts'
 import './whois.css'
+import { toLocal } from './scale.ts'
 
 const SKILL_CUT: Record<S.Skill, string> = { machine: 'machine', field: 'field', woods: 'woods', build: 'hammer', pack: 'pack' }
 const SKILL_SHORT: Record<S.Skill, string> = { machine: 'Machine', field: 'Field', woods: 'Woods', build: 'Build', pack: 'Pack' }
@@ -221,11 +222,11 @@ export function whois(ctx: Ctx, layer: HTMLElement): Whois {
     label.hidden = !name || !at?.visible
     if (!label.hidden && at) {
       if (label.textContent !== name) label.textContent = name
-      label.style.transform = `translate3d(${(at.x + 24).toFixed(1)}px, ${(at.y - 44).toFixed(1)}px, 0)`
+      label.style.transform = `translate3d(${(toLocal(at.x) + 24).toFixed(1)}px, ${(toLocal(at.y) - 44).toFixed(1)}px, 0)`
     }
     const foot = pt && pt.unit >= 0 && !label.hidden ? ctx.view.unitFoot(pt.unit) : null
     mark.hidden = !foot?.visible
-    if (foot?.visible) mark.style.transform = `translate3d(${foot.x.toFixed(1)}px, ${foot.y.toFixed(1)}px, 0)`
+    if (foot?.visible) mark.style.transform = `translate3d(${toLocal(foot.x).toFixed(1)}px, ${toLocal(foot.y).toFixed(1)}px, 0)`
   }
 
   const off = app.on(e => {
