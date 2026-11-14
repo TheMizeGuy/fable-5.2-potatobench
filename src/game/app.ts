@@ -345,7 +345,11 @@ export class App {
   private halt(cause: PauseCause, why: string): void {
     this.dayProgress = 0
     if (this.speed === 0) return
-    this.resumeSpeed = this.speed
+    // "Skip ahead" skips the waiting, not the work it was waiting for: at the decision it skipped to, the way on is at
+    // the speed the player had before. A telegram or a weigh ticket on the way does not end the skip.
+    const landed = this.skipBack > 0 && (cause === 'plantAsk' || cause === 'killCall' || cause === 'spray' || cause === 'over')
+    this.resumeSpeed = landed ? this.skipBack : this.speed
+    if (landed) this.skipBack = 0
     this.speed = 0
     this.pauseReason = why
     this.pauseCause = cause
@@ -364,7 +368,9 @@ export class App {
     if (this.screen !== 'season' || this.speed !== 0 || this.pauseReason === '') return
     const c = this.campaign
     if (!c || seasonDone(c)) return
+    const skip = this.skipBack
     this.setSpeed(this.resumeSpeed || 1)
+    this.skipBack = skip
     this.resumedAt = performance.now()
   }
 
@@ -597,10 +603,20 @@ export class App {
     }
     this.pauseReason = ''
     this.pauseCause = ''
+    // (a speed the player sets is theirs: it ends a skip)
+    this.skipBack = 0
     if (this.speed === speed) return
     this.speed = speed
     if (speed === 0) this.dayProgress = 0
     this.emit({ type: 'speed', speed })
+  }
+
+  // "Skip ahead": the fastest speed until the next decision on the land, then back to the speed the clock had.
+  skipBack: Speed | 0 = 0
+  skipAhead(): void {
+    const back = (this.speed > 0 ? this.speed : this.resumeSpeed || 1) as Speed
+    this.setSpeed(3)
+    this.skipBack = back >= 3 ? 1 : back
   }
 
   // Space: stop, or go on at the speed the clock last ran at.

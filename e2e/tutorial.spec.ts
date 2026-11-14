@@ -1126,9 +1126,11 @@ test('the game pauses itself the day the crew asks for the word: year one withou
   await atTheAsk(page, 'year one, Skip ahead')
   // The way on is the player's: resumed without a press, the crew starts three days later, says so, and nothing
   // pauses for it.
-  await expect(page.getByTestId('paused-go')).toContainText('Resume at 8×')
+  // (Skip ahead skipped the waiting: the way on is at the speed the game had before it, so the planting is seen)
+  await expect(page.getByTestId('paused-go')).toContainText('Resume at 1×')
   const asked = await game<number>(page, 'c.season.plantAsk')
   await page.getByTestId('paused-go').click()
+  await page.getByTestId('speed-3').click()
   await expect(page.locator('#ui .notes .alert').filter({ hasText: 'Paused: the soil is ready' })).toHaveCount(0)
   await expect.poll(() => game<string>(page, 'c.season.plantWordBy ?? ""'), { timeout: 30_000, intervals: [100] }).toBe('crew')
   const started = await game<number>(page, 'c.season.plantWord')

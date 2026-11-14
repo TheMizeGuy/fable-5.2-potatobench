@@ -489,7 +489,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
         : null
     // While the soil warms there is nothing to do but wait: a key beside the slip lets the weeks go by at 3x.
     const faster = wait > 0 && app.speed < 3 && !S.seasonDone(c)
-      ? h('button', { class: 'btn goal-go', type: 'button', testid: 'goal-faster', title: ctx.touch() ? undefined : 'The game pauses automatically when there\'s work to do (press F to change the speed)', onclick: () => app.setSpeed(3) },
+      ? h('button', { class: 'btn goal-go', type: 'button', testid: 'goal-faster', title: ctx.touch() ? undefined : 'Runs fast until there\'s something for you to decide, then goes back to the speed you had', onclick: () => app.skipAhead() },
         icon('fast', 'i'), `Skip ahead at ${SPEED_X[3]}`) : null
     // The fist points only at what can be done now and paid for: the season's pressing call first (a long goal waits
     // in the quiet line under it), then the goal when its control can be reached; anything else is said quietly.
