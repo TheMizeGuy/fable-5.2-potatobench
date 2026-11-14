@@ -442,8 +442,7 @@ function springClear(step: Step): Step {
 // A new farm from the title with the guide taken, into its first season, every lesson before this one passed by.
 function guideAt(id: string, then = ''): Step {
   return async page => {
-    // (the clock is the capture's own, as a player's who took it from the guide, so each state stands to be pictured)
-    await q(page, `window.__countyGuide.reset(); window.__countyGuide.skipTo(${JSON.stringify(id)}); window.__countyGuide.takeClock()`)
+    await q(page, `window.__countyGuide.reset(); window.__countyGuide.skipTo(${JSON.stringify(id)})`)
     await page.getByTestId('play').first().click()
     await page.getByTestId('begin-season').click()
     await page.getByTestId('date').first().waitFor()

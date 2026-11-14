@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { countWords, driving, Guide, KEY, LESSONS, lesson, openAsks, OPENING_PACE, PIECES, RUN_PACE, type Input, type Look, type Scene, type Store, partName } from '../src/game/tutorial.ts'
+import { countWords, Guide, KEY, LESSONS, lesson, PIECES, type Input, type Look, type Store, partName } from '../src/game/tutorial.ts'
 import * as S from '../src/sim/index.ts'
 import { loadWorld } from '../tools/balance/world.ts'
 
@@ -438,15 +438,26 @@ describe('round seven: what the player is for, and what the agent asks', () => {
 })
 
 describe('the clock and the camera are the player\'s (the owner, 14 November)', () => {
-  it('the tips never take the clock: not in a first year, not when handed it', () => {
+  it('the tips never take the clock: progress saved when the clock could be handed to the guide reads as any other', () => {
     const { w, c } = farm(11)
     const g = new Guide(memory())
     g.newFarm(c.seed)
     g.accept()
     S.apply(w, c, { t: 'begin' })
-    expect(g.drives(c)).toBe(false)
-    g.giveClock()
-    expect(g.drives(c)).toBe(false)
+    const handed = memory()
+    handed.text = JSON.stringify({ ...g.p, facts: [...g.p.facts, 'clock:guide'] })
+    const taken = memory()
+    taken.text = JSON.stringify({ ...g.p, facts: [...g.p.facts, 'clock:player'] })
+    const plain = memory()
+    plain.text = JSON.stringify(g.p)
+    const l = look(w, c, { speed: 1 })
+    const first = new Guide(plain).current(l)?.id
+    expect(first).toBeTruthy()
+    for (const store of [handed, taken]) {
+      const again = new Guide(store)
+      expect(again.on).toBe(true)
+      expect(again.current(l)?.id).toBe(first)
+    }
   })
 
   it('the one key for a wait is taught once, while the soil warms, and goes when it has been used or the wait is over', () => {

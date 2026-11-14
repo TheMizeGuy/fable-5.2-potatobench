@@ -33,9 +33,6 @@ interface Seen {
   ticketSell: string; paperWords: number
   // The note lying over the stamp or control it points at.
   overTarget: boolean
-  // The guide's line while it runs the clock (not a note: nothing is paused for it): its words, the work it is
-  // showing and who is doing it, whether that person's pin is inside the window, and the field whose stamp it waits on.
-  drive: string; scene: string; unit: number; inView: boolean; waitField: number
 }
 
 async function see(page: Page): Promise<Seen> {
@@ -72,16 +69,7 @@ async function see(page: Page): Promise<Seen> {
     // What is on the land: the tags, stamps and faces, the fields' names aside.
     let land = read(ui.querySelector('.plate-layer'))
     for (const n of sim.FIELD_NAMES as string[]) land = land.split(n).join(' ')
-    // The guide's line while it runs the clock is on the screen too: its words count.
-    const drive = ui.querySelector<HTMLElement>('[data-testid="guide-drive"]')
-    const driving = vis(drive) ? drive : null
-    const text = `${read(screen)} | ${land} | ${slip && !slip.classList.contains('guide-card') ? read(slip) : ''}${driving ? ` | ${read(driving)}` : ''}`
-    const unit = Number(driving?.dataset.unit ?? -1)
-    // The one the guide is showing: the middle of their body as the land draws it, inside the window with nothing of
-    // the interface over it but their own pin (the guide's line least of all).
-    const body = unit >= 0 ? (globalThis as unknown as { __countyField: { unitAt(id: number): { x: number; y: number } | null } }).__countyField.unitAt(unit) : null
-    const over = body && body.x >= 0 && body.y >= 0 && body.x <= innerWidth && body.y <= innerHeight ? document.elementFromPoint(body.x, body.y) : null
-    const inView = !!over && (!over.closest('#ui') || !!over.closest('.pin-at'))
+    const text = `${read(screen)} | ${land} | ${slip && !slip.classList.contains('guide-card') ? read(slip) : ''}`
     const asking: string[] = []
     if (slip) asking.push('note')
     if (vis(ui.querySelector('[data-testid="guide-offer"]'))) asking.push('offer')
@@ -94,8 +82,6 @@ async function see(page: Page): Promise<Seen> {
     const aim = slip?.dataset.target ? ui.querySelector<HTMLElement>(`[data-testid="${slip.dataset.target}"]`) : null
     const sb = slip?.getBoundingClientRect(), ab = aim && vis(aim) ? aim.getBoundingClientRect() : null
     return {
-      drive: driving ? read(driving) : '', scene: driving?.dataset.scene ?? '', unit, waitField: driving?.dataset.wait ? Number(driving.dataset.wait) : -1,
-      inView,
       overTarget: !!sb && !!ab && !slip!.contains(aim) && sb.left < ab.right && sb.right > ab.left && sb.top < ab.bottom && sb.bottom > ab.top,
       phase: c?.phase ?? 'title', speed: app.speed, stopped: app.pauseReason ?? '', day: c?.season?.day ?? -1, sold: c ? c.lots.filter((l: any) => l.sold > 0).length : 0, done: !!ui.querySelector('[data-testid="end-season"]'),
       note: slip?.dataset.lesson ?? '', target: slip?.dataset.target ?? '', noteWords: count(said), cardWords: card ? count(read(card)) : 0,
@@ -700,8 +686,7 @@ async function toFrostWarning(page: Page, guided: boolean): Promise<{ speed: num
     const answer = (c: any, go: (cmd: unknown) => unknown) => { for (const i of [...c.incidents]) go({ t: 'answer', incident: i.id, choice: sim.defaultChoice(i) }) }
     for (const seed of [7, 8, 12]) {
       w.__countyGuide.reset()
-      // (the clock is the test's here, as a player's who took it from the guide: what a frost does to the speed is read)
-      if (guided) { w.__countyGuide.skipTo('bills'); w.__countyGuide.takeClock() } else w.__countyGuide.refuse()
+      if (guided) w.__countyGuide.skipTo('bills'); else w.__countyGuide.refuse()
       app.newGame(1995, seed)
       const c = app.campaign
       app.do({ t: 'begin' })
@@ -900,8 +885,7 @@ test('a note never points at a stamp that something half covers: it says a card 
 })
 
 // A guided first year with spraying left to the player, run by the test to the first spray stamps, the game at 8x.
-// clock: whose the clock is between notes there.
-const TO_STAMPS = (clock: 'guide' | 'player') => `const guide = window.__countyGuide; guide.reset(); guide.skipTo('stamp'); ${clock === 'player' ? 'guide.takeClock();' : ''} const { app } = q.g(); app.newGame(1987, 3); app.do({ t: 'begin' }); app.do({ t: 'sprayWay', way: 'ask' })
+const TO_STAMPS = `const guide = window.__countyGuide; guide.reset(); guide.skipTo('stamp'); const { app } = q.g(); app.newGame(1987, 3); app.do({ t: 'begin' }); app.do({ t: 'sprayWay', way: 'ask' })
     const c = app.campaign
     for (let n = 0; n < 200 && !app.needs().some(x => x.need && x.need.act === 'spray'); n++) { c.incidents = []; app.do({ t: 'day' }) }
     c.incidents = []; app.setSpeed(3)`
@@ -913,7 +897,7 @@ test('a press on a stamp never changes the speed: the days go at 1x while its ti
   test.setTimeout(240_000)
   const errors = watchErrors(page)
   await open(page)
-  await reach(page, TO_STAMPS('player'))
+  await reach(page, TO_STAMPS)
   await expect(note(page, 'stamp')).toBeVisible({ timeout: 15_000 })
   // The tip does not stop the game: the days the player had at 8x go at 1x while it is up.
   await expect.poll(() => game<number>(page, 'app.speed')).toBe(1)

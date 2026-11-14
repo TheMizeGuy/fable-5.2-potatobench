@@ -43,9 +43,7 @@ Checked against George Fan's rules for the Plants vs. Zombies tutorial (GDC 2012
 than read; spread the teaching out; a few words at a time; messages that never block; show a hint when it is needed;
 never take control from the player.
 
-Not yet done: the code that ran the guide's clock and framed work (`driving` in `src/game/tutorial.ts`, `runClock`
-and the scenes in `src/ui/tutorial.ts`) is switched off but still in the files; the second spring's walk through the
-plan sheet is as it was.
+Not yet done: the second spring's walk through the plan sheet is as it was.
 
 The owner, after playing the live build with the first guide in it: "it just needs to pause when the things pop up so
 you can see it and be more obvious to start the tutorial", and then: "The game is just too fast and too much at once
@@ -56,6 +54,10 @@ guide's design after that: a calm first year that says why, that begins at the f
 that runs the clock itself between its notes (rule I). The code is `src/game/tutorial.ts` (the lessons and their state, no DOM), `src/ui/tutorial.ts` (the
 cards, the note, the pointing hand, the clock's hold, the guide's own paper) and `src/ui/system/tutorial.css`; the
 tests are `tests/tutorial.test.ts` and `e2e/tutorial.spec.ts`.
+
+The narrator's code has since been removed: the guide running the clock between tips (`driving`, `runClock`), the
+scenes that moved the camera to show work, the drive line, the clock's hold, and the "Set the speed for me" option in
+the guide's paper. Progress saved with the old `clock:guide` or `clock:player` facts still loads; the facts are ignored.
 
 ## The rules
 

@@ -27,7 +27,7 @@ import { planScreen } from './plan.ts'
 import { alertShort, blightWhy, countYearsFrom, firstName, JOB_DOING, jobText } from './rules.ts'
 import { seasonScreen } from './season.ts'
 import { titleScreen } from './title.ts'
-import { guidedYear, HOLD, mountGuide, openGuide, quietAlert } from './tutorial.ts'
+import { guidedYear, mountGuide, openGuide, quietAlert } from './tutorial.ts'
 import { mountTies } from './tie.ts'
 import { whois } from './whois.ts'
 // Last, after every screen's own stylesheet: the control rule fitted to the live game.
@@ -323,7 +323,7 @@ export const mountHud: MountHud = (root, app, view, sound) => {
           notes.push({ text: pauseSaid, level: 'info', glyph: app.pauseCause === 'plantAsk' ? 'plant' : app.pauseCause === 'killCall' ? 'kill' : undefined, ttl: asks ? 0 : 9000 })
         }
         if (e.speed === 0 && app.holding) ctx.announce(app.pauseReason)
-        else if (!ticketing && e.speed === 0 && app.pauseReason && app.pauseReason !== HOLD) {
+        else if (!ticketing && e.speed === 0 && app.pauseReason) {
           const why = app.pauseReason
           if (!guidedYear(c)) sayPause(why)
           else if (asks) setTimeout(() => sayPause(why), 700)

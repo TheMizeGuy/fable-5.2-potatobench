@@ -22,7 +22,7 @@ await page.waitForFunction(() => '__county' in globalThis && !document.getElemen
 
 type Seen = {
   t: number; phase: string; speed: number; pace: number; why: string; cause: string; day: number
-  tip: string; tipWords: number; tipText: string; tipKeys: string[]; target: string; drive: string
+  tip: string; tipWords: number; tipText: string; tipKeys: string[]; target: string
   offer: boolean; card: boolean; telegram: boolean; spray: boolean; paper: boolean; ticket: boolean; begin: boolean; skip: boolean; cam: string
 }
 const see = () => page.evaluate(() => {
@@ -33,12 +33,10 @@ const see = () => page.evaluate(() => {
   const words = (s: string) => s.trim().split(/\s+/).filter(Boolean).length
   const slip = [...ui.querySelectorAll<HTMLElement>('[data-testid="guide-slip"]')].find(e => vis(e) && !e.classList.contains('guide-card')) ?? null
   const text = slip ? [...slip.querySelectorAll<HTMLElement>('.guide-ask, .guide-why, .tip-ask, .tip-why')].filter(vis).map(e => e.innerText).join(' ') : ''
-  const drive = q('[data-testid="guide-drive"]')
   const w = g.__countyField?.rig?.where?.()
   return {
     t: performance.now(), phase: app.campaign?.phase ?? 'title', speed: app.speed, pace: app.pace, why: app.pauseReason ?? '', cause: app.pauseCause ?? '', day: app.campaign?.season?.day ?? -1,
     tip: slip?.dataset.lesson ?? '', tipWords: words(text), tipText: text.replace(/\s+/g, ' ').slice(0, 160), tipKeys: slip ? [...slip.querySelectorAll<HTMLElement>('button')].filter(vis).map(b => b.dataset.testid ?? '') : [], target: slip?.dataset.target ?? '',
-    drive: drive ? drive.innerText.replace(/\s+/g, ' ').slice(0, 80) : '',
     offer: !!q('[data-testid="guide-offer"]'), card: !!q('.guide-card.frame'), telegram: !!q('.season-screen .telegram:not(.guide-card)'), spray: !!q('[data-testid="spray-way-auto"]'),
     paper: !!ui.querySelector('.paper-layer > .dialog:not(.out)'), ticket: !!q('.paper-layer [data-testid^="lot-sell-"]'), begin: !!q('[data-testid="begin-season"]'), skip: !!q('[data-testid="goal-faster"]'),
     cam: w ? [w.x, w.z, w.dist, w.yaw].map(n => Math.round(n * 2) / 2).join(',') : '',
@@ -83,7 +81,7 @@ while (Date.now() - t0 < limit) {
   if (!did && s.phase === 'plan' && s.begin && !s.tip && !s.offer && !s.card) did = await act('start the season', 'game', '[data-testid="begin-season"]')
   // Nothing asked and the days standing: after a moment the player runs them (the key the game offers, or Space).
   // With the key the game offers for a wait on show (Skip ahead), the player uses it once nothing else is asked.
-  if (!did && s.phase === 'season' && !s.paper && !s.drive && !s.tip && (s.speed === 0 || (s.skip && s.speed < 3))) {
+  if (!did && s.phase === 'season' && !s.paper && !s.tip && (s.speed === 0 || (s.skip && s.speed < 3))) {
     if (!idleSince) idleSince = Date.now()
     else if (Date.now() - idleSince > 2500) { if (!(s.skip && await act('skip ahead', 'game', '[data-testid="goal-faster"]'))) { if (s.speed === 0) await key('run the days (Space)', 'Space') } idleSince = 0 }
   } else idleSince = 0

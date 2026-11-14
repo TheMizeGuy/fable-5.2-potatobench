@@ -610,8 +610,8 @@ test('the answer to a right-click is seen while a tutorial note is up, and befor
 test('before planting, a right-click on a potato field says why it is too early', async ({ page }) => {
   const errors = watchErrors(page)
   await open(page)
-  // A guided first season stopped on its first day, the clock the test's (as a player's who took it from the guide).
-  await reach(page, `const guide = window.__countyGuide; guide.reset(); guide.skipTo('word'); guide.takeClock(); const { app } = q.g(); app.newGame(1987, 3); app.do({ t: 'begin' }); app.campaign.incidents = []; app.setSpeed(0)`)
+  // A guided first season stopped on its first day.
+  await reach(page, `const guide = window.__countyGuide; guide.reset(); guide.skipTo('word'); const { app } = q.g(); app.newGame(1987, 3); app.do({ t: 'begin' }); app.campaign.incidents = []; app.setSpeed(0)`)
   await putAway(page)
   const field = await game<number>(page, `app.campaign.plans.findIndex((p, i) => p.crop === 'potato' && sim.held(app.campaign, i) && sim.fieldInfo(app.campaign, i).status === 'idle')`)
   const name = await game<string>(page, `sim.FIELD_NAMES[${field}]`)
