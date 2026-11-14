@@ -62,6 +62,13 @@ export function personNow(c: S.Campaign, id: number, waits: Record<number, strin
     }
     return said('go', 'Heading', `to ${S.placeName(going.field)} to ${TO_DO[going.kind]}`, going.field, progress)
   }
+  // Lending a hand with an order someone else holds.
+  const helped = u.help !== undefined ? s.jobs.find(j => j.id === u.help) : undefined
+  if (helped) {
+    const progress = helped.need > 0 ? helped.done / helped.need : 0
+    if (u.road <= 0 && u.at === helped.field) return said(helped.kind, 'Helping', `${TO_DO[helped.kind]} at ${S.placeName(helped.field)}`, helped.field, progress)
+    return said('go', 'Heading', `to ${S.placeName(helped.field)} to help ${TO_DO[helped.kind]}`, helped.field, progress)
+  }
   if (u.road > 0) return said('go', 'Heading', `to ${S.placeName(u.to)}`, u.to)
   // Work they could take: held up, or theirs to start on the next working morning.
   const could = s.jobs.filter(j => (j.unit < 0 || j.unit === id) && S.willDo(u, j.kind) && !others(j))

@@ -91,7 +91,8 @@ test('a day of work at 1× is a minute: the planter is watched at its work, a pa
   await page.waitForTimeout(300)
   const after = await state(page)
   expect(after.upTo, 'the farm was brought up to the moment of the order').toBeGreaterThan(0.1)
-  expect(after.plans.join(' | ')).toMatch(/hand1 work: rocks@/)
+  // (the hand was lending a hand with the planting; an order of their own comes first)
+  expect(after.plans.join(' | ')).toMatch(/hand1 work: .*rocks@/)
   const rigC = after.info.rigs.find(r => r.key === rigB.key)!
   expect(Math.hypot(rigC.x - rigB.x, rigC.z - rigB.z), 'the planter went on as it was').toBeLessThan(12)
   await expect.poll(async () => { const u = (await state(page)).info.units.find(x => x.id === 1)!; return Math.hypot(u.x - idle.x, u.z - idle.z) }, { timeout: 8000 }).toBeGreaterThan(3)
