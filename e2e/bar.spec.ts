@@ -147,6 +147,25 @@ test('a field drying out while its potatoes form is on To do, with what watering
   }
 })
 
+// A note that asks for the same work on several fields read as a key that would do it, and only went to one field
+// (round nine). It opens To do, where one key orders them all and says what that costs.
+test('a note about several fields at once opens To do', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'the bar is a desk thing; a phone goes to the first field')
+  await startSeason(page)
+  await reach(page, `const { app } = q.g(); app.do({ t: 'sprayWay', way: 'none' }); q.run(q.day(7, 6)); app.setSpeed(0); app.campaign.incidents = []; app.select(-1); app.selectUnit(-1)`)
+  await putAway(page)
+  await page.evaluate(() => {
+    const { app } = (globalThis as any).__county
+    const fields = app.campaign.season.fields.map((f: any, i: number) => (f.status === 'growing' ? i : -1)).filter((i: number) => i >= 0)
+    app.emit({ type: 'alert', alert: { type: 'need', level: 'warn', text: 'Spray North Ridge.', field: fields[0], day: app.campaign.season.day, data: { act: 'spray', fields } } })
+  })
+  const note = page.locator('#ui .notes .alert').filter({ hasText: /Spray North Ridge and \d more fields?/ })
+  await expect(note).toBeVisible()
+  await note.click()
+  await expect(page.getByTestId('todo')).toBeVisible()
+  expect(await game<number[]>(page, 'app.selection'), 'no one field is picked').toEqual([])
+})
+
 test('To do orders what it lists: a key on each row with its cost, and one key for all of them', async ({ page, isMobile }) => {
   test.skip(isMobile, 'the bar is a desk thing; a phone keeps its foot')
   await startSeason(page)

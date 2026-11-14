@@ -417,7 +417,9 @@ export const LESSONS: Lesson[] = [
     when: l => l.screen === 'plan' && !!l.c && l.c.history.length > 0,
     done: (l, g) => g.has('fold:crew') || (!!l.c && l.c.crew.length > 1),
     ask: l => `${l.input === 'touch' ? 'Tap' : 'Open'} People to see who's looking for work and what each person is best at.`,
-    why: () => 'A hired hand shares the work list with you, and you pay their wages every month of the season.',
+    // (Twelve two-year farms of the reference practice: a hire in year two works about a day in five and costs more
+    // than it brings, so the note says when help pays instead of asking for a hire.)
+    why: () => 'You can farm these fields alone. A hire is for when there\'s more work than you can do: more land, or woods to clear.',
     point: () => ({ testid: ['crew-open'] }),
   },
   {

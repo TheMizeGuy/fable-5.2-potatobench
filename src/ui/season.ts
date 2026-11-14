@@ -758,6 +758,9 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     // Frost on the barrels: the haul of the biggest pile first, today.
     if (a.type === 'frostBarrels') return () => { const h = app.campaign ? S.haulInfo(app.world, app.campaign).sort((x, y) => y.cwt - x.cwt)[0] : undefined; if (h) app.haulAhead(h.field); else ctx.say('The barrels are all in. Nothing is left out tonight.', 'good') }
     if (a.type === 'barrelsOut' && a.field >= 0) { const field = a.field; return () => app.haulAhead(field) }
+    // An ask about several fields at once leads to To do, where one key orders them all and says what that costs
+    // (where the menu is up: a phone goes to the first field, as before).
+    if (a.type === 'need' && Array.isArray(a.data?.fields) && a.data.fields.length > 1) return () => { if (bar.el.offsetHeight > 0) bar.openTodo(); else if (a.field >= 0) { app.select(a.field); app.focus(a.field) } }
     // Someone idle with work waiting that they are set never to do: the press lets them, last in their order.
     if (a.type === 'idleNever' && unit >= 0 && typeof a.data?.work === 'string') {
       const work = a.data.work as S.Skill

@@ -390,7 +390,7 @@ function why(ctx: Ctx, c: S.Campaign, lot: S.Lot, cause: S.Cause): string {
       const barrels = weighDay(c, lot) - lot.dugDay
       return `Potatoes that grow up into the light turn green and bitter. ${name} was ${p === 0 ? 'never hilled, and hilling twice' : p === 1 ? 'hilled once, and a second hilling' : 'hilled twice'}${p < 2 ? ' before the rows close keeps them covered' : ''}.`
         + (storms.length ? ` Heavy rain on ${F.list(storms.map(date))} washed soil off the hills.` : '')
-        + (barrels > 2 ? ` The crop sat ${barrels} days in barrels in the field, and every sunny day turns more of it green.` : '')
+        + (barrels > 2 ? ` The crop sat ${barrels} days in barrels in the field, and every sunny day turns more of it green. One person can't dig and haul at once: a second driver with a truck or a second tractor hauls while you dig.` : '')
         + (v.green >= 1.3 ? ` ${v.name} forms its potatoes high in the hill.` : '')
     }
     case 'scab': {

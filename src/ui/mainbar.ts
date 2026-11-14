@@ -27,7 +27,7 @@ interface Hooks {
   onMenu: () => void
 }
 
-export function mainBar(ctx: Ctx, o: Hooks): { el: HTMLElement; update(c: S.Campaign): void } {
+export function mainBar(ctx: Ctx, o: Hooks): { el: HTMLElement; update(c: S.Campaign): void; openTodo(): void } {
   const app = ctx.app
   const el = h('nav', { class: 'mainbar sys', 'aria-label': 'The farm\'s menu' })
   let key = ''
@@ -133,6 +133,7 @@ export function mainBar(ctx: Ctx, o: Hooks): { el: HTMLElement; update(c: S.Camp
 
   return {
     el,
+    openTodo,
     update(c: S.Campaign): void {
       const n = c.phase === 'season' ? o.todo().length : 0
       const k = `${c.phase}|${n}`

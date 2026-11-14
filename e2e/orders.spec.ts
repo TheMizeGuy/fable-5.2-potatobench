@@ -493,7 +493,16 @@ test('a right-click with nobody picked is answered: the field\'s order, or why n
   await farmWithPeople(page)
   await reach(page, `const { app } = q.g(); app.selectUnit(-1); app.select(-1)`)
   const rest = await game<number>(page, `app.campaign.season.fields.findIndex(f => f.status === 'rest')`)
-  const spot = await landOf(page, rest)
+  // (the click is aimed once the land holds still: a spot read while the view is still settling is not the field's a
+  // moment later)
+  let spot = await landOf(page, rest)
+  for (let k = 0; k < 20; k++) {
+    await page.waitForTimeout(250)
+    const again = await landOf(page, rest)
+    const still = Math.abs(again.x - spot.x) < 1 && Math.abs(again.y - spot.y) < 1
+    spot = again
+    if (still) break
+  }
   await page.mouse.click(spot.x, spot.y, { button: 'right' })
   await expect(notes(page).filter({ hasText: 'Nothing needs doing here right now. To send someone here, select them first.' })).toBeVisible({ timeout: 1000 })
   expect(errors, errors.join('\n')).toEqual([])
