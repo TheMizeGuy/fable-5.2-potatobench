@@ -84,6 +84,10 @@ walk through the crop. As measured on 14 November:
 | a stretch of planting seen being done in its field, share of its hours | over 90% | 100%, 99.5% |
 | moved by a new plan when someone else was given an order | under 1 m | 0.3 m |
 
+The same file runs a whole season at 1× with every order the farm asks for given each morning (139 days from
+planting to the freeze, 1,930 hills changed as the work passed): no jump, no slide, nothing changed out of its
+time.
+
 `e2e/longday.spec.ts` is the same day in a browser on the game's own clock: the clock's keys (1×, 6×, 60×), the hour, the
 planter at its rows within half a minute, the ground sown behind it and not all at once, a pause that holds
 everyone still, an order given at mid-morning set out for within seconds.
