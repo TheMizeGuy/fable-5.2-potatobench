@@ -763,10 +763,19 @@ export class Flora {
       fragmentHead: 'varying vec4 vTree; varying float vShade; varying float vPart; varying vec3 vObj; varying vec3 vRound; vec2 leafBump;',
       fragmentColor: /* glsl */ `
         ${LEAF_LOOK}
-        ${treeSnow('vObj', '0.75 * (1.0 - step(0.5, vPart))')}`,
+        ${treeSnow('vObj', '0.75 * (1.0 - step(0.5, vPart))')}
+        // The cut edge of a mass of leaves is spread over two points of the picture, not one: with four samples to a
+        // point, an edge one point wide goes from all to nothing in a single step as the view moves, and with a
+        // crown's many edges the whole tree glitters.
+        {
+          float edge = max(fwidth(diffuseColor.a), 1e-4);
+          diffuseColor.a = clamp((diffuseColor.a - 0.5) / (2.0 * edge) + 0.5, 0.0, 1.0);
+          if (diffuseColor.a <= 0.0) discard;
+        }`,
       fragmentNormal: 'normal = normalize(normal + (viewMatrix * vec4(leafBump.x, 0.0, leafBump.y, 0.0)).xyz * 0.5);',
     }
-    const leafMat = patch(new MeshStandardMaterial({ color: 0xffffff, alphaTest: 0.5, alphaToCoverage: true, side: DoubleSide, roughness: 0.9, metalness: 0 }), treeLeafSpec)
+    // (no alpha test of the material's own: the edge above is the cut, and it is the samples' cover)
+    const leafMat = patch(new MeshStandardMaterial({ color: 0xffffff, alphaToCoverage: true, side: DoubleSide, roughness: 0.9, metalness: 0 }), treeLeafSpec)
     // In the shadow pass a crown thins with its leaves.
     const leafDepth = depthFor({ ...leafPatch, vertexBegin: `${leafPatch.vertexBegin} if (aPart > 0.5) transformed.xz *= smoothstep(0.0, 0.6, uLeaf);` })
     this.disposables.push(cMat, leafMat, leafDepth)
@@ -807,17 +816,21 @@ export class Flora {
         {
           float cl = cardLod();
           vec4 c0 = textureLod(uCard0, vCard, cl);
-          if (c0.a < 0.4) discard;
+          // The card's cut edge is spread over two points of the picture and given to the samples as their cover: cut
+          // all or nothing, every bough's edge stepped a whole point at a time as the view moved, and the trees glittered.
+          float cut = clamp((c0.a - 0.4) / (2.0 * max(fwidth(c0.a), 1e-4)) + 0.5, 0.0, 1.0);
+          if (cut <= 0.0 || c0.a < 0.1) discard;
           vec4 c1 = textureLod(uCard1, vCard, cl), c2 = textureLod(uCard2, vCard, cl);
           vec3 vObj = c0.xyz / c0.a;
           vec3 vColor = vec3(c2.r, c1.a, c2.g) / c0.a;
           cardWN = cardWorld(c1.xyz / c0.a);
           ${CONIFER_LOOK}
           ${treeSnow('vObj', '0.6')}
+          diffuseColor.a = cut;
         }`,
       fragmentNormal: 'normal = normalize((viewMatrix * vec4(cardWN, 0.0)).xyz);',
     }
-    this.conCard = patch(new MeshStandardMaterial({ color: 0xffffff, roughness: 0.92, metalness: 0, side: DoubleSide }), conSpec)
+    this.conCard = patch(new MeshStandardMaterial({ color: 0xffffff, roughness: 0.92, metalness: 0, side: DoubleSide, alphaToCoverage: true }), conSpec)
     const leafSpec: Patch = {
       key: 'county-hardwood-card',
       translucent: 0.6,
@@ -833,8 +846,10 @@ export class Flora {
           bool done = false;
           vec4 c0 = textureLod(uCard0, vCard, cl);
           float crown = c0.a;
+          // (the crown's cut edge, spread over two points of the picture: see the conifers' card)
+          float cut = clamp((crown - 0.4) / (2.0 * max(fwidth(crown), 1e-4)) + 0.5, 0.0, 1.0);
           vec3 crownAt = c0.xyz / max(c0.a, 1e-3);
-          if (c0.a >= 0.4) {
+          if (cut > 0.0 && c0.a >= 0.1) {
             vec4 c1 = textureLod(uCard1, vCard, cl), c2 = textureLod(uCard2, vCard, cl);
             vec3 vObj = c0.xyz / c0.a;
             float vShade = c1.a / c0.a, vPart = step(0.5, c2.r / c0.a);
@@ -876,7 +891,7 @@ export class Flora {
               diffuseColor.rgb = ${linear('#3a332e')} * (0.7 + 0.5 * fract(vTree.x * 5.3)) * vTree.z;
               diffuseColor.a = haze;
             }
-          } else diffuseColor.a = 1.0;
+          } else diffuseColor.a = cut;
         }
         ${snowRimeAt('0.0', '0.35 * rimeAt( vWorld.y )')}`,
       fragmentNormal: 'normal = normalize((viewMatrix * vec4(cardWN, 0.0)).xyz + (viewMatrix * vec4(leafBump.x, 0.0, leafBump.y, 0.0)).xyz * 0.5);',

@@ -18,8 +18,11 @@ const hours = (args.find(a => a.startsWith('--hours='))?.slice(8) ?? '0.5,0.9').
 // --dpr=2: a screen of twice the density, where the picture is drawn smaller than the screen and stretched over it.
 const dpr = Number(args.find(a => a.startsWith('--dpr='))?.slice(6) ?? 1)
 mkdirSync(out, { recursive: true })
-// The farmhouse (src/render/layout.ts HOUSE), in metres.
-const HOUSE = { x: 227.34, z: -34.42 }
+// What is looked at: the farmhouse (src/render/layout.ts HOUSE) unless --at=x,z names another place, in metres
+// (--at=-101,-255 is the near edge of the home woodlot: trees). With --at the crop is a fixed piece of the picture.
+const at = args.find(a => a.startsWith('--at='))?.slice(5).split(',').map(Number)
+const HOUSE = at ? { x: at[0], z: at[1] } : { x: 227.34, z: -34.42 }
+const fixed = !!at
 
 const browser = await chromium.launch({ args: GPU })
 const page = await (await browser.newContext({ viewport: { width: size[0], height: size[1] }, deviceScaleFactor: dpr })).newPage()
@@ -34,7 +37,7 @@ await page.addStyleTag({ content: '#ui, #ui * { visibility: hidden !important; t
 await page.waitForTimeout(1500)
 
 type Result = { across: number; up: number; shareAcross: number; shareUp: number; same: number; sheet: string; crop: number[]; scale: number; tier: string; drawn: number[] }
-const run = (dist: number, hour: number) => page.evaluate(async ([hx, hz, d, hr]) => {
+const run = (dist: number, hour: number) => page.evaluate(async ([hx, hz, d, hr, fx]) => {
   type Rig = { complete(p: object): object; moveTo(p: object, still: boolean): void; offsetFor(vp: unknown): { x: number; y: number } }
   const h = (globalThis as unknown as { __countyField: { rig: Rig; screenOf(x: number, z: number, up?: number): { x: number; y: number }; settle(): void; tune(o: object): void; stats(): { drawn: number[]; width: number } } }).__countyField
   const canvas = document.getElementById('field') as HTMLCanvasElement
@@ -50,7 +53,7 @@ const run = (dist: number, hour: number) => page.evaluate(async ([hx, hz, d, hr]
   const perCss = st.drawn[0] / canvas.clientWidth, onCanvas = canvas.width / st.drawn[0]
   h.settle()
   const foot = h.screenOf(hx, hz, 0), top = h.screenOf(hx, hz, 8)
-  const tall = Math.max(24, Math.abs(foot.y - top.y)), s = canvas.width / canvas.clientWidth
+  const tall = fx ? 200 : Math.max(24, Math.abs(foot.y - top.y)), s = canvas.width / canvas.clientWidth
   const cw = Math.round(Math.min(520, tall * 2.6) * s), ch = Math.round(Math.min(380, tall * 1.9) * s)
   const cx = Math.round((foot.x - Math.min(520, tall * 2.6) / 2) * s), cy = Math.round((top.y - tall * 0.45) * s)
   const pad = document.createElement('canvas'); pad.width = cw; pad.height = ch
@@ -100,7 +103,7 @@ const run = (dist: number, hour: number) => page.evaluate(async ([hx, hz, d, hr]
   for (let i = 0; i < cw * ch; i++) { const v = heat[i] / 2; img.data[i * 4] = Math.min(255, v * 22); img.data[i * 4 + 1] = Math.min(255, v * 7); img.data[i * 4 + 2] = 24; img.data[i * 4 + 3] = 255 }
   sg.putImageData(img, cw, 0)
   return { across: ax.e, up: ay.e, shareAcross: ax.share, shareUp: ay.share, same: same / (cw * ch), sheet: sheet.toDataURL('image/png').split(',')[1], crop: [cw, ch], scale: onCanvas, tier: (st as unknown as { tier: string }).tier, drawn: st.drawn }
-}, [HOUSE.x, HOUSE.z, dist, hour] as const) as Promise<Result>
+}, [HOUSE.x, HOUSE.z, dist, hour, fixed] as const) as Promise<Result>
 
 let total = 0, n = 0
 for (const hour of hours) for (const dist of dists) {
