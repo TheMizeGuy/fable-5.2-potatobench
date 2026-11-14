@@ -1,6 +1,8 @@
 // A person picked, then a right-click on a field: the most useful work there that they can do is theirs, or why not.
 import { describe, expect, it } from 'vitest'
-import { App, type AppEvent } from '../src/game/app.ts'
+import { App, setDays, type AppEvent } from '../src/game/app.ts'
+
+setDays('brisk')
 import * as S from '../src/sim/index.ts'
 import { loadWorld } from '../tools/balance/world.ts'
 

@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { App, DAYS_PER_SECOND, PLANT_PAUSE, SELF_PAUSES, SPEED_X, type AppEvent, type Speed } from '../src/game/app.ts'
+import { App, DAYS_PER_SECOND, DAY_SECONDS, PLANT_PAUSE, SELF_PAUSES, SPEED_X, setDays, type AppEvent, type Speed } from '../src/game/app.ts'
 import * as S from '../src/sim/index.ts'
 import { loadWorld } from '../tools/balance/world.ts'
 
 // The clock as a strategy game has it: pause and three speeds in step, the speed the player set is the speed the game
 // runs at, and only a card that needs an answer stops it.
+// (the clock the tests below were written to: four seconds a day at the first speed; the long day has its own tests)
+setDays('brisk')
 function c0(app: App): S.Campaign { return app.campaign! }
 
 // The clock as a new player has it: "Pause on alerts" off, so only a card stops it.
@@ -63,19 +65,85 @@ describe('the clock', () => {
     expect(app.speed).toBe(2)
   })
 
-  it('has pause and three speeds named for what they are, the first slow enough to watch, the fastest a season in under two minutes', () => {
-    expect(DAYS_PER_SECOND.length).toBe(4)
-    expect(DAYS_PER_SECOND[0]).toBe(0)
-    // Each speed's name is its true multiple of the first.
-    for (const k of [1, 2, 3]) expect(SPEED_X[k]).toBe(`${Math.round(DAYS_PER_SECOND[k] / DAYS_PER_SECOND[1])}×`)
-    expect(DAYS_PER_SECOND[2]).toBeGreaterThan(DAYS_PER_SECOND[1])
-    expect(DAYS_PER_SECOND[3]).toBeGreaterThan(DAYS_PER_SECOND[2])
-    // At the first speed a day lasts long enough to watch the people work and give an order (the owner: 0.7 days a
-    // second was "way too fast").
-    expect(1 / DAYS_PER_SECOND[1]).toBeGreaterThanOrEqual(4)
-    const season = 204
-    expect(season / DAYS_PER_SECOND[3]).toBeGreaterThan(60)
-    expect(season / DAYS_PER_SECOND[3]).toBeLessThan(150)
+  it('has pause and three speeds: a day of three to four minutes at the first, a season in under two minutes at the fastest', () => {
+    // (the owner, 14 November: "days should last like 3-4 minutes at 1x you should be able to watch everyone on your
+    // farm working")
+    setDays('long')
+    try {
+      expect(DAYS_PER_SECOND.length).toBe(4)
+      expect(DAYS_PER_SECOND[0]).toBe(0)
+      expect(DAY_SECONDS).toBeGreaterThanOrEqual(180)
+      expect(DAY_SECONDS).toBeLessThanOrEqual(240)
+      expect(1 / DAYS_PER_SECOND[1]).toBeCloseTo(DAY_SECONDS)
+      expect(DAYS_PER_SECOND[2]).toBeGreaterThan(DAYS_PER_SECOND[1])
+      expect(DAYS_PER_SECOND[3]).toBeGreaterThan(DAYS_PER_SECOND[2])
+      // Each speed is named for what it is against the first, in round figures no more than a tenth out.
+      expect(SPEED_X.slice(1)).toEqual(['1×', '50×', '400×'])
+      for (const k of [1, 2, 3]) {
+        const x = DAYS_PER_SECOND[k] / DAYS_PER_SECOND[1]
+        expect(Math.abs(Number(SPEED_X[k].slice(0, -1)) - x) / x).toBeLessThan(0.1)
+      }
+      const season = 204
+      expect(season / DAYS_PER_SECOND[3]).toBeGreaterThan(60)
+      expect(season / DAYS_PER_SECOND[3]).toBeLessThan(150)
+      const app = new App(loadWorld())
+      app.newGame(undefined, 11)
+      app.do({ t: 'begin' })
+      app.setSpeed(1)
+      expect(app.daySeconds()).toBeCloseTo(DAY_SECONDS)
+      app.setSpeed(0)
+      expect(app.daySeconds(), 'paused: the speed it goes on at').toBeCloseTo(DAY_SECONDS)
+    } finally { setDays('brisk') }
+    expect(SPEED_X.slice(1)).toEqual(['1×', '3×', '8×'])
+  })
+
+  it('keeps its place in the day through a pause, and begins each day with the morning\'s orders', () => {
+    const app = farm()
+    const c = c0(app)
+    app.setSpeed(1)
+    for (let k = 0; k < 30; k++) app.tick(50)
+    const day = c.season!.day
+    expect(c.season!.clock, 'the day has begun').toBeDefined()
+    expect(app.dayProgress).toBeGreaterThan(0.3)
+    const at = app.dayProgress
+    app.togglePause()
+    expect(app.dayProgress).toBe(at)
+    for (let k = 0; k < 20; k++) app.tick(50)
+    expect(app.dayProgress).toBe(at)
+    app.togglePause()
+    app.tick(50)
+    expect(app.dayProgress).toBeGreaterThan(at)
+    expect(c.season!.day).toBe(day)
+  })
+
+  it('an order given part way through a day is worked in what is left of it, and what the land shows is that day', () => {
+    const app = farm()
+    const c = c0(app)
+    app.setSpeed(1)
+    // To the middle of a working day in the growing season with nothing on the list.
+    const quiet = () => c.season!.jobs.length === 0 && S.workday(c, c.season!) && c.season!.fields.some(f => f.status === 'growing') && c.season!.fields.some(f => f.status === 'rest')
+    play(app, 4000, () => !!c.season!.clock && app.dayProgress >= 0.5 && app.dayProgress < 0.7 && c.season!.clock.at === 0 && quiet())
+    const s = c.season!
+    const day = s.day
+    const field = s.fields.findIndex(f => f.status === 'rest')
+    expect(quiet(), 'a quiet day was found').toBe(true)
+    expect(s.clock!.at).toBe(0)
+    const events: AppEvent[] = []
+    app.on(e => events.push(e))
+    expect(app.do({ t: 'job', kind: 'rocks', field }).ok).toBe(true)
+    // The farm was brought up to the moment of the order.
+    expect(s.clock!.at).toBeCloseTo(app.dayProgress, 2)
+    // What the land is to show: today, with the order worked this afternoon.
+    const ahead = app.today()!
+    expect(ahead).not.toBe(c)
+    expect(ahead.season!.day).toBe(day)
+    expect(ahead.season!.worked.some(w => w.kind === 'rocks' && w.field === field)).toBe(true)
+    expect(s.worked.some(w => w.kind === 'rocks')).toBe(false)
+    expect(app.today()).toBe(ahead)
+    while (s.day === day) app.tick(50)
+    expect(s.worked.some(w => w.kind === 'rocks' && w.field === field)).toBe(true)
+    const job = s.jobs.find(j => j.kind === 'rocks' && j.field === field)
+    expect(job?.done ?? 9).toBeLessThan(0.5 * 1.6)
   })
 
   it('runs at the speed set while needs come and go: nothing slows it', () => {

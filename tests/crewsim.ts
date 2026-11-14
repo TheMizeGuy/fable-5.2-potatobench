@@ -2,7 +2,7 @@
 // speed, the field view's own bookkeeping of days and plans done as src/render/index.ts does it, and every frame
 // where each person and machine is seen. For tests of what is seen of the work (tests/seen.test.ts).
 import { PerspectiveCamera, Texture, Vector3 } from 'three'
-import { App } from '../src/game/app.ts'
+import { App, setDays } from '../src/game/app.ts'
 import { Crews, type PendingReveal } from '../src/render/units.ts'
 import { copyEnv, envTarget, makeEnv } from '../src/render/env.ts'
 import type { HillDisplay } from '../src/render/fields.ts'
@@ -20,6 +20,7 @@ export const HEAD = { x: 12, z: 2 }
 export interface Farm { spring?: (app: App) => void; order?: (app: App) => void }
 
 function start(farm: Farm): App {
+  setDays('brisk')
   const app = new App(world)
   app.newGame(1977, 5)
   const c = app.campaign!

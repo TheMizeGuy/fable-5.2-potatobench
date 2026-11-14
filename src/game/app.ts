@@ -8,11 +8,27 @@ import { neighborYear } from './neighbor.ts'
 import { clearSave, parseSave, readSave, readSettings, serialize, writeSave, writeSettings, type SaveFile } from './save.ts'
 
 export type Speed = 0 | 1 | 2 | 3
-// Pause and three speeds, as a strategy game has them: at the first a day takes four seconds, time to watch the
-// people work and give the next order; the second is three times that; at the third a season goes by in under two
-// minutes. Each is named for what it really is against the first.
-export const DAYS_PER_SECOND = [0, 0.25, 0.75, 2]
-export const SPEED_X = ['', '1×', '3×', '8×']
+// Pause and three speeds. At the first a day takes three and a half minutes: the day's work is watched as it is
+// done, a tractor crossing a field and coming back. At the second a day takes four seconds, and at the third a
+// season goes by in under two minutes. Each is named for what it is against the first, in round figures.
+export const DAY_SECONDS = 210
+// ('brisk' is the clock the game had before days were long: four seconds a day at its first speed. Tests of
+// everything that is not the long day itself run on it, so a test that waits for a day waits four seconds.)
+const LADDERS = { long: [0, 1 / DAY_SECONDS, 0.25, 2], brisk: [0, 0.25, 0.75, 2] }
+export type Days = keyof typeof LADDERS
+export const DAYS_PER_SECOND = [...LADDERS.long]
+export const SPEED_X = ['', '', '', '']
+export function setDays(which: Days): void {
+  for (let k = 0; k < 4; k++) {
+    DAYS_PER_SECOND[k] = LADDERS[which][k]
+    const x = k ? DAYS_PER_SECOND[k] / LADDERS[which][1] : 0
+    SPEED_X[k] = k ? `${x < 10 ? Math.round(x) : x < 100 ? Math.round(x / 10) * 10 : Math.round(x / 100) * 100}×` : ''
+  }
+}
+setDays('long')
+// Orders that change nothing about who works where: given part way through a day, the day need not be brought up
+// to that moment first.
+const NO_WORK = new Set<Cmd['t']>(['day', 'work', 'sell', 'deliver', 'seed', 'payMortgage', 'sellLogs', 'raise', 'accept', 'plan'])
 
 export type Quality = 'auto' | 'high' | 'medium' | 'low'
 
@@ -236,7 +252,9 @@ export class App {
     this.owed = null
     this.advised = new Set()
     this.alerts = []
-    this.dayProgress = 0
+    this.ahead = null
+    // (a save taken part way through a day goes on from the last order given in it)
+    this.dayProgress = this.campaign!.season?.clock?.at ?? 0
     this.selection = []
     this.unit = -1
     this.yard = 0
@@ -273,7 +291,19 @@ export class App {
   do(cmd: Cmd): Result {
     const c = this.campaign
     if (!c) return { ok: false, err: 'No game in progress.', events: [] }
+    // An order given part way through a day is given to a farm that has done the day's work up to that moment: it
+    // is worked in what is left of the day.
+    const s = c.season
+    let before: GameEvent[] = []
+    if (!NO_WORK.has(cmd.t) && c.phase === 'season' && s?.clock && this.dayProgress > s.clock.at + 0.002) {
+      before = apply(this.world, c, { t: 'work', to: Math.min(1, this.dayProgress) }).events
+    }
     const r = apply(this.world, c, cmd)
+    if (before.length) {
+      this.revision++
+      for (const e of before) if (e.level !== 'info' || NOTABLE.has(e.type)) this.alert(c, e)
+      this.emit({ type: 'events', events: before, dayPassed: false })
+    }
     if (!r.ok) return r
     if (cmd.t === 'next') this.meetNeighbor()
     // The last question answered, however it was answered: the days go on at the speed they had.
@@ -282,11 +312,16 @@ export class App {
     this.dirty = true
     this.revision++
     for (const e of r.events) if (e.level !== 'info' || NOTABLE.has(e.type)) this.alert(c, e)
+    this.ahead = null
     if (cmd.t === 'day') {
       this.emit({ type: 'events', events: r.events, dayPassed: true })
       this.paceAfterDay(c, r.events)
-    } else if (r.events.length) {
-      this.emit({ type: 'events', events: r.events, dayPassed: false })
+    } else if (cmd.t === 'work') {
+      if (r.events.length) this.emit({ type: 'events', events: r.events, dayPassed: false })
+      this.paceAfterDay(c, [...before, ...r.events])
+    } else {
+      if (r.events.length) this.emit({ type: 'events', events: r.events, dayPassed: false })
+      if (before.length) this.paceAfterDay(c, before)
     }
     if (c.phase !== this.screen && this.screen !== 'title') {
       this.halt('over', '')
@@ -345,7 +380,6 @@ export class App {
   }
 
   private halt(cause: PauseCause, why: string): void {
-    this.dayProgress = 0
     if (this.speed === 0) return
     // "Skip ahead" skips the waiting, not the work it was waiting for: at the decision it skipped to, the way on is at
     // the speed the player had before. A telegram or a weigh ticket on the way does not end the skip.
@@ -609,8 +643,25 @@ export class App {
     this.skipBack = 0
     if (this.speed === speed) return
     this.speed = speed
-    if (speed === 0) this.dayProgress = 0
     this.emit({ type: 'speed', speed })
+  }
+
+  // How long a day takes at the speed the clock is at (or, paused, would go on at), in seconds.
+  daySeconds(): number {
+    return 1 / (DAYS_PER_SECOND[this.speed || this.resumeSpeed || 1] * this.pace)
+  }
+
+  // Today as it goes on from here if no new order comes: a copy of the farm with the day's work done to the evening
+  // (the night not yet come). What the land shows being done through the day is read from it. Null out of a season.
+  private ahead: { rev: number; c: Campaign } | null = null
+  today(): Campaign | null {
+    const c = this.campaign
+    if (!c || c.phase !== 'season' || !c.season || c.season.frozen || seasonDone(c)) return null
+    if (this.ahead && this.ahead.rev === this.revision) return this.ahead.c
+    const copy = structuredClone(c)
+    apply(this.world, copy, { t: 'work', to: 1 })
+    this.ahead = { rev: this.revision, c: copy }
+    return copy
   }
 
   // "Skip ahead": the fastest speed until the next decision on the land, then back to the speed the clock had.
@@ -659,12 +710,15 @@ export class App {
     const c = this.campaign
     if (c && this.screen === 'season' && this.speed > 0 && c.season && !seasonDone(c) && !this.pressing) {
       if (this.owed && this.pauseOwed(c)) return
+      // The morning: the day's standing orders are given as the day begins, not when it is over.
+      if (!c.season.clock) { this.do({ t: 'work', to: 0 }); if (this.speed === 0 || !c.season || seasonDone(c)) return }
       this.dayProgress += (Math.min(dtMs, 250) / 1000) * DAYS_PER_SECOND[this.speed] * this.pace
       let guard = 0
       while (this.dayProgress >= 1 && guard++ < 3 && this.speed > 0) {
         this.dayProgress -= 1
         this.do({ t: 'day' })
       }
+      // (a day's turn that paused the game: the next day begins at its beginning)
       if (this.speed === 0) this.dayProgress = 0
     }
     this.sinceSave += dtMs
