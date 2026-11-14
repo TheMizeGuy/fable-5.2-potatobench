@@ -147,15 +147,25 @@ test('a new farm opens three days before planting, the days with no work go by i
   const b = await game()
   expect(b.clouds, 'the clouds\' clock while paused').toBe(a.clouds)
   // Running again, they drift.
-  await page.locator('#ui [data-testid^="badge-"]').first().click()
+  // (the word to plant, on a ringed Plant stamp: once the order is on the list, the days are set going)
+  const field = await page.evaluate(() => (globalThis as unknown as { __county: { app: { needs(): { need?: { act: string } }[] } } }).__county.app.needs().findIndex(n => n.need?.act === 'plant'))
+  expect(field).toBeGreaterThanOrEqual(0)
+  await page.getByTestId(`badge-${field}`).click()
+  await expect.poll(() => page.evaluate(() => (globalThis as unknown as { __county: { app: { campaign: { season: { jobs: { kind: string }[] } } } } }).__county.app.campaign.season.jobs.some(j => j.kind === 'plant')), { timeout: 5000 }).toBe(true)
   await page.keyboard.press('Space')
   await expect.poll(async () => (await game()).speed, { timeout: 5000 }).toBeGreaterThan(0)
   await page.waitForTimeout(1500)
   const c = await game()
   expect(c.clouds).toBeGreaterThan(b.clouds)
-  // Planting is work: its day is not hurried.
-  expect(c.hurrying).toBe(false)
-  expect(c.day).toBe(b.day)
+  // Planting is work: once the planter is at its rows (a Sunday or a wet day first goes by, when the word falls on
+  // one), the day is not hurried.
+  await expect.poll(() => page.evaluate(() => (globalThis as unknown as { __countyField: { info(): { rigs: { work: string }[] } } }).__countyField.info().rigs.some(r => r.work === 'plant')), { timeout: 60_000 }).toBe(true)
+  const d = await game()
+  expect(d.hurrying).toBe(false)
+  await page.waitForTimeout(3000)
+  const e = await game()
+  expect(e.hurrying).toBe(false)
+  expect(e.day, 'the planting day is still going three seconds on').toBe(d.day)
   if (process.env.SHOTS) {
     await page.getByTestId('speed-2').click()
     await page.waitForTimeout(9000)
