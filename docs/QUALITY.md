@@ -132,7 +132,10 @@ pictures of one view differed by 1.2 at every point on `live-43` (a grain that c
 while frames were drawn, which is while the camera moves) and are now the same picture. What is left is the edges
 of thin, strongly contrasted things (shutters, window frames, pickets) under four-sample multisampling.
 
-**Known faults after `live-45`**: the guided first year (`e2e/tutorial.spec.ts:122`) is sensitive to load: what the
+**Known faults after `live-45`**: the board at the top left grows wider with the words on the slip under it, and a card
+laid between the two boards is then pushed down (`e2e/interface.spec.ts:153` fails on it in the full run, where the
+card is laid there; hanging the slip in a holder as wide as the board cured it but let a long slip overhang the
+board's edge, `e2e/interface.spec.ts:1067`, so it was taken out again). the guided first year (`e2e/tutorial.spec.ts:122`) is sensitive to load: what the
 guide shows of the dig depends on who is still in the field when it looks. A tag for a field under the foot boards
 can be taken up and faded in a few times in a long pan.
 

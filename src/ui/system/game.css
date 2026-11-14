@@ -10,14 +10,6 @@
 /* The row the goal slip stands in is wider than the slip: only what stands in it takes the pointer. */
 .hud .topbar > section > .goal-row { pointer-events: none; }
 .hud .topbar > section > .goal-row > * { pointer-events: auto; }
-/* The slip hangs from the board and is never wider than it: its words wrap inside the board's width, so the board
-   keeps the width its own face gives it whatever the slip says (a board that grew with the slip's words pushed aside
-   a card lying beside it). */
-.topbar .almanac > .goal-hang { display: flex; width: 0; min-width: 100%; pointer-events: none; }
-.topbar .almanac > .goal-hang:empty { display: none; }
-.hud .topbar > section > .goal-hang > * { pointer-events: auto; }
-.hud .topbar > section > .goal-hang > .goal-row { pointer-events: none; }
-.hud .topbar > section > .goal-hang > .goal-row > * { pointer-events: auto; }
 
 /* ---------------------------------------------------------------- the title (design/title.html) */
 .title-screen .title-shade { position: absolute; inset: 0; background: linear-gradient(90deg, rgb(14 12 8 / 0.4), rgb(14 12 8 / 0) 42%); }
