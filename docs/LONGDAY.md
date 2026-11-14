@@ -89,10 +89,17 @@ tests of the game's rules and its interface, and a test that waits for a day sho
 
 ## Known limits
 
-- The farm's own count (the work list, a field's tag) has the day's work when the day is over, or when an order
-  is given: through a long day the land is ahead of it.
+- The farm's own count (the work list, a person's card, a field's tag) is brought up to the clock every hour of
+  the day (eleven to a day, about nineteen seconds) and whenever an order is given: between those the land is up
+  to an hour ahead of it. What the day brings (a field planted, barrels to haul, a test dig's tray) comes when it
+  happens, not when the day is over.
+- A long day counted by the hour and a day counted in one step (50×, 400×) give out the work by the same rules but
+  not at the same moments: under a frost forecast the hourly day stops the digger for the haul a little later, and
+  digs a little more. Over a season the two differ by a few hundredweight.
 - A swath is wider than the implement drawn: six lanes plant a field that seventy real passes would.
-- Someone with nothing to do moves about the dooryard; the simulation has no work for them to be seen at.
+- Someone with nothing to do walks home and moves about the dooryard; the simulation has no work for them to be
+  seen at. The planter is worked by its driver alone: the second man on the planter and the stops to fill its
+  hoppers at the headland (docs/research/farm-work-practice.md) are not drawn yet.
 - Hauling is so many whole loads in its hours; a stretch too short for a load is seen loading only.
 - A change of clock between 1× and the faster speeds brings everyone into sight again where the new clock's day
   has them (a quick fade), since the two pictures are not the same day.
