@@ -66,9 +66,10 @@ const look = () => page.evaluate(() => {
   return { plans: g.__countyField.plans().join('\n'), info: g.__countyField.info(), at: g.__county.app.dayProgress, day: s.day, speed: g.__county.app.speed, jobs: s.jobs.map(j => `${j.kind}@${j.field} ${(j.done / j.need).toFixed(2)}`).join(', ') }
 }) as Promise<{ plans: string; info: Info; at: number; day: number; speed: number; jobs: string }>
 
-await page.evaluate(p => { const app = (globalThis as unknown as { __county: { app: { pace: number; setSpeed(n: number): void } } }).__county.app; app.pace = p; app.setSpeed(1) }, pace)
+const speed = Number(opt('speed', '1'))
+await page.evaluate(([p, sp]) => { const app = (globalThis as unknown as { __county: { app: { pace: number; setSpeed(n: number): void } } }).__county.app; app.pace = p; app.setSpeed(sp) }, [pace, speed])
 const start = await look()
-const daySec = 210 / pace
+const daySec = 180 / pace
 const step = (daySec * 1000 * days) / frames
 const rows: { t: number; day: number; at: number; pending: number; who: string }[] = []
 const fastest = new Map<string, number>()
@@ -79,7 +80,7 @@ const sub = 4
 for (let n = 0; n <= frames * sub; n++) {
   const t0 = Date.now()
   const now = await look()
-  if (now.speed === 0) await page.evaluate(() => { const g = globalThis as unknown as { __county: { app: { campaign: { incidents: unknown[] }; setSpeed(n: number): void } } }; g.__county.app.campaign.incidents = []; g.__county.app.setSpeed(1) })
+  if (now.speed === 0) await page.evaluate(sp => { const g = globalThis as unknown as { __county: { app: { campaign: { incidents: unknown[] }; setSpeed(n: number): void } } }; g.__county.app.campaign.incidents = []; g.__county.app.setSpeed(sp) }, speed)
   if (was) {
     const dt = ((Date.now() - wasAt) / 1000) * pace
     const all = [...now.info.units.map(u => ({ key: `${u.foot ? 'foot' : 'aboard'} ${u.id}`, x: u.x, z: u.z, fade: u.fade, most: u.foot ? 5 : 24, id: `u${u.id}` })), ...now.info.rigs.map(r => ({ key: `rig ${r.key}`, x: r.x, z: r.z, fade: r.fade, most: 24, id: r.key }))]

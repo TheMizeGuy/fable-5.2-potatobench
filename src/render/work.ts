@@ -332,7 +332,8 @@ export function crossings(field: number, p0: number, p1: number, n: number, from
 // next morning, or after an order changed the day, goes on from where the machine stands. The lanes are fewer than
 // the real passes (a day is shown in minutes: seventy real crossings cannot be), and each one's ground is the band
 // about it.
-export const LANES: Record<string, number> = { plant: 6, hill: 3, spray: 2, kill: 2, water: 4, dig: ROWS }
+// (an even number of them where the machine goes on to another field: it ends at the end it began from, by the lane)
+export const LANES: Record<string, number> = { plant: 4, hill: 2, spray: 2, kill: 2, water: 4, dig: ROWS }
 const lanePolys = new Map<string, Poly>()
 const laneEnds = new Map<string, number[]>()
 // A planter is filled at the headland it set out from, each time it is back there: seed from barrels set out along

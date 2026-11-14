@@ -421,7 +421,7 @@ export const mountHud: MountHud = (root, app, view, sound) => {
       // The hour, on a day long enough to have hours: a working day from six to five.
       const hourEl = root.querySelector<HTMLElement>('[data-testid="hour"]')
       if (hourEl) {
-        const long = app.screen === 'season' && app.daySeconds() >= LONG_DAY_S && !!app.campaign?.season?.clock
+        const long = app.screen === 'season' && app.daySeconds() >= LONG_DAY_S && !!app.campaign?.season?.clock && !app.hurrying
         const hr = long ? 6 + Math.min(DAY_HOURS - 1, Math.floor(app.dayProgress * DAY_HOURS)) : -1
         const said = hr < 0 ? '' : ` ${hr % 12 || 12} ${hr < 12 ? 'AM' : 'PM'}`
         if (hourEl.textContent !== said) {

@@ -222,6 +222,7 @@ export interface CrewFrame {
   dayT: number
   advancing: boolean      // the game clock is running (else the day is replayed at `pace`)
   live?: boolean          // a long day, watched as it is worked: everyone is where the day's own time has them
+  rate?: number           // and how many times faster than the first speed the clock is running it
   pace: number
   time: number
   reduced: boolean
@@ -1027,7 +1028,8 @@ export class Crews {
     this.vFoot = Math.max(this.pace, clamp(f.dist / 40, 2.8, 9)) * 1.3 * quick
     this.vRig = Math.max(this.literal ? PACE.truck : clamp(f.dist / 16, 6, 30), clamp(f.dist / 12, 8, 45)) * 1.3 * quick
     this.frozen = snap.mode === 'season' && !f.advancing && (f.pace === 1 || this.live)
-    if (this.live) { this.vFoot = 12; this.vRig = 40 }
+    this.liveRate = this.live ? Math.max(1, f.rate ?? 1) : 1
+    if (this.live) { this.vFoot = 12 * this.liveRate; this.vRig = 40 * this.liveRate }
     // The clock set going: whoever would take the first order sets out for it at once.
     if (f.advancing && !this.ran && !this.live) this.setOut(snap)
     this.ran = f.advancing
@@ -1109,7 +1111,7 @@ export class Crews {
       // and they are seen on foot until they are at it.
       const walking = !!holder && holder.aboard && Number.isFinite(holder.sx) && Math.hypot(holder.sx - r.sx, holder.sz - r.sz) > 0.3
       if (walking) {
-        this.follow(holder!, this.vFoot, this.live ? LIVE_FOOT_MOST : FOOT_MOST * quick, { x: r.sx, z: r.sz })
+        this.follow(holder!, this.vFoot, this.live ? LIVE_FOOT_MOST * this.liveRate : FOOT_MOST * quick, { x: r.sx, z: r.sz })
         holder!.heading = Math.atan2(r.sz - holder!.sz, r.sx - holder!.sx)
         const pose = holder!.pose.reset()
         walk(pose, f.time * 7, 1, holder!.tired, 0)
@@ -1118,7 +1120,7 @@ export class Crews {
         drawFigure(this.prims, M, cold ? holder!.coat : holder!.dress, pose)
         holder!.head.copy(drawn.head)
       } else {
-        this.follow(r, this.vRig, this.live ? LIVE_RIG_MOST : RIG_MOST * quick)
+        this.follow(r, this.vRig, this.live ? LIVE_RIG_MOST * this.liveRate : RIG_MOST * quick)
         if (holder && holder.aboard) { holder.sx = r.sx; holder.sz = r.sz }
       }
       // a machine standing idle in the yard is not drawn as large as one at work, or the yard is all machines; under
@@ -1210,7 +1212,7 @@ export class Crews {
 
   private figure(a: Actor, pose: Pose, scale: number, lift = 0): void {
     const bx = a.sx, bz = a.sz
-    this.follow(a, this.vFoot, this.live ? LIVE_FOOT_MOST : FOOT_MOST * this.quick)
+    this.follow(a, this.vFoot, this.live ? LIVE_FOOT_MOST * this.liveRate : FOOT_MOST * this.quick)
     // Carried over the ground to where the day has them, they are seen walking there and facing the way they go:
     // nobody is slid along as they stand or work.
     const gone = Number.isFinite(bx) ? Math.hypot(a.sx - bx, a.sz - bz) : 0
@@ -1251,6 +1253,7 @@ export class Crews {
   // A long day, watched as it is worked (a day of some minutes): the day's plan is made as the day begins, from the
   // day as it will go (and again when an order changes it), and everyone keeps the day's own time through it.
   private live = false
+  private liveRate = 1
   private liveDay = -1
   private dayStart = new Map<string, number>()
   private from0 = new Map<number, Pt>()

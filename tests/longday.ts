@@ -34,7 +34,8 @@ export interface LongSeen {
 
 // job: the work the day is begun for (the first day the farm's advice asks for it). order: at this share of the first
 // day, a second order (rocks on a resting field). hands: field hands hired.
-export function watchLong(opts: { job: sim.JobKind; days?: number; order?: number; hands?: number; dt?: number; seed?: number }): LongSeen {
+// soak: every morning the farm's advice is ordered, as a player who does all that is asked would (a whole season).
+export function watchLong(opts: { job: sim.JobKind; days?: number; order?: number; hands?: number; dt?: number; seed?: number; soak?: boolean }): LongSeen {
   setDays('long')
   const app = new App(world)
   app.settings.pauseOnAlerts = false
@@ -142,10 +143,16 @@ export function watchLong(opts: { job: sim.JobKind; days?: number; order?: numbe
         const r = app.do({ t: 'job', kind: 'rocks', field: f })
         out.orders.push(`${r.ok ? `rocks on field ${f}` : r.err} at ${app.dayProgress.toFixed(2)}`)
       }
+      if (opts.soak && c.season && !c.season.clock && !sim.seasonDone(c)) {
+        for (const a of sim.advise(app.world, c)) {
+          if (a.act === 'sell') app.do({ t: 'sell', lot: a.lot!, frac: 1 })
+          else if (a.field >= 0 && a.act !== 'wait' && a.act !== 'close') app.do({ t: 'job', kind: a.act as sim.JobKind, field: a.field })
+        }
+      }
       app.tick(dt * 1000)
       if (dirty) rebuild()
       const s = c.season
-      if (!s || c.phase !== 'season') break
+      if (!s || c.phase !== 'season' || sim.seasonDone(c)) break
       dayT = longKey && s.day === longFor ? app.dayProgress : 1
       crews.place({
         dt, dayT, advancing: app.speed > 0, live: true, pace: 1, time, reduced: false, idle: false, season: true, dist: 300, dust: env.dry, dark: 0, picked: -1, particles, passed, snap, env, camera,

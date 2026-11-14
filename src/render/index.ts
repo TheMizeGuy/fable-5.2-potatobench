@@ -42,6 +42,7 @@ import { Poly, type Reveal } from './work.ts'
 
 const DAY_ANIM_S = 3.4          // how long a paused day's work takes to play out
 // The light through a long day: from this share of the day, this hour (-1 the morning's low sun, 0 noon, 1 the evening's).
+const QUIET_HOUR = 0.6
 const LONG_HOURS: [number, number][] = [[0, MORNING], [0.1, -0.72], [0.28, -0.38], [0.5, 0.3], [0.68, 0.6], [0.86, EVENING], [0.985, NIGHT]]
 // The tractor in the opening: how far down the farm road it is as the film starts (metres), and its pace. It comes
 // out from behind the big house in the second shot and is well down the lane by the last.
@@ -222,6 +223,8 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   // Clocks for water, cloud, mist and smoke (`ambient`) and for rain and snow (`fall`): under reduced motion the first
   // nearly stops and the second stops. The crews' work keeps `time`.
   let ambient = 0
+  // The clouds' own clock (how they churn as they drift): it stops with them when the game is paused.
+  let cloudTime = 0
   let fall = 0
   let lost = false
   let lostFor = 0
@@ -690,7 +693,8 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       const p = longKey && app.campaign?.season?.day === longFor ? app.dayProgress : 0
       let h = MORNING
       for (const [from, hour] of LONG_HOURS) if (p >= from) h = hour
-      envT.hour = h
+      // (days going by with no work in them are seen in one afternoon's light: no night between them)
+      envT.hour = app.hurrying ? QUIET_HOUR : h
       return
     }
     const want = dayHour < 0 && (!season || app.speed <= 1)
@@ -730,7 +734,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     U.uSunlit.value += ((snap.mode === 'title' ? 120 * K : 0) - U.uSunlit.value) * Math.min(1, dt * 1.2)
     sky.setAir(lit.air, lit.skySun, lit.moon, lit.skyCap, lit.skyGain / lit.skyShow, lit.exposure)
     sky.tune.set(lit.skyShow, lit.skySat, 0.25)
-    sky.more.set(env.high, env.storm, lit.night, ambient)
+    sky.more.set(env.high, env.storm, lit.night, cloudTime)
     sky.deck.copy(lit.deck)
     sky.deckDark.copy(lit.deckDark)
     sky.rim.copy(lit.rim)
@@ -921,8 +925,11 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     // shadows go a little slower than a walking tractor in a light air and as fast as a truck in a blow.
     gustRun += (5 + 9 * env.wind) * dt * pace
     U.uGust.value.set(Math.cos(gustHeading), Math.sin(gustHeading), gustRun, env.wind)
-    cloudAt.x -= (wx * (5 + 11 * env.wind) * dt * pace) / CLOUD_TURN
-    cloudAt.y -= (wz * (5 + 11 * env.wind) * dt * pace) / CLOUD_TURN
+    // (with the game paused in a season the clouds and their shadows stand where they are: the owner, 14 November)
+    const drift = snap.mode === 'season' && app.speed === 0 ? 0 : dt * pace
+    cloudTime += drift
+    cloudAt.x -= (wx * (5 + 11 * env.wind) * drift) / CLOUD_TURN
+    cloudAt.y -= (wz * (5 + 11 * env.wind) * drift) / CLOUD_TURN
     U.uCloud.value.z = cloudAt.x
     U.uCloud.value.w = cloudAt.y
     terrain.water.ice.value = env.ice
@@ -963,7 +970,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     crews.place({
       dt: wdt, dayT, advancing: app.speed > 0, live: longDay && snap.mode === 'season', pace: replayPace, time, reduced, idle: snap.mode !== 'season' && snap.mode !== 'title',
       season: snap.mode === 'season', dist: rig.cur.dist, dust: env.dry, dark: clamp((LAMP.value * lit.exposure) / 5, 0, 1), picked: app.unit, particles, passed, snap, env, camera: cam,
-      speed: app.speed, daySec: longDay ? DAY_SECONDS : 1 / DAYS_PER_SECOND[Math.max(1, app.speed)], clock: Math.min(0.25, dtMs / 1000) * live,
+      speed: app.speed, daySec: longDay ? DAY_SECONDS : 1 / DAYS_PER_SECOND[Math.max(1, app.speed)], rate: longDay ? DAY_SECONDS / app.daySeconds() : 1, clock: Math.min(0.25, dtMs / 1000) * live,
     })
     // Smoke from the kitchen chimney: all day in the cold, a thread of it at supper time. It goes on rising and leans
     // away downwind, a plume a few roofs high: from two fields off it says where the house is and which way the wind sets.

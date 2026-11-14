@@ -18,8 +18,15 @@ drawing better: a day's work cannot be watched in four seconds.
 
 ## What it is now
 
-**The clock.** Pause and three speeds: 1× is a day of 210 seconds, 50× a day of 4 seconds (what 1× was), 400× a
-season in under two minutes. A pause keeps its place in the day. The date shows the hour (a working day from six
+**The clock.** Pause and three speeds, by the length of a day of work: 1× three minutes, 6× half a minute (the
+same work run six times faster, still lane by lane), 60× three seconds. Time with no work in it goes by quickly at
+every speed: a day nobody works, and what is left of a day once its last work is done, take 3, 1.5 and 0.3 seconds
+a day. So at 1× the weeks between jobs pass in seconds and the jobs are watched. (The first build of this, the same
+morning, had every day 210 seconds long at 1× and then 50× and 400×; the owner: "50x and 400x seem extreme ...
+increase the base speed of the game to a realistic level thats a big disparity things dont have to grow as they
+would in real life its a game".) A new farm's first season opens three days before the soil is expected to be fit
+to plant (the owner: "start the player closer to when the ground is ready for planting on a new game"). A pause
+keeps its place in the day, and the clouds and their shadows stand still while the game is paused. The date shows the hour (a working day from six
 to five) and the light goes through the day: the morning's low sun, higher toward noon, over the top to the
 afternoon's, the evening's, and a few seconds of night as the day turns.
 
@@ -27,7 +34,7 @@ afternoon's, the evening's, and a few seconds of night as the day turns.
 `runCrews` in `src/sim/season.ts`): the morning's standing orders are given when the day begins, and an order
 given at eleven first brings the farm up to eleven, so it is worked in what is left of that day by whoever is free
 then. A whole day counted in one step is bit for bit what it was (the golden replay in `tests/golden.json` is
-unchanged), so every balance test and the 50× and 400× clocks stand as they were.
+unchanged), so every balance test and the 60× clock stand as they were.
 
 **The picture.** At a day of 30 seconds or longer the land plays today's work in today's time
 (`src/render/index.ts`, `planLive` in `src/render/units.ts`, `planDay` in `src/render/work.ts`):
@@ -43,16 +50,16 @@ unchanged), so every balance test and the 50× and 400× clocks stand as they we
   longer waits for that.
 - The day breaks on people already on the last of their way to the first work (the night covers the rest), so a
   morning begins with work and not with a drive.
-- Days of seconds (50×, 400×) keep the picture they had.
+- Days of seconds (60×) keep the picture they had.
 
 ## What cannot be literal, and what was chosen
 
-A day is shown in 210 seconds and stands for eleven hours: 190 to one. A real two-row planter makes about seventy
+A day is shown in 180 seconds and stands for eleven hours: 220 to one. A real two-row planter makes about seventy
 crossings of a five-acre field in its day; shown at a tractor's real speed it would make two. So:
 
-- **Lanes are fewer than real passes.** Six for planting, three for hilling, two for spraying and vine killing,
+- **Lanes are fewer than real passes.** Four for planting, two for hilling, two for spraying and vine killing,
   eight for digging (two days to a field), each one's ground the band about it. The machine's pace then comes out
-  at what reads as a tractor at work: 4 to 8 m/s, against a real 1 to 2.
+  at what reads as a tractor at work: about 5 m/s, against a real 1 to 2.
 - **Ways are quick and short.** On the lane a tractor goes at about 12 m/s and a person at a brisk walk; a way too
   long for its time is cut (they go from sight and come into sight again over its last stretch).
 
@@ -69,15 +76,15 @@ walk through the crop. As measured on 14 November:
 |---|---|---|
 | steps nobody could make, in sight | 0 | 0 |
 | figures slid over the ground as they stood | 0 | 0 |
-| hills whose ground changed only when the day turned | 0 | 0 of 195 (planting), 96 (hilling), 130 (digging) |
+| hills whose ground changed only when the day turned | 0 | 0 of 196 (planting), 96 (hilling), 131 (digging) |
 | ground shown worked that the day's end did not have worked | 0 | 0 |
-| a machine at row work, median pace | 2.5 to 9 m/s | 6.2 planting, 6.7 hilling, 4.0 digging |
-| a machine anywhere, fastest kept up for a second | 16 m/s | 15.5 |
-| on foot, fastest kept up for a second | 4.5 m/s | 3.3 |
+| a machine at row work, median pace | 2.5 to 9 m/s | 5.2 planting, 5.3 hilling, 4.7 digging |
+| a machine anywhere, fastest kept up for a second | 17.2 m/s | 17.0 |
+| on foot, fastest kept up for a second | 4.5 m/s | 4.2 |
 | a stretch of planting seen being done in its field, share of its hours | over 90% | 100%, 99.5% |
 | moved by a new plan when someone else was given an order | under 1 m | 0.3 m |
 
-`e2e/longday.spec.ts` is the same day in a browser on the game's own clock: the clock's keys, the hour, the
+`e2e/longday.spec.ts` is the same day in a browser on the game's own clock: the clock's keys (1×, 6×, 60×), the hour, the
 planter at its rows within half a minute, the ground sown behind it and not all at once, a pause that holds
 everyone still, an order given at mid-morning set out for within seconds.
 
@@ -93,13 +100,13 @@ tests of the game's rules and its interface, and a test that waits for a day sho
   the day (eleven to a day, about nineteen seconds) and whenever an order is given: between those the land is up
   to an hour ahead of it. What the day brings (a field planted, barrels to haul, a test dig's tray) comes when it
   happens, not when the day is over.
-- A long day counted by the hour and a day counted in one step (50×, 400×) give out the work by the same rules but
+- A long day counted by the hour and a day counted in one step (60×) give out the work by the same rules but
   not at the same moments: under a frost forecast the hourly day stops the digger for the haul a little later, and
   digs a little more. Over a season the two differ by a few hundredweight.
 - A swath is wider than the implement drawn: six lanes plant a field that seventy real passes would.
 - Someone with nothing to do walks home and moves about the dooryard; the simulation has no work for them to be
   seen at.
-- The planter stops at the headland it set out from, each time it is back there, to be filled: seed barrels and
+- The planter stops at the headland it set out from, half way through a field, to be filled: seed barrels and
   fertilizer sacks stand there from the morning, and its driver gets down and tips four barrels in (about eight
   seconds). It is worked by its driver alone: the second man who rode a real planter is not in the simulation, so
   he is not drawn.

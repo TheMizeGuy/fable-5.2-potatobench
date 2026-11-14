@@ -1,6 +1,6 @@
 // The running game: owns the campaign, the clock, the selection and the orders, saving, and tells the views what changed.
 import {
-  advise, apply, awaitsWord, climateWorld, createCampaign, fieldInfo, fieldNeeds, FIELD_NAMES, held, isFarmYear, plantReady, plantWordGiven, seasonDone, startYears, unitBlock, FARM_YEAR0, PLANT_WORD_DAYS,
+  advise, apply, awaitsWord, climateWorld, createCampaign, fieldInfo, fieldNeeds, FIELD_NAMES, held, isFarmYear, plantingIn, plantReady, plantWordGiven, seasonDone, startYears, unitBlock, FARM_YEAR0, PLANT_WORD_DAYS,
   type Advice, type Campaign, type Cmd, type GameEvent, type JobKind, type Phase, type Result, type World,
 } from '../sim/index.ts'
 import type { Pointing, Thing } from './contracts.ts'
@@ -8,20 +8,30 @@ import { neighborYear } from './neighbor.ts'
 import { clearSave, parseSave, readSave, readSettings, serialize, writeSave, writeSettings, type SaveFile } from './save.ts'
 
 export type Speed = 0 | 1 | 2 | 3
-// Pause and three speeds. At the first a day takes three and a half minutes: the day's work is watched as it is
-// done, a tractor crossing a field and coming back. At the second a day takes four seconds, and at the third a
-// season goes by in under two minutes. Each is named for what it is against the first, in round figures.
-export const DAY_SECONDS = 210
+// Pause and three speeds. A day of work takes three minutes at the first: the work is watched as it is done, a
+// tractor crossing a field and coming back. At the second it takes half a minute, the same work run six times
+// faster; at the third three seconds. Each is named for what it is against the first, in round figures.
+// Time with no work in it goes by quickly at every speed (QUIET_S: a day nobody works, and what is left of a day
+// once its last work is done): the days are long for the work in them, and the crop need not be waited for (the
+// owner, 14 November: "things dont have to grow as they would in real life its a game").
+export const DAY_SECONDS = 180
 // A day this long or longer at the clock's speed (seconds) is watched as it is worked, and counted by the hour.
-export const LONG_DAY_S = 30
+export const LONG_DAY_S = 25
 export const DAY_HOURS = 11
-// ('brisk' is the clock the game had before days were long: four seconds a day at its first speed. Tests of
-// everything that is not the long day itself run on it, so a test that waits for a day waits four seconds.)
-const LADDERS = { long: [0, 1 / DAY_SECONDS, 0.25, 2], brisk: [0, 0.25, 0.75, 2] }
+// ('brisk' is the clock the game had before days were long: four seconds a day at its first speed, every day the
+// same length. Tests of everything that is not the long day itself run on it, so a test that waits for a day waits
+// four seconds.)
+const LADDERS = { long: [0, 1 / DAY_SECONDS, 1 / 30, 1 / 3], brisk: [0, 0.25, 0.75, 2] }
+// Seconds a day with no work in it takes at each speed (null: such a day is as long as any other).
+const QUIETS: Record<keyof typeof LADDERS, number[] | null> = { long: [0, 3, 1.5, 0.3], brisk: null }
+export let QUIET_S: number[] | null = QUIETS.long
+// A new farm's first season opens this many days before the soil is expected to be fit to plant.
+export const OPEN_BEFORE_PLANTING = 3
 export type Days = keyof typeof LADDERS
 export const DAYS_PER_SECOND = [...LADDERS.long]
 export const SPEED_X = ['', '', '', '']
 export function setDays(which: Days): void {
+  QUIET_S = QUIETS[which]
   for (let k = 0; k < 4; k++) {
     DAYS_PER_SECOND[k] = LADDERS[which][k]
     const x = k ? DAYS_PER_SECOND[k] / LADDERS[which][1] : 0
@@ -301,6 +311,15 @@ export class App {
     const r = apply(this.world, c, cmd)
     if (!r.ok) return r
     if (cmd.t === 'next') this.meetNeighbor()
+    // A new farm's first season opens close to planting (the owner, 14 November: "start the player closer to when
+    // the ground is ready for planting on a new game"): the weeks before it, in which a first-year farm has nothing
+    // to do, are gone through at once. (A farm started in a year of the record, as the tests and tools start them,
+    // opens on the season's first day.)
+    if (cmd.t === 'begin' && QUIET_S && c.history.length === 0 && this.world !== this.record) {
+      for (let n = 0; n < 60 && c.phase === 'season' && c.season && c.season.plantAsk === undefined && plantingIn(this.world, c) > OPEN_BEFORE_PLANTING; n++) {
+        apply(this.world, c, { t: 'day' })
+      }
+    }
     // The last question answered, however it was answered: the days go on at the speed they had.
     if (cmd.t === 'answer' && !c.incidents.length) { this.holding = ''; this.resumeAfterCard() }
     if (cmd.t === 'job') this.answered(cmd.kind)
@@ -659,7 +678,19 @@ export class App {
     this.emit({ type: 'speed', speed })
   }
 
-  // How long a day takes at the speed the clock is at (or, paused, would go on at), in seconds.
+  // Whether the time now going by has no work in it: nobody works today, or today's last work is done.
+  hurrying = false
+  private quietNow(c: Campaign): boolean {
+    if (!QUIET_S || !c.season?.clock) return false
+    const log = this.today()?.season?.clock?.log
+    if (!log) return false
+    let last = -1
+    for (const x of log) if (x.to > last) last = x.to
+    // (someone on the way to work that begins later today is before the last of it; the evening after it, a moment's grace)
+    return this.dayProgress > last + 0.012
+  }
+
+  // How long a day of work takes at the speed the clock is at (or, paused, would go on at), in seconds.
   daySeconds(): number {
     return 1 / (DAYS_PER_SECOND[this.speed || this.resumeSpeed || 1] * this.pace)
   }
@@ -729,7 +760,10 @@ export class App {
       if (this.owed && this.pauseOwed(c)) return
       // The morning: the day's standing orders are given as the day begins, not when it is over.
       if (!c.season.clock) { this.do({ t: 'work', to: 0 }); if (this.speed === 0 || !c.season || seasonDone(c)) return }
-      this.dayProgress += (Math.min(dtMs, 250) / 1000) * DAYS_PER_SECOND[this.speed] * this.pace
+      // (time with no work in it goes by quickly: a day nobody works, and the rest of a day once its work is done)
+      const quiet = this.quietNow(c)
+      this.hurrying = quiet
+      this.dayProgress += (Math.min(dtMs, 250) / 1000) * (quiet ? 1 / QUIET_S![this.speed] : DAYS_PER_SECOND[this.speed] * this.pace)
       // A long day is counted as it goes: by the hour (a working day has eleven) the farm's own count has the work
       // done so far, so the work list, a person's card and what the day brings (a field planted, barrels to haul)
       // keep up with what is seen; and a test dig is answered the moment the day as it will go has it done.
@@ -737,7 +771,7 @@ export class App {
         const at = c.season.clock?.at ?? 0
         const ahead = this.ahead && this.ahead.rev === this.revision ? this.ahead.c.season?.clock?.log : undefined
         const dug = !!ahead && ahead.some(x => x.kind === 'sample' && x.to > at + 1e-4 && x.to <= this.dayProgress)
-        if (dug || Math.floor(this.dayProgress * DAY_HOURS) / DAY_HOURS > at + 1e-6) {
+        if (dug || (!quiet && Math.floor(this.dayProgress * DAY_HOURS) / DAY_HOURS > at + 1e-6)) {
           const events = this.upToNow()
           this.dirty = true
           this.emit({ type: 'change' })

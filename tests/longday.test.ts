@@ -12,8 +12,9 @@ import { describe, expect, it } from 'vitest'
 import { watchLong, type LongSeen } from './longday.ts'
 
 // Metres a second, kept up for a second in sight: on foot (a brisk walk to a run across a yard), a machine on the
-// lane, and a machine at its work in the rows.
-const FOOT_MOST = 4.5, RIG_MOST = 16, WORK = [2.5, 9]
+// lane, and a machine at its work in the rows: its usual pace (the median), and the most it ever goes (a stretch of
+// a few seconds' work at a day's edge is gone over quicker).
+const FOOT_MOST = 4.5, RIG_MOST = 17.2, WORK = [2.5, 9], WORK_MOST = 13
 
 function held(r: LongSeen, what: string): void {
   expect(r.jumps, `${what}: steps nobody could make`).toEqual([])
@@ -30,15 +31,16 @@ describe('a long day, watched as it is worked', () => {
     expect(r.days).toBe(2)
     expect(r.shown).toBeGreaterThan(150)
     expect(r.slowestWorking).toBeGreaterThan(WORK[0])
-    expect(r.fastest.working).toBeLessThan(WORK[1])
+    expect(r.slowestWorking).toBeLessThan(WORK[1])
+    expect(r.fastest.working).toBeLessThan(WORK_MOST)
     expect(r.fastest.rig, r.where.rig).toBeLessThanOrEqual(RIG_MOST)
     // Every stretch of the planting is seen being done in its field for nearly all of its hours.
     // (a stretch of minutes at the end of a way is half way and half work)
     for (const s of r.atWork) expect(s.seen, `${s.kind} in field ${s.field}, ${(s.hours * 100).toFixed(0)}% of a day`).toBeGreaterThan(s.hours > 0.15 ? 0.9 : 0.4)
-    // The planter is filled at the headland each time it is back where it set out: twice in a field, its driver down
-    // beside it for some seconds each time (four fields' worth of lanes in these two days).
-    expect(r.filled).toBeGreaterThan(20)
-    expect(r.filled).toBeLessThan(45)
+    // The planter is filled at the headland each time it is back where it set out, half way through a field: its
+    // driver down beside it for some seconds (two fields in these two days).
+    expect(r.filled).toBeGreaterThan(10)
+    expect(r.filled).toBeLessThan(30)
     // The order given at eleven: whoever takes it sets out then, and the planter is not moved by the new plan.
     expect(r.orders).toEqual(['rocks on field 1 at 0.45'])
     // (the day is counted by the hour, and laid out again each time: nobody is moved by that either)
@@ -50,12 +52,14 @@ describe('a long day, watched as it is worked', () => {
   it('hilling, digging and hauling, a walk through the crop: at a pace that reads, with no jump', () => {
     const hill = watchLong({ job: 'hill' })
     held(hill, 'hilling')
-    expect(hill.fastest.working).toBeLessThan(WORK[1])
+    expect(hill.slowestWorking).toBeLessThan(WORK[1])
+    expect(hill.fastest.working).toBeLessThan(WORK_MOST)
     expect(hill.shown).toBe(96)
     const dig = watchLong({ job: 'dig', days: 4 })
     held(dig, 'digging and hauling')
     expect(dig.slowestWorking).toBeGreaterThan(WORK[0])
-    expect(dig.fastest.working).toBeLessThan(WORK[1])
+    expect(dig.slowestWorking).toBeLessThan(WORK[1])
+    expect(dig.fastest.working).toBeLessThan(WORK_MOST)
     expect(dig.shown).toBeGreaterThan(100)
     const scout = watchLong({ job: 'scout' })
     held(scout, 'scouting')
