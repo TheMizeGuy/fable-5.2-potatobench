@@ -282,7 +282,7 @@ table .num, .tab { font-variant-numeric: lining-nums proportional-nums; }
 .leaf .month { font: 400 21px/1 var(--f-gothic); letter-spacing: .1em; text-transform: uppercase; color: var(--red); }
 .leaf .weekday { font: italic 400 16px/1.1 var(--f-text); }
 .leaf .year { position: absolute; right: 10px; top: 10px; }
-.forecast { display: grid; grid-template-columns: repeat(6, 1fr); }
+.forecast { display: grid; grid-template-columns: repeat(6, 35px); }
 .forecast .d { display: grid; justify-items: center; align-content: center; gap: 3px; padding: 6px 2px 6px; border-left: 1px solid var(--hair); }
 .forecast .d:first-child { border-left: 0; background: var(--paper-2); }
 .forecast .d .t-label { color: var(--ink); }

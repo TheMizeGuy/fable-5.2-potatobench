@@ -648,7 +648,9 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
                   icon(x.sky, 'i'),
                   h('span', { class: 'hi num' }, `${F.degrees(x.hi)}°`),
                   h('span', { class: 'wet num' },
-                    x.rain >= 30 ? h('span', { class: 'pct' }, `${x.rain}%`) : null,
+                    // (a day's column keeps its width: with a mark for blight or frost the chance of rain is left to the
+                    // sky drawn above it, and to the almanac)
+                    x.rain >= 30 && !(x.blight > 0 || x.frost >= 30) ? h('span', { class: 'pct' }, `${x.rain}%`) : null,
                     x.blight > 0 ? icon('blight', 'i risk') : null,
                     x.frost >= 30 ? icon('frost', 'i cold') : null)))) : null,
               phone ? balance : null),
