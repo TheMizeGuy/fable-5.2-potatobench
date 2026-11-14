@@ -340,6 +340,9 @@ export interface Season {
   spent: number
   log: GameEvent[]
   pickers: boolean          // a picking crew hired by the day for the harvest break
+  // While a day is being worked: how far into it the crews have got (a share of the day), who minds the stand (-1
+  // nobody), and each person's day so far (time not used, waits, what they worked at). Gone once the day is over.
+  clock?: { at: number; stand: number; turns: { id: number; left: number; waited: number; spent: Record<Skill, number>; tractor: boolean }[] }
 }
 
 export interface YearSummary {
@@ -459,6 +462,7 @@ export type Cmd =
   | { t: 'cancel'; id: number }
   | { t: 'bump'; id: number }
   | { t: 'day' }
+  | { t: 'work'; to: number }   // the crews' work up to a time of today (a share of the day), the day not yet over
   | { t: 'endSeason' }
   | { t: 'sell'; lot: number; frac: number }
   | { t: 'deliver'; lot: number; contract: number }

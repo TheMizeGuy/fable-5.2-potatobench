@@ -11,7 +11,7 @@ import { heldUpBy } from './remedies.ts'
 import { hash32 } from './rng.ts'
 import {
   addJob, buildable, buildJob, closeIncidents, FIELD_NAMES, holdsDufour, JOB_LABEL, leftInField, letGo, releaseJob, removePerson, resolveIncident, seasonDone, sheltering,
-  haulByDark, haulRate, placeName, startSeason, stepDay, tractorsRunning, unitBlock, workday,
+  haulByDark, haulRate, placeName, startSeason, stepDay, tractorsRunning, unitBlock, workDay, workday,
 } from './season.ts'
 import { CHOICE_LABEL } from './incidents.ts'
 import { article, buildBlock, buildCost, buildingAt, buildWork, hasBuilt, startBuilding, travel, YARD_NAME } from './buildings.ts'
@@ -1119,9 +1119,16 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
     case 'day': {
       if (c.phase !== 'season' || !c.season) return fail('The season isn\'t under way.')
       if (c.season.frozen) return fail('The ground has frozen. Close out the season.')
-      const orders = standingOrders(world, c)
+      // (a day already begun has had its morning)
+      const orders = c.season.clock ? [] : standingOrders(world, c)
       const day = stepDay(world, c)
       return ok([...orders, ...day, ...frostAhead(world, c), ...plantAsked(world, c), ...killCalled(world, c)])
+    }
+    case 'work': {
+      if (c.phase !== 'season' || !c.season) return fail('The season isn\'t under way.')
+      if (c.season.frozen) return fail('The ground has frozen. Close out the season.')
+      const orders = c.season.clock ? [] : standingOrders(world, c)
+      return ok([...orders, ...workDay(world, c, Math.max(0, Math.min(1, cmd.to)))])
     }
     case 'endSeason': {
       if (c.phase !== 'season' || !c.season) return fail('The season isn\'t under way.')

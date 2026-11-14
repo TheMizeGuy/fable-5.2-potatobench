@@ -641,7 +641,9 @@ function digProgress(c: Campaign, s: Season, f: FieldSeason, field: number, job:
 // laid end to end on it: someone who takes a machine has it from when it was last let go (the drive with it counts),
 // waits for it until then, and gets only what is left of the day; with none left they look for other work.
 
-interface Turn { u: Unit; left: number; idle: boolean; spent: Record<Skill, number>; tractor: boolean; waited: number; keys: string[] }
+// (a day is worked in one stretch or in several, each from where the last ended to `end`: `left` is what is left of
+// the stretch, so the time of day is `end - left`)
+interface Turn { u: Unit; left: number; end: number; idle: boolean; spent: Record<Skill, number>; tractor: boolean; waited: number; keys: string[] }
 
 // The day's bookings: for each machine, the share of the day at which it is free (held: to the end of the day).
 type Book = Map<string, number>
@@ -654,7 +656,20 @@ interface Booking { rig: Rig; keys: string[]; start: number }
 // The day's record of a stretch of work; machine work says which machine and its hours, for the picture.
 function logWork(s: Season, t: Turn, kind: JobKind, field: number, time: number): void {
   const u = t.u
-  s.worked.push(u.rig && t.keys.length ? { kind, field, unit: u.id, rig: u.rig, machine: t.keys[0], from: 1 - t.left - time, to: 1 - t.left } : { kind, field, unit: u.id })
+  const w: Season['worked'][number] = u.rig && t.keys.length ? { kind, field, unit: u.id, rig: u.rig, machine: t.keys[0], from: t.end - t.left - time, to: t.end - t.left } : { kind, field, unit: u.id }
+  // Later in a day worked in stretches: work carried straight on is one stretch in the record, and work on foot is
+  // said once.
+  if ((s.clock?.at ?? 0) > 0) {
+    for (let k = s.worked.length - 1; k >= 0; k--) {
+      const o = s.worked[k]
+      if (o.unit !== w.unit) continue
+      if (o.kind !== w.kind || o.field !== w.field || o.rig !== w.rig || o.machine !== w.machine) break
+      if (w.from === undefined) return
+      if (o.to !== undefined && Math.abs(o.to - w.from) < 1e-4) { o.to = w.to; return }
+      break
+    }
+  }
+  s.worked.push(w)
 }
 
 function heldByOther(c: Campaign, job: Job, u: Unit): boolean {
@@ -681,13 +696,13 @@ export function tractorsRunning(c: Campaign, day: number): number {
 // What this person would drive to work this order, from now (a share of the day): '' for work on foot, the truck for
 // hauling, or the tractor (with the one implement, where the farm has it) that is free soonest; and when it is free.
 // Null when no machine has any of the day left.
-function rigFor(c: Campaign, s: Season, job: Job, book: Book, now: number): Booking | null {
+function rigFor(c: Campaign, s: Season, job: Job, book: Book, now: number, end: number): Booking | null {
   if (jobSkill(job.kind) !== 'machine') return { rig: '', keys: [], start: now }
   const at = (k: string) => Math.max(now, book.get(k) ?? 0)
   const gear = IMPLEMENT[job.kind]
   const extra = gear && c.upgrades[gear] ? [gear] : []
   let best: Booking | null = null
-  const offer = (b: Booking) => { if (b.start < 1 - EPS && (!best || b.start < best.start - EPS)) best = b }
+  const offer = (b: Booking) => { if (b.start < end - EPS && (!best || b.start < best.start - EPS)) best = b }
   // The truck hauls when it can, ahead of a tractor free as soon.
   if (job.kind === 'haul' && c.upgrades.truck) offer({ rig: 'truck', keys: ['truck'], start: at('truck') })
   for (let i = 0; i < tractorsRunning(c, s.day); i++) offer({ rig: 'tractor', keys: [`tractor${i}`, ...extra], start: Math.max(at(`tractor${i}`), ...extra.map(at)) })
@@ -837,7 +852,8 @@ function digCap(c: Campaign, s: Season, t: Turn, job: Job, rate: number): number
   const lifted = lot ? lotCwt(lot) + lot.sold + lot.grades.cull : 0
   const perDay = (job.done > 0 && lifted > 0 ? lifted / job.done : P.DIG_CWT_GUESS) * rate
   const h = haulRate(c, u, job.field, c.upgrades.truck ? 'truck' : 'tractor')
-  const free = t.left - f.inField / h
+  // (what is left of the day, not only of this stretch of it)
+  const free = t.left + (1 - t.end) - f.inField / h
   return Math.max(0, free * h / (perDay + h))
 }
 
@@ -882,7 +898,7 @@ function buildDay(world: World, c: Campaign, s: Season, t: Turn, job: Job, _d: D
   t.spent.build += time
   job.done += use
   job.need = b.need
-  s.worked.push({ kind: 'build', field: job.field, unit: u.id })
+  if (!s.worked.some(w => w.kind === 'build' && w.field === job.field && w.unit === u.id)) s.worked.push({ kind: 'build', field: job.field, unit: u.id })
   if (buildWork(c, b, use)) {
     const k = s.jobs.indexOf(job)
     if (k >= 0) s.jobs.splice(k, 1)
@@ -895,13 +911,13 @@ type Pick = { job: Job } & Booking
 
 // Work whose delay loses crop comes before work that can wait, for anyone who can do both, whatever their first kind of
 // work, unless the player pinned the work that can wait to them.
-function choose(c: Campaign, s: Season, u: Unit, d: Day, out: GameEvent[], book: Book, now: number): Pick | null {
-  const pick = byPriority(c, s, u, d, out, book, now)
+function choose(c: Campaign, s: Season, u: Unit, d: Day, out: GameEvent[], book: Book, now: number, end: number): Pick | null {
+  const pick = byPriority(c, s, u, d, out, book, now, end)
   if (pick && (!waitable(pick.job.kind) || pick.job.unit === u.id)) return pick
   for (const job of [...s.jobs]) {
     if (waitable(job.kind) || !mayTake(u, job) || heldByOther(c, job, u) || stoppedToday(s, job) || !pressingWhy(c, s, job)) continue
     if (!stillWanted(c, s, job, out)) continue
-    const rig = rigFor(c, s, job, book, now)
+    const rig = rigFor(c, s, job, book, now, end)
     if (waitFor(c, s, job, d) || rig === null) continue
     if (pick && !(s.pressed ?? []).includes(u.id)) {
       s.pressed = [...(s.pressed ?? []), u.id]
@@ -912,7 +928,7 @@ function choose(c: Campaign, s: Season, u: Unit, d: Day, out: GameEvent[], book:
   return pick
 }
 
-function byPriority(c: Campaign, s: Season, u: Unit, d: Day, out: GameEvent[], book: Book, now: number): Pick | null {
+function byPriority(c: Campaign, s: Season, u: Unit, d: Day, out: GameEvent[], book: Book, now: number, end: number): Pick | null {
   for (let level = 1; level <= P.PRIORITY_MAX; level++) {
     let any = false
     for (const k of P.SKILLS) if (u.prio[k] === level) any = true
@@ -923,7 +939,7 @@ function byPriority(c: Campaign, s: Season, u: Unit, d: Day, out: GameEvent[], b
       const job = s.jobs[k]
       if (u.prio[jobSkill(job.kind)] !== level || !mayTake(u, job) || heldByOther(c, job, u) || stoppedToday(s, job)) { k++; continue }
       if (!stillWanted(c, s, job, out)) continue
-      const rig = rigFor(c, s, job, book, now)
+      const rig = rigFor(c, s, job, book, now, end)
       if (!waitFor(c, s, job, d) && rig !== null) cands.push({ job, ...rig })
       k++
     }
@@ -940,10 +956,10 @@ function byPriority(c: Campaign, s: Season, u: Unit, d: Day, out: GameEvent[], b
 }
 
 // Who works today: everyone but a foreman and anyone laid up hurt, and nobody on a Sunday off.
-function turnsFor(c: Campaign, s: Season): Turn[] {
+function turnsFor(c: Campaign, s: Season, from = 0, to = 1): Turn[] {
   if (!workday(c, s)) return []
   const turns: Turn[] = []
-  for (const u of c.crew) if (!u.foreman && !hurt(u, s.day) && !resting(u)) turns.push({ u, left: 1, idle: false, spent: zeroSkills(), tractor: false, waited: 0, keys: [] })
+  for (const u of c.crew) if (!u.foreman && !hurt(u, s.day) && !resting(u)) turns.push({ u, left: to - from, end: to, idle: false, spent: zeroSkills(), tractor: false, waited: 0, keys: [] })
   turns.sort((a, b) => turnBefore(a.u, b.u) ? -1 : turnBefore(b.u, a.u) ? 1 : 0)
   return turns
 }
@@ -965,18 +981,16 @@ export function standOpen(c: Campaign, s: Season): boolean {
 
 // Someone minds the stand each day it is open: whoever puts packing first among those working today (on a tie, the
 // first to take a turn). False when nobody is working, and the stand stays shut.
-function mindStand(c: Campaign, s: Season, turns: Turn[]): boolean {
-  if (!standOpen(c, s)) return false
+// Who it is, or -1.
+function standMinder(c: Campaign, s: Season, turns: Turn[]): number {
+  if (!standOpen(c, s)) return -1
   let best: Turn | null = null
   for (const t of turns) {
     const p = t.u.prio.pack
     if (p > 0 && (!best || p < best.u.prio.pack)) best = t
   }
   if (!best) best = turns[0] ?? null
-  if (!best) return false
-  best.left -= P.STAND_MIND
-  best.spent.pack += P.STAND_MIND
-  return true
+  return best ? best.u.id : -1
 }
 
 // A day at the farm stand: about STAND_CWT from the newest lot at twice the market's No. 1 price; 2.4 times for red
@@ -1016,27 +1030,35 @@ function pondDay(world: World, c: Campaign, s: Season, d: Day, out: GameEvent[])
   }
 }
 
-function runCrews(world: World, c: Campaign, s: Season, d: Day, out: GameEvent[]): { turns: Turn[]; minded: boolean } {
-  s.worked = []
-  const turns = turnsFor(c, s)
-  const minded = mindStand(c, s, turns)
+// The crews' work from one time of the day to another (shares of the day; a whole day is 0 to 1). A day worked in
+// several stretches is the same day: whoever holds an order carries it on, and the day's time is counted once.
+function runCrews(world: World, c: Campaign, s: Season, d: Day, out: GameEvent[], from: number, to: number): void {
+  const clock = s.clock!
+  const turns = turnsFor(c, s, from, to)
+  // Minding the stand takes its share of each stretch of the day.
+  const minder = clock.stand >= 0 ? turns.find(t => t.u.id === clock.stand) : undefined
+  if (minder) {
+    const m = P.STAND_MIND * (to - from)
+    minder.left -= m
+    minder.spent.pack += m
+  }
   const book: Book = new Map()
   // Takes a booking: the person waits for the machine, which is theirs to the end of the day until they let it go.
   const take = (t: Turn, b: Booking) => {
-    const wait = Math.max(0, b.start - (1 - t.left))
+    const wait = Math.max(0, b.start - (t.end - t.left))
     t.left -= wait
     t.waited += wait
-    for (const k of b.keys) book.set(k, 1)
+    for (const k of b.keys) book.set(k, t.end)
     t.u.rig = b.rig
     t.keys = b.keys
   }
   // Once they are done for now: let go, the machine is free from that moment; still held, it stays booked.
-  const done = (t: Turn, b: Booking) => { if (t.u.job < 0) for (const k of b.keys) book.set(k, 1 - t.left); t.keys = [] }
+  const done = (t: Turn, b: Booking) => { if (t.u.job < 0) for (const k of b.keys) book.set(k, t.end - t.left); t.keys = [] }
   for (const t of turns) {
     const u = t.u
     const job = u.job >= 0 ? s.jobs.find(j => j.id === u.job) : undefined
     // Carrying on: a machine held from yesterday is booked first thing, or the order goes back when none is free.
-    const b = job && u.rig ? rigFor(c, s, job, book, 1 - t.left) : null
+    const b = job && u.rig ? rigFor(c, s, job, book, t.end - t.left, t.end) : null
     if (job && u.rig && !b) { letGo(u); continue }
     if (b) take(t, b)
     if (!drive(t)) { if (b) done(t, b); continue }
@@ -1051,14 +1073,73 @@ function runCrews(world: World, c: Campaign, s: Season, d: Day, out: GameEvent[]
       if (!t || x.left > t.left) t = x
     }
     if (!t) break
-    const pick = choose(c, s, t.u, d, out, book, 1 - t.left)
+    const pick = choose(c, s, t.u, d, out, book, t.end - t.left, t.end)
     if (!pick) { t.idle = true; continue }
     t.u.job = pick.job.id
     take(t, pick)
     work(world, c, s, t, pick.job, d, out)
     done(t, pick)
   }
-  return { turns, minded }
+  // The day's count for each person: the time not used, the waits, what was worked at.
+  for (const t of turns) {
+    let a = clock.turns.find(x => x.id === t.u.id)
+    if (!a) { a = { id: t.u.id, left: from, waited: 0, spent: zeroSkills(), tractor: false }; clock.turns.push(a) }
+    a.left += t.left
+    a.waited += t.waited
+    for (const k of P.SKILLS) a.spent[k] += t.spent[k]
+    if (t.tractor) a.tractor = true
+  }
+  // (someone taken off work part way through the day: the rest of it is time not used)
+  for (const a of clock.turns) if (!turns.some(t => t.u.id === a.id)) a.left += to - from
+}
+
+// The morning of a day, once: wages, the picking crew, repairs and telegrams unanswered, orders that no longer make
+// sense, and who minds the stand.
+function dayStart(c: Campaign, s: Season, out: GameEvent[]): void {
+  // Wages fall due every WAGE_DAYS from the day each person was taken on.
+  for (const u of c.crew) {
+    while (u.wage > 0 && s.day >= u.paidTo) {
+      const pay = payOf(u)
+      charge(c, pay)
+      c.yearWages += pay
+      u.paidTo += P.WAGE_DAYS
+    }
+  }
+  // The picking crew goes back to school when the harvest break ends; while it is on it is paid for each day worked.
+  if (s.pickers && s.day > dayIndex(s.year, P.PICKERS_TO.month, P.PICKERS_TO.dom)) {
+    s.pickers = false
+    push(s, out, 'pickers', -1, 'info', 'The harvest break is over and the pickers are back in school.')
+  }
+  if (s.pickers && workday(c, s)) {
+    charge(c, P.PICKER_DAY)
+    c.yearWages += P.PICKER_DAY
+  }
+
+  morning(c, s, out)
+  sweep(c, s, out)
+  s.pressed = []
+  s.digStop = []
+  s.worked = []
+  s.clock = { at: 0, stand: standMinder(c, s, turnsFor(c, s)), turns: [] }
+}
+
+// Works the day on to a time of day (a share of it, 1 the evening), starting the day if it has not begun. An order
+// given part way through a day is given to a farm that has done the day's work up to then.
+export function workDay(world: World, c: Campaign, to: number): GameEvent[] {
+  const s = c.season!
+  const out: GameEvent[] = []
+  if (s.frozen) return out
+  workTo(world, c, s, getDay(world, s.year, s.day), out, to)
+  return out
+}
+
+function workTo(world: World, c: Campaign, s: Season, d: Day, out: GameEvent[], to: number): void {
+  if (!s.clock) dayStart(c, s, out)
+  const clock = s.clock!
+  const end = Math.min(1, to)
+  if (end - clock.at <= EPS) return
+  runCrews(world, c, s, d, out, clock.at, end)
+  clock.at = end
 }
 
 // The end of each person's day: experience in what they worked at, tiredness, mood, and whether they have had enough.
@@ -1432,30 +1513,15 @@ export function stepDay(world: World, c: Campaign): GameEvent[] {
   if (s.frozen) return out
   const d = getDay(world, s.year, s.day)
 
-  // Wages fall due every WAGE_DAYS from the day each person was taken on.
-  for (const u of c.crew) {
-    while (u.wage > 0 && s.day >= u.paidTo) {
-      const pay = payOf(u)
-      charge(c, pay)
-      c.yearWages += pay
-      u.paidTo += P.WAGE_DAYS
-    }
+  workTo(world, c, s, d, out, 1)
+  // The day as each person had it, whether it was worked in one stretch or several.
+  const turns: Turn[] = []
+  for (const a of s.clock!.turns) {
+    const u = c.crew.find(x => x.id === a.id)
+    if (u) turns.push({ u, left: a.left, end: 1, idle: false, spent: a.spent, tractor: a.tractor, waited: a.waited, keys: [] })
   }
-  // The picking crew goes back to school when the harvest break ends; while it is on it is paid for each day worked.
-  if (s.pickers && s.day > dayIndex(s.year, P.PICKERS_TO.month, P.PICKERS_TO.dom)) {
-    s.pickers = false
-    push(s, out, 'pickers', -1, 'info', 'The harvest break is over and the pickers are back in school.')
-  }
-  if (s.pickers && workday(c, s)) {
-    charge(c, P.PICKER_DAY)
-    c.yearWages += P.PICKER_DAY
-  }
-
-  morning(c, s, out)
-  sweep(c, s, out)
-  s.pressed = []
-  s.digStop = []
-  const { turns, minded } = runCrews(world, c, s, d, out)
+  const minded = s.clock!.stand >= 0
+  delete s.clock
   contractors(c, s, out)
   if (minded) standSales(world, c, s)
   pondDay(world, c, s, d, out)
