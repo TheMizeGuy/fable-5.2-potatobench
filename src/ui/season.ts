@@ -648,6 +648,19 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     onGrid: () => grid.toggle(),
     hireShown: () => { const c = app.campaign; return !!c && (c.crew.length > 1 || c.history.length > 0 || c.season!.fields.some(f => f.plantDay >= 0)) },
     goal: () => { const c = app.campaign; const g = c ? nextGoal(c) : null; return g?.id === 'hire' ? 'hire' : g?.id === 'foreman' ? 'person' : '' },
+    listLimit: () => {
+      const layout = ctx.layout()
+      const list = crew.querySelector<HTMLElement>('.queue')
+      if (layout === 'narrow' || layout === 'short' || !list || list.offsetParent === null) return Infinity
+      const r = list.getBoundingClientRect()
+      let limit = Infinity
+      for (const c of [card.el, yard.el, person.el]) {
+        if (c.hidden || c.offsetParent === null) continue
+        const b = c.getBoundingClientRect()
+        if (b.bottom > r.top && b.top < r.bottom && b.left > r.left + 150) limit = Math.min(limit, b.left - 8)
+      }
+      return limit
+    },
   })
 
   // ------------------------------------------------------------ keys

@@ -1456,7 +1456,12 @@ test('the guide never runs past a decision: the word to plant, the spraying ques
     if (await game<number>(page, 'app.speed') > 0) break
     await page.waitForTimeout(700)
   }
-  await expect.poll(() => game<number>(page, 'app.speed'), { timeout: 8000 }).toBeGreaterThan(0)
+  // (a note that comes a little later is acknowledged too: the guide runs on once nothing waits for the player)
+  await expect.poll(async () => {
+    const got = page.locator('#ui [data-testid="guide-slip"]:not([hidden]) [data-testid="guide-noted"]').first()
+    if (await got.isVisible().catch(() => false)) await got.click().catch(() => {})
+    return game<number>(page, 'app.speed')
+  }, { timeout: 12_000 }).toBeGreaterThan(0)
   expect(errors, errors.join('\n')).toEqual([])
 })
 

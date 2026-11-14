@@ -653,7 +653,8 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
               phone ? balance : null),
             season ? seasonTrack(c) : null,
             season ? phaseRow(c) : null),
-          goalSlip(c, g, gone, season),
+          // (in a holder as wide as the board and no wider: whatever the slip says, the board keeps its own width)
+          h('div', { class: 'goal-hang' }, goalSlip(c, g, gone, season)),
           pop === 'goals' ? ladder(c, g) : null,
           phone ? money : null),
         phone ? null : h('section', { class: 'bank', 'aria-label': 'Money, game speed and contracts' },

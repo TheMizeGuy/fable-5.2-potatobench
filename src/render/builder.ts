@@ -397,7 +397,8 @@ export function builtMaterial(): MeshStandardMaterial {
       // across: a line thinner than the picture's grain is drawn as the grey it makes there, so it never breaks into
       // steps that crawl along it when the view moves.
       float bandTo(float x, float a, float b) { return floor(x) * (b - a) + clamp(fract(x) - a, 0.0, b - a); }
-      float band(float c, float a, float b, float soft) { float w = max(fwidth(c), soft); return (bandTo(c + 0.5 * w, a, b) - bandTo(c - 0.5 * w, a, b)) / w; }
+      // (read a little wider than one point of the picture: a line then passes from one point to the next evenly)
+      float band(float c, float a, float b, float soft) { float w = max(1.4 * fwidth(c), soft); return (bandTo(c + 0.5 * w, a, b) - bandTo(c - 0.5 * w, a, b)) / w; }
     `,
     fragmentColor: /* glsl */ `
       {
@@ -493,7 +494,8 @@ export function builtMaterial(): MeshStandardMaterial {
         } else if (fin == ${FIN.glass}) {
           vec2 pc = uv * max(vColor.xy, vec2(1.0)), pf = abs(fract(pc) - 0.5), aa = fwidth(pc);
           vec2 bw = vec2(0.05, 0.038);
-          vec2 bar = smoothstep(vec2(0.5) - bw - aa * 0.5, vec2(0.5) - bw + aa * 0.5, pf);
+          // the bars between the panes, each drawn as the share of the point it covers
+          vec2 bar = vec2(band(pc.x + bw.x, 0.0, 2.0 * bw.x, 0.02), band(pc.y + bw.y, 0.0, 2.0 * bw.y, 0.02));
           // too far off to draw a bar: the glass keeps the bars' own small share of pale
           float wood = mix(max(bar.x, bar.y), 0.14, smoothstep(0.3, 0.9, max(aa.x, aa.y)));
           bGlass = 1.0 - wood;

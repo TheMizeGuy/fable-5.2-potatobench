@@ -319,7 +319,9 @@ void main() {
       col = clamp(col + (col - 0.25 * (cNW + cNE + cSW + cSE)) * uSharp, lo, hi);
     }
   } else col = stretched(uv);
-  float g = hash(gl_FragCoord.xy + fract(uGrain.y) * 91.7) - 0.5;
+  // The grain holds still: one that changed with every frame lay quiet while nothing was drawn anew and seethed over
+  // the whole picture, the pale walls most of all, the moment the camera moved.
+  float g = hash(gl_FragCoord.xy) - 0.5;
   col += g * uGrain.x * (1.0 - 0.6 * lum(col));
   gl_FragColor = vec4(col, 1.0);
 }

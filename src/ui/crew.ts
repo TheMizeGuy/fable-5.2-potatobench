@@ -47,6 +47,8 @@ export interface BarHooks {
   // Whether hiring is in reach yet, and whether the goal points at it.
   hireShown(): boolean
   goal(): 'hire' | 'person' | ''
+  // Where the work list must end (a screen x) while a card stands beside it; Infinity when nothing does.
+  listLimit?(): number
 }
 
 const NEXT_MS = 2600
@@ -76,6 +78,8 @@ function fixWord(c: S.Campaign, p: S.Pressing): string {
 export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c: S.Campaign): void; escape(): boolean; dispose(): void } {
   const app = ctx.app
   let expanded = false
+  // Beside a card the list shows no more orders than fit on its own side of it (cap), for the limit it was found at.
+  let cap = Infinity, capFor = Infinity
   // The order whose choices are open, and whether only the choice of crew is shown (from the mouse) or all of them.
   let pop = -1
   let popWho = false
@@ -223,7 +227,7 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
     const touch = ctx.touch()
     const head = jobs.find(j => !waits[j.id]) ?? null
     const all = expanded || jobs.length <= room
-    const list = all ? jobs : jobs.slice(0, room - 1)
+    const list = all ? jobs : jobs.slice(0, Math.max(1, room - 1))
     return h('ol', { class: `queue${expanded ? ' all' : ''}`, 'aria-label': 'Work list, in the order your crew will do it' },
       h('li', { class: 'q-label t-label', 'aria-hidden': 'true' }, 'Work list'),
       press,
@@ -307,48 +311,63 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
     // How many orders the list has room for before the rest fold behind a count.
     // In the guided first year: the next two, and a count.
     const guided = guidedYear(c)
-    const room = guided ? 3 : layout === 'narrow' ? Math.max(3, Math.floor((innerWidth - 120) / 52)) : layout === 'short' ? 4 : layout === 'wide' ? 5 : 7
+    const limit = hooks.listLimit?.() ?? Infinity
+    if (!Number.isFinite(limit) || expanded || Math.abs(limit - capFor) > 24) { cap = Infinity; capFor = limit }
+    let room = Math.min(guided ? 3 : layout === 'narrow' ? Math.max(3, Math.floor((innerWidth - 120) / 52)) : layout === 'short' ? 4 : layout === 'wide' ? 5 : 7, cap)
     const now = people.map(p => personNow(c, p.id, waits))
     const signs = people.map(p => personSign(p, idleWithWork(c, p, waits)))
     if (next && performance.now() >= next.until) next = null
     const way = sprayWay(c)
     // (in the guided first year, not before the question has been asked)
     const spraying = s0.watchDay >= 0 && !S.seasonDone(c) && (!!way || !guided)
-    const model = {
-      j: jobs.map(j => [j.id, j.kind, j.field, j.unit, Math.round(j.need > 0 ? j.done / j.need * 20 : 0), waits[j.id]]),
-      u: people.map((p, k) => [p.id, p.name, now[k].glyph, now[k].line, Math.round(now[k].progress * 20), signs[k]?.glyph, signs[k]?.cls]),
-      pick: app.unit, expanded, pop, popWho, layout, room, guided, touch, h: c.fields.map(f => f.tenure), w: waiting.map(x => x.id), grid: hooks.gridOpen(), hire: hooks.hireShown(), goal,
-      next: next ? [next.unit, next.kind, next.field] : 0, stopped: [...stopped], spray: spraying ? way ?? 'ask' : 0,
-      pr: c.crew.map(u => [u.id, u.prio, u.job, u.rest]),
-      fate: [...f.of.values()].map(o => [o.id, o.unit, o.when, o.why]), press: f.pressing.map(p => [p.kind, p.field, p.why, p.inWay]),
+    const draw = (): void => {
+      const model = {
+        j: jobs.map(j => [j.id, j.kind, j.field, j.unit, Math.round(j.need > 0 ? j.done / j.need * 20 : 0), waits[j.id]]),
+        u: people.map((p, k) => [p.id, p.name, now[k].glyph, now[k].line, Math.round(now[k].progress * 20), signs[k]?.glyph, signs[k]?.cls]),
+        pick: app.unit, expanded, pop, popWho, layout, room, guided, touch, h: c.fields.map(f => f.tenure), w: waiting.map(x => x.id), grid: hooks.gridOpen(), hire: hooks.hireShown(), goal,
+        next: next ? [next.unit, next.kind, next.field] : 0, stopped: [...stopped], spray: spraying ? way ?? 'ask' : 0,
+        pr: c.crew.map(u => [u.id, u.prio, u.job, u.rest]),
+        fate: [...f.of.values()].map(o => [o.id, o.unit, o.when, o.why]), press: f.pressing.map(p => [p.kind, p.field, p.why, p.inWay]),
+      }
+      el.classList.toggle('busy', jobs.length > 0)
+      el.classList.toggle('many', many)
+      patch(el, JSON.stringify(model), () => [
+        queue(c, jobs, crews, people, waits, many, room, f.of, pressingChip(c, f.pressing.filter(p => !(p.kind === 'spray' && sprayWay(c) === 'none') && !(p.kind === 'kill' && p.job < 0 && guided)))),
+        h('section', { class: 'timebook mount sys', 'aria-label': 'People' },
+          h('div', { class: `page units${many ? ' many' : ''}${people.length > 5 ? ' crowded' : ''}`, role: 'group', 'aria-label': 'People' },
+            people.map((p, k) => cell(c, p, now[k], signs[k], many, goal === 'person' && k === 1, stopped.has(p.id))),
+            h('div', { class: 'tools bar-tools' },
+              // How spraying is done this season, and the way to change it, once blight weather has come: the whole
+              // farm's, so it stands with the people and not on any one field's card.
+              spraying ? h('button', {
+                class: 'iconbtn spray-way', type: 'button', testid: 'spraying-open', title: touch ? undefined : `Spraying this season: ${way === 'auto' ? 'kept sprayed' : way === 'none' ? 'not this year' : 'ask me'} · change`,
+                onclick: () => askSpray(ctx),
+              }, icon('spray', 'i'), h('span', { class: 'sr' }, 'Spraying this season: ', h('b', null, way === 'auto' ? 'kept sprayed' : way === 'none' ? 'not this year' : 'ask me'), h('span', { class: 'quiet' }, ' · change'))) : null,
+              waiting.length ? h('button', {
+                class: 'iconbtn inc-mark', type: 'button', testid: 'incident-open', 'aria-label': `${waiting[0].title}. Waiting for your answer.`, title: touch ? undefined : waiting[0].title,
+                onclick: () => hooks.onIncident(),
+              }, icon('ask', 'i'), waiting.length > 1 ? h('span', { class: 'inc-n num', 'aria-hidden': 'true' }, String(waiting.length)) : null) : null,
+              people.length >= 3 ? h('button', {
+                class: `iconbtn${hooks.gridOpen() ? ' is-on' : ''}`, type: 'button', testid: 'grid-open', 'aria-pressed': String(hooks.gridOpen()), 'aria-label': `Who does what${touch ? '' : ' (G)'}`,
+                title: touch ? undefined : 'Who does what (G)', onclick: () => hooks.onGrid(),
+              }, icon('grid', 'i')) : null,
+              hooks.hireShown() ? h('button', {
+                class: `iconbtn crew-open${goal === 'hire' ? ' goal-ring' : ''}`, type: 'button', testid: 'crew-open', 'aria-label': 'Hire someone', title: touch ? undefined : 'Hire someone',
+                onclick: () => openCrew(ctx),
+              }, icon('hire', 'i')) : null))),
+      ])
     }
-    el.classList.toggle('busy', jobs.length > 0)
-    el.classList.toggle('many', many)
-    patch(el, JSON.stringify(model), () => [
-      queue(c, jobs, crews, people, waits, many, room, f.of, pressingChip(c, f.pressing.filter(p => !(p.kind === 'spray' && sprayWay(c) === 'none') && !(p.kind === 'kill' && p.job < 0 && guided)))),
-      h('section', { class: 'timebook mount sys', 'aria-label': 'People' },
-        h('div', { class: `page units${many ? ' many' : ''}${people.length > 5 ? ' crowded' : ''}`, role: 'group', 'aria-label': 'People' },
-          people.map((p, k) => cell(c, p, now[k], signs[k], many, goal === 'person' && k === 1, stopped.has(p.id))),
-          h('div', { class: 'tools bar-tools' },
-            // How spraying is done this season, and the way to change it, once blight weather has come: the whole
-            // farm's, so it stands with the people and not on any one field's card.
-            spraying ? h('button', {
-              class: 'iconbtn spray-way', type: 'button', testid: 'spraying-open', title: touch ? undefined : `Spraying this season: ${way === 'auto' ? 'kept sprayed' : way === 'none' ? 'not this year' : 'ask me'} · change`,
-              onclick: () => askSpray(ctx),
-            }, icon('spray', 'i'), h('span', { class: 'sr' }, 'Spraying this season: ', h('b', null, way === 'auto' ? 'kept sprayed' : way === 'none' ? 'not this year' : 'ask me'), h('span', { class: 'quiet' }, ' · change'))) : null,
-            waiting.length ? h('button', {
-              class: 'iconbtn inc-mark', type: 'button', testid: 'incident-open', 'aria-label': `${waiting[0].title}. Waiting for your answer.`, title: touch ? undefined : waiting[0].title,
-              onclick: () => hooks.onIncident(),
-            }, icon('ask', 'i'), waiting.length > 1 ? h('span', { class: 'inc-n num', 'aria-hidden': 'true' }, String(waiting.length)) : null) : null,
-            people.length >= 3 ? h('button', {
-              class: `iconbtn${hooks.gridOpen() ? ' is-on' : ''}`, type: 'button', testid: 'grid-open', 'aria-pressed': String(hooks.gridOpen()), 'aria-label': `Who does what${touch ? '' : ' (G)'}`,
-              title: touch ? undefined : 'Who does what (G)', onclick: () => hooks.onGrid(),
-            }, icon('grid', 'i')) : null,
-            hooks.hireShown() ? h('button', {
-              class: `iconbtn crew-open${goal === 'hire' ? ' goal-ring' : ''}`, type: 'button', testid: 'crew-open', 'aria-label': 'Hire someone', title: touch ? undefined : 'Hire someone',
-              onclick: () => openCrew(ctx),
-            }, icon('hire', 'i')) : null))),
-    ])
+    draw()
+    // Beside a card the list keeps to its own side: the orders that do not fit there fold behind the count, so a
+    // list that grows as orders are given from the card never runs under it and pushes it, and the keys in it,
+    // from under the hand.
+    for (let k = 0; k < 6 && Number.isFinite(limit) && !expanded && room > 1; k++) {
+      const q = el.querySelector<HTMLElement>('.queue')
+      if (!q || q.getBoundingClientRect().right <= limit) break
+      room = Math.max(1, Math.min(room, jobs.length) - 1)
+      cap = room
+      draw()
+    }
   }
 
   return {

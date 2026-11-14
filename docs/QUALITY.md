@@ -122,15 +122,19 @@ found); bare hardwood twigs are scribble close up in winter; tags crowd the lowe
 by the sheet's edge; a field off screen has no tag and is picked by its number; the balance gates for the farmstead
 are partly unmet (`docs/balance/README.md`).
 
-**Known faults after `live-44`**: a field's card that stands just right of the work list is pushed a few pixels
-aside when orders given from it lengthen the list under it (the list is a thing the card keeps off), so the order
-keys shift under the hand; `e2e/interface.spec.ts:153` shows it in the full twelve-file run and not alone, because
-where the card is first laid depends on how fast the frames come. Letting the list wrap at the card's edge held the
-card still in a slowed browser and with eight copies at once, but with it the guide's clock test
-(`e2e/tutorial.spec.ts:1403`) began to fail one run in three, so it was not kept. The guided first year
-(`e2e/tutorial.spec.ts:122`) is sensitive to the same load: what the guide shows of the dig depends on who is still in
-the field when it looks. The light on the buildings was checked in stills only: no measure was found that tells a
-flicker from ordinary edges moving across the picture.
+**The light on the buildings while the camera moves (`live-45`)**: measured with `tools/render/subpixel.ts`, which
+shifts the whole picture by half of one of its points (no turn, no change of perspective, the wind and the clock
+held) and asks how far it is from half way between itself and itself shifted a whole point; on a screen of twice the
+density, where the picture is drawn at 1/1.69 of the screen and stretched, the picture moved one screen point against
+itself. Round the farmhouse at 45 to 190 m, of 255: `live-43` 3.16 (3.43 stretched), `live-45` 2.28 (2.77 stretched);
+moved up or down at 45 and 70 m, where the siding broke into false stripes, 5.5 and 5.8 became 3.0 and 2.7. Two
+pictures of one view differed by 1.2 at every point on `live-43` (a grain that changed with every frame, seen only
+while frames were drawn, which is while the camera moves) and are now the same picture. What is left is the edges
+of thin, strongly contrasted things (shutters, window frames, pickets) under four-sample multisampling.
+
+**Known faults after `live-45`**: the guided first year (`e2e/tutorial.spec.ts:122`) is sensitive to load: what the
+guide shows of the dig depends on who is still in the field when it looks. A tag for a field under the foot boards
+can be taken up and faded in a few times in a long pan.
 
 ## What a frame costs
 
