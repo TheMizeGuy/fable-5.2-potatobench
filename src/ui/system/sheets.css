@@ -12,6 +12,8 @@
 /* The board's lines keep fixed rows, one line each, said or not: the keys under the board never move. */
 .topbar .balance .cash-moved { height: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .topbar .balance .after-why { display: flex; justify-content: flex-end; align-items: center; gap: 6px; height: 28px; white-space: nowrap; overflow: hidden; }
+/* The amount is never the part cut short: only the words before it give way. */
+.topbar .balance .after-why .why-amt { flex: none; margin-left: -6px; }
 .topbar .balance .after-why .why-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .topbar .balance .after-why .why-key { flex: none; min-height: 22px; margin: 0; }
 .topbar .balance .after .give { height: 16px; white-space: nowrap; }

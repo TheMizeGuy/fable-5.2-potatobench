@@ -9,7 +9,7 @@ import { count, patch, type Ctx } from './core.ts'
 import { h, type Child } from './dom.ts'
 import * as F from './fmt.ts'
 import { icon } from './icons.ts'
-import { BORROWED_SAYS, causeLine, LOAN_NOTE, loanNoteNow, rangeSays, REMEDY, sumLines } from './money-words.ts'
+import { BORROWED_SAYS, causeLine, LOAN_NOTE, loanNoteNow, rangeSays, REMEDY, signedMoney, sumLines } from './money-words.ts'
 import { BLIGHT_RISK, firstName, forecastSky, JOB_VERB, jobText, plantingIn, SKY_WORD, yearName } from './rules.ts'
 import { fist } from './system/parts.ts'
 
@@ -132,7 +132,8 @@ export function clock(ctx: Ctx, compact: boolean, onMenu?: () => void): HTMLElem
   const pause = h('button', {
     class: `k${paused ? ' stopped' : ''}`, type: 'button', testid: compact ? 'speed-toggle' : 'speed-0', 'aria-pressed': String(paused),
     'aria-label': paused ? `Paused. Resume at ${SPEED_X[at]}${keys ? ' (Space)' : ''}` : `Pause${keys ? ' (Space)' : ''}`,
-    title: keys ? (paused ? `Resume at ${SPEED_X[at]} (Space)` : 'Pause (Space)') : undefined, onclick: () => app.togglePause(),
+    title: keys ? (paused ? `Resume at ${SPEED_X[at]} (Space)` : 'Pause (Space)') : undefined,
+    onclick: () => { if (!app.pressPause()) ctx.announce(`The game is running at ${SPEED_X[app.speed]}.`) },
   }, icon(paused ? 'play' : 'pause'))
   if (compact) {
     const next = (at % 3 + 1) as 1 | 2 | 3
@@ -320,7 +321,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
   let watch: S.MoneyWatch | null = null
   let openedIn = -1
   let loanSaid = -1
-  const closePop = (e: Event) => { if (pop && !(e.target as HTMLElement).closest?.('.tb-pop, .goal, .materials, .after-key, .why-key')) { pop = ''; ctx.dirty() } }
+  const closePop = (e: Event) => { if (pop && !(e.target as HTMLElement).closest?.('.tb-pop, .goal, .materials, .after-key, .why-key, [data-testid="bar-money"]')) { pop = ''; ctx.dirty() } }
   const openMoney = (by: 'press' | 'hover') => { if (pop === 'money' && by === 'press' && popBy === 'press') pop = ''; else { pop = 'money'; popBy = by; openedIn = app.campaign?.year ?? -1; if (whyNow) whyNow.ask = false } ctx.dirty() }
   // A cause's remedy: its field, with its card open and the order that helps lit.
   const fix = (why: S.MoneyCause) => {
@@ -603,7 +604,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
         after && lines && !moved ? h('span', { class: 'cash-moved idle', 'aria-hidden': 'true' }, '\u00a0') : null,
         after,
         after && lines ? h('span', { class: `after-why${whyNow ? '' : ' idle'}`, testid: whyNow ? 'outlook-why' : undefined, role: whyNow ? 'status' : undefined, 'aria-hidden': whyNow ? undefined : 'true' },
-          whyNow ? [h('span', { class: 'why-t' }, whyNow.text),
+          whyNow ? [h('span', { class: 'why-t' }, whyNow.cause.text), Math.abs(whyNow.cause.amount) < 0.5 ? null : h('span', { class: 'why-amt num' }, `: ${signedMoney(whyNow.cause.amount)}`),
             whyNow.cause.remedy ? [' ', h('button', { class: 'why-key fix-key', type: 'button', testid: 'outlook-fix', onclick: () => fix(whyNow!.cause) }, REMEDY[whyNow.cause.remedy] ?? 'Show me')] : null,
             whyNow.ask ? [' ', h('button', { class: 'why-key', type: 'button', testid: 'outlook-why-open', 'aria-label': 'Why?', title: ctx.touch() ? undefined : 'Why?', 'aria-expanded': String(pop === 'money'), onclick: () => openMoney('press') }, icon('help', 'i'))] : null]
             : '\u00a0') : null)

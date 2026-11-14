@@ -1056,3 +1056,85 @@ for (const [w, h] of [[1280, 800], [1440, 900]]) {
     expect(errors, errors.join('\n')).toEqual([])
   })
 }
+
+// ---------------------------------------------------------------- round nine (docs/quality/players/round-9.md)
+
+// The top bar's own box spans the window: a right-drag begun between the boards did nothing, and a player could not
+// tilt the view back.
+test('the land between the boards and beside the goal slip takes the pointer: nothing unseen lies over it', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'the desk\'s boards')
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await startSeason(page)
+  await reach(page, `const { app } = q.g(); app.select(-1); app.selectUnit(-1)`)
+  await putAway(page)
+  await expect(page.getByTestId('goal')).toBeVisible()
+  const boards = await page.evaluate(() => [...document.querySelectorAll('#ui .topbar > section')].map(e => { const r = e.getBoundingClientRect(); return { l: r.left, r: r.right, b: r.bottom } }))
+  expect(boards.length).toBeGreaterThanOrEqual(2)
+  const left = Math.min(...boards.map(b => b.r)), right = Math.max(...boards.map(b => b.l)), foot = Math.max(...boards.map(b => b.b))
+  expect(right - left, 'room between the boards').toBeGreaterThan(200)
+  const over = await page.evaluate(([l, r, f]) => {
+    const out: string[] = []
+    for (let y = 12; y < f + 40; y += 12) for (let x = l + 16; x < r - 16; x += 24) {
+      const e = document.elementFromPoint(x, y) as HTMLElement | null
+      if (e && e.tagName !== 'CANVAS') out.push(`${x},${y} ${e.tagName}.${String(e.className).slice(0, 40)}`)
+    }
+    return out
+  }, [left, right, foot])
+  expect(over, 'between the boards').toEqual([])
+  // Beside the slip and its key, inside the row they stand in.
+  const row = await page.evaluate(() => {
+    const row = document.querySelector('#ui .topbar .goal-row')
+    if (!row) return []
+    const r = row.getBoundingClientRect()
+    const out: string[] = []
+    for (let y = r.top + 4; y < r.bottom - 2; y += 8) for (let x = r.left + 4; x < r.right - 2; x += 12) {
+      const e = document.elementFromPoint(x, y) as HTMLElement | null
+      if (e === row) out.push(`${Math.round(x)},${Math.round(y)}`)
+    }
+    return out
+  })
+  expect(row, 'the goal row\'s own empty box').toEqual([])
+})
+
+test('the yard\'s key for selling logs keeps its name on one line, clear of its price', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'the desk\'s card')
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await startSeason(page)
+  await reach(page, `const { app } = q.g(); app.campaign.logs = 38; app.select(-1); app.selectUnit(-1); app.selectYard(-1)`)
+  const key = page.getByTestId('yard-sell-logs')
+  await expect(key).toBeVisible()
+  const name = (await key.locator('.name').boundingBox())!, cost = (await key.locator('.cost').boundingBox())!
+  expect(name.height, 'one line').toBeLessThanOrEqual(30)
+  expect(name.x + name.width, 'clear of the price').toBeLessThanOrEqual(cost.x + 1)
+  await expect(key.locator('.name')).toHaveText('Sell 38 loads of logs')
+})
+
+// A click on the clock's own pause key 0.5 to 1 s after an answer had set the days going paused the game again, and
+// read as "the game keeps pausing itself"; a click on Sell while the scale was still weighing missed, the ticket
+// having been laid out taller until it was done.
+test('a press on the pause key just after an answer is read as go on, once; the ticket\'s keys stand still while the scale weighs', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'the desk\'s clock')
+  const errors = watchErrors(page)
+  await startSeason(page)
+  await reach(page, `const { app } = q.g(); app.setSpeed(0); app.do({ t: 'sprayWay', way: 'ask' }); q.run('digging', ['sell'], 'status'); app.campaign.incidents = []`)
+  await putAway(page)
+  await page.getByTestId('speed-2').click()
+  const ticket = page.getByTestId('weighin')
+  await untilTicket(page)
+  const sell = ticket.locator('[data-testid^="lot-sell-"]').first()
+  const y0 = (await sell.boundingBox())!.y
+  await expect(page.locator('#ui .dig-day:not(.revealing) .ticket:not(.is-waiting)')).toBeVisible({ timeout: 10_000 })
+  await page.waitForTimeout(500)
+  expect(Math.abs((await sell.boundingBox())!.y - y0), 'Sell stands where it stood while the scale weighed').toBeLessThanOrEqual(1)
+  await sell.click()
+  await page.evaluate(() => new Promise<void>(done => {
+    const app = (globalThis as unknown as { __county: { app: { speed: number } } }).__county.app
+    const tick = () => { if (app.speed > 0) { setTimeout(() => { (document.querySelector('#ui [data-testid="speed-0"]') as HTMLElement).click(); done() }, 600) } else requestAnimationFrame(tick) }
+    tick()
+  }))
+  expect((await look(page)).speed, 'still running').toBe(2)
+  // The next press is a pause.
+  await page.getByTestId('speed-0').click()
+  await expect.poll(async () => (await look(page)).paused).toBe(true)
+  expect(errors, errors.join('\n')).toEqual([])
+})

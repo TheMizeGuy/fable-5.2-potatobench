@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { countWords, driving, Guide, KEY, LESSONS, lesson, openAsks, OPENING_PACE, PIECES, RUN_PACE, type Input, type Look, type Scene, type Store } from '../src/game/tutorial.ts'
+import { countWords, driving, Guide, KEY, LESSONS, lesson, openAsks, OPENING_PACE, PIECES, RUN_PACE, type Input, type Look, type Scene, type Store, partName } from '../src/game/tutorial.ts'
 import * as S from '../src/sim/index.ts'
 import { loadWorld } from '../tools/balance/world.ts'
 
@@ -627,5 +627,46 @@ describe('round eight: the guide in the opening and in the second spring', () =>
     }
     // The season's first note says the game pauses for the word.
     expect(lesson('calls2')!.ask(land)).toBe('It\'s a new season. The game pauses when the soil is ready, and planting waits for your word.')
+  })
+})
+
+describe('round nine: a note put away before its click, and the year a note is headed with', () => {
+  it('Got it on "pick a field", then a field opened: the note is about that field, and the next step waits its turn; the same for People', () => {
+    const { w, c } = guidedYear(11)
+    expect(c.phase).toBe('plan')
+    const g = new Guide(memory())
+    g.skipTo('seed')
+    expect(g.current(look(w, c))?.id).toBe('seed')
+    g.noted('seed')
+    expect(g.current(look(w, c))?.id).toBe('people')
+    const i = c.plans.findIndex((p, k) => p?.crop === 'potato' && S.held(c, k))
+    const open = look(w, c, { selection: [i] })
+    for (let k = 0; k < 5; k++) expect(g.current(open)?.id).toBe('crop')
+    expect(lesson('crop')!.ask(open)).toContain(S.FIELD_NAMES[i])
+    // The record closed: the step it came in front of is back.
+    expect(g.current(look(w, c))?.id).toBe('people')
+    g.noted('people')
+    expect(g.current(look(w, c))?.id).toBe('land')
+    g.note('fold:crew')
+    expect(g.current(look(w, c, { fold: 'crew' }))?.id).toBe('hire')
+  })
+
+  it('a tract in hand is not asked what it grows', () => {
+    const { w, c } = guidedYear(11)
+    const g = new Guide(memory())
+    g.skipTo('seed')
+    const tract = S.TRACTS.find(t => S.held(c, t) && c.fields[t].cover !== 'open')
+    expect(tract).toBeDefined()
+    expect(g.current(look(w, c, { selection: [tract!] }))?.id).not.toBe('crop')
+  })
+
+  it('a note met in a later year is headed with that year, not "Your first year"', () => {
+    const { c } = guidedYear(11)
+    expect(c.history.length).toBe(1)
+    expect(partName('year', { ...c, history: [] } as S.Campaign)).toBe('Your first year')
+    expect(partName('year', c)).toBe('Year 2')
+    expect(partName('spring', c)).toBe('Your second spring')
+    expect(partName('spring', { ...c, history: [...c.history, c.history[0]] } as S.Campaign)).toBe('Spring, year 3')
+    expect(partName('opening', c)).toBe('Getting started')
   })
 })

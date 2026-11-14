@@ -2,7 +2,7 @@
 // time, set where it covers nothing it is about, and the printer's fist on the one control it asks for. In spring the
 // slip is tucked into the seed catalogue above the order blank; elsewhere it floats over the land.
 import { SPEED_X } from '../game/app.ts'
-import { driving, Guide, lesson, LESSONS, localStore, openAsks, PART_NAME, PIECES, SCENE_SECONDS, type Input, type Lesson, type Look, type Part, type Point, type Show } from '../game/tutorial.ts'
+import { driving, Guide, lesson, LESSONS, localStore, openAsks, PART_NAME, partName, PIECES, SCENE_SECONDS, type Input, type Lesson, type Look, type Part, type Point, type Show } from '../game/tutorial.ts'
 import * as S from '../sim/index.ts'
 import { patch, type Ctx } from './core.ts'
 import { h } from './dom.ts'
@@ -96,7 +96,7 @@ export function openGuide(ctx: Ctx): void {
             type: 'checkbox', checked: guide.drives(ctx.app.campaign), disabled: !guide.on, testid: 'guide-clock',
             onchange: (e: Event) => { if ((e.target as HTMLInputElement).checked) guide.giveClock(); else guide.takeClock(); draw(); ctx.dirty() },
           }), h('i', { class: `tick${guide.drives(ctx.app.campaign) ? ' on' : ''}` })),
-          h('span', null, h('b', null, 'Run the clock for me'), ' ', h('span', { class: 'quiet' }, 'time runs on between tips and stops at each decision'))),
+          h('span', null, h('b', null, 'Set the speed for me'), ' ', h('span', { class: 'quiet' }, 'time runs on between tips and stops at each decision'))),
         ...PARTS.map(part => h('section', { class: 'guide-part' },
           h('h3', { class: 't-label' }, PART_NAME[part]),
           h('ul', null, LESSONS.filter(x => x.part === part).map(x => {
@@ -294,7 +294,7 @@ function holdLine(): HTMLElement {
 // the player's and the note offers to take it back.
 function slipBody(ctx: Ctx, x: Lesson, l: Look, held: boolean, lost = false, under = false, show = -1, clock: 'guide' | 'player' | '' = '', back = -1, go: Show | null = null): (HTMLElement | null)[] {
   const again = guide.replaying(x.id)
-  const where = PART_NAME[x.part]
+  const where = partName(x.part, l.c)
   const done = () => { guide.noted(x.id); poke(); ctx.dirty() }
   const act = x.act?.(l) ?? null
   // Each key that touches the clock says what it does to it.
@@ -318,7 +318,7 @@ function slipBody(ctx: Ctx, x: Lesson, l: Look, held: boolean, lost = false, und
         : h('button', { class: 'btn', type: 'button', testid: 'guide-pass', onclick: () => { guide.skip(x.id); poke(); ctx.dirty() } }, icon('check', 'i'), h('span', { class: 'two' }, 'Got it', resumes)),
       go && show < 0 ? h('button', { class: 'btn quiet', type: 'button', testid: 'guide-show', onclick: () => lead(go) }, 'Show me') : null,
       // The clock is the player's: the guide offers, once a note, to run it again.
-      clock === 'player' ? h('button', { class: 'btn quiet', type: 'button', testid: 'guide-give', onclick: () => { guide.giveClock(); poke(); ctx.dirty() } }, 'Run the clock for me') : null,
+      clock === 'player' ? h('button', { class: 'btn quiet', type: 'button', testid: 'guide-give', onclick: () => { guide.giveClock(); poke(); ctx.dirty() } }, 'Set the speed for me') : null,
       h('button', { class: 'btn quiet', type: 'button', testid: 'guide-stop', onclick: () => { guide.stop(); poke(); ctx.say('The tutorial is off. You can turn it back on from the menu.'); ctx.dirty() } }, 'Turn off the tutorial')),
   ]
 }
@@ -331,7 +331,7 @@ function driveBody(ctx: Ctx, line: string, next: string, waits: (() => void) | n
     h('p', { class: 'gd-next t-caption', testid: 'guide-drive-next' }, next),
     h('footer', { class: 'guide-foot' },
       waits ? h('button', { class: 'btn quiet', type: 'button', testid: 'guide-wave', onclick: () => { waits(); poke(); ctx.dirty() } }, 'Go on without it') : null,
-      h('button', { class: 'btn quiet', type: 'button', testid: 'guide-take', onclick: () => { take(); poke(); ctx.dirty() } }, 'Take the clock')),
+      h('button', { class: 'btn quiet', type: 'button', testid: 'guide-take', onclick: () => { take(); poke(); ctx.dirty() } }, 'I\'ll set the speed')),
   ]
 }
 
@@ -631,14 +631,14 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
       if (guide.drives(c)) return
       // A card still up keeps the clock.
       // So does a pause the game made for a decision on the land: only the player's own resume runs past that.
-      if (back > 0 && app.speed === 0 && app.pauseReason !== '' && !waitsOnLand() && !app.holding && app.screen === 'season' && c && !S.seasonDone(c) && !cardUp(lookNow())) app.setSpeed(back as 1 | 2 | 3)
+      if (back > 0 && app.speed === 0 && app.pauseReason !== '' && !waitsOnLand() && !app.holding && app.screen === 'season' && c && !S.seasonDone(c) && !cardUp(lookNow())) { app.setSpeed(back as 1 | 2 | 3); app.resumedAt = performance.now() }
     }
   }
 
   // The guide runs the clock between its notes (game/tutorial.ts, driving): fast where nothing teaches, slowed and
   // framed the first time each kind of work is done, stopped for a press the year waits on. It only ever sets the
   // speed: every pause the game makes itself (app.ts, SELF_PAUSES), every card and every note stops it as they stop
-  // anyone. The player's own hand on the clock (a speed, a pause, "Take the clock") takes it for good; a note
+  // anyone. The player's own hand on the clock (a speed, a pause, "I'll set the speed") takes it for good; a note
   // offers to take it back.
   let driven = false
   let scene: { id: string; unit: number; line: string; until: number } | null = null
@@ -769,7 +769,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     // what they are reading does not change under them.
     const slow = !!scene || app.selection.length > 0 || app.unit >= 0 || app.yard !== 0
     const want = slow ? 1 : d.speed
-    if (app.speed !== want) app.setSpeed(want)
+    if (app.speed !== want) { if (app.speed === 0) app.resumedAt = performance.now(); app.setSpeed(want) }
     if (app.speed === 0) { hideDrive(); return }
     app.pace = slow ? 1 : d.pace
     driven = true

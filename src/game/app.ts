@@ -87,6 +87,9 @@ function killPause(e: GameEvent): string {
   const first = e.text.slice(0, e.text.indexOf('. ') + 1) || e.text
   return `${first.charAt(0).toLowerCase()}${first.slice(1)} Press a ringed Kill vines stamp, or resume and they stay up.`
 }
+// How long after the game sets the days going by itself a press on pause is read as "go on" (round nine: players
+// pressed play 0.5 to 1 s after an answer had already resumed the game, and so paused it).
+export const SELF_RESUME_MS = 2000
 // Events worth an alert even though they are not warnings.
 const NOTABLE = new Set([
   'dug', 'weighed', 'sample', 'skinSet', 'emerged', 'ti', 'mature', 'watch',
@@ -260,6 +263,8 @@ export class App {
   private setScreen(screen: Screen): void {
     if (this.screen === screen) return
     this.screen = screen
+    // A new spring opens on the plan itself: what was in hand on last year's land is put down.
+    if (screen === 'plan') { this.selection = []; this.unit = -1; this.yard = 0 }
     this.emit({ type: 'screen', screen })
   }
 
@@ -603,6 +608,15 @@ export class App {
     if (this.speed > 0) { this.resumeSpeed = this.speed; this.setSpeed(0) } else this.setSpeed(this.resumeSpeed || 1)
   }
 
+  // A press on pause (Space, the clock's key, the "Running" chip). Just after the game set the days going by itself
+  // (a card answered, a paper put away, the guide's clock) the press was meant as "go on": it is not taken as a
+  // pause, and the answer is false. Only the first such press: the next one pauses.
+  pressPause(): boolean {
+    if (this.speed > 0 && performance.now() - this.resumedAt < SELF_RESUME_MS) { this.resumedAt = 0; return false }
+    this.togglePause()
+    return true
+  }
+
   // The next speed up, coming round from 3x to 1x.
   cycleSpeed(): void {
     this.setSpeed((this.speed === 0 ? this.resumeSpeed || 1 : this.speed % 3 + 1) as Speed)
@@ -619,7 +633,8 @@ export class App {
   pace = 1
   // While a pointer is held down on the land (a drag, a press on a stamp) the days wait, so nothing is lost to it.
   pressing = false
-  // When an answer last set the days going again (performance.now()), so a Space just after it is not taken back.
+  // When the game last set the days going by itself (performance.now()), so a press on pause just after it is not
+  // taken back.
   resumedAt = 0
 
   tick(dtMs: number): void {

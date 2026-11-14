@@ -16,6 +16,9 @@
   position: relative; display: grid; justify-items: center; }
 @supports (height: 100dvh) { .dig-day { --dial: min(470px, calc(100vw - 2 * var(--gutter) - 92px), calc(100dvh - 250px)); } }
 .dig-day.revealing { min-height: calc(var(--dial) + 250px); }
+/* While the scale weighs, the paper is as tall as the dial. The ticket's lines keep to the top of it, where they will
+   stay once the paper closes up under them, so a key pressed early is where it was aimed. */
+.dig-day.revealing .ticket > .tk { align-content: start; }
 
 /* ---------------------------------------------------------------- the scale's face, over the ticket while it prints */
 .dig-day .scale-face { position: absolute; z-index: 1; left: 50%; top: 20px; transform: none; width: calc(var(--dial) + 90px); margin-left: calc(var(--dial) / -2 - 45px); }

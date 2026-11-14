@@ -590,7 +590,7 @@ function causeText(a: MoneyLook, b: MoneyLook, part: string, x: number, d: Recor
     out.remedy = remedyFor(why, now)
     const days = now.unsprayed
     switch (why) {
-      case 'dry': return many ? `Fields dry, ${name} worst` : `${name} dry`
+      case 'dry': return many ? `${name} driest` : `${name} dry`
       case 'scab': return `Scab in ${name}, dry soil`
       case 'blight': return now.protect >= 0.35 ? `Blight in ${name}` : days < 0 ? `Blight in ${name}, never sprayed` : `${name} unsprayed ${days} days`
       case 'frost': return `Frost hit ${name}`
@@ -632,6 +632,9 @@ function causeText(a: MoneyLook, b: MoneyLook, part: string, x: number, d: Recor
     if (told) return told
     if (now.samples > (was?.samples ?? 0)) return `${name}'s test dig came ${up ? 'heavy' : 'light'}`
     if (now.set && !was?.set) return `Tubers set in ${name}`
+    // A crop that is in no longer "looks" anything: it brought, or is worth, more or less than was counted.
+    if (now.revenue > 0.5) return `${name} brought ${up ? 'more' : 'less'} than counted`
+    if (now.weighed) return `${name}'s stored crop worth ${up ? 'more' : 'less'}`
     return `${name} looks ${up ? 'heavier' : 'lighter'}`
   }
   if (part === 'wages') {

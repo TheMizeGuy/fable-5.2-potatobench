@@ -3,8 +3,13 @@
 
 /* What the system draws takes the pointer; the space between lets it through to the land. */
 .hud .sys:not(.topbar) { pointer-events: auto; }
-.hud .topbar { pointer-events: none; }
+/* (three classes, so the general rule for a .sys part of the HUD in style.css never turns it back on: the bar's box
+   spans the window over the land between its boards) */
+.hud .topbar.sys { pointer-events: none; }
 .hud .topbar > section > * { pointer-events: auto; }
+/* The row the goal slip stands in is wider than the slip: only what stands in it takes the pointer. */
+.hud .topbar > section > .goal-row { pointer-events: none; }
+.hud .topbar > section > .goal-row > * { pointer-events: auto; }
 
 /* ---------------------------------------------------------------- the title (design/title.html) */
 .title-screen .title-shade { position: absolute; inset: 0; background: linear-gradient(90deg, rgb(14 12 8 / 0.4), rgb(14 12 8 / 0) 42%); }

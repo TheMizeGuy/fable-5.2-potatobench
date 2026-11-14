@@ -858,7 +858,7 @@ test('Got it says what it does to the clock: time runs on under the guide, and t
   await expect(note(page, 'tend')).toBeVisible({ timeout: 90_000 })
   expect(await game<number>(page, 'app.speed')).toBe(0)
   await expect(note(page, 'tend').getByTestId('guide-resumes')).toHaveText('resumes at 8×')
-  await expect(note(page, 'tend').getByTestId('guide-give')).toHaveText('Run the clock for me')
+  await expect(note(page, 'tend').getByTestId('guide-give')).toHaveText('Set the speed for me')
   await page.waitForTimeout(500)
   const after = await page.evaluate(() => new Promise<number>(resolve => {
     document.querySelector<HTMLElement>('#ui [data-testid="guide-slip"][data-lesson="tend"] [data-testid="guide-noted"]')!.click()
@@ -1279,7 +1279,7 @@ test('the tutorial starts when planting is ready: Start the season, a few second
   const line = page.getByTestId('guide-drive-line')
   await expect(line).toHaveText('A few weeks pass while the soil warms.', { timeout: 5000 })
   await expect(page.getByTestId('guide-drive-next')).toHaveText('Next: planting, on your word.')
-  await expect(page.getByTestId('guide-take')).toHaveText('Take the clock')
+  await expect(page.getByTestId('guide-take')).toHaveText('I\'ll set the speed')
   const running = await see(page)
   expect(running.speed).toBe(3)
   expect(running.asking, 'nothing asks while the weeks pass').toEqual([])
@@ -1340,9 +1340,9 @@ test('the tutorial starts when planting is ready: Start the season, a few second
   expect(errors, errors.join('\n')).toEqual([])
 })
 
-// (3): the player keeps control. Setting a speed, pausing, or "Take the clock" stops the guide's driving, and it does
+// (3): the player keeps control. Setting a speed, pausing, or "I'll set the speed" stops the guide's driving, and it does
 // not start again by itself; a note offers to take the clock back, without nagging.
-test('the player keeps the clock: a speed set, a pause or Take the clock stops the guide driving, and only the player hands it back', async ({ page, isMobile }) => {
+test('the player keeps the clock: a speed set, a pause or I\'ll set the speed stops the guide driving, and only the player hands it back', async ({ page, isMobile }) => {
   test.skip(isMobile, 'run at the desk')
   test.setTimeout(240_000)
   const errors = watchErrors(page)
@@ -1356,7 +1356,7 @@ test('the player keeps the clock: a speed set, a pause or Take the clock stops t
   await expect(drive).toBeVisible({ timeout: 8000 })
   await expect.poll(() => game<number>(page, 'app.speed'), { timeout: 8000 }).toBeGreaterThan(0)
   expect(await drives()).toBe(true)
-  // "Take the clock": the line goes, the game runs on at the first speed, and nothing of the guide's touches it.
+  // "I'll set the speed": the line goes, the game runs on at the first speed, and nothing of the guide's touches it.
   await page.getByTestId('guide-take').click()
   await expect(drive).toHaveCount(0)
   expect(await drives()).toBe(false)
@@ -1455,5 +1455,40 @@ test('the guide never runs past a decision: the word to plant, the spraying ques
     await page.waitForTimeout(700)
   }
   await expect.poll(() => game<number>(page, 'app.speed'), { timeout: 8000 }).toBeGreaterThan(0)
+  expect(errors, errors.join('\n')).toEqual([])
+})
+
+// ---------------------------------------------------------------- round nine (docs/quality/players/round-9.md)
+
+// One Plant stamp gives the word for every field and the other stamps go with it: two of three players pressed on
+// where the next stamps had been, and opened a field's card and the yard's instead.
+test('after one Plant stamp gives the word, a press where another stamp stood opens nothing', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'run at the desk')
+  test.setTimeout(300_000)
+  const errors = watchErrors(page)
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await open(page)
+  await reach(page, `const guide = window.__countyGuide; guide.reset(); guide.refuse(); const { app } = q.g(); app.newGame(1987, 3); app.do({ t: 'begin' }); app.campaign.incidents = []`)
+  await putAway(page)
+  await page.getByTestId('goal-faster').click()
+  const fit = await atTheAsk(page, 'year one, Skip ahead')
+  expect(fit.length).toBeGreaterThan(1)
+  const spots: { x: number; y: number }[] = []
+  for (const i of fit) { const b = (await page.getByTestId(`badge-${i}`).boundingBox())!; spots.push({ x: b.x + b.width / 2, y: b.y + b.height / 2 }) }
+  const tags: { x: number; y: number }[] = []
+  for (const i of fit) { const b = (await page.getByTestId(`field-${i}`).boundingBox())!; tags.push({ x: b.x + 20, y: b.y + b.height / 2 }) }
+  await page.mouse.click(spots[0].x, spots[0].y)
+  await expect.poll(() => game<boolean>(page, 'sim.plantWordGiven(c.season)')).toBe(true)
+  // The run of presses a player makes across the stamps, and one on a tag itself.
+  for (const s of spots.slice(1)) { await page.waitForTimeout(250); await page.mouse.click(s.x, s.y) }
+  await page.mouse.click(tags[tags.length - 1].x, tags[tags.length - 1].y)
+  expect(await game<number[]>(page, 'app.selection'), 'no field\'s card opened').toEqual([])
+  expect(await game<number>(page, 'app.yard'), 'nor the yard\'s').toBe(0)
+  expect(await game<number>(page, 'app.unit')).toBe(-1)
+  // A moment later the land answers again.
+  await page.waitForTimeout(1900)
+  const b = (await page.getByTestId(`field-${fit[0]}`).boundingBox())!
+  await page.mouse.click(b.x + 20, b.y + b.height / 2)
+  await expect.poll(() => game<number[]>(page, 'app.selection')).toEqual([fit[0]])
   expect(errors, errors.join('\n')).toEqual([])
 })

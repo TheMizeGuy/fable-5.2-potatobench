@@ -269,7 +269,7 @@ export class Papers {
       this.resume = null
       // The clock goes back to what it was doing, unless something else has set it since. A clock the game had stopped
       // stays stopped: a paper the game stopped for (the weigh ticket) sets it going itself once it is answered.
-      if (this.app.screen === 'season' && this.app.speed === 0 && this.app.pauseReason === '' && r.speed > 0) this.app.setSpeed(r.speed)
+      if (this.app.screen === 'season' && this.app.speed === 0 && this.app.pauseReason === '' && r.speed > 0) { this.app.setSpeed(r.speed); this.app.resumedAt = performance.now() }
     }
     if (now || reducedNow()) gone()
     else {

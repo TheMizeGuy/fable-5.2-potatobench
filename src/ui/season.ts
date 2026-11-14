@@ -118,15 +118,20 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       if (!isJob(need.act) || (need.act === 'spray' && sprayWay(c) === 'none') || s0.jobs.some(j => j.kind === need.act && j.field === i)) continue
       out.push({ field: i, glyph: need.act, text: F.localize(need.text), why: F.localize(need.why), urgent: need.urgent, go: go(i) })
     }
-    // Dry soil in the weeks after the potatoes form sets scab, and the coach asks for water only once a crop wilts:
+    // Dry soil in the weeks after the potatoes form sets scab and later cuts the yield, and the coach asks for water
+    // only once a crop wilts:
     // said here, with what watering costs, while it can still help. Rain on the way answers it for nothing.
     const rain = S.forecast(app.world, c, 3).some(d => d.rainChance >= 60 && d.rainMm >= 8)
     for (let i = 0; i < s0.fields.length && !rain; i++) {
       const fs = s0.fields[i]
-      if (!S.held(c, i) || fs.status !== 'growing' || fs.tiDay < 0 || s0.day - fs.tiDay > S.SCAB_DAYS) continue
+      if (!S.held(c, i) || fs.status !== 'growing' || fs.tiDay < 0 || fs.matureDay >= 0) continue
       const f = S.fieldInfo(c, i)
-      if (f.moisture >= 0.5 || f.tooWet || out.some(t => t.field === i) || s0.jobs.some(j => j.kind === 'water' && j.field === i)) continue
-      out.push({ field: i, glyph: 'water', text: `${f.name} is drying out`, why: `Dry soil while the potatoes form sets scab. Watering costs ${F.money(S.jobCost(c, 'water', i))}; rain is free if it comes.`, urgent: false, go: go(i) })
+      const forming = s0.day - fs.tiDay <= S.SCAB_DAYS
+      if (f.moisture >= (forming ? 0.5 : 0.38) || f.tooWet || out.some(t => t.field === i) || s0.jobs.some(j => j.kind === 'water' && j.field === i)) continue
+      out.push({
+        field: i, glyph: 'water', text: `${f.name} is drying out`, urgent: false, go: go(i),
+        why: `${forming ? 'Dry soil while the potatoes form sets scab' : 'Dry soil while the potatoes size up cuts the yield'}. Watering costs ${F.money(S.jobCost(c, 'water', i))}; rain is free if it comes.`,
+      })
     }
     for (const x of fates(app.world, c).pressing) {
       if (x.job < 0 || !x.inWay) continue
@@ -471,10 +476,24 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     if (!c) return
     const need = app.needs()[i]?.need
     if (need && need.act === 'sell') { openTicket(need.lot); return }
+    const asked = !!c.season && !S.plantWordGiven(c.season)
     const r = app.smartOrder(i)
     if (r.ok) ctx.announce(`${need ? F.localize(need.text) : 'Order given.'} It's on the work list.`)
     else ctx.say(`${S.FIELD_NAMES[i]}: ${r.err}`, 'info')
+    if (asked && c.season && S.plantWordGiven(c.season)) landQuietUntil = performance.now() + WORD_QUIET_MS
   }
+  // One Plant stamp gives the word for every field, and the other stamps go with it: for a moment after, a press
+  // aimed at one of them is taken by nothing, where it would have opened whatever lay under it (round nine: a field's
+  // card, the yard's).
+  const WORD_QUIET_MS = 1600
+  let landQuietUntil = 0
+  const quietLand = (e: Event): void => {
+    if (performance.now() >= landQuietUntil) return
+    const t = e.target as HTMLElement | null
+    if (t?.tagName === 'CANVAS' || t?.closest?.('.plate-layer, .yard-at, .pin-at, .pin-list-at')) { e.stopPropagation(); e.preventDefault() }
+  }
+  const QUIET_EVENTS = ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click', 'dblclick', 'contextmenu'] as const
+  for (const k of QUIET_EVENTS) window.addEventListener(k, quietLand, true)
 
   // What floats over the land: nothing on the land is left under it.
   const floating = () => [card.el, yard.el, person.el, grid.el, incident.el, trayHost.firstElementChild as HTMLElement | null, paused, running]
@@ -682,8 +701,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       if (onControl) (t.closest?.('button, a') as HTMLElement | null)?.blur()
       // Just after an answer set the days going by themselves, Space is taken as "go on", not as a pause: the chip
       // that says the days are running is lit again instead.
-      if (app.speed > 0 && performance.now() - app.resumedAt < 1000) { ranAt = performance.now(); ctx.dirty(); ctx.announce(`The game is running at ${SPEED_X[app.speed]}.`); return true }
-      app.togglePause()
+      if (!app.pressPause()) { ranAt = performance.now(); ctx.dirty(); ctx.announce(`The game is running at ${SPEED_X[app.speed]}.`) }
       return true
     }
     if (k === 'Enter') {
@@ -797,7 +815,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     running.hidden = app.speed === 0 || S.seasonDone(c) || (stoppedFor && layout !== 'narrow') || (layout === 'narrow' && app.selection.length > 0)
     if (!running.hidden && !wasRunning) ranAt = performance.now()
     if (!running.hidden) {
-      patch(running, JSON.stringify([ctx.touch(), app.speed]), () => h('button', { class: 'paused-go btn', type: 'button', testid: 'running-stop', onclick: () => app.togglePause() },
+      patch(running, JSON.stringify([ctx.touch(), app.speed]), () => h('button', { class: 'paused-go btn', type: 'button', testid: 'running-stop', onclick: () => { if (!app.pressPause()) { ranAt = performance.now(); ctx.dirty() } } },
         icon('pause', 'i'), `Running at ${SPEED_X[app.speed]}`, ctx.touch() ? null : h('span', { class: 'key' }, 'Space')))
       running.classList.toggle('lit', performance.now() - ranAt < 2400)
       if (performance.now() - ranAt < 2400) setTimeout(() => ctx.dirty(), 2450)
@@ -900,6 +918,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       coverCache = null
     },
     dispose() {
+      for (const k of QUIET_EVENTS) window.removeEventListener(k, quietLand, true)
       off()
       P.dispose()
       people.dispose()

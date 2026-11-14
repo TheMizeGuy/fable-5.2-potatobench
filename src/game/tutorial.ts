@@ -406,7 +406,8 @@ export const LESSONS: Lesson[] = [
     // The field's record is open: this step is the player's until they close it or say Got it. Nothing after it
     // comes on a timer or on another click.
     id: 'crop', part: 'spring', name: 'Choose what a field grows', read: true, follows: true,
-    when: (l, g) => l.screen === 'plan' && !!l.c && l.c.history.length > 0 && g.passed('seed') && l.selection.length > 0,
+    // (a field that can be planted: a tract's record offers clearing, not a crop)
+    when: (l, g) => l.screen === 'plan' && !!l.c && l.c.history.length > 0 && g.passed('seed') && l.selection.length > 0 && S.held(l.c, l.selection[0]) && l.c.fields[l.selection[0]].cover === 'open',
     done: (l, g, since) => g.has('noted:crop') || (!!since && l.selection.length === 0),
     ask: l => `Choose potatoes or a rest year for ${name(l.selection[0] ?? 0)}, and which variety to grow.`,
     why: l => `Take your time. ${by(l, 'Click', 'Tap', 'Press')} Got it or close the record when you're done, and I'll go on.`,
@@ -505,6 +506,13 @@ const BY_ID = new Map(LESSONS.map(x => [x.id, x]))
 export function lesson(id: string): Lesson | undefined { return BY_ID.get(id) }
 
 export const PART_NAME: Record<Part, string> = { opening: 'Getting started', year: 'Your first year', spring: 'Your second spring' }
+// The heading on a note: its part's name, or the year the farm is really in when a lesson is met later than that.
+export function partName(part: Part, c: S.Campaign | null): string {
+  const n = (c?.history.length ?? 0) + 1
+  if (part === 'year' && n > 1) return `Year ${n}`
+  if (part === 'spring' && n !== 2) return `Spring, year ${n}`
+  return PART_NAME[part]
+}
 
 const words = (t: string) => t.trim().split(/\s+/).filter(Boolean).length
 export function countWords(t: string): number { return words(t) }
@@ -660,7 +668,7 @@ export class Guide {
 
   get on(): boolean { return this.p.mode === 'on' }
   // Whose the clock is between notes. The guide runs it through a first year until the player takes it (a speed set,
-  // a pause, "Take the clock"); after that, and in later years, only where the player handed it back.
+  // a pause, "I'll set the speed"); after that, and in later years, only where the player handed it back.
   drives(c: S.Campaign | null): boolean {
     return this.on && !!c && (this.facts.has('clock:guide') || (c.history.length === 0 && !this.facts.has('clock:player')))
   }
@@ -795,7 +803,9 @@ export class Guide {
     }
     // One lesson at a time: the one on show keeps its place until it passes, unless something urgent comes.
     // A question, or a moment that holds the clock for a click, may come in front; the note it interrupted comes back.
-    const cuts = (x: Lesson | null) => !!x && (!!x.urgent || !!x.holds)
+    // So may a note about what the player has just opened (a field's record, a fold): it is what they are looking at,
+    // whatever note they put away before opening it.
+    const cuts = (x: Lesson | null) => !!x && (!!x.urgent || !!x.holds || !!x.follows)
     if (kept && best && !cuts(best)) best = kept
     if (cuts(best) && this.onShow && this.onShow !== best!.id && !cuts(lesson(this.onShow) ?? null)) this.waiting = this.onShow
     else if (best && !cuts(best)) this.waiting = ''
