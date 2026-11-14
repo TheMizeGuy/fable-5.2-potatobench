@@ -19,6 +19,10 @@ export const guide = new Guide(localStore())
 let poke: () => void = () => {}
 // The pause reason the guide's own hold leaves on the clock.
 export const HOLD = 'Paused for a tip from the county agent.'
+// A tip that only tells goes by itself: after long enough to read it twice over, and never under five seconds.
+export const tipSeconds = (words: number): number => Math.max(5, Math.min(10, 2 + words * 0.45))
+// In a season, the least time between one tip being put away and the next that only tells.
+const TIP_GAP_MS = 6000
 // For the browser tests and the capture tool, as window.__county is.
 ;(globalThis as Record<string, unknown>).__countyGuide = guide
 
@@ -301,10 +305,8 @@ function slipBody(ctx: Ctx, x: Lesson, l: Look, held: boolean, lost = false, und
   // Each key that touches the clock says what it does to it.
   const resumes = back < 0 ? null : h('span', { class: 'sub', testid: 'guide-resumes' }, back <= 0 ? 'stays paused' : clock === 'guide' ? 'time runs on' : `resumes at ${SPEED_X[back]}`)
   const lead = (s: Show) => { if ('field' in s) { ctx.app.select(s.field); ctx.app.focus(s.field) } else { if (s.foreman) showForemanKey(); ctx.app.selectUnit(s.unit); ctx.dirty() } }
+  void held; void clock; void back; void where
   return [
-    h('header', { class: 'guide-head' },
-      h('p', { class: 't-label' }, 'The county agent'),
-      held ? holdLine() : h('p', { class: 't-label guide-n' }, where)),
     h('p', { class: 'guide-ask', id: 'guide-ask' }, x.ask(l)),
     h('p', { class: 'guide-why t-caption' }, x.why(l)),
     lost ? h('p', { class: 'guide-lost t-caption', testid: 'guide-lost' }, icon('field', 'i'), by(l.input, 'It\'s off screen. Press Home or double-click open ground to see the farm again.', 'It\'s off screen. Double-tap open ground to see the farm again.', 'It\'s off screen. Press Home to see the farm again.')) : null,
@@ -312,15 +314,14 @@ function slipBody(ctx: Ctx, x: Lesson, l: Look, held: boolean, lost = false, und
       h('button', { class: 'btn quiet', type: 'button', testid: 'guide-show', onclick: () => ctx.app.focus(show) }, 'Show me')) : null,
     show >= 0 && lost ? h('p', { class: 'guide-lost t-caption' }, h('button', { class: 'btn quiet', type: 'button', testid: 'guide-show', onclick: () => ctx.app.focus(show) }, 'Show me')) : null,
     under ? h('p', { class: 'guide-lost t-caption', testid: 'guide-under' }, icon('close', 'i'), by(l.input, 'A card is in the way. Click its X to close it.', 'A card is in the way. Tap its X to close it.', 'A card is in the way. Use its X to close it.')) : null,
+    // A tip asks for nothing but what it points at: its own key where it has one (the order it is about), and two
+    // quiet ones, to put it away now and to have no more tips. None of them has to be pressed.
     h('footer', { class: 'guide-foot' },
       act ? h('button', { class: 'btn guide-ok', type: 'button', testid: 'guide-act', onclick: () => { let said = ''; for (const cmd of act.cmds) { const r = ctx.run(cmd); said = (r.ok ? r.events[0]?.text : r.err) ?? said } const text = act.done ?? said; if (text) ctx.say(F.localize(text), 'good'); done() } }, icon('check', 'i'), act.label) : null,
-      // Every note has a Got it. On one that points at a control (guide-pass) it passes the step without doing it.
-      x.read || again ? h('button', { class: `btn${act ? '' : ' guide-ok'}`, type: 'button', testid: 'guide-noted', onclick: done }, icon('check', 'i'), h('span', { class: 'two' }, 'Got it', resumes))
-        : h('button', { class: 'btn', type: 'button', testid: 'guide-pass', onclick: () => { guide.skip(x.id); poke(); ctx.dirty() } }, icon('check', 'i'), h('span', { class: 'two' }, 'Got it', resumes)),
       go && show < 0 ? h('button', { class: 'btn quiet', type: 'button', testid: 'guide-show', onclick: () => lead(go) }, 'Show me') : null,
-      // The clock is the player's: the guide offers, once a note, to run it again.
-      clock === 'player' ? h('button', { class: 'btn quiet', type: 'button', testid: 'guide-give', onclick: () => { guide.giveClock(); poke(); ctx.dirty() } }, 'Set the speed for me') : null,
-      h('button', { class: 'btn quiet', type: 'button', testid: 'guide-stop', onclick: () => { guide.stop(); poke(); ctx.say('The tutorial is off. You can turn it back on from the menu.'); ctx.dirty() } }, 'Turn off the tutorial')),
+      x.read || again ? h('button', { class: 'btn quiet', type: 'button', testid: 'guide-noted', onclick: done }, 'Got it')
+        : h('button', { class: 'btn quiet', type: 'button', testid: 'guide-pass', onclick: () => { guide.skip(x.id); poke(); ctx.dirty() } }, 'Skip'),
+      h('button', { class: 'btn quiet', type: 'button', testid: 'guide-stop', onclick: () => { guide.stop(); poke(); ctx.say('Tips are off. You can turn them back on from the menu.'); ctx.dirty() } }, 'No more tips')),
   ]
 }
 
@@ -363,10 +364,10 @@ function offerCard(ctx: Ctx): HTMLElement {
   }, key(String(n)), h('b', { class: 'c-title' }, title, usual ? fist() : null), h('span', { class: 'c-does' }, does))
   return h('section', { class: 'guide-card offer telegram sheet sys', testid: 'guide-offer', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'guide-offer-h' },
     h('header', { class: 'gc-head' }, h('p', { class: 't-label' }, 'From the county agent'), h('h2', { class: 't-title', id: 'guide-offer-h' }, 'First time on the farm?')),
-    h('p', { class: 'gc-lead' }, 'I can start your first season on a usual plan and point things out as they come up, one at a time.'),
+    h('p', { class: 'gc-lead' }, 'I can start your first season on a usual plan and point things out as they come up. Tips never stop the game, and you never have to click one.'),
     h('div', { class: 'replies', role: 'group', 'aria-label': 'Your answer' },
-      reply(1, 'guide-accept', 'Start the tutorial', 'The usual choice. Your first season starts right away.', true, () => { guide.accept(); straightIn(ctx) }),
-      reply(2, 'guide-refuse', 'Skip the tutorial', 'Play without tips. You can turn it on later from the menu.', false, () => guide.refuse())))
+      reply(1, 'guide-accept', 'Play with tips', 'The usual choice. Your first season starts right away.', true, () => { guide.accept(); straightIn(ctx) }),
+      reply(2, 'guide-refuse', 'Play without tips', 'You can turn them on later from the menu.', false, () => guide.refuse())))
 }
 
 // What a year is, drawn: the five things the year asks, in order, and what it costs at the end.
@@ -591,48 +592,34 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
   // The speed it had is the speed the clock's own keys resume at, Space included.
   const waitsOnLand = () => app.pauseCause === 'plantAsk' || app.pauseCause === 'killCall'
   function stopNow(): void { if (app.speed > 0) app.resumeSpeed = app.speed; app.setSpeed(0); app.pauseReason = HOLD; ctx.dirty() }
-  function hold(l: Look): void {
+  // A tip never stops the game. The game stops itself for a decision (app.ts, SELF_PAUSES), with its own line saying
+  // why; a tip that speaks to that decision stands beside it, and the pause stays the game's.
+  function hold(_l: Look): void { holding = null }
+
+  // While a tip is up the days go no faster than the first speed, so it can be read beside what it is about (the
+  // owner: "it just needs to pause when the things pop up so you can see it"; a tip passing at eight times speed is
+  // not seen). When it goes they go back to the speed they had, Skip ahead included. The player's own hand on the
+  // clock while a tip is up is kept: nothing is put back over it.
+  let slowed: { back: 1 | 2 | 3; skip: 0 | 1 | 2 | 3; at: number } | null = null
+  // The tip the player set the clock under with their own hand: it is not slowed again.
+  let theirs = ''
+  function calm(tip: string): void {
     const t = performance.now()
-    const want = due && app.screen === 'season' ? due.id : ''
-    const stay = !!want && !!due!.asks?.(l)
-    if (holding && want && app.speed > 0) {
-      if (t - pressedAt < 1500 && now) {
-        // The player's press: the note goes, and the days are theirs.
-        if (now.read) guide.noted(now.id); else guide.skip(now.id)
-        holding = null
-        stale = true
-        return
-      }
-      // The game set the clock going itself (a telegram answered, a paper closed): paused again, and that speed is
-      // the one the note goes back to.
-      holding.speed = app.speed
-      stopNow()
-      return
-    }
-    if (want && !holding) {
-      // Running: paused here. Paused by the game for a card: the speed it would resume at. Paused by the player: it
-      // stays so.
-      const speed = app.speed > 0 ? app.speed : app.pauseReason && app.pauseReason !== HOLD ? app.resumeSpeed || 1 : 0
-      holding = { id: want, speed, stay }
-      if (app.speed > 0) stopNow()
-      // The game's own pause for the decision this note asks for (app.ts, SELF_PAUSES) is the note's from here.
-      else if ((app.pauseCause === 'plantAsk' && want === 'word') || (app.pauseCause === 'killCall' && want === 'kill')) { app.pauseReason = HOLD; app.pauseCause = ''; ctx.dirty() }
-    } else if (want && holding) { holding.id = want; holding.stay = stay }
-    else if (!want && holding) {
-      const back = holding.speed
-      const stays = holding.stay
-      holding = null
-      const c = app.campaign
-      if (stays) {
-        // The pause becomes the player's own: Space, or the clock, resumes at the speed the game had.
-        if (app.speed === 0 && app.pauseReason === HOLD) { app.pauseReason = ''; ctx.dirty() }
-        return
-      }
-      // Where the guide runs the clock, it sets the days going itself a moment after the note (runClock).
-      if (guide.drives(c)) return
-      // A card still up keeps the clock.
-      // So does a pause the game made for a decision on the land: only the player's own resume runs past that.
-      if (back > 0 && app.speed === 0 && app.pauseReason !== '' && !waitsOnLand() && !app.holding && app.screen === 'season' && c && !S.seasonDone(c) && !cardUp(lookNow())) { app.setSpeed(back as 1 | 2 | 3); app.resumedAt = performance.now() }
+    if (slowed && pressedAt > slowed.at) { slowed = null; theirs = tip }
+    if (!tip) theirs = ''
+    if (tip && tip !== theirs && !slowed && app.speed > 1) {
+      slowed = { back: app.speed as 2 | 3, skip: app.skipBack, at: t }
+      app.setSpeed(1)
+    } else if (slowed && app.speed === 0 && app.pauseCause) {
+      // The game stopped for a decision meanwhile: once it is answered the days go on as they would have, at the
+      // speed they had, or (a decision Skip ahead was running to) at the speed before the skip.
+      const landed = slowed.skip > 0 && (app.pauseCause === 'plantAsk' || app.pauseCause === 'killCall' || app.pauseCause === 'spray' || app.pauseCause === 'over')
+      app.resumeSpeed = landed ? slowed.skip as 1 | 2 | 3 : slowed.back
+      app.skipBack = landed ? 0 : slowed.skip
+      slowed = null
+    } else if (!tip && slowed) {
+      if (app.speed === 1) { app.setSpeed(slowed.back); app.skipBack = slowed.skip }
+      slowed = null
     }
   }
 
@@ -704,6 +691,8 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     drivePlace = null
   }
   function runClock(l: Look, carded: boolean): void {
+    // The clock and the camera are the player's: the tips never set a speed and never move the view.
+    if (!guide.drives(app.campaign)) { letGo(); hideDrive(); return }
     const c = app.campaign
     const t = performance.now()
     // The player's own hand on the clock takes it.
@@ -791,12 +780,16 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
       // an open fold is done there (someone hired). Passed by opening something: the next waits while that is read,
       // and every fold the walk opens has a note of its own, so the agent never goes quiet over one.
       const said = !!lastId && (guide.has(`noted:${lastId}`) || guide.p.passed[lastId] === 'skip' || !!lesson(lastId)?.follows)
-      if (lastId && guide.passed(lastId)) { restUntil = t + 1200; waitFor = said ? [] : panelsOpen() }
+      if (lastId && guide.passed(lastId)) { restUntil = t + (app.screen === 'season' ? TIP_GAP_MS : 1200); waitFor = said ? [] : panelsOpen() }
       lastId = x?.id ?? ''
     }
-    // In a season the next note follows at once and takes over the hold: no days run between two notes. Out of it,
-    // the next waits a moment, and while a panel the last click opened is still open.
-    if (!x || app.screen === 'season' || x.urgent || x.paper || x.follows || x.card) return x
+    // What cannot wait comes at once: an urgent tip, one over a paper, one that follows the click that opened what
+    // it is about. In a season any other waits until some seconds have gone by since the last was put away, so two
+    // never come back to back and the player sees what came of the one before. Out of a season the next waits a
+    // moment, and while a panel the last click opened is still open.
+    if (!x || x.urgent || x.paper || x.follows || x.card) return x
+    // (a tip that points at a decision is not one that only tells: it comes when its moment does)
+    if (app.screen === 'season') { if (t < restUntil && (x.read || x.hint) && !x.asks?.(lookNow())) { stale = true; return null } return x }
     // (for as long as it is open: a step never comes on a timer over what the player is still reading)
     waitFor = waitFor.filter(sel => !!root.querySelector(sel))
     if (t < restUntil || waitFor.length > 0) { stale = true; return null }
@@ -912,6 +905,14 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     const key = offer ? 'offer' : cardKey || (now?.id ?? '')
     if (key && key !== said) ctx.announce(words)
     said = key
+    calm(app.screen === 'season' ? showing : '')
+    // A tip that only tells puts itself away once there has been time to read it: nothing has to be pressed. One that
+    // points at something to do stays until it is done, or is skipped.
+    if (app.screen === 'season' && now && shownId === now.id && (now.read || now.hint) && !now.asks?.(l) && !now.act?.(l) && !guide.replaying(now.id) && !document.hidden) {
+      const count = `${now.ask(l)} ${now.why(l)}`.trim().split(/\s+/).length
+      // (a suggestion is given twice as long: there is something to find and press)
+      if (performance.now() - cameAt > tipSeconds(count) * (now.hint ? 2000 : 1000)) { if (now.read) guide.noted(now.id); else guide.skip(now.id); stale = true }
+    }
   }
 
   function placeAll(): void {

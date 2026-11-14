@@ -1,5 +1,52 @@
 # The County: the guided first year
 
+## Tips, not a narrator (14 November)
+
+The owner, after five rounds of the same complaint: "the tutorial thing should help as you play, not do one action and
+spam before you realize what even happened to the next", "it shouldn't be obnoxious", and before that "the game is just
+too fast and too much at once". Every earlier round changed the narrator's words or its speed. This one removed the
+narrator. What follows in this section is the rule; where a later section says a note holds the clock, the guide runs
+the clock or the guide frames a piece of work, that section is history.
+
+**What a new player got before** (`tools/quality/ftue.ts`, a first year played by someone who takes the tutorial and
+then does only what the game asks): 8 notes of 257 words, the longest 34; all 8 stopped the game (41 s stopped); 7
+presses that only put a note away against 6 that played the game; the clock changed without the player's hand 26
+times and the camera moved without it 13 times; 4 of the 8 notes said that nothing needed doing.
+
+**What they get now**: 5 tips of about 90 words, the longest 20; none stops the game; no press is needed for any;
+the camera never moves without the player's hand, and the clock only to go at 1x while a tip is up.
+
+The rules, each held by `e2e/tutorial.spec.ts` ("a first year with tips") or `tests/tutorial.test.ts`:
+
+- *A tip never stops the game.* The game stops itself only for a decision (`SELF_PAUSES` in `src/game/app.ts`), with
+  its own line saying why. A tip may stand beside that decision and point at it; the pause stays the game's.
+- *A tip never needs a press.* One that points at something to do goes when it is done. One that only tells goes by
+  itself after long enough to read it twice (5 to 10 seconds, by its words). Each carries a quiet "Got it" or "Skip"
+  and "No more tips", and none of them has to be used.
+- *The clock and the camera are the player's.* The tips never move the view, never stop the days and never speed
+  them up. One thing only: while a tip is up the days go no faster than 1x, so it can be read beside what it is
+  about (the owner, earlier: "it just needs to pause when the things pop up so you can see it"), and when it goes
+  they go back to the speed they had, Skip ahead included. A speed the player sets while a tip is up is kept. Empty
+  stretches are the player's to pass: the season's first tip points at **Skip ahead** while the soil warms, and one
+  after planting points at the fastest speed. (Offering Skip ahead beside the goal slip all season was tried and
+  taken out: it put four more words on a full screen and took room from the test-dig tray on a short window.)
+- *Only what the player acts on is taught, when it comes up.* Cut: "the summer" and "blight weather", which said that
+  nothing needed doing (the goal slip says what is next, and the spraying card explains itself). Kept, shortened:
+  skip ahead, the word to plant, run the days, planting day, the fastest speed, the work list, a ringed stamp, the
+  vine kill, frost on the barrels, the harvest, the year-end figure.
+- *Short.* Twenty words at the most for a tip shown while the days run, both lines together.
+- *One at a time, and not back to back.* At least six seconds lie between one tip that only tells and the next.
+- *The game's own guidance stays up.* The goal slip and the line that says why the game is paused are no longer
+  hidden while a tip shows.
+
+Checked against George Fan's rules for the Plants vs. Zombies tutorial (GDC 2012): blend it into the game; do rather
+than read; spread the teaching out; a few words at a time; messages that never block; show a hint when it is needed;
+never take control from the player.
+
+Not yet done: the code that ran the guide's clock and framed work (`driving` in `src/game/tutorial.ts`, `runClock`
+and the scenes in `src/ui/tutorial.ts`) is switched off but still in the files; the second spring's walk through the
+plan sheet is as it was.
+
 The owner, after playing the live build with the first guide in it: "it just needs to pause when the things pop up so
 you can see it and be more obvious to start the tutorial", and then: "The game is just too fast and too much at once
 theres all these things happening and even with the tutorial you have no idea why theres all this text on thes creen

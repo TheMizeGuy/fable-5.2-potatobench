@@ -124,14 +124,14 @@
 .hud.st-hide-list .crew .queue, .hud.st-hide-list .plate-layer .listed { visibility: hidden; }
 .hud.st-hide-forecast .topbar .forecast { visibility: hidden; }
 .hud.st-hide-after .topbar .after { visibility: hidden; }
-/* One voice: while the agent has a note for this screen (up, or waiting its turn) the goal slip stands down whole,
-   in its place, and nothing at the foot competes. Never a part of the slip alone: its words sit in a grid, and a
-   part taken out would let the rest slide into its column. */
-.hud.agent .topbar :is(.goal, .goal-go) { visibility: hidden; }
+/* A tip stands beside the game and takes nothing from it: the goal slip goes on saying what is next (a tip may
+   point at its key), and the line that says why the game is paused stays. Only the toasts at the foot wait while a
+   tip is up, so two things are never said at once there; a telegram that needs its answer still stands alone. */
 .hud.noting .notes, .hud.voice .notes { visibility: hidden; }
-.hud.noting .season-screen .paused, .hud.noting .season-screen .running, .hud.voice .season-screen .paused, .hud.voice .season-screen .running { visibility: hidden; }
-/* In the guided first year the notes say what is next; the goal slip comes with the second year. */
-.hud.guided .topbar :is(.goal, .goal-go) { visibility: hidden; }
+.hud.voice .season-screen .paused, .hud.voice .season-screen .running { visibility: hidden; }
+/* Off the season screen (the spring's walk through the plan sheet) the goal slip still stands down whole while the
+   agent has a note: there both would be naming the next thing to press. */
+.hud.agent:not(:has(.season-screen)) .topbar :is(.goal, .goal-go) { visibility: hidden; }
 /* And the boards say less: figures for today and tomorrow, an order on a tag as its mark alone, no line for what
    the money just did. */
 .hud.guided .topbar .forecast .d:nth-child(n+4) :is(.hi, .pct) { display: none; }

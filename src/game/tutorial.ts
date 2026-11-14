@@ -72,6 +72,9 @@ export interface Lesson {
   point?(l: Look): Point | null
   // Nothing to do but read: it carries a button to put it away.
   read?: boolean
+  // A suggestion: it points at something the player may use, and goes by itself, as a tip that only tells does,
+  // whether or not they do.
+  hint?: boolean
   // Comes ahead of everything else: a question the clock stopped for.
   urgent?: boolean
   // An opening lesson tied to a moment (planting day), so it comes ahead of the opening's look round.
@@ -193,6 +196,8 @@ const call = (l: Look) => seen(l, a => jobAct(a?.act) && a?.act !== 'kill' && a?
 // The year's first planting waits for the player's word: the field whose Plant stamp is up, or -1.
 const wordAt = (l: Look) => (l.c?.season && !S.plantWordGiven(l.c.season) ? seen(l, a => a?.act === 'plant') : -1)
 // The potato fields still to plant, the one being planted aside.
+// The soil is still too cold to plant, and the goal slip offers to skip the wait.
+const soilWait = (l: Look) => !!l.c && !!l.c.season && !S.plantWordGiven(l.c.season) && S.plantingIn(l.world, l.c) > 0
 const othersToPlant = (l: Look) => Math.max(0, potatoFields(l.c).filter(i => (l.c?.season?.fields[i]?.plantDay ?? -1) < 0).length - 1)
 // The people the farm has hired, and whether there are fields away from home for a foreman to run.
 const hands = (l: Look) => l.c?.crew.filter(u => u.kind !== 'farmer') ?? []
@@ -235,61 +240,71 @@ export const LESSONS: Lesson[] = [
     point: () => ({ testid: ['begin-season'] }),
   },
   {
-    // The first thing the player does on the land, and the season's first note: the guide has carried the player
-    // through the weeks the soil took to warm (driving, below), and the year's first planting waits for their word
-    // (src/sim/advice.ts). The tags come onto the land with their stamps.
-    id: 'word', part: 'opening', moment: true, name: 'Start planting', read: true, reveals: ['tags', 'stamps'],
+    // The clock, taught by using it. A year has long stretches with nothing to decide, and the one key a new player
+    // needs for them is Skip ahead: it runs the days fast and the game stops by itself at the next decision. The tip
+    // points at it through the first wait of the year (the soil warming), and goes once it has been used.
+    id: 'clock', part: 'opening', moment: true, name: 'Skip ahead', hint: true,
+    when: (l, g) => inSeason(l) && firstYear(l) && !g.has('fast') && wordAt(l) < 0 && soilWait(l),
+    done: (l, g) => g.has('fast') || (inSeason(l) && !soilWait(l)),
+    ask: l => `Nothing to do until the soil warms. ${by(l, 'Click', 'Tap', 'Tab to')} Skip ahead.`,
+    why: () => 'The game stops itself when you have a decision.',
+    point: () => ({ testid: ['goal-faster'] }),
+  },
+  {
+    // The first decision of the year: the game has stopped for it by itself (the word to plant), and the tip points
+    // at the stamp that gives it. The tags come onto the land with their stamps.
+    id: 'word', part: 'opening', moment: true, name: 'Start planting', reveals: ['tags', 'stamps'],
     when: l => inSeason(l) && firstYear(l) && wordAt(l) >= 0,
     done: (l, g) => g.has('noted:word') || (!!l.c?.season && S.plantWordGiven(l.c.season)),
-    ask: l => `The soil is ready, and planting waits for you. ${by(l, 'Click', 'Tap', 'Press Tab to reach')} the ringed Plant stamp on ${name(wordAt(l))}${l.input === 'keys' ? ', then Enter' : ''}.`,
-    why: l => { const n = othersToPlant(l); return n ? `Your crew then plants the other ${n === 1 ? 'field' : `${n} fields`} on its own.` : 'Planting starts there right away.' },
+    ask: l => `The soil is ready. ${by(l, 'Click', 'Tap', 'Tab to')} the ringed Plant stamp${l.input === 'keys' ? ', then Enter' : ''}.`,
+    why: l => othersToPlant(l) ? 'Your crew plants the other fields too.' : 'Planting starts there right away.',
     point: l => { const i = wordAt(l); return i >= 0 ? { badge: i } : null },
     show: l => { const i = wordAt(l); return i >= 0 ? { field: i } : null },
     asks: () => true,
   },
   {
-    id: 'plantday', part: 'opening', moment: true, name: 'Planting day', read: true, reveals: ['people', 'stamps'],
+    // A press on a stamp never sets the days going: the game the player answered is still stopped, and the first
+    // time that happens the way on is pointed at.
+    id: 'run', part: 'opening', moment: true, name: 'Run the days',
+    when: l => inSeason(l) && firstYear(l) && l.speed === 0 && !!l.c?.season && S.plantWordGiven(l.c.season) && wordAt(l) < 0 && call(l) < 0 && !l.carded && !l.paper && !S.seasonDone(l.c),
+    done: (l, _g, since) => !!since && l.speed > 0,
+    ask: l => `Planting is ordered. ${by(l, 'Press Space', 'Tap the play key', 'Press Space')} to run the days.`,
+    why: () => 'A press on a stamp never starts the clock.',
+    point: () => ({ testid: ['paused-go', 'speed-0', 'speed-toggle'] }),
+  },
+  {
+    id: 'plantday', part: 'opening', moment: true, name: 'Planting day', read: true, reveals: ['people', 'stamps', 'forecast'],
     // The word given (or three days gone by with none), in this season or an older save's.
     when: l => inSeason(l) && firstYear(l) && !!l.c?.season && S.plantWordGiven(l.c.season),
     done: (_l, g) => g.has('noted:plantday'),
-    ask: l => {
-      const n = othersToPlant(l)
-      const word = l.c?.season?.plantWordBy === 'crew' ? 'Your crew started planting on its own.'
-        : n ? `Planting has started. Your crew will plant the other ${n === 1 ? 'field' : `${n} fields`} too.` : 'Planting has started.'
-      return `${word} You're on the crew, and your face at the bottom shows what you're doing.`
-    },
-    why: () => 'The same face on the land is you.',
+    ask: l => l.c?.season?.plantWordBy === 'crew' ? 'Your crew started planting on its own.' : 'Planting has started.',
+    why: () => 'You work too. Your face at the bottom shows what you\'re doing.',
     point: l => ({ unit: farmer(l) }),
   },
   {
-    id: 'tend', part: 'year', name: 'The summer', read: true,
-    when: (l, g) => inSeason(l) && firstYear(l) && g.passed('plantday') && !unplanted(l),
-    done: (_l, g) => g.has('noted:tend'),
-    ask: () => 'Planting is done. All summer your crew hills the rows (piles soil over them) and checks for disease.',
-    why: () => 'You don\'t need to do anything until blight weather arrives. That\'ll be your first big decision.',
-  },
-  {
-    id: 'blight', part: 'year', name: 'Blight weather', read: true, reveals: ['forecast'],
-    when: l => inSeason(l) && (l.c?.season?.watchDay ?? -1) >= 0 && anyField(l, f => f.status === 'growing'),
-    done: (_l, g) => g.has('noted:blight'),
-    ask: () => 'Blight weather is coming. Blight is a disease that can wipe out a field in one wet week.',
-    why: () => 'The forecast marks it with a red leaf. Spraying protects a field for about a week.',
-    point: () => ({ testid: ['forecast'] }),
+    // The long waits of a year are the player's to shorten: once, with planting done and the days going slowly, the
+    // tip points at the fastest speed. It goes when that speed has been used.
+    id: 'fast', part: 'year', name: 'Run the days faster', hint: true,
+    when: (l, g) => inSeason(l) && firstYear(l) && g.passed('plantday') && !unplanted(l) && l.speed > 0 && l.speed < 3 && call(l) < 0 && wordAt(l) < 0 && !g.has('faster'),
+    done: (l, g, since) => g.has('faster') || (!!since && l.speed >= 3),
+    ask: l => `Nothing to decide for a while. ${by(l, 'Click 8×', 'Tap 8×', 'Press +')} to run fast.`,
+    why: () => 'The game stops itself when you have a decision.',
+    point: () => ({ testid: ['speed-3', 'speed-cycle'] }),
   },
   {
     id: 'list', part: 'year', name: 'The work list', read: true, reveals: ['list'],
     when: l => inSeason(l) && auto(l, 'spray') && jobOn(l, 'spray'),
     done: (_l, g) => g.has('noted:list'),
-    ask: () => 'Your crew now sprays on its own. The work list at the bottom shows their jobs in order.',
-    why: l => { const o = l.c ? S.sprayOutlook(l.world, l.c) : null; return `${o && o.perPass > 0 ? `Each spray costs about ${usd(o.perPass)} a field. ` : ''}You don't need to do anything else.` },
+    ask: () => 'Your crew sprays on its own now.',
+    why: () => 'The work list at the bottom shows their jobs in order.',
     point: () => ({ testid: ['queue-*'] }),
   },
   {
     id: 'stamp', part: 'year', name: 'A decision on a field', read: true, reveals: ['stamps', 'list'],
     when: l => inSeason(l) && call(l) >= 0,
     done: (l, g, since) => g.has('noted:stamp') || (!!since && call(l) < 0),
-    ask: l => `A ringed stamp means a field needs a decision from you. This one: ${l.needs[call(l)]?.text ?? 'work that\'s due.'}`,
-    why: l => by(l, 'Click the stamp to order it. The job goes on the work list.', 'Tap the stamp to order it. The job goes on the work list.', 'Press Tab to go to the field, then Enter to order it.'),
+    ask: () => 'A ringed stamp is a decision for you.',
+    why: l => by(l, 'Click it to give the order. It goes on the work list.', 'Tap it to give the order. It goes on the work list.', 'Tab to the field, then Enter to give the order.'),
     point: l => { const i = call(l); return i >= 0 ? { badge: i } : null },
     show: l => { const i = call(l); return i >= 0 ? { field: i } : null },
     asks: () => true,
@@ -298,12 +313,12 @@ export const LESSONS: Lesson[] = [
     id: 'kill', part: 'year', name: 'Kill the vines', read: true, reveals: ['stamps', 'list', 'forecast'],
     when: l => inSeason(l) && (needFor(l, 'kill') >= 0 || !!crewKills(l) || jobOn(l, 'kill')),
     done: (_l, g) => g.has('noted:kill'),
-    ask: () => 'The crop is nearly ready. Killing the vines stops the growth, so the skins toughen for harvest.',
+    ask: () => 'Killing the vines toughens the skins for harvest.',
     why: l => {
       const day = crewKills(l)
-      if (day) return `Your crew will do this automatically on ${day}. ${click(l)} a stamp to do it sooner.`
+      if (day) return `Your crew does it ${day}, or ${click(l).toLowerCase()} a Kill stamp.`
       const i = killAt(l)
-      return i >= 0 ? `${click(l)} the stamp on ${name(i)} to order it.` : 'It\'s on the work list, so you don\'t need to do anything.'
+      return i >= 0 ? `${click(l)} the ringed stamp on ${name(i)} to order it.` : 'It\'s on the work list already.'
     },
     point: l => { const i = killAt(l); return i >= 0 && !crewKills(l) ? { badge: i } : null },
     show: l => { const i = killAt(l); return i >= 0 && !crewKills(l) ? { field: i } : null },
@@ -314,13 +329,13 @@ export const LESSONS: Lesson[] = [
     // The warning itself, not a pause for it: the game no longer stops for a frost by itself.
     when: l => inSeason(l) && frostWarned(l) && !!frostNow(l),
     done: (_l, g) => g.has('noted:frost'),
-    ask: () => 'Frost tonight ruins a fifth of the potatoes still out in barrels.',
+    ask: () => 'Frost tonight ruins a fifth of the barrels outside.',
     // Never a promise the night may break (a tractor hauls about 900 cwt a day, the forecast misses, and what is dug
     // after the haul stays out): what the player can do now, by the same order and the same words as the frost
     // toast's key (the haulNow command), whose answer says how much comes in by dark and how much stays out.
     why: l => {
       const f = frostNow(l)
-      return f ? `Haul it in now sends your best hauler to ${name(f.field)} today, even on a day off.` : 'Your crew hauls barrels in ahead of everything else.'
+      return f ? `Haul it in now sends a hauler to ${name(f.field)} today.` : 'Your crew hauls barrels in ahead of everything else.'
     },
     show: l => { const f = frostNow(l); return f ? { field: f.field } : null },
     act: l => {
@@ -332,16 +347,16 @@ export const LESSONS: Lesson[] = [
     id: 'dig', part: 'year', name: 'The harvest', read: true, reveals: ['people', 'forecast', 'list', 'stamps'],
     when: l => inSeason(l) && anyField(l, f => f.status === 'digging' || f.status === 'dug' || f.inField >= 0.5),
     done: (_l, g) => g.has('noted:dig'),
-    ask: () => 'The harvest has started. Your crew digs the potatoes into barrels and hauls them to the potato house.',
-    why: () => 'You don\'t need to do anything. Each field is weighed when its barrels are in.',
+    ask: () => 'The harvest has started.',
+    why: () => 'Your crew digs and hauls. Each field is weighed once its barrels are in.',
   },
   {
     id: 'bills', part: 'year', name: 'The year-end bills', read: true, reveals: ['after'],
     when: l => inSeason(l) && anyField(l, f => f.weighed) && !l.papers.includes('weighin'),
     done: (l, g, since) => g.has('noted:bills') || (!!since && !!l.c && l.c.phase !== 'season'),
     // By the words on the money board: its second figure is labelled "After year-end bills".
-    ask: () => `Your first crop is weighed. "After year-end bills" at the top right is what's left after paying the ${owed()}.`,
-    why: () => 'It counts the crop still in the ground, so it\'ll change until every field is in.',
+    ask: () => '"After year-end bills" is what you\'ll have left.',
+    why: () => 'It counts the crop still in the ground, so it will change.',
     point: () => ({ testid: ['outlook'] }),
   },
   {
@@ -671,8 +686,9 @@ export class Guide {
   get on(): boolean { return this.p.mode === 'on' }
   // Whose the clock is between notes. The guide runs it through a first year until the player takes it (a speed set,
   // a pause, "I'll set the speed"); after that, and in later years, only where the player handed it back.
-  drives(c: S.Campaign | null): boolean {
-    return this.on && !!c && (this.facts.has('clock:guide') || (c.history.length === 0 && !this.facts.has('clock:player')))
+  // (It never is: the tips point things out while the player plays, and the clock and the camera stay the player's.)
+  drives(_c: S.Campaign | null): boolean {
+    return false
   }
   takeClock(): void { this.facts.delete('clock:guide'); this.facts.add('clock:player'); this.save() }
   giveClock(): void { this.facts.delete('clock:player'); this.facts.add('clock:guide'); this.save() }

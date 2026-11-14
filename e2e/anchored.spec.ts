@@ -870,6 +870,7 @@ async function guidedYear(page: Page, at: (note: string) => Promise<boolean | vo
   await page.getByTestId('guide-accept').click()
   const did: string[] = []
   const mine = new Set<string>()
+  let quiet = 0
   const until = Date.now() + 600_000
   while (Date.now() < until) {
     const s = await guidedNow(page)
@@ -884,17 +885,10 @@ async function guidedYear(page: Page, at: (note: string) => Promise<boolean | vo
         if (await at(s.note)) break
         continue
       }
-      // (the word to plant, a decision on a field and a vine kill that is the player's ask for a press on the stamp
-      // they name; the guide runs the clock between notes, so no note carries a key to run the game fast)
-      const key = (s.note === 'stamp' || s.note === 'word' || s.note === 'kill') && s.target.startsWith('badge-') ? '' : s.keys.includes('guide-noted') ? 'guide-noted' : ''
-      if (key) await page.locator(`#ui [data-testid="guide-slip"] [data-testid="${key}"]`).first().click().catch(() => {})
-      else {
-        // What the note points at: a field's tag or a person's chip opens that thing's card, by the player's press.
-        const m = /^(field|unit)-(\d+)$/.exec(s.target)
-        if (m) mine.add(m[1] === 'field' ? `field-${m[2]}` : `person-${m[2]}`)
-        await page.locator(`#ui [data-testid="${s.target}"]`).first().click().catch(() => {})
-      }
-      await page.waitForTimeout(150)
+      // A tip is never pressed: one that only tells goes by itself. What a tip points at to be done is done, as a
+      // player would: the stamp, the key that skips a wait, the key that runs the days.
+      if (s.target.startsWith('badge-') || ['goal-faster', 'paused-go', 'speed-0', 'speed-toggle', 'speed-3', 'speed-cycle', 'end-season'].includes(s.target)) await page.locator(`#ui [data-testid="${s.target}"]`).first().click().catch(() => {})
+      await page.waitForTimeout(250)
       continue
     }
     if (s.telegram) {
@@ -904,10 +898,13 @@ async function guidedYear(page: Page, at: (note: string) => Promise<boolean | vo
       await page.waitForTimeout(200)
       continue
     }
-    // The guide runs the clock between its notes. Where it waits on a ringed stamp no note is asking for, the stamp
-    // is pressed, as its line says.
-    const wait = await page.evaluate(() => document.querySelector<HTMLElement>('#ui [data-testid="guide-drive"]')?.dataset.wait ?? '')
-    if (wait) { await page.locator(`#ui [data-testid="badge-${wait}"]`).first().click().catch(() => {}); await page.waitForTimeout(150); continue }
+    // Nothing asked: the player passes the wait with the key the game offers for it, or sets the days going.
+    const clock = await page.evaluate(() => { const e = document.querySelector<HTMLElement>('#ui [data-testid="goal-faster"]'); return { speed: (globalThis as any).__county.app.speed as number, skip: !!e && e.offsetParent !== null } })
+    if (++quiet >= 6) {
+      quiet = 0
+      if (clock.skip && clock.speed < 3) await page.locator('#ui [data-testid="goal-faster"]').first().click().catch(() => {})
+      else if (clock.speed === 0) await page.keyboard.press('Space')
+    }
     await page.waitForTimeout(250)
   }
   return did
@@ -975,11 +972,11 @@ test('a guided first year to the first weigh ticket: nothing opens that the play
   await page.setViewportSize({ width: 1280, height: 800 })
   let yard = false
   const did = await guidedYear(page, async note => {
-    // With the crew's summer note up, as a player had it: a click in the yard.
-    if (note === 'tend' && !yard) { yard = true; await yardHolds(page, '1280x800 guided') }
+    // With a tip up that only tells (planting day's), as a player had it: a click in the yard.
+    if (note === 'plantday' && !yard) { yard = true; await yardHolds(page, '1280x800 guided') }
   })
   console.log(`followed: ${did.join(' > ')}`)
-  expect(yard, 'the note about the summer came up, and the yard was opened under it').toBe(true)
+  expect(yard, 'the tip about planting day came up, and the yard was opened under it').toBe(true)
   expect(did[did.length - 1], `the run reached the first weigh ticket (${did.join(' > ')})`).toBe('ticket')
   expect(errors, errors.join('\n')).toEqual([])
 })
@@ -991,12 +988,12 @@ test('the yard\'s card holds its rows and keeps off the tutorial\'s note, 1280 b
   await page.setViewportSize({ width: 1280, height: 720 })
   let yard = false
   await guidedYear(page, async note => {
-    if (note !== 'tend') return false
+    if (note !== 'plantday') return false
     yard = true
     await yardHolds(page, '1280x720 guided')
     return true
   })
-  expect(yard, 'the note about the summer came up, and the yard was opened under it').toBe(true)
+  expect(yard, 'the tip about planting day came up, and the yard was opened under it').toBe(true)
   expect(errors, errors.join('\n')).toEqual([])
 })
 
