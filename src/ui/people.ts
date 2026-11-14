@@ -246,7 +246,7 @@ export function personCard(ctx: Ctx): PersonCard {
       h('dl', { class: 'state' },
         h('div', { testid: 'person-tired' }, h('dt', { class: tiredCls }, F.upper(p.tiredWord)), h('dd', null, p.tired >= S.TIRED_SLOW_FROM ? `${F.upper(restWords(c, p))}.${tiredWhy ? ` ${tiredWhy}` : ''}` : tiredWhy || 'Rested enough.')),
         h('div', { testid: 'person-mood' }, h('dt', { class: moodCls }, `${F.upper(p.moodWord)}${heading ? `, ${heading === 'rising' ? 'improving' : 'getting worse'}` : ''}`),
-          h('dd', null, p.quitIn >= 0 ? `Will quit in ${F.plural(p.quitIn, 'day')} unless their mood improves.` : why.length ? F.upper(`${moodSaid(why)}.`) : 'No strong reasons either way.')),
+          h('dd', null, p.quitIn >= 0 ? `Will quit in ${F.plural(p.quitIn, 'day')} unless their mood improves.` : why.length ? F.upper(`${moodSaid(why)}.`) : p.kind === 'farmer' ? 'Nothing is bothering you.' : 'Nothing is bothering them.')),
         p.hurtUntil >= 0 ? h('div', null, h('dt', { class: 'c-red' }, 'Hurt'), h('dd', null, `Back on ${F.date(c.year, p.hurtUntil)}.`)) : null),
       flashed && performance.now() < flashed.until ? h('p', { class: 'pc-flash c-red', role: 'status' }, flashed.text) : null),
       h('div', { class: 'card-foot' },
