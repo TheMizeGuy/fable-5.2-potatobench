@@ -169,11 +169,14 @@ function outOfRange(c: Campaign): string[] {
       const u = crew.find(x => x.id === j.unit)
       check(j.unit === -1 || (!!u && S.willDo(u, j.kind)), `order ${j.id} pinned to ${j.unit}`)
     }
+    // Helpers hold no order and work on foot; their records are apart from the holder's.
+    for (const u of crew) if (u.help !== undefined) check(u.job < 0, `helper ${u.id} holds order ${u.job}`)
     // Two crews never work the same order: each order (one kind on one field) was worked by one crew in a day.
     const by = new Map<string, number>()
     // (Two buildings going up in one yard are two orders on the same place; a hauler who empties the barrels lets the
     // order go, and someone else can take it up once more is dug the same day.)
     for (const w of s.worked) {
+      if (w.help) { check(w.machine === undefined && w.rig === undefined && w.from === undefined, `helper's record on a machine: ${JSON.stringify(w)}`); continue }
       if (w.kind === 'build' || w.kind === 'haul') continue
       const key = `${w.kind}:${w.field}`
       check(!by.has(key) || by.get(key) === w.unit, `${key} worked by ${by.get(key)} and ${w.unit}`)

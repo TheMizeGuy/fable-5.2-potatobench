@@ -267,8 +267,10 @@ describe('travel', () => {
     ok(x, { t: 'job', kind: 'plant', field: 2 })
     refused(x, { t: 'assign', id: order(x, 'plant', 2)!.id, unit: hand }, /field hand/)
     days(x, 1)
-    expect(x.season!.worked).toMatchObject([{ kind: 'plant', field: 2, unit: 0 }])
-    expect(crewOf(x, hand)).toMatchObject({ at: -1, job: null })
+    expect(x.season!.worked.filter(w => !w.help)).toMatchObject([{ kind: 'plant', field: 2, unit: 0 }])
+    // the hand, with nothing of its own, walks over and helps at the farmer's planting, holding no order
+    expect(x.season!.worked.filter(w => w.help)).toEqual([{ kind: 'plant', field: 2, unit: hand, help: true }])
+    expect(crewOf(x, hand)).toMatchObject({ at: 2, job: null })
   })
 
   it('lets another crew take over an order the farmer began, and keeps the work done on it', () => {
@@ -284,7 +286,9 @@ describe('travel', () => {
     expect(crewOf(x, 0).job).toBeNull()
     expect(crewOf(x, op.id).job).toBeNull()
     const { events, worked } = untilDone(x, 'plant', 8)
-    expect(worked).toMatchObject([{ kind: 'plant', field: 8, unit: op.id }])
+    expect(worked.filter(w => !w.help)).toMatchObject([{ kind: 'plant', field: 8, unit: op.id }])
+    // the farmer, let go of it, helps the operator finish it on foot
+    expect(worked.filter(w => w.help)).toEqual([{ kind: 'plant', field: 8, unit: 0, help: true }])
     expect(events.filter(e => e.type === 'planted' && e.field === 8).length).toBe(1)
     expect(crewOf(x, op.id).at).toBe(8)
     expect(crewOf(x, 0).at).toBe(8)

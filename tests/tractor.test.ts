@@ -33,6 +33,8 @@ describe('a machine\'s day', () => {
         const on = new Map<string, { unit: number; from: number; to: number }[]>()
         for (const w of s.worked) {
           if (S.jobSkill(w.kind) !== 'machine') continue
+          // a helper at machine work is on foot: no machine, no hours on one
+          if (w.help) { expect(w.machine ?? w.rig ?? w.from, `${w.kind} helped on day ${s.day - 1}`).toBeUndefined(); continue }
           // machine work says which machine it was on and when
           expect(w.machine, `${w.kind} on day ${s.day - 1}`).toBeDefined()
           on.set(w.machine!, [...(on.get(w.machine!) ?? []), { unit: w.unit, from: w.from!, to: w.to! }])

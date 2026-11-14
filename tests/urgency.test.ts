@@ -45,7 +45,10 @@ describe('urgent work first', () => {
     expect(S.apply(world, c, { t: 'day' }).ok).toBe(true)
     const his = c.season!.worked.filter(w => w.unit === op.id)
     expect(his.some(w => w.kind === 'kill' && w.field === field)).toBe(true)
-    expect(his.some(w => w.kind === 'fell')).toBe(false)
+    // he holds no felling; once the kill is done he may lend the farmer a hand at it, on foot
+    expect(his.some(w => w.kind === 'fell' && !w.help)).toBe(false)
+    const kill = his.findIndex(w => w.kind === 'kill'), help = his.findIndex(w => w.kind === 'fell')
+    expect(help < 0 || help > kill).toBe(true)
   })
 
   it('a felling pinned to him is still his to do first', () => {
@@ -53,6 +56,6 @@ describe('urgent work first', () => {
     const job = c.season!.jobs.find(j => j.kind === 'fell' && j.field === fell)!
     expect(S.apply(world, c, { t: 'assign', id: job.id, unit: op.id }).ok).toBe(true)
     expect(S.apply(world, c, { t: 'day' }).ok).toBe(true)
-    expect(c.season!.worked.some(w => w.unit === op.id && w.kind === 'fell')).toBe(true)
+    expect(c.season!.worked.some(w => w.unit === op.id && w.kind === 'fell' && !w.help)).toBe(true)
   })
 })

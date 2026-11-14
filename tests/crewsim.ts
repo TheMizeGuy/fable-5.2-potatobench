@@ -34,8 +34,9 @@ function start(farm: Farm): App {
   return app
 }
 
-// The machine work of the first day on which two people each have hours of this kind on one machine: who, where and
-// from when, in the order of the hours; and how many days go by before it.
+// The machine work of the first day on which two people each have hours of this kind on one machine, and the second
+// waits for it: they do nothing else that day, while the first has it for an hour or more. Who, where and from when,
+// in the order of the hours; and how many days go by before it.
 export function sharedDay(kind: string, farm: Farm = {}): { days: number; turns: { unit: number; field: number; from: number }[] } {
   const app = start(farm), c = app.campaign!
   for (let n = 1; n < 240 && c.phase === 'season' && !sim.seasonDone(c); n++) {
@@ -44,7 +45,9 @@ export function sharedDay(kind: string, farm: Farm = {}): { days: number; turns:
     const did = c.season!.worked.filter(w => w.kind === kind && !!w.machine).sort((a, b) => (a.from ?? 0) - (b.from ?? 0))
     for (const w of did) {
       const same = did.filter(x => x.machine === w.machine)
-      if (new Set(same.map(x => x.unit)).size > 1) return { days: n, turns: same.map(x => ({ unit: x.unit, field: x.field, from: x.from ?? 0 })) }
+      const first = same[0], second = same.find(x => x.unit !== first.unit)
+      const waits = !!second && (first.to ?? 0) - (first.from ?? 0) >= 1 / sim.DAY_STRETCHES && c.season!.worked.every(x => x.unit !== second.unit || x.machine === w.machine)
+      if (waits) return { days: n, turns: same.map(x => ({ unit: x.unit, field: x.field, from: x.from ?? 0 })) }
     }
   }
   return { days: 0, turns: [] }
