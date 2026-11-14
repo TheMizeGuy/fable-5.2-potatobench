@@ -1747,7 +1747,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
         const r = renderer.info.render
         return {
           triangles: r.triangles, calls: r.calls, pixelRatio: renderer.getPixelRatio(), width: canvas.width, height: canvas.height,
-          camera: rig.where(), time, ambient, fall, exposure: lit.exposure, tier, startedAt, fps, drawn: [post.target.width, post.target.height], samples: post.target.samples, firstFrame, built, began, shadersAt, firstDraw,
+          camera: rig.where(), time, ambient, clouds: cloudTime, fall, exposure: lit.exposure, tier, startedAt, fps, drawn: [post.target.width, post.target.height], samples: post.target.samples, firstFrame, built, began, shadersAt, firstDraw,
           spent: { crews: +spent.crews.toFixed(2), update: +spent.update.toFixed(2), draw: +spent.draw.toFixed(2) }, objects: scene.children.reduce((n, c) => { let k = 0; c.traverse(() => k++); return n + k }, 0),
         }
       },

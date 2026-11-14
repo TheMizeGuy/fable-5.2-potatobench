@@ -107,3 +107,60 @@ test('a day of work at 1× is three minutes: the planter is watched at its work,
   await expect(page.getByTestId('hour')).toHaveText(/AM|PM/)
   expect(errors, errors.join('\n')).toEqual([])
 })
+
+// The owner, 14 November: "cloud should stop when game is paused"; "start the player closer to when the ground is
+// ready for planting on a new game"; and of days with nothing in them, "things dont have to grow as they would in
+// real life its a game".
+test('a new farm opens three days before planting, the days with no work go by in seconds, and the clouds stand still while the game is paused', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'run at the desk')
+  test.setTimeout(180_000)
+  const errors = watchErrors(page)
+  await page.goto('./')
+  await page.evaluate(() => localStorage.clear())
+  await page.reload()
+  await page.waitForFunction(() => '__county' in globalThis && !document.getElementById('splash'))
+  await page.getByTestId('play').click()
+  await page.getByTestId('guide-refuse').click()
+  await page.getByTestId('begin-season').click()
+  await expect(page.getByTestId('date')).toBeVisible({ timeout: 15_000 })
+  const game = () => page.evaluate(() => {
+    const g = globalThis as unknown as { __county: { app: { speed: number; pauseCause: string; hurrying: boolean; world: unknown; campaign: { season: { day: number; startDay: number; plantAsk?: number } } }; sim: { plantingIn(w: unknown, c: unknown): number } }; __countyField: { stats(): { clouds: number } } }
+    const { app, sim } = g.__county, s = app.campaign.season
+    return { day: s.day, start: s.startDay, asked: s.plantAsk !== undefined, wait: sim.plantingIn(app.world, app.campaign), speed: app.speed, cause: app.pauseCause, hurrying: app.hurrying, clouds: g.__countyField.stats().clouds }
+  })
+  // Opened close to planting: weeks past the season's first day, the soil a few days from fit.
+  const open0 = await game()
+  expect(open0.day - open0.start, 'days past the season\'s first').toBeGreaterThan(5)
+  expect(open0.asked).toBe(false)
+  // (the season starts running by itself; a day or so may have gone by already)
+  expect(open0.wait).toBeLessThanOrEqual(3)
+  // The days before the soil is fit have no work in them: they go by in seconds, and the game stops for the word.
+  const t0 = Date.now()
+  await expect.poll(async () => (await game()).cause, { timeout: 30_000 }).toBe('plantAsk')
+  expect(Date.now() - t0, 'the wait for the soil, in milliseconds').toBeLessThan(25_000)
+  await expect(page.getByTestId('speed-1')).toHaveText(/^1×/)
+  if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/open-the-word.jpg`, type: 'jpeg', quality: 80 })
+  // Paused: the clouds stand where they are.
+  const a = await game()
+  expect(a.speed).toBe(0)
+  await page.waitForTimeout(2000)
+  const b = await game()
+  expect(b.clouds, 'the clouds\' clock while paused').toBe(a.clouds)
+  // Running again, they drift.
+  await page.locator('#ui [data-testid^="badge-"]').first().click()
+  await page.keyboard.press('Space')
+  await expect.poll(async () => (await game()).speed, { timeout: 5000 }).toBeGreaterThan(0)
+  await page.waitForTimeout(1500)
+  const c = await game()
+  expect(c.clouds).toBeGreaterThan(b.clouds)
+  // Planting is work: its day is not hurried.
+  expect(c.hurrying).toBe(false)
+  expect(c.day).toBe(b.day)
+  if (process.env.SHOTS) {
+    await page.getByTestId('speed-2').click()
+    await page.waitForTimeout(9000)
+    await page.screenshot({ path: `${process.env.SHOTS}/planting-at-the-second-speed.jpg`, type: 'jpeg', quality: 80 })
+  }
+  expect(errors, errors.join('\n')).toEqual([])
+})
+
