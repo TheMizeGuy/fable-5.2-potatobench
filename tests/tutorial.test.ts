@@ -249,7 +249,7 @@ describe('what a note says against what the game does (round six)', () => {
             const said = `${frost.ask({ ...l, input })} ${frost.why({ ...l, input })}`
             expect(said).not.toMatch(/don't need to do anything|will haul them in|before the frost/)
             expect(said).toMatch(/a fifth/)
-            expect(said).toContain(`Haul it in now sends whoever can bring in the most from ${S.FIELD_NAMES[most.field]} by dark`)
+            expect(said).toContain(`Haul it in now sends your best hauler to ${S.FIELD_NAMES[most.field]} today`)
             expect(countWords(said)).toBeLessThanOrEqual(35)
           }
           expect(frost.show!(l)).toEqual({ field: most.field })
@@ -335,7 +335,7 @@ describe('round seven: what the player is for, and what the agent asks', () => {
     const word = g.current(l)!
     expect(word.id).toBe('word')
     const field = S.fieldNeeds(w, c).findIndex(n => n.need?.act === 'plant')
-    expect(word.ask(l)).toBe(`The soil is ready, and planting waits for your word. Click the ringed Plant stamp on ${S.FIELD_NAMES[field]}.`)
+    expect(word.ask(l)).toBe(`The soil is ready, and planting waits for you. Click the ringed Plant stamp on ${S.FIELD_NAMES[field]}.`)
     expect(word.why(l)).toBe('Your crew then plants the other 3 fields on its own.')
     expect(word.point!(l)).toEqual({ badge: field })
     // It brings the stamps onto the guided screen, and it asks: the game stays paused after Got it.
@@ -349,7 +349,7 @@ describe('round seven: what the player is for, and what the agent asks', () => {
     expect(S.apply(w, c, { t: 'job', kind: 'plant', field }).ok).toBe(true)
     const after = g.current(look(w, c))!
     expect(after.id).toBe('plantday')
-    expect(after.ask(look(w, c))).toBe('You gave the word. Your crew will plant the other 3 fields too. You\'re on the crew, and your face at the bottom shows what you\'re doing.')
+    expect(after.ask(look(w, c))).toBe('Planting has started. Your crew will plant the other 3 fields too. You\'re on the crew, and your face at the bottom shows what you\'re doing.')
     expect(after.asks?.(look(w, c)) ?? false).toBe(false)
     for (const input of INPUTS) for (const x of [word, after]) expect(countWords(`${x.ask({ ...l, input })} ${x.why({ ...l, input })}`), x.id).toBeLessThanOrEqual(35)
   })
@@ -362,7 +362,7 @@ describe('round seven: what the player is for, and what the agent asks', () => {
     expect(c.season!.plantWordBy).toBe('crew')
     const after = g.current(look(w, c))!
     expect(after.id).toBe('plantday')
-    expect(after.ask(look(w, c))).toMatch(/^You gave no word, so your crew started planting on its own\./)
+    expect(after.ask(look(w, c))).toMatch(/^Your crew started planting on its own\./)
   })
 
   it('a note that asks for a press on the land says so, and one that only tells does not', () => {
@@ -444,7 +444,7 @@ describe('the guide runs the clock between its notes', () => {
       const first = driving(at(w, c), g)!
       expect(first.speed).toBe(3)
       expect(first.line, `seed ${seed}`).toBe('A few weeks pass while the soil warms.')
-      expect(first.next).toBe('Next: planting, on your word.')
+      expect(first.next).toBe('Next: planting, when you say.')
       // The seconds the wait takes: each day at the pace the guide gives that day (8x is two days a second).
       let seconds = 0
       const paces = new Set<number>()
@@ -463,7 +463,7 @@ describe('the guide runs the clock between its notes', () => {
       // The day of the ask it waits: the press is the player's, or theirs to wave through.
       const ask = driving(at(w, c, { speed: 0 }), g)!
       expect(ask.waits?.id).toBe('word')
-      expect(ask.line).toBe('Planting waits for your word. Click a ringed Plant stamp.')
+      expect(ask.line).toBe('Planting waits for you. Click a ringed Plant stamp.')
       expect(driving(at(w, c, { speed: 0 }), g, new Set(['word']))!.waits).toBeUndefined()
     }
   })
@@ -626,7 +626,7 @@ describe('round eight: the guide in the opening and in the second spring', () =>
       expect(countWords(`${lesson(id)!.ask(v)} ${lesson(id)!.why(v)}`), id).toBeLessThanOrEqual(40)
     }
     // The season's first note says the game pauses for the word.
-    expect(lesson('calls2')!.ask(land)).toBe('It\'s a new season. The game pauses when the soil is ready, and planting waits for your word.')
+    expect(lesson('calls2')!.ask(land)).toBe('It\'s a new season. The game pauses when the soil is ready, and planting waits for you.')
   })
 })
 

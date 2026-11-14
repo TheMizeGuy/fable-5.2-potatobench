@@ -585,7 +585,7 @@ test('the goal line says the one next thing, opens the ladder, and moves on when
   await reach(page, `const { app } = q.g(); for (let k = 0; k < 40 && !app.needs().some(n => n.need && n.need.act === 'plant'); k++) app.do({ t: 'day' }); app.setSpeed(0)`)
   await putAway(page)
   // (round seven: the year's first planting waits for the player's word, and the slip asks for it)
-  await expect(goal).toContainText(`Give the word to plant0/${of}`)
+  await expect(goal).toContainText(`Start planting0/${of}`)
   await goal.click()
   await page.getByTestId('goal-show').click()
   expect(await game<string>(page, 'app.needs()[app.selected]?.need?.act')).toBe('plant')
@@ -594,7 +594,7 @@ test('the goal line says the one next thing, opens the ladder, and moves on when
     for (let k = 0; k < 60 && c.season.fields.some((f, i) => sim.isField(c, i) && f.status === 'idle'); k++) { for (const a of sim.advise(app.world, c)) if (a.act === 'plant') app.order('plant', { fields: [a.field] }); app.do({ t: 'day' }) }
     app.setSpeed(0)`)
   // (round eight: the walking is the crew's, so the slip says what the player is waiting for)
-  await expect(page.getByTestId('goal')).toContainText('Nothing for you until blight weather', { timeout: 5000 })
+  await expect(page.getByTestId('goal')).toContainText('Nothing to do until blight weather', { timeout: 5000 })
   expect(errors, errors.join('\n')).toEqual([])
 })
 
@@ -961,7 +961,7 @@ test('a field says which work the crew does by itself and which waits for the pl
   // Round seven: the year's first planting waits three days for the player's word. With none given the crew starts by
   // itself: a note says so, and a press on it goes to the field where it started (never to the planter's card).
   await reach(page, `const { app } = q.g(); const c = app.campaign; for (let k = 0; k < 90 && c.season.plantWord === undefined; k++) { c.incidents = []; app.do({ t: 'day' }) } app.setSpeed(0)`)
-  const note = page.locator('#ui [data-testid="alert"]', { hasText: 'You gave no word in 3 days, so your crew has started planting on its own.' })
+  const note = page.locator('#ui [data-testid="alert"]', { hasText: 'Your crew waited 3 days and has started planting on its own.' })
   await expect(note).toBeVisible()
   const named = await game<string>(page, `sim.FIELD_NAMES[app.campaign.season.log.find(e => e.type === 'plantWord').field]`)
   await note.click()

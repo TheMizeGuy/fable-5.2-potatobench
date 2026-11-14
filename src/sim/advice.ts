@@ -242,7 +242,7 @@ export function standingOrders(world: World, c: Campaign): GameEvent[] {
   if (fit.length && s.plantAsk !== undefined && s.day - s.plantAsk >= P.PLANT_WORD_DAYS) {
     s.plantWord = s.day
     s.plantWordBy = 'crew'
-    out.push(said(s, 'plantWord', fit[0].field, `You gave no word in ${P.PLANT_WORD_DAYS} days, so your crew has started planting on its own.`))
+    out.push(said(s, 'plantWord', fit[0].field, `Your crew waited ${P.PLANT_WORD_DAYS} days and has started planting on its own.`))
   }
   for (const a of withinReach(c, all)) {
     if (a.field < 0 || a.act === 'wait' || a.act === 'sell' || a.act === 'close') continue
@@ -294,7 +294,7 @@ export function plantAsked(world: World, c: Campaign): GameEvent[] {
   const fit = everything(world, c).find(a => a.act === 'plant' && awaitsWord(c, 'plant', a.field))
   if (!fit) return []
   s.plantAsk = s.day
-  return [said(s, 'plantAsk', fit.field, `The soil is ready and your crew is waiting for your word. Order Plant on any potato field, or they'll start on their own in ${P.PLANT_WORD_DAYS} days.`)]
+  return [said(s, 'plantAsk', fit.field, `The soil is ready and your crew is waiting for you. Order Plant on any potato field, or they'll start on their own in ${P.PLANT_WORD_DAYS} days.`)]
 }
 
 // The player's first planting order of the year is the word the crew waits for: said back, with what follows.
@@ -307,7 +307,7 @@ export function wordToPlant(c: Campaign, field: number): GameEvent | null {
   if (!first) return null
   let others = 0
   for (let i = 0; i < P.FIELD_COUNT; i++) if (i !== field && c.plans[i]?.crop === 'potato' && c.fields[i].tenure !== 'none' && s.fields[i].plantDay < 0 && standingBy(c, 'plant', i) === 'routine') others++
-  return said(s, 'plantWord', field, others ? `You gave the word. Your crew will plant the other ${others === 1 ? 'field' : `${others} fields`} too.` : 'You gave the word, and planting has started.')
+  return said(s, 'plantWord', field, others ? `Planting has started. Your crew will plant the other ${others === 1 ? 'field' : `${others} fields`} too.` : 'Planting has started.')
 }
 
 // The evening a field's vine kill comes due and is the player's to give, said once for each field. Where the crew

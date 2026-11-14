@@ -238,10 +238,10 @@ export const LESSONS: Lesson[] = [
     // The first thing the player does on the land, and the season's first note: the guide has carried the player
     // through the weeks the soil took to warm (driving, below), and the year's first planting waits for their word
     // (src/sim/advice.ts). The tags come onto the land with their stamps.
-    id: 'word', part: 'opening', moment: true, name: 'Give the word to plant', read: true, reveals: ['tags', 'stamps'],
+    id: 'word', part: 'opening', moment: true, name: 'Start planting', read: true, reveals: ['tags', 'stamps'],
     when: l => inSeason(l) && firstYear(l) && wordAt(l) >= 0,
     done: (l, g) => g.has('noted:word') || (!!l.c?.season && S.plantWordGiven(l.c.season)),
-    ask: l => `The soil is ready, and planting waits for your word. ${by(l, 'Click', 'Tap', 'Press Tab to reach')} the ringed Plant stamp on ${name(wordAt(l))}${l.input === 'keys' ? ', then Enter' : ''}.`,
+    ask: l => `The soil is ready, and planting waits for you. ${by(l, 'Click', 'Tap', 'Press Tab to reach')} the ringed Plant stamp on ${name(wordAt(l))}${l.input === 'keys' ? ', then Enter' : ''}.`,
     why: l => { const n = othersToPlant(l); return n ? `Your crew then plants the other ${n === 1 ? 'field' : `${n} fields`} on its own.` : 'Planting starts there right away.' },
     point: l => { const i = wordAt(l); return i >= 0 ? { badge: i } : null },
     show: l => { const i = wordAt(l); return i >= 0 ? { field: i } : null },
@@ -254,8 +254,8 @@ export const LESSONS: Lesson[] = [
     done: (_l, g) => g.has('noted:plantday'),
     ask: l => {
       const n = othersToPlant(l)
-      const word = l.c?.season?.plantWordBy === 'crew' ? 'You gave no word, so your crew started planting on its own.'
-        : n ? `You gave the word. Your crew will plant the other ${n === 1 ? 'field' : `${n} fields`} too.` : 'You gave the word, and planting has started.'
+      const word = l.c?.season?.plantWordBy === 'crew' ? 'Your crew started planting on its own.'
+        : n ? `Planting has started. Your crew will plant the other ${n === 1 ? 'field' : `${n} fields`} too.` : 'Planting has started.'
       return `${word} You're on the crew, and your face at the bottom shows what you're doing.`
     },
     why: () => 'The same face on the land is you.',
@@ -320,7 +320,7 @@ export const LESSONS: Lesson[] = [
     // toast's key (the haulNow command), whose answer says how much comes in by dark and how much stays out.
     why: l => {
       const f = frostNow(l)
-      return f ? `Haul it in now sends whoever can bring in the most from ${name(f.field)} by dark, day off or not.` : 'Your crew hauls barrels in ahead of everything else.'
+      return f ? `Haul it in now sends your best hauler to ${name(f.field)} today, even on a day off.` : 'Your crew hauls barrels in ahead of everything else.'
     },
     show: l => { const f = frostNow(l); return f ? { field: f.field } : null },
     act: l => {
@@ -449,7 +449,7 @@ export const LESSONS: Lesson[] = [
     id: 'loan', part: 'spring', name: 'Money and the spring loan', uses: ['paper:money'],
     when: l => l.screen === 'plan' && !!l.c && l.c.history.length > 0,
     done: (_l, g) => g.has('paper:money') || g.has('noted:loan'),
-    ask: l => `${l.input === 'touch' ? 'Tap' : 'Open'} The money to see what this plan costs and how much the spring loan covers.`,
+    ask: l => `${l.input === 'touch' ? 'Tap' : 'Click'} See the money to check what this plan costs and how much the spring loan covers.`,
     why: () => 'The bank lends you money each spring, and your yearly bank payment is due at the end of the year.',
     point: () => ({ testid: ['money-open'] }),
   },
@@ -466,7 +466,7 @@ export const LESSONS: Lesson[] = [
     id: 'calls2', part: 'spring', name: 'Your decisions this season', read: true,
     when: l => inSeason(l) && !!l.c && l.c.history.length > 0,
     done: (_l, g) => g.has('noted:calls2'),
-    ask: () => 'It\'s a new season. The game pauses when the soil is ready, and planting waits for your word.',
+    ask: () => 'It\'s a new season. The game pauses when the soil is ready, and planting waits for you.',
     why: () => 'Your other big decisions are spray, water and kill the vines, and a stamp appears when one is due.',
   },
   {
@@ -583,7 +583,7 @@ export function openAsks(l: Look): { id: string; field: number }[] {
 
 // What the guide is waiting for, said as the thing to press.
 function askLine(l: Look, a: { id: string; field: number }): string {
-  if (a.id === 'word') return `Planting waits for your word. ${click(l)} a ringed Plant stamp.`
+  if (a.id === 'word') return `Planting waits for you. ${click(l)} a ringed Plant stamp.`
   if (a.id.startsWith('kill:')) return `The vines in ${name(a.field)} wait for you. ${click(l)} the ringed Kill vines stamp.`
   return `${l.needs[a.field]?.text ?? 'Work is waiting.'} ${click(l)} its ringed stamp.`
 }
@@ -595,7 +595,7 @@ function passing(l: Look): { line: string; next: string } {
   const pot = potatoFields(c)
   const left = pot.filter(i => (s.fields[i]?.plantDay ?? -1) < 0).length
   const any = (ok: (f: S.FieldSeason) => boolean) => pot.some(i => !!s.fields[i] && ok(s.fields[i]))
-  if (!S.plantWordGiven(s) && left === pot.length) return { line: 'A few weeks pass while the soil warms.', next: 'Next: planting, on your word.' }
+  if (!S.plantWordGiven(s) && left === pot.length) return { line: 'A few weeks pass while the soil warms.', next: 'Next: planting, when you say.' }
   if (left > 0) return { line: left === pot.length ? 'Your crew is starting to plant.' : `Your crew is planting the other ${left === 1 ? 'field' : `${left} fields`}.`, next: 'Next: the plants come up.' }
   if (any(f => f.weighed)) return { line: 'The rest of the crop is coming in.', next: 'Next: the next weigh ticket.' }
   if (any(f => f.status === 'digging' || f.status === 'dug' || f.inField >= 0.5)) return { line: 'Your crew is digging and hauling.', next: 'Next: the first weigh ticket.' }

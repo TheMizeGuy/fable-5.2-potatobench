@@ -122,7 +122,7 @@ export function alertShort(a: Alert): { text: string; glyph: string } {
   const name = a.field >= 0 ? `${S.FIELD_NAMES[a.field]}: ` : ''
   const n = /(\d+)/.exec(a.text)?.[1] ?? ''
   switch (a.type) {
-    case 'plantAsk': return { text: 'The soil is ready. Press a ringed Plant stamp to give the word', glyph: 'plant' }
+    case 'plantAsk': return { text: 'The soil is ready. Press a ringed Plant stamp to start planting', glyph: 'plant' }
     case 'plantWord': return { text: a.text, glyph: 'plant' }
     case 'killCall': return { text: a.text, glyph: 'kill' }
     case 'emerged': return { text: `${name}${a.level === 'warn' ? 'plants are up, but sparse' : 'plants are up'}`, glyph: 'leaf' }

@@ -299,7 +299,7 @@ describe('what the player is waiting for', () => {
       expect(seasonStep(c)?.id === 'walk' || seasonStep(c)?.id === 'hill' || seasonStep(c)?.id === 'spray' || seasonStep(c)?.id === 'sample').toBe(true)
       day(c)
     }
-    expect([...said]).toEqual(['Nothing for you until blight weather / your crew tends the fields on its own'])
+    expect([...said]).toEqual(['Nothing to do until blight weather / your crew tends the fields on its own'])
     // Spraying decided: the next decision is the vine kill, with its date.
     expect(S.apply(w, c, { t: 'sprayWay', way: 'auto' }).ok).toBe(true)
     const kill = waitingFor(c)!
@@ -310,7 +310,7 @@ describe('what the player is waiting for', () => {
     // The vines dead: nothing until the weigh ticket.
     for (let n = 0; n < 200 && c.season!.fields.some(f => f.status === 'growing' && f.deadDay < 0) && !S.seasonDone(c); n++) day(c)
     const end = waitingFor(c)
-    if (end) expect(end).toEqual({ title: 'Nothing for you until the weigh ticket', when: 'your crew digs and hauls on its own' })
+    if (end) expect(end).toEqual({ title: 'Nothing to do until the weigh ticket', when: 'your crew digs and hauls on its own' })
   })
 
   it('says nothing in the place of a step the player took from the crew', () => {

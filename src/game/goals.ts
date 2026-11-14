@@ -76,7 +76,7 @@ export function goals(c: Campaign, o: { thisSeason?: boolean } = {}): Goal[] {
 
   // The first season, in the order the crop asks for it. A later step done means every earlier one is behind the farm.
   const season: Spec[] = [
-    { id: 'plant', title: 'Plant the fields', why: 'Planting can start once the soil has warmed up. Your crew then waits for your word, so order Plant on one field and they\'ll plant the rest.', when: 'During the season',
+    { id: 'plant', title: 'Plant the fields', why: 'Planting can start once the soil has warmed up. Your crew then waits for you, so order Plant on one field and they\'ll plant the rest.', when: 'During the season',
       done: past || (potato.length > 0 && planted.length === potato.length) || any(f => f.tiDay >= 0), now: crop,
       progress: potato.length ? { n: planted.length, of: potato.length } : null },
     { id: 'walk', title: 'Walk a field for blight', why: 'Blight only shows up close, so walking a field catches it while it\'s still small.', when: 'Once the rows are up',
@@ -207,7 +207,7 @@ export function waitingFor(c: Campaign): { title: string; when: string } | null 
   // While the spraying is the player's (not left to the crew), a spray is their next decision until the vine kill
   // comes near: before the first one it comes with the first blight weather, after it with each new forecast of it.
   if (up.length && !crew('spray') && sprayWayNow(c) !== 'none' && !(due && due.day - s.day <= KILL_NEAR)) {
-    if (!s.fields.some(f => f.lastSpray >= 0)) return { title: 'Nothing for you until blight weather', when: 'your crew tends the fields on its own' }
+    if (!s.fields.some(f => f.lastSpray >= 0)) return { title: 'Nothing to do until blight weather', when: 'your crew tends the fields on its own' }
     return { title: 'Your next decision is a spray', when: 'when blight weather is forecast' }
   }
   if (up.length && !crew('kill')) {
@@ -221,7 +221,7 @@ export function waitingFor(c: Campaign): { title: string; when: string } | null 
     return { title: 'Your next decision is killing the vines', when: due ? `due around ${formatDay(c.year, due.day, true)}` : 'in September' }
   }
   if (!crew('dig') || !crew('haul')) return null
-  if (potato.some(i => !s.fields[i].weighed && s.fields[i].status !== 'lost')) return { title: 'Nothing for you until the weigh ticket', when: up.length ? 'your crew kills the vines and digs on its own' : 'your crew digs and hauls on its own' }
+  if (potato.some(i => !s.fields[i].weighed && s.fields[i].status !== 'lost')) return { title: 'Nothing to do until the weigh ticket', when: up.length ? 'your crew kills the vines and digs on its own' : 'your crew digs and hauls on its own' }
   return null
 }
 

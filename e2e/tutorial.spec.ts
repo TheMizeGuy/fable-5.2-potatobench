@@ -702,8 +702,8 @@ test('the crew stands ready and says so; one press on a Plant stamp starts plant
   const { fit, potato } = await soilReady(page)
   expect(fit.length, 'fields fit to plant').toBeGreaterThan(0)
   // Said where the player looks: a toast, the goal slip, and a ringed Plant stamp on each field that is fit.
-  await expect(page.locator('#ui .notes .alert').filter({ hasText: 'The soil is ready. Press a ringed Plant stamp to give the word' })).toBeVisible()
-  await expect(page.getByTestId('goal')).toContainText('Give the word to plant')
+  await expect(page.locator('#ui .notes .alert').filter({ hasText: 'The soil is ready. Press a ringed Plant stamp to start planting' })).toBeVisible()
+  await expect(page.getByTestId('goal')).toContainText('Start planting')
   for (const i of fit) await expect(page.locator(`#ui [data-testid="badge-${i}"]`), `the Plant stamp on field ${i}`).toBeVisible()
   await expect(page.locator('#ui .plate-layer .need.is-next')).toHaveCount(1)
   // Nothing starts without the word: two more days, and still no planting on the list.
@@ -713,7 +713,7 @@ test('the crew stands ready and says so; one press on a Plant stamp starts plant
   const first = (await game<number[]>(page, `app.needs().map((n, i) => n.need && n.need.act === 'plant' ? i : -1).filter(i => i >= 0)`))[0]
   await page.locator(`#ui [data-testid="badge-${first}"]`).click()
   expect(await game<number>(page, 'app.speed')).toBe(0)
-  await expect(page.locator('#ui .notes .alert').filter({ hasText: `You gave the word. Your crew will plant the other ${potato.length - 1} fields too.` })).toBeVisible()
+  await expect(page.locator('#ui .notes .alert').filter({ hasText: `Planting has started. Your crew will plant the other ${potato.length - 1} fields too.` })).toBeVisible()
   expect(await game<[number, string][]>(page, `c.season.jobs.filter(j => j.kind === 'plant').map(j => [j.field, j.by])`)).toEqual([[first, 'you']])
   await picture(page, 'r7-word-toast-1280')
   // The rest follows with no other order from the player.
@@ -738,7 +738,7 @@ test('with no word in three days the crew starts planting by itself and says so,
   expect(started - asked, 'days from the ask to the crew\'s own start').toBeGreaterThanOrEqual(3)
   expect(started - asked).toBeLessThanOrEqual(4)
   expect(await game<string>(page, 'c.season.plantWordBy')).toBe('crew')
-  const toast = page.locator('#ui .notes .alert').filter({ hasText: 'You gave no word in 3 days, so your crew has started planting on its own.' })
+  const toast = page.locator('#ui .notes .alert').filter({ hasText: 'Your crew waited 3 days and has started planting on its own.' })
   await expect(toast).toBeVisible()
   const field = await game<number>(page, `c.season.log.find(e => e.type === 'plantWord').field`)
   await toast.first().click()
@@ -837,14 +837,14 @@ test('Got it says what it does to the clock: time runs on under the guide, and t
   await expect(note(page, 'word')).toHaveCount(0)
   // The guide does not run on past the word: it waits, says what for, and offers to go on without it.
   const line = page.getByTestId('guide-drive-line')
-  await expect(line).toHaveText('Planting waits for your word. Click a ringed Plant stamp.')
+  await expect(line).toHaveText('Planting waits for you. Click a ringed Plant stamp.')
   await page.waitForTimeout(2500)
   expect(await game<[number, number]>(page, `[app.speed, c.season.jobs.filter(j => j.kind === 'plant').length]`)).toEqual([0, 0])
   // Sent on without it: the days run, the crew starts in three days, and the note that tells it pauses the game.
   await page.getByTestId('guide-wave').click()
   await expect.poll(() => game<number>(page, 'app.speed')).toBe(3)
   await expect(note(page, 'plantday')).toBeVisible({ timeout: 90_000 })
-  await expect(note(page, 'plantday')).toContainText('You gave no word, so your crew started planting on its own.')
+  await expect(note(page, 'plantday')).toContainText('Your crew started planting on its own.')
   expect(await game<number>(page, 'app.speed')).toBe(0)
   await expect(note(page, 'plantday').getByTestId('guide-resumes')).toHaveText('time runs on')
   await page.waitForTimeout(500)
@@ -937,7 +937,7 @@ test('the guided year asks for the word to plant, and the press starts planting 
   const errors = watchErrors(page)
   const field = await toTheWord(page)
   const name = await page.evaluate(i => (globalThis as unknown as Win).__county.sim.FIELD_NAMES[i], field)
-  await expect(note(page, 'word')).toContainText(`The soil is ready, and planting waits for your word. Click the ringed Plant stamp on ${name}.`)
+  await expect(note(page, 'word')).toContainText(`The soil is ready, and planting waits for you. Click the ringed Plant stamp on ${name}.`)
   await expect(note(page, 'word')).toContainText('Your crew then plants the other 3 fields on its own.')
   await expect(page.getByTestId('guide-held')).toHaveText('Paused')
   // The stamp it names is on the screen, ringed, and nothing lies over it: not the note, not the pointing hand.
@@ -950,7 +950,7 @@ test('the guided year asks for the word to plant, and the press starts planting 
   await stamp.click()
   // The press: planting on the list there, the speed unchanged, and the note that says what the crew does next.
   await expect(note(page, 'plantday')).toBeVisible()
-  await expect(note(page, 'plantday')).toContainText('You gave the word. Your crew will plant the other 3 fields too.')
+  await expect(note(page, 'plantday')).toContainText('Planting has started. Your crew will plant the other 3 fields too.')
   expect(await game<number>(page, 'app.speed')).toBe(0)
   expect(await game<[number, string][]>(page, `c.season.jobs.filter(j => j.kind === 'plant').map(j => [j.field, j.by])`)).toEqual([[field, 'you']])
   // The guide runs the clock: Got it on a note that only tells says time runs on.
@@ -958,8 +958,8 @@ test('the guided year asks for the word to plant, and the press starts planting 
   await page.waitForTimeout(700)
   // Round eight (2): the sentence is told once. The answer beside the pointer does not repeat what the note says.
   await expect(page.getByTestId('answer-tip')).toBeHidden()
-  expect(await page.evaluate(() => [...document.querySelectorAll<HTMLElement>('#ui *')].filter(e => !e.closest('.sr') && [...e.childNodes].some(n => n.nodeType === 3 && /You gave the word/.test(n.nodeValue ?? ''))
-    && e.checkVisibility({ opacityProperty: true, visibilityProperty: true } as CheckVisibilityOptions)).length), 'places that say "You gave the word"').toBe(1)
+  expect(await page.evaluate(() => [...document.querySelectorAll<HTMLElement>('#ui *')].filter(e => !e.closest('.sr') && [...e.childNodes].some(n => n.nodeType === 3 && /Planting has started/.test(n.nodeValue ?? ''))
+    && e.checkVisibility({ opacityProperty: true, visibilityProperty: true } as CheckVisibilityOptions)).length), 'places that say "Planting has started"').toBe(1)
   await picture(page, 'r7-after-press-1280')
   expect(errors, errors.join('\n')).toEqual([])
 })
@@ -1107,7 +1107,7 @@ async function atTheAsk(page: Page, what: string, shot = ''): Promise<number[]> 
     for (const i of edge) out.push(`field-${i} at the edge`)
     return out
   }, { timeout: 10_000, message: `${what}: the Plant stamps are in view, on fields that are on the screen` }).toEqual([])
-  await expect(page.getByTestId('goal')).toContainText('Give the word to plant')
+  await expect(page.getByTestId('goal')).toContainText('Start planting')
   return at.fit
 }
 
@@ -1134,7 +1134,7 @@ test('the game pauses itself the day the crew asks for the word: year one withou
   const started = await game<number>(page, 'c.season.plantWord')
   expect(started - asked, 'days from the ask to the crew\'s own start').toBeGreaterThanOrEqual(3)
   expect(started - asked).toBeLessThanOrEqual(7)
-  await expect(page.locator('#ui .notes .alert').filter({ hasText: 'You gave no word in 3 days, so your crew has started planting on its own.' })).toBeVisible()
+  await expect(page.locator('#ui .notes .alert').filter({ hasText: 'Your crew waited 3 days and has started planting on its own.' })).toBeVisible()
   expect(errors, errors.join('\n')).toEqual([])
 })
 
@@ -1182,7 +1182,7 @@ test('year two without the tutorial at 3x: paused at the ask with the stamps bro
   await expect(page.getByTestId('paused-go')).toContainText('Resume at 3×')
   // One press on a ringed stamp: the word, said once; the speed unchanged; the pause the player's own.
   await page.locator(`#ui [data-testid="badge-${fit[0]}"]`).click()
-  await expect(page.locator('#ui .notes .alert').filter({ hasText: /^You gave the word/ })).toBeVisible()
+  await expect(page.locator('#ui .notes .alert').filter({ hasText: /^Planting has started/ })).toBeVisible()
   await expect(page.locator('#ui .notes .alert').filter({ hasText: 'Paused: the soil is ready' })).toHaveCount(0)
   expect(await game<[number, string, string]>(page, '[app.speed, app.pauseReason, c.season.plantWordBy]')).toEqual([0, '', 'you'])
   // (2): the slip does not go back to the soil. It says how far the planting is, and counts up.
@@ -1217,7 +1217,7 @@ test('year two with the tutorial on: Skip ahead under the slip stops at the ask,
   await secondSpring(page, 'calls2')
   await page.getByTestId('begin-season').click()
   await expect(note(page, 'calls2')).toBeVisible({ timeout: 15_000 })
-  await expect(note(page, 'calls2')).toContainText('The game pauses when the soil is ready, and planting waits for your word.')
+  await expect(note(page, 'calls2')).toContainText('The game pauses when the soil is ready, and planting waits for you.')
   await page.waitForTimeout(500)
   await note(page, 'calls2').getByTestId('guide-noted').click()
   await expect(note(page, 'calls2')).toHaveCount(0)
@@ -1239,7 +1239,7 @@ test('the slip never gives the crew\'s job as the player\'s goal: after planting
   await reach(page, `const guide = window.__countyGuide; guide.reset(); guide.refuse(); ${PLANTED}`)
   await putAway(page)
   const goal = page.getByTestId('goal')
-  await expect(goal).toContainText('Nothing for you until blight weather')
+  await expect(goal).toContainText('Nothing to do until blight weather')
   await expect(goal).toContainText('your crew tends the fields on its own')
   await expect(page.locator('#ui [data-testid="goal"][data-waiting="crew"]')).toHaveCount(1)
   await picture(page, 'r8-waiting-1280')
@@ -1278,7 +1278,7 @@ test('the tutorial starts when planting is ready: Start the season, a few second
   // alone is on the screen under it.
   const line = page.getByTestId('guide-drive-line')
   await expect(line).toHaveText('A few weeks pass while the soil warms.', { timeout: 5000 })
-  await expect(page.getByTestId('guide-drive-next')).toHaveText('Next: planting, on your word.')
+  await expect(page.getByTestId('guide-drive-next')).toHaveText('Next: planting, when you say.')
   await expect(page.getByTestId('guide-take')).toHaveText('I\'ll set the speed')
   const running = await see(page)
   expect(running.speed).toBe(3)
@@ -1411,7 +1411,7 @@ test('the guide never runs past a decision: the word to plant, the spraying ques
   const asked = await game<{ day: number; ask: number; jobs: number }>(page, `({ day: c.season.day, ask: c.season.plantAsk, jobs: c.season.jobs.filter(j => j.kind === 'plant').length })`)
   expect([asked.day - asked.ask, asked.jobs]).toEqual([0, 0])
   // It waits there, saying what for, for as long as the player leaves it.
-  await expect(page.getByTestId('guide-drive-line')).toHaveText('Planting waits for your word. Click a ringed Plant stamp.')
+  await expect(page.getByTestId('guide-drive-line')).toHaveText('Planting waits for you. Click a ringed Plant stamp.')
   await page.waitForTimeout(4000)
   expect(await game<[number, number, number]>(page, `[app.speed, c.season.day, c.season.jobs.filter(j => j.kind === 'plant').length]`)).toEqual([0, asked.day, 0])
   // The press: the note that says what follows; after it the guide runs to the summer, then to blight weather.

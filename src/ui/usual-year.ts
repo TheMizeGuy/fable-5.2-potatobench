@@ -19,7 +19,7 @@ export function usualFirstYear(bills: number): { short: string; full: string } {
 
 // change: the year's cash at its end less its cash at the start.
 export function againstUsual(change: number): string {
-  if (change > USUAL_YEAR.hi) return `Better than a usual year, which ends ${range()} down.`
-  if (change < USUAL_YEAR.lo) return `Worse than a usual year, which ends ${range()} down.`
+  if (change > USUAL_YEAR.hi) return `Better than usual. Most years end ${range()} down.`
+  if (change < USUAL_YEAR.lo) return `Worse than usual. Most years end ${range()} down.`
   return `A usual year. Most end ${range()} down.`
 }

@@ -214,7 +214,7 @@ describe('the word to plant (round seven)', () => {
     const c = S.createCampaign(world, { seed: 3, startYear: 2001 })
     ok(c, { t: 'begin' })
     const ask = untilAsked(c)
-    expect(ask.text).toBe('The soil is ready and your crew is waiting for your word. Order Plant on any potato field, or they\'ll start on their own in 3 days.')
+    expect(ask.text).toBe('The soil is ready and your crew is waiting for you. Order Plant on any potato field, or they\'ll start on their own in 3 days.')
     const asked = c.season!.plantAsk!
     // Every planned potato field that is fit carries the need, as the player's to give.
     const needs = S.fieldNeeds(world, c)
@@ -236,7 +236,7 @@ describe('the word to plant (round seven)', () => {
     const first = S.fieldNeeds(world, c).findIndex(n => n.need?.act === 'plant')
     const r = ok(c, { t: 'job', kind: 'plant', field: first })
     const others = potato(c).length - 1
-    expect(r.events.map(e => [e.type, e.text])).toEqual([['plantWord', `You gave the word. Your crew will plant the other ${others} fields too.`]])
+    expect(r.events.map(e => [e.type, e.text])).toEqual([['plantWord', `Planting has started. Your crew will plant the other ${others} fields too.`]])
     expect(c.season!.plantWordBy).toBe('you')
     expect(planting(c).map(j => [j.field, j.by])).toEqual([[first, 'you']])
     // No other order from the player: every planned field is planted, the pressed one first.
@@ -257,7 +257,7 @@ describe('the word to plant (round seven)', () => {
     const seen: GameEvent[] = []
     leave(c, x => planting(x).length > 0 || planted(x).length > 0, seen)
     const own = seen.filter(e => e.type === 'plantWord')
-    expect(own.map(e => e.text)).toEqual(['You gave no word in 3 days, so your crew has started planting on its own.'])
+    expect(own.map(e => e.text)).toEqual(['Your crew waited 3 days and has started planting on its own.'])
     // (three days, or four where the third is a Sunday off)
     expect(own[0].day - asked).toBeGreaterThanOrEqual(S.PLANT_WORD_DAYS)
     expect(own[0].day - asked).toBeLessThanOrEqual(S.PLANT_WORD_DAYS + 1)

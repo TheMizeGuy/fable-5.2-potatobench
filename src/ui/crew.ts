@@ -393,7 +393,7 @@ export function openCrew(ctx: Ctx): void {
         box.replaceChildren(h('div', { class: 'crew-in' },
           h('p', { class: 't-caption' }, 'Everyone picks jobs from the work list by their own priorities. More skill means faster, better work.'),
           h('p', { class: `beds${room ? ' c-red' : ''}`, testid: 'beds' }, icon('bunk', 'i'),
-            room ? F.localize(room) : `${l.hired} hired, with room for ${l.housing}. ${S.HOUSED_OUT} can live off the farm, and a bunkhouse sleeps ${S.BUNK_BEDS}.`,
+            room ? F.localize(room) : `You can hire up to ${l.housing} people (${l.hired} hired). A bunkhouse adds room for ${S.BUNK_BEDS} more.`,
             room && S.buildingInfo(c).some(b => b.kind === 'bunk' && b.state === 'none') ? h('button', { class: 'btn', type: 'button', testid: 'beds-build', onclick: () => { ctx.papers.closeTop(); app.selectYard(S.HOME_YARD) } }, icon('bunk', 'i'), 'Build a bunkhouse') : null),
           applicants.length ? [
             h('h3', { class: 't-label crew-h' }, 'Looking for work this spring'),

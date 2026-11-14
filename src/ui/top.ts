@@ -470,7 +470,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     const ready = wait > 0 && first >= 0 ? S.plantReady(app.world, c, first) : null
     // The soil fit and the crew standing ready: the year's first planting waits for the player's word.
     const word = !!g && g.id === 'plant' && season && !!c.season && !S.plantWordGiven(c.season) && app.needs().some(n => n.need?.act === 'plant')
-    const title = ready ? `Plant when the soil reaches ${F.temp(ready.need)}` : word ? 'Give the word to plant' : g?.title ?? ''
+    const title = ready ? `Plant when the soil reaches ${F.temp(ready.need)}` : word ? 'Start planting' : g?.title ?? ''
     const n = wait > 1 ? `about ${F.plural(wait, 'day')}` : wait === 1 ? 'any day now' : g ? progressText(g) : ''
     const when = !g ? null : !g.now ? h('span', { class: 'goal-when' }, lowerFirst(g.when))
       : c.phase === 'plan' && CROP_STEPS.has(g.id) ? h('span', { class: 'goal-when' }, 'once the season starts')
