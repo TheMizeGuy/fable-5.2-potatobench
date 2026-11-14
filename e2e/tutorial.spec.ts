@@ -225,7 +225,8 @@ test('a first year with tips: they never stop the game, never need a press, neve
   for (const id of ['tend', 'blight']) expect(tips.map(t => t.id), `nothing is said only to say nothing need be done (${id})`).not.toContain(id)
   expect(tips.length, `a handful of tips in a first season: ${tips.map(t => t.id).join(' ')}`).toBeLessThanOrEqual(9)
   // Two tips that only tell never come back to back: some seconds of play lie between them.
-  for (let k = 1; k < tips.length; k++) if (!tips[k].asks && tips[k - 1].went) expect(tips[k].came - tips[k - 1].went, `${tips[k - 1].id} then ${tips[k].id}`).toBeGreaterThanOrEqual(4000)
+  // (one tip a card lay over for a moment is the same tip when it shows again, not a second one)
+  for (let k = 1; k < tips.length; k++) if (!tips[k].asks && tips[k - 1].went && tips[k].id !== tips[k - 1].id) expect(tips[k].came - tips[k - 1].went, `${tips[k - 1].id} then ${tips[k].id}`).toBeGreaterThanOrEqual(4000)
   // A tip that only tells goes by itself: none stayed up past twelve seconds.
   for (const t of tips) if (!t.asks && t.went) expect(t.went - t.came, `${t.id} was up`).toBeLessThan(12_000)
   if (!isMobile) await noSidewaysScroll(page)
