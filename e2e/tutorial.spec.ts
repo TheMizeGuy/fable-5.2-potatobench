@@ -631,7 +631,7 @@ test('the crew stands ready and says so; one press on a Plant stamp starts plant
   const { fit, potato } = await soilReady(page)
   expect(fit.length, 'fields fit to plant').toBeGreaterThan(0)
   // Said where the player looks: a toast, the goal slip, and a ringed Plant stamp on each field that is fit.
-  await expect(page.locator('#ui .notes .alert').filter({ hasText: 'The soil is ready. Press a ringed Plant stamp to start planting' })).toBeVisible()
+  await expect(page.locator('#ui .notes .alert').filter({ hasText: 'The soil is ready. Click Plant on a field to start planting' })).toBeVisible()
   await expect(page.getByTestId('goal')).toContainText('Start planting')
   for (const i of fit) await expect(page.locator(`#ui [data-testid="badge-${i}"]`), `the Plant stamp on field ${i}`).toBeVisible()
   await expect(page.locator('#ui .plate-layer .need.is-next')).toHaveCount(1)
@@ -820,7 +820,7 @@ test('the guided year asks for the word to plant, and the press starts planting 
   const field = await toTheWord(page)
   const name = await page.evaluate(i => (globalThis as unknown as Win).__county.sim.FIELD_NAMES[i], field)
   void name
-  await expect(note(page, 'word')).toContainText('The soil is ready. Click the ringed Plant stamp.')
+  await expect(note(page, 'word')).toContainText('The soil is ready. Click Plant on a field.')
   await expect(note(page, 'word')).toContainText('Your crew plants the other fields too.')
   // The game stopped itself for this decision, and its own line says why: the tip stands beside it.
   expect(await game<[number, string]>(page, '[app.speed, app.pauseCause]')).toEqual([0, 'plantAsk'])
@@ -833,13 +833,11 @@ test('the guided year asks for the word to plant, and the press starts planting 
   expect(await game<number>(page, `c.season.jobs.filter(j => j.kind === 'plant').length`)).toBe(0)
   await picture(page, 'r7-ask-1280')
   await stamp.click()
-  // The press: planting on the list there and the speed unchanged. The game is still stopped, so the next tip points
-  // at the way on; with the days running, some seconds later, the tip that says what the player is doing.
-  expect(await game<number>(page, 'app.speed')).toBe(0)
-  expect(await game<[number, string][]>(page, `c.season.jobs.filter(j => j.kind === 'plant').map(j => [j.field, j.by])`)).toEqual([[field, 'you']])
-  await expect(note(page, 'run')).toBeVisible({ timeout: 10_000 })
-  await expect(note(page, 'run')).toContainText('Planting is ordered. Press Space to run the days.')
-  await page.keyboard.press('Space')
+  // The press: planting on the list there, and the game that stopped itself for the word goes on by itself (until
+  // 14 November it stood until the player resumed, and a tip pointed at the way on). With the days running, some
+  // seconds later, the tip that says what the player is doing.
+  await expect.poll(() => game<number>(page, 'app.speed'), { timeout: 5000 }).toBe(1)
+  expect(await game<[number, string]>(page, `(j => [j.field, j.by])(c.season.jobs.find(j => j.kind === 'plant' && j.by === 'you'))`)).toEqual([field, 'you'])
   await expect(note(page, 'run')).toHaveCount(0)
   await expect(note(page, 'plantday')).toBeVisible({ timeout: 15_000 })
   await expect(note(page, 'plantday')).toContainText('Planting has started.')
@@ -943,7 +941,7 @@ async function atTheAsk(page: Page, what: string, shot = ''): Promise<number[]> 
   expect(at.day, `${what}: paused on the day the crew asks`).toBe(at.ask)
   expect([at.jobs, at.planted], `${what}: planting has not started`).toEqual([0, 0])
   expect(at.fit.length, `${what}: fields fit to plant`).toBeGreaterThan(0)
-  await expect(page.locator('#ui .notes .alert').filter({ hasText: 'Paused: the soil is ready. Press a ringed Plant stamp, or resume and your crew starts in 3 days.' }), what).toBeVisible()
+  await expect(page.locator('#ui .notes .alert').filter({ hasText: 'Paused: the soil is ready. Click Plant on a field and your crew goes to work. (Left alone, they start in 3 days.)' }), what).toBeVisible()
   if (shot) { await page.waitForTimeout(2500); await picture(page, shot) }
   await expect.poll(async () => {
     const out: string[] = []

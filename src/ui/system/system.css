@@ -383,6 +383,9 @@ table .num:is(.sys, .sys *), .tab { font-variant-numeric: lining-nums proportion
 .need.blue:is(.sys, .sys *){ background: var(--st-blue); }
 .need.ochre:is(.sys, .sys *){ color: var(--ink); background: var(--st-ochre); box-shadow: 0 0 0 3px var(--paper), 0 0 0 4px var(--edge), inset 0 0 0 2px rgba(30, 28, 25, .35); }
 .need.is-next:is(.sys, .sys *)::after{ content: ''; position: absolute; inset: -12px; border-radius: 50%; border: 3px solid var(--st-ochre); box-shadow: 0 0 0 1.5px var(--edge), inset 0 0 0 1.5px var(--edge); }
+/* a need the game is waiting on says what its press does: the stamp set out as a key, the order's name beside its cut */
+.need.worded:is(.sys, .sys *){ grid-auto-flow: column; gap: 8px; width: auto; padding: 1px 17px 0 13px; border-radius: 22px; transform: none; font: 400 19px/1 var(--f-stencil); letter-spacing: .07em; text-transform: uppercase; white-space: nowrap; }
+.need.worded.is-next:is(.sys, .sys *)::after{ inset: -9px; border-radius: 31px; }
 .yard-tag:is(.sys, .sys *){ position: absolute; display: flex; align-items: center; gap: 7px; height: 34px; padding: 0 12px; transform: translate(-50%, -50%); color: var(--paper);
   background: #3d3328 url(./grain.png); background-blend-mode: overlay; box-shadow: 0 0 0 1px #17120c, 0 4px 6px -2px rgba(0, 0, 0, .5); font: 400 18px/1 var(--f-stencil); letter-spacing: .07em; text-transform: uppercase; }
 .yard-tag .i:is(.sys, .sys *){ --i: 17px; }

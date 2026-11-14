@@ -110,13 +110,13 @@ test('a day of work at 1× is a minute: the planter is watched at its work, a pa
 })
 
 // The owner, 14 November: "cloud should stop when game is paused"; "start the player closer to when the ground is
-// ready for planting on a new game"; and of days with nothing in them, "things dont have to grow as they would in
-// real life its a game".
-test('a new farm opens three days before planting, the days with no work go by in seconds, and the clouds stand still while the game is paused', async ({ page, isMobile }) => {
+// ready for planting on a new game"; and, of a Play that opened on the spring plan and then on days of waiting, "I
+// just click start game there is ZERO intuitive direction on what im supposed to do next".
+test('a new farm opens on the morning of the word to plant: the game stands at once, the stamps say Plant, and the clouds stand still while it is paused', async ({ page, isMobile }) => {
   test.skip(isMobile, 'run at the desk')
   test.setTimeout(180_000)
   const errors = watchErrors(page)
-  // A farm of its own made-up years, as Play starts one, on a seed the test knows (the soil is fit three days on).
+  // A farm of its own made-up years, as Play starts one, on a seed the test knows.
   await open(page)
   await reach(page, `q.g().app.newGame(undefined, 11)`)
   await putAway(page)
@@ -124,21 +124,22 @@ test('a new farm opens three days before planting, the days with no work go by i
   await page.getByTestId('begin-season').click()
   await expect(page.getByTestId('date')).toBeVisible({ timeout: 15_000 })
   const game = () => page.evaluate(() => {
-    const g = globalThis as unknown as { __county: { app: { speed: number; pauseCause: string; hurrying: boolean; world: unknown; campaign: { season: { day: number; startDay: number; plantAsk?: number } } }; sim: { plantingIn(w: unknown, c: unknown): number } }; __countyField: { stats(): { clouds: number } } }
-    const { app, sim } = g.__county, s = app.campaign.season
-    return { day: s.day, start: s.startDay, asked: s.plantAsk !== undefined, wait: sim.plantingIn(app.world, app.campaign), speed: app.speed, cause: app.pauseCause, hurrying: app.hurrying, clouds: g.__countyField.stats().clouds }
+    const g = globalThis as unknown as { __county: { app: { speed: number; pauseCause: string; hurrying: boolean; world: unknown; campaign: { season: { day: number; startDay: number; plantAsk?: number } } } }; __countyField: { stats(): { clouds: number } } }
+    const { app } = g.__county, s = app.campaign.season
+    return { day: s.day, start: s.startDay, asked: s.plantAsk, speed: app.speed, cause: app.pauseCause, hurrying: app.hurrying, clouds: g.__countyField.stats().clouds }
   })
-  // Opened close to planting: weeks past the season's first day, the soil a few days from fit.
+  // Opened on its first decision, weeks past the season's first day: the game stands for the word within seconds,
+  // on the morning the crew asked.
+  await expect.poll(async () => (await game()).cause, { timeout: 10_000 }).toBe('plantAsk')
   const open0 = await game()
   expect(open0.day - open0.start, 'days past the season\'s first').toBeGreaterThan(5)
-  expect(open0.asked).toBe(false)
-  // (the season starts running by itself; a day or so may have gone by already)
-  expect(open0.wait).toBeLessThanOrEqual(3)
-  // The days before the soil is fit have no work in them: they go by in seconds, and the game stops for the word.
-  const t0 = Date.now()
-  await expect.poll(async () => (await game()).cause, { timeout: 60_000 }).toBe('plantAsk')
-  expect(Date.now() - t0, 'the wait for the soil, in milliseconds').toBeLessThan(50_000)
+  expect(open0.asked).toBe(open0.day)
   await expect(page.getByTestId('speed-1')).toHaveText(/^1×/)
+  // What to press says what it does: each field's stamp is a key with the order's name on it.
+  const asks = await page.evaluate(() => (globalThis as unknown as { __county: { app: { needs(): { need?: { act: string } }[] } } }).__county.app.needs().flatMap((n, i) => n.need?.act === 'plant' ? [i] : []))
+  expect(asks.length).toBeGreaterThan(1)
+  for (const i of asks) await expect(page.getByTestId(`badge-${i}`)).toHaveText('Plant')
+  await expect(page.locator('#ui .notes .alert').filter({ hasText: 'Click Plant on a field and your crew goes to work.' })).toBeVisible()
   if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/open-the-word.jpg`, type: 'jpeg', quality: 80 })
   // Paused: the clouds stand where they are.
   const a = await game()

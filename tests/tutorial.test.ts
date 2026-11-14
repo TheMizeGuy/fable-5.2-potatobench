@@ -340,7 +340,7 @@ describe('round seven: what the player is for, and what the agent asks', () => {
     const word = g.current(l)!
     expect(word.id).toBe('word')
     const field = S.fieldNeeds(w, c).findIndex(n => n.need?.act === 'plant')
-    expect(word.ask(l)).toBe('The soil is ready. Click the ringed Plant stamp.')
+    expect(word.ask(l)).toBe('The soil is ready. Click Plant on a field.')
     expect(word.why(l)).toBe('Your crew plants the other fields too.')
     expect(word.point!(l)).toEqual({ badge: field })
     // It brings the stamps onto the guided screen, and it asks: the game stays paused after Got it.
@@ -352,8 +352,8 @@ describe('round seven: what the player is for, and what the agent asks', () => {
     // No press: the note stays, however many times it is looked at. The press passes it.
     for (let k = 0; k < 5; k++) expect(g.current(look(w, c))?.id).toBe('word')
     expect(S.apply(w, c, { t: 'job', kind: 'plant', field }).ok).toBe(true)
-    // The press never starts the clock: with the days still stopped the way on is pointed at, and with them running
-    // the tip that says what came of the press.
+    // With the days stopped after the press (the game sets them going; the player may have stopped them) the way on
+    // is pointed at, and with them running the tip that says what came of the press.
     const stopped = g.current(look(w, c))!
     expect(stopped.id).toBe('run')
     expect(stopped.ask(look(w, c))).toBe('Planting is ordered. Press Space to run the days.')

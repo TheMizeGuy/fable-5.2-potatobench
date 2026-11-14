@@ -19,7 +19,8 @@ export interface PlateModel {
   queue: { glyph: string; active: boolean }[]
   // What it needs. ink: the stamp's ink by kind (red blight or loss, blue water, ink other work); a need the goal or a
   // tip points at is the one next thing, ochre and ringed (taught).
-  badge: { glyph: string; label: string; urgent: boolean; ink?: Ink } | null
+  // word: the order's name on the stamp, while the game waits on it
+  badge: { glyph: string; label: string; urgent: boolean; ink?: Ink; word?: string } | null
   // What a screen reader hears for the tag.
   said: string
   // The need a tip or the goal is about holds its ring until it is put away.
@@ -219,7 +220,7 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
         },
         onclick: (e: Event) => pick(i, (e as MouseEvent).shiftKey),
         need: b ? need({
-          ink: m.taught ? 'ochre' : b.ink ?? 'ink', next: !!m.taught, icon: b.glyph, label: b.label, testid: fading ? `fading-${i}` : `badge-${i}`,
+          ink: m.taught ? 'ochre' : b.ink ?? 'ink', next: !!m.taught, icon: b.glyph, label: b.label, word: fading ? undefined : b.word, testid: fading ? `fading-${i}` : `badge-${i}`,
           attrs: { class: `badge${b.urgent ? ' urgent' : ''}${m.taught ? ' taught' : ''}${fading ? ' fading' : ''}`, title: ctx.touch() || fading ? undefined : `${b.label} (${INK_SAYS[m.taught ? 'ochre' : b.ink ?? 'ink']})`, 'aria-hidden': fading ? 'true' : null, tabindex: fading ? '-1' : null },
           onclick: () => { if (!fading) o.onBadge(i) },
         }) : null,

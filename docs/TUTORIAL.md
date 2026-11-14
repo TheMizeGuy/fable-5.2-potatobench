@@ -114,7 +114,7 @@ three players missed the word to plant in year two. They pressed "Skip ahead at 
 reaches 50°F", three days are a second and a half at 8×, and the crew started by itself. The game now pauses itself
 the moment the crew asks for the word (the soil ready, the stamps up), in every year, with the tutorial on or off and
 whatever "Pause on alerts" says. The pause says why and what to do in its own line, which stays for as long as it
-waits: "Paused: the soil is ready. Press a ringed Plant stamp, or resume and your crew starts in 3 days." If none of
+waits: "Paused: the soil is ready. Click Plant on a field and your crew goes to work. (Left alone, they start in 3 days.)" If none of
 the stamps is on the screen the whole farm is shown. "Skip ahead" and the guide's own running of the clock (rule I)
 only set the speed, so they stop there too. The three days are counted in days that run, so they begin when the player resumes
 without pressing. A press on a stamp answers the pause and leaves the game paused (C3). In the guided first year the

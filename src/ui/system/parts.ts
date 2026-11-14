@@ -26,12 +26,14 @@ export function fist(cls = ''): SVGElement {
 // A need on the land, inked by kind: red blight or loss, ochre the suggested next order (ringed when it is the one
 // next thing), blue water, ink other work due. Always its order's cut, never colour alone; label says it in words.
 // attrs: more for the button (handlers, a title, a class), for a live screen.
-export function need(o: { ink: Ink; icon: string; label: string; next?: boolean; testid?: string; onclick?: Click; attrs?: Attrs }): HTMLElement {
+// word: the order's name beside its cut, for a need the game is waiting on (the stamp is then a key that says what
+// it does).
+export function need(o: { ink: Ink; icon: string; label: string; next?: boolean; word?: string; testid?: string; onclick?: Click; attrs?: Attrs }): HTMLElement {
   const more = o.attrs ?? {}
   return h('button', {
-    ...more, class: `need sys${o.ink === 'ink' ? '' : ` ${o.ink}`}${o.next ? ' is-next' : ''}${more.class ? ` ${more.class}` : ''}`, type: 'button', 'aria-label': o.label,
+    ...more, class: `need sys${o.ink === 'ink' ? '' : ` ${o.ink}`}${o.next ? ' is-next' : ''}${o.word ? ' worded' : ''}${more.class ? ` ${more.class}` : ''}`, type: 'button', 'aria-label': o.label,
     title: more.title === undefined ? o.label : more.title, testid: o.testid, onclick: o.onclick,
-  }, icon(o.icon))
+  }, icon(o.icon), o.word ? h('span', { class: 'need-word', 'aria-hidden': 'true' }, o.word) : null)
 }
 
 // A field's tag on the land: stencilled name and stage, an order on its list, the need stamp beside it. Place the

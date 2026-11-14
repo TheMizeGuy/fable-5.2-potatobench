@@ -170,7 +170,7 @@ test('a first season by the short path, from the opening to the next spring, wit
     if (s.incidents) await answerIncident(page, false)
     else if (await game<boolean>(page, `app.speed === 0 && app.pauseCause === 'plantAsk'`)) {
       asked++
-      await expect(page.locator('#ui .notes .alert').filter({ hasText: 'Paused: the soil is ready. Press a ringed Plant stamp, or resume and your crew starts in 3 days.' })).toBeVisible()
+      await expect(page.locator('#ui .notes .alert').filter({ hasText: 'Paused: the soil is ready. Click Plant on a field and your crew goes to work. (Left alone, they start in 3 days.)' })).toBeVisible()
       expect(await game<number>(page, `c.season.jobs.filter(j => j.kind === 'plant').length + c.season.fields.filter(f => f.plantDay >= 0).length`)).toBe(0)
       await (isMobile ? page.locator('#ui [data-testid="speed-0"]:visible, #ui [data-testid="speed-toggle"]:visible').first() : page.getByTestId('paused-go')).click()
     }

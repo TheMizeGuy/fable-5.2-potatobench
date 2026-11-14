@@ -25,8 +25,9 @@ export async function startNewFarm(ctx: Ctx, guided = false): Promise<void> {
   ctx.papers.closeAll()
   app.newGame()
   if (!app.campaign) return
+  // Onto the land at once; a browser that has not been asked about tips answers that first.
   if (guided) { guidedFarm(); straightIn(ctx) }
-  else startedFarm(app.campaign.seed)
+  else if (!startedFarm(app.campaign.seed)) straightIn(ctx)
 }
 
 let entered = false

@@ -95,7 +95,9 @@ describe('the clock', () => {
     expect(QUIET_S).toBeNull()
   })
 
-  it('a new farm\'s first season opens three days before planting, and a day nobody works goes by in six seconds at 1×', () => {
+  // The owner, 14 November, of a farm that opened on a plan and then on days of waiting: "ZERO intuitive direction on
+  // what im supposed to do next". A new farm opens on its first decision.
+  it('a new farm\'s first season opens on the morning of the word to plant and stops for it at once, and a day nobody works goes by in six seconds at 1×', () => {
     setDays('long')
     try {
       const app = new App(loadWorld())
@@ -105,18 +107,54 @@ describe('the clock', () => {
       expect(app.do({ t: 'begin' }).ok).toBe(true)
       const s = c.season!
       expect(s.day, 'not the season\'s first day').toBeGreaterThan(s.startDay + 5)
-      expect(S.plantingIn(app.world, c)).toBeLessThanOrEqual(3)
-      expect(S.plantingIn(app.world, c)).toBeGreaterThan(0)
-      expect(s.plantAsk).toBeUndefined()
-      // Nothing to do yet: the days before the soil is fit go by in six seconds each, and the game stops for the word.
+      expect(s.plantAsk, 'the crew asked this morning').toBe(s.day)
+      expect(app.needs().filter(n => n.need?.act === 'plant').length).toBeGreaterThan(0)
+      // Set going, the game stops for the word before any of the day has gone by.
+      app.setSpeed(1)
+      app.tick(50)
+      expect(app.speed).toBe(0)
+      expect(app.pauseCause).toBe('plantAsk')
+      expect(s.day).toBe(s.plantAsk)
+      // Left unanswered, the crew starts on its own some days on: those days have no work in them, and go by in six
+      // seconds each.
       app.setSpeed(1)
       const day = s.day
       let ms = 0
-      for (; ms < 90_000 && app.speed > 0; ms += 50) app.tick(50)
-      expect(app.pauseCause).toBe('plantAsk')
+      for (; ms < 90_000 && !s.jobs.some(j => j.kind === 'plant'); ms += 50) { app.tick(50); if (app.speed === 0) app.setSpeed(1) }
       const days = s.day - day
       expect(days).toBeGreaterThan(0)
       expect(ms / 1000 / days, 'seconds to a day with no work').toBeLessThan(7.5)
+    } finally { setDays('brisk') }
+  })
+
+  it('a farm started from Play has a fair working day for its first morning, and the day after it', () => {
+    setDays('long')
+    try {
+      for (let k = 0; k < 4; k++) {
+        const app = new App(loadWorld())
+        app.newGame()
+        const c = c0(app)
+        expect(app.do({ t: 'begin' }).ok).toBe(true)
+        const s = c.season!
+        expect(s.plantAsk).toBe(s.day)
+        for (const d of [s.day, s.day + 1]) {
+          expect(['clear', 'cloud'], `seed ${c.seed}, day ${d}`).toContain(S.skyOf(S.getDay(app.world, s.year, d)))
+          expect(S.weekday(s.year, d), `seed ${c.seed}, day ${d}`).not.toBe(S.SUNDAY)
+        }
+      }
+    } finally { setDays('brisk') }
+  })
+
+  it('the planting day ordered on a new farm is a day of work, a minute long', () => {
+    setDays('long')
+    try {
+      const app = new App(loadWorld())
+      app.settings.pauseOnAlerts = false
+      app.newGame(undefined, 11)
+      const c = c0(app)
+      expect(app.do({ t: 'begin' }).ok).toBe(true)
+      const s = c.season!
+      let ms = 0
       // The word given: the planting day is a day of work, a minute long.
       app.order('plant', { fields: [app.needs().findIndex(n => n.need?.act === 'plant')] })
       app.setSpeed(1)
@@ -423,7 +461,7 @@ describe('a decision that waits for the player pauses the game', () => {
       run(app, 600, () => waitsForWord(app))
       expect(waitsForWord(app), what).toBe(true)
       expect(app.pauseReason, what).toBe(PLANT_PAUSE)
-      expect(PLANT_PAUSE).toBe('the soil is ready. Press a ringed Plant stamp, or resume and your crew starts in 3 days.')
+      expect(PLANT_PAUSE).toBe('the soil is ready. Click Plant on a field and your crew goes to work. (Left alone, they start in 3 days.)')
       const s = c.season!
       expect(s.plantAsk, `${what}: paused on the day the crew asks`).toBe(s.day)
       expect(s.jobs.filter(j => j.kind === 'plant'), what).toEqual([])
@@ -446,23 +484,28 @@ describe('a decision that waits for the player pauses the game', () => {
     }
   })
 
-  it('a press on a Plant stamp answers the pause without changing the speed: the game stays paused until the player resumes', () => {
+  // (Until 14 November the game stood after the answer until the player resumed. A press that answers the game and
+  // leaves it standing read as a press that did nothing.)
+  it('a press on a Plant stamp answers the pause, and the game goes on at the speed it had', () => {
     const app = farm()
     const c = c0(app)
     app.setSpeed(3)
     run(app, 600, () => waitsForWord(app))
+    expect(app.speed).toBe(0)
     const speeds: number[] = []
     app.on((e: AppEvent) => { if (e.type === 'speed') speeds.push(e.speed) })
     const r = app.smartOrder(app.needs().findIndex(n => n.need?.act === 'plant'))
     expect(r.ok).toBe(true)
     expect(c.season!.plantWordBy).toBe('you')
-    expect(app.speed).toBe(0)
-    expect(speeds.every(x => x === 0)).toBe(true)
-    // The pause is the player's own now, said by nothing, and Space resumes at the speed the game had.
+    expect(app.speed).toBe(3)
+    expect(speeds).toEqual([3])
     expect(app.pauseReason).toBe('')
     expect(app.pauseCause).toBe('')
-    app.togglePause()
+    // A press of pause in the moment after is the player saying "go on", and the game is going: it is not stopped.
+    expect(app.pressPause()).toBe(false)
     expect(app.speed).toBe(3)
+    expect(app.pressPause()).toBe(true)
+    expect(app.speed).toBe(0)
   })
 
   it('lists every cause that can pause the game by itself, and a whole year at 8x pauses for those alone', () => {
@@ -525,12 +568,12 @@ describe('a decision that waits for the player pauses the game', () => {
     const called = s.fields.map((f, i) => (f.killCall === s.day ? i : -1)).filter(i => i >= 0)
     expect(called.length).toBeGreaterThan(0)
     for (const i of called) expect(S.advise(app.world, c).some(a => a.act === 'kill' && a.field === i), S.FIELD_NAMES[i]).toBe(true)
-    expect(app.pauseReason).toMatch(/^the vines in .+ are due to be killed, and that's your decision\. Press a ringed Kill vines stamp, or resume and they stay up\.$/)
+    expect(app.pauseReason).toMatch(/^the vines in .+ are due to be killed, and that's your decision\. Click Kill vines on a field, or resume and they stay up\.$/)
     expect(app.pauseReason).toContain(S.FIELD_NAMES[called[0]])
-    // Ordered, the pause is answered and the game stays paused. Each field is called once.
+    // Ordered, the pause is answered and the game goes on. Each field is called once.
     app.order('kill', { fields: called })
     expect(app.pauseCause).toBe('')
-    expect(app.speed).toBe(0)
+    expect(app.speed).toBeGreaterThan(0)
     expect(s.log.filter(e => e.type === 'killCall' && e.data && (e.data.fields as number[]).includes(called[0])).length).toBe(1)
   })
 
@@ -544,7 +587,7 @@ describe('a decision that waits for the player pauses the game', () => {
     const latest = S.dayIndex(s.year, S.DIG_GREEN.month, S.DIG_GREEN.dom) - S.SKIN_DAYS
     expect(s.day).toBe(latest - S.KILL_CALL_DAYS)
     expect(s.fields[keep].killCall).toBe(s.day)
-    expect(app.pauseReason).toBe(`you're keeping the vines up in ${S.FIELD_NAMES[keep]}. Press a ringed Kill vines stamp, or resume and they stay up.`)
+    expect(app.pauseReason).toBe(`you're keeping the vines up in ${S.FIELD_NAMES[keep]}. Click Kill vines on a field, or resume and they stay up.`)
     expect(s.log.find(e => e.type === 'killCall')!.text).toBe(`You're keeping the vines up in ${S.FIELD_NAMES[keep]}. Kill them by ${S.formatDay(s.year, latest)} so the skins toughen before the harvest, or the field gets dug green.`)
     // The other fields, which the crew killed on its own date, were never called.
     expect(s.fields.filter(f => f.killCall !== undefined).length).toBe(1)

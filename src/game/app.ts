@@ -1,6 +1,6 @@
 // The running game: owns the campaign, the clock, the selection and the orders, saving, and tells the views what changed.
 import {
-  advise, apply, awaitsWord, climateWorld, createCampaign, DAY_STRETCHES, fieldInfo, fieldNeeds, FIELD_NAMES, held, isFarmYear, plantingIn, plantReady, plantWordGiven, seasonDone, startYears, unitBlock, FARM_YEAR0, PLANT_WORD_DAYS,
+  advise, apply, awaitsWord, climateWorld, createCampaign, DAY_STRETCHES, fieldInfo, fieldNeeds, FIELD_NAMES, getDay, held, isFarmYear, plantReady, plantWordGiven, seasonDone, skyOf, startYears, unitBlock, weekday, FARM_YEAR0, PLANT_WORD_DAYS, SUNDAY,
   type Advice, type Campaign, type Cmd, type GameEvent, type JobKind, type Phase, type Result, type World,
 } from '../sim/index.ts'
 import type { Pointing, Thing } from './contracts.ts'
@@ -29,8 +29,10 @@ export let QUIET_S: number[] | null = QUIETS.long
 // A new farm's field hands, and a season of a hand's wages (seven months at the hall's rate).
 export const START_HANDS = 2
 const START_HAND_PAY = 2660
-// A new farm's first season opens this many days before the soil is expected to be fit to plant.
-export const OPEN_BEFORE_PLANTING = 3
+// A new farm's first season opens on the morning its crew asks for the word to plant; a new farm's seed is one of
+// this many tried for a fair working day there (the first thing seen is the farm in good light, and the planting
+// starts when it is ordered).
+const OPENING_TRIES = 24
 export type Days = keyof typeof LADDERS
 export const DAYS_PER_SECOND = [...LADDERS.long]
 export const SPEED_X = ['', '', '', '']
@@ -117,10 +119,10 @@ export type PauseCause = keyof typeof SELF_PAUSES
 // The events of a day that pause the game, and the cause each one is.
 const STOP_FOR: Record<string, PauseCause> = { weighed: 'weighed', incident: 'incident', freeze: 'over', plantAsk: 'plantAsk', killCall: 'killCall' }
 // Why the game paused for a decision made on the land, read after "Paused: ". Resuming is an answer too.
-export const PLANT_PAUSE = `the soil is ready. Press a ringed Plant stamp, or resume and your crew starts in ${PLANT_WORD_DAYS} days.`
+export const PLANT_PAUSE = `the soil is ready. Click Plant on a field and your crew goes to work. (Left alone, they start in ${PLANT_WORD_DAYS} days.)`
 function killPause(e: GameEvent): string {
   const first = e.text.slice(0, e.text.indexOf('. ') + 1) || e.text
-  return `${first.charAt(0).toLowerCase()}${first.slice(1)} Press a ringed Kill vines stamp, or resume and they stay up.`
+  return `${first.charAt(0).toLowerCase()}${first.slice(1)} Click Kill vines on a field, or resume and they stay up.`
 }
 // How long after the game sets the days going by itself a press on pause is read as "go on" (round nine: players
 // pressed play 0.5 to 1 s after an answer had already resumed the game, and so paused it).
@@ -133,6 +135,27 @@ const NOTABLE = new Set([
   'plantAsk', 'plantWord', 'killCall',
 ])
 const ALERTS_KEPT = 24
+
+// Steps a first-year farm's season to the morning its crew asks for the word to plant. The asking, or null when the
+// word was already given or the morning never came.
+function toTheWord(world: World, c: Campaign): GameEvent | null {
+  let ask: GameEvent | null = null
+  for (let n = 0; n < 90 && !ask && c.phase === 'season' && c.season && c.season.plantAsk === undefined && !plantWordGiven(c.season); n++) {
+    ask = apply(world, c, { t: 'day' }).events.find(e => e.type === 'plantAsk') ?? null
+  }
+  return ask
+}
+
+// Whether a farm of this seed opens on a day worth opening on: fair, a working day, and the day after it no worse
+// than cloud, so the first planting ordered is seen through.
+function fairOpening(record: World, seed: number): boolean {
+  const world = climateWorld(record, seed)
+  const c = createCampaign(world, { seed, startYear: FARM_YEAR0 + 1 })
+  if (!apply(world, c, { t: 'begin' }).ok || !toTheWord(world, c) || !c.season) return false
+  const { year, day } = c.season
+  const fair = (k: number) => { const d = getDay(world, year, day + k), sky = skyOf(d); return (sky === 'clear' || sky === 'cloud') && d.prcp < 1 }
+  return fair(0) && fair(1) && weekday(year, day) !== SUNDAY && weekday(year, day + 1) !== SUNDAY
+}
 
 export class App {
   // The world of the farm being played: its own made-up years, or the record for a farm started in a real year.
@@ -228,8 +251,9 @@ export class App {
 
   // Starts a farm. With no year it is a farm of its own with weather made from its seed; a year plays the record.
   newGame(startYear?: number, seed?: number): void {
-    const s = seed ?? (crypto.getRandomValues(new Uint32Array(1))[0] | 0)
+    let s = seed ?? (crypto.getRandomValues(new Uint32Array(1))[0] | 0)
     if (startYear === undefined) {
+      if (seed === undefined && QUIET_S) for (let k = 0; k < OPENING_TRIES && !fairOpening(this.record, s); k++) s = crypto.getRandomValues(new Uint32Array(1))[0] | 0
       this.world = climateWorld(this.record, s)
       this.campaign = createCampaign(this.world, { seed: s, startYear: FARM_YEAR0 + 1 })
       // A new farm is three people, not one (the owner, 14 November: "watching all your guys"): the farmer and two
@@ -319,14 +343,15 @@ export class App {
     const r = apply(this.world, c, cmd)
     if (!r.ok) return r
     if (cmd.t === 'next') this.meetNeighbor()
-    // A new farm's first season opens close to planting (the owner, 14 November: "start the player closer to when
-    // the ground is ready for planting on a new game"): the weeks before it, in which a first-year farm has nothing
-    // to do, are gone through at once. (A farm started in a year of the record, as the tests and tools start them,
+    // A new farm's first season opens on the morning of its first decision, the word to plant (the owner, 14
+    // November: "start the player closer to when the ground is ready for planting on a new game"; and, of a farm
+    // that opened on a plan and then on days of waiting, "ZERO intuitive direction on what im supposed to do next"):
+    // the weeks before it, in which a first-year farm has nothing to do, are gone through at once. (A farm started in a year of the record, as the tests and tools start them,
     // opens on the season's first day.)
     if (cmd.t === 'begin' && QUIET_S && c.history.length === 0 && this.world !== this.record) {
-      for (let n = 0; n < 60 && c.phase === 'season' && c.season && c.season.plantAsk === undefined && plantingIn(this.world, c) > OPEN_BEFORE_PLANTING; n++) {
-        apply(this.world, c, { t: 'day' })
-      }
+      const ask = toTheWord(this.world, c)
+      // The question that morning brought is asked as soon as the days are set going.
+      if (ask) { r.events.push(ask); this.owed = { cause: 'plantAsk', why: PLANT_PAUSE, fields: [] } }
     }
     // The last question answered, however it was answered: the days go on at the speed they had.
     if (cmd.t === 'answer' && !c.incidents.length) { this.holding = ''; this.resumeAfterCard() }
@@ -409,12 +434,13 @@ export class App {
     return waits
   }
 
-  // The player gave the order a pause was waiting for: the pause is their own now, and stays until they resume.
+  // The player gave the order a pause was waiting for: the game stopped itself for it, and goes on by itself at the
+  // speed it had, as it does after a card is answered. (It used to stand until the player resumed; a press that
+  // answers the game and leaves it standing reads as a press that did nothing. The owner, 14 November: "ZERO
+  // intuitive direction on what im supposed to do next".)
   private answered(kind: JobKind): void {
     if (!(this.pauseCause === 'plantAsk' && kind === 'plant') && !(this.pauseCause === 'killCall' && kind === 'kill')) return
-    this.pauseReason = ''
-    this.pauseCause = ''
-    this.emit({ type: 'speed', speed: this.speed })
+    this.resumeAfterCard()
   }
 
   private halt(cause: PauseCause, why: string): void {

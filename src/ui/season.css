@@ -576,3 +576,11 @@
 .telegram .reply .c-title .fist { --i: 22px; margin-left: 8px; vertical-align: -3px; }
 .telegram .reply .usual { font-weight: 700; }
 .season-screen.docks.person-up .view-home { display: none; }
+
+/* The stamp the game is waiting on calls for its press: its ring breathes. */
+@keyframes ask-ring { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.09); opacity: .55; } }
+.plate-layer .need.worded.is-next::after { animation: ask-ring 1.5s ease-in-out infinite; }
+.reduce-motion .plate-layer .need.worded.is-next::after { animation: none; }
+
+/* A first spring on its way to the land: the plan and its tags are not laid out behind the question of tips. */
+.going-in .spring-screen > :not(.guide-card), .going-in .plate-layer { visibility: hidden; }

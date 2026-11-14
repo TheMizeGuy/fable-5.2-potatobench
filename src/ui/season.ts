@@ -439,6 +439,8 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     const tract = isTract(i) && (f.cover !== 'open' || f.status === 'off')
     if (tract && !tractsShown(c) && !app.selection.includes(i) && !queued.length) return null
     const need = app.needs()[i]?.need ?? null
+    // The order the game stands waiting for: its stamps say their name.
+    const asked = app.speed === 0 ? (app.pauseCause === 'plantAsk' ? 'plant' : app.pauseCause === 'killCall' ? 'kill' : '') : ''
     const live = f.status === 'growing' || f.status === 'planted'
     const marks: PlateModel['marks'] = []
     const said: string[] = []
@@ -464,7 +466,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     const lot = f.lot >= 0 ? c.lots.find(l => l.id === f.lot) : undefined
     // Spraying the player said not to do this year carries no stamp.
     const badge = need && isJob(need.act) && !(need.act === 'spray' && sprayWay(c) === 'none')
-      ? { glyph: need.act as string, label: `${F.localize(need.text)} ${F.localize(need.why)}`, urgent: need.urgent, ink: inkFor(need.act, need.urgent, f) }
+      ? { glyph: need.act as string, label: `${F.localize(need.text)} ${F.localize(need.why)}`, urgent: need.urgent, ink: inkFor(need.act, need.urgent, f), word: asked === need.act ? JOB_VERB[need.act] : undefined }
       : need && need.act === 'sell' && lot ? { glyph: 'ticket', label: `${F.localize(need.text)} ${F.localize(need.why)}`, urgent: need.urgent, ink: 'ink' as Ink } : null
     const key = digitFor(c, i)
     const what = tract ? (f.cover === 'open' ? 'new ground, ready to plant next spring' : f.coverWord) : f.status === 'rest' ? 'resting in oats and clover' : `${f.variety}, ${f.stage.toLowerCase()}`
@@ -486,7 +488,11 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     const r = app.smartOrder(i)
     if (r.ok) ctx.announce(`${need ? F.localize(need.text) : 'Order given.'} It's on the work list.`)
     else ctx.say(`${S.FIELD_NAMES[i]}: ${r.err}`, 'info')
-    if (asked && c.season && S.plantWordGiven(c.season)) landQuietUntil = performance.now() + WORD_QUIET_MS
+    if (asked && c.season && S.plantWordGiven(c.season)) {
+      landQuietUntil = performance.now() + WORD_QUIET_MS
+      // A first farm's first order is followed to its field, where the crew is about to be seen at it.
+      if (r.ok && c.history.length === 0 && ctx.layout() !== 'narrow') app.focus(i)
+    }
   }
   // One Plant stamp gives the word for every field, and the other stamps go with it: for a moment after, a press
   // aimed at one of them is taken by nothing, where it would have opened whatever lay under it (round nine: a field's

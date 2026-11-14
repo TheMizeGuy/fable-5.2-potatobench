@@ -27,7 +27,8 @@ const TIP_GAP_MS = 6000
 // ---------------------------------------------------------------- hooks for the screens
 
 // A farm started from the title: its first spring carries the offer, once.
-export function startedFarm(seed: number): void { guide.newFarm(seed) }
+// True when the offer of tips is made on it (a browser that has not answered one yet).
+export function startedFarm(seed: number): boolean { guide.newFarm(seed); return !guide.p.offered }
 
 // A farm started from the title's Guided first year: the guide on from the first note, with no offer to answer.
 export function guidedFarm(): void { guide.restart() }
@@ -305,8 +306,9 @@ function slipBody(ctx: Ctx, x: Lesson, l: Look, lost = false, under = false, sho
   ]
 }
 
-// The offer: a card in the middle of the screen, as a telegram is, with two numbered replies.
-// Taking the tutorial in the first spring goes straight onto the land: the usual plan stands, the season starts, and
+// A first spring goes straight onto the land, with tips or without (the owner, 14 November, of a Play that opened on
+// the spring plan: "I just click start game there is ZERO intuitive direction on what im supposed to do next"): the
+// usual plan stands, the season starts, and
 // planning is taught in the second spring, when there is a year behind it to plan from. While the season is starting
 // no card of the opening is shown.
 let straight = false
@@ -325,6 +327,7 @@ export function straightIn(ctx: Ctx): void {
   go()
 }
 
+// The offer: a card in the middle of the screen, as a telegram is, with two numbered replies.
 function offerCard(ctx: Ctx): HTMLElement {
   const keys = !ctx.touch()
   const reply = (n: number, id: string, title: string, does: string, usual: boolean, go: () => void) => h('button', {
@@ -335,7 +338,7 @@ function offerCard(ctx: Ctx): HTMLElement {
     h('p', { class: 'gc-lead' }, 'I can start your first season on a usual plan and point things out as they come up. Tips never stop the game, and you never have to click one.'),
     h('div', { class: 'replies', role: 'group', 'aria-label': 'Your answer' },
       reply(1, 'guide-accept', 'Play with tips', 'The usual choice. Your first season starts right away.', true, () => { guide.accept(); straightIn(ctx) }),
-      reply(2, 'guide-refuse', 'Play without tips', 'You can turn them on later from the menu.', false, () => guide.refuse())))
+      reply(2, 'guide-refuse', 'Play without tips', 'You can turn them on later from the menu.', false, () => { guide.refuse(); straightIn(ctx) })))
 }
 
 // What a year is, drawn: the five things the year asks, in order, and what it costs at the end.
@@ -633,6 +636,8 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     const speaks = offer || !!owed
     if (speaking !== speaks) { speaking = speaks; ctx.dirty() }
     root.classList.toggle('agent', speaking)
+    // A first spring on its way to the land (the offer up, or the season starting): the plan is not laid out.
+    root.classList.toggle('going-in', (!!offer || straight) && app.screen === 'plan')
     // The cards in the middle: the offer, and what a year is.
     const card = offer ? 'offer' : now?.card ? now.id : ''
     if (card !== cardKey) {

@@ -257,20 +257,20 @@ export const LESSONS: Lesson[] = [
     id: 'word', part: 'opening', moment: true, name: 'Start planting', reveals: ['tags', 'stamps'],
     when: l => inSeason(l) && firstYear(l) && wordAt(l) >= 0,
     done: (l, g) => g.has('noted:word') || (!!l.c?.season && S.plantWordGiven(l.c.season)),
-    ask: l => `The soil is ready. ${by(l, 'Click', 'Tap', 'Tab to')} the ringed Plant stamp${l.input === 'keys' ? ', then Enter' : ''}.`,
+    ask: l => `The soil is ready. ${by(l, 'Click', 'Tap', 'Tab to')} Plant on a field${l.input === 'keys' ? ', then Enter' : ''}.`,
     why: l => othersToPlant(l) ? 'Your crew plants the other fields too.' : 'Planting starts there right away.',
     point: l => { const i = wordAt(l); return i >= 0 ? { badge: i } : null },
     show: l => { const i = wordAt(l); return i >= 0 ? { field: i } : null },
     asks: () => true,
   },
   {
-    // A press on a stamp never sets the days going: the game the player answered is still stopped, and the first
-    // time that happens the way on is pointed at.
+    // The game goes on by itself when the word is given. Where it stands all the same (the player stopped it, or
+    // gave the word while it was stopped for something else), the first time that happens the way on is pointed at.
     id: 'run', part: 'opening', moment: true, name: 'Run the days',
     when: l => inSeason(l) && firstYear(l) && l.speed === 0 && !!l.c?.season && S.plantWordGiven(l.c.season) && wordAt(l) < 0 && call(l) < 0 && !l.carded && !l.paper && !S.seasonDone(l.c),
     done: (l, _g, since) => !!since && l.speed > 0,
     ask: l => `Planting is ordered. ${by(l, 'Press Space', 'Tap the play key', 'Press Space')} to run the days.`,
-    why: () => 'A press on a stamp never starts the clock.',
+    why: () => 'The game is paused.',
     point: () => ({ testid: ['paused-go', 'speed-0', 'speed-toggle'] }),
   },
   {
