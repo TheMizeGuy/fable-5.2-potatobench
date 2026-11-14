@@ -53,7 +53,9 @@ export function personNow(c: S.Campaign, id: number, waits: Record<number, strin
   // The order they hold, or the one they worked on the last day and have not finished.
   const held = u.job >= 0 ? s.jobs.find(j => j.id === u.job) : undefined
   const last = s.worked.filter(w => w.unit === id).at(-1)
-  const going = held ?? (last ? s.jobs.find(j => j.kind === last.kind && j.field === last.field && (j.unit < 0 || j.unit === id) && !others(j)) : undefined)
+  // (an order they let go that is held up today is waited for below, not gone on with)
+  const went = last ? s.jobs.find(j => j.kind === last.kind && j.field === last.field && (j.unit < 0 || j.unit === id) && !others(j) && !waits[j.id]) : undefined
+  const going = held ?? went
   if (going) {
     const progress = going.need > 0 ? going.done / going.need : 0
     if (u.road <= 0 && u.at === going.field) {
@@ -79,7 +81,9 @@ export function personNow(c: S.Campaign, id: number, waits: Record<number, strin
   const next = could.find(j => !waits[j.id] && free(j))
   if (next) return said(next.kind, 'Next', jobText(next, c, next.building).replace(/^./, x => x.toLowerCase()), next.field)
   if (could.some(j => !waits[j.id])) return said('stale', 'Waiting', tractors > 1 ? 'for a tractor' : 'for the tractor', at)
-  if (could.length) return said('stale', 'Waiting', `for ${WAIT_FOR[waits[could[0].id]] ?? waits[could[0].id]}`, at)
+  // (for what holds the work up itself: hauling that waits for the digger waits for what the digger waits for)
+  const stuck = could.find(j => waits[j.id] !== 'waiting for the digger') ?? could[0]
+  if (stuck) return said('stale', 'Waiting', `for ${WAIT_FOR[waits[stuck.id]] ?? waits[stuck.id]}`, at)
   // Nothing ahead of them, and they worked the last day through: what they did.
   if (last) { const [word, rest] = DID[last.kind]; return said(last.kind, word, rest(S.placeName(last.field)), last.field, 1) }
   const where = at === S.HOME_YARD ? '' : `at ${S.placeName(at)}, `
