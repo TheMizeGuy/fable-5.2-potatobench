@@ -41,7 +41,7 @@ are a step or two apart; nobody stands idle without the game saying so; more tha
 ## The budget, and the meter
 
 `tests/longday.ts` plays a first year at the first speed a frame at a time without a picture, a player giving every
-order the farm asks for each morning, and counts (its `feel`): the real minutes the season takes; the minutes to
+order the farm asks for each morning, and counts (its `feel`), on a farm of three: the real minutes the season takes; the minutes to
 the first weigh ticket; how long each stretch of machine work lasts; the share of the time nobody on the farm is
 at anything (dead air); and each person's share of the time at something. `tests/longday.test.ts` holds a season
 to the budget.
@@ -51,11 +51,12 @@ to the budget.
 | speed steps | a step apart | 1×, 6×, 60× | 1×, 2×, 3× |
 | a stretch of machine work, usual | under 30 s | 41 s | 14 s |
 | a stretch of machine work, longest | a minute | 180 s | 60 s |
-| a first season at the first speed | under an hour | 137 min | 54 min (farmer alone); see below with a crew |
-| the first weigh ticket | within a sitting | not measured | 44 min |
+| a first season at the first speed | under an hour | 137 min | 43 min |
+| the first weigh ticket | within a sitting | not measured | 37 min |
 | people on a new farm | 3 | 1 | 3 |
-| time nobody is at anything | under a fifth | 5% (of a season more than twice as long) | 14% |
-| a machine's pace at work | one pace for every job | 5 m/s | 14 to 18 m/s |
+| time nobody is at anything | under a fifth | 5% (of a season three times as long) | 15% |
+| each person's time at something | most of it | farmer 95%; hired hands 38% and 27% | farmer 69%, hands 64% and 49% |
+| a machine's pace at work | one pace for every job | 5 m/s | about 17 m/s, 26 at most |
 | steps nobody could make, figures slid, ground changed out of its time | 0 | 0 | 0 |
 
 ## What it is now
@@ -64,14 +65,21 @@ to the budget.
   lane by lane at every one of them. A field is planted in a minute, hilled in half, sprayed in a quarter. Time
   with no work in it (a day nobody works, the rest of a day once its work is done) goes by at six seconds a day at
   1×. `src/game/app.ts`: `DAY_SECONDS`, `QUIET_S`.
-- **The pace.** Machines work at about 15 m/s and go by the lane at up to 26; people go at up to 5.5. A field is
-  planted in four lanes, hilled in two, sprayed in one pass, dug in eight over two days. `src/render/work.ts`:
-  `LANES`, `LIVE_PACE`.
+- **The pace.** Machines work at about 17 m/s and go by the lane at up to 26; people go at up to 5.5. A field is
+  planted in two lanes, hilled in two, sprayed in one pass, dug in four over two days: few enough that a machine
+  with a full crew helping, at twice its own rate, still goes at a pace that reads. `src/render/work.ts`: `LANES`,
+  `LIVE_PACE`.
 - **Three people.** A new farm is the farmer and two field hands, their first season's wages already in the
   farm's hand (`START_HANDS` in `src/game/app.ts`).
 - **Many hands.** Someone with no order of their own goes and helps with a job that is being worked, on foot, and
   the job goes faster for each helper there (`HELP_RATE`, `HELPERS_MOST` in `src/sim/params.ts`; the rule is in
-  `src/sim/season.ts`, the crews' day). Real work comes first: a helper given an order leaves to do it.
+  `src/sim/season.ts`, the crews' day). Real work comes first: a helper given an order leaves to do it. Planting,
+  digging, hauling, felling, picking rocks, cutting brush and building can be helped; a planting with two helpers
+  goes about 1.7 times as fast. A helper's card says "Helping", and they are seen on foot in the rows beside the
+  machine, or at the work's place with the others.
+- **An hour at a time.** The crews' work is counted in eleven stretches a day however the day is asked for
+  (`DAY_STRETCHES`), so a day stepped at once, a day counted as it is watched and a day worked out ahead for the
+  picture are the same day.
 - **The light** holds a morning or an evening through the days, as it did before days were long: a night every
   minute would be a strobe.
 
