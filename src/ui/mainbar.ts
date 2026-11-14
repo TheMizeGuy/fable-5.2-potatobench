@@ -14,7 +14,8 @@ import { heldFields, isTract } from './map.ts'
 import { personNow } from './now.ts'
 import { ringed } from './system/people.ts'
 
-export interface Todo { field: number; glyph: string; text: string; why: string; urgent: boolean; go: () => void }
+// order: the one press that deals with it, where there is one, with what it costs.
+export interface Todo { field: number; glyph: string; text: string; why: string; urgent: boolean; go: () => void; order?: { label: string; cost: number; run: () => void } }
 
 interface Hooks {
   todo: () => Todo[]
@@ -41,13 +42,21 @@ export function mainBar(ctx: Ctx, o: Hooks): { el: HTMLElement; update(c: S.Camp
         const c = app.campaign
         if (!c) return null
         const list = o.todo()
+        const orders = list.filter(t => t.order)
+        const all = orders.reduce((n, t) => n + t.order!.cost, 0)
         const goal = nextGoal(c)
         const wait = c.phase === 'season' ? waitingFor(c) : null
         return h('div', { class: 'mb-sheet' },
           list.length
             ? h('ul', { class: 'mb-list' }, list.map((t, k) => h('li', null,
-              h('button', { class: `mb-row${t.urgent ? ' urgent' : ''}`, type: 'button', testid: `todo-go-${k}`, onclick: () => { close(); t.go() } },
-                icon(t.glyph, 'i'), h('span', { class: 'mb-what' }, h('b', null, t.text), h('span', { class: 't-caption' }, t.why)), h('span', { class: 'mb-go t-label' }, 'Go there')))))
+              h('div', { class: `mb-row${t.urgent ? ' urgent' : ''}` },
+                icon(t.glyph, 'i'), h('span', { class: 'mb-what' }, h('b', null, t.text), h('span', { class: 't-caption' }, t.why)),
+                h('span', { class: 'mb-keys' },
+                  h('button', { class: 'btn quiet', type: 'button', testid: `todo-go-${k}`, onclick: () => { close(); t.go() } }, 'Go there'),
+                  t.order ? h('button', { class: 'btn', type: 'button', testid: `todo-do-${k}`, onclick: () => { close(); t.order!.run() } }, t.order.label, h('span', { class: 'num mb-cost' }, F.money(t.order.cost))) : null))))
+            // Several at once: one press orders them all, and says what that comes to.
+            .concat(orders.length > 1 ? [h('li', { class: 'mb-all' }, h('button', { class: 'btn go', type: 'button', testid: 'todo-all', onclick: () => { close(); for (const t of orders) t.order!.run() } },
+              `Order all ${orders.length}`, h('span', { class: 'num mb-cost' }, F.money(all))))] : []))
             : h('p', { class: 'mb-none' }, 'Nothing is waiting on you. Your crew is working through the work list.'),
           wait ? h('p', { class: 'mb-next' }, h('span', { class: 't-label' }, 'Coming up'), ' ', wait.title, wait.when ? `, ${wait.when}` : '', '.') : null,
           goal ? h('p', { class: 'mb-next' }, h('span', { class: 't-label' }, 'Next goal'), ' ', goal.title, '. ', h('span', { class: 't-caption' }, goal.why)) : null)

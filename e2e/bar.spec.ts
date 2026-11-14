@@ -131,8 +131,54 @@ test('a field drying out while its potatoes form is on To do, with what watering
     await expect(row).toHaveCount(1)
     await expect(row).toContainText(`Watering costs $${state!.cost.toLocaleString('en-US')}`)
     await shot(page, 'todo-dry')
-    await row.click()
+    await row.locator('[data-testid^="todo-go-"]').click()
     await expect(todo).toBeHidden()
     await expect.poll(() => game<number[]>(page, 'app.selection')).toEqual([state!.i])
+    // Its own key orders the watering, with the cost on the key.
+    await page.keyboard.press('Escape')
+    await page.locator('#ui .mainbar').getByTestId('bar-todo').click()
+    const key = todo.locator('.mb-row').filter({ hasText: `${state!.name} is drying out` }).locator('[data-testid^="todo-do-"]')
+    await expect(key).toContainText('Water')
+    await expect(key).toContainText(state!.cost.toLocaleString('en-US'))
+    await key.click()
+    await expect(todo).toBeHidden()
+    expect(await game<boolean>(page, `c.season.jobs.some(j => j.kind === 'water' && j.field === ${state!.i})`)).toBe(true)
+    await expect(page.locator('#ui .notes').getByText(`Watering ${state!.name} is on the work list.`)).toBeVisible()
   }
+})
+
+test('To do orders what it lists: a key on each row with its cost, and one key for all of them', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'the bar is a desk thing; a phone keeps its foot')
+  await startSeason(page)
+  await reach(page, `const { app } = q.g(); app.do({ t: 'sprayWay', way: 'none' }); q.run(q.day(7, 20)); app.setSpeed(0); app.campaign.incidents = []; app.select(-1); app.selectUnit(-1)`)
+  await putAway(page)
+  // Every growing field a few days past tuber set and dried to under half its water, with no order to water any.
+  const state = await page.evaluate(() => {
+    const { app, sim } = (globalThis as any).__county
+    const c = app.campaign, s = c.season
+    const dry: number[] = []
+    s.jobs = s.jobs.filter((j: any) => j.kind !== 'water')
+    s.fields.forEach((f: any, i: number) => {
+      if (!sim.held(c, i) || f.status !== 'growing') return
+      f.tiDay = s.day - 3
+      f.wet = 0
+      for (let k = 0; k < 400 && sim.fieldInfo(c, i).moisture >= 0.45; k++) f.dr += 1
+      dry.push(i)
+    })
+    const rain = sim.forecast(app.world, c, 3).some((d: any) => d.rainChance >= 60 && d.rainMm >= 8)
+    const coach = app.needs().some((n: any) => n.need && n.need.act !== 'wait')
+    return { dry, rain, coach, cost: dry.reduce((n, i) => n + sim.jobCost(c, 'water', i), 0) as number }
+  })
+  test.skip(state.dry.length < 2 || state.rain || state.coach, 'rain on the way, or the coach asks for something else')
+  await page.locator('#ui .mainbar').getByTestId('bar-todo').click()
+  const todo = page.getByTestId('todo')
+  await expect(todo).toBeVisible()
+  await expect(todo.locator('[data-testid^="todo-do-"]')).toHaveCount(state.dry.length)
+  const all = todo.getByTestId('todo-all')
+  await expect(all).toContainText(`Order all ${state.dry.length}`)
+  await expect(all).toContainText(state.cost.toLocaleString('en-US'))
+  await shot(page, 'todo-orders')
+  await all.click()
+  await expect(todo).toBeHidden()
+  for (const i of state.dry) expect(await game<boolean>(page, `c.season.jobs.some(j => j.kind === 'water' && j.field === ${i})`), `water on field ${i}`).toBe(true)
 })

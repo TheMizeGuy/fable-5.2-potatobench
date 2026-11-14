@@ -116,7 +116,11 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       if (!need || !S.held(c, i)) continue
       if (need.act === 'sell') { out.push({ field: i, glyph: 'ticket', text: F.localize(need.text), why: F.localize(need.why), urgent: need.urgent, go: () => openTicket(need.lot) }); continue }
       if (!isJob(need.act) || (need.act === 'spray' && sprayWay(c) === 'none') || s0.jobs.some(j => j.kind === need.act && j.field === i)) continue
-      out.push({ field: i, glyph: need.act, text: F.localize(need.text), why: F.localize(need.why), urgent: need.urgent, go: go(i) })
+      const act = need.act
+      out.push({
+        field: i, glyph: act, text: F.localize(need.text), why: F.localize(need.why), urgent: need.urgent, go: go(i),
+        order: { label: JOB_VERB[act], cost: S.jobCost(c, act, i), run: () => { app.selectUnit(-1); const r = app.smartOrder(i); if (!r.ok) ctx.say(`${S.FIELD_NAMES[i]}: ${r.err}`, 'info') } },
+      })
     }
     // Dry soil in the weeks after the potatoes form sets scab and later cuts the yield, and the coach asks for water
     // only once a crop wilts:
@@ -130,6 +134,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       if (f.moisture >= (forming ? 0.5 : 0.38) || f.tooWet || out.some(t => t.field === i) || s0.jobs.some(j => j.kind === 'water' && j.field === i)) continue
       out.push({
         field: i, glyph: 'water', text: `${f.name} is drying out`, urgent: false, go: go(i),
+        order: { label: JOB_VERB.water, cost: S.jobCost(c, 'water', i), run: () => { const r = app.order('water', { fields: [i], unit: -1 })[0]; ctx.say(r?.ok ? `Watering ${f.name} is on the work list.` : `${f.name}: ${r?.err ?? 'that can\'t be ordered now.'}`, 'info') } },
         why: `${forming ? 'Dry soil while the potatoes form sets scab' : 'Dry soil while the potatoes size up cuts the yield'}. Watering costs ${F.money(S.jobCost(c, 'water', i))}; rain is free if it comes.`,
       })
     }

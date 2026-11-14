@@ -12,6 +12,10 @@
 .mb-sheet { display: grid; gap: var(--s3); }
 .mb-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .mb-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; width: 100%; min-height: 48px; padding: 6px 12px; text-align: left; background: var(--paper-2); }
+.mb-keys { display: flex; align-items: center; gap: 8px; }
+.mb-keys .btn { min-height: 36px; white-space: nowrap; }
+.mb-cost { margin-left: 8px; font-weight: 700; }
+.mb-all { display: flex; justify-content: flex-end; }
 .mb-row.urgent { box-shadow: inset 4px 0 0 var(--red); }
 .mb-row .i { --i: 20px; }
 .mb-what { display: grid; gap: 1px; min-width: 0; }
