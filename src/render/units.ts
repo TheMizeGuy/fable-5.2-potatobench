@@ -716,6 +716,8 @@ export class Crews {
       for (const a of this.actors) if (a.siteKey) this.site0.set(a.id, a.siteKey)
       for (const r of this.rigs) this.rig0.set(r.key, { x: r.x, z: r.z })
     }
+    // (someone the day had nothing for until now is planned from where they are, not from where the morning had them)
+    if (!fresh) for (const a of this.actors) if (!a.segs.length && !a.aboard) this.from0.set(a.id, { x: a.x, z: a.z })
     const from: CrewFrom[] = this.actors.map(a => ({ id: a.id, slot: a.slot, farmer: a.kind === 'farmer', goal: a.goal, at: this.from0.get(a.id) ?? { x: a.x, z: a.z }, working: this.site0.get(a.id) ?? '', holding: a.rig?.key ?? '', arrives: false }))
     const rigAt = (key: string) => {
       const was = this.rig0.get(key)
@@ -1674,7 +1676,34 @@ export class Crews {
   }
 
   // Not at work: a Sunday on the porch, laid up in a chair, waiting in the yard, or stood where the last job ended.
+  // A long day with nothing to do: about the dooryard, from one place in it to another and standing a while at each,
+  // not stood on one spot from morning to night. True while that is what they are at.
+  private potter(a: Actor, f: CrewFrame, pose: Pose, big: number): boolean {
+    if (!this.live || a.state !== 'idle' || !a.home || a.aboard || a.worn > 0.72 || f.snap.mode !== 'season') return false
+    const period = 24 + (a.id % 3) * 9
+    const n = Math.floor((f.time + a.id * 13) / period)
+    const spot = idleSpot(-1, (a.slot + n * 5) % 12, false)
+    const k = Math.max(1, (big / TRUE_SIZE) * 0.72)
+    const tx = a.about.x + (spot.x - a.about.x) * k, tz = a.about.z + (spot.z - a.about.z) * k
+    const dx = tx - a.x, dz = tz - a.z, d = Math.hypot(dx, dz)
+    // (never from across the farm: someone back from the fields goes to their own place first)
+    if (d > 40) return false
+    if (d > 0.25 && !this.frozen) {
+      const step = Math.min(d, 1.2 * (1 - 0.3 * a.tired) * f.dt)
+      a.x += (dx / d) * step
+      a.z += (dz / d) * step
+      a.heading = Math.atan2(dz, dx)
+      a.gait += (step / (0.46 * big)) * Math.PI * 2
+      walk(pose, a.gait, 1, a.tired, 0)
+    } else {
+      if (d <= 0.25) a.heading = spot.heading
+      stand(pose, f.time + a.id * 3.1, a.tired, (a.style + n) % 3)
+    }
+    return true
+  }
+
   private atEase(a: Actor, f: CrewFrame, pose: Pose, big: number): void {
+    if (this.potter(a, f, pose, big)) return
     const g = a.goal
     const k = a.home ? Math.max(1, (big / TRUE_SIZE) * 0.72) : 1
     const there = g && (Math.hypot(g.x - a.x, g.z - a.z) < 1.2 || (a.home === g && Math.hypot(a.about.x + (g.x - a.about.x) * k - a.x, a.about.z + (g.z - a.about.z) * k - a.z) < 1.2))

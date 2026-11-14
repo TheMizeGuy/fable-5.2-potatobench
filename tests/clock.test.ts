@@ -146,6 +146,41 @@ describe('the clock', () => {
     expect(job?.done ?? 9).toBeLessThan(0.5 * 1.6)
   })
 
+  it('a test dig ordered on a long day is answered when it is done, not when the day is over', () => {
+    setDays('long')
+    try {
+      const app = new App(loadWorld())
+      app.settings.pauseOnAlerts = false
+      app.newGame(undefined, 11)
+      app.do({ t: 'begin' })
+      const c = c0(app)
+      // To a day with tubers to look at, stepped a day at a time.
+      for (let n = 0; n < 200 && !app.needs().some(x => x.need?.act === 'sample' || x.hold?.act === 'sample'); n++) {
+        c.incidents = []
+        if (app.needs().some(x => x.need?.act === 'plant')) app.order('plant', { fields: [app.needs().findIndex(x => x.need?.act === 'plant')] })
+        app.do({ t: 'day' })
+        if (S.fieldInfo(c, 0).tubers !== null || c.season!.fields.some(f => f.status === 'growing' && c.season!.day > S.dayIndex(c.year, 8, 1))) break
+      }
+      const field = c.season!.fields.findIndex(f => f.status === 'growing')
+      expect(field).toBeGreaterThanOrEqual(0)
+      const events: string[] = []
+      app.on(e => { if (e.type === 'events') for (const ev of e.events) events.push(ev.type) })
+      app.setSpeed(1)
+      app.tick(50)
+      const day = c.season!.day
+      expect(app.do({ t: 'job', kind: 'sample', field }).ok).toBe(true)
+      // The land asks for the day as it will go each frame it draws; the test does as it does.
+      for (let k = 0; k < 20 * 205 && !events.includes('sample'); k++) { c.incidents = []; app.today(); app.tick(50); if (app.speed === 0) app.setSpeed(1) }
+      expect(events, `day ${c.season!.day} (was ${day}) at ${app.dayProgress.toFixed(2)}, jobs ${c.season!.jobs.map(j => j.kind + '@' + j.field).join(' ')}, ahead ${JSON.stringify(app.today()?.season?.clock?.log)}`).toContain('sample')
+      expect(c.season!.day, 'the same day').toBe(day)
+      // (when the day as it will go has the dig done: within a frame of then)
+      const done = Math.max(...(c.season!.clock?.log ?? []).filter(x => x.kind === 'sample').map(x => x.to))
+      expect(app.dayProgress).toBeGreaterThanOrEqual(done)
+      expect(app.dayProgress).toBeLessThan(done + 0.01)
+      expect(app.dayProgress).toBeLessThan(0.95)
+    } finally { setDays('brisk') }
+  })
+
   it('runs at the speed set while needs come and go: nothing slows it', () => {
     const app = farm()
     app.setSpeed(3)

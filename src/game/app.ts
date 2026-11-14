@@ -727,6 +727,17 @@ export class App {
       // The morning: the day's standing orders are given as the day begins, not when it is over.
       if (!c.season.clock) { this.do({ t: 'work', to: 0 }); if (this.speed === 0 || !c.season || seasonDone(c)) return }
       this.dayProgress += (Math.min(dtMs, 250) / 1000) * DAYS_PER_SECOND[this.speed] * this.pace
+      // A test dig watched through a long day: when the day as it will go (worked out for the land to show) has it
+      // done, the farm is brought up to then, so its tray comes when the hill is seen lifted and not at the day's end.
+      const ahead = this.ahead && this.ahead.rev === this.revision ? this.ahead.c.season?.clock?.log : undefined
+      const at = c.season.clock?.at ?? 0
+      if (ahead && this.dayProgress < 1 && ahead.some(x => x.kind === 'sample' && x.to > at + 1e-4 && x.to <= this.dayProgress)) {
+        const events = this.upToNow()
+        this.dirty = true
+        this.emit({ type: 'change' })
+        this.paceAfterDay(c, events)
+        if (this.speed === 0) return
+      }
       let guard = 0
       while (this.dayProgress >= 1 && guard++ < 3 && this.speed > 0) {
         this.dayProgress -= 1
