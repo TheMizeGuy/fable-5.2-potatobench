@@ -166,6 +166,60 @@ test('a note about several fields at once opens To do', async ({ page, isMobile 
   expect(await game<number[]>(page, 'app.selection'), 'no one field is picked').toEqual([])
 })
 
+// The money board's key beside a fall it can name a remedy for ("Brook Field dry: -$2,600 [Water]") read as a key
+// that waters, and only went to the field (round nine). It gives the order, with the cost on the key, and goes once
+// the order is on the list.
+test('the money board\'s remedy key gives the order at the cost printed on it', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'the desk\'s board; a phone has the line as a note')
+  await startSeason(page)
+  await reach(page, `const { app } = q.g(); app.do({ t: 'sprayWay', way: 'auto' }); q.run(q.day(7, 14)); app.setSpeed(0); app.campaign.incidents = []; app.select(-1); app.selectUnit(-1)`)
+  await putAway(page)
+  await expect(page.locator('#ui [data-testid="outlook"]')).toBeVisible()
+  // One field dried right out overnight: the figure falls, and the board says which field and why.
+  const field = await page.evaluate(() => {
+    const { app, sim } = (globalThis as any).__county
+    const c = app.campaign, s = c.season
+    const i = s.fields.findIndex((f: any, k: number) => sim.held(c, k) && f.status === 'growing' && f.tiDay >= 0 && f.matureDay < 0)
+    if (i < 0) return -1
+    s.jobs = s.jobs.filter((j: any) => !(j.kind === 'water' && j.field === i))
+    for (let k = 0; k < 600 && sim.fieldInfo(c, i).moisture > 0.08; k++) s.fields[i].dr += 1
+    return i
+  })
+  test.skip(field < 0, 'no field bulking on this day')
+  const fix = page.getByTestId('outlook-fix')
+  // A day at a time, as the board sees them, with every growing field kept dry: until the board puts a fall down to it.
+  let shown = false
+  for (let d = 0; d < 25 && !shown; d++) {
+    await page.evaluate(() => {
+      const { app, sim } = (globalThis as any).__county
+      const c = app.campaign
+      c.season.fields.forEach((f: any, i: number) => {
+        if (!sim.held(c, i) || f.status !== 'growing') return
+        for (let k = 0; k < 600 && sim.fieldInfo(c, i).moisture > 0.08; k++) f.dr += 1
+      })
+      c.season.jobs = c.season.jobs.filter((j: any) => j.kind !== 'water')
+      app.do({ t: 'day' })
+      c.incidents = []
+    })
+    await page.waitForTimeout(300)
+    shown = (await fix.count()) > 0 && await fix.isVisible()
+  }
+  const line = page.locator('#ui [data-testid="outlook-why"]')
+  const why = (await line.count()) ? await line.textContent() : ''
+  console.log(`board says: ${why}; key shown: ${shown}`)
+  test.skip(!shown, 'the fall was put down to something else on this day')
+  await expect(fix).toContainText('Water')
+  await expect(fix).toContainText('$')
+  await shot(page, 'board-remedy')
+  // (the key is only up while the order can still be given: its field is the one the line names)
+  const named = await page.evaluate(() => { const { app, sim } = (globalThis as any).__county; const t = document.querySelector('#ui [data-testid="outlook-why"]')?.textContent ?? ''; return (sim.FIELD_NAMES as string[]).findIndex((n, i) => sim.held(app.campaign, i) && t.includes(n)) })
+  expect(named).toBeGreaterThanOrEqual(0)
+  await fix.click()
+  await expect.poll(() => game<boolean>(page, `c.season.jobs.some(j => j.kind === 'water' && j.field === ${named})`)).toBe(true)
+  await expect(fix).toHaveCount(0)
+  expect(await game<number[]>(page, 'app.selection'), 'no card is opened for it').toEqual([])
+})
+
 test('To do orders what it lists: a key on each row with its cost, and one key for all of them', async ({ page, isMobile }) => {
   test.skip(isMobile, 'the bar is a desk thing; a phone keeps its foot')
   await startSeason(page)

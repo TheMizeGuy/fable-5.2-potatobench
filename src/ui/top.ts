@@ -10,7 +10,7 @@ import { h, type Child } from './dom.ts'
 import * as F from './fmt.ts'
 import { icon } from './icons.ts'
 import { BORROWED_SAYS, causeLine, LOAN_NOTE, loanNoteNow, rangeSays, REMEDY, signedMoney, sumLines } from './money-words.ts'
-import { BLIGHT_RISK, firstName, forecastSky, JOB_VERB, jobText, plantingIn, SKY_WORD, yearName } from './rules.ts'
+import { BLIGHT_RISK, firstName, forecastSky, JOB_DOING, JOB_VERB, jobText, plantingIn, SKY_WORD, yearName } from './rules.ts'
 import { fist } from './system/parts.ts'
 
 export const PHASE_LABEL: Record<S.Phase, string> = {
@@ -330,6 +330,18 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     app.focus(why.field)
     light(`[data-testid="order-${why.remedy}"]`, { open: false })
   }
+  // Whether the remedy the board offers is already on the work list, or can no longer be ordered (rain has wet the
+  // ground since): its key goes.
+  const remedied = (c: S.Campaign): boolean => !!whyNow?.cause.remedy && whyNow.cause.field !== undefined
+    && (!!c.season?.jobs.some(j => j.kind === whyNow!.cause.remedy && j.field === whyNow!.cause.field) || S.jobBlock(c, whyNow.cause.remedy, whyNow.cause.field) !== '')
+  // The board's own key for it gives the order, at the cost printed on the key. If the order cannot be given (it is on
+  // the list already, nobody can do it), the field is shown instead, with why.
+  const order = (why: S.MoneyCause) => {
+    if (why.field === undefined || !why.remedy) return
+    const r = app.order(why.remedy, { fields: [why.field], unit: -1 })[0]
+    if (r?.ok) ctx.say(`${JOB_DOING[why.remedy]} ${S.FIELD_NAMES[why.field]} is on the work list.`, 'info')
+    else { fix(why); if (r?.err) ctx.say(`${S.FIELD_NAMES[why.field]}: ${r.err}`, 'info') }
+  }
   let leaving = 0
   const leaveMoney = () => { if (pop !== 'money' || popBy !== 'hover') return; clearTimeout(leaving); leaving = window.setTimeout(() => { if (pop === 'money' && popBy === 'hover' && !el.querySelector('.money-pop:hover, .after-key:hover')) { pop = ''; ctx.dirty() } }, 250) }
   document.addEventListener('pointerdown', closePop, true)
@@ -568,7 +580,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
       w: c.season?.watchDay, f: c.season?.log.filter(e => e.type === 'frost').length, u: app.settings.units, t: ctx.touch(), days, withClock, withMenu, stopped,
       g: g ? [g.id, progressText(g), g.now] : 0, gone: gone?.id ?? '', fresh, pop, wait: season && g?.id === 'plant' ? plantingIn(app.world, c) : -1, mats: mats ? [Math.round(c.logs * 10), Math.round(c.stone * 10)] : 0,
       ladder: pop === 'goals' ? goals(c).map(x => [x.id, x.done, progressText(x), x.block, x.now && !x.done && !!o.canShow?.(x)]) : 0, reach: g ? !!o.canShow?.(g) : false,
-      call: season ? pressing(c)?.id ?? '' : '', block: g?.block ?? '', view: view?.why ?? '', moved: moved?.text ?? '', last: lastMoved, why: whyNow ? [whyNow.text, whyNow.ask] : '', by: popBy,
+      call: season ? pressing(c)?.id ?? '' : '', block: g?.block ?? '', view: view?.why ?? '', moved: moved?.text ?? '', last: lastMoved, why: whyNow ? [whyNow.text, whyNow.ask, remedied(c)] : '', by: popBy,
       jobs: season ? [...new Set(c.season!.jobs.map(j => j.kind))].sort().join() : '', auto: season ? S.routineInfo(c).filter(r => r.auto).map(r => r.kind).join() : '',
       k: season || c.phase === 'cellar' ? contracts.key() : 0, ph: season ? phaseNow(c) : '', mine: season ? waitingFor(c) : 0,
     }
@@ -605,7 +617,8 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
         after,
         after && lines ? h('span', { class: `after-why${whyNow ? '' : ' idle'}`, testid: whyNow ? 'outlook-why' : undefined, role: whyNow ? 'status' : undefined, 'aria-hidden': whyNow ? undefined : 'true' },
           whyNow ? [h('span', { class: 'why-t' }, whyNow.cause.text), Math.abs(whyNow.cause.amount) < 0.5 ? null : h('span', { class: 'why-amt num' }, `: ${signedMoney(whyNow.cause.amount)}`),
-            whyNow.cause.remedy ? [' ', h('button', { class: 'why-key fix-key', type: 'button', testid: 'outlook-fix', onclick: () => fix(whyNow!.cause) }, REMEDY[whyNow.cause.remedy] ?? 'Show me')] : null,
+            whyNow.cause.remedy && !remedied(c) ? [' ', h('button', { class: 'why-key fix-key', type: 'button', testid: 'outlook-fix', onclick: () => (REMEDY[whyNow!.cause.remedy!] ? order(whyNow!.cause) : fix(whyNow!.cause)) },
+              REMEDY[whyNow.cause.remedy] ? [REMEDY[whyNow.cause.remedy], ' ', h('span', { class: 'num' }, F.money(S.jobCost(c, whyNow.cause.remedy, whyNow.cause.field ?? -1)))] : 'Show me')] : null,
             whyNow.ask ? [' ', h('button', { class: 'why-key', type: 'button', testid: 'outlook-why-open', 'aria-label': 'Why?', title: ctx.touch() ? undefined : 'Why?', 'aria-expanded': String(pop === 'money'), onclick: () => openMoney('press') }, icon('help', 'i'))] : null]
             : '\u00a0') : null)
       // The sum that makes the figure, under the board, clear of the speed keys.

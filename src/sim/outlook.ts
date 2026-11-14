@@ -590,7 +590,7 @@ function causeText(a: MoneyLook, b: MoneyLook, part: string, x: number, d: Recor
     out.remedy = remedyFor(why, now)
     const days = now.unsprayed
     switch (why) {
-      case 'dry': return many ? `${name} driest` : `${name} dry`
+      case 'dry': return `${name} dry`
       case 'scab': return `Scab in ${name}, dry soil`
       case 'blight': return now.protect >= 0.35 ? `Blight in ${name}` : days < 0 ? `Blight in ${name}, never sprayed` : `${name} unsprayed ${days} days`
       case 'frost': return `Frost hit ${name}`
