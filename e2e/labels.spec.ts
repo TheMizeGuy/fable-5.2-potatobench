@@ -1,7 +1,7 @@
 // Labels a first-time player reads off a picture: the Plant stamp in cold ground, field tags far out, a person's
 // "First priority" keys, and what grows on a resting field.
 import { mkdirSync } from 'node:fs'
-import { test, type Page } from '@playwright/test'
+import { test, type Page } from './base.ts'
 import { expect, open, putAway, reach, startSeason, watchErrors } from './helpers.ts'
 
 const SHOTS = process.env.SHOTS ?? ''

@@ -1,7 +1,7 @@
 // The control rule (docs/UI.md, "Controls: depth and weight"), read off the live game on each of its main papers:
 // what can be pressed stands off the paper and what is only read does not; a control's size and edge say what its
 // press costs; a destroying control is striped and asks once more; every control has a name and words that can be read.
-import { type Page, test } from '@playwright/test'
+import { type Page, test } from './base.ts'
 import { closeAll, q } from '../tools/quality/shared.ts'
 import { expect, open, reach } from './helpers.ts'
 

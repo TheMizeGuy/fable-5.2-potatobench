@@ -2,6 +2,7 @@
 // lesson starts and ends on what the farm and the app show, never on a page being looked at, and nothing here is
 // written into the campaign. Progress lives in its own storage key. docs/TUTORIAL.md has the list and the reasons.
 import * as S from '../sim/index.ts'
+import { SPEED_X } from './app.ts'
 
 export type Input = 'mouse' | 'touch' | 'keys'
 export type Part = 'opening' | 'year' | 'spring'
@@ -287,7 +288,7 @@ export const LESSONS: Lesson[] = [
     id: 'fast', part: 'year', name: 'Run the days faster', hint: true,
     when: (l, g) => inSeason(l) && firstYear(l) && g.passed('plantday') && !unplanted(l) && l.speed > 0 && l.speed < 3 && call(l) < 0 && wordAt(l) < 0 && !g.has('faster'),
     done: (l, g, since) => g.has('faster') || (!!since && l.speed >= 3),
-    ask: l => `Nothing to decide for a while. ${by(l, 'Click 8×', 'Tap 8×', 'Press +')} to run fast.`,
+    ask: l => `Nothing to decide for a while. ${by(l, `Click ${SPEED_X[3]}`, `Tap ${SPEED_X[3]}`, 'Press +')} to run fast.`,
     why: () => 'The game stops itself when you have a decision.',
     point: () => ({ testid: ['speed-3', 'speed-cycle'] }),
   },

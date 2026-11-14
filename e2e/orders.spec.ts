@@ -1,6 +1,6 @@
 // Orders and the clock as a strategy player gives them: pick someone, right-click a field, and they go; a click on a
 // person only picks them; a pause line goes once what it was for is answered.
-import { test, type Page } from '@playwright/test'
+import { test, type Page } from './base.ts'
 import { expect, look, open, putAway, reach, watchErrors } from './helpers.ts'
 
 async function game<T>(page: Page, expr: string): Promise<T> {

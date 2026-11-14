@@ -45,6 +45,7 @@ export interface StageFrame {
   pace: number             // metres a second a machine at work is seen to go (its own pace when the day is literal)
   lane: number             // and a machine on the lane
   literal: boolean         // the clock is stopped and the day's work goes at its own pace
+  live?: boolean           // a long day, watched as it is worked: staged work keeps the day's own time
   dry: boolean             // dry ground: what is dragged over it raises dust
   day: number              // how long a day lasts on the clock, seconds
   far: (x: number, z: number) => number   // 0 seen from close by .. 1 from across the farm, where smoke is what is found
@@ -709,10 +710,12 @@ export class Stage {
     // two days long (a job of a day or two would otherwise never be seen to leave the field), and a drive too long
     // to make in its share of that at a pace that reads is cut, as the way to any work is: away from one end, in to
     // the other.
-    const literal = f.literal && w.lit
+    const literal = (f.literal || !!f.live) && w.lit
     const q0 = literal ? 0.22 : LAP_STAND, q1 = LAP_DOOR, q2 = q1 + q0
     const lapS = Math.min(6, Math.max(2.6, 1.5 * f.day)), legS = lapS * (q1 - q0), reach = f.lane * legS
-    if (literal) j.t = frac(Math.min(0.99999, w.w) * Math.max(1, w.loads))
+    // (a long day's hauling: so many loads over its hours, the last of them off at the door as the hours end)
+    if (literal && f.live) j.t = frac(Math.min(0.99999, w.w) * (Math.max(1, w.loads) - 1 + q2))
+    else if (literal) j.t = frac(Math.min(0.99999, w.w) * Math.max(1, w.loads))
     // (the clock stopped on a day that was running: the load in hand is seen in to the door, and no more)
     else if (f.going) j.t = f.literal ? (j.t < q2 ? Math.min(q2, j.t + f.dt / lapS) : j.t) : frac(j.t + f.dt / lapS)
     const lap = j.t

@@ -211,7 +211,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   // where the work has been, ahead of the farm's own count, which has the day's work when the day is over.
   // longKey: the day and the order count the plan in hand was made for ('' when there is none). doneToday: the hills
   // shown worked ahead of the count.
-  let longDay = false, longKey = ''
+  let longDay = false, longKey = '', longFor = -1
   let longShares = new Map<string, number>()
   const doneToday = new Set<number>()
   let dirty = true, dayPassed = false, first = true, turnHeld = false
@@ -558,6 +558,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       if (ahead) {
         if (!longKey.startsWith(day)) longShares = new Map(season.jobs.filter(j => j.need > 0 && j.done > 0).map(j => [`${j.field}|${j.kind}`, Math.min(1, j.done / j.need)]))
         longKey = key
+        longFor = next.seasonDay
         const hills = new Map<number, number>()
         for (const ev of app.todayEvents()) {
           if (ev.type !== 'sample' || ev.field < 0 || !ev.data || typeof ev.data.hill !== 'number') continue
@@ -887,7 +888,8 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     // Day clock: follows the game clock when it runs, plays the day out by itself when paused.
     if (snap.mode === 'title') dayT = titleDay()
     // (a long day keeps the game's own time; between its end and the next day's plan everyone is where it left them)
-    else if (longDay && snap.mode === 'season') dayT = longKey ? app.dayProgress : 1
+    // (a day's turn counted and not yet drawn: the plan in hand is the day before's, and that day is over)
+    else if (longDay && snap.mode === 'season') dayT = longKey && app.campaign?.season?.day === longFor ? app.dayProgress : 1
     else if (dayT < 1) dayT = Math.min(1, app.speed > 0 ? Math.max(dayT + dt / DAY_ANIM_S * 0.25, app.dayProgress) : dayT + dt / DAY_ANIM_S * replayPace)
     if (crews.stageHold >= 0 && snap.mode === 'season' && !longDay) dayT = Math.min(dayT, crews.stageHold)
     aimHour(false)
@@ -1432,6 +1434,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
         replayPace = pace
         dayT = Math.max(0, Math.min(1, t))
       },
+      plans: () => crews.plans(),
       info() {
         const w = crews.where()
         return {

@@ -4,7 +4,7 @@
 // the instruments' half (the card that asks an incident), it is answered there if that card is on screen, and through
 // the test hook if not. Play gives a farm of its own with seasons made from a random seed, so nothing here may count
 // on one year's weather, and money is read from the game rather than written into the test.
-import { test, type Page } from '@playwright/test'
+import { test, type Page } from './base.ts'
 import { expect, look, noSidewaysScroll, putAway, reach, straightIn, watchErrors } from './helpers.ts'
 
 const BADGE = '#ui [data-testid^="badge-"]'

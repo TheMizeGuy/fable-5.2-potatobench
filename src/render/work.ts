@@ -518,7 +518,12 @@ export function planDay(snap: Snapshot, shown: HillDisplay[][], crews: CrewFrom[
           const there = (!ride && Math.hypot(spot.x - at.x, spot.z - at.z) < 9) || (crew.working === (wet !== 'tank' ? `${w.field}|${wet}` : key) && !crew.arrives)
           const { walkTo, travel } = there ? { walkTo: [], travel: [at] } : go(spot, ride)
           // a day's hauling in loads: what one person brings in, by the barrel, over what a bed holds (a last day is a short one)
-          const loads = w.kind === 'haul' ? Math.max(1, Math.ceil(((ride === 'truck' ? HAUL_CWT_DAY * TRUCK_HAUL : HAUL_CWT_DAY) / (LOAD * BARREL_CWT)) * (w.share !== undefined && w.share >= 1 ? 0.5 : 1))) : undefined
+          let loads = w.kind === 'haul' ? Math.max(1, Math.ceil(((ride === 'truck' ? HAUL_CWT_DAY * TRUCK_HAUL : HAUL_CWT_DAY) / (LOAD * BARREL_CWT)) * (w.share !== undefined && w.share >= 1 ? 0.5 : 1))) : undefined
+          // (a long day: as many loads as its hours hold at a pace on the lane that reads, standing to load and unload)
+          if (live && w.kind === 'haul' && hours) {
+            const trip = new Poly(route({ x: spot.x, z: spot.z }, cropDoor(snap, w.field).stop)).length
+            loads = Math.max(1, Math.round(((hours[1] - hours[0]) * live.daySec) / ((2 * trip) / (ride === 'truck' ? LIVE_PACE.truck : LIVE_PACE.tractor) + 26)))
+          }
           segs.push({ kind: w.kind, field: w.field, walker: !ride, ride, walkTo, travel, path: [{ x: spot.x, z: spot.z }], reveals: [], start: 0, end: 0, site: wet !== 'tank' ? `${w.field}|${wet}` : key, lit: literal, from: 0, loads, machine: ride ? w.machine : undefined, hours: ride || live ? hours : undefined })
           if (!there) at = { x: spot.x, z: spot.z }
           if (ride) {

@@ -59,10 +59,10 @@ await page.waitForTimeout(800)
 
 type Info = { dayT: number; pending: number; units: { id: number; x: number; z: number; foot: boolean; fade: number; doing: string }[]; rigs: { key: string; x: number; z: number; fade: number; work: string; tool: string }[] }
 const look = () => page.evaluate(() => {
-  const g = globalThis as unknown as { __county: { app: { dayProgress: number; speed: number; campaign: { season: { day: number; jobs: { kind: string; field: number; done: number; need: number }[]; clock?: { at: number } } } } }; __countyField: { info(): Info } }
+  const g = globalThis as unknown as { __county: { app: { dayProgress: number; speed: number; campaign: { season: { day: number; jobs: { kind: string; field: number; done: number; need: number }[]; clock?: { at: number } } } } }; __countyField: { info(): Info; plans(): string[] } }
   const s = g.__county.app.campaign.season
-  return { info: g.__countyField.info(), at: g.__county.app.dayProgress, day: s.day, speed: g.__county.app.speed, jobs: s.jobs.map(j => `${j.kind}@${j.field} ${(j.done / j.need).toFixed(2)}`).join(', ') }
-}) as Promise<{ info: Info; at: number; day: number; speed: number; jobs: string }>
+  return { plans: g.__countyField.plans().join('\n'), info: g.__countyField.info(), at: g.__county.app.dayProgress, day: s.day, speed: g.__county.app.speed, jobs: s.jobs.map(j => `${j.kind}@${j.field} ${(j.done / j.need).toFixed(2)}`).join(', ') }
+}) as Promise<{ plans: string; info: Info; at: number; day: number; speed: number; jobs: string }>
 
 await page.evaluate(p => { const app = (globalThis as unknown as { __county: { app: { pace: number; setSpeed(n: number): void } } }).__county.app; app.pace = p; app.setSpeed(1) }, pace)
 const start = await look()
@@ -89,6 +89,7 @@ for (let n = 0; n <= frames * sub; n++) {
       if (v > a.most * 1.6 && d > 6 && a.fade > 0.95 && b.fade > 0.95) jumps.push(`day ${now.day} at ${(now.at * 100).toFixed(0)}%: ${a.key} went ${d.toFixed(0)} m in ${dt.toFixed(1)} s (${v.toFixed(0)} m/s)`)
     }
   }
+  if (!was || was.day !== now.day || was.plans !== now.plans) console.log(`  plan, day ${now.day} at ${(6 + now.at * 11).toFixed(1)}h:\n    ${now.plans.split('\n').join('\n    ')}`)
   was = now; wasAt = Date.now()
   if (orderAt && !ordered && now.day === start.day && now.at >= (orderAt - 6) / 11) {
     ordered = true

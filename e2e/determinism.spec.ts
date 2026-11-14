@@ -1,6 +1,6 @@
 // Gate 6: one scripted five-season campaign must end in the same state hash in every browser engine as in Node.
 import { readFileSync } from 'node:fs'
-import { test } from '@playwright/test'
+import { test } from './base.ts'
 import { runReplay } from '../tests/replay.ts'
 import { expect, open } from './helpers.ts'
 

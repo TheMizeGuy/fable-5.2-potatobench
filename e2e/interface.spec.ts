@@ -1,5 +1,5 @@
 // How the interface behaves: selecting and ordering, what it says and does not say, and every size it has to hold at.
-import { test, type Page } from '@playwright/test'
+import { test, type Page } from './base.ts'
 import { expect, look, noSidewaysScroll, open, putAway, reach, startSeason, straightIn, watchErrors } from './helpers.ts'
 
 // A label and its amount on a money line, however the sheet sets what lies between them (a space, "with rent $3,500").

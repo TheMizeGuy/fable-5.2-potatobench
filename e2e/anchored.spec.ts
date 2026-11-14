@@ -3,7 +3,7 @@
 // chip, a machine, a neighbour's thing, an order in the list. At three window sizes and two camera tiers at a desk; on
 // a phone the card is a sheet at the foot with a notch toward the thing, which is kept in view above it.
 import { mkdirSync } from 'node:fs'
-import { test, type Page } from '@playwright/test'
+import { test, type Page } from './base.ts'
 import { expect, open, putAway, reach, watchErrors } from './helpers.ts'
 
 // (1920 by 1080 and 2560 by 1440 are drawn scaled up, at 125% and 150%: src/ui/scale.ts)

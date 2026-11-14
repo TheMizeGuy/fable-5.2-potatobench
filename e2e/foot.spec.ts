@@ -1,7 +1,7 @@
 // What stands at the foot of the land (the list with its "cannot wait" chip and the chip's pop, the people, the clock)
 // never lies over a field's tag or stamp. A phone play-through once stuck on 27 August pressing a vine-kill stamp that
 // the red row of work that cannot wait lay over.
-import { test, type Page } from '@playwright/test'
+import { test, type Page } from './base.ts'
 import { expect, putAway, reach, startSeason, watchErrors } from './helpers.ts'
 
 const PANELS = '[data-testid="pressing"], .press-pop, .queue, .timebook, .clock, .command, .person-card, .work, .telegram, .goal'

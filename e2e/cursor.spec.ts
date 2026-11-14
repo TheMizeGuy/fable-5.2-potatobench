@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './base.ts'
 import { startSeason } from './helpers.ts'
 
 test('the pointer is the game\'s own, and nothing is picked up as text', async ({ page, isMobile }) => {

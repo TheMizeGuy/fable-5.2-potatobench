@@ -1,5 +1,6 @@
 // How to play (design/howto.html), from the almanac: three pictures made of the interface's own pieces (a field's tag,
 // a need's stamp, the clock's keys) and three verbs, the code of the stamps, the year in a line, and the keys folded.
+import { SPEED_X } from '../game/app.ts'
 import * as S from '../sim/index.ts'
 import type { Ctx } from './core.ts'
 import { h } from './dom.ts'
@@ -20,7 +21,7 @@ function figs(touch: boolean): HTMLElement {
   return h('div', { class: 'figs' },
     fig(1, tag({ name: 'North Ridge', icon: 'bloom', selected: true, still: true }), 'Pick a field', touch ? 'Tap a field or its tag, and a card opens showing what it needs.' : 'Click a field or its tag, and a card opens showing what it needs.'),
     fig(2, tag({ name: 'Upper Middle', icon: 'bloom', need: spray, still: true }), 'Give an order', touch ? 'Tap the stamp to order the job the field needs.' : 'Click the stamp or right-click the field to order the job it needs.'),
-    fig(3, h('div', { class: 'clock' }, h('span', { class: 'k' }, icon('pause', 'i')), h('span', { class: 'k', 'aria-pressed': 'true' }, '1×'), h('span', { class: 'k' }, '3×'), h('span', { class: 'k' }, '8×')),
+    fig(3, h('div', { class: 'clock' }, h('span', { class: 'k' }, icon('pause', 'i')), h('span', { class: 'k', 'aria-pressed': 'true' }, SPEED_X[1]), h('span', { class: 'k' }, SPEED_X[2]), h('span', { class: 'k' }, SPEED_X[3])),
       'Let time pass', touch ? 'Time runs at the speed you pick, and the game pauses when something needs you.' : 'Time runs at the speed you pick, and the game pauses when something needs you. Press Space to pause it yourself.'))
 }
 
@@ -64,7 +65,7 @@ export function openHelp(ctx: Ctx): void {
               row(keys('1', '–', '9', '0'), 'Select one of your first ten fields. Hold Shift to add it to the selection.'),
               row(keys('Tab'), 'Jump to the next field that needs something.'),
               row(keys('Enter'), 'Order what the selected field needs.'),
-              row(keys('Space', 'F', '+', '−'), 'Pause or resume, cycle through 1×, 3× and 8×, speed up, and slow down.'),
+              row(keys('Space', 'F', '+', '−'), `Pause or resume, cycle through ${SPEED_X[1]}, ${SPEED_X[2]} and ${SPEED_X[3]}, speed up, and slow down.`),
               row(keys('Backspace'), 'Cancel the last order on the work list.'),
               row(keys('I', 'M', 'Esc'), 'Open the almanac, open the menu, and close or deselect.'),
               row(keys('Arrows', 'Q', 'E', 'Home'), 'Move the view, rotate it, and center the farm.'),

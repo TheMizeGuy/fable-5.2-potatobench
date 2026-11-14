@@ -2,7 +2,7 @@
 // the ways to take it in few words, with every grade and every loss one press away; the farm words on it and behind
 // it carry their meaning; the test-dig tray and the field record keep inside the window, the middle scrolling between
 // a head and a foot that stay in view.
-import { test, type Page } from '@playwright/test'
+import { test, type Page } from './base.ts'
 import { expect, look, open, putAway, reach, startSeason, watchErrors } from './helpers.ts'
 
 // The most words the ticket shows before anything is pressed, its ways and the note under them counted (round 6,

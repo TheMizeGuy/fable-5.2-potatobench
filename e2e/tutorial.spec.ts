@@ -2,7 +2,7 @@
 // first sale by pressing only what the notes ask. At every step: the clock stands while a note or a card is up, one
 // thing at most asks for attention, a note is 35 words or fewer, and the screen stays short of words.
 import AxeBuilder from '@axe-core/playwright'
-import { test, type Page } from '@playwright/test'
+import { test, type Page } from './base.ts'
 import { expect, noSidewaysScroll, open, putAway, reach, watchErrors } from './helpers.ts'
 
 // The budgets (docs/TUTORIAL.md). Words are those a player can see on the season screen, on the land's tags and in

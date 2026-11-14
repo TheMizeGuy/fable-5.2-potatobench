@@ -294,17 +294,8 @@ export class App {
     if (!c) return { ok: false, err: 'No game in progress.', events: [] }
     // An order given part way through a day is given to a farm that has done the day's work up to that moment: it
     // is worked in what is left of the day.
-    const s = c.season
-    let before: GameEvent[] = []
-    if (!NO_WORK.has(cmd.t) && c.phase === 'season' && s?.clock && this.dayProgress > s.clock.at + 0.002) {
-      before = apply(this.world, c, { t: 'work', to: Math.min(1, this.dayProgress) }).events
-    }
+    const before = NO_WORK.has(cmd.t) ? [] : this.upToNow()
     const r = apply(this.world, c, cmd)
-    if (before.length) {
-      this.revision++
-      for (const e of before) if (e.level !== 'info' || NOTABLE.has(e.type)) this.alert(c, e)
-      this.emit({ type: 'events', events: before, dayPassed: false })
-    }
     if (!r.ok) return r
     if (cmd.t === 'next') this.meetNeighbor()
     // The last question answered, however it was answered: the days go on at the speed they had.
@@ -331,6 +322,20 @@ export class App {
     }
     this.emit({ type: 'change' })
     return r
+  }
+
+  // Brings the farm up to this moment of a day already begun: the crews' work so far today is done. What it brought.
+  private upToNow(): GameEvent[] {
+    const c = this.campaign, s = c?.season
+    if (!c || c.phase !== 'season' || !s?.clock || this.dayProgress <= s.clock.at + 0.002) return []
+    const events = apply(this.world, c, { t: 'work', to: Math.min(1, this.dayProgress) }).events
+    this.revision++
+    this.ahead = null
+    if (events.length) {
+      for (const e of events) if (e.level !== 'info' || NOTABLE.has(e.type)) this.alert(c, e)
+      this.emit({ type: 'events', events, dayPassed: false })
+    }
+    return events
   }
 
   private alert(c: Campaign, e: GameEvent): void {
@@ -532,6 +537,8 @@ export class App {
     const out: OrderResult[] = []
     if (!c) return out
     const taken: number[] = []
+    // (given part way through a day: to a farm that has done the day's work up to now)
+    const before = fields.length ? this.upToNow() : []
     for (const field of fields) {
       const unit = opts.unit ?? this.unit
       const r = apply(this.world, c, unit >= 0 ? { t: 'job', kind, field, unit } : { t: 'job', kind, field })
@@ -544,12 +551,14 @@ export class App {
       const jobs = c.season?.jobs ?? []
       if (opts.first && jobs.length) apply(this.world, c, { t: 'bump', id: jobs[jobs.length - 1].id })
     }
-    if (taken.length) {
+    if (taken.length || before.length) {
       this.dirty = true
       this.revision++
-      this.emit({ type: 'order', kind, fields: taken })
+      this.ahead = null
+      if (taken.length) this.emit({ type: 'order', kind, fields: taken })
       this.emit({ type: 'change' })
     }
+    if (before.length) this.paceAfterDay(c, before)
     return out
   }
 

@@ -1,6 +1,6 @@
 // axe at serious and critical on every screen and every paper.
 import AxeBuilder from '@axe-core/playwright'
-import { test, type Page } from '@playwright/test'
+import { test, type Page } from './base.ts'
 import { expect, open, putAway, reach } from './helpers.ts'
 
 const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']

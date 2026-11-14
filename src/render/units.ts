@@ -865,6 +865,11 @@ export class Crews {
     return this.actors.flatMap(a => a.segs.map(s => `${a.kind}${a.id}:${s.kind}@${s.field}`))
   }
 
+  // Each one's day as it is planned: its parts, and when each begins, is at its work and ends (for tools).
+  plans(): string[] {
+    return this.actors.map(a => `${a.kind}${a.id}${a.away ? ' away' : ''} ${a.state}: ${a.segs.map(s => `${s.kind}@${s.field}${s.ride ? ` ${s.machine ?? s.ride}` : ''} ${s.start.toFixed(2)}>${(s.work ?? s.start).toFixed(2)}>${s.end.toFixed(2)} way ${Math.round(new Poly(s.walkTo).length)}+${Math.round(new Poly(s.travel).length)} m, work ${Math.round(new Poly(s.path).length)} m`).join(' | ') || 'nothing'}`)
+  }
+
   // Where each one is in the day they are seen at (for tools).
   clocks(): string[] {
     return this.actors.map(a => `${a.id}:${a.segs.map(s => s.kind).join('+') || '-'} u${a.u.toFixed(2)}${a.way ? ` way${(a.way.t / a.way.T).toFixed(2)}${a.way.cut ? 'c' : ''}` : ''}${a.queue ? ' q' : ''}${a.line ? ` row${a.line.arc.toFixed(0)}/${a.line.poly.length.toFixed(0)}` : ''} g${a.gen}${a.siteKey ? ' at ' + a.siteKey : ''}${a.aboard ? ' aboard' : ''}${a.rig ? ` load${a.rig.state.load} rig@${a.rig.x.toFixed(0)},${a.rig.z.toFixed(0)}` : ''} @${a.x.toFixed(0)},${a.z.toFixed(0)}`)
@@ -985,7 +990,7 @@ export class Crews {
     GRIME.value.set(0.52, 0.42, 0.31).lerp(V.set(0.2, 0.15, 0.11), clamp(env.wet * 1.4 - 0.3, 0, 1))
     const sf: StageFrame = {
       pr, particles: f.particles, dt: f.dt, time: f.time, s: big, snap, wind: env.wind, cold, still: f.reduced, going, stand: this.standOf,
-      pace: this.pace, lane: this.literal ? PACE.truck : clamp(f.dist / 16, 6, 30), literal: this.literal, dry: f.dust > 0.3 && !cold, day: f.daySec,
+      pace: this.pace, lane: this.literal ? PACE.truck : clamp(f.dist / 16, 6, 30), literal: this.literal, live: this.live, dry: f.dust > 0.3 && !cold, day: f.daySec,
       far: (x, z) => clamp((Math.hypot(x - EYE.x, heightAt(x, z) - EYE.y, z - EYE.z) - 110) / 330, 0, 1),
     }
     const mf: MachineFrame = {

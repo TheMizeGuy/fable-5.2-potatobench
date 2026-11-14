@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test'
+import { expect, test } from './base.ts'
 import { mkdirSync } from 'node:fs'
 import { noSidewaysScroll, open, putAway, reach, startSeason } from './helpers.ts'
 
