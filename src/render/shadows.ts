@@ -26,6 +26,7 @@ export class SunShadows {
   private up = new Vector3()
   private c = new Vector3()
   private frame = 0
+  private step = NaN
   // What each cascade was last drawn with. The two wide ones hold nothing that moves by itself; nor does the fine one
   // once it covers the country (people and machines are then a texel or two long), or once it holds a field and
   // nobody is at work (only leaves in the wind, a texel's breadth). Those are drawn again only when the sun or the
@@ -90,8 +91,12 @@ export class SunShadows {
     this.lights[0].color.copy(color)
     this.frame++
     this.redrawn = 0
-    // Steps of radius, so zooming does not make every shadow crawl.
-    const r0 = clamp(12 * Math.pow(1.3, Math.round(Math.log(Math.max(dist, 1) * 0.34 / 12) / Math.log(1.3))), 12, 420)
+    // Steps of radius, so zooming does not make every shadow crawl; and a step once taken is kept until the camera
+    // is well past the line between two, so a view that stands on that line does not flick from one to the other as
+    // it is carried about.
+    const want = Math.log(Math.max(dist, 1) * 0.34 / 12) / Math.log(1.3)
+    if (all || !Number.isFinite(this.step) || Math.abs(want - this.step) > 0.72) this.step = Math.round(want)
+    const r0 = clamp(12 * Math.pow(1.3, this.step), 12, 420)
     this.radius[0] = r0
     this.radius[1] = clamp(r0 * 3.4, 150, 1500)
     this.radius[2] = clamp(this.radius[1] * 3.6, 900, 4500)
@@ -139,6 +144,11 @@ export class SunShadows {
       sh.normalBias = texel * (k === 0 ? 1.1 : 1.6)
     }
     U.uShadowFade.value.set(dist + this.radius[2] * 0.7, dist + this.radius[2] * 0.95)
+  }
+
+  // For the tools: each cascade's radius and where it is centred, as last drawn.
+  info(): { radius: number[]; centre: number[][]; redrawn: number } {
+    return { radius: this.radius.slice(), centre: this.drawn.map(d => [d.c.x, d.c.y, d.c.z]), redrawn: this.redrawn }
   }
 
   dispose(): void {

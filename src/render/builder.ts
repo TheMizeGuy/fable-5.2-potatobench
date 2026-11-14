@@ -388,8 +388,16 @@ export function builtMaterial(): MeshStandardMaterial {
       float bh2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
       // The noise read twice, each turned its own way, so that its own grid never lines up into rules on a wall or a roof.
       vec4 turned(vec2 p) { return 0.5 * (texture2D(uNoise, mat2(0.8, 0.6, -0.6, 0.8) * p) + texture2D(uNoise, mat2(0.6, -0.8, 0.8, 0.6) * p * 1.31 + 0.37)); }
-      // How much of a pattern this fine still shows at this distance.
-      float seen(float c) { return 1.0 - smoothstep(0.3, 0.95, fwidth(c)); }
+      // How much of a pattern this fine still shows at this distance: all of it while a board is five points of the
+      // picture across, none once it is under two. relief: the same for the light its laps catch, which goes sooner
+      // (a lap's edge turned to the sun and thinner than a point of the picture glitters as the view moves).
+      float seen(float c) { return 1.0 - smoothstep(0.2, 0.62, fwidth(c)); }
+      float relief(float c) { return 1.0 - smoothstep(0.12, 0.4, fwidth(c)); }
+      // The share of a point of the picture that a band from a to b of every unit covers, the point being w units
+      // across: a line thinner than the picture's grain is drawn as the grey it makes there, so it never breaks into
+      // steps that crawl along it when the view moves.
+      float bandTo(float x, float a, float b) { return floor(x) * (b - a) + clamp(fract(x) - a, 0.0, b - a); }
+      float band(float c, float a, float b, float soft) { float w = max(fwidth(c), soft); return (bandTo(c + 0.5 * w, a, b) - bandTo(c - 0.5 * w, a, b)) / w; }
     `,
     fragmentColor: /* glsl */ `
       {
@@ -410,47 +418,48 @@ export function builtMaterial(): MeshStandardMaterial {
           streak = turned(vec2(uv.x * 0.31, uv.y * 0.045 + 0.5)).a;
           float board = 0.9 + 0.2 * bh2(vec2(row, joint));
           // each board's foot throws a line of shade on the one below; old paint is thin, and thinnest low down
-          base *= mix(1.0, board * (1.0 - 0.5 * smoothstep(0.76, 0.95, lap)) * (1.0 + 0.1 * smoothstep(0.0, 0.2, lap) * (1.0 - smoothstep(0.2, 0.5, lap))), s);
+          base *= mix(1.0, board, s) * (1.0 - 0.5 * s * band(c, 0.84, 1.0, 0.16)) * (1.0 + 0.1 * s * smoothstep(0.0, 0.2, lap) * (1.0 - smoothstep(0.2, 0.5, lap)));
           float worn = smoothstep(0.52, 0.8, mott * 0.6 + streak * 0.4 + 0.45 * (1.0 - smoothstep(0.0, 1.2, hgt)));
           base = mix(base, (base * vec3(0.7, 0.68, 0.64) + 0.01) * (0.9 + 0.2 * fine), worn * 0.34);
           base = mix(base, base * vec3(0.7, 0.66, 0.56), splash * 0.6);
-          bBump.y = -1.1 * s * smoothstep(0.7, 0.98, lap);
+          bBump.y = -1.1 * relief(c) * band(c, 0.8, 1.0, 0.2);
           bRough = 0.78;
         } else if (fin == ${FIN.boards}) {
           float wide = 0.115;
           float c = uv.x / wide, id = floor(c), fr = fract(c), s = seen(c);
           float tone = 0.8 + 0.4 * bh1(id);
-          float gap = smoothstep(0.88, 0.98, fr) + (1.0 - smoothstep(0.0, 0.05, fr)) * 0.4;
+          float gap = band(c, 0.92, 1.0, 0.08) + 0.4 * band(c, 0.0, 0.03, 0.04);
           float grain = texture2D(uNoise, vec2(uv.x * 3.1, uv.y * 0.16 + id * 0.37)).a;
           base *= mix(1.0, tone * (1.0 - 0.5 * gap), s) * (0.84 + 0.32 * grain);
           // weather greys the foot of every board, and the nails weep
           float grey = smoothstep(0.35, 0.9, (1.0 - smoothstep(0.0, 1.6, hgt)) * 0.7 + mott * 0.5 + bh1(id + 7.0) * 0.25);
           base = mix(base, vec3(0.3, 0.29, 0.27) * (0.7 + 0.5 * grain), grey * 0.34);
           base = mix(base, base * vec3(0.62, 0.56, 0.48), splash * 0.7);
-          bBump.x = s * (smoothstep(0.86, 0.98, fr) - (1.0 - smoothstep(0.0, 0.08, fr))) * 1.2;
+          bBump.x = relief(c) * (band(c, 0.9, 1.0, 0.1) - band(c, 0.0, 0.05, 0.06)) * 1.2;
           bRough = 0.92;
         } else if (fin == ${FIN.shingle}) {
           float c = uv.y / 0.062, course = floor(c), lap = fract(c), s = seen(c);
           float t = uv.x / 0.095 + 0.5 * mod(course, 2.0) + bh1(course) * 0.3, tab = floor(t), tf = fract(t);
           float tone = 0.84 + 0.3 * bh2(vec2(tab, course));
-          float shade = 1.0 - 0.42 * smoothstep(0.0, 0.16, 0.16 - lap) - 0.18 * (1.0 - smoothstep(0.0, 0.06, tf));
-          base *= mix(1.0, tone * shade, s);
+          float across = uv.x / 0.095;
+          float shade = 1.0 - 0.42 * s * band(c, 0.0, 0.1, 0.12) - 0.18 * seen(across) * (1.0 - smoothstep(0.0, 0.06 + fwidth(across), tf));
+          base *= mix(1.0, tone, s * seen(across)) * shade;
           // lichen and moss creep down from the ridge and the damp north side; dark where the rain runs
           float moss = smoothstep(0.7, 0.92, texture2D(uNoise, uv * 0.31 + 0.11).b * 0.7 + fine * 0.2 + streak * 0.2) * step(0.5, vWNormal.y);
           base = mix(base, vec3(0.1, 0.12, 0.07) * (0.7 + 0.6 * fine), moss * 0.3);
           base *= 0.8 + 0.34 * streak;
-          bBump.y = 0.9 * s * (smoothstep(0.0, 0.16, 0.16 - lap) - 0.4);
+          bBump.y = 0.9 * relief(c) * (band(c, 0.0, 0.1, 0.12) - 0.4);
           bRough = 0.94;
         } else if (fin == ${FIN.metal}) {
           float c = uv.x / 0.22, fr = fract(c), s = seen(c);
-          float seam = smoothstep(0.86, 0.94, fr) * (1.0 - smoothstep(0.96, 1.0, fr));
-          base *= mix(1.0, 1.0 + 0.3 * seam - 0.3 * smoothstep(0.94, 1.0, fr) - 0.12 * (1.0 - smoothstep(0.0, 0.08, fr)), s);
+          float seam = band(c, 0.88, 0.96, 0.06);
+          base *= mix(1.0, 1.0 + 0.3 * seam - 0.3 * band(c, 0.96, 1.0, 0.04) - 0.12 * band(c, 0.0, 0.06, 0.06), s);
           // rust starts at the eaves and the seams and runs down the sheet
           float rust = smoothstep(0.42, 0.78, turned(vec2(uv.x * 0.21 + 0.4, uv.y * 0.09)).b * 0.72 + streak * 0.4);
           float amount = clamp(2.0 - open * 2.0, 0.0, 1.0);
           base = mix(base, vec3(0.2, 0.085, 0.04) * (0.7 + 0.6 * fine), rust * amount);
           base *= 0.88 + 0.22 * streak;
-          bBump.x = s * (smoothstep(0.84, 0.9, fr) - smoothstep(0.94, 1.0, fr)) * 1.4;
+          bBump.x = relief(c) * (band(c, 0.86, 0.93, 0.06) - band(c, 0.95, 1.0, 0.05)) * 1.4;
           bRough = mix(0.55, 0.85, rust * amount);
           bMetal = mix(0.35, 0.0, rust * amount);
           bSnow = 0.72;
@@ -458,10 +467,12 @@ export function builtMaterial(): MeshStandardMaterial {
         } else if (fin == ${FIN.brick}) {
           float c = uv.y / 0.036, course = floor(c), s = seen(c);
           float t = uv.x / 0.1 + 0.5 * mod(course, 2.0), id = floor(t);
-          float mortar = max(smoothstep(0.8, 0.94, fract(c)), smoothstep(0.88, 0.97, fract(t)));
-          base = mix(base, mix(base * (0.7 + 0.55 * bh2(vec2(id, course))), vec3(0.42, 0.4, 0.36), mortar * 0.8), s);
+          float along = uv.x / 0.1, sa = seen(along);
+          float bed = band(c, 0.86, 1.0, 0.12), head = (1.0 - smoothstep(0.0, 0.1 + fwidth(along), 1.0 - fract(t))) * sa;
+          float mortar = max(bed, head);
+          base = mix(base, mix(base * (0.7 + 0.55 * bh2(vec2(id, course)) * sa + 0.275 * (1.0 - sa)), vec3(0.42, 0.4, 0.36), mortar * 0.8), s);
           base *= 0.86 + 0.24 * streak;
-          bBump = s * vec2(smoothstep(0.86, 0.97, fract(t)), smoothstep(0.78, 0.94, fract(c))) * 0.8;
+          bBump = relief(c) * vec2(head, bed) * 0.8;
         } else if (fin == ${FIN.stone}) {
           // field stone laid dry or in lime: uneven stones, each its own grey, dark between
           vec2 cell = uv / vec2(0.16, 0.105);
@@ -573,10 +584,11 @@ export function builtMaterial(): MeshStandardMaterial {
         }
       }`,
     // Glass shows the sky, more of it the flatter it is seen; each pane sits a little out of true, so the low sun
-    // flashes from one and then the next; and when it is dark enough to want a lamp, some are lit.
+    // gleams from one a little before the next; and when it is dark enough to want a lamp, some are lit.
     fragmentEmissive: /* glsl */ `
       if (bGlass > 0.0) {
-        vec2 pane = floor(vUvh.xy * max(vColor.xy, vec2(1.0))) + floor(vWorld.xz * 3.0);
+        // (one tilt to a pane, and its own to every window: the tilt is never cut across the middle of a pane)
+        vec2 pane = floor(vUvh.xy * max(vColor.xy, vec2(1.0))) + vColor.z * 41.0;
         vec3 wN = normalize(vWNormal + 0.035 * (vec3(bh2(pane), bh2(pane + 3.1), bh2(pane + 7.7)) - 0.5));
         vec3 wV = normalize(cameraPosition - vWorld);
         vec3 wR = reflect(-wV, wN);
@@ -585,7 +597,9 @@ export function builtMaterial(): MeshStandardMaterial {
         // a pane mirrors the sky, never the sun's own glare: held to a few times the sky's own brightness overhead
         vec3 over = skyIrradiance(vec3(0.0, 1.0, 0.0)) * 0.3183;
         sky = min(sky, over * 2.5 + 0.02);
-        float glint = pow(max(dot(wR, uSunDir), 0.0), 900.0);
+        // The sun on a pane is a gleam that comes and goes softly as the view turns, never a spark that jumps from
+        // one pane to the next between two frames.
+        float glint = 0.16 * pow(max(dot(wR, uSunDir), 0.0), 90.0);
         vec3 lamp = vec3(1.0, 0.62, 0.27) * uLampLum * bLit * (0.55 + 0.6 * texture2D(uNoise, vUvh.xy * 0.9 + pane * 0.13).a);
         totalEmissiveRadiance += bGlass * (sky * fres * (1.0 - 0.6 * bLit) + min(uSunCol, vec3(6.0)) * glint * 0.6 * cloudShade(vWorld) + lamp);
       }`,

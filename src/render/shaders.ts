@@ -238,18 +238,19 @@ float cascadeEdge(vec4 c) {
   vec2 e = min(p.xy, 1.0 - p.xy);
   return min(min(e.x, e.y), 1.0 - p.z);
 }
-// The sun's shadow from the finest cascade that covers this point, blended into the next at its edge.
+// The sun's shadow from the finest cascade that covers this point, blended into the next over the outer tenth of
+// it: wide enough that the line between two never shows as it passes over a house.
 float countyShadow() {
   float fade = 1.0 - smoothstep(uShadowFade.x, uShadowFade.y, length(vWorld - cameraPosition));
   if (fade <= 0.0) return 1.0;
   float sh = 1.0;
-  float w0 = smoothstep(0.0, 0.04, cascadeEdge(vDirectionalShadowCoord[0]));
+  float w0 = smoothstep(0.0, 0.1, cascadeEdge(vDirectionalShadowCoord[0]));
   #if NUM_DIR_LIGHT_SHADOWS > 1
     if (w0 < 1.0) {
-      float w1 = smoothstep(0.0, 0.04, cascadeEdge(vDirectionalShadowCoord[1]));
+      float w1 = smoothstep(0.0, 0.1, cascadeEdge(vDirectionalShadowCoord[1]));
       #if NUM_DIR_LIGHT_SHADOWS > 2
         if (w1 < 1.0) {
-          float w2 = smoothstep(0.0, 0.04, cascadeEdge(vDirectionalShadowCoord[2]));
+          float w2 = smoothstep(0.0, 0.1, cascadeEdge(vDirectionalShadowCoord[2]));
           if (w2 > 0.0) sh = mix(1.0, getShadow(directionalShadowMap[2], directionalLightShadows[2].shadowMapSize, directionalLightShadows[2].shadowIntensity, directionalLightShadows[2].shadowBias, directionalLightShadows[2].shadowRadius, vDirectionalShadowCoord[2]), w2);
         }
       #endif

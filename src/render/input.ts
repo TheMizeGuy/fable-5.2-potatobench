@@ -68,6 +68,8 @@ export function attachInput(
       dragged = false
       consumed = false
       slop = touch ? 11 : 5
+      // A press takes hold of the land where it stands: whatever move it was in ends under the hand.
+      rig.hold(true)
       if (touch) {
         pressTimer = window.setTimeout(() => {
           if (!downAt || dragged || pointers.size !== 1) return
@@ -79,6 +81,7 @@ export function attachInput(
     } else if (pointers.size === 2) {
       pinch = two()
       dragged = true
+      rig.hold(true)
     }
   }
 
@@ -102,16 +105,21 @@ export function attachInput(
       pinch = now
       return
     }
+    let from = was
     if (downAt && !dragged && Math.hypot(p.x - downAt.x, p.y - downAt.y) > slop) {
       dragged = true
+      // The land is held from the point first pressed: the ground under it comes along from the first movement.
+      rig.hold(true)
+      from = downAt
+      if (downAt.button !== 2) rig.grab(downAt.x, downAt.y, vp)
       clearTimeout(pressTimer)
       canvas.style.cursor = 'var(--cur-grabbing, grabbing)'
       if (app.hover !== -1) app.setHover(-1)
       app.point(null)
     }
     if (dragged && downAt && !consumed) {
-      if (downAt.button === 2) { rig.turnBy((p.x - was.x) * 0.0062, vp); rig.leanBy((was.y - p.y) * 0.0035) }
-      else rig.pan(was.x, was.y, p.x, p.y, vp)
+      if (downAt.button === 2) { rig.turnBy((p.x - from.x) * 0.0062, vp); rig.leanBy((from.y - p.y) * 0.0035) }
+      else rig.dragTo(p.x, p.y, vp)
     }
     pointers.set(e.pointerId, p)
   }
@@ -119,6 +127,7 @@ export function attachInput(
   const release = (e: PointerEvent, tap: boolean) => {
     const had = pointers.delete(e.pointerId)
     clearTimeout(pressTimer)
+    if (pointers.size === 0) rig.hold(false)
     if (pointers.size === 1) {
       // One finger of a pinch lifted: the other carries on as a drag, and never as a tap.
       dragged = true

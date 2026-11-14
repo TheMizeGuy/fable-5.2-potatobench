@@ -109,8 +109,8 @@ const ROAM = (() => {
 // Each view is the place looked at, how far off, and the way of looking.
 const view = (x: number, z: number, dist: number, yaw: number, pitch: number, fov: number, tilt: number): Pose => ({ x, z, dist, yaw, pitch, fov, tilt })
 export const TITLE_SHOTS: { s: number; from: Pose; to: Pose }[] = [
-  { s: 12, from: view(228, -46.3, 62, -0.44, 0.17, 30, 0.06), to: view(228.5, -44, 50, -0.36, 0.15, 30, 0.06) },
   { s: 11, from: view(227.3, -36, 52, 2.46, 0.2, 30, 0.08), to: view(227.3, -34.4, 42, 2.34, 0.17, 30, 0.07) },
+  { s: 12, from: view(228, -46.3, 62, -0.44, 0.17, 30, 0.06), to: view(228.5, -44, 50, -0.36, 0.15, 30, 0.06) },
   { s: 10, from: view(228, -54.2, 39, -1.37, 0.1, 34, 0.06), to: view(228, -54.2, 33, -1.24, 0.1, 34, 0.06) },
   { s: 11, from: view(-100.6, -11.7, 34, -1, 0.07, 36, 0.03), to: view(-110.7, -18.2, 30, -1, 0.055, 36, 0.03) },
   { s: 16, from: view(208, -31, 100, -1.1, 0.12, 34, 0.07), to: view(200, -10, 230, -1.04, 0.15, 33, 0.085) },
@@ -152,6 +152,13 @@ export class CameraRig {
   // How far the player has tipped the view over toward straight down, 0 (as each distance sets it) to 1.
   private lean = 0
   private leanGoal = 0
+  // While the player holds the land (a drag or a turn under way) the picture follows the hand exactly: the ground
+  // taken hold of stays under the pointer, and stops when the hand stops. Let go while still moving, it glides on a
+  // little way and comes to rest.
+  private held = false
+  private was = { x: 0, z: 0, yaw: 0 }
+  private vel = { x: 0, z: 0, yaw: 0 }
+  private glide: { x: number; z: number; yaw: number } | null = null
 
   private place(c: PerspectiveCamera, p: Pose, vp: Viewport, sx: number, sy: number): void {
     const ty = profile(clamp(p.z, ROAM.z0, ROAM.z1)) + 0.8
@@ -339,6 +346,7 @@ export class CameraRig {
 
   private byHand(): void {
     if (this.move) { Object.assign(this.goal, this.cur); this.move = null }
+    if (!this.held) this.glide = null
     this.idle = 0
   }
 
@@ -349,12 +357,62 @@ export class CameraRig {
     g.dist = clamp(g.dist, MIN_DIST, Math.max(this.county(vp).dist * 1.15, this.farm(vp).dist * 1.3, 1200))
     this.shape(vp)
     const std = this.at(g)
-    g.pitch = std.pitch
-    g.fov = std.fov
-    g.tilt = std.tilt
+    // A view the game framed may look down more steeply or through another lens than this distance's own. Taking
+    // hold of it does not change how it looks: the difference is kept through a drag or a turn, and is given up only
+    // as the player zooms, so the picture never lurches the moment the hand first moves it.
+    if (!this.kept) this.kept = { pitch: g.pitch - std.pitch, fov: g.fov - std.fov, tilt: g.tilt - std.tilt, dist: g.dist }
+    const k = this.kept
+    const less = Math.exp(-3 * Math.abs(Math.log(g.dist / k.dist)))
+    k.pitch *= less; k.fov *= less; k.tilt *= less; k.dist = g.dist
+    g.pitch = std.pitch + k.pitch
+    g.fov = std.fov + k.fov
+    g.tilt = std.tilt + k.tilt
   }
+  private kept: { pitch: number; fov: number; tilt: number; dist: number } | null = null
 
   // Drag: the ground that was under the pointer stays under it.
+  // The point of the land itself under a pixel: the slope's plane first, then the ground's own height under the ray.
+  private landAt(c: PerspectiveCamera, px: number, py: number, vp: Viewport, at: Pose): { x: number; y: number; z: number } | null {
+    const p = this.ground(c, px, py, vp, at)
+    const o = c.position, d = this.v
+    if (d.y > -1e-3) return null
+    let t = Math.hypot(p.x - o.x, p.z - o.z) / Math.max(1e-6, Math.hypot(d.x, d.z))
+    for (let k = 0; k < 10; k++) {
+      const want = (groundY(o.x + d.x * t, o.z + d.z * t) - o.y) / d.y
+      if (!Number.isFinite(want) || want <= 0) break
+      if (Math.abs(want - t) < 0.02) { t = want; break }
+      t += (want - t) * 0.7
+    }
+    return { x: o.x + d.x * t, y: o.y + d.y * t, z: o.z + d.z * t }
+  }
+
+  // A left-drag takes hold of the land under the pointer, and carries that very point with it: wherever the pointer
+  // goes while the button is down, the ground first pressed is under it.
+  private grip: { x: number; y: number; z: number } | null = null
+  grab(px: number, py: number, vp: Viewport): void {
+    this.place(this.probe, this.goal, vp, this.shift.x, this.shift.y)
+    this.grip = this.landAt(this.probe, px, py, vp, this.goal)
+  }
+
+  dragTo(px: number, py: number, vp: Viewport): void {
+    this.byHand()
+    const g = this.grip
+    if (!g) return
+    // The view keeps its bearing and its height over the land: the camera is moved level until the ray through the
+    // pointer passes through the point held. Twice, since its height follows the ground it comes over.
+    for (let k = 0; k < 2; k++) {
+      this.place(this.probe, this.goal, vp, this.shift.x, this.shift.y)
+      this.v.set((px / vp.w) * 2 - 1, -(py / vp.h) * 2 + 1, 0.5).unproject(this.probe).sub(this.probe.position).normalize()
+      const o = this.probe.position, d = this.v
+      if (d.y > -1e-3) return
+      const t = (g.y - o.y) / d.y
+      if (!(t > 0) || t > this.goal.dist * 8 + 600) return
+      this.goal.x += g.x - d.x * t - o.x
+      this.goal.z += g.z - d.z * t - o.z
+    }
+    this.bound(vp)
+  }
+
   pan(fromX: number, fromY: number, toX: number, toY: number, vp: Viewport): void {
     this.byHand()
     this.place(this.probe, this.goal, vp, this.shift.x, this.shift.y)
@@ -384,6 +442,25 @@ export class CameraRig {
     this.bound(vp)
   }
 
+  // The player takes hold of the land, or lets it go.
+  hold(on: boolean): void {
+    if (on === this.held) return
+    this.held = on
+    if (on) {
+      // Taken hold of where it is: whatever it was still easing toward is dropped.
+      if (this.move) this.move = null
+      Object.assign(this.goal, this.cur)
+      this.leanGoal = this.lean
+      this.glide = null
+      this.was = { x: this.goal.x, z: this.goal.z, yaw: this.goal.yaw }
+      this.vel = { x: 0, z: 0, yaw: 0 }
+    } else {
+      // (only a flick glides: a hand that slowed to a stop leaves the land exactly where it put it)
+      const fast = Math.hypot(this.vel.x, this.vel.z) > 0.2 * this.goal.dist || Math.abs(this.vel.yaw) > 1.2
+      this.glide = fast ? { ...this.vel } : null
+    }
+  }
+
   // Tips the view over toward straight down (positive) or back toward the horizon.
   leanBy(amount: number): void {
     this.idle = 0
@@ -406,12 +483,14 @@ export class CameraRig {
 
   // A timed move to a view. `still`: jump there.
   moveTo(to: Pose, still: boolean, ms = MOVE_MS): void {
+    this.kept = null
     Object.assign(this.goal, to)
     if (still) { Object.assign(this.cur, to); this.move = null } else this.move = { from: { ...this.cur }, to: { ...to }, t: 0, ms }
   }
 
   // If a timed move is under way, send it somewhere else without starting it again.
   retarget(to: Pose): void {
+    this.kept = null
     Object.assign(this.goal, to)
     if (this.move) Object.assign(this.move.to, to)
   }
@@ -431,10 +510,28 @@ export class CameraRig {
       blend(this.move.from, this.move.to, easeMove(u), this.cur)
       if (u >= 1) this.move = null
     } else {
-      const k = still ? 1 : 1 - Math.exp(-dt / 0.085)
+      const g = this.goal
+      if (this.held && dt > 0) {
+        // How fast the hand is carrying it, smoothed over a few frames, for the glide when it lets go.
+        const a = Math.min(1, dt / 0.07)
+        this.vel.x += ((g.x - this.was.x) / dt - this.vel.x) * a
+        this.vel.z += ((g.z - this.was.z) / dt - this.vel.z) * a
+        this.vel.yaw += (turn(this.was.yaw, g.yaw) / dt - this.vel.yaw) * a
+        this.was = { x: g.x, z: g.z, yaw: g.yaw }
+      } else if (this.glide && !still) {
+        g.x += this.glide.x * dt
+        g.z += this.glide.z * dt
+        g.yaw += this.glide.yaw * dt
+        const keep = Math.exp(-dt / 0.14)
+        this.glide.x *= keep; this.glide.z *= keep; this.glide.yaw *= keep
+        if (Math.hypot(this.glide.x, this.glide.z) < 0.004 * g.dist && Math.abs(this.glide.yaw) < 0.02) this.glide = null
+        this.bound(vp)
+        this.idle = 0
+      }
+      const k = still || this.held || this.glide ? 1 : 1 - Math.exp(-dt / 0.085)
       blend(this.cur, this.goal, k, this.cur)
     }
-    this.lean += (this.leanGoal - this.lean) * (still ? 1 : 1 - Math.exp(-dt / 0.12))
+    this.lean += (this.leanGoal - this.lean) * (still || this.held ? 1 : 1 - Math.exp(-dt / 0.12))
     const ks = still ? 1 : 1 - Math.exp(-dt / 0.16)
     this.shift.x += (this.shiftGoal.x - this.shift.x) * ks
     this.shift.y += (this.shiftGoal.y - this.shift.y) * ks

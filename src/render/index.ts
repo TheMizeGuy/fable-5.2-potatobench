@@ -42,8 +42,8 @@ import { Poly, type Reveal } from './work.ts'
 
 const DAY_ANIM_S = 3.4          // how long a paused day's work takes to play out
 // The tractor in the opening: how far down the farm road it is as the film starts (metres), and its pace. It comes
-// out from behind the big house in the first shot and is well down the lane by the last.
-const TITLE_MEET_M = 46, TITLE_PACE = 2.2
+// out from behind the big house in the second shot and is well down the lane by the last.
+const TITLE_MEET_M = 23, TITLE_PACE = 2.2
 // With motion reduced the opening is one still: the first shot, part way in.
 const TITLE_STILL_U = 6 / TITLE_FILM_S
 const HOUR_HOLD_S = 6           // the least time between a morning's light and an evening's
@@ -1423,6 +1423,12 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       scale: { K, S, KV },
       // Where a point of the ground is on the screen (for tools that draw over the picture).
       screenOf: (x: number, z: number, up = 0) => screenAt(x, groundY(x, z) + up, z),
+      // Where the farmhouse stands on the screen, and how the sun's shadow maps lie (for the tool that looks for light that will not hold still).
+      house: (up = 4) => screenAt(HOUSE.x, groundY(HOUSE.x, HOUSE.z) + up, HOUSE.z),
+      atHouse(dist: number, pitch = 0.3) { framing = 'free'; rig.moveTo(rig.complete({ x: HOUSE.x, z: HOUSE.z, dist, pitch }), true) },
+      shadowInfo: () => shadows.info(),
+      // The point of the ground under a pixel (for tools that check a drag holds the land).
+      groundUnder: (x: number, y: number) => groundAt(x, y),
       // Hold the opening at a share of its film (0 its first frame, 1 its last); below 0 lets it run.
       titleAt(u: number) { titleFixed = u },
       // For working on the light: set parts of the day's air by hand; they hold until the game next changes the day.
@@ -1678,7 +1684,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     }
     // Whatever a tool changes is drawn at once, as what a player changes is.
     const changing = hooks as unknown as Record<string, (...a: unknown[]) => unknown>
-    for (const name of ['settle', 'seek', 'view', 'titleAt', 'tune', 'home', 'tier', 'show', 'showChild', 'shadowsOn', 'force', 'cascade', 'emptyCascade', 'adapt', 'uncap', 'tryWithout', 'trees']) {
+    for (const name of ['settle', 'seek', 'view', 'atHouse', 'titleAt', 'tune', 'home', 'tier', 'show', 'showChild', 'shadowsOn', 'force', 'cascade', 'emptyCascade', 'adapt', 'uncap', 'tryWithout', 'trees']) {
       const call = changing[name]
       changing[name] = (...a) => { pacing.wake(); const r = call(...a); seenGen++; return r }
     }
