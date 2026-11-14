@@ -12,6 +12,9 @@ export type Speed = 0 | 1 | 2 | 3
 // done, a tractor crossing a field and coming back. At the second a day takes four seconds, and at the third a
 // season goes by in under two minutes. Each is named for what it is against the first, in round figures.
 export const DAY_SECONDS = 210
+// A day this long or longer at the clock's speed (seconds) is watched as it is worked, and counted by the hour.
+export const LONG_DAY_S = 30
+export const DAY_HOURS = 11
 // ('brisk' is the clock the game had before days were long: four seconds a day at its first speed. Tests of
 // everything that is not the long day itself run on it, so a test that waits for a day waits four seconds.)
 const LADDERS = { long: [0, 1 / DAY_SECONDS, 0.25, 2], brisk: [0, 0.25, 0.75, 2] }
@@ -727,16 +730,20 @@ export class App {
       // The morning: the day's standing orders are given as the day begins, not when it is over.
       if (!c.season.clock) { this.do({ t: 'work', to: 0 }); if (this.speed === 0 || !c.season || seasonDone(c)) return }
       this.dayProgress += (Math.min(dtMs, 250) / 1000) * DAYS_PER_SECOND[this.speed] * this.pace
-      // A test dig watched through a long day: when the day as it will go (worked out for the land to show) has it
-      // done, the farm is brought up to then, so its tray comes when the hill is seen lifted and not at the day's end.
-      const ahead = this.ahead && this.ahead.rev === this.revision ? this.ahead.c.season?.clock?.log : undefined
-      const at = c.season.clock?.at ?? 0
-      if (ahead && this.dayProgress < 1 && ahead.some(x => x.kind === 'sample' && x.to > at + 1e-4 && x.to <= this.dayProgress)) {
-        const events = this.upToNow()
-        this.dirty = true
-        this.emit({ type: 'change' })
-        this.paceAfterDay(c, events)
-        if (this.speed === 0) return
+      // A long day is counted as it goes: by the hour (a working day has eleven) the farm's own count has the work
+      // done so far, so the work list, a person's card and what the day brings (a field planted, barrels to haul)
+      // keep up with what is seen; and a test dig is answered the moment the day as it will go has it done.
+      if (this.daySeconds() >= LONG_DAY_S && this.dayProgress < 1) {
+        const at = c.season.clock?.at ?? 0
+        const ahead = this.ahead && this.ahead.rev === this.revision ? this.ahead.c.season?.clock?.log : undefined
+        const dug = !!ahead && ahead.some(x => x.kind === 'sample' && x.to > at + 1e-4 && x.to <= this.dayProgress)
+        if (dug || Math.floor(this.dayProgress * DAY_HOURS) / DAY_HOURS > at + 1e-6) {
+          const events = this.upToNow()
+          this.dirty = true
+          this.emit({ type: 'change' })
+          this.paceAfterDay(c, events)
+          if (this.speed === 0) return
+        }
       }
       let guard = 0
       while (this.dayProgress >= 1 && guard++ < 3 && this.speed > 0) {

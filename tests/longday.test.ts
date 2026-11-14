@@ -37,9 +37,10 @@ describe('a long day, watched as it is worked', () => {
     for (const s of r.atWork) expect(s.seen, `${s.kind} in field ${s.field}, ${(s.hours * 100).toFixed(0)}% of a day`).toBeGreaterThan(s.hours > 0.15 ? 0.9 : 0.4)
     // The order given at eleven: whoever takes it sets out then, and the planter is not moved by the new plan.
     expect(r.orders).toEqual(['rocks on field 1 at 0.45'])
-    expect(r.replans.length).toBe(1)
-    expect(r.replans[0].moved).toBeLessThan(1)
-    expect(r.plans.find(p => p.includes('(again)'))).toMatch(/hand1 work: rocks@1 0\.45>/)
+    // (the day is counted by the hour, and laid out again each time: nobody is moved by that either)
+    expect(r.replans.length).toBeGreaterThan(5)
+    for (const p of r.replans) expect(p.moved, `laid out again at ${p.at.toFixed(2)}`).toBeLessThan(1)
+    expect(r.plans.find(p => p.includes('(again)') && p.includes('rocks@1'))).toMatch(/hand1 work: rocks@1 0\.45>/)
   }, 120_000)
 
   it('hilling, digging and hauling, a walk through the crop: at a pace that reads, with no jump', () => {

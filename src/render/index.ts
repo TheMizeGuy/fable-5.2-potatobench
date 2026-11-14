@@ -4,7 +4,7 @@ import {
   BackSide, Color, CustomBlending, DoubleSide, FloatType, FrontSide, Group, OneFactor, PCFShadowMap, Raycaster, Scene, Triangle, Vector2, Vector3, WebGLRenderer, WebGLRenderTarget, ZeroFactor,
   type Material, type Mesh, type MeshDepthMaterial, type MeshStandardMaterial, type Object3D, type Side,
 } from 'three'
-import { DAYS_PER_SECOND, DAY_SECONDS, type App } from '../game/app.ts'
+import { DAYS_PER_SECOND, DAY_SECONDS, LONG_DAY_S, type App } from '../game/app.ts'
 import type { CreateFieldView, FieldView, Place, Thing } from '../game/contracts.ts'
 import { FIELD_COUNT, HILLS } from '../sim/index.ts'
 import { CameraRig, HOME_FIELD, MIN_DIST, MOVE_MS, pitchFor, TITLE_FILM_S, titleShade, type Pose, type TierName, type Viewport } from './camera.ts'
@@ -41,8 +41,6 @@ import { Weather } from './weather.ts'
 import { Poly, type Reveal } from './work.ts'
 
 const DAY_ANIM_S = 3.4          // how long a paused day's work takes to play out
-// A day this long or longer at the clock's speed (seconds) is watched as it is worked.
-const LONG_DAY_S = 30
 // The light through a long day: from this share of the day, this hour (-1 the morning's low sun, 0 noon, 1 the evening's).
 const LONG_HOURS: [number, number][] = [[0, MORNING], [0.1, -0.72], [0.28, -0.38], [0.5, 0.3], [0.68, 0.6], [0.86, EVENING], [0.985, NIGHT]]
 // The tractor in the opening: how far down the farm road it is as the film starts (metres), and its pace. It comes

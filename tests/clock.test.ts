@@ -146,6 +146,34 @@ describe('the clock', () => {
     expect(job?.done ?? 9).toBeLessThan(0.5 * 1.6)
   })
 
+  it('a long day is counted by the hour: the work list has the morning\'s work by mid-morning', () => {
+    setDays('long')
+    try {
+      const app = new App(loadWorld())
+      app.settings.pauseOnAlerts = false
+      app.newGame(undefined, 11)
+      app.do({ t: 'begin' })
+      const c = c0(app)
+      for (let n = 0; n < 200 && !app.needs().some(x => x.need?.act === 'plant'); n++) { c.incidents = []; app.do({ t: 'day' }) }
+      app.order('plant', { fields: [app.needs().findIndex(x => x.need?.act === 'plant')] })
+      const day = c.season!.day
+      app.setSpeed(1)
+      const seen: number[] = []
+      for (let k = 0; k < 20 * 105 && c.season!.day === day; k++) {
+        c.incidents = []
+        app.tick(50)
+        if (app.speed === 0) app.setSpeed(1)
+        const j = c.season!.jobs.find(x => x.kind === 'plant' && x.done > 0)
+        if (j && app.dayProgress > 0.45 && app.dayProgress < 0.5) seen.push(j.done / j.need)
+      }
+      expect(c.season!.day, 'half a day gone').toBe(day)
+      expect(seen.length).toBeGreaterThan(0)
+      expect(Math.max(...seen), 'the planting done by half past eleven').toBeGreaterThan(0.2)
+      // No further than an hour behind the clock.
+      expect(c.season!.clock!.at).toBeGreaterThan(app.dayProgress - 1 / 11 - 0.01)
+    } finally { setDays('brisk') }
+  })
+
   it('a test dig ordered on a long day is answered when it is done, not when the day is over', () => {
     setDays('long')
     try {

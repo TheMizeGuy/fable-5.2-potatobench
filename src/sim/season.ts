@@ -837,7 +837,8 @@ function work(world: World, c: Campaign, s: Season, t: Turn, job: Job, d: Day, o
   }
   if (u.rig === 'tractor') t.tractor = true
   const rate = workRate(c, s, u, job)
-  const cap = job.kind === 'dig' ? digCap(c, s, t, job, rate) : t.left
+  // (the share of the rest of the day the frost leaves for digging; of this stretch of the day, no more than it holds)
+  const cap = Math.min(t.left, job.kind === 'dig' ? digCap(c, s, t, job, rate) : t.left)
   if (job.kind === 'dig' && cap < 0.05 && cap < t.left) { stopDig(c, s, u, job, out); return }
   const use = Math.min(cap * rate, job.need - job.done)
   const time = Math.min(t.left, use / rate)

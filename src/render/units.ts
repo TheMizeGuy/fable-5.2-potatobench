@@ -700,6 +700,8 @@ export class Crews {
   private planLive(snap: Snapshot, shown: HillDisplay[][], samples: Map<number, number>, live: { daySec: number; day: number; shares: Map<string, number>; now?: number }): PendingReveal[] {
     this.stopped = false
     this.sync(snap)
+    // (who the day had nothing for, in the plan this one replaces)
+    const free = new Set(this.actors.filter(a => a.state !== 'work' && !a.aboard).map(a => a.id))
     this.goals(snap)
     for (const a of this.actors) { a.led = false; if (a.lead) { a.lead = false; a.segs = []; a.way = a.waySeg = a.came = null } }
     this.name(snap)
@@ -717,7 +719,7 @@ export class Crews {
       for (const r of this.rigs) this.rig0.set(r.key, { x: r.x, z: r.z })
     }
     // (someone the day had nothing for until now is planned from where they are, not from where the morning had them)
-    if (!fresh) for (const a of this.actors) if (!a.segs.length && !a.aboard) this.from0.set(a.id, { x: a.x, z: a.z })
+    if (!fresh) for (const a of this.actors) if (free.has(a.id)) this.from0.set(a.id, { x: a.x, z: a.z })
     const from: CrewFrom[] = this.actors.map(a => ({ id: a.id, slot: a.slot, farmer: a.kind === 'farmer', goal: a.goal, at: this.from0.get(a.id) ?? { x: a.x, z: a.z }, working: this.site0.get(a.id) ?? '', holding: a.rig?.key ?? '', arrives: false }))
     const rigAt = (key: string) => {
       const was = this.rig0.get(key)
@@ -753,6 +755,8 @@ export class Crews {
     const out: PendingReveal[] = []
     this.actors.forEach((a, k) => {
       if (a.away || a.leaving) plans[k] = []
+      // (with nothing to do and at home in the dooryard: about it as they please, not walked back to one spot)
+      if (a.state === 'idle' && a.home && !works(plans[k]) && Math.hypot(a.x - a.about.x, a.z - a.about.z) < 45) plans[k] = []
       a.queue = null
       this.take(a, { segs: plans[k], gen: this.gen, arrives: false, waited: false, keep: !!snap.units.find(w => w.id === a.id)?.rig }, false)
       a.lastT = 0
