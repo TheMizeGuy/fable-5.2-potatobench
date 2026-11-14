@@ -407,7 +407,8 @@ async function cases(page: Page, t: string): Promise<{ list: Case[]; missing: st
   return { list, missing }
 }
 
-for (const [w, h] of SIZES) {
+// (at 2560 by 1440 a card has one place at the right and is tied to nothing: e2e/interface.spec.ts, "at a wide desk")
+for (const [w, h] of SIZES.filter(([x]) => x < 2560)) {
   for (const t of TIERS) {
     test(`a card opens beside the thing clicked, tied to it, ${w} by ${h}, the ${t} tier`, async ({ page, isMobile, browserName }) => {
       test.skip(isMobile || browserName !== 'chromium', 'the desk rule, read through the 3D view\'s hooks')

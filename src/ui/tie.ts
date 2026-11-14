@@ -26,7 +26,7 @@ export interface Tie {
 
 // tags: the other tags and people's pins on the land now, which a card hides as few of as it can.
 // dock: at a desk with room for it, the one place a card stands (its right edge, and the room from top to bottom).
-export interface Land { win: Box; blocks: Box[]; tags?: () => (Box & { weight?: number })[]; dock?: { right: number; top: number; bottom: number } }
+export interface Land { win: Box; blocks: Box[]; tags?: () => (Box & { weight?: number })[]; dock?: () => { right: number; top: number; bottom: number } }
 
 export interface Ties {
   field(): Tie | null
@@ -414,17 +414,12 @@ export function anchored(ctx: Ctx, card: HTMLElement, o: { mark?: boolean } = {}
   seen?.observe(card)
 
   function frame(mode: Mode, quiet = false): void {
-    const live = !!tie && !card.hidden && !quiet
-    if (!live || card.classList.contains('out')) {
-      hide(line, dot, notch, show, mark)
-      if (card.hidden) { placed = null; side = null }
-      return
-    }
-    const t = tie!.at()
-    const dock = mode === 'dock' ? ties().land().dock : undefined
+    // One place for every card, so it is never looked for and never lies over what it is about: its top right corner
+    // under the boards at the right, as tall as it wants down to the bar, scrolling past that. Tied to nothing, so
+    // it stands there whether or not what it is about can be seen. (Its room is read each frame: the board above it
+    // grows and shrinks with what it says.)
+    const dock = mode === 'dock' && !card.hidden && !card.classList.contains('out') ? ties().land().dock?.() : undefined
     if (dock) {
-      // One place for every card, so it is never looked for and never lies over what it is about: its top right
-      // corner under the boards at the right, as tall as it wants down to the bar, scrolling past that.
       hide(line, dot, notch, show, mark)
       card.classList.remove('hop')
       placed = null
@@ -437,6 +432,13 @@ export function anchored(ctx: Ctx, card: HTMLElement, o: { mark?: boolean } = {}
       delete card.dataset.aside
       return
     }
+    const live = !!tie && !card.hidden && !quiet
+    if (!live || card.classList.contains('out')) {
+      hide(line, dot, notch, show, mark)
+      if (card.hidden) { placed = null; side = null }
+      return
+    }
+    const t = tie!.at()
     if (mode !== 'float' && mode !== 'dock') {
       if (drawn.card) { card.style.transform = ''; drawn.card = '' }
       if (drawn.max) { card.style.maxHeight = ''; drawn.max = '' }

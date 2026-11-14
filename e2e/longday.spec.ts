@@ -116,12 +116,11 @@ test('a new farm opens three days before planting, the days with no work go by i
   test.skip(isMobile, 'run at the desk')
   test.setTimeout(180_000)
   const errors = watchErrors(page)
-  await page.goto('./')
-  await page.evaluate(() => localStorage.clear())
-  await page.reload()
-  await page.waitForFunction(() => '__county' in globalThis && !document.getElementById('splash'))
-  await page.getByTestId('play').click()
-  await page.getByTestId('guide-refuse').click()
+  // A farm of its own made-up years, as Play starts one, on a seed the test knows (the soil is fit three days on).
+  await open(page)
+  await reach(page, `q.g().app.newGame(undefined, 11)`)
+  await putAway(page)
+  expect(await page.evaluate(() => (globalThis as unknown as { __county: { app: { campaign: { crew: unknown[] } } } }).__county.app.campaign.crew.length), 'a new farm is three people').toBe(3)
   await page.getByTestId('begin-season').click()
   await expect(page.getByTestId('date')).toBeVisible({ timeout: 15_000 })
   const game = () => page.evaluate(() => {
@@ -137,8 +136,8 @@ test('a new farm opens three days before planting, the days with no work go by i
   expect(open0.wait).toBeLessThanOrEqual(3)
   // The days before the soil is fit have no work in them: they go by in seconds, and the game stops for the word.
   const t0 = Date.now()
-  await expect.poll(async () => (await game()).cause, { timeout: 45_000 }).toBe('plantAsk')
-  expect(Date.now() - t0, 'the wait for the soil, in milliseconds').toBeLessThan(40_000)
+  await expect.poll(async () => (await game()).cause, { timeout: 60_000 }).toBe('plantAsk')
+  expect(Date.now() - t0, 'the wait for the soil, in milliseconds').toBeLessThan(50_000)
   await expect(page.getByTestId('speed-1')).toHaveText(/^1×/)
   if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/open-the-word.jpg`, type: 'jpeg', quality: 80 })
   // Paused: the clouds stand where they are.

@@ -1147,9 +1147,10 @@ test('a press on the pause key just after an answer is read as go on, once; the 
 test('at a wide desk a field\'s card and a person\'s stand in one place at the right: under the boards, above the menu bar, over no tag, tied to nothing', async ({ page, isMobile }) => {
   test.skip(isMobile, 'the desk')
   const errors = watchErrors(page)
-  await page.setViewportSize({ width: 1920, height: 1080 })
+  // (the owner's desk: drawn at one and a half times, 1707 by 960 in the interface's own pixels)
+  await page.setViewportSize({ width: 2560, height: 1440 })
   await startSeason(page)
-  await reach(page, `q.run(q.day(7, 6), ['hill', 'spray']); const { app } = q.g(); app.setSpeed(0); app.campaign.incidents = []; app.select(-1); app.selectUnit(-1)`)
+  await reach(page, `q.run(q.day(7, 6), ['hill', 'spray']); const { app } = q.g(); app.campaign.cash += 5000; app.do({ t: 'hire', kind: 'hand' }); app.setSpeed(0); app.campaign.incidents = []; app.select(-1); app.selectUnit(-1)`)
   await putAway(page)
   const laid = (sel: string) => page.evaluate(s => {
     const box = (e: Element) => { const r = e.getBoundingClientRect(); return { l: r.left, t: r.top, r: r.right, b: r.bottom } }
@@ -1158,7 +1159,7 @@ test('at a wide desk a field\'s card and a person\'s stand in one place at the r
     if (!card || !vis(card)) return null
     const c = box(card)
     const meets = (o: { l: number; t: number; r: number; b: number }) => Math.min(c.r, o.r) - Math.max(c.l, o.l) > 1 && Math.min(c.b, o.b) - Math.max(c.t, o.t) > 1
-    const over = [...document.querySelectorAll('#ui .mainbar, #ui .queue, #ui .timebook, #ui .topbar .mount, #ui .paused, #ui [data-testid="running"], #ui .plate-layer .tag-wrap:not(.gone) .tag, #ui .notes .alert')].filter(vis).filter(e => meets(box(e))).map(e => e.className.toString().slice(0, 30))
+    const over = [...document.querySelectorAll('#ui .mainbar, #ui .queue, #ui .timebook, #ui .topbar .mount, #ui .paused, #ui [data-testid="running"], #ui .plate-layer .tag-wrap:not(.gone) .tag, #ui .notes .alert')].filter(vis).filter(e => meets(box(e))).map(e => `${e.className.toString().slice(0, 30)} at ${Object.values(box(e)).map(Math.round).join(',')} under the card at ${Object.values(c).map(Math.round).join(',')}`)
     const bar = document.querySelector('#ui .mainbar'), bank = document.querySelector('#ui .topbar .bank > .mount')
     const ties = [...document.querySelectorAll('#ui .tether, #ui .tether-end, #ui .tether-notch')].filter(vis).length
     const caption = [...document.querySelectorAll('#ui .plate-layer .tag-wrap.named .hover-name')].filter(vis).length
@@ -1180,7 +1181,8 @@ test('at a wide desk a field\'s card and a person\'s stand in one place at the r
   }
   expect(new Set(places).size, `one place for every field's card: ${places.join(' ')}`).toBe(1)
   await game(page, `app.select(-1)`)
-  await page.getByTestId('unit-0').click()
+  const hand = await game<number>(page, `app.campaign.crew.find(u => u.kind === 'hand').id`)
+  await page.getByTestId(`unit-${hand}`).click()
   await page.waitForTimeout(500)
   const p = (await laid('.person-card'))!
   expect(p).not.toBeNull()

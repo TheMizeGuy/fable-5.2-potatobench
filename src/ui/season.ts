@@ -604,7 +604,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       for (const x of mounts) { const r = x.getBoundingClientRect(); blocks.push({ left: r.left, top: Math.min(0, r.top), right: r.right, bottom: r.bottom }) }
       line = 8
     }
-    landNow = { win: { left: 8, top: line, right: innerWidth - 8, bottom: innerHeight - 8 }, blocks, dock: docking() ? dockRoom() : undefined }
+    landNow = { win: { left: 8, top: line, right: innerWidth - 8, bottom: innerHeight - 8 }, blocks, dock: dockRoom }
     return landNow
   }
   // What a card hides as little of as it can: the field tags, the yards' tags and people's pins.
