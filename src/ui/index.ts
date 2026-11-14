@@ -417,6 +417,14 @@ export const mountHud: MountHud = (root, app, view, sound) => {
     frame(dt: number) {
       if (held && performance.now() - heldAt > 1500) held = false
       sinceTick += dt
+      // The hour, on a day long enough to have hours: a working day from six to five.
+      const hourEl = root.querySelector<HTMLElement>('[data-testid="hour"]')
+      if (hourEl) {
+        const long = app.screen === 'season' && app.daySeconds() >= 30 && !!app.campaign?.season?.clock
+        const hr = long ? 6 + Math.min(10, Math.floor(app.dayProgress * 11)) : -1
+        const said = hr < 0 ? '' : ` ${hr % 12 || 12} ${hr < 12 ? 'AM' : 'PM'}`
+        if (hourEl.textContent !== said) hourEl.textContent = said
+      }
       guided.frame(dt)
       laps.end('interface: guide')
       notes.hush(papers.isOpen() || !!app.holding)

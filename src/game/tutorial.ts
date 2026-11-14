@@ -283,14 +283,14 @@ export const LESSONS: Lesson[] = [
     point: l => ({ unit: farmer(l) }),
   },
   {
-    // The long waits of a year are the player's to shorten: once, with planting done and the days going slowly, the
-    // tip points at the fastest speed. It goes when that speed has been used.
+    // A day at the first speed is minutes long, there to be watched: once planting has begun the tip says the days can
+    // be run faster, and points at the next speed. It goes when a faster speed has been used.
     id: 'fast', part: 'year', name: 'Run the days faster', hint: true,
-    when: (l, g) => inSeason(l) && firstYear(l) && g.passed('plantday') && !unplanted(l) && l.speed > 0 && l.speed < 3 && call(l) < 0 && wordAt(l) < 0 && !g.has('faster'),
-    done: (l, g, since) => g.has('faster') || (!!since && l.speed >= 3),
-    ask: l => `Nothing to decide for a while. ${by(l, `Click ${SPEED_X[3]}`, `Tap ${SPEED_X[3]}`, 'Press +')} to run fast.`,
+    when: (l, g) => inSeason(l) && firstYear(l) && g.passed('plantday') && l.speed === 1 && call(l) < 0 && wordAt(l) < 0 && !g.has('faster'),
+    done: (l, g, since) => g.has('faster') || (!!since && l.speed >= 2),
+    ask: l => `Watch the work, or run the days faster: ${by(l, `click ${SPEED_X[2]}`, `tap ${SPEED_X[2]}`, 'press +')}.`,
     why: () => 'The game stops itself when you have a decision.',
-    point: () => ({ testid: ['speed-3', 'speed-cycle'] }),
+    point: () => ({ testid: ['speed-2', 'speed-cycle'] }),
   },
   {
     id: 'list', part: 'year', name: 'The work list', read: true, reveals: ['list'],

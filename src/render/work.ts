@@ -330,7 +330,7 @@ export function crossings(field: number, p0: number, p1: number, n: number, from
 // next morning, or after an order changed the day, goes on from where the machine stands. The lanes are fewer than
 // the real passes (a day is shown in minutes: seventy real crossings cannot be), and each one's ground is the band
 // about it.
-export const LANES: Record<string, number> = { plant: 6, hill: 4, spray: 2, kill: 2, water: 4, dig: ROWS }
+export const LANES: Record<string, number> = { plant: 6, hill: 3, spray: 2, kill: 2, water: 4, dig: ROWS }
 const lanePolys = new Map<string, Poly>()
 export function lanePoly(field: number, kind: string): Poly {
   const key = `${field}|${kind}`
@@ -380,8 +380,15 @@ export function dugHills(done: number): boolean[] {
 // A long day's timing. Nominal speeds on the way to work, metres a second: a brisk walk, a tractor on the lane, the
 // truck. The way takes its time at these when the day leaves room, never more than this share of what there is.
 export const LIVE_PACE = { walk: 2.2, tractor: 12, truck: 16 }
-const WAY_SHARE = 0.4
-export interface LiveDay { daySec: number }
+const WAY_SHARE = 0.3
+// The day breaks on people already on their way: of the way to the first work of someone's day, only as much is
+// gone in the day as its time before the work allows at pace, and no less than this (seconds). The night between two
+// days covers the rest of it.
+const DAWN_S = 9
+// now: the time of day the plan is made at (0 as the day begins). was: the part of someone's day, in the plan this
+// one replaces, that began the same work at the same hour: its way keeps the times it had. dawn: where the day
+// breaks on someone (and their machine), when that is not where the evening left them.
+export interface LiveDay { daySec: number; now?: number; was?: (id: number, kind: string, field: number, from: number) => Seg | undefined; dawn?: (id: number, at: Pt, machine: string) => void }
 
 function scoutWalk(field: number, flip: boolean): Pt[] {
   const f = FIELDS[field]
@@ -522,13 +529,14 @@ export function planDay(snap: Snapshot, shown: HillDisplay[][], crews: CrewFrom[
           // (a long day: as many loads as its hours hold at a pace on the lane that reads, standing to load and unload)
           if (live && w.kind === 'haul' && hours) {
             const trip = new Poly(route({ x: spot.x, z: spot.z }, cropDoor(snap, w.field).stop)).length
-            loads = Math.max(1, Math.round(((hours[1] - hours[0]) * live.daySec) / ((2 * trip) / (ride === 'truck' ? LIVE_PACE.truck : LIVE_PACE.tractor) + 26)))
+            // (hours too short for a load to go in: it is loaded where it stands, and goes in with the day after's)
+            loads = Math.round(((hours[1] - hours[0]) * live.daySec) / (((2 * trip) / (ride === 'truck' ? LIVE_PACE.truck : LIVE_PACE.tractor)) / 0.8))
           }
           segs.push({ kind: w.kind, field: w.field, walker: !ride, ride, walkTo, travel, path: [{ x: spot.x, z: spot.z }], reveals: [], start: 0, end: 0, site: wet !== 'tank' ? `${w.field}|${wet}` : key, lit: literal, from: 0, loads, machine: ride ? w.machine : undefined, hours: ride || live ? hours : undefined })
           if (!there) at = { x: spot.x, z: spot.z }
           if (ride) {
             // a day's hauling ends at the potato house door
-            at = machine = w.kind === 'haul' ? cropDoor(snap, w.field).stop : at
+            at = machine = w.kind === 'haul' && !(live && loads === 0) ? cropDoor(snap, w.field).stop : live && w.kind === 'haul' ? { x: spot.x, z: spot.z } : at
           }
           continue
         }
@@ -629,14 +637,37 @@ export function planDay(snap: Snapshot, shown: HillDisplay[][], crews: CrewFrom[
     // the way takes no more than a share of what there is and the work begins as they come.
     if (live) {
       let t = 0
+      const now = live.now ?? 0
+      const first = segs[0]
+      // The first work of the day, as the day begins: the day breaks on them already on the last of the way to it.
+      if (first && first.hours && now <= 1e-6 && first.kind !== 'travel') {
+        const v = first.ride === 'truck' ? LIVE_PACE.truck : first.ride ? LIVE_PACE.tractor : LIVE_PACE.walk
+        const lw = first.walkTo.length ? new Poly(first.walkTo).length : 0, trip = new Poly(first.travel)
+        const room = Math.max(DAWN_S, first.hours[0] * live.daySec)
+        if (lw / LIVE_PACE.walk + trip.length / v > room * 1.15 && trip.length > 1) {
+          first.walkTo = []
+          first.travel = trip.slice(Math.max(0, trip.length - room * v), trip.length)
+          live.dawn?.(crew.id, first.travel[0], first.ride ? first.machine ?? '' : '')
+        }
+      }
       for (const s of segs) {
         const lw = s.walkTo.length ? new Poly(s.walkTo).length : 0, lt = new Poly(s.travel).length
         const need = (lw / LIVE_PACE.walk + lt / (s.ride === 'truck' ? LIVE_PACE.truck : s.ride ? LIVE_PACE.tractor : LIVE_PACE.walk)) / live.daySec
         if (s.hours) {
           const end = Math.max(t + 2e-3, s.hours[1])
-          s.start = Math.max(t, Math.min(s.hours[0], s.hours[0] - need))
-          s.work = Math.max(s.hours[0], Math.min(s.start + need, s.start + (end - s.start) * WAY_SHARE))
-          if (lw + lt < 0.5) s.work = Math.max(s.start, Math.min(s.hours[0], end - 1e-3))
+          const had = live.was?.(crew.id, s.kind, s.field, s.hours[0])
+          if (had && had.work !== undefined && had.start >= t - 1e-6) {
+            // (the same work at the same hour as the plan before had it: its way is the way already being gone)
+            s.start = had.start
+            s.work = Math.min(had.work, end - 1e-3)
+          } else {
+            // (work the day did not have before this moment is set out for now, not earlier)
+            const from = had ? t : Math.max(t, Math.min(now, s.hours[0]))
+            s.start = Math.max(from, Math.min(s.hours[0], s.hours[0] - need))
+            // (short hours at the end of a way: half of them may go on it)
+            s.work = Math.max(s.hours[0], Math.min(s.start + need, s.start + (end - s.start) * (end - s.start < 0.15 ? 0.5 : WAY_SHARE)))
+            if (lw + lt < 0.5) s.work = Math.max(s.start, Math.min(s.hours[0], end - 1e-3))
+          }
           s.end = end
         } else {
           // (a way with no work at its end: on through what is left of the day, or as long as it takes)

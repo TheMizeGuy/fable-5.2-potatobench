@@ -887,7 +887,7 @@ async function guidedYear(page: Page, at: (note: string) => Promise<boolean | vo
       }
       // A tip is never pressed: one that only tells goes by itself. What a tip points at to be done is done, as a
       // player would: the stamp, the key that skips a wait, the key that runs the days.
-      if (s.target.startsWith('badge-') || ['goal-faster', 'paused-go', 'speed-0', 'speed-toggle', 'speed-3', 'speed-cycle', 'end-season'].includes(s.target)) await page.locator(`#ui [data-testid="${s.target}"]`).first().click().catch(() => {})
+      if (s.target.startsWith('badge-') || ['goal-faster', 'paused-go', 'speed-0', 'speed-toggle', 'speed-2', 'speed-3', 'speed-cycle', 'end-season'].includes(s.target)) await page.locator(`#ui [data-testid="${s.target}"]`).first().click().catch(() => {})
       await page.waitForTimeout(250)
       continue
     }

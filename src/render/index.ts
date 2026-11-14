@@ -9,7 +9,7 @@ import type { CreateFieldView, FieldView, Place, Thing } from '../game/contracts
 import { FIELD_COUNT, HILLS } from '../sim/index.ts'
 import { CameraRig, HOME_FIELD, MIN_DIST, MOVE_MS, pitchFor, TITLE_FILM_S, titleShade, type Pose, type TierName, type Viewport } from './camera.ts'
 import { Clearing } from './clearing.ts'
-import { EVENING, MORNING, copyEnv, easeEnv, envTarget, light, makeEnv, makeLight } from './env.ts'
+import { EVENING, MORNING, NIGHT, copyEnv, easeEnv, envTarget, light, makeEnv, makeLight } from './env.ts'
 import { FarHills } from './far.ts'
 import { createFallbackView } from './fallback.ts'
 import { Fields, MARK_WIDE, PIXEL, UI_GAIN, type HillDisplay } from './fields.ts'
@@ -43,6 +43,8 @@ import { Poly, type Reveal } from './work.ts'
 const DAY_ANIM_S = 3.4          // how long a paused day's work takes to play out
 // A day this long or longer at the clock's speed (seconds) is watched as it is worked.
 const LONG_DAY_S = 30
+// The light through a long day: from this share of the day, this hour (-1 the morning's low sun, 0 noon, 1 the evening's).
+const LONG_HOURS: [number, number][] = [[0, MORNING], [0.2, -0.6], [0.46, 0.56], [0.74, EVENING], [0.985, NIGHT]]
 // The tractor in the opening: how far down the farm road it is as the film starts (metres), and its pace. It comes
 // out from behind the big house in the second shot and is well down the lane by the last.
 const TITLE_MEET_M = 23, TITLE_PACE = 2.2
@@ -566,7 +568,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
           lastSample.set(ev.field, { hill: ev.data.hill, weights: Array.isArray(ev.data.weights) ? ev.data.weights : [], marks: Array.isArray(ev.data.marks) ? ev.data.marks : [] })
         }
         // (what was still to be shown is planned again: the same ground, if the day still has it worked)
-        pending = crews.plan(snapshot(app, ahead), shown, hills, new Set(), true, { daySec: DAY_SECONDS, day: next.seasonDay, shares: longShares })
+        pending = crews.plan(snapshot(app, ahead), shown, hills, new Set(), true, { daySec: DAY_SECONDS, day: next.seasonDay, shares: longShares, now: app.dayProgress })
         dayT = app.dayProgress
         digDir.clear()
         for (const s of crews.segments()) if (s.kind === 'dig' && !digDir.has(s.field) && s.path.length > 1) { const p = new Poly(s.path).at(0); digDir.set(s.field, { dx: p.dx, dz: p.dz }) }
@@ -683,6 +685,16 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   let hourSince = -99
   function aimHour(now: boolean): void {
     const season = snap.mode === 'season'
+    // A long day has its own light: the morning's, higher toward noon, over the top to the afternoon's, the evening's,
+    // and as the day turns the night, out of which the next morning comes. The sun stands at each and is moved to the
+    // next in some seconds (below): it does not creep.
+    if (longDay && season && heldHour === null && !reduced) {
+      const p = longKey && app.campaign?.season?.day === longFor ? app.dayProgress : 0
+      let h = MORNING
+      for (const [from, hour] of LONG_HOURS) if (p >= from) h = hour
+      envT.hour = h
+      return
+    }
     const want = dayHour < 0 && (!season || app.speed <= 1)
     if (want !== morning && (now || !season || app.speed === 0 || time - hourSince > HOUR_HOLD_S)) { morning = want; hourSince = time }
     // Between changes the sun holds still: a sun that crept would make every fine shadow on the land crawl.
@@ -893,7 +905,8 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     else if (dayT < 1) dayT = Math.min(1, app.speed > 0 ? Math.max(dayT + dt / DAY_ANIM_S * 0.25, app.dayProgress) : dayT + dt / DAY_ANIM_S * replayPace)
     if (crews.stageHold >= 0 && snap.mode === 'season' && !longDay) dayT = Math.min(dayT, crews.stageHold)
     aimHour(false)
-    easeEnv(env, envT, 1 - Math.exp(-dt / 1.1), reduced ? dt * 4 : dt)
+    // (a long day's sun is moved from one of its hours to the next in some seconds, not in one)
+    easeEnv(env, envT, 1 - Math.exp(-dt / 1.1), reduced ? dt * 4 : longDay && snap.mode === 'season' ? dt * 0.3 : dt)
     const pace = (reduced ? STILL : 1) * live
     const wx = Math.cos(env.windDir), wz = Math.sin(env.windDir)
     U.uTime.value = ambient

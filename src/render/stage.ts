@@ -205,7 +205,7 @@ export class Stage {
     m.walking = dist > (m.walking ? 0.06 : 0.4) * f.s
     if (m.walking) {
       // (a long way to their own part of the work is hurried over)
-      const step = Math.min(dist, (f.going ? Math.max(1.5 * f.s * (1 - 0.4 * w.tired), dist > 14 ? Math.min(dist * 0.9, f.pace * 1.5) : 0) : 0) * f.dt)
+      const step = Math.min(dist, (f.going ? Math.max(1.5 * f.s * (1 - 0.4 * w.tired), dist > 14 ? Math.min(dist * 0.9, f.live ? 3.6 : f.pace * 1.5) : 0) : 0) * f.dt)
       m.x += (dx / dist) * step
       m.z += (dz / dist) * step
       w.heading = Math.atan2(dz, dx)
@@ -711,10 +711,11 @@ export class Stage {
     // to make in its share of that at a pace that reads is cut, as the way to any work is: away from one end, in to
     // the other.
     const literal = (f.literal || !!f.live) && w.lit
-    const q0 = literal ? 0.22 : LAP_STAND, q1 = LAP_DOOR, q2 = q1 + q0
+    // (a long day's laps are mostly the drive: a tenth of each standing to load, a tenth to unload)
+    const q0 = f.live && literal ? 0.1 : literal ? 0.22 : LAP_STAND, q1 = LAP_DOOR, q2 = q1 + q0
     const lapS = Math.min(6, Math.max(2.6, 1.5 * f.day)), legS = lapS * (q1 - q0), reach = f.lane * legS
     // (a long day's hauling: so many loads over its hours, the last of them off at the door as the hours end)
-    if (literal && f.live) j.t = frac(Math.min(0.99999, w.w) * (Math.max(1, w.loads) - 1 + q2))
+    if (literal && f.live) j.t = w.loads < 1 ? Math.min(0.999, w.w) * q0 : frac(Math.min(0.99999, w.w) * (w.loads - 1 + q2))
     else if (literal) j.t = frac(Math.min(0.99999, w.w) * Math.max(1, w.loads))
     // (the clock stopped on a day that was running: the load in hand is seen in to the door, and no more)
     else if (f.going) j.t = f.literal ? (j.t < q2 ? Math.min(q2, j.t + f.dt / lapS) : j.t) : frac(j.t + f.dt / lapS)

@@ -621,7 +621,7 @@ export class Crews {
   // digs: the fields whose digging the interface is waiting to see out (their crop has just been weighed).
   // running: whether the clock was running when the day was counted (a question the day brought may have stopped it
   // since: that day is still one seen as the days before it were, not a day stepped with the clock stopped).
-  plan(snap: Snapshot, shown: HillDisplay[][], samples: Map<number, number>, digs: Set<number> = new Set(), running?: boolean, live?: { daySec: number; day: number; shares: Map<string, number> }): PendingReveal[] {
+  plan(snap: Snapshot, shown: HillDisplay[][], samples: Map<number, number>, digs: Set<number> = new Set(), running?: boolean, live?: { daySec: number; day: number; shares: Map<string, number>; now?: number }): PendingReveal[] {
     if (live) return this.planLive(snap, shown, samples, live)
     if (running !== undefined) this.stopped = !running
     this.sync(snap)
@@ -697,29 +697,51 @@ export class Crews {
   // A long day's plan: today as it will go (and, when an order changes the day, as it now will). Everyone's day is
   // laid out from where they and the machines stood as the day began, so a plan made again part way through has the
   // same morning in it, and they are where it has them at this time of day.
-  private planLive(snap: Snapshot, shown: HillDisplay[][], samples: Map<number, number>, live: { daySec: number; day: number; shares: Map<string, number> }): PendingReveal[] {
+  private planLive(snap: Snapshot, shown: HillDisplay[][], samples: Map<number, number>, live: { daySec: number; day: number; shares: Map<string, number>; now?: number }): PendingReveal[] {
     this.stopped = false
     this.sync(snap)
     this.goals(snap)
     for (const a of this.actors) { a.led = false; if (a.lead) { a.lead = false; a.segs = []; a.way = a.waySeg = a.came = null } }
     this.name(snap)
     this.gen++
-    if (this.liveDay !== live.day) {
+    const fresh = this.liveDay !== live.day
+    if (fresh) {
       this.liveDay = live.day
       this.dayStart = live.shares
       this.from0.clear()
       this.rig0.clear()
+      this.site0.clear()
       for (const a of this.actors) this.from0.set(a.id, a.aboard && a.rig ? { x: a.rig.x, z: a.rig.z } : { x: a.x, z: a.z })
+      // (the staged work each stood at as the day began: they carry on at it where they stand)
+      for (const a of this.actors) if (a.siteKey) this.site0.set(a.id, a.siteKey)
       for (const r of this.rigs) this.rig0.set(r.key, { x: r.x, z: r.z })
     }
-    const from: CrewFrom[] = this.actors.map(a => ({ id: a.id, slot: a.slot, farmer: a.kind === 'farmer', goal: a.goal, at: this.from0.get(a.id) ?? { x: a.x, z: a.z }, working: '', holding: a.rig?.key ?? '', arrives: false }))
+    const from: CrewFrom[] = this.actors.map(a => ({ id: a.id, slot: a.slot, farmer: a.kind === 'farmer', goal: a.goal, at: this.from0.get(a.id) ?? { x: a.x, z: a.z }, working: this.site0.get(a.id) ?? '', holding: a.rig?.key ?? '', arrives: false }))
     const rigAt = (key: string) => {
       const was = this.rig0.get(key)
       if (was) return was
       const r = this.rigs.find(x => x.key === key && !x.broken)
       return r ? { x: r.x, z: r.z } : null
     }
-    const plans = planDay(snap, shown, from, samples, snap.farm.pond < this.pondWas - 0.02, key => this.dayStart.get(key) ?? 0, true, rigAt, { daySec: live.daySec })
+    // (the plan this one replaces, for the ways already being gone; and where the day breaks on each)
+    const before = new Map(this.actors.map(a => [a.id, fresh ? [] : a.segs]))
+    const was = (id: number, kind: string, field: number, h0: number) => before.get(id)?.find(s => s.kind === kind && s.field === field && !!s.hours && Math.abs(s.hours[0] - h0) < 2e-3)
+    const dawn = (id: number, at: Pt, machine: string) => {
+      const a = this.actors.find(x => x.id === id)
+      if (!a || !fresh) return
+      this.from0.set(id, { x: at.x, z: at.z })
+      a.x = at.x; a.z = at.z; a.sx = NaN; a.fade = 0.1
+      const r = machine ? this.rigs.find(x => x.key === machine && !x.broken) : undefined
+      if (r) { this.rig0.set(r.key, { x: at.x, z: at.z }); r.x = at.x; r.z = at.z; r.sx = NaN; r.fade = 0.1 }
+    }
+    const plans = planDay(snap, shown, from, samples, snap.farm.pond < this.pondWas - 0.02, key => this.dayStart.get(key) ?? 0, true, rigAt, { daySec: live.daySec, now: fresh ? 0 : live.now ?? 0, was, dawn })
+    // Back to work staged at one place: to where they stood at it, not to the middle of it.
+    plans.forEach((segs, k) => {
+      for (const s of segs) {
+        const p = s.site && s.kind !== 'haul' && s.travel.length > 1 ? this.stage.placeOf(s.site, this.actors[k].id) : null
+        if (p) { s.travel[s.travel.length - 1] = p; s.path = [p] }
+      }
+    })
     this.pondWas = snap.farm.pond
     for (const u of snap.units) for (const w of u.worked) {
       const key = `${w.field}|${w.kind}`
@@ -1209,6 +1231,7 @@ export class Crews {
   private dayStart = new Map<string, number>()
   private from0 = new Map<number, Pt>()
   private rig0 = new Map<string, Pt>()
+  private site0 = new Map<number, string>()
   // where someone coming in to work is first seen: on the farm road, short of the dooryard
   private roadIn = new Poly(route(OFF_FARM, GATE))
   private roadAt(slot: number): Pt { const e = this.roadIn.at(Math.max(0, this.roadIn.length - 30 - 2.4 * (slot % 4))); return { x: e.x + 0.5 * (slot % 2), z: e.z } }
@@ -1592,7 +1615,7 @@ export class Crews {
     // (up to pace over a second or so, and down from it)
     const ramp = Math.min(0.4, 1.2 / T)
     const ease = (x: number) => (x < ramp ? (x * x) / (2 * ramp * (1 - ramp)) : x > 1 - ramp ? 1 - ((1 - x) * (1 - x)) / (2 * ramp * (1 - ramp)) : (x - ramp / 2) / (1 - ramp))
-    if (need <= T * 1.9) {
+    if (need <= T * 1.35) {
       // each part of it has the time its own pace asks, in proportion
       const e = ease(clamp(q, 0, 1)), ws = need > 0 ? tw / need : 0
       at(e < ws ? (e / Math.max(1e-6, ws)) * lw : lw + ((e - ws) / Math.max(1e-6, 1 - ws)) * lt)
@@ -1600,7 +1623,7 @@ export class Crews {
     }
     // cut: the first of it and the last of it at pace, half the time each
     const t = clamp(q, 0, 1) * T, half = T / 2
-    const pace = (s: number) => (s < lw ? LIVE_PACE.walk : vr) * 1.5
+    const pace = (s: number) => (s < lw ? LIVE_PACE.walk : vr) * 1.2
     if (t < half) {
       let s = 0, left = t
       // (on foot first, then the drive)

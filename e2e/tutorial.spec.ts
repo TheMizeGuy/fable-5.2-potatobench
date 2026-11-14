@@ -185,7 +185,7 @@ test('a first year with tips: they never stop the game, never need a press, neve
     was = n
     if (s.note !== (tips.at(-1)?.went ? '' : tips.at(-1)?.id ?? '')) {
       if (tips.length && !tips.at(-1)!.went) tips.at(-1)!.went = Date.now()
-      if (s.note) { tips.push({ id: s.note, words: s.noteWords, came: Date.now(), went: 0, asks: s.target.startsWith('badge-') || ['goal-faster', 'end-season', 'paused-go', 'speed-0', 'speed-toggle', 'speed-3', 'speed-cycle'].includes(s.target) || s.keys.includes('guide-act') }); console.log(`${s.note} (day ${s.day}, ${s.noteWords} words, speed ${n.speed})`) }
+      if (s.note) { tips.push({ id: s.note, words: s.noteWords, came: Date.now(), went: 0, asks: s.target.startsWith('badge-') || ['goal-faster', 'end-season', 'paused-go', 'speed-0', 'speed-toggle', 'speed-2', 'speed-3', 'speed-cycle'].includes(s.target) || s.keys.includes('guide-act') }); console.log(`${s.note} (day ${s.day}, ${s.noteWords} words, speed ${n.speed})`) }
     }
     if (s.sold > 0) break
     if (s.ticketSell) { ticketAt ||= Date.now(); await act('ticket', `[data-testid="${s.ticketSell}"]`); await page.waitForTimeout(300); continue }
@@ -199,7 +199,7 @@ test('a first year with tips: they never stop the game, never need a press, neve
     }
     if (s.asking.includes('tray')) { await page.getByTestId('sample-close').click().catch(() => {}); continue }
     if (s.note && s.keys.includes('guide-act')) { await act(`${s.note}: its own key`, '[data-testid="guide-slip"] [data-testid="guide-act"]'); await page.waitForTimeout(250); continue }
-    if (s.note && (s.target.startsWith('badge-') || ['goal-faster', 'end-season', 'paused-go', 'speed-0', 'speed-toggle', 'speed-3', 'speed-cycle'].includes(s.target))) { await act(`${s.note}: what it points at`, `[data-testid="${s.target}"]`); await page.waitForTimeout(250); continue }
+    if (s.note && (s.target.startsWith('badge-') || ['goal-faster', 'end-season', 'paused-go', 'speed-0', 'speed-toggle', 'speed-2', 'speed-3', 'speed-cycle'].includes(s.target))) { await act(`${s.note}: what it points at`, `[data-testid="${s.target}"]`); await page.waitForTimeout(250); continue }
     if (s.done) { await act('close out', '[data-testid="end-season"]'); await page.waitForTimeout(400); continue }
     // Nothing asked: the player uses the key the game offers for a wait, or sets the days going.
     const waiting = s.phase === 'season' && !s.note && !s.asking.some(a => a !== 'toast') && (n.speed === 0 || (n.skip && n.speed < 3))

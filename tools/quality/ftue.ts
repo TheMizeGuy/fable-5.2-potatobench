@@ -77,7 +77,7 @@ while (Date.now() - t0 < limit) {
     else if (s.target === 'begin-season') did = await act('start the season', 'game', '[data-testid="begin-season"]')
     else if (s.target === 'goal-faster') did = await act('skip ahead', 'game', '[data-testid="goal-faster"]')
     else if (s.target === 'paused-go' || s.target === 'speed-0' || s.target === 'speed-toggle') { await key(`${s.tip}: run the days (Space)`, 'Space'); did = true }
-    else if (s.target === 'speed-3' || s.target === 'speed-cycle') did = await act(`${s.tip}: the fastest speed`, 'game', `[data-testid="${s.target}"]`)
+    else if (s.target === 'speed-2' || s.target === 'speed-3' || s.target === 'speed-cycle') did = await act(`${s.tip}: a faster speed`, 'game', `[data-testid="${s.target}"]`)
     else if (Date.now() - tipSince > 1500 + s.tipWords * 120 && (s.tipKeys.includes('guide-noted') || s.tipKeys.includes('guide-pass')) && s.speed === 0 && /tip from the county agent/i.test(s.why)) did = (await act(`${s.tip}: Got it`, 'tutorial', '[data-testid="guide-slip"] [data-testid="guide-noted"]')) || (await act(`${s.tip}: Got it`, 'tutorial', '[data-testid="guide-slip"] [data-testid="guide-pass"]'))
   }
   if (!did && s.phase === 'plan' && s.begin && !s.tip && !s.offer && !s.card) did = await act('start the season', 'game', '[data-testid="begin-season"]')
