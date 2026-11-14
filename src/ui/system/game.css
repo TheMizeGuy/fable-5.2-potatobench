@@ -90,9 +90,9 @@
 .topbar[data-layout='narrow'] .season-track .ph { display: inline; color: var(--ink); }
 /* the goal slip, a button: open it for the goals; beside it while the soil warms, the key that lets the weeks go */
 .topbar .goal-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
-/* (the row takes the board's width and never gives it one: a slip and its key too wide for the board go on two
-   lines, and the board keeps the width its date and forecast give it) */
-.topbar:not([data-layout='narrow']):not([data-layout='short']) .goal-row { width: 0; min-width: 100%; }
+/* (a slip and its key wider than the board stand out past it along the top, over the sky: the board itself keeps
+   the width its date and forecast give it, and does not stretch to theirs) */
+.topbar:not([data-layout='narrow']):not([data-layout='short']) .almanac > .mount { width: fit-content; max-width: 100%; }
 /* a goal not yet in reach: said on plain paper, without the fist */
 .topbar .goal.later { --w-side: var(--card); grid-template-columns: 1fr auto; background-color: var(--paper); }
 .topbar .goal.later .goal-t { font-weight: 400; font-style: italic; }
