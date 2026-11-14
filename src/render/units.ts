@@ -1531,7 +1531,8 @@ export class Crews {
           const along = fill ? fill.arc : w * path.length
           ride(path.at(along))
           rig.state.working = w > 0 && w < 1 ? 1 : 0
-          arc = w >= 1 ? Infinity : along
+          // (the last of a stretch's ground is done as the stretch ends, not a frame after the day has turned)
+          arc = w >= 0.99 ? Infinity : along
           if (live && seg.laneFrom !== undefined) {
             // (down from the seat as it stops, and back in it a second before it goes on)
             const kk = fill && fill.stop >= 0 ? clamp((fill.k - 0.05) / 0.83, 0, 1) : 0
@@ -1659,7 +1660,7 @@ export class Crews {
       const now = !!fill && Math.abs(st.arc - (seg.laneFrom ?? 0) - (seg.stops?.[fill.stop] ?? -1e9)) < 0.5
       // (the planter's hoppers are 2.2 m behind the tractor; its driver stands beside them, on the side the land is
       // looked at from, clear of the turn into the next lane)
-      const rx = -st.dz, rz = st.dx, side = 1
+      const rx = -st.dz, rz = st.dx, side = rz >= 0 ? 1 : -1
       const hx = st.x - st.dx * 1.02 * S, hz = st.z - st.dz * 1.02 * S
       const mx = hx + rx * side * 2.0, mz = hz + rz * side * 2.0
       if (now) out = { x: mx, z: mz, heading: Math.atan2(st.dz, st.dx), side: -side }

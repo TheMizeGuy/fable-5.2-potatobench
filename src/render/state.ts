@@ -168,8 +168,8 @@ export function snapshot(app: App, of?: sim.Campaign): Snapshot {
       if (sown?.[h]) look = SEED
       if (killed?.[h] && look.kind === 'plant') look = { ...look, kind: 'dead', yellow: 1 }
       if (lifted && fs && h < fs.digDone !== lifted[h]) {
-        // (the row as the digger has it: this hill's ground is that of the hill the same way in from the row's other end)
-        const m = Math.floor(h / sim.COLS) * sim.COLS + (sim.COLS - 1 - (h % sim.COLS))
+        // (the digger has it otherwise than the count: a hill it has yet to come to looks as the field's last row does)
+        const m = sim.HILLS - sim.COLS + (h % sim.COLS)
         look = lifted[h] ? DUG : sim.hillLook(fs, m)
       }
       if (look.kind !== 'bare') planted = true

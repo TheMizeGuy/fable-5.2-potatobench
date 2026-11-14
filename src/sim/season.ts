@@ -765,7 +765,7 @@ function workRate(c: Campaign, s: Season, u: Unit, job: Job): number {
 }
 
 // Orders others can lend a hand at; the machine ones are helped on foot, as field work.
-const HELPED: JobKind[] = ['plant', 'hill', 'dig', 'haul', 'fell', 'rocks', 'brush', 'build']
+const HELPED: JobKind[] = ['plant', 'dig', 'haul', 'fell', 'rocks', 'brush', 'build']
 
 function helpSkill(kind: JobKind): Skill {
   const skill = jobSkill(kind)
@@ -1227,9 +1227,13 @@ function workTo(world: World, c: Campaign, s: Season, d: Day, out: GameEvent[], 
   if (!s.clock) dayStart(c, s, out)
   const clock = s.clock!
   const end = Math.min(1, to)
-  if (end - clock.at <= EPS) return
-  runCrews(world, c, s, d, out, clock.at, end)
-  clock.at = end
+  // The day is worked an hour at a time (DAY_STRETCHES to a day) however far it is asked to be worked: so a day
+  // counted in one step, a day counted as it goes and a day worked out ahead on a copy all come to the same day.
+  while (end - clock.at > EPS) {
+    const next = Math.min(end, (Math.floor(clock.at * P.DAY_STRETCHES + 1e-6) + 1) / P.DAY_STRETCHES)
+    runCrews(world, c, s, d, out, clock.at, next)
+    clock.at = next
+  }
 }
 
 // The end of each person's day: experience in what they worked at, tiredness, mood, and whether they have had enough.

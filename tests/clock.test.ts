@@ -243,10 +243,10 @@ describe('the clock', () => {
       for (let k = 0; k < 20 * 205 && !events.includes('sample'); k++) { c.incidents = []; app.today(); app.tick(50); if (app.speed === 0) app.setSpeed(1) }
       expect(events, `day ${c.season!.day} (was ${day}) at ${app.dayProgress.toFixed(2)}, jobs ${c.season!.jobs.map(j => j.kind + '@' + j.field).join(' ')}, ahead ${JSON.stringify(app.today()?.season?.clock?.log)}`).toContain('sample')
       expect(c.season!.day, 'the same day').toBe(day)
-      // (when the day as it will go has the dig done: within a frame of then)
+      // (at the hour's count after the dig is done: within two hours of the day's eleven)
       const done = Math.max(...(c.season!.clock?.log ?? []).filter(x => x.kind === 'sample').map(x => x.to))
       expect(app.dayProgress).toBeGreaterThanOrEqual(done)
-      expect(app.dayProgress).toBeLessThan(done + 0.01)
+      expect(app.dayProgress).toBeLessThan(done + 2 / 11 + 0.01)
       expect(app.dayProgress).toBeLessThan(0.95)
     } finally { setDays('brisk') }
   })

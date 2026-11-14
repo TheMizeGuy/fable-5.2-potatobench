@@ -116,6 +116,8 @@ export const UNIT_JOBS: Record<UnitKind, JobKind[]> = {
 export const TRAVEL_DAYS_PER_UNIT = 0.0016     // a day's work lost per ground unit driven: a neighbouring field about 0.03
 export const PICK_WINDOW = 3                   // a crew chooses among this many of the orders it could take next
 export const PICK_LAG = 0.07                   // days of travel a crew would rather drive than skip one place down the list: more than any two home fields are apart
+// The hours of a working day: the crews' work is counted an hour at a time.
+export const DAY_STRETCHES = 11
 export const HELPERS_MOST = 3                  // people with nothing to do who help at one order at most
 export const HELP_RATE = 0.35                  // each helper at an order's place adds this share to the rate it is worked at
 export const HAND_WAGE = 380                   // dollars a month

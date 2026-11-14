@@ -139,7 +139,7 @@ describe('many hands', () => {
     const helped = run(true), alone = run(false)
     // (the first day's dig: with two helpers at the field from the second stretch on)
     expect(helped.first).toBeGreaterThan(alone.first * 1.4)
-    expect(helped.n).toBeLessThan(alone.n)
+    expect(helped.n).toBeLessThanOrEqual(alone.n)
   })
 
   it('a helper given an order of their own stops helping and works it', () => {

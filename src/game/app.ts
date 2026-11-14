@@ -1,6 +1,6 @@
 // The running game: owns the campaign, the clock, the selection and the orders, saving, and tells the views what changed.
 import {
-  advise, apply, awaitsWord, climateWorld, createCampaign, fieldInfo, fieldNeeds, FIELD_NAMES, held, isFarmYear, plantingIn, plantReady, plantWordGiven, seasonDone, startYears, unitBlock, FARM_YEAR0, PLANT_WORD_DAYS,
+  advise, apply, awaitsWord, climateWorld, createCampaign, DAY_STRETCHES, fieldInfo, fieldNeeds, FIELD_NAMES, held, isFarmYear, plantingIn, plantReady, plantWordGiven, seasonDone, startYears, unitBlock, FARM_YEAR0, PLANT_WORD_DAYS,
   type Advice, type Campaign, type Cmd, type GameEvent, type JobKind, type Phase, type Result, type World,
 } from '../sim/index.ts'
 import type { Pointing, Thing } from './contracts.ts'
@@ -18,7 +18,7 @@ export type Speed = 0 | 1 | 2 | 3
 export const DAY_SECONDS = 60
 // A day this long or longer at the clock's speed (seconds) is watched as it is worked, and counted as it goes.
 export const LONG_DAY_S = 10
-export const DAY_HOURS = 11
+export const DAY_HOURS = DAY_STRETCHES
 // ('brisk' is the clock the game had before days were long: four seconds a day at its first speed, every day the
 // same length. Tests of everything that is not the long day itself run on it, so a test that waits for a day waits
 // four seconds.)
@@ -355,10 +355,12 @@ export class App {
   }
 
   // Brings the farm up to this moment of a day already begun: the crews' work so far today is done. What it brought.
-  private upToNow(): GameEvent[] {
+  // hour: to the last full hour (the count kept as the day goes), not to the moment (an order given).
+  private upToNow(hour = false): GameEvent[] {
     const c = this.campaign, s = c?.season
-    if (!c || c.phase !== 'season' || !s?.clock || this.dayProgress <= s.clock.at + 0.002) return []
-    const events = apply(this.world, c, { t: 'work', to: Math.min(1, this.dayProgress) }).events
+    const to = hour ? Math.floor(this.dayProgress * DAY_HOURS + 1e-9) / DAY_HOURS : Math.min(1, this.dayProgress)
+    if (!c || c.phase !== 'season' || !s?.clock || to <= s.clock.at + 0.002) return []
+    const events = apply(this.world, c, { t: 'work', to }).events
     this.revision++
     this.ahead = null
     if (events.length) {
@@ -773,18 +775,15 @@ export class App {
       const quiet = this.quietNow(c)
       this.hurrying = quiet
       this.dayProgress += (Math.min(dtMs, 250) / 1000) * (quiet ? 1 / QUIET_S![this.speed] : DAYS_PER_SECOND[this.speed] * this.pace)
-      // A long day is counted as it goes: by the hour (a working day has eleven) the farm's own count has the work
-      // done so far, so the work list, a person's card and what the day brings (a field planted, barrels to haul)
-      // keep up with what is seen; and a test dig is answered the moment the day as it will go has it done.
-      if (this.daySeconds() >= LONG_DAY_S && this.dayProgress < 1) {
-        const at = c.season.clock?.at ?? 0
-        const ahead = this.ahead && this.ahead.rev === this.revision ? this.ahead.c.season?.clock?.log : undefined
-        const dug = !!ahead && ahead.some(x => x.kind === 'sample' && x.to > at + 1e-4 && x.to <= this.dayProgress)
-        // (by the hour, and no oftener than every three seconds of play)
+      // A watched day is counted as it goes: by the hour (and no oftener than every three seconds of play) the farm's
+      // own count has the work done so far, so the work list, a person's card and what the day brings (a field
+      // planted, barrels to haul, a test dig's tray) keep up with what is seen. Always to the hour: the crews' work is
+      // counted an hour at a time, and a count part way through one would not be the day that was worked out ahead.
+      if (this.daySeconds() >= LONG_DAY_S && this.dayProgress < 1 && !quiet) {
         this.sinceCount += Math.min(dtMs, 250)
-        if (dug || (!quiet && this.sinceCount >= 3000 && Math.floor(this.dayProgress * DAY_HOURS) / DAY_HOURS > at + 1e-6)) {
+        if (this.sinceCount >= 3000 && Math.floor(this.dayProgress * DAY_HOURS) / DAY_HOURS > (c.season.clock?.at ?? 0) + 1e-6) {
           this.sinceCount = 0
-          const events = this.upToNow()
+          const events = this.upToNow(true)
           this.dirty = true
           this.emit({ type: 'change' })
           this.paceAfterDay(c, events)

@@ -332,8 +332,9 @@ export function crossings(field: number, p0: number, p1: number, n: number, from
 // next morning, or after an order changed the day, goes on from where the machine stands. The lanes are fewer than
 // the real passes (a day is shown in minutes: seventy real crossings cannot be), and each one's ground is the band
 // about it.
-// (an even number of them where the machine goes on to another field: it ends at the end it began from, by the lane)
-export const LANES: Record<string, number> = { plant: 4, hill: 2, spray: 1, kill: 1, water: 4, dig: ROWS }
+// (an even number of them where the machine goes on to another field: it ends at the end it began from, by the lane;
+// few enough that a machine with a full crew helping, at twice its own rate, still goes at a pace that reads)
+export const LANES: Record<string, number> = { plant: 2, hill: 2, spray: 1, kill: 1, water: 4, dig: ROWS / 2 }
 const lanePolys = new Map<string, Poly>()
 const laneEnds = new Map<string, number[]>()
 // A planter is filled at the headland it set out from, each time it is back there: seed from barrels set out along
@@ -344,7 +345,9 @@ export interface Fill { arc: number; x: number; z: number; dx: number; dz: numbe
 export function fillStops(field: number, kind: string): Fill[] {
   if (kind !== 'plant') return []
   const poly = lanePoly(field, kind), ends = laneEnds.get(`${field}|${kind}`) ?? []
-  const out: Fill[] = []
+  // (as it comes to the field, and each time it is back at that end with more of the field to plant)
+  const e0 = poly.at(0.01)
+  const out: Fill[] = [{ arc: 0, x: e0.x, z: e0.z, dx: e0.dx, dz: e0.dz }]
   for (let k = 1; k < ends.length - 1; k += 2) { const e = poly.at(ends[k] - 0.01); out.push({ arc: ends[k], x: e.x, z: e.z, dx: e.dx, dz: e.dz }) }
   return out
 }
@@ -390,9 +393,12 @@ export function workedHills(field: number, kind: string, share: number): boolean
 // The hills of a field the digger has been over, as they lie along its lanes: the simulation digs each row from the
 // same end, the digger works them there and back.
 export function dugHills(done: number): boolean[] {
+  // (a lane of the digger is two of the simulation's rows deep: so many hills dug are the first so many along the
+  // lanes, both rows of a lane together)
   return Array.from({ length: HILLS }, (_, h) => {
-    const row = Math.floor(h / COLS), col = h % COLS, n = Math.max(0, Math.min(COLS, done - row * COLS))
-    return row % 2 === 0 ? col >= COLS - n : col < n
+    const row = Math.floor(h / COLS), col = h % COLS, lane = Math.floor(row / 2)
+    const along = lane % 2 === 0 ? COLS - 1 - col : col
+    return lane * 2 * COLS + along * 2 + (row % 2) < done
   })
 }
 
@@ -590,7 +596,7 @@ export function planDay(snap: Snapshot, shown: HillDisplay[][], crews: CrewFrom[
           const lane = lanePoly(w.field, w.kind)
           path = lane.slice(band[0] * lane.length, band[1] * lane.length)
           laneFrom = band[0] * lane.length
-          stops = fillStops(w.field, w.kind).map(x => x.arc - laneFrom!).filter(x => x > 2 && x < (band[1] - band[0]) * lane.length - 2)
+          stops = fillStops(w.field, w.kind).map(x => x.arc - laneFrom!).filter(x => x > -0.5 && x < (band[1] - band[0]) * lane.length - 2).map(x => Math.max(0, x))
         } else if (tractor) {
           // the dug ground is the band the dug hills lie in (the simulation digs in rows from the top)
           let [p0, p1] = band
