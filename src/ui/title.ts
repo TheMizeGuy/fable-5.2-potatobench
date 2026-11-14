@@ -29,14 +29,6 @@ export async function startNewFarm(ctx: Ctx, guided = false): Promise<void> {
 }
 
 let entered = false
-// Motes of dust in the low sun: where each starts (percent of the frame), its size, how long it drifts, how far into
-// its drift it starts, where it drifts to, and how bright it gets.
-const MOTES: [number, number, number, number, number, number, number, number][] = [
-  [58, 62, 5, 26, 3, 90, -150, .55], [66, 78, 3, 31, 12, 120, -210, .45], [74, 55, 6, 37, 20, 70, -120, .4], [81, 70, 4, 29, 7, 140, -190, .5],
-  [49, 84, 4, 34, 16, 110, -230, .45], [88, 46, 3, 41, 28, 60, -110, .35], [63, 40, 5, 44, 9, 80, -90, .3], [71, 88, 7, 33, 22, 100, -260, .5],
-  [93, 80, 4, 27, 5, 50, -170, .45], [55, 50, 3, 39, 31, 130, -140, .35], [78, 34, 4, 47, 14, 90, -80, .28], [84, 60, 6, 30, 18, 75, -200, .48],
-  [45, 70, 3, 36, 25, 150, -180, .38], [68, 64, 4, 42, 2, 60, -130, .42], [96, 58, 5, 35, 11, 40, -150, .4], [60, 92, 5, 28, 19, 110, -240, .5],
-]
 
 function engraving(): HTMLElement {
   const box = h('span', { class: 'cv-plate' })
@@ -48,23 +40,21 @@ export function titleScreen(ctx: Ctx, o: { onMenu: () => void; onHelp: () => voi
   const app = ctx.app
   const menu = h('nav', { class: 'cv-menu', 'aria-label': 'The County' })
   const cover = h('section', { class: 'cover sheet sys', 'aria-label': 'The County' },
-    h('p', { class: 'cv-top', 'aria-hidden': 'true' }, h('span', null, 'Potatoes'), h('i', { class: 'orn' }), h('span', null, 'Five seasons')),
+    h('p', { class: 'cv-top', 'aria-hidden': 'true' }, h('span', null, 'Potato farming'), h('i', { class: 'orn' }), h('span', null, 'Northern Maine')),
     h('h1', { class: 'cv-name title-name' }, h('span', { class: 'the' }, 'The'), h('span', { class: 'county' }, 'County')),
     h('hr', { class: 'rule oxford' }),
     h('figure', { class: 'cv-cut' }, engraving(),
-      h('p', null, 'Grow a crop you can\'t see until you dig it up. Hire help, clear woods, raise barns, and keep the farm for five years.'),
-      h('figcaption', { class: 'it' }, 'Fig. 1. The crop you can\'t see until you dig it up.')),
+      h('p', null, 'Run a potato farm in northern Maine. Plant your fields, hire a crew, sell the harvest, and keep the farm going for five years.'),
+      h('figcaption', { class: 'it' }, 'Fig. 1. A potato plant.')),
     menu,
     h('footer', { class: 'imprint', testid: 'credit' },
       h('p', { class: 'a' }, 'Fable 5.2 - PotatoBench'),
       h('p', { class: 'b' }, 'PotatoBench made by TheMizeGuy')))
-  // The frame's dressing: bars, the dark at its corners, the sun's haze, grain, motes of dust in the light, and the
-  // black the first frame comes up out of. All of it lies under the name and the menu and takes no press.
+  // The frame's dressing: bars, a little dark at its corners and behind the name, and the black the first frame comes
+  // up out of. All of it lies under the name and the menu and takes no press. The picture itself is left clean.
   const barT = h('div', { class: 'cine-bar t' }), barB = h('div', { class: 'cine-bar b' })
-  const motes = h('div', { class: 'cine-motes', 'aria-hidden': 'true' }, MOTES.map(([x, y, s, d, w, dx, dy, o]) =>
-    h('i', { style: `--x:${x}%;--y:${y}%;--s:${s}px;--d:${d}s;--w:-${w}s;--dx:${dx}px;--dy:${dy}px;--o:${o}` })))
-  const el = h('main', { class: 'title-screen cine sys' }, h('div', { class: 'cine-haze' }), h('div', { class: 'title-shade' }), h('div', { class: 'cine-vignette' }), motes,
-    h('div', { class: 'cine-grain' }), barT, barB, cover, h('p', { class: 'cine-hint', 'aria-hidden': 'true' }, 'Enter to play'), h('div', { class: 'cine-fade' }))
+  const el = h('main', { class: 'title-screen cine sys' }, h('div', { class: 'title-shade' }), h('div', { class: 'cine-vignette' }),
+    barT, barB, cover, h('p', { class: 'cine-hint', 'aria-hidden': 'true' }, 'Enter to play'), h('div', { class: 'cine-fade' }))
   // The entrance plays once a visit, the first time the landing is shown.
   if (!entered) {
     entered = true

@@ -1,25 +1,20 @@
-/* The landing: the opening shot full across the window, dressed as a film's first frame. Bars above and below, the
-   name set straight on the picture, the menu a slip of paper laid on it, grain and motes of dust in the light.
+/* The landing: the opening's film full across the window. Bars above and below, the name set straight on the picture,
+   the menu a slip of paper laid on it. The picture is left clean: no haze, grain or dust is laid over it.
    Everything that moves here moves by transform or opacity alone, so none of it costs the picture a frame.
    A phone and a short window keep the almanac's cover. */
 .title-screen.cine { --bar-t: 0px; --bar-b: 0px; }
-.cine .cine-bar, .cine .cine-vignette, .cine .cine-haze, .cine .cine-grain, .cine .cine-motes, .cine .cine-fade, .cine .cine-hint { position: absolute; pointer-events: none; }
-.cine .cine-bar, .cine .cine-hint, .cine .cine-motes, .cine .cine-haze { display: none; }
-.cine .cine-vignette { inset: 0; background: radial-gradient(125% 95% at 62% 42%, rgb(8 5 2 / 0) 52%, rgb(8 5 2 / 0.6) 100%); }
-.cine .cine-grain { inset: -120px; background: url(./system/grain.png) repeat; opacity: .09; animation: cine-grain 1s steps(1) infinite; will-change: transform; }
+.cine .cine-bar, .cine .cine-vignette, .cine .cine-fade, .cine .cine-hint { position: absolute; pointer-events: none; }
+.cine .cine-bar, .cine .cine-hint { display: none; }
+.cine .cine-vignette { inset: 0; background: radial-gradient(130% 100% at 64% 44%, rgb(8 5 2 / 0) 60%, rgb(8 5 2 / 0.38) 100%); }
 .cine .cine-fade { inset: 0; background: #060504; opacity: 0; z-index: 5; }
 
 .title-screen.cine:is([data-layout='wide'], [data-layout='mid']) { --bar-t: 5.5vh; --bar-b: 8.5vh; }
 .cine:is([data-layout='wide'], [data-layout='mid']) .cine-bar { display: block; left: 0; right: 0; background: #060504; z-index: 1; }
 .cine:is([data-layout='wide'], [data-layout='mid']) .cine-bar.t { top: 0; height: var(--bar-t); box-shadow: 0 1px 0 rgb(246 241 228 / 0.08); }
 .cine:is([data-layout='wide'], [data-layout='mid']) .cine-bar.b { bottom: 0; height: var(--bar-b); box-shadow: 0 -1px 0 rgb(246 241 228 / 0.08); }
-.cine:is([data-layout='wide'], [data-layout='mid']) .cine-haze { display: block; inset: 0; background: radial-gradient(58% 62% at 60% 0%, rgb(255 214 150 / 0.3), rgb(255 214 150 / 0) 72%); animation: cine-breathe 11s ease-in-out infinite alternate; }
-.cine:is([data-layout='wide'], [data-layout='mid']) .cine-motes { display: block; inset: var(--bar-t) 0 var(--bar-b) 0; overflow: hidden; }
-.cine .cine-motes i { position: absolute; left: var(--x); top: var(--y); width: var(--s); height: var(--s); border-radius: 50%; opacity: 0;
-  background: radial-gradient(circle, rgb(255 238 196 / 0.95), rgb(255 238 196 / 0) 70%); animation: cine-mote var(--d) linear var(--w) infinite; will-change: transform, opacity; }
 .cine:is([data-layout='wide'], [data-layout='mid']) .title-shade { background:
-  linear-gradient(90deg, rgb(10 7 3 / 0.82) 0%, rgb(10 7 3 / 0.58) 24%, rgb(10 7 3 / 0) 58%),
-  linear-gradient(0deg, rgb(10 7 3 / 0.45), rgb(10 7 3 / 0) 38%); }
+  linear-gradient(90deg, rgb(10 7 3 / 0.7) 0%, rgb(10 7 3 / 0.46) 22%, rgb(10 7 3 / 0) 50%),
+  linear-gradient(0deg, rgb(10 7 3 / 0.3), rgb(10 7 3 / 0) 30%); }
 .cine:is([data-layout='wide'], [data-layout='mid']) .cine-hint { display: block; right: max(5vw, 44px); bottom: 0; height: var(--bar-b); z-index: 2; display: grid; align-items: center;
   font: 400 13px/1 var(--f-gothic); letter-spacing: .26em; text-transform: uppercase; color: rgb(246 241 228 / 0.62); }
 
@@ -81,10 +76,5 @@
 @keyframes cine-rule { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 @keyframes cine-bar-t { from { transform: translate3d(0, -100%, 0); } to { transform: none; } }
 @keyframes cine-bar-b { from { transform: translate3d(0, 100%, 0); } to { transform: none; } }
-@keyframes cine-breathe { from { opacity: .62; } to { opacity: 1; } }
-@keyframes cine-grain { 0% { transform: translate3d(0, 0, 0); } 17% { transform: translate3d(-41px, 27px, 0); } 33% { transform: translate3d(33px, -52px, 0); } 50% { transform: translate3d(-64px, -18px, 0); } 67% { transform: translate3d(52px, 44px, 0); } 83% { transform: translate3d(-17px, 61px, 0); } }
-@keyframes cine-mote { 0% { opacity: 0; transform: translate3d(0, 0, 0); } 12% { opacity: var(--o); } 80% { opacity: var(--o); } 100% { opacity: 0; transform: translate3d(var(--dx), var(--dy), 0); } }
 
-.reduce-motion .title-screen .cine-grain, .reduce-motion .title-screen .cine-haze { animation: none; }
-.reduce-motion .title-screen .cine-motes { display: none !important; }
 .reduce-motion .title-screen.intro * { animation: none !important; }

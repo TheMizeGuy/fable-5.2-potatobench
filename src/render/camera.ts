@@ -100,34 +100,38 @@ const ROAM = (() => {
   return { x0: x0 - 120, x1: x1 + 120, z0: z0 - 120, z1: z1 + 160 }
 })()
 
-// The opening shot. It starts high and far beyond the brook, looking into the last of the sun, so the size of the
-// country is the first thing seen: the whole farm small below, the woods, the back country and the hills. It comes down
-// over the swale, and ends a barn's height over the pasture below the dooryard: the farmstead, the tractor coming
-// down the lane with its driver, the rows of the middle field running away to the woods and the hills, the sun low
-// ahead. The title's card covers the left third of the window, so all of that is composed into the right two thirds;
-// and the camera stands clear of every tree and pole.
-// Each is the place looked at, how far off, and the way of looking.
-const TITLE: Pose[] = [
-  { x: 40, z: -20, dist: 1650, yaw: -1.02, pitch: 0.27, fov: 31, tilt: 0.152 },
-  { x: 120, z: 30, dist: 640, yaw: -1.0, pitch: 0.19, fov: 32, tilt: 0.1 },
-  { x: 200, z: -10, dist: 200, yaw: -1.04, pitch: 0.14, fov: 33, tilt: 0.085 },
-  { x: 208, z: -31, dist: 100, yaw: -1.1, pitch: 0.12, fov: 34, tilt: 0.07 },
+// The opening is cut like the first minute of a film, from places on the farmstead seen close: the big house and its
+// picket fence with the tractor going by on the farm road, the dooryard (the back door, the cordwood, the porch), the
+// kitchen garden and its gate under the barn with the washing on the line, the potato rows low into the last of the sun,
+// and only then the whole farm, drawing back until the woods and the hills are round it. Each shot is one slow, even
+// move from a view to a view; the picture goes down to dark between them (titleShade). The title's card covers the
+// left of the window, and each view is aimed at what the frame the interface leaves free should hold at its middle.
+// Each view is the place looked at, how far off, and the way of looking.
+const view = (x: number, z: number, dist: number, yaw: number, pitch: number, fov: number, tilt: number): Pose => ({ x, z, dist, yaw, pitch, fov, tilt })
+export const TITLE_SHOTS: { s: number; from: Pose; to: Pose }[] = [
+  { s: 12, from: view(228, -46.3, 62, -0.44, 0.17, 30, 0.06), to: view(228.5, -44, 50, -0.36, 0.15, 30, 0.06) },
+  { s: 11, from: view(227.3, -36, 52, 2.46, 0.2, 30, 0.08), to: view(227.3, -34.4, 42, 2.34, 0.17, 30, 0.07) },
+  { s: 10, from: view(228, -54.2, 39, -1.37, 0.1, 34, 0.06), to: view(228, -54.2, 33, -1.24, 0.1, 34, 0.06) },
+  { s: 11, from: view(-100.6, -11.7, 34, -1, 0.07, 36, 0.03), to: view(-110.7, -18.2, 30, -1, 0.055, 36, 0.03) },
+  { s: 16, from: view(208, -31, 100, -1.1, 0.12, 34, 0.07), to: view(200, -10, 230, -1.04, 0.15, 33, 0.085) },
 ]
-// The time of each of those along the move, 0..1: most of it is spent coming down the last of the way.
-const TITLE_AT = [0, 0.4, 0.78, 1]
-
-// A smooth curve through numbers given at times: no corner anywhere (Catmull-Rom).
-function through(v: number[], at: number[], u: number): number {
-  let i = 0
-  while (i < v.length - 2 && at[i + 1] <= u) i++
-  const t = clamp((u - at[i]) / (at[i + 1] - at[i]), 0, 1)
-  const p0 = v[Math.max(0, i - 1)], p1 = v[i], p2 = v[i + 1], p3 = v[Math.min(v.length - 1, i + 2)]
-  const h = at[i + 1] - at[i]
-  const m1 = i > 0 ? ((p2 - p0) / (at[i + 1] - at[i - 1])) * h : p2 - p1
-  const m2 = i + 2 < v.length ? ((p3 - p1) / (at[i + 2] - at[i])) * h : p2 - p1
-  const t2 = t * t, t3 = t2 * t
-  return (2 * t3 - 3 * t2 + 1) * p1 + (t3 - 2 * t2 + t) * m1 + (-2 * t3 + 3 * t2) * p2 + (t3 - t2) * m2
+// The whole of it, in seconds, and how long the picture takes to go down to dark before a cut and to come up after.
+export const TITLE_FILM_S = TITLE_SHOTS.reduce((n, k) => n + k.s, 0)
+export const TITLE_CUT_S = 0.6
+// The shot showing at a share of the film (0..1), how far through it (0..1), and the seconds to its nearer end.
+function titleShot(u: number): { k: number; t: number; edge: number } {
+  let at = clamp(u, 0, 1) * TITLE_FILM_S
+  let k = 0
+  while (k < TITLE_SHOTS.length - 1 && at >= TITLE_SHOTS[k].s) at -= TITLE_SHOTS[k++].s
+  const s = TITLE_SHOTS[k].s
+  return { k, t: clamp(at / s, 0, 1), edge: Math.min(at, s - at) }
 }
+// How dark the picture is at a share of the film: 1 at a cut, 0 once a shot is under way.
+export function titleShade(u: number): number {
+  const d = 1 - smooth(0, TITLE_CUT_S, titleShot(u).edge)
+  return d * d * (3 - 2 * d)
+}
+
 
 interface Fit { start: number; yaw: number; wide: number; tall: number; at?: number }
 
@@ -304,16 +308,11 @@ export class CameraRig {
     return Math.hypot(g.x - p.x, g.z - p.z) < 0.04 * p.dist + 2 && Math.abs(Math.log(g.dist / p.dist)) < 0.08 && Math.abs(turn(g.yaw, p.yaw)) < 0.05
   }
 
-  // The opening shot at a point of its move, 0..1 (see TITLE).
+  // The opening at a share of its film, 0..1 (see TITLE_SHOTS).
   titlePose(vp: Viewport, u = 0): Pose {
-    const p = this.titled, t = clamp(u, 0, 1)
-    p.x = through(TITLE.map(k => k.x), TITLE_AT, t)
-    p.z = through(TITLE.map(k => k.z), TITLE_AT, t)
-    p.dist = Math.exp(through(TITLE.map(k => Math.log(k.dist)), TITLE_AT, t))
-    p.yaw = through(TITLE.map(k => k.yaw), TITLE_AT, t)
-    p.pitch = through(TITLE.map(k => k.pitch), TITLE_AT, t)
-    p.fov = through(TITLE.map(k => k.fov), TITLE_AT, t)
-    p.tilt = through(TITLE.map(k => k.tilt), TITLE_AT, t)
+    const p = this.titled
+    const { k, t } = titleShot(u)
+    blend(TITLE_SHOTS[k].from, TITLE_SHOTS[k].to, t, p)
     // An upright window sees less to either side: stand back and widen the lens.
     const narrow = 1 - smooth(0.7, 1.3, vp.w / vp.h)
     p.fov = mix(p.fov, 46, narrow)

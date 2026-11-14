@@ -19,12 +19,12 @@ for (const [w, h, ratio, name] of [[1440, 900, 1, 'desk'], [1280, 720, 1, 'small
   await page.goto(base)
   await page.locator('#ui [data-testid="play"]').waitFor({ timeout: 40000 })
   for (const ms of [300, 600, 600, 700, 1800]) { await page.waitForTimeout(ms); await page.screenshot({ path: `${out}/${name}-${String(shot++).padStart(2, '0')}.png` }) }
-  // Frames while the landing stands: the gaps between pictures over six seconds.
+  // Frames while the landing's film runs: the gaps between pictures over fifteen seconds, its first cut among them.
   const gaps = await page.evaluate(() => new Promise<number[]>(done => {
     const g: number[] = []
     let last = performance.now()
     const t0 = last
-    const step = (t: number) => { g.push(t - last); last = t; if (t - t0 < 6000) requestAnimationFrame(step); else done(g.slice(1)) }
+    const step = (t: number) => { g.push(t - last); last = t; if (t - t0 < 15000) requestAnimationFrame(step); else done(g.slice(1)) }
     requestAnimationFrame(step)
   }))
   gaps.sort((a, b) => a - b)

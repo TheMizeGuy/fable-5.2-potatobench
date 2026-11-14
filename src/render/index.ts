@@ -7,7 +7,7 @@ import {
 import { DAYS_PER_SECOND, type App } from '../game/app.ts'
 import type { CreateFieldView, FieldView, Place, Thing } from '../game/contracts.ts'
 import { FIELD_COUNT, HILLS } from '../sim/index.ts'
-import { CameraRig, HOME_FIELD, MIN_DIST, MOVE_MS, pitchFor, type Pose, type TierName, type Viewport } from './camera.ts'
+import { CameraRig, HOME_FIELD, MIN_DIST, MOVE_MS, pitchFor, TITLE_FILM_S, titleShade, type Pose, type TierName, type Viewport } from './camera.ts'
 import { Clearing } from './clearing.ts'
 import { EVENING, MORNING, copyEnv, easeEnv, envTarget, light, makeEnv, makeLight } from './env.ts'
 import { FarHills } from './far.ts'
@@ -41,12 +41,11 @@ import { Weather } from './weather.ts'
 import { Poly, type Reveal } from './work.ts'
 
 const DAY_ANIM_S = 3.4          // how long a paused day's work takes to play out
-// The opening shot, in seconds: down from the far view to the road, a stay there while the tractor goes by, up again,
-// and a stay at the top. The tractor's trip down the farm road is timed to it.
-const TITLE_DOWN_S = 38, TITLE_STAY_S = 20, TITLE_UP_S = 30, TITLE_TOP_S = 8
-const TITLE_LOOP_S = TITLE_DOWN_S + TITLE_STAY_S + TITLE_UP_S + TITLE_TOP_S
-// The tractor in the opening: how far down the road it is as the camera comes to rest (metres), and its pace.
-const TITLE_MEET_M = 66, TITLE_PACE = 1.2
+// The tractor in the opening: how far down the farm road it is as the film starts (metres), and its pace. It comes
+// out from behind the big house in the first shot and is well down the lane by the last.
+const TITLE_MEET_M = 46, TITLE_PACE = 2.2
+// With motion reduced the opening is one still: the first shot, part way in.
+const TITLE_STILL_U = 6 / TITLE_FILM_S
 const HOUR_HOLD_S = 6           // the least time between a morning's light and an evening's
 const LOST_MS = 3000            // how long a lost WebGL context may stay away before the farm is drawn flat
 const STILL = 0.02              // the pace of water, cloud, mist and smoke under reduced motion
@@ -326,24 +325,19 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     reframe(reduced)
   }
 
-  // The opening shot goes down from its far view to its low one, stays, and goes back, without end; a tool can hold
-  // it at a point of the way down.
+  // The opening's film runs through its shots and starts again, without end; a tool can hold it at a share of it.
   let titleClock = 0
   let titleFixed = -1
-  const ease = (u: number) => 0.5 - 0.5 * Math.cos(Math.PI * clamp(u, 0, 1))
   function titleU(): number {
     if (titleFixed >= 0) return titleFixed
-    if (reduced) return 0
-    const t = titleClock % TITLE_LOOP_S
-    return t < TITLE_DOWN_S + TITLE_STAY_S ? ease(t / TITLE_DOWN_S) : 1 - ease((t - TITLE_DOWN_S - TITLE_STAY_S) / TITLE_UP_S)
+    if (reduced) return TITLE_STILL_U
+    return (titleClock % TITLE_FILM_S) / TITLE_FILM_S
   }
   // The length of the tractor's way in the opening (the people's part lays it from the potato house down the farm road).
   const titleRoad = ROAD.reduce((n, p, k) => n + (k ? Math.hypot(p[0] - ROAD[k - 1][0], p[1] - ROAD[k - 1][1]) : Math.hypot(p[0] - POTATO_HOUSE.x, p[1] - POTATO_HOUSE.z)), 0)
   // Where the tractor is on its way, as a share of the day the people's part plays out (its trip is the first 0.8).
   function titleDay(): number {
-    // Held by a tool at a point of the way down: as it would be then, and at the low view with the tractor in frame.
-    const t = titleFixed >= 0 ? titleFixed * TITLE_DOWN_S + (titleFixed >= 1 ? 6.5 : 0) : titleClock % TITLE_LOOP_S
-    const share = clamp((TITLE_MEET_M + TITLE_PACE * (t - TITLE_DOWN_S)) / titleRoad, 0, 1)
+    const share = clamp((TITLE_MEET_M + TITLE_PACE * titleU() * TITLE_FILM_S) / titleRoad, 0, 1)
     // The people's part eases a trip in and out (a smooth step of its clock): ask for the clock that gives this share.
     return (0.5 - Math.sin(Math.asin(1 - 2 * share) / 3)) * 0.8
   }
@@ -844,7 +838,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     if (dirty && dayPassed && dayRan && !turnHeld) turnHeld = true
     else if (dirty) { turnHeld = false; rebuild() }
     // Day clock: follows the game clock when it runs, plays the day out by itself when paused.
-    if (snap.mode === 'title') dayT = reduced ? 0.12 : titleDay()
+    if (snap.mode === 'title') dayT = titleDay()
     else if (dayT < 1) dayT = Math.min(1, app.speed > 0 ? Math.max(dayT + dt / DAY_ANIM_S * 0.25, app.dayProgress) : dayT + dt / DAY_ANIM_S * replayPace)
     if (crews.stageHold >= 0 && snap.mode === 'season') dayT = Math.min(dayT, crews.stageHold)
     aimHour(false)
@@ -994,7 +988,8 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     downward.set(0, -1, 0.5).unproject(cam).sub(cam.position).normalize()
     const nearest = downward.y < -1e-3 ? (cam.position.y - focus.y) / -downward.y : 1e9
     post.render(scene, cam, {
-      exposure: lit.exposure, focus: sharp, aperture: 0.3 * lens, time, grain: 0.018,
+      // (the opening's picture goes down to dark at each cut of its film)
+      exposure: lit.exposure * (snap.mode === 'title' && framing === 'title' && !reduced ? 1 - titleShade(titleU()) : 1), focus: sharp, aperture: 0.3 * lens, time, grain: 0.018,
       sunX: sunAt.x * 0.5 + 0.5, sunY: sunAt.y * 0.5 + 0.5, shafts: sunAt.z < 1 ? shafts : 0, shaftTint,
       warm: 0.2 + 0.5 * gold + 0.1 * autumn * open - 0.3 * cold - 0.28 * lit.night,
       // Rain is wet and dark: its colours deepen and its darks go down, where snow and mist pale theirs.
@@ -1428,7 +1423,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       scale: { K, S, KV },
       // Where a point of the ground is on the screen (for tools that draw over the picture).
       screenOf: (x: number, z: number, up = 0) => screenAt(x, groundY(x, z) + up, z),
-      // Hold the opening shot at a point of its move (0 the wide view, 1 the low one); below 0 lets it run.
+      // Hold the opening at a share of its film (0 its first frame, 1 its last); below 0 lets it run.
       titleAt(u: number) { titleFixed = u },
       // For working on the light: set parts of the day's air by hand; they hold until the game next changes the day.
       tune(o: Record<string, number>) { Object.assign(envT, o); Object.assign(env, o); if (typeof o.hour === 'number') { dayHour = o.hour; heldHour = o.hour } },
