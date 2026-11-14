@@ -146,7 +146,7 @@ test('every crop order has its place on the card; one that cannot be given is gr
   await page.keyboard.press('Escape')
   await page.getByTestId('field-1').click()
   await expect(orders).toHaveCount(0)
-  await expect(page.getByTestId('card-line')).toContainText('Resting in oats and clover')
+  await expect(page.getByTestId('card-line')).toContainText('restores the soil')
   expect(errors, errors.join('\n')).toEqual([])
 })
 
@@ -1139,5 +1139,53 @@ test('a press on the pause key just after an answer is read as go on, once; the 
   // The next press is a pause.
   await page.getByTestId('speed-0').click()
   await expect.poll(async () => (await look(page)).paused).toBe(true)
+  expect(errors, errors.join('\n')).toEqual([])
+})
+
+// The owner, 14 November, of a card laid beside its field and over the menu bar: "its impossible to tell whats even
+// going on in that corner of the screen". At a desk with room for it, every card stands in one place.
+test('at a wide desk a field\'s card and a person\'s stand in one place at the right: under the boards, above the menu bar, over no tag, tied to nothing', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'the desk')
+  const errors = watchErrors(page)
+  await page.setViewportSize({ width: 1920, height: 1080 })
+  await startSeason(page)
+  await reach(page, `q.run(q.day(7, 6), ['hill', 'spray']); const { app } = q.g(); app.setSpeed(0); app.campaign.incidents = []; app.select(-1); app.selectUnit(-1)`)
+  await putAway(page)
+  const laid = (sel: string) => page.evaluate(s => {
+    const box = (e: Element) => { const r = e.getBoundingClientRect(); return { l: r.left, t: r.top, r: r.right, b: r.bottom } }
+    const vis = (e: Element): e is HTMLElement => e instanceof HTMLElement && e.offsetParent !== null && !e.closest('[hidden], .gone, .leaving')
+    const card = document.querySelector(`#ui ${s}`)
+    if (!card || !vis(card)) return null
+    const c = box(card)
+    const meets = (o: { l: number; t: number; r: number; b: number }) => Math.min(c.r, o.r) - Math.max(c.l, o.l) > 1 && Math.min(c.b, o.b) - Math.max(c.t, o.t) > 1
+    const over = [...document.querySelectorAll('#ui .mainbar, #ui .queue, #ui .timebook, #ui .topbar .mount, #ui .paused, #ui [data-testid="running"], #ui .plate-layer .tag-wrap:not(.gone) .tag, #ui .notes .alert')].filter(vis).filter(e => meets(box(e))).map(e => e.className.toString().slice(0, 30))
+    const bar = document.querySelector('#ui .mainbar'), bank = document.querySelector('#ui .topbar .bank > .mount')
+    const ties = [...document.querySelectorAll('#ui .tether, #ui .tether-end, #ui .tether-notch')].filter(vis).length
+    const caption = [...document.querySelectorAll('#ui .plate-layer .tag-wrap.named .hover-name')].filter(vis).length
+    return { c, over, ties, caption, barTop: bar ? box(bar).t : innerHeight, bankBottom: bank ? box(bank).b : 0, w: innerWidth }
+  }, sel)
+  const places: string[] = []
+  for (const i of [0, 1, 2, 3]) {
+    await game(page, `app.select(${i})`)
+    await page.waitForTimeout(500)
+    const m = (await laid('[data-testid="card"]'))!
+    expect(m, `field ${i}'s card is up`).not.toBeNull()
+    expect(m.over, `field ${i}'s card lies over`).toEqual([])
+    expect(m.ties, 'tethers shown').toBe(0)
+    expect(m.caption, 'the tag\'s caption beside an open card').toBe(0)
+    expect(m.w - m.c.r, 'from the window\'s right edge').toBeLessThan(40)
+    expect(m.c.t, 'under the bank board').toBeGreaterThan(m.bankBottom)
+    expect(m.c.b, 'above the menu bar').toBeLessThan(m.barTop)
+    places.push(`${Math.round(m.c.r)},${Math.round(m.c.t)}`)
+  }
+  expect(new Set(places).size, `one place for every field's card: ${places.join(' ')}`).toBe(1)
+  await game(page, `app.select(-1)`)
+  await page.getByTestId('unit-0').click()
+  await page.waitForTimeout(500)
+  const p = (await laid('.person-card'))!
+  expect(p).not.toBeNull()
+  expect(p.over, 'the person\'s card lies over').toEqual([])
+  expect(`${Math.round(p.c.r)},${Math.round(p.c.t)}`, 'the same place as a field\'s card').toBe(places[0])
+  expect(p.c.b).toBeLessThan(p.barTop)
   expect(errors, errors.join('\n')).toEqual([])
 })

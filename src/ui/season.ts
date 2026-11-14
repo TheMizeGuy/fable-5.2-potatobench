@@ -567,13 +567,27 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
 
   // ------------------------------------------------------------ where a card may stand
 
+  // At a desk wide enough for it a card has one place, as a strategy game's selection panel has: at the right, under
+  // the bank board and the clock's chip, above the menu bar (the owner, 14 November, of a card laid beside its field
+  // and over the bar: "its impossible to tell whats even going on in that corner of the screen").
+  const DOCK_FROM = 1600
+  const docking = () => ctx.layout() === 'wide' && toLocal(innerWidth) >= DOCK_FROM
+  function dockRoom(): { right: number; top: number; bottom: number } {
+    const shown = (x: HTMLElement | null): x is HTMLElement => !!x && !x.hidden && x.offsetParent !== null && x.offsetHeight > 0
+    let topAt = 8
+    for (const x of [top.el.querySelector<HTMLElement>('.bank > .mount'), clockSlot, paused, running]) if (shown(x)) topAt = Math.max(topAt, x.getBoundingClientRect().bottom + toScreen(10))
+    const foot = shown(bar.el) ? bar.el.getBoundingClientRect().top - toScreen(12) : innerHeight - 8
+    return { right: innerWidth - toScreen(16), top: topAt, bottom: foot }
+  }
+
   // What a card keeps off: the list and the time book at the foot, the clock's chip under the boards, the work grid
   // and a test-dig tray. Read once after each change, not every frame.
   let landNow: Land | null = null
   function land(): Land {
     if (landNow) return landNow
     const ins = app.insets
-    const bars = [...crew.querySelectorAll<HTMLElement>('.queue, .timebook'), clockSlot, paused, running, homeKey, grid.el, trayHost.firstElementChild as HTMLElement | null]
+    // (and, at a desk, the menu bar: a card never lies over a bar while the window has room for it elsewhere)
+    const bars = [...crew.querySelectorAll<HTMLElement>('.queue, .timebook'), clockSlot, paused, running, homeKey, grid.el, trayHost.firstElementChild as HTMLElement | null, ctx.layout() === 'wide' ? bar.el : null]
     const blocks = bars.filter((x): x is HTMLElement => !!x && !x.hidden && x.offsetParent !== null && x.offsetHeight > 0).map(x => { const r = x.getBoundingClientRect(); return { left: r.left, top: r.top, right: r.right, bottom: r.bottom } })
     // The land runs up to the boards themselves; the slip that hangs from one is a thing to keep off, not a line
     // across the whole window, so a card clear of it has that much more room.
@@ -590,7 +604,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       for (const x of mounts) { const r = x.getBoundingClientRect(); blocks.push({ left: r.left, top: Math.min(0, r.top), right: r.right, bottom: r.bottom }) }
       line = 8
     }
-    landNow = { win: { left: 8, top: line, right: innerWidth - 8, bottom: innerHeight - 8 }, blocks }
+    landNow = { win: { left: 8, top: line, right: innerWidth - 8, bottom: innerHeight - 8 }, blocks, dock: docking() ? dockRoom() : undefined }
     return landNow
   }
   // What a card hides as little of as it can: the field tags, the yards' tags and people's pins.
@@ -633,10 +647,12 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   function placeCards(): void {
     const layout = ctx.layout()
     const quiet = incident.isUp()
-    const bar: Mode = layout === 'narrow' ? 'sheet' : layout === 'short' ? 'side' : 'float'
+    const dock = docking()
+    el.classList.toggle('docks', dock)
+    const bar: Mode = layout === 'narrow' ? 'sheet' : layout === 'short' ? 'side' : dock ? 'dock' : 'float'
     tied.card.frame(bar, quiet)
     tied.yard.frame(bar, quiet)
-    tied.person.frame(layout === 'narrow' ? 'sheet' : layout === 'short' ? 'plain' : 'float', quiet)
+    tied.person.frame(layout === 'narrow' ? 'sheet' : layout === 'short' ? 'plain' : dock ? 'dock' : 'float', quiet)
   }
 
   // ------------------------------------------------------------ the time book and the list

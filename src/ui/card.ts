@@ -411,12 +411,14 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
       if (need && need.act === 'sell') return note([h('b', null, 'Sell. '), F.localize(need.why)])
       if (need && isJob(need.act)) return note('')
       // Why a field waits to be planted is said once, in the planting rule's own sentence.
+      // (work the crew does by itself is said once, in the crew's line below: not in a paragraph of its own here)
+      if (hold && hold.act === 'wait' && / goes on the work list automatically\.$/.test(hold.text)) return note('')
       if (hold) return note(S.fieldInfo(c, i).status === 'idle' ? F.localize(hold.why) : `${F.localize(hold.text)} ${F.localize(hold.why)}`)
       if (!canAny) {
         const f = S.fieldInfo(c, i)
         const job = s.jobs.find(j => j.kind === 'dig' && j.field === i)
         return note(s.frozen ? 'The ground has frozen, so nothing more can be done in the field.'
-          : f.status === 'rest' ? `Resting in oats and clover. It earns ${F.money(S.REST_INCOME)} in the fall and restores the soil.`
+          : f.status === 'rest' ? `Earns ${F.money(S.REST_INCOME)} in the fall and restores the soil.`
             : f.status === 'planted' ? 'Planted. There\'s nothing to do here until the plants come up.'
               : f.status === 'digging' ? `Being dug, with ${job ? F.pct(job.done / job.need) : 'part'} of the rows out so far. You'll get the weigh ticket once it's all hauled in.`
                 : f.status === 'lost' ? 'This crop is lost.'
@@ -553,7 +555,7 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
     if (f.status === 'rest' || f.status === 'lost') {
       const extra = c.history.length > 0 ? [contractor(c, i, 'tile')].filter((x): x is HTMLElement => !!x) : []
       const rows = orderRow(c, [i], sugg, need && sugg ? F.localize(need.why) : '', extra)
-      return [head(fieldKind(f), f.name, f.status === 'rest' ? 'Oats and clover, resting' : `${f.variety}, lost`), land.length ? h('div', { class: 'readings' }, land) : null, adviceLine(c, [i], !!rows), rows]
+      return [head(fieldKind(f), f.name, f.status === 'rest' ? 'Oats and clover' : `${f.variety}, lost`), land.length ? h('div', { class: 'readings' }, land) : null, adviceLine(c, [i], !!rows), rows]
     }
     // The orders stand right under the gauges, so nothing above them comes or goes: a paragraph appearing never moves one.
     const g = slots(c, [i], sugg, need && sugg ? F.localize(need.why) : '')
@@ -603,7 +605,7 @@ export function commandCard(ctx: Ctx, o: { onTray: (field: number) => void; onTi
     const yours = r.filter(x => !x.auto && (CROP as string[]).includes(x.kind)).map(x => JOB_VERB[x.kind].toLowerCase())
     const parts: Child[] = []
     if (crew.length) parts.push(h('span', null, icon('sprout', 'i'), h('b', null, 'Your crew: '), `${crew.join(', ')}.`))
-    else parts.push(h('span', { class: 'quiet' }, icon('sprout', 'i'), 'Your crew adds this field\'s routine work to the work list automatically.'))
+    else parts.push(h('span', { class: 'quiet' }, icon('sprout', 'i'), 'Your crew does the routine work.'))
     if (yours.length) parts.push(h('span', null, ' ', h('b', null, 'You: '), `${F.list(yours)}.`))
     // When the kill is due by the coach's reckoning; the vine kill the crew does by itself, with its date, and the way
     // to refuse it.

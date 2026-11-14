@@ -185,6 +185,8 @@
 .sel-layer .sel-quad .line { stroke-width: calc(2.5 * var(--u, 2.8)); stroke-dasharray: calc(10 * var(--u, 2.8)) calc(6 * var(--u, 2.8)); animation: draw-line 180ms var(--ease-out); }
 @keyframes draw-line { from { stroke-dashoffset: 90; } }
 .sel-layer .reg-at .sel-mark { position: absolute; left: -15px; top: -15px; width: 30px; height: 30px; overflow: visible; }
+/* (the marks at the corners read as a measuring tool: the line alone says what is picked) */
+.sel-layer .reg-at { display: none; }
 .plate-layer .tag-wrap { z-index: 2; }
 
 /* ---------------------------------------------------------------- a thing's card, beside the thing (tie.ts) */
@@ -573,3 +575,4 @@
 /* The usual choice on the spraying card. */
 .telegram .reply .c-title .fist { --i: 22px; margin-left: 8px; vertical-align: -3px; }
 .telegram .reply .usual { font-weight: 700; }
+.season-screen.docks.person-up .view-home { display: none; }

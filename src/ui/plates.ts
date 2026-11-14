@@ -676,7 +676,8 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
   }
 
   function frame(): void {
-    for (let i = 0; i < S.FIELD_COUNT; i++) if (models[i]?.hoverName) wraps[i].classList.toggle('named', app.hover === i || app.selection.includes(i))
+    // (under the pointer, and not while the field is in hand: its card says it then)
+    for (let i = 0; i < S.FIELD_COUNT; i++) if (models[i]?.hoverName) wraps[i].classList.toggle('named', app.hover === i && !app.selection.includes(i))
     const anchors: { x: number; y: number }[] = []
     for (let i = 0; i < S.FIELD_COUNT; i++) { const a = ctx.view.fieldAnchor(i); anchors.push(a.visible ? { x: a.x, y: a.y } : { x: NaN, y: NaN }) }
     // The boards' edges changing (the list filling, a sheet on a phone) moves no tag until the camera moves.

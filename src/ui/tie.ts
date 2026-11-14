@@ -25,7 +25,8 @@ export interface Tie {
 }
 
 // tags: the other tags and people's pins on the land now, which a card hides as few of as it can.
-export interface Land { win: Box; blocks: Box[]; tags?: () => (Box & { weight?: number })[] }
+// dock: at a desk with room for it, the one place a card stands (its right edge, and the room from top to bottom).
+export interface Land { win: Box; blocks: Box[]; tags?: () => (Box & { weight?: number })[]; dock?: { right: number; top: number; bottom: number } }
 
 export interface Ties {
   field(): Tie | null
@@ -338,7 +339,7 @@ export function mountTies(ctx: Ctx, root: HTMLElement): Ties {
 
 // ---------------------------------------------------------------- a card held to its tie
 
-export type Mode = 'float' | 'sheet' | 'side' | 'plain'
+export type Mode = 'float' | 'sheet' | 'side' | 'plain' | 'dock'
 
 export interface Anchored {
   // The tether, its end, the notch and the Show key: laid in the same layer as the card.
@@ -346,7 +347,8 @@ export interface Anchored {
   // After the card is drawn: what it is tied to, and its size taken again.
   update(tie: Tie | null): void
   // Every frame. float: beside its thing on the land; sheet: at the foot (a notch on its top edge); side: a panel at
-  // the right (a notch on its left edge); plain: where its screen puts it, untied. quiet: something holds the floor.
+  // the right (a notch on its left edge); plain: where its screen puts it, untied; dock: in the one place the screen
+  // keeps for cards, untied (what is picked is marked on the land itself). quiet: something holds the floor.
   frame(mode: Mode, quiet?: boolean): void
   dispose(): void
 }
@@ -419,7 +421,23 @@ export function anchored(ctx: Ctx, card: HTMLElement, o: { mark?: boolean } = {}
       return
     }
     const t = tie!.at()
-    if (mode !== 'float') {
+    const dock = mode === 'dock' ? ties().land().dock : undefined
+    if (dock) {
+      // One place for every card, so it is never looked for and never lies over what it is about: its top right
+      // corner under the boards at the right, as tall as it wants down to the bar, scrolling past that.
+      hide(line, dot, notch, show, mark)
+      card.classList.remove('hop')
+      placed = null
+      if (stale) measure()
+      const x = Math.round(dock.right - size.w), y = Math.round(dock.top), room = dock.bottom - dock.top
+      set(card, 'card', `translate3d(${+toLocal(x).toFixed(2)}px, ${+toLocal(y).toFixed(2)}px, 0)`)
+      const max = room < size.h - 0.5 ? `${Math.floor(toLocal(room))}px` : ''
+      if (drawn.max !== max) { card.style.maxHeight = max; drawn.max = max }
+      if (card.dataset.side !== 'dock') card.dataset.side = 'dock'
+      delete card.dataset.aside
+      return
+    }
+    if (mode !== 'float' && mode !== 'dock') {
       if (drawn.card) { card.style.transform = ''; drawn.card = '' }
       if (drawn.max) { card.style.maxHeight = ''; drawn.max = '' }
       card.classList.remove('hop')

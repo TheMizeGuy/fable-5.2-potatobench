@@ -426,7 +426,7 @@ test("each of a person's First priority keys has its name on it, a hover title a
   expect(errors, errors.join('\n')).toEqual([])
 })
 
-test("a resting field's tag says what grows there when it is hovered or selected", async ({ page }) => {
+test("a resting field's tag says what grows there under the pointer, and not while its card is open", async ({ page }) => {
   const errors = watchErrors(page)
   await startSeason(page)
   const rest = await game<number>(page, `app.campaign.plans.findIndex((p, i) => p.crop === 'rest' && sim.held(app.campaign, i))`)
@@ -440,9 +440,10 @@ test("a resting field's tag says what grows there when it is hovered or selected
   await shot(page, '4-resting-hover')
   await page.mouse.move(2, 300)
   await expect(named).toBeHidden()
+  // In hand, its card says what it is: the tag does not say it again beside the card.
   await game(page, `app.select(${rest})`)
-  await expect(named).toBeVisible()
-  await expect(named).toHaveText(/resting: oats and clover/i)
+  await expect(named).toBeHidden()
+  await game(page, `app.select(-1)`)
   // A potato field's tag says nothing more.
   const potato = await game<number>(page, `app.campaign.plans.findIndex((p, i) => p.crop === 'potato' && sim.held(app.campaign, i))`)
   await page.getByTestId(`field-${potato}`).hover()

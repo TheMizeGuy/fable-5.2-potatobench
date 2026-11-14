@@ -386,10 +386,10 @@ table .num, .tab { font-variant-numeric: lining-nums proportional-nums; }
   background: #3d3328 url(img/grain.png); background-blend-mode: overlay; box-shadow: 0 0 0 1px #17120c, 0 4px 6px -2px rgba(0, 0, 0, .5); font: 400 18px/1 var(--f-stencil); letter-spacing: .07em; text-transform: uppercase; }
 .yard-tag .i { --i: 17px; }
 .yard-tag.is-sel { box-shadow: 0 0 0 2px var(--paper), 0 0 0 3px #17120c; }
-/* selection: drawn on the land, a dashed pencil line round the field with registration marks at its corners */
+/* selection: drawn on the land, one bright line round the field */
 .select { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
 .select .under { fill: none; stroke: rgba(20, 16, 10, .55); stroke-width: 5; stroke-linejoin: round; }
-.select .line { fill: rgba(246, 241, 228, .08); stroke: var(--paper); stroke-width: 2.5; stroke-dasharray: 10 6; stroke-linejoin: round; }
+.select .line { fill: rgba(246, 241, 228, .12); stroke: var(--paper); stroke-width: 3; stroke-linejoin: round; }
 .select .reg circle { fill: none; stroke: var(--paper); stroke-width: 2; }
 .select .reg path { stroke: var(--paper); stroke-width: 2; }
 .select .reg .u { stroke: rgba(20, 16, 10, .6); stroke-width: 4.5; }
