@@ -50,7 +50,7 @@ function outlookOf(world: World, c: Campaign, s: NonNullable<Campaign['season']>
   const d = getDay(world, s.year, s.day)
   const working = workday(c, s) || copy.season!.frostHaul === s.day
   return s.jobs.map((j, place) => {
-    const w = worked.find(x => x.kind === j.kind && x.field === j.field)
+    const w = worked.find(x => x.kind === j.kind && x.field === j.field && !x.help)
     if (w) return { id: j.id, unit: w.unit, when: 'now', why: says(c, w.unit, 'is working on it.', 'You\'re working on it.') }
     if (dropped.has(j.id)) return { id: j.id, unit: -1, when: 'waiting', why: `It comes off the work list in the morning. ${dropped.get(j.id)}`, leaves: true }
     const who = takers(c, j)

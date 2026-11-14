@@ -263,6 +263,7 @@ export interface CrewInfo {
   at: number                // a field index, or -1 the home yard, -2 the Dufour yard
   wage: number              // dollars a month
   job: { id: number; kind: JobKind; field: number } | null   // the order it is working or going to
+  helping?: { kind: JobKind; field: number }                  // the order someone else holds that it is helping with
   travelling: boolean
   to: number                // where it is going (equals at when it is not travelling)
   road: number              // days of driving left
@@ -272,10 +273,12 @@ export function crewInfo(c: Campaign): CrewInfo[] {
   const s = c.phase === 'season' ? c.season : null
   return c.crew.map(u => {
     const j = s && u.job >= 0 ? s.jobs.find(x => x.id === u.job) : undefined
+    const h = s && !j && u.help !== undefined ? s.jobs.find(x => x.id === u.help) : undefined
     const travelling = !!s && u.road > 0
     return {
       id: u.id, kind: u.kind, name: u.name, at: u.at, wage: u.wage,
       job: j ? { id: j.id, kind: j.kind, field: j.field } : null,
+      ...(h ? { helping: { kind: h.kind, field: h.field } } : {}),
       travelling, to: travelling ? u.to : u.at, road: travelling ? u.road : 0,
     }
   })
@@ -303,6 +306,7 @@ export interface PersonInfo {
   speed: Record<Skill, number>      // share of normal speed today at each kind of work
   doing: string                     // what they are doing now, in words
   job: { id: number; kind: JobKind; field: number } | null
+  helping?: { kind: JobKind; field: number }   // the order someone else holds that they are helping with
   at: number                        // a field index, or -1 the home yard, -2 the Dufour yard
   to: number
   travelling: boolean
@@ -326,6 +330,7 @@ export function peopleInfo(c: Campaign): PersonInfo[] {
   const rest = !!s && !s.frozen && !workday(c, s)
   return c.crew.map(u => {
     const j = s && u.job >= 0 ? s.jobs.find(x => x.id === u.job) : undefined
+    const h = s && !j && u.help !== undefined ? s.jobs.find(x => x.id === u.help) : undefined
     const travelling = !!s && u.road > 0
     const progress = { machine: 0, field: 0, woods: 0, build: 0, pack: 0 }
     const sp = { machine: 0, field: 0, woods: 0, build: 0, pack: 0 }
@@ -339,6 +344,7 @@ export function peopleInfo(c: Campaign): PersonInfo[] {
     else if (c.phase === 'season' && s && !s.frozen) {
       if (rest) doing = 'Sunday: resting'
       else if (j) doing = travelling ? `Heading to ${placeName(j.field)} to ${GOING_TO[j.kind]}` : `${JOB_LABEL[j.kind]} in ${placeName(j.field)}`
+      else if (h) doing = travelling ? `Heading to ${placeName(h.field)} to help ${GOING_TO[h.kind]}` : `Helping with ${JOB_LABEL[h.kind].toLowerCase()} in ${placeName(h.field)}`
       else if (travelling) doing = 'On the road'
       else doing = 'Nothing to do'
     } else if (c.phase === 'cellar' || (s && s.frozen)) doing = u.winter === 'off' ? 'Laid off for the winter' : `Kept on: ${WINTER_LABEL[u.winter]}`
@@ -349,6 +355,7 @@ export function peopleInfo(c: Campaign): PersonInfo[] {
       tired: u.tired, tiredWord: tiredWord(u.tired), mood: u.mood, moodWord: moodWord(u.mood),
       wage: u.wage, pay: payOf(u), ask: u.ask, prio: { ...u.prio }, speed: sp, doing,
       job: j ? { id: j.id, kind: j.kind, field: j.field } : null,
+      ...(h ? { helping: { kind: h.kind, field: h.field } } : {}),
       at: u.at, to: travelling ? u.to : u.at, travelling,
       foreman: u.foreman || null,
       winter: u.winter, winterField: u.winterField,

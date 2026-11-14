@@ -230,7 +230,7 @@ function endSeason(world: World, c: Campaign): GameEvent[] {
   closeIncidents(c, s, out)
   s.jobs = []
   // The crews go home for the winter.
-  for (const u of c.crew) { letGo(u); u.at = HOME_YARD; u.to = HOME_YARD; u.road = 0; u.tired = 0 }
+  for (const u of c.crew) { letGo(u); delete u.help; u.at = HOME_YARD; u.to = HOME_YARD; u.road = 0; u.tired = 0 }
   s.pickers = false
   settleContracts(c, 'harvest', out)
   // The potato houses only hold so much: the overflow is sold off the field.
@@ -944,6 +944,7 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
       u.foreman = block
       for (const j of c.season?.jobs ?? []) if (j.unit === u.id) j.unit = -1
       letGo(u)
+      delete u.help
       return ok([note(c, 'foreman', 'info', `${u.name} is now foreman of ${BLOCK_NAME[block]}. They'll add whatever its fields need to the work list, and won't do field work themselves.`)])
     }
     case 'sundays': {
@@ -995,7 +996,7 @@ function command(world: World, c: Campaign, cmd: Cmd): Result {
       if (mode !== 'now' && mode !== 'auto' && mode !== 'push') return fail('Choose one: rest now, rest when worn out, or keep working.')
       if (u.rest === mode) return fail(mode === 'now' ? `${subject(u, 'is', 'You\'re')} already resting.` : mode === 'push' ? `${subject(u, 'is', 'You\'re')} already told to keep working.` : `${subject(u, 'already rests', 'You already rest')} when worn out.`)
       u.rest = mode
-      if (mode === 'now') letGo(u)
+      if (mode === 'now') { letGo(u); delete u.help }
       return ok([note(c, 'rest', 'info', mode === 'now' ? `${subject(u, 'takes', 'You take')} time off until rested.` : mode === 'push' ? `${subject(u, 'will', 'You\'ll')} keep working no matter how tired, which is slower and risks an injury on a machine or in the woods.` : `${subject(u, 'will', 'You\'ll')} rest automatically once worn out.`)])
     }
     case 'keepVines': {

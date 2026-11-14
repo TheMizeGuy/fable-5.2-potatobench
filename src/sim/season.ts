@@ -146,10 +146,11 @@ function roadHaul(c: Campaign): number {
   return hasBuilt(c, 'road') ? P.ROAD_SPEED : 1
 }
 
-// Cwt a day this person hauls from this field with this rig.
+// Cwt a day this person hauls from this field with this rig (with the help of anyone at the field's hauling).
 export function haulRate(c: Campaign, u: Unit, field: number, rig: Rig): number {
+  const job = c.season?.jobs.find(j => j.kind === 'haul' && j.field === field)
   return P.HAUL_CWT_DAY * speed(u, 'machine') * (hasBuilt(c, 'shed') ? P.SHED_SPEED : 1) * (rig === 'truck' ? P.TRUCK_HAUL : 1)
-    / (haulFactor(c, field) * roadHaul(c))
+    * (job ? helped(c, job) : 1) / (haulFactor(c, field) * roadHaul(c))
 }
 
 // What one driver brings in from a field's barrels by dark today: the one who would bring in most (the drive there
@@ -633,7 +634,10 @@ function digProgress(c: Campaign, s: Season, f: FieldSeason, field: number, job:
 //    else, not held by someone else, allowed by the weather today, and, for machine work, with a tractor free (on
 //    the way, an order that no longer makes sense for its field is dropped, as before). Of those they take the one
 //    with the least travel plus PICK_LAG for each place down the list, the earliest on a tie; they drive there and
-//    work it at their own speed until it is done or the day is used up. Someone who finds nothing is idle.
+//    work it at their own speed until it is done or the day is used up.
+// 3. Someone who finds nothing helps at an order someone else holds that they could lend a hand at (planting, hilling,
+//    digging and hauling on foot, as field work; felling, rocks, brush and building as their own work), up to
+//    HELPERS_MOST to an order; each helper at its place makes it go HELP_RATE faster. Someone with nobody to help is idle.
 // People end the day where they worked, and one still on the road carries the rest of the drive into tomorrow.
 //
 // A machine's hours are booked, not just its holder at an instant. Each tractor, the truck and each implement the farm
@@ -656,22 +660,27 @@ interface Booking { rig: Rig; keys: string[]; start: number }
 // The day's record of a stretch of work; machine work says which machine and its hours, for the picture.
 // The hours of every stretch of the day's work, on foot or with a machine, while the day lasts: what the land shows
 // being done through a long day is timed by them.
-function logHours(s: Season, t: Turn, kind: JobKind, field: number, time: number): void {
+function logHours(s: Season, t: Turn, kind: JobKind, field: number, time: number, help = false): void {
   const log = s.clock?.log
   if (!log || time <= 0) return
   const from = t.end - t.left - time, to = t.end - t.left
   for (let k = log.length - 1; k >= 0; k--) {
     const o = log[k]
     if (o.unit !== t.u.id) continue
-    if (o.kind === kind && o.field === field && Math.abs(o.to - from) < 1e-4) { o.to = to; return }
+    if (o.kind === kind && o.field === field && !!o.help === help && Math.abs(o.to - from) < 1e-4) { o.to = to; return }
     break
   }
-  log.push({ unit: t.u.id, kind, field, from, to })
+  log.push(help ? { unit: t.u.id, kind, field, from, to, help } : { unit: t.u.id, kind, field, from, to })
 }
 
-function logWork(s: Season, t: Turn, kind: JobKind, field: number, time: number): void {
+function logWork(s: Season, t: Turn, kind: JobKind, field: number, time: number, help = false): void {
   const u = t.u
-  logHours(s, t, kind, field, time)
+  logHours(s, t, kind, field, time, help)
+  if (help) {
+    // Helping is said once a day for a person and an order's place.
+    if (!s.worked.some(o => o.unit === u.id && o.kind === kind && o.field === field && o.from === undefined)) s.worked.push({ kind, field, unit: u.id, help })
+    return
+  }
   const w: Season['worked'][number] = u.rig && t.keys.length ? { kind, field, unit: u.id, rig: u.rig, machine: t.keys[0], from: t.end - t.left - time, to: t.end - t.left } : { kind, field, unit: u.id }
   // Later in a day worked in stretches: work carried straight on is one stretch in the record, and work on foot is
   // said once.
@@ -679,7 +688,7 @@ function logWork(s: Season, t: Turn, kind: JobKind, field: number, time: number)
     for (let k = s.worked.length - 1; k >= 0; k--) {
       const o = s.worked[k]
       if (o.unit !== w.unit) continue
-      if (o.kind !== w.kind || o.field !== w.field || o.rig !== w.rig || o.machine !== w.machine) break
+      if (o.kind !== w.kind || o.field !== w.field || o.rig !== w.rig || o.machine !== w.machine || o.help) break
       if (w.from === undefined) return
       if (o.to !== undefined && Math.abs(o.to - w.from) < 1e-4) { o.to = w.to; return }
       break
@@ -752,7 +761,34 @@ function workRate(c: Campaign, s: Season, u: Unit, job: Job): number {
   if (job.kind === 'dig' && s.pickers) r *= P.PICKER_DIG
   if (job.kind === 'plant' || job.kind === 'dig') r *= stoneSpeed(c.fields[job.field].stones)
   if (job.kind === 'fell') r *= P.FELL_SEASON
-  return r
+  return r * helped(c, job)
+}
+
+// Orders others can lend a hand at; the machine ones are helped on foot, as field work.
+const HELPED: JobKind[] = ['plant', 'hill', 'dig', 'haul', 'fell', 'rocks', 'brush', 'build']
+
+function helpSkill(kind: JobKind): Skill {
+  const skill = jobSkill(kind)
+  return skill === 'machine' ? 'field' : skill
+}
+
+function mayHelp(u: Unit, kind: JobKind): boolean {
+  return HELPED.includes(kind) && (jobSkill(kind) === 'machine' ? u.foreman === '' && u.prio.field > 0 : willDo(u, kind))
+}
+
+// People with nothing of their own to do who are at an order's place helping with it.
+export function helpersAt(c: Campaign, job: Job): number {
+  const day = c.season?.day ?? 0
+  let n = 0
+  for (const u of c.crew) {
+    if (u.help === job.id && u.job < 0 && u.at === job.field && u.road <= 0 && !hurt(u, day) && !resting(u) && mayHelp(u, job.kind)) n++
+  }
+  return n
+}
+
+// How much faster an order goes for the helpers at it.
+function helped(c: Campaign, job: Job): number {
+  return 1 + P.HELP_RATE * helpersAt(c, job)
 }
 
 // A field's name, or a yard's.
@@ -908,7 +944,7 @@ function buildDay(world: World, c: Campaign, s: Season, t: Turn, job: Job, _d: D
   const u = t.u
   const b = c.buildings.find(x => x.id === job.building)
   if (!b || b.built) { letGo(u); return }
-  const rate = speed(u, 'build')
+  const rate = speed(u, 'build') * helped(c, job)
   const use = Math.min(t.left * rate, b.need - b.done)
   const time = Math.min(t.left, use / rate)
   t.left -= time
@@ -1094,9 +1130,45 @@ function runCrews(world: World, c: Campaign, s: Season, d: Day, out: GameEvent[]
     const pick = choose(c, s, t.u, d, out, book, t.end - t.left, t.end)
     if (!pick) { t.idle = true; continue }
     t.u.job = pick.job.id
+    delete t.u.help
     take(t, pick)
     work(world, c, s, t, pick.job, d, out)
     done(t, pick)
+  }
+  // 3. Whoever is left with nothing to do helps at an order someone else is working: the one they were helping with
+  // while it lasts, else the nearest (fewest helpers, then first on the list), HELPERS_MOST to an order. They walk
+  // there and spend the rest of the stretch at it; the work there goes faster from the next stretch on.
+  for (const u of c.crew) {
+    if (u.help === undefined) continue
+    const job = s.jobs.find(j => j.id === u.help)
+    if (!job || u.job >= 0 || hurt(u, s.day) || resting(u) || !mayHelp(u, job.kind) || !c.crew.some(o => o.job === job.id)) delete u.help
+  }
+  for (const t of turns) {
+    const u = t.u
+    if (u.job >= 0 || t.left <= EPS) continue
+    let job = u.help !== undefined ? s.jobs.find(j => j.id === u.help) : undefined
+    if (!job) {
+      let best = Infinity, fewest = Infinity
+      for (const j of s.jobs) {
+        if (!mayHelp(u, j.kind) || !c.crew.some(o => o !== u && o.job === j.id)) continue
+        const n = c.crew.filter(o => o.help === j.id).length
+        if (n >= P.HELPERS_MOST) continue
+        const cost = travel(c, u.at, j.field)
+        if (cost < best - EPS || (cost < best + EPS && n < fewest)) { job = j; best = cost; fewest = n }
+      }
+      if (!job) continue
+      u.help = job.id
+    }
+    u.rig = ''
+    if (u.at !== job.field && u.road <= 0) {
+      u.to = job.field
+      u.road = travel(c, u.at, job.field)
+    }
+    if (!drive(t) || t.left <= EPS) continue
+    const time = t.left
+    t.left = 0
+    t.spent[helpSkill(job.kind)] += time
+    logWork(s, t, job.kind, job.field, time, true)
   }
   // The day's count for each person: the time not used, the waits, what was worked at.
   for (const t of turns) {
@@ -1576,7 +1648,7 @@ export function stepDay(world: World, c: Campaign): GameEvent[] {
     s.frozen = true
     s.jobs = []
     s.pickers = false
-    for (const u of c.crew) letGo(u)
+    for (const u of c.crew) { letGo(u); delete u.help }
     for (let i = 0; i < P.FIELD_COUNT; i++) {
       const f = s.fields[i]
       if (f.status === 'digging') {
@@ -1694,6 +1766,7 @@ function drawIncidents(c: Campaign, s: Season, turns: Turn[], out: GameEvent[]):
       const days = P.HURT_DAYS[0] + Math.floor(u01(7150 + u.id) * (P.HURT_DAYS[1] - P.HURT_DAYS[0] + 1))
       u.out = s.day + 1 + days
       letGo(u)
+      delete u.help
       push(s, out, 'hurt', -1, 'bad', `${subject(u, 'is', 'You are')} hurt after working worn out ${t.spent.woods > 0 ? 'in the woods' : 'on the tractor'}, and will be off for ${days} days, back on ${formatDay(s.year, u.out)}.`, { unit: u.id, days })
     }
     if (t.tractor && c.broken.length < tractorsOwned(c) && !firstPlanting) {
