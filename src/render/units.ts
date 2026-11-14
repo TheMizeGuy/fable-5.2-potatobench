@@ -1633,6 +1633,8 @@ export class Crews {
           else stand(pose, f.time, a.tired, 3)
         }
         if (seg.kind === 'rogue') { pose.held = 'sack'; pose.size = 0.6 + 0.6 * w }
+        // (picking behind the digger: a basket in hand)
+        if (seg.kind === 'dig' && !walking && on) pose.held = 'basket'
         if (!on) this.idle(a, f, pose)
         passed(w >= 1 ? Infinity : seg.lit ? a.arc : w * path.length)
       }

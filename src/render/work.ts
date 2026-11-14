@@ -449,6 +449,8 @@ export function planDay(snap: Snapshot, shown: HillDisplay[][], crews: CrewFrom[
   // Who worked each field at each job today, in order: they share out the hills that changed.
   const sharers = new Map<string, number[]>()
   for (const u of snap.units) for (const w of u.worked) {
+    // (someone lending a hand changes none of the ground themselves: it changes behind the machine)
+    if (w.help) continue
     const key = `${w.field}|${w.kind}`
     const list = sharers.get(key) ?? []
     if (!list.includes(u.id)) list.push(u.id)
@@ -560,6 +562,20 @@ export function planDay(snap: Snapshot, shown: HillDisplay[][], crews: CrewFrom[
           continue
         }
         const f = snap.fields[w.field]
+        if (w.help) {
+          // Lending a hand with a machine's work in the rows: on foot along the ground the machine is working today,
+          // a few metres off its lane, bending to it every few steps (picking behind the digger, seeing to the seed
+          // behind the planter), as far as the time allows at a brisk walk.
+          const lane = lanePoly(w.field, w.kind in LANES ? w.kind : 'plant'), [b0, b1] = bandOf(key)
+          const far = hours && live ? LIVE_PACE.walk * 0.55 * (hours[1] - hours[0]) * live.daySec : 60
+          const side = 2.4 + 1.3 * (crew.slot % 3)
+          const path = lane.slice(b0 * lane.length, Math.min(Math.max(b0, b1) * lane.length, b0 * lane.length + Math.max(8, far))).map(pt => ({ x: pt.x, z: pt.z + side }))
+          const afoot = !crew.arrives && inField(w.field, at)
+          const { walkTo, travel } = afoot ? { walkTo: [], travel: [at] } : go(path[0], '')
+          segs.push({ kind: w.kind, field: w.field, walker: true, ride: '', walkTo, travel, path, reveals: [], start: 0, end: 0, site: '', lit: true, from: 0, hours: live ? hours : undefined })
+          at = path[path.length - 1]
+          continue
+        }
         const { hills, band } = share(key, crew.id)
         const tractor = ROW_JOBS.has(w.kind) && ride === 'tractor'
         let path: Pt[]

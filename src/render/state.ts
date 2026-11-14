@@ -53,7 +53,8 @@ export interface Weather {
 // share: how far the order has got by the day's end, 0..1 (1 once it is finished); only on a person's own work.
 // rig, machine, from, to: for machine work, what was driven, which of the farm's machines it was, and its hours as
 // shares of the day (the farm's day books each machine's hours once: src/sim/season.ts).
-export interface Work { kind: sim.JobKind; field: number; share?: number; rig?: sim.Rig; machine?: string; from?: number; to?: number }
+// help: they had no order of their own and lent a hand with someone else's (on foot)
+export interface Work { kind: sim.JobKind; field: number; share?: number; rig?: sim.Rig; machine?: string; from?: number; to?: number; help?: boolean }
 
 // A crew as the farm knows it: where it is, where it is driving to, and what it did today, in order.
 export interface UnitVis {
@@ -252,7 +253,7 @@ export function snapshot(app: App, of?: sim.Campaign): Snapshot {
         // (work on foot has its hours while the day lasts: from the first of it to the last)
         const on = w.from === undefined ? (s.clock?.log ?? []).filter(x => x.unit === u.id && x.kind === w.kind && x.field === w.field) : []
         const from = on.length ? Math.min(...on.map(x => x.from)) : w.from, to = on.length ? Math.max(...on.map(x => x.to)) : w.to
-        return { kind: w.kind, field: w.field, share: j && j.need > 0 ? Math.max(0, Math.min(1, j.done / j.need)) : 1, rig: w.rig, machine: w.machine, from, to }
+        return { kind: w.kind, field: w.field, share: j && j.need > 0 ? Math.max(0, Math.min(1, j.done / j.need)) : 1, rig: w.rig, machine: w.machine, from, to, help: (w as { help?: boolean }).help || undefined }
       }) : [],
     }
   })

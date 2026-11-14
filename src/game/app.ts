@@ -26,6 +26,9 @@ const LADDERS = { long: [0, 1 / DAY_SECONDS, 2 / DAY_SECONDS, 3 / DAY_SECONDS], 
 // Seconds a day with no work in it takes at each speed (null: such a day is as long as any other).
 const QUIETS: Record<keyof typeof LADDERS, number[] | null> = { long: [0, 6, 3, 2], brisk: null }
 export let QUIET_S: number[] | null = QUIETS.long
+// A new farm's field hands, and a season of a hand's wages (seven months at the hall's rate).
+export const START_HANDS = 2
+const START_HAND_PAY = 2660
 // A new farm's first season opens this many days before the soil is expected to be fit to plant.
 export const OPEN_BEFORE_PLANTING = 3
 export type Days = keyof typeof LADDERS
@@ -229,6 +232,10 @@ export class App {
     if (startYear === undefined) {
       this.world = climateWorld(this.record, s)
       this.campaign = createCampaign(this.world, { seed: s, startYear: FARM_YEAR0 + 1 })
+      // A new farm is three people, not one (the owner, 14 November: "watching all your guys"): the farmer and two
+      // field hands, with their first season's wages already in the farm's hand. They can be let go in spring like
+      // anyone hired then. (Not on the test clock: those farms start as they always did.)
+      if (QUIET_S) for (let k = 0; k < START_HANDS; k++) if (apply(this.world, this.campaign, { t: 'hire', kind: 'hand' }).ok) this.campaign.cash += START_HAND_PAY
     } else {
       this.world = this.record
       this.campaign = createCampaign(this.world, { seed: s, startYear })
