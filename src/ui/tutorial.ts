@@ -1,7 +1,7 @@
 // The guided first year on screen (src/game/tutorial.ts holds the lessons): the county agent's printed slip, one at a
 // time, set where it covers nothing it is about, and the printer's fist on the one control it asks for. In spring the
 // slip is tucked into the seed catalogue above the order blank; elsewhere it floats over the land.
-import { SPEED_X } from '../game/app.ts'
+import { DAYS_PER_SECOND, SPEED_X } from '../game/app.ts'
 import { driving, Guide, lesson, LESSONS, localStore, openAsks, PART_NAME, partName, PIECES, SCENE_SECONDS, type Input, type Lesson, type Look, type Part, type Point, type Show } from '../game/tutorial.ts'
 import * as S from '../sim/index.ts'
 import { patch, type Ctx } from './core.ts'
@@ -596,20 +596,22 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
   // why; a tip that speaks to that decision stands beside it, and the pause stays the game's.
   function hold(_l: Look): void { holding = null }
 
-  // While a tip is up the days go no faster than the first speed, so it can be read beside what it is about (the
+  // While a tip is up a day takes no less than four seconds, so it can be read beside what it is about (the
   // owner: "it just needs to pause when the things pop up so you can see it"; a tip passing at eight times speed is
   // not seen). When it goes they go back to the speed they had, Skip ahead included. The player's own hand on the
   // clock while a tip is up is kept: nothing is put back over it.
-  let slowed: { back: 1 | 2 | 3; skip: 0 | 1 | 2 | 3; at: number } | null = null
+  // (the first speed where a day is four seconds; where the first speed is a long day, the second)
+  const calmAt = (): 1 | 2 | 3 => ([3, 2, 1] as const).find(k => 1 / DAYS_PER_SECOND[k] >= 3.9) ?? 1
+  let slowed: { back: 1 | 2 | 3; skip: 0 | 1 | 2 | 3; at: number; to: 1 | 2 | 3 } | null = null
   // The tip the player set the clock under with their own hand: it is not slowed again.
   let theirs = ''
   function calm(tip: string): void {
     const t = performance.now()
     if (slowed && pressedAt > slowed.at) { slowed = null; theirs = tip }
     if (!tip) theirs = ''
-    if (tip && tip !== theirs && !slowed && app.speed > 1) {
-      slowed = { back: app.speed as 2 | 3, skip: app.skipBack, at: t }
-      app.setSpeed(1)
+    if (tip && tip !== theirs && !slowed && app.speed > calmAt()) {
+      slowed = { back: app.speed as 2 | 3, skip: app.skipBack, at: t, to: calmAt() }
+      app.setSpeed(slowed.to)
     } else if (slowed && app.speed === 0 && app.pauseCause) {
       // The game stopped for a decision meanwhile: once it is answered the days go on as they would have, at the
       // speed they had, or (a decision Skip ahead was running to) at the speed before the skip.
@@ -618,7 +620,7 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
       app.skipBack = landed ? 0 : slowed.skip
       slowed = null
     } else if (!tip && slowed) {
-      if (app.speed === 1) { app.setSpeed(slowed.back); app.skipBack = slowed.skip }
+      if (app.speed === slowed.to) { app.setSpeed(slowed.back); app.skipBack = slowed.skip }
       slowed = null
     }
   }

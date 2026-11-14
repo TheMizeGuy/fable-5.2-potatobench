@@ -44,7 +44,7 @@ const DAY_ANIM_S = 3.4          // how long a paused day's work takes to play ou
 // A day this long or longer at the clock's speed (seconds) is watched as it is worked.
 const LONG_DAY_S = 30
 // The light through a long day: from this share of the day, this hour (-1 the morning's low sun, 0 noon, 1 the evening's).
-const LONG_HOURS: [number, number][] = [[0, MORNING], [0.2, -0.6], [0.46, 0.56], [0.74, EVENING], [0.985, NIGHT]]
+const LONG_HOURS: [number, number][] = [[0, MORNING], [0.1, -0.72], [0.28, -0.38], [0.5, 0.3], [0.68, 0.6], [0.86, EVENING], [0.985, NIGHT]]
 // The tractor in the opening: how far down the farm road it is as the film starts (metres), and its pace. It comes
 // out from behind the big house in the second shot and is well down the lane by the last.
 const TITLE_MEET_M = 23, TITLE_PACE = 2.2

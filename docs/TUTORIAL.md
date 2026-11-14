@@ -515,7 +515,7 @@ A day at 1× is three and a half minutes (docs/LONGDAY.md), and the speeds are 1
 for the tips:
 
 - The tip for running the days faster comes once planting has begun, with the clock at 1×: "Watch the work, or run
-  the days faster: click 50×." It points at the next speed, not the fastest, and goes when a faster speed has been
+  the days faster: click 50× or 400×." It points at the next speed and names the fastest, and goes when a faster speed has been
   used. It no longer waits for every field to be planted: at 1× that is a quarter of an hour.
 - The tests of the tips run on the short-day clock (four seconds a day at its first speed), where the speeds are
   named 1×, 3× and 8×. The words of a tip that names a speed are read from the clock, so they are right on both.

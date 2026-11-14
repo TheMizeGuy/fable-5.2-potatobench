@@ -288,8 +288,8 @@ export const LESSONS: Lesson[] = [
     id: 'fast', part: 'year', name: 'Run the days faster', hint: true,
     when: (l, g) => inSeason(l) && firstYear(l) && g.passed('plantday') && l.speed === 1 && call(l) < 0 && wordAt(l) < 0 && !g.has('faster'),
     done: (l, g, since) => g.has('faster') || (!!since && l.speed >= 2),
-    ask: l => `Watch the work, or run the days faster: ${by(l, `click ${SPEED_X[2]}`, `tap ${SPEED_X[2]}`, 'press +')}.`,
-    why: () => 'The game stops itself when you have a decision.',
+    ask: l => `Watch the work, or run the days faster: ${by(l, `click ${SPEED_X[2]} or ${SPEED_X[3]}`, `tap ${SPEED_X[2]} or ${SPEED_X[3]}`, 'press +')}.`,
+    why: () => 'The game stops when you have a decision.',
     point: () => ({ testid: ['speed-2', 'speed-cycle'] }),
   },
   {
