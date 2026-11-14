@@ -268,7 +268,7 @@ tall, always lands on something; a strategy game keeps one selection panel.
 
 What changed:
 
-- **At a desk 1600 wide or more (in the interface's own pixels) a field's, a yard's and a person's card stand in
+- **At a desk 1530 wide or more (in the interface's own pixels: 1920 by 1080 and up) a field's, a yard's and a person's card stand in
   one place**: at the right, under the bank board and the clock's chip, above the menu bar, scrolling inside if
   taller than that room. Nothing ties them to the land; what is picked is marked on the land itself
   (`docking()` in `src/ui/season.ts`, the `dock` mode in `src/ui/tie.ts`). Narrower desks keep the card beside

@@ -407,8 +407,9 @@ async function cases(page: Page, t: string): Promise<{ list: Case[]; missing: st
   return { list, missing }
 }
 
-// (at 2560 by 1440 a card has one place at the right and is tied to nothing: e2e/interface.spec.ts, "at a wide desk")
-for (const [w, h] of SIZES.filter(([x]) => x < 2560)) {
+// (at 1920 by 1080 and wider a card has one place at the right and is tied to nothing: e2e/interface.spec.ts, "at a
+// wide desk")
+for (const [w, h] of SIZES.filter(([x]) => x < 1920)) {
   for (const t of TIERS) {
     test(`a card opens beside the thing clicked, tied to it, ${w} by ${h}, the ${t} tier`, async ({ page, isMobile, browserName }) => {
       test.skip(isMobile || browserName !== 'chromium', 'the desk rule, read through the 3D view\'s hooks')
@@ -486,7 +487,8 @@ const CLEAR: Record<string, Record<'its ground' | 'its tag', number>> = {
   '1920x1080 farm': { 'its ground': 0, 'its tag': 1 },
 }
 
-for (const [w, h] of [[1512, 982], [1920, 1080]] as const) {
+// (a card laid beside its field; at 1920 by 1080 it stands in its one place at the right and lies over no tag at all)
+for (const [w, h] of [[1512, 982]] as const) {
   for (const t of TIERS) {
     test(`a field's card leaves the tags of the fields next to it in reach, ${w} by ${h}, the ${t} tier`, async ({ page, isMobile, browserName }) => {
       test.skip(isMobile || browserName !== 'chromium', 'the desk rule, read through the 3D view\'s hooks')

@@ -1144,11 +1144,12 @@ test('a press on the pause key just after an answer is read as go on, once; the 
 
 // The owner, 14 November, of a card laid beside its field and over the menu bar: "its impossible to tell whats even
 // going on in that corner of the screen". At a desk with room for it, every card stands in one place.
-test('at a wide desk a field\'s card and a person\'s stand in one place at the right: under the boards, above the menu bar, over no tag, tied to nothing', async ({ page, isMobile }) => {
+// (the owner's desk, drawn at one and a half times: 1707 by 960 in the interface's own pixels; and the commonest
+// desk, at one and a quarter: 1536 by 864)
+for (const [dw, dh] of [[2560, 1440], [1920, 1080]]) test(`at a wide desk a field's card and a person's stand in one place at the right: under the boards, above the menu bar, over no tag, tied to nothing, ${dw} by ${dh}`, async ({ page, isMobile }) => {
   test.skip(isMobile, 'the desk')
   const errors = watchErrors(page)
-  // (the owner's desk: drawn at one and a half times, 1707 by 960 in the interface's own pixels)
-  await page.setViewportSize({ width: 2560, height: 1440 })
+  await page.setViewportSize({ width: dw, height: dh })
   await startSeason(page)
   await reach(page, `q.run(q.day(7, 6), ['hill', 'spray']); const { app } = q.g(); app.campaign.cash += 5000; app.do({ t: 'hire', kind: 'hand' }); app.setSpeed(0); app.campaign.incidents = []; app.select(-1); app.selectUnit(-1)`)
   await putAway(page)
@@ -1187,7 +1188,9 @@ test('at a wide desk a field\'s card and a person\'s stand in one place at the r
   const p = (await laid('.person-card'))!
   expect(p).not.toBeNull()
   expect(p.over, 'the person\'s card lies over').toEqual([])
-  expect(`${Math.round(p.c.r)},${Math.round(p.c.t)}`, 'the same place as a field\'s card').toBe(places[0])
+  // (to the pixel its own width rounds to)
+  const [fr, ft] = places[0].split(',').map(Number)
+  expect(Math.abs(p.c.r - fr) + Math.abs(p.c.t - ft), `the same place as a field's card (${Math.round(p.c.r)},${Math.round(p.c.t)} against ${places[0]})`).toBeLessThanOrEqual(3)
   expect(p.c.b).toBeLessThan(p.barTop)
   expect(errors, errors.join('\n')).toEqual([])
 })

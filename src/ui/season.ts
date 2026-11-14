@@ -570,7 +570,8 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   // At a desk wide enough for it a card has one place, as a strategy game's selection panel has: at the right, under
   // the bank board and the clock's chip, above the menu bar (the owner, 14 November, of a card laid beside its field
   // and over the bar: "its impossible to tell whats even going on in that corner of the screen").
-  const DOCK_FROM = 1600
+  // (1920 by 1080, drawn at one and a quarter, is 1536 wide in the interface's own pixels)
+  const DOCK_FROM = 1530
   const docking = () => ctx.layout() === 'wide' && toLocal(innerWidth) >= DOCK_FROM
   function dockRoom(): { right: number; top: number; bottom: number } {
     const shown = (x: HTMLElement | null): x is HTMLElement => !!x && !x.hidden && x.offsetParent !== null && x.offsetHeight > 0
