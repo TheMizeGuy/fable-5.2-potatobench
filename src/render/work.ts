@@ -333,7 +333,7 @@ export function crossings(field: number, p0: number, p1: number, n: number, from
 // the real passes (a day is shown in minutes: seventy real crossings cannot be), and each one's ground is the band
 // about it.
 // (an even number of them where the machine goes on to another field: it ends at the end it began from, by the lane)
-export const LANES: Record<string, number> = { plant: 4, hill: 2, spray: 2, kill: 2, water: 4, dig: ROWS }
+export const LANES: Record<string, number> = { plant: 4, hill: 2, spray: 1, kill: 1, water: 4, dig: ROWS }
 const lanePolys = new Map<string, Poly>()
 const laneEnds = new Map<string, number[]>()
 // A planter is filled at the headland it set out from, each time it is back there: seed from barrels set out along
@@ -398,12 +398,12 @@ export function dugHills(done: number): boolean[] {
 
 // A long day's timing. Nominal speeds on the way to work, metres a second: a brisk walk, a tractor on the lane, the
 // truck. The way takes its time at these when the day leaves room, never more than this share of what there is.
-export const LIVE_PACE = { walk: 2.2, tractor: 12, truck: 16 }
+export const LIVE_PACE = { walk: 3.2, tractor: 18, truck: 22 }
 const WAY_SHARE = 0.3
 // The day breaks on people already on their way: of the way to the first work of someone's day, only as much is
 // gone in the day as its time before the work allows at pace, and no less than this (seconds). The night between two
 // days covers the rest of it.
-const DAWN_S = 9
+const DAWN_S = 4
 // now: the time of day the plan is made at (0 as the day begins). was: the part of someone's day, in the plan this
 // one replaces, that began the same work at the same hour: its way keeps the times it had. dawn: where the day
 // breaks on someone (and their machine), when that is not where the evening left them.

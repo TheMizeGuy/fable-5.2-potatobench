@@ -65,29 +65,24 @@ describe('the clock', () => {
     expect(app.speed).toBe(2)
   })
 
-  it('has pause and three speeds: a day of work is three minutes at the first, half a minute at the second, three seconds at the third', () => {
-    // (the owner, 14 November: "days should last like 3-4 minutes at 1x you should be able to watch everyone on your
-    // farm working"; then, of 1x, 50x and 400x: "seem extreme ... thats a big disparity")
+  it('has pause and three speeds, one, two and three times: a day of work is a minute at the first, and the work is watched at all of them', () => {
+    // (the owner, 14 November, of days of three minutes with 6x and 60x above them: "make it play like a true fun RTS
+    // watching all your guys ... make the speed go around the gameplay this is a game not a backend simulator")
     setDays('long')
     try {
       expect(DAYS_PER_SECOND.length).toBe(4)
       expect(DAYS_PER_SECOND[0]).toBe(0)
-      expect(DAY_SECONDS).toBeGreaterThanOrEqual(180)
-      expect(DAY_SECONDS).toBeLessThanOrEqual(240)
+      // One order on one field is done in under a minute: a field's planting is a day of work.
+      expect(DAY_SECONDS).toBeLessThanOrEqual(60)
+      expect(DAY_SECONDS).toBeGreaterThanOrEqual(40)
       expect(1 / DAYS_PER_SECOND[1]).toBeCloseTo(DAY_SECONDS)
-      expect(DAYS_PER_SECOND[2]).toBeGreaterThan(DAYS_PER_SECOND[1])
-      expect(DAYS_PER_SECOND[3]).toBeGreaterThan(DAYS_PER_SECOND[2])
-      // Each speed is named for what it is against the first, and no step between them is more than ten times.
-      expect(SPEED_X.slice(1)).toEqual(['1×', '6×', '60×'])
-      for (const k of [1, 2, 3]) {
-        const x = DAYS_PER_SECOND[k] / DAYS_PER_SECOND[1]
-        expect(Math.abs(Number(SPEED_X[k].slice(0, -1)) - x) / x).toBeLessThan(0.1)
-      }
-      for (const k of [2, 3]) expect(DAYS_PER_SECOND[k] / DAYS_PER_SECOND[k - 1]).toBeLessThanOrEqual(10)
-      // The second speed's day is still long enough to be watched as it is worked.
-      expect(1 / DAYS_PER_SECOND[2]).toBeGreaterThanOrEqual(LONG_DAY_S)
+      // The speeds are a strategy game's: each named for what it is against the first, a step apart.
+      expect(SPEED_X.slice(1)).toEqual(['1×', '2×', '3×'])
+      for (const k of [1, 2, 3]) expect(DAYS_PER_SECOND[k] / DAYS_PER_SECOND[1]).toBeCloseTo(k)
+      // At every one of them a day is long enough to be watched as it is worked.
+      for (const k of [1, 2, 3]) expect(1 / DAYS_PER_SECOND[k]).toBeGreaterThanOrEqual(LONG_DAY_S)
       // Days with no work in them go by in seconds at every speed.
-      expect(QUIET_S).toEqual([0, 3, 1.5, 0.3])
+      expect(QUIET_S).toEqual([0, 6, 3, 2])
       const app = new App(loadWorld())
       app.newGame(undefined, 11)
       app.do({ t: 'begin' })
@@ -100,7 +95,7 @@ describe('the clock', () => {
     expect(QUIET_S).toBeNull()
   })
 
-  it('a new farm\'s first season opens three days before planting, and a day nobody works goes by in three seconds at 1×', () => {
+  it('a new farm\'s first season opens three days before planting, and a day nobody works goes by in six seconds at 1×', () => {
     setDays('long')
     try {
       const app = new App(loadWorld())
@@ -113,24 +108,24 @@ describe('the clock', () => {
       expect(S.plantingIn(app.world, c)).toBeLessThanOrEqual(3)
       expect(S.plantingIn(app.world, c)).toBeGreaterThan(0)
       expect(s.plantAsk).toBeUndefined()
-      // Nothing to do yet: the days before the soil is fit go by in three seconds each, and the game stops for the word.
+      // Nothing to do yet: the days before the soil is fit go by in six seconds each, and the game stops for the word.
       app.setSpeed(1)
       const day = s.day
       let ms = 0
-      for (; ms < 60_000 && app.speed > 0; ms += 50) app.tick(50)
+      for (; ms < 90_000 && app.speed > 0; ms += 50) app.tick(50)
       expect(app.pauseCause).toBe('plantAsk')
       const days = s.day - day
       expect(days).toBeGreaterThan(0)
-      expect(ms / 1000 / days, 'seconds to a day with no work').toBeLessThan(4)
-      // The word given: the planting day is a day of work, three minutes long.
+      expect(ms / 1000 / days, 'seconds to a day with no work').toBeLessThan(7.5)
+      // The word given: the planting day is a day of work, a minute long.
       app.order('plant', { fields: [app.needs().findIndex(n => n.need?.act === 'plant')] })
       app.setSpeed(1)
       const planting = s.day
-      for (ms = 0; ms < 100_000 && s.day === planting; ms += 50) { c.incidents = []; app.tick(50); if (app.speed === 0) app.setSpeed(1) }
-      expect(s.day, 'still the planting day after a hundred seconds').toBe(planting)
+      for (ms = 0; ms < 30_000 && s.day === planting; ms += 50) { c.incidents = []; app.tick(50); if (app.speed === 0) app.setSpeed(1) }
+      expect(s.day, 'still the planting day after half a minute').toBe(planting)
       expect(app.hurrying).toBe(false)
-      expect(app.dayProgress).toBeGreaterThan(0.45)
-      expect(app.dayProgress).toBeLessThan(0.65)
+      expect(app.dayProgress).toBeGreaterThan(0.4)
+      expect(app.dayProgress).toBeLessThan(0.6)
     } finally { setDays('brisk') }
   })
 
@@ -206,7 +201,7 @@ describe('the clock', () => {
       const day = c.season!.day
       app.setSpeed(1)
       const seen: number[] = []
-      for (let k = 0; k < 20 * 105 && c.season!.day === day; k++) {
+      for (let k = 0; k < 20 * 105 && c.season!.day === day && app.dayProgress < 0.55; k++) {
         c.incidents = []
         app.tick(50)
         if (app.speed === 0) app.setSpeed(1)

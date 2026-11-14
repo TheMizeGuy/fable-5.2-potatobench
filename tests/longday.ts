@@ -27,6 +27,10 @@ export interface LongSeen {
   ahead: string[]                       // ground shown worked that the day's end did not have worked
   atWork: { kind: string; field: number; unit: number; hours: number; seen: number }[]   // each stretch of row work in the days' records, and the share of its hours a machine was seen at it in its field
   filled: number                        // seconds a planter stood at the headland with its driver down beside it
+  // How it plays, in real seconds at the speed run: the whole run; of it, time going by with no work in it (hurried);
+  // time nobody on the farm was at anything (dead air: hurried time is part of it); each person's time at something
+  // (on the way or at work); the first money from a crop; and how long each stretch of machine work took.
+  feel: { seconds: number; hurried: number; dead: number; busy: Record<number, number>; firstSale: number; jobs: number[] }
   replans: { at: number; moved: number }[]   // an order given part way through a day: how far anyone in sight was moved by the new plan
   orders: string[]
   plans: string[]
@@ -35,7 +39,7 @@ export interface LongSeen {
 // job: the work the day is begun for (the first day the farm's advice asks for it). order: at this share of the first
 // day, a second order (rocks on a resting field). hands: field hands hired.
 // soak: every morning the farm's advice is ordered, as a player who does all that is asked would (a whole season).
-export function watchLong(opts: { job: sim.JobKind; days?: number; order?: number; hands?: number; dt?: number; seed?: number; soak?: boolean }): LongSeen {
+export function watchLong(opts: { job: sim.JobKind; days?: number; order?: number; hands?: number; dt?: number; seed?: number; soak?: boolean; speed?: 1 | 2 | 3 }): LongSeen {
   setDays('long')
   const app = new App(world)
   app.settings.pauseOnAlerts = false
@@ -70,7 +74,7 @@ export function watchLong(opts: { job: sim.JobKind; days?: number; order?: numbe
   let dirty = false, dayPassed = false, dayT = 1
   let longKey = '', longFor = -1, longShares = new Map<string, number>()
   const doneToday = new Set<number>()
-  const out: LongSeen = { days: 0, jumps: [], fastest: { foot: 0, rig: 0, working: 0 }, where: { foot: '', rig: '' }, slowestWorking: 0, slid: 0, popped: 0, shown: 0, ahead: [], atWork: [], filled: 0, replans: [], orders: [], plans: [] }
+  const out: LongSeen = { days: 0, jumps: [], fastest: { foot: 0, rig: 0, working: 0 }, where: { foot: '', rig: '' }, slowestWorking: 0, slid: 0, popped: 0, shown: 0, ahead: [], atWork: [], filled: 0, feel: { seconds: 0, hurried: 0, dead: 0, busy: {}, firstSale: 0, jobs: [] }, replans: [], orders: [], plans: [] }
   app.on(e => { if (e.type === 'change' || e.type === 'screen') dirty = true; else if (e.type === 'events') { dirty = true; if (e.dayPassed) dayPassed = true } })
   const reveal = (r: PendingReveal, late: boolean) => { shown[r.field][r.hill] = { look: r.look, ridge: r.ridge }; doneToday.add(r.field * sim.HILLS + r.hill); if (late) out.popped++; else out.shown++ }
   const passed = (unit: number, seg: number, arc: number, gen: number) => {
@@ -160,7 +164,12 @@ export function watchLong(opts: { job: sim.JobKind; days?: number; order?: numbe
       })
       particles.update(dt, 0, 0)
       const w = crews.where()
-      const all = [...w.units.map(u => ({ key: `person ${u.id}`, x: u.x, z: u.z, fade: u.fade, foot: u.foot, most: u.foot ? 4.5 : 17 })), ...w.rigs.map(r => ({ key: r.key, x: r.x, z: r.z, fade: r.fade, foot: false, most: 17 }))]
+      out.feel.seconds += dt
+      if (app.hurrying) out.feel.hurried += dt
+      if (!w.units.some(u => u.act)) out.feel.dead += dt
+      for (const u of w.units) if (u.act) out.feel.busy[u.id] = (out.feel.busy[u.id] ?? 0) + dt
+      if (!out.feel.firstSale && c.season?.fields.some(f => f.weighed)) out.feel.firstSale = out.feel.seconds
+      const all = [...w.units.map(u => ({ key: `person ${u.id}`, x: u.x, z: u.z, fade: u.fade, foot: u.foot, most: u.foot ? 6 : 27 })), ...w.rigs.map(r => ({ key: r.key, x: r.x, z: r.z, fade: r.fade, foot: false, most: 27 }))]
       let moved = 0
       for (const p of all) {
         const b = was.get(p.key)
@@ -225,6 +234,7 @@ export function watchLong(opts: { job: sim.JobKind; days?: number; order?: numbe
   } finally { WATCH.on = false; WATCH.rows.length = 0 }
   paces.sort((a, b) => a - b)
   out.slowestWorking = paces.length ? paces[Math.floor(paces.length / 2)] : 0
+  out.feel.jobs = [...stretches.values()].map(st => (st.to - st.from) * DAY_SECONDS).sort((a, b) => a - b)
   out.atWork = [...stretches.values()].map(st => ({ kind: st.kind, field: st.field, unit: st.unit, hours: st.to - st.from, seen: st.frames ? st.seen / st.frames : 0 }))
   crews.dispose()
   particles.dispose()

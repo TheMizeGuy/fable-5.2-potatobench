@@ -205,7 +205,7 @@ export class Stage {
     m.walking = dist > (m.walking ? 0.06 : 0.4) * f.s
     if (m.walking) {
       // (a long way to their own part of the work is hurried over)
-      const step = Math.min(dist, (f.going ? Math.max(1.5 * f.s * (1 - 0.4 * w.tired), dist > 14 ? Math.min(dist * 0.9, f.live ? 3.6 : f.pace * 1.5) : 0) : 0) * f.dt)
+      const step = Math.min(dist, (f.going ? Math.max(1.5 * f.s * (1 - 0.4 * w.tired), dist > 14 ? Math.min(dist * 0.9, f.live ? 5 : f.pace * 1.5) : 0) : 0) * f.dt)
       m.x += (dx / dist) * step
       m.z += (dz / dist) * step
       w.heading = Math.atan2(dz, dx)

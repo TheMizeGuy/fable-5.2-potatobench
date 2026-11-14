@@ -689,7 +689,8 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     // A long day has its own light: the morning's, higher toward noon, over the top to the afternoon's, the evening's,
     // and as the day turns the night, out of which the next morning comes. The sun stands at each and is moved to the
     // next in some seconds (below): it does not creep.
-    if (longDay && season && heldHour === null && !reduced) {
+    // (a day of minutes: one of a minute would be a morning and a night every minute, so those keep the light below)
+    if (longDay && DAY_SECONDS >= 120 && season && heldHour === null && !reduced) {
       const p = longKey && app.campaign?.season?.day === longFor ? app.dayProgress : 0
       let h = MORNING
       for (const [from, hour] of LONG_HOURS) if (p >= from) h = hour
@@ -908,7 +909,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     if (crews.stageHold >= 0 && snap.mode === 'season' && !longDay) dayT = Math.min(dayT, crews.stageHold)
     aimHour(false)
     // (a long day's sun is moved from one of its hours to the next in some seconds, not in one)
-    easeEnv(env, envT, 1 - Math.exp(-dt / 1.1), reduced ? dt * 4 : longDay && snap.mode === 'season' ? dt * 0.3 : dt)
+    easeEnv(env, envT, 1 - Math.exp(-dt / 1.1), reduced ? dt * 4 : longDay && DAY_SECONDS >= 120 && snap.mode === 'season' ? dt * 0.3 : dt)
     const pace = (reduced ? STILL : 1) * live
     const wx = Math.cos(env.windDir), wz = Math.sin(env.windDir)
     U.uTime.value = ambient

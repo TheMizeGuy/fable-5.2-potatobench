@@ -78,9 +78,9 @@ const CATCH_UP = 1.6
 // (m/s); half as fast again at 3x and two and a half times at 8x. The script's own ways keep within it.
 const FOOT_MOST = 9, RIG_MOST = 28
 // On a long day: a run, and a machine flat out on the lane.
-const LIVE_FOOT_MOST = 4.2, LIVE_RIG_MOST = 17
+const LIVE_FOOT_MOST = 5.5, LIVE_RIG_MOST = 26
 // Filling a planter at the headland: seconds stopped, and barrels of seed tipped in.
-const FILL_S = 8.5, FILL_BARRELS = 4
+const FILL_S = 5, FILL_BARRELS = 2
 
 // Where a machine that stops to be filled is, w of the way through its T seconds of work over L metres: it goes at
 // one pace between the stops and stands FILL_S at each. stop: which it stands at (-1 none), k: how far through that.
@@ -183,6 +183,7 @@ interface Actor {
   led: boolean             // and was, when its plan came
   fade: number             // 1 as they are; less while they go from sight and come back where a way is cut
   cutSeg?: Seg | null      // a long day: the part of the day whose way they have come through a cut for
+  act?: string             // this frame: what they are at ('' nothing, 'way' going to work, else the work's kind)
 }
 
 // waited: the interface is waiting to see this day's work (a test dig; the digging of a field whose crop is weighed)
@@ -925,14 +926,14 @@ export class Crews {
   // Where the farmer's machine is, and the person on foot if anyone is walking (for the look tools).
   // (fade: below 1 while they are gone from sight where a way is cut; work: the row work a machine is at, or '';
   // doing: 'wait' for a machine someone else has, 'rows' at a machine's row work, or '')
-  where(): { tractor: Pt; farmer: { x: number; z: number; turn: number } | null; units: { id: number; kind: UnitKind; x: number; z: number; foot: boolean; fade: number; doing: string }[]; rigs: { kind: string; key: string; x: number; z: number; holder: number; broken: boolean; fade: number; work: string; tool: string }[] } {
+  where(): { tractor: Pt; farmer: { x: number; z: number; turn: number } | null; units: { id: number; kind: UnitKind; x: number; z: number; foot: boolean; fade: number; doing: string; act: string }[]; rigs: { kind: string; key: string; x: number; z: number; holder: number; broken: boolean; fade: number; work: string; tool: string }[] } {
     const f = this.actors.find(a => a.kind === 'farmer')
     const rig = f?.rig ?? this.rigs.find(r => r.kind === 'tractor')
     const walker = this.actors.find(a => !a.aboard && a.segs.length > 0) ?? this.actors.find(a => !a.aboard)
     return {
       tractor: rig ? { x: rig.x, z: rig.z } : { x: 0, z: 0 },
       farmer: walker ? { x: walker.x, z: walker.z, turn: -walker.heading } : null,
-      units: this.actors.map(a => ({ id: a.id, kind: a.kind, x: a.sx, z: a.sz, foot: !a.aboard, fade: a.away ? 0 : a.fade, doing: a.away ? '' : a.doing })),
+      units: this.actors.map(a => ({ id: a.id, kind: a.kind, x: a.sx, z: a.sz, foot: !a.aboard, fade: a.away ? 0 : a.fade, doing: a.away ? '' : a.doing, act: a.away ? '' : a.act ?? '' })),
       rigs: this.rigs.map(r => ({ kind: r.kind, key: r.key, x: r.sx, z: r.sz, holder: r.holder, broken: r.broken, fade: r.fade, work: r.state.working > 0 ? r.state.kind : '', tool: r.kind === 'tractor' ? (r.machine as Tractor).current : '' })),
     }
   }
@@ -1380,6 +1381,7 @@ export class Crews {
       a.aboard = true
     }
     let site: { key: string; kind: string; field: number; w: number; loads: number; lit: boolean } | null = null
+    a.act = ''
     if (!seg) {
       // Waiting for a machine out in a field: off the rows to the field's end, and there until it is theirs.
       const within = waiting && !a.aboard ? fieldAt(a.x, a.z) : -1
@@ -1459,6 +1461,7 @@ export class Crews {
       tShare = drive / (drive + work)
       if (p < 0.92 && f.season) this.stageHold = this.stageHold < 0 ? seg.end - 1e-3 : Math.min(this.stageHold, seg.end - 1e-3)
     }
+    a.act = a.u >= seg.end - 1e-9 ? '' : seg.kind === 'travel' || p < tShare || a.way ? 'way' : seg.kind
     if (a.way) {
       const wy = a.way, was = wy.t
       if (going) wy.t += f.clock

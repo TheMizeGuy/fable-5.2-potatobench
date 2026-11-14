@@ -8,22 +8,23 @@ import { neighborYear } from './neighbor.ts'
 import { clearSave, parseSave, readSave, readSettings, serialize, writeSave, writeSettings, type SaveFile } from './save.ts'
 
 export type Speed = 0 | 1 | 2 | 3
-// Pause and three speeds. A day of work takes three minutes at the first: the work is watched as it is done, a
-// tractor crossing a field and coming back. At the second it takes half a minute, the same work run six times
-// faster; at the third three seconds. Each is named for what it is against the first, in round figures.
+// Pause and three speeds, set from the work and not from the calendar (the owner, 14 November: "make it play like a
+// true fun RTS watching all your guys ... make the speed go around the gameplay this is a game not a backend
+// simulator"): at the first a day of work is a minute, so one order on one field is watched from start to finish in
+// well under a minute (a field planted in a minute, hilled in half, sprayed in a quarter); the second and third are
+// twice and three times that, as a strategy game's speeds are, and the work is watched at every one of them.
 // Time with no work in it goes by quickly at every speed (QUIET_S: a day nobody works, and what is left of a day
-// once its last work is done): the days are long for the work in them, and the crop need not be waited for (the
-// owner, 14 November: "things dont have to grow as they would in real life its a game").
-export const DAY_SECONDS = 180
-// A day this long or longer at the clock's speed (seconds) is watched as it is worked, and counted by the hour.
-export const LONG_DAY_S = 25
+// once its last work is done): the clock keeps to what the people are doing, and the crop is not waited for.
+export const DAY_SECONDS = 60
+// A day this long or longer at the clock's speed (seconds) is watched as it is worked, and counted as it goes.
+export const LONG_DAY_S = 10
 export const DAY_HOURS = 11
 // ('brisk' is the clock the game had before days were long: four seconds a day at its first speed, every day the
 // same length. Tests of everything that is not the long day itself run on it, so a test that waits for a day waits
 // four seconds.)
-const LADDERS = { long: [0, 1 / DAY_SECONDS, 1 / 30, 1 / 3], brisk: [0, 0.25, 0.75, 2] }
+const LADDERS = { long: [0, 1 / DAY_SECONDS, 2 / DAY_SECONDS, 3 / DAY_SECONDS], brisk: [0, 0.25, 0.75, 2] }
 // Seconds a day with no work in it takes at each speed (null: such a day is as long as any other).
-const QUIETS: Record<keyof typeof LADDERS, number[] | null> = { long: [0, 3, 1.5, 0.3], brisk: null }
+const QUIETS: Record<keyof typeof LADDERS, number[] | null> = { long: [0, 6, 3, 2], brisk: null }
 export let QUIET_S: number[] | null = QUIETS.long
 // A new farm's first season opens this many days before the soil is expected to be fit to plant.
 export const OPEN_BEFORE_PLANTING = 3
@@ -678,6 +679,7 @@ export class App {
     this.emit({ type: 'speed', speed })
   }
 
+  private sinceCount = 0
   // Whether the time now going by has no work in it: nobody works today, or today's last work is done.
   hurrying = false
   private quietNow(c: Campaign): boolean {
@@ -771,7 +773,10 @@ export class App {
         const at = c.season.clock?.at ?? 0
         const ahead = this.ahead && this.ahead.rev === this.revision ? this.ahead.c.season?.clock?.log : undefined
         const dug = !!ahead && ahead.some(x => x.kind === 'sample' && x.to > at + 1e-4 && x.to <= this.dayProgress)
-        if (dug || (!quiet && Math.floor(this.dayProgress * DAY_HOURS) / DAY_HOURS > at + 1e-6)) {
+        // (by the hour, and no oftener than every three seconds of play)
+        this.sinceCount += Math.min(dtMs, 250)
+        if (dug || (!quiet && this.sinceCount >= 3000 && Math.floor(this.dayProgress * DAY_HOURS) / DAY_HOURS > at + 1e-6)) {
+          this.sinceCount = 0
           const events = this.upToNow()
           this.dirty = true
           this.emit({ type: 'change' })
