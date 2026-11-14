@@ -1314,6 +1314,12 @@ for (const [w, h] of [[1440, 900], [1280, 800], [1280, 720]] as const) {
     // The body between the head and the foot: wheeled down, it stays there through two seconds of the game's updates.
     const wheeled = async (id: string, how: string) => {
       const body = page.locator(`#ui [data-testid="${id}"] > .card-body`)
+      // (the day is begun first: its morning gives out the day's orders, and what the card says of them changes then;
+      // and from its beginning, so the two seconds below do not reach its end, where the card changes again)
+      await a(page, 'app.dayProgress = 0; app.setSpeed(1)')
+      await page.waitForTimeout(300)
+      await a(page, 'app.setSpeed(0); app.campaign.incidents = []')
+      await page.waitForTimeout(300)
       const room = await body.evaluate(b => [b.scrollHeight, b.clientHeight])
       if (room[0] <= room[1] + 1) return
       const b = (await body.boundingBox())!

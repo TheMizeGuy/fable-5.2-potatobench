@@ -217,7 +217,8 @@ test('a first year with tips: they never stop the game, never need a press, neve
   // it goes (a tip a card came over for a moment counts as one that came and went). Nothing else changes the clock.
   const forTip = (c: { t: number; from: number; to: number }) => tips.some(t => (c.to === 1 && c.from > 1 && Math.abs(c.t - t.came) < 3000) || (c.from === 1 && c.to > 1 && !!t.went && Math.abs(c.t - t.went) < 3000))
   const stray = changes.filter(c => !forTip(c))
-  expect(stray.map(c => `${c.from} to ${c.to} ${c.at}`), 'the clock changed without the player\'s hand, and not for a tip').toEqual([])
+  const t00 = begun
+  expect(stray.map(c => `${c.from} to ${c.to} at ${((c.t - t00) / 1000).toFixed(1)} s ${c.at}`), `the clock changed without the player's hand, and not for a tip (tips: ${tips.map(t => `${t.id} ${((t.came - t00) / 1000).toFixed(1)}-${t.went ? ((t.went - t00) / 1000).toFixed(1) : ''}`).join(', ')}; every change: ${changes.map(c => `${c.from}>${c.to} ${((c.t - t00) / 1000).toFixed(1)}`).join(', ')})`).toEqual([])
   expect(camera, 'times the camera moved without the player\'s hand').toBe(0)
   // The first tips of a first year: the key for a wait while the soil warms (when it is cold), then the word to plant.
   expect(tips.map(t => t.id).filter(id => id === 'clock' || id === 'word' || id === 'plantday').slice(-2)).toEqual(['word', 'plantday'])
