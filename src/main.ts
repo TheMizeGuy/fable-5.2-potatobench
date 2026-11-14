@@ -4,7 +4,7 @@ import notes from './data/notes.json'
 import prices from './data/prices.json'
 import records from './data/records.json'
 import { createSound } from './audio/index.ts'
-import { App } from './game/app.ts'
+import { App, setDays } from './game/app.ts'
 import { createFieldView } from './render/index.ts'
 import { laps } from './render/laps.ts'
 import * as sim from './sim/index.ts'
@@ -38,6 +38,9 @@ function start(): void {
   })
 
   mark('world')
+  // (the short-day clock the game had before days were long, for tests of everything else: ?days=brisk, or set by the
+  // test before the page loads)
+  if (new URLSearchParams(location.search).get('days') === 'brisk' || (globalThis as { __countyDays?: string }).__countyDays === 'brisk') setDays('brisk')
   const app = new App(world)
   const canvas = document.getElementById('field') as HTMLCanvasElement
   mark('app')

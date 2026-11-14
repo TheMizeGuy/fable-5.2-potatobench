@@ -4,7 +4,7 @@ import {
   BackSide, Color, CustomBlending, DoubleSide, FloatType, FrontSide, Group, OneFactor, PCFShadowMap, Raycaster, Scene, Triangle, Vector2, Vector3, WebGLRenderer, WebGLRenderTarget, ZeroFactor,
   type Material, type Mesh, type MeshDepthMaterial, type MeshStandardMaterial, type Object3D, type Side,
 } from 'three'
-import { DAYS_PER_SECOND, type App } from '../game/app.ts'
+import { DAYS_PER_SECOND, DAY_SECONDS, type App } from '../game/app.ts'
 import type { CreateFieldView, FieldView, Place, Thing } from '../game/contracts.ts'
 import { FIELD_COUNT, HILLS } from '../sim/index.ts'
 import { CameraRig, HOME_FIELD, MIN_DIST, MOVE_MS, pitchFor, TITLE_FILM_S, titleShade, type Pose, type TierName, type Viewport } from './camera.ts'
@@ -41,6 +41,8 @@ import { Weather } from './weather.ts'
 import { Poly, type Reveal } from './work.ts'
 
 const DAY_ANIM_S = 3.4          // how long a paused day's work takes to play out
+// A day this long or longer at the clock's speed (seconds) is watched as it is worked.
+const LONG_DAY_S = 30
 // The tractor in the opening: how far down the farm road it is as the film starts (metres), and its pace. It comes
 // out from behind the big house in the second shot and is well down the lane by the last.
 const TITLE_MEET_M = 23, TITLE_PACE = 2.2
@@ -202,8 +204,16 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
 
   const env = makeEnv(), envT = makeEnv(), lit = makeLight()
   let snap: Snapshot = snapshot(app)
-  let shown: HillDisplay[][] = snap.fields.map(f => f.hills.map(look => ({ look, ridge: f.ridge })))
+  let shown: HillDisplay[][] = snap.fields.map(f => f.hills.map((look, h) => ({ look, ridge: f.ridges?.[h] ?? f.ridge })))
   let dayT = 1
+  // A long day (a day of some minutes at the clock's speed) is watched as it is worked: the day's plan is made from
+  // the day as it will go (app.today()) when the day begins, and again when an order changes it; the ground changes
+  // where the work has been, ahead of the farm's own count, which has the day's work when the day is over.
+  // longKey: the day and the order count the plan in hand was made for ('' when there is none). doneToday: the hills
+  // shown worked ahead of the count.
+  let longDay = false, longKey = ''
+  let longShares = new Map<string, number>()
+  const doneToday = new Set<number>()
   let dirty = true, dayPassed = false, first = true, turnHeld = false
   // Whether the clock was running when the day just counted was counted (what it brought may have stopped it since).
   let dayRan = false
@@ -441,11 +451,12 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   })
 
   function display(f: number, h: number, s: Snapshot): HillDisplay {
-    return { look: s.fields[f].hills[h], ridge: s.fields[f].ridge }
+    return { look: s.fields[f].hills[h], ridge: s.fields[f].ridges?.[h] ?? s.fields[f].ridge }
   }
 
   function reveal(r: Reveal, animate: boolean): void {
     shown[r.field][r.hill] = { look: r.look, ridge: r.ridge }
+    if (longDay) doneToday.add(r.field * HILLS + r.hill)
     fields.setHill(r.field, r.hill, shown[r.field][r.hill], snap.fields[r.field])
     if (!animate) return
     const fv = snap.fields[r.field]
@@ -487,14 +498,29 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     const next = snapshot(app)
     const prev = snap
     const sameSeason = dayPassed && !first && prev.mode === 'season' && next.mode === 'season' && prev.year === next.year
-    if (sameSeason) flush(app.speed < 3 && !reduced, true)
+    const long = next.mode === 'season' && app.daySeconds() >= LONG_DAY_S
+    if (long !== longDay) {
+      // (the clock changed between long days and short: everyone is next seen where the new clock's day has them)
+      longDay = long
+      longKey = ''
+      doneToday.clear()
+      if (!first) crews.cut()
+    }
+    if (sameSeason) flush(app.speed < 3 && !reduced, !long)
     snap = next
     if (next.mode !== 'season') {
       harvest.clear()
       dugSince.clear()
     }
     const sameDay = !dayPassed && !first && prev.mode === next.mode && prev.year === next.year && prev.seasonDay === next.seasonDay
-    if (sameSeason) {
+    if (sameSeason && long) {
+      // The day's turn: the day was seen as it was worked, and the farm's count now has it.
+      for (const [f, s] of samples) lastSample.set(f, s)
+      doneToday.clear()
+      longKey = ''
+      crews.sync(next)
+      shown = next.fields.map((f, i) => f.hills.map((_, h) => display(i, h, next)))
+    } else if (sameSeason) {
       for (const [f, s] of samples) lastSample.set(f, s)
       pending = pending.concat(crews.plan(next, shown, new Map([...samples].map(([f, s]) => [f, s.hill])), new Set(waiters.filter(w => w.kind === 'dig').map(w => w.field)), dayRan))
       const wait = new Set(pending.map(r => r.field * HILLS + r.hill))
@@ -506,9 +532,9 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       // A command in the middle of the day: keep the day playing, refresh everything not waiting to be revealed.
       crews.sync(next)
       // (an order just given, with the clock running: whoever would take it sets out)
-      if (app.speed > 0) crews.setOut(next)
+      if (app.speed > 0 && !long) crews.setOut(next)
       const wait = new Set(pending.map(r => r.field * HILLS + r.hill))
-      shown = next.fields.map((f, i) => f.hills.map((_, h) => (wait.has(i * HILLS + h) ? shown[i][h] : display(i, h, next))))
+      shown = next.fields.map((f, i) => f.hills.map((_, h) => (wait.has(i * HILLS + h) || doneToday.has(i * HILLS + h) ? shown[i][h] : display(i, h, next))))
     } else {
       flush(false)
       shown = next.fields.map((f, i) => f.hills.map((_, h) => display(i, h, next)))
@@ -523,6 +549,27 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
         rig.moveTo(framedPose(viewport()), first || reduced, next.mode === 'title' || prev.mode === 'title' ? 2600 : MOVE_MS)
       } else crews.sync(next)
       dayT = next.mode === 'title' ? 0 : 1
+    }
+    // A long day's plan: made when the day has begun, and again when an order has changed what the day will be.
+    const season = app.campaign?.season
+    if (long && season?.clock) {
+      const day = `${next.year}|${next.seasonDay}|`, key = `${day}${app.revision}`
+      const ahead = key !== longKey ? app.today() : null
+      if (ahead) {
+        if (!longKey.startsWith(day)) longShares = new Map(season.jobs.filter(j => j.need > 0 && j.done > 0).map(j => [`${j.field}|${j.kind}`, Math.min(1, j.done / j.need)]))
+        longKey = key
+        const hills = new Map<number, number>()
+        for (const ev of app.todayEvents()) {
+          if (ev.type !== 'sample' || ev.field < 0 || !ev.data || typeof ev.data.hill !== 'number') continue
+          hills.set(ev.field, ev.data.hill)
+          lastSample.set(ev.field, { hill: ev.data.hill, weights: Array.isArray(ev.data.weights) ? ev.data.weights : [], marks: Array.isArray(ev.data.marks) ? ev.data.marks : [] })
+        }
+        // (what was still to be shown is planned again: the same ground, if the day still has it worked)
+        pending = crews.plan(snapshot(app, ahead), shown, hills, new Set(), true, { daySec: DAY_SECONDS, day: next.seasonDay, shares: longShares })
+        dayT = app.dayProgress
+        digDir.clear()
+        for (const s of crews.segments()) if (s.kind === 'dig' && !digDir.has(s.field) && s.path.length > 1) { const p = new Poly(s.path).at(0); digDir.set(s.field, { dx: p.dx, dz: p.dz }) }
+      }
     }
     for (let i = 0; i < FIELD_COUNT; i++) {
       const st = next.fields[i].status
@@ -839,8 +886,10 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     else if (dirty) { turnHeld = false; rebuild() }
     // Day clock: follows the game clock when it runs, plays the day out by itself when paused.
     if (snap.mode === 'title') dayT = titleDay()
+    // (a long day keeps the game's own time; between its end and the next day's plan everyone is where it left them)
+    else if (longDay && snap.mode === 'season') dayT = longKey ? app.dayProgress : 1
     else if (dayT < 1) dayT = Math.min(1, app.speed > 0 ? Math.max(dayT + dt / DAY_ANIM_S * 0.25, app.dayProgress) : dayT + dt / DAY_ANIM_S * replayPace)
-    if (crews.stageHold >= 0 && snap.mode === 'season') dayT = Math.min(dayT, crews.stageHold)
+    if (crews.stageHold >= 0 && snap.mode === 'season' && !longDay) dayT = Math.min(dayT, crews.stageHold)
     aimHour(false)
     easeEnv(env, envT, 1 - Math.exp(-dt / 1.1), reduced ? dt * 4 : dt)
     const pace = (reduced ? STILL : 1) * live
@@ -899,9 +948,9 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     laps.end('land: clocks, light, camera')
     const t0 = performance.now()
     crews.place({
-      dt: wdt, dayT, advancing: app.speed > 0, pace: replayPace, time, reduced, idle: snap.mode !== 'season' && snap.mode !== 'title',
+      dt: wdt, dayT, advancing: app.speed > 0, live: longDay && snap.mode === 'season', pace: replayPace, time, reduced, idle: snap.mode !== 'season' && snap.mode !== 'title',
       season: snap.mode === 'season', dist: rig.cur.dist, dust: env.dry, dark: clamp((LAMP.value * lit.exposure) / 5, 0, 1), picked: app.unit, particles, passed, snap, env, camera: cam,
-      speed: app.speed, daySec: 1 / DAYS_PER_SECOND[Math.max(1, app.speed)], clock: Math.min(0.25, dtMs / 1000) * live,
+      speed: app.speed, daySec: longDay ? DAY_SECONDS : 1 / DAYS_PER_SECOND[Math.max(1, app.speed)], clock: Math.min(0.25, dtMs / 1000) * live,
     })
     // Smoke from the kitchen chimney: all day in the cold, a thread of it at supper time. It goes on rising and leans
     // away downwind, a plume a few roofs high: from two fields off it says where the house is and which way the wind sets.

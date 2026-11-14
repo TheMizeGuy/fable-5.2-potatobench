@@ -341,8 +341,13 @@ export interface Season {
   log: GameEvent[]
   pickers: boolean          // a picking crew hired by the day for the harvest break
   // While a day is being worked: how far into it the crews have got (a share of the day), who minds the stand (-1
-  // nobody), and each person's day so far (time not used, waits, what they worked at). Gone once the day is over.
-  clock?: { at: number; stand: number; turns: { id: number; left: number; waited: number; spent: Record<Skill, number>; tractor: boolean }[] }
+  // nobody), each person's day so far (time not used, waits, what they worked at), and the hours of every stretch of
+  // work done in it. Gone once the day is over.
+  clock?: {
+    at: number; stand: number
+    turns: { id: number; left: number; waited: number; spent: Record<Skill, number>; tractor: boolean }[]
+    log: { unit: number; kind: JobKind; field: number; from: number; to: number }[]
+  }
 }
 
 export interface YearSummary {

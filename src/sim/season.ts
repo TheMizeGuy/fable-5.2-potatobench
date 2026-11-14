@@ -654,8 +654,24 @@ const IMPLEMENT: Partial<Record<JobKind, 'boom' | 'harvester' | 'reel'>> = { spr
 interface Booking { rig: Rig; keys: string[]; start: number }
 
 // The day's record of a stretch of work; machine work says which machine and its hours, for the picture.
+// The hours of every stretch of the day's work, on foot or with a machine, while the day lasts: what the land shows
+// being done through a long day is timed by them.
+function logHours(s: Season, t: Turn, kind: JobKind, field: number, time: number): void {
+  const log = s.clock?.log
+  if (!log || time <= 0) return
+  const from = t.end - t.left - time, to = t.end - t.left
+  for (let k = log.length - 1; k >= 0; k--) {
+    const o = log[k]
+    if (o.unit !== t.u.id) continue
+    if (o.kind === kind && o.field === field && Math.abs(o.to - from) < 1e-4) { o.to = to; return }
+    break
+  }
+  log.push({ unit: t.u.id, kind, field, from, to })
+}
+
 function logWork(s: Season, t: Turn, kind: JobKind, field: number, time: number): void {
   const u = t.u
+  logHours(s, t, kind, field, time)
   const w: Season['worked'][number] = u.rig && t.keys.length ? { kind, field, unit: u.id, rig: u.rig, machine: t.keys[0], from: t.end - t.left - time, to: t.end - t.left } : { kind, field, unit: u.id }
   // Later in a day worked in stretches: work carried straight on is one stretch in the record, and work on foot is
   // said once.
@@ -898,6 +914,7 @@ function buildDay(world: World, c: Campaign, s: Season, t: Turn, job: Job, _d: D
   t.spent.build += time
   job.done += use
   job.need = b.need
+  logHours(s, t, 'build', job.field, time)
   if (!s.worked.some(w => w.kind === 'build' && w.field === job.field && w.unit === u.id)) s.worked.push({ kind: 'build', field: job.field, unit: u.id })
   if (buildWork(c, b, use)) {
     const k = s.jobs.indexOf(job)
@@ -1120,7 +1137,7 @@ function dayStart(c: Campaign, s: Season, out: GameEvent[]): void {
   s.pressed = []
   s.digStop = []
   s.worked = []
-  s.clock = { at: 0, stand: standMinder(c, s, turnsFor(c, s)), turns: [] }
+  s.clock = { at: 0, stand: standMinder(c, s, turnsFor(c, s)), turns: [], log: [] }
 }
 
 // Works the day on to a time of day (a share of it, 1 the evening), starting the day if it has not begun. An order

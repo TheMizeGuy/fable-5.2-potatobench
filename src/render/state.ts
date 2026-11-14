@@ -2,6 +2,7 @@
 import type { App } from '../game/app.ts'
 import * as sim from '../sim/index.ts'
 import { hash2 } from './noise.ts'
+import { dugHills, workedHills } from './work.ts'
 
 export type Mode = 'title' | 'plan' | 'season' | 'cellar' | 'ledger' | 'over'
 
@@ -12,6 +13,7 @@ export interface FieldVis {
   status: string
   hills: sim.HillLook[]
   ridge: number            // 0 flat, 0.1 planted, 0.55 hilled once, 1 hilled twice
+  ridges?: number[]        // hill by hill, while a planting or a hilling is part done: the ground behind the machine
   moisture: sim.Moisture
   bloom: number
   wilt: number
@@ -117,14 +119,18 @@ export interface Snapshot {
 }
 
 const BARE: sim.HillLook = { kind: 'bare', canopy: 0, vigor: 1, blight: 0, stunted: false, yellow: 0 }
+const SEED: sim.HillLook = { kind: 'seed', canopy: 0, vigor: 1, blight: 0, stunted: false, yellow: 0 }
+const DUG: sim.HillLook = { kind: 'dug', canopy: 0, vigor: 1, blight: 0, stunted: false, yellow: 0 }
 
 const RIDGE_BY_PASSES = [0.1, 0.55, 1]
 // The order people take their turns at the day's work (as src/sim/crew.ts has it).
 const TURN: Record<sim.UnitKind, number> = { hand: 0, operator: 1, farmer: 2 }
 const WETNESS: Record<string, number> = { 'standing water': 1, wet: 0.8, good: 0.34, drying: 0.16, dry: 0.04, wilting: 0 }
 
-export function snapshot(app: App): Snapshot {
-  const c = app.campaign
+// of: the farm to picture, when it is not the game's own: the day as it will go on (app.today()), for a day watched
+// as it is worked.
+export function snapshot(app: App, of?: sim.Campaign): Snapshot {
+  const c = of ?? app.campaign
   if (!c || app.screen === 'title') return showcase()
   const mode: Mode = c.phase
   const s = c.season
@@ -146,12 +152,31 @@ export function snapshot(app: App): Snapshot {
     }
     const hills: sim.HillLook[] = []
     let planted = false, dug = 0
+    // Work part done shows on the ground where the machine has been (its lanes, src/render/work.ts): a planting and a
+    // hilling and a vine kill change a field as the simulation has it only when they are finished, and it digs each
+    // row from the same end.
+    const fs = held && s && plan.crop === 'potato' ? s.fields[i] : null
+    const part = (kind: sim.JobKind) => { const j = fs && mode === 'season' ? s!.jobs.find(x => x.kind === kind && x.field === i && x.done > 1e-6 && x.done < x.need - 1e-6) : undefined; return j ? workedHills(i, kind, j.done / j.need) : null }
+    const sown = fs && !fs.hState.length ? part('plant') : null
+    const hilled = fs && fs.hState.length ? part('hill') : null
+    const killed = fs && fs.deadDay < 0 ? part('kill') : null
+    const lifted = fs && fs.status === 'digging' && fs.digDone < sim.HILLS ? dugHills(fs.digDone) : null
+    let ridges: number[] | undefined
     for (let h = 0; h < sim.HILLS; h++) {
-      const look = held && s && plan.crop === 'potato' ? sim.hillLook(s.fields[i], h) : BARE
+      let look = fs ? sim.hillLook(fs, h) : BARE
+      if (sown?.[h]) look = SEED
+      if (killed?.[h] && look.kind === 'plant') look = { ...look, kind: 'dead', yellow: 1 }
+      if (lifted && fs && h < fs.digDone !== lifted[h]) {
+        // (the row as the digger has it: this hill's ground is that of the hill the same way in from the row's other end)
+        const m = Math.floor(h / sim.COLS) * sim.COLS + (sim.COLS - 1 - (h % sim.COLS))
+        look = lifted[h] ? DUG : sim.hillLook(fs, m)
+      }
       if (look.kind !== 'bare') planted = true
       if (look.kind === 'dug') dug++
       hills.push(look)
     }
+    if (sown) ridges = sown.map(w => (w ? RIDGE_BY_PASSES[0] : 0))
+    if (hilled) ridges = hilled.map(w => RIDGE_BY_PASSES[Math.min(2, info.hillPasses + (w ? 1 : 0))])
     const lot = info.lot >= 0 ? c.lots.find(l => l.id === info.lot) : undefined
     let grams = 0, dark = 0, green = 0
     if (lot && dug > 0) {
@@ -170,6 +195,7 @@ export function snapshot(app: App): Snapshot {
       status: info.status,
       hills,
       ridge: planted ? RIDGE_BY_PASSES[Math.min(2, info.hillPasses)] : 0,
+      ridges,
       moisture: info.moistureLabel,
       bloom: info.bloom,
       wilt: info.wilt,
@@ -223,7 +249,10 @@ export function snapshot(app: App): Snapshot {
       job: inSeason && u.job ? { kind: u.job.kind, field: u.job.field } : null,
       worked: inSeason ? s.worked.filter(w => w.unit === u.id).map(w => {
         const j = s.jobs.find(x => x.kind === w.kind && x.field === w.field)
-        return { kind: w.kind, field: w.field, share: j && j.need > 0 ? Math.max(0, Math.min(1, j.done / j.need)) : 1, rig: w.rig, machine: w.machine, from: w.from, to: w.to }
+        // (work on foot has its hours while the day lasts: from the first of it to the last)
+        const on = w.from === undefined ? (s.clock?.log ?? []).filter(x => x.unit === u.id && x.kind === w.kind && x.field === w.field) : []
+        const from = on.length ? Math.min(...on.map(x => x.from)) : w.from, to = on.length ? Math.max(...on.map(x => x.to)) : w.to
+        return { kind: w.kind, field: w.field, share: j && j.need > 0 ? Math.max(0, Math.min(1, j.done / j.need)) : 1, rig: w.rig, machine: w.machine, from, to }
       }) : [],
     }
   })
@@ -286,7 +315,8 @@ export function snapshot(app: App): Snapshot {
     next: nextJob ? { kind: nextJob.kind, field: nextJob.field } : null,
     lead,
     frozen: s ? s.frozen : false,
-    restDay: inSeason && !s.frozen && s.day > s.startDay && c.sundaysOff && sim.weekday(s.year, s.day - 1) === sim.SUNDAY,
+    // (the day pictured is the one just worked; of a day being worked, that day)
+    restDay: inSeason && !s.frozen && (of ? !sim.workday(c, s) : s.day > s.startDay && c.sundaysOff && sim.weekday(s.year, s.day - 1) === sim.SUNDAY),
     rime,
     wetGround: mode === 'season' ? wetGround : 0.3,
   }

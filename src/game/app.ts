@@ -158,7 +158,8 @@ export class App {
   private listeners = new Set<(e: AppEvent) => void>()
   private dirty = false
   private sinceSave = 0
-  private revision = 0
+  // (counts the orders given: what is worked out from the farm is worked out again when it has moved on)
+  revision = 0
   private needsAt = -1
   private needsCache: { need: Advice | null; hold: Advice | null }[] = []
 
@@ -653,15 +654,19 @@ export class App {
 
   // Today as it goes on from here if no new order comes: a copy of the farm with the day's work done to the evening
   // (the night not yet come). What the land shows being done through the day is read from it. Null out of a season.
-  private ahead: { rev: number; c: Campaign } | null = null
+  private ahead: { rev: number; c: Campaign; events: GameEvent[] } | null = null
   today(): Campaign | null {
     const c = this.campaign
     if (!c || c.phase !== 'season' || !c.season || c.season.frozen || seasonDone(c)) return null
     if (this.ahead && this.ahead.rev === this.revision) return this.ahead.c
     const copy = structuredClone(c)
-    apply(this.world, copy, { t: 'work', to: 1 })
-    this.ahead = { rev: this.revision, c: copy }
+    const r = apply(this.world, copy, { t: 'work', to: 1 })
+    this.ahead = { rev: this.revision, c: copy, events: r.events }
     return copy
+  }
+  // What the rest of today will bring (a test dig's hill, a field planted), for the land to show as it happens.
+  todayEvents(): GameEvent[] {
+    return this.today() && this.ahead ? this.ahead.events : []
   }
 
   // "Skip ahead": the fastest speed until the next decision on the land, then back to the speed the clock had.
