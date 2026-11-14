@@ -39,7 +39,7 @@ const TIER_WORD = { high: 'in full detail', medium: 'in medium detail', low: 'in
 
 // The menu (design/menu.html): the office file open over the live land, the menu on its left page and the settings on
 // its right. From the title it holds the settings and the save.
-export function openMenu(ctx: Ctx, o: { onHelp: () => void; onAlmanac: () => void; onGuide?: () => void }): void {
+export function openMenu(ctx: Ctx, o: { onHelp: () => void; onAlmanac: () => void; onGuide?: () => void; farm?: { waiting: number; todo(): void; fields(): void; people(): void } | null }): void {
   const app = ctx.app
   const set = app.settings
   const toggle = (key: 'sound' | 'reducedMotion' | 'hints' | 'pauseOnAlerts', label: string, hint: string) => {
@@ -107,6 +107,11 @@ export function openMenu(ctx: Ctx, o: { onHelp: () => void; onAlmanac: () => voi
         h('div', { class: 'rule double' }),
         h('nav', { class: 'menu-list', 'aria-label': 'Menu' },
           inGame ? h('button', { class: 'btn go wide', type: 'button', testid: 'menu-continue', autofocus: true, onclick: close }, 'Continue', icon('arrow', 'i')) : null,
+          // On a phone the farm's sheets open from here: the menu that is always up has no room there.
+          o.farm ? h('div', { class: 'menu-farm', role: 'group', 'aria-label': 'The farm' },
+            h('button', { class: 'btn', type: 'button', testid: 'menu-todo', onclick: () => { close(); o.farm!.todo() } }, 'To do', o.farm.waiting ? h('span', { class: 'mb-n num', 'aria-label': `${o.farm.waiting} waiting` }, String(o.farm.waiting)) : null),
+            h('button', { class: 'btn', type: 'button', testid: 'menu-fields', onclick: () => { close(); o.farm!.fields() } }, 'Fields'),
+            h('button', { class: 'btn', type: 'button', testid: 'menu-people', onclick: () => { close(); o.farm!.people() } }, 'People')) : null,
           season ? h('button', { class: 'btn wide', type: 'button', testid: 'menu-almanac', onclick: () => { close(); o.onAlmanac() } }, icon('almanac', 'i'), 'The almanac') : null,
           h('button', { class: 'btn wide', type: 'button', testid: 'save-export', disabled: !c, onclick: exportSave }, icon('save', 'i'), 'Save a copy'),
           h('button', { class: 'btn wide', type: 'button', testid: 'save-import', onclick: () => file.click() }, icon('ticket', 'i'), 'Load a saved farm'),

@@ -142,7 +142,7 @@ export const mountHud: MountHud = (root, app, view, sound) => {
   const tying = mountTies(ctx, root)
   const who = whois(ctx, whoLayer)
 
-  const menu = () => openMenu(ctx, { onHelp: () => openHelp(ctx), onAlmanac: () => openAlmanac(ctx), onGuide: () => openGuide(ctx) })
+  const menu = () => openMenu(ctx, { onHelp: () => openHelp(ctx), onAlmanac: () => openAlmanac(ctx), onGuide: () => openGuide(ctx), farm: screen?.farmSheets?.() ?? null })
   const almanac = () => openAlmanac(ctx)
 
   function applySettings(): void {

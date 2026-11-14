@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { mkdirSync } from 'node:fs'
-import { open, putAway, reach, startSeason } from './helpers.ts'
+import { noSidewaysScroll, open, putAway, reach, startSeason } from './helpers.ts'
 
 const PICS = process.env.PICS ? 'out/bar' : ''
 if (PICS) mkdirSync(PICS, { recursive: true })
@@ -254,4 +254,47 @@ test('To do orders what it lists: a key on each row with its cost, and one key f
   await all.click()
   await expect(todo).toBeHidden()
   for (const i of state.dry) expect(await game<boolean>(page, `c.season.jobs.some(j => j.kind === 'water' && j.field === ${i})`), `water on field ${i}`).toBe(true)
+})
+
+// A phone has no room for the bar: its sheets open from the game menu there, and fit the screen.
+test('on a phone To do, Fields and People open from the game menu, and a row still takes the camera there', async ({ page, isMobile }) => {
+  test.skip(!isMobile, 'a phone; a desk has the bar')
+  const errors: string[] = []
+  page.on('pageerror', e => errors.push(String(e)))
+  await startSeason(page)
+  await reach(page, `const { app } = q.g(); app.do({ t: 'sprayWay', way: 'auto' }); q.run(q.day(7, 6)); app.setSpeed(0); app.campaign.incidents = []; app.select(-1); app.selectUnit(-1)`)
+  await putAway(page)
+  await expect(page.locator('#ui .mainbar')).toBeHidden()
+  for (const [key, sheet] of [['menu-todo', 'todo'], ['menu-fields', 'fields'], ['menu-people', 'people']]) {
+    await page.getByTestId('menu-open').click()
+    await expect(page.getByTestId(key)).toBeVisible()
+    await page.getByTestId(key).click()
+    await expect(page.getByTestId(sheet)).toBeVisible()
+    await page.waitForTimeout(400)
+    await noSidewaysScroll(page)
+    const box = (await page.getByTestId(sheet).boundingBox())!
+    expect(box.x, `${sheet} inside the window`).toBeGreaterThanOrEqual(-1)
+    expect(box.x + box.width, `${sheet} inside the window`).toBeLessThanOrEqual(page.viewportSize()!.width + 1)
+    await shot(page, `phone-${sheet}`)
+    if (sheet === 'fields') {
+      await page.getByTestId('fields-go-0').click()
+      await expect(page.getByTestId('fields')).toBeHidden()
+      await expect.poll(() => game<number[]>(page, 'app.selection')).toEqual([0])
+      await reach(page, `const { app } = q.g(); app.select(-1)`)
+    } else if (sheet === 'people') {
+      await page.getByTestId('people-go-0').click()
+      await expect(page.getByTestId('people')).toBeHidden()
+      await expect.poll(() => game<number>(page, 'app.unit')).toBe(0)
+    } else await page.keyboard.press('Escape')
+    await putAway(page)
+  }
+  expect(errors, errors.join('\n')).toEqual([])
+})
+
+test('at a desk the game menu has no farm keys: the bar is there', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'a desk')
+  await startSeason(page)
+  await page.getByTestId('menu-open').click()
+  await expect(page.getByTestId('menu-continue')).toBeVisible()
+  await expect(page.getByTestId('menu-todo')).toHaveCount(0)
 })

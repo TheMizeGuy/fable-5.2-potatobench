@@ -54,6 +54,9 @@ export interface Screen {
   notes?: HTMLElement
   // Where an alert takes the player when it is clicked, for alerts about something other than a field.
   goFor?(a: Alert): (() => void) | null
+  // The farm's own sheets (To do, Fields, People) where the menu that is always up has no room: the game menu offers
+  // them instead. null where the bar is up. waiting: how many things To do lists.
+  farmSheets?(): { waiting: number; todo(): void; fields(): void; people(): void } | null
   dispose?(): void
 }
 

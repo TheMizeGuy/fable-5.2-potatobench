@@ -4,7 +4,7 @@
 .mainbar .mb-tab { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 10px; background: var(--paper); color: var(--ink);
   font: 400 13px/1 var(--f-gothic); letter-spacing: .07em; text-transform: uppercase; white-space: nowrap; }
 .mainbar .mb-tab.has { background: var(--canary); }
-.mainbar .mb-n { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; background: var(--red); color: var(--paper); font: 700 12px/1 var(--f-text); letter-spacing: 0; }
+.mainbar .mb-n, .menu-farm .mb-n { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; background: var(--red); color: var(--paper); font: 700 12px/1 var(--f-text); letter-spacing: 0; }
 /* A phone and a short window keep their foot as it is: the needs strip, the people's chips and the menu key. */
 #ui[data-layout='narrow'] .mainbar, #ui[data-layout='short'] .mainbar { display: none; }
 .season-screen.incident-up > .mainbar { visibility: hidden; }
@@ -26,3 +26,13 @@
 .mb-table th, .mb-table td { padding: 6px 10px 6px 0; text-align: left; border-bottom: 1px solid var(--hair); vertical-align: baseline; }
 .mb-table td.num { font-variant-numeric: tabular-nums; }
 .mb-table .mb-name { font: 600 16px/1.2 var(--f-text); text-decoration: underline; text-underline-offset: 3px; min-height: 32px; }
+
+/* Where the bar has no room (a phone, a short window) its sheets open from the game menu: three keys in a row. */
+.menu-farm { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.menu-farm .btn { justify-content: center; gap: 6px; padding-left: 6px; padding-right: 6px; }
+/* On a phone a row's keys stand under its words, and the fields' table scrolls sideways inside its own sheet. */
+#ui[data-layout='narrow'] .mb-row { grid-template-columns: auto minmax(0, 1fr); }
+#ui[data-layout='narrow'] .mb-keys { grid-column: 1 / -1; justify-content: flex-end; }
+#ui[data-layout='narrow'] .mb-row > .mb-go { display: none; }
+.mb-scroll { overflow-x: auto; overscroll-behavior-x: contain; }
+#ui[data-layout='narrow'] .mb-table { min-width: 520px; font-size: 14px; }

@@ -27,7 +27,7 @@ interface Hooks {
   onMenu: () => void
 }
 
-export function mainBar(ctx: Ctx, o: Hooks): { el: HTMLElement; update(c: S.Campaign): void; openTodo(): void } {
+export function mainBar(ctx: Ctx, o: Hooks): { el: HTMLElement; update(c: S.Campaign): void; openTodo(): void; openFields(): void; openPeople(): void } {
   const app = ctx.app
   const el = h('nav', { class: 'mainbar sys', 'aria-label': 'The farm\'s menu' })
   let key = ''
@@ -75,7 +75,7 @@ export function mainBar(ctx: Ctx, o: Hooks): { el: HTMLElement; update(c: S.Camp
         if (!c) return null
         const needs = c.phase === 'season' ? app.needs() : []
         const pct = (v: number) => F.pct(v)
-        return h('table', { class: 'mb-table' },
+        return h('div', { class: 'mb-scroll' }, h('table', { class: 'mb-table' },
           h('thead', null, h('tr', null, ['Field', 'Growing', 'Stage', 'Leaf', 'Water', 'Protection', 'Needs'].map(t => h('th', { scope: 'col', class: 't-label' }, t)))),
           h('tbody', null, heldFields(c).map(i => {
             const f = S.fieldInfo(c, i)
@@ -90,7 +90,7 @@ export function mainBar(ctx: Ctx, o: Hooks): { el: HTMLElement; update(c: S.Camp
               h('td', null, live ? f.moistureLabel : ''),
               h('td', { class: 'num' }, f.status === 'growing' ? pct(f.protect) : ''),
               h('td', null, need && need.act !== 'wait' ? F.localize(need.text) : ''))
-          })))
+          }))))
       },
     })
   }
@@ -134,6 +134,8 @@ export function mainBar(ctx: Ctx, o: Hooks): { el: HTMLElement; update(c: S.Camp
   return {
     el,
     openTodo,
+    openFields,
+    openPeople,
     update(c: S.Campaign): void {
       const n = c.phase === 'season' ? o.todo().length : 0
       const k = `${c.phase}|${n}`

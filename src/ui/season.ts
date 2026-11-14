@@ -871,6 +871,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     key,
     escapes,
     goFor,
+    farmSheets: () => (bar.el.offsetHeight > 0 || !app.campaign?.season ? null : { waiting: todo().length, todo: bar.openTodo, fields: bar.openFields, people: bar.openPeople }),
     update() { const all = drawn(); while (!all.next().done); },
     steps: drawn,
     insets() {
