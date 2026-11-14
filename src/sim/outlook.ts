@@ -447,7 +447,8 @@ export interface MoneyLook {
   year: number; phase: string; after: number; day: number
   flows: Record<string, number>
   // Each field's crop held at today's price and at the harvest price, with its variety and what has happened to it.
-  fields: Record<number, { base: number; harvest: number; variety: VarietyId; facts: FieldFacts | null }>
+  // (dig: the cost of lifting it, counted against the crop until the digging starts and is charged as field work)
+  fields: Record<number, { base: number; harvest: number; dig?: number; variety: VarietyId; facts: FieldFacts | null }>
   prices: Record<string, { base: number; harvest: number }>
   crew: { id: number; name: string }[]
   pickers: boolean; contracts: number; sold: number
@@ -485,7 +486,7 @@ export function moneyLook(world: World, c: Campaign): MoneyLook {
     if (f) for (let h = 0; h < f.hState.length; h++) if (f.hState[h] & H_ROGUED) rogued++
     const fi = f && s ? fieldInfo(c, i) : null
     out[i] = {
-      base: m.base, harvest: m.harvest, variety: id,
+      base: m.base, harvest: m.harvest, dig: m.dig, variety: id,
       facts: f && s && fi ? {
         status: f.status, samples: f.samples.length, set: f.tiDay >= 0, dead: f.deadDay >= 0, killed: f.killDay >= 0, rogued,
         frost: c.lots.filter(l => l.field === i).reduce((a, l) => a + l.loss.frost, 0), dug: f.digDone, weighed: f.weighed, revenue: m.revenue,
@@ -548,6 +549,12 @@ export function moneyCause(a: MoneyLook, b: MoneyLook, last: MoneyLook = a): Mon
   if (a.year !== b.year || Math.abs(amount) < MONEY_STEP) return null
   const d: Record<string, number> = {}
   for (const k of new Set([...Object.keys(a.flows), ...Object.keys(b.flows)])) d[k] = (b.flows[k] ?? 0) - (a.flows[k] ?? 0)
+  // A field whose digging began between the two: its lifting was counted against its crop until then and is field
+  // work now. Nothing moved by that; it is put back with the crop, so the cause is what the crop itself did.
+  for (const [key, was] of Object.entries(a.fields)) {
+    const began = (was.dig ?? 0) - (b.fields[Number(key)]?.dig ?? 0)
+    if (began > 0 && d[`crop:${key}`] !== undefined && d.orders !== undefined) { d[`crop:${key}`] -= began; d.orders += began }
+  }
   // A price's move: what the crop held before is worth at the new prices.
   let price = 0
   const moved: Record<string, number> = {}
