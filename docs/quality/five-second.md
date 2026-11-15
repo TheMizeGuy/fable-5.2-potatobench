@@ -37,7 +37,7 @@ What they still marked down, and what was done about it in the same round:
 - "Killing the vines sounds like a disaster": its line now says what it is for ("to toughen the skins for digging").
 - "Fell is jargon": the key says "Cut trees".
 - Build menu, "nothing says whether a purchase would push my year-end forecast toward the goal" and "no recommended
-  pick": each thing that can be had says what it leaves of the year-end forecast; the farm stand is marked as a good
+  pick": each thing that can be had says what it leaves of the year-end forecast; the farm stand, the cheapest, is marked as a good
   first building; four keys at the top go to the sheet's four parts.
 - Not done: every potato field's stamp as a labelled Plant key (one is; four crowded a small window); the tip and
   the slip saying the same thing at the first screen; words of the trade in the build menu (cwt, crew-days).

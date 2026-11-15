@@ -150,7 +150,8 @@ export function pins(ctx: Ctx, layer: HTMLElement, o: { covers: () => DOMRect[];
       const tall = s0.members.length === 1 && Number.isFinite(foot.y) ? Math.max(0, foot.y - s0.y) : 0
       const near = tall > toScreen(wasNear.has(m.id) ? NEAR_TALL - 6 : NEAR_TALL)
       if (near) wasNear.add(m.id); else wasNear.delete(m.id)
-      const lift = Math.min(tall * 0.12, toScreen(26))
+      // (a name stands right over the head; a face pin is lifted a little clear of it)
+      const lift = near ? 0 : Math.min(tall * 0.12, toScreen(26))
       draw(w, m, s0.members.length, s0.members, near)
       w.classList.toggle('near', near)
       w.classList.toggle('tired', !!m.tired)

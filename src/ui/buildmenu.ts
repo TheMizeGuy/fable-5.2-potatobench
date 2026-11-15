@@ -31,7 +31,7 @@ function items(ctx: Ctx, c: S.Campaign, done: (text: string, ok: boolean) => voi
     return {
       id: `build-${b.kind}`, glyph: BUILD_GLYPH[b.kind], name: b.name, does: b.does,
       price: F.money(b.total), cost: b.total,
-      tag: b.kind === 'stand' && b.state === 'none' ? 'A good first building: it pays for itself by fall' : undefined,
+      tag: b.kind === 'stand' && b.state === 'none' ? 'The cheapest building: a good first one' : undefined,
       sub: `Your crew builds it in about ${F.plural(crewDays, 'day')}${mats ? ` · ${mats}, ${bought ? 'bought in the price' : 'from your yard'}` : ''}`,
       state: b.state === 'built' ? 'have' : b.state === 'building' ? 'doing' : b.ok ? 'can' : 'no',
       why: b.state === 'built' ? 'Built' : b.state === 'building' ? `Going up: ${F.pct(b.progress)} built` : b.ok ? '' : first(b.why),
