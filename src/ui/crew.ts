@@ -246,7 +246,11 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
         const tagged = o && o.unit < 0 ? null : taker && many ? taker : many && who ? who.u : null
         const named = (n: string) => n === S.FARMER_NAME ? 'you' : firstName(n)
         const whose = o && o.unit < 0 ? 'nobody yet' : taker ? named(taker.name) : who ? named(who.u.name) : 'anyone'
-        const letter = tagged ? ` The ringed ${initial(tagged.name)} ${tagged.name === S.FARMER_NAME ? 'stands for you' : `is ${firstName(tagged.name)}'s initial`}.` : ''
+        // At a wide desk the mark is the person's name, not a ringed initial to be learned (viewers of every pass asked
+        // what the letters on the work list stood for).
+        const wide = ctx.layout() === 'wide'
+        const mark = (n: string) => wide ? (n === S.FARMER_NAME ? 'You' : firstName(n)) : initial(n)
+        const letter = tagged && !wide ? ` The ringed ${initial(tagged.name)} ${tagged.name === S.FARMER_NAME ? 'stands for you' : `is ${firstName(tagged.name)}'s initial`}.` : ''
         const said = `${what}: ${whose}. ${fateSaid || `${F.upper(whoSaid)}.`}${letter}`
         const choices = many && able.length > 1 ? h('div', { class: 'q-who', role: 'group', 'aria-label': `${what}: choose who does it` },
           [{ id: -1, name: 'Anyone' }, ...able.map(u => ({ id: u.id, name: firstName(u.name) }))].map(x => h('button', {
@@ -267,8 +271,8 @@ export function unitBar(ctx: Ctx, el: HTMLElement, hooks: BarHooks): { update(c:
             onpointerleave: () => { if (app.hover === j.field) app.setHover(-1) },
           }, icon(j.kind, 'i'), ctx.layout() === 'wide' ? h('span', { class: 'q-name' }, `${JOB_VERB[j.kind]} ${shortPlace(j.field)}`) : where(c, j.field),
           o && o.unit < 0 ? h('span', { class: 'q-tag q-nobody', testid: `nobody-${j.id}`, 'aria-hidden': 'true' }, '!')
-            : taker && many ? h('span', { class: `q-tag${who?.pinned ? ' pinned' : ''} q-${o!.when}`, style: `--c:${ringFor(c, taker.id)}`, 'aria-hidden': 'true' }, initial(taker.name))
-              : many && who ? h('span', { class: `q-tag${who.pinned ? ' pinned' : ''}`, style: `--c:${ringFor(c, who.u.id)}`, 'aria-hidden': 'true' }, initial(who.u.name)) : null,
+            : taker && many ? h('span', { class: `q-tag${wide ? ' named' : ''}${who?.pinned ? ' pinned' : ''} q-${o!.when}`, style: `--c:${ringFor(c, taker.id)}`, 'aria-hidden': 'true' }, mark(taker.name))
+              : many && who ? h('span', { class: `q-tag${wide ? ' named' : ''}${who.pinned ? ' pinned' : ''}`, style: `--c:${ringFor(c, who.u.id)}`, 'aria-hidden': 'true' }, mark(who.u.name)) : null,
           o && o.when === 'waiting' && o.unit >= 0 ? h('span', { class: 'q-wait', 'aria-hidden': 'true' }, icon('stale', 'i')) : null,
           by !== 'you' ? h('span', { class: 'q-by', title: touch ? undefined : by === 'routine' ? 'Added by your crew\'s routine' : 'Added by the foreman' }, icon(by === 'routine' ? 'sprout' : 'foreman', 'i')) : null,
           h('span', { class: 'sr' }, `${said}${j.done > 0 && j.need > 0 ? ` ${F.pct(j.done / j.need)} done.` : ''}${by === 'routine' ? ' Added by the routine.' : by === 'foreman' ? ' Added by the foreman.' : ''} ${touch ? 'Tap' : 'Click'} for options.`)),

@@ -122,6 +122,26 @@ test('the To do sheet says who has nothing to do and gives them work, and says w
   expect(errors, errors.join('\n')).toEqual([])
 })
 
+// The work list's ringed initials had to be learned ("what are the letters?", viewers of every pass): at a wide desk
+// an order's chip carries the name of whoever has it.
+test('at a wide desk an order on the work list names who has it', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'the desk')
+  const errors = watchErrors(page)
+  await page.setViewportSize({ width: 1920, height: 1080 })
+  await startSeason(page)
+  await reach(page, `const { app, sim } = q.g(); const c = app.campaign; app.do({ t: 'hire', kind: 'hand' })
+    for (let k = 0; k < 90 && c.season.fields.some((f, i) => sim.isField(c, i) && f.status === 'idle'); k++) { c.incidents = []; for (const a of sim.advise(app.world, c)) if (a.act === 'plant') app.order('plant', { fields: [a.field] }); app.do({ t: 'day' }) }
+    c.incidents = []; for (const j of [...c.season.jobs]) app.do({ t: 'cancel', id: j.id }); app.do({ t: 'routine', kind: 'scout', auto: false }); app.do({ t: 'routine', kind: 'hill', auto: false }); app.setSpeed(0)`)
+  await putAway(page)
+  await page.getByTestId('idle-do-1').click()
+  const names = await game<string[]>(page, `c.crew.map(u => u.kind === 'farmer' ? 'You' : u.name.split(' ')[0])`)
+  const mark = page.locator('#ui .queue .q-tag.named').first()
+  await expect(mark).toBeVisible({ timeout: 10_000 })
+  expect(names).toContain((await mark.textContent())!.trim())
+  await expect(page.locator('#ui .queue .q').first()).not.toHaveAttribute('title', /The ringed/)
+  expect(errors, errors.join('\n')).toEqual([])
+})
+
 test('seen from near, a person wears their name over their head and no face covers them', async ({ page, isMobile, browserName }) => {
   test.skip(isMobile || browserName !== 'chromium', 'read through the 3D view\'s hooks')
   const errors = watchErrors(page)

@@ -600,6 +600,9 @@ test('the answer to a right-click is seen while a tutorial note is up, and befor
   // A field with nothing to order is asked about here, and the cold weeks before planting in the test below.)
   const rest = await game<number>(page, `app.campaign.plans.findIndex((p, i) => p.crop === 'rest' && sim.held(app.campaign, i))`)
   const at = await landOf(page, rest)
+  // (a press within half a second of a note going, on the place where it stood, is swallowed on purpose
+  // (src/ui/tutorial.ts, ghost); the note for the word has only just taken the last one's place)
+  await page.waitForTimeout(700)
   await page.mouse.click(at.x, at.y, { button: 'right' })
   const tip = page.getByTestId('answer-tip')
   await expect(tip).toBeVisible()
