@@ -451,6 +451,12 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   let goalField = -1
   let frostAt: Record<number, number> = {}
 
+  // A field's stage (src/sim/view.ts) as a player would say it.
+  const STATE_WORD: Record<string, string> = {
+    'Resting': 'resting', 'Not planted': 'not planted', 'Planted, not up': 'planted', 'Growing leaf': 'growing', 'Setting tubers': 'growing',
+    'Bulking': 'potatoes forming', 'Vines going down': 'ripening', 'Vines dead, skins setting': 'skins setting', 'Vines dead, skins set': 'ready to dig',
+    'Being dug': 'being dug', 'Dug': 'dug', 'Lost': 'lost',
+  }
   function plateModel(i: number): PlateModel | null {
     const c = app.campaign!
     const s0 = c.season!
@@ -481,6 +487,9 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       sub = `${F.massValue(f.inField) >= 1000 ? `${F.num(F.massValue(f.inField) / 1000, 1)}k` : F.num(F.massValue(f.inField))} in barrels`
       said.push(`${F.mass(f.inField)} in barrels${frost >= 30 ? `, ${frost}% chance of frost tonight` : ''}`)
     }
+    // At a wide desk each field's tag says its state in a word or two (viewers who knew nothing of the game, of a July
+    // farm: "why are two fields yellow?", "which are ready?"). A count of barrels, where there is one, comes first.
+    if (!sub && !tract && app.centerTags) sub = STATE_WORD[f.stage] ?? undefined
     if (f.works) { marks.push({ glyph: f.works.kind, cls: '' }); said.push(f.works.kind === 'stump' ? 'stumps being pulled' : 'tile drains going in') }
     if (tract && f.cover !== 'open' && c.fields[i].felled > 0 && f.clearing) said.push(`${F.pct(f.clearing.felled)} felled`)
     const waits = S.jobWaits(app.world, c)

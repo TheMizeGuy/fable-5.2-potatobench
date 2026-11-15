@@ -154,8 +154,9 @@ export function openBuild(ctx: Ctx): void {
               : [x.price ? h('span', { class: 'num bm-price' }, x.price) : null, h('span', { class: `bm-why${x.state === 'have' ? ' ok' : ''}` }, x.state === 'have' ? [icon('check', 'i'), x.why] : x.why)]))
         const groups = items(ctx, c, (text, ok) => { said = { text, ok }; draw() })
         const head = h('div', { class: 'bm-head' },
-          h('div', { class: 'bm-fig', testid: 'build-spend' }, h('span', { class: 't-label' }, c.phase !== 'plan' && c.cash < 0 ? 'The bank will lend you' : 'You can spend'), h('b', { class: 'num' }, F.money(Math.floor(S.spendable(c)))),
-            h('span', { class: 't-caption' }, c.phase === 'plan' ? 'your cash' : c.cash >= 0 ? 'your cash, and what the bank will lend' : 'for buildings, machines and land; the crop pays it back')),
+          h('div', { class: 'bm-fig', testid: 'build-spend' }, h('span', { class: 't-label' }, 'You can spend'), h('b', { class: 'num' }, F.money(Math.floor(S.spendable(c)))),
+            // (whose money it is, said outright: two viewers in a row asked whether a purchase is cash or debt)
+            h('span', { class: 't-caption' }, c.phase === 'plan' ? 'your own cash' : c.cash >= 1 ? `${F.money(Math.floor(c.cash))} is your own cash; the rest is borrowed and the crop pays it back` : 'all borrowed: you have no cash until the crop sells, and the crop pays it back')),
           h('div', { class: 'bm-fig' }, h('span', { class: 't-label' }, 'Your own materials'), h('b', { class: 'num' }, `${F.num(Math.floor(c.logs))} logs · ${F.num(Math.floor(c.stone))} stone`), h('span', { class: 't-caption' }, 'from cutting trees and picking rocks; the price covers what you lack')))
         const jump = h('nav', { class: 'bm-jump', 'aria-label': 'Go to' }, groups.map((g, k) => h('button', { class: 'btn quiet', type: 'button', testid: `build-jump-${k}`, onclick: () => box.querySelectorAll('.bm-group')[k]?.scrollIntoView({ block: 'start', behavior: 'smooth' }) }, g.title)))
         const parts: (Node | null)[] = [head as Node, jump,
