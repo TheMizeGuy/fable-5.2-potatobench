@@ -147,3 +147,16 @@ The marks have settled within a point of each other from pass to pass: the first
 or 7, the build menu at 6 or 7. What both still asked for, done in `live-70` and not re-marked: the key says "Plant
 all"; the idle keys say what the work brings ("Cut trees: logs"); a build row shows the year-end cash from and to,
 at the weight of a figure; the line about the vine kill says it is for harvest.
+
+## Ninth pass, on `live-70`
+
+| | first screen | later | build menu |
+|---|---|---|---|
+| strategy player | 8 | 6 | 7 |
+| casual player | 8 | 5 | 6 |
+
+No movement. Across the last five passes the first screen has been 8 from every viewer, the later screen 5 to 7 and
+the build menu 6 to 8, and rewording has stopped moving them. What is left is not wording: the fields do not say on
+their face what state they are in (why two are yellow, what the red patches are); a building has no payback in
+money because the game has no such figure; the vine kill is a date and not a thing to press; the work list and its
+marks need learning. Those are design work, and the measure for them is the owner at play, not a still.
