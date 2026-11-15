@@ -26,6 +26,18 @@ const BUILD_GIST: Record<S.BuildingKind, string> = {
   house: '+3,600 hundredweight of storage', shed: 'Machine work 15% faster', bunk: '+6 beds for hired people', packing: '+15% sale price in winter',
   pond: 'Stores six waterings', stand: 'Sells at twice the market price', station: 'Better forecasts', road: 'Travel and hauling 30% faster',
 }
+// When a building is worth its price, from what it does in the game (src/sim/params.ts, BUILDINGS; two hired people
+// can live out, HOUSED_OUT; the home cellar holds CELLAR_CWT). No sum of money is put on one the game has no sum for.
+const BUILD_WHEN: Record<S.BuildingKind, string> = {
+  house: 'Worth it when you grow more than your cellar holds',
+  shed: 'Worth it before a second tractor, which needs it',
+  bunk: 'Worth it when you want a third hired person',
+  packing: 'Worth it if you store the crop and sell in winter',
+  pond: 'Worth it in a dry summer',
+  stand: 'Worth it every year from the first harvest',
+  station: 'Worth it if you order the spraying yourself',
+  road: 'Worth it with fields far from the yard',
+}
 const UPGRADE_GIST: Record<S.UpgradeId, string> = {
   boom: 'Spraying 2.5\u00d7 faster', harvester: 'Digging 1.6\u00d7 faster', vent: 'More storage, less rot', reel: 'Watering 2\u00d7 faster',
   tractor2: 'Two machines at work at once', house2: 'Double the storage, built at once', tractor3: 'Three machines at work at once', truck: 'Hauling 2\u00d7 faster',
@@ -46,10 +58,12 @@ function items(ctx: Ctx, c: S.Campaign, done: (text: string, ok: boolean) => voi
     const bought = b.buyLogs > 0 || b.buyStone > 0
     const crewDays = Math.max(1, Math.ceil(b.days / Math.max(1, c.crew.length)))
     return {
-      id: `build-${b.kind}`, glyph: BUILD_GLYPH[b.kind], name: b.name, gist: b.kind === 'stand' && standExtra > 0 ? `About +${F.money(standExtra)} a day once a field is dug` : BUILD_GIST[b.kind], does: plain(b.does),
+      id: `build-${b.kind}`, glyph: BUILD_GLYPH[b.kind], name: b.name, gist: b.kind === 'stand' && standExtra > 0 ? `About +${F.money(standExtra)} a day after harvest` : BUILD_GIST[b.kind], does: `${plain(b.does)}${mats ? ` It takes ${mats}${bought ? ', bought for you in the price' : ' from your yard'}.` : ''}`,
       price: F.money(b.total), cost: b.total,
       tag: b.kind === 'stand' && b.state === 'none' ? 'The cheapest building: a good first one' : undefined,
-      sub: `Your crew builds it in about ${F.plural(crewDays, 'day')}${mats ? ` · ${mats}, ${bought ? 'included in the price' : 'from your yard'}` : ''}`,
+      // (its materials are on its slip with the sentence: "30 logs and 25 stone, included in the price" beside a
+      // yard of none read as a thing still to be got)
+      sub: `${BUILD_WHEN[b.kind]} · built in about ${F.plural(crewDays, 'day')}${mats && !bought ? ` with ${mats} from your yard` : ''}`,
       state: b.state === 'built' ? 'have' : b.state === 'building' ? 'doing' : b.ok ? 'can' : 'no',
       why: b.state === 'built' ? 'Built' : b.state === 'building' ? `Going up: ${F.pct(b.progress)} built` : b.ok ? '' : first(b.why),
       label: 'Build', run: () => run({ t: 'build', kind: b.kind, yard: S.HOME_YARD }),
@@ -142,7 +156,7 @@ export function openBuild(ctx: Ctx): void {
         const head = h('div', { class: 'bm-head' },
           h('div', { class: 'bm-fig', testid: 'build-spend' }, h('span', { class: 't-label' }, c.phase !== 'plan' && c.cash < 0 ? 'The bank will lend you' : 'You can spend'), h('b', { class: 'num' }, F.money(Math.floor(S.spendable(c)))),
             h('span', { class: 't-caption' }, c.phase === 'plan' ? 'your cash' : c.cash >= 0 ? 'your cash, and what the bank will lend' : 'for buildings, machines and land; the crop pays it back')),
-          h('div', { class: 'bm-fig' }, h('span', { class: 't-label' }, 'Your own materials'), h('b', { class: 'num' }, `${F.num(Math.floor(c.logs))} logs · ${F.num(Math.floor(c.stone))} stone`), h('span', { class: 't-caption' }, 'cut trees and pick rocks to get them: they make buildings cheaper')))
+          h('div', { class: 'bm-fig' }, h('span', { class: 't-label' }, 'Your own materials'), h('b', { class: 'num' }, `${F.num(Math.floor(c.logs))} logs · ${F.num(Math.floor(c.stone))} stone`), h('span', { class: 't-caption' }, 'cut trees and pick rocks to get them; without them the price buys them')))
         const jump = h('nav', { class: 'bm-jump', 'aria-label': 'Go to' }, groups.map((g, k) => h('button', { class: 'btn quiet', type: 'button', testid: `build-jump-${k}`, onclick: () => box.querySelectorAll('.bm-group')[k]?.scrollIntoView({ block: 'start', behavior: 'smooth' }) }, g.title)))
         const parts: (Node | null)[] = [head as Node, jump,
           said ? h('p', { class: `bm-said${said.ok ? '' : ' c-red'}`, testid: 'build-said', role: 'status' }, said.text) : null,

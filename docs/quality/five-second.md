@@ -123,3 +123,15 @@ the idle keys under it and a toast still read as separate things, and neither vi
 money figure is cash or debt. Done from that in `live-66`, not re-marked: the slip and the idle keys are one canary
 card with the fist; the second figure is "Year-end cash"; a build row's materials are "included in the price".
 Not done: what a building earns back, said in money; the test dig's toast folded into the card.
+
+## Seventh pass, on `live-67`
+
+| | first screen | later | build menu |
+|---|---|---|---|
+| strategy player | 8 | 7 | 6 |
+| casual player | 8 | 6 | 7 |
+
+The later screen moved for the first time (one canary card, the work list's chip naming its order). The build menu
+is where both still ask for more: when a building pays back, and whether its logs and stone have to be got. Done
+from that in `live-68`, not re-marked: each building's small line says when it is worth its price (in words: the
+game has a sum only for the farm stand, which its row gives), and its materials are on its slip, not on its row.
