@@ -5,7 +5,7 @@
 // the test hook if not. Play gives a farm of its own with seasons made from a random seed, so nothing here may count
 // on one year's weather, and money is read from the game rather than written into the test.
 import { test, type Page } from './base.ts'
-import { expect, look, noSidewaysScroll, putAway, reach, straightIn, watchErrors } from './helpers.ts'
+import { expect, look, noSidewaysScroll, open, putAway, reach, straightIn, watchErrors } from './helpers.ts'
 
 const BADGE = '#ui [data-testid^="badge-"]'
 
@@ -137,25 +137,18 @@ test('a first season by the short path, from the opening to the next spring, wit
   await page.evaluate(() => localStorage.clear())
   await page.reload()
 
-  // The opening asks one thing, once in a browser: start the tutorial or skip it. Then Start: three clicks
-  // from the landing page to a running season, two ever after.
+  // The opening asks one thing, once in a browser: tips or none. Either answer goes onto the land with the season
+  // under way: two clicks from the landing page to a running season, one ever after. (Until 14 November the answer
+  // left the first spring's plan up, with Start the season still to press; the owner, of that plan: "I just click
+  // start game there is ZERO intuitive direction on what im supposed to do next".)
   let clicks = 0
   await page.getByTestId('play').click(); clicks++
   await straightIn(page); clicks++
-  await expect(page.getByTestId('begin-season')).toBeVisible()
-  const held = await game<number>(page, 'c.fields.filter(f => f.tenure !== "none").length')
-  await expect(page.locator('#ui [data-testid^="field-"].plate')).toHaveCount(held)
-  // The first spring as a newcomer sees it: a short sheet, the offers folded.
-  const words = await page.getByTestId('spring').evaluate(el => (el as HTMLElement).innerText.split(/\s+/).filter(Boolean).length)
-  console.log(`the first spring paper: ${words} words`)
-  // Short, and it says where the money stands before the first Start: what the farm has, the loan, what comes due.
-  expect(words).toBeLessThan(115)
-  await expect(page.getByTestId('crew')).toHaveCount(0)
-  await page.getByTestId('begin-season').click(); clicks++
   await expect(page.getByTestId('forecast')).toBeVisible()
+  await expect(page.getByTestId('begin-season')).toHaveCount(0)
   await expect.poll(async () => (await look(page)).running).toBe(true)
   console.log(`clicks from the landing page to a running season: ${clicks}`)
-  expect(clicks).toBe(3)
+  expect(clicks).toBe(2)
 
   // Start goes straight into a running game at 1x: no chip to dismiss, nothing more to press.
   expect((await look(page)).speed).toBe(1)
@@ -264,10 +257,10 @@ test('a later year on the farmstead: an applicant hired, land on the mortgage, a
   await page.reload()
   await page.getByTestId('play').click()
   await straightIn(page)
-  await expect(page.getByTestId('begin-season')).toBeVisible()
+  await expect(page.getByTestId('forecast')).toBeVisible()
   // The first year is not what this is about: it is run by the reference practice, and the cash topped up before the
   // year closes so that a hard first year cannot end the farm before the second begins.
-  await reach(page, `const { app } = q.g(); app.do({ t: 'begin' }); q.run(999, ['sell']); app.campaign.cash += 60000; q.winter(12, 3); app.do({ t: 'next' })`)
+  await reach(page, `const { app } = q.g(); q.run(999, ['sell']); app.campaign.cash += 60000; q.winter(12, 3); app.do({ t: 'next' })`)
   await expect(page.getByTestId('begin-season')).toBeVisible()
   await expect(page.locator('#ui main:not(.leaving) .tb-year')).toHaveText('Year 2')
 
@@ -377,22 +370,11 @@ test('a later year on the farmstead: an applicant hired, land on the mortgage, a
   expect(errors, errors.join('\n')).toEqual([])
 })
 
-test('the same start by keyboard alone', async ({ page, isMobile }) => {
+test('the spring plan by keyboard alone: a number key picks a field, Enter opens a fold, Escape puts each away, Enter on Start begins', async ({ page, isMobile }) => {
   test.skip(isMobile, 'a phone has no keyboard')
-  test.setTimeout(240_000)
   const errors = watchErrors(page)
-  await page.goto('./')
-  await page.evaluate(() => localStorage.clear())
-  await page.reload()
-
-  // The focus is put on Play once the land is up, which a slow engine takes a while over.
-  await expect(page.getByTestId('play')).toBeFocused({ timeout: 20_000 })
-  await page.keyboard.press('Enter')
-  // The offer takes the keyboard: 2 is Skip the tutorial, and the focus goes on to Start the season.
-  await expect(page.getByTestId('guide-accept')).toBeFocused()
-  await page.keyboard.press('Digit2')
-  await expect(page.getByTestId('guide-offer')).toHaveCount(0)
-  await expect(page.getByTestId('begin-season')).toBeFocused()
+  await open(page, '?year=1987&seed=3')
+  await expect(page.getByTestId('begin-season')).toBeVisible()
   // Fields are chosen with the number keys; Escape lets them go.
   await page.keyboard.press('Digit2')
   await expect(page.getByTestId('plan-card')).toBeVisible()
@@ -406,6 +388,25 @@ test('the same start by keyboard alone', async ({ page, isMobile }) => {
   await expect(page.getByTestId('equipment')).toHaveCount(0)
   await page.getByTestId('begin-season').focus()
   await page.keyboard.press('Enter')
+  await expect(page.getByTestId('forecast')).toBeVisible()
+  expect(errors, errors.join('\n')).toEqual([])
+})
+
+test('the same start by keyboard alone', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'a phone has no keyboard')
+  test.setTimeout(240_000)
+  const errors = watchErrors(page)
+  await page.goto('./')
+  await page.evaluate(() => localStorage.clear())
+  await page.reload()
+
+  // The focus is put on Play once the land is up, which a slow engine takes a while over.
+  await expect(page.getByTestId('play')).toBeFocused({ timeout: 20_000 })
+  await page.keyboard.press('Enter')
+  // The offer takes the keyboard: 2 is Play without tips, and the season is under way.
+  await expect(page.getByTestId('guide-accept')).toBeFocused()
+  await page.keyboard.press('Digit2')
+  await expect(page.getByTestId('guide-offer')).toHaveCount(0)
   await expect(page.getByTestId('forecast')).toBeVisible()
 
   // Running at 1x by itself. The weeks until the soil is warm are passed through the test hook: the keys are what

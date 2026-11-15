@@ -183,6 +183,7 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
   const lastBadge: ({ b: NonNullable<PlateModel['badge']>; until: number } | null)[] = []
   const FADE_MS = 1500
 
+  let worded = false, asked = false
   // A stamp or "on the list" already there is drawn again without stamping it down a second time.
   const was: string[] = []
 
@@ -231,6 +232,11 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
       wrap.style.zIndex = on ? '5' : m.taught ? '4' : b ? '3' : m.land ? '1' : '2'
     }
     measure()
+    // Stamps that say their order's name (the game has stopped for it) are wider than the room kept for a stamp: the
+    // one time the tags are put again with the camera still, so no key lies under a tag.
+    const w = models.some(m => !!m?.badge?.word)
+    if (w && !worded) asked = true
+    worded = w
   }
 
   function measure(): void {
@@ -697,7 +703,7 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
     // A zoom changes the fields' size on the screen under tags that keep theirs, so it settles them too.
     const k = scale()
     const zoomed = !!laid && Number.isFinite(k) && Number.isFinite(laid.k) && Math.abs(Math.log(k / laid.k)) > RESETTLE_ZOOM
-    const far0 = !laid || laid.key !== key || ((moving || rested) && (zoomed || anchors.some((a, i) => {
+    const far0 = !laid || asked || laid.key !== key || ((moving || rested) && (zoomed || anchors.some((a, i) => {
       const b = laid!.anchors[i]
       return finite(a) !== finite(b) || (finite(a) && Math.hypot(a.x - b.x, a.y - b.y) > (rested ? 0.5 : RESETTLE_PX))
     })))
@@ -727,8 +733,9 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
     }
     if (far0) {
       // Why the tags were put again, for the checks that hold them to it.
-      const why = !laid ? 'first' : laid.key !== key ? 'window' : `camera${zoomed ? ' zoom' : ''} ${anchors.map((a, i) => { const b = laid!.anchors[i]; return finite(a) !== finite(b) ? `${i}:seen` : finite(a) && Math.hypot(a.x - b.x, a.y - b.y) > RESETTLE_PX ? `${i}:${Math.round(a.x - b.x)},${Math.round(a.y - b.y)}` : '' }).filter(Boolean).join(' ')}`
+      const why = !laid ? 'first' : asked ? 'asked' : laid.key !== key ? 'window' : `camera${zoomed ? ' zoom' : ''} ${anchors.map((a, i) => { const b = laid!.anchors[i]; return finite(a) !== finite(b) ? `${i}:seen` : finite(a) && Math.hypot(a.x - b.x, a.y - b.y) > RESETTLE_PX ? `${i}:${Math.round(a.x - b.x)},${Math.round(a.y - b.y)}` : '' }).filter(Boolean).join(' ')}`
       layer.dataset.settled = `${(parseInt(layer.dataset.settled ?? '0', 10) || 0) + 1} ${why}`
+      asked = false
       settle()
       laid = { key, anchors, k }
       for (let i = 0; i < S.FIELD_COUNT; i++) ref[i] = anchors[i]

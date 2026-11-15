@@ -1,6 +1,6 @@
 // The ladder: what a farm reaches for next, in the order a player can reach it. Worked out from the farm as it stands,
 // so nothing extra is saved.
-import { BUILDING_KINDS, forecast, FELL_DAYS, FIELD_COUNT, formatDay, goalCosts, isField, killOutlook, NOTE_PAYMENT, PARCELS, plantWordGiven, ROCKS_ADVISE, sprayWayNow, standingBy, TRACTS, type Campaign, type World, type GoalCost, type JobKind } from '../sim/index.ts'
+import { BUILDING_KINDS, forecast, FELL_DAYS, FIELD_COUNT, formatDay, goalCosts, isField, jobBlock, killOutlook, NOTE_PAYMENT, PARCELS, plantWordGiven, ROCKS_ADVISE, sprayWayNow, standingBy, TRACTS, type Campaign, type World, type GoalCost, type JobKind } from '../sim/index.ts'
 
 export interface Goal {
   id: string
@@ -229,6 +229,31 @@ export function waitingFor(c: Campaign, world?: World): { title: string; when: s
   }
   if (!crew('dig') || !crew('haul')) return null
   if (potato.some(i => !s.fields[i].weighed && s.fields[i].status !== 'lost')) return { title: 'Nothing to do until the weigh ticket', when: up.length ? 'your crew kills the vines and digs on its own' : 'your crew digs and hauls on its own' }
+  return null
+}
+
+// Work on the land for people with nothing to do: the one job to give them next, or null when everyone has work,
+// when work on the land is already on the list, or when there is none to give. The crop's own work comes first
+// whatever is ordered here (someone on land work leaves it for pressing work on the crop). In order: the hedgerow
+// round a crop in the ground, lowest land first (it is this year's crop it spares); the stones of a field with no
+// crop in it, stoniest first; then a tract to fell, brush before woods.
+// who: the people with nothing to do, by id; gain: what the work is for, after its name ("... for less bruising").
+export interface FreeWork { kind: 'brush' | 'rocks' | 'fell'; field: number; who: number[]; gain: string }
+const LAND: JobKind[] = ['brush', 'rocks', 'fell']
+export function freeWork(c: Campaign): FreeWork | null {
+  const s = c.season
+  if (c.phase !== 'season' || !s || s.frozen || !plantWordGiven(s)) return null
+  const who = c.crew.filter(u => u.foreman === '' && u.job < 0 && u.help === undefined && (u.out < 0 || u.out <= s.day)).map(u => u.id)
+  if (!who.length || s.jobs.some(j => LAND.includes(j.kind))) return null
+  const can = (kind: JobKind, i: number) => c.fields[i].tenure !== 'none' && jobBlock(c, kind, i) === ''
+  const all = c.fields.map((_, i) => i)
+  const crop = (i: number) => { const st = s.fields[i].status; return st === 'planted' || st === 'growing' }
+  const brush = all.filter(i => crop(i) && can('brush', i)).sort((a, b) => c.fields[a].elev - c.fields[b].elev || a - b)[0]
+  if (brush !== undefined) return { kind: 'brush', field: brush, who, gain: 'for less blight and frost' }
+  const rocks = all.filter(i => can('rocks', i) && c.fields[i].stones >= ROCKS_ADVISE).sort((a, b) => c.fields[b].stones - c.fields[a].stones || a - b)[0]
+  if (rocks !== undefined) return { kind: 'rocks', field: rocks, who, gain: 'for less bruising' }
+  const fell = all.filter(i => can('fell', i)).sort((a, b) => Number(c.fields[a].cover !== 'brush') - Number(c.fields[b].cover !== 'brush') || a - b)[0]
+  if (fell !== undefined) return { kind: 'fell', field: fell, who, gain: 'to start a new field' }
   return null
 }
 

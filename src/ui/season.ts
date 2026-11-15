@@ -488,11 +488,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     const r = app.smartOrder(i)
     if (r.ok) ctx.announce(`${need ? F.localize(need.text) : 'Order given.'} It's on the work list.`)
     else ctx.say(`${S.FIELD_NAMES[i]}: ${r.err}`, 'info')
-    if (asked && c.season && S.plantWordGiven(c.season)) {
-      landQuietUntil = performance.now() + WORD_QUIET_MS
-      // A first farm's first order is followed to its field, where the crew is about to be seen at it.
-      if (r.ok && c.history.length === 0 && ctx.layout() !== 'narrow') app.focus(i)
-    }
+    if (asked && c.season && S.plantWordGiven(c.season)) landQuietUntil = performance.now() + WORD_QUIET_MS
   }
   // One Plant stamp gives the word for every field, and the other stamps go with it: for a moment after, a press
   // aimed at one of them is taken by nothing, where it would have opened whatever lay under it (round nine: a field's

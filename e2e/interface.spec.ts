@@ -323,8 +323,9 @@ test('Play starts a farm of its own, counted in years of its own, and a new farm
   await open(page)
   await expect(page.getByTestId('choose-year')).toHaveCount(0)
   await page.getByTestId('play').click()
+  // (Play goes onto the land: the first spring's plan is the usual one, and the season is under way)
   await straightIn(page)
-  await expect(page.getByTestId('begin-season')).toBeVisible()
+  await expect(page.getByTestId('forecast')).toBeVisible()
   await expect(page.locator('#ui main:not(.leaving) .tb-year')).toHaveText('Year 1')
   // The home six, and none of the land beyond them.
   for (let i = 0; i < 6; i++) await expect(page.getByTestId(`field-${i}`)).toHaveCount(1)

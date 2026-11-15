@@ -230,7 +230,7 @@ test('the offer is answered by its keys, and Skip the tutorial shows no guide', 
   else await page.keyboard.press('Digit2')
   await expect(offer).toHaveCount(0)
   await expect(page.locator('#ui > .screen-layer')).not.toHaveAttribute('inert', '')
-  await page.getByTestId('begin-season').click()
+  // (either answer goes onto the land: the season is under way with nothing more to press)
   await expect(page.getByTestId('forecast')).toBeVisible()
   // The whole interface from the first day, the clock running, and no note for a week of days.
   const s = await see(page)
@@ -243,7 +243,7 @@ test('the offer is answered by its keys, and Skip the tutorial shows no guide', 
   await page.evaluate(() => (globalThis as unknown as { __county: { app: any } }).__county.app.quitToTitle())
   await page.getByTestId('play').click()
   await page.getByTestId('confirm-ok').click()
-  await expect(page.getByTestId('begin-season')).toBeVisible()
+  await expect(page.getByTestId('forecast')).toBeVisible()
   await expect(offer).toHaveCount(0)
   expect(errors, errors.join('\n')).toEqual([])
 })
@@ -917,9 +917,10 @@ test('a press on a stamp never changes the speed: the days go at 1x while its ti
 
 test('the first spring sheet says a usual first year and that the loan carries it', async ({ page, isMobile }) => {
   const errors = watchErrors(page)
+  // (a first spring's sheet is seen on a farm started from the address bar; Play goes onto the land)
   await fresh(page)
-  await page.getByTestId('play').click()
-  await page.getByTestId('guide-refuse').click()
+  await page.goto('./?year=1987&seed=3')
+  await page.waitForFunction(() => '__county' in globalThis && !document.getElementById('splash'))
   // (at a desk the blank shows three figures at a glance and this line is behind Details; a phone's sheet shows it)
   if (!isMobile) await page.getByTestId('plan-more').click()
   const line = page.getByTestId('plan-usual')

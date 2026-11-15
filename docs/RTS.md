@@ -83,6 +83,34 @@ to the budget.
 - **The light** holds a morning or an evening through the days, as it did before days were long: a night every
   minute would be a strobe.
 
+## The opening, and what to do next
+
+The owner, the same evening, with a picture of the first spring's plan (seventeen tags, a sheet of six folds, "Start
+the season"):
+
+> "I just click start game there is ZERO intuitive direction on what im supposed to do next"
+
+- **Play goes onto the land.** A first spring's plan is the usual one and is not shown: Play (after the question of
+  tips, the first time in a browser) starts the season. Planning is the second spring's, when there is a year
+  behind it to plan from. `src/ui/title.ts`, `straightIn` in `src/ui/tutorial.ts`.
+- **The farm opens on its first decision.** The weeks before the soil is fit are gone through at once, and the
+  first thing on the screen is the game stopped for the word to plant. A farm started from Play has a fair working
+  day for that morning and the day after it (a seed is tried up to 24 times for one), so the first picture is the
+  farm in good light and the first order is seen through. `toTheWord`, `fairOpening` in `src/game/app.ts`.
+- **What to press says what it does.** While the game stands waiting for an order (the word to plant, a vine kill
+  that is the player's), that order's stamps are keys with its name on them: "PLANT" beside each field, the one the
+  slip points at in ochre with its ring breathing. The tags are put again once when the keys come, so none lies
+  under a tag. `need(..., word)` in `src/ui/system/parts.ts`, `src/ui/plates.ts`.
+- **Answering the game sets it going.** A press that gives the order a pause was waiting for resumes the days at
+  the speed they had, as answering a card does. (It used to leave the game standing, with a tip pointing at Space.)
+  `answered` in `src/game/app.ts`.
+- **People with nothing to do are given work from the slip.** Once planting is ordered, whenever the player is
+  waiting on the crew and somebody has no order and is helping nobody, the slip under the date says so with the
+  fist ("Your crew has nothing to do: cut brush around Brook Field for less blight and frost") and a key beside it
+  gives that order. One job on the land at a time: the hedgerow round a crop on low ground first, then stones
+  where a field is stony, then a tract to fell. Work on the crop still comes first: anyone needed there leaves the
+  land work for it. `freeWork` in `src/game/goals.ts`, `tests/free.test.ts`.
+
 ## What was given up
 
 - The three-minute day in which a tractor went at a tractor's pace (docs/LONGDAY.md): at a minute a day the
@@ -95,5 +123,7 @@ to the budget.
 - The browser tests of everything but the day itself run on the old short-day clock (`e2e/base.ts`) and on a farm
   of one: they hold the interface and the rules, not this pacing. `e2e/longday.spec.ts` and
   `tests/longday.test.ts` hold the pacing.
-- The farm's own work list still reads as a calendar's: "Nothing to do until the weigh ticket". The player's
-  verbs are the ones the game had; this round changed what is watched and how fast, not what there is to decide.
+- The player's verbs are the ones the game had. With everyone at work, or with no work on the land left to give,
+  the slip still says what the player is waiting for ("Nothing to do until the weigh ticket").
+- A first spring's choices (what each field grows, a contract, who is hired) are no longer the player's: the first
+  year is the usual plan. A farm started from the address bar (`?year=1987`) still opens on its plan.
