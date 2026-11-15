@@ -311,7 +311,7 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
       if (y1 < y0 && !app.selection.includes(i)) { want.push({ x: a.x, y: a.y, place: 'gone' }); continue }
       // (the field's point is the middle of what shows of it; the tag's own middle goes there, so y, its foot, is
       // half its height below. Not where the point is the field's near edge at the foot of the free land.)
-      const ay = Math.min(a.y + hh / 2, Math.max(a.y, y1))
+      const ay = app.centerTags ? Math.min(a.y + hh / 2, Math.max(a.y, y1)) : a.y
       const x = Math.max(x0, Math.min(Math.max(x0, x1), a.x)), y = Math.max(y0, Math.min(Math.max(y0, y1), ay))
       want.push({ x, y, place: !seen || Math.abs(x - a.x) > 1 || Math.abs(y - ay) > 1 ? 'docked' : 'on' })
     }

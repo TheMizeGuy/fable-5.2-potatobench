@@ -719,6 +719,10 @@ export class App {
   private sinceCount = 0
   // Whether the player's skip ahead is running through time with no work in it.
   hurrying = false
+  // Whether a field's tag stands on the middle of what shows of its field (a wide desk, where a card has its own
+  // place at the right) or hangs at the field's near edge (where a card stands beside its tag, on the field's ground).
+  // The interface says which; the picture reads it.
+  centerTags = false
   private quietNow(c: Campaign): boolean {
     if (!QUIET_S || !c.season?.clock) return false
     const log = this.today()?.season?.clock?.log

@@ -78,7 +78,8 @@ test('fields are selected with a click, Shift, a double-click and the number key
   await page.getByTestId('field-2').click({ modifiers: ['Shift'] })
   await expect(page.locator(PRESSED)).toHaveCount(1)
   // A double-click takes every field in the same state: here, every potato field not yet planted.
-  const potato = await page.locator('#ui .plate').evaluateAll(els => els.filter(e => !/resting/.test(e.textContent ?? '')).length)
+  // (the fields' own tags: the home yard has one too, from a first year's start, now that the bank lends for a building)
+  const potato = await page.locator('#ui .plate[data-k^="field-"]').evaluateAll(els => els.filter(e => !/resting/.test(e.textContent ?? '')).length)
   expect(potato).toBeGreaterThan(1)
   await page.getByTestId('field-0').dblclick()
   await expect(page.locator(PRESSED)).toHaveCount(potato)
@@ -599,6 +600,8 @@ test('the goal line says the one next thing, opens the ladder, and moves on when
     app.setSpeed(0)`)
   // (round eight: the walking is the crew's, so the slip never names it. With somebody at nothing it is work on the
   // land to give them; with that given, what the player is waiting for)
+  // (the slip for idle people steps down while a card is open: the field the goal showed is let go first)
+  await reach(page, `q.g().app.select(-1)`)
   await expect(page.getByTestId('idle')).toContainText('You are idle', { timeout: 5000 })
   await expect(page.getByTestId('goal')).toContainText('The crop is growing', { timeout: 5000 })
   await page.getByTestId('idle-do-0').click()

@@ -371,7 +371,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
   // Whether a field's tag point lies under what the interface covers (or off the screen).
   function covered(i: number): boolean {
     if (i < 0 || i >= FIELD_COUNT) return false
-    const vp = viewport(), at = fieldAnchor(i)
+    const vp = viewport(), at = fieldAnchorNow(i, true)
     return !at.visible || at.x < vp.left || at.x > vp.w - vp.right || at.y < vp.top || at.y > vp.h - vp.bottom
   }
 
@@ -1153,7 +1153,9 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
     const kept = anchorSeen[i] ??= fieldAnchorNow(i)
     return { x: kept.x, y: kept.y, visible: kept.visible }
   }
-  function fieldAnchorNow(i: number): OnScreen {
+  // edge: the field's point on its near edge alone, as the camera's own rules read it (whether a field in hand lies
+  // under the boards); a tag stands on the middle of what shows.
+  function fieldAnchorNow(i: number, edge = false): OnScreen {
     const f = FIELDS[i]
     if (!f) return { x: 0, y: 0, visible: false }
     const vp = sight()
@@ -1195,7 +1197,7 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       px = x; py = y
     }
     // (all of the middle once a sixth of the field's ground is well inside the window, none of it under a thirtieth)
-    const t = Math.max(0, Math.min(1, (sw - 1.5) / 6.5)), k = t * t * (3 - 2 * t)
+    const t = edge || !app.centerTags ? 0 : Math.max(0, Math.min(1, (sw - 1.5) / 6.5)), k = t * t * (3 - 2 * t)
     if (k > 0) {
       const mx = sx / sw, my = sy / sw
       if (!inFront || !Number.isFinite(x) || !Number.isFinite(y)) return { x: mx, y: my, visible: true }

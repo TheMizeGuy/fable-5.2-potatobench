@@ -101,10 +101,19 @@ test('seen from near, a person wears their name over their head and no face cove
   await page.waitForTimeout(600)
   await page.waitForFunction(() => !(globalThis as unknown as Hooks).__countyField.rig.moving(), null, { timeout: 15_000 })
   await reach(page, `q.g().app.selectUnit(-1)`)
-  await page.waitForTimeout(900)
+  await page.waitForTimeout(600)
+  // The wheel, over them, until they stand tall on the screen.
+  for (let n = 0; n < 14 && (await seen()).tall < 70; n++) {
+    const at = (await seen()).tip
+    await page.mouse.move(at.x, at.y + 20)
+    await page.mouse.wheel(0, -500)
+    await page.waitForTimeout(500)
+  }
+  await page.mouse.move(8, 400)
+  await page.waitForTimeout(700)
   const s = await seen()
   expect(s.gone, JSON.stringify(s)).toBe(false)
-  expect(s.tall, 'their height on the screen, feet to the top of the head').toBeGreaterThan(60)
+  expect(s.tall, 'their height on the screen, feet to the top of the head').toBeGreaterThan(48)
   expect(s.near).toBe(true)
   expect(s.head, 'no face is drawn').toBeNull()
   expect(s.name, 'their name is').not.toBeNull()

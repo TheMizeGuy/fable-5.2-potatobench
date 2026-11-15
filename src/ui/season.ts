@@ -852,6 +852,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     const selected = app.selection.length > 0 || app.yard !== 0
     el.classList.toggle('selected', selected)
     el.classList.toggle('card-up', selected || app.unit >= 0)
+    app.centerTags = docking()
     el.classList.toggle('person-up', personUp || grid.isOpen())
     el.classList.toggle('tray-up', !!tray)
     // What the goal points at: the field it lights, the yard it rings.
