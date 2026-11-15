@@ -31,7 +31,7 @@ export function fist(cls = ''): SVGElement {
 export function need(o: { ink: Ink; icon: string; label: string; next?: boolean; word?: string; testid?: string; onclick?: Click; attrs?: Attrs }): HTMLElement {
   const more = o.attrs ?? {}
   return h('button', {
-    ...more, class: `need sys${o.ink === 'ink' ? '' : ` ${o.ink}`}${o.next ? ' is-next' : ''}${o.word ? ' worded' : ''}${more.class ? ` ${more.class}` : ''}`, type: 'button', 'aria-label': o.label,
+    ...more, class: `need sys${o.ink === 'ink' ? '' : ` ${o.ink}`}${o.next ? ' is-next' : ''}${o.word ? ' worded' : ''}${more.class ? ` ${more.class}` : ''}`, type: 'button', 'aria-label': o.word ? `${o.word}. ${o.label}` : o.label,
     title: more.title === undefined ? o.label : more.title, testid: o.testid, onclick: o.onclick,
   }, icon(o.icon), o.word ? h('span', { class: 'need-word', 'aria-hidden': 'true' }, o.word) : null)
 }

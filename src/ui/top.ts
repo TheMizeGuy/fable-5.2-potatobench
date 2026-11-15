@@ -461,7 +461,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     return h('div', { class: 'idle-row', testid: 'idle', role: 'group', 'aria-label': 'People with nothing to do' },
       h('span', { class: 'sr' }, `${who}. `),
       idle.options.map((w, k) => h('button', {
-        class: 'btn idle-key', type: 'button', testid: `idle-do-${k}`, 'data-kind': w.kind, 'aria-label': `${w.kind === 'fell' ? 'Cut trees' : JOB_VERB[w.kind]}: ${S.FIELD_NAMES[w.field]}`,
+        class: 'btn idle-key', type: 'button', testid: `idle-do-${k}`, 'data-kind': w.kind, 'aria-label': `${w.kind === 'fell' ? 'Cut trees: logs' : w.kind === 'brush' ? 'Cut brush: less frost' : 'Pick rocks: stone'}, ${S.FIELD_NAMES[w.field]}`,
         title: ctx.touch() ? undefined : `${S.FIELD_NAMES[w.field]}. ${w.gain} Work on the crop comes first: anyone needed there leaves this for it.`,
         onclick: () => giveFree(w),
         onpointerenter: (e: Event) => { if ((e as PointerEvent).pointerType === 'mouse') app.setHover(w.field) }, onpointerleave: () => { if (app.hover === w.field) app.setHover(-1) },
