@@ -641,7 +641,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
       // Cash below zero through the season and the winter is what the bank has lent, said as that, not as a loss.
       const borrowed = !!after && c.cash < 0
       const balance = h('div', { class: `balance${after ? ' two' : ''}` },
-        h('span', { class: `t-label when${c.cash < 0 ? ' owed' : ''}` }, borrowed ? 'You owe the bank' : c.cash < 0 ? 'In the red' : after ? 'Cash' : 'Balance'),
+        h('span', { class: `t-label when${c.cash < 0 ? ' owed' : ''}` }, borrowed ? 'You owe' : c.cash < 0 ? 'In the red' : after ? 'Cash' : 'Balance'),
         h('span', {
           class: `t-figure cash${c.cash < 0 && !borrowed ? ' neg' : ''}${c.cash < 0 ? ' owed' : ''}`, testid: 'cash',
           title: ctx.touch() ? undefined : `${c.cash >= 0 ? '' : borrowed ? BORROWED_SAYS : 'You owe this on the spring loan, and the crop pays it back. The bank will foreclose if you end the year too far in the red.'}${lastMoved ? `${c.cash >= 0 ? '' : ' '}Last change: ${lastMoved}.` : ''}` || undefined,
