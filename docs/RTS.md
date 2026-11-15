@@ -141,16 +141,20 @@ from two viewers who knew nothing of the game (docs/quality/five-second.md):
   contractor until the farm owes $30,000 in all (`BUILD_CREDIT`), and machines are bought in any part of the year.
   Before, both came out of cash, and a first year is on the loan from its first day. `spendable`, `spendBlock` in
   `src/sim/buildings.ts`.
-- **Idle people are offered work by name.** Under the slip: who is idle, and each job they can be given as a key
-  that says what it is and where ("Cut brush: Brook Field", "Fell: Alder Swale"), with Build beside them. The
-  pointer over a key lights its field. The slip itself never says there is nothing to do.
+- **Idle people are offered work by name.** Under the slip, one line on canary: who is idle, and each job they can
+  be given as a key that names it ("Cut brush", "Cut trees"); the key's slip and the order's toast say where, and
+  the camera goes there. It never moves the land when it comes or goes, and it steps down while a card is open.
+  The goal slip itself never says there is nothing to do ("The crop is growing").
 - **The clock changes only when the player changes it.** Every day is a minute at 1×, twenty seconds at 3×, ten at
   6× (RimWorld's steps), whoever is or is not working. Days with no work in them no longer go by in seconds by
   themselves; the one fast run is the player's own Skip ahead. `src/game/app.ts`.
 - **Nothing is hidden in a guided year.** The tips used to bring the forecast, the people and the year-end figure
   onto the screen one at a time, each keeping its place blank until then.
-- **Tags are small and stand on their fields.** A third smaller, and placed on the middle of what shows of the
-  field, not hung at its near edge. `fieldAnchorNow` in `src/render/index.ts`.
+- **Tags are small, and on a wide desk stand on their fields.** A quarter smaller everywhere. Where a card has its
+  own place at the right (a desk 1530 wide or more in the interface's pixels: 1920 by 1080 and up), a tag stands on
+  the middle of what shows of its field. On a smaller window a card stands beside its tag on the field's own
+  ground, and the tag still hangs at the field's near edge to leave that ground free. `fieldAnchorNow` in
+  `src/render/index.ts`, `app.centerTags`.
 - **From near, a person is their own figure.** Once someone stands taller on the screen than their face pin, the
   pin gives way to their name over their head; at every range it stands clear above the head. `src/ui/pins.ts`.
 - **The interface is drawn smaller on a large screen**: at its own size up to 1920 by 1080, a quarter larger at

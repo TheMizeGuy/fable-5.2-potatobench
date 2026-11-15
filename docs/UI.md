@@ -254,6 +254,19 @@ frame's "saved" note; some old rules still load from `src/ui/legacy.css`, `paper
 Not yet run: the blind pairs of the old interface against the new, first-time players in a real browser, measured
 contrast in the live game, and the audit for anything that looks default.
 
+## The bar, and the build menu
+
+14 November, evening (docs/RTS.md, "The loop on the screen"). The bar at the foot is six tabs: **Build**, To do,
+Fields, People, Money, Menu. Build stands first, in ochre, and opens with B when no field is in hand. Work ("Who does
+what") is a key of the People sheet; contracts and the almanac are in the menu, and the forecast still opens the
+almanac.
+
+The build menu (`src/ui/buildmenu.ts`) is one sheet in four parts (Buildings, Machines, People, Land) with keys at
+its top that go to each. Its head has three figures: what can be spent, the logs and stone in the yard, and the
+year-end forecast. A row is a thing's name, one sentence of what it changes, and at the right either its key with the
+price on it and what the purchase leaves of the year-end forecast, or its price and the few words that say why it
+cannot be had. A purchase redraws the sheet in place and says what happened at its top.
+
 ## One place for a card (14 November)
 
 The owner, of a resting field's card laid beside its tag and over the menu bar on a 2560 by 1440 screen at one and
