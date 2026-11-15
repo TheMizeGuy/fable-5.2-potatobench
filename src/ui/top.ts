@@ -459,13 +459,13 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     // (one line: who, and each job as a key that names it; its place is on the key's slip, lit on the land under the
     // pointer, and said when the order is given)
     return h('div', { class: 'idle-row', testid: 'idle', role: 'group', 'aria-label': 'People with nothing to do' },
-      h('b', { class: 'idle-say' }, who),
+      h('span', { class: 'sr' }, `${who}. `),
       idle.options.map((w, k) => h('button', {
         class: 'btn idle-key', type: 'button', testid: `idle-do-${k}`, 'data-kind': w.kind, 'aria-label': `${w.kind === 'fell' ? 'Cut trees' : JOB_VERB[w.kind]}: ${S.FIELD_NAMES[w.field]}`,
         title: ctx.touch() ? undefined : `${S.FIELD_NAMES[w.field]}. ${w.gain} Work on the crop comes first: anyone needed there leaves this for it.`,
         onclick: () => giveFree(w),
         onpointerenter: (e: Event) => { if ((e as PointerEvent).pointerType === 'mouse') app.setHover(w.field) }, onpointerleave: () => { if (app.hover === w.field) app.setHover(-1) },
-      }, icon(w.kind, 'i'), w.kind === 'fell' ? 'Cut trees' : JOB_VERB[w.kind])))
+      }, icon(w.kind, 'i'), w.kind === 'fell' ? 'Cut trees: logs' : w.kind === 'brush' ? 'Cut brush: less frost' : 'Pick rocks: stone')))
   }
 
   // Why a goal is not the fist's to point at now, in a few words.

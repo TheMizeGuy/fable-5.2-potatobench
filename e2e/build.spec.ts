@@ -66,9 +66,9 @@ test('people with nothing to do are offered work by name, and a key gives it', a
   await expect(idle).toBeVisible({ timeout: 10_000 })
   await expect(idle).toContainText('You are idle')
   // Each job is a key that says what it is, and names its place to a reader and on its slip.
-  await expect(page.getByTestId('idle-do-0')).toHaveText(/^(Cut brush|Pick rocks)$/)
+  await expect(page.getByTestId('idle-do-0')).toHaveText(/^(Cut brush: less frost|Pick rocks: stone)$/)
   await expect(page.getByTestId('idle-do-0')).toHaveAttribute('aria-label', /^(Cut brush|Pick rocks): .+/)
-  await expect(page.getByTestId('idle-do-1')).toHaveText('Cut trees')
+  await expect(page.getByTestId('idle-do-1')).toHaveText('Cut trees: logs')
   // It is one line under the goal, no wider than the board it hangs from.
   const row = (await idle.boundingBox())!, board = (await page.locator('#ui .topbar .almanac > .mount').boundingBox())!
   expect(row.height).toBeLessThan(52)

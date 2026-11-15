@@ -493,7 +493,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     // stamp until the word is given (three fresh viewers of four stamps: "it looks like I need four clicks").
     const oneKey = asked === 'plant' && keyed >= 0 && keyed !== i && need?.act === 'plant'
     const badge = oneKey ? null : need && isJob(need.act) && !(need.act === 'spray' && sprayWay(c) === 'none')
-      ? { glyph: need.act as string, label: `${F.localize(need.text)} ${F.localize(need.why)}`, urgent: need.urgent, ink: inkFor(need.act, need.urgent, f), word: keyed === i ? JOB_VERB[need.act] : undefined }
+      ? { glyph: need.act as string, label: `${F.localize(need.text)} ${F.localize(need.why)}`, urgent: need.urgent, ink: inkFor(need.act, need.urgent, f), word: keyed === i ? (asked === 'plant' && all.filter(n => n.need?.act === 'plant').length > 1 ? 'Plant all' : JOB_VERB[need.act]) : undefined }
       : need && need.act === 'sell' && lot ? { glyph: 'ticket', label: `${F.localize(need.text)} ${F.localize(need.why)}`, urgent: need.urgent, ink: 'ink' as Ink } : null
     const key = digitFor(c, i)
     const what = tract ? (f.cover === 'open' ? 'new ground, ready to plant next spring' : f.coverWord) : f.status === 'rest' ? 'resting in oats and clover' : `${f.variety}, ${f.stage.toLowerCase()}`

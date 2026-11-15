@@ -226,7 +226,7 @@ export function waitingFor(c: Campaign, world?: World): { title: string; when: s
       return { title: `Killing the vines: ${dead} of ${potato.length} ${potato.length === 1 ? 'field' : 'fields'}`, when: 'on the work list' }
     }
     // (two viewers who knew nothing of potatoes read "killing the vines" as a disaster: the line says what it is for)
-    return { title: 'Next up: kill the vines', when: due ? `due around ${formatDay(c.year, due.day, true)}, to toughen the skins for digging` : 'in September, to toughen the skins for digging' }
+    return { title: 'Next up: kill the vines for harvest', when: due ? `due around ${formatDay(c.year, due.day, true)}, to toughen the skins for digging` : 'in September, to toughen the skins for digging' }
   }
   if (!crew('dig') || !crew('haul')) return null
   if (potato.some(i => !s.fields[i].weighed && s.fields[i].status !== 'lost')) return up.length ? { title: 'The crop is growing', when: 'your crew kills the vines and digs it; then you sell or store it' } : { title: 'The harvest is coming in', when: 'your crew digs and hauls; then you sell or store it' }

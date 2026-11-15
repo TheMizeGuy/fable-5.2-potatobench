@@ -1096,7 +1096,7 @@ test('the slip never gives the crew\'s job as the player\'s goal: after planting
   // only "Order it": "order it? order what?"). The goal itself never says there is nothing to do.
   const idle = page.getByTestId('idle')
   await expect(idle).toContainText('You are idle')
-  await expect(page.getByTestId('idle-do-0')).toHaveText('Cut brush')
+  await expect(page.getByTestId('idle-do-0')).toHaveText('Cut brush: less frost')
   await expect(page.getByTestId('idle-do-0')).toHaveAttribute('aria-label', /^Cut brush: [A-Z][a-z]+ Field$/)
   await expect(goal).toContainText('The crop is growing')
   await picture(page, 'r8-free-1280')

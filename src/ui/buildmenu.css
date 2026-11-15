@@ -45,3 +45,8 @@
 
 /* A name stays on one line; what follows it (its effect, a word of advice) goes under it when the row is short. */
 .bm-name { display: flex; flex-wrap: wrap; align-items: center; row-gap: 3px; }
+
+/* What a purchase does to the year-end figure: from, to; the new figure at the weight of a figure. */
+.bm-left { font-style: normal; font-size: 14px; color: var(--ink-2); }
+.bm-left b { font: 700 16px/1.2 var(--f-text); color: var(--ink); }
+.bm-left b.c-red { color: var(--red); }
