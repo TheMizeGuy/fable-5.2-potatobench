@@ -516,14 +516,18 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     }
   }
 
-  function onBadge(i: number): void {
+  // right: a right-click on the field's tag, which is a right-click on the field: the same order (to whoever is
+  // picked) and the same answer as one on its land. (It answered with a line of its own, without the land's "select
+  // them first" and never beside the pointer, so the same press said two things by where on the field it fell.)
+  function onBadge(i: number, right = false): void {
     const c = app.campaign
     if (!c) return
     const need = app.needs()[i]?.need
     if (need && need.act === 'sell') { openTicket(need.lot); return }
     const asked = !!c.season && !S.plantWordGiven(c.season)
-    const r = app.smartOrder(i)
+    const r = right ? app.orderAt(i) : app.smartOrder(i)
     if (r.ok) ctx.announce(`${need ? F.localize(need.text) : 'Order given.'} It's on the work list.`)
+    else if (right) app.notice(r.err)
     else ctx.say(`${S.FIELD_NAMES[i]}: ${r.err}`, 'info')
     if (asked && c.season && S.plantWordGiven(c.season)) landQuietUntil = performance.now() + WORD_QUIET_MS
   }

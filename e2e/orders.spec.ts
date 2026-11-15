@@ -86,7 +86,8 @@ test('someone picked and a field right-clicked: its suggested order goes on the 
   await page.mouse.click(at.x, at.y, { button: 'right' })
   await expect.poll(() => game<number>(page, `app.campaign.season.jobs.find(j => j.field === ${field} && j.kind === 'spray')?.unit ?? -9`)).toBe(op.id)
   const id = await game<number>(page, `app.campaign.season.jobs.find(j => j.field === ${field} && j.kind === 'spray').id`)
-  await expect(page.getByTestId(`queue-${id}`).locator('.q-tag.pinned')).toHaveText(first[0])
+  // (15 November: at a wide desk the mark is the person's name; narrower, their ringed initial)
+  await expect(page.getByTestId(`queue-${id}`).locator('.q-tag.pinned')).toHaveText(new RegExp(`^(${first[0]}|${first})$`))
   await expect(notes(page).filter({ hasText: `${first} will spray ${name}.` })).toBeVisible()
   // A resting field has nothing for them: one sentence says so, and nothing goes on the list.
   const rest = await game<number>(page, `app.campaign.season.fields.findIndex(f => f.status === 'rest')`)
@@ -301,7 +302,9 @@ test('in the harvest rain both can stand waiting: the time book says Waiting and
       expect(said).toMatch(/^(Digging|Hauling from) \w+ \w+: (you|nobody yet)\./)
       expect(said).toMatch(/Waiting|Sunday|will do it|get to this|working on it/)
     }
-    if (await chip.locator('.q-tag:not(.q-nobody)').count()) expect(title).toContain('The ringed Y stands for you.')
+    // (at a wide desk the mark is the name itself, and there is no letter to explain)
+    if (await chip.locator('.q-tag.named').count()) await expect(chip.locator('.q-tag.named')).toHaveText('You')
+    else if (await chip.locator('.q-tag:not(.q-nobody)').count()) expect(title).toContain('The ringed Y stands for you.')
   }
   expect(errors, errors.join('\n')).toEqual([])
 })
@@ -600,11 +603,14 @@ test('the answer to a right-click is seen while a tutorial note is up, and befor
   // A field with nothing to order is asked about here, and the cold weeks before planting in the test below.)
   const rest = await game<number>(page, `app.campaign.plans.findIndex((p, i) => p.crop === 'rest' && sim.held(app.campaign, i))`)
   const at = await landOf(page, rest)
-  // (a press within half a second of a note going, on the place where it stood, is swallowed on purpose
-  // (src/ui/tutorial.ts, ghost); the note for the word has only just taken the last one's place)
-  await page.waitForTimeout(700)
   await page.mouse.click(at.x, at.y, { button: 'right' })
   const tip = page.getByTestId('answer-tip')
+  await expect(tip).toBeVisible()
+  await expect(tip).toContainText('To send someone here, select them first.')
+  // The field's tag answers a right-click as its land does. (This test failed now and then when the tags, put again
+  // as the Plant stamp came, had moved one under the point: the tag answered with a line of its own and no tip.)
+  await page.evaluate(() => { document.querySelector<HTMLElement>('#ui [data-testid="answer-tip"]')!.hidden = true })
+  await page.getByTestId(`field-${rest}`).click({ button: 'right' })
   await expect(tip).toBeVisible()
   await expect(tip).toContainText('To send someone here, select them first.')
   expect(errors, errors.join('\n')).toEqual([])

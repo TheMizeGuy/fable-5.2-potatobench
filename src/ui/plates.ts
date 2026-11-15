@@ -120,7 +120,7 @@ function gapTo(r: Rect, poly: Pt[]): number {
 // not read.
 // keep: what a tag moved by its field steps clear of (the people on the land). yards: the yards' tags, which a tag
 // steps clear of too, but lies over before it would leave its own field.
-export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => PlateModel | null; onBadge: (i: number) => void; covers?: () => DOMRect[]; keep?: () => DOMRect[]; yards?: () => DOMRect[]; boards?: () => DOMRect[] }): { update(): void; frame(): void; dispose(): void; boxes(): DOMRect[]; byField(): { field: number; box: DOMRect; need: boolean }[] } {
+export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => PlateModel | null; onBadge: (i: number, right?: boolean) => void; covers?: () => DOMRect[]; keep?: () => DOMRect[]; yards?: () => DOMRect[]; boards?: () => DOMRect[] }): { update(): void; frame(): void; dispose(): void; boxes(): DOMRect[]; byField(): { field: number; box: DOMRect; need: boolean }[] } {
   const app = ctx.app
   const wraps: HTMLElement[] = []
   const models: (PlateModel | null)[] = []
@@ -215,7 +215,7 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
         attrs: {
           class: 'plate', 'data-k': `field-${i}`, 'aria-keyshortcuts': m.key || null, title: ctx.touch() ? undefined : m.said,
           ondblclick: () => { if (!m.land) app.selectLike(i) },
-          oncontextmenu: (e: Event) => { e.preventDefault(); if (!m.land) o.onBadge(i) },
+          oncontextmenu: (e: Event) => { e.preventDefault(); if (!m.land) o.onBadge(i, true) },
           onpointerenter: (e: Event) => { if ((e as PointerEvent).pointerType === 'mouse') app.setHover(i) },
           onpointerleave: () => { if (app.hover === i) app.setHover(-1) },
         },

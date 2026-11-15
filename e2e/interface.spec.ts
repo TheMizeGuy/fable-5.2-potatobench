@@ -416,7 +416,7 @@ test('crews: a picked crew takes the next orders, an order it cannot do says why
   await expect(page.getByTestId('card-line')).toContainText('Lucien is a field hand')
   await page.keyboard.press('c')
   const id = await page.evaluate(() => (globalThis as unknown as { __county: { app: { campaign: { season: { jobs: { id: number; kind: string; field: number; unit: number }[] } } } } }).__county.app.campaign.season.jobs.find(j => j.kind === 'scout' && j.field === 2)!.id)
-  await expect(page.getByTestId(`queue-${id}`).locator('.q-tag.pinned')).toHaveText('L')
+  await expect(page.getByTestId(`queue-${id}`).locator('.q-tag.pinned')).toHaveText(/^(L|Lucien)$/)
   // Any crew may take it again, from the choices above the order.
   // The choices above an order show under the pointer, and to the keyboard when the order has the focus.
   await page.getByTestId(`queue-${id}`).focus()
