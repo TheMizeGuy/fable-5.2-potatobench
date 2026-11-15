@@ -135,10 +135,13 @@ test('a new farm opens on the morning of the word to plant: the game stands at o
   expect(open0.day - open0.start, 'days past the season\'s first').toBeGreaterThan(5)
   expect(open0.asked).toBe(open0.day)
   await expect(page.getByTestId('speed-1')).toHaveText(/^1×/)
-  // What to press says what it does: each field's stamp is a key with the order's name on it.
+  // What to press says what it does: one field's stamp is a key with the order's name on it, ochre and ringed; the
+  // other fields that want planting carry the round stamp.
   const asks = await page.evaluate(() => (globalThis as unknown as { __county: { app: { needs(): { need?: { act: string } }[] } } }).__county.app.needs().flatMap((n, i) => n.need?.act === 'plant' ? [i] : []))
   expect(asks.length).toBeGreaterThan(1)
-  for (const i of asks) await expect(page.getByTestId(`badge-${i}`)).toHaveText('Plant')
+  await expect(page.locator('#ui .plate-layer .need.worded')).toHaveCount(1)
+  await expect(page.locator('#ui .plate-layer .need.worded.is-next')).toHaveText('Plant')
+  for (const i of asks) await expect(page.getByTestId(`badge-${i}`)).toBeVisible()
   await expect(page.locator('#ui .notes .alert').filter({ hasText: 'Click Plant on a field and your crew goes to work.' })).toBeVisible()
   if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/open-the-word.jpg`, type: 'jpeg', quality: 80 })
   // Paused: the clouds stand where they are.

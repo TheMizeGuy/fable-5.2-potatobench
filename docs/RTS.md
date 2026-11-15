@@ -98,9 +98,9 @@ the season"):
   day for that morning and the day after it (a seed is tried up to 24 times for one), so the first picture is the
   farm in good light and the first order is seen through. `toTheWord`, `fairOpening` in `src/game/app.ts`.
 - **What to press says what it does.** While the game stands waiting for an order (the word to plant, a vine kill
-  that is the player's), that order's stamps are keys with its name on them: "PLANT" beside each field, the one the
-  slip points at in ochre with its ring breathing. The tags are put again once when the keys come, so none lies
-  under a tag. `need(..., word)` in `src/ui/system/parts.ts`, `src/ui/plates.ts`.
+  that is the player's), one stamp is a key with the order's name on it: "PLANT", in ochre with its ring breathing,
+  beside the field the slip points at. (Every field's stamp as a key crowded the tags at a small desk; one press is
+  the word for every field.) The tags are put again once when the key comes, so it lies under none. `need(..., word)` in `src/ui/system/parts.ts`, `src/ui/plates.ts`.
 - **Answering the game sets it going.** A press that gives the order a pause was waiting for resumes the days at
   the speed they had, as answering a card does. (It used to leave the game standing, with a tip pointing at Space.)
   `answered` in `src/game/app.ts`.

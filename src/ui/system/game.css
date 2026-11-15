@@ -89,13 +89,14 @@
 .topbar[data-layout='narrow'] .season-track .mo { display: none; }
 .topbar[data-layout='narrow'] .season-track .ph { display: inline; color: var(--ink); }
 /* the goal slip, a button: open it for the goals; beside it while the soil warms, the key that lets the weeks go */
-/* (the row takes the board's width and gives it none: a slip with a key beside it does not widen the board) */
-.topbar .goal-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; width: 0; min-width: 100%; }
+.topbar .goal-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
 /* a goal not yet in reach: said on plain paper, without the fist */
 .topbar .goal.later { --w-side: var(--card); grid-template-columns: 1fr auto; background-color: var(--paper); }
 .topbar .goal.later .goal-t { font-weight: 400; font-style: italic; }
-/* (beside a key the slip is as wide as its words, so the two stand on one line under the board) */
-.topbar .goal-row .goal { flex: 0 1 auto; min-width: 0; }
+.topbar .goal-row .goal { flex: 0 1 auto; }
+/* (work for idle people: the slip is as wide as its few words, so it and its key stand on one line under the board
+   without widening it) */
+.topbar .goal-row .goal[data-free] { min-width: 0; }
 .topbar .goal-go { padding: 0 12px 3px; margin-top: 6px; font-size: 15px; gap: 6px; }
 .topbar[data-layout='narrow'] .goal-go, .topbar[data-layout='short'] .goal-go { min-height: var(--touch); margin: 4px 0 0 12px; }
 .topbar .goal { text-align: left; min-height: var(--touch); max-width: 100%; }

@@ -606,6 +606,10 @@ function createWebGLView(canvas: HTMLCanvasElement, app: App, giveUp: () => void
       copyEnv(env, envT)
       fields.snap(env.oats)
       harvest.snap()
+    } else if (prev.mode === 'plan' && next.mode === 'season' && next.seasonDay - (app.campaign?.season?.startDay ?? next.seasonDay) > 7) {
+      // A season that opens weeks on from its spring (a new farm's first, on the morning of the word to plant) is
+      // seen as that day at once: the plan's last snow is not left to melt in front of the player.
+      copyEnv(env, envT)
     }
   }
 

@@ -439,8 +439,11 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     const tract = isTract(i) && (f.cover !== 'open' || f.status === 'off')
     if (tract && !tractsShown(c) && !app.selection.includes(i) && !queued.length) return null
     const need = app.needs()[i]?.need ?? null
-    // The order the game stands waiting for: its stamps say their name.
+    // The order the game stands waiting for: one stamp says its name, as a key (the field the slip points at, else
+    // the first that wants the order; one press at the word to plant is the word for every field).
     const asked = app.speed === 0 ? (app.pauseCause === 'plantAsk' ? 'plant' : app.pauseCause === 'killCall' ? 'kill' : '') : ''
+    const all = asked ? app.needs() : []
+    const keyed = !asked ? -1 : all[goalField]?.need?.act === asked ? goalField : all.findIndex(n => n.need?.act === asked)
     const live = f.status === 'growing' || f.status === 'planted'
     const marks: PlateModel['marks'] = []
     const said: string[] = []
@@ -466,7 +469,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     const lot = f.lot >= 0 ? c.lots.find(l => l.id === f.lot) : undefined
     // Spraying the player said not to do this year carries no stamp.
     const badge = need && isJob(need.act) && !(need.act === 'spray' && sprayWay(c) === 'none')
-      ? { glyph: need.act as string, label: `${F.localize(need.text)} ${F.localize(need.why)}`, urgent: need.urgent, ink: inkFor(need.act, need.urgent, f), word: asked === need.act ? JOB_VERB[need.act] : undefined }
+      ? { glyph: need.act as string, label: `${F.localize(need.text)} ${F.localize(need.why)}`, urgent: need.urgent, ink: inkFor(need.act, need.urgent, f), word: keyed === i ? JOB_VERB[need.act] : undefined }
       : need && need.act === 'sell' && lot ? { glyph: 'ticket', label: `${F.localize(need.text)} ${F.localize(need.why)}`, urgent: need.urgent, ink: 'ink' as Ink } : null
     const key = digitFor(c, i)
     const what = tract ? (f.cover === 'open' ? 'new ground, ready to plant next spring' : f.coverWord) : f.status === 'rest' ? 'resting in oats and clover' : `${f.variety}, ${f.stage.toLowerCase()}`
@@ -475,7 +478,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       glyph: tract ? COVER_GLYPH[f.cover] : stageGlyph(f),
       sub, marks, queue, badge, key, cls: tract ? 'tract' : undefined, hoverName: !tract && f.status === 'rest' ? 'Resting: oats and clover' : undefined,
       said: `${key ? `Key ${key}` : f.block === 'home' ? 'The home farm' : 'Beyond the home farm'}: ${what}${said.length ? `, ${said.join(', ')}` : ''}${badge ? `. Needs: ${F.localize(need!.text)}` : '.'}`,
-      taught: !!badge && ((!!hint && need?.act === hint.kind) || goalField === i),
+      taught: !!badge && ((!!hint && need?.act === hint.kind) || goalField === i || keyed === i),
     }
   }
 
@@ -594,10 +597,14 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     const blocks = bars.filter((x): x is HTMLElement => !!x && !x.hidden && x.offsetParent !== null && x.offsetHeight > 0).map(x => { const r = x.getBoundingClientRect(); return { left: r.left, top: r.top, right: r.right, bottom: r.bottom } })
     // The land runs up to the boards themselves; the slip that hangs from one is a thing to keep off, not a line
     // across the whole window, so a card clear of it has that much more room.
+    // (The slip's strip is kept off for the width of the board it hangs from, whatever the slip says and whether or
+    // not a key stands beside it: an order given from a card can change the slip, and must not move the card.)
+    const hung = top.el.querySelector<HTMLElement>('.almanac > .mount')?.getBoundingClientRect()
     for (const x of top.el.querySelectorAll<HTMLElement>('.goal, .tb-pop')) {
       if (x.offsetParent === null || !x.offsetHeight) continue
       const r = x.getBoundingClientRect()
-      blocks.push({ left: r.left, top: r.top, right: r.right, bottom: r.bottom })
+      const wide = hung && hung.width > 0 && x.classList.contains('goal')
+      blocks.push({ left: wide ? Math.min(r.left, hung.left) : r.left, top: r.top, right: wide ? Math.max(r.right, hung.right) : r.right, bottom: r.bottom })
     }
     // At a desk the two boards are things to keep off as well: between them, and beside the shorter one, the land
     // runs on up, so a card there has that much more room.
