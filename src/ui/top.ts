@@ -192,7 +192,7 @@ export function outlook(ctx: Ctx, c: S.Campaign): Outlook {
   const head = c.phase === 'cellar' ? 'If you sold everything in storage today:' : 'If the crop sold today:'
   const says = `${range}${verdict}`.trim()
   return {
-    figure, before: false, spread, risk: m.callRisk, label: 'After year-end bills', look: S.moneyLook(world, c), lines, head, says,
+    figure, before: false, spread, risk: m.callRisk, label: 'Year-end forecast', look: S.moneyLook(world, c), lines, head, says,
     reach: !!spread && m.range.lo < S.CREDIT_LIMIT,
     why: `${head} ${lines.map(p => `${p.label} ${signed(p.amount)}`).join(', ')}, which makes ${F.money(figure)} after year-end bills. ${says}`.trim(),
   }
@@ -641,11 +641,11 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
       // Cash below zero through the season and the winter is what the bank has lent, said as that, not as a loss.
       const borrowed = !!after && c.cash < 0
       const balance = h('div', { class: `balance${after ? ' two' : ''}` },
-        h('span', { class: `t-label when${c.cash < 0 ? ' owed' : ''}` }, borrowed ? 'Borrowed' : c.cash < 0 ? 'In the red' : after ? 'Cash' : 'Balance'),
+        h('span', { class: `t-label when${c.cash < 0 ? ' owed' : ''}` }, borrowed ? 'You owe the bank' : c.cash < 0 ? 'In the red' : after ? 'Cash' : 'Balance'),
         h('span', {
           class: `t-figure cash${c.cash < 0 && !borrowed ? ' neg' : ''}${c.cash < 0 ? ' owed' : ''}`, testid: 'cash',
           title: ctx.touch() ? undefined : `${c.cash >= 0 ? '' : borrowed ? BORROWED_SAYS : 'You owe this on the spring loan, and the crop pays it back. The bank will foreclose if you end the year too far in the red.'}${lastMoved ? `${c.cash >= 0 ? '' : ' '}Last change: ${lastMoved}.` : ''}` || undefined,
-        }, h('span', { class: 'sr' }, borrowed ? 'Borrowed: ' : 'Cash: '), h('span', { class: 'cash-v num' }, F.money(borrowed ? -c.cash : c.cash))),
+        }, h('span', { class: 'sr' }, borrowed ? 'You owe the bank: ' : 'Cash: '), h('span', { class: 'cash-v num' }, F.money(borrowed ? -c.cash : c.cash))),
         moved && lines ? h('span', { class: 'cash-moved', testid: 'cash-moved', role: 'status' }, moved.text) : null,
         // The cash's line and the figure's line keep their rows whether they say anything or not, so the keys under
         // the board never move.

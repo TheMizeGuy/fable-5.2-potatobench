@@ -355,8 +355,8 @@ export const LESSONS: Lesson[] = [
     id: 'bills', part: 'year', name: 'The year-end bills', read: true, reveals: ['after'],
     when: l => inSeason(l) && anyField(l, f => f.weighed) && !l.papers.includes('weighin'),
     done: (l, g, since) => g.has('noted:bills') || (!!since && !!l.c && l.c.phase !== 'season'),
-    // By the words on the money board: its second figure is labelled "After year-end bills".
-    ask: () => '"After year-end bills" is what you\'ll have left.',
+    // By the words on the money board: its second figure is labelled "Year-end forecast".
+    ask: () => '"Year-end forecast" is what you\'ll keep after bills.',
     why: () => 'It counts the crop still in the ground, so it will change.',
     point: () => ({ testid: ['outlook'] }),
   },
