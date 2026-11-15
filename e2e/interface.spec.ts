@@ -159,7 +159,10 @@ test('the crop orders hold their places when one is given, and under 80 words wi
   await putAway(page)
   await page.waitForTimeout(300)
   // (ninety with somebody idle: who they are and the two jobs and Build offered them, each by name, since 14 November)
-  { const w = await wordsOnScreen(page); expect(w.n, w.by).toBeLessThan(90) }
+  // (ninety-five since 15 November: on a morning when an order has not been taken up yet nobody counts as idle, the
+  // slip says what is waited for with its Skip ahead key, two words added on purpose, and the bank's sixteen-word
+  // line may be up beside it: 93 was counted in that state, which came and went with the hour of the day)
+  { const w = await wordsOnScreen(page); expect(w.n, w.by).toBeLessThan(95) }
   await page.getByTestId('field-2').click()
   const slots = page.locator('#ui [data-testid="card"] .orders.slots > .order')
   await expect(slots).toHaveCount(9)
