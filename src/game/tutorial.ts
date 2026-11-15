@@ -247,7 +247,7 @@ export const LESSONS: Lesson[] = [
     id: 'clock', part: 'opening', moment: true, name: 'Skip ahead', hint: true,
     when: (l, g) => inSeason(l) && firstYear(l) && !g.has('fast') && wordAt(l) < 0 && soilWait(l),
     done: (l, g) => g.has('fast') || (inSeason(l) && !soilWait(l)),
-    ask: l => `Nothing to do until the soil warms. ${by(l, 'Click', 'Tap', 'Tab to')} Skip ahead.`,
+    ask: l => `The soil is too cold to plant. ${by(l, 'Click', 'Tap', 'Tab to')} Skip ahead.`,
     why: () => 'The game stops itself when you have a decision.',
     point: () => ({ testid: ['goal-faster'] }),
   },

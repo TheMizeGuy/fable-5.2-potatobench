@@ -141,7 +141,7 @@ export function mainBar(ctx: Ctx, o: Hooks): { el: HTMLElement; update(c: S.Camp
       const k = `${c.phase}|${n}`
       if (k === key) return
       key = k
-      el.replaceChildren(...TABS.map(([id, name, open]) => h('button', { class: `mb-tab${id === 'todo' && n ? ' has' : ''}${id === 'build' ? ' build' : ''}`, type: 'button', testid: `bar-${id}`, onclick: open },
+      el.replaceChildren(...TABS.map(([id, name, open]) => h('button', { class: `mb-tab${id === 'todo' && n ? ' has' : ''}${id === 'build' ? ' build' : ''}`, type: 'button', testid: `bar-${id}`, title: id === 'build' && !ctx.touch() ? 'Buildings, machines, people and land (B)' : undefined, onclick: open },
         id === 'build' ? icon('hammer', 'i') : null, name, id === 'todo' && n ? h('span', { class: 'mb-n num', 'aria-label': `${n} waiting` }, String(n)) : null)))
     },
   }

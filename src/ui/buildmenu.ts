@@ -12,7 +12,8 @@ import { BUILD_GLYPH } from './rules.ts'
 import './buildmenu.css'
 
 type State = 'can' | 'no' | 'have' | 'doing'
-interface Item { id: string; glyph: string; name: string; does: string; price: string; sub?: string; state: State; why: string; label: string; run?: () => void }
+// cost: what it takes from the year-end forecast, where that is a plain sum. tag: a word of advice beside its name.
+interface Item { id: string; glyph: string; name: string; does: string; price: string; cost?: number; tag?: string; sub?: string; state: State; why: string; label: string; run?: () => void }
 
 const UPGRADE_GLYPH: Record<S.UpgradeId, string> = { boom: 'spray', harvester: 'dig', vent: 'store', reel: 'water', tractor2: 'machine', house2: 'store', tractor3: 'machine', truck: 'haul' }
 // What a machine's purchase waits on, said as the thing to do first.
@@ -26,10 +27,12 @@ function items(ctx: Ctx, c: S.Campaign, done: (text: string, ok: boolean) => voi
   const buildings: Item[] = S.buildingInfo(c).filter(b => b.yard === S.HOME_YARD).map(b => {
     const mats = [b.logs > 0 ? `${loads(b.logs)} logs` : '', b.stone > 0 ? `${loads(b.stone)} stone` : ''].filter(Boolean).join(' and ')
     const bought = b.buyLogs > 0 || b.buyStone > 0
+    const crewDays = Math.max(1, Math.ceil(b.days / Math.max(1, c.crew.length)))
     return {
       id: `build-${b.kind}`, glyph: BUILD_GLYPH[b.kind], name: b.name, does: b.does,
-      price: F.money(b.total),
-      sub: `${F.num(b.days)} crew-days of building${mats ? ` · uses ${mats}${bought ? ' (the price buys what your yard lacks)' : ' from your yard'}` : ''}`,
+      price: F.money(b.total), cost: b.total,
+      tag: b.kind === 'stand' && b.state === 'none' ? 'A good first building: it pays for itself by fall' : undefined,
+      sub: `Your crew builds it in about ${F.plural(crewDays, 'day')}${mats ? ` · ${mats}, ${bought ? 'bought in the price' : 'from your yard'}` : ''}`,
       state: b.state === 'built' ? 'have' : b.state === 'building' ? 'doing' : b.ok ? 'can' : 'no',
       why: b.state === 'built' ? 'Built' : b.state === 'building' ? `Going up: ${F.pct(b.progress)} built` : b.ok ? '' : first(b.why),
       label: 'Build', run: () => run({ t: 'build', kind: b.kind, yard: S.HOME_YARD }),
@@ -39,7 +42,7 @@ function items(ctx: Ctx, c: S.Campaign, done: (text: string, ok: boolean) => voi
     const u = S.UPGRADES[id], g = costs.find(x => x.id === `buy:${id}`)
     const have = !!c.upgrades[id]
     return {
-      id: `buy-${id}`, glyph: UPGRADE_GLYPH[id], name: u.name, does: u.blurb, price: F.money(u.cost),
+      id: `buy-${id}`, glyph: UPGRADE_GLYPH[id], name: u.name, does: u.blurb, price: F.money(u.cost), cost: u.cost,
       state: have ? 'have' : g?.can ? 'can' : 'no', why: have ? 'Owned' : g?.can ? '' : first(g?.why ?? ''),
       label: 'Buy', run: () => run({ t: 'buy', upgrade: id }),
     }
@@ -101,17 +104,20 @@ export function openBuild(ctx: Ctx): void {
         const money = c.phase === 'season' || c.phase === 'cellar' ? S.moneyNow(app.world, c) : null
         const row = (x: Item): HTMLElement => h('li', { class: `bm-row is-${x.state}`, testid: x.id },
           icon(x.glyph, 'i bm-ic'),
-          h('div', { class: 'bm-what' }, h('b', { class: 'bm-name' }, x.name), h('span', { class: 'bm-does' }, x.does), x.sub ? h('span', { class: 'bm-sub t-caption' }, x.sub) : null),
+          h('div', { class: 'bm-what' }, h('b', { class: 'bm-name' }, x.name, x.tag && x.state === 'can' ? h('span', { class: 'bm-tag' }, x.tag) : null), h('span', { class: 'bm-does' }, x.does), x.sub ? h('span', { class: 'bm-sub t-caption' }, x.sub) : null),
           h('div', { class: 'bm-get' },
-            x.state === 'can' && x.run ? h('button', { class: 'btn go bm-key', type: 'button', testid: `${x.id}-go`, onclick: x.run }, x.label, x.price && x.price !== 'No cost' ? h('span', { class: 'num bm-price' }, x.price) : null)
+            x.state === 'can' && x.run ? [h('button', { class: 'btn go bm-key', type: 'button', testid: `${x.id}-go`, onclick: x.run }, x.label, x.price && x.price !== 'No cost' ? h('span', { class: 'num bm-price' }, x.price) : null),
+              // What the purchase leaves of the year-end forecast, so its price is read against the goal.
+              money && x.cost ? h('span', { class: `bm-left t-caption num${money.after - x.cost < 0 ? ' c-red' : ''}`, testid: `${x.id}-left` }, `leaves ${F.money(money.after - x.cost)} at year end`) : null]
               : [x.price ? h('span', { class: 'num bm-price' }, x.price) : null, h('span', { class: `bm-why${x.state === 'have' ? ' ok' : ''}` }, x.state === 'have' ? [icon('check', 'i'), x.why] : x.why)]))
         const groups = items(ctx, c, (text, ok) => { said = { text, ok }; draw() })
         const head = h('div', { class: 'bm-head' },
           h('div', { class: 'bm-fig', testid: 'build-spend' }, h('span', { class: 't-label' }, 'You can spend'), h('b', { class: 'num' }, F.money(Math.floor(S.spendable(c)))),
-            h('span', { class: 't-caption' }, c.phase === 'plan' ? 'your cash' : c.cash >= 0 ? 'your cash, and what the bank will lend' : 'what the bank will still lend')),
+            h('span', { class: 't-caption' }, c.phase === 'plan' ? 'your cash' : c.cash >= 0 ? 'your cash, and what the bank will lend' : 'on the bank\'s loan, paid back when the crop sells')),
           h('div', { class: 'bm-fig' }, h('span', { class: 't-label' }, 'In the yard'), h('b', { class: 'num' }, `${F.num(Math.floor(c.logs))} logs · ${F.num(Math.floor(c.stone))} stone`), h('span', { class: 't-caption' }, 'from felling and picking rocks')),
-          money ? h('div', { class: 'bm-fig' }, h('span', { class: 't-label' }, 'Year-end forecast'), h('b', { class: `num${money.after < 0 ? ' c-red' : ''}` }, F.money(money.after)), h('span', { class: 't-caption' }, 'after the bills; what you spend comes off it')) : null)
-        const parts: (Node | null)[] = [head as Node,
+          money ? h('div', { class: 'bm-fig' }, h('span', { class: 't-label' }, 'Year-end forecast'), h('b', { class: `num${money.after < 0 ? ' c-red' : ''}` }, F.money(money.after)), h('span', { class: 't-caption' }, 'what you keep after the bills; the goal is above $0')) : null)
+        const jump = h('nav', { class: 'bm-jump', 'aria-label': 'Go to' }, groups.map((g, k) => h('button', { class: 'btn quiet', type: 'button', testid: `build-jump-${k}`, onclick: () => box.querySelectorAll('.bm-group')[k]?.scrollIntoView({ block: 'start', behavior: 'smooth' }) }, g.title)))
+        const parts: (Node | null)[] = [head as Node, jump,
           said ? h('p', { class: `bm-said${said.ok ? '' : ' c-red'}`, testid: 'build-said', role: 'status' }, said.text) : null,
           ...groups.map(g => h('section', { class: 'bm-group' },
             h('h3', { class: 'bm-title t-label' }, g.title), g.note ? h('p', { class: 'bm-note t-caption' }, g.note) : null,

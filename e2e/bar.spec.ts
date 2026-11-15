@@ -16,7 +16,9 @@ test('the menu is always up on the season screen: its tabs open their sheets, an
   await putAway(page)
   const bar = page.locator('#ui .mainbar')
   await expect(bar).toBeVisible()
-  for (const id of ['todo', 'fields', 'people', 'work', 'money', 'contracts', 'almanac', 'menu']) await expect(bar.getByTestId(`bar-${id}`)).toBeVisible()
+  // (Build stands first; Work is under People, and the contracts and the almanac are in the menu: 14 November.)
+  for (const id of ['build', 'todo', 'fields', 'people', 'money', 'menu']) await expect(bar.getByTestId(`bar-${id}`)).toBeVisible()
+  for (const id of ['work', 'contracts', 'almanac']) await expect(bar.getByTestId(`bar-${id}`)).toHaveCount(0)
   // It lies inside the window and over nothing else that can be pressed at the foot.
   const b = (await bar.boundingBox())!
   expect(b.x + b.width).toBeLessThanOrEqual(page.viewportSize()!.width)

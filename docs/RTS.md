@@ -61,7 +61,8 @@ to the budget.
 
 ## What it is now
 
-- **The clock.** A day of work is a minute at 1×; 2× and 3× are twice and three times that; the work is watched
+- **The clock.** (As first built; see "The loop on the screen" below for what it is now: 1×, 3×, 6×, and no day
+  hurried by itself.) A day of work is a minute at 1×; 2× and 3× are twice and three times that; the work is watched
   lane by lane at every one of them. A field is planted in a minute, hilled in half, sprayed in a quarter. Time
   with no work in it (a day nobody works, the rest of a day once its work is done) goes by at six seconds a day at
   1×. `src/game/app.ts`: `DAY_SECONDS`, `QUIET_S`.
@@ -110,6 +111,50 @@ the season"):
   an order on the list has nobody at it yet: those people are about to go to it. One job on the land at a time: the hedgerow round a crop on low ground first, then stones
   where a field is stony, then a tract to fell. Work on the crop still comes first: anyone needed there leaves the
   land work for it. `freeWork` in `src/game/goals.ts`, `tests/free.test.ts`.
+
+## The loop on the screen
+
+The owner, later the same evening, with a picture of the farm a few minutes in (the slip "Everyone is idle", a key
+"Order it", the money board half blank, tags hung at the fields' edges):
+
+> "menus need another ux pass and the icons stay over the character at too close of a range and block their models
+> and its still unclear what your supposed to actually be doing and the freedom like whats building etc how do you
+> get upgrades like think rimworld think cities skylines think factorio think frostpunk think stardew valley"
+>
+> "everyone is idle? ok and then the time randomly changes.... order it? order what? huge blank box sentence that
+> doesnt make sense huge as uncentered labels all over the farm and no sense of direction"
+
+The games he names carry their loop on three fixtures: objectives that always name a next step, a build menu that is
+always open with prices and locks, and upgrades that say what they unlock. This game had the things to buy and no
+place that showed them, and its first year could buy none of them. What changed, each from the screen he sent and
+from two viewers who knew nothing of the game (docs/quality/five-second.md):
+
+- **One loop, said on the screen.** Grow and sell potatoes; spend on buildings, machines, people and land; keep
+  what is left after the year-end bills above nothing, five years. The money board says the last of it under its
+  figure ("Goal: keep this above $0 · year 1 of 5").
+- **Build, first on the bar.** One sheet with every building, machine, kind of hire and tract to clear: what it
+  does, what it costs, and either the one press that gets it or the few words that say why not ("Needs the machine
+  shed", "No bed free: a bunkhouse adds six"). Three figures across its top: what can be spent, the logs and stone
+  in the yard, the year-end forecast. `src/ui/buildmenu.ts`. The bar is Build, To do, Fields, People, Money, Menu;
+  Work is under People, and contracts and the almanac are in the menu.
+- **A first year can build.** Once the season is under way the bank lends for a building, a machine or a
+  contractor until the farm owes $30,000 in all (`BUILD_CREDIT`), and machines are bought in any part of the year.
+  Before, both came out of cash, and a first year is on the loan from its first day. `spendable`, `spendBlock` in
+  `src/sim/buildings.ts`.
+- **Idle people are offered work by name.** Under the slip: who is idle, and each job they can be given as a key
+  that says what it is and where ("Cut brush: Brook Field", "Fell: Alder Swale"), with Build beside them. The
+  pointer over a key lights its field. The slip itself never says there is nothing to do.
+- **The clock changes only when the player changes it.** Every day is a minute at 1×, twenty seconds at 3×, ten at
+  6× (RimWorld's steps), whoever is or is not working. Days with no work in them no longer go by in seconds by
+  themselves; the one fast run is the player's own Skip ahead. `src/game/app.ts`.
+- **Nothing is hidden in a guided year.** The tips used to bring the forecast, the people and the year-end figure
+  onto the screen one at a time, each keeping its place blank until then.
+- **Tags are small and stand on their fields.** A third smaller, and placed on the middle of what shows of the
+  field, not hung at its near edge. `fieldAnchorNow` in `src/render/index.ts`.
+- **From near, a person is their own figure.** Once someone stands taller on the screen than their face pin, the
+  pin gives way to their name over their head; at every range it stands clear above the head. `src/ui/pins.ts`.
+- **The interface is drawn smaller on a large screen**: at its own size up to 1920 by 1080, a quarter larger at
+  2560 by 1440 (it was half as large again). `src/ui/scale.ts`.
 
 ## What was given up
 

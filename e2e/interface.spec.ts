@@ -156,7 +156,8 @@ test('the crop orders hold their places when one is given, and under 80 words wi
   await reach(page, `q.run(q.day(6, 12))`)
   await putAway(page)
   await page.waitForTimeout(300)
-  { const w = await wordsOnScreen(page); expect(w.n, w.by).toBeLessThan(80) }
+  // (ninety with somebody idle: who they are and the two jobs and Build offered them, each by name, since 14 November)
+  { const w = await wordsOnScreen(page); expect(w.n, w.by).toBeLessThan(90) }
   await page.getByTestId('field-2').click()
   const slots = page.locator('#ui [data-testid="card"] .orders.slots > .order')
   await expect(slots).toHaveCount(9)
@@ -598,9 +599,11 @@ test('the goal line says the one next thing, opens the ladder, and moves on when
     app.setSpeed(0)`)
   // (round eight: the walking is the crew's, so the slip never names it. With somebody at nothing it is work on the
   // land to give them; with that given, what the player is waiting for)
-  await expect(page.getByTestId('goal')).toContainText('You are idle', { timeout: 5000 })
-  await page.getByTestId('goal-do').click()
-  await expect(page.getByTestId('goal')).toContainText('Nothing to do until blight weather', { timeout: 5000 })
+  await expect(page.getByTestId('idle')).toContainText('You are idle', { timeout: 5000 })
+  await expect(page.getByTestId('goal')).toContainText('The crop is growing', { timeout: 5000 })
+  await page.getByTestId('idle-do-0').click()
+  await expect(page.getByTestId('idle')).toHaveCount(0)
+  await expect(page.getByTestId('goal')).toContainText('The crop is growing')
   expect(errors, errors.join('\n')).toEqual([])
 })
 

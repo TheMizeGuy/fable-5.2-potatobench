@@ -654,8 +654,8 @@ export function mountGuide(ctx: Ctx, layer: HTMLElement): { frame(dt: number): v
     if (card) for (const el of behind()) if (!el.inert) el.inert = true
     if (now?.card) now = null
     // The screen grows with the player: what a guided first year has not brought in yet is held back, in its place.
-    const hide = guide.hidden(c, app.screen)
-    for (const piece of PIECES) root.classList.toggle(`st-hide-${piece}`, hide.includes(piece))
+    // (a guided year hid the pieces it had not brought in yet, until 14 November: nothing is hidden now)
+    for (const piece of PIECES) root.classList.remove(`st-hide-${piece}`)
     root.classList.toggle('noting', !!now || !!card)
     root.classList.toggle('guided', guidedYear(c) && app.screen === 'season')
     // In spring the note floats beside the sheet, covering none of its rows; on a phone, where the sheet is the whole

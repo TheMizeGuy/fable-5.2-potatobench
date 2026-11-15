@@ -3,7 +3,7 @@
 // names one job on the land to give them, and stops naming one while such a job is on the list.
 import { describe, expect, it } from 'vitest'
 import { App, setDays } from '../src/game/app.ts'
-import { freeWork } from '../src/game/goals.ts'
+import { freeWork, idleWork } from '../src/game/goals.ts'
 import * as S from '../src/sim/index.ts'
 import { loadWorld } from '../tools/balance/world.ts'
 
@@ -57,6 +57,31 @@ describe('work for people with nothing to do', () => {
       day(app, c)
       const fell = s.jobs.find(j => j.kind === 'fell')
       if (fell && !c.crew.some(u => u.job >= 0 && u.job !== fell.id)) expect(c.crew.filter(u => u.job === fell.id || u.help === fell.id).length).toBeGreaterThan(1)
+    } finally { setDays('brisk') }
+  })
+
+  // "order it? order what?" (the owner, 14 November, of a key that said "Order it"): the jobs are offered by name,
+  // at most two of them, a short one on a field and a tract to fell.
+  it('offers at most two jobs, each with its place and what it is for, and none while an order waits to be taken up', () => {
+    setDays('long')
+    try {
+      const { app, c } = farm()
+      app.order('plant', { fields: [app.needs().findIndex(n => n.need?.act === 'plant')] })
+      const s = c.season!
+      for (let n = 0; n < 40 && !(idleWork(c) && s.fields.filter(f => f.status === 'planted' || f.status === 'growing').length >= 4); n++) day(app, c)
+      const idle = idleWork(c)!
+      expect(idle.who.length).toBeGreaterThan(0)
+      expect(idle.options.map(o => o.kind)).toEqual(['brush', 'fell'])
+      for (const o of idle.options) {
+        expect(S.jobBlock(c, o.kind, o.field)).toBe('')
+        expect(o.gain.length).toBeGreaterThan(20)
+      }
+      // An order nobody has taken up yet: the people standing are about to go to it, and nothing is offered.
+      const field = s.fields.findIndex(f => f.status === 'planted' || f.status === 'growing')
+      for (let n = 0; n < 60 && S.jobBlock(c, 'scout', field) !== ''; n++) day(app, c)
+      for (const j of [...s.jobs]) S.apply(app.world, c, { t: 'cancel', id: j.id })
+      expect(S.apply(app.world, c, { t: 'job', kind: 'scout', field }).ok).toBe(true)
+      expect(idleWork(c)).toBeNull()
     } finally { setDays('brisk') }
   })
 })

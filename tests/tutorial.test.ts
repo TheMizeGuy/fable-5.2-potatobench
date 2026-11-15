@@ -470,7 +470,7 @@ describe('the clock and the camera are the player\'s (the owner, 14 November)', 
     if (S.plantingIn(w, c) > 0) {
       const tip = g.current(look(w, c, { speed: 1 }))!
       expect(tip.id).toBe('clock')
-      expect(tip.ask(look(w, c))).toBe('Nothing to do until the soil warms. Click Skip ahead.')
+      expect(tip.ask(look(w, c))).toBe('The soil is too cold to plant. Click Skip ahead.')
       expect(tip.point!(look(w, c))).toEqual({ testid: ['goal-faster'] })
       // Used (the days at the fastest speed): it has done its work.
       expect(g.current(look(w, c, { speed: 3 }))?.id ?? null).not.toBe('clock')

@@ -28,3 +28,8 @@
 /* On the bar the build menu's tab is the strong one. */
 .mainbar .mb-tab.build { background: var(--st-ochre); font-weight: 700; padding: 0 14px; }
 .mainbar .mb-tab.build .i { --i: 18px; }
+
+.bm-jump { display: flex; flex-wrap: wrap; gap: 6px; }
+.bm-jump .btn { min-height: 32px; padding: 0 10px 2px; font-size: 14px; }
+.bm-tag { margin-left: 10px; padding: 1px 7px 2px; background: var(--canary); font: italic 400 13px/1.3 var(--f-text); white-space: nowrap; }
+.bm-left { white-space: nowrap; }

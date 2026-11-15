@@ -269,8 +269,14 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
 
   // How far out the camera is, in screen pixels to a plan unit: the home fields' anchors are 16.2 plan units apart
   // across the slope and 26.4 down it.
+  // (read from the middles of the fields' own ground, which do not move with how much of a field shows)
   function scale(): number {
-    const a = ctx.view.fieldAnchor(0), b = ctx.view.fieldAnchor(1), c = ctx.view.fieldAnchor(4)
+    const mid = (i: number): { x: number; y: number; visible: boolean } => {
+      const q = ctx.view.fieldCorners(i)
+      if (q.length !== 4 || !q.every(p => p.visible && Number.isFinite(p.x) && Number.isFinite(p.y))) return { x: NaN, y: NaN, visible: false }
+      return { x: (q[0].x + q[1].x + q[2].x + q[3].x) / 4, y: (q[0].y + q[1].y + q[2].y + q[3].y) / 4, visible: true }
+    }
+    const a = mid(0), b = mid(1), c = mid(4)
     if (!finite(a) || !finite(b) || !finite(c)) return Infinity
     return Math.max(Math.hypot(a.x - b.x, a.y - b.y) / 16.2, Math.hypot(a.x - c.x, a.y - c.y) / 26.4)
   }
@@ -304,8 +310,8 @@ export function plates(ctx: Ctx, layer: HTMLElement, o: { model: (i: number) => 
       // field in hand's.
       if (y1 < y0 && !app.selection.includes(i)) { want.push({ x: a.x, y: a.y, place: 'gone' }); continue }
       // (the field's point is the middle of what shows of it; the tag's own middle goes there, so y, its foot, is
-      // half its height below)
-      const ay = a.y + hh / 2
+      // half its height below. Not where the point is the field's near edge at the foot of the free land.)
+      const ay = Math.min(a.y + hh / 2, Math.max(a.y, y1))
       const x = Math.max(x0, Math.min(Math.max(x0, x1), a.x)), y = Math.max(y0, Math.min(Math.max(y0, y1), ay))
       want.push({ x, y, place: !seen || Math.abs(x - a.x) > 1 || Math.abs(y - ay) > 1 ? 'docked' : 'on' })
     }

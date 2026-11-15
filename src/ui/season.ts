@@ -796,6 +796,8 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
       else ctx.say('You can build once the farm can afford a building.')
       return true
     }
+    // B with no field in hand opens the build menu (with one, it is that field's Cut brush).
+    if (low === 'b' && !e.ctrlKey && !app.selection.length) { openBuild(ctx); return true }
     const kind = KEY_JOB[low]
     if (kind) { card.give(kind, e.ctrlKey || e.shiftKey); return true }
     return false

@@ -1088,21 +1088,25 @@ test('the slip never gives the crew\'s job as the player\'s goal: after planting
   await reach(page, `const guide = window.__countyGuide; guide.reset(); guide.refuse(); ${PLANTED}`)
   await putAway(page)
   const goal = page.getByTestId('goal')
-  // With somebody on the farm at nothing, the slip is work on the land to give them, and a key beside it gives it
-  // (the owner, 14 November: "ZERO intuitive direction on what im supposed to do next").
-  await expect(goal).toContainText('You are idle')
-  await expect(goal).toContainText(/cut brush at [A-Z][a-z]+ Field/)
-  await expect(page.locator('#ui [data-testid="goal"][data-free="brush"]')).toHaveCount(1)
+  // With somebody on the farm at nothing, a second slip under the goal says so and offers work on the land by name
+  // (the owner, 14 November: "ZERO intuitive direction on what im supposed to do next"; and, of a key that said
+  // only "Order it": "order it? order what?"). The goal itself never says there is nothing to do.
+  const idle = page.getByTestId('idle')
+  await expect(idle).toContainText('You are idle')
+  await expect(page.getByTestId('idle-do-0')).toHaveText(/^Cut brush: [A-Z][a-z]+ Field$/)
+  await expect(goal).toContainText('The crop is growing')
   await picture(page, 'r8-free-1280')
-  await page.getByTestId('goal-do').click()
+  await page.getByTestId('idle-do-0').click()
   expect(await game<string[]>(page, `c.season.jobs.filter(j => j.kind === 'brush').map(j => j.by)`)).toEqual(['you'])
+  await expect(idle).toHaveCount(0)
   // With work on the land on the list (here a tract to fell as well, which lasts the test), the slip says what the
   // player is waiting for.
   await reach(page, `const { app } = q.g(); app.order('fell', { fields: [app.campaign.fields.findIndex(f => f.tenure !== 'none' && f.cover === 'woods')] })`)
   await putAway(page)
   expect(await game<number>(page, `c.season.jobs.filter(j => j.kind === 'fell').length`)).toBe(1)
-  await expect(goal).toContainText('Nothing to do until blight weather')
-  await expect(goal).toContainText('your crew tends the fields on its own')
+  await expect(goal).toContainText('The crop is growing')
+  await expect(goal).toContainText('your crew tends it; your next decision is a spray, when blight weather comes')
+  await expect(goal).not.toContainText(/nothing to do/i)
   await expect(page.locator('#ui [data-testid="goal"][data-waiting="crew"]')).toHaveCount(1)
   await picture(page, 'r8-waiting-1280')
   // Through the weeks the crew walks, hills and digs test hills, the slip never names one of those as the goal.

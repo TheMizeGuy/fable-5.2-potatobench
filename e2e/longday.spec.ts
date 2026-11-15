@@ -37,8 +37,8 @@ test('a day of work at 1× is a minute: the planter is watched at its work, a pa
 
   // The clock's keys say what they are: the first speed, and the two that run the days by.
   await expect(page.getByTestId('speed-1')).toHaveText(/^1×/)
-  await expect(page.getByTestId('speed-2')).toHaveText(/^2×/)
-  await expect(page.getByTestId('speed-3')).toHaveText(/^3×/)
+  await expect(page.getByTestId('speed-2')).toHaveText(/^3×/)
+  await expect(page.getByTestId('speed-3')).toHaveText(/^6×/)
   const before = await state(page)
   expect(before.daySec).toBeGreaterThanOrEqual(39.9)
   expect(before.daySec).toBeLessThanOrEqual(60.1)
@@ -98,7 +98,7 @@ test('a day of work at 1× is a minute: the planter is watched at its work, a pa
   await expect.poll(async () => { const u = (await state(page)).info.units.find(x => x.id === 1)!; return Math.hypot(u.x - idle.x, u.z - idle.z) }, { timeout: 8000 }).toBeGreaterThan(3)
 
   // The faster speeds run the days by, and the first speed is a long day again.
-  // (the second speed is twice the first, and the work is still watched as it is done)
+  // (the second speed is three times the first, and the work is still watched as it is done)
   await page.getByTestId('speed-2').click()
   await expect.poll(async () => (await state(page)).day, { timeout: 40_000 }).toBeGreaterThan(before.day)
   await page.getByTestId('speed-1').click()

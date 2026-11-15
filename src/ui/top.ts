@@ -457,13 +457,13 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     const one = c.crew.find(u => u.id === idle.who[0])
     const who = idle.who.length === c.crew.length && c.crew.length > 1 ? 'Everyone is idle.' : idle.who.length === 1 && one ? (one.kind === 'farmer' ? 'You are idle.' : `${firstName(one.name)} is idle.`) : `${idle.who.length} people are idle.`
     return h('div', { class: 'idle-row', testid: 'idle', role: 'group', 'aria-label': 'People with nothing to do' },
-      h('p', { class: 'idle-say' }, icon('idle', 'i'), h('b', null, who), ' Give them work:'),
+      h('p', { class: 'idle-say' }, fist(), h('b', null, who), h('span', { class: 'sr' }, ' Give them work:')),
       h('div', { class: 'idle-keys' },
         idle.options.map((w, k) => h('button', {
           class: 'btn idle-key', type: 'button', testid: `idle-do-${k}`, 'data-kind': w.kind, title: ctx.touch() ? undefined : `${w.gain} Work on the crop comes first: anyone needed there leaves this for it.`,
           onclick: () => giveFree(w),
           onpointerenter: (e: Event) => { if ((e as PointerEvent).pointerType === 'mouse') app.setHover(w.field) }, onpointerleave: () => { if (app.hover === w.field) app.setHover(-1) },
-        }, icon(w.kind, 'i'), `${JOB_VERB[w.kind]}: ${S.FIELD_NAMES[w.field]}`)),
+        }, icon(w.kind, 'i'), `${w.kind === 'fell' ? 'Cut trees' : JOB_VERB[w.kind]}: ${S.FIELD_NAMES[w.field]}`)),
         o.onBuild ? h('button', { class: 'btn idle-key', type: 'button', testid: 'idle-build', onclick: () => o.onBuild!() }, icon('hammer', 'i'), 'Build…') : null))
   }
 
@@ -653,7 +653,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
             whyNow.cause.remedy && !remedied(c) ? [' ', h('button', { class: 'why-key fix-key', type: 'button', testid: 'outlook-fix', onclick: () => (REMEDY[whyNow!.cause.remedy!] ? order(whyNow!.cause) : fix(whyNow!.cause)) },
               REMEDY[whyNow.cause.remedy] ? [REMEDY[whyNow.cause.remedy], ' ', h('span', { class: 'num' }, F.money(S.jobCost(c, whyNow.cause.remedy, whyNow.cause.field ?? -1)))] : 'Show me')] : null,
             whyNow.ask ? [' ', h('button', { class: 'why-key', type: 'button', testid: 'outlook-why-open', 'aria-label': 'Why?', title: ctx.touch() ? undefined : 'Why?', 'aria-expanded': String(pop === 'money'), onclick: () => openMoney('press') }, icon('help', 'i'))] : null]
-            : h('span', { class: 'why-t' }, `Goal: keep this above $0 · year ${Math.min(c.goalYears, c.history.length + 1)} of ${c.goalYears}`)) : null)
+            : h('span', { class: 'why-t' }, `Goal: above $0 at year end`)) : null)
       // The sum that makes the figure, under the board, clear of the speed keys.
       const money = pop === 'money' && view ? h('div', {
         class: 'tb-pop money-pop sheet', id: 'money-pop', testid: 'money-pop', role: 'dialog', 'aria-label': 'How the year-end figure is made up',
