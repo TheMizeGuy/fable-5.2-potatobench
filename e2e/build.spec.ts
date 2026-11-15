@@ -24,6 +24,10 @@ test('the build menu is one press from the season and a purchase is one more, on
   // What can be spent is said, and every building and machine is on it with its price.
   await expect(page.getByTestId('build-spend')).toContainText(/\$\d/)
   for (const id of ['build-house', 'build-shed', 'build-bunk', 'build-packing', 'build-pond', 'build-stand', 'build-station', 'build-road', 'buy-boom', 'buy-harvester', 'buy-truck', 'hire-hand', 'hire-operator']) await expect(page.getByTestId(id)).toContainText(/\$\d/)
+  // Every row lies inside the sheet: no key or caption runs past its edge.
+  const edge = (await sheet.boundingBox())!
+  const past = await page.locator('#ui [data-testid="build"] .bm-get > *').evaluateAll((els, right) => els.filter(e => (e as HTMLElement).offsetParent !== null && e.getBoundingClientRect().right > right + 0.5).map(e => (e.textContent ?? '').slice(0, 40)), edge.x + edge.width)
+  expect(past, 'keys and captions past the sheet\'s right edge').toEqual([])
   // One press builds: the weather station is started, paid for with the bank's money, and on the work list.
   const owed = await game<number>(page, '-c.cash')
   await page.getByTestId('build-station-go').click()
