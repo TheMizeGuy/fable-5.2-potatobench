@@ -414,6 +414,8 @@ test('in the second spring the goal slip stands down while the agent has a note,
   const covers: string[] = []
   const notes: string[] = []
   let strips = 0
+  // (each note as it was met, for the message when the walk goes wrong: this test has failed now and then on a loaded box)
+  const seen: string[] = []
   let pictured = false
   let idle = 0
   const until = Date.now() + 200_000
@@ -437,6 +439,7 @@ test('in the second spring the goal slip stands down while the agent has a note,
     // Round eight (10): every note has a Got it, whether it is read or points at a control.
     if (!v.got && !v.pass) noGot.push(v.note)
     if (v.over) covers.push(`the note ${v.note} lies over ${v.over}`)
+    seen.push(`${v.note}${v.strip ? ' over the strip' : ''}${await page.locator('#ui .catalogue .fold.open').count() ? ' (a fold open)' : ''}`)
     if (v.strip) { if (!strips) await picture(page, 'b-spring-strip-1280'); strips++ }
     if (!pictured && v.note === 'seed') { pictured = true; await picture(page, 'b-spring-note-1280') }
     // Round seven (9): with the field's record open the walk waits on that field. Nothing else comes for ten seconds
@@ -471,7 +474,7 @@ test('in the second spring the goal slip stands down while the agent has a note,
   console.log(`the second spring's notes: ${notes.join(' > ')}`)
   expect([...new Set(two)], 'two voices at once').toEqual([])
   expect([...new Set(covers)], 'a note over the strip of folds or over what it points at').toEqual([])
-  expect(strips, 'notes seen with the strip of folds showing').toBeGreaterThan(0)
+  expect(strips, `notes seen with the strip of folds showing (the walk: ${seen.join(' > ')})`).toBeGreaterThan(0)
   expect(notes).toEqual(['seed', 'crop', 'people', 'hire', 'land', 'lots', 'loan', 'begin2'])
   expect(noGot, 'notes with no Got it').toEqual([])
   // The season: its first note. (The owner, 14 November: a tip takes nothing from the game: the slip stays up under it.)
