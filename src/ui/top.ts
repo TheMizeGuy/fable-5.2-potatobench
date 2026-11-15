@@ -533,14 +533,18 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     const mine = !call && season && g && wait <= 0 && CROP_STEPS.has(g.id) ? waitingFor(c, app.world) : null
     // What comes after the pressing call: the next goal, unless that is work the crew does by itself.
     const crewOwn = (x: Goal) => { const act = GOAL_ROUTINE[x.id]; return !!act && S.routineInfo(c).some(r => r.kind === act && r.auto) }
+    // While the player waits on the crop and somebody is idle, the slip is the thing to do now, and the line under
+    // it what is waited for; the keys that give the work hang right under it. (Four fresh viewers of the two
+    // together: which is the task?)
+    const busy = !callFirst && !!mine && !!idleWork(c)
     if (callFirst || mine || (season && g && !reach && wait <= 0)) {
       const quiet = h('button', {
         class: `goal${callFirst ? '' : ' later'}`, type: 'button', testid: 'goal', k: callFirst ? `goal-call-${call!.id}` : `goal-later-${g!.id}`, 'data-waiting': mine ? 'crew' : undefined, 'aria-expanded': String(pop === 'goals'),
         title: ctx.touch() ? undefined : callFirst ? F.localize(call!.why) : g!.why,
         onclick: () => { pop = pop === 'goals' ? '' : 'goals'; ctx.dirty() },
       }, callFirst ? fist() : null, h('span', { class: 'goal-body' }, h('span', { class: 'sr' }, callFirst ? 'Now: ' : 'Next goal: '),
-        h('b', { class: 'goal-t' }, callFirst ? F.localize(call!.text).replace(/\.$/, '') : mine ? mine.title : g!.title),
-        callFirst ? (call!.line ? h('span', { class: 'goal-when' }, call!.line) : g && !crewOwn(g) ? h('span', { class: 'goal-when' }, `then ${g.title.toLowerCase()}${reach ? '' : ` (${notYet(c, g)})`}`) : null) : h('span', { class: 'goal-when' }, `${mine ? F.localize(mine.when) : notYet(c, g!)}${then ? ` · ${then}` : ''}`)),
+        h('b', { class: 'goal-t' }, callFirst ? F.localize(call!.text).replace(/\.$/, '') : busy ? 'Keep your crew busy' : mine ? mine.title : g!.title),
+        callFirst ? (call!.line ? h('span', { class: 'goal-when' }, call!.line) : g && !crewOwn(g) ? h('span', { class: 'goal-when' }, `then ${g.title.toLowerCase()}${reach ? '' : ` (${notYet(c, g)})`}`) : null) : h('span', { class: 'goal-when' }, busy ? `${mine!.title}${/^due /.test(mine!.when) ? `, ${F.localize(mine!.when.split(',')[0])}` : ''}` : `${mine ? F.localize(mine.when) : notYet(c, g!)}${then ? ` · ${then}` : ''}`)),
       h('span', { class: 'sr' }, `. ${callFirst ? F.localize(call!.why) : g!.why} Press to open your goals.`))
       const go = callFirst ? h('button', { class: 'btn goal-go', type: 'button', testid: 'goal-do', onclick: () => takeCall(call!) }, icon(call!.fix ? 'check' : 'arrow', 'i'), call!.fixLabel) : null
       return go ? h('div', { class: 'goal-row' }, quiet, go) : quiet

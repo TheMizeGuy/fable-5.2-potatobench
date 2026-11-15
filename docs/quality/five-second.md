@@ -84,3 +84,15 @@ button until its day; the work list's chips; the build menu's rows are sentences
 "You can spend" is not the figure on the money board. Done from that in `live-60`, not re-marked: "Plant button";
 "Goal: end the year above $0"; the build menu's first figure is "The bank will lend you" while the farm is on the
 loan, and a row says "Left at year end".
+
+## Fourth pass, on `live-61`
+
+| | first screen | later | build menu |
+|---|---|---|---|
+| strategy player | 8 | 6 | 7 |
+| casual player | 7 | 4 | 6 |
+
+The build menu's short effect beside each name was noticed by both. The later screen is still the weak one: the
+line about the vine kill, the slip for idle people and a test dig's toast read as three tasks with none first. Done
+from that in `live-62`, not re-marked: while somebody is idle the slip itself says "Keep your crew busy", with
+what is being waited for as its second line and the work's keys right under it.
