@@ -428,9 +428,10 @@ test('in the second spring the goal slip stands down while the agent has a note,
     if (v.phase !== 'plan') break
     if (v.paper) { await page.keyboard.press('Escape'); continue }
     // No step while a fold the last step opened is still open: read, it is closed, as a player moving on would.
-    // (after four looks with no note, six seconds: a note that follows a fold's opening comes within a few seconds of
-    // it, and on a loaded test box two looks closed the fold before its note had come, so none was seen over the strip)
-    if (!v.note) { const open = page.locator('#ui .catalogue .fold.open'); if (++idle >= 4 && await open.count()) { await open.first().click(); idle = 0 } continue }
+    // (after ten looks with no note, a quarter of a minute: a note that follows a fold's opening comes a few seconds of
+    // the game's own clock after it, and that clock runs slow when a loaded test box draws few frames; two looks, and
+    // then four, closed the fold before its note had come, so none was seen over the strip)
+    if (!v.note) { const open = page.locator('#ui .catalogue .fold.open'); if (++idle >= 10 && await open.count()) { await open.first().click(); idle = 0 } continue }
     idle = 0
     if (notes[notes.length - 1] !== v.note) notes.push(v.note)
     // Round eight (10): every note has a Got it, whether it is read or points at a control.
