@@ -89,4 +89,21 @@ describe('a long day, watched as it is worked', () => {
     expect(f.seconds / 60, 'the season, minutes at the first speed').toBeLessThan(60)
     expect(f.dead / f.seconds, 'share of the season nobody is at anything').toBeLessThan(0.2)
   }, 240_000)
+
+  // The owner, 14 November: "ZERO intuitive direction on what im supposed to do next". The slip gives work on the
+  // land to people with nothing to do; a player who takes it every time has a crew that is never standing, and a
+  // season that is still a sitting.
+  it('the same season with the slip\'s work for free hands taken each morning: everybody is at something nearly all of it, and it is still under an hour', () => {
+    const r = watchLong({ job: 'plant', days: 230, soak: true, free: true, hands: 2, dt: 1 / 15 })
+    expect(r.jumps, 'steps nobody could make').toEqual([])
+    expect(r.slid, 'figures slid over the ground as they stood').toBe(0)
+    expect(r.popped, 'hills whose ground changed only when the day turned').toBe(0)
+    expect(r.fastest.foot, r.where.foot).toBeLessThanOrEqual(FOOT_MOST)
+    expect(r.fastest.rig, r.where.rig).toBeLessThanOrEqual(RIG_MOST)
+    const f = r.feel
+    expect(f.seconds / 60, 'the season, minutes at the first speed').toBeLessThan(60)
+    expect(f.firstSale / 60, 'the first weigh ticket, minutes').toBeLessThan(50)
+    expect(f.dead / f.seconds, 'share of the season nobody is at anything').toBeLessThan(0.05)
+    for (const id of [0, 1, 2]) expect(f.busy[id] / f.seconds, `person ${id}'s share of the season at something`).toBeGreaterThan(0.85)
+  }, 240_000)
 })

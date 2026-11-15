@@ -227,4 +227,38 @@ describe('many hands', () => {
     }
     expect(saved(true)).toBe(saved(false))
   })
+
+  // Felling is weeks of work for people who would otherwise have none (the slip offers it): the crop comes before it.
+  it('someone felling leaves it to lend a hand with a planting that is being worked, and goes back to it after', () => {
+    const w = loadWorld()
+    const c = S.createCampaign(w, { seed: 3, startYear: 1987 })
+    c.cash += 40000
+    expect(S.apply(w, c, { t: 'hire', kind: 'hand' }).ok).toBe(true)
+    expect(S.apply(w, c, { t: 'begin' }).ok).toBe(true)
+    const s = c.season!
+    const tract = c.fields.findIndex(f => f.tenure !== 'none' && f.cover === 'woods')
+    expect(S.apply(w, c, { t: 'job', kind: 'fell', field: tract }).ok).toBe(true)
+    const hand = c.crew.find(u => u.kind === 'hand')!
+    // Until the planting, the hand is the one felling.
+    let field = -1
+    for (let n = 0; n < 120 && field < 0; n++) {
+      c.incidents = []
+      field = S.advise(w, c).find(a => a.act === 'plant' && a.field >= 0)?.field ?? -1
+      if (field < 0) S.apply(w, c, { t: 'day' })
+    }
+    const fell = s.jobs.find(j => j.kind === 'fell')!
+    expect(fell, 'the felling is still on the list').toBeTruthy()
+    expect(S.apply(w, c, { t: 'job', kind: 'plant', field }).ok).toBe(true)
+    // A planting day: the farmer plants, and the hand is at the planting, not in the woods.
+    for (let n = 0; n < 6 && !(s.clock?.log ?? []).some(x => x.kind === 'plant' && !x.help); n++) { c.incidents = []; S.apply(w, c, { t: 'day' }); S.apply(w, c, { t: 'work', to: 1 }) }
+    const log = s.clock!.log
+    expect(log.some(x => x.kind === 'plant' && !x.help), 'the planting was worked today').toBe(true)
+    expect(log.some(x => x.unit === hand.id && x.kind === 'plant' && x.help), 'the hand lent a hand at it').toBe(true)
+    expect(s.jobs.some(j => j.id === fell.id), 'the felling stays on the list').toBe(true)
+    // With the planting done, the felling is taken up again.
+    for (let n = 0; n < 30 && s.jobs.some(j => j.kind === 'plant'); n++) { c.incidents = []; for (const a of S.advise(w, c)) if (a.act === 'plant' && a.field >= 0) S.apply(w, c, { t: 'job', kind: 'plant', field: a.field }); S.apply(w, c, { t: 'day' }) }
+    let back = false
+    for (let n = 0; n < 6 && !back; n++) { c.incidents = []; S.apply(w, c, { t: 'day' }); S.apply(w, c, { t: 'work', to: 1 }); back = (s.clock?.log ?? []).some(x => x.kind === 'fell') }
+    expect(back, 'someone is felling again').toBe(true)
+  })
 })

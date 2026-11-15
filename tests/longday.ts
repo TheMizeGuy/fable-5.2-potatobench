@@ -3,6 +3,7 @@
 // frame where each person and machine is seen. For tests of a day watched as it is worked (tests/longday.test.ts).
 import { PerspectiveCamera, Texture } from 'three'
 import { App, DAY_SECONDS, setDays } from '../src/game/app.ts'
+import { freeWork } from '../src/game/goals.ts'
 import { WATCH } from '../src/render/crew.ts'
 import { copyEnv, envTarget, makeEnv } from '../src/render/env.ts'
 import type { HillDisplay } from '../src/render/fields.ts'
@@ -39,7 +40,8 @@ export interface LongSeen {
 // job: the work the day is begun for (the first day the farm's advice asks for it). order: at this share of the first
 // day, a second order (rocks on a resting field). hands: field hands hired.
 // soak: every morning the farm's advice is ordered, as a player who does all that is asked would (a whole season).
-export function watchLong(opts: { job: sim.JobKind; days?: number; order?: number; hands?: number; dt?: number; seed?: number; soak?: boolean; speed?: 1 | 2 | 3 }): LongSeen {
+// free: the soaking player also gives, each morning, the work on the land the slip offers for people with nothing to do.
+export function watchLong(opts: { job: sim.JobKind; days?: number; order?: number; hands?: number; dt?: number; seed?: number; soak?: boolean; free?: boolean; speed?: 1 | 2 | 3 }): LongSeen {
   setDays('long')
   const app = new App(world)
   app.settings.pauseOnAlerts = false
@@ -152,6 +154,8 @@ export function watchLong(opts: { job: sim.JobKind; days?: number; order?: numbe
           if (a.act === 'sell') app.do({ t: 'sell', lot: a.lot!, frac: 1 })
           else if (a.field >= 0 && a.act !== 'wait' && a.act !== 'close') app.do({ t: 'job', kind: a.act as sim.JobKind, field: a.field })
         }
+        const w = opts.free ? freeWork(c) : null
+        if (w) app.do({ t: 'job', kind: w.kind, field: w.field })
       }
       app.tick(dt * 1000)
       if (dirty) rebuild()

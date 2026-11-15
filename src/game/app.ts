@@ -26,6 +26,12 @@ const LADDERS = { long: [0, 1 / DAY_SECONDS, 2 / DAY_SECONDS, 3 / DAY_SECONDS], 
 // Seconds a day with no work in it takes at each speed (null: such a day is as long as any other).
 const QUIETS: Record<keyof typeof LADDERS, number[] | null> = { long: [0, 6, 3, 2], brisk: null }
 export let QUIET_S: number[] | null = QUIETS.long
+// Seconds a day takes while its only work is on the land (felling, picking rocks, cutting brush; a day with none
+// on the crop, and what is left of a day once the crop's work is done): work for people who would otherwise have
+// none, which is weeks of days in a summer. It is seen being done, ten seconds to a day, and the season stays a
+// sitting (at a minute a day a summer of felling is two hours).
+const LAND_S = [0, 10, 6, 4]
+const LAND_WORK: JobKind[] = ['fell', 'rocks', 'brush']
 // A new farm's field hands, and a season of a hand's wages (seven months at the hall's rate).
 export const START_HANDS = 2
 const START_HAND_PAY = 2660
@@ -727,6 +733,16 @@ export class App {
     return this.dayProgress > last + 0.012
   }
 
+  // Whether what is left of today's work is all work on the land (the day's last work on the crop is done, or it
+  // had none).
+  private landNow(): boolean {
+    const log = this.today()?.season?.clock?.log
+    if (!log || !log.length) return false
+    let crop = -1
+    for (const x of log) if (!LAND_WORK.includes(x.kind) && x.to > crop) crop = x.to
+    return this.dayProgress > crop + 0.012
+  }
+
   // How long a day of work takes at the speed the clock is at (or, paused, would go on at), in seconds.
   daySeconds(): number {
     return 1 / (DAYS_PER_SECOND[this.speed || this.resumeSpeed || 1] * this.pace)
@@ -766,7 +782,7 @@ export class App {
   // (a card answered, a paper put away, the guide's clock) the press was meant as "go on": it is not taken as a
   // pause, and the answer is false. Only the first such press: the next one pauses.
   pressPause(): boolean {
-    if (this.speed > 0 && performance.now() - this.resumedAt < SELF_RESUME_MS) { this.resumedAt = 0; return false }
+    if (this.speed > 0 && performance.now() - this.resumedAt < SELF_RESUME_MS) { this.resumedAt = -Infinity; return false }
     this.togglePause()
     return true
   }
@@ -789,7 +805,7 @@ export class App {
   pressing = false
   // When the game last set the days going by itself (performance.now()), so a press on pause just after it is not
   // taken back.
-  resumedAt = 0
+  resumedAt = -Infinity
 
   tick(dtMs: number): void {
     const c = this.campaign
@@ -799,13 +815,14 @@ export class App {
       if (!c.season.clock) { this.do({ t: 'work', to: 0 }); if (this.speed === 0 || !c.season || seasonDone(c)) return }
       // (time with no work in it goes by quickly: a day nobody works, and the rest of a day once its work is done)
       const quiet = this.quietNow(c)
-      this.hurrying = quiet
-      this.dayProgress += (Math.min(dtMs, 250) / 1000) * (quiet ? 1 / QUIET_S![this.speed] : DAYS_PER_SECOND[this.speed] * this.pace)
+      const land = !quiet && !!QUIET_S && this.landNow()
+      this.hurrying = quiet || land
+      this.dayProgress += (Math.min(dtMs, 250) / 1000) * (quiet ? 1 / QUIET_S![this.speed] : land ? 1 / LAND_S[this.speed] : DAYS_PER_SECOND[this.speed] * this.pace)
       // A watched day is counted as it goes: by the hour (and no oftener than every three seconds of play) the farm's
       // own count has the work done so far, so the work list, a person's card and what the day brings (a field
       // planted, barrels to haul, a test dig's tray) keep up with what is seen. Always to the hour: the crews' work is
       // counted an hour at a time, and a count part way through one would not be the day that was worked out ahead.
-      if (this.daySeconds() >= LONG_DAY_S && this.dayProgress < 1 && !quiet) {
+      if (this.daySeconds() >= LONG_DAY_S && this.dayProgress < 1 && !quiet && !land) {
         this.sinceCount += Math.min(dtMs, 250)
         if (this.sinceCount >= 3000 && Math.floor(this.dayProgress * DAY_HOURS) / DAY_HOURS > (c.season.clock?.at ?? 0) + 1e-6) {
           this.sinceCount = 0

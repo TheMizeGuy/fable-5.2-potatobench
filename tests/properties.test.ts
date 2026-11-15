@@ -174,10 +174,11 @@ function outOfRange(c: Campaign): string[] {
     // Two crews never work the same order: each order (one kind on one field) was worked by one crew in a day.
     const by = new Map<string, number>()
     // (Two buildings going up in one yard are two orders on the same place; a hauler who empties the barrels lets the
-    // order go, and someone else can take it up once more is dug the same day.)
+    // order go, and someone else can take it up once more is dug the same day; someone felling leaves it to lend a
+    // hand with the crop, and someone else can take the felling up the same day.)
     for (const w of s.worked) {
       if (w.help) { check(w.machine === undefined && w.rig === undefined && w.from === undefined, `helper's record on a machine: ${JSON.stringify(w)}`); continue }
-      if (w.kind === 'build' || w.kind === 'haul') continue
+      if (w.kind === 'build' || w.kind === 'haul' || w.kind === 'fell') continue
       const key = `${w.kind}:${w.field}`
       check(!by.has(key) || by.get(key) === w.unit, `${key} worked by ${by.get(key)} and ${w.unit}`)
       by.set(key, w.unit)

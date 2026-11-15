@@ -776,6 +776,25 @@ function mayHelp(u: Unit, kind: JobKind): boolean {
   return HELPED.includes(kind) && (jobSkill(kind) === 'machine' ? u.foreman === '' && u.prio.field > 0 : willDo(u, kind))
 }
 
+// The crop comes before the woods: felling is weeks of work, given to people who would otherwise have none, so
+// someone felling (or about to take it up) lends a hand instead at a planting, a digging or a hauling that is being
+// worked and has room for one more. (Picking rocks and cutting brush are a day or two, and are seen through.) The
+// order of the crop's they would help with, or undefined.
+const FILL_WORK: JobKind[] = ['fell']
+const CROP_HELPED: JobKind[] = ['plant', 'dig', 'haul']
+function cropToHelp(c: Campaign, s: Season, u: Unit): Job | undefined {
+  if (hurt(u, s.day) || resting(u)) return undefined
+  let job: Job | undefined
+  let best = Infinity
+  for (const j of s.jobs) {
+    if (!CROP_HELPED.includes(j.kind) || !mayHelp(u, j.kind) || !c.crew.some(o => o !== u && o.job === j.id)) continue
+    if (u.help !== j.id && c.crew.filter(o => o.help === j.id).length >= P.HELPERS_MOST) continue
+    const cost = u.help === j.id ? -1 : travel(c, u.at, j.field)
+    if (cost < best - EPS) { job = j; best = cost }
+  }
+  return job
+}
+
 // People with nothing of their own to do who are at an order's place helping with it.
 export function helpersAt(c: Campaign, job: Job): number {
   const day = c.season?.day ?? 0
@@ -1108,6 +1127,14 @@ function runCrews(world: World, c: Campaign, s: Season, d: Day, out: GameEvent[]
   }
   // Once they are done for now: let go, the machine is free from that moment; still held, it stays booked.
   const done = (t: Turn, b: Booking) => { if (t.u.job < 0) for (const k of b.keys) book.set(k, t.end - t.left); t.keys = [] }
+  // Felling is left for a hand lent to the crop (the order stays on the list, and is gone back to).
+  for (const t of turns) {
+    const u = t.u
+    const own = u.job >= 0 ? s.jobs.find(j => j.id === u.job) : undefined
+    if (!own || !FILL_WORK.includes(own.kind)) continue
+    const crop = cropToHelp(c, s, u)
+    if (crop) { letGo(u); u.help = crop.id }
+  }
   for (const t of turns) {
     const u = t.u
     const job = u.job >= 0 ? s.jobs.find(j => j.id === u.job) : undefined
@@ -1129,6 +1156,10 @@ function runCrews(world: World, c: Campaign, s: Season, d: Day, out: GameEvent[]
     if (!t) break
     const pick = choose(c, s, t.u, d, out, book, t.end - t.left, t.end)
     if (!pick) { t.idle = true; continue }
+    if (FILL_WORK.includes(pick.job.kind)) {
+      const crop = cropToHelp(c, s, t.u)
+      if (crop) { t.u.help = crop.id; t.idle = true; continue }
+    }
     t.u.job = pick.job.id
     delete t.u.help
     take(t, pick)
