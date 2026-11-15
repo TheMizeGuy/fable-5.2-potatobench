@@ -44,3 +44,28 @@ What they still marked down, and what was done about it in the same round:
 - Words of the trade in the build menu: crew-days are said as days for this crew, and the Buildings part says once
   what a cwt is.
 - Not done: every potato field's stamp as a labelled Plant key (one is; four crowded a small window).
+
+## Second pass, on the published build (`live-57`)
+
+The same two outlooks, fresh, on stills of the published game.
+
+| | first screen | later | build menu |
+|---|---|---|---|
+| strategy player | 7 | 5 | 6 |
+| casual player | 7 | 5 | 6 |
+
+The marks did not move from the first pass. Both now find Build and the goal at once, and both praised the line that
+says what a purchase leaves at year end. What they still marked down:
+
+- First screen: three things say "plant" (the slip, the tip, the key), the tip stands far from the key it is about,
+  and "0/4" beside six field tags (four are potato fields; two rest).
+- Later: the line about the vine kill reads as story, not as something to press; the work list's chips and "On the
+  list" are not explained; the game stands paused with people idle and says so only on the clock's chip.
+- Build menu: three money figures with none said to be the one that matters; "cwt", "intervale", "No. 1", "B size";
+  nothing marks what can be afforded; seven dense rows.
+
+Done from that, in `live-58`: the build menu's head is two figures (what can be spent; the farm's own logs and
+stone, and what they are for), each thing that can be had says "You can afford it" with the year-end figure it
+leaves (rounded as the board rounds it), the recommended first building is marked down its side, and the trade's
+words are said plainly. Not re-marked by fresh viewers. The first screen's three prompts and the later screen's
+lines are as they were.
