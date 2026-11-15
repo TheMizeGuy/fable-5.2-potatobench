@@ -39,5 +39,8 @@ What they still marked down, and what was done about it in the same round:
 - Build menu, "nothing says whether a purchase would push my year-end forecast toward the goal" and "no recommended
   pick": each thing that can be had says what it leaves of the year-end forecast; the farm stand, the cheapest, is marked as a good
   first building; four keys at the top go to the sheet's four parts.
-- Not done: every potato field's stamp as a labelled Plant key (one is; four crowded a small window); the tip and
-  the slip saying the same thing at the first screen; words of the trade in the build menu (cwt, crew-days).
+- "Why do I click at all?" and "why 0/4 when I see six fields?" at the first screen: the tip now names the control
+  and what one press does ("Click the orange Plant key. One press plants every potato field.").
+- Words of the trade in the build menu: crew-days are said as days for this crew, and the Buildings part says once
+  what a cwt is.
+- Not done: every potato field's stamp as a labelled Plant key (one is; four crowded a small window).

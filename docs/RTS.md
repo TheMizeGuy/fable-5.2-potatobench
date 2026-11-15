@@ -141,6 +141,9 @@ from two viewers who knew nothing of the game (docs/quality/five-second.md):
   contractor until the farm owes $30,000 in all (`BUILD_CREDIT`), and machines are bought in any part of the year.
   Before, both came out of cash, and a first year is on the loan from its first day. `spendable`, `spendBlock` in
   `src/sim/buildings.ts`.
+- **A first year can buy land to clear.** Woods and brush for sale are bought in any part of the year from the build
+  menu's Land part, a quarter down and the rest on the land mortgage; a field ready to plant is still bought or
+  rented in spring, with the year's plan. `buyLandBlock` in `src/sim/buildings.ts`.
 - **Idle people are offered work by name.** Under the slip, one line on canary: who is idle, and each job they can
   be given as a key that names it ("Cut brush", "Cut trees"); the key's slip and the order's toast say where, and
   the camera goes there. It never moves the land when it comes or goes, and it steps down while a card is open.
