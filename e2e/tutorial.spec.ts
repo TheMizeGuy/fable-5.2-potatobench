@@ -946,7 +946,10 @@ async function atTheAsk(page: Page, what: string, shot = ''): Promise<number[]> 
   if (shot) { await page.waitForTimeout(2500); await picture(page, shot) }
   await expect.poll(async () => {
     const out: string[] = []
-    for (const i of at.fit) { const r = await reachable(page, `badge-${i}`); if (r !== 'in view') out.push(`badge-${i} ${r}`) }
+    // (at the word to plant one field carries the key, and one press is the word for them all)
+    const keyed = await page.evaluate(fit => fit.filter(i => !!document.querySelector(`#ui .plate-layer [data-testid="badge-${i}"]`)), at.fit)
+    if (!keyed.length) out.push('no stamp carries the order')
+    for (const i of keyed) { const r = await reachable(page, `badge-${i}`); if (r !== 'in view') out.push(`badge-${i} ${r}`) }
     // The fields themselves are on the screen: a tag waiting at the window's edge stands for land out of view.
     const edge = await page.evaluate(fit => fit.filter(i => { const r = document.querySelector(`#ui [data-testid="field-${i}"]`)?.getBoundingClientRect(); return !r || r.left < 40 || r.right > innerWidth - 40 }), at.fit)
     for (const i of edge) out.push(`field-${i} at the edge`)

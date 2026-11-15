@@ -367,12 +367,21 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   // field that carries one is on the screen itself (a tag waiting at the edge for land out of view is not the
   // field), the whole farm is shown.
   function showStamps(act: 'plant' | 'kill'): void {
-    const onScreen = () => app.needs().every((n, i) => {
-      if (n.need?.act !== act) return true
-      const a = ctx.view.fieldAnchor(i)
-      const r = document.querySelector(`#ui .plate-layer [data-testid="badge-${i}"]`)?.getBoundingClientRect()
-      return a.visible && a.x >= 0 && a.y >= 0 && a.x <= innerWidth && a.y <= innerHeight && !!r && r.width > 0 && r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight
-    })
+    // (every field the order is for is on the screen, and so is every stamp that carries it: at the word to plant
+    // that is the one key)
+    const onScreen = () => {
+      let keys = 0
+      const all = app.needs().every((n, i) => {
+        if (n.need?.act !== act) return true
+        const a = ctx.view.fieldAnchor(i)
+        if (!(a.visible && a.x >= 0 && a.y >= 0 && a.x <= innerWidth && a.y <= innerHeight)) return false
+        const r = document.querySelector(`#ui .plate-layer [data-testid="badge-${i}"]`)?.getBoundingClientRect()
+        if (!r || !r.width) return true
+        keys++
+        return r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight
+      })
+      return all && keys > 0
+    }
     // (a season that opens on the question finds the camera still on its way in: judged then once more, when it has
     // come to rest, and never later than that, so nothing moves the land under a player who has gone on)
     const asking = () => app.screen === 'season' && app.speed === 0 && (app.pauseCause === 'plantAsk' || app.pauseCause === 'killCall')
@@ -480,7 +489,10 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
     if (queue.length) said.push(`on the work list: ${F.list(queued.map(j => JOB_VERB[j.kind].toLowerCase()))}`)
     const lot = f.lot >= 0 ? c.lots.find(l => l.id === f.lot) : undefined
     // Spraying the player said not to do this year carries no stamp.
-    const badge = need && isJob(need.act) && !(need.act === 'spray' && sprayWay(c) === 'none')
+    // At the word to plant one press plants every field: the one key stands alone, and the other fields carry no
+    // stamp until the word is given (three fresh viewers of four stamps: "it looks like I need four clicks").
+    const oneKey = asked === 'plant' && keyed >= 0 && keyed !== i && need?.act === 'plant'
+    const badge = oneKey ? null : need && isJob(need.act) && !(need.act === 'spray' && sprayWay(c) === 'none')
       ? { glyph: need.act as string, label: `${F.localize(need.text)} ${F.localize(need.why)}`, urgent: need.urgent, ink: inkFor(need.act, need.urgent, f), word: keyed === i ? JOB_VERB[need.act] : undefined }
       : need && need.act === 'sell' && lot ? { glyph: 'ticket', label: `${F.localize(need.text)} ${F.localize(need.why)}`, urgent: need.urgent, ink: 'ink' as Ink } : null
     const key = digitFor(c, i)

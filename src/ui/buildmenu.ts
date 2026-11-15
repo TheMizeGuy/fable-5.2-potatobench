@@ -127,13 +127,13 @@ export function openBuild(ctx: Ctx): void {
         const c = app.campaign
         if (!c) return
         const money = c.phase === 'season' || c.phase === 'cellar' ? S.moneyNow(app.world, c) : null
-        const row = (x: Item): HTMLElement => h('li', { class: `bm-row is-${x.state}${x.tag && x.state === 'can' ? ' is-pick' : ''}`, testid: x.id },
+        const row = (x: Item): HTMLElement => h('li', { class: `bm-row is-${x.state}${x.tag && x.state === 'can' ? ' is-pick' : ''}`, testid: x.id, title: x.gist && !ctx.touch() ? x.does : undefined },
           icon(x.glyph, 'i bm-ic'),
-          h('div', { class: 'bm-what' }, h('b', { class: 'bm-name' }, x.name, x.gist ? h('span', { class: 'bm-gist' }, x.gist) : null, x.tag && x.state === 'can' ? h('span', { class: 'bm-tag' }, x.tag) : null), h('span', { class: 'bm-does' }, x.does), x.sub ? h('span', { class: 'bm-sub t-caption' }, x.sub) : null),
+          h('div', { class: 'bm-what' }, h('b', { class: 'bm-name' }, x.name, x.gist ? h('span', { class: 'bm-gist' }, x.gist) : null, x.tag && x.state === 'can' ? h('span', { class: 'bm-tag' }, x.tag) : null), x.gist ? null : h('span', { class: 'bm-does' }, x.does), x.sub ? h('span', { class: 'bm-sub t-caption' }, x.sub) : null),
           h('div', { class: 'bm-get' },
             x.state === 'can' && x.run ? [h('button', { class: 'btn go bm-key', type: 'button', testid: `${x.id}-go`, onclick: x.run }, x.label, x.price && x.price !== 'No cost' ? h('span', { class: 'num bm-price' }, x.price) : null),
               // What the purchase leaves of the year-end forecast, so its price is read against the goal.
-              money && x.cost ? h('span', { class: `bm-left t-caption num${money.after - x.cost < 0 ? ' c-red' : ''}`, testid: `${x.id}-left` }, `You can afford it. Left at year end: ${F.money(Math.round((money.after - x.cost) / 100) * 100)}`) : null]
+              money && x.cost ? h('span', { class: `bm-left t-caption num${money.after - x.cost < 0 ? ' c-red' : ''}`, testid: `${x.id}-left` }, `${c.cash - x.cost < 0 ? 'Goes on your loan' : 'Paid from your cash'}. Year-end forecast: ${F.money(Math.round((money.after - x.cost) / 100) * 100)}`) : null]
               : [x.price ? h('span', { class: 'num bm-price' }, x.price) : null, h('span', { class: `bm-why${x.state === 'have' ? ' ok' : ''}` }, x.state === 'have' ? [icon('check', 'i'), x.why] : x.why)]))
         const groups = items(ctx, c, (text, ok) => { said = { text, ok }; draw() })
         const head = h('div', { class: 'bm-head' },
