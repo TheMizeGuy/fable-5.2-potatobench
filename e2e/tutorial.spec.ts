@@ -1090,8 +1090,8 @@ test('the slip never gives the crew\'s job as the player\'s goal: after planting
   const goal = page.getByTestId('goal')
   // With somebody on the farm at nothing, the slip is work on the land to give them, and a key beside it gives it
   // (the owner, 14 November: "ZERO intuitive direction on what im supposed to do next").
-  await expect(goal).toContainText('You have nothing to do')
-  await expect(goal).toContainText(/cut brush around [A-Z][a-z]+ Field for less blight and frost/)
+  await expect(goal).toContainText('You are idle')
+  await expect(goal).toContainText(/cut brush at [A-Z][a-z]+ Field/)
   await expect(page.locator('#ui [data-testid="goal"][data-free="brush"]')).toHaveCount(1)
   await picture(page, 'r8-free-1280')
   await page.getByTestId('goal-do').click()

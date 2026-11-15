@@ -237,23 +237,24 @@ export function waitingFor(c: Campaign, world?: World): { title: string; when: s
 // whatever is ordered here (someone on land work leaves it for pressing work on the crop). In order: the hedgerow
 // round a crop in the ground, lowest land first (it is this year's crop it spares); the stones of a field with no
 // crop in it, stoniest first; then a tract to fell, brush before woods.
-// who: the people with nothing to do, by id; gain: what the work is for, after its name ("... for less bruising").
+// who: the people with nothing to do, by id; gain: what the work is for, as a sentence.
 export interface FreeWork { kind: 'brush' | 'rocks' | 'fell'; field: number; who: number[]; gain: string }
 const LAND: JobKind[] = ['brush', 'rocks', 'fell']
 export function freeWork(c: Campaign): FreeWork | null {
   const s = c.season
   if (c.phase !== 'season' || !s || s.frozen || !plantWordGiven(s)) return null
   const who = c.crew.filter(u => u.foreman === '' && u.job < 0 && u.help === undefined && (u.out < 0 || u.out <= s.day)).map(u => u.id)
-  if (!who.length || s.jobs.some(j => LAND.includes(j.kind))) return null
+  // (an order nobody has taken up yet is work waiting: the people standing are about to go to it)
+  if (!who.length || s.jobs.some(j => LAND.includes(j.kind) || !c.crew.some(u => u.job === j.id))) return null
   const can = (kind: JobKind, i: number) => c.fields[i].tenure !== 'none' && jobBlock(c, kind, i) === ''
   const all = c.fields.map((_, i) => i)
   const crop = (i: number) => { const st = s.fields[i].status; return st === 'planted' || st === 'growing' }
   const brush = all.filter(i => crop(i) && can('brush', i)).sort((a, b) => c.fields[a].elev - c.fields[b].elev || a - b)[0]
-  if (brush !== undefined) return { kind: 'brush', field: brush, who, gain: 'for less blight and frost' }
+  if (brush !== undefined) return { kind: 'brush', field: brush, who, gain: 'Less blight weather and frost on that crop.' }
   const rocks = all.filter(i => can('rocks', i) && c.fields[i].stones >= ROCKS_ADVISE).sort((a, b) => c.fields[b].stones - c.fields[a].stones || a - b)[0]
-  if (rocks !== undefined) return { kind: 'rocks', field: rocks, who, gain: 'for less bruising' }
+  if (rocks !== undefined) return { kind: 'rocks', field: rocks, who, gain: 'Faster planting and digging there, and less bruising.' }
   const fell = all.filter(i => can('fell', i)).sort((a, b) => Number(c.fields[a].cover !== 'brush') - Number(c.fields[b].cover !== 'brush') || a - b)[0]
-  if (fell !== undefined) return { kind: 'fell', field: fell, who, gain: 'to start a new field' }
+  if (fell !== undefined) return { kind: 'fell', field: fell, who, gain: 'The first step to a new field.' }
   return null
 }
 

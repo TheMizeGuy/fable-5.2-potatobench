@@ -106,8 +106,8 @@ the season"):
   `answered` in `src/game/app.ts`.
 - **People with nothing to do are given work from the slip.** Once planting is ordered, whenever the player is
   waiting on the crew and somebody has no order and is helping nobody, the slip under the date says so with the
-  fist ("Your crew has nothing to do: cut brush around Brook Field for less blight and frost") and a key beside it
-  gives that order. One job on the land at a time: the hedgerow round a crop on low ground first, then stones
+  fist ("Everyone is idle: cut brush at Brook Field") and a key beside it, Order it, gives that order. Not while
+  an order on the list has nobody at it yet: those people are about to go to it. One job on the land at a time: the hedgerow round a crop on low ground first, then stones
   where a field is stony, then a tract to fell. Work on the crop still comes first: anyone needed there leaves the
   land work for it. `freeWork` in `src/game/goals.ts`, `tests/free.test.ts`.
 

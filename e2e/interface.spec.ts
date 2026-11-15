@@ -598,7 +598,7 @@ test('the goal line says the one next thing, opens the ladder, and moves on when
     app.setSpeed(0)`)
   // (round eight: the walking is the crew's, so the slip never names it. With somebody at nothing it is work on the
   // land to give them; with that given, what the player is waiting for)
-  await expect(page.getByTestId('goal')).toContainText('nothing to do', { timeout: 5000 })
+  await expect(page.getByTestId('goal')).toContainText('You are idle', { timeout: 5000 })
   await page.getByTestId('goal-do').click()
   await expect(page.getByTestId('goal')).toContainText('Nothing to do until blight weather', { timeout: 5000 })
   expect(errors, errors.join('\n')).toEqual([])

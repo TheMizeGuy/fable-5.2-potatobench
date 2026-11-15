@@ -443,7 +443,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
   // Work for people with nothing to do, given from the slip: on the list, said, and its place shown.
   function giveFree(w: FreeWork): void {
     const r = app.order(w.kind, { fields: [w.field] })[0]
-    if (r?.ok) ctx.say(`${JOB_DOING[w.kind]} ${S.FIELD_NAMES[w.field]} is on the work list.`, 'good')
+    if (r?.ok) ctx.say(`${JOB_DOING[w.kind]} ${S.FIELD_NAMES[w.field]} is on the work list. ${w.gain}`, 'good')
     else ctx.say(`${S.FIELD_NAMES[w.field]}: ${r?.err ?? 'that can\'t be ordered now.'}`, 'info')
     app.focus(w.field)
     ctx.dirty()
@@ -517,17 +517,18 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     // do next"; a farm whose slip said "Nothing to do until..." beside three people standing still.)
     const free = mine ? freeWork(c) : null
     if (free) {
-      const all = free.who.length === c.crew.length
+      // (few words: the slip and its key stand side by side under the board, which is no wider for them)
       const one = c.crew.find(u => u.id === free.who[0])
-      const who = c.crew.length === 1 ? 'You have' : all ? 'Your crew has' : free.who.length === 1 && one ? (one.kind === 'farmer' ? 'You have' : `${firstName(one.name)} has`) : `${free.who.length} of your crew have`
-      const what = `${lowerFirst(JOB_VERB[free.kind])} ${free.kind === 'brush' ? 'around ' : free.kind === 'rocks' ? 'in ' : ''}${S.FIELD_NAMES[free.field]} ${free.gain}`
+      const who = free.who.length === c.crew.length && c.crew.length > 1 ? 'Everyone is idle' : free.who.length === 1 && one ? (one.kind === 'farmer' ? 'You are idle' : `${firstName(one.name)} is idle`) : `${free.who.length} people are idle`
+      const what = `${lowerFirst(JOB_VERB[free.kind])} ${free.kind === 'brush' ? 'at ' : free.kind === 'rocks' ? 'in ' : ''}${S.FIELD_NAMES[free.field]}`
+      const why = `${free.gain} Work on the crop comes first: anyone needed there leaves this for it.`
       const slip = h('button', {
         class: 'goal', type: 'button', testid: 'goal', k: `goal-free-${free.kind}-${free.field}`, 'data-free': free.kind, 'aria-expanded': String(pop === 'goals'),
-        title: ctx.touch() ? undefined : 'Work on the crop comes first: anyone needed there leaves this for it.',
+        title: ctx.touch() ? undefined : why,
         onclick: () => { pop = pop === 'goals' ? '' : 'goals'; ctx.dirty() },
-      }, fist(), h('span', { class: 'goal-body' }, h('span', { class: 'sr' }, 'Now: '), h('b', { class: 'goal-t' }, `${who} nothing to do`), h('span', { class: 'goal-when' }, what)),
-      h('span', { class: 'sr' }, '. Press to open your goals.'))
-      return h('div', { class: 'goal-row' }, slip, h('button', { class: 'btn goal-go', type: 'button', testid: 'goal-do', onclick: () => giveFree(free) }, icon(free.kind, 'i'), JOB_VERB[free.kind]))
+      }, fist(), h('span', { class: 'goal-body' }, h('span', { class: 'sr' }, 'Now: '), h('b', { class: 'goal-t' }, who), h('span', { class: 'sr' }, ': '), h('span', { class: 'goal-when' }, what)),
+      h('span', { class: 'sr' }, `. ${why} Press to open your goals.`))
+      return h('div', { class: 'goal-row' }, slip, h('button', { class: 'btn goal-go', type: 'button', testid: 'goal-do', title: ctx.touch() ? undefined : why, onclick: () => giveFree(free) }, icon('check', 'i'), 'Order it'))
     }
     // What comes after the pressing call: the next goal, unless that is work the crew does by itself.
     const crewOwn = (x: Goal) => { const act = GOAL_ROUTINE[x.id]; return !!act && S.routineInfo(c).some(r => r.kind === act && r.auto) }
