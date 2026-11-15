@@ -94,7 +94,7 @@ function items(ctx: Ctx, c: S.Campaign, done: (text: string, ok: boolean) => voi
   })
   const room = S.hireBlock(c, 'hand')
   const hire = (kind: 'hand' | 'operator', name: string, wage: number, does: string): Item => ({
-    id: `hire-${kind}`, glyph: kind === 'hand' ? 'hand' : 'machine', name, does, price: `${F.money(wage)} a month`,
+    id: `hire-${kind}`, glyph: kind === 'hand' ? 'hand' : 'machine', name, does, price: `${F.money(wage)} a month`, cost: wage, cmd: { t: 'hire', kind },
     state: room ? 'no' : 'can', why: room ? (/bunkhouse/i.test(room) ? 'No bed free: a bunkhouse adds six' : first(room)) : '', label: 'Hire', run: () => run({ t: 'hire', kind }),
   })
   const crew: Item[] = [
@@ -170,7 +170,8 @@ export function openBuild(ctx: Ctx): void {
             x.state === 'can' && x.run ? [h('button', { class: 'btn go bm-key', type: 'button', testid: `${x.id}-go`, onclick: x.run }, x.label, x.price && x.price !== 'No cost' ? h('span', { class: 'num bm-price' }, x.price) : null),
               // What the purchase leaves of the year-end forecast, so its price is read against the goal.
               money && x.cost ? ((left: number) => h('span', { class: `bm-left t-caption num${left < 0 ? ' c-red' : ''}`, testid: `${x.id}-left` }, 'Year-end cash ', h('span', { class: 'bm-was' }, F.money(Math.round(money.after / 100) * 100)), ' \u2192 ', h('b', { class: left < 0 ? 'c-red' : left > money.after ? 'bm-up' : 'bm-ok' }, F.money(Math.round(left / 100) * 100))))(leftAfter(x, money.after)) : null]
-              : [x.price ? h('span', { class: 'num bm-price' }, x.price) : null, h('span', { class: `bm-why${x.state === 'have' ? ' ok' : ''}` }, x.state === 'have' ? [icon('check', 'i'), x.why] : x.why)]))
+              // (no price beside a thing built or going up: with the yard's logs used, the figure there was no longer what was paid)
+              : [x.price && x.state === 'no' ? h('span', { class: 'num bm-price' }, x.price) : null, h('span', { class: `bm-why${x.state === 'have' ? ' ok' : ''}` }, x.state === 'have' ? [icon('check', 'i'), x.why] : x.why)]))
         const groups = items(ctx, c, (text, ok) => { said = { text, ok }; draw() })
         const head = h('div', { class: 'bm-head' },
           h('div', { class: 'bm-fig', testid: 'build-spend' }, h('span', { class: 't-label' }, 'You can spend'), h('b', { class: 'num' }, F.money(Math.floor(S.spendable(c)))),

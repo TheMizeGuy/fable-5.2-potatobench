@@ -781,6 +781,17 @@ function mayHelp(u: Unit, kind: JobKind): boolean {
 // worked and has room for one more. (Picking rocks and cutting brush are a day or two, and are seen through.) The
 // order of the crop's they would help with, or undefined.
 const FILL_WORK: JobKind[] = ['fell']
+// Too tired for the woods today: felling that was not given to this person by name is left for a rest, unless the
+// player has told them to work on whatever their state.
+export function sparing(u: Unit, job: Job): boolean {
+  return FILL_WORK.includes(job.kind) && job.unit !== u.id && u.tired >= P.FILL_TIRED && (u.rest ?? 'auto') !== 'push'
+}
+// Whether a person with no order is resting today for that reason: there is felling they would otherwise be at.
+export function sparingToday(c: Campaign, u: Unit): boolean {
+  const s = c.season
+  if (!s || u.job >= 0 || u.help !== undefined || u.foreman !== '' || hurt(u, s.day) || resting(u)) return false
+  return s.jobs.some(j => sparing(u, j) && willDo(u, j.kind) && j.unit < 0)
+}
 const CROP_HELPED: JobKind[] = ['plant', 'dig', 'haul']
 function cropToHelp(c: Campaign, s: Season, u: Unit): Job | undefined {
   if (hurt(u, s.day) || resting(u)) return undefined
@@ -988,7 +999,7 @@ function choose(c: Campaign, s: Season, u: Unit, d: Day, out: GameEvent[], book:
   const pick = byPriority(c, s, u, d, out, book, now, end)
   if (pick && (!waitable(pick.job.kind) || pick.job.unit === u.id)) return pick
   for (const job of [...s.jobs]) {
-    if (waitable(job.kind) || !mayTake(u, job) || heldByOther(c, job, u) || stoppedToday(s, job) || !pressingWhy(c, s, job)) continue
+    if (waitable(job.kind) || !mayTake(u, job) || sparing(u, job) || heldByOther(c, job, u) || stoppedToday(s, job) || !pressingWhy(c, s, job)) continue
     if (!stillWanted(c, s, job, out)) continue
     const rig = rigFor(c, s, job, book, now, end)
     if (waitFor(c, s, job, d) || rig === null) continue
@@ -1010,7 +1021,7 @@ function byPriority(c: Campaign, s: Season, u: Unit, d: Day, out: GameEvent[], b
     let k = 0
     while (k < s.jobs.length && cands.length < P.PICK_WINDOW) {
       const job = s.jobs[k]
-      if (u.prio[jobSkill(job.kind)] !== level || !mayTake(u, job) || heldByOther(c, job, u) || stoppedToday(s, job)) { k++; continue }
+      if (u.prio[jobSkill(job.kind)] !== level || !mayTake(u, job) || sparing(u, job) || heldByOther(c, job, u) || stoppedToday(s, job)) { k++; continue }
       if (!stillWanted(c, s, job, out)) continue
       const rig = rigFor(c, s, job, book, now, end)
       if (!waitFor(c, s, job, d) && rig !== null) cands.push({ job, ...rig })
@@ -1132,6 +1143,7 @@ function runCrews(world: World, c: Campaign, s: Season, d: Day, out: GameEvent[]
     const u = t.u
     const own = u.job >= 0 ? s.jobs.find(j => j.id === u.job) : undefined
     if (!own || !FILL_WORK.includes(own.kind)) continue
+    if (sparing(u, own)) { letGo(u); continue }
     const crop = cropToHelp(c, s, u)
     if (crop) { letGo(u); u.help = crop.id }
   }
@@ -1172,7 +1184,7 @@ function runCrews(world: World, c: Campaign, s: Season, d: Day, out: GameEvent[]
   for (const u of c.crew) {
     if (u.help === undefined) continue
     const job = s.jobs.find(j => j.id === u.help)
-    if (!job || u.job >= 0 || hurt(u, s.day) || resting(u) || !mayHelp(u, job.kind) || !c.crew.some(o => o.job === job.id)) delete u.help
+    if (!job || u.job >= 0 || hurt(u, s.day) || resting(u) || !mayHelp(u, job.kind) || sparing(u, job) || !c.crew.some(o => o.job === job.id)) delete u.help
   }
   for (const t of turns) {
     const u = t.u
@@ -1181,7 +1193,7 @@ function runCrews(world: World, c: Campaign, s: Season, d: Day, out: GameEvent[]
     if (!job) {
       let best = Infinity, fewest = Infinity
       for (const j of s.jobs) {
-        if (!mayHelp(u, j.kind) || !c.crew.some(o => o !== u && o.job === j.id)) continue
+        if (!mayHelp(u, j.kind) || sparing(u, j) || !c.crew.some(o => o !== u && o.job === j.id)) continue
         const n = c.crew.filter(o => o.help === j.id).length
         if (n >= P.HELPERS_MOST) continue
         const cost = travel(c, u.at, j.field)

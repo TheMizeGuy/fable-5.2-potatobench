@@ -49,6 +49,8 @@ export function personNow(c: S.Campaign, id: number, waits: Record<number, strin
   if (s.frozen) return said('frost', 'Frozen', 'out: the ground has frozen', at)
   if (!S.workday(c, s)) return said('sunday', 'Sunday', 'off', at)
   if (S.resting(u)) return said('tired', 'Resting', 'today, worn out', at)
+  // (tired enough to leave the felling for a day: not idle, and not to be given more work)
+  if (S.sparingToday(c, u)) return said('tired', 'Resting', 'today, to stay fresh for the crop', at)
   const others = (j: S.Job) => c.crew.some(o => o !== u && o.job === j.id)
   // The order they hold, or the one they worked on the last day and have not finished.
   const held = u.job >= 0 ? s.jobs.find(j => j.id === u.job) : undefined

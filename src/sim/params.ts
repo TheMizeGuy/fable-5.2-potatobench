@@ -346,6 +346,10 @@ export const BREAK_SHED = 0.5                  // half as likely with a machine 
 export const BREAK_DAYS = 3                    // days out waiting for the part
 export const MECHANIC = 7                      // with someone this good at machine work on the farm, a day out
 export const RUSH_PART = 450                   // dollars: a rush part, back in a day
+// Felling is work for spare time and spare strength: someone this tired leaves it for a day's rest, so the woods
+// never wear out the people the crop will need. (A first-time player's crew felled itself worn out, the farm's one
+// driver with it, and the hilling and the spraying waited weeks.)
+export const FILL_TIRED = 0.45
 export const HURT_TIRED = 0.85                 // working tired above this in the woods or on a machine risks an injury
 // Someone told to rest is back at work once rested below this.
 export const REST_UNTIL = 0.3

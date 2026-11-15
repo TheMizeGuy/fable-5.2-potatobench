@@ -9,7 +9,7 @@ import { basePrice, gradePrice, harvestPrice, levelNow, lotValue } from './marke
 import { lotCwt, markOdds, skinAt, skinnedShare } from './harvest.ts'
 import * as P from './params.ts'
 import { housingLimit, hiredCount, hurt, jobSkill, payOf, resting, SKILL_LABEL, speed, subject, willDo } from './people.ts'
-import { FIELD_NAMES, JOB_LABEL, jobCost, placeName, pressingWhy, seasonDone, standingBy, tractorsRunning, waitFor, workday } from './season.ts'
+import { FIELD_NAMES, JOB_LABEL, jobCost, placeName, pressingWhy, seasonDone, sparing, standingBy, tractorsRunning, waitFor, workday } from './season.ts'
 import { asks, killByItself } from './advice.ts'
 import { H_ROGUED, type BuildingKind, type Campaign, type Cmd, type Job, type JobKind, type KillWhy, type Unit, type UpgradeId, type VarietyId, type World, type YearSummary } from './types.ts'
 import { estimateYield, fieldInfo, forecast, today } from './view.ts'
@@ -56,6 +56,10 @@ function outlookOf(world: World, c: Campaign, s: NonNullable<Campaign['season']>
     const who = takers(c, j)
     if (!who.length) return { id: j.id, unit: -1, when: 'waiting', why: nobody(c, j) }
     if (!working) return { id: j.id, unit: who[0], when: 'next', why: 'It\'s Sunday, so nobody works today.' }
+    // Felling left for a day by everyone who would be at it: they are resting so the crop finds them fresh.
+    if (who.every(id => { const u = c.crew.find(x => x.id === id); return !!u && sparing(u, j) })) {
+      return { id: j.id, unit: who[0], when: 'next', why: `${says(c, who[0], 'is', 'You\'re')} resting today to stay fresh for the crop, and will go back to it tomorrow or the day after.` }
+    }
     const weather = waitFor(c, s, j, d)
     if (weather) {
       const [held, until] = WAITING[weather] ?? [`Waiting: ${weather} today.`, 'the weather allows']

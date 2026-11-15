@@ -106,6 +106,8 @@ describe('a long day, watched as it is worked', () => {
     expect(f.hurried, 'seconds the clock ran fast by itself').toBe(0)
     expect(f.seconds / 60 / 6, 'the season, minutes at the third speed').toBeLessThan(30)
     expect(f.dead / f.seconds, 'share of the season nobody is at anything').toBeLessThan(0.2)
-    for (const id of [0, 1, 2]) expect(f.busy[id] / f.seconds, `person ${id}'s share of the season at something`).toBeGreaterThan(0.7)
+    // (0.7 until 15 November: felling is now left for a day's rest by anyone tired, so that the woods never wear out
+    // the people the crop needs, and a person on the woods all season is at them about two days in three)
+    for (const id of [0, 1, 2]) expect(f.busy[id] / f.seconds, `person ${id}'s share of the season at something`).toBeGreaterThan(0.6)
   }, 240_000)
 })

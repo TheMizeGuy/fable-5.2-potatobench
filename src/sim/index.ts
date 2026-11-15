@@ -33,6 +33,6 @@ export {
 export { advise, fieldNeeds, frostOnBarrels, type Advice } from './advice.ts'
 export { contractOutlook, cropAhead, goalCosts, harvestYield, jobOutlook, killOutlook, killsAhead, killTiming, fieldWhy, MONEY_STEP, moneyCause, moneyEffect, moneyLook, moneyPlan, moneyWatch, monthCost, planCut, planRescue, plantingIn, plantReady, moneyNow, packOutlook, pressing, sprayOutlook, yearStory, type ContractOutlook, type GoalCost, type FieldWhy, type MoneyCause, type MoneyLook, type MoneyWatch, type JobOutlook, type KillOutlook, type KillTiming, type MoneyNow, type MoneyPart, type PlantReady, type Pressing, type SprayOutlook, type YearStory } from './outlook.ts'
 export { killCostToday, type KillCost } from './killcost.ts'
-export { pressingWhy, waitable } from './season.ts'
+export { pressingWhy, sparingToday, waitable } from './season.ts'
 export { resting } from './people.ts'
 export { heldUpBy, remedies, type Remedy } from './remedies.ts'

@@ -1,6 +1,6 @@
 // The ladder: what a farm reaches for next, in the order a player can reach it. Worked out from the farm as it stands,
 // so nothing extra is saved.
-import { BUILDING_KINDS, forecast, FELL_DAYS, FIELD_COUNT, formatDay, goalCosts, isField, jobBlock, killOutlook, NOTE_PAYMENT, PARCELS, plantWordGiven, ROCKS_ADVISE, spendable, sprayWayNow, standingBy, TRACTS, type Campaign, type World, type GoalCost, type JobKind } from '../sim/index.ts'
+import { BUILDING_KINDS, forecast, FELL_DAYS, FIELD_COUNT, formatDay, goalCosts, isField, jobBlock, killOutlook, NOTE_PAYMENT, PARCELS, plantWordGiven, resting, ROCKS_ADVISE, spendable, sprayWayNow, standingBy, TRACTS, type Campaign, type World, type GoalCost, type JobKind } from '../sim/index.ts'
 
 export interface Goal {
   id: string
@@ -244,7 +244,8 @@ const LAND: JobKind[] = ['brush', 'rocks', 'fell']
 export function idleWork(c: Campaign): { who: number[]; options: FreeWork[] } | null {
   const s = c.season
   if (c.phase !== 'season' || !s || s.frozen || !plantWordGiven(s)) return null
-  const who = c.crew.filter(u => u.foreman === '' && u.job < 0 && u.help === undefined && (u.out < 0 || u.out <= s.day)).map(u => u.id)
+  // (someone resting, worn out, has not "nothing to do": a slip asked a player to keep busy a crew shown worn out)
+  const who = c.crew.filter(u => u.foreman === '' && u.job < 0 && u.help === undefined && (u.out < 0 || u.out <= s.day) && !resting(u)).map(u => u.id)
   if (!who.length || s.jobs.some(j => LAND.includes(j.kind) || !c.crew.some(u => u.job === j.id))) return null
   const can = (kind: JobKind, i: number) => c.fields[i].tenure !== 'none' && jobBlock(c, kind, i) === ''
   const all = c.fields.map((_, i) => i)

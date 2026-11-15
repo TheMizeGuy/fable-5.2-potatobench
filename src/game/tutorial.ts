@@ -128,6 +128,8 @@ const first = (n: string) => n.split(' ')[0]
 const by = (l: Look, mouse: string, touch: string, keys: string) => l.input === 'touch' ? touch : l.input === 'keys' ? keys : mouse
 const click = (l: Look) => (l.input === 'touch' ? 'Tap' : 'Click')
 const inSeason = (l: Look) => l.screen === 'season' && !!l.c?.season && l.c.phase === 'season'
+// A potato field of the plan still to be planted.
+const toPlant = (l: Look) => !!l.c?.season && l.c.season.fields.some((f, i) => l.c!.plans[i]?.crop === 'potato' && S.held(l.c!, i) && f.plantDay < 0)
 const fields = (l: Look) => l.c?.season?.fields ?? []
 const anyField = (l: Look, f: (x: S.FieldSeason) => boolean) => fields(l).some(f)
 const jobOn = (l: Look, kind: S.JobKind) => !!l.c?.season?.jobs.some(j => j.kind === kind)
@@ -269,8 +271,10 @@ export const LESSONS: Lesson[] = [
     id: 'run', part: 'opening', moment: true, name: 'Run the days',
     when: l => inSeason(l) && firstYear(l) && l.speed === 0 && !!l.c?.season && S.plantWordGiven(l.c.season) && wordAt(l) < 0 && call(l) < 0 && !l.carded && !l.paper && !S.seasonDone(l.c),
     done: (l, _g, since) => !!since && l.speed > 0,
-    ask: l => `Planting is ordered. ${by(l, 'Press Space', 'Tap the play key', 'Press Space')} to run the days.`,
-    why: () => 'The game is paused.',
+    // (said of planting only while there is planting to come: a player who first paused in late June was told
+    // "Planting is ordered")
+    ask: l => `${toPlant(l) ? 'Planting is ordered.' : 'The game is paused.'} ${by(l, 'Press Space', 'Tap the play key', 'Press Space')} to run the days.`,
+    why: l => (toPlant(l) ? 'The game is paused.' : 'It stops by itself only when there is something for you to decide.'),
     point: () => ({ testid: ['paused-go', 'speed-0', 'speed-toggle'] }),
   },
   {

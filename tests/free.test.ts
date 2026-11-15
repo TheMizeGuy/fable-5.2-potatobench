@@ -85,3 +85,49 @@ describe('work for people with nothing to do', () => {
     } finally { setDays('brisk') }
   })
 })
+
+// Round ten's strategy player gave the idle crew a woodlot to fell ("work for people with nothing else to do") and by
+// late June all three people were worn out, the farm's one driver among them: the hilling and the spraying waited
+// weeks and the slip asked them to keep a worn-out crew busy.
+describe('felling is for spare strength', () => {
+  const world = loadWorld()
+  // A season of the game's own advice with two hired hands; felling: whether a tract to fell is kept on the list.
+  function season(seed: number, felling: boolean): { worn: number; cwt: number } {
+    const c = S.createCampaign(world, { seed, startYear: 1987 })
+    expect(S.apply(world, c, { t: 'hire', kind: 'hand' }).ok).toBe(true)
+    expect(S.apply(world, c, { t: 'hire', kind: 'hand' }).ok).toBe(true)
+    expect(S.apply(world, c, { t: 'begin' }).ok).toBe(true)
+    let worn = 0
+    for (let g = 0; g < 400 && c.phase === 'season' && !S.seasonDone(c); g++) {
+      for (const a of S.advise(world, c)) if (a.act !== 'wait' && a.act !== 'close' && a.act !== 'sell') S.apply(world, c, { t: 'job', kind: a.act, field: a.field })
+      if (felling && !c.season!.jobs.some(j => j.kind === 'fell')) {
+        const tract = c.fields.findIndex((_, i) => S.jobBlock(c, 'fell', i) === '')
+        if (tract >= 0) S.apply(world, c, { t: 'job', kind: 'fell', field: tract })
+      }
+      S.apply(world, c, { t: 'day' })
+      worn += c.crew.filter(u => S.resting(u)).length
+    }
+    return { worn, cwt: c.lots.filter(l => l.year === c.year).reduce((sum, l) => sum + S.lotCwt(l), 0) }
+  }
+
+  it('a crew with woods to fell all season is hardly ever worn out, and brings in the crop it would have without them', () => {
+    for (const seed of [1, 3, 7]) {
+      const woods = season(seed, true), none = season(seed, false)
+      // (before the rule: about 60 person-days worn out on each of these farms, and 2,600 to 4,900 cwt)
+      expect(woods.worn, `seed ${seed}: person-days worn out`).toBeLessThan(10)
+      expect(woods.cwt / none.cwt, `seed ${seed}: ${Math.round(woods.cwt)} cwt with felling, ${Math.round(none.cwt)} without`).toBeGreaterThan(0.93)
+    }
+  })
+
+  it('someone given the felling by name works on whatever their tiredness', () => {
+    const c = S.createCampaign(world, { seed: 1, startYear: 1987 })
+    S.apply(world, c, { t: 'begin' })
+    const u = c.crew[0]
+    u.tired = 0.6
+    const tract = c.fields.findIndex((_, i) => S.jobBlock(c, 'fell', i) === '')
+    expect(S.apply(world, c, { t: 'job', kind: 'fell', field: tract }).ok).toBe(true)
+    expect(S.sparingToday(c, u), 'tired, with felling open to anyone: resting for the crop').toBe(true)
+    c.season!.jobs.find(j => j.kind === 'fell')!.unit = u.id
+    expect(S.sparingToday(c, u)).toBe(false)
+  })
+})
