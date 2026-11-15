@@ -122,12 +122,12 @@ export function openBuild(ctx: Ctx): void {
           h('div', { class: 'bm-get' },
             x.state === 'can' && x.run ? [h('button', { class: 'btn go bm-key', type: 'button', testid: `${x.id}-go`, onclick: x.run }, x.label, x.price && x.price !== 'No cost' ? h('span', { class: 'num bm-price' }, x.price) : null),
               // What the purchase leaves of the year-end forecast, so its price is read against the goal.
-              money && x.cost ? h('span', { class: `bm-left t-caption num${money.after - x.cost < 0 ? ' c-red' : ''}`, testid: `${x.id}-left` }, `You can afford it. Year end: ${F.money(Math.round((money.after - x.cost) / 100) * 100)}`) : null]
+              money && x.cost ? h('span', { class: `bm-left t-caption num${money.after - x.cost < 0 ? ' c-red' : ''}`, testid: `${x.id}-left` }, `You can afford it. Left at year end: ${F.money(Math.round((money.after - x.cost) / 100) * 100)}`) : null]
               : [x.price ? h('span', { class: 'num bm-price' }, x.price) : null, h('span', { class: `bm-why${x.state === 'have' ? ' ok' : ''}` }, x.state === 'have' ? [icon('check', 'i'), x.why] : x.why)]))
         const groups = items(ctx, c, (text, ok) => { said = { text, ok }; draw() })
         const head = h('div', { class: 'bm-head' },
-          h('div', { class: 'bm-fig', testid: 'build-spend' }, h('span', { class: 't-label' }, 'You can spend'), h('b', { class: 'num' }, F.money(Math.floor(S.spendable(c)))),
-            h('span', { class: 't-caption' }, c.phase === 'plan' ? 'your cash' : c.cash >= 0 ? 'your cash, and what the bank will lend' : 'on the bank\'s loan, paid back when the crop sells')),
+          h('div', { class: 'bm-fig', testid: 'build-spend' }, h('span', { class: 't-label' }, c.phase !== 'plan' && c.cash < 0 ? 'The bank will lend you' : 'You can spend'), h('b', { class: 'num' }, F.money(Math.floor(S.spendable(c)))),
+            h('span', { class: 't-caption' }, c.phase === 'plan' ? 'your cash' : c.cash >= 0 ? 'your cash, and what the bank will lend' : 'for buildings, machines and land; the crop pays it back')),
           h('div', { class: 'bm-fig' }, h('span', { class: 't-label' }, 'Your own materials'), h('b', { class: 'num' }, `${F.num(Math.floor(c.logs))} logs · ${F.num(Math.floor(c.stone))} stone`), h('span', { class: 't-caption' }, 'cut trees and pick rocks to get them: they make buildings cheaper')))
         const jump = h('nav', { class: 'bm-jump', 'aria-label': 'Go to' }, groups.map((g, k) => h('button', { class: 'btn quiet', type: 'button', testid: `build-jump-${k}`, onclick: () => box.querySelectorAll('.bm-group')[k]?.scrollIntoView({ block: 'start', behavior: 'smooth' }) }, g.title)))
         const parts: (Node | null)[] = [head as Node, jump,

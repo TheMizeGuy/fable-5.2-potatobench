@@ -257,7 +257,7 @@ export const LESSONS: Lesson[] = [
     id: 'word', part: 'opening', moment: true, name: 'Start planting', reveals: ['tags', 'stamps'],
     when: l => inSeason(l) && firstYear(l) && wordAt(l) >= 0,
     done: (l, g) => g.has('noted:word') || (!!l.c?.season && S.plantWordGiven(l.c.season)),
-    ask: l => `The soil is ready. ${by(l, 'Click', 'Tap', 'Tab to')} the orange Plant key${l.input === 'keys' ? ', then Enter' : ''}.`,
+    ask: l => `The soil is ready. ${by(l, 'Click', 'Tap', 'Tab to')} the orange Plant button${l.input === 'keys' ? ', then Enter' : ''}.`,
     why: l => othersToPlant(l) ? 'One press plants every potato field.' : 'Planting starts there right away.',
     point: l => { const i = wordAt(l); return i >= 0 ? { badge: i } : null },
     show: l => { const i = wordAt(l); return i >= 0 ? { field: i } : null },

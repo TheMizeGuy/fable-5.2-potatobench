@@ -69,3 +69,18 @@ stone, and what they are for), each thing that can be had says "You can afford i
 leaves (rounded as the board rounds it), the recommended first building is marked down its side, and the trade's
 words are said plainly. Not re-marked by fresh viewers. The first screen's three prompts and the later screen's
 lines are as they were.
+
+## Third pass, on `live-59`
+
+| | first screen | later | build menu |
+|---|---|---|---|
+| strategy player | 8 | 6 | 6 |
+| casual player | 7 | 5 | 7 |
+
+The first screen with tips is the tip and the orange key alone (the slip stands down while that tip is up), and the
+later screen's line reads "Next up: kill the vines". Still marked down: the goal reads as already won ("above $0"
+under a positive figure); "Plant key" sent one viewer to the keyboard; "kill the vines" is described and has no
+button until its day; the work list's chips; the build menu's rows are sentences where a figure would do, and its
+"You can spend" is not the figure on the money board. Done from that in `live-60`, not re-marked: "Plant button";
+"Goal: end the year above $0"; the build menu's first figure is "The bank will lend you" while the farm is on the
+loan, and a row says "Left at year end".
