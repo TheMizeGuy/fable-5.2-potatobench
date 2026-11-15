@@ -160,3 +160,15 @@ the build menu 6 to 8, and rewording has stopped moving them. What is left is no
 their face what state they are in (why two are yellow, what the red patches are); a building has no payback in
 money because the game has no such figure; the vine kill is a date and not a thing to press; the work list and its
 marks need learning. Those are design work, and the measure for them is the owner at play, not a still.
+
+## Tenth pass, on `live-71`
+
+| | first screen | later | build menu |
+|---|---|---|---|
+| strategy player | 8 | 6 | 7 |
+| casual player | 7 | 6 | 7 |
+
+Each field's tag now says its state at a wide desk ("potatoes forming", "resting"), and both viewers read the
+fields without asking why two are yellow. The marks are where they were. The one thing both still ask of the build
+menu is what a building earns back; done for the farm stand in `live-72` from its own figures ("Pays for itself in
+about 10 days of selling"), and not for the others, for which the game has no sum.

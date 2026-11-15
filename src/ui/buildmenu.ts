@@ -63,7 +63,8 @@ function items(ctx: Ctx, c: S.Campaign, done: (text: string, ok: boolean) => voi
       tag: b.kind === 'stand' && b.state === 'none' ? 'The cheapest building: a good first one' : undefined,
       // (its materials are on its slip with the sentence: "30 logs and 25 stone, included in the price" beside a
       // yard of none read as a thing still to be got)
-      sub: `${BUILD_WHEN[b.kind]} · built in about ${F.plural(crewDays, 'day')}${mats && !bought ? ` with ${mats} from your yard` : ''}`,
+      // (the stand's price over what it takes in a day more than the market would pay: the days of selling that pay for it)
+      sub: `${b.kind === 'stand' && standExtra > 0 ? `Pays for itself in about ${F.plural(Math.ceil(b.total / standExtra), 'day')} of selling` : BUILD_WHEN[b.kind]} · built in about ${F.plural(crewDays, 'day')}${mats && !bought ? ` with ${mats} from your yard` : ''}`,
       state: b.state === 'built' ? 'have' : b.state === 'building' ? 'doing' : b.ok ? 'can' : 'no',
       why: b.state === 'built' ? 'Built' : b.state === 'building' ? `Going up: ${F.pct(b.progress)} built` : b.ok ? '' : first(b.why),
       label: 'Build', run: () => run({ t: 'build', kind: b.kind, yard: S.HOME_YARD }),
