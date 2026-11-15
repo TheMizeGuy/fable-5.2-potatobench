@@ -243,6 +243,25 @@ function wagesAhead(c: Campaign): number {
   return out
 }
 
+// The marketable crop the farm looks like having to store this season, cwt: the lots in hand, and for each field
+// not yet weighed its expected yield (harvestYield) at the usual marketable share. For setting the crop against what
+// the potato houses hold.
+export function cropAhead(c: Campaign): number {
+  const s = c.season
+  if (c.phase !== 'season' || !s) return 0
+  let cwt = 0
+  for (const l of openLots(c)) cwt += lotCwt(l)
+  for (let i = 0; i < P.FIELD_COUNT; i++) {
+    const f = s.fields[i]
+    if (f.weighed) continue
+    const toPlant = f.status === 'idle' && c.plans[i]?.crop === 'potato'
+    if (!toPlant && f.status !== 'planted' && f.status !== 'growing' && f.status !== 'dead' && f.status !== 'digging' && f.status !== 'dug') continue
+    const e = harvestYield(c, i)
+    if (e) cwt += e.mean * P.FIELD_ACRES * P.MARKETABLE_SHARE
+  }
+  return cwt
+}
+
 // The farm stand's takings still to come this season over what the same potatoes fetch at the market's price
 // (season.ts, standSales: STAND_CWT a day at STAND_PRICE times the price): for a stand built or going up, from the day
 // it can open (August 1; its building done at the crew's pace; a field's crop weighed, which where none is yet is put

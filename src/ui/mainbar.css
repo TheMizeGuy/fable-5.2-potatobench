@@ -36,3 +36,4 @@
 #ui[data-layout='narrow'] .mb-row > .mb-go { display: none; }
 .mb-scroll { overflow-x: auto; overscroll-behavior-x: contain; }
 #ui[data-layout='narrow'] .mb-table { min-width: 520px; font-size: 14px; }
+.mb-idle { display: grid; gap: 8px; }

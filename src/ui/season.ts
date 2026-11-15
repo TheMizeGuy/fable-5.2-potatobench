@@ -148,6 +148,7 @@ export function seasonScreen(ctx: Ctx, plateLayer: HTMLElement, o: { onMenu: () 
   }
   const bar = mainBar(ctx, {
     todo,
+    free: w => top.free(w),
     goField: i => { app.selectUnit(-1); app.select(i); app.focus(i) },
     goUnit: id => { app.select(-1); app.selectYard(0); app.selectUnit(id, 'land'); ctx.view.show?.({ unit: id }) },
     onWork: () => grid.toggle(true),

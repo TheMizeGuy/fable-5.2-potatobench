@@ -210,6 +210,25 @@ describe('the potato house', () => {
   })
 })
 
+describe('the crop against the cellar', () => {
+  // The build menu sets this figure beside what the potato houses hold, so a second house's worth can be judged.
+  it('the crop the farm looks like storing is within a fifth of what comes to the weigh-in, and more than the home cellar in a first year', () => {
+    for (const seed of [1, 3, 7]) {
+      const c = S.createCampaign(world, { seed, startYear: 1987 })
+      expect(S.cropAhead(c), 'in spring there is no season to forecast').toBe(0)
+      ok(c, { t: 'begin' })
+      const ahead = S.cropAhead(c)
+      expect(ahead).toBeGreaterThan(S.cellarCapacity(c))
+      tend(c, x => S.seasonDone(x))
+      const weighed = c.lots.filter(l => l.year === c.year).reduce((sum, l) => sum + S.lotCwt(l), 0)
+      expect(weighed / ahead, `seed ${seed}: ${Math.round(ahead)} forecast, ${Math.round(weighed)} weighed`).toBeGreaterThan(0.8)
+      expect(weighed / ahead).toBeLessThan(1.2)
+      // With every field weighed, it is what is in the lots in hand.
+      expect(S.cropAhead(c)).toBeCloseTo(S.storageInfo(c).stored, 3)
+    }
+  })
+})
+
 describe('the machine shed', () => {
   it('makes machine work 10% faster and lets the farm keep more tractors; without it a second tractor is refused', () => {
     const c = spring()

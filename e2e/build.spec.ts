@@ -90,6 +90,38 @@ test('people with nothing to do are offered work by name, and a key gives it', a
   expect(errors, errors.join('\n')).toEqual([])
 })
 
+// The To do sheet said "Nothing is waiting on you. Your crew is working through the work list." under a slip that said
+// "Keep your crew busy", with people standing idle: it says who has nothing to do and gives the same work.
+test('the To do sheet says who has nothing to do and gives them work, and says what is coming once', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'the desk')
+  const errors = watchErrors(page)
+  await startSeason(page)
+  await reach(page, `const { app, sim } = q.g(); const c = app.campaign
+    for (let k = 0; k < 90 && c.season.fields.some((f, i) => sim.isField(c, i) && f.status === 'idle'); k++) { c.incidents = []; for (const a of sim.advise(app.world, c)) if (a.act === 'plant') app.order('plant', { fields: [a.field] }); app.do({ t: 'day' }) }
+    c.incidents = []; for (const j of [...c.season.jobs]) app.do({ t: 'cancel', id: j.id }); app.do({ t: 'routine', kind: 'scout', auto: false }); app.do({ t: 'routine', kind: 'hill', auto: false }); app.setSpeed(0)`)
+  await putAway(page)
+  await expect(page.getByTestId('idle')).toBeVisible({ timeout: 10_000 })
+  await page.getByTestId('bar-todo').click()
+  const todo = page.getByTestId('todo')
+  await expect(todo).toBeVisible()
+  const block = todo.getByTestId('todo-idle')
+  await expect(block).toContainText('You have nothing to do. Give yourself work on the land:')
+  await expect(todo).not.toContainText('Your crew is working through the work list')
+  // What is coming is said under its label, without "Next up" a second time.
+  await expect(todo).not.toContainText('Next up')
+  const key = todo.getByTestId('todo-free-0')
+  const kind = /brush/i.test((await key.textContent())!) ? 'brush' : 'rocks'
+  await key.click()
+  await expect(todo).toBeHidden()
+  expect(await game<string[]>(page, 'c.season.jobs.map(j => j.kind)')).toContain(kind)
+  await expect(page.getByTestId('idle')).toHaveCount(0)
+  // With the work given, the sheet no longer offers it.
+  await page.getByTestId('bar-todo').click()
+  await expect(todo).toBeVisible()
+  await expect(todo.getByTestId('todo-idle')).toHaveCount(0)
+  expect(errors, errors.join('\n')).toEqual([])
+})
+
 test('seen from near, a person wears their name over their head and no face covers them', async ({ page, isMobile, browserName }) => {
   test.skip(isMobile || browserName !== 'chromium', 'read through the 3D view\'s hooks')
   const errors = watchErrors(page)

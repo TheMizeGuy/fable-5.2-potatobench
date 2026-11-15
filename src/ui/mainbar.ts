@@ -1,7 +1,7 @@
 // The menu that is always up: one row of tabs at the foot of the season screen, each opening its own sheet, in the
 // manner of a colony game's main bar. "To do" says what waits on the player and goes there; Fields and People list
 // the farm, and a row pressed takes the camera to it.
-import { nextGoal, waitingFor } from '../game/goals.ts'
+import { idleWork, nextGoal, waitingFor, type FreeWork } from '../game/goals.ts'
 import * as S from '../sim/index.ts'
 import { openBuild } from './buildmenu.ts'
 import type { Ctx } from './core.ts'
@@ -14,11 +14,16 @@ import { heldFields, isTract } from './map.ts'
 import { personNow } from './now.ts'
 import { ringed } from './system/people.ts'
 
+const FREE_TEXT: Record<FreeWork['kind'], string> = { brush: 'Cut the brush round', rocks: 'Pick the rocks off', fell: 'Cut the trees on' }
+const FREE_KEY: Record<FreeWork['kind'], string> = { brush: 'Cut brush', rocks: 'Pick rocks', fell: 'Cut trees' }
+
 // order: the one press that deals with it, where there is one, with what it costs.
 export interface Todo { field: number; glyph: string; text: string; why: string; urgent: boolean; go: () => void; order?: { label: string; cost: number; run: () => void } }
 
 interface Hooks {
   todo: () => Todo[]
+  // Gives people with nothing to do a job on the land (the keys under the goal slip do the same).
+  free: (w: FreeWork) => void
   goField: (i: number) => void
   goUnit: (id: number) => void
   onWork: () => void
@@ -46,6 +51,10 @@ export function mainBar(ctx: Ctx, o: Hooks): { el: HTMLElement; update(c: S.Camp
         const all = orders.reduce((n, t) => n + t.order!.cost, 0)
         const goal = nextGoal(c)
         const wait = c.phase === 'season' ? waitingFor(c, app.world) : null
+        const idle = c.phase === 'season' ? idleWork(c) : null
+        const names = (idle?.who ?? []).map(id => c.crew.find(u => u.id === id)).filter((u): u is S.Unit => !!u).map(u => (u.kind === 'farmer' ? 'You' : u.name.split(' ')[0]))
+        const idleNames = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0] ?? ''
+        const upper = (t: string) => t.charAt(0).toUpperCase() + t.slice(1)
         return h('div', { class: 'mb-sheet' },
           list.length
             ? h('ul', { class: 'mb-list' }, list.map((t, k) => h('li', null,
@@ -57,9 +66,18 @@ export function mainBar(ctx: Ctx, o: Hooks): { el: HTMLElement; update(c: S.Camp
             // Several at once: one press orders them all, and says what that comes to.
             .concat(orders.length > 1 ? [h('li', { class: 'mb-all' }, h('button', { class: 'btn go', type: 'button', testid: 'todo-all', onclick: () => { close(); for (const t of orders) t.order!.run() } },
               `Order all ${orders.length}`, h('span', { class: 'num mb-cost' }, F.money(all))))] : []))
-            : h('p', { class: 'mb-none' }, 'Nothing is waiting on you. Your crew is working through the work list.'),
-          wait ? h('p', { class: 'mb-next' }, h('span', { class: 't-label' }, 'Coming up'), ' ', wait.title, wait.when ? `, ${wait.when}` : '', '.') : null,
-          goal ? h('p', { class: 'mb-next' }, h('span', { class: 't-label' }, 'Next goal'), ' ', goal.title, '. ', h('span', { class: 't-caption' }, goal.why)) : null)
+            : idle ? null : h('p', { class: 'mb-none' }, 'Nothing is waiting on you. Your crew is working through the work list.'),
+          // People with nothing to do, and the work they can be given: the sheet said "nothing is waiting on you, your
+          // crew is working through the work list" under a slip that said "Keep your crew busy" with two of three idle.
+          idle ? h('div', { class: 'mb-idle', testid: 'todo-idle' },
+            h('p', { class: 'mb-none' }, `${idleNames} ${idle.who.length === 1 && !idleNames.startsWith('You') ? 'has' : 'have'} nothing to do. Give ${idle.who.length === 1 ? (idleNames.startsWith('You') ? 'yourself' : 'them') : 'them'} work on the land:`),
+            h('ul', { class: 'mb-list' }, idle.options.map((w, k) => h('li', null, h('div', { class: 'mb-row' },
+              icon(w.kind, 'i'), h('span', { class: 'mb-what' }, h('b', null, `${FREE_TEXT[w.kind]} ${S.FIELD_NAMES[w.field]}`), h('span', { class: 't-caption' }, w.gain)),
+              h('span', { class: 'mb-keys' }, h('button', { class: 'btn', type: 'button', testid: `todo-free-${k}`, onclick: () => { close(); o.free(w) } }, FREE_KEY[w.kind]))))))) : null,
+          // (the label says it is coming, so the line does not say "Next up" again; and the goal that is the same
+          // thing, the vine kill, is not said a third time under it)
+          wait ? h('p', { class: 'mb-next' }, h('span', { class: 't-label' }, 'Coming up'), ' ', upper(wait.title.replace(/^Next up: /, '')), wait.when ? `, ${wait.when}` : '', '.') : null,
+          goal && !(wait && goal.id === 'kill' && /vines/.test(wait.title)) ? h('p', { class: 'mb-next' }, h('span', { class: 't-label' }, 'Next goal'), ' ', goal.title, '. ', h('span', { class: 't-caption' }, goal.why)) : null)
       },
     })
   }

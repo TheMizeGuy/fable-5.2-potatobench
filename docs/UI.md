@@ -267,6 +267,16 @@ year-end forecast. A row is a thing's name, one sentence of what it changes, and
 price on it and what the purchase leaves of the year-end forecast, or its price and the few words that say why it
 cannot be had. A purchase redraws the sheet in place and says what happened at its top.
 
+Where the game has the farm's own figure for a building, its small line gives that instead of a rule of thumb (15
+November): the potato house and the two storage machines set this season's crop (`S.cropAhead`) against what the
+houses hold ("Your crop looks like 5,200 cwt and you can store 3,600 cwt: 1,600 cwt would sell at harvest"), the
+packing shed says what a winter of the farmer's own packing adds at today's price, and the farm stand its days to
+pay for itself. The others keep "Worth it when ...": the game has no sum for them.
+
+The To do sheet lists what needs an answer. When nothing does and people stand idle, it names them and gives the
+same work as the keys under the goal slip ("You have nothing to do. Give yourself work on the land:"); it used to say
+the crew was working through the list. What is coming is said once, under "Coming up".
+
 ## One place for a card (14 November)
 
 The owner, of a resting field's card laid beside its tag and over the menu bar on a 2560 by 1440 screen at one and

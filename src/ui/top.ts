@@ -289,6 +289,8 @@ const CROP_STEPS = new Set(['plant', 'walk', 'hill', 'spray', 'sample', 'kill', 
 export interface TopBar {
   el: HTMLElement
   update(): void
+  // Gives people with nothing to do a job on the land, as an idle key under the slip does.
+  free(w: FreeWork): void
   // Closes the goal list or the materials, if one is open.
   escape(): boolean
 }
@@ -719,7 +721,7 @@ export function topBar(ctx: Ctx, o: { onMenu: () => void; onAlmanac?: () => void
     cashWas = cash
   }
   return {
-    el, update,
+    el, update, free: giveFree,
     escape() { if (!pop) return false; pop = ''; ctx.dirty(); return true },
   }
 }
