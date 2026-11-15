@@ -1027,11 +1027,13 @@ test('year two without the tutorial at 3x: paused at the ask with the stamps bro
   expect(await game<number>(page, 'app.speed')).toBe(2)
   const fit = await atTheAsk(page, 'year two at 3x', 'r8-pause-year2-1280')
   await expect(page.getByTestId('paused-go')).toContainText('Resume at 3×')
-  // One press on a ringed stamp: the word, said once; the speed unchanged; the pause the player's own.
+  // One press on a Plant key: the word, said once, and the game that stopped itself for it goes on at the speed it
+  // had. (Until 14 November it stood until the player resumed.) The days are stopped here by the test's own hand,
+  // so the slip is read before the first field is planted.
   await page.locator(`#ui [data-testid="badge-${fit[0]}"]`).click()
+  expect(await game<[number, string, string]>(page, '(() => { const was = [app.speed, app.pauseReason, c.season.plantWordBy]; app.setSpeed(0); return was })()')).toEqual([2, '', 'you'])
   await expect(page.locator('#ui .notes .alert').filter({ hasText: /^Planting has started/ })).toBeVisible()
   await expect(page.locator('#ui .notes .alert').filter({ hasText: 'Paused: the soil is ready' })).toHaveCount(0)
-  expect(await game<[number, string, string]>(page, '[app.speed, app.pauseReason, c.season.plantWordBy]')).toEqual([0, '', 'you'])
   // (2): the slip does not go back to the soil. It says how far the planting is, and counts up.
   const goal = page.getByTestId('goal')
   await expect(goal).toContainText(`Planting: 0 of ${potato.length} fields`)
@@ -1086,6 +1088,19 @@ test('the slip never gives the crew\'s job as the player\'s goal: after planting
   await reach(page, `const guide = window.__countyGuide; guide.reset(); guide.refuse(); ${PLANTED}`)
   await putAway(page)
   const goal = page.getByTestId('goal')
+  // With somebody on the farm at nothing, the slip is work on the land to give them, and a key beside it gives it
+  // (the owner, 14 November: "ZERO intuitive direction on what im supposed to do next").
+  await expect(goal).toContainText('You have nothing to do')
+  await expect(goal).toContainText(/cut brush around [A-Z][a-z]+ Field for less blight and frost/)
+  await expect(page.locator('#ui [data-testid="goal"][data-free="brush"]')).toHaveCount(1)
+  await picture(page, 'r8-free-1280')
+  await page.getByTestId('goal-do').click()
+  expect(await game<string[]>(page, `c.season.jobs.filter(j => j.kind === 'brush').map(j => j.by)`)).toEqual(['you'])
+  // With work on the land on the list (here a tract to fell as well, which lasts the test), the slip says what the
+  // player is waiting for.
+  await reach(page, `const { app } = q.g(); app.order('fell', { fields: [app.campaign.fields.findIndex(f => f.tenure !== 'none' && f.cover === 'woods')] })`)
+  await putAway(page)
+  expect(await game<number>(page, `c.season.jobs.filter(j => j.kind === 'fell').length`)).toBe(1)
   await expect(goal).toContainText('Nothing to do until blight weather')
   await expect(goal).toContainText('your crew tends the fields on its own')
   await expect(page.locator('#ui [data-testid="goal"][data-waiting="crew"]')).toHaveCount(1)
